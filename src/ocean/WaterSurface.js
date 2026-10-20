@@ -40,7 +40,9 @@ export class WaterSurface {
 			waterSky: G.skyIrradiance,
 		};
 
-		const mat = this.material = new THREE.MeshStandardMaterial( { color: 0xffffff, roughness: 0.1, metalness: 0, envMapIntensity: 3.2, transparent: true, side: THREE.DoubleSide } );
+		// envMapIntensity 12: the scene's environment intensity is only a small diffuse fill (Sky); the
+		// sea reflects the sky in full
+		const mat = this.material = new THREE.MeshStandardMaterial( { color: 0xffffff, roughness: 0.1, metalness: 0, envMapIntensity: 12, transparent: true, side: THREE.DoubleSide } );
 		mat.name = 'Water';
 		mat.premultipliedAlpha = true;
 		mat.onBeforeCompile = ( shader ) => {

@@ -52,6 +52,10 @@ export class Sky {
 		this._envSun = new THREE.Vector3( 0, - 1, 0 );
 
 		this.sunDir = new THREE.Vector3(); // true sun direction (the sky)
+		// light levels: the key light, the sky's fill (hemisphere) and its reflections (environment)
+		// (the sky's prefiltered map is bright and blue: as diffuse light it greys the sand, so it is a
+		// small fill here; the water reflects it at full strength through its own envMapIntensity)
+		this.levels = { sun: 3.2, sky: 0.25, env: 0.09 };
 		this.moonDir = new THREE.Vector3();
 
 	}
@@ -76,7 +80,7 @@ export class Sky {
 
 			_c.copy( SUN_WARM ).lerp( SUN_NOON, THREE.MathUtils.smoothstep( dir.y, 0.0, 0.45 ) );
 			this.sun.color.copy( _c );
-			this.sun.intensity = 3.4 * day;
+			this.sun.intensity = this.levels.sun * day;
 
 		} else {
 
@@ -92,7 +96,7 @@ export class Sky {
 
 		// sky fill: blue by day, a little blue at night; the ground bounces warm light back
 		this.hemi.color.setRGB( 0.55, 0.7, 0.9 ).multiplyScalar( 0.15 + 0.85 * day ).lerp( MOON, night * 0.5 );
-		this.hemi.intensity = 0.3 + 0.15 * day;
+		this.hemi.intensity = this.levels.sky * ( 0.65 + 0.35 * day );
 		this.hemi.groundColor.setRGB( 0.32, 0.28, 0.2 ).multiplyScalar( 0.1 + 0.9 * day );
 		G.skyIrradiance.value.copy( this.hemi.color ).multiplyScalar( this.hemi.intensity );
 
@@ -103,7 +107,7 @@ export class Sky {
 		G.horizonColor.value.copy( _c );
 		if ( this.scene.background && this.scene.background.isColor ) this.scene.background.copy( _c );
 
-		this.scene.environmentIntensity = 0.1 + 0.2 * day;
+		this.scene.environmentIntensity = this.levels.env * ( 0.33 + 0.67 * day );
 
 		// re-make the reflections when the sun has moved more than ~2 degrees
 		if ( ! this.envTarget || this._envSun.dot( dir ) < 0.9994 ) {

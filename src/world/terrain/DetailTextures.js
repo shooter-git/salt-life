@@ -1,5 +1,5 @@
-import { Texture } from '../../engine/gpu/Texture.js';
-import { generateMipmaps } from '../../engine/gpu/Mipmaps.js';
+import * as THREE from '../../engine/index.js';
+import { zlibSync, unzlibSync } from 'fflate';
 import { hash2 } from './TerrainNoise.js';
 
 // Tileable procedural detail heights shared by the terrain and rock materials (RGBA8, mipmapped,
@@ -8,7 +8,7 @@ import { hash2 } from './TerrainNoise.js';
 //   G  soil:  leaf litter / clumps / small stones
 //   B  sand:  grains, shell grit and scattered pebbles
 //   A  fbm:   smooth multi-octave noise (macro variation when sampled at large scales)
-// Generated once on the CPU and cached.
+// Generated once on the CPU and cached (detailData() alone: no GPU, for Node and the placement code).
 
 const S = 512;
 
@@ -144,12 +144,39 @@ const smooth = ( a, b, x ) => {
 
 };
 
+let cachedData = null;
 let cached = null;
 
-export function getDetailTexture() {
+// the texture's data baked ahead (public/world/detail.bin, tools/bake-terrain.mjs): generating it
+// takes ~0.75 s on a desktop, seconds on a phone
+const DETAIL_MAGIC = 'SLD1';
+export function encodeDetail( data, hash ) {
 
-	if ( cached ) return cached;
-	const t0 = performance.now();
+	const z = zlibSync( data, { level: 9 } );
+	const out = new Uint8Array( 4 + 16 + z.length );
+	out.set( new TextEncoder().encode( DETAIL_MAGIC + hash.padEnd( 16 ).slice( 0, 16 ) ), 0 );
+	out.set( z, 20 );
+	return out;
+
+}
+
+export function detailHash( bytes ) {
+
+	const head = new TextDecoder().decode( bytes.subarray( 0, 20 ) );
+	return head.startsWith( DETAIL_MAGIC ) ? head.slice( 4 ).trim() : null;
+
+}
+
+export function setDetailData( bytes ) {
+
+	if ( ! detailHash( bytes ) ) throw new Error( 'detail.bin: not a detail bake' );
+	cachedData = unzlibSync( bytes.subarray( 20 ) );
+
+}
+
+export function detailData() {
+
+	if ( cachedData ) return cachedData;
 
 	const warpA = makeFbm( 4, 2, 11 ), warpB = makeFbm( 4, 2, 23 );
 	const rockCells = makeWorley( 7, 101 ), rockChips = makeWorley( 23, 211 );
@@ -217,14 +244,23 @@ export function getDetailTexture() {
 
 	}
 
-	// repeat wrapping + trilinear / anisotropic filtering come from the shared samplers
-	// (smpAniso4Repeat: grazing views of the beach, anisotropy 4 as before; smpLinearRepeat elsewhere)
-	const tex = new Texture( { label: 'terrainDetail', width: S, height: S, format: 'rgba8unorm', mips: true, usage: [ 'sample', 'copyDst' ], sampler: 'aniso4Repeat', data } );
-	tex.getGPU();
-	generateMipmaps( tex );
-	tex.userData = {};
-	// CPU copy for placement code sampling the same fbm (vegetation Scatter.js, three's DataTexture.image)
-	tex.image = { width: S, height: S, data };
+	cachedData = data;
+	return data;
+
+}
+
+export function getDetailTexture() {
+
+	if ( cached ) return cached;
+	const t0 = performance.now();
+	const data = detailData();
+	const tex = new THREE.DataTexture( data, S, S, THREE.RGBAFormat );
+	tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+	tex.minFilter = THREE.LinearMipmapLinearFilter;
+	tex.magFilter = THREE.LinearFilter;
+	tex.anisotropy = 4; // grazing views of the beach
+	tex.generateMipmaps = true;
+	tex.needsUpdate = true;
 	tex.userData.ms = performance.now() - t0;
 	cached = tex;
 	return tex;

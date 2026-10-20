@@ -5,6 +5,7 @@ import { Input } from './core/Input.js';
 import { SaveStore } from './core/SaveStore.js';
 import { TerrainData } from './world/TerrainData.js';
 import { decodeIsland } from './world/terrain/IslandBake.js';
+import { setDetailData } from './world/terrain/DetailTextures.js';
 import { WORLD } from './world/WorldLayout.js';
 import { Colliders } from './world/Colliders.js';
 import { Terrain } from './world/Terrain.js';
@@ -54,7 +55,7 @@ export class App {
 		// ---------------------------------------------------------------- saves and the island
 		await progress( 0.05, 'Fetching the island' );
 		this.store = new SaveStore( portal, { onError: ( e ) => this.hud && this.hud.toast( saveErrorText( e ) ) } );
-		const [ bytes ] = await Promise.all( [
+		const [ bytes, detail ] = await Promise.all( [
 			// low-powered devices get the island at 2 m (a quarter of the memory), as their ground is drawn
 			fetch( ISLAND[ tier ] ?? ISLAND.low ).then( ( r ) => {
 
@@ -62,8 +63,15 @@ export class App {
 				return r.arrayBuffer();
 
 			} ),
+			fetch( 'world/detail.bin' ).then( ( r ) => {
+
+				if ( ! r.ok ) throw new Error( `${ r.url }: ${ r.status }` );
+				return r.arrayBuffer();
+
+			} ),
 			this.store.load(),
 		] );
+		setDetailData( new Uint8Array( detail ) );
 		this.state = new GameState( this.store );
 
 		await progress( 0.25, 'Shaping the island' );
