@@ -1,10 +1,17 @@
 import * as THREE from '../engine/index.js';
 import { Noise2D, mulberry32, smoothstep as sstep } from '../util/Noise.js';
-import { standard } from '../materials/Materials.js';
 import { WORLD } from './WorldLayout.js';
 import { buildRockGeometry, ROCK_STYLES } from './terrain/RockGeometry.js';
-import { rot2, srgb, terrainShadingModule } from './terrain/TerrainShading.js';
-import { lodFadeModule, bandFade } from '../materials/LODFade.js';
+import { rot2, srgb, TERRAIN_SHADING_GLSL } from './terrain/TerrainShading.js';
+
+// Fade factor across a distance band [start, end] (0 before, 1 after), for the level that takes over
+// at `end` (as materials/LODFade.js bandFade)
+function bandFade( dist, start, end ) {
+
+	const t = ( dist - start ) / Math.max( end - start, 1e-6 );
+	return t <= 0 ? 0 : t >= 1 ? 1 : t * t * ( 3 - 2 * t );
+
+}
 
 // Scattered procedural rocks: boulders and blocks on the rocky shores (some half submerged),
 // talus below cliffs, outcrops breaking through the hillsides, rubble around the sea stacks and a
@@ -21,13 +28,15 @@ const BAND = 0.12; // cross-fade band, share of the switch distance (Bayer scree
 
 export class Rocks {
 
+	// terrain: the Terrain (its maps and detail texture shade the rocks like the ground's rock).
 	// castShadow: the near LOD (rocks within ~60-80 m) casts shadow-map shadows; far rocks never do.
-	// sunShadow: receive the terrain's heightfield sun shadow (false if SceneLighting applies it).
-	constructor( { scene, terrain, village = null, colliders = null, seed = 4242, castShadow = true, sunShadow = true } ) {
+	// lite: the low tier's cheaper surface (no triplanar detail).
+	constructor( { scene, terrain, village = null, colliders = null, seed = 4242, castShadow = true, lite = false } ) {
 
 		this.scene = scene;
+		this.terrain = terrain;
 		this.terrainData = terrain.data || terrain; // Terrain instance or TerrainData
-		this.terrainGPU = terrain.gpu || null;
+		this.lite = lite;
 		this.village = village;
 		this.group = new THREE.Group();
 		this.group.name = 'Rocks';
@@ -49,7 +58,7 @@ export class Rocks {
 
 		}
 
-		this.material = this._createMaterial( sunShadow );
+		this.material = this._createMaterial();
 		this.meshes = [];
 		this.buckets = [];
 		for ( let s = 0; s < ROCK_STYLES.length; s ++ ) {
@@ -69,8 +78,6 @@ export class Rocks {
 				m.castShadow = castShadow && name.endsWith( 'near' );
 				m.receiveShadow = true;
 				m.frustumCulled = false;
-				// re-bucketed every camera move: motion vectors use the static-world reprojection
-				m.staticVelocity = true;
 				m.instanceMatrix.setUsage( THREE.DynamicDrawUsage );
 				this.group.add( m );
 				this.meshes.push( m );
@@ -340,41 +347,93 @@ export class Rocks {
 
 	// ------------------------------------------------------------------ material
 
-	_createMaterial( sunShadow ) {
+	_createMaterial() {
 
-		const gpu = this.terrainGPU;
-		const mat = standard( { name: 'Rocks', roughness: 0.8, metalness: 0 } );
-		if ( ! gpu ) return mat;
-		// heightfield sun shadow (the former TerrainLightingModel)
-		mat.modules = [ gpu.module, terrainShadingModule(), lodFadeModule, ...( sunShadow ? [ gpu.sunModulationModule ] : [] ) ];
-		if ( sunShadow ) mat.defines.MATERIAL_SUN_MODULATION = 1;
-		mat.attributes = { iLod: 'vec2f', ao: 'f32' };
-		mat.varyings = { vLod: 'vec2f', vCav: 'f32' };
-		mat.vertex = 'o.vLod = v.iLod; o.vCav = v.ao;';
-		// LOD cross-fade: iLod = (fade, outgoing); the incoming level keeps the dither cells below
-		// `fade`, the outgoing one the others (both levels are drawn only inside the band)
-		const lodDiscard = 'if ( ! lodFadeVisible( in.pixel, in.vs.vLod.x, in.vs.vLod.y > 0.5 ) ) { discard; }';
-		mat.shadow = `${ lodDiscard }\n\treturn true;`;
-		mat.surface = /* wgsl */`
-	let p = in.P;
-	let N = in.N;
-	let g = terrainImplicitGrad( p );
-	let mcr = textureSample( terrainDetailTex, smpAniso4Repeat, ${ rot2( 'p.xz', 0.9 ) } / 61.0 ).w * 0.6
-		+ textureSample( terrainDetailTex, smpAniso4Repeat, ${ rot2( 'p.xz', 2.3 ) } / 17.0 ).w * 0.4;
-	let R = terrainRockSurface( p, N, p.y, mcr, 0.5, 1.0, g );
+		const mat = new THREE.MeshStandardMaterial( { roughness: 0.8, metalness: 0 } );
+		mat.name = 'Rocks';
+		const T = this.terrain;
+		if ( ! T || ! T.uniforms ) return mat;
+		if ( this.lite ) mat.defines = { ROCKS_LITE: '' };
+		const U = T.uniforms;
+		const uniforms = {
+			terrainHeightMap: U.terrainHeightMap, terrainHeightInfo: U.terrainHeightInfo,
+			terrainDetailTex: U.terrainDetailTex, terrainSplatTex: U.terrainSplatTex, terrainMapInfo: U.terrainMapInfo,
+		};
+		mat.onBeforeCompile = ( shader ) => {
+
+			Object.assign( shader.uniforms, uniforms );
+			shader.vertexShader = shader.vertexShader
+				.replace( '#include <common>', '#include <common>\nattribute vec2 iLod;\nattribute float ao;\nvarying vec2 vLod;\nvarying float vCav;\nvarying vec3 vRockP;\nvarying vec3 vRockN;' )
+				.replace( '#include <begin_vertex>', /* glsl */`#include <begin_vertex>
+	vLod = iLod;
+	vCav = ao;
+	mat4 rockM = modelMatrix;
+#ifdef USE_INSTANCING
+	rockM = modelMatrix * instanceMatrix;
+#endif
+	vRockP = ( rockM * vec4( transformed, 1.0 ) ).xyz;
+	vRockN = normalize( mat3( rockM ) * objectNormal );` );
+			shader.fragmentShader = shader.fragmentShader
+				.replace( '#include <common>', /* glsl */`#include <common>
+uniform highp sampler2D terrainHeightMap;
+uniform vec4 terrainHeightInfo;
+uniform sampler2D terrainDetailTex;
+uniform sampler2D terrainSplatTex;
+uniform vec3 terrainMapInfo;
+varying vec2 vLod;
+varying float vCav;
+varying vec3 vRockP;
+varying vec3 vRockN;
+${ T.heightGlsl.replace( 'uniform highp sampler2D terrainHeightMap;\nuniform vec4 terrainHeightInfo;\n', '' ) }
+vec4 terrainSplat( vec2 xz ) { return texture( terrainSplatTex, ( xz - terrainMapInfo.xy ) / terrainMapInfo.z ); }
+${ TERRAIN_SHADING_GLSL }
+// Bayer 4x4 threshold in (0, 1) (screen-door cross-fade between the levels of detail)
+float rockBayer4( vec2 pixel ) {
+	ivec2 p = ivec2( pixel ) & 3;
+	int x0 = p.x & 1, x1 = p.x >> 1, y0 = p.y & 1, y1 = p.y >> 1;
+	int v = ( ( x0 ^ y0 ) << 3 ) | ( y0 << 2 ) | ( ( x1 ^ y1 ) << 1 ) | y1;
+	return ( float( v ) + 0.5 ) / 16.0;
+}
+` )
+				.replace( '#include <color_fragment>', /* glsl */`
+	// LOD cross-fade: iLod = (fade, outgoing); the incoming level keeps the dither cells below
+	// fade, the outgoing one the others
+	float lodT = rockBayer4( gl_FragCoord.xy );
+	if ( vLod.y > 0.5 ? lodT >= vLod.x : lodT < vLod.x ) discard;
+	vec3 p = vRockP;
+	vec3 N = normalize( vRockN );
+	float mcr = texture( terrainDetailTex, ${ rot2( 'p.xz', 0.9 ) } / 61.0 ).w * 0.6
+		+ texture( terrainDetailTex, ${ rot2( 'p.xz', 2.3 ) } / 17.0 ).w * 0.4;
+#ifdef ROCKS_LITE
+	vec4 dM = texture( terrainDetailTex, ${ rot2( 'p.xz + p.y * 0.7', 1.3 ) } / 6.7 + 0.21 );
+	float tone = dM.x * 0.7 + ( mcr - 0.5 ) * 0.8;
+	vec3 rockAlbedo = mix( PAL_rockDark, PAL_rockMid, ss( 0.2, 0.6, tone ) );
+	rockAlbedo = mix( rockAlbedo, PAL_rockLight, ss( 0.35, 0.95, N.y ) * ss( 1.5, 3.0, p.y ) * 0.3 );
+	rockAlbedo *= mix( 1.0, 0.55, ss( 1.0, 0.25, p.y + dM.w * 0.3 ) );
+	float rockRough = 0.85, rockHd = dM.x * 0.1, rockHeight = dM.x;
+#else
+	RockGrad g;
+	g.dpdx = dFdx( p ); g.dpdy = dFdy( p ); g.fwY = fwidth( p.y );
+	RockSurface R = terrainRockSurface( p, N, p.y, mcr, 0.5, 1.0, g );
+	vec3 rockAlbedo = R.albedo;
+	float rockRough = R.rough, rockHd = R.hd, rockHeight = R.height;
+#endif
 	// contact with the ground: sand / soil drifted against the base, darker crevice
-	let ground = terrainHeightAt( p.xz );
-	let above = p.y - ground;
-	let sp = terrainSplat( p.xz );
-	let contact = ( 1.0 - smoothstep( 0.0, 0.22, above + ( R.height - 0.5 ) * 0.15 ) ) * smoothstep( -0.2, 0.3, ground );
-	let drift = mix( ${ srgb( 0.33, 0.27, 0.18 ) }, ${ srgb( 0.8, 0.72, 0.56 ) }, sp.x );
-	let nb = terrainPerturbNormal( p, N, R.hd, 1.0 );
-	${ lodDiscard }
-	s.albedo = mix( R.albedo, drift, contact * 0.8 );
-	s.roughness = mix( R.rough, 0.9, contact );
-	s.normal = nb;
-	s.ao = sat( in.vs.vCav * ( 1.0 - contact * 0.35 ) * ( smoothstep( 0.0, 0.35, R.height ) * 0.35 + 0.65 ) );
-`;
+	float groundH = terrainHeightAt( p.xz );
+	float above = p.y - groundH;
+	vec4 sp = terrainSplat( p.xz );
+	float contact = ( 1.0 - ss( 0.0, 0.22, above + ( rockHeight - 0.5 ) * 0.15 ) ) * ss( -0.2, 0.3, groundH );
+	vec3 drift = mix( ${ srgb( 0.33, 0.27, 0.18 ) }, ${ srgb( 0.8, 0.72, 0.56 ) }, sp.x );
+	vec3 rockN = terrainPerturbNormal( p, N, rockHd, 1.0 );
+	diffuseColor.rgb = mix( rockAlbedo, drift, contact * 0.8 );
+	float rockR = mix( rockRough, 0.9, contact );
+	float rockAO = clamp( vCav * ( 1.0 - contact * 0.35 ) * ( ss( 0.0, 0.35, rockHeight ) * 0.35 + 0.65 ), 0.0, 1.0 );
+` )
+				.replace( '#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = rockR;' )
+				.replace( '#include <normal_fragment_maps>', 'normal = normalize( ( viewMatrix * vec4( rockN, 0.0 ) ).xyz );' )
+				.replace( '#include <aomap_fragment>', '\treflectedLight.indirectDiffuse *= rockAO;\n\treflectedLight.indirectSpecular *= rockAO;' );
+
+		};
 		return mat;
 
 	}
@@ -390,7 +449,7 @@ export class Rocks {
 		this._lastQuat.copy( camera.quaternion );
 		camera.updateMatrixWorld();
 		this._m4.multiplyMatrices( camera.projectionMatrix, camera.matrixWorldInverse );
-		this._frustum.setFromProjectionMatrix( this._m4, camera.coordinateSystem, camera.reversedDepth );
+		this._frustum.setFromProjectionMatrix( this._m4, camera.coordinateSystem );
 		const sph = this._sphere;
 		for ( const b of this.buckets ) {
 
