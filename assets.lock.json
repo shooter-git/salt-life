@@ -804,6 +804,11 @@
 			"author": "three.js authors; J. Jimenez et al."
 		},
 		{
+			"path": "public/world/island-1024.bin",
+			"license": "own",
+			"title": "The island, baked by tools/bake-terrain.mjs"
+		},
+		{
 			"path": "public/world/island.bin",
 			"license": "own",
 			"title": "The island, baked by tools/bake-terrain.mjs"

@@ -25,6 +25,7 @@ import { Hud } from './ui/Hud.js';
 // `portal` is the All the Spaces SDK (connect()): its tier ('low' | 'mid' | 'high') sizes everything.
 
 const SHADOW_SIZE = { mid: 1024, high: 2048 };
+const ISLAND = { low: 'world/island-1024.bin', mid: 'world/island.bin', high: 'world/island.bin' };
 const LENS_REACH = 0.02; // m below the surface before the view counts as under water
 const UNDERWATER = new THREE.Color( 0.03, 0.17, 0.2 );
 const _c = new THREE.Color();
@@ -34,7 +35,9 @@ export class App {
 	constructor( portal ) {
 
 		this.portal = portal;
-		this.tier = portal.tier;
+		// ?tier=low|mid|high tries another device tier when running on its own (pnpm dev)
+		const asked = portal.standalone && new URLSearchParams( location.search ).get( 'tier' );
+		this.tier = [ 'low', 'mid', 'high' ].includes( asked ) ? asked : portal.tier;
 		this.settings = {
 			timeOfDay: 16.2,
 			sunAzimuth: 0, // degrees: turns the sun's daily path about the vertical
@@ -52,9 +55,10 @@ export class App {
 		await progress( 0.05, 'Fetching the island' );
 		this.store = new SaveStore( portal, { onError: ( e ) => this.hud && this.hud.toast( saveErrorText( e ) ) } );
 		const [ bytes ] = await Promise.all( [
-			fetch( 'world/island.bin' ).then( ( r ) => {
+			// low-powered devices get the island at 2 m (a quarter of the memory), as their ground is drawn
+			fetch( ISLAND[ tier ] ?? ISLAND.low ).then( ( r ) => {
 
-				if ( ! r.ok ) throw new Error( `world/island.bin: ${ r.status }` );
+				if ( ! r.ok ) throw new Error( `${ r.url }: ${ r.status }` );
 				return r.arrayBuffer();
 
 			} ),

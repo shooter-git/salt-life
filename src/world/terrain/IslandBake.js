@@ -2,7 +2,8 @@ import { zlibSync, unzlibSync } from 'fflate';
 import { BAKED_FIELDS } from '../TerrainData.js';
 
 // The island, baked: TerrainData's grids, packed small enough to download before the game starts.
-// tools/bake-terrain.mjs writes public/world/island.bin; the game reads it instead of generating the
+// tools/bake-terrain.mjs writes public/world/island.bin (1 m) and island-1024.bin (2 m, for
+// low-powered devices: a quarter of the memory); the game reads one instead of generating the
 // island, which takes ~5 s on a desktop and far longer on a phone.
 //
 //   'SLI1' | u32 header length | header (JSON) | the fields, each zlib-compressed
@@ -84,12 +85,12 @@ export function readIslandHeader( bytes ) {
 
 }
 
-// -> { heights: Float32Array, rock: Float32Array, sand…scarp: Uint8Array, rockSites }, for new TerrainData( seed, baked )
+// -> { res, heights: Float32Array, rock: Float32Array, sand…scarp: Uint8Array, rockSites }, for new TerrainData( seed, baked )
 export function decodeIsland( bytes ) {
 
 	const { header, dataStart } = readIslandHeader( bytes );
 	const n = header.res * header.res;
-	const out = { rockSites: header.rockSites };
+	const out = { res: header.res, rockSites: header.rockSites };
 	for ( const f of header.fields ) {
 
 		const raw = unzlibSync( bytes.subarray( dataStart + f.offset, dataStart + f.offset + f.length ) );
@@ -119,6 +120,31 @@ export function decodeIsland( bytes ) {
 			out[ f.name ] = r;
 
 		} else out[ f.name ] = raw;
+
+	}
+
+	return out;
+
+}
+
+// the island's grids at half resolution (2x2 averages), for low-powered devices
+export function halfIsland( terrain ) {
+
+	const sr = terrain.res, res = sr / 2;
+	const out = { res, rockSites: terrain.rockSites };
+	for ( const name of BAKED_FIELDS ) {
+
+		const src = terrain[ name ];
+		const dst = new src.constructor( res * res );
+		for ( let j = 0; j < res; j ++ ) for ( let i = 0; i < res; i ++ ) {
+
+			const k = 2 * j * sr + 2 * i;
+			const avg = ( src[ k ] + src[ k + 1 ] + src[ k + sr ] + src[ k + sr + 1 ] ) / 4;
+			dst[ j * res + i ] = dst instanceof Uint8Array ? Math.round( avg ) : avg;
+
+		}
+
+		out[ name ] = dst;
 
 	}
 
