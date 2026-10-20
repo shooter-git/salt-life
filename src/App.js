@@ -14,6 +14,8 @@ import { Sky } from './sky/Sky.js';
 import { Waves } from './ocean/Waves.js';
 import { WaterQuery } from './ocean/WaterQuery.js';
 import { WaterSurface } from './ocean/WaterSurface.js';
+import { ShoreWaves } from './ocean/ShoreWaves.js';
+import { computeShoreField } from './world/ShoreField.js';
 import { Player } from './player/Player.js';
 import { BoatController } from './player/BoatController.js';
 import { GameState } from './game/GameState.js';
@@ -120,8 +122,11 @@ export class App {
 		// ---------------------------------------------------------------- ocean
 		await progress( 0.6, 'Rolling in the swell' );
 		this.waves = new Waves( { tier, terrain: this.terrainData } );
-		this.query = new WaterQuery( this.waves, this.terrainData );
-		this.water = new WaterSurface( { scene, waves: this.waves, terrain: this.terrain, tier } );
+		// the breaking shore waves: their phase from the wave travel-time field around the island
+		this.shoreField = computeShoreField( this.terrainData, { res: 512, swellDir: [ WORLD.swellDir.x, WORLD.swellDir.y ] } );
+		this.shore = new ShoreWaves( { field: this.shoreField } );
+		this.query = new WaterQuery( this.waves, this.terrainData, this.shore );
+		this.water = new WaterSurface( { scene, waves: this.waves, terrain: this.terrain, shore: this.shore, tier } );
 
 		// ---------------------------------------------------------------- boat and player
 		await progress( 0.7, 'Mooring the boat' );
