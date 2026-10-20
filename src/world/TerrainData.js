@@ -22,6 +22,9 @@ const beachZoneAt = ( x, z ) => ( 1 - smoothstep( 120, 205, Math.abs( x - 10 ) )
 
 const RES = 2048; // 1 m texels over the 2048 m domain
 
+// the grids generate() fills (besides rockSites): what a bake of the island holds
+export const BAKED_FIELDS = [ 'heights', 'rock', 'sand', 'path', 'gully', 'seagrass', 'rubble', 'scarp' ];
+
 // volcanic plugs on the summit ridge: [x, z, radius, height above the envelope]
 const PLUGS = [ [ - 42, - 505, 72, 62 ], [ 152, - 466, 46, 38 ], [ - 238, - 458, 40, 26 ] ];
 const VILLAGE = WORLD.village.center;
@@ -43,7 +46,9 @@ const VILLAGE = WORLD.village.center;
 //            rubble, then the rock / sand / path / gully masks
 export class TerrainData {
 
-	constructor( seed = 7 ) {
+	// `baked`: the fields generate() makes, read from public/world/island.bin (terrain/IslandBake.js)
+	// instead of generated, which takes seconds on a phone
+	constructor( seed = 7, baked = null ) {
 
 		this.size = WORLD.terrainSize;
 		this.res = RES;
@@ -67,7 +72,12 @@ export class TerrainData {
 		this.timings = {};
 		this._F = { wx: 0, wz: 0, f170: 0, und: 0, deep: 0, E: 0, gx: 0, gz: 0 };
 		this._out = { h: 0, rock: 0, d: 0, bz: 0, carve: 0 };
-		this.generate();
+		if ( baked ) {
+
+			for ( const k of BAKED_FIELDS ) this[ k ].set( baked[ k ] );
+			this.rockSites = baked.rockSites;
+
+		} else this.generate();
 		this.buildMinMax();
 
 	}

@@ -1,28 +1,64 @@
-// Keyboard / mouse input with pointer lock support.
+// Keyboard / mouse input with pointer lock, plus what All the Spaces adds: gamepads (relayed by the
+// app: a creation's frame can't read them) and the on-screen touch controls (ui/TouchControls.js).
+// Everything lands in the same fields Tidewater's game code reads: `keys` / `pressed` by key code
+// (gamepad and touch buttons press the matching keys), `look` deltas in pixels, mouse buttons, and
+// `move`, an analog stick (x right, y forward, each -1..1) for the touch joystick and gamepads.
+
+// standard gamepad buttons -> the keys they stand for
+const PAD_KEYS = {
+	0: 'Space', // A: jump / swim up
+	1: 'KeyE', // B: interact (board, helm, trade)
+	2: 'KeyR', // X: the rod
+	3: 'KeyV', // Y: boat camera
+	4: 'KeyC', // LB: crouch / dive
+	5: 'ShiftLeft', // RB: sprint / boost
+	8: 'KeyI', // back / view: cooler and fish log
+	12: 'KeyI', // d-pad up
+	13: 'KeyL', // d-pad down: flashlight
+};
+const PAD_LOOK = 700; // px per second at full right-stick deflection
+const DEADZONE = 0.15;
+
 export class Input {
 
-	constructor( dom ) {
+	constructor( dom, { portal = null } = {} ) {
 
 		this.dom = dom;
+		this.portal = portal;
 		this.keys = new Set();
 		this.pressed = new Set();
 		this.look = { x: 0, y: 0 };
+		this.move = { x: 0, y: 0 };
+		this.touchMove = { x: 0, y: 0 }; // written by the touch joystick
 		this.wheel = 0;
 		this.mouseDown = false;
 		this.rightDown = false;
 		this.locked = false;
 		this.enabled = true;
+		this.lastDevice = 'keyboard'; // 'keyboard' | 'touch' | 'gamepad': hints and prompts follow it
+		this._virtual = new Map(); // key code -> how many virtual sources hold it (touch, pad)
+		this._pad = new Set();
 
 		window.addEventListener( 'keydown', ( e ) => {
 
 			if ( e.target && ( e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA' ) ) return;
 			if ( ! this.keys.has( e.code ) ) this.pressed.add( e.code );
 			this.keys.add( e.code );
+			this.lastDevice = 'keyboard';
 			if ( [ 'Space', 'ArrowUp', 'ArrowDown', 'Tab' ].includes( e.code ) ) e.preventDefault();
 
 		} );
-		window.addEventListener( 'keyup', ( e ) => this.keys.delete( e.code ) );
-		window.addEventListener( 'blur', () => this.keys.clear() );
+		window.addEventListener( 'keyup', ( e ) => {
+
+			if ( ! this._virtual.has( e.code ) ) this.keys.delete( e.code );
+
+		} );
+		window.addEventListener( 'blur', () => {
+
+			this.keys.clear();
+			this._virtual.clear();
+
+		} );
 
 		dom.addEventListener( 'mousedown', ( e ) => {
 
@@ -64,7 +100,85 @@ export class Input {
 
 	requestLock() {
 
-		if ( ! this.locked ) this.dom.requestPointerLock?.()?.catch?.( () => {} );
+		if ( ! this.locked && this.lastDevice !== 'touch' ) this.dom.requestPointerLock?.()?.catch?.( () => {} );
+
+	}
+
+	// a virtual source (touch button, gamepad button) holds / lets go of a key
+	press( code ) {
+
+		if ( ! this.keys.has( code ) ) this.pressed.add( code );
+		this.keys.add( code );
+		this._virtual.set( code, ( this._virtual.get( code ) || 0 ) + 1 );
+
+	}
+
+	release( code ) {
+
+		const n = ( this._virtual.get( code ) || 0 ) - 1;
+		if ( n > 0 ) this._virtual.set( code, n );
+		else {
+
+			this._virtual.delete( code );
+			this.keys.delete( code );
+
+		}
+
+	}
+
+	// once per frame, before the game reads input: gamepads and the touch joystick
+	update( dt ) {
+
+		let mx = this.touchMove.x, my = this.touchMove.y;
+		const pads = this.portal ? this.portal.input.gamepads() : [];
+		const held = new Set();
+		for ( const p of pads ) {
+
+			const ax = p.axes[ 0 ] ?? 0, ay = p.axes[ 1 ] ?? 0;
+			if ( Math.hypot( ax, ay ) > DEADZONE ) {
+
+				mx += ax;
+				my -= ay;
+				this.lastDevice = 'gamepad';
+
+			}
+
+			const lx = p.axes[ 2 ] ?? 0, ly = p.axes[ 3 ] ?? 0;
+			if ( Math.hypot( lx, ly ) > DEADZONE ) {
+
+				this.look.x += lx * Math.abs( lx ) * PAD_LOOK * dt;
+				this.look.y += ly * Math.abs( ly ) * PAD_LOOK * dt;
+				this.lastDevice = 'gamepad';
+
+			}
+
+			for ( const [ i, code ] of Object.entries( PAD_KEYS ) ) if ( ( p.buttons[ i ] ?? 0 ) > 0.5 ) held.add( code );
+			if ( ( p.buttons[ 7 ] ?? 0 ) > 0.5 ) held.add( 'mouse0' ); // right trigger: cast / reel
+			if ( ( p.buttons[ 6 ] ?? 0 ) > 0.5 ) held.add( 'mouse2' ); // left trigger: reel in an empty line
+
+		}
+
+		for ( const code of held ) if ( ! this._pad.has( code ) ) {
+
+			this.lastDevice = 'gamepad';
+			if ( code === 'mouse0' ) this.mouseDown = true;
+			else if ( code === 'mouse2' ) this.rightDown = true;
+			else this.press( code );
+
+		}
+
+		for ( const code of this._pad ) if ( ! held.has( code ) ) {
+
+			if ( code === 'mouse0' ) this.mouseDown = false;
+			else if ( code === 'mouse2' ) this.rightDown = false;
+			else this.release( code );
+
+		}
+
+		this._pad = held;
+		const len = Math.hypot( mx, my );
+		this.move.x = len > 1 ? mx / len : mx;
+		this.move.y = len > 1 ? my / len : my;
 
 	}
 
@@ -74,7 +188,7 @@ export class Input {
 
 	}
 
-	// true once per physical key press
+	// true once per key press
 	hit( code ) {
 
 		return this.enabled && this.pressed.has( code );
