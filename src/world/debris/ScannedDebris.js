@@ -10,7 +10,7 @@ import { standard } from '../../materials/Materials.js';
 import { srgb } from '../terrain/TerrainShading.js';
 import { parseGLB } from './GLB.js';
 
-// Photoscanned debris (CC0, Poly Haven; see public/models/debris/CREDITS.md): dead wood (logs,
+// Photoscanned debris (CC0, Poly Haven; see credits/debris.md): dead wood (logs,
 // branches) and conch shells, instanced with three LODs.
 //
 // Each LOD level is ONE InstancedMesh holding the geometry of every asset (vertex attribute

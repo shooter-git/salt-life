@@ -32,7 +32,7 @@ The repository is a creation project, which All the Spaces builds and checks its
 - `ats.json`: the title, how people join (`shared`: drop in), and the least capable devices it must
   run smoothly on (`low`).
 - `assets.lock.json`: every picture, model, sound and font, with its licence. It's written by
-  `tools/update-lock.mjs` from the `CREDITS.md` files; run `pnpm lock` after adding an asset.
+  `tools/update-lock.mjs` from `CREDITS.md` and `credits/`; run `pnpm lock` after adding an asset.
 - `qa/script.json`: what the checks do while playing it on a phone, a tablet and a laptop.
 
 It draws with `WebGLRenderer` through the SDK's `createStage`, saves through `portal.save` (a

@@ -336,7 +336,7 @@ fn terrainWetness( xz: vec2f, h: f32 ) -> vec2f {
 		this.setRenderScale( this.settings.renderScale );
 
 		// ---------------------------------------------------------------- audio
-		// recorded field recordings (public/audio, credits in public/audio/CREDITS.md); ?noAudio turns it off
+		// recorded field recordings (public/audio, credits in credits/audio.md); ?noAudio turns it off
 		this.audio = qs.has( 'noAudio' ) ? null : new SoundScape();
 		this.player.audio = this.audio;
 		// the fishing game (rod, bites, catch, cooler, fish stand)

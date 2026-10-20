@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Writes assets.lock.json: every asset file in the project with its licence and where it came from,
-// which All the Spaces checks before publishing. The credits come from the CREDITS.md files next to
-// the assets, so they stay the single record.
+// which All the Spaces checks before publishing. The credits come from CREDITS.md and the files in
+// credits/ (outside public/: a creation can't serve Markdown), so those stay the single record.
 //
 //   node tools/update-lock.mjs           rewrite assets.lock.json
 //   node tools/update-lock.mjs --check   fail if it's out of date or a file has no known licence
@@ -40,17 +40,17 @@ function walk( dir, out = [] ) {
 
 }
 
-// public/audio/CREDITS.md: | `file.ogg` | use | [title](url), … | author, … | licence |
+// credits/audio.md: | `file.ogg` | use | [title](url), … | author, … | licence |
 function audioCredits() {
 
 	const credits = new Map();
-	for ( const line of readFileSync( join( ROOT, 'public/audio/CREDITS.md' ), 'utf8' ).split( '\n' ) ) {
+	for ( const line of readFileSync( join( ROOT, 'credits/audio.md' ), 'utf8' ).split( '\n' ) ) {
 
 		const cells = line.split( '|' ).map( ( c ) => c.trim() );
 		const file = /^`([^`]+\.(?:ogg|m4a))`$/.exec( cells[ 1 ] ?? '' );
 		if ( ! file ) continue;
 		const links = [ ...cells[ 3 ].matchAll( /\[([^\]]+)\]\(([^)]+)\)/g ) ];
-		if ( ! links.length || ! /CC0/.test( cells[ 5 ] ) ) throw new Error( `public/audio/CREDITS.md: no CC0 source for ${ file[ 1 ] }` );
+		if ( ! links.length || ! /CC0/.test( cells[ 5 ] ) ) throw new Error( `credits/audio.md: no CC0 source for ${ file[ 1 ] }` );
 		credits.set( file[ 1 ], {
 			source: links[ 0 ][ 2 ],
 			title: links.map( ( l ) => l[ 1 ] ).join( '; ' ).slice( 0, 200 ),
@@ -115,13 +115,13 @@ for ( const path of walk( ROOT ).sort() ) {
 
 if ( unknown.length ) {
 
-	console.error( 'No known licence for:\n' + unknown.map( ( p ) => '  ' + p ).join( '\n' ) + '\nAdd it to tools/update-lock.mjs (and the CREDITS.md next to it).' );
+	console.error( 'No known licence for:\n' + unknown.map( ( p ) => '  ' + p ).join( '\n' ) + '\nAdd it to tools/update-lock.mjs (and its credit to credits/ or CREDITS.md).' );
 	process.exit( 1 );
 
 }
 
 const text = JSON.stringify( {
-	$comment: 'Every asset in the project, its licence and where it came from. Written by tools/update-lock.mjs from the CREDITS.md files: change those, then run `pnpm lock`.',
+	$comment: 'Every asset in the project, its licence and where it came from. Written by tools/update-lock.mjs from CREDITS.md and credits/: change those, then run `pnpm lock`.',
 	assets,
 }, null, '\t' ) + '\n';
 

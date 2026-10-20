@@ -1,5 +1,5 @@
 {
-	"$comment": "Every asset in the project, its licence and where it came from. Written by tools/update-lock.mjs from the CREDITS.md files: change those, then run `pnpm lock`.",
+	"$comment": "Every asset in the project, its licence and where it came from. Written by tools/update-lock.mjs from CREDITS.md and credits/: change those, then run `pnpm lock`.",
 	"assets": [
 		{
 			"path": "public/audio/bail_click.ogg",

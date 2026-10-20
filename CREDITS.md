@@ -11,7 +11,7 @@ and source, for All the Spaces; `tools/update-lock.mjs` writes it from these cre
 
 42 field recordings from [Freesound](https://freesound.org), all released under
 [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). No attribution is required, but every file is
-credited with its author and source link in [`public/audio/CREDITS.md`](public/audio/CREDITS.md).
+credited with its author and source link in [`credits/audio.md`](credits/audio.md).
 
 Recordists: YevgVerh, straget, Alex_hears_things, chris_dagorne, bruno.auzet, felix.blume, hdfreema,
 richardemoore, KaleidacousticsAudio, AugustSandberg, kyles, Pfannkuchn, 200221-WeanBekker, florianreichelt,
@@ -31,7 +31,7 @@ Photogrammetry models from [Poly Haven](https://polyhaven.com), under
 - Lambis Shell
 
 The meshes were decimated into levels of detail, and the textures are unchanged. Details are in
-[`public/models/debris/CREDITS.md`](public/models/debris/CREDITS.md).
+[`credits/debris.md`](credits/debris.md).
 
 ## Vendor stalls: `public/models/props/`
 
@@ -47,7 +47,7 @@ The models were decimated and the textures downsized by `tools/props/`. The sign
 scale dial were lettered with [Permanent Marker](https://fonts.google.com/specimen/Permanent+Marker) (Apache
 2.0), [Cabin Sketch](https://fonts.google.com/specimen/Cabin+Sketch) (SIL OFL 1.1) and
 [Oswald](https://fonts.google.com/specimen/Oswald) (SIL OFL 1.1); the font files and their licences are in
-`tools/props/fonts/`. Details are in [`public/models/props/CREDITS.md`](public/models/props/CREDITS.md).
+`tools/props/fonts/`. Details are in [`credits/props.md`](credits/props.md).
 
 ## Humpback whale: `public/models/whale/`
 
@@ -59,7 +59,7 @@ US government work in the public domain. The reference photographs used while mo
 
 The vendors (`joe.glb`, `marta.glb`) are avatars `Wood_Male_01` and `Female_Adult_04` and their
 idle, talk, wave and shrug animations from the [Microsoft Rocketbox Avatar Library](https://github.com/microsoft/Microsoft-Rocketbox)
-(© Microsoft Corporation, MIT license, included as `LICENSE-Rocketbox.md`), converted with
+(© Microsoft Corporation, MIT license, included as [`credits/LICENSE-Rocketbox.md`](credits/LICENSE-Rocketbox.md)), converted with
 `tools/characters/` (textures resized, animations retargeted and baked). Paper: M. Gonzalez-Franco
 et al., "The Rocketbox Library and the Utility of Freely Available Rigged Avatars", Frontiers in
 Virtual Reality, 2020.

@@ -1,5 +1,5 @@
 // Sample-based sound for the island: real field recordings only (public/audio, sources and licences in
-// public/audio/CREDITS.md). Nothing is synthesised. Files are fetched and decoded after the first user
+// credits/audio.md). Nothing is synthesised. Files are fetched and decoded after the first user
 // gesture (resume()); boat, underwater, pier and night sounds load the first time they become audible.
 //
 // Surf is wave by wave, driven by the game's own shore waves (ShoreWaves): a CPU mirror of their phase

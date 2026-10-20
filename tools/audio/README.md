@@ -2,7 +2,7 @@
 
 Rebuilds the fishing sounds in `public/audio/` from CC0 Freesound previews. Needs node and ffmpeg
 (libopus). Nothing is synthesised: every sound is a real recording (sources and licences in
-`public/audio/CREDITS.md`).
+`credits/audio.md`).
 
 ```sh
 cd tools/audio
