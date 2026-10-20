@@ -14,6 +14,9 @@ importers:
       '@allthespaces/portal':
         specifier: link:../all-the-spaces/packages/portal-sdk
         version: link:../all-the-spaces/packages/portal-sdk
+      fflate:
+        specifier: 0.8.2
+        version: 0.8.2
       three:
         specifier: 0.186.1
         version: 0.186.1
@@ -132,6 +135,9 @@ packages:
     peerDependenciesMeta:
       picomatch:
         optional: true
+
+  fflate@0.8.2:
+    resolution: {integrity: sha512-cPJU47OaAoCbg0pBvzsgpTPhmhqI5eJjh/JIu8tPj5q+T7iLvW/JAYUqmE7KOB4R1ZyEhzBaIQpQpardBF5z8A==}
 
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
@@ -339,6 +345,8 @@ snapshots:
   fdir@6.5.0(picomatch@4.0.7):
     optionalDependencies:
       picomatch: 4.0.7
+
+  fflate@0.8.2: {}
 
   fsevents@2.3.3:
     optional: true

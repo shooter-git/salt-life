@@ -211,7 +211,9 @@ export class Player {
 		if ( inp.down( 'KeyS' ) ) wish.sub( _fwd );
 		if ( inp.down( 'KeyD' ) ) wish.add( _right );
 		if ( inp.down( 'KeyA' ) ) wish.sub( _right );
-		if ( wish.lengthSq() > 0 ) wish.normalize();
+		// analog sticks (touch, gamepad) walk as fast as they're pushed
+		if ( inp.move ) wish.addScaledVector( _fwd, inp.move.y ).addScaledVector( _right, inp.move.x );
+		if ( wish.lengthSq() > 1 ) wish.normalize();
 
 		const depth = this.waterH - this.position.y; // water depth at the feet
 		const wade = THREE.MathUtils.clamp( depth / 1.2, 0, 1 );
@@ -311,7 +313,8 @@ export class Player {
 		if ( inp.down( 'KeyA' ) ) wish.sub( _right );
 		if ( inp.down( 'Space' ) ) wish.y += 1;
 		if ( inp.down( 'KeyC' ) || inp.down( 'ControlLeft' ) ) wish.y -= 1;
-		if ( wish.lengthSq() > 0 ) wish.normalize();
+		if ( inp.move ) wish.addScaledVector( _fwd, inp.move.y ).addScaledVector( _right, inp.move.x );
+		if ( wish.lengthSq() > 1 ) wish.normalize();
 
 		const atSurface = this.floating && p.y > surfaceY - 0.45;
 		// at the surface W along a level view keeps you on top; looking down dives
@@ -602,7 +605,8 @@ export class Player {
 		if ( inp.down( 'KeyS' ) ) _wish.sub( _fwd );
 		if ( inp.down( 'KeyD' ) ) _wish.add( _right );
 		if ( inp.down( 'KeyA' ) ) _wish.sub( _right );
-		if ( _wish.lengthSq() > 0 ) _wish.normalize();
+		if ( inp.move ) _wish.addScaledVector( _fwd, inp.move.y ).addScaledVector( _right, inp.move.x );
+		if ( _wish.lengthSq() > 1 ) _wish.normalize();
 		const speed = ( inp.down( 'ShiftLeft' ) ? 2.6 : 1.6 );
 		const k = 1 - Math.exp( - 12 * dt );
 		const v = this.deckVel;
@@ -746,6 +750,14 @@ export class Player {
 		let steer = 0;
 		if ( inp.down( 'KeyA' ) ) steer += 1;
 		if ( inp.down( 'KeyD' ) ) steer -= 1;
+		// analog: the stick's forward travel is the throttle (astern when pulled back), its side the wheel
+		if ( inp.move && ( inp.move.x || inp.move.y ) ) {
+
+			if ( ! throttle ) throttle = inp.move.y > 0 ? inp.move.y : inp.move.y * 0.6;
+			if ( ! steer ) steer = - inp.move.x;
+
+		}
+
 		b.setInput( throttle, steer, dt );
 		this.prompt = { key: 'E', text: 'Leave helm   ·   V  camera' };
 

@@ -10,12 +10,14 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "bake": "node tools/bake-terrain.mjs",
     "lock": "node tools/update-lock.mjs",
-    "test": "node test/game-logic.mjs && node tools/update-lock.mjs --check"
+    "test": "node test/game-logic.mjs && node test/waves.mjs && node tools/bake-terrain.mjs --check && node tools/update-lock.mjs --check"
   },
   "dependencies": {
     "@allthespaces/bridge-protocol": "link:../all-the-spaces/packages/bridge-protocol",
     "@allthespaces/portal": "link:../all-the-spaces/packages/portal-sdk",
+    "fflate": "0.8.2",
     "three": "0.186.1"
   },
   "devDependencies": {

@@ -1,5 +1,5 @@
 import { Group, MathUtils, Mesh, Object3D, Quaternion, Vector3 } from '../engine/index.js';
-import { G } from '../engine/render/Frame.js';
+import { G } from '../core/Globals.js';
 import { HullLines, RHO_SEAWATER } from './boat/HullLines.js';
 import { GeoKit, triangleCount } from './boat/GeoKit.js';
 import { BoatMaterials } from './boat/BoatMaterials.js';

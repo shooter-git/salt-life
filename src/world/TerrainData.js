@@ -22,6 +22,9 @@ const beachZoneAt = ( x, z ) => ( 1 - smoothstep( 120, 205, Math.abs( x - 10 ) )
 
 const RES = 2048; // 1 m texels over the 2048 m domain
 
+// the grids generate() fills (besides rockSites): what a bake of the island holds
+export const BAKED_FIELDS = [ 'heights', 'rock', 'sand', 'path', 'gully', 'seagrass', 'rubble', 'scarp' ];
+
 // volcanic plugs on the summit ridge: [x, z, radius, height above the envelope]
 const PLUGS = [ [ - 42, - 505, 72, 62 ], [ 152, - 466, 46, 38 ], [ - 238, - 458, 40, 26 ] ];
 const VILLAGE = WORLD.village.center;
@@ -43,31 +46,35 @@ const VILLAGE = WORLD.village.center;
 //            rubble, then the rock / sand / path / gully masks
 export class TerrainData {
 
-	constructor( seed = 7 ) {
+	// `baked`: the fields generate() makes, read from public/world/island.bin (terrain/IslandBake.js)
+	// instead of generated, which takes seconds on a phone
+	constructor( seed = 7, baked = null ) {
 
 		this.size = WORLD.terrainSize;
-		this.res = RES;
+		this.res = baked ? baked.res : RES; // a bake may be coarser (2 m for low-powered devices)
 		this.texel = this.size / this.res;
 		this.origin = - this.size / 2;
 		this.noise = new Noise2D( seed );
 		this.noise2 = new Noise2D( seed * 31 + 5 );
 		this.noise3 = new Noise2D( seed * 131 + 17 );
+		// a bake's grids are adopted as they are (two copies of the island would not fit a phone's budget)
 		const n = this.res * this.res;
-		this.heights = new Float32Array( n );
-		this.rock = new Float32Array( n ); // rockiness mask (0 sand/soil .. 1 bare rock)
-		this.sand = new Uint8Array( n ); // loose sand cover (beach, dunes, seabed)
-		this.path = new Uint8Array( n ); // worn footpaths
-		this.gully = new Uint8Array( n ); // drainage lines carved by the erosion noise
-		this.seagrass = new Uint8Array( n ); // seagrass meadows on the shallow seabed (1.5 - 12 m deep)
-		this.rubble = new Uint8Array( n ); // dark coral rubble / rock heads on the seabed
-		this.scarp = new Uint8Array( n ); // face of the eroded embankment behind the bay beach
-		this.rockSites = []; // outcrops / stacks for the rock scatter: { x, z, r, h, kind }
+		const grid = ( k, Type ) => baked ? baked[ k ] : new Type( n );
+		this.heights = grid( 'heights', Float32Array );
+		this.rock = grid( 'rock', Float32Array ); // rockiness mask (0 sand/soil .. 1 bare rock)
+		this.sand = grid( 'sand', Uint8Array ); // loose sand cover (beach, dunes, seabed)
+		this.path = grid( 'path', Uint8Array ); // worn footpaths
+		this.gully = grid( 'gully', Uint8Array ); // drainage lines carved by the erosion noise
+		this.seagrass = grid( 'seagrass', Uint8Array ); // seagrass meadows on the shallow seabed (1.5 - 12 m deep)
+		this.rubble = grid( 'rubble', Uint8Array ); // dark coral rubble / rock heads on the seabed
+		this.scarp = grid( 'scarp', Uint8Array ); // face of the eroded embankment behind the bay beach
+		this.rockSites = baked ? baked.rockSites : []; // outcrops / stacks for the rock scatter: { x, z, r, h, kind }
 		this.pads = []; // building pads flattened by the village (trampled ground in the splat map)
 		this.paths = PATHS;
 		this.timings = {};
 		this._F = { wx: 0, wz: 0, f170: 0, und: 0, deep: 0, E: 0, gx: 0, gz: 0 };
 		this._out = { h: 0, rock: 0, d: 0, bz: 0, carve: 0 };
-		this.generate();
+		if ( ! baked ) this.generate();
 		this.buildMinMax();
 
 	}
