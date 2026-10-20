@@ -37,10 +37,13 @@ import { releaseGeometries, releaseTextures, uploadTextures, watchContext } from
 
 const SHADOW_SIZE = { mid: 1024, high: 2048 };
 const ISLAND = { low: 'world/island-1024.bin', mid: 'world/island.bin', high: 'world/island.bin' };
+// WebGL drawn on the CPU draws at most a phone screen's pixels (a laptop's is three times as many)
+const CPU_PIXELS = 360_000;
 const LENS_REACH = 0.02; // m below the surface before the view counts as under water
 const UNDERWATER = new THREE.Color( 0.03, 0.17, 0.2 );
 const _c = new THREE.Color();
 const _c3 = new THREE.Vector3();
+const _size = new THREE.Vector2();
 
 export class App {
 
@@ -104,6 +107,8 @@ export class App {
 		this._drawn = null; // the last frame's fence
 		this._owed = 0; // s not yet played while waiting for it
 		this._rest = false; // the frame after a drawn one is skipped
+		if ( this.cpuGL ) this.fitCpuPixels();
+
 		this.camera = camera;
 		const scene = this.scene = new THREE.Scene();
 
@@ -209,6 +214,18 @@ export class App {
 
 		} ).catch( ( e ) => console.warn( 'stalls', e ) );
 		watchContext( renderer );
+		// WebGL drawn on the CPU draws the loading frames tiny: they're for placing everything,
+		// uploading it and making the GPU's programs, which a few pixels do as well, and there a
+		// full-size frame takes seconds (on a laptop's screen, enough to miss the 45 s a creation has
+		// to load). The game's first frame is then drawn by its loop.
+		const full = this.cpuGL ? { ratio: renderer.getPixelRatio(), size: renderer.getSize( new THREE.Vector2() ) } : null;
+		if ( full ) {
+
+			renderer.setPixelRatio( 1 );
+			renderer.setSize( 8, 8, false );
+
+		}
+
 		this.frame( 0 ); // places the camera, the LOD grids and the sky for the compile
 		// (with the near detail it hid: compiled now, not the first time it shows)
 		const near = ( this.nearDetail || [] ).filter( ( d ) => ! d.o.visible );
@@ -227,6 +244,12 @@ export class App {
 		}
 
 		this.frame( 1 / 60 );
+		if ( full ) {
+
+			renderer.setPixelRatio( full.ratio );
+			renderer.setSize( full.size.x, full.size.y, false );
+
+		}
 
 	}
 
@@ -320,11 +343,24 @@ export class App {
 
 		}
 
+		// (whenever the stage has sized the canvas again)
+		const canvas = this.renderer.domElement;
+		if ( canvas.width * canvas.height > CPU_PIXELS * 1.05 ) this.fitCpuPixels();
 		this.frame( Math.min( 0.1, dt + this._owed ) );
 		this._owed = 0;
 		this._drawn = gl.fenceSync( gl.SYNC_GPU_COMMANDS_COMPLETE, 0 );
 		this._rest = true;
 		gl.flush();
+
+	}
+
+	// WebGL drawn on the CPU: the canvas's resolution brought down to CPU_PIXELS (the stage sizes it
+	// for the screen; its dynamic resolution doesn't see paced frames)
+	fitCpuPixels() {
+
+		const r = this.renderer, size = r.getSize( _size ), ratio = r.getPixelRatio();
+		const pixels = size.x * size.y * ratio * ratio;
+		if ( pixels > CPU_PIXELS ) r.setPixelRatio( ratio * Math.sqrt( CPU_PIXELS / pixels ) );
 
 	}
 
