@@ -39,8 +39,17 @@ html, body {
 }
 
 .hud-prompt { bottom: calc(28px + env(safe-area-inset-bottom)); }
-.hud-hint { bottom: calc(76px + env(safe-area-inset-bottom)); opacity: 0.9; }
 .hud-toast { top: calc(16px + env(safe-area-inset-top)); }
+
+/* the first hint about the controls: at the top (clear of the app's menu button), wrapping on phones */
+.hud-hint {
+	top: calc(64px + env(safe-area-inset-top));
+	opacity: 0.9;
+	white-space: normal;
+	text-align: center;
+	border-radius: 18px;
+	width: max-content;
+}
 
 .hud kbd {
 	display: inline-block;

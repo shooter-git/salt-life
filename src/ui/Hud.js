@@ -27,7 +27,7 @@ export class Hud {
 	showHint( device ) {
 
 		this.hint.textContent = device === 'touch'
-			? 'Left thumb to walk, drag on the right to look'
+			? 'Left side to walk · right side to look'
 			: device === 'gamepad'
 				? 'Left stick to walk, right stick to look, A to jump'
 				: 'W A S D to walk, click and move the mouse to look, Space to jump';
