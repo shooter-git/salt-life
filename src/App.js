@@ -8,7 +8,10 @@ import { decodeIsland } from './world/terrain/IslandBake.js';
 import { setDetailData } from './world/terrain/DetailTextures.js';
 import { WORLD } from './world/WorldLayout.js';
 import { Colliders } from './world/Colliders.js';
+import { Village } from './world/Village.js';
 import { Terrain } from './world/Terrain.js';
+import { Rocks } from './world/Rocks.js';
+import { Vegetation } from './world/Vegetation.js';
 import { BoatModel } from './world/BoatModel.js';
 import { Sky } from './sky/Sky.js';
 import { Waves } from './ocean/Waves.js';
@@ -19,8 +22,12 @@ import { computeShoreField } from './world/ShoreField.js';
 import { Player } from './player/Player.js';
 import { BoatController } from './player/BoatController.js';
 import { GameState } from './game/GameState.js';
+import { FishStand } from './game/FishStand.js';
+import { Chandlery } from './game/Chandlery.js';
 import { TouchControls } from './ui/TouchControls.js';
 import { Hud } from './ui/Hud.js';
+import { Wake } from './ocean/Wake.js';
+import { PostChain } from './post/PostChain.js';
 
 // Salt Life: the island, the sea and the boat, drawn with three.js inside All the Spaces. It follows
 // Tidewater's App (same systems, same order each frame); what isn't ported yet is simply not here.
@@ -102,6 +109,8 @@ export class App {
 		// ---------------------------------------------------------------- sky
 		await progress( 0.4, 'Lighting the sky' );
 		this.sky = new Sky( { scene, renderer, tier } );
+		// the eye adapts at dusk and at night: the whole scene's exposure follows (Tidewater's auto exposure)
+		this.sky.sceneAdaptation = true;
 		if ( SHADOW_SIZE[ tier ] ) {
 
 			const s = this.sky.sun;
@@ -117,7 +126,19 @@ export class App {
 		// ---------------------------------------------------------------- island
 		await progress( 0.5, 'Laying out the ground' );
 		this.colliders = new Colliders();
+		// the village flattens building pads into the heightmap: build it before the ground (whose
+		// textures are made from the heights) and everything placed on it
+		this.village = new Village( { scene, terrain: this.terrainData, colliders: this.colliders, tier } );
+		await this.village.init( renderer );
+		// Joe's fish stand and Marta's chandlery (Tidewater's Game builds them; the fishing game isn't
+		// ported yet): their scanned props load while the rest of the island is made
+		this.stand = new FishStand( { scene, terrain: this.terrainData, colliders: this.colliders, tier } );
+		this.chandlery = new Chandlery( { scene, terrain: this.terrainData, colliders: this.colliders, tier } );
 		this.terrain = new Terrain( { scene, terrainData: this.terrainData, tier } );
+		// boulders, blocks, talus and outcrops (shaded like the ground's rock)
+		this.rocks = new Rocks( { scene, terrain: this.terrain, colliders: this.colliders, village: this.village, castShadow: tier !== 'low', lite: tier === 'low' } );
+		this.vegetation = new Vegetation( { scene, terrain: this.terrainData, ground: this.terrain, renderer, tier, village: this.village } );
+		await this.vegetation.init();
 
 		// ---------------------------------------------------------------- ocean
 		await progress( 0.6, 'Rolling in the swell' );
@@ -140,10 +161,14 @@ export class App {
 
 		} );
 		this.boatCtl = new BoatController( { model: this.boat, query: this.query, terrain: this.terrainData, colliders: this.colliders } );
+		this.wake = new Wake( { scene, boat: this.boatCtl, waves: this.waves, tier } );
+		// laptops: bloom and SMAA (phones draw straight to the screen)
+		this.post = tier === 'high' ? new PostChain( renderer, scene, camera ) : null;
 		this.player = new Player( { camera, input: this.input, terrain: this.terrainData, colliders: this.colliders, query: this.query, boat: this.boatCtl } );
 
 		// ---------------------------------------------------------------- shaders
 		await progress( 0.8, 'Preparing the shaders' );
+		await Promise.all( [ this.stand.ready, this.chandlery.ready ] );
 		this.frame( 0 ); // places the camera, the LOD grids and the sky for the compile
 		await renderer.compileAsync( scene, camera );
 		this.frame( 1 / 60 );
@@ -199,12 +224,17 @@ export class App {
 
 		// ---- world
 		this.terrain.update( this.camera );
+		this.village.update( dt );
+		this.rocks.update( this.camera );
+		this.vegetation.update( dt, this.camera );
 		this.water.update( this.camera );
 		this.boat.update( dt );
+		this.wake.update( dt );
 
 		// ---- render
-		this.renderer.toneMappingExposure = s.exposure;
-		this.renderer.render( this.scene, this.camera );
+		this.renderer.toneMappingExposure = s.exposure * this.sky.adaptation;
+		if ( this.post ) this.post.render();
+		else this.renderer.render( this.scene, this.camera );
 
 		this.touch.update( this.player );
 		this.hud.update( dt, { player: this.player, device: input.lastDevice } );

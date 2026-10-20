@@ -1280,3 +1280,16 @@ export function buildBroadleaf() {
 	return { geometry: b.build( 3, new THREE.Vector3( 0, 1, 0 ) ), triangles: b.triangles, perKind: tris };
 
 }
+
+// One plant of a merged geometry in a mesh of its own (Salt Life: every instance of a merged mesh
+// runs the vertices of all its plants, so on WebGL budgets each kind gets its own draw call). The
+// plant keeps its kind id, so the shared deformation keeps its vertices for instances of that kind.
+//   build: one of the builders above ( seed, GeoBuilder ) => ...
+export function buildPlantKind( kind, build, seed ) {
+
+	const b = new GeoBuilder();
+	b.kind = kind;
+	build( seed, b );
+	return { geometry: b.build( 3, new THREE.Vector3( 0, 1, 0 ) ), triangles: b.triangles };
+
+}

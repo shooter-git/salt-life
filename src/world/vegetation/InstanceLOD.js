@@ -11,8 +11,8 @@ import * as THREE from '../../engine/index.js';
 // camera distance of the instance base), so the switch is frame-exact and independent of
 // how often the CPU refills. Instances outside their window collapse to a point.
 
-// (three.js: > maxUniformBufferBindingSize / 64 forced a vertex-attribute instance matrix; the
-// engine always uses one. Kept so the buffers keep their size.)
+// (three.js keeps the instance matrices in a vertex attribute anyway; a floor on the capacity
+// avoids re-creating small buffers)
 const MIN_CAPACITY = 1100;
 
 const _m = new THREE.Matrix4();
@@ -111,6 +111,10 @@ export class VegInstances {
 }
 
 // A set of InstancedMeshes (e.g. palm wood + palm leaves) sharing instance buffers.
+// parts: [ { geometry, material, castShadow, name } ]; material: a material, or a function
+// ( lodRange ) => material for materials reading the level's LOD window (uniform `{ value }`):
+// three uploads uniforms per material, so every level gets its own (sharing the program). A
+// material's `userData.depth` becomes the mesh's shadow-pass material.
 export class LodLevel {
 
 	constructor( parts, capacity, lodRange ) {
@@ -127,11 +131,14 @@ export class LodLevel {
 		this.count = 0;
 		this.trianglesPerInstance = 0;
 
-		for ( const { geometry, material, castShadow = false, name = '' } of parts ) {
+		this.lodRangeUniform = { value: this.lodRange };
+		for ( const { geometry, material: m, castShadow = false, name = '' } of parts ) {
 
 			geometry.setAttribute( 'iPos', this.iPos );
 			geometry.setAttribute( 'iDat', this.iDat );
+			const material = typeof m === 'function' ? m( this.lodRangeUniform ) : m;
 			const mesh = new THREE.InstancedMesh( geometry, material, cap );
+			if ( material.userData.depth ) mesh.customDepthMaterial = material.userData.depth;
 			mesh.instanceMatrix = this.instanceMatrix;
 			mesh.count = 0;
 			mesh.name = name;
@@ -139,8 +146,6 @@ export class LodLevel {
 			mesh.receiveShadow = true;
 			mesh.frustumCulled = false; // instances are spread around the camera
 			mesh.userData.lodRange = this.lodRange;
-			// per-draw uniform (three's onObjectUpdate uLodRange): draw.params.yzw in WGSL
-			mesh.drawParams = [ this.lodRange.x, this.lodRange.y, this.lodRange.z ];
 			mesh.matrixAutoUpdate = false;
 			mesh.updateMatrix();
 			this.meshes.push( mesh );

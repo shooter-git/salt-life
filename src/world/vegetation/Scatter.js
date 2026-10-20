@@ -26,14 +26,14 @@ export const RULES = {
 function detailSampler() {
 
 	const tex = getDetailTexture();
-	const S = tex.image.width, d = tex.image.data;
+	const S = tex.image.width, d = tex.image.data, M = S - 1; // S: a power of two
 	return ( u, v, c ) => {
 
 		const x = u * S - 0.5, y = v * S - 0.5;
 		const xi = Math.floor( x ), yi = Math.floor( y );
 		const tx = x - xi, ty = y - yi;
-		const x0 = ( ( xi % S ) + S ) % S, y0 = ( ( yi % S ) + S ) % S;
-		const x1 = ( x0 + 1 ) % S, y1 = ( y0 + 1 ) % S;
+		const x0 = xi & M, y0 = yi & M;
+		const x1 = ( x0 + 1 ) & M, y1 = ( y0 + 1 ) & M;
 		const a = d[ ( y0 * S + x0 ) * 4 + c ], b = d[ ( y0 * S + x1 ) * 4 + c ];
 		const e = d[ ( y1 * S + x0 ) * 4 + c ], f = d[ ( y1 * S + x1 ) * 4 + c ];
 		return ( ( a * ( 1 - tx ) + b * tx ) * ( 1 - ty ) + ( e * ( 1 - tx ) + f * tx ) * ty ) / 255;
@@ -42,7 +42,9 @@ function detailSampler() {
 
 }
 
-const rot = ( x, z, a ) => [ x * Math.cos( a ) - z * Math.sin( a ), x * Math.sin( a ) + z * Math.cos( a ) ];
+// rotation of (x, z) by a constant angle (TerrainShading.rot2), one component at a time
+const rotX = ( x, z, a ) => x * Math.cos( a ) - z * Math.sin( a );
+const rotZ = ( x, z, a ) => x * Math.sin( a ) + z * Math.cos( a );
 
 export class VegSite {
 
@@ -177,14 +179,16 @@ export class VegSite {
 	// Land cover at (x, z), matching Terrain.js:
 	//   forest: forest-floor weight (0 meadow .. 1 forest); slope: 1 - N.y; rock: bare-rock tendency
 	//   (mask + steepness); gully, sand, path: splat masks; macro: large-scale fbm
-	cover( x, z, out = {} ) {
+	//   minH: below this height only out.h is set (the callers reject the spot on it anyway)
+	cover( x, z, out = {}, minH = - Infinity ) {
 
 		const t = this.terrain;
 		const h = this.height( x, z );
+		out.h = h;
+		if ( h < minH ) return out;
 		const ny = this.normalY( x, z );
 		const slope = 1 - ny;
-		const [ ax, az ] = rot( x, z, 0.7 ), [ bx, bz ] = rot( x, z, 2.1 );
-		const mA = this.detail( ax / 173, az / 173, 3 ), mB = this.detail( bx / 47, bz / 47, 3 );
+		const mA = this.detail( rotX( x, z, 0.7 ) / 173, rotZ( x, z, 0.7 ) / 173, 3 ), mB = this.detail( rotX( x, z, 2.1 ) / 47, rotZ( x, z, 2.1 ) / 47, 3 );
 		const macro = mA * 0.6 + mB * 0.4;
 		const gully = this._mask( t.gully, x, z, 1 / 255 ) * smoothstep( - 0.5, 0.5, h );
 		const forest = clamp( smoothstep( 9, 24, h + ( macro - 0.5 ) * 18 ) + smoothstep( 0.18, 0.36, slope ) + gully * 0.6, 0, 1 );
@@ -293,8 +297,9 @@ class Occupancy {
 
 const KIND = { PALM: 1, TREE: 2, BANANA: 3, SHRUB: 4, YOUNG: 5, FERN: 6, BROAD: 7 };
 
-// Jittered-grid dart throwing over a rectangle.
-function scatter( rand, x0, z0, x1, z1, step, fn ) {
+// Jittered-grid dart throwing over a rectangle (a generator: yields after every row, so the
+// caller can spread the work over several tasks)
+function* scatter( rand, x0, z0, x1, z1, step, fn ) {
 
 	for ( let z = z0; z < z1; z += step ) {
 
@@ -304,7 +309,18 @@ function scatter( rand, x0, z0, x1, z1, step, fn ) {
 
 		}
 
+		yield;
+
 	}
+
+}
+
+// Runs a generator to completion; returns its return value
+export function drain( steps ) {
+
+	let r;
+	do r = steps.next(); while ( ! r.done );
+	return r.value;
 
 }
 
@@ -326,7 +342,15 @@ function headland( x, z, c, sandOk = false ) {
 
 }
 
-export function scatterVegetation( site, seed = 99 ) {
+export function scatterVegetation( site, seed = 99, options ) {
+
+	return drain( scatterSteps( site, seed, options ) );
+
+}
+
+// scatterVegetation as a generator (yields between rows). ferns: false skips the ferns (devices
+// that don't draw them)
+export function* scatterSteps( site, seed = 99, { ferns = true } = {} ) {
 
 	_site = site;
 
@@ -346,9 +370,9 @@ export function scatterVegetation( site, seed = 99 ) {
 
 	// --- broadleaf trees: a closed canopy on the forest ground (hillsides, gullies), thinning at
 	// the forest edge into scattered trees; a few lone trees on the meadow ----------------------
-	scatter( rand, X0, Z0, X1, HZ1, 4.6, ( x, z ) => {
+	yield* scatter( rand, X0, Z0, X1, HZ1, 4.6, ( x, z ) => {
 
-		site.cover( x, z, c );
+		site.cover( x, z, c, 3 );
 		if ( c.h < 3 ) return;
 		const clump = N.fbm( x / 60, z / 60, 3 ) * 0.6 + N2.fbm( x / 17, z / 17, 2 ) * 0.4;
 		let p = c.forest > 0.5 ? 0.9 : smoothstep( 0.15, 0.5, c.forest ) * 0.38 * smoothstep( - 0.25, 0.2, clump ) + 0.008;
@@ -386,7 +410,7 @@ export function scatterVegetation( site, seed = 99 ) {
 
 	};
 
-	scatter( rand, - 240, - 230, 250, - 40, 3.4, ( x, z ) => {
+	yield* scatter( rand, - 240, - 230, 250, - 40, 3.4, ( x, z ) => {
 
 		if ( ! site.inBay( x, z ) ) return;
 		if ( site.villageDist( x, z ) < RULES.villageRadius ) return;
@@ -405,11 +429,11 @@ export function scatterVegetation( site, seed = 99 ) {
 	// --- a few palms inside the village radius: between the houses and along the beach edge,
 	// clear of buildings, boardwalks and the pier path --------------------------------------
 	const vc = [];
-	scatter( rand, - 70, - 220, 150, - 60, 3.5, ( x, z ) => {
+	yield* scatter( rand, - 70, - 220, 150, - 60, 3.5, ( x, z ) => {
 
 		if ( site.villageDist( x, z ) >= RULES.villageRadius ) return;
 		if ( ! site.hasVillage && z < - 106 ) return; // unknown houses: stay on the beach edge
-		site.cover( x, z, c );
+		site.cover( x, z, c, 2.05 );
 		if ( c.h < 2.05 || c.h > 14 || c.bare > 0.2 || c.ny < 0.9 ) return;
 		if ( site.pathDist( x, z ) < RULES.pathClear || site.spawnDist( x, z ) < RULES.spawnClear + 3 ) return;
 		const od = site.obstacleDist( x, z );
@@ -434,7 +458,7 @@ export function scatterVegetation( site, seed = 99 ) {
 	out.villagePalms = village;
 
 	// --- palms scattered over the valley and the forest edge (above the canopy here and there)
-	scatter( rand, X0, Z0, X1, Z1, 12, ( x, z ) => {
+	yield* scatter( rand, X0, Z0, X1, Z1, 12, ( x, z ) => {
 
 		site.cover( x, z, c );
 		const patch = N2.fbm( x / 110 + 3.3, z / 110 - 1.7, 3 );
@@ -486,9 +510,9 @@ export function scatterVegetation( site, seed = 99 ) {
 
 	// --- shrubs: thickets along the forest edge and in the gullies, understory in the forest,
 	// a few clumps out on the meadow and the back of the beach -----------------------------
-	scatter( rand, X0, Z0, X1, HZ1, 3.0, ( x, z ) => {
+	yield* scatter( rand, X0, Z0, X1, HZ1, 3.0, ( x, z ) => {
 
-		site.cover( x, z, c );
+		site.cover( x, z, c, 2.3 );
 		if ( c.h < 2.3 ) return;
 		const thicket = N.fbm( x / 26 + 11.3, z / 26 - 4.1, 3 ) * 0.7 + N2.fbm( x / 9, z / 9, 2 ) * 0.3;
 		const edge = smoothstep( 0.2, 0.45, c.forest ) * ( 1 - smoothstep( 0.75, 0.95, c.forest ) );
@@ -510,7 +534,7 @@ export function scatterVegetation( site, seed = 99 ) {
 	} );
 
 	// --- banana groves on the lower slopes around the village ----------------------------------
-	scatter( rand, - 280, - 420, 360, - 40, 4.2, ( x, z ) => {
+	yield* scatter( rand, - 280, - 420, 360, - 40, 4.2, ( x, z ) => {
 
 		const dv = site.villageDist( x, z );
 		if ( dv > 330 ) return;
@@ -527,9 +551,9 @@ export function scatterVegetation( site, seed = 99 ) {
 	} );
 
 	// --- young palms: grove edges, forest edge, the back of the beach ---------------------------
-	scatter( rand, X0, Z0, X1, Z1, 6.5, ( x, z ) => {
+	yield* scatter( rand, X0, Z0, X1, Z1, 6.5, ( x, z ) => {
 
-		site.cover( x, z, c );
+		site.cover( x, z, c, 2.3 );
 		if ( c.h < 2.3 || c.h > 120 ) return;
 		const grove = N.fbm( x / 48, z / 48, 3 );
 		const p = ( site.inBay( x, z ) ? 0.22 : 0.1 ) * smoothstep( - 0.3, 0.2, grove ) * ( 1 - c.forest * 0.6 );
@@ -543,9 +567,9 @@ export function scatterVegetation( site, seed = 99 ) {
 	} );
 
 	// --- ferns: forest floor, gullies, the shady foot of the forest edge --------------------------
-	scatter( rand, X0, Z0, X1, Z1, 2.2, ( x, z ) => {
+	if ( ferns ) yield* scatter( rand, X0, Z0, X1, Z1, 2.2, ( x, z ) => {
 
-		site.cover( x, z, c );
+		site.cover( x, z, c, 4 );
 		if ( c.h < 4 ) return;
 		const fn = N2.fbm( x / 28 - 9.9, z / 28 + 3.7, 3 );
 		const p = ( 0.08 + 0.72 * smoothstep( 0.3, 0.8, c.forest ) + c.gully * 0.4 ) * smoothstep( - 0.35, 0.2, fn );
@@ -561,9 +585,9 @@ export function scatterVegetation( site, seed = 99 ) {
 	// --- broadleaf understory (big leaves) ------------------------------------------------------
 	// monstera: clumps on the shaded forest floor and along the forest edge, in the gullies, and a
 	// few in the village gardens
-	scatter( rand, X0, Z0, X1, Z1, 3.2, ( x, z ) => {
+	yield* scatter( rand, X0, Z0, X1, Z1, 3.2, ( x, z ) => {
 
-		site.cover( x, z, c );
+		site.cover( x, z, c, 3.5 );
 		if ( c.h < 3.5 ) return;
 		const clump = N2.fbm( x / 22 + 7.7, z / 22 - 1.3, 3 );
 		const dv = site.villageDist( x, z );
@@ -579,9 +603,9 @@ export function scatterVegetation( site, seed = 99 ) {
 	} );
 
 	// elephant ears: damp ground (gullies, the low backshore behind the bay, the forest foot)
-	scatter( rand, X0, Z0, X1, Z1, 3.6, ( x, z ) => {
+	yield* scatter( rand, X0, Z0, X1, Z1, 3.6, ( x, z ) => {
 
-		site.cover( x, z, c );
+		site.cover( x, z, c, 2.6 );
 		if ( c.h < 2.6 ) return;
 		const clump = N.fbm( x / 30 - 3.1, z / 30 + 8.4, 3 );
 		const damp = c.gully * 0.8 + smoothstep( 7, 3, c.h ) * 0.25 + smoothstep( 0.25, 0.5, c.forest ) * ( 1 - smoothstep( 0.7, 0.95, c.forest ) ) * 0.25;
@@ -596,10 +620,10 @@ export function scatterVegetation( site, seed = 99 ) {
 	} );
 
 	// heliconia: colour around the village (beside houses and paths) and at the sunny forest edge
-	scatter( rand, X0, Z0, X1, Z1, 3.4, ( x, z ) => {
+	yield* scatter( rand, X0, Z0, X1, Z1, 3.4, ( x, z ) => {
 
 		const dv = site.villageDist( x, z );
-		site.cover( x, z, c );
+		site.cover( x, z, c, 3 );
 		if ( c.h < 3 ) return;
 		const edge = smoothstep( 0.2, 0.45, c.forest ) * ( 1 - smoothstep( 0.7, 0.9, c.forest ) );
 		const od = site.obstacleDist( x, z );
@@ -615,10 +639,10 @@ export function scatterVegetation( site, seed = 99 ) {
 	} );
 
 	// bird of paradise: planted beside the village houses
-	scatter( rand, X0, Z0, X1, Z1, 3.0, ( x, z ) => {
+	yield* scatter( rand, X0, Z0, X1, Z1, 3.0, ( x, z ) => {
 
 		if ( site.villageDist( x, z ) > 105 ) return;
-		site.cover( x, z, c );
+		site.cover( x, z, c, 3 );
 		if ( c.h < 3 ) return;
 		const od = site.obstacleDist( x, z );
 		const p = smoothstep( 10, 3.5, od ) * 0.35 * smoothstep( - 0.2, 0.3, N.fbm( x / 14 - 4.4, z / 14 + 6.6, 2 ) );
@@ -641,6 +665,13 @@ export function scatterVegetation( site, seed = 99 ) {
 //   R dune grass, G tall meadow grass, B sea oats, A beach creeper. Returns { data, res }.
 export const GRASS_MASK_TEXEL = 2;
 export function buildGrassMask( site ) {
+
+	return drain( grassMaskSteps( site ) );
+
+}
+
+// buildGrassMask as a generator (yields between rows)
+export function* grassMaskSteps( site ) {
 
 	const t = site.terrain;
 	const res = Math.round( t.size / GRASS_MASK_TEXEL );
@@ -733,6 +764,8 @@ export function buildGrassMask( site ) {
 			data[ o + 3 ] = Math.round( 255 * clamp( vine * keep, 0, 1 ) );
 
 		}
+
+		yield;
 
 	}
 

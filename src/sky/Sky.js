@@ -260,6 +260,10 @@ export class Sky {
 		// at dusk and at night; here the sky's radiance, its reflections and the fog follow it)
 		this.adaptation = 1;
 		this._adaptSun = new THREE.Vector3();
+		// sceneAdaptation: the whole scene's exposure follows the adaptation (App multiplies the
+		// renderer's exposure by it, as Tidewater's auto exposure did), so the sky and the fog don't
+		// apply it again themselves
+		this.sceneAdaptation = false;
 
 		// the passes' shaders compile in the background (the clouds wait for them: no hitch on first use)
 		this._compile();
@@ -349,11 +353,12 @@ export class Sky {
 		const jump = this._adaptSun.dot( dir ) < 0.9986; // a time of day jump (> 3 degrees): no adaptation
 		this._adaptSun.copy( dir );
 		this.adaptation = jump ? target : this.adaptation + ( target - this.adaptation ) * ( 1 - Math.exp( - dt * ( target > this.adaptation ? 1.6 : 1.1 ) ) );
-		this.uniforms.skyExposure.value = this.adaptation;
+		const skyAdapt = this.sceneAdaptation ? 1 : this.adaptation;
+		this.uniforms.skyExposure.value = skyAdapt;
 
 		// the horizon haze the fog fades into: the atmosphere's horizon (Tidewater's units, those of the
 		// sky behind the island) and the moonlit sky's at night
-		_c.copy( MOON_SKY ).multiplyScalar( night ).add( lit.horizon ).multiplyScalar( this.adaptation );
+		_c.copy( MOON_SKY ).multiplyScalar( night ).add( lit.horizon ).multiplyScalar( skyAdapt );
 		this.fog.color.copy( _c );
 		G.horizonColor.value.copy( _c );
 		if ( this.scene.background && this.scene.background.isColor ) this.scene.background.copy( _c );
