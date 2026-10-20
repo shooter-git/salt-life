@@ -1,7 +1,11 @@
 # Credits
 
+Salt Life is based on [Tidewater](https://github.com/dgreenheck/tidewater) by Dan Greenheck (© DRG
+Software Solutions LLC, MIT). Its code, the whale model and the stall signs come from Tidewater.
+
 The code in this repository is released under the MIT license (see `LICENSE`). The third-party
-assets below keep their own licences.
+assets below keep their own licences. `assets.lock.json` lists every asset file with its licence
+and source, for All the Spaces; `tools/update-lock.mjs` writes it from these credits.
 
 ## Audio: `public/audio/`
 

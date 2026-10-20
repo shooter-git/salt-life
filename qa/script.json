@@ -1,0 +1,9 @@
+{
+  "$comment": "What a person might do, played on every screen size during All the Spaces' checks. Positions are fractions of the screen (0 to 1).",
+  "steps": [
+    { "wait": 1 },
+    { "tap": [0.5, 0.5] },
+    { "wait": 2 },
+    { "screenshot": "open-sea" }
+  ]
+}
