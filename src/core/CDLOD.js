@@ -1,19 +1,18 @@
-import { Vector2, Vector4, Box3, Frustum, Matrix4, Vector3, Sphere } from '../engine/index.js';
-import { InstancedBufferGeometry, BufferAttribute, InstancedBufferAttribute } from '../engine/geometry/index.js';
-import { UniformBlock, ShaderModule } from '../engine/webgpu.js';
+import { Vector2, Vector4, Box3, Frustum, Matrix4, Vector3, Sphere, InstancedBufferGeometry, BufferAttribute, InstancedBufferAttribute } from '../engine/index.js';
 
 // Continuous distance-dependent LOD (Strugar 2010) quadtree grid.
 // A single G x G grid mesh is instanced for every selected node. Vertices near the
 // outer edge of each LOD range geomorph toward the next coarser grid so there are
 // never cracks or pops between levels.
 //
-// WGSL module (`cdlod.module`, prefix `cdlod`, or the `prefix` option): the material declares the
-// instanced attribute `nodeData: vec4f` (origin xz, size, lod) and calls
-//   fn cdlodSnapped( node: vec4f, grid: vec2f ) -> vec2f             the vertex on its LOD's lattice
-//   fn cdlodMorph( node: vec4f, grid: vec2f, viewPos: vec3f, y0: f32 ) -> CdlodVertex
+// GLSL (`cdlod.glsl`, names prefixed `cdlod`, or the `prefix` option): the material's vertex shader
+// declares the instanced attribute `nodeData` (origin xz, size, lod) and calls
+//   vec2 cdlodSnapped( vec4 node, vec2 grid )                         the vertex on its LOD's lattice
+//   CdlodVertex cdlodMorph( vec4 node, vec2 grid, vec3 viewPos, float y0 )
 //        (y0 = height at cdlodSnapped(), for the morph distance; 0 for the sea)
-//   struct CdlodVertex { worldXZ: vec2f, spacing: f32, morphK: f32, lod: f32, size: f32 }
-// Uniforms: <prefix>.morph[ lod ] = ( morph start, 1 / morph range, grid spacing, 0 ).
+//   struct CdlodVertex { vec2 worldXZ; float spacing; float morphK; float lod; float size; }
+// Uniforms (`cdlod.uniforms`, merged into the material's): <prefix>Morph[ lod ] = ( morph start,
+// 1 / morph range, grid spacing, 0 ).
 export class CDLOD {
 
 	constructor( {
@@ -27,7 +26,7 @@ export class CDLOD {
 		maxY = 20,
 		heightBounds = null, // optional (x0,z0,x1,z1) => [minY,maxY]
 		center = null, // optional fixed world bounds for root grid { x, z, size }
-		prefix = 'cdlod', // WGSL name prefix of this instance's module
+		prefix = 'cdlod', // GLSL name prefix of this instance's functions and uniforms
 	} = {} ) {
 
 		this.G = gridSize;
@@ -53,41 +52,37 @@ export class CDLOD {
 
 		const spacings = [];
 		for ( let l = 0; l < levels; l ++ ) spacings.push( leafSize * Math.pow( 2, l ) / gridSize );
-		// (three version: uniformArray( morph ) / uniformArray( spacings ); `.array` kept for callers)
+		// `.array` kept for callers
 		this.uMorph = { array: morph };
 		this.uSpacing = { array: spacings };
 		const P = prefix;
 		const Cap = P[ 0 ].toUpperCase() + P.slice( 1 );
-		this.params = new UniformBlock( Cap + 'Params', {
-			morph: [ `vec4f[${ levels }]`, morph.map( ( m, l ) => new Vector4( m.x, m.y, spacings[ l ], 0 ) ) ],
-		}, { label: P } );
-		this.module = new ShaderModule( {
-			name: P,
-			uniforms: this.params,
-			uniformName: P,
-			code: /* wgsl */`
-struct ${ Cap }Vertex { worldXZ: vec2f, spacing: f32, morphK: f32, lod: f32, size: f32 };
+		this.uniforms = { [ P + 'Morph' ]: { value: morph.map( ( m, l ) => new Vector4( m.x, m.y, spacings[ l ], 0 ) ) } };
+		this.prefix = P;
+		this.glsl = /* glsl */`
+attribute vec4 nodeData;
+uniform vec4 ${ P }Morph[ ${ levels } ];
+struct ${ Cap }Vertex { vec2 worldXZ; float spacing; float morphK; float lod; float size; };
 
 // Morph in world space on the LOD's own vertex lattice (spacing h). Quarter nodes of a
 // partially subdivided parent carry the parent's LOD, so their extra vertices first snap
 // onto that lattice; every node covering a point then computes the same position.
-fn ${ P }Snapped( node: vec4f, grid: vec2f ) -> vec2f {
-	let h = ${ P }.morph[ i32( node.w ) ].z;
-	let p = node.xy + grid * node.z;
+vec2 ${ P }Snapped( vec4 node, vec2 grid ) {
+	float h = ${ P }Morph[ int( node.w ) ].z;
+	vec2 p = node.xy + grid * node.z;
 	return floor( p / h + 1e-3 ) * h;
 }
 
-fn ${ P }Morph( node: vec4f, grid: vec2f, viewPos: vec3f, y0: f32 ) -> ${ Cap }Vertex {
-	let lod = i32( node.w );
-	let m = ${ P }.morph[ lod ];
-	let h = m.z;
-	let p = node.xy + grid * node.z;
-	let idx = floor( p / h + 1e-3 );
-	let snapped = idx * h;
-	let dist = length( viewPos - vec3f( snapped.x, y0, snapped.y ) );
-	let morphK = clamp( ( dist - m.x ) * m.y, 0.0, 1.0 );
-	let odd = fract( idx * 0.5 ) * 2.0;
-	var o: ${ Cap }Vertex;
+${ Cap }Vertex ${ P }Morph_( vec4 node, vec2 grid, vec3 viewPos, float y0 ) {
+	vec4 m = ${ P }Morph[ int( node.w ) ];
+	float h = m.z;
+	vec2 p = node.xy + grid * node.z;
+	vec2 idx = floor( p / h + 1e-3 );
+	vec2 snapped = idx * h;
+	float dist = length( viewPos - vec3( snapped.x, y0, snapped.y ) );
+	float morphK = clamp( ( dist - m.x ) * m.y, 0.0, 1.0 );
+	vec2 odd = fract( idx * 0.5 ) * 2.0;
+	${ Cap }Vertex o;
 	o.worldXZ = snapped - odd * h * morphK;
 	o.spacing = h * ( morphK + 1.0 );
 	o.morphK = morphK;
@@ -95,8 +90,7 @@ fn ${ P }Morph( node: vec4f, grid: vec2f, viewPos: vec3f, y0: f32 ) -> ${ Cap }V
 	o.size = node.z;
 	return o;
 }
-`,
-		} );
+`;
 
 		// grid geometry in [0,1]^2 on XZ
 		const G = gridSize;
@@ -165,15 +159,15 @@ fn ${ P }Morph( node: vec4f, grid: vec2f, viewPos: vec3f, y0: f32 ) -> ${ Cap }V
 
 	}
 
-	// WGSL snippet (vertex hook) computing `let <out> = cdlodMorph( ... )` for the current vertex: the
-	// material declares `attributes: { nodeData: 'vec4f' }`. `heightFn` optional WGSL function name
-	// ( xz: vec2f ) -> f32 used for the morph distance (defaults to seaLevel 0); `viewPos` WGSL vec3f
-	// (defaults to the camera; the terrain passes its view position so shadow passes morph alike).
-	vertexNodes( heightFn = null, { out = 'lod', viewPos = 'frame.cameraPos' } = {} ) {
+	// GLSL statement (vertex shader) computing `<Cap>Vertex <out> = <prefix>Morph_( ... )` for the
+	// current vertex. `heightFn` optional GLSL function name ( vec2 xz ) -> float used for the morph
+	// distance (defaults to sea level 0); `viewPos` a GLSL vec3 (defaults to the camera).
+	vertexNodes( heightFn = null, { out = 'lod', viewPos = 'cameraPosition' } = {} ) {
 
-		const P = this.module.name;
-		const y0 = heightFn ? `${ heightFn }( ${ P }Snapped( v.nodeData, v.position.xz ) )` : '0.0';
-		return `let ${ out } = ${ P }Morph( v.nodeData, v.position.xz, ${ viewPos }, ${ y0 } );`;
+		const P = this.prefix;
+		const Cap = P[ 0 ].toUpperCase() + P.slice( 1 );
+		const y0 = heightFn ? `${ heightFn }( ${ P }Snapped( nodeData, position.xz ) )` : '0.0';
+		return `${ Cap }Vertex ${ out } = ${ P }Morph_( nodeData, position.xz, ${ viewPos }, ${ y0 } );`;
 
 	}
 
@@ -181,7 +175,7 @@ fn ${ P }Morph( node: vec4f, grid: vec2f, viewPos: vec3f, y0: f32 ) -> ${ Cap }V
 
 		camera.updateMatrixWorld();
 		this._mat.multiplyMatrices( camera.projectionMatrix, camera.matrixWorldInverse );
-		this._frustum.setFromProjectionMatrix( this._mat, camera.coordinateSystem, camera.reversedDepth );
+		this._frustum.setFromProjectionMatrix( this._mat, camera.coordinateSystem );
 		camera.getWorldPosition( this._cam );
 
 		this.count = 0;

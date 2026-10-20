@@ -8,4 +8,140 @@ html, body {
 	-webkit-user-select: none;
 	user-select: none;
 	-webkit-tap-highlight-color: transparent;
+	font: 15px / 1.35 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	color: #f4f1ea;
+}
+
+/* ---- heads-up display */
+
+.hud {
+	position: fixed;
+	inset: 0;
+	pointer-events: none;
+	z-index: 10;
+}
+
+.hud-prompt,
+.hud-hint,
+.hud-toast {
+	position: absolute;
+	left: 50%;
+	transform: translateX(-50%);
+	max-width: calc(100% - 32px);
+	box-sizing: border-box;
+	padding: 8px 14px;
+	border-radius: 999px;
+	background: rgba(8, 20, 28, 0.55);
+	text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.hud-prompt { bottom: calc(28px + env(safe-area-inset-bottom)); }
+.hud-hint { bottom: calc(76px + env(safe-area-inset-bottom)); opacity: 0.9; }
+.hud-toast { top: calc(16px + env(safe-area-inset-top)); }
+
+.hud kbd {
+	display: inline-block;
+	min-width: 1.4em;
+	padding: 1px 6px;
+	margin-right: 6px;
+	border-radius: 5px;
+	background: rgba(244, 241, 234, 0.92);
+	color: #10222c;
+	font: 600 13px / 1.4 system-ui, sans-serif;
+	text-align: center;
+	text-shadow: none;
+}
+
+/* ---- touch controls */
+
+.touch {
+	position: fixed;
+	inset: 0;
+	z-index: 20;
+	pointer-events: none;
+	display: none;
+	touch-action: none;
+}
+
+.touch.is-on { display: block; }
+
+.touch-zone {
+	position: absolute;
+	top: 64px;
+	bottom: 0;
+	pointer-events: auto;
+	touch-action: none;
+}
+
+.touch-move { left: 0; width: 45%; }
+.touch-look { right: 0; width: 55%; }
+
+.touch-stick {
+	position: absolute;
+	width: 120px;
+	height: 120px;
+	margin: -60px 0 0 -60px;
+	border-radius: 50%;
+	border: 2px solid rgba(244, 241, 234, 0.45);
+	background: rgba(8, 20, 28, 0.25);
+	pointer-events: none;
+}
+
+.touch-knob {
+	position: absolute;
+	left: 34px;
+	top: 34px;
+	width: 52px;
+	height: 52px;
+	border-radius: 50%;
+	background: rgba(244, 241, 234, 0.75);
+}
+
+.touch-buttons {
+	position: absolute;
+	right: calc(16px + env(safe-area-inset-right));
+	bottom: calc(20px + env(safe-area-inset-bottom));
+	display: flex;
+	flex-direction: column-reverse;
+	align-items: flex-end;
+	gap: 12px;
+	pointer-events: none;
+}
+
+.touch-btn {
+	pointer-events: auto;
+	touch-action: none;
+	min-width: 64px;
+	min-height: 64px;
+	padding: 0 18px;
+	border: 2px solid rgba(244, 241, 234, 0.55);
+	border-radius: 32px;
+	background: rgba(8, 20, 28, 0.45);
+	color: #f4f1ea;
+	font: 600 15px / 1 system-ui, sans-serif;
+	-webkit-user-select: none;
+	user-select: none;
+}
+
+.touch-btn[hidden] { display: none; }
+.touch-btn.is-down { background: rgba(244, 241, 234, 0.35); }
+
+.touch-action {
+	min-height: 72px;
+	background: rgba(214, 160, 70, 0.8);
+	border-color: rgba(255, 236, 200, 0.8);
+	color: #1d150a;
+	max-width: 46vw;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* phone on its side: the buttons in a row, out of the way of the view */
+@media (orientation: landscape) and (max-height: 500px) {
+	.touch-buttons { flex-direction: row-reverse; align-items: flex-end; }
+	.touch-zone { top: 48px; }
 }

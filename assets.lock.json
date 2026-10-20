@@ -804,6 +804,11 @@
 			"author": "three.js authors; J. Jimenez et al."
 		},
 		{
+			"path": "public/world/island.bin",
+			"license": "own",
+			"title": "The island, baked by tools/bake-terrain.mjs"
+		},
+		{
 			"path": "tools/props/fonts/CabinSketch-Bold.ttf",
 			"license": "OFL-1.1",
 			"source": "https://fonts.google.com/specimen/Cabin+Sketch",

@@ -1,9 +1,9 @@
-// CPU-side engine: math, scene graph and geometry with a three.js-compatible
-// API. `import * as THREE from '../engine/index.js'` works as a stopgap for
-// ported files.
+// Math, scene graph and geometry: three.js itself now. Tidewater's own WebGPU engine mirrored
+// three's API so its CPU-side code (game logic, physics, procedural geometry) could be written
+// once; Salt Life draws with three.js and WebGL 2, so `import * as THREE from '../engine/index.js'`
+// simply hands over three and the two addons the engine used to bundle.
 
-export * from './math/index.js';
-export * from './scene/index.js';
-export * from './geometry/index.js';
-export { EventDispatcher } from './core/EventDispatcher.js';
-export { StaticDrawUsage, DynamicDrawUsage, StreamDrawUsage, FrontSide, BackSide, DoubleSide } from './constants.js';
+export * from 'three';
+export { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+export { mergeGeometries, mergeVertices, mergeAttributes } from 'three/addons/utils/BufferGeometryUtils.js';
+export * as BufferGeometryUtils from 'three/addons/utils/BufferGeometryUtils.js';

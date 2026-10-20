@@ -1,4 +1,4 @@
-import { GRAVITY } from '../engine/render/Frame.js';
+import { GRAVITY } from '../core/Globals.js';
 
 // Offline wave-propagation field for shoreline waves.
 //

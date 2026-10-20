@@ -3,7 +3,13 @@
   "steps": [
     { "wait": 1 },
     { "tap": [0.5, 0.5] },
-    { "wait": 2 },
-    { "screenshot": "open-sea" }
+    { "hold": "KeyW", "seconds": 3 },
+    { "screenshot": "down-the-beach" },
+    { "drag": [[0.8, 0.5], [0.6, 0.45]], "seconds": 0.8 },
+    { "press": "Space" },
+    { "hold": "KeyD", "seconds": 1.5 },
+    { "screenshot": "looking-around" },
+    { "hold": "KeyW", "seconds": 4 },
+    { "screenshot": "at-the-water" }
   ]
 }
