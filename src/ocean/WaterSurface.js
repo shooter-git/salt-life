@@ -1,6 +1,7 @@
 import * as THREE from '../engine/index.js';
 import { CDLOD } from '../core/CDLOD.js';
 import { G } from '../core/Globals.js';
+import { rippleTexture } from './SeaTextures.js';
 
 // The sea: one instanced CDLOD grid that follows the camera out to the horizon. Its surface is the
 // open sea's Gerstner waves (Waves), fading out over the outer surf zone, plus Tidewater's breaking
@@ -43,6 +44,7 @@ export class WaterSurface {
 			waterSunColor: G.sunColor,
 			waterSunDir: G.sunDir,
 			waterSky: G.skyIrradiance,
+			waterRipples: { value: rippleTexture() },
 		};
 
 		// envMapIntensity 12: the scene's environment intensity is only a small diffuse fill (Sky); the
@@ -59,6 +61,7 @@ uniform float waterSeaLevel;
 varying vec3 vWater;
 varying float vWaterFade;
 varying vec4 vSurf; // whitewater, clear plunging face, roller relief, swash sheet (0..1)
+varying vec3 vWaterN;
 ` )
 				.replace( '#include <beginnormal_vertex>', /* glsl */`
 	${ this.lod.vertexNodes() }
@@ -98,7 +101,8 @@ ${ SH ? /* glsl */`
 	if ( y < ground ) y = min( y, below );
 	vec3 wPos = vec3( x0.x + total.x, y, x0.y + total.z );
 	vWater = wPos;
-	vWaterFade = fade;` )
+	vWaterFade = fade;
+	vWaterN = objectNormal;` )
 				.replace( '#include <begin_vertex>', 'vec3 transformed = wPos;' );
 
 			shader.fragmentShader = shader.fragmentShader
@@ -110,6 +114,8 @@ uniform vec3 waterSky;
 varying vec3 vWater;
 varying float vWaterFade;
 varying vec4 vSurf;
+varying vec3 vWaterN;
+uniform sampler2D waterRipples;
 float waterNoise( vec2 p ) {
 	vec2 i = floor( p ), f = fract( p );
 	vec2 u = f * f * ( 3.0 - 2.0 * f );
@@ -138,15 +144,18 @@ float waterLace( vec2 p, float cover ) {
 	// runs out on the sand
 	vec2 drift = vec2( 0.0, waterTime * 0.12 );
 	float ww = clamp( vSurf.x, 0.0, 1.0 );
-	float foam = waterLace( vWater.xz * 0.9 + drift, ww * 0.95 ) * ww;
-	foam = max( foam, ww * ww * 0.6 );
+	// two scales of lace: clumps of bubbles (~0.5 m) torn into a fine net; solid only at the very top
+	// of the roller
+	float lace = waterLace( vWater.xz * 2.1 + drift, ww * 0.9 ) * 0.65 + waterLace( vWater.xz * 5.3 + drift * 1.7 + 3.1, ww * 0.8 ) * 0.35;
+	float foam = lace * ww;
+	foam = max( foam, smoothstep( 0.75, 1.0, ww ) * 0.75 );
 	float film = depth;
 ${ SH ? /* glsl */`
 	vec4 se = shoreSwashEdge( vWater.xz, film );
 	float frontD = se.y;
 	float uprush = smoothstep( 0.46, 0.32, se.z );
 	float frontFoam = smoothstep( 0.9, 0.0, frontD ) * smoothstep( -0.05, 0.08, frontD ) * uprush;
-	foam = max( foam, waterLace( vWater.xz * 2.2 + 3.7, 0.7 ) * frontFoam * 0.9 );
+	foam = max( foam, waterLace( vWater.xz * 4.5 + 3.7, 0.65 ) * frontFoam * 0.85 );
 	// the swash sheet ends on its analytic front, not on the mesh triangles
 	float sheetEdge = smoothstep( 0.0, 0.012, se.x );` : `
 	float sheetEdge = smoothstep( 0.0, 0.03, film );
@@ -170,6 +179,17 @@ ${ SH ? /* glsl */`
 	diffuseColor.a = clamp( max( max( cover, glow * 0.6 ), foam ), 0.0, 1.0 ) * sheetEdge;
 ` )
 				.replace( '#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = mix( roughnessFactor, 0.85, foam );' )
+				.replace( '#include <normal_fragment_maps>', /* glsl */`
+	// short wind ripples and capillary waves on the waves near the camera (two drifting samples),
+	// calmed by the foam
+	vec3 wN = normalize( vWaterN );
+	float rippleK = ( 1.0 - smoothstep( 25.0, 140.0, length( cameraPosition - vWater ) ) ) * ( 1.0 - foam );
+	vec2 r1 = texture2D( waterRipples, vWater.xz * 0.11 + waterTime * vec2( 0.012, 0.03 ) ).xy * 2.0 - 1.0;
+	vec2 r2 = texture2D( waterRipples, vWater.xz * 0.043 + 0.3 - waterTime * vec2( 0.02, 0.008 ) ).xy * 2.0 - 1.0;
+	vec2 rs = ( r1 * 0.6 + r2 * 0.4 ) * 0.32 * rippleK;
+	vec3 nP = normalize( wN + vec3( - rs.x, 0.0, - rs.y ) );
+	nP = gl_FrontFacing ? nP : - nP;
+	normal = normalize( ( viewMatrix * vec4( nP, 0.0 ) ).xyz );` )
 				.replace( '#include <opaque_fragment>', /* glsl */`
 	// premultiplied: the water's own light by its opacity, reflections in full (less on foam)
 	gl_FragColor = vec4( waterBody * diffuseColor.a + totalSpecular * ( 1.0 - foam * 0.8 ) * sheetEdge, diffuseColor.a );` )

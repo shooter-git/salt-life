@@ -3,9 +3,10 @@ import { CDLOD } from '../core/CDLOD.js';
 import { G } from '../core/Globals.js';
 import { bakeTerrainMaps } from './terrain/TerrainBake.js';
 import { getDetailTexture } from './terrain/DetailTextures.js';
-import { TERRAIN_SHADING_GLSL } from './terrain/TerrainShading.js';
+import { TERRAIN_SHADING_GLSL, rot2 } from './terrain/TerrainShading.js';
 import { TERRAIN_SURFACE_GLSL } from './terrain/TerrainSurface.js';
 import { halfIsland } from './terrain/IslandBake.js';
+import { causticTexture } from '../ocean/SeaTextures.js';
 
 // The island's ground, drawn with one instanced CDLOD grid (core/CDLOD.js): every vertex reads its
 // height from a float texture of TerrainData's heightmap. The surface is Tidewater's terrain
@@ -82,6 +83,9 @@ float terrainHeightAt( vec2 xz ) {
 			terrainWindDir: G.windDir,
 			terrainWindSpeed: G.windSpeed,
 			terrainGustOffset: { value: this.gustOffset },
+			terrainCaustics: { value: causticTexture() },
+			terrainTime: G.time,
+			terrainNight: G.night,
 		};
 
 		this.uniforms = uniforms;
@@ -112,6 +116,9 @@ uniform vec3 terrainWaterAbsorption;
 uniform vec2 terrainWindDir;
 uniform float terrainWindSpeed;
 uniform vec2 terrainGustOffset;
+uniform sampler2D terrainCaustics;
+uniform float terrainTime;
+uniform float terrainNight;
 varying vec3 vTerrain;
 vec4 terDetail( vec2 uv ) { return texture( terrainDetailTex, uv ); }
 vec2 terrainUvOf( vec2 xz ) { return ( xz - terrainMapInfo.xy ) / terrainMapInfo.z; }
@@ -123,7 +130,15 @@ ${ TERRAIN_SHADING_GLSL }
 ` )
 				.replace( '#include <color_fragment>', TERRAIN_SURFACE_GLSL + /* glsl */`
 	// under the sea: the water takes the red out first, then the green, on the way down and back
-	tAlbedo *= exp( - terrainWaterAbsorption * max( terrainSeaLevel - h, 0.0 ) * 1.6 );
+	float cWater = max( terrainSeaLevel - h, 0.0 );
+	tAlbedo *= exp( - terrainWaterAbsorption * cWater * 1.6 );
+	// caustics: the net of sunlight focused by the waves, drifting over the shallow sea floor
+	float cK = ss( 0.05, 0.7, cWater ) * exp( - cWater * 0.1 ) * ( 1.0 - terrainNight );
+	if ( cK > 0.001 ) {
+		float ca = min( texture( terrainCaustics, xz * 0.19 + terrainTime * vec2( 0.031, 0.018 ) ).r,
+			texture( terrainCaustics, ${ rot2( 'xz', 0.8 ) } * 0.15 + 0.5 - terrainTime * vec2( 0.017, 0.034 ) ).r );
+		tAlbedo *= 1.0 + ca * 3.0 * cK;
+	}
 	diffuseColor.rgb = tAlbedo;
 ` )
 				.replace( '#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = tRough;' )
