@@ -18,6 +18,7 @@ const PAD_KEYS = {
 };
 const PAD_LOOK = 700; // px per second at full right-stick deflection
 const DEADZONE = 0.15;
+const MAX_STEP = 300; // px: a mouse event moving further is spurious (see the mousemove handler)
 
 export class Input {
 
@@ -75,6 +76,9 @@ export class Input {
 		dom.addEventListener( 'contextmenu', ( e ) => e.preventDefault() );
 		window.addEventListener( 'mousemove', ( e ) => {
 
+			// (one event moving hundreds of pixels is spurious: browsers report the cursor's jump as it
+			// locks, and headless ones a jump and its return for every scripted move)
+			if ( Math.abs( e.movementX ) > MAX_STEP || Math.abs( e.movementY ) > MAX_STEP ) return;
 			if ( this.locked || this.mouseDown || this.rightDown ) {
 
 				this.look.x += e.movementX;

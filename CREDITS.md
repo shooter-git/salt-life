@@ -92,5 +92,6 @@ These are published techniques. No code from the papers is included.
 | Rasterized caustics | Evan Wallace's *WebGL Water* approach |
 | Breaking waves | Guerrilla Games, *Horizon Forbidden West* water (SIGGRAPH 2022) |
 
-The cloud noise, lighting and sampling scheme (`src/sky/Clouds.js`) is adapted from DRG Software Solutions'
-own *Sky Pro WebGPU*. It is published here under this repository's MIT license by its copyright holder.
+The cloud noise, lighting and sampling scheme (`src/sky/SkyProClouds.js`; the cirrus veil in `src/sky/Clouds.js`) is
+adapted from DRG Software Solutions' own *Sky Pro WebGPU*. It is published here under this repository's MIT license
+by its copyright holder. Salt Life generates the cloud noise volume at load instead of downloading it.

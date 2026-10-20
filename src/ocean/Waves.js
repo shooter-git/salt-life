@@ -30,7 +30,7 @@ const COUNT = { low: 4, mid: 6, high: 8 };
 const STEEPNESS = 0.55; // sum of the waves' crest sharpening (< 1: no loops)
 
 // depth (m) over which the open-sea waves fade out toward the beach
-export const SHALLOW_FADE = [ 0.3, 6.0 ];
+export const SHALLOW_FADE = [ 1.5, 12.0 ]; // (the shore waves take over from ~13 m of depth in)
 
 export class Waves {
 

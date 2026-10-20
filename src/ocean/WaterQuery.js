@@ -11,10 +11,11 @@ export const MAX_QUERIES = 64;
 // `resultInputs` / `latency` for the boat, which integrates between results.
 export class WaterQuery {
 
-	constructor( waves, terrain = null ) {
+	constructor( waves, terrain = null, shore = null ) {
 
 		this.waves = waves;
 		this.terrain = terrain;
+		this.shore = shore; // ShoreWaves: the breakers and the swash sheet near the beach
 		this.inputs = new Float32Array( MAX_QUERIES * 4 );
 		this.count = 1;
 		this.cpu = new Float32Array( MAX_QUERIES * 4 );
@@ -65,16 +66,35 @@ export class WaterQuery {
 
 	}
 
+	// the water surface's height at (x, z): the open sea, the breaking shore waves on top, and the
+	// swash sheet on the sand (the same smooth max the water mesh takes)
+	heightAt( x, z, t ) {
+
+		let h = this.waves.heightAt( x, z, t );
+		if ( this.shore && this.terrain ) {
+
+			const ground = this.terrain.heightAt( x, z );
+			const sw = this.shore.sample( x, z, t, ground, this.terrain );
+			h += sw.y;
+			const k = 0.04, m = Math.min( 1, Math.max( 0, ( sw.swashLevel - h ) / k * 0.5 + 0.5 ) );
+			h = h + ( sw.swashLevel - h ) * m + m * ( 1 - m ) * k;
+
+		}
+
+		return h;
+
+	}
+
 	update() {
 
 		const t = G.time.value;
-		const W = this.waves, e = 0.35;
+		const e = 0.35;
 		for ( let i = 0; i < this.count; i ++ ) {
 
 			const x = this.inputs[ i * 4 ], z = this.inputs[ i * 4 + 1 ];
-			const h = W.heightAt( x, z, t );
-			const hx = W.heightAt( x + e, z, t );
-			const hz = W.heightAt( x, z + e, t );
+			const h = this.heightAt( x, z, t );
+			const hx = this.heightAt( x + e, z, t );
+			const hz = this.heightAt( x, z + e, t );
 			const nx = ( h - hx ) / e, nz = ( h - hz ) / e;
 			const len = Math.hypot( nx, 1, nz );
 			this.cpu[ i * 4 ] = h;

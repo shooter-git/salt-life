@@ -11,6 +11,8 @@ import { GRAVITY } from '../core/Globals.js';
 //   r = arrival time T (s), g,b = propagation direction * exposure (length = exposure 0..1),
 //   a = arrival time at the nearest shoreline (extended onto land for swash timing)
 
+// (it holds only the marching front, a few thousand cells: it starts small and grows when full,
+// as the whole field's worth would be megabytes of a phone's script memory)
 class MinHeap {
 
 	constructor( cap ) {
@@ -22,6 +24,16 @@ class MinHeap {
 	}
 
 	push( k, v ) {
+
+		if ( this.size === this.keys.length ) {
+
+			const keys = new Float64Array( this.size * 2 ), vals = new Int32Array( this.size * 2 );
+			keys.set( this.keys );
+			vals.set( this.vals );
+			this.keys = keys;
+			this.vals = vals;
+
+		}
 
 		let i = this.size ++;
 		const keys = this.keys, vals = this.vals;
@@ -88,7 +100,7 @@ export function computeShoreField( terrain, { res = 512, swellDir = [ 0, - 1 ], 
 
 	const T = new Float32Array( N ).fill( Infinity );
 	const state = new Uint8Array( N ); // 0 far, 1 trial, 2 known
-	const heap = new MinHeap( N * 4 );
+	const heap = new MinHeap( 8 * res );
 	const [ sdx, sdz ] = swellDir;
 	const c0 = Math.sqrt( GRAVITY * maxDepth );
 
@@ -129,9 +141,9 @@ export function computeShoreField( terrain, { res = 512, swellDir = [ 0, - 1 ], 
 		if ( state[ k ] === 2 ) continue;
 		state[ k ] = 2;
 		const i = k % res, j = ( k / res ) | 0;
-		const nb = [ [ i - 1, j ], [ i + 1, j ], [ i, j - 1 ], [ i, j + 1 ] ];
-		for ( const [ ni, nj ] of nb ) {
+		for ( let n = 0; n < 4; n ++ ) {
 
+			const ni = n === 0 ? i - 1 : n === 1 ? i + 1 : i, nj = n === 2 ? j - 1 : n === 3 ? j + 1 : j;
 			if ( ni < 0 || nj < 0 || ni >= res || nj >= res ) continue;
 			const nk = nj * res + ni;
 			if ( state[ nk ] === 2 || speed[ nk ] <= 0 ) continue;
@@ -186,18 +198,19 @@ export function computeShoreField( terrain, { res = 512, swellDir = [ 0, - 1 ], 
 	extend( Tfilled, 24, h / 1.5 );
 
 	// smooth to remove first-order FMM kinks (keeps phase monotonic)
-	let Ts = Tfilled;
+	// (two buffers taking turns)
+	let Ts = Tfilled, spare = new Float32Array( N );
 	for ( let it = 0; it < 3; it ++ ) {
 
-		const out = new Float32Array( N );
+		const out = spare;
 		for ( let j = 0; j < res; j ++ ) for ( let i = 0; i < res; i ++ ) {
 
 			const k = j * res + i;
 			if ( ! isFinite( Ts[ k ] ) ) { out[ k ] = Ts[ k ]; continue; }
 			let s = Ts[ k ] * 4, w = 4;
-			for ( const [ di, dj ] of [ [ - 1, 0 ], [ 1, 0 ], [ 0, - 1 ], [ 0, 1 ] ] ) {
+			for ( let n = 0; n < 4; n ++ ) {
 
-				const ni = i + di, nj = j + dj;
+				const ni = n === 0 ? i - 1 : n === 1 ? i + 1 : i, nj = n === 2 ? j - 1 : n === 3 ? j + 1 : j;
 				if ( ni < 0 || nj < 0 || ni >= res || nj >= res ) continue;
 				const v = Ts[ nj * res + ni ];
 				if ( isFinite( v ) ) { s += v; w ++; }
@@ -208,6 +221,7 @@ export function computeShoreField( terrain, { res = 512, swellDir = [ 0, - 1 ], 
 
 		}
 
+		spare = Ts;
 		Ts = out;
 
 	}
@@ -215,11 +229,11 @@ export function computeShoreField( terrain, { res = 512, swellDir = [ 0, - 1 ], 
 	// directions + exposure
 	const data = new Float32Array( N * 4 );
 	const sl = Math.hypot( sdx, sdz );
+	const g = ( a, b ) => ( isFinite( a ) && isFinite( b ) ) ? ( a - b ) : 0;
 	for ( let j = 0; j < res; j ++ ) for ( let i = 0; i < res; i ++ ) {
 
 		const k = j * res + i;
 		const t = Ts[ k ];
-		const g = ( a, b ) => ( isFinite( a ) && isFinite( b ) ) ? ( a - b ) : 0;
 		const tl = i > 0 ? Ts[ k - 1 ] : t, tr = i < res - 1 ? Ts[ k + 1 ] : t;
 		const td = j > 0 ? Ts[ k - res ] : t, tu = j < res - 1 ? Ts[ k + res ] : t;
 		let gx = g( tr, tl ), gz = g( tu, td );

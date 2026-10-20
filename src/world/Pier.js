@@ -119,7 +119,9 @@ export function buildPier( { B, terrain, colliders, rand, lights, inst, signB = 
 
 	const bolt = ( x, y, z, dir ) => {
 
-		B.cyl( 'hard', x, y, z, 0.022, 0.026, 0.022, { segs: 5, rx: dir * Math.PI / 2, tint: C.iron, data: HARD( rand.next(), 0.85, 0.4, 0.6 ) } );
+		const data = HARD( rand.next(), 0.85, 0.4, 0.6 );
+		if ( B.lite ) return; // (low-powered devices: no bolt heads)
+		B.cyl( 'hard', x, y, z, 0.022, 0.026, 0.022, { segs: 5, rx: dir * Math.PI / 2, tint: C.iron, data } );
 
 	};
 

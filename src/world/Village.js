@@ -1,12 +1,12 @@
-import { BufferGeometry, Color, Euler, Group, Mesh, Vector3 } from '../engine/index.js';
+import { BufferGeometry, Color, DoubleSide, Euler, Group, Mesh, Vector3 } from '../engine/index.js';
 import { mulberry32 } from '../util/Noise.js';
-import { Builder, Batch } from './village/GeoBuilder.js';
+import { Builder, Batch, setGeometryDetail } from './village/GeoBuilder.js';
 import { createVillageMaterials } from './village/VillageMaterials.js';
 import { VillageTextures } from './village/TextureBaker.js';
 import { buildHouse, buildBoathouse, buildMarketStall, buildShed } from './village/Buildings.js';
 import { buildBoardwalk } from './village/Boardwalk.js';
 import { buildPier, PIER } from './Pier.js';
-import { G } from '../engine/render/Frame.js';
+import { G } from '../core/Globals.js';
 import {
 	InstancedProps, Rand, lin, C, WOOD, rowboat, netRack, fishRack, fence, laundryLine, oar, buoy,
 	bench, ropeCoil, pathLight, lampPost, bucket, wreck,
@@ -20,7 +20,10 @@ import {
 // (wood + glass, hard + rope, roof metal, thatch, stone, fabric). The opaque materials
 // share one vertex / index buffer; the wood mesh is the only shadow caster and covers all
 // opaque geometry in the shadow passes (see _assemble). Surface detail comes from GPU-baked
-// PBR texture sets (village/TextureBaker.js, 43 MB) sampled with metre-scale uvs.
+// PBR texture sets (village/TextureBaker.js, 11 to 43 MB by tier) sampled with metre-scale uvs.
+//
+// Salt Life: `tier` ('low' | 'mid' | 'high') sizes the baked textures; init( renderer ) bakes them
+// while the game loads (call it before the first frame).
 
 const PASTELS = {
 	turquoise: lin( 0x5dbcb0 ),
@@ -61,9 +64,11 @@ const _lanternEuler = new Euler();
 
 export class Village {
 
-	constructor( { scene, terrain, colliders } ) {
+	constructor( { scene, terrain, colliders, tier = 'high' } ) {
 
+		const t0 = performance.now();
 		this.scene = scene;
+		this.tier = tier;
 		this.terrain = terrain;
 		this.colliders = colliders;
 		this.lights = [];
@@ -75,19 +80,49 @@ export class Village {
 
 		const rand = new Rand( mulberry32( 90210 ) );
 		this.rand = rand;
-		// tileable PBR texture sets, baked on the GPU the first time a village material renders
-		this.textures = new VillageTextures();
+		// tileable PBR texture sets, baked on the GPU while the game loads (init())
+		this.textures = new VillageTextures( { tier } );
 		this.materials = createVillageMaterials( this.textures );
-		// one builder: everything static merges into a single mesh per material
-		this.B = new Builder();
-		this.harbor = this.B;
-		this.town = this.B;
-		this.inst = new InstancedProps( this.B );
+		// fewer segments on round parts on low-powered devices
+		setGeometryDetail( tier === 'low' ? 0.5 : 1 );
+		// two builders: everything static merges into a single mesh per material for the harbour (pier,
+		// beach, stilt huts, boathouse) and one for the town up the slope, so each can be culled when
+		// out of view (Tidewater merged the whole village into one per material)
+		this.harbor = new Builder();
+		this.town = new Builder();
+		for ( const B of [ this.harbor, this.town ] ) B.lite = tier === 'low'; // emitters skip their smallest details (bolts, twine, sash bars)
+		this.B = this.harbor;
+		this.harborInst = new InstancedProps( this.harbor );
+		this.townInst = new InstancedProps( this.town );
+		this.inst = this.harborInst;
 
 		const specs = this._layout( rand );
 		this._flattenPads( specs );
 
-		const ctx = ( B ) => ( { B, terrain, colliders, rand, lights: this.lights, inst: this.inst, checks: this.foundationChecks } );
+		this.specs = specs;
+		this.buildMs = performance.now() - t0;
+		this.longestStepMs = this.buildMs;
+
+	}
+
+	// Builds the village (in steps, yielding to the browser between them so no single step blocks
+	// for long) and bakes its texture sets (GPU passes, nothing read back). The heights are flattened
+	// already (constructor): anything placed on the ground may be built before this finishes, but
+	// the footprints / paths other systems keep clear of are known only afterwards.
+	async init( renderer ) {
+
+		const { terrain, colliders, rand, specs, scene } = this;
+		const ctx = ( B ) => ( { B, terrain, colliders, rand, lights: this.lights, inst: B === this.town ? this.townInst : this.harborInst, checks: this.foundationChecks } );
+		let t0 = performance.now();
+		const step = async () => {
+
+			const ms = performance.now() - t0;
+			this.buildMs += ms;
+			this.longestStepMs = Math.max( this.longestStepMs, ms );
+			await new Promise( ( r ) => setTimeout( r, 0 ) );
+			t0 = performance.now();
+
+		};
 
 		// the fish sign at the pier entrance is its own small mesh: it swings in the wind (update())
 		this.signB = new Builder();
@@ -98,14 +133,18 @@ export class Village {
 		this.path = buildBoardwalk( ctx( this.harbor ), [
 			[ foot.x, foot.z + 0.05 ], [ 54.6, - 72 ], [ 52.4, - 82 ], [ 48.4, - 92 ], [ 44.8, - 100.5 ], [ 42.6, - 107.2 ],
 		], { width: 1.8, startY: foot.y + 0.24, lightEvery: 70 } );
+		this.inst = this.townInst;
 		this._plaza( ctx( this.town ) );
+		await step();
 
+		let built = 0;
 		for ( const s of specs.houses ) {
 
 			const B = s.harbor ? this.harbor : this.town;
 			const res = buildHouse( ctx( B ), s );
 			this.buildings.push( { name: s.name, x: s.x, z: s.z, floorY: res.floorY, roofTop: res.roofTop, stilts: s.foundation === 'stilts', footprint: res.footprint } );
 			this.footprints.push( res.footprint );
+			if ( ++ built % 3 === 0 ) await step();
 
 		}
 
@@ -126,13 +165,35 @@ export class Village {
 		this.footprints.push( buildBoathouse( ctx( this.harbor ), specs.boathouse ).footprint );
 		this.footprints.push( buildMarketStall( ctx( this.town ), specs.stall ).footprint );
 
+		await step();
+		this.inst = this.harborInst;
 		this._beachProps( ctx( this.harbor ) );
+		await step();
+		this.inst = this.townInst;
 		this._villageProps( ctx( this.town ) );
+		await step();
 
-		this._assemble();
+		// low-powered devices: the pier's lanterns hang still, merged with the rest (two draw calls
+		// each saved)
+		if ( this.tier === 'low' ) {
+
+			for ( const h of this.pierInfo.hung || [] ) {
+
+				for ( const key in h.B.batches ) this.harbor.batch( key ).append( h.B.batches[ key ] );
+				h.B = null;
+
+			}
+
+			this.pierInfo.hung = [];
+
+		}
+
+		await this._assemble( step );
 		this._buildSign();
 		this._buildLanterns();
 		scene.add( this.group );
+		await step();
+		await this.textures.bake( renderer );
 
 	}
 
@@ -495,9 +556,22 @@ export class Village {
 
 	// ------------------------------------------------------------------ meshes
 
-	_assemble() {
+	async _assemble( step ) {
 
-		const B = this.B;
+		this.meshes = [];
+		this.shadowTriangles = 0;
+		this._assembleBuilder( this.harbor, 'harbor' );
+		await step();
+		this._assembleBuilder( this.town, 'town' );
+
+		// release the CPU-side builders
+		this.B = this.harbor = this.town = null;
+		this.inst = this.harborInst = this.townInst = null;
+
+	}
+
+	_assembleBuilder( B, part ) {
+
 		const mats = this.materials;
 		const take = ( key ) => {
 
@@ -522,21 +596,23 @@ export class Village {
 		// All opaque geometry lives in ONE set of vertex / index buffers. Each opaque material
 		// draws its own index range; the wood mesh is the only shadow caster and widens its
 		// range to cover everything during the shadow passes (1 shadow draw per cascade).
+		const keys = [ 'wood', 'hard', 'roofMetal', 'thatch', 'stone' ].filter( ( key ) => B.batches[ key ] && B.batches[ key ].vcount > 0 );
 		const opaque = new Batch();
+		// (sized up front: the merged arrays are made once, and become the geometry's)
+		opaque.reserve( keys.reduce( ( s, key ) => s + B.batches[ key ].vcount, 0 ), keys.reduce( ( s, key ) => s + B.batches[ key ].icount, 0 ) );
 		const ranges = {};
-		for ( const key of [ 'wood', 'hard', 'roofMetal', 'thatch', 'stone' ] ) {
+		for ( const key of keys ) {
 
-			const b = B.batches[ key ];
-			if ( ! b || b.vcount === 0 ) continue;
-			const start = opaque.idx.length;
-			opaque.append( b );
-			ranges[ key ] = { start, count: opaque.idx.length - start };
+			const start = opaque.icount;
+			opaque.append( take( key ) );
+			ranges[ key ] = { start, count: opaque.icount - start };
 
 		}
 
+		if ( opaque.vcount === 0 ) return;
 		const shared = opaque.build();
 		const total = shared.index.count;
-		this.meshes = [];
+		const meshes = [];
 		for ( const key in ranges ) {
 
 			const geo = new BufferGeometry();
@@ -548,38 +624,47 @@ export class Village {
 			geo.setDrawRange( r.start, r.count );
 			const mesh = new Mesh( geo, mats[ key ] );
 			mesh.name = 'village_' + key;
+			mesh.userData.part = part;
 			mesh.receiveShadow = true;
 			mesh.castShadow = key === 'wood';
 			if ( key === 'wood' ) {
 
-				// the engine has no onBeforeShadow / onAfterShadow: onBeforeRender runs per pass
-				// (before the draw list is built) with that pass's camera; the sun shadow cascade
-				// cameras (render/Shadows.js) are flagged isShadowCamera (and use standard depth)
+				// three calls onBeforeShadow / onAfterShadow around the mesh's draw in each shadow
+				// pass: the range covers all the opaque geometry there, only the wood otherwise
 				const range = geo.drawRange;
-				mesh.onBeforeRender = ( renderer, scene, camera ) => {
+				mesh.onBeforeShadow = () => {
 
-					this.textures.bake();
-					const shadow = !! camera && ( camera.isShadowCamera === true || camera.reversedDepth === false );
-					range.start = shadow ? 0 : r.start;
-					range.count = shadow ? total : r.count;
+					range.start = 0;
+					range.count = total;
 
 				};
 
+				mesh.onAfterShadow = () => {
+
+					range.start = r.start;
+					range.count = r.count;
+
+				};
+
+				// the merged geometry has open faces (roof sheets, thatch): both sides cast
+				mats[ key ].shadowSide = DoubleSide;
+
 			}
 
-			this.meshes.push( mesh );
+			meshes.push( mesh );
 
 		}
 
-		this.shadowTriangles = total / 3;
+		this.shadowTriangles += total / 3;
 
 		if ( fabric.vcount > 0 ) {
 
 			const mesh = new Mesh( fabric.build(), mats.fabric );
 			mesh.name = 'village_fabric';
+			mesh.userData.part = part;
 			mesh.receiveShadow = true;
 			mesh.castShadow = false;
-			this.meshes.push( mesh );
+			meshes.push( mesh );
 
 		}
 
@@ -587,35 +672,35 @@ export class Village {
 
 			const mesh = new Mesh( nets.build(), mats.net );
 			mesh.name = 'village_nets';
+			mesh.userData.part = part;
 			mesh.receiveShadow = true;
 			mesh.castShadow = false;
-			this.meshes.push( mesh );
+			meshes.push( mesh );
 
 		}
 
 		// fish, lobsters, ice and banana leaves (market stall, drying racks, cleaning tables): one
-		// instanced mesh with the fish material (fish/FishProps.js)
-		if ( B.fishProps ) this.group.add( B.fishProps.build() );
+		// merged mesh (village/FishProps.js)
+		if ( B.fishProps ) {
 
-		// the texture bake is recorded by whichever village mesh is drawn first in a frame
-		// (the TSL version's VillageBakeNode.updateBefore); bake() is a no-op afterwards
-		const bake = () => this.textures.bake();
-		for ( const mesh of this.meshes ) if ( ! mesh.onBeforeRender ) mesh.onBeforeRender = bake;
-
-		for ( const mesh of this.meshes ) {
-
-			// never culled: all pipelines compile during the app's loading-screen precompile and
-			// the texture bake runs on the first frame
-			mesh.frustumCulled = false;
-			mesh.matrixAutoUpdate = false;
-			mesh.updateMatrix();
-			this.group.add( mesh );
+			const fish = B.fishProps.build( { lod: this.tier === 'low' ? 2 : 1 } );
+			fish.matrixAutoUpdate = false;
+			fish.updateMatrix();
+			this.group.add( fish );
+			( this.fish || ( this.fish = [] ) ).push( fish );
 
 		}
 
-		// release the CPU-side builders
-		this.B = this.harbor = this.town = null;
-		this.inst = null;
+		for ( const mesh of meshes ) {
+
+			// culled as a whole (the harbour or the town); all programs compile during the app's
+			// loading-screen precompile, which draws everything
+			mesh.matrixAutoUpdate = false;
+			mesh.updateMatrix();
+			this.group.add( mesh );
+			this.meshes.push( mesh );
+
+		}
 
 	}
 
@@ -776,13 +861,20 @@ export class Village {
 		}
 
 		const shadowCasters = this.meshes.filter( ( m ) => m.castShadow ).length;
-		return { triangles, drawCalls, shadowCasters, shadowTriangles: this.shadowTriangles, lights: this.lights.length, textureMB: this.textures.bytes / 1048576, bakeMs: this.textures.bakeMs, baked: this.textures.baked };
+		return { triangles, drawCalls, shadowCasters, shadowTriangles: this.shadowTriangles, lights: this.lights.length, textureMB: this.textures.bytes / 1048576, buildMs: this.buildMs, longestStepMs: this.longestStepMs, bakeMs: this.textures.bakeMs, baked: this.textures.baked };
 
 	}
 
 	dispose() {
 
 		for ( const m of this.meshes ) m.geometry.dispose();
+		for ( const f of this.fish || [] ) {
+
+			f.geometry.dispose();
+			f.material.dispose();
+
+		}
+
 		for ( const k in this.materials ) this.materials[ k ].dispose();
 		this.textures.dispose();
 		this.scene.remove( this.group );

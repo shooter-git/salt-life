@@ -1,19 +1,20 @@
 import * as THREE from '../engine/index.js';
 import { G } from '../core/Globals.js';
-import { VegSite, scatterVegetation, buildGrassMask, RULES } from './vegetation/Scatter.js';
+import { VegSite, scatterSteps, grassMaskSteps, RULES } from './vegetation/Scatter.js';
 import { VegType, LodLevel } from './vegetation/InstanceLOD.js';
-import { GrassField } from './vegetation/GrassField.js';
-import { uCamPos, uGustOffset, UNDER_FERN_FADE } from './vegetation/VegNodes.js';
-
-// WGSL variant index of an instance (VegNodes.vegVariantOf)
-const variantOf = ( seed, isShrub ) => `vegVariantOf( ${ seed }, ${ isShrub } )`;
+import { GrassField, GRASS_TIERS } from './vegetation/GrassField.js';
+import { vegUniforms, uCamPos, uGustOffset } from './vegetation/VegNodes.js';
 import {
-	buildPalmNear, buildPalmFar, buildUnderstory, buildCanopyNear, buildTreeNear, buildShrubNear,
-	lobeVariantGeometry, LOBE_TABLE, TREE_VARIANTS, SHRUB_VARIANTS, UNDERSTORY, buildBroadleaf, BROADLEAF, buildMonsteraMesh, buildBananas,
+	buildPalmNear, buildPalmFar, buildYoungPalm, buildFern, buildTreeNear, buildShrubNear, buildBanana, buildElephantEar, buildHeliconia, buildStrelitzia,
+	lobeVariantGeometry, LOBE_TABLE, TREE_VARIANTS, SHRUB_VARIANTS, UNDERSTORY, BROADLEAF, buildMonsteraMesh, buildPlantKind,
 } from './vegetation/PlantGeometry.js';
-import { createPlantLeafMaterial, createCanopyMaterial, createCanopyBakeMaterials, impostorColor, uCanopyNear } from './vegetation/VegMaterials.js';
+import { vegMaterial, PLANT_LEAF, canopyMaterialDef, createCanopyBakeMaterials, impostorColor, uCanopyNear } from './vegetation/VegMaterials.js';
 import { ImpostorAtlas, buildImpostorQuad } from './vegetation/Impostors.js';
 import { LeafAtlas } from './vegetation/LeafTextures.js';
+import { getDetailTexture } from './terrain/DetailTextures.js';
+
+// GLSL variant index of an instance (VegNodes.vegVariantOf)
+const variantOf = ( seed, isShrub ) => `vegVariantOf( ${ seed }, ${ isShrub } )`;
 
 // Island vegetation: coconut palms along the back of the beach (leaning to the sea), a closed
 // rainforest canopy on the hillsides and gullies thinning into scattered trees and shrub
@@ -23,15 +24,21 @@ import { LeafAtlas } from './vegetation/LeafTextures.js';
 // Everything is instanced and procedural. Wind (G.windDir / G.windSpeed) drives trunk sway,
 // frond / branch bending, leaf flutter and travelling gusts across the grass.
 //
-// Draw calls (main pass): palm near, palm far, understory (young palms + ferns), bananas, monstera,
-// broadleaf (elephant ear + heliconia + bird of paradise), canopy near (trees + shrubs), canopy impostors (octahedral,
-// trees + shrubs), grass near / mid / far = 11 (fewer when a level is empty). Shadow casters: palm
-// near, bananas, monstera, broadleaf, canopy near.
+// Draw calls (main pass): palm near, palm far, young palms, ferns, bananas (two variants), monstera,
+// elephant ear, heliconia, bird of paradise, canopy near (trees), shrubs near, canopy impostors
+// (octahedral, trees + shrubs), grass near / mid / far = 16 (fewer when a level is empty). Shadow casters: palm near, bananas, the broadleaf plants, the near canopy and shrubs.
+// (Tidewater merged the understory, bananas, broadleaf kinds and trees + shrubs into a mesh each; every
+// instance of a merged mesh runs all its plants' vertices, which WebGL budgets can't afford: they
+// are separate meshes here, a few more draw calls for a fraction of the triangles.)
 //
-// Options: { scene, terrain, village? } - with a village (Village.js) its building footprints
-// and boardwalks are kept clear; otherwise a default boardwalk polyline is used.
-// The impostor atlases are baked on the first update() (recorded into the frame encoder; three.js
-// picked up from the meshes' onBeforeRender); until then far trees are not drawn.
+// Device tiers (TIERS) scale the ranges: high is Tidewater's; mid shortens them and thins the
+// grass; low has no grass field and no ferns, short ranges and the impostors close in.
+//
+// Options: { scene, terrain (TerrainData), renderer, tier, ground? (Terrain: its float height
+// texture is shared with the grass), village? } - with a village (Village.js) its building
+// footprints and boardwalks are kept clear; otherwise a default boardwalk polyline is used.
+// Building takes a few hundred ms of scattering: `await init()` spreads it over several tasks and
+// bakes the leaf and impostor atlases (render targets) with the renderer.
 
 // Building footprints + boardwalk polylines from a Village instance (duck-typed).
 function villageObstacles( village ) {
@@ -83,67 +90,133 @@ function axisSphere( geometry ) {
 
 }
 
-const PALM_NEAR = 120; // m, full detail palms
-const TREE_NEAR = 65; // m, trees: geometry -> impostor
-const SHRUB_NEAR = 45;
-const UNDER_FADE = [ 120, 140 ]; // young palms / bananas
-const BROAD_FADE = [ 85, 105 ]; // monstera / elephant ear / heliconia
-const BANANA_FADE = [ 100, 120 ];
-const CANOPY_FAR = [ 2600, 2800 ];
+// Ranges (m) per device tier. high: Tidewater's.
+//   palmNear: full detail palms; treeNear / shrubNear: trees / shrubs geometry -> impostor;
+//   underFade: young palms (shrink out), fernFade: ferns, broadFade: monstera / elephant ear /
+//   heliconia, bananaFade; palmFar / canopyFar: palms (far level) / impostors fade out; framePx: impostor
+//   atlas pixels per frame; blendDist: impostors blend three frames within; shadows: which types
+//   cast: palms, bananas and the broadleaf plants / the near canopy (its leaf cards are the most
+//   expensive part of the shadow pass); margin: the near levels hold the instances within their
+//   range + margin (refilled after the camera moved 60 % of it)
+const TIERS = {
+	low: {
+		palmNear: 35, treeNear: 14, shrubNear: 10, underFade: [ 40, 50 ], fernFade: null, broadFade: [ 12, 16 ], bananaFade: [ 22, 28 ], margin: 5,
+		palmFar: [ 260, 320 ], canopyFar: [ 900, 1100 ], framePx: 96, blendDist: 40, grass: null, shadows: { plants: false, canopy: false },
+	},
+	mid: {
+		palmNear: 70, treeNear: 30, shrubNear: 22, underFade: [ 70, 85 ], fernFade: [ 26, 36 ], broadFade: [ 32, 42 ], bananaFade: [ 50, 62 ], margin: 8,
+		palmFar: [ 1400, 1600 ], canopyFar: [ 2200, 2400 ], framePx: 128, blendDist: 70, grass: GRASS_TIERS.mid, shadows: { plants: true, canopy: false },
+	},
+	high: {
+		palmNear: 120, treeNear: 65, shrubNear: 45, underFade: [ 120, 140 ], fernFade: [ 42, 58 ], broadFade: [ 85, 105 ], bananaFade: [ 100, 120 ], margin: 10,
+		palmFar: [ 2600, 2800 ], canopyFar: [ 2600, 2800 ], framePx: 128, blendDist: 100, grass: GRASS_TIERS.high, shadows: { plants: true, canopy: true },
+	},
+};
+
+// spread over tasks: yield to the event loop after this much work (ms)
+const SLICE_MS = 30;
 
 export class Vegetation {
 
-	constructor( { scene, terrain, village = null } ) {
+	constructor( { scene, terrain, renderer, tier = 'low', ground = null, village = null } ) {
 
 		this.scene = scene;
 		this.terrain = terrain;
+		this.renderer = renderer;
+		this.ground = ground;
+		this.village = village;
+		this.tier = TIERS[ tier ] ? tier : 'low';
+		this.cfg = TIERS[ this.tier ];
+		this.ready = false;
 		this.group = new THREE.Group();
 		this.group.name = 'Vegetation';
 		this.group.matrixAutoUpdate = false;
+		this.types = [];
+		this.materials = [];
+		this.grass = null;
+		this.timings = {};
+		this._camPos = new THREE.Vector3();
 
+	}
+
+	// Scatter, build and bake; resolves when the vegetation is in the scene
+	async init() {
+
+		const cfg = this.cfg, terrain = this.terrain;
 		const t0 = performance.now();
-		const site = new VegSite( terrain, villageObstacles( village ) );
+		let slice = performance.now(), longest = 0;
+		const run = async ( steps ) => {
+
+			let r;
+			for ( ;; ) {
+
+				r = steps.next();
+				if ( r.done ) return r.value;
+				const now = performance.now();
+				if ( now - slice > SLICE_MS ) {
+
+					longest = Math.max( longest, now - slice );
+					await new Promise( ( resolve ) => setTimeout( resolve, 0 ) );
+					slice = performance.now();
+
+				}
+
+			}
+
+		};
+
+		vegUniforms.vegDetail.value = getDetailTexture();
+		const site = new VegSite( terrain, villageObstacles( this.village ) );
 		this.site = site;
-		const recs = scatterVegetation( site );
+		const recs = await run( scatterSteps( site, 99, { ferns: !! cfg.fernFade } ) );
 		this.records = recs;
 		const t1 = performance.now();
-		const grassMask = buildGrassMask( site );
-		this.timings = { scatter: t1 - t0, mask: performance.now() - t1 };
+		const grassMask = cfg.grass ? await run( grassMaskSteps( site ) ) : null;
+		this.timings.scatter = t1 - t0;
+		this.timings.mask = performance.now() - t1;
+		await new Promise( ( resolve ) => setTimeout( resolve, 0 ) );
+		slice = performance.now();
 
-		// materials (shared across meshes)
-		const leafMat = createPlantLeafMaterial();
+		// materials: one per LOD level (factories take the level's LOD window uniform)
+		const plantMat = ( lodRange ) => this._keep( vegMaterial( PLANT_LEAF, lodRange ) );
 		this.leafAtlas = new LeafAtlas();
-		const canopyMat = createCanopyMaterial( this.leafAtlas );
-		uCanopyNear.value.set( TREE_NEAR, SHRUB_NEAR );
+		const canopyDef = canopyMaterialDef( this.leafAtlas );
+		const canopyMat = ( lodRange ) => this._keep( vegMaterial( canopyDef, lodRange ) );
+		uCanopyNear.value.set( cfg.treeNear, cfg.shrubNear );
+		vegUniforms.vegFernFade.value.set( ...( cfg.fernFade ?? [ 0, 0 ] ) );
 
 		// geometry
 		const palmNear = buildPalmNear();
-		const palmFar = buildPalmFar();
-		const under = buildUnderstory();
-		const broad = buildBroadleaf();
+		const palmFar = buildPalmFar( 11, { lite: this.tier === 'low' } );
+		const under = { young: buildPlantKind( UNDERSTORY.YOUNG, buildYoungPalm, 5 ), fern: buildPlantKind( UNDERSTORY.FERN, buildFern, 3 ) };
 		const monsteraMesh = buildMonsteraMesh();
-		const bananaMesh = buildBananas();
-		const canopy = buildCanopyNear();
+		const bananaMeshes = [ buildPlantKind( UNDERSTORY.BANANA, buildBanana, 9 ), buildPlantKind( UNDERSTORY.BANANA_B, buildBanana, 23 ) ];
+		const broad = {
+			elephantEars: buildPlantKind( BROADLEAF.ELEPHANT, buildElephantEar, 43 ),
+			heliconias: buildPlantKind( BROADLEAF.HELICONIA, buildHeliconia, 47 ),
+			strelitzias: buildPlantKind( BROADLEAF.STRELITZIA, buildStrelitzia, 53 ),
+		};
+		const tree = buildTreeNear(), shrub = buildShrubNear();
 
 		// impostor atlas of the tree and shrub crown variants (same lobe tables as the near mesh)
-		const treeGeo = buildTreeNear().geometry, shrubGeo = buildShrubNear().geometry;
+		const treeGeo = tree.geometry, shrubGeo = shrub.geometry;
 		const treeVariants = [], shrubVariants = [];
 		for ( let v = 0; v < TREE_VARIANTS; v ++ ) treeVariants.push( lobeVariantGeometry( treeGeo, LOBE_TABLE, v * 8 ) );
 		for ( let v = 0; v < SHRUB_VARIANTS; v ++ ) shrubVariants.push( lobeVariantGeometry( shrubGeo, LOBE_TABLE, ( TREE_VARIANTS + v ) * 8 ) );
+		this.bakeMaterials = createCanopyBakeMaterials( this.leafAtlas );
 		this.atlas = new ImpostorAtlas( [
 			{ variants: treeVariants, ...axisSphere( treeGeo ) },
 			{ variants: shrubVariants, ...axisSphere( shrubGeo ) },
-		], createCanopyBakeMaterials( this.leafAtlas ) );
-		// (WGSL expressions: see ImpostorAtlas.createMaterial)
-		const impostorMat = this.atlas.createMaterial( {
+		], this.bakeMaterials, { framePx: cfg.framePx, blendDist: cfg.blendDist } );
+		// (GLSL expressions: see ImpostorAtlas.materialDef)
+		const impostorDef = this.atlas.materialDef( {
 			isGroup1: ( iDat ) => `${ iDat }.y < 0.0`,
 			variantOf: ( seed, isShrub ) => variantOf( seed, isShrub ),
 			colorOf: ( { seed, cr, leaf, bright, isGroup1 } ) => `${ impostorColor }( ${ seed }, ${ cr }, ${ leaf }, ${ bright }, ${ isGroup1 } )`,
-			nearDist: ( isShrub ) => `select( vegParams.canopyNear.x, vegParams.canopyNear.y, ${ isShrub } )`,
+			nearDist: ( isShrub ) => `( ${ isShrub } ? vegCanopyNear.y : vegCanopyNear.x )`,
 		} );
-		this.materials = [ leafMat, canopyMat, impostorMat ];
+		const impostorMat = ( lodRange ) => this._keep( vegMaterial( impostorDef, lodRange ) );
 
-		this.types = [];
 		const add = ( t ) => {
 
 			this.types.push( t );
@@ -152,94 +225,134 @@ export class Vegetation {
 
 		};
 
+		const shadows = cfg.shadows.plants;
+		const near = { margin: cfg.margin, refreshDistance: cfg.margin * 0.6 };
 		this.palms = add( new VegType( 'palms', recs.palms, {
-			nearRange: PALM_NEAR, margin: 10, refreshDistance: 6, farExcludeNear: true, sortNear: true,
-			near: [ { geometry: palmNear.geometry, material: leafMat, castShadow: true, name: 'veg-palm' } ],
-			far: { parts: [ { geometry: palmFar.geometry, material: leafMat, name: 'veg-palm-far' } ], fade: CANOPY_FAR },
+			nearRange: cfg.palmNear, ...near, farExcludeNear: true, sortNear: true,
+			near: [ { geometry: palmNear.geometry, material: plantMat, castShadow: shadows, name: 'veg-palm' } ],
+			far: { parts: [ { geometry: palmFar.geometry, material: plantMat, name: 'veg-palm-far' } ], fade: cfg.palmFar },
 		} ) );
 
-		// understory: young palms and ferns in one mesh; the plant kind rides on the seed
-		const underRecs = [
-			...recs.youngPalms.map( ( r ) => ( { ...r, seed: UNDERSTORY.YOUNG + r.seed * 0.999, qr: UNDER_FADE[ 1 ] + 10 } ) ),
-			...recs.ferns.map( ( r ) => ( { ...r, seed: UNDERSTORY.FERN + r.seed * 0.999, qr: UNDER_FERN_FADE[ 1 ] + 8 } ) ),
-		];
-		// banana clumps (two variants; their heights are in the mesh: H ~ 0)
-		const bananaRecs = recs.bananas.map( ( r ) => ( { ...r, H: 0.02, seed: ( r.seed < 0.5 ? UNDERSTORY.BANANA : UNDERSTORY.BANANA_B ) + r.seed * 0.999, qr: BANANA_FADE[ 1 ] + 10 } ) );
-		this.bananas = add( new VegType( 'bananas', bananaRecs, {
-			fade: BANANA_FADE, margin: 10, sortNear: true,
-			near: [ { geometry: bananaMesh.geometry, material: leafMat, castShadow: true, name: 'veg-banana' } ],
+		// banana clumps (two variants, a mesh each; their heights are in the mesh: H ~ 0)
+		this.bananas = [ UNDERSTORY.BANANA, UNDERSTORY.BANANA_B ].map( ( kind, v ) => {
+
+			const bananaRecs = recs.bananas.filter( ( r ) => ( r.seed < 0.5 ) === ( v === 0 ) ).map( ( r ) => ( { ...r, H: 0.02, seed: kind + r.seed * 0.999, qr: cfg.bananaFade[ 1 ] + cfg.margin } ) );
+			return add( new VegType( v ? 'bananasB' : 'bananas', bananaRecs, {
+				fade: cfg.bananaFade, ...near, sortNear: true,
+				near: [ { geometry: bananaMeshes[ v ].geometry, material: plantMat, castShadow: shadows, name: v ? 'veg-banana-b' : 'veg-banana' } ],
+			} ) );
+
+		} );
+		// understory: young palms and ferns (a mesh each; the plant kind rides on the seed, the ferns
+		// fade out earlier: vegFernFade)
+		this.understory = add( new VegType( 'understory', recs.youngPalms.map( ( r ) => ( { ...r, seed: UNDERSTORY.YOUNG + r.seed * 0.999, qr: cfg.underFade[ 1 ] + cfg.margin } ) ), {
+			fade: cfg.underFade, ...near, sortNear: true,
+			near: [ { geometry: under.young.geometry, material: plantMat, castShadow: false, name: 'veg-understory' } ],
 		} ) );
-		this.understory = add( new VegType( 'understory', underRecs, {
-			fade: UNDER_FADE, margin: 10, sortNear: true,
-			near: [ { geometry: under.geometry, material: leafMat, castShadow: false, name: 'veg-understory' } ],
+		if ( cfg.fernFade ) this.ferns = add( new VegType( 'ferns', recs.ferns.map( ( r ) => ( { ...r, seed: UNDERSTORY.FERN + r.seed * 0.999, qr: cfg.fernFade[ 1 ] + 6 } ) ), {
+			fade: cfg.fernFade, margin: 6, refreshDistance: 4, sortNear: true,
+			near: [ { geometry: under.fern.geometry, material: plantMat, castShadow: false, name: 'veg-ferns' } ],
 		} ) );
 
-		// broadleaf understory: monstera (own mesh), elephant ear + heliconia (one mesh, kind on the seed)
-		const monsteraRecs = recs.monsteras.map( ( r ) => ( { ...r, seed: BROADLEAF.MONSTERA + r.seed * 0.999, qr: BROAD_FADE[ 1 ] + 10 } ) );
+		// broadleaf understory: monstera, elephant ear, heliconia, bird of paradise (a mesh each, the
+		// kind on the seed)
+		const monsteraRecs = recs.monsteras.map( ( r ) => ( { ...r, seed: BROADLEAF.MONSTERA + r.seed * 0.999, qr: cfg.broadFade[ 1 ] + cfg.margin } ) );
 		this.monsteras = add( new VegType( 'monsteras', monsteraRecs, {
-			fade: BROAD_FADE, margin: 10, sortNear: true,
-			near: [ { geometry: monsteraMesh.geometry, material: leafMat, castShadow: true, name: 'veg-monstera' } ],
+			fade: cfg.broadFade, ...near, sortNear: true,
+			near: [ { geometry: monsteraMesh.geometry, material: plantMat, castShadow: shadows, name: 'veg-monstera' } ],
 		} ) );
-		const broadRecs = [
-			...recs.elephantEars.map( ( r ) => ( { ...r, seed: BROADLEAF.ELEPHANT + r.seed * 0.999, qr: BROAD_FADE[ 1 ] + 10 } ) ),
-			...recs.heliconias.map( ( r ) => ( { ...r, seed: BROADLEAF.HELICONIA + r.seed * 0.999, qr: BROAD_FADE[ 1 ] + 10 } ) ),
-			...recs.strelitzias.map( ( r ) => ( { ...r, seed: BROADLEAF.STRELITZIA + r.seed * 0.999, qr: BROAD_FADE[ 1 ] + 10 } ) ),
-		];
-		this.broadleaf = add( new VegType( 'broadleaf', broadRecs, {
-			fade: BROAD_FADE, margin: 10, sortNear: true,
-			near: [ { geometry: broad.geometry, material: leafMat, castShadow: true, name: 'veg-broadleaf' } ],
-		} ) );
+		const BROAD_KIND = { elephantEars: BROADLEAF.ELEPHANT, heliconias: BROADLEAF.HELICONIA, strelitzias: BROADLEAF.STRELITZIA };
+		this.broadleaf = Object.entries( BROAD_KIND ).map( ( [ name, kind ] ) => add( new VegType( name, recs[ name ].map( ( r ) => ( { ...r, seed: kind + r.seed * 0.999, qr: cfg.broadFade[ 1 ] + cfg.margin } ) ), {
+			fade: cfg.broadFade, ...near, sortNear: true,
+			near: [ { geometry: broad[ name ].geometry, material: plantMat, castShadow: shadows, name: 'veg-' + name } ],
+		} ) ) );
 
 		// canopy: trees + shrubs (shrubs flagged by a negative vertical scale in iDat.y); near
-		// geometry within TREE_NEAR / SHRUB_NEAR, octahedral impostors beyond
+		// geometry within treeNear / shrubNear, octahedral impostors beyond. The trees' near level
+		// draws the tree geometry (the shrubs never enter it: a ~0 query radius), the shrubs have a
+		// near level of their own.
 		const canopyRecs = [
-			...recs.trees.map( ( r ) => ( { ...r, qr: TREE_NEAR + 10 } ) ),
-			...recs.shrubs.map( ( r ) => ( { ...r, qr: SHRUB_NEAR + 10 } ) ),
+			...recs.trees.map( ( r ) => ( { ...r, qr: cfg.treeNear + cfg.margin } ) ),
+			...recs.shrubs.map( ( r ) => ( { ...r, qr: 1e-3 } ) ),
 		];
 		this.canopy = add( new VegType( 'canopy', canopyRecs, {
-			nearRange: TREE_NEAR, margin: 10, sortNear: true, sortFar: true, farRefresh: 16,
-			near: [ { geometry: canopy.geometry, material: canopyMat, castShadow: true, name: 'veg-canopy' } ],
-			far: { parts: [ { geometry: buildImpostorQuad(), material: impostorMat, name: 'veg-canopy-far' } ], fade: CANOPY_FAR },
+			nearRange: cfg.treeNear, ...near, sortNear: true, sortFar: true, farRefresh: 16,
+			near: [ { geometry: tree.geometry, material: canopyMat, castShadow: cfg.shadows.canopy, name: 'veg-canopy' } ],
+			far: { parts: [ { geometry: buildImpostorQuad(), material: impostorMat, name: 'veg-canopy-far' } ], fade: cfg.canopyFar },
+		} ) );
+		this.shrubs = add( new VegType( 'shrubs', recs.shrubs.map( ( r ) => ( { ...r, qr: cfg.shrubNear + cfg.margin } ) ), {
+			fade: [ cfg.shrubNear, cfg.shrubNear + 0.01 ], ...near, sortNear: true,
+			near: [ { geometry: shrub.geometry, material: canopyMat, castShadow: cfg.shadows.canopy, name: 'veg-shrubs' } ],
 		} ) );
 
 		// alpha-tested foliage after the opaque ground (terrain, rocks, buildings) and the far crowns
 		// after the near ones, so the early depth test rejects what those already cover
-		for ( const t of [ this.palms, this.understory, this.bananas, this.monsteras, this.broadleaf, this.canopy ] ) for ( const m of t.meshes ) m.renderOrder = 1;
-		for ( const m of this.canopy.far.meshes ) m.renderOrder = 2;
+		for ( const t of this.types ) for ( const m of t.meshes ) m.renderOrder = 1;
+		for ( const m of this.canopy.far.meshes ) {
 
-		// the impostor bake records into the frame encoder on the first update (the engine needs no
-		// renderer handle; the atlas bakes with its own MeshRenderer)
-		this.renderer = true;
+			m.renderOrder = 2;
+			m.castShadow = false;
+			m.receiveShadow = false;
 
-		this.grass = new GrassField( { terrain, mask: grassMask } );
-		for ( const m of this.grass.meshes ) this.group.add( m );
+		}
+
+		if ( cfg.grass ) {
+
+			const heights = this.ground ?? ownHeights( terrain );
+			this.grass = new GrassField( { terrain, mask: grassMask, heights, config: cfg.grass } );
+			this._keep( this.grass.material );
+			for ( const m of this.grass.meshes ) this.group.add( m );
+
+		}
 
 		this.geometryTriangles = {
-			palmNear: palmNear.triangles, palmFar: palmFar.triangles, understory: under.triangles, understoryPerKind: under.perKind,
-			broadleaf: broad.triangles, broadleafPerKind: broad.perKind, monstera: monsteraMesh.triangles, bananas: bananaMesh.triangles,
-			canopy: canopy.triangles, tree: canopy.treeTriangles, shrub: canopy.shrubTriangles, impostor: 2,
-			grassNearPatch: this.grass.patchTris[ 0 ], grassMidPatch: this.grass.patchTris[ 1 ], grassFarPatch: this.grass.patchTris[ 2 ],
+			palmNear: palmNear.triangles, palmFar: palmFar.triangles, youngPalm: under.young.triangles, fern: under.fern.triangles,
+			elephantEar: broad.elephantEars.triangles, heliconia: broad.heliconias.triangles, strelitzia: broad.strelitzias.triangles,
+			monstera: monsteraMesh.triangles, banana: bananaMeshes[ 0 ].triangles, bananaB: bananaMeshes[ 1 ].triangles,
+			tree: tree.triangles, shrub: shrub.triangles, impostor: 2,
+			...( this.grass ? { grassNearPatch: this.grass.patchTris[ 0 ], grassMidPatch: this.grass.patchTris[ 1 ], grassFarPatch: this.grass.patchTris[ 2 ] } : {} ),
 		};
+		this.timings.build = performance.now() - slice;
+		await new Promise( ( resolve ) => setTimeout( resolve, 0 ) );
+
+		// the leaf atlas first: the impostor bake samples it
+		let tb = performance.now();
+		this.leafAtlas.bake( this.renderer );
+		this.timings.leafBake = performance.now() - tb;
+		await new Promise( ( resolve ) => setTimeout( resolve, 0 ) );
+		tb = performance.now();
+		this.timings.impostorBake = 0;
+		const bake = this.atlas.bakeSteps( this.renderer );
+		while ( ! bake.next().done ) {
+
+			this.timings.impostorBake = Math.max( this.timings.impostorBake, performance.now() - tb );
+			await new Promise( ( resolve ) => setTimeout( resolve, 0 ) );
+			tb = performance.now();
+
+		}
+
+		this.timings.impostorBake = Math.max( this.timings.impostorBake, performance.now() - tb );
+		this.bakeMaterials.albedo.dispose();
+		this.bakeMaterials.normal.dispose();
 
 		this.group.updateMatrixWorld( true );
-		scene.add( this.group );
-
-		this._camPos = new THREE.Vector3();
+		this.scene.add( this.group );
+		this.ready = true;
+		this.timings.longestSlice = Math.max( longest, this.timings.build, this.timings.leafBake, this.timings.impostorBake );
 		this.timings.total = performance.now() - t0;
+
+	}
+
+	_keep( material ) {
+
+		this.materials.push( material );
+		return material;
 
 	}
 
 	update( dt, camera ) {
 
-		if ( this.renderer && ! this.atlas.baked ) {
-
-			const t = performance.now();
-			this.leafAtlas.bake( this.renderer );
-			this.atlas.bake( this.renderer );
-			this.timings.bake = performance.now() - t;
-
-		}
-
+		if ( ! this.ready ) return;
 		camera.updateMatrixWorld();
 		const p = camera.getWorldPosition( this._camPos );
 		uCamPos.value.copy( p );
@@ -273,15 +386,15 @@ export class Vegetation {
 		if ( a ) a.update( p, true );
 		if ( b ) b.update( p, true );
 
-		this.grass.update( camera );
+		if ( this.grass ) this.grass.update( camera );
 
 	}
 
-	// Re-upload the terrain height texture used by the grass after terrain.flatten() & co.
-	// (plant placement is computed once in the constructor: build Vegetation after terrain edits).
+	// Plant placement is computed once in init(): build Vegetation after terrain edits. The grass
+	// reads the terrain's height texture (re-uploaded by its owner).
 	refreshTerrain() {
 
-		this.grass.heightTex.needsUpdate = true;
+		if ( this.grass && this.grass.heights.heightUniforms.terrainHeightMap.value.userData.vegOwned ) this.grass.heights.heightUniforms.terrainHeightMap.value.needsUpdate = true;
 
 	}
 
@@ -306,10 +419,15 @@ export class Vegetation {
 		}
 
 		const g = this.grass;
-		types.grass = { nearCells: g.levels[ 0 ].count, midCells: g.levels[ 1 ].count, farCells: g.levels[ 2 ].count, triangles: g.triangles };
-		tris += g.triangles;
-		draws += g.levels.filter( ( l ) => l.count > 0 ).length;
-		return { types, triangles: tris, drawCalls: draws, villagePalms: this.records.villagePalms, rules: RULES };
+		if ( g ) {
+
+			types.grass = { nearCells: g.levels[ 0 ].count, midCells: g.levels[ 1 ].count, farCells: g.levels[ 2 ].count, triangles: g.triangles };
+			tris += g.triangles;
+			draws += g.levels.filter( ( l ) => l.count > 0 ).length;
+
+		}
+
+		return { types, triangles: tris, drawCalls: draws, villagePalms: this.records.villagePalms, rules: RULES, timings: this.timings };
 
 	}
 
@@ -317,14 +435,52 @@ export class Vegetation {
 
 		this.scene.remove( this.group );
 		for ( const t of this.types ) for ( const m of t.meshes ) m.geometry.dispose();
-		for ( const m of this.materials ) m.dispose();
-		this.atlas.rtA.dispose();
-		this.leafAtlas.rt.dispose();
-		this.atlas.rtB.dispose();
-		this.atlas.depth.destroy();
-		this.grass.dispose();
+		for ( const m of this.materials ) {
+
+			m.dispose();
+			if ( m.userData.depth ) m.userData.depth.dispose();
+
+		}
+
+		this.atlas.dispose();
+		this.leafAtlas.dispose();
+		if ( this.grass ) this.grass.dispose();
 
 	}
+
+}
+
+// The terrain heights as a float texture with Terrain's GLSL accessor (when no Terrain is given)
+function ownHeights( terrain ) {
+
+	const res = terrain.res;
+	const tex = new THREE.DataTexture( terrain.heights, res, res, THREE.RedFormat, THREE.FloatType );
+	tex.minFilter = tex.magFilter = THREE.NearestFilter;
+	tex.generateMipmaps = false;
+	tex.userData.vegOwned = true;
+	tex.needsUpdate = true;
+	return {
+		heightUniforms: {
+			terrainHeightMap: { value: tex },
+			terrainHeightInfo: { value: new THREE.Vector4( terrain.origin, terrain.origin, 1 / terrain.texel, res ) },
+		},
+		heightGlsl: /* glsl */`
+uniform highp sampler2D terrainHeightMap;
+uniform vec4 terrainHeightInfo;
+float terrainHeightAt( vec2 xz ) {
+	vec2 f = ( xz - terrainHeightInfo.xy ) * terrainHeightInfo.z - 0.5;
+	float res = terrainHeightInfo.w;
+	if ( f.x < 0.0 || f.y < 0.0 || f.x >= res - 1.0 || f.y >= res - 1.0 ) return -90.0;
+	ivec2 i = ivec2( floor( f ) );
+	vec2 t = f - floor( f );
+	float h00 = texelFetch( terrainHeightMap, i, 0 ).r;
+	float h10 = texelFetch( terrainHeightMap, i + ivec2( 1, 0 ), 0 ).r;
+	float h01 = texelFetch( terrainHeightMap, i + ivec2( 0, 1 ), 0 ).r;
+	float h11 = texelFetch( terrainHeightMap, i + ivec2( 1, 1 ), 0 ).r;
+	return mix( mix( h00, h10, t.x ), mix( h01, h11, t.x ), t.y );
+}
+`,
+	};
 
 }
 
