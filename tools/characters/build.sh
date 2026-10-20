@@ -19,7 +19,7 @@ for c in $CLIPS; do for g in m f; do echo "Assets/Animations/all_animations_max_
 echo LICENSE.md >> files
 tr '\n' '\0' < files | xargs -0 -P 16 -n 1 $HERE/fetch.sh
 mkdir -p $ROOT/public/models/characters
-cp LICENSE.md $ROOT/public/models/characters/LICENSE-Rocketbox.md
+cp LICENSE.md $ROOT/credits/LICENSE-Rocketbox.md
 for a in $AVATARS; do
 	d=${a%%:*}; r=${a#*:}; p=${r%%:*}; r=${r#*:}; g=${r%%:*}; out=${r#*:}; n=$(basename $d)
 	$HERE/textures.sh Assets/Avatars/$d/Textures tex/$p $p 1024

@@ -1,155 +1,67 @@
-# Tidewater
+# Salt Life
 
-An island fishing game for the browser. Cast from the pier, the beach or your own boat, fight the fish,
-sell your catch to Joe at the fish stand, and spend it on better gear at Marta's chandlery. Around it is a
-real-time tropical island and ocean: swim the reef, drive the boat out to deep water, and watch a humpback
-breach. It runs directly on WebGPU and WGSL with its own small rendering engine, no framework.
+An island fishing game for [All the Spaces](https://github.com/shooter-git/all-the-spaces). Cast from
+the pier, the beach or your own boat, fight the fish, sell your catch to Joe at the fish stand and
+spend it on better gear at Marta's chandlery. Other people in the space can drop in: you'll see them
+walking, swimming and out on their boats, and the group keeps a board of record catches.
 
-**Play it:** https://dgreenheck.github.io/tidewater/
+Salt Life is based on [Tidewater](https://github.com/dgreenheck/tidewater) by Dan Greenheck (MIT).
+It is not Tidewater and not made by its author. Tidewater runs on its own WebGPU engine and needs a
+strong graphics card. Salt Life rebuilds it on [three.js](https://threejs.org) with WebGL 2, so that
+it runs on phones too, inside All the Spaces' sealed creation frame.
 
-![Fishing off the pier at golden hour](docs/screenshot.jpg)
+## Status: being ported
 
-![The beach in the late afternoon](docs/screenshot-beach.jpg)
+This repository started as a fork of Tidewater. Its WebGPU code is still here while each system is
+ported; `src/main.js` is the new entry point, and it shows the sky and the open sea for now.
 
-## Requirements
-
-- A browser with WebGPU: a recent Chrome, Edge or Safari.
-- A capable GPU. It targets 60 fps at 2560×1267 on an Apple M5 Pro, and dynamic resolution scales
-  the render down on slower machines.
-- The first load compiles several hundred shaders, which can take a minute or more. Later visits are
-  faster because the browser caches them.
-
-## Features
-
-**Fishing**
-- A spinning rod and reel that cast, reel and bend under load, with the bail, rotor and crank animated.
-- Bites that depend on the water (shallows, pier, reef, bay, deep water), depth and time of day, across
-  18 Caribbean species.
-- A line-tension fight: keep the tension in the green band, ease off when the fish runs.
-- A full-screen catch card with the fish's length and weight, a fish log with records, and a cooler.
-- Joe's fish stand buys your catch; Marta's chandlery sells line, reels, rods, a bigger hold, fuel, a rebuilt
-  engine, a fish finder and deck floodlights for night fishing.
-- Walk the deck and the wheelhouse while the boat drifts; the boat burns fuel.
-- A first-play guide, contextual tips and a minimap. Progress is saved in the browser.
-
-**Ocean**
-- Four-cascade FFT ocean (Tessendorf spectra) with foam, whitecaps, wind streaks and swell.
-- Depth-aware breaking waves with peeling shoulders, whitewater, spray and foam lace.
-- A shallow-water simulation for swash running up and down the sand.
-- Boat wake and bow spray, and a whale wake.
-- Caustics on the seabed and in the water, with light shafts.
-- A split underwater/above-water view at the waterline, with water droplets on the lens after surfacing.
-- Refraction of the seabed through the surface, including behind the pier and boats.
-
-**Sky**
-- Physically based atmosphere (Hillaire 2020) with a sun, moon and stars.
-- Volumetric cumulus and wispy cirrus with cloud shadows on the land.
-- Aerial perspective and sea haze.
-- God rays, and a lens flare with occlusion.
-
-**World**
-- An island with a beach, hills, headlands and rocks.
-- A fishing village, a pier, and the vendors' stalls built from Poly Haven scans.
-- Realistic vendor characters (Microsoft Rocketbox) with skinned animation.
-- A coral reef with fish.
-- Palms, bananas, monstera, elephant ear, heliconia, bird of paradise, broadleaf trees, shrubs and dune
-  grass, with impostors and dithered LOD fades.
-- Beach debris.
-- Birds, crabs and marine snow.
-- A humpback whale with an escort of fish, blows, fluke dives and breaches.
-
-**Lighting and post**
-- Cascaded shadows with contact-hardening penumbrae, and screen-space contact shadows.
-- Ground bounce light.
-- GTAO ambient occlusion.
-- Temporal upscaling and sharpening.
-- Bloom, auto exposure and motion blur.
-- Night lighting from lanterns, windows and the boat, plus a flashlight that also works underwater.
-
-**Audio**
-- Positional audio from real CC0 field recordings: surf timed to each breaking wave, wind, birds, the boat
-  engine, footsteps by surface, underwater ambience, whale song, and the rod and reel (casts, the bail,
-  reeling, the drag, line snaps, splashes).
-
-## Controls
-
-| Key | Action |
+| Milestone | What it brings |
 |---|---|
-| W A S D | Move |
-| Mouse | Look (click to capture the mouse, Esc to release) |
-| Shift | Sprint / boat boost |
-| Space | Jump / swim up |
-| C | Crouch / dive |
-| E | Interact: board the boat, take or leave the helm, step ashore, trade with the fish buyer or the chandlery |
-| V | Boat camera at the helm (1st / 3rd person) |
-| R | Take out / put away the fishing rod |
-| Left mouse | Hold to wind up, release to cast · strike when a fish takes the bait · hold to reel |
-| Right mouse | Reel an empty line in |
-| I or Tab | Cooler / fish hold and the fish log |
-| F | Free camera |
-| L | Flashlight |
-| T | Pause time |
-| M | Mute |
-| H | Settings panel |
-| P | Photo mode |
-| F1 or ? | All controls |
+| M0 | The creation skeleton: All the Spaces' SDK, the checks, CI |
+| M1 | A playable island: terrain, sky and time of day, the sea, walking, swimming, the boat, touch controls, saves |
+| M2 | The sea and the shore: water, breaking waves and foam, underwater, caustics, wake and spray |
+| M3 | The world: village, pier, stalls, rocks, plants, reef and fish, wildlife, the whale, night lights |
+| M4 | The fishing game: the rod and the fight, the cooler and log, Joe and Marta, upgrades, the guide, sound |
+| M5 | Device tiers and budgets: richer on laptops, smooth on phones |
+| M6 | Drop-in multiplayer: others in the space, catch announcements, a shared records board |
 
-### Fishing
+## How it fits All the Spaces
 
-Walk the deck of the boat while it drifts, or fish from the pier and the beach. Cast, wait for the bobber
-to dip and strike when it's pulled under, then play the fish: keep the line tension in the green band,
-ease off when it runs. Different water holds different fish (the shallows, the pier, the reef, the bay and
-deep water offshore), and some bite best at dawn, dusk or night. Sell your catch to Joe at the fish stand
-on the beach by the pier, and spend it at Marta's chandlery by the boathouse: stronger line, a faster reel,
-a longer rod, a bigger fish hold, a larger fuel tank, a rebuilt engine, a fish finder and deck floodlights for
-night fishing. The boat burns diesel at the helm; fill up at the chandlery. Progress is saved in the browser.
+The repository is a creation project, which All the Spaces builds and checks itself:
 
-The settings panel (H) exposes the sea state, time of day, sun azimuth, clouds, haze, post-processing and
-more.
+- `ats.json`: the title, how people join (`shared`: drop in), and the least capable devices it must
+  run smoothly on (`low`).
+- `assets.lock.json`: every picture, model, sound and font, with its licence. It's written by
+  `tools/update-lock.mjs` from `CREDITS.md` and `credits/`; run `pnpm lock` after adding an asset.
+- `qa/script.json`: what the checks do while playing it on a phone, a tablet and a laptop.
 
-## URL options
+It draws with `WebGLRenderer` through the SDK's `createStage`, saves through `portal.save` (a
+creation's frame has no browser storage), and reads `portal.tier` to choose its detail.
 
-Add these to the URL, for example `?fly&noAudio`:
+## Running it
 
-| Option | Effect |
-|---|---|
-| `fly` | Start in the free camera |
-| `noAudio` | Disable sound |
-| `noClouds` | Skip the volumetric clouds |
-| `noHaze` | Skip the haze and sun shafts |
-| `noCaustics` | Skip caustics |
-| `noVeg` | Skip vegetation |
-| `noSim` | Skip the swash (shallow-water) simulation |
-
-## Running locally
+The All the Spaces SDK isn't published on npm: it's linked from a checkout of All the Spaces next to
+this one.
 
 ```sh
-npm install
-npm run dev      # http://127.0.0.1:5189
-npm run build    # static build in dist/
+git clone https://github.com/shooter-git/all-the-spaces.git
+git clone https://github.com/shooter-git/salt-life.git
+cd salt-life
+pnpm install
+pnpm dev        # http://127.0.0.1:5189, standing in for All the Spaces
+pnpm test       # game logic and the asset list
 ```
 
-Every push to `main` deploys to GitHub Pages through `.github/workflows/deploy.yml`.
+To run All the Spaces' publishing checks, from the All the Spaces checkout (after `pnpm install`
+there):
 
-## Project layout
-
-| Folder | Contents |
-|---|---|
-| `src/game/` | The fishing game: rod, bites, the fight, catch card, cooler and log, vendors and stalls, guide, minimap, HUD |
-| `src/engine/` | The rendering engine: math, scene graph and geometry, GPU resources, WGSL shader composition, materials, lighting and shadows |
-| `src/ocean/` | FFT ocean, water surface and material, shore waves, breakers, swash, wake, caustics, underwater lighting |
-| `src/sky/` | Atmosphere, clouds, sky and environment |
-| `src/world/` | Terrain, village, pier, reef, fish, vegetation, rocks, debris, wildlife, whale, boat |
-| `src/post/` | Post chain: AO, underwater composite, haze, TAAU, motion blur, bloom, lens flare, droplets |
-| `src/materials/` | Shared lighting: shadow filtering, bounce light, contact shadows, local lights, LOD fades |
-| `src/player/` | Walking, swimming, the boat and the free camera |
-| `src/audio/` | The sample-based soundscape |
-| `src/ui/` | Settings panel, loading screen and HUD |
-| `tools/` | Scripts that fetch and convert the characters, stall props and fishing sounds |
-| `test/` | Headless engine smoke test and game-logic tests (`npm test`), and HUD / loader dev pages |
+```sh
+node packages/qa-browser/src/cli.ts check ../salt-life
+```
 
 ## Credits and license
 
-The code is released under the MIT license; see [LICENSE](LICENSE). Third-party assets (CC0 audio from
-Freesound, CC0 scans from Poly Haven, MIT characters from Microsoft Rocketbox, OFL / Apache fonts) and
-technique references are listed in [CREDITS.md](CREDITS.md).
+The code is under the MIT license (see [LICENSE](LICENSE)), as Tidewater's is. The third-party
+assets are CC0 recordings from Freesound, CC0 scans and textures from Poly Haven, MIT characters
+from Microsoft Rocketbox, and OFL and Apache fonts. Each is listed in [CREDITS.md](CREDITS.md) and in
+`assets.lock.json`.

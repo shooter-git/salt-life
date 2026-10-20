@@ -1,4 +1,5 @@
 node_modules
 dist
+qa-output
 .DS_Store
 *.log

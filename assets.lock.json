@@ -1,0 +1,828 @@
+{
+	"$comment": "Every asset in the project, its licence and where it came from. Written by tools/update-lock.mjs from CREDITS.md and credits/: change those, then run `pnpm lock`.",
+	"assets": [
+		{
+			"path": "public/audio/bail_click.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/MrFossy/sounds/523282/",
+			"title": "Foley_TapeMeasure_ClickLock.wav",
+			"author": "MrFossy"
+		},
+		{
+			"path": "public/audio/big_splash.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/qubodup/sounds/442773/",
+			"title": "Big Water Splash; Large Splash",
+			"author": "qubodup, roboroo"
+		},
+		{
+			"path": "public/audio/bird_dove.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/nathankwright/sounds/456930/",
+			"title": "mourning_dove _2017-06-06.wav",
+			"author": "nathankwright"
+		},
+		{
+			"path": "public/audio/bird_forest.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/coalcon/sounds/636071/",
+			"title": "Birds in Rainforest - Volcanoes National Park (Hawaii) 2; Birds in Rainforest - Volcanoes National Park (Hawaii) 1; Tropical Birds.wav",
+			"author": "coalcon, coalcon, dubminister"
+		},
+		{
+			"path": "public/audio/birds_dawn.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/SorenF109/sounds/678859/",
+			"title": "Birds at Dusk on Hawaii.wav",
+			"author": "SorenF109"
+		},
+		{
+			"path": "public/audio/boat_engine.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/AugustSandberg/sounds/264864/",
+			"title": "Marine diesel engine",
+			"author": "AugustSandberg"
+		},
+		{
+			"path": "public/audio/boat_lap.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/kyles/sounds/637206/",
+			"title": "boat knocks fiberglass water laps on hull.flac",
+			"author": "kyles"
+		},
+		{
+			"path": "public/audio/boat_rush.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/Pfannkuchn/sounds/360631/",
+			"title": "Sailing boat, bow wave (close perspective)",
+			"author": "Pfannkuchn"
+		},
+		{
+			"path": "public/audio/coins.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/Anthousai/sounds/336585/",
+			"title": "coins - in paper bowl 05.wav",
+			"author": "Anthousai"
+		},
+		{
+			"path": "public/audio/crickets.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/hdfreema/sounds/333221/",
+			"title": "Night Crickets Back Porch.aiff",
+			"author": "hdfreema"
+		},
+		{
+			"path": "public/audio/emerge.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/felix.blume/sounds/434978/",
+			"title": "Water Splash",
+			"author": "felix.blume"
+		},
+		{
+			"path": "public/audio/fish_flop.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/ramattahatta/sounds/649003/",
+			"title": "FishFlappingTail.wav; Fish Flopping.wav",
+			"author": "ramattahatta, RatBird"
+		},
+		{
+			"path": "public/audio/fish_splash.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/paulprit/sounds/507094/",
+			"title": "Fish Splashing Release 1.wav; Fish Splashing Release 2.wav",
+			"author": "paulprit"
+		},
+		{
+			"path": "public/audio/gull.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/squashy555/sounds/353416/",
+			"title": "Seagull on beach; Seagulls / gaviotas clean wildtrack.WAV",
+			"author": "squashy555, Soojay"
+		},
+		{
+			"path": "public/audio/hull_slap.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/kyles/sounds/637206/",
+			"title": "boat knocks fiberglass water laps on hull.flac",
+			"author": "kyles"
+		},
+		{
+			"path": "public/audio/line_out.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/BranndyBottle/sounds/464697/",
+			"title": "fishingreel_throw.wav",
+			"author": "BranndyBottle"
+		},
+		{
+			"path": "public/audio/line_snap.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/khenshom/sounds/537084/",
+			"title": "Guitar string snap or breaks - various sounds",
+			"author": "khenshom"
+		},
+		{
+			"path": "public/audio/line_strain.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/kyles/sounds/450849/",
+			"title": "nylon rope string fishing line handling tying tie tense friction",
+			"author": "kyles"
+		},
+		{
+			"path": "public/audio/palms.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/felix.blume/sounds/384550/",
+			"title": "Wind through the palm trees and some crickets chirping in the day (Gran Sabana, Venezuela)",
+			"author": "felix.blume"
+		},
+		{
+			"path": "public/audio/pier_lap.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/richardemoore/sounds/260263/",
+			"title": "WavesOnTheShore.wav",
+			"author": "richardemoore"
+		},
+		{
+			"path": "public/audio/plop.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/JoelMcDaniel/sounds/849752/",
+			"title": "Fishing Lure-Sinker Hitting water; fishingreel_throw.wav",
+			"author": "JoelMcDaniel, BranndyBottle"
+		},
+		{
+			"path": "public/audio/reel_drag.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/paulprit/sounds/507070/",
+			"title": "Angel Fly Fish Reel Fast Pull_1.wav",
+			"author": "paulprit"
+		},
+		{
+			"path": "public/audio/reel_wind.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/tosha73/sounds/509902/",
+			"title": "Spinning reel.wav",
+			"author": "tosha73"
+		},
+		{
+			"path": "public/audio/rod_swish.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/Mrthenoronha/sounds/371313/",
+			"title": "Fishing Rod Swish Swoosh.wav; Fishing Rod Cast - Swoosh",
+			"author": "Mrthenoronha, mwchristian95"
+		},
+		{
+			"path": "public/audio/splash.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/qubodup/sounds/212143/",
+			"title": "SPLASH (by blaukreuz); Foley_Natural_Water_Jump_Mono.wav",
+			"author": "qubodup, Nox_Sound"
+		},
+		{
+			"path": "public/audio/step_grass.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/SilentStrikeZ/sounds/389625/",
+			"title": "Footsteps_Grass_1.wav",
+			"author": "SilentStrikeZ"
+		},
+		{
+			"path": "public/audio/step_rock.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/SecureSubset/sounds/813622/",
+			"title": "Footsteps - Stone, Rock, Concrete, Cement",
+			"author": "SecureSubset"
+		},
+		{
+			"path": "public/audio/step_sand.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/200221-WeanBekker/sounds/543714/",
+			"title": "Soft sand steps.wav",
+			"author": "200221-WeanBekker"
+		},
+		{
+			"path": "public/audio/step_water.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/Nox_Sound/sounds/490951/",
+			"title": "Footsteps_Walk.wav; Wading in Shallow Water.wav",
+			"author": "Nox_Sound, ryansitz"
+		},
+		{
+			"path": "public/audio/step_wetsand.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/bruno.auzet/sounds/539175/",
+			"title": "footsteps in wet coarse sand.wav",
+			"author": "bruno.auzet"
+		},
+		{
+			"path": "public/audio/step_wood.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/florianreichelt/sounds/459970/",
+			"title": "Footsteps on hollow wood",
+			"author": "florianreichelt"
+		},
+		{
+			"path": "public/audio/submerge.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/felix.blume/sounds/384218/",
+			"title": "Underwater recording of aquatic movement, bubbles and drops.",
+			"author": "felix.blume"
+		},
+		{
+			"path": "public/audio/surf_backwash.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/Alex_hears_things/sounds/352356/",
+			"title": "Gentle small waves lapping on shore.wav",
+			"author": "Alex_hears_things"
+		},
+		{
+			"path": "public/audio/surf_crash.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/YevgVerh/sounds/827530/",
+			"title": "Ocean_coast_04_092025_0659AM; Big waves hit land.wav",
+			"author": "YevgVerh, straget"
+		},
+		{
+			"path": "public/audio/surf_far.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/chris_dagorne/sounds/426074/",
+			"title": "11ft waves breaking on sandy beach in the distance from the top of the cliff",
+			"author": "chris_dagorne"
+		},
+		{
+			"path": "public/audio/surf_wash.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/Alex_hears_things/sounds/352356/",
+			"title": "Gentle small waves lapping on shore.wav",
+			"author": "Alex_hears_things"
+		},
+		{
+			"path": "public/audio/swim.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/tbsounddesigns/sounds/530158/",
+			"title": "POOL SWIMMING R-L",
+			"author": "tbsounddesigns"
+		},
+		{
+			"path": "public/audio/tern.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/LaScienceMusicale/sounds/648386/",
+			"title": "LAC_DES_CHANTERAINES_Sternespierregarin_m32bitsfloat_192kHz.wav",
+			"author": "LaScienceMusicale"
+		},
+		{
+			"path": "public/audio/under_reef.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/KaleidacousticsAudio/sounds/630436/",
+			"title": "Underwater crackling sounds_Hydrophone.wav",
+			"author": "KaleidacousticsAudio"
+		},
+		{
+			"path": "public/audio/uw_swim.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/felix.blume/sounds/384218/",
+			"title": "Underwater recording of aquatic movement, bubbles and drops.",
+			"author": "felix.blume"
+		},
+		{
+			"path": "public/audio/whale_blow.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/mikewest/sounds/198937/",
+			"title": "ORCA.wav",
+			"author": "mikewest"
+		},
+		{
+			"path": "public/audio/whale_song.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/KEVOY/sounds/82325/",
+			"title": "Diving with whales.wav",
+			"author": "KEVOY"
+		},
+		{
+			"path": "public/audio/wind.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/bruno.auzet/sounds/706471/",
+			"title": "strong wind on coastal path.wav",
+			"author": "bruno.auzet"
+		},
+		{
+			"path": "public/models/characters/joe.glb",
+			"license": "MIT",
+			"source": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"title": "Rocketbox avatar (joe.glb)",
+			"author": "Microsoft Corporation"
+		},
+		{
+			"path": "public/models/characters/marta.glb",
+			"license": "MIT",
+			"source": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"title": "Rocketbox avatar (marta.glb)",
+			"author": "Microsoft Corporation"
+		},
+		{
+			"path": "public/models/debris/dead_quiver_branch_01.glb",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/dead_quiver_branch_01",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/debris/dead_quiver_branch_01_albedo.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/dead_quiver_branch_01",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/debris/dead_quiver_branch_01_arm.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/dead_quiver_branch_01",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/debris/dead_quiver_branch_01_normal.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/dead_quiver_branch_01",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/debris/dead_quiver_branch_02.glb",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/dead_quiver_branch_02",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/debris/dead_quiver_branch_02_albedo.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/dead_quiver_branch_02",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/debris/dead_quiver_branch_02_arm.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/dead_quiver_branch_02",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/debris/dead_quiver_branch_02_normal.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/dead_quiver_branch_02",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/debris/dead_quiver_trunk.glb",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/dead_quiver_trunk",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/debris/dead_quiver_trunk_albedo.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/dead_quiver_trunk",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/debris/dead_quiver_trunk_arm.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/dead_quiver_trunk",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/debris/dead_quiver_trunk_normal.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/dead_quiver_trunk",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/debris/lambis_shell.glb",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/lambis_shell",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/debris/lambis_shell_albedo.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/lambis_shell",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/debris/lambis_shell_arm.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/lambis_shell",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/debris/lambis_shell_normal.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/lambis_shell",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_WoodenTable_03_0_a.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/WoodenTable_03",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_WoodenTable_03_0_n.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/WoodenTable_03",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_WoodenTable_03_0_r.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/WoodenTable_03",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_fish_knife_0_a.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/fish_knife",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_fish_knife_0_n.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/fish_knife",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_fish_knife_0_r.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/fish_knife",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_fishermans_hat_0_a.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/fishermans_hat",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_fishermans_hat_0_n.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/fishermans_hat",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_fishermans_hat_0_r.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/fishermans_hat",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_life_jacket_0_a.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/life_jacket",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_life_jacket_0_n.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/life_jacket",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_life_jacket_0_r.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/life_jacket",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_lifebuoy_0_a.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/lifebuoy",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_lifebuoy_0_n.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/lifebuoy",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_lifebuoy_0_r.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/lifebuoy",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_metal_jerrycan_green_0_a.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/metal_jerrycan_green",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_metal_jerrycan_green_0_n.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/metal_jerrycan_green",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_metal_jerrycan_green_0_r.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/metal_jerrycan_green",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_metal_toolbox_0_a.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/metal_toolbox",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_metal_toolbox_0_n.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/metal_toolbox",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_metal_toolbox_0_r.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/metal_toolbox",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_plastic_jerrycan_0_a.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/plastic_jerrycan",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_plastic_jerrycan_0_n.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/plastic_jerrycan",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_plastic_jerrycan_0_r.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/plastic_jerrycan",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_wooden_bucket_01_0_a.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/wooden_bucket_01",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_wooden_bucket_01_0_n.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/wooden_bucket_01",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_wooden_bucket_01_0_r.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/wooden_bucket_01",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_wooden_crate_01_0_a.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/wooden_crate_01",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_wooden_crate_01_0_n.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/wooden_crate_01",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_wooden_crate_01_0_r.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/wooden_crate_01",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_wooden_crate_02_0_a.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/wooden_crate_02",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_wooden_crate_02_0_n.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/wooden_crate_02",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_wooden_crate_02_0_r.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/wooden_crate_02",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_wooden_cutting_board_0_a.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/wooden_cutting_board",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_wooden_cutting_board_0_n.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/wooden_cutting_board",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_wooden_cutting_board_0_r.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/wooden_cutting_board",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_wooden_display_shelves_01_0_a.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/wooden_display_shelves_01",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_wooden_display_shelves_01_0_n.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/wooden_display_shelves_01",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_wooden_display_shelves_01_0_r.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/wooden_display_shelves_01",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_wooden_lantern_01_0_a.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/wooden_lantern_01",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_wooden_lantern_01_0_n.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/wooden_lantern_01",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_wooden_lantern_01_0_r.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/wooden_lantern_01",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_wooden_lantern_01_1_a.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/wooden_lantern_01",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_wooden_lantern_01_1_n.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/wooden_lantern_01",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/p_wooden_lantern_01_1_r.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/wooden_lantern_01",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/props.bin",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/models",
+			"title": "Stall props (decimated Poly Haven models)",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/s_weathered_brown_planks_a.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/weathered_brown_planks",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/s_weathered_brown_planks_n.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/weathered_brown_planks",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/s_weathered_brown_planks_r.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/weathered_brown_planks",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/s_weathered_peeling_timber_a.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/weathered_peeling_timber",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/s_weathered_peeling_timber_n.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/weathered_peeling_timber",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/s_weathered_peeling_timber_r.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/weathered_peeling_timber",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/s_weathered_planks_a.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/weathered_planks",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/s_weathered_planks_n.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/weathered_planks",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/s_weathered_planks_r.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/weathered_planks",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/s_worn_corrugated_iron_a.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/worn_corrugated_iron",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/s_worn_corrugated_iron_n.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/worn_corrugated_iron",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/s_worn_corrugated_iron_r.jpg",
+			"license": "CC0-1.0",
+			"source": "https://polyhaven.com/a/worn_corrugated_iron",
+			"author": "Poly Haven"
+		},
+		{
+			"path": "public/models/props/signs.png",
+			"license": "MIT",
+			"source": "https://github.com/dgreenheck/tidewater",
+			"title": "Stall signs",
+			"author": "Dan Greenheck (DRG Software Solutions)"
+		},
+		{
+			"path": "public/models/whale/humpback.bin",
+			"license": "MIT",
+			"source": "https://github.com/dgreenheck/tidewater",
+			"title": "Humpback whale",
+			"author": "Dan Greenheck (DRG Software Solutions)"
+		},
+		{
+			"path": "public/models/whale/humpback_albedo.png",
+			"license": "MIT",
+			"source": "https://github.com/dgreenheck/tidewater",
+			"title": "Humpback whale",
+			"author": "Dan Greenheck (DRG Software Solutions)"
+		},
+		{
+			"path": "public/models/whale/humpback_height.png",
+			"license": "MIT",
+			"source": "https://github.com/dgreenheck/tidewater",
+			"title": "Humpback whale",
+			"author": "Dan Greenheck (DRG Software Solutions)"
+		},
+		{
+			"path": "public/textures/smaa/area.png",
+			"license": "MIT",
+			"source": "https://github.com/mrdoob/three.js/tree/dev/examples/jsm/postprocessing",
+			"title": "SMAA lookup textures",
+			"author": "three.js authors; J. Jimenez et al."
+		},
+		{
+			"path": "public/textures/smaa/search.png",
+			"license": "MIT",
+			"source": "https://github.com/mrdoob/three.js/tree/dev/examples/jsm/postprocessing",
+			"title": "SMAA lookup textures",
+			"author": "three.js authors; J. Jimenez et al."
+		},
+		{
+			"path": "tools/props/fonts/CabinSketch-Bold.ttf",
+			"license": "OFL-1.1",
+			"source": "https://fonts.google.com/specimen/Cabin+Sketch",
+			"title": "Cabin Sketch",
+			"author": "Pablo Impallari"
+		},
+		{
+			"path": "tools/props/fonts/Oswald.ttf",
+			"license": "OFL-1.1",
+			"source": "https://fonts.google.com/specimen/Oswald",
+			"title": "Oswald",
+			"author": "Vernon Adams, Kalapi Gajjar, Cyreal"
+		},
+		{
+			"path": "tools/props/fonts/PermanentMarker-Regular.ttf",
+			"license": "Apache-2.0",
+			"source": "https://fonts.google.com/specimen/Permanent+Marker",
+			"title": "Permanent Marker",
+			"author": "Font Diner"
+		}
+	]
+}
