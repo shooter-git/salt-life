@@ -316,12 +316,13 @@ export function buildPalmNear( seed = 11 ) {
 }
 
 // Low detail palm: one geometry (stem + crown) for the plant-leaf material.
-export function buildPalmFar( seed = 11 ) {
+// lite: low-powered devices (half the fronds, a thinner trunk: about half the triangles)
+export function buildPalmFar( seed = 11, { lite = false } = {} ) {
 
 	const rand = mulberry32( seed );
 	const b = new GeoBuilder();
-	addStem( b, { radial: 5, rows: [ - 0.03, 0.03, 0.2, 0.6, 1.0 ], radius: palmRadius, Hgeo: PALM_H, mat: [ PART.STEM, 0, 0, 0 ], cap: false } );
-	const fronds = palmFrondParams( rand, 18 ).filter( ( f, i ) => i !== 1 && i !== 5 && i !== 9 && i !== 13 );
+	addStem( b, { radial: lite ? 4 : 5, rows: lite ? [ - 0.03, 0.03, 0.5, 1.0 ] : [ - 0.03, 0.03, 0.2, 0.6, 1.0 ], radius: palmRadius, Hgeo: PALM_H, mat: [ PART.STEM, 0, 0, 0 ], cap: false } );
+	const fronds = palmFrondParams( rand, 18 ).filter( ( f, i ) => lite ? i % 2 === 0 : i !== 1 && i !== 5 && i !== 9 && i !== 13 );
 	addPalmCrown( b, fronds, { segs: 3, cross: 1, leafScale: 1.15 } );
 	return { geometry: b.build( 16, new THREE.Vector3( 0, 6, 0 ) ), triangles: b.triangles };
 

@@ -64,8 +64,9 @@ export class Rocks {
 		for ( let s = 0; s < ROCK_STYLES.length; s ++ ) {
 
 			const members = this.instances.filter( ( r ) => r.style === s );
-			const near = buildRockGeometry( s, 17 + s * 101, NEAR_SUBDIV );
-			const far = buildRockGeometry( s, 17 + s * 101, FAR_SUBDIV );
+			// (the low tier: one subdivision less, a quarter of the triangles)
+			const near = buildRockGeometry( s, 17 + s * 101, NEAR_SUBDIV - ( lite ? 1 : 0 ) );
+			const far = buildRockGeometry( s, 17 + s * 101, FAR_SUBDIV - ( lite ? 1 : 0 ) );
 			const mk = ( geo, name ) => {
 
 				const g = geo.clone();

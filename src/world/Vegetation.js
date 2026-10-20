@@ -101,7 +101,7 @@ function axisSphere( geometry ) {
 const TIERS = {
 	low: {
 		palmNear: 35, treeNear: 14, shrubNear: 10, underFade: [ 40, 50 ], fernFade: null, broadFade: [ 12, 16 ], bananaFade: [ 22, 28 ], margin: 5,
-		palmFar: [ 700, 800 ], canopyFar: [ 1600, 1800 ], framePx: 96, blendDist: 40, grass: null, shadows: { plants: false, canopy: false },
+		palmFar: [ 260, 320 ], canopyFar: [ 900, 1100 ], framePx: 96, blendDist: 40, grass: null, shadows: { plants: false, canopy: false },
 	},
 	mid: {
 		palmNear: 70, treeNear: 30, shrubNear: 22, underFade: [ 70, 85 ], fernFade: [ 26, 36 ], broadFade: [ 32, 42 ], bananaFade: [ 50, 62 ], margin: 8,
@@ -187,7 +187,7 @@ export class Vegetation {
 
 		// geometry
 		const palmNear = buildPalmNear();
-		const palmFar = buildPalmFar();
+		const palmFar = buildPalmFar( 11, { lite: this.tier === 'low' } );
 		const under = { young: buildPlantKind( UNDERSTORY.YOUNG, buildYoungPalm, 5 ), fern: buildPlantKind( UNDERSTORY.FERN, buildFern, 3 ) };
 		const monsteraMesh = buildMonsteraMesh();
 		const bananaMeshes = [ buildPlantKind( UNDERSTORY.BANANA, buildBanana, 9 ), buildPlantKind( UNDERSTORY.BANANA_B, buildBanana, 23 ) ];

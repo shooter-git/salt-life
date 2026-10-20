@@ -19,7 +19,7 @@ import { causticTexture } from '../ocean/SeaTextures.js';
 // GLSL for other materials (the water reads the sea floor): `terrain.heightUniforms` and
 // `terrain.heightGlsl` define `float terrainHeightAt( vec2 xz )` (-90 outside the domain).
 
-const LOD_GRID = { low: 16, mid: 24, high: 40 };
+const LOD_GRID = { low: 12, mid: 24, high: 40 };
 const HEIGHT_RES = { low: 1024, mid: 2048, high: 2048 };
 const MAP_RES = 1024; // the baked maps: 2 m is plenty for macro shading (the detail adds the rest)
 
@@ -91,6 +91,7 @@ float terrainHeightAt( vec2 xz ) {
 		this.uniforms = uniforms;
 		const mat = this.material = new THREE.MeshStandardMaterial( { roughness: 0.9, metalness: 0 } );
 		mat.name = 'Terrain';
+		mat.userData.uniforms = uniforms;
 		if ( tier === 'low' ) mat.defines = { TERRAIN_LITE: '' };
 		mat.onBeforeCompile = ( shader ) => {
 

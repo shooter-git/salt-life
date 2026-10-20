@@ -29,7 +29,22 @@ export class FishStand {
 		this.group.position.set( STAND.x, y, STAND.z );
 		this.group.rotation.y = STAND.yaw;
 		scene.add( this.group );
-		this.ready = loadStallAssets( tier ).then( ( a ) => {
+		// low-powered devices: the plain procedural stall (the scans are ~6 MB of downloads, 20 MB of
+		// textures and 29k triangles)
+		const plain = () => {
+
+			const mesh = new Mesh( buildStall(), this.material );
+			mesh.name = 'FishStandStall';
+			mesh.castShadow = true;
+			this.group.add( mesh );
+
+		};
+		if ( tier === 'low' ) {
+
+			plain();
+			this.ready = Promise.resolve();
+
+		} else this.ready = loadStallAssets( tier ).then( ( a ) => {
 
 			const mesh = new Mesh( buildStallKit( a ), a.material );
 			mesh.name = 'FishStandStall';
@@ -38,10 +53,8 @@ export class FishStand {
 
 		} ).catch( ( e ) => {
 
-			console.error( 'FishStand: stall assets failed, using the plain stall', e );
-			const mesh = new Mesh( buildStall(), this.material );
-			mesh.castShadow = true;
-			this.group.add( mesh );
+			console.warn( 'FishStand: stall assets failed, using the plain stall', e );
+			plain();
 
 		} );
 

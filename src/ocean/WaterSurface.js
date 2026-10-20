@@ -14,7 +14,9 @@ import { rippleTexture } from './SeaTextures.js';
 // shallows it lets the sea floor show through; its reflections stay at full strength there
 // (premultiplied output: the water's own light is weighted by its opacity, the reflections are not).
 
-const LOD_GRID = { low: 12, mid: 20, high: 32 };
+const LOD_GRID = { low: 7, mid: 20, high: 32 };
+// node size at the finest LOD (m): phones take a coarser sea (their triangle budget is 300k)
+const LEAF = { low: 16, mid: 8, high: 8 };
 const SHORE_DEEP = 26; // m: the shore waves' envelope is 0 beyond this depth
 // an sRGB colour as a linear GLSL vec3 (shading is linear)
 const rgb = ( r, g, b ) => {
@@ -31,7 +33,7 @@ export class WaterSurface {
 		this.waves = waves;
 		this.terrain = terrain;
 		this.shore = shore;
-		this.lod = new CDLOD( { gridSize: LOD_GRID[ tier ] ?? LOD_GRID.low, leafSize: 8, levels: 12, minY: - 4, maxY: 4, prefix: 'oceanLod' } );
+		this.lod = new CDLOD( { gridSize: LOD_GRID[ tier ] ?? LOD_GRID.low, leafSize: LEAF[ tier ] ?? LEAF.low, levels: 12, minY: - 4, maxY: 4, prefix: 'oceanLod' } );
 		const SH = !! shore;
 
 		const uniforms = {

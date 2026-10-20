@@ -596,14 +596,15 @@ export class Village {
 		// All opaque geometry lives in ONE set of vertex / index buffers. Each opaque material
 		// draws its own index range; the wood mesh is the only shadow caster and widens its
 		// range to cover everything during the shadow passes (1 shadow draw per cascade).
+		const keys = [ 'wood', 'hard', 'roofMetal', 'thatch', 'stone' ].filter( ( key ) => B.batches[ key ] && B.batches[ key ].vcount > 0 );
 		const opaque = new Batch();
+		// (sized up front: the merged arrays are made once, and become the geometry's)
+		opaque.reserve( keys.reduce( ( s, key ) => s + B.batches[ key ].vcount, 0 ), keys.reduce( ( s, key ) => s + B.batches[ key ].icount, 0 ) );
 		const ranges = {};
-		for ( const key of [ 'wood', 'hard', 'roofMetal', 'thatch', 'stone' ] ) {
+		for ( const key of keys ) {
 
-			const b = B.batches[ key ];
-			if ( ! b || b.vcount === 0 ) continue;
 			const start = opaque.icount;
-			opaque.append( b );
+			opaque.append( take( key ) );
 			ranges[ key ] = { start, count: opaque.icount - start };
 
 		}

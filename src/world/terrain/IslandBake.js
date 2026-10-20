@@ -1,4 +1,4 @@
-import { zlibSync, unzlibSync } from 'fflate';
+import { zlibSync } from 'fflate';
 import { BAKED_FIELDS } from '../TerrainData.js';
 
 // The island, baked: TerrainData's grids, packed small enough to download before the game starts.
@@ -9,9 +9,10 @@ import { BAKED_FIELDS } from '../TerrainData.js';
 //   'SLI1' | u32 header length | header (JSON) | the fields, each zlib-compressed
 //
 // heights: quantized to u16 (~6 mm steps) and stored as differences along each row, which compress
-// well; rock (0..1): u8; the other masks are u8 already.
+// well; rock (0..1): u8; the other masks are u8 already. Reading it back: IslandDecode.js (outside
+// the bake's source hash: how it's read doesn't change what's baked).
 
-const MAGIC = 'SLI1';
+export const MAGIC = 'SLI1';
 
 export function encodeIsland( terrain, { sourceHash } ) {
 
@@ -70,56 +71,6 @@ export function encodeIsland( terrain, { sourceHash } ) {
 
 		out.set( b, at );
 		at += b.length;
-
-	}
-
-	return out;
-
-}
-
-export function readIslandHeader( bytes ) {
-
-	if ( new TextDecoder().decode( bytes.subarray( 0, 4 ) ) !== MAGIC ) throw new Error( 'island.bin: not an island bake' );
-	const length = new DataView( bytes.buffer, bytes.byteOffset ).getUint32( 4, true );
-	return { header: JSON.parse( new TextDecoder().decode( bytes.subarray( 8, 8 + length ) ) ), dataStart: 8 + length };
-
-}
-
-// -> { res, heights: Float32Array, rock: Float32Array, sand…scarp: Uint8Array, rockSites }, for new TerrainData( seed, baked )
-export function decodeIsland( bytes ) {
-
-	const { header, dataStart } = readIslandHeader( bytes );
-	const n = header.res * header.res;
-	const out = { res: header.res, rockSites: header.rockSites };
-	for ( const f of header.fields ) {
-
-		const raw = unzlibSync( bytes.subarray( dataStart + f.offset, dataStart + f.offset + f.length ) );
-		if ( f.encoding === 'u16-row-delta' ) {
-
-			const q = new Uint16Array( raw.buffer, raw.byteOffset, n );
-			const h = new Float32Array( n );
-			for ( let j = 0, res = header.res; j < res; j ++ ) {
-
-				let v = 0;
-				for ( let i = 0; i < res; i ++ ) {
-
-					const k = j * res + i;
-					v = ( v + q[ k ] ) & 0xffff;
-					h[ k ] = f.min + v * f.step;
-
-				}
-
-			}
-
-			out[ f.name ] = h;
-
-		} else if ( f.encoding === 'u8-unit' ) {
-
-			const r = new Float32Array( n );
-			for ( let k = 0; k < n; k ++ ) r[ k ] = raw[ k ] / 255;
-			out[ f.name ] = r;
-
-		} else out[ f.name ] = raw;
 
 	}
 

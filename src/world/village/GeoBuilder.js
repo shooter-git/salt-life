@@ -582,13 +582,21 @@ export class Batch {
 
 	}
 
+	// room for exactly nv more vertices and ni more indices (a batch whose size is known up front: its
+	// arrays are made once, and become the geometry's in build())
+	reserve( nv, ni ) {
+
+		this._reserve( nv, ni, true );
+
+	}
+
 	// room for nv more vertices and ni more indices
-	_reserve( nv, ni ) {
+	_reserve( nv, ni, exact = false ) {
 
 		const need = this.vcount + nv;
 		if ( need > this.cap ) {
 
-			const cap = Math.max( need, this.cap * 2, 256 );
+			const cap = exact ? need : Math.max( need, this.cap * 2, 256 );
 			const grow = ( a, k ) => {
 
 				const b = new Float32Array( cap * k );
@@ -609,7 +617,7 @@ export class Batch {
 		const ineed = this.icount + ni;
 		if ( ineed > this.icap ) {
 
-			const icap = Math.max( ineed, this.icap * 2, 512 );
+			const icap = exact ? ineed : Math.max( ineed, this.icap * 2, 512 );
 			const b = new Uint32Array( icap );
 			b.set( this.idx.subarray( 0, this.icount ) );
 			this.idx = b;
@@ -743,16 +751,19 @@ export class Batch {
 
 	}
 
+	// (arrays filled exactly are handed over as they are, the rest trimmed: a full batch can't write
+	// into them again without growing into new ones first)
 	build() {
 
 		const g = new BufferGeometry();
 		const n = this.vcount;
-		g.setAttribute( 'position', new BufferAttribute( this.pos.slice( 0, n * 3 ), 3 ) );
-		g.setAttribute( 'normal', new BufferAttribute( this.nrm.slice( 0, n * 3 ), 3 ) );
-		g.setAttribute( 'uv', new BufferAttribute( this.uv.slice( 0, n * 2 ), 2 ) );
-		g.setAttribute( 'tint', new BufferAttribute( this.tint.slice( 0, n * 3 ), 3 ) );
-		g.setAttribute( 'vdata', new BufferAttribute( this.data.slice( 0, n * 4 ), 4 ) );
-		g.setIndex( new BufferAttribute( n > 65535 ? this.idx.slice( 0, this.icount ) : Uint16Array.from( this.idx.subarray( 0, this.icount ) ), 1 ) );
+		const fit = ( a, length ) => a.length === length ? a : a.slice( 0, length );
+		g.setAttribute( 'position', new BufferAttribute( fit( this.pos, n * 3 ), 3 ) );
+		g.setAttribute( 'normal', new BufferAttribute( fit( this.nrm, n * 3 ), 3 ) );
+		g.setAttribute( 'uv', new BufferAttribute( fit( this.uv, n * 2 ), 2 ) );
+		g.setAttribute( 'tint', new BufferAttribute( fit( this.tint, n * 3 ), 3 ) );
+		g.setAttribute( 'vdata', new BufferAttribute( fit( this.data, n * 4 ), 4 ) );
+		g.setIndex( new BufferAttribute( n > 65535 ? fit( this.idx, this.icount ) : Uint16Array.from( this.idx.subarray( 0, this.icount ) ), 1 ) );
 		g.computeBoundingBox();
 		g.computeBoundingSphere();
 		return g;

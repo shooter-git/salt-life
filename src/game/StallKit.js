@@ -364,6 +364,7 @@ export function createStallMaterial( assets ) {
 		skPropA: { value: assets.prop.a }, skPropN: { value: assets.prop.n }, skPropR: { value: assets.prop.r },
 		skSigns: { value: assets.signs }, skTime: G.time, skNight: G.night,
 	};
+	m.userData.uniforms = uniforms;
 	m.onBeforeCompile = ( shader ) => {
 
 		Object.assign( shader.uniforms, uniforms );

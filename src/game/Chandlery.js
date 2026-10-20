@@ -20,7 +20,21 @@ export class Chandlery {
 		this.group.position.set( CHANDLERY.x, y, CHANDLERY.z );
 		this.group.rotation.y = CHANDLERY.yaw;
 		scene.add( this.group );
-		this.ready = loadStallAssets( tier ).then( ( a ) => {
+		// low-powered devices: the plain table (the scans cost downloads, textures and triangles)
+		const plain = () => {
+
+			const mesh = new Mesh( buildTable(), this.material );
+			mesh.name = 'ChandleryStall';
+			mesh.castShadow = true;
+			this.group.add( mesh );
+
+		};
+		if ( tier === 'low' ) {
+
+			plain();
+			this.ready = Promise.resolve();
+
+		} else this.ready = loadStallAssets( tier ).then( ( a ) => {
 
 			const mesh = new Mesh( buildChandleryKit( a ), a.material );
 			mesh.name = 'ChandleryStall';
@@ -29,10 +43,8 @@ export class Chandlery {
 
 		} ).catch( ( e ) => {
 
-			console.error( 'Chandlery: stall assets failed, using the plain table', e );
-			const mesh = new Mesh( buildTable(), this.material );
-			mesh.castShadow = true;
-			this.group.add( mesh );
+			console.warn( 'Chandlery: stall assets failed, using the plain table', e );
+			plain();
 
 		} );
 

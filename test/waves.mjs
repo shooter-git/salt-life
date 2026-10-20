@@ -3,7 +3,7 @@
 // query results must be sane numbers.
 import { readFileSync } from 'node:fs';
 import { TerrainData } from '../src/world/TerrainData.js';
-import { decodeIsland } from '../src/world/terrain/IslandBake.js';
+import { decodeIsland } from '../src/world/terrain/IslandDecode.js';
 import { Waves } from '../src/ocean/Waves.js';
 import { WaterQuery } from '../src/ocean/WaterQuery.js';
 

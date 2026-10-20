@@ -263,6 +263,35 @@ vec4 cloudsHigh( vec3 rd, float pxAngle ) {
 
 // ------------------------------------------------------------ the veil
 
+// the low tier's sky has no veil: its textures take ~50 frames of line integrals to make, which the
+// weakest devices feel. The same interface as Cirrus, with a clear sky behind the cumulus.
+export class NoCirrus {
+
+	constructor() {
+
+		this.glsl = /* glsl */`
+vec4 cloudsHigh( vec3 rd, float pxAngle ) { return vec4( 0.0, 0.0, 0.0, 1.0 ); }
+`;
+		this.uniforms = { cloudsCirrus: { value: 0 }, cloudsCirrusFade: { value: 0 } };
+		this.amount = this.uniforms.cloudsCirrus;
+		this.passList = [];
+		this.ready = true;
+		this.memory = 0;
+
+	}
+
+	generate() {
+
+		return true;
+
+	}
+
+	update() {}
+
+	dispose() {}
+
+}
+
 export class Cirrus {
 
 	constructor( renderer, { fibRes = 1024 } = {} ) {

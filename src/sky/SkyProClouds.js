@@ -1,7 +1,7 @@
 import * as THREE from '../engine/index.js';
 import { G } from '../core/Globals.js';
 import { ATMOSPHERE_GLSL, Pass, floatTarget, f } from './Atmosphere.js';
-import { Cirrus } from './Clouds.js';
+import { Cirrus, NoCirrus } from './Clouds.js';
 
 // Volumetric cumulus from sky-pro-webgpu (../sky-pro-webgpu, "Partly cloudy" preset): procedural
 // weather map, a 64³ Perlin-Worley shape noise with a height-dependent erosion, a cone-traced
@@ -26,7 +26,8 @@ import { Cirrus } from './Clouds.js';
 //   - tiers: `high` is Tidewater's (half resolution history, 1/16 of it traced per frame, 256 steps,
 //     6 light taps); `mid` the same with fewer steps and light taps; both cap the history's size
 //     (high: 1280 x 720, mid: 960 x 540 pixels). `low` has no per-pixel march at all: the panorama
-//     (1/64 of it marched per frame, sampled bicubically) is the view's clouds.
+//     (1/64 of it marched per frame, sampled bicubically) is the view's clouds; its first panorama is
+//     made at that pace too (64 frames, none of them heavier than the rest), and it has no cirrus.
 //   - not ported: the cloud shadow map on the ground (the WebGL materials don't sample it).
 //
 //   clouds.sampleUniforms     what a material samples the clouds with (CLOUDS_GLSL):
@@ -75,7 +76,7 @@ const QUALITY = {
 	},
 	low: {
 		view: false, stepMeters: 40, fullLightingAlpha: 0.4, lightReuseSteps: 4,
-		pano: [ 1024, 256 ], panoLattice: 8, panoSteps: 96, panoLightTaps: 3, weather: 512, fibres: 512,
+		pano: [ 1024, 256 ], panoLattice: 8, panoSteps: 96, panoLightTaps: 3, weather: 512, fibres: 0, warmLattice: 8,
 	},
 };
 
@@ -83,7 +84,7 @@ const NOISE_RES = 64;
 const NOISE_LAYERS_PER_FRAME = 8;
 const WEATHER_STRIPS = 8;
 const BOUNDS_RES = 64;
-const WARM = 16; // frames of the first panorama (a 4x4 lattice)
+const WARM_LATTICE = 4; // a whole new panorama: a 4x4 lattice, 16 frames (per tier: quality.warmLattice)
 const REBUILD_SLOTS = 4; // view slots traced per frame while the history is rebuilt after a cut
 const AP_DIST = 30000; // m: aerial perspective toward the horizon
 const PANO_MIN = - 4 * DEG, PANO_RANGE = 94 * DEG; // panorama elevations (v = sqrt of the fraction)
@@ -822,11 +823,14 @@ export class SkyProClouds {
 		U.scWeatherBounds.value = this.weatherBounds.texture;
 
 		const [ PW, PH ] = q.pano;
-		// the panorama and its back buffer (a whole new one is made there over WARM frames, then swapped in)
+		// the panorama and its back buffer (a whole new one is made there over warmFrames frames, then swapped in)
 		this.panoramas = [ floatTarget( PW, PH, { wrapS: THREE.RepeatWrapping } ), floatTarget( PW, PH, { wrapS: THREE.RepeatWrapping } ) ];
 		this.panorama = this.panoramas[ 0 ];
-		// one slot of the panorama's lattice (the largest: the warm-up's 4 x 4)
-		this.panoSlot = floatTarget( Math.ceil( PW / 4 ), Math.ceil( PH / 4 ), { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter } );
+		// one slot of the panorama's lattice (the largest marched in a frame: the warm-up's)
+		this.warmLattice = q.warmLattice || WARM_LATTICE;
+		this.warmFrames = this.warmLattice ** 2;
+		const slot = Math.min( this.warmLattice, q.panoLattice );
+		this.panoSlot = floatTarget( Math.ceil( PW / slot ), Math.ceil( PH / slot ), { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter } );
 		if ( q.view ) {
 
 			// the trace (1/lattice² of the history) and the history ping-pong: colour + ( depth, carried depth )
@@ -863,7 +867,7 @@ export class SkyProClouds {
 		this.fade = S.cloudsFade;
 
 		// Tidewater's cirrus veil (composited behind the cumulus by the trace and the panorama)
-		this.cirrus = new Cirrus( renderer, { fibRes: q.fibres } );
+		this.cirrus = q.fibres ? new Cirrus( renderer, { fibRes: q.fibres } ) : new NoCirrus();
 		this.cirrusAmount = this.cirrus.amount;
 
 		this._buildPasses();
@@ -875,7 +879,7 @@ export class SkyProClouds {
 		this.historyValid = false;
 		this.noiseLayer = 0; // layers of the noise volume made so far
 		this.weatherStrip = 0; // strips of the weather map made so far
-		this.panoWarm = 0; // > 0: slots of a new panorama still to march (4x4 lattice)
+		this.panoWarm = 0; // > 0: slots of a new panorama still to march (a warmLattice x warmLattice lattice)
 		this.panoVersion = 0; // new panoramas made (the environment follows)
 		this._slotIndex = 0; // view traces so far (the lattice order)
 		this._rebuild = 0; // view slots traced since the last cut
@@ -987,7 +991,7 @@ export class SkyProClouds {
 
 		}
 
-		this.panoWarm = WARM;
+		this.panoWarm = this.warmFrames;
 		return true;
 
 	}
@@ -1023,7 +1027,7 @@ export class SkyProClouds {
 			U.scsShell.value[ 3 ] = cov;
 			this._lastCoverage = cov;
 			this.historyValid = false;
-			if ( this.ready ) this.panoWarm = WARM;
+			if ( this.ready ) this.panoWarm = this.warmFrames;
 
 		}
 
@@ -1064,7 +1068,7 @@ export class SkyProClouds {
 			this.historyValid = false;
 			// a new light (the moon takes over, a jump of the time of day): a whole new panorama (as the
 			// time of day runs the progressive refresh follows the sun)
-			if ( this.ready && L.dot( this._prevLight ) < 0.9997 ) this.panoWarm = WARM;
+			if ( this.ready && L.dot( this._prevLight ) < 0.9997 ) this.panoWarm = this.warmFrames;
 
 		}
 
@@ -1123,7 +1127,7 @@ export class SkyProClouds {
 			if ( this.cirrus.generate() ) {
 
 				this.cirrus.uniforms.cloudsCirrusFade.value = 1;
-				this.panoWarm = WARM;
+				this.panoWarm = this.warmFrames;
 				this.historyValid = false;
 
 			}
@@ -1139,8 +1143,8 @@ export class SkyProClouds {
 		const warming = this.panoWarm > 0;
 		if ( warming ) {
 
-			const k = WARM - this.panoWarm --;
-			U.scfPano.value = [ k % 4, Math.floor( k / 4 ), 4, 0 ];
+			const k = this.warmFrames - this.panoWarm --, WL = this.warmLattice;
+			U.scfPano.value = [ k % WL, Math.floor( k / WL ), WL, 0 ];
 
 		} else {
 
@@ -1250,7 +1254,7 @@ export class SkyProClouds {
 
 	invalidate() {
 
-		if ( this.ready ) this.panoWarm = WARM;
+		if ( this.ready ) this.panoWarm = this.warmFrames;
 		this.resetHistory();
 
 	}

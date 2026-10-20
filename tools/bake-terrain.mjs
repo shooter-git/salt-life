@@ -39,7 +39,8 @@ const sourceHash = hashOf( SOURCES );
 const detailSourceHash = hashOf( [ 'src/world/terrain/DetailTextures.js', 'src/world/terrain/TerrainNoise.js' ] );
 const { detailData, encodeDetail, detailHash } = await import( '../src/world/terrain/DetailTextures.js' );
 
-const { readIslandHeader, encodeIsland, halfIsland } = await import( '../src/world/terrain/IslandBake.js' );
+const { encodeIsland, halfIsland } = await import( '../src/world/terrain/IslandBake.js' );
+const { readIslandHeader } = await import( '../src/world/terrain/IslandDecode.js' );
 
 if ( process.argv.includes( '--check' ) ) {
 

@@ -4,7 +4,7 @@ import { G } from './core/Globals.js';
 import { Input } from './core/Input.js';
 import { SaveStore } from './core/SaveStore.js';
 import { TerrainData } from './world/TerrainData.js';
-import { decodeIsland } from './world/terrain/IslandBake.js';
+import { decodeIsland } from './world/terrain/IslandDecode.js';
 import { setDetailData } from './world/terrain/DetailTextures.js';
 import { WORLD } from './world/WorldLayout.js';
 import { Colliders } from './world/Colliders.js';
@@ -28,6 +28,7 @@ import { TouchControls } from './ui/TouchControls.js';
 import { Hud } from './ui/Hud.js';
 import { Wake } from './ocean/Wake.js';
 import { PostChain } from './post/PostChain.js';
+import { releaseGeometries, releaseTextures, uploadTextures, watchContext } from './core/ReleaseAfterUpload.js';
 
 // Salt Life: the island, the sea and the boat, drawn with three.js inside All the Spaces. It follows
 // Tidewater's App (same systems, same order each frame); what isn't ported yet is simply not here.
@@ -39,6 +40,7 @@ const ISLAND = { low: 'world/island-1024.bin', mid: 'world/island.bin', high: 'w
 const LENS_REACH = 0.02; // m below the surface before the view counts as under water
 const UNDERWATER = new THREE.Color( 0.03, 0.17, 0.2 );
 const _c = new THREE.Color();
+const _c3 = new THREE.Vector3();
 
 export class App {
 
@@ -97,6 +99,11 @@ export class App {
 		camera.far = 12000;
 		camera.updateProjectionMatrix();
 		this.renderer = renderer;
+		// WebGL drawn on the CPU (no graphics card, or a blocklisted one): frames are paced (pacedFrame)
+		this.cpuGL = drawsOnCpu( renderer.getContext() );
+		this._drawn = null; // the last frame's fence
+		this._owed = 0; // s not yet played while waiting for it
+		this._rest = false; // the frame after a drawn one is skipped
 		this.camera = camera;
 		const scene = this.scene = new THREE.Scene();
 
@@ -135,10 +142,14 @@ export class App {
 		this.stand = new FishStand( { scene, terrain: this.terrainData, colliders: this.colliders, tier } );
 		this.chandlery = new Chandlery( { scene, terrain: this.terrainData, colliders: this.colliders, tier } );
 		this.terrain = new Terrain( { scene, terrainData: this.terrainData, tier } );
+		uploadTextures( renderer, [ this.terrain.heightTexture, this.terrain.normalTexture, this.terrain.splatTexture ] );
 		// boulders, blocks, talus and outcrops (shaded like the ground's rock)
 		this.rocks = new Rocks( { scene, terrain: this.terrain, colliders: this.colliders, village: this.village, castShadow: tier !== 'low', lite: tier === 'low' } );
 		this.vegetation = new Vegetation( { scene, terrain: this.terrainData, ground: this.terrain, renderer, tier, village: this.village } );
 		await this.vegetation.init();
+		// the island's masks are read only while it's being made (the ground's maps, the rocks and the
+		// plants placed on it); from here on only its heights are
+		for ( const k of [ 'rock', 'sand', 'path', 'gully', 'seagrass', 'rubble', 'scarp' ] ) this.terrainData[ k ] = null;
 
 		// ---------------------------------------------------------------- ocean
 		await progress( 0.6, 'Rolling in the swell' );
@@ -162,22 +173,66 @@ export class App {
 		} );
 		this.boatCtl = new BoatController( { model: this.boat, query: this.query, terrain: this.terrainData, colliders: this.colliders } );
 		this.wake = new Wake( { scene, boat: this.boatCtl, waves: this.waves, tier } );
+		if ( tier === 'low' ) {
+
+			this.nearDetail = [];
+			// (the display fish are one mesh spanning the village: left out on these devices)
+			for ( const f of this.village.fish || [] ) f.visible = false;
+			this.stand.group?.traverse( ( o ) => o.isMesh && this.nearDetail.push( { o, dist: 60 } ) );
+			this.chandlery.group?.traverse( ( o ) => o.isMesh && this.nearDetail.push( { o, dist: 60 } ) );
+			for ( const k of [ 'fittings', 'trap', 'wood', 'wheel', 'throttle', 'radar', 'propeller', 'rudder' ] ) if ( this.boat.meshes[ k ] ) this.nearDetail.push( { o: this.boat.meshes[ k ], dist: 70 } );
+			for ( const d of this.nearDetail ) if ( ! d.o.geometry.boundingSphere ) d.o.geometry.computeBoundingSphere();
+
+		}
+
 		// laptops: bloom and SMAA (phones draw straight to the screen)
 		this.post = tier === 'high' ? new PostChain( renderer, scene, camera ) : null;
 		this.player = new Player( { camera, input: this.input, terrain: this.terrainData, colliders: this.colliders, query: this.query, boat: this.boatCtl } );
 
 		// ---------------------------------------------------------------- shaders
 		await progress( 0.8, 'Preparing the shaders' );
-		await Promise.all( [ this.stand.ready, this.chandlery.ready ] );
+		// the CPU copies of the big static data go once it's on the GPU (phones' script memory)
+		releaseGeometries( this.village.group );
+		releaseTextures( this.terrain.mesh );
+		// the stalls' scans (mid and high) arrive after the game has started: they're not needed to
+		// begin, and the download before it does is limited
+		Promise.all( [ this.stand.ready, this.chandlery.ready ] ).then( () => {
+
+			for ( const root of [ this.stand.group, this.chandlery.group ] ) {
+
+				releaseGeometries( root );
+				releaseTextures( root );
+
+			}
+
+			return renderer.compileAsync( scene, camera );
+
+		} ).catch( ( e ) => console.warn( 'stalls', e ) );
+		watchContext( renderer );
 		this.frame( 0 ); // places the camera, the LOD grids and the sky for the compile
+		// (with the near detail it hid: compiled now, not the first time it shows)
+		const near = ( this.nearDetail || [] ).filter( ( d ) => ! d.o.visible );
+		for ( const d of near ) d.o.visible = true;
 		await renderer.compileAsync( scene, camera );
+		for ( const d of near ) d.o.visible = false;
+		await this.sky.compiled;
+		// a shader's first use asks the GPU for its uniforms and attributes, which waits for all the
+		// drawing queued before it: seconds on a device that draws on its CPU. Every one is used here,
+		// before the game starts (the sky's passes would otherwise first run mid-game)
+		for ( const p of renderer.info.programs ) {
+
+			p.getUniforms();
+			p.getAttributes();
+
+		}
+
 		this.frame( 1 / 60 );
 
 	}
 
 	start() {
 
-		this.stage.loop( ( dt ) => this.frame( dt ) );
+		this.stage.loop( ( dt ) => this.cpuGL ? this.pacedFrame( dt ) : this.frame( dt ) );
 		this._started = true;
 		this.hud.showHint( this.input.lastDevice );
 
@@ -232,6 +287,7 @@ export class App {
 		this.wake.update( dt );
 
 		// ---- render
+		if ( this.nearDetail ) this.updateNearDetail();
 		this.renderer.toneMappingExposure = s.exposure * this.sky.adaptation;
 		if ( this.post ) this.post.render();
 		else this.renderer.render( this.scene, this.camera );
@@ -239,6 +295,51 @@ export class App {
 		this.touch.update( this.player );
 		this.hud.update( dt, { player: this.player, device: input.lastDevice } );
 		input.endFrame();
+
+	}
+
+	// WebGL drawn on the CPU: a frame begins only once the last one has been drawn (asked without
+	// waiting; its time is carried over meanwhile), and never straight after one, so the page answers
+	// in between (showing a frame holds it up for as long as the frame took to draw). Left to queue up
+	// there, frames come slower, and the page stops answering while the queue drains, for many seconds;
+	// waiting for each frame instead would leave the page no time to answer either
+	pacedFrame( dt ) {
+
+		const gl = this.renderer.getContext();
+		if ( this._drawn ) {
+
+			if ( this._rest || gl.clientWaitSync( this._drawn, 0, 0 ) === gl.TIMEOUT_EXPIRED ) {
+
+				this._rest = false;
+				this._owed += dt;
+				return;
+
+			}
+
+			gl.deleteSync( this._drawn );
+
+		}
+
+		this.frame( Math.min( 0.1, dt + this._owed ) );
+		this._owed = 0;
+		this._drawn = gl.fenceSync( gl.SYNC_GPU_COMMANDS_COMPLETE, 0 );
+		this._rest = true;
+		gl.flush();
+
+	}
+
+	// low-powered devices: small detail (the boat's fittings and gear, the stalls) only near the camera,
+	// for their triangle budget
+	updateNearDetail() {
+
+		const cam = this.camera.position;
+		for ( const d of this.nearDetail ) {
+
+			const s = d.o.geometry.boundingSphere;
+			_c3.copy( s.center ).applyMatrix4( d.o.matrixWorld );
+			d.o.visible = _c3.distanceTo( cam ) - s.radius < d.dist;
+
+		}
 
 	}
 
@@ -260,6 +361,22 @@ export class App {
 		this.hud.toast( s.timeSpeed !== 0 ? 'Time running' : 'Time paused' );
 
 	}
+
+}
+
+// whether WebGL draws on the CPU here (SwiftShader, llvmpipe, Microsoft's basic renderer)
+function drawsOnCpu( gl ) {
+
+	let name = gl.getParameter( gl.RENDERER ) || '';
+	// (Chrome names only "WebKit WebGL" there)
+	if ( /webkit webgl/i.test( name ) ) {
+
+		const info = gl.getExtension( 'WEBGL_debug_renderer_info' );
+		if ( info ) name = gl.getParameter( info.UNMASKED_RENDERER_WEBGL ) || name;
+
+	}
+
+	return /swiftshader|llvmpipe|softpipe|software|basic render/i.test( name );
 
 }
 

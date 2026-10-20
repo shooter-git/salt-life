@@ -270,9 +270,11 @@ export class Sky {
 
 	}
 
+	// (this.compiled: resolves once they're compiled)
 	_compile() {
 
 		const r = this.renderer;
+		this.compiled = Promise.resolve();
 		if ( ! r.compileAsync ) return;
 		const scene = new THREE.Scene();
 		for ( const m of [ ...this.clouds.meshes, this.atmosphere.skyViewPass.mesh, this.atmosphere.multiScatPass.mesh, this.atmosphere.transmittancePass.mesh ] ) scene.add( m.clone() );
@@ -282,7 +284,7 @@ export class Sky {
 		const done = r.compileAsync( scene, new THREE.OrthographicCamera() );
 		r.setRenderTarget( old );
 		this.clouds._compiling = true;
-		done.then( () => {
+		this.compiled = done.then( () => {
 
 			this.clouds._compiling = false;
 
@@ -322,7 +324,9 @@ export class Sky {
 
 			const m = Math.max( T.r, T.g, T.b, 1e-6 );
 			this.sun.color.setRGB( T.r / m, T.g / m, T.b / m );
-			this.sun.intensity = this.levels.sun * m * horizonFade;
+			// (the square root: to the adapted eye a low sun reddens more than it dims; the full
+			// transmittance left golden hour dull at this game's exposure)
+			this.sun.intensity = this.levels.sun * Math.sqrt( m ) * horizonFade;
 
 		} else {
 
@@ -342,7 +346,8 @@ export class Sky {
 		const k = Math.min( 1.2, luminance( irr ) / luminance( noon ) );
 		const il = Math.max( luminance( irr ), 1e-6 );
 		_tint.setRGB( irr.r / il, irr.g / il, irr.b / il ).lerp( _c.setRGB( 1, 1, 1 ), 0.45 ).multiplyScalar( 0.68 );
-		this.hemi.color.copy( _tint ).multiplyScalar( 0.15 + 0.85 * k ).lerp( MOON, night * 0.5 );
+		// (a floor: at dusk the adapted eye still sees the land by the sky's light)
+		this.hemi.color.copy( _tint ).multiplyScalar( 0.32 + 0.68 * k ).lerp( MOON, night * 0.5 );
 		this.hemi.intensity = this.levels.sky * ( 0.65 + 0.35 * day );
 		this.hemi.groundColor.setRGB( 0.32, 0.28, 0.2 ).multiplyScalar( 0.1 + 0.9 * day );
 		G.skyIrradiance.value.copy( this.hemi.color ).multiplyScalar( this.hemi.intensity );
@@ -363,7 +368,7 @@ export class Sky {
 		G.horizonColor.value.copy( _c );
 		if ( this.scene.background && this.scene.background.isColor ) this.scene.background.copy( _c );
 
-		this.scene.environmentIntensity = this.levels.env * ( 0.33 + 0.67 * day );
+		this.scene.environmentIntensity = this.levels.env * ( 0.6 + 0.4 * day );
 
 		// ---- the GPU side: sky view LUT, clouds, environment
 		const cameraY = camera ? camera.position.y : 2;
