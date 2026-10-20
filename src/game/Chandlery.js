@@ -1,27 +1,26 @@
 import { Group, Mesh, Vector3, Matrix4 } from '../engine/index.js';
 import { prepare, mergePrepared, box, cylinder, sphere, rod, torus, mat4 } from '../world/boat/GeoKit.js';
-import { createPropMaterial, PAT } from './GameMaterials.js';
-import { Vendor } from './Vendor.js';
-import { loadStallAssets, KitBuilder, LAYER, ATLAS, place, Shapes } from './StallKit.js';
+import { loadStallAssets, KitBuilder, LAYER, ATLAS, place, Shapes, PAT, createPlainMaterial } from './StallKit.js';
 
 // The upgrade trader by the boathouse: a scanned work table with a tackle box, spools of line and
 // reels, display shelves of rope and floats behind her, a rack of rods, jerrycans of diesel, fenders,
 // a coil of mooring line and a hand-painted sign on posts (StallKit, Poly Haven CC0; the old
-// procedural table is the fallback). Sells the gear levels in Gear.js and fuel.
+// procedural table is the fallback). Sells the gear levels in Gear.js and fuel (with the fishing game,
+// not ported yet: the stall is built and placed here, `vendor` stays null). `tier` sizes the textures.
 export const CHANDLERY = { x: 85.5, z: - 60.5, yaw: - 1.9 }; // faces the beach and the pier
 
 export class Chandlery {
 
-	constructor( { scene, terrain, colliders, material = null } ) {
+	constructor( { scene, terrain, colliders, material = null, tier = 'high' } ) {
 
 		const y = terrain.heightAt( CHANDLERY.x, CHANDLERY.z );
-		this.material = material || createPropMaterial( 'chandlery' );
+		this.material = material || createPlainMaterial( 'chandlery' );
 		this.group = new Group();
 		this.group.name = 'Chandlery';
 		this.group.position.set( CHANDLERY.x, y, CHANDLERY.z );
 		this.group.rotation.y = CHANDLERY.yaw;
 		scene.add( this.group );
-		this.ready = loadStallAssets().then( ( a ) => {
+		this.ready = loadStallAssets( tier ).then( ( a ) => {
 
 			const mesh = new Mesh( buildChandleryKit( a ), a.material );
 			mesh.name = 'ChandleryStall';
@@ -37,21 +36,9 @@ export class Chandlery {
 
 		} );
 
-		const local = new Vector3( 0, 0, - 0.75 ).applyAxisAngle( new Vector3( 0, 1, 0 ), CHANDLERY.yaw );
-		const vx = CHANDLERY.x + local.x, vz = CHANDLERY.z + local.z;
-		this.vendor = new Vendor( {
-			name: 'Marta · Chandlery',
-			kind: 'shop',
-			position: new Vector3( vx, terrain.heightAt( vx, vz ), vz ),
-			yaw: CHANDLERY.yaw,
-			radius: 3.0,
-			greeting: 'Line, reels, a bigger hold, diesel. What do you need?',
-			material: this.material,
-			// realistic character (Rocketbox, MIT): the stand-in shows until it has loaded
-			character: { url: ( ( import.meta.env && import.meta.env.BASE_URL ) || '/' ) + 'models/characters/marta.glb', idle: 'idle_neutral_01', talk: 'gestic_talk_neutral_01', greet: 'wave_01' },
-			look: { shirt: 0x8a3b32, trousers: 0x2f3b4a, apron: 0x3d5a4a, hat: 0x2c3a44, hair: 0x3a2c22, skin: 0x7a5236 },
-		} );
-		scene.add( this.vendor.group );
+		// Marta (Vendor 'Marta · Chandlery') stands behind the table at local ( 0, 0, -0.75 ); she and
+		// the shop come with the fishing game, which isn't ported yet
+		this.vendor = null;
 		if ( colliders ) {
 
 			colliders.addBox( new Vector3( CHANDLERY.x, y + 0.45, CHANDLERY.z ), new Vector3( 1.0, 0.45, 0.4 ), CHANDLERY.yaw, { tag: 'chandlery' } );
@@ -69,7 +56,7 @@ export class Chandlery {
 
 	update( dt, player ) {
 
-		this.vendor.update( dt, player );
+		if ( this.vendor ) this.vendor.update( dt, player );
 
 	}
 
@@ -173,15 +160,15 @@ function buildChandleryKit( assets ) {
 	K.prop( 'wooden_lantern_01', place( - 0.75, 1.36, - 1.45, 0.3 ) );
 
 	// the life jacket hangs from the left post
-	K.prop( 'life_jacket', place( - 1.08, 1.05, - 1.6, 0.08 ) );
+	K.prop( 'life_jacket', place( - 1.08, 1.05, - 1.6, 0.08 ), { detail: true } );
 
 	// jerrycans of diesel on the right, a lifebuoy against the table, a big coil of mooring line
 	K.prop( 'metal_jerrycan_green', place( 1.1, 0, 0.05, 0.3 ) );
-	K.prop( 'metal_jerrycan_green', place( 1.38, 0, 0.32, - 0.25 ) );
-	K.prop( 'plastic_jerrycan', place( 1.2, 0, 0.45, 1.3 ) );
+	K.prop( 'metal_jerrycan_green', place( 1.38, 0, 0.32, - 0.25 ), { detail: true } );
+	K.prop( 'plastic_jerrycan', place( 1.2, 0, 0.45, 1.3 ), { detail: true } );
 	K.geometry( fenderGeo(), place( - 0.82, 0.1, 0.36, 0.3, 0, Math.PI / 2 - 0.1 ), { layer: FLOAT, color: [ 0.16, 0.3, 0.5 ] } );
 	K.coil( - 1.15, 0, 0.55, 0.3, 6, 0.016, [ 0.72, 0.66, 0.5 ] );
-	K.prop( 'wooden_crate_01', place( 1.35, 0, - 0.75, Math.PI / 2 + 0.2 ) );
+	K.prop( 'wooden_crate_01', place( 1.35, 0, - 0.75, Math.PI / 2 + 0.2 ), { detail: true } );
 
 	// a rack of rods on the left
 	K.box( 0.06, 1.2, 0.06, place( - 1.35, 0.6, - 1.05 ), { layer: DECK, along: 'y', color: tone() } );

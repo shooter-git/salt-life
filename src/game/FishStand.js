@@ -1,10 +1,8 @@
 import { Group, Mesh, Vector3, BoxGeometry, Matrix4, Quaternion } from '../engine/index.js';
-import { mergeGeometries } from '../engine/geometry/BufferGeometryUtils.js';
+import { mergeGeometries } from '../engine/index.js';
 import { prepare, mergePrepared, box, cylinder, sphere, rod, mat4 } from '../world/boat/GeoKit.js';
-import { createPropMaterial, PAT } from './GameMaterials.js';
-import { Vendor } from './Vendor.js';
-import { loadStallAssets, KitBuilder, LAYER, ATLAS, place, Shapes } from './StallKit.js';
-import { FishProps } from '../world/fish/FishProps.js';
+import { loadStallAssets, KitBuilder, LAYER, ATLAS, place, Shapes, PAT, createPlainMaterial } from './StallKit.js';
+import { FishProps } from '../world/village/FishProps.js';
 import { FISH } from './FishTable.js';
 
 // The fish buyer's stall on the beach by the pier: a weathered plank shack with a rusty tin roof,
@@ -12,6 +10,9 @@ import { FISH } from './FishTable.js';
 // chalkboard of prices and a hand-painted sign, and the buyer behind it. Built from photoscanned
 // surfaces and props (StallKit, Poly Haven CC0); the old procedural stall is the fallback if they
 // fail to load.
+//
+// Salt Life: the stall is built and placed here; Joe (Vendor.js) and the trade come with the fishing
+// game, which isn't ported yet (`vendor` stays null until then). `tier` sizes the scanned textures.
 export const STAND = { x: 49.9, z: - 74.6, yaw: 1.45 }; // beside the boardwalk up from the pier foot, facing it
 
 const STALL_FLOOR = 0.06; // top of the stall's plank floor (local y)
@@ -19,16 +20,16 @@ const ICE_TOP = 1.27; // top of the ice in the chest on the counter (local y)
 
 export class FishStand {
 
-	constructor( { scene, terrain, colliders } ) {
+	constructor( { scene, terrain, colliders, tier = 'high' } ) {
 
 		const y = terrain.heightAt( STAND.x, STAND.z );
-		this.material = createPropMaterial( 'fishStand' );
+		this.material = createPlainMaterial( 'fishStand' );
 		this.group = new Group();
 		this.group.name = 'FishStand';
 		this.group.position.set( STAND.x, y, STAND.z );
 		this.group.rotation.y = STAND.yaw;
 		scene.add( this.group );
-		this.ready = loadStallAssets().then( ( a ) => {
+		this.ready = loadStallAssets( tier ).then( ( a ) => {
 
 			const mesh = new Mesh( buildStallKit( a ), a.material );
 			mesh.name = 'FishStandStall';
@@ -44,22 +45,9 @@ export class FishStand {
 
 		} );
 
-		// the buyer stands behind the counter (local -Z), facing out (+Z)
-		// (local z 0.12: clear of the shelf at -0.78..-0.48 and the counter top from 0.58)
-		const local = new Vector3( 0.2, 0, 0.12 ).applyAxisAngle( new Vector3( 0, 1, 0 ), STAND.yaw );
-		this.vendor = new Vendor( {
-			name: 'Joe · Fish buyer',
-			kind: 'buyer',
-			position: new Vector3( STAND.x + local.x, y + STALL_FLOOR, STAND.z + local.z ),
-			yaw: STAND.yaw,
-			radius: 3.2,
-			greeting: 'Let\'s see what you caught. Fair prices, cash.',
-			idle: 'Nothing to sell? The grunts are biting off the pier.',
-			material: this.material,
-			// realistic character (Rocketbox, MIT): the stand-in shows until it has loaded
-			character: { url: ( ( import.meta.env && import.meta.env.BASE_URL ) || '/' ) + 'models/characters/joe.glb', idle: 'idle_neutral_01', talk: 'gestic_talk_relaxed_01', greet: 'wave_01' },
-		} );
-		scene.add( this.vendor.group );
+		// the buyer stands behind the counter (local -Z), facing out (+Z), at local ( 0.2, floor, 0.12 ):
+		// clear of the shelf at -0.78..-0.48 and the counter top from 0.58 (Vendor 'Joe · Fish buyer')
+		this.vendor = null;
 
 		// the stall is solid (counter front and the side walls)
 		if ( colliders ) {
@@ -100,7 +88,7 @@ export class FishStand {
 
 	update( dt, player ) {
 
-		this.vendor.update( dt, player );
+		if ( this.vendor ) this.vendor.update( dt, player );
 
 	}
 
@@ -273,7 +261,7 @@ function buildStallKit( assets ) {
 
 	// cutting board and a filleting knife by the box
 	K.prop( 'wooden_cutting_board', place( 0.32, b0, 0.88, 0.12 ) );
-	K.prop( 'fish_knife', place( 0.3, b0 + 0.041 + 0.008, 0.84, 1.1, - Math.PI / 2 ) );
+	K.prop( 'fish_knife', place( 0.3, b0 + 0.041 + 0.008, 0.84, 1.1, - Math.PI / 2 ), { detail: true } );
 
 	// hanging spring scale: hook, red enamelled body with the dial, steel pan on three chains
 	const sx0 = 0.62, sz0 = 0.84;
@@ -303,19 +291,19 @@ function buildStallKit( assets ) {
 
 	}
 
-	K.prop( 'lifebuoy', place( 1.345, 1.05, - 0.3, Math.PI / 2 + 0.03, 0, 0.1 ) );
+	K.prop( 'lifebuoy', place( 1.345, 1.05, - 0.3, Math.PI / 2 + 0.03, 0, 0.1 ), { detail: true } );
 
 	// a lantern under the roof, the old hat on a nail, a coil of line on the floor
 	K.rope( [ V( - 0.9, 2.32, 0.1 ), V( - 0.9, 2.16, 0.1 ) ], 0.004 );
 	K.prop( 'wooden_lantern_01', place( - 0.9, 1.64, 0.1, 0.4 ) );
-	K.prop( 'fishermans_hat', place( - 0.4, 1.72, - 0.73, 0.2, Math.PI / 2 - 0.3 ) );
+	K.prop( 'fishermans_hat', place( - 0.4, 1.72, - 0.73, 0.2, Math.PI / 2 - 0.3 ), { detail: true } );
 	K.coil( - 0.95, STALL_FLOOR, - 0.5, 0.2, 5, 0.012, [ 0.66, 0.58, 0.42 ] );
 	// an old net drying over the outside of the left wall, a few floats still on its head rope
 	net( K, - 1.335, 1.08, - 0.68, 0.62, 0.8 );
 
 	// outside: crates stacked on the left, a long crate on the right, a bucket, the price board
 	K.prop( 'wooden_crate_01', place( - 1.85, 0, 0.25, Math.PI / 2 + 0.06 ) );
-	K.prop( 'wooden_crate_01', place( - 1.84, 0.335, 0.28, Math.PI / 2 - 0.1 ) );
+	K.prop( 'wooden_crate_01', place( - 1.84, 0.335, 0.28, Math.PI / 2 - 0.1 ), { detail: true } );
 	K.prop( 'wooden_crate_02', place( 1.8, 0, - 0.2, 0.03 ) );
 	K.prop( 'wooden_bucket_01', place( 1.55, 0, 1.05, 0.7 ) );
 	chalkboard( K, place( 1.95, 0, 1.45, - 0.35 ), { layer: DECK, color: tone() } );

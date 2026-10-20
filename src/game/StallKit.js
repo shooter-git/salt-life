@@ -1,27 +1,30 @@
 import {
 	BufferGeometry, Float32BufferAttribute, Uint32BufferAttribute, Matrix4, Matrix3, Vector3, Quaternion, Euler,
 	CylinderGeometry, TorusGeometry, SphereGeometry, LatheGeometry, Vector2,
+	DataArrayTexture, DataTexture, MeshStandardMaterial, SRGBColorSpace, NoColorSpace, RepeatWrapping, ClampToEdgeWrapping,
+	LinearFilter, LinearMipmapLinearFilter,
 } from '../engine/index.js';
-import { Texture } from '../engine/gpu/Texture.js';
-import { generateMipmaps } from '../engine/gpu/Mipmaps.js';
-import { commonModule } from '../engine/render/wgsl/common.js';
-import { ShaderModule } from '../engine/gpu/Shader.js';
-import { decodeImage } from '../engine/loaders/GLTF.js';
-import { standard } from '../materials/Materials.js';
+import { G } from '../core/Globals.js';
 
 // Shared kit for the vendor stalls (FishStand, Chandlery): photoscanned CC0 surfaces and props from
-// Poly Haven (public/models/props, built by tools/props/build.mjs; credits in CREDITS.md) plus a
-// few procedural pieces, all merged into ONE mesh per stall with ONE material:
+// Poly Haven (public/models/props, built by tools/props/build.mjs; credits in credits/props.md) plus
+// a few procedural pieces, all merged into ONE mesh per stall with ONE material:
 //
 //   per vertex: uv, color (tint / plain colour), aLayer (what it is), aUV2 (a second uv or params)
-//   aLayer  0..3   tiling surface (texture array, 1K): 0 weathered wall planks (boards along u),
+//   aLayer  0..3   tiling surface (texture array): 0 weathered wall planks (boards along u),
 //                  1 dark nailed planks (boards along v), 2 corrugated iron (ribs along v), 3 painted timber
-//           100+i  scanned prop texture set i (texture array, 512 px), uv = the model's own uvs
+//           100+i  scanned prop texture set i (texture array), uv = the model's own uvs
 //           -1 crushed ice, -2 hand-painted sign (painted timber + the sign atlas at aUV2),
 //           -3 chalkboard (slate + chalk from the atlas at aUV2), -4 plain (color, aUV2 = roughness,
 //           metalness), -5 rope (color, uv = ( metres along, around )), -6 weathered painted float,
 //           -7 enamel scale dial (atlas at aUV2)
-// Textures are loaded once (loadStallAssets) and shared by both stalls.
+// Textures are loaded once (loadStallAssets) and shared by both stalls. Their size follows the device
+// tier (TEX_SIZE: the scans are 1K surfaces and 512 px props; low / mid devices get them smaller).
+//
+// Port notes (WebGL 2): the images are decoded by the browser and drawn into a 2D canvas at the tier's
+// size, then uploaded as three DataArrayTextures (mipmapped by the GPU). The material is three's
+// MeshStandardMaterial with Tidewater's surface spliced in (onBeforeCompile); the ice and the dial's
+// clearcoat and the ice's translucency are left out (a glossy surface instead).
 
 export const LAYER = { WALL: 0, DECK: 1, TIN: 2, PAINTED: 3, PROP: 100, ICE: - 1, SIGN: - 2, CHALK: - 3, PLAIN: - 4, ROPE: - 5, FLOAT: - 6, DIAL: - 7 };
 // metres covered by one repeat of each surface texture, and which uv axis the boards / ribs follow
@@ -31,6 +34,12 @@ const SURF = [
 	{ name: 'worn_corrugated_iron', size: 1.8, grain: 'v' },
 	{ name: 'weathered_peeling_timber', size: 1.1, grain: 'v' },
 ];
+// texture sizes per tier: tiling surfaces, scanned props, the sign atlas (width; it is 2:1)
+const TEX_SIZE = {
+	low: { surf: 512, prop: 128, signs: 1024 },
+	mid: { surf: 512, prop: 256, signs: 1024 },
+	high: { surf: 1024, prop: 256, signs: 2048 },
+};
 // sign atlas (signs.png, 2048 x 1024) regions in uv: [ u0, v0, u1, v1 ]
 export const ATLAS = {
 	joe: [ 0.0, 0.0, 1.0, 0.25 ],
@@ -52,172 +61,215 @@ async function bytes( url ) {
 
 }
 
-async function pixels( url ) {
+// decoded RGBA pixels of an image at w x h (row 0 = the top of the image, as Tidewater's decoder)
+let _canvas = null;
+async function pixels( url, w, h ) {
 
-	return decodeImage( new Uint8Array( await bytes( url ) ), url.endsWith( '.png' ) ? 'image/png' : 'image/jpeg' );
+	const blob = new Blob( [ await bytes( url ) ], { type: url.endsWith( '.png' ) ? 'image/png' : 'image/jpeg' } );
+	const bmp = await createImageBitmap( blob, { premultiplyAlpha: 'none', colorSpaceConversion: 'none' } );
+	if ( ! _canvas ) _canvas = typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas( w, h ) : document.createElement( 'canvas' );
+	_canvas.width = w;
+	_canvas.height = h;
+	const ctx = _canvas.getContext( '2d', { willReadFrequently: true } );
+	ctx.clearRect( 0, 0, w, h );
+	ctx.imageSmoothingQuality = 'high';
+	ctx.drawImage( bmp, 0, 0, w, h );
+	if ( bmp.close ) bmp.close();
+	return ctx.getImageData( 0, 0, w, h ).data;
 
 }
 
 // one texture array from same-sized images
-function arrayTexture( label, imgs, srgb ) {
+function arrayTexture( name, imgs, size, srgb ) {
 
-	const w = imgs[ 0 ].width, h = imgs[ 0 ].height;
-	const data = new Uint8Array( w * h * 4 * imgs.length );
-	imgs.forEach( ( im, i ) => {
-
-		if ( im.width !== w || im.height !== h ) throw new Error( 'StallKit: ' + label + ' layer ' + i + ' is ' + im.width + 'x' + im.height );
-		data.set( im.data, w * h * 4 * i );
-
-	} );
-	const tex = new Texture( { label, width: w, height: h, depth: imgs.length, dimension: '2d-array', format: srgb ? 'rgba8unorm-srgb' : 'rgba8unorm', mips: true, usage: [ 'sample', 'copyDst' ], data } );
-	tex.getGPU();
-	generateMipmaps( tex );
+	const data = new Uint8Array( size * size * 4 * imgs.length );
+	imgs.forEach( ( im, i ) => data.set( im, size * size * 4 * i ) );
+	const tex = new DataArrayTexture( data, size, size, imgs.length );
+	tex.name = name;
+	tex.colorSpace = srgb ? SRGBColorSpace : NoColorSpace;
+	tex.wrapS = tex.wrapT = RepeatWrapping;
+	tex.minFilter = LinearMipmapLinearFilter;
+	tex.magFilter = LinearFilter;
+	tex.generateMipmaps = true;
+	tex.anisotropy = 8;
+	tex.needsUpdate = true;
 	return tex;
 
 }
 
-let _assets = null;
-export function loadStallAssets() {
+const _assets = {};
+export function loadStallAssets( tier = 'high' ) {
 
-	return _assets || ( _assets = _load() );
+	const t = TEX_SIZE[ tier ] ? tier : 'high';
+	return _assets[ t ] || ( _assets[ t ] = _load( TEX_SIZE[ t ] ) );
 
 }
 
-async function _load() {
+async function _load( size ) {
 
 	const t0 = performance.now();
 	const info = JSON.parse( new TextDecoder().decode( await bytes( BASE + 'props.json' ) ) );
 	const bin = await bytes( BASE + 'props.bin' );
 	const verts = new Float32Array( bin, 0, info.vertexCount * info.vertexFloats );
 	const index = new Uint32Array( bin, info.indexByteOffset, info.indexCount );
-	const set = ( names, prefix ) => Promise.all( [ 'a', 'n', 'r' ].map( ( m ) => Promise.all( names.map( ( n ) => pixels( BASE + prefix + n + '_' + m + '.jpg' ) ) ) ) );
-	const [ surf, prop, signs ] = await Promise.all( [ set( SURF.map( ( s ) => s.name ), 's_' ), set( info.layers, 'p_' ), pixels( BASE + 'signs.png' ) ] );
+	const set = ( names, prefix, px ) => Promise.all( [ 'a', 'n', 'r' ].map( ( m ) => Promise.all( names.map( ( n ) => pixels( BASE + prefix + n + '_' + m + '.jpg', px, px ) ) ) ) );
+	const [ surf, prop, signs ] = await Promise.all( [
+		set( SURF.map( ( s ) => s.name ), 's_', size.surf ),
+		set( info.layers, 'p_', size.prop ),
+		pixels( BASE + 'signs.png', size.signs, size.signs / 2 ),
+	] );
 	const assets = {
 		info, verts, index,
-		surf: { a: arrayTexture( 'stallSurfA', surf[ 0 ], true ), n: arrayTexture( 'stallSurfN', surf[ 1 ], false ), r: arrayTexture( 'stallSurfR', surf[ 2 ], false ) },
-		prop: { a: arrayTexture( 'stallPropA', prop[ 0 ], true ), n: arrayTexture( 'stallPropN', prop[ 1 ], false ), r: arrayTexture( 'stallPropR', prop[ 2 ], false ) },
-		signs: arrayTexture( 'stallSigns', [ signs ], true ),
+		surf: { a: arrayTexture( 'stallSurfA', surf[ 0 ], size.surf, true ), n: arrayTexture( 'stallSurfN', surf[ 1 ], size.surf, false ), r: arrayTexture( 'stallSurfR', surf[ 2 ], size.surf, false ) },
+		prop: { a: arrayTexture( 'stallPropA', prop[ 0 ], size.prop, true ), n: arrayTexture( 'stallPropN', prop[ 1 ], size.prop, false ), r: arrayTexture( 'stallPropR', prop[ 2 ], size.prop, false ) },
+		signs: signTexture( signs, size.signs, size.signs / 2 ),
 	};
 	assets.material = createStallMaterial( assets );
+	assets.lite = size === TEX_SIZE.low; // the stalls leave out a few scanned finishing touches
+	assets.bytes = ( 12 * size.surf * size.surf + 3 * info.layers.length * size.prop * size.prop * 4 + size.signs * size.signs * 2 ) * 4 / 3;
 	assets.loadMs = performance.now() - t0;
 	return assets;
 
 }
 
+function signTexture( data, w, h ) {
+
+	const tex = new DataTexture( new Uint8Array( data.buffer, data.byteOffset, data.byteLength ), w, h );
+	tex.name = 'stallSigns';
+	tex.colorSpace = SRGBColorSpace;
+	tex.flipY = false;
+	tex.wrapS = tex.wrapT = ClampToEdgeWrapping;
+	tex.minFilter = LinearMipmapLinearFilter;
+	tex.magFilter = LinearFilter;
+	tex.generateMipmaps = true;
+	tex.needsUpdate = true;
+	return tex;
+
+}
+
 // ---------------------------------------------------------------- material
 
-const kitModule = new ShaderModule( {
-	name: 'stallKit',
-	deps: [ commonModule ],
-	code: /* wgsl */`
-fn skHash( p: vec3f ) -> f32 { return fract( sin( dot( p, vec3f( 127.1, 311.7, 74.7 ) ) ) * 43758.5453 ); }
-fn skNoise( p: vec3f ) -> f32 {
-	let i = floor( p ); let f = fract( p ); let u = f * f * ( 3.0 - 2.0 * f );
-	let a = mix( mix( skHash( i ), skHash( i + vec3f( 1, 0, 0 ) ), u.x ), mix( skHash( i + vec3f( 0, 1, 0 ) ), skHash( i + vec3f( 1, 1, 0 ) ), u.x ), u.y );
-	let b = mix( mix( skHash( i + vec3f( 0, 0, 1 ) ), skHash( i + vec3f( 1, 0, 1 ) ), u.x ), mix( skHash( i + vec3f( 0, 1, 1 ) ), skHash( i + vec3f( 1, 1, 1 ) ), u.x ), u.y );
+// The plain procedural stalls (the fallback when the scans fail to load) are GeoKit geometry
+// (boat/GeoKit.js: linear vertex colours, aux = roughness, metalness, pattern). Tidewater drew them
+// with the game's prop material (GameMaterials.js, not ported yet); this stand-in keeps the colours.
+// PAT: the game material's pattern ids (GameMaterials.PAT), kept in the geometry for it.
+export const PAT = {
+	plain: 0, wood: 1, cloth: 2, skin: 3, cork: 4, rusty: 5, woodX: 6, woodZ: 7,
+	carbon: 8, thread: 9, eva: 10, braid: 11, machined: 12, knurl: 13, rubber: 14,
+};
+
+export function createPlainMaterial( name ) {
+
+	const m = new MeshStandardMaterial( { vertexColors: true, roughness: 0.85, metalness: 0 } );
+	m.name = name;
+	return m;
+
+}
+
+const KIT_GLSL = /* glsl */`
+uniform highp sampler2DArray skSurfA;
+uniform highp sampler2DArray skSurfN;
+uniform highp sampler2DArray skSurfR;
+uniform highp sampler2DArray skPropA;
+uniform highp sampler2DArray skPropN;
+uniform highp sampler2DArray skPropR;
+uniform sampler2D skSigns;
+uniform float skTime;
+uniform float skNight;
+varying float vLayer;
+varying vec2 vUV2;
+varying vec2 vSkUv;
+varying vec3 vSkP;
+varying vec3 vSkN;
+
+float skHash( vec3 p ) { return fract( sin( dot( p, vec3( 127.1, 311.7, 74.7 ) ) ) * 43758.5453 ); }
+float skNoise( vec3 p ) {
+	vec3 i = floor( p ); vec3 f = fract( p ); vec3 u = f * f * ( 3.0 - 2.0 * f );
+	float a = mix( mix( skHash( i ), skHash( i + vec3( 1, 0, 0 ) ), u.x ), mix( skHash( i + vec3( 0, 1, 0 ) ), skHash( i + vec3( 1, 1, 0 ) ), u.x ), u.y );
+	float b = mix( mix( skHash( i + vec3( 0, 0, 1 ) ), skHash( i + vec3( 1, 0, 1 ) ), u.x ), mix( skHash( i + vec3( 0, 1, 1 ) ), skHash( i + vec3( 1, 1, 1 ) ), u.x ), u.y );
 	return mix( a, b, u.z );
 }
-fn skFbm( p: vec3f ) -> f32 { return skNoise( p ) * 0.55 + skNoise( p * 2.13 + 7.1 ) * 0.3 + skNoise( p * 4.7 + 3.3 ) * 0.15; }
+float skFbm( vec3 p ) { return skNoise( p ) * 0.55 + skNoise( p * 2.13 + 7.1 ) * 0.3 + skNoise( p * 4.7 + 3.3 ) * 0.15; }
 // 2D cellular noise: ( distance to the nearest feature, to the second nearest )
-fn skCells( p: vec2f ) -> vec2f {
-	let i = floor( p ); let f = fract( p );
-	var d1 = 8.0; var d2 = 8.0;
-	for ( var y = -1; y <= 1; y++ ) {
-		for ( var x = -1; x <= 1; x++ ) {
-			let g = vec2f( f32( x ), f32( y ) );
-			let h = vec2f( skHash( vec3f( i + g, 1.7 ) ), skHash( vec3f( i + g, 9.3 ) ) );
-			let d = length( g + h - f );
+vec2 skCells( vec2 p ) {
+	vec2 i = floor( p ); vec2 f = fract( p );
+	float d1 = 8.0; float d2 = 8.0;
+	for ( int y = -1; y <= 1; y ++ ) {
+		for ( int x = -1; x <= 1; x ++ ) {
+			vec2 g = vec2( float( x ), float( y ) );
+			vec2 h = vec2( skHash( vec3( i + g, 1.7 ) ), skHash( vec3( i + g, 9.3 ) ) );
+			float d = length( g + h - f );
 			if ( d < d1 ) { d2 = d1; d1 = d; } else if ( d < d2 ) { d2 = d; }
 		}
 	}
-	return vec2f( d1, d2 );
+	return vec2( d1, d2 );
 }
 // perturbed normal from a scalar height (screen-space derivatives)
-fn skBump( P: vec3f, N: vec3f, h: f32 ) -> vec3f {
-	let dPdx = dpdx( P ); let dPdy = dpdy( P );
-	let r1 = cross( dPdy, N ); let r2 = cross( N, dPdx );
-	let det = dot( dPdx, r1 );
-	let grad = sign( det ) * ( dpdx( h ) * r1 + dpdy( h ) * r2 );
+vec3 skBump( vec3 P, vec3 N, float h ) {
+	vec3 dPdx = dFdx( P ); vec3 dPdy = dFdy( P );
+	vec3 r1 = cross( dPdy, N ); vec3 r2 = cross( N, dPdx );
+	float det = dot( dPdx, r1 );
+	vec3 grad = sign( det ) * ( dFdx( h ) * r1 + dFdy( h ) * r2 );
 	return normalize( abs( det ) * N - grad + N * 1e-12 );
 }
-`,
-} );
 
-export function createStallMaterial( assets ) {
+struct SkSurf { vec3 albedo; float roughness; float metalness; float ao; vec3 emissive; vec3 normal; };
 
-	const m = standard( {
-		vertexColors: true,
-		modules: [ kitModule ],
-		attributes: { aLayer: 'f32', aUV2: 'vec2f' },
-		varyings: { vLayer: 'f32', vUV2: 'vec2f' },
-		textures: {
-			skSurfA: assets.surf.a, skSurfN: assets.surf.n, skSurfR: assets.surf.r,
-			skPropA: assets.prop.a, skPropN: assets.prop.n, skPropR: assets.prop.r,
-			skSigns: assets.signs,
-		},
-		vertex: /* wgsl */`
-	o.vLayer = v.aLayer;
-	o.vUV2 = v.aUV2;
-`,
-	} );
-	m.name = 'stall';
-	m.setDefine( 'CLEARCOAT', 1 ); // the ice and the enamel dial
-	m.surface = /* wgsl */`
-	let L = round( in.vs.vLayer );
-	let uv = in.uv;
-	let uv2 = in.vs.vUV2;
-	let P = in.P;
-	let N0 = s.normal;
+SkSurf skSurface( vec3 tint ) {
+	float L = floor( vLayer + 0.5 );
+	vec2 uv = vSkUv;
+	vec2 uv2 = vUV2;
+	vec3 P = vSkP;
+	vec3 N0 = normalize( vSkN ) * ( gl_FrontFacing ? 1.0 : - 1.0 );
 	// tangent frame from derivatives (uniform control flow): OpenGL normal maps, image v runs down
-	let dp1 = dpdx( P ); let dp2 = dpdy( P ); let duv1 = dpdx( uv ); let duv2 = dpdy( uv );
-	let dp2perp = cross( dp2, N0 ); let dp1perp = cross( N0, dp1 );
-	let Tt = dp2perp * duv1.x + dp1perp * duv2.x;
-	let Bt = dp2perp * duv1.y + dp1perp * duv2.y;
-	let tInv = inverseSqrt( max( max( dot( Tt, Tt ), dot( Bt, Bt ) ), 1e-24 ) );
-	let TBN = mat3x3f( Tt * tInv, - Bt * tInv, N0 );
-	let g2x = dpdx( uv2 ); let g2y = dpdy( uv2 );
-	let tint = in.color.rgb;
-	var alb = tint;
-	var rough = 0.8;
-	var metal = 0.0;
-	var ao = 1.0;
-	var nrm = N0;
+	vec3 dp1 = dFdx( P ); vec3 dp2 = dFdy( P ); vec2 duv1 = dFdx( uv ); vec2 duv2 = dFdy( uv );
+	vec3 dp2perp = cross( dp2, N0 ); vec3 dp1perp = cross( N0, dp1 );
+	vec3 Tt = dp2perp * duv1.x + dp1perp * duv2.x;
+	vec3 Bt = dp2perp * duv1.y + dp1perp * duv2.y;
+	float tInv = inversesqrt( max( max( dot( Tt, Tt ), dot( Bt, Bt ) ), 1e-24 ) );
+	mat3 TBN = mat3( Tt * tInv, - Bt * tInv, N0 );
+	vec2 g2x = dFdx( uv2 ); vec2 g2y = dFdy( uv2 );
+	vec3 alb = tint;
+	float rough = 0.8;
+	float metal = 0.0;
+	float ao = 1.0;
+	vec3 nrm = N0;
+	vec3 emissive = vec3( 0.0 );
 	if ( L > -0.5 ) {
-		// scanned texture set: a prop (512 px) or a tiling surface (1K)
-		var a: vec4f; var n: vec4f; var r: vec4f;
+		// scanned texture set: a prop or a tiling surface
+		vec4 a; vec4 n; vec4 r;
 		if ( L > 99.5 ) {
-			let li = i32( L - 100.0 );
-			a = textureSampleGrad( skPropA, smpAnisoRepeat, uv, li, duv1, duv2 );
-			n = textureSampleGrad( skPropN, smpAnisoRepeat, uv, li, duv1, duv2 );
-			r = textureSampleGrad( skPropR, smpAnisoRepeat, uv, li, duv1, duv2 );
+			vec3 q = vec3( uv, L - 100.0 );
+			a = textureGrad( skPropA, q, duv1, duv2 );
+			n = textureGrad( skPropN, q, duv1, duv2 );
+			r = textureGrad( skPropR, q, duv1, duv2 );
 		} else {
-			let li = i32( L );
-			a = textureSampleGrad( skSurfA, smpAnisoRepeat, uv, li, duv1, duv2 );
-			n = textureSampleGrad( skSurfN, smpAnisoRepeat, uv, li, duv1, duv2 );
-			r = textureSampleGrad( skSurfR, smpAnisoRepeat, uv, li, duv1, duv2 );
+			vec3 q = vec3( uv, L );
+			a = textureGrad( skSurfA, q, duv1, duv2 );
+			n = textureGrad( skSurfN, q, duv1, duv2 );
+			r = textureGrad( skSurfR, q, duv1, duv2 );
 		}
 		// the corrugated sheets are corrugated in the geometry too: keep only a little of the ribs
-		let strength = select( 1.0, 0.35, abs( L - 2.0 ) < 0.5 );
-		var tn = n.xyz * 2.0 - 1.0;
-		tn = vec3f( tn.xy * strength, max( tn.z, 0.05 ) );
+		float strength = abs( L - 2.0 ) < 0.5 ? 0.35 : 1.0;
+		vec3 tn = n.xyz * 2.0 - 1.0;
+		tn = vec3( tn.xy * strength, max( tn.z, 0.05 ) );
 		nrm = normalize( TBN * tn );
 		alb = a.rgb * tint;
 		ao = r.r; rough = r.g; metal = r.b;
 		// the lantern's glass (prop layer 7: wooden_lantern_01_1): sooty panes that glow warm from dusk,
-		// as the village lanterns do (the stall's local light switches on over the same range, App)
+		// as the village lanterns do
 		if ( abs( L - 107.0 ) < 0.5 ) {
-			let lum = dot( a.rgb, vec3f( 0.3, 0.55, 0.15 ) );
-			let pane = smoothstep( 0.32, 0.16, lum ); // the dark panes, not the frame rims
-			let nightOn = smoothstep( 0.15, 0.75, frame.night );
-			let flicker = sin( frame.time * 9.0 + P.x * 40.0 ) * sin( frame.time * 5.3 + P.z * 13.0 ) * 0.12 + 0.9;
+			float lum = dot( a.rgb, vec3( 0.3, 0.55, 0.15 ) );
+			float pane = 1.0 - smoothstep( 0.16, 0.32, lum ); // the dark panes, not the frame rims
+			float nightOn = smoothstep( 0.15, 0.75, skNight );
+			float flicker = sin( skTime * 9.0 + P.x * 40.0 ) * sin( skTime * 5.3 + P.z * 13.0 ) * 0.12 + 0.9;
 			// lit from inside: the flame shows through the soot, brighter in the middle of each pane
-			// (the soot and smudges on the glass hold part of it back: a warm, uneven glow, not a light box)
-			let soot = mix( 1.0, 0.35, smoothstep( 0.05, 0.22, lum ) );
+			float soot = mix( 1.0, 0.35, smoothstep( 0.05, 0.22, lum ) );
 			// the flame sits ~19 cm up in the middle: a hot core behind the glass, dim toward the frame
-			let q = ( uv2 - vec2f( 0.0, 0.19 ) ) / vec2f( 0.05, 0.075 );
-			let core = exp( - dot( q, q ) );
-			let glow = vec3f( 1.0, 0.5, 0.18 ) * 0.35 + vec3f( 1.0, 0.72, 0.4 ) * 3.0 * core;
-			s.emissive = glow * flicker * nightOn * pane * soot;
+			vec2 qf = ( uv2 - vec2( 0.0, 0.19 ) ) / vec2( 0.05, 0.075 );
+			float core = exp( - dot( qf, qf ) );
+			vec3 glow = vec3( 1.0, 0.5, 0.18 ) * 0.35 + vec3( 1.0, 0.72, 0.4 ) * 3.0 * core;
+			emissive = glow * flicker * nightOn * pane * soot;
 			// clean glass over the soot: glossy, a little lighter than the scan by day
 			alb = mix( alb, alb * 1.6 + 0.02, pane );
 			rough = mix( rough, 0.12, pane );
@@ -225,88 +277,111 @@ export function createStallMaterial( assets ) {
 		}
 		// sun-bleached and salty on the upward faces of the stall timber
 		if ( L < 1.5 ) {
-			let up = smoothstep( 0.3, 0.95, N0.y );
-			let lum = dot( alb, vec3f( 0.3, 0.55, 0.15 ) );
-			alb = mix( alb, vec3f( lum * 1.25 ), 0.28 * up + 0.12 );
+			float up = smoothstep( 0.3, 0.95, N0.y );
+			float lum = dot( alb, vec3( 0.3, 0.55, 0.15 ) );
+			alb = mix( alb, vec3( lum * 1.25 ), 0.28 * up + 0.12 );
 			rough = clamp( rough + 0.06, 0.0, 1.0 );
 		}
 	} else if ( L > -1.5 ) {
 		// crushed ice: packed chunks with glassy facets, clear meltwater in the gaps
-		let c = skCells( P.xz * 34.0 + vec2f( P.y * 11.0 ) );
-		let chunk = smoothstep( 0.0, 0.55, c.y - c.x );
-		let frost = skFbm( P * 90.0 );
-		let hgt = chunk * 0.004 + frost * 0.0008;
+		vec2 c = skCells( P.xz * 34.0 + vec2( P.y * 11.0 ) );
+		float chunk = smoothstep( 0.0, 0.55, c.y - c.x );
+		float frost = skFbm( P * 90.0 );
+		float hgt = chunk * 0.004 + frost * 0.0008;
 		nrm = skBump( P, N0, hgt );
-		alb = mix( vec3f( 0.52, 0.62, 0.66 ), vec3f( 0.86, 0.92, 0.95 ), chunk * 0.8 + frost * 0.2 );
+		alb = mix( vec3( 0.52, 0.62, 0.66 ), vec3( 0.86, 0.92, 0.95 ), chunk * 0.8 + frost * 0.2 );
 		rough = mix( 0.03, 0.28, frost * chunk );
-		s.translucency = vec3f( 0.25, 0.32, 0.35 ) * chunk;
-		s.clearcoat = 1.0; s.clearcoatRoughness = 0.02;
 	} else if ( L > -3.5 || ( L > -7.5 && L < -6.5 ) ) {
 		// painted: a sign on peeling timber, a chalkboard, or the scale's enamel dial
-		let paint = textureSampleGrad( skSigns, smpLinearClamp, uv2, 0, g2x, g2y );
+		vec4 paint = textureGrad( skSigns, uv2, g2x, g2y );
 		if ( L > -2.5 ) {
-			let a = textureSampleGrad( skSurfA, smpAnisoRepeat, uv, 3, duv1, duv2 );
-			let n = textureSampleGrad( skSurfN, smpAnisoRepeat, uv, 3, duv1, duv2 );
-			let r = textureSampleGrad( skSurfR, smpAnisoRepeat, uv, 3, duv1, duv2 );
+			vec3 q = vec3( uv, 3.0 );
+			vec4 a = textureGrad( skSurfA, q, duv1, duv2 );
+			vec4 n = textureGrad( skSurfN, q, duv1, duv2 );
+			vec4 r = textureGrad( skSurfR, q, duv1, duv2 );
 			// the board was painted over: a dark ground coat, the lettering, both chipped and sun-faded
 			// chipped through where the old timber shows (its own peeling paint pattern) and at random
-			let wear = skFbm( vec3f( uv2 * vec2f( 90.0, 45.0 ), 3.1 ) );
-			let chips = smoothstep( 0.64, 0.74, wear + ( 0.45 - dot( a.rgb, vec3f( 0.33 ) ) ) * 0.35 );
-			let ground = mix( vec3f( 0.03, 0.062, 0.068 ) * mix( 0.8, 1.15, wear ), a.rgb * tint, chips );
-			let letters = paint.a * ( 1.0 - chips * 0.8 ) * mix( 0.78, 1.0, skNoise( vec3f( uv2 * 400.0, 0.0 ) ) );
+			float wear = skFbm( vec3( uv2 * vec2( 90.0, 45.0 ), 3.1 ) );
+			float chips = smoothstep( 0.64, 0.74, wear + ( 0.45 - dot( a.rgb, vec3( 0.33 ) ) ) * 0.35 );
+			vec3 ground = mix( vec3( 0.03, 0.062, 0.068 ) * mix( 0.8, 1.15, wear ), a.rgb * tint, chips );
+			float letters = paint.a * ( 1.0 - chips * 0.8 ) * mix( 0.78, 1.0, skNoise( vec3( uv2 * 400.0, 0.0 ) ) );
 			alb = mix( ground, paint.rgb * 0.82, letters );
 			rough = mix( r.g, 0.62, ( 1.0 - chips ) * 0.8 );
 			ao = r.r;
-			var tn = n.xyz * 2.0 - 1.0;
-			nrm = normalize( TBN * vec3f( tn.xy * mix( 1.0, 0.45, 1.0 - chips ), tn.z ) );
+			vec3 tn = n.xyz * 2.0 - 1.0;
+			nrm = normalize( TBN * vec3( tn.xy * mix( 1.0, 0.45, 1.0 - chips ), tn.z ) );
 		} else if ( L > -3.5 ) {
 			// slate with smeared chalk dust, the prices in chalk
-			let dust = skFbm( vec3f( uv2 * vec2f( 18.0, 9.0 ), 0.0 ) );
-			let chalk = paint.a * mix( 0.55, 1.0, skNoise( vec3f( uv2 * 900.0, 1.0 ) ) );
-			alb = mix( vec3f( 0.028, 0.034, 0.031 ) + dust * 0.035, vec3f( 0.72, 0.72, 0.68 ), chalk );
+			float dust = skFbm( vec3( uv2 * vec2( 18.0, 9.0 ), 0.0 ) );
+			float chalk = paint.a * mix( 0.55, 1.0, skNoise( vec3( uv2 * 900.0, 1.0 ) ) );
+			alb = mix( vec3( 0.028, 0.034, 0.031 ) + dust * 0.035, vec3( 0.72, 0.72, 0.68 ), chalk );
 			rough = 0.9;
 		} else {
 			// enamel dial face, a little crazed and yellowed
-			let crazing = skNoise( vec3f( uv2 * 900.0, 2.0 ) );
-			alb = mix( vec3f( 0.72, 0.68, 0.58 ), paint.rgb, paint.a ) * mix( 0.92, 1.0, crazing );
-			rough = 0.22;
-			s.clearcoat = 1.0; s.clearcoatRoughness = 0.06;
+			float crazing = skNoise( vec3( uv2 * 900.0, 2.0 ) );
+			alb = mix( vec3( 0.72, 0.68, 0.58 ), paint.rgb, paint.a ) * mix( 0.92, 1.0, crazing );
+			rough = 0.18;
 		}
 	} else if ( L > -4.5 ) {
 		// plain: colour, roughness and metalness from the vertex data; a little grime and pitting
-		let g = skFbm( P * 14.0 );
+		float g = skFbm( P * 14.0 );
 		alb = tint * mix( 0.78, 1.04, g );
 		rough = clamp( uv2.x + ( g - 0.5 ) * 0.2, 0.05, 1.0 );
 		metal = uv2.y;
 		if ( metal > 0.5 ) {
-			let rust = smoothstep( 0.6, 0.8, skFbm( P * 40.0 + 3.0 ) );
-			alb = mix( alb, vec3f( 0.2, 0.09, 0.04 ), rust * 0.8 );
+			float rust = smoothstep( 0.6, 0.8, skFbm( P * 40.0 + 3.0 ) );
+			alb = mix( alb, vec3( 0.2, 0.09, 0.04 ), rust * 0.8 );
 			metal = mix( metal, 0.0, rust );
 			rough = mix( rough, 0.9, rust );
 		}
 	} else if ( L > -5.5 ) {
 		// three-strand laid rope: twisted strands, fibres, grime
-		let strand = sin( ( uv.y * 3.0 + uv.x * 22.0 ) * 6.2831853 ) * 0.5 + 0.5;
-		let fibre = skNoise( vec3f( uv.x * 900.0, uv.y * 40.0, 0.0 ) );
+		float strand = sin( ( uv.y * 3.0 + uv.x * 22.0 ) * 6.2831853 ) * 0.5 + 0.5;
+		float fibre = skNoise( vec3( uv.x * 900.0, uv.y * 40.0, 0.0 ) );
 		alb = tint * mix( 0.55, 1.05, strand ) * mix( 0.85, 1.05, fibre ) * mix( 0.8, 1.0, skFbm( P * 6.0 ) );
 		rough = 0.95;
 		nrm = skBump( P, N0, strand * 0.0025 + fibre * 0.0003 );
 	} else {
 		// sun-faded painted float or fender: chalky, chipped to the white foam, streaky grime
-		let fade = skFbm( P * 9.0 );
-		let chip = smoothstep( 0.66, 0.74, skFbm( P * 55.0 + 2.0 ) );
-		let streak = skFbm( vec3f( P.x * 30.0, P.y * 3.0, P.z * 30.0 ) );
-		let chalky = mix( tint, vec3f( dot( tint, vec3f( 0.33 ) ) * 1.1 + 0.08 ), 0.3 + fade * 0.2 );
-		alb = mix( chalky, vec3f( 0.78, 0.76, 0.7 ), chip ) * mix( 0.62, 1.0, smoothstep( 0.35, 0.7, streak ) );
+		float fade = skFbm( P * 9.0 );
+		float chip = smoothstep( 0.66, 0.74, skFbm( P * 55.0 + 2.0 ) );
+		float streak = skFbm( vec3( P.x * 30.0, P.y * 3.0, P.z * 30.0 ) );
+		vec3 chalky = mix( tint, vec3( dot( tint, vec3( 0.33 ) ) * 1.1 + 0.08 ), 0.3 + fade * 0.2 );
+		alb = mix( chalky, vec3( 0.78, 0.76, 0.7 ), chip ) * mix( 0.62, 1.0, smoothstep( 0.35, 0.7, streak ) );
 		rough = mix( 0.55, 0.85, fade );
 		nrm = skBump( P, N0, - chip * 0.0015 + fade * 0.0006 );
 	}
-	s.albedo = alb;
-	s.roughness = rough;
-	s.metalness = metal;
-	s.ao = ao;
-	s.normal = nrm;
+	return SkSurf( alb, rough, metal, ao, emissive, nrm );
+}
 `;
+
+export function createStallMaterial( assets ) {
+
+	const m = new MeshStandardMaterial( { vertexColors: true, roughness: 0.8, metalness: 0 } );
+	m.name = 'stall';
+	const uniforms = {
+		skSurfA: { value: assets.surf.a }, skSurfN: { value: assets.surf.n }, skSurfR: { value: assets.surf.r },
+		skPropA: { value: assets.prop.a }, skPropN: { value: assets.prop.n }, skPropR: { value: assets.prop.r },
+		skSigns: { value: assets.signs }, skTime: G.time, skNight: G.night,
+	};
+	m.onBeforeCompile = ( shader ) => {
+
+		Object.assign( shader.uniforms, uniforms );
+		shader.vertexShader = shader.vertexShader
+			.replace( '#include <common>', '#include <common>\nattribute float aLayer;\nattribute vec2 aUV2;\nvarying float vLayer;\nvarying vec2 vUV2;\nvarying vec2 vSkUv;\nvarying vec3 vSkP;\nvarying vec3 vSkN;' )
+			.replace( '#include <worldpos_vertex>', '#include <worldpos_vertex>\n\tvLayer = aLayer;\n\tvUV2 = aUV2;\n\tvSkUv = uv;\n\tvSkP = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;\n\tvSkN = normalize( mat3( modelMatrix ) * objectNormal );' );
+		shader.fragmentShader = shader.fragmentShader
+			.replace( '#include <common>', '#include <common>\n' + KIT_GLSL )
+			.replace( '#include <color_fragment>', '#include <color_fragment>\n\tSkSurf sk = skSurface( diffuseColor.rgb );\n\tdiffuseColor.rgb = sk.albedo;' )
+			.replace( '#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = sk.roughness;' )
+			.replace( '#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n\tmetalnessFactor = sk.metalness;' )
+			.replace( '#include <normal_fragment_maps>', '\tnormal = normalize( ( viewMatrix * vec4( sk.normal, 0.0 ) ).xyz );' )
+			.replace( '#include <emissivemap_fragment>', '\ttotalEmissiveRadiance = sk.emissive;' )
+			.replace( '#include <aomap_fragment>', '\treflectedLight.indirectDiffuse *= sk.ao;\n\treflectedLight.indirectSpecular *= sk.ao;' );
+
+	};
+
+	m.customProgramCacheKey = () => 'stallKit';
 	return m;
 
 }
@@ -329,6 +404,7 @@ export class KitBuilder {
 		this.assets = assets;
 		this.pos = []; this.nrm = []; this.uv = []; this.col = []; this.layer = []; this.uv2 = []; this.idx = [];
 		this.seed = seed;
+		this.lite = assets.lite === true;
 
 	}
 
@@ -599,9 +675,11 @@ export class KitBuilder {
 
 	}
 
-	// a scanned prop from props.bin (placed with its origin at the matrix; props are y-up, metres)
-	prop( name, matrix ) {
+	// a scanned prop from props.bin (placed with its origin at the matrix; props are y-up, metres).
+	// o.detail: a finishing touch, left out on low-powered devices (K.lite)
+	prop( name, matrix, o = {} ) {
 
+		if ( o.detail && this.lite ) return;
 		const A = this.assets, P = A.info.props[ name ];
 		if ( ! P ) throw new Error( 'StallKit: no prop ' + name );
 		const V = A.verts, F = A.info.vertexFloats;

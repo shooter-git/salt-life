@@ -1,6 +1,6 @@
 import { Color, Matrix4, Vector3 } from '../engine/index.js';
 import { Builder, mat4, gridPart, slabPart, sagPoints } from './village/GeoBuilder.js';
-import { FishProps } from './fish/FishProps.js';
+import { FishProps } from './village/FishProps.js';
 import { mulberry32 } from '../util/Noise.js';
 
 // Procedural harbour / village props. Every emitter writes into a GeoBuilder `B`
@@ -10,11 +10,19 @@ import { mulberry32 } from '../util/Noise.js';
 const _col = new Color();
 const _v = new Vector3();
 
-// sRGB hex -> linear [r, g, b]
+// sRGB hex -> linear [r, g, b] (cached: the village asks for the same few colours thousands of times)
+const _lin = new Map();
 export const lin = ( hex ) => {
 
-	_col.setHex( hex );
-	return [ _col.r, _col.g, _col.b ];
+	let c = _lin.get( hex );
+	if ( c === undefined ) {
+
+		_col.setHex( hex );
+		_lin.set( hex, c = [ _col.r, _col.g, _col.b ] );
+
+	}
+
+	return c.slice();
 
 };
 
@@ -290,7 +298,7 @@ export function bucket( B, x, y, z, tint = C.blue, seed = 0.5 ) {
 }
 
 // ---------------------------------------------------------------------------
-// Fish, lobsters and their displays: modelled and drawn by fish/FishProps.js (one instanced mesh
+// Fish, lobsters and their displays: modelled and drawn by village/FishProps.js (one merged mesh
 // with the fish material, collected on the builder as B.fishProps).
 
 const _fm = new Matrix4();
@@ -361,6 +369,8 @@ export function lobster( B, x, y, z, ry = 0, len = 0.3, seed = 0.5, rx = 0 ) {
 
 // Twine from (a) down to a loop around a fish's tail stalk at (b).
 export function fishTwine( B, a, b, seed = 0.5, loop = 0.018 ) {
+
+	if ( B.lite ) return; // (low-powered devices: the fish hang without visible twine)
 
 	B.tube( 'rope', [ new Vector3( a[ 0 ], a[ 1 ], a[ 2 ] ), new Vector3( b[ 0 ], b[ 1 ] + loop * 0.5, b[ 2 ] ) ], 0.0035, { radial: 3, tint: C.rope, data: [ seed, 0, 0, 0 ] } );
 	const pts = [];
@@ -731,8 +741,8 @@ export function netRack( B, x, gy, z, ry, len = 3.2, netTint = lin( 0x3f6f5f ), 
 
 	} );
 	B.add( 'net', part, new Matrix4(), netTint, ( px, py ) => [ seed, Math.min( 1, Math.max( 0, ( top - py ) / drop ) ) * 0.8, 0.045, 0 ] );
-	// float line along the bottom edges
-	for ( const side of [ - 1, 1 ] ) {
+	// float line along the bottom edges (not on low-powered devices)
+	if ( ! B.lite ) for ( const side of [ - 1, 1 ] ) {
 
 		for ( let i = 0; i < 5; i ++ ) {
 

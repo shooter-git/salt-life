@@ -1,4 +1,4 @@
-import { BufferGeometry, Euler, Float32BufferAttribute, Matrix3, Matrix4, Quaternion, Uint16BufferAttribute, Uint32BufferAttribute, Vector3 } from '../../engine/index.js';
+import { BufferAttribute, BufferGeometry, Euler, Matrix3, Matrix4, Quaternion, Vector3 } from '../../engine/index.js';
 
 // Procedural geometry toolkit for the village.
 //
@@ -32,6 +32,18 @@ export const CAP_U = 2000;
 
 // Texture period (m) around the circumference per material, so round parts wrap seamlessly.
 const WRAP_PERIOD = { wood: 1.0, hard: 1.0, stone: 2.0, thatch: 1.0, roofMetal: 0.84, roofMetalSwap: 1.68 };
+
+// Salt Life: round parts get fewer segments on low-powered devices (setGeometryDetail( 0.5 )); a
+// part never drops below a hexagon (tubes: a square), and parts that were already that coarse keep
+// their segments
+let DETAIL = 1;
+export function setGeometryDetail( k ) {
+
+	DETAIL = k;
+
+}
+
+const segs = ( n, min ) => ( n <= min ? n : Math.max( min, Math.round( n * DETAIL ) ) );
 
 // scale factor for the around-coordinate so a circumference C maps onto whole texture periods
 const wrapScale = ( C, P ) => ( P > 0 ? Math.max( 1, Math.round( C / P ) ) * P / C : 1 );
@@ -547,63 +559,132 @@ export function gablePart( w, h, depth ) {
 
 export class Batch {
 
+	// Salt Life: the vertex streams are growable typed arrays (Tidewater pushed onto JS arrays: the
+	// village's ~1.5 M floats took over a second to collect and convert)
 	constructor() {
 
-		this.pos = [];
-		this.nrm = [];
-		this.uv = [];
-		this.tint = [];
-		this.data = [];
-		this.idx = [];
+		this.cap = 0;
+		this.icap = 0;
+		this.pos = new Float32Array( 0 );
+		this.nrm = new Float32Array( 0 );
+		this.uv = new Float32Array( 0 );
+		this.tint = new Float32Array( 0 );
+		this.data = new Float32Array( 0 );
+		this.idx = new Uint32Array( 0 );
 		this.vcount = 0;
+		this.icount = 0;
 
 	}
 
 	get triangles() {
 
-		return this.idx.length / 3;
+		return this.icount / 3;
+
+	}
+
+	// room for nv more vertices and ni more indices
+	_reserve( nv, ni ) {
+
+		const need = this.vcount + nv;
+		if ( need > this.cap ) {
+
+			const cap = Math.max( need, this.cap * 2, 256 );
+			const grow = ( a, k ) => {
+
+				const b = new Float32Array( cap * k );
+				b.set( a.subarray( 0, this.vcount * k ) );
+				return b;
+
+			};
+
+			this.pos = grow( this.pos, 3 );
+			this.nrm = grow( this.nrm, 3 );
+			this.uv = grow( this.uv, 2 );
+			this.tint = grow( this.tint, 3 );
+			this.data = grow( this.data, 4 );
+			this.cap = cap;
+
+		}
+
+		const ineed = this.icount + ni;
+		if ( ineed > this.icap ) {
+
+			const icap = Math.max( ineed, this.icap * 2, 512 );
+			const b = new Uint32Array( icap );
+			b.set( this.idx.subarray( 0, this.icount ) );
+			this.idx = b;
+			this.icap = icap;
+
+		}
+
+	}
+
+	// indices of a part / batch (offset by base), flipped for mirroring transforms
+	_indices( I, n, base, flip ) {
+
+		const idx = this.idx;
+		let o = this.icount;
+		for ( let k = 0; k < n; k += 3 ) {
+
+			idx[ o ++ ] = base + I[ k ];
+			idx[ o ++ ] = base + I[ k + ( flip ? 2 : 1 ) ];
+			idx[ o ++ ] = base + I[ k + ( flip ? 1 : 2 ) ];
+
+		}
+
+		this.icount = o;
+
+	}
+
+	// transformed positions / normals of nv vertices from P / N into slot `base`
+	_transform( P, N, nv, base, m ) {
+
+		_m3.getNormalMatrix( m );
+		const e = m.elements, ne = _m3.elements;
+		const pos = this.pos, nrm = this.nrm;
+		for ( let i = 0; i < nv; i ++ ) {
+
+			const x = P[ i * 3 ], y = P[ i * 3 + 1 ], z = P[ i * 3 + 2 ];
+			const o = ( base + i ) * 3;
+			pos[ o ] = e[ 0 ] * x + e[ 4 ] * y + e[ 8 ] * z + e[ 12 ];
+			pos[ o + 1 ] = e[ 1 ] * x + e[ 5 ] * y + e[ 9 ] * z + e[ 13 ];
+			pos[ o + 2 ] = e[ 2 ] * x + e[ 6 ] * y + e[ 10 ] * z + e[ 14 ];
+			const nx = N[ i * 3 ], ny = N[ i * 3 + 1 ], nz = N[ i * 3 + 2 ];
+			const tx = ne[ 0 ] * nx + ne[ 3 ] * ny + ne[ 6 ] * nz;
+			const ty = ne[ 1 ] * nx + ne[ 4 ] * ny + ne[ 7 ] * nz;
+			const tz = ne[ 2 ] * nx + ne[ 5 ] * ny + ne[ 8 ] * nz;
+			const l = Math.sqrt( tx * tx + ty * ty + tz * tz ) || 1;
+			nrm[ o ] = tx / l;
+			nrm[ o + 1 ] = ty / l;
+			nrm[ o + 2 ] = tz / l;
+
+		}
 
 	}
 
 	add( part, m, tint, data ) {
 
-		_m3.getNormalMatrix( m );
-		const e = m.elements, ne = _m3.elements;
-		const P = part.p, N = part.n, U = part.uv;
+		const P = part.p, U = part.uv;
 		const base = this.vcount;
 		const tintFn = typeof tint === 'function', dataFn = typeof data === 'function';
 		const nv = P.length / 3;
+		this._reserve( nv, part.idx.length );
+		this._transform( P, part.n, nv, base, m );
+		this.uv.set( U.subarray( 0, nv * 2 ), base * 2 );
+		const T = this.tint, D = this.data;
 		for ( let i = 0; i < nv; i ++ ) {
 
 			const x = P[ i * 3 ], y = P[ i * 3 + 1 ], z = P[ i * 3 + 2 ];
-			this.pos.push(
-				e[ 0 ] * x + e[ 4 ] * y + e[ 8 ] * z + e[ 12 ],
-				e[ 1 ] * x + e[ 5 ] * y + e[ 9 ] * z + e[ 13 ],
-				e[ 2 ] * x + e[ 6 ] * y + e[ 10 ] * z + e[ 14 ]
-			);
-			const nx = N[ i * 3 ], ny = N[ i * 3 + 1 ], nz = N[ i * 3 + 2 ];
-			const tx = ne[ 0 ] * nx + ne[ 3 ] * ny + ne[ 6 ] * nz;
-			const ty = ne[ 1 ] * nx + ne[ 4 ] * ny + ne[ 7 ] * nz;
-			const tz = ne[ 2 ] * nx + ne[ 5 ] * ny + ne[ 8 ] * nz;
-			const l = Math.hypot( tx, ty, tz ) || 1;
-			this.nrm.push( tx / l, ty / l, tz / l );
-			this.uv.push( U[ i * 2 ], U[ i * 2 + 1 ] );
 			const t = tintFn ? tint( x, y, z, i ) : tint;
-			this.tint.push( t[ 0 ], t[ 1 ], t[ 2 ] );
+			const o = ( base + i ) * 3;
+			T[ o ] = t[ 0 ]; T[ o + 1 ] = t[ 1 ]; T[ o + 2 ] = t[ 2 ];
 			const d = dataFn ? data( x, y, z, i ) : data;
-			this.data.push( d[ 0 ], d[ 1 ], d[ 2 ], d[ 3 ] );
+			const q = ( base + i ) * 4;
+			D[ q ] = d[ 0 ]; D[ q + 1 ] = d[ 1 ]; D[ q + 2 ] = d[ 2 ]; D[ q + 3 ] = d[ 3 ];
 
 		}
 
-		const flip = m.determinant() < 0;
-		const I = part.idx;
-		for ( let k = 0; k < I.length; k += 3 ) {
-
-			if ( flip ) this.idx.push( base + I[ k ], base + I[ k + 2 ], base + I[ k + 1 ] );
-			else this.idx.push( base + I[ k ], base + I[ k + 1 ], base + I[ k + 2 ] );
-
-		}
-
+		this._indices( part.idx, part.idx.length, base, m.determinant() < 0 );
 		this.vcount += nv;
 
 	}
@@ -612,43 +693,23 @@ export class Batch {
 	// tint multiplied by tintMul, the per-vertex seed (vdata.x) offset so every copy looks different.
 	addBatch( src, m, tintMul = null, seedOffset = 0 ) {
 
-		_m3.getNormalMatrix( m );
-		const e = m.elements, ne = _m3.elements;
 		const base = this.vcount;
-		const P = src.pos, N = src.nrm;
 		const nv = src.vcount;
+		this._reserve( nv, src.icount );
+		this._transform( src.pos, src.nrm, nv, base, m );
+		this.uv.set( src.uv.subarray( 0, nv * 2 ), base * 2 );
+		const T = this.tint, D = this.data, t = src.tint, d = src.data;
+		const mr = tintMul ? tintMul[ 0 ] : 1, mg = tintMul ? tintMul[ 1 ] : 1, mb = tintMul ? tintMul[ 2 ] : 1;
 		for ( let i = 0; i < nv; i ++ ) {
 
-			const x = P[ i * 3 ], y = P[ i * 3 + 1 ], z = P[ i * 3 + 2 ];
-			this.pos.push(
-				e[ 0 ] * x + e[ 4 ] * y + e[ 8 ] * z + e[ 12 ],
-				e[ 1 ] * x + e[ 5 ] * y + e[ 9 ] * z + e[ 13 ],
-				e[ 2 ] * x + e[ 6 ] * y + e[ 10 ] * z + e[ 14 ]
-			);
-			const nx = N[ i * 3 ], ny = N[ i * 3 + 1 ], nz = N[ i * 3 + 2 ];
-			const tx = ne[ 0 ] * nx + ne[ 3 ] * ny + ne[ 6 ] * nz;
-			const ty = ne[ 1 ] * nx + ne[ 4 ] * ny + ne[ 7 ] * nz;
-			const tz = ne[ 2 ] * nx + ne[ 5 ] * ny + ne[ 8 ] * nz;
-			const l = Math.hypot( tx, ty, tz ) || 1;
-			this.nrm.push( tx / l, ty / l, tz / l );
-			this.uv.push( src.uv[ i * 2 ], src.uv[ i * 2 + 1 ] );
-			const t = src.tint;
-			if ( tintMul ) this.tint.push( t[ i * 3 ] * tintMul[ 0 ], t[ i * 3 + 1 ] * tintMul[ 1 ], t[ i * 3 + 2 ] * tintMul[ 2 ] );
-			else this.tint.push( t[ i * 3 ], t[ i * 3 + 1 ], t[ i * 3 + 2 ] );
-			const d = src.data;
-			this.data.push( d[ i * 4 ] + seedOffset, d[ i * 4 + 1 ], d[ i * 4 + 2 ], d[ i * 4 + 3 ] );
+			const o = ( base + i ) * 3, si = i * 3;
+			T[ o ] = t[ si ] * mr; T[ o + 1 ] = t[ si + 1 ] * mg; T[ o + 2 ] = t[ si + 2 ] * mb;
+			const q = ( base + i ) * 4, sq = i * 4;
+			D[ q ] = d[ sq ] + seedOffset; D[ q + 1 ] = d[ sq + 1 ]; D[ q + 2 ] = d[ sq + 2 ]; D[ q + 3 ] = d[ sq + 3 ];
 
 		}
 
-		const flip = m.determinant() < 0;
-		const I = src.idx;
-		for ( let k = 0; k < I.length; k += 3 ) {
-
-			if ( flip ) this.idx.push( base + I[ k ], base + I[ k + 2 ], base + I[ k + 1 ] );
-			else this.idx.push( base + I[ k ], base + I[ k + 1 ], base + I[ k + 2 ] );
-
-		}
-
+		this._indices( src.idx, src.icount, base, m.determinant() < 0 );
 		this.vcount += nv;
 
 	}
@@ -657,34 +718,41 @@ export class Batch {
 	// several emitter keys into one material / draw call).
 	append( src, dataFn = null ) {
 
-		const base = this.vcount;
-		for ( let i = 0; i < src.pos.length; i ++ ) this.pos.push( src.pos[ i ] );
-		for ( let i = 0; i < src.nrm.length; i ++ ) this.nrm.push( src.nrm[ i ] );
-		for ( let i = 0; i < src.uv.length; i ++ ) this.uv.push( src.uv[ i ] );
-		for ( let i = 0; i < src.tint.length; i ++ ) this.tint.push( src.tint[ i ] );
-		for ( let i = 0; i < src.vcount; i ++ ) {
+		const base = this.vcount, nv = src.vcount;
+		this._reserve( nv, src.icount );
+		this.pos.set( src.pos.subarray( 0, nv * 3 ), base * 3 );
+		this.nrm.set( src.nrm.subarray( 0, nv * 3 ), base * 3 );
+		this.uv.set( src.uv.subarray( 0, nv * 2 ), base * 2 );
+		this.tint.set( src.tint.subarray( 0, nv * 3 ), base * 3 );
+		if ( dataFn ) {
 
-			const d = [ src.data[ i * 4 ], src.data[ i * 4 + 1 ], src.data[ i * 4 + 2 ], src.data[ i * 4 + 3 ] ];
-			const o = dataFn ? dataFn( d ) : d;
-			this.data.push( o[ 0 ], o[ 1 ], o[ 2 ], o[ 3 ] );
+			const D = this.data, S = src.data;
+			for ( let i = 0; i < nv; i ++ ) {
 
-		}
+				const o = dataFn( [ S[ i * 4 ], S[ i * 4 + 1 ], S[ i * 4 + 2 ], S[ i * 4 + 3 ] ] );
+				D.set( o, ( base + i ) * 4 );
 
-		for ( let i = 0; i < src.idx.length; i ++ ) this.idx.push( base + src.idx[ i ] );
-		this.vcount += src.vcount;
+			}
+
+		} else this.data.set( src.data.subarray( 0, nv * 4 ), base * 4 );
+
+		const idx = this.idx, I = src.idx;
+		for ( let i = 0; i < src.icount; i ++ ) idx[ this.icount + i ] = base + I[ i ];
+		this.icount += src.icount;
+		this.vcount += nv;
 
 	}
 
 	build() {
 
 		const g = new BufferGeometry();
-		g.setAttribute( 'position', new Float32BufferAttribute( this.pos, 3 ) );
-		g.setAttribute( 'normal', new Float32BufferAttribute( this.nrm, 3 ) );
-		g.setAttribute( 'uv', new Float32BufferAttribute( this.uv, 2 ) );
-		g.setAttribute( 'tint', new Float32BufferAttribute( this.tint, 3 ) );
-		g.setAttribute( 'vdata', new Float32BufferAttribute( this.data, 4 ) );
-		const Idx = this.vcount > 65535 ? Uint32BufferAttribute : Uint16BufferAttribute;
-		g.setIndex( new Idx( this.idx, 1 ) );
+		const n = this.vcount;
+		g.setAttribute( 'position', new BufferAttribute( this.pos.slice( 0, n * 3 ), 3 ) );
+		g.setAttribute( 'normal', new BufferAttribute( this.nrm.slice( 0, n * 3 ), 3 ) );
+		g.setAttribute( 'uv', new BufferAttribute( this.uv.slice( 0, n * 2 ), 2 ) );
+		g.setAttribute( 'tint', new BufferAttribute( this.tint.slice( 0, n * 3 ), 3 ) );
+		g.setAttribute( 'vdata', new BufferAttribute( this.data.slice( 0, n * 4 ), 4 ) );
+		g.setIndex( new BufferAttribute( n > 65535 ? this.idx.slice( 0, this.icount ) : Uint16Array.from( this.idx.subarray( 0, this.icount ) ), 1 ) );
 		g.computeBoundingBox();
 		g.computeBoundingSphere();
 		return g;
@@ -790,7 +858,7 @@ export class Builder {
 
 		const swap = o.swapUV ?? false;
 		const period = WRAP_PERIOD[ key === 'roofMetal' && swap ? 'roofMetalSwap' : key ] ?? 0;
-		const part = cylPart( rTop, rBot, h, o.segs ?? 8, o.capTop ?? true, o.capBot ?? false, swap, period );
+		const part = cylPart( rTop, rBot, h, segs( o.segs ?? 8, 6 ), o.capTop ?? true, o.capBot ?? false, swap, period );
 		this.add( key, part, optMat( x, y, z, o ), o.tint, o.data );
 
 	}
@@ -798,14 +866,14 @@ export class Builder {
 	// lathe standing on (x, y, z)
 	lathe( key, x, y, z, profile, o = {} ) {
 
-		const part = lathePart( profile, o.segs ?? 12, o.rRef ?? null, WRAP_PERIOD[ key ] ?? 0 );
+		const part = lathePart( profile, segs( o.segs ?? 12, 6 ), o.rRef ?? null, WRAP_PERIOD[ key ] ?? 0 );
 		this.add( key, part, optMat( x, y, z, o ), o.tint, o.data );
 
 	}
 
 	torus( key, x, y, z, R, r, o = {} ) {
 
-		const part = torusPart( R, r, o.radial ?? 6, o.tubular ?? 16, o.arc ?? Math.PI * 2 );
+		const part = torusPart( R, r, segs( o.radial ?? 6, 4 ), segs( o.tubular ?? 16, 8 ), o.arc ?? Math.PI * 2 );
 		this.add( key, part, optMat( x, y, z, o ), o.tint, key === 'rope' ? ropeData( o.data, r ) : o.data );
 
 	}
@@ -852,7 +920,7 @@ export class Builder {
 		_a.divideScalar( L );
 		_q.setFromUnitVectors( _Y, _a );
 		const m = new Matrix4().compose( _p.set( p0[ 0 ], p0[ 1 ], p0[ 2 ] ), _q, _s );
-		const part = cylPart( r1, r0, L, o.segs ?? 6, o.capTop ?? true, o.capBot ?? false, false, WRAP_PERIOD[ key ] ?? 0 );
+		const part = cylPart( r1, r0, L, segs( o.segs ?? 6, 6 ), o.capTop ?? true, o.capBot ?? false, false, WRAP_PERIOD[ key ] ?? 0 );
 		this.add( key, part, m, o.tint, o.data );
 
 	}
@@ -860,7 +928,7 @@ export class Builder {
 	// tube (rope) along local points
 	tube( key, points, radius, o = {} ) {
 
-		const part = tubePart( points, radius, o.radial ?? 5 );
+		const part = tubePart( points, radius, segs( o.radial ?? 5, 4 ) );
 		this.add( key, part, new Matrix4(), o.tint, key === 'rope' ? ropeData( o.data, radius ) : o.data );
 
 	}
