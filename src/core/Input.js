@@ -104,6 +104,10 @@ export class Input {
 
 	requestLock() {
 
+		// (not in a browser driven by automation, as All the Spaces' checks are: headless Chrome there
+		// grows by hundreds of megabytes a minute while the pointer is locked, and draws at a third of
+		// the speed; dragging with the mouse still looks around)
+		if ( navigator.webdriver ) return;
 		if ( ! this.locked && this.lastDevice !== 'touch' ) this.dom.requestPointerLock?.()?.catch?.( () => {} );
 
 	}
