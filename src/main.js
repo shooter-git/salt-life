@@ -14,6 +14,7 @@ const portal = await connect( {
 const progress = async ( p, label ) => {
 
 	portal.progress( p, label );
+	performance.mark( `load: ${ label }` ); // (where the load's time goes, in a profile)
 	await new Promise( ( r ) => requestAnimationFrame( () => setTimeout( r, 0 ) ) );
 
 };
@@ -22,5 +23,6 @@ const app = new App( portal );
 window.__app = app; // console and test access
 await app.init( progress );
 portal.progress( 1, 'Ready' );
+performance.mark( 'load: ready' );
 app.start();
 portal.ready();

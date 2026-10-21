@@ -141,23 +141,33 @@ const SWAY = /* glsl */`
 	vec3 swayPos = transformed + vec3( vlmWindDir.x, swFlutter * 0.3, vlmWindDir.y ) * ( ( swGust + swFlutter ) * ( vlmWindSpeed * 0.011 * swW ) );
 `;
 
-// MeshStandardMaterial + a surface function. `textures`: { glslName: texture }.
-function villageMaterial( params, T, names, { surface, vertex = '', extra = '' } ) {
+// MeshStandardMaterial + a surface function. `textures`: { glslName: texture }. extra: GLSL chunks
+// (functions, constants) the surface uses, each a string (shareProgram includes each chunk once).
+function villageMaterial( params, T, names, { surface, vertex = '', extra = [] } ) {
 
 	const m = new THREE.MeshStandardMaterial( params );
 	const uniforms = {
 		vlmTime: G.time, vlmNight: G.night, vlmWindDir: G.windDir, vlmWindSpeed: G.windSpeed,
 	};
-	let samplers = '';
-	for ( const n of names ) {
+	for ( const n of names ) uniforms[ samplerOf( n ) ] = { value: T[ n ] };
+	const extras = [].concat( extra );
+	const build = villageShader( names, extras.join( '' ), surface, vertex );
+	m.onBeforeCompile = ( shader ) => build( shader, uniforms );
+	// the shader source differs per material (onBeforeCompile): give each its own program cache key
+	const key = 'village:' + ( params.name || '' ) + surface.length + ':' + vertex.length;
+	m.customProgramCacheKey = () => key;
+	m.userData.vlm = { names, surface, vertex, extras, uniforms };
+	return m;
 
-		const u = 'vlg' + n[ 0 ].toUpperCase() + n.slice( 1 );
-		uniforms[ u ] = { value: T[ n ] };
-		samplers += `uniform sampler2D ${ u };\n`;
+}
 
-	}
+const samplerOf = ( n ) => 'vlg' + n[ 0 ].toUpperCase() + n.slice( 1 );
 
-	m.onBeforeCompile = ( shader ) => {
+// the onBeforeCompile of a village material: Tidewater's surface spliced into MeshStandardMaterial
+function villageShader( names, extra, surface, vertex ) {
+
+	const samplers = names.map( ( n ) => `uniform sampler2D ${ samplerOf( n ) };\n` ).join( '' );
+	return ( shader, uniforms ) => {
 
 		Object.assign( shader.uniforms, uniforms );
 		shader.vertexShader = shader.vertexShader
@@ -184,10 +194,35 @@ function villageMaterial( params, T, names, { surface, vertex = '', extra = '' }
 
 	};
 
-	// the shader source differs per material (onBeforeCompile): give each its own program cache key
-	const key = 'village:' + ( params.name || '' ) + surface.length + ':' + vertex.length;
-	m.customProgramCacheKey = () => key;
-	return m;
+}
+
+// (Salt Life, low-powered devices) materials that differ only in their surface (same render state,
+// no vertex code) drawn with ONE program: every surface function in it, picked by a uniform. A
+// standard material's program is ~100 KB of GLSL, and compiling them is most of the load on a device
+// that draws on its CPU. (Not above low: with shadow maps the textures would pass 16 per shader.)
+function shareProgram( list, T ) {
+
+	const names = [ ...new Set( list.flatMap( ( m ) => m.userData.vlm.names ) ) ];
+	const extras = [ ...new Set( list.flatMap( ( m ) => m.userData.vlm.extras ) ) ];
+	let surfaces = '', pick = '';
+	list.forEach( ( m, k ) => {
+
+		surfaces += m.userData.vlm.surface.replace( 'void vlmSurface(', `void vlmSurface${ k }(` );
+		pick += `\t${ k ? 'else ' : '' }if ( vlmKind == ${ k } ) vlmSurface${ k }( s, Ng );\n`;
+
+	} );
+	const surface = `${ surfaces }\nuniform int vlmKind;\nvoid vlmSurface( inout VlmSurf s, vec3 Ng ) {\n${ pick }}\n`;
+	const build = villageShader( names, extras.join( '' ), surface, '' );
+	const key = 'village:shared:' + list.map( ( m ) => m.name ).join( ',' );
+	list.forEach( ( m, k ) => {
+
+		const uniforms = m.userData.vlm.uniforms;
+		for ( const n of names ) uniforms[ samplerOf( n ) ] = { value: T[ n ] };
+		uniforms.vlmKind = { value: k };
+		m.onBeforeCompile = ( shader ) => build( shader, uniforms );
+		m.customProgramCacheKey = () => key;
+
+	} );
 
 }
 
@@ -206,7 +241,7 @@ function villageMaterial( params, T, names, { surface, vertex = '', extra = '' }
 
 export function createWoodMaterial( T ) {
 
-	const m = villageMaterial( { roughness: 0.85, metalness: 0, name: 'VillageWood' }, T, [ 'woodA', 'woodN', 'paintN', 'grime' ], { extra: TIDAL + GLASS, surface: /* glsl */`
+	const m = villageMaterial( { roughness: 0.85, metalness: 0, name: 'VillageWood' }, T, [ 'woodA', 'woodN', 'paintN', 'grime' ], { extra: [ TIDAL, GLASS ], surface: /* glsl */`
 void vlmSurface( inout VlmSurf s, vec3 Ng ) {
 	vec3 aTint = vTint;
 	vec4 aData = vData;
@@ -526,7 +561,7 @@ void vlmSurface( inout VlmSurf s, vec3 Ng ) {
 
 export function createHardMaterial( T ) {
 
-	const m = villageMaterial( { roughness: 0.5, metalness: 0.5, name: 'VillageHard' }, T, [ 'hardA', 'hardN', 'rope', 'grime' ], { extra: TIDAL, surface: /* glsl */`
+	const m = villageMaterial( { roughness: 0.5, metalness: 0.5, name: 'VillageHard' }, T, [ 'hardA', 'hardN', 'rope', 'grime' ], { extra: [ TIDAL ], surface: /* glsl */`
 void vlmSurface( inout VlmSurf s, vec3 Ng ) {
 	vec3 aTint = vTint;
 	vec4 aData = vData;
@@ -735,10 +770,11 @@ void vlmSurface( inout VlmSurf s, vec3 Ng ) {
 
 }
 
-export function createVillageMaterials( textures = new VillageTextures() ) {
+// shared: the opaque materials in one program (shareProgram: low-powered devices)
+export function createVillageMaterials( textures = new VillageTextures(), { shared = false } = {} ) {
 
 	const T = textures.textures;
-	return {
+	const M = {
 		wood: createWoodMaterial( T ),
 		roofMetal: createRoofMetalMaterial( T ),
 		thatch: createThatchMaterial( T ),
@@ -747,5 +783,7 @@ export function createVillageMaterials( textures = new VillageTextures() ) {
 		fabric: createFabricMaterial( T ),
 		net: createNetMaterial( T ),
 	};
+	if ( shared ) shareProgram( [ M.wood, M.roofMetal, M.thatch, M.hard, M.stone ], T );
+	return M;
 
 }

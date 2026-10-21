@@ -290,6 +290,9 @@ export class App {
 
 		}
 
+		// (WebGL drawn on the CPU: the rod and its line, out of sight until the rod comes out, are
+		// compiled after the start: prepareLate)
+		if ( this.cpuGL ) this.game.rod.holdBack = true;
 		this.frame( 0 ); // places the camera, the LOD grids and the sky for the compile
 		// (with the near detail it hid: compiled now, not the first time it shows)
 		const near = ( this.nearDetail || [] ).filter( ( d ) => ! d.o.visible );
@@ -337,7 +340,7 @@ export class App {
 		this.hud.showHint( this.input.lastDevice );
 		// (on a device that draws on its CPU the plants grow after the start: the catch card's shaders,
 		// then Joe and Marta after them)
-		Promise.resolve( this.cpuGL ? this.plantsGrow() : null ).then( () => this.preparePortrait() ).then( () => this.loadCharacters() );
+		Promise.resolve( this.cpuGL ? this.plantsGrow() : null ).then( () => this.prepareLate() ).then( () => this.loadCharacters() );
 		const begin = () => this.audio.resume().then( ( on ) => {
 
 			if ( on ) for ( const type of GESTURES ) removeEventListener( type, begin, true );
@@ -455,13 +458,29 @@ export class App {
 
 	}
 
-	// the catch card's fish portrait (its studio light and the blurred backdrop), compiled and first
-	// used after the start: it isn't needed before the first catch
-	async preparePortrait() {
+	// shaders not needed at the start, compiled and first used after it: the catch card's fish portrait
+	// (its studio light and the blurred backdrop), and on a device that draws on its CPU the rod and
+	// its line (held back while loading: every shader compiled then is load time)
+	async prepareLate() {
 
 		if ( ! this.game ) return;
-		const r = this.renderer;
+		const r = this.renderer, rod = this.game.rod;
 		await this.game.portrait.compile( r, this.scene.environment );
+		if ( rod.holdBack ) {
+
+			for ( const m of [ rod.rodMesh, rod.lineMesh, rod.bobberMesh ] ) {
+
+				const was = m.visible;
+				m.visible = true;
+				await r.compileAsync( m, this.camera, this.scene );
+				m.visible = was;
+
+			}
+
+			rod.holdBack = false;
+
+		}
+
 		for ( const p of r.info.programs ) {
 
 			p.getUniforms();
