@@ -59,6 +59,7 @@ export class BoatMaterials {
 		this.fittings = withAux( new THREE.MeshStandardMaterial() );
 		for ( const k of [ 'gelcoat', 'wood', 'fittings' ] ) this[ k ].name = 'boat' + k[ 0 ].toUpperCase() + k.slice( 1 );
 		this.glass = new THREE.MeshStandardMaterial( { color: 0xa9bec4, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.22, side: THREE.DoubleSide, depthWrite: false } );
+		this.glass.forceSinglePass = true; // (thin panes: no back-then-front passes, one program)
 		this.glass.name = 'boatGlass';
 		this.glow = this.createGlow();
 		this.trap = this.createTrap();

@@ -17,7 +17,7 @@ export const LEAF_TILES = [
 	{ grid: 3, leaves: 6, width: 0.45 },
 	{ grid: 3, leaves: 8, width: 0.22 },
 ];
-const SIZE = 1024;
+const SIZE = 1024; // (smaller where WebGL is drawn on the CPU: see LeafAtlas)
 
 // leaf rosettes tiled G x G over a card: each cell holds one rosette with its own rotation /
 // size; leaves have a short petiole gap at the centre. Returns ( d: signed distance to the leaf
@@ -66,9 +66,10 @@ VegRosette vegRosette( vec2 st, float G, float nLeaves, float width, float rot )
 
 export class LeafAtlas {
 
-	constructor() {
+	constructor( { size = SIZE } = {} ) {
 
-		this.rt = new THREE.WebGLRenderTarget( SIZE, SIZE, {
+		this.size = size;
+		this.rt = new THREE.WebGLRenderTarget( size, size, {
 			depthBuffer: false,
 			generateMipmaps: true,
 			minFilter: THREE.LinearMipmapLinearFilter,
@@ -96,6 +97,7 @@ vec4 vegLeafSample( vec2 st, float tile ) {
 	// renders the atlas into its render target (a fullscreen triangle pair; mipmaps by three)
 	bake( renderer ) {
 
+		const px = 1 / ( this.size / 2 ); // texel size in tile uv
 		let body = '';
 		for ( let t = 0; t < 4; t ++ ) {
 
@@ -169,7 +171,6 @@ ${ body }
 
 }
 
-const px = 1 / ( SIZE / 2 ); // texel size in tile uv
 const _camera = new THREE.OrthographicCamera( - 1, 1, 1, - 1, 0, 1 );
 
 // Renders into `target` (cleared to transparent black) and restores the renderer's state

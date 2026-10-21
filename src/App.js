@@ -140,7 +140,7 @@ export class App {
 		this.colliders = new Colliders();
 		// the village flattens building pads into the heightmap: build it before the ground (whose
 		// textures are made from the heights) and everything placed on it
-		this.village = new Village( { scene, terrain: this.terrainData, colliders: this.colliders, tier } );
+		this.village = new Village( { scene, terrain: this.terrainData, colliders: this.colliders, tier, smallBakes: this.cpuGL } );
 		await this.village.init( renderer );
 		// Joe's fish stand and Marta's chandlery (Tidewater's Game builds them; the fishing game isn't
 		// ported yet): their scanned props load while the rest of the island is made
@@ -150,7 +150,7 @@ export class App {
 		uploadTextures( renderer, [ this.terrain.heightTexture, this.terrain.normalTexture, this.terrain.splatTexture ] );
 		// boulders, blocks, talus and outcrops (shaded like the ground's rock)
 		this.rocks = new Rocks( { scene, terrain: this.terrain, colliders: this.colliders, village: this.village, castShadow: tier !== 'low', lite: tier === 'low' } );
-		this.vegetation = new Vegetation( { scene, terrain: this.terrainData, ground: this.terrain, renderer, tier, village: this.village } );
+		this.vegetation = new Vegetation( { scene, terrain: this.terrainData, ground: this.terrain, renderer, tier, village: this.village, smallBakes: this.cpuGL } );
 		await this.vegetation.init();
 		// the island's masks are read only while it's being made (the ground's maps, the rocks and the
 		// plants placed on it); from here on only its heights are
@@ -214,10 +214,10 @@ export class App {
 
 		} ).catch( ( e ) => console.warn( 'stalls', e ) );
 		watchContext( renderer );
-		// WebGL drawn on the CPU draws the loading frames tiny: they're for placing everything,
-		// uploading it and making the GPU's programs, which a few pixels do as well, and there a
-		// full-size frame takes seconds (on a laptop's screen, enough to miss the 45 s a creation has
-		// to load). The game's first frame is then drawn by its loop.
+		// WebGL drawn on the CPU draws one loading frame, tiny: it's for placing everything, uploading
+		// it and making the GPU's programs, which a few pixels do as well, and there every frame takes
+		// seconds (enough to miss the 45 s a creation has to load). The game's first frame is then
+		// drawn by its loop.
 		const full = this.cpuGL ? { ratio: renderer.getPixelRatio(), size: renderer.getSize( new THREE.Vector2() ) } : null;
 		if ( full ) {
 
@@ -243,13 +243,12 @@ export class App {
 
 		}
 
-		this.frame( 1 / 60 );
 		if ( full ) {
 
 			renderer.setPixelRatio( full.ratio );
 			renderer.setSize( full.size.x, full.size.y, false );
 
-		}
+		} else this.frame( 1 / 60 );
 
 	}
 
