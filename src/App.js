@@ -169,10 +169,9 @@ export class App {
 		// boulders, blocks, talus and outcrops (shaded like the ground's rock)
 		this.rocks = new Rocks( { scene, terrain: this.terrain, colliders: this.colliders, village: this.village, castShadow: tier !== 'low', lite: tier === 'low' } );
 		this.vegetation = new Vegetation( { scene, terrain: this.terrainData, ground: this.terrain, renderer, tier, village: this.village, smallBakes: this.cpuGL } );
-		await this.vegetation.init();
-		// the island's masks are read only while it's being made (the ground's maps, the rocks and the
-		// plants placed on it); from here on only its heights are
-		for ( const k of [ 'rock', 'sand', 'path', 'gully', 'seagrass', 'rubble', 'scarp' ] ) this.terrainData[ k ] = null;
+		// (WebGL drawn on the CPU: the plants grow in once the game has started, in start(); their
+		// programs and bakes take seconds there, and a creation has 45 s to load)
+		if ( ! this.cpuGL ) await this.plantsGrow();
 
 		// ---------------------------------------------------------------- ocean
 		await progress( 0.6, 'Rolling in the swell' );
@@ -243,7 +242,9 @@ export class App {
 		await progress( 0.8, 'Preparing the shaders' );
 		// the CPU copies of the big static data go once it's on the GPU (phones' script memory)
 		releaseGeometries( this.village.group );
-		releaseTextures( this.terrain.mesh );
+		// (but the detail texture: the plants read its data as they're placed, and its bake keeps the data
+		// anyway, so letting go of the texture's reference would free nothing)
+		releaseTextures( this.terrain.mesh, { keep: [ this.terrain.detailTexture ] } );
 		// the stalls' scans (mid and high) arrive after the game has started: they're not needed to
 		// begin, and the download before it does is limited
 		Promise.all( [ this.stand.ready, this.chandlery.ready ] ).then( () => {
@@ -313,6 +314,7 @@ export class App {
 		} );
 		this._started = true;
 		this.hud.showHint( this.input.lastDevice );
+		if ( this.cpuGL ) this.plantsGrow();
 		const begin = () => this.audio.resume().then( ( on ) => {
 
 			if ( on ) for ( const type of GESTURES ) removeEventListener( type, begin, true );
@@ -419,6 +421,16 @@ export class App {
 		this._drawn = gl.fenceSync( gl.SYNC_GPU_COMMANDS_COMPLETE, 0 );
 		this._rest = true;
 		gl.flush();
+
+	}
+
+	// the plants: scattered over the island, built and baked (in slices)
+	async plantsGrow() {
+
+		await this.vegetation.init();
+		// the island's masks are read only while it's being made (the ground's maps, the rocks and the
+		// plants placed on it); from here on only its heights are
+		for ( const k of [ 'rock', 'sand', 'path', 'gully', 'seagrass', 'rubble', 'scarp' ] ) this.terrainData[ k ] = null;
 
 	}
 
