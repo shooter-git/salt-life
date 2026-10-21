@@ -297,8 +297,6 @@ export class App {
 		await renderer.compileAsync( scene, camera );
 		for ( const d of near ) d.o.visible = false;
 		await this.sky.compiled;
-		// the catch card's fish portrait (its studio light and the blurred backdrop)
-		await this.game.portrait.compile( renderer, scene.environment );
 		// a shader's first use asks the GPU for its uniforms and attributes, which waits for all the
 		// drawing queued before it: seconds on a device that draws on its CPU. Every one is used here,
 		// before the game starts (the sky's passes would otherwise first run mid-game)
@@ -337,8 +335,9 @@ export class App {
 		} );
 		this._started = true;
 		this.hud.showHint( this.input.lastDevice );
-		// (on a device that draws on its CPU the plants grow after the start: Joe and Marta after them)
-		Promise.resolve( this.cpuGL ? this.plantsGrow() : null ).then( () => this.loadCharacters() );
+		// (on a device that draws on its CPU the plants grow after the start: the catch card's shaders,
+		// then Joe and Marta after them)
+		Promise.resolve( this.cpuGL ? this.plantsGrow() : null ).then( () => this.preparePortrait() ).then( () => this.loadCharacters() );
 		const begin = () => this.audio.resume().then( ( on ) => {
 
 			if ( on ) for ( const type of GESTURES ) removeEventListener( type, begin, true );
@@ -453,6 +452,22 @@ export class App {
 		this._drawn = gl.fenceSync( gl.SYNC_GPU_COMMANDS_COMPLETE, 0 );
 		this._rest = true;
 		gl.flush();
+
+	}
+
+	// the catch card's fish portrait (its studio light and the blurred backdrop), compiled and first
+	// used after the start: it isn't needed before the first catch
+	async preparePortrait() {
+
+		if ( ! this.game ) return;
+		const r = this.renderer;
+		await this.game.portrait.compile( r, this.scene.environment );
+		for ( const p of r.info.programs ) {
+
+			p.getUniforms();
+			p.getAttributes();
+
+		}
 
 	}
 
