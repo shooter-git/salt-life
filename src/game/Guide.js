@@ -4,10 +4,10 @@ import { CHANDLERY } from './Chandlery.js';
 // First-play guide:
 //  - an intro (3 cards) the first time the game starts, after the start overlay: the goal, the fishing
 //    controls, getting around and where Joe and Marta are (live direction and distance; their
-//    markers pulse on the minimap). Enter / Space / click: next, Esc: skip. Replay from the help (F1).
+//    markers pulse on the minimap). Enter / Space / click or tap: next, Esc: skip. Replay from the help (F1).
 //  - one-time tips the first time something happens (rod out, first nibble, fish on, first catch,
 //    full cooler, next to the boat, at Joe's, at Marta's), in a card above the minimap.
-// Seen state in localStorage ('tidewater.guide'), wrapped in try/catch.
+// Seen state under 'tidewater.guide' (in the person's saves: core/SaveStore), wrapped in try/catch.
 //   const guide = new Guide( ui, game, minimap );  guide.update( dt );  guide.replay()
 
 const KEY = 'tidewater.guide';
@@ -57,59 +57,107 @@ const CSS = /* css */`
 	color: var(--tw-ink-2); font-size: var(--tw-fs-sm); line-height: 1.5; }
 .tw-help-guide b { color: var(--tw-ink); }
 .tw-help-guide .gm-btn { flex: none; }
-@media (max-height: 860px) { .gm-coach { right: calc(var(--tw-edge) + 58 * var(--tw-u)); } }
 @media (max-width: 640px) { .tw-help-guide { flex-direction: column; align-items: flex-start; } .gm-coach { bottom: calc(var(--tw-edge) + 128 * var(--tw-u) + var(--tw-3)); } .gm-guide-row { grid-template-columns: calc(78 * var(--tw-u)) 1fr; } }
+/* (Salt Life) phones on their side: the cards a little tighter, so the buttons stay on screen */
+@media (max-height: 500px) {
+	.gm-guide-card { padding: var(--tw-4) var(--tw-5) var(--tw-3); }
+	.gm-guide-card h2 { margin: var(--tw-1) 0 var(--tw-2); font-size: calc(20 * var(--tw-u)); }
+	.gm-guide-body { line-height: 1.4; }
+	.gm-guide-list { gap: calc(3 * var(--tw-u)); margin-bottom: var(--tw-2); }
+	.gm-guide-where { margin-bottom: var(--tw-2); }
+	.gm-guide-where div { padding: var(--tw-1) var(--tw-3); }
+	.gm-guide-foot { margin-top: var(--tw-2); }
+}
 @media (prefers-reduced-motion: reduce) { .gm-guide-card, .gm-coach { transform: none !important; } }
 `;
 
 const k = ( ...keys ) => keys.map( ( x ) => `<kbd>${ x }</kbd>` ).join( '' );
 const row = ( keys, text ) => `<div class="gm-guide-row"><span class="k">${ keys }</span><span>${ text }</span></div>`;
 
-const CARDS = [
-	{
-		eyebrow: 'Welcome to Tidewater',
-		title: 'Fish the island, sell your catch',
-		body: `<p>Catch fish from the <b>beach</b>, the <b>pier</b> or your <b>boat</b>. Different fish bite in the shallows, around the pier, over the reef and out in deep water, and they change with the time of day.</p>
-			<p>Sell your catch to <b>Joe</b> at the fish stand by the pier, then spend the money on upgrades from <b>Marta</b> at the chandlery by the boathouse: stronger line, a faster reel, a bigger hold, a fish finder and lights for fishing at night.</p>`,
-	},
-	{
-		eyebrow: 'Fishing',
-		title: 'Cast, strike, reel',
-		body: `<div class="gm-guide-list">
-			${ row( k( 'R' ), 'Take out the rod (by the water or on the boat)' ) }
-			${ row( k( 'Hold', 'LMB' ), 'Wind up, release to cast. Hold longer to cast farther' ) }
-			${ row( k( 'LMB' ), 'Strike when the bobber is <b>pulled under</b> (dips are only nibbles)' ) }
-			${ row( k( 'Hold', 'LMB' ), 'Reel in. <b>Let go when the tension turns red</b>, or the line snaps' ) }
-			${ row( k( 'RMB' ), 'Reel an empty line back in' ) }
-			${ row( k( 'I' ), 'Your cooler and fish log' ) }
-		</div>`,
-	},
-	{
-		eyebrow: 'Getting around',
-		title: 'Joe and Marta',
-		body: `<div class="gm-guide-list">
-			${ row( k( 'W', 'A', 'S', 'D' ), 'Move, mouse to look, <kbd>Shift</kbd> to run' ) }
-			${ row( k( 'E' ), 'Board the boat, take the helm, talk to Joe and Marta' ) }
-			${ row( k( 'F1' ), 'All controls, and this guide again' ) }
-		</div>
-		<div class="gm-guide-where">
-			<div class="is-joe"><i></i><span><b>Joe</b> · fish stand by the pier</span><em data-where="joe"></em></div>
-			<div class="is-marta"><i></i><span><b>Marta</b> · chandlery by the boathouse</span><em data-where="marta"></em></div>
-		</div>
-		<p style="margin:0;color:var(--tw-ink-3);font-size:var(--tw-fs-sm)">Both are marked on the map in the lower right.</p>`,
-	},
-];
+// the intro's cards and the tips, worded for the input in use (Input.lastDevice: 'keyboard' | 'touch' |
+// 'gamepad'; on touch screens the controls are TouchControls' buttons)
+const WELCOME = {
+	eyebrow: 'Welcome to Salt Life',
+	title: 'Fish the island, sell your catch',
+	body: `<p>Catch fish from the <b>beach</b>, the <b>pier</b> or your <b>boat</b>. Different fish bite in the shallows, around the pier, over the reef and out in deep water, and they change with the time of day.</p>
+		<p>Sell your catch to <b>Joe</b> at the fish stand by the pier, then spend the money on upgrades from <b>Marta</b> at the chandlery by the boathouse: stronger line, a faster reel, a bigger hold, a fish finder and lights for fishing at night.</p>`,
+};
+
+const FISHING = {
+	keyboard: [ [ k( 'R' ), 'Take out the rod (by the water or on the boat)' ], [ k( 'Hold', 'LMB' ), 'Wind up, release to cast. Hold longer to cast farther' ],
+		[ k( 'LMB' ), 'Strike when the bobber is <b>pulled under</b> (dips are only nibbles)' ], [ k( 'Hold', 'LMB' ), 'Reel in. <b>Let go when the tension turns red</b>, or the line snaps' ],
+		[ k( 'RMB' ), 'Reel an empty line back in' ], [ k( 'I' ), 'Your cooler and fish log' ] ],
+	touch: [ [ k( 'Rod' ), 'Take out the rod (by the water or on the boat)' ], [ k( 'Hold', 'Cast' ), 'Wind up, let go to cast. Hold longer to cast farther' ],
+		[ k( 'Strike' ), 'When the bobber is <b>pulled under</b> (dips are only nibbles)' ], [ k( 'Hold', 'Reel' ), 'Reel in. <b>Let go when the tension turns red</b>, or the line snaps' ],
+		[ k( 'Reel in' ), 'Reel an empty line back in' ], [ k( 'Cooler' ), 'Your cooler and fish log' ] ],
+	gamepad: [ [ k( 'X' ), 'Take out the rod (by the water or on the boat)' ], [ k( 'Hold', 'RT' ), 'Wind up, release to cast. Hold longer to cast farther' ],
+		[ k( 'RT' ), 'Strike when the bobber is <b>pulled under</b> (dips are only nibbles)' ], [ k( 'Hold', 'RT' ), 'Reel in. <b>Let go when the tension turns red</b>, or the line snaps' ],
+		[ k( 'LT' ), 'Reel an empty line back in' ], [ k( 'Back' ), 'Your cooler and fish log' ] ],
+};
+
+const AROUND = {
+	keyboard: [ [ k( 'W', 'A', 'S', 'D' ), 'Move, mouse to look, <kbd>Shift</kbd> to run' ], [ k( 'E' ), 'Board the boat, take the helm, talk to Joe and Marta' ],
+		[ k( 'F1' ), 'All controls, and this guide again' ] ],
+	touch: [ [ k( 'Left side' ), 'Drag to walk, from wherever your thumb lands' ], [ k( 'Right side' ), 'Drag to look around' ],
+		[ k( 'Gold button' ), 'Board the boat, take the helm, talk to Joe and Marta' ] ],
+	gamepad: [ [ k( 'Left stick' ), 'Move, right stick to look' ], [ k( 'B' ), 'Board the boat, take the helm, talk to Joe and Marta' ] ],
+};
+
+function cards( device ) {
+
+	const d = FISHING[ device ] ? device : 'keyboard';
+	const rows = ( list ) => `<div class="gm-guide-list">${ list.map( ( [ keys, text ] ) => row( keys, text ) ).join( '' ) }</div>`;
+	return [
+		WELCOME,
+		{ eyebrow: 'Fishing', title: 'Cast, strike, reel', body: rows( FISHING[ d ] ) },
+		{
+			eyebrow: 'Getting around',
+			title: 'Joe and Marta',
+			body: `${ rows( AROUND[ d ] ) }
+			<div class="gm-guide-where">
+				<div class="is-joe"><i></i><span><b>Joe</b> · fish stand by the pier</span><em data-where="joe"></em></div>
+				<div class="is-marta"><i></i><span><b>Marta</b> · chandlery by the boathouse</span><em data-where="marta"></em></div>
+			</div>
+			<p style="margin:0;color:var(--tw-ink-3);font-size:var(--tw-fs-sm)">Both are marked on the map ${ d === 'touch' ? 'at the top right' : 'in the lower right' }.</p>`,
+		},
+	];
+
+}
+
+const CARD_COUNT = 3;
 
 const TIPS = {
-	rodOut: 'Hold the <b>left mouse button</b> to wind up and release to cast. Try deeper water, around the pier or over the reef.',
-	nibble: 'The bobber is dipping: something is <b>nibbling</b>. Wait until it is <b>pulled under</b>, then click to strike.',
-	fishOn: '<b>Hold the left mouse button</b> to reel. When the tension needle nears the <b>red</b>, let go until it settles, then reel again.',
-	caught: 'Into the cooler (<kbd>I</kbd>). Sell your catch to <b>Joe</b> at the fish stand by the pier: he is on the map.',
+	keyboard: {
+		rodOut: 'Hold the <b>left mouse button</b> to wind up and release to cast. Try deeper water, around the pier or over the reef.',
+		nibble: 'The bobber is dipping: something is <b>nibbling</b>. Wait until it is <b>pulled under</b>, then click to strike.',
+		fishOn: '<b>Hold the left mouse button</b> to reel. When the tension needle nears the <b>red</b>, let go until it settles, then reel again.',
+		caught: 'Into the cooler (<kbd>I</kbd>). Sell your catch to <b>Joe</b> at the fish stand by the pier: he is on the map.',
+		boat: 'Your boat. <kbd>E</kbd> to board, <kbd>E</kbd> again at the wheel to drive (<kbd>W</kbd><kbd>S</kbd> throttle, <kbd>A</kbd><kbd>D</kbd> steer). Diesel is sold by Marta.',
+		joe: '<b>Joe</b> buys your fish. <kbd>E</kbd> to see what he will pay.',
+		marta: '<b>Marta</b> sells upgrades and diesel. <kbd>E</kbd> to see her stock.',
+	},
+	touch: {
+		rodOut: 'Hold <b>Cast</b> to wind up and let go to cast. Try deeper water, around the pier or over the reef.',
+		nibble: 'The bobber is dipping: something is <b>nibbling</b>. Wait until it is <b>pulled under</b>, then tap <b>Strike</b>.',
+		fishOn: '<b>Hold Reel</b> to reel in. When the tension needle nears the <b>red</b>, let go until it settles, then reel again.',
+		caught: 'Into the cooler (the <b>Cooler</b> button). Sell your catch to <b>Joe</b> at the fish stand by the pier: he is on the map.',
+		boat: 'Your boat. Tap <b>Board boat</b>, then <b>Take the helm</b> at the wheel and drive with the left side. Diesel is sold by Marta.',
+		joe: '<b>Joe</b> buys your fish. Tap <b>Talk to Joe</b> to see what he will pay.',
+		marta: '<b>Marta</b> sells upgrades and diesel. Tap <b>Talk to Marta</b> to see her stock.',
+	},
+	gamepad: {
+		rodOut: 'Hold <kbd>RT</kbd> to wind up and release to cast. Try deeper water, around the pier or over the reef.',
+		nibble: 'The bobber is dipping: something is <b>nibbling</b>. Wait until it is <b>pulled under</b>, then <kbd>RT</kbd> to strike.',
+		fishOn: '<b>Hold <kbd>RT</kbd></b> to reel. When the tension needle nears the <b>red</b>, let go until it settles, then reel again.',
+		caught: 'Into the cooler (<kbd>Back</kbd>). Sell your catch to <b>Joe</b> at the fish stand by the pier: he is on the map.',
+		boat: 'Your boat. <kbd>B</kbd> to board, <kbd>B</kbd> again at the wheel to drive with the left stick. Diesel is sold by Marta.',
+		joe: '<b>Joe</b> buys your fish. <kbd>B</kbd> to see what he will pay.',
+		marta: '<b>Marta</b> sells upgrades and diesel. <kbd>B</kbd> to see her stock.',
+	},
 	full: 'Your cooler is <b>full</b>. Sell to Joe, or buy a bigger hold from Marta at the chandlery.',
-	boat: 'Your boat. <kbd>E</kbd> to board, <kbd>E</kbd> again at the wheel to drive (<kbd>W</kbd><kbd>S</kbd> throttle, <kbd>A</kbd><kbd>D</kbd> steer). Diesel is sold by Marta.',
-	joe: '<b>Joe</b> buys your fish. <kbd>E</kbd> to see what he will pay.',
-	marta: '<b>Marta</b> sells upgrades and diesel. <kbd>E</kbd> to see her stock.',
 };
+
+const tipText = ( id, device ) => ( TIPS[ device ] || TIPS.keyboard )[ id ] || TIPS[ id ];
 
 const h = ( tag, cls, html ) => {
 
@@ -143,7 +191,7 @@ export class Guide {
 		this.seen = this._load();
 		this.el = h( 'div', 'gm-guide tw-interactive', `<div class="gm-guide-card tw-glass" role="dialog" aria-modal="true" aria-live="polite">
 			<div class="gm-guide-eyebrow"></div><h2></h2><div class="gm-guide-body"></div>
-			<div class="gm-guide-foot"><div class="gm-guide-dots">${ CARDS.map( () => '<span></span>' ).join( '' ) }</div>
+			<div class="gm-guide-foot"><div class="gm-guide-dots">${ '<span></span>'.repeat( CARD_COUNT ) }</div>
 			<div class="gm-guide-btns"><span class="gm-guide-hint">Enter · Esc to skip</span><button type="button" class="gm-btn is-ghost gm-guide-skip">Skip</button><button type="button" class="gm-btn gm-guide-next">Next</button></div></div></div>` );
 		this.card = this.el.firstChild;
 		this.eyebrow = this.el.querySelector( '.gm-guide-eyebrow' );
@@ -151,6 +199,7 @@ export class Guide {
 		this.body = this.el.querySelector( '.gm-guide-body' );
 		this.dots = [ ...this.el.querySelectorAll( '.gm-guide-dots span' ) ];
 		this.nextBtn = this.el.querySelector( '.gm-guide-next' );
+		this.hint = this.el.querySelector( '.gm-guide-hint' );
 		this.el.querySelector( '.gm-guide-skip' ).addEventListener( 'click', ( e ) => {
 
 			e.stopPropagation();
@@ -201,7 +250,21 @@ export class Guide {
 		};
 
 		window.addEventListener( 'keydown', this._onKey, true );
-		window.addEventListener( 'mousedown', this._onDown, true );
+		window.addEventListener( 'pointerdown', this._onDown, true );
+
+	}
+
+	get device() {
+
+		return this.game.app.input.lastDevice;
+
+	}
+
+	// (Salt Life: the app's save store, All the Spaces' personal save: a creation's frame has no
+	// localStorage of its own)
+	get _storage() {
+
+		return ( this.game && this.game.app && this.game.app.store ) || localStorage;
 
 	}
 
@@ -209,7 +272,7 @@ export class Guide {
 
 		try {
 
-			return JSON.parse( localStorage.getItem( KEY ) || '{}' ) || {};
+			return JSON.parse( this._storage.getItem( KEY ) || '{}' ) || {};
 
 		} catch ( e ) {
 
@@ -223,7 +286,7 @@ export class Guide {
 
 		try {
 
-			localStorage.setItem( KEY, JSON.stringify( this.seen ) );
+			this._storage.setItem( KEY, JSON.stringify( this.seen ) );
 
 		} catch ( e ) { /* storage blocked: the guide just shows again next time */ }
 
@@ -233,13 +296,14 @@ export class Guide {
 	show( i ) {
 
 		this.step = i;
-		const c = CARDS[ i ];
+		const c = cards( this.device )[ i ];
 		this.eyebrow.textContent = c.eyebrow;
 		this.title.textContent = c.title;
 		this.body.innerHTML = c.body;
 		this.dots.forEach( ( d, j ) => d.classList.toggle( 'is-on', j === i ) );
-		this.nextBtn.textContent = i === CARDS.length - 1 ? 'Let\'s fish' : 'Next';
-		if ( this.minimap ) this.minimap.highlight( i === CARDS.length - 1 ? [ 'joe', 'marta' ] : [] );
+		this.nextBtn.textContent = i === CARD_COUNT - 1 ? 'Let\'s fish' : 'Next';
+		if ( this.minimap ) this.minimap.highlight( i === CARD_COUNT - 1 ? [ 'joe', 'marta' ] : [] );
+		this.hint.hidden = this.device === 'touch';
 		this._whereT = 0;
 		if ( ! this.open ) {
 
@@ -252,7 +316,7 @@ export class Guide {
 
 	next() {
 
-		if ( this.step < CARDS.length - 1 ) this.show( this.step + 1 );
+		if ( this.step < CARD_COUNT - 1 ) this.show( this.step + 1 );
 		else this.close();
 
 	}
@@ -310,7 +374,7 @@ export class Guide {
 
 			// live direction and distance to Joe and Marta
 			this._whereT -= dt;
-			if ( this._whereT <= 0 && this.step === CARDS.length - 1 ) {
+			if ( this._whereT <= 0 && this.step === CARD_COUNT - 1 ) {
 
 				this._whereT = 0.25;
 				const x = p.position.x, z = p.position.z;
@@ -368,7 +432,7 @@ export class Guide {
 			this._current = id;
 			this.seen[ id ] = true;
 			this._save();
-			this.coachText.innerHTML = TIPS[ id ];
+			this.coachText.innerHTML = tipText( id, this.device );
 			this.coach.classList.add( 'is-on' );
 			this._coachT = 7.5;
 

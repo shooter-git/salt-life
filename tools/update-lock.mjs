@@ -71,6 +71,14 @@ const FONTS = {
 	'Oswald.ttf': { license: 'OFL-1.1', source: 'https://fonts.google.com/specimen/Oswald', title: 'Oswald', author: 'Vernon Adams, Kalapi Gajjar, Cyreal' },
 };
 
+// the HUD's fonts (src/ui/fonts: Fontsource's latin subsets of the Google Fonts files)
+const HUD_FONTS = {
+	'inter': { license: 'OFL-1.1', source: 'https://fonts.google.com/specimen/Inter', title: 'Inter', author: 'The Inter Project Authors' },
+	'jetbrains-mono': { license: 'OFL-1.1', source: 'https://fonts.google.com/specimen/JetBrains+Mono', title: 'JetBrains Mono', author: 'The JetBrains Mono Project Authors' },
+	'caveat-brush': { license: 'OFL-1.1', source: 'https://fonts.google.com/specimen/Caveat+Brush', title: 'Caveat Brush', author: 'Google' },
+	'kalam': { license: 'OFL-1.1', source: 'https://fonts.google.com/specimen/Kalam', title: 'Kalam', author: 'Indian Type Foundry' },
+};
+
 function creditFor( path, audio ) {
 
 	const name = path.split( '/' ).pop();
@@ -97,6 +105,7 @@ function creditFor( path, audio ) {
 	if ( path.startsWith( 'public/models/whale/' ) ) return { license: 'MIT', source: TIDEWATER, title: 'Humpback whale', author: TIDEWATER_AUTHOR };
 	if ( path.startsWith( 'public/textures/smaa/' ) ) return { license: 'MIT', source: 'https://github.com/mrdoob/three.js/tree/dev/examples/jsm/postprocessing', title: 'SMAA lookup textures', author: 'three.js authors; J. Jimenez et al.' };
 	if ( path.startsWith( 'tools/props/fonts/' ) ) return FONTS[ name ];
+	if ( path.startsWith( 'src/ui/fonts/' ) ) return HUD_FONTS[ name.replace( /-latin.*$/, '' ) ];
 	// made for Salt Life (the baked island: tools/bake-terrain.mjs)
 	if ( path.startsWith( 'public/world/' ) ) return { license: 'own', title: 'The island, baked by tools/bake-terrain.mjs' };
 

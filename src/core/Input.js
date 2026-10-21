@@ -112,8 +112,16 @@ export class Input {
 
 	}
 
-	// a virtual source (touch button, gamepad button) holds / lets go of a key
+	// a virtual source (touch button, gamepad button) holds / lets go of a key ('mouse0' / 'mouse2':
+	// the left / right mouse button)
 	press( code ) {
+
+		if ( code === 'mouse0' || code === 'mouse2' ) {
+
+			this[ code === 'mouse0' ? 'mouseDown' : 'rightDown' ] = true;
+			return;
+
+		}
 
 		if ( ! this.keys.has( code ) ) this.pressed.add( code );
 		this.keys.add( code );
@@ -122,6 +130,13 @@ export class Input {
 	}
 
 	release( code ) {
+
+		if ( code === 'mouse0' || code === 'mouse2' ) {
+
+			this[ code === 'mouse0' ? 'mouseDown' : 'rightDown' ] = false;
+			return;
+
+		}
 
 		const n = ( this._virtual.get( code ) || 0 ) - 1;
 		if ( n > 0 ) this._virtual.set( code, n );

@@ -29,6 +29,8 @@ import { TouchControls } from './ui/TouchControls.js';
 import { Hud } from './ui/Hud.js';
 import { Wake } from './ocean/Wake.js';
 import { SoundScape } from './audio/SoundScape.js';
+import { Game } from './game/Game.js';
+import { createGameUI } from './ui/GameUI.js';
 import { PostChain } from './post/PostChain.js';
 import { releaseGeometries, releaseTextures, uploadTextures, watchContext } from './core/ReleaseAfterUpload.js';
 
@@ -93,6 +95,7 @@ export class App {
 		] );
 		setDetailData( new Uint8Array( detail ) );
 		this.state = new GameState( this.store );
+		this.state.load(); // (the save was read above: money, the cooler, the log, upgrades, fuel)
 
 		await progress( 0.25, 'Shaping the island' );
 		this.terrainData = new TerrainData( 7, decodeIsland( new Uint8Array( bytes ) ) );
@@ -238,6 +241,20 @@ export class App {
 		this.player.audio = this.audio;
 		this.boatCtl.onSlam = ( strength ) => this.audio.hullSlap( strength );
 
+		// ---------------------------------------------------------------- the fishing game
+		// Tidewater's Game: the rod, bites, the fight, the catch, the cooler and log, Joe's and Marta's
+		// trade and upgrades; its HUD, minimap and guide on GameUI (over the Hud)
+		this.ui = { ui: createGameUI( this.hud ) };
+		this.game = new Game( this );
+		if ( this.nearDetail ) {
+
+			// (low-powered devices: the traders and the fish on ice only near the camera, too)
+			for ( const v of this.game.vendors ) v.group.traverse( ( o ) => o.isMesh && this.nearDetail.push( { o, dist: 60 } ) );
+			if ( this.game.display.stallMesh ) this.nearDetail.push( { o: this.game.display.stallMesh, dist: 60 } );
+			for ( const d of this.nearDetail ) if ( ! d.o.geometry.boundingSphere ) d.o.geometry.computeBoundingSphere();
+
+		}
+
 		// ---------------------------------------------------------------- shaders
 		await progress( 0.8, 'Preparing the shaders' );
 		// the CPU copies of the big static data go once it's on the GPU (phones' script memory)
@@ -303,6 +320,9 @@ export class App {
 		this._settleAt = performance.now() + 5000; // (resolution follows frames once the start has settled)
 		this.stage.loop( ( dt ) => {
 
+			// (the stage's first step can be negative: it starts counting after the frame it is given
+			// began, a second earlier after a slow start)
+			dt = Math.max( 0, dt );
 			if ( this.cpuGL ) this.pacedFrame( dt );
 			else {
 
@@ -343,6 +363,8 @@ export class App {
 		}
 		this.boatCtl.update( dt );
 		this.player.update( dt );
+		this.game.update( dt );
+		this.releaseMasks();
 		this.sky.update( s.timeOfDay, s.sunAzimuth, this.camera );
 
 		// ---- water
@@ -385,8 +407,11 @@ export class App {
 		if ( this.post ) this.post.render();
 		else this.renderer.render( this.scene, this.camera );
 
-		this.touch.update( this.player );
+		this.touch.update( this.player, this.game );
 		this.hud.update( dt, { player: this.player, device: input.lastDevice } );
+		// the HUD's layout and wording follow the input in use (game-ui.css, style.css)
+		const html = document.documentElement;
+		if ( html.dataset.device !== input.lastDevice ) html.dataset.device = input.lastDevice;
 		input.endFrame();
 
 	}
@@ -428,9 +453,18 @@ export class App {
 	async plantsGrow() {
 
 		await this.vegetation.init();
-		// the island's masks are read only while it's being made (the ground's maps, the rocks and the
-		// plants placed on it); from here on only its heights are
-		for ( const k of [ 'rock', 'sand', 'path', 'gully', 'seagrass', 'rubble', 'scarp' ] ) this.terrainData[ k ] = null;
+		this._plantsGrown = true;
+		this.releaseMasks();
+
+	}
+
+	// the island's masks are read only while it's being made (the ground's maps, the rocks and the
+	// plants placed on it) and by the minimap's picture of it; then only its heights are
+	releaseMasks() {
+
+		const T = this.terrainData;
+		if ( ! this._plantsGrown || T.rock === null || ! this.game || ! this.game.minimap || ! this.game.minimap._bake.done ) return;
+		for ( const k of [ 'rock', 'sand', 'path', 'gully', 'seagrass', 'rubble', 'scarp' ] ) T[ k ] = null;
 
 	}
 

@@ -4,6 +4,7 @@ import {
 	DataArrayTexture, DataTexture, MeshStandardMaterial, SRGBColorSpace, NoColorSpace, RepeatWrapping, ClampToEdgeWrapping,
 	LinearFilter, LinearMipmapLinearFilter,
 } from '../engine/index.js';
+import { PAT } from './GameMaterials.js';
 import { G } from '../core/Globals.js';
 
 // Shared kit for the vendor stalls (FishStand, Chandlery): photoscanned CC0 surfaces and props from
@@ -150,13 +151,9 @@ function signTexture( data, w, h ) {
 // ---------------------------------------------------------------- material
 
 // The plain procedural stalls (the fallback when the scans fail to load) are GeoKit geometry
-// (boat/GeoKit.js: linear vertex colours, aux = roughness, metalness, pattern). Tidewater drew them
-// with the game's prop material (GameMaterials.js, not ported yet); this stand-in keeps the colours.
-// PAT: the game material's pattern ids (GameMaterials.PAT), kept in the geometry for it.
-export const PAT = {
-	plain: 0, wood: 1, cloth: 2, skin: 3, cork: 4, rusty: 5, woodX: 6, woodZ: 7,
-	carbon: 8, thread: 9, eva: 10, braid: 11, machined: 12, knurl: 13, rubber: 14,
-};
+// (boat/GeoKit.js: linear vertex colours, aux = roughness, metalness, pattern), drawn with plain
+// vertex colours. PAT: the game material's pattern ids, kept in the geometry for it.
+export { PAT };
 
 export function createPlainMaterial( name ) {
 

@@ -1120,6 +1120,41 @@
 			"title": "The island, baked by tools/bake-terrain.mjs"
 		},
 		{
+			"path": "src/ui/fonts/caveat-brush-latin.woff2",
+			"license": "OFL-1.1",
+			"source": "https://fonts.google.com/specimen/Caveat+Brush",
+			"title": "Caveat Brush",
+			"author": "Google"
+		},
+		{
+			"path": "src/ui/fonts/inter-latin.woff2",
+			"license": "OFL-1.1",
+			"source": "https://fonts.google.com/specimen/Inter",
+			"title": "Inter",
+			"author": "The Inter Project Authors"
+		},
+		{
+			"path": "src/ui/fonts/jetbrains-mono-latin.woff2",
+			"license": "OFL-1.1",
+			"source": "https://fonts.google.com/specimen/JetBrains+Mono",
+			"title": "JetBrains Mono",
+			"author": "The JetBrains Mono Project Authors"
+		},
+		{
+			"path": "src/ui/fonts/kalam-latin-400.woff2",
+			"license": "OFL-1.1",
+			"source": "https://fonts.google.com/specimen/Kalam",
+			"title": "Kalam",
+			"author": "Indian Type Foundry"
+		},
+		{
+			"path": "src/ui/fonts/kalam-latin-700.woff2",
+			"license": "OFL-1.1",
+			"source": "https://fonts.google.com/specimen/Kalam",
+			"title": "Kalam",
+			"author": "Indian Type Foundry"
+		},
+		{
 			"path": "tools/props/fonts/CabinSketch-Bold.ttf",
 			"license": "OFL-1.1",
 			"source": "https://fonts.google.com/specimen/Cabin+Sketch",

@@ -13,7 +13,11 @@ it runs on phones too, inside All the Spaces' sealed creation frame.
 ## Status: being ported
 
 This repository started as a fork of Tidewater. Its WebGPU code is still here while each system is
-ported; `src/main.js` is the new entry point, and it shows the sky and the open sea for now.
+ported; `src/main.js` is the new entry point. M0 to M3 are done, and most of M4: you can walk, swim and
+take the boat around the island, and fish from the pier, the beach or the boat, sell your catch to Joe
+and buy better gear from Marta, with a mouse and keyboard, a gamepad or a touch screen. Still to come in
+M4: Joe and Marta as animated people (simple figures stand in for them) and the catch card's studio
+portrait of your fish.
 
 | Milestone | What it brings |
 |---|---|

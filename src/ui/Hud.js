@@ -1,8 +1,8 @@
 // The heads-up display, for now: what you can do here (the player's prompt) and a first hint about
 // the controls. On touch screens the prompt is the action button itself (TouchControls).
 
-const KEY_NAMES = { E: 'E', Space: 'Space', V: 'V' };
-const PAD_NAMES = { E: 'B', Space: 'A', V: 'Y' };
+const KEY_NAMES = { E: 'E', Space: 'Space', V: 'V', R: 'R', I: 'I', LMB: 'Left mouse', RMB: 'Right mouse' };
+const PAD_NAMES = { E: 'B', Space: 'A', V: 'Y', R: 'X', I: 'Back', LMB: 'RT', RMB: 'LT' };
 
 export class Hud {
 
@@ -52,7 +52,8 @@ export class Hud {
 		if ( show ) {
 
 			const names = device === 'gamepad' ? PAD_NAMES : KEY_NAMES;
-			const text = p.text.replace( /\bV\b(?=\s+camera)/, names.V );
+			// (a second key inside the text: 'V  camera', 'R  put the rod away')
+			const text = p.text.replace( /\b([RV])\b(?=\s+(camera|put the rod away))/, ( m, key ) => names[ key ] );
 			const html = `<kbd>${ names[ p.key ] ?? p.key }</kbd> ${ escapeHtml( text ) }`;
 			if ( this.prompt.innerHTML !== html ) this.prompt.innerHTML = html;
 

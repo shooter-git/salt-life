@@ -1,13 +1,10 @@
 import { Group, Mesh, Vector3 } from '../engine/index.js';
-import { SkinnedModel } from '../engine/render/Skinning.js';
-import { loadGLB } from '../engine/loaders/GLTF.js';
 import { prepare, mergePrepared, cylinder, sphere, roundedBox, box, rod, mat4 } from '../world/boat/GeoKit.js';
 import { createPropMaterial, PAT } from './GameMaterials.js';
 
 // A trader the player talks to (E within `radius`). Swappable: `model` is a slot (a Group) that
-// holds the stand-in figure; setModel( obj ) replaces it. loadCharacter( url ) swaps in a skinned,
-// animated character (engine SkinnedModel, Rocketbox avatars) once it has loaded: idle clip,
-// a wave when the player comes up, talk gestures while their panel is open (vendor.talking).
+// holds the stand-in figure; setModel( obj ) replaces it. (Tidewater's loadCharacter( url ) swapped
+// in a skinned, animated Rocketbox character on its WebGPU engine: not ported yet, the stand-in stays.)
 //   new Vendor( { name, position, yaw, radius, greeting, idle, material, character } )
 //   vendor.group (add to the scene), vendor.inRange( p ), vendor.update( dt, lookAt )
 export class Vendor {
@@ -36,24 +33,7 @@ export class Vendor {
 		this.character = null;
 		this.talking = false;
 		this._near = false;
-		if ( character ) this.loadCharacter( character.url, character ).catch( ( e ) => console.warn( 'Vendor: character failed to load', e ) );
-
-	}
-
-	// clips: { idle, talk, greet } clip names in the GLB
-	async loadCharacter( url, { idle = 'idle_neutral_01', talk = 'gestic_talk_relaxed_01', greet = 'wave_01', listen = null } = {} ) {
-
-		const model = await SkinnedModel.create( await loadGLB( url ) );
-		// on land, never under water: no caustics / wave lookups in their shaders
-		for ( const m of model.materials ) m.underwaterLighting = 'lite';
-		this.clips = { idle, talk, greet, listen };
-		model.play( idle, { fade: 0.01, from: Math.random() * model.clipDuration( idle ) } );
-		// pose right away: far from the player the animation holds, and the rest pose is a T-pose
-		model.update( 0 );
-		// one-shot clips (the wave) hand back to the idle / talk loop
-		model.onClipEnd = () => model.play( this.talking ? talk : idle, { fade: 0.5 } );
-		this.character = model;
-		this.setModel( model.group );
+		this.characterSpec = character; // (kept for when the characters are ported)
 
 	}
 
