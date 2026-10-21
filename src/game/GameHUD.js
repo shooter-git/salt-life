@@ -1,6 +1,5 @@
 import { FISH, fishLengthCm } from './FishTable.js';
 import { UPGRADES, nextLevel, FUEL_PRICE } from './Gear.js';
-import { FishPortrait } from './FishPortrait.js';
 
 // DOM for the fishing game, in the look of the rest of the HUD (ui/ui.css tokens, .tw-glass):
 //   top right     purse and cooler / hold load
@@ -151,6 +150,35 @@ const CSS = /* css */`
 	.gm-catch-stats { gap: 6px; }
 	.gm-stat { min-width: 0; padding: 8px 10px; }
 }
+/* (Salt Life) the portrait is drawn in the game's canvas, under the card (FishPortrait): the dimming
+   and blur are drawn there too, so nothing above it blurs */
+.gm-catch-scrim.is-gl { display: none; }
+.gm-catch.is-gl.tw-glass { background: none; border-color: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.gm-catch.is-gl .gm-catch-stage canvas { display: none; }
+@media (max-height: 500px) {
+	.gm-catch.is-gl { gap: 2px; padding: var(--tw-3) var(--tw-edge); }
+	.gm-catch.is-gl .gm-catch-stage { width: min(94vw, calc(34vh * 2.4)); }
+	.gm-catch.is-gl .gm-catch-sci, .gm-catch.is-gl .gm-catch-note { display: none; }
+}
+/* (Salt Life) narrow phones: a fish's name on its own line, its numbers and button under it */
+.gm-row > span:not(:first-child) { white-space: nowrap; }
+@media (max-width: 480px) {
+	.gm-row.has-cm { grid-template-columns: 1fr auto auto auto; row-gap: 2px; }
+	.gm-row.has-cm > span:first-child { grid-column: 1 / -1; }
+}
+/* (Salt Life) the card without its studio portrait: the name at the top and the numbers at the bottom,
+   and between them the real fish, hanging on the line in the world, which is neither dimmed nor blurred */
+.gm-catch.is-on { pointer-events: auto; }
+.gm-catch.is-flat { justify-content: space-between; padding-top: calc(64px + env(safe-area-inset-top)); padding-bottom: calc(var(--tw-4) + env(safe-area-inset-bottom)); }
+.gm-catch.is-flat .gm-catch-stage { flex: 1 1 0; min-height: 0; aspect-ratio: auto; }
+.gm-catch.is-flat.tw-glass { background: none; border-color: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.gm-catch-scrim.is-flat { -webkit-backdrop-filter: none; backdrop-filter: none;
+	background: linear-gradient(180deg, rgba(4, 9, 15, 0.72) 0%, rgba(4, 9, 15, 0.12) 30%, rgba(4, 9, 15, 0.12) 52%, rgba(4, 9, 15, 0.8) 100%); }
+@media (max-height: 500px) {
+	.gm-catch.is-flat { padding-top: var(--tw-3); }
+	.gm-catch.is-flat .gm-catch-sci, .gm-catch.is-flat .gm-catch-note { display: none; }
+	.gm-catch h2 { font-size: clamp(30px, 5vw, 56px); }
+}
 `;
 
 const h = ( tag, cls, html ) => {
@@ -202,8 +230,36 @@ export class GameHUD {
 		this.catchScrim = h( 'div', 'gm-catch-scrim' );
 		this.catchCard = h( 'div', 'gm-catch tw-glass' );
 		this.catchOpen = false;
+		this._catchTap = false;
+		this.catchCard.addEventListener( 'pointerdown', () => {
+
+			if ( this.catchOpen ) this._catchTap = true;
+
+		} );
 		const hud = ui.hud || ui.root;
 		hud.append( this.catchScrim, this.purse, this.fight, this.bite, this.cast, this.dot, this.catchCard );
+		// (Salt Life) on touch screens the minimap, the tips and the fight panel line up under the purse,
+		// which wraps on narrow screens (game-ui.css): where it ends, and how tall the fight panel is (and
+		// where the purse starts, for the toasts in landscape: style.css)
+		if ( typeof ResizeObserver !== 'undefined' ) {
+
+			const measure = () => {
+
+				const css = document.documentElement.style;
+				const r = this.purse.getBoundingClientRect();
+				css.setProperty( '--gm-band', `${ Math.ceil( r.bottom ) }px` );
+				css.setProperty( '--gm-purse-l', `${ Math.floor( r.left ) }px` );
+				css.setProperty( '--gm-fight-h', `${ Math.ceil( this.fight.offsetHeight ) }px` );
+
+			};
+
+			const ro = new ResizeObserver( measure );
+			ro.observe( this.purse );
+			ro.observe( this.fight );
+			window.addEventListener( 'resize', measure );
+
+		}
+
 
 		// panels (interactive)
 		this.inv = h( 'div', 'gm-panel tw-glass tw-interactive' );
@@ -335,7 +391,7 @@ export class GameHUD {
 					<div class="gm-stat is-value"><span>Value</span><b>$${ info.value }</b><i>${ info.kept ? 'in the cooler' : 'let go' }</i></div>
 				</div>
 				${ note }
-				<div class="gm-catch-foot"><kbd>Click</kbd> or <kbd>E</kbd> to continue<span class="gm-catch-timer"><span></span></span></div>
+				<div class="gm-catch-foot">${ { touch: 'Tap to continue', gamepad: '<kbd>RT</kbd> or <kbd>B</kbd> to continue' }[ this.device ] || '<kbd>Click</kbd> or <kbd>E</kbd> to continue' }<span class="gm-catch-timer"><span></span></span></div>
 			</div>`;
 		// restart the entrance even when a card is already up
 		c.classList.remove( 'is-on' );
@@ -344,16 +400,49 @@ export class GameHUD {
 		this.catchScrim.classList.add( 'is-on' );
 		this.catchOpen = true;
 		// the fish itself: the real model in a studio, drawn live into the stage canvas
+		// (Salt Life: the game's FishPortrait, drawn in the game's canvas under the card: no blur above it)
+		let live = false;
 		try {
 
-			if ( ! this.portrait ) this.portrait = new FishPortrait();
-			if ( this.portrait.attach( c.querySelector( '.gm-catch-stage canvas' ) ) ) this.portrait.show( info.species, info.kg );
+			this.portrait = this.game.portrait || null;
+			live = !! this.portrait && this.portrait.attach( c.querySelector( '.gm-catch-stage canvas' ) );
+			if ( live ) this.portrait.show( info.species, info.kg );
 
 		} catch ( e ) {
 
 			console.warn( 'fish portrait unavailable', e );
 
 		}
+
+		// (no portrait: the fish on the line shows through)
+		c.classList.toggle( 'is-flat', ! live );
+		c.classList.toggle( 'is-gl', live );
+		this.catchScrim.classList.toggle( 'is-flat', ! live );
+		this.catchScrim.classList.toggle( 'is-gl', live );
+
+	}
+
+	// a button's label with its key, for keyboards and gamepads ('Leave (E)'); touch screens just tap it
+	keyed( label, key, pad ) {
+
+		const d = this.device;
+		return d === 'touch' ? label : `${ label } (${ d === 'gamepad' ? pad : key })`;
+
+	}
+
+	// a tap or click on the catch card (Game dismisses the card with it), once
+	takeCatchTap() {
+
+		const t = this._catchTap;
+		this._catchTap = false;
+		return t;
+
+	}
+
+	// the input in use ('keyboard' | 'touch' | 'gamepad'), for what the panels call the controls
+	get device() {
+
+		return this.game.app.input.lastDevice;
 
 	}
 
@@ -362,6 +451,7 @@ export class GameHUD {
 		this.catchCard.classList.remove( 'is-on' );
 		this.catchScrim.classList.remove( 'is-on' );
 		this.catchOpen = false;
+		this._catchTap = false;
 		if ( this.portrait ) this.portrait.detach();
 
 	}
@@ -392,7 +482,7 @@ export class GameHUD {
 			<p class="gm-sub">${ s.inventory.length } fish · ${ s.holdKg.toFixed( 1 ) } of ${ s.stats.holdKg } kg · worth $${ s.holdValue }</p>
 			<div class="gm-list">${ rows || '<div class="gm-empty">Nothing yet. Cast from the pier, the beach or the boat.</div>' }</div>
 			${ logged ? `<div class="gm-log"><b>Fish log</b><br>${ logged }</div>` : '' }
-			<div class="gm-foot"><span class="gm-sub">Sell at the fish stand by the pier</span><button class="gm-btn is-ghost" data-close>Close (I)</button></div>`;
+			<div class="gm-foot"><span class="gm-sub">Sell at the fish stand by the pier</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Close', 'I', 'Back' ) }</button></div>`;
 		this.inv.querySelector( '[data-close]' ).onclick = () => this.toggleInventory( false );
 		for ( const b of this.inv.querySelectorAll( '[data-release]' ) ) b.onclick = () => s.release( Number( b.dataset.release ) );
 
@@ -427,7 +517,7 @@ export class GameHUD {
 			<h2>${ v.name }</h2>
 			<p class="gm-sub">${ s.inventory.length ? v.greeting || 'Let\'s see what you caught.' : v.idle || 'Come back when you\'ve got fish.' }</p>
 			<div class="gm-list">${ rows || '<div class="gm-empty">Your cooler is empty.</div>' }</div>
-			<div class="gm-foot"><button class="gm-btn is-ghost" data-close>Leave (E)</button><button class="gm-btn" data-all ${ s.inventory.length ? '' : 'disabled' }>Sell all · $${ s.holdValue }</button></div>`;
+			<div class="gm-foot"><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button><button class="gm-btn" data-all ${ s.inventory.length ? '' : 'disabled' }>Sell all · $${ s.holdValue }</button></div>`;
 		this.stand.querySelector( '[data-close]' ).onclick = () => this.closeStand();
 		this.stand.querySelector( '[data-all]' ).onclick = () => this.game.sellAll();
 		for ( const b of this.stand.querySelectorAll( '[data-sell]' ) ) b.onclick = () => this.game.sell( [ Number( b.dataset.sell ) ] );
@@ -456,7 +546,7 @@ GameHUD.prototype.renderShop = function () {
 		<h2>${ v.name }</h2>
 		<p class="gm-sub">${ v.greeting } · You have $${ s.money.toLocaleString() }</p>
 		<div class="gm-list">${ fuelRow }${ rows }</div>
-		<div class="gm-foot"><span class="gm-sub">Upgrades take effect at once</span><button class="gm-btn is-ghost" data-close>Leave (E)</button></div>`;
+		<div class="gm-foot"><span class="gm-sub">Upgrades take effect at once</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>`;
 	this.stand.querySelector( '[data-close]' ).onclick = () => this.closeStand();
 	for ( const b of this.stand.querySelectorAll( '[data-buy]' ) ) b.onclick = () => this.game.buy( b.dataset.buy );
 	const f = this.stand.querySelector( '[data-fuel]' );

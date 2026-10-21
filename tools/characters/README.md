@@ -23,7 +23,13 @@ Clips (the in-place `motextr_static` versions, `m_` for men and `f_` for women):
 `idle_breathe_01`, `idle_look_around_01`, `gestic_talk_neutral_01`, `gestic_talk_relaxed_01`,
 `wave_01`, `gestic_shrug_01`.
 
-Runtime: `engine/loaders/GLTF.js` (loadGLB) and `engine/render/Skinning.js` (SkinnedModel: clip
-crossfades, GPU skinning, motion vectors, shadows); `game/Vendor.js` swaps the stand-in figure for
-the character once it has loaded. `test/character-smoke.mjs <glb> <out.png> [clip]` renders one
-headlessly.
+Low-powered devices (All the Spaces' `low` tier) load copies with 512² textures, `joe-512.glb` and
+`marta-512.glb`, made from the 1024² files with glTF-Transform:
+
+    npx @gltf-transform/cli@4.2.1 resize joe.glb joe-512.glb --width 512 --height 512
+
+Runtime (Salt Life): three.js's GLTFLoader through the SDK's `gltfLoader()` (All the Spaces
+compresses every `.glb` with meshopt when it builds the creation) and `game/Character.js` (an
+AnimationMixer with clip crossfades); `App.loadCharacters()` loads them after the start and readies
+their shaders and textures, and `game/Vendor.js` swaps the stand-in figure for the character once it
+has loaded.

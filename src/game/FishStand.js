@@ -4,6 +4,7 @@ import { prepare, mergePrepared, box, cylinder, sphere, rod, mat4 } from '../wor
 import { loadStallAssets, KitBuilder, LAYER, ATLAS, place, Shapes, PAT, createPlainMaterial } from './StallKit.js';
 import { FishProps } from '../world/village/FishProps.js';
 import { FISH } from './FishTable.js';
+import { Vendor } from './Vendor.js';
 
 // The fish buyer's stall on the beach by the pier: a weathered plank shack with a rusty tin roof,
 // a wooden fish box of crushed ice on the counter, a hanging spring scale, floats, crates, a
@@ -11,8 +12,8 @@ import { FISH } from './FishTable.js';
 // surfaces and props (StallKit, Poly Haven CC0); the old procedural stall is the fallback if they
 // fail to load.
 //
-// Salt Life: the stall is built and placed here; Joe (Vendor.js) and the trade come with the fishing
-// game, which isn't ported yet (`vendor` stays null until then). `tier` sizes the scanned textures.
+// Salt Life: Joe is a stand-in figure until his animated character has loaded (Vendor.js). `tier`
+// sizes the scanned textures.
 export const STAND = { x: 49.9, z: - 74.6, yaw: 1.45 }; // beside the boardwalk up from the pier foot, facing it
 
 const STALL_FLOOR = 0.06; // top of the stall's plank floor (local y)
@@ -58,9 +59,20 @@ export class FishStand {
 
 		} );
 
-		// the buyer stands behind the counter (local -Z), facing out (+Z), at local ( 0.2, floor, 0.12 ):
-		// clear of the shelf at -0.78..-0.48 and the counter top from 0.58 (Vendor 'Joe · Fish buyer')
-		this.vendor = null;
+		// the buyer stands behind the counter (local -Z), facing out (+Z)
+		// (local z 0.12: clear of the shelf at -0.78..-0.48 and the counter top from 0.58)
+		const local = new Vector3( 0.2, 0, 0.12 ).applyAxisAngle( new Vector3( 0, 1, 0 ), STAND.yaw );
+		this.vendor = new Vendor( {
+			name: 'Joe · Fish buyer',
+			kind: 'buyer',
+			position: new Vector3( STAND.x + local.x, y + STALL_FLOOR, STAND.z + local.z ),
+			yaw: STAND.yaw,
+			radius: 3.2,
+			greeting: 'Let\'s see what you caught. Fair prices, cash.',
+			idle: 'Nothing to sell? The grunts are biting off the pier.',
+			character: { url: 'models/characters/joe.glb', idle: 'idle_neutral_01', talk: 'gestic_talk_relaxed_01', greet: 'wave_01' },
+		} );
+		scene.add( this.vendor.group );
 
 		// the stall is solid (counter front and the side walls)
 		if ( colliders ) {

@@ -604,10 +604,24 @@
 			"author": "bruno.auzet"
 		},
 		{
+			"path": "public/models/characters/joe-512.glb",
+			"license": "MIT",
+			"source": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"title": "Rocketbox avatar (joe-512.glb)",
+			"author": "Microsoft Corporation"
+		},
+		{
 			"path": "public/models/characters/joe.glb",
 			"license": "MIT",
 			"source": "https://github.com/microsoft/Microsoft-Rocketbox",
 			"title": "Rocketbox avatar (joe.glb)",
+			"author": "Microsoft Corporation"
+		},
+		{
+			"path": "public/models/characters/marta-512.glb",
+			"license": "MIT",
+			"source": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"title": "Rocketbox avatar (marta-512.glb)",
 			"author": "Microsoft Corporation"
 		},
 		{
@@ -1118,6 +1132,41 @@
 			"path": "public/world/island.bin",
 			"license": "own",
 			"title": "The island, baked by tools/bake-terrain.mjs"
+		},
+		{
+			"path": "src/ui/fonts/caveat-brush-latin.woff2",
+			"license": "OFL-1.1",
+			"source": "https://fonts.google.com/specimen/Caveat+Brush",
+			"title": "Caveat Brush",
+			"author": "Google"
+		},
+		{
+			"path": "src/ui/fonts/inter-latin.woff2",
+			"license": "OFL-1.1",
+			"source": "https://fonts.google.com/specimen/Inter",
+			"title": "Inter",
+			"author": "The Inter Project Authors"
+		},
+		{
+			"path": "src/ui/fonts/jetbrains-mono-latin.woff2",
+			"license": "OFL-1.1",
+			"source": "https://fonts.google.com/specimen/JetBrains+Mono",
+			"title": "JetBrains Mono",
+			"author": "The JetBrains Mono Project Authors"
+		},
+		{
+			"path": "src/ui/fonts/kalam-latin-400.woff2",
+			"license": "OFL-1.1",
+			"source": "https://fonts.google.com/specimen/Kalam",
+			"title": "Kalam",
+			"author": "Indian Type Foundry"
+		},
+		{
+			"path": "src/ui/fonts/kalam-latin-700.woff2",
+			"license": "OFL-1.1",
+			"source": "https://fonts.google.com/specimen/Kalam",
+			"title": "Kalam",
+			"author": "Indian Type Foundry"
 		},
 		{
 			"path": "tools/props/fonts/CabinSketch-Bold.ttf",

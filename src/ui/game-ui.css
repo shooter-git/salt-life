@@ -1,0 +1,205 @@
+/* Tidewater's UI tokens and base rules (src/ui/ui.css), the part the fishing game's HUD, minimap and
+   guide build on (GameHUD.js, Minimap.js and Guide.js add their own rules). The rest of ui.css is
+   Tidewater's settings panel, loader and start screen, which Salt Life doesn't use. */
+
+/* The HUD's fonts, latin only (SIL Open Font License 1.1: credits/fonts/), from Fontsource's copies of
+   Google Fonts. Tidewater loaded them from Google Fonts; a creation's frame can't reach other sites. */
+@font-face { font-family: 'Inter'; font-style: normal; font-weight: 100 900; font-display: swap; src: url('./fonts/inter-latin.woff2') format('woff2');
+	unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'JetBrains Mono'; font-style: normal; font-weight: 100 800; font-display: swap; src: url('./fonts/jetbrains-mono-latin.woff2') format('woff2');
+	unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Caveat Brush'; font-style: normal; font-weight: 400; font-display: swap; src: url('./fonts/caveat-brush-latin.woff2') format('woff2');
+	unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Kalam'; font-style: normal; font-weight: 400; font-display: swap; src: url('./fonts/kalam-latin-400.woff2') format('woff2');
+	unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+@font-face { font-family: 'Kalam'; font-style: normal; font-weight: 700; font-display: swap; src: url('./fonts/kalam-latin-700.woff2') format('woff2');
+	unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD; }
+
+:root {
+	--tw-u: clamp(1px, calc(0.7px + 0.04vmin), 1.25px);
+
+	--tw-aqua: #5fe3d4;
+	--tw-aqua-rgb: 95, 227, 212;
+	--tw-sun: #ffb86b;
+	--tw-sun-rgb: 255, 184, 107;
+	--tw-coral: #ff7a85;
+	--tw-ink: #eef6f8;
+	--tw-ink-2: rgba(222, 236, 242, 0.76);
+	--tw-ink-3: rgba(200, 222, 232, 0.52);
+	--tw-ink-4: rgba(190, 215, 228, 0.32);
+	--tw-glass: rgba(12, 18, 26, 0.62);
+	--tw-fill: rgba(170, 215, 235, 0.07);
+	--tw-fill-2: rgba(170, 215, 235, 0.12);
+	--tw-line: rgba(170, 215, 235, 0.12);
+	--tw-line-2: rgba(170, 215, 235, 0.2);
+
+	--tw-font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+	--tw-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+	--tw-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+	--tw-ease-io: cubic-bezier(0.65, 0, 0.35, 1);
+	--tw-fast: 140ms;
+	--tw-med: 240ms;
+	--tw-slow: 420ms;
+
+	--tw-1: calc(4 * var(--tw-u));
+	--tw-2: calc(8 * var(--tw-u));
+	--tw-3: calc(12 * var(--tw-u));
+	--tw-4: calc(16 * var(--tw-u));
+	--tw-5: calc(24 * var(--tw-u));
+	--tw-6: calc(32 * var(--tw-u));
+	--tw-fs-xs: calc(10.5 * var(--tw-u));
+	--tw-fs-sm: calc(11.5 * var(--tw-u));
+	--tw-fs-md: calc(12.5 * var(--tw-u));
+	--tw-fs-lg: calc(14 * var(--tw-u));
+	--tw-r-sm: calc(6 * var(--tw-u));
+	--tw-r-md: calc(10 * var(--tw-u));
+	--tw-r-lg: calc(16 * var(--tw-u));
+	--tw-edge: calc(16 * var(--tw-u));
+	--tw-panel-w: calc(340 * var(--tw-u));
+}
+
+.tw-root {
+	position: fixed;
+	inset: 0;
+	z-index: 100;
+	pointer-events: none;
+	font-family: var(--tw-font);
+	font-size: var(--tw-fs-md);
+	line-height: 1.4;
+	color: var(--tw-ink);
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+	text-rendering: optimizeLegibility;
+	-webkit-user-select: none;
+	user-select: none;
+	-webkit-tap-highlight-color: transparent;
+}
+
+.tw-root *,
+.tw-root *::before,
+.tw-root *::after {
+	box-sizing: border-box;
+}
+
+.tw-root [hidden] {
+	display: none !important;
+}
+
+.tw-interactive {
+	pointer-events: auto;
+}
+
+:where(.tw-root) button {
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: none;
+	font: inherit;
+	color: inherit;
+	text-align: inherit;
+	cursor: pointer;
+}
+
+:where(.tw-root) :focus-visible {
+	outline: 2px solid rgba(var(--tw-aqua-rgb), 0.9);
+	outline-offset: 2px;
+}
+
+:where(.tw-root) :focus:not(:focus-visible) {
+	outline: none;
+}
+
+.tw-ico {
+	display: block;
+	flex: none;
+	width: calc(16 * var(--tw-u));
+	height: calc(16 * var(--tw-u));
+}
+
+.tw-glass {
+	background: linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0) 40%), var(--tw-glass);
+	border: 1px solid var(--tw-line);
+	-webkit-backdrop-filter: blur(8px) saturate(1.4);
+	backdrop-filter: blur(8px) saturate(1.4);
+	box-shadow:
+		inset 0 1px 0 rgba(255, 255, 255, 0.07),
+		0 1px 2px rgba(0, 0, 0, 0.25),
+		0 12px 32px -12px rgba(0, 0, 0, 0.55);
+}
+
+:where(.tw-root) kbd {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: none;
+	min-width: calc(20 * var(--tw-u));
+	height: calc(20 * var(--tw-u));
+	padding: 0 calc(5 * var(--tw-u));
+	border: 1px solid rgba(255, 255, 255, 0.16);
+	border-bottom-color: rgba(255, 255, 255, 0.07);
+	border-radius: calc(5 * var(--tw-u));
+	background: linear-gradient(180deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.06));
+	box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 1px 0 rgba(0, 0, 0, 0.35);
+	font-family: var(--tw-mono);
+	font-size: var(--tw-fs-xs);
+	font-weight: 500;
+	line-height: 1;
+	color: var(--tw-ink);
+	white-space: nowrap;
+}
+
+.tw-hud {
+	position: absolute;
+	inset: 0;
+	pointer-events: none;
+	transition: opacity 700ms var(--tw-ease), visibility 0s;
+}
+
+.tw-root.is-photo .tw-hud,
+.tw-root.is-starting .tw-hud {
+	opacity: 0;
+	visibility: hidden;
+	transition: opacity var(--tw-med) var(--tw-ease), visibility 0s linear var(--tw-med);
+}
+
+/* ---- (Salt Life) touch screens: html.is-touch while the touch controls are shown (App).
+   Larger type, and the game's HUD kept clear of the thumbs: the purse at the top right with the
+   minimap under it, the tips beside the minimap (portrait) or under it (landscape), the fight panel
+   at the top, and the touch buttons out of the way while a panel, the catch card or the guide is up.
+   GameHUD measures --gm-band (where the purse ends, as it wraps) and --gm-fight-h. */
+html.is-touch {
+	--tw-u: clamp(1px, calc(0.95px + 0.05vmin), 1.25px);
+	--gm-map: calc(112 * var(--tw-u));
+	--gm-l: calc(var(--tw-edge) + env(safe-area-inset-left));
+	--gm-r: calc(var(--tw-edge) + env(safe-area-inset-right));
+	--gm-top: calc(var(--gm-band, 56px) + var(--tw-2));
+}
+
+html.is-touch .gm-purse { top: calc(var(--tw-edge) + env(safe-area-inset-top)); right: var(--gm-r); flex-wrap: wrap; justify-content: flex-end;
+	row-gap: var(--tw-1); max-width: calc(100vw - 56px - 2 * var(--tw-edge) - env(safe-area-inset-right)); }
+html.is-touch .gm-map { top: var(--gm-top); bottom: auto; right: var(--gm-r); width: var(--gm-map); height: var(--gm-map); }
+html.is-touch .gm-panel { width: min(calc(420 * var(--tw-u)), calc(100vw - 2 * var(--tw-edge) - env(safe-area-inset-left) - env(safe-area-inset-right))); }
+html.is-touch .gm-btn,
+html.is-touch .gm-mini { min-height: 44px; }
+html.is-touch .gm-guide-card { max-height: calc(100% - 2 * var(--tw-edge)); overflow: auto; }
+html.is-touch .gm-guide-row { grid-template-columns: calc(100 * var(--tw-u)) 1fr; }
+html.is-touch:has(.gm-panel.is-open, .gm-catch.is-on, .gm-guide.is-on) .touch-buttons,
+html.is-touch .tw-root:has(.gm-panel.is-open) :is(.gm-map, .gm-coach) { visibility: hidden; }
+
+@media (orientation: portrait) {
+	html.is-touch .gm-coach { top: var(--gm-top); bottom: auto; left: var(--gm-l); right: auto;
+		width: min(calc(320 * var(--tw-u)), calc(100vw - 3 * var(--tw-edge) - var(--gm-map) - env(safe-area-inset-left) - env(safe-area-inset-right))); }
+	html.is-touch .gm-fight { top: var(--gm-top); bottom: auto; width: min(calc(360 * var(--tw-u)), calc(100vw - 2 * var(--tw-edge))); }
+	/* fighting: the fight panel takes the minimap's place, and a tip goes under it */
+	html.is-touch .tw-root:has(.gm-fight.is-on) .gm-map { opacity: 0; }
+	html.is-touch .tw-root:has(.gm-fight.is-on) .gm-coach { top: calc(var(--gm-top) + var(--gm-fight-h, 100px) + var(--tw-2));
+		width: min(calc(360 * var(--tw-u)), calc(100vw - 2 * var(--tw-edge))); }
+}
+
+@media (orientation: landscape) {
+	html.is-touch { --gm-map: calc(96 * var(--tw-u)); }
+	html.is-touch .gm-coach { top: calc(var(--gm-top) + var(--gm-map) + var(--tw-2)); bottom: auto; right: var(--gm-r); width: min(calc(300 * var(--tw-u)), 42vw); }
+	html.is-touch .gm-fight { top: calc(64px + env(safe-area-inset-top)); bottom: auto; left: var(--gm-l); transform: none; width: min(calc(340 * var(--tw-u)), 46vw); }
+	html.is-touch .gm-panel { max-height: calc(100% - 2 * var(--tw-edge)); }
+}

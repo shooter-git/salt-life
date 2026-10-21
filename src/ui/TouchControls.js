@@ -1,6 +1,7 @@
 // On-screen controls for touch screens: a joystick wherever the left thumb lands, drag anywhere on
 // the right to look, and buttons that follow what you're doing: the action of the moment (the
-// player's prompt: "Board boat", "Take the helm"...), jump / swim up, dive, the boat camera.
+// player's prompt: "Board boat", "Take the helm"...), jump / swim up, dive, the boat camera, and
+// the fishing: the rod, cast / strike / reel (the left mouse button's part), reel in (the right's).
 // They feed core/Input.js like a keyboard and mouse would. Shown once a touch screen is in use;
 // mouse and keyboard players never see them.
 
@@ -24,6 +25,10 @@ export class TouchControls {
 				<button type="button" class="touch-btn touch-camera" data-key="KeyV" hidden aria-label="Boat camera">Camera</button>
 				<button type="button" class="touch-btn touch-dive" data-key="KeyC" hidden aria-label="Dive">Dive</button>
 				<button type="button" class="touch-btn touch-jump" data-key="Space" aria-label="Jump">Jump</button>
+				<button type="button" class="touch-btn touch-reel" data-key="mouse2" hidden>Reel in</button>
+				<button type="button" class="touch-btn touch-cast" data-key="mouse0" hidden>Cast</button>
+				<button type="button" class="touch-btn touch-rod" data-key="KeyR" hidden>Rod</button>
+				<button type="button" class="touch-btn touch-cooler" data-key="KeyI" hidden>Cooler</button>
 			</div>`;
 		root.append( el );
 
@@ -34,6 +39,10 @@ export class TouchControls {
 			camera: el.querySelector( '.touch-camera' ),
 			dive: el.querySelector( '.touch-dive' ),
 			jump: el.querySelector( '.touch-jump' ),
+			reel: el.querySelector( '.touch-reel' ),
+			cast: el.querySelector( '.touch-cast' ),
+			rod: el.querySelector( '.touch-rod' ),
+			cooler: el.querySelector( '.touch-cooler' ),
 		};
 
 		// the joystick
@@ -158,11 +167,18 @@ export class TouchControls {
 
 	}
 
-	// what the buttons offer this frame: the player's prompt ({ key, text }) and mode
-	update( player ) {
+	// what the buttons offer this frame: the player's prompt ({ key, text }) and mode, and the fishing
+	// game's rod (game: Game, optional)
+	update( player, game = null ) {
 
 		if ( ! this.active ) return;
 		const prompt = player && player.prompt;
+		const rod = game && game.rod;
+		const fishing = !! ( rod && rod.equipped );
+		setButton( this.buttons.rod, fishing ? 'Put away' : prompt && prompt.key === 'R' ? 'Rod' : null );
+		setButton( this.buttons.cast, fishing ? castLabel( game ) : null );
+		setButton( this.buttons.reel, fishing && ! game.fight && ( rod.state === 'floating' || rod.state === 'flying' ) ? 'Reel in' : null );
+		setButton( this.buttons.cooler, game && game.hud && ! fishing ? 'Cooler' : null );
 		const action = prompt && prompt.key === 'E' ? prompt.text.split( '   ·' )[ 0 ] : null;
 		setButton( this.buttons.action, action );
 		setButton( this.buttons.camera, player && player.mode === 'boat' ? 'Camera' : null );
@@ -170,6 +186,19 @@ export class TouchControls {
 		setButton( this.buttons.jump, prompt && prompt.key === 'Space' ? prompt.text : player && player.mode === 'swim' ? 'Swim up' : player && player.mode === 'boat' ? null : 'Jump' );
 
 	}
+
+}
+
+// the big fishing button: hold to wind up, let go to cast; strike when a fish takes the bobber; hold to
+// reel in the fight
+function castLabel( game ) {
+
+	const rod = game.rod;
+	if ( game.fight ) return 'Reel';
+	if ( rod.state === 'windup' ) return 'Let go';
+	if ( rod.state === 'floating' ) return game.bite && game.bite.phase === 'take' ? 'Strike!' : 'Strike';
+	if ( rod.state === 'idle' ) return 'Cast';
+	return 'Wait';
 
 }
 

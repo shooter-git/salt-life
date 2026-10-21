@@ -8,6 +8,7 @@ import { FishingRod } from './FishingRod.js';
 import { FishStand } from './FishStand.js';
 import { Chandlery } from './Chandlery.js';
 import { CatchDisplay } from './CatchDisplay.js';
+import { FishPortrait } from './FishPortrait.js';
 import { UPGRADES, fuelBurn } from './Gear.js';
 import { GameHUD } from './GameHUD.js';
 import { Minimap } from './Minimap.js';
@@ -28,15 +29,19 @@ export class Game {
 	constructor( app ) {
 
 		this.app = app;
-		this.state = new GameState();
-		this.state.load();
+		// (Salt Life: the app's progress, kept in All the Spaces' personal save and loaded with it)
+		this.state = app.state || new GameState();
+		if ( ! app.state ) this.state.load();
 		this.rod = new FishingRod( { scene: app.scene, camera: app.camera, query: app.query, terrain: app.terrainData, audio: app.audio } );
 		this.rod.onLand = ( where ) => this.onBobberLanded( where );
-		this.stand = new FishStand( { scene: app.scene, terrain: app.terrainData, colliders: app.colliders } );
+		// (Salt Life: the stalls are the app's, built with the village)
+		this.stand = app.stand || new FishStand( { scene: app.scene, terrain: app.terrainData, colliders: app.colliders } );
 		this.display = new CatchDisplay( { scene: app.scene, stall: this.stand.iceFish() } );
+		// (Salt Life: the catch card's fish portrait is drawn by the app, in its canvas)
+		this.portrait = new FishPortrait( this.display.material );
 		this.landing = null; // { species, kg } while the caught fish swings in view
-		this.chandlery = new Chandlery( { scene: app.scene, terrain: app.terrainData, colliders: app.colliders, material: this.stand.material } );
-		this.vendors = [ this.stand.vendor, this.chandlery.vendor ];
+		this.chandlery = app.chandlery || new Chandlery( { scene: app.scene, terrain: app.terrainData, colliders: app.colliders, material: this.stand.material } );
+		this.vendors = [ this.stand.vendor, this.chandlery.vendor ].filter( Boolean );
 		// boat upgrades: engine (thrust / top speed) and deck floodlights for night fishing
 		const b = app.boatCtl;
 		this._engineBase = { maxThrust: b.maxThrust, pitchSpeed: b.pitchSpeed };
@@ -159,7 +164,8 @@ export class Game {
 
 			rod.equip( ! rod.equipped );
 			if ( ! rod.equipped ) this.cancelLine();
-			this.toast( rod.equipped ? 'Rod out · hold left mouse to cast' : 'Rod away', 1600 );
+			const cast = { touch: 'hold Cast and let go', gamepad: 'hold RT to cast' }[ app.input.lastDevice ] || 'hold left mouse to cast';
+			this.toast( rod.equipped ? `Rod out · ${ cast }` : 'Rod away', 1600 );
 
 		}
 
@@ -232,7 +238,7 @@ export class Game {
 					// a slow turn so both flanks show
 					L.cardT += dt;
 					yaw += Math.sin( L.cardT * 0.7 ) * 0.55;
-					if ( lDown || inp.hit( 'KeyE' ) || inp.hit( 'Escape' ) || L.cardT > CATCH_CARD_MS / 1000 ) {
+					if ( lDown || inp.hit( 'KeyE' ) || inp.hit( 'Escape' ) || this.hud.takeCatchTap() || L.cardT > CATCH_CARD_MS / 1000 ) {
 
 						this._cardDismissed = true; // this frame's E / click belong to the card
 						this.endLanding();
@@ -246,8 +252,9 @@ export class Game {
 			if ( this.landing ) {
 
 				// with the HUD the fish is shown on the full-screen catch card (studio portrait), not on
-				// the line; without it (headless) it hangs on the line for a moment
-				if ( ! L.card ) this.display.show( L.species, L.kg, m, yaw, dt );
+				// the line; without it (headless, or no portrait) it hangs on the line
+				const portrait = this.hud && this.hud.portrait && this.hud.portrait.live;
+				if ( ! L.card || ! portrait ) this.display.show( L.species, L.kg, m, yaw, dt );
 				else if ( this.display.shown ) this.display.hide();
 				if ( ! L.card && rod.t > 2.8 ) this.endLanding();
 
@@ -303,7 +310,7 @@ export class Game {
 			case 'floating':
 				if ( b && b.phase === 'take' ) return { key: 'LMB', text: 'Strike now!' };
 				if ( b && b.phase === 'nibble' ) return { key: '…', text: 'Something\'s nibbling · wait until the bobber is pulled under' };
-				return { key: 'RMB', text: 'Waiting for a bite · right-click to reel the line in' };
+				return { key: 'RMB', text: 'Waiting for a bite · reel the line in' };
 			case 'retrieving': return { key: 'RMB', text: 'Reeling in' };
 			case 'fighting': return this.fight && this.fight.tension > this.fight.band[ 1 ]
 				? { key: 'LMB', text: 'Too much tension · let go!' }

@@ -1,12 +1,13 @@
 import { Group, Mesh, Vector3, Matrix4 } from '../engine/index.js';
 import { prepare, mergePrepared, box, cylinder, sphere, rod, torus, mat4 } from '../world/boat/GeoKit.js';
 import { loadStallAssets, KitBuilder, LAYER, ATLAS, place, Shapes, PAT, createPlainMaterial } from './StallKit.js';
+import { Vendor } from './Vendor.js';
 
 // The upgrade trader by the boathouse: a scanned work table with a tackle box, spools of line and
 // reels, display shelves of rope and floats behind her, a rack of rods, jerrycans of diesel, fenders,
 // a coil of mooring line and a hand-painted sign on posts (StallKit, Poly Haven CC0; the old
-// procedural table is the fallback). Sells the gear levels in Gear.js and fuel (with the fishing game,
-// not ported yet: the stall is built and placed here, `vendor` stays null). `tier` sizes the textures.
+// procedural table is the fallback). Sells the gear levels in Gear.js and fuel. Marta is a stand-in
+// figure until her animated character has loaded (Vendor.js). `tier` sizes the textures.
 export const CHANDLERY = { x: 85.5, z: - 60.5, yaw: - 1.9 }; // faces the beach and the pier
 
 export class Chandlery {
@@ -48,9 +49,20 @@ export class Chandlery {
 
 		} );
 
-		// Marta (Vendor 'Marta · Chandlery') stands behind the table at local ( 0, 0, -0.75 ); she and
-		// the shop come with the fishing game, which isn't ported yet
-		this.vendor = null;
+		// Marta stands behind the table
+		const local = new Vector3( 0, 0, - 0.75 ).applyAxisAngle( new Vector3( 0, 1, 0 ), CHANDLERY.yaw );
+		const vx = CHANDLERY.x + local.x, vz = CHANDLERY.z + local.z;
+		this.vendor = new Vendor( {
+			name: 'Marta · Chandlery',
+			kind: 'shop',
+			position: new Vector3( vx, terrain.heightAt( vx, vz ), vz ),
+			yaw: CHANDLERY.yaw,
+			radius: 3.0,
+			greeting: 'Line, reels, a bigger hold, diesel. What do you need?',
+			character: { url: 'models/characters/marta.glb', idle: 'idle_neutral_01', talk: 'gestic_talk_neutral_01', greet: 'wave_01' },
+			look: { shirt: 0x8a3b32, trousers: 0x2f3b4a, apron: 0x3d5a4a, hat: 0x2c3a44, hair: 0x3a2c22, skin: 0x7a5236 },
+		} );
+		scene.add( this.vendor.group );
 		if ( colliders ) {
 
 			colliders.addBox( new Vector3( CHANDLERY.x, y + 0.45, CHANDLERY.z ), new Vector3( 1.0, 0.45, 0.4 ), CHANDLERY.yaw, { tag: 'chandlery' } );

@@ -66,8 +66,12 @@ Virtual Reality, 2020.
 
 ## Fonts
 
-[Inter](https://rsms.me/inter/) and [JetBrains Mono](https://www.jetbrains.com/lp/mono/) are both under the
-SIL Open Font License 1.1. They are loaded from Google Fonts at runtime and are not part of this repository.
+The fishing game's HUD uses [Inter](https://rsms.me/inter/) (© The Inter Project Authors),
+[JetBrains Mono](https://www.jetbrains.com/lp/mono/) (© The JetBrains Mono Project Authors),
+[Caveat Brush](https://fonts.google.com/specimen/Caveat+Brush) (© Google) and
+[Kalam](https://fonts.google.com/specimen/Kalam) (© Indian Type Foundry), all under the SIL Open Font
+License 1.1. Their latin subsets (`src/ui/fonts/`) are [Fontsource](https://fontsource.org)'s copies of the
+Google Fonts files; the licences are in [`credits/fonts/`](credits/fonts/).
 
 ## Libraries
 
