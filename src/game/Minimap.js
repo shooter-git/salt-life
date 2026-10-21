@@ -77,7 +77,17 @@ const h = ( tag, cls, html ) => {
 
 };
 
-const mix = ( a, b, t ) => [ a[ 0 ] + ( b[ 0 ] - a[ 0 ] ) * t, a[ 1 ] + ( b[ 1 ] - a[ 1 ] ) * t, a[ 2 ] + ( b[ 2 ] - a[ 2 ] ) * t ];
+// out = a + ( b - a ) * t (out may be a). (Salt Life: in place; Tidewater made an array per call, a few
+// a pixel: 20 MB of garbage while the island is made)
+const mix = ( out, a, b, t ) => {
+
+	out[ 0 ] = a[ 0 ] + ( b[ 0 ] - a[ 0 ] ) * t;
+	out[ 1 ] = a[ 1 ] + ( b[ 1 ] - a[ 1 ] ) * t;
+	out[ 2 ] = a[ 2 ] + ( b[ 2 ] - a[ 2 ] ) * t;
+	return out;
+
+};
+const _c = new Float64Array( 3 );
 const sat = ( x ) => Math.min( 1, Math.max( 0, x ) );
 const smooth = ( e0, e1, x ) => {
 
@@ -216,28 +226,28 @@ export class Minimap {
 			if ( hgt < 0 ) {
 
 				const dep = - hgt;
-				c = dep < 6 ? mix( C.shallow, C.mid, smooth( 0.3, 6, dep ) ) : mix( C.mid, C.deep, smooth( 6, 40, dep ) );
+				c = dep < 6 ? mix( _c, C.shallow, C.mid, smooth( 0.3, 6, dep ) ) : mix( _c, C.mid, C.deep, smooth( 6, 40, dep ) );
 				if ( k >= 0 ) {
 
-					c = mix( c, C.grassSea, ( T.seagrass[ k ] / 255 ) * 0.55 );
-					c = mix( c, C.rubble, ( T.rubble[ k ] / 255 ) * 0.6 );
+					c = mix( c, c, C.grassSea, ( T.seagrass[ k ] / 255 ) * 0.55 );
+					c = mix( c, c, C.rubble, ( T.rubble[ k ] / 255 ) * 0.6 );
 
 				}
 
-				c = mix( c, C.foam, smooth( 0.5, 0.0, dep ) * 0.45 );
+				c = mix( c, c, C.foam, smooth( 0.5, 0.0, dep ) * 0.45 );
 
 			} else {
 
 				const rock = k >= 0 ? T.rock[ k ] : 0, sand = k >= 0 ? T.sand[ k ] / 255 : 0;
-				c = mix( C.grass, C.scrub, smooth( 4, 16, hgt ) );
-				c = mix( c, C.forest, smooth( 12, 40, hgt ) );
-				c = mix( c, C.sand, Math.max( sand, smooth( 1.6, 0.4, hgt ) ) );
-				c = mix( c, C.wet, smooth( 0.5, 0.0, hgt ) * 0.6 );
-				c = mix( c, C.rock, smooth( 0.35, 0.7, rock ) );
+				c = mix( _c, C.grass, C.scrub, smooth( 4, 16, hgt ) );
+				c = mix( c, c, C.forest, smooth( 12, 40, hgt ) );
+				c = mix( c, c, C.sand, Math.max( sand, smooth( 1.6, 0.4, hgt ) ) );
+				c = mix( c, c, C.wet, smooth( 0.5, 0.0, hgt ) * 0.6 );
+				c = mix( c, c, C.rock, smooth( 0.35, 0.7, rock ) );
 				if ( k >= 0 ) {
 
-					c = mix( c, C.path, ( T.path[ k ] / 255 ) * 0.85 );
-					c = mix( c, C.scarp, ( T.scarp[ k ] / 255 ) * 0.5 );
+					c = mix( c, c, C.path, ( T.path[ k ] / 255 ) * 0.85 );
+					c = mix( c, c, C.scarp, ( T.scarp[ k ] / 255 ) * 0.5 );
 
 				}
 
@@ -247,7 +257,7 @@ export class Minimap {
 				const gz = ( T.heightAt( x, z + e ) - T.heightAt( x, z - e ) ) / ( 2 * e );
 				const nl = ( - gx * - 0.6 + - gz * - 0.6 + 1 * 0.53 ) / Math.sqrt( gx * gx + gz * gz + 1 );
 				const s = 0.7 + 0.45 * sat( nl / 0.53 );
-				c = [ c[ 0 ] * s, c[ 1 ] * s, c[ 2 ] * s ];
+				c[ 0 ] *= s; c[ 1 ] *= s; c[ 2 ] *= s;
 
 			}
 

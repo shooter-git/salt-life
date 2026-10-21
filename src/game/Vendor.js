@@ -38,14 +38,15 @@ export class Vendor {
 
 	}
 
-	// load: url -> Promise<Character> (the app's: it picks the file for the device and readies the
-	// shaders). The stand-in stays until the character is ready, or if it doesn't load.
+	// load: ( url, clips ) -> Promise<Character> (the app's: it picks the file for the device and
+	// readies the shaders; clips: the ones to keep). The stand-in stays until the character is
+	// ready, or if it doesn't load.
 	async loadCharacter( load ) {
 
 		const spec = this.characterSpec;
 		if ( ! spec ) return null;
 		const { idle = 'idle_neutral_01', talk = 'gestic_talk_relaxed_01', greet = 'wave_01', listen = null } = spec;
-		const model = await load( spec.url );
+		const model = await load( spec.url, [ idle, talk, greet, listen ].filter( Boolean ) );
 		this.clips = { idle, talk, greet, listen };
 		model.play( idle, { fade: 0, from: Math.random() * model.clipDuration( idle ) } );
 		// pose right away: far from the player the animation holds, and the rest pose is a T-pose

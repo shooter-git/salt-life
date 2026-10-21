@@ -7,7 +7,7 @@ import {
 	KIND, stone, minGround, driftLog, branch, plank, coconut, husk, weedMat, seagrassWrack, frond, shell, coralPiece,
 	tyre, bottle, flipFlop, ropeScrap, netScrap, wheelbarrow, plankPile, floatBuoy,
 } from './DebrisShapes.js';
-import { SCAN, SCAN_SIZE } from './ScannedDebris.js';
+import { SCAN, SCAN_SIZE } from './ScanAssets.js';
 
 // Where the debris goes. Works on the CPU terrain (TerrainData) after the village, vegetation and
 // rocks exist, and keeps clear of everything the player walks on or through: boardwalks, the
@@ -26,6 +26,7 @@ import { SCAN, SCAN_SIZE } from './ScannedDebris.js';
 
 const TAU = Math.PI * 2;
 const SHORE_SHIFT = 2.0; // m: shoreline debris placed this far seaward of its height band
+const WRACK_TYPES = [ 'conch', 'scanBranch', 'twig', 'coral', 'pumice', 'shell', 'coconut', 'husk', 'rope', 'net', 'float', 'litter', 'plank', 'stone' ];
 
 // 2D signed distances
 function boxDist( o, x, z ) {
@@ -158,7 +159,8 @@ class Occupancy {
 
 export class DebrisPlacer {
 
-	constructor( { B, inst, terrain, village = null, vegetation = null, rocks = null, colliders = null, seed = 5150, detail = null } ) {
+	// (Salt Life) mask: false skips the pebble field's mask (no pebbles on that device)
+	constructor( { B, inst, terrain, village = null, vegetation = null, rocks = null, colliders = null, seed = 5150, detail = null, mask = true } ) {
 
 		this.B = B;
 		this.inst = inst;
@@ -178,6 +180,8 @@ export class DebrisPlacer {
 		this.newColliders = 0;
 		this.rockSpots = []; // stones / rocks near the shore (for the pebble mask)
 		this.scanned = []; // photoscanned debris instances (ScannedDebris)
+		this.wantMask = mask;
+		this.mask = null;
 		this._buildObstacles();
 
 	}
@@ -369,7 +373,7 @@ export class DebrisPlacer {
 		step( 'palms', this._palmLitter );
 		step( 'wrack', this._wrack );
 		step( 'coves', this._coves );
-		step( 'mask', this._mask );
+		if ( this.wantMask ) step( 'mask', this._mask );
 		this.timings = t;
 		return this;
 
@@ -1056,7 +1060,10 @@ export class DebrisPlacer {
 		const g = this.ground;
 		const B = this.B;
 		const nz = this.noise;
-		const pts = [];
+		// (Salt Life: the points and the odds in typed arrays rather than an array per point: ~40 MB
+		// of short-lived arrays, the most of anything while the island is made)
+		const pts = new Float64Array( 800 * 130 * 3 );
+		let np = 0;
 		// scan the beach band, 0.5 m grid
 		for ( let x = - 200; x < 200; x += 0.5 ) for ( let z = - 90; z < - 25; z += 0.5 ) {
 
@@ -1064,12 +1071,15 @@ export class DebrisPlacer {
 			const h = g( jx, jz );
 			if ( h < 0.3 || h > 2.6 ) continue;
 			if ( this.sand( jx, jz ) < 0.5 || this.rockM( jx, jz ) > 0.35 ) continue;
-			pts.push( [ jx, jz, h ] );
+			pts[ np ++ ] = jx; pts[ np ++ ] = jz; pts[ np ++ ] = h;
 
 		}
 
 		this.wrackPoints = 0;
-		for ( const [ x, z, h ] of pts ) {
+		const P = new Float64Array( WRACK_TYPES.length );
+		for ( let q = 0; q < np; q += 3 ) {
+
+			const x = pts[ q ], z = pts[ q + 1 ], h = pts[ q + 2 ];
 
 			// the last high-water line meanders around h ~1.5 (the terrain paints its wrack band at
 			// 1.15 - 2.1), an older storm line higher up; items cluster in patches along it
@@ -1087,32 +1097,30 @@ export class DebrisPlacer {
 			if ( line < 0.02 && stormK < 0.02 && swash < 0.02 ) continue;
 			this.wrackPoints ++;
 
-			// probabilities per 0.25 m^2 sample
-			const P = [
-				[ 'conch', 0.004 * ( line + stormK * 0.5 ) ],
-				[ 'scanBranch', 0.03 * ( line + stormK ) ],
-				[ 'twig', 0.05 * ( line + stormK ) ],
-				[ 'coral', 0.04 * ( line + stormK * 0.7 ) + 0.005 * swash ],
-				[ 'pumice', 0.012 * ( line + stormK * 0.5 ) ],
-				[ 'shell', 0.016 * ( line + stormK * 0.5 ) + 0.006 * swash ],
-				[ 'coconut', 0.012 * ( line + stormK ) ],
-				[ 'husk', 0.008 * ( line + stormK ) ],
+			// probabilities per 0.25 m^2 sample (in WRACK_TYPES' order)
+			P[ 0 ] = 0.004 * ( line + stormK * 0.5 );
+			P[ 1 ] = 0.03 * ( line + stormK );
+			P[ 2 ] = 0.05 * ( line + stormK );
+			P[ 3 ] = 0.04 * ( line + stormK * 0.7 ) + 0.005 * swash;
+			P[ 4 ] = 0.012 * ( line + stormK * 0.5 );
+			P[ 5 ] = 0.016 * ( line + stormK * 0.5 ) + 0.006 * swash;
+			P[ 6 ] = 0.012 * ( line + stormK );
+			P[ 7 ] = 0.008 * ( line + stormK );
 
-				[ 'rope', 0.0045 * ( lineK + stormK ) ],
-				[ 'net', 0.0012 * ( lineK + stormK ) ],
-				[ 'float', 0.0022 * ( lineK + stormK ) ],
-				[ 'litter', 0.0022 * ( lineK + stormK ) ],
-				[ 'plank', 0.0018 * ( lineK + stormK ) ],
-				[ 'stone', 0.01 * line ],
-			];
+			P[ 8 ] = 0.0045 * ( lineK + stormK );
+			P[ 9 ] = 0.0012 * ( lineK + stormK );
+			P[ 10 ] = 0.0022 * ( lineK + stormK );
+			P[ 11 ] = 0.0022 * ( lineK + stormK );
+			P[ 12 ] = 0.0018 * ( lineK + stormK );
+			P[ 13 ] = 0.01 * line;
 			let acc = 0;
 			let type = null;
-			for ( const [ t, p ] of P ) {
+			for ( let k = 0; k < P.length; k ++ ) {
 
-				acc += p;
+				acc += P[ k ];
 				if ( u < acc ) {
 
-					type = t;
+					type = WRACK_TYPES[ k ];
 					break;
 
 				}

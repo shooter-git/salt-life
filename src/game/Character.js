@@ -6,11 +6,12 @@ import { AnimationMixer, LoopOnce, LoopRepeat } from '../engine/index.js';
 //   const c = new Character( gltf );  parent.add( c.group );  c.play( 'idle_neutral_01' );  c.update( dt )
 export class Character {
 
-	constructor( gltf ) {
+	// clips: the names of the clips to keep (all if null; the others' keyframes are let go)
+	constructor( gltf, { clips = null } = {} ) {
 
 		this.group = gltf.scene;
 		this.mixer = new AnimationMixer( this.group );
-		this.clips = new Map( gltf.animations.map( ( c ) => [ c.name, c ] ) );
+		this.clips = new Map( gltf.animations.filter( ( c ) => ! clips || clips.includes( c.name ) ).map( ( c ) => [ c.name, c ] ) );
 		this.current = null;
 		this.onClipEnd = null;
 		this._action = null;

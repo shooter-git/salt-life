@@ -95,6 +95,39 @@ export class ShoreWaves {
 
 	}
 
+	// (Salt Life) the swash on the sand at (x, z): the run-up of the most recent wave and the point's
+	// own distance up the beach (both in metres up the beach at the nominal slope), how fast the edge
+	// moves (dRt/dt, > 0 while the water runs up) and the swash cycle's phase. For the shorebirds
+	// (wildlife/SwashProbe): Tidewater evaluated this on the GPU and read it back.
+	swash( x, z, t, groundH, out = {} ) {
+
+		const P = this.params;
+		const sh = this.fieldAt( x, z, this._shs || ( this._shs = [ 0, 0, 0, 0 ] ) );
+		const exposure = Math.hypot( sh[ 1 ], sh[ 2 ] );
+		const dx = sh[ 1 ] / Math.max( exposure, 1e-4 ), dz = sh[ 2 ] / Math.max( exposure, 1e-4 );
+		const along = x * - dz + z * dx;
+		const runup = ( tt ) => {
+
+			const ssw = ( tt - sh[ 3 ] ) / P.period + wobble( along );
+			const ms = Math.floor( ssw ), tau = ssw - ms;
+			const Am = this.waveAmp( ms, along );
+			const RhMax = Am * 2.1 * P.runup * sat( exposure * 1.4 ) / BEACH_SLOPE;
+			const su = sat( tau / SWASH_UP ), sb = sat( ( tau - SWASH_UP ) / SWASH_DOWN );
+			const Rh = ( tau < SWASH_UP ? 1 - Math.pow( 1 - su, 1.5 ) : 1 - Math.pow( sb, 1.6 ) ) * RhMax - 0.3;
+			const lobes = Math.sin( along * 0.61 + ms * 2.3 ) * 0.5 + Math.sin( along * 1.73 + ms * 5.1 ) * 0.3 + Math.sin( along * 4.3 + ms * 1.7 ) * 0.2;
+			out.tau = tau;
+			return Math.max( Rh + lobes * ( Math.max( Rh, 0 ) * 0.07 + 0.35 ), 0.35 ) * P.enabled;
+
+		};
+
+		const r1 = runup( t + 0.05 ), r0 = runup( t );
+		out.runup = r0;
+		out.dRdt = ( r1 - r0 ) / 0.05;
+		out.inland = Math.max( groundH - G.seaLevel.value, 0 ) / BEACH_SLOPE;
+		return out;
+
+	}
+
 	// the shore wave's height (m, relative to sea level, times its envelope) and the swash sheet's
 	// level at (x, z): the same as the GLSL shoreEvaluate() for a parcel resting there
 	sample( x, z, t, groundH, terrain ) {
@@ -191,6 +224,9 @@ const hash1 = ( x ) => {
 
 };
 
+// (Salt Life: bar() and breakParams() fill one object each, read at once by their callers; the CPU
+// samples of the sea run them every frame)
+const _bar = { k: 0, rip: 0 };
 function bar( along ) {
 
 	const w = Math.sin( along * 0.021 + 1.9 ) * 1.4 + Math.sin( along * 0.009 + 0.3 ) * 0.9;
@@ -198,7 +234,9 @@ function bar( along ) {
 	const width = 0.8 + Math.sin( along * 0.017 + 4.1 ) * 0.08;
 	const rip = smooth( width, 0.985, r );
 	const b = 0.9 + ( Math.sin( along * 0.031 + 7.3 ) * 0.6 + Math.sin( along * 0.083 + 1.1 ) * 0.4 ) * 0.14;
-	return { k: b * ( 1 - rip * 0.58 ), rip };
+	_bar.k = b * ( 1 - rip * 0.58 );
+	_bar.rip = rip;
+	return _bar;
 
 }
 
@@ -210,9 +248,10 @@ function wobble( along ) {
 
 }
 
+const _B = { db: 0, b: 0, Ash: 0, p: 0, meanP: 0, crestPeak: 0, yc: 0, yt: 0, H: 0, wBore: 0, Hb: 0, ycB: 0, ytB: 0 };
 function breakParams( A, d, P ) {
 
-	const B = {};
+	const B = _B;
 	B.db = Math.pow( A * 3.556 / P.gamma, 0.8 );
 	B.b = ( B.db - d ) / ( B.db * P.breakSpan );
 	const shoal = Math.pow( 10 / clamp( d, 0.35, 10 ), 0.25 );

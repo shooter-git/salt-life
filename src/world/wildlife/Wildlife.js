@@ -1,4 +1,5 @@
 import { BirdBatch } from './BirdBatch.js';
+import { ViewCull } from './Kit.js';
 import { Birds } from './Birds.js';
 import { CritterBatch } from './CritterBatch.js';
 import { Crabs } from './Crabs.js';
@@ -65,44 +66,37 @@ class WaterHeights {
 }
 
 // Island wildlife: gulls, terns, pelicans, frigatebirds and sanderlings (one instanced draw, plus
-// the near shadow cascade), ghost crabs, hermit crabs and burrows (one draw), and soft contact
-// shadows under the small ones (one draw in the late pass). Everything is simulated on the CPU
-// near the viewer only; far away the crabs and shorebirds cost nothing and draw nothing.
+// the shadow pass on mid and high), ghost crabs, hermit crabs and burrows (one draw), and soft
+// contact shadows under the small ones (one draw after the opaque world). Everything is simulated
+// on the CPU near the viewer only; far away the crabs and shorebirds cost nothing and draw nothing.
 //
-// csm: the SunShadows instance (birds cast into its near cascade only).
-//
-// update( dt, camera, player ): player = null for the free camera (it only scares animals when
-// it is near the ground).
+// update( dt, camera, player ): player = null for a free camera (it only scares animals when it
+// is near the ground).
 export class Wildlife {
 
+	// shore: ShoreWaves (the swash edge for the sanderlings); castShadow: the birds into the sun's
+	// shadow map (mid and high); spray: Spray or null (splashes)
 	constructor( {
-		scene, renderer, terrain, terrainGPU = null, shore = null, village = null, colliders = null, vegetation = null,
-		boat = null, boatModel = null, query = null, spray = null, csm = null,
+		scene, terrain, shore = null, village = null, colliders = null, vegetation = null,
+		boat = null, boatModel = null, query = null, spray = null, castShadow = false,
 	} ) {
 
 		this.terrain = terrain;
-		this.birdBatch = new BirdBatch( { csm } );
-		scene.add( this.birdBatch.mesh );
+		// (Salt Life) only what can be seen is drawn: viewHeight (the canvas' height in pixels) is
+		// set by the app; minPx: the smallest bird or crab drawn, in pixels
+		this.cull = new ViewCull();
+		this.viewHeight = 0;
+		this.minPx = 1;
+		this.birdBatch = new BirdBatch( { castShadow } );
+		this.birdBatch.cull = this.cull;
+		scene.add( this.birdBatch.mesh, this.birdBatch.farMesh );
 		this.critterBatch = new CritterBatch();
-		scene.add( this.critterBatch.mesh );
+		this.critterBatch.cull = this.cull;
+		scene.add( this.critterBatch.mesh, this.critterBatch.farMesh );
 		this.crabs = new Crabs( { terrain, village, colliders, vegetation } );
 		this.blobs = new ShadowBlobs();
 		scene.add( this.blobs.mesh );
-		let probe = null;
-		if ( shore && terrainGPU ) {
-
-			try {
-
-				probe = new SwashProbe( renderer, { shore, terrainGPU } );
-
-			} catch ( e ) {
-
-				console.warn( 'Wildlife: swash probe unavailable', e );
-
-			}
-
-		}
-
+		const probe = shore ? new SwashProbe( { shore, terrain } ) : null;
 		this.shorebirds = new Shorebirds( { terrain, probe } );
 		this.water = new WaterHeights( query );
 		this.birds = new Birds( { terrain, village, colliders, boat, boatModel, water: this.water, spray } );
@@ -150,6 +144,7 @@ export class Wildlife {
 
 		const t0 = performance.now();
 		const viewer = this.updateViewer( dt, camera, player );
+		this.cull.set( camera, this.viewHeight, this.minPx );
 		this.birdBatch.begin();
 		this.critterBatch.begin();
 		this.blobs.begin();

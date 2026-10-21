@@ -241,7 +241,9 @@ export class FishPortrait {
 	}
 
 	// in place of the world's frame while the card is up. drawWorld() draws the world: the frame the
-	// card opens on is copied from it (and again if the canvas changes size)
+	// card opens on is copied from it (and again if the canvas changes size). (Salt Life: that frame
+	// shows the world alone, the card from the next: the world and the fish in one frame were more
+	// triangles than a low-powered device's budget)
 	render( renderer, drawWorld ) {
 
 		const frame = this._frame( renderer );
@@ -251,6 +253,7 @@ export class FishPortrait {
 			renderer.setRenderTarget( null );
 			renderer.copyFramebufferToTexture( frame );
 			this._capture = false;
+			return;
 
 		}
 

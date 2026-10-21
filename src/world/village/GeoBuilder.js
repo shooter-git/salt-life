@@ -43,6 +43,12 @@ export function setGeometryDetail( k ) {
 
 }
 
+export function geometryDetail() {
+
+	return DETAIL;
+
+}
+
 const segs = ( n, min ) => ( n <= min ? n : Math.max( min, Math.round( n * DETAIL ) ) );
 
 // scale factor for the around-coordinate so a circumference C maps onto whole texture periods
