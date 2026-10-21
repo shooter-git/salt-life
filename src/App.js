@@ -23,8 +23,9 @@ import { computeShoreField } from './world/ShoreField.js';
 import { Player } from './player/Player.js';
 import { BoatController } from './player/BoatController.js';
 import { GameState } from './game/GameState.js';
-import { FishStand } from './game/FishStand.js';
-import { Chandlery } from './game/Chandlery.js';
+import { FishStand, STAND } from './game/FishStand.js';
+import { Chandlery, CHANDLERY } from './game/Chandlery.js';
+import { LocalLights, addBoatLights, addVillageLights, useLocalLights, holdLocalLights } from './materials/LocalLights.js';
 import { Character } from './game/Character.js';
 import { TouchControls } from './ui/TouchControls.js';
 import { Hud } from './ui/Hud.js';
@@ -246,6 +247,22 @@ export class App {
 		// Tidewater's Game: the rod, bites, the fight, the catch, the cooler and log, Joe's and Marta's
 		// trade and upgrades; its HUD, minimap and guide on GameUI (over the Hud)
 		this.ui = { ui: createGameUI( this.hud ) };
+		// the lights at night (lanterns, lit windows, the boat's lights, the flashlight): the nearest
+		// few each frame, in every lit material (LocalLights). Before the Game: it adds the boat's deck
+		// floodlights
+		this.localLights = new LocalLights( { max: tier === 'low' ? 4 : 8 } );
+		addVillageLights( this.localLights, this.village );
+		addBoatLights( this.localLights, this.boat );
+		// the lanterns at Joe's fish stand and Marta's chandlery, in each stall's frame (x right, z toward
+		// the customer), turned by its yaw
+		for ( const [ st, lx, ly, lz ] of [ [ STAND, - 0.9, 1.85, 0.1 ], [ CHANDLERY, - 0.75, 1.58, - 1.45 ] ] ) {
+
+			const c = Math.cos( st.yaw ), sn = Math.sin( st.yaw );
+			const x = st.x + lx * c + lz * sn, z = st.z - lx * sn + lz * c;
+			this.localLights.add( { position: new THREE.Vector3( x, this.terrainData.heightAt( st.x, st.z ) + ly, z ), color: new THREE.Color( 1.0, 0.72, 0.42 ), intensity: 5 * 1.5, range: 11, kind: 'lantern', flicker: 0.08 } );
+
+		}
+
 		this.game = new Game( this );
 		if ( this.nearDetail ) {
 
@@ -258,6 +275,7 @@ export class App {
 
 		// ---------------------------------------------------------------- shaders
 		await progress( 0.8, 'Preparing the shaders' );
+		this.lightUp( scene );
 		// the CPU copies of the big static data go once it's on the GPU (phones' script memory)
 		releaseGeometries( this.village.group );
 		// (but the detail texture: the plants read its data as they're placed, and its bake keeps the data
@@ -375,6 +393,7 @@ export class App {
 		const input = this.input;
 		input.update( dt );
 		if ( input.hit( 'KeyT' ) ) this.toggleTime();
+		if ( input.hit( 'KeyL' ) ) this.hud.toast( this.localLights.toggleFlashlight() ? 'Flashlight on' : 'Flashlight off' );
 		if ( input.hit( 'KeyM' ) ) {
 
 			this.audio.setMuted( ! this.audio.muted );
@@ -418,6 +437,7 @@ export class App {
 		this.vegetation.update( dt, this.camera );
 		this.water.update( this.camera );
 		this.boat.update( dt );
+		this.localLights.update( this.camera, dt );
 		this.wake.update( dt );
 		this.updateAudio( dt );
 
@@ -569,6 +589,7 @@ export class App {
 		const load = async ( url ) => {
 
 			const c = new Character( await loader.loadAsync( this.tier === 'low' ? url.replace( /\.glb$/, '-512.glb' ) : url ) );
+			this.lightUp( c.group );
 			for ( const t of c.textures() ) r.initTexture( t );
 			await r.compileAsync( c.group, this.camera, this.scene );
 			for ( const p of r.info.programs ) {
@@ -606,10 +627,38 @@ export class App {
 
 	}
 
+	// the local lights (night) in every lit material under `root`: Lambert only (cheap) for the ground,
+	// the rocks and the plants, and on low-powered devices everywhere but the boat (the full BRDF: wet
+	// wood and metal glinting under the lamps). Not the sea (its own shading)
+	lightUp( root ) {
+
+		const lit = this._lit || ( this._lit = new WeakSet() );
+		const cheapRoots = [ this.terrain.mesh, this.rocks.group, this.vegetation.group ];
+		const visit = ( o, cheap ) => {
+
+			if ( cheapRoots.includes( o ) ) cheap = true;
+			else if ( o === this.boat.group ) cheap = false;
+			if ( o.isMesh ) for ( const m of [ o.material ].flat() ) {
+
+				if ( ! m || lit.has( m ) || ! ( m.isMeshStandardMaterial || m.isMeshLambertMaterial || m.isMeshPhongMaterial ) ) continue;
+				if ( m.name === 'Water' || m.name === 'fishingLine' ) continue;
+				lit.add( m );
+				useLocalLights( m, { cheap } );
+
+			}
+
+			for ( const c of o.children ) visit( c, cheap );
+
+		};
+		visit( root, this.tier === 'low' );
+
+	}
+
 	// the plants: scattered over the island, built and baked (in slices)
 	async plantsGrow() {
 
 		await this.vegetation.init();
+		this.lightUp( this.vegetation.group );
 		this._plantsGrown = true;
 		this.releaseMasks();
 

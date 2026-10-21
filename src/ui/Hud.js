@@ -1,8 +1,8 @@
 // The heads-up display, for now: what you can do here (the player's prompt) and a first hint about
 // the controls. On touch screens the prompt is the action button itself (TouchControls).
 
-const KEY_NAMES = { E: 'E', Space: 'Space', V: 'V', R: 'R', I: 'I', LMB: 'Left mouse · F', RMB: 'Right mouse · G' };
-const PAD_NAMES = { E: 'B', Space: 'A', V: 'Y', R: 'X', I: 'Back', LMB: 'RT', RMB: 'LT' };
+const KEY_NAMES = { E: 'E', Space: 'Space', V: 'V', R: 'R', I: 'I', L: 'L', LMB: 'Left mouse · F', RMB: 'Right mouse · G' };
+const PAD_NAMES = { E: 'B', Space: 'A', V: 'Y', R: 'X', I: 'Back', L: 'D-pad ↓', LMB: 'RT', RMB: 'LT' };
 
 export class Hud {
 

@@ -98,10 +98,10 @@ const FISHING = {
 
 const AROUND = {
 	keyboard: [ [ k( 'W', 'A', 'S', 'D' ), 'Move, mouse to look, <kbd>Shift</kbd> to run' ], [ k( 'E' ), 'Board the boat, take the helm, talk to Joe and Marta' ],
-		[ k( 'H' ), 'This guide again' ] ],
+		[ k( 'L' ), 'Flashlight (at night)' ], [ k( 'H' ), 'This guide again' ] ],
 	touch: [ [ k( 'Left side' ), 'Drag to walk, from wherever your thumb lands' ], [ k( 'Right side' ), 'Drag to look around' ],
-		[ k( 'Gold button' ), 'Board the boat, take the helm, talk to Joe and Marta' ] ],
-	gamepad: [ [ k( 'Left stick' ), 'Move, right stick to look' ], [ k( 'B' ), 'Board the boat, take the helm, talk to Joe and Marta' ] ],
+		[ k( 'Gold button' ), 'Board the boat, take the helm, talk to Joe and Marta' ], [ k( 'Torch' ), 'Flashlight, after dusk' ] ],
+	gamepad: [ [ k( 'Left stick' ), 'Move, right stick to look' ], [ k( 'B' ), 'Board the boat, take the helm, talk to Joe and Marta' ], [ k( 'D-pad ↓' ), 'Flashlight' ] ],
 };
 
 function cards( device ) {

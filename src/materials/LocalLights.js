@@ -1,111 +1,118 @@
 import * as THREE from '../engine/index.js';
-import { ShaderModule, UniformBlock } from '../engine/gpu/Shader.js';
-import { commonModule } from '../engine/render/wgsl/common.js';
-import { surfaceModule } from '../engine/render/wgsl/lighting.js';
-import { G } from '../engine/render/Frame.js';
-import { SceneLighting } from './SceneLighting.js';
+import { G } from '../core/Globals.js';
 
 // Local lights (lanterns, lamp posts, path lights, lit windows, the boat's cabin and navigation
-// lights, the handheld flashlight) without a light object per lamp: unrolling every light into every
-// material would multiply shader size and compile time. Instead the CPU picks the
-// MAX lights nearest the camera each frame and packs them into three small uniform arrays; every
-// lit material evaluates them in ONE loop (the physical BRDF: diffuse + GGX
-// specular), inverse-square falloff with a smooth range window, optional spot cone, no shadows.
-// Skipped entirely (uniform loop bound) when no light is active (daytime without the flashlight).
-// They bypass the sun-only terms of the direct light (clouds, caustics, contact shadows).
+// lights, its deck floodlights, the handheld flashlight) without a light object per lamp: unrolling
+// every light into every material would multiply shader size and compile time. Instead the CPU picks
+// the lights nearest the camera each frame and packs them into one uniform block; every lit material
+// evaluates them in ONE loop (three's direct-light BRDF), inverse-square falloff with a smooth range
+// window, optional spot cone, no shadows. Skipped entirely (loop bound) when no light is active
+// (daytime without the flashlight).
 //
-// WGSL: `localLightsModule` (prefix localLights) installs the `localLights` lighting hook and exposes
-//   uniforms localLights.{ pos[ 8 ], col[ 8 ], dir[ 8 ], count, flashOn, flashPos, flashDir, flashCol, flashCone }
-//   fn localLightsSpotProfile( cd: f32, cosInner: f32, cosOuter: f32 ) -> f32
-// for effects outside the lighting model (underwater beam in-scatter, marine snow: add the module).
-// Exclusions per material define: IS_WATER, NO_LOCAL_LIGHTS (the former `material.localLights = false`);
-// LOCAL_LIGHTS_CHEAP (material.localLightsCheap) = Lambert only.
+// Salt Life (WebGL 2): Tidewater's WGSL lighting hook becomes a patch of three's lights chunks
+// (lights_pars_begin: the uniform block; lights_fragment_end: the loop), compiled only into
+// materials that ask for it (useLocalLights: the LOCAL_LIGHTS or LOCAL_LIGHTS_CHEAP define, Lambert
+// only, for ground, rocks and plants). The block is one three.js UniformsGroup shared by every such
+// material: positions and directions in view space (the main camera's), packed in update().
 const MAX = 8;
-const v4 = () => Array.from( { length: MAX }, () => new THREE.Vector4() );
-const params = new UniformBlock( 'LocalLightParams', {
-	pos: [ `vec4f[${ MAX }]`, v4() ], // xyz, range^2
-	col: [ `vec4f[${ MAX }]`, v4() ], // rgb x intensity, cos(inner cone)
-	dir: [ `vec4f[${ MAX }]`, v4() ], // spot axis, cos(outer cone) (-2: point light)
-	count: [ 'i32', 0 ],
-	flashOn: [ 'f32', 0 ],
-	flashCone: [ 'vec2f', new THREE.Vector2( 0.99, 0.82 ) ], // cos inner, cos outer
-	flashPos: [ 'vec3f', new THREE.Vector3() ],
-	flashDir: [ 'vec3f', new THREE.Vector3( 0, 0, - 1 ) ],
-	flashCol: [ 'vec3f', new THREE.Vector3() ], // rgb x intensity
-}, { label: 'localLights' } );
-const F = params.fields;
-const uPos = { array: F.pos.value };
-const uCol = { array: F.col.value };
-const uDir = { array: F.dir.value };
-const uCount = F.count;
-
-// the flashlight for effects outside the lighting model (underwater beam in-scatter, marine snow):
-// `{ value }` handles of the localLights uniforms
-export const FLASH = {
-	on: F.flashOn,
-	pos: F.flashPos,
-	dir: F.flashDir,
-	col: F.flashCol,
-	cone: F.flashCone,
+// (an array in a three.js uniforms group is an array of uniforms)
+const v4 = () => Array.from( { length: MAX }, () => new THREE.Uniform( new THREE.Vector4() ) );
+const block = new THREE.UniformsGroup();
+block.setName( 'LocalLights' );
+const U = {
+	pos: v4(), // view-space xyz, range^2
+	col: v4(), // rgb x intensity, cos(inner cone)
+	dir: v4(), // view-space spot axis, cos(outer cone) (-2: point light)
+	aux: v4(), // x: the light's world height (for the water it shines through)
+	info: new THREE.Uniform( new THREE.Vector4() ), // x: count, y: sea level
+	worldY: new THREE.Uniform( new THREE.Vector4() ), // world height of a view-space point: dot( xyz, p ) + w
+	absorb: new THREE.Uniform( new THREE.Vector4() ), // water absorption + scattering (per metre)
 };
+block.add( U.pos ).add( U.col ).add( U.dir ).add( U.aux ).add( U.info ).add( U.worldY ).add( U.absorb );
 
-export const localLightsModule = new ShaderModule( {
-	name: 'localLights',
-	deps: [ commonModule, surfaceModule ],
-	uniforms: params,
-	uniformName: 'localLights',
-	code: /* wgsl */`
-// spot profile shared by the shading, the beam and the snow: hot centre, soft edge, faint spill
-fn localLightsSpotProfile( cd: f32, cosInner: f32, cosOuter: f32 ) -> f32 {
-	let m = smoothstep( cosOuter, cosInner, cd );
-	return max( m * m, smoothstep( cosOuter - 0.55, cosOuter, cd ) * 0.05 );
-}
+THREE.ShaderChunk.lights_pars_begin = /* glsl */`
+#if defined( LOCAL_LIGHTS ) || defined( LOCAL_LIGHTS_CHEAP )
+layout( std140 ) uniform LocalLights {
+	vec4 llPos[ ${ MAX } ];
+	vec4 llCol[ ${ MAX } ];
+	vec4 llDir[ ${ MAX } ];
+	vec4 llAux[ ${ MAX } ];
+	vec4 llInfo;
+	vec4 llWorldY;
+	vec4 llAbsorb;
+};
+#endif
+` + THREE.ShaderChunk.lights_pars_begin;
 
-fn hookLocalLights( s: Surface, P: vec3f, N: vec3f, V: vec3f, acc: ptr<function, LightAccum> ) {
-#if !IS_WATER && !NO_LOCAL_LIGHTS
-	let diffuseColor = s.albedo * ( 1.0 - s.metalness );
-	let specF0 = mix( vec3f( 0.04 ) * s.specularIntensity, s.albedo, s.metalness );
-	let specF90 = mix( s.specularIntensity, 1.0, s.metalness );
-	let rough = clamp( s.roughness, 0.03, 1.0 );
-	for ( var i = 0; i < localLights.count; i++ ) {
-		let p = localLights.pos[ i ];
-		let d = p.xyz - P;
-		let d2 = dot( d, d );
-		if ( d2 < p.w ) {
-			let c = localLights.col[ i ];
-			let sd = localLights.dir[ i ];
-			let L = d * inverseSqrt( max( d2, 1e-6 ) );
-			// smooth range window (1 - (d/r)^4)^2 on the inverse-square law
-			let x = d2 / p.w;
-			let win = sat( 1.0 - x * x );
-			// spot: hot centre, soft edge at the outer cone, faint wide spill
-			let spot = localLightsSpotProfile( dot( -L, sd.xyz ), c.w, sd.w );
-			// Beer-Lambert over the underwater part of the path (straight, mean sea level): red dies
-			// within metres, so what the torch lights far away under water is dim and blue-green
-			let r = d2 * inverseSqrt( max( d2, 1e-6 ) );
-			let under = sat( ( frame.seaLevel - min( P.y, p.y ) ) / max( abs( p.y - P.y ), 1e-3 ) );
-			let Tw = exp( -( frame.waterAbsorption + frame.waterScattering ) * ( r * under ) );
-			// the + 0.15 m^2 softens the near field of a lamp's finite size (no hot spot on the post)
-			let lightColor = c.xyz * Tw * ( win * win * spot / ( d2 + 0.15 ) );
-			let irradiance = max( dot( N, L ), 0.0 ) * lightColor;
-#if LOCAL_LIGHTS_CHEAP
-			// foliage (heavy overdraw): Lambert only
-			( *acc ).directDiffuse += irradiance * diffuseColor * INV_PI;
+THREE.ShaderChunk.lights_fragment_end = /* glsl */`
+#if defined( LOCAL_LIGHTS ) || defined( LOCAL_LIGHTS_CHEAP )
+	{
+		float llPY = dot( llWorldY.xyz, geometryPosition ) + llWorldY.w;
+		for ( int i = 0; i < ${ MAX }; i ++ ) {
+
+			if ( float( i ) >= llInfo.x ) break;
+			vec4 p = llPos[ i ];
+			vec3 d = p.xyz - geometryPosition;
+			float d2 = dot( d, d );
+			if ( d2 >= p.w ) continue;
+			vec4 c = llCol[ i ];
+			vec4 sd = llDir[ i ];
+			vec3 L = d * inversesqrt( max( d2, 1e-6 ) );
+			// smooth range window ( 1 - ( d / r )^4 )^2 on the inverse-square law
+			float x = d2 / p.w;
+			float win = clamp( 1.0 - x * x, 0.0, 1.0 );
+			// spot: hot centre, soft edge at the outer cone, faint wide spill (points: cones of -1.5 / -2)
+			float cd = dot( - L, sd.xyz );
+			float m = smoothstep( sd.w, c.w, cd );
+			float spot = max( m * m, smoothstep( sd.w - 0.55, sd.w, cd ) * 0.05 );
+			// Beer-Lambert over the part of the path under water (straight, mean sea level)
+			float ly = llAux[ i ].x;
+			float under = clamp( ( llInfo.y - min( llPY, ly ) ) / max( abs( ly - llPY ), 1e-3 ), 0.0, 1.0 );
+			vec3 Tw = exp( - llAbsorb.rgb * ( sqrt( d2 ) * under ) );
+			// (the + 0.15 m^2 softens the near field of a lamp's finite size)
+			vec3 lc = c.rgb * Tw * ( win * win * spot / ( d2 + 0.15 ) );
+#ifdef LOCAL_LIGHTS_CHEAP
+			reflectedLight.directDiffuse += clamp( dot( geometryNormal, L ), 0.0, 1.0 ) * lc * BRDF_Lambert( material.diffuseColor );
 #else
-			( *acc ).directDiffuse += irradiance * diffuseColor * INV_PI;
-			( *acc ).directSpecular += irradiance * BRDF_GGX( L, V, N, specF0, specF90, rough );
-#if SHEEN
-			( *acc ).directSpecular += irradiance * BRDF_Sheen( L, V, N, s.sheenColor, max( s.sheenRoughness, 0.07 ) );
+			IncidentLight llLight;
+			llLight.color = lc;
+			llLight.direction = L;
+			llLight.visible = true;
+			RE_Direct( llLight, geometryPosition, geometryNormal, geometryViewDir, geometryClearcoatNormal, material, reflectedLight );
 #endif
-#endif
+
 		}
 	}
 #endif
-}
-`,
-} );
+` + THREE.ShaderChunk.lights_fragment_end;
 
-SceneLighting.set( 'localLights', localLightsModule );
+// a lit material (standard, physical, Lambert, Phong) takes the local lights: cheap = Lambert only
+// (large or heavily overdrawn surfaces). Before its first compile.
+export function useLocalLights( material, { cheap = false } = {} ) {
+
+	material.defines = { ...( material.defines || {} ), [ cheap ? 'LOCAL_LIGHTS_CHEAP' : 'LOCAL_LIGHTS' ]: '' };
+	material.uniformsGroups = [ ...( material.uniformsGroups || [] ).filter( ( g ) => g !== block ), block ];
+	material.needsUpdate = true; // (in case it was drawn already)
+	return material;
+
+}
+
+// no local lights for a moment (a render with another camera: the catch card's portrait)
+export function holdLocalLights( fn ) {
+
+	const n = U.info.value.x;
+	U.info.value.x = 0;
+	try {
+
+		return fn();
+
+	} finally {
+
+		U.info.value.x = n;
+
+	}
+
+}
 
 const _v = new THREE.Vector3(), _f = new THREE.Vector3(), _r = new THREE.Vector3(), _u = new THREE.Vector3();
 const smooth = ( x, a, b ) => {
@@ -120,8 +127,10 @@ const smooth = ( x, a, b ) => {
 //   intensity: luminous intensity in scene units (illuminance at 1 m); range: cut-off distance (m)
 export class LocalLights {
 
-	constructor() {
+	// max: lights at once (low-powered devices: fewer)
+	constructor( { max = MAX } = {} ) {
 
+		this.max = Math.min( MAX, max );
 		this.sources = [];
 		this.enabled = true;
 		this.strength = 1; // UI multiplier for the lamps (not the flashlight)
@@ -157,8 +166,10 @@ export class LocalLights {
 
 		this.time += dt;
 		let n = 0;
-		FLASH.on.value = this.flashlight.on && this.enabled ? 1 : 0;
-		const pos = uPos.array, col = uCol.array, dir = uDir.array;
+		const pos = this._pos || ( this._pos = U.pos.map( ( u ) => u.value ) );
+		const col = this._col || ( this._col = U.col.map( ( u ) => u.value ) );
+		const dir = this._dir || ( this._dir = U.dir.map( ( u ) => u.value ) );
+		const aux = this._aux || ( this._aux = U.aux.map( ( u ) => u.value ) );
 		const fl = this.flashlight;
 		if ( fl.on && this.enabled ) {
 
@@ -183,14 +194,12 @@ export class LocalLights {
 			col[ 0 ].set( fl.color.r * k, fl.color.g * k, fl.color.b * k, fl.cosInner );
 			dir[ 0 ].set( fl.dir.x, fl.dir.y, fl.dir.z, fl.cosOuter );
 			n = 1;
-			FLASH.pos.value.copy( fl.position );
-			FLASH.dir.value.copy( fl.dir );
-			FLASH.col.value.set( fl.color.r * k, fl.color.g * k, fl.color.b * k );
-			FLASH.cone.value.set( fl.cosInner, fl.cosOuter );
 
 		}
 
-		// lamps: on from dusk (same ramp as the lantern glass), nearest first
+		// lamps: on from dusk (same ramp as the lantern glass). (Salt Life) The ones that light the
+		// most around the camera first (brightness x reach^2 / distance^2), not simply the nearest: with
+		// four slots on low-powered devices the boat's six small lights would crowd out its floodlights
 		const on = smooth( G.night.value, 0.15, 0.75 ) * this.strength;
 		if ( on > 0.002 && this.enabled ) {
 
@@ -199,21 +208,22 @@ export class LocalLights {
 			list.length = 0;
 			for ( const s of this.sources ) {
 
-				if ( s.enabled === false ) continue;
+				if ( s.enabled === false || ( s.scale ?? 1 ) <= 0 ) continue;
 				if ( s.update ) s.update();
 				s.d2 = s.position.distanceToSquared( cp );
+				s.score = s.intensity * s.range * s.range / Math.max( s.d2, 1 );
 				list.push( s );
 
 			}
 
-			list.sort( ( a, b ) => a.d2 - b.d2 );
-			const slots = MAX - n;
-			// fade out the farthest selected lights as they approach the cut (no popping)
-			const dCut = list.length > slots ? Math.sqrt( list[ slots ].d2 ) : Infinity;
+			list.sort( ( a, b ) => b.score - a.score );
+			const slots = this.max - n;
+			// fade out the last selected lights as the next one's score comes close (no popping)
+			const cut = list.length > slots ? list[ slots ].score : 0;
 			for ( let i = 0; i < Math.min( slots, list.length ); i ++ ) {
 
 				const s = list[ i ];
-				const fade = Number.isFinite( dCut ) ? smooth( Math.sqrt( s.d2 ), dCut, dCut * 0.8 ) : 1;
+				const fade = cut > 0 ? smooth( s.score, cut, cut * 1.5 ) : 1;
 				const fl2 = s.flicker ? 1 + s.flicker * Math.sin( this.time * 9 + s.phase ) * Math.sin( this.time * 5.3 + s.phase * 0.37 ) : 1;
 				const k = s.intensity * on * fade * fl2 * ( s.scale ?? 1 );
 				if ( k <= 1e-4 ) continue;
@@ -228,7 +238,25 @@ export class LocalLights {
 
 		}
 
-		uCount.value = n;
+		// to view space (the lighting runs there), with each light's world height for the water
+		camera.updateMatrixWorld();
+		const V = camera.matrixWorldInverse, e = camera.matrixWorld.elements;
+		for ( let i = 0; i < n; i ++ ) {
+
+			aux[ i ].x = pos[ i ].y;
+			const r2 = pos[ i ].w;
+			_v.set( pos[ i ].x, pos[ i ].y, pos[ i ].z ).applyMatrix4( V );
+			pos[ i ].set( _v.x, _v.y, _v.z, r2 );
+			const c = dir[ i ].w;
+			_v.set( dir[ i ].x, dir[ i ].y, dir[ i ].z ).transformDirection( V );
+			dir[ i ].set( _v.x, _v.y, _v.z, c );
+
+		}
+
+		U.info.value.set( n, G.seaLevel.value, 0, 0 );
+		U.worldY.value.set( e[ 1 ], e[ 5 ], e[ 9 ], e[ 13 ] );
+		const a = G.waterAbsorption.value, sc = G.waterScattering.value;
+		U.absorb.value.set( a.x + sc.x, a.y + sc.y, a.z + sc.z, 0 );
 		this.active = n;
 
 	}

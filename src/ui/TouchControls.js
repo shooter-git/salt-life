@@ -1,7 +1,10 @@
+import { G } from '../core/Globals.js';
+
 // On-screen controls for touch screens: a joystick wherever the left thumb lands, drag anywhere on
 // the right to look, and buttons that follow what you're doing: the action of the moment (the
 // player's prompt: "Board boat", "Take the helm"...), jump / swim up, dive, the boat camera, and
-// the fishing: the rod, cast / strike / reel (the left mouse button's part), reel in (the right's).
+// the fishing: the rod, cast / strike / reel (the left mouse button's part), reel in (the right's),
+// and the flashlight after dusk.
 // They feed core/Input.js like a keyboard and mouse would. Shown once a touch screen is in use;
 // mouse and keyboard players never see them.
 
@@ -29,6 +32,7 @@ export class TouchControls {
 				<button type="button" class="touch-btn touch-cast" data-key="mouse0" hidden>Cast</button>
 				<button type="button" class="touch-btn touch-rod" data-key="KeyR" hidden>Rod</button>
 				<button type="button" class="touch-btn touch-cooler" data-key="KeyI" hidden>Cooler</button>
+				<button type="button" class="touch-btn touch-torch" data-key="KeyL" hidden>Torch</button>
 			</div>`;
 		root.append( el );
 
@@ -43,6 +47,7 @@ export class TouchControls {
 			cast: el.querySelector( '.touch-cast' ),
 			rod: el.querySelector( '.touch-rod' ),
 			cooler: el.querySelector( '.touch-cooler' ),
+			torch: el.querySelector( '.touch-torch' ),
 		};
 
 		// the joystick
@@ -179,6 +184,10 @@ export class TouchControls {
 		setButton( this.buttons.cast, fishing ? castLabel( game ) : null );
 		setButton( this.buttons.reel, fishing && ! game.fight && ( rod.state === 'floating' || rod.state === 'flying' ) ? 'Reel in' : null );
 		setButton( this.buttons.cooler, game && game.hud && ! fishing ? 'Cooler' : null );
+		// the flashlight: offered after dusk (or while it's on)
+		const lights = game && game.app && game.app.localLights;
+		const torchOn = !! ( lights && lights.flashlight.on );
+		setButton( this.buttons.torch, lights && ( torchOn || G.night.value > 0.35 ) ? ( torchOn ? 'Torch off' : 'Torch' ) : null );
 		const action = prompt && prompt.key === 'E' ? prompt.text.split( '   ·' )[ 0 ] : null;
 		setButton( this.buttons.action, action );
 		setButton( this.buttons.camera, player && player.mode === 'boat' ? 'Camera' : null );
