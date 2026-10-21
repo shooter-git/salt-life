@@ -6,7 +6,8 @@ Nothing is synthesised. Source: each sound's Freesound high-quality preview.
 
 Processing (scratch build script): excerpt, high-pass (some), trim, fades, equal-power crossfade at the
 loop point, loudness normalisation (loops ≈ −23 LUFS integrated; one-shot slices peak-normalised to
-−1 dBFS), Opus in Ogg (64 kb/s). Wave slices were cut at detected wave onsets / peaks / troughs. One-shot files are sprites; the
+−1 dBFS), Opus in Ogg (64 kb/s); then turned down where needed to stay inside All the Spaces' loudness
+rule (`tools/audio/tame.mjs`). Each `.ogg` also ships as `.m4a` (AAC), the same sound for older Safari. Wave slices were cut at detected wave onsets / peaks / troughs. One-shot files are sprites; the
 slice table is in `src/audio/soundBank.js`.
 
 | File | Use | Source | Author | Licence |

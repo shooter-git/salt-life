@@ -55,17 +55,18 @@ export function releaseGeometry( geometry ) {
 
 }
 
-// every material texture and uniform texture under `root`
-export function releaseTextures( root ) {
+// every material texture and uniform texture under `root` (but those in `keep`)
+export function releaseTextures( root, { keep = [] } = {} ) {
 
+	const release = ( t ) => keep.includes( t ) || releaseTexture( t );
 	root.traverse( ( o ) => {
 
 		const mats = o.material ? ( Array.isArray( o.material ) ? o.material : [ o.material ] ) : [];
 		for ( const m of mats ) {
 
-			for ( const v of Object.values( m ) ) if ( v && v.isTexture ) releaseTexture( v );
+			for ( const v of Object.values( m ) ) if ( v && v.isTexture ) release( v );
 			// (ShaderMaterial uniforms, and onBeforeCompile materials that keep theirs in userData.uniforms)
-			for ( const U of [ m.uniforms, m.userData && m.userData.uniforms ] ) if ( U ) for ( const u of Object.values( U ) ) if ( u && u.value && u.value.isTexture ) releaseTexture( u.value );
+			for ( const U of [ m.uniforms, m.userData && m.userData.uniforms ] ) if ( U ) for ( const u of Object.values( U ) ) if ( u && u.value && u.value.isTexture ) release( u.value );
 
 		}
 

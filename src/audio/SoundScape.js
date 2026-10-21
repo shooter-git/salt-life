@@ -115,6 +115,29 @@ const STEP = {
 
 // max simultaneous one-shot voices per category (oldest is faded out beyond this)
 const LIMITS = { step: 3, swim: 2, splash: 3, trans: 2, hull: 3, gull: 2, crash: 7, wash: 5, back: 5, bird: 4, tern: 2, whale: 4, rod: 4, fish: 3, coin: 1 };
+// Salt Life: All the Spaces allows 16 / 32 / 64 sounds at once by device tier. Beds and one-shots
+// together stay under it (a new one-shot is left out when it's full), and the low tier keeps fewer of
+// each kind so the surf can't crowd out the footsteps.
+const VOICES = { low: 14, mid: 30, high: 62 };
+const LOW_LIMITS = { ...LIMITS, step: 2, splash: 2, hull: 2, gull: 1, crash: 3, wash: 2, back: 2, bird: 2, tern: 1, whale: 2, rod: 3, fish: 2 };
+// a bed that has been silent this long (s) stops, freeing its voice (it starts again when wanted)
+const BED_IDLE = 4;
+
+// Salt Life: Ogg Opus where the browser decodes it, else the AAC copies (older Safari); a failed Ogg
+// decode falls back to the AAC copy too
+const EXT = ( () => {
+
+	try {
+
+		return document.createElement( 'audio' ).canPlayType( 'audio/ogg; codecs="opus"' ) ? '.ogg' : '.m4a';
+
+	} catch {
+
+		return '.ogg';
+
+	}
+
+} )();
 
 // loaded at resume(); everything else on first use
 const CORE = [ 'surf_crash', 'surf_wash', 'surf_backwash', 'surf_far', 'wind', 'palms', 'step_sand', 'step_wetsand', 'step_wood', 'step_water', 'step_grass', 'splash', 'swim' ];
@@ -129,9 +152,17 @@ export class SoundScape {
 	// Does not touch Web Audio: the context is created on the first resume() (autoplay policy).
 	// shore (optional): { shore: ShoreWaves, field: shore field { res, data }, terrain: TerrainData }; found
 	// on window.__app when not given (see attachShore()).
-	constructor( { baseUrl = ( ( import.meta.env && import.meta.env.BASE_URL ) || '/' ) + 'audio/', shore = null } = {} ) {
+	// Salt Life: `context` / `output` give the audio context and the node everything goes to (All the
+	// Spaces' sound groups: nothing may go straight to the speakers); `tier` sets the panning and how
+	// many sounds play at once.
+	constructor( { baseUrl = ( ( import.meta.env && import.meta.env.BASE_URL ) || '/' ) + 'audio/', shore = null, context = null, output = null, tier = 'high' } = {} ) {
 
 		this.baseUrl = baseUrl;
+		this._context = context;
+		this._output = output;
+		this.tier = VOICES[ tier ] ? tier : 'high';
+		this.maxVoices = VOICES[ this.tier ];
+		this.limits = this.tier === 'low' ? LOW_LIMITS : LIMITS;
 		this.ctx = null;
 		this._failed = false;
 		this._muted = false;
@@ -185,7 +216,7 @@ export class SoundScape {
 		if ( ! this.ctx ) {
 
 			const AC = globalThis.AudioContext || globalThis.webkitAudioContext;
-			if ( typeof AC !== 'function' ) {
+			if ( typeof AC !== 'function' && ! this._context ) {
 
 				this._failed = true;
 				return false;
@@ -194,7 +225,7 @@ export class SoundScape {
 
 			try {
 
-				this.ctx = new AC( { latencyHint: 'balanced' } );
+				this.ctx = this._context ? this._context() : new AC( { latencyHint: 'balanced' } );
 				this._build();
 
 			} catch ( e ) {
@@ -447,8 +478,14 @@ export class SoundScape {
 		if ( ! this.ctx ) return;
 		try {
 
-			const p = this.ctx.close();
-			if ( p && p.catch ) p.catch( () => {} );
+			// (a context of our own is closed; a given one is only let go of)
+			if ( this._context ) this.limiter.disconnect();
+			else {
+
+				const p = this.ctx.close();
+				if ( p && p.catch ) p.catch( () => {} );
+
+			}
 
 		} catch ( e ) { /* ignore */ }
 
@@ -485,7 +522,8 @@ export class SoundScape {
 		const panner = ( dest, ref, rolloff ) => {
 
 			const p = c.createPanner();
-			p.panningModel = 'HRTF';
+			// (HRTF costs a convolution per voice: equal-power on low-powered devices)
+			p.panningModel = this.tier === 'low' ? 'equalpower' : 'HRTF';
 			p.distanceModel = 'inverse';
 			p.refDistance = ref;
 			p.rolloffFactor = rolloff;
@@ -502,7 +540,7 @@ export class SoundScape {
 		this.limiter.ratio.value = 16;
 		this.limiter.attack.value = 0.003;
 		this.limiter.release.value = 0.25;
-		this.limiter.connect( c.destination );
+		this.limiter.connect( this._output ? this._output() : c.destination );
 		this.master = gain( 0, this.limiter );
 		this._applyVolume();
 
@@ -571,14 +609,21 @@ export class SoundScape {
 		if ( b ) return b;
 		if ( ! this._loading.has( name ) && BANK[ name ] && this.ctx ) {
 
-			const p = fetch( this.baseUrl + BANK[ name ].file )
+			const load = ( ext ) => fetch( this.baseUrl + BANK[ name ].file.replace( /\.ogg$/, ext ) )
 				.then( ( r ) => {
 
 					if ( ! r.ok ) throw new Error( `audio ${ name }: HTTP ${ r.status }` );
 					return r.arrayBuffer();
 
 				} )
-				.then( ( a ) => this.ctx.decodeAudioData( a ) )
+				.then( ( a ) => this.ctx.decodeAudioData( a ) );
+			const p = load( EXT )
+				.catch( ( e ) => {
+
+					if ( EXT === '.m4a' ) throw e;
+					return load( '.m4a' );
+
+				} )
 				.then( ( buf ) => {
 
 					this._buffers.set( name, buf );
@@ -600,9 +645,29 @@ export class SoundScape {
 	_bed( name, g, now, tau = 0.25, rate = 1 ) {
 
 		let bed = this._beds.get( name );
+		if ( bed && g < 1e-4 ) {
+
+			// silent for a while: stopped (its voice freed)
+			bed.idle ??= now;
+			if ( now - bed.idle > BED_IDLE ) {
+
+				try {
+
+					bed.src.stop();
+
+				} catch ( e ) { /* already stopped */ }
+
+				bed.gain.disconnect();
+				this._beds.delete( name );
+				return;
+
+			}
+
+		} else if ( bed ) bed.idle = null;
+
 		if ( ! bed ) {
 
-			if ( g < 1e-4 ) return;
+			if ( g < 1e-4 || this._playing() >= this.maxVoices ) return;
 			const buf = this._want( name );
 			if ( ! buf ) return;
 			const c = this.ctx;
@@ -631,7 +696,7 @@ export class SoundScape {
 	// `at`: context time (default now); `pick`: slice index (default random)
 	_shot( bank, cat, dest, targetLufs, rate = 1, at = 0, pick = - 1 ) {
 
-		if ( ! this.enabled || ! dest ) return null;
+		if ( ! this.enabled || ! dest || this._playing() >= this.maxVoices ) return null;
 		const info = BANK[ bank ];
 		const buf = this._want( bank );
 		if ( ! buf || ! info ) return null;
@@ -661,7 +726,7 @@ export class SoundScape {
 
 		};
 
-		while ( list.length > ( LIMITS[ cat ] || 3 ) ) {
+		while ( list.length > ( this.limits[ cat ] || 3 ) ) {
 
 			const old = list.shift();
 			old.gain.gain.setTargetAtTime( 0, c.currentTime, 0.05 );
@@ -680,7 +745,7 @@ export class SoundScape {
 	// a one-shot placed in the world: HRTF panner at (x, y, z) + air absorption with distance
 	_shotAt( bank, cat, x, y, z, targetLufs, rate, at, ref, rolloff = 1, pick = - 1 ) {
 
-		if ( ! this.enabled || ! this._want( bank ) ) return null;
+		if ( ! this.enabled || this._playing() >= this.maxVoices || ! this._want( bank ) ) return null;
 		const c = this.ctx, e = this.env;
 		const d = Math.hypot( x - e.lx, y - e.ly, z - e.lz );
 		const p = this._panner( this.above, ref, rolloff );
@@ -1380,6 +1445,15 @@ export class SoundScape {
 	}
 
 	// ------------------------------------------------------------------ helpers
+
+	// sounds playing now: the beds and the one-shots
+	_playing() {
+
+		let n = this._beds.size;
+		for ( const k in this._voices ) n += this._voices[ k ].length;
+		return n;
+
+	}
 
 	// smooth parameter ramp; skips negligible changes to keep the automation timeline short
 	_ramp( param, v, tau ) {
