@@ -259,6 +259,6 @@ export function buildCritters() {
 
 	const limbs = [];
 	for ( let s = 0; s < S; s ++ ) limbs.push( ...limbTable( s ) );
-	return { geometry: g, bodyData, limbs, species: S, vertices: nv, triangles: idx.length / 3 };
+	return { geometry: g, bodyData, limbs, species: S, vertices: nv, triangles: idx.length / 3, bodyTriangles: ( NV - 1 ) * NU * 2 + NU * 2 };
 
 }

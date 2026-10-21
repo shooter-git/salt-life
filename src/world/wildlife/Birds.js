@@ -1,12 +1,15 @@
 import * as THREE from '../../engine/index.js';
 import { G } from '../../core/Globals.js';
 import { WORLD } from '../WorldLayout.js';
-import { SPRAY } from '../../fx/Spray.js';
 import { mulberry32 } from '../../util/Noise.js';
 import { BIRD } from './BirdShapes.js';
 import { Flyer } from './Flight.js';
 import { setHead, groundPose, standHeight, storePrevious, resetPrevious, setWings, tuckLegs } from './BirdPose.js';
 import { TAU, clamp, lerp, smooth, angleDiff, approach, qYawPitchRoll } from './Kit.js';
+
+// (Salt Life) fx/Spray.js's particle kinds: that module draws with WebGPU and isn't ported yet (the
+// splashes are skipped while there is no spray)
+const SPRAY = { DROPLET: 0, MIST: 1, LIGAMENT: 2, SPRAY: 3, SHEET: 4 };
 
 // Gulls, terns, pelicans and frigatebirds.
 //

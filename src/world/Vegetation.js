@@ -119,8 +119,10 @@ const _view = new THREE.Vector3();
 
 export class Vegetation {
 
-	// smallBakes: the leaf atlas and the impostors baked at half size (WebGL drawn on the CPU)
-	constructor( { scene, terrain, renderer, tier = 'low', ground = null, village = null, smallBakes = false } ) {
+	// smallBakes: the leaf atlas and the impostors baked at half size (WebGL drawn on the CPU).
+	// bakeSlot: () => a promise that resolves when a bake may draw (the app's: a frame without the
+	// world, so no frame counts both; by default the next task)
+	constructor( { scene, terrain, renderer, tier = 'low', ground = null, village = null, smallBakes = false, bakeSlot = null } ) {
 
 		this.scene = scene;
 		this.terrain = terrain;
@@ -130,6 +132,7 @@ export class Vegetation {
 		this.tier = TIERS[ tier ] ? tier : 'low';
 		this.cfg = TIERS[ this.tier ];
 		this.smallBakes = smallBakes;
+		this.bakeSlot = bakeSlot || ( () => new Promise( ( resolve ) => setTimeout( resolve, 0 ) ) );
 		this.ready = false;
 		this.group = new THREE.Group();
 		this.group.name = 'Vegetation';
@@ -316,20 +319,21 @@ export class Vegetation {
 			...( this.grass ? { grassNearPatch: this.grass.patchTris[ 0 ], grassMidPatch: this.grass.patchTris[ 1 ], grassFarPatch: this.grass.patchTris[ 2 ] } : {} ),
 		};
 		this.timings.build = performance.now() - slice;
-		await new Promise( ( resolve ) => setTimeout( resolve, 0 ) );
+		// (each bake's drawing in a slot of its own: bakeSlot)
+		await this.bakeSlot();
 
 		// the leaf atlas first: the impostor bake samples it
 		let tb = performance.now();
 		this.leafAtlas.bake( this.renderer );
 		this.timings.leafBake = performance.now() - tb;
-		await new Promise( ( resolve ) => setTimeout( resolve, 0 ) );
+		await this.bakeSlot();
 		tb = performance.now();
 		this.timings.impostorBake = 0;
 		const bake = this.atlas.bakeSteps( this.renderer );
 		while ( ! bake.next().done ) {
 
 			this.timings.impostorBake = Math.max( this.timings.impostorBake, performance.now() - tb );
-			await new Promise( ( resolve ) => setTimeout( resolve, 0 ) );
+			await this.bakeSlot();
 			tb = performance.now();
 
 		}

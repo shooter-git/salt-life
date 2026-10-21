@@ -26,6 +26,8 @@ import { GameState } from './game/GameState.js';
 import { FishStand, STAND } from './game/FishStand.js';
 import { Chandlery, CHANDLERY } from './game/Chandlery.js';
 import { LocalLights, addBoatLights, addVillageLights, useLocalLights, holdLocalLights } from './materials/LocalLights.js';
+import { Wildlife } from './world/wildlife/Wildlife.js';
+import { Debris } from './world/Debris.js';
 import { Character } from './game/Character.js';
 import { TouchControls } from './ui/TouchControls.js';
 import { Hud } from './ui/Hud.js';
@@ -122,6 +124,8 @@ export class App {
 		this.renderer = renderer;
 		this._drawn = null; // the last frame's fence
 		this._owed = 0; // s not yet played while waiting for it
+		this._slots = []; // bakes waiting for a frame of their own (frameSlot)
+		this._slotOwed = 0;
 		this._rest = false; // the frame after a drawn one is skipped
 		if ( this.cpuGL ) this.fitCpuPixels();
 		// dynamic resolution, gentler than the stage's (which aims at 60 frames a second and goes down
@@ -173,7 +177,7 @@ export class App {
 		uploadTextures( renderer, [ this.terrain.heightTexture, this.terrain.normalTexture, this.terrain.splatTexture ] );
 		// boulders, blocks, talus and outcrops (shaded like the ground's rock)
 		this.rocks = new Rocks( { scene, terrain: this.terrain, colliders: this.colliders, village: this.village, castShadow: tier !== 'low', lite: tier === 'low' } );
-		this.vegetation = new Vegetation( { scene, terrain: this.terrainData, ground: this.terrain, renderer, tier, village: this.village, smallBakes: this.cpuGL } );
+		this.vegetation = new Vegetation( { scene, terrain: this.terrainData, ground: this.terrain, renderer, tier, village: this.village, smallBakes: this.cpuGL, bakeSlot: () => this.frameSlot() } );
 		// (WebGL drawn on the CPU: the plants grow in once the game has started, in start(); their
 		// programs and bakes take seconds there, and a creation has 45 s to load)
 		if ( ! this.cpuGL ) await this.plantsGrow();
@@ -264,6 +268,7 @@ export class App {
 		}
 
 		this.game = new Game( this );
+		if ( ! this.cpuGL ) await this.lifeAndDebris();
 		if ( this.nearDetail ) {
 
 			// (low-powered devices: the traders and the fish on ice only near the camera, too)
@@ -357,6 +362,17 @@ export class App {
 			// (the stage's first step can be negative: it starts counting after the frame it is given
 			// began, a second earlier after a slow start)
 			dt = Math.max( 0, dt );
+			// a frame given to a bake (frameSlot): nothing else is drawn, its time goes to the next
+			if ( this._slots.length ) {
+
+				this._slotOwed += dt;
+				this._slots.shift()();
+				return;
+
+			}
+
+			dt += this._slotOwed;
+			this._slotOwed = 0;
 			if ( this.cpuGL ) this.pacedFrame( dt );
 			else {
 
@@ -369,10 +385,12 @@ export class App {
 		this._started = true;
 		this.hud.showHint( this.input.lastDevice );
 		// (on a device that draws on its CPU, one after another, so their garbage doesn't pile up: the
-		// island's held-back parts appear, the plants grow, then the catch card's shaders, then Joe
-		// and Marta)
+		// island's held-back parts appear, the plants grow, then the catch card's shaders, then Joe and
+		// Marta (their loading is the high point of script memory: before the animals and the debris
+		// add theirs), then the animals and the debris, then the scanned debris, with pauses between)
 		const revealed = this._late ? new Promise( ( done ) => this._revealed = done ) : null;
-		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.loadCharacters() );
+		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.loadCharacters() )
+			.then( () => this.pause() ).then( () => this.cpuGL && this.lifeAndDebris() ).then( () => this.pause() ).then( () => this.scansArrive() );
 		const begin = () => this.audio.resume().then( ( on ) => {
 
 			if ( on ) for ( const type of GESTURES ) removeEventListener( type, begin, true );
@@ -434,7 +452,14 @@ export class App {
 		this.terrain.update( this.camera );
 		this.village.update( dt );
 		this.rocks.update( this.camera );
+		if ( this.debris ) this.debris.update( this.camera );
 		this.vegetation.update( dt, this.camera );
+		if ( this.wildlife ) {
+
+			this.wildlife.viewHeight = this.renderer.domElement.height;
+			this.wildlife.update( dt, this.camera, this.player );
+
+		}
 		this.water.update( this.camera );
 		this.boat.update( dt );
 		this.localLights.update( this.camera, dt );
@@ -464,6 +489,25 @@ export class App {
 	// in between (showing a frame holds it up for as long as the frame took to draw). Left to queue up
 	// there, frames come slower, and the page stops answering while the queue drains, for many seconds;
 	// waiting for each frame instead would leave the page no time to answer either
+	// a few seconds between the stages after the start on a device that draws on its CPU: the page's
+	// thread is mostly idle while frames are drawn, and the garbage collector catches up then (so the
+	// stages' garbage doesn't pile up: script memory); none with a graphics card
+	pause( ms = 3000 ) {
+
+		return this.cpuGL ? new Promise( ( resolve ) => setTimeout( resolve, ms ) ) : Promise.resolve();
+
+	}
+
+	// A promise that resolves at the start of a frame that draws nothing else, for the plants' bakes:
+	// All the Spaces' checks count every triangle drawn between two frames as one frame's, and a
+	// bake with the world came to over the low tier's 300k. (Before the loop runs: the next task.)
+	frameSlot() {
+
+		if ( ! this._started ) return new Promise( ( resolve ) => setTimeout( resolve, 0 ) );
+		return new Promise( ( resolve ) => this._slots.push( resolve ) );
+
+	}
+
 	pacedFrame( dt ) {
 
 		const gl = this.renderer.getContext();
@@ -585,10 +629,11 @@ export class App {
 	async loadCharacters() {
 
 		if ( ! this.game ) return;
+		performance.mark( 'world: characters' );
 		const loader = gltfLoader(), r = this.renderer;
-		const load = async ( url ) => {
+		const load = async ( url, clips = null ) => {
 
-			const c = new Character( await loader.loadAsync( this.tier === 'low' ? url.replace( /\.glb$/, '-512.glb' ) : url ) );
+			const c = new Character( await loader.loadAsync( this.tier === 'low' ? url.replace( /\.glb$/, '-512.glb' ) : url ), { clips } );
 			this.lightUp( c.group );
 			for ( const t of c.textures() ) r.initTexture( t );
 			await r.compileAsync( c.group, this.camera, this.scene );
@@ -634,7 +679,7 @@ export class App {
 	lightUp( root ) {
 
 		const lit = this._lit || ( this._lit = new WeakSet() );
-		const cheapRoots = [ this.terrain.mesh, this.rocks.group, this.vegetation.group ];
+		const cheapRoots = [ this.terrain.mesh, this.rocks.group, this.vegetation.group, this.debris && this.debris.group ];
 		const boat = this.boat ? this.boat.group : null;
 		const visit = ( o, cheap ) => {
 
@@ -656,11 +701,97 @@ export class App {
 
 	}
 
+	// the island's animals (after the plants: hermit crabs live by the palms; the ghost crabs' burrows
+	// need the sand mask, freed afterwards): gulls, terns, pelicans, frigatebirds and sanderlings,
+	// ghost and hermit crabs (wildlife/). Their shaders are compiled and first used here, not mid-game
+	async lifeArrives() {
+
+		if ( this.wildlife ) return;
+		performance.mark( 'world: life' );
+		this.wildlife = new Wildlife( {
+			scene: this.scene, terrain: this.terrainData, shore: this.shore, village: this.village, colliders: this.colliders,
+			vegetation: this.vegetation, boat: this.boatCtl, boatModel: this.boat, query: this.query, spray: null,
+			// (mid: its triangles are mostly spent on the island already)
+			castShadow: this.tier === 'high',
+		} );
+		// (birds and crabs smaller than this many pixels aren't drawn)
+		this.wildlife.minPx = this.tier === 'low' ? 1.5 : 0.75;
+		const meshes = [ this.wildlife.birdBatch.mesh, this.wildlife.birdBatch.farMesh, this.wildlife.critterBatch.mesh, this.wildlife.critterBatch.farMesh, this.wildlife.blobs.mesh ];
+		for ( const m of meshes ) await this.readyToDraw( m );
+
+	}
+
+	// the beach debris and the village's clutter (world/Debris.js, made in a worker; after the plants
+	// and the rocks, kept clear of their trunks; it reads the island's masks, freed afterwards)
+	async debrisLands() {
+
+		if ( this.debris ) return;
+		performance.mark( 'world: debris' );
+		this.debris = await Debris.create( {
+			scene: this.scene, terrain: this.terrainData, ground: this.terrain, village: this.village, vegetation: this.vegetation,
+			rocks: this.rocks, colliders: this.colliders, tier: this.tier, loader: gltfLoader(), show: false,
+		} );
+		// (the areas out of range are hidden at once: frames go on while the shaders compile)
+		await this.readyToDraw( this.debris.group, () => this.debris.update( this.camera ) );
+
+	}
+
+	// the photoscanned logs, branches and shells (debris/ScannedDebris.js), after Joe and Marta (their
+	// loading's garbage and theirs don't pile up), drawn once their shaders are ready
+	async scansArrive() {
+
+		const scanned = this.debris && this.debris.scanned;
+		if ( ! scanned || scanned.promise ) return;
+		try {
+
+			await scanned.load();
+			performance.mark( 'world: scans' );
+			for ( const t of scanned.textures || [] ) this.renderer.initTexture( t );
+			await this.readyToDraw( this.debris.group );
+			scanned.show();
+
+		} catch ( e ) {
+
+			console.warn( 'the scanned debris did not load', e );
+
+		}
+
+	}
+
+	// lit (lightUp), its shaders compiled and their uniforms and attributes looked up. then: called once
+	// the programs are made (compileAsync makes them at once, then waits for them to finish)
+	async readyToDraw( root, then = null ) {
+
+		const r = this.renderer;
+		this.lightUp( root );
+		const compiled = r.compileAsync( root, this.camera, this.scene );
+		if ( then ) then();
+		await compiled;
+		for ( const p of r.info.programs ) {
+
+			p.getUniforms();
+			p.getAttributes();
+
+		}
+
+	}
+
 	// the plants: scattered over the island, built and baked (in slices)
 	async plantsGrow() {
 
 		await this.vegetation.init();
 		this.lightUp( this.vegetation.group );
+
+	}
+
+	// the animals and the debris: after the plants, the sea and the boat (the birds perch on it, the
+	// sanderlings follow the swash), and before the island's masks are freed. With a graphics card at
+	// the end of loading, on a device that draws on its CPU after the start (start())
+	async lifeAndDebris() {
+
+		await this.lifeArrives();
+		await this.pause();
+		await this.debrisLands();
 		this._plantsGrown = true;
 		this.releaseMasks();
 

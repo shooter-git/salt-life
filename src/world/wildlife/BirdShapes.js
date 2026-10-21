@@ -193,6 +193,10 @@ export function wingJoints( sp ) {
 export function buildBird( sp ) {
 
 	const pos = [], fold = [], part = [], wgt = [], uu = [], vv = [], idx = [];
+	// (Salt Life) far: the same vertices, coarser (every other body ring and side, the bill as a
+	// cone, half the tail rays, half the wing stations and a 4-sided airfoil, no legs): 170 triangles
+	// for birds a few pixels across, rather than 592
+	const far = [];
 	const legA = [], legB = []; // leg parameters (stored in place of the rest position / normal)
 	const legs = [];
 	const vtx = ( p, f, pt, w, u, v ) => {
@@ -248,6 +252,25 @@ export function buildBird( sp ) {
 
 	}
 
+	{
+
+		const rings = [ 0, 2, 4, 6, 8, 10, NB - 1 ];
+		for ( let r = 0; r < rings.length - 1; r ++ ) for ( let j = 0; j < NR; j += 2 ) {
+
+			const i0 = rings[ r ], i1 = rings[ r + 1 ];
+			far.push( P( i0, j ), P( i1, j ), P( i0, j + 2 ), P( i0, j + 2 ), P( i1, j ), P( i1, j + 2 ) );
+
+		}
+
+		for ( let j = 0; j < NR; j += 2 ) {
+
+			far.push( rear, P( 0, j ), P( 0, j + 2 ) );
+			far.push( front, P( NB - 1, j + 2 ), P( NB - 1, j ) );
+
+		}
+
+	}
+
 	// ---- bill (starts inside the head), closed at the tip
 	const Bl = sp.bill;
 	const firstBill = pos.length / 3;
@@ -289,6 +312,7 @@ export function buildBird( sp ) {
 	}
 
 	for ( let j = 0; j < NRB; j ++ ) idx.push( billTip, PB( NBL - 1, j + 1 ), PB( NBL - 1, j ) );
+	for ( let j = 0; j < NRB; j += 2 ) far.push( PB( 0, j ), billTip, PB( 0, j + 2 ) );
 
 	// ---- tail: a thin fan (upper and lower layer), rays spread from the tail base
 	const T = sp.tail;
@@ -327,6 +351,13 @@ export function buildBird( sp ) {
 			idx.push( PT( 1, r, k ), PT( 1, r + 1, k ), PT( 1, r, k + 1 ), PT( 1, r, k + 1 ), PT( 1, r + 1, k ), PT( 1, r + 1, k + 1 ) );
 
 		}
+
+	}
+
+	for ( let k = 0; k < NT - 1; k += 2 ) {
+
+		far.push( PT( 0, 0, k ), PT( 0, 0, k + 2 ), PT( 0, 2, k ), PT( 0, 0, k + 2 ), PT( 0, 2, k + 2 ), PT( 0, 2, k ) );
+		far.push( PT( 1, 0, k ), PT( 1, 2, k ), PT( 1, 0, k + 2 ), PT( 1, 0, k + 2 ), PT( 1, 2, k ), PT( 1, 2, k + 2 ) );
 
 	}
 
@@ -392,6 +423,18 @@ export function buildBird( sp ) {
 				else idx.push( PW( i, j ), PW( i + 1, j ), PW( i, j + 1 ), PW( i, j + 1 ), PW( i + 1, j ), PW( i + 1, j + 1 ) );
 
 			}
+
+		}
+
+		// (far: stations 0, 2, 4, 6, 8; the leading edge, the upper middle, the trailing edge, the
+		// lower middle)
+		const ring = [ 0, 2, 3, 4 ];
+		for ( let i = 0; i < NS - 1; i += 2 ) for ( let k = 0; k < 4; k ++ ) {
+
+			const j0 = ring[ k ], j1 = ring[ ( k + 1 ) % 4 ];
+			const a = PW( i, j0 ), b = PW( i, j1 ), c = PW( i + 2, j0 ), d = PW( i + 2, j1 );
+			if ( side < 0 ) far.push( a, b, c, b, d, c );
+			else far.push( a, c, b, b, c, d );
 
 		}
 
@@ -485,6 +528,6 @@ export function buildBird( sp ) {
 
 	}
 
-	return { count: n, A, B: Bn, C, D, index: idx, joints: wingJoints( sp ) };
+	return { count: n, A, B: Bn, C, D, index: idx, far, joints: wingJoints( sp ) };
 
 }
