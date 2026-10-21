@@ -205,9 +205,11 @@ export class Input {
 
 	}
 
+	// (a key pressed since the last frame counts as held for this one, even if it's already up again:
+	// a quick tap still does something, also when frames are slow)
 	down( code ) {
 
-		return this.enabled && this.keys.has( code );
+		return this.enabled && ( this.keys.has( code ) || this.pressed.has( code ) );
 
 	}
 

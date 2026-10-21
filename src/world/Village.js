@@ -685,6 +685,8 @@ export class Village {
 		if ( B.fishProps ) {
 
 			const fish = B.fishProps.build( { lod: this.tier === 'low' ? 2 : 1 } );
+			// (small props: ~40k triangles in the shadow pass for shadows hardly seen; high-end only)
+			fish.castShadow = this.tier === 'high';
 			fish.matrixAutoUpdate = false;
 			fish.updateMatrix();
 			this.group.add( fish );

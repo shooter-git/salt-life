@@ -1,5 +1,5 @@
 {
-  "$comment": "What a person might do, played on every screen size during All the Spaces' checks. Positions are fractions of the screen (0 to 1).",
+  "$comment": "What a person might do, played on every screen size during All the Spaces' checks. Positions are fractions of the screen (0 to 1). Then the fishing: the rod (R), a cast (F does what the left mouse button does), the cooler (I). Escape closes the first-play guide if it has come up by then; the waits are long because a device without a graphics card plays it slowly.",
   "steps": [
     { "wait": 1 },
     { "tap": [0.5, 0.5] },
@@ -10,6 +10,19 @@
     { "hold": "KeyD", "seconds": 1.5 },
     { "screenshot": "looking-around" },
     { "hold": "KeyW", "seconds": 4 },
-    { "screenshot": "at-the-water" }
+    { "screenshot": "at-the-water" },
+    { "press": "Escape" },
+    { "wait": 3 },
+    { "press": "KeyR" },
+    { "wait": 3 },
+    { "hold": "KeyF", "seconds": 2.5 },
+    { "wait": 5 },
+    { "screenshot": "cast" },
+    { "press": "Escape" },
+    { "wait": 3 },
+    { "press": "KeyI" },
+    { "wait": 3 },
+    { "screenshot": "cooler" },
+    { "press": "KeyI" }
   ]
 }

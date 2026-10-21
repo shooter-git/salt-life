@@ -49,7 +49,7 @@ export class FishStand {
 
 			const mesh = new Mesh( buildStallKit( a ), a.material );
 			mesh.name = 'FishStandStall';
-			mesh.castShadow = true;
+			mesh.castShadow = tier === 'high'; // (its scanned props: ~40-50k triangles in the shadow pass, under the stall's roof)
 			this.group.add( mesh );
 
 		} ).catch( ( e ) => {
