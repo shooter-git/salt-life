@@ -1,5 +1,5 @@
 import * as THREE from './engine/index.js';
-import { createStage } from '@allthespaces/portal/three';
+import { createStage, gltfLoader } from '@allthespaces/portal/three';
 import { ResolutionGovernor } from '@allthespaces/portal/resolution';
 import { G } from './core/Globals.js';
 import { Input } from './core/Input.js';
@@ -25,6 +25,7 @@ import { BoatController } from './player/BoatController.js';
 import { GameState } from './game/GameState.js';
 import { FishStand } from './game/FishStand.js';
 import { Chandlery } from './game/Chandlery.js';
+import { Character } from './game/Character.js';
 import { TouchControls } from './ui/TouchControls.js';
 import { Hud } from './ui/Hud.js';
 import { Wake } from './ocean/Wake.js';
@@ -334,7 +335,8 @@ export class App {
 		} );
 		this._started = true;
 		this.hud.showHint( this.input.lastDevice );
-		if ( this.cpuGL ) this.plantsGrow();
+		// (on a device that draws on its CPU the plants grow after the start: Joe and Marta after them)
+		Promise.resolve( this.cpuGL ? this.plantsGrow() : null ).then( () => this.loadCharacters() );
 		const begin = () => this.audio.resume().then( ( on ) => {
 
 			if ( on ) for ( const type of GESTURES ) removeEventListener( type, begin, true );
@@ -450,6 +452,54 @@ export class App {
 
 	}
 
+	// Joe and Marta, animated (Character.js), after the start: two models of a few MB with shaders of
+	// their own. Low-powered devices get their textures at 512² rather than 1024² (-512.glb). Each is
+	// readied before it's drawn: its shaders compiled and first used, its textures uploaded (on a
+	// device that draws on its CPU a shader's first use waits for all the drawing queued before it).
+	async loadCharacters() {
+
+		if ( ! this.game ) return;
+		const loader = gltfLoader(), r = this.renderer;
+		const load = async ( url ) => {
+
+			const c = new Character( await loader.loadAsync( this.tier === 'low' ? url.replace( /\.glb$/, '-512.glb' ) : url ) );
+			for ( const t of c.textures() ) r.initTexture( t );
+			await r.compileAsync( c.group, this.camera, this.scene );
+			for ( const p of r.info.programs ) {
+
+				p.getUniforms();
+				p.getAttributes();
+
+			}
+
+			return c;
+
+		};
+
+		for ( const v of this.game.vendors ) {
+
+			try {
+
+				const c = await v.loadCharacter( load );
+				// (low-powered devices: only near the camera, like the stand-in)
+				if ( c && this.nearDetail ) c.group.traverse( ( o ) => {
+
+					if ( ! o.isMesh ) return;
+					if ( ! o.geometry.boundingSphere ) o.geometry.computeBoundingSphere();
+					this.nearDetail.push( { o, dist: 60 } );
+
+				} );
+
+			} catch ( e ) {
+
+				console.warn( `${ v.name }: the character didn't load; the stand-in stays`, e );
+
+			}
+
+		}
+
+	}
+
 	// the plants: scattered over the island, built and baked (in slices)
 	async plantsGrow() {
 
@@ -534,7 +584,7 @@ export class App {
 
 			const s = d.o.geometry.boundingSphere;
 			_c3.copy( s.center ).applyMatrix4( d.o.matrixWorld );
-			d.o.visible = _c3.distanceTo( cam ) - s.radius < d.dist;
+			d.o.visible = _c3.distanceTo( cam ) - s.radius * d.o.matrixWorld.getMaxScaleOnAxis() < d.dist;
 
 		}
 

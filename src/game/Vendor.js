@@ -3,8 +3,9 @@ import { prepare, mergePrepared, cylinder, sphere, roundedBox, box, rod, mat4 } 
 import { createPropMaterial, PAT } from './GameMaterials.js';
 
 // A trader the player talks to (E within `radius`). Swappable: `model` is a slot (a Group) that
-// holds the stand-in figure; setModel( obj ) replaces it. (Tidewater's loadCharacter( url ) swapped
-// in a skinned, animated Rocketbox character on its WebGPU engine: not ported yet, the stand-in stays.)
+// holds the stand-in figure; setModel( obj ) replaces it. loadCharacter( load ) swaps in the skinned,
+// animated character (Character.js, Rocketbox avatars) once it has loaded: idle clip, a wave when the
+// player comes up, talk gestures while their panel is open (vendor.talking).
 //   new Vendor( { name, position, yaw, radius, greeting, idle, material, character } )
 //   vendor.group (add to the scene), vendor.inRange( p ), vendor.update( dt, lookAt )
 export class Vendor {
@@ -33,12 +34,33 @@ export class Vendor {
 		this.character = null;
 		this.talking = false;
 		this._near = false;
-		this.characterSpec = character; // (kept for when the characters are ported)
+		this.characterSpec = character; // { url, idle, talk, greet }: loadCharacter
+
+	}
+
+	// load: url -> Promise<Character> (the app's: it picks the file for the device and readies the
+	// shaders). The stand-in stays until the character is ready, or if it doesn't load.
+	async loadCharacter( load ) {
+
+		const spec = this.characterSpec;
+		if ( ! spec ) return null;
+		const { idle = 'idle_neutral_01', talk = 'gestic_talk_relaxed_01', greet = 'wave_01', listen = null } = spec;
+		const model = await load( spec.url );
+		this.clips = { idle, talk, greet, listen };
+		model.play( idle, { fade: 0, from: Math.random() * model.clipDuration( idle ) } );
+		// pose right away: far from the player the animation holds, and the rest pose is a T-pose
+		model.update( 0 );
+		// one-shot clips (the wave) hand back to the idle / talk loop
+		model.onClipEnd = () => model.play( this.talking ? talk : idle, { fade: 0.5 } );
+		this.character = model;
+		this.setModel( model.group );
+		return model;
 
 	}
 
 	setModel( obj ) {
 
+		if ( this.figure && this.figure.isMesh ) this.figure.geometry.dispose();
 		this.model.clear();
 		this.model.add( obj );
 		this.figure = obj;

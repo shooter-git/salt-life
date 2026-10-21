@@ -6,8 +6,8 @@ import { Vendor } from './Vendor.js';
 // The upgrade trader by the boathouse: a scanned work table with a tackle box, spools of line and
 // reels, display shelves of rope and floats behind her, a rack of rods, jerrycans of diesel, fenders,
 // a coil of mooring line and a hand-painted sign on posts (StallKit, Poly Haven CC0; the old
-// procedural table is the fallback). Sells the gear levels in Gear.js and fuel. Marta is her stand-in
-// figure for now (Vendor.js: the animated character isn't ported yet). `tier` sizes the textures.
+// procedural table is the fallback). Sells the gear levels in Gear.js and fuel. Marta is a stand-in
+// figure until her animated character has loaded (Vendor.js). `tier` sizes the textures.
 export const CHANDLERY = { x: 85.5, z: - 60.5, yaw: - 1.9 }; // faces the beach and the pier
 
 export class Chandlery {

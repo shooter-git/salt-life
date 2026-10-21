@@ -12,8 +12,8 @@ import { Vendor } from './Vendor.js';
 // surfaces and props (StallKit, Poly Haven CC0); the old procedural stall is the fallback if they
 // fail to load.
 //
-// Salt Life: Joe is his stand-in figure for now (Vendor.js: the animated character isn't ported yet).
-// `tier` sizes the scanned textures.
+// Salt Life: Joe is a stand-in figure until his animated character has loaded (Vendor.js). `tier`
+// sizes the scanned textures.
 export const STAND = { x: 49.9, z: - 74.6, yaw: 1.45 }; // beside the boardwalk up from the pier foot, facing it
 
 const STALL_FLOOR = 0.06; // top of the stall's plank floor (local y)
