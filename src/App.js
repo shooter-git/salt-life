@@ -1,5 +1,6 @@
 import * as THREE from './engine/index.js';
 import { createStage } from '@allthespaces/portal/three';
+import { ResolutionGovernor } from '@allthespaces/portal/resolution';
 import { G } from './core/Globals.js';
 import { Input } from './core/Input.js';
 import { SaveStore } from './core/SaveStore.js';
@@ -92,7 +93,14 @@ export class App {
 		this.terrainData = new TerrainData( 7, decodeIsland( new Uint8Array( bytes ) ) );
 
 		// ---------------------------------------------------------------- stage
-		const stage = this.stage = createStage( portal, { fov: 70, shadows: tier !== 'low' } );
+		// WebGL drawn on the CPU (no graphics card, or a blocklisted one): frames are paced (pacedFrame)
+		// and kept to a phone's pixels (fitCpuPixels). Asked of a throwaway context, as it decides how
+		// the stage's is made.
+		this.cpuGL = probeCpuGL();
+		// Anti-aliased on every tier where a graphics card draws (the SDK leaves it off on low: on a
+		// phone the low tier's resolution, a third of the screen's across, then looks jagged, and
+		// phones' GPUs smooth edges almost for free). Its resolution is this game's own (adaptResolution).
+		const stage = this.stage = createStage( portal, { fov: 70, shadows: tier !== 'low', antialias: ! this.cpuGL, dynamicResolution: false } );
 		const { renderer, camera } = stage;
 		// Tidewater's grading: ACES (the SDK's default AgX greys out the sand and the sea)
 		renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -102,12 +110,17 @@ export class App {
 		camera.far = 12000;
 		camera.updateProjectionMatrix();
 		this.renderer = renderer;
-		// WebGL drawn on the CPU (no graphics card, or a blocklisted one): frames are paced (pacedFrame)
-		this.cpuGL = drawsOnCpu( renderer.getContext() );
 		this._drawn = null; // the last frame's fence
 		this._owed = 0; // s not yet played while waiting for it
 		this._rest = false; // the frame after a drawn one is skipped
 		if ( this.cpuGL ) this.fitCpuPixels();
+		// dynamic resolution, gentler than the stage's (which aims at 60 frames a second and goes down
+		// to half the pixels, a blur): at least 70%, aiming at 30, and back up when fewer pixels
+		// didn't make frames faster (frames held up by the processor)
+		this.resolution = new ResolutionGovernor( { min: 0.7, targetMs: 1000 / 30, detectCpuBound: true } );
+		this._ratio = 0; // the pixel ratio last set here
+		this._fullRatio = 1; // the stage's, for the screen
+		this._lastTick = 0;
 
 		this.camera = camera;
 		const scene = this.scene = new THREE.Scene();
@@ -254,7 +267,18 @@ export class App {
 
 	start() {
 
-		this.stage.loop( ( dt ) => this.cpuGL ? this.pacedFrame( dt ) : this.frame( dt ) );
+		this._settleAt = performance.now() + 5000; // (resolution follows frames once the start has settled)
+		this.stage.loop( ( dt ) => {
+
+			if ( this.cpuGL ) this.pacedFrame( dt );
+			else {
+
+				this.adaptResolution();
+				this.frame( dt );
+
+			}
+
+		} );
 		this._started = true;
 		this.hud.showHint( this.input.lastDevice );
 
@@ -353,6 +377,21 @@ export class App {
 
 	}
 
+	// the canvas's resolution follows how long frames take (this.resolution), from the stage's for the
+	// screen (which it sets again when the screen turns or resizes)
+	adaptResolution() {
+
+		const now = performance.now(), ms = this._lastTick ? now - this._lastTick : 0;
+		this._lastTick = now;
+		const r = this.renderer, ratio = r.getPixelRatio();
+		if ( ratio !== this._ratio ) this._fullRatio = ratio; // the stage sized it again
+		if ( ms > 0 && now > this._settleAt ) this.resolution.frame( ms, now );
+		const want = this._fullRatio * this.resolution.scale;
+		if ( Math.abs( want - ratio ) > 1e-4 ) r.setPixelRatio( want );
+		this._ratio = r.getPixelRatio();
+
+	}
+
 	// WebGL drawn on the CPU: the canvas's resolution brought down to CPU_PIXELS (the stage sizes it
 	// for the screen; its dynamic resolution doesn't see paced frames)
 	fitCpuPixels() {
@@ -396,6 +435,17 @@ export class App {
 		this.hud.toast( s.timeSpeed !== 0 ? 'Time running' : 'Time paused' );
 
 	}
+
+}
+
+// drawsOnCpu, asked of a throwaway context (let go of straight away)
+function probeCpuGL() {
+
+	const gl = document.createElement( 'canvas' ).getContext( 'webgl2' );
+	if ( ! gl ) return false;
+	const cpu = drawsOnCpu( gl );
+	gl.getExtension( 'WEBGL_lose_context' )?.loseContext();
+	return cpu;
 
 }
 
