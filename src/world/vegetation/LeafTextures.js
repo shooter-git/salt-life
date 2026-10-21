@@ -98,24 +98,26 @@ vec4 vegLeafSample( vec2 st, float tile ) {
 	bake( renderer ) {
 
 		const px = 1 / ( this.size / 2 ); // texel size in tile uv
+		// 2 x 2 supersampling, except in a smaller atlas (WebGL drawn on the CPU): the program is a
+		// quarter of the size, and making it is most of the bake's time there
+		const n = this.size < SIZE ? 1 : 4, w = f( 1 / n );
 		let body = '';
 		for ( let t = 0; t < 4; t ++ ) {
 
 			const T = LEAF_TILES[ t ];
 			body += `\tif ( tid == ${ t }.0 ) {\n`;
-			// 2 x 2 supersampling
-			for ( let s = 0; s < 4; s ++ ) {
+			for ( let s = 0; s < n; s ++ ) {
 
-				const ox = ( ( s % 2 ) - 0.5 ) * px * 0.5, oy = ( Math.floor( s / 2 ) - 0.5 ) * px * 0.5;
+				const ox = n > 1 ? ( ( s % 2 ) - 0.5 ) * px * 0.5 : 0, oy = n > 1 ? ( Math.floor( s / 2 ) - 0.5 ) * px * 0.5 : 0;
 				body += /* glsl */`\t\t{
 			vec2 q = local + vec2( ${ f( ox ) }, ${ f( oy ) } );
 			VegRosette A = vegRosette( q, ${ f( T.grid ) }, ${ f( T.leaves ) }, ${ f( T.width ) }, 0.0 );
 			VegRosette B = vegRosette( q + ${ f( 0.5 / T.grid ) }, ${ f( T.grid ) }, ${ f( T.leaves ) }, ${ f( T.width ) }, 2.1 );
 			bool inA = A.d > 0.0; bool inB = B.d > 0.0;
 			if ( inA || inB ) {
-				cov += 0.25;
-				bright += ( inA ? A.bright : B.bright ) * 0.25;
-				cellR += ( inA ? A.cell : B.cell ) * 0.25;
+				cov += ${ w };
+				bright += ( inA ? A.bright : B.bright ) * ${ w };
+				cellR += ( inA ? A.cell : B.cell ) * ${ w };
 			}
 		}\n`;
 
