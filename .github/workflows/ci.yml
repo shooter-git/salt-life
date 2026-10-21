@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
   pull_request:
+  # (by hand too: GitHub can drop a push event when Actions is degraded)
+  workflow_dispatch:
 
 permissions:
   contents: read

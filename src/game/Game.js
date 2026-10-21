@@ -1,4 +1,5 @@
 import { Vector3, Color } from '../engine/index.js';
+import { G } from '../core/Globals.js';
 import { WORLD } from '../world/WorldLayout.js';
 import { FISH } from './FishTable.js';
 import { habitatAt, pickSpecies, rollWeight, biteDelay } from './Bites.js';
@@ -267,6 +268,14 @@ export class Game {
 		p.busy = rod.lineInWater || rod.state === 'windup';
 
 		this.updateBoat( dt );
+		// (Salt Life) the floodlights' lenses glow when they're fitted, from dusk like their light
+		const mats = app.boat && app.boat.materials;
+		if ( mats && mats.floodOn ) {
+
+			const t = Math.min( 1, Math.max( 0, ( G.night.value - 0.15 ) / 0.6 ) );
+			mats.floodOn.value = this.state.stats.deckLights ? t * t * ( 3 - 2 * t ) : 0;
+
+		}
 
 		// the traders
 		for ( const v of this.vendors ) v.update( dt, p.mode === 'walk' ? p.position : null );

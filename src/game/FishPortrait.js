@@ -4,6 +4,7 @@ import {
 } from '../engine/index.js';
 import { FishProps } from '../world/village/FishProps.js';
 import { FISH, fishLengthCm } from './FishTable.js';
+import { holdLocalLights } from '../materials/LocalLights.js';
 
 // The catch card's studio portrait of the fish: the real game model (world/fish, baked by the
 // village's FishProps like the fish on ice and on the line), side-on and horizontal (nose left, as in
@@ -293,7 +294,8 @@ export class FishPortrait {
 			renderer.autoClear = false;
 			renderer.clearDepth();
 			renderer.toneMappingExposure = EXPOSURE;
-			renderer.render( this.scene, this.camera );
+			// (the fish's material also takes the island's lamps at night: not in the studio)
+			holdLocalLights( () => renderer.render( this.scene, this.camera ) );
 			renderer.setScissorTest( false );
 			renderer.setViewport( 0, 0, cv.width, cv.height );
 

@@ -49,6 +49,8 @@ export class BoatMaterials {
 
 		// uniform handles ({ value }), as the TSL uniform() nodes were
 		this.navOn = { value: 1 };
+		// (Salt Life) the deck floodlights' lenses: lit when they're fitted and it's dark (Game)
+		this.floodOn = { value: 0 };
 		this.flagPivot = { value: new THREE.Vector3() };
 		this.flagDir = { value: new THREE.Vector3( 1, 0, 0 ) };
 		this.flagWind = { value: 0 };
@@ -104,12 +106,12 @@ export class BoatMaterials {
 
 		const m = new THREE.MeshStandardMaterial( { color: 0x000000, roughness: 0.3, metalness: 0, emissive: 0xffffff } );
 		m.name = 'boatGlow';
-		withAux( m, { uniforms: { navOn: this.navOn } } );
+		withAux( m, { uniforms: { navOn: this.navOn, floodOn: this.floodOn } } );
 		return extend( m, ( shader ) => {
 
 			shader.fragmentShader = shader.fragmentShader.replace( '#include <emissivemap_fragment>', /* glsl */`
 	float glowMode = vAux.z;
-	float glowOn = glowMode < 0.5 ? navOn : 1.0;
+	float glowOn = glowMode < 0.5 ? navOn : glowMode > 3.5 && glowMode < 4.5 ? floodOn : 1.0;
 	totalEmissiveRadiance = vColor.rgb * glowOn * ( glowMode < 0.5 || glowMode > 3.5 ? 2.5 : 0.8 );` );
 
 		} );
