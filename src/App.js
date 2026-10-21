@@ -290,9 +290,20 @@ export class App {
 
 		}
 
-		// (WebGL drawn on the CPU: the rod and its line, out of sight until the rod comes out, are
-		// compiled after the start: prepareLate)
-		if ( this.cpuGL ) this.game.rod.holdBack = true;
+		// WebGL drawn on the CPU: a shader's first draw is its slowest moment there (the driver builds
+		// it then), and drawing every part of the island in the loading frame was most of the load.
+		// The loading frame draws the sky, the ground and the sea; the rest appears over the first
+		// frames after the start, a group a frame (revealLate). The rod and its line, out of sight
+		// until the rod comes out, are compiled after the start (prepareLate).
+		if ( this.cpuGL ) {
+
+			const named = ( ...names ) => scene.children.filter( ( c ) => names.some( ( n ) => c.name === n || c.name.startsWith( n + ':' ) ) );
+			this._late = [ named( 'Rocks' ), named( 'Village' ), named( 'FishStand', 'Chandlery', 'StallFish', 'Vendor' ), named( 'LobsterBoat' ) ];
+			for ( const group of this._late ) for ( const o of group ) o.visible = false;
+			this.game.rod.holdBack = true;
+
+		}
+
 		this.frame( 0 ); // places the camera, the LOD grids and the sky for the compile
 		// (with the near detail it hid: compiled now, not the first time it shows)
 		const near = ( this.nearDetail || [] ).filter( ( d ) => ! d.o.visible );
@@ -450,11 +461,20 @@ export class App {
 		// (whenever the stage has sized the canvas again)
 		const canvas = this.renderer.domElement;
 		if ( canvas.width * canvas.height > CPU_PIXELS * 1.05 ) this.fitCpuPixels();
+		this.revealLate();
 		this.frame( Math.min( 0.1, dt + this._owed ) );
 		this._owed = 0;
 		this._drawn = gl.fenceSync( gl.SYNC_GPU_COMMANDS_COMPLETE, 0 );
 		this._rest = true;
 		gl.flush();
+
+	}
+
+	// (WebGL drawn on the CPU) the parts held back from the loading frame, a group per drawn frame
+	revealLate() {
+
+		const group = this._late && this._late.shift();
+		if ( group ) for ( const o of group ) o.visible = true;
 
 	}
 
