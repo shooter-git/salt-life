@@ -8,6 +8,7 @@ import { FishingRod } from './FishingRod.js';
 import { FishStand } from './FishStand.js';
 import { Chandlery } from './Chandlery.js';
 import { CatchDisplay } from './CatchDisplay.js';
+import { FishPortrait } from './FishPortrait.js';
 import { UPGRADES, fuelBurn } from './Gear.js';
 import { GameHUD } from './GameHUD.js';
 import { Minimap } from './Minimap.js';
@@ -36,6 +37,8 @@ export class Game {
 		// (Salt Life: the stalls are the app's, built with the village)
 		this.stand = app.stand || new FishStand( { scene: app.scene, terrain: app.terrainData, colliders: app.colliders } );
 		this.display = new CatchDisplay( { scene: app.scene, stall: this.stand.iceFish() } );
+		// (Salt Life: the catch card's fish portrait is drawn by the app, in its canvas)
+		this.portrait = new FishPortrait( this.display.material );
 		this.landing = null; // { species, kg } while the caught fish swings in view
 		this.chandlery = app.chandlery || new Chandlery( { scene: app.scene, terrain: app.terrainData, colliders: app.colliders, material: this.stand.material } );
 		this.vendors = [ this.stand.vendor, this.chandlery.vendor ].filter( Boolean );

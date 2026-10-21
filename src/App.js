@@ -297,6 +297,8 @@ export class App {
 		await renderer.compileAsync( scene, camera );
 		for ( const d of near ) d.o.visible = false;
 		await this.sky.compiled;
+		// the catch card's fish portrait (its studio light and the blurred backdrop)
+		await this.game.portrait.compile( renderer, scene.environment );
 		// a shader's first use asks the GPU for its uniforms and attributes, which waits for all the
 		// drawing queued before it: seconds on a device that draws on its CPU. Every one is used here,
 		// before the game starts (the sky's passes would otherwise first run mid-game)
@@ -406,8 +408,10 @@ export class App {
 		// ---- render
 		if ( this.nearDetail ) this.updateNearDetail();
 		this.renderer.toneMappingExposure = s.exposure * this.sky.adaptation;
-		if ( this.post ) this.post.render();
-		else this.renderer.render( this.scene, this.camera );
+		// (while the catch card is up its fish portrait is drawn in place of the world: FishPortrait)
+		const portrait = this.game && this.game.portrait;
+		if ( portrait && portrait.active ) portrait.render( this.renderer, () => this.drawWorld() );
+		else this.drawWorld();
 
 		this.touch.update( this.player, this.game );
 		this.hud.update( dt, { player: this.player, device: input.lastDevice } );
@@ -587,6 +591,13 @@ export class App {
 			d.o.visible = _c3.distanceTo( cam ) - s.radius * d.o.matrixWorld.getMaxScaleOnAxis() < d.dist;
 
 		}
+
+	}
+
+	drawWorld() {
+
+		if ( this.post ) this.post.render();
+		else this.renderer.render( this.scene, this.camera );
 
 	}
 

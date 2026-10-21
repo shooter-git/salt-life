@@ -1,6 +1,5 @@
 import { FISH, fishLengthCm } from './FishTable.js';
 import { UPGRADES, nextLevel, FUEL_PRICE } from './Gear.js';
-import { FishPortrait } from './FishPortrait.js';
 
 // DOM for the fishing game, in the look of the rest of the HUD (ui/ui.css tokens, .tw-glass):
 //   top right     purse and cooler / hold load
@@ -150,6 +149,16 @@ const CSS = /* css */`
 	.gm-catch-stage { width: 96vw; }
 	.gm-catch-stats { gap: 6px; }
 	.gm-stat { min-width: 0; padding: 8px 10px; }
+}
+/* (Salt Life) the portrait is drawn in the game's canvas, under the card (FishPortrait): the dimming
+   and blur are drawn there too, so nothing above it blurs */
+.gm-catch-scrim.is-gl { display: none; }
+.gm-catch.is-gl.tw-glass { background: none; border-color: transparent; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.gm-catch.is-gl .gm-catch-stage canvas { display: none; }
+@media (max-height: 500px) {
+	.gm-catch.is-gl { gap: 2px; padding: var(--tw-3) var(--tw-edge); }
+	.gm-catch.is-gl .gm-catch-stage { width: min(94vw, calc(34vh * 2.4)); }
+	.gm-catch.is-gl .gm-catch-sci, .gm-catch.is-gl .gm-catch-note { display: none; }
 }
 /* (Salt Life) narrow phones: a fish's name on its own line, its numbers and button under it */
 .gm-row > span:not(:first-child) { white-space: nowrap; }
@@ -391,11 +400,12 @@ export class GameHUD {
 		this.catchScrim.classList.add( 'is-on' );
 		this.catchOpen = true;
 		// the fish itself: the real model in a studio, drawn live into the stage canvas
+		// (Salt Life: the game's FishPortrait, drawn in the game's canvas under the card: no blur above it)
 		let live = false;
 		try {
 
-			if ( ! this.portrait ) this.portrait = new FishPortrait();
-			live = this.portrait.attach( c.querySelector( '.gm-catch-stage canvas' ) );
+			this.portrait = this.game.portrait || null;
+			live = !! this.portrait && this.portrait.attach( c.querySelector( '.gm-catch-stage canvas' ) );
 			if ( live ) this.portrait.show( info.species, info.kg );
 
 		} catch ( e ) {
@@ -406,7 +416,9 @@ export class GameHUD {
 
 		// (no portrait: the fish on the line shows through)
 		c.classList.toggle( 'is-flat', ! live );
+		c.classList.toggle( 'is-gl', live );
 		this.catchScrim.classList.toggle( 'is-flat', ! live );
+		this.catchScrim.classList.toggle( 'is-gl', live );
 
 	}
 
