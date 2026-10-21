@@ -629,15 +629,17 @@ export class App {
 
 	// the local lights (night) in every lit material under `root`: Lambert only (cheap) for the ground,
 	// the rocks and the plants, and on low-powered devices everywhere but the boat (the full BRDF: wet
-	// wood and metal glinting under the lamps). Not the sea (its own shading)
+	// wood and metal glinting under the lamps). Not the sea (its own shading). (With a graphics card
+	// the plants are lit during loading, before the boat exists.)
 	lightUp( root ) {
 
 		const lit = this._lit || ( this._lit = new WeakSet() );
 		const cheapRoots = [ this.terrain.mesh, this.rocks.group, this.vegetation.group ];
+		const boat = this.boat ? this.boat.group : null;
 		const visit = ( o, cheap ) => {
 
 			if ( cheapRoots.includes( o ) ) cheap = true;
-			else if ( o === this.boat.group ) cheap = false;
+			else if ( o === boat ) cheap = false;
 			if ( o.isMesh ) for ( const m of [ o.material ].flat() ) {
 
 				if ( ! m || lit.has( m ) || ! ( m.isMeshStandardMaterial || m.isMeshLambertMaterial || m.isMeshPhongMaterial ) ) continue;
