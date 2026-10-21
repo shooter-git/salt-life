@@ -64,7 +64,8 @@ const _lanternEuler = new Euler();
 
 export class Village {
 
-	constructor( { scene, terrain, colliders, tier = 'high' } ) {
+	// smallBakes: its baked textures at half size (WebGL drawn on the CPU)
+	constructor( { scene, terrain, colliders, tier = 'high', smallBakes = false } ) {
 
 		const t0 = performance.now();
 		this.scene = scene;
@@ -81,7 +82,7 @@ export class Village {
 		const rand = new Rand( mulberry32( 90210 ) );
 		this.rand = rand;
 		// tileable PBR texture sets, baked on the GPU while the game loads (init())
-		this.textures = new VillageTextures( { tier } );
+		this.textures = new VillageTextures( { tier, smaller: smallBakes ? 0.5 : 1 } );
 		this.materials = createVillageMaterials( this.textures );
 		// fewer segments on round parts on low-powered devices
 		setGeometryDetail( tier === 'low' ? 0.5 : 1 );

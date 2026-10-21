@@ -730,6 +730,7 @@ void vlmSurface( inout VlmSurf s, vec3 Ng ) {
 `,
 	} );
 	m.name = 'VillageNet';
+	m.forceSinglePass = true; // (thin mesh: no back-then-front passes, one program)
 	return m;
 
 }

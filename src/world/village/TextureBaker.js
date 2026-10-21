@@ -640,7 +640,9 @@ function pass( fragmentShader, uniforms = {} ) {
 
 export class VillageTextures {
 
-	constructor( { tier = 'high' } = {} ) {
+	// smaller: every map at this share of its tier's size again (WebGL drawn on the CPU, where the
+	// bake takes seconds)
+	constructor( { tier = 'high', smaller = 1 } = {} ) {
 
 		this.baked = false;
 		this.bakeMs = 0;
@@ -652,7 +654,7 @@ export class VillageTextures {
 
 		for ( const s of SETS ) {
 
-			const k = scale[ s.name ] ?? scale.all;
+			const k = ( scale[ s.name ] ?? scale.all ) * smaller;
 			const set = { ...s, w: Math.max( 64, Math.round( s.w * k ) ), h: Math.max( 64, Math.round( s.h * k ) ), k };
 			const job = { set, albedo: null, nra: null };
 			for ( const key of [ 'out', 'nra' ] ) {

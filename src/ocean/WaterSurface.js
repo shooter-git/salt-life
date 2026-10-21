@@ -52,6 +52,9 @@ export class WaterSurface {
 		// envMapIntensity 12: the scene's environment intensity is only a small diffuse fill (Sky); the
 		// sea reflects the sky in full
 		const mat = this.material = new THREE.MeshStandardMaterial( { color: 0xffffff, roughness: 0.1, metalness: 0, envMapIntensity: 12, transparent: true, side: THREE.DoubleSide } );
+		// (in one pass: three draws a see-through double-sided material twice, back faces then front,
+		// with a program for each; a sheet seen from one side at a time doesn't need it)
+		mat.forceSinglePass = true;
 		mat.name = 'Water';
 		mat.premultipliedAlpha = true;
 		mat.onBeforeCompile = ( shader ) => {

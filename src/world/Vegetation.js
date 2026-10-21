@@ -118,7 +118,8 @@ const SLICE_MS = 30;
 
 export class Vegetation {
 
-	constructor( { scene, terrain, renderer, tier = 'low', ground = null, village = null } ) {
+	// smallBakes: the leaf atlas and the impostors baked at half size (WebGL drawn on the CPU)
+	constructor( { scene, terrain, renderer, tier = 'low', ground = null, village = null, smallBakes = false } ) {
 
 		this.scene = scene;
 		this.terrain = terrain;
@@ -127,6 +128,7 @@ export class Vegetation {
 		this.village = village;
 		this.tier = TIERS[ tier ] ? tier : 'low';
 		this.cfg = TIERS[ this.tier ];
+		this.smallBakes = smallBakes;
 		this.ready = false;
 		this.group = new THREE.Group();
 		this.group.name = 'Vegetation';
@@ -179,7 +181,7 @@ export class Vegetation {
 
 		// materials: one per LOD level (factories take the level's LOD window uniform)
 		const plantMat = ( lodRange ) => this._keep( vegMaterial( PLANT_LEAF, lodRange ) );
-		this.leafAtlas = new LeafAtlas();
+		this.leafAtlas = new LeafAtlas( this.smallBakes ? { size: 512 } : {} );
 		const canopyDef = canopyMaterialDef( this.leafAtlas );
 		const canopyMat = ( lodRange ) => this._keep( vegMaterial( canopyDef, lodRange ) );
 		uCanopyNear.value.set( cfg.treeNear, cfg.shrubNear );
@@ -207,7 +209,7 @@ export class Vegetation {
 		this.atlas = new ImpostorAtlas( [
 			{ variants: treeVariants, ...axisSphere( treeGeo ) },
 			{ variants: shrubVariants, ...axisSphere( shrubGeo ) },
-		], this.bakeMaterials, { framePx: cfg.framePx, blendDist: cfg.blendDist } );
+		], this.bakeMaterials, { framePx: this.smallBakes ? cfg.framePx / 2 : cfg.framePx, blendDist: cfg.blendDist } );
 		// (GLSL expressions: see ImpostorAtlas.materialDef)
 		const impostorDef = this.atlas.materialDef( {
 			isGroup1: ( iDat ) => `${ iDat }.y < 0.0`,
