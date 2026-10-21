@@ -409,9 +409,10 @@ export class App {
 
 		this.touch.update( this.player, this.game );
 		this.hud.update( dt, { player: this.player, device: input.lastDevice } );
-		// the HUD's layout and wording follow the input in use (game-ui.css, style.css)
+		// the HUD makes room for the touch controls while they're shown (game-ui.css, style.css); its
+		// wording follows the input last used (a keyboard on a tablet, say)
 		const html = document.documentElement;
-		if ( html.dataset.device !== input.lastDevice ) html.dataset.device = input.lastDevice;
+		if ( html.classList.contains( 'is-touch' ) !== this.touch.active ) html.classList.toggle( 'is-touch', this.touch.active );
 		input.endFrame();
 
 	}

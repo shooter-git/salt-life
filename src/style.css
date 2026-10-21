@@ -64,16 +64,16 @@ html, body {
 	text-shadow: none;
 }
 
-/* on touch screens (App sets html[data-device]): in portrait the top right holds the fishing game's
+/* on touch screens (App sets html.is-touch while the touch controls are shown): in portrait the top right holds the fishing game's
    purse and minimap (game-ui.css), so toasts and the first hint go under them; in landscape the toast
    stays at the top, between the app's menu button and the purse */
 @media (orientation: portrait) {
-	html[data-device='touch'] .hud-toast { top: calc(var(--gm-top, 64px) + var(--gm-map, 0px) + 16px); }
-	html[data-device='touch'] .hud-hint { top: calc(var(--gm-top, 64px) + var(--gm-map, 0px) + 64px); }
+	html.is-touch .hud-toast { top: calc(var(--gm-top, 64px) + var(--gm-map, 0px) + 16px); }
+	html.is-touch .hud-hint { top: calc(var(--gm-top, 64px) + var(--gm-map, 0px) + 64px); }
 }
 
 @media (orientation: landscape) {
-	html[data-device='touch'] .hud-toast { left: calc((72px + var(--gm-purse-l, 100vw)) / 2 - 6px); max-width: calc(var(--gm-purse-l, 100vw) - 84px); }
+	html.is-touch .hud-toast { left: calc((72px + var(--gm-purse-l, 100vw)) / 2 - 6px); max-width: calc(var(--gm-purse-l, 100vw) - 84px); }
 }
 
 /* ---- touch controls */

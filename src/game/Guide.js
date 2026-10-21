@@ -118,7 +118,7 @@ function cards( device ) {
 				<div class="is-joe"><i></i><span><b>Joe</b> · fish stand by the pier</span><em data-where="joe"></em></div>
 				<div class="is-marta"><i></i><span><b>Marta</b> · chandlery by the boathouse</span><em data-where="marta"></em></div>
 			</div>
-			<p style="margin:0;color:var(--tw-ink-3);font-size:var(--tw-fs-sm)">Both are marked on the map ${ d === 'touch' ? 'at the top right' : 'in the lower right' }.</p>`,
+			<p style="margin:0;color:var(--tw-ink-3);font-size:var(--tw-fs-sm)">Both are marked on the map ${ document.documentElement.classList.contains( 'is-touch' ) ? 'at the top right' : 'in the lower right' }.</p>`,
 		},
 	];
 
