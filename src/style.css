@@ -67,6 +67,9 @@ html, body {
 /* on touch screens (App sets html.is-touch while the touch controls are shown): in portrait the top right holds the fishing game's
    purse and minimap (game-ui.css), so toasts and the first hint go under them; in landscape the toast
    stays at the top, between the app's menu button and the purse */
+/* (the action button says it there: no key prompt behind the buttons, also when a keyboard is used) */
+html.is-touch .hud-prompt { display: none; }
+
 @media (orientation: portrait) {
 	html.is-touch .hud-toast { top: calc(var(--gm-top, 64px) + var(--gm-map, 0px) + 16px); }
 	html.is-touch .hud-hint { top: calc(var(--gm-top, 64px) + var(--gm-map, 0px) + 64px); }
