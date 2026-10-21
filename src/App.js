@@ -305,6 +305,7 @@ export class App {
 		}
 
 		this.frame( 0 ); // places the camera, the LOD grids and the sky for the compile
+		if ( this._late ) this.uploadLate();
 		// (with the near detail it hid: compiled now, not the first time it shows)
 		const near = ( this.nearDetail || [] ).filter( ( d ) => ! d.o.visible );
 		for ( const d of near ) d.o.visible = true;
@@ -349,9 +350,11 @@ export class App {
 		} );
 		this._started = true;
 		this.hud.showHint( this.input.lastDevice );
-		// (on a device that draws on its CPU the plants grow after the start: the catch card's shaders,
-		// then Joe and Marta after them)
-		Promise.resolve( this.cpuGL ? this.plantsGrow() : null ).then( () => this.prepareLate() ).then( () => this.loadCharacters() );
+		// (on a device that draws on its CPU, one after another, so their garbage doesn't pile up: the
+		// island's held-back parts appear, the plants grow, then the catch card's shaders, then Joe
+		// and Marta)
+		const revealed = this._late ? new Promise( ( done ) => this._revealed = done ) : null;
+		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.loadCharacters() );
 		const begin = () => this.audio.resume().then( ( on ) => {
 
 			if ( on ) for ( const type of GESTURES ) removeEventListener( type, begin, true );
@@ -470,11 +473,56 @@ export class App {
 
 	}
 
+	// (WebGL drawn on the CPU) the geometry of the parts held back from the loading frame goes to the
+	// GPU while loading all the same, drawn once into a 1×1 target in a plain material (all of it:
+	// culling and the near detail's hiding off): their CPU copies are freed then (ReleaseAfterUpload),
+	// not after the start on top of the plants being made
+	uploadLate() {
+
+		const r = this.renderer, scene = this.scene;
+		const target = new THREE.WebGLRenderTarget( 1, 1 ), plain = new THREE.MeshBasicMaterial();
+		const restore = [];
+		for ( const group of this._late ) for ( const root of group ) {
+
+			root.traverse( ( o ) => {
+
+				restore.push( [ o, o.visible, o.frustumCulled ] );
+				o.visible = true;
+				o.frustumCulled = false;
+
+			} );
+
+		}
+
+		scene.overrideMaterial = plain;
+		r.setRenderTarget( target );
+		r.render( scene, this.camera );
+		r.setRenderTarget( null );
+		scene.overrideMaterial = null;
+		for ( const [ o, visible, culled ] of restore ) {
+
+			o.visible = visible;
+			o.frustumCulled = culled;
+
+		}
+
+		for ( const group of this._late ) for ( const root of group ) root.visible = false;
+		target.dispose();
+		plain.dispose();
+
+	}
+
 	// (WebGL drawn on the CPU) the parts held back from the loading frame, a group per drawn frame
 	revealLate() {
 
 		const group = this._late && this._late.shift();
 		if ( group ) for ( const o of group ) o.visible = true;
+		else if ( this._late ) {
+
+			this._late = null;
+			if ( this._revealed ) this._revealed();
+
+		}
 
 	}
 
