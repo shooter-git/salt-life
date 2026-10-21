@@ -124,6 +124,8 @@ export class App {
 		this.renderer = renderer;
 		this._drawn = null; // the last frame's fence
 		this._owed = 0; // s not yet played while waiting for it
+		this._slots = []; // bakes waiting for a frame of their own (frameSlot)
+		this._slotOwed = 0;
 		this._rest = false; // the frame after a drawn one is skipped
 		if ( this.cpuGL ) this.fitCpuPixels();
 		// dynamic resolution, gentler than the stage's (which aims at 60 frames a second and goes down
@@ -175,7 +177,7 @@ export class App {
 		uploadTextures( renderer, [ this.terrain.heightTexture, this.terrain.normalTexture, this.terrain.splatTexture ] );
 		// boulders, blocks, talus and outcrops (shaded like the ground's rock)
 		this.rocks = new Rocks( { scene, terrain: this.terrain, colliders: this.colliders, village: this.village, castShadow: tier !== 'low', lite: tier === 'low' } );
-		this.vegetation = new Vegetation( { scene, terrain: this.terrainData, ground: this.terrain, renderer, tier, village: this.village, smallBakes: this.cpuGL } );
+		this.vegetation = new Vegetation( { scene, terrain: this.terrainData, ground: this.terrain, renderer, tier, village: this.village, smallBakes: this.cpuGL, bakeSlot: () => this.frameSlot() } );
 		// (WebGL drawn on the CPU: the plants grow in once the game has started, in start(); their
 		// programs and bakes take seconds there, and a creation has 45 s to load)
 		if ( ! this.cpuGL ) await this.plantsGrow();
@@ -360,6 +362,17 @@ export class App {
 			// (the stage's first step can be negative: it starts counting after the frame it is given
 			// began, a second earlier after a slow start)
 			dt = Math.max( 0, dt );
+			// a frame given to a bake (frameSlot): nothing else is drawn, its time goes to the next
+			if ( this._slots.length ) {
+
+				this._slotOwed += dt;
+				this._slots.shift()();
+				return;
+
+			}
+
+			dt += this._slotOwed;
+			this._slotOwed = 0;
 			if ( this.cpuGL ) this.pacedFrame( dt );
 			else {
 
@@ -374,10 +387,10 @@ export class App {
 		// (on a device that draws on its CPU, one after another, so their garbage doesn't pile up: the
 		// island's held-back parts appear, the plants grow, then the catch card's shaders, then Joe and
 		// Marta (their loading is the high point of script memory: before the animals and the debris
-		// add theirs), then the animals and the debris, then the scanned debris)
+		// add theirs), then the animals and the debris, then the scanned debris, with pauses between)
 		const revealed = this._late ? new Promise( ( done ) => this._revealed = done ) : null;
 		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.loadCharacters() )
-			.then( () => this.cpuGL && this.lifeAndDebris() ).then( () => this.scansArrive() );
+			.then( () => this.pause() ).then( () => this.cpuGL && this.lifeAndDebris() ).then( () => this.pause() ).then( () => this.scansArrive() );
 		const begin = () => this.audio.resume().then( ( on ) => {
 
 			if ( on ) for ( const type of GESTURES ) removeEventListener( type, begin, true );
@@ -476,6 +489,25 @@ export class App {
 	// in between (showing a frame holds it up for as long as the frame took to draw). Left to queue up
 	// there, frames come slower, and the page stops answering while the queue drains, for many seconds;
 	// waiting for each frame instead would leave the page no time to answer either
+	// a few seconds between the stages after the start on a device that draws on its CPU: the page's
+	// thread is mostly idle while frames are drawn, and the garbage collector catches up then (so the
+	// stages' garbage doesn't pile up: script memory); none with a graphics card
+	pause( ms = 3000 ) {
+
+		return this.cpuGL ? new Promise( ( resolve ) => setTimeout( resolve, ms ) ) : Promise.resolve();
+
+	}
+
+	// A promise that resolves at the start of a frame that draws nothing else, for the plants' bakes:
+	// All the Spaces' checks count every triangle drawn between two frames as one frame's, and a
+	// bake with the world came to over the low tier's 300k. (Before the loop runs: the next task.)
+	frameSlot() {
+
+		if ( ! this._started ) return new Promise( ( resolve ) => setTimeout( resolve, 0 ) );
+		return new Promise( ( resolve ) => this._slots.push( resolve ) );
+
+	}
+
 	pacedFrame( dt ) {
 
 		const gl = this.renderer.getContext();
@@ -758,6 +790,7 @@ export class App {
 	async lifeAndDebris() {
 
 		await this.lifeArrives();
+		await this.pause();
 		await this.debrisLands();
 		this._plantsGrown = true;
 		this.releaseMasks();
