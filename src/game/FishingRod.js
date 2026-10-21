@@ -285,6 +285,10 @@ export class FishingRod {
 	// ---- per frame. fight: { distance, tension, surge } while fighting
 	update( dt, { visible, fight = null } ) {
 
+		// (Salt Life: held back from the load's first frames, whose drawing compiles their shaders; the
+		// app compiles them after the start: App.prepareLate)
+		if ( this.holdBack ) visible = false;
+
 		this.t += dt;
 		const cam = this.camera;
 		const tipOld = _tipOld.copy( this.tip );

@@ -4,7 +4,8 @@ import { CHANDLERY } from './Chandlery.js';
 // First-play guide:
 //  - an intro (3 cards) the first time the game starts, after the start overlay: the goal, the fishing
 //    controls, getting around and where Joe and Marta are (live direction and distance; their
-//    markers pulse on the minimap). Enter / Space / click or tap: next, Esc: skip. Replay from the help (F1).
+//    markers pulse on the minimap). Enter / Space / click or tap: next, Esc: skip. Replay with H (Salt
+//    Life: Tidewater's help panel, F1, isn't ported).
 //  - one-time tips the first time something happens (rod out, first nibble, fish on, first catch,
 //    full cooler, next to the boat, at Joe's, at Marta's), in a card above the minimap.
 // Seen state under 'tidewater.guide' (in the person's saves: core/SaveStore), wrapped in try/catch.
@@ -86,7 +87,7 @@ const WELCOME = {
 const FISHING = {
 	keyboard: [ [ k( 'R' ), 'Take out the rod (by the water or on the boat)' ], [ k( 'Hold', 'LMB' ), 'Wind up, release to cast. Hold longer to cast farther' ],
 		[ k( 'LMB' ), 'Strike when the bobber is <b>pulled under</b> (dips are only nibbles)' ], [ k( 'Hold', 'LMB' ), 'Reel in. <b>Let go when the tension turns red</b>, or the line snaps' ],
-		[ k( 'RMB' ), 'Reel an empty line back in' ], [ k( 'I' ), 'Your cooler and fish log' ] ],
+		[ k( 'RMB' ), 'Reel an empty line back in' ], [ k( 'F', 'G' ), 'The left and right mouse buttons, from the keyboard' ], [ k( 'I' ), 'Your cooler and fish log' ] ],
 	touch: [ [ k( 'Rod' ), 'Take out the rod (by the water or on the boat)' ], [ k( 'Hold', 'Cast' ), 'Wind up, let go to cast. Hold longer to cast farther' ],
 		[ k( 'Strike' ), 'When the bobber is <b>pulled under</b> (dips are only nibbles)' ], [ k( 'Hold', 'Reel' ), 'Reel in. <b>Let go when the tension turns red</b>, or the line snaps' ],
 		[ k( 'Reel in' ), 'Reel an empty line back in' ], [ k( 'Cooler' ), 'Your cooler and fish log' ] ],
@@ -97,7 +98,7 @@ const FISHING = {
 
 const AROUND = {
 	keyboard: [ [ k( 'W', 'A', 'S', 'D' ), 'Move, mouse to look, <kbd>Shift</kbd> to run' ], [ k( 'E' ), 'Board the boat, take the helm, talk to Joe and Marta' ],
-		[ k( 'F1' ), 'All controls, and this guide again' ] ],
+		[ k( 'H' ), 'This guide again' ] ],
 	touch: [ [ k( 'Left side' ), 'Drag to walk, from wherever your thumb lands' ], [ k( 'Right side' ), 'Drag to look around' ],
 		[ k( 'Gold button' ), 'Board the boat, take the helm, talk to Joe and Marta' ] ],
 	gamepad: [ [ k( 'Left stick' ), 'Move, right stick to look' ], [ k( 'B' ), 'Board the boat, take the helm, talk to Joe and Marta' ] ],
@@ -233,7 +234,7 @@ export class Guide {
 			if ( e.code === 'Escape' ) this.close();
 			else if ( e.code === 'Enter' || e.code === 'Space' || e.code === 'ArrowRight' ) this.next();
 			else if ( e.code === 'ArrowLeft' ) this.show( Math.max( 0, this.step - 1 ) );
-			else if ( e.code !== 'F1' ) return;
+			else if ( e.code !== 'KeyH' ) return;
 			e.preventDefault();
 			e.stopPropagation();
 

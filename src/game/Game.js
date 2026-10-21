@@ -152,7 +152,7 @@ export class Game {
 
 			const ui = app.ui.ui;
 			this.hud = new GameHUD( ui, this );
-			// the minimap (lower right) and the first-play guide (intro, one-time tips; replay from F1)
+			// the minimap (lower right) and the first-play guide (intro, one-time tips; replay with H)
 			this.minimap = new Minimap( ui.hud || ui.root, this );
 			this.guide = new Guide( ui, this, this.minimap );
 			ui.onReplayGuide = () => this.guide.replay();
@@ -164,7 +164,7 @@ export class Game {
 
 			rod.equip( ! rod.equipped );
 			if ( ! rod.equipped ) this.cancelLine();
-			const cast = { touch: 'hold Cast and let go', gamepad: 'hold RT to cast' }[ app.input.lastDevice ] || 'hold left mouse to cast';
+			const cast = { touch: 'hold Cast and let go', gamepad: 'hold RT to cast' }[ app.input.lastDevice ] || 'hold left mouse or F to cast';
 			this.toast( rod.equipped ? `Rod out · ${ cast }` : 'Rod away', 1600 );
 
 		}
@@ -178,6 +178,7 @@ export class Game {
 		}
 
 		if ( this.hud && ( inp.hit( 'KeyI' ) || inp.hit( 'Tab' ) ) ) this.hud.toggleInventory();
+		if ( this.guide && inp.hit( 'KeyH' ) && ! this.guide.open ) this.guide.replay();
 		if ( this.hud && inp.hit( 'Escape' ) ) {
 
 			this.hud.toggleInventory( false );
@@ -185,8 +186,9 @@ export class Game {
 
 		}
 
-		// mouse edges (the left button also looks around while the pointer isn't captured)
-		const lmb = inp.mouseDown && inp.enabled, rmb = inp.rightDown && inp.enabled;
+		// mouse edges (the left button also looks around while the pointer isn't captured). (Salt Life:
+		// F and G do the same from the keyboard, for trackpads and All the Spaces' checks' scripts)
+		const lmb = ( inp.mouseDown || inp.down( 'KeyF' ) ) && inp.enabled, rmb = ( inp.rightDown || inp.down( 'KeyG' ) ) && inp.enabled;
 		const lDown = lmb && ! this._lmb, lUp = ! lmb && this._lmb, rDown = rmb && ! this._rmb;
 		this._lmb = lmb;
 		this._rmb = rmb;

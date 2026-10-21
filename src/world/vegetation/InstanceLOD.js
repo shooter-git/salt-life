@@ -5,8 +5,10 @@ import * as THREE from '../../engine/index.js';
 // Each type has up to two levels:
 //   near: InstancedMeshes holding only instances within (range + margin) of the camera,
 //         re-filled on the CPU when the camera has moved a few metres (cheap grid query);
-//   far:  InstancedMeshes holding all instances (static buffers), or - with farExcludeNear -
-//         all instances except those certainly inside the near range (small refill).
+//   far:  InstancedMeshes holding all instances (static buffers), or - with farExcludeNear /
+//         sortFar - those that can be inside the far window and the camera's view before the next
+//         refill (Salt Life: the ones beyond would only collapse or be clipped, but their triangles
+//         still count; setView() gives the view, a turn past VIEW_TURN refills).
 // The exact per-instance near/far split happens in the vertex shader (uLodRange vs the
 // camera distance of the instance base), so the switch is frame-exact and independent of
 // how often the CPU refills. Instances outside their window collapse to a point.
@@ -14,6 +16,11 @@ import * as THREE from '../../engine/index.js';
 // (three.js keeps the instance matrices in a vertex attribute anyway; a floor on the capacity
 // avoids re-creating small buffers)
 const MIN_CAPACITY = 1100;
+// far levels keep the instances within the camera's horizontal view, widened by VIEW_MARGIN (and an
+// instance's own size, INSTANCE_R m), plus everything within VIEW_NEAR m; refilled when the view
+// has turned VIEW_TURN from the last fill
+const VIEW_MARGIN = 30 * Math.PI / 180, VIEW_TURN = 20 * Math.PI / 180, VIEW_NEAR = 40, INSTANCE_R = 15;
+const wrapAngle = ( a ) => Math.atan2( Math.sin( a ), Math.cos( a ) );
 
 const _m = new THREE.Matrix4();
 const _q = new THREE.Quaternion();
@@ -232,6 +239,10 @@ export class VegType {
 		this.lastY = Infinity;
 		this.lastZ = Infinity;
 		this.levels = [];
+		this.farEnd = far ? far.fade[ 1 ] : Infinity;
+		this.viewYaw = 0;
+		this.viewHalf = Math.PI; // (no view yet: everything)
+		this.farYaw = NaN;
 
 		// fade = [start, end] for types without a far level (shrink out)
 		const nearWindow = far ? new THREE.Vector3( 0, nearRange, nearRange + 0.01 ) : new THREE.Vector3( 0, fade[ 0 ], fade[ 1 ] );
@@ -280,10 +291,33 @@ export class VegType {
 
 	}
 
+	// the camera's view: yaw (atan2 of its forward x, z) and half its horizontal field of view
+	setView( yaw, half ) {
+
+		this.viewYaw = yaw;
+		this.viewHalf = half;
+
+	}
+
+	// whether an instance (dx, dz from the camera, d apart) can be in view before the next refill
+	_inView( dx, dz, d ) {
+
+		if ( d < VIEW_NEAR || this.viewHalf >= Math.PI ) return true;
+		return Math.abs( wrapAngle( Math.atan2( dx, dz ) - this.viewYaw ) ) <= this.viewHalf + VIEW_MARGIN + Math.atan( INSTANCE_R / d );
+
+	}
+
+	get _turned() {
+
+		return this.far && ( this.sortFar || this.farExcludeNear ) && ! ( Math.abs( wrapAngle( this.viewYaw - this.farYaw ) ) <= VIEW_TURN );
+
+	}
+
 	// how far (3D) past its refresh distance the camera has moved (> 0: needs a refill)
 	overdue( camPos ) {
 
 		if ( ! this.near ) return - 1;
+		if ( this._turned ) return 1e9;
 		const dx = camPos.x - this.lastX, dy = camPos.y - this.lastY, dz = camPos.z - this.lastZ;
 		const d2 = dx * dx + dy * dy + dz * dz;
 		const d = Number.isFinite( d2 ) ? Math.sqrt( d2 ) - this.refreshDistance : 1e9;
@@ -298,22 +332,28 @@ export class VegType {
 
 		this.farX = camPos.x;
 		this.farZ = camPos.z;
+		this.farYaw = this.viewYaw;
 		const { px, pz, count } = this.inst;
 		const B = 6, NB = 1024;
 		const bucket = this._bucket || ( this._bucket = new Uint16Array( count ) );
 		const start = this._bstart || ( this._bstart = new Int32Array( NB + 1 ) );
 		start.fill( 0 );
+		// (only the instances that can reach the far window's end and the view before the next
+		// re-sort; the others get bucket NB: left out)
+		const cut = Math.min( NB, Math.ceil( ( this.farEnd + this.farRefresh ) / B ) + 1 );
 		for ( let i = 0; i < count; i ++ ) {
 
-			const b = Math.min( NB - 1, Math.floor( Math.hypot( px[ i ] - camPos.x, pz[ i ] - camPos.z ) / B ) );
-			bucket[ i ] = b;
-			start[ b + 1 ] ++;
+			const dx = px[ i ] - camPos.x, dz = pz[ i ] - camPos.z, d = Math.hypot( dx, dz );
+			const b = Math.min( NB - 1, Math.floor( d / B ) );
+			bucket[ i ] = b < cut && this._inView( dx, dz, d ) ? b : NB;
+			if ( bucket[ i ] < NB ) start[ b + 1 ] ++;
 
 		}
 
 		for ( let b = 0; b < NB; b ++ ) start[ b + 1 ] += start[ b ];
-		for ( let i = 0; i < count; i ++ ) this.farIds[ start[ bucket[ i ] ] ++ ] = i;
-		this.far.fill( this.inst, this.farIds, count, false );
+		const n = start[ cut ];
+		for ( let i = 0; i < count; i ++ ) if ( bucket[ i ] < NB ) this.farIds[ start[ bucket[ i ] ] ++ ] = i;
+		this.far.fill( this.inst, this.farIds, n, false );
 
 	}
 
@@ -322,7 +362,7 @@ export class VegType {
 
 		if ( ! this.near ) return false;
 		if ( ! force && this.overdue( camPos ) < 0 ) return false;
-		if ( this.sortFar && ! ( Math.hypot( camPos.x - this.farX, camPos.z - this.farZ ) < this.farRefresh ) ) this._sortFar( camPos );
+		if ( this.sortFar && ( this._turned || ! ( Math.hypot( camPos.x - this.farX, camPos.z - this.farZ ) < this.farRefresh ) ) ) this._sortFar( camPos );
 		this.lastX = camPos.x;
 		this.lastY = camPos.y;
 		this.lastZ = camPos.z;
@@ -350,15 +390,19 @@ export class VegType {
 		if ( this.farExcludeNear ) {
 
 			// drop only instances that stay inside the near range (3D, like the shader test)
-			// until the camera has moved refreshDistance and triggered the next refill
+			// until the camera has moved refreshDistance and triggered the next refill, and
+			// those that stay beyond the far window's end
 			const rMin = Math.max( 0, this.nearRange - this.refreshDistance - 2 );
 			const r2 = rMin * rMin;
+			const rMax = this.farEnd + this.refreshDistance + 2, R2 = rMax * rMax;
 			const { px, py, pz } = this.inst;
 			let c = 0;
+			this.farYaw = this.viewYaw;
 			for ( let i = 0; i < this.inst.count; i ++ ) {
 
 				const dx = px[ i ] - camPos.x, dy = py[ i ] - camPos.y, dz = pz[ i ] - camPos.z;
-				if ( dx * dx + dy * dy + dz * dz >= r2 ) this.farIds[ c ++ ] = i;
+				const d2 = dx * dx + dy * dy + dz * dz;
+				if ( d2 >= r2 && d2 < R2 && this._inView( dx, dz, Math.hypot( dx, dz ) ) ) this.farIds[ c ++ ] = i;
 
 			}
 

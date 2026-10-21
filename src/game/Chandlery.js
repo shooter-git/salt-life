@@ -39,7 +39,7 @@ export class Chandlery {
 
 			const mesh = new Mesh( buildChandleryKit( a ), a.material );
 			mesh.name = 'ChandleryStall';
-			mesh.castShadow = true;
+			mesh.castShadow = tier === 'high'; // (its scanned props: ~40-50k triangles in the shadow pass, under the stall's roof)
 			this.group.add( mesh );
 
 		} ).catch( ( e ) => {

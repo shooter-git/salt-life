@@ -83,7 +83,7 @@ export class Village {
 		this.rand = rand;
 		// tileable PBR texture sets, baked on the GPU while the game loads (init())
 		this.textures = new VillageTextures( { tier, smaller: smallBakes ? 0.5 : 1 } );
-		this.materials = createVillageMaterials( this.textures );
+		this.materials = createVillageMaterials( this.textures, { shared: tier === 'low' } );
 		// fewer segments on round parts on low-powered devices
 		setGeometryDetail( tier === 'low' ? 0.5 : 1 );
 		// two builders: everything static merges into a single mesh per material for the harbour (pier,
@@ -685,6 +685,8 @@ export class Village {
 		if ( B.fishProps ) {
 
 			const fish = B.fishProps.build( { lod: this.tier === 'low' ? 2 : 1 } );
+			// (small props: ~40k triangles in the shadow pass for shadows hardly seen; high-end only)
+			fish.castShadow = this.tier === 'high';
 			fish.matrixAutoUpdate = false;
 			fish.updateMatrix();
 			this.group.add( fish );

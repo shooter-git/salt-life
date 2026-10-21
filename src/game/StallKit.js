@@ -2,7 +2,7 @@ import {
 	BufferGeometry, Float32BufferAttribute, Uint32BufferAttribute, Matrix4, Matrix3, Vector3, Quaternion, Euler,
 	CylinderGeometry, TorusGeometry, SphereGeometry, LatheGeometry, Vector2,
 	DataArrayTexture, DataTexture, MeshStandardMaterial, SRGBColorSpace, NoColorSpace, RepeatWrapping, ClampToEdgeWrapping,
-	LinearFilter, LinearMipmapLinearFilter,
+	LinearFilter, LinearMipmapLinearFilter, DoubleSide,
 } from '../engine/index.js';
 import { PAT } from './GameMaterials.js';
 import { G } from '../core/Globals.js';
@@ -157,7 +157,9 @@ export { PAT };
 
 export function createPlainMaterial( name ) {
 
-	const m = new MeshStandardMaterial( { vertexColors: true, roughness: 0.85, metalness: 0 } );
+	// (two-sided like the fish props' material, so the two share one program: one shader fewer to
+	// compile while loading)
+	const m = new MeshStandardMaterial( { vertexColors: true, roughness: 0.85, metalness: 0, side: DoubleSide } );
 	m.name = name;
 	return m;
 

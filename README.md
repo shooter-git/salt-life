@@ -13,9 +13,11 @@ it runs on phones too, inside All the Spaces' sealed creation frame.
 ## Status: being ported
 
 This repository started as a fork of Tidewater. Its WebGPU code is still here while each system is
-ported; `src/main.js` is the new entry point. M0 to M4 are done: you can walk, swim and take the boat
-around the island, and fish from the pier, the beach or the boat, sell your catch to Joe and buy better
-gear from Marta, with a mouse and keyboard, a gamepad or a touch screen.
+ported; `src/main.js` is the new entry point. You can walk, swim and take the boat around the island,
+and fish from the pier, the beach or the boat, sell your catch to Joe and buy better gear from Marta,
+with a mouse and keyboard, a gamepad or a touch screen. Done: M0, M1, M2, M4 and M5, and from M3 the
+village, the pier, the stalls, the rocks and the plants. Still to come from M3: the reef and its fish,
+the birds and crabs, the whale and the lights at night.
 
 | Milestone | What it brings |
 |---|---|
@@ -24,7 +26,7 @@ gear from Marta, with a mouse and keyboard, a gamepad or a touch screen.
 | M2 | The sea and the shore: water, breaking waves and foam, underwater, caustics, wake and spray |
 | M3 | The world: village, pier, stalls, rocks, plants, reef and fish, wildlife, the whale, night lights |
 | M4 | The fishing game: the rod and the fight, the cooler and log, Joe and Marta, upgrades, the guide, sound |
-| M5 | Device tiers and budgets: richer on laptops, smooth on phones |
+| M5 | Device tiers and budgets: richer on laptops, smooth on phones; the checks play the fishing too |
 | M6 | Drop-in multiplayer: others in the space, catch announcements, a shared records board |
 
 ## How it fits All the Spaces

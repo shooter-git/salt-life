@@ -115,6 +115,7 @@ const TIERS = {
 
 // spread over tasks: yield to the event loop after this much work (ms)
 const SLICE_MS = 30;
+const _view = new THREE.Vector3();
 
 export class Vegetation {
 
@@ -365,9 +366,14 @@ export class Vegetation {
 		uGustOffset.value.x += wd.x * speed * dt;
 		uGustOffset.value.y += wd.y * speed * dt;
 
+		// the view, for the far levels (InstanceLOD: what's behind the camera is left out)
+		const f = camera.getWorldDirection( _view );
+		const half = Math.atan( Math.tan( camera.fov * Math.PI / 360 ) * camera.aspect );
+		for ( const t of this.types ) t.setView( Math.atan2( f.x, f.z ), half );
+
 		// near-level refills happen only after the camera moved a few metres; at most two
 		// types per frame (most overdue first) so fast flights never stack up refills.
-		// Teleports (anything far past the margin) refill everything at once.
+		// Teleports (anything far past the margin) and turns of the view refill everything at once.
 		let a = null, b = null, da = 0, db = 0;
 		for ( const t of this.types ) {
 
