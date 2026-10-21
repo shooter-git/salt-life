@@ -21,3 +21,17 @@ cp out/*.ogg ../../public/audio/         # then copy the entries of fishing-bank
 - The mixer (`src/audio/SoundScape.js`, `MIX`) turns target loudness into gains with those measurements.
 
 `raw/`, `work/` and `out/` are build scratch (not committed).
+
+## All the Spaces' loudness rule, and the AAC copies
+
+All the Spaces' build turns a sound down when it's louder than -14 LUFS integrated or peaks above -1 dBFS.
+That would quietly change the mix, since the bank's `lufs` would no longer be true. `tame.mjs` keeps every
+file inside that rule, with 0.3 dB to spare, and moves the file's `lufs` in `src/audio/soundBank.js` by the
+same gain. It also writes an `.m4a` (AAC) copy of each `.ogg` for browsers that can't decode Ogg Opus
+(older Safari). The soundscape picks the format with `canPlayType`, and falls back to the copy when an Ogg
+decode fails.
+
+```sh
+node tools/audio/tame.mjs           # after adding or rebuilding sounds (needs ffmpeg)
+node tools/audio/tame.mjs --check   # fails if a file is outside the rule or has no .m4a
+```

@@ -28,6 +28,7 @@ import { Chandlery } from './game/Chandlery.js';
 import { TouchControls } from './ui/TouchControls.js';
 import { Hud } from './ui/Hud.js';
 import { Wake } from './ocean/Wake.js';
+import { SoundScape } from './audio/SoundScape.js';
 import { PostChain } from './post/PostChain.js';
 import { releaseGeometries, releaseTextures, uploadTextures, watchContext } from './core/ReleaseAfterUpload.js';
 
@@ -45,6 +46,10 @@ const UNDERWATER = new THREE.Color( 0.03, 0.17, 0.2 );
 const _c = new THREE.Color();
 const _c3 = new THREE.Vector3();
 const _size = new THREE.Vector2();
+const _fwd = new THREE.Vector3();
+const _up = new THREE.Vector3();
+// what starts the sound: browsers allow it only after one of these
+const GESTURES = [ 'pointerdown', 'touchend', 'click', 'keydown' ];
 
 export class App {
 
@@ -207,6 +212,33 @@ export class App {
 		this.post = tier === 'high' ? new PostChain( renderer, scene, camera ) : null;
 		this.player = new Player( { camera, input: this.input, terrain: this.terrainData, colliders: this.colliders, query: this.query, boat: this.boatCtl } );
 
+		// ---------------------------------------------------------------- sound
+		// Tidewater's field recordings (public/audio): surf wave by wave, wind, palms, birds by the
+		// hour, footsteps, swimming, the boat. Out through All the Spaces' ambience group; started by
+		// the first tap, click or key (start()); M mutes it.
+		// (the ambience group at full: its default half is for a bed under other sounds, and this is the
+		// whole mix, balanced in itself)
+		const output = () => {
+
+			portal.audio.setVolume( 'ambience', 1 );
+			return portal.audio.bus( 'ambience' );
+
+		};
+
+		this.audio = new SoundScape( { context: () => portal.audio.context, output, tier } );
+		// (the surf follows the shore waves: Tidewater's are { value } uniforms, these plain params)
+		const P = this.shore.params, live = ( k ) => ( { get value() {
+
+			return P[ k ];
+
+		} } );
+		this.audio.attachShore( {
+			shore: { amplitude: live( 'amplitude' ), variation: live( 'variation' ), period: live( 'period' ), gamma: live( 'gamma' ), enabled: live( 'enabled' ), time: G.time },
+			field: this.shoreField, terrain: this.terrainData,
+		} );
+		this.player.audio = this.audio;
+		this.boatCtl.onSlam = ( strength ) => this.audio.hullSlap( strength );
+
 		// ---------------------------------------------------------------- shaders
 		await progress( 0.8, 'Preparing the shaders' );
 		// the CPU copies of the big static data go once it's on the GPU (phones' script memory)
@@ -281,6 +313,12 @@ export class App {
 		} );
 		this._started = true;
 		this.hud.showHint( this.input.lastDevice );
+		const begin = () => this.audio.resume().then( ( on ) => {
+
+			if ( on ) for ( const type of GESTURES ) removeEventListener( type, begin, true );
+
+		} );
+		for ( const type of GESTURES ) addEventListener( type, begin, true );
 
 	}
 
@@ -295,6 +333,12 @@ export class App {
 		const input = this.input;
 		input.update( dt );
 		if ( input.hit( 'KeyT' ) ) this.toggleTime();
+		if ( input.hit( 'KeyM' ) ) {
+
+			this.audio.setMuted( ! this.audio.muted );
+			this.hud.toast( this.audio.muted ? 'Sound off' : 'Sound on' );
+
+		}
 		this.boatCtl.update( dt );
 		this.player.update( dt );
 		this.sky.update( s.timeOfDay, s.sunAzimuth, this.camera );
@@ -331,6 +375,7 @@ export class App {
 		this.water.update( this.camera );
 		this.boat.update( dt );
 		this.wake.update( dt );
+		this.updateAudio( dt );
 
 		// ---- render
 		if ( this.nearDetail ) this.updateNearDetail();
@@ -374,6 +419,37 @@ export class App {
 		this._drawn = gl.fenceSync( gl.SYNC_GPU_COMMANDS_COMPLETE, 0 );
 		this._rest = true;
 		gl.flush();
+
+	}
+
+	// the soundscape follows the camera, the shore, the wind, the time of day and the boat
+	updateAudio( dt ) {
+
+		const a = this.audio;
+		if ( ! a.enabled ) return;
+		const cam = this.camera, p = cam.position;
+		cam.getWorldDirection( _fwd );
+		_up.set( 0, 1, 0 ).applyQuaternion( cam.quaternion );
+		const h = this.cameraWaterHeight ?? 0;
+		const coast = this.terrainData.coastDistance( p.x, p.z ).d;
+		const amp = this.shore.params.amplitude, pier = WORLD.pier, boat = this.boatCtl;
+		a.update( dt, {
+			listener: { position: p, forward: _fwd, up: _up },
+			underwater: p.y < h ? 1 : 0,
+			depthBelowSurface: Math.max( 0, h - p.y ),
+			surfIntensity: Math.min( 1, amp / 0.6 ),
+			distanceToShore: Math.abs( coast ),
+			coastDistance: coast,
+			waveHeight: amp * 2,
+			windSpeed: G.windSpeed.value,
+			windDir: G.windDir.value,
+			daylight: 1 - G.night.value,
+			nearPier: Math.abs( p.x - pier.x ) < 12 && p.z > pier.zStart - 5 && p.z < pier.zEnd + 8,
+			boat: {
+				active: boat.driven, rpm: boat.rpm, throttle: boat.throttle, speed: boat.velocity.length(),
+				position: this.boat.group.position, listenerInside: this.player.mode === 'boat' && this.player.camMode === 'first',
+			},
+		} );
 
 	}
 
