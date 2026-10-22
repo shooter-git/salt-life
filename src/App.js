@@ -470,6 +470,8 @@ export class App {
 			this.hud.toast( this.audio.muted ? 'Sound off' : 'Sound on' );
 
 		}
+		// (where the others are now, before the player: the boat you may be riding in)
+		if ( this.together ) this.together.track( dt );
 		this.boatCtl.update( dt );
 		this.player.update( dt );
 		this.game.update( dt );
