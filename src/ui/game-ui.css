@@ -1,6 +1,6 @@
-/* Tidewater's UI tokens and base rules (src/ui/ui.css), the part the fishing game's HUD, minimap and
-   guide build on (GameHUD.js, Minimap.js and Guide.js add their own rules). The rest of ui.css is
-   Tidewater's settings panel, loader and start screen, which Salt Life doesn't use. */
+/* Tidewater's UI tokens and base rules (its src/ui/ui.css), the part the fishing game's HUD, minimap
+   and guide build on (GameHUD.js, Minimap.js and Guide.js add their own rules). The rest of ui.css
+   was Tidewater's settings panel, loader and start screen, which Salt Life doesn't use. */
 
 /* The HUD's fonts, latin only (SIL Open Font License 1.1: credits/fonts/), from Fontsource's copies of
    Google Fonts. Tidewater loaded them from Google Fonts; a creation's frame can't reach other sites. */
