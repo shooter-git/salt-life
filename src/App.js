@@ -33,6 +33,8 @@ import { FishSchools } from './world/Fish.js';
 import { fishModelsAsync } from './world/fish/FishModelsAsync.js';
 import { MarineSnow } from './fx/MarineSnow.js';
 import { Whale } from './world/marine/Whale.js';
+import { Spray } from './fx/Spray.js';
+import { BoatSpray } from './player/BoatSpray.js';
 import { WhaleWater } from './ocean/WhaleWater.js';
 import { Character } from './game/Character.js';
 import { TouchControls } from './ui/TouchControls.js';
@@ -213,6 +215,11 @@ export class App {
 		} );
 		this.boatCtl = new BoatController( { model: this.boat, query: this.query, terrain: this.terrainData, colliders: this.colliders } );
 		this.wake = new Wake( { scene, boat: this.boatCtl, waves: this.waves, tier } );
+		// spray (fx/Spray.js): off the boat's bow (and the slap of its hull on the water), the
+		// whale's blows and breaches, leaping mullet, diving birds
+		this.spray = new Spray( { waves: this.waves, terrain: this.terrainData, tier } );
+		scene.add( this.spray.mesh );
+		this.boatSpray = new BoatSpray( { boat: this.boatCtl, spray: this.spray } );
 		if ( tier === 'low' ) {
 
 			this.nearDetail = [];
@@ -484,7 +491,7 @@ export class App {
 		if ( this.whale ) {
 
 			this.whale.update( dt, this.camera );
-			this.whaleWater.update( this.whale, dt, null );
+			this.whaleWater.update( this.whale, dt, this.spray );
 
 		}
 
@@ -503,6 +510,8 @@ export class App {
 			this.wildlife.update( dt, this.camera, this.player );
 
 		}
+		this.boatSpray.update( dt );
+		this.spray.update( dt, this.camera, this.renderer.domElement.height );
 		this.water.update( this.camera );
 		this.boat.update( dt );
 		this.localLights.update( this.camera, dt );
@@ -781,7 +790,7 @@ export class App {
 		performance.mark( 'world: life' );
 		this.wildlife = new Wildlife( {
 			scene: this.scene, terrain: this.terrainData, shore: this.shore, village: this.village, colliders: this.colliders,
-			vegetation: this.vegetation, boat: this.boatCtl, boatModel: this.boat, query: this.query, spray: null,
+			vegetation: this.vegetation, boat: this.boatCtl, boatModel: this.boat, query: this.query, spray: this.spray,
 			// (mid: its triangles are mostly spent on the island already)
 			castShadow: this.tier === 'high',
 		} );
@@ -789,6 +798,15 @@ export class App {
 		this.wildlife.minPx = this.tier === 'low' ? 1.5 : 0.75;
 		const meshes = [ this.wildlife.birdBatch.mesh, this.wildlife.birdBatch.farMesh, this.wildlife.critterBatch.mesh, this.wildlife.critterBatch.farMesh, this.wildlife.blobs.mesh ];
 		for ( const m of meshes ) await this.readyToDraw( m );
+		// the spray's shader too (the birds dive): drawn once, empty, in a frame of its own
+		const spray = this.spray.mesh;
+		spray.visible = true;
+		await this.readyToDraw( spray, () => {
+
+			spray.visible = false;
+
+		} );
+		await this.firstDraws( [ spray ] );
 
 	}
 
@@ -857,6 +875,7 @@ export class App {
 		} );
 		await this.firstDraws( [ fish.batch.meshes[ 0 ] ] );
 		this.fish = fish;
+		fish.spray = this.spray; // (leaping mullet)
 		await this.pause();
 		// and the specks drifting in the water around the swimmer (fx/MarineSnow.js)
 		const snow = new MarineSnow( { waves: this.waves, tier: this.tier } );
@@ -880,7 +899,7 @@ export class App {
 
 		if ( this.whale ) return;
 		performance.mark( 'world: whale' );
-		const whale = new Whale( { scene: this.scene, terrain: this.terrainData, ground: this.terrain, query: this.query, tier: this.tier } );
+		const whale = new Whale( { scene: this.scene, terrain: this.terrainData, ground: this.terrain, query: this.query, spray: this.spray, tier: this.tier } );
 		try {
 
 			await whale.load();
