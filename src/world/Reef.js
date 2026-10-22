@@ -150,7 +150,8 @@ export class Reef {
 
 	}
 
-	// the sun's shadow camera also draws the proxies (layer 1: drawn in the shadow passes only)
+	// the sun's shadow camera also draws the proxies (layer 1: drawn in the shadow passes only;
+	// three r186 tests the view camera's layers there, which App enables for its shadow pass)
 	shadowsFrom( light ) {
 
 		if ( this.cfg.shadows ) light.shadow.camera.layers.enable( 1 );

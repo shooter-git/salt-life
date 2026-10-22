@@ -187,7 +187,7 @@ const COMMON = /* glsl */`
 	vec3 Pv = ( viewMatrix * vec4( vFishP, 1.0 ) ).xyz;
 	float px = length( fwidth( Pv ) );
 #ifdef FISH_LITE
-	float sf = 0.0, sa = 0.0, sb = 0.0, sfade = 0.0;
+	float sf = 0.0, sa = 0.0, sb = 0.0, sfade = 0.0, sline = 0.0;
 	float bumpH = 0.0;
 #else
 	// scale rows: posterior margins are arcs, rows offset by half a scale
@@ -199,7 +199,10 @@ const COMMON = /* glsl */`
 	float fb = fract( sb ) * 2.0 - 1.0;
 	float sf = fract( sa + rowI * 0.5 + fb * fb * 0.32 );
 	// pixel footprint (m) against the scale size (m): fade out sub-pixel detail
-	float sfade = ( 1.0 - fishSs( 0.25, 0.7, px / ( sss * I.z ) ) ) * ( scaleSize > 0.001 ? 1.0 : 0.0 );
+	// (Salt Life: from 10 px a scale, gone under 3.5 px: smaller scales only shimmered)
+	float sfade = ( 1.0 - fishSs( 0.1, 0.28, px / ( sss * I.z ) ) ) * ( scaleSize > 0.001 ? 1.0 : 0.0 );
+	// the thin lines at the scales' margins need a scale ~20 px across (gone under ~7 px)
+	float sline = 1.0 - fishSs( 0.05, 0.15, fwidth( sa ) );
 
 	// ---- relief
 	float bumpH = 0.0;
@@ -207,14 +210,16 @@ const COMMON = /* glsl */`
 		bool isBodyR = part == ${ PA( 'BODY' ) };
 		float L = I.z;
 		// scales: each rises toward its free posterior margin
-		float sc = fishSs( 0.0, 0.9, sf ) * ( 1.0 - fishSs( 0.9, 1.0, sf ) ) * sfade * scaleVis;
+		// (Salt Life: the drop at the margin over a fifth of the scale at most: steeper, it glinted in
+		// rows of single pixels)
+		float sc = fishSs( 0.0, 0.8, sf ) * ( 1.0 - fishSs( mix( 0.55, 0.8, sline ), 1.0, sf ) ) * sfade * scaleVis;
 		// gill cover: raised in front of its edge
 		vec4 eyeOp = fishRow( pattern, 6 );
 		float hh = D.w;
 		float zE = fishOpercleEdge( eyeOp.w, hh );
 		float onOpR = fishOpercleMask( hh );
 		float op = fishSs( -0.004, 0.004, Lp.z - zE ) * onOpR;
-		float grainFade = 1.0 - fishSs( 0.3, 0.8, px / ( 0.004 * I.z ) );
+		float grainFade = 1.0 - fishSs( 0.15, 0.45, px / ( 0.004 * I.z ) );
 		float grain = ( fishVnoise( vec2( Lp.z, D.z ) * 420.0 ) - 0.5 ) * 0.00022 * grainFade;
 		float bodyH = sc * 0.0016 + op * 0.0025 + grain;
 		// fin rays: ridges
@@ -261,10 +266,20 @@ const SURFACE = /* glsl */`
 	// scales: a thin shadow line under each free margin, the exposed field slightly brighter toward
 	// the margin
 	float scaleShade = fishSs( 0.3, 0.9, sf ) * sfade * scaleVis;
-	float pocket = fishSs( 0.88, 0.97, sf ) * ( 1.0 - fishSs( 0.97, 1.0, sf ) ) * sfade * scaleVis;
-	float cellK = ( fishHash( vec2( floor( sa + floor( sb ) * 0.5 ), floor( sb ) ) ) - 0.5 ) * 0.1 * sfade * scaleVis;
+	float pocket = fishSs( 0.88, 0.97, sf ) * ( 1.0 - fishSs( 0.97, 1.0, sf ) ) * sfade * sline * scaleVis;
+	float cellK = ( fishHash( vec2( floor( sa + floor( sb ) * 0.5 ), floor( sb ) ) ) - 0.5 ) * 0.06 * sfade * scaleVis;
 	// (on silvery skin the pocket is a thin line: the mirror-like scale reflects its own light)
 	c *= mix( 1.0, 0.96 + scaleShade * 0.07 - pocket * mix( 0.14, 0.06, r0.w ) + cellK, bodyK );
+	// (Salt Life) where the scales are too small to draw one by one, their net: the brick lattice's
+	// first harmonics (peaks at the scales' middles, troughs along their margins), band-limited, so it
+	// holds to ~3 px a scale without shimmering
+	#ifndef FISH_LITE
+	float netF = max( fwidth( sa ), fwidth( sb ) );
+	float net = ( cos( 6.2832 * ( sa - sb * 0.5 ) ) + cos( 6.2832 * ( sa + sb * 0.5 ) ) + cos( 6.2832 * sb ) + 1.5 ) / 4.5;
+	float netK = ( 1.0 - fishSs( 0.2, 0.45, netF ) ) * ( 1.0 - sfade ) * scaleVis * bodyK * ( scaleSize > 0.001 ? 1.0 : 0.0 );
+	c *= 1.0 + ( net - 0.6 ) * mix( 0.22, 0.1, r0.w ) * netK;
+	rough *= 1.0 - ( net - 0.6 ) * 0.25 * netK;
+	#endif
 	c *= mix( 1.0, n1 * 0.14 + 0.93, bodyK );
 	c *= mix( 1.0, n2 * 0.2 + 0.9, bodyK );
 	rough = mix( rough, rough * mix( 0.8, 1.25, n2 ), bodyK );
@@ -374,7 +389,8 @@ const SURFACE = /* glsl */`
 		c = mix( c, vec3( 0.75, 0.78, 0.8 ), P == ${ PA( 'CAUDAL' ) } ? fishSs( 0.85, 1.0, t ) * fishSs( 5.0, 7.0, abs( w - 8.0 ) ) : 0.0 );
 	} else if ( pat == ${ PT( 'redSnapper' ) } ) {
 		// rose red back fading to a silvery pink belly; rows of scales show as fine oblique lines
-		float rows = fishSs( 0.6, 0.95, sin( y * 210.0 + z * 120.0 ) ) * max( sfade, 0.3 ) * bodyK * 0.15;
+		// (Salt Life: only where the scales are too small to draw)
+		float rows = fishSs( 0.6, 0.95, sin( y * 210.0 + z * 120.0 ) ) * ( 1.0 - sfade ) * bodyK * 0.1;
 		c *= 1.0 - rows;
 	} else if ( pat == ${ PT( 'grouper' ) } ) {
 		// Nassau grouper: dark brown bars, a band from the snout through the eye, a black saddle on
@@ -403,9 +419,15 @@ const SURFACE = /* glsl */`
 		vec2 jit = vec2( fishHash( cell + 3.1 ), fishHash( cell + 7.7 ) ) - 0.5;
 		vec2 fc = fract( vec2( z, y ) * 55.0 ) - 0.5 - jit * 0.55;
 		float rs = mix( 0.1, 0.24, fishHash( cell + 1.3 ) );
-		float spots = ( 1.0 - fishSs( rs, rs + 0.1, length( fc * vec2( 1.0, 1.25 ) ) ) ) * step( 0.45, fishHash( cell + seed * 7.0 ) ) * bodyK * ( 1.0 - tBelly );
-		c = mix( c, vec3( 0.08, 0.22, 0.5 ), spots * 0.75 );
+		float spots = ( 1.0 - fishSs( rs * 0.75, rs * 0.75 + 0.14, length( fc * vec2( 1.0, 1.25 ) ) ) ) * step( 0.45, fishHash( cell + seed * 7.0 ) ) * bodyK * ( 1.0 - tBelly );
+		c = mix( c, vec3( 0.04, 0.1, 0.24 ), spots * 0.7 );
 		c = mix( c, vec3( 0.2, 0.5, 0.3 ), fishSs( 0.0, 0.5, h ) * bodyK * 0.35 );
+		// (Salt Life) the long dorsal and the anal fin deep blue, the paired fins pale yellow, the tail
+		// yellow-green to its blue edge
+		bool pairedM = P == ${ PA( 'PECTORAL' ) } || P == ${ PA( 'PELVIC' ) };
+		c = ( P == ${ PA( 'DORSAL1' ) } || P == ${ PA( 'ANAL' ) } ) ? c * 0.6 : c;
+		c = pairedM ? mix( flank * 0.85, c, 0.25 ) : c;
+		c = P == ${ PA( 'CAUDAL' ) } ? mix( mix( flank, back, 0.4 ) * 0.8, edgeC, fishSs( 0.45, 1.0, t ) ) : c;
 	} else if ( pat == ${ PT( 'mullet' ) } ) {
 		// faint dark stripes along the scale rows of the upper flank
 		float lines = fishSs( 0.7, 0.95, sin( sd * 280.0 ) ) * fishSs( -0.1, 0.3, h ) * bodyK * 0.25;
@@ -532,12 +554,14 @@ const SURFACE = /* glsl */`
 	}
 
 #ifndef FISH_LITE
-	// iridescent sheen on silvery skin at grazing angles
+	#ifndef FISH_PHYSICAL
+	// iridescent sheen on silvery skin at grazing angles (FISH_PHYSICAL: three's thin film instead)
 	vec3 V = normalize( cameraPosition - vFishP );
 	float cosV = abs( dot( fN, V ) );
 	float irid = r1.w * bodyK * silver * ( 1.0 - cosV );
 	vec3 hueA = vec3( 0.55, 0.95, 0.8 ); vec3 hueB = vec3( 0.95, 0.6, 1.0 );
 	c = mix( c, c * mix( hueA, hueB, cosV ) * 1.25, irid * 0.6 );
+	#endif
 	vec3 fishN = fishBump( vFishP, fN, dhdx, dhdy );
 #else
 	vec3 fishN = fN;
@@ -548,6 +572,113 @@ const SURFACE = /* glsl */`
 	// translucency: lightColor * albedo * transl * 0.5
 	vec3 fishTrans = c * ( transl * 0.5 );
 `;
+
+// (Salt Life) A fish out of the water as a prop (village/FishProps.js builds them: bent and placed
+// on the CPU): the fish on the line, the catch card's portrait, the fish on ice and hanging at the
+// stalls. The same skin as the swimming fish, from per-vertex attributes: aRest (the rest pose
+// position, model units), aData (as the swimming models'), aFish ( pattern, seed, length at unit
+// scale (m), wetness ); the mesh's scale multiplies the length (a fish baked at unit length and
+// scaled to the catch). No underwater shading: they are never under water.
+//
+// Out of the water a fish is a wet thing in daylight: a film of slime over the skin (a clearcoat, its
+// own smooth surface over the scales' relief, as wet as the fish), thin-film colours on its silver
+// (three's iridescence, where the swimming fish fake it), and fins: thin membranes the light and the
+// world behind show through, thicker along their rays and at the base. The fins are a second
+// material (fins: true) drawn after everything opaque (FishProps puts their triangles in a group of
+// their own). The colours are a little less vivid than the swimming fish's, which the water greys.
+// lite (the low tier): three's standard material, no clearcoat or thin film, the glossier skin only.
+const PROP_GLSL = /* glsl */`
+attribute vec3 aRest;
+attribute vec4 aData;
+attribute vec4 aFish;
+varying vec3 vFishLocal;
+varying vec4 vFishData;
+flat varying vec4 vFishInfo;
+flat varying float vFishFade;
+varying vec3 vFishP;
+varying vec3 vFishN;
+`;
+
+const PROP_SURFACE = /* glsl */`
+	float fishWet = vFishInfo.w;
+	#ifndef FISH_PHYSICAL
+	// (FISH_PHYSICAL: wet is the clearcoat; a glossier skin under it glinted along every scale)
+	fishRough = mix( fishRough, fishRough * 0.5, fishWet );
+	#endif
+	// fin membranes: see-through toward the edge, thicker along the rays and at the base; the tail
+	// thicker, the paired fins thinnest
+	float finK = isFin && P != ${ PA( 'FINLET' ) } ? 1.0 : 0.0;
+	float finRd = abs( fract( w + 0.5 ) - 0.5 );
+	float finRay = ( 1.0 - fishSs( 0.07, fwW + 0.15, finRd ) ) * ( 1.0 - fishSs( 0.25, 0.6, fwW ) );
+	float finThick = P == ${ PA( 'CAUDAL' ) } ? 0.18 : ( ( P == ${ PA( 'PECTORAL' ) } || P == ${ PA( 'PELVIC' ) } ) ? - 0.16 : 0.0 );
+	float fishAlpha = mix( 1.0, clamp( mix( 0.94, 0.4, fishSs( 0.05, 0.95, t ) ) + finRay * 0.18 + finThick, 0.22, 1.0 ), finK );
+	// the fins a little less vivid than the paint (thin, they take the colours behind them)
+	float fishLum = dot( fishAlbedo, vec3( 0.2126, 0.7152, 0.0722 ) );
+	fishAlbedo = mix( fishAlbedo, vec3( fishLum ), finK * 0.25 );
+	// the scales' relief gentler under the wet film
+	fishN = normalize( mix( fN, fishN, 0.5 ) );
+	fishTrans *= mix( 1.0, 0.6, finK );
+	#ifdef FISH_PHYSICAL
+	float fishIrid = r1.w * bodyK * silver;
+	#endif
+	normal = normalize( ( viewMatrix * vec4( fishN, 0.0 ) ).xyz );
+	diffuseColor.rgb = fishAlbedo;
+	diffuseColor.a = fishAlpha;
+	roughnessFactor = fishRough;
+	metalnessFactor = fishMetal;
+`;
+
+const _props = {};
+export function createPropMaterial( { lite = false, fins = false } = {} ) {
+
+	const key = 'fishProp' + ( lite ? 'Lite' : '' ) + ( fins ? 'Fins' : '' );
+	if ( _props[ key ] ) return _props[ key ];
+	const options = { roughness: 0.4, metalness: 0, side: THREE.DoubleSide };
+	const m = _props[ key ] = lite ? new THREE.MeshStandardMaterial( options ) : new THREE.MeshPhysicalMaterial( {
+		...options,
+		clearcoat: 1, clearcoatRoughness: 0.06,
+		iridescence: 1, iridescenceIOR: 1.6, iridescenceThicknessRange: [ 180, 420 ],
+	} );
+	m.name = fins ? 'FishPropFins' : 'FishProp';
+	if ( ! lite ) m.defines = { FISH_PHYSICAL: '' };
+	if ( fins ) {
+
+		m.transparent = true;
+		m.depthWrite = false;
+
+	}
+
+	const uniforms = { fishSkin: { value: skinTable() }, fishSunColor: G.sunColor };
+	m.onBeforeCompile = ( shader ) => {
+
+		Object.assign( shader.uniforms, uniforms );
+		shader.vertexShader = shader.vertexShader
+			.replace( '#include <common>', '#include <common>\n' + FISH_GLSL + PROP_GLSL )
+			.replace( '#include <project_vertex>', /* glsl */`#include <project_vertex>
+	vFishLocal = aRest;
+	vFishData = aData;
+	vFishInfo = vec4( aFish.x, aFish.y, aFish.z * length( modelMatrix[ 0 ].xyz ), aFish.w );
+	vFishFade = 1.0;
+	vFishP = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;
+	vFishN = normalize( mat3( modelMatrix ) * objectNormal );` );
+		shader.fragmentShader = shader.fragmentShader
+			.replace( '#include <common>', '#include <common>\n' + FISH_GLSL + LOD_FADE_GLSL + FRAG_GLSL )
+			.replace( '#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + SURFACE + PROP_SURFACE )
+			.replace( '#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += fishTrans * fishSunColor * 0.5;' )
+			// the wet film as wet as the fish; the thin film on the silver only
+			.replace( '#include <lights_physical_fragment>', /* glsl */`#include <lights_physical_fragment>
+	#ifdef USE_CLEARCOAT
+	material.clearcoat *= fishWet;
+	#endif
+	#ifdef USE_IRIDESCENCE
+	material.iridescence *= fishIrid;
+	#endif` );
+
+	};
+	m.customProgramCacheKey = () => key;
+	return m;
+
+}
 
 // The material of the swimming fish (batch: the KindBatch of the fish kinds; ground: the Terrain,
 // for the shared underwater shading).

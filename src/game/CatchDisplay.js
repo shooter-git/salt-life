@@ -1,9 +1,11 @@
-import { DoubleSide, Matrix4, MeshStandardMaterial } from '../engine/index.js';
+import { Matrix4 } from '../engine/index.js';
 import { FishProps } from '../world/village/FishProps.js';
+import { createPropMaterial } from '../world/fish/FishMaterial.js';
 import { SPECIES } from '../world/fish/FishSpecies.js';
 import { FISH, fishLengthCm } from './FishTable.js';
 
-// Real fish (the world's fish models, baked like the village's: world/village/FishProps) for the game:
+// Real fish (the world's fish models with the swimming fish's skin, baked like the village's:
+// world/village/FishProps) for the game:
 //  - the fish you just landed, hanging from the line by the gills and struggling, for a moment
 //  - fish on ice at the buyer's stall (static)
 // A hanging fish is baked the first time its species is caught, at unit length in three curls of its
@@ -22,34 +24,46 @@ export function fishLength( species, kg ) {
 
 export class CatchDisplay {
 
-	// stall: the fish on ice, { species, frame (Matrix4, world), L, pose ('side' | 'sideFlip'), ice }
-	constructor( { scene, stall = [] } ) {
+	// stall: the fish on ice, { species, frame (Matrix4, world), L, pose ('side' | 'sideFlip'), ice };
+	// lite: the low tier's materials
+	constructor( { scene, stall = [], lite = false } ) {
 
 		this.scene = scene;
-		this.material = new MeshStandardMaterial( { vertexColors: true, roughness: 0.38, metalness: 0, side: DoubleSide } );
-		this.material.name = 'GameFish';
+		this.lite = lite;
+		// (the swimming fish's skin and the fins': fish/FishMaterial.js; the catch card's portrait
+		// shares them)
+		this.material = [ createPropMaterial( { lite } ), createPropMaterial( { lite, fins: true } ) ];
 		this.hanging = {}; // species -> its meshes, one per curl
 		this.shown = null;
 		this.t = 0;
-		this.stallMesh = null;
+		this.stallMesh = null; // the fish on ice
+		this.stallIce = null; // and the ice
 		if ( stall.length ) {
 
 			const fp = new FishProps();
-			for ( const s of stall ) fp.add( 'whole', FISH[ s.species ].model, s.frame, s.pose || 'side', s.L, { wet: 0.7 } );
+			for ( const s of stall ) fp.add( 'whole', FISH[ s.species ].model, s.frame, s.pose || 'side', s.L, { wet: 0.7, seed: ( s.frame.elements[ 12 ] * 7.31 ) % 1 } );
 			for ( const s of stall.filter( ( x ) => x.ice ) ) fp.add( 'ice', null, s.ice, 'flat', 0.5, { seed: 0.3 } );
-			this.stallMesh = this.bake( fp );
+			this.stallMesh = this.bake( fp, 1 );
 			this.stallMesh.name = 'StallFish';
 			scene.add( this.stallMesh );
+			const ice = this.stallIce = fp.mesh;
+			if ( ice ) {
+
+				ice.name = 'StallIce';
+				ice.castShadow = false;
+				scene.add( ice );
+
+			}
 
 		}
 
 	}
 
-	bake( fp ) {
+	// the whole fish of `fp`, with the skin, at level of detail `lod`
+	bake( fp, lod ) {
 
-		const mesh = fp.build();
-		fp.material.dispose();
-		mesh.material = this.material;
+		fp.build( { lod, skinned: true, lite: this.lite } );
+		const mesh = fp.fishMesh;
 		mesh.castShadow = false;
 		return mesh;
 
@@ -64,7 +78,7 @@ export class CatchDisplay {
 
 			const fp = new FishProps();
 			fp.add( 'whole', model, ORIGIN, 'gill', 1, { anchor: FishProps.gillAnchor( model ), curl, wet: 1 } );
-			const mesh = this.bake( fp );
+			const mesh = this.bake( fp, 0 );
 			mesh.name = 'CaughtFish';
 			mesh.visible = false;
 			mesh.frustumCulled = false;
