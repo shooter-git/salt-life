@@ -208,18 +208,27 @@ export class Together {
 
 	// ---- who's here
 
+	// first: the list the game started with (All the Spaces may not have joined the session yet:
+	// whoever was already there arrives with the next list, and is "on the island")
 	_sync( players, first ) {
 
 		const here = new Set();
+		let came = false;
 		for ( const p of players ) {
 
 			if ( p.id === this.me.id ) continue;
 			here.add( p.id );
 			if ( this.others.has( p.id ) ) continue;
 			this.others.set( p.id, this._remote( p ) );
-			if ( ! first ) this.app.game.toast( `${ p.name } came to the island`, 3200 );
+			came = true;
+			if ( ! first ) this.app.game.toast( this._settled ? `${ p.name } came to the island` : `${ p.name } is on the island`, 3200 );
 
 		}
+
+		this._settled = this._settled || ! first;
+		// someone new: the host says what time it is (a clock set before the session was joined stayed
+		// on this device)
+		if ( came && ! first && this.session.isHost && this._clock ) this.setClock( this.app.settings.timeOfDay, this._clock.speed );
 
 		for ( const [ id, o ] of this.others ) {
 
