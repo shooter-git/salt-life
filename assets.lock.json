@@ -1091,14 +1091,28 @@
 			"author": "Dan Greenheck (DRG Software Solutions)"
 		},
 		{
-			"path": "public/models/whale/humpback_albedo.png",
+			"path": "public/models/whale/humpback_albedo_1024.png",
 			"license": "MIT",
 			"source": "https://github.com/dgreenheck/tidewater",
 			"title": "Humpback whale",
 			"author": "Dan Greenheck (DRG Software Solutions)"
 		},
 		{
-			"path": "public/models/whale/humpback_height.png",
+			"path": "public/models/whale/humpback_albedo_2048.png",
+			"license": "MIT",
+			"source": "https://github.com/dgreenheck/tidewater",
+			"title": "Humpback whale",
+			"author": "Dan Greenheck (DRG Software Solutions)"
+		},
+		{
+			"path": "public/models/whale/humpback_height_1024.png",
+			"license": "MIT",
+			"source": "https://github.com/dgreenheck/tidewater",
+			"title": "Humpback whale",
+			"author": "Dan Greenheck (DRG Software Solutions)"
+		},
+		{
+			"path": "public/models/whale/humpback_height_2048.png",
 			"license": "MIT",
 			"source": "https://github.com/dgreenheck/tidewater",
 			"title": "Humpback whale",

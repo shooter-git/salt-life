@@ -1,46 +1,45 @@
-import { Vector3, Vector4 } from '../engine/index.js';
-import { UniformBlock, ShaderModule } from '../engine/webgpu.js';
+import { Vector3, Vector4 } from 'three';
 
-// The humpback's marks on the water surface (read by WaterMaterial): churned white water where
+// The humpback's marks on the water surface (read by WaterSurface): churned white water where
 // it breaks the surface and rolls, spreading and fading over ~15 s, and the smooth, flat "fluke
 // print" slick it leaves where it dives. A handful of analytic patches in a small uniform array
 // (no textures): ( x, z, radius, strength ), strength > 0 foam, < 0 slick.
 //
-// WGSL (`whaleWaterModule`): fn whaleWater( xz: vec2f ) -> vec2f   ( foam, slick )
+// GLSL (WHALE_WATER_GLSL): vec2 whaleWater( vec2 xz )   ( foam, slick )
+// (Salt Life) three uniforms (whaleMarkUniforms: the patches, and whether any is in use: the sea
+// skips the loop otherwise) instead of Tidewater's uniform block.
 const N = 6;
-const block = new UniformBlock( 'WhaleMarks', {
-	marks: [ `vec4f[${ N }]`, new Array( N ).fill( 0 ).map( () => new Vector4( 0, 0, 1, 0 ) ) ],
-}, { label: 'whaleMarks' } );
+export const whaleMarkUniforms = {
+	whaleMarks: { value: new Array( N ).fill( 0 ).map( () => new Vector4( 0, 0, 1, 0 ) ) },
+	whaleMarksOn: { value: 0 },
+};
 // three-style handle: whaleMarks.array[ k ].set( x, z, r, strength )
-export const whaleMarks = { get array() { return block.fields.marks.value; } };
+export const whaleMarks = { get array() { return whaleMarkUniforms.whaleMarks.value; } };
 
 // foam and slick amounts at a surface point
-export const whaleWaterModule = new ShaderModule( {
-	name: 'whaleWater',
-	uniforms: block,
-	uniformName: 'whaleMarks',
-	code: /* wgsl */`
-fn whaleWater( xz: vec2f ) -> vec2f {
-	var foam = 0.0; var slick = 0.0;
-	for ( var i = 0; i < ${ N }; i++ ) {
-		let e = whaleMarks.marks[ i ];
-		let d = length( xz - e.xy ) / e.z;
+export const WHALE_WATER_GLSL = /* glsl */`
+uniform vec4 whaleMarks[ ${ N } ];
+uniform float whaleMarksOn;
+vec2 whaleWater( vec2 xz ) {
+	float foam = 0.0; float slick = 0.0;
+	for ( int i = 0; i < ${ N }; i ++ ) {
+		vec4 e = whaleMarks[ i ];
+		float d = length( xz - e.xy ) / e.z;
 		// (outside a mark, or an unused one, core or the amounts are 0)
-		if ( d >= 1.0 || e.w == 0.0 ) { continue; }
-		let core = 1.0 - smoothstep( 0.2, 1.0, d );
+		if ( d >= 1.0 || e.w == 0.0 ) continue;
+		float core = 1.0 - smoothstep( 0.2, 1.0, d );
 		// churned water breaks up into lumps and streaks with dark water between them, denser
 		// toward the middle
-		let q = xz * 0.8; let q2 = xz * 2.9;
-		let n1 = sin( q.x + sin( q.y * 1.3 ) * 1.7 ) * sin( q.y * 1.1 + sin( q.x * 1.7 ) * 1.4 );
-		let n2 = sin( q2.x * 1.1 + sin( q2.y ) * 1.3 ) * sin( q2.y * 0.9 + sin( q2.x * 1.2 ) );
-		let lumps = smoothstep( -0.25, 0.55, n1 * 0.7 + n2 * 0.45 + ( 1.0 - d ) * 0.5 );
+		vec2 q = xz * 0.8; vec2 q2 = xz * 2.9;
+		float n1 = sin( q.x + sin( q.y * 1.3 ) * 1.7 ) * sin( q.y * 1.1 + sin( q.x * 1.7 ) * 1.4 );
+		float n2 = sin( q2.x * 1.1 + sin( q2.y ) * 1.3 ) * sin( q2.y * 0.9 + sin( q2.x * 1.2 ) );
+		float lumps = smoothstep( -0.25, 0.55, n1 * 0.7 + n2 * 0.45 + ( 1.0 - d ) * 0.5 );
 		foam = max( foam, core * max( e.w, 0.0 ) * lumps * 0.85 );
 		slick = max( slick, core * max( - e.w, 0.0 ) );
 	}
-	return vec2f( foam, slick );
+	return vec2( foam, slick );
 }
-`,
-} );
+`;
 
 // CPU side: emits the patches from the whale's state; spray bursts of white water around the body
 // as it breaks the surface.
@@ -138,6 +137,7 @@ export class WhaleWater {
 		}
 
 		this.events = this.events.filter( ( e ) => e.age < e.life );
+		whaleMarkUniforms.whaleMarksOn.value = this.events.length ? 1 : 0;
 
 	}
 
