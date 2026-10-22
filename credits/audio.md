@@ -23,6 +23,7 @@ slice table is in `src/audio/soundBank.js`.
 | `under_reef.ogg` | hydrophone in a cove: snapping-shrimp crackle, low rumble — loop | [Underwater crackling sounds_Hydrophone.wav](https://freesound.org/people/KaleidacousticsAudio/sounds/630436/) | KaleidacousticsAudio | CC0 1.0 |
 | `boat_engine.ogg` | Volvo Penta MD22 marine diesel — loop, pitched with rpm | [Marine diesel engine](https://freesound.org/people/AugustSandberg/sounds/264864/) | AugustSandberg | CC0 1.0 |
 | `boat_lap.ogg` | water lapping a fibreglass hull — loop | [boat knocks fiberglass water laps on hull.flac](https://freesound.org/people/kyles/sounds/637206/) | kyles | CC0 1.0 |
+| `boat_horn.ogg` | The horn of a cruise boat in Istanbul, 3 blasts (each cut short when the horn is let go) | [Boat Horn](https://freesound.org/people/felix.blume/sounds/162350/) | felix.blume | CC0 1.0 |
 | `hull_slap.ogg` | 5 water knocks on the hull | [boat knocks fiberglass water laps on hull.flac](https://freesound.org/people/kyles/sounds/637206/) | kyles | CC0 1.0 |
 | `boat_rush.ogg` | bow wave / water past the hull — loop | [Sailing boat, bow wave (close perspective)](https://freesound.org/people/Pfannkuchn/sounds/360631/) | Pfannkuchn | CC0 1.0 |
 | `step_sand.ogg` | 5 steps, soft loose dry sand (foley, no surf) | [Soft sand steps.wav](https://freesound.org/people/200221-WeanBekker/sounds/543714/) | 200221-WeanBekker | CC0 1.0 |

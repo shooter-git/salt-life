@@ -13,8 +13,10 @@ import { G } from '../core/Globals.js';
 // (lights_pars_begin: the uniform block; lights_fragment_end: the loop), compiled only into
 // materials that ask for it (useLocalLights: the LOCAL_LIGHTS or LOCAL_LIGHTS_CHEAP define, Lambert
 // only, for ground, rocks and plants). The block is one three.js UniformsGroup shared by every such
-// material: positions and directions in view space (the main camera's), packed in update().
+// material: positions and directions in view space (the main camera's), packed in update(). The sea
+// (LOCAL_LIGHTS_WATER) reads the same lights in its own way: see WaterSurface.
 const MAX = 8;
+export const LOCAL_LIGHTS_MAX = MAX;
 // (an array in a three.js uniforms group is an array of uniforms)
 const v4 = () => Array.from( { length: MAX }, () => new THREE.Uniform( new THREE.Vector4() ) );
 const block = new THREE.UniformsGroup();
@@ -31,7 +33,7 @@ const U = {
 block.add( U.pos ).add( U.col ).add( U.dir ).add( U.aux ).add( U.info ).add( U.worldY ).add( U.absorb );
 
 THREE.ShaderChunk.lights_pars_begin = /* glsl */`
-#if defined( LOCAL_LIGHTS ) || defined( LOCAL_LIGHTS_CHEAP )
+#if defined( LOCAL_LIGHTS ) || defined( LOCAL_LIGHTS_CHEAP ) || defined( LOCAL_LIGHTS_WATER )
 layout( std140 ) uniform LocalLights {
 	vec4 llPos[ ${ MAX } ];
 	vec4 llCol[ ${ MAX } ];
@@ -41,6 +43,30 @@ layout( std140 ) uniform LocalLights {
 	vec4 llWorldY;
 	vec4 llAbsorb;
 };
+// light i arriving at P (view space; PY its world height): the colour, and L toward the lamp
+// (black beyond its range)
+vec3 llIncident( int i, vec3 P, float PY, out vec3 L ) {
+	vec4 p = llPos[ i ];
+	vec3 d = p.xyz - P;
+	float d2 = dot( d, d );
+	L = d * inversesqrt( max( d2, 1e-6 ) );
+	if ( d2 >= p.w ) return vec3( 0.0 );
+	vec4 c = llCol[ i ];
+	vec4 sd = llDir[ i ];
+	// smooth range window ( 1 - ( d / r )^4 )^2 on the inverse-square law
+	float x = d2 / p.w;
+	float win = clamp( 1.0 - x * x, 0.0, 1.0 );
+	// spot: hot centre, soft edge at the outer cone, faint wide spill (points: cones of -1.5 / -2)
+	float cd = dot( - L, sd.xyz );
+	float m = smoothstep( sd.w, c.w, cd );
+	float spot = max( m * m, smoothstep( sd.w - 0.55, sd.w, cd ) * 0.05 );
+	// Beer-Lambert over the part of the path under water (straight, mean sea level)
+	float ly = llAux[ i ].x;
+	float under = clamp( ( llInfo.y - min( PY, ly ) ) / max( abs( ly - PY ), 1e-3 ), 0.0, 1.0 );
+	vec3 Tw = exp( - llAbsorb.rgb * ( sqrt( d2 ) * under ) );
+	// (the + 0.15 m^2 softens the near field of a lamp's finite size)
+	return c.rgb * Tw * ( win * win * spot / ( d2 + 0.15 ) );
+}
 #endif
 ` + THREE.ShaderChunk.lights_pars_begin;
 
@@ -51,26 +77,9 @@ THREE.ShaderChunk.lights_fragment_end = /* glsl */`
 		for ( int i = 0; i < ${ MAX }; i ++ ) {
 
 			if ( float( i ) >= llInfo.x ) break;
-			vec4 p = llPos[ i ];
-			vec3 d = p.xyz - geometryPosition;
-			float d2 = dot( d, d );
-			if ( d2 >= p.w ) continue;
-			vec4 c = llCol[ i ];
-			vec4 sd = llDir[ i ];
-			vec3 L = d * inversesqrt( max( d2, 1e-6 ) );
-			// smooth range window ( 1 - ( d / r )^4 )^2 on the inverse-square law
-			float x = d2 / p.w;
-			float win = clamp( 1.0 - x * x, 0.0, 1.0 );
-			// spot: hot centre, soft edge at the outer cone, faint wide spill (points: cones of -1.5 / -2)
-			float cd = dot( - L, sd.xyz );
-			float m = smoothstep( sd.w, c.w, cd );
-			float spot = max( m * m, smoothstep( sd.w - 0.55, sd.w, cd ) * 0.05 );
-			// Beer-Lambert over the part of the path under water (straight, mean sea level)
-			float ly = llAux[ i ].x;
-			float under = clamp( ( llInfo.y - min( llPY, ly ) ) / max( abs( ly - llPY ), 1e-3 ), 0.0, 1.0 );
-			vec3 Tw = exp( - llAbsorb.rgb * ( sqrt( d2 ) * under ) );
-			// (the + 0.15 m^2 softens the near field of a lamp's finite size)
-			vec3 lc = c.rgb * Tw * ( win * win * spot / ( d2 + 0.15 ) );
+			vec3 L;
+			vec3 lc = llIncident( i, geometryPosition, llPY, L );
+			if ( lc.r + lc.g + lc.b <= 0.0 ) continue;
 #ifdef LOCAL_LIGHTS_CHEAP
 			reflectedLight.directDiffuse += clamp( dot( geometryNormal, L ), 0.0, 1.0 ) * lc * BRDF_Lambert( material.diffuseColor );
 #else
@@ -87,10 +96,12 @@ THREE.ShaderChunk.lights_fragment_end = /* glsl */`
 ` + THREE.ShaderChunk.lights_fragment_end;
 
 // a lit material (standard, physical, Lambert, Phong) takes the local lights: cheap = Lambert only
-// (large or heavily overdrawn surfaces). Before its first compile.
-export function useLocalLights( material, { cheap = false } = {} ) {
+// (large or heavily overdrawn surfaces). Before its first compile. water: the sea's own use of them
+// (LOCAL_LIGHTS_WATER: llIncident() for its shader to call), plus their glints on it unless cheap.
+export function useLocalLights( material, { cheap = false, water = false } = {} ) {
 
-	material.defines = { ...( material.defines || {} ), [ cheap ? 'LOCAL_LIGHTS_CHEAP' : 'LOCAL_LIGHTS' ]: '' };
+	const defines = water ? ( cheap ? [ 'LOCAL_LIGHTS_WATER' ] : [ 'LOCAL_LIGHTS_WATER', 'LOCAL_LIGHTS' ] ) : [ cheap ? 'LOCAL_LIGHTS_CHEAP' : 'LOCAL_LIGHTS' ];
+	material.defines = { ...( material.defines || {} ), ...Object.fromEntries( defines.map( ( d ) => [ d, '' ] ) ) };
 	material.uniformsGroups = [ ...( material.uniformsGroups || [] ).filter( ( g ) => g !== block ), block ];
 	material.needsUpdate = true; // (in case it was drawn already)
 	return material;
@@ -151,6 +162,13 @@ export class LocalLights {
 		src.phase = src.phase ?? Math.random() * 100;
 		this.sources.push( src );
 		return src;
+
+	}
+
+	remove( src ) {
+
+		const i = this.sources.indexOf( src );
+		if ( i >= 0 ) this.sources.splice( i, 1 );
 
 	}
 

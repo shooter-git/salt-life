@@ -3,6 +3,7 @@ import { gltfLoader } from '@allthespaces/portal/three';
 import { Avatar, LOOKS, lookOf } from './Avatar.js';
 import { figureStandIn } from './Figure.js';
 import { RecordsBoard } from './RecordsBoard.js';
+import { BoatLamps } from '../world/boat/BoatLamps.js';
 import { FISH, fishLengthCm } from '../game/FishTable.js';
 import { ROD_L, SEAT_Y } from '../game/FishingRod.js';
 import { WORLD } from '../world/WorldLayout.js';
@@ -139,6 +140,7 @@ export class Together {
 		else if ( s.isHost ) this.setClock( app.settings.timeOfDay, app.settings.timeSpeed );
 		s.onChange( 'clock', ( value ) => this._adopt( value ) );
 		s.on( 'catch', ( body, from ) => this._theirCatch( body, from ) );
+		s.on( 'horn', ( on, from ) => this._theirHorn( on, from ) );
 
 		// the records: the group's, read now and again when someone breaks one
 		this.records = {};
@@ -166,6 +168,35 @@ export class Together {
 		this.records = clean;
 		this.board.draw( clean );
 		if ( this.app.game.hud && this.app.game.hud.inv && ! this.app.game.hud.inv.hidden ) this.app.game.hud.renderInventory();
+
+	}
+
+	// your horn, sounded or let go: the others hear it from your boat
+	horn( on ) {
+
+		if ( this.others.size ) this.session.send( 'horn', on ? 1 : 0 );
+
+	}
+
+	// theirs: from their boat's horn (as drawn here: their boat, or yours standing in at the dock)
+	_theirHorn( on, from ) {
+
+		const o = this.others.get( from ), app = this.app;
+		if ( ! o ) return;
+		if ( o.horn ) app.audio.hornStop( o.horn );
+		o.horn = null;
+		if ( on && this._hornAt( o ) ) o.horn = app.audio.hornStart( _bp );
+
+	}
+
+	// (in _bp) where their horn is, as their boat is drawn here: their boat, or yours standing in at the dock
+	_hornAt( o ) {
+
+		const c = o.cur, app = this.app;
+		if ( ! c || ! c.boat ) return false;
+		const frame = o.boat && o.boat.visible ? c.boat : this._docked( c.boat.pos ) ? { pos: app.boatCtl.position, quat: app.boatCtl.quaternion } : c.boat;
+		_bp.copy( app.boat.hornAt || _bp.set( - 0.42, 3.4, 1.15 ) ).applyQuaternion( frame.quat ).add( frame.pos );
+		return true;
 
 	}
 
@@ -357,7 +388,15 @@ export class Together {
 		o.avatar.dispose();
 		o.tackle.rod.material.dispose();
 		o.tackle.line.material.dispose();
-		if ( o.boat ) app.scene.remove( o.boat );
+		if ( o.boat ) {
+
+			app.scene.remove( o.boat );
+			o.boat.userData.lamps.removeLight( app.localLights );
+			o.boat.userData.lamps.dispose();
+
+		}
+
+		if ( o.horn ) app.audio.hornStop( o.horn );
 		if ( o.fish ) {
 
 			app.scene.remove( o.fish );
@@ -443,6 +482,7 @@ export class Together {
 		}
 
 		if ( p.riding ) body.R = p.boat.owner;
+		if ( body.B && this.app.searchlight ) body.S = 1; // (your boat's searchlight is on)
 		if ( m === 'h' ) body.E = r2( boat.rpm ); // (the engine's revs: what the others hear)
 		if ( m === 'd' ) body.D = [ r2( p.deckPos.x ), r2( p.deckPos.y ), r2( p.deckPos.z ) ];
 
@@ -544,7 +584,13 @@ export class Together {
 		const show = new Set( list.slice( 0, this.limits.avatars ) );
 		const boats = new Set( list.filter( ( o ) => o.cur.boat && ! this._docked( o.cur.boat.pos ) ).slice( 0, this.limits.boats ) );
 		if ( riding && riding.cur && riding.cur.boat ) boats.add( riding );
-		for ( const o of this.others.values() ) this._place( o, show.has( o ) && this.ready, boats.has( o ), dt );
+		for ( const o of this.others.values() ) {
+
+			this._place( o, show.has( o ) && this.ready, boats.has( o ), dt );
+			if ( o.horn && this._hornAt( o ) ) this.app.audio.hornMove( o.horn, _bp ); // (their horn moves with their boat)
+
+		}
+
 		this._names();
 
 	}
@@ -601,6 +647,7 @@ export class Together {
 		cur.speed = ( a.v || 0 ) + ( ( b.v || 0 ) - ( a.v || 0 ) ) * f;
 		cur.rod = near.r || 0;
 		cur.ride = typeof near.R === 'string' ? near.R : null;
+		cur.spot = near.S === 1;
 		cur.rpm = ( Number( a.E ) || 0 ) + ( ( Number( b.E ) || 0 ) - ( Number( a.E ) || 0 ) ) * f;
 		cur.tension = b.k || 0;
 		cur.bobber = lerp3( cur._bobber, a.b, b.b );
@@ -639,13 +686,19 @@ export class Together {
 				boat.visible = true;
 				boat.position.copy( c.boat.pos );
 				boat.quaternion.copy( c.boat.quat );
+				boat.userData.lamps.set( { underway: c.mode === 'helm' || ! this._docked( c.boat.pos ), spot: c.spot } );
 				frame = c.boat;
 
 			} else if ( this._docked( c.boat.pos ) ) frame = { pos: app.boatCtl.position, quat: app.boatCtl.quaternion };
 
 		}
 
-		if ( o.boat && ( ! c || ! c.boat || ! boatShown ) ) o.boat.visible = false;
+		if ( o.boat && ( ! c || ! c.boat || ! boatShown ) ) {
+
+			o.boat.visible = false;
+			o.boat.userData.lamps.set( { spot: false } ); // (its searchlight's light too)
+
+		}
 
 		// riding along: on the deck of the boat they're in (yours, or its owner's as drawn here)
 		let deck = frame;
@@ -785,6 +838,8 @@ export class Together {
 		if ( ! this._boatTemplate ) {
 
 			const t = this._boatTemplate = app.boat.group.clone( true );
+			const own = t.getObjectByName( 'BoatLamps' );
+			if ( own ) own.removeFromParent();
 			if ( app.tier === 'low' ) {
 
 				const keep = [];
@@ -809,6 +864,10 @@ export class Together {
 
 		const b = this._boatTemplate.clone( true );
 		b.name = 'PlayerBoat';
+		// its own lamps (their state is theirs), its searchlight's light among the island's
+		const lamps = b.userData.lamps = new BoatLamps( app.boat );
+		lamps.addLight( app.localLights );
+		b.add( lamps.group );
 		app.scene.add( b );
 		return b;
 

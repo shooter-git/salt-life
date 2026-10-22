@@ -86,6 +86,20 @@
 			"author": "AugustSandberg"
 		},
 		{
+			"path": "public/audio/boat_horn.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/felix.blume/sounds/162350/",
+			"title": "Boat Horn",
+			"author": "felix.blume"
+		},
+		{
+			"path": "public/audio/boat_horn.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/felix.blume/sounds/162350/",
+			"title": "Boat Horn",
+			"author": "felix.blume"
+		},
+		{
 			"path": "public/audio/boat_lap.m4a",
 			"license": "CC0-1.0",
 			"source": "https://freesound.org/people/kyles/sounds/637206/",

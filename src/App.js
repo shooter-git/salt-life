@@ -45,6 +45,7 @@ import { Wake } from './ocean/Wake.js';
 import { SoundScape } from './audio/SoundScape.js';
 import { Game } from './game/Game.js';
 import { Together } from './together/Together.js';
+import { BoatLamps } from './world/boat/BoatLamps.js';
 import { createGameUI } from './ui/GameUI.js';
 import { PostChain } from './post/PostChain.js';
 import { releaseGeometries, releaseTextures, uploadTextures, watchContext } from './core/ReleaseAfterUpload.js';
@@ -68,6 +69,7 @@ const _c3 = new THREE.Vector3();
 const _size = new THREE.Vector2();
 const _fwd = new THREE.Vector3();
 const _up = new THREE.Vector3();
+const _hornAt = new THREE.Vector3( - 0.42, 3.4, 1.15 ); // (the boat's horn, if its model doesn't say)
 // what starts the sound: browsers allow it only after one of these
 const GESTURES = [ 'pointerdown', 'touchend', 'click', 'keydown' ];
 
@@ -297,6 +299,12 @@ export class App {
 		this.localLights = new LocalLights( { max: tier === 'low' ? 4 : 8 } );
 		addVillageLights( this.localLights, this.village );
 		addBoatLights( this.localLights, this.boat );
+		// (Salt Life) the boat's lamps as others see them at night, and its searchlight (on its group:
+		// on a device that draws on the CPU, after the start, with the shaders for later)
+		this.boatLamps = new BoatLamps( this.boat );
+		this.boatLamps.addLight( this.localLights );
+		this.searchlight = false;
+		if ( ! this.cpuGL ) this.boat.group.add( this.boatLamps.group );
 		// the lanterns at Joe's fish stand and Marta's chandlery, in each stall's frame (x right, z toward
 		// the customer), turned by its yaw
 		for ( const [ st, lx, ly, lz ] of [ [ STAND, - 0.9, 1.85, 0.1 ], [ CHANDLERY, - 0.75, 1.58, - 1.45 ] ] ) {
@@ -463,7 +471,34 @@ export class App {
 		const input = this.input;
 		input.update( dt );
 		if ( input.hit( 'KeyT' ) ) this.toggleTime();
-		if ( input.hit( 'KeyL' ) ) this.hud.toast( this.localLights.toggleFlashlight() ? 'Flashlight on' : 'Flashlight off' );
+		// L: the flashlight; at the helm, the boat's searchlight
+		if ( input.hit( 'KeyL' ) ) {
+
+			if ( this.player.mode === 'boat' ) {
+
+				this.searchlight = ! this.searchlight;
+				this.hud.toast( this.searchlight ? 'Searchlight on' : 'Searchlight off' );
+
+			} else this.hud.toast( this.localLights.toggleFlashlight() ? 'Flashlight on' : 'Flashlight off' );
+
+		}
+
+		// H at the helm: the horn, for as long as it's held (everyone hears it)
+		const horn = this.player.mode === 'boat' && ( input.down( 'KeyH' ) || input.down( 'Horn' ) );
+		if ( horn !== !! this._horn ) {
+
+			if ( horn ) this._horn = this.audio.hornStart( this.boatCtl.toWorld( this.boat.hornAt || _hornAt, new THREE.Vector3() ) ) || true;
+			else {
+
+				if ( this._horn !== true ) this.audio.hornStop( this._horn );
+				this._horn = null;
+
+			}
+
+			if ( this.together ) this.together.horn( horn );
+
+		} else if ( this._horn && this._horn !== true ) this.audio.hornMove( this._horn, this.boatCtl.toWorld( this.boat.hornAt || _hornAt, _c3 ) );
+
 		if ( input.hit( 'KeyM' ) ) {
 
 			this.audio.setMuted( ! this.audio.muted );
@@ -551,6 +586,7 @@ export class App {
 		this.water.detail.update( dt );
 		this.water.update( this.camera );
 		this.boat.update( dt );
+		this.boatLamps.set( { underway: this.boatCtl.driven || ! this.boatCtl.moored, spot: this.searchlight } );
 		this.localLights.update( this.camera, dt );
 		this.wake.update( dt );
 		this.updateAudio( dt );
@@ -717,6 +753,12 @@ export class App {
 		const r = this.renderer, rod = this.game.rod;
 		await this.game.portrait.compile( r, this.scene.environment );
 		await this.together.compile( r, this.camera, this.scene );
+		if ( ! this.boatLamps.group.parent ) {
+
+			this.boat.group.add( this.boatLamps.group );
+			await r.compileAsync( this.boatLamps.group, this.camera, this.scene );
+
+		}
 		if ( rod.holdBack ) {
 
 			for ( const m of [ rod.rodMesh, rod.lineMesh, rod.bobberMesh ] ) {

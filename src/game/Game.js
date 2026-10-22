@@ -179,7 +179,8 @@ export class Game {
 		}
 
 		if ( this.hud && ( inp.hit( 'KeyI' ) || inp.hit( 'Tab' ) ) ) this.hud.toggleInventory();
-		if ( this.guide && inp.hit( 'KeyH' ) && ! this.guide.open ) this.guide.replay();
+		// (H at the helm is the horn)
+		if ( this.guide && inp.hit( 'KeyH' ) && ! this.guide.open && app.player.mode !== 'boat' ) this.guide.replay();
 		if ( this.hud && inp.hit( 'Escape' ) ) {
 
 			this.hud.toggleInventory( false );

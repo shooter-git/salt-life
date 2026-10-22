@@ -26,6 +26,9 @@ Done, M0 to M6:
 - the fishing game;
 - playing together:
   - you see the others on the island, walking, swimming, fishing and out in their boats;
+  - you pick your islander: two men and two women;
+  - you can ride along in someone else's boat, and hear it;
+  - at night their boats show their lamps and searchlights, and you hear their horns;
   - you hear about their catches;
   - the group keeps a board of the island's records at the fish stand;
   - everyone shares one time of day.

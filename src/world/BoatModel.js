@@ -99,6 +99,8 @@ export class BoatModel {
 
 		this.throttleMesh = addPart( 'throttle', throttleGeometry(), materials.fittings, parts.throttlePivot );
 		this.radarMesh = addPart( 'radar', radarArrayGeometry(), materials.fittings, parts.radarPivot );
+		this.searchlight = parts.searchlight; // (boat frame: the searchlight's lens, the horn's mouth)
+		this.hornAt = parts.horn;
 		this.propMesh = addPart( 'propeller', propellerGeometry(), materials.fittings, PROP.position );
 		this.rudderMesh = addPart( 'rudder', rudderGeometry(), materials.fittings, RUDDER.pivot );
 

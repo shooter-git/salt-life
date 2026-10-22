@@ -22,6 +22,10 @@ cp out/*.ogg ../../public/audio/         # then copy the entries of fishing-bank
 
 `raw/`, `work/` and `out/` are build scratch (not committed).
 
+The boat's horn is built the same way: `node dl.mjs 162350:felix.blume`, then `node build-horn.mjs` (three
+blasts in one sprite), then `tame.mjs`. Keep the scratch folders empty afterwards (or move them out):
+All the Spaces' checks read the folder on disk and ask for a licence entry for every sound in it.
+
 ## All the Spaces' loudness rule, and the AAC copies
 
 All the Spaces' build turns a sound down when it's louder than -14 LUFS integrated or peaks above -1 dBFS.

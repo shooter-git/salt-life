@@ -1014,6 +1014,9 @@ function buildRoofGear( kit, L, parts ) {
 	horn.applyMatrix4( mat4( - sx, roofTopY( 0.42 ) + 0.07, szz - 0.12, Math.PI / 2, 0, 0 ) );
 	kit.add( 'fittings', horn, STAINLESS );
 	kit.add( 'fittings', rod( V( - sx, roofTopY( 0.42 ), szz ), V( - sx, roofTopY( 0.42 ) + 0.07, szz ), 0.012, 6 ), STAINLESS );
+	// (Salt Life) where the searchlight's lens and the horn's mouth are (boat/BoatLamps.js, the sound)
+	parts.searchlight = V( sx, syy + 0.17, szz + 0.08 );
+	parts.horn = V( - sx, roofTopY( 0.42 ) + 0.07, szz + 0.1 );
 
 	// the owner's buoy colours displayed on the roof
 	const bx = 0.62, bz = - 0.72;
