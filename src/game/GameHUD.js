@@ -1,7 +1,7 @@
 import { FISH, fishLengthCm } from './FishTable.js';
 import { UPGRADES, nextLevel, FUEL_PRICE } from './Gear.js';
 
-// DOM for the fishing game, in the look of the rest of the HUD (ui/ui.css tokens, .tw-glass):
+// DOM for the fishing game, in the look of the rest of the HUD (ui/game-ui.css tokens, .tw-glass):
 //   top right     purse and cooler / hold load
 //   bottom centre the fight: line tension with its safe band, the fish's stamina, line out
 //   centre        "!" when a fish takes the bait

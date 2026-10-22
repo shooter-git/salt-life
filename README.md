@@ -10,15 +10,23 @@ It is not Tidewater and not made by its author. Tidewater runs on its own WebGPU
 strong graphics card. Salt Life rebuilds it on [three.js](https://threejs.org) with WebGL 2, so that
 it runs on phones too, inside All the Spaces' sealed creation frame.
 
-## Status: being ported
+## Status
 
-This repository started as a fork of Tidewater. Its WebGPU code is still here while each system is
-ported; `src/main.js` is the new entry point. You can walk, swim and take the boat around the island,
-and fish from the pier, the beach or the boat, sell your catch to Joe and buy better gear from Marta,
-with a mouse and keyboard, a gamepad or a touch screen. Done: M0 to M5: the sea and its shore, spray,
-gusts and slicks, the haze, the whole world (the village, the pier, the reef and its fish, the birds and
-crabs, the beach's debris, the whale, the lights at night) and the fishing game. Still to come: M6, the
-multiplayer.
+This repository started as a fork of Tidewater. Every system Salt Life keeps is now ported, and
+Tidewater's WebGPU engine is gone (its history is still in the repository).
+
+You can walk, swim and take the boat around the island. You can fish from the pier, the beach or the
+boat, sell your catch to Joe and buy better gear from Marta. It plays with a mouse and keyboard, a
+gamepad or a touch screen.
+
+Done, M0 to M5:
+- the sea and its shore, spray, gusts and slicks, and the haze;
+- the whole world: the village, the pier, the reef and its fish, the birds and crabs, the beach's
+  debris, the whale and the lights at night;
+- the fishing game.
+
+Next is M6, the multiplayer. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how the game is
+put together.
 
 | Milestone | What it brings |
 |---|---|
