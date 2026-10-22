@@ -19,15 +19,18 @@ You can walk, swim and take the boat around the island. You can fish from the pi
 boat, sell your catch to Joe and buy better gear from Marta. It plays with a mouse and keyboard, a
 gamepad or a touch screen.
 
-Done, M0 to M5:
+Done, M0 to M6:
 - the sea and its shore, spray, gusts and slicks, and the haze;
 - the whole world: the village, the pier, the reef and its fish, the birds and crabs, the beach's
   debris, the whale and the lights at night;
-- the fishing game.
+- the fishing game;
+- playing together:
+  - you see the others on the island, walking, swimming, fishing and out in their boats;
+  - you hear about their catches;
+  - the group keeps a board of the island's records at the fish stand;
+  - everyone shares one time of day.
 
-M6, the multiplayer, is under way. You see the others on the island, walking, swimming, fishing and
-out in their boats, and everyone shares one time of day. Catch announcements and the shared records
-board come next. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how the game is put together.
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how the game is put together.
 
 | Milestone | What it brings |
 |---|---|

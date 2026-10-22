@@ -70,6 +70,14 @@ Materials are three's `MeshStandardMaterial` (or `MeshPhysicalMaterial`), with G
   - The host sets it if there's none.
   - T changes it for everyone.
   - Each device works the hour out from the time of day on its own clock.
+- **Catches:** a landed fish is a `'catch'` message to the others.
+  - They see a toast and hear the player cheer.
+  - The fish hangs on the player's line for a moment.
+- **The island's records:** each species' heaviest fish, with who caught it and when.
+  - They're kept in the group's shared save (`portal.save.shared`, key `'records'`), so they last between visits.
+  - A catch updates them with `update`, which retries when two saves cross.
+  - The catch card says when a catch is the island's heaviest yet.
+  - The records are chalked on a board beside Joe's stand (`RecordsBoard.js`, a canvas) and listed in the cooler.
 
 Everyone keeps their own progress and their own fish.
 

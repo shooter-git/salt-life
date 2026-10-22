@@ -90,6 +90,20 @@ export class CatchDisplay {
 
 	}
 
+	// (Salt Life) a fish of `species` at unit length, hanging by the gills from its origin, still: what
+	// another player landed (together/Together.js). Not in the scene; the caller places and disposes it
+	hangingFish( species ) {
+
+		const model = FISH[ species ].model;
+		const fp = new FishProps();
+		fp.add( 'whole', model, ORIGIN, 'gill', 1, { anchor: FishProps.gillAnchor( model ), curl: 0.2, wet: 1 } );
+		const mesh = this.bake( fp, 1 );
+		mesh.name = 'TheirCatch';
+		mesh.frustumCulled = false;
+		return mesh;
+
+	}
+
 	// hang `species` from `mouth` (world point: the end of the line), facing the camera
 	show( species, kg, mouth, faceYaw, dt ) {
 

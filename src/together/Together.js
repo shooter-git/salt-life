@@ -2,6 +2,8 @@ import { Vector3, Quaternion, Matrix4, MathUtils } from '../engine/index.js';
 import { gltfLoader } from '@allthespaces/portal/three';
 import { Avatar } from './Avatar.js';
 import { figureStandIn } from './Figure.js';
+import { RecordsBoard } from './RecordsBoard.js';
+import { FISH, fishLengthCm } from '../game/FishTable.js';
 import { ROD_L, SEAT_Y } from '../game/FishingRod.js';
 import { WORLD } from '../world/WorldLayout.js';
 
@@ -12,6 +14,11 @@ import { WORLD } from '../world/WorldLayout.js';
 //    shown a little behind (DELAY) and eased between, so it moves smoothly
 //  - the time of day: one clock for everyone (the shared value 'clock': { at, hour, speed }), which
 //    the host sets if there's none, and T changes for all
+//  - catches: a message to the others ('catch'), who see a toast, the fish on your line and you
+//    cheering
+//  - the island's records: each species' heaviest fish anyone in the group has landed, who and when,
+//    in the group's shared save ('records': kept between visits), chalked on a board at Joe's stand
+//    (RecordsBoard) and listed in the cooler
 // Each other player is one of four islanders (Avatar.js: Rocketbox characters, as Joe and Marta),
 // walking, running, swimming, at the helm or holding a rod as they are, with their name over them in
 // their colour and a dot on the minimap; they wave when you meet; their boat is a copy of yours (its meshes, no new shaders), out at sea; their rod, line and
@@ -75,6 +82,100 @@ export class Together {
 		if ( clock ) this._adopt( clock );
 		else if ( s.isHost ) this.setClock( app.settings.timeOfDay, app.settings.timeSpeed );
 		s.onChange( 'clock', ( value ) => this._adopt( value ) );
+		s.on( 'catch', ( body, from ) => this._theirCatch( body, from ) );
+
+		// the records: the group's, read now and again when someone breaks one
+		this.records = {};
+		this.board = new RecordsBoard( { terrain: app.terrainData } );
+		app.lightUp( this.board.group );
+		// (on a device that draws on its CPU, after the start: its shader is load time)
+		if ( this.ready ) app.scene.add( this.board.group );
+		this._readRecords();
+
+	}
+
+	// ---- catches and records
+
+	_readRecords() {
+
+		return this.portal.save.shared.get( 'records' ).then( ( r ) => this._setRecords( r ) ).catch( ( e ) => console.warn( 'records', e ) );
+
+	}
+
+	_setRecords( r ) {
+
+		if ( ! r || typeof r !== 'object' ) r = {};
+		const clean = {};
+		for ( const [ k, v ] of Object.entries( r ) ) if ( FISH[ k ] && v && typeof v.kg === 'number' ) clean[ k ] = v;
+		this.records = clean;
+		this.board.draw( clean );
+		if ( this.app.game.hud && this.app.game.hud.inv && ! this.app.game.hud.inv.hidden ) this.app.game.hud.renderInventory();
+
+	}
+
+	// a fish landed here: is it the island's heaviest of its kind? (from what's known now; the shared
+	// save is then brought up to date, and the others told)
+	caught( species, kg, cm ) {
+
+		const held = this.records[ species ];
+		const island = ! held || kg > held.kg;
+		const tell = ( record ) => {
+
+			if ( this.others.size ) this.session.send( 'catch', { s: species, kg: r3( kg ), cm, rec: record } );
+
+		};
+		if ( ! island ) {
+
+			tell( false );
+			return { island: false, held };
+
+		}
+
+		const mine = { kg: r3( kg ), cm, who: this.me.name, id: this.me.id, at: Date.now() };
+		this.portal.save.shared.update( 'records', ( cur ) => {
+
+			const next = cur && typeof cur === 'object' ? { ...cur } : {};
+			const r = next[ species ];
+			if ( ! r || kg > r.kg ) next[ species ] = mine;
+			return next;
+
+		} ).then( ( saved ) => {
+
+			this._setRecords( saved );
+			const ours = saved[ species ] && saved[ species ].id === this.me.id && saved[ species ].at === mine.at;
+			tell( ours );
+
+		} ).catch( ( e ) => {
+
+			console.warn( 'records', e );
+			tell( false );
+
+		} );
+		return { island: true, held };
+
+	}
+
+	// another player landed one: a toast, their cheer, their fish on their line for a moment
+	_theirCatch( b, from ) {
+
+		const o = this.others.get( from );
+		if ( ! o || ! b || ! FISH[ b.s ] || typeof b.kg !== 'number' ) return;
+		const kg = b.kg < 1 ? b.kg.toFixed( 2 ) : b.kg.toFixed( 1 );
+		this.app.game.toast( `${ o.person.name } caught a ${ kg } kg ${ FISH[ b.s ].name.toLowerCase() }${ b.rec ? ': a new island record!' : '' }`, 4200 );
+		o.avatar.once( 'cheer_01' );
+		if ( o.fish ) {
+
+			this.app.scene.remove( o.fish );
+			o.fish.geometry.dispose();
+
+		}
+
+		o.fish = this.app.game.display.hangingFish( b.s );
+		o.fish.scale.setScalar( fishLengthCm( b.s, b.kg ) / 100 );
+		o.fish.visible = false;
+		this.app.scene.add( o.fish );
+		o.fishUntil = performance.now() / 1000 + 8;
+		if ( b.rec ) this._readRecords();
 
 	}
 
@@ -160,6 +261,13 @@ export class Together {
 		o.tackle.rod.material.dispose();
 		o.tackle.line.material.dispose();
 		if ( o.boat ) app.scene.remove( o.boat );
+		if ( o.fish ) {
+
+			app.scene.remove( o.fish );
+			o.fish.geometry.dispose();
+
+		}
+
 		if ( o.tag ) o.tag.remove();
 		if ( o.mapped && app.game.minimap ) app.game.minimap.removePlayer( o.person.id );
 
@@ -450,6 +558,30 @@ export class Together {
 
 		}
 
+		// the fish they've just landed, on the end of their line, turned to you
+		if ( o.fish ) {
+
+			const show = lineOn && c.rod === 6 && performance.now() / 1000 < o.fishUntil;
+			o.fish.visible = !! show;
+			if ( show ) {
+
+				const cam = app.camera.position;
+				o.fish.position.copy( c.bobber );
+				o.fish.rotation.set( 0, Math.atan2( cam.x - c.bobber.x, cam.z - c.bobber.z ), 0 );
+
+			}
+
+			T.bobber.visible = T.bobber.visible && ! show;
+			if ( performance.now() / 1000 > o.fishUntil + 2 ) {
+
+				app.scene.remove( o.fish );
+				o.fish.geometry.dispose();
+				o.fish = null;
+
+			}
+
+		}
+
 	}
 
 	// a copy of the boat (its meshes and materials: no new shaders), without its gear on low
@@ -549,7 +681,8 @@ export class Together {
 
 	}
 
-	// for the load's shaders (prepareLate): the stand-in figures' program, in the island's light
+	// for the load's shaders (prepareLate): the stand-in figures' program and the records board's,
+	// in the island's light
 	async compile( renderer, camera, scene ) {
 
 		const stand = figureStandIn();
@@ -557,6 +690,8 @@ export class Together {
 		stand.frustumCulled = false;
 		scene.add( stand );
 		await renderer.compileAsync( stand, camera, scene );
+		if ( ! this.board.group.parent ) scene.add( this.board.group );
+		await renderer.compileAsync( this.board.group, camera, scene );
 		scene.remove( stand );
 		stand.geometry.dispose();
 		stand.material.dispose();
