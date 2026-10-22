@@ -32,6 +32,8 @@ import { Reef } from './world/Reef.js';
 import { FishSchools } from './world/Fish.js';
 import { fishModelsAsync } from './world/fish/FishModelsAsync.js';
 import { MarineSnow } from './fx/MarineSnow.js';
+import { Whale } from './world/marine/Whale.js';
+import { WhaleWater } from './ocean/WhaleWater.js';
 import { Character } from './game/Character.js';
 import { TouchControls } from './ui/TouchControls.js';
 import { Hud } from './ui/Hud.js';
@@ -395,11 +397,13 @@ export class App {
 		// island's held-back parts appear, the plants grow, then the catch card's shaders, then Joe and
 		// Marta (their loading is the high point of script memory: before the animals and the debris
 		// add theirs), then the animals and the debris, then the scanned debris, with pauses between;
-		// last, once that loading's garbage is collected (settle), the reef, its fish and the specks)
+		// last, once that loading's garbage is collected (settle), the reef, its fish and the specks;
+		// then, on every device, the whale)
 		const revealed = this._late ? new Promise( ( done ) => this._revealed = done ) : null;
 		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.loadCharacters() )
 			.then( () => this.pause() ).then( () => this.cpuGL && this.lifeAndDebris() ).then( () => this.pause() ).then( () => this.scansArrive() )
-			.then( () => this.cpuGL && this.settle() ).then( () => this.cpuGL && this.reefGrows() );
+			.then( () => this.cpuGL && this.settle() ).then( () => this.cpuGL && this.reefGrows() )
+			.then( () => this.pause() ).then( () => this.whaleArrives() );
 		const begin = () => this.audio.resume().then( ( on ) => {
 
 			if ( on ) for ( const type of GESTURES ) removeEventListener( type, begin, true );
@@ -477,6 +481,13 @@ export class App {
 		this.rocks.update( this.camera );
 		if ( this.debris ) this.debris.update( this.camera );
 		if ( this.reef ) this.reef.update( this.camera );
+		if ( this.whale ) {
+
+			this.whale.update( dt, this.camera );
+			this.whaleWater.update( this.whale, dt, null );
+
+		}
+
 		if ( this.fish ) {
 
 			this.fish.viewHeight = this.renderer.domElement.height;
@@ -858,6 +869,41 @@ export class App {
 		} );
 		await this.firstDraws( [ snow.mesh ] );
 		this.snow = snow;
+
+	}
+
+	// the humpback (world/marine/Whale.js): its loop through the bay, its breaths at the surface in
+	// view of the beach and the pier, its dives; its marks on the water (ocean/WhaleWater.js) and
+	// the pilot fish around it. After the start everywhere (its model and maps are 1-5 MB), drawn
+	// once its maps are up and its shader is ready
+	async whaleArrives() {
+
+		if ( this.whale ) return;
+		performance.mark( 'world: whale' );
+		const whale = new Whale( { scene: this.scene, terrain: this.terrainData, ground: this.terrain, query: this.query, tier: this.tier } );
+		try {
+
+			await whale.load();
+
+		} catch ( e ) {
+
+			console.warn( 'the whale did not load', e );
+			return;
+
+		}
+
+		const meshes = whale.meshes.filter( Boolean );
+		for ( const t of [ whale.albedoTex, whale.heightTex ] ) this.renderer.initTexture( t );
+		for ( const m of meshes ) m.visible = true;
+		await this.readyToDraw( whale.group, () => {
+
+			for ( const m of meshes ) m.visible = false;
+
+		} );
+		await this.firstDraws( [ meshes[ meshes.length - 1 ] ] );
+		this.whale = whale;
+		this.whaleWater = new WhaleWater();
+		if ( this.fish ) this.fish.setWhale( whale );
 
 	}
 

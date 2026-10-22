@@ -2,6 +2,7 @@ import * as THREE from '../engine/index.js';
 import { CDLOD } from '../core/CDLOD.js';
 import { G } from '../core/Globals.js';
 import { rippleTexture } from './SeaTextures.js';
+import { WHALE_WATER_GLSL, whaleMarkUniforms } from './WhaleWater.js';
 
 // The sea: one instanced CDLOD grid that follows the camera out to the horizon. Its surface is the
 // open sea's Gerstner waves (Waves), fading out over the outer surf zone, plus Tidewater's breaking
@@ -47,6 +48,7 @@ export class WaterSurface {
 			waterSunDir: G.sunDir,
 			waterSky: G.skyIrradiance,
 			waterRipples: { value: rippleTexture() },
+			...whaleMarkUniforms,
 		};
 
 		// envMapIntensity 12: the scene's environment intensity is only a small diffuse fill (Sky); the
@@ -121,6 +123,7 @@ varying float vWaterFade;
 varying vec4 vSurf;
 varying vec3 vWaterN;
 uniform sampler2D waterRipples;
+${ WHALE_WATER_GLSL }
 float waterNoise( vec2 p ) {
 	vec2 i = floor( p ), f = fract( p );
 	vec2 u = f * f * ( 3.0 - 2.0 * f );
@@ -166,6 +169,9 @@ ${ SH ? /* glsl */`
 	float sheetEdge = smoothstep( 0.0, 0.03, film );
 	float lap = sin( dot( vWater.xz, vec2( 0.11, 0.93 ) ) * 1.7 - waterTime * 1.3 ) * 0.5 + 0.5;
 	foam = max( foam, ( 1.0 - smoothstep( 0.0, 0.08 + 0.16 * lap, depth ) ) * ( 0.35 + 0.45 * lap ) );` }
+	// the humpback's marks: churned white water, and the flat slick of its fluke print (WhaleWater)
+	vec2 whaleMk = whaleMarksOn > 0.5 ? whaleWater( vWater.xz ) : vec2( 0.0 );
+	foam = max( foam, whaleMk.x );
 	// the body of the water: light scattered back up from inside it (and off the sand under the
 	// shallows), lit by the sky and the sun whatever way the surface faces. Turquoise over sand,
 	// deep blue offshore, milky in the surf (suspended sand and fine bubbles)
@@ -188,7 +194,7 @@ ${ SH ? /* glsl */`
 	// short wind ripples and capillary waves on the waves near the camera (two drifting samples),
 	// calmed by the foam
 	vec3 wN = normalize( vWaterN );
-	float rippleK = ( 1.0 - smoothstep( 25.0, 140.0, length( cameraPosition - vWater ) ) ) * ( 1.0 - foam );
+	float rippleK = ( 1.0 - smoothstep( 25.0, 140.0, length( cameraPosition - vWater ) ) ) * ( 1.0 - foam ) * ( 1.0 - whaleMk.y );
 	vec2 r1 = texture2D( waterRipples, vWater.xz * 0.11 + waterTime * vec2( 0.012, 0.03 ) ).xy * 2.0 - 1.0;
 	vec2 r2 = texture2D( waterRipples, vWater.xz * 0.043 + 0.3 - waterTime * vec2( 0.02, 0.008 ) ).xy * 2.0 - 1.0;
 	vec2 rs = ( r1 * 0.6 + r2 * 0.4 ) * 0.32 * rippleK;
