@@ -1,7 +1,8 @@
 import {
 	Scene, PerspectiveCamera, OrthographicCamera, Matrix4, Quaternion, Vector2, Vector3, Mesh, BufferGeometry, Float32BufferAttribute,
-	ShaderMaterial, DirectionalLight, HemisphereLight, FramebufferTexture, LinearFilter,
+	ShaderMaterial, DirectionalLight, HemisphereLight, FramebufferTexture, LinearFilter, PMREMGenerator,
 } from '../engine/index.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { FishProps } from '../world/village/FishProps.js';
 import { FISH, fishLengthCm } from './FishTable.js';
 import { holdLocalLights } from '../materials/LocalLights.js';
@@ -16,7 +17,7 @@ import { holdLocalLights } from '../materials/LocalLights.js';
 // the card is up that frame, blurred and dimmed, and the fish are all that's drawn (cheaper than the
 // world). The card's DOM above has no backdrop blur of its own then (GameHUD: .is-gl).
 //
-//   const fp = new FishPortrait( material );  fp.compile( renderer, environment )  (with the load's shaders)
+//   const fp = new FishPortrait( materials, { lite } );  fp.compile( renderer, environment )  (with the load's shaders)
 //   fp.attach( canvas )     the card's stage canvas: the fish is drawn over its box; detach() stops it
 //   fp.show( species, kg )  start the card's animation (slide in, tail flick, slow turn)
 //   fp.update( dt );  if ( fp.active ) fp.render( renderer, drawWorld )  (App, in place of the world)
@@ -29,6 +30,8 @@ const FRAME = PORTRAIT.clone().multiply( SIDE.clone().invert() );
 const CURLS = [ - 0.8, - 0.4, 0, 0.4, 0.8 ]; // the tail flick, baked (FishProps bends the body as it builds)
 const VFOV = 16; // degrees: a long lens, little perspective distortion
 const EXPOSURE = 1.15;
+const STUDIO_ENV = 0.35; // the room's light (above the low tier), and the fill light with it
+const STUDIO_FILL = 0.3;
 const FADE_IN = 0.42; // s: the world dims and blurs as the card comes up
 
 const _q = new Quaternion(), _q2 = new Quaternion(), _a = new Vector3(), _size = new Vector2();
@@ -64,18 +67,24 @@ const BACKDROP = {
 
 export class FishPortrait {
 
-	// material: the fish's (CatchDisplay's GameFish: vertex colours)
-	constructor( material ) {
+	// materials: the fish's and their fins' (CatchDisplay's: the swimming fish's skin,
+	// fish/FishMaterial.js); lite: the low tier's (and no studio of its own: the world's sky)
+	constructor( materials, { lite = false } = {} ) {
 
-		this.material = material;
+		this.materials = materials;
+		this.lite = lite;
 		this.scene = new Scene();
 		this.camera = new PerspectiveCamera( VFOV, 2.4, 0.05, 50 );
-		// the studio: a warm key light from the upper front left, a cool rim behind, a soft fill
+		// the studio: a warm key light from the upper front left, a cool rim behind, a soft fill; above
+		// the low tier also a room around them (compile: three's RoomEnvironment), its bright panels
+		// mirrored in the wet skin and the silver
 		const key = new DirectionalLight( 0xfff1e0, 3.0 );
 		key.position.set( - 0.45, 0.78, 0.55 );
 		const rim = new DirectionalLight( 0xcfe2ff, 1.4 );
 		rim.position.set( 0.6, 0.35, - 0.75 );
-		this.scene.add( key, rim, new HemisphereLight( 0xe4ecf0, 0x403a34, 0.9 ) );
+		this.fill = new HemisphereLight( 0xe4ecf0, 0x403a34, 0.9 );
+		this.scene.add( key, rim, this.fill );
+		this.studio = null; // the room's PMREM
 		this.meshes = {}; // species -> one mesh per curl
 
 		const quad = new BufferGeometry();
@@ -105,23 +114,35 @@ export class FishPortrait {
 
 	}
 
-	// with the load's shaders: the fish material in this light, and the backdrop (a stand-in fish:
-	// any geometry with vertex colours gives the same program)
+	// with the load's shaders: the fish materials in this light, and the backdrop (stand-in fish: any
+	// geometry gives the same programs). environment: the world's, for the low tier's studio
 	compile( renderer, environment = null ) {
 
 		const g = new BufferGeometry();
 		g.setAttribute( 'position', new Float32BufferAttribute( [ 0, 0, 0, 0.1, 0, 0, 0, 0.1, 0 ], 3 ) );
 		g.setAttribute( 'normal', new Float32BufferAttribute( [ 0, 0, 1, 0, 0, 1, 0, 0, 1 ], 3 ) );
-		g.setAttribute( 'color', new Float32BufferAttribute( [ 1, 1, 1, 1, 1, 1, 1, 1, 1 ], 3 ) );
-		const stand = new Mesh( g, this.material );
+		const stand = this.materials.map( ( m ) => new Mesh( g, m ) );
 		const frame = new FramebufferTexture( 1, 1 );
-		this.scene.environment = environment;
-		this.scene.add( stand );
+		if ( this.lite ) this.scene.environment = environment;
+		else {
+
+			const pmrem = new PMREMGenerator( renderer );
+			const room = new RoomEnvironment();
+			this.studio = pmrem.fromScene( room, 0.04 );
+			room.dispose();
+			pmrem.dispose();
+			this.scene.environment = this.studio.texture;
+			this.scene.environmentIntensity = STUDIO_ENV;
+			this.fill.intensity = STUDIO_FILL;
+
+		}
+
+		this.scene.add( ...stand );
 		this.backdrop.material.uniforms.frame.value = frame;
 		const done = Promise.all( [ renderer.compileAsync( this.scene, this.camera ), renderer.compileAsync( this.backScene, this.backCamera ) ] );
 		return done.finally( () => {
 
-			this.scene.remove( stand );
+			this.scene.remove( ...stand );
 			g.dispose();
 			frame.dispose();
 			this.backdrop.material.uniforms.frame.value = null;
@@ -191,9 +212,8 @@ export class FishPortrait {
 
 			const fp = new FishProps();
 			fp.add( 'whole', FISH[ species ].model, FRAME, 'side', 1, { curl, wet: 1, seed: 0.37 } );
-			const mesh = fp.build( { lod: 0 } );
-			fp.material.dispose();
-			mesh.material = this.material;
+			fp.build( { lod: 0, skinned: true, lite: this.lite } );
+			const mesh = fp.fishMesh;
 			mesh.castShadow = mesh.receiveShadow = false;
 			mesh.frustumCulled = false;
 			mesh.visible = false;

@@ -1,6 +1,7 @@
 import * as THREE from '../../engine/index.js';
 import { SPECIES, SKIN } from '../fish/FishSpecies.js';
 import { fishGeometry, splitFishGeometry, section, PART } from '../fish/FishGeometry.js';
+import { createPropMaterial } from '../fish/FishMaterial.js';
 
 // Fish as village props: whole fish lying on ice or hanging from the stall, split salted fish on
 // the drying racks, a fish cut in two on a cleaning table, plus the crushed ice, banana leaves and
@@ -344,6 +345,22 @@ function bendPoint( x, y, z, curl, sag, out ) {
 
 }
 
+// the normal at a model point after those bends: the body's frame turns by the curl (about y), then
+// by the sag (about x), as the point does
+function bendNormal( nx, ny, nz, z, curl, sag, out ) {
+
+	const k1 = curl + ( curl >= 0 ? 1e-4 : - 1e-4 );
+	const t1 = k1 * z;
+	const c1 = Math.cos( t1 ), s1 = Math.sin( t1 );
+	const x1 = nx * c1 + nz * s1, z1n = - nx * s1 + nz * c1;
+	const k2 = sag + ( sag >= 0 ? 1e-4 : - 1e-4 );
+	const zb = Math.sin( t1 ) / k1; // (the body's axis after the curl: where the sag bends)
+	const t2 = k2 * zb;
+	const c2 = Math.cos( t2 ), s2 = Math.sin( t2 );
+	return out.set( x1, ny * c2 + z1n * s2, - ny * s2 + z1n * c2 ).normalize();
+
+}
+
 // model frame (nose +z, back +y, left flank +x) -> placement frame, per pose
 const POSE = {
 	// lying on its side, nose toward +x, left flank up
@@ -423,8 +440,11 @@ export class FishProps {
 	}
 
 	// one merged mesh (position, normal, color) of the models at level of detail `lod` (0 .. 2; the
-	// props are small and seen from a few metres at most)
-	build( { lod = 1 } = {} ) {
+	// props are small and seen from a few metres at most). skinned (Salt Life): the whole fish apart,
+	// in this.fishMesh with the swimming fish's skin (fish/FishMaterial.js createPropMaterial: lite on
+	// the low tier), their fins a second group with the see-through fins' material; the returned mesh
+	// is then the rest (null if there is none)
+	build( { lod = 1, skinned = false, lite = false } = {} ) {
 
 		const models = new Map();
 		const model = ( it ) => {
@@ -450,55 +470,130 @@ export class FishProps {
 
 		};
 
-		let vcount = 0, icount = 0;
-		for ( const it of this.items ) {
+		const skinItems = skinned ? this.items.filter( ( it ) => it.kind === 'whole' ) : [];
+		const colourItems = skinned ? this.items.filter( ( it ) => it.kind !== 'whole' ) : this.items;
+		const count = ( items ) => {
 
-			const g = model( it );
-			vcount += g.attributes.position.count;
-			icount += g.index.count;
+			let v = 0, i = 0;
+			for ( const it of items ) {
 
-		}
-
-		const pos = new Float32Array( vcount * 3 ), nrm = new Float32Array( vcount * 3 ), col = new Float32Array( vcount * 3 );
-		const idx = new Uint32Array( icount );
-		let vo = 0, io = 0;
-		for ( const it of this.items ) {
-
-			const g = model( it );
-			const P = g.attributes.position, N = g.attributes.normal, D = g.attributes.aData;
-			const skin = skinOf( it.species || 'mullet' );
-			const tone = 0.92 + ( it.seed % 1 ) * 0.16;
-			for ( let i = 0; i < P.count; i ++ ) {
-
-				bendPoint( P.getX( i ), P.getY( i ), P.getZ( i ), it.curl, it.sag, _v ).multiplyScalar( it.L ).applyQuaternion( it.q ).add( it.position );
-				_n.fromBufferAttribute( N, i ).applyQuaternion( it.q );
-				pos.set( [ _v.x, _v.y, _v.z ], ( vo + i ) * 3 );
-				nrm.set( [ _n.x, _n.y, _n.z ], ( vo + i ) * 3 );
-				colour( it, skin, D.getY( i ), D.getZ( i ), D.getW( i ) );
-				_c.multiplyScalar( tone );
-				col.set( [ _c.r, _c.g, _c.b ], ( vo + i ) * 3 );
+				const g = model( it );
+				v += g.attributes.position.count;
+				i += g.index.count;
 
 			}
 
-			for ( let i = 0; i < g.index.count; i ++ ) idx[ io + i ] = vo + g.index.getX( i );
-			vo += P.count;
-			io += g.index.count;
+			return [ v, i ];
+
+		};
+
+		// posed (bent, scaled, placed) positions and normals of the items, and their indices. fins: the
+		// fins' triangles (their membranes, not the finlets) after all the others, in a group of their
+		// own (geometry groups 0 and 1)
+		const place = ( items, perVertex, fins = false ) => {
+
+			const [ vcount, icount ] = count( items );
+			const pos = new Float32Array( vcount * 3 ), nrm = new Float32Array( vcount * 3 );
+			const idx = new Uint32Array( icount );
+			const finIdx = fins ? new Uint32Array( icount ) : null;
+			let vo = 0, io = 0, fo = 0;
+			for ( const it of items ) {
+
+				const g = model( it );
+				const P = g.attributes.position, N = g.attributes.normal;
+				for ( let i = 0; i < P.count; i ++ ) {
+
+					const x = P.getX( i ), y = P.getY( i ), z = P.getZ( i );
+					bendPoint( x, y, z, it.curl, it.sag, _v ).multiplyScalar( it.L ).applyQuaternion( it.q ).add( it.position );
+					bendNormal( N.getX( i ), N.getY( i ), N.getZ( i ), z, it.curl, it.sag, _n ).applyQuaternion( it.q );
+					pos.set( [ _v.x, _v.y, _v.z ], ( vo + i ) * 3 );
+					nrm.set( [ _n.x, _n.y, _n.z ], ( vo + i ) * 3 );
+					perVertex( it, g, i, vo + i );
+
+				}
+
+				const D = g.attributes.aData;
+				for ( let i = 0; i < g.index.count; i += 3 ) {
+
+					const a = g.index.getX( i ), part = D ? Math.floor( D.getY( a ) + 0.01 ) : - 1;
+					const fin = fins && part >= PART.DORSAL1 && part <= PART.PELVIC;
+					const out = fin ? finIdx : idx, o = fin ? fo : io;
+					out[ o ] = vo + a;
+					out[ o + 1 ] = vo + g.index.getX( i + 1 );
+					out[ o + 2 ] = vo + g.index.getX( i + 2 );
+					if ( fin ) fo += 3;
+					else io += 3;
+
+				}
+
+				vo += P.count;
+
+			}
+
+			const geo = new THREE.BufferGeometry();
+			geo.setAttribute( 'position', new THREE.BufferAttribute( pos, 3 ) );
+			geo.setAttribute( 'normal', new THREE.BufferAttribute( nrm, 3 ) );
+			if ( fins ) {
+
+				idx.set( finIdx.subarray( 0, fo ), io );
+				geo.addGroup( 0, io, 0 );
+				geo.addGroup( io, fo, 1 );
+
+			}
+
+			geo.setIndex( new THREE.BufferAttribute( idx, 1 ) );
+			return geo;
+
+		};
+
+		let mesh = null;
+		if ( colourItems.length ) {
+
+			const col = new Float32Array( count( colourItems )[ 0 ] * 3 );
+			const geo = place( colourItems, ( it, g, i, v ) => {
+
+				const D = g.attributes.aData;
+				colour( it, skinOf( it.species || 'mullet' ), D.getY( i ), D.getZ( i ), D.getW( i ) );
+				_c.multiplyScalar( 0.92 + ( it.seed % 1 ) * 0.16 );
+				col.set( [ _c.r, _c.g, _c.b ], v * 3 );
+
+			} );
+			geo.setAttribute( 'color', new THREE.BufferAttribute( col, 3 ) );
+			geo.computeBoundingSphere();
+			this.material = new THREE.MeshStandardMaterial( { vertexColors: true, roughness: 0.38, metalness: 0, side: THREE.DoubleSide } );
+			this.material.name = 'VillageFish';
+			mesh = new THREE.Mesh( geo, this.material );
+			mesh.name = 'village_fish';
+			mesh.castShadow = true;
+			mesh.receiveShadow = true;
 
 		}
 
-		const geo = new THREE.BufferGeometry();
-		geo.setAttribute( 'position', new THREE.BufferAttribute( pos, 3 ) );
-		geo.setAttribute( 'normal', new THREE.BufferAttribute( nrm, 3 ) );
-		geo.setAttribute( 'color', new THREE.BufferAttribute( col, 3 ) );
-		geo.setIndex( new THREE.BufferAttribute( idx, 1 ) );
-		geo.computeBoundingSphere();
+		this.fishMesh = null;
+		if ( skinItems.length ) {
+
+			const n = count( skinItems )[ 0 ];
+			const rest = new Float32Array( n * 3 ), data = new Float32Array( n * 4 ), fish = new Float32Array( n * 4 );
+			const geo = place( skinItems, ( it, g, i, v ) => {
+
+				const P = g.attributes.position, D = g.attributes.aData;
+				rest.set( [ P.getX( i ), P.getY( i ), P.getZ( i ) ], v * 3 );
+				data.set( [ D.getX( i ), D.getY( i ), D.getZ( i ), D.getW( i ) ], v * 4 );
+				fish.set( [ SPECIES[ it.species ].pattern, it.seed % 1, it.L, it.wet * ( 1 - it.dried ) ], v * 4 );
+
+			}, true );
+			geo.setAttribute( 'aRest', new THREE.BufferAttribute( rest, 3 ) );
+			geo.setAttribute( 'aData', new THREE.BufferAttribute( data, 4 ) );
+			geo.setAttribute( 'aFish', new THREE.BufferAttribute( fish, 4 ) );
+			geo.computeBoundingSphere();
+			const fm = this.fishMesh = new THREE.Mesh( geo, [ createPropMaterial( { lite } ), createPropMaterial( { lite, fins: true } ) ] );
+			fm.name = 'fish';
+			fm.castShadow = true;
+			fm.receiveShadow = true;
+
+		}
+
 		for ( const g of models.values() ) g.dispose();
-		this.material = new THREE.MeshStandardMaterial( { vertexColors: true, roughness: 0.38, metalness: 0, side: THREE.DoubleSide } );
-		this.material.name = 'VillageFish';
-		const mesh = new THREE.Mesh( geo, this.material );
-		mesh.name = 'village_fish';
-		mesh.castShadow = true;
-		mesh.receiveShadow = true;
 		this.mesh = mesh;
 		this.items = null;
 		return mesh;

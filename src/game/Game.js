@@ -37,9 +37,9 @@ export class Game {
 		this.rod.onLand = ( where ) => this.onBobberLanded( where );
 		// (Salt Life: the stalls are the app's, built with the village)
 		this.stand = app.stand || new FishStand( { scene: app.scene, terrain: app.terrainData, colliders: app.colliders } );
-		this.display = new CatchDisplay( { scene: app.scene, stall: this.stand.iceFish() } );
+		this.display = new CatchDisplay( { scene: app.scene, stall: this.stand.iceFish(), lite: app.tier === 'low' } );
 		// (Salt Life: the catch card's fish portrait is drawn by the app, in its canvas)
-		this.portrait = new FishPortrait( this.display.material );
+		this.portrait = new FishPortrait( this.display.material, { lite: app.tier === 'low' } );
 		this.landing = null; // { species, kg } while the caught fish swings in view
 		this.chandlery = app.chandlery || new Chandlery( { scene: app.scene, terrain: app.terrainData, colliders: app.colliders, material: this.stand.material } );
 		this.vendors = [ this.stand.vendor, this.chandlery.vendor ].filter( Boolean );

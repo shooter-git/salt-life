@@ -3,6 +3,7 @@ import { G } from '../core/Globals.js';
 import { Atmosphere, ATMOSPHERE_GLSL, SUN_ANGULAR_RADIUS, SUN_ILLUMINANCE, f } from './Atmosphere.js';
 import { SkyProClouds, CLOUDS_GLSL } from './SkyProClouds.js';
 import { Environment } from './Environment.js';
+import { SunLight } from 'three/addons/lights/SunLight.js';
 
 // The sky and the light it gives: Tidewater's physically based atmosphere (Hillaire 2020 LUTs) with
 // the sun disk, stars, moon and moonlit sky, composited with sky-pro's volumetric cumulus and
@@ -32,6 +33,7 @@ const STAR_REFLECTION = 0.08;
 
 const _up = new THREE.Vector3( 0, 1, 0 );
 const _origin = new THREE.Vector3();
+const _anchor = new THREE.Vector3(), _fwd = new THREE.Vector3(), _u = new THREE.Vector3(), _v = new THREE.Vector3();
 const _c = new THREE.Color();
 const _tint = new THREE.Color();
 const MOON = new THREE.Color( 0.55, 0.65, 1.0 );
@@ -238,10 +240,16 @@ export class Sky {
 		dome.onBeforeRender = ( r ) => this.fog.color.getRGB( this.uniforms.skyFogColor.value, r.getRenderTarget() === null ? r.outputColorSpace : THREE.ColorManagement.workingColorSpace );
 		scene.add( dome );
 
-		this.sun = new THREE.DirectionalLight( 0xffffff, 2 );
+		// (Salt Life) on high three's SunLight: two shadow maps fitted to the view, a sharp one near the
+		// camera and a wider one beyond (App sets them up). Below, a directional light: on mid its one
+		// shadow map ahead of the camera (shadowAhead; two maps drew the village's big merged meshes
+		// twice, past mid's triangle budget), on low no shadows
+		this.sun = tier === 'high' ? new SunLight( 0xffffff, 2 ) : new THREE.DirectionalLight( 0xffffff, 2 );
+		this.shadowAhead = 0; // m
 		this.sun.name = 'Sun';
 		this.hemi = new THREE.HemisphereLight( 0x9cc4e4, 0x3a3326, 0.6 );
-		scene.add( this.sun, this.sun.target, this.hemi );
+		scene.add( this.sun, this.hemi );
+		if ( this.sun.target ) scene.add( this.sun.target );
 
 		const [ near, far ] = FOG_DISTANCE[ this.tier ];
 		this.fogNear = near;
@@ -346,9 +354,31 @@ export class Sky {
 		}
 
 		G.sunColor.value.copy( this.sun.color ).multiplyScalar( this.sun.intensity );
-		const anchor = camera ? camera.position : _origin;
-		this.sun.position.copy( anchor ).addScaledVector( light, 200 );
-		this.sun.target.position.copy( anchor );
+		// (a sun light shines from its position toward the origin; a directional light at its target: the
+		// camera, or with shadows a point shadowAhead metres ahead of it, moved across the light in
+		// whole texels of the shadow map so the shadows' edges hold still)
+		if ( this.sun.isSunLight ) this.sun.position.copy( light );
+		else {
+
+			const anchor = _anchor.copy( camera ? camera.position : _origin );
+			if ( camera && this.sun.castShadow ) {
+
+				camera.getWorldDirection( _fwd ).setY( 0 );
+				if ( _fwd.lengthSq() > 1e-6 ) anchor.addScaledVector( _fwd.normalize(), this.shadowAhead );
+				const sc = this.sun.shadow.camera, texel = ( sc.right - sc.left ) / this.sun.shadow.mapSize.x;
+				// (the shadow camera's own axes: three's lookAt from the light toward the target)
+				_u.crossVectors( _up, light ).normalize();
+				_v.crossVectors( light, _u );
+				const a = Math.round( anchor.dot( _u ) / texel ) * texel, b = Math.round( anchor.dot( _v ) / texel ) * texel;
+				const c = anchor.dot( light );
+				anchor.copy( light ).multiplyScalar( c ).addScaledVector( _u, a ).addScaledVector( _v, b );
+
+			}
+
+			this.sun.position.copy( anchor ).addScaledVector( light, 200 );
+			this.sun.target.position.copy( anchor );
+
+		}
 
 		// sky fill: the sky's irradiance (its colour a little desaturated, its level relative to noon's
 		// at this game's level); a little blue at night; the ground bounces warm light back

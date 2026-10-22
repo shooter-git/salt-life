@@ -53,7 +53,10 @@ import { releaseGeometries, releaseTextures, uploadTextures, watchContext } from
 //
 // `portal` is the All the Spaces SDK (connect()): its tier ('low' | 'mid' | 'high') sizes everything.
 
-const SHADOW_SIZE = { mid: 1024, high: 2048 };
+// the sun's shadows: on high two maps fitted to the view (Sky's SunLight), each `size` px, as far as
+// `distance` (m); on mid one map, `box` m across, its middle `ahead` m in front of the camera (2.3 cm
+// a texel: the railings' shadows were stairs at mid's earlier 6 cm)
+const SHADOW = { mid: { size: 2048, box: 48, ahead: 14 }, high: { size: 2048, distance: 110 } };
 const ISLAND = { low: 'world/island-1024.bin', mid: 'world/island.bin', high: 'world/island.bin' };
 // WebGL drawn on the CPU draws at most a phone screen's pixels (a laptop's is three times as many)
 const CPU_PIXELS = 360_000;
@@ -163,15 +166,34 @@ export class App {
 		this.sky = new Sky( { scene, renderer, tier } );
 		// the eye adapts at dusk and at night: the whole scene's exposure follows (Tidewater's auto exposure)
 		this.sky.sceneAdaptation = true;
-		if ( SHADOW_SIZE[ tier ] ) {
+		if ( SHADOW[ tier ] ) {
 
-			const s = this.sky.sun;
+			const s = this.sky.sun, o = SHADOW[ tier ];
 			s.castShadow = true;
-			s.shadow.mapSize.setScalar( SHADOW_SIZE[ tier ] );
-			const r = tier === 'high' ? 50 : 32;
-			Object.assign( s.shadow.camera, { left: - r, right: r, top: r, bottom: - r, near: 1, far: 400 } );
+			s.shadow.mapSize.setScalar( o.size );
+			if ( s.isSunLight ) s.shadow.camera.far = o.distance;
+			else {
+
+				const r = o.box / 2;
+				Object.assign( s.shadow.camera, { left: - r, right: r, top: r, bottom: - r, near: 1, far: 400 } );
+				this.sky.shadowAhead = o.ahead;
+
+			}
+
 			s.shadow.bias = - 0.0004;
-			s.shadow.normalBias = 0.04;
+			s.shadow.normalBias = 0.03;
+			s.shadow.radius = 1.25;
+			// (three r186's shadow pass draws what the view camera's layers show: the reef's
+			// shadow-only stand-ins on layer 1 join it there, and only there)
+			const shadowMap = renderer.shadowMap, renderShadows = shadowMap.render;
+			shadowMap.render = function ( lights, scene, camera ) {
+
+				const had = camera.layers.isEnabled( 1 );
+				camera.layers.enable( 1 );
+				renderShadows.call( this, lights, scene, camera );
+				if ( ! had ) camera.layers.disable( 1 );
+
+			};
 
 		}
 
@@ -225,8 +247,7 @@ export class App {
 		if ( tier === 'low' ) {
 
 			this.nearDetail = [];
-			// (the display fish are one mesh spanning the village: left out on these devices)
-			for ( const f of this.village.fish || [] ) f.visible = false;
+			// (the village's display fish, one mesh spanning the village, aren't built on these devices)
 			this.stand.group?.traverse( ( o ) => o.isMesh && this.nearDetail.push( { o, dist: 60 } ) );
 			this.chandlery.group?.traverse( ( o ) => o.isMesh && this.nearDetail.push( { o, dist: 60 } ) );
 			for ( const k of [ 'fittings', 'trap', 'wood', 'wheel', 'throttle', 'radar', 'propeller', 'rudder' ] ) if ( this.boat.meshes[ k ] ) this.nearDetail.push( { o: this.boat.meshes[ k ], dist: 70 } );
@@ -291,7 +312,7 @@ export class App {
 
 			// (low-powered devices: the traders and the fish on ice only near the camera, too)
 			for ( const v of this.game.vendors ) v.group.traverse( ( o ) => o.isMesh && this.nearDetail.push( { o, dist: 60 } ) );
-			if ( this.game.display.stallMesh ) this.nearDetail.push( { o: this.game.display.stallMesh, dist: 60 } );
+			for ( const o of [ this.game.display.stallMesh, this.game.display.stallIce ] ) if ( o ) this.nearDetail.push( { o, dist: 60 } );
 			for ( const d of this.nearDetail ) if ( ! d.o.geometry.boundingSphere ) d.o.geometry.computeBoundingSphere();
 
 		}
@@ -342,6 +363,11 @@ export class App {
 			this._late = [ named( 'Rocks' ), named( 'Village' ), named( 'FishStand', 'Chandlery', 'StallFish', 'Vendor' ), named( 'LobsterBoat' ) ];
 			for ( const group of this._late ) for ( const o of group ) o.visible = false;
 			this.game.rod.holdBack = true;
+			// the fish in the swimming fish's skin (the village's and the stall's: two big shaders, the
+			// skin's and the fins') wait out of the scene, compiled after the start too
+			this._heldFish = [ ...( this.village.fish || [] ), this.game.display.stallMesh ]
+				.filter( ( m ) => m && Array.isArray( m.material ) ).map( ( m ) => [ m, m.parent ] );
+			for ( const [ m ] of this._heldFish ) m.removeFromParent();
 
 		}
 
@@ -676,7 +702,7 @@ export class App {
 
 	// shaders not needed at the start, compiled and first used after it: the catch card's fish portrait
 	// (its studio light and the blurred backdrop), and on a device that draws on its CPU the rod and
-	// its line (held back while loading: every shader compiled then is load time)
+	// its line and the skinned fish (held back while loading: every shader compiled then is load time)
 	async prepareLate() {
 
 		if ( ! this.game ) return;
@@ -696,6 +722,15 @@ export class App {
 			rod.holdBack = false;
 
 		}
+
+		for ( const [ m, parent ] of this._heldFish || [] ) {
+
+			await r.compileAsync( m, this.camera, this.scene );
+			parent.add( m );
+
+		}
+
+		this._heldFish = null;
 
 		for ( const p of r.info.programs ) {
 
