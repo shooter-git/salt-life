@@ -4,18 +4,24 @@ import { Character } from '../game/Character.js';
 import { Figure } from './Figure.js';
 
 // (Salt Life) Another player on the island: one of four islanders (Microsoft Rocketbox, as Joe and
-// Marta: tools/characters/players.sh), the same one on every screen (lookOf: from their id).
+// Marta: tools/characters/players.sh), the one they chose (in the cooler; it comes with their poses),
+// or until they have, one picked from their id (lookOf: the same on every screen).
 // Their clips: standing (idle), walking and running (matched to their speed), the rod held up in
 // front (an umbrella's handle in Rocketbox), both hands on the wheel at the helm (a trolley's), a cheer
 // and a wave. Swimming has no clip: the arms turn over and the legs kick, posed here on the idle, the
 // body lying face down. Until their look has loaded (or if it doesn't) a stand-in figure (Figure.js).
-//   const a = new Avatar( person );  scene.add( a.group );  a.setLook( gltf )
+//   const a = new Avatar( person );  scene.add( a.group );  a.look = name;  a.setLook( gltf )  (again to change)
 //   a.pose( { mode, speed, rod }, dt )   mode 'walk' | 'swim' | 'deck' | 'helm'; rod: holding one
 //   a.hand( out )                        the right hand (world): the rod's grip
 //   a.once( 'wave_01' | 'cheer_01' )     a gesture, when standing
 // Feet at the group's origin facing +Z.
 
 export const LOOKS = [ 'player-m1', 'player-m2', 'player-f1', 'player-f2' ];
+// (what each is, for choosing)
+export const LOOK_NAMES = {
+	'player-m1': 'Man · polo shirt and shorts', 'player-m2': 'Man · vest and shorts',
+	'player-f1': 'Woman · vest top and denim shorts', 'player-f2': 'Woman · T-shirt and jeans',
+};
 // m/s the walk and run clips cover (Rocketbox's: ~1.2 m in 1.2 s, ~1.85 m in 0.83 s), and where one
 // gives way to the other (the island's walking pace, 3 m/s, is a jog)
 const WALK = 1.0, RUN = 2.2, JOG = 1.8;
@@ -63,8 +69,18 @@ export class Avatar {
 
 	}
 
-	// their look's glTF (shared by everyone with that look: the skin is cloned, the clips shared)
+	// their look's glTF (shared by everyone with that look: the skin is cloned, the clips shared); again
+	// when they choose another
 	setLook( gltf, { shadows = false } = {} ) {
+
+		if ( this.character ) {
+
+			this.character.mixer.stopAllAction();
+			this.body.remove( this.character.group );
+			this.character = null;
+			this._gesture = null;
+
+		}
 
 		const scene = cloneSkinned( gltf.scene );
 		const c = this.character = new Character( { scene, animations: gltf.animations } );
@@ -94,9 +110,14 @@ export class Avatar {
 			hand: bone( /R_?Hand$/ ), handL: bone( /L_?Hand$/ ), armL: bone( /L_?UpperArm$/ ), armR: bone( /R_?UpperArm$/ ),
 			thighL: bone( /L_?Thigh$/ ), thighR: bone( /R_?Thigh$/ ),
 		};
-		this.body.remove( this.figure.group );
-		this.figure.dispose();
-		this.figure = null;
+		if ( this.figure ) {
+
+			this.body.remove( this.figure.group );
+			this.figure.dispose();
+			this.figure = null;
+
+		}
+
 		this.body.add( scene );
 		c.play( 'idle_neutral_01', { fade: 0, from: Math.random() * c.clipDuration( 'idle_neutral_01' ) } );
 		c.onClipEnd = () => {

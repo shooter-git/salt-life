@@ -1,5 +1,6 @@
 import { FISH, fishLengthCm } from './FishTable.js';
 import { UPGRADES, nextLevel, FUEL_PRICE } from './Gear.js';
+import { LOOKS, LOOK_NAMES } from '../together/Avatar.js';
 
 // (other players' names, into HTML)
 const escape = ( t ) => String( t ).replace( /[&<>"']/g, ( c ) => ( { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } )[ c ] );
@@ -68,6 +69,9 @@ const CSS = /* css */`
 .gm-btn[disabled] { opacity: 0.4; cursor: default; }
 .gm-btn.is-ghost { background: var(--tw-fill-2); color: var(--tw-ink); }
 .gm-mini { font: 500 var(--tw-fs-sm) var(--tw-font); color: var(--tw-ink-2); background: var(--tw-fill); border: 1px solid var(--tw-line); border-radius: 999px; padding: 2px var(--tw-2); cursor: pointer; }
+.gm-mini.is-on { color: #0b1418; background: var(--tw-aqua); border-color: transparent; }
+.gm-looks > span { margin-left: var(--tw-1); }
+.gm-look-list { display: flex; flex-wrap: wrap; gap: var(--tw-2); margin-top: var(--tw-2); }
 .gm-gauge { display: none; align-items: center; gap: var(--tw-2); color: var(--tw-ink-2); font-size: var(--tw-fs-md); }
 .gm-gauge.is-on { display: flex; }
 .gm-gauge b { font-family: var(--tw-mono); font-weight: 500; color: var(--tw-ink); }
@@ -493,9 +497,16 @@ export class GameHUD {
 			<div class="gm-list">${ rows || '<div class="gm-empty">Nothing yet. Cast from the pier, the beach or the boat.</div>' }</div>
 			${ logged ? `<div class="gm-log"><b>Fish log</b><br>${ logged }</div>` : '' }
 			${ isle ? `<div class="gm-log"><b>Island records</b><br>${ isle }</div>` : '' }
+			${ together ? `<div class="gm-log gm-looks"><b>Your islander</b><span>how the others on the island see you</span><div class="gm-look-list">${ LOOKS.map( ( l ) => `<button class="gm-mini${ l === together.myLook ? ' is-on' : '' }" data-look="${ l }" aria-pressed="${ l === together.myLook }">${ LOOK_NAMES[ l ] }</button>` ).join( '' ) }</div></div>` : '' }
 			<div class="gm-foot"><span class="gm-sub">Sell at the fish stand by the pier</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Close', 'I', 'Back' ) }</button></div>`;
 		this.inv.querySelector( '[data-close]' ).onclick = () => this.toggleInventory( false );
 		for ( const b of this.inv.querySelectorAll( '[data-release]' ) ) b.onclick = () => s.release( Number( b.dataset.release ) );
+		for ( const b of this.inv.querySelectorAll( '[data-look]' ) ) b.onclick = () => {
+
+			together.setLook( b.dataset.look );
+			this.renderInventory();
+
+		};
 
 	}
 
