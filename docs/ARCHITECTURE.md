@@ -50,6 +50,29 @@ Salt Life is [Tidewater](https://github.com/dgreenheck/tidewater) rebuilt as an 
 
 Materials are three's `MeshStandardMaterial` (or `MeshPhysicalMaterial`), with GLSL added in `onBeforeCompile`. Each gets its own `customProgramCacheKey`.
 
+## Playing together
+
+`src/together/Together.js` handles everyone else on the island. It works through `portal.session`, the SDK's live session for the people in the space.
+
+- **Who's here:**
+  - Each player sends a pose message (`'p'`) about ten times a second, only while anyone else is here. It carries:
+    - where they are and their heading;
+    - walking, swimming, on deck or at the helm;
+    - their speed;
+    - the rod's state, their bobber and the line's tension;
+    - their boat's pose, when it's away from its mooring or they're aboard.
+  - Others are drawn 0.15 s behind the newest pose and eased between poses.
+  - Each player is one of four Rocketbox islanders (`Avatar.js`), always the same one for the same person. Each has their name over them in their colour and a dot on the minimap.
+  - Their boat is a copy of yours that shares its meshes and materials. When both boats are at the dock, yours stands in for theirs.
+  - Their rod, line and bobber are the rod's (`FishingRod.tackle()`).
+  - Each device draws only the nearest few players and boats.
+- **The clock:** one time of day for everyone, kept in the shared value `'clock'` as `{ at, hour, speed }`.
+  - The host sets it if there's none.
+  - T changes it for everyone.
+  - Each device works the hour out from the time of day on its own clock.
+
+Everyone keeps their own progress and their own fish.
+
 ## Device tiers
 
 `portal.tier` sizes everything. On its own (`pnpm dev`), `?tier=low|mid|high` tries another tier.

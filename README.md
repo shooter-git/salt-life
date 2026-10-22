@@ -25,8 +25,9 @@ Done, M0 to M5:
   debris, the whale and the lights at night;
 - the fishing game.
 
-Next is M6, the multiplayer. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how the game is
-put together.
+M6, the multiplayer, is under way. You see the others on the island, walking, swimming, fishing and
+out in their boats, and everyone shares one time of day. Catch announcements and the shared records
+board come next. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how the game is put together.
 
 | Milestone | What it brings |
 |---|---|

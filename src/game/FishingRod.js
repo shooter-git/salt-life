@@ -27,7 +27,7 @@ import { createPropMaterial, createLineMaterial, PAT } from './GameMaterials.js'
 // 'retrieving' reels an empty line in.
 export const ROD_L = 2.13; // 7 ft
 const BLANK_START = 0.535; // front of the fore grip: the blank bends from here
-const SEAT_Y = 0.405; // the hand holds the reel seat (reel foot between the fingers)
+export const SEAT_Y = 0.405; // the hand holds the reel seat (reel foot between the fingers)
 const REEL_Z = - 0.092; // reel axis below the blank
 const BODY_Y = 0.327; // crank axis height along the rod
 const PIVOT_Y = 0.403; // bail pivots at the rotor arm ends
@@ -74,6 +74,76 @@ export const POSES = {
 	landing: { elev: 0.85, side: 0.3, hand: [ 0.16, - 0.08, - 0.46 ] }, // rod up, the fish swinging in view
 };
 
+// the rod's material: the carbon blank, its wraps and the reel, with the reel's and the blank's
+// animation in the vertex shader (uniforms rodBend, rodShape, reelAnim, reelAnim2)
+function createRodMaterial() {
+
+	const f = ( x ) => x.toFixed( 4 );
+	return createPropMaterial( 'fishingRod', {
+		clearcoat: true,
+		uniforms: {
+			rodBend: { value: new Vector4() }, // xyz bend direction (rod space), w bend
+			rodShape: { value: new Vector4( 3, 0, 0, 0 ) }, // x: bend exponent (fast action)
+			reelAnim: { value: new Vector4() }, // rotor angle, bail open 0..1, crank angle, spool angle
+			reelAnim2: { value: new Vector4( 0, 1, 0, 0 ) }, // spool oscillation (m), line fill
+		},
+		vertex: /* glsl */`
+	float part = aux.w;
+	vec3 axisC = vec3( 0.0, 0.0, ${ f( REEL_Z ) } );
+	if ( part > 0.5 ) {
+		if ( part < 2.5 ) {
+			if ( part > 1.5 ) {
+				// the bail flips back about the line through its two pivots
+				float a = - reelAnim.y * 1.95;
+				vec3 c = vec3( 0.0, ${ f( PIVOT_Y ) }, ${ f( REEL_Z ) } );
+				float ca = cos( a ); float sa = sin( a );
+				vec3 q = P - c;
+				P = c + vec3( q.x, q.y * ca - q.z * sa, q.y * sa + q.z * ca );
+				Nn = vec3( Nn.x, Nn.y * ca - Nn.z * sa, Nn.y * sa + Nn.z * ca );
+			}
+			// rotor (and the bail on it) turn about the reel axis
+			float a = reelAnim.x;
+			float ca = cos( a ); float sa = sin( a );
+			vec3 q = P - axisC;
+			P = vec3( q.x * ca + q.z * sa, P.y, - q.x * sa + q.z * ca ) + vec3( 0.0, 0.0, axisC.z );
+			Nn = vec3( Nn.x * ca + Nn.z * sa, Nn.y, - Nn.x * sa + Nn.z * ca );
+		} else if ( part < 3.5 ) {
+			// crank handle about its shaft (along x)
+			float a = reelAnim.z;
+			vec3 c = vec3( 0.0, ${ f( BODY_Y ) }, ${ f( REEL_Z ) } );
+			float ca = cos( a ); float sa = sin( a );
+			vec3 q = P - c;
+			P = c + vec3( q.x, q.y * ca - q.z * sa, q.y * sa + q.z * ca );
+			Nn = vec3( Nn.x, Nn.y * ca - Nn.z * sa, Nn.y * sa + Nn.z * ca );
+		} else {
+			// spool: in and out with the crank, turning back when the drag slips; the braid on it
+			// shrinks as line goes out
+			vec3 q = P - axisC;
+			if ( part > 4.5 ) {
+				float r = length( q.xz );
+				float r2 = mix( 0.0205, r, reelAnim2.y );
+				q = vec3( q.x * r2 / max( r, 1e-5 ), q.y, q.z * r2 / max( r, 1e-5 ) );
+			}
+			float a = reelAnim.w;
+			float ca = cos( a ); float sa = sin( a );
+			P = vec3( q.x * ca + q.z * sa, P.y + reelAnim2.x, - q.x * sa + q.z * ca ) + vec3( 0.0, 0.0, axisC.z );
+			Nn = vec3( Nn.x * ca + Nn.z * sa, Nn.y, - Nn.x * sa + Nn.z * ca );
+		}
+	}
+	// the blank bends toward the line (fast action: rodShape.x = exponent of the deflection)
+	float span = ${ f( ROD_L - BLANK_START ) };
+	float s = clamp( ( P.y - ${ f( BLANK_START ) } ) / span, 0.0, 1.0 );
+	float pw = rodShape.x;
+	float lat = rodBend.w * ${ f( ROD_L ) } * pow( s, pw );
+	float slope = rodBend.w * ${ f( ROD_L ) } * pw * pow( max( s, 1e-4 ), pw - 1.0 ) / span;
+	float drop = 0.5 * lat * lat / ( max( P.y - ${ f( BLANK_START ) }, 0.0 ) + 0.06 );
+	P = P + rodBend.xyz * lat - vec3( 0.0, drop, 0.0 );
+	Nn = normalize( Nn - vec3( 0.0, slope * dot( Nn, rodBend.xyz ), 0.0 ) );
+`,
+	} );
+
+}
+
 export class FishingRod {
 
 	constructor( { scene, camera, query, terrain, audio = null } ) {
@@ -117,69 +187,7 @@ export class FishingRod {
 		this._lastOut = 0;
 
 		// ---- meshes
-		const f = ( x ) => x.toFixed( 4 );
-		this.rodMat = createPropMaterial( 'fishingRod', {
-			clearcoat: true,
-			uniforms: {
-				rodBend: { value: new Vector4() }, // xyz bend direction (rod space), w bend
-				rodShape: { value: new Vector4( 3, 0, 0, 0 ) }, // x: bend exponent (fast action)
-				reelAnim: { value: new Vector4() }, // rotor angle, bail open 0..1, crank angle, spool angle
-				reelAnim2: { value: new Vector4( 0, 1, 0, 0 ) }, // spool oscillation (m), line fill
-			},
-			vertex: /* glsl */`
-		float part = aux.w;
-		vec3 axisC = vec3( 0.0, 0.0, ${ f( REEL_Z ) } );
-		if ( part > 0.5 ) {
-			if ( part < 2.5 ) {
-				if ( part > 1.5 ) {
-					// the bail flips back about the line through its two pivots
-					float a = - reelAnim.y * 1.95;
-					vec3 c = vec3( 0.0, ${ f( PIVOT_Y ) }, ${ f( REEL_Z ) } );
-					float ca = cos( a ); float sa = sin( a );
-					vec3 q = P - c;
-					P = c + vec3( q.x, q.y * ca - q.z * sa, q.y * sa + q.z * ca );
-					Nn = vec3( Nn.x, Nn.y * ca - Nn.z * sa, Nn.y * sa + Nn.z * ca );
-				}
-				// rotor (and the bail on it) turn about the reel axis
-				float a = reelAnim.x;
-				float ca = cos( a ); float sa = sin( a );
-				vec3 q = P - axisC;
-				P = vec3( q.x * ca + q.z * sa, P.y, - q.x * sa + q.z * ca ) + vec3( 0.0, 0.0, axisC.z );
-				Nn = vec3( Nn.x * ca + Nn.z * sa, Nn.y, - Nn.x * sa + Nn.z * ca );
-			} else if ( part < 3.5 ) {
-				// crank handle about its shaft (along x)
-				float a = reelAnim.z;
-				vec3 c = vec3( 0.0, ${ f( BODY_Y ) }, ${ f( REEL_Z ) } );
-				float ca = cos( a ); float sa = sin( a );
-				vec3 q = P - c;
-				P = c + vec3( q.x, q.y * ca - q.z * sa, q.y * sa + q.z * ca );
-				Nn = vec3( Nn.x, Nn.y * ca - Nn.z * sa, Nn.y * sa + Nn.z * ca );
-			} else {
-				// spool: in and out with the crank, turning back when the drag slips; the braid on it
-				// shrinks as line goes out
-				vec3 q = P - axisC;
-				if ( part > 4.5 ) {
-					float r = length( q.xz );
-					float r2 = mix( 0.0205, r, reelAnim2.y );
-					q = vec3( q.x * r2 / max( r, 1e-5 ), q.y, q.z * r2 / max( r, 1e-5 ) );
-				}
-				float a = reelAnim.w;
-				float ca = cos( a ); float sa = sin( a );
-				P = vec3( q.x * ca + q.z * sa, P.y + reelAnim2.x, - q.x * sa + q.z * ca ) + vec3( 0.0, 0.0, axisC.z );
-				Nn = vec3( Nn.x * ca + Nn.z * sa, Nn.y, - Nn.x * sa + Nn.z * ca );
-			}
-		}
-		// the blank bends toward the line (fast action: rodShape.x = exponent of the deflection)
-		float span = ${ f( ROD_L - BLANK_START ) };
-		float s = clamp( ( P.y - ${ f( BLANK_START ) } ) / span, 0.0, 1.0 );
-		float pw = rodShape.x;
-		float lat = rodBend.w * ${ f( ROD_L ) } * pow( s, pw );
-		float slope = rodBend.w * ${ f( ROD_L ) } * pw * pow( max( s, 1e-4 ), pw - 1.0 ) / span;
-		float drop = 0.5 * lat * lat / ( max( P.y - ${ f( BLANK_START ) }, 0.0 ) + 0.06 );
-		P = P + rodBend.xyz * lat - vec3( 0.0, drop, 0.0 );
-		Nn = normalize( Nn - vec3( 0.0, slope * dot( Nn, rodBend.xyz ), 0.0 ) );
-`,
-		} );
+		this.rodMat = createRodMaterial();
 		this.rodMesh = new Mesh( buildRodGeometry(), this.rodMat );
 		this.rodMesh.name = 'FishingRod';
 		this.rodMesh.frustumCulled = false;
@@ -202,6 +210,27 @@ export class FishingRod {
 		this.lineMesh.visible = false;
 
 		scene.add( this.rodMesh, this.bobberMesh, this.lineMesh );
+
+	}
+
+	// (Salt Life) another player's rod, bobber and line (together/Together.js): the same geometry, and
+	// materials of their own (the rod's bend and the line's ends are uniforms) in the same programs
+	tackle() {
+
+		const rod = new Mesh( this.rodMesh.geometry, createRodMaterial() );
+		const bobber = new Mesh( this.bobberMesh.geometry, this.bobberMat );
+		const line = new Mesh( this.lineMesh.geometry, createLineMaterial( LINE_SEGS ) );
+		for ( const m of [ rod, bobber, line ] ) {
+
+			m.frustumCulled = false;
+			m.castShadow = false;
+			m.visible = false;
+
+		}
+
+		rod.matrixAutoUpdate = false;
+		line.material.uniforms.lineShow.value = 1;
+		return { rod, bobber, line };
 
 	}
 

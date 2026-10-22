@@ -37,6 +37,8 @@ const CSS = /* css */`
 .gm-mk.is-joe > i { background: var(--tw-sun); }
 .gm-mk.is-marta > i { background: var(--tw-aqua); }
 .gm-mk.is-boat > i { background: #f2efe6; }
+.gm-mk.is-player > i { width: calc(16 * var(--tw-u)); height: calc(16 * var(--tw-u)); margin: calc(-8 * var(--tw-u)) 0 0 calc(-8 * var(--tw-u)); color: #fff;
+	text-shadow: 0 1px 1px rgba(0,0,0,0.6); }
 .gm-mk > b { position: absolute; left: 0; top: 0; width: 0; height: 0; border-left: calc(5 * var(--tw-u)) solid transparent; border-right: calc(5 * var(--tw-u)) solid transparent;
 	border-bottom: calc(7 * var(--tw-u)) solid rgba(255,255,255,0.9); margin: calc(-19 * var(--tw-u)) 0 0 calc(-5 * var(--tw-u)); transform-origin: calc(5 * var(--tw-u)) calc(19 * var(--tw-u)); display: none; }
 .gm-mk.is-edge > b { display: block; }
@@ -190,6 +192,27 @@ export class Minimap {
 		if ( el[ k ] === on ) return;
 		el[ k ] = on;
 		el.classList.toggle( cls, on );
+
+	}
+
+	// (Salt Life) another player: a dot in their colour with their initial (together/Together.js);
+	// pos() -> { x, z } or null while they're out of sight
+	addPlayer( id, { name, color, pos } ) {
+
+		const e = h( 'div', 'gm-mk is-player', '<b></b><i></i>' );
+		e.lastChild.textContent = ( name || '?' ).trim().charAt( 0 ).toUpperCase();
+		e.lastChild.style.background = color;
+		this.marks.append( e );
+		this.markers.push( { id, el: e, arrow: e.firstChild, pos } );
+
+	}
+
+	removePlayer( id ) {
+
+		const i = this.markers.findIndex( ( m ) => m.id === id );
+		if ( i < 0 ) return;
+		this.markers[ i ].el.remove();
+		this.markers.splice( i, 1 );
 
 	}
 

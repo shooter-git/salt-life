@@ -1,6 +1,6 @@
-# Blender (4.2+ / 5.x) batch converter (see README): Rocketbox avatar FBX + clip FBXs -> one GLB (skin + clips).
-# blender -b --python convert.py -- <avatar.fbx> <texdir (prepared jpg/png)> <prefix m106> <out.glb> <anim1.fbx> [anim2.fbx ...]
-import bpy, sys, os
+# Blender (3.4+, tested with 3.4 and 5.2) batch converter (see README): Rocketbox avatar FBX + clip FBXs -> one GLB (skin + clips).
+# blender -b --python convert.py -- <avatar.fbx> <texdir (prepared jpg/png)> <prefix m106> <out.glb> <anim1.fbx[@first-last]> [anim2.fbx ...]
+import bpy, sys, os, re
 argv = sys.argv[sys.argv.index('--') + 1:]
 avatar, texdir, prefix, out = argv[:4]
 anims = argv[4:]
@@ -63,10 +63,18 @@ for slot in mesh.material_slots:
 # pose (arms down) while the avatars rest in a T-pose, so local rotations can't be copied: every
 # avatar bone copies its clip bone's world orientation (the pelvis also its position) and the
 # result is baked (visual keying) into one action per clip.
+# an action's curves (Blender 4.4+ keeps them in layers, strips and channel bags)
+def action_fcurves(act):
+    if hasattr(act, 'layers') and act.layers:
+        return [fc for layer in act.layers for strip in layer.strips for bag in strip.channelbags for fc in bag.fcurves]
+    return list(act.fcurves)
+
 bone_names = set(b.name for b in arm.data.bones)
 arm.animation_data_create()
 view_layer = bpy.context.view_layer
 for path in anims:
+    # (path@first-last: only those frames of a long clip)
+    path, _, frames = path.partition('@')
     clip = os.path.basename(path).split('.')[0]  # m_idle_neutral_01
     clip = clip[2:] if clip[:2] in ('m_', 'f_') else clip
     new = import_fbx(path)
@@ -76,6 +84,9 @@ for path in anims:
         print('NO ACTION', path)
         continue
     f0, f1 = int(act.frame_range[0]), int(act.frame_range[1])
+    if frames:
+        a, b = (int(x) for x in frames.split('-'))
+        f0, f1 = max(f0, a), min(f1, b)
     cons = []
     for pb in arm.pose.bones:
         if pb.name not in a_arm.pose.bones: continue
@@ -94,6 +105,20 @@ for path in anims:
     bpy.ops.object.mode_set(mode='OBJECT')
     baked = arm.animation_data.action
     baked.name = clip
+    if 'motextr_xy' in path:
+        # a walk or run: in place. The pelvis carries the forward motion (from the first frame to the
+        # last); that drift comes out, its bob and sway stay
+        for fc in action_fcurves(baked):
+            if fc.data_path != 'pose.bones["Bip01 Pelvis"].location': continue
+            k = fc.keyframe_points
+            vals = [p.co[1] for p in k]
+            if len(k) < 2 or max(vals) - min(vals) <= 0: continue
+            (t0, v0), (t1, v1) = k[0].co, k[-1].co
+            if abs(v1 - v0) < 0.5 * (max(vals) - min(vals)): continue
+            for p in k:
+                d = (p.co[0] - t0) / (t1 - t0) * (v1 - v0)
+                p.co[1] -= d; p.handle_left[1] -= d; p.handle_right[1] -= d
+            print('IN PLACE', clip, fc.array_index, round(v1 - v0, 2))
     baked.use_fake_user = True
     arm.animation_data.action = None
     for o in new:
@@ -111,10 +136,22 @@ for a in list(bpy.data.actions):
     if not a.use_fake_user: bpy.data.actions.remove(a)
 arm.animation_data.action = None
 
-bpy.ops.export_scene.gltf(
+options = dict(
     filepath=out, export_format='GLB', export_image_format='AUTO', export_jpeg_quality=88,
-    export_skins=True, export_animations=True, export_animation_mode='NLA_TRACKS',
+    export_skins=True, export_animations=True,
     export_force_sampling=True, export_optimize_animation_size=True, export_def_bones=False,
     export_morph=False, export_yup=True, export_apply=False, export_cameras=False, export_lights=False,
 )
+# (one animation per NLA track; older Blenders (3.4) call it export_nla_strips and lack some
+# options: those it doesn't know are left out)
+options['export_animation_mode'] = 'NLA_TRACKS'
+while True:
+    try:
+        bpy.ops.export_scene.gltf(**options)
+        break
+    except TypeError as e:
+        bad = re.search(r'keyword "(\w+)" unrecognized', str(e))
+        if not bad or bad.group(1) not in options: raise
+        print('NOT IN THIS BLENDER', bad.group(1))
+        if options.pop(bad.group(1)) == 'NLA_TRACKS': options['export_nla_strips'] = True
 print('EXPORTED', out, os.path.getsize(out))

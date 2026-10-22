@@ -28,6 +28,19 @@ Low-powered devices (All the Spaces' `low` tier) load copies with 512² textures
 
     npx @gltf-transform/cli@4.2.1 resize joe.glb joe-512.glb --width 512 --height 512
 
+The other players (`together/Avatar.js`) are four more Rocketbox avatars, `player-m1.glb` …
+`player-f2.glb` (`Male_Adult_01`, `Sports_Male_04`, `Female_Party_01`, `Female_Adult_17`), at 512²
+on every device (one download for all tiers):
+
+    tools/characters/players.sh [workdir]    # needs Blender 3.4+ (BLENDER=…), MAGICK=convert for ImageMagick 6
+
+Their clips: `idle_neutral_01`; `walk_neutral_01` and `run_slow_01` from `motextr_xy` (the forward
+motion taken out: in place, with the bob); `umbrella_idle_01` (holding a rod up in front),
+`trolley_idle` (both hands on the boat's wheel) and `cheer_01`, cut to their first seconds
+(`clip@first-last`: the holds play back and forth); `wave_01`. Blender 3.4 (Debian's) runs the glTF
+exporter on the system's Python and needs numpy there (or on `PYTHONPATH` with
+`--python-use-system-env`); `convert.py` leaves out exporter options an older Blender doesn't know.
+
 Runtime (Salt Life): three.js's GLTFLoader through the SDK's `gltfLoader()` (All the Spaces
 compresses every `.glb` with meshopt when it builds the creation) and `game/Character.js` (an
 AnimationMixer with clip crossfades); `App.loadCharacters()` loads them after the start and readies
