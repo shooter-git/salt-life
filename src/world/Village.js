@@ -681,11 +681,12 @@ export class Village {
 		}
 
 		// fish, lobsters, ice and banana leaves (market stall, drying racks, cleaning tables): one
-		// merged mesh (village/FishProps.js)
-		if ( B.fishProps ) {
+		// merged mesh (village/FishProps.js). (Salt Life: not on low-powered devices: one mesh spanning
+		// the village, it was left out there)
+		if ( B.fishProps && this.tier !== 'low' ) {
 
 			// (the whole fish apart, with the swimming fish's skin: FishProps skinned)
-			const rest = B.fishProps.build( { lod: this.tier === 'low' ? 2 : 1, skinned: true, lite: this.tier === 'low' } );
+			const rest = B.fishProps.build( { lod: 1, skinned: true } );
 			for ( const fish of [ rest, B.fishProps.fishMesh ] ) {
 
 				if ( ! fish ) continue;
@@ -880,7 +881,8 @@ export class Village {
 		for ( const f of this.fish || [] ) {
 
 			f.geometry.dispose();
-			f.material.dispose();
+			// (the skinned fish's materials are shared: fish/FishMaterial.js)
+			if ( ! Array.isArray( f.material ) ) f.material.dispose();
 
 		}
 

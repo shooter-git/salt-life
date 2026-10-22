@@ -643,8 +643,11 @@ export function createPropMaterial( { lite = false, fins = false } = {} ) {
 	if ( ! lite ) m.defines = { FISH_PHYSICAL: '' };
 	if ( fins ) {
 
+		// (single sheets: one pass of both faces; three's two passes for double-sided transparency
+		// cost a second program and order nothing here)
 		m.transparent = true;
 		m.depthWrite = false;
+		m.forceSinglePass = true;
 
 	}
 

@@ -247,8 +247,7 @@ export class App {
 		if ( tier === 'low' ) {
 
 			this.nearDetail = [];
-			// (the display fish are one mesh spanning the village: left out on these devices)
-			for ( const f of this.village.fish || [] ) f.visible = false;
+			// (the village's display fish, one mesh spanning the village, aren't built on these devices)
 			this.stand.group?.traverse( ( o ) => o.isMesh && this.nearDetail.push( { o, dist: 60 } ) );
 			this.chandlery.group?.traverse( ( o ) => o.isMesh && this.nearDetail.push( { o, dist: 60 } ) );
 			for ( const k of [ 'fittings', 'trap', 'wood', 'wheel', 'throttle', 'radar', 'propeller', 'rudder' ] ) if ( this.boat.meshes[ k ] ) this.nearDetail.push( { o: this.boat.meshes[ k ], dist: 70 } );
@@ -364,6 +363,11 @@ export class App {
 			this._late = [ named( 'Rocks' ), named( 'Village' ), named( 'FishStand', 'Chandlery', 'StallFish', 'Vendor' ), named( 'LobsterBoat' ) ];
 			for ( const group of this._late ) for ( const o of group ) o.visible = false;
 			this.game.rod.holdBack = true;
+			// the fish in the swimming fish's skin (the village's and the stall's: two big shaders, the
+			// skin's and the fins') wait out of the scene, compiled after the start too
+			this._heldFish = [ ...( this.village.fish || [] ), this.game.display.stallMesh ]
+				.filter( ( m ) => m && Array.isArray( m.material ) ).map( ( m ) => [ m, m.parent ] );
+			for ( const [ m ] of this._heldFish ) m.removeFromParent();
 
 		}
 
@@ -698,7 +702,7 @@ export class App {
 
 	// shaders not needed at the start, compiled and first used after it: the catch card's fish portrait
 	// (its studio light and the blurred backdrop), and on a device that draws on its CPU the rod and
-	// its line (held back while loading: every shader compiled then is load time)
+	// its line and the skinned fish (held back while loading: every shader compiled then is load time)
 	async prepareLate() {
 
 		if ( ! this.game ) return;
@@ -718,6 +722,15 @@ export class App {
 			rod.holdBack = false;
 
 		}
+
+		for ( const [ m, parent ] of this._heldFish || [] ) {
+
+			await r.compileAsync( m, this.camera, this.scene );
+			parent.add( m );
+
+		}
+
+		this._heldFish = null;
 
 		for ( const p of r.info.programs ) {
 
