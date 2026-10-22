@@ -3,6 +3,7 @@ import { CDLOD } from '../core/CDLOD.js';
 import { G } from '../core/Globals.js';
 import { rippleTexture } from './SeaTextures.js';
 import { WHALE_WATER_GLSL, whaleMarkUniforms } from './WhaleWater.js';
+import { SeaDetail } from './SeaDetail.js';
 
 // The sea: one instanced CDLOD grid that follows the camera out to the horizon. Its surface is the
 // open sea's Gerstner waves (Waves), fading out over the outer surf zone, plus Tidewater's breaking
@@ -36,6 +37,8 @@ export class WaterSurface {
 		this.shore = shore;
 		this.lod = new CDLOD( { gridSize: LOD_GRID[ tier ] ?? LOD_GRID.low, leafSize: LEAF[ tier ] ?? LEAF.low, levels: 12, minY: - 4, maxY: 4, prefix: 'oceanLod' } );
 		const SH = !! shore;
+		// gusts, slicks and windrows drifting with the wind (update( dt ) moves them)
+		this.detail = new SeaDetail( { lite: tier === 'low' } );
 
 		const uniforms = {
 			...this.lod.uniforms,
@@ -49,11 +52,24 @@ export class WaterSurface {
 			waterSky: G.skyIrradiance,
 			waterRipples: { value: rippleTexture() },
 			...whaleMarkUniforms,
+			...this.detail.uniforms,
 		};
 
 		// envMapIntensity 12: the scene's environment intensity is only a small diffuse fill (Sky); the
 		// sea reflects the sky in full
 		const mat = this.material = new THREE.MeshStandardMaterial( { color: 0xffffff, roughness: 0.1, metalness: 0, envMapIntensity: 12, transparent: true, side: THREE.DoubleSide } );
+		// (high) refraction: the frame drawn so far (all that's opaque: the seabed, the reef, the hull
+		// under water) copied just before the sea is drawn (one copy a frame, no second scene pass),
+		// and seen through the surface bent by its waves and ripples
+		this.refract = tier === 'high';
+		if ( this.refract ) {
+
+			mat.defines = { ...( mat.defines || {} ), WATER_REFRACT: '' };
+			uniforms.waterRefract = { value: null };
+			uniforms.waterRefractSize = { value: new THREE.Vector2( 1, 1 ) };
+
+		}
+
 		// (in one pass: three draws a see-through double-sided material twice, back faces then front,
 		// with a program for each; a sheet seen from one side at a time doesn't need it)
 		mat.forceSinglePass = true;
@@ -123,7 +139,12 @@ varying float vWaterFade;
 varying vec4 vSurf;
 varying vec3 vWaterN;
 uniform sampler2D waterRipples;
+#ifdef WATER_REFRACT
+uniform sampler2D waterRefract;
+uniform vec2 waterRefractSize;
+#endif
 ${ WHALE_WATER_GLSL }
+${ this.detail.glsl }
 float waterNoise( vec2 p ) {
 	vec2 i = floor( p ), f = fract( p );
 	vec2 u = f * f * ( 3.0 - 2.0 * f );
@@ -172,6 +193,9 @@ ${ SH ? /* glsl */`
 	// the humpback's marks: churned white water, and the flat slick of its fluke print (WhaleWater)
 	vec2 whaleMk = whaleMarksOn > 0.5 ? whaleWater( vWater.xz ) : vec2( 0.0 );
 	foam = max( foam, whaleMk.x );
+	// the sea's large-scale detail: rougher gusts, calm slicks, a trace of foam on the windrows
+	vec4 seaD = seaDetailSample( vWater.xz );
+	foam = max( foam, seaD.w * 0.3 );
 	// the body of the water: light scattered back up from inside it (and off the sand under the
 	// shallows), lit by the sky and the sun whatever way the surface faces. Turquoise over sand,
 	// deep blue offshore, milky in the surf (suspended sand and fine bubbles)
@@ -189,12 +213,12 @@ ${ SH ? /* glsl */`
 	diffuseColor.rgb = vec3( 0.0 );
 	diffuseColor.a = clamp( max( max( cover, glow * 0.6 ), foam ), 0.0, 1.0 ) * sheetEdge;
 ` )
-				.replace( '#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = mix( roughnessFactor, 0.85, foam );' )
+				.replace( '#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = mix( roughnessFactor * mix( 1.0, 0.35, seaD.z ) * mix( 1.0, 1.6, seaD.y ), 0.85, foam );' )
 				.replace( '#include <normal_fragment_maps>', /* glsl */`
 	// short wind ripples and capillary waves on the waves near the camera (two drifting samples),
 	// calmed by the foam
 	vec3 wN = normalize( vWaterN );
-	float rippleK = ( 1.0 - smoothstep( 25.0, 140.0, length( cameraPosition - vWater ) ) ) * ( 1.0 - foam ) * ( 1.0 - whaleMk.y );
+	float rippleK = ( 1.0 - smoothstep( 25.0, 140.0, length( cameraPosition - vWater ) ) ) * ( 1.0 - foam ) * ( 1.0 - whaleMk.y ) * seaD.x;
 	vec2 r1 = texture2D( waterRipples, vWater.xz * 0.11 + waterTime * vec2( 0.012, 0.03 ) ).xy * 2.0 - 1.0;
 	vec2 r2 = texture2D( waterRipples, vWater.xz * 0.043 + 0.3 - waterTime * vec2( 0.02, 0.008 ) ).xy * 2.0 - 1.0;
 	vec2 rs = ( r1 * 0.6 + r2 * 0.4 ) * 0.32 * rippleK;
@@ -202,6 +226,15 @@ ${ SH ? /* glsl */`
 	nP = gl_FrontFacing ? nP : - nP;
 	normal = normalize( ( viewMatrix * vec4( nP, 0.0 ) ).xyz );` )
 				.replace( '#include <opaque_fragment>', /* glsl */`
+#ifdef WATER_REFRACT
+	if ( gl_FrontFacing ) {
+		// what's under the surface seen through it where the water's own colour leaves it visible,
+		// bent by the waves and ripples (more where it's deeper)
+		vec2 bend = ( viewMatrix * vec4( nP - vec3( 0.0, 1.0, 0.0 ), 0.0 ) ).xy * ( 0.08 * clamp( depth * 0.5, 0.0, 1.0 ) );
+		vec3 behind = texture2D( waterRefract, gl_FragCoord.xy / waterRefractSize + bend ).rgb;
+		gl_FragColor = vec4( waterBody * diffuseColor.a + totalSpecular * ( 1.0 - foam * 0.8 ) * sheetEdge + behind * ( 1.0 - diffuseColor.a ), 1.0 );
+	} else
+#endif
 	// premultiplied: the water's own light by its opacity, reflections in full (less on foam)
 	gl_FragColor = vec4( waterBody * diffuseColor.a + totalSpecular * ( 1.0 - foam * 0.8 ) * sheetEdge, diffuseColor.a );` )
 				.replace( '#include <premultiplied_alpha_fragment>', '' );
@@ -215,6 +248,32 @@ ${ SH ? /* glsl */`
 		this.mesh.frustumCulled = false;
 		this.mesh.renderOrder = 1;
 		scene.add( this.mesh );
+		if ( this.refract ) {
+
+			const tex = this._refractTex = new THREE.FramebufferTexture( 1, 1 );
+			tex.type = THREE.HalfFloatType; // (as the post chain's buffer: PostChain)
+			tex.minFilter = tex.magFilter = THREE.LinearFilter;
+			uniforms.waterRefract.value = tex;
+			this.mesh.onBeforeRender = ( renderer ) => {
+
+				// (only into the post chain's buffer: never the screen's)
+				const rt = renderer.getRenderTarget();
+				if ( ! rt ) return;
+				if ( tex.image.width !== rt.width || tex.image.height !== rt.height ) {
+
+					tex.dispose();
+					tex.image.width = rt.width;
+					tex.image.height = rt.height;
+					tex.needsUpdate = true;
+
+				}
+
+				renderer.copyFramebufferToTexture( tex );
+				uniforms.waterRefractSize.value.set( rt.width, rt.height );
+
+			};
+
+		}
 
 	}
 

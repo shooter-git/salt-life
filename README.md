@@ -15,10 +15,10 @@ it runs on phones too, inside All the Spaces' sealed creation frame.
 This repository started as a fork of Tidewater. Its WebGPU code is still here while each system is
 ported; `src/main.js` is the new entry point. You can walk, swim and take the boat around the island,
 and fish from the pier, the beach or the boat, sell your catch to Joe and buy better gear from Marta,
-with a mouse and keyboard, a gamepad or a touch screen. Done: M0, M1, M4 and M5, most of M2, and from
-M3 the village, the pier, the stalls, the rocks, the plants, the lights at night, the beach's driftwood,
-shells and clutter, the birds and crabs, the reef with its fish, and the whale. Still to come: from M2
-the spray, the sea's gusts and slicks, and the haze.
+with a mouse and keyboard, a gamepad or a touch screen. Done: M0 to M5: the sea and its shore, spray,
+gusts and slicks, the haze, the whole world (the village, the pier, the reef and its fish, the birds and
+crabs, the beach's debris, the whale, the lights at night) and the fishing game. Still to come: M6, the
+multiplayer.
 
 | Milestone | What it brings |
 |---|---|
