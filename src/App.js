@@ -1073,6 +1073,17 @@ export class App {
 		const h = this.cameraWaterHeight ?? 0;
 		const coast = this.terrainData.coastDistance( p.x, p.z ).d;
 		const amp = this.shore.params.amplitude, pier = WORLD.pier, boat = this.boatCtl;
+		// (the boat you hear: yours, or the one you ride in, or someone's going by: together/)
+		const theirs = this.together ? this.together.boatSound() : null;
+		const engine = theirs ? theirs.active : boat.driven;
+		if ( engine !== this._engineHeard ) {
+
+			if ( engine ) a.engineStart();
+			else if ( this._engineHeard !== undefined ) a.engineStop();
+			this._engineHeard = engine;
+
+		}
+
 		a.update( dt, {
 			listener: { position: p, forward: _fwd, up: _up },
 			underwater: p.y < h ? 1 : 0,
@@ -1085,7 +1096,7 @@ export class App {
 			windDir: G.windDir.value,
 			daylight: 1 - G.night.value,
 			nearPier: Math.abs( p.x - pier.x ) < 12 && p.z > pier.zStart - 5 && p.z < pier.zEnd + 8,
-			boat: {
+			boat: theirs ? { active: theirs.active, rpm: theirs.rpm, speed: theirs.speed, position: theirs.position, listenerInside: false } : {
 				active: boat.driven, rpm: boat.rpm, throttle: boat.throttle, speed: boat.velocity.length(),
 				position: this.boat.group.position, listenerInside: this.player.mode === 'boat' && this.player.camMode === 'first',
 			},

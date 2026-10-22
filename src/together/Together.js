@@ -443,6 +443,7 @@ export class Together {
 		}
 
 		if ( p.riding ) body.R = p.boat.owner;
+		if ( m === 'h' ) body.E = r2( boat.rpm ); // (the engine's revs: what the others hear)
 		if ( m === 'd' ) body.D = [ r2( p.deckPos.x ), r2( p.deckPos.y ), r2( p.deckPos.z ) ];
 
 		return body;
@@ -456,7 +457,17 @@ export class Together {
 
 		const app = this.app, p = app.player;
 		const now = performance.now() / 1000;
-		for ( const o of this.others.values() ) o.cur = now - o.last < this.stale ? this._at( o, now - DELAY ) : null;
+		for ( const o of this.others.values() ) {
+
+			o.cur = now - o.last < this.stale ? this._at( o, now - DELAY ) : null;
+			// how fast their boat goes (for its sound)
+			const bp = o.cur && o.cur.boat && o.cur.boat.pos;
+			if ( bp && o._boatAt && dt > 0 ) o.boatSpeed += ( bp.distanceTo( o._boatAt ) / dt - o.boatSpeed ) * ( 1 - Math.exp( - dt * 4 ) );
+			if ( bp ) ( o._boatAt || ( o._boatAt = new Vector3() ) ).copy( bp );
+			else o._boatAt = null;
+			o.boatSpeed = o.boatSpeed || 0;
+
+		}
 
 		// riding: their boat's pose (gone, or they left: in the water where it was)
 		if ( p.riding ) {
@@ -590,6 +601,7 @@ export class Together {
 		cur.speed = ( a.v || 0 ) + ( ( b.v || 0 ) - ( a.v || 0 ) ) * f;
 		cur.rod = near.r || 0;
 		cur.ride = typeof near.R === 'string' ? near.R : null;
+		cur.rpm = ( Number( a.E ) || 0 ) + ( ( Number( b.E ) || 0 ) - ( Number( a.E ) || 0 ) ) * f;
 		cur.tension = b.k || 0;
 		cur.bobber = lerp3( cur._bobber, a.b, b.b );
 		cur.deck = lerp3( cur._deck, a.D, b.D );
@@ -860,6 +872,40 @@ export class Together {
 			}
 
 		}
+
+	}
+
+	// the boat to hear (App, for the sound: null = your own): the one you're riding in; or on foot or in
+	// the water, the nearest someone is driving (its engine and the water past it, fading with
+	// distance in the sound's own panning)
+	boatSound() {
+
+		const p = this.app.player;
+		if ( p.riding ) {
+
+			const o = this.others.get( p.boat.owner ), c = o && o.cur;
+			return { active: !! ( c && c.mode === 'helm' ), rpm: c ? c.rpm : 0, speed: p.boat.speed, position: p.boat.position };
+
+		}
+
+		if ( p.mode === 'boat' || p.mode === 'deck' || this.app.boatCtl.driven ) return null;
+		let best = null, bd = 120;
+		const cam = this.app.camera.position;
+		for ( const o of this.others.values() ) {
+
+			const c = o.cur;
+			if ( ! c || ! c.boat || c.mode !== 'helm' ) continue;
+			const d = c.boat.pos.distanceTo( cam );
+			if ( d < bd ) {
+
+				bd = d;
+				best = o;
+
+			}
+
+		}
+
+		return best ? { active: true, rpm: best.cur.rpm, speed: best.boatSpeed, position: best.cur.boat.pos } : null;
 
 	}
 
