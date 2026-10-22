@@ -62,7 +62,7 @@ Materials are three's `MeshStandardMaterial` (or `MeshPhysicalMaterial`), with G
     - the rod's state, their bobber and the line's tension;
     - their boat's pose, when it's away from its mooring or they're aboard.
   - Others are drawn 0.15 s behind the newest pose and eased between poses.
-  - Each player is one of four Rocketbox islanders (`Avatar.js`): two men and two women. Everyone picks theirs under "Your islander" in the cooler; it's saved with their progress and sent in the pose (`l`). Until someone picks, the same person always gets the same one. Each has their name over them in their colour and a dot on the minimap.
+  - Each player is one of four Rocketbox islanders (`Avatar.js`): two men and two women. Everyone picks theirs on the cooler's Islander tab; it's saved with their progress and sent in the pose (`l`). Until someone picks, the same person always gets the same one. Each has their name over them in their colour and a dot on the minimap.
   - Their boat is a copy of yours that shares its meshes and materials. When both boats are at the dock, yours stands in for theirs.
   - Their rod, line and bobber are the rod's (`FishingRod.tackle()`).
   - Their boat shows its lamps (below): lit as under way when they're at the helm or away from the dock, and their searchlight when the pose says it's on (`S`).
@@ -83,7 +83,7 @@ Materials are three's `MeshStandardMaterial` (or `MeshPhysicalMaterial`), with G
   - They're kept in the group's shared save (`portal.save.shared`, key `'records'`), so they last between visits.
   - A catch updates them with `update`, which retries when two saves cross.
   - The catch card says when a catch is the island's heaviest yet.
-  - The records are chalked on a board beside Joe's stand (`RecordsBoard.js`, a canvas) and listed in the cooler.
+  - The records are chalked on a board beside Joe's stand (`RecordsBoard.js`, a canvas) and listed on the cooler's Records tab.
 
 Everyone keeps their own progress and their own fish.
 

@@ -15,6 +15,8 @@ const PAD_KEYS = {
 	8: 'KeyI', // back / view: cooler and fish log
 	12: 'KeyI', // d-pad up
 	13: 'KeyL', // d-pad down: flashlight (at the helm: the searchlight)
+	14: 'ArrowLeft', // d-pad left / right: the cooler's tabs
+	15: 'ArrowRight',
 	10: 'Horn', // left stick pressed: the horn, at the helm (its own code: H off the helm is the guide)
 };
 const PAD_LOOK = 700; // px per second at full right-stick deflection

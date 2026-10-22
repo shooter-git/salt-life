@@ -4,6 +4,11 @@ import { LOOKS, LOOK_NAMES } from '../together/Avatar.js';
 
 // (other players' names, into HTML)
 const escape = ( t ) => String( t ).replace( /[&<>"']/g, ( c ) => ( { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } )[ c ] );
+// a row of the cooler or Joe's stand: a name over its details, then what's on the right
+const item = ( name, meta, ...right ) => `<div class="gm-item"><span class="gm-item-main"><span class="gm-item-name">${ name }</span><span class="gm-item-meta">${ meta }</span></span>${ right.join( '' ) }</div>`;
+const fishItem = ( f, button ) => item( `${ FISH[ f.species ].name }${ f.record ? '<small>record</small>' : '' }`,
+	`${ f.cm ?? Math.round( fishLengthCm( f.species, f.kg ) ) } cm · ${ f.kg.toFixed( 2 ) } kg`, `<span class="gm-item-val">$${ f.value }</span>`, button );
+const upper = ( t ) => t.charAt( 0 ).toUpperCase() + t.slice( 1 );
 
 // DOM for the fishing game, in the look of the rest of the HUD (ui/game-ui.css tokens, .tw-glass):
 //   top right     purse and cooler / hold load
@@ -58,11 +63,8 @@ const CSS = /* css */`
 .gm-panel.is-open { opacity: 1; pointer-events: auto; transform: translate(-50%, -50%); }
 .gm-panel h2 { margin: 0 0 var(--tw-1); font-size: calc(17 * var(--tw-u)); font-weight: 600; }
 .gm-panel p.gm-sub { margin: 0 0 var(--tw-3); color: var(--tw-ink-3); font-size: var(--tw-fs-sm); }
-.gm-list { overflow: auto; margin: 0 calc(-1 * var(--tw-2)); padding: 0 var(--tw-2); }
-.gm-row { display: grid; grid-template-columns: 1fr auto auto auto; gap: var(--tw-3); align-items: center; padding: var(--tw-2) 0; border-bottom: 1px solid var(--tw-line); }
-.gm-row .gm-kg, .gm-row .gm-val { font-family: var(--tw-mono); color: var(--tw-ink-2); }
-.gm-row .gm-val { color: var(--tw-sun); }
-.gm-row small { color: var(--tw-aqua); margin-left: var(--tw-1); }
+.gm-list { overflow: auto; min-height: 0; overscroll-behavior: contain; margin: 0 calc(-1 * var(--tw-2)); padding: 0 var(--tw-2); }
+.gm-panel > :not(.gm-list) { flex: none; }
 .gm-empty { color: var(--tw-ink-3); padding: var(--tw-4) 0; text-align: center; }
 .gm-foot { display: flex; justify-content: space-between; align-items: center; margin-top: var(--tw-3); gap: var(--tw-3); }
 .gm-btn { font: 600 var(--tw-fs-md) var(--tw-font); color: #0b1418; background: var(--tw-aqua); border: 0; border-radius: 999px; padding: var(--tw-2) var(--tw-4); cursor: pointer; }
@@ -70,8 +72,39 @@ const CSS = /* css */`
 .gm-btn.is-ghost { background: var(--tw-fill-2); color: var(--tw-ink); }
 .gm-mini { font: 500 var(--tw-fs-sm) var(--tw-font); color: var(--tw-ink-2); background: var(--tw-fill); border: 1px solid var(--tw-line); border-radius: 999px; padding: 2px var(--tw-2); cursor: pointer; }
 .gm-mini.is-on { color: #0b1418; background: var(--tw-aqua); border-color: transparent; }
-.gm-looks > span { margin-left: var(--tw-1); }
-.gm-look-list { display: flex; flex-wrap: wrap; gap: var(--tw-2); margin-top: var(--tw-2); }
+/* (Salt Life) the cooler's tabs (the fish in it, your log, the island's records, your islander), and
+   the rows of the cooler and Joe's stand: a fish's name over its numbers, its value and a button */
+.gm-tabs { display: flex; gap: 2px; padding: 3px; margin: 0 0 var(--tw-2); border-radius: 999px; background: var(--tw-fill); border: 1px solid var(--tw-line); }
+.gm-tab { flex: 1 1 auto; display: inline-flex; align-items: center; justify-content: center; gap: 0.45em; padding: var(--tw-1) var(--tw-2);
+	font: 600 var(--tw-fs-sm) var(--tw-font); color: var(--tw-ink-2); background: none; border: 0; border-radius: 999px; white-space: nowrap; cursor: pointer; }
+.gm-tab small { font: 500 0.92em var(--tw-mono); color: var(--tw-ink-3); }
+.gm-tab.is-on { color: #0b1418; background: var(--tw-aqua); }
+.gm-tab.is-on small { color: rgba(11, 20, 24, 0.62); }
+.gm-tabs-keys { align-self: center; padding: 0 var(--tw-2) 0 var(--tw-1); color: var(--tw-ink-3); font-size: var(--tw-fs-xs); white-space: nowrap; }
+.gm-item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--tw-3); align-items: center; padding: var(--tw-2) 0; border-bottom: 1px solid var(--tw-line); }
+.gm-item:last-child { border-bottom: 0; }
+.gm-item-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.gm-item-name { color: var(--tw-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gm-item-name small { color: var(--tw-aqua); margin-left: var(--tw-1); }
+.gm-item-meta { color: var(--tw-ink-3); font-size: var(--tw-fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gm-item-meta b { color: var(--tw-aqua); font-weight: 600; }
+.gm-item-val { font-family: var(--tw-mono); color: var(--tw-sun); }
+.gm-item-num { font-family: var(--tw-mono); font-size: var(--tw-fs-sm); color: var(--tw-ink-2); white-space: nowrap; text-align: right; }
+.gm-looks { display: grid; grid-template-columns: 1fr 1fr; gap: var(--tw-2); padding: var(--tw-1) 0; }
+.gm-look { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: var(--tw-2) var(--tw-3); text-align: left; cursor: pointer;
+	font: 500 var(--tw-fs-sm) var(--tw-font); color: var(--tw-ink-2); background: var(--tw-fill); border: 1px solid var(--tw-line-2); border-radius: var(--tw-r-md); }
+.gm-look b { font-size: var(--tw-fs-md); font-weight: 600; color: var(--tw-ink); }
+.gm-look.is-on { background: rgba(var(--tw-aqua-rgb), 0.14); border-color: var(--tw-aqua); box-shadow: inset 0 0 0 1px var(--tw-aqua); }
+.gm-look.is-on b::after { content: ' ✓'; color: var(--tw-aqua); }
+/* short screens (phones on their side): the cooler's title and summary on one line, less padding */
+@media (max-height: 500px) {
+	.gm-panel { padding: var(--tw-3) var(--tw-4); }
+	.gm-head { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--tw-3); margin-bottom: var(--tw-2); }
+	.gm-head h2, .gm-head p.gm-sub { margin: 0; }
+	.gm-foot { margin-top: var(--tw-2); }
+}
+/* a panel up: the first hint about the controls steps aside */
+html:has(.gm-panel.is-open) .hud-hint { visibility: hidden; }
 .gm-gauge { display: none; align-items: center; gap: var(--tw-2); color: var(--tw-ink-2); font-size: var(--tw-fs-md); }
 .gm-gauge.is-on { display: flex; }
 .gm-gauge b { font-family: var(--tw-mono); font-weight: 500; color: var(--tw-ink); }
@@ -81,9 +114,6 @@ const CSS = /* css */`
 .gm-shop-row { display: grid; grid-template-columns: 1fr auto; gap: var(--tw-3); align-items: center; padding: var(--tw-2) 0; border-bottom: 1px solid var(--tw-line); }
 .gm-shop-row small { display: block; color: var(--tw-ink-3); font-size: var(--tw-fs-sm); margin-top: 2px; }
 .gm-shop-row .gm-have { color: var(--tw-ink-3); font-size: var(--tw-fs-sm); }
-.gm-log { margin-top: var(--tw-3); color: var(--tw-ink-3); font-size: var(--tw-fs-sm); line-height: 1.5; }
-.gm-row .gm-cm { font-family: var(--tw-mono); color: var(--tw-ink-3); }
-.gm-row.has-cm { grid-template-columns: 1fr auto auto auto auto; }
 
 /* catch card: full screen. The world dims and blurs; the fish lies side-on in its own studio light
    (FishPortrait, a WebGPU canvas) between the name above and the numbers below */
@@ -166,12 +196,6 @@ const CSS = /* css */`
 	.gm-catch.is-gl { gap: 2px; padding: var(--tw-3) var(--tw-edge); }
 	.gm-catch.is-gl .gm-catch-stage { width: min(94vw, calc(34vh * 2.4)); }
 	.gm-catch.is-gl .gm-catch-sci, .gm-catch.is-gl .gm-catch-note { display: none; }
-}
-/* (Salt Life) narrow phones: a fish's name on its own line, its numbers and button under it */
-.gm-row > span:not(:first-child) { white-space: nowrap; }
-@media (max-width: 480px) {
-	.gm-row.has-cm { grid-template-columns: 1fr auto auto auto; row-gap: 2px; }
-	.gm-row.has-cm > span:first-child { grid-column: 1 / -1; }
 }
 /* (Salt Life) the card without its studio portrait: the name at the top and the numbers at the bottom,
    and between them the real fish, hanging on the line in the world, which is neither dimmed nor blurred */
@@ -273,6 +297,7 @@ export class GameHUD {
 		this.stand = h( 'div', 'gm-panel tw-glass tw-interactive' );
 		ui.root.append( this.inv, this.stand );
 		this.invOpen = false;
+		this.invTab = 'fish';
 		this.standOpen = false;
 		this._last = {};
 		game.state.onChange( () => this.refresh() );
@@ -482,24 +507,64 @@ export class GameHUD {
 
 	}
 
+	// the cooler, in tabs: the fish in it, your log, the island's records, and how the others see you
 	renderInventory() {
 
 		const s = this.game.state;
-		const rows = s.inventory.map( ( f ) => `<div class="gm-row has-cm"><span>${ FISH[ f.species ].name }${ f.record ? '<small>record</small>' : '' }</span><span class="gm-cm">${ f.cm ?? Math.round( fishLengthCm( f.species, f.kg ) ) } cm</span><span class="gm-kg">${ f.kg.toFixed( 2 ) } kg</span><span class="gm-val">$${ f.value }</span><button class="gm-mini" data-release="${ f.id }">Release</button></div>` ).join( '' );
-		const logged = Object.entries( s.log ).filter( ( [ k ] ) => FISH[ k ] ).map( ( [ k, v ] ) => `${ FISH[ k ].name }: ${ v.count } caught, best ${ v.bestKg.toFixed( 2 ) } kg · ${ v.bestCm ?? Math.round( fishLengthCm( k, v.bestKg ) ) } cm` ).join( '<br>' );
-		// (Salt Life) the island's records: the group's heaviest of each kind (together/)
 		const together = this.game.app && this.game.app.together, me = together && together.me.id;
-		const isle = together ? Object.entries( together.records ).filter( ( [ k ] ) => FISH[ k ] ).sort( ( a, b ) => b[ 1 ].kg - a[ 1 ].kg )
-			.map( ( [ k, r ] ) => `${ FISH[ k ].name }: ${ r.kg.toFixed( 2 ) } kg${ r.cm ? ` · ${ r.cm } cm` : '' }, ${ r.id === me ? '<b>you</b>' : escape( r.who || '?' ) }` ).join( '<br>' ) : '';
+		const logged = Object.entries( s.log ).filter( ( [ k ] ) => FISH[ k ] );
+		// (Salt Life) the island's records: the group's heaviest of each kind (together/)
+		const isle = together ? Object.entries( together.records ).filter( ( [ k ] ) => FISH[ k ] ).sort( ( a, b ) => b[ 1 ].kg - a[ 1 ].kg ) : [];
+		const tabs = [ [ 'fish', 'Fish', s.inventory.length ], [ 'log', 'Log', logged.length ] ];
+		if ( together ) tabs.push( [ 'records', 'Records', isle.length ], [ 'islander', 'Islander', 0 ] );
+		this._invTabs = tabs.map( ( t ) => t[ 0 ] );
+		const tab = this._invTabs.includes( this.invTab ) ? this.invTab : 'fish';
+		const empty = ( text ) => `<div class="gm-empty">${ text }</div>`;
+		const d = this.device;
+		let body, hint;
+		if ( tab === 'fish' ) {
+
+			body = s.inventory.map( ( f ) => fishItem( f, `<button class="gm-mini" data-release="${ f.id }">Release</button>` ) ).join( '' ) || empty( 'Nothing yet. Cast from the pier, the beach or the boat.' );
+			hint = 'Sell at the fish stand by the pier';
+
+		} else if ( tab === 'log' ) {
+
+			body = logged.map( ( [ k, v ] ) => item( FISH[ k ].name, `${ v.count } caught`, `<span class="gm-item-num">${ v.bestKg.toFixed( 2 ) } kg · ${ v.bestCm ?? Math.round( fishLengthCm( k, v.bestKg ) ) } cm</span>` ) ).join( '' )
+				|| empty( 'Each kind you catch is logged here, with your best.' );
+			hint = 'Your best of each kind';
+
+		} else if ( tab === 'records' ) {
+
+			body = isle.map( ( [ k, r ] ) => item( FISH[ k ].name, r.id === me ? '<b>You</b>' : escape( r.who || '?' ), `<span class="gm-item-num">${ r.kg.toFixed( 2 ) } kg${ r.cm ? ` · ${ r.cm } cm` : '' }</span>` ) ).join( '' )
+				|| empty( 'None yet: the first of each kind anyone lands here sets one.' );
+			hint = 'The heaviest of each kind anyone here has landed';
+
+		} else {
+
+			body = `<div class="gm-looks">${ LOOKS.map( ( l ) => {
+
+				const [ who, wear ] = LOOK_NAMES[ l ].split( ' · ' ), on = l === together.myLook;
+				return `<button class="gm-look${ on ? ' is-on' : '' }" data-look="${ l }" aria-pressed="${ on }"><b>${ who }</b><span>${ upper( wear || '' ) }</span></button>`;
+
+			} ).join( '' ) }</div>`;
+			hint = d === 'gamepad' ? 'How the others see you. <kbd>RT</kbd> for the next one' : 'How the others on the island see you';
+
+		}
+
+		// (the list keeps its place when the same tab is drawn again: a fish released, a record broken)
+		const old = this.inv.querySelector( '.gm-list' );
+		const scroll = old && this._invDrawn === tab ? old.scrollTop : 0;
+		this._invDrawn = tab;
+		const keys = d === 'touch' ? '' : `<span class="gm-tabs-keys">${ d === 'gamepad' ? 'D-pad' : '<kbd>←</kbd><kbd>→</kbd>' }</span>`;
 		this.inv.innerHTML = `
-			<h2>${ s.upgrades.hold > 0 ? 'Fish hold' : 'Cooler' }</h2>
-			<p class="gm-sub">${ s.inventory.length } fish · ${ s.holdKg.toFixed( 1 ) } of ${ s.stats.holdKg } kg · worth $${ s.holdValue }</p>
-			<div class="gm-list">${ rows || '<div class="gm-empty">Nothing yet. Cast from the pier, the beach or the boat.</div>' }</div>
-			${ logged ? `<div class="gm-log"><b>Fish log</b><br>${ logged }</div>` : '' }
-			${ isle ? `<div class="gm-log"><b>Island records</b><br>${ isle }</div>` : '' }
-			${ together ? `<div class="gm-log gm-looks"><b>Your islander</b><span>how the others on the island see you</span><div class="gm-look-list">${ LOOKS.map( ( l ) => `<button class="gm-mini${ l === together.myLook ? ' is-on' : '' }" data-look="${ l }" aria-pressed="${ l === together.myLook }">${ LOOK_NAMES[ l ] }</button>` ).join( '' ) }</div></div>` : '' }
-			<div class="gm-foot"><span class="gm-sub">Sell at the fish stand by the pier</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Close', 'I', 'Back' ) }</button></div>`;
+			<div class="gm-head"><h2>${ s.upgrades.hold > 0 ? 'Fish hold' : 'Cooler' }</h2>
+			<p class="gm-sub">${ s.inventory.length } fish · ${ s.holdKg.toFixed( 1 ) } of ${ s.stats.holdKg } kg · worth $${ s.holdValue }</p></div>
+			<div class="gm-tabs" role="tablist">${ tabs.map( ( [ id, label, n ] ) => `<button class="gm-tab${ id === tab ? ' is-on' : '' }" role="tab" aria-selected="${ id === tab }" data-tab="${ id }">${ label }${ n ? `<small>${ n }</small>` : '' }</button>` ).join( '' ) }${ keys }</div>
+			<div class="gm-list" role="tabpanel">${ body }</div>
+			<div class="gm-foot"><span class="gm-sub">${ hint }</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Close', 'I', 'Back' ) }</button></div>`;
+		this.inv.querySelector( '.gm-list' ).scrollTop = scroll;
 		this.inv.querySelector( '[data-close]' ).onclick = () => this.toggleInventory( false );
+		for ( const b of this.inv.querySelectorAll( '[data-tab]' ) ) b.onclick = () => this.showTab( b.dataset.tab );
 		for ( const b of this.inv.querySelectorAll( '[data-release]' ) ) b.onclick = () => s.release( Number( b.dataset.release ) );
 		for ( const b of this.inv.querySelectorAll( '[data-look]' ) ) b.onclick = () => {
 
@@ -507,6 +572,32 @@ export class GameHUD {
 			this.renderInventory();
 
 		};
+
+	}
+
+	showTab( tab ) {
+
+		this.invTab = tab;
+		this.renderInventory();
+
+	}
+
+	// the next or previous tab (← → on a keyboard, the d-pad)
+	cycleTab( step ) {
+
+		const list = this._invTabs || [ 'fish' ];
+		const i = Math.max( 0, list.indexOf( this.invTab ) );
+		this.showTab( list[ ( i + step + list.length ) % list.length ] );
+
+	}
+
+	// (a gamepad on the Islander tab) the next islander
+	nextLook() {
+
+		const together = this.game.app && this.game.app.together;
+		if ( ! together ) return;
+		together.setLook( LOOKS[ ( LOOKS.indexOf( together.myLook ) + 1 ) % LOOKS.length ] );
+		this.renderInventory();
 
 	}
 
@@ -534,7 +625,7 @@ export class GameHUD {
 
 		const s = this.game.state;
 		const v = this.vendor || { name: 'Fish buyer' };
-		const rows = s.inventory.map( ( f ) => `<div class="gm-row has-cm"><span>${ FISH[ f.species ].name }</span><span class="gm-cm">${ f.cm ?? Math.round( fishLengthCm( f.species, f.kg ) ) } cm</span><span class="gm-kg">${ f.kg.toFixed( 2 ) } kg</span><span class="gm-val">$${ f.value }</span><button class="gm-mini" data-sell="${ f.id }">Sell</button></div>` ).join( '' );
+		const rows = s.inventory.map( ( f ) => fishItem( f, `<button class="gm-mini" data-sell="${ f.id }">Sell</button>` ) ).join( '' );
 		this.stand.innerHTML = `
 			<h2>${ v.name }</h2>
 			<p class="gm-sub">${ s.inventory.length ? v.greeting || 'Let\'s see what you caught.' : v.idle || 'Come back when you\'ve got fish.' }</p>

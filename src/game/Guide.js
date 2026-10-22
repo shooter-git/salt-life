@@ -87,13 +87,13 @@ const WELCOME = {
 const FISHING = {
 	keyboard: [ [ k( 'R' ), 'Take out the rod (by the water or on the boat)' ], [ k( 'Hold', 'LMB' ), 'Wind up, release to cast. Hold longer to cast farther' ],
 		[ k( 'LMB' ), 'Strike when the bobber is <b>pulled under</b> (dips are only nibbles)' ], [ k( 'Hold', 'LMB' ), 'Reel in. <b>Let go when the tension turns red</b>, or the line snaps' ],
-		[ k( 'RMB' ), 'Reel an empty line back in' ], [ k( 'F', 'G' ), 'The left and right mouse buttons, from the keyboard' ], [ k( 'I' ), 'Your cooler and fish log' ] ],
+		[ k( 'RMB' ), 'Reel an empty line back in' ], [ k( 'F', 'G' ), 'The left and right mouse buttons, from the keyboard' ], [ k( 'I' ), 'Your cooler, fish log, island records and islander' ] ],
 	touch: [ [ k( 'Rod' ), 'Take out the rod (by the water or on the boat)' ], [ k( 'Hold', 'Cast' ), 'Wind up, let go to cast. Hold longer to cast farther' ],
 		[ k( 'Strike' ), 'When the bobber is <b>pulled under</b> (dips are only nibbles)' ], [ k( 'Hold', 'Reel' ), 'Reel in. <b>Let go when the tension turns red</b>, or the line snaps' ],
-		[ k( 'Reel in' ), 'Reel an empty line back in' ], [ k( 'Cooler' ), 'Your cooler and fish log' ] ],
+		[ k( 'Reel in' ), 'Reel an empty line back in' ], [ k( 'Cooler' ), 'Your cooler, fish log, island records and islander' ] ],
 	gamepad: [ [ k( 'X' ), 'Take out the rod (by the water or on the boat)' ], [ k( 'Hold', 'RT' ), 'Wind up, release to cast. Hold longer to cast farther' ],
 		[ k( 'RT' ), 'Strike when the bobber is <b>pulled under</b> (dips are only nibbles)' ], [ k( 'Hold', 'RT' ), 'Reel in. <b>Let go when the tension turns red</b>, or the line snaps' ],
-		[ k( 'LT' ), 'Reel an empty line back in' ], [ k( 'Back' ), 'Your cooler and fish log' ] ],
+		[ k( 'LT' ), 'Reel an empty line back in' ], [ k( 'Back' ), 'Your cooler, fish log, island records and islander' ] ],
 };
 
 const AROUND = {
