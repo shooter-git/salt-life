@@ -4,11 +4,12 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { SMAAPass } from 'three/addons/postprocessing/SMAAPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { SunShafts } from './SunShafts.js';
 
-// The post chain on laptops (high tier): the scene in half float, a soft bloom (the sun's glint on the
-// sea, lit windows and lanterns at night) and SMAA, then tone mapping and sRGB output. Tidewater's own
-// chain (GTAO, TAAU, motion blur, auto exposure, lens flare) needed its WebGPU engine; phones keep
-// drawing straight to the screen.
+// The post chain on laptops (high tier): the scene in half float, shafts of light toward the sun
+// (SunShafts), a soft bloom (the sun's glint on the sea, lit windows and lanterns at night) and SMAA,
+// then tone mapping and sRGB output. Tidewater's own chain (GTAO, TAAU, motion blur, auto exposure,
+// lens flare) needed its WebGPU engine; phones keep drawing straight to the screen.
 
 export class PostChain {
 
@@ -22,6 +23,9 @@ export class PostChain {
 		this.bloom = new UnrealBloomPass( new THREE.Vector2( size.x, size.y ), 0.18, 0.55, 0.92 );
 		this.smaa = new SMAAPass( size.x, size.y );
 		this.composer.addPass( this.renderPass );
+		// shafts of light toward the sun (SunShafts), before the bloom
+		this.shafts = new SunShafts();
+		this.composer.addPass( this.shafts.pass );
 		this.composer.addPass( this.bloom );
 		this.composer.addPass( new OutputPass() );
 		this.composer.addPass( this.smaa );
@@ -41,6 +45,7 @@ export class PostChain {
 
 		}
 
+		this.shafts.update( this.renderPass.camera, size.x, size.y );
 		this.composer.render();
 
 	}

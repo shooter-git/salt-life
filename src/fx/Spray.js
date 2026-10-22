@@ -266,13 +266,8 @@ void main() {
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 #ifdef USE_FOG
-	// (premultiplied: the fog's colour by the particle's coverage)
-	#ifdef FOG_EXP2
-		float fogFactor = 1.0 - exp( - fogDensity * fogDensity * vFogDepth * vFogDepth );
-	#else
-		float fogFactor = smoothstep( fogNear, fogFar, vFogDepth );
-	#endif
-	gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor * gl_FragColor.a, fogFactor );
+	// (premultiplied: the fog's colour by the particle's coverage; materials/HeightHaze.js)
+	gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor * gl_FragColor.a, sceneFogFactor() );
 #endif
 }
 `;

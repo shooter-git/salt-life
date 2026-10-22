@@ -1,4 +1,5 @@
 import * as THREE from './engine/index.js';
+import './materials/HeightHaze.js'; // (three's fog chunks: before anything is compiled)
 import { createStage, gltfLoader } from '@allthespaces/portal/three';
 import { ResolutionGovernor } from '@allthespaces/portal/resolution';
 import { G } from './core/Globals.js';
@@ -34,6 +35,7 @@ import { fishModelsAsync } from './world/fish/FishModelsAsync.js';
 import { MarineSnow } from './fx/MarineSnow.js';
 import { Whale } from './world/marine/Whale.js';
 import { Spray } from './fx/Spray.js';
+import { AirMotes } from './fx/AirMotes.js';
 import { BoatSpray } from './player/BoatSpray.js';
 import { WhaleWater } from './ocean/WhaleWater.js';
 import { Character } from './game/Character.js';
@@ -410,7 +412,7 @@ export class App {
 		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.loadCharacters() )
 			.then( () => this.pause() ).then( () => this.cpuGL && this.lifeAndDebris() ).then( () => this.pause() ).then( () => this.scansArrive() )
 			.then( () => this.cpuGL && this.settle() ).then( () => this.cpuGL && this.reefGrows() )
-			.then( () => this.pause() ).then( () => this.whaleArrives() );
+			.then( () => this.pause() ).then( () => this.whaleArrives() ).then( () => this.airArrives() );
 		const begin = () => this.audio.resume().then( ( on ) => {
 
 			if ( on ) for ( const type of GESTURES ) removeEventListener( type, begin, true );
@@ -512,6 +514,8 @@ export class App {
 		}
 		this.boatSpray.update( dt );
 		this.spray.update( dt, this.camera, this.renderer.domElement.height );
+		if ( this.motes ) this.motes.update( dt, this.camera, this.cameraWaterHeight, this.renderer.domElement.height );
+		this.water.detail.update( dt );
 		this.water.update( this.camera );
 		this.boat.update( dt );
 		this.localLights.update( this.camera, dt );
@@ -923,6 +927,19 @@ export class App {
 		this.whale = whale;
 		this.whaleWater = new WhaleWater();
 		if ( this.fish ) this.fish.setWhale( whale );
+
+	}
+
+	// specks in the air around the camera, lit when the sun shines through them: dust and pollen, salt
+	// near the surf, seed tufts, gnats over the plants (fx/AirMotes.js). Not on low-powered devices
+	async airArrives() {
+
+		if ( this.motes || this.tier === 'low' ) return;
+		const motes = new AirMotes( { terrain: this.terrain, tier: this.tier } );
+		this.scene.add( motes.mesh );
+		await this.readyToDraw( motes.mesh );
+		await this.firstDraws( [ motes.mesh ] );
+		this.motes = motes;
 
 	}
 
