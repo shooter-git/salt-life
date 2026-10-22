@@ -38,7 +38,7 @@ class Source {
 
 const SEGMENTS = 3; // contact segments per side, stem -> shoulder
 const EMIT_RATE = 300; // drops per unit of demand (m of waterline x m/s of response) per second
-const MAX_PER_FRAME = 150; // particle cap per frame for the bow (both sides; the pool's CPU ring is 8192)
+const MAX_PER_FRAME = 150; // particle cap per frame for the bow (both sides; Salt Life: at most a 40th of the pool)
 const FREE_REQUESTS = 8; // emit requests of the shared pool left to other emitters each frame
 
 // Spray thrown off the hull, after the contact model of threejs-water-pro (SprayContacts /
@@ -237,7 +237,7 @@ export class BoatSpray {
 		this.burst = Math.max( this.burst * Math.exp( - dt / 0.15 ), slam );
 		const burst = this.burst;
 		const boost = 1 + 2.5 * burst;
-		const budget = Math.min( 1, MAX_PER_FRAME / Math.max( 1e-6, total * EMIT_RATE * dt * boost * 1.3 ) );
+		const budget = Math.min( 1, Math.min( MAX_PER_FRAME, ( spray.N || 8192 ) / 40 ) / Math.max( 1e-6, total * EMIT_RATE * dt * boost * 1.3 ) );
 		const fast = MathUtils.smoothstep( speed, 4, 10 );
 		const making = MathUtils.smoothstep( speed, 3, 6 );
 		// per side: the segment that throws most also throws the sheet, ligaments, white water and mist
