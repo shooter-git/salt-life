@@ -1,4 +1,4 @@
-import { Texture } from '../../engine/gpu/Texture.js';
+import * as THREE from '../../engine/index.js';
 import { mulberry32 } from '../../util/Noise.js';
 
 // Tileable 3D gradient noise in a small RGBA8 volume: four independent noise channels with
@@ -12,7 +12,8 @@ import { mulberry32 } from '../../util/Noise.js';
 // fetched value back to about the range of MaterialX noise: ( s - 0.5 ) * NOISE_SCALE.
 export const NOISE_SCALE = 2.55;
 
-export function createNoiseVolume( size = 64, cells = 8, seed = 90210 ) {
+// (Salt Life) the volume's texels (made in the reef's worker: ReefWorker), then its texture
+export function noiseVolumeData( size = 64, cells = 8, seed = 90210 ) {
 
 	const rng = mulberry32( seed );
 	const n = cells, n3 = n * n * n;
@@ -77,8 +78,21 @@ export function createNoiseVolume( size = 64, cells = 8, seed = 90210 ) {
 
 	}
 
-	// sampled trilinear with repeat wrapping (the shared `smpLinearRepeat` sampler), no mipmaps
-	const tex = new Texture( { label: 'reefNoise', width: size, height: size, depth: size, dimension: '3d', format: 'rgba8unorm', data, sampler: 'linearRepeat' } );
+	return data;
+
+}
+
+// sampled trilinear with repeat wrapping, no mipmaps (Salt Life: a three Data3DTexture)
+export function createNoiseVolume( data = noiseVolumeData(), size = 64 ) {
+
+	const tex = new THREE.Data3DTexture( data, size, size, size );
+	tex.format = THREE.RGBAFormat;
+	tex.type = THREE.UnsignedByteType;
+	tex.minFilter = tex.magFilter = THREE.LinearFilter;
+	tex.wrapS = tex.wrapT = tex.wrapR = THREE.RepeatWrapping;
+	tex.generateMipmaps = false;
+	tex.unpackAlignment = 1;
+	tex.needsUpdate = true;
 	return tex;
 
 }

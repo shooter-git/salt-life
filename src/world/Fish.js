@@ -1,17 +1,13 @@
 import * as THREE from '../engine/index.js';
 import { mulberry32 } from '../util/Noise.js';
-import { ReefBatch } from './reef/ReefBatch.js';
+import { KindBatch } from './reef/KindBatch.js';
 import { WORLD } from './WorldLayout.js';
 import { SPECIES } from './fish/FishSpecies.js';
-import { fishGeometry } from './fish/FishGeometry.js';
-import { rayGeometry, turtleGeometry } from './fish/CreatureGeometry.js';
 import { createSwimMaterial } from './fish/FishMaterial.js';
 import { bandFade } from '../materials/LODFade.js';
-import { WhaleWater } from '../ocean/WhaleWater.js';
-import { FrameUniforms } from '../engine/render/Frame.js';
 
 // Fish and other swimmers of the reef and the bay, simulated on the CPU and drawn in a single
-// render object (ReefBatch: one indirect draw per model and level of detail) with the
+// batch (reef/KindBatch.js: one instanced draw per model and level of detail in view) with the
 // procedural fish models (fish/FishGeometry.js, fish/CreatureGeometry.js) and material
 // (fish/FishMaterial.js).
 //
@@ -34,10 +30,17 @@ import { FrameUniforms } from '../engine/render/Frame.js';
 const TAU = Math.PI * 2;
 const CEILING = - 0.7; // reef fish stay below this (m)
 const FLOOR_CLEARANCE = 0.18; // minimum above the reef / seabed (m)
-const RANGE = 45; // draw distance (m)
+// (Salt Life) per tier: the draw distance (m; Tidewater's was 45, Salt Life's underwater fog ends
+// at 28), the share of the big schools' fish (20 or more), the level-of-detail switches' scale (more
+// pixels: coarser sooner), cross-fades, lite shading
+const TIER = {
+	low: { range: 20, schools: 0.35, lodPx: 1.6, fades: false, lite: true },
+	mid: { range: 26, schools: 0.6, lodPx: 1.2, fades: true, lite: false },
+	high: { range: 32, schools: 1, lodPx: 1, fades: true, lite: false },
+};
 const SIM_RANGE = 65; // groups further than this from the camera are frozen (m)
 const GRAVITY = 9.81;
-const LOD_PX = [ 320, 80, 22 ]; // screen length (px) below which the next level of detail takes over
+const LOD_PX0 = [ 320, 80, 22 ]; // screen length (px) below which the next level of detail takes over
 const LOD_BAND = 1.15; // cross-fade band above each switch (screen length ratio)
 
 // Behaviour per kind of swimmer. model: anatomy (FishSpecies.js) or 'stingray' / 'eagleRay' /
@@ -84,40 +87,6 @@ const BEHAVIOUR = {
 };
 for ( const k in BEHAVIOUR ) BEHAVIOUR[ k ] = { name: k, ...base, ...BEHAVIOUR[ k ] };
 
-// models per level of detail (0 nearest .. 3)
-function buildModels( names ) {
-
-	const kinds = [], first = {};
-	for ( const name of names ) {
-
-		first[ name ] = kinds.length;
-		let geos;
-		if ( name === 'stingray' || name === 'eagleRay' ) {
-
-			const eagle = name === 'eagleRay';
-			const g1 = rayGeometry( { lod: 1, eagle } );
-			geos = [ rayGeometry( { lod: 0, eagle } ), g1, g1, g1 ];
-
-		} else if ( name === 'turtle' ) {
-
-			const g1 = turtleGeometry( { lod: 1 } );
-			geos = [ turtleGeometry( { lod: 0 } ), g1, g1, g1 ];
-
-		} else {
-
-			const S = SPECIES[ name ];
-			geos = [ 0, 1, 2, 3 ].map( ( lod ) => fishGeometry( S, { lod, pose: 'swim' } ) );
-
-		}
-
-		for ( let l = 0; l < 4; l ++ ) kinds.push( { geometry: geos[ l ], model: name, lod: l } );
-
-	}
-
-	return { kinds, first };
-
-}
-
 class Group {
 
 	constructor( sp, count, offset, zone, rng ) {
@@ -156,8 +125,10 @@ export class FishSchools {
 	// floorAt( x, z ): highest obstacle (seabed or reef); anchors: [ [ x, z ], ... ] coral heads;
 	// bay: also populate the bay, the pier and the beach; shoreField (optional, ShoreField.js)
 	// locates the breakers (without it every beach counts as fully exposed)
-	constructor( { parent, terrain, floorAt = null, center, radius, anchors = [], seed = 23, bay = true, shoreField = null } ) {
+	// (Salt Life) ground: the Terrain (the shared underwater shading); tier
+	constructor( { parent, terrain, ground, floorAt = null, center, radius, anchors = [], seed = 23, bay = true, shoreField = null, tier = 'high' } ) {
 
+		this.cfg = TIER[ tier ] || TIER.high;
 		this.terrain = terrain;
 		this.floorAt = floorAt ?? ( ( x, z ) => terrain.heightAt( x, z ) );
 		this.center = center.clone();
@@ -167,6 +138,7 @@ export class FishSchools {
 		this.rng = mulberry32( seed );
 		this.time = 0;
 		this.spray = null; // set by the owner (Spray.js): splashes of leaping mullet
+		this.ground = ground;
 		this.group = new THREE.Group();
 		this.group.name = 'Fish';
 		parent.add( this.group );
@@ -176,10 +148,10 @@ export class FishSchools {
 		this.n = 0;
 		this.layout( bay );
 
-		// ---- models
-		const models = [ ...new Set( this.groups.map( ( g ) => g.sp.model ) ) ];
-		const { kinds, first } = buildModels( models );
-		this.modelKind = first;
+		// ---- models: their names (built apart: setModels, fish/FishModels.js), the first kind of each
+		this.modelNames = [ ...new Set( this.groups.map( ( g ) => g.sp.model ) ) ];
+		this.modelKind = {};
+		this.modelNames.forEach( ( name, i ) => this.modelKind[ name ] = i * 4 );
 
 		// ---- fish state
 		const n = this.n;
@@ -203,33 +175,29 @@ export class FishSchools {
 		this.tmpA = new Float32Array( n * 9 ); // boids accumulators: separation, alignment, cohesion
 		this.tmpC = new Uint16Array( n ); // neighbour counts
 		for ( const g of this.groups ) this.initGroup( g );
-
-		this.batch = new ReefBatch( 'Fish', kinds, { maxInstances: n, dynamic: true, fade: true } );
-		this.material = createSwimMaterial( this.batch );
-		this.fadeMaterial = createSwimMaterial( this.batch, { fade: true } );
-		this.mesh = this.batch.createMesh( this.material );
-		this.group.add( this.batch.createFadeMesh( this.fadeMaterial ) );
-		this.viewHeight = 1267;
-		const draw = this.mesh.onBeforeRender;
-		this.mesh.onBeforeRender = ( renderer, scene, camera, geometry, material, group ) => {
-
-			if ( camera.isPerspectiveCamera ) {
-
-				// (the engine passes no renderer: the internal render height comes from the frame uniforms)
-				this.viewHeight = renderer?.domElement?.height || FrameUniforms.fields.resolution.value.y || this.viewHeight;
-				this.cull( camera );
-
-			}
-
-			draw( renderer, scene, camera, geometry, material, group );
-
-		};
-
-		this.group.add( this.mesh );
+		this.batch = null; // (setModels)
+		this.viewHeight = 1267; // (the app sets the canvas' height)
 		this._frame = 0;
 		this._cullFrame = - 1;
 		this.dt = 1 / 60;
 		this.warmUp();
+
+	}
+
+	// (Salt Life) the models of modelNames, merged (fish/FishModels.js: fishModels, or
+	// fishModelsAsync in a worker), drawn as a KindBatch: a draw per model and level of detail in
+	// use, the records (all the fish, written each frame for those drawn) in a float texture; a kind
+	// lists each fish of its model at most once
+	setModels( merged ) {
+
+		const n = this.n;
+		const cap = merged.kinds.map( () => 0 );
+		for ( let i = 0; i < n; i ++ ) for ( let l = 0; l < 4; l ++ ) cap[ this.kind[ i ] + l ] ++;
+		this.batch = new KindBatch( 'Fish', { geometry: merged, kinds: merged.kinds, count: n, stride: 4, capacity: cap } );
+		this.material = createSwimMaterial( this.batch, { ground: this.ground, lite: this.cfg.lite } );
+		this.batch.setMaterial( this.material );
+		this.batch.releaseAfterUpload();
+		for ( const m of this.batch.meshes ) this.group.add( m );
 
 	}
 
@@ -283,6 +251,8 @@ export class FishSchools {
 
 	addGroup( name, count, zone ) {
 
+		// (Salt Life: fewer fish in the big schools on low-powered devices)
+		if ( count >= 20 ) count = Math.max( 8, Math.round( count * this.cfg.schools ) );
 		const sp = BEHAVIOUR[ name ];
 		const g = new Group( sp, count, this.n, zone, mulberry32( Math.floor( this.rng() * 1e9 ) ) );
 		this.n += count;
@@ -637,7 +607,8 @@ export class FishSchools {
 		this._frame ++;
 		this.time += dt;
 		this.dt = dt || 1 / 60;
-		if ( this.whale && this.whale.ready ) ( this.whaleWater || ( this.whaleWater = new WhaleWater() ) ).update( this.whale, dt, this.spray );
+		// (Salt Life: the whale's marks on the water come with the whale)
+		if ( this.whale && this.whale.ready && this.whaleWater ) this.whaleWater.update( this.whale, dt, this.spray );
 		let threat = null;
 		if ( player ) {
 
@@ -667,9 +638,13 @@ export class FishSchools {
 
 		}
 
-		this.mesh.visible = any;
-		if ( ! any ) this.batch.fadeMesh.visible = false;
-		if ( ! any ) return;
+		if ( ! any ) {
+
+			if ( this.batch ) this.batch.hide();
+			return;
+
+		}
+
 		this.prev.set( this.pos );
 		const steps = dt > 1 / 30 ? Math.min( 3, Math.ceil( dt * 30 ) ) : 1;
 		const h = dt / steps;
@@ -1425,6 +1400,7 @@ export class FishSchools {
 	// Orients the visible fish, advances their swimming wave and writes the instance data.
 	cull( camera ) {
 
+		if ( ! this.batch ) return;
 		if ( this._cullFrame === this._frame ) return;
 		this._cullFrame = this._frame;
 		const dt = this.dt;
@@ -1434,7 +1410,8 @@ export class FishSchools {
 		const cp = camera.position;
 		// pixels per metre at 1 m: level of detail by the fish's size on screen
 		const pxScale = camera.projectionMatrix.elements[ 5 ] * this.viewHeight * 0.5;
-		const batch = this.batch, D = batch.data;
+		const batch = this.batch, D = batch.records, C = this.cfg, RANGE = C.range;
+		const LOD_PX = C.lodPx === 1 ? LOD_PX0 : LOD_PX0.map( ( x ) => x * C.lodPx );
 		const P = this.pos, V = this.vel, H = this.head, R = this.prev;
 		const kHead = 1 - Math.exp( - dt * 6 ), kRoll = 1 - Math.exp( - dt * 3 );
 		batch.begin();
@@ -1521,7 +1498,8 @@ export class FishSchools {
 				const lod = px > LOD_PX[ 0 ] ? 0 : px > LOD_PX[ 1 ] ? 1 : px > LOD_PX[ 2 ] ? 2 : 3;
 				const k0 = this.kind[ i ] + lod;
 				const far = RANGE * 0.9;
-				if ( d > far ) batch.addFade( k0, i, 1 - bandFade( d, far, RANGE + L ), false );
+				if ( ! C.fades ) batch.add( k0, i );
+				else if ( d > far ) batch.addFade( k0, i, 1 - bandFade( d, far, RANGE + L ), false );
 				else if ( lod < 3 && px < LOD_PX[ lod ] * LOD_BAND ) {
 
 					const f = bandFade( - px, - LOD_PX[ lod ] * LOD_BAND, - LOD_PX[ lod ] );
@@ -1535,15 +1513,19 @@ export class FishSchools {
 		}
 
 		batch.commit();
-		batch.dataAttr.needsUpdate = true;
+		batch.texture.needsUpdate = true;
 
 	}
 
 	dispose() {
 
-		this.batch.dispose();
-		this.material.dispose();
-		this.fadeMaterial.dispose();
+		if ( this.batch ) {
+
+			this.batch.dispose();
+			this.material.dispose();
+
+		}
+
 		this.group.removeFromParent();
 
 	}

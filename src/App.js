@@ -28,6 +28,10 @@ import { Chandlery, CHANDLERY } from './game/Chandlery.js';
 import { LocalLights, addBoatLights, addVillageLights, useLocalLights, holdLocalLights } from './materials/LocalLights.js';
 import { Wildlife } from './world/wildlife/Wildlife.js';
 import { Debris } from './world/Debris.js';
+import { Reef } from './world/Reef.js';
+import { FishSchools } from './world/Fish.js';
+import { fishModelsAsync } from './world/fish/FishModelsAsync.js';
+import { MarineSnow } from './fx/MarineSnow.js';
 import { Character } from './game/Character.js';
 import { TouchControls } from './ui/TouchControls.js';
 import { Hud } from './ui/Hud.js';
@@ -109,6 +113,8 @@ export class App {
 		// and kept to a phone's pixels (fitCpuPixels). Asked of a throwaway context, as it decides how
 		// the stage's is made.
 		this.cpuGL = probeCpuGL();
+		// (with a graphics card the reef is laid out in a worker while the rest loads: reefGrows)
+		if ( ! this.cpuGL ) this._reefLayout = Reef.layout( this.terrainData );
 		// Anti-aliased on every tier where a graphics card draws (the SDK leaves it off on low: on a
 		// phone the low tier's resolution, a third of the screen's across, then looks jagged, and
 		// phones' GPUs smooth edges almost for free). Its resolution is this game's own (adaptResolution).
@@ -125,6 +131,7 @@ export class App {
 		this._drawn = null; // the last frame's fence
 		this._owed = 0; // s not yet played while waiting for it
 		this._slots = []; // bakes waiting for a frame of their own (frameSlot)
+		this._firsts = []; // programs waiting for their first draw (firstDraws)
 		this._slotOwed = 0;
 		this._rest = false; // the frame after a drawn one is skipped
 		if ( this.cpuGL ) this.fitCpuPixels();
@@ -387,10 +394,12 @@ export class App {
 		// (on a device that draws on its CPU, one after another, so their garbage doesn't pile up: the
 		// island's held-back parts appear, the plants grow, then the catch card's shaders, then Joe and
 		// Marta (their loading is the high point of script memory: before the animals and the debris
-		// add theirs), then the animals and the debris, then the scanned debris, with pauses between)
+		// add theirs), then the animals and the debris, then the scanned debris, with pauses between;
+		// last, once that loading's garbage is collected (settle), the reef, its fish and the specks)
 		const revealed = this._late ? new Promise( ( done ) => this._revealed = done ) : null;
 		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.loadCharacters() )
-			.then( () => this.pause() ).then( () => this.cpuGL && this.lifeAndDebris() ).then( () => this.pause() ).then( () => this.scansArrive() );
+			.then( () => this.pause() ).then( () => this.cpuGL && this.lifeAndDebris() ).then( () => this.pause() ).then( () => this.scansArrive() )
+			.then( () => this.cpuGL && this.settle() ).then( () => this.cpuGL && this.reefGrows() );
 		const begin = () => this.audio.resume().then( ( on ) => {
 
 			if ( on ) for ( const type of GESTURES ) removeEventListener( type, begin, true );
@@ -448,11 +457,34 @@ export class App {
 
 		}
 
+		// (Salt Life) the far plane just past the fog under water: the island beyond it isn't drawn
+		// (its culling drops it), the sky dome is the fog there (Sky)
+		const far = under ? 32 : 12000;
+		if ( this.camera.far !== far ) {
+
+			this.camera.far = far;
+			this.camera.updateProjectionMatrix();
+
+		}
+
+		// (and the plants aren't drawn: instanced, they ignore the far plane, and from under the
+		// surface nothing above it shows)
+		if ( this.vegetation.ready ) this.vegetation.group.visible = ! under;
+
 		// ---- world
 		this.terrain.update( this.camera );
 		this.village.update( dt );
 		this.rocks.update( this.camera );
 		if ( this.debris ) this.debris.update( this.camera );
+		if ( this.reef ) this.reef.update( this.camera );
+		if ( this.fish ) {
+
+			this.fish.viewHeight = this.renderer.domElement.height;
+			this.fish.update( dt, this.camera.position );
+			this.fish.cull( this.camera );
+
+		}
+		if ( this.snow ) this.snow.update( this.camera, under, this.renderer.domElement.height, this.localLights && this.localLights.flashlight );
 		this.vegetation.update( dt, this.camera );
 		if ( this.wildlife ) {
 
@@ -495,6 +527,34 @@ export class App {
 	pause( ms = 3000 ) {
 
 		return this.cpuGL ? new Promise( ( resolve ) => setTimeout( resolve, ms ) ) : Promise.resolve();
+
+	}
+
+	// (CPU WebGL) waits for the garbage of the loading so far to be collected before the next big
+	// stage: until the script heap falls back from its high point (where the browser reports it; a
+	// pause where it doesn't), at least 3 s, at most `ms`. All the Spaces' checks measure its peak
+	settle( ms = 15000 ) {
+
+		performance.mark( 'world: settle' );
+		const mem = performance.memory;
+		if ( ! this.cpuGL ) return Promise.resolve();
+		if ( ! mem ) return this.pause();
+		return new Promise( ( resolve ) => {
+
+			const t0 = performance.now();
+			let high = mem.usedJSHeapSize;
+			const tick = () => {
+
+				const used = mem.usedJSHeapSize, t = performance.now() - t0;
+				high = Math.max( high, used );
+				if ( ( t > 3000 && used < high * 0.75 ) || t > ms ) resolve();
+				else setTimeout( tick, 250 );
+
+			};
+
+			setTimeout( tick, 250 );
+
+		} );
 
 	}
 
@@ -736,6 +796,71 @@ export class App {
 
 	}
 
+	// the reef (world/Reef.js, laid out in a worker; it reads the island's seagrass mask): its
+	// shaders readied with its meshes shown for the compile (they're hidden until the culling picks
+	// them); the swimmer then climbs over it
+	async reefGrows() {
+
+		if ( this.reef ) return;
+		performance.mark( 'world: reef' );
+		const reef = await Reef.create( { scene: this.scene, terrain: this.terrainData, ground: this.terrain, tier: this.tier, data: this._reefLayout } );
+		this._reefLayout = null;
+		this._reefLaid = true; // (the seagrass mask may go: releaseMasks)
+		this.releaseMasks();
+		reef.shadowsFrom( this.sky.sun );
+		const meshes = [];
+		reef.group.traverse( ( o ) => o.isMesh && meshes.push( o ) );
+		for ( const m of meshes ) m.visible = true;
+		await this.readyToDraw( reef.group, () => {
+
+			for ( const m of meshes ) m.visible = false;
+
+		} );
+		await this.firstDraws( [ reef.batches.hard, reef.batches.soft ].map( ( b ) => b.meshes.find( ( m ) => m.layers.isEnabled( 0 ) ) ) );
+		this.reef = reef;
+		this.player.reef = reef;
+		await this.pause();
+		await this.fishSwim();
+
+	}
+
+	// the reef's fish, the bait ball, the rays and the turtle, the bay's tarpon, jacks, mullet and fry,
+	// the pier's snappers and grunts (world/Fish.js): they keep to the reef's floor and its coral heads
+	async fishSwim() {
+
+		if ( this.fish || ! this.reef ) return;
+		performance.mark( 'world: fish' );
+		const reef = this.reef;
+		const fish = new FishSchools( {
+			parent: this.scene, terrain: this.terrainData, ground: this.terrain, tier: this.tier,
+			floorAt: ( x, z ) => reef.floorHeightAt( x, z ), center: WORLD.reef.center, radius: WORLD.reef.radius + 10,
+			anchors: reef.anchors, shoreField: this.shoreField,
+		} );
+		// (their models are made in a worker: fish/FishModels.js)
+		fish.setModels( await fishModelsAsync( fish.modelNames ) );
+		for ( const m of fish.batch.meshes ) m.visible = true;
+		await this.readyToDraw( fish.group, () => {
+
+			for ( const m of fish.batch.meshes ) m.visible = false;
+
+		} );
+		await this.firstDraws( [ fish.batch.meshes[ 0 ] ] );
+		this.fish = fish;
+		await this.pause();
+		// and the specks drifting in the water around the swimmer (fx/MarineSnow.js)
+		const snow = new MarineSnow( { waves: this.waves, tier: this.tier } );
+		this.scene.add( snow.mesh );
+		snow.mesh.visible = true;
+		await this.readyToDraw( snow.mesh, () => {
+
+			snow.mesh.visible = false;
+
+		} );
+		await this.firstDraws( [ snow.mesh ] );
+		this.snow = snow;
+
+	}
+
 	// the photoscanned logs, branches and shells (debris/ScannedDebris.js), after Joe and Marta (their
 	// loading's garbage and theirs don't pile up), drawn once their shaders are ready
 	async scansArrive() {
@@ -792,6 +917,8 @@ export class App {
 		await this.lifeArrives();
 		await this.pause();
 		await this.debrisLands();
+		// (with a graphics card the reef and its fish too; drawn on the CPU, they come last: start())
+		if ( ! this.cpuGL ) await this.reefGrows();
 		this._plantsGrown = true;
 		this.releaseMasks();
 
@@ -802,8 +929,10 @@ export class App {
 	releaseMasks() {
 
 		const T = this.terrainData;
-		if ( ! this._plantsGrown || T.rock === null || ! this.game || ! this.game.minimap || ! this.game.minimap._bake.done ) return;
-		for ( const k of [ 'rock', 'sand', 'path', 'gully', 'seagrass', 'rubble', 'scarp' ] ) T[ k ] = null;
+		if ( ! this._plantsGrown || ! this.game || ! this.game.minimap || ! this.game.minimap._bake.done ) return;
+		if ( T.rock !== null ) for ( const k of [ 'rock', 'sand', 'path', 'gully', 'rubble', 'scarp' ] ) T[ k ] = null;
+		// (the seagrass meadows: once the reef is laid out on them)
+		if ( this._reefLaid ) T.seagrass = null;
 
 	}
 
@@ -880,8 +1009,38 @@ export class App {
 
 	drawWorld() {
 
+		// a program's first draw (firstDraws): its mesh shown for this frame, one instance
+		const first = this._firsts.shift();
+		let was = null;
+		if ( first ) {
+
+			const m = first.mesh, g = m.geometry;
+			was = [ m.visible, g.instanceCount ];
+			m.visible = true;
+			if ( g.isInstancedBufferGeometry ) g.instanceCount = 1;
+
+		}
+
 		if ( this.post ) this.post.render();
 		else this.renderer.render( this.scene, this.camera );
+		if ( first ) {
+
+			first.mesh.visible = was[ 0 ];
+			first.mesh.geometry.instanceCount = was[ 1 ];
+			first.resolve();
+
+		}
+
+	}
+
+	// (CPU WebGL) where a program is first drawn the driver builds its pipeline: seconds each on
+	// SwiftShader, and those of things that come into view together stack into one long freeze.
+	// So each mesh here (one per new program, compiled already: readyToDraw) is drawn once, one
+	// instance, in a frame of the next few of its own. Resolves once all are drawn
+	firstDraws( meshes ) {
+
+		if ( ! this.cpuGL || ! this._started ) return Promise.resolve();
+		return Promise.all( meshes.map( ( mesh ) => new Promise( ( resolve ) => this._firsts.push( { mesh, resolve } ) ) ) );
 
 	}
 

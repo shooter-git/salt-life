@@ -58,6 +58,8 @@ uniform vec3 skyMoonDir;
 uniform float skySunDiskIntensity;
 uniform float skyStarIntensity;
 uniform float skyNight;
+uniform float skyUnderwater;
+uniform vec3 skyFogColor;
 uniform float skyTime;
 uniform float skyExposure;
 varying vec3 vSkyDir;
@@ -177,6 +179,8 @@ void main() {
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
 #ifndef SKY_ENVIRONMENT
+	// (as three's fog, after the tone mapping)
+	gl_FragColor.rgb = mix( gl_FragColor.rgb, skyFogColor, skyUnderwater );
 	// a triangular +-1/255 dither: the 8-bit sky gradients show no rings (Tidewater's post grain did
 	// the same)
 	vec3 q = vec3( floor( gl_FragCoord.xy ), 0.0 );
@@ -205,6 +209,11 @@ export class Sky {
 			skyNight: G.night,
 			skyTime: G.time,
 			skyExposure: { value: 1 },
+			// (Salt Life) under water the dome is the fog: the camera's far plane is just past the fog
+			// there (App), so the dome shows where the sea floor would. skyFogColor: the fog's colour as
+			// three hands it to its fog (in the space of the target drawn: the dome's onBeforeRender)
+			skyUnderwater: G.cameraUnderwater,
+			skyFogColor: { value: new THREE.Color() },
 		};
 		this.moonDir = this.uniforms.skyMoonDir.value;
 		this.sunDiskIntensity = this.uniforms.skySunDiskIntensity;
@@ -226,6 +235,7 @@ export class Sky {
 		dome.name = 'Sky';
 		dome.frustumCulled = false;
 		dome.renderOrder = 1e6;
+		dome.onBeforeRender = ( r ) => this.fog.color.getRGB( this.uniforms.skyFogColor.value, r.getRenderTarget() === null ? r.outputColorSpace : THREE.ColorManagement.workingColorSpace );
 		scene.add( dome );
 
 		this.sun = new THREE.DirectionalLight( 0xffffff, 2 );
