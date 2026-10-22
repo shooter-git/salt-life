@@ -62,7 +62,10 @@ Salt Life ships its skin maps at 2048×1024 and 1024×512, box-filtered from Tid
 The vendors (`joe.glb`, `marta.glb`) are avatars `Wood_Male_01` and `Female_Adult_04` and their
 idle, talk, wave and shrug animations from the [Microsoft Rocketbox Avatar Library](https://github.com/microsoft/Microsoft-Rocketbox)
 (© Microsoft Corporation, MIT license, included as [`credits/LICENSE-Rocketbox.md`](credits/LICENSE-Rocketbox.md)), converted with
-`tools/characters/` (textures resized, animations retargeted and baked). Paper: M. Gonzalez-Franco
+`tools/characters/` (textures resized, animations retargeted and baked). The other players
+(`player-m1.glb`, `player-m2.glb`, `player-f1.glb`, `player-f2.glb`) are avatars `Male_Adult_01`,
+`Sports_Male_04`, `Female_Party_01` and `Female_Adult_17` from the same library, with its idle, walk,
+run, umbrella-holding, trolley-pushing, cheer and wave animations (`tools/characters/players.sh`). Paper: M. Gonzalez-Franco
 et al., "The Rocketbox Library and the Utility of Freely Available Rigged Avatars", Frontiers in
 Virtual Reality, 2020.
 

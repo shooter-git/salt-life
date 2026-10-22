@@ -632,6 +632,34 @@
 			"author": "Microsoft Corporation"
 		},
 		{
+			"path": "public/models/characters/player-f1.glb",
+			"license": "MIT",
+			"source": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"title": "Rocketbox avatar (player-f1.glb)",
+			"author": "Microsoft Corporation"
+		},
+		{
+			"path": "public/models/characters/player-f2.glb",
+			"license": "MIT",
+			"source": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"title": "Rocketbox avatar (player-f2.glb)",
+			"author": "Microsoft Corporation"
+		},
+		{
+			"path": "public/models/characters/player-m1.glb",
+			"license": "MIT",
+			"source": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"title": "Rocketbox avatar (player-m1.glb)",
+			"author": "Microsoft Corporation"
+		},
+		{
+			"path": "public/models/characters/player-m2.glb",
+			"license": "MIT",
+			"source": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"title": "Rocketbox avatar (player-m2.glb)",
+			"author": "Microsoft Corporation"
+		},
+		{
 			"path": "public/models/debris/dead_quiver_branch_01.glb",
 			"license": "CC0-1.0",
 			"source": "https://polyhaven.com/a/dead_quiver_branch_01",

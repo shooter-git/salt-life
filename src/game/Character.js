@@ -1,4 +1,4 @@
-import { AnimationMixer, LoopOnce, LoopRepeat } from '../engine/index.js';
+import { AnimationMixer, LoopOnce, LoopPingPong, LoopRepeat } from '../engine/index.js';
 
 // A skinned, animated character from a glTF (the Rocketbox vendors: tools/characters), behind the
 // interface Tidewater's engine gave it (its SkinnedModel): play a clip with a crossfade, a clip's
@@ -45,14 +45,15 @@ export class Character {
 	}
 
 	// fade: seconds to blend from the clip playing; loop: false plays it once and holds its last pose
-	// (then onClipEnd); from: where in the clip to start (seconds)
+	// (then onClipEnd), 'pingpong' back and forth (a hold cut from a longer take: no seam); from: where
+	// in the clip to start (seconds)
 	play( name, { fade = 0.3, loop = true, from = 0 } = {} ) {
 
 		const clip = this.clips.get( name );
 		if ( ! clip ) return;
 		const next = this.mixer.clipAction( clip ), prev = this._action;
 		next.reset();
-		next.setLoop( loop ? LoopRepeat : LoopOnce, Infinity );
+		next.setLoop( loop === 'pingpong' ? LoopPingPong : loop ? LoopRepeat : LoopOnce, Infinity );
 		next.clampWhenFinished = ! loop;
 		next.time = from;
 		next.play();

@@ -44,6 +44,7 @@ import { Hud } from './ui/Hud.js';
 import { Wake } from './ocean/Wake.js';
 import { SoundScape } from './audio/SoundScape.js';
 import { Game } from './game/Game.js';
+import { Together } from './together/Together.js';
 import { createGameUI } from './ui/GameUI.js';
 import { PostChain } from './post/PostChain.js';
 import { releaseGeometries, releaseTextures, uploadTextures, watchContext } from './core/ReleaseAfterUpload.js';
@@ -307,6 +308,8 @@ export class App {
 		}
 
 		this.game = new Game( this );
+		// whoever else is on the island, and the time of day you share (together/)
+		this.together = new Together( this );
 		if ( ! this.cpuGL ) await this.lifeAndDebris();
 		if ( this.nearDetail ) {
 
@@ -454,6 +457,7 @@ export class App {
 		G.dt.value = dt;
 		G.time.value += dt;
 		if ( s.timeSpeed !== 0 ) s.timeOfDay = ( s.timeOfDay + dt * s.timeSpeed + 24 ) % 24;
+		if ( this.together ) this.together.syncClock( s );
 
 		// ---- player / boat (boat physics first so the cameras follow this frame's pose)
 		const input = this.input;
@@ -469,6 +473,7 @@ export class App {
 		this.boatCtl.update( dt );
 		this.player.update( dt );
 		this.game.update( dt );
+		if ( this.together ) this.together.update( dt );
 		this.releaseMasks();
 		this.sky.update( s.timeOfDay, s.sunAzimuth, this.camera );
 
@@ -701,13 +706,15 @@ export class App {
 	}
 
 	// shaders not needed at the start, compiled and first used after it: the catch card's fish portrait
-	// (its studio light and the blurred backdrop), and on a device that draws on its CPU the rod and
-	// its line and the skinned fish (held back while loading: every shader compiled then is load time)
+	// (its studio light and the blurred backdrop), the other players' figures, and on a device that
+	// draws on its CPU the rod and its line and the skinned fish (held back while loading: every
+	// shader compiled then is load time)
 	async prepareLate() {
 
 		if ( ! this.game ) return;
 		const r = this.renderer, rod = this.game.rod;
 		await this.game.portrait.compile( r, this.scene.environment );
+		await this.together.compile( r, this.camera, this.scene );
 		if ( rod.holdBack ) {
 
 			for ( const m of [ rod.rodMesh, rod.lineMesh, rod.bobberMesh ] ) {
@@ -1161,7 +1168,7 @@ export class App {
 
 	}
 
-	// T: let the day run (about 8 minutes per day) or stop it
+	// T: let the day run (about 8 minutes per day) or stop it, for everyone here
 	toggleTime() {
 
 		const s = this.settings;
@@ -1176,6 +1183,8 @@ export class App {
 
 		}
 
+		// (for everyone on the island: one clock)
+		if ( this.together ) this.together.setClock( s.timeOfDay, s.timeSpeed );
 		this.hud.toast( s.timeSpeed !== 0 ? 'Time running' : 'Time paused' );
 
 	}

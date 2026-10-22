@@ -537,6 +537,15 @@ export class Game {
 
 			const entry = this.state.addFish( f.species, f.kg, this.hour );
 			const info = this.state.lastCatch;
+			// (Salt Life) the others hear of it; the island's records (together/): the card says when
+			// it's the heaviest of its kind anyone here has landed
+			if ( this.app.together ) {
+
+				const isle = this.app.together.caught( f.species, f.kg, info.cm );
+				info.islandRecord = isle.island;
+				info.islandHeld = isle.held || null;
+
+			}
 			if ( au && au.fishSplash ) au.fishSplash( this.rod.bobber, 0.8 );
 			if ( au && au.fishFlop ) au.fishFlop();
 			// the catch card (with a HUD) while the fish hangs on the line; a toast otherwise
