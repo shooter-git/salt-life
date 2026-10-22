@@ -42,6 +42,9 @@ export class Player {
 		this.colliders = colliders;
 		this.query = query;
 		this.boat = boat;
+		this.ownBoat = boat; // (Salt Life) yours; this.boat is another player's while you ride along (ride)
+		this.riding = false;
+		this.rideOffer = null; // { name, boat }: someone's boat you're next to, aboard it (together/Together.js)
 		this.reef = reef;
 		this.audio = audio;
 
@@ -158,7 +161,18 @@ export class Player {
 		this.pitch = THREE.MathUtils.clamp( this.pitch - look.y * 0.0022, - 1.5, 1.5 );
 
 		// (not with a line out or a fish in hand: E belongs to the fishing then)
-		if ( this.nearBoat() && ! this.busy ) {
+		const offer = this.rideOffer;
+		if ( offer && ! this.busy ) {
+
+			this.prompt = { key: 'E', text: `Board ${ offer.name }'s boat` };
+			if ( inp.hit( 'KeyE' ) ) {
+
+				this.ride( offer.boat );
+				return;
+
+			}
+
+		} else if ( this.nearBoat() && ! this.busy ) {
 
 			this.prompt = { key: 'E', text: 'Board boat' };
 			if ( inp.hit( 'KeyE' ) ) {
@@ -173,6 +187,8 @@ export class Player {
 		const prevMode = this.mode;
 		if ( this.mode === 'walk' ) this.updateWalk( dt );
 		else this.updateSwim( dt );
+		// (E boards their boat before anything else here: say so)
+		if ( offer && ! this.busy ) this.prompt = { key: 'E', text: `Board ${ offer.name }'s boat` };
 
 		// camera. Wading out of your depth, finding your feet again or climbing out on a ladder
 		// changes the eye height: ease the view there (critically damped) instead of jumping
@@ -415,6 +431,24 @@ export class Player {
 
 	// ------------------------------------------------------------------ boat
 
+	// (Salt Life) aboard someone else's boat (together/Together.js: a stand-in with the boat's shape and
+	// their boat's pose): on its deck while they drive; you can't take their helm
+	ride( boat ) {
+
+		this.boat = boat;
+		this.riding = true;
+		this.boardBoat();
+
+	}
+
+	// back to your own boat (after stepping off theirs)
+	unride() {
+
+		this.boat = this.ownBoat;
+		this.riding = false;
+
+	}
+
 	// step aboard from the pier / beach / water: onto the cockpit sole at the boarding point
 	boardBoat() {
 
@@ -484,7 +518,7 @@ export class Player {
 		let best = side ? null : this.ashoreTarget();
 
 		const dock = WORLD.boatDock.position;
-		if ( b.position.distanceTo( dock ) < 14 && b.speed < 1.5 ) {
+		if ( ! this.riding && b.position.distanceTo( dock ) < 14 && b.speed < 1.5 ) {
 
 			b.moored = true;
 			b.mooring.anchor.set( b.position.x, 0, b.position.z );
@@ -513,6 +547,7 @@ export class Player {
 		this.yaw = b.getYaw() + Math.PI;
 		this._camY = null;
 		if ( this.audio && wasDriving ) this.audio.engineStop();
+		if ( this.riding ) this.unride();
 
 	}
 
@@ -672,7 +707,7 @@ export class Player {
 
 		// prompts: take the helm, or step ashore
 		const hx = HOUSE_HELM.x, hz = HOUSE_HELM.z;
-		const nearHelm = Math.hypot( p.x - hx, p.z - hz ) < HELM_REACH && ! this.busy;
+		const nearHelm = Math.hypot( p.x - hx, p.z - hz ) < HELM_REACH && ! this.busy && ! this.riding;
 		this._ashoreT -= dt;
 		if ( this._ashoreT <= 0 ) {
 
