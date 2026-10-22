@@ -103,7 +103,11 @@ vec3 terrainPerturbNormal( vec3 p, vec3 N, float hd, float scale ) {
 	float facet = ad / max( area, 1e-20 ); // cos between the facet and N
 	float k = ss( 0.12, 0.35, fr ) * ss( 0.3, 0.6, facet );
 	vec3 g = grad * min( 1.0, ad * 1.4 / max( length( grad ), 1e-20 ) ) * k;
-	return normalize( N * max( ad, 1e-20 ) - g );
+	// (Salt Life) a collapsed footprint: the vector's squared length underflows and normalize()
+	// gives NaN, which the high tier's bloom spreads over the whole frame
+	vec3 b = N * ad - g;
+	float b2 = dot( b, b );
+	return b2 > 1e-30 ? b * inversesqrt( b2 ) : N;
 }
 
 // triplanar blend weights (sharp)

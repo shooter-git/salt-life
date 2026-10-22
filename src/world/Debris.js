@@ -3,6 +3,7 @@ import { releaseGeometry } from '../core/ReleaseAfterUpload.js';
 import { geometryDetail } from './village/GeoBuilder.js';
 import { debrisInput, buildDebris } from './debris/DebrisBuild.js';
 import DebrisWorker from './debris/DebrisWorker.js?worker&inline';
+import { classicWorker } from '../core/ClassicWorker.js';
 import { createNatureMaterial } from './debris/NatureMaterial.js';
 import { PebbleField } from './debris/PebbleField.js';
 import { ScannedDebris } from './debris/ScannedDebris.js';
@@ -50,7 +51,7 @@ export class Debris {
 
 			built = await new Promise( ( resolve, reject ) => {
 
-				const worker = new DebrisWorker();
+				const worker = classicWorker( DebrisWorker );
 				worker.onmessage = ( e ) => {
 
 					worker.terminate();

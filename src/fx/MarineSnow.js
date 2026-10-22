@@ -1,166 +1,221 @@
-import { Vector2, Vector3, PlaneGeometry, InstancedBufferGeometry, Mesh } from '../engine/index.js';
-import { UniformBlock, ShaderModule, Material } from '../engine/webgpu.js';
-import { LAYERS } from '../core/SceneRenderer.js';
+import * as THREE from 'three';
+import { G } from '../core/Globals.js';
 
 // Suspended particles in the water around the camera (marine snow, plankton, sand grains).
 // Positions are procedural (hash of the instance) inside a box that wraps around the camera, so
 // there is no simulation and no CPU work. The particles drift with a slow current and sway back
-// and forth with the orbital motion of the passing swell (longest FFT cascades, decaying with
-// depth). Only drawn while the view can be under water, and only below the surface (when the
-// waterline crosses the lens, none float in the air half). The specks are tiny depth-writing discs
-// in the opaque pass, so the underwater fog treats each one at its own distance (TAA smooths the
-// edges).
+// and forth with the orbital motion of the passing swell (decaying with depth). Only drawn while
+// the camera is under water, and only below the surface (when the waterline crosses the lens, none
+// float in the air half). The specks are tiny depth-writing discs in the opaque pass, so the
+// underwater fog treats each one at its own distance.
 //
-// Consumes: fft.module (oceanDisplacement: texture_2d_array, cascade sizes ocean.sizes[ c ].x),
-// query.module (waterQueryHeightAtXZ( xz ) -> f32, optional), and the diver's torch of LocalLights
-// (materials/LocalLights.js FLASH handles: on, pos, dir, col, cone). Port note: the torch values
-// live in this material's own `SnowFlash` block whose `{ value }` handles are linked to FLASH by
-// setFlash( FLASH ) (done automatically once materials/LocalLights.js loads; the spot profile is
-// the same formula as LocalLights' spotProfile, localLightsSpotProfile in WGSL).
-export class MarineSnow {
+// (Salt Life) Tidewater's WebGPU material on three's WebGL 2: one instanced quad, the swell from
+// the Gerstner waves (ocean/Waves.js) instead of the FFT cascades, the diver's torch from
+// LocalLights' flashlight. Its TAA smoothed specks smaller than a pixel; here each speck is drawn
+// at least ~1.5 px across, dimmed as it shrinks, so none flicker in and out. Fewer on weaker tiers.
+//
+//   const snow = new MarineSnow( { waves, tier } ); scene.add( snow.mesh );
+//   snow.update( camera, underwater, viewHeight, flashlight )  (each frame)
 
-	constructor( { fft, query = null, count = 12000, box = 8 } ) {
+const TIER = {
+	low: { count: 2500, box: 6 },
+	mid: { count: 6000, box: 7 },
+	high: { count: 12000, box: 8 },
+};
 
-		this.fft = fft;
-		this.box = box;
+const VERTEX = /* glsl */`
+#include <fog_pars_vertex>
+uniform vec3 snowCamPos;
+uniform float snowBox;
+uniform float snowSeaLevel;
+uniform float snowViewHeight;
+uniform vec3 snowAbsorption;
+uniform vec3 snowScattering;
+uniform float flashOn;
+uniform vec3 flashPos;
+uniform vec3 flashDir;
+uniform vec3 flashCol;
+uniform vec2 flashCone; // cos inner, cos outer
+varying vec2 vUv;
+varying float vFade;
+varying float vDepth;
+varying float vDim;
+varying float vPx;
+varying vec3 vTorch;
 
-		const geo = new PlaneGeometry( 1, 1 );
-		const inst = new InstancedBufferGeometry();
-		inst.index = geo.index;
-		inst.setAttribute( 'position', geo.getAttribute( 'position' ) );
-		inst.setAttribute( 'uv', geo.getAttribute( 'uv' ) );
-		inst.instanceCount = count;
-
-		// the torch (linked to LocalLights' FLASH by setFlash)
-		this.flashBlock = new UniformBlock( 'SnowFlash', {
-			pos: [ 'vec3f', new Vector3() ],
-			on: [ 'f32', 0 ],
-			dir: [ 'vec3f', new Vector3( 0, 0, - 1 ) ],
-			col: [ 'vec3f', new Vector3() ], // rgb x intensity
-			cone: [ 'vec2f', new Vector2( 0.99, 0.82 ) ], // cos inner, cos outer
-		}, { label: 'snow flash' } );
-		const flashModule = new ShaderModule( {
-			name: 'snowFlash',
-			uniforms: this.flashBlock,
-			uniformName: 'snowFlash',
-			code: /* wgsl */`
-// spot profile shared by the shading, the beam and the snow: hot centre, soft edge, faint spill
-// (LocalLights spotProfile)
-fn snowSpotProfile( cd: f32, cosInner: f32, cosOuter: f32 ) -> f32 {
-	let m = smoothstep( cosOuter, cosInner, cd );
+// hash3 of the reference (sin-fract)
+vec3 snowHash3( float n ) { return fract( sin( vec3( n, n + 17.13, n + 43.71 ) ) * vec3( 43758.5453, 22578.1459, 19642.3490 ) ); }
+// spot profile shared with LocalLights: hot centre, soft edge, faint spill
+float snowSpotProfile( float cd, float cosInner, float cosOuter ) {
+	float m = smoothstep( cosOuter, cosInner, cd );
 	return max( m * m, smoothstep( cosOuter - 0.55, cosOuter, cd ) * 0.05 );
 }
-`,
+// orbital motion under the waves: each wave's orbit shrinks as exp( -k z ) with depth
+vec3 snowSway( vec2 x0, float depth ) {
+	vec3 d = vec3( 0.0 );
+	for ( int i = 0; i < WAVE_COUNT; i ++ ) {
+		vec4 A = waveA[ i ];
+		vec4 B = waveB[ i ];
+		float theta = A.z * dot( A.xy, x0 ) - A.w * waveTime + B.z;
+		float decay = exp( - A.z * depth );
+		d.xz += A.xy * ( B.y * cos( theta ) * decay );
+		d.y += B.x * sin( theta ) * decay;
+	}
+	return d;
+}
+// the surface's height over (x, z) (one fixed-point step back from the displaced grid)
+float snowWaterHeight( vec2 xz ) {
+	vec3 n;
+	vec3 d = waveDisplacement( xz, 1.0, n );
+	d = waveDisplacement( xz - d.xz, 1.0, n );
+	return snowSeaLevel + d.y;
+}
+
+void main() {
+	float id = float( gl_InstanceID );
+	vec3 h = snowHash3( id * 0.7131 );
+	vec3 h2 = snowHash3( id * 1.3917 + 5.1 );
+	float B = snowBox;
+	// slow current + sinking, wrapped into the camera box
+	vec3 drift = vec3( 0.05, - 0.012, 0.03 ) * waveTime + ( h2 - 0.5 ) * ( waveTime * 0.02 );
+	vec3 local = ( fract( h + drift / B - snowCamPos / B ) - 0.5 ) * B;
+	vec3 p = snowCamPos + local;
+	float depth = max( snowSeaLevel - p.y, 0.0 );
+	vec3 sway = snowSway( p.xz, depth );
+	p += vec3( sway.x, sway.y * 0.5, sway.z ) * 0.8;
+
+	// camera-facing quad, 3-8 mm (a few flecks larger)
+	float size = mix( 0.003, 0.008, h2.x * h2.x ) + ( h2.y > 0.98 ? 0.008 : 0.0 );
+	vec4 mvPosition = viewMatrix * vec4( p, 1.0 );
+	// fade in the box edges and right in front of the lens (by shrinking), and above the surface
+	float dist = length( local );
+	float fade = ( 1.0 - smoothstep( B * 0.3, B * 0.5, dist ) ) * smoothstep( 0.08, 0.3, - mvPosition.z );
+	fade *= smoothstep( 0.0, 0.04, snowWaterHeight( p.xz ) - p.y );
+	// at least ~1.5 px across, dimmer the smaller it really is
+	float px = size * projectionMatrix[ 1 ][ 1 ] * snowViewHeight * 0.5 / max( - mvPosition.z, 0.05 );
+	float grow = max( 1.0, 1.5 / max( px, 1e-3 ) );
+	vDim = clamp( 1.0 / grow, 0.2, 1.0 );
+	vPx = px * grow;
+	mvPosition.xy += position.xy * size * grow * fade;
+	vUv = uv;
+	vFade = fade;
+	vDepth = depth;
+	// flashlight on the speck (per vertex): the backscatter sparkle of a diver's torch
+	vec3 tv = p - flashPos;
+	float tr2 = max( dot( tv, tv ), 1e-4 );
+	float tr = sqrt( tr2 );
+	float tspot = snowSpotProfile( dot( tv / tr, flashDir ), flashCone.x, flashCone.y );
+	vTorch = flashCol * exp( - ( snowAbsorption + snowScattering ) * tr ) * ( tspot / ( tr2 + 0.15 ) * flashOn * 0.35 );
+	// (a glint, not a blob in the high tier's bloom)
+	vTorch = min( vTorch, vec3( 4.0 ) );
+	gl_Position = projectionMatrix * mvPosition;
+	#include <fog_vertex>
+}
+`;
+
+const FRAGMENT = /* glsl */`
+#include <fog_pars_fragment>
+uniform vec3 snowSun;
+uniform vec3 snowSky;
+uniform vec3 snowAbsorption;
+uniform vec3 snowScattering;
+uniform float snowOpacity;
+varying vec2 vUv;
+varying float vFade;
+varying float vDepth;
+varying float vDim;
+varying float vPx;
+varying vec3 vTorch;
+
+void main() {
+	float r = length( vUv - 0.5 ) * 2.0;
+	// (round only where it's a few pixels across: a pixel-sized speck stays a square)
+	if ( vFade < 0.02 || ( r > 1.0 && vPx > 3.0 ) ) discard;
+	// lit by the light that reaches this depth, slightly greenish-white (organic matter)
+	vec3 light = ( snowSun * 0.1 + snowSky * 1.2 ) * exp( - ( snowAbsorption + snowScattering ) * vDepth );
+	gl_FragColor = vec4( ( light + vTorch ) * vec3( 0.9, 1.0, 0.95 ) * mix( 1.3, 0.8, min( r, 1.0 ) ) * snowOpacity * vDim, 1.0 );
+	#include <tonemapping_fragment>
+	#include <colorspace_fragment>
+	#include <fog_fragment>
+}
+`;
+
+export class MarineSnow {
+
+	constructor( { waves, tier = 'low' } ) {
+
+		const T = TIER[ tier ] || TIER.low;
+		this.box = T.box;
+
+		const plane = new THREE.PlaneGeometry( 1, 1 );
+		const geo = new THREE.InstancedBufferGeometry();
+		geo.index = plane.index;
+		geo.setAttribute( 'position', plane.getAttribute( 'position' ) );
+		geo.setAttribute( 'uv', plane.getAttribute( 'uv' ) );
+		geo.instanceCount = T.count;
+		geo.boundingSphere = new THREE.Sphere( new THREE.Vector3(), 1e5 );
+
+		this.flash = {
+			flashOn: { value: 0 }, flashPos: { value: new THREE.Vector3() }, flashDir: { value: new THREE.Vector3( 0, 0, - 1 ) },
+			flashCol: { value: new THREE.Vector3() }, flashCone: { value: new THREE.Vector2( 0.99, 0.82 ) },
+		};
+		this.uniforms = {
+			...THREE.UniformsUtils.clone( THREE.UniformsLib.fog ),
+			...waves.uniforms,
+			...this.flash,
+			snowCamPos: { value: new THREE.Vector3() },
+			snowBox: { value: T.box },
+			snowSeaLevel: G.seaLevel,
+			snowViewHeight: { value: 720 },
+			snowAbsorption: G.waterAbsorption,
+			snowScattering: G.waterScattering,
+			snowSun: G.sunColor,
+			snowSky: G.skyIrradiance,
+			snowOpacity: { value: 1 },
+		};
+		this.material = new THREE.ShaderMaterial( {
+			name: 'MarineSnow',
+			uniforms: this.uniforms,
+			vertexShader: waves.glsl + VERTEX,
+			fragmentShader: FRAGMENT,
+			fog: true,
 		} );
 
-		// orbital sway from the passing swell: the two longest cascades
-		let sway = '';
-		for ( let c = 0; c < Math.min( 2, fft.cascades ?? 2 ); c ++ ) {
+		this.mesh = new THREE.Mesh( geo, this.material );
+		this.mesh.name = 'MarineSnow';
+		this.mesh.frustumCulled = false;
+		this.mesh.matrixAutoUpdate = false;
+		this.mesh.visible = false;
 
-			// (cascade size L from the ocean uniforms, so setCascadeSizes() is followed)
-			sway += `\tsway += textureSampleLevel( oceanDisplacement, smpLinearRepeat, p.xz / ocean.sizes[ ${ c } ].x, ${ c }, 3.0 ).xyz * exp( depth * ( - TWO_PI / ocean.sizes[ ${ c } ].x ) );\n`;
+	}
+
+	// underwater: whether the camera is below the surface; viewHeight: the canvas height (px);
+	// flashlight: LocalLights' flashlight ({ on, position, dir, color, intensity, cosInner, cosOuter })
+	update( camera, underwater, viewHeight, flashlight = null ) {
+
+		this.mesh.visible = underwater;
+		if ( ! underwater ) return;
+		this.uniforms.snowCamPos.value.copy( camera.position );
+		this.uniforms.snowViewHeight.value = viewHeight;
+		const F = this.flash, fl = flashlight;
+		F.flashOn.value = fl && fl.on ? 1 : 0;
+		if ( fl && fl.on ) {
+
+			// (as LocalLights: faint against daylight)
+			const k = fl.intensity * ( 0.08 + 0.92 * THREE.MathUtils.smoothstep( G.night.value, 0, 0.6 ) );
+			F.flashPos.value.copy( fl.position );
+			F.flashDir.value.copy( fl.dir );
+			F.flashCol.value.set( fl.color.r * k, fl.color.g * k, fl.color.b * k );
+			F.flashCone.value.set( fl.cosInner, fl.cosOuter );
 
 		}
 
-		const modules = [ fft.module, flashModule ];
-		if ( query && query.module ) modules.push( query.module );
-
-		const mat = new Material( {
-			name: 'MarineSnow',
-			lit: false,
-			modules,
-			uniforms: {
-				camPos: [ 'vec3f', new Vector3() ],
-				snowOpacity: [ 'f32', 1 ],
-				box: [ 'f32', box ],
-			},
-			varyings: { vFade: 'f32', vDepth: 'f32', vTorch: 'vec3f' },
-			vertex: /* wgsl */`
-	let id = f32( v.instance );
-	let h = snowHash3( id * 0.7131 );
-	let h2 = snowHash3( id * 1.3917 + 5.1 );
-	let B = mat.box;
-	// slow current + sinking, wrapped into the camera box
-	let drift = vec3f( 0.05, - 0.012, 0.03 ) * frame.time + ( h2 - 0.5 ) * ( frame.time * 0.02 );
-	let local = ( fract( h + drift / B - mat.camPos / B ) - 0.5 ) * B;
-	var p = mat.camPos + local;
-	// orbital sway from the passing swell (decays ~exp(-k z) with depth)
-	let depth = max( frame.seaLevel - p.y, 0.0 );
-	var sway = vec3f( 0.0 );
-${ sway }	p += vec3f( sway.x, sway.y * 0.5, sway.z ) * 0.8;
-
-	// camera-facing quad, 3-8 mm (a few flecks larger)
-	let size = mix( 0.003, 0.008, h2.x * h2.x ) + select( 0.0, 0.008, h2.y > 0.98 );
-	let pv0 = frame.view * vec4f( p, 1.0 );
-	// fade in the box edges and right in front of the lens (by shrinking)
-	let dist = length( local );
-	var fade = smoothstep( B * 0.5, B * 0.3, dist ) * smoothstep( 0.08, 0.3, - pv0.z );
-${ query && query.module ? '\tfade *= smoothstep( 0.0, 0.04, waterQueryHeightAtXZ( p.xz ) - p.y );\n' : '' }	// (view-space offset: along the camera's right / up axes in world space)
-	let right = vec3f( frame.view[ 0 ][ 0 ], frame.view[ 1 ][ 0 ], frame.view[ 2 ][ 0 ] );
-	let up = vec3f( frame.view[ 0 ][ 1 ], frame.view[ 1 ][ 1 ], frame.view[ 2 ][ 1 ] );
-	let q = v.position.xy * size * fade;
-	o.vFade = fade;
-	o.vDepth = depth;
-	// flashlight on the speck (per vertex): the backscatter sparkle of a diver's torch; the
-	// view leg is attenuated by the underwater composite
-	let tv = p - snowFlash.pos;
-	let tr2 = max( dot( tv, tv ), 1e-4 );
-	let tr = sqrt( tr2 );
-	let tspot = snowSpotProfile( dot( tv / tr, snowFlash.dir ), snowFlash.cone.x, snowFlash.cone.y );
-	let sigT = frame.waterAbsorption + frame.waterScattering;
-	o.vTorch = snowFlash.col * exp( - sigT * tr ) * ( tspot / ( tr2 + 0.15 ) * snowFlash.on * 0.35 );
-	// nearly still in the world: camera-only motion vectors (no previous position)
-	v.useWorld = true;
-	v.worldPos = p + right * q.x + up * q.y;
-	v.worldNormal = - normalize( vec3f( frame.view[ 0 ][ 2 ], frame.view[ 1 ][ 2 ], frame.view[ 2 ][ 2 ] ) );
-`,
-			surface: /* wgsl */`
-	let r = length( in.uv - 0.5 ) * 2.0;
-	if ( r > 1.0 || in.vs.vFade < 0.02 ) { discard; }
-	// lit by the light that reaches this depth, slightly greenish-white (organic matter)
-	let sigT = frame.waterAbsorption + frame.waterScattering;
-	let light = ( frame.sunColor * 0.1 + frame.skyIrradiance * 1.2 ) * exp( - sigT * in.vs.vDepth );
-	s.albedo = ( light + in.vs.vTorch ) * vec3f( 0.9, 1.0, 0.95 ) * mix( 1.3, 0.8, r ) * mat.snowOpacity;
-	s.emissive = vec3f( 0.0 );
-	s.alpha = 1.0;
-`,
-		} );
-		// hash3 of the reference (sin-fract), in a tiny module of its own
-		mat.modules.push( new ShaderModule( { name: 'snowHash', code: /* wgsl */`
-fn snowHash3( n: f32 ) -> vec3f { return fract( sin( vec3f( n, n + 17.13, n + 43.71 ) ) * vec3f( 43758.5453, 22578.1459, 19642.3490 ) ); }
-` } ) );
-
-		this.material = mat;
-		this.camPos = mat.uniforms.camPos;
-		this.opacity = mat.uniforms.snowOpacity;
-
-		this.mesh = new Mesh( inst, mat );
-		this.mesh.frustumCulled = false;
-		this.mesh.castShadow = false;
-		this.mesh.layers.set( LAYERS.OPAQUE );
-		this.mesh.visible = false;
-
-		// the torch of LocalLights (once that module is ported; harmless if it isn't)
-		import( '../materials/LocalLights.js' ).then( ( m ) => {
-
-			if ( m.FLASH ) this.setFlash( m.FLASH );
-
-		} ).catch( () => {} );
-
 	}
 
-	// link the torch uniforms to LocalLights' FLASH handles ({ on, pos, dir, col, cone } with .value)
-	setFlash( flash ) {
+	dispose() {
 
-		const F = this.flashBlock.fields;
-		for ( const k of [ 'on', 'pos', 'dir', 'col', 'cone' ] ) if ( flash[ k ] && 'value' in flash[ k ] ) F[ k ] = flash[ k ];
-
-	}
-
-	update( camera, underwater ) {
-
-		this.mesh.visible = underwater;
-		if ( underwater ) this.camPos.value.copy( camera.position );
+		this.mesh.geometry.dispose();
+		this.material.dispose();
 
 	}
 
