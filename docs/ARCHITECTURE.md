@@ -62,9 +62,15 @@ Materials are three's `MeshStandardMaterial` (or `MeshPhysicalMaterial`), with G
     - the rod's state, their bobber and the line's tension;
     - their boat's pose, when it's away from its mooring or they're aboard.
   - Others are drawn 0.15 s behind the newest pose and eased between poses.
-  - Each player is one of four Rocketbox islanders (`Avatar.js`), always the same one for the same person. Each has their name over them in their colour and a dot on the minimap.
+  - Each player is one of four Rocketbox islanders (`Avatar.js`): two men and two women. Everyone picks theirs under "Your islander" in the cooler; it's saved with their progress and sent in the pose (`l`). Until someone picks, the same person always gets the same one. Each has their name over them in their colour and a dot on the minimap.
   - Their boat is a copy of yours that shares its meshes and materials. When both boats are at the dock, yours stands in for theirs.
   - Their rod, line and bobber are the rod's (`FishingRod.tackle()`).
+  - Their boat shows its lamps (below): lit as under way when they're at the helm or away from the dock, and their searchlight when the pose says it's on (`S`).
+- **Riding along:** standing by someone's boat offers "Board their boat".
+  - Aboard, you ride on their boat wherever they take it (`Player.ride()`); your pose names the boat's owner (`R`), so everyone draws you on it.
+  - Your own boat stays at its mooring, so each player always has a boat of their own. Jumping off or stepping ashore ends the ride.
+  - You hear the boat you ride in: its engine at the revs its skipper sends from the helm (`E`), and the water past the hull. On foot or in the water, you hear the nearest boat going by.
+- **The horn:** sounding it is a `'horn'` message (1 when it starts, 0 when it's let go). The others hear it from that player's boat.
   - Each device draws only the nearest few players and boats.
 - **The clock:** one time of day for everyone, kept in the shared value `'clock'` as `{ at, hour, speed }`.
   - The host sets it if there's none.
@@ -80,6 +86,19 @@ Materials are three's `MeshStandardMaterial` (or `MeshPhysicalMaterial`), with G
   - The records are chalked on a board beside Joe's stand (`RecordsBoard.js`, a canvas) and listed in the cooler.
 
 Everyone keeps their own progress and their own fish.
+
+## The boat at night
+
+`src/world/boat/BoatLamps.js` gives each boat (yours, and each copy of someone else's) the lamps a boat shows at night:
+
+- **Navigation lights:**
+  - Under way: the red sidelight to port, the green one to starboard, the white masthead light ahead and the white stern light. Each is seen only from its own arc, as at sea, so you can tell which way a boat is heading.
+  - Moored: one white anchor light at the masthead, seen all round.
+  - They're glowing points a few pixels across at any distance, all in one draw.
+- **The searchlight** (L at the helm, or the Searchlight button): a beam in the night air, its lens glaring when it points at you, and a spot in the local lights.
+  - The sea takes the local lights in its own way (`LOCAL_LIGHTS_WATER` in `WaterSurface`). Beams light a pool on the water; a lamp's light on it is mostly its glints.
+- **The horn** (hold H at the helm, the Horn button, or the left stick): Félix Blume's field recording of a cruise boat's horn in Istanbul (CC0), three blasts in one sprite (`tools/audio/build-horn.mjs`).
+  - It sounds from the wheelhouse roof for as long as it's held and fades when let go.
 
 ## Device tiers
 

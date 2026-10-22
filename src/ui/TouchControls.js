@@ -33,6 +33,7 @@ export class TouchControls {
 				<button type="button" class="touch-btn touch-rod" data-key="KeyR" hidden>Rod</button>
 				<button type="button" class="touch-btn touch-cooler" data-key="KeyI" hidden>Cooler</button>
 				<button type="button" class="touch-btn touch-torch" data-key="KeyL" hidden>Torch</button>
+				<button type="button" class="touch-btn touch-horn" data-key="Horn" hidden>Horn</button>
 			</div>`;
 		root.append( el );
 
@@ -48,6 +49,7 @@ export class TouchControls {
 			rod: el.querySelector( '.touch-rod' ),
 			cooler: el.querySelector( '.touch-cooler' ),
 			torch: el.querySelector( '.touch-torch' ),
+			horn: el.querySelector( '.touch-horn' ),
 		};
 
 		// the joystick
@@ -187,7 +189,11 @@ export class TouchControls {
 		// the flashlight: offered after dusk (or while it's on)
 		const lights = game && game.app && game.app.localLights;
 		const torchOn = !! ( lights && lights.flashlight.on );
-		setButton( this.buttons.torch, lights && ( torchOn || G.night.value > 0.35 ) ? ( torchOn ? 'Torch off' : 'Torch' ) : null );
+		// at the helm: the boat's searchlight, after dusk (or while it's on), and the horn
+		const helm = player && player.mode === 'boat', app = game && game.app;
+		if ( helm ) setButton( this.buttons.torch, app && ( app.searchlight || G.night.value > 0.35 ) ? ( app.searchlight ? 'Searchlight off' : 'Searchlight' ) : null );
+		else setButton( this.buttons.torch, lights && ( torchOn || G.night.value > 0.35 ) ? ( torchOn ? 'Torch off' : 'Torch' ) : null );
+		setButton( this.buttons.horn, helm ? 'Horn' : null );
 		const action = prompt && prompt.key === 'E' ? prompt.text.split( '   ·' )[ 0 ] : null;
 		setButton( this.buttons.action, action );
 		setButton( this.buttons.camera, player && player.mode === 'boat' ? 'Camera' : null );

@@ -9,7 +9,7 @@ and source, for All the Spaces; `tools/update-lock.mjs` writes it from these cre
 
 ## Audio: `public/audio/`
 
-42 field recordings from [Freesound](https://freesound.org), all released under
+51 field recordings from [Freesound](https://freesound.org), all released under
 [CC0 1.0](https://creativecommons.org/publicdomain/zero/1.0/). No attribution is required, but every file is
 credited with its author and source link in [`credits/audio.md`](credits/audio.md).
 

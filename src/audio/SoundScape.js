@@ -65,6 +65,7 @@ export const MIX = {
 	boatRush: - 27, // water past the hull at ~9 m/s
 	boatLap: - 34, // lapping on the hull, boat at rest
 	hullSlap: - 24, // hard slam at the helm (chop slaps while running are 6-14 dB quieter)
+	horn: - 15, // the boat's air horn, at 6 m (it carries: heard across the bay)
 	spray: - 30, // spray layer on hard slams
 	step: - 56, // footsteps: ~30 dB under the surf at the beach
 	swim: - 43, // surface stroke
@@ -420,6 +421,41 @@ export class SoundScape {
 		if ( ! p ) return;
 		const s = clamp( num( strength, 0.5 ), 0, 1 );
 		this._shotAt( 'fish_splash', 'fish', p.x, p.y, p.z, MIX.fishSplash - ( 1 - s ) * 10, 0.9 + Math.random() * 0.2 + ( 1 - s ) * 0.15, 0, 6, 1 );
+
+	}
+
+	// (Salt Life) the boat's air horn, on its wheelhouse roof at p (yours, or someone else's): a blast
+	// that lasts while it's held; hornStop( blast ) lets it go (a short fade, as the air stops)
+	hornStart( p ) {
+
+		if ( ! p ) return null;
+		return this._shotAt( 'boat_horn', 'horn', p.x, p.y, p.z, MIX.horn, 0.98 + Math.random() * 0.04, 0, 6, 0.7 );
+
+	}
+
+	// it moves with its boat
+	hornMove( blast, p ) {
+
+		const pan = blast && blast.extra && blast.extra[ 1 ];
+		if ( ! pan || ! p ) return;
+		pan.positionX.value = p.x;
+		pan.positionY.value = p.y;
+		pan.positionZ.value = p.z;
+
+	}
+
+	hornStop( blast ) {
+
+		if ( ! blast || ! this.ctx ) return;
+		const t = this.ctx.currentTime, g = blast.gain.gain;
+		g.cancelScheduledValues( t );
+		g.setValueAtTime( g.value, t );
+		g.linearRampToValueAtTime( 0, t + 0.35 );
+		try {
+
+			blast.src.stop( t + 0.4 );
+
+		} catch ( e ) { /* already stopped */ }
 
 	}
 

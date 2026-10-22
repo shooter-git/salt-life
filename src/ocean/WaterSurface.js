@@ -4,6 +4,7 @@ import { G } from '../core/Globals.js';
 import { rippleTexture } from './SeaTextures.js';
 import { WHALE_WATER_GLSL, whaleMarkUniforms } from './WhaleWater.js';
 import { SeaDetail } from './SeaDetail.js';
+import { useLocalLights, LOCAL_LIGHTS_MAX } from '../materials/LocalLights.js';
 
 // The sea: one instanced CDLOD grid that follows the camera out to the horizon. Its surface is the
 // open sea's Gerstner waves (Waves), fading out over the outer surf zone, plus Tidewater's breaking
@@ -74,6 +75,8 @@ export class WaterSurface {
 		// with a program for each; a sheet seen from one side at a time doesn't need it)
 		mat.forceSinglePass = true;
 		mat.name = 'Water';
+		// the lamps' light on the sea (their glints too, above low)
+		useLocalLights( mat, { water: true, cheap: tier === 'low' } );
 		mat.premultipliedAlpha = true;
 		mat.onBeforeCompile = ( shader ) => {
 
@@ -209,7 +212,29 @@ ${ SH ? /* glsl */`
 	vec3 waterLight = waterSunColor * ( max( waterSunDir.y, 0.0 ) * 0.22 ) + waterSky * 0.55;
 	// foam is a white surface on top: lit like the sand (the sun by its height in the sky, the sky's fill)
 	vec3 foamLight = waterSunColor * max( waterSunDir.y, 0.0 ) + waterSky * 1.2 + 0.02;
-	vec3 waterBody = mix( body * waterLight, ${ rgb( 0.93, 0.96, 0.96 ) } * foamLight, foam * 0.92 );
+	vec3 lampSum = vec3( 0.0 );
+#ifdef LOCAL_LIGHTS_WATER
+	// lamps and searchlights on the sea (LocalLights): their light scattered back up from inside the
+	// water, on the foam, and off the surface's roughness: a pool where a beam meets the sea
+	{
+		vec3 llP = - vViewPosition;
+		float llPY = dot( llWorldY.xyz, llP ) + llWorldY.w;
+		vec3 llN = normalize( ( viewMatrix * vec4( normalize( vWaterN ), 0.0 ) ).xyz ); // (the wave's face)
+		for ( int i = 0; i < ${ LOCAL_LIGHTS_MAX }; i ++ ) {
+
+			if ( float( i ) >= llInfo.x ) break;
+			vec3 L;
+			// (a beam makes a pool; a lamp's light on the water is mostly its glints)
+			vec3 lc = llIncident( i, llP, llPY, L ) * ( llDir[ i ].w > - 1.0 ? 1.0 : 0.3 );
+			float up = abs( dot( L, llN ) ); // (on the wave's face; or from below, under water)
+			waterLight += lc * ( 0.3 + 0.7 * up );
+			foamLight += lc * up;
+			lampSum += lc * up;
+
+		}
+	}
+#endif
+	vec3 waterBody = mix( body * waterLight, ${ rgb( 0.93, 0.96, 0.96 ) } * foamLight, foam * 0.92 ) + lampSum * 0.06 * ( 1.0 - foam );
 	diffuseColor.rgb = vec3( 0.0 );
 	diffuseColor.a = clamp( max( max( cover, glow * 0.6 ), foam ), 0.0, 1.0 ) * sheetEdge;
 ` )

@@ -98,10 +98,12 @@ const FISHING = {
 
 const AROUND = {
 	keyboard: [ [ k( 'W', 'A', 'S', 'D' ), 'Move, mouse to look, <kbd>Shift</kbd> to run' ], [ k( 'E' ), 'Board the boat, take the helm, talk to Joe and Marta' ],
-		[ k( 'L' ), 'Flashlight (at night)' ], [ k( 'H' ), 'This guide again' ] ],
+		[ k( 'L' ), 'Flashlight (at night). At the helm, the searchlight' ], [ k( 'H' ), 'This guide again. At the helm, hold for the horn' ] ],
 	touch: [ [ k( 'Left side' ), 'Drag to walk, from wherever your thumb lands' ], [ k( 'Right side' ), 'Drag to look around' ],
-		[ k( 'Gold button' ), 'Board the boat, take the helm, talk to Joe and Marta' ], [ k( 'Torch' ), 'Flashlight, after dusk' ] ],
-	gamepad: [ [ k( 'Left stick' ), 'Move, right stick to look' ], [ k( 'B' ), 'Board the boat, take the helm, talk to Joe and Marta' ], [ k( 'D-pad ↓' ), 'Flashlight' ] ],
+		[ k( 'Gold button' ), 'Board the boat, take the helm, talk to Joe and Marta' ], [ k( 'Torch' ), 'Flashlight, after dusk. At the helm: the searchlight' ],
+		[ k( 'Horn' ), 'At the helm, hold it to sound the horn' ] ],
+	gamepad: [ [ k( 'Left stick' ), 'Move, right stick to look' ], [ k( 'B' ), 'Board the boat, take the helm, talk to Joe and Marta' ], [ k( 'D-pad ↓' ), 'Flashlight. At the helm, the searchlight' ],
+		[ k( 'L3' ), 'At the helm, press and hold the left stick for the horn' ] ],
 };
 
 function cards( device ) {
