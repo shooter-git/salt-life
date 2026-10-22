@@ -1,6 +1,6 @@
 import { Vector3, Quaternion, Matrix4, MathUtils } from '../engine/index.js';
 import { gltfLoader } from '@allthespaces/portal/three';
-import { Avatar } from './Avatar.js';
+import { Avatar, LOOKS, lookOf } from './Avatar.js';
 import { figureStandIn } from './Figure.js';
 import { RecordsBoard } from './RecordsBoard.js';
 import { FISH, fishLengthCm } from '../game/FishTable.js';
@@ -226,6 +226,13 @@ export class Together {
 		}
 
 		this._settled = this._settled || ! first;
+		// the first time anyone else is here: where to choose how they see you (after the arrival's toast)
+		if ( came && ! this._hinted && ! LOOKS.includes( this.app.game.state.look ) ) {
+
+			this._hinted = true;
+			setTimeout( () => this.app.game.toast( 'Others can see you now. Choose your islander in the cooler', 4500 ), 3600 );
+
+		}
 		// someone new: the host says what time it is (a clock set before the session was joined stayed
 		// on this device)
 		if ( came && ! first && this.session.isHost && this._clock ) this.setClock( this.app.settings.timeOfDay, this._clock.speed );
@@ -248,17 +255,42 @@ export class Together {
 		avatar.group.visible = false;
 		app.scene.add( avatar.group );
 		app.lightUp( avatar.group );
-		this._loadLook( avatar.look ).then( ( gltf ) => {
-
-			if ( ! gltf || ! this.others.has( person.id ) ) return;
-			avatar.setLook( gltf, { shadows: app.tier === 'high' } );
-			app.lightUp( avatar.group );
-
-		} );
 		const tackle = app.game.rod.tackle();
 		app.scene.add( tackle.rod, tackle.bobber, tackle.line );
-		const o = { person, avatar, tackle, samples: [], last: - Infinity, boat: null, tag: null, shown: false, mapped: false, cur: null };
+		// (their look comes with their first pose: the stand-in figure until then)
+		const o = { person, avatar, tackle, samples: [], last: - Infinity, boat: null, tag: null, shown: false, mapped: false, cur: null, wearing: null };
 		return o;
+
+	}
+
+	// dress them as `look` (loaded once per look; the stand-in or their last look until then)
+	_wear( o, look ) {
+
+		o.wearing = look;
+		o.avatar.look = look;
+		this._loadLook( look ).then( ( gltf ) => {
+
+			if ( ! gltf || ! this.others.has( o.person.id ) || o.wearing !== look ) return;
+			o.avatar.setLook( gltf, { shadows: this.app.tier === 'high' } );
+			this.app.lightUp( o.avatar.group );
+
+		} );
+
+	}
+
+	// ---- how the others see you
+
+	get myLook() {
+
+		const chosen = this.app.game.state.look;
+		return LOOKS.includes( chosen ) ? chosen : lookOf( this.me );
+
+	}
+
+	// (the cooler's chooser) it goes with the next pose
+	setLook( look ) {
+
+		if ( LOOKS.includes( look ) ) this.app.game.state.setLook( look );
 
 	}
 
@@ -318,6 +350,9 @@ export class Together {
 
 		const o = this.others.get( from );
 		if ( ! o || ! b || ! Array.isArray( b.p ) ) return;
+		// the islander they chose (or, from a game that doesn't say, the one from their id)
+		const look = LOOKS[ b.l ] || lookOf( o.person );
+		if ( o.wearing !== look ) this._wear( o, look );
 		const now = performance.now() / 1000;
 		o.samples.push( { time: now, body: b } );
 		if ( o.samples.length > 12 ) o.samples.shift();
@@ -331,7 +366,7 @@ export class Together {
 		const app = this.app, p = app.player, rod = app.game.rod, boat = app.boatCtl;
 		const m = MODES[ p.mode ] || 'w';
 		const v = p.mode === 'deck' ? Math.hypot( p.deckVel.x, p.deckVel.z ) : Math.hypot( p.velocity.x, p.velocity.z );
-		const body = { m, p: [ r2( p.position.x ), r2( p.position.y ), r2( p.position.z ) ], a: r3( p.yaw ), v: r2( v ) };
+		const body = { m, p: [ r2( p.position.x ), r2( p.position.y ), r2( p.position.z ) ], a: r3( p.yaw ), v: r2( v ), l: LOOKS.indexOf( this.myLook ) };
 		if ( m === 'h' ) body.a = r3( boat.getYaw() + Math.PI );
 		const r = rod.equipped || rod.state !== 'stowed' ? ROD[ rod.state ] ?? 1 : 0;
 		if ( r ) {
