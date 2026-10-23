@@ -100,7 +100,7 @@ const CSS = /* css */`
 .gm-look b { font-size: var(--tw-fs-md); font-weight: 600; color: var(--tw-ink); }
 .gm-look.is-on { background: rgba(var(--tw-aqua-rgb), 0.14); border-color: var(--tw-aqua); box-shadow: inset 0 0 0 1px var(--tw-aqua); }
 .gm-look.is-on b::after { content: ' ✓'; color: var(--tw-aqua); }
-/* short screens (phones on their side): the cooler's title and summary on one line, less padding */
+/* short screens (phones on their side): a panel's title and what's under it on one line, less padding */
 @media (max-height: 500px) {
 	.gm-panel { padding: var(--tw-3) var(--tw-4); }
 	.gm-head { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: var(--tw-3); margin-bottom: var(--tw-2); }
@@ -134,8 +134,8 @@ html:has(.gm-panel.is-open) .hud-hint { visibility: hidden; }
 .gm-shop-row { display: grid; grid-template-columns: 1fr auto; gap: var(--tw-3); align-items: center; padding: var(--tw-2) 0; border-bottom: 1px solid var(--tw-line); }
 .gm-shop-row small { display: block; color: var(--tw-ink-3); font-size: var(--tw-fs-sm); margin-top: 2px; }
 .gm-shop-row .gm-have { color: var(--tw-ink-3); font-size: var(--tw-fs-sm); }
-/* (Salt Life) the day's wanted list at Joe's and Marta's: a small block over the list, and a tag on
-   the fish it wants */
+/* (Salt Life) the day's wanted list at Joe's and Marta's: a small block at the top of the list, and a
+   tag on the fish it wants */
 .gm-item-name small.is-wanted { color: var(--tw-sun); }
 .gm-wanted { margin: 0 0 var(--tw-2); padding: var(--tw-1) var(--tw-3); border-radius: var(--tw-r-md); background: rgba(var(--tw-sun-rgb), 0.07); border: 1px solid rgba(var(--tw-sun-rgb), 0.22); }
 .gm-wanted-h { display: block; margin: var(--tw-1) 0 0; color: var(--tw-sun); font-size: var(--tw-fs-xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
@@ -685,6 +685,7 @@ export class GameHUD {
 
 		this.standOpen = true;
 		this.vendor = vendor;
+		this._standDrawn = null; // (opened again: its list from the top)
 		this.toggleInventory( false );
 		// (Salt Life) Joe pays your share of a filled week's order when he's in
 		if ( vendor.kind !== 'shop' && this.game.collectWeek ) this.game.collectWeek();
@@ -771,16 +772,30 @@ export class GameHUD {
 			: g.paidNote ? `The restaurant's paid for the week's order. Here's your share: $${ g.paidNote }.`
 			: this.closingSoon( v ) ? `Last orders: I shut at ${ this.at( v.hours[ 1 ] ) }.`
 			: s.inventory.length ? v.greeting || 'Let\'s see what you caught.' : v.idle || 'Come back when you\'ve got fish.';
-		this.stand.innerHTML = `
-			<h2>${ box ? 'Joe\'s night box' : v.name }</h2>
-			<p class="gm-sub">${ sub }</p>
-			${ this.wantedBlock( 'joe', 'Wanted today' ) }
-			${ this.weekBlock( box ) }
-			<div class="gm-list">${ rows || '<div class="gm-empty">Your cooler is empty.</div>' }</div>
-			<div class="gm-foot"><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button><button class="gm-btn" data-all ${ s.inventory.length ? '' : 'disabled' }>${ box ? 'Drop all' : 'Sell all' } · $${ all.total }</button></div>`;
+		// the wanted list and the week's order scroll with the fish, under the title and over the
+		// buttons: on a short screen they'd leave no room for either. On a phone on its side with
+		// room, they're beside the fish (gm-split, game-ui.css)
+		const orders = this.wantedBlock( 'joe', 'Wanted today' ) + this.weekBlock( box );
+		this.drawStand( v, `
+			<div class="gm-head"><h2>${ box ? 'Joe\'s night box' : v.name }</h2>
+			<p class="gm-sub">${ sub }</p></div>
+			<div class="gm-list${ orders ? ' gm-split' : '' }"><div class="gm-orders">${ orders }</div><div class="gm-rows">${ rows || '<div class="gm-empty">Your cooler is empty.</div>' }</div></div>
+			<div class="gm-foot"><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button><button class="gm-btn" data-all ${ s.inventory.length ? '' : 'disabled' }>${ box ? 'Drop all' : 'Sell all' } · $${ all.total }</button></div>` );
 		this.stand.querySelector( '[data-close]' ).onclick = () => this.closeStand();
 		this.stand.querySelector( '[data-all]' ).onclick = () => this.game.sellAll();
 		for ( const b of this.stand.querySelectorAll( '[data-sell]' ) ) b.onclick = () => this.game.sell( [ Number( b.dataset.sell ) ] );
+
+	}
+
+	// a trader's panel drawn again, its list (or Joe's two columns) keeping its place for the same
+	// trader (a fish sold, a thing bought)
+	drawStand( v, html ) {
+
+		const scrollers = () => this.stand.querySelectorAll( '.gm-list, .gm-orders, .gm-rows' );
+		const was = this._standDrawn === v ? [ ...scrollers() ].map( ( e ) => e.scrollTop ) : [];
+		this._standDrawn = v;
+		this.stand.innerHTML = html;
+		scrollers().forEach( ( e, i ) => e.scrollTop = was[ i ] || 0 );
 
 	}
 
@@ -802,11 +817,11 @@ GameHUD.prototype.renderShop = function () {
 	// (Salt Life) gone home: the diesel is on the honesty box, the gear waits for her
 	if ( v.open === false ) {
 
-		this.stand.innerHTML = `
-			<h2>Marta's honesty box</h2>
-			<p class="gm-sub">Marta's back at ${ this.at( v.hours[ 0 ] ) }. The diesel's left out: pay into the box. You have $${ s.money.toLocaleString() }</p>
+		this.drawStand( v, `
+			<div class="gm-head"><h2>Marta's honesty box</h2>
+			<p class="gm-sub">Marta's back at ${ this.at( v.hours[ 0 ] ) }. The diesel's left out: pay into the box. You have $${ s.money.toLocaleString() }</p></div>
 			<div class="gm-list">${ fuelRow }</div>
-			<div class="gm-foot"><span class="gm-sub">Gear when she's back</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>`;
+			<div class="gm-foot"><span class="gm-sub">Gear when she's back</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>` );
 		bindFuel();
 		return;
 
@@ -827,12 +842,12 @@ GameHUD.prototype.renderShop = function () {
 
 	} ).join( '' );
 	const greeting = this.closingSoon( v ) ? `I'm shutting at ${ this.at( v.hours[ 1 ] ) }` : v.greeting;
-	this.stand.innerHTML = `
-		<h2>${ v.name }</h2>
-		<p class="gm-sub">${ greeting } · You have $${ s.money.toLocaleString() }</p>
-		${ this.wantedBlock( 'marta', 'Marta\'s after' ) }
-		<div class="gm-list">${ baitRows }${ fuelRow }${ rows }</div>
-		<div class="gm-foot"><span class="gm-sub">Upgrades take effect at once</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>`;
+	// (her wanted list scrolls with the rest, as Joe's does)
+	this.drawStand( v, `
+		<div class="gm-head"><h2>${ v.name }</h2>
+		<p class="gm-sub">${ greeting } · You have $${ s.money.toLocaleString() }</p></div>
+		<div class="gm-list">${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ baitRows }${ fuelRow }${ rows }</div>
+		<div class="gm-foot"><span class="gm-sub">Upgrades take effect at once</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>` );
 	bindFuel();
 	for ( const b of this.stand.querySelectorAll( '[data-buy]' ) ) b.onclick = () => this.game.buy( b.dataset.buy );
 	for ( const b of this.stand.querySelectorAll( '[data-sell]' ) ) b.onclick = () => this.game.sell( [ Number( b.dataset.sell ) ] );
