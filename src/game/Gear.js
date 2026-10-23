@@ -21,14 +21,15 @@ export const UPGRADES = {
 		{ cost: 75, label: '7 ft graphite rod', castM: 32 },
 		{ cost: 260, label: '9 ft surf rod', castM: 45 },
 	] },
-	// (Salt Life) the speargun, for a fish you've swum down to: a band gun, its barrel (gunCm) and
-	// rubber bands (bands), the steel shaft it fires (shaftM long, at spearV m/s), the reach it kills
-	// at (spearM), the shooting line between them (lineM), and how hard a big fish can pull on the line
-	// before the shaft tears out of it (spearHold, kg; a reel pays line out instead)
+	// (Salt Life) the speargun, for a fish you've swum down to: a band gun (gunStyle: an aluminium tube,
+	// a teak stock, a railgun), its barrel from the grip to the muzzle (gunCm) and rubber bands
+	// (bands), the steel shaft it fires (shaftM long, at spearV m/s), the reach it kills at (spearM),
+	// the shooting line (lineM), and how hard a big fish can pull before the shaft tears out of it
+	// (spearHold, kg; with a reel the line pays out instead of the fish tearing free)
 	speargun: { name: 'Speargun', levels: [
-		{ cost: 0, label: 'Hand-me-down 75 cm speargun', gunCm: 75, bands: 1, shaftM: 1.15, spearV: 16, spearM: 3, lineM: 4.5, spearHold: 7, spearReel: false },
-		{ cost: 180, label: '100 cm speargun, two bands', gunCm: 100, bands: 2, shaftM: 1.4, spearV: 20, spearM: 4, lineM: 6, spearHold: 11, spearReel: false },
-		{ cost: 480, label: '120 cm railgun with a reel', gunCm: 120, bands: 2, shaftM: 1.6, spearV: 23, spearM: 5, lineM: 7.5, spearHold: 16, spearReel: true },
+		{ cost: 0, label: 'Hand-me-down 75 cm speargun', gunStyle: 'tube', gunCm: 75, bands: 1, shaftM: 1.15, spearV: 16, spearM: 3, lineM: 4.5, spearHold: 7, spearReel: false },
+		{ cost: 180, label: '100 cm teak speargun, two bands', gunStyle: 'teak', gunCm: 100, bands: 2, shaftM: 1.4, spearV: 20, spearM: 4, lineM: 6, spearHold: 11, spearReel: false },
+		{ cost: 480, label: '120 cm railgun with a reel', gunStyle: 'rail', gunCm: 120, bands: 2, shaftM: 1.6, spearV: 23, spearM: 5, lineM: 7.5, spearHold: 16, spearReel: true },
 	] },
 	// boat
 	hold: { name: 'Fish hold', levels: [

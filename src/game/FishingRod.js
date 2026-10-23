@@ -753,7 +753,7 @@ function buildBobberGeometry() {
 
 }
 
-function buildLineGeometry( n ) {
+export function buildLineGeometry( n ) {
 
 	const pos = new Float32Array( ( n + 1 ) * 2 * 3 );
 	const line = new Float32Array( ( n + 1 ) * 2 * 2 );

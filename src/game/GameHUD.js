@@ -111,6 +111,22 @@ html:has(.gm-panel.is-open) .hud-hint { visibility: hidden; }
 .gm-fuel-bar > span { background: var(--tw-sun); }
 .gm-fuel.is-low .gm-fuel-bar > span { background: var(--tw-coral); }
 .gm-sonar-dots { letter-spacing: 1px; color: var(--tw-aqua); }
+/* (Salt Life) the held breath under water; what's under the speargun's sights; the edges of sight
+   closing in as the breath runs out (dark when you black out) */
+.gm-breath-bar > span { background: var(--tw-aqua); }
+.gm-breath.is-low .gm-breath-bar > span { background: var(--tw-coral); }
+.gm-breath.is-low { animation: gm-breath-pulse 0.9s ease-in-out infinite; }
+@keyframes gm-breath-pulse { 50% { opacity: 0.55; } }
+.gm-aim { position: absolute; left: 50%; top: calc(50% + 14px); transform: translateX(-50%); padding: 2px var(--tw-2); border-radius: 999px;
+	font: 600 var(--tw-fs-sm) var(--tw-font); color: var(--tw-ink); background: rgba(6, 16, 24, 0.5); white-space: nowrap; pointer-events: none;
+	opacity: 0; transition: opacity var(--tw-fast); }
+.gm-aim.is-on { opacity: 1; }
+.gm-aim small { font-weight: 500; color: var(--tw-ink-2); margin-left: 6px; }
+.gm-aim.is-far small { color: var(--tw-ink-3); }
+.gm-aim.is-no { color: var(--tw-coral); }
+.gm-aim.is-small { color: var(--tw-sun); }
+.gm-veil { position: absolute; inset: 0; pointer-events: none; opacity: 0;
+	background: radial-gradient(closest-side at 50% 50%, rgba(1, 6, 10, 0) 35%, rgba(1, 6, 10, 0.94) 125%); }
 .gm-shop-row { display: grid; grid-template-columns: 1fr auto; gap: var(--tw-3); align-items: center; padding: var(--tw-2) 0; border-bottom: 1px solid var(--tw-line); }
 .gm-shop-row small { display: block; color: var(--tw-ink-3); font-size: var(--tw-fs-sm); margin-top: 2px; }
 .gm-shop-row .gm-have { color: var(--tw-ink-3); font-size: var(--tw-fs-sm); }
@@ -231,7 +247,9 @@ export class GameHUD {
 		style.textContent = CSS;
 		document.head.append( style );
 
-		this.purse = h( 'div', 'gm-purse tw-glass', `<span class="gm-money">$0</span><span class="gm-cooler"><span class="gm-cooler-label">Cooler</span><span class="gm-cooler-bar"><span></span></span><span class="gm-cooler-kg">0 / 30 kg</span></span><span class="gm-gauge gm-fuel"><span>Fuel</span><span class="gm-cooler-bar gm-fuel-bar"><span></span></span><b class="gm-fuel-l">40 L</b></span><span class="gm-gauge gm-sonar"><span>Sonar</span><b class="gm-sonar-d">0 m</b><span class="gm-sonar-dots"></span></span>` );
+		this.purse = h( 'div', 'gm-purse tw-glass', `<span class="gm-money">$0</span><span class="gm-cooler"><span class="gm-cooler-label">Cooler</span><span class="gm-cooler-bar"><span></span></span><span class="gm-cooler-kg">0 / 30 kg</span></span><span class="gm-gauge gm-fuel"><span>Fuel</span><span class="gm-cooler-bar gm-fuel-bar"><span></span></span><b class="gm-fuel-l">40 L</b></span><span class="gm-gauge gm-sonar"><span>Sonar</span><b class="gm-sonar-d">0 m</b><span class="gm-sonar-dots"></span></span><span class="gm-gauge gm-breath"><span>Breath</span><span class="gm-cooler-bar gm-breath-bar"><span></span></span></span>` );
+		this.breathEl = this.purse.querySelector( '.gm-breath' );
+		this.breathBar = this.purse.querySelector( '.gm-breath-bar > span' );
 		this.fuelEl = this.purse.querySelector( '.gm-fuel' );
 		this.fuelBar = this.purse.querySelector( '.gm-fuel-bar > span' );
 		this.fuelL = this.purse.querySelector( '.gm-fuel-l' );
@@ -258,6 +276,8 @@ export class GameHUD {
 		this.cast = h( 'div', 'gm-cast', '<span></span>' );
 		this.castBar = this.cast.firstChild;
 		this.dot = h( 'div', 'gm-dot' );
+		this.aimTag = h( 'div', 'gm-aim' );
+		this.veil = h( 'div', 'gm-veil' );
 		this.catchScrim = h( 'div', 'gm-catch-scrim' );
 		this.catchCard = h( 'div', 'gm-catch tw-glass' );
 		this.catchOpen = false;
@@ -268,7 +288,7 @@ export class GameHUD {
 
 		} );
 		const hud = ui.hud || ui.root;
-		hud.append( this.catchScrim, this.purse, this.fight, this.bite, this.cast, this.dot, this.catchCard );
+		hud.append( this.veil, this.catchScrim, this.purse, this.fight, this.bite, this.cast, this.dot, this.aimTag, this.catchCard );
 		// (Salt Life) on touch screens the minimap, the tips and the fight panel line up under the purse,
 		// which wraps on narrow screens (game-ui.css): where it ends, and how tall the fight panel is (and
 		// where the purse starts, for the toasts in landscape: style.css)
@@ -336,7 +356,9 @@ export class GameHUD {
 	}
 
 	// per frame
-	update( { fight, casting, power, bite, aiming, fuel = null, sonar = null } ) {
+	// (Salt Life) aim: what's under the speargun's sights ({ label, cm, rule, far }); breath: the swimmer's
+	// ({ s, max, blackout }) while it matters
+	update( { fight, casting, power, bite, aiming, fuel = null, sonar = null, aim = null, breath = null } ) {
 
 		// boat instruments in the purse: fuel while aboard, the fish finder when fitted
 		this.fuelEl.classList.toggle( 'is-on', !! fuel );
@@ -368,7 +390,7 @@ export class GameHUD {
 			this.fBand.style.width = `${ ( fight.band[ 1 ] - fight.band[ 0 ] ) / 1.05 * 100 }%`;
 			this.fStam.style.width = `${ fight.stamina * 100 }%`;
 			this.fDist.textContent = `${ fight.distance.toFixed( 1 ) } m`;
-			let call = 'Reel in', cls = '';
+			let call = fight.spear ? 'Pull it in' : 'Reel in', cls = '';
 			if ( fight.tension > 0.88 ) { call = 'Ease off!'; cls = 'is-warn'; }
 			else if ( fight.surge > 0.55 ) { call = 'It\'s running!'; cls = 'is-warn'; }
 			else if ( fight.tension < 0.15 ) { call = 'Slack line!'; cls = 'is-warn'; }
@@ -383,10 +405,45 @@ export class GameHUD {
 		if ( casting ) this.castBar.style.width = `${ power * 100 }%`;
 		this.dot.classList.toggle( 'is-on', !! aiming && ! this.invOpen && ! this.standOpen );
 
+		// (Salt Life) the speargun's sights: the fish's name and size, and whether it may be taken
+		const tag = aim && ! this.invOpen && ! this.standOpen && ! this.catchOpen;
+		this.aimTag.classList.toggle( 'is-on', !! tag );
+		if ( tag ) {
+
+			const why = { protected: 'protected', notTarget: 'not a target', small: `${ aim.cm } cm · too small` }[ aim.rule ];
+			const html = `${ escape( aim.label ) }<small>${ why || ( aim.far ? `${ aim.cm } cm · get closer` : `${ aim.cm } cm` ) }</small>`;
+			if ( html !== this._aimHtml ) {
+
+				this._aimHtml = html;
+				this.aimTag.innerHTML = html;
+
+			}
+
+			this.aimTag.className = 'gm-aim is-on' + ( aim.rule === 'small' ? ' is-small' : aim.rule !== 'ok' ? ' is-no' : aim.far ? ' is-far' : '' );
+
+		}
+
+		// the breath: its gauge, and the edges of sight closing in as it runs out
+		this.breathEl.classList.toggle( 'is-on', !! breath );
+		let veil = 0;
+		if ( breath ) {
+
+			const f = breath.s / breath.max;
+			this.breathBar.style.width = `${ f * 100 }%`;
+			this.breathEl.classList.toggle( 'is-low', f < 0.25 );
+			veil = breath.blackout === 1 ? 1 : Math.max( 0, 1 - f / 0.22 ) * 0.85;
+
+		}
+
+		this._veil = ( this._veil || 0 ) + ( veil - ( this._veil || 0 ) ) * 0.1;
+		const op = this._veil < 0.01 ? '0' : this._veil.toFixed( 2 );
+		if ( this.veil.style.opacity !== op ) this.veil.style.opacity = op;
+
 	}
 
 	// ---- catch card
-	// info: GameState.lastCatch ({ species, kg, cm, value, newSpecies, record, prevBestKg, prevBestCm, kept })
+	// info: GameState.lastCatch ({ species, kg, cm, value, newSpecies, record, prevBestKg, prevBestCm, kept,
+	// released, method })
 	showCatch( info, ms = 9000 ) {
 
 		const f = FISH[ info.species ];
@@ -394,9 +451,12 @@ export class GameHUD {
 		const isle = info.islandHeld;
 		const badge = info.islandRecord ? '<span class="gm-badge is-record">★ Island record</span>'
 			: info.record ? '<span class="gm-badge is-record">★ New record</span>'
-			: info.newSpecies ? '<span class="gm-badge is-new">New species</span>' : '<span class="gm-badge is-plain">Catch</span>';
+			: info.newSpecies ? '<span class="gm-badge is-new">New species</span>' : `<span class="gm-badge is-plain">${ info.method === 'spear' ? 'Speared' : 'Catch' }</span>`;
 		let note;
-		if ( ! info.kept ) note = `<div class="gm-catch-note is-warn">No room in the ${ this.game.state.upgrades.hold > 0 ? 'hold' : 'cooler' } · you let it go</div>`;
+		// (Salt Life: a protected fish is measured and let go; the lionfish's bounty)
+		if ( info.released ) note = `<div class="gm-catch-note">Protected: measured and let go alive${ info.islandRecord ? '. It still goes on the board at the fish stand' : '' }.</div>`;
+		else if ( ! info.kept ) note = `<div class="gm-catch-note is-warn">No room in the ${ this.game.state.upgrades.hold > 0 ? 'hold' : 'cooler' } · you let it go</div>`;
+		else if ( f.bounty && ! info.islandRecord && ! info.record ) note = `<div class="gm-catch-note">An invader on the reef: Joe pays $${ f.bounty } a fish on top.</div>`;
 		else if ( info.islandRecord ) note = `<div class="gm-catch-note">The heaviest anyone here has landed${ isle ? `. It beats ${ escape( isle.who || 'someone' ) }'s <b>${ isle.kg.toFixed( 2 ) } kg</b>` : '' }. It goes on the board at the fish stand.</div>`;
 		else if ( info.record ) note = `<div class="gm-catch-note">Previous best <b>${ info.prevBestKg.toFixed( 2 ) } kg</b> · ${ info.prevBestCm } cm. Beaten by ${ ( info.kg - info.prevBestKg ).toFixed( 2 ) } kg.</div>`;
 		else if ( info.newSpecies ) note = '<div class="gm-catch-note">First one in your fish log.</div>';
@@ -423,7 +483,7 @@ export class GameHUD {
 				<div class="gm-catch-stats">
 					<div class="gm-stat"><span>Length</span><b>${ info.cm }<small>cm</small></b><i>${ inch.toFixed( 1 ) } in</i></div>
 					<div class="gm-stat"><span>Weight</span><b>${ info.kg < 1 ? info.kg.toFixed( 2 ) : info.kg.toFixed( 1 ) }<small>kg</small></b><i>${ lb.toFixed( 1 ) } lb</i></div>
-					<div class="gm-stat is-value"><span>Value</span><b>$${ info.value }</b><i>${ info.kept ? 'in the cooler' : 'let go' }</i></div>
+					<div class="gm-stat is-value"><span>Value</span><b>${ info.released ? '—' : `$${ info.value }` }</b><i>${ info.released ? 'released' : info.kept ? 'in the cooler' : 'let go' }</i></div>
 				</div>
 				${ note }
 				<div class="gm-catch-foot">${ { touch: 'Tap to continue', gamepad: '<kbd>RT</kbd> or <kbd>B</kbd> to continue' }[ this.device ] || '<kbd>Click</kbd> or <kbd>E</kbd> to continue' }<span class="gm-catch-timer"><span></span></span></div>

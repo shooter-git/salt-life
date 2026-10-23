@@ -374,6 +374,7 @@ export class App {
 			this._late = [ named( 'Rocks' ), named( 'Village' ), named( 'FishStand', 'Chandlery', 'StallFish', 'Vendor' ), named( 'LobsterBoat' ) ];
 			for ( const group of this._late ) for ( const o of group ) o.visible = false;
 			this.game.rod.holdBack = true;
+			this.game.gun.holdBack = true; // (and the speargun, its bands, shaft and line)
 			// the fish in the swimming fish's skin (the village's and the stall's: two big shaders, the
 			// skin's and the fins') wait out of the scene, compiled after the start too
 			this._heldFish = [ ...( this.village.fish || [] ), this.game.display.stallMesh ]
@@ -771,6 +772,22 @@ export class App {
 			}
 
 			rod.holdBack = false;
+
+		}
+
+		const gun = this.game.gun;
+		if ( gun.holdBack ) {
+
+			for ( const m of [ gun.gunMesh, gun.bandMesh, gun.shaftMesh, gun.lineMesh ] ) {
+
+				const was = m.visible;
+				m.visible = true;
+				await r.compileAsync( m, this.camera, this.scene );
+				m.visible = was;
+
+			}
+
+			gun.holdBack = false;
 
 		}
 

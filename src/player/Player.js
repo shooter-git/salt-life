@@ -11,6 +11,11 @@ const HEIGHT = 1.75;
 // water depth (mean level over the feet) where you start swimming / find your feet again
 const SWIM_DEPTH = 1.35;
 const STAND_DEPTH = 1.1;
+// (Salt Life) a held breath (s, finning at an easy pace: faster kicking hard, slower keeping still)
+// and how long it takes to get it all back at the surface (s)
+export const BREATH = 50;
+const BREATH_BACK = 10;
+const GASP = 3; // s at the surface after a blackout before you can dive again
 
 const _v = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
@@ -28,7 +33,9 @@ const HELM_REACH = 0.75; // m from the helm seat to take the wheel
 
 // First-person walker / swimmer / boat captain.
 //   walk : capsule on terrain + walkable colliders, wading slows you down
-//   swim : floats with the head at the surface; look down + W (or C) to dive, Space to rise
+//   swim : floats with the head at the surface; look down + W (or C) to dive, Space to rise. (Salt
+//          Life) Under water you hold your breath (breath); out of it you black out and float up.
+//          With the speargun out (stalk) you fin slowly along, kicking hard with Shift
 //   deck : aboard, walking in the boat's frame (it moves and rocks under you); E at the helm
 //          takes the wheel, E near a pier / the beach steps ashore
 //   boat : at the helm, driving; V toggles helm (1st person) / chase (3rd person) camera, E stands up
@@ -68,6 +75,13 @@ export class Player {
 		this.camOffV = 0;
 		this._camY = null;
 		this.floating = true; // swimming at the surface (riding the waves) vs. free under water
+		this.under = false; // (Salt Life) the head under water
+		this.breath = BREATH; // s of breath left
+		this.breathMax = BREATH;
+		this.breathPaused = false; // (the game: while a catch card is up, the world waits)
+		this.blackout = 0; // 1 while blacked out and floating up, then the gasp at the surface (s)
+		this.blackouts = 0; // how many times (the game notices a new one)
+		this.stalk = false; // set by the game: the speargun is out (a slow, quiet pace under water)
 		this.slot = query.allocate( 'player', 1 );
 		this.prompt = null;
 		this.surface = 'sand';
@@ -220,6 +234,7 @@ export class Player {
 	updateWalk( dt ) {
 
 		const inp = this.input;
+		this.breathe( dt, false, false );
 		_fwd.set( - Math.sin( this.yaw ), 0, - Math.cos( this.yaw ) );
 		_right.set( - _fwd.z, 0, _fwd.x );
 		const wish = new THREE.Vector3();
@@ -335,9 +350,16 @@ export class Player {
 		const atSurface = this.floating && p.y > surfaceY - 0.45;
 		// at the surface W along a level view keeps you on top; looking down dives
 		if ( atSurface && wish.y > - 0.25 && ! inp.down( 'KeyC' ) ) wish.y = Math.max( wish.y, 0 );
+		// (Salt Life) blacked out: limp, floating up to the surface; then a few breaths before diving
+		if ( this.blackout === 1 ) wish.set( 0, 1, 0 );
+		else if ( this.blackout > 0 ) wish.y = Math.max( wish.y, 0 );
 
-		const sprint = inp.down( 'ShiftLeft' ) || inp.down( 'ShiftRight' );
-		const speed = sprint ? 2.5 : 1.5;
+		const sprint = ( inp.down( 'ShiftLeft' ) || inp.down( 'ShiftRight' ) ) && this.blackout !== 1;
+		// (Salt Life) hunting with the speargun: a slow, quiet glide along (fish notice a fast diver
+		// sooner: world/Fish.js), still brisk going down or coming up
+		const stalking = this.stalk && ! this.floating;
+		const level = wish.lengthSq() > 1e-4 ? Math.abs( wish.y ) / wish.length() : 0;
+		const speed = this.blackout === 1 ? 0.9 : sprint ? 2.5 : stalking ? 0.7 + 0.8 * Math.min( 1, level * 1.5 ) : 1.5;
 		const k = 1 - Math.exp( - dt * 3.0 );
 		this.velocity.lerp( wish.multiplyScalar( speed ), k );
 
@@ -345,7 +367,7 @@ export class Player {
 		// they swim to (neutral buoyancy, nothing pulls them back up) until they swim up to the
 		// surface again.
 		const eyeTarget = surfaceY - SWIM_EYE + 0.1; // eyes ~10 cm above the water; waves still wash over
-		const diving = inp.down( 'KeyC' ) || ( inp.down( 'KeyW' ) && this.pitch < - 0.35 ) || wish.y < - 0.1;
+		const diving = this.blackout === 0 && ( inp.down( 'KeyC' ) || ( inp.down( 'KeyW' ) && this.pitch < - 0.35 ) || wish.y < - 0.1 );
 		if ( diving ) this.floating = false;
 		else if ( p.y > eyeTarget - 0.15 ) this.floating = true;
 		if ( this.floating ) {
@@ -379,6 +401,7 @@ export class Player {
 		}
 
 		this.wasUnder = under;
+		this.breathe( dt, under, sprint );
 
 		// shallow enough to stand -> walk (update() eases the view up to standing height). The mean
 		// level decides, so a passing wave doesn't flip you between swimming and standing.
@@ -424,6 +447,36 @@ export class Player {
 				}
 
 			}
+
+		}
+
+	}
+
+	// (Salt Life) the held breath: it runs down with the head under water (faster kicking hard, slower
+	// keeping still) and comes back at the surface. Out of it: a blackout (the swimmer floats up), then
+	// a few breaths at the surface before the next dive
+	breathe( dt, under, sprint ) {
+
+		this.under = under;
+		if ( under ) {
+
+			if ( this.breathPaused ) return;
+			const rate = sprint ? 1.8 : this.velocity.lengthSq() < 0.09 ? 0.7 : 1;
+			this.breath = Math.max( 0, this.breath - dt * rate );
+			if ( this.breath === 0 && this.blackout === 0 ) {
+
+				this.blackout = 1;
+				this.blackouts ++;
+				this.floating = false;
+
+			}
+
+		} else {
+
+			this.breath = Math.min( BREATH, this.breath + dt * BREATH / BREATH_BACK );
+			if ( this.blackout === 1 ) this.blackout = 1 + GASP;
+			else if ( this.blackout > 1 ) this.blackout = Math.max( 0, this.blackout - dt ) || 0;
+			if ( this.blackout > 0 && this.blackout <= 1 ) this.blackout = 0;
 
 		}
 
@@ -626,6 +679,7 @@ export class Player {
 
 		const inp = this.input;
 		const b = this.boat;
+		this.breathe( dt, false, false );
 		const L = b.model.lines;
 		const look = inp.consumeLook();
 		this.deckYaw -= look.x * 0.0022;
@@ -768,6 +822,7 @@ export class Player {
 
 		const inp = this.input;
 		const b = this.boat;
+		this.breathe( dt, false, false );
 		const look = inp.consumeLook();
 		const wheel = inp.consumeWheel();
 

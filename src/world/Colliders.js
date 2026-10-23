@@ -119,6 +119,33 @@ export class Colliders {
 
 	}
 
+	// (Salt Life) The segment a -> b against the solid boxes and the cylinders (the pier's piles): the
+	// share of the way along it where it first meets one (0 .. 1), or Infinity. For the speargun's shaft.
+	segmentHit( a, b ) {
+
+		const d = this._v.subVectors( b, a );
+		const len = d.length();
+		if ( len < 1e-6 ) return Infinity;
+		d.divideScalar( len );
+		let best = this.raycast( a, d, len );
+		for ( const c of this.cylinders ) {
+
+			const ox = a.x - c.x, oz = a.z - c.z;
+			const A = d.x * d.x + d.z * d.z, B = 2 * ( ox * d.x + oz * d.z ), C = ox * ox + oz * oz - c.radius * c.radius;
+			if ( A < 1e-9 ) continue;
+			const disc = B * B - 4 * A * C;
+			if ( disc < 0 ) continue;
+			const t = C <= 0 ? 0 : ( - B - Math.sqrt( disc ) ) / ( 2 * A );
+			if ( t < 0 || t >= best ) continue;
+			const y = a.y + d.y * t;
+			if ( y >= c.yMin && y <= c.yMax ) best = t;
+
+		}
+
+		return best < len ? best / len : Infinity;
+
+	}
+
 	// Segment/ray against boxes (XZ-plane rotated) for camera occlusion; returns distance or Infinity.
 	raycast( origin, dir, maxDist ) {
 
