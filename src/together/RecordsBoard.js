@@ -3,6 +3,7 @@ import { prepare, mergePrepared, box, mat4 } from '../world/boat/GeoKit.js';
 import { createPropMaterial, PAT } from '../game/GameMaterials.js';
 import { STAND } from '../game/FishStand.js';
 import { FISH } from '../game/FishTable.js';
+import { pounds } from '../game/Units.js';
 
 // (Salt Life) The island's records, chalked on an A-frame board beside Joe's stand (across the
 // counter from his price board): each species' heaviest fish anyone in the group has landed, its
@@ -106,7 +107,7 @@ export class RecordsBoard {
 			g.fillText( FISH[ k ].name, 28, y, 320 );
 			g.textAlign = 'right';
 			g.fillStyle = '#f5d98a';
-			g.fillText( `${ r.kg < 10 ? r.kg.toFixed( 1 ) : Math.round( r.kg ) } kg`, W - 28, y );
+			g.fillText( `${ pounds( r.kg ) } lb`, W - 28, y );
 			g.textAlign = 'left';
 			g.font = `28px ${ font }`;
 			g.fillStyle = 'rgba(242, 239, 228, 0.7)';

@@ -10,6 +10,7 @@ import { gunModels, setBands } from '../game/Speargun.js';
 import { gearStats, defaultUpgrades } from '../game/Gear.js';
 import { DAY_RATE, REST, clockAt, restTo } from '../game/IslandClock.js';
 import { weekOrder, weekNumber, tallyFor, deliver, delivered } from '../game/WeekOrder.js';
+import { lb } from '../game/Units.js';
 import { WORLD } from '../world/WorldLayout.js';
 
 // (Salt Life) Playing together: whoever else is on the island (portal.session, All the Spaces), drawn
@@ -320,8 +321,7 @@ export class Together {
 
 		const o = this.others.get( from );
 		if ( ! o || ! b || ! FISH[ b.s ] || typeof b.kg !== 'number' ) return;
-		const kg = b.kg < 1 ? b.kg.toFixed( 2 ) : b.kg.toFixed( 1 );
-		if ( b.rec || isTrophy( b.s, b.kg ) ) this.app.game.toast( `${ o.person.name } ${ b.m === 's' ? 'speared' : 'caught' } a ${ kg } kg ${ FISH[ b.s ].name.toLowerCase() }${ b.rec ? ': a new island record!' : '' }`, 4200 );
+		if ( b.rec || isTrophy( b.s, b.kg ) ) this.app.game.toast( `${ o.person.name } ${ b.m === 's' ? 'speared' : 'caught' } a ${ lb( b.kg, 1 ) } ${ FISH[ b.s ].name.toLowerCase() }${ b.rec ? ': a new island record!' : '' }`, 4200 );
 		o.avatar.once( 'cheer_01' );
 		if ( o.fish ) {
 

@@ -21,6 +21,7 @@ import { delivered, filled, owed, weekEnds } from './WeekOrder.js';
 import { Minimap } from './Minimap.js';
 import { Guide } from './Guide.js';
 import { Speargun, groundHit } from './Speargun.js';
+import { lb, feet } from './Units.js';
 import { SPECIES } from '../world/fish/FishSpecies.js';
 
 // how long the catch card stays up unless dismissed (ms)
@@ -756,8 +757,8 @@ export class Game {
 			if ( this.hud ) this.landing = { species: f.species, kg: f.kg, card: info, cardT: 0 };
 			else {
 
-				if ( entry ) this.toast( `${ info.record ? 'New record! ' : '' }${ name } · ${ entry.kg.toFixed( 2 ) } kg · $${ entry.value }`, 3600 );
-				else this.toast( `${ name } · ${ f.kg.toFixed( 1 ) } kg · no room in the ${ this.state.upgrades.hold > 0 ? 'hold' : 'cooler' }, let it go`, 3600 );
+				if ( entry ) this.toast( `${ info.record ? 'New record! ' : '' }${ name } · ${ lb( entry.kg ) } · $${ entry.value }`, 3600 );
+				else this.toast( `${ name } · ${ lb( f.kg, 1 ) } · no room in the ${ this.state.upgrades.hold > 0 ? 'hold' : 'cooler' }, let it go`, 3600 );
 				this.landing = { species: f.species, kg: f.kg };
 
 			}
@@ -1001,7 +1002,7 @@ export class Game {
 		} else {
 
 			const name = FISH[ sp.id ].name;
-			this.toast( info.kept ? `${ info.record ? 'New record! ' : '' }${ name } · ${ info.kg.toFixed( 2 ) } kg · $${ info.value }` : `${ name } · ${ info.kg.toFixed( 1 ) } kg · no room, let it go`, 3600 );
+			this.toast( info.kept ? `${ info.record ? 'New record! ' : '' }${ name } · ${ lb( info.kg ) } · $${ info.value }` : `${ name } · ${ lb( info.kg, 1 ) } · no room, let it go`, 3600 );
 			this.finishSpeared();
 
 		}
@@ -1067,7 +1068,7 @@ export class Game {
 
 			case 'loaded':
 				if ( ! this.submerged ) return p.blackout ? { key: '…', text: 'Catch your breath' } : { key: 'W', text: 'Look down and swim to dive   ·   R  put the speargun away' };
-				if ( a && a.rule === 'ok' ) return a.far ? { key: '…', text: `Closer: ${ a.dist.toFixed( 1 ) } m off, your gun reaches ${ g.spearM } m` } : { key: 'LMB', text: 'Shoot!' };
+				if ( a && a.rule === 'ok' ) return a.far ? { key: '…', text: `Closer: ${ feet( a.dist ) } off, your gun reaches ${ feet( g.spearM ) }` } : { key: 'LMB', text: 'Shoot!' };
 				if ( a ) return { key: '…', text: { protected: 'Protected: let it be', notTarget: 'Not a fish anyone spears', small: 'Too small: let it grow' }[ a.rule ] };
 				return { key: 'LMB', text: 'Stalk slowly, aim at a fish and shoot   ·   Shift  kick hard' };
 			case 'empty': return { key: 'LMB', text: `Hold to load the band${ gun.bands > 1 ? 's' : '' }` };

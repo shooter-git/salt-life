@@ -1,8 +1,9 @@
 import { Mesh, PlaneGeometry, CanvasTexture, MeshStandardMaterial, SRGBColorSpace } from '../engine/index.js';
 import { FISH } from './FishTable.js';
+import { LB } from './Units.js';
 
 // (Salt Life) Joe's prices, chalked on the A-frame board by his stand (FishStand.js stands the plane
-// over the board's slate): what he pays a kilo for the fish he buys most, from the catch table. One
+// over the board's slate): what he pays a pound for the fish he buys most, from the catch table. One
 // plane drawn on a canvas, lettered like the records board across the counter (together/RecordsBoard.js)
 // and in its program (no new shader).
 //   const b = new PriceBoard();  b.mesh.applyMatrix4( slate );  stand.group.add( b.mesh )
@@ -59,7 +60,7 @@ export class PriceBoard {
 		let y = 200;
 		for ( const [ name, k ] of ROWS ) {
 
-			const price = `$${ FISH[ k ].price }/kg`;
+			const price = `$${ ( FISH[ k ].price / LB ).toFixed( 2 ) }/lb`;
 			g.font = `52px ${ font }`;
 			g.textAlign = 'left';
 			g.fillStyle = '#f2efe4';

@@ -4,6 +4,7 @@ import { LOOKS, LOOK_NAMES } from '../together/Avatar.js';
 import { NIGHT_BOX, biteHint, orderTerms } from './Orders.js';
 import { WEEK_MUL, delivered, filled, mineOf, shareOf, weekEnds } from './WeekOrder.js';
 import { timeText } from './IslandClock.js';
+import { LB, IN, lb, pounds, inches, feet, lbOz, feetInches } from './Units.js';
 
 // (other players' names, into HTML)
 const escape = ( t ) => String( t ).replace( /[&<>"']/g, ( c ) => ( { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } )[ c ] );
@@ -11,7 +12,7 @@ const escape = ( t ) => String( t ).replace( /[&<>"']/g, ( c ) => ( { '&': '&amp
 const item = ( name, meta, ...right ) => `<div class="gm-item"><span class="gm-item-main"><span class="gm-item-name">${ name }</span><span class="gm-item-meta">${ meta }</span></span>${ right.join( '' ) }</div>`;
 // (Salt Life) price: what it fetches here (a wanted fish: the order's price); wanted: on today's list
 const fishItem = ( f, button, price = f.value, wanted = false ) => item( `${ FISH[ f.species ].name }${ f.record ? '<small>record</small>' : '' }${ wanted ? '<small class="is-wanted">wanted</small>' : '' }`,
-	`${ f.cm ?? Math.round( fishLengthCm( f.species, f.kg ) ) } cm · ${ f.kg.toFixed( 2 ) } kg${ f.method === 'spear' ? ' · speared' : '' }`, `<span class="gm-item-val">$${ price }</span>`, button );
+	`${ inches( f.cm ?? fishLengthCm( f.species, f.kg ) ) } · ${ lb( f.kg ) }${ f.method === 'spear' ? ' · speared' : '' }`, `<span class="gm-item-val">$${ price }</span>`, button );
 const upper = ( t ) => t.charAt( 0 ).toUpperCase() + t.slice( 1 );
 
 // DOM for the fishing game, in the look of the rest of the HUD (ui/game-ui.css tokens, .tw-glass):
@@ -263,7 +264,7 @@ export class GameHUD {
 		style.textContent = CSS;
 		document.head.append( style );
 
-		this.purse = h( 'div', 'gm-purse tw-glass', `<span class="gm-money">$0</span><span class="gm-cooler"><span class="gm-cooler-label">Cooler</span><span class="gm-cooler-bar"><span></span></span><span class="gm-cooler-kg">0 / 30 kg</span></span><span class="gm-gauge gm-fuel"><span>Fuel</span><span class="gm-cooler-bar gm-fuel-bar"><span></span></span><b class="gm-fuel-l">40 L</b></span><span class="gm-gauge gm-sonar"><span>Sonar</span><b class="gm-sonar-d">0 m</b><span class="gm-sonar-dots"></span></span><span class="gm-gauge gm-breath"><span>Breath</span><span class="gm-cooler-bar gm-breath-bar"><span></span></span></span>` );
+		this.purse = h( 'div', 'gm-purse tw-glass', `<span class="gm-money">$0</span><span class="gm-cooler"><span class="gm-cooler-label">Cooler</span><span class="gm-cooler-bar"><span></span></span><span class="gm-cooler-kg">0 / 66 lb</span></span><span class="gm-gauge gm-fuel"><span>Fuel</span><span class="gm-cooler-bar gm-fuel-bar"><span></span></span><b class="gm-fuel-l">40 L</b></span><span class="gm-gauge gm-sonar"><span>Sonar</span><b class="gm-sonar-d">0 ft</b><span class="gm-sonar-dots"></span></span><span class="gm-gauge gm-breath"><span>Breath</span><span class="gm-cooler-bar gm-breath-bar"><span></span></span></span>` );
 		this.breathEl = this.purse.querySelector( '.gm-breath' );
 		this.breathBar = this.purse.querySelector( '.gm-breath-bar > span' );
 		this.fuelEl = this.purse.querySelector( '.gm-fuel' );
@@ -279,7 +280,7 @@ export class GameHUD {
 		this.coolerLabel = this.purse.querySelector( '.gm-cooler-label' );
 
 		this.fight = h( 'div', 'gm-fight tw-glass', `
-			<div class="gm-fight-head"><span class="gm-fight-call">Fish on!</span><span class="gm-fight-dist">0 m</span></div>
+			<div class="gm-fight-head"><span class="gm-fight-call">Fish on!</span><span class="gm-fight-dist">0 ft</span></div>
 			<div class="gm-tension"><span class="gm-band"></span><span class="gm-danger"></span><span class="gm-needle"></span></div>
 			<div class="gm-stamina"><span>Fish</span><span class="gm-stamina-bar"><span></span></span></div>` );
 		this.fCall = this.fight.querySelector( '.gm-fight-call' );
@@ -356,7 +357,7 @@ export class GameHUD {
 		this.moneyEl.textContent = `$${ s.money.toLocaleString() }`;
 		const kg = s.holdKg;
 		this.coolerLabel.textContent = s.upgrades.hold > 0 ? 'Hold' : 'Cooler';
-		this.coolerKg.textContent = `${ kg.toFixed( 1 ) } / ${ st.holdKg } kg`;
+		this.coolerKg.textContent = `${ pounds( kg ) } / ${ pounds( st.holdKg ) } lb`;
 		this.coolerBar.style.width = `${ Math.min( 100, kg / st.holdKg * 100 ) }%`;
 		this.coolerEl.classList.toggle( 'is-full', kg > st.holdKg * 0.9 );
 		if ( this._last.money !== undefined && this._last.money !== s.money ) {
@@ -391,7 +392,7 @@ export class GameHUD {
 		this.sonarEl.classList.toggle( 'is-on', !! sonar );
 		if ( sonar ) {
 
-			this.sonarD.textContent = `${ sonar.depth.toFixed( 1 ) } m`;
+			this.sonarD.textContent = feet( sonar.depth );
 			const n = Math.round( sonar.fish * 4 );
 			this.sonarDots.textContent = '●'.repeat( n ) + '○'.repeat( 4 - n );
 
@@ -407,7 +408,7 @@ export class GameHUD {
 			this.fBand.style.left = `${ fight.band[ 0 ] / 1.05 * 100 }%`;
 			this.fBand.style.width = `${ ( fight.band[ 1 ] - fight.band[ 0 ] ) / 1.05 * 100 }%`;
 			this.fStam.style.width = `${ fight.stamina * 100 }%`;
-			this.fDist.textContent = `${ fight.distance.toFixed( 1 ) } m`;
+			this.fDist.textContent = feet( fight.distance );
 			let call = fight.spear ? 'Pull it in' : 'Reel in', cls = '';
 			if ( fight.tension > 0.88 ) { call = 'Ease off!'; cls = 'is-warn'; }
 			else if ( fight.surge > 0.55 ) { call = 'It\'s running!'; cls = 'is-warn'; }
@@ -428,8 +429,8 @@ export class GameHUD {
 		this.aimTag.classList.toggle( 'is-on', !! tag );
 		if ( tag ) {
 
-			const why = { protected: 'protected', notTarget: 'not a target', small: `${ aim.cm } cm · too small` }[ aim.rule ];
-			const html = `${ escape( aim.label ) }<small>${ why || ( aim.far ? `${ aim.cm } cm · get closer` : `${ aim.cm } cm` ) }</small>`;
+			const why = { protected: 'protected', notTarget: 'not a target', small: `${ inches( aim.cm ) } · too small` }[ aim.rule ];
+			const html = `${ escape( aim.label ) }<small>${ why || ( aim.far ? `${ inches( aim.cm ) } · get closer` : inches( aim.cm ) ) }</small>`;
 			if ( html !== this._aimHtml ) {
 
 				this._aimHtml = html;
@@ -465,7 +466,7 @@ export class GameHUD {
 	showCatch( info, ms = 9000 ) {
 
 		const f = FISH[ info.species ];
-		const inch = info.cm / 2.54, lb = info.kg * 2.20462;
+		const inch = info.cm / IN, lbs = info.kg * LB;
 		const isle = info.islandHeld;
 		const badge = info.islandRecord ? '<span class="gm-badge is-record">★ Island record</span>'
 			: info.record ? '<span class="gm-badge is-record">★ New record</span>'
@@ -475,10 +476,10 @@ export class GameHUD {
 		if ( info.released ) note = `<div class="gm-catch-note">Protected: measured and let go alive${ info.islandRecord ? '. It still goes on the board at the fish stand' : '' }.</div>`;
 		else if ( ! info.kept ) note = `<div class="gm-catch-note is-warn">No room in the ${ this.game.state.upgrades.hold > 0 ? 'hold' : 'cooler' } · you let it go</div>`;
 		else if ( f.bounty && ! info.islandRecord && ! info.record ) note = `<div class="gm-catch-note">An invader on the reef: Joe pays $${ f.bounty } a fish on top.</div>`;
-		else if ( info.islandRecord ) note = `<div class="gm-catch-note">The heaviest anyone here has landed${ isle ? `. It beats ${ escape( isle.who || 'someone' ) }'s <b>${ isle.kg.toFixed( 2 ) } kg</b>` : '' }. It goes on the board at the fish stand.</div>`;
-		else if ( info.record ) note = `<div class="gm-catch-note">Previous best <b>${ info.prevBestKg.toFixed( 2 ) } kg</b> · ${ info.prevBestCm } cm. Beaten by ${ ( info.kg - info.prevBestKg ).toFixed( 2 ) } kg.</div>`;
+		else if ( info.islandRecord ) note = `<div class="gm-catch-note">The heaviest anyone here has landed${ isle ? `. It beats ${ escape( isle.who || 'someone' ) }'s <b>${ lb( isle.kg ) }</b>` : '' }. It goes on the board at the fish stand.</div>`;
+		else if ( info.record ) note = `<div class="gm-catch-note">Previous best <b>${ lb( info.prevBestKg ) }</b> · ${ inches( info.prevBestCm ) }. Beaten by ${ lb( info.kg - info.prevBestKg ) }.</div>`;
 		else if ( info.newSpecies ) note = '<div class="gm-catch-note">First one in your fish log.</div>';
-		else note = `<div class="gm-catch-note">Your best: ${ info.prevBestKg.toFixed( 2 ) } kg · ${ info.prevBestCm } cm</div>`;
+		else note = `<div class="gm-catch-note">Your best: ${ lb( info.prevBestKg ) } · ${ inches( info.prevBestCm ) }</div>`;
 		// splash burst around the fish as it lands in view
 		let drops = '';
 		for ( let i = 0; i < 26; i ++ ) {
@@ -499,8 +500,8 @@ export class GameHUD {
 			<div class="gm-catch-stage"><canvas></canvas><div class="gm-splash">${ drops }</div></div>
 			<div class="gm-catch-bottom">
 				<div class="gm-catch-stats">
-					<div class="gm-stat"><span>Length</span><b>${ info.cm }<small>cm</small></b><i>${ inch.toFixed( 1 ) } in</i></div>
-					<div class="gm-stat"><span>Weight</span><b>${ info.kg < 1 ? info.kg.toFixed( 2 ) : info.kg.toFixed( 1 ) }<small>kg</small></b><i>${ lb.toFixed( 1 ) } lb</i></div>
+					<div class="gm-stat"><span>Length</span><b>${ inch.toFixed( 1 ) }<small>in</small></b><i>${ feetInches( info.cm ) || '&nbsp;' }</i></div>
+					<div class="gm-stat"><span>Weight</span>${ lbs * 16 < 15.5 ? `<b>${ Math.max( 1, Math.round( lbs * 16 ) ) }<small>oz</small></b><i>&nbsp;</i>` : `<b>${ lbs.toFixed( 1 ) }<small>lb</small></b><i>${ lbOz( info.kg ) }</i>` }</div>
 					<div class="gm-stat is-value"><span>Value</span><b>${ info.released ? '—' : `$${ info.value }` }</b><i>${ info.released ? 'released' : ! info.kept ? 'let go' : info.wanted ? info.wanted.text : 'in the cooler' }</i></div>
 				</div>
 				${ note }
@@ -608,13 +609,13 @@ export class GameHUD {
 
 		} else if ( tab === 'log' ) {
 
-			body = logged.map( ( [ k, v ] ) => item( FISH[ k ].name, `${ v.count } caught`, `<span class="gm-item-num">${ v.bestKg.toFixed( 2 ) } kg · ${ v.bestCm ?? Math.round( fishLengthCm( k, v.bestKg ) ) } cm</span>` ) ).join( '' )
+			body = logged.map( ( [ k, v ] ) => item( FISH[ k ].name, `${ v.count } caught`, `<span class="gm-item-num">${ lb( v.bestKg ) } · ${ inches( v.bestCm ?? fishLengthCm( k, v.bestKg ) ) }</span>` ) ).join( '' )
 				|| empty( 'Each kind you catch is logged here, with your best.' );
 			hint = 'Your best of each kind';
 
 		} else if ( tab === 'records' ) {
 
-			body = isle.map( ( [ k, r ] ) => item( FISH[ k ].name, ( r.id === me ? '<b>You</b>' : escape( r.who || '?' ) ) + ( r.m === 's' ? ' · speared' : '' ), `<span class="gm-item-num">${ r.kg.toFixed( 2 ) } kg${ r.cm ? ` · ${ r.cm } cm` : '' }</span>` ) ).join( '' )
+			body = isle.map( ( [ k, r ] ) => item( FISH[ k ].name, ( r.id === me ? '<b>You</b>' : escape( r.who || '?' ) ) + ( r.m === 's' ? ' · speared' : '' ), `<span class="gm-item-num">${ lb( r.kg ) }${ r.cm ? ` · ${ inches( r.cm ) }` : '' }</span>` ) ).join( '' )
 				|| empty( 'None yet: the first of each kind anyone lands here sets one.' );
 			hint = 'The heaviest of each kind anyone here has landed';
 
@@ -637,7 +638,7 @@ export class GameHUD {
 		const keys = d === 'touch' ? '' : `<span class="gm-tabs-keys">${ d === 'gamepad' ? 'D-pad' : '<kbd>←</kbd><kbd>→</kbd>' }</span>`;
 		this.inv.innerHTML = `
 			<div class="gm-head"><h2>${ s.upgrades.hold > 0 ? 'Fish hold' : 'Cooler' }</h2>
-			<p class="gm-sub">${ s.inventory.length } fish · ${ s.holdKg.toFixed( 1 ) } of ${ s.stats.holdKg } kg · worth $${ s.holdValue }</p></div>
+			<p class="gm-sub">${ s.inventory.length } fish · ${ pounds( s.holdKg ) } of ${ pounds( s.stats.holdKg ) } lb · worth $${ s.holdValue }</p></div>
 			<div class="gm-tabs" role="tablist">${ tabs.map( ( [ id, label, n ] ) => `<button class="gm-tab${ id === tab ? ' is-on' : '' }" role="tab" aria-selected="${ id === tab }" data-tab="${ id }">${ label }${ n ? `<small>${ n }</small>` : '' }</button>` ).join( '' ) }${ keys }</div>
 			<div class="gm-list" role="tabpanel">${ body }</div>
 			<div class="gm-foot"><span class="gm-sub">${ hint }</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Close', 'I', 'Back' ) }</button></div>`;
@@ -726,14 +727,13 @@ export class GameHUD {
 		const g = this.game, t = g.week ? g.week() : null;
 		if ( ! t ) return '';
 		const me = g.app.together.me.id, got = delivered( t ), mine = mineOf( t, me ), done = filled( t ), share = shareOf( t, me );
-		const kg = ( n ) => ( n < 10 ? n.toFixed( 1 ) : String( Math.round( n ) ) );
 		const days = Math.ceil( ( weekEnds( t.week ) - Date.now() ) / 864e5 );
 		const when = days > 1 ? `${ days } days left` : 'last day';
 		const helped = Object.keys( t.by ).length;
 		const meta = done ? `filled by ${ helped === 1 ? ( mine ? 'you' : 'one islander' ) : `${ helped } of you` }` : `for a restaurant on the mainland · pays ×${ WEEK_MUL }`;
 		const note = done ? ( share ? `Your share of the $${ t.bonus } bonus: $${ share }${ g.state.weekPaid !== null && g.state.weekPaid >= t.week ? ', paid' : box ? '. Joe pays it when he\'s in' : '' }.` : 'A new order next week.' )
-			: `$${ t.bonus } bonus when it's filled, shared by what each of you brings.${ mine ? ` You've brought ${ kg( mine ) } kg.` : '' }`;
-		const row = item( FISH[ t.species ].name, meta, `<span class="gm-item-num">${ done ? '✓ ' : '' }${ kg( Math.min( got, t.kg ) ) } / ${ t.kg } kg</span>` );
+			: `$${ t.bonus } bonus when it's filled, shared by what each of you brings.${ mine ? ` You've brought ${ pounds( mine ) } lb.` : '' }`;
+		const row = item( FISH[ t.species ].name, meta, `<span class="gm-item-num">${ done ? '✓ ' : '' }${ pounds( Math.min( got, t.kg ) ) } / ${ pounds( t.kg ) } lb</span>` );
 		return `<div class="gm-wanted"><span class="gm-wanted-h">The week's order${ done ? '' : ` · ${ when }` }</span>${ row }<div class="gm-week-bar"><span style="width:${ Math.min( 100, got / t.kg * 100 ).toFixed( 1 ) }%"></span></div><span class="gm-week-note">${ note }</span></div>`;
 
 	}

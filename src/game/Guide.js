@@ -1,5 +1,6 @@
 import { STAND } from './FishStand.js';
 import { CHANDLERY } from './Chandlery.js';
+import { feet } from './Units.js';
 
 // First-play guide:
 //  - an intro (3 cards) the first time the game starts, after the start overlay: the goal, the fishing
@@ -399,7 +400,7 @@ export class Guide {
 				for ( const [ id, t ] of [ [ 'joe', STAND ], [ 'marta', CHANDLERY ] ] ) {
 
 					const el = this.body.querySelector( `[data-where="${ id }"]` );
-					if ( el ) el.textContent = `${ Math.round( Math.hypot( t.x - x, t.z - z ) ) } m ${ compassWord( x, z, t.x, t.z ) }`;
+					if ( el ) el.textContent = `${ feet( Math.hypot( t.x - x, t.z - z ) ) } ${ compassWord( x, z, t.x, t.z ) }`;
 
 				}
 

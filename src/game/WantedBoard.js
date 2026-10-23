@@ -2,6 +2,7 @@ import { Mesh, PlaneGeometry, CanvasTexture, MeshStandardMaterial, SRGBColorSpac
 import { STAND } from './FishStand.js';
 import { FISH } from './FishTable.js';
 import { orderTerms, biteHint } from './Orders.js';
+import { pounds } from './Units.js';
 
 // (Salt Life) The day's wanted list, chalked on a slate hung on the front of Joe's counter: his two
 // fish, where and when they bite, what he pays, and Marta's bait; ticked off as you fill them (each
@@ -119,7 +120,7 @@ export class WantedBoard {
 			g.textAlign = 'right';
 			g.fillStyle = '#f5d98a';
 			const got = Math.min( week.got, week.kg );
-			g.fillText( `${ got < 10 ? got.toFixed( 1 ) : Math.round( got ) } / ${ week.kg } kg`, W - 40, 400 );
+			g.fillText( `${ pounds( got ) } / ${ pounds( week.kg ) } lb`, W - 40, 400 );
 			// the bar: an outline, filled in chalk as far as the group has got
 			g.strokeStyle = 'rgba(242, 239, 228, 0.7)';
 			g.lineWidth = 2;
