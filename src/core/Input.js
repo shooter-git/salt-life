@@ -8,7 +8,7 @@
 const PAD_KEYS = {
 	0: 'Space', // A: jump / swim up
 	1: 'KeyE', // B: interact (board, helm, trade)
-	2: 'KeyR', // X: the rod
+	2: 'KeyR', // X: the rod (in the water: the speargun)
 	3: 'KeyV', // Y: boat camera
 	4: 'KeyC', // LB: crouch / dive
 	5: 'ShiftLeft', // RB: sprint / boost
@@ -180,7 +180,7 @@ export class Input {
 			}
 
 			for ( const [ i, code ] of Object.entries( PAD_KEYS ) ) if ( ( p.buttons[ i ] ?? 0 ) > 0.5 ) held.add( code );
-			if ( ( p.buttons[ 7 ] ?? 0 ) > 0.5 ) held.add( 'mouse0' ); // right trigger: cast / reel
+			if ( ( p.buttons[ 7 ] ?? 0 ) > 0.5 ) held.add( 'mouse0' ); // right trigger: cast / reel; shoot / load / pull with the speargun
 			if ( ( p.buttons[ 6 ] ?? 0 ) > 0.5 ) held.add( 'mouse2' ); // left trigger: reel in an empty line
 
 		}
