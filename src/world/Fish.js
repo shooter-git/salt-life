@@ -26,6 +26,15 @@ import { bandFade } from '../materials/LODFade.js';
 // water (terrain and reef height field, surface, out of the surf zone) and is only simulated
 // near the camera. Each fish writes its own motion (position change and swimming wave) into the
 // motion vectors.
+//
+// (Salt Life) For the speargun (game/Speargun.js), and the spearfisher's fish with it: hogfish
+// rooting on the sand, black groupers and lionfish at the coral heads, mutton snappers along the
+// reef's edges, red snappers over the deep holes, mahi-mahi and blackfin tuna in the blue water off
+// the bay. A diver who comes slowly gets close; one who sprints, or shoots, spooks them, and a spooked
+// fish stays wary a while (groupers tuck in at their coral head). Jacks, barracuda and mahi come to
+// look at a diver who keeps still. A speared fish leaves its school: the speargun holds it on the
+// shaft (hold), and once it's landed it's gone (take) until its kind fills the place again, out of
+// sight, a few minutes later.
 
 const TAU = Math.PI * 2;
 const CEILING = - 0.7; // reef fish stay below this (m)
@@ -39,6 +48,12 @@ const TIER = {
 	high: { range: 32, schools: 1, lodPx: 1, fades: true, lite: false },
 };
 const SIM_RANGE = 65; // groups further than this from the camera are frozen (m)
+// (Salt Life) a landed fish's place is filled again after this long (s), out of sight
+const REFILL = [ 240, 420 ];
+// how far fish notice the diver (their flee distance), by the diver's speed (m/s): a slow approach
+// gets close, a sprint scatters them
+const WARY = [ [ 0.3, 0.5 ], [ 1.5, 1 ], [ 2.5, 1.55 ] ];
+const SPOOKED = 25; // s a fish stays warier after a fright (a sprint at it, a shot)
 const GRAVITY = 9.81;
 const LOD_PX0 = [ 320, 80, 22 ]; // screen length (px) below which the next level of detail takes over
 const LOD_BAND = 1.15; // cross-fade band above each switch (screen length ratio)
@@ -49,41 +64,53 @@ const LOD_BAND = 1.15; // cross-fade band above each switch (screen length ratio
 // lengths, weights); depth: preferred height above the bottom (fraction of the local water
 // column above it: 0 on the bottom .. 1 at the ceiling); band: water depth range of the homes;
 // flee: reaction distance (m); amp / freq: tail beat amplitude and frequency (Hz at rest, per
-// body length / s).
+// body length / s). (Salt Life) fish: the catch table's species (game/FishTable.js), or label: what
+// it is when it's not one; curious: how close (m) it comes to look at a diver keeping still.
 const base = {
 	cruise: 1, max: 2.5, burst: 6, accel: 4, sep: 2, nbr: 5, wSep: 5, wAli: 1, wCoh: 0.8, wGoal: 1, flee: 3.5,
 	depth: [ 0.1, 0.5 ], homeRadius: 6, amp: 0.08, freq: [ 1.6, 0.9 ], ceiling: CEILING, minDepth: 1.2, band: [ 1.5, 20 ],
 };
 const BEHAVIOUR = {
-	bait: { model: 'silverside', length: [ 0.06, 0.09 ], mode: 'bait', cruise: 1.8, max: 4, burst: 10, accel: 7, flee: 3, depth: [ 0.35, 0.75 ], amp: 0.1, freq: [ 3, 1.1 ] },
-	silverside: { model: 'silverside', length: [ 0.06, 0.09 ], mode: 'school', cruise: 1.6, max: 3.5, burst: 9, accel: 6, sep: 1.8, nbr: 7, wSep: 7, wAli: 2.6, wCoh: 1.4, wGoal: 0.7, flee: 4.5, depth: [ 0.35, 0.8 ], homeRadius: 18, amp: 0.1, freq: [ 3, 1.1 ], band: [ 4, 20 ] },
-	chromis: { model: 'chromis', length: [ 0.08, 0.11 ], mode: 'hover', cruise: 0.8, max: 2.5, burst: 7, accel: 5, sep: 2.2, nbr: 6, wAli: 0.5, wCoh: 0.5, flee: 3.0, depth: [ 0.12, 0.45 ], homeRadius: 3, freq: [ 2.5, 0.9 ], amp: 0.1, band: [ 4, 16 ] },
-	grunt: { model: 'grunt', length: [ 0.16, 0.24 ], mode: 'mill', cruise: 0.45, max: 1.8, burst: 5, accel: 3, sep: 1.6, nbr: 4, wAli: 1.8, wCoh: 1.0, wGoal: 0.9, depth: [ 0.04, 0.2 ], homeRadius: 1.5, band: [ 2.5, 10 ] },
-	yellowtail: { model: 'yellowtail', length: [ 0.25, 0.36 ], mode: 'school', cruise: 0.8, max: 2.2, burst: 5, accel: 3, sep: 1.8, wAli: 1.6, wGoal: 0.7, flee: 5, depth: [ 0.15, 0.5 ], homeRadius: 16, freq: [ 1.5, 0.9 ], band: [ 3, 14 ] },
-	tang: { model: 'tang', length: [ 0.15, 0.24 ], mode: 'forage', cruise: 0.7, max: 2, burst: 5, accel: 3, sep: 1.8, wAli: 1.0, wCoh: 0.7, wGoal: 0.9, flee: 4, depth: [ 0.03, 0.2 ], homeRadius: 14, amp: 0.07, band: [ 2, 9 ] },
-	sergeant: { model: 'sergeant', length: [ 0.12, 0.17 ], mode: 'hover', cruise: 0.6, max: 2, burst: 6, accel: 4, wAli: 0.6, wCoh: 0.6, flee: 3.2, depth: [ 0.08, 0.3 ], homeRadius: 2, amp: 0.09, freq: [ 2, 0.9 ], band: [ 1.5, 6 ] },
-	wrasse: { model: 'wrasse', length: [ 0.07, 0.12 ], mode: 'forage', cruise: 1.3, max: 3, burst: 7, accel: 6, wAli: 0.5, wCoh: 0.6, wGoal: 1.2, flee: 2.5, depth: [ 0.02, 0.1 ], homeRadius: 5, amp: 0.1, freq: [ 2.5, 1.0 ], band: [ 1.5, 9 ] },
-	parrot: { model: 'parrot', length: [ 0.3, 0.45 ], mode: 'forage', cruise: 0.55, max: 1.6, burst: 4, accel: 2, sep: 2.2, nbr: 6, wSep: 4, wAli: 0.6, wCoh: 0.5, flee: 4.5, depth: [ 0.02, 0.1 ], homeRadius: 18, amp: 0.05, freq: [ 1.0, 0.6 ], band: [ 2, 12 ] },
-	angel: { model: 'angel', length: [ 0.25, 0.35 ], mode: 'pair', cruise: 0.45, max: 1.4, burst: 3.5, accel: 2, sep: 1.5, nbr: 4, wSep: 3, wAli: 0.8, wCoh: 1.2, depth: [ 0.04, 0.15 ], homeRadius: 3, amp: 0.05, freq: [ 1.0, 0.6 ], band: [ 5, 16 ] },
-	grouper: { model: 'grouper', length: [ 0.6, 0.85 ], mode: 'lurk', cruise: 0.15, max: 1.2, burst: 3, accel: 1.5, sep: 1, nbr: 2, wSep: 1, wAli: 0, wCoh: 0, wGoal: 0.8, flee: 3, depth: [ 0.0, 0.05 ], homeRadius: 2.5, amp: 0.04, freq: [ 0.6, 0.6 ], band: [ 5, 16 ] },
-	barracuda: { model: 'barracuda', length: [ 1.0, 1.35 ], mode: 'solo', cruise: 0.15, max: 1.2, burst: 3, accel: 1.2, sep: 1, nbr: 2, wSep: 1, wAli: 0, wCoh: 0, wGoal: 0.6, depth: [ 0.3, 0.6 ], homeRadius: 10, amp: 0.035, freq: [ 0.5, 0.8 ], band: [ 4, 16 ] },
-	jack: { model: 'jack', length: [ 0.4, 0.6 ], mode: 'patrol', cruise: 1.1, max: 2.6, burst: 5, accel: 3, sep: 2, nbr: 5, wAli: 1.4, wCoh: 0.9, wGoal: 0.9, flee: 4, depth: [ 0.25, 0.6 ], homeRadius: 20, amp: 0.07, freq: [ 1.6, 0.8 ], band: [ 6, 20 ] },
-	eagleRay: { model: 'eagleRay', length: [ 1.6, 2.0 ], mode: 'cruise', cruise: 0.35, max: 0.9, burst: 1.8, accel: 0.8, sep: 1, nbr: 2, wSep: 1, wAli: 0, wCoh: 0, wGoal: 0.8, flee: 5, depth: [ 0.25, 0.55 ], homeRadius: 30, amp: 0.13, freq: [ 0.45, 0.2 ], band: [ 6, 20 ] },
-	stingray: { model: 'stingray', length: [ 0.9, 1.3 ], mode: 'glide', cruise: 0.3, max: 0.8, burst: 1.6, accel: 0.8, sep: 1, nbr: 2, wSep: 1, wAli: 0, wCoh: 0, wGoal: 0.8, flee: 3.5, depth: [ 0, 0 ], homeRadius: 14, amp: 0.05, freq: [ 0.9, 0.5 ], band: [ 2.5, 16 ] },
-	turtle: { model: 'turtle', length: [ 0.9, 1.1 ], mode: 'turtle', cruise: 0.3, max: 0.8, burst: 1.4, accel: 0.6, sep: 1, nbr: 2, wSep: 1, wAli: 0, wCoh: 0, wGoal: 0.7, flee: 4, depth: [ 0.15, 0.6 ], homeRadius: 25, amp: 0, freq: [ 0.3, 0.25 ], ceiling: - 0.25, band: [ 3, 12 ] },
+	bait: { model: 'silverside', fish: 'silverside', length: [ 0.06, 0.09 ], mode: 'bait', cruise: 1.8, max: 4, burst: 10, accel: 7, flee: 3, depth: [ 0.35, 0.75 ], amp: 0.1, freq: [ 3, 1.1 ] },
+	silverside: { model: 'silverside', fish: 'silverside', length: [ 0.06, 0.09 ], mode: 'school', cruise: 1.6, max: 3.5, burst: 9, accel: 6, sep: 1.8, nbr: 7, wSep: 7, wAli: 2.6, wCoh: 1.4, wGoal: 0.7, flee: 4.5, depth: [ 0.35, 0.8 ], homeRadius: 18, amp: 0.1, freq: [ 3, 1.1 ], band: [ 4, 20 ] },
+	chromis: { model: 'chromis', fish: 'chromis', length: [ 0.08, 0.11 ], mode: 'hover', cruise: 0.8, max: 2.5, burst: 7, accel: 5, sep: 2.2, nbr: 6, wAli: 0.5, wCoh: 0.5, flee: 3.0, depth: [ 0.12, 0.45 ], homeRadius: 3, freq: [ 2.5, 0.9 ], amp: 0.1, band: [ 4, 16 ] },
+	grunt: { model: 'grunt', fish: 'grunt', length: [ 0.16, 0.26 ], mode: 'mill', cruise: 0.45, max: 1.8, burst: 7, accel: 3, sep: 1.6, nbr: 4, wAli: 1.8, wCoh: 1.0, wGoal: 0.9, depth: [ 0.04, 0.2 ], homeRadius: 1.5, band: [ 2.5, 10 ] },
+	yellowtail: { model: 'yellowtail', fish: 'yellowtail', length: [ 0.26, 0.42 ], mode: 'school', cruise: 0.8, max: 2.2, burst: 10, accel: 3, sep: 1.8, wAli: 1.6, wGoal: 0.7, flee: 5, depth: [ 0.15, 0.5 ], homeRadius: 16, freq: [ 1.5, 0.9 ], band: [ 3, 14 ] },
+	tang: { model: 'tang', fish: 'tang', length: [ 0.15, 0.24 ], mode: 'forage', cruise: 0.7, max: 2, burst: 5, accel: 3, sep: 1.8, wAli: 1.0, wCoh: 0.7, wGoal: 0.9, flee: 4, depth: [ 0.03, 0.2 ], homeRadius: 14, amp: 0.07, band: [ 2, 9 ] },
+	sergeant: { model: 'sergeant', fish: 'sergeant', length: [ 0.12, 0.17 ], mode: 'hover', cruise: 0.6, max: 2, burst: 6, accel: 4, wAli: 0.6, wCoh: 0.6, flee: 3.2, depth: [ 0.08, 0.3 ], homeRadius: 2, amp: 0.09, freq: [ 2, 0.9 ], band: [ 1.5, 6 ] },
+	wrasse: { model: 'wrasse', label: 'Bluehead wrasse', length: [ 0.07, 0.12 ], mode: 'forage', cruise: 1.3, max: 3, burst: 7, accel: 6, wAli: 0.5, wCoh: 0.6, wGoal: 1.2, flee: 2.5, depth: [ 0.02, 0.1 ], homeRadius: 5, amp: 0.1, freq: [ 2.5, 1.0 ], band: [ 1.5, 9 ] },
+	parrot: { model: 'parrot', fish: 'parrot', length: [ 0.3, 0.45 ], mode: 'forage', cruise: 0.55, max: 1.6, burst: 4, accel: 2, sep: 2.2, nbr: 6, wSep: 4, wAli: 0.6, wCoh: 0.5, flee: 4.5, depth: [ 0.02, 0.1 ], homeRadius: 18, amp: 0.05, freq: [ 1.0, 0.6 ], band: [ 2, 12 ] },
+	angel: { model: 'angel', fish: 'angel', length: [ 0.25, 0.35 ], mode: 'pair', cruise: 0.45, max: 1.4, burst: 3.5, accel: 2, sep: 1.5, nbr: 4, wSep: 3, wAli: 0.8, wCoh: 1.2, depth: [ 0.04, 0.15 ], homeRadius: 3, amp: 0.05, freq: [ 1.0, 0.6 ], band: [ 5, 16 ] },
+	grouper: { model: 'grouper', fish: 'grouper', length: [ 0.6, 0.85 ], mode: 'lurk', cruise: 0.15, max: 1.2, burst: 5, accel: 1.5, sep: 1, nbr: 2, wSep: 1, wAli: 0, wCoh: 0, wGoal: 0.8, flee: 3, depth: [ 0.0, 0.05 ], homeRadius: 2.5, amp: 0.04, freq: [ 0.6, 0.6 ], band: [ 5, 16 ] },
+	barracuda: { model: 'barracuda', fish: 'barracuda', length: [ 1.0, 1.35 ], mode: 'solo', curious: 4, cruise: 0.15, max: 1.2, burst: 6, accel: 1.2, sep: 1, nbr: 2, wSep: 1, wAli: 0, wCoh: 0, wGoal: 0.6, depth: [ 0.3, 0.6 ], homeRadius: 10, amp: 0.035, freq: [ 0.5, 0.8 ], band: [ 4, 16 ] },
+	jack: { model: 'jack', fish: 'jack', length: [ 0.45, 0.8 ], mode: 'patrol', curious: 3.5, cruise: 1.1, max: 2.6, burst: 8, accel: 3, sep: 2, nbr: 5, wAli: 1.4, wCoh: 0.9, wGoal: 0.9, flee: 4, depth: [ 0.25, 0.6 ], homeRadius: 20, amp: 0.07, freq: [ 1.6, 0.8 ], band: [ 6, 20 ] },
+	eagleRay: { model: 'eagleRay', label: 'Spotted eagle ray', length: [ 1.6, 2.0 ], mode: 'cruise', cruise: 0.35, max: 0.9, burst: 1.8, accel: 0.8, sep: 1, nbr: 2, wSep: 1, wAli: 0, wCoh: 0, wGoal: 0.8, flee: 5, depth: [ 0.25, 0.55 ], homeRadius: 30, amp: 0.13, freq: [ 0.45, 0.2 ], band: [ 6, 20 ] },
+	stingray: { model: 'stingray', label: 'Southern stingray', length: [ 0.9, 1.3 ], mode: 'glide', cruise: 0.3, max: 0.8, burst: 1.6, accel: 0.8, sep: 1, nbr: 2, wSep: 1, wAli: 0, wCoh: 0, wGoal: 0.8, flee: 3.5, depth: [ 0, 0 ], homeRadius: 14, amp: 0.05, freq: [ 0.9, 0.5 ], band: [ 2.5, 16 ] },
+	turtle: { model: 'turtle', label: 'Green sea turtle', length: [ 0.9, 1.1 ], mode: 'turtle', cruise: 0.3, max: 0.8, burst: 1.4, accel: 0.6, sep: 1, nbr: 2, wSep: 1, wAli: 0, wCoh: 0, wGoal: 0.7, flee: 4, depth: [ 0.15, 0.6 ], homeRadius: 25, amp: 0, freq: [ 0.3, 0.25 ], ceiling: - 0.25, band: [ 3, 12 ] },
 	// bay
-	tarpon: { model: 'tarpon', length: [ 1.3, 1.8 ], mode: 'cruise', cruise: 0.3, max: 1.2, burst: 3, accel: 1, sep: 1.5, nbr: 3, wSep: 2, wAli: 0.8, wCoh: 0.5, wGoal: 0.7, flee: 5, depth: [ 0.3, 0.7 ], homeRadius: 25, amp: 0.04, freq: [ 0.5, 0.7 ], band: [ 4, 14 ] },
-	needlefish: { model: 'needlefish', length: [ 0.5, 0.8 ], mode: 'surface', cruise: 0.9, max: 2.5, burst: 6, accel: 3, sep: 3, nbr: 4, wSep: 3, wAli: 1, wCoh: 0.5, wGoal: 0.9, flee: 4, homeRadius: 25, amp: 0.05, freq: [ 1.2, 0.7 ], ceiling: - 0.12, minDepth: 1.0, band: [ 1.8, 12 ] },
-	mullet: { model: 'mullet', length: [ 0.3, 0.4 ], mode: 'jumper', cruise: 0.8, max: 2.2, burst: 5, accel: 3, sep: 1.8, nbr: 5, wAli: 1.5, wCoh: 1, wGoal: 0.8, flee: 4, depth: [ 0.3, 0.9 ], homeRadius: 14, amp: 0.07, freq: [ 1.5, 0.9 ], ceiling: - 0.25, minDepth: 1.2, band: [ 1.8, 4.5 ] },
-	fry: { model: 'silverside', length: [ 0.045, 0.065 ], mode: 'fry', cruise: 2, max: 4, burst: 14, accel: 9, sep: 1.6, nbr: 8, wSep: 7, wAli: 2.4, wCoh: 1.6, wGoal: 0.9, flee: 3.2, depth: [ 0.3, 0.8 ], homeRadius: 6, amp: 0.11, freq: [ 3.5, 1.2 ], ceiling: - 0.2, minDepth: 0.5, band: [ 0.5, 3.5 ] },
-	pierGrunt: { model: 'grunt', length: [ 0.16, 0.26 ], mode: 'pile', cruise: 0.45, max: 1.8, burst: 5, accel: 3, sep: 1.6, nbr: 4, wAli: 1.4, wCoh: 0.9, depth: [ 0.1, 0.5 ], homeRadius: 1.6, band: [ 2, 6 ] },
-	pierSnapper: { model: 'yellowtail', length: [ 0.25, 0.34 ], mode: 'pile', cruise: 0.6, max: 2.2, burst: 5, accel: 3, sep: 1.8, wAli: 1.4, wCoh: 0.8, flee: 4.5, depth: [ 0.3, 0.8 ], homeRadius: 2.5, freq: [ 1.5, 0.9 ], band: [ 2, 6 ] },
+	tarpon: { model: 'tarpon', fish: 'tarpon', length: [ 1.3, 1.8 ], mode: 'cruise', cruise: 0.3, max: 1.2, burst: 3, accel: 1, sep: 1.5, nbr: 3, wSep: 2, wAli: 0.8, wCoh: 0.5, wGoal: 0.7, flee: 5, depth: [ 0.3, 0.7 ], homeRadius: 25, amp: 0.04, freq: [ 0.5, 0.7 ], band: [ 4, 14 ] },
+	needlefish: { model: 'needlefish', fish: 'needlefish', length: [ 0.5, 0.8 ], mode: 'surface', cruise: 0.9, max: 2.5, burst: 6, accel: 3, sep: 3, nbr: 4, wSep: 3, wAli: 1, wCoh: 0.5, wGoal: 0.9, flee: 4, homeRadius: 25, amp: 0.05, freq: [ 1.2, 0.7 ], ceiling: - 0.12, minDepth: 1.0, band: [ 1.8, 12 ] },
+	mullet: { model: 'mullet', fish: 'mullet', length: [ 0.3, 0.4 ], mode: 'jumper', cruise: 0.8, max: 2.2, burst: 5, accel: 3, sep: 1.8, nbr: 5, wAli: 1.5, wCoh: 1, wGoal: 0.8, flee: 4, depth: [ 0.3, 0.9 ], homeRadius: 14, amp: 0.07, freq: [ 1.5, 0.9 ], ceiling: - 0.25, minDepth: 1.2, band: [ 1.8, 4.5 ] },
+	fry: { model: 'silverside', label: 'Silverside fry', length: [ 0.045, 0.065 ], mode: 'fry', cruise: 2, max: 4, burst: 14, accel: 9, sep: 1.6, nbr: 8, wSep: 7, wAli: 2.4, wCoh: 1.6, wGoal: 0.9, flee: 3.2, depth: [ 0.3, 0.8 ], homeRadius: 6, amp: 0.11, freq: [ 3.5, 1.2 ], ceiling: - 0.2, minDepth: 0.5, band: [ 0.5, 3.5 ] },
+	pierGrunt: { model: 'grunt', fish: 'grunt', length: [ 0.16, 0.26 ], mode: 'pile', cruise: 0.45, max: 1.8, burst: 7, accel: 3, sep: 1.6, nbr: 4, wAli: 1.4, wCoh: 0.9, depth: [ 0.1, 0.5 ], homeRadius: 1.6, band: [ 2, 6 ] },
+	pierSnapper: { model: 'yellowtail', fish: 'yellowtail', length: [ 0.26, 0.4 ], mode: 'pile', cruise: 0.6, max: 2.2, burst: 8, accel: 3, sep: 1.8, wAli: 1.4, wCoh: 0.8, flee: 4.5, depth: [ 0.3, 0.8 ], homeRadius: 2.5, freq: [ 1.5, 0.9 ], band: [ 2, 6 ] },
 	// escort of the humpback (setWhale): pilot fish / small jacks around its head and flippers,
 	// juveniles near the head, remoras holding on to its belly and flanks
-	pilot: { model: 'jack', length: [ 0.25, 0.4 ], mode: 'escort', cruise: 1.2, max: 3.5, burst: 7, accel: 5, flee: 2, amp: 0.07, freq: [ 1.8, 0.9 ], ceiling: - 0.3, minDepth: 2, band: [ 0, 1e9 ] },
-	juvenile: { model: 'jack', length: [ 0.1, 0.16 ], mode: 'escort', cruise: 1.5, max: 4, burst: 9, accel: 7, flee: 1.5, amp: 0.1, freq: [ 2.5, 1 ], ceiling: - 0.3, minDepth: 2, band: [ 0, 1e9 ] },
-	remora: { model: 'mullet', length: [ 0.35, 0.55 ], mode: 'remora', cruise: 0.5, max: 3, burst: 3, accel: 3, flee: 0, amp: 0.03, freq: [ 0.8, 0.3 ], ceiling: 5, minDepth: 0, band: [ 0, 1e9 ] },
-	pierSergeant: { model: 'sergeant', length: [ 0.12, 0.17 ], mode: 'pile', cruise: 0.6, max: 2, burst: 6, accel: 4, wAli: 0.6, wCoh: 0.6, flee: 3.2, depth: [ 0.3, 0.9 ], homeRadius: 1.2, amp: 0.09, freq: [ 2, 0.9 ], band: [ 2, 6 ] },
+	pilot: { model: 'jack', label: 'Pilot jack', length: [ 0.25, 0.4 ], mode: 'escort', cruise: 1.2, max: 3.5, burst: 7, accel: 5, flee: 2, amp: 0.07, freq: [ 1.8, 0.9 ], ceiling: - 0.3, minDepth: 2, band: [ 0, 1e9 ] },
+	juvenile: { model: 'jack', label: 'Young jack', length: [ 0.1, 0.16 ], mode: 'escort', cruise: 1.5, max: 4, burst: 9, accel: 7, flee: 1.5, amp: 0.1, freq: [ 2.5, 1 ], ceiling: - 0.3, minDepth: 2, band: [ 0, 1e9 ] },
+	remora: { model: 'mullet', label: 'Remora', length: [ 0.35, 0.55 ], mode: 'remora', cruise: 0.5, max: 3, burst: 3, accel: 3, flee: 0, amp: 0.03, freq: [ 0.8, 0.3 ], ceiling: 5, minDepth: 0, band: [ 0, 1e9 ] },
+	pierSergeant: { model: 'sergeant', fish: 'sergeant', length: [ 0.12, 0.17 ], mode: 'pile', cruise: 0.6, max: 2, burst: 6, accel: 4, wAli: 0.6, wCoh: 0.6, flee: 3.2, depth: [ 0.3, 0.9 ], homeRadius: 1.2, amp: 0.09, freq: [ 2, 0.9 ], band: [ 2, 6 ] },
+	// (Salt Life) the spearfisher's fish. Hogfish root along the sand at the reef's foot, alone or a
+	// male with his harem; black groupers hold to the deeper coral heads; lionfish hang over the coral,
+	// hardly moving and hardly afraid; mutton snappers cruise the reef's edges, the warier fish;
+	// red snappers mill over the deep holes; mahi and blackfin tuna roam the blue water off the bay
+	hogfish: { model: 'hogfish', fish: 'wrasse', length: [ 0.32, 0.62 ], mode: 'forage', cruise: 0.45, max: 1.6, burst: 9, accel: 2.5, sep: 2, nbr: 5, wAli: 0.4, wCoh: 0.4, wGoal: 1.1, flee: 4, depth: [ 0.0, 0.05 ], homeRadius: 12, amp: 0.06, freq: [ 1.1, 0.7 ], band: [ 3, 16 ] },
+	blackGrouper: { model: 'blackGrouper', fish: 'blackGrouper', length: [ 0.55, 1.15 ], mode: 'lurk', cruise: 0.15, max: 1.2, burst: 6, accel: 1.5, sep: 1, nbr: 2, wSep: 1, wAli: 0, wCoh: 0, wGoal: 0.8, flee: 4, depth: [ 0.0, 0.06 ], homeRadius: 3, amp: 0.04, freq: [ 0.6, 0.6 ], band: [ 7, 20 ] },
+	lionfish: { model: 'lionfish', fish: 'lionfish', length: [ 0.18, 0.38 ], mode: 'hover', cruise: 0.2, max: 0.8, burst: 2, accel: 2, sep: 3, nbr: 4, wAli: 0.2, wCoh: 0.2, flee: 0.9, depth: [ 0.04, 0.2 ], homeRadius: 1.2, amp: 0.03, freq: [ 0.8, 0.5 ], band: [ 3, 22 ] },
+	muttonSnapper: { model: 'muttonSnapper', fish: 'muttonSnapper', length: [ 0.38, 0.72 ], mode: 'forage', cruise: 0.6, max: 1.8, burst: 9, accel: 2.5, sep: 2.2, nbr: 6, wAli: 0.8, wCoh: 0.6, wGoal: 1, flee: 5.5, depth: [ 0.04, 0.2 ], homeRadius: 16, amp: 0.06, freq: [ 1.2, 0.8 ], band: [ 4, 20 ] },
+	redSnapper: { model: 'redSnapper', fish: 'redSnapper', length: [ 0.4, 0.78 ], mode: 'mill', cruise: 0.5, max: 1.8, burst: 9, accel: 2.5, sep: 1.8, nbr: 5, wAli: 1.2, wCoh: 0.9, wGoal: 0.9, flee: 5, depth: [ 0.05, 0.3 ], homeRadius: 4, amp: 0.06, freq: [ 1.2, 0.8 ], band: [ 15, 32 ] },
+	mahi: { model: 'mahi', fish: 'mahi', length: [ 0.7, 1.25 ], mode: 'cruise', curious: 4, cruise: 1.0, max: 3, burst: 8, accel: 3, sep: 2.5, nbr: 5, wSep: 3, wAli: 1.2, wCoh: 0.6, wGoal: 0.8, flee: 6, depth: [ 0.75, 0.95 ], homeRadius: 45, amp: 0.06, freq: [ 1.2, 0.7 ], ceiling: - 0.5, band: [ 16, 1e9 ] },
+	tuna: { model: 'tuna', fish: 'tuna', length: [ 0.5, 0.85 ], mode: 'cruise', cruise: 1.4, max: 3.5, burst: 9, accel: 4, sep: 2, nbr: 6, wAli: 2, wCoh: 1.2, wGoal: 0.8, flee: 7, depth: [ 0.45, 0.85 ], homeRadius: 45, amp: 0.05, freq: [ 1.6, 0.8 ], band: [ 16, 1e9 ] },
 };
 for ( const k in BEHAVIOUR ) BEHAVIOUR[ k ] = { name: k, ...base, ...BEHAVIOUR[ k ] };
 
@@ -109,6 +136,7 @@ class Group {
 		this.rest = 0; // stingray: resting time left
 		this.breath = 30 + rng() * 40; // turtle: time to the next breath
 		this.jumpTimer = 3 + rng() * 6; // mullet: time to the next leap
+		this.spooked = 0; // (Salt Life) s left of a fright's wariness
 		this.pathIndex = 0;
 		this.pathDir = 1;
 
@@ -174,6 +202,16 @@ export class FishSchools {
 		this.prev = new Float32Array( n * 3 ); // positions in the previous frame (motion vectors)
 		this.tmpA = new Float32Array( n * 9 ); // boids accumulators: separation, alignment, cohesion
 		this.tmpC = new Uint16Array( n ); // neighbour counts
+		// (Salt Life) the speargun's: 0 swimming, 1 on the shaft (hold), 2 landed (take: gone until its
+		// place is filled, refillAt); each fish's group; the bodies as ellipsoids (per model, for the
+		// shaft); the diver's speed and how long they've kept still; how far fish notice them (WARY)
+		this.held = new Uint8Array( n );
+		this.refillAt = new Float32Array( n );
+		this.groupOf = new Array( n );
+		this.taken = new Set();
+		this.hitShapes = {};
+		this.diver = { x: 0, y: 0, z: 0, speed: 0, still: 0, has: false };
+		this.wary = 1;
 		for ( const g of this.groups ) this.initGroup( g );
 		this.batch = null; // (setModels)
 		this.viewHeight = 1267; // (the app sets the canvas' height)
@@ -334,6 +372,11 @@ export class FishSchools {
 		for ( let i = 0; i < 2; i ++ ) place( 'grouper', 1, reef, true );
 		for ( let i = 0; i < 2; i ++ ) place( 'barracuda', 1, reef );
 		for ( const c of [ 150, 120 ] ) place( 'silverside', c, reef );
+		// (Salt Life) the spearfisher's fish of the reef
+		for ( const c of [ 3, 2, 2, 1, 1 ] ) place( 'hogfish', c, { ...reef, r: this.radius, sand: true } );
+		for ( let i = 0; i < 3; i ++ ) place( 'blackGrouper', 1, reef, true );
+		for ( let i = 0; i < 8; i ++ ) place( 'lionfish', i % 3 ? 1 : 2, reef, true );
+		for ( const c of [ 3, 2, 2 ] ) place( 'muttonSnapper', c, { ...reef, r: this.radius } );
 
 		// ---- the drop-off: the reef's deep seaward slope
 		const drop = this.dropOff();
@@ -349,6 +392,7 @@ export class FishSchools {
 
 		}
 
+		place( 'blackGrouper', 1, { ...dropZone, r: 24 } );
 		const eagle = place( 'eagleRay', 1, dropZone );
 		if ( eagle ) eagle.zone.path = drop;
 		for ( let i = 0; i < 2; i ++ ) place( 'stingray', 1, { ...reef, r: this.radius, band: [ 3, 12 ], sand: true } );
@@ -364,6 +408,12 @@ export class FishSchools {
 		place( 'barracuda', 1, { x: WORLD.pier.x + 6, z: WORLD.pier.zEnd - 4, r: 8, band: [ 3, 8 ] } );
 		for ( const c of [ 3, 2, 1 ] ) place( 'needlefish', c, { x: 30, z: 30, r: 60, band: [ 2, 12 ] } );
 		for ( const c of [ 9, 7 ] ) place( 'mullet', c, { x: 20, z: 5, r: 70 } );
+		// (Salt Life) red snappers over the deep holes in the bay and beyond its mouth; mahi and tuna in
+		// the blue water off it (by boat)
+		for ( const c of [ 6, 5 ] ) place( 'redSnapper', c, { x: 5, z: 165, r: 40 } );
+		place( 'redSnapper', 6, { x: 0, z: 330, r: 80 } );
+		for ( const c of [ 5, 4 ] ) place( 'mahi', c, { x: 0, z: 420, r: 90 } );
+		place( 'tuna', 10, { x: - 40, z: 440, r: 90 } );
 
 		// fry along the beach, just outside the breakers (or inside sheltered water)
 		for ( const [ c, x ] of [ [ 90, - 60 ], [ 70, - 10 ], [ 80, 30 ], [ 60, 110 ], [ 70, 150 ] ] ) place( 'fry', c, { x, z: 0, r: 30 } );
@@ -441,6 +491,7 @@ export class FishSchools {
 		for ( let k = 0; k < g.count; k ++ ) {
 
 			const i = g.offset + k;
+			this.groupOf[ i ] = g;
 			let x = g.home.x, z = g.home.z;
 			for ( let t = 0; t < 10; t ++ ) {
 
@@ -610,6 +661,28 @@ export class FishSchools {
 		// (Salt Life: the whale's marks on the water come with the whale)
 		if ( this.whale && this.whale.ready && this.whaleWater ) this.whaleWater.update( this.whale, dt, this.spray );
 		let threat = null;
+		// (Salt Life) the diver's speed (eased: the camera also moves as they turn and bob) and how
+		// long they've kept still: how wary the fish are of them, and who comes to look
+		const dv = this.diver;
+		if ( player ) {
+
+			if ( dv.has && dt > 0 ) {
+
+				const v = Math.min( 6, Math.hypot( player.x - dv.x, player.y - dv.y, player.z - dv.z ) / dt );
+				dv.speed += ( v - dv.speed ) * ( 1 - Math.exp( - dt * 4 ) );
+
+			}
+
+			dv.x = player.x;
+			dv.y = player.y;
+			dv.z = player.z;
+			dv.has = true;
+			dv.still = dv.speed < 0.35 ? dv.still + dt : 0;
+			this.wary = wariness( dv.speed );
+
+		}
+
+		if ( this.taken.size ) this.refill( player );
 		if ( player ) {
 
 			if ( player.y < - 0.1 ) threat = player;
@@ -670,29 +743,35 @@ export class FishSchools {
 
 		const sp = g.sp;
 		const n = g.count, o = g.offset;
-		const P = this.pos, V = this.vel, A = this.tmpA, C = this.tmpC;
-		let cx = 0, cy = 0, cz = 0;
+		const P = this.pos, V = this.vel, A = this.tmpA, C = this.tmpC, Hd = this.held;
+		// (Salt Life: of the fish still swimming: not one on a shaft or landed)
+		let cx = 0, cy = 0, cz = 0, m = 0;
 		for ( let k = 0; k < n; k ++ ) {
 
+			if ( Hd[ o + k ] ) continue;
 			const i = ( o + k ) * 3;
 			cx += P[ i ];
 			cy += P[ i + 1 ];
 			cz += P[ i + 2 ];
+			m ++;
 
 		}
 
-		g.center.set( cx / n, cy / n, cz / n );
+		g.timer -= dt;
+		g.alarm = Math.max( 0, g.alarm - dt );
+		g.spooked = Math.max( 0, g.spooked - dt );
+		if ( ! m ) return;
+		g.center.set( cx / m, cy / m, cz / m );
 		let r2 = 0;
 		for ( let k = 0; k < n; k += Math.max( 1, n >> 4 ) ) {
 
+			if ( Hd[ o + k ] ) continue;
 			const i = ( o + k ) * 3;
 			r2 = Math.max( r2, ( P[ i ] - g.center.x ) ** 2 + ( P[ i + 1 ] - g.center.y ) ** 2 + ( P[ i + 2 ] - g.center.z ) ** 2 );
 
 		}
 
 		g.radius = Math.sqrt( r2 ) + 2;
-		g.timer -= dt;
-		g.alarm = Math.max( 0, g.alarm - dt );
 		if ( sp.mode === 'bait' ) return this.stepBait( g, dt, player );
 		if ( sp.mode === 'escort' || sp.mode === 'remora' ) {
 
@@ -741,8 +820,10 @@ export class FishSchools {
 
 		}
 
-		// the diver
+		// the diver. (Salt Life: noticed farther off the faster they come, and farther still by a fish
+		// that's had a fright; a lurker tucks in at its coral head rather than leaving it)
 		let px = 0, py = 0, pz = 0, near = false;
+		const fleeR = sp.flee * this.wary * ( 1 + 0.8 * g.spooked / SPOOKED );
 		if ( player ) {
 
 			px = player.x;
@@ -750,13 +831,29 @@ export class FishSchools {
 			pz = player.z;
 			const dx = g.center.x - px, dy = g.center.y - py, dz = g.center.z - pz;
 			const d2 = dx * dx + dy * dy + dz * dz;
-			const reach = sp.flee + 4;
-			near = d2 < ( reach + 20 + g.radius ) ** 2;
-			if ( near && g.alarm <= 0 && d2 < reach * reach && roams ) {
+			const reach = fleeR * 1.3 + 0.5;
+			near = d2 < ( reach + 24 + g.radius ) ** 2;
+			if ( near && d2 < reach * reach && ( roams || sp.mode === 'lurk' ) && ( g.alarm <= 0 || ! roams ) ) {
 
+				// (a diver who came at them fast: a fright they remember)
+				if ( g.alarm <= 0 && this.diver.speed > 1 ) g.spooked = SPOOKED;
 				g.alarm = 4;
 				g.rest = 0;
-				this.retarget( g, { x: dx, z: dz } );
+				if ( roams ) this.retarget( g, { x: dx, z: dz } );
+
+			}
+
+		}
+
+		// (Salt Life) a diver keeping still: the curious come to look, holding off a few metres
+		if ( sp.curious && near && this.diver.still > 1.5 && g.alarm <= 0 && g.spooked <= 0 ) {
+
+			const dx = g.center.x - px, dz = g.center.z - pz, dl = Math.hypot( dx, dz ) || 1;
+			if ( dl < 24 ) {
+
+				g.goal.set( px + dx / dl * sp.curious, Math.min( sp.ceiling - 0.3, py ), pz + dz / dl * sp.curious );
+				g.timer = Math.max( g.timer, 2 );
+				hunt = null;
 
 			}
 
@@ -773,10 +870,12 @@ export class FishSchools {
 			for ( let a = 0; a < n; a ++ ) {
 
 				const i = o + a;
+				if ( Hd[ i ] ) continue;
 				const ix = P[ i * 3 ], iy = P[ i * 3 + 1 ], iz = P[ i * 3 + 2 ];
 				for ( let b = a + 1; b < n; b += stride ) {
 
 					const j = o + b;
+					if ( Hd[ j ] ) continue;
 					const dx = P[ j * 3 ] - ix, dy = P[ j * 3 + 1 ] - iy, dz = P[ j * 3 + 2 ] - iz;
 					const d2 = dx * dx + dy * dy + dz * dz;
 					if ( d2 > nbr2 ) continue;
@@ -803,11 +902,12 @@ export class FishSchools {
 		}
 
 		const t = this.time;
-		const flee2 = sp.flee * sp.flee;
+		const flee2 = fleeR * fleeR;
 		const piles = g.zone.piles;
 		for ( let a = 0; a < n; a ++ ) {
 
 			const i = o + a, i3 = i * 3, ai = i * 9;
+			if ( Hd[ i ] ) continue;
 			const L = this.size[ i ];
 			let x = P[ i3 ], y = P[ i3 + 1 ], z = P[ i3 + 2 ];
 			let vx = V[ i3 ], vy = V[ i3 + 1 ], vz = V[ i3 + 2 ];
@@ -881,6 +981,14 @@ export class FishSchools {
 				const floor = this.terrain.heightAt( tx, tz );
 				ty = floor + FLOOR_CLEARANCE + 0.3 + ( sp.ceiling - floor ) * ( sp.depth[ 0 ] + ( sp.depth[ 1 ] - sp.depth[ 0 ] ) * ( ( s * 5.7 ) % 1 ) );
 
+			} else if ( sp.mode === 'lurk' && g.alarm > 0 ) {
+
+				// (Salt Life) frightened: down to the foot of its coral head, and keeps still there
+				tx = g.home.x;
+				tz = g.home.z;
+				ty = this.floorC[ i ] + FLOOR_CLEARANCE + L * 0.3;
+				want = cruise * 4;
+
 			} else if ( sp.mode === 'lurk' ) {
 
 				// hangs by its coral head, turning slowly
@@ -928,7 +1036,7 @@ export class FishSchools {
 				if ( d2 < flee2 ) {
 
 					dl = Math.sqrt( d2 ) + 1e-4;
-					const k = 1 - dl / sp.flee;
+					const k = 1 - dl / fleeR;
 					const f = ( k * k * 12 + k * 3 ) * sp.accel;
 					ax += dx / dl * f;
 					ay += dy / dl * f * 0.4;
@@ -1059,7 +1167,7 @@ export class FishSchools {
 
 				g.jumpTimer = 4 + g.rng() * 10;
 				const i = o + Math.floor( g.rng() * n );
-				if ( this.jump[ i ] === 0 && this.pos[ i * 3 + 1 ] > - 2.5 ) this.jump[ i ] = 1;
+				if ( this.jump[ i ] === 0 && ! Hd[ i ] && this.pos[ i * 3 + 1 ] > - 2.5 ) this.jump[ i ] = 1;
 
 			}
 
@@ -1429,6 +1537,9 @@ export class FishSchools {
 			for ( let a = 0; a < g.count; a ++ ) {
 
 				const i = g.offset + a, i3 = i * 3;
+				// (Salt Life) landed: gone; on the shaft: posed by the speargun (hold), thrashing
+				const held = this.held[ i ];
+				if ( held === 2 ) continue;
 				const L = this.size[ i ];
 				const x = P[ i3 ], y = P[ i3 + 1 ], z = P[ i3 + 2 ];
 				const vx = V[ i3 ], vy = V[ i3 + 1 ], vz = V[ i3 + 2 ];
@@ -1436,32 +1547,39 @@ export class FishSchools {
 				const airborne = this.jump[ i ] > 1.5;
 
 				// heading follows the velocity (slowly when hovering), pitch limited
-				const kh = airborne ? 1 : kHead * Math.min( 1, speed / ( L * 0.5 ) + 0.15 );
-				const ohx = H[ i3 ], ohz = H[ i3 + 2 ];
-				let hx = ohx + ( vx / speed - ohx ) * kh;
-				let hy = H[ i3 + 1 ] + ( vy / speed - H[ i3 + 1 ] ) * kh;
-				let hz = ohz + ( vz / speed - ohz ) * kh;
-				const pitchMax = airborne ? 1.2 : ray || turtle ? 0.3 : 0.45;
-				hy = Math.max( - pitchMax, Math.min( pitchMax, hy ) );
-				const hl = Math.hypot( hx, hy, hz ) || 1;
-				hx /= hl;
-				hy /= hl;
-				hz /= hl;
-				H[ i3 ] = hx;
-				H[ i3 + 1 ] = hy;
-				H[ i3 + 2 ] = hz;
-				const yawRate = ( ohz * hx - ohx * hz ) / dt;
-				const bank = ray ? 0.45 : turtle ? 0.35 : 0.12;
-				this.roll[ i ] += ( Math.max( - 0.5, Math.min( 0.5, yawRate * bank ) ) - this.roll[ i ] ) * kRoll;
-				this.bend[ i ] += ( Math.max( - 0.25, Math.min( 0.25, yawRate * 0.06 ) ) - this.bend[ i ] ) * kRoll;
+				let hx = H[ i3 ], hy = H[ i3 + 1 ], hz = H[ i3 + 2 ];
+				if ( ! held ) {
 
-				// tail beat / wing wave / flipper stroke: frequency and amplitude grow with speed
+					const kh = airborne ? 1 : kHead * Math.min( 1, speed / ( L * 0.5 ) + 0.15 );
+					const ohx = hx, ohz = hz;
+					hx = ohx + ( vx / speed - ohx ) * kh;
+					hy = hy + ( vy / speed - hy ) * kh;
+					hz = ohz + ( vz / speed - ohz ) * kh;
+					const pitchMax = airborne ? 1.2 : ray || turtle ? 0.3 : 0.45;
+					hy = Math.max( - pitchMax, Math.min( pitchMax, hy ) );
+					const hl = Math.hypot( hx, hy, hz ) || 1;
+					hx /= hl;
+					hy /= hl;
+					hz /= hl;
+					H[ i3 ] = hx;
+					H[ i3 + 1 ] = hy;
+					H[ i3 + 2 ] = hz;
+					const yawRate = ( ohz * hx - ohx * hz ) / dt;
+					const bank = ray ? 0.45 : turtle ? 0.35 : 0.12;
+					this.roll[ i ] += ( Math.max( - 0.5, Math.min( 0.5, yawRate * bank ) ) - this.roll[ i ] ) * kRoll;
+					this.bend[ i ] += ( Math.max( - 0.25, Math.min( 0.25, yawRate * 0.06 ) ) - this.bend[ i ] ) * kRoll;
+
+				}
+
+				// tail beat / wing wave / flipper stroke: frequency and amplitude grow with speed (a
+				// speared fish beats hard and fast as it fights the shaft: its panic)
 				const bl = speed / L;
 				const rest = sp.mode === 'glide' && g.rest > 0;
-				const freq = rest ? 0.15 : Math.min( 10, sp.freq[ 0 ] + sp.freq[ 1 ] * bl ) * ( airborne ? 2.5 : 1 );
+				const thrash = held ? this.panic[ i ] : 0;
+				const freq = held ? sp.freq[ 0 ] * ( 1.2 + thrash * 3 ) : rest ? 0.15 : Math.min( 10, sp.freq[ 0 ] + sp.freq[ 1 ] * bl ) * ( airborne ? 2.5 : 1 );
 				const dPhase = dt * TAU * freq;
 				this.phase[ i ] = ( this.phase[ i ] + dPhase ) % ( TAU * 64 );
-				const amp = rest ? sp.amp * 0.2 : sp.amp * ( 0.55 + 0.45 * Math.min( 2.5, bl / Math.max( 0.2, sp.cruise ) ) + this.panic[ i ] * 0.5 );
+				const amp = held ? sp.amp * ( 0.5 + thrash * 2.5 ) : rest ? sp.amp * 0.2 : sp.amp * ( 0.55 + 0.45 * Math.min( 2.5, bl / Math.max( 0.2, sp.cruise ) ) + this.panic[ i ] * 0.5 );
 
 				// cull: distance, size on screen and view frustum
 				const dx = x - cp.x, dy = y - cp.y, dz = z - cp.z;
@@ -1474,7 +1592,7 @@ export class FishSchools {
 				if ( ! _frustum.intersectsSphere( _sphere ) ) continue;
 
 				// orientation: yaw from the heading, pitch, bank into turns
-				yawPitchRoll( Math.atan2( hx, hz ), - Math.asin( hy ), this.roll[ i ], _q );
+				yawPitchRoll( Math.atan2( hx, hz ), - Math.asin( Math.max( - 1, Math.min( 1, hy ) ) ), this.roll[ i ], _q );
 
 				const o = i * 16;
 				D[ o ] = x;
@@ -1517,6 +1635,199 @@ export class FishSchools {
 
 	}
 
+	// ------------------------------------------------------------------ (Salt Life) the speargun
+
+	// what fish i is: its kind (BEHAVIOUR: the catch table's species in .fish, else .label) and its
+	// length (m)
+	about( i ) {
+
+		return { sp: this.groupOf[ i ].sp, L: this.size[ i ] };
+
+	}
+
+	// the body of a model as an ellipsoid in the model's frame (total length 1, snout at z = +0.5):
+	// centre ( 0, cy, cz ), half axes ( hw, hh, hl ). Fins aren't in it: a shot through a fin misses
+	hitShape( model ) {
+
+		let h = this.hitShapes[ model ];
+		if ( h ) return h;
+		const S = SPECIES[ model ];
+		if ( ! S.top ) h = { cz: 0, hl: 0.5, cy: 0, hh: 0.06, hw: 0.4 }; // rays and the turtle (flat)
+		else {
+
+			const max = ( pts ) => pts.reduce( ( m, p ) => Math.max( m, p[ 1 ] ), 0 );
+			const top = max( S.top ), bot = max( S.bot );
+			h = { cz: 0.5 - S.body / 2, hl: S.body / 2, cy: ( top - bot ) / 2, hh: ( top + bot ) / 2, hw: max( S.wid ) * 1.15 };
+
+		}
+
+		return this.hitShapes[ model ] = h;
+
+	}
+
+	// The first swimming fish the segment a -> b goes through (only those pick( i ) allows; all of
+	// them without it): { i, t (0 .. 1 along the segment), u (where along its body: 0 snout .. 1 the
+	// base of its tail) }, or null
+	pierce( a, b, pick = null ) {
+
+		const P = this.pos, H = this.head;
+		const sx = b.x - a.x, sy = b.y - a.y, sz = b.z - a.z;
+		const len = Math.hypot( sx, sy, sz );
+		if ( len < 1e-6 ) return null;
+		let best = null, bt = Infinity;
+		for ( const g of this.groups ) {
+
+			if ( ! g.active ) continue;
+			// the group's sphere against the segment
+			const cx = g.center.x - a.x, cy = g.center.y - a.y, cz = g.center.z - a.z;
+			const along = Math.max( 0, Math.min( len, ( cx * sx + cy * sy + cz * sz ) / len ) );
+			const ex = cx - sx / len * along, ey = cy - sy / len * along, ez = cz - sz / len * along;
+			if ( ex * ex + ey * ey + ez * ez > ( g.radius + 1.5 ) ** 2 ) continue;
+			const sh = this.hitShape( g.sp.model );
+			for ( let k = 0; k < g.count; k ++ ) {
+
+				const i = g.offset + k, i3 = i * 3;
+				if ( this.held[ i ] || ( pick && ! pick( i ) ) ) continue;
+				const L = this.size[ i ];
+				// the fish's frame: f its heading, r level and square to it, v up its back
+				let fx = H[ i3 ], fy = H[ i3 + 1 ], fz = H[ i3 + 2 ];
+				const fl = Math.hypot( fx, fy, fz ) || 1;
+				fx /= fl; fy /= fl; fz /= fl;
+				let rx = fz, rz = - fx;
+				const rl = Math.hypot( rx, rz ) || 1;
+				rx /= rl; rz /= rl;
+				const vx = - rz * fy, vy = rz * fx - rx * fz, vz = rx * fy;
+				// the segment in the ellipsoid's unit-sphere space
+				const ox = a.x - P[ i3 ], oy = a.y - P[ i3 + 1 ], oz = a.z - P[ i3 + 2 ];
+				const toUnit = ( x, y, z, out, origin ) => {
+
+					const lz = x * fx + y * fy + z * fz, lx = x * rx + z * rz, ly = x * vx + y * vy + z * vz;
+					out[ 0 ] = lx / ( sh.hw * L );
+					out[ 1 ] = ( ly - ( origin ? sh.cy * L : 0 ) ) / ( sh.hh * L );
+					out[ 2 ] = ( lz - ( origin ? sh.cz * L : 0 ) ) / ( sh.hl * L );
+					return lz;
+
+				};
+				toUnit( ox, oy, oz, _o3, true );
+				toUnit( sx, sy, sz, _d3, false );
+				const A = _d3[ 0 ] ** 2 + _d3[ 1 ] ** 2 + _d3[ 2 ] ** 2;
+				const B = 2 * ( _o3[ 0 ] * _d3[ 0 ] + _o3[ 1 ] * _d3[ 1 ] + _o3[ 2 ] * _d3[ 2 ] );
+				const Cc = _o3[ 0 ] ** 2 + _o3[ 1 ] ** 2 + _o3[ 2 ] ** 2 - 1;
+				const disc = B * B - 4 * A * Cc;
+				if ( disc < 0 ) continue;
+				let t = Cc <= 0 ? 0 : ( - B - Math.sqrt( disc ) ) / ( 2 * A );
+				if ( t < 0 || t > 1 || t >= bt ) continue;
+				bt = t;
+				const lz = ( oz + sz * t ) * fz + ( ox + sx * t ) * fx + ( oy + sy * t ) * fy;
+				best = { i, t, u: Math.max( 0, Math.min( 1, ( 0.5 - lz / L ) / ( 2 * sh.hl ) ) ) };
+
+			}
+
+		}
+
+		return best;
+
+	}
+
+	// fish i is on the shaft: at x, y, z, heading h (unit), rolled `roll` about it, thrashing 0 .. 1
+	// (the speargun, each frame while it holds it)
+	hold( i, x, y, z, h, roll, thrash ) {
+
+		const i3 = i * 3;
+		if ( ! this.held[ i ] ) {
+
+			this.held[ i ] = 1;
+			this.startle( x, y, z, 7 );
+
+		}
+
+		this.pos[ i3 ] = x;
+		this.pos[ i3 + 1 ] = y;
+		this.pos[ i3 + 2 ] = z;
+		this.vel[ i3 ] = this.vel[ i3 + 1 ] = this.vel[ i3 + 2 ] = 0;
+		this.head[ i3 ] = h.x;
+		this.head[ i3 + 1 ] = h.y;
+		this.head[ i3 + 2 ] = h.z;
+		this.roll[ i ] = roll;
+		this.bend[ i ] = Math.sin( this.time * 9 + i ) * 0.2 * thrash;
+		this.panic[ i ] = thrash;
+
+	}
+
+	// it tore free: off it goes, at speed
+	release( i ) {
+
+		const i3 = i * 3, L = this.size[ i ];
+		this.held[ i ] = 0;
+		const sp = this.groupOf[ i ].sp;
+		this.vel[ i3 ] = this.head[ i3 ] * sp.burst * L;
+		this.vel[ i3 + 1 ] = 0;
+		this.vel[ i3 + 2 ] = this.head[ i3 + 2 ] * sp.burst * L;
+		this.panic[ i ] = 1;
+
+	}
+
+	// landed: gone from the water until its place is filled, a few minutes on, out of sight
+	take( i ) {
+
+		this.held[ i ] = 2;
+		this.refillAt[ i ] = this.time + REFILL[ 0 ] + Math.random() * ( REFILL[ 1 ] - REFILL[ 0 ] );
+		this.taken.add( i );
+
+	}
+
+	// the landed fish whose time has come, back among their own kind where the camera can't see
+	refill( camera ) {
+
+		for ( const i of this.taken ) {
+
+			if ( this.time < this.refillAt[ i ] ) continue;
+			const g = this.groupOf[ i ];
+			const far = ! camera || Math.hypot( g.center.x - camera.x, g.center.y - camera.y, g.center.z - camera.z ) > this.cfg.range + g.radius + 6;
+			if ( ! far ) continue;
+			const i3 = i * 3, sp = g.sp;
+			let mate = - 1;
+			for ( let k = 0; k < g.count && mate < 0; k ++ ) if ( ! this.held[ g.offset + k ] ) mate = g.offset + k;
+			const x = mate >= 0 ? this.pos[ mate * 3 ] + ( Math.random() - 0.5 ) : g.home.x;
+			const z = mate >= 0 ? this.pos[ mate * 3 + 2 ] + ( Math.random() - 0.5 ) : g.home.z;
+			const y = this.clampY( sp, x, z, mate >= 0 ? this.pos[ mate * 3 + 1 ] : g.home.y );
+			this.pos.set( [ x, y, z ], i3 );
+			this.prev.set( [ x, y, z ], i3 );
+			this.vel.set( [ g.heading.x * sp.cruise * this.size[ i ], 0, g.heading.z * sp.cruise * this.size[ i ] ], i3 );
+			this.head.set( [ g.heading.x, 0, g.heading.z ], i3 );
+			this.panic[ i ] = 0;
+			this.held[ i ] = 0;
+			this.taken.delete( i );
+
+		}
+
+	}
+
+	// a fright at x, y, z (a shot, a speared fish thrashing): the fish within r scatter, and stay wary
+	startle( x, y, z, r ) {
+
+		for ( const g of this.groups ) {
+
+			if ( ! g.active ) continue;
+			if ( Math.hypot( g.center.x - x, g.center.y - y, g.center.z - z ) > r + g.radius ) continue;
+			g.alarm = 4;
+			g.spooked = SPOOKED;
+			g.rest = 0;
+			const sp = g.sp;
+			if ( sp.mode !== 'mill' && sp.mode !== 'hover' && sp.mode !== 'pile' && sp.mode !== 'lurk' && sp.mode !== 'bait' && sp.mode !== 'escort' && sp.mode !== 'remora' ) this.retarget( g, { x: g.center.x - x, z: g.center.z - z } );
+			for ( let k = 0; k < g.count; k ++ ) {
+
+				const i = g.offset + k;
+				if ( this.held[ i ] ) continue;
+				const d = Math.hypot( this.pos[ i * 3 ] - x, this.pos[ i * 3 + 1 ] - y, this.pos[ i * 3 + 2 ] - z );
+				if ( d < r ) this.panic[ i ] = Math.max( this.panic[ i ], 1 - d / r );
+
+			}
+
+		}
+
+	}
+
 	dispose() {
 
 		if ( this.batch ) {
@@ -1529,6 +1840,28 @@ export class FishSchools {
 		this.group.removeFromParent();
 
 	}
+
+}
+
+const _o3 = [ 0, 0, 0 ], _d3 = [ 0, 0, 0 ];
+
+// (Salt Life) WARY at the diver's speed (m/s): how far the fish notice them, as a share of their flee
+// distance
+function wariness( speed ) {
+
+	if ( speed <= WARY[ 0 ][ 0 ] ) return WARY[ 0 ][ 1 ];
+	for ( let k = 1; k < WARY.length; k ++ ) {
+
+		if ( speed <= WARY[ k ][ 0 ] ) {
+
+			const [ s0, w0 ] = WARY[ k - 1 ], [ s1, w1 ] = WARY[ k ];
+			return w0 + ( w1 - w0 ) * ( speed - s0 ) / ( s1 - s0 );
+
+		}
+
+	}
+
+	return WARY[ WARY.length - 1 ][ 1 ];
 
 }
 

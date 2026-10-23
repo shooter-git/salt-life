@@ -14,7 +14,8 @@
 //  dorsal / anal: fin segments { from, to, rays, spiny, h: [ [ t, height ], ... ] over the
 //    segment, rake: [ first, last ] angle of the rays from the vertical (rad), notch: membrane
 //    dip between the rays (fraction of the ray length) }
-//  pectoral: { u, y, len, base, rays, shape ('rounded' | 'pointed' | 'falcate'), spread }
+//  pectoral: { u, y, len, base, rays, shape ('rounded' | 'pointed' | 'falcate'), spread (out from the
+//    flank, rad; [ first, last ] ray: a fan), notch (membrane dip between the ray tips; default 0.035) }
 //  pelvic: { u, len, rays }
 //  caudal: { shape: 'forked' | 'lunate' | 'rounded' | 'truncate', len, span, fork (length of the
 //    middle rays relative to the lobes), rays }
@@ -25,6 +26,8 @@ export const PATTERN = {
 	silverside: 0, chromis: 1, grunt: 2, yellowtail: 3, tang: 4, sergeant: 5, wrasse: 6, parrot: 7,
 	angel: 8, barracuda: 9, redSnapper: 10, grouper: 11, tuna: 12, mahi: 13, mullet: 14, needlefish: 15,
 	jack: 16, tarpon: 17, stingray: 18, eagleRay: 19, turtle: 20,
+	// (Salt Life) for the speargun: the spearfisher's fish of the reef
+	hogfish: 21, blackGrouper: 22, muttonSnapper: 23, lionfish: 24,
 };
 
 const spiny = ( from, to, rays, h, rake, notch = 0.16 ) => ( { from, to, rays, spiny: true, h, rake, notch } );
@@ -307,9 +310,10 @@ export const SPECIES = {
 
 	// bar jack: compressed, pointed snout, sickle pectorals, deeply forked tail
 	jack: {
+		// (Salt Life: a crevalle jack, as the catch table has it: deeper, with a blunt, steep head)
 		pattern: PATTERN.jack, body: 0.78, sec: 2.0,
-		top: [ [ 0, 0.004 ], [ 0.03, 0.024 ], [ 0.08, 0.055 ], [ 0.16, 0.088 ], [ 0.28, 0.114 ], [ 0.42, 0.12 ], [ 0.56, 0.107 ], [ 0.7, 0.078 ], [ 0.84, 0.042 ], [ 0.94, 0.024 ], [ 1, 0.02 ] ],
-		bot: [ [ 0, 0.004 ], [ 0.03, 0.02 ], [ 0.08, 0.046 ], [ 0.16, 0.074 ], [ 0.28, 0.098 ], [ 0.42, 0.105 ], [ 0.56, 0.094 ], [ 0.7, 0.068 ], [ 0.84, 0.037 ], [ 0.94, 0.022 ], [ 1, 0.019 ] ],
+		top: [ [ 0, 0.005 ], [ 0.03, 0.034 ], [ 0.08, 0.074 ], [ 0.16, 0.112 ], [ 0.28, 0.137 ], [ 0.42, 0.142 ], [ 0.56, 0.124 ], [ 0.7, 0.088 ], [ 0.84, 0.045 ], [ 0.94, 0.024 ], [ 1, 0.02 ] ],
+		bot: [ [ 0, 0.005 ], [ 0.03, 0.024 ], [ 0.08, 0.055 ], [ 0.16, 0.088 ], [ 0.28, 0.117 ], [ 0.42, 0.125 ], [ 0.56, 0.11 ], [ 0.7, 0.078 ], [ 0.84, 0.04 ], [ 0.94, 0.022 ], [ 1, 0.019 ] ],
 		wid: [ [ 0, 0.004 ], [ 0.05, 0.022 ], [ 0.15, 0.04 ], [ 0.3, 0.048 ], [ 0.5, 0.044 ], [ 0.7, 0.032 ], [ 0.88, 0.02 ], [ 1, 0.016 ] ],
 		mouth: { corner: 0.09, y: - 0.006, tip: - 0.002, protrude: 0.002 },
 		eye: { u: 0.12, y: 0.03, r: 0.024 }, opercle: 0.26,
@@ -339,6 +343,76 @@ export const SPECIES = {
 		iris: 0xc0c0b0, irid: 0.3, metal: 0.8,
 	},
 
+	// (Salt Life) hogfish: a big wrasse, deep and compressed, with a long pig's snout; the first three
+	// dorsal spines long streamers, the soft dorsal, the anal fin and the tail's corners drawn out
+	hogfish: {
+		pattern: PATTERN.hogfish, body: 0.8, sec: 2.0,
+		top: [ [ 0, 0.004 ], [ 0.03, 0.012 ], [ 0.08, 0.03 ], [ 0.13, 0.068 ], [ 0.2, 0.13 ], [ 0.28, 0.172 ], [ 0.38, 0.186 ], [ 0.5, 0.18 ], [ 0.62, 0.16 ], [ 0.74, 0.122 ], [ 0.87, 0.078 ], [ 1, 0.056 ] ],
+		bot: [ [ 0, 0.004 ], [ 0.03, 0.011 ], [ 0.08, 0.026 ], [ 0.13, 0.05 ], [ 0.2, 0.088 ], [ 0.28, 0.12 ], [ 0.38, 0.136 ], [ 0.5, 0.134 ], [ 0.62, 0.12 ], [ 0.74, 0.098 ], [ 0.87, 0.066 ], [ 1, 0.052 ] ],
+		wid: [ [ 0, 0.004 ], [ 0.05, 0.015 ], [ 0.14, 0.032 ], [ 0.28, 0.048 ], [ 0.45, 0.05 ], [ 0.65, 0.041 ], [ 0.85, 0.028 ], [ 1, 0.02 ] ],
+		mouth: { corner: 0.055, y: - 0.008, tip: - 0.004, protrude: 0.003 },
+		eye: { u: 0.16, y: 0.052, r: 0.017 }, opercle: 0.3,
+		scales: 0.022, scaleVis: 0.55, lateral: 0.72, arch: 0.15,
+		dorsal: [ spiny( 0.27, 0.31, 3, [ [ 0, 0.19 ], [ 0.5, 0.21 ], [ 1, 0.17 ] ], [ 0.35, 0.5 ], 0.72 ), spiny( 0.32, 0.55, 11, [ [ 0, 0.05 ], [ 1, 0.05 ] ], [ 0.5, 0.6 ], 0.1 ), soft( 0.55, 0.86, 11, [ [ 0, 0.06 ], [ 0.7, 0.085 ], [ 1, 0.11 ] ], [ 0.6, 1.0 ] ) ],
+		anal: [ spiny( 0.58, 0.62, 3, [ [ 0, 0.03 ], [ 1, 0.045 ] ], [ 0.5, 0.6 ], 0.1 ), soft( 0.62, 0.85, 10, [ [ 0, 0.06 ], [ 0.7, 0.085 ], [ 1, 0.11 ] ], [ 0.6, 1.0 ] ) ],
+		pectoral: { u: 0.31, y: 0.0, len: 0.13, base: 0.03, rays: 15, shape: 'rounded', spread: 0.45 },
+		pelvic: { u: 0.34, len: 0.08, rays: 6 },
+		caudal: { shape: 'lunate', len: 0.19, span: 0.16, fork: 0.7, rays: 14 },
+		iris: 0xc87830, irid: 0.1, metal: 0.05,
+	},
+
+	// black grouper: longer and slimmer than the Nassau grouper, a big jaw, the tail squared off
+	blackGrouper: {
+		pattern: PATTERN.blackGrouper, body: 0.84, sec: 2.15,
+		top: [ [ 0, 0.005 ], [ 0.03, 0.026 ], [ 0.08, 0.052 ], [ 0.15, 0.082 ], [ 0.25, 0.11 ], [ 0.38, 0.124 ], [ 0.52, 0.122 ], [ 0.66, 0.105 ], [ 0.8, 0.08 ], [ 0.92, 0.062 ], [ 1, 0.055 ] ],
+		bot: [ [ 0, 0.005 ], [ 0.03, 0.028 ], [ 0.08, 0.055 ], [ 0.15, 0.082 ], [ 0.25, 0.105 ], [ 0.38, 0.116 ], [ 0.52, 0.112 ], [ 0.66, 0.094 ], [ 0.8, 0.07 ], [ 0.92, 0.056 ], [ 1, 0.052 ] ],
+		wid: [ [ 0, 0.005 ], [ 0.04, 0.03 ], [ 0.12, 0.056 ], [ 0.25, 0.07 ], [ 0.4, 0.071 ], [ 0.6, 0.06 ], [ 0.8, 0.043 ], [ 1, 0.027 ] ],
+		mouth: { corner: 0.155, y: - 0.02, tip: - 0.006, protrude: 0.01 },
+		eye: { u: 0.13, y: 0.058, r: 0.016 }, opercle: 0.32,
+		scales: 0.009, scaleVis: 0.35, lateral: 0.6, arch: 0.2,
+		dorsal: [ spiny( 0.3, 0.58, 11, [ [ 0, 0.035 ], [ 0.25, 0.055 ], [ 1, 0.045 ] ], [ 0.3, 0.45 ], 0.2 ), soft( 0.58, 0.85, 16, [ [ 0, 0.055 ], [ 0.5, 0.065 ], [ 1, 0.03 ] ], [ 0.55, 0.9 ] ) ],
+		anal: [ spiny( 0.65, 0.68, 3, [ [ 0, 0.022 ], [ 1, 0.035 ] ], [ 0.4, 0.5 ], 0.12 ), soft( 0.68, 0.84, 11, [ [ 0, 0.06 ], [ 0.5, 0.068 ], [ 1, 0.03 ] ], [ 0.55, 0.9 ] ) ],
+		pectoral: { u: 0.33, y: - 0.02, len: 0.15, base: 0.036, rays: 17, shape: 'rounded', spread: 0.4 },
+		pelvic: { u: 0.35, len: 0.11, rays: 6 },
+		caudal: { shape: 'truncate', len: 0.15, span: 0.11, fork: 0.94, rays: 15 },
+		iris: 0x8a7a50, irid: 0.05, metal: 0.0,
+	},
+
+	// mutton snapper: a snapper with a sloping head, a pointed anal fin and a lightly forked tail
+	muttonSnapper: {
+		pattern: PATTERN.muttonSnapper, body: 0.8, sec: 2.15,
+		top: [ [ 0, 0.004 ], [ 0.02, 0.018 ], [ 0.06, 0.04 ], [ 0.12, 0.068 ], [ 0.2, 0.1 ], [ 0.3, 0.13 ], [ 0.42, 0.143 ], [ 0.55, 0.136 ], [ 0.68, 0.11 ], [ 0.8, 0.08 ], [ 0.9, 0.056 ], [ 1, 0.046 ] ],
+		bot: [ [ 0, 0.004 ], [ 0.02, 0.016 ], [ 0.06, 0.032 ], [ 0.12, 0.055 ], [ 0.2, 0.08 ], [ 0.3, 0.102 ], [ 0.42, 0.115 ], [ 0.55, 0.112 ], [ 0.68, 0.088 ], [ 0.8, 0.063 ], [ 0.9, 0.049 ], [ 1, 0.044 ] ],
+		wid: [ [ 0, 0.004 ], [ 0.03, 0.019 ], [ 0.1, 0.039 ], [ 0.2, 0.053 ], [ 0.35, 0.059 ], [ 0.5, 0.055 ], [ 0.65, 0.045 ], [ 0.8, 0.031 ], [ 0.92, 0.022 ], [ 1, 0.018 ] ],
+		mouth: { corner: 0.11, y: - 0.012, tip: - 0.004, protrude: 0.004 },
+		eye: { u: 0.14, y: 0.054, r: 0.02 }, opercle: 0.29,
+		scales: 0.017, scaleVis: 0.6, lateral: 0.45, arch: 0.15,
+		dorsal: [ spiny( 0.34, 0.6, 10, [ [ 0, 0.04 ], [ 0.3, 0.07 ], [ 1, 0.05 ] ], [ 0.3, 0.5 ], 0.17 ), soft( 0.6, 0.86, 14, [ [ 0, 0.06 ], [ 0.4, 0.065 ], [ 1, 0.03 ] ], [ 0.6, 0.95 ] ) ],
+		anal: [ spiny( 0.64, 0.67, 3, [ [ 0, 0.03 ], [ 1, 0.05 ] ], [ 0.4, 0.5 ], 0.1 ), soft( 0.67, 0.83, 8, [ [ 0, 0.08 ], [ 0.3, 0.1 ], [ 1, 0.03 ] ], [ 0.65, 1.0 ] ) ],
+		pectoral: { u: 0.33, y: - 0.02, len: 0.19, base: 0.032, rays: 16, shape: 'pointed', spread: 0.35 },
+		pelvic: { u: 0.37, len: 0.1, rays: 6 },
+		caudal: { shape: 'forked', len: 0.19, span: 0.135, fork: 0.72, rays: 17 },
+		iris: 0xc84028, irid: 0.25, metal: 0.2,
+	},
+
+	// red lionfish: a stout body under a crest of long, separate venomous spines; the pectorals huge
+	// fans reaching the tail; long pelvic fins; a rounded tail
+	lionfish: {
+		pattern: PATTERN.lionfish, body: 0.78, sec: 2.1,
+		top: [ [ 0, 0.008 ], [ 0.03, 0.03 ], [ 0.08, 0.065 ], [ 0.16, 0.105 ], [ 0.26, 0.13 ], [ 0.38, 0.135 ], [ 0.52, 0.12 ], [ 0.66, 0.095 ], [ 0.8, 0.068 ], [ 0.92, 0.05 ], [ 1, 0.045 ] ],
+		bot: [ [ 0, 0.008 ], [ 0.03, 0.03 ], [ 0.08, 0.058 ], [ 0.16, 0.088 ], [ 0.26, 0.105 ], [ 0.38, 0.108 ], [ 0.52, 0.098 ], [ 0.66, 0.08 ], [ 0.8, 0.058 ], [ 0.92, 0.046 ], [ 1, 0.042 ] ],
+		wid: [ [ 0, 0.006 ], [ 0.04, 0.03 ], [ 0.12, 0.055 ], [ 0.25, 0.066 ], [ 0.4, 0.062 ], [ 0.6, 0.048 ], [ 0.8, 0.032 ], [ 1, 0.022 ] ],
+		mouth: { corner: 0.1, y: - 0.006, tip: 0.0, protrude: 0.006 },
+		eye: { u: 0.13, y: 0.062, r: 0.024 }, opercle: 0.3,
+		scales: 0.01, scaleVis: 0.15, lateral: 0.6, arch: 0.15,
+		dorsal: [ spiny( 0.2, 0.6, 13, [ [ 0, 0.25 ], [ 0.25, 0.33 ], [ 0.6, 0.29 ], [ 1, 0.13 ] ], [ 0.25, 0.75 ], 0.8 ), soft( 0.62, 0.86, 11, [ [ 0, 0.12 ], [ 0.5, 0.13 ], [ 1, 0.06 ] ], [ 0.6, 1.0 ] ) ],
+		anal: [ spiny( 0.62, 0.66, 3, [ [ 0, 0.05 ], [ 1, 0.08 ] ], [ 0.5, 0.6 ], 0.3 ), soft( 0.66, 0.84, 7, [ [ 0, 0.12 ], [ 0.5, 0.13 ], [ 1, 0.06 ] ], [ 0.6, 1.0 ] ) ],
+		pectoral: { u: 0.3, y: - 0.02, len: 0.42, base: 0.06, rays: 14, shape: 'rounded', spread: [ 1.3, 0.3 ], notch: 0.3 },
+		pelvic: { u: 0.32, len: 0.2, rays: 6 },
+		caudal: { shape: 'rounded', len: 0.2, span: 0.12, fork: 1, rays: 13 },
+		iris: 0x9a2a1a, irid: 0.05, metal: 0.0,
+	},
+
 	// rays and the turtle: geometry from CreatureGeometry.js; these entries only feed the skin table
 	stingray: { pattern: PATTERN.stingray, body: 1, eye: { u: 0.3, y: 0.05, r: 0.012 }, opercle: 0.4, mouth: { corner: 0.1, y: - 0.03, tip: - 0.03 }, lateral: 0, arch: 0, scales: 0, scaleVis: 0, iris: 0x606040, irid: 0, metal: 0 },
 	eagleRay: { pattern: PATTERN.eagleRay, body: 1, eye: { u: 0.2, y: 0.05, r: 0.014 }, opercle: 0.3, mouth: { corner: 0.1, y: - 0.03, tip: - 0.03 }, lateral: 0, arch: 0, scales: 0, scaleVis: 0, iris: 0x404040, irid: 0, metal: 0 },
@@ -365,9 +439,13 @@ export const SKIN = {
 	mahi: { back: 0x125c6a, flank: 0xcdb52a, belly: 0xefe29a, fin: 0x2c5c9c, edge: 0x1c4c9c, rough: 0.3 },
 	mullet: { back: 0x485856, flank: 0xb4bcbe, belly: 0xe6eaea, fin: 0x848c8c, edge: 0x6c7474, rough: 0.33 },
 	needlefish: { back: 0x36766c, flank: 0xb4cccc, belly: 0xeef2f2, fin: 0x76968e, edge: 0x46666c, rough: 0.3 },
-	jack: { back: 0x56768c, flank: 0xbcc8d0, belly: 0xe6ecee, fin: 0x86949c, edge: 0x3c444c, rough: 0.3 },
+	jack: { back: 0x4c6a68, flank: 0xc4c6b0, belly: 0xe8e0b4, fin: 0x9a967a, edge: 0x5a5a48, rough: 0.3 },
 	tarpon: { back: 0x364c5c, flank: 0xd4dadc, belly: 0xeef0f2, fin: 0x86949c, edge: 0x4c565c, rough: 0.28 },
 	stingray: { back: 0x6c604c, flank: 0x7a6c56, belly: 0xd8d6d0, fin: 0x4c4236, edge: 0x8a7c66, rough: 0.5 },
 	eagleRay: { back: 0x14181e, flank: 0x1c2028, belly: 0xe0e2e2, fin: 0x101418, edge: 0x2a2e36, rough: 0.35 },
 	turtle: { back: 0x3e3220, flank: 0x86683a, belly: 0xc8b884, fin: 0x4a4238, edge: 0x9a9280, rough: 0.45 },
+	hogfish: { back: 0x9a5848, flank: 0xd09078, belly: 0xecd4c0, fin: 0xc8846c, edge: 0x8a4434, rough: 0.4 },
+	blackGrouper: { back: 0x383a30, flank: 0x5a5a4a, belly: 0xa49e8c, fin: 0x34362e, edge: 0x141410, rough: 0.4 },
+	muttonSnapper: { back: 0x6a7652, flank: 0xc89c84, belly: 0xf0d8d0, fin: 0xd0704c, edge: 0x8a3c2c, rough: 0.34 },
+	lionfish: { back: 0xd8c4b4, flank: 0xeee0d2, belly: 0xf4ece4, fin: 0xe8d8c8, edge: 0x7a2418, rough: 0.45 },
 };
