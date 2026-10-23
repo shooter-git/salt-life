@@ -18,10 +18,13 @@ const ICON = {
 };
 
 const CSS = /* css */`
-.gm-clock { display: inline-flex; align-items: center; gap: calc(6 * var(--tw-u)); margin: calc(-4 * var(--tw-u)) 0; padding: calc(4 * var(--tw-u)) calc(6 * var(--tw-u));
-	border-radius: 999px; font: 500 var(--tw-fs-md) var(--tw-mono); color: var(--tw-ink-2); white-space: nowrap; position: relative;
-	transition: background var(--tw-fast), color var(--tw-fast); }
-.gm-clock:hover, .gm-clock.is-open { background: var(--tw-fill-2); color: var(--tw-ink); }
+/* (a 44 px box to tap, its margins giving back what the purse's line doesn't need; the pill is the face) */
+.gm-clock { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; margin: -12px 0 -12px calc(-6 * var(--tw-u));
+	font: 500 var(--tw-fs-md) var(--tw-mono); color: var(--tw-ink-2); white-space: nowrap; transition: color var(--tw-fast); }
+.gm-clock-face { display: inline-flex; align-items: center; gap: calc(6 * var(--tw-u)); padding: calc(4 * var(--tw-u)) calc(6 * var(--tw-u)); border-radius: 999px;
+	position: relative; transition: background var(--tw-fast); }
+.gm-clock:hover, .gm-clock.is-open { color: var(--tw-ink); }
+.gm-clock:hover .gm-clock-face, .gm-clock.is-open .gm-clock-face { background: var(--tw-fill-2); }
 .gm-clock svg { width: calc(14 * var(--tw-u)); height: calc(14 * var(--tw-u)); flex: none; }
 .gm-clock.is-day svg { color: var(--tw-sun); }
 .gm-clock.is-held { color: var(--tw-ink-3); }
@@ -80,7 +83,7 @@ export class TimeHUD {
 		const style = h( 'style' );
 		style.textContent = CSS;
 		document.head.append( style );
-		this.button = h( 'button', 'gm-clock tw-interactive', `<span class="gm-clock-ico"></span><span class="gm-clock-t"></span><i class="gm-clock-dot"></i>` );
+		this.button = h( 'button', 'gm-clock tw-interactive', `<span class="gm-clock-face"><span class="gm-clock-ico"></span><span class="gm-clock-t"></span><i class="gm-clock-dot"></i></span>` );
 		this.button.type = 'button';
 		this.ico = this.button.querySelector( '.gm-clock-ico' );
 		this.text = this.button.querySelector( '.gm-clock-t' );
