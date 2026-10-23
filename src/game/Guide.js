@@ -16,12 +16,17 @@ import { feet } from './Units.js';
 const KEY = 'tidewater.guide';
 
 const CSS = /* css */`
-.gm-guide { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; opacity: 0; visibility: hidden;
+.gm-guide { position: absolute; inset: 0; display: grid; grid-template: minmax(0, 1fr) / minmax(0, 1fr); place-items: center; pointer-events: none; opacity: 0; visibility: hidden;
 	background: radial-gradient(70% 70% at 50% 50%, rgba(4, 10, 16, 0.2), rgba(4, 10, 16, 0.55));
 	transition: opacity 420ms var(--tw-ease), visibility 0s linear 420ms; }
 .gm-guide.is-on { opacity: 1; visibility: visible; pointer-events: auto; transition: opacity 420ms var(--tw-ease), visibility 0s; }
 .gm-guide-card { width: min(calc(480 * var(--tw-u)), calc(100vw - 2 * var(--tw-edge))); padding: var(--tw-5) var(--tw-5) var(--tw-4); border-radius: var(--tw-r-lg);
-	color: var(--tw-ink); font: 500 var(--tw-fs-md) var(--tw-font); transform: translateY(calc(10 * var(--tw-u))); transition: transform 520ms var(--tw-ease); }
+	color: var(--tw-ink); font: 500 var(--tw-fs-md) var(--tw-font); transform: translateY(calc(10 * var(--tw-u))); transition: transform 520ms var(--tw-ease);
+	display: flex; flex-direction: column; max-height: calc(100% - 2 * var(--tw-edge)); }
+/* (Salt Life) on a screen too short for a card, its words scroll between the title and the buttons (the
+   guide's one row is the screen's height, so the card's max-height measures against it) */
+.gm-guide-card > * { flex: none; }
+.gm-guide-card > .gm-guide-body { flex: 0 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .gm-guide.is-on .gm-guide-card { transform: none; }
 .gm-guide-eyebrow { font-size: var(--tw-fs-xs); font-weight: 600; letter-spacing: 0.22em; text-transform: uppercase; color: var(--tw-sun); }
 .gm-guide-card h2 { margin: var(--tw-2) 0 var(--tw-3); font-size: calc(24 * var(--tw-u)); font-weight: 600; letter-spacing: -0.01em; line-height: 1.2; }
@@ -61,9 +66,9 @@ const CSS = /* css */`
 .tw-help-guide b { color: var(--tw-ink); }
 .tw-help-guide .gm-btn { flex: none; }
 @media (max-width: 640px) { .tw-help-guide { flex-direction: column; align-items: flex-start; } .gm-coach { bottom: calc(var(--tw-edge) + 128 * var(--tw-u) + var(--tw-3)); } .gm-guide-row { grid-template-columns: calc(78 * var(--tw-u)) 1fr; } }
-/* (Salt Life) phones on their side: the cards a little tighter, so the buttons stay on screen */
+/* (Salt Life) phones on their side: the cards wider and a little tighter, so there's less to scroll */
 @media (max-height: 500px) {
-	.gm-guide-card { padding: var(--tw-4) var(--tw-5) var(--tw-3); }
+	.gm-guide-card { width: min(calc(640 * var(--tw-u)), calc(100vw - 2 * var(--tw-edge))); padding: var(--tw-4) var(--tw-5) var(--tw-3); }
 	.gm-guide-card h2 { margin: var(--tw-1) 0 var(--tw-2); font-size: calc(20 * var(--tw-u)); }
 	.gm-guide-body { line-height: 1.4; }
 	.gm-guide-list { gap: calc(3 * var(--tw-u)); margin-bottom: var(--tw-2); }

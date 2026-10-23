@@ -184,7 +184,7 @@ html.is-touch .gm-btn,
 html.is-touch .gm-mini,
 html.is-touch .gm-tab { min-height: 44px; }
 html.is-touch .gm-look { min-height: 60px; }
-html.is-touch .gm-guide-card { max-height: calc(100% - 2 * var(--tw-edge)); overflow: auto; }
+html.is-touch .gm-guide-card { max-height: calc(100% - 2 * var(--tw-edge) - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
 html.is-touch .gm-guide-row { grid-template-columns: calc(100 * var(--tw-u)) 1fr; }
 html.is-touch:has(.gm-panel.is-open, .gm-catch.is-on, .gm-guide.is-on) .touch-buttons,
 html.is-touch .tw-root:has(.gm-panel.is-open) :is(.gm-map, .gm-coach) { visibility: hidden; }
