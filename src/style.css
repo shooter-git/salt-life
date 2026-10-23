@@ -79,6 +79,14 @@ html.is-touch .hud-prompt { display: none; }
 	html.is-touch .hud-toast { left: calc((72px + var(--gm-purse-l, 100vw)) / 2 - 6px); max-width: calc(var(--gm-purse-l, 100vw) - 84px); }
 }
 
+/* elsewhere the purse is at the top right too, with the clock in it: the toast stays centred unless
+   that would run it under the purse, and then moves left as far as it has to, no further than the
+   app's menu button (--gm-purse-l: where the purse starts). Too long to fit there (Hud checks:
+   .is-low), it goes under the purse instead, and the first hint under it */
+html:not(.is-touch) .hud-toast { transform: translateX(min(-50%, calc(var(--gm-purse-l, 100vw) - 12px - 50vw - 100%))); max-width: calc(var(--gm-purse-l, 100vw) - 84px); }
+html:not(.is-touch) .hud-toast.is-low { top: calc(var(--gm-band, 56px) + 8px); transform: translateX(-50%); max-width: calc(100% - 32px); }
+html:not(.is-touch) .hud:has(.hud-toast.is-low:not([hidden])) .hud-hint { top: calc(var(--gm-band, 56px) + 56px); }
+
 /* ---- touch controls */
 
 .touch {

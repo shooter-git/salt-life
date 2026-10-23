@@ -20,6 +20,8 @@ export function createGameUI( hud ) {
 		onReplayGuide: null,
 		// (the game counts in milliseconds, the Hud in seconds)
 		toast: ( text, ms = 2600 ) => hud.toast( text, ms / 1000 ),
+		// (the purse moved or changed: the toast beside it, or under it if it no longer fits)
+		placeToast: () => hud.placeToast(),
 	};
 
 }
