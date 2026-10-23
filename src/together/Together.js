@@ -6,6 +6,8 @@ import { RecordsBoard } from './RecordsBoard.js';
 import { BoatLamps } from '../world/boat/BoatLamps.js';
 import { FISH, fishLengthCm, isTrophy } from '../game/FishTable.js';
 import { ROD_L, SEAT_Y } from '../game/FishingRod.js';
+import { gunModels, setBands } from '../game/Speargun.js';
+import { gearStats, defaultUpgrades } from '../game/Gear.js';
 import { DAY_RATE, REST, clockAt, restTo } from '../game/IslandClock.js';
 import { weekOrder, weekNumber, tallyFor, deliver, delivered } from '../game/WeekOrder.js';
 import { WORLD } from '../world/WorldLayout.js';
@@ -30,7 +32,7 @@ import { WORLD } from '../world/WorldLayout.js';
 // shape at their boat's pose, for the Player) and walk its deck while they drive; your poses say whose
 // boat you're on ('R': the deck position is in its frame), so everyone sees you aboard it.
 // Each other player is one of four islanders (Avatar.js: Rocketbox characters, as Joe and Marta),
-// walking, running, swimming, at the helm or holding a rod as they are, with their name over them in
+// walking, running, swimming, at the helm or holding a rod (or under water, a speargun) as they are, with their name over them in
 // their colour and a dot on the minimap; they wave when you meet; their boat is a copy of yours (its meshes, no new shaders), out at sea; their rod, line and
 // bobber are the rod's (FishingRod.tackle). Their wakes, spray and sounds aren't drawn.
 //   const t = new Together( app );  t.track( dt )  (before the player: where everyone is, the boat
@@ -66,7 +68,7 @@ const r2 = ( v ) => Math.round( v * 100 ) / 100;
 const r3 = ( v ) => Math.round( v * 1000 ) / 1000;
 const _p = new Vector3(), _q = new Vector3(), _tip = new Vector3(), _hand = new Vector3(), _d = new Vector3();
 const _x = new Vector3(), _y = new Vector3(), _z = new Vector3(), _up = new Vector3( 0, 1, 0 );
-const _qa = new Quaternion(), _qb = new Quaternion(), _m = new Matrix4();
+const _qa = new Quaternion(), _qb = new Quaternion(), _m = new Matrix4(), _mt = new Matrix4();
 const _bp = new Vector3(), _bq = new Quaternion();
 
 // another player's boat, to ride in: the boat's shape (yours: the same model) at their boat's pose,
@@ -269,13 +271,15 @@ export class Together {
 
 	// a fish landed here: is it the island's heaviest of its kind? (from what's known now; the shared
 	// save is then brought up to date, and the others told)
-	caught( species, kg, cm ) {
+	// (Salt Life) method: 'rod' or 'spear'; a speared record says so (m: 's')
+	caught( species, kg, cm, method = 'rod' ) {
 
 		const held = this.records[ species ];
 		const island = ! held || kg > held.kg;
+		const speared = method === 'spear';
 		const tell = ( record ) => {
 
-			if ( this.others.size ) this.session.send( 'catch', { s: species, kg: r3( kg ), cm, rec: record } );
+			if ( this.others.size ) this.session.send( 'catch', speared ? { s: species, kg: r3( kg ), cm, rec: record, m: 's' } : { s: species, kg: r3( kg ), cm, rec: record } );
 
 		};
 		if ( ! island ) {
@@ -286,6 +290,7 @@ export class Together {
 		}
 
 		const mine = { kg: r3( kg ), cm, who: this.me.name, id: this.me.id, at: Date.now() };
+		if ( speared ) mine.m = 's';
 		this.portal.save.shared.update( 'records', ( cur ) => {
 
 			const next = cur && typeof cur === 'object' ? { ...cur } : {};
@@ -316,7 +321,7 @@ export class Together {
 		const o = this.others.get( from );
 		if ( ! o || ! b || ! FISH[ b.s ] || typeof b.kg !== 'number' ) return;
 		const kg = b.kg < 1 ? b.kg.toFixed( 2 ) : b.kg.toFixed( 1 );
-		if ( b.rec || isTrophy( b.s, b.kg ) ) this.app.game.toast( `${ o.person.name } caught a ${ kg } kg ${ FISH[ b.s ].name.toLowerCase() }${ b.rec ? ': a new island record!' : '' }`, 4200 );
+		if ( b.rec || isTrophy( b.s, b.kg ) ) this.app.game.toast( `${ o.person.name } ${ b.m === 's' ? 'speared' : 'caught' } a ${ kg } kg ${ FISH[ b.s ].name.toLowerCase() }${ b.rec ? ': a new island record!' : '' }`, 4200 );
 		o.avatar.once( 'cheer_01' );
 		if ( o.fish ) {
 
@@ -495,8 +500,11 @@ export class Together {
 		app.lightUp( avatar.group );
 		const tackle = app.game.rod.tackle();
 		app.scene.add( tackle.rod, tackle.bobber, tackle.line );
+		// (Salt Life) and their speargun, its shaft and line
+		const spear = app.game.gun.tackle();
+		app.scene.add( spear.gun, spear.bands, spear.shaft, spear.line );
 		// (their look comes with their first pose: the stand-in figure until then)
-		const o = { person, avatar, tackle, samples: [], last: - Infinity, boat: null, tag: null, shown: false, mapped: false, cur: null, wearing: null };
+		const o = { person, avatar, tackle, spear, samples: [], last: - Infinity, boat: null, tag: null, shown: false, mapped: false, cur: null, wearing: null };
 		return o;
 
 	}
@@ -539,6 +547,12 @@ export class Together {
 		o.avatar.dispose();
 		o.tackle.rod.material.dispose();
 		o.tackle.line.material.dispose();
+		for ( const m of [ o.spear.gun, o.spear.bands, o.spear.shaft, o.spear.line ] ) {
+
+			app.scene.remove( m );
+			m.material.dispose();
+
+		}
 		if ( o.boat ) {
 
 			app.scene.remove( o.boat );
@@ -614,6 +628,22 @@ export class Together {
 		const v = p.mode === 'deck' ? Math.hypot( p.deckVel.x, p.deckVel.z ) : Math.hypot( p.velocity.x, p.velocity.z );
 		const body = { m, p: [ r2( p.position.x ), r2( p.position.y ), r2( p.position.z ) ], a: r3( p.yaw ), v: r2( v ), l: LOOKS.indexOf( this.myLook ) };
 		if ( m === 'h' ) body.a = r3( boat.getYaw() + Math.PI );
+		// (Salt Life) the speargun: 1 loaded, 2 empty or being loaded, 3 its shaft out, 4 a fish on it
+		// landed; which gun (gl); the shaft's tail and direction while it's out (G)
+		const gun = app.game.gun;
+		if ( gun.equipped ) {
+
+			body.g = gun.state === 'landing' ? 4 : gun.shaftOut ? 3 : gun.state === 'loaded' ? 1 : 2;
+			body.gl = app.game.state.upgrades.speargun | 0;
+			if ( gun.shaftOut ) {
+
+				const L = gun.gear.shaftM, t = gun.tip, d = gun.dir;
+				body.G = [ r2( t.x - d.x * L ), r2( t.y - d.y * L ), r2( t.z - d.z * L ), r3( d.x ), r3( d.y ), r3( d.z ) ];
+
+			}
+
+		}
+
 		const r = rod.equipped || rod.state !== 'stowed' ? ROD[ rod.state ] ?? 1 : 0;
 		if ( r ) {
 
@@ -758,6 +788,76 @@ export class Together {
 
 	}
 
+	// (Salt Life) their speargun (their gun, from its level: gunModels): in their right hand as they swim,
+	// along their facing, or toward the shaft out on its line; its bands drawn or slack; the shaft in the
+	// gun or out, and the line to it
+	_spear( o, c, g ) {
+
+		const S = o.spear, app = this.app;
+		const on = c.gun > 0 && c.mode === 'swim' && ! app.game.gun.holdBack;
+		S.gun.visible = S.bands.visible = S.shaft.visible = on;
+		S.line.visible = false;
+		if ( ! on ) return;
+		if ( o.gunLevel !== c.gunLevel ) {
+
+			o.gunLevel = c.gunLevel;
+			o.gunModels = gunModels( gearStats( { ...defaultUpgrades(), speargun: c.gunLevel } ) );
+
+		}
+
+		const m = o.gunModels;
+		if ( S.gun.geometry !== m.gun ) {
+
+			S.gun.geometry = m.gun;
+			S.shaft.geometry = m.shaft;
+			S.shaft.material.uniforms.shaftHinge.value = m.hinge;
+
+		}
+
+		o.spearM = m.shaftM;
+		o.avatar.hand( _hand );
+		_d.set( 0, 0, 1 ).applyQuaternion( g.quaternion );
+		const out = c.gun >= 3 && c.shaft;
+		if ( out ) {
+
+			_q.copy( c.shaft.tail ).sub( _hand );
+			if ( _q.lengthSq() > 0.25 ) _d.copy( _q );
+
+		}
+
+		_d.normalize();
+		_y.copy( _d );
+		_z.copy( _up ).addScaledVector( _y, - _y.y );
+		if ( _z.lengthSq() < 1e-6 ) _z.set( 0, 0, 1 );
+		_z.normalize();
+		_x.crossVectors( _y, _z ).normalize();
+		_m.makeBasis( _x, _y, _z ).setPosition( _hand );
+		S.gun.matrix.copy( _m );
+		S.bands.matrix.copy( _m );
+		setBands( S.bands.material.uniforms, m.lay, m.bands, c.gun === 1 ? [ 1, 1 ] : [ 0, 0 ] );
+		S.gun.material.uniforms.gunWraps.value = out ? 0 : 1;
+		S.shaft.material.uniforms.shaftFlopper.value = c.gun === 4 ? 1 : 0;
+		if ( out ) {
+
+			_y.copy( c.shaft.dir );
+			_z.copy( _up ).addScaledVector( _y, - _y.y );
+			if ( _z.lengthSq() < 1e-6 ) _z.set( 1, 0, 0 );
+			_z.normalize();
+			_x.crossVectors( _y, _z ).normalize();
+			S.shaft.matrix.makeBasis( _x, _y, _z ).setPosition( c.shaft.tail );
+			// the line from their muzzle's hook to the shaft's tail
+			_tip.set( 0, m.lay.L - 0.03, m.lay.bottom ).applyMatrix4( S.gun.matrix );
+			const L = S.line.material.uniforms;
+			L.lineA.value.copy( _tip );
+			L.lineB.value.copy( c.shaft.tail );
+			L.lineCtl.value.copy( _tip ).lerp( c.shaft.tail, 0.5 ).y -= _tip.distanceTo( c.shaft.tail ) * 0.05;
+			S.line.visible = true;
+
+		} else S.shaft.matrix.copy( _m ).multiply( _mt.makeTranslation( 0, 0, m.lay.shaftZ ) );
+		for ( const mesh of [ S.gun, S.bands, S.shaft ] ) mesh.matrixWorldNeedsUpdate = true;
+
+	}
+
 	// both boats at the dock: yours stands in for theirs (they'd sit in the same berth)
 	_docked( pos ) {
 
@@ -778,8 +878,9 @@ export class Together {
 		const a = sa.body, b = sb.body, near = f < 0.5 ? a : b;
 		const cur = o.state || ( o.state = {
 			pos: new Vector3(), yaw: 0, mode: 'walk', speed: 0, rod: 0, tension: 0, ride: null,
-			bobber: null, boat: null, deck: null,
+			bobber: null, boat: null, deck: null, gun: 0, gunLevel: 0, shaft: null,
 			_bobber: new Vector3(), _deck: new Vector3(), _boat: { pos: new Vector3(), quat: new Quaternion() },
+			_shaft: { tail: new Vector3(), dir: new Vector3() },
 		} );
 		// a vector between two [ x, y, z ] (either may be missing: the other then)
 		const lerp3 = ( out, A, B ) => {
@@ -802,6 +903,23 @@ export class Together {
 		cur.rpm = ( Number( a.E ) || 0 ) + ( ( Number( b.E ) || 0 ) - ( Number( a.E ) || 0 ) ) * f;
 		cur.tension = b.k || 0;
 		cur.bobber = lerp3( cur._bobber, a.b, b.b );
+		cur.gun = near.g || 0;
+		cur.gunLevel = MathUtils.clamp( near.gl | 0, 0, 2 );
+		const Ga = Array.isArray( a.G ) && a.G.length === 6 ? a.G : null, Gb = Array.isArray( b.G ) && b.G.length === 6 ? b.G : null;
+		cur.shaft = null;
+		if ( Ga || Gb ) {
+
+			const A = Ga || Gb, B = Gb || Ga, S = cur._shaft;
+			S.tail.set( A[ 0 ] + ( B[ 0 ] - A[ 0 ] ) * f, A[ 1 ] + ( B[ 1 ] - A[ 1 ] ) * f, A[ 2 ] + ( B[ 2 ] - A[ 2 ] ) * f );
+			S.dir.set( A[ 3 ] + ( B[ 3 ] - A[ 3 ] ) * f, A[ 4 ] + ( B[ 4 ] - A[ 4 ] ) * f, A[ 5 ] + ( B[ 5 ] - A[ 5 ] ) * f );
+			if ( S.dir.lengthSq() > 1e-6 && S.tail.lengthSq() < 1e8 ) {
+
+				S.dir.normalize();
+				cur.shaft = S;
+
+			}
+
+		}
 		cur.deck = lerp3( cur._deck, a.D, b.D );
 		const Ba = Array.isArray( a.B ) ? a.B : null, Bb = Array.isArray( b.B ) ? b.B : null;
 		cur.boat = null;
@@ -872,6 +990,7 @@ export class Together {
 		if ( ! visible || ! c ) {
 
 			T.rod.visible = T.line.visible = T.bobber.visible = false;
+			o.spear.gun.visible = o.spear.bands.visible = o.spear.shaft.visible = o.spear.line.visible = false;
 			return;
 
 		}
@@ -893,7 +1012,7 @@ export class Together {
 
 		}
 
-		o.avatar.pose( { mode: c.mode, speed: c.speed, rod: c.rod > 0 }, dt );
+		o.avatar.pose( { mode: c.mode, speed: c.speed, rod: c.rod > 0, gun: c.gun > 0 }, dt );
 		// meeting someone: a wave, the first time
 		if ( ! o.waved && g.position.distanceTo( app.player.position ) < WAVE_NEAR && c.mode !== 'swim' && app.player.mode !== 'swim' ) {
 
@@ -956,16 +1075,21 @@ export class Together {
 
 		}
 
-		// the fish they've just landed, on the end of their line, turned to you
+		// (Salt Life) their speargun, held out ahead of them as they swim (toward its shaft when that's out)
+		this._spear( o, c, g );
+
+		// the fish they've just landed, on the end of their line (or their shaft), turned to you
 		if ( o.fish ) {
 
-			const show = lineOn && c.rod === 6 && performance.now() / 1000 < o.fishUntil;
+			const onShaft = c.gun === 4 && c.shaft;
+			const show = ( ( lineOn && c.rod === 6 ) || onShaft ) && performance.now() / 1000 < o.fishUntil;
 			o.fish.visible = !! show;
 			if ( show ) {
 
 				const cam = app.camera.position;
-				o.fish.position.copy( c.bobber );
-				o.fish.rotation.set( 0, Math.atan2( cam.x - c.bobber.x, cam.z - c.bobber.z ), 0 );
+				const at = onShaft ? _p.copy( c.shaft.tail ).addScaledVector( c.shaft.dir, o.spearM - 0.25 ) : c.bobber;
+				o.fish.position.copy( at );
+				o.fish.rotation.set( 0, Math.atan2( cam.x - at.x, cam.z - at.z ), 0 );
 
 			}
 

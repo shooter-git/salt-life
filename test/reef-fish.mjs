@@ -10,6 +10,7 @@ import { ReefLayout } from '../src/world/reef/ReefLayout.js';
 import { FishSchools } from '../src/world/Fish.js';
 import { fishModels } from '../src/world/fish/FishModels.js';
 import { WORLD } from '../src/world/WorldLayout.js';
+import { FISH } from '../src/game/FishTable.js';
 
 let failed = 0;
 const check = ( ok, what ) => {
@@ -103,6 +104,89 @@ for ( const tier of [ 'low', 'high' ] ) {
 	for ( let i = 0; i < 45; i ++ ) fish.update( 1 / 30, at );
 	const after = spread();
 	check( after > before + 0.5, `fish ${ tier }: grunts flee a swimmer (mean distance ${ before.toFixed( 1 ) } -> ${ after.toFixed( 1 ) } m)` );
+	// (Salt Life) the spearfisher's fish live here too
+	const kinds = new Set( fish.groups.map( ( g ) => g.sp.name ) );
+	const want = [ 'hogfish', 'blackGrouper', 'lionfish', 'muttonSnapper', 'redSnapper', 'mahi', 'tuna' ];
+	check( want.every( ( k ) => kinds.has( k ) ), `fish ${ tier }: hogfish, black groupers, lionfish, mutton and red snappers, mahi and tuna are placed` );
+	check( fish.groups.every( ( g ) => ( g.sp.fish && FISH[ g.sp.fish ] ) || g.sp.label ), `fish ${ tier }: every swimmer is a species of the catch table or has a name` );
+
+}
+
+// ---- (Salt Life) the speargun's side of the fish
+{
+
+	const fish = new FishSchools( { parent: new Group(), terrain, ground, tier: 'mid', floorAt, center: WORLD.reef.center, radius: WORLD.reef.radius + 10, anchors: reef.anchors } );
+	const P = fish.pos, at = ( i ) => new Vector3( P[ i * 3 ], P[ i * 3 + 1 ], P[ i * 3 + 2 ] );
+	const g = fish.groups.find( ( g ) => g.sp.name === 'hogfish' );
+	const i = g.offset, c = at( i );
+	for ( let k = 0; k < 30; k ++ ) fish.update( 1 / 30, c.clone().add( new Vector3( 0, 40, 0 ) ) );
+	const p = at( i ), L = fish.size[ i ];
+	const h = new Vector3( fish.head[ i * 3 ], fish.head[ i * 3 + 1 ], fish.head[ i * 3 + 2 ] ).normalize();
+	const side = new Vector3().crossVectors( h, new Vector3( 0, 1, 0 ) ).normalize();
+	const mid = p.clone().addScaledVector( h, fish.hitShape( 'hogfish' ).cz * L );
+	const hit = fish.pierce( mid.clone().addScaledVector( side, 2 ), mid.clone().addScaledVector( side, - 2 ) );
+	check( hit && hit.i === i && Math.abs( hit.u - 0.5 ) < 0.1 && hit.t > 0.4 && hit.t < 0.5, `pierce: a shaft through a hogfish's flank hits it mid-body (u ${ hit && hit.u.toFixed( 2 ) })` );
+	const over = mid.clone().add( new Vector3( 0, L, 0 ) );
+	check( ! fish.pierce( over.clone().addScaledVector( side, 2 ), over.clone().addScaledVector( side, - 2 ) ), 'pierce: a shaft a body length over its back misses' );
+	check( ! fish.pierce( mid.clone().addScaledVector( side, 2 ), mid.clone().addScaledVector( side, - 2 ), ( j ) => j !== i ), 'pierce: a fish the speargun won\'t take is passed by' );
+	// on the shaft: out of its school, posed by the speargun; landed: gone, back later out of sight
+	fish.hold( i, 1, - 3, 2, new Vector3( 1, 0, 0 ), 0.3, 1 );
+	for ( let k = 0; k < 30; k ++ ) fish.update( 1 / 30, c );
+	check( P[ i * 3 ] === 1 && P[ i * 3 + 1 ] === - 3 && P[ i * 3 + 2 ] === 2 && fish.held[ i ] === 1, 'a speared fish stays where the speargun holds it' );
+	fish.take( i );
+	check( fish.held[ i ] === 2 && fish.taken.has( i ), 'a landed fish is taken from the water' );
+	fish.time = fish.refillAt[ i ] + 1;
+	fish.update( 1 / 30, g.center.clone() );
+	check( fish.held[ i ] === 2, 'its place isn\'t filled in sight of the diver' );
+	fish.update( 1 / 30, g.center.clone().add( new Vector3( 0, 0, 200 ) ) );
+	check( fish.held[ i ] === 0 && ! fish.taken.size && at( i ).distanceTo( g.home ) < 30, 'it is filled out of sight, among its kind' );
+
+}
+
+// ---- (Salt Life) stalking: a slow diver gets close, a sprinting one doesn't; jacks come to a still one
+{
+
+	const closest = ( name, speed, trial ) => {
+
+		const fish = new FishSchools( { parent: new Group(), terrain, ground, tier: 'low', floorAt, center: WORLD.reef.center, radius: WORLD.reef.radius + 10, anchors: reef.anchors } );
+		const far = new Vector3( 0, 50, - 400 );
+		for ( let k = 0; k < 60; k ++ ) fish.update( 1 / 30, far );
+		const g = fish.groups.filter( ( g ) => g.sp.name === name )[ trial ];
+		const i = g.offset, P = fish.pos;
+		const f = new Vector3( P[ i * 3 ], P[ i * 3 + 1 ], P[ i * 3 + 2 ] );
+		const diver = f.clone().add( new Vector3( Math.cos( trial * 2.1 ) * 7, 0, Math.sin( trial * 2.1 ) * 7 ) );
+		diver.y = Math.min( diver.y, - 0.5 );
+		let best = Infinity;
+		for ( let k = 0; k < 30 * 20; k ++ ) {
+
+			f.set( P[ i * 3 ], P[ i * 3 + 1 ], P[ i * 3 + 2 ] );
+			const d = f.distanceTo( diver );
+			best = Math.min( best, d );
+			diver.addScaledVector( f.sub( diver ).normalize(), Math.min( speed / 30, Math.max( 0, d - 0.5 ) ) );
+			fish.update( 1 / 30, diver );
+
+		}
+
+		return best;
+
+	};
+	const stalk = [ 0, 1 ].map( ( t ) => closest( 'hogfish', 0.7, t ) ), sprint = [ 0, 1 ].map( ( t ) => closest( 'hogfish', 2.5, t ) );
+	check( Math.max( ...stalk ) < 3 && Math.min( ...sprint ) > Math.max( ...stalk ), `a diver stalking a hogfish gets within a spear's reach (${ stalk.map( ( d ) => d.toFixed( 1 ) ).join( ', ' ) } m); one sprinting at it doesn't get as close (${ sprint.map( ( d ) => d.toFixed( 1 ) ).join( ', ' ) } m)` );
+
+	const fish = new FishSchools( { parent: new Group(), terrain, ground, tier: 'low', floorAt, center: WORLD.reef.center, radius: WORLD.reef.radius + 10, anchors: reef.anchors } );
+	for ( let k = 0; k < 60; k ++ ) fish.update( 1 / 30, new Vector3( 0, 50, - 400 ) );
+	const g = fish.groups.find( ( g ) => g.sp.name === 'jack' );
+	const diver = g.center.clone().add( new Vector3( 12, 0, 0 ) );
+	diver.y = Math.min( g.center.y, - 1 );
+	let near = Infinity;
+	for ( let k = 0; k < 40 * 30; k ++ ) {
+
+		fish.update( 1 / 30, diver );
+		for ( let a = 0; a < g.count; a ++ ) near = Math.min( near, Math.hypot( fish.pos[ ( g.offset + a ) * 3 ] - diver.x, fish.pos[ ( g.offset + a ) * 3 + 1 ] - diver.y, fish.pos[ ( g.offset + a ) * 3 + 2 ] - diver.z ) );
+
+	}
+
+	check( near < 4, `jacks come to look at a diver keeping still (to ${ near.toFixed( 1 ) } m)` );
 
 }
 

@@ -1,9 +1,10 @@
 # Salt Life
 
 An island fishing game for [All the Spaces](https://github.com/shooter-git/all-the-spaces). Cast from
-the pier, the beach or your own boat, fight the fish, sell your catch to Joe at the fish stand and
-spend it on better gear at Marta's chandlery. Other people in the space can drop in: you'll see them
-walking, swimming and out on their boats, and the group keeps a board of record catches.
+the pier, the beach or your own boat, or dive with a speargun; fight the fish, sell your catch to Joe
+at the fish stand and spend it on better gear at Marta's chandlery. Other people in the space can
+drop in: you'll see them walking, swimming and out on their boats, and the group keeps a board of
+record catches.
 
 Salt Life is based on [Tidewater](https://github.com/dgreenheck/tidewater) by Dan Greenheck (MIT).
 It is not Tidewater and not made by its author. Tidewater runs on its own WebGPU engine and needs a
@@ -16,14 +17,21 @@ This repository started as a fork of Tidewater. Every system Salt Life keeps is 
 Tidewater's WebGPU engine is gone (its history is still in the repository).
 
 You can walk, swim and take the boat around the island. You can fish from the pier, the beach or the
-boat, sell your catch to Joe and buy better gear from Marta. It plays with a mouse and keyboard, a
-gamepad or a touch screen.
+boat, or dive and spear a fish, sell your catch to Joe and buy better gear from Marta. It plays with a
+mouse and keyboard, a gamepad or a touch screen.
 
-Done, M0 to M6:
+Done, M0 to M7:
 - the sea and its shore, spray, gusts and slicks, and the haze;
 - the whole world: the village, the pier, the reef and its fish, the birds and crabs, the beach's
   debris, the whale and the lights at night;
 - the fishing game;
+- spearfishing:
+  - a speargun to dive with, three of them at Marta's; it fires only under water;
+  - the law: protected fish are let go, and nobody spears the reef's aquarium fish or one too small;
+  - the spearfisher's fish: hogfish, black groupers, mutton snappers, lionfish, and red snappers, mahi
+    and tuna offshore;
+  - fish that notice you: stalk them slowly;
+  - a held breath;
 - playing together:
   - you see the others on the island, walking, swimming, fishing and out in their boats;
   - you pick your islander: two men and two women;
@@ -57,6 +65,7 @@ The island's day:
 | M4 | The fishing game: the rod and the fight, the cooler and log, Joe and Marta, upgrades, the guide, sound |
 | M5 | Device tiers and budgets: richer on laptops, smooth on phones; the checks play the fishing too |
 | M6 | Drop-in multiplayer: others in the space, catch announcements, a shared records board |
+| M7 | Spearfishing: the speargun, the law, the spearfisher's fish, fish that notice you, a held breath |
 
 ## How it fits All the Spaces
 

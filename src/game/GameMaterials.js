@@ -1,16 +1,18 @@
 import * as THREE from '../engine/index.js';
+import { UNDERWATER_GLSL, underwaterUniforms } from '../materials/Underwater.js';
 
 // Materials for the game's props (rod, bobber, vendors' stand-ins), for WebGL 2. Geometry is built
 // with the boat's GeoKit layout: color = linear albedo, aux = ( roughness, metalness, pattern, part ).
 //   pattern 0 plain, 1 weathered wood (grain along local y... planks: see woodAxis), 2 canvas /
 //   cloth, 3 skin, 4 cork, 5 painted metal with rust; fishing tackle (local +Y = the rod or reel
 //   axis): 8 carbon blank under clear coat, 9 epoxy-coated thread wraps, 10 EVA foam grip,
-//   11 braided line on the spool, 12 machined / anodised metal, 13 knurled metal, 14 rubber
+//   11 braided line on the spool, 12 machined / anodised metal, 13 knurled metal, 14 rubber;
+//   (Salt Life) 15 oiled teak (a speargun's barrel: the grain along local +Y)
 // (Tidewater's were WGSL materials on its WebGPU engine: the same patterns, in GLSL, on three's
 // MeshPhysicalMaterial.)
 export const PAT = {
 	plain: 0, wood: 1, cloth: 2, skin: 3, cork: 4, rusty: 5, woodX: 6, woodZ: 7,
-	carbon: 8, thread: 9, eva: 10, braid: 11, machined: 12, knurl: 13, rubber: 14,
+	carbon: 8, thread: 9, eva: 10, braid: 11, machined: 12, knurl: 13, rubber: 14, teak: 15,
 };
 
 const GP_GLSL = /* glsl */`
@@ -125,11 +127,20 @@ const PATTERNS = /* glsl */`
 			float k = abs( sin( u + w ) ) * abs( sin( u - w ) );
 			col = base * ( 0.85 + k * 0.25 * aa );
 			gpH = k * 0.00012 * aa;
-		} else {
+		} else if ( pat < 14.5 ) {
 			// rubber: matte, a few scuffs
 			float sc = gpFbm( lp * 250.0 );
 			col = base * mix( 0.9, 1.15, sc );
 			gpRough = clamp( gpRough + ( sc - 0.5 ) * 0.2, 0.6, 1.0 );
+		} else {
+			// oiled teak: straight close grain along the barrel, darker streaks, a satin sheen
+			float grain = gpFbm( vec3( lp.x * 260.0, lp.y * 4.0, lp.z * 260.0 ) );
+			float streak = smoothstep( 0.55, 0.8, gpNoise( vec3( lp.x * 90.0 + lp.z * 40.0, lp.y * 1.5, 0.0 ) ) );
+			float aa = 1.0 - smoothstep( 0.2, 0.8, fwidth( lp.x * 260.0 ) );
+			col = base * mix( 0.8, 1.1, mix( 0.5, grain, aa ) ) * ( 1.0 - streak * 0.25 );
+			gpRough = clamp( gpRough + ( grain - 0.5 ) * 0.1, 0.3, 0.7 );
+			gpH = grain * 0.0001 * aa;
+			gpCoat = 0.35; gpCoatRough = 0.25;
 		}
 	}
 	diffuseColor.rgb = col;
@@ -139,7 +150,12 @@ const glslType = ( v ) => v.isVector4 ? 'vec4' : v.isVector3 ? 'vec3' : v.isVect
 
 // extra: { uniforms: { name: { value } } (also on material.uniforms, for the caller to write),
 //   vertex: GLSL run on the rest pose ( vec3 P, vec3 Nn in model space; the part id is aux.w ),
-//   clearcoat: the clear-coat lobe (the carbon / thread patterns use it) }
+//   clearcoat: the clear-coat lobe (the carbon / thread patterns use it),
+//   underwater: (Salt Life) the Terrain: under the sea the water takes the colour out of it and the
+//   caustics play over it, as on the reef (materials/Underwater.js: the speargun),
+//   viewModel: (Salt Life) held in the hand: its depth pressed up against the near plane (keeping its
+//   own order), so the reef a hand's length away never cuts through it; while material.uniforms
+//   gpViewModel is 1 (0: in the world, as the shaft in flight) }
 export function createPropMaterial( name = 'gameProp', extra = {} ) {
 
 	const Material = extra.clearcoat ? THREE.MeshPhysicalMaterial : THREE.MeshStandardMaterial;
@@ -147,10 +163,18 @@ export function createPropMaterial( name = 'gameProp', extra = {} ) {
 	if ( extra.clearcoat ) m.clearcoat = 1; // (per pixel: only where the pattern asks for it)
 	m.name = name;
 	const uniforms = m.uniforms = extra.uniforms || {};
+	const under = !! extra.underwater;
+	const uwUniforms = under ? underwaterUniforms( extra.underwater ) : null;
+	if ( extra.viewModel ) uniforms.gpViewModel = { value: 1 };
 	const decl = Object.entries( uniforms ).map( ( [ k, u ] ) => `uniform ${ glslType( u.value ) } ${ k };` ).join( '\n' );
+	// (Salt Life) one program per variant: the snippet and the uniforms decide it (they all share one
+	// onBeforeCompile, three's default key)
+	const key = 'gameProp' + ( extra.clearcoat ? ':cc' : '' ) + ( under ? ':uw' : '' ) + ( extra.viewModel ? ':vm' : '' ) + ':' + decl + ':' + ( extra.vertex || '' );
+	m.customProgramCacheKey = () => key;
 	m.onBeforeCompile = ( shader ) => {
 
 		Object.assign( shader.uniforms, uniforms );
+		if ( under ) Object.assign( shader.uniforms, uwUniforms );
 		shader.vertexShader = shader.vertexShader
 			.replace( '#include <common>', `#include <common>
 attribute vec4 aux;
@@ -174,7 +198,8 @@ ${ extra.vertex || '' }
 			.replace( '#include <begin_vertex>', 'vec3 transformed = gpP;' )
 			.replace( '#include <project_vertex>', `#include <project_vertex>
 	vGpWorld = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;
-	vGpNormal = normalize( mat3( modelMatrix ) * objectNormal );` );
+	vGpNormal = normalize( mat3( modelMatrix ) * objectNormal );${ extra.viewModel ? `
+	gl_Position.z = mix( gl_Position.z, - gl_Position.w + ( gl_Position.z + gl_Position.w ) * 0.03, gpViewModel );` : '' }` );
 		shader.fragmentShader = shader.fragmentShader
 			.replace( '#include <common>', `#include <common>
 varying vec4 vAux;
@@ -182,6 +207,7 @@ varying vec3 vLocal;
 varying vec3 vGpWorld;
 varying vec3 vGpNormal;
 ${ decl }
+${ under ? UNDERWATER_GLSL : '' }
 ${ GP_GLSL }` )
 			.replace( '#include <color_fragment>', `#include <color_fragment>
 	float gpRough = vAux.x;
@@ -190,7 +216,8 @@ ${ GP_GLSL }` )
 	float gpCoatRough = 0.05;
 	{
 ${ PATTERNS }
-	}` )
+	}
+${ under ? '\tdiffuseColor.rgb = uwShade( diffuseColor.rgb, vGpWorld, normalize( vGpNormal ) );' : '' }` )
 			.replace( '#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = max( gpRough, 0.04 );' )
 			.replace( '#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n\tmetalnessFactor = vAux.y;' )
 			// (the bump on the view-space surface; zero height leaves the normal as it is)

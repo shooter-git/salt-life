@@ -1,5 +1,5 @@
 // Plain-node tests of the fishing game logic (no GPU): bites, the catch fight, inventory, save.
-import { FISH, FISH_IDS, fishValue, fishLengthCm, isTrophy } from '../src/game/FishTable.js';
+import { FISH, FISH_IDS, fishValue, fishLengthCm, fishWeightKg, spearRule, isTrophy } from '../src/game/FishTable.js';
 import { habitatAt, pickSpecies, rollWeight, biteDelay, lampsLit } from '../src/game/Bites.js';
 import { CatchMinigame } from '../src/game/CatchMinigame.js';
 import { GameState } from '../src/game/GameState.js';
@@ -42,7 +42,7 @@ ok( biteDelay( habitatAt( spots.sand ), 12, rng ) === Infinity, 'no bite delay o
 {
 
 	let deepOnly = 0;
-	for ( let i = 0; i < 500; i ++ ) if ( [ 'tuna', 'mahi', 'redSnapper', 'grouper', 'barracuda' ].includes( pickSpecies( habitatAt( spots.deep ), 12, rng ) ) ) deepOnly ++;
+	for ( let i = 0; i < 500; i ++ ) if ( [ 'tuna', 'mahi', 'redSnapper', 'grouper', 'barracuda', 'blackGrouper', 'muttonSnapper', 'lionfish' ].includes( pickSpecies( habitatAt( spots.deep ), 12, rng ) ) ) deepOnly ++;
 	ok( deepOnly === 500, 'deep water gives offshore species only' );
 	let reefFish = 0;
 	for ( let i = 0; i < 500; i ++ ) if ( FISH[ pickSpecies( habitatAt( spots.reef ), 12, rng ) ].habitat.reef ) reefFish ++;
@@ -145,7 +145,7 @@ ok( s.stats.holdKg === 30, 'cooler holds 30 kg' );
 const a = s.addFish( 'grunt', 0.84, 9.5 );
 const b = s.addFish( 'yellowtail', 1.31, 10 );
 ok( a && b && s.inventory.length === 2, 'fish go into the cooler' );
-ok( s.addFish( 'tarpon', 40, 22 ) === null && s.log.tarpon.count === 1, 'a fish too big for the hold is logged but not kept' );
+ok( s.addFish( 'blackGrouper', 29, 22 ) === null && s.log.blackGrouper.count === 1, 'a fish too big for the hold is logged but not kept' );
 const value = s.holdValue;
 const sale = s.sell( [ a.id ] );
 ok( sale.count === 1 && s.money === a.value && s.inventory.length === 1, 'selling one fish pays for it' );
@@ -178,8 +178,14 @@ ok( s2.addFish( 'grunt', 0.5 ).id > b.id, 'ids keep counting after a load' );
 	st.addFish( 'jack', 4.05 );
 	const i3 = st.lastCatch;
 	ok( i3.record && i3.prevBestKg === 3.2 && i3.prevBestCm === i1.cm && st.log.jack.bestKg === 4.05 && st.log.jack.bestCm === i3.cm, 'a bigger one: new record, previous best reported, log updated' );
-	st.addFish( 'tarpon', 40 );
-	ok( st.lastCatch.kept === false && st.lastCatch.newSpecies, 'a fish that does not fit: logged, card says released' );
+	st.addFish( 'blackGrouper', 24 );
+	ok( st.lastCatch.kept === false && ! st.lastCatch.released && st.lastCatch.newSpecies, 'a fish that does not fit: logged, card says let go' );
+	// protected species: measured, logged and released, never kept or sold
+	const tp = st.addFish( 'tarpon', 30, 22 ), it = st.lastCatch;
+	ok( tp === null && it.released && ! it.kept && it.value === 0 && st.log.tarpon.count === 1 && ! st.inventory.some( ( f ) => f.species === 'tarpon' ), 'a protected tarpon is logged and released, worth nothing' );
+	// a speared fish: its method, and the length it swam at
+	const sp = st.addFish( 'wrasse', fishWeightKg( 'wrasse', 52 ), 11, { method: 'spear', cm: 52 } );
+	ok( sp && sp.method === 'spear' && sp.cm === 52 && st.lastCatch.method === 'spear', 'a speared fish keeps its method and measured length' );
 	// a save from before lengths: inventory and log get lengths on load
 	const old = { v: 1, money: 5, inventory: [ { id: 1, species: 'grunt', kg: 0.84, value: 6, caughtAt: 9 } ], log: { grunt: { count: 1, bestKg: 0.84 } }, upgrades: {}, fuel: null, nextId: 2 };
 	const st2 = new GameState( { getItem: () => JSON.stringify( old ), setItem: () => {} } );
@@ -202,6 +208,30 @@ ok( Object.keys( defaultUpgrades() ).length === Object.keys( UPGRADES ).length &
 	st.money = 1000;
 	ok( st.buy( 'fuel' ) && st.fuelL === 80, 'a new tank comes full' );
 	ok( st.buy( 'fishFinder' ) && st.stats.finder === true && st.buy( 'fishFinder' ) === null, 'fish finder: one level' );
+
+}
+// ---- (Salt Life) the speargun and the law
+{
+
+	ok( [ 'grouper', 'parrot', 'tarpon' ].every( ( id ) => spearRule( id, 80 ) === 'protected' ), 'Nassau grouper, parrotfish and tarpon are protected' );
+	ok( [ 'angel', 'tang', 'chromis', 'sergeant', 'silverside' ].every( ( id ) => spearRule( id, 30 ) === 'notTarget' ), 'nobody spears angelfish, tangs, chromis, sergeant majors or bait' );
+	ok( spearRule( 'wrasse', 35 ) === 'small' && spearRule( 'wrasse', 45 ) === 'ok' && spearRule( 'lionfish', 12 ) === 'ok' && spearRule( 'nope', 40 ) === 'notTarget', 'minimum sizes; a lionfish of any size; unknown fish are not targets' );
+	let round = true, sized = true;
+	for ( const id of FISH_IDS ) {
+
+		const f = FISH[ id ];
+		if ( Math.abs( fishWeightKg( id, fishLengthCm( id, 2 ) ) - 2 ) > 1e-6 ) round = false;
+		if ( f.minCm && ! ( f.minCm > fishLengthCm( id, f.kg[ 0 ] ) * 0.6 && f.minCm < fishLengthCm( id, f.kg[ 1 ] ) ) ) sized = false;
+
+	}
+
+	ok( round, 'weight from length is the length-weight relation the other way' );
+	ok( sized, 'every minimum size lies within the species\' sizes' );
+	ok( fishValue( 'lionfish', 0.5 ) === Math.round( 10 * 0.5 ) + 6 && fishValue( 'grouper', 8 ) === 0, 'lionfish bounty; nothing for a protected fish' );
+	const g = gearStats( defaultUpgrades() );
+	ok( g.gunCm === 75 && g.bands === 1 && g.spearM === 3 && ! g.spearReel, 'everyone starts with a 75 cm speargun' );
+	const lv = UPGRADES.speargun.levels;
+	ok( lv.every( ( l, i ) => i === 0 || ( l.spearM > lv[ i - 1 ].spearM && l.spearV > lv[ i - 1 ].spearV && l.cost > lv[ i - 1 ].cost && l.shaftM > l.gunCm / 100 ) ), 'each speargun reaches farther and shoots harder; shafts outreach their barrels' );
 
 }
 console.log( `value check ${ value }` );

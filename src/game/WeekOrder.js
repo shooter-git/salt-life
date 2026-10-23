@@ -12,7 +12,7 @@ import { FISH } from './FishTable.js';
 // kept for whoever hasn't collected their share yet)
 
 export const WEEK_MUL = 1.5;
-const MENU = [ 'redSnapper', 'grouper', 'mahi', 'tuna', 'yellowtail', 'wrasse' ]; // what a restaurant would order
+const MENU = [ 'redSnapper', 'blackGrouper', 'mahi', 'tuna', 'yellowtail', 'wrasse' ]; // what a restaurant would order (never a protected fish)
 const FISH_N = 12; // the order is about this many fish of the kind
 const SHARE = 0.5; // the bonus: half of what the order would fetch at Joe's price
 const DAY = 864e5, WEEK = 7 * DAY, MONDAY = 4 * DAY; // (1 January 1970 was a Thursday)
@@ -50,11 +50,12 @@ function clean( t ) {
 }
 
 // this week's tally from the saved one (from an earlier week: a fresh one, keeping the last filled week's;
-// from a later one, on a device whose clock is behind: that one)
+// from a later one, on a device whose clock is behind: that one). (An open one for a fish that's since
+// been protected can't be filled: the week's order replaces it)
 export function tallyFor( saved, w ) {
 
 	const t = clean( saved );
-	if ( t && t.week >= w.week ) return t;
+	if ( t && t.week >= w.week && ( ! FISH[ t.species ].protected || filled( t ) ) ) return t;
 	const prev = t ? ( filled( t ) ? { ...t, prev: null } : t.prev ) : null;
 	return { week: w.week, species: w.species, kg: w.kg, bonus: w.bonus, by: {}, prev };
 

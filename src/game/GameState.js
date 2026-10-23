@@ -14,9 +14,10 @@ export class GameState {
 
 		this.storage = storage;
 		this.money = 0;
-		this.inventory = []; // { id, species, kg, cm, value, caughtAt (game hours), record }
+		this.inventory = []; // { id, species, kg, cm, value, caughtAt (game hours), record, method }
 		this.log = {}; // species -> { count, bestKg, bestCm }
-		// the last addFish: { species, kg, cm, value, newSpecies, record, prevBestKg, prevBestCm, kept } (the catch card)
+		// the last addFish: { species, kg, cm, value, newSpecies, record, prevBestKg, prevBestCm, kept,
+		// released, method } (the catch card)
 		this.lastCatch = null;
 		this.upgrades = defaultUpgrades();
 		this.fuel = null; // litres left (null = full tank)
@@ -57,12 +58,14 @@ export class GameState {
 
 	}
 
-	// store a caught fish; returns the entry, or null when the hold is full (it is logged either way).
-	// A record beats an earlier catch of the species; the first one of a species is a new species.
-	addFish( species, kg, timeOfDay = 12 ) {
+	// store a caught fish; returns the entry, or null when the hold is full or the fish is protected
+	// (released: it is logged either way). A record beats an earlier catch of the species; the first
+	// one of a species is a new species. method: 'rod' or 'spear'; cm: its length when it was
+	// measured (a speared fish: the size it swam at), else from its weight
+	addFish( species, kg, timeOfDay = 12, { method = 'rod', cm = null } = {} ) {
 
 		kg = Math.round( kg * 100 ) / 100;
-		const cm = Math.round( fishLengthCm( species, kg ) );
+		cm = Math.round( cm ?? fishLengthCm( species, kg ) );
 		const logEntry = this.log[ species ] || ( this.log[ species ] = { count: 0, bestKg: 0 } );
 		const newSpecies = logEntry.count === 0;
 		const prevBestKg = logEntry.bestKg, prevBestCm = logEntry.bestCm ?? ( prevBestKg > 0 ? Math.round( fishLengthCm( species, prevBestKg ) ) : 0 );
@@ -76,8 +79,9 @@ export class GameState {
 		}
 
 		const value = fishValue( species, kg );
-		const kept = this.fits( kg );
-		this.lastCatch = { species, kg, cm, value, newSpecies, record, prevBestKg, prevBestCm, kept };
+		const released = !! FISH[ species ].protected;
+		const kept = ! released && this.fits( kg );
+		this.lastCatch = { species, kg, cm, value, newSpecies, record, prevBestKg, prevBestCm, kept, released, method };
 		if ( ! kept ) {
 
 			this.save();
@@ -86,7 +90,7 @@ export class GameState {
 
 		}
 
-		const f = { id: this._nextId ++, species, kg, cm, value, caughtAt: timeOfDay, record };
+		const f = { id: this._nextId ++, species, kg, cm, value, caughtAt: timeOfDay, record, method };
 		this.inventory.push( f );
 		this.save();
 		this.emit();

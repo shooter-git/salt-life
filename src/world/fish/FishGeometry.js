@@ -586,7 +586,9 @@ function pairedFins( M, S, F, part, o ) {
 				const shape = F.shape;
 				alpha = shape === 'falcate' ? lerp( 0.05, - 0.55, t ) : shape === 'pointed' ? lerp( 0.1, - 0.85, t ) : lerp( 0.25, - 1.1, t );
 				len = F.len * ( shape === 'falcate' ? 1 - 0.85 * Math.pow( t, 0.55 ) : shape === 'pointed' ? 1 - 0.62 * Math.pow( t, 0.9 ) : 0.62 + 0.38 * Math.sin( Math.PI * ( 0.15 + 0.85 * t ) ) );
-				spread = dead ? 0.16 : F.spread;
+				// (Salt Life: a spread of [ first, last ] swings the rays round, from out to the side to back
+				// along the flank: the lionfish's fans, open like wings)
+				spread = dead ? 0.16 : Array.isArray( F.spread ) ? lerp( F.spread[ 0 ], F.spread[ 1 ], t ) : F.spread;
 				if ( dead ) alpha = alpha * 0.6 - 0.08; // relaxed: rays closer together, pointing back
 
 			}
@@ -597,7 +599,8 @@ function pairedFins( M, S, F, part, o ) {
 
 		} );
 		const first = M.pos.length / 3;
-		membrane( M, part, rays, o.lod >= 2 ? 0 : 0.035, rows, ids, side < 0 );
+		// (Salt Life: the lionfish's fans: the rays run on well past the membrane)
+		membrane( M, part, rays, o.lod >= 2 ? 0 : ( F.notch ?? 0.035 ), rows, ids, side < 0 );
 		// keep the membrane outside the flank it lies against
 		for ( let i = first; i < M.pos.length / 3; i ++ ) {
 

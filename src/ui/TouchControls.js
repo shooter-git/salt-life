@@ -182,10 +182,13 @@ export class TouchControls {
 		const prompt = player && player.prompt;
 		const rod = game && game.rod;
 		const fishing = !! ( rod && rod.equipped );
-		setButton( this.buttons.rod, fishing ? 'Put away' : prompt && prompt.key === 'R' ? 'Rod' : null );
-		setButton( this.buttons.cast, fishing ? castLabel( game ) : null );
+		// (Salt Life) in the water the same buttons are the speargun's
+		const spearing = !! ( game && game.gun && game.gun.equipped );
+		const swim = player && player.mode === 'swim';
+		setButton( this.buttons.rod, fishing || ( spearing && ! game.gun.shaftOut ) ? 'Put away' : prompt && prompt.key === 'R' ? ( swim ? 'Speargun' : 'Rod' ) : null );
+		setButton( this.buttons.cast, fishing ? castLabel( game ) : spearing ? spearLabel( game ) : null );
 		setButton( this.buttons.reel, fishing && ! game.fight && ( rod.state === 'floating' || rod.state === 'flying' ) ? 'Reel in' : null );
-		setButton( this.buttons.cooler, game && game.hud && ! fishing ? 'Cooler' : null );
+		setButton( this.buttons.cooler, game && game.hud && ! fishing && ! spearing ? 'Cooler' : null );
 		// the flashlight: offered after dusk (or while it's on)
 		const lights = game && game.app && game.app.localLights;
 		const torchOn = !! ( lights && lights.flashlight.on );
@@ -213,6 +216,18 @@ function castLabel( game ) {
 	if ( rod.state === 'windup' ) return 'Let go';
 	if ( rod.state === 'floating' ) return game.bite && game.bite.phase === 'take' ? 'Strike!' : 'Strike';
 	if ( rod.state === 'idle' ) return 'Cast';
+	return 'Wait';
+
+}
+
+// (Salt Life) the speargun's: shoot once you've dived, hold to load, hold to pull in a big fish
+function spearLabel( game ) {
+
+	const gun = game.gun;
+	if ( game.spearFight ) return 'Pull';
+	if ( gun.state === 'loaded' ) return ! game.submerged ? 'Dive' : gun.safety ? 'Hold fire' : 'Shoot';
+	if ( gun.state === 'empty' ) return 'Load';
+	if ( gun.state === 'loading' ) return 'Loading';
 	return 'Wait';
 
 }

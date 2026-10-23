@@ -80,6 +80,9 @@ for ( let d = 0; d < 40; d ++ ) {
 ok( differ >= 38, 'a new list (nearly) every day' );
 ok( tw === 40, 'Joe always wants one fish of the dusk, dawn or dark' );
 ok( a.length === 3 && a.every( ( o ) => FISH[ o.species ] && o.max > 0 ), 'Joe\'s two and Marta\'s one' );
+let wantsProtected = 0;
+for ( let d = 0; d < 400; d ++ ) if ( ordersFor( d ).some( ( o ) => FISH[ o.species ].protected ) ) wantsProtected ++;
+ok( wantsProtected === 0, 'nobody wants a protected fish: it\'s let go' );
 console.log( `     day 12: ${ a.map( ( o ) => `${ o.who } ${ o.species } ${ orderTerms( o ) }` ).join( '; ' ) }` );
 
 // ---- selling on them
@@ -143,15 +146,21 @@ ok( o1.total === sr && o1.week === w0.week && owed( next, 'r', o1.week ).total =
 const both = deliver( next, w1, robin, w1.kg );
 ok( owed( both, 'r' ).total === sr + shareOf( both, 'r' ) && owed( both, 'r' ).week === w1.week, 'two weeks owed: both, together' );
 ok( tallyFor( { week: 'x' }, w0 ).week === w0.week && tallyFor( { ...t, by: { r: { name: 'R', kg: - 4 } } }, w0 ).by.r === undefined, 'a bad tally is set aside' );
+ok( [ ...Array( 12 ).keys() ].every( ( i ) => ! FISH[ weekOrder( mon + i * 7 * DAYMS ).species ].protected ), 'no restaurant orders a protected fish' );
+// (saved before the Nassau grouper was protected: it can't be filled now, so the week's order replaces it;
+// a filled one stays, to be paid)
+const nassau = { week: w0.week, species: 'grouper', kg: 75, bonus: 560, by: { r: { name: 'Robin', kg: 20 } } };
+const swapped = tallyFor( nassau, w0 ), paid = tallyFor( { ...nassau, kg: 15 }, w0 );
+ok( swapped.species === w0.species && delivered( swapped ) === 0 && paid.species === 'grouper' && filled( paid ), 'a tally for a fish since protected gives way to the week\'s order (a filled one is still paid)' );
 
 // selling toward it
 const sw = new GameState( { getItem: ( k ) => m.get( 'w' + k ) ?? null, setItem: ( k, v ) => m.set( 'w' + k, v ) } );
-const g1 = sw.addFish( 'grouper', 8 ), g2 = sw.addFish( 'grouper', 5 ), g3 = sw.addFish( 'grouper', 4 ), gr = sw.addFish( 'grunt', 0.5 );
-const wk = { species: 'grouper', left: 10 };
+const g1 = sw.addFish( 'blackGrouper', 8 ), g2 = sw.addFish( 'blackGrouper', 5 ), g3 = sw.addFish( 'blackGrouper', 4 ), gr = sw.addFish( 'grunt', 0.5 );
+const wk = { species: 'blackGrouper', left: 10 };
 const wq = sw.quote( null, { who: 'joe', orders: [], day: 3, week: wk } );
 ok( wq.prices.get( g1.id ) === Math.round( g1.value * WEEK_MUL ) && wq.prices.get( g2.id ) === Math.round( g2.value * WEEK_MUL ) && wq.prices.get( g3.id ) === g3.value, 'toward the week\'s order: half as much again, the biggest first, until it\'s filled' );
 ok( wq.week === 13 && wq.weekN === 2, 'what went toward it' );
-const both2 = sw.quote( [ g1.id ], { who: 'joe', orders: [ { id: 'joe-b', who: 'joe', species: 'grouper', mul: 2, max: 3 } ], day: 3, week: wk } );
+const both2 = sw.quote( [ g1.id ], { who: 'joe', orders: [ { id: 'joe-b', who: 'joe', species: 'blackGrouper', mul: 2, max: 3 } ], day: 3, week: wk } );
 ok( both2.prices.get( g1.id ) === g1.value * 2 && both2.week === 8 && both2.wanted === 1, 'on the day\'s list too: its price, and it still counts toward the week' );
 const nbox = sw.quote( [ g1.id, gr.id ], { who: 'joe', orders: [], day: 3, rate: NIGHT_BOX, week: wk } );
 ok( nbox.prices.get( g1.id ) === Math.round( g1.value * WEEK_MUL ) && nbox.week === 8, 'the night box takes it in full' );

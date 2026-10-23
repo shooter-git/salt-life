@@ -17,7 +17,7 @@ import { PART } from './FishGeometry.js';
 // glossy cornea. The vertex stage poses the model: a travelling swimming wave with pectoral
 // sculling (rays undulate or flap, the turtle strokes).
 //
-// Port notes: the species table (21 species x 8 vec4) is a float texture (168 vec4 uniforms would
+// Port notes: the species table (25 species x 8 vec4) is a float texture (200 vec4 uniforms would
 // pass WebGL's guaranteed limit); no motion vectors; the underwater shading is the shared one
 // (materials/Underwater.js); translucency goes to the emissive term in the sun's colour; lite
 // (low-powered devices): no scale rows, relief or sheen.
@@ -438,18 +438,85 @@ const SURFACE = /* glsl */`
 		c = mix( c, vec3( 0.12, 0.25, 0.45 ), stripe * 0.6 );
 		c = mix( c, vec3( 0.12, 0.16, 0.16 ), fishSs( 0.32, 0.36, z ) * bodyK * 0.7 );
 	} else if ( pat == ${ PT( 'jack' ) } ) {
-		// bar jack: black stripe along the base of the dorsal fin into the lower tail lobe, electric
-		// blue below it
-		float top = fishBand( h, 0.82, 0.06, fwH + 0.05 ) * fishSs( 0.2, 0.05, z ) * bodyK;
-		float blue = fishBand( h, 0.68, 0.05, fwH + 0.05 ) * fishSs( 0.2, 0.05, z ) * bodyK;
-		c = mix( c, vec3( 0.15, 0.45, 0.9 ), blue * 0.5 );
-		c = mix( c, vec3( 0.02, 0.03, 0.05 ), top * 0.85 );
-		float lobe = P == ${ PA( 'CAUDAL' ) } ? fishSs( 7.5, 5.5, w ) * fishSs( 0.1, 0.3, t ) : 0.0;
-		c = mix( c, vec3( 0.02, 0.03, 0.05 ), lobe * 0.8 );
+		// (Salt Life) crevalle jack: a brassy green back over silvery gold; a black spot at the top corner
+		// of the gill cover and a black blotch at the base of the pectoral fin; a dark ridge of scutes
+		// along the tail stalk; the anal fin and the lower tail lobe yellow
+		float opSpot = ( 1.0 - fishSs( 0.011, 0.019, length( vec2( ( z - eye.w - 0.006 ) * 1.3, y - eye.y - 0.004 ) ) ) ) * bodyK;
+		vec2 pc = vec2( z - ${ f( 0.5 - 0.3 * SPECIES.jack.body ) }, y + 0.012 );
+		float pecB = ( 1.0 - fishSs( 0.008, 0.015, length( pc * vec2( 1.0, 1.4 ) ) ) ) * bodyK;
+		float stalk = fishSs( ${ f( 0.5 - 0.72 * SPECIES.jack.body ) }, ${ f( 0.5 - 0.8 * SPECIES.jack.body ) }, z );
+		float scutes = fishBand( h, 0.0, 0.1, fwH + 0.05 ) * stalk * bodyK;
+		c = mix( c, vec3( 0.75, 0.62, 0.16 ), fishSs( -0.15, -0.65, h ) * bodyK * 0.3 );
+		c = mix( c, vec3( 0.22, 0.2, 0.1 ), scutes * 0.6 );
+		c = mix( c, vec3( 0.015, 0.015, 0.02 ), max( opSpot * 0.95, pecB * 0.8 ) );
+		bool yellowFin = P == ${ PA( 'ANAL' ) } || ( P == ${ PA( 'CAUDAL' ) } && w < 7.5 );
+		c = yellowFin ? mix( c, vec3( 0.78, 0.6, 0.1 ), 0.65 ) : c;
 	} else if ( pat == ${ PT( 'tarpon' ) } ) {
 		// huge scales with dark edges
 		float rims = fishSs( 0.8, 0.97, sf ) * sfade * bodyK;
 		c *= 1.0 - rims * 0.35;
+	} else if ( pat == ${ PT( 'hogfish' ) } ) {
+		// (Salt Life) hogfish: mottled pinkish tan, a black spot at the rear base of the soft dorsal fin;
+		// a big male's snout and brow dark maroon back to the first dorsal spines
+		bool male = fract( seed * 5.3 ) < 0.3;
+		float mott = fishSs( 0.45, 0.85, fishVnoise( vec2( z, y ) * 55.0 + seed * 7.0 ) ) * bodyK;
+		c = mix( c, c * vec3( 0.68, 0.5, 0.46 ), mott * 0.7 );
+		float spot = 1.0 - fishSs( 0.014, 0.022, length( vec2( z - ${ f( 0.5 - 0.82 * SPECIES.hogfish.body ) }, y - 0.088 ) ) );
+		c = mix( c, vec3( 0.02, 0.015, 0.015 ), spot * ( isBody || P == ${ PA( 'DORSAL2' ) } ? 0.92 : 0.0 ) );
+		// (back over the brow to the first spines; on the cheek only ahead of the eye)
+		float face = fishSs( ${ f( 0.5 - 0.31 * SPECIES.hogfish.body ) }, ${ f( 0.5 - 0.26 * SPECIES.hogfish.body ) }, z + max( h, 0.0 ) * 0.03 ) * fishSs( -0.45, -0.1, h + ( z - eye.x ) * 4.0 ) * bodyK;
+		c = mix( c, vec3( 0.12, 0.035, 0.035 ), face * ( male ? 0.85 : 0.0 ) );
+		c = ( isFin && P != ${ PA( 'PECTORAL' ) } ) ? mix( c, edgeC * 0.8, fishSs( 0.75, 1.0, t ) * 0.6 ) : c;
+	} else if ( pat == ${ PT( 'blackGrouper' ) } ) {
+		// black grouper: dark rectangular blotches in offset rows on olive grey, brassy hexagonal spots
+		// over the head and the lower flank; the soft dorsal, the anal fin and the tail edged black (the
+		// tail with a thin white rim), the pectorals edged orange
+		vec2 q = vec2( ( 0.5 - z ) * 15.0, h * 2.2 + 3.0 );
+		float row = floor( q.y );
+		float qx = q.x + row * 0.5;
+		vec2 fr = vec2( fract( qx ), fract( q.y ) ) - 0.5;
+		vec2 cellG = vec2( floor( qx ), row ) + seed * 3.0;
+		vec2 ext = vec2( 0.24, 0.26 ) + vec2( fishHash( cellG + 4.1 ), fishHash( cellG + 8.3 ) ) * 0.14;
+		float rect = ( 1.0 - fishSs( 0.0, 0.08, max( abs( fr.x ) - ext.x, abs( fr.y ) - ext.y ) + ( n1 - 0.5 ) * 0.05 ) ) * step( 0.18, fishHash( cellG ) );
+		float blot = rect * fishSs( eye.w + 0.01, eye.w - 0.03, z ) * ( 1.0 - tBelly * 0.85 ) * bodyK;
+		c = mix( c, vec3( 0.045, 0.045, 0.035 ), blot * 0.75 );
+		vec2 qs = vec2( z, y ) * 150.0;
+		vec2 fs = fract( qs + vec2( 0.0, floor( qs.x ) * 0.5 ) ) - 0.5;
+		float hex = ( 1.0 - fishSs( 0.22, 0.34, max( abs( fs.x ) * 1.15 + abs( fs.y ) * 0.58, abs( fs.y ) * 1.15 ) ) );
+		float brassK = max( fishSs( eye.w - 0.04, eye.w + 0.02, z ), fishSs( -0.1, -0.5, h ) ) * bodyK;
+		c = mix( c, vec3( 0.42, 0.3, 0.1 ), hex * brassK * 0.45 );
+		bool edged = P == ${ PA( 'DORSAL2' ) } || P == ${ PA( 'ANAL' ) } || P == ${ PA( 'CAUDAL' ) };
+		c = edged ? mix( c, vec3( 0.012 ), fishSs( 0.74, 0.86, t ) ) : c;
+		c = P == ${ PA( 'CAUDAL' ) } ? mix( c, vec3( 0.75, 0.75, 0.72 ), fishSs( 0.95, 1.0, t ) ) : c;
+		c = P == ${ PA( 'PECTORAL' ) } ? mix( c, vec3( 0.75, 0.32, 0.06 ), fishSs( 0.7, 0.95, t ) * 0.85 ) : c;
+	} else if ( pat == ${ PT( 'muttonSnapper' ) } ) {
+		// mutton snapper: olive green above, pink to red below; a small black spot above the lateral
+		// line under the front of the soft dorsal fin; two bright blue lines on the cheek under the eye;
+		// red-orange pelvic and anal fins, the tail dusky red with a dark margin
+		c = mix( c, vec3( 0.6, 0.2, 0.13 ), fishSs( 0.05, -0.55, h ) * ( 1.0 - fishSs( -0.6, -0.9, h ) ) * bodyK * 0.35 );
+		float spot = ( 1.0 - fishSs( 0.011, 0.017, length( vec2( z - ${ f( 0.5 - 0.62 * SPECIES.muttonSnapper.body ) }, y - 0.074 ) ) ) ) * bodyK;
+		c = mix( c, vec3( 0.02, 0.02, 0.025 ), spot * 0.9 );
+		float cheek = fishSs( eye.w, eye.w + 0.02, z ) * fishSs( 0.48, 0.44, z ) * bodyK;
+		float l1 = fishBand( y - eye.y + eye.z * 1.7 + ( z - eye.x ) * 0.32, 0.0, 0.0022, 0.0018 );
+		float l2 = fishBand( y - eye.y + eye.z * 2.7 + ( z - eye.x ) * 0.32, 0.0, 0.0018, 0.0016 );
+		c = mix( c, vec3( 0.12, 0.42, 0.85 ), max( l1, l2 * 0.8 ) * cheek * 0.9 );
+		c = P == ${ PA( 'CAUDAL' ) } ? mix( c * vec3( 1.0, 0.75, 0.7 ), vec3( 0.12, 0.04, 0.03 ), fishSs( 0.8, 0.98, t ) * 0.8 ) : c;
+	} else if ( pat == ${ PT( 'lionfish' ) } ) {
+		// red lionfish: maroon bars on cream, wide and narrow in turn and a little slanted; the spines
+		// banded maroon and white; rows of dark spots on the soft fins and the tail; the fans' rays banded
+		vec3 maroon = vec3( 0.28, 0.035, 0.022 );
+		float ph = ( 0.5 - z ) * 10.9 + h * 0.15 + n1 * 0.08;
+		float fb = fract( ph );
+		float bars = max( fishBand( fb, 0.3, 0.16, 0.05 ), fishBand( fb, 0.78, 0.03, 0.02 ) * 0.9 );
+		c = mix( c, maroon, bars * bodyK * mix( 0.92, 0.6, tBelly ) );
+		float banded = fishSs( -0.25, 0.25, sin( t * 26.0 + w * 0.7 ) );
+		c = P == ${ PA( 'DORSAL1' ) } ? mix( c, maroon, banded * 0.85 ) : c;
+		c = P == ${ PA( 'PECTORAL' ) } ? mix( c, maroon * 1.2, banded * 0.75 ) : c;
+		vec2 qd = vec2( z, y ) * 95.0;
+		float dots = 1.0 - fishSs( 0.2, 0.36, length( fract( qd + vec2( 0.0, floor( qd.x ) * 0.5 ) ) - 0.5 ) );
+		bool spotted = P == ${ PA( 'DORSAL2' ) } || P == ${ PA( 'ANAL' ) } || P == ${ PA( 'CAUDAL' ) };
+		c = spotted ? mix( c, maroon, dots * 0.8 ) : c;
+		c = P == ${ PA( 'PELVIC' ) } ? mix( maroon * 0.7, vec3( 0.85, 0.82, 0.8 ), dots * 0.7 ) : c;
 	}
 
 	// ---- lateral line (a row of pores along a dark line)

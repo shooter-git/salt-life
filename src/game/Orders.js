@@ -5,17 +5,18 @@ import { FISH } from './FishTable.js';
 // from the day alone, so everyone sharing an island's clock sees the same one and nothing is sent.
 // The day's list runs from Joe opening (OPENS) to his opening the next morning: a fish caught after he
 // shuts still counts, left in his night box. Each order takes a few fish from each player at its price.
-//   const list = ordersFor( tradeDay( hour, day ) )   orderFor( list, 'joe', 'tarpon' )
+//   const list = ordersFor( tradeDay( hour, day ) )   orderFor( list, 'joe', 'yellowtail' )
 //   orderPrice( order, value )
 
 export const OPENS = 5; // Joe opens at 5 am
 export const HOURS = { joe: [ OPENS, 19 ], marta: [ 7, 19 ] }; // [ open, close ) game hours
 export const NIGHT_BOX = 0.7; // what Joe's night box pays, of his price (the wanted list in full)
 
-// Joe's pick: one fish of the twilight or the dark (yellowtail and jacks at dusk and dawn, tuna offshore
-// at first light, tarpon under the pier lights at night) at double, and one more at half as much again
-const TWILIGHT = [ 'yellowtail', 'jack', 'tuna', 'tarpon' ];
-const MORE = [ 'sergeant', 'grunt', 'tang', 'wrasse', 'parrot', 'angel', 'barracuda', 'grouper', 'redSnapper', 'mahi', 'mullet', 'needlefish' ];
+// Joe's pick: one fish of the twilight (yellowtail, jacks and mutton snapper at dusk and dawn, tuna
+// offshore at first light) at double, and one more at half as much again. Never a protected fish: it's
+// let go (FishTable.js)
+const TWILIGHT = [ 'yellowtail', 'jack', 'tuna', 'muttonSnapper' ];
+const MORE = [ 'sergeant', 'grunt', 'tang', 'wrasse', 'lionfish', 'angel', 'barracuda', 'blackGrouper', 'redSnapper', 'mahi', 'mullet', 'needlefish' ];
 // Marta's bait tank: $ a fish
 const BAIT = { silverside: 6, sergeant: 8, grunt: 10, mullet: 12, needlefish: 12 };
 
