@@ -19,7 +19,7 @@ import { bandFade } from '../materials/LODFade.js';
 //    a bait ball of silversides in mid water that cruises as a polarized school and balls up,
 //    milling, when jacks or the swimmer come close (and parts around them);
 //  - sand: southern stingrays gliding low (and resting), a green turtle that surfaces to breathe;
-//  - bay: tarpon cruising in the deeper water, needlefish just under the surface, mullet schools
+//  - bay: tarpon cruising in the deeper water (after dark, under the pier's lamps), needlefish just under the surface, mullet schools
 //    near the shore (one now and then leaps out with a splash), snappers and grunts around the
 //    pier piles, schools of fry in the shallows just outside the breakers.
 // Everything scatters from the swimmer (also from someone wading in the shallows), stays in the
@@ -166,6 +166,7 @@ export class FishSchools {
 		this.rng = mulberry32( seed );
 		this.time = 0;
 		this.spray = null; // set by the owner (Spray.js): splashes of leaping mullet
+		this.lit = 0; // (Salt Life) the pier's lamps, 0..1 (the app sets it: Bites.lampsLit)
 		this.ground = ground;
 		this.group = new THREE.Group();
 		this.group.name = 'Fish';
@@ -402,7 +403,16 @@ export class FishSchools {
 
 		// ---- the bay (east of the reef, south of the beach)
 		const bayZone = { x: 45, z: 70, r: 45 };
-		place( 'tarpon', 3, { ...bayZone, band: [ 5, 14 ] } );
+		const tarpon = place( 'tarpon', 3, { ...bayZone, band: [ 5, 14 ] } );
+		// (Salt Life) after dark they gather under the pier's lamps (and bite there: Bites.pickSpecies)
+		if ( tarpon ) {
+
+			const n = { x: WORLD.pier.x, z: WORLD.pier.zEnd - 3, r: 12, band: [ 3, 14 ] };
+			n.home = new THREE.Vector3( n.x, this.depthFor( tarpon.sp, n.x, n.z, 0.5 ), n.z );
+			tarpon.night = n;
+
+		}
+
 		place( 'jack', 5, { x: WORLD.pier.x, z: WORLD.pier.zEnd, r: 20, band: [ 3, 10 ] } );
 		place( 'stingray', 1, { ...bayZone, band: [ 3, 9 ], sand: true } );
 		place( 'barracuda', 1, { x: WORLD.pier.x + 6, z: WORLD.pier.zEnd - 4, r: 8, band: [ 3, 8 ] } );
@@ -553,7 +563,10 @@ export class FishSchools {
 	// New goal for the group: wandering in its zone, along its path, or away from a threat.
 	retarget( g, away ) {
 
-		const sp = g.sp, rng = g.rng, zone = g.zone;
+		const sp = g.sp, rng = g.rng;
+		// (Salt Life) a group with a place for the night (the tarpon: under the pier's lamps) goes there once they're lit
+		const night = g.night && this.lit > 0.5 ? g.night : null;
+		const zone = night || g.zone, home = night ? night.home : g.home;
 		const hold = sp.mode === 'solo' || sp.mode === 'lurk' ? [ 12, 25 ] : sp.mode === 'forage' ? [ 3, 7 ] : sp.mode === 'surface' ? [ 10, 20 ] : [ 6, 12 ];
 		if ( ! away && zone.path && zone.path.length > 1 && ( sp.mode === 'patrol' || sp.mode === 'cruise' ) ) {
 
@@ -595,9 +608,9 @@ export class FishSchools {
 
 			} else {
 
-				const a = rng() * TAU, r = Math.sqrt( rng() ) * Math.max( sp.homeRadius, zone.r * 0.8 );
-				x = g.home.x + Math.cos( a ) * r;
-				z = g.home.z + Math.sin( a ) * r;
+				const a = rng() * TAU, r = Math.sqrt( rng() ) * ( night ? night.r : Math.max( sp.homeRadius, zone.r * 0.8 ) );
+				x = home.x + Math.cos( a ) * r;
+				z = home.z + Math.sin( a ) * r;
 
 			}
 
@@ -609,7 +622,7 @@ export class FishSchools {
 
 		}
 
-		g.goal.copy( g.home );
+		g.goal.copy( home );
 		g.timer = 4;
 
 	}

@@ -18,6 +18,7 @@ const PAD_KEYS = {
 	14: 'ArrowLeft', // d-pad left / right: the cooler's tabs
 	15: 'ArrowRight',
 	10: 'Horn', // left stick pressed: the horn, at the helm (its own code: H off the helm is the guide)
+	11: 'KeyT', // right stick pressed: the clock
 };
 const PAD_LOOK = 700; // px per second at full right-stick deflection
 const DEADZONE = 0.15;

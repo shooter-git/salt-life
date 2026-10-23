@@ -1,6 +1,6 @@
 // Plain-node tests of the fishing game logic (no GPU): bites, the catch fight, inventory, save.
-import { FISH, FISH_IDS, fishValue, fishLengthCm, fishWeightKg, spearRule } from '../src/game/FishTable.js';
-import { habitatAt, pickSpecies, rollWeight, biteDelay } from '../src/game/Bites.js';
+import { FISH, FISH_IDS, fishValue, fishLengthCm, fishWeightKg, spearRule, isTrophy } from '../src/game/FishTable.js';
+import { habitatAt, pickSpecies, rollWeight, biteDelay, lampsLit } from '../src/game/Bites.js';
 import { CatchMinigame } from '../src/game/CatchMinigame.js';
 import { GameState } from '../src/game/GameState.js';
 import { gearStats, defaultUpgrades, UPGRADES } from '../src/game/Gear.js';
@@ -60,6 +60,23 @@ ok( biteDelay( habitatAt( spots.sand ), 12, rng ) === Infinity, 'no bite delay o
 	}
 
 	ok( tarponNight > tarponDay * 2, `tarpon bite at night (${ tarponNight } vs ${ tarponDay } by day)` );
+	// (Salt Life) they gather under the pier's lamps after dark: twice as many bites there as without
+	// the lamps, and more than out in the open bay
+	const share = ( spot ) => {
+
+		let t = 0;
+		for ( let i = 0; i < 6000; i ++ ) if ( pickSpecies( habitatAt( spot ), 22, rng ) === 'tarpon' ) t ++;
+		return t / 6000;
+
+	};
+	const lights = FISH.tarpon.lights;
+	delete FISH.tarpon.lights;
+	const dark = share( spots.pier );
+	FISH.tarpon.lights = lights;
+	const lit = share( spots.pier ), bay = share( { depth: 6, reefDist: 200, pierDist: 60 } );
+	console.log( `     tarpon after dark: ${ ( 100 * lit ).toFixed( 1 ) }% of bites under the pier lights (${ ( 100 * dark ).toFixed( 1 ) }% without them), ${ ( 100 * bay ).toFixed( 1 ) }% in the open bay` );
+	ok( lit > 1.7 * dark && lit > bay, 'after dark the tarpon gather under the pier lights' );
+	ok( lampsLit( 12 ) === 0 && lampsLit( 22 ) === 1 && lampsLit( 3 ) === 1 && lampsLit( 19.5 ) > 0 && lampsLit( 19.5 ) < 1, 'the pier lamps: lit from dusk to dawn' );
 
 }
 for ( const id of FISH_IDS ) {
@@ -69,6 +86,22 @@ for ( const id of FISH_IDS ) {
 
 }
 ok( fishValue( 'redSnapper', 5 ) > fishValue( 'redSnapper', 2 ), 'bigger fish is worth more' );
+// (Salt Life) trophies: what the others hear of (with island records), about one catch in ten
+{
+
+	let trophies = 0, n = 0;
+	for ( const id of FISH_IDS ) for ( let i = 0; i < 2000; i ++ ) {
+
+		n ++;
+		if ( isTrophy( id, rollWeight( id, rng ) ) ) trophies ++;
+
+	}
+
+	console.log( `     trophies: ${ ( 100 * trophies / n ).toFixed( 1 ) }% of catches` );
+	ok( trophies / n > 0.05 && trophies / n < 0.15, 'a trophy is about one catch in ten' );
+	ok( isTrophy( 'tarpon', 40 ) && ! isTrophy( 'tarpon', 20 ), 'a trophy is a big one of its kind' );
+
+}
 
 // ---- the fight: three players
 const policies = {

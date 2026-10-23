@@ -37,9 +37,22 @@ Done, M0 to M7:
   - you pick your islander: two men and two women;
   - you can ride along in someone else's boat, and hear it;
   - at night their boats show their lamps and searchlights, and you hear their horns;
-  - you hear about their catches;
+  - you see their catches, and hear about the records and the big ones;
   - the group keeps a board of the island's records at the fish stand;
   - everyone shares one time of day.
+
+The island's day:
+- the day runs on its own, about half an hour from dawn to dawn, and quickly through the dark;
+- on your own you can hold the clock or rest until dawn, noon, dusk or night (T, or tap the time);
+  with others, time runs for everyone and you rest once you all choose the same;
+- Joe and Marta keep hours; when they've gone home, Joe's night box takes your catch and Marta's
+  honesty box has diesel;
+- each morning Joe chalks the fish he's after on his counter and pays over the odds for them, and
+  Marta buys one kind of bait fish;
+- each week a restaurant on the mainland orders one kind of fish through Joe, and the group fills it
+  together and shares the bonus;
+- a "Closed" board is out at each stall while its trader's away, and after dark the tarpon gather
+  under the pier lights.
 
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how the game is put together.
 

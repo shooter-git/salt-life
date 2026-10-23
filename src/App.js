@@ -24,9 +24,12 @@ import { computeShoreField } from './world/ShoreField.js';
 import { Player } from './player/Player.js';
 import { BoatController } from './player/BoatController.js';
 import { GameState } from './game/GameState.js';
+import { DAY_RATE, START_HOUR, advance } from './game/IslandClock.js';
+import { lampsLit } from './game/Bites.js';
 import { FishStand, STAND } from './game/FishStand.js';
 import { Chandlery, CHANDLERY } from './game/Chandlery.js';
 import { LocalLights, addBoatLights, addVillageLights, useLocalLights, holdLocalLights } from './materials/LocalLights.js';
+import { cloudShadows, useCloudShadows } from './materials/CloudShadows.js';
 import { Wildlife } from './world/wildlife/Wildlife.js';
 import { Debris } from './world/Debris.js';
 import { Reef } from './world/Reef.js';
@@ -82,11 +85,16 @@ export class App {
 		const asked = portal.standalone && new URLSearchParams( location.search ).get( 'tier' );
 		this.tier = [ 'low', 'mid', 'high' ].includes( asked ) ? asked : portal.tier;
 		this.settings = {
-			timeOfDay: 16.2,
+			// (Salt Life) the island's clock (game/IslandClock.js): the hour and the day, running at
+			// timeSpeed game hours a real second by day (0: held). Yours from the save until a session
+			// shares one (together/)
+			timeOfDay: START_HOUR,
+			day: 1,
 			sunAzimuth: 0, // degrees: turns the sun's daily path about the vertical
-			timeSpeed: 0, // hours per real second (T lets the day run)
+			timeSpeed: DAY_RATE,
 			exposure: 0.55,
 		};
+		this._clockSaveT = 0;
 
 	}
 
@@ -116,6 +124,7 @@ export class App {
 		setDetailData( new Uint8Array( detail ) );
 		this.state = new GameState( this.store );
 		this.state.load(); // (the save was read above: money, the cooler, the log, upgrades, fuel)
+		this.loadClock();
 
 		await progress( 0.25, 'Shaping the island' );
 		this.terrainData = new TerrainData( 7, decodeIsland( new Uint8Array( bytes ) ) );
@@ -167,6 +176,10 @@ export class App {
 		// ---------------------------------------------------------------- sky
 		await progress( 0.4, 'Lighting the sky' );
 		this.sky = new Sky( { scene, renderer, tier } );
+		// (high) the clouds' shadows on the island and the sea: lightUp gives them to the lit materials,
+		// so before anything is lit (with a graphics card the plants are lit early in loading)
+		this.cloudShadows = !! this.sky.clouds.shadowMap;
+		if ( this.cloudShadows ) cloudShadows.attach( this.sky.clouds );
 		// the eye adapts at dusk and at night: the whole scene's exposure follows (Tidewater's auto exposure)
 		this.sky.sceneAdaptation = true;
 		if ( SHADOW[ tier ] ) {
@@ -228,6 +241,7 @@ export class App {
 		this.shore = new ShoreWaves( { field: this.shoreField } );
 		this.query = new WaterQuery( this.waves, this.terrainData, this.shore );
 		this.water = new WaterSurface( { scene, waves: this.waves, terrain: this.terrain, shore: this.shore, tier } );
+		if ( this.cloudShadows ) useCloudShadows( this.water.material );
 
 		// ---------------------------------------------------------------- boat and player
 		await progress( 0.7, 'Mooring the boat' );
@@ -465,13 +479,14 @@ export class App {
 		const s = this.settings;
 		G.dt.value = dt;
 		G.time.value += dt;
-		if ( s.timeSpeed !== 0 ) s.timeOfDay = ( s.timeOfDay + dt * s.timeSpeed + 24 ) % 24;
+		if ( s.timeSpeed !== 0 ) Object.assign( s, timeOf( advance( s.timeOfDay, s.day, s.timeSpeed, dt ) ) );
 		if ( this.together ) this.together.syncClock( s );
+		// (the hour you're at, in your save now and again: you come back to it)
+		if ( ( this._clockSaveT -= dt ) <= 0 ) this.saveClock();
 
 		// ---- player / boat (boat physics first so the cameras follow this frame's pose)
 		const input = this.input;
 		input.update( dt );
-		if ( input.hit( 'KeyT' ) ) this.toggleTime();
 		// L: the flashlight; at the helm, the boat's searchlight
 		if ( input.hit( 'KeyL' ) ) {
 
@@ -569,6 +584,7 @@ export class App {
 		if ( this.fish ) {
 
 			this.fish.viewHeight = this.renderer.domElement.height;
+			this.fish.lit = lampsLit( this.settings.timeOfDay ); // (Salt Life: the tarpon gather under the pier's lamps)
 			this.fish.update( dt, this.camera.position );
 			this.fish.cull( this.camera );
 
@@ -589,6 +605,7 @@ export class App {
 		this.boat.update( dt );
 		this.boatLamps.set( { underway: this.boatCtl.driven || ! this.boatCtl.moored, spot: this.searchlight } );
 		this.localLights.update( this.camera, dt );
+		cloudShadows.update( this.camera );
 		this.wake.update( dt );
 		this.updateAudio( dt );
 
@@ -754,6 +771,9 @@ export class App {
 		const r = this.renderer, rod = this.game.rod;
 		await this.game.portrait.compile( r, this.scene.environment );
 		await this.together.compile( r, this.camera, this.scene );
+		// (the wanted slate on Joe's counter and the stalls' "Closed" boards: the records board's program,
+		// compiled just now)
+		for ( const m of [ this.game.wanted.mesh, ...this.game.signs.map( ( s ) => s.mesh ) ] ) if ( ! m.parent ) this.scene.add( m );
 		if ( ! this.boatLamps.group.parent ) {
 
 			this.boat.group.add( this.boatLamps.group );
@@ -878,6 +898,7 @@ export class App {
 				if ( m.name === 'Water' || m.name === 'fishingLine' ) continue;
 				lit.add( m );
 				useLocalLights( m, { cheap } );
+				if ( this.cloudShadows ) useCloudShadows( m );
 
 			}
 
@@ -1240,28 +1261,54 @@ export class App {
 
 	}
 
-	// T: let the day run (about 8 minutes per day) or stop it, for everyone here
-	toggleTime() {
+	// (Salt Life) the island's clock from your save: the hour and day you left at, and whether you'd
+	// held it (a new player: the first morning). On its own (pnpm dev), ?hour=21 starts at that hour
+	loadClock() {
 
 		const s = this.settings;
-		if ( s.timeSpeed !== 0 ) {
+		let saved = null;
+		try {
 
-			this._timeSpeed = s.timeSpeed;
-			s.timeSpeed = 0;
+			saved = JSON.parse( this.store.getItem( CLOCK_KEY ) || 'null' );
 
-		} else {
+		} catch ( e ) { /* none */ }
 
-			s.timeSpeed = this._timeSpeed || 0.05;
+		if ( saved && Number.isFinite( saved.hour ) ) {
+
+			s.timeOfDay = ( ( saved.hour % 24 ) + 24 ) % 24;
+			s.day = Number.isFinite( saved.day ) ? Math.max( 1, Math.floor( saved.day ) ) : 1;
+			s.timeSpeed = saved.held ? 0 : DAY_RATE;
 
 		}
 
-		// (for everyone on the island: one clock)
-		if ( this.together ) this.together.setClock( s.timeOfDay, s.timeSpeed );
-		this.hud.toast( s.timeSpeed !== 0 ? 'Time running' : 'Time paused' );
+		const q = this.portal.standalone ? new URLSearchParams( location.search ) : null;
+		const asked = q && q.has( 'hour' ) ? Number( q.get( 'hour' ) ) : NaN;
+		if ( asked >= 0 && asked < 24 ) s.timeOfDay = asked;
+		this.portal.on( 'pause', () => this.saveClock() );
+		this.portal.onExit( () => {
+
+			this.saveClock();
+			return this.store.flush();
+
+		} );
+
+	}
+
+	// the hour and day you're at, into your save (written a moment later, with the rest of it)
+	saveClock() {
+
+		this._clockSaveT = 30;
+		const s = this.settings;
+		const text = JSON.stringify( { hour: Math.round( s.timeOfDay * 1000 ) / 1000, day: s.day, held: s.timeSpeed === 0 } );
+		if ( this.store && text !== this._clockSaved ) this.store.setItem( CLOCK_KEY, text );
+		this._clockSaved = text;
 
 	}
 
 }
+
+const CLOCK_KEY = 'saltlife.clock';
+const timeOf = ( t ) => ( { timeOfDay: t.hour, day: t.day } );
 
 // drawsOnCpu, asked of a throwaway context (let go of straight away)
 function probeCpuGL() {

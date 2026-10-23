@@ -24,7 +24,7 @@ Salt Life is [Tidewater](https://github.com/dgreenheck/tidewater) rebuilt as an 
 ## A frame
 
 `App.frame(dt)` runs, in order:
-1. The clock (`settings.timeOfDay`, advanced by `timeSpeed`).
+1. The island's clock (`settings.timeOfDay` and `settings.day`, advanced by `IslandClock.advance`, or worked out from the session's clock: see [The island's day](#the-islands-day)).
 2. Input.
 3. The boat's physics (`BoatController`).
 4. The player (`Player`: walking, swimming, on deck or at the helm), then the fishing game (`Game`).
@@ -41,7 +41,7 @@ Salt Life is [Tidewater](https://github.com/dgreenheck/tidewater) rebuilt as an 
 | `src/world` | The island: terrain, village, pier, rocks, plants, debris, reef and fish, wildlife, the whale, the boat model, colliders, the layout (`WorldLayout`) |
 | `src/ocean` | The sea: Gerstner waves, shore waves, the water surface and its detail, the wake, the CPU water queries |
 | `src/sky` | Atmosphere, clouds, the sun and moon, the environment map |
-| `src/materials` | Shader pieces shared by many materials: local lights at night, height haze (three's fog chunks, replaced), underwater light, LOD fades |
+| `src/materials` | Shader pieces shared by many materials: local lights at night, the clouds' shadows (high), height haze (three's fog chunks, replaced), underwater light, LOD fades |
 | `src/player` | The player, the boat's physics, the bow spray |
 | `src/game` | The fishing game: the rod, bites, the fight, the catch card, the cooler and log, the stalls, Joe and Marta, the HUD, the minimap, the guide; the speargun |
 | `src/fx`, `src/post` | Spray, marine snow, air motes; the high tier's post chain and sun shafts |
@@ -72,20 +72,64 @@ Materials are three's `MeshStandardMaterial` (or `MeshPhysicalMaterial`), with G
   - You hear the boat you ride in: its engine at the revs its skipper sends from the helm (`E`), and the water past the hull. On foot or in the water, you hear the nearest boat going by.
 - **The horn:** sounding it is a `'horn'` message (1 when it starts, 0 when it's let go). The others hear it from that player's boat.
   - Each device draws only the nearest few players and boats.
-- **The clock:** one time of day for everyone, kept in the shared value `'clock'` as `{ at, hour, speed }`.
-  - The host sets it if there's none.
-  - T changes it for everyone.
-  - Each device works the hour out from the time of day on its own clock.
+- **The clock:** one time of day for everyone, kept in the shared value `'clock'` as `{ at, hour, day, speed }` (below).
+  - The host sets it if there's none: a new room starts from its first player's saved clock.
+  - When someone arrives, the host sets it again for everyone, running (in company it can't be held).
+  - Each device works the hour out from the record and its own clock (`IslandClock.clockAt`).
+  - Resting needs everyone here: each player's wish is their own shared value, `'rest.<id>'` (`{ to, c }`, `c`: the clock it was made on). Whoever's wish completes the agreement moves the clock, and so does the host when it sees it (the wishes arrive as events, so a host whose game is paused still hears them). A wish lasts two minutes, or until the clock changes.
 - **Catches:** a landed fish is a `'catch'` message to the others.
-  - They see a toast and hear the player cheer.
-  - The fish hangs on the player's line for a moment.
+  - They hear the player cheer, and the fish hangs on the player's line for a moment.
+  - Only a fish worth hearing of is a toast: an island record, or a trophy (the top fifth of its kind's size range, about one catch in ten: `FishTable.isTrophy`). On a busy island a toast for every catch would add up.
 - **The island's records:** each species' heaviest fish, with who caught it and when.
   - They're kept in the group's shared save (`portal.save.shared`, key `'records'`), so they last between visits.
   - A catch updates them with `update`, which retries when two saves cross.
   - The catch card says when a catch is the island's heaviest yet.
   - The records are chalked on a board beside Joe's stand (`RecordsBoard.js`, a canvas) and listed on the cooler's Records tab.
+- **The week's order** (below): what each player has brought toward it is in the group's shared save too (`'weekOrder'`).
+  - A sale toward it adds the player's kilos with `update` (which retries when two saves cross), then sends the saved tally to the others (`'week'`), so their slates and panels move at once.
+  - Within a week the tally only grows, so a tally that arrives late or out of order never takes it back.
 
 Everyone keeps their own progress and their own fish.
+
+## The island's day
+
+`src/game/IslandClock.js` is the clock's arithmetic, with no three.js, so `test/island-day.mjs` runs it under Node.
+
+- **Pace:** by day an hour takes 100 s (`DAY_RATE`, 0.01 game hours a second). Deep night, from about 20:30 to 3:30, runs four times faster (`NIGHT_X`), eased in and out, so dusk and dawn linger and the dark passes in a few minutes. A whole day is about half an hour.
+- **One record:** the time is worked out from `{ at, hour, day, speed }`, the hour and day at `at` (ms since 1970) running at `speed` (0: held). A table of the day's pace turns real seconds into hours, so every device gets the same hour from the same record without anything ticking over the network.
+- **Saved:** the hour, the day and whether you'd held it are in your save (`'clock'`, written every 30 s, when the app covers the game and when you leave), so you come back to where you were. A new player starts at 9:30 on day 1. On its own (`pnpm dev`), `?hour=21` starts at that hour.
+- **On your own** (a solo session, or nobody else here yet), you can hold the clock and rest until dawn, noon, dusk or night. In company it runs for everyone, and a rest needs all of you (Playing together, above).
+- **The clock in the HUD** (`TimeHUD.js`): the time at the left of the purse, with a sun, a moon, or two bars while it's held. T (R3 on a gamepad, or a tap) opens a small menu under the purse. It says when Joe and Marta open or shut, and offers holding and resting, or, in company, who wants to rest until when. A dot on the clock says someone else wants to rest. Nothing about the clock is a toast: a rest dims the world for a moment instead.
+
+**The stalls keep hours** (`Orders.HOURS`): Joe from 5 am to 7 pm, Marta from 7 am to 7 pm.
+
+- Out of them the trader has gone home (`Vendor.setOpen`: not drawn), and their minimap marker greys.
+- A "Closed" board is out while they're away, saying when they're back and what's left out (`ClosedSign.js`: one plane drawn on a canvas, sharing the records board's program). Joe's is propped on his counter; Marta's leans on the front of her table.
+- Joe's stand has his night box. It pays 70% of his price (`NIGHT_BOX`), and his wanted list in full.
+- Marta's chandlery has diesel on the honesty box, so nobody is stranded at sea; the gear waits for her.
+- Whoever is serving you at closing time finishes with you first. In their last ¾ hour they say so in their panel.
+
+**The wanted lists** (`src/game/Orders.js`):
+
+- Each morning Joe wants two fish: one of dusk and dawn (yellowtail, jacks, mutton snapper or tuna) at double, and one more at half as much again. Marta buys one kind of bait fish at a set price. Never a protected fish (Spearfishing, below): it's let go.
+- The list comes from the day alone (`ordersFor(tradeDay)`), so everyone on one clock sees the same list and nothing is sent. It runs from Joe opening at 5 am until he opens the next morning, so a fish caught after dark counts, left in his night box.
+- Each order takes a few fish from each player (3 for Joe's, 4 for Marta's); the biggest fill it first (`GameState.quote`). What you've filled that day is saved with your progress (`orders`).
+- Joe's list is chalked on a slate on his counter (`WantedBoard.js`, one plane drawn on a canvas, sharing the records board's program), with where and when each fish bites. Your own ticks show on it.
+- It's also in Joe's and Marta's panels, and a tag in the cooler and on the catch card marks a fish someone wants. A sale says how many went to the list, in its usual line.
+
+**The week's order** (`src/game/WeekOrder.js`): a restaurant on the mainland orders one kind of fish through Joe, so many kilos by the end of the week, and everyone in the group fills it together.
+
+- **Real weeks:** it runs from Monday 00:00 UTC to the next, the same for everyone wherever they are, and comes from the week alone (`weekOrder(now)`). The kinds come round in turn (red snapper, black grouper, mahi-mahi, tuna, yellowtail, hogfish), never the same two weeks running. The kilos are about twelve fish of the kind; the bonus is half of what that would fetch at Joe's price, and at least $200.
+- **Filling it:** every one of those fish sold to Joe, or left in his night box, goes toward it and fetches half as much again (`WEEK_MUL`), or the day's list's price if it's on that too. The biggest go first, and the fish that fills it counts whole. The cooler and the catch card tag the fish it would take.
+- **The tally** is the group's (`'weekOrder'` in the shared save: Playing together, above): who brought how many kilos. On its own the game keeps it in the stand-in's storage, so a player alone fills it alone.
+- **Getting paid:** once it's filled, the bonus is shared by what each player brought. Joe pays your share when you next come to his stall while he's in. The last filled week's tally is kept for whoever hasn't collected yet, and your save records the last week you were paid for (`weekPaid`).
+- **Where it shows:** under the day's list on Joe's slate (the fish, the group's kilos and a chalk bar), and as a block in Joe's panel with the bonus, the days left and what you've brought. A sale toward it says so in its usual line. Nothing else is a toast.
+- A tally saved for a fish that has since been protected (the Nassau grouper's week) can't be filled; the week's order replaces it (`tallyFor`).
+
+**Tarpon under the pier lights:** after dark the pier's lamps draw the tarpon (`lights` in `FishTable.js`).
+
+- Their bites under the pier double while the lamps are lit (`Bites.lampsLit`, `Bites.pickSpecies`). A tarpon is let go: it's catch and release (Spearfishing, below).
+- The bay's tarpon swim to the pier head once the lamps come on and back to the bay by day (`night` on their group in `world/Fish.js`; the app sets the lamps' state on the fish each frame).
 
 ## Spearfishing
 
@@ -106,6 +150,7 @@ The speargun is `src/game/Speargun.js` and its half of `src/game/Game.js`. The f
   - `Fish.hold` poses it on the shaft, thrashing, and the simulation leaves it alone. `release` lets it swim off; `take` removes it until its place is filled, out of sight, a few minutes later.
   - A clean shot through the head, or a small fish, is hauled straight in. A big one fights: `CatchMinigame` with `landAt` and `tired` lands it only once it's tired. One shot through the tail can work itself off.
   - It's weighed by the size it swam at (`fishWeightKg`), and its catch keeps the method (`'spear'`).
+  - It sells like any other fish: it counts toward Joe's list and the week's order.
 - **The fish notice the diver** (`Fish.wary`, `WARY`): the faster the diver comes, the farther off they react, and a fright keeps them warier a while (`SPOOKED`). Frightened groupers tuck in at their coral head. Jacks, barracuda and mahi come to look at a diver keeping still (`curious`).
 - **The spearfisher's fish**: hogfish on the sand at the reef's foot, black groupers and lionfish at the coral heads, mutton snappers along the reef's edges, red snappers over the deep holes in the bay and beyond its mouth, mahi and blackfin tuna in the blue water off the bay.
 - **The breath** (`Player.breathe`):
@@ -147,7 +192,7 @@ The speargun is `src/game/Speargun.js` and its half of `src/game/Game.js`. The f
 | Lights at night | 4, diffuse only off the boat | 8 | 8 |
 | Reef, fish | shorter range, fewer schools | fewer schools | Tidewater's |
 | Spray particles | 1k | 2k | 4k |
-| Extras | | air motes | air motes, sun shafts, refraction, bloom |
+| Extras | | air motes | air motes, sun shafts, refraction, bloom, the clouds' shadows |
 
 The checks hold the low tier to its budgets: 150 draw calls, 300k triangles, 128 MB of textures and 150 MB of script memory. Mid stays under 1M triangles and high under 3M.
 
@@ -166,6 +211,7 @@ The checks' browser has no graphics card, and some laptops don't either. `App.cp
 
 ## Testing
 
-- `pnpm test`: the game's logic, the waves, the reef and fish, the spearfishing, the whale and the spray, under Node. It also checks that the baked terrain matches its generator and that every asset has a licence.
+- `pnpm test`: the game's logic, the island's day (the clock, the stalls' hours, the wanted lists), the waves, the reef and fish, the spearfishing, the whale and the spray, under Node. It also checks that the baked terrain matches its generator and that every asset has a licence.
+- Two players on one machine: `pnpm dev`, then `/tools/two-players/?name=Robin` and `?name=Sam` in two windows of one browser (`tools/two-players/`: a stand-in for the app and its realtime room).
 - All the Spaces' checks, from its checkout: `node packages/qa-browser/src/cli.ts check ../salt-life`. Run them from an up-to-date `main` there.
 - `qa/script.json` is what the checks play.

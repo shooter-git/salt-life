@@ -12,6 +12,8 @@
 //   stamina   seconds of good pressure it takes to tire a typical one
 //   time      activity by time of day: 'day', 'dawnDusk', 'night' or 'any'
 //   rarity    0..1, scales how often it bites relative to the others in the same water
+//   lights    (optional) after dark it gathers under the pier's lamps: its pier weight counts this
+//             many times more while they're lit (Bites.pickSpecies)
 // (Salt Life) and for the law and the speargun:
 //   protected  never kept: one caught on a line is measured, logged and released (the island's
 //              records count it); the speargun won't fire at one
@@ -42,7 +44,7 @@ export const FISH = {
 	tuna: { name: 'Blackfin tuna', sci: 'Thunnus atlanticus', lw: [ 0.0145, 3.0 ], model: 'tuna', habitat: { deep: 1 }, kg: [ 3, 14 ], price: 16, fight: 0.85, stamina: 16, time: 'dawnDusk', rarity: 0.5, spear: true },
 	mahi: { name: 'Mahi-mahi', sci: 'Coryphaena hippurus', lw: [ 0.0079, 3.0 ], model: 'mahi', habitat: { deep: 0.8 }, kg: [ 4, 18 ], price: 14, fight: 0.8, stamina: 15, time: 'day', rarity: 0.4, spear: true, minCm: 51 },
 	// (catch and release only)
-	tarpon: { name: 'Tarpon', sci: 'Megalops atlanticus', lw: [ 0.0077, 3.02 ], model: 'tarpon', habitat: { pier: 0.35, bay: 0.5, shallows: 0.15 }, kg: [ 10, 45 ], price: 4, fight: 1, stamina: 24, time: 'night', rarity: 0.2, protected: true },
+	tarpon: { name: 'Tarpon', sci: 'Megalops atlanticus', lw: [ 0.0077, 3.02 ], model: 'tarpon', habitat: { pier: 0.35, bay: 0.5, shallows: 0.15 }, kg: [ 10, 45 ], price: 4, fight: 1, stamina: 24, time: 'night', rarity: 0.2, protected: true, lights: 3 },
 	blackGrouper: { name: 'Black grouper', sci: 'Mycteroperca bonaci', lw: [ 0.0115, 3.03 ], model: 'blackGrouper', habitat: { reef: 0.4, deep: 0.7 }, kg: [ 3, 25 ], price: 16, fight: 0.75, stamina: 14, time: 'any', rarity: 0.35, spear: true, minCm: 61 },
 	muttonSnapper: { name: 'Mutton snapper', sci: 'Lutjanus analis', lw: [ 0.0157, 2.97 ], model: 'muttonSnapper', habitat: { reef: 0.6, bay: 0.4, deep: 0.3 }, kg: [ 1, 7 ], price: 14, fight: 0.55, stamina: 9, time: 'dawnDusk', rarity: 0.45, spear: true, minCm: 46 },
 	// (an invader from the Pacific with no predators here: every one taken helps the reef)
@@ -59,6 +61,14 @@ export function fishValue( id, kg ) {
 	if ( f.protected ) return 0;
 	const t = ( kg - f.kg[ 0 ] ) / Math.max( f.kg[ 1 ] - f.kg[ 0 ], 1e-6 );
 	return Math.max( 1, Math.round( f.price * kg * ( 1 + 0.25 * Math.max( 0, t - 0.7 ) / 0.3 ) ) + ( f.bounty || 0 ) );
+
+}
+
+// a trophy: in the top fifth of its kind's size range (about one fish in ten: Bites.rollWeight)
+export function isTrophy( id, kg ) {
+
+	const [ a, b ] = FISH[ id ].kg;
+	return ( kg - a ) / Math.max( b - a, 1e-6 ) >= 0.8;
 
 }
 

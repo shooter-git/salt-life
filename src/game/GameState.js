@@ -1,5 +1,7 @@
 import { FISH, fishValue, fishLengthCm } from './FishTable.js';
 import { defaultUpgrades, gearStats, nextLevel, UPGRADES, FUEL_PRICE } from './Gear.js';
+import { orderFor, orderPrice } from './Orders.js';
+import { WEEK_MUL } from './WeekOrder.js';
 
 const SAVE_KEY = 'tidewater.save.v1';
 
@@ -20,6 +22,8 @@ export class GameState {
 		this.upgrades = defaultUpgrades();
 		this.fuel = null; // litres left (null = full tank)
 		this.look = null; // (Salt Life) how the others see you: one of together/Avatar.js LOOKS (null: not chosen)
+		this.orders = { day: null, filled: {} }; // (Salt Life) the wanted lists (Orders.js): how many of each you've filled that day
+		this.weekPaid = null; // (Salt Life) the last week's order (WeekOrder.js) Joe paid you your share of
 		this._nextId = 1;
 		this.listeners = new Set();
 
@@ -94,18 +98,104 @@ export class GameState {
 
 	}
 
-	// sell the given fish ids (all when omitted); returns the money made
-	sell( ids = null ) {
+	// (Salt Life) what selling the given fish ids (all when null) would pay, on `terms`: { who: 'joe' |
+	// 'marta', orders (Orders.ordersFor), day (the list's), rate (what Joe's night box pays of his price;
+	// the wanted list in full), week (Joe's: the week's order, { species, left: kg }, until it's filled) }.
+	// Without terms, Joe's price. Marta takes only the fish she's after. The biggest fill an order first;
+	// each of the week's kind goes toward it (the one that fills it whole) and fetches WEEK_MUL, or the
+	// day's list's price if that's on it too.
+	// -> { total, count, wanted, prices (id -> $), ids, filled, week (kg toward it), weekN (how many) }
+	quote( ids = null, terms = null ) {
 
-		const keep = [], sold = [];
-		for ( const f of this.inventory ) ( ids === null || ids.includes( f.id ) ? sold : keep ).push( f );
-		let total = 0;
-		for ( const f of sold ) total += f.value;
-		this.inventory = keep;
-		this.money += total;
+		const filled = terms && this.orders.day === terms.day ? { ...this.orders.filled } : {};
+		const prices = new Map(), sold = [];
+		let total = 0, wanted = 0, left = terms && terms.week ? terms.week.left : 0, week = 0, weekN = 0;
+		const pick = this.inventory.filter( ( f ) => ids === null || ids.includes( f.id ) ).sort( ( a, b ) => b.value - a.value );
+		for ( const f of pick ) {
+
+			const o = terms && orderFor( terms.orders, terms.who, f.species );
+			const toWeek = left > 0 && f.species === terms.week.species;
+			let price;
+			if ( o && ( filled[ o.id ] | 0 ) < o.max ) {
+
+				price = orderPrice( o, f.value );
+				filled[ o.id ] = ( filled[ o.id ] | 0 ) + 1;
+				wanted ++;
+
+			} else if ( toWeek ) price = Math.round( f.value * WEEK_MUL );
+			else if ( terms && terms.who === 'marta' ) continue;
+			else price = Math.max( 1, Math.round( f.value * ( terms && terms.rate !== undefined ? terms.rate : 1 ) ) );
+			if ( toWeek ) {
+
+				left -= f.kg;
+				week += f.kg;
+				weekN ++;
+
+			}
+
+			prices.set( f.id, price );
+			total += price;
+			sold.push( f.id );
+
+		}
+
+		return { total, count: sold.length, wanted, prices, ids: sold, filled, week, weekN };
+
+	}
+
+	// sell the given fish ids (all when omitted), on `terms` (quote); returns the money made
+	sell( ids = null, terms = null ) {
+
+		const q = this.quote( ids, terms );
+		this.inventory = this.inventory.filter( ( f ) => ! q.ids.includes( f.id ) );
+		this.money += q.total;
+		if ( terms ) this.orders = { day: terms.day, filled: q.filled };
 		this.save();
 		this.emit();
-		return { total, count: sold.length };
+		return { total: q.total, count: q.count, wanted: q.wanted, week: q.week, weekN: q.weekN };
+
+	}
+
+	// (Salt Life) Joe pays your share of a filled week's order (WeekOrder.owed)
+	collect( amount, week ) {
+
+		this.money += amount;
+		this.weekPaid = week;
+		this.save();
+		this.emit();
+
+	}
+
+	// (Salt Life) how many of an order you've filled on `day`
+	filledOf( order, day ) {
+
+		return this.orders.day === day ? this.orders.filled[ order.id ] | 0 : 0;
+
+	}
+
+	// the fish in the cooler the list would take: the biggest of each kind, as many as each order still
+	// wants; and the week's order's ({ species, left: kg }), as many as it still wants
+	wantedIds( list, day, week = null ) {
+
+		const ids = new Set();
+		const biggest = ( species ) => this.inventory.filter( ( f ) => f.species === species ).sort( ( a, b ) => b.value - a.value );
+		for ( const o of list || [] ) {
+
+			const left = o.max - this.filledOf( o, day );
+			for ( const f of biggest( o.species ).slice( 0, Math.max( 0, left ) ) ) ids.add( f.id );
+
+		}
+
+		let left = week ? week.left : 0;
+		if ( left > 0 ) for ( const f of biggest( week.species ) ) {
+
+			if ( left <= 0 ) break;
+			ids.add( f.id );
+			left -= f.kg;
+
+		}
+
+		return ids;
 
 	}
 
@@ -202,7 +292,7 @@ export class GameState {
 
 	toJSON() {
 
-		return { v: 1, money: this.money, inventory: this.inventory, log: this.log, upgrades: this.upgrades, fuel: this.fuel, look: this.look, nextId: this._nextId };
+		return { v: 1, money: this.money, inventory: this.inventory, log: this.log, upgrades: this.upgrades, fuel: this.fuel, look: this.look, orders: this.orders, weekPaid: this.weekPaid, nextId: this._nextId };
 
 	}
 
@@ -218,6 +308,9 @@ export class GameState {
 		this.upgrades = { ...defaultUpgrades(), ...( d.upgrades || {} ) };
 		this.fuel = Number.isFinite( d.fuel ) ? d.fuel : null;
 		this.look = typeof d.look === 'string' ? d.look : null;
+		const o = d.orders;
+		this.orders = o && Number.isFinite( o.day ) && o.filled && typeof o.filled === 'object' ? { day: o.day, filled: { ...o.filled } } : { day: null, filled: {} };
+		this.weekPaid = Number.isFinite( d.weekPaid ) ? d.weekPaid : null;
 		this._nextId = Math.max( d.nextId | 0, ...this.inventory.map( ( f ) => f.id + 1 ), 1 );
 		return true;
 
@@ -257,6 +350,8 @@ export class GameState {
 		this.log = {};
 		this.upgrades = defaultUpgrades();
 		this.fuel = null;
+		this.orders = { day: null, filled: {} };
+		this.weekPaid = null;
 		this.save();
 		this.emit();
 

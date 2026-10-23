@@ -1,13 +1,17 @@
 import { FISH, fishLengthCm } from './FishTable.js';
 import { UPGRADES, nextLevel, FUEL_PRICE } from './Gear.js';
 import { LOOKS, LOOK_NAMES } from '../together/Avatar.js';
+import { NIGHT_BOX, biteHint, orderTerms } from './Orders.js';
+import { WEEK_MUL, delivered, filled, mineOf, shareOf, weekEnds } from './WeekOrder.js';
+import { timeText } from './IslandClock.js';
 
 // (other players' names, into HTML)
 const escape = ( t ) => String( t ).replace( /[&<>"']/g, ( c ) => ( { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } )[ c ] );
 // a row of the cooler or Joe's stand: a name over its details, then what's on the right
 const item = ( name, meta, ...right ) => `<div class="gm-item"><span class="gm-item-main"><span class="gm-item-name">${ name }</span><span class="gm-item-meta">${ meta }</span></span>${ right.join( '' ) }</div>`;
-const fishItem = ( f, button ) => item( `${ FISH[ f.species ].name }${ f.record ? '<small>record</small>' : '' }`,
-	`${ f.cm ?? Math.round( fishLengthCm( f.species, f.kg ) ) } cm · ${ f.kg.toFixed( 2 ) } kg${ f.method === 'spear' ? ' · speared' : '' }`, `<span class="gm-item-val">$${ f.value }</span>`, button );
+// (Salt Life) price: what it fetches here (a wanted fish: the order's price); wanted: on today's list
+const fishItem = ( f, button, price = f.value, wanted = false ) => item( `${ FISH[ f.species ].name }${ f.record ? '<small>record</small>' : '' }${ wanted ? '<small class="is-wanted">wanted</small>' : '' }`,
+	`${ f.cm ?? Math.round( fishLengthCm( f.species, f.kg ) ) } cm · ${ f.kg.toFixed( 2 ) } kg${ f.method === 'spear' ? ' · speared' : '' }`, `<span class="gm-item-val">$${ price }</span>`, button );
 const upper = ( t ) => t.charAt( 0 ).toUpperCase() + t.slice( 1 );
 
 // DOM for the fishing game, in the look of the rest of the HUD (ui/game-ui.css tokens, .tw-glass):
@@ -130,6 +134,18 @@ html:has(.gm-panel.is-open) .hud-hint { visibility: hidden; }
 .gm-shop-row { display: grid; grid-template-columns: 1fr auto; gap: var(--tw-3); align-items: center; padding: var(--tw-2) 0; border-bottom: 1px solid var(--tw-line); }
 .gm-shop-row small { display: block; color: var(--tw-ink-3); font-size: var(--tw-fs-sm); margin-top: 2px; }
 .gm-shop-row .gm-have { color: var(--tw-ink-3); font-size: var(--tw-fs-sm); }
+/* (Salt Life) the day's wanted list at Joe's and Marta's: a small block over the list, and a tag on
+   the fish it wants */
+.gm-item-name small.is-wanted { color: var(--tw-sun); }
+.gm-wanted { margin: 0 0 var(--tw-2); padding: var(--tw-1) var(--tw-3); border-radius: var(--tw-r-md); background: rgba(var(--tw-sun-rgb), 0.07); border: 1px solid rgba(var(--tw-sun-rgb), 0.22); }
+.gm-wanted-h { display: block; margin: var(--tw-1) 0 0; color: var(--tw-sun); font-size: var(--tw-fs-xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.gm-wanted .gm-item { padding: var(--tw-1) 0; border-color: rgba(var(--tw-sun-rgb), 0.14); }
+.gm-wanted .gm-item.is-done .gm-item-name { color: var(--tw-ink-3); text-decoration: line-through; }
+/* (Salt Life) the week's order: the group's progress under it */
+.gm-week-bar { height: calc(4 * var(--tw-u)); margin: var(--tw-1) 0 0; border-radius: 99px; background: rgba(var(--tw-sun-rgb), 0.14); overflow: hidden; }
+.gm-week-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--tw-sun); }
+.gm-week-note { display: block; margin: var(--tw-1) 0; color: var(--tw-ink-2); font-size: var(--tw-fs-sm); }
+.gm-label { display: block; margin: 0 0 var(--tw-1); color: var(--tw-ink-3); font-size: var(--tw-fs-xs); font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
 
 /* catch card: full screen. The world dims and blurs; the fish lies side-on in its own studio light
    (FishPortrait, a WebGPU canvas) between the name above and the numbers below */
@@ -483,7 +499,7 @@ export class GameHUD {
 				<div class="gm-catch-stats">
 					<div class="gm-stat"><span>Length</span><b>${ info.cm }<small>cm</small></b><i>${ inch.toFixed( 1 ) } in</i></div>
 					<div class="gm-stat"><span>Weight</span><b>${ info.kg < 1 ? info.kg.toFixed( 2 ) : info.kg.toFixed( 1 ) }<small>kg</small></b><i>${ lb.toFixed( 1 ) } lb</i></div>
-					<div class="gm-stat is-value"><span>Value</span><b>${ info.released ? '—' : `$${ info.value }` }</b><i>${ info.released ? 'released' : info.kept ? 'in the cooler' : 'let go' }</i></div>
+					<div class="gm-stat is-value"><span>Value</span><b>${ info.released ? '—' : `$${ info.value }` }</b><i>${ info.released ? 'released' : ! info.kept ? 'let go' : info.wanted ? info.wanted.text : 'in the cooler' }</i></div>
 				</div>
 				${ note }
 				<div class="gm-catch-foot">${ { touch: 'Tap to continue', gamepad: '<kbd>RT</kbd> or <kbd>B</kbd> to continue' }[ this.device ] || '<kbd>Click</kbd> or <kbd>E</kbd> to continue' }<span class="gm-catch-timer"><span></span></span></div>
@@ -584,7 +600,8 @@ export class GameHUD {
 		let body, hint;
 		if ( tab === 'fish' ) {
 
-			body = s.inventory.map( ( f ) => fishItem( f, `<button class="gm-mini" data-release="${ f.id }">Release</button>` ) ).join( '' ) || empty( 'Nothing yet. Cast from the pier, the beach or the boat, or dive with the speargun.' );
+			const g = this.game, wanted = s.wantedIds( g.orders, g.tradeDay, g.weekTerms ? g.weekTerms() : null );
+			body = s.inventory.map( ( f ) => fishItem( f, `<button class="gm-mini" data-release="${ f.id }">Release</button>`, f.value, wanted.has( f.id ) ) ).join( '' ) || empty( 'Nothing yet. Cast from the pier, the beach or the boat, or dive with the speargun.' );
 			hint = 'Sell at the fish stand by the pier';
 
 		} else if ( tab === 'log' ) {
@@ -667,6 +684,8 @@ export class GameHUD {
 		this.standOpen = true;
 		this.vendor = vendor;
 		this.toggleInventory( false );
+		// (Salt Life) Joe pays your share of a filled week's order when he's in
+		if ( vendor.kind !== 'shop' && this.game.collectWeek ) this.game.collectWeek();
 		if ( vendor.kind === 'shop' ) this.renderShop();
 		else this.renderStand();
 		this.stand.classList.add( 'is-open' );
@@ -678,19 +697,85 @@ export class GameHUD {
 
 		this.standOpen = false;
 		this.stand.classList.remove( 'is-open' );
+		this.game.paidNote = 0;
+
+	}
+
+	// (Salt Life) a trader's part of the day's wanted list ('joe' | 'marta'): a block over the list, each
+	// fish with what it pays, where it bites and how many you've brought
+	wantedBlock( who, title ) {
+
+		const g = this.game, s = g.state;
+		const rows = ( g.orders || [] ).filter( ( o ) => o.who === who ).map( ( o ) => {
+
+			const n = s.filledOf( o, g.tradeDay ), hint = who === 'marta' ? 'for her bait tank' : biteHint( o.species );
+			return item( FISH[ o.species ].name, `${ orderTerms( o ) }${ hint ? ` · ${ hint }` : '' }`, `<span class="gm-item-num">${ n } / ${ o.max }</span>` )
+				.replace( 'class="gm-item"', `class="gm-item${ n >= o.max ? ' is-done' : '' }"` );
+
+		} ).join( '' );
+		return rows ? `<div class="gm-wanted"><span class="gm-wanted-h">${ title }</span>${ rows }</div>` : '';
+
+	}
+
+	// (Salt Life) the week's order at Joe's (WeekOrder.js): what it is, how far the group has got and
+	// what you've brought; once it's filled, your share of the bonus
+	weekBlock( box ) {
+
+		const g = this.game, t = g.week ? g.week() : null;
+		if ( ! t ) return '';
+		const me = g.app.together.me.id, got = delivered( t ), mine = mineOf( t, me ), done = filled( t ), share = shareOf( t, me );
+		const kg = ( n ) => ( n < 10 ? n.toFixed( 1 ) : String( Math.round( n ) ) );
+		const days = Math.ceil( ( weekEnds( t.week ) - Date.now() ) / 864e5 );
+		const when = days > 1 ? `${ days } days left` : 'last day';
+		const helped = Object.keys( t.by ).length;
+		const meta = done ? `filled by ${ helped === 1 ? ( mine ? 'you' : 'one islander' ) : `${ helped } of you` }` : `for a restaurant on the mainland · pays ×${ WEEK_MUL }`;
+		const note = done ? ( share ? `Your share of the $${ t.bonus } bonus: $${ share }${ g.state.weekPaid !== null && g.state.weekPaid >= t.week ? ', paid' : box ? '. Joe pays it when he\'s in' : '' }.` : 'A new order next week.' )
+			: `$${ t.bonus } bonus when it's filled, shared by what each of you brings.${ mine ? ` You've brought ${ kg( mine ) } kg.` : '' }`;
+		const row = item( FISH[ t.species ].name, meta, `<span class="gm-item-num">${ done ? '✓ ' : '' }${ kg( Math.min( got, t.kg ) ) } / ${ t.kg } kg</span>` );
+		return `<div class="gm-wanted"><span class="gm-wanted-h">The week's order${ done ? '' : ` · ${ when }` }</span>${ row }<div class="gm-week-bar"><span style="width:${ Math.min( 100, got / t.kg * 100 ).toFixed( 1 ) }%"></span></div><span class="gm-week-note">${ note }</span></div>`;
+
+	}
+
+	// the last ¾ hour before a trader shuts
+	closingSoon( v ) {
+
+		const h = this.game.hour, close = v.hours && v.hours[ 1 ];
+		return !! v.open && close !== undefined && h < close && close - h <= 0.75;
+
+	}
+
+	// an hour of the day as the person reads it ('7:00 PM')
+	at( hour ) {
+
+		const p = this.game.app && this.game.app.portal;
+		return timeText( hour, p && p.locale, 30 );
 
 	}
 
 	renderStand() {
 
-		const s = this.game.state;
-		const v = this.vendor || { name: 'Fish buyer' };
-		const rows = s.inventory.map( ( f ) => fishItem( f, `<button class="gm-mini" data-sell="${ f.id }">Sell</button>` ) ).join( '' );
+		const g = this.game, s = g.state;
+		const v = this.vendor || { name: 'Fish buyer', open: true };
+		// (Salt Life) Joe's price and his wanted list; gone home, his night box
+		const box = ! v.open, terms = g.saleTerms ? g.saleTerms( v ) : null;
+		const all = s.quote( null, terms );
+		const rows = s.inventory.map( ( f ) => {
+
+			const q = s.quote( [ f.id ], terms );
+			return fishItem( f, `<button class="gm-mini" data-sell="${ f.id }">${ box ? 'Drop' : 'Sell' }</button>`, q.prices.get( f.id ), q.wanted > 0 || q.weekN > 0 );
+
+		} ).join( '' );
+		const sub = box ? `Joe's back at ${ this.at( v.hours[ 0 ] ) }. The box pays ${ Math.round( NIGHT_BOX * 100 ) }% of his price, and his orders in full.`
+			: g.paidNote ? `The restaurant's paid for the week's order. Here's your share: $${ g.paidNote }.`
+			: this.closingSoon( v ) ? `Last orders: I shut at ${ this.at( v.hours[ 1 ] ) }.`
+			: s.inventory.length ? v.greeting || 'Let\'s see what you caught.' : v.idle || 'Come back when you\'ve got fish.';
 		this.stand.innerHTML = `
-			<h2>${ v.name }</h2>
-			<p class="gm-sub">${ s.inventory.length ? v.greeting || 'Let\'s see what you caught.' : v.idle || 'Come back when you\'ve got fish.' }</p>
+			<h2>${ box ? 'Joe\'s night box' : v.name }</h2>
+			<p class="gm-sub">${ sub }</p>
+			${ this.wantedBlock( 'joe', 'Wanted today' ) }
+			${ this.weekBlock( box ) }
 			<div class="gm-list">${ rows || '<div class="gm-empty">Your cooler is empty.</div>' }</div>
-			<div class="gm-foot"><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button><button class="gm-btn" data-all ${ s.inventory.length ? '' : 'disabled' }>Sell all · $${ s.holdValue }</button></div>`;
+			<div class="gm-foot"><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button><button class="gm-btn" data-all ${ s.inventory.length ? '' : 'disabled' }>${ box ? 'Drop all' : 'Sell all' } · $${ all.total }</button></div>`;
 		this.stand.querySelector( '[data-close]' ).onclick = () => this.closeStand();
 		this.stand.querySelector( '[data-all]' ).onclick = () => this.game.sellAll();
 		for ( const b of this.stand.querySelectorAll( '[data-sell]' ) ) b.onclick = () => this.game.sell( [ Number( b.dataset.sell ) ] );
@@ -701,8 +786,34 @@ export class GameHUD {
 
 GameHUD.prototype.renderShop = function () {
 
-	const s = this.game.state;
+	const g = this.game, s = g.state;
 	const v = this.vendor;
+	const missing = s.stats.fuelL - s.fuelL;
+	const fuelRow = `<div class="gm-shop-row"><span>Diesel · $${ FUEL_PRICE.toFixed( 2 ) } / L<small>Tank: ${ s.fuelL.toFixed( 0 ) } of ${ s.stats.fuelL } L</small></span>${ missing > 0.5 ? `<button class="gm-btn" data-fuel ${ s.money < FUEL_PRICE ? 'disabled' : '' }>Fill · $${ s.refuelCost() }</button>` : '<span class="gm-have">Full</span>' }</div>`;
+	const bindFuel = () => {
+
+		const f = this.stand.querySelector( '[data-fuel]' );
+		if ( f ) f.onclick = () => this.game.refuel();
+		this.stand.querySelector( '[data-close]' ).onclick = () => this.closeStand();
+
+	};
+	// (Salt Life) gone home: the diesel is on the honesty box, the gear waits for her
+	if ( v.open === false ) {
+
+		this.stand.innerHTML = `
+			<h2>Marta's honesty box</h2>
+			<p class="gm-sub">Marta's back at ${ this.at( v.hours[ 0 ] ) }. The diesel's left out: pay into the box. You have $${ s.money.toLocaleString() }</p>
+			<div class="gm-list">${ fuelRow }</div>
+			<div class="gm-foot"><span class="gm-sub">Gear when she's back</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>`;
+		bindFuel();
+		return;
+
+	}
+
+	// what she's after today, from your cooler
+	const terms = g.saleTerms ? g.saleTerms( v ) : null;
+	const bait = terms ? s.quote( null, terms ) : { prices: new Map() };
+	const baitRows = s.inventory.filter( ( f ) => bait.prices.has( f.id ) ).map( ( f ) => fishItem( f, `<button class="gm-mini" data-sell="${ f.id }">Sell</button>`, bait.prices.get( f.id ), true ) ).join( '' );
 	const rows = Object.entries( UPGRADES ).map( ( [ key, track ] ) => {
 
 		const cur = track.levels[ s.upgrades[ key ] | 0 ];
@@ -713,17 +824,16 @@ GameHUD.prototype.renderShop = function () {
 		return `<div class="gm-shop-row"><span>${ track.name }: ${ next ? next.label : cur.label }<small>Now: ${ cur.label }</small></span>${ btn }</div>`;
 
 	} ).join( '' );
-	const missing = s.stats.fuelL - s.fuelL;
-	const fuelRow = `<div class="gm-shop-row"><span>Diesel · $${ FUEL_PRICE.toFixed( 2 ) } / L<small>Tank: ${ s.fuelL.toFixed( 0 ) } of ${ s.stats.fuelL } L</small></span>${ missing > 0.5 ? `<button class="gm-btn" data-fuel ${ s.money < FUEL_PRICE ? 'disabled' : '' }>Fill · $${ s.refuelCost() }</button>` : '<span class="gm-have">Full</span>' }</div>`;
+	const greeting = this.closingSoon( v ) ? `I'm shutting at ${ this.at( v.hours[ 1 ] ) }` : v.greeting;
 	this.stand.innerHTML = `
 		<h2>${ v.name }</h2>
-		<p class="gm-sub">${ v.greeting } · You have $${ s.money.toLocaleString() }</p>
-		<div class="gm-list">${ fuelRow }${ rows }</div>
+		<p class="gm-sub">${ greeting } · You have $${ s.money.toLocaleString() }</p>
+		${ this.wantedBlock( 'marta', 'Marta\'s after' ) }
+		<div class="gm-list">${ baitRows }${ fuelRow }${ rows }</div>
 		<div class="gm-foot"><span class="gm-sub">Upgrades take effect at once</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>`;
-	this.stand.querySelector( '[data-close]' ).onclick = () => this.closeStand();
+	bindFuel();
 	for ( const b of this.stand.querySelectorAll( '[data-buy]' ) ) b.onclick = () => this.game.buy( b.dataset.buy );
-	const f = this.stand.querySelector( '[data-fuel]' );
-	if ( f ) f.onclick = () => this.game.refuel();
+	for ( const b of this.stand.querySelectorAll( '[data-sell]' ) ) b.onclick = () => this.game.sell( [ Number( b.dataset.sell ) ] );
 
 };
 

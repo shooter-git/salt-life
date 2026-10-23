@@ -4,10 +4,12 @@ import { Avatar, LOOKS, lookOf } from './Avatar.js';
 import { figureStandIn } from './Figure.js';
 import { RecordsBoard } from './RecordsBoard.js';
 import { BoatLamps } from '../world/boat/BoatLamps.js';
-import { FISH, fishLengthCm } from '../game/FishTable.js';
+import { FISH, fishLengthCm, isTrophy } from '../game/FishTable.js';
 import { ROD_L, SEAT_Y } from '../game/FishingRod.js';
 import { gunModels, setBands } from '../game/Speargun.js';
 import { gearStats, defaultUpgrades } from '../game/Gear.js';
+import { DAY_RATE, REST, clockAt, restTo } from '../game/IslandClock.js';
+import { weekOrder, weekNumber, tallyFor, deliver, delivered } from '../game/WeekOrder.js';
 import { WORLD } from '../world/WorldLayout.js';
 
 // (Salt Life) Playing together: whoever else is on the island (portal.session, All the Spaces), drawn
@@ -15,13 +17,17 @@ import { WORLD } from '../world/WorldLayout.js';
 // fish; what's shared is
 //  - where each of you is: a pose message about ten times a second while anyone else is here ('p'),
 //    shown a little behind (DELAY) and eased between, so it moves smoothly
-//  - the time of day: one clock for everyone (the shared value 'clock': { at, hour, speed }), which
-//    the host sets if there's none, and T changes for all
-//  - catches: a message to the others ('catch'), who see a toast, the fish on your line and you
-//    cheering
+//  - the time of day: one clock for everyone (the shared value 'clock': { at, hour, day, speed }, see
+//    game/IslandClock.js), which the host sets if there's none. On your own you can hold it and rest
+//    until later; in company it runs, and a rest needs everyone here to want it ('rest.<id>')
+//  - catches: a message to the others ('catch'), who see the fish on your line and you cheering; a
+//    toast only for one worth hearing of (an island record or a trophy-sized fish)
 //  - the island's records: each species' heaviest fish anyone in the group has landed, who and when,
 //    in the group's shared save ('records': kept between visits), chalked on a board at Joe's stand
 //    (RecordsBoard) and listed in the cooler
+//  - the week's order (game/WeekOrder.js): what each of the group has brought toward it, in the
+//    group's shared save ('weekOrder'); a sale toward it brings that up to date and tells the others
+//    ('week', with the tally)
 // Riding along: next to someone's boat while they're aboard, you board theirs (TheirBoat: the boat's
 // shape at their boat's pose, for the Player) and walk its deck while they drive; your poses say whose
 // boat you're on ('R': the deck position is in its frame), so everyone sees you aboard it.
@@ -32,7 +38,8 @@ import { WORLD } from '../world/WorldLayout.js';
 //   const t = new Together( app );  t.track( dt )  (before the player: where everyone is, the boat
 //   you ride);  t.update( dt )  (after the game: the camera is placed)
 //   t.syncClock( settings )  (each frame: the time of day from the shared clock)
-//   t.setClock( hour, speed )  (T)
+//   t.alone  t.holdClock( held )  t.rest( 'dawn' )  t.restWishes()  (the clock's menu: game/TimeHUD.js)
+//   t.week()  (this week's order's tally)  t.deliver( kg )  (a sale toward it)
 
 const SEND = 0.1; // s between poses
 const DELAY = 0.15; // s behind the newest pose: room to ease between two
@@ -130,6 +137,8 @@ export class Together {
 		this.stale = STALE;
 		this._sendT = 0;
 		this._clock = null; // the shared clock, as adopted
+		this._wishSeen = new Map(); // 'rest.<id>' -> { text, t }: when a wish to rest was first seen here
+		this.onJump = null; // ( ) => void: the clock jumped (a rest, or joining others), for the HUD
 		this._tags = null;
 		this._boatTemplate = null;
 
@@ -137,12 +146,21 @@ export class Together {
 		this._sync( s.players, true );
 		s.onPlayers( ( players ) => this._sync( players, false ) );
 		s.on( 'p', ( body, from ) => this._pose( body, from ) );
+		// the clock: the session's, or yours from your save if there's none and you host (a new room
+		// starts from its first player's)
 		const clock = s.get( 'clock' );
 		if ( clock ) this._adopt( clock );
-		else if ( s.isHost ) this.setClock( app.settings.timeOfDay, app.settings.timeSpeed );
+		else if ( s.isHost ) this.setClock( app.settings.timeOfDay, app.settings.day, app.settings.timeSpeed );
 		s.onChange( 'clock', ( value ) => this._adopt( value ) );
+		if ( s.onAnyChange ) s.onAnyChange( ( key ) => key.startsWith( 'rest.' ) && this._restVote() );
+		if ( s.onHostChange ) s.onHostChange( () => {
+
+			if ( s.isHost && ! s.get( 'clock' ) ) this.setClock( app.settings.timeOfDay, app.settings.day, app.settings.timeSpeed || DAY_RATE );
+
+		} );
 		s.on( 'catch', ( body, from ) => this._theirCatch( body, from ) );
 		s.on( 'horn', ( on, from ) => this._theirHorn( on, from ) );
+		s.on( 'week', ( tally ) => this._setWeek( tally ) );
 
 		// the records: the group's, read now and again when someone breaks one
 		this.records = {};
@@ -151,6 +169,55 @@ export class Together {
 		// (on a device that draws on its CPU, after the start: its shader is load time)
 		if ( this.ready ) app.scene.add( this.board.group );
 		this._readRecords();
+
+		// the week's order: the group's tally, read now and sent on whenever someone brings fish toward it
+		this._week = null;
+		this._readWeek();
+
+	}
+
+	// ---- the week's order
+
+	// this week's tally (a fresh one when the week has turned since it was read). The same object until
+	// it changes (the game watches for that: Game.update); not to be changed
+	week() {
+
+		const n = weekNumber( Date.now() ), c = this._weekNow;
+		if ( c && c.n === n && c.from === this._week ) return c.tally;
+		this._weekNow = { n, from: this._week, tally: tallyFor( this._week, weekOrder( Date.now() ) ) };
+		return this._weekNow.tally;
+
+	}
+
+	_readWeek() {
+
+		return this.portal.save.shared.get( 'weekOrder' ).then( ( t ) => this._setWeek( t ) ).catch( ( e ) => console.warn( 'week', e ) );
+
+	}
+
+	// a tally, read or sent: kept if it's newer than the one here (within a week it only grows, so
+	// messages that cross don't take it back); force: the one just saved
+	_setWeek( t, force = false ) {
+
+		if ( ! t || typeof t !== 'object' ) return;
+		const now = weekOrder( Date.now() ), next = tallyFor( t, now ), cur = this.week();
+		if ( ! force && ( next.week < cur.week || ( next.week === cur.week && delivered( next ) < delivered( cur ) ) ) ) return;
+		this._week = next;
+
+	}
+
+	// `kg` of the week's fish sold toward it: counted here at once, then in the group's save (whoever
+	// else saved meanwhile: update tries again), and the others told
+	deliver( kg ) {
+
+		const w = weekOrder( Date.now() ), me = { id: this.me.id, name: this.me.name };
+		this._setWeek( deliver( this._week, w, me, kg ), true );
+		return this.portal.save.shared.update( 'weekOrder', ( cur ) => deliver( cur, w, me, kg ) ).then( ( saved ) => {
+
+			this._setWeek( saved, true );
+			if ( this.others.size ) this.session.send( 'week', saved );
+
+		} ).catch( ( e ) => console.warn( 'week', e ) );
 
 	}
 
@@ -247,13 +314,14 @@ export class Together {
 
 	}
 
-	// another player landed one: a toast, their cheer, their fish on their line for a moment
+	// another player landed one: their cheer, their fish on their line for a moment; a toast only for
+	// an island record or a trophy (on a busy island the rest would add up)
 	_theirCatch( b, from ) {
 
 		const o = this.others.get( from );
 		if ( ! o || ! b || ! FISH[ b.s ] || typeof b.kg !== 'number' ) return;
 		const kg = b.kg < 1 ? b.kg.toFixed( 2 ) : b.kg.toFixed( 1 );
-		this.app.game.toast( `${ o.person.name } ${ b.m === 's' ? 'speared' : 'caught' } a ${ kg } kg ${ FISH[ b.s ].name.toLowerCase() }${ b.rec ? ': a new island record!' : '' }`, 4200 );
+		if ( b.rec || isTrophy( b.s, b.kg ) ) this.app.game.toast( `${ o.person.name } ${ b.m === 's' ? 'speared' : 'caught' } a ${ kg } kg ${ FISH[ b.s ].name.toLowerCase() }${ b.rec ? ': a new island record!' : '' }`, 4200 );
 		o.avatar.once( 'cheer_01' );
 		if ( o.fish ) {
 
@@ -273,10 +341,18 @@ export class Together {
 
 	// ---- the clock
 
-	// everyone's time of day: the hour at `at` (ms since 1970), running at `speed` hours a second
-	setClock( hour, speed ) {
+	// on your own: a solo session, or nobody else here (yet). You can hold the clock and rest at will
+	get alone() {
 
-		const value = { at: Date.now(), hour: r3( hour ), speed };
+		return this.session.mode === 'solo' || this.others.size === 0;
+
+	}
+
+	// everyone's time of day: the hour and day at `at` (ms since 1970), running at `speed` hours a
+	// second by day (IslandClock: faster at night)
+	setClock( hour, day, speed ) {
+
+		const value = { at: Date.now(), hour: r3( hour ), day: Math.max( 1, Math.floor( day ) || 1 ), speed };
 		this._adopt( value );
 		this.session.set( 'clock', value ).catch( ( e ) => console.warn( 'clock', e ) );
 
@@ -285,7 +361,12 @@ export class Together {
 	_adopt( value ) {
 
 		if ( ! value || typeof value.at !== 'number' || typeof value.hour !== 'number' ) return;
-		this._clock = { at: value.at, hour: value.hour, speed: Number( value.speed ) || 0 };
+		const s = this.app.settings;
+		const was = this._clock ? clockAt( this._clock ) : { hour: s.timeOfDay, day: s.day };
+		// (a clock from before days were counted keeps the day you're on)
+		this._clock = { at: value.at, hour: value.hour, day: Number.isFinite( value.day ) ? value.day : was.day, speed: Number( value.speed ) || 0 };
+		const now = clockAt( this._clock );
+		if ( Math.abs( now.day * 24 + now.hour - was.day * 24 - was.hour ) > 0.5 && this.onJump ) this.onJump();
 
 	}
 
@@ -293,8 +374,77 @@ export class Together {
 
 		const c = this._clock;
 		if ( ! c ) return;
+		const t = clockAt( c );
 		s.timeSpeed = c.speed;
-		s.timeOfDay = ( ( c.hour + ( Date.now() - c.at ) / 1000 * c.speed ) % 24 + 24 ) % 24;
+		s.timeOfDay = t.hour;
+		s.day = t.day;
+
+	}
+
+	// hold the clock, or let it run again: only on your own -> done?
+	holdClock( held ) {
+
+		if ( ! this.alone ) return false;
+		const s = this.app.settings;
+		this.setClock( s.timeOfDay, s.day, held ? 0 : DAY_RATE );
+		return true;
+
+	}
+
+	// rest until 'dawn' | 'noon' | 'dusk' | 'night' (null: never mind). On your own, at once; in company,
+	// a wish everyone here sees, and the host moves the clock once all of you want the same -> done now?
+	rest( to ) {
+
+		const s = this.app.settings;
+		if ( this.alone ) {
+
+			if ( REST[ to ] === undefined ) return false;
+			const t = restTo( s.timeOfDay, s.day, to );
+			this.setClock( t.hour, t.day, s.timeSpeed );
+			return true;
+
+		}
+
+		this.session.set( `rest.${ this.me.id }`, REST[ to ] !== undefined ? { to, c: this._clock ? this._clock.at : 0 } : null )
+			.then( () => this._restVote( true ) ).catch( ( e ) => console.warn( 'rest', e ) );
+		return false;
+
+	}
+
+	// who here wants to rest until when: wishes made since the clock last changed, for two minutes ->
+	// { wishes: Map id -> to, agreed: to | null (all of you, the same), here: [ ids ] }
+	restWishes() {
+
+		const c = this._clock ? this._clock.at : 0, now = performance.now();
+		const here = [ this.me.id, ...this.others.keys() ];
+		const wishes = new Map();
+		for ( const id of here ) {
+
+			const key = `rest.${ id }`, w = this.session.get( key );
+			if ( ! w || REST[ w.to ] === undefined || w.c !== c ) continue;
+			const text = JSON.stringify( w ), seen = this._wishSeen.get( key );
+			if ( ! seen || seen.text !== text ) this._wishSeen.set( key, { text, t: now } );
+			else if ( now - seen.t > 120000 ) continue;
+			wishes.set( id, w.to );
+
+		}
+
+		const tos = new Set( wishes.values() );
+		return { wishes, agreed: here.length > 1 && wishes.size === here.length && tos.size === 1 ? [ ...tos ][ 0 ] : null, here };
+
+	}
+
+	// everyone wants to rest: the clock moves on. Moved by whoever's wish completes it (mine: true), or
+	// by the host when it sees that (on the wishes as they change: a host whose game is paused, its tab
+	// hidden, still hears them). Two moving it at once move it to the same hour
+	_restVote( mine = false ) {
+
+		if ( this.alone || ! ( mine || this.session.isHost ) ) return;
+		const { agreed } = this.restWishes();
+		if ( ! agreed || ! this._clock ) return;
+		// (the clock as it is now: the frames that bring the settings up to date may be paused)
+		const now = clockAt( this._clock ), t = restTo( now.hour, now.day, agreed );
+		this.setClock( t.hour, t.day, this._clock.speed || DAY_RATE );
 
 	}
 
@@ -326,8 +476,9 @@ export class Together {
 
 		}
 		// someone new: the host says what time it is (a clock set before the session was joined stayed
-		// on this device)
-		if ( came && ! first && this.session.isHost && this._clock ) this.setClock( this.app.settings.timeOfDay, this._clock.speed );
+		// on this device), and a held clock runs again: in company it runs for everyone
+		const s = this.app.settings;
+		if ( came && ! first && this.session.isHost ) this.setClock( s.timeOfDay, s.day, s.timeSpeed || DAY_RATE );
 
 		for ( const [ id, o ] of this.others ) {
 

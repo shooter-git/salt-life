@@ -6,16 +6,22 @@ import { createPropMaterial, PAT } from './GameMaterials.js';
 // holds the stand-in figure; setModel( obj ) replaces it. loadCharacter( load ) swaps in the skinned,
 // animated character (Character.js, Rocketbox avatars) once it has loaded: idle clip, a wave when the
 // player comes up, talk gestures while their panel is open (vendor.talking).
-//   new Vendor( { name, position, yaw, radius, greeting, idle, material, character } )
-//   vendor.group (add to the scene), vendor.inRange( p ), vendor.update( dt, lookAt )
+// (Salt Life) A trader keeps hours (game hours [ open, close ), Orders.HOURS): out of them they've gone
+// home (setOpen( false ): not drawn, their "Closed" board out: `sign`, Game), and the stall offers what
+// it does without them (Game).
+//   new Vendor( { name, position, yaw, radius, greeting, idle, material, character, hours } )
+//   vendor.group (add to the scene), vendor.inRange( p ), vendor.update( dt, lookAt ), vendor.setOpen( open )
 export class Vendor {
 
-	constructor( { name, kind = 'buyer', position, yaw = 0, radius = 2.6, greeting = '', idle = '', material = null, look = {}, character = null } ) {
+	constructor( { name, kind = 'buyer', position, yaw = 0, radius = 2.6, greeting = '', idle = '', material = null, look = {}, character = null, hours = null } ) {
 
 		this.name = name;
 		this.kind = kind; // 'buyer' (fish stand) | 'shop' (upgrades)
 		this.greeting = greeting;
 		this.idle = idle;
+		this.hours = hours;
+		this.open = true;
+		this.sign = null; // (Salt Life) the stall's "Closed" board (ClosedSign), shown while they're away
 		this.radius = radius;
 		this.position = position.clone();
 		this.yaw = yaw;
@@ -68,6 +74,17 @@ export class Vendor {
 
 	}
 
+	// at the stall, or gone home for the night (the model, not the group: on a device that draws on
+	// its CPU the app shows the group itself after the start, App.revealLate)
+	setOpen( open ) {
+
+		if ( open === this.open ) return;
+		this.open = open;
+		this.model.visible = open;
+		if ( this.sign ) this.sign.visible = ! open;
+
+	}
+
 	inRange( p ) {
 
 		return Math.hypot( p.x - this.position.x, p.z - this.position.z ) < this.radius && Math.abs( p.y - this.position.y ) < 2.5;
@@ -77,6 +94,7 @@ export class Vendor {
 	// idle motion: breathing, a slow weight shift, turning toward the player when near
 	update( dt, lookAt = null ) {
 
+		if ( ! this.open ) return;
 		this._t += dt;
 		let want = 0;
 		if ( lookAt ) {
