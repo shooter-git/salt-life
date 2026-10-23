@@ -27,9 +27,9 @@ export const UPGRADES = {
 	// the shooting line (lineM), and how hard a big fish can pull before the shaft tears out of it
 	// (spearHold, kg; with a reel the line pays out instead of the fish tearing free)
 	speargun: { name: 'Speargun', levels: [
-		{ cost: 0, label: 'Hand-me-down 75 cm speargun', gunStyle: 'tube', gunCm: 75, bands: 1, shaftM: 1.15, spearV: 16, spearM: 3, lineM: 4.5, spearHold: 7, spearReel: false },
-		{ cost: 180, label: '100 cm teak speargun, two bands', gunStyle: 'teak', gunCm: 100, bands: 2, shaftM: 1.4, spearV: 20, spearM: 4, lineM: 6, spearHold: 11, spearReel: false },
-		{ cost: 480, label: '120 cm railgun with a reel', gunStyle: 'rail', gunCm: 120, bands: 2, shaftM: 1.6, spearV: 23, spearM: 5, lineM: 7.5, spearHold: 16, spearReel: true },
+		{ cost: 0, label: 'Hand-me-down 30-inch speargun', gunStyle: 'tube', gunCm: 75, bands: 1, shaftM: 1.15, spearV: 16, spearM: 3, lineM: 4.5, spearHold: 7, spearReel: false },
+		{ cost: 180, label: '40-inch teak speargun, two bands', gunStyle: 'teak', gunCm: 100, bands: 2, shaftM: 1.4, spearV: 20, spearM: 4, lineM: 6, spearHold: 11, spearReel: false },
+		{ cost: 480, label: '48-inch railgun with a reel', gunStyle: 'rail', gunCm: 120, bands: 2, shaftM: 1.6, spearV: 23, spearM: 5, lineM: 7.5, spearHold: 16, spearReel: true },
 	] },
 	// boat
 	hold: { name: 'Fish hold', levels: [
@@ -38,9 +38,9 @@ export const UPGRADES = {
 		{ cost: 400, label: 'Insulated fish hold', holdKg: 160 },
 	] },
 	fuel: { name: 'Fuel tank', levels: [
-		{ cost: 0, label: '40 L tank', fuelL: 40 },
-		{ cost: 150, label: '80 L tank', fuelL: 80 },
-		{ cost: 380, label: '150 L tank', fuelL: 150 },
+		{ cost: 0, label: '11-gallon tank', fuelL: 40 },
+		{ cost: 150, label: '21-gallon tank', fuelL: 80 },
+		{ cost: 380, label: '40-gallon tank', fuelL: 150 },
 	] },
 	engine: { name: 'Engine', levels: [
 		{ cost: 0, label: 'Tired diesel', speedMul: 1 },
