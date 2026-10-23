@@ -150,6 +150,11 @@ export class TouchControls {
 
 		}
 
+		// (iOS: quick taps on a button are a double-tap to zoom, and a held one brings up the text
+		// magnifier, whatever touch-action says; cancelling the touches stops both, and the pointer
+		// events above still come)
+		for ( const type of [ 'touchstart', 'touchend' ] ) el.addEventListener( type, ( e ) => e.preventDefault(), { passive: false } );
+
 		// any touch turns them on (a laptop with a touch screen too)
 		window.addEventListener( 'pointerdown', ( e ) => {
 

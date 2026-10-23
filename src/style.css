@@ -156,6 +156,7 @@ html:not(.is-touch) .hud:has(.hud-toast.is-low:not([hidden])) .hud-hint { top: c
 	font: 600 15px / 1 system-ui, sans-serif;
 	-webkit-user-select: none;
 	user-select: none;
+	-webkit-touch-callout: none;
 }
 
 .touch-btn[hidden] { display: none; }

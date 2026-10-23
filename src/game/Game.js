@@ -832,7 +832,7 @@ export class Game {
 			pierce: ( a, b ) => {
 
 				const hit = fish && fish.pierce( a, b, ( i ) => this.legal( i ) );
-				if ( hit ) this.strike( hit );
+				if ( hit ) this.spearStrike( hit );
 				return !! hit;
 
 			},
@@ -947,7 +947,7 @@ export class Game {
 
 	// the shaft is through a fish: a clean shot through the head, through its body, or only its tail;
 	// a long shot at a big fish (the shaft slowed by the water) can glance off
-	strike( hit ) {
+	spearStrike( hit ) {
 
 		const fish = this.app.fish, gun = this.gun;
 		const { sp, L } = fish.about( hit.i );
