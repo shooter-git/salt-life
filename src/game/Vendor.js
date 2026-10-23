@@ -72,12 +72,13 @@ export class Vendor {
 
 	}
 
-	// at the stall, or gone home for the night
+	// at the stall, or gone home for the night (the model, not the group: on a device that draws on
+	// its CPU the app shows the group itself after the start, App.revealLate)
 	setOpen( open ) {
 
 		if ( open === this.open ) return;
 		this.open = open;
-		this.group.visible = open;
+		this.model.visible = open;
 
 	}
 
