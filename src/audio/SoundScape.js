@@ -97,6 +97,12 @@ export const MIX = {
 	fishSplash: - 24, // a hooked fish thrashing at the surface, at 6 m
 	fishFlop: - 32, // the landed fish flapping on the line in front of you
 	coins: - 30, // paid at the stand
+	// (Salt Life) the speargun, under water in your hands (the fishing recordings stand in: spearShot)
+	spearShot: - 26, // the bands slapping forward as the shaft leaves
+	spearLine: - 40, // the shooting line whipping off its wraps
+	spearThud: - 30, // the shaft going into a fish, a few metres off
+	spearClank: - 31, // the tip striking rock or coral, a pile
+	bandStretch: - 42, // a band drawn back to its notch
 };
 
 // the fishing sounds (loaded when the rod comes out)
@@ -469,6 +475,31 @@ export class SoundScape {
 	lineSnap() {
 
 		this._shot( 'line_snap', 'rod', this.rod, MIX.lineSnap, 0.95 + Math.random() * 0.1 );
+
+	}
+
+	// (Salt Life) the speargun. It has no recordings of its own (yet): the fishing ones stand in,
+	// slowed and heard close and clear under water: the bands' slap is the line parting, the line
+	// coming off its wraps is line peeling off the reel, the shaft's thud into a fish is the bobber's
+	// plop, its tip on rock the bail's click, a band drawn back the line's creak. Loaded with the rod's
+	// (rodReady)
+	spearShot( bands = 1 ) {
+
+		this._shot( 'line_snap', 'spear', this.near, MIX.spearShot + ( bands > 1 ? 2 : 0 ), 0.55 + Math.random() * 0.06 );
+		this._shot( 'line_out', 'spear', this.near, MIX.spearLine, 1.45 + Math.random() * 0.1 );
+
+	}
+
+	spearHit( what ) {
+
+		if ( what === 'fish' ) this._shot( 'plop', 'spear', this.under, MIX.spearThud, 0.55 + Math.random() * 0.1 );
+		else this._shot( 'bail_click', 'spear', this.under, MIX.spearClank, 0.62 + Math.random() * 0.08 );
+
+	}
+
+	bandStretch() {
+
+		this._shot( 'line_strain', 'spear', this.near, MIX.bandStretch, 0.7 + Math.random() * 0.08 );
 
 	}
 

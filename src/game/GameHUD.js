@@ -7,7 +7,7 @@ const escape = ( t ) => String( t ).replace( /[&<>"']/g, ( c ) => ( { '&': '&amp
 // a row of the cooler or Joe's stand: a name over its details, then what's on the right
 const item = ( name, meta, ...right ) => `<div class="gm-item"><span class="gm-item-main"><span class="gm-item-name">${ name }</span><span class="gm-item-meta">${ meta }</span></span>${ right.join( '' ) }</div>`;
 const fishItem = ( f, button ) => item( `${ FISH[ f.species ].name }${ f.record ? '<small>record</small>' : '' }`,
-	`${ f.cm ?? Math.round( fishLengthCm( f.species, f.kg ) ) } cm · ${ f.kg.toFixed( 2 ) } kg`, `<span class="gm-item-val">$${ f.value }</span>`, button );
+	`${ f.cm ?? Math.round( fishLengthCm( f.species, f.kg ) ) } cm · ${ f.kg.toFixed( 2 ) } kg${ f.method === 'spear' ? ' · speared' : '' }`, `<span class="gm-item-val">$${ f.value }</span>`, button );
 const upper = ( t ) => t.charAt( 0 ).toUpperCase() + t.slice( 1 );
 
 // DOM for the fishing game, in the look of the rest of the HUD (ui/game-ui.css tokens, .tw-glass):
@@ -584,7 +584,7 @@ export class GameHUD {
 		let body, hint;
 		if ( tab === 'fish' ) {
 
-			body = s.inventory.map( ( f ) => fishItem( f, `<button class="gm-mini" data-release="${ f.id }">Release</button>` ) ).join( '' ) || empty( 'Nothing yet. Cast from the pier, the beach or the boat.' );
+			body = s.inventory.map( ( f ) => fishItem( f, `<button class="gm-mini" data-release="${ f.id }">Release</button>` ) ).join( '' ) || empty( 'Nothing yet. Cast from the pier, the beach or the boat, or dive with the speargun.' );
 			hint = 'Sell at the fish stand by the pier';
 
 		} else if ( tab === 'log' ) {
@@ -595,7 +595,7 @@ export class GameHUD {
 
 		} else if ( tab === 'records' ) {
 
-			body = isle.map( ( [ k, r ] ) => item( FISH[ k ].name, r.id === me ? '<b>You</b>' : escape( r.who || '?' ), `<span class="gm-item-num">${ r.kg.toFixed( 2 ) } kg${ r.cm ? ` · ${ r.cm } cm` : '' }</span>` ) ).join( '' )
+			body = isle.map( ( [ k, r ] ) => item( FISH[ k ].name, ( r.id === me ? '<b>You</b>' : escape( r.who || '?' ) ) + ( r.m === 's' ? ' · speared' : '' ), `<span class="gm-item-num">${ r.kg.toFixed( 2 ) } kg${ r.cm ? ` · ${ r.cm } cm` : '' }</span>` ) ).join( '' )
 				|| empty( 'None yet: the first of each kind anyone lands here sets one.' );
 			hint = 'The heaviest of each kind anyone here has landed';
 

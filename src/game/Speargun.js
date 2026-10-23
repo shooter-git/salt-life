@@ -126,23 +126,55 @@ function createGunMaterial( ground ) {
 
 }
 
-// the shaft's: the flopper (aux.w 2) opens about its hinge (on the shaft's top, ahead of it)
-function createShaftMaterial( ground, hingeY ) {
+// the shaft's: the flopper (aux.w 2) opens about its hinge (on the shaft's top, ahead of it: shaftHinge)
+function createShaftMaterial( ground ) {
 
 	return createPropMaterial( 'spearShaft', {
 		underwater: ground,
 		viewModel: true,
-		uniforms: { shaftFlopper: { value: 0 } },
+		uniforms: { shaftFlopper: { value: 0 }, shaftHinge: { value: 1 } },
 		vertex: /* glsl */`
 	if ( aux.w > 1.5 && aux.w < 2.5 ) {
 		float a = shaftFlopper * 0.6;
-		vec3 c = vec3( 0.0, ${ hingeY.toFixed( 4 ) }, ${ ( SHAFT_R + 0.001 ).toFixed( 4 ) } );
+		vec3 c = vec3( 0.0, shaftHinge, ${ ( SHAFT_R + 0.001 ).toFixed( 4 ) } );
 		float ca = cos( a ); float sa = sin( a );
 		vec3 q = P - c;
 		P = c + vec3( q.x, q.y * ca - q.z * sa, q.y * sa + q.z * ca );
 		Nn = vec3( Nn.x, Nn.y * ca - Nn.z * sa, Nn.y * sa + Nn.z * ca );
 	}`,
 	} );
+
+}
+
+// the models of a gun of these stats (Gear.js), made once: { gun, shaft (geometries), lay, hinge }.
+// Yours and the others' (Together.js: they may carry another)
+const MODELS = new Map();
+export function gunModels( g ) {
+
+	const key = `${ g.gunStyle }:${ g.gunCm }:${ g.bands }:${ g.shaftM }:${ g.spearReel }`;
+	let m = MODELS.get( key );
+	if ( m ) return m;
+	const lay = gunLayout( g ), hinge = g.shaftM - 0.075;
+	m = { gun: buildGunGeometry( lay, g ), shaft: buildShaftGeometry( g.shaftM, lay.notches, hinge ), lay, hinge, bands: g.bands, shaftM: g.shaftM };
+	MODELS.set( key, m );
+	return m;
+
+}
+
+// the bands' uniforms (createBandMaterial) for a gun laid out as lay, its bands each at load[ b ] (0
+// slack .. 1 on its notch)
+export function setBands( U, lay, bands, load ) {
+
+	U.bandAnchor.value.set( lay.anchor.x, lay.anchor.y, lay.anchor.z, 0.028 );
+	for ( let b = 0; b < 2; b ++ ) {
+
+		const rest = lay.rest[ Math.min( b, lay.rest.length - 1 ) ];
+		bandEnd( lay, b, b < bands ? load[ b ] : 0, rest, _a );
+		// (a gun of one band: the second folded away into the first's anchor)
+		if ( b >= bands ) _a.set( 0, lay.anchor.y, lay.anchor.z - 0.001 );
+		( b ? U.bandEnd1 : U.bandEnd0 ).value.set( _a.x, _a.y, _a.z, b >= bands ? 0.001 : rest );
+
+	}
 
 }
 
@@ -180,11 +212,12 @@ export class Speargun {
 
 		this.gunMat = createGunMaterial( ground );
 		this.bandMat = createBandMaterial( ground );
+		this.shaftMat = createShaftMaterial( ground );
 		this.lineMat = createLineMaterial( LINE_SEGS );
 		this.lineMat.color.set( 0xc8d0d4 );
 		this.gunMesh = new Mesh( undefined, this.gunMat );
 		this.bandMesh = new Mesh( buildBandGeometry(), this.bandMat );
-		this.shaftMesh = new Mesh( undefined, null );
+		this.shaftMesh = new Mesh( undefined, this.shaftMat );
 		this.lineMesh = new Mesh( buildLineGeometry( LINE_SEGS ), this.lineMat );
 		this.gunMesh.name = 'Speargun';
 		this.bandMesh.name = 'SpeargunBands';
@@ -207,30 +240,27 @@ export class Speargun {
 	// the gun of these stats (Gear.js): built again when it changes
 	setGear( g ) {
 
-		const key = `${ g.gunStyle }:${ g.gunCm }:${ g.bands }:${ g.shaftM }`;
+		const m = gunModels( g );
 		this.gear = g;
-		if ( key === this._key ) return;
-		this._key = key;
-		const lay = this.lay = gunLayout( g );
-		if ( this.gunMesh.geometry ) this.gunMesh.geometry.dispose();
-		if ( this.shaftMesh.geometry ) this.shaftMesh.geometry.dispose();
-		if ( this.shaftMesh.material ) this.shaftMesh.material.dispose();
-		this.gunMesh.geometry = buildGunGeometry( lay, g );
-		const hinge = g.shaftM - 0.075;
-		this.shaftMesh.geometry = buildShaftGeometry( g.shaftM, lay.notches, hinge );
-		this.shaftMesh.material = createShaftMaterial( this.ground, hinge );
+		if ( m === this.models ) return;
+		this.models = m;
+		this.lay = m.lay;
+		this.gunMesh.geometry = m.gun;
+		this.shaftMesh.geometry = m.shaft;
+		this.shaftMat.uniforms.shaftHinge.value = m.hinge;
 		this.load = [ 1, g.bands > 1 ? 1 : 0 ];
 		if ( ! LOADED_STATES.has( this.state ) && this.state !== 'stowed' ) return;
 		this.setState( this.state === 'stowed' ? 'stowed' : 'loaded' );
 
 	}
 
-	// (Together.js) another diver's gun, shaft and line: the same geometry, materials of their own
+	// (Together.js) another diver's gun, shaft and line: materials of their own in the same programs; the
+	// models are their gun's (gunModels)
 	tackle() {
 
 		const gun = new Mesh( this.gunMesh.geometry, createGunMaterial( this.ground ) );
 		const bands = new Mesh( this.bandMesh.geometry, createBandMaterial( this.ground ) );
-		const shaft = new Mesh( this.shaftMesh.geometry, createShaftMaterial( this.ground, this.gear.shaftM - 0.075 ) );
+		const shaft = new Mesh( this.shaftMesh.geometry, createShaftMaterial( this.ground ) );
 		const line = new Mesh( this.lineMesh.geometry, createLineMaterial( LINE_SEGS ) );
 		for ( const m of [ gun, bands, shaft, line ] ) {
 
@@ -245,7 +275,7 @@ export class Speargun {
 
 		line.matrixAutoUpdate = true;
 		line.material.uniforms.lineShow.value = 1;
-		return { gun, bands, shaft, line, lay: this.lay };
+		return { gun, bands, shaft, line };
 
 	}
 
@@ -429,11 +459,13 @@ export class Speargun {
 		h.applyAxisAngle( d, Math.sin( this.t * 9 + f.i ) * 0.45 * this.thrash );
 		// its centre: the shaft through its body where it was hit
 		out.pos.copy( _a ).addScaledVector( h, - ( 0.5 - f.u * f.body ) * f.L );
-		// rolled about its heading so that its side lies square to the shaft
+		// rolled about its heading so that its side lies square to the shaft (either flank toward the
+		// shaft's tip: whichever keeps it the nearer to upright)
 		_r.set( h.z, 0, - h.x );
 		if ( _r.lengthSq() < 1e-6 ) _r.set( 1, 0, 0 );
 		_r.normalize();
-		out.roll = Math.atan2( _t.crossVectors( _r, d ).dot( h ), _r.dot( d ) );
+		_c.copy( d ).multiplyScalar( _r.dot( d ) < 0 ? - 1 : 1 );
+		out.roll = Math.atan2( _t.crossVectors( _r, _c ).dot( h ), _r.dot( _c ) );
 		out.thrash = this.thrash;
 		return out;
 
@@ -482,18 +514,7 @@ export class Speargun {
 		this.muzzle.set( 0, lay.L - 0.03, lay.bottom - 0.004 ).applyMatrix4( this.gunMesh.matrix );
 
 		// ---- the bands: each on its notch, slack under the muzzle, or on its way between
-		const U = this.bandMat.uniforms;
-		U.bandAnchor.value.set( lay.anchor.x, lay.anchor.y, lay.anchor.z, 0.028 );
-		for ( let b = 0; b < 2; b ++ ) {
-
-			const rest = lay.rest[ Math.min( b, lay.rest.length - 1 ) ];
-			const on = b < this.bands ? this.load[ b ] : 0;
-			bandEnd( lay, b, on, rest, _a );
-			// (a gun of one band: the second folded away into the first's anchor)
-			if ( b >= this.bands ) _a.set( 0, lay.anchor.y, lay.anchor.z - 0.001 );
-			( b ? U.bandEnd1 : U.bandEnd0 ).value.set( _a.x, _a.y, _a.z, b >= this.bands ? 0.001 : rest );
-
-		}
+		setBands( this.bandMat.uniforms, lay, this.bands, this.load );
 
 		// ---- the shaft
 		const L = this.gear.shaftM;
@@ -529,7 +550,7 @@ export class Speargun {
 
 		this.shaftMesh.matrixWorldNeedsUpdate = true;
 		this.shaftMesh.visible = shown || ( visible && this.shaftOut );
-		const SU = this.shaftMesh.material.uniforms;
+		const SU = this.shaftMat.uniforms;
 		SU.shaftFlopper.value += ( ( this.fish ? 1 : 0 ) - SU.shaftFlopper.value ) * Math.min( 1, dt * 12 );
 		SU.gpViewModel.value = this.shaftOut ? 0 : 1; // (in the gun, held; out, in the world)
 		this.gunMat.uniforms.gunWraps.value = this.shaftOut ? 0 : 1;
@@ -586,8 +607,31 @@ export class Speargun {
 				v.y -= SINK * dt;
 				this.tip.addScaledVector( v, dt );
 				if ( v.lengthSq() > 0.01 ) this.dir.copy( v ).normalize();
-				// into a fish? (the game strikes it: 'stuck')
-				if ( this.state === 'flying' && pierce && pierce( this.prevTip, this.tip ) ) break;
+				if ( this.state === 'flying' ) {
+
+					// what it meets first along this step: a fish (the game strikes it: 'stuck'), the
+					// bottom or the reef (it buries its tip there), a pile
+					const gt = groundAt ? groundHit( this.prevTip, this.tip, groundAt ) : Infinity;
+					const ct = colliders ? colliders.segmentHit( this.prevTip, this.tip ) : Infinity;
+					const stop = Math.min( gt, ct );
+					const end = stop < 1 ? _w.lerpVectors( this.prevTip, this.tip, stop ) : this.tip;
+					if ( pierce && pierce( this.prevTip, end ) ) break;
+					if ( stop < 1 ) {
+
+						this.tip.copy( end );
+						if ( gt <= ct ) {
+
+							this.tip.addScaledVector( this.dir, 0.04 );
+							this.stuck = true;
+							this.spend( 'ground' );
+
+						} else this.spend( 'pile' );
+						break;
+
+					}
+
+				}
+
 				// the end of the line: it fetches up short
 				_b.copy( this.tip ).addScaledVector( this.dir, - L );
 				const out = _b.distanceTo( this.muzzle );
@@ -677,32 +721,11 @@ export class Speargun {
 
 		}
 
-		// the bottom, the reef and the piles stop it; it doesn't leave the water
+		// it rests on the bottom, and doesn't leave the water
 		if ( this.state === 'flying' || this.state === 'spent' || this.state === 'stuck' ) {
 
-			const gnd = groundAt ? groundAt( this.tip.x, this.tip.z ) : - Infinity;
-			if ( this.tip.y < gnd ) {
-
-				if ( this.state === 'flying' ) {
-
-					// buried a few cm, where it went in
-					const a = this.prevTip.y - groundAt( this.prevTip.x, this.prevTip.z ), b = this.tip.y - gnd;
-					this.tip.lerpVectors( this.prevTip, this.tip, a > 0 ? a / ( a - b ) : 0 ).addScaledVector( this.dir, 0.04 );
-					this.stuck = true;
-					this.spend( 'ground' );
-
-				} else this.tip.y = gnd;
-
-			}
-
-			const hit = this.state === 'flying' && colliders ? colliders.segmentHit( this.prevTip, this.tip ) : Infinity;
-			if ( hit < 1 ) {
-
-				this.tip.lerpVectors( this.prevTip, this.tip, hit );
-				this.spend( 'pile' );
-
-			}
-
+			const gnd = groundAt && ! this.stuck ? groundAt( this.tip.x, this.tip.z ) : - Infinity;
+			if ( this.tip.y < gnd ) this.tip.y = gnd;
 			if ( this.tip.y > waterY - 0.04 ) {
 
 				this.tip.y = waterY - 0.04;
@@ -721,6 +744,23 @@ export class Speargun {
 		if ( what && what !== 'line' && this.audio && this.audio.spearHit ) this.audio.spearHit( what, this.tip );
 
 	}
+
+}
+
+// where the segment a -> b first goes into the bottom or the reef (groundAt( x, z ): its height), as
+// a share of the way (0 .. 1), or Infinity: marched in steps of ~10 cm, so a shot doesn't go through a
+// coral head between two frames (and a fish behind one isn't in the sights: Game.sights)
+export function groundHit( a, b, groundAt ) {
+
+	const len = a.distanceTo( b ), n = Math.max( 1, Math.ceil( len / 0.1 ) );
+	for ( let k = 1; k <= n; k ++ ) {
+
+		const t = k / n;
+		if ( a.y + ( b.y - a.y ) * t < groundAt( a.x + ( b.x - a.x ) * t, a.z + ( b.z - a.z ) * t ) ) return Math.max( 0, t - 0.5 / n );
+
+	}
+
+	return Infinity;
 
 }
 

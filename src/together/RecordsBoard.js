@@ -58,7 +58,7 @@ export class RecordsBoard {
 
 	}
 
-	// records: species -> { kg, cm, who }
+	// records: species -> { kg, cm, who, m ('s': speared) }
 	draw( records ) {
 
 		this._last = records;
@@ -110,7 +110,7 @@ export class RecordsBoard {
 			g.textAlign = 'left';
 			g.font = `28px ${ font }`;
 			g.fillStyle = 'rgba(242, 239, 228, 0.7)';
-			g.fillText( r.who || '', 46, y + 30, 320 );
+			g.fillText( `${ r.who || '' }${ r.m === 's' ? ' · speared' : '' }`, 46, y + 30, 320 );
 			y += 70;
 
 		}

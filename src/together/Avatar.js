@@ -11,7 +11,8 @@ import { Figure } from './Figure.js';
 // and a wave. Swimming has no clip: the arms turn over and the legs kick, posed here on the idle, the
 // body lying face down. Until their look has loaded (or if it doesn't) a stand-in figure (Figure.js).
 //   const a = new Avatar( person );  scene.add( a.group );  a.look = name;  a.setLook( gltf )  (again to change)
-//   a.pose( { mode, speed, rod }, dt )   mode 'walk' | 'swim' | 'deck' | 'helm'; rod: holding one
+//   a.pose( { mode, speed, rod, gun }, dt )   mode 'walk' | 'swim' | 'deck' | 'helm'; rod: holding one;
+//                                        gun (Salt Life): swimming with a speargun
 //   a.hand( out )                        the right hand (world): the rod's grip
 //   a.once( 'wave_01' | 'cheer_01' )     a gesture, when standing
 // Feet at the group's origin facing +Z.
@@ -138,7 +139,8 @@ export class Avatar {
 
 	}
 
-	pose( { mode, speed = 0, rod = false }, dt ) {
+	// (Salt Life) gun: swimming with a speargun, held out ahead in the right hand
+	pose( { mode, speed = 0, rod = false, gun = false }, dt ) {
 
 		// lying face down in the water (the chest at the float point), upright otherwise
 		this._swim += ( ( mode === 'swim' ? 1 : 0 ) - this._swim ) * ( 1 - Math.exp( - dt * 6 ) );
@@ -192,7 +194,8 @@ export class Avatar {
 			_axis.set( 1, 0, 0 ).applyQuaternion( this.body.getWorldQuaternion( _q1 ) );
 			const p = this._phase, B = this.bones;
 			turnBone( B.armL, _axis, - ( p % ( Math.PI * 2 ) ) );
-			turnBone( B.armR, _axis, - ( ( p + Math.PI ) % ( Math.PI * 2 ) ) );
+			// (with a speargun the right arm stays reached out ahead, the gun in its hand)
+			turnBone( B.armR, _axis, gun ? - Math.PI : - ( ( p + Math.PI ) % ( Math.PI * 2 ) ) );
 			if ( B.thighL ) turnBone( B.thighL, _axis, Math.sin( p * 2.6 ) * 0.3 );
 			if ( B.thighR ) turnBone( B.thighR, _axis, - Math.sin( p * 2.6 ) * 0.3 );
 

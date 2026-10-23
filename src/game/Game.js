@@ -14,7 +14,7 @@ import { UPGRADES, fuelBurn } from './Gear.js';
 import { GameHUD } from './GameHUD.js';
 import { Minimap } from './Minimap.js';
 import { Guide } from './Guide.js';
-import { Speargun } from './Speargun.js';
+import { Speargun, groundHit } from './Speargun.js';
 import { SPECIES } from '../world/fish/FishSpecies.js';
 
 // how long the catch card stays up unless dismissed (ms)
@@ -704,7 +704,8 @@ export class Game {
 			if ( sp.big ) {
 
 				const g = gun.gear;
-				const f = this.spearFight = new CatchMinigame( { species: sp.id, kg: sp.kg, lineKg: g.spearHold * ( sp.tail ? 0.6 : 1 ), reelSpeed: 1.0, distance: Math.max( 1.5, gun.muzzle.distanceTo( gun.tip ) - g.shaftM ) } );
+				// (landed once it's tired and pulled close: CatchMinigame landAt, tired)
+				const f = this.spearFight = new CatchMinigame( { species: sp.id, kg: sp.kg, lineKg: g.spearHold * ( sp.tail ? 0.6 : 1 ), reelSpeed: 1.0, distance: Math.max( 1.5, gun.muzzle.distanceTo( gun.tip ) - g.shaftM ), landAt: 1.0, tired: 0.25 } );
 				// it runs to the end of the line, and tears free (with a reel, it takes line first)
 				f.maxDistance = g.lineM + ( g.spearReel ? 25 : 0.4 );
 				f.spear = true;
@@ -778,6 +779,9 @@ export class Game {
 		_b.set( 0, 0, - 1 ).applyQuaternion( cam.quaternion ).multiplyScalar( range ).add( _a );
 		const hit = fish.pierce( _a, _b );
 		if ( ! hit ) return null;
+		// (not one behind the reef)
+		const p = app.player;
+		if ( groundHit( _a, _b.lerpVectors( _a, _b, hit.t ), ( x, z ) => p.groundAt( x, z, _a.y + 0.3 ) ) < 1 ) return null;
 		const { sp, L } = fish.about( hit.i );
 		const cm = Math.round( L * 100 );
 		const id = sp.fish && FISH[ sp.fish ] ? sp.fish : null;

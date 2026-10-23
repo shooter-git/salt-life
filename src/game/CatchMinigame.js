@@ -5,13 +5,16 @@ import { FISH } from './FishTable.js';
 // fastest. Too much tension (above the line's strength for about half a second) snaps it; too little
 // for too long and the hook falls out. Every few seconds the fish surges: ease off or it breaks you.
 //
-//   const g = new CatchMinigame( { species, kg, lineKg, reelSpeed, distance, rng } )
+// (Salt Life) A fish on a speargun's line is only a few metres off: it's landed once it's tired
+// (tired: its stamina at most this) and within landAt metres.
+//
+//   const g = new CatchMinigame( { species, kg, lineKg, reelSpeed, distance, rng, landAt, tired } )
 //   g.update( dt, reeling ) -> 'fighting' | 'caught' | 'snapped' | 'escaped'
 //   g.tension (0..1+, 1 = breaking point), g.distance (m), g.stamina (0..1), g.surge (0..1),
 //   g.band = [ lo, hi ] (the green band)
 export class CatchMinigame {
 
-	constructor( { species, kg, lineKg = 7, reelSpeed = 1.1, distance = 15, rng = Math.random } ) {
+	constructor( { species, kg, lineKg = 7, reelSpeed = 1.1, distance = 15, rng = Math.random, landAt = 1.2, tired = 1 } ) {
 
 		const f = FISH[ species ];
 		this.species = species;
@@ -33,6 +36,8 @@ export class CatchMinigame {
 		this._nextSurge = 1.2 + rng() * 2;
 		this._surgeT = 0;
 		this.state = 'fighting';
+		this.landAt = landAt;
+		this.tired = tired;
 
 	}
 
@@ -64,7 +69,7 @@ export class CatchMinigame {
 		// line in / out
 		if ( reeling ) this.distance -= this.reelSpeed * dt * ( 1.15 - 0.6 * this.surge * ( 1 - tired ) );
 		else this.distance += pull * 1.4 * dt;
-		this.distance = Math.max( 0, this.distance );
+		this.distance = Math.max( this.stamina > this.tired ? this.landAt * 0.8 : 0, this.distance );
 
 		// tiring: fastest in the band, slowly otherwise
 		const inBand = this.tension >= this.band[ 0 ] && this.tension <= this.band[ 1 ];
@@ -77,7 +82,7 @@ export class CatchMinigame {
 
 			this.slack = this.tension < 0.12 ? this.slack + dt : Math.max( 0, this.slack - dt * 2 );
 			if ( this.slack > 4 || this.distance > this.maxDistance ) this.state = 'escaped';
-			else if ( this.distance < 1.2 ) this.state = 'caught';
+			else if ( this.distance < this.landAt && this.stamina <= this.tired ) this.state = 'caught';
 
 		}
 

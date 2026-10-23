@@ -7,7 +7,8 @@ import { CHANDLERY } from './Chandlery.js';
 //    markers pulse on the minimap). Enter / Space / click or tap: next, Esc: skip. Replay with H (Salt
 //    Life: Tidewater's help panel, F1, isn't ported).
 //  - one-time tips the first time something happens (rod out, first nibble, fish on, first catch,
-//    full cooler, next to the boat, at Joe's, at Marta's), in a card above the minimap.
+//    full cooler, next to the boat, at Joe's, at Marta's; Salt Life: the speargun out, its band to
+//    load, a big fish on the shaft, the breath running low), in a card above the minimap.
 // Seen state under 'tidewater.guide' (in the person's saves: core/SaveStore), wrapped in try/catch.
 //   const guide = new Guide( ui, game, minimap );  guide.update( dt );  guide.replay()
 
@@ -80,8 +81,8 @@ const row = ( keys, text ) => `<div class="gm-guide-row"><span class="k">${ keys
 const WELCOME = {
 	eyebrow: 'Welcome to Salt Life',
 	title: 'Fish the island, sell your catch',
-	body: `<p>Catch fish from the <b>beach</b>, the <b>pier</b> or your <b>boat</b>. Different fish bite in the shallows, around the pier, over the reef and out in deep water, and they change with the time of day.</p>
-		<p>Sell your catch to <b>Joe</b> at the fish stand by the pier, then spend the money on upgrades from <b>Marta</b> at the chandlery by the boathouse: stronger line, a faster reel, a bigger hold, a fish finder and lights for fishing at night.</p>`,
+	body: `<p>Catch fish from the <b>beach</b>, the <b>pier</b> or your <b>boat</b>, or dive for them with a <b>speargun</b>. Different fish bite in the shallows, around the pier, over the reef and out in deep water, and they change with the time of day.</p>
+		<p>Sell your catch to <b>Joe</b> at the fish stand by the pier, then spend the money on upgrades from <b>Marta</b> at the chandlery by the boathouse: stronger line, a faster reel, a better speargun, a bigger hold, a fish finder and lights for fishing at night.</p>`,
 };
 
 const FISHING = {
@@ -138,6 +139,10 @@ const TIPS = {
 		boat: 'Your boat. <kbd>E</kbd> to board, <kbd>E</kbd> again at the wheel to drive (<kbd>W</kbd><kbd>S</kbd> throttle, <kbd>A</kbd><kbd>D</kbd> steer). Diesel is sold by Marta.',
 		joe: '<b>Joe</b> buys your fish. <kbd>E</kbd> to see what he will pay.',
 		marta: '<b>Marta</b> sells upgrades and diesel. <kbd>E</kbd> to see her stock.',
+		gunOut: 'Dive (look down and swim) and <b>fin slowly</b> up to a fish: rush it and it bolts. Put it in the sights and <b>click</b>. They tell you what it is, and whether you may take it.',
+		gunLoad: '<b>Hold the left mouse button</b> to draw the band back to its notch on the shaft.',
+		spearFight: 'A big one. <b>Hold the left mouse button</b> to pull it in, let go when it runs, until it tires.',
+		breath: 'Your <b>breath</b> is running out (the gauge by your money). Swim up (<kbd>Space</kbd>) before you black out.',
 	},
 	touch: {
 		rodOut: 'Hold <b>Cast</b> to wind up and let go to cast. Try deeper water, around the pier or over the reef.',
@@ -147,6 +152,10 @@ const TIPS = {
 		boat: 'Your boat. Tap <b>Board boat</b>, then <b>Take the helm</b> at the wheel and drive with the left side. Diesel is sold by Marta.',
 		joe: '<b>Joe</b> buys your fish. Tap <b>Talk to Joe</b> to see what he will pay.',
 		marta: '<b>Marta</b> sells upgrades and diesel. Tap <b>Talk to Marta</b> to see her stock.',
+		gunOut: 'Tap <b>Dive</b> and <b>fin slowly</b> up to a fish: rush it and it bolts. Put it in the sights and tap <b>Shoot</b>. They tell you what it is, and whether you may take it.',
+		gunLoad: '<b>Hold Load</b> to draw the band back to its notch on the shaft.',
+		spearFight: 'A big one. <b>Hold Pull</b> to pull it in, let go when it runs, until it tires.',
+		breath: 'Your <b>breath</b> is running out (the gauge by your money). <b>Swim up</b> before you black out.',
 	},
 	gamepad: {
 		rodOut: 'Hold <kbd>RT</kbd> to wind up and release to cast. Try deeper water, around the pier or over the reef.',
@@ -156,6 +165,10 @@ const TIPS = {
 		boat: 'Your boat. <kbd>B</kbd> to board, <kbd>B</kbd> again at the wheel to drive with the left stick. Diesel is sold by Marta.',
 		joe: '<b>Joe</b> buys your fish. <kbd>B</kbd> to see what he will pay.',
 		marta: '<b>Marta</b> sells upgrades and diesel. <kbd>B</kbd> to see her stock.',
+		gunOut: 'Dive (look down and swim) and <b>fin slowly</b> up to a fish: rush it and it bolts. Put it in the sights and <kbd>RT</kbd>. They tell you what it is, and whether you may take it.',
+		gunLoad: '<b>Hold <kbd>RT</kbd></b> to draw the band back to its notch on the shaft.',
+		spearFight: 'A big one. <b>Hold <kbd>RT</kbd></b> to pull it in, let go when it runs, until it tires.',
+		breath: 'Your <b>breath</b> is running out (the gauge by your money). Swim up (<kbd>A</kbd>) before you black out.',
 	},
 	full: 'Your cooler is <b>full</b>. Sell to Joe, or buy a bigger hold from Marta at the chandlery.',
 };
@@ -407,6 +420,16 @@ export class Guide {
 			this._afterCard = null;
 
 		}
+
+		// (Salt Life) the speargun and the held breath
+		const gun = g.gun;
+		if ( gun && gun.equipped && ! prev.gun ) this.tip( 'gunOut' );
+		if ( gun && gun.state === 'empty' && [ 'landing', 'pulling' ].includes( prev.gunState ) ) this.tip( 'gunLoad' );
+		if ( g.spearFight && ! prev.spearFight ) this.tip( 'spearFight' );
+		if ( p.mode === 'swim' && p.under && p.breath < p.breathMax * 0.3 ) this.tip( 'breath' );
+		prev.gun = !! ( gun && gun.equipped );
+		prev.gunState = gun && gun.state;
+		prev.spearFight = !! g.spearFight;
 
 		const s = g.state;
 		if ( s.holdKg >= s.stats.holdKg * 0.92 ) this.tip( 'full' );
