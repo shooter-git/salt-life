@@ -43,7 +43,7 @@ Salt Life is [Tidewater](https://github.com/dgreenheck/tidewater) rebuilt as an 
 | `src/sky` | Atmosphere, clouds, the sun and moon, the environment map |
 | `src/materials` | Shader pieces shared by many materials: local lights at night, height haze (three's fog chunks, replaced), underwater light, LOD fades |
 | `src/player` | The player, the boat's physics, the bow spray |
-| `src/game` | The fishing game: the rod, bites, the fight, the catch card, the cooler and log, the stalls, Joe and Marta, the HUD, the minimap, the guide |
+| `src/game` | The fishing game: the rod, bites, the fight, the catch card, the cooler and log, the stalls, Joe and Marta, the HUD, the minimap, the guide; the speargun |
 | `src/fx`, `src/post` | Spray, marine snow, air motes; the high tier's post chain and sun shafts |
 | `src/ui` | The HUD's DOM, touch controls, fonts |
 | `src/engine/index.js` | `three` itself, re-exported: the ported files still import it as Tidewater's engine |
@@ -87,6 +87,42 @@ Materials are three's `MeshStandardMaterial` (or `MeshPhysicalMaterial`), with G
 
 Everyone keeps their own progress and their own fish.
 
+## Spearfishing
+
+The speargun is `src/game/Speargun.js` and its half of `src/game/Game.js`. The fish's side is in `src/world/Fish.js`, and the held breath in `src/player/Player.js`.
+
+- **The law** (`game/FishTable.js`):
+  - Each species is a fish spearfishers take (`spear`), protected (`protected`: the Nassau grouper, the stoplight parrotfish, the tarpon), or neither (the reef's aquarium fish and the bait).
+  - Some have a minimum size (`minCm`). `spearRule()` says whether one may be taken, and why not.
+  - A protected fish caught on a line is measured, logged and released. The island's records still count it.
+  - Joe pays a bounty on lionfish, an invader on the reef.
+- **One key, R**: the rod on land or on deck, the speargun in the water. Neither leaves its element (`Game.canFish`, `canSpear`), so changing one for the other means getting out of the water or into it. The speargun fires only once you've dived (`Game.submerged`).
+- **The sights** (`Game.sights`) name the first fish along the view within the shot's range (`Fish.pierce`), unless the reef is in the way (`groundHit`). The gun won't fire at one that mustn't be taken (`gun.safety`).
+- **The shot** (`Speargun.stepShaft`):
+  - It flies with the water's drag and a little sinking, and stops at the end of its shooting line.
+  - Each step it's tested against the fish it may take (`Fish.pierce`), the bottom and the reef (`groundHit`, in ~10 cm steps) and the piles (`Colliders.segmentHit`).
+  - A long shot at a big fish glances off.
+- **A fish on the shaft** is the reef's own fish:
+  - `Fish.hold` poses it on the shaft, thrashing, and the simulation leaves it alone. `release` lets it swim off; `take` removes it until its place is filled, out of sight, a few minutes later.
+  - A clean shot through the head, or a small fish, is hauled straight in. A big one fights: `CatchMinigame` with `landAt` and `tired` lands it only once it's tired. One shot through the tail can work itself off.
+  - It's weighed by the size it swam at (`fishWeightKg`), and its catch keeps the method (`'spear'`).
+- **The fish notice the diver** (`Fish.wary`, `WARY`): the faster the diver comes, the farther off they react, and a fright keeps them warier a while (`SPOOKED`). Frightened groupers tuck in at their coral head. Jacks, barracuda and mahi come to look at a diver keeping still (`curious`).
+- **The spearfisher's fish**: hogfish on the sand at the reef's foot, black groupers and lionfish at the coral heads, mutton snappers along the reef's edges, red snappers over the deep holes in the bay and beyond its mouth, mahi and blackfin tuna in the blue water off the bay.
+- **The breath** (`Player.breathe`):
+  - 50 s finning easy, less kicking hard, more keeping still. It comes back at the surface in 10 s.
+  - Running out is a blackout: the swimmer floats up, and whatever's on the line is lost.
+  - With the speargun out the swimmer stalks (`Player.stalk`): a slow glide along, still brisk going down or up.
+- **The gun in your hands**:
+  - It's held like the rod: a pose in camera space, eased between its states.
+  - Its depth is pressed against the near plane (`GameMaterials` `viewModel`), so the reef never cuts through it.
+  - The bands are tubes the vertex shader lays out: stretched thin on the shaft's notch, slack under the muzzle, or on the way between as they're loaded.
+  - Under the sea it takes the water's colour, as the reef does (`underwater`).
+- **Playing together**:
+  - The pose carries the speargun (`g`), which gun it is (`gl`) and the shaft while it's out (`G`).
+  - Others see it in your hand (`gunModels`, per gun), its shaft and line, and a speared fish on the shaft.
+  - The catch message and the records say a fish was speared (`m`).
+- **Sound**: the speargun has no recordings of its own yet, so the fishing ones stand in (`SoundScape.spearShot`, `spearHit`, `bandStretch`).
+
 ## The boat at night
 
 `src/world/boat/BoatLamps.js` gives each boat (yours, and each copy of someone else's) the lamps a boat shows at night:
@@ -123,13 +159,13 @@ The checks' browser has no graphics card, and some laptops don't either. `App.cp
   - The canvas is held to a phone's pixels.
   - The loading frame is 8 × 8 px and draws only the sky, the ground and the sea.
   - The rest (`_late`) is revealed a group per frame after the start.
-- **Shaders compiled late:** every shader compiled before the start is load time. Shaders not needed at once are compiled in `prepareLate`, after the start: the rod and its line, and the fish in the swimming fish's skin.
+- **Shaders compiled late:** every shader compiled before the start is load time. Shaders not needed at once are compiled in `prepareLate`, after the start: the rod and its line, the speargun, and the fish in the swimming fish's skin.
   - three's `compile()` also compiles the materials of hidden objects. So what waits is taken out of the scene, not just hidden.
 - **Heavy builds in workers:** the debris, the fish models and the reef's noise are built in workers, so their garbage stays out of script memory.
   - All the Spaces builds inline workers as module workers, which don't start in its sealed frame. `ClassicWorker` starts them as classic workers instead.
 
 ## Testing
 
-- `pnpm test`: the game's logic, the waves, the reef and fish, the whale and the spray, under Node. It also checks that the baked terrain matches its generator and that every asset has a licence.
+- `pnpm test`: the game's logic, the waves, the reef and fish, the spearfishing, the whale and the spray, under Node. It also checks that the baked terrain matches its generator and that every asset has a licence.
 - All the Spaces' checks, from its checkout: `node packages/qa-browser/src/cli.ts check ../salt-life`. Run them from an up-to-date `main` there.
 - `qa/script.json` is what the checks play.
