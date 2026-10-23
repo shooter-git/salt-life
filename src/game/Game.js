@@ -179,6 +179,8 @@ export class Game {
 		}
 
 		if ( this.hud && ( inp.hit( 'KeyI' ) || inp.hit( 'Tab' ) ) ) this.hud.toggleInventory();
+		// the cooler's tabs: ← →, the d-pad
+		if ( this.hud && this.hud.invOpen && ( inp.hit( 'ArrowLeft' ) || inp.hit( 'ArrowRight' ) ) ) this.hud.cycleTab( inp.hit( 'ArrowRight' ) ? 1 : - 1 );
 		// (H at the helm is the horn)
 		if ( this.guide && inp.hit( 'KeyH' ) && ! this.guide.open && app.player.mode !== 'boat' ) this.guide.replay();
 		if ( this.hud && inp.hit( 'Escape' ) ) {
@@ -195,6 +197,8 @@ export class Game {
 		this._lmb = lmb;
 		this._rmb = rmb;
 		const panelOpen = this.hud && ( this.hud.invOpen || this.hud.standOpen );
+		// (a gamepad's RT on the cooler's Islander tab: the next islander)
+		if ( panelOpen && lDown && this.hud.invOpen && this.hud.invTab === 'islander' && this.hud.device === 'gamepad' ) this.hud.nextLook();
 
 		if ( rod.equipped && ! panelOpen ) {
 
