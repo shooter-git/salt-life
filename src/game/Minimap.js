@@ -36,6 +36,7 @@ const CSS = /* css */`
 .gm-mk > i svg { width: 64%; height: 64%; }
 .gm-mk.is-joe > i { background: var(--tw-sun); }
 .gm-mk.is-marta > i { background: var(--tw-aqua); }
+.gm-mk.is-shut > i { filter: saturate(0.25) brightness(0.75); }
 .gm-mk.is-boat > i { background: #f2efe6; }
 .gm-mk.is-player > i { width: calc(16 * var(--tw-u)); height: calc(16 * var(--tw-u)); margin: calc(-8 * var(--tw-u)) 0 0 calc(-8 * var(--tw-u)); color: #fff;
 	text-shadow: 0 1px 1px rgba(0,0,0,0.6); }
@@ -133,8 +134,8 @@ export class Minimap {
 		};
 
 		this.markers = [
-			{ id: 'joe', ...mk( 'joe', ICON.fish ), pos: () => ( { x: STAND.x, z: STAND.z } ) },
-			{ id: 'marta', ...mk( 'marta', ICON.anchor ), pos: () => ( { x: CHANDLERY.x, z: CHANDLERY.z } ) },
+			{ id: 'joe', ...mk( 'joe', ICON.fish ), pos: () => ( { x: STAND.x, z: STAND.z } ), vendor: () => game.stand.vendor },
+			{ id: 'marta', ...mk( 'marta', ICON.anchor ), pos: () => ( { x: CHANDLERY.x, z: CHANDLERY.z } ), vendor: () => game.chandlery.vendor },
 			{ id: 'boat', ...mk( 'boat', ICON.boat ), pos: () => {
 
 				const b = game.app.boatCtl;
@@ -399,6 +400,8 @@ export class Minimap {
 			if ( hide ) continue;
 			const edge = place( m.el, q.x - x, q.z - z, 12, m.arrow );
 			this._toggle( m.el, 'is-edge', edge );
+			// (Salt Life) a stall whose trader has gone home for the night
+			if ( m.vendor ) this._toggle( m.el, 'is-shut', ! m.vendor().open );
 
 		}
 

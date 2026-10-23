@@ -24,7 +24,7 @@ Salt Life is [Tidewater](https://github.com/dgreenheck/tidewater) rebuilt as an 
 ## A frame
 
 `App.frame(dt)` runs, in order:
-1. The clock (`settings.timeOfDay`, advanced by `timeSpeed`).
+1. The island's clock (`settings.timeOfDay` and `settings.day`, advanced by `IslandClock.advance`, or worked out from the session's clock: see [The island's day](#the-islands-day)).
 2. Input.
 3. The boat's physics (`BoatController`).
 4. The player (`Player`: walking, swimming, on deck or at the helm), then the fishing game (`Game`).
@@ -72,10 +72,11 @@ Materials are three's `MeshStandardMaterial` (or `MeshPhysicalMaterial`), with G
   - You hear the boat you ride in: its engine at the revs its skipper sends from the helm (`E`), and the water past the hull. On foot or in the water, you hear the nearest boat going by.
 - **The horn:** sounding it is a `'horn'` message (1 when it starts, 0 when it's let go). The others hear it from that player's boat.
   - Each device draws only the nearest few players and boats.
-- **The clock:** one time of day for everyone, kept in the shared value `'clock'` as `{ at, hour, speed }`.
-  - The host sets it if there's none.
-  - T changes it for everyone.
-  - Each device works the hour out from the time of day on its own clock.
+- **The clock:** one time of day for everyone, kept in the shared value `'clock'` as `{ at, hour, day, speed }` (below).
+  - The host sets it if there's none: a new room starts from its first player's saved clock.
+  - When someone arrives, the host sets it again for everyone, running (in company it can't be held).
+  - Each device works the hour out from the record and its own clock (`IslandClock.clockAt`).
+  - Resting needs everyone here: each player's wish is their own shared value, `'rest.<id>'` (`{ to, c }`, `c`: the clock it was made on). Whoever's wish completes the agreement moves the clock, and so does the host when it sees it (the wishes arrive as events, so a host whose game is paused still hears them). A wish lasts two minutes, or until the clock changes.
 - **Catches:** a landed fish is a `'catch'` message to the others.
   - They see a toast and hear the player cheer.
   - The fish hangs on the player's line for a moment.
@@ -86,6 +87,31 @@ Materials are three's `MeshStandardMaterial` (or `MeshPhysicalMaterial`), with G
   - The records are chalked on a board beside Joe's stand (`RecordsBoard.js`, a canvas) and listed on the cooler's Records tab.
 
 Everyone keeps their own progress and their own fish.
+
+## The island's day
+
+`src/game/IslandClock.js` is the clock's arithmetic, with no three.js, so `test/island-day.mjs` runs it under Node.
+
+- **Pace:** by day an hour takes 100 s (`DAY_RATE`, 0.01 game hours a second). Deep night, from about 20:30 to 3:30, runs four times faster (`NIGHT_X`), eased in and out, so dusk and dawn linger and the dark passes in a few minutes. A whole day is about half an hour.
+- **One record:** the time is worked out from `{ at, hour, day, speed }`, the hour and day at `at` (ms since 1970) running at `speed` (0: held). A table of the day's pace turns real seconds into hours, so every device gets the same hour from the same record without anything ticking over the network.
+- **Saved:** the hour, the day and whether you'd held it are in your save (`'clock'`, written every 30 s, when the app covers the game and when you leave), so you come back to where you were. A new player starts at 9:30 on day 1. On its own (`pnpm dev`), `?hour=21` starts at that hour.
+- **On your own** (a solo session, or nobody else here yet), you can hold the clock and rest until dawn, noon, dusk or night. In company it runs for everyone, and a rest needs all of you (Playing together, above).
+- **The clock in the HUD** (`TimeHUD.js`): the time at the left of the purse, with a sun, a moon, or two bars while it's held. T (R3 on a gamepad, or a tap) opens a small menu under the purse. It says when Joe and Marta open or shut, and offers holding and resting, or, in company, who wants to rest until when. A dot on the clock says someone else wants to rest. Nothing about the clock is a toast: a rest dims the world for a moment instead.
+
+**The stalls keep hours** (`Orders.HOURS`): Joe from 5 am to 7 pm, Marta from 7 am to 7 pm.
+
+- Out of them the trader has gone home (`Vendor.setOpen`: not drawn), and their minimap marker greys.
+- Joe's stand has his night box. It pays 70% of his price (`NIGHT_BOX`), and his wanted list in full.
+- Marta's chandlery has diesel on the honesty box, so nobody is stranded at sea; the gear waits for her.
+- Whoever is serving you at closing time finishes with you first. In their last ¾ hour they say so in their panel.
+
+**The wanted lists** (`src/game/Orders.js`):
+
+- Each morning Joe wants two fish: one of dusk, dawn or the dark (yellowtail, jacks, tuna or tarpon) at double, and one more at half as much again. Marta buys one kind of bait fish at a set price.
+- The list comes from the day alone (`ordersFor(tradeDay)`), so everyone on one clock sees the same list and nothing is sent. It runs from Joe opening at 5 am until he opens the next morning, so a fish caught after dark counts, left in his night box.
+- Each order takes a few fish from each player (3 for Joe's, 4 for Marta's); the biggest fill it first (`GameState.quote`). What you've filled that day is saved with your progress (`orders`).
+- Joe's list is chalked on a slate on his counter (`WantedBoard.js`, one plane drawn on a canvas, sharing the records board's program), with where and when each fish bites. Your own ticks show on it.
+- It's also in Joe's and Marta's panels, and a tag in the cooler and on the catch card marks a fish someone wants. A sale says how many went to the list, in its usual line.
 
 ## The boat at night
 
@@ -130,6 +156,7 @@ The checks' browser has no graphics card, and some laptops don't either. `App.cp
 
 ## Testing
 
-- `pnpm test`: the game's logic, the waves, the reef and fish, the whale and the spray, under Node. It also checks that the baked terrain matches its generator and that every asset has a licence.
+- `pnpm test`: the game's logic, the island's day (the clock, the stalls' hours, the wanted lists), the waves, the reef and fish, the whale and the spray, under Node. It also checks that the baked terrain matches its generator and that every asset has a licence.
+- Two players on one machine: `pnpm dev`, then `/tools/two-players/?name=Robin` and `?name=Sam` in two windows of one browser (`tools/two-players/`: a stand-in for the app and its realtime room).
 - All the Spaces' checks, from its checkout: `node packages/qa-browser/src/cli.ts check ../salt-life`. Run them from an up-to-date `main` there.
 - `qa/script.json` is what the checks play.

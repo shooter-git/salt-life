@@ -9,6 +9,7 @@ import { StaleSaveError } from '@allthespaces/portal';
 const KEYS = {
 	'tidewater.save.v1': 'progress', // money, cooler, fish log, upgrades, fuel (GameState)
 	'tidewater.guide': 'guide', // tips already shown (Guide)
+	'saltlife.clock': 'clock', // (Salt Life) the island's hour and day when you left (App.saveClock)
 };
 const WRITE_AFTER_MS = 1200;
 

@@ -5,6 +5,7 @@ import { loadStallAssets, KitBuilder, LAYER, ATLAS, place, Shapes, PAT, createPl
 import { FishProps } from '../world/village/FishProps.js';
 import { FISH } from './FishTable.js';
 import { Vendor } from './Vendor.js';
+import { HOURS } from './Orders.js';
 
 // The fish buyer's stall on the beach by the pier: a weathered plank shack with a rusty tin roof,
 // a wooden fish box of crushed ice on the counter, a hanging spring scale, floats, crates, a
@@ -71,6 +72,7 @@ export class FishStand {
 			greeting: 'Let\'s see what you caught. Fair prices, cash.',
 			idle: 'Nothing to sell? The grunts are biting off the pier.',
 			character: { url: 'models/characters/joe.glb', idle: 'idle_neutral_01', talk: 'gestic_talk_relaxed_01', greet: 'wave_01' },
+			hours: HOURS.joe,
 		} );
 		scene.add( this.vendor.group );
 
