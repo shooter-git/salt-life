@@ -4,7 +4,7 @@ import { LOOKS, LOOK_NAMES } from '../together/Avatar.js';
 import { NIGHT_BOX, biteHint, orderTerms } from './Orders.js';
 import { WEEK_MUL, delivered, filled, mineOf, shareOf, weekEnds } from './WeekOrder.js';
 import { timeText } from './IslandClock.js';
-import { LB, IN, lb, pounds, inches, feet, lbOz, feetInches } from './Units.js';
+import { LB, IN, GAL, lb, pounds, inches, feet, gallons, lbOz, feetInches } from './Units.js';
 
 // (other players' names, into HTML)
 const escape = ( t ) => String( t ).replace( /[&<>"']/g, ( c ) => ( { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } )[ c ] );
@@ -264,7 +264,7 @@ export class GameHUD {
 		style.textContent = CSS;
 		document.head.append( style );
 
-		this.purse = h( 'div', 'gm-purse tw-glass', `<span class="gm-money">$0</span><span class="gm-cooler"><span class="gm-cooler-label">Cooler</span><span class="gm-cooler-bar"><span></span></span><span class="gm-cooler-kg">0 / 66 lb</span></span><span class="gm-gauge gm-fuel"><span>Fuel</span><span class="gm-cooler-bar gm-fuel-bar"><span></span></span><b class="gm-fuel-l">40 L</b></span><span class="gm-gauge gm-sonar"><span>Sonar</span><b class="gm-sonar-d">0 ft</b><span class="gm-sonar-dots"></span></span><span class="gm-gauge gm-breath"><span>Breath</span><span class="gm-cooler-bar gm-breath-bar"><span></span></span></span>` );
+		this.purse = h( 'div', 'gm-purse tw-glass', `<span class="gm-money">$0</span><span class="gm-cooler"><span class="gm-cooler-label">Cooler</span><span class="gm-cooler-bar"><span></span></span><span class="gm-cooler-kg">0 / 66 lb</span></span><span class="gm-gauge gm-fuel"><span>Fuel</span><span class="gm-cooler-bar gm-fuel-bar"><span></span></span><b class="gm-fuel-l">11 gal</b></span><span class="gm-gauge gm-sonar"><span>Sonar</span><b class="gm-sonar-d">0 ft</b><span class="gm-sonar-dots"></span></span><span class="gm-gauge gm-breath"><span>Breath</span><span class="gm-cooler-bar gm-breath-bar"><span></span></span></span>` );
 		this.breathEl = this.purse.querySelector( '.gm-breath' );
 		this.breathBar = this.purse.querySelector( '.gm-breath-bar > span' );
 		this.fuelEl = this.purse.querySelector( '.gm-fuel' );
@@ -384,7 +384,7 @@ export class GameHUD {
 		if ( fuel ) {
 
 			this.fuelBar.style.width = `${ fuel.litres / fuel.tank * 100 }%`;
-			this.fuelL.textContent = `${ fuel.litres.toFixed( 0 ) } L`;
+			this.fuelL.textContent = `${ gallons( fuel.litres ) } gal`;
 			this.fuelEl.classList.toggle( 'is-low', fuel.litres < fuel.tank * 0.15 );
 
 		}
@@ -791,7 +791,7 @@ GameHUD.prototype.renderShop = function () {
 	const g = this.game, s = g.state;
 	const v = this.vendor;
 	const missing = s.stats.fuelL - s.fuelL;
-	const fuelRow = `<div class="gm-shop-row"><span>Diesel · $${ FUEL_PRICE.toFixed( 2 ) } / L<small>Tank: ${ s.fuelL.toFixed( 0 ) } of ${ s.stats.fuelL } L</small></span>${ missing > 0.5 ? `<button class="gm-btn" data-fuel ${ s.money < FUEL_PRICE ? 'disabled' : '' }>Fill · $${ s.refuelCost() }</button>` : '<span class="gm-have">Full</span>' }</div>`;
+	const fuelRow = `<div class="gm-shop-row"><span>Diesel · $${ ( FUEL_PRICE * GAL ).toFixed( 2 ) } / gal<small>Tank: ${ gallons( s.fuelL ) } of ${ gallons( s.stats.fuelL ) } gal</small></span>${ missing > 0.5 ? `<button class="gm-btn" data-fuel ${ s.money < FUEL_PRICE ? 'disabled' : '' }>Fill · $${ s.refuelCost() }</button>` : '<span class="gm-have">Full</span>' }</div>`;
 	const bindFuel = () => {
 
 		const f = this.stand.querySelector( '[data-fuel]' );

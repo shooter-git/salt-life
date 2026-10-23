@@ -21,7 +21,7 @@ import { delivered, filled, owed, weekEnds } from './WeekOrder.js';
 import { Minimap } from './Minimap.js';
 import { Guide } from './Guide.js';
 import { Speargun, groundHit } from './Speargun.js';
-import { lb, feet } from './Units.js';
+import { lb, feet, gallons } from './Units.js';
 import { SPECIES } from '../world/fish/FishSpecies.js';
 
 // how long the catch card stays up unless dismissed (ms)
@@ -177,7 +177,7 @@ export class Game {
 		if ( l > 0 ) {
 
 			this._fuelOut = false;
-			this.toast( `Filled up · ${ l.toFixed( 0 ) } L` );
+			this.toast( `Filled up · ${ gallons( l ) } gal` );
 
 		}
 

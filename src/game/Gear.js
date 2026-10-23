@@ -38,9 +38,9 @@ export const UPGRADES = {
 		{ cost: 400, label: 'Insulated fish hold', holdKg: 160 },
 	] },
 	fuel: { name: 'Fuel tank', levels: [
-		{ cost: 0, label: '40 L tank', fuelL: 40 },
-		{ cost: 150, label: '80 L tank', fuelL: 80 },
-		{ cost: 380, label: '150 L tank', fuelL: 150 },
+		{ cost: 0, label: '11-gallon tank', fuelL: 40 },
+		{ cost: 150, label: '21-gallon tank', fuelL: 80 },
+		{ cost: 380, label: '40-gallon tank', fuelL: 150 },
 	] },
 	engine: { name: 'Engine', levels: [
 		{ cost: 0, label: 'Tired diesel', speedMul: 1 },
