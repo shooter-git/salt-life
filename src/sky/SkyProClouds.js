@@ -28,7 +28,9 @@ import { Cirrus, NoCirrus } from './Clouds.js';
 //     (high: 1280 x 720, mid: 960 x 540 pixels). `low` has no per-pixel march at all: the panorama
 //     (1/64 of it marched per frame, sampled bicubically) is the view's clouds; its first panorama is
 //     made at that pace too (64 frames, none of them heavier than the rest), and it has no cirrus.
-//   - not ported: the cloud shadow map on the ground (the WebGL materials don't sample it).
+//   - the cloud shadow map on the ground (high only): as Tidewater's, 256² over 12 km around the camera,
+//     a quarter of its rows marched a frame (all of them when it moves on); the lit materials read it
+//     through materials/CloudShadows.js.
 //
 //   clouds.sampleUniforms     what a material samples the clouds with (CLOUDS_GLSL):
 //     vec4 cloudsSampleView( vec3 dir )   ( rgb in-scattered radiance, a transmittance ), main view
@@ -38,6 +40,8 @@ import { Cirrus, NoCirrus } from './Clouds.js';
 //   clouds.update( dt, camera, keyColor, nightSky, night, skyIrradiance ) (Tidewater's frame values;
 //     keyColor: the moon's light at night)
 //   clouds.resolutionScale, clouds.resetHistory(), clouds.invalidate()
+//   clouds.shadowMap (high: a render target, else null), clouds.shadowArea { value } ( centre x, z, size m,
+//     strength ): the ground's shadow along the key light (1 = clear)
 
 const DEG = Math.PI / 180;
 
@@ -68,7 +72,7 @@ const PRESET = {
 const QUALITY = {
 	high: {
 		view: true, historyDivisor: 2, historyBudget: 1280 * 720, lattice: 4, maxSteps: 256, lightTaps: 6, stepMeters: 25, fullLightingAlpha: 0.5, lightReuseSteps: 3, historyWeight: 0.9,
-		pano: [ 512, 160 ], panoLattice: 4, panoSteps: 128, panoLightTaps: 6, weather: 1024, fibres: 1024,
+		pano: [ 512, 160 ], panoLattice: 4, panoSteps: 128, panoLightTaps: 6, weather: 1024, fibres: 1024, shadow: true,
 	},
 	mid: {
 		view: true, historyDivisor: 2, historyBudget: 960 * 540, lattice: 4, maxSteps: 160, lightTaps: 4, stepMeters: 30, fullLightingAlpha: 0.45, lightReuseSteps: 3, historyWeight: 0.9,
@@ -760,6 +764,30 @@ vec4 cloudsSampleView( vec3 dir ) {
 
 // ------------------------------------------------------------------ the clouds
 
+// the clouds' shadow on the ground (sea level) under each texel: the optical depth up the key light
+// through the cloud layer (Tidewater's shadow kernel)
+const SHADOW_RES = 256;
+const SHADOW_SIZE = 12000; // m
+const SHADOW_PASS = '#ifndef PI\n#define PI 3.141592653589793\n#endif\n' + UNIFORMS_GLSL + CORE_GLSL + /* glsl */`
+uniform vec4 scShadowArea; // xy centre (world xz), z size (m)
+void main() {
+	vec2 xz = scShadowArea.xy + ( gl_FragCoord.xy / ${ f( SHADOW_RES ) } - 0.5 ) * scShadowArea.z;
+	vec3 L = scKeyDir;
+	float ly = max( L.y, 0.08 );
+	float t0 = scsShell.x / ly, t1 = ( scsShell.x + scsShell.y ) / ly;
+	float dt = ( t1 - t0 ) / 16.0;
+	float tau = 0.0;
+	for ( int i = 0; i < 16; i ++ ) {
+		float t = t0 + ( float( i ) + 0.5 ) * dt;
+		vec3 p = vec3( xz.x, 0.0, xz.y ) + vec3( L.x, ly, L.z ) * t;
+		tau += scLightDensity( p, scsShell.w, vec2( 2.0 ), false ) * scsShell.z * dt;
+		if ( tau > 12.0 ) break;
+	}
+	// multiple scattering lets some light through even thick cloud (as the view's octaves do)
+	float T = exp( - tau ) * 0.8 + exp( - tau * 0.25 ) * 0.2;
+	gl_FragColor = vec4( T, 0.0, 0.0, 1.0 );
+}`;
+
 export class SkyProClouds {
 
 	constructor( renderer, atmosphere, tier = 'high' ) {
@@ -850,6 +878,12 @@ export class SkyProClouds {
 
 		this._pp = 0;
 
+		// (high) the clouds' shadow on the ground
+		this.shadowMap = q.shadow ? floatTarget( SHADOW_RES, SHADOW_RES, { format: THREE.RedFormat } ) : null;
+		this.shadowArea = { value: new THREE.Vector4( 0, 0, SHADOW_SIZE, 0 ) };
+		this._shadowRow = 0;
+		this._shadowMade = false;
+
 		// ---- sampling (every consumer: the sky, its environment)
 		this.sampleUniforms = {
 			cloudsPanorama: { value: this.panorama.texture },
@@ -915,6 +949,13 @@ export class SkyProClouds {
 				scPreviousColor: { value: null }, scPreviousMeta: { value: null },
 			} );
 			this.passList.push( this.tracePass, this.resolvePass );
+
+		}
+
+		if ( this.shadowMap ) {
+
+			this.shadowPass = new Pass( SHADOW_PASS, { ...U, scShadowArea: this.shadowArea } );
+			this.passList.push( this.shadowPass );
 
 		}
 
@@ -1175,6 +1216,7 @@ export class SkyProClouds {
 
 		// fade in once the first panorama is complete
 		if ( this.panoWarm === 0 ) this.fade.value = Math.min( 1, this.fade.value + dt * 2 );
+		if ( this.shadowMap ) this._shadow( camera );
 
 		const underwater = G.cameraUnderwater.value > 0.5;
 		if ( ! q.view || underwater ) {
@@ -1246,6 +1288,30 @@ export class SkyProClouds {
 
 	}
 
+	// (high) the shadow map: a quarter of its rows a frame around a centre snapped to 4 texels; all of
+	// them when the centre moves on (or the first time). It fades in with the clouds.
+	_shadow( camera ) {
+
+		const A = this.shadowArea.value, t = this.shadowMap, cell = SHADOW_SIZE / SHADOW_RES * 4;
+		const cx = Math.round( camera.position.x / cell ) * cell, cz = Math.round( camera.position.z / cell ) * cell;
+		const all = ! this._shadowMade || cx !== A.x || cz !== A.y;
+		A.set( cx, cz, SHADOW_SIZE, 0.85 * this.fade.value );
+		if ( ! all ) {
+
+			const rows = SHADOW_RES / 4;
+			t.scissor.set( 0, this._shadowRow * rows, SHADOW_RES, rows );
+			t.scissorTest = true;
+			this._shadowRow = ( this._shadowRow + 1 ) % 4;
+
+		}
+
+		this.shadowPass.render( this.renderer, t, false );
+		t.scissorTest = false;
+		this._shadowMade = true;
+		this.passes ++;
+
+	}
+
 	resetHistory() {
 
 		this.historyValid = false;
@@ -1265,13 +1331,14 @@ export class SkyProClouds {
 		const q = this.quality;
 		let b = NOISE_RES ** 3 * 4 * 8 / 7 + q.weather ** 2 + BOUNDS_RES ** 2 + q.pano[ 0 ] * q.pano[ 1 ] * 18 + this.cirrus.memory;
 		if ( q.view ) b += this.sourceWidth * this.sourceHeight * 12 + this.historyWidth * this.historyHeight * 12 * 2;
+		if ( this.shadowMap ) b += SHADOW_RES * SHADOW_RES * 2;
 		return Math.round( b );
 
 	}
 
 	dispose() {
 
-		for ( const t of [ this.noise, this.weatherMap, this.weatherBounds, ...this.panoramas, this.panoSlot, this.source, ...( this.history || [] ) ] ) if ( t ) t.dispose();
+		for ( const t of [ this.noise, this.weatherMap, this.weatherBounds, ...this.panoramas, this.panoSlot, this.source, ...( this.history || [] ), this.shadowMap ] ) if ( t ) t.dispose();
 		for ( const p of this.passList ) p.dispose();
 		this.cirrus.dispose();
 

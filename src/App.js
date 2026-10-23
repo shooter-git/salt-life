@@ -28,6 +28,7 @@ import { DAY_RATE, START_HOUR, advance } from './game/IslandClock.js';
 import { FishStand, STAND } from './game/FishStand.js';
 import { Chandlery, CHANDLERY } from './game/Chandlery.js';
 import { LocalLights, addBoatLights, addVillageLights, useLocalLights, holdLocalLights } from './materials/LocalLights.js';
+import { cloudShadows, useCloudShadows } from './materials/CloudShadows.js';
 import { Wildlife } from './world/wildlife/Wildlife.js';
 import { Debris } from './world/Debris.js';
 import { Reef } from './world/Reef.js';
@@ -174,6 +175,10 @@ export class App {
 		// ---------------------------------------------------------------- sky
 		await progress( 0.4, 'Lighting the sky' );
 		this.sky = new Sky( { scene, renderer, tier } );
+		// (high) the clouds' shadows on the island and the sea: lightUp gives them to the lit materials,
+		// so before anything is lit (with a graphics card the plants are lit early in loading)
+		this.cloudShadows = !! this.sky.clouds.shadowMap;
+		if ( this.cloudShadows ) cloudShadows.attach( this.sky.clouds );
 		// the eye adapts at dusk and at night: the whole scene's exposure follows (Tidewater's auto exposure)
 		this.sky.sceneAdaptation = true;
 		if ( SHADOW[ tier ] ) {
@@ -235,6 +240,7 @@ export class App {
 		this.shore = new ShoreWaves( { field: this.shoreField } );
 		this.query = new WaterQuery( this.waves, this.terrainData, this.shore );
 		this.water = new WaterSurface( { scene, waves: this.waves, terrain: this.terrain, shore: this.shore, tier } );
+		if ( this.cloudShadows ) useCloudShadows( this.water.material );
 
 		// ---------------------------------------------------------------- boat and player
 		await progress( 0.7, 'Mooring the boat' );
@@ -596,6 +602,7 @@ export class App {
 		this.boat.update( dt );
 		this.boatLamps.set( { underway: this.boatCtl.driven || ! this.boatCtl.moored, spot: this.searchlight } );
 		this.localLights.update( this.camera, dt );
+		cloudShadows.update( this.camera );
 		this.wake.update( dt );
 		this.updateAudio( dt );
 
@@ -871,6 +878,7 @@ export class App {
 				if ( m.name === 'Water' || m.name === 'fishingLine' ) continue;
 				lit.add( m );
 				useLocalLights( m, { cheap } );
+				if ( this.cloudShadows ) useCloudShadows( m );
 
 			}
 

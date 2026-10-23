@@ -41,7 +41,7 @@ Salt Life is [Tidewater](https://github.com/dgreenheck/tidewater) rebuilt as an 
 | `src/world` | The island: terrain, village, pier, rocks, plants, debris, reef and fish, wildlife, the whale, the boat model, colliders, the layout (`WorldLayout`) |
 | `src/ocean` | The sea: Gerstner waves, shore waves, the water surface and its detail, the wake, the CPU water queries |
 | `src/sky` | Atmosphere, clouds, the sun and moon, the environment map |
-| `src/materials` | Shader pieces shared by many materials: local lights at night, height haze (three's fog chunks, replaced), underwater light, LOD fades |
+| `src/materials` | Shader pieces shared by many materials: local lights at night, the clouds' shadows (high), height haze (three's fog chunks, replaced), underwater light, LOD fades |
 | `src/player` | The player, the boat's physics, the bow spray |
 | `src/game` | The fishing game: the rod, bites, the fight, the catch card, the cooler and log, the stalls, Joe and Marta, the HUD, the minimap, the guide |
 | `src/fx`, `src/post` | Spray, marine snow, air motes; the high tier's post chain and sun shafts |
@@ -137,7 +137,7 @@ Everyone keeps their own progress and their own fish.
 | Lights at night | 4, diffuse only off the boat | 8 | 8 |
 | Reef, fish | shorter range, fewer schools | fewer schools | Tidewater's |
 | Spray particles | 1k | 2k | 4k |
-| Extras | | air motes | air motes, sun shafts, refraction, bloom |
+| Extras | | air motes | air motes, sun shafts, refraction, bloom, the clouds' shadows |
 
 The checks hold the low tier to its budgets: 150 draw calls, 300k triangles, 128 MB of textures and 150 MB of script memory. Mid stays under 1M triangles and high under 3M.
 

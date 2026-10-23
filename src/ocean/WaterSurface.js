@@ -209,9 +209,14 @@ ${ SH ? /* glsl */`
 	// light through the thin, clear face of a plunging wave and its crest: it glows turquoise
 	float glow = clamp( vSurf.y, 0.0, 1.0 );
 	body = mix( body, ${ rgb( 0.25, 0.85, 0.75 ) } * 1.35, glow * 0.7 );
-	vec3 waterLight = waterSunColor * ( max( waterSunDir.y, 0.0 ) * 0.22 ) + waterSky * 0.55;
+#ifdef CLOUD_SHADOWS
+	float cloudSh = cloudShadowXZ( vWater.xz ); // (high: under a cloud the sun's share of the light dims)
+#else
+	float cloudSh = 1.0;
+#endif
+	vec3 waterLight = waterSunColor * ( max( waterSunDir.y, 0.0 ) * 0.22 * cloudSh ) + waterSky * 0.55;
 	// foam is a white surface on top: lit like the sand (the sun by its height in the sky, the sky's fill)
-	vec3 foamLight = waterSunColor * max( waterSunDir.y, 0.0 ) + waterSky * 1.2 + 0.02;
+	vec3 foamLight = waterSunColor * ( max( waterSunDir.y, 0.0 ) * cloudSh ) + waterSky * 1.2 + 0.02;
 	vec3 lampSum = vec3( 0.0 );
 #ifdef LOCAL_LIGHTS_WATER
 	// lamps and searchlights on the sea (LocalLights): their light scattered back up from inside the
