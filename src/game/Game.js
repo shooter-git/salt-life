@@ -12,11 +12,19 @@ import { CatchDisplay } from './CatchDisplay.js';
 import { FishPortrait } from './FishPortrait.js';
 import { UPGRADES, fuelBurn } from './Gear.js';
 import { GameHUD } from './GameHUD.js';
+import { TimeHUD } from './TimeHUD.js';
+import { isOpen, timeText } from './IslandClock.js';
+import { NIGHT_BOX, ordersFor, tradeDay } from './Orders.js';
+import { WantedBoard } from './WantedBoard.js';
 import { Minimap } from './Minimap.js';
 import { Guide } from './Guide.js';
 
 // how long the catch card stays up unless dismissed (ms)
 const CATCH_CARD_MS = 9000;
+
+// the sale's one line ('Sold 3 fish for $86 · 2 on the wanted list')
+const saleText = ( r, vendor ) => vendor && ! vendor.open ? `Left ${ r.count } fish in the night box · $${ r.total }`
+	: `Sold ${ r.count } fish for $${ r.total }${ r.wanted ? ` · ${ r.wanted } on the wanted list` : '' }`;
 
 // The fishing game on top of the world:
 //   R          take out / put away the rod (on foot, on the pier, on the boat's deck)
@@ -43,6 +51,14 @@ export class Game {
 		this.landing = null; // { species, kg } while the caught fish swings in view
 		this.chandlery = app.chandlery || new Chandlery( { scene: app.scene, terrain: app.terrainData, colliders: app.colliders, material: this.stand.material } );
 		this.vendors = [ this.stand.vendor, this.chandlery.vendor ].filter( Boolean );
+		// (Salt Life) the day's wanted lists (Orders.js), chalked on a slate on Joe's counter. On a device
+		// that draws on its CPU it goes up after the start, with the records board (App.prepareLate)
+		this.orders = [];
+		this.tradeDay = null;
+		this.wanted = new WantedBoard( { terrain: app.terrainData } );
+		app.lightUp( this.wanted.mesh );
+		if ( ! app.cpuGL ) app.scene.add( this.wanted.mesh );
+		this.state.onChange( () => this.drawWanted() );
 		// boat upgrades: engine (thrust / top speed) and deck floodlights for night fishing
 		const b = app.boatCtl;
 		this._engineBase = { maxThrust: b.maxThrust, pitchSpeed: b.pitchSpeed };
@@ -149,10 +165,13 @@ export class Game {
 
 		const app = this.app, p = app.player, inp = app.input, rod = this.rod;
 		this._cardDismissed = false;
+		this.updateDay();
 		if ( ! this.hud && app.ui && app.ui.ui && typeof document !== 'undefined' && document.head ) {
 
 			const ui = app.ui.ui;
 			this.hud = new GameHUD( ui, this );
+			// (Salt Life) the island's clock, at the left of the purse (T: its menu)
+			this.time = new TimeHUD( this, this.hud.purse, ui.root );
 			// the minimap (lower right) and the first-play guide (intro, one-time tips; replay with H)
 			this.minimap = new Minimap( ui.hud || ui.root, this );
 			this.guide = new Guide( ui, this, this.minimap );
@@ -301,6 +320,7 @@ export class Game {
 			bite: this.bite && this.bite.phase === 'take',
 			aiming: rod.equipped,
 		} );
+		if ( this.time ) this.time.update( dt );
 		if ( this.minimap ) this.minimap.update( dt );
 		if ( this.guide ) this.guide.update( dt );
 
@@ -378,17 +398,21 @@ export class Game {
 	updateVendors( inp, p ) {
 
 		const hud = this.hud;
+		// (Salt Life) the traders keep hours: out of them they've gone home, and their stall offers what it
+		// does without them (Joe's night box, diesel on Marta's honesty box). Whoever is serving you when
+		// it's time finishes with you first
+		for ( const v of this.vendors ) v.setOpen( isOpen( v.hours, this.hour ) || ( v.open && !! hud && hud.standOpen && hud.vendor === v ) );
 		let near = null;
 		if ( p.mode === 'walk' ) for ( const v of this.vendors ) if ( v.inRange( p.position ) ) near = v;
 		for ( const v of this.vendors ) v.talking = !! ( hud && hud.standOpen && hud.vendor === v );
 		if ( hud && hud.standOpen && ( ! near || near !== hud.vendor ) ) hud.closeStand();
 		if ( ! near || this.fight || this._cardDismissed || ( hud && hud.catchOpen ) ) return;
-		if ( ! p.prompt ) p.prompt = { key: 'E', text: hud && hud.standOpen ? 'Leave' : `Talk to ${ near.name.split( ' ·' )[ 0 ] }` };
+		if ( ! p.prompt ) p.prompt = { key: 'E', text: hud && hud.standOpen ? 'Leave' : this.vendorPrompt( near ) };
 		if ( inp.hit( 'KeyE' ) ) {
 
 			if ( ! hud ) {
 
-				if ( near.kind === 'buyer' ) this.sellAll(); // headless: straight sale
+				if ( near.kind === 'buyer' ) this.sellAll( near ); // headless: straight sale
 
 			} else if ( hud.standOpen ) hud.closeStand();
 			else hud.openStand( near );
@@ -397,19 +421,58 @@ export class Game {
 
 	}
 
-	sellAll() {
+	// what E does at a stall: talk to them, or (they've gone home) what's left out
+	vendorPrompt( v ) {
 
-		const r = this.state.sell();
-		if ( r.count ) this.toast( `Sold ${ r.count } fish for $${ r.total }` );
+		const name = v.name.split( ' ·' )[ 0 ];
+		if ( v.open ) return `Talk to ${ name }`;
+		const back = timeText( v.hours[ 0 ], this.app.portal && this.app.portal.locale, 60 );
+		return v.kind === 'shop' ? `Diesel on the honesty box   ·   ${ name }'s back at ${ back }` : `${ name }'s night box   ·   he's back at ${ back }`;
+
+	}
+
+	// (Salt Life) a new wanted list each morning, when Joe opens (Orders.tradeDay)
+	updateDay() {
+
+		const s = this.app.settings;
+		const day = tradeDay( s.timeOfDay, s.day );
+		if ( day === this.tradeDay ) return;
+		this.tradeDay = day;
+		this.orders = ordersFor( day );
+		this.drawWanted();
+		if ( this.hud ) this.hud.refresh();
+
+	}
+
+	drawWanted() {
+
+		const o = this.state.orders;
+		this.wanted.draw( this.orders, o.day === this.tradeDay ? o.filled : {} );
+
+	}
+
+	// what selling to `vendor` is on (GameState.quote): Joe's price and his wanted list; his night box when
+	// he's gone home (less, but the list in full); Marta: only the bait she's after
+	saleTerms( vendor ) {
+
+		const who = vendor && vendor.kind === 'shop' ? 'marta' : 'joe';
+		return { who, orders: this.orders, day: this.tradeDay, rate: who === 'joe' && vendor && ! vendor.open ? NIGHT_BOX : 1 };
+
+	}
+
+	sellAll( vendor = this.hud && this.hud.vendor ) {
+
+		const r = this.state.sell( null, this.saleTerms( vendor ) );
+		if ( r.count ) this.toast( saleText( r, vendor ) );
 		if ( this.app.audio && this.app.audio.coin ) this.app.audio.coin();
 		return r;
 
 	}
 
-	sell( ids ) {
+	sell( ids, vendor = this.hud && this.hud.vendor ) {
 
-		const r = this.state.sell( ids );
-		if ( r.count ) this.toast( `Sold for $${ r.total }` );
+		const r = this.state.sell( ids, this.saleTerms( vendor ) );
+		if ( r.count ) this.toast( saleText( r, vendor ) );
 		return r;
 
 	}
@@ -542,6 +605,7 @@ export class Game {
 
 			const entry = this.state.addFish( f.species, f.kg, this.hour );
 			const info = this.state.lastCatch;
+			info.wanted = entry ? this.wantedFor( entry ) : null; // (Salt Life) on today's wanted list
 			// (Salt Life) the others hear of it; the island's records (together/): the card says when
 			// it's the heaviest of its kind anyone here has landed
 			if ( this.app.together ) {
@@ -587,6 +651,15 @@ export class Game {
 		this.display.hide();
 		if ( this.hud && this.hud.catchOpen ) this.hud.hideCatch();
 		if ( this.rod.state === 'landing' ) this.rod.setState( 'idle' );
+
+	}
+
+	// who's after a fish in the cooler today, if the wanted list would take it (the catch card), or null
+	wantedFor( fish ) {
+
+		const o = this.orders.find( ( x ) => x.species === fish.species );
+		if ( ! o || ! this.state.wantedIds( this.orders, this.tradeDay ).has( fish.id ) ) return null;
+		return { order: o, who: o.who === 'marta' ? 'Marta' : 'Joe' };
 
 	}
 
