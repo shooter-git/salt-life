@@ -178,7 +178,8 @@ html:has(.gm-panel.is-open) .hud-hint { visibility: hidden; }
 .gm-catch h2 { margin: 0; font-family: 'Caveat Brush', 'Kalam', var(--tw-font); font-weight: 400; font-size: clamp(38px, 6.2vw, 92px); line-height: 1; letter-spacing: 0.01em;
 	color: #fbf1dc; text-shadow: 0 2px 0 rgba(0, 0, 0, 0.35), 0 8px 30px rgba(0, 0, 0, 0.45); }
 .gm-catch-sci { margin-top: calc(4 * var(--tw-u)); font-family: 'Kalam', var(--tw-font); font-style: italic; color: rgba(244, 234, 214, 0.66); font-size: clamp(13px, 1.3vw, 19px); }
-.gm-catch-stage { position: relative; width: min(94vw, 1400px, calc(46vh * 2.4)); aspect-ratio: 2.4 / 1; }
+/* (the fish's stage gives way on a short window, so the name, the numbers and "continue" stay on screen) */
+.gm-catch-stage { position: relative; width: min(94vw, 1400px, calc(min(46vh, 100vh - 360px) * 2.4)); aspect-ratio: 2.4 / 1; }
 .gm-catch-stage canvas { position: absolute; inset: 0; width: 100%; height: 100%;
 	-webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 14%, #000 86%, transparent 100%); mask-image: linear-gradient(90deg, transparent 0%, #000 14%, #000 86%, transparent 100%); }
 /* the card owns the screen: the minimap and the settings rail step aside */
