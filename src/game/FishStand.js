@@ -338,12 +338,13 @@ function buildStallKit( assets ) {
 
 }
 
-// A-frame chalkboard, its feet at the matrix origin, the price side facing +z
+// A-frame chalkboard standing on the matrix origin, the price side facing +z: two panels leaning
+// together, meeting at the top (their feet 2 × 0.88 sin 0.24 m apart)
 function chalkboard( K, m, wood ) {
 
 	const panel = ( tilt, face ) => {
 
-		const pm = m.clone().multiply( place( 0, 0, 0, face ? 0 : Math.PI, tilt ) );
+		const pm = m.clone().multiply( place( 0, 0, 0, face ? 0 : Math.PI ) ).multiply( place( 0, 0, 0.88 * Math.sin( - tilt ), 0, tilt ) );
 		// frame
 		K.box( 0.62, 0.035, 0.025, pm.clone().multiply( place( 0, 0.86, 0 ) ), { ...wood, along: 'x' } );
 		K.box( 0.62, 0.035, 0.025, pm.clone().multiply( place( 0, 0.05, 0 ) ), { ...wood, along: 'x' } );
