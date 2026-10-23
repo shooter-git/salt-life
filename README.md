@@ -33,6 +33,15 @@ Done, M0 to M6:
   - the group keeps a board of the island's records at the fish stand;
   - everyone shares one time of day.
 
+The island's day:
+- the day runs on its own, about half an hour from dawn to dawn, and quickly through the dark;
+- on your own you can hold the clock or rest until dawn, noon, dusk or night (T, or tap the time);
+  with others, time runs for everyone and you rest once you all choose the same;
+- Joe and Marta keep hours; when they've gone home, Joe's night box takes your catch and Marta's
+  honesty box has diesel;
+- each morning Joe chalks the fish he's after on his counter and pays over the odds for them, and
+  Marta buys one kind of bait fish.
+
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how the game is put together.
 
 | Milestone | What it brings |
