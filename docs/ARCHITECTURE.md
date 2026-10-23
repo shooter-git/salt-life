@@ -157,5 +157,6 @@ The checks' browser has no graphics card, and some laptops don't either. `App.cp
 ## Testing
 
 - `pnpm test`: the game's logic, the island's day (the clock, the stalls' hours, the wanted lists), the waves, the reef and fish, the whale and the spray, under Node. It also checks that the baked terrain matches its generator and that every asset has a licence.
+- Two players on one machine: `pnpm dev`, then `/tools/two-players/?name=Robin` and `?name=Sam` in two windows of one browser (`tools/two-players/`: a stand-in for the app and its realtime room).
 - All the Spaces' checks, from its checkout: `node packages/qa-browser/src/cli.ts check ../salt-life`. Run them from an up-to-date `main` there.
 - `qa/script.json` is what the checks play.
