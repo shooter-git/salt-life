@@ -6,6 +6,7 @@ import { FishProps } from '../world/village/FishProps.js';
 import { FISH } from './FishTable.js';
 import { Vendor } from './Vendor.js';
 import { HOURS } from './Orders.js';
+import { PriceBoard } from './PriceBoard.js';
 
 // The fish buyer's stall on the beach by the pier: a weathered plank shack with a rusty tin roof,
 // a wooden fish box of crushed ice on the counter, a hanging spring scale, floats, crates, a
@@ -19,6 +20,7 @@ export const STAND = { x: 49.9, z: - 74.6, yaw: 1.45 }; // beside the boardwalk 
 
 const STALL_FLOOR = 0.06; // top of the stall's plank floor (local y)
 const ICE_TOP = 1.27; // top of the ice in the chest on the counter (local y)
+const PRICES = place( 1.95, 0, 1.45, - 0.35 ); // where the price chalkboard stands, out by the front right corner (on the floor's level)
 
 export class FishStand {
 
@@ -48,10 +50,23 @@ export class FishStand {
 
 		} else this.ready = loadStallAssets( tier ).then( ( a ) => {
 
-			const mesh = new Mesh( buildStallKit( a ), a.material );
+			// the price board stands on the sand, which rises 12-19 cm from the stall towards it: its
+			// lowest foot on the sand (none in the air)
+			const feet = [ [ - 0.29, 0.21 ], [ 0.29, 0.21 ], [ - 0.29, - 0.21 ], [ 0.29, - 0.21 ] ].map( ( [ fx, fz ] ) => {
+
+				const w = new Vector3( fx, 0, fz ).applyMatrix4( PRICES ).applyAxisAngle( new Vector3( 0, 1, 0 ), STAND.yaw );
+				return terrain.heightAt( STAND.x + w.x, STAND.z + w.z );
+
+			} );
+			const board = PRICES.clone().premultiply( new Matrix4().makeTranslation( 0, Math.min( ...feet ) - y, 0 ) );
+			const mesh = new Mesh( buildStallKit( a, board ), a.material );
 			mesh.name = 'FishStandStall';
 			mesh.castShadow = tier === 'high'; // (its scanned props: ~40-50k triangles in the shadow pass, under the stall's roof)
 			this.group.add( mesh );
+			// the prices, chalked over the board's slate
+			this.prices = new PriceBoard();
+			this.prices.mesh.applyMatrix4( chalkPanel( board, true ).multiply( place( 0, 0.455, 0.009 ) ) );
+			this.group.add( this.prices.mesh );
 
 		} ).catch( ( e ) => {
 
@@ -224,7 +239,8 @@ function corrugated( w, l, ribs ) {
 
 // Local frame as above: 2.6 m wide (x), 1.6 m deep (z), counter and customers at +z, roof sloping
 // back. Joe stands on the floor between the shelf (z -0.78..-0.48) and the counter (top from 0.58).
-function buildStallKit( assets ) {
+// board: where the price chalkboard stands (its feet on the sand)
+function buildStallKit( assets, board ) {
 
 	const K = new KitBuilder( assets, 7 );
 	const { WALL, DECK, TIN, SIGN, CHALK, PLAIN, FLOAT, DIAL } = LAYER;
@@ -333,29 +349,34 @@ function buildStallKit( assets ) {
 	K.prop( 'wooden_crate_01', place( - 1.84, 0.335, 0.28, Math.PI / 2 - 0.1 ), { detail: true } );
 	K.prop( 'wooden_crate_02', place( 1.8, 0, - 0.2, 0.03 ) );
 	K.prop( 'wooden_bucket_01', place( 1.55, 0, 1.05, 0.7 ) );
-	chalkboard( K, place( 1.95, 0, 1.45, - 0.35 ), { layer: DECK, color: tone() } );
+	chalkboard( K, board, { layer: DECK, color: tone() } );
 	return K.build();
 
 }
 
-// A-frame chalkboard standing on the matrix origin, the price side facing +z: two panels leaning
-// together, meeting at the top (their feet 2 × 0.88 sin 0.24 m apart)
+// One panel of an A-frame chalkboard standing on m (face: the front one, facing +z), leaning in to
+// meet the other at the top (their feet 2 × 0.88 sin 0.24 m apart)
+function chalkPanel( m, face ) {
+
+	return m.clone().multiply( place( 0, 0, 0, face ? 0 : Math.PI ) ).multiply( place( 0, 0, 0.88 * Math.sin( 0.24 ), 0, - 0.24 ) );
+
+}
+
+// A-frame chalkboard standing on the matrix origin, the price side facing +z. Its slates are blank:
+// the prices are chalked on a canvas over the front one (PriceBoard)
 function chalkboard( K, m, wood ) {
 
-	const panel = ( tilt, face ) => {
+	for ( const face of [ true, false ] ) {
 
-		const pm = m.clone().multiply( place( 0, 0, 0, face ? 0 : Math.PI ) ).multiply( place( 0, 0, 0.88 * Math.sin( - tilt ), 0, tilt ) );
+		const pm = chalkPanel( m, face );
 		// frame
 		K.box( 0.62, 0.035, 0.025, pm.clone().multiply( place( 0, 0.86, 0 ) ), { ...wood, along: 'x' } );
 		K.box( 0.62, 0.035, 0.025, pm.clone().multiply( place( 0, 0.05, 0 ) ), { ...wood, along: 'x' } );
 		for ( const s of [ - 1, 1 ] ) K.box( 0.035, 0.88, 0.025, pm.clone().multiply( place( s * 0.29, 0.44, 0 ) ), { ...wood, along: 'y' } );
-		// slate (both sides: the back panel shows a blank board)
-		K.box( 0.55, 0.78, 0.012, pm.clone().multiply( place( 0, 0.455, 0 ) ), { layer: LAYER.CHALK, uv2Rect: face ? ATLAS.prices : [ 0.99, 0.99, 1.0, 1.0 ] } );
+		// slate
+		K.box( 0.55, 0.78, 0.012, pm.clone().multiply( place( 0, 0.455, 0 ) ), { layer: LAYER.CHALK, uv2Rect: [ 0.99, 0.99, 1.0, 1.0 ] } );
 
-	};
-
-	panel( - 0.24, true );
-	panel( - 0.24, false );
+	}
 
 }
 
