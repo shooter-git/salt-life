@@ -4,9 +4,10 @@ import { Avatar, LOOKS, lookOf } from './Avatar.js';
 import { figureStandIn } from './Figure.js';
 import { RecordsBoard } from './RecordsBoard.js';
 import { BoatLamps } from '../world/boat/BoatLamps.js';
-import { FISH, fishLengthCm } from '../game/FishTable.js';
+import { FISH, fishLengthCm, isTrophy } from '../game/FishTable.js';
 import { ROD_L, SEAT_Y } from '../game/FishingRod.js';
 import { DAY_RATE, REST, clockAt, restTo } from '../game/IslandClock.js';
+import { weekOrder, weekNumber, tallyFor, deliver, delivered } from '../game/WeekOrder.js';
 import { WORLD } from '../world/WorldLayout.js';
 
 // (Salt Life) Playing together: whoever else is on the island (portal.session, All the Spaces), drawn
@@ -17,11 +18,14 @@ import { WORLD } from '../world/WorldLayout.js';
 //  - the time of day: one clock for everyone (the shared value 'clock': { at, hour, day, speed }, see
 //    game/IslandClock.js), which the host sets if there's none. On your own you can hold it and rest
 //    until later; in company it runs, and a rest needs everyone here to want it ('rest.<id>')
-//  - catches: a message to the others ('catch'), who see a toast, the fish on your line and you
-//    cheering
+//  - catches: a message to the others ('catch'), who see the fish on your line and you cheering; a
+//    toast only for one worth hearing of (an island record or a trophy-sized fish)
 //  - the island's records: each species' heaviest fish anyone in the group has landed, who and when,
 //    in the group's shared save ('records': kept between visits), chalked on a board at Joe's stand
 //    (RecordsBoard) and listed in the cooler
+//  - the week's order (game/WeekOrder.js): what each of the group has brought toward it, in the
+//    group's shared save ('weekOrder'); a sale toward it brings that up to date and tells the others
+//    ('week', with the tally)
 // Riding along: next to someone's boat while they're aboard, you board theirs (TheirBoat: the boat's
 // shape at their boat's pose, for the Player) and walk its deck while they drive; your poses say whose
 // boat you're on ('R': the deck position is in its frame), so everyone sees you aboard it.
@@ -33,6 +37,7 @@ import { WORLD } from '../world/WorldLayout.js';
 //   you ride);  t.update( dt )  (after the game: the camera is placed)
 //   t.syncClock( settings )  (each frame: the time of day from the shared clock)
 //   t.alone  t.holdClock( held )  t.rest( 'dawn' )  t.restWishes()  (the clock's menu: game/TimeHUD.js)
+//   t.week()  (this week's order's tally)  t.deliver( kg )  (a sale toward it)
 
 const SEND = 0.1; // s between poses
 const DELAY = 0.15; // s behind the newest pose: room to ease between two
@@ -153,6 +158,7 @@ export class Together {
 		} );
 		s.on( 'catch', ( body, from ) => this._theirCatch( body, from ) );
 		s.on( 'horn', ( on, from ) => this._theirHorn( on, from ) );
+		s.on( 'week', ( tally ) => this._setWeek( tally ) );
 
 		// the records: the group's, read now and again when someone breaks one
 		this.records = {};
@@ -161,6 +167,55 @@ export class Together {
 		// (on a device that draws on its CPU, after the start: its shader is load time)
 		if ( this.ready ) app.scene.add( this.board.group );
 		this._readRecords();
+
+		// the week's order: the group's tally, read now and sent on whenever someone brings fish toward it
+		this._week = null;
+		this._readWeek();
+
+	}
+
+	// ---- the week's order
+
+	// this week's tally (a fresh one when the week has turned since it was read). The same object until
+	// it changes (the game watches for that: Game.update); not to be changed
+	week() {
+
+		const n = weekNumber( Date.now() ), c = this._weekNow;
+		if ( c && c.n === n && c.from === this._week ) return c.tally;
+		this._weekNow = { n, from: this._week, tally: tallyFor( this._week, weekOrder( Date.now() ) ) };
+		return this._weekNow.tally;
+
+	}
+
+	_readWeek() {
+
+		return this.portal.save.shared.get( 'weekOrder' ).then( ( t ) => this._setWeek( t ) ).catch( ( e ) => console.warn( 'week', e ) );
+
+	}
+
+	// a tally, read or sent: kept if it's newer than the one here (within a week it only grows, so
+	// messages that cross don't take it back); force: the one just saved
+	_setWeek( t, force = false ) {
+
+		if ( ! t || typeof t !== 'object' ) return;
+		const now = weekOrder( Date.now() ), next = tallyFor( t, now ), cur = this.week();
+		if ( ! force && ( next.week < cur.week || ( next.week === cur.week && delivered( next ) < delivered( cur ) ) ) ) return;
+		this._week = next;
+
+	}
+
+	// `kg` of the week's fish sold toward it: counted here at once, then in the group's save (whoever
+	// else saved meanwhile: update tries again), and the others told
+	deliver( kg ) {
+
+		const w = weekOrder( Date.now() ), me = { id: this.me.id, name: this.me.name };
+		this._setWeek( deliver( this._week, w, me, kg ), true );
+		return this.portal.save.shared.update( 'weekOrder', ( cur ) => deliver( cur, w, me, kg ) ).then( ( saved ) => {
+
+			this._setWeek( saved, true );
+			if ( this.others.size ) this.session.send( 'week', saved );
+
+		} ).catch( ( e ) => console.warn( 'week', e ) );
 
 	}
 
@@ -254,13 +309,14 @@ export class Together {
 
 	}
 
-	// another player landed one: a toast, their cheer, their fish on their line for a moment
+	// another player landed one: their cheer, their fish on their line for a moment; a toast only for
+	// an island record or a trophy (on a busy island the rest would add up)
 	_theirCatch( b, from ) {
 
 		const o = this.others.get( from );
 		if ( ! o || ! b || ! FISH[ b.s ] || typeof b.kg !== 'number' ) return;
 		const kg = b.kg < 1 ? b.kg.toFixed( 2 ) : b.kg.toFixed( 1 );
-		this.app.game.toast( `${ o.person.name } caught a ${ kg } kg ${ FISH[ b.s ].name.toLowerCase() }${ b.rec ? ': a new island record!' : '' }`, 4200 );
+		if ( b.rec || isTrophy( b.s, b.kg ) ) this.app.game.toast( `${ o.person.name } caught a ${ kg } kg ${ FISH[ b.s ].name.toLowerCase() }${ b.rec ? ': a new island record!' : '' }`, 4200 );
 		o.avatar.once( 'cheer_01' );
 		if ( o.fish ) {
 

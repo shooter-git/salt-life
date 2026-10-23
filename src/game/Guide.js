@@ -82,7 +82,7 @@ const WELCOME = {
 	title: 'Fish the island, sell your catch',
 	body: `<p>Catch fish from the <b>beach</b>, the <b>pier</b> or your <b>boat</b>. Different fish bite in the shallows, around the pier, over the reef and out in deep water, and they change with the time of day.</p>
 		<p>Sell your catch to <b>Joe</b> at the fish stand by the pier, then spend the money on upgrades from <b>Marta</b> at the chandlery by the boathouse: stronger line, a faster reel, a bigger hold, a fish finder and lights for fishing at night.</p>
-		<p>They keep island hours. Each morning Joe chalks the fish he's after on his counter, and pays over the odds for them.</p>`,
+		<p>They keep island hours. Each morning Joe chalks the fish he's after on his counter, and pays over the odds for them. Under it is the week's order for a restaurant on the mainland, which everyone on the island fills together.</p>`,
 };
 
 const FISHING = {

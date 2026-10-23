@@ -78,13 +78,16 @@ Materials are three's `MeshStandardMaterial` (or `MeshPhysicalMaterial`), with G
   - Each device works the hour out from the record and its own clock (`IslandClock.clockAt`).
   - Resting needs everyone here: each player's wish is their own shared value, `'rest.<id>'` (`{ to, c }`, `c`: the clock it was made on). Whoever's wish completes the agreement moves the clock, and so does the host when it sees it (the wishes arrive as events, so a host whose game is paused still hears them). A wish lasts two minutes, or until the clock changes.
 - **Catches:** a landed fish is a `'catch'` message to the others.
-  - They see a toast and hear the player cheer.
-  - The fish hangs on the player's line for a moment.
+  - They hear the player cheer, and the fish hangs on the player's line for a moment.
+  - Only a fish worth hearing of is a toast: an island record, or a trophy (the top fifth of its kind's size range, about one catch in ten: `FishTable.isTrophy`). On a busy island a toast for every catch would add up.
 - **The island's records:** each species' heaviest fish, with who caught it and when.
   - They're kept in the group's shared save (`portal.save.shared`, key `'records'`), so they last between visits.
   - A catch updates them with `update`, which retries when two saves cross.
   - The catch card says when a catch is the island's heaviest yet.
   - The records are chalked on a board beside Joe's stand (`RecordsBoard.js`, a canvas) and listed on the cooler's Records tab.
+- **The week's order** (below): what each player has brought toward it is in the group's shared save too (`'weekOrder'`).
+  - A sale toward it adds the player's kilos with `update` (which retries when two saves cross), then sends the saved tally to the others (`'week'`), so their slates and panels move at once.
+  - Within a week the tally only grows, so a tally that arrives late or out of order never takes it back.
 
 Everyone keeps their own progress and their own fish.
 
@@ -101,6 +104,7 @@ Everyone keeps their own progress and their own fish.
 **The stalls keep hours** (`Orders.HOURS`): Joe from 5 am to 7 pm, Marta from 7 am to 7 pm.
 
 - Out of them the trader has gone home (`Vendor.setOpen`: not drawn), and their minimap marker greys.
+- A "Closed" board is out while they're away, saying when they're back and what's left out (`ClosedSign.js`: one plane drawn on a canvas, sharing the records board's program). Joe's is propped on his counter; Marta's leans on the front of her table.
 - Joe's stand has his night box. It pays 70% of his price (`NIGHT_BOX`), and his wanted list in full.
 - Marta's chandlery has diesel on the honesty box, so nobody is stranded at sea; the gear waits for her.
 - Whoever is serving you at closing time finishes with you first. In their last ¾ hour they say so in their panel.
@@ -112,6 +116,19 @@ Everyone keeps their own progress and their own fish.
 - Each order takes a few fish from each player (3 for Joe's, 4 for Marta's); the biggest fill it first (`GameState.quote`). What you've filled that day is saved with your progress (`orders`).
 - Joe's list is chalked on a slate on his counter (`WantedBoard.js`, one plane drawn on a canvas, sharing the records board's program), with where and when each fish bites. Your own ticks show on it.
 - It's also in Joe's and Marta's panels, and a tag in the cooler and on the catch card marks a fish someone wants. A sale says how many went to the list, in its usual line.
+
+**The week's order** (`src/game/WeekOrder.js`): a restaurant on the mainland orders one kind of fish through Joe, so many kilos by the end of the week, and everyone in the group fills it together.
+
+- **Real weeks:** it runs from Monday 00:00 UTC to the next, the same for everyone wherever they are, and comes from the week alone (`weekOrder(now)`). The kinds come round in turn (red snapper, grouper, mahi-mahi, tuna, yellowtail, hogfish), never the same two weeks running. The kilos are about twelve fish of the kind; the bonus is half of what that would fetch at Joe's price, and at least $200.
+- **Filling it:** every one of those fish sold to Joe, or left in his night box, goes toward it and fetches half as much again (`WEEK_MUL`), or the day's list's price if it's on that too. The biggest go first, and the fish that fills it counts whole. The cooler and the catch card tag the fish it would take.
+- **The tally** is the group's (`'weekOrder'` in the shared save: Playing together, above): who brought how many kilos. On its own the game keeps it in the stand-in's storage, so a player alone fills it alone.
+- **Getting paid:** once it's filled, the bonus is shared by what each player brought. Joe pays your share when you next come to his stall while he's in. The last filled week's tally is kept for whoever hasn't collected yet, and your save records the last week you were paid for (`weekPaid`).
+- **Where it shows:** under the day's list on Joe's slate (the fish, the group's kilos and a chalk bar), and as a block in Joe's panel with the bonus, the days left and what you've brought. A sale toward it says so in its usual line. Nothing else is a toast.
+
+**Tarpon under the pier lights:** after dark the pier's lamps draw the tarpon (`lights` in `FishTable.js`).
+
+- Their bites under the pier double while the lamps are lit (`Bites.lampsLit`, `Bites.pickSpecies`), and Joe's hint says to fish there.
+- The bay's tarpon swim to the pier head once the lamps come on and back to the bay by day (`night` on their group in `world/Fish.js`; the app sets the lamps' state on the fish each frame).
 
 ## The boat at night
 
