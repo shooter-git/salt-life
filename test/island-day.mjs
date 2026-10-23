@@ -1,9 +1,10 @@
 // Plain-node tests of the island's day (no GPU): the clock, the stalls' hours, the wanted lists and
-// selling on them.
+// selling on them, and the week's order.
 import { DAY_RATE, NIGHT_X, START_HOUR, REST, pace, advance, clockAt, restTo, isOpen, timeText, dayLength, sunUp } from '../src/game/IslandClock.js';
 import { HOURS, OPENS, NIGHT_BOX, tradeDay, ordersFor, orderFor, orderPrice, orderTerms } from '../src/game/Orders.js';
 import { FISH } from '../src/game/FishTable.js';
 import { GameState } from '../src/game/GameState.js';
+import { WEEK_MUL, weekOrder, weekNumber, weekEnds, tallyFor, deliver, delivered, filled, mineOf, shareOf, owed } from '../src/game/WeekOrder.js';
 
 let fails = 0;
 const ok = ( c, msg ) => {
@@ -105,6 +106,64 @@ const st2 = new GameState( { getItem: ( k ) => m.get( k ) ?? null, setItem: () =
 ok( st2.load() && st2.filledOf( list[ 0 ], 7 ) === 1, 'saved with your progress' );
 ok( orderPrice( { mul: 1.5 }, 11 ) === 17 && orderPrice( { each: 6 }, 1 ) === 6, 'order prices' );
 ok( orderFor( list, 'joe', 'mullet' ) === null && orderFor( list, 'marta', 'mullet' ) === list[ 1 ], 'whose order' );
+
+// ---- the week's order
+const DAYMS = 864e5, fri = Date.UTC( 2026, 9, 23, 15 ), mon = Date.UTC( 2026, 9, 26 );
+const w0 = weekOrder( fri ), w1 = weekOrder( mon ), w1b = weekOrder( mon + 6.9 * DAYMS );
+console.log( `     ${ [ 0, 1, 2, 3, 4, 5 ].map( ( i ) => { const w = weekOrder( mon + i * 7 * DAYMS ); return `${ w.species } ${ w.kg } kg $${ w.bonus }`; } ).join( '; ' ) }` );
+ok( w0.week === weekNumber( fri ) && w0.ends === mon && new Date( w0.ends ).getUTCDay() === 1 && weekEnds( w0.week ) === mon, 'a week runs to Monday 00:00 UTC' );
+ok( w1.week === w0.week + 1 && JSON.stringify( w1 ) === JSON.stringify( w1b ), 'the same order all week, for everyone (nothing to send)' );
+let repeats = 0;
+for ( let i = 0; i < 30; i ++ ) if ( weekOrder( mon + i * 7 * DAYMS ).species === weekOrder( mon + ( i + 1 ) * 7 * DAYMS ).species ) repeats ++;
+ok( repeats === 0, 'never the same fish two weeks running' );
+ok( [ 0, 1, 2, 3, 4, 5 ].every( ( i ) => { const w = weekOrder( mon + i * 7 * DAYMS ); return FISH[ w.species ] && w.kg >= 10 && w.kg % 5 === 0 && w.bonus >= 200; } ), 'each order: a food fish, a round number of kilos, a bonus' );
+const robin = { id: 'r', name: 'Robin' }, sam = { id: 's', name: 'Sam' };
+let t = tallyFor( null, w0 );
+ok( t.week === w0.week && t.species === w0.species && delivered( t ) === 0 && ! filled( t ), 'a fresh tally' );
+t = deliver( t, w0, robin, 10 );
+t = deliver( JSON.parse( JSON.stringify( t ) ), w0, sam, 20 );
+t = deliver( t, w0, robin, 5 );
+ok( mineOf( t, 'r' ) === 15 && mineOf( t, 's' ) === 20 && delivered( t ) === 35, 'each of you brings to it, added up' );
+const before = JSON.stringify( t );
+deliver( t, w0, sam, 1 );
+ok( JSON.stringify( t ) === before, 'bringing to it makes a new tally (for update(): the saved one is left as it is)' );
+t = deliver( t, w0, sam, w0.kg );
+ok( filled( t ) && delivered( t ) === 35 + w0.kg, 'the fish that fills it counts whole' );
+ok( delivered( deliver( t, w0, robin, 3 ) ) === delivered( t ), 'filled: no more toward it' );
+const sr = shareOf( t, 'r' ), ss = shareOf( t, 's' );
+ok( sr > 0 && ss > sr && Math.abs( sr + ss - w0.bonus ) <= 1 && shareOf( t, 'x' ) === 0, 'the bonus shared by what each brought' );
+ok( shareOf( deliver( null, w0, robin, 1 ), 'r' ) === 0, 'no share until it\'s filled' );
+const next = tallyFor( t, w1 );
+ok( next.week === w1.week && delivered( next ) === 0 && next.prev && next.prev.week === w0.week, 'a new week: a new order, the last filled one kept' );
+ok( tallyFor( next, w0 ).week === w1.week, 'a device whose clock is behind keeps the newer week' );
+const w2 = weekOrder( mon + 7 * DAYMS ), after2 = tallyFor( deliver( next, w1, sam, 1 ), w2 );
+ok( after2.prev && after2.prev.week === w0.week, 'an unfilled week passes the last filled one on' );
+const o1 = owed( next, 'r' );
+ok( o1.total === sr && o1.week === w0.week && owed( next, 'r', o1.week ).total === 0, 'Joe owes your share once' );
+const both = deliver( next, w1, robin, w1.kg );
+ok( owed( both, 'r' ).total === sr + shareOf( both, 'r' ) && owed( both, 'r' ).week === w1.week, 'two weeks owed: both, together' );
+ok( tallyFor( { week: 'x' }, w0 ).week === w0.week && tallyFor( { ...t, by: { r: { name: 'R', kg: - 4 } } }, w0 ).by.r === undefined, 'a bad tally is set aside' );
+
+// selling toward it
+const sw = new GameState( { getItem: ( k ) => m.get( 'w' + k ) ?? null, setItem: ( k, v ) => m.set( 'w' + k, v ) } );
+const g1 = sw.addFish( 'grouper', 8 ), g2 = sw.addFish( 'grouper', 5 ), g3 = sw.addFish( 'grouper', 4 ), gr = sw.addFish( 'grunt', 0.5 );
+const wk = { species: 'grouper', left: 10 };
+const wq = sw.quote( null, { who: 'joe', orders: [], day: 3, week: wk } );
+ok( wq.prices.get( g1.id ) === Math.round( g1.value * WEEK_MUL ) && wq.prices.get( g2.id ) === Math.round( g2.value * WEEK_MUL ) && wq.prices.get( g3.id ) === g3.value, 'toward the week\'s order: half as much again, the biggest first, until it\'s filled' );
+ok( wq.week === 13 && wq.weekN === 2, 'what went toward it' );
+const both2 = sw.quote( [ g1.id ], { who: 'joe', orders: [ { id: 'joe-b', who: 'joe', species: 'grouper', mul: 2, max: 3 } ], day: 3, week: wk } );
+ok( both2.prices.get( g1.id ) === g1.value * 2 && both2.week === 8 && both2.wanted === 1, 'on the day\'s list too: its price, and it still counts toward the week' );
+const nbox = sw.quote( [ g1.id, gr.id ], { who: 'joe', orders: [], day: 3, rate: NIGHT_BOX, week: wk } );
+ok( nbox.prices.get( g1.id ) === Math.round( g1.value * WEEK_MUL ) && nbox.week === 8, 'the night box takes it in full' );
+ok( sw.quote( null, { who: 'marta', orders: [], day: 3 } ).week === 0, 'Marta isn\'t taking it' );
+const wids = sw.wantedIds( [], 3, wk );
+ok( wids.has( g1.id ) && wids.has( g2.id ) && ! wids.has( g3.id ) && ! wids.has( gr.id ), 'tagged in the cooler: as many as it still wants' );
+const r1 = sw.sell( [ g1.id ], { who: 'joe', orders: [], day: 3, week: wk } );
+ok( r1.week === 8 && r1.weekN === 1 && r1.total === Math.round( g1.value * WEEK_MUL ), 'a sale says what went toward it' );
+const money = sw.money;
+sw.collect( 120, w0.week );
+const sw2 = new GameState( { getItem: ( k ) => m.get( 'w' + k ) ?? null, setItem: () => {} } );
+ok( sw.money === money + 120 && sw2.load() && sw2.weekPaid === w0.week && sw2.money === money + 120, 'your share paid, and saved' );
 
 console.log( fails ? `${ fails } FAILED` : 'all passed' );
 process.exit( fails ? 1 : 0 );

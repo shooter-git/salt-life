@@ -65,6 +65,8 @@ export function biteHint( species ) {
 
 	const f = FISH[ species ];
 	if ( ! f ) return '';
+	// (one that gathers under the pier's lamps after dark: there, then)
+	if ( f.lights ) return 'under the pier lights, after dark';
 	const best = Object.entries( f.habitat ).sort( ( a, b ) => b[ 1 ] - a[ 1 ] )[ 0 ];
 	return [ best && WHERE[ best[ 0 ] ], WHEN[ f.time ] ].filter( Boolean ).join( ', ' );
 

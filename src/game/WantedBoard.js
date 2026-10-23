@@ -5,12 +5,13 @@ import { orderTerms, biteHint } from './Orders.js';
 
 // (Salt Life) The day's wanted list, chalked on a slate hung on the front of Joe's counter: his two
 // fish, where and when they bite, what he pays, and Marta's bait; ticked off as you fill them (each
-// player sees their own ticks). One plane, its frame painted into the canvas; the same program as the
-// records board's slate (together/RecordsBoard.js). Drawn again when the list or your progress changes.
-//   const b = new WantedBoard( { terrain } );  scene.add( b.mesh );  b.draw( orders, filled )
+// player sees their own ticks). Under it, the week's order (WeekOrder.js) and how far the group has
+// got with it. One plane, its frame painted into the canvas; the same program as the records board's
+// slate (together/RecordsBoard.js). Drawn again when the list, your progress or the group's changes.
+//   const b = new WantedBoard( { terrain } );  scene.add( b.mesh );  b.draw( orders, filled, week )
 
-const W = 512, H = 352; // the slate's canvas (0.64 × 0.44 m)
-const SPOT = { x: 0.42, y: 0.6, z: 0.86 }; // in the stand's frame: on the counter front, right of centre
+const W = 512, H = 464; // the slate's canvas (0.64 × 0.58 m)
+const SPOT = { x: 0.42, y: 0.53, z: 0.86 }; // in the stand's frame: on the counter front, right of centre
 
 export class WantedBoard {
 
@@ -22,7 +23,7 @@ export class WantedBoard {
 		this.texture = new CanvasTexture( this.canvas );
 		this.texture.colorSpace = SRGBColorSpace;
 		this.texture.anisotropy = 4;
-		this.mesh = new Mesh( new PlaneGeometry( 0.64, 0.44 ), new MeshStandardMaterial( { map: this.texture, roughness: 0.95 } ) );
+		this.mesh = new Mesh( new PlaneGeometry( 0.64, 0.64 * H / W ), new MeshStandardMaterial( { map: this.texture, roughness: 0.95 } ) );
 		this.mesh.name = 'WantedSlate';
 		const y = terrain.heightAt( STAND.x, STAND.z );
 		// hung a little off true on the boards
@@ -33,13 +34,16 @@ export class WantedBoard {
 
 	}
 
-	// orders: the day's (Orders.ordersFor); filled: order id -> how many you've filled
-	draw( orders = [], filled = {} ) {
+	// orders: the day's (Orders.ordersFor); filled: order id -> how many you've filled; week: the week's
+	// order, { species, kg, got (kg brought), ends (ms) } (null: none)
+	draw( orders = [], filled = {}, week = null ) {
 
-		const key = JSON.stringify( [ orders, filled ] );
+		// (the days left, as drawn: the slate changes when that does)
+		const days = week ? Math.ceil( ( week.ends - Date.now() ) / 864e5 ) : 0;
+		const key = JSON.stringify( [ orders, filled, week && [ week.species, week.kg, Math.round( week.got * 10 ), days ] ] );
 		if ( key === this._key ) return;
 		this._key = key;
-		this._last = [ orders, filled ];
+		this._last = [ orders, filled, week ];
 		const font = '"Caveat Brush", "Comic Sans MS", cursive';
 		// (the chalk font is the HUD's: drawn again once it has loaded)
 		if ( ! this._font && document.fonts && document.fonts.load ) {
@@ -96,6 +100,32 @@ export class WantedBoard {
 			g.fillStyle = 'rgba(242, 239, 228, 0.62)';
 			g.fillText( o.who === 'marta' ? 'bait, at the chandlery' : biteHint( o.species ), 56, y + 28, 400 );
 			y += 74;
+
+		}
+
+		// the week's order: a chalk line across, then the fish, the group's kilos and a bar filling up
+		if ( week ) {
+
+			const done = week.got >= week.kg;
+			g.fillStyle = 'rgba(242, 239, 228, 0.5)';
+			for ( let x = 40; x < W - 40; x += 18 ) g.fillRect( x, 330, 10, 2 );
+			g.textAlign = 'left';
+			g.font = `24px ${ font }`;
+			g.fillStyle = 'rgba(242, 239, 228, 0.62)';
+			g.fillText( done ? 'This week, for the mainland: filled!' : `This week, for the mainland · ${ days > 1 ? `${ days } days left` : 'last day' }`, 40, 362, W - 80 );
+			g.font = `36px ${ font }`;
+			g.fillStyle = '#f2efe4';
+			g.fillText( FISH[ week.species ].name, 40, 400, 260 );
+			g.textAlign = 'right';
+			g.fillStyle = '#f5d98a';
+			const got = Math.min( week.got, week.kg );
+			g.fillText( `${ got < 10 ? got.toFixed( 1 ) : Math.round( got ) } / ${ week.kg } kg`, W - 40, 400 );
+			// the bar: an outline, filled in chalk as far as the group has got
+			g.strokeStyle = 'rgba(242, 239, 228, 0.7)';
+			g.lineWidth = 2;
+			g.strokeRect( 40, 414, W - 80, 16 );
+			g.fillStyle = 'rgba(245, 217, 138, 0.85)';
+			g.fillRect( 43, 417, ( W - 86 ) * got / week.kg, 10 );
 
 		}
 

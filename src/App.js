@@ -25,6 +25,7 @@ import { Player } from './player/Player.js';
 import { BoatController } from './player/BoatController.js';
 import { GameState } from './game/GameState.js';
 import { DAY_RATE, START_HOUR, advance } from './game/IslandClock.js';
+import { lampsLit } from './game/Bites.js';
 import { FishStand, STAND } from './game/FishStand.js';
 import { Chandlery, CHANDLERY } from './game/Chandlery.js';
 import { LocalLights, addBoatLights, addVillageLights, useLocalLights, holdLocalLights } from './materials/LocalLights.js';
@@ -576,6 +577,7 @@ export class App {
 		if ( this.fish ) {
 
 			this.fish.viewHeight = this.renderer.domElement.height;
+			this.fish.lit = lampsLit( this.settings.timeOfDay ); // (Salt Life: the tarpon gather under the pier's lamps)
 			this.fish.update( dt, this.camera.position );
 			this.fish.cull( this.camera );
 
@@ -761,8 +763,9 @@ export class App {
 		const r = this.renderer, rod = this.game.rod;
 		await this.game.portrait.compile( r, this.scene.environment );
 		await this.together.compile( r, this.camera, this.scene );
-		// (the wanted slate on Joe's counter: the records board's program, compiled just now)
-		if ( ! this.game.wanted.mesh.parent ) this.scene.add( this.game.wanted.mesh );
+		// (the wanted slate on Joe's counter and the stalls' "Closed" boards: the records board's program,
+		// compiled just now)
+		for ( const m of [ this.game.wanted.mesh, ...this.game.signs.map( ( s ) => s.mesh ) ] ) if ( ! m.parent ) this.scene.add( m );
 		if ( ! this.boatLamps.group.parent ) {
 
 			this.boat.group.add( this.boatLamps.group );

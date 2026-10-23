@@ -35,17 +35,27 @@ export function activity( pref, hour ) {
 
 }
 
+// the pier's lamps, 0..1 by the hour: lit from 7 to 8 pm, out from 5 to 6 am
+export function lampsLit( hour ) {
+
+	return hour >= 20 || hour < 5 ? 1 : hour > 19 ? hour - 19 : hour < 6 ? 6 - hour : 0;
+
+}
+
 // Weighted pick of the species that bites here; null when nothing lives here.
 // rng: () => [0, 1)
 export function pickSpecies( habitat, hour, rng = Math.random ) {
 
 	let total = 0;
 	const w = [];
+	const lit = lampsLit( hour );
 	for ( const id of FISH_IDS ) {
 
 		const f = FISH[ id ];
 		let hw = 0;
 		for ( const k in f.habitat ) hw += f.habitat[ k ] * habitat[ k ];
+		// (Salt Life) some gather under the pier's lamps after dark
+		if ( f.lights && f.habitat.pier ) hw += f.lights * f.habitat.pier * habitat.pier * lit;
 		const x = hw * f.rarity * activity( f.time, hour );
 		w.push( x );
 		total += x;

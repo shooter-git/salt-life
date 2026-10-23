@@ -1,11 +1,16 @@
 // Playing together on one machine, without All the Spaces: this page stands in for the app around one
 // player's game (in the iframe, as the app's sealed frame holds it), and the pages open in the same
 // browser share a room over a BroadcastChannel, as the app's realtime room does: who's here and who
-// hosts (whoever came first), the shared values (newcomers get them on arrival), and the messages.
-// Saves are kept in memory, one set per page (a page opened again starts with a fresh save). Plain
-// script, no build: the dev server serves it as it is.
+// hosts (whoever came first), the shared values (newcomers get them on arrival; two set at once: the
+// later stands for everyone, as the app's room orders them), and the messages.
+// Each player's own save is kept in memory, one per page (a page opened again starts with a fresh
+// save); the group's (the 'shared' scope) is the browser's (IndexedDB), so every page in the group sees
+// it and it lasts. A save made on a stale read is refused, as the app's server does (each check and
+// write is one transaction, so two pages saving at once can't both win). Plain script, no build: the
+// dev server serves it as it is.
 //   pnpm dev, then  http://127.0.0.1:5189/tools/two-players/?name=Robin  and  ?name=Sam  in a second window
 //   ?id=  ?name=  ?color=  ?tier=low|mid|high  ?locale=en-GB  ?src= (the game: / by default)
+//   ?group= (whose shared save: 'island' by default; a new name starts the group afresh)
 //   window.__host.leave()  (from the console: this player leaves the room, as closing the window does)
 
 const params = new URLSearchParams( location.search );
@@ -16,7 +21,62 @@ const joinedAt = Date.now();
 const room = new BroadcastChannel( 'salt-life-two-players' );
 const people = new Map( [ [ me.id, { person: me, at: joinedAt } ] ] ); // id -> { person, at (joined) }
 const shared = new Map(); // the room's shared values
-const saved = new Map(); // this player's saves: 'scope/key' -> { value, schemaVersion, version }
+const stamps = new Map(); // key -> [ ms, id ]: when each value was set, and by whom
+const later = ( a, b ) => ! b || a[ 0 ] > b[ 0 ] || ( a[ 0 ] === b[ 0 ] && a[ 1 ] > b[ 1 ] );
+const saved = new Map(); // this player's saves: 'personal/key' -> { value, schemaVersion, version }
+const group = params.get( 'group' ) || 'island';
+// the group's saves: '<group>/key' -> { value, schemaVersion, version }, in the browser's IndexedDB
+const db = new Promise( ( done, fail ) => {
+
+	const r = indexedDB.open( 'salt-life-two-players', 1 );
+	r.onupgradeneeded = () => r.result.createObjectStore( 'shared' );
+	r.onsuccess = () => done( r.result );
+	r.onerror = () => fail( r.error );
+
+} );
+// a save: this player's (in memory) or the group's -> { value, schemaVersion, version } | undefined
+const read = async ( scope, key ) => {
+
+	if ( scope !== 'shared' ) return saved.get( `${ scope }/${ key }` );
+	const get = ( await db ).transaction( 'shared' ).objectStore( 'shared' ).get( `${ group }/${ key }` );
+	return new Promise( ( done ) => {
+
+		get.onsuccess = () => done( get.result );
+		get.onerror = () => done( undefined );
+
+	} );
+
+};
+// the app's rule: a save based on a version that isn't the current one is stale -> the new version, or
+// null (stale)
+const next = ( row, basedOn ) => ( basedOn != null && basedOn !== ( row ? row.version : null ) ? null : ( row ? row.version : 0 ) + 1 );
+const write = async ( scope, key, value, schemaVersion, basedOn ) => {
+
+	if ( scope !== 'shared' ) {
+
+		const version = next( saved.get( `${ scope }/${ key }` ), basedOn );
+		if ( version ) saved.set( `${ scope }/${ key }`, { value, schemaVersion, version } );
+		return version;
+
+	}
+
+	const tx = ( await db ).transaction( 'shared', 'readwrite' ), st = tx.objectStore( 'shared' ), k = `${ group }/${ key }`;
+	return new Promise( ( done ) => {
+
+		let version = null;
+		const get = st.get( k );
+		get.onsuccess = () => {
+
+			version = next( get.result, basedOn );
+			if ( version ) st.put( { value, schemaVersion, version }, k );
+
+		};
+		tx.oncomplete = () => done( version );
+		tx.onerror = tx.onabort = () => done( null );
+
+	} );
+
+};
 let inited = false;
 document.title = `${ name } · Salt Life`;
 
@@ -32,8 +92,15 @@ room.onmessage = ( { data: m } ) => {
 
 		const fresh = ! people.has( m.who.id );
 		people.set( m.who.id, { person: m.who, at: m.at } );
-		if ( m.t === 'join' ) room.postMessage( { t: 'here', who: me, at: joinedAt, shared: [ ...shared ] } );
-		for ( const [ k, v ] of m.shared || [] ) if ( ! shared.has( k ) ) shared.set( k, v );
+		if ( m.t === 'join' ) room.postMessage( { t: 'here', who: me, at: joinedAt, shared: [ ...shared ].map( ( [ k, v ] ) => [ k, v, stamps.get( k ) ] ) } );
+		for ( const [ k, v, stamp ] of m.shared || [] ) {
+
+			if ( shared.has( k ) && ! ( stamp && later( stamp, stamps.get( k ) ) ) ) continue;
+			shared.set( k, v );
+			if ( stamp ) stamps.set( k, stamp );
+
+		}
+
 		if ( fresh ) tellPlayers();
 
 	} else if ( m.t === 'leave' ) {
@@ -43,7 +110,10 @@ room.onmessage = ( { data: m } ) => {
 
 	} else if ( m.t === 'shared' ) {
 
+		// (set here too in the meantime, and later: that one stands, on every page)
+		if ( m.stamp && ! later( m.stamp, stamps.get( m.key ) ) ) return;
 		shared.set( m.key, m.value );
+		if ( m.stamp ) stamps.set( m.key, m.stamp );
 		if ( inited ) send( { type: 'mp:shared', data: { key: m.key, value: m.value, by: m.by } } );
 
 	} else if ( m.t === 'send' ) {
@@ -91,27 +161,27 @@ addEventListener( 'message', ( e ) => {
 
 			}, 1500 );
 			break;
-		case 'save:get': {
-
-			const row = saved.get( `${ msg.scope }/${ msg.key }` );
-			send( { type: 'result', re: msg.id, ok: true, data: row ? { value: row.value, schemaVersion: row.schemaVersion, version: row.version } : { value: null, schemaVersion: null, version: null } } );
+		case 'save:get':
+			read( msg.scope, msg.key ).then( ( r ) => send( { type: 'result', re: msg.id, ok: true, data: r ? { value: r.value, schemaVersion: r.schemaVersion, version: r.version } : { value: null, schemaVersion: null, version: null } } ) );
 			break;
-
-		}
-		case 'save:set': {
-
-			const key = `${ msg.scope }/${ msg.key }`, row = saved.get( key ), version = ( row ? row.version : 0 ) + 1;
-			saved.set( key, { value: msg.value, schemaVersion: msg.schemaVersion, version } );
-			send( { type: 'result', re: msg.id, ok: true, data: { version } } );
+		case 'save:set':
+			// (saved by someone else since it was read: refused, as the app does)
+			write( msg.scope, msg.key, msg.value, msg.schemaVersion, msg.basedOn ).then( ( version ) => send( version
+				? { type: 'result', re: msg.id, ok: true, data: { version } }
+				: { type: 'result', re: msg.id, ok: false, error: 'Saved by someone else in the meantime.', code: 'stale' } ) );
 			break;
+		case 'mp:shared': {
 
-		}
-		case 'mp:shared':
+			// (after anything this page has seen set)
+			const seen = stamps.get( msg.key ), stamp = [ Math.max( Date.now(), seen ? seen[ 0 ] + 1 : 0 ), me.id ];
 			shared.set( msg.key, msg.value );
+			stamps.set( msg.key, stamp );
 			send( { type: 'result', re: msg.id, ok: true } );
 			send( { type: 'mp:shared', data: { key: msg.key, value: msg.value, by: me.id } } );
-			room.postMessage( { t: 'shared', key: msg.key, value: msg.value, by: me.id } );
+			room.postMessage( { t: 'shared', key: msg.key, value: msg.value, by: me.id, stamp } );
 			break;
+
+		}
 		case 'mp:send':
 			room.postMessage( { t: 'send', kind: msg.kind, body: msg.body, from: me.id, to: msg.to } );
 			break;
