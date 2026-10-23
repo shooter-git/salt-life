@@ -217,3 +217,12 @@ html.is-touch .tw-root:has(.gm-panel.is-open) :is(.gm-map, .gm-coach) { visibili
 	   on its side has room for both */
 	html.is-touch .tw-root:has(.gm-panel.is-open) .gm-purse > :not(.gm-money) { display: none; }
 }
+
+/* a phone on its side with room for it: Joe's wanted list and the week's order beside your fish, each
+   column scrolling on its own, so the fish are there at a glance (narrower, they scroll as one list) */
+@media (orientation: landscape) and (max-height: 500px) and (min-width: 740px) {
+	html.is-touch .gm-panel:has(.gm-split) { width: min(calc(760 * var(--tw-u)), calc(var(--gm-purse-l, 100vw) - var(--gm-menu) - var(--tw-2))); }
+	html.is-touch .gm-split { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); column-gap: var(--tw-4); overflow: hidden; }
+	html.is-touch .gm-split > * { min-height: 0; overflow: auto; overscroll-behavior: contain; }
+	html.is-touch .gm-split .gm-wanted:last-child { margin-bottom: 0; }
+}
