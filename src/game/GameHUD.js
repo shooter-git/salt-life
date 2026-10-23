@@ -287,7 +287,8 @@ export class GameHUD {
 		hud.append( this.catchScrim, this.purse, this.fight, this.bite, this.cast, this.dot, this.catchCard );
 		// (Salt Life) on touch screens the minimap, the tips and the fight panel line up under the purse,
 		// which wraps on narrow screens (game-ui.css): where it ends, and how tall the fight panel is (and
-		// where the purse starts, for the toasts in landscape: style.css)
+		// where the purse starts, for the toasts: style.css. On a computer a toast goes under the purse
+		// when it doesn't fit beside it, so that's checked again here)
 		if ( typeof ResizeObserver !== 'undefined' ) {
 
 			const measure = () => {
@@ -297,6 +298,7 @@ export class GameHUD {
 				css.setProperty( '--gm-band', `${ Math.ceil( r.bottom ) }px` );
 				css.setProperty( '--gm-purse-l', `${ Math.floor( r.left ) }px` );
 				css.setProperty( '--gm-fight-h', `${ Math.ceil( this.fight.offsetHeight ) }px` );
+				if ( ui.placeToast ) ui.placeToast();
 
 			};
 

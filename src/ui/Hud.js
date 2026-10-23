@@ -41,6 +41,18 @@ export class Hud {
 		this.toastEl.textContent = text;
 		this.toastEl.hidden = false;
 		this._toastTime = seconds;
+		this.placeToast();
+
+	}
+
+	// on a computer the toast sits at the top beside the game's purse, or under the purse if its text
+	// doesn't fit there (style.css); again whenever the purse changes (GameHUD)
+	placeToast() {
+
+		const el = this.toastEl;
+		if ( el.hidden ) return;
+		el.classList.remove( 'is-low' );
+		el.classList.toggle( 'is-low', el.scrollWidth > el.clientWidth );
 
 	}
 
