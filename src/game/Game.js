@@ -1,11 +1,12 @@
-import { Vector3, Color } from '../engine/index.js';
+import { Vector3, Color, Mesh } from '../engine/index.js';
 import { G } from '../core/Globals.js';
 import { WORLD } from '../world/WorldLayout.js';
 import { FISH, fishWeightKg, spearRule } from './FishTable.js';
 import { habitatAt, pickSpecies, rollWeight, biteDelay } from './Bites.js';
 import { CatchMinigame } from './CatchMinigame.js';
 import { GameState } from './GameState.js';
-import { FishingRod } from './FishingRod.js';
+import { FishingRod, buildLineGeometry } from './FishingRod.js';
+import { createLineMaterial } from './GameMaterials.js';
 import { FishStand, STAND } from './FishStand.js';
 import { Chandlery, CHANDLERY } from './Chandlery.js';
 import { CatchDisplay } from './CatchDisplay.js';
@@ -28,6 +29,11 @@ import { SPECIES } from '../world/fish/FishSpecies.js';
 
 // how long the catch card stays up unless dismissed (ms)
 const CATCH_CARD_MS = 9000;
+// (Salt Life) the anchor: within this of the berth the dock lines hold the boat instead (Player.exitBoat),
+// and it goes down once the boat is slower than this (m/s)
+const BERTH_M = 14;
+const ANCHOR_SPEED = 2.5;
+const RODE_SEGS = 16;
 const _a = new Vector3(), _b = new Vector3(), _h = new Vector3();
 const _pose = { pos: new Vector3(), head: new Vector3(), roll: 0, thrash: 0 };
 const BAG_FROM = 0.85; // the brails drawn this far: the netting has closed round what's under it (it rides in the purse)
@@ -116,6 +122,17 @@ export class Game {
 		this._engineBase = { maxThrust: b.maxThrust, pitchSpeed: b.pitchSpeed };
 		this.floods = [];
 		if ( app.localLights ) this.addFloodlights( app.localLights, app.boat );
+		// (Salt Life) the anchor's rode while it's down, from the stem head to the bottom (the fishing
+		// line's ribbon, in rope's colour); and a leave of the helm still waiting for the boat to slow
+		this.rode = new Mesh( buildLineGeometry( RODE_SEGS ), createLineMaterial( RODE_SEGS ) );
+		this.rode.name = 'AnchorRode';
+		this.rode.material.color.set( 0xcfc6ad );
+		this.rode.material.uniforms.lineShow.value = 2; // twice the fishing line's width
+		this.rode.frustumCulled = false;
+		this.rode.castShadow = false;
+		this.rode.visible = false;
+		app.scene.add( this.rode );
+		this._anchorDue = false;
 		this._fuelOut = false;
 		this._sonarT = 0;
 		this._sonar = null;
@@ -397,12 +414,7 @@ export class Game {
 		this.updateBoat( dt );
 		// (Salt Life) the floodlights' lenses glow when they're fitted, from dusk like their light
 		const mats = app.boat && app.boat.materials;
-		if ( mats && mats.floodOn ) {
-
-			const t = Math.min( 1, Math.max( 0, ( G.night.value - 0.15 ) / 0.6 ) );
-			mats.floodOn.value = this.state.stats.deckLights ? t * t * ( 3 - 2 * t ) : 0;
-
-		}
+		if ( mats && mats.floodOn ) mats.floodOn.value = this.floodsOn;
 
 		// the traders
 		for ( const v of this.vendors ) v.update( dt, p.mode === 'walk' ? p.position : null );
@@ -487,6 +499,7 @@ export class Game {
 			}
 
 		} else if ( this._wasDriven ) s.save();
+		this.updateAnchor( b.driven && ! this._wasDriven, ! b.driven && this._wasDriven );
 		this._wasDriven = b.driven;
 
 		if ( ( p.mode === 'boat' || p.mode === 'deck' ) && s.stats.finder ) {
@@ -505,6 +518,79 @@ export class Game {
 			}
 
 		}
+
+	}
+
+	// (Salt Life) the deck floodlights, 0..1: fitted, and lit from dusk like every local light
+	get floodsOn() {
+
+		if ( ! this.state.stats.deckLights ) return 0;
+		const t = Math.min( 1, Math.max( 0, ( G.night.value - 0.15 ) / 0.6 ) );
+		return t * t * ( 3 - 2 * t );
+
+	}
+
+	// how far a spot is in their pool, 0..1: all of it within 5 m of the stern, none past their 14 m
+	floodAt( x, z ) {
+
+		const on = this.floodsOn, b = this.app.boatCtl;
+		if ( on <= 0 || ! b ) return 0;
+		const t = Math.min( 1, Math.max( 0, ( Math.hypot( x - b.sternWorld.x, z - b.sternWorld.z ) - 5 ) / 9 ) );
+		return on * ( 1 - t * t * ( 3 - 2 * t ) );
+
+	}
+
+	// (Salt Life) the anchor (Gear anchor): up when you take the helm; down when you leave it out on the
+	// water, once the boat has slowed (took / left: the helm, this frame). Its rode follows the boat
+	updateAnchor( took, left ) {
+
+		const b = this.app.boatCtl;
+		if ( took ) {
+
+			this._anchorDue = false;
+			if ( b.anchor ) {
+
+				b.anchor = null;
+				this.toast( 'Anchor up', 1600 );
+
+			}
+
+		} else if ( left ) this._anchorDue = this.state.stats.anchorM > 0 && ! b.anchor;
+		if ( this._anchorDue && ! b.driven && b.speed < ANCHOR_SPEED ) {
+
+			this._anchorDue = false;
+			this.dropAnchor();
+
+		}
+
+		const rode = this.rode;
+		rode.visible = !! b.anchor;
+		if ( ! b.anchor ) return;
+		// it comes down from the stem head and lies along the bottom to the anchor
+		const u = rode.material.uniforms, a = b.anchor;
+		b.toWorld( b.stemHead, u.lineA.value );
+		u.lineB.value.copy( a );
+		u.lineCtl.value.copy( u.lineA.value ).lerp( a, 0.8 ).y = a.y;
+
+	}
+
+	// where the boat is, unless the dock lines have her or it's deeper than the rode holds in
+	dropAnchor() {
+
+		const b = this.app.boatCtl, max = this.state.stats.anchorM, dock = WORLD.boatDock.position;
+		if ( b.moored || Math.hypot( b.position.x - dock.x, b.position.z - dock.z ) < BERTH_M ) return;
+		const at = b.toWorld( b.stemHead, new Vector3() );
+		const floor = this.app.terrainData.heightAt( at.x, at.z );
+		const depth = Math.max( 0, - floor );
+		if ( depth > max ) {
+
+			this.toast( `Too deep to anchor · ${ feet( depth ) } of water, the rode holds in ${ feet( max ) }`, 3200 );
+			return;
+
+		}
+
+		b.anchor = at.setY( floor );
+		this.toast( `Anchor down in ${ feet( depth ) } of water`, 2200 );
 
 	}
 
@@ -651,7 +737,11 @@ export class Game {
 	// ---- bites
 	habitat() {
 
-		return this.habitatAtPoint( this.rod.bobber.x, this.rod.bobber.z, this.rod.depth );
+		const p = this.rod.bobber;
+		const h = this.habitatAtPoint( p.x, p.z, this.rod.depth );
+		// (Salt Life) in the deck floodlights' pool after dark (Bites: what gathers under lights)
+		h.flood = this.floodAt( p.x, p.z );
+		return h;
 
 	}
 

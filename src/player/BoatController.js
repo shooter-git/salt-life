@@ -7,6 +7,11 @@ const DEG = Math.PI / 180;
 
 const sstep = THREE.MathUtils.smoothstep;
 const clamp = THREE.MathUtils.clamp;
+// (Salt Life) the anchor rode: how far the bow swings from over the anchor before it comes taut (a
+// short scope, so the boat stays on the spot), and its stretch and damping (N/m, N s/m)
+const RODE_SLACK = 4;
+const RODE_K = 2500;
+const RODE_C = 2500;
 
 // scratch (the integrator runs at 120 Hz: no allocations in the loop)
 const _F = new THREE.Vector3();
@@ -102,6 +107,11 @@ export class BoatController {
 		this.driven = false;
 		this.moored = true;
 		this.mooring = { anchor: WORLD.boatDock.position.clone(), heading: WORLD.boatDock.heading };
+		// (Salt Life) where the anchor lies on the bottom while it's down (Game sets it), else null; its
+		// rode is made fast at the stem head
+		this.anchor = null;
+		const L = model.lines;
+		this.stemHead = L ? new THREE.Vector3( 0, L.sheerY( 1 ), L.sheerZ( 1 ) - 0.15 ) : new THREE.Vector3( 0, 1.2, 4.1 );
 
 		const n = this.samples.length;
 		this.waterH = new Float32Array( n ); // latest read-back
@@ -397,6 +407,24 @@ export class BoatController {
 			dy = Math.atan2( Math.sin( dy ), Math.cos( dy ) );
 			T.y += dy * 60000 - this.angular.y * 30000;
 
+		} else if ( this.anchor ) {
+
+			// ---- (Salt Life) the anchor rode at the stem head: slack until the bow has swung out to the
+			// end of it, then it holds, and the bow comes round to the anchor
+			const bow = this.toWorld( this.stemHead, _p );
+			const dx = this.anchor.x - bow.x, dz = this.anchor.z - bow.z;
+			const d = Math.hypot( dx, dz );
+			if ( d > RODE_SLACK ) {
+
+				const nx = dx / d, nz = dz / d;
+				_vp.copy( this.angular ).cross( _r.copy( bow ).sub( comW ) ).add( this.velocity );
+				const away = - ( _vp.x * nx + _vp.z * nz );
+				// (a rope only pulls)
+				const pull = Math.max( 0, ( d - RODE_SLACK ) * RODE_K + away * RODE_C );
+				addForceAt( _f.set( nx * pull, 0, nz * pull ), bow );
+
+			}
+
 		}
 
 		// ---- grounding on terrain + contact with pier piles
@@ -448,6 +476,7 @@ export class BoatController {
 		this.moored = true;
 		this.mooring.anchor.copy( WORLD.boatDock.position );
 		this.mooring.heading = WORLD.boatDock.heading;
+		this.anchor = null;
 
 	}
 

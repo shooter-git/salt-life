@@ -65,7 +65,7 @@ Materials are three's `MeshStandardMaterial` (or `MeshPhysicalMaterial`), with G
   - Each player is one of four Rocketbox islanders (`Avatar.js`): two men and two women. Everyone picks theirs on the cooler's Islander tab; it's saved with their progress and sent in the pose (`l`). Until someone picks, the same person always gets the same one. Each has their name over them in their colour and a dot on the minimap.
   - Their boat is a copy of yours that shares its meshes and materials. When both boats are at the dock, yours stands in for theirs.
   - Their rod, line and bobber are the rod's (`FishingRod.tackle()`).
-  - Their boat shows its lamps (below): lit as under way when they're at the helm or away from the dock, and their searchlight when the pose says it's on (`S`).
+  - Their boat shows its lamps (below): lit as under way when they're at the helm or away from the dock and not at anchor (`A`), and their searchlight when the pose says it's on (`S`).
 - **Riding along:** standing by someone's boat offers "Board their boat".
   - Aboard, you ride on their boat wherever they take it (`Player.ride()`); your pose names the boat's owner (`R`), so everyone draws you on it.
   - Your own boat stays at its mooring, so each player always has a boat of their own. Jumping off or stepping ashore ends the ride.
@@ -218,16 +218,30 @@ The cast net is `src/game/CastNet.js` and its half of `src/game/Game.js`. The fi
 - **Sound**: no recordings of its own yet (`SoundScape.netThrow`, `netSplash`, `netLand`, `netPull`, `netLift`, `netDump`). The rod's swish slowed down is the net spinning out; splashes sped up are the lead line coming down; swim strokes are the wet netting drawn in.
 - **On the island**: cast nets hang drying by their horns on the beach racks (`Props.castNetHung`, through `netRack`), and lie in heaps on the sand by the chandlery and on the pier by the bait bucket (`castNetHeap`).
 
+## The anchor
+
+Marta sells one (`anchor` in `Gear.js`: a Danforth on 200 ft of rode, `anchorM` 20, so it holds in up to 66 ft of water).
+
+- **No button:** it goes down when you leave the helm out on the water and comes up when you take it again, as the dock lines do at the berth (`Game.updateAnchor`). It waits for the boat to slow below 2.5 m/s (`ANCHOR_SPEED`) and isn't used within 14 m of the berth, where the dock lines take her (`BERTH_M`). Deeper than the rode holds, a toast says so and she drifts.
+- **The rode** (`BoatController.anchor`, the spot on the bottom): it's made fast at the stem head, slack until the bow swings 4 m from over the anchor (`RODE_SLACK`), then a damped spring that only pulls, so the boat is brought up short and her bow comes round to it.
+- **What you see:** the rode, the fishing line's ribbon at twice its width in rope's colour, from the stem head down and along the bottom (`Game.rode`). At night the masthead shows the anchor light.
+- Others see it too: the pose says your boat is at anchor (`A`), and their copy of it shows the anchor light.
+- With nothing yet pushing a boat sideways (no wind or current), what it does now is stop her coasting on once you've left the helm. It's what weather's wind will push against.
+
 ## The boat at night
 
 `src/world/boat/BoatLamps.js` gives each boat (yours, and each copy of someone else's) the lamps a boat shows at night:
 
 - **Navigation lights:**
   - Under way: the red sidelight to port, the green one to starboard, the white masthead light ahead and the white stern light. Each is seen only from its own arc, as at sea, so you can tell which way a boat is heading.
-  - Moored: one white anchor light at the masthead, seen all round.
+  - Moored or at anchor: one white anchor light at the masthead, seen all round.
   - They're glowing points a few pixels across at any distance, all in one draw.
 - **The searchlight** (L at the helm, or the Searchlight button): a beam in the night air, its lens glaring when it points at you, and a spot in the local lights.
   - The sea takes the local lights in its own way (`LOCAL_LIGHTS_WATER` in `WaterSurface`). Beams light a pool on the water; a lamp's light on it is mostly its glints.
+- **The deck floodlights** (`lights` in `Gear.js`), lit from dusk once fitted, draw fish to their pool astern (`Game.floodAt`: all of it within 5 m of the stern, none past 14 m).
+  - Yellowtail, jacks and houndfish gather there (`flood` in `FishTable.js`): their weight in `Bites.pickSpecies` counts up to that many times more, about doubling their share of night bites.
+  - The pool counts as richer water in `Bites.biteDelay`, so bites come sooner in open water (a reef or the pier is already as rich as it gets).
+  - Only the odds change: the swimming fish don't crowd into the light as the tarpon do under the pier lamps.
 - **The horn** (hold H at the helm, the Horn button, or the left stick): Félix Blume's field recording of a cruise boat's horn in Istanbul (CC0), three blasts in one sprite (`tools/audio/build-horn.mjs`).
   - It sounds from the wheelhouse roof for as long as it's held and fades when let go.
 
