@@ -5,8 +5,8 @@ import { G } from '../../core/Globals.js';
 // see of it in the dark, and its searchlight.
 //  - Under way: the sidelights (red to port, green to starboard, each from dead ahead to 22.5° abaft the
 //    beam), the white masthead light ahead (225°) and the white stern light (135° aft): seen only from
-//    their own sectors, so a boat's lights say which way it's heading. Moored: one all-round white
-//    anchor light at the masthead.
+//    their own sectors, so a boat's lights say which way it's heading. Moored or at anchor: one
+//    all-round white anchor light at the masthead.
 //  - The searchlight on the wheelhouse roof: a beam ahead (a soft cone in the night air), its lens
 //    glaring when it points at you, and its light on the water and what it meets (a LocalLights spot).
 // The lights are glowing points that keep a few pixels across at any distance (one draw), the beam a
