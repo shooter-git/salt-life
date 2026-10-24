@@ -1,4 +1,4 @@
-import { FISH, fishLengthCm } from './FishTable.js';
+import { FISH, CARAPACE, fishLengthCm } from './FishTable.js';
 import { UPGRADES, nextLevel, FUEL_PRICE } from './Gear.js';
 import { BAITS, BAIT_IDS, chunksOf } from './Bait.js';
 import { LOOKS, LOOK_NAMES } from '../together/Avatar.js';
@@ -13,10 +13,14 @@ const escape = ( t ) => String( t ).replace( /[&<>"']/g, ( c ) => ( { '&': '&amp
 const item = ( name, meta, ...right ) => `<div class="gm-item"><span class="gm-item-main"><span class="gm-item-name">${ name }</span><span class="gm-item-meta">${ meta }</span></span>${ right.join( '' ) }</div>`;
 // (Salt Life) price: what it fetches here (a wanted fish: the order's price); wanted: on today's list
 const fishItem = ( f, button, price = f.value, wanted = false ) => item( `${ FISH[ f.species ].name }${ f.record ? '<small>record</small>' : '' }${ wanted ? '<small class="is-wanted">wanted</small>' : '' }`,
-	`${ inches( f.cm ?? fishLengthCm( f.species, f.kg ) ) } · ${ lb( f.kg ) }${ f.method === 'spear' ? ' · speared' : f.method === 'net' ? ' · netted' : '' }`, `<span class="gm-item-val">$${ price }</span>`, button );
+	`${ sizeOf( f.species, f.cm ?? fishLengthCm( f.species, f.kg ) ) } · ${ lb( f.kg ) }${ { spear: ' · speared', net: ' · netted', hand: ' · by hand' }[ f.method ] || '' }`, `<span class="gm-item-val">$${ price }</span>`, button );
 // (Salt Life) why the net's catch went back (GameState.addHaul)
 const BACK = { protected: 'protected', notNet: 'not bait', full: 'no room in the cooler', bucket: 'the bucket\'s full' };
 const upper = ( t ) => t.charAt( 0 ).toUpperCase() + t.slice( 1 );
+// (Salt Life) a spiny lobster's carapace (the gauge's measure), of its total length (cm), in inches;
+// a catch's size as it's told (a lobster by its carapace)
+const carapaceIn = ( cm ) => cm * CARAPACE / IN;
+const sizeOf = ( species, cm ) => species === 'lobster' ? `${ carapaceIn( cm ).toFixed( 1 ) } in carapace` : inches( cm );
 
 // DOM for the fishing game, in the look of the rest of the HUD (ui/game-ui.css tokens, .tw-glass):
 //   top right     purse and cooler / hold load
@@ -500,8 +504,11 @@ export class GameHUD {
 		this.aimTag.classList.toggle( 'is-on', !! tag );
 		if ( tag ) {
 
-			const why = { protected: 'protected', notTarget: 'not a target', small: `${ inches( aim.cm ) } · too small` }[ aim.rule ];
-			const html = `${ escape( aim.label ) }<small>${ why || ( aim.far ? `${ inches( aim.cm ) } · get closer` : inches( aim.cm ) ) }</small>`;
+			// (a lobster: its carapace by eye, the gauge has the last word)
+			const size = aim.carapace ? `~${ carapaceIn( aim.cm ).toFixed( 1 ) } in carapace` : inches( aim.cm );
+			const short = aim.carapace && aim.cm < FISH.lobster.minCm;
+			const why = { protected: 'protected', notTarget: 'not a target', small: `${ size } · too small`, byHand: 'by hand only', shark: 'no spearing sharks' }[ aim.rule ];
+			const html = `${ escape( aim.label ) }<small>${ why || ( aim.far ? `${ size } · get closer` : short ? `${ size } · looks short` : size ) }</small>`;
 			if ( html !== this._aimHtml ) {
 
 				this._aimHtml = html;
@@ -509,7 +516,7 @@ export class GameHUD {
 
 			}
 
-			this.aimTag.className = 'gm-aim is-on' + ( aim.rule === 'small' ? ' is-small' : aim.rule !== 'ok' ? ' is-no' : aim.far ? ' is-far' : '' );
+			this.aimTag.className = 'gm-aim is-on' + ( aim.rule === 'small' || short ? ' is-small' : aim.rule !== 'ok' ? ' is-no' : aim.far ? ' is-far' : '' );
 
 		}
 
@@ -533,7 +540,7 @@ export class GameHUD {
 
 	// ---- catch card
 	// info: GameState.lastCatch ({ species, kg, cm, value, newSpecies, record, prevBestKg, prevBestCm, kept,
-	// released, method })
+	// released, why, method, bag })
 	showCatch( info, ms = 9000 ) {
 
 		const f = FISH[ info.species ];
@@ -541,16 +548,21 @@ export class GameHUD {
 		const isle = info.islandHeld;
 		const badge = info.islandRecord ? '<span class="gm-badge is-record">★ Island record</span>'
 			: info.record ? '<span class="gm-badge is-record">★ New record</span>'
-			: info.newSpecies ? '<span class="gm-badge is-new">New species</span>' : `<span class="gm-badge is-plain">${ info.method === 'spear' ? 'Speared' : 'Catch' }</span>`;
+			: info.newSpecies ? '<span class="gm-badge is-new">New species</span>' : `<span class="gm-badge is-plain">${ { spear: 'Speared', hand: 'By hand' }[ info.method ] || 'Catch' }</span>`;
 		let note;
-		// (Salt Life: a protected fish is measured and let go; the lionfish's bounty)
-		if ( info.released ) note = `<div class="gm-catch-note">Protected: measured and let go alive${ info.islandRecord ? '. It still goes on the board at the fish stand' : '' }.</div>`;
+		// (Salt Life: a protected fish is measured and let go, as is a catch-and-release one and a short or
+		// berried lobster; one over the day's bag goes back; the lionfish's bounty)
+		const board = info.islandRecord ? '. It still goes on the board at the fish stand' : '';
+		if ( info.why === 'short' ) note = `<div class="gm-catch-note is-warn">Short: under ${ ( f.minCm * CARAPACE / IN ).toFixed( 0 ) } in on the gauge · back it goes, to grow${ board }.</div>`;
+		else if ( info.why === 'berried' ) note = `<div class="gm-catch-note is-warn">Berried: she's carrying eggs under her tail · back she goes${ board }.</div>`;
+		else if ( info.released ) note = `<div class="gm-catch-note">${ f.cr ? 'Catch and release: everyone lets one go. Measured and' : 'Protected: measured and' } let go alive${ board }.</div>`;
+		else if ( info.bag && info.bag.full ) note = `<div class="gm-catch-note is-warn">That's your ${ info.bag.max } for today, the most anyone may keep · back it goes</div>`;
 		else if ( ! info.kept ) note = `<div class="gm-catch-note is-warn">No room in the ${ this.game.state.upgrades.hold > 0 ? 'hold' : 'cooler' } · you let it go</div>`;
 		else if ( f.bounty && ! info.islandRecord && ! info.record ) note = `<div class="gm-catch-note">An invader on the reef: Joe pays $${ f.bounty } a fish on top.</div>`;
 		else if ( info.islandRecord ) note = `<div class="gm-catch-note">The heaviest anyone here has landed${ isle ? `. It beats ${ escape( isle.who || 'someone' ) }'s <b>${ lb( isle.kg ) }</b>` : '' }. It goes on the board at the fish stand.</div>`;
-		else if ( info.record ) note = `<div class="gm-catch-note">Previous best <b>${ lb( info.prevBestKg ) }</b> · ${ inches( info.prevBestCm ) }. Beaten by ${ lb( info.kg - info.prevBestKg ) }.</div>`;
+		else if ( info.record ) note = `<div class="gm-catch-note">Previous best <b>${ lb( info.prevBestKg ) }</b> · ${ sizeOf( info.species, info.prevBestCm ) }. Beaten by ${ lb( info.kg - info.prevBestKg ) }.</div>`;
 		else if ( info.newSpecies ) note = '<div class="gm-catch-note">First one in your fish log.</div>';
-		else note = `<div class="gm-catch-note">Your best: ${ lb( info.prevBestKg ) } · ${ inches( info.prevBestCm ) }</div>`;
+		else note = `<div class="gm-catch-note">Your best: ${ lb( info.prevBestKg ) } · ${ sizeOf( info.species, info.prevBestCm ) }</div>`;
 		// splash burst around the fish as it lands in view
 		let drops = '';
 		for ( let i = 0; i < 26; i ++ ) {
@@ -571,9 +583,9 @@ export class GameHUD {
 			<div class="gm-catch-stage"><canvas></canvas><div class="gm-splash">${ drops }</div></div>
 			<div class="gm-catch-bottom">
 				<div class="gm-catch-stats">
-					<div class="gm-stat"><span>Length</span><b>${ inch.toFixed( 1 ) }<small>in</small></b><i>${ feetInches( info.cm ) || '&nbsp;' }</i></div>
+					${ info.species === 'lobster' ? `<div class="gm-stat"><span>Carapace</span><b>${ carapaceIn( info.cm ).toFixed( 2 ) }<small>in</small></b><i>${ inches( info.cm ) } long</i></div>` : `<div class="gm-stat"><span>Length</span><b>${ inch.toFixed( 1 ) }<small>in</small></b><i>${ feetInches( info.cm ) || '&nbsp;' }</i></div>` }
 					<div class="gm-stat"><span>Weight</span>${ lbs * 16 < 15.5 ? `<b>${ Math.max( 1, Math.round( lbs * 16 ) ) }<small>oz</small></b><i>&nbsp;</i>` : `<b>${ lbs.toFixed( 1 ) }<small>lb</small></b><i>${ lbOz( info.kg ) }</i>` }</div>
-					<div class="gm-stat is-value"><span>Value</span><b>${ info.released ? '—' : `$${ info.value }` }</b><i>${ info.released ? 'released' : ! info.kept ? 'let go' : info.wanted ? info.wanted.text : 'in the cooler' }</i></div>
+					<div class="gm-stat is-value"><span>Value</span><b>${ info.released ? '—' : `$${ info.value }` }</b><i>${ info.released ? 'released' : ! info.kept ? 'let go' : info.wanted ? info.wanted.text : info.bag ? `${ info.bag.n } of ${ info.bag.max } today` : 'in the cooler' }</i></div>
 				</div>
 				${ note }
 				<div class="gm-catch-foot">${ { touch: 'Tap to continue', gamepad: '<kbd>RT</kbd> or <kbd>B</kbd> to continue' }[ this.device ] || '<kbd>Click</kbd> or <kbd>E</kbd> to continue' }<span class="gm-catch-timer"><span></span></span></div>
@@ -726,7 +738,7 @@ export class GameHUD {
 
 			// (Salt Life) a mullet can be cut into bait for the hook
 			const g = this.game, wanted = s.wantedIds( g.orders, g.tradeDay, g.weekTerms ? g.weekTerms() : null );
-			body = s.inventory.map( ( f ) => fishItem( f, `<span class="gm-btns">${ f.species === 'mullet' ? `<button class="gm-mini" data-cut="${ f.id }" title="Cut into ${ chunksOf( f.kg ) } chunks of bait">Cut bait</button>` : '' }<button class="gm-mini" data-release="${ f.id }">Release</button></span>`, f.value, wanted.has( f.id ) ) ).join( '' ) || empty( 'Nothing yet. Cast from the pier, the beach or the boat, throw the cast net, or dive with the speargun.' );
+			body = s.inventory.map( ( f ) => fishItem( f, `<span class="gm-btns">${ f.species === 'mullet' ? `<button class="gm-mini" data-cut="${ f.id }" title="Cut into ${ chunksOf( f.kg ) } chunks of bait">Cut bait</button>` : '' }<button class="gm-mini" data-release="${ f.id }">Release</button></span>`, f.value, wanted.has( f.id ) ) ).join( '' ) || empty( 'Nothing yet. Cast from the pier, the beach or the boat, throw the cast net, dive with the speargun, or hunt lobsters on the reef after dark.' );
 			hint = 'Sell at the fish stand by the pier';
 
 		} else if ( tab === 'bait' ) {
@@ -741,13 +753,13 @@ export class GameHUD {
 
 		} else if ( tab === 'log' ) {
 
-			body = logged.map( ( [ k, v ] ) => item( FISH[ k ].name, `${ v.count } caught`, `<span class="gm-item-num">${ lb( v.bestKg ) } · ${ inches( v.bestCm ?? fishLengthCm( k, v.bestKg ) ) }</span>` ) ).join( '' )
+			body = logged.map( ( [ k, v ] ) => item( FISH[ k ].name, `${ v.count } caught`, `<span class="gm-item-num">${ lb( v.bestKg ) } · ${ sizeOf( k, v.bestCm ?? fishLengthCm( k, v.bestKg ) ) }</span>` ) ).join( '' )
 				|| empty( 'Each kind you catch is logged here, with your best.' );
 			hint = 'Your best of each kind';
 
 		} else if ( tab === 'records' ) {
 
-			body = isle.map( ( [ k, r ] ) => item( FISH[ k ].name, ( r.id === me ? '<b>You</b>' : escape( r.who || '?' ) ) + ( r.m === 's' ? ' · speared' : r.m === 'n' ? ' · netted' : '' ), `<span class="gm-item-num">${ lb( r.kg ) }${ r.cm ? ` · ${ inches( r.cm ) }` : '' }</span>` ) ).join( '' )
+			body = isle.map( ( [ k, r ] ) => item( FISH[ k ].name, ( r.id === me ? '<b>You</b>' : escape( r.who || '?' ) ) + ( { s: ' · speared', n: ' · netted', h: ' · by hand' }[ r.m ] || '' ), `<span class="gm-item-num">${ lb( r.kg ) }${ r.cm ? ` · ${ sizeOf( k, r.cm ) }` : '' }</span>` ) ).join( '' )
 				|| empty( 'None yet: the first of each kind anyone lands here sets one.' );
 			hint = 'The heaviest of each kind anyone here has landed';
 

@@ -10,6 +10,7 @@ import { ReefLayout } from '../src/world/reef/ReefLayout.js';
 import { FishSchools } from '../src/world/Fish.js';
 import { fishModels } from '../src/world/fish/FishModels.js';
 import { WORLD } from '../src/world/WorldLayout.js';
+import { computeShoreField } from '../src/world/ShoreField.js';
 import { FISH } from '../src/game/FishTable.js';
 
 let failed = 0;
@@ -187,6 +188,107 @@ for ( const tier of [ 'low', 'high' ] ) {
 	}
 
 	check( near < 4, `jacks come to look at a diver keeping still (to ${ near.toFixed( 1 ) } m)` );
+
+}
+
+// ---- (Salt Life) the new sea life: the snappers, the goliath, bonefish on the flats, sharks that
+// steal a speared fish, and spiny lobsters in their dens
+{
+
+	const shoreField = computeShoreField( terrain, { res: 512, swellDir: [ WORLD.swellDir.x, WORLD.swellDir.y ] } );
+	const fish = new FishSchools( { parent: new Group(), terrain, ground, tier: 'mid', floorAt, center: WORLD.reef.center, radius: WORLD.reef.radius + 10, anchors: reef.anchors, shoreField } );
+	const P = fish.pos, at = ( i ) => new Vector3( P[ i * 3 ], P[ i * 3 + 1 ], P[ i * 3 + 2 ] );
+	const kinds = new Set( fish.groups.map( ( g ) => g.sp.name ) );
+	const want = [ 'silkSnapper', 'cuberaSnapper', 'graySnapper', 'pierGray', 'goliathGrouper', 'bonefish', 'whiteMullet', 'reefShark', 'blacktipShark', 'nurseShark', 'lobster' ];
+	check( want.every( ( k ) => kinds.has( k ) ), `new sea life placed (missing: ${ want.filter( ( k ) => ! kinds.has( k ) ).join( ', ' ) || 'none' })` );
+	const reds = fish.groups.filter( ( g ) => g.sp.fish === 'redSnapper' );
+	const shallowest = Math.min( ...reds.map( ( g ) => fish.depthAt( g.home.x, g.home.z ) ) );
+	check( reds.length > 0 && shallowest > 14, `red snappers only over deep water (the shallowest at ${ shallowest.toFixed( 0 ) } m)` );
+	check( fish.groups.filter( ( g ) => g.sp.rule === 'shark' ).every( ( g ) => ! g.sp.fish && g.sp.label ), 'the sharks are no one\'s catch' );
+
+	// lobsters: by day in their dens; tickled out; rushed, they shoot off backwards, then walk home
+	const lob = fish.groups.filter( ( g ) => g.sp.name === 'lobster' );
+	const i = lob[ 0 ].offset, den = [ fish.slot[ i * 4 ], fish.slot[ i * 4 + 1 ] ];
+	const near = at( i ).add( new Vector3( 3, 2, 0 ) ), away = near.clone().add( new Vector3( 10, 0, 0 ) );
+	fish.hour = 13;
+	for ( let k = 0; k < 90; k ++ ) fish.update( 1 / 30, near );
+	const inDens = lob.every( ( g ) => fish.lobsterState( g.offset ) === 'den' );
+	let t = 0;
+	while ( fish.lobsterState( i ) === 'den' && t < 10 ) {
+
+		fish.tickle( i, 1 / 30, 1 / 2.5 );
+		fish.update( 1 / 30, near );
+		t += 1 / 30;
+
+	}
+
+	check( inDens && fish.lobsterState( i ) === 'out' && t > 2 && t < 4, `by day the lobsters keep to their dens; tickled, one walks out (after ${ t.toFixed( 1 ) } s)` );
+	for ( let k = 0; k < 60; k ++ ) fish.update( 1 / 30, near );
+	const out = Math.hypot( P[ i * 3 ] - den[ 0 ], P[ i * 3 + 2 ] - den[ 1 ] );
+	const rush = at( i ).add( new Vector3( 0.4, 0.3, 0 ) );
+	for ( let k = 0; k < 6; k ++ ) fish.update( 1 / 30, rush );
+	const flipped = fish.lobsterState( i ) === 'flip';
+	for ( let k = 0; k < 30 * 30; k ++ ) fish.update( 1 / 30, away );
+	const home = Math.hypot( P[ i * 3 ] - den[ 0 ], P[ i * 3 + 2 ] - den[ 1 ] );
+	check( out > 0.1 && flipped && fish.lobsterState( i ) === 'den' && home < 0.05, `out of its den (${ out.toFixed( 2 ) } m), it shoots off backwards from a rushing diver and walks home` );
+	// netted: held for the game; let go, off it shoots
+	const j = lob[ 1 ].offset;
+	fish.netLobster( j, true, P[ j * 3 ] + 1, P[ j * 3 + 2 ] );
+	const held = fish.held[ j ] === 1;
+	fish.letGo( j, P[ j * 3 ] + 1, P[ j * 3 + 2 ] );
+	check( held && ! fish.held[ j ] && fish.lobsterState( j ) === 'flip', 'a netted lobster is held for the game; one let go shoots off' );
+	fish.hour = 23;
+	for ( let k = 0; k < 30 * 60; k ++ ) fish.update( 1 / 30, away );
+	const foraging = lob.filter( ( g ) => fish.lobsterState( g.offset ) !== 'den' ).length;
+	check( foraging >= lob.length * 0.7, `after dark they walk out to forage (${ foraging } of ${ lob.length })` );
+
+	// a reef shark comes for a fish on the shaft, takes it, and makes off
+	const sh = fish.groups.find( ( g ) => g.sp.name === 'reefShark' );
+	const prey = sh.center.clone().add( new Vector3( 8, 0, 4 ) ), diver = prey.clone().add( new Vector3( 2, 0, 0 ) );
+	for ( let k = 0; k < 30; k ++ ) fish.update( 1 / 30, diver );
+	const th = fish.thiefNear( prey.x, prey.y, prey.z );
+	let tt = 0, got = false, fled = 0;
+	if ( th ) {
+
+		const r = fish.raid( th.i, prey.x, prey.y, prey.z );
+		while ( ! r.got && tt < 15 ) {
+
+			fish.update( 1 / 30, diver );
+			tt += 1 / 30;
+
+		}
+
+		got = r.got;
+		const take = at( th.i ).clone();
+		for ( let k = 0; k < 150; k ++ ) fish.update( 1 / 30, diver );
+		fled = at( th.i ).distanceTo( take );
+
+	}
+
+	check( th && got && tt < 10 && fled > 2, `a reef shark takes a speared fish (in ${ tt.toFixed( 1 ) } s), then makes off (${ fled.toFixed( 1 ) } m from it)` );
+
+	// bonefish tail on the flats: noses down, tails breaking the surface now and then, never aground
+	const bg = fish.groups.find( ( g ) => g.sp.name === 'bonefish' );
+	const view = bg.center.clone().add( new Vector3( 30, 3, 0 ) );
+	let rooting = 0, n = 0, wet = true;
+	for ( let k = 0; k < 30 * 30; k ++ ) {
+
+		fish.update( 1 / 30, view );
+		for ( let a = 0; a < bg.count; a ++ ) {
+
+			const b = bg.offset + a, y = P[ b * 3 + 1 ];
+			n ++;
+			if ( fish.aux[ b * 8 ] > 0 ) rooting ++;
+			if ( ! ( y < 0.05 && y > floorAt( P[ b * 3 ], P[ b * 3 + 2 ] ) - 0.05 ) ) wet = false;
+
+		}
+
+	}
+
+	check( rooting / n > 0.15 && rooting / n < 0.7 && wet, `bonefish root along the flats (${ ( 100 * rooting / n ).toFixed( 0 ) }% of the time) and stay in the water` );
+	let finite = true;
+	for ( let k = 0; k < fish.n * 3; k ++ ) if ( ! Number.isFinite( P[ k ] ) ) finite = false;
+	check( finite, 'all of it stays finite' );
 
 }
 

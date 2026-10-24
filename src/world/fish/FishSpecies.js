@@ -14,13 +14,18 @@
 //  dorsal / anal: fin segments { from, to, rays, spiny, h: [ [ t, height ], ... ] over the
 //    segment, rake: [ first, last ] angle of the rays from the vertical (rad), notch: membrane
 //    dip between the rays (fraction of the ray length) }
-//  pectoral: { u, y, len, base, rays, shape ('rounded' | 'pointed' | 'falcate'), spread (out from the
-//    flank, rad; [ first, last ] ray: a fan), notch (membrane dip between the ray tips; default 0.035) }
+//  pectoral: { u, y, len, base, rays, shape ('rounded' | 'pointed' | 'falcate' | 'shark'), spread (out
+//    from the flank, rad; [ first, last ] ray: a fan), notch (membrane dip between the ray tips; default
+//    0.035) }. (Salt Life) 'shark': a stiff fin on a long base along the flank (base: its length in u),
+//    the leading edge longest, swept back to a short trailing edge (round: a broad, rounded one)
 //  pelvic: { u, len, rays }
-//  caudal: { shape: 'forked' | 'lunate' | 'rounded' | 'truncate', len, span, fork (length of the
-//    middle rays relative to the lobes), rays }
+//  caudal: { shape: 'forked' | 'lunate' | 'rounded' | 'truncate' | 'heterocercal', len, span, fork
+//    (length of the middle rays relative to the lobes), rays }. (Salt Life) 'heterocercal': a shark's,
+//    the long upper lobe swept up and back over a shorter lower one (lower: its height and lowerLen
+//    its length, relative to the upper's)
 //  finlets: { from, to, dorsal, ventral } (tunas)
 //  iris: eye colour (sRGB hex); irid: iridescence (0 .. 1); metal: silvery guanine reflection
+//  (Salt Life) scaleVis -1: a shark's skin, no gill cover (five gill slits instead: FishMaterial)
 
 export const PATTERN = {
 	silverside: 0, chromis: 1, grunt: 2, yellowtail: 3, tang: 4, sergeant: 5, wrasse: 6, parrot: 7,
@@ -28,6 +33,9 @@ export const PATTERN = {
 	jack: 16, tarpon: 17, stingray: 18, eagleRay: 19, turtle: 20,
 	// (Salt Life) for the speargun: the spearfisher's fish of the reef
 	hogfish: 21, blackGrouper: 22, muttonSnapper: 23, lionfish: 24,
+	// (Salt Life) the flats, the piles and the deep ledges; the sharks; the spiny lobster
+	bonefish: 25, goliathGrouper: 26, cuberaSnapper: 27, silkSnapper: 28, graySnapper: 29, whiteMullet: 30,
+	reefShark: 31, blacktipShark: 32, nurseShark: 33, lobster: 34,
 };
 
 const spiny = ( from, to, rays, h, rake, notch = 0.16 ) => ( { from, to, rays, spiny: true, h, rake, notch } );
@@ -274,7 +282,7 @@ export const SPECIES = {
 		iris: 0x8a8a50, irid: 0.6, metal: 0.25,
 	},
 
-	// white mullet: robust, blunt head, small mouth, two widely spaced dorsal fins, forked tail
+	// striped mullet: robust, blunt head, small mouth, two widely spaced dorsal fins, forked tail
 	mullet: {
 		pattern: PATTERN.mullet, body: 0.82, sec: 2.15,
 		top: [ [ 0, 0.008 ], [ 0.03, 0.03 ], [ 0.08, 0.055 ], [ 0.16, 0.08 ], [ 0.28, 0.1 ], [ 0.42, 0.107 ], [ 0.56, 0.1 ], [ 0.7, 0.082 ], [ 0.84, 0.058 ], [ 1, 0.044 ] ],
@@ -413,10 +421,170 @@ export const SPECIES = {
 		iris: 0x9a2a1a, irid: 0.05, metal: 0.0,
 	},
 
+	// (Salt Life) bonefish: a silver torpedo, the conical snout overhanging a small mouth set low under
+	// it, one dorsal fin at mid-back, a deeply forked tail
+	bonefish: {
+		pattern: PATTERN.bonefish, body: 0.8, sec: 2.0,
+		top: [ [ 0, 0.004 ], [ 0.03, 0.016 ], [ 0.08, 0.036 ], [ 0.16, 0.06 ], [ 0.28, 0.084 ], [ 0.42, 0.095 ], [ 0.56, 0.088 ], [ 0.7, 0.068 ], [ 0.85, 0.045 ], [ 1, 0.034 ] ],
+		bot: [ [ 0, 0.004 ], [ 0.03, 0.018 ], [ 0.08, 0.038 ], [ 0.16, 0.058 ], [ 0.28, 0.076 ], [ 0.42, 0.085 ], [ 0.56, 0.08 ], [ 0.7, 0.062 ], [ 0.85, 0.042 ], [ 1, 0.032 ] ],
+		wid: [ [ 0, 0.004 ], [ 0.05, 0.022 ], [ 0.15, 0.042 ], [ 0.3, 0.055 ], [ 0.45, 0.058 ], [ 0.65, 0.046 ], [ 0.85, 0.03 ], [ 1, 0.018 ] ],
+		mouth: { corner: 0.055, y: - 0.022, tip: - 0.004, protrude: - 0.012 },
+		eye: { u: 0.1, y: 0.018, r: 0.019 }, opercle: 0.23,
+		scales: 0.016, scaleVis: 0.45, lateral: 0.12, arch: 0.05,
+		dorsal: [ soft( 0.36, 0.52, 16, [ [ 0, 0.085 ], [ 0.2, 0.08 ], [ 1, 0.02 ] ], [ 0.35, 0.9 ] ) ],
+		anal: [ soft( 0.76, 0.84, 8, [ [ 0, 0.045 ], [ 1, 0.018 ] ], [ 0.55, 0.9 ] ) ],
+		pectoral: { u: 0.27, y: - 0.045, len: 0.11, base: 0.018, rays: 16, shape: 'pointed', spread: 0.4 },
+		pelvic: { u: 0.52, len: 0.07, rays: 9 },
+		caudal: { shape: 'forked', len: 0.21, span: 0.15, fork: 0.32, rays: 19 },
+		iris: 0xd8d0b0, irid: 0.55, metal: 0.65,
+	},
+
+	// goliath grouper: a huge, heavy grouper, the head broad and flat between small eyes, a low spiny
+	// dorsal running into the soft one, broad rounded pectorals and tail
+	goliathGrouper: {
+		pattern: PATTERN.goliathGrouper, body: 0.83, sec: 2.3,
+		top: [ [ 0, 0.008 ], [ 0.03, 0.035 ], [ 0.08, 0.07 ], [ 0.15, 0.105 ], [ 0.25, 0.138 ], [ 0.38, 0.156 ], [ 0.52, 0.158 ], [ 0.66, 0.14 ], [ 0.8, 0.105 ], [ 0.92, 0.078 ], [ 1, 0.07 ] ],
+		bot: [ [ 0, 0.008 ], [ 0.03, 0.036 ], [ 0.08, 0.07 ], [ 0.15, 0.104 ], [ 0.25, 0.132 ], [ 0.38, 0.148 ], [ 0.52, 0.146 ], [ 0.66, 0.125 ], [ 0.8, 0.09 ], [ 0.92, 0.07 ], [ 1, 0.065 ] ],
+		wid: [ [ 0, 0.008 ], [ 0.04, 0.045 ], [ 0.12, 0.08 ], [ 0.25, 0.098 ], [ 0.4, 0.1 ], [ 0.6, 0.086 ], [ 0.8, 0.06 ], [ 1, 0.034 ] ],
+		mouth: { corner: 0.15, y: - 0.022, tip: - 0.008, protrude: 0.012 },
+		eye: { u: 0.12, y: 0.062, r: 0.012 }, opercle: 0.31,
+		scales: 0.008, scaleVis: 0.3, lateral: 0.6, arch: 0.2,
+		dorsal: [ spiny( 0.3, 0.55, 11, [ [ 0, 0.03 ], [ 0.3, 0.045 ], [ 1, 0.04 ] ], [ 0.35, 0.5 ], 0.18 ), soft( 0.55, 0.86, 16, [ [ 0, 0.06 ], [ 0.5, 0.07 ], [ 1, 0.035 ] ], [ 0.55, 0.95 ] ) ],
+		anal: [ spiny( 0.64, 0.67, 3, [ [ 0, 0.02 ], [ 1, 0.035 ] ], [ 0.4, 0.5 ], 0.12 ), soft( 0.67, 0.84, 8, [ [ 0, 0.065 ], [ 0.5, 0.072 ], [ 1, 0.035 ] ], [ 0.55, 0.9 ] ) ],
+		pectoral: { u: 0.32, y: - 0.03, len: 0.17, base: 0.045, rays: 19, shape: 'rounded', spread: 0.45 },
+		pelvic: { u: 0.34, len: 0.11, rays: 6 },
+		caudal: { shape: 'rounded', len: 0.15, span: 0.12, fork: 1, rays: 15 },
+		iris: 0x6a5a38, irid: 0.03, metal: 0.0,
+	},
+
+	// cubera snapper: the biggest of the snappers, heavy-bodied, thick-lipped, with a rounded anal fin
+	cuberaSnapper: {
+		pattern: PATTERN.cuberaSnapper, body: 0.81, sec: 2.2,
+		top: [ [ 0, 0.005 ], [ 0.02, 0.022 ], [ 0.06, 0.048 ], [ 0.12, 0.08 ], [ 0.2, 0.11 ], [ 0.3, 0.13 ], [ 0.42, 0.138 ], [ 0.55, 0.132 ], [ 0.68, 0.108 ], [ 0.8, 0.08 ], [ 0.9, 0.06 ], [ 1, 0.052 ] ],
+		bot: [ [ 0, 0.005 ], [ 0.02, 0.02 ], [ 0.06, 0.04 ], [ 0.12, 0.066 ], [ 0.2, 0.09 ], [ 0.3, 0.106 ], [ 0.42, 0.115 ], [ 0.55, 0.11 ], [ 0.68, 0.088 ], [ 0.8, 0.066 ], [ 0.9, 0.054 ], [ 1, 0.05 ] ],
+		wid: [ [ 0, 0.005 ], [ 0.03, 0.024 ], [ 0.1, 0.048 ], [ 0.2, 0.064 ], [ 0.35, 0.072 ], [ 0.5, 0.068 ], [ 0.65, 0.055 ], [ 0.8, 0.038 ], [ 0.92, 0.026 ], [ 1, 0.022 ] ],
+		mouth: { corner: 0.125, y: - 0.014, tip: - 0.004, protrude: 0.006 },
+		eye: { u: 0.13, y: 0.056, r: 0.016 }, opercle: 0.3,
+		scales: 0.014, scaleVis: 0.55, lateral: 0.45, arch: 0.15,
+		dorsal: [ spiny( 0.33, 0.6, 10, [ [ 0, 0.04 ], [ 0.3, 0.075 ], [ 1, 0.055 ] ], [ 0.3, 0.5 ], 0.17 ), soft( 0.6, 0.85, 14, [ [ 0, 0.065 ], [ 0.4, 0.068 ], [ 1, 0.03 ] ], [ 0.6, 0.95 ] ) ],
+		anal: [ spiny( 0.64, 0.67, 3, [ [ 0, 0.03 ], [ 1, 0.05 ] ], [ 0.4, 0.5 ], 0.1 ), soft( 0.67, 0.83, 8, [ [ 0, 0.07 ], [ 0.5, 0.075 ], [ 1, 0.045 ] ], [ 0.6, 0.85 ] ) ],
+		pectoral: { u: 0.33, y: - 0.022, len: 0.16, base: 0.034, rays: 16, shape: 'pointed', spread: 0.38 },
+		pelvic: { u: 0.37, len: 0.1, rays: 6 },
+		caudal: { shape: 'forked', len: 0.18, span: 0.13, fork: 0.85, rays: 17 },
+		iris: 0xa04030, irid: 0.15, metal: 0.1,
+	},
+
+	// silk snapper: a red snapper's shape, a little slimmer, with a big yellow eye
+	silkSnapper: {
+		pattern: PATTERN.silkSnapper, body: 0.81, sec: 2.15,
+		top: [ [ 0, 0.004 ], [ 0.02, 0.019 ], [ 0.06, 0.042 ], [ 0.12, 0.07 ], [ 0.2, 0.1 ], [ 0.3, 0.13 ], [ 0.42, 0.145 ], [ 0.55, 0.138 ], [ 0.68, 0.112 ], [ 0.8, 0.082 ], [ 0.9, 0.058 ], [ 1, 0.047 ] ],
+		bot: [ [ 0, 0.004 ], [ 0.02, 0.017 ], [ 0.06, 0.033 ], [ 0.12, 0.056 ], [ 0.2, 0.082 ], [ 0.3, 0.105 ], [ 0.42, 0.118 ], [ 0.55, 0.114 ], [ 0.68, 0.09 ], [ 0.8, 0.064 ], [ 0.9, 0.05 ], [ 1, 0.045 ] ],
+		wid: [ [ 0, 0.004 ], [ 0.03, 0.019 ], [ 0.1, 0.04 ], [ 0.2, 0.054 ], [ 0.35, 0.061 ], [ 0.5, 0.057 ], [ 0.65, 0.046 ], [ 0.8, 0.032 ], [ 0.92, 0.022 ], [ 1, 0.019 ] ],
+		mouth: { corner: 0.105, y: - 0.011, tip: - 0.004, protrude: 0.004 },
+		eye: { u: 0.135, y: 0.052, r: 0.026 }, opercle: 0.29,
+		scales: 0.017, scaleVis: 0.65, lateral: 0.45, arch: 0.15,
+		dorsal: [ spiny( 0.34, 0.61, 10, [ [ 0, 0.04 ], [ 0.3, 0.075 ], [ 1, 0.058 ] ], [ 0.3, 0.5 ], 0.17 ), soft( 0.61, 0.86, 14, [ [ 0, 0.066 ], [ 0.4, 0.068 ], [ 1, 0.032 ] ], [ 0.6, 0.95 ] ) ],
+		anal: [ spiny( 0.64, 0.68, 3, [ [ 0, 0.028 ], [ 1, 0.046 ] ], [ 0.4, 0.5 ], 0.1 ), soft( 0.68, 0.84, 8, [ [ 0, 0.07 ], [ 1, 0.032 ] ], [ 0.6, 0.9 ] ) ],
+		pectoral: { u: 0.34, y: - 0.02, len: 0.19, base: 0.032, rays: 16, shape: 'pointed', spread: 0.35 },
+		pelvic: { u: 0.38, len: 0.1, rays: 6 },
+		caudal: { shape: 'forked', len: 0.19, span: 0.14, fork: 0.65, rays: 17 },
+		iris: 0xf0c020, irid: 0.35, metal: 0.25,
+	},
+
+	// gray (mangrove) snapper: a slimmer, darker snapper with a pointed snout and two canines in front
+	graySnapper: {
+		pattern: PATTERN.graySnapper, body: 0.81, sec: 2.15,
+		top: [ [ 0, 0.004 ], [ 0.02, 0.019 ], [ 0.06, 0.042 ], [ 0.12, 0.068 ], [ 0.2, 0.095 ], [ 0.3, 0.117 ], [ 0.42, 0.128 ], [ 0.55, 0.123 ], [ 0.68, 0.1 ], [ 0.8, 0.075 ], [ 0.9, 0.054 ], [ 1, 0.045 ] ],
+		bot: [ [ 0, 0.004 ], [ 0.02, 0.017 ], [ 0.06, 0.033 ], [ 0.12, 0.054 ], [ 0.2, 0.077 ], [ 0.3, 0.095 ], [ 0.42, 0.105 ], [ 0.55, 0.101 ], [ 0.68, 0.081 ], [ 0.8, 0.06 ], [ 0.9, 0.047 ], [ 1, 0.043 ] ],
+		wid: [ [ 0, 0.004 ], [ 0.03, 0.019 ], [ 0.1, 0.038 ], [ 0.2, 0.05 ], [ 0.35, 0.055 ], [ 0.5, 0.052 ], [ 0.65, 0.042 ], [ 0.8, 0.03 ], [ 0.92, 0.021 ], [ 1, 0.018 ] ],
+		mouth: { corner: 0.11, y: - 0.01, tip: - 0.003, protrude: 0.005 },
+		eye: { u: 0.13, y: 0.048, r: 0.019 }, opercle: 0.29,
+		scales: 0.016, scaleVis: 0.6, lateral: 0.45, arch: 0.15,
+		dorsal: [ spiny( 0.33, 0.6, 10, [ [ 0, 0.04 ], [ 0.3, 0.068 ], [ 1, 0.05 ] ], [ 0.3, 0.5 ], 0.17 ), soft( 0.6, 0.85, 14, [ [ 0, 0.058 ], [ 0.4, 0.06 ], [ 1, 0.028 ] ], [ 0.6, 0.95 ] ) ],
+		anal: [ spiny( 0.63, 0.67, 3, [ [ 0, 0.028 ], [ 1, 0.045 ] ], [ 0.4, 0.5 ], 0.1 ), soft( 0.67, 0.83, 8, [ [ 0, 0.06 ], [ 0.4, 0.062 ], [ 1, 0.03 ] ], [ 0.6, 0.85 ] ) ],
+		pectoral: { u: 0.33, y: - 0.02, len: 0.17, base: 0.03, rays: 16, shape: 'pointed', spread: 0.38 },
+		pelvic: { u: 0.36, len: 0.1, rays: 6 },
+		caudal: { shape: 'forked', len: 0.18, span: 0.13, fork: 0.8, rays: 17 },
+		iris: 0xb04a28, irid: 0.2, metal: 0.15,
+	},
+
+	// white mullet: a slimmer, silverier mullet, the pectoral set high with a dark spot at its base
+	whiteMullet: {
+		pattern: PATTERN.whiteMullet, body: 0.82, sec: 2.1,
+		top: [ [ 0, 0.007 ], [ 0.03, 0.026 ], [ 0.08, 0.048 ], [ 0.16, 0.07 ], [ 0.28, 0.088 ], [ 0.42, 0.094 ], [ 0.56, 0.088 ], [ 0.7, 0.072 ], [ 0.84, 0.052 ], [ 1, 0.04 ] ],
+		bot: [ [ 0, 0.007 ], [ 0.03, 0.024 ], [ 0.08, 0.044 ], [ 0.16, 0.064 ], [ 0.28, 0.078 ], [ 0.42, 0.083 ], [ 0.56, 0.077 ], [ 0.7, 0.062 ], [ 0.84, 0.045 ], [ 1, 0.036 ] ],
+		wid: [ [ 0, 0.007 ], [ 0.04, 0.03 ], [ 0.12, 0.05 ], [ 0.25, 0.06 ], [ 0.42, 0.06 ], [ 0.6, 0.05 ], [ 0.8, 0.034 ], [ 1, 0.02 ] ],
+		mouth: { corner: 0.05, y: - 0.004, tip: 0.0, protrude: 0 },
+		eye: { u: 0.1, y: 0.021, r: 0.021 }, opercle: 0.25,
+		scales: 0.022, scaleVis: 0.55, lateral: 0.3, arch: 0.0,
+		dorsal: [ spiny( 0.44, 0.52, 4, [ [ 0, 0.055 ], [ 1, 0.032 ] ], [ 0.35, 0.6 ], 0.125 ), soft( 0.66, 0.74, 9, [ [ 0, 0.056 ], [ 1, 0.024 ] ], [ 0.55, 0.9 ] ) ],
+		anal: [ soft( 0.62, 0.72, 11, [ [ 0, 0.052 ], [ 1, 0.024 ] ], [ 0.55, 0.9 ] ) ],
+		pectoral: { u: 0.27, y: 0.028, len: 0.13, base: 0.02, rays: 16, shape: 'pointed', spread: 0.45 },
+		pelvic: { u: 0.4, len: 0.075, rays: 6 },
+		caudal: { shape: 'forked', len: 0.18, span: 0.13, fork: 0.55, rays: 15 },
+		iris: 0xd0c098, irid: 0.55, metal: 0.6,
+	},
+
+	// Caribbean reef shark: a grey torpedo with a short rounded snout, the big first dorsal over the
+	// pectorals' trailing edge, a long upper tail lobe. No gill cover: five gill slits. (The dorsals are
+	// listed second fin first, so the farthest level of detail keeps the first)
+	reefShark: {
+		pattern: PATTERN.reefShark, body: 0.74, sec: 2.0,
+		top: [ [ 0, 0.004 ], [ 0.02, 0.018 ], [ 0.06, 0.038 ], [ 0.14, 0.06 ], [ 0.26, 0.078 ], [ 0.4, 0.086 ], [ 0.55, 0.08 ], [ 0.7, 0.06 ], [ 0.85, 0.036 ], [ 0.95, 0.022 ], [ 1, 0.018 ] ],
+		bot: [ [ 0, 0.004 ], [ 0.02, 0.016 ], [ 0.06, 0.034 ], [ 0.14, 0.055 ], [ 0.26, 0.072 ], [ 0.4, 0.08 ], [ 0.55, 0.074 ], [ 0.7, 0.054 ], [ 0.85, 0.032 ], [ 0.95, 0.02 ], [ 1, 0.017 ] ],
+		wid: [ [ 0, 0.004 ], [ 0.03, 0.022 ], [ 0.1, 0.05 ], [ 0.22, 0.068 ], [ 0.38, 0.074 ], [ 0.55, 0.066 ], [ 0.72, 0.046 ], [ 0.88, 0.026 ], [ 1, 0.016 ] ],
+		mouth: { corner: 0.085, y: - 0.028, tip: - 0.012, protrude: - 0.012 },
+		eye: { u: 0.08, y: 0.012, r: 0.009 }, opercle: 0.22,
+		scales: 0, scaleVis: - 1, lateral: 0.35, arch: 0.05,
+		dorsal: [ soft( 0.86, 0.9, 4, [ [ 0, 0.03 ], [ 1, 0.008 ] ], [ 0.7, 1.35 ], 0 ), spiny( 0.38, 0.52, 9, [ [ 0, 0.11 ], [ 0.35, 0.075 ], [ 1, 0.012 ] ], [ 0.6, 1.4 ], 0 ) ],
+		anal: [ soft( 0.85, 0.9, 4, [ [ 0, 0.026 ], [ 1, 0.007 ] ], [ 0.7, 1.35 ], 0 ) ],
+		pectoral: { u: 0.29, y: - 0.045, len: 0.17, base: 0.09, rays: 9, shape: 'shark', spread: [ 1.15, 0.3 ], notch: 0 },
+		pelvic: { u: 0.64, len: 0.05, rays: 5 },
+		caudal: { shape: 'heterocercal', len: 0.27, span: 0.16, fork: 0.22, lower: 0.55, lowerLen: 0.45, rays: 15 },
+		iris: 0x4a5a40, irid: 0, metal: 0,
+	},
+
+	// blacktip shark: slimmer, the snout long and pointed, black tips on the fins
+	blacktipShark: {
+		pattern: PATTERN.blacktipShark, body: 0.75, sec: 2.0,
+		top: [ [ 0, 0.003 ], [ 0.03, 0.014 ], [ 0.08, 0.03 ], [ 0.16, 0.05 ], [ 0.28, 0.068 ], [ 0.42, 0.076 ], [ 0.56, 0.07 ], [ 0.7, 0.052 ], [ 0.85, 0.031 ], [ 0.95, 0.019 ], [ 1, 0.016 ] ],
+		bot: [ [ 0, 0.003 ], [ 0.03, 0.012 ], [ 0.08, 0.027 ], [ 0.16, 0.046 ], [ 0.28, 0.063 ], [ 0.42, 0.07 ], [ 0.56, 0.064 ], [ 0.7, 0.047 ], [ 0.85, 0.028 ], [ 0.95, 0.018 ], [ 1, 0.015 ] ],
+		wid: [ [ 0, 0.003 ], [ 0.04, 0.018 ], [ 0.12, 0.042 ], [ 0.25, 0.058 ], [ 0.4, 0.064 ], [ 0.56, 0.057 ], [ 0.72, 0.04 ], [ 0.88, 0.023 ], [ 1, 0.014 ] ],
+		mouth: { corner: 0.09, y: - 0.024, tip: - 0.01, protrude: - 0.014 },
+		eye: { u: 0.085, y: 0.01, r: 0.008 }, opercle: 0.21,
+		scales: 0, scaleVis: - 1, lateral: 0.35, arch: 0.05,
+		dorsal: [ soft( 0.86, 0.9, 4, [ [ 0, 0.026 ], [ 1, 0.007 ] ], [ 0.7, 1.35 ], 0 ), spiny( 0.37, 0.5, 9, [ [ 0, 0.12 ], [ 0.35, 0.08 ], [ 1, 0.012 ] ], [ 0.55, 1.4 ], 0 ) ],
+		anal: [ soft( 0.85, 0.9, 4, [ [ 0, 0.026 ], [ 1, 0.007 ] ], [ 0.7, 1.35 ], 0 ) ],
+		pectoral: { u: 0.28, y: - 0.04, len: 0.18, base: 0.085, rays: 9, shape: 'shark', spread: [ 1.12, 0.28 ], notch: 0 },
+		pelvic: { u: 0.63, len: 0.05, rays: 5 },
+		caudal: { shape: 'heterocercal', len: 0.27, span: 0.17, fork: 0.22, lower: 0.6, lowerLen: 0.48, rays: 15 },
+		iris: 0x5a6a50, irid: 0, metal: 0,
+	},
+
+	// nurse shark: a broad, flattened head with a small mouth at the front, two rounded dorsals of
+	// about one size far back, broad rounded pectorals, a long tail with hardly a lower lobe
+	nurseShark: {
+		pattern: PATTERN.nurseShark, body: 0.72, sec: 2.4,
+		top: [ [ 0, 0.008 ], [ 0.02, 0.022 ], [ 0.06, 0.038 ], [ 0.14, 0.055 ], [ 0.26, 0.068 ], [ 0.4, 0.074 ], [ 0.55, 0.068 ], [ 0.7, 0.052 ], [ 0.85, 0.034 ], [ 0.95, 0.024 ], [ 1, 0.02 ] ],
+		bot: [ [ 0, 0.008 ], [ 0.02, 0.02 ], [ 0.06, 0.032 ], [ 0.14, 0.045 ], [ 0.26, 0.055 ], [ 0.4, 0.06 ], [ 0.55, 0.056 ], [ 0.7, 0.045 ], [ 0.85, 0.03 ], [ 0.95, 0.022 ], [ 1, 0.018 ] ],
+		wid: [ [ 0, 0.01 ], [ 0.03, 0.04 ], [ 0.1, 0.066 ], [ 0.22, 0.08 ], [ 0.38, 0.082 ], [ 0.55, 0.07 ], [ 0.72, 0.05 ], [ 0.88, 0.03 ], [ 1, 0.02 ] ],
+		mouth: { corner: 0.06, y: - 0.03, tip: - 0.02, protrude: - 0.006 },
+		eye: { u: 0.08, y: 0.022, r: 0.006 }, opercle: 0.17,
+		scales: 0, scaleVis: - 1, lateral: 0.3, arch: 0.05,
+		dorsal: [ spiny( 0.61, 0.7, 7, [ [ 0, 0.075 ], [ 0.4, 0.07 ], [ 1, 0.012 ] ], [ 0.5, 1.3 ], 0 ), soft( 0.78, 0.86, 6, [ [ 0, 0.06 ], [ 0.4, 0.055 ], [ 1, 0.01 ] ], [ 0.5, 1.3 ], 0 ) ],
+		anal: [ soft( 0.8, 0.87, 5, [ [ 0, 0.045 ], [ 1, 0.01 ] ], [ 0.6, 1.3 ], 0 ) ],
+		pectoral: { u: 0.25, y: - 0.04, len: 0.15, base: 0.1, rays: 9, shape: 'shark', round: true, spread: [ 1.1, 0.45 ], notch: 0 },
+		pelvic: { u: 0.56, len: 0.07, rays: 6 },
+		caudal: { shape: 'heterocercal', len: 0.28, span: 0.07, fork: 0.32, lower: 0.35, lowerLen: 0.38, rays: 13 },
+		iris: 0x6a5020, irid: 0, metal: 0,
+	},
+
 	// rays and the turtle: geometry from CreatureGeometry.js; these entries only feed the skin table
 	stingray: { pattern: PATTERN.stingray, body: 1, eye: { u: 0.3, y: 0.05, r: 0.012 }, opercle: 0.4, mouth: { corner: 0.1, y: - 0.03, tip: - 0.03 }, lateral: 0, arch: 0, scales: 0, scaleVis: 0, iris: 0x606040, irid: 0, metal: 0 },
 	eagleRay: { pattern: PATTERN.eagleRay, body: 1, eye: { u: 0.2, y: 0.05, r: 0.014 }, opercle: 0.3, mouth: { corner: 0.1, y: - 0.03, tip: - 0.03 }, lateral: 0, arch: 0, scales: 0, scaleVis: 0, iris: 0x404040, irid: 0, metal: 0 },
 	turtle: { pattern: PATTERN.turtle, body: 1, eye: { u: 0.1, y: 0.04, r: 0.013 }, opercle: 0.2, mouth: { corner: 0.05, y: 0.0, tip: 0.0 }, lateral: 0, arch: 0, scales: 0, scaleVis: 0, iris: 0x302010, irid: 0, metal: 0 },
+	// (Salt Life) the spiny lobster (creature: its geometry is CreatureGeometry.lobsterGeometry)
+	lobster: { pattern: PATTERN.lobster, creature: 'lobster', body: 1, eye: { u: 0.03, y: 0.05, r: 0.012 }, opercle: 0.2, mouth: { corner: 0.05, y: 0.0, tip: 0.0 }, lateral: 0, arch: 0, scales: 0, scaleVis: - 1, iris: 0x101010, irid: 0, metal: 0 },
 
 };
 
@@ -448,4 +616,14 @@ export const SKIN = {
 	blackGrouper: { back: 0x383a30, flank: 0x5a5a4a, belly: 0xa49e8c, fin: 0x34362e, edge: 0x141410, rough: 0.4 },
 	muttonSnapper: { back: 0x6a7652, flank: 0xc89c84, belly: 0xf0d8d0, fin: 0xd0704c, edge: 0x8a3c2c, rough: 0.34 },
 	lionfish: { back: 0xd8c4b4, flank: 0xeee0d2, belly: 0xf4ece4, fin: 0xe8d8c8, edge: 0x7a2418, rough: 0.45 },
+	bonefish: { back: 0x5e7c7a, flank: 0xc8d0d2, belly: 0xeef0f0, fin: 0xa8b4b0, edge: 0x7a8a88, rough: 0.28 },
+	goliathGrouper: { back: 0x5a5236, flank: 0x8a7e56, belly: 0xb8ad8a, fin: 0x5c5438, edge: 0x2e2a1c, rough: 0.45 },
+	cuberaSnapper: { back: 0x4a3a36, flank: 0x7a5e56, belly: 0xb89a90, fin: 0x5a4642, edge: 0x2a2020, rough: 0.36 },
+	silkSnapper: { back: 0xc0505a, flank: 0xe08a8c, belly: 0xf2d4d0, fin: 0xd88a6a, edge: 0xe0b030, rough: 0.33 },
+	graySnapper: { back: 0x4a4a3c, flank: 0x8a8070, belly: 0xc8bcb0, fin: 0x7a5a48, edge: 0x2c2420, rough: 0.36 },
+	whiteMullet: { back: 0x3e5a60, flank: 0xc0c8ca, belly: 0xeceeee, fin: 0x9aa4a6, edge: 0x5c6668, rough: 0.3 },
+	reefShark: { back: 0x5e6460, flank: 0x8a8e88, belly: 0xe4e2da, fin: 0x5a605c, edge: 0x2c302e, rough: 0.55 },
+	blacktipShark: { back: 0x6e6c60, flank: 0x9c9a8c, belly: 0xeeece4, fin: 0x6a685c, edge: 0x101010, rough: 0.55 },
+	nurseShark: { back: 0x8a6a3a, flank: 0x9a7a48, belly: 0xc4a87a, fin: 0x86663a, edge: 0x6a5030, rough: 0.6 },
+	lobster: { back: 0x8a4a2a, flank: 0xb8784a, belly: 0xd8c09a, fin: 0x6a4a5a, edge: 0xe0c070, rough: 0.4 },
 };

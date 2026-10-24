@@ -1,7 +1,7 @@
 import { Vector3, Color, Mesh } from '../engine/index.js';
 import { G } from '../core/Globals.js';
 import { WORLD } from '../world/WorldLayout.js';
-import { FISH, fishWeightKg, spearRule } from './FishTable.js';
+import { FISH, CARAPACE, fishWeightKg, spearRule } from './FishTable.js';
 import { habitatAt, pickSpecies, rollWeight, biteDelay } from './Bites.js';
 import { CatchMinigame } from './CatchMinigame.js';
 import { GameState } from './GameState.js';
@@ -24,6 +24,7 @@ import { Guide } from './Guide.js';
 import { Speargun, groundHit } from './Speargun.js';
 import { CastNet, sweetWindow } from './CastNet.js';
 import { BAITS, BAIT_IDS } from './Bait.js';
+import { LobsterTools } from './LobsterTools.js';
 import { lb, feet, gallons } from './Units.js';
 import { SPECIES } from '../world/fish/FishSpecies.js';
 
@@ -37,6 +38,16 @@ const RODE_SEGS = 16;
 const _a = new Vector3(), _b = new Vector3(), _h = new Vector3();
 const _pose = { pos: new Vector3(), head: new Vector3(), roll: 0, thrash: 0 };
 const BAG_FROM = 0.85; // the brails drawn this far: the netting has closed round what's under it (it rides in the purse)
+// (Salt Life) the hand net's reach (m); how long a lobster in the net shows before it's gauged (s); a
+// thief's try at a fish on the shaft or the line: first after this long (s), then every so often,
+// and it gives up after this long; the rod's fish it goes for (kg, under)
+const NET_M = 0.95;
+const GAUGE_S = 0.6;
+const THIEF_S = [ 0.8, 4, 12 ];
+const THIEF_KG = 8;
+const upper = ( t ) => t.charAt( 0 ).toUpperCase() + t.slice( 1 );
+// a kind's name mid-sentence: 'a goliath grouper', 'a Caribbean reef shark'
+const aName = ( label ) => 'a ' + label.replace( /^\w+/, ( w ) => w === 'Caribbean' ? w : w.toLowerCase() );
 
 // the sale's one line ('Sold 3 fish for $86 · 2 on the wanted list · 1 for the week's order')
 const saleText = ( r, vendor ) => ( vendor && ! vendor.open ? `Left ${ r.count } fish in the night box · $${ r.total }`
@@ -82,6 +93,13 @@ export class Game {
 		this.aim = null;
 		this._blackouts = 0;
 		this._said = 0;
+		// (Salt Life) the lobster diver's tickle stick and hand net (R again in the water, after the
+		// speargun, once you have them); the lobster being netted, the one in the net ({ i, cm, kg,
+		// berried, t, card }), and the one in front of you
+		this.tools = new LobsterTools( { scene: app.scene, camera: app.camera, ground: app.terrain, audio: app.audio } );
+		this._scoop = null;
+		this.netted = null;
+		this.lobsterAim = null;
 		// (Salt Life: the stalls are the app's, built with the village)
 		this.stand = app.stand || new FishStand( { scene: app.scene, terrain: app.terrainData, colliders: app.colliders } );
 		this.display = new CatchDisplay( { scene: app.scene, stall: this.stand.iceFish(), lite: app.tier === 'low' } );
@@ -155,6 +173,7 @@ export class Game {
 		this.rod.setGear( { castM: g.castM, reelSpeed: g.reelSpeed } );
 		if ( this.gun ) this.gun.setGear( g );
 		if ( this.net ) this.net.setGear( g );
+		if ( this.tools ) this.tools.setGear( g );
 		const b = this.app.boatCtl;
 		if ( b && this._engineBase ) {
 
@@ -277,12 +296,29 @@ export class Game {
 			this.toast( rod.equipped ? `Rod out · ${ cast }` : 'Rod away', 1600 );
 
 		} else if ( inp.hit( 'KeyN' ) && can && ! this.fight && ! net.busy ) this.toggleNet();
-		else if ( inp.hit( 'KeyR' ) && canSpear && ! gun.shaftOut ) {
+		else if ( inp.hit( 'KeyR' ) && canSpear && ! gun.shaftOut && ! this.tools.busy ) {
 
-			// (Salt Life) in the water R is the speargun's
-			gun.equip( ! gun.equipped );
+			// (Salt Life) in the water R is the speargun's; then, with the gear, the lobster tools'
+			const tools = this.tools;
 			const dive = { touch: 'Dive, then Shoot', gamepad: 'dive, then RT to shoot' }[ app.input.lastDevice ] || 'dive, then left mouse or F to shoot';
-			this.toast( gun.equipped ? `Speargun out · ${ dive }` : 'Speargun away', 1800 );
+			const tickle = { touch: 'hold Tickle at a den, then Net', gamepad: 'hold RT at a den, then RT to net' }[ app.input.lastDevice ] || 'hold left mouse at a den, then click to net';
+			if ( gun.equipped ) {
+
+				gun.equip( false );
+				tools.equip( tools.owned );
+				this.toast( tools.equipped ? `Lobster gear out · ${ tickle }` : 'Speargun away', 2000 );
+
+			} else if ( tools.equipped ) {
+
+				tools.equip( false );
+				this.toast( 'Lobster gear away', 1600 );
+
+			} else {
+
+				gun.equip( true );
+				this.toast( `Speargun out · ${ dive }`, 1800 );
+
+			}
 
 		}
 
@@ -302,6 +338,14 @@ export class Game {
 			// speargun goes away
 			this.dropSpear( ! this.speared );
 			gun.equip( false );
+
+		}
+
+		if ( ! canSpear && this.tools.equipped ) {
+
+			// (a lobster already gauged is kept; one still in the net goes back)
+			this.dropLobster();
+			this.tools.equip( false );
 
 		}
 
@@ -359,10 +403,10 @@ export class Game {
 		if ( this.fight ) this.updateFight( dt, lmb && ! panelOpen );
 
 		rod.update( dt, { visible: can, fight: this.fight } );
-		// (Salt Life) the cast net
+		// (Salt Life) the cast net; the speargun; the lobster tools
 		this.updateNet( dt, { lmb: ( lmb || rmb ) && ! panelOpen, lDown: lDown && ! panelOpen, lUp, panelOpen, visible: can } );
-		// (Salt Life) the speargun
 		this.updateSpear( dt, { lmb: lmb && ! panelOpen, lDown: lDown && ! panelOpen, canSpear } );
+		this.updateLobster( dt, { lmb: lmb && ! panelOpen, lDown: lDown && ! panelOpen, canSpear } );
 		// the landed fish hangs on the end of the line, turned to face you, then goes in the cooler. With
 		// the HUD the catch card comes up once the fish has swung in, and the fish stays (slowly turning)
 		// until the card is dismissed (click, E, Esc) or times out.
@@ -409,7 +453,7 @@ export class Game {
 
 		} else if ( this.landing || this.display.shown ) this.endLanding();
 
-		p.busy = rod.lineInWater || rod.state === 'windup' || gun.shaftOut || net.busy || net.state === 'windup';
+		p.busy = rod.lineInWater || rod.state === 'windup' || gun.shaftOut || net.busy || net.state === 'windup' || this.tools.busy;
 
 		this.updateBoat( dt );
 		// (Salt Life) the floodlights' lenses glow when they're fitted, from dusk like their light
@@ -436,8 +480,8 @@ export class Game {
 			netWind: net.state === 'windup' ? { charge: net.charge, win: sweetWindow( net.gear.spreadWin ), tired: net.over > 0.5 } : null,
 			bait: rod.equipped ? this.baitChip() : net.equipped ? { label: 'Bucket', text: `${ this.state.baitCount } / ${ this.state.stats.baitMax }` } : null,
 			bite: this.bite && this.bite.phase === 'take',
-			aiming: rod.equipped || ( gun.state === 'loaded' && this.submerged ),
-			aim: gun.state === 'loaded' && this.submerged ? this.aim : null,
+			aiming: rod.equipped || ( gun.state === 'loaded' && this.submerged ) || ( this.tools.equipped && this.submerged && ! this.tools.busy ),
+			aim: gun.state === 'loaded' && this.submerged ? this.aim : this.tools.equipped && ! this.tools.busy ? this.lobsterTag() : null,
 			// (the breath while it matters: in the water, under it or getting it back)
 			breath: p.mode === 'swim' && ( p.under || p.breath < p.breathMax - 0.5 || p.blackout ) ? { s: p.breath, max: p.breathMax, blackout: p.blackout } : null,
 		} );
@@ -452,6 +496,7 @@ export class Game {
 		const rod = this.rod, p = this.app.player;
 		if ( this.gun.equipped ) return this.spearPrompt();
 		if ( this.net.equipped ) return this.netPrompt();
+		if ( this.tools.equipped ) return this.lobsterPrompt();
 		if ( ! rod.equipped ) {
 
 			// by the water (boat deck, pier, the wet beach, wading): suggest the rod (or the cast net); in
@@ -870,7 +915,23 @@ export class Game {
 		const au = this.app.audio;
 		if ( f.surge > 0.6 && ! f._splashed && au && au.fishSplash ) au.fishSplash( this.rod.bobber, 0.3 + 0.5 * Math.min( 1, f.kg / 8 ) );
 		f._splashed = f.surge > 0.6 ? true : f.surge < 0.3 ? false : f._splashed;
-		if ( st === 'fighting' ) return;
+		if ( st === 'fighting' ) {
+
+			// (Salt Life) a goliath under the pier or a shark off the drop-off may take a smaller fish
+			// off the hook (a little under the bobber, where it's fighting)
+			const b = this.rod.bobber;
+			const thief = f.kg < THIEF_KG ? this.thief( f, dt, b.x, b.y - 1.2, b.z, 'reel it in fast!' ) : null;
+			if ( ! thief ) return;
+			this.fight = null;
+			this.rod.dip = 0;
+			this.toast( `${ upper( thief ) } took your fish off the hook`, 2800 );
+			if ( au && au.lineSnap ) au.lineSnap();
+			this.rod.setState( 'idle' );
+			return;
+
+		}
+
+		this.calmThief( f );
 		this.fight = null;
 		this.rod.dip = 0;
 		this.hookBait = null; // (Salt Life) taken with the fish, or with the hook
@@ -1186,13 +1247,14 @@ export class Game {
 	updateSpear( dt, { lmb, lDown, canSpear } ) {
 
 		const app = this.app, p = app.player, gun = this.gun, fish = app.fish, inp = app.input;
-		p.stalk = gun.equipped;
+		p.stalk = gun.equipped || this.tools.equipped;
 		// blacked out: whatever was on the shaft is lost, and the line comes in
 		if ( p.blackouts !== this._blackouts ) {
 
 			this._blackouts = p.blackouts;
 			this.toast( 'You blacked out and floated up · surface before your breath runs out', 3600 );
 			this.dropSpear( true );
+			this.dropLobster();
 
 		}
 
@@ -1203,7 +1265,7 @@ export class Game {
 
 				const a = this.aim;
 				if ( ! this.submerged ) this.say( p.blackout ? 'Catch your breath first' : 'Dive first: the speargun is for under the water' );
-				else if ( gun.safety && a ) this.say( { protected: `${ a.label }: protected · let it be`, notTarget: `${ a.label }: not a fish anyone spears`, small: `That ${ a.label.toLowerCase() } is too small · let it grow` }[ a.rule ] );
+				else if ( gun.safety && a ) this.say( { protected: `${ a.label }: protected · let it be`, notTarget: `${ a.label }: not a fish anyone spears`, small: `That ${ a.label.toLowerCase() } is too small · let it grow`, byHand: `${ a.label }: by hand only · tickle it out and net it`, shark: `${ a.label }: no spearing sharks · let it be` }[ a.rule ] );
 				else {
 
 					const cam = app.camera;
@@ -1234,6 +1296,22 @@ export class Game {
 		// the fish on the shaft, where the shaft has it
 		const pose = gun.fishPose( _pose );
 		if ( pose ) fish.hold( sp.i, pose.pos.x, pose.pos.y, pose.pos.z, pose.head, pose.roll, pose.thrash );
+		// (Salt Life) a shark or a goliath may come for it while it's out on the line
+		if ( pose && ( gun.state === 'stuck' || gun.state === 'fighting' || gun.state === 'pulling' ) ) {
+
+			const thief = this.thief( sp, dt, pose.pos.x, pose.pos.y, pose.pos.z, 'pull it in fast!' );
+			if ( thief ) {
+
+				fish.take( sp.i );
+				this.speared = null;
+				this.spearFight = null;
+				gun.tearFree();
+				this.toast( `${ upper( thief ) } took it off the shaft`, 2800 );
+				return;
+
+			}
+
+		} else this.calmThief( sp );
 		// shot, it's hauled in; a big one (not shot through the head) fights first
 		if ( gun.state === 'stuck' && gun.t > 0.35 ) {
 
@@ -1321,7 +1399,7 @@ export class Game {
 		const { sp, L } = fish.about( hit.i );
 		const cm = Math.round( L * 100 );
 		const id = sp.fish && FISH[ sp.fish ] ? sp.fish : null;
-		const rule = id ? spearRule( id, cm ) : 'notTarget';
+		const rule = id ? spearRule( id, cm ) : sp.rule || 'notTarget';
 		const dist = hit.t * range;
 		this.aim = { i: hit.i, label: id ? FISH[ id ].name : sp.label, cm, rule, dist, far: dist > g.spearM };
 		gun.safety = rule !== 'ok';
@@ -1370,6 +1448,7 @@ export class Game {
 	landSpeared() {
 
 		const sp = this.speared, gun = this.gun;
+		this.calmThief( sp );
 		const entry = this.state.addFish( sp.id, sp.kg, this.hour, { method: 'spear', cm: sp.cm } );
 		const info = this.state.lastCatch;
 		info.wanted = entry ? this.wantedFor( entry ) : null;
@@ -1418,6 +1497,7 @@ export class Game {
 		const sp = this.speared, fish = this.app.fish;
 		if ( sp && fish ) {
 
+			this.calmThief( sp );
 			if ( sp.kill ) fish.take( sp.i );
 			else fish.release( sp.i );
 
@@ -1441,6 +1521,229 @@ export class Game {
 
 	}
 
+	// ---- (Salt Life) thieves: a shark or a goliath grouper after the fish on the shaft or the line
+
+	// w: the speared fish or the rod's fight (its tries are kept on it), now at x, y, z. A first try a
+	// moment after it's on, then now and then (Fish.thiefNear: one near enough, at its odds); once one
+	// is coming the fish must be in before it gets there. Who took it ('a blacktip shark'), or null
+	thief( w, dt, x, y, z, hurry ) {
+
+		const fish = this.app.fish;
+		if ( ! fish ) return null;
+		w.thiefT = ( w.thiefT || 0 ) + dt;
+		const r = w.raid;
+		if ( r ) {
+
+			r.at.x = x;
+			r.at.y = y;
+			r.at.z = z;
+			if ( r.at.got ) {
+
+				w.raid = null;
+				return r.who;
+
+			}
+
+			if ( w.thiefT - r.t0 > THIEF_S[ 2 ] ) this.calmThief( w );
+			return null;
+
+		}
+
+		if ( w.thiefT < ( w.nextTry ?? THIEF_S[ 0 ] ) ) return null;
+		w.nextTry = w.thiefT + THIEF_S[ 1 ];
+		const t = fish.thiefNear( x, y, z );
+		if ( ! t || Math.random() >= t.chance ) return null;
+		const { sp } = fish.about( t.i );
+		const who = aName( sp.fish && FISH[ sp.fish ] ? FISH[ sp.fish ].name : sp.label );
+		w.raid = { i: t.i, at: fish.raid( t.i, x, y, z ), t0: w.thiefT, who };
+		this.toast( `${ upper( who ) } is coming for your fish · ${ hurry }`, 2600 );
+		return null;
+
+	}
+
+	// the fish is in (or lost): the thief after it turns away
+	calmThief( w ) {
+
+		if ( ! w || ! w.raid ) return;
+		if ( this.app.fish ) this.app.fish.endRaid( w.raid.i );
+		w.raid = null;
+
+	}
+
+	// ---- (Salt Life) the spiny lobster: the tickle stick worked into its den (held) until it walks
+	// out, then the hand net swept over it in the open (a click). In the net it's gauged (the catch
+	// card): a short one, a berried female, or one over the day's bag goes back
+
+	updateLobster( dt, { lmb, lDown, canSpear } ) {
+
+		const app = this.app, fish = app.fish, tools = this.tools, cam = app.camera, inp = app.input;
+		let tickling = false, at = null;
+		this.lobsterAim = null;
+		if ( tools.equipped && fish && this.submerged && ! tools.busy ) {
+
+			const g = this.state.stats;
+			_b.set( 0, 0, - 1 ).applyQuaternion( cam.quaternion );
+			const a = this.lobsterAim = fish.nearLobster( cam.position, _b, g.tickleM + 0.6 );
+			if ( a ) {
+
+				const i3 = a.i * 3, L = fish.size[ a.i ];
+				a.cm = Math.round( L * 100 );
+				a.reach = a.state === 'den' ? g.tickleM + 0.25 : NET_M;
+				_h.set( fish.pos[ i3 ] + fish.head[ i3 ] * L * 0.4, fish.pos[ i3 + 1 ], fish.pos[ i3 + 2 ] + fish.head[ i3 + 2 ] * L * 0.4 );
+				if ( a.state === 'den' && lmb && a.dist < a.reach ) {
+
+					tickling = true;
+					at = _h;
+					a.coax = fish.tickle( a.i, dt, 1 / g.coaxS );
+
+				} else if ( lDown && a.state === 'out' && a.dist < NET_M ) {
+
+					_a.set( fish.pos[ i3 ], fish.pos[ i3 + 1 ], fish.pos[ i3 + 2 ] );
+					if ( tools.scoop( _a, cam.position ) ) this._scoop = a.i;
+
+				} else if ( lDown ) this.say( a.state === 'flip' ? 'It shot off · let it settle, then creep up slowly' : a.state === 'den' ? 'Closer · reach into the den with the stick' : 'Closer · within arm\'s reach, slowly' );
+
+			}
+
+		} else if ( tools.equipped && lDown && ! tools.busy && ! this.submerged ) this.say( app.player.blackout ? 'Catch your breath first' : 'Dive first: lobsters live in the reef' );
+
+		tools.update( dt, { visible: canSpear, tickling, at } );
+
+		// the sweep is over it: in the net, or missed (and it shoots off backwards)
+		if ( this._scoop !== null && tools.swept ) {
+
+			const i = this._scoop, i3 = i * 3;
+			this._scoop = null;
+			const near = Math.hypot( fish.pos[ i3 ] - tools.target.x, fish.pos[ i3 + 2 ] - tools.target.z ) < tools.R + 0.15;
+			const ok = near && ! fish.held[ i ] && fish.lobsterState( i ) !== 'flip' && Math.random() < ( fish.diver.speed < 0.8 ? 0.9 : 0.55 );
+			fish.netLobster( i, ok, cam.position.x, cam.position.z );
+			tools.land( ok );
+			if ( ok ) {
+
+				const cm = Math.round( fish.size[ i ] * 100 );
+				this.netted = { i, cm, kg: fishWeightKg( 'lobster', cm ), berried: fish.berried( i ), t: 0, card: null, cardT: 0 };
+				this.toast( 'In the net!', 1200 );
+
+			} else this.toast( 'Missed · it shot off backwards', 1600 );
+
+		}
+
+		// in the net, held up in front of you: gauged, then the card until it's dismissed
+		const n = this.netted;
+		if ( ! n || ! fish ) return;
+		tools.bag( _a, _b );
+		fish.hold( n.i, _a.x, _a.y, _a.z, _b, 0, n.card ? 0.35 : 0.9 );
+		n.t += dt;
+		if ( ! n.gauged && n.t > GAUGE_S ) this.gaugeLobster();
+		if ( n.card ) {
+
+			n.cardT += dt;
+			app.player.breathPaused = true;
+			if ( lDown || inp.hit( 'KeyE' ) || inp.hit( 'Escape' ) || this.hud.takeCatchTap() || n.cardT > CATCH_CARD_MS / 1000 ) {
+
+				this._cardDismissed = true;
+				this.finishLobster();
+
+			}
+
+		}
+
+	}
+
+	// the gauge on its carapace: kept (the bag), or why it goes back; the catch card (a toast without one)
+	gaugeLobster() {
+
+		const n = this.netted;
+		n.gauged = true;
+		const release = n.cm < FISH.lobster.minCm ? 'short' : n.berried ? 'berried' : null;
+		const entry = this.state.addFish( 'lobster', n.kg, this.hour, { method: 'hand', cm: n.cm, day: this.tradeDay, release } );
+		const info = this.state.lastCatch;
+		info.wanted = entry ? this.wantedFor( entry ) : null;
+		if ( this.app.together ) {
+
+			const isle = this.app.together.caught( 'lobster', info.kg, info.cm, 'hand' );
+			info.islandRecord = isle.island;
+			info.islandHeld = isle.held || null;
+
+		}
+
+		if ( this.hud ) {
+
+			n.card = info;
+			n.cardT = 0;
+			this.hud.showCatch( info, CATCH_CARD_MS );
+
+		} else {
+
+			const name = FISH.lobster.name, size = `${ ( n.cm * CARAPACE / 2.54 ).toFixed( 2 ) } in carapace`;
+			const why = { short: 'short, back it goes', berried: 'carrying eggs, back she goes' }[ info.why ] || ( info.bag && info.bag.full ? 'your bag is full today, back it goes' : ! info.kept ? 'no room, back it goes' : `$${ info.value }` );
+			this.toast( `${ name } · ${ size } · ${ why }`, 3600 );
+			this.finishLobster();
+
+		}
+
+	}
+
+	// the card dismissed: a kept one into the cooler, one let go off backwards to its den; the net back
+	// in the hand
+	finishLobster() {
+
+		const n = this.netted, fish = this.app.fish;
+		this.netted = null;
+		if ( n && fish ) {
+
+			if ( n.card && n.card.kept ) fish.take( n.i );
+			else {
+
+				const c = this.app.camera.position;
+				fish.letGo( n.i, c.x, c.z );
+
+			}
+
+		}
+
+		this.app.player.breathPaused = false;
+		this.tools.endLanding();
+		if ( n && n.card && this.hud && this.hud.catchOpen ) this.hud.hideCatch();
+
+	}
+
+	// out of the water or blacked out: one already gauged is kept (or let go, as its card says); one
+	// not yet gauged slips out of the net; a sweep stops
+	dropLobster() {
+
+		const n = this.netted;
+		if ( n && ! n.gauged ) n.card = null;
+		if ( n ) this.finishLobster();
+		this._scoop = null;
+		if ( this.tools.busy ) this.tools.endLanding();
+
+	}
+
+	// the lobster in front of the tools, for the sights' tag ({ label, cm (its carapace's own rule: the
+	// HUD shows it), rule, far })
+	lobsterTag() {
+
+		const a = this.lobsterAim;
+		if ( ! a || ! this.submerged ) return null;
+		return { label: a.state === 'den' ? 'Spiny lobster · in its den' : FISH.lobster.name, cm: a.cm, carapace: true, rule: 'ok', far: a.dist > a.reach };
+
+	}
+
+	lobsterPrompt() {
+
+		const p = this.app.player, a = this.lobsterAim, n = this.netted;
+		if ( n ) return n.card ? null : { key: '…', text: 'Gauging the carapace' };
+		if ( this.tools.busy ) return { key: '…', text: 'Sweeping the net' };
+		if ( ! this.submerged ) return p.blackout ? { key: '…', text: 'Catch your breath' } : { key: 'W', text: 'Look down and swim to dive   ·   R  put the lobster gear away' };
+		if ( ! a ) return { key: '…', text: 'Look under ledges and coral heads for antennae · they walk out after dark' };
+		if ( a.state === 'flip' ) return { key: '…', text: 'It shot off · let it settle, then creep up slowly' };
+		if ( a.dist > a.reach ) return { key: '…', text: a.state === 'den' ? 'Closer: reach into the den with the stick' : 'Closer: within arm\'s reach, slowly' };
+		if ( a.state === 'den' ) return { key: 'LMB', text: 'Hold to tickle it out of its den' };
+		return { key: 'LMB', text: 'Net it!' };
+
+	}
+
 	// a toast, not over and over
 	say( text ) {
 
@@ -1460,7 +1763,7 @@ export class Game {
 			case 'loaded':
 				if ( ! this.submerged ) return p.blackout ? { key: '…', text: 'Catch your breath' } : { key: 'W', text: 'Look down and swim to dive   ·   R  put the speargun away' };
 				if ( a && a.rule === 'ok' ) return a.far ? { key: '…', text: `Closer: ${ feet( a.dist ) } off, your gun reaches ${ feet( g.spearM ) }` } : { key: 'LMB', text: 'Shoot!' };
-				if ( a ) return { key: '…', text: { protected: 'Protected: let it be', notTarget: 'Not a fish anyone spears', small: 'Too small: let it grow' }[ a.rule ] };
+				if ( a ) return { key: '…', text: { protected: 'Protected: let it be', notTarget: 'Not a fish anyone spears', small: 'Too small: let it grow', byHand: this.tools.owned ? 'By hand only: R for the tickle stick and net' : 'By hand only: Marta sells a tickle stick and net', shark: 'A shark: let it be' }[ a.rule ] };
 				return { key: 'LMB', text: 'Stalk slowly, aim at a fish and shoot   ·   Shift  kick hard' };
 			case 'empty': return { key: 'LMB', text: `Hold to load the band${ gun.bands > 1 ? 's' : '' }` };
 			case 'loading': return { key: 'LMB', text: gun.bands > 1 ? `Drawing back band ${ gun.loading + 1 } of ${ gun.bands }` : 'Drawing back the band' };
@@ -1489,6 +1792,7 @@ export class Game {
 	cancelLine( silent = false ) {
 
 		if ( this.fight && ! silent ) this.toast( 'Lost it', 1400 );
+		if ( this.fight ) this.calmThief( this.fight );
 		this.fight = null;
 		this.bite = null;
 		if ( this.rod.state !== 'stowed' ) this.rod.setState( this.rod.equipped ? 'idle' : 'stowed' );

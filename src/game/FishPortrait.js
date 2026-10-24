@@ -34,6 +34,9 @@ const EXPOSURE = 1.15;
 const STUDIO_ENV = 0.35; // the room's light (above the low tier), and the fill light with it
 const STUDIO_FILL = 0.3;
 const FADE_IN = 0.42; // s: the world dims and blurs as the card comes up
+// (Salt Life) a spiny lobster: turned to show its back, framed for its antennae (they reach most of a
+// body length ahead of it: its share of the stage, and moved this far toward its tail, of its length)
+const LOBSTER_VIEW = { roll: 0.8, fill: 0.42, x: 0.42 };
 
 const _q = new Quaternion(), _q2 = new Quaternion(), _a = new Vector3(), _size = new Vector2();
 
@@ -297,20 +300,21 @@ export class FishPortrait {
 			const p = this._pose( this.t );
 			const pick = Math.round( ( Math.max( - 0.8, Math.min( 0.8, p.curl ) ) + 0.8 ) / 0.4 );
 			const L = fishLengthCm( this.species, this.kg ) / 100;
+			const lob = FISH[ this.species ].model === 'lobster' ? LOBSTER_VIEW : null;
 			list.forEach( ( m, i ) => {
 
 				m.visible = i === pick;
 				if ( i !== pick ) return;
 				_q.setFromAxisAngle( _a.set( 0, 1, 0 ), p.yaw );
 				_q.multiply( _q2.setFromAxisAngle( _a.set( 0, 0, 1 ), p.pitch ) );
-				_q.multiply( _q2.setFromAxisAngle( _a.set( 1, 0, 0 ), p.roll ) );
+				_q.multiply( _q2.setFromAxisAngle( _a.set( 1, 0, 0 ), p.roll + ( lob ? lob.roll : 0 ) ) );
 				m.quaternion.copy( _q );
-				m.position.set( p.x * L, p.y * L, 0 );
+				m.position.set( ( p.x + ( lob ? lob.x : 0 ) ) * L, p.y * L, 0 );
 				m.scale.setScalar( L );
 
 			} );
 
-			this._aim( L, box.width / box.height );
+			this._aim( L, box.width / box.height, lob ? lob.fill : undefined );
 			const x = box.left - cv.left, y = cv.bottom - box.bottom;
 			renderer.setViewport( x, y, box.width, box.height );
 			renderer.setScissor( x, y, box.width, box.height );

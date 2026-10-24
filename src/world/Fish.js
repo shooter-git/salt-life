@@ -35,6 +35,14 @@ import { bandFade } from '../materials/LODFade.js';
 // look at a diver who keeps still. A speared fish leaves its school: the speargun holds it on the
 // shaft (hold), and once it's landed it's gone (take) until its kind fills the place again, out of
 // sight, a few minutes later.
+//
+// (Salt Life) More of the sea's life: bonefish tailing on the shallow flats, goliath groupers at the
+// pier's piles and the drop-off, cubera snappers on the drop-off, silk snappers over the deep holes,
+// mangrove snappers at the piles, on the reef and in the bay, white mullet along the shore. Sharks
+// in the background: Caribbean reef sharks along the drop-off and blacktips off the bay, cruising,
+// nurse sharks resting on the sand. A shark or a goliath near a speared or hooked fish now and then
+// comes in and takes it (raid). Spiny lobsters in dens at the foot of the coral heads by day, out
+// walking after dark, taken by hand: tickled out (tickle), netted (netLobster).
 
 const TAU = Math.PI * 2;
 const CEILING = - 0.7; // reef fish stay below this (m)
@@ -62,6 +70,15 @@ const NET_TURN = [ 0.4, 1.2 ];
 const GRAVITY = 9.81;
 const LOD_PX0 = [ 320, 80, 22 ]; // screen length (px) below which the next level of detail takes over
 const LOD_BAND = 1.15; // cross-fade band above each switch (screen length ratio)
+// (Salt Life) a spiny lobster's states (aux[ 0 ]: stepLobster); the height of its body's centre over
+// the ground on its legs (body lengths: fish/CreatureGeometry.js lobsterGeometry); out of the den
+// between these hours
+const LOB = { den: 0, forage: 1, out: 2, flip: 3, home: 4 };
+const LOB_STAND = 0.112;
+const LOB_NIGHT = [ 5.8, 19.2 ];
+const FLIP_S = 0.9; // s a lobster's tail flip lasts
+const BONE_TILT = 0.9; // a rooting bonefish's nose-down tilt (rad)
+const RAID_OFF = 5; // s a thief keeps going once it has the fish
 
 // Behaviour per kind of swimmer. model: anatomy (FishSpecies.js) or 'stingray' / 'eagleRay' /
 // 'turtle'; length range (m); mode (see stepGroup); speeds in body lengths / s (cruise, max,
@@ -70,10 +87,12 @@ const LOD_BAND = 1.15; // cross-fade band above each switch (screen length ratio
 // column above it: 0 on the bottom .. 1 at the ceiling); band: water depth range of the homes;
 // flee: reaction distance (m); amp / freq: tail beat amplitude and frequency (Hz at rest, per
 // body length / s). (Salt Life) fish: the catch table's species (game/FishTable.js), or label: what
-// it is when it's not one; curious: how close (m) it comes to look at a diver keeping still.
+// it is when it's not one; curious: how close (m) it comes to look at a diver keeping still; rests
+// (glide): [ chance a second it settles on the bottom, for this long (s), plus up to this ].
 const base = {
 	cruise: 1, max: 2.5, burst: 6, accel: 4, sep: 2, nbr: 5, wSep: 5, wAli: 1, wCoh: 0.8, wGoal: 1, flee: 3.5,
 	depth: [ 0.1, 0.5 ], homeRadius: 6, amp: 0.08, freq: [ 1.6, 0.9 ], ceiling: CEILING, minDepth: 1.2, band: [ 1.5, 20 ],
+	rests: [ 0.02, 6, 12 ],
 };
 const BEHAVIOUR = {
 	bait: { model: 'silverside', fish: 'silverside', length: [ 0.06, 0.09 ], mode: 'bait', cruise: 1.8, max: 4, burst: 10, accel: 7, flee: 3, depth: [ 0.35, 0.75 ], amp: 0.1, freq: [ 3, 1.1 ] },
@@ -121,6 +140,28 @@ const BEHAVIOUR = {
 	// net from the beach (game/CastNet.js)
 	runnerMullet: { model: 'mullet', fish: 'mullet', length: [ 0.2, 0.34 ], mode: 'jumper', surf: true, cruise: 0.9, max: 2.4, burst: 5.5, accel: 3, sep: 1.6, nbr: 5, wAli: 1.6, wCoh: 1.1, wGoal: 0.8, flee: 2.6, depth: [ 0.25, 0.7 ], homeRadius: 22, amp: 0.07, freq: [ 1.5, 0.9 ], ceiling: - 0.14, minDepth: 0.4, band: [ 0.5, 1.6 ] },
 	runnerFry: { model: 'silverside', fish: 'silverside', label: 'Silverside fry', length: [ 0.05, 0.075 ], mode: 'fry', surf: true, cruise: 2, max: 4, burst: 12, accel: 9, sep: 1.6, nbr: 8, wSep: 7, wAli: 2.4, wCoh: 1.6, wGoal: 0.9, flee: 2.4, depth: [ 0.3, 0.75 ], homeRadius: 14, amp: 0.11, freq: [ 3.5, 1.2 ], ceiling: - 0.12, minDepth: 0.35, band: [ 0.45, 1.5 ] },
+	// (Salt Life) more of the sea's life. Bonefish nose over the shallow flats in small schools (the
+	// warier fish there is none); now and then one stops, head down, rooting in the sand with its tail
+	// up. Goliath groupers hang at the pier's piles and the deep heads, unafraid; cubera snappers lurk
+	// in pairs on the drop-off; silk snappers mill over the deep holes; mangrove snappers round the
+	// piles, at the coral heads and in the bay; white mullet school along the shore. hug: keeps this
+	// close over the bottom (its belly's depth under its centre, body lengths); thief: [ how near (m)
+	// a speared or hooked fish has to be, the chance it comes for it ] (raid)
+	bonefish: { model: 'bonefish', fish: 'bonefish', length: [ 0.4, 0.7 ], mode: 'flats', cruise: 0.55, max: 2, burst: 14, accel: 6, sep: 2, nbr: 6, wAli: 1.2, wCoh: 0.9, wGoal: 0.8, flee: 10, depth: [ 0, 0.15 ], homeRadius: 10, amp: 0.07, freq: [ 1.4, 0.8 ], ceiling: - 0.15, minDepth: 0.15, band: [ 0.4, 1.3 ] },
+	goliathGrouper: { model: 'goliathGrouper', fish: 'goliathGrouper', length: [ 1.1, 1.9 ], mode: 'lurk', cruise: 0.1, max: 0.7, burst: 2.5, accel: 0.8, sep: 1, nbr: 2, wSep: 1, wAli: 0, wCoh: 0, wGoal: 0.8, flee: 1.6, depth: [ 0.02, 0.12 ], homeRadius: 2, amp: 0.035, freq: [ 0.4, 0.45 ], hug: 0.17, band: [ 3, 20 ], thief: [ 10, 0.45 ] },
+	cuberaSnapper: { model: 'cuberaSnapper', fish: 'cuberaSnapper', length: [ 0.8, 1.4 ], mode: 'lurk', cruise: 0.18, max: 1.4, burst: 6, accel: 1.5, sep: 1.5, nbr: 3, wSep: 1, wAli: 0.3, wCoh: 0.3, wGoal: 0.8, flee: 5, depth: [ 0.03, 0.15 ], homeRadius: 4, amp: 0.045, freq: [ 0.7, 0.6 ], hug: 0.2, band: [ 9, 30 ] },
+	silkSnapper: { model: 'silkSnapper', fish: 'silkSnapper', length: [ 0.32, 0.6 ], mode: 'mill', cruise: 0.5, max: 1.8, burst: 9, accel: 2.5, sep: 1.8, nbr: 5, wAli: 1.2, wCoh: 0.9, wGoal: 0.9, flee: 5, depth: [ 0.05, 0.3 ], homeRadius: 4, amp: 0.06, freq: [ 1.2, 0.8 ], band: [ 17, 1e9 ] },
+	graySnapper: { model: 'graySnapper', fish: 'graySnapper', length: [ 0.22, 0.48 ], mode: 'mill', cruise: 0.45, max: 1.8, burst: 8, accel: 3, sep: 1.6, nbr: 4, wAli: 1.4, wCoh: 0.9, wGoal: 0.9, flee: 4.5, depth: [ 0.05, 0.3 ], homeRadius: 2, band: [ 2.5, 10 ] },
+	pierGray: { model: 'graySnapper', fish: 'graySnapper', length: [ 0.22, 0.42 ], mode: 'pile', cruise: 0.5, max: 2, burst: 8, accel: 3, sep: 1.6, wAli: 1.4, wCoh: 0.8, flee: 4, depth: [ 0.1, 0.5 ], homeRadius: 2, freq: [ 1.5, 0.9 ], band: [ 2, 6 ] },
+	whiteMullet: { model: 'whiteMullet', fish: 'whiteMullet', length: [ 0.2, 0.34 ], mode: 'jumper', cruise: 0.8, max: 2.4, burst: 6, accel: 3.5, sep: 1.8, nbr: 5, wAli: 1.5, wCoh: 1, wGoal: 0.8, flee: 4, depth: [ 0.3, 0.9 ], homeRadius: 12, amp: 0.07, freq: [ 1.6, 0.9 ], ceiling: - 0.25, minDepth: 1.0, band: [ 1.5, 4.5 ] },
+	// the sharks, in the background: Caribbean reef sharks cruise the drop-off and blacktips the water
+	// off the bay, never stopping, curious about a diver who keeps still and drawn to a commotion
+	// (startle); nurse sharks rest on the sand most of the day. Not fish to spear (rule)
+	reefShark: { model: 'reefShark', label: 'Caribbean reef shark', rule: 'shark', length: [ 1.5, 2.4 ], mode: 'cruise', curious: 6, cruise: 0.32, max: 1.2, burst: 4, accel: 1.2, sep: 3, nbr: 4, wSep: 2, wAli: 0.3, wCoh: 0.2, wGoal: 0.8, flee: 3, depth: [ 0.25, 0.6 ], homeRadius: 30, amp: 0.09, freq: [ 0.5, 0.45 ], band: [ 9, 30 ], thief: [ 25, 0.3 ] },
+	blacktipShark: { model: 'blacktipShark', label: 'Blacktip shark', rule: 'shark', length: [ 1.2, 1.8 ], mode: 'cruise', curious: 8, cruise: 0.45, max: 1.5, burst: 5, accel: 1.5, sep: 3, nbr: 5, wSep: 2, wAli: 0.8, wCoh: 0.5, wGoal: 0.8, flee: 5, depth: [ 0.3, 0.8 ], homeRadius: 35, amp: 0.09, freq: [ 0.6, 0.5 ], band: [ 6, 20 ], thief: [ 18, 0.25 ] },
+	nurseShark: { model: 'nurseShark', label: 'Nurse shark', rule: 'shark', length: [ 1.6, 2.6 ], mode: 'glide', cruise: 0.18, max: 0.6, burst: 1.5, accel: 0.8, sep: 1, nbr: 2, wSep: 1, wAli: 0, wCoh: 0, wGoal: 0.8, flee: 2, depth: [ 0, 0 ], homeRadius: 10, amp: 0.08, freq: [ 0.45, 0.4 ], hug: 0.07, rests: [ 0.06, 40, 80 ], band: [ 3, 14 ] },
+	// spiny lobsters (stepLobster): by hand, not with the speargun
+	lobster: { model: 'lobster', fish: 'lobster', length: [ 0.17, 0.42 ], mode: 'lobster', cruise: 0.3, max: 0.6, burst: 8, accel: 3, flee: 1.1, depth: [ 0, 0 ], homeRadius: 3, amp: 0, freq: [ 1.5, 2 ], band: [ 2.5, 12 ] },
 };
 for ( const k in BEHAVIOUR ) BEHAVIOUR[ k ] = { name: k, ...base, ...BEHAVIOUR[ k ] };
 
@@ -186,6 +227,7 @@ export class FishSchools {
 		// ---- groups
 		this.groups = [];
 		this.n = 0;
+		this.lobsterGroups = [];
 		this.layout( bay );
 
 		// ---- models: their names (built apart: setModels, fish/FishModels.js), the first kind of each
@@ -226,6 +268,13 @@ export class FishSchools {
 		this.hitShapes = {};
 		this.diver = { x: 0, y: 0, z: 0, speed: 0, still: 0, has: false };
 		this.wary = 1;
+		// (Salt Life) per fish, its kind's own state: a bonefish's rooting (time left, or to the next
+		// as a negative) and nose-down tilt; a lobster's (stepLobster). The thieves after a fish (raid:
+		// fish index -> { x, y, z, got, off }); the island's hour (the app sets it: lobsters come out
+		// after dark)
+		this.aux = new Float32Array( n * 8 );
+		this.raids = new Map();
+		this.hour = 12;
 		for ( const g of this.groups ) this.initGroup( g );
 		this.batch = null; // (setModels)
 		this.viewHeight = 1267; // (the app sets the canvas' height)
@@ -464,6 +513,45 @@ export class FishSchools {
 		// waterline near z -42: wading depth out to z -20 or so)
 		for ( const [ c, x ] of [ [ 9, - 95 ], [ 8, - 35 ], [ 10, 15 ], [ 7, 75 ], [ 9, 125 ] ] ) place( 'runnerMullet', c, { x, z: - 25, r: 26 } );
 		for ( const [ c, x ] of [ [ 45, - 70 ], [ 40, - 10 ], [ 50, 40 ], [ 40, 100 ], [ 45, 140 ] ] ) place( 'runnerFry', c, { x, z: - 27, r: 24 } );
+		// (Salt Life) more of the sea's life (placed last: the others keep their places). Mangrove
+		// snappers round the piles, at the coral heads and in the bay; goliath groupers under the pier,
+		// at a deep head and on the drop-off; cubera snappers on the drop-off; silk snappers over the
+		// deep holes; white mullet along the shore; bonefish on the two flats (east of the bay, and off
+		// the west point)
+		const gray = place( 'pierGray', 10, pierZone, true );
+		if ( gray ) gray.zone.piles = wet.filter( ( p ) => Math.hypot( p[ 0 ] - gray.home.x, p[ 1 ] - gray.home.z ) < 5 );
+		if ( gray && ! gray.zone.piles.length ) gray.zone.piles = [ [ gray.home.x, gray.home.z ] ];
+		for ( const c of [ 8, 6 ] ) place( 'graySnapper', c, reef, true );
+		place( 'graySnapper', 7, { ...bayZone, band: [ 2.5, 8 ] } );
+		place( 'goliathGrouper', 1, pierZone, true );
+		place( 'goliathGrouper', 1, { ...reef, band: [ 7, 20 ] }, true );
+		place( 'goliathGrouper', 1, { ...dropZone, r: 24 } );
+		place( 'cuberaSnapper', 2, dropZone );
+		place( 'silkSnapper', 6, { x: 5, z: 165, r: 40 } );
+		place( 'silkSnapper', 7, { x: 0, z: 360, r: 90 } );
+		for ( const c of [ 10, 8 ] ) place( 'whiteMullet', c, { x: 60, z: 10, r: 80 } );
+		place( 'bonefish', 6, { x: 172, z: 136, r: 10 } );
+		place( 'bonefish', 5, { x: - 374, z: 52, r: 16 } );
+		// the sharks: reef sharks along the drop-off, blacktips off the bay's mouth and beyond, nurse
+		// sharks on the reef's sand and under the pier's head
+		for ( const c of [ 1, 2 ] ) {
+
+			const s = place( 'reefShark', c, dropZone );
+			if ( s ) s.zone.path = drop;
+
+		}
+
+		place( 'blacktipShark', 3, { x: 45, z: 125, r: 40 } );
+		place( 'blacktipShark', 2, { x: 0, z: 330, r: 80 } );
+		for ( let i = 0; i < 2; i ++ ) place( 'nurseShark', 1, { ...reef, r: this.radius, band: [ 3, 12 ], sand: true } );
+		place( 'nurseShark', 1, { x: P.x, z: P.zEnd - 4, r: 8, band: [ 3, 10 ] } );
+		// spiny lobsters in dens at the coral heads (initGroup: makeDen)
+		for ( let i = 0; i < 10; i ++ ) {
+
+			const g = place( 'lobster', i % 3 ? 1 : 2, reef, true );
+			if ( g ) this.lobsterGroups.push( g );
+
+		}
 
 	}
 
@@ -552,10 +640,59 @@ export class FishSchools {
 			const u = rng() * 2 - 1, a = rng() * TAU, rr = Math.sqrt( 1 - u * u );
 			this.slot.set( [ rr * Math.cos( a ), u, rr * Math.sin( a ), 0.45 + 0.55 * Math.cbrt( rng() ) ], i * 4 );
 			if ( sp.mode === 'pile' && g.zone.piles ) this.slot[ i * 4 + 3 ] = Math.floor( rng() * g.zone.piles.length );
+			if ( sp.mode === 'lobster' ) this.makeDen( g, i );
+			else if ( sp.mode === 'flats' ) this.aux[ i * 8 ] = - 2 - rng() * 8;
 
 		}
 
 		this.retarget( g, null );
+
+	}
+
+	// (Salt Life) lobster i's den: at the foot of a coral head near its group's home, backed in under
+	// its edge and facing out (slot: x, z, the way it faces (rad), the sand's height there); on the sand
+	// near the home where there's no head. Some are berried females (seed over 0.94: their eggs under
+	// the tail, FishMaterial), the rest under 0.93
+	makeDen( g, i ) {
+
+		const rng = g.rng, L = this.size[ i ];
+		// (its tail end under the coral behind it, its head and feelers out)
+		let den = null;
+		const a0 = rng() * TAU;
+		for ( let k = 0; k < 16 && ! den; k ++ ) {
+
+			const a = a0 + k / 16 * TAU, dx = Math.cos( a ), dz = Math.sin( a );
+			let head = false;
+			for ( let r = 0; r < 4; r += 0.12 ) {
+
+				const x = g.home.x + dx * r, z = g.home.z + dz * r;
+				const rise = this.floorAt( x, z ) - this.terrain.heightAt( x, z );
+				if ( rise > 0.3 ) head = true;
+				else if ( head && rise < 0.06 ) {
+
+					den = [ x + dx * L * 0.1, z + dz * L * 0.1, a ];
+					break;
+
+				}
+
+			}
+
+		}
+
+		if ( ! den ) den = [ g.home.x + ( rng() - 0.5 ) * 2, g.home.z + ( rng() - 0.5 ) * 2, rng() * TAU ];
+		const [ x, z, a ] = den, sand = this.terrain.heightAt( x, z );
+		this.slot.set( [ x, z, a, sand ], i * 4 );
+		this.pos.set( [ x, sand + LOB_STAND * L, z ], i * 3 );
+		this.prev.set( [ x, sand + LOB_STAND * L, z ], i * 3 );
+		this.vel.set( [ 0, 0, 0 ], i * 3 );
+		this.head.set( [ Math.cos( a ), 0, Math.sin( a ) ], i * 3 );
+		this.seed[ i ] = rng() < 0.14 ? 0.94 + rng() * 0.055 : rng() * 0.93;
+		const k = i * 8;
+		this.aux.fill( 0, k, k + 8 );
+		this.aux[ k ] = LOB.den;
+		this.aux[ k + 1 ] = rng() * 30;
+		this.aux[ k + 3 ] = - 1e9;
+		this.aux[ k + 6 ] = 0.08;
 
 	}
 
@@ -648,7 +785,7 @@ export class FishSchools {
 	// Runs the steering branches once so the JIT doesn't hitch on the first encounter.
 	warmUp() {
 
-		const save = [ this.pos.slice(), this.vel.slice(), this.head.slice(), this.panic.slice(), this.jump.slice() ];
+		const save = [ this.pos.slice(), this.vel.slice(), this.head.slice(), this.panic.slice(), this.jump.slice(), this.aux.slice() ];
 		const goals = this.groups.map( ( g ) => [ g.goal.clone(), g.timer, g.alarm, g.ball, g.rest, g.breath, g.jumpTimer ] );
 		const probe = new THREE.Vector3();
 		for ( let k = 0; k < 40; k ++ ) {
@@ -669,6 +806,7 @@ export class FishSchools {
 		this.head.set( save[ 2 ] );
 		this.panic.set( save[ 3 ] );
 		this.jump.set( save[ 4 ] );
+		this.aux.set( save[ 5 ] );
 		this.groups.forEach( ( g, i ) => {
 
 			const s = goals[ i ];
@@ -804,6 +942,7 @@ export class FishSchools {
 
 		g.radius = Math.sqrt( r2 ) + 2;
 		if ( sp.mode === 'bait' ) return this.stepBait( g, dt, player );
+		if ( sp.mode === 'lobster' ) return this.stepLobster( g, dt, player );
 		if ( sp.mode === 'escort' || sp.mode === 'remora' ) {
 
 			if ( this.whale && this.whale.ready && g.attached ) this.stepEscort( g, dt );
@@ -843,11 +982,11 @@ export class FishSchools {
 
 		}
 
-		// stingray: rests on the sand now and then
+		// stingray: rests on the sand now and then (a nurse shark, most of the time)
 		if ( sp.mode === 'glide' ) {
 
 			if ( g.rest > 0 ) g.rest -= dt;
-			else if ( g.rng() < dt * 0.02 ) g.rest = 6 + g.rng() * 12;
+			else if ( g.rng() < dt * sp.rests[ 0 ] ) g.rest = sp.rests[ 1 ] + g.rng() * sp.rests[ 2 ];
 
 		}
 
@@ -935,6 +1074,7 @@ export class FishSchools {
 		const t = this.time;
 		const flee2 = fleeR * fleeR;
 		const piles = g.zone.piles;
+		const X = this.aux, H = this.head;
 		for ( let a = 0; a < n; a ++ ) {
 
 			const i = o + a, i3 = i * 3, ai = i * 9;
@@ -982,7 +1122,32 @@ export class FishSchools {
 			let tx = g.goal.x, ty = g.goal.y, tz = g.goal.z;
 			let want = cruise;
 			const s = this.seed[ i ];
-			if ( sp.mode === 'mill' || sp.mode === 'pair' ) {
+			const raid = this.raids.size ? this.raids.get( i ) : undefined;
+			if ( raid ) {
+
+				// (Salt Life) a thief after a speared or hooked fish: straight in at speed; once it has
+				// it, off, away from the diver
+				if ( ! raid.got ) {
+
+					tx = raid.x;
+					ty = raid.y;
+					tz = raid.z;
+					want = sp.burst * L * 0.6;
+					if ( Math.hypot( tx - x, ty - y, tz - z ) < L * 0.4 + 0.2 ) raid.got = true;
+
+				} else {
+
+					const ox = x - ( player ? px : raid.x ), oz = z - ( player ? pz : raid.z ), ol = Math.hypot( ox, oz ) || 1;
+					tx = x + ox / ol * 10;
+					tz = z + oz / ol * 10;
+					ty = y;
+					want = sp.max * L;
+					raid.off -= dt;
+					if ( raid.off <= 0 ) this.raids.delete( i );
+
+				}
+
+			} else if ( sp.mode === 'mill' || sp.mode === 'pair' ) {
 
 				// slow circling around the coral head
 				const ang = t * ( sp.mode === 'pair' ? 0.25 : 0.12 ) * g.spin + s * 0.8;
@@ -1044,21 +1209,55 @@ export class FishSchools {
 				// resting on the sand
 				tx = x;
 				tz = z;
-				ty = Math.max( this.terrain.heightAt( x, z ), this.floorAt( x, z ) ) + 0.04;
+				ty = Math.max( this.terrain.heightAt( x, z ), this.floorAt( x, z ) ) + 0.04 + ( sp.hug || 0 ) * L;
 				want = 0;
+
+			} else if ( sp.mode === 'flats' ) {
+
+				// (Salt Life) bonefish: nosing along the bottom with the school; now and then one stops,
+				// head down, rooting in the sand, its tail up (aux: the time left rooting, or to the next
+				// as a negative; the tilt, for cull). Not while they're frightened
+				const k8 = i * 8;
+				let tt = X[ k8 ];
+				if ( tt > 0 ) {
+
+					tt -= dt;
+					if ( tt <= 0 ) tt = - 3 - g.rng() * 8;
+
+				} else {
+
+					tt += dt;
+					if ( tt >= 0 ) tt = 2 + g.rng() * 5;
+
+				}
+
+				if ( g.alarm > 0 || this.panic[ i ] > 0.05 ) tt = Math.min( tt, - 5 );
+				X[ k8 ] = tt;
+				X[ k8 + 1 ] += ( ( tt > 0 ? BONE_TILT : 0 ) - X[ k8 + 1 ] ) * Math.min( 1, dt * 2.5 );
+				if ( tt > 0 ) {
+
+					const ground = Math.max( this.terrain.heightAt( x, z ), this.floorAt( x, z ) );
+					tx = x + H[ i3 ] * 0.05;
+					tz = z + H[ i3 + 2 ] * 0.05;
+					ty = ground + L * 0.37;
+					want = cruise * 0.1;
+					// its tail out of the water: a flick of spray now and then
+					if ( ty + Math.sin( X[ k8 + 1 ] ) * L * 0.5 > - 0.03 && g.rng() < dt * 0.6 ) this.splash( x - H[ i3 ] * L * 0.4, z - H[ i3 + 2 ] * L * 0.4, 0, 0, L, 0.06 );
+
+				}
 
 			}
 
 			let dx = tx - x, dy = ty - y, dz = tz - z;
 			let dl = Math.sqrt( dx * dx + dy * dy + dz * dz ) + 1e-6;
-			const arrive = Math.min( 1, dl / Math.max( 0.3, L * 4 ) );
+			const arrive = raid && ! raid.got ? 1 : Math.min( 1, dl / Math.max( 0.3, L * 4 ) );
 			ax += ( dx / dl * want * arrive - vx ) * sp.wGoal;
 			ay += ( dy / dl * want * arrive - vy ) * sp.wGoal;
 			az += ( dz / dl * want * arrive - vz ) * sp.wGoal;
 
 			// flee from the diver (horizontally for fish near the surface)
 			let panic = Math.max( 0, this.panic[ i ] - dt * 0.5 );
-			if ( near ) {
+			if ( near && ! raid ) {
 
 				dx = x - px;
 				dy = y - py;
@@ -1079,6 +1278,7 @@ export class FishSchools {
 
 			}
 
+			if ( raid ) panic = Math.max( panic, 0.7 );
 			this.panic[ i ] = panic;
 
 			// bottom below (with look-ahead) and the surface above; the look-ups are refreshed every
@@ -1092,7 +1292,8 @@ export class FishSchools {
 
 			}
 
-			const clear = sp.mode === 'glide' ? 0.03 : FLOOR_CLEARANCE + L * 0.8;
+			// (Salt Life: the bottom huggers, and bonefish on the flats, close over it)
+			const clear = sp.hug ? 0.05 + sp.hug * L : sp.mode === 'glide' ? 0.03 : sp.mode === 'flats' ? 0.05 + L * 0.25 : FLOOR_CLEARANCE + L * 0.8;
 			const floor = this.floorC[ i ] + clear;
 			if ( y < floor ) ay += ( floor - y ) * 8;
 			// shallow water ahead (or the breakers): turn back
@@ -1103,8 +1304,8 @@ export class FishSchools {
 
 			}
 
-			const ceil = sp.ceiling;
-			if ( y > ceil - 0.3 && ! ( sp.mode === 'jumper' && this.jump[ i ] > 0.5 ) ) ay -= ( y - ( ceil - 0.3 ) ) * 8;
+			const ceil = sp.ceiling, under = sp.mode === 'flats' ? 0.08 : 0.3;
+			if ( y > ceil - under && ! ( sp.mode === 'jumper' && this.jump[ i ] > 0.5 ) ) ay -= ( y - ( ceil - under ) ) * 8;
 			if ( sp.mode !== 'turtle' ) ay -= vy * 1.5; // fish prefer to swim level
 
 			// mullet: rising to the surface for a leap
@@ -1131,7 +1332,7 @@ export class FishSchools {
 			vz += az * dt;
 			const speed = Math.sqrt( vx * vx + vy * vy + vz * vz ) + 1e-6;
 			const vmax = ( sp.max + ( sp.burst - sp.max ) * panic ) * L * ( this.jump[ i ] > 0.5 ? 2 : 1 );
-			const vmin = sp.mode === 'hover' || sp.mode === 'solo' || sp.mode === 'mill' || sp.mode === 'lurk' || sp.mode === 'pile' || sp.mode === 'glide' ? 0.0 : cruise * 0.3;
+			const vmin = sp.mode === 'hover' || sp.mode === 'solo' || sp.mode === 'mill' || sp.mode === 'lurk' || sp.mode === 'pile' || sp.mode === 'glide' || sp.mode === 'flats' ? 0.0 : cruise * 0.3;
 			const sc = speed > vmax ? vmax / speed : ( speed < vmin ? vmin / speed : 1 );
 			vx *= sc;
 			vy *= sc;
@@ -1154,7 +1355,7 @@ export class FishSchools {
 
 			}
 
-			const bottom = this.floorC[ i ] + ( sp.mode === 'glide' ? 0.02 : FLOOR_CLEARANCE );
+			const bottom = this.floorC[ i ] + ( sp.hug ? 0.02 + sp.hug * L : sp.mode === 'glide' ? 0.02 : sp.mode === 'flats' ? 0.03 + L * 0.1 : FLOOR_CLEARANCE );
 			let ny = y + vy * dt;
 			if ( this.jump[ i ] > 0.5 && ny > - 0.25 ) {
 
@@ -1571,6 +1772,7 @@ export class FishSchools {
 
 			}
 			const turtle = sp.mode === 'turtle', ray = sp.model === 'stingray' || sp.model === 'eagleRay';
+			const lob = sp.mode === 'lobster', flats = sp.mode === 'flats';
 			for ( let a = 0; a < g.count; a ++ ) {
 
 				const i = g.offset + a, i3 = i * 3;
@@ -1583,9 +1785,10 @@ export class FishSchools {
 				const speed = Math.sqrt( vx * vx + vy * vy + vz * vz ) + 1e-6;
 				const airborne = this.jump[ i ] > 1.5;
 
-				// heading follows the velocity (slowly when hovering), pitch limited
+				// heading follows the velocity (slowly when hovering), pitch limited (a lobster's is its
+				// own: it walks, turns on the spot and shoots off backward)
 				let hx = H[ i3 ], hy = H[ i3 + 1 ], hz = H[ i3 + 2 ];
-				if ( ! held ) {
+				if ( ! held && ! lob ) {
 
 					const kh = airborne ? 1 : kHead * Math.min( 1, speed / ( L * 0.5 ) + 0.15 );
 					const ohx = hx, ohz = hz;
@@ -1613,10 +1816,23 @@ export class FishSchools {
 				const bl = speed / L;
 				const rest = sp.mode === 'glide' && g.rest > 0;
 				const thrash = held ? this.panic[ i ] : 0;
-				const freq = held ? sp.freq[ 0 ] * ( 1.2 + thrash * 3 ) : rest ? 0.15 : Math.min( 10, sp.freq[ 0 ] + sp.freq[ 1 ] * bl ) * ( airborne ? 2.5 : 1 );
+				// (Salt Life) a rooting bonefish waves its tail slowly; a lobster: its gait (amp: walk 0 .. 1,
+				// bend: its tail's curl; the feelers sway on the same clock), kicking in the net
+				const rooting = flats && this.aux[ i * 8 ] > 0;
+				let freq = held ? sp.freq[ 0 ] * ( 1.2 + thrash * 3 ) : rest ? 0.15 : rooting ? sp.freq[ 0 ] * 0.4 : Math.min( 10, sp.freq[ 0 ] + sp.freq[ 1 ] * bl ) * ( airborne ? 2.5 : 1 );
+				let amp = held ? sp.amp * ( 0.5 + thrash * 2.5 ) : rest ? sp.amp * 0.2 : rooting ? sp.amp * 0.8 : sp.amp * ( 0.55 + 0.45 * Math.min( 2.5, bl / Math.max( 0.2, sp.cruise ) ) + this.panic[ i ] * 0.5 );
+				let bend = this.bend[ i ];
+				if ( lob ) {
+
+					const k8 = i * 8;
+					amp = held ? 0.6 + 0.4 * thrash : this.aux[ k8 + 5 ];
+					freq = 0.12 + amp * 1.3;
+					bend = held ? 0.2 + 0.7 * thrash * ( 0.5 + 0.5 * Math.sin( this.time * 8 + i ) ) : this.aux[ k8 + 6 ];
+
+				}
+
 				const dPhase = dt * TAU * freq;
 				this.phase[ i ] = ( this.phase[ i ] + dPhase ) % ( TAU * 64 );
-				const amp = held ? sp.amp * ( 0.5 + thrash * 2.5 ) : rest ? sp.amp * 0.2 : sp.amp * ( 0.55 + 0.45 * Math.min( 2.5, bl / Math.max( 0.2, sp.cruise ) ) + this.panic[ i ] * 0.5 );
 
 				// cull: distance, size on screen and view frustum
 				const dx = x - cp.x, dy = y - cp.y, dz = z - cp.z;
@@ -1628,8 +1844,8 @@ export class FishSchools {
 				_sphere.radius = L * 0.7;
 				if ( ! _frustum.intersectsSphere( _sphere ) ) continue;
 
-				// orientation: yaw from the heading, pitch, bank into turns
-				yawPitchRoll( Math.atan2( hx, hz ), - Math.asin( Math.max( - 1, Math.min( 1, hy ) ) ), this.roll[ i ], _q );
+				// orientation: yaw from the heading, pitch (a rooting bonefish's nose down), bank into turns
+				yawPitchRoll( Math.atan2( hx, hz ), - Math.asin( Math.max( - 1, Math.min( 1, hy ) ) ) + ( flats && ! held ? this.aux[ i * 8 + 1 ] : 0 ), this.roll[ i ], _q );
 
 				const o = i * 16;
 				D[ o ] = x;
@@ -1642,7 +1858,7 @@ export class FishSchools {
 				D[ o + 7 ] = _q.w;
 				D[ o + 8 ] = this.phase[ i ];
 				D[ o + 9 ] = amp;
-				D[ o + 10 ] = this.bend[ i ];
+				D[ o + 10 ] = bend;
 				D[ o + 11 ] = this.pattern[ i ] + this.seed[ i ] * 0.9;
 				D[ o + 12 ] = x - R[ i3 ];
 				D[ o + 13 ] = y - R[ i3 + 1 ];
@@ -1689,7 +1905,8 @@ export class FishSchools {
 		let h = this.hitShapes[ model ];
 		if ( h ) return h;
 		const S = SPECIES[ model ];
-		if ( ! S.top ) h = { cz: 0, hl: 0.5, cy: 0, hh: 0.06, hw: 0.4 }; // rays and the turtle (flat)
+		if ( S.creature === 'lobster' ) h = { cz: 0, hl: 0.48, cy: 0.03, hh: 0.08, hw: 0.12 }; // (Salt Life) its shell, on its legs
+		else if ( ! S.top ) h = { cz: 0, hl: 0.5, cy: 0, hh: 0.06, hw: 0.4 }; // rays and the turtle (flat)
 		else {
 
 			const max = ( pts ) => pts.reduce( ( m, p ) => Math.max( m, p[ 1 ] ), 0 );
@@ -1840,18 +2057,55 @@ export class FishSchools {
 			this.panic[ i ] = 0;
 			this.held[ i ] = 0;
 			this.taken.delete( i );
+			// (Salt Life) another lobster in the den, of its own size
+			if ( sp.mode === 'lobster' ) {
+
+				this.size[ i ] = sp.length[ 0 ] + ( sp.length[ 1 ] - sp.length[ 0 ] ) * Math.random();
+				this.makeDen( g, i );
+
+			}
 
 		}
 
 	}
 
-	// a fright at x, y, z (a shot, a speared fish thrashing): the fish within r scatter, and stay wary
+	// a fright at x, y, z (a shot, a speared fish thrashing): the fish within r scatter, and stay wary.
+	// (Salt Life) A cruising shark comes to see what the commotion is (from further off); a lobster out
+	// of its den shoots off
 	startle( x, y, z, r ) {
 
 		for ( const g of this.groups ) {
 
 			if ( ! g.active ) continue;
-			if ( Math.hypot( g.center.x - x, g.center.y - y, g.center.z - z ) > r + g.radius ) continue;
+			const gd = Math.hypot( g.center.x - x, g.center.y - y, g.center.z - z );
+			if ( g.sp.rule === 'shark' && g.sp.mode === 'cruise' ) {
+
+				if ( gd < 35 && g.alarm <= 0 ) {
+
+					const dx = g.center.x - x, dz = g.center.z - z, dl = Math.hypot( dx, dz ) || 1;
+					g.goal.set( x + dx / dl * 5, this.clampY( g.sp, x, z, y ), z + dz / dl * 5 );
+					g.timer = 8;
+
+				}
+
+				continue;
+
+			}
+
+			if ( gd > r + g.radius ) continue;
+			if ( g.sp.mode === 'lobster' ) {
+
+				for ( let k = 0; k < g.count; k ++ ) {
+
+					const i = g.offset + k;
+					if ( ! this.held[ i ] && this.aux[ i * 8 ] !== LOB.den && Math.hypot( this.pos[ i * 3 ] - x, this.pos[ i * 3 + 2 ] - z ) < r ) this.flipFrom( i, x, z );
+
+				}
+
+				continue;
+
+			}
+
 			g.alarm = 4;
 			g.spooked = SPOOKED;
 			g.rest = 0;
@@ -2059,6 +2313,334 @@ export class FishSchools {
 		if ( ! this.net ) return;
 		for ( const i of this.net.list ) this.inNet[ i ] = 0;
 		this.net = null;
+
+	}
+
+
+	// ------------------------------------------------------------------ (Salt Life) thieves
+
+	// a thief (sp.thief: a shark, a goliath) within its reach of x, y, z: { i, chance, dist } for the
+	// nearest, or null
+	thiefNear( x, y, z ) {
+
+		let best = null, bd = Infinity;
+		for ( const g of this.groups ) {
+
+			const th = g.sp.thief;
+			if ( ! th || ! g.active || Math.hypot( g.center.x - x, g.center.y - y, g.center.z - z ) > th[ 0 ] + g.radius ) continue;
+			for ( let k = 0; k < g.count; k ++ ) {
+
+				const i = g.offset + k;
+				if ( this.held[ i ] || this.raids.has( i ) ) continue;
+				const d = Math.hypot( this.pos[ i * 3 ] - x, this.pos[ i * 3 + 1 ] - y, this.pos[ i * 3 + 2 ] - z );
+				if ( d < th[ 0 ] && d < bd ) {
+
+					bd = d;
+					best = { i, chance: th[ 1 ], dist: d };
+
+				}
+
+			}
+
+		}
+
+		return best;
+
+	}
+
+	// thief i comes for the fish at x, y, z: the raid { x, y, z (where the fish is: the caller keeps it
+	// up to date), got (it has it: it keeps going, away from the diver) }
+	raid( i, x, y, z ) {
+
+		const r = { x, y, z, got: false, off: RAID_OFF };
+		this.raids.set( i, r );
+		return r;
+
+	}
+
+	// the fish was landed first (or lost): the thief turns away
+	endRaid( i ) {
+
+		const r = this.raids.get( i );
+		if ( r ) r.got = true;
+
+	}
+
+	// ------------------------------------------------------------------ (Salt Life) spiny lobsters
+
+	// Each lobster (aux: its state (LOB), a timer, how far it's been coaxed 0 .. 1, where it's walking
+	// (x, z; in its den: when it was last tickled), its gait 0 .. 1 and its tail's curl (rad) (cull),
+	// the clock of a tail flip; slot: its den, makeDen). By day it sits backed into its den, feelers
+	// out; after dark it walks out over the reef to forage, and is home by dawn. Tickled (tickle) it
+	// walks out of the den into the open; in the open, a diver coming at it (or a miss with the net)
+	// and it shoots off backward with strokes of its tail, settles, and walks home.
+	stepLobster( g, dt, player ) {
+
+		const sp = g.sp, X = this.aux, S = this.slot, P = this.pos, V = this.vel, H = this.head, rng = g.rng;
+		const fleeR = sp.flee * this.wary * ( 1 + g.spooked / SPOOKED );
+		for ( let a = 0; a < g.count; a ++ ) {
+
+			const i = g.offset + a, i3 = i * 3, i4 = i * 4, k = i * 8;
+			if ( this.held[ i ] ) continue;
+			const L = this.size[ i ];
+			const x0 = P[ i3 ], y0 = P[ i3 + 1 ], z0 = P[ i3 + 2 ];
+			// out after dark (each at its own hour)
+			const late = ( this.seed[ i ] * 7.3 ) % 1;
+			const night = this.hour < LOB_NIGHT[ 0 ] - late * 0.8 || this.hour > LOB_NIGHT[ 1 ] + late;
+			if ( player && X[ k ] !== LOB.den && X[ k ] !== LOB.flip && Math.hypot( player.x - x0, player.y - y0, player.z - z0 ) < fleeR ) this.flipFrom( i, player.x, player.z );
+
+			// ---- what it's doing
+			let st = X[ k ];
+			const timer = ( X[ k + 1 ] -= dt );
+			const tickled = st === LOB.den && this.time - X[ k + 3 ] < 0.25;
+			if ( st === LOB.den ) {
+
+				if ( ! tickled ) X[ k + 2 ] = Math.max( 0, X[ k + 2 ] - dt * 0.12 );
+				if ( X[ k + 2 ] >= 1 ) st = this.lobsterTo( i, LOB.out, 9 + rng() * 6 );
+				else if ( night && timer <= 0 ) st = this.lobsterTo( i, LOB.forage, 60 + rng() * 120 );
+
+			} else if ( st === LOB.forage ) {
+
+				if ( ! night || timer <= 0 ) st = this.lobsterTo( i, LOB.home, 0 );
+				else if ( Math.hypot( X[ k + 3 ] - x0, X[ k + 4 ] - z0 ) < 0.08 ) this.lobsterWander( i, rng );
+
+			} else if ( st === LOB.out ) {
+
+				if ( timer <= 0 ) st = this.lobsterTo( i, LOB.home, 0 );
+
+			} else if ( st === LOB.flip ) {
+
+				if ( X[ k + 7 ] > FLIP_S ) st = this.lobsterTo( i, LOB.home, 1.5 + rng() * 2 );
+
+			} else if ( Math.hypot( S[ i4 ] - x0, S[ i4 + 1 ] - z0 ) < 0.06 ) st = this.lobsterTo( i, LOB.den, 20 + rng() * 60 );
+
+			// ---- how it moves
+			let x = x0, z = z0, hx = H[ i3 ], hz = H[ i3 + 2 ];
+			let walk = 0, curl = 0.08, lift = 0;
+			if ( st === LOB.flip ) {
+
+				// backward, tail first, in strokes of its tail: up off the bottom and down again (its head
+				// turning, at first, to the fright)
+				const c = ( X[ k + 7 ] += dt ), u = Math.min( 1, c / FLIP_S );
+				const dx = X[ k + 3 ] - x, dz = X[ k + 4 ] - z, dl = Math.hypot( dx, dz );
+				if ( dl > 1e-3 && c < 0.25 ) {
+
+					const kk = Math.min( 1, dt * 14 );
+					hx += ( dx / dl - hx ) * kk;
+					hz += ( dz / dl - hz ) * kk;
+					const hl = Math.hypot( hx, hz ) || 1;
+					hx /= hl;
+					hz /= hl;
+
+				}
+
+				const v = 2.6 * ( 1 - u ) + 0.15;
+				x -= hx * v * dt;
+				z -= hz * v * dt;
+				lift = Math.sin( Math.PI * u ) * 0.35;
+				curl = 0.15 + 0.9 * ( 0.5 - 0.5 * Math.cos( c * TAU * 4.5 ) );
+
+			} else {
+
+				// walking: it turns toward where it's going (in its den, to face out of it), and walks
+				// once it faces it; it shuffles while it's tickled
+				let tx = X[ k + 3 ], tz = X[ k + 4 ], speed = 0, face = null;
+				if ( st === LOB.den ) {
+
+					tx = S[ i4 ];
+					tz = S[ i4 + 1 ];
+					face = S[ i4 + 2 ];
+					speed = 0.04;
+					if ( tickled ) walk = 0.35;
+
+				} else if ( st === LOB.forage ) speed = 0.1 * Math.max( 0, Math.sin( this.time * 0.35 + i * 1.7 ) );
+				else if ( st === LOB.out ) speed = 0.07;
+				else {
+
+					tx = S[ i4 ];
+					tz = S[ i4 + 1 ];
+					speed = timer > 0 ? 0 : 0.1;
+
+				}
+
+				const dx = tx - x, dz = tz - z, dl = Math.hypot( dx, dz );
+				const going = speed > 0 && dl > 0.03;
+				const want = going ? Math.atan2( dz, dx ) : face;
+				if ( want !== null ) {
+
+					const cur = Math.atan2( hz, hx );
+					let d = want - cur;
+					d -= Math.round( d / TAU ) * TAU;
+					const turn = Math.max( - 1.6 * dt, Math.min( 1.6 * dt, d ) );
+					hx = Math.cos( cur + turn );
+					hz = Math.sin( cur + turn );
+					if ( Math.abs( d ) > 0.05 ) walk = Math.max( walk, 0.45 );
+					if ( going && Math.abs( d ) < 0.6 ) {
+
+						const step = Math.min( dl, speed * dt * Math.cos( d ) );
+						x += hx * step;
+						z += hz * step;
+						walk = Math.max( walk, Math.min( 1, speed / 0.07 ) );
+
+					}
+
+				}
+
+			}
+
+			// on its legs on the bottom (in the den, on the sand under the coral's edge)
+			const ground = st === LOB.den ? S[ i4 + 3 ] : Math.max( this.terrain.heightAt( x, z ), this.floorAt( x, z ) );
+			const y = Math.min( y0 + ( ground + LOB_STAND * L + lift - y0 ) * Math.min( 1, dt * 6 ), - 0.1 );
+			X[ k + 5 ] += ( walk - X[ k + 5 ] ) * Math.min( 1, dt * 5 );
+			X[ k + 6 ] += ( curl - X[ k + 6 ] ) * Math.min( 1, dt * ( st === LOB.flip ? 30 : 4 ) );
+			P[ i3 ] = x;
+			P[ i3 + 1 ] = y;
+			P[ i3 + 2 ] = z;
+			V[ i3 ] = ( x - x0 ) / dt;
+			V[ i3 + 1 ] = ( y - y0 ) / dt;
+			V[ i3 + 2 ] = ( z - z0 ) / dt;
+			H[ i3 ] = hx;
+			H[ i3 + 1 ] = 0;
+			H[ i3 + 2 ] = hz;
+
+		}
+
+	}
+
+	// lobster i on to state st (LOB), for timer s; returns st
+	lobsterTo( i, st, timer ) {
+
+		const X = this.aux, S = this.slot, k = i * 8, i4 = i * 4;
+		X[ k ] = st;
+		X[ k + 1 ] = timer;
+		if ( st === LOB.out ) {
+
+			// a body length or so out of the den, the way it faces
+			const d = 0.3 + 0.9 * this.size[ i ];
+			X[ k + 3 ] = S[ i4 ] + Math.cos( S[ i4 + 2 ] ) * d;
+			X[ k + 4 ] = S[ i4 + 1 ] + Math.sin( S[ i4 + 2 ] ) * d;
+
+		} else if ( st === LOB.forage ) this.lobsterWander( i, this.groupOf[ i ].rng );
+		else if ( st === LOB.den ) {
+
+			X[ k + 2 ] = 0;
+			X[ k + 3 ] = - 1e9;
+
+		}
+
+		return st;
+
+	}
+
+	// somewhere for lobster i to walk to, a few metres round its den
+	lobsterWander( i, rng ) {
+
+		const S = this.slot, i4 = i * 4, k = i * 8;
+		for ( let t = 0; t < 8; t ++ ) {
+
+			const a = rng() * TAU, r = 0.6 + rng() * 3;
+			const x = S[ i4 ] + Math.cos( a ) * r, z = S[ i4 + 1 ] + Math.sin( a ) * r;
+			if ( this.depthAt( x, z ) < 1.5 ) continue;
+			this.aux[ k + 3 ] = x;
+			this.aux[ k + 4 ] = z;
+			return;
+
+		}
+
+		this.aux[ k + 3 ] = S[ i4 ];
+		this.aux[ k + 4 ] = S[ i4 + 1 ];
+
+	}
+
+	// lobster i shoots off backward, away from fx, fz
+	flipFrom( i, fx, fz ) {
+
+		const k = i * 8;
+		this.aux[ k ] = LOB.flip;
+		this.aux[ k + 1 ] = 0;
+		this.aux[ k + 3 ] = fx;
+		this.aux[ k + 4 ] = fz;
+		this.aux[ k + 7 ] = 0;
+
+	}
+
+	// what lobster i is doing, for the game: 'den', 'out' (in the open) or 'flip' (shooting off)
+	lobsterState( i ) {
+
+		const s = this.aux[ i * 8 ];
+		return s === LOB.den ? 'den' : s === LOB.flip ? 'flip' : 'out';
+
+	}
+
+	// the lobster in front of a diver at pos looking along dir (unit) whose head is the nearest, within
+	// reach (m): { i, dist, state }, or null
+	nearLobster( pos, dir, reach ) {
+
+		let best = null, bd = reach;
+		for ( const g of this.lobsterGroups ) {
+
+			if ( ! g.active ) continue;
+			for ( let k = 0; k < g.count; k ++ ) {
+
+				const i = g.offset + k, i3 = i * 3;
+				if ( this.held[ i ] ) continue;
+				const L = this.size[ i ];
+				const hx = this.pos[ i3 ] + this.head[ i3 ] * L * 0.4 - pos.x, hy = this.pos[ i3 + 1 ] - pos.y, hz = this.pos[ i3 + 2 ] + this.head[ i3 + 2 ] * L * 0.4 - pos.z;
+				const d = Math.hypot( hx, hy, hz );
+				if ( d >= bd || hx * dir.x + hy * dir.y + hz * dir.z < d * 0.8 ) continue;
+				bd = d;
+				best = { i, dist: d, state: this.lobsterState( i ) };
+
+			}
+
+		}
+
+		return best;
+
+	}
+
+	// the tickle stick worked at lobster i's den this frame (rate: its share of the coaxing a second):
+	// how far it's coaxed out, 0 .. 1 (1: it's walking out, or isn't in its den)
+	tickle( i, dt, rate ) {
+
+		const X = this.aux, k = i * 8;
+		if ( X[ k ] !== LOB.den ) return 1;
+		X[ k + 3 ] = this.time;
+		X[ k + 2 ] = Math.min( 1, X[ k + 2 ] + dt * rate );
+		return X[ k + 2 ];
+
+	}
+
+	// the net swept over lobster i: in it (held: the game poses it in the net, hold), or missed, and it
+	// shoots off away from fx, fz
+	netLobster( i, ok, fx, fz ) {
+
+		if ( ok ) {
+
+			this.held[ i ] = 1;
+			this.panic[ i ] = 1;
+			return true;
+
+		}
+
+		this.flipFrom( i, fx, fz );
+		this.groupOf[ i ].spooked = SPOOKED;
+		return false;
+
+	}
+
+	// a lobster let go from the net (short, berried, or the day's bag full): off it shoots, and home
+	letGo( i, fx, fz ) {
+
+		this.held[ i ] = 0;
+		this.flipFrom( i, fx, fz );
+
+	}
+
+	// a berried female (her eggs under her tail): one to let go
+	berried( i ) {
+
+		return this.seed[ i ] > 0.935;
 
 	}
 

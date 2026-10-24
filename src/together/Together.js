@@ -284,12 +284,13 @@ export class Together {
 
 	// a fish landed here: is it the island's heaviest of its kind? (from what's known now; the shared
 	// save is then brought up to date, and the others told)
-	// (Salt Life) method: 'rod', 'spear' or 'net'; a speared or netted record says so (m: 's' | 'n')
+	// (Salt Life) method: 'rod', 'spear', 'net' or 'hand' (a lobster); a speared, netted or hand-taken
+	// record says so (m: 's' | 'n' | 'h')
 	caught( species, kg, cm, method = 'rod' ) {
 
 		const held = this.records[ species ];
 		const island = ! held || kg > held.kg;
-		const m = { spear: 's', net: 'n' }[ method ];
+		const m = { spear: 's', net: 'n', hand: 'h' }[ method ] || null;
 		const tell = ( record ) => {
 
 			if ( this.others.size ) this.session.send( 'catch', m ? { s: species, kg: r3( kg ), cm, rec: record, m } : { s: species, kg: r3( kg ), cm, rec: record } );
@@ -400,7 +401,7 @@ export class Together {
 
 		const o = this.others.get( from );
 		if ( ! o || ! b || ! FISH[ b.s ] || typeof b.kg !== 'number' ) return;
-		if ( b.rec || isTrophy( b.s, b.kg ) ) this.app.game.toast( `${ o.person.name } ${ b.m === 's' ? 'speared' : b.m === 'n' ? 'netted' : 'caught' } a ${ lb( b.kg, 1 ) } ${ FISH[ b.s ].name.toLowerCase() }${ b.rec ? ': a new island record!' : '' }`, 4200 );
+		if ( b.rec || isTrophy( b.s, b.kg ) ) this.app.game.toast( `${ o.person.name } ${ { s: 'speared', n: 'netted', h: 'caught by hand' }[ b.m ] || 'caught' } a ${ lb( b.kg, 1 ) } ${ FISH[ b.s ].name.toLowerCase() }${ b.rec ? ': a new island record!' : '' }`, 4200 );
 		o.avatar.once( 'cheer_01' );
 		if ( b.m === 'n' ) {
 

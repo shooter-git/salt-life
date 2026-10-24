@@ -10,7 +10,7 @@ import { LB } from './Units.js';
 
 const W = 512, H = 726; // the slate's canvas (0.55 × 0.78 m), as the records board's
 // the board's rows: the name chalked, the fish in the catch table
-const ROWS = [ [ 'Red snapper', 'redSnapper' ], [ 'Hogfish', 'wrasse' ], [ 'Yellowtail', 'yellowtail' ], [ 'Grunt', 'grunt' ], [ 'Jack', 'jack' ] ];
+const ROWS = [ [ 'Red snapper', 'redSnapper' ], [ 'Spiny lobster', 'lobster' ], [ 'Hogfish', 'wrasse' ], [ 'Mangrove snapper', 'graySnapper' ], [ 'Yellowtail', 'yellowtail' ], [ 'Grunt', 'grunt' ] ];
 
 export class PriceBoard {
 
@@ -57,11 +57,11 @@ export class PriceBoard {
 		g.font = `66px ${ font }`;
 		g.fillText( 'Today we buy', W / 2, 88 );
 		g.fillRect( 60, 108, W - 120, 3 );
-		let y = 200;
+		let y = 190;
 		for ( const [ name, k ] of ROWS ) {
 
 			const price = `$${ ( FISH[ k ].price / LB ).toFixed( 2 ) }/lb`;
-			g.font = `52px ${ font }`;
+			g.font = `48px ${ font }`;
 			g.textAlign = 'left';
 			g.fillStyle = '#f2efe4';
 			g.fillText( name, 36, y, 290 );
@@ -72,14 +72,14 @@ export class PriceBoard {
 			const a = 36 + Math.min( 290, g.measureText( name ).width ) + 14, b = W - 36 - g.measureText( price ).width - 14;
 			g.fillStyle = 'rgba(242, 239, 228, 0.45)';
 			for ( let x = a; x < b; x += 14 ) g.fillRect( x, y - 5, 4, 4 );
-			y += 86;
+			y += 74;
 
 		}
 
 		g.fillStyle = '#f2efe4';
 		g.textAlign = 'center';
 		g.font = `50px ${ font }`;
-		g.fillText( 'Tuna, mahi: ask Joe', W / 2, 660 );
+		g.fillText( 'Tuna, mahi, jacks: ask Joe', W / 2, 660, W - 40 );
 		this.texture.needsUpdate = true;
 
 	}

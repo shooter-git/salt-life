@@ -59,7 +59,7 @@ export class RecordsBoard {
 
 	}
 
-	// records: species -> { kg, cm, who, m ('s': speared) }
+	// records: species -> { kg, cm, who, m ('s': speared, 'h': by hand) }
 	draw( records ) {
 
 		this._last = records;
@@ -111,7 +111,7 @@ export class RecordsBoard {
 			g.textAlign = 'left';
 			g.font = `28px ${ font }`;
 			g.fillStyle = 'rgba(242, 239, 228, 0.7)';
-			g.fillText( `${ r.who || '' }${ r.m === 's' ? ' · speared' : '' }`, 46, y + 30, 320 );
+			g.fillText( `${ r.who || '' }${ { s: ' · speared', n: ' · netted', h: ' · by hand' }[ r.m ] || '' }`, 46, y + 30, 320 );
 			y += 70;
 
 		}

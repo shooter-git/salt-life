@@ -1,6 +1,7 @@
 import * as THREE from '../../engine/index.js';
 import { SPECIES, SKIN } from '../fish/FishSpecies.js';
 import { fishGeometry, splitFishGeometry, section, PART } from '../fish/FishGeometry.js';
+import { lobsterGeometry as spinyLobster } from '../fish/CreatureGeometry.js';
 import { createPropMaterial } from '../fish/FishMaterial.js';
 
 // Fish as village props: whole fish lying on ice or hanging from the stall, split salted fish on
@@ -400,7 +401,15 @@ export class FishProps {
 	// placed at the frame origin (after bending).
 	add( kind, species, frame, pose, L, o = {} ) {
 
-		const curl = o.curl ?? 0, sag = o.sag ?? 0;
+		let curl = o.curl ?? 0, sag = o.sag ?? 0, tail = 0;
+		// (Salt Life) a whole spiny lobster isn't bent as a fish is: a fish's curl either way is its
+		// tail snapped under (CreatureGeometry.lobsterGeometry curl), from a relaxed tuck
+		if ( kind === 'whole' && SPECIES[ species ] && SPECIES[ species ].creature === 'lobster' ) {
+
+			tail = Math.round( ( 0.15 + Math.abs( curl ) * 0.9 ) * 20 ) / 20;
+			curl = sag = 0;
+
+		}
 		_m.multiplyMatrices( frame, POSE[ pose ] );
 		_m.decompose( _p, _q, _s );
 		// the anchor point of the model sits at the frame origin
@@ -409,7 +418,7 @@ export class FishProps {
 		_p.sub( b );
 		this.items.push( {
 			kind, species, L, position: _p.clone(), q: _q.clone(), seed: o.seed ?? 0.5,
-			curl, sag, wet: o.wet ?? 1, dried: o.dried ?? 0, blood: o.blood ?? 0,
+			curl, sag, tail, wet: o.wet ?? 1, dried: o.dried ?? 0, blood: o.blood ?? 0,
 		} );
 
 	}
@@ -418,6 +427,7 @@ export class FishProps {
 	static restHeight( species, L ) {
 
 		const S = SPECIES[ species ];
+		if ( S.creature === 'lobster' ) return 0.11 * L;
 		let w = 0;
 		for ( let u = 0.1; u < 0.9; u += 0.05 ) w = Math.max( w, section( S, u ).W );
 		return w * L * 0.85;
@@ -428,13 +438,16 @@ export class FishProps {
 	static tailAnchor( species ) {
 
 		const S = SPECIES[ species ];
+		if ( S.creature === 'lobster' ) return [ 0, 0, - 0.42 ];
 		return [ 0, 0, 0.5 - S.body * 0.985 ];
 
 	}
 
+	// (a lobster: held up by the back of its carapace)
 	static gillAnchor( species ) {
 
 		const S = SPECIES[ species ];
+		if ( S.creature === 'lobster' ) return [ 0, 0.09, 0.2 ];
 		return [ 0, S.mouth.y * 0.5, 0.5 - S.body * ( S.mouth.corner + 0.03 ) ];
 
 	}
@@ -449,10 +462,19 @@ export class FishProps {
 		const models = new Map();
 		const model = ( it ) => {
 
-			const key = it.kind + ':' + ( it.species || '' );
+			const S = it.species ? SPECIES[ it.species ] : null;
+			const lobster = it.kind === 'whole' && S && S.creature === 'lobster';
+			const key = it.kind + ':' + ( it.species || '' ) + ( lobster ? ':' + it.tail : '' );
 			let g = models.get( key );
 			if ( g ) return g;
-			const S = it.species ? SPECIES[ it.species ] : null;
+			if ( lobster ) {
+
+				g = spinyLobster( { lod: Math.min( lod, 2 ), curl: it.tail } );
+				models.set( key, g );
+				return g;
+
+			}
+
 			switch ( it.kind ) {
 
 				case 'split': g = splitFishGeometry( S, { lod: Math.min( lod, 1 ) } ); break;

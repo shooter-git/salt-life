@@ -68,15 +68,17 @@ export function pickSpecies( habitat, hour, rng = Math.random, bait = null ) {
 	}
 
 	if ( total < 1e-4 ) return null;
-	let r = rng() * total;
+	let r = rng() * total, last = null;
 	for ( let i = 0; i < w.length; i ++ ) {
 
+		if ( w[ i ] <= 0 ) continue; // (Salt Life: never one that doesn't bite: the spiny lobster)
 		r -= w[ i ];
-		if ( r <= 0 ) return FISH_IDS[ i ];
+		last = FISH_IDS[ i ];
+		if ( r <= 0 ) return last;
 
 	}
 
-	return FISH_IDS[ FISH_IDS.length - 1 ];
+	return last;
 
 }
 

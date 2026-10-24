@@ -389,6 +389,7 @@ export class App {
 			for ( const group of this._late ) for ( const o of group ) o.visible = false;
 			this.game.rod.holdBack = true;
 			this.game.gun.holdBack = true; // (and the speargun, its bands, shaft and line)
+			this.game.tools.holdBack = true; // (and the lobster diver's tickle stick and net)
 			// the fish in the swimming fish's skin (the village's and the stall's: two big shaders, the
 			// skin's and the fins') wait out of the scene, compiled after the start too
 			this._heldFish = [ ...( this.village.fish || [] ), this.game.display.stallMesh ]
@@ -588,6 +589,7 @@ export class App {
 
 			this.fish.viewHeight = this.renderer.domElement.height;
 			this.fish.lit = lampsLit( this.settings.timeOfDay ); // (Salt Life: the tarpon gather under the pier's lamps)
+			this.fish.hour = this.settings.timeOfDay; // (Salt Life: the lobsters come out after dark)
 			this.fish.update( dt, this.camera.position );
 			this.fish.cull( this.camera );
 
@@ -811,6 +813,22 @@ export class App {
 			}
 
 			gun.holdBack = false;
+
+		}
+
+		const tools = this.game.tools;
+		if ( tools.holdBack ) {
+
+			for ( const m of [ tools.stickMesh, tools.netMesh ] ) {
+
+				const was = m.visible;
+				m.visible = true;
+				await r.compileAsync( m, this.camera, this.scene );
+				m.visible = was;
+
+			}
+
+			tools.holdBack = false;
 
 		}
 

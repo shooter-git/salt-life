@@ -59,7 +59,7 @@ export class Chandlery {
 			position: new Vector3( vx, terrain.heightAt( vx, vz ), vz ),
 			yaw: CHANDLERY.yaw,
 			radius: 3.0,
-			greeting: 'Line, reels, a bigger hold, diesel. What do you need?',
+			greeting: 'Line, reels, a bigger hold, lobster gear, diesel. What do you need?',
 			character: { url: 'models/characters/marta.glb', idle: 'idle_neutral_01', talk: 'gestic_talk_neutral_01', greet: 'wave_01' },
 			look: { shirt: 0x8a3b32, trousers: 0x2f3b4a, apron: 0x3d5a4a, hat: 0x2c3a44, hair: 0x3a2c22, skin: 0x7a5236 },
 			hours: HOURS.marta,

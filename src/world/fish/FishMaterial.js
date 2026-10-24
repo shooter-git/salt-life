@@ -4,6 +4,7 @@ import { LOD_FADE_GLSL } from '../../materials/LODFade.js';
 import { UNDERWATER_GLSL, underwaterUniforms } from '../../materials/Underwater.js';
 import { SPECIES, SKIN, PATTERN } from './FishSpecies.js';
 import { PART } from './FishGeometry.js';
+import { LOBSTER_HINGE } from './CreatureGeometry.js';
 
 // The swimming fish's material (Tidewater's WGSL, in GLSL on MeshStandardMaterial: Salt Life; the
 // fish on the stall and the racks are village/FishProps.js).
@@ -15,9 +16,10 @@ import { PART } from './FishGeometry.js';
 // silvery guanine reflection with an iridescent sheen. Fins: ray-striped membranes, darker and
 // thinner toward the edge, lit through from behind. Eyes: pupil, iris with radial streaks and a
 // glossy cornea. The vertex stage poses the model: a travelling swimming wave with pectoral
-// sculling (rays undulate or flap, the turtle strokes).
+// sculling (rays undulate or flap, the turtle strokes; the spiny lobster walks, curls its tail and
+// sways its feelers).
 //
-// Port notes: the species table (25 species x 8 vec4) is a float texture (200 vec4 uniforms would
+// Port notes: the species table (35 species x 8 vec4) is a float texture (280 vec4 uniforms would
 // pass WebGL's guaranteed limit); no motion vectors; the underwater shading is the shared one
 // (materials/Underwater.js); translucency goes to the emissive term in the sun's colour; lite
 // (low-powered devices): no scale rows, relief or sheen.
@@ -113,6 +115,37 @@ vec3 fishSwimOffset( float ph, vec4 d, vec3 p, float env, float amp, float bend,
 	vec3 stroke = vec3( 0.0, sin( ph ) * ( front ? 0.3 : 0.07 ), cos( ph ) * ( front ? 0.14 : 0.0 ) ) * side;
 	return isDisc ? disc : ( isFlip ? stroke : ( turtle ? vec3( 0.0 ) : fish ) );
 }
+// (Salt Life) the spiny lobster: the tail curls under on an arc from its hinge behind the carapace
+// (curl: the angle at its end, rad; the tail fan carries on along the last tangent), the legs walk
+// (walk: the gait, 0 .. 1), the feelers sway. The geometry's CPU curl is the same arc
+// (CreatureGeometry.lobsterGeometry)
+void lobsterPose( float ph, vec4 d, inout vec3 p, inout vec3 n, float walk, float curl ) {
+	float part = fishPartOf( d );
+	if ( part == ${ PA( 'CHITIN' ) } && p.z < ${ f( LOBSTER_HINGE.z ) } ) {
+		float sA = ${ f( LOBSTER_HINGE.z ) } - p.z;
+		float sC = min( sA, ${ f( LOBSTER_HINGE.len ) } );
+		float kap = curl / ${ f( LOBSTER_HINGE.len ) };
+		float a = kap * sC;
+		vec2 C = abs( kap ) > 1e-4 ? vec2( - sin( a ) / kap, - ( 1.0 - cos( a ) ) / kap ) : vec2( - sC, 0.0 );
+		vec2 T = vec2( - cos( a ), - sin( a ) );
+		vec2 U = vec2( - sin( a ), cos( a ) );
+		vec2 o = vec2( ${ f( LOBSTER_HINGE.z ) }, ${ f( LOBSTER_HINGE.y ) } ) + C + T * ( sA - sC ) + U * ( p.y - ${ f( LOBSTER_HINGE.y ) } );
+		p.z = o.x; p.y = o.y;
+		float ca = cos( a ), sa = sin( a );
+		n = vec3( n.x, n.z * sa + n.y * ca, n.z * ca - n.y * sa );
+	} else if ( part == ${ PA( 'LEG' ) } ) {
+		float id = floor( d.w + 0.01 );
+		float pair = floor( id * 0.5 ), side = mod( id, 2.0 );
+		float g = ph + pair * 1.3 + side * 3.1416;
+		p.z += sin( g ) * walk * 0.035 * d.z;
+		p.y += max( 0.0, cos( g ) ) * walk * 0.025 * d.z;
+	} else if ( part == ${ PA( 'FEELER' ) } ) {
+		float side = mod( floor( d.w + 0.01 ), 2.0 ) * 2.0 - 1.0;
+		float k = pow( d.z, 1.5 );
+		p.x += sin( ph * 0.3 + side * 1.7 + d.z * 2.0 ) * k * 0.06;
+		p.y += sin( ph * 0.23 + side * 0.9 + d.z * 1.5 ) * k * 0.035;
+	}
+}
 attribute vec2 aInst;
 attribute vec4 aData;
 varying vec3 vFishLocal; // rest pose position (model units)
@@ -135,8 +168,10 @@ void fishPose( out vec3 world, out vec3 nrm ) {
 	float env = ( u * u * 0.85 + 0.08 ) * ( fishSs( 0.0, 0.25, u ) * 0.7 + 0.3 );
 	float bend = r2.z * ( u * u );
 	bool eagle = pattern == ${ PT( 'eagleRay' ) };
-	p += fishSwimOffset( r2.x, d, p, env, r2.y, bend, eagle );
-	nrm = fishRotateQ( q, normal );
+	vec3 n0 = normal;
+	if ( pattern == ${ PT( 'lobster' ) } ) lobsterPose( r2.x, d, p, n0, r2.y, r2.z );
+	else p += fishSwimOffset( r2.x, d, p, env, r2.y, bend, eagle );
+	nrm = fishRotateQ( q, n0 );
 	world = fishRotateQ( q, p * r0.w ) + r0.xyz;
 	vFishP = world;
 	vFishN = nrm;
@@ -184,6 +219,8 @@ const COMMON = /* glsl */`
 	float pattern = floor( I.x + 0.5 );
 	float part = fishPartOf( D );
 	float scaleSize = fishRow( pattern, 4 ).w; float scaleVis = fishRow( pattern, 5 ).w;
+	// (Salt Life) scaleVis -1: no gill cover (a shark's gill slits, the lobster)
+	float noOp = scaleVis < -0.5 ? 1.0 : 0.0;
 	vec3 Pv = ( viewMatrix * vec4( vFishP, 1.0 ) ).xyz;
 	float px = length( fwidth( Pv ) );
 #ifdef FISH_LITE
@@ -218,7 +255,7 @@ const COMMON = /* glsl */`
 		float hh = D.w;
 		float zE = fishOpercleEdge( eyeOp.w, hh );
 		float onOpR = fishOpercleMask( hh );
-		float op = fishSs( -0.004, 0.004, Lp.z - zE ) * onOpR;
+		float op = fishSs( -0.004, 0.004, Lp.z - zE ) * onOpR * ( 1.0 - noOp );
 		float grainFade = 1.0 - fishSs( 0.15, 0.45, px / ( 0.004 * I.z ) );
 		float grain = ( fishVnoise( vec2( Lp.z, D.z ) * 420.0 ) - 0.5 ) * 0.00022 * grainFade;
 		float bodyH = sc * 0.0016 + op * 0.0025 + grain;
@@ -517,6 +554,85 @@ const SURFACE = /* glsl */`
 		bool spotted = P == ${ PA( 'DORSAL2' ) } || P == ${ PA( 'ANAL' ) } || P == ${ PA( 'CAUDAL' ) };
 		c = spotted ? mix( c, maroon, dots * 0.8 ) : c;
 		c = P == ${ PA( 'PELVIC' ) } ? mix( maroon * 0.7, vec3( 0.85, 0.82, 0.8 ), dots * 0.7 ) : c;
+	} else if ( pat == ${ PT( 'bonefish' ) } ) {
+		// (Salt Life) bonefish: bright silver, faint dark streaks between the scale rows of the upper
+		// flank, a dusky snout tip; the tail and the dorsal fin dusky at their edges
+		float streaks = fishSs( 0.6, 0.95, sin( h * 48.0 ) ) * fishSs( -0.05, 0.25, h ) * fishSs( 0.42, 0.3, z ) * bodyK;
+		c = mix( c, back * 0.7, streaks * 0.35 );
+		c = mix( c, vec3( 0.12, 0.13, 0.14 ), fishSs( 0.44, 0.49, z ) * bodyK * 0.55 );
+		c = ( P == ${ PA( 'CAUDAL' ) } || P == ${ PA( 'DORSAL2' ) } ) ? mix( c, edgeC * 0.6, fishSs( 0.8, 1.0, t ) * 0.6 ) : c;
+	} else if ( pat == ${ PT( 'goliathGrouper' ) } ) {
+		// goliath grouper: brownish yellow under irregular dark oblique bars (bold on the young, fading
+		// on the big ones), small black spots over the head and the fins
+		float young = 1.0 - fishSs( 1.0, 1.8, L );
+		float zz = 0.5 - z;
+		float wob = ( n2 - 0.5 ) * 0.05;
+		float bars = fishSs( 0.25, 0.65, sin( ( zz + wob + h * 0.06 ) * 30.0 ) ) * fishSs( 0.12, 0.2, zz ) * ( 1.0 - tBelly * 0.8 ) * bodyK;
+		c = mix( c, back * 0.45, bars * mix( 0.35, 0.8, young ) );
+		vec2 qs = vec2( z, y ) * 120.0;
+		vec2 cs = floor( qs );
+		vec2 js = ( vec2( fishHash( cs + 1.3 ), fishHash( cs + 4.7 ) ) - 0.5 ) * 0.4;
+		float spots = ( 1.0 - fishSs( 0.12, 0.22, length( fract( qs ) - 0.5 - js ) ) ) * step( 0.6, fishHash( cs + 7.1 ) );
+		float spotK = max( fishSs( eye.w - 0.04, eye.w + 0.03, z ) * bodyK, isFin ? 1.0 : 0.0 );
+		c = mix( c, vec3( 0.03, 0.03, 0.025 ), spots * spotK * 0.75 );
+	} else if ( pat == ${ PT( 'cuberaSnapper' ) } ) {
+		// cubera snapper: dark grey-brown with a reddish cast low on the flank; the young faintly barred
+		c = mix( c, c * vec3( 1.15, 0.9, 0.85 ), fishSs( 0.2, -0.4, h ) * bodyK * 0.5 );
+		float young = 1.0 - fishSs( 0.7, 1.0, L );
+		float bars = fishSs( 0.5, 0.85, sin( z * 50.0 ) ) * fishSs( 0.0, 0.5, h ) * bodyK * young;
+		c = mix( c, flank * 1.2, bars * 0.3 );
+		float rows = fishSs( 0.6, 0.95, sin( y * 190.0 + z * 110.0 ) ) * ( 1.0 - sfade ) * bodyK * 0.08;
+		c *= 1.0 - rows;
+	} else if ( pat == ${ PT( 'silkSnapper' ) } ) {
+		// silk snapper: rose red, fine wavy yellow lines low on the flank, yellow pectorals, the tail
+		// with a dusky margin
+		float wav = fishSs( 0.7, 0.95, sin( y * 230.0 + sin( z * 70.0 ) * 1.2 ) ) * fishSs( 0.1, -0.5, h ) * ( 1.0 - fishSs( -0.6, -0.85, h ) ) * bodyK;
+		c = mix( c, vec3( 0.85, 0.65, 0.2 ), wav * 0.45 );
+		c = P == ${ PA( 'PECTORAL' ) } ? mix( c, vec3( 0.9, 0.72, 0.25 ), 0.6 ) : c;
+		c = P == ${ PA( 'CAUDAL' ) } ? mix( c, vec3( 0.25, 0.12, 0.12 ), fishSs( 0.82, 1.0, t ) * 0.6 ) : c;
+	} else if ( pat == ${ PT( 'graySnapper' ) } ) {
+		// gray (mangrove) snapper: grey-green to copper, rows of rusty spots on the lower flank, a dark
+		// band from the snout through the eye (bold on the young), the soft dorsal and the tail
+		// edged dark
+		vec2 qs = vec2( ( 0.5 - z ) * 85.0, h * 9.0 );
+		float rowS = floor( qs.y );
+		float spots = ( 1.0 - fishSs( 0.18, 0.3, length( fract( qs + vec2( rowS * 0.5, 0.0 ) ) - 0.5 ) ) ) * fishSs( -0.5, -0.1, h ) * ( 1.0 - fishSs( 0.3, 0.6, h ) ) * bodyK;
+		c = mix( c, vec3( 0.55, 0.3, 0.16 ), spots * 0.45 );
+		float young = 1.0 - fishSs( 0.3, 0.45, L );
+		float band = fishBand( y - eye.y - ( z - eye.x ) * 0.3, 0.0, 0.006, 0.006 ) * fishSs( eye.x - 0.05, eye.x, z ) * bodyK;
+		c = mix( c, back * 0.5, band * mix( 0.35, 0.8, young ) );
+		bool edged = P == ${ PA( 'DORSAL2' ) } || P == ${ PA( 'CAUDAL' ) };
+		c = edged ? mix( c, edgeC, fishSs( 0.75, 0.95, t ) * 0.8 ) : c;
+	} else if ( pat == ${ PT( 'whiteMullet' ) } ) {
+		// white mullet: plain silver under an olive back, a gold spot on the gill cover, a blue-black
+		// blotch at the base of the pectoral fin
+		float opSpot = ( 1.0 - fishSs( 0.008, 0.014, length( vec2( z - eye.w - 0.012, y - eye.y + 0.004 ) ) ) ) * bodyK;
+		c = mix( c, vec3( 0.75, 0.6, 0.2 ), opSpot * 0.7 );
+		vec2 pc = vec2( z - ${ f( 0.5 - 0.27 * SPECIES.whiteMullet.body ) }, y - ${ f( SPECIES.whiteMullet.pectoral.y ) } );
+		float pecB = ( 1.0 - fishSs( 0.006, 0.011, length( pc * vec2( 1.0, 1.4 ) ) ) ) * bodyK;
+		c = mix( c, vec3( 0.04, 0.06, 0.12 ), pecB * 0.8 );
+		c = P == ${ PA( 'CAUDAL' ) } ? mix( c, edgeC * 0.6, fishSs( 0.8, 1.0, t ) * 0.5 ) : c;
+	} else if ( pat >= ${ PT( 'reefShark' ) } && pat <= ${ PT( 'nurseShark' ) } ) {
+		// sharks: smooth skin; the fins solid, the body's colour (no rays, hardly lit through); five
+		// gill slits ahead of the pectoral fin. Blacktip: black tips on the first dorsal, the paired
+		// fins and the lower tail lobe, a pale band along the flank to the anal fin. Reef shark: the
+		// tail's trailing edge dusky
+		float blackTip = pat == ${ PT( 'blacktipShark' ) } ? 1.0 : 0.0;
+		float reef = pat == ${ PT( 'reefShark' ) } ? 1.0 : 0.0;
+		if ( isFin ) {
+			c = mix( finC, back, 0.3 ) * ( 0.92 + n2 * 0.12 );
+			transl = 0.08;
+			rough = r2.w;
+		}
+		float gk = ( eye.w - z - h * h * 0.006 ) / 0.016;
+		float gd = abs( fract( gk + 0.5 ) - 0.5 );
+		float slit = ( 1.0 - fishSs( 0.05, 0.12, gd ) ) * step( -0.5, gk ) * step( gk, 4.5 ) * ( 1.0 - fishSs( 0.35, 0.55, abs( h + 0.05 ) ) ) * bodyK;
+		c *= 1.0 - slit * 0.55;
+		bool tipped = P == ${ PA( 'DORSAL1' ) } || P == ${ PA( 'PECTORAL' ) } || P == ${ PA( 'PELVIC' ) } || ( P == ${ PA( 'CAUDAL' ) } && w < 6.5 );
+		c = tipped ? mix( c, edgeC, fishSs( 0.72, 0.85, t ) * blackTip * 0.95 ) : c;
+		float band = fishBand( h, -0.25, 0.08, 0.1 ) * fishSs( 0.08, 0.02, z ) * fishSs( -0.17, -0.1, z ) * bodyK * blackTip;
+		c = mix( c, belly, band * 0.8 );
+		c = P == ${ PA( 'CAUDAL' ) } ? mix( c, edgeC, fishSs( 0.85, 1.0, t ) * 0.6 * reef ) : c;
 	}
 
 	// ---- lateral line (a row of pores along a dark line)
@@ -527,7 +643,7 @@ const SURFACE = /* glsl */`
 	// ---- gill cover edge and the preopercle (dark creases)
 	float zE2 = fishOpercleEdge( eye.w, h );
 	float dOp = z - zE2;
-	float onOp = fishOpercleMask( h ) * bodyK;
+	float onOp = fishOpercleMask( h ) * bodyK * ( 1.0 - noOp );
 	float crease = ( 1.0 - fishSs( 0.0015, 0.004, abs( dOp ) ) ) * onOp;
 	c *= 1.0 - crease * 0.45;
 	float pre = ( 1.0 - fishSs( 0.001, 0.003, abs( dOp - 0.04 ) ) ) * onOp * fishSs( 0.6, 0.2, h );
@@ -541,7 +657,7 @@ const SURFACE = /* glsl */`
 	float lips = ( 1.0 - fishSs( 0.0015, 0.0035, abs( y - yLip ) ) ) * step( hz - 0.004, z ) * bodyK;
 	c *= 1.0 - lips * 0.55;
 	float maxZ = hz + 0.006 - ( y - hy ) * 0.35;
-	float maxilla = ( 1.0 - fishSs( 0.001, 0.0025, abs( z - maxZ ) ) ) * fishSs( hy - 0.002, hy + 0.002, y ) * fishSs( hy + 0.04, hy + 0.025, y ) * bodyK;
+	float maxilla = ( 1.0 - fishSs( 0.001, 0.0025, abs( z - maxZ ) ) ) * fishSs( hy - 0.002, hy + 0.002, y ) * fishSs( hy + 0.04, hy + 0.025, y ) * bodyK * ( 1.0 - noOp );
 	c *= 1.0 - maxilla * 0.3;
 	float nostril = ( 1.0 - fishSs( 0.1, 0.2, length( vec2( z - eye.x - eye.z * 1.7, y - eye.y - eye.z * 0.25 ) ) / eye.z ) ) * bodyK;
 	c *= 1.0 - nostril * 0.6;
@@ -618,6 +734,77 @@ const SURFACE = /* glsl */`
 		c = ( w > 1.5 && P == ${ PA( 'SKIN' ) } ) ? belly * mix( 0.85, 1.05, n1 ) : skin;
 		metal = 0.0;
 		rough = 0.5;
+	} else if ( P == ${ PA( 'CHITIN' ) } ) {
+		// (Salt Life) the spiny lobster's shell (w: 0 .. 1 the carapace, 1 .. 7 the tail's segments,
+		// 7 .. 8 the tail fan, 9 the eyes, 10 .. 11 the spines; t: round the shell, 0 on the back,
+		// +-1 on the belly; on the fan, across it): mottled olive brown over orange tan, dark seams
+		// between the plates, cream spots in pairs on the tail (the big yellow pair on its second
+		// segment), spines pale to their dark points, the underside pale, the fan banded; a berried
+		// female's orange eggs under the tail
+		float code = w; float ar = abs( t );
+		float mott = fishSs( 0.4, 0.8, fishVnoise( Lp.zx * 70.0 + seed * 11.0 ) );
+		vec3 shell = mix( flank, back, mott * 0.7 + n2 * 0.3 );
+		shell = mix( shell, back * 0.45, fishSs( 0.62, 0.85, fishVnoise( Lp.zx * 160.0 + 3.0 ) ) * 0.5 );
+		float under = fishSs( 0.58, 0.7, ar ) * step( code, 7.0 );
+		rough = 0.35;
+		if ( code < 1.0 ) {
+			shell *= 1.0 - fishBand( code, 0.55, 0.008, 0.01 ) * ( 1.0 - under ) * 0.5;
+			vec2 qd = vec2( z, t * 0.6 ) * 90.0;
+			float spk = ( 1.0 - fishSs( 0.12, 0.24, length( fract( qd ) - 0.5 ) ) ) * step( 0.55, fishHash( floor( qd ) ) );
+			shell = mix( shell, edgeC, spk * 0.6 );
+		} else if ( code < 7.0 ) {
+			float fs = fract( code ); float k = floor( code );
+			float seam = 1.0 - fishSs( 0.0, 0.08, fs );
+			float groove = fishBand( fs, 0.35, 0.02, 0.03 ) * ( 1.0 - under ) * fishSs( 0.5, 0.2, ar );
+			shell *= ( 1.0 - seam * 0.55 ) * ( 1.0 - groove * 0.35 );
+			float big = k == 2.0 ? 1.0 : 0.0;
+			vec2 sp = vec2( ( fs - 0.6 ) * 2.2, ( ar - 0.42 ) * 4.0 );
+			float spot = 1.0 - fishSs( mix( 0.18, 0.4, big ), mix( 0.26, 0.5, big ), length( sp ) );
+			shell = mix( shell, mix( vec3( 0.85, 0.78, 0.6 ), edgeC * 1.1, big ), spot * 0.85 );
+		} else if ( code < 8.5 ) {
+			float ft = fract( code ); float aq = abs( t );
+			float seam = max( fishBand( aq, 0.33, 0.012, 0.012 ), fishBand( aq, 0.66, 0.012, 0.012 ) ) * fishSs( 0.05, 0.2, ft );
+			float band = fishBand( ft, 0.72, 0.08, 0.04 );
+			vec2 qs = vec2( ft * 6.0, aq * 9.0 );
+			float spots = ( 1.0 - fishSs( 0.18, 0.3, length( fract( qs ) - 0.5 ) ) ) * step( 0.5, fishHash( floor( qs ) + 2.0 ) );
+			shell = mix( shell, edgeC, spots * 0.6 * ( 1.0 - band ) );
+			shell = mix( shell, back * 0.35, band * 0.7 );
+			shell = mix( shell, vec3( 0.85, 0.6, 0.3 ), fishSs( 0.9, 0.98, ft ) * 0.7 );
+			shell *= 1.0 - seam * 0.5;
+		} else if ( code < 9.9 ) {
+			bool ball = fract( code ) > 0.5;
+			shell = ball ? vec3( 0.012, 0.01, 0.01 ) : shell;
+			rough = ball ? 0.08 : rough;
+		} else {
+			float ts = fract( code );
+			shell = mix( shell, vec3( 0.8, 0.7, 0.5 ), fishSs( 0.2, 0.7, ts ) );
+			shell = mix( shell, vec3( 0.08, 0.05, 0.04 ), fishSs( 0.85, 1.0, ts ) );
+		}
+		c = mix( shell, belly * mix( 0.85, 1.05, n1 ), under );
+		float eggs = ( seed > 0.84 && code >= 1.0 && code < 7.0 ) ? fishSs( 0.7, 0.82, ar ) : 0.0;
+		vec2 qe = vec2( z, t * 0.2 ) * 420.0;
+		float roe = 1.0 - fishSs( 0.25, 0.45, length( fract( qe ) - 0.5 ) );
+		c = mix( c, vec3( 0.95, 0.42, 0.06 ) * mix( 0.7, 1.05, roe ), eggs );
+		metal = 0.0;
+	} else if ( P == ${ PA( 'LEG' ) } ) {
+		// walking legs: striped along their length, purple and cream yellow; dark tips
+		float stripe = fishSs( -0.3, 0.3, sin( fract( w ) * 18.0 ) );
+		c = mix( finC, edgeC, stripe );
+		c = mix( c, vec3( 0.75, 0.55, 0.4 ), fishBand( fract( t * 3.0 ), 0.98, 0.04, 0.04 ) * 0.4 );
+		c = mix( c, vec3( 0.12, 0.08, 0.05 ), fishSs( 0.92, 1.0, t ) );
+		metal = 0.0;
+		rough = 0.4;
+	} else if ( P == ${ PA( 'FEELER' ) } ) {
+		// feelers: the antennae reddish brown, spiny at the base, ringed along the whips; the antennules
+		// banded purple and cream
+		bool antennule = w > 1.5;
+		float ring = fishSs( 0.3, 0.7, sin( t * ( antennule ? 90.0 : 160.0 ) ) );
+		vec3 fe = mix( vec3( 0.42, 0.16, 0.08 ), vec3( 0.62, 0.32, 0.14 ), ring * 0.5 );
+		float spk = fishSs( 0.7, 0.85, fishVnoise( Lp.xz * 260.0 + Lp.y * 200.0 ) ) * ( 1.0 - fishSs( 0.12, 0.2, t ) );
+		fe = mix( fe, vec3( 0.85, 0.75, 0.55 ), spk );
+		c = antennule ? mix( finC, edgeC, ring ) : fe;
+		metal = 0.0;
+		rough = 0.4;
 	}
 
 #ifndef FISH_LITE

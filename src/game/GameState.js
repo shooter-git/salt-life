@@ -18,8 +18,9 @@ export class GameState {
 		this.inventory = []; // { id, species, kg, cm, value, caughtAt (game hours), record, method }
 		this.log = {}; // species -> { count, bestKg, bestCm }
 		// the last addFish: { species, kg, cm, value, newSpecies, record, prevBestKg, prevBestCm, kept,
-		// released, method } (the catch card)
+		// released, why, method, bag } (the catch card)
 		this.lastCatch = null;
+		this.bag = { day: null, n: {} }; // (Salt Life) how many of each bag-limited kind (FishTable bag) you've kept that day
 		this.upgrades = defaultUpgrades();
 		this.fuel = null; // litres left (null = full tank)
 		this.look = null; // (Salt Life) how the others see you: one of together/Avatar.js LOOKS (null: not chosen)
@@ -65,17 +66,24 @@ export class GameState {
 
 	// store a caught fish; returns the entry, or null when the hold is full or the fish is protected
 	// (released: it is logged either way). A record beats an earlier catch of the species; the first
-	// one of a species is a new species. method: 'rod' or 'spear'; cm: its length when it was
-	// measured (a speared fish: the size it swam at), else from its weight
-	addFish( species, kg, timeOfDay = 12, { method = 'rod', cm = null } = {} ) {
+	// one of a species is a new species. method: 'rod', 'spear' or (Salt Life) 'hand' (a spiny lobster);
+	// cm: its length when it was measured (a speared fish: the size it swam at), else from its weight;
+	// day: the island's day, for a kind with a bag limit (one over it is let go: lastCatch.bag); release:
+	// why one that may be kept is let go all the same ('short', 'berried': lastCatch.why)
+	addFish( species, kg, timeOfDay = 12, { method = 'rod', cm = null, day = null, release = null } = {} ) {
 
 		kg = Math.round( kg * 100 ) / 100;
 		cm = Math.round( cm ?? fishLengthCm( species, kg ) );
 		const { newSpecies, record, prevBestKg, prevBestCm } = this.logFish( species, kg, cm );
 		const value = fishValue( species, kg );
-		const released = !! FISH[ species ].protected;
-		const kept = ! released && this.fits( kg );
-		this.lastCatch = { species, kg, cm, value, newSpecies, record, prevBestKg, prevBestCm, kept, released, method };
+		const released = !! FISH[ species ].protected || !! release;
+		const max = day !== null ? FISH[ species ].bag || 0 : 0;
+		const full = max > 0 && ! released && this.bagged( species, day ) >= max;
+		const kept = ! released && ! full && this.fits( kg );
+		if ( kept && max ) this.bagOne( species, day );
+		const bag = max ? { n: this.bagged( species, day ), max, full } : null;
+		const why = release || ( FISH[ species ].protected ? 'protected' : null );
+		this.lastCatch = { species, kg, cm, value, newSpecies, record, prevBestKg, prevBestCm, kept, released, why, method, bag };
 		if ( ! kept ) {
 
 			this.save();
@@ -375,6 +383,21 @@ export class GameState {
 
 	}
 
+	// (Salt Life) how many of a bag-limited kind you've kept on `day` (one let go from the cooler after
+	// still counts: it was in your bag)
+	bagged( species, day ) {
+
+		return this.bag.day === day ? this.bag.n[ species ] | 0 : 0;
+
+	}
+
+	bagOne( species, day ) {
+
+		if ( this.bag.day !== day ) this.bag = { day, n: {} };
+		this.bag.n[ species ] = ( this.bag.n[ species ] | 0 ) + 1;
+
+	}
+
 	// spend money (upgrade shop); false when it can't be afforded
 	spend( amount ) {
 
@@ -460,7 +483,7 @@ export class GameState {
 
 	toJSON() {
 
-		return { v: 1, money: this.money, inventory: this.inventory, log: this.log, upgrades: this.upgrades, fuel: this.fuel, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, nextId: this._nextId };
+		return { v: 1, money: this.money, inventory: this.inventory, log: this.log, upgrades: this.upgrades, fuel: this.fuel, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, bag: this.bag, nextId: this._nextId };
 
 	}
 
@@ -482,6 +505,8 @@ export class GameState {
 		this.bait = {};
 		for ( const [ k, n ] of Object.entries( d.bait && typeof d.bait === 'object' ? d.bait : {} ) ) if ( BAITS[ k ] && Number.isInteger( n ) && n > 0 ) this.bait[ k ] = n;
 		this.baitPick = BAITS[ d.baitPick ] ? d.baitPick : null;
+		const b = d.bag;
+		this.bag = b && Number.isFinite( b.day ) && b.n && typeof b.n === 'object' ? { day: b.day, n: { ...b.n } } : { day: null, n: {} };
 		this._nextId = Math.max( d.nextId | 0, ...this.inventory.map( ( f ) => f.id + 1 ), 1 );
 		return true;
 
@@ -525,6 +550,7 @@ export class GameState {
 		this.weekPaid = null;
 		this.bait = {};
 		this.baitPick = null;
+		this.bag = { day: null, n: {} };
 		this.save();
 		this.emit();
 

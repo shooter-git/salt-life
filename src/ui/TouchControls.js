@@ -192,18 +192,21 @@ export class TouchControls {
 		const prompt = player && player.prompt;
 		const rod = game && game.rod;
 		const fishing = !! ( rod && rod.equipped );
-		// (Salt Life) in the water the same buttons are the speargun's; with the cast net out, its
+		// (Salt Life) in the water the same buttons are the speargun's, then the lobster gear's; with the
+		// cast net out, its
 		const spearing = !! ( game && game.gun && game.gun.equipped );
+		const lobstering = !! ( game && game.tools && game.tools.equipped );
 		const net = game && game.net, netting = !! ( net && net.equipped );
 		const swim = player && player.mode === 'swim';
 		const netFree = netting && ! net.busy;
-		setButton( this.buttons.rod, fishing || ( spearing && ! game.gun.shaftOut ) ? 'Put away' : ( prompt && prompt.key === 'R' ) || netFree ? ( swim ? 'Speargun' : 'Rod' ) : null );
-		const offerNet = ! swim && game && game.canFish && ! game.fight && ( ( prompt && prompt.key === 'R' ) || ( fishing && rod.state === 'idle' ) );
+		const away = spearing ? ( game.gun.shaftOut ? null : game.tools && game.tools.owned ? 'Lobster gear' : 'Put away' ) : lobstering ? ( game.tools.busy ? null : 'Put away' ) : null;
+		setButton( this.buttons.rod, fishing ? 'Put away' : away || ( ( prompt && prompt.key === 'R' ) || netFree ? ( swim ? 'Speargun' : 'Rod' ) : null ) );
+		const offerNet = ! swim && ! lobstering && game && game.canFish && ! game.fight && ( ( prompt && prompt.key === 'R' ) || ( fishing && rod.state === 'idle' ) );
 		setButton( this.buttons.net, netFree ? 'Put away' : ! netting && offerNet ? 'Cast net' : null );
 		setButton( this.buttons.bait, fishing && rod.state === 'idle' ? 'Bait' : null );
-		setButton( this.buttons.cast, fishing ? castLabel( game ) : spearing ? spearLabel( game ) : netting ? netLabel( game ) : null );
+		setButton( this.buttons.cast, fishing ? castLabel( game ) : spearing ? spearLabel( game ) : lobstering ? lobsterLabel( game ) : netting ? netLabel( game ) : null );
 		setButton( this.buttons.reel, fishing && ! game.fight && ( rod.state === 'floating' || rod.state === 'flying' ) ? 'Reel in' : null );
-		setButton( this.buttons.cooler, game && game.hud && ! fishing && ! spearing && ! netting ? 'Cooler' : null );
+		setButton( this.buttons.cooler, game && game.hud && ! fishing && ! spearing && ! lobstering && ! netting ? 'Cooler' : null );
 		// the flashlight: offered after dusk (or while it's on)
 		const lights = game && game.app && game.app.localLights;
 		const torchOn = !! ( lights && lights.flashlight.on );
@@ -256,6 +259,17 @@ function netLabel( game ) {
 	if ( net.state === 'windup' ) return 'Let go';
 	if ( net.state === 'sinking' ) return ! net.footprint.wet ? 'Draw in' : net.draw >= 1 ? 'Haul' : net.pulling ? 'Closing' : 'Close';
 	return 'Wait';
+
+}
+
+// (Salt Life) the lobster gear's: hold to tickle one out of its den, tap to net it in the open
+function lobsterLabel( game ) {
+
+	const a = game.lobsterAim;
+	if ( game.tools.busy ) return 'Wait';
+	if ( ! game.submerged ) return 'Dive';
+	if ( ! a || a.state === 'flip' || a.dist > a.reach ) return 'Wait';
+	return a.state === 'den' ? 'Tickle' : 'Net';
 
 }
 
