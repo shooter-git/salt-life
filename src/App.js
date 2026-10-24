@@ -769,92 +769,51 @@ export class App {
 	// shaders not needed at the start, compiled and first used after it: the catch card's fish portrait
 	// (its studio light and the blurred backdrop), the other players' figures, and on a device that
 	// draws on its CPU the rod and its line, the skinned fish and the cast net (held back while
-	// loading: every shader compiled then is load time)
+	// loading: every shader compiled then is load time). All are compiled, then their programs first
+	// used (useNewPrograms: once the GPU has made them all, on a device that draws on its CPU), then
+	// they're shown: out of the scene, or held back, until then (three compiles a mesh's material
+	// whether it's visible or not)
 	async prepareLate() {
 
 		if ( ! this.game ) return;
-		const r = this.renderer, rod = this.game.rod;
-		await this.game.portrait.compile( r, this.scene.environment );
+		const r = this.renderer, game = this.game;
+		await game.portrait.compile( r, this.scene.environment );
 		await this.together.compile( r, this.camera, this.scene );
 		// (the wanted slate on Joe's counter and the stalls' "Closed" boards: the records board's program,
 		// compiled just now)
-		for ( const m of [ this.game.wanted.mesh, ...this.game.signs.map( ( s ) => s.mesh ) ] ) if ( ! m.parent ) this.scene.add( m );
+		for ( const m of [ game.wanted.mesh, ...game.signs.map( ( s ) => s.mesh ) ] ) if ( ! m.parent ) this.scene.add( m );
+		const roots = [], show = [];
 		if ( ! this.boatLamps.group.parent ) {
 
-			this.boat.group.add( this.boatLamps.group );
-			await r.compileAsync( this.boatLamps.group, this.camera, this.scene );
-
-		}
-		if ( rod.holdBack ) {
-
-			for ( const m of [ rod.rodMesh, rod.lineMesh, rod.bobberMesh ] ) {
-
-				const was = m.visible;
-				m.visible = true;
-				await r.compileAsync( m, this.camera, this.scene );
-				m.visible = was;
-
-			}
-
-			rod.holdBack = false;
+			roots.push( this.boatLamps.group );
+			show.push( () => this.boat.group.add( this.boatLamps.group ) );
 
 		}
 
-		const gun = this.game.gun;
-		if ( gun.holdBack ) {
+		const { rod, gun, tools } = game;
+		for ( const [ held, meshes ] of [
+			[ rod, [ rod.rodMesh, rod.lineMesh, rod.bobberMesh ] ],
+			[ gun, [ gun.gunMesh, gun.bandMesh, gun.shaftMesh, gun.lineMesh ] ],
+			[ tools, [ tools.stickMesh, tools.netMesh ] ],
+		] ) if ( held.holdBack ) {
 
-			for ( const m of [ gun.gunMesh, gun.bandMesh, gun.shaftMesh, gun.lineMesh ] ) {
-
-				const was = m.visible;
-				m.visible = true;
-				await r.compileAsync( m, this.camera, this.scene );
-				m.visible = was;
-
-			}
-
-			gun.holdBack = false;
+			roots.push( ...meshes );
+			show.push( () => held.holdBack = false );
 
 		}
 
-		const tools = this.game.tools;
-		if ( tools.holdBack ) {
+		for ( const [ m, parent ] of [ ...( this._heldFish || [] ), ...( this._heldNet || [] ) ] ) {
 
-			for ( const m of [ tools.stickMesh, tools.netMesh ] ) {
-
-				const was = m.visible;
-				m.visible = true;
-				await r.compileAsync( m, this.camera, this.scene );
-				m.visible = was;
-
-			}
-
-			tools.holdBack = false;
-
-		}
-
-		for ( const [ m, parent ] of this._heldFish || [] ) {
-
-			await r.compileAsync( m, this.camera, this.scene );
-			parent.add( m );
+			roots.push( m );
+			show.push( () => parent.add( m ) );
 
 		}
 
 		this._heldFish = null;
-		for ( const [ m, parent ] of this._heldNet || [] ) {
-
-			await r.compileAsync( m, this.camera, this.scene );
-			parent.add( m );
-
-		}
-
 		this._heldNet = null;
-
-		for ( const p of r.info.programs ) {
-
-			p.getUniforms();
-			p.getAttributes();
-
-		}
+		for ( const root of roots ) await r.compileAsync( root, this.camera, this.scene );
+		await this.useNewPrograms();
+		for ( const f of show ) f();
 
 	}
 
@@ -873,13 +832,7 @@ export class App {
 			this.lightUp( c.group );
 			for ( const t of c.textures() ) r.initTexture( t );
 			await r.compileAsync( c.group, this.camera, this.scene );
-			for ( const p of r.info.programs ) {
-
-				p.getUniforms();
-				p.getAttributes();
-
-			}
-
+			await this.useNewPrograms();
 			return c;
 
 		};
@@ -1127,7 +1080,20 @@ export class App {
 		const compiled = r.compileAsync( root, this.camera, this.scene );
 		if ( then ) then();
 		await compiled;
-		for ( const p of r.info.programs ) {
+		await this.useNewPrograms();
+
+	}
+
+	// The programs made since the last call, used once (their uniforms and attributes looked up), so
+	// a frame doesn't first use them. A first use asks the GPU, and waits for everything queued before
+	// it, the program's own linking too: seconds on a device that draws on its CPU, the page frozen
+	// all that time (All the Spaces' checks fail a creation that stops answering for 20 s there, and
+	// their machine is slower than most). There it's done once the GPU has caught up (gpuCaughtUp),
+	// so the asking is quick and the page answers meanwhile
+	async useNewPrograms() {
+
+		if ( this.cpuGL && this._started ) await this.gpuCaughtUp();
+		for ( const p of this.renderer.info.programs ) {
 
 			p.getUniforms();
 			p.getAttributes();
@@ -1136,11 +1102,53 @@ export class App {
 
 	}
 
-	// the plants: scattered over the island, built and baked (in slices)
+	// (CPU WebGL) resolves once the GPU has done everything asked of it so far: a fence, looked at
+	// without waiting (as pacedFrame does) every few milliseconds, so the page goes on answering
+	gpuCaughtUp() {
+
+		const gl = this.renderer.getContext();
+		const sync = gl.fenceSync( gl.SYNC_GPU_COMMANDS_COMPLETE, 0 );
+		if ( ! sync ) return Promise.resolve();
+		gl.flush();
+		return new Promise( ( resolve ) => {
+
+			const look = () => {
+
+				if ( gl.clientWaitSync( sync, 0, 0 ) === gl.TIMEOUT_EXPIRED ) {
+
+					setTimeout( look, 20 );
+					return;
+
+				}
+
+				gl.deleteSync( sync );
+				resolve();
+
+			};
+
+			setTimeout( look, 20 );
+
+		} );
+
+	}
+
+	// the plants: scattered over the island, built and baked (in slices). (After the start, on a
+	// device that draws on its CPU: their shaders made and first used before they're drawn, the
+	// group out of the scene meanwhile)
 	async plantsGrow() {
 
-		await this.vegetation.init();
-		this.lightUp( this.vegetation.group );
+		const v = this.vegetation;
+		await v.init();
+		if ( ! this._started ) {
+
+			this.lightUp( v.group );
+			return;
+
+		}
+
+		v.group.removeFromParent();
+		await this.readyToDraw( v.group );
+		this.scene.add( v.group );
 
 	}
 

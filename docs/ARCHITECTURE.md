@@ -270,6 +270,9 @@ The checks' browser has no graphics card, and some laptops don't either. `App.cp
   - The rest (`_late`) is revealed a group per frame after the start.
 - **Shaders compiled late:** every shader compiled before the start is load time. Shaders not needed at once are compiled in `prepareLate`, after the start: the rod and its line, the speargun, the cast net, and the fish in the swimming fish's skin.
   - three's `compile()` also compiles the materials of hidden objects. So what waits is taken out of the scene, not just hidden.
+- **Shaders first used off the frame:** a program's first use (three looking up its uniforms) waits for the GPU to finish everything queued before it, the program's own linking too. That's seconds there, with the page frozen; a frame that first uses one freezes it too.
+  - After the start, `App.useNewPrograms` first waits for a fence (`gpuCaughtUp`, looked at between frames as `pacedFrame` does), so the page keeps answering, then uses every new program once.
+  - What it readies stays out of the scene, or held back, until then: `readyToDraw`, the parts in `prepareLate` (all at once, one wait), the plants, Joe and Marta, the records board, the other players' figures.
 - **Heavy builds in workers:** the debris, the fish models and the reef's noise are built in workers, so their garbage stays out of script memory.
   - All the Spaces builds inline workers as module workers, which don't start in its sealed frame. `ClassicWorker` starts them as classic workers instead.
 
