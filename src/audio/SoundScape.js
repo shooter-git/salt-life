@@ -103,10 +103,21 @@ export const MIX = {
 	spearThud: - 30, // the shaft going into a fish, a few metres off
 	spearClank: - 31, // the tip striking rock or coral, a pile
 	bandStretch: - 42, // a band drawn back to its notch
+	// (Salt Life) the cast net (the fishing and water recordings stand in: netThrow)
+	netSwish: - 31, // the net spinning out of your hands (a badly timed throw quieter)
+	netLine: - 41, // the hand line running off your wrist after it
+	netSplash: - 27, // the lead line slapping down in its ring, at 5 m (a full spread)
+	netLead: - 35, // single leads plinking in round it
+	netLand: - 33, // the leads coming down on sand or a deck, at 5 m
+	netPull: - 42, // hand over hand: the line through your hands, the netting dripping
+	netLift: - 31, // the purse coming up out of the water, streaming
+	netDump: - 30, // the catch spilled out, flapping
 };
 
 // the fishing sounds (loaded when the rod comes out)
 const FISHING = [ 'reel_wind', 'reel_drag', 'line_strain', 'rod_swish', 'bail_click', 'line_out', 'plop', 'line_snap', 'fish_splash', 'fish_flop' ];
+// (Salt Life) and the cast net's besides (loaded when it comes out)
+const NET_SET = [ 'splash', 'swim', 'emerge', 'step_water', 'step_wetsand' ];
 
 // forest bird sprite: slices per source recording (a singer sings from one of them)
 const FOREST = [ [ 0, 1, 2, 3, 4, 5, 6 ], [ 7, 8, 9, 10, 11, 12 ] ];
@@ -121,12 +132,12 @@ const STEP = {
 };
 
 // max simultaneous one-shot voices per category (oldest is faded out beyond this)
-const LIMITS = { step: 3, swim: 2, splash: 3, trans: 2, hull: 3, gull: 2, crash: 7, wash: 5, back: 5, bird: 4, tern: 2, whale: 4, rod: 4, fish: 3, coin: 1 };
+const LIMITS = { step: 3, swim: 2, splash: 3, trans: 2, hull: 3, gull: 2, crash: 7, wash: 5, back: 5, bird: 4, tern: 2, whale: 4, rod: 4, fish: 3, coin: 1, net: 6 };
 // Salt Life: All the Spaces allows 16 / 32 / 64 sounds at once by device tier. Beds and one-shots
 // together stay under it (a new one-shot is left out when it's full), and the low tier keeps fewer of
 // each kind so the surf can't crowd out the footsteps.
 const VOICES = { low: 14, mid: 30, high: 62 };
-const LOW_LIMITS = { ...LIMITS, step: 2, splash: 2, hull: 2, gull: 1, crash: 3, wash: 2, back: 2, bird: 2, tern: 1, whale: 2, rod: 3, fish: 2 };
+const LOW_LIMITS = { ...LIMITS, step: 2, splash: 2, hull: 2, gull: 1, crash: 3, wash: 2, back: 2, bird: 2, tern: 1, whale: 2, rod: 3, fish: 2, net: 3 };
 // a bed that has been silent this long (s) stops, freeing its voice (it starts again when wanted)
 const BED_IDLE = 4;
 
@@ -500,6 +511,80 @@ export class SoundScape {
 	bandStretch() {
 
 		this._shot( 'line_strain', 'spear', this.near, MIX.bandStretch, 0.7 + Math.random() * 0.08 );
+
+	}
+
+	// (Salt Life) the cast net (game/CastNet.js). No recordings of its own either: the rod's swish
+	// slowed is the heavy net spinning out, the line peeling off the reel the hand line off the wrist,
+	// splashes and plops sped up the lead line's ring coming down, the swim strokes the wet netting
+	// drawn in, the emerge the purse streaming as it comes up, the fish flopping the catch spilled out.
+	// Yours close and clear; someone else's (`at`: { x, y, z }) placed where it happens
+	netReady() {
+
+		for ( const n of [ ...FISHING, ...NET_SET ] ) this._want( n );
+
+	}
+
+	_net( bank, x, lufs, rate, delay = 0, ref = 4, dest = this.near ) {
+
+		const at = delay > 0 && this.ctx ? this.ctx.currentTime + delay : 0;
+		if ( x ) return this._shotAt( bank, 'net', x.x, x.y, x.z, lufs, rate, at, ref, 1 );
+		return this._shot( bank, 'net', dest, lufs, rate, at );
+
+	}
+
+	// the sweep: q, how well it was timed (0..1: a full spin is louder and quicker)
+	netThrow( q = 1, at = null ) {
+
+		const s = clamp( num( q, 1 ), 0, 1 );
+		this._net( 'rod_swish', at, MIX.netSwish - ( 1 - s ) * 7, 0.6 + s * 0.12 + Math.random() * 0.05, 0, 4, this.rod );
+		this._net( 'line_out', at, MIX.netLine, 0.78 + Math.random() * 0.1, 0.12 );
+
+	}
+
+	// the lead line coming down on the water at p in its ring (strength 0..1: as wide as it opened)
+	netSplash( p, strength = 1 ) {
+
+		if ( ! p ) return;
+		const s = clamp( num( strength, 1 ), 0, 1 );
+		this._net( 'splash', p, MIX.netSplash - ( 1 - s ) * 9, 1.2 + Math.random() * 0.15 + ( 1 - s ) * 0.2, 0, 5 );
+		// the leads round the ring: not all at once (the ring's never quite flat as it lands)
+		for ( let i = 0; i < 3; i ++ ) this._net( 'plop', p, MIX.netLead - Math.random() * 5, 1.35 + Math.random() * 0.4, 0.02 + i * 0.035 + Math.random() * 0.03, 4 );
+
+	}
+
+	// the leads coming down on dry sand or a deck at p
+	netLand( p ) {
+
+		if ( ! p ) return;
+		this._net( 'step_wetsand', p, MIX.netLand, 0.75 + Math.random() * 0.1, 0, 4 );
+		for ( let i = 0; i < 2; i ++ ) this._net( 'bail_click', p, MIX.netLand - 6 - Math.random() * 4, 0.5 + Math.random() * 0.1, 0.04 + i * 0.05, 3 );
+
+	}
+
+	// one pull, hand over hand: drawing the brails (closing it on the bottom) or hauling the purse in
+	netPull( brailing = false, at = null ) {
+
+		this._net( 'swim', at, MIX.netPull + ( brailing ? - 3 : 0 ) + ( Math.random() - 0.5 ) * 3, ( brailing ? 1.1 : 0.9 ) + Math.random() * 0.15, 0, 3 );
+		if ( Math.random() < 0.6 ) this._net( 'line_out', at, MIX.netPull - 4, 0.5 + Math.random() * 0.08, 0.05, 3 );
+
+	}
+
+	// the purse up out of the water at bag ({ x, y, z }), streaming (out: clear of it, or still dragging)
+	netLift( bag, out = true ) {
+
+		if ( ! bag ) return;
+		this._net( 'emerge', bag, MIX.netLift - ( out ? 0 : 5 ), 0.85 + Math.random() * 0.1, 0, 4 );
+		this._net( 'step_water', bag, MIX.netLift - 8, 0.8 + Math.random() * 0.15, 0.25, 3 );
+
+	}
+
+	// the catch shaken out of it at bag
+	netDump( bag ) {
+
+		if ( ! bag ) return;
+		this._net( 'fish_flop', bag, MIX.netDump, 0.95 + Math.random() * 0.15, 0, 3 );
+		this._net( 'step_water', bag, MIX.netDump - 6, 1.1 + Math.random() * 0.15, 0.08, 3 );
 
 	}
 

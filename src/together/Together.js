@@ -7,6 +7,8 @@ import { BoatLamps } from '../world/boat/BoatLamps.js';
 import { FISH, fishLengthCm, isTrophy } from '../game/FishTable.js';
 import { ROD_L, SEAT_Y } from '../game/FishingRod.js';
 import { gunModels, setBands } from '../game/Speargun.js';
+import { CastNet } from '../game/CastNet.js';
+import { G } from '../core/Globals.js';
 import { gearStats, defaultUpgrades } from '../game/Gear.js';
 import { DAY_RATE, REST, clockAt, restTo } from '../game/IslandClock.js';
 import { weekOrder, weekNumber, tallyFor, deliver, delivered } from '../game/WeekOrder.js';
@@ -35,7 +37,9 @@ import { WORLD } from '../world/WorldLayout.js';
 // Each other player is one of four islanders (Avatar.js: Rocketbox characters, as Joe and Marta),
 // walking, running, swimming, at the helm or holding a rod (or under water, a speargun) as they are, with their name over them in
 // their colour and a dot on the minimap; they wave when you meet; their boat is a copy of yours (its meshes, no new shaders), out at sea; their rod, line and
-// bobber are the rod's (FishingRod.tackle). Their wakes, spray and sounds aren't drawn.
+// bobber are the rod's (FishingRod.tackle); their cast net is one of yours (CastNet), thrown as they
+// threw it ('net': where it was aimed, how well it opened) and drawn and hauled as their poses say.
+// Their wakes, spray and sounds aren't drawn.
 //   const t = new Together( app );  t.track( dt )  (before the player: where everyone is, the boat
 //   you ride);  t.update( dt )  (after the game: the camera is placed)
 //   t.syncClock( settings )  (each frame: the time of day from the shared clock)
@@ -54,6 +58,13 @@ const NAMES = { w: 'walk', s: 'swim', d: 'deck', h: 'helm' };
 // and how it's held then (rad above level: past a right angle, back over the shoulder)
 const ROD = { stowed: 0, idle: 1, windup: 2, flick: 3, flying: 3, floating: 4, retrieving: 4, fighting: 5, landing: 6 };
 const ROD_ELEV = [ 0, 0.5, 1.95, 0.18, 0.45, 0.95, 0.9 ];
+// (Salt Life) the cast net: 0 put away, 1 loaded in the hands, 2 winding up, 3 thrown, 4 in the water, 5
+// its purse up in front of them, 6 being loaded again (their net, here: game/CastNet.js, thrown as
+// they threw it, the 'net' message)
+const NET = { held: 1, windup: 2, throw: 3, flying: 3, sinking: 4, lifted: 5, dumping: 5, gather: 6 };
+const NET_STATE = [ null, 'held', 'windup', 'throw', 'sinking', 'lifted', 'gather' ];
+const NET_PITCH = - 0.38; // their head, looking down at the water ahead
+const NET_FAR = 90; // m: a net farther off than this isn't drawn (or simulated)
 const LOW_BOAT = [ 'boat-hull', 'boat-gelcoat', 'boat-wood', 'boat-glass' ]; // (low: the boat without its gear)
 const EYE = 1.62;
 
@@ -160,6 +171,7 @@ export class Together {
 
 		} );
 		s.on( 'catch', ( body, from ) => this._theirCatch( body, from ) );
+		s.on( 'net', ( body, from ) => this._theirThrow( body, from ) );
 		s.on( 'horn', ( on, from ) => this._theirHorn( on, from ) );
 		s.on( 'week', ( tally ) => this._setWeek( tally ) );
 
@@ -272,15 +284,15 @@ export class Together {
 
 	// a fish landed here: is it the island's heaviest of its kind? (from what's known now; the shared
 	// save is then brought up to date, and the others told)
-	// (Salt Life) method: 'rod' or 'spear'; a speared record says so (m: 's')
+	// (Salt Life) method: 'rod', 'spear' or 'net'; a speared or netted record says so (m: 's' | 'n')
 	caught( species, kg, cm, method = 'rod' ) {
 
 		const held = this.records[ species ];
 		const island = ! held || kg > held.kg;
-		const speared = method === 'spear';
+		const m = { spear: 's', net: 'n' }[ method ];
 		const tell = ( record ) => {
 
-			if ( this.others.size ) this.session.send( 'catch', speared ? { s: species, kg: r3( kg ), cm, rec: record, m: 's' } : { s: species, kg: r3( kg ), cm, rec: record } );
+			if ( this.others.size ) this.session.send( 'catch', m ? { s: species, kg: r3( kg ), cm, rec: record, m } : { s: species, kg: r3( kg ), cm, rec: record } );
 
 		};
 		if ( ! island ) {
@@ -291,7 +303,7 @@ export class Together {
 		}
 
 		const mine = { kg: r3( kg ), cm, who: this.me.name, id: this.me.id, at: Date.now() };
-		if ( speared ) mine.m = 's';
+		if ( m ) mine.m = m;
 		this.portal.save.shared.update( 'records', ( cur ) => {
 
 			const next = cur && typeof cur === 'object' ? { ...cur } : {};
@@ -315,14 +327,88 @@ export class Together {
 
 	}
 
+	// (Salt Life) your cast net's thrown (CastNet.lastThrow): the others throw theirs as you threw it,
+	// from their copy of you
+	netThrow( d ) {
+
+		if ( d && this.others.size ) this.session.send( 'net', { x: r2( d.x ), y: r2( d.y ), z: r2( d.z ), q: r3( d.q ), s: r3( d.seed ), l: this.app.game.state.upgrades.castNet | 0 } );
+
+	}
+
+	_theirThrow( b, from ) {
+
+		const o = this.others.get( from );
+		if ( ! this.ready || ! o || ! b || ! [ b.x, b.y, b.z, b.q, b.s ].every( Number.isFinite ) ) return;
+		this._netOf( o, b.l ).remoteThrow( { x: b.x, y: b.y, z: b.z, q: MathUtils.clamp( b.q, 0.05, 1 ), seed: b.s } );
+
+	}
+
+	// their cast net (one of yours, posed from their figure: _net), of their net's size, in their hands
+	_netOf( o, level ) {
+
+		const app = this.app;
+		if ( ! o.net ) {
+
+			o.net = new CastNet( { scene: app.scene, viewer: app.camera, ground: app.terrain, audio: app.audio, spray: app.spray } );
+			for ( const m of o.net.meshes ) app.lightUp( m );
+			o.netLevel = - 1;
+			o.netHands = { r: o.net.handR, l: o.net.handL };
+
+		}
+
+		level = MathUtils.clamp( level | 0, 0, 3 );
+		if ( o.netLevel !== level ) {
+
+			o.netLevel = level;
+			o.net.setGear( gearStats( { ...defaultUpgrades(), castNet: level } ) );
+
+		}
+
+		if ( ! o.net.equipped ) o.net.equip( true );
+		return o.net;
+
+	}
+
+	// their net each frame: held, thrown, drawn and hauled as their poses say, from their eyes (their
+	// head, as a camera would be there: CastNet.HANDS are in its frame) looking down at the water
+	_net( o, c, g, dt ) {
+
+		const app = this.app;
+		const on = c.net > 0 && ( c.mode === 'walk' || c.mode === 'deck' ) && g.position.distanceTo( app.camera.position ) < NET_FAR;
+		if ( ! on ) {
+
+			if ( o.net && o.net.equipped ) o.net.equip( false );
+			return;
+
+		}
+
+		const net = this._netOf( o, c.netLevel );
+		if ( c.net === 2 && net.state === 'held' ) net.startWindup();
+		else if ( c.net === 1 && net.state === 'windup' ) net.cancelWindup();
+		net.follow( NET_STATE[ c.net ], c.netDraw, c.netLen );
+		_bq.setFromAxisAngle( _up, c.yaw ).multiply( _qa.setFromAxisAngle( _x.set( 1, 0, 0 ), NET_PITCH ) );
+		_mt.compose( _p.set( g.position.x, g.position.y + EYE, g.position.z ), _bq, _q.set( 1, 1, 1 ) );
+		const P = net.P;
+		net.update( dt, { frame: _mt, groundAt: this._netGround || ( this._netGround = ( x, z, maxY ) => app.player.groundAt( x, z, maxY ) ), waterY: app.query.heightAt( P[ 0 ], P[ 2 ], G.time.value ) } );
+		net.takeEvents(); // (their catch is theirs: nothing here reads the net's moments)
+
+	}
+
 	// another player landed one: their cheer, their fish on their line for a moment; a toast only for
 	// an island record or a trophy (on a busy island the rest would add up)
 	_theirCatch( b, from ) {
 
 		const o = this.others.get( from );
 		if ( ! o || ! b || ! FISH[ b.s ] || typeof b.kg !== 'number' ) return;
-		if ( b.rec || isTrophy( b.s, b.kg ) ) this.app.game.toast( `${ o.person.name } ${ b.m === 's' ? 'speared' : 'caught' } a ${ lb( b.kg, 1 ) } ${ FISH[ b.s ].name.toLowerCase() }${ b.rec ? ': a new island record!' : '' }`, 4200 );
+		if ( b.rec || isTrophy( b.s, b.kg ) ) this.app.game.toast( `${ o.person.name } ${ b.m === 's' ? 'speared' : b.m === 'n' ? 'netted' : 'caught' } a ${ lb( b.kg, 1 ) } ${ FISH[ b.s ].name.toLowerCase() }${ b.rec ? ': a new island record!' : '' }`, 4200 );
 		o.avatar.once( 'cheer_01' );
+		if ( b.m === 'n' ) {
+
+			// (in their net's purse: no fish on a line)
+			if ( b.rec ) this._readRecords();
+			return;
+
+		}
 		if ( o.fish ) {
 
 			this.app.scene.remove( o.fish );
@@ -569,6 +655,7 @@ export class Together {
 
 		}
 
+		if ( o.net ) o.net.dispose();
 		if ( o.tag ) o.tag.remove();
 		if ( o.mapped && app.game.minimap ) app.game.minimap.removePlayer( o.person.id );
 
@@ -639,6 +726,22 @@ export class Together {
 
 				const L = gun.gear.shaftM, t = gun.tip, d = gun.dir;
 				body.G = [ r2( t.x - d.x * L ), r2( t.y - d.y * L ), r2( t.z - d.z * L ), r3( d.x ), r3( d.y ), r3( d.z ) ];
+
+			}
+
+		}
+
+		// (Salt Life) the cast net (NET; its size, nl), and while it's in the water how far its brails are
+		// drawn (nd) and how much hand line is out (nh): the throw itself is the 'net' message
+		const net = app.game.net;
+		if ( net && net.equipped && NET[ net.state ] ) {
+
+			body.n = NET[ net.state ];
+			body.nl = app.game.state.upgrades.castNet | 0;
+			if ( net.state === 'sinking' ) {
+
+				body.nd = r2( net.draw );
+				body.nh = r2( net.handLen );
 
 			}
 
@@ -905,6 +1008,10 @@ export class Together {
 		cur.bobber = lerp3( cur._bobber, a.b, b.b );
 		cur.gun = near.g || 0;
 		cur.gunLevel = MathUtils.clamp( near.gl | 0, 0, 2 );
+		cur.net = MathUtils.clamp( near.n | 0, 0, NET_STATE.length - 1 );
+		cur.netLevel = MathUtils.clamp( near.nl | 0, 0, 3 );
+		cur.netDraw = Number.isFinite( b.nd ) ? b.nd : Number.isFinite( a.nd ) ? a.nd : 0;
+		cur.netLen = Number.isFinite( b.nh ) ? b.nh : Number.isFinite( a.nh ) ? a.nh : NaN;
 		const Ga = Array.isArray( a.G ) && a.G.length === 6 ? a.G : null, Gb = Array.isArray( b.G ) && b.G.length === 6 ? b.G : null;
 		cur.shaft = null;
 		if ( Ga || Gb ) {
@@ -991,6 +1098,7 @@ export class Together {
 
 			T.rod.visible = T.line.visible = T.bobber.visible = false;
 			o.spear.gun.visible = o.spear.bands.visible = o.spear.shaft.visible = o.spear.line.visible = false;
+			if ( o.net && o.net.equipped ) o.net.equip( false );
 			return;
 
 		}
@@ -1012,7 +1120,9 @@ export class Together {
 
 		}
 
-		o.avatar.pose( { mode: c.mode, speed: c.speed, rod: c.rod > 0, gun: c.gun > 0 }, dt );
+		// (Salt Life) their cast net first: their arms reach for where its hands are
+		this._net( o, c, g, dt );
+		o.avatar.pose( { mode: c.mode, speed: c.speed, rod: c.rod > 0, gun: c.gun > 0, reach: o.net && o.net.equipped ? o.netHands : null }, dt );
 		// meeting someone: a wave, the first time
 		if ( ! o.waved && g.position.distanceTo( app.player.position ) < WAVE_NEAR && c.mode !== 'swim' && app.player.mode !== 'swim' ) {
 

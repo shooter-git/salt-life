@@ -21,13 +21,16 @@ import { delivered, filled, owed, weekEnds } from './WeekOrder.js';
 import { Minimap } from './Minimap.js';
 import { Guide } from './Guide.js';
 import { Speargun, groundHit } from './Speargun.js';
+import { CastNet, sweetWindow } from './CastNet.js';
+import { BAITS, BAIT_IDS } from './Bait.js';
 import { lb, feet, gallons } from './Units.js';
 import { SPECIES } from '../world/fish/FishSpecies.js';
 
 // how long the catch card stays up unless dismissed (ms)
 const CATCH_CARD_MS = 9000;
-const _a = new Vector3(), _b = new Vector3();
+const _a = new Vector3(), _b = new Vector3(), _h = new Vector3();
 const _pose = { pos: new Vector3(), head: new Vector3(), roll: 0, thrash: 0 };
+const BAG_FROM = 0.85; // the brails drawn this far: the netting has closed round what's under it (it rides in the purse)
 
 // the sale's one line ('Sold 3 fish for $86 · 2 on the wanted list · 1 for the week's order')
 const saleText = ( r, vendor ) => ( vendor && ! vendor.open ? `Left ${ r.count } fish in the night box · $${ r.total }`
@@ -42,6 +45,12 @@ const saleText = ( r, vendor ) => ( vendor && ! vendor.open ? `Left ${ r.count }
 //   hold LMB   wind up, release to cast (hold longer = farther)
 //   LMB        strike when a fish takes the bobber ("!"); then hold LMB to reel, let go to ease off
 //   RMB        reel an empty line back in
+//   N          (Salt Life) take out / put away the cast net (where the rod goes: it takes the rod's
+//              place). Hold LMB to wind up, let go as the ring on the water brightens (the moment
+//              that spins it fully open); once it's down, hold LMB to draw the line: the brails close
+//              the lead line under what's caught, then the purse comes in hand over hand
+//   B          (Salt Life) the bait for the hook: the frozen shrimp, or what the net put in the bait
+//              bucket (Bait.js); it goes on at the next cast (the d-pad's ← → with the rod out)
 //   I / Tab    cooler / hold contents and the fish log
 //   E          at the fish stand: sell your catch
 export class Game {
@@ -57,6 +66,11 @@ export class Game {
 		// (Salt Life) the speargun; the speared fish ({ i, id, kg, cm, kill, tail, card }) and the fight
 		// with a big one; what's under the sights
 		this.gun = new Speargun( { scene: app.scene, camera: app.camera, ground: app.terrain, audio: app.audio } );
+		// (Salt Life) the cast net; how many fish are in it while it's in the water; the bait on the hook
+		// (Bait.js; null: the frozen shrimp), taken from the bucket as the line is cast
+		this.net = new CastNet( { scene: app.scene, camera: app.camera, query: app.query, ground: app.terrain, audio: app.audio, spray: app.spray } );
+		this.netIn = 0;
+		this.hookBait = null;
 		this.speared = null;
 		this.spearFight = null;
 		this.aim = null;
@@ -123,6 +137,7 @@ export class Game {
 		const g = this.state.stats;
 		this.rod.setGear( { castM: g.castM, reelSpeed: g.reelSpeed } );
 		if ( this.gun ) this.gun.setGear( g );
+		if ( this.net ) this.net.setGear( g );
 		const b = this.app.boatCtl;
 		if ( b && this._engineBase ) {
 
@@ -234,15 +249,18 @@ export class Game {
 
 		}
 
-		const can = this.canFish, canSpear = this.canSpear, gun = this.gun;
-		if ( inp.hit( 'KeyR' ) && can && ! this.fight ) {
+		const can = this.canFish, canSpear = this.canSpear, gun = this.gun, net = this.net;
+		if ( inp.hit( 'KeyR' ) && can && ! this.fight && ! net.busy ) {
 
-			rod.equip( ! rod.equipped );
-			if ( ! rod.equipped ) this.cancelLine();
+			// (Salt Life) the cast net goes away for it
+			if ( net.equipped ) this.dropNet();
+			if ( rod.equipped ) this.stowRod();
+			else rod.equip( true );
 			const cast = { touch: 'hold Cast and let go', gamepad: 'hold RT to cast' }[ app.input.lastDevice ] || 'hold left mouse or F to cast';
 			this.toast( rod.equipped ? `Rod out · ${ cast }` : 'Rod away', 1600 );
 
-		} else if ( inp.hit( 'KeyR' ) && canSpear && ! gun.shaftOut ) {
+		} else if ( inp.hit( 'KeyN' ) && can && ! this.fight && ! net.busy ) this.toggleNet();
+		else if ( inp.hit( 'KeyR' ) && canSpear && ! gun.shaftOut ) {
 
 			// (Salt Life) in the water R is the speargun's
 			gun.equip( ! gun.equipped );
@@ -254,10 +272,12 @@ export class Game {
 		if ( ! can && rod.equipped ) {
 
 			// swimming, driving, free camera: the line comes in and the rod goes away
-			this.cancelLine( true );
-			rod.equip( false );
+			this.stowRod();
 
 		}
+
+		// (and the cast net: whatever's in it goes back)
+		if ( ! can && net.equipped ) this.dropNet();
 
 		if ( ! canSpear && gun.equipped ) {
 
@@ -290,11 +310,19 @@ export class Game {
 		// (a gamepad's RT on the cooler's Islander tab: the next islander)
 		if ( panelOpen && lDown && this.hud.invOpen && this.hud.invTab === 'islander' && this.hud.device === 'gamepad' ) this.hud.nextLook();
 
+		// (Salt Life) the bait for the hook: B, or the d-pad's ← → with the rod out
+		const quiet = ! panelOpen && ! ( this.time && this.time.open ) && ! ( this.guide && this.guide.open );
+		if ( rod.equipped && quiet && ( inp.hit( 'KeyB' ) || inp.hit( 'ArrowRight' ) || inp.hit( 'ArrowLeft' ) ) ) this.cycleBait( inp.hit( 'ArrowLeft' ) ? - 1 : 1 );
+		else if ( net.equipped && quiet && inp.hit( 'KeyB' ) ) this.toast( this.bucketText(), 2400 );
+
 		if ( rod.equipped && ! panelOpen ) {
 
 			if ( rod.state === 'idle' && lDown ) rod.startWindup();
-			else if ( rod.state === 'windup' && lUp ) rod.release();
-			else if ( rod.state === 'floating' ) {
+			else if ( rod.state === 'windup' && lUp ) {
+
+				if ( rod.release() !== false ) this.baitHook();
+
+			} else if ( rod.state === 'floating' ) {
 
 				if ( lDown ) this.strike();
 				else if ( rDown ) {
@@ -314,6 +342,8 @@ export class Game {
 		if ( this.fight ) this.updateFight( dt, lmb && ! panelOpen );
 
 		rod.update( dt, { visible: can, fight: this.fight } );
+		// (Salt Life) the cast net
+		this.updateNet( dt, { lmb: ( lmb || rmb ) && ! panelOpen, lDown: lDown && ! panelOpen, lUp, panelOpen, visible: can } );
 		// (Salt Life) the speargun
 		this.updateSpear( dt, { lmb: lmb && ! panelOpen, lDown: lDown && ! panelOpen, canSpear } );
 		// the landed fish hangs on the end of the line, turned to face you, then goes in the cooler. With
@@ -362,7 +392,7 @@ export class Game {
 
 		} else if ( this.landing || this.display.shown ) this.endLanding();
 
-		p.busy = rod.lineInWater || rod.state === 'windup' || gun.shaftOut;
+		p.busy = rod.lineInWater || rod.state === 'windup' || gun.shaftOut || net.busy || net.state === 'windup';
 
 		this.updateBoat( dt );
 		// (Salt Life) the floodlights' lenses glow when they're fitted, from dusk like their light
@@ -390,6 +420,9 @@ export class Game {
 			fight: this.fight || this.spearFight,
 			casting: rod.state === 'windup',
 			power: rod.power,
+			// (Salt Life) the cast net's wind-up and its moment; the bait on the hook, or the bucket
+			netWind: net.state === 'windup' ? { charge: net.charge, win: sweetWindow( net.gear.spreadWin ), tired: net.over > 0.5 } : null,
+			bait: rod.equipped ? this.baitChip() : net.equipped ? { label: 'Bucket', text: `${ this.state.baitCount } / ${ this.state.stats.baitMax }` } : null,
 			bite: this.bite && this.bite.phase === 'take',
 			aiming: rod.equipped || ( gun.state === 'loaded' && this.submerged ),
 			aim: gun.state === 'loaded' && this.submerged ? this.aim : null,
@@ -406,19 +439,21 @@ export class Game {
 
 		const rod = this.rod, p = this.app.player;
 		if ( this.gun.equipped ) return this.spearPrompt();
+		if ( this.net.equipped ) return this.netPrompt();
 		if ( ! rod.equipped ) {
 
-			// by the water (boat deck, pier, the wet beach, wading): suggest the rod; in it, the speargun
+			// by the water (boat deck, pier, the wet beach, wading): suggest the rod (or the cast net); in
+			// it, the speargun
 			if ( p.mode === 'swim' ) return { key: 'R', text: 'Take out the speargun' };
 			const byWater = p.mode === 'deck' || ( p.mode === 'walk' && [ 'wood', 'wetsand', 'water' ].includes( p.surface ) );
-			return byWater ? { key: 'R', text: 'Take out the rod' } : null;
+			return byWater ? { key: 'R', text: `Take out the rod   ·   ${ this.keyName( 'N' ) }  the cast net` } : null;
 
 		}
 
 		const b = this.bite;
 		switch ( rod.state ) {
 
-			case 'idle': return { key: 'LMB', text: 'Hold to wind up, release to cast   ·   R  put the rod away' };
+			case 'idle': return { key: 'LMB', text: `Hold to wind up, release to cast   ·   ${ this.keyName( 'B' ) }  bait   ·   R  put the rod away` };
 			case 'windup': return { key: 'LMB', text: 'Release to cast (hold longer to cast farther)' };
 			case 'flying': return null;
 			case 'floating':
@@ -648,7 +683,7 @@ export class Game {
 
 		}
 
-		this.bite = { phase: 'wait', t: biteDelay( this.habitat(), this.hour ) };
+		this.bite = { phase: 'wait', t: biteDelay( this.habitat(), this.hour, Math.random, this.hookBait ) };
 
 	}
 
@@ -668,7 +703,7 @@ export class Game {
 		if ( b.phase === 'wait' ) {
 
 			const h = this.habitat();
-			const species = pickSpecies( h, this.hour );
+			const species = pickSpecies( h, this.hour, Math.random, this.hookBait );
 			if ( ! species ) {
 
 				b.t = 8;
@@ -677,7 +712,7 @@ export class Game {
 			}
 
 			b.species = species;
-			b.kg = rollWeight( species );
+			b.kg = rollWeight( species, Math.random, this.hookBait );
 			b.phase = 'nibble';
 			b.nibbles = 1 + Math.floor( Math.random() * 3 );
 			b.t = 0.7 + Math.random() * 0.8;
@@ -687,6 +722,17 @@ export class Game {
 
 			b.nibbles --;
 			b.pulse = 0;
+			// (Salt Life) a nibble can pick the bait clean off the hook
+			const bait = BAITS[ this.hookBait ];
+			if ( bait && Math.random() < bait.steal ) {
+
+				this.hookBait = null;
+				this.toast( 'Something picked the bait clean off the hook · shrimp until you cast again', 2400 );
+				this.bite = { phase: 'wait', t: biteDelay( this.habitat(), this.hour ) };
+				return;
+
+			}
+
 			if ( b.nibbles > 0 ) b.t = 0.6 + Math.random() * 1.0;
 			else {
 
@@ -699,7 +745,8 @@ export class Game {
 
 		} else if ( b.phase === 'take' ) {
 
-			this.toast( 'It took the bait and ran', 1800 );
+			this.toast( this.hookBait ? `It ran off with your ${ BAITS[ this.hookBait ].name.toLowerCase() }` : 'It took the bait and ran', 1800 );
+			this.hookBait = null;
 			this.bite = { phase: 'wait', t: biteDelay( this.habitat(), this.hour ) };
 
 		}
@@ -736,6 +783,7 @@ export class Game {
 		if ( st === 'fighting' ) return;
 		this.fight = null;
 		this.rod.dip = 0;
+		this.hookBait = null; // (Salt Life) taken with the fish, or with the hook
 		const name = FISH[ f.species ].name;
 		if ( st === 'caught' ) {
 
@@ -787,6 +835,258 @@ export class Game {
 		this.display.hide();
 		if ( this.hud && this.hud.catchOpen ) this.hud.hideCatch();
 		if ( this.rod.state === 'landing' ) this.rod.setState( 'idle' );
+
+	}
+
+	// ---- (Salt Life) the cast net
+
+	// N: out (the rod goes away for it), or away
+	toggleNet() {
+
+		const net = this.net;
+		if ( net.equipped ) {
+
+			this.dropNet();
+			this.toast( 'Cast net away', 1400 );
+			return;
+
+		}
+
+		if ( this.rod.equipped ) this.stowRod();
+		net.equip( true );
+		const how = { touch: 'hold Throw, let go as the ring brightens', gamepad: 'hold RT, let go as the ring brightens' }[ this.app.input.lastDevice ] || 'hold left mouse or F, let go as the ring brightens';
+		this.toast( `Cast net out · ${ how }`, 2400 );
+
+	}
+
+	// the rod away: the line in, a live bait on its hook back in the bucket
+	stowRod() {
+
+		this.cancelLine( true );
+		if ( this.hookBait ) this.state.returnBait( this.hookBait );
+		this.hookBait = null;
+		this.rod.equip( false );
+
+	}
+
+	// the net away at once (swimming, at the helm, the free camera): whatever's in it goes back
+	dropNet() {
+
+		this.letNetGo();
+		this.net.equip( false );
+
+	}
+
+	// the fish inside the net let go where they are (those in its purse too)
+	letNetGo() {
+
+		const fish = this.app.fish;
+		this.netIn = 0;
+		if ( ! fish || ! fish.net ) return;
+		_a.set( 0, 0, 0 );
+		for ( const i of fish.netFish() ) if ( fish.held[ i ] ) fish.netRelease( i, fish.pos[ i * 3 ], fish.pos[ i * 3 + 1 ], fish.pos[ i * 3 + 2 ], _a );
+		fish.netEnd();
+
+	}
+
+	updateNet( dt, { lmb, lDown, lUp, panelOpen, visible } ) {
+
+		const app = this.app, net = this.net, fish = app.fish, p = app.player;
+		if ( net.equipped ) {
+
+			if ( panelOpen ) net.cancelWindup();
+			else if ( net.state === 'held' && lDown ) net.startWindup();
+			else if ( net.state === 'windup' && lUp ) net.release();
+			net.setPull( lmb );
+
+		}
+
+		this._netGround = this._netGround || ( ( x, z, maxY ) => p.groundAt( x, z, maxY ) );
+		net.update( dt, { visible, groundAt: this._netGround } );
+		for ( const e of net.takeEvents() || [] ) {
+
+			// on the water: what's under it is in it now (Fish.netLand); on the sand or a deck, nothing is
+			if ( e === 'throw' && this.app.together ) this.app.together.netThrow( net.lastThrow );
+			else if ( e === 'splash' && fish ) this.netIn = fish.netLand( net.footprint, net.gear, net.waterY );
+			else if ( e === 'land' ) this.say( 'It came down on dry ground · draw it back in' );
+			else if ( e === 'dump' ) this.resolveHaul();
+
+		}
+
+		if ( ! fish || ! fish.net ) return;
+		// in the water the fish race the lead line to the bottom; drawn closed, they're in the purse
+		if ( net.state === 'sinking' ) this.netIn = fish.netStep( net.footprint, dt );
+		if ( ( net.state === 'sinking' && net.draw >= BAG_FROM ) || net.state === 'lifted' || ( net.state === 'dumping' && ! net.dumped ) ) this.holdBag( dt );
+		// (it never came up: put away, or loaded again at once)
+		if ( ! net.busy ) this.letNetGo();
+
+	}
+
+	// the fish in the purse, where it has them: kicking, shifting about as it swings (eased in from
+	// where the netting closed round them)
+	holdBag( dt ) {
+
+		const fish = this.app.fish, net = this.net, list = fish.netFish(), n = list.length, t = fish.time;
+		const k = 1 - Math.exp( - dt * 10 );
+		let kg = 0;
+		for ( let j = 0; j < n; j ++ ) {
+
+			const i = list[ j ], i3 = i * 3, L = fish.size[ i ];
+			net.bagPoint( j, n, _b );
+			_b.lerpVectors( _a.set( fish.pos[ i3 ], fish.pos[ i3 + 1 ], fish.pos[ i3 + 2 ] ), _b, k );
+			_h.set( Math.cos( t * 1.3 + i ), Math.sin( t * 2.1 + i * 0.7 ) * 0.5, Math.sin( t * 1.3 + i ) ).normalize();
+			fish.hold( i, _b.x, _b.y, _b.z, _h, Math.sin( t * 3 + i ) * 0.9, net.bag.out ? 1 : 0.6 );
+			kg += 11 * L * L * L;
+
+		}
+
+		net.load = kg;
+
+	}
+
+	// the purse emptied: each fish into the bait bucket or the cooler (GameState.addHaul), or out and back
+	// into the water toward where it was thrown; the haul card says what came up
+	resolveHaul() {
+
+		const fish = this.app.fish, net = this.net, b = net.bag, au = this.app.audio;
+		const list = fish && fish.net ? fish.netFish() : [];
+		const caught = list.map( ( i ) => {
+
+			const { sp, L } = fish.about( i );
+			const id = sp.fish && FISH[ sp.fish ] ? sp.fish : null;
+			const cm = Math.round( L * 100 );
+			return { i, species: id, label: id ? FISH[ id ].name : sp.label, cm, kg: id ? fishWeightKg( id, cm ) : 0 };
+
+		} );
+		const r = this.state.addHaul( caught, this.hour );
+		const to = net.lastThrow;
+		_b.set( to ? to.x - b.x : 0, 0, to ? to.z - b.z : 1 );
+		if ( _b.lengthSq() < 1e-6 ) _b.set( 0, 0, 1 );
+		_b.normalize();
+		for ( const f of caught ) {
+
+			if ( f.kept ) fish.take( f.i );
+			else fish.netRelease( f.i, b.x + ( Math.random() - 0.5 ) * 0.2, b.y, b.z + ( Math.random() - 0.5 ) * 0.2, _a.set( _b.x * ( 1.6 + Math.random() ) + ( Math.random() - 0.5 ), 1 + Math.random() * 0.8, _b.z * ( 1.6 + Math.random() ) + ( Math.random() - 0.5 ) ) );
+
+		}
+
+		if ( fish ) fish.netEnd();
+		this.netIn = 0;
+		// a mullet for the cooler counts toward the island's records, and the others hear of it
+		if ( this.app.together ) for ( const e of r.cooler ) this.app.together.caught( e.species, e.kg, e.cm, 'net' );
+		if ( caught.length && au && au.fishFlop ) au.fishFlop();
+		this.lastHaul = { r, n: caught.length };
+		if ( this.hud ) this.hud.showHaul( r, caught.length );
+		else this.toast( caught.length ? `The net came up with ${ caught.length } fish` : 'Nothing in the net', 2400 );
+
+	}
+
+	netPrompt() {
+
+		const net = this.net, a = net.aim, fp = net.footprint;
+		switch ( net.state ) {
+
+			case 'held':
+				if ( a.show && a.land ) return { key: 'LMB', text: 'That\'s dry ground · put the ring on the water' };
+				if ( ! net.aimReaches ) return { key: 'LMB', text: 'Too deep for the hand line · it\'ll close before it reaches the bottom   ·   hold to throw anyway' };
+				return { key: 'LMB', text: `Hold to wind up, let go as the ring brightens   ·   ${ this.keyName( 'N' ) }  put it away` };
+			case 'windup': {
+
+				const [ lo, hi ] = sweetWindow( net.gear.spreadWin );
+				if ( net.charge < lo ) return { key: 'LMB', text: 'Swing it back… let go as the ring brightens' };
+				if ( net.charge <= hi ) return { key: 'LMB', text: 'Now! Let go' };
+				return { key: 'LMB', text: net.over > 0.6 ? 'Your arms are tiring · let go' : 'Past the moment · let go' };
+
+			}
+
+			case 'sinking':
+				if ( ! fp.wet ) return { key: 'LMB', text: 'Hold to draw it back in' };
+				if ( net.draw >= 1 ) return { key: 'LMB', text: this.netIn ? 'Hold to haul in · something\'s kicking in it' : 'Hold to haul it in' };
+				if ( net.pulling ) return { key: 'LMB', text: 'Drawing the brails · the lead line closes under it' };
+				if ( ! net.bottomed ) return { key: 'LMB', text: this.netIn ? 'Fish under it! Let it sink, then hold to close it' : 'Let it sink…  hold to draw it in' };
+				return { key: 'LMB', text: this.netIn ? 'Fish under it! Hold to close it and haul in' : 'On the bottom · hold to close it and haul in' };
+			default: return null;
+
+		}
+
+	}
+
+	// a key as the device in use calls it, in the prompts' text
+	keyName( k ) {
+
+		return this.app.input.lastDevice === 'gamepad' ? { N: 'D-pad ↑', B: 'D-pad ← →', R: 'X' }[ k ] || k : k;
+
+	}
+
+	// ---- (Salt Life) bait on the hook (Bait.js)
+
+	// the next (step 1) or previous kind in the bucket, for the next cast (the frozen shrimp among them)
+	cycleBait( step = 1 ) {
+
+		const s = this.state;
+		const kinds = [ null, ...BAIT_IDS.filter( ( k ) => s.bait[ k ] > 0 ) ];
+		if ( kinds.length === 1 ) {
+
+			this.say( `Only shrimp · throw the cast net (${ this.keyName( 'N' ) }) for live bait` );
+			return;
+
+		}
+
+		const i = Math.max( 0, kinds.indexOf( s.baitPick ) );
+		const next = kinds[ ( i + step + kinds.length ) % kinds.length ];
+		s.pickBait( next );
+		const what = next ? `${ BAITS[ next ].name } · ${ s.bait[ next ] } in the bucket` : 'Frozen shrimp';
+		this.toast( `${ this.rod.lineInWater ? 'Next cast' : 'Bait' }: ${ what }`, 1800 );
+
+	}
+
+	// the line's cast: the hook baited with your pick (one from the bucket), unless it already is. A
+	// live one left on the hook from the last cast goes back in the bucket for another pick
+	baitHook() {
+
+		const s = this.state, want = s.baitPick;
+		if ( this.hookBait === want ) return;
+		if ( this.hookBait ) s.returnBait( this.hookBait );
+		this.hookBait = null;
+		if ( ! want ) return;
+		if ( s.takeBait( want ) ) this.hookBait = want;
+		else {
+
+			s.pickBait( null );
+			this.say( `Out of ${ BAITS[ want ].short } · back to shrimp` );
+
+		}
+
+	}
+
+	// the HUD's bait chip with the rod out
+	baitChip() {
+
+		const s = this.state, k = s.baitPick;
+		return BAITS[ k ] ? { label: 'Bait', text: `${ BAITS[ k ].name } ×${ ( s.bait[ k ] | 0 ) + ( this.hookBait === k ? 1 : 0 ) }` } : { label: 'Bait', text: 'Shrimp' };
+
+	}
+
+	bucketText() {
+
+		const s = this.state, kinds = BAIT_IDS.filter( ( k ) => s.bait[ k ] > 0 );
+		const room = `${ s.baitCount } / ${ s.stats.baitMax }`;
+		return kinds.length ? `Bait bucket (${ room }): ${ kinds.map( ( k ) => `${ s.bait[ k ] } ${ BAITS[ k ].short }` ).join( ', ' ) }` : `The bait bucket's empty (${ room })`;
+
+	}
+
+	// Marta's order filled from the bait bucket
+	sellBait( vendor = this.hud && this.hud.vendor ) {
+
+		const r = this.state.sellBait( this.saleTerms( vendor ) );
+		if ( r.count ) {
+
+			this.toast( `Sold Marta ${ r.count } live bait for $${ r.total }` );
+			if ( this.app.audio && this.app.audio.coin ) this.app.audio.coin();
+
+		}
+
+		return r;
 
 	}
 
