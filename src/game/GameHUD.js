@@ -1,5 +1,6 @@
 import { FISH, fishLengthCm } from './FishTable.js';
 import { UPGRADES, nextLevel, FUEL_PRICE } from './Gear.js';
+import { BAITS, BAIT_IDS, chunksOf } from './Bait.js';
 import { LOOKS, LOOK_NAMES } from '../together/Avatar.js';
 import { NIGHT_BOX, biteHint, orderTerms } from './Orders.js';
 import { WEEK_MUL, delivered, filled, mineOf, shareOf, weekEnds } from './WeekOrder.js';
@@ -12,7 +13,9 @@ const escape = ( t ) => String( t ).replace( /[&<>"']/g, ( c ) => ( { '&': '&amp
 const item = ( name, meta, ...right ) => `<div class="gm-item"><span class="gm-item-main"><span class="gm-item-name">${ name }</span><span class="gm-item-meta">${ meta }</span></span>${ right.join( '' ) }</div>`;
 // (Salt Life) price: what it fetches here (a wanted fish: the order's price); wanted: on today's list
 const fishItem = ( f, button, price = f.value, wanted = false ) => item( `${ FISH[ f.species ].name }${ f.record ? '<small>record</small>' : '' }${ wanted ? '<small class="is-wanted">wanted</small>' : '' }`,
-	`${ inches( f.cm ?? fishLengthCm( f.species, f.kg ) ) } · ${ lb( f.kg ) }${ f.method === 'spear' ? ' · speared' : '' }`, `<span class="gm-item-val">$${ price }</span>`, button );
+	`${ inches( f.cm ?? fishLengthCm( f.species, f.kg ) ) } · ${ lb( f.kg ) }${ f.method === 'spear' ? ' · speared' : f.method === 'net' ? ' · netted' : '' }`, `<span class="gm-item-val">$${ price }</span>`, button );
+// (Salt Life) why the net's catch went back (GameState.addHaul)
+const BACK = { protected: 'protected', notNet: 'not bait', full: 'no room in the cooler', bucket: 'the bucket\'s full' };
 const upper = ( t ) => t.charAt( 0 ).toUpperCase() + t.slice( 1 );
 
 // DOM for the fishing game, in the look of the rest of the HUD (ui/game-ui.css tokens, .tw-glass):
@@ -60,6 +63,37 @@ const CSS = /* css */`
 	border-radius: 99px; background: var(--tw-fill-2); overflow: hidden; opacity: 0; transition: opacity var(--tw-fast); pointer-events: none; }
 .gm-cast.is-on { opacity: 1; }
 .gm-cast > span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--tw-aqua), var(--tw-sun)); }
+/* (Salt Life) the cast net's wind-up: the needle swings across, the moment that spins it fully open is
+   the band (it lights while the needle's in it); held past it, the arms tire (coral) */
+.gm-netwind { position: absolute; left: 50%; top: 58%; transform: translateX(-50%); width: calc(170 * var(--tw-u)); height: calc(7 * var(--tw-u));
+	border-radius: 99px; background: var(--tw-fill-2); opacity: 0; transition: opacity var(--tw-fast); pointer-events: none; }
+.gm-netwind.is-on { opacity: 1; }
+.gm-netwind > i { position: absolute; top: 0; bottom: 0; border-radius: 99px; background: rgba(var(--tw-aqua-rgb), 0.3); box-shadow: inset 0 0 0 1px rgba(var(--tw-aqua-rgb), 0.65);
+	transition: background var(--tw-fast), box-shadow var(--tw-fast); }
+.gm-netwind.is-sweet > i { background: rgba(var(--tw-aqua-rgb), 0.85); box-shadow: 0 0 14px rgba(var(--tw-aqua-rgb), 0.85); }
+.gm-netwind > b { position: absolute; top: -4px; bottom: -4px; width: 3px; margin-left: -1.5px; border-radius: 2px; background: var(--tw-ink); box-shadow: 0 0 6px rgba(255,255,255,0.5); }
+.gm-netwind.is-tired > b { background: var(--tw-coral); box-shadow: 0 0 8px var(--tw-coral); }
+/* (Salt Life) what the cast net brought up: a card over the prompt for a few seconds */
+.gm-haul { position: absolute; left: 50%; bottom: calc(max(calc(72 * var(--tw-u)), 13vh) + calc(58 * var(--tw-u))); transform: translate(-50%, 10px);
+	min-width: calc(280 * var(--tw-u)); max-width: min(92vw, calc(420 * var(--tw-u))); padding: var(--tw-3) var(--tw-4); border-radius: var(--tw-r-lg);
+	font: 500 var(--tw-fs-md) var(--tw-font); color: var(--tw-ink); pointer-events: none; opacity: 0;
+	transition: opacity var(--tw-med) var(--tw-ease), transform var(--tw-slow) var(--tw-ease); }
+.gm-haul.is-on { opacity: 1; transform: translate(-50%, 0); }
+.gm-haul-h { display: flex; justify-content: space-between; align-items: baseline; gap: var(--tw-3); margin-bottom: var(--tw-1); }
+.gm-haul-h b { font-weight: 600; }
+.gm-haul-h small { color: var(--tw-ink-3); font-size: var(--tw-fs-sm); }
+.gm-haul-row { display: grid; grid-template-columns: calc(26 * var(--tw-u)) minmax(0, 1fr) auto; gap: var(--tw-2); align-items: baseline; padding: 2px 0; }
+.gm-haul-row > b { font: 600 var(--tw-fs-md) var(--tw-mono); color: var(--tw-aqua); text-align: right; }
+.gm-haul-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gm-haul-row > em { font-style: normal; color: var(--tw-ink-3); font-size: var(--tw-fs-sm); white-space: nowrap; }
+.gm-haul-row.is-cooler > b { color: var(--tw-sun); }
+.gm-haul-row.is-back { color: var(--tw-ink-3); }
+.gm-haul-row.is-back > b { color: var(--tw-ink-3); }
+.gm-haul-tags { display: flex; flex-wrap: wrap; gap: var(--tw-1); margin-top: var(--tw-2); }
+.gm-haul-tags span { padding: 1px var(--tw-2); border-radius: 999px; font-size: var(--tw-fs-xs); font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.gm-haul-tags .is-new { color: #062420; background: #6fd6c6; }
+.gm-haul-tags .is-record { color: #2a1604; background: #e7bd68; }
+.gm-btns { display: inline-flex; gap: var(--tw-1); }
 .gm-dot { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px; border-radius: 50%; background: rgba(255,255,255,0.7); box-shadow: 0 0 3px rgba(0,0,0,0.6); opacity: 0; pointer-events: none; }
 .gm-dot.is-on { opacity: 1; }
 .gm-panel { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -48%); width: calc(420 * var(--tw-u)); max-height: 70vh; display: flex; flex-direction: column;
@@ -265,7 +299,10 @@ export class GameHUD {
 		style.textContent = CSS;
 		document.head.append( style );
 
-		this.purse = h( 'div', 'gm-purse tw-glass', `<span class="gm-money">$0</span><span class="gm-cooler"><span class="gm-cooler-label">Cooler</span><span class="gm-cooler-bar"><span></span></span><span class="gm-cooler-kg">0 / 66 lb</span></span><span class="gm-gauge gm-fuel"><span>Fuel</span><span class="gm-cooler-bar gm-fuel-bar"><span></span></span><b class="gm-fuel-l">11 gal</b></span><span class="gm-gauge gm-sonar"><span>Sonar</span><b class="gm-sonar-d">0 ft</b><span class="gm-sonar-dots"></span></span><span class="gm-gauge gm-breath"><span>Breath</span><span class="gm-cooler-bar gm-breath-bar"><span></span></span></span>` );
+		this.purse = h( 'div', 'gm-purse tw-glass', `<span class="gm-money">$0</span><span class="gm-cooler"><span class="gm-cooler-label">Cooler</span><span class="gm-cooler-bar"><span></span></span><span class="gm-cooler-kg">0 / 66 lb</span></span><span class="gm-gauge gm-fuel"><span>Fuel</span><span class="gm-cooler-bar gm-fuel-bar"><span></span></span><b class="gm-fuel-l">11 gal</b></span><span class="gm-gauge gm-sonar"><span>Sonar</span><b class="gm-sonar-d">0 ft</b><span class="gm-sonar-dots"></span></span><span class="gm-gauge gm-breath"><span>Breath</span><span class="gm-cooler-bar gm-breath-bar"><span></span></span></span><span class="gm-gauge gm-bait"><span class="gm-bait-l">Bait</span><b class="gm-bait-t">Shrimp</b></span>` );
+		this.baitEl = this.purse.querySelector( '.gm-bait' );
+		this.baitL = this.purse.querySelector( '.gm-bait-l' );
+		this.baitT = this.purse.querySelector( '.gm-bait-t' );
 		this.breathEl = this.purse.querySelector( '.gm-breath' );
 		this.breathBar = this.purse.querySelector( '.gm-breath-bar > span' );
 		this.fuelEl = this.purse.querySelector( '.gm-fuel' );
@@ -293,6 +330,11 @@ export class GameHUD {
 		this.bite = h( 'div', 'gm-bite', '!' );
 		this.cast = h( 'div', 'gm-cast', '<span></span>' );
 		this.castBar = this.cast.firstChild;
+		this.netWind = h( 'div', 'gm-netwind', '<i></i><b></b>' );
+		this.netWin = this.netWind.querySelector( 'i' );
+		this.netNeedle = this.netWind.querySelector( 'b' );
+		this.haul = h( 'div', 'gm-haul tw-glass' );
+		this._haulT = 0;
 		this.dot = h( 'div', 'gm-dot' );
 		this.aimTag = h( 'div', 'gm-aim' );
 		this.veil = h( 'div', 'gm-veil' );
@@ -306,7 +348,7 @@ export class GameHUD {
 
 		} );
 		const hud = ui.hud || ui.root;
-		hud.append( this.veil, this.catchScrim, this.purse, this.fight, this.bite, this.cast, this.dot, this.aimTag, this.catchCard );
+		hud.append( this.veil, this.catchScrim, this.purse, this.fight, this.bite, this.cast, this.netWind, this.haul, this.dot, this.aimTag, this.catchCard );
 		// (Salt Life) on touch screens the minimap, the tips and the fight panel line up under the purse,
 		// which wraps on narrow screens (game-ui.css): where it ends, and how tall the fight panel is (and
 		// where the purse starts, for the toasts: style.css. On a computer a toast goes under the purse
@@ -377,8 +419,36 @@ export class GameHUD {
 
 	// per frame
 	// (Salt Life) aim: what's under the speargun's sights ({ label, cm, rule, far }); breath: the swimmer's
-	// ({ s, max, blackout }) while it matters
-	update( { fight, casting, power, bite, aiming, fuel = null, sonar = null, aim = null, breath = null } ) {
+	// ({ s, max, blackout }) while it matters; netWind: the cast net's wind-up ({ charge, win: [ lo, hi ],
+	// tired }); bait: the chip in the purse ({ label, text }: the hook's bait, or the bucket)
+	update( { fight, casting, power, bite, aiming, fuel = null, sonar = null, aim = null, breath = null, netWind = null, bait = null } ) {
+
+		this.netWind.classList.toggle( 'is-on', !! netWind );
+		if ( netWind ) {
+
+			const [ lo, hi ] = netWind.win, c = netWind.charge;
+			this.netWin.style.left = `${ lo * 100 }%`;
+			this.netWin.style.width = `${ ( hi - lo ) * 100 }%`;
+			this.netNeedle.style.left = `${ c * 100 }%`;
+			this.netWind.classList.toggle( 'is-sweet', c >= lo && c <= hi );
+			this.netWind.classList.toggle( 'is-tired', !! netWind.tired );
+
+		}
+
+		this.baitEl.classList.toggle( 'is-on', !! bait );
+		if ( bait ) {
+
+			if ( this.baitL.textContent !== bait.label ) this.baitL.textContent = bait.label;
+			if ( this.baitT.textContent !== bait.text ) this.baitT.textContent = bait.text;
+
+		}
+
+		if ( this._haulT && performance.now() > this._haulT ) {
+
+			this._haulT = 0;
+			this.haul.classList.remove( 'is-on' );
+
+		}
 
 		// boat instruments in the purse: fuel while aboard, the fish finder when fitted
 		this.fuelEl.classList.toggle( 'is-on', !! fuel );
@@ -537,6 +607,56 @@ export class GameHUD {
 
 	}
 
+	// (Salt Life) what the cast net brought up (GameState.addHaul's result; n: how many fish; out: the
+	// ones that got away, Fish.netStep): into the bait bucket, into the cooler, back in the water and
+	// why; a new kind or a record. A few seconds, over the prompt; an empty net is only a toast, saying
+	// why if any were under it
+	showHaul( r, n, out = null, ms = 5200 ) {
+
+		const s = this.game.state;
+		if ( ! n ) {
+
+			const k = ( x ) => x === 1 ? 'One' : x;
+			const heavier = nextLevel( s.upgrades, 'castNet' ) ? ' · a heavier net sinks faster' : ' · let it sink, then close it';
+			const why = ! out ? '' : out.under ? `${ k( out.under ) } got out under the lead line before it was down${ heavier }`
+				: out.leapt ? `${ k( out.leapt ) } leapt clear as it settled` : out.big ? `${ k( out.big ) } too big for this net tore out of it`
+					: out.mesh ? `${ k( out.mesh ) } slipped through the mesh` : '';
+			const tips = [ 'Look for nervous water and jumping mullet', 'Bait fish gather by the pier\'s pilings', 'Mullet run the trough by the beach at dawn and dusk', 'Throw ahead of a moving school' ];
+			this.toast( `Nothing in the net · ${ why || tips[ Math.floor( Math.random() * tips.length ) ] }`, why ? 3600 : 2600 );
+			return;
+
+		}
+
+		const row = ( k, name, where, cls = '' ) => `<div class="gm-haul-row${ cls }"><b>${ k }</b><span>${ escape( name ) }</span><em>${ where }</em></div>`;
+		let rows = '';
+		for ( const [ kind, k ] of Object.entries( r.bait ) ) rows += row( k, FISH[ kind ] ? FISH[ kind ].name : BAITS[ kind ].name, 'bait bucket' );
+		for ( const e of r.cooler ) rows += row( 1, `${ FISH[ e.species ].name } · ${ lb( e.kg ) }`, 'cooler', ' is-cooler' );
+		const back = new Map();
+		for ( const b of r.back ) {
+
+			const key = b.label + '|' + b.why;
+			back.set( key, ( back.get( key ) || 0 ) + 1 );
+
+		}
+
+		for ( const [ key, k ] of back ) {
+
+			const [ label, why ] = key.split( '|' );
+			rows += row( k, label, `let go · ${ BACK[ why ] || why }`, ' is-back' );
+
+		}
+
+		const tags = [ ...r.news.map( ( sp ) => `<span class="is-new">New · ${ FISH[ sp ].name }</span>` ), ...r.records.map( ( sp ) => `<span class="is-record">Record · ${ FISH[ sp ].name }</span>` ) ].join( '' );
+		this.haul.innerHTML = `
+			<div class="gm-haul-h"><b>The net came up with ${ n } fish</b><small>Bucket ${ s.baitCount } / ${ s.stats.baitMax }</small></div>
+			${ rows }${ tags ? `<div class="gm-haul-tags">${ tags }</div>` : '' }`;
+		this.haul.classList.remove( 'is-on' );
+		void this.haul.offsetWidth;
+		this.haul.classList.add( 'is-on' );
+		this._haulT = performance.now() + ms;
+
+	}
+
 	// a button's label with its key, for keyboards and gamepads ('Leave (E)'); touch screens just tap it
 	keyed( label, key, pad ) {
 
@@ -595,7 +715,7 @@ export class GameHUD {
 		const logged = Object.entries( s.log ).filter( ( [ k ] ) => FISH[ k ] );
 		// (Salt Life) the island's records: the group's heaviest of each kind (together/)
 		const isle = together ? Object.entries( together.records ).filter( ( [ k ] ) => FISH[ k ] ).sort( ( a, b ) => b[ 1 ].kg - a[ 1 ].kg ) : [];
-		const tabs = [ [ 'fish', 'Fish', s.inventory.length ], [ 'log', 'Log', logged.length ] ];
+		const tabs = [ [ 'fish', 'Fish', s.inventory.length ], [ 'bait', 'Bait', Object.values( s.bait ).reduce( ( a, n ) => a + n, 0 ) ], [ 'log', 'Log', logged.length ] ];
 		if ( together ) tabs.push( [ 'records', 'Records', isle.length ], [ 'islander', 'Islander', 0 ] );
 		this._invTabs = tabs.map( ( t ) => t[ 0 ] );
 		const tab = this._invTabs.includes( this.invTab ) ? this.invTab : 'fish';
@@ -604,9 +724,20 @@ export class GameHUD {
 		let body, hint;
 		if ( tab === 'fish' ) {
 
+			// (Salt Life) a mullet can be cut into bait for the hook
 			const g = this.game, wanted = s.wantedIds( g.orders, g.tradeDay, g.weekTerms ? g.weekTerms() : null );
-			body = s.inventory.map( ( f ) => fishItem( f, `<button class="gm-mini" data-release="${ f.id }">Release</button>`, f.value, wanted.has( f.id ) ) ).join( '' ) || empty( 'Nothing yet. Cast from the pier, the beach or the boat, or dive with the speargun.' );
+			body = s.inventory.map( ( f ) => fishItem( f, `<span class="gm-btns">${ f.species === 'mullet' ? `<button class="gm-mini" data-cut="${ f.id }" title="Cut into ${ chunksOf( f.kg ) } chunks of bait">Cut bait</button>` : '' }<button class="gm-mini" data-release="${ f.id }">Release</button></span>`, f.value, wanted.has( f.id ) ) ).join( '' ) || empty( 'Nothing yet. Cast from the pier, the beach or the boat, throw the cast net, or dive with the speargun.' );
 			hint = 'Sell at the fish stand by the pier';
+
+		} else if ( tab === 'bait' ) {
+
+			// (Salt Life) the bait bucket (Bait.js): what goes on the hook at the next cast
+			const pick = s.baitPick, well = UPGRADES.baitWell.levels[ s.upgrades.baitWell | 0 ].label.toLowerCase();
+			const on = ( k ) => `<button class="gm-mini${ pick === k ? ' is-on' : '' }" data-bait="${ k || '' }" aria-pressed="${ pick === k }">${ pick === k ? 'On the hook' : 'Use' }</button>`;
+			body = item( 'Frozen shrimp', 'never runs out · the little fish take it', on( null ) )
+				+ BAIT_IDS.filter( ( k ) => s.bait[ k ] > 0 ).map( ( k ) => item( BAITS[ k ].name, `${ s.bait[ k ] } in the ${ BAITS[ k ].live ? well : 'cooler' }`, `<span class="gm-btns">${ on( k ) }<button class="gm-mini" data-dump="${ k }">${ BAITS[ k ].live ? 'Let go' : 'Toss' }</button></span>` ) ).join( '' );
+			if ( ! BAIT_IDS.some( ( k ) => s.bait[ k ] > 0 ) ) body += empty( 'Throw the cast net for live bait: silversides, sergeant majors, small grunts and mullet. The big fish come for it.' );
+			hint = `${ s.baitCount } / ${ s.stats.baitMax } in the bucket · ${ d === 'gamepad' ? 'D-pad ← →' : d === 'touch' ? 'the Bait button' : '<kbd>B</kbd>' } changes it with the rod out`;
 
 		} else if ( tab === 'log' ) {
 
@@ -616,7 +747,7 @@ export class GameHUD {
 
 		} else if ( tab === 'records' ) {
 
-			body = isle.map( ( [ k, r ] ) => item( FISH[ k ].name, ( r.id === me ? '<b>You</b>' : escape( r.who || '?' ) ) + ( r.m === 's' ? ' · speared' : '' ), `<span class="gm-item-num">${ lb( r.kg ) }${ r.cm ? ` · ${ inches( r.cm ) }` : '' }</span>` ) ).join( '' )
+			body = isle.map( ( [ k, r ] ) => item( FISH[ k ].name, ( r.id === me ? '<b>You</b>' : escape( r.who || '?' ) ) + ( r.m === 's' ? ' · speared' : r.m === 'n' ? ' · netted' : '' ), `<span class="gm-item-num">${ lb( r.kg ) }${ r.cm ? ` · ${ inches( r.cm ) }` : '' }</span>` ) ).join( '' )
 				|| empty( 'None yet: the first of each kind anyone lands here sets one.' );
 			hint = 'The heaviest of each kind anyone here has landed';
 
@@ -647,6 +778,14 @@ export class GameHUD {
 		this.inv.querySelector( '[data-close]' ).onclick = () => this.toggleInventory( false );
 		for ( const b of this.inv.querySelectorAll( '[data-tab]' ) ) b.onclick = () => this.showTab( b.dataset.tab );
 		for ( const b of this.inv.querySelectorAll( '[data-release]' ) ) b.onclick = () => s.release( Number( b.dataset.release ) );
+		for ( const b of this.inv.querySelectorAll( '[data-cut]' ) ) b.onclick = () => {
+
+			const n = s.cutBait( Number( b.dataset.cut ) );
+			if ( n ) this.toast( `Cut into ${ n } chunks of bait`, 1800 );
+
+		};
+		for ( const b of this.inv.querySelectorAll( '[data-bait]' ) ) b.onclick = () => s.pickBait( b.dataset.bait || null );
+		for ( const b of this.inv.querySelectorAll( '[data-dump]' ) ) b.onclick = () => s.dumpBait( b.dataset.dump );
 		for ( const b of this.inv.querySelectorAll( '[data-look]' ) ) b.onclick = () => {
 
 			together.setLook( b.dataset.look );
@@ -832,6 +971,9 @@ GameHUD.prototype.renderShop = function () {
 	const terms = g.saleTerms ? g.saleTerms( v ) : null;
 	const bait = terms ? s.quote( null, terms ) : { prices: new Map() };
 	const baitRows = s.inventory.filter( ( f ) => bait.prices.has( f.id ) ).map( ( f ) => fishItem( f, `<button class="gm-mini" data-sell="${ f.id }">Sell</button>`, bait.prices.get( f.id ), true ) ).join( '' );
+	// (Salt Life) and from the bait bucket, alive
+	const bq = terms ? s.quoteBait( terms ) : null;
+	const bucketRow = bq && bq.n ? item( `${ FISH[ bq.species ].name }<small class="is-wanted">wanted</small>`, `${ bq.n } live from your bait bucket · $${ bq.each } each`, `<span class="gm-item-val">$${ bq.total }</span>`, `<button class="gm-mini" data-sellbait>Sell ${ bq.n }</button>` ) : '';
 	const rows = Object.entries( UPGRADES ).map( ( [ key, track ] ) => {
 
 		const cur = track.levels[ s.upgrades[ key ] | 0 ];
@@ -847,9 +989,11 @@ GameHUD.prototype.renderShop = function () {
 	this.drawStand( v, `
 		<div class="gm-head"><h2>${ v.name }</h2>
 		<p class="gm-sub">${ greeting } · You have $${ s.money.toLocaleString() }</p></div>
-		<div class="gm-list">${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ baitRows }${ fuelRow }${ rows }</div>
+		<div class="gm-list">${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ bucketRow }${ baitRows }${ fuelRow }${ rows }</div>
 		<div class="gm-foot"><span class="gm-sub">Upgrades take effect at once</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>` );
 	bindFuel();
+	const sb = this.stand.querySelector( '[data-sellbait]' );
+	if ( sb ) sb.onclick = () => this.game.sellBait();
 	for ( const b of this.stand.querySelectorAll( '[data-buy]' ) ) b.onclick = () => this.game.buy( b.dataset.buy );
 	for ( const b of this.stand.querySelectorAll( '[data-sell]' ) ) b.onclick = () => this.game.sell( [ Number( b.dataset.sell ) ] );
 

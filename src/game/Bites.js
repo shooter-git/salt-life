@@ -1,4 +1,5 @@
 import { FISH, FISH_IDS } from './FishTable.js';
+import { BAITS, baitWeight } from './Bait.js';
 
 // Where the bobber is and what lives there.
 //   depth     water depth under the bobber (m)
@@ -45,8 +46,8 @@ export function lampsLit( hour ) {
 }
 
 // Weighted pick of the species that bites here; null when nothing lives here.
-// rng: () => [0, 1)
-export function pickSpecies( habitat, hour, rng = Math.random ) {
+// rng: () => [0, 1); (Salt Life) bait: what's on the hook (Bait.js; null: shrimp)
+export function pickSpecies( habitat, hour, rng = Math.random, bait = null ) {
 
 	let total = 0;
 	const w = [];
@@ -60,7 +61,7 @@ export function pickSpecies( habitat, hour, rng = Math.random ) {
 		if ( f.lights && f.habitat.pier ) hw += f.lights * f.habitat.pier * habitat.pier * lit;
 		// and under a boat's deck floodlights
 		if ( f.flood && habitat.flood ) hw *= 1 + f.flood * habitat.flood;
-		const x = hw * f.rarity * activity( f.time, hour );
+		const x = hw * f.rarity * activity( f.time, hour ) * baitWeight( bait, id );
 		w.push( x );
 		total += x;
 
@@ -79,17 +80,19 @@ export function pickSpecies( habitat, hour, rng = Math.random ) {
 
 }
 
-// Weight in kg: skewed toward the small end (most fish are small, trophies are rare)
-export function rollWeight( id, rng = Math.random ) {
+// Weight in kg: skewed toward the small end (most fish are small, trophies are rare; less so on a
+// big bait)
+export function rollWeight( id, rng = Math.random, bait = null ) {
 
 	const [ a, b ] = FISH[ id ].kg;
-	const t = Math.pow( rng(), 2.2 );
+	const t = Math.pow( rng(), 2.2 * ( BAITS[ bait ] ? BAITS[ bait ].skew : 1 ) );
 	return a + ( b - a ) * t;
 
 }
 
-// Seconds until the next bite at this spot: richer water bites sooner. Infinity when barren.
-export function biteDelay( habitat, hour, rng = Math.random ) {
+// Seconds until the next bite at this spot: richer water bites sooner (and live or cut bait). Infinity
+// when barren.
+export function biteDelay( habitat, hour, rng = Math.random, bait = null ) {
 
 	let rich = 0;
 	for ( const k in habitat ) if ( k !== 'flood' ) rich += habitat[ k ];
@@ -98,7 +101,7 @@ export function biteDelay( habitat, hour, rng = Math.random ) {
 	// Life) a boat's floodlights draw the bait in, and what feeds on it
 	rich = Math.max( rich, 0.35 ) + ( habitat.flood || 0 );
 	const light = hour > 6 && hour < 19 ? 1 : 0.8;
-	const mean = 8 / ( Math.min( rich, 1.6 ) * light );
+	const mean = 8 / ( Math.min( rich, 1.6 ) * light ) * ( BAITS[ bait ] ? BAITS[ bait ].speed : 1 );
 	return 2 + - Math.log( 1 - rng() * 0.98 ) * mean * 0.6;
 
 }

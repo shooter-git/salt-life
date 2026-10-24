@@ -4,7 +4,8 @@ import { G } from '../core/Globals.js';
 // the right to look, and buttons that follow what you're doing: the action of the moment (the
 // player's prompt: "Board boat", "Take the helm"...), jump / swim up, dive, the boat camera, and
 // the fishing: the rod, cast / strike / reel (the left mouse button's part), reel in (the right's),
-// and the flashlight after dusk.
+// the bait for the hook, the cast net (throw / close / haul on the same big button), and the
+// flashlight after dusk.
 // They feed core/Input.js like a keyboard and mouse would. Shown once a touch screen is in use;
 // mouse and keyboard players never see them.
 
@@ -31,6 +32,8 @@ export class TouchControls {
 				<button type="button" class="touch-btn touch-reel" data-key="mouse2" hidden>Reel in</button>
 				<button type="button" class="touch-btn touch-cast" data-key="mouse0" hidden>Cast</button>
 				<button type="button" class="touch-btn touch-rod" data-key="KeyR" hidden>Rod</button>
+				<button type="button" class="touch-btn touch-net" data-key="KeyN" hidden>Cast net</button>
+				<button type="button" class="touch-btn touch-bait" data-key="KeyB" hidden>Bait</button>
 				<button type="button" class="touch-btn touch-cooler" data-key="KeyI" hidden>Cooler</button>
 				<button type="button" class="touch-btn touch-torch" data-key="KeyL" hidden>Torch</button>
 				<button type="button" class="touch-btn touch-horn" data-key="Horn" hidden>Horn</button>
@@ -47,6 +50,8 @@ export class TouchControls {
 			reel: el.querySelector( '.touch-reel' ),
 			cast: el.querySelector( '.touch-cast' ),
 			rod: el.querySelector( '.touch-rod' ),
+			net: el.querySelector( '.touch-net' ),
+			bait: el.querySelector( '.touch-bait' ),
 			cooler: el.querySelector( '.touch-cooler' ),
 			torch: el.querySelector( '.touch-torch' ),
 			horn: el.querySelector( '.touch-horn' ),
@@ -187,13 +192,18 @@ export class TouchControls {
 		const prompt = player && player.prompt;
 		const rod = game && game.rod;
 		const fishing = !! ( rod && rod.equipped );
-		// (Salt Life) in the water the same buttons are the speargun's
+		// (Salt Life) in the water the same buttons are the speargun's; with the cast net out, its
 		const spearing = !! ( game && game.gun && game.gun.equipped );
+		const net = game && game.net, netting = !! ( net && net.equipped );
 		const swim = player && player.mode === 'swim';
-		setButton( this.buttons.rod, fishing || ( spearing && ! game.gun.shaftOut ) ? 'Put away' : prompt && prompt.key === 'R' ? ( swim ? 'Speargun' : 'Rod' ) : null );
-		setButton( this.buttons.cast, fishing ? castLabel( game ) : spearing ? spearLabel( game ) : null );
+		const netFree = netting && ! net.busy;
+		setButton( this.buttons.rod, fishing || ( spearing && ! game.gun.shaftOut ) ? 'Put away' : ( prompt && prompt.key === 'R' ) || netFree ? ( swim ? 'Speargun' : 'Rod' ) : null );
+		const offerNet = ! swim && game && game.canFish && ! game.fight && ( ( prompt && prompt.key === 'R' ) || ( fishing && rod.state === 'idle' ) );
+		setButton( this.buttons.net, netFree ? 'Put away' : ! netting && offerNet ? 'Cast net' : null );
+		setButton( this.buttons.bait, fishing && rod.state === 'idle' ? 'Bait' : null );
+		setButton( this.buttons.cast, fishing ? castLabel( game ) : spearing ? spearLabel( game ) : netting ? netLabel( game ) : null );
 		setButton( this.buttons.reel, fishing && ! game.fight && ( rod.state === 'floating' || rod.state === 'flying' ) ? 'Reel in' : null );
-		setButton( this.buttons.cooler, game && game.hud && ! fishing && ! spearing ? 'Cooler' : null );
+		setButton( this.buttons.cooler, game && game.hud && ! fishing && ! spearing && ! netting ? 'Cooler' : null );
 		// the flashlight: offered after dusk (or while it's on)
 		const lights = game && game.app && game.app.localLights;
 		const torchOn = !! ( lights && lights.flashlight.on );
@@ -233,6 +243,18 @@ function spearLabel( game ) {
 	if ( gun.state === 'loaded' ) return ! game.submerged ? 'Dive' : gun.safety ? 'Hold fire' : 'Shoot';
 	if ( gun.state === 'empty' ) return 'Load';
 	if ( gun.state === 'loading' ) return 'Loading';
+	return 'Wait';
+
+}
+
+// (Salt Life) the cast net's: hold to wind up, let go as the ring brightens; hold to draw the brails
+// and haul it in. (Never hidden while it's out: a button hidden under a held thumb is never let go)
+function netLabel( game ) {
+
+	const net = game.net;
+	if ( net.state === 'held' ) return 'Throw';
+	if ( net.state === 'windup' ) return 'Let go';
+	if ( net.state === 'sinking' ) return ! net.footprint.wet ? 'Draw in' : net.draw >= 1 ? 'Haul' : net.pulling ? 'Closing' : 'Close';
 	return 'Wait';
 
 }

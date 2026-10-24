@@ -709,7 +709,8 @@ export function wreck( B, x, y, z, ry, rand, o = {} ) {
 // Racks, fences, stands
 
 // Net drying rack: two T-posts with a pole, a net draped over it. Local frame: along x.
-export function netRack( B, x, gy, z, ry, len = 3.2, netTint = lin( 0x3f6f5f ), seed = 0.5, groundFn = null ) {
+// (Salt Life) cast: [ { x, R, tint } ] hangs cast nets from the pole by their horns instead (castNetHung)
+export function netRack( B, x, gy, z, ry, len = 3.2, netTint = lin( 0x3f6f5f ), seed = 0.5, groundFn = null, cast = null ) {
 
 	B.pushAt( x, 0, z, ry );
 	const h = 1.95;
@@ -724,6 +725,21 @@ export function netRack( B, x, gy, z, ry, len = 3.2, netTint = lin( 0x3f6f5f ), 
 
 	const gm = groundFn ? ( groundFn( - len / 2, 0 ) + groundFn( len / 2, 0 ) ) / 2 : gy;
 	B.rod( 'wood', [ - len / 2 - 0.2, gm + h + 0.05, 0 ], [ len / 2 + 0.2, gm + h + 0.05, 0 ], 0.04, 0.04, { segs: 6, data: WOOD( seed + 0.3, 0.8, 0, 0 ) } );
+	if ( cast ) {
+
+		cast.forEach( ( c, i ) => {
+
+			const hy = gm + h + 0.05;
+			// the hand line looped over the pole
+			B.torus( 'rope', c.x, hy, 0, 0.05, 0.005, { rx: Math.PI / 2, ry: Math.PI / 2, radial: 3, tubular: 8, tint: CAST_LINE, data: [ seed + i * 0.1, 0, 0, 0 ] } );
+			castNetHung( B, c.x, hy - 0.05, 0, ( i * 1.7 + seed * 5 ) % ( Math.PI * 2 ), { R: c.R, tint: c.tint, seed: seed + i * 0.13, ground: groundFn ? groundFn( c.x, 0 ) : gy } );
+
+		} );
+		B.pop();
+		return;
+
+	}
+
 	// draped net
 	const NX = 18, NY = 12;
 	const top = gm + h + 0.09;
@@ -753,6 +769,161 @@ export function netRack( B, x, gy, z, ry, len = 3.2, netTint = lin( 0x3f6f5f ), 
 
 	}
 
+	B.pop();
+
+}
+
+// (Salt Life) cast nets, as the player's (game/CastNet.js): white nylon or pale monofilament netting,
+// a braided lead line strung with barrel leads, a white horn and swivel, the hand line
+export const CAST_NYLON = lin( 0xe6e1d4 );
+export const CAST_MONO = lin( 0xbfd2c6 );
+const CAST_LEAD_LINE = lin( 0x6f6a5e );
+const CAST_LEAD = lin( 0x7a766c );
+const CAST_HORN = lin( 0xe6e0d0 );
+const CAST_LINE = lin( 0xd9d2bd );
+const CAST_MESH = 0.02; // m (the net material's smallest)
+const HORN = [ [ 0.001, 0.004 ], [ 0.032, 0.0 ], [ 0.03, 0.012 ], [ 0.017, 0.045 ], [ 0.0095, 0.07 ], [ 0.008, 0.076 ], [ 0.001, 0.077 ] ];
+
+// the leads along a closed ring of points (barrel leads threaded on the line, end to end where it's
+// bunched up)
+function castLeads( B, ring, seed ) {
+
+	B.tube( 'rope', [ ...ring, ring[ 0 ] ], 0.0065, { radial: 4, tint: CAST_LEAD_LINE, data: [ seed, 0, 0, 0 ] } );
+	if ( B.lite ) return;
+	const d = HARD( seed, 0, 0.6, 0.62 );
+	for ( let i = 0; i < ring.length; i ++ ) {
+
+		const a = ring[ i ], b = ring[ ( i + 1 ) % ring.length ];
+		_v.subVectors( b, a );
+		const L = _v.length();
+		if ( L < 0.01 ) continue;
+		_v.multiplyScalar( Math.min( 0.026, L * 0.8 ) / L );
+		B.rod( 'hard', [ a.x, a.y, a.z ], [ a.x + _v.x, a.y + _v.y, a.z + _v.z ], 0.0072, 0.0072, { segs: 5, tint: CAST_LEAD, data: d } );
+
+	}
+
+}
+
+// A cast net hung up to dry by its horn from a hook (or a pole) at (x, y, z): the netting falls in
+// pleats from the horn, the leads bunched at the bottom, festooned between the folds; a net longer
+// than the drop puddles on the ground (o.ground: its height) in a ring of lead. The hand line's coil
+// hangs on the hook beside it. o: { R (m: the net's radius, horn to lead line), tint, seed, ground }
+export function castNetHung( B, x, y, z, ry = 0, o = {} ) {
+
+	const R = o.R ?? 1.83, seed = o.seed ?? 0.5, tint = o.tint || CAST_NYLON;
+	const rnd = mulberry32( Math.floor( seed * 1e6 ) | 0 );
+	B.pushAt( x, y, z, ry );
+	// the hand line down to the swivel, the swivel and horn
+	const foot = - 0.16;
+	B.tube( 'rope', [ new Vector3( 0, 0, 0 ), new Vector3( 0, foot + 0.1, 0 ) ], 0.004, { radial: 4, tint: CAST_LINE, data: [ seed, 0, 0, 0 ] } );
+	B.cyl( 'hard', 0, foot + 0.077, 0, 0.005, 0.005, 0.024, { segs: 6, tint: C.brass, data: HARD( seed, 0, 1, 0.32 ) } );
+	B.lathe( 'hard', 0, foot, 0, HORN, { segs: 10, tint: CAST_HORN, data: HARD( seed, 0, 0, 0.38 ) } );
+	// the netting: a pleated bell from the horn's foot down to the lead line
+	const g = ( o.ground ?? - Infinity ) - y; // the ground, in the hook's frame
+	const COLS = 30, ROWS = 12, K = 8 + Math.floor( rnd() * 3 ), ph = rnd() * 6.28;
+	const rb = 0.1 + 0.065 * R; // the bunched lead line's radius
+	const twist = ( rnd() - 0.5 ) * 0.8;
+	const at = ( i, j ) => {
+
+		const v = j / ROWS, th = i / COLS * Math.PI * 2;
+		const fold = Math.sin( K * th + ph + twist * v * 3 );
+		let r = 0.032 + ( rb - 0.032 ) * Math.sqrt( v );
+		r *= 1 + 0.34 * v * fold + 0.07 * v * Math.sin( 3 * th + seed * 9 );
+		// the lead line sags between the folds
+		let yy = foot - v * R - Math.pow( v, 6 ) * 0.045 * ( 1 - fold );
+		// on the ground: it spreads out there in a ring
+		if ( yy < g + 0.012 ) {
+
+			r += ( g + 0.012 - yy ) * 0.85;
+			yy = g + 0.012 + Math.pow( v, 8 ) * 0.01;
+
+		}
+
+		return [ Math.cos( th ) * r, yy, Math.sin( th ) * r, th, v ];
+
+	};
+	const part = gridPart( COLS, ROWS, ( i, j ) => {
+
+		const [ px, py, pz, th, v ] = at( i, j );
+		return { p: [ px, py, pz ], n: [ Math.cos( th ), 0.15, Math.sin( th ) ], uv: [ th * Math.max( 0.05, v ) * R, v * R ] };
+
+	} );
+	B.add( 'net', part, new Matrix4(), tint, ( px, py ) => [ seed, Math.min( 1, Math.max( 0, ( foot - py ) / R ) ) * 0.25, CAST_MESH, 0 ] );
+	const ring = [];
+	for ( let i = 0; i < COLS; i ++ ) {
+
+		const [ px, py, pz ] = at( i, ROWS );
+		ring.push( new Vector3( px, py - 0.004, pz ) );
+
+	}
+
+	castLeads( B, ring, seed );
+	// the hand line, coiled and hung on the hook beside it
+	const loops = 3 + Math.floor( rnd() * 2 ), side = rnd() < 0.5 ? - 1 : 1;
+	for ( let i = 0; i < loops; i ++ ) {
+
+		const lr = 0.13 + rnd() * 0.035;
+		B.torus( 'rope', side * ( 0.035 + i * 0.006 ), - lr + 0.01, 0.05 + i * 0.012, lr, 0.0045, {
+			rx: Math.PI / 2, ry: ( rnd() - 0.5 ) * 0.5, rz: ( rnd() - 0.5 ) * 0.25, radial: 3, tubular: 14, tint: CAST_LINE, data: [ seed + i * 0.07, 0, 0, 0 ],
+		} );
+
+	}
+
+	B.pop();
+
+}
+
+// A cast net dumped in a heap on a deck or the sand at (x, y, z): the netting in a low wrinkled mound,
+// its lead line round the edge, the horn on top and the hand line in loose coils beside it
+export function castNetHeap( B, x, y, z, ry = 0, o = {} ) {
+
+	const R = o.R ?? 1.83, seed = o.seed ?? 0.5, tint = o.tint || CAST_NYLON;
+	const rnd = mulberry32( Math.floor( seed * 1e6 ) | 0 );
+	B.pushAt( x, y, z, ry );
+	const rH = 0.22 + 0.07 * R, H = 0.08 + 0.035 * R;
+	const COLS = 28, ROWS = 8, ph = rnd() * 6.28;
+	const at = ( i, j ) => {
+
+		const s = j / ROWS, th = i / COLS * Math.PI * 2;
+		const edge = 1 + 0.16 * Math.sin( 3 * th + ph ) + 0.08 * Math.sin( 7 * th + ph * 2 );
+		const r = s * rH * edge;
+		const wr = 0.35 * Math.sin( 9 * th + s * 5 + ph ) * Math.sin( s * Math.PI );
+		const yy = 0.006 + H * Math.pow( Math.max( 0, 1 - s * s ), 0.8 ) * ( 1 + wr ) * ( 0.85 + 0.15 * Math.sin( 2 * th + ph ) );
+		return [ Math.cos( th ) * r, yy, Math.sin( th ) * r, th ];
+
+	};
+	const part = gridPart( COLS, ROWS, ( i, j ) => {
+
+		const [ px, py, pz, th ] = at( i, j );
+		const s = j / ROWS;
+		return { p: [ px, py, pz ], n: [ Math.cos( th ) * s * 0.6, 1, Math.sin( th ) * s * 0.6 ], uv: [ px * 2.4, pz * 2.4 ] };
+
+	} );
+	B.add( 'net', part, new Matrix4(), tint, [ seed, 0, CAST_MESH, 0 ] );
+	// the lead line round the foot of the heap, in and out of the folds
+	const ring = [];
+	for ( let i = 0; i < 40; i ++ ) {
+
+		const th = i / 40 * Math.PI * 2;
+		const [ px, , pz ] = at( Math.round( i / 40 * COLS ) % COLS, ROWS );
+		const k = 1.02 + 0.08 * Math.sin( 11 * th + ph );
+		ring.push( new Vector3( px * k + Math.cos( th ) * 0.01, 0.008, pz * k + Math.sin( th ) * 0.01 ) );
+
+	}
+
+	castLeads( B, ring, seed );
+	// the horn, lying on its side on top; the hand line in coils by the heap
+	B.lathe( 'hard', 0.02, H * 0.85, - 0.03, HORN, { segs: 10, rz: 1.35 + rnd() * 0.3, ry: rnd() * 6.28, tint: CAST_HORN, data: HARD( seed, 0, 0, 0.38 ) } );
+	const cx = rH + 0.2, cz = ( rnd() - 0.5 ) * 0.2;
+	for ( let i = 0; i < 4; i ++ ) {
+
+		B.torus( 'rope', cx + ( rnd() - 0.5 ) * 0.04, 0.005 + i * 0.006, cz + ( rnd() - 0.5 ) * 0.04, 0.14 + rnd() * 0.04, 0.0045, {
+			rx: ( rnd() - 0.5 ) * 0.08, rz: ( rnd() - 0.5 ) * 0.08, radial: 3, tubular: 16, tint: CAST_LINE, data: [ seed + i * 0.07, 0, 0, 0 ],
+		} );
+
+	}
+
+	B.tube( 'rope', sagPoints( [ cx - 0.14, 0.01, cz ], [ rH * 0.6, H * 0.5, 0 ], - 0.02, 4 ), 0.0045, { radial: 4, tint: CAST_LINE, data: [ seed, 0, 0, 0 ] } );
 	B.pop();
 
 }

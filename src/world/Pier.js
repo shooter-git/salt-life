@@ -2,7 +2,7 @@ import { Color, Vector3 } from '../engine/index.js';
 import { WORLD } from './WorldLayout.js';
 import {
 	WOOD, HARD, C, lin, bollard, cleat, tireFender, ropeCoil, ropeLoop, lifeRing, lampPost,
-	bench, cleaningTable, buoyString, bucket, lantern,
+	bench, cleaningTable, buoyString, bucket, lantern, castNetHeap, CAST_NYLON,
 } from './Props.js';
 
 // Timber pier with a T-shaped head. Everything is procedural geometry written into a
@@ -624,6 +624,8 @@ export function buildPier( { B, terrain, colliders, rand, lights, inst, signB = 
 
 	// a few things along the walkway: gear left where it was last used
 	bucket( B, X + 0.9, DK, - 21.3, C.white, rand.next() );
+	// (Salt Life) a cast net dumped by the bait bucket, as if the bait's just been shaken out of it
+	castNetHeap( B, X + 0.6, DK, - 20.5, 2.1, { R: 1.83, tint: CAST_NYLON, seed: 0.61 } );
 	bucket( B, X - 0.95, DK, 12.6, C.orange, rand.next() );
 	ropeCoil( B, X + 0.85, DK, - 33.0, 0.07, 0.24, 3, rand.next(), C.ropeDark );
 	ropeCoil( B, X - 0.85, DK, 21.5, 0.06, 0.22, 4, rand.next() );

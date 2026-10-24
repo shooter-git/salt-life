@@ -11,8 +11,9 @@ import { Figure } from './Figure.js';
 // and a wave. Swimming has no clip: the arms turn over and the legs kick, posed here on the idle, the
 // body lying face down. Until their look has loaded (or if it doesn't) a stand-in figure (Figure.js).
 //   const a = new Avatar( person );  scene.add( a.group );  a.look = name;  a.setLook( gltf )  (again to change)
-//   a.pose( { mode, speed, rod, gun }, dt )   mode 'walk' | 'swim' | 'deck' | 'helm'; rod: holding one;
-//                                        gun (Salt Life): swimming with a speargun
+//   a.pose( { mode, speed, rod, gun, reach }, dt )   mode 'walk' | 'swim' | 'deck' | 'helm'; rod: holding one;
+//                                        gun (Salt Life): swimming with a speargun; reach: { r, l }, the
+//                                        hands held out to these (world: a cast net in them)
 //   a.hand( out )                        the right hand (world): the rod's grip
 //   a.once( 'wave_01' | 'cheer_01' )     a gesture, when standing
 // Feet at the group's origin facing +Z.
@@ -38,15 +39,39 @@ export function lookOf( person ) {
 }
 
 const _q1 = new Quaternion(), _q2 = new Quaternion(), _q3 = new Quaternion(), _axis = new Vector3(), _left = new Vector3();
+const _qr = new Quaternion(), _qw = new Quaternion(), _s = new Vector3(), _h = new Vector3(), _u = new Vector3(), _v = new Vector3();
 
 // turn a bone by `angle` about a world axis (after the clip has posed it)
 function turnBone( bone, axis, angle ) {
 
+	_qr.setFromAxisAngle( axis, angle );
+	turnBoneBy( bone, _qr );
+
+}
+
+// turn a bone by a world rotation
+function turnBoneBy( bone, q ) {
+
 	bone.parent.getWorldQuaternion( _q1 );
 	bone.getWorldQuaternion( _q2 );
-	_q3.setFromAxisAngle( axis, angle ).multiply( _q2 );
+	_q3.copy( q ).multiply( _q2 );
 	bone.quaternion.copy( _q1.invert().multiply( _q3 ) );
 	bone.updateMatrixWorld( true );
+
+}
+
+// (Salt Life) turn an upper arm (after the clip) so its hand points toward `to` (world), by w (0..1):
+// holding something out in front of them (their cast net's hands: CastNet.handR, handL)
+function reachArm( arm, hand, to, w ) {
+
+	arm.getWorldPosition( _s );
+	hand.getWorldPosition( _h );
+	_u.subVectors( _h, _s );
+	_v.subVectors( to, _s );
+	if ( _u.lengthSq() < 1e-6 || _v.lengthSq() < 1e-6 ) return;
+	_qr.setFromUnitVectors( _u.normalize(), _v.normalize() );
+	_qw.identity().slerp( _qr, w );
+	turnBoneBy( arm, _qw );
 
 }
 
@@ -67,6 +92,8 @@ export class Avatar {
 		this._swim = 0;
 		this._phase = 0;
 		this._gesture = null;
+		this._reach = 0;
+		this._reachTo = null;
 
 	}
 
@@ -139,17 +166,21 @@ export class Avatar {
 
 	}
 
-	// (Salt Life) gun: swimming with a speargun, held out ahead in the right hand
-	pose( { mode, speed = 0, rod = false, gun = false }, dt ) {
+	// (Salt Life) gun: swimming with a speargun, held out ahead in the right hand; reach: { r, l } (world)
+	// where their hands hold something out (a cast net), or null
+	pose( { mode, speed = 0, rod = false, gun = false, reach = null }, dt ) {
 
 		// lying face down in the water (the chest at the float point), upright otherwise
 		this._swim += ( ( mode === 'swim' ? 1 : 0 ) - this._swim ) * ( 1 - Math.exp( - dt * 6 ) );
 		const tilt = this._swim * LIE;
 		this.body.rotation.x = tilt;
 		this.body.position.set( 0, - CHEST * Math.cos( tilt ) * this._swim, - CHEST * Math.sin( tilt ) * this._swim );
+		const reaching = !! reach && mode !== 'swim' && mode !== 'helm';
+		this._reach += ( ( reaching ? 1 : 0 ) - this._reach ) * ( 1 - Math.exp( - dt * 10 ) );
+		if ( reaching ) this._reachTo = reach;
 		if ( ! this.character ) {
 
-			this.figure.pose( { mode, speed, rod }, dt );
+			this.figure.pose( { mode, speed, rod: rod || reaching }, dt );
 			return;
 
 		}
@@ -198,6 +229,16 @@ export class Avatar {
 			turnBone( B.armR, _axis, gun ? - Math.PI : - ( ( p + Math.PI ) % ( Math.PI * 2 ) ) );
 			if ( B.thighL ) turnBone( B.thighL, _axis, Math.sin( p * 2.6 ) * 0.3 );
 			if ( B.thighR ) turnBone( B.thighR, _axis, - Math.sin( p * 2.6 ) * 0.3 );
+
+		}
+
+		// both hands out to what they hold (eased in and out as they take it up and put it away)
+		const B = this.bones, to = this._reachTo;
+		if ( this._reach > 0.01 && to && B.armR && B.hand ) {
+
+			this.group.updateMatrixWorld( true );
+			reachArm( B.armR, B.hand, to.r, this._reach );
+			if ( B.armL && B.handL ) reachArm( B.armL, B.handL, to.l, this._reach );
 
 		}
 

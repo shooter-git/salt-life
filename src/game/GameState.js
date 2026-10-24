@@ -2,6 +2,7 @@ import { FISH, fishValue, fishLengthCm } from './FishTable.js';
 import { defaultUpgrades, gearStats, nextLevel, UPGRADES, FUEL_PRICE } from './Gear.js';
 import { orderFor, orderPrice } from './Orders.js';
 import { WEEK_MUL } from './WeekOrder.js';
+import { BAITS, KEEPER_KG, baitOf, chunksOf } from './Bait.js';
 
 const SAVE_KEY = 'tidewater.save.v1';
 
@@ -24,6 +25,10 @@ export class GameState {
 		this.look = null; // (Salt Life) how the others see you: one of together/Avatar.js LOOKS (null: not chosen)
 		this.orders = { day: null, filled: {} }; // (Salt Life) the wanted lists (Orders.js): how many of each you've filled that day
 		this.weekPaid = null; // (Salt Life) the last week's order (WeekOrder.js) Joe paid you your share of
+		// (Salt Life) the bait bucket: kind (Bait.js) -> how many; the one you bait the hook with (null:
+		// the frozen shrimp)
+		this.bait = {};
+		this.baitPick = null;
 		this._nextId = 1;
 		this.listeners = new Set();
 
@@ -66,18 +71,7 @@ export class GameState {
 
 		kg = Math.round( kg * 100 ) / 100;
 		cm = Math.round( cm ?? fishLengthCm( species, kg ) );
-		const logEntry = this.log[ species ] || ( this.log[ species ] = { count: 0, bestKg: 0 } );
-		const newSpecies = logEntry.count === 0;
-		const prevBestKg = logEntry.bestKg, prevBestCm = logEntry.bestCm ?? ( prevBestKg > 0 ? Math.round( fishLengthCm( species, prevBestKg ) ) : 0 );
-		const record = ! newSpecies && kg > prevBestKg;
-		logEntry.count ++;
-		if ( kg > prevBestKg ) {
-
-			logEntry.bestKg = kg;
-			logEntry.bestCm = cm;
-
-		}
-
+		const { newSpecies, record, prevBestKg, prevBestCm } = this.logFish( species, kg, cm );
 		const value = fishValue( species, kg );
 		const released = !! FISH[ species ].protected;
 		const kept = ! released && this.fits( kg );
@@ -95,6 +89,180 @@ export class GameState {
 		this.save();
 		this.emit();
 		return f;
+
+	}
+
+	// a fish in the log: one more of its kind, and its best -> { newSpecies, record, prevBestKg, prevBestCm }
+	logFish( species, kg, cm ) {
+
+		const logEntry = this.log[ species ] || ( this.log[ species ] = { count: 0, bestKg: 0 } );
+		const newSpecies = logEntry.count === 0;
+		const prevBestKg = logEntry.bestKg, prevBestCm = logEntry.bestCm ?? ( prevBestKg > 0 ? Math.round( fishLengthCm( species, prevBestKg ) ) : 0 );
+		const record = ! newSpecies && kg > prevBestKg;
+		logEntry.count ++;
+		if ( kg > prevBestKg ) {
+
+			logEntry.bestKg = kg;
+			logEntry.bestCm = cm;
+
+		}
+
+		return { newSpecies, record, prevBestKg, prevBestCm };
+
+	}
+
+	// ---- (Salt Life) the cast net's haul and the bait bucket (Bait.js)
+
+	// the live bait in the bucket (what its size limits: cut bait keeps in the cooler)
+	get baitCount() {
+
+		let n = 0;
+		for ( const k in this.bait ) if ( BAITS[ k ].live ) n += this.bait[ k ];
+		return n;
+
+	}
+
+	// a cast net's haul: [ { species (the catch table's, or null: not one of its fish), label, kg, cm } ].
+	// Each catch-table fish is logged; a keeper mullet goes in the cooler, the bait fish in the bucket
+	// while there's room; the rest go back (why: 'protected', 'notNet': not a fish a net may take,
+	// 'full': no room in the cooler, 'bucket': the bucket's full). Each of `fish` is marked kept (true:
+	// in the cooler or the bucket) or not
+	// -> { cooler: [ entries ], bait: { kind: n }, back: [ { species, label, why } ], news: [ species ], records: [ species ] }
+	addHaul( fish, timeOfDay = 12 ) {
+
+		const r = { cooler: [], bait: {}, back: [], news: [], records: [] };
+		const room = this.stats.baitMax;
+		for ( const f of fish ) {
+
+			f.kept = false;
+			const F = f.species && FISH[ f.species ];
+			if ( ! F ) {
+
+				r.back.push( { species: null, label: f.label, why: 'notNet' } );
+				continue;
+
+			}
+
+			const kg = Math.round( f.kg * 100 ) / 100, cm = Math.round( f.cm ?? fishLengthCm( f.species, kg ) );
+			const log = this.logFish( f.species, kg, cm );
+			if ( log.newSpecies ) r.news.push( f.species );
+			else if ( log.record && ! r.records.includes( f.species ) ) r.records.push( f.species );
+			const back = ( why ) => r.back.push( { species: f.species, label: F.name, why } );
+			if ( F.protected ) back( 'protected' );
+			else if ( ! F.net ) back( 'notNet' );
+			else if ( f.species === 'mullet' && kg >= KEEPER_KG ) {
+
+				if ( ! this.fits( kg ) ) back( 'full' );
+				else {
+
+					const e = { id: this._nextId ++, species: f.species, kg, cm, value: fishValue( f.species, kg ), caughtAt: timeOfDay, record: log.record, method: 'net' };
+					this.inventory.push( e );
+					r.cooler.push( e );
+					f.kept = true;
+
+				}
+
+			} else {
+
+				const kind = baitOf( f.species );
+				if ( ! kind ) back( 'notNet' );
+				else if ( this.baitCount >= room ) back( 'bucket' );
+				else {
+
+					this.bait[ kind ] = ( this.bait[ kind ] | 0 ) + 1;
+					r.bait[ kind ] = ( r.bait[ kind ] | 0 ) + 1;
+					f.kept = true;
+
+				}
+
+			}
+
+		}
+
+		this.save();
+		this.emit();
+		return r;
+
+	}
+
+	// one off the bucket for the hook -> whether there was one
+	takeBait( kind ) {
+
+		if ( ! ( this.bait[ kind ] > 0 ) ) return false;
+		if ( -- this.bait[ kind ] === 0 ) delete this.bait[ kind ];
+		this.save();
+		this.emit();
+		return true;
+
+	}
+
+	// back in the bucket (off the hook as the rod goes away): it goes in even when the bucket's full
+	returnBait( kind ) {
+
+		if ( ! BAITS[ kind ] ) return;
+		this.bait[ kind ] = ( this.bait[ kind ] | 0 ) + 1;
+		this.save();
+		this.emit();
+
+	}
+
+	// let a kind go (the cooler's bait tab)
+	dumpBait( kind ) {
+
+		delete this.bait[ kind ];
+		if ( this.baitPick === kind ) this.baitPick = null;
+		this.save();
+		this.emit();
+
+	}
+
+	// what the hook is baited with from now on (null: the frozen shrimp)
+	pickBait( kind ) {
+
+		this.baitPick = BAITS[ kind ] ? kind : null;
+		this.save();
+		this.emit();
+
+	}
+
+	// a mullet from the cooler cut into chunks of bait -> how many (0: no such fish)
+	cutBait( id ) {
+
+		const f = this.inventory.find( ( x ) => x.id === id && x.species === 'mullet' );
+		if ( ! f ) return 0;
+		const n = chunksOf( f.kg );
+		this.inventory = this.inventory.filter( ( x ) => x !== f );
+		this.bait.cutMullet = ( this.bait.cutMullet | 0 ) + n;
+		this.save();
+		this.emit();
+		return n;
+
+	}
+
+	// Marta's order from the bucket, on `terms` (quote's): how many of today's bait kind she'd take
+	// -> { species, n, each, total, order } or null
+	quoteBait( terms ) {
+
+		const o = terms && terms.who === 'marta' ? ( terms.orders || [] ).find( ( x ) => x.who === 'marta' ) : null;
+		if ( ! o ) return null;
+		const n = Math.min( this.bait[ o.species ] | 0, Math.max( 0, o.max - ( this.orders.day === terms.day ? this.orders.filled[ o.id ] | 0 : 0 ) ) );
+		return { species: o.species, n, each: o.each, total: n * o.each, order: o };
+
+	}
+
+	sellBait( terms ) {
+
+		const q = this.quoteBait( terms );
+		if ( ! q || ! q.n ) return { total: 0, count: 0 };
+		this.bait[ q.species ] -= q.n;
+		if ( this.bait[ q.species ] <= 0 ) delete this.bait[ q.species ];
+		const filled = this.orders.day === terms.day ? { ...this.orders.filled } : {};
+		filled[ q.order.id ] = ( filled[ q.order.id ] | 0 ) + q.n;
+		this.orders = { day: terms.day, filled };
+		this.money += q.total;
+		this.save();
+		this.emit();
+		return { total: q.total, count: q.n };
 
 	}
 
@@ -292,7 +460,7 @@ export class GameState {
 
 	toJSON() {
 
-		return { v: 1, money: this.money, inventory: this.inventory, log: this.log, upgrades: this.upgrades, fuel: this.fuel, look: this.look, orders: this.orders, weekPaid: this.weekPaid, nextId: this._nextId };
+		return { v: 1, money: this.money, inventory: this.inventory, log: this.log, upgrades: this.upgrades, fuel: this.fuel, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, nextId: this._nextId };
 
 	}
 
@@ -311,6 +479,9 @@ export class GameState {
 		const o = d.orders;
 		this.orders = o && Number.isFinite( o.day ) && o.filled && typeof o.filled === 'object' ? { day: o.day, filled: { ...o.filled } } : { day: null, filled: {} };
 		this.weekPaid = Number.isFinite( d.weekPaid ) ? d.weekPaid : null;
+		this.bait = {};
+		for ( const [ k, n ] of Object.entries( d.bait && typeof d.bait === 'object' ? d.bait : {} ) ) if ( BAITS[ k ] && Number.isInteger( n ) && n > 0 ) this.bait[ k ] = n;
+		this.baitPick = BAITS[ d.baitPick ] ? d.baitPick : null;
 		this._nextId = Math.max( d.nextId | 0, ...this.inventory.map( ( f ) => f.id + 1 ), 1 );
 		return true;
 
@@ -352,6 +523,8 @@ export class GameState {
 		this.fuel = null;
 		this.orders = { day: null, filled: {} };
 		this.weekPaid = null;
+		this.bait = {};
+		this.baitPick = null;
 		this.save();
 		this.emit();
 

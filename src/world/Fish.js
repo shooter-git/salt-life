@@ -54,6 +54,11 @@ const REFILL = [ 240, 420 ];
 // gets close, a sprint scatters them
 const WARY = [ [ 0.3, 0.5 ], [ 1.5, 1 ], [ 2.5, 1.55 ] ];
 const SPOOKED = 25; // s a fish stays warier after a fright (a sprint at it, a shot)
+// (Salt Life) the cast net: a fish this far out (of the lead line's radius) is at its edge, so not under
+// it as it lands, and out under it from there; and how long (s) the lead line's ring of splashes
+// turns the fish inside in toward the middle before they make for the edge
+const NET_EDGE = 0.9;
+const NET_TURN = [ 0.4, 1.2 ];
 const GRAVITY = 9.81;
 const LOD_PX0 = [ 320, 80, 22 ]; // screen length (px) below which the next level of detail takes over
 const LOD_BAND = 1.15; // cross-fade band above each switch (screen length ratio)
@@ -91,7 +96,7 @@ const BEHAVIOUR = {
 	tarpon: { model: 'tarpon', fish: 'tarpon', length: [ 1.3, 1.8 ], mode: 'cruise', cruise: 0.3, max: 1.2, burst: 3, accel: 1, sep: 1.5, nbr: 3, wSep: 2, wAli: 0.8, wCoh: 0.5, wGoal: 0.7, flee: 5, depth: [ 0.3, 0.7 ], homeRadius: 25, amp: 0.04, freq: [ 0.5, 0.7 ], band: [ 4, 14 ] },
 	needlefish: { model: 'needlefish', fish: 'needlefish', length: [ 0.5, 0.8 ], mode: 'surface', cruise: 0.9, max: 2.5, burst: 6, accel: 3, sep: 3, nbr: 4, wSep: 3, wAli: 1, wCoh: 0.5, wGoal: 0.9, flee: 4, homeRadius: 25, amp: 0.05, freq: [ 1.2, 0.7 ], ceiling: - 0.12, minDepth: 1.0, band: [ 1.8, 12 ] },
 	mullet: { model: 'mullet', fish: 'mullet', length: [ 0.3, 0.4 ], mode: 'jumper', cruise: 0.8, max: 2.2, burst: 5, accel: 3, sep: 1.8, nbr: 5, wAli: 1.5, wCoh: 1, wGoal: 0.8, flee: 4, depth: [ 0.3, 0.9 ], homeRadius: 14, amp: 0.07, freq: [ 1.5, 0.9 ], ceiling: - 0.25, minDepth: 1.2, band: [ 1.8, 4.5 ] },
-	fry: { model: 'silverside', label: 'Silverside fry', length: [ 0.045, 0.065 ], mode: 'fry', cruise: 2, max: 4, burst: 14, accel: 9, sep: 1.6, nbr: 8, wSep: 7, wAli: 2.4, wCoh: 1.6, wGoal: 0.9, flee: 3.2, depth: [ 0.3, 0.8 ], homeRadius: 6, amp: 0.11, freq: [ 3.5, 1.2 ], ceiling: - 0.2, minDepth: 0.5, band: [ 0.5, 3.5 ] },
+	fry: { model: 'silverside', fish: 'silverside', label: 'Silverside fry', length: [ 0.045, 0.065 ], mode: 'fry', cruise: 2, max: 4, burst: 14, accel: 9, sep: 1.6, nbr: 8, wSep: 7, wAli: 2.4, wCoh: 1.6, wGoal: 0.9, flee: 3.2, depth: [ 0.3, 0.8 ], homeRadius: 6, amp: 0.11, freq: [ 3.5, 1.2 ], ceiling: - 0.2, minDepth: 0.5, band: [ 0.5, 3.5 ] },
 	pierGrunt: { model: 'grunt', fish: 'grunt', length: [ 0.16, 0.26 ], mode: 'pile', cruise: 0.45, max: 1.8, burst: 7, accel: 3, sep: 1.6, nbr: 4, wAli: 1.4, wCoh: 0.9, depth: [ 0.1, 0.5 ], homeRadius: 1.6, band: [ 2, 6 ] },
 	pierSnapper: { model: 'yellowtail', fish: 'yellowtail', length: [ 0.26, 0.4 ], mode: 'pile', cruise: 0.6, max: 2.2, burst: 8, accel: 3, sep: 1.8, wAli: 1.4, wCoh: 0.8, flee: 4.5, depth: [ 0.3, 0.8 ], homeRadius: 2.5, freq: [ 1.5, 0.9 ], band: [ 2, 6 ] },
 	// escort of the humpback (setWhale): pilot fish / small jacks around its head and flippers,
@@ -111,6 +116,11 @@ const BEHAVIOUR = {
 	redSnapper: { model: 'redSnapper', fish: 'redSnapper', length: [ 0.4, 0.78 ], mode: 'mill', cruise: 0.5, max: 1.8, burst: 9, accel: 2.5, sep: 1.8, nbr: 5, wAli: 1.2, wCoh: 0.9, wGoal: 0.9, flee: 5, depth: [ 0.05, 0.3 ], homeRadius: 4, amp: 0.06, freq: [ 1.2, 0.8 ], band: [ 15, 32 ] },
 	mahi: { model: 'mahi', fish: 'mahi', length: [ 0.7, 1.25 ], mode: 'cruise', curious: 4, cruise: 1.0, max: 3, burst: 8, accel: 3, sep: 2.5, nbr: 5, wSep: 3, wAli: 1.2, wCoh: 0.6, wGoal: 0.8, flee: 6, depth: [ 0.75, 0.95 ], homeRadius: 45, amp: 0.06, freq: [ 1.2, 0.7 ], ceiling: - 0.5, band: [ 16, 1e9 ] },
 	tuna: { model: 'tuna', fish: 'tuna', length: [ 0.5, 0.85 ], mode: 'cruise', cruise: 1.4, max: 3.5, burst: 9, accel: 4, sep: 2, nbr: 6, wAli: 2, wCoh: 1.2, wGoal: 0.8, flee: 7, depth: [ 0.45, 0.85 ], homeRadius: 45, amp: 0.05, freq: [ 1.6, 0.8 ], band: [ 16, 1e9 ] },
+	// (Salt Life) inside the breakers (surf: the surf zone is theirs), running the trough along the beach
+	// at wading depth: pods of finger mullet (now and then one leaps) and of silverside fry, for the cast
+	// net from the beach (game/CastNet.js)
+	runnerMullet: { model: 'mullet', fish: 'mullet', length: [ 0.2, 0.34 ], mode: 'jumper', surf: true, cruise: 0.9, max: 2.4, burst: 5.5, accel: 3, sep: 1.6, nbr: 5, wAli: 1.6, wCoh: 1.1, wGoal: 0.8, flee: 2.6, depth: [ 0.25, 0.7 ], homeRadius: 22, amp: 0.07, freq: [ 1.5, 0.9 ], ceiling: - 0.14, minDepth: 0.4, band: [ 0.5, 1.6 ] },
+	runnerFry: { model: 'silverside', fish: 'silverside', label: 'Silverside fry', length: [ 0.05, 0.075 ], mode: 'fry', surf: true, cruise: 2, max: 4, burst: 12, accel: 9, sep: 1.6, nbr: 8, wSep: 7, wAli: 2.4, wCoh: 1.6, wGoal: 0.9, flee: 2.4, depth: [ 0.3, 0.75 ], homeRadius: 14, amp: 0.11, freq: [ 3.5, 1.2 ], ceiling: - 0.12, minDepth: 0.35, band: [ 0.45, 1.5 ] },
 };
 for ( const k in BEHAVIOUR ) BEHAVIOUR[ k ] = { name: k, ...base, ...BEHAVIOUR[ k ] };
 
@@ -137,6 +147,7 @@ class Group {
 		this.breath = 30 + rng() * 40; // turtle: time to the next breath
 		this.jumpTimer = 3 + rng() * 6; // mullet: time to the next leap
 		this.spooked = 0; // (Salt Life) s left of a fright's wariness
+		this.holding = 0; // (Salt Life) its fish held (on a shaft, in a cast net's purse): drawn wherever they are
 		this.pathIndex = 0;
 		this.pathDir = 1;
 
@@ -207,6 +218,8 @@ export class FishSchools {
 		// place is filled, refillAt); each fish's group; the bodies as ellipsoids (per model, for the
 		// shaft); the diver's speed and how long they've kept still; how far fish notice them (WARY)
 		this.held = new Uint8Array( n );
+		this.inNet = new Uint8Array( n ); // (Salt Life) under a cast net (netLand)
+		this.net = null;
 		this.refillAt = new Float32Array( n );
 		this.groupOf = new Array( n );
 		this.taken = new Set();
@@ -282,7 +295,7 @@ export class FishSchools {
 
 		const d = this.depthAt( x, z );
 		if ( d < zone.band[ 0 ] || d > zone.band[ 1 ] ) return false;
-		if ( d < this.breakDepth( x, z ) + 0.3 ) return false;
+		if ( ! sp.surf && d < this.breakDepth( x, z ) + 0.3 ) return false;
 		const floor = Math.max( this.terrain.heightAt( x, z ), this.floorAt( x, z ) );
 		return - floor > sp.minDepth + 0.3;
 
@@ -446,6 +459,11 @@ export class FishSchools {
 			if ( g && ! g.zone.piles.length ) g.zone.piles = [ [ g.home.x, g.home.z ] ];
 
 		}
+
+		// (Salt Life) mullet and fry running the trough inside the breakers, along the main beach (its
+		// waterline near z -42: wading depth out to z -20 or so)
+		for ( const [ c, x ] of [ [ 9, - 95 ], [ 8, - 35 ], [ 10, 15 ], [ 7, 75 ], [ 9, 125 ] ] ) place( 'runnerMullet', c, { x, z: - 25, r: 26 } );
+		for ( const [ c, x ] of [ [ 45, - 70 ], [ 40, - 10 ], [ 50, 40 ], [ 40, 100 ], [ 45, 140 ] ] ) place( 'runnerFry', c, { x, z: - 27, r: 24 } );
 
 	}
 
@@ -1070,7 +1088,7 @@ export class FishSchools {
 				const lx = x + vx * 0.7, lz = z + vz * 0.7;
 				this.floorC[ i ] = Math.max( this.floorAt( x, z ), this.floorAt( lx, lz ) );
 				const deepAhead = - this.terrain.heightAt( lx, lz );
-				this.shallowC[ i ] = deepAhead < sp.minDepth || deepAhead < this.breakDepthFast( lx, lz ) ? 1 : 0;
+				this.shallowC[ i ] = deepAhead < sp.minDepth || ( ! sp.surf && deepAhead < this.breakDepthFast( lx, lz ) ) ? 1 : 0;
 
 			}
 
@@ -1279,6 +1297,7 @@ export class FishSchools {
 		for ( let a = 0; a < n; a ++ ) {
 
 			const i = o + a, i3 = i * 3, i4 = i * 4;
+			if ( this.held[ i ] ) continue;
 			const sx = S[ i4 ], sy = S[ i4 + 1 ], sz = S[ i4 + 2 ], sr = S[ i4 + 3 ];
 			// cruising: an ellipsoid 3 x longer along the heading
 			const along = sx * 2.4, side = sz * 1.1, up = sy * 0.55;
@@ -1540,12 +1559,17 @@ export class FishSchools {
 
 			if ( ! g.active ) continue;
 			const sp = g.sp;
-			// whole group out of range / view
-			const gd = Math.hypot( g.center.x - cp.x, g.center.y - cp.y, g.center.z - cp.z );
-			if ( gd > RANGE + g.radius ) continue;
-			_sphere.center.copy( g.center );
-			_sphere.radius = g.radius + 2;
-			if ( ! _frustum.intersectsSphere( _sphere ) ) continue;
+			// whole group out of range / view (not while it has fish held: they're wherever they're held,
+			// far from the rest)
+			if ( ! g.holding ) {
+
+				const gd = Math.hypot( g.center.x - cp.x, g.center.y - cp.y, g.center.z - cp.z );
+				if ( gd > RANGE + g.radius ) continue;
+				_sphere.center.copy( g.center );
+				_sphere.radius = g.radius + 2;
+				if ( ! _frustum.intersectsSphere( _sphere ) ) continue;
+
+			}
 			const turtle = sp.mode === 'turtle', ray = sp.model === 'stingray' || sp.model === 'eagleRay';
 			for ( let a = 0; a < g.count; a ++ ) {
 
@@ -1750,6 +1774,7 @@ export class FishSchools {
 		if ( ! this.held[ i ] ) {
 
 			this.held[ i ] = 1;
+			this.groupOf[ i ].holding ++;
 			this.startle( x, y, z, 7 );
 
 		}
@@ -1771,7 +1796,9 @@ export class FishSchools {
 	release( i ) {
 
 		const i3 = i * 3, L = this.size[ i ];
+		if ( this.held[ i ] === 1 ) this.groupOf[ i ].holding --;
 		this.held[ i ] = 0;
+		this.inNet[ i ] = 0;
 		const sp = this.groupOf[ i ].sp;
 		this.vel[ i3 ] = this.head[ i3 ] * sp.burst * L;
 		this.vel[ i3 + 1 ] = 0;
@@ -1783,7 +1810,9 @@ export class FishSchools {
 	// landed: gone from the water until its place is filled, a few minutes on, out of sight
 	take( i ) {
 
+		if ( this.held[ i ] === 1 ) this.groupOf[ i ].holding --;
 		this.held[ i ] = 2;
+		this.inNet[ i ] = 0;
 		this.refillAt[ i ] = this.time + REFILL[ 0 ] + Math.random() * ( REFILL[ 1 ] - REFILL[ 0 ] );
 		this.taken.add( i );
 
@@ -1838,6 +1867,198 @@ export class FishSchools {
 			}
 
 		}
+
+	}
+
+	// ------------------------------------------------------------------ (Salt Life) the cast net
+
+	// It's landed on the water (game/CastNet.js: its footprint; the net's stats, Gear.js): the fish under
+	// it are inside it now, and the rest nearby scatter. -> how many are under it
+	netLand( fp, gear, waterY = 0 ) {
+
+		this.netEnd();
+		// (out: how many got away, and how: under the lead line, leapt clear, too big for it, through the mesh)
+		const net = this.net = { list: [], holdM: gear.holdCm / 100, slipM: gear.meshCm * 0.035, t: 0, sealed: false, out: { under: 0, leapt: 0, big: 0, mesh: 0 } };
+		for ( const g of this.groups ) {
+
+			if ( ! g.active || g.sp.mode === 'escort' || g.sp.mode === 'remora' ) continue;
+			if ( Math.hypot( g.center.x - fp.x, g.center.z - fp.z ) > fp.r + g.radius + 1 ) continue;
+			for ( let k = 0; k < g.count; k ++ ) {
+
+				const i = g.offset + k, i3 = i * 3;
+				if ( this.held[ i ] || this.jump[ i ] > 1.5 ) continue;
+				if ( Math.hypot( this.pos[ i3 ] - fp.x, this.pos[ i3 + 2 ] - fp.z ) > fp.r * NET_EDGE ) continue;
+				this.inNet[ i ] = 1;
+				net.list.push( i );
+
+			}
+
+		}
+
+		this.startle( fp.x, waterY - 0.3, fp.z, fp.r + 2.5 );
+		return net.list.length;
+
+	}
+
+	// Each frame while it's in the water. The netting is a cone from the horn down to the lead line: a
+	// fish inside it is kept inside, and makes for the edge; one that gets there below the lead line's
+	// height slips out under it, until the lead line is on the bottom or drawn closed (then it's sealed).
+	// One too long for the net tears out through it; one small enough slips through the mesh.
+	// -> how many are inside
+	netStep( fp, dt ) {
+
+		const net = this.net;
+		if ( ! net ) return 0;
+		net.t += dt;
+		const was = net.sealed;
+		const sealed = net.sealed = net.sealed || fp.onFloor > 0.7 || fp.purse > 0.4;
+		// drawn closed before it's on the bottom, the purse is the netting above the lead line: a fish
+		// below it then isn't in it
+		const pursedOver = sealed && ! was && fp.onFloor <= 0.7;
+		const P = this.pos, V = this.vel, list = net.list;
+		const top = Math.max( fp.top, fp.lead + 0.05 );
+		let n = 0;
+		for ( let k = list.length - 1; k >= 0; k -- ) {
+
+			const i = list[ k ], i3 = i * 3;
+			if ( ! this.inNet[ i ] || this.held[ i ] === 2 ) {
+
+				list.splice( k, 1 );
+				continue;
+
+			}
+
+			n ++;
+			if ( this.held[ i ] ) continue; // in the purse (the game holds it there)
+			const L = this.size[ i ], sp = this.groupOf[ i ].sp, s = this.seed[ i ];
+			if ( ( L > net.holdM && net.t > 0.6 + s ) || L < net.slipM ) {
+
+				this.netFree( i, k );
+				net.out[ L < net.slipM ? 'mesh' : 'big' ] ++;
+				n --;
+				continue;
+
+			}
+
+			const y = P[ i3 + 1 ];
+			let dx = P[ i3 ] - fp.x, dz = P[ i3 + 2 ] - fp.z;
+			const d = Math.hypot( dx, dz ) || 1e-4;
+			dx /= d;
+			dz /= d;
+			if ( ( ! sealed && y < fp.lead + L * 0.5 && d > fp.r * NET_EDGE ) || ( pursedOver && y < fp.lead - L * 0.5 ) ) {
+
+				this.netFree( i, k );
+				net.out.under ++;
+				n --;
+				continue;
+
+			}
+
+			// a mullet may leap clear of it as it settles
+			if ( ! sealed && sp.mode === 'jumper' && s > 0.45 && this.jump[ i ] === 0 && Math.random() < dt * 0.9 ) {
+
+				this.netFree( i, k );
+				net.out.leapt ++;
+				this.jump[ i ] = 1;
+				V[ i3 ] += dx * 1.2;
+				V[ i3 + 2 ] += dz * 1.2;
+				n --;
+				continue;
+
+			}
+
+			// the cone's radius at the fish's height (all of it below the lead line)
+			const f = Math.min( 1, Math.max( 0, ( top - y ) / Math.max( 0.05, top - fp.lead ) ) );
+			const rc = Math.max( 0.05, ( y < fp.lead ? fp.r : fp.r * f ) - L * 0.3 );
+			if ( d > rc ) {
+
+				P[ i3 ] = fp.x + dx * rc;
+				P[ i3 + 2 ] = fp.z + dz * rc;
+				// it bounces off the netting
+				const vo = V[ i3 ] * dx + V[ i3 + 2 ] * dz;
+				if ( vo > 0 ) {
+
+					V[ i3 ] -= dx * vo * 1.6;
+					V[ i3 + 2 ] -= dz * vo * 1.6;
+
+				}
+
+			}
+
+			if ( y > top - L * 0.3 ) P[ i3 + 1 ] = top - L * 0.3;
+			// until it's sealed: turned in by the splashes, then a dash for the edge, low (some keep their
+			// heads; some just circle)
+			if ( ! sealed && net.t < NET_TURN[ 0 ] + ( NET_TURN[ 1 ] - NET_TURN[ 0 ] ) * s ) {
+
+				const a = sp.burst * L * 2 * dt;
+				V[ i3 ] -= dx * a;
+				V[ i3 + 2 ] -= dz * a;
+
+			} else if ( ! sealed ) {
+
+				const a = sp.burst * L * ( s > 0.35 ? 4 : 1.2 ) * dt;
+				V[ i3 ] += dx * a;
+				V[ i3 + 2 ] += dz * a;
+				V[ i3 + 1 ] -= a * 0.5;
+
+			}
+
+			this.panic[ i ] = Math.max( this.panic[ i ], sealed ? 0.6 : 1 );
+
+		}
+
+		return n;
+
+	}
+
+	netFree( i, k = - 1 ) {
+
+		this.inNet[ i ] = 0;
+		if ( k >= 0 && this.net ) this.net.list.splice( k, 1 );
+		this.panic[ i ] = 1;
+
+	}
+
+	// the fish inside it (swimming, or held in its purse)
+	netFish() {
+
+		return this.net ? this.net.list.filter( ( i ) => this.inNet[ i ] && this.held[ i ] !== 2 ) : [];
+
+	}
+
+	// a fish out of the purse, let go at x, y, z with velocity v: out of the water it falls back in (a
+	// splash), in it it's off at speed
+	netRelease( i, x, y, z, v ) {
+
+		const i3 = i * 3, g = this.groupOf[ i ];
+		if ( this.held[ i ] === 1 ) g.holding --;
+		this.held[ i ] = 0;
+		this.inNet[ i ] = 0;
+		this.pos[ i3 ] = x;
+		this.pos[ i3 + 1 ] = y;
+		this.pos[ i3 + 2 ] = z;
+		this.prev[ i3 ] = x;
+		this.prev[ i3 + 1 ] = y;
+		this.prev[ i3 + 2 ] = z;
+		this.vel[ i3 ] = v.x;
+		this.vel[ i3 + 1 ] = v.y;
+		this.vel[ i3 + 2 ] = v.z;
+		this.panic[ i ] = 1;
+		if ( y > - 0.05 ) {
+
+			if ( g.sp.mode === 'bait' ) this.pos[ i3 + 1 ] = - 0.3; // (the bait ball's steering has no flight)
+			else this.jump[ i ] = 2;
+
+		}
+
+	}
+
+	// the net's out of the water: whatever's still inside is let go
+	netEnd() {
+
+		if ( ! this.net ) return;
+		for ( const i of this.net.list ) this.inNet[ i ] = 0;
+		this.net = null;
 
 	}
 

@@ -43,7 +43,7 @@ Salt Life is [Tidewater](https://github.com/dgreenheck/tidewater) rebuilt as an 
 | `src/sky` | Atmosphere, clouds, the sun and moon, the environment map |
 | `src/materials` | Shader pieces shared by many materials: local lights at night, the clouds' shadows (high), height haze (three's fog chunks, replaced), underwater light, LOD fades |
 | `src/player` | The player, the boat's physics, the bow spray |
-| `src/game` | The fishing game: the rod, bites, the fight, the catch card, the cooler and log, the stalls, Joe and Marta, the HUD, the minimap, the guide; the speargun |
+| `src/game` | The fishing game: the rod, bites, the fight, the catch card, the cooler and log, the stalls, Joe and Marta, the HUD, the minimap, the guide; the speargun; the cast net and the bait |
 | `src/fx`, `src/post` | Spray, marine snow, air motes; the high tier's post chain and sun shafts |
 | `src/ui` | The HUD's DOM, touch controls, fonts |
 | `src/engine/index.js` | `three` itself, re-exported: the ported files still import it as Tidewater's engine |
@@ -168,6 +168,56 @@ The speargun is `src/game/Speargun.js` and its half of `src/game/Game.js`. The f
   - The catch message and the records say a fish was speared (`m`).
 - **Sound**: the speargun has no recordings of its own yet, so the fishing ones stand in (`SoundScape.spearShot`, `spearHit`, `bandStretch`).
 
+## The cast net
+
+The cast net is `src/game/CastNet.js` and its half of `src/game/Game.js`. The fish's side is in `src/world/Fish.js`; the bait is `src/game/Bait.js`, kept in `GameState`.
+
+- **One key, N**: the net goes wherever the rod does (`Game.canFish`: ashore, wading, on the pier or on deck) and takes its place. R swaps it for the rod. Swimming or taking the helm puts it away, and whatever's in it goes back.
+- **The throw**:
+  - Hold the left mouse button (F, RT, or Throw on a touch screen) to wind up; let go to throw.
+  - A ring on the water shows where it will land and how wide it opens. It brightens during the wind-up's moment (`SWEET`, as wide as the net's `spreadWin`): let go then and the net spins fully open; early or late, it opens partly (`openQuality`). Held too long, the arms tire.
+  - The ring reddens over dry ground. Where the water is deeper than the hand line reaches (`aimReaches`), the prompt says the net will close before it gets to the bottom.
+- **The net** is a radial cloth (`CastNet._step`):
+  - 9 rings of 28 particles from the horn to the lead line, joined by ropes that pull and never push (a net folds and bunches), solved by position-based dynamics in substeps.
+  - The leads are heavy and the netting light. In the water everything slows to the net's sinking speed (`sinkMs`). The horn is tied to the hand line and to the brails.
+  - The hands pin the particles they hold (`HANDS`, in camera space): loaded, the horn and a gather of netting are in the right hand and a third of the lead line over the left. The throw sets the particles off with the spin the wind-up gave it.
+  - Drawn, the netting is a smooth surface through the particles with a diamond-mesh shader (twine, knots, a veil far off). The lead line is a tube with sinkers along it, the brails and hand line are ribbons, and the horn and swivel are a small mesh.
+  - States: `stowed`, `held`, `windup`, `throw`, `flying`, `sinking` (everything from the splash until it's out), `lifted`, `dumping`, `gather`. The game drains its moments with `takeEvents` (`'throw'`, `'splash'`, `'land'`, `'bottom'`, `'pursed'`, `'lifted'`, `'dump'`).
+- **Closing and hauling**: holding the button draws the hand line in. First it pulls the brails through the horn, closing the lead line under the net into a purse (`draw`, 0 to 1); then the purse comes in hand over hand, slower with a heavy catch (`load`). It hangs in front of you a moment, dripping, then the brails let go and the catch spills out.
+- **The fish under it** are the island's own fish (`Fish.netLand`, `netStep`):
+  - When the net lands on the water, every fish inside the lead line (within `NET_EDGE` of it) is in it, and the rest nearby scatter.
+  - The lead line's ring of splashes turns the fish inside in toward the middle for a moment (`NET_TURN`). Then each makes for the edge. One that gets there below the lead line slips out under it, until the lead line is on the bottom or drawn closed. A mullet may leap clear while it settles. A fish too long for the net tears out (`holdCm`); one small enough slips through the mesh (`meshCm`).
+  - Drawn closed before it's on the bottom, the purse is the netting above the lead line, and a fish below it gets away. So in deep water (off the pier, round its piles) it's let sink first, and a heavier net gets down before they're out: from the deck, the 4 ft net keeps one now and then, the 10 ft net most of what it lands on.
+  - Off a pier or a deck in deep water, the hand line runs out before the lead line reaches the bottom: the net purses where it hangs, and fish can still swim out under it until it's closed.
+  - The net counts the ones that got away and how (`Fish.net.out`). An empty haul says so, instead of a tip.
+  - Once the brails are mostly drawn (`BAG_FROM`), the fish ride in the purse, kicking (`Fish.hold`).
+- **The haul** (`GameState.addHaul`): each fish is logged.
+  - A mullet of 0.45 kg or more (`KEEPER_KG`) goes in the cooler (method `'net'`), and sells like any other fish.
+  - Silversides, sergeant majors, grunts and smaller mullet go into the bait bucket while there's room.
+  - Anything else, a protected fish, or a fish with no room for it, is thrown back toward where the net was thrown.
+  - The haul card (`GameHUD.showHaul`) says what went where and why, for a few seconds over the prompt.
+- **Where the bait is**:
+  - Along the main beach, pods of finger mullet and silverside fry run the trough inside the breakers at wading depth (`runnerMullet`, `runnerFry`: `surf`, so they may swim where waves break). More fry school just outside the breakers.
+  - Sergeant majors and grunts mill round the pier's piles.
+  - Schools of bigger mullet cruise the bay in chest-deep water and deeper: from the pier or a boat.
+  - Silverside schools swim over the reef, and a bait ball turns at its drop-off: from a boat.
+- **The shop** (`Gear.js`, at Marta's chandlery):
+  - The cast net: a hand-me-down 4 ft net; 6 ft monofilament ($70); an 8 ft bait net with heavy lead ($210); a 10 ft pro net ($520). Each step covers more water, sinks faster, throws farther and holds bigger fish, but its moment to let go is narrower.
+  - The bait well: a 5-gallon bucket (24 baits), an aerated bucket ($90, 50), a livewell with a pump ($300, 120).
+  - An upgrade bought while the net is out takes effect once it's back in the hands (`CastNet.setGear`).
+- **Bait on the hook** (`Bait.js`):
+  - B (the d-pad's ← → with the rod out, or the bait button on a touch screen) picks what goes on the hook at the next cast: the frozen shrimp, which never runs out, or a kind from the bucket. The cast takes one from the bucket; a live one still on the hook when the rod goes away goes back in.
+  - Live and cut bait bite sooner (`speed`), draw their predators (`likes`), put the little fish off (`small`) and bring bigger fish (`skew`), through `Bites.pickSpecies`, `rollWeight` and `biteDelay`. A nibble can steal it (`steal`).
+  - A mullet in the cooler can be cut into 2 to 8 chunks of cut bait (`GameState.cutBait`, one per 200 g or so). Cut bait doesn't count against the bucket.
+  - Marta's daily bait order can be filled from the bucket (`GameState.sellBait`).
+  - The bucket and the pick are saved with your progress (`bait`, `baitPick`).
+- **Playing together**:
+  - The pose carries the net's state (`n`), its size (`nl`), and while it's in the water how far the brails are drawn (`nd`) and how much hand line is out (`nh`). The throw itself is a `'net'` message: where it was aimed, how well it opened, and the seed of its spin.
+  - Others throw a copy of your net as you threw it (`CastNet.remoteThrow`, `follow`), from their copy of you, and its arms reach for the net's hands (`Avatar.reachArm`). A net more than 90 m away isn't drawn or simulated.
+  - A mullet netted for the cooler counts toward the island's records, and the toasts say it was netted.
+- **Sound**: no recordings of its own yet (`SoundScape.netThrow`, `netSplash`, `netLand`, `netPull`, `netLift`, `netDump`). The rod's swish slowed down is the net spinning out; splashes sped up are the lead line coming down; swim strokes are the wet netting drawn in.
+- **On the island**: cast nets hang drying by their horns on the beach racks (`Props.castNetHung`, through `netRack`), and lie in heaps on the sand by the chandlery and on the pier by the bait bucket (`castNetHeap`).
+
 ## The anchor
 
 Marta sells one (`anchor` in `Gear.js`: a Danforth on 200 ft of rode, `anchorM` 20, so it holds in up to 66 ft of water).
@@ -218,14 +268,14 @@ The checks' browser has no graphics card, and some laptops don't either. `App.cp
   - The canvas is held to a phone's pixels.
   - The loading frame is 8 × 8 px and draws only the sky, the ground and the sea.
   - The rest (`_late`) is revealed a group per frame after the start.
-- **Shaders compiled late:** every shader compiled before the start is load time. Shaders not needed at once are compiled in `prepareLate`, after the start: the rod and its line, the speargun, and the fish in the swimming fish's skin.
+- **Shaders compiled late:** every shader compiled before the start is load time. Shaders not needed at once are compiled in `prepareLate`, after the start: the rod and its line, the speargun, the cast net, and the fish in the swimming fish's skin.
   - three's `compile()` also compiles the materials of hidden objects. So what waits is taken out of the scene, not just hidden.
 - **Heavy builds in workers:** the debris, the fish models and the reef's noise are built in workers, so their garbage stays out of script memory.
   - All the Spaces builds inline workers as module workers, which don't start in its sealed frame. `ClassicWorker` starts them as classic workers instead.
 
 ## Testing
 
-- `pnpm test`: the game's logic, the island's day (the clock, the stalls' hours, the wanted lists), the waves, the reef and fish, the spearfishing, the whale and the spray, under Node. It also checks that the baked terrain matches its generator and that every asset has a licence.
+- `pnpm test`: the game's logic, the island's day (the clock, the stalls' hours, the wanted lists), the waves, the reef and fish, the spearfishing, the cast net and bait, the whale and the spray, under Node. It also checks that the baked terrain matches its generator and that every asset has a licence.
 - Two players on one machine: `pnpm dev`, then `/tools/two-players/?name=Robin` and `?name=Sam` in two windows of one browser (`tools/two-players/`: a stand-in for the app and its realtime room).
 - All the Spaces' checks, from its checkout: `node packages/qa-browser/src/cli.ts check ../salt-life`. Run them from an up-to-date `main` there.
 - `qa/script.json` is what the checks play.

@@ -394,6 +394,9 @@ export class App {
 			this._heldFish = [ ...( this.village.fish || [] ), this.game.display.stallMesh ]
 				.filter( ( m ) => m && Array.isArray( m.material ) ).map( ( m ) => [ m, m.parent ] );
 			for ( const [ m ] of this._heldFish ) m.removeFromParent();
+			// (and the cast net: its netting, lead line and cords are shaders of their own)
+			this._heldNet = this.game.net.meshes.map( ( m ) => [ m, m.parent ] );
+			for ( const [ m ] of this._heldNet ) m.removeFromParent();
 
 		}
 
@@ -763,8 +766,8 @@ export class App {
 
 	// shaders not needed at the start, compiled and first used after it: the catch card's fish portrait
 	// (its studio light and the blurred backdrop), the other players' figures, and on a device that
-	// draws on its CPU the rod and its line and the skinned fish (held back while loading: every
-	// shader compiled then is load time)
+	// draws on its CPU the rod and its line, the skinned fish and the cast net (held back while
+	// loading: every shader compiled then is load time)
 	async prepareLate() {
 
 		if ( ! this.game ) return;
@@ -819,6 +822,14 @@ export class App {
 		}
 
 		this._heldFish = null;
+		for ( const [ m, parent ] of this._heldNet || [] ) {
+
+			await r.compileAsync( m, this.camera, this.scene );
+			parent.add( m );
+
+		}
+
+		this._heldNet = null;
 
 		for ( const p of r.info.programs ) {
 

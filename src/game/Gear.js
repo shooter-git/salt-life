@@ -1,6 +1,6 @@
-// Gear and upgrade data. The upgrade shop (a vendor by the boathouse) is not built yet; everything
-// the game reads goes through gearStats( state.upgrades ), so buying a level is just
-// state.upgrades[ key ]++ and the stats follow.
+// Gear and upgrade data, sold by Marta at the chandlery by the boathouse; everything the game reads
+// goes through gearStats( state.upgrades ), so buying a level is just state.upgrades[ key ]++ and the
+// stats follow.
 //
 // Each track: levels[ 0 ] is what you start with; cost is the price of that level (0 for the first).
 export const UPGRADES = {
@@ -30,6 +30,23 @@ export const UPGRADES = {
 		{ cost: 0, label: 'Hand-me-down 30-inch speargun', gunStyle: 'tube', gunCm: 75, bands: 1, shaftM: 1.15, spearV: 16, spearM: 3, lineM: 4.5, spearHold: 7, spearReel: false },
 		{ cost: 180, label: '40-inch teak speargun, two bands', gunStyle: 'teak', gunCm: 100, bands: 2, shaftM: 1.4, spearV: 20, spearM: 4, lineM: 6, spearHold: 11, spearReel: false },
 		{ cost: 480, label: '48-inch railgun with a reel', gunStyle: 'rail', gunCm: 120, bands: 2, shaftM: 1.6, spearV: 23, spearM: 5, lineM: 7.5, spearHold: 16, spearReel: true },
+	] },
+	// (Salt Life) the cast net, for bait and mullet (CastNet.js): its size is its radius (netM, from the
+	// horn to the lead line, as nets are sold), its mesh (meshCm, the square), the lead line's weight
+	// (leadKgM) and how fast that sinks it (sinkMs), how far it's thrown (throwM), how wide the moment
+	// is that spins it fully open (spreadWin, of the wind-up), the longest fish it holds (holdCm: a
+	// bigger one bursts out), its twine (netTwine: 'nylon' braided, or clear 'mono')
+	castNet: { name: 'Cast net', levels: [
+		{ cost: 0, label: 'Hand-me-down 4 ft cast net', netM: 1.22, meshCm: 1.0, leadKgM: 0.7, sinkMs: 0.95, throwM: 6, spreadWin: 0.3, holdCm: 45, netTwine: 'nylon' },
+		{ cost: 70, label: '6 ft monofilament cast net', netM: 1.83, meshCm: 1.0, leadKgM: 0.9, sinkMs: 1.2, throwM: 7, spreadWin: 0.25, holdCm: 50, netTwine: 'mono' },
+		{ cost: 210, label: '8 ft bait net, heavy lead', netM: 2.44, meshCm: 1.0, leadKgM: 1.2, sinkMs: 1.5, throwM: 8, spreadWin: 0.21, holdCm: 55, netTwine: 'mono' },
+		{ cost: 520, label: '10 ft pro net, 1½ lb a foot', netM: 3.05, meshCm: 1.27, leadKgM: 2.2, sinkMs: 1.95, throwM: 9, spreadWin: 0.18, holdCm: 62, netTwine: 'mono' },
+	] },
+	// (Salt Life) where the bait you net is kept alive (Bait.js): how many it holds
+	baitWell: { name: 'Bait well', levels: [
+		{ cost: 0, label: '5-gallon bait bucket', baitMax: 24 },
+		{ cost: 90, label: 'Aerated bait bucket', baitMax: 50 },
+		{ cost: 300, label: 'Livewell with a pump', baitMax: 120 },
 	] },
 	// boat
 	hold: { name: 'Fish hold', levels: [

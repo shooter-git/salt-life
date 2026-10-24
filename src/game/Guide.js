@@ -9,7 +9,8 @@ import { feet } from './Units.js';
 //    Life: Tidewater's help panel, F1, isn't ported).
 //  - one-time tips the first time something happens (rod out, first nibble, fish on, first catch,
 //    full cooler, next to the boat, at Joe's, at Marta's; Salt Life: the speargun out, its band to
-//    load, a big fish on the shaft, the breath running low), in a card above the minimap.
+//    load, a big fish on the shaft, the breath running low, the cast net out, in the water, the first
+//    bait in the bucket), in a card above the minimap.
 // Seen state under 'tidewater.guide' (in the person's saves: core/SaveStore), wrapped in try/catch.
 //   const guide = new Guide( ui, game, minimap );  guide.update( dt );  guide.replay()
 
@@ -87,21 +88,24 @@ const row = ( keys, text ) => `<div class="gm-guide-row"><span class="k">${ keys
 const WELCOME = {
 	eyebrow: 'Welcome to Salt Life',
 	title: 'Fish the island, sell your catch',
-	body: `<p>Catch fish from the <b>beach</b>, the <b>pier</b> or your <b>boat</b>, or dive for them with a <b>speargun</b>. Different fish bite in the shallows, around the pier, over the reef and out in deep water, and they change with the time of day.</p>
-		<p>Sell your catch to <b>Joe</b> at the fish stand by the pier, then spend the money on upgrades from <b>Marta</b> at the chandlery by the boathouse: stronger line, a faster reel, a better speargun, a bigger hold, a fish finder and lights for fishing at night.</p>
+	body: `<p>Catch fish from the <b>beach</b>, the <b>pier</b> or your <b>boat</b>, throw a <b>cast net</b> over mullet and bait fish, or dive for them with a <b>speargun</b>. Different fish bite in the shallows, around the pier, over the reef and out in deep water, and they change with the time of day.</p>
+		<p>Sell your catch to <b>Joe</b> at the fish stand by the pier, then spend the money on upgrades from <b>Marta</b> at the chandlery by the boathouse: stronger line, a faster reel, a bigger cast net and a bait bucket, a better speargun, a bigger hold, a fish finder and lights for fishing at night.</p>
 		<p>They keep island hours. Each morning Joe chalks the fish he's after on his counter, and pays over the odds for them. Under it is the week's order for a restaurant on the mainland, which everyone on the island fills together.</p>`,
 };
 
 const FISHING = {
 	keyboard: [ [ k( 'R' ), 'Take out the rod (by the water or on the boat)' ], [ k( 'Hold', 'LMB' ), 'Wind up, release to cast. Hold longer to cast farther' ],
 		[ k( 'LMB' ), 'Strike when the bobber is <b>pulled under</b> (dips are only nibbles)' ], [ k( 'Hold', 'LMB' ), 'Reel in. <b>Let go when the tension turns red</b>, or the line snaps' ],
-		[ k( 'RMB' ), 'Reel an empty line back in' ], [ k( 'F', 'G' ), 'The left and right mouse buttons, from the keyboard' ], [ k( 'I' ), 'Your cooler, fish log, island records and islander' ] ],
+		[ k( 'RMB' ), 'Reel an empty line back in' ], [ k( 'N' ), 'The cast net, for mullet and bait. <kbd>B</kbd> picks the bait for the hook' ],
+		[ k( 'F', 'G' ), 'The left and right mouse buttons, from the keyboard' ], [ k( 'I' ), 'Your cooler, fish log, island records and islander' ] ],
 	touch: [ [ k( 'Rod' ), 'Take out the rod (by the water or on the boat)' ], [ k( 'Hold', 'Cast' ), 'Wind up, let go to cast. Hold longer to cast farther' ],
 		[ k( 'Strike' ), 'When the bobber is <b>pulled under</b> (dips are only nibbles)' ], [ k( 'Hold', 'Reel' ), 'Reel in. <b>Let go when the tension turns red</b>, or the line snaps' ],
-		[ k( 'Reel in' ), 'Reel an empty line back in' ], [ k( 'Cooler' ), 'Your cooler, fish log, island records and islander' ] ],
+		[ k( 'Reel in' ), 'Reel an empty line back in' ], [ k( 'Cast net' ), 'For mullet and bait fish. <b>Bait</b> picks what goes on the hook' ],
+		[ k( 'Cooler' ), 'Your cooler, fish log, island records and islander' ] ],
 	gamepad: [ [ k( 'X' ), 'Take out the rod (by the water or on the boat)' ], [ k( 'Hold', 'RT' ), 'Wind up, release to cast. Hold longer to cast farther' ],
 		[ k( 'RT' ), 'Strike when the bobber is <b>pulled under</b> (dips are only nibbles)' ], [ k( 'Hold', 'RT' ), 'Reel in. <b>Let go when the tension turns red</b>, or the line snaps' ],
-		[ k( 'LT' ), 'Reel an empty line back in' ], [ k( 'Back' ), 'Your cooler, fish log, island records and islander' ] ],
+		[ k( 'LT' ), 'Reel an empty line back in' ], [ k( 'D-pad ↑' ), 'The cast net, for mullet and bait. <kbd>D-pad ← →</kbd> picks the bait for the hook' ],
+		[ k( 'Back' ), 'Your cooler, fish log, island records and islander' ] ],
 };
 
 const AROUND = {
@@ -151,6 +155,9 @@ const TIPS = {
 		gunLoad: '<b>Hold the left mouse button</b> to draw the band back to its notch on the shaft.',
 		spearFight: 'A big one. <b>Hold the left mouse button</b> to pull it in, let go when it runs, until it tires.',
 		breath: 'Your <b>breath</b> is running out (the gauge by your money). Swim up (<kbd>Space</kbd>) before you black out.',
+		netOut: 'Look at the water where you want it and <b>hold the left mouse button</b> to swing it back. Let go <b>as the ring brightens</b> and it spins fully open. Mullet and bait fish school in the shallows, by the pier and round the boat.',
+		netSink: 'Let it <b>sink</b>: the lead line traps what\'s under it as it reaches the bottom. Then <b>hold the left mouse button</b> to draw it closed and haul it in.',
+		bait: 'Live bait goes in your <b>bucket</b>. With the rod out, <kbd>B</kbd> puts it on the hook: bigger fish take it, and sooner. A mullet can be cut up for bait in the cooler (<kbd>I</kbd>).',
 	},
 	touch: {
 		rodOut: 'Hold <b>Cast</b> to wind up and let go to cast. Try deeper water, around the pier or over the reef.',
@@ -164,6 +171,9 @@ const TIPS = {
 		gunLoad: '<b>Hold Load</b> to draw the band back to its notch on the shaft.',
 		spearFight: 'A big one. <b>Hold Pull</b> to pull it in, let go when it runs, until it tires.',
 		breath: 'Your <b>breath</b> is running out (the gauge by your money). <b>Swim up</b> before you black out.',
+		netOut: 'Look at the water where you want it and <b>hold Throw</b> to swing it back. Let go <b>as the ring brightens</b> and it spins fully open. Mullet and bait fish school in the shallows, by the pier and round the boat.',
+		netSink: 'Let it <b>sink</b>: the lead line traps what\'s under it as it reaches the bottom. Then <b>hold Close</b> to draw it shut and haul it in.',
+		bait: 'Live bait goes in your <b>bucket</b>. With the rod out, <b>Bait</b> puts it on the hook: bigger fish take it, and sooner. A mullet can be cut up for bait in the <b>Cooler</b>.',
 	},
 	gamepad: {
 		rodOut: 'Hold <kbd>RT</kbd> to wind up and release to cast. Try deeper water, around the pier or over the reef.',
@@ -177,6 +187,9 @@ const TIPS = {
 		gunLoad: '<b>Hold <kbd>RT</kbd></b> to draw the band back to its notch on the shaft.',
 		spearFight: 'A big one. <b>Hold <kbd>RT</kbd></b> to pull it in, let go when it runs, until it tires.',
 		breath: 'Your <b>breath</b> is running out (the gauge by your money). Swim up (<kbd>A</kbd>) before you black out.',
+		netOut: 'Look at the water where you want it and <b>hold <kbd>RT</kbd></b> to swing it back. Let go <b>as the ring brightens</b> and it spins fully open. Mullet and bait fish school in the shallows, by the pier and round the boat.',
+		netSink: 'Let it <b>sink</b>: the lead line traps what\'s under it as it reaches the bottom. Then <b>hold <kbd>RT</kbd></b> to draw it closed and haul it in.',
+		bait: 'Live bait goes in your <b>bucket</b>. With the rod out, <kbd>D-pad ← →</kbd> puts it on the hook: bigger fish take it, and sooner. A mullet can be cut up for bait in the cooler (<kbd>Back</kbd>).',
 	},
 	full: 'Your cooler is <b>full</b>. Sell to Joe, or buy a bigger hold from Marta at the chandlery.',
 };
@@ -439,7 +452,16 @@ export class Guide {
 		prev.gunState = gun && gun.state;
 		prev.spearFight = !! g.spearFight;
 
-		const s = g.state;
+		// (Salt Life) the cast net, and the bait it brings in
+		const net = g.net, s = g.state;
+		if ( net && net.equipped && ! prev.net ) this.tip( 'netOut' );
+		if ( net && net.state === 'sinking' && net.footprint.wet && prev.netState !== 'sinking' ) this.tip( 'netSink' );
+		const baitN = s.baitCount;
+		if ( prev.baitN !== undefined && baitN > prev.baitN ) this.tip( 'bait' );
+		prev.net = !! ( net && net.equipped );
+		prev.netState = net && net.state;
+		prev.baitN = baitN;
+
 		if ( s.holdKg >= s.stats.holdKg * 0.92 ) this.tip( 'full' );
 		if ( p.mode === 'walk' ) {
 

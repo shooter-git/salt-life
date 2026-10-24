@@ -13,7 +13,7 @@ const PAD_KEYS = {
 	4: 'KeyC', // LB: crouch / dive
 	5: 'ShiftLeft', // RB: sprint / boost
 	8: 'KeyI', // back / view: cooler and fish log
-	12: 'KeyI', // d-pad up
+	12: 'KeyN', // d-pad up: the cast net
 	13: 'KeyL', // d-pad down: flashlight (at the helm: the searchlight)
 	14: 'ArrowLeft', // d-pad left / right: the cooler's tabs
 	15: 'ArrowRight',

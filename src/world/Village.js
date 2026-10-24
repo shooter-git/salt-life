@@ -9,7 +9,7 @@ import { buildPier, PIER } from './Pier.js';
 import { G } from '../core/Globals.js';
 import {
 	InstancedProps, Rand, lin, C, WOOD, rowboat, netRack, fishRack, fence, laundryLine, oar, buoy,
-	bench, ropeCoil, pathLight, lampPost, bucket, wreck,
+	bench, ropeCoil, pathLight, lampPost, bucket, wreck, castNetHeap, CAST_NYLON, CAST_MONO,
 } from './Props.js';
 
 // Tropical fishing village: timber pier with a T-head, stilt fishing huts on the beach,
@@ -369,12 +369,17 @@ export class Village {
 		oar( B, [ 48.1 + BX, g( 48.1 + BX, - 55.7 ) + 0.03, - 55.7 ], [ 49.6 + BX, g( 49.6 + BX, - 57.9 ) + 0.05, - 57.9 ], rand.next(), lin( 0xc23b2e ) );
 		oar( B, [ 48.4 + BX, g( 48.4 + BX, - 55.4 ) + 0.03, - 55.4 ], [ 49.9 + BX, g( 49.9 + BX, - 57.6 ) + 0.06, - 57.6 ], rand.next(), lin( 0xc23b2e ) );
 
-		// net drying racks
-		const racks = [ [ 41.8, - 64.2, 0.25, lin( 0x3f6f5f ) ], [ 74.6, - 58.6, - 0.12, lin( 0x2f5f8a ) ], [ 86.4, - 64.0, 0.3, lin( 0xb0553a ) ] ];
-		for ( const [ x, z, ry, tint ] of racks ) {
+		// net drying racks: a gill net over one; cast nets hung up by their horns on the others (by
+		// Marta's, one of each size she sells)
+		const racks = [
+			[ 41.8, - 64.2, 0.25, lin( 0x3f6f5f ) ],
+			[ 74.6, - 58.6, - 0.12, null, [ { x: - 1.0, R: 1.83, tint: CAST_MONO }, { x: 0.15, R: 2.44, tint: CAST_NYLON }, { x: 1.15, R: 1.22, tint: CAST_NYLON } ] ],
+			[ 86.4, - 64.0, 0.3, null, [ { x: - 1.2, R: 3.05, tint: CAST_NYLON }, { x: - 0.35, R: 2.44, tint: CAST_MONO }, { x: 0.45, R: 1.83, tint: CAST_MONO }, { x: 1.2, R: 1.22, tint: CAST_NYLON } ] ],
+		];
+		for ( const [ x, z, ry, tint, cast ] of racks ) {
 
 			const cy = Math.cos( ry ), sy = Math.sin( ry );
-			netRack( B, x, g( x, z ), z, ry, 3.2, tint, rand.next(), ( lx, lz ) => g( x + lx * cy + lz * sy, z - lx * sy + lz * cy ) );
+			netRack( B, x, g( x, z ), z, ry, 3.2, tint, rand.next(), ( lx, lz ) => g( x + lx * cy + lz * sy, z - lx * sy + lz * cy ), cast );
 			for ( const sx of [ - 1.6, 1.6 ] ) {
 
 				const px = x + sx * cy, pz = z - sx * sy;
@@ -384,8 +389,13 @@ export class Village {
 			}
 
 			this.footprints.push( { x, z, r: 2.2, kind: 'prop' } );
+			// (the hung nets hang down to the sand: not walked through)
+			if ( cast ) box( x, g( x, z ) + 1.0, z, 1.6, 1.0, 0.24, ry, 'castNets' );
 
 		}
+
+		// a cast net left in a heap on the sand by the rack, its hand line coiled beside it
+		castNetHeap( B, 75.05, g( 75.05, - 57.15 ) - 0.01, - 57.15, 0.7, { R: 1.83, tint: CAST_MONO, seed: 0.37 } );
 
 		// fish drying rack between the huts
 		fishRack( B, 73.8, g( 73.8, - 69.5 ), - 69.5, 0.2, 2.6, rand.next(), rand );
