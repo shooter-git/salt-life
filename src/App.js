@@ -153,6 +153,7 @@ export class App {
 		this._owed = 0; // s not yet played while waiting for it
 		this._slots = []; // bakes waiting for a frame of their own (frameSlot)
 		this._firsts = []; // programs waiting for their first draw (firstDraws)
+		this._uses = []; // programs waiting for their first use, with no frame being drawn (useNewPrograms)
 		this._slotOwed = 0;
 		this._rest = false; // the frame after a drawn one is skipped
 		if ( this.cpuGL ) this.fitCpuPixels();
@@ -698,6 +699,17 @@ export class App {
 			}
 
 			gl.deleteSync( this._drawn );
+			this._drawn = null;
+
+		}
+
+		// programs waiting for their first use (useNewPrograms): this tick instead of a frame, so that
+		// asking the GPU about them waits for no drawing (they're used as soon as this returns)
+		if ( this._uses.length ) {
+
+			for ( const use of this._uses.splice( 0 ) ) use();
+			this._owed += dt;
+			return;
 
 		}
 
@@ -907,7 +919,7 @@ export class App {
 		// (birds and crabs smaller than this many pixels aren't drawn)
 		this.wildlife.minPx = this.tier === 'low' ? 1.5 : 0.75;
 		const meshes = [ this.wildlife.birdBatch.mesh, this.wildlife.birdBatch.farMesh, this.wildlife.critterBatch.mesh, this.wildlife.critterBatch.farMesh, this.wildlife.blobs.mesh ];
-		for ( const m of meshes ) await this.readyToDraw( m );
+		await this.readyOffstage( meshes );
 		// the spray's shader too (the birds dive): drawn once, empty, in a frame of its own
 		const spray = this.spray.mesh;
 		spray.visible = true;
@@ -931,7 +943,7 @@ export class App {
 			rocks: this.rocks, colliders: this.colliders, tier: this.tier, loader: gltfLoader(), show: false,
 		} );
 		// (the areas out of range are hidden at once: frames go on while the shaders compile)
-		await this.readyToDraw( this.debris.group, () => this.debris.update( this.camera ) );
+		await this.readyOffstage( this.debris.group, () => this.debris.update( this.camera ) );
 
 	}
 
@@ -1042,8 +1054,8 @@ export class App {
 
 		if ( this.motes || this.tier === 'low' ) return;
 		const motes = new AirMotes( { terrain: this.terrain, tier: this.tier } );
-		this.scene.add( motes.mesh );
 		await this.readyToDraw( motes.mesh );
+		this.scene.add( motes.mesh );
 		await this.firstDraws( [ motes.mesh ] );
 		this.motes = motes;
 
@@ -1071,16 +1083,28 @@ export class App {
 
 	}
 
-	// lit (lightUp), its shaders compiled and their uniforms and attributes looked up. then: called once
-	// the programs are made (compileAsync makes them at once, then waits for them to finish)
+	// lit (lightUp), its shaders compiled and their uniforms and attributes looked up (root: one, or
+	// several, all compiled before the one wait). then: called once the programs are made
+	// (compileAsync makes them at once, then waits for them to finish)
 	async readyToDraw( root, then = null ) {
 
-		const r = this.renderer;
-		this.lightUp( root );
-		const compiled = r.compileAsync( root, this.camera, this.scene );
+		const r = this.renderer, roots = [ root ].flat();
+		for ( const o of roots ) this.lightUp( o );
+		const compiled = Promise.all( roots.map( ( o ) => r.compileAsync( o, this.camera, this.scene ) ) );
 		if ( then ) then();
 		await compiled;
 		await this.useNewPrograms();
+
+	}
+
+	// readyToDraw for what's in the scene already, and shown: out of it meanwhile, so that no frame
+	// draws it first (a frame would first use its programs, or make an unlit one before lightUp)
+	async readyOffstage( root, then = null ) {
+
+		const roots = [ root ].flat(), parents = roots.map( ( o ) => o.parent );
+		for ( const o of roots ) o.removeFromParent();
+		await this.readyToDraw( roots, then );
+		roots.forEach( ( o, i ) => parents[ i ] && parents[ i ].add( o ) );
 
 	}
 
@@ -1089,10 +1113,17 @@ export class App {
 	// it, the program's own linking too: seconds on a device that draws on its CPU, the page frozen
 	// all that time (All the Spaces' checks fail a creation that stops answering for 20 s there, and
 	// their machine is slower than most). There it's done once the GPU has caught up (gpuCaughtUp),
-	// so the asking is quick and the page answers meanwhile
+	// in a tick of the paced frames that draws nothing (pacedFrame), so the asking is quick and the
+	// page answers meanwhile
 	async useNewPrograms() {
 
-		if ( this.cpuGL && this._started ) await this.gpuCaughtUp();
+		if ( this.cpuGL && this._started ) {
+
+			await this.gpuCaughtUp();
+			await new Promise( ( resolve ) => this._uses.push( resolve ) );
+
+		}
+
 		for ( const p of this.renderer.info.programs ) {
 
 			p.getUniforms();
@@ -1133,22 +1164,12 @@ export class App {
 	}
 
 	// the plants: scattered over the island, built and baked (in slices). (After the start, on a
-	// device that draws on its CPU: their shaders made and first used before they're drawn, the
-	// group out of the scene meanwhile)
+	// device that draws on its CPU: their shaders made and first used before they're drawn)
 	async plantsGrow() {
 
-		const v = this.vegetation;
-		await v.init();
-		if ( ! this._started ) {
-
-			this.lightUp( v.group );
-			return;
-
-		}
-
-		v.group.removeFromParent();
-		await this.readyToDraw( v.group );
-		this.scene.add( v.group );
+		await this.vegetation.init();
+		if ( this._started ) await this.readyOffstage( this.vegetation.group );
+		else this.lightUp( this.vegetation.group );
 
 	}
 
