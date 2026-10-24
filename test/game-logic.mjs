@@ -3,8 +3,9 @@ import { FISH, FISH_IDS, CARAPACE, fishValue, fishLengthCm, fishWeightKg, spearR
 import { habitatAt, pickSpecies, rollWeight, biteDelay, lampsLit } from '../src/game/Bites.js';
 import { CatchMinigame } from '../src/game/CatchMinigame.js';
 import { GameState } from '../src/game/GameState.js';
-import { gearStats, defaultUpgrades, UPGRADES } from '../src/game/Gear.js';
+import { gearStats, defaultUpgrades, UPGRADES, TOW, towFee } from '../src/game/Gear.js';
 import { BoatController } from '../src/player/BoatController.js';
+import { G } from '../src/core/Globals.js';
 import { Vector3, Group } from '../src/engine/index.js';
 
 let fails = 0;
@@ -248,6 +249,13 @@ ok( Object.keys( defaultUpgrades() ).length === Object.keys( UPGRADES ).length &
 	ok( st.buy( 'fuel' ) && st.fuelL === 80, 'a new tank comes full' );
 	ok( st.buy( 'fishFinder' ) && st.stats.finder === true && st.buy( 'fishFinder' ) === null, 'fish finder: one level' );
 	ok( gearStats( defaultUpgrades() ).anchorM === 0 && st.buy( 'anchor' ) && st.stats.anchorM === 20 && st.buy( 'anchor' ) === null, 'anchor: one level, holds in 66 ft' );
+	// (Salt Life) Marta's tow: a call-out and a little a hundred metres, never past its cap, and never
+	// more than you have
+	ok( towFee( TOW.from ) === TOW.base + 2 && towFee( 1000 ) === TOW.base + 10 * TOW.per100m && towFee( 1e6 ) === TOW.max, 'the tow: more the further she\'s drifted, up to a cap' );
+	st.money = 30;
+	const paid = st.payTow( towFee( 2000 ) );
+	ok( paid === 30 && st.money === 0 && st.payTow( 50 ) === 0 && st.money === 0, 'short of the fee, she tows you in for what you have' );
+	st.money = 1000;
 
 }
 // ---- (Salt Life) the anchor: the boat, let go out on the water, is brought up short by its rode and
@@ -255,7 +263,8 @@ ok( Object.keys( defaultUpgrades() ).length === Object.keys( UPGRADES ).length &
 {
 
 	const at = new Vector3( 600, 0, 600 );
-	const run = ( anchored ) => {
+	// a boat on flat, deep water
+	const newBoat = () => {
 
 		const n = 24, hullSamples = [];
 		for ( let i = 0; i < n; i ++ ) hullSamples.push( { position: new Vector3( ( i % 4 ) * 0.8 - 1.2, - 0.4, Math.floor( i / 4 ) * 1.3 - 3.3 ), area: 0.325 } );
@@ -263,6 +272,12 @@ ok( Object.keys( defaultUpgrades() ).length === Object.keys( UPGRADES ).length &
 		const query = { allocate: () => 0, latency: 0, setPoint() {}, cpuValid: true, version: 1, resultTime: 0, cpu: new Float32Array( n * 4 ), resultInputs: new Float32Array( n * 4 ) };
 		const b = new BoatController( { model, query, terrain: { heightAt: () => - 10 }, colliders: null } );
 		b.moored = false;
+		return b;
+
+	};
+	const run = ( anchored ) => {
+
+		const b = newBoat();
 		b.position.copy( at );
 		b.quaternion.identity();
 		b.velocity.set( 0, 0, 2.5 );
@@ -284,6 +299,38 @@ ok( Object.keys( defaultUpgrades() ).length === Object.keys( UPGRADES ).length &
 	const held = run( true ), free = run( false );
 	console.log( `     let go at 2.5 m/s: at anchor the bow strays at most ${ held.far.toFixed( 1 ) } m from it and she's at ${ held.b.speed.toFixed( 2 ) } m/s after a minute; without, she coasts ${ free.went.toFixed( 0 ) } m` );
 	ok( held.b.isFinite() && held.far < 8 && held.b.speed < 0.25 && free.went > 3 * held.went, 'the anchor brings the boat up and holds her near the spot' );
+
+	// ---- (Salt Life) the wind on her: left to herself she comes round beam-on and drifts downwind,
+	// slowly on a fair day, faster in a gale, heeling a little; at anchor she lies head to wind
+	const lie = ( wind, anchored, yaw ) => {
+
+		G.windSpeed.value = wind;
+		const b = newBoat();
+		b.position.copy( at );
+		b.quaternion.setFromAxisAngle( new Vector3( 0, 1, 0 ), yaw );
+		if ( anchored ) b.anchor = b.toWorld( b.stemHead, new Vector3() ).setY( - 10 );
+		let heel = 0;
+		const up = new Vector3();
+		for ( let i = 0; i < 60 * 150; i ++ ) {
+
+			b.update( 1 / 60 );
+			if ( i > 60 * 60 ) heel = Math.max( heel, Math.acos( Math.min( 1, up.set( 0, 1, 0 ).applyQuaternion( b.quaternion ).y ) ) );
+
+		}
+
+		const f = b.forward( new Vector3() ), w = G.windDir.value;
+		G.windSpeed.value = 7;
+		return { b, bow: ( f.x * w.x + f.z * w.y ) / Math.hypot( f.x, f.z ), drift: b.velocity.x * w.x + b.velocity.z * w.y, heel: heel * 180 / Math.PI };
+
+	};
+	const calm = lie( 0, false, 1 ), fair = [ 0, 1.2, 2.5 ].map( ( y ) => lie( 7, false, y ) ), gale = [ 0, 1.2, 2.5 ].map( ( y ) => lie( 20, false, y ) );
+	const anchoredGale = lie( 20, true, 0.5 );
+	console.log( `     left to herself: on a fair day she drifts ${ fair.map( ( r ) => r.drift.toFixed( 2 ) ).join( ', ' ) } m/s, in a gale ${ gale.map( ( r ) => r.drift.toFixed( 2 ) ).join( ', ' ) } m/s, heeling ${ ( gale[ 0 ].heel - calm.heel ).toFixed( 1 ) }° more than in a calm; at anchor in a gale her bow is ${ ( - anchoredGale.bow ).toFixed( 2 ) } into the wind` );
+	ok( Math.abs( calm.drift ) < 1e-3 && calm.b.speed < 1e-3, 'in a calm she stays where she is' );
+	ok( [ ...fair, ...gale ].every( ( r ) => r.b.isFinite() && Math.abs( r.bow ) < 0.3 ), 'wherever she\'s pointing, she comes round beam-on to the wind' );
+	ok( fair.every( ( r ) => r.drift > 0.15 && r.drift < 0.6 ) && gale.every( ( r ) => r.drift > 0.5 && r.drift < 1.5 ), 'she drifts downwind: slowly on a fair day, faster in a gale' );
+	ok( gale.every( ( r ) => r.heel - calm.heel < 12 ), 'and heels a little' );
+	ok( anchoredGale.bow < - 0.9 && anchoredGale.b.speed < 0.1, 'at anchor she lies head to wind' );
 
 }
 // ---- (Salt Life) the speargun and the law

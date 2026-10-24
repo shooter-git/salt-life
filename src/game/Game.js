@@ -11,7 +11,7 @@ import { FishStand, STAND } from './FishStand.js';
 import { Chandlery, CHANDLERY } from './Chandlery.js';
 import { CatchDisplay } from './CatchDisplay.js';
 import { FishPortrait } from './FishPortrait.js';
-import { UPGRADES, fuelBurn } from './Gear.js';
+import { UPGRADES, fuelBurn, TOW, towFee } from './Gear.js';
 import { GameHUD } from './GameHUD.js';
 import { TimeHUD } from './TimeHUD.js';
 import { isOpen, timeText } from './IslandClock.js';
@@ -233,6 +233,30 @@ export class Game {
 		}
 
 		return l;
+
+	}
+
+	// (Salt Life) Marta's tow: your boat, drifted off (or left) more than TOW.from from the dock with
+	// nobody at her helm, as { metres, fee }; null when there's nothing to tow
+	towJob() {
+
+		const b = this.app.boatCtl, dock = WORLD.boatDock.position;
+		if ( ! b || b.moored || b.driven ) return null;
+		const metres = Math.hypot( b.position.x - dock.x, b.position.z - dock.z );
+		return metres > TOW.from ? { metres, fee: towFee( metres ) } : null;
+
+	}
+
+	// she brings her back to the dock (you're at her stall, so not aboard); returns what you paid
+	tow() {
+
+		const job = this.towJob();
+		if ( ! job ) return 0;
+		const paid = this.state.payTow( job.fee );
+		this._anchorDue = false;
+		this.app.boatCtl.reset();
+		this.toast( paid < job.fee ? `Marta towed her in for the $${ paid } you had · she's at the dock` : `Marta towed her in · $${ paid } · she's at the dock` );
+		return paid;
 
 	}
 

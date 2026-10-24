@@ -6,7 +6,8 @@ import { WORLD } from '../world/WorldLayout.js';
 // surface) and on the CPU (WaterQuery: the boat, the swimmer, the bobber). It stands in for Tidewater's
 // four-cascade FFT ocean, which needs compute shaders. Longer swell rolls in toward the island along
 // WORLD.swellDir; shorter wind sea runs with G.windDir. Phones draw fewer waves than laptops; the CPU
-// always evaluates exactly the set the GPU draws, so what floats sits on what is seen.
+// always evaluates exactly the set the GPU draws, so what floats sits on what is seen. (Salt Life) The
+// weather sets the sea state (setSea): the swell's and the wind sea's heights, the directions as built.
 //
 // A wave i at Lagrangian point x0 (the undisplaced grid point):
 //   theta = k (d . x0) - omega t + phase,  omega = sqrt( g k ) (deep water)
@@ -28,6 +29,8 @@ const SPECTRUM = [
 ];
 const COUNT = { low: 4, mid: 6, high: 8 };
 const STEEPNESS = 0.55; // sum of the waves' crest sharpening (< 1: no loops)
+// a wave's crest sharpening (its horizontal travel), at most its share of STEEPNESS
+const crest = ( a, k, n ) => Math.min( a * 1.4, STEEPNESS / ( k * n ) );
 
 // depth (m) over which the open-sea waves fade out toward the beach
 export const SHALLOW_FADE = [ 1.5, 12.0 ]; // (the shore waves take over from ~13 m of depth in)
@@ -46,17 +49,23 @@ export class Waves {
 			const k = 2 * Math.PI / w.L;
 			return {
 				dx: Math.cos( angle ), dz: Math.sin( angle ), k, omega: Math.sqrt( GRAVITY * k ), a: w.a,
-				qa: Math.min( w.a * 1.4, STEEPNESS / ( k * n ) ),
+				qa: crest( w.a, k, n ),
 				phase: ( ( i * 2.3999632 ) % 1 ) * Math.PI * 2, // golden-angle spread: no two crests line up
+				a0: w.a, from: w.from, // (the height in today's sea, and whether it's swell or wind sea)
 			};
 
 		} );
+		this.sea = [ 1, 1 ]; // swell, wind sea: x today's heights (setSea)
+		this.iterations = 2; // the CPU height's fixed-point steps (more on steep seas: setSea)
+		// 1 / the waves' summed height: a point's height over the sea, as a share of the highest crest
+		this.crest = { value: 1 / this.waves.reduce( ( s, w ) => s + w.a, 0 ) };
 
 		// GLSL: uniforms waveA[ i ] = ( d.x, d.z, k, omega ), waveB[ i ] = ( a, qa, phase, 0 )
 		this.uniforms = {
 			waveA: { value: this.waves.map( ( w ) => new Vector4( w.dx, w.dz, w.k, w.omega ) ) },
 			waveB: { value: this.waves.map( ( w ) => new Vector4( w.a, w.qa, w.phase, 0 ) ) },
 			waveTime: G.time,
+			waveCrest: this.crest,
 		};
 		this.glsl = /* glsl */`
 #define WAVE_COUNT ${ n }
@@ -85,6 +94,34 @@ vec3 waveDisplacement( vec2 x0, float fade, out vec3 normal ) {
 	return d;
 }
 `;
+
+	}
+
+	// (Salt Life) the sea state (Weather): the swell's and the wind sea's heights, x today's. Only the
+	// heights change, in place (the CPU's waves and the GPU's waveB), never the phases, so the sea
+	// builds and calms where it is; setSea( 1, 1 ) is today's sea exactly
+	setSea( swell = 1, windSea = 1 ) {
+
+		if ( swell === this.sea[ 0 ] && windSea === this.sea[ 1 ] ) return;
+		this.sea[ 0 ] = swell;
+		this.sea[ 1 ] = windSea;
+		const n = this.waves.length;
+		let steep = 0, sum = 0;
+		this.waves.forEach( ( w, i ) => {
+
+			w.a = w.a0 * ( w.from === 's' ? swell : windSea );
+			w.qa = crest( w.a, w.k, n );
+			const B = this.uniforms.waveB.value[ i ];
+			B.x = w.a;
+			B.y = w.qa;
+			steep += w.k * w.qa;
+			sum += w.a;
+
+		} );
+		// a steeper sea moves its points further: the CPU's inversion (heightAt) takes more steps to
+		// land on the drawn surface (today's seas take 2 on every tier)
+		this.iterations = steep > 0.34 ? 4 : steep > 0.28 ? 3 : 2;
+		this.crest.value = 1 / sum;
 
 	}
 
@@ -124,7 +161,7 @@ vec3 waveDisplacement( vec2 x0, float fade, out vec3 normal ) {
 		const d = this._d || ( this._d = [ 0, 0, 0 ] );
 		const fade = this.fadeAt( x, z );
 		let x0 = x, z0 = z;
-		for ( let i = 0; i < 2; i ++ ) {
+		for ( let i = 0; i < this.iterations; i ++ ) {
 
 			this.displacement( x0, z0, t, d, fade );
 			x0 = x - d[ 0 ];

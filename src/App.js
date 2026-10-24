@@ -25,6 +25,8 @@ import { Player } from './player/Player.js';
 import { BoatController } from './player/BoatController.js';
 import { GameState } from './game/GameState.js';
 import { DAY_RATE, START_HOUR, advance } from './game/IslandClock.js';
+import { CONDITIONS } from './game/Weather.js';
+import { WeatherDriver } from './world/WeatherDriver.js';
 import { lampsLit } from './game/Bites.js';
 import { FishStand, STAND } from './game/FishStand.js';
 import { Chandlery, CHANDLERY } from './game/Chandlery.js';
@@ -93,6 +95,8 @@ export class App {
 			sunAzimuth: 0, // degrees: turns the sun's daily path about the vertical
 			timeSpeed: DAY_RATE,
 			exposure: 0.55,
+			// (Salt Life) the weather you picked on your own (an id from game/Weather.js), or null: the day's
+			weather: null,
 		};
 		this._clockSaveT = 0;
 
@@ -256,6 +260,9 @@ export class App {
 
 		} );
 		this.boatCtl = new BoatController( { model: this.boat, query: this.query, terrain: this.terrainData, colliders: this.colliders } );
+		// (Salt Life) the weather: the day's, or the one picked on your own (game/Weather.js), on the wind,
+		// the sea, the surf, the cloud and the light (set from the first frame on)
+		this.weather = new WeatherDriver( { sky: this.sky, waves: this.waves, shore: this.shore, water: this.water, boat: this.boatCtl } );
 		this.wake = new Wake( { scene, boat: this.boatCtl, waves: this.waves, tier } );
 		// spray (fx/Spray.js): off the boat's bow (and the slap of its hull on the water), the
 		// whale's blows and breaches, leaping mullet, diving birds
@@ -488,6 +495,8 @@ export class App {
 		if ( this.together ) this.together.syncClock( s );
 		// (the hour you're at, in your save now and again: you come back to it)
 		if ( ( this._clockSaveT -= dt ) <= 0 ) this.saveClock();
+		// (Salt Life) the weather, before anything it moves (the boat, the sky)
+		this.weather.update( dt, s.day, s.timeOfDay, this.weatherPick() );
 
 		// ---- player / boat (boat physics first so the cameras follow this frame's pose)
 		const input = this.input;
@@ -1336,12 +1345,21 @@ export class App {
 			s.timeOfDay = ( ( saved.hour % 24 ) + 24 ) % 24;
 			s.day = Number.isFinite( saved.day ) ? Math.max( 1, Math.floor( saved.day ) ) : 1;
 			s.timeSpeed = saved.held ? 0 : DAY_RATE;
+			s.weather = CONDITIONS[ saved.weather ] ? saved.weather : null;
 
 		}
 
 		const q = this.portal.standalone ? new URLSearchParams( location.search ) : null;
 		const asked = q && q.has( 'hour' ) ? Number( q.get( 'hour' ) ) : NaN;
 		if ( asked >= 0 && asked < 24 ) s.timeOfDay = asked;
+		// (?weather=gale: that weather; ?weather=forecast: the day's)
+		const weather = q && q.get( 'weather' );
+		if ( weather && ( CONDITIONS[ weather ] || weather === 'forecast' ) ) {
+
+			s.weather = CONDITIONS[ weather ] ? weather : null;
+			this._weatherAsked = true;
+
+		}
 		this.portal.on( 'pause', () => this.saveClock() );
 		this.portal.onExit( () => {
 
@@ -1352,12 +1370,23 @@ export class App {
 
 	}
 
-	// the hour and day you're at, into your save (written a moment later, with the rest of it)
+	// (Salt Life) the weather you picked holds while you're on your own; in company it's the day's.
+	// (?weather= on its own holds from the first frame, company or not: for trying it)
+	weatherPick() {
+
+		const s = this.settings, t = this.together;
+		if ( ! s.weather ) return null;
+		return this._weatherAsked || ! t || t.surelyAlone ? s.weather : null;
+
+	}
+
+	// the hour and day you're at, into your save (written a moment later, with the rest of it); and the
+	// weather you picked (none: the day's)
 	saveClock() {
 
 		this._clockSaveT = 30;
 		const s = this.settings;
-		const text = JSON.stringify( { hour: Math.round( s.timeOfDay * 1000 ) / 1000, day: s.day, held: s.timeSpeed === 0 } );
+		const text = JSON.stringify( { hour: Math.round( s.timeOfDay * 1000 ) / 1000, day: s.day, held: s.timeSpeed === 0, ...( s.weather ? { weather: s.weather } : {} ) } );
 		if ( this.store && text !== this._clockSaved ) this.store.setItem( CLOCK_KEY, text );
 		this._clockSaved = text;
 

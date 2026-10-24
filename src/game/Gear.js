@@ -92,6 +92,11 @@ export const UPGRADES = {
 };
 
 export const FUEL_PRICE = 1.5; // $ per litre of diesel at the chandlery
+// (Salt Life) Marta's tow: she fetches your boat back to the dock when it's drifted off (the wind pushes
+// a boat left without its anchor). A call-out and a little for every 100 m, up to a cap; nothing to tow
+// within `from` metres of the dock (walk or swim to her)
+export const TOW = { base: 20, per100m: 5, max: 90, from: 30 };
+export const towFee = ( metres ) => Math.min( TOW.max, Math.round( TOW.base + TOW.per100m * Math.max( 0, metres ) / 100 ) );
 // litres per second at the helm: idle plus a lot more at full rpm (40 L lasts ~25 min flat out)
 export function fuelBurn( rpm ) {
 

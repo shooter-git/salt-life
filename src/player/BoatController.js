@@ -1,5 +1,6 @@
 import * as THREE from '../engine/index.js';
 import { WORLD } from '../world/WorldLayout.js';
+import { G } from '../core/Globals.js';
 
 const RHO = 1025; // sea water density
 const GRAV = 9.81;
@@ -12,6 +13,20 @@ const clamp = THREE.MathUtils.clamp;
 const RODE_SLACK = 4;
 const RODE_K = 2500;
 const RODE_C = 2500;
+// (Salt Life) the wind on her: the area she shows it end-on and abeam (m^2: the hull's side and the
+// wheelhouse), the drag coefficient, and how high its centre of effort is (boat frame: the house)
+const WIND_AREA = [ 6, 11 ];
+const WIND_CD = 0.92;
+const WIND_Y = 1.2;
+// how far toward the end the wind comes from its push moves as it comes round from abeam to end-on
+// (m: as on a flat plate, toward the windward edge): beam-on is how she lies, not a balance on a knife edge
+const WIND_LEAD = 3;
+const AIR = 1.2; // kg/m^3
+// her range of stability: past RIGHT_FROM of heel (or trim) her full keel's ballast and the flare of
+// her topsides, burying as she heels, right her harder (N m per radian past it); the waterplane
+// samples alone lose their grip on her there, and in a gale's wind and seas she'd go over
+const RIGHT_FROM = 25 * Math.PI / 180;
+const RIGHT_K = 45000;
 
 // scratch (the integrator runs at 120 Hz: no allocations in the loop)
 const _F = new THREE.Vector3();
@@ -88,6 +103,18 @@ export class BoatController {
 		// lateral stations along the keel: (z, lateral area m^2) for hull lift and cross-flow drag
 		this.stations = [ [ - 3.4, 0.73 ], [ - 2.3, 0.78 ], [ - 1.2, 0.8 ], [ - 0.1, 0.77 ], [ 1.0, 0.62 ], [ 2.1, 0.33 ], [ 3.2, 0.14 ] ];
 		this.lateralY = 0.06; // height of the centre of lateral resistance (boat frame)
+		// (Salt Life) where the wind pushes: above the keel's centre of lateral resistance (its stations'
+		// area-weighted middle), up on the house. Beam-on, wind and water then balance without turning
+		// her: she lies across the wind and drifts; at anchor the rode at the bow brings her head to it
+		let za = 0, a = 0;
+		for ( const [ z, A ] of this.stations ) {
+
+			za += z * A;
+			a += A;
+
+		}
+
+		this.windage = new THREE.Vector3( 0, WIND_Y, za / a );
 		this.bank = 0; // roll moment per (u * drift velocity): hull bottom lift banking into turns
 		this.hullLift = 0.5; // lift coefficient of the hull + keel per radian of drift
 		this.rudderLift = 2.8; // rudder lift slope (x area 0.12 m^2), includes the hull's flap effect
@@ -327,8 +354,21 @@ export class BoatController {
 		_p.set( 0, - 0.2, this.com.z );
 		this.toWorld( _p, _p );
 		addForceAt( _f.copy( fwd ).multiplyScalar( - R * Math.sign( u ) ), _p );
-		// air drag on hull + house (Cd ~0.9, ~6 m^2 frontal area)
-		F.addScaledVector( this.velocity, - 3.3 * this.speed );
+		// air drag on hull + house (Cd ~0.9, ~6 m^2 frontal area). (Salt Life) On the air moving past her,
+		// the wind with her own motion taken off (the apparent wind): on a still day the drag of her
+		// motion through the air as before; in a wind she's pushed downwind, more when it's on her beam
+		const ws = G.windSpeed.value, wdir = G.windDir.value;
+		_g.set( wdir.x * ws - this.velocity.x, 0, wdir.y * ws - this.velocity.z );
+		const aw = _g.length();
+		if ( aw > 1e-4 ) {
+
+			const c = clamp( _g.dot( fwd ) / aw, - 1, 1 ); // the cosine of the wind's angle to her keel (+: from astern)
+			const area = WIND_AREA[ 0 ] * Math.abs( c ) + WIND_AREA[ 1 ] * Math.sqrt( 1 - c * c );
+			_p.copy( this.windage );
+			_p.z -= WIND_LEAD * c;
+			addForceAt( _g.multiplyScalar( 0.5 * AIR * WIND_CD * area * aw ), this.toWorld( _p, _p ) );
+
+		}
 
 		// ---- lateral hydrodynamics along the keel: hull lift ~ u * v and cross-flow drag ~ v|v| at
 		// each station (v includes the yaw rate): directional stability, the turning circle, speed
@@ -394,6 +434,15 @@ export class BoatController {
 		// the keel's lift resists roll in proportion to speed (a boat underway rolls much less)
 		_v.set( - aLoc.x * 25000, - aLoc.y * 2000, - aLoc.z * ( 4500 + 900 * au ) ).multiplyScalar( wd ).applyQuaternion( this.quaternion );
 		T.add( _v );
+		// ---- (Salt Life) righting past RIGHT_FROM: a torque turning her up toward upright
+		const tilt = Math.asin( Math.min( 1, Math.hypot( up.x, up.z ) ) );
+		if ( tilt > RIGHT_FROM && up.y > 0 ) {
+
+			const k = RIGHT_K * ( tilt - RIGHT_FROM ) * wetD / Math.max( Math.hypot( up.x, up.z ), 1e-6 );
+			T.x -= up.z * k;
+			T.z += up.x * k;
+
+		}
 
 		// ---- mooring lines when docked and not driven
 		if ( this.moored && ! this.driven ) {
@@ -463,7 +512,7 @@ export class BoatController {
 
 	}
 
-	// back to the berth, at rest (safety net if the integration ever blows up)
+	// back to the berth, at rest (safety net if the integration ever blows up; and Marta's tow)
 	reset() {
 
 		this.position.copy( WORLD.boatDock.position );
@@ -477,6 +526,7 @@ export class BoatController {
 		this.mooring.anchor.copy( WORLD.boatDock.position );
 		this.mooring.heading = WORLD.boatDock.heading;
 		this.anchor = null;
+		this.hasWater = false; // (Salt Life: the water where she was is no use here)
 
 	}
 

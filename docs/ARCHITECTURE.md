@@ -25,25 +25,26 @@ Salt Life is [Tidewater](https://github.com/dgreenheck/tidewater) rebuilt as an 
 
 `App.frame(dt)` runs, in order:
 1. The island's clock (`settings.timeOfDay` and `settings.day`, advanced by `IslandClock.advance`, or worked out from the session's clock: see [The island's day](#the-islands-day)).
-2. Input.
-3. The boat's physics (`BoatController`).
-4. The player (`Player`: walking, swimming, on deck or at the helm), then the fishing game (`Game`).
-5. The sky.
-6. The CPU water queries (`WaterQuery`: Gerstner waves plus the shore waves). They give heights for the boat, the swimmer, the bobber and the birds.
-7. Everything else (plants, reef, fish, wildlife, spray, sound).
-8. The drawing, through the SDK's `createStage`. On high it also goes through `PostChain`.
+2. The weather (`WeatherDriver`): the wind, the sea, the surf, the cloud and the light, from the clock (see [The weather](#the-weather)).
+3. Input.
+4. The boat's physics (`BoatController`).
+5. The player (`Player`: walking, swimming, on deck or at the helm), then the fishing game (`Game`).
+6. The sky.
+7. The CPU water queries (`WaterQuery`: Gerstner waves plus the shore waves). They give heights for the boat, the swimmer, the bobber and the birds.
+8. Everything else (plants, reef, fish, wildlife, spray, sound).
+9. The drawing, through the SDK's `createStage`. On high it also goes through `PostChain`.
 
 ## Where things are
 
 | Folder | What's in it |
 |---|---|
 | `src/core` | Globals (shared uniforms such as `G.time`, `G.sunDir`, `G.night`), input, saving (`SaveStore`: `portal.save.personal`), the CDLOD grid, `ClassicWorker`, `ReleaseAfterUpload` |
-| `src/world` | The island: terrain, village, pier, rocks, plants, debris, reef and fish, wildlife, the whale, the boat model, colliders, the layout (`WorldLayout`) |
+| `src/world` | The island: terrain, village, pier, rocks, plants, debris, reef and fish, wildlife, the whale, the boat model, colliders, the layout (`WorldLayout`); the weather's driver (`WeatherDriver`) |
 | `src/ocean` | The sea: Gerstner waves, shore waves, the water surface and its detail, the wake, the CPU water queries |
 | `src/sky` | Atmosphere, clouds, the sun and moon, the environment map |
 | `src/materials` | Shader pieces shared by many materials: local lights at night, the clouds' shadows (high), height haze (three's fog chunks, replaced), underwater light, LOD fades |
 | `src/player` | The player, the boat's physics, the bow spray |
-| `src/game` | The fishing game: the rod, bites, the fight, the catch card, the cooler and log, the stalls, Joe and Marta, the HUD, the minimap, the guide; the speargun; the cast net and the bait |
+| `src/game` | The fishing game: the rod, bites, the fight, the catch card, the cooler and log, the stalls, Joe and Marta, the HUD, the minimap, the guide; the speargun; the cast net and the bait; the island's clock and its weather (`Weather.js`) |
 | `src/fx`, `src/post` | Spray, marine snow, air motes; the high tier's post chain and sun shafts |
 | `src/ui` | The HUD's DOM, touch controls, fonts |
 | `src/engine/index.js` | `three` itself, re-exported: the ported files still import it as Tidewater's engine |
@@ -130,6 +131,39 @@ Everyone keeps their own progress and their own fish.
 
 - Their bites under the pier double while the lamps are lit (`Bites.lampsLit`, `Bites.pickSpecies`). A tarpon is let go: it's catch and release (Spearfishing, below).
 - The bay's tarpon swim to the pier head once the lamps come on and back to the bay by day (`night` on their group in `world/Fish.js`; the app sets the lamps' state on the fish each frame).
+
+## The weather
+
+`src/game/Weather.js` is what the weather is, with no three.js (`test/weather.mjs` runs it under Node). `src/world/WeatherDriver.js` puts it on the island each frame.
+
+- **From the day alone:** the weather is a function of the island's time (`islandTime( day, hour )`, game hours since day 1 began), as the wanted lists are of the day. Everyone on one clock has the same weather, and nothing is sent.
+  - Two slow fields over that time: storminess (the wind, the swell) and cloudiness (it can grey a calm day too). Each is value noise in two octaves, about 60 h and 14 h, mapped through its own distribution so that it's spread evenly.
+  - They're read against the conditions' rows (`CONDITIONS`): calm, fair, breezy, cloudy, blustery and gale. About half the time it's fair, a tenth calm, and a gale about one hour in twenty-five.
+  - The swell comes from the storm ahead (storminess 3 and 6 hours on), so the surf builds before a blow.
+  - Only `+ − × ÷` and integer hashes: every device works out the same condition from the same time.
+  - Day 1 is fair, and the forecast comes in over the first hours of day 2 (a new player's first morning; the checks start there).
+  - **Fair is the island as it always was:** 7 m/s of wind, today's sea, surf, cloud and light.
+- **What it drives** (`WeatherDriver`):
+  - the wind's speed, `G.windSpeed`: the plants, the village's flags and lanterns, the sea's gusts, slicks and windrows, the spray, the boat, the sound. The birds drift in no more than 10 m/s of it;
+  - the open sea (`Waves.setSea`): the swell's and the wind sea's heights, the wind sea growing as wind^1.5. Only the heights change, in place on the CPU and the GPU, so the sea builds where it is; the CPU's heights take more fixed-point steps on a steep sea;
+  - whitecaps (`WaterSurface`): in a wind over fair's, Monahan's share of the sea breaking white, as patches along the crests near by and scattered further off. A uniform behind a branch: nothing is drawn for them on a fair day;
+  - the surf (`ShoreWaves.setSurf`): its height, up to `SURF_MAX` (0.6 m: bigger, the sets break on the pier head and over the boat at the dock). Its run-up grows as the root of its height (Stockdon), so it never reaches the boardwalk (`test/waves.mjs`);
+  - the cloud (`SkyProClouds`): its cover, and how grey it is (`overcast`: denser, its bases everywhere, darker below). Slow changes are followed by the panorama's progressive refresh and the view's history; only a step (a jump of the clock) makes a new panorama;
+  - the light (`Sky.overcast`): the sun dims under a grey sky (to 30% of a clear day's on low and mid; to 70% on high, where the clouds' shadows dim the rest), and the sky's light greys and rises a little;
+  - how far you see (`Sky.visibility`): the tier's fog distances, nearer in murk;
+  - the sound: the wind and the palms louder in a gale, the surf's waves louder as the root of the swell, and its far roar building faster.
+- **Easing:** the wind and the sea come round over half a minute or so, the cloud more slowly (a few minutes from fair to a gale's). A jump of the clock (a rest, adopting the host's clock, coming back to the tab) sets it all at once, and the boat takes the sea as she finds it.
+- **What stays as it was:** the wind's direction and the surf's period. Turning the wind would turn the wind sea and the sand's ripples about the island's middle; the shore waves' phase is ( t − T ) / period with T in the thousands of seconds, so a new period would set the breakers racing ([docs/M9.md](M9.md)).
+- **The boat in the wind** (`BoatController`): drag on the apparent wind, 6 m² end-on and 11 m² abeam, at a centre of effort over the keel's centre of lateral resistance, up on the house. It moves toward the end the wind comes from as it comes round from abeam (as on a flat plate), so beam-on is how she lies.
+  - Left to herself she comes round beam-on and drifts downwind (about 0.3 m/s on a fair day, 0.9 in a gale), heeling a little.
+  - At anchor she lies head to wind.
+  - Past 25° of heel her full keel and flared topsides right her harder (`RIGHT_K`): the waterplane samples alone lose their grip there, and a gale's wind and beam seas would roll her over.
+  - On a still day her drag through the air is what it always was.
+- **Marta's tow:** when your boat has drifted more than 30 m from the dock with nobody at her helm, Marta's panel (and her honesty box) offers to tow her in (`Game.tow`): $20 and a little every 100 m, at most $90 (`towFee`). Short of it, she takes what you have.
+- **The clock's menu** (`TimeHUD`):
+  - what the weather is (wind in knots, surf as a report gives it, `surfText`) and what's coming (`forecast`);
+  - on your own, a choice of it: the forecast or any condition. It's saved with the clock (`weather`), and holds only while you're surely alone (`Together.surelyAlone`: a solo session, or nobody else here once the first lists are in). In company the weather is the day's.
+  - On its own (`pnpm dev`), `?weather=gale` holds it from the first frame, company or not; `?weather=forecast` is the day's.
 
 ## Spearfishing
 
@@ -226,7 +260,7 @@ Marta sells one (`anchor` in `Gear.js`: a Danforth on 200 ft of rode, `anchorM` 
 - **The rode** (`BoatController.anchor`, the spot on the bottom): it's made fast at the stem head, slack until the bow swings 4 m from over the anchor (`RODE_SLACK`), then a damped spring that only pulls, so the boat is brought up short and her bow comes round to it.
 - **What you see:** the rode, the fishing line's ribbon at twice its width in rope's colour, from the stem head down and along the bottom (`Game.rode`). At night the masthead shows the anchor light.
 - Others see it too: the pose says your boat is at anchor (`A`), and their copy of it shows the anchor light.
-- With nothing yet pushing a boat sideways (no wind or current), what it does now is stop her coasting on once you've left the helm. It's what weather's wind will push against.
+- The wind pushes her (The weather, below), and the rode holds her against it: she swings round to lie head to wind, and in a gale she sails about on it before she settles.
 
 ## The boat at night
 
@@ -257,6 +291,7 @@ Marta sells one (`anchor` in `Gear.js`: a Danforth on 200 ft of rode, `anchorM` 
 | Reef, fish | shorter range, fewer schools | fewer schools | Tidewater's |
 | Spray particles | 1k | 2k | 4k |
 | Extras | | air motes | air motes, sun shafts, refraction, bloom, the clouds' shadows |
+| The sun under a grey sky | 30% | 30% | 70% (the clouds' shadows do the rest) |
 
 The checks hold the low tier to its budgets: 150 draw calls, 300k triangles, 128 MB of textures and 150 MB of script memory. Mid stays under 1M triangles and high under 3M.
 
@@ -278,7 +313,7 @@ The checks' browser has no graphics card, and some laptops don't either. `App.cp
 
 ## Testing
 
-- `pnpm test`: the game's logic, the island's day (the clock, the stalls' hours, the wanted lists), the waves, the reef and fish, the spearfishing, the cast net and bait, the whale and the spray, under Node. It also checks that the baked terrain matches its generator and that every asset has a licence.
+- `pnpm test`: the game's logic (and the boat in the wind, and the tow), the island's day (the clock, the stalls' hours, the wanted lists), the weather, the waves (a gale's sea, the biggest surf), the reef and fish, the spearfishing, the cast net and bait, the whale and the spray, under Node. It also checks that the baked terrain matches its generator and that every asset has a licence.
 - Two players on one machine: `pnpm dev`, then `/tools/two-players/?name=Robin` and `?name=Sam` in two windows of one browser (`tools/two-players/`: a stand-in for the app and its realtime room).
 - All the Spaces' checks, from its checkout: `node packages/qa-browser/src/cli.ts check ../salt-life`. Run them from an up-to-date `main` there.
 - `qa/script.json` is what the checks play.

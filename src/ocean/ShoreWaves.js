@@ -20,11 +20,14 @@ import { G, GRAVITY } from '../core/Globals.js';
 //   vec4 shoreSwashEdge( vec2 xz, float t )   ( clipped film thickness, distance to the swash front, tau, Rt )
 //   vec3 shoreSurfScatter( vec2 xz, float depth )   milky surf-zone turbidity weight (0..1) * colour
 // CPU: sample( x, z, t, groundH ) -> { y, swashLevel, env } for WaterQuery.
+// (Salt Life) setSurf( amplitude ): the weather's surf (Weather.js); the period stays (the phase is
+// ( t - T ) / period, with T in the thousands of seconds: a new period would set the breakers racing).
 
 const TAU = Math.PI * 2;
 const BEACH_SLOPE = 0.066; // run-up is converted to a horizontal excursion with this slope
 const SWASH_UP = 0.4, SWASH_DOWN = 0.55; // fractions of the period: uprush, backwash
 const SWASH_OVERSHOOT = 1.2; // the mesh sheet reaches this far (m) past the leading edge
+const FAIR_AMPLITUDE = 0.34; // (Salt Life) the surf on a fair day (params.amplitude), run-up 1
 
 const f = ( x ) => {
 
@@ -47,7 +50,7 @@ export class ShoreWaves {
 
 		this.params = {
 			period: 9.0,
-			amplitude: 0.34, // offshore amplitude (H/2)
+			amplitude: FAIR_AMPLITUDE, // offshore amplitude (H/2)
 			variation: 0.55,
 			gamma: 0.78,
 			// fraction of the break depth over which the lip plunges (peeling shoulders, not vertical cuts)
@@ -69,6 +72,19 @@ export class ShoreWaves {
 		};
 		this.syncUniforms();
 		this.glsl = SHORE_GLSL;
+
+	}
+
+	// (Salt Life) the surf the weather brings: the waves' offshore amplitude. They run up the sand as
+	// the root of their height (run-up goes as sqrt( H L ), Stockdon 2006), not in proportion, so a
+	// big swell doesn't flood the beach; today's surf runs up as it always has
+	setSurf( amplitude ) {
+
+		const P = this.params;
+		if ( amplitude === P.amplitude ) return;
+		P.amplitude = amplitude;
+		P.runup = Math.sqrt( FAIR_AMPLITUDE / amplitude );
+		this.syncUniforms();
 
 	}
 
