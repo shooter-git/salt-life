@@ -1,5 +1,8 @@
 import { DAY_RATE, REST, REST_NAMES, isOpen, restTo, sunUp, timeText } from './IslandClock.js';
 import { HOURS } from './Orders.js';
+import { CONDITIONS, WEATHER_IDS, WEATHER_NAMES, islandTime, forecast, surfText, windFrom } from './Weather.js';
+import { G } from '../core/Globals.js';
+import { knots } from './Units.js';
 
 // (Salt Life) The island's clock in the HUD: the time at the left of the purse (a sun by day, a moon at
 // night, two bars while it's held), and, when it's tapped (T; R3 on a gamepad), a small menu under the
@@ -7,7 +10,9 @@ import { HOURS } from './Orders.js';
 //   on your own   hold the clock or let it run, rest until dawn, noon, dusk or night
 //   in company    time runs for everyone; a rest happens once all of you want it (each choice shows
 //                 who wants it; a dot on the clock when someone else does and you haven't said)
-// It says when Joe and Marta open or shut. No toasts: a rest dims the world for a moment instead.
+// It says when Joe and Marta open or shut, and (Salt Life) the weather: what it is, what's coming, and on
+// your own a choice of it (held while you're alone; in company it's the day's). No toasts: a rest dims
+// the world for a moment instead.
 //   const t = new TimeHUD( game, purse, root );  t.update( dt )  (per frame)  t.toggle( open? )
 
 const ICON = {
@@ -35,6 +40,10 @@ const CSS = /* css */`
 	padding: var(--tw-3) var(--tw-4) var(--tw-3); border-radius: var(--tw-r-lg); font: 500 var(--tw-fs-md) var(--tw-font); color: var(--tw-ink);
 	opacity: 0; transform: translateY(-4px); pointer-events: none; transition: opacity var(--tw-med) var(--tw-ease), transform var(--tw-med) var(--tw-ease); }
 .gm-time.is-open { opacity: 1; transform: none; pointer-events: auto; }
+/* (on a phone on its side it scrolls rather than run off the screen) */
+.gm-time { max-height: calc(100vh - var(--gm-band, 56px) - 3 * var(--tw-2)); max-height: calc(100dvh - var(--gm-band, 56px) - 3 * var(--tw-2)); overflow-y: auto; overscroll-behavior: contain; }
+.gm-time-wx { color: var(--tw-ink-2); }
+.gm-time-wx b { color: var(--tw-ink); font-weight: 600; }
 .gm-time-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--tw-2); }
 .gm-time-now { font: 600 calc(20 * var(--tw-u)) var(--tw-mono); letter-spacing: -0.01em; }
 .gm-time-day { color: var(--tw-ink-3); font-size: var(--tw-fs-sm); }
@@ -62,6 +71,15 @@ html.is-touch .tw-root:has(.gm-time.is-open) :is(.gm-map, .gm-coach) { visibilit
 /* with a panel up on a phone on its side, the purse is only your money (game-ui.css): the clock too goes */
 @media (prefers-reduced-motion: reduce) { .gm-time, .gm-rest-fade { transition: none; } }
 `;
+
+const WEATHER_WIND = Object.fromEntries( WEATHER_IDS.map( ( id ) => [ id, CONDITIONS[ id ].wind ] ) );
+// the direction a wind turned `a` from the trades blows toward
+const turned = ( a ) => {
+
+	const p = G.windPrevailing.value, c = Math.cos( a ), s = Math.sin( a );
+	return [ p.x * c - p.y * s, p.x * s + p.y * c ];
+
+};
 
 const h = ( tag, cls, html ) => {
 
@@ -221,7 +239,16 @@ export class TimeHUD {
 		const loc = this.locale, at = ( hr ) => timeText( hr, loc, 30 );
 		const stall = ( name, hours ) => isOpen( hours, st.hour ) ? `${ name } until ${ at( hours[ 1 ] ) }` : `${ name } opens ${ at( hours[ 0 ] ) }`;
 		const asks = st.asks.map( ( a ) => `${ a.name }:${ a.to }` ).join( ',' );
-		const sig = [ timeText( st.hour, loc ), st.day, st.held, st.alone, st.mine, asks, st.here.length, this.app.input.lastDevice ].join( '|' );
+		// (Salt Life) the weather as it's going to be (not as it's easing there: the menu isn't drawn again
+		// every frame), and what's coming
+		// (chosen: what you picked; pick: whether it holds yet, once you're surely alone)
+		const wx = this.app.weather && this.app.weather.target, chosen = st.alone ? this.app.settings.weather : null;
+		const pick = chosen && this.app.weatherPick ? this.app.weatherPick() : chosen;
+		const next = wx && ! pick ? forecast( islandTime( st.day, st.hour ), 12 ) : null;
+		const wxLine = wx ? `<b>${ WEATHER_NAMES[ wx.id ] }</b> · wind ${ windFrom( ...turned( wx.windAngle ) ) } ${ knots( wx.wind ) } · surf ${ surfText( wx.surf ) } at ${ Math.round( wx.period ) } s` : '';
+		const wxNext = pick ? 'Your choice holds while you\'re on your own' : st.alone || ! wx ? ( next ? `Later: ${ WEATHER_NAMES[ next.id ].toLowerCase() }, from ${ at( next.at % 24 ) }` : 'Settled for now' )
+			: `The weather follows the island's day${ next ? ` · later ${ WEATHER_NAMES[ next.id ].toLowerCase() }` : '' }`;
+		const sig = [ timeText( st.hour, loc ), st.day, st.held, st.alone, st.mine, asks, st.here.length, this.app.input.lastDevice, wxLine, wxNext, chosen ].join( '|' );
 		if ( sig === this._sig ) return;
 		this._sig = sig;
 		const focused = this.menu.contains( document.activeElement ) ? [ ...this.menu.querySelectorAll( 'button' ) ].indexOf( document.activeElement ) : - 1;
@@ -235,8 +262,16 @@ export class TimeHUD {
 		let body, note = '';
 		if ( st.alone ) {
 
+			// (Salt Life) the weather: the day's, or one of your own while you're alone
+			const weather = [ null, ...WEATHER_IDS ].map( ( id ) => {
+
+				const on = ( chosen || null ) === id;
+				return `<button type="button" data-weather="${ id || '' }" class="${ on ? 'is-on' : '' }" aria-pressed="${ on }">${ id ? WEATHER_NAMES[ id ] : 'Forecast' }<small>${ id ? knots( WEATHER_WIND[ id ] ) : 'today' }</small></button>`;
+
+			} ).join( '' );
 			body = `<button type="button" class="gm-time-hold" data-hold>${ st.held ? ICON.play : ICON.held }<span>${ st.held ? 'Let the day run' : 'Hold the clock' }</span><small>${ st.held ? 'held' : 'running' }</small></button>
-				<div class="gm-time-label">Rest until</div><div class="gm-time-rest">${ rest }</div>`;
+				<div class="gm-time-label">Rest until</div><div class="gm-time-rest">${ rest }</div>
+				<div class="gm-time-label">Weather</div><div class="gm-time-rest">${ weather }</div>`;
 
 		} else {
 
@@ -253,11 +288,13 @@ export class TimeHUD {
 		this.menu.innerHTML = `
 			<div class="gm-time-head"><b class="gm-time-now">${ timeText( st.hour, loc ) }</b><span class="gm-time-day">Day ${ st.day }</span></div>
 			<p class="gm-time-sub">${ stall( 'Joe', HOURS.joe ) } · ${ stall( 'Marta', HOURS.marta ) }</p>
+			${ wxLine ? `<p class="gm-time-sub gm-time-wx">${ wxLine }</p><p class="gm-time-sub">${ wxNext }</p>` : '' }
 			${ body }
 			${ keys ? `<div class="gm-time-foot">${ keys }</div>` : '' }`;
 		const hold = this.menu.querySelector( '[data-hold]' );
 		if ( hold ) hold.onclick = () => this.hold( ! st.held );
 		for ( const b of this.menu.querySelectorAll( '[data-rest]' ) ) b.onclick = () => this.rest( b.dataset.rest === this.state().mine ? null : b.dataset.rest );
+		for ( const b of this.menu.querySelectorAll( '[data-weather]' ) ) b.onclick = () => this.pickWeather( b.dataset.weather || null );
 		const buttons = this.menu.querySelectorAll( 'button' );
 		if ( focused >= 0 && buttons[ focused ] ) buttons[ focused ].focus( { preventScroll: true } );
 
@@ -268,6 +305,15 @@ export class TimeHUD {
 		const t = this.app.together, s = this.app.settings;
 		if ( t ) t.holdClock( held );
 		else s.timeSpeed = held ? 0 : DAY_RATE;
+		this.app.saveClock && this.app.saveClock();
+		this._sig = '';
+
+	}
+
+	// (Salt Life) the weather you choose on your own (null: the day's); it comes in over a minute or two
+	pickWeather( id ) {
+
+		this.app.settings.weather = id;
 		this.app.saveClock && this.app.saveClock();
 		this._sig = '';
 

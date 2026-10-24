@@ -20,11 +20,17 @@ import { G, GRAVITY } from '../core/Globals.js';
 //   vec4 shoreSwashEdge( vec2 xz, float t )   ( clipped film thickness, distance to the swash front, tau, Rt )
 //   vec3 shoreSurfScatter( vec2 xz, float depth )   milky surf-zone turbidity weight (0..1) * colour
 // CPU: sample( x, z, t, groundH ) -> { y, swashLevel, env } for WaterQuery.
+// (Salt Life) setSurf( amplitude, period ): the weather's surf (Weather.js). The waves' phase runs on a
+// clock re-anchored whenever the period changes (phase( t, T ), timeOf( s, T ); the GPU's shoreClock,
+// set each frame by update( t )): a wave carries on from where it was, only the crests' spacing changes.
+// As ( t - T ) / period, with T in the thousands of seconds, a new period would set the breakers racing.
 
 const TAU = Math.PI * 2;
 const BEACH_SLOPE = 0.066; // run-up is converted to a horizontal excursion with this slope
 const SWASH_UP = 0.4, SWASH_DOWN = 0.55; // fractions of the period: uprush, backwash
 const SWASH_OVERSHOOT = 1.2; // the mesh sheet reaches this far (m) past the leading edge
+const FAIR_AMPLITUDE = 0.34; // (Salt Life) the surf on a fair day (params.amplitude), run-up 1
+const FAIR_PERIOD = 9; // (and its period, s)
 
 const f = ( x ) => {
 
@@ -46,8 +52,8 @@ export class ShoreWaves {
 		this.texture = tex;
 
 		this.params = {
-			period: 9.0,
-			amplitude: 0.34, // offshore amplitude (H/2)
+			period: FAIR_PERIOD,
+			amplitude: FAIR_AMPLITUDE, // offshore amplitude (H/2)
 			variation: 0.55,
 			gamma: 0.78,
 			// fraction of the break depth over which the lip plunges (peeling shoulders, not vertical cuts)
@@ -61,6 +67,10 @@ export class ShoreWaves {
 			shoreTex: { value: tex },
 			shoreInfo: { value: new THREE.Vector4( field.origin, field.origin, field.size, field.res ) },
 			shoreTime: G.time,
+			// (Salt Life) the waves' clock: clock( t ), and the travel time it's counted from (the bay's
+			// middle: there a change of period moves nothing)
+			shoreClock: { value: 0 },
+			shoreRef: { value: 0 },
 			shoreSeaLevel: G.seaLevel,
 			// period, amplitude, variation, gamma
 			shoreP0: { value: new THREE.Vector4() },
@@ -69,6 +79,63 @@ export class ShoreWaves {
 		};
 		this.syncUniforms();
 		this.glsl = SHORE_GLSL;
+		// (Salt Life) the clock: clock( t ) = c0 + ( t - t0 ) / period; at the start, ( t - ref ) / period,
+		// so a wave's phase there, clock( t ) - ( T - ref ) / period, is ( t - T ) / period as it always was
+		const ref = this.uniforms.shoreRef.value = this.fieldAt( 0, 0 )[ 0 ];
+		this._t0 = 0;
+		this._c0 = - ref / this.params.period;
+		this.update( G.time.value );
+
+	}
+
+	// (Salt Life) the surf the weather brings: the waves' offshore amplitude and their period. Run-up
+	// goes as sqrt( H L ) (Stockdon 2006), L as the period squared: so as the root of their height,
+	// not in proportion (a big swell doesn't flood the beach), and in proportion to the period (a long
+	// groundswell runs further up); today's surf runs up as it always has
+	setSurf( amplitude, period = this.params.period, t = G.time.value ) {
+
+		const P = this.params;
+		if ( amplitude === P.amplitude && period === P.period ) return;
+		if ( period !== P.period ) {
+
+			// the clock carries on from where it is, at the new pace
+			this._c0 = this.clock( t );
+			this._t0 = t;
+			P.period = period;
+
+		}
+
+		P.amplitude = amplitude;
+		P.runup = Math.sqrt( FAIR_AMPLITUDE / amplitude ) * period / FAIR_PERIOD;
+		this.syncUniforms();
+		this.update( t );
+
+	}
+
+	// (Salt Life) the waves' clock at time t (in waves); a wave's phase at a point whose travel time is T;
+	// and when a phase s comes to it
+	clock( t ) {
+
+		return this._c0 + ( t - this._t0 ) / this.params.period;
+
+	}
+
+	phase( t, T ) {
+
+		return this.clock( t ) - ( T - this.uniforms.shoreRef.value ) / this.params.period;
+
+	}
+
+	timeOf( s, T ) {
+
+		return this._t0 + ( s + ( T - this.uniforms.shoreRef.value ) / this.params.period - this._c0 ) * this.params.period;
+
+	}
+
+	// each frame: the GPU's clock
+	update( t = G.time.value ) {
+
+		this.uniforms.shoreClock.value = this.clock( t );
 
 	}
 
@@ -108,7 +175,7 @@ export class ShoreWaves {
 		const along = x * - dz + z * dx;
 		const runup = ( tt ) => {
 
-			const ssw = ( tt - sh[ 3 ] ) / P.period + wobble( along );
+			const ssw = this.phase( tt, sh[ 3 ] ) + wobble( along );
 			const ms = Math.floor( ssw ), tau = ssw - ms;
 			const Am = this.waveAmp( ms, along );
 			const RhMax = Am * 2.1 * P.runup * sat( exposure * 1.4 ) / BEACH_SLOPE;
@@ -143,7 +210,7 @@ export class ShoreWaves {
 		const exposure = Math.hypot( sh[ 1 ], sh[ 2 ] );
 		const dx = sh[ 1 ] / Math.max( exposure, 1e-4 ), dz = sh[ 2 ] / Math.max( exposure, 1e-4 );
 		const along = x * - dz + z * dx;
-		const s = ( t - sh[ 0 ] ) / P.period + wobble( along );
+		const s = this.phase( t, sh[ 0 ] ) + wobble( along );
 		const c = Math.sqrt( clamp( d, 0.3, 25 ) * GRAVITY ), lam = c * P.period;
 		const m = Math.floor( s + 0.5 ), u = s - m;
 		const A0 = this.waveAmp( m, along ), An = this.waveAmp( m + Math.sign( u ), along );
@@ -156,7 +223,7 @@ export class ShoreWaves {
 		out.y = this.profileY( u, A, dB, lam ) * env;
 		// swash run-up of the most recent wave on the sand
 		const inland = Math.max( groundH - sea, 0 ) / BEACH_SLOPE;
-		const ssw = ( t - sh[ 3 ] ) / P.period + wobble( along );
+		const ssw = this.phase( t, sh[ 3 ] ) + wobble( along );
 		const ms = Math.floor( ssw ), tau = ssw - ms;
 		const Am = this.waveAmp( ms, along );
 		const RhMax = Am * 2.1 * P.runup * sat( exposure * 1.4 ) / BEACH_SLOPE;
@@ -276,6 +343,8 @@ const SHORE_GLSL = /* glsl */`
 uniform highp sampler2D shoreTex;
 uniform vec4 shoreInfo; // origin x, origin z, size, res
 uniform float shoreTime;
+uniform float shoreClock; // (Salt Life: the waves' clock, ShoreWaves.clock)
+uniform float shoreRef;
 uniform float shoreSeaLevel;
 uniform vec4 shoreP0; // period, amplitude, variation, gamma
 uniform vec4 shoreP1; // breakSpan, curl, runup, enabled
@@ -478,7 +547,7 @@ ShorePhase shorePhaseAt( vec2 xz ) {
 	float exposure = length( dirE );
 	vec2 dir = dirE / max( exposure, 1e-4 );
 	float along = dot( xz, vec2( - dir.y, dir.x ) );
-	float s = ( shoreTime - sh.x ) / SHORE_PERIOD + shoreWobble( along );
+	float s = shoreClock - ( sh.x - shoreRef ) / SHORE_PERIOD + shoreWobble( along );
 	return ShorePhase( sh, sh.x, dir, exposure, along, s );
 }
 
@@ -487,7 +556,7 @@ ShoreRunup shoreSwashRunup( vec4 sh, float along, float groundH ) {
 	float Tp = SHORE_PERIOD;
 	float exposure = length( sh.yz );
 	float inland = max( groundH - shoreSeaLevel, 0.0 ) / SHORE_BEACH_SLOPE;
-	float ssw = ( shoreTime - sh.w ) / Tp + shoreWobble( along );
+	float ssw = shoreClock - ( sh.w - shoreRef ) / Tp + shoreWobble( along );
 	float ms = floor( ssw );
 	float tau = ssw - ms;
 	float Am = shoreWaveAmp( ms, along );

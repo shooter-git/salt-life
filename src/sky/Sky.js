@@ -38,6 +38,9 @@ const _c = new THREE.Color();
 const _tint = new THREE.Color();
 const MOON = new THREE.Color( 0.55, 0.65, 1.0 );
 const FOG_DISTANCE = { low: [ 250, 1600 ], mid: [ 400, 3000 ], high: [ 600, 5000 ] };
+// (Salt Life) under a grey sky (overcast 1) the sun's direct light falls to this share of a clear day's;
+// on high the clouds' shadow map already dims it where they are, so less is taken off here
+const UNDER_CLOUD = { low: 0.3, mid: 0.3, high: 0.7 };
 // the environment: cube size, s between refreshes for the drifting clouds (low: when the sun moves)
 const ENV = { low: { size: 64, interval: 60 }, mid: { size: 128, interval: 10 }, high: { size: 128, interval: 4 } };
 // Tidewater's night (its units): the moon's light on the clouds and the night sky's ambient, the
@@ -62,6 +65,7 @@ uniform float skyStarIntensity;
 uniform float skyNight;
 uniform float skyUnderwater;
 uniform vec3 skyFogColor;
+uniform vec4 skyGrey; // (Salt Life) the horizon under a grey sky: ( its radiance, how much )
 uniform float skyTime;
 uniform float skyExposure;
 varying vec3 vSkyDir;
@@ -177,6 +181,8 @@ void main() {
 	vec4 c = cloudsSampleView( dir );
 	vec3 L = base * c.a + sun * cloudsSunTransmittance( c.a ) + c.rgb;
 #endif
+	// (Salt Life) under a grey sky the horizon greys, as the fog does (Sky.update): they meet in one grey
+	L = mix( L, skyGrey.rgb, skyGrey.a * ( 1.0 - smoothstep( 0.0, 0.3, dir.y ) ) );
 	gl_FragColor = vec4( L * skyExposure, 1.0 );
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
@@ -216,6 +222,7 @@ export class Sky {
 			// three hands it to its fog (in the space of the target drawn: the dome's onBeforeRender)
 			skyUnderwater: G.cameraUnderwater,
 			skyFogColor: { value: new THREE.Color() },
+			skyGrey: { value: new THREE.Vector4() },
 		};
 		this.moonDir = this.uniforms.skyMoonDir.value;
 		this.sunDiskIntensity = this.uniforms.skySunDiskIntensity;
@@ -265,6 +272,10 @@ export class Sky {
 		// (the sky's prefiltered map is bright and blue: as diffuse light it greys the sand, so it is a
 		// small fill here; the water reflects it at full strength through its own envMapIntensity)
 		this.levels = { sun: 3.2, sky: 0.25, env: 0.09 };
+		// (Salt Life) the weather (WeatherDriver): how grey the sky is (0..1), and how far you see (x the
+		// tier's fog distances). 0 and 1 are the island's clear day
+		this.overcast = 0;
+		this.visibility = 1;
 		this._lit = { sunTransmittance: new THREE.Color(), skyIrradiance: new THREE.Color(), horizon: new THREE.Color() };
 		this._noon = this.atmosphere.lighting( 1, { sunTransmittance: new THREE.Color(), skyIrradiance: new THREE.Color(), horizon: new THREE.Color() } );
 		// the sky's irradiance (luminance) below which the eye adapts: the sun 15 degrees up
@@ -338,18 +349,20 @@ export class Sky {
 		// faded out as it sets), the moon at night
 		const horizonFade = THREE.MathUtils.smoothstep( dir.y, - 0.03, 0.02 );
 		const day = THREE.MathUtils.smoothstep( dir.y, - 0.04, 0.12 );
+		// (the sun, or the moon, through a grey sky)
+		const veiled = 1 - ( 1 - ( UNDER_CLOUD[ this.tier ] ?? UNDER_CLOUD.low ) ) * this.overcast;
 		if ( sunUp ) {
 
 			const m = Math.max( T.r, T.g, T.b, 1e-6 );
 			this.sun.color.setRGB( T.r / m, T.g / m, T.b / m );
 			// (the square root: to the adapted eye a low sun reddens more than it dims; the full
 			// transmittance left golden hour dull at this game's exposure)
-			this.sun.intensity = this.levels.sun * Math.sqrt( m ) * horizonFade;
+			this.sun.intensity = this.levels.sun * Math.sqrt( m ) * horizonFade * veiled;
 
 		} else {
 
 			this.sun.color.copy( MOON );
-			this.sun.intensity = 0.25 * night;
+			this.sun.intensity = 0.25 * night * veiled;
 
 		}
 
@@ -385,10 +398,12 @@ export class Sky {
 		const irr = lit.skyIrradiance, noon = this._noon.skyIrradiance;
 		const k = Math.min( 1.2, luminance( irr ) / luminance( noon ) );
 		const il = Math.max( luminance( irr ), 1e-6 );
-		_tint.setRGB( irr.r / il, irr.g / il, irr.b / il ).lerp( _c.setRGB( 1, 1, 1 ), 0.45 ).multiplyScalar( 0.68 );
+		// (a grey sky's light is greyer, and a little more of it: the cloud scatters the sun's light down,
+		// and the eye's adaptation, which follows the clear sky, doesn't make up for the dimmer sun)
+		_tint.setRGB( irr.r / il, irr.g / il, irr.b / il ).lerp( _c.setRGB( 1, 1, 1 ), 0.45 + 0.35 * this.overcast ).multiplyScalar( 0.68 );
 		// (a floor: at dusk the adapted eye still sees the land by the sky's light)
 		this.hemi.color.copy( _tint ).multiplyScalar( 0.32 + 0.68 * k ).lerp( MOON, night * 0.5 );
-		this.hemi.intensity = this.levels.sky * ( 0.65 + 0.35 * day );
+		this.hemi.intensity = this.levels.sky * ( 0.65 + 0.35 * day ) * ( 1 + 0.3 * this.overcast );
 		this.hemi.groundColor.setRGB( 0.32, 0.28, 0.2 ).multiplyScalar( 0.1 + 0.9 * day );
 		G.skyIrradiance.value.copy( this.hemi.color ).multiplyScalar( this.hemi.intensity );
 
@@ -402,13 +417,22 @@ export class Sky {
 		this.uniforms.skyExposure.value = skyAdapt;
 
 		// the horizon haze the fog fades into: the atmosphere's horizon (Tidewater's units, those of the
-		// sky behind the island) and the moonlit sky's at night
-		_c.copy( MOON_SKY ).multiplyScalar( night ).add( lit.horizon ).multiplyScalar( skyAdapt );
+		// sky behind the island) and the moonlit sky's at night. (Salt Life) Under a grey sky, a grey of
+		// its brightness, a little dimmer the greyer it is; the sky's dome takes the same toward its horizon
+		_c.copy( MOON_SKY ).multiplyScalar( night ).add( lit.horizon );
+		const grey = this.uniforms.skyGrey.value, gl = luminance( _c ) * ( 1 - 0.35 * this.overcast );
+		grey.set( 0.93 * gl, 0.96 * gl, gl, 0.85 * this.overcast );
+		_c.lerp( _tint.setRGB( grey.x, grey.y, grey.z ), grey.w ).multiplyScalar( skyAdapt );
 		this.fog.color.copy( _c );
 		G.horizonColor.value.copy( _c );
 		if ( this.scene.background && this.scene.background.isColor ) this.scene.background.copy( _c );
 
 		this.scene.environmentIntensity = this.levels.env * ( 0.6 + 0.4 * day );
+		// (Salt Life) how far you see: the tier's fog distances, nearer in rain and murk (App takes them
+		// into the scene's fog above water)
+		const [ near, far ] = FOG_DISTANCE[ this.tier ];
+		this.fogNear = near * this.visibility;
+		this.fogFar = far * this.visibility;
 
 		// ---- the GPU side: sky view LUT, clouds, environment
 		const cameraY = camera ? camera.position.y : 2;

@@ -25,6 +25,7 @@ const SPRAY = { DROPLET: 0, MIST: 1, LIGAMENT: 2, SPRAY: 3, SHEET: 4 };
 // Every bird is a Flyer (Flight.js) while airborne; perched / floating poses are set here.
 
 const DECK = WORLD.pier.deckHeight;
+const BIRD_WIND = 10; // m/s: (Salt Life) the most wind the birds drift in (a fresh breeze)
 const RAIL_TOP = DECK + 0.95 + 0.0445;
 const _v = new THREE.Vector3(), _w = new THREE.Vector3();
 
@@ -273,7 +274,8 @@ export class Birds {
 
 		this.time += dt;
 		this.lastViewer = viewer;
-		this.wind.set( G.windDir.value.x, G.windDir.value.y ).multiplyScalar( G.windSpeed.value );
+		// (Salt Life: in a gale they keep low and in the lee, out of the strongest of it, rather than fly backwards)
+		this.wind.set( G.windDir.value.x, G.windDir.value.y ).multiplyScalar( Math.min( G.windSpeed.value, BIRD_WIND ) );
 		const day = 1 - G.night.value;
 		this.updateSquad( dt );
 		for ( const a of this.agents ) {

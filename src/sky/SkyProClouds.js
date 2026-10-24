@@ -37,6 +37,9 @@ import { Cirrus, NoCirrus } from './Clouds.js';
 //     vec4 cloudsSample( vec3 dir )       panorama (reflections, environment)
 //     float cloudsSunTransmittance( float T )
 //   clouds.coverage, clouds.cirrusAmount   { value } 0..1
+//   clouds.overcast   { value } 0..1 (Salt Life: the weather's grey sky: denser, darker cloud, bases
+//     everywhere). Slow changes of these are followed by the progressive refresh and the history; a
+//     step (more than 0.05 in a frame) makes a new panorama
 //   clouds.update( dt, camera, keyColor, nightSky, night, skyIrradiance ) (Tidewater's frame values;
 //     keyColor: the moon's light at night)
 //   clouds.resolutionScale, clouds.resetHistory(), clouds.invalidate()
@@ -832,6 +835,7 @@ export class SkyProClouds {
 
 		// ---- public handles
 		this.coverage = { value: s.coverage };
+		this.overcast = { value: 0 };
 		this.resolutionScale = 1;
 		this.outputSize = null;
 
@@ -923,6 +927,7 @@ export class SkyProClouds {
 		this._prevCam = null;
 		this._prevLight = new THREE.Vector3();
 		this._lastCoverage = - 1;
+		this._lastOvercast = 0;
 		this.passes = 0; // passes drawn by the last update (stats)
 
 	}
@@ -1061,18 +1066,30 @@ export class SkyProClouds {
 
 		}
 
-		// ---- settings: coverage, wind direction
-		const cov = this.coverage.value;
-		if ( cov !== this._lastCoverage ) {
+		// ---- settings: coverage, overcast, wind direction. (Salt Life) The weather moves the first two
+		// a little every frame: the panorama's progressive refresh and the view's history follow on their
+		// own. Only a step (a pick, the clock jumping) makes a whole new panorama, and never restarts one
+		// already being made (the first one fades the clouds in, and brings the cirrus)
+		const cov = this.coverage.value, oc = this.overcast.value;
+		if ( cov !== this._lastCoverage || oc !== this._lastOvercast ) {
 
+			const step = Math.abs( cov - this._lastCoverage ) > 0.05 || Math.abs( oc - this._lastOvercast ) > 0.05;
 			U.scsShell.value[ 3 ] = cov;
+			this._setOvercast( oc );
 			this._lastCoverage = cov;
-			this.historyValid = false;
-			if ( this.ready ) this.panoWarm = this.warmFrames;
+			this._lastOvercast = oc;
+			if ( step ) {
+
+				this.historyValid = false;
+				if ( this.ready && this.panoWarm === 0 ) this.panoWarm = this.warmFrames;
+
+			}
 
 		}
 
-		const wd = G.windDir.value;
+		// (Salt Life: aloft, the trades' direction, whichever way the weather turns the wind at the surface;
+		// the clouds' evolution runs along it, so it mustn't turn)
+		const wd = G.windPrevailing.value;
 		const wl = Math.hypot( wd.x, wd.y ) || 1;
 		const wx = wd.x / wl, wz = wd.y / wl;
 		U.scsWind.value[ 0 ] = wx; U.scsWind.value[ 1 ] = wz;
@@ -1309,6 +1326,19 @@ export class SkyProClouds {
 		t.scissorTest = false;
 		this._shadowMade = true;
 		this.passes ++;
+
+	}
+
+	// (Salt Life) a grey sky (0: the preset's fair-weather cumulus): denser cloud, its bases forming
+	// everywhere, darker below, less light through it
+	_setOvercast( o ) {
+
+		const S = PRESET.shape, L = PRESET.lighting, U = this.uniforms;
+		U.scsShell.value[ 2 ] = S.density * ( 1 + 1.2 * o );
+		U.scsBase.value[ 0 ] = S.baseWeatherStrength * ( 1 - 0.7 * o );
+		U.scsCloudLight.value[ 0 ] = L.scatteringAlbedo * ( 1 - 0.25 * o );
+		U.scsCloudLight.value[ 2 ] = L.ambientIntensity * ( 1 - 0.25 * o );
+		U.scsShadow.value[ 0 ] = L.baseShadowStrength + ( 1 - L.baseShadowStrength ) * o;
 
 	}
 

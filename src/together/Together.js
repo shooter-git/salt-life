@@ -44,9 +44,11 @@ import { WORLD } from '../world/WorldLayout.js';
 //   you ride);  t.update( dt )  (after the game: the camera is placed)
 //   t.syncClock( settings )  (each frame: the time of day from the shared clock)
 //   t.alone  t.holdClock( held )  t.rest( 'dawn' )  t.restWishes()  (the clock's menu: game/TimeHUD.js)
+//   t.surelyAlone  (the weather you pick holds only then: world/WeatherDriver.js)
 //   t.week()  (this week's order's tally)  t.deliver( kg )  (a sale toward it)
 
 const SEND = 0.1; // s between poses
+const SETTLE_MS = 8000; // (Salt Life) after this long with nobody else in the lists, you're on your own
 const DELAY = 0.15; // s behind the newest pose: room to ease between two
 const STALE = 6; // s without a pose: not shown
 const TAG_FAR = 70; // m: names fade out toward here
@@ -145,6 +147,7 @@ export class Together {
 		this.me = app.portal.me;
 		this.limits = LIMITS[ app.tier ] || LIMITS.low;
 		this.others = new Map(); // id -> Remote
+		this._since = Date.now(); // (when the game joined: the first lists may not have everyone)
 		this.ready = ! app.cpuGL; // (devices that draw on the CPU: once prepareLate has the shaders)
 		this.stale = STALE;
 		this._sendT = 0;
@@ -432,6 +435,14 @@ export class Together {
 	get alone() {
 
 		return this.session.mode === 'solo' || this.others.size === 0;
+
+	}
+
+	// (Salt Life) alone and sure of it: a solo session, or nobody else here once the lists have had time
+	// to name everyone (the game's first list may not have whoever was already there)
+	get surelyAlone() {
+
+		return this.session.mode === 'solo' || ( this.others.size === 0 && ( this._settled || Date.now() - this._since > SETTLE_MS ) );
 
 	}
 

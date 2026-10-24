@@ -20,7 +20,7 @@ You can walk, swim and take the boat around the island. You can fish from the pi
 boat, or dive and spear a fish, sell your catch to Joe and buy better gear from Marta. It plays with a
 mouse and keyboard, a gamepad or a touch screen.
 
-Done, M0 to M7:
+Done, M0 to M8:
 - the sea and its shore, spray, gusts and slicks, and the haze;
 - the whole world: the village, the pier, the reef and its fish, the birds and crabs, the beach's
   debris, the whale and the lights at night;
@@ -32,6 +32,16 @@ Done, M0 to M7:
     and tuna offshore;
   - fish that notice you: stalk them slowly;
   - a held breath;
+- the weather (M8):
+  - each day brings its own, the same for everyone on the island: calm, fair, breezy, cloudy,
+    blustery, now and then a gale;
+  - the wind bends the palms, turns about the trades' direction and drives the sea: whitecaps, a
+    bigger swell, bigger surf (it builds a few hours ahead of a blow, long and clean, then short and
+    steep in it), and you hear it;
+  - cloud comes over, the light dims, the haze closes in and the horizon greys;
+  - the wind pushes your boat: left without her anchor she drifts, anchored she swings to it, and
+    Marta tows her home if she gets away from you;
+  - the clock's menu says what it is and what's coming; on your own you can choose it;
 - playing together:
   - you see the others on the island, walking, swimming, fishing and out in their boats;
   - you pick your islander: two men and two women;
@@ -66,6 +76,8 @@ The island's day:
 | M5 | Device tiers and budgets: richer on laptops, smooth on phones; the checks play the fishing too |
 | M6 | Drop-in multiplayer: others in the space, catch announcements, a shared records board |
 | M7 | Spearfishing: the speargun, the law, the spearfisher's fish, fish that notice you, a held breath |
+| M8 | Weather: the day's wind, sea, surf, cloud and light; the boat in the wind, and Marta's tow |
+| M9 | For consideration ([docs/M9.md](docs/M9.md)): rain, thunder and lightning, storm skies, damage, the hurricane |
 
 ## How it fits All the Spaces
 

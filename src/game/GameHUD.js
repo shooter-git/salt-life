@@ -959,10 +959,20 @@ GameHUD.prototype.renderShop = function () {
 	const v = this.vendor;
 	const missing = s.stats.fuelL - s.fuelL;
 	const fuelRow = `<div class="gm-shop-row"><span>Diesel · $${ ( FUEL_PRICE * GAL ).toFixed( 2 ) } / gal<small>Tank: ${ gallons( s.fuelL ) } of ${ gallons( s.stats.fuelL ) } gal</small></span>${ missing > 0.5 ? `<button class="gm-btn" data-fuel ${ s.money < FUEL_PRICE ? 'disabled' : '' }>Fill · $${ s.refuelCost() }</button>` : '<span class="gm-have">Full</span>' }</div>`;
+	// (Salt Life) your boat drifted off: Marta tows her back to the dock (out of hours too: into the box)
+	const job = g.towJob ? g.towJob() : null;
+	const towRow = job ? `<div class="gm-shop-row"><span>Tow your boat in<small>She's drifted ${ feet( job.metres ) } off the dock</small></span><button class="gm-btn" data-tow>Tow · $${ Math.min( job.fee, s.money ) }</button></div>` : '';
 	const bindFuel = () => {
 
 		const f = this.stand.querySelector( '[data-fuel]' );
 		if ( f ) f.onclick = () => this.game.refuel();
+		const t = this.stand.querySelector( '[data-tow]' );
+		if ( t ) t.onclick = () => {
+
+			this.game.tow();
+			this.renderShop();
+
+		};
 		this.stand.querySelector( '[data-close]' ).onclick = () => this.closeStand();
 
 	};
@@ -972,7 +982,7 @@ GameHUD.prototype.renderShop = function () {
 		this.drawStand( v, `
 			<div class="gm-head"><h2>Marta's honesty box</h2>
 			<p class="gm-sub">Marta's back at ${ this.at( v.hours[ 0 ] ) }. The diesel's left out: pay into the box. You have $${ s.money.toLocaleString() }</p></div>
-			<div class="gm-list">${ fuelRow }</div>
+			<div class="gm-list">${ towRow }${ fuelRow }</div>
 			<div class="gm-foot"><span class="gm-sub">Gear when she's back</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>` );
 		bindFuel();
 		return;
@@ -1001,7 +1011,7 @@ GameHUD.prototype.renderShop = function () {
 	this.drawStand( v, `
 		<div class="gm-head"><h2>${ v.name }</h2>
 		<p class="gm-sub">${ greeting } · You have $${ s.money.toLocaleString() }</p></div>
-		<div class="gm-list">${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ bucketRow }${ baitRows }${ fuelRow }${ rows }</div>
+		<div class="gm-list">${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ bucketRow }${ baitRows }${ towRow }${ fuelRow }${ rows }</div>
 		<div class="gm-foot"><span class="gm-sub">Upgrades take effect at once</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>` );
 	bindFuel();
 	const sb = this.stand.querySelector( '[data-sellbait]' );

@@ -409,6 +409,18 @@ export class GameState {
 
 	}
 
+	// (Salt Life) Marta's tow: her fee, or all you have when it's less (she never leaves you without a
+	// boat); returns what was paid
+	payTow( fee ) {
+
+		const paid = Math.max( 0, Math.min( fee, this.money ) );
+		this.money -= paid;
+		this.save();
+		this.emit();
+		return paid;
+
+	}
+
 	// buy the next level of an upgrade track; returns the new level entry or null
 	buy( key ) {
 

@@ -16,6 +16,8 @@ import { useLocalLights, LOCAL_LIGHTS_MAX } from '../materials/LocalLights.js';
 // blue offshore, milky in the surf, by the depth read from the terrain's height texture. Over the
 // shallows it lets the sea floor show through; its reflections stay at full strength there
 // (premultiplied output: the water's own light is weighted by its opacity, the reflections are not).
+// (Salt Life) In a fresh wind the open sea's crests break: whitecaps (this.whitecap, set by the weather;
+// 0, and nothing drawn for them, in a fair day's breeze or less).
 
 const LOD_GRID = { low: 7, mid: 20, high: 32 };
 // node size at the finest LOD (m): phones take a coarser sea (their triangle budget is 300k)
@@ -40,6 +42,8 @@ export class WaterSurface {
 		const SH = !! shore;
 		// gusts, slicks and windrows drifting with the wind (update( dt ) moves them)
 		this.detail = new SeaDetail( { lite: tier === 'low' } );
+		// (Salt Life) how much of the open sea's crests break white (WeatherDriver: from the wind)
+		this.whitecap = { value: 0 };
 
 		const uniforms = {
 			...this.lod.uniforms,
@@ -54,6 +58,7 @@ export class WaterSurface {
 			waterRipples: { value: rippleTexture() },
 			...whaleMarkUniforms,
 			...this.detail.uniforms,
+			waterWhitecap: this.whitecap,
 		};
 
 		// envMapIntensity 12: the scene's environment intensity is only a small diffuse fill (Sky); the
@@ -142,6 +147,8 @@ varying float vWaterFade;
 varying vec4 vSurf;
 varying vec3 vWaterN;
 uniform sampler2D waterRipples;
+uniform float waterWhitecap;
+uniform float waveCrest;
 #ifdef WATER_REFRACT
 uniform sampler2D waterRefract;
 uniform vec2 waterRefractSize;
@@ -199,6 +206,20 @@ ${ SH ? /* glsl */`
 	// the sea's large-scale detail: rougher gusts, calm slicks, a trace of foam on the windrows
 	vec4 seaD = seaDetailSample( vWater.xz );
 	foam = max( foam, seaD.w * 0.3 );
+	// (Salt Life) whitecaps: in a fresh wind the crests break, white patches thickest in the gusts and
+	// streaming downwind. Near by, on the crests themselves (the height over the sea, as a share of the
+	// highest a crest gets); further off, where the coarse grid no longer has the crests, scattered
+	// over the sea as they'd be seen from afar. Out over the open sea only (the shore waves have their own)
+	if ( waterWhitecap > 0.0 ) {
+		float wcDist = length( cameraPosition - vWater );
+		float wcCrest = mix( smoothstep( 0.15, 0.5, ( vWater.y - waterSeaLevel_ ) * waveCrest ), 0.5, smoothstep( 80.0, 450.0, wcDist ) );
+		// they break here and there along a crest, not all along it: patches tens of metres across,
+		// drifting downwind (with the gusts' drift: integrated, so it follows the wind as it turns)
+		float wcPatch = smoothstep( 0.35, 0.8, waterNoise( ( vWater.xz - seaDetailOffset * 0.13 ) * 0.045 ) );
+		// (fading out toward the horizon, where the lace would crowd into a white band)
+		float wcCover = clamp( waterWhitecap * wcCrest * wcPatch * ( 0.5 + seaD.y ), 0.0, 0.55 ) * vWaterFade * ( 1.0 - smoothstep( 700.0, 2200.0, wcDist ) );
+		foam = max( foam, waterLace( ( vWater.xz - seaDetailOffset * 0.33 ) * 0.35, wcCover ) * 0.9 );
+	}
 	// the body of the water: light scattered back up from inside it (and off the sand under the
 	// shallows), lit by the sky and the sun whatever way the surface faces. Turquoise over sand,
 	// deep blue offshore, milky in the surf (suspended sand and fine bubbles)

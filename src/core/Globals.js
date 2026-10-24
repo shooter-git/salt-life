@@ -20,6 +20,9 @@ export const G = {
 	// direction the wind blows toward, and its speed (m/s at 10 m)
 	windDir: { value: new Vector2( 0.35, 0.94 ).normalize() },
 	windSpeed: { value: 7 },
+	// (Salt Life) the trade wind's usual direction, which the weather turns windDir about: what the sand's
+	// ripples, the grass's comb and the clouds aloft follow
+	windPrevailing: { value: new Vector2( 0.35, 0.94 ).normalize() },
 	night: { value: 0 }, // 0 = day, 1 = full night
 	envIntensity: { value: 1 },
 };

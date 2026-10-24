@@ -124,6 +124,9 @@ const FOREST = [ [ 0, 1, 2, 3, 4, 5, 6 ], [ 7, 8, 9, 10, 11, 12 ] ];
 const WHALE_SET = [ 'whale_blow', 'big_splash', 'emerge' ];
 // the whale is only heard within this distance (m), faded out over its last 30 m
 const WHALE_RANGE = 100;
+// (Salt Life) a fair day's surf: the shore waves' amplitude (m), and the far roar's intensity then (App)
+const FAIR_SURF = 0.34;
+const FAIR_SURF_FAR = FAIR_SURF / 0.6;
 
 // per-surface footstep trims (dB)
 const STEP = {
@@ -1088,23 +1091,29 @@ export class SoundScape {
 		}
 
 		const P = Math.max( 1, sh.period.value ), tNow = sh.time.value, gamma = sh.gamma.value;
+		// (Salt Life) a wave's phase at a point whose travel time is T, and when phase s comes to it: the
+		// shore waves' clock, which carries on as the weather changes their period
+		const phase = sh.phase || ( ( t, T ) => ( t - T ) / P ), when = sh.timeOf || ( ( s, T ) => T + s * P );
 		const audioNow = this.ctx.currentTime, LOOK = 0.2;
-		const A0 = Math.max( 0.05, sh.amplitude.value );
+		// (Salt Life) each wave's loudness against the day's surf, which itself is louder the bigger it is
+		// (as the root of its height against a fair day's): the sets stand out as before, and a big swell
+		// is heard as one
+		const A0 = Math.max( 0.05, sh.amplitude.value ), big = Math.sqrt( A0 / FAIR_SURF );
 		for ( const st of this._stations ) {
 
 			const d = Math.hypot( st.x - e.lx, st.z - e.lz );
 			if ( d > 160 ) continue;
 			const wob = this._wobble( st.along );
-			const mw = Math.floor( ( tNow - st.Ts ) / P + wob );
+			const mw = Math.floor( phase( tNow, st.Ts ) + wob );
 			for ( let m = mw; m <= mw + 2; m ++ ) {
 
 				const A = this._waveAmp( m, st.along );
-				const rel = A / A0, lvl = 16 * Math.log10( clamp( rel * st.exposure, 0.05, 3 ) );
+				const rel = A / A0 * big, lvl = 16 * Math.log10( clamp( rel * st.exposure, 0.05, 3 ) );
 				// breaking: the crest reaches the depth where this wave plunges (H = gamma d, lip lands ~8% in)
 				const db = Math.pow( A * 3.556 / gamma, 0.8 ) * 0.92;
 				let rb = 0;
 				while ( rb < TRANSECT - 1 && st.depth[ rb ] < db ) rb ++;
-				const tc = st.T[ rb ] + ( m - wob ) * P;
+				const tc = when( m - wob, st.T[ rb ] );
 				if ( m > st.last.crash && tc >= tNow - 0.1 && tc < tNow + LOOK ) {
 
 					st.last.crash = m;
@@ -1119,7 +1128,7 @@ export class SoundScape {
 				}
 
 				// the bore reaches the sand and runs up; then the swash turns and drains back
-				const tw = st.Ts + ( m - wob ) * P, tb = tw + SWASH_UP * P;
+				const tw = when( m - wob, st.Ts ), tb = tw + SWASH_UP * P;
 				if ( m > st.last.wash && tw >= tNow - 0.1 && tw < tNow + LOOK ) {
 
 					st.last.wash = m;
@@ -1260,8 +1269,9 @@ export class SoundScape {
 
 		}
 
-		// distant surf (the waves themselves are events, see _surf)
-		const lvl = 0.6 + 0.7 * e.surf;
+		// distant surf (the waves themselves are events, see _surf). (Salt Life) A big swell's roar builds
+		// faster than a fair day's surf would have it
+		const lvl = 0.6 + 0.7 * e.surf * Math.max( 1, e.surf / FAIR_SURF_FAR );
 		this._bed( 'surf_far', dB( MIX.surfFar ) * 1.25 / ( 1 + d / 200 ) * lvl / dB( BANK.surf_far.lufs ), now, 0.5 );
 
 		// wind in gusts: a random target every 2-8 s (lulls near silent), eased towards
@@ -1277,12 +1287,12 @@ export class SoundScape {
 		g.v += ( g.target - g.v ) * ( 1 - Math.exp( - dt / 1.4 ) );
 		const w = Math.hypot( e.wind, eb.active ? eb.speed * 0.9 : 0 );
 		const gw = eb.active && eb.speed > 3 ? Math.max( g.v, 0.5 ) : g.v; // apparent wind on a running boat is steady
-		this._bed( 'wind', dB( MIX.wind ) * clamp( w / 7, 0, 2.5 ) * gw / dB( BANK.wind.lufs ), now, 0.3 );
+		this._bed( 'wind', dB( MIX.wind ) * clamp( w / 7, 0, 3.5 ) * gw / dB( BANK.wind.lufs ), now, 0.3 );
 		this._ramp( this.windLP.frequency, 400 + ( 80 + 60 * gw ) * w, 0.4 );
 
 		// trees inland rustle in the gusts; crickets inland at night (daylight < 0.3)
 		const veg = e.onLand ? smooth( 6, 30, d ) : 0;
-		this._bed( 'palms', dB( MIX.palms ) * veg * clamp( e.wind / 7, 0.2, 1.8 ) * g.v * ( 0.3 + 0.7 * e.day ) / dB( BANK.palms.lufs ), now, 0.5 );
+		this._bed( 'palms', dB( MIX.palms ) * veg * clamp( e.wind / 7, 0.2, 2.6 ) * g.v * ( 0.3 + 0.7 * e.day ) / dB( BANK.palms.lufs ), now, 0.5 );
 		const night = smooth( 0.3, 0.12, e.day );
 		this._bed( 'crickets', dB( MIX.crickets ) * night * ( e.onLand ? 0.35 + 0.65 * smooth( 5, 40, d ) : 0.1 ) / dB( BANK.crickets.lufs ), now, 1 );
 

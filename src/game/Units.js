@@ -2,12 +2,14 @@
 // Underneath, the game keeps kilograms, centimetres, metres and litres (the catch table, the physics,
 // the saves, what's sent to the others); these say them as the player reads them.
 //   lb( 1.2 ) -> '2.65 lb', lb( 0.3 ) -> '11 oz', pounds( 54.4 ) -> '120', inches( 44 ) -> '17.3 in',
-//   feet( 3 ) -> '10 ft', gallons( 40 ) -> '11', lbOz( 1.2 ) -> '2 lb 10 oz', feetInches( 44 ) -> '1 ft 5 in'
+//   feet( 3 ) -> '10 ft', gallons( 40 ) -> '11', lbOz( 1.2 ) -> '2 lb 10 oz', feetInches( 44 ) -> '1 ft 5 in',
+//   knots( 7 ) -> '14 kt'
 
 export const LB = 2.20462; // pounds in a kilogram
 export const IN = 2.54; // centimetres in an inch
 export const FT = 0.3048; // metres in a foot
 export const GAL = 3.78541; // litres in a US gallon
+export const KT = 0.514444; // metres a second in a knot
 
 // a fish's weight: ounces under a pound, else pounds to `digits` places
 export function lb( kg, digits = 2 ) {
@@ -31,6 +33,9 @@ export const inches = ( cm ) => `${ ( cm / IN ).toFixed( 1 ) } in`;
 
 // a distance or a depth, in whole feet
 export const feet = ( m ) => `${ Math.round( m / FT ) } ft`;
+
+// a wind speed, in whole knots (as a marine forecast gives it)
+export const knots = ( ms ) => `${ Math.round( ms / KT ) } kt`;
 
 // fuel in US gallons, without the unit: a tenth under ten, else whole ('6.5', '21')
 export function gallons( litres ) {
