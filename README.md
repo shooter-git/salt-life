@@ -35,9 +35,10 @@ Done, M0 to M8:
 - the weather (M8):
   - each day brings its own, the same for everyone on the island: calm, fair, breezy, cloudy,
     blustery, now and then a gale;
-  - the wind bends the palms and drives the sea: whitecaps, a bigger swell, bigger surf (it builds a
-    few hours ahead of a blow), and you hear it;
-  - cloud comes over, the light dims and the haze closes in;
+  - the wind bends the palms, turns about the trades' direction and drives the sea: whitecaps, a
+    bigger swell, bigger surf (it builds a few hours ahead of a blow, long and clean, then short and
+    steep in it), and you hear it;
+  - cloud comes over, the light dims, the haze closes in and the horizon greys;
   - the wind pushes your boat: left without her anchor she drifts, anchored she swings to it, and
     Marta tows her home if she gets away from you;
   - the clock's menu says what it is and what's coming; on your own you can choose it;

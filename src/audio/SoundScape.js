@@ -1091,6 +1091,9 @@ export class SoundScape {
 		}
 
 		const P = Math.max( 1, sh.period.value ), tNow = sh.time.value, gamma = sh.gamma.value;
+		// (Salt Life) a wave's phase at a point whose travel time is T, and when phase s comes to it: the
+		// shore waves' clock, which carries on as the weather changes their period
+		const phase = sh.phase || ( ( t, T ) => ( t - T ) / P ), when = sh.timeOf || ( ( s, T ) => T + s * P );
 		const audioNow = this.ctx.currentTime, LOOK = 0.2;
 		// (Salt Life) each wave's loudness against the day's surf, which itself is louder the bigger it is
 		// (as the root of its height against a fair day's): the sets stand out as before, and a big swell
@@ -1101,7 +1104,7 @@ export class SoundScape {
 			const d = Math.hypot( st.x - e.lx, st.z - e.lz );
 			if ( d > 160 ) continue;
 			const wob = this._wobble( st.along );
-			const mw = Math.floor( ( tNow - st.Ts ) / P + wob );
+			const mw = Math.floor( phase( tNow, st.Ts ) + wob );
 			for ( let m = mw; m <= mw + 2; m ++ ) {
 
 				const A = this._waveAmp( m, st.along );
@@ -1110,7 +1113,7 @@ export class SoundScape {
 				const db = Math.pow( A * 3.556 / gamma, 0.8 ) * 0.92;
 				let rb = 0;
 				while ( rb < TRANSECT - 1 && st.depth[ rb ] < db ) rb ++;
-				const tc = st.T[ rb ] + ( m - wob ) * P;
+				const tc = when( m - wob, st.T[ rb ] );
 				if ( m > st.last.crash && tc >= tNow - 0.1 && tc < tNow + LOOK ) {
 
 					st.last.crash = m;
@@ -1125,7 +1128,7 @@ export class SoundScape {
 				}
 
 				// the bore reaches the sand and runs up; then the swash turns and drains back
-				const tw = st.Ts + ( m - wob ) * P, tb = tw + SWASH_UP * P;
+				const tw = when( m - wob, st.Ts ), tb = tw + SWASH_UP * P;
 				if ( m > st.last.wash && tw >= tNow - 0.1 && tw < tNow + LOOK ) {
 
 					st.last.wash = m;

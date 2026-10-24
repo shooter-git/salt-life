@@ -1,6 +1,7 @@
 import { DAY_RATE, REST, REST_NAMES, isOpen, restTo, sunUp, timeText } from './IslandClock.js';
 import { HOURS } from './Orders.js';
-import { CONDITIONS, WEATHER_IDS, WEATHER_NAMES, islandTime, forecast, surfText } from './Weather.js';
+import { CONDITIONS, WEATHER_IDS, WEATHER_NAMES, islandTime, forecast, surfText, windFrom } from './Weather.js';
+import { G } from '../core/Globals.js';
 import { knots } from './Units.js';
 
 // (Salt Life) The island's clock in the HUD: the time at the left of the purse (a sun by day, a moon at
@@ -72,6 +73,13 @@ html.is-touch .tw-root:has(.gm-time.is-open) :is(.gm-map, .gm-coach) { visibilit
 `;
 
 const WEATHER_WIND = Object.fromEntries( WEATHER_IDS.map( ( id ) => [ id, CONDITIONS[ id ].wind ] ) );
+// the direction a wind turned `a` from the trades blows toward
+const turned = ( a ) => {
+
+	const p = G.windPrevailing.value, c = Math.cos( a ), s = Math.sin( a );
+	return [ p.x * c - p.y * s, p.x * s + p.y * c ];
+
+};
 
 const h = ( tag, cls, html ) => {
 
@@ -237,7 +245,7 @@ export class TimeHUD {
 		const wx = this.app.weather && this.app.weather.target, chosen = st.alone ? this.app.settings.weather : null;
 		const pick = chosen && this.app.weatherPick ? this.app.weatherPick() : chosen;
 		const next = wx && ! pick ? forecast( islandTime( st.day, st.hour ), 12 ) : null;
-		const wxLine = wx ? `<b>${ WEATHER_NAMES[ wx.id ] }</b> · wind ${ knots( wx.wind ) } · surf ${ surfText( wx.surf ) }` : '';
+		const wxLine = wx ? `<b>${ WEATHER_NAMES[ wx.id ] }</b> · wind ${ windFrom( ...turned( wx.windAngle ) ) } ${ knots( wx.wind ) } · surf ${ surfText( wx.surf ) } at ${ Math.round( wx.period ) } s` : '';
 		const wxNext = pick ? 'Your choice holds while you\'re on your own' : st.alone || ! wx ? ( next ? `Later: ${ WEATHER_NAMES[ next.id ].toLowerCase() }, from ${ at( next.at % 24 ) }` : 'Settled for now' )
 			: `The weather follows the island's day${ next ? ` · later ${ WEATHER_NAMES[ next.id ].toLowerCase() }` : '' }`;
 		const sig = [ timeText( st.hour, loc ), st.day, st.held, st.alone, st.mine, asks, st.here.length, this.app.input.lastDevice, wxLine, wxNext, chosen ].join( '|' );

@@ -137,23 +137,28 @@ Everyone keeps their own progress and their own fish.
 `src/game/Weather.js` is what the weather is, with no three.js (`test/weather.mjs` runs it under Node). `src/world/WeatherDriver.js` puts it on the island each frame.
 
 - **From the day alone:** the weather is a function of the island's time (`islandTime( day, hour )`, game hours since day 1 began), as the wanted lists are of the day. Everyone on one clock has the same weather, and nothing is sent.
-  - Two slow fields over that time: storminess (the wind, the swell) and cloudiness (it can grey a calm day too). Each is value noise in two octaves, about 60 h and 14 h, mapped through its own distribution so that it's spread evenly.
+  - Three slow fields over that time: storminess (the wind, the swell), cloudiness (it can grey a calm day too) and how far the wind has turned from the trades (`veer`: up to about 35° either way). Each is value noise in two octaves, about 60 h and 14 h, mapped through its own distribution so that it's spread evenly.
   - They're read against the conditions' rows (`CONDITIONS`): calm, fair, breezy, cloudy, blustery and gale. About half the time it's fair, a tenth calm, and a gale about one hour in twenty-five.
   - The swell comes from the storm ahead (storminess 3 and 6 hours on), so the surf builds before a blow.
+  - The surf's period: a storm's own swell is short (7.5 s in a gale), a swell from one still on its way long (up to `PERIOD_MAX`, 12 s), and by then smaller (`GROUNDSWELL_MAX`, 0.4 m, at the longest). Fair's is 9 s.
   - Only `+ − × ÷` and integer hashes: every device works out the same condition from the same time.
   - Day 1 is fair, and the forecast comes in over the first hours of day 2 (a new player's first morning; the checks start there).
-  - **Fair is the island as it always was:** 7 m/s of wind, today's sea, surf, cloud and light.
+  - **Fair is the island as it always was:** 7 m/s of wind from the trades' direction, today's sea, surf (9 s), cloud and light.
 - **What it drives** (`WeatherDriver`):
-  - the wind's speed, `G.windSpeed`: the plants, the village's flags and lanterns, the sea's gusts, slicks and windrows, the spray, the boat, the sound. The birds drift in no more than 10 m/s of it;
+  - the wind, `G.windSpeed` and `G.windDir`: the plants, the village's flags and lanterns, the sea's gusts, slicks and windrows, the spray, the boat, the sound. The birds drift in no more than 10 m/s of it. Its direction turns about the trades' (`G.windPrevailing`), at most 0.003 rad a second:
+    - the wind sea turns with it about the camera (`Waves.setWindDir`): each wave's phase is moved so that at the camera it's where it was (turned about the island's middle, the crests far from it would sweep past);
+    - the slicks and windrows turn in a frame moved to the camera as it turns (`SeaDetail`, `seaDetailFrame`), and the whitecaps drift on the gusts' integrated offset;
+    - the sand's ripples, the grass's comb and the clouds aloft keep to the trades' direction (they're laid by the usual wind, and the clouds' evolution runs along theirs);
   - the open sea (`Waves.setSea`): the swell's and the wind sea's heights, the wind sea growing as wind^1.5. Only the heights change, in place on the CPU and the GPU, so the sea builds where it is; the CPU's heights take more fixed-point steps on a steep sea;
   - whitecaps (`WaterSurface`): in a wind over fair's, Monahan's share of the sea breaking white, as patches along the crests near by and scattered further off. A uniform behind a branch: nothing is drawn for them on a fair day;
-  - the surf (`ShoreWaves.setSurf`): its height, up to `SURF_MAX` (0.6 m: bigger, the sets break on the pier head and over the boat at the dock). Its run-up grows as the root of its height (Stockdon), so it never reaches the boardwalk (`test/waves.mjs`);
+  - the surf (`ShoreWaves.setSurf`): its height, up to `SURF_MAX` (0.6 m: bigger, the sets break on the pier head and over the boat at the dock), and its period. Its run-up goes as the root of its height and in proportion to its period (Stockdon), so it never reaches the boardwalk (`test/waves.mjs`). The waves run on a clock (`ShoreWaves.clock`, the GPU's `shoreClock`) that's re-anchored whenever the period changes, counted from the bay's middle: every wave carries on, only the crests' spacing changes. The period changes at most 0.02 s a second, so the crests on their way in are hurried by no more than a few percent; the surf's sound and the shorebirds' swash take the same clock;
   - the cloud (`SkyProClouds`): its cover, and how grey it is (`overcast`: denser, its bases everywhere, darker below). Slow changes are followed by the panorama's progressive refresh and the view's history; only a step (a jump of the clock) makes a new panorama;
   - the light (`Sky.overcast`): the sun dims under a grey sky (to 30% of a clear day's on low and mid; to 70% on high, where the clouds' shadows dim the rest), and the sky's light greys and rises a little;
   - how far you see (`Sky.visibility`): the tier's fog distances, nearer in murk;
+  - the horizon: under a grey sky the fog greys, to a grey of the horizon's brightness, and the sky's dome takes the same grey toward its horizon (`skyGrey`, in the view and in the reflections), so the two meet without a seam;
   - the sound: the wind and the palms louder in a gale, the surf's waves louder as the root of the swell, and its far roar building faster.
 - **Easing:** the wind and the sea come round over half a minute or so, the cloud more slowly (a few minutes from fair to a gale's). A jump of the clock (a rest, adopting the host's clock, coming back to the tab) sets it all at once, and the boat takes the sea as she finds it.
-- **What stays as it was:** the wind's direction and the surf's period. Turning the wind would turn the wind sea and the sand's ripples about the island's middle; the shore waves' phase is ( t − T ) / period with T in the thousands of seconds, so a new period would set the breakers racing ([docs/M9.md](M9.md)).
+- **What stays as it was:** the swell's direction (its travel times around the island are baked when the island loads: [docs/M9.md](M9.md)).
 - **The boat in the wind** (`BoatController`): drag on the apparent wind, 6 m² end-on and 11 m² abeam, at a centre of effort over the keel's centre of lateral resistance, up on the house. It moves toward the end the wind comes from as it comes round from abeam (as on a flat plate), so beam-on is how she lies.
   - Left to herself she comes round beam-on and drifts downwind (about 0.3 m/s on a fair day, 0.9 in a gale), heeling a little.
   - At anchor she lies head to wind.
@@ -161,7 +166,7 @@ Everyone keeps their own progress and their own fish.
   - On a still day her drag through the air is what it always was.
 - **Marta's tow:** when your boat has drifted more than 30 m from the dock with nobody at her helm, Marta's panel (and her honesty box) offers to tow her in (`Game.tow`): $20 and a little every 100 m, at most $90 (`towFee`). Short of it, she takes what you have.
 - **The clock's menu** (`TimeHUD`):
-  - what the weather is (wind in knots, surf as a report gives it, `surfText`) and what's coming (`forecast`);
+  - what the weather is (where the wind comes from and its speed in knots, `windFrom`, `knots`; the surf as a report gives it, `surfText`, and its period) and what's coming (`forecast`);
   - on your own, a choice of it: the forecast or any condition. It's saved with the clock (`weather`), and holds only while you're surely alone (`Together.surelyAlone`: a solo session, or nobody else here once the first lists are in). In company the weather is the day's.
   - On its own (`pnpm dev`), `?weather=gale` holds it from the first frame, company or not; `?weather=forecast` is the day's.
 

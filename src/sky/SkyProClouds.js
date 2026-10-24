@@ -1087,7 +1087,9 @@ export class SkyProClouds {
 
 		}
 
-		const wd = G.windDir.value;
+		// (Salt Life: aloft, the trades' direction, whichever way the weather turns the wind at the surface;
+		// the clouds' evolution runs along it, so it mustn't turn)
+		const wd = G.windPrevailing.value;
 		const wl = Math.hypot( wd.x, wd.y ) || 1;
 		const wx = wd.x / wl, wz = wd.y / wl;
 		U.scsWind.value[ 0 ] = wx; U.scsWind.value[ 1 ] = wz;

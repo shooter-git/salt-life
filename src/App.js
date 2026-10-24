@@ -305,7 +305,9 @@ export class App {
 
 		} } );
 		this.audio.attachShore( {
-			shore: { amplitude: live( 'amplitude' ), variation: live( 'variation' ), period: live( 'period' ), gamma: live( 'gamma' ), enabled: live( 'enabled' ), time: G.time },
+			shore: { amplitude: live( 'amplitude' ), variation: live( 'variation' ), period: live( 'period' ), gamma: live( 'gamma' ), enabled: live( 'enabled' ), time: G.time,
+				// (Salt Life: the waves' clock, as the period changes with the weather)
+				phase: ( t, T ) => this.shore.phase( t, T ), timeOf: ( s, T ) => this.shore.timeOf( s, T ) },
 			field: this.shoreField, terrain: this.terrainData,
 		} );
 		this.player.audio = this.audio;
@@ -496,7 +498,7 @@ export class App {
 		// (the hour you're at, in your save now and again: you come back to it)
 		if ( ( this._clockSaveT -= dt ) <= 0 ) this.saveClock();
 		// (Salt Life) the weather, before anything it moves (the boat, the sky)
-		this.weather.update( dt, s.day, s.timeOfDay, this.weatherPick() );
+		this.weather.update( dt, s.day, s.timeOfDay, this.weatherPick(), this.camera );
 
 		// ---- player / boat (boat physics first so the cameras follow this frame's pose)
 		const input = this.input;
@@ -615,7 +617,8 @@ export class App {
 		this.boatSpray.update( dt );
 		this.spray.update( dt, this.camera, this.renderer.domElement.height );
 		if ( this.motes ) this.motes.update( dt, this.camera, this.cameraWaterHeight, this.renderer.domElement.height );
-		this.water.detail.update( dt );
+		this.water.detail.update( dt, this.camera );
+		this.shore.update( G.time.value ); // (Salt Life: the waves' clock, for the GPU)
 		this.water.update( this.camera );
 		this.boat.update( dt );
 		this.boatLamps.set( { underway: this.boatCtl.driven || ! ( this.boatCtl.moored || this.boatCtl.anchor ), spot: this.searchlight } );

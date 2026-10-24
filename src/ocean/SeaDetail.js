@@ -26,7 +26,11 @@ export class SeaDetail {
 			seaDetailTime: G.time,
 			seaDetailWindDir: G.windDir,
 			seaDetailWindSpeed: G.windSpeed,
+			// (Salt Life) the slicks' and windrows' frame along the wind: ( a point, the along- and across-
+			// wind distances there ). As the wind turns it's moved to the camera, so they turn about you
+			seaDetailFrame: { value: new THREE.Vector4() },
 		};
+		this._wind = G.windDir.value.clone();
 		this.offset = this.uniforms.seaDetailOffset;
 		this.glsl = /* glsl */`
 uniform sampler2D seaDetailNoise;
@@ -35,6 +39,7 @@ uniform vec3 seaDetailAmounts;
 uniform float seaDetailTime;
 uniform vec2 seaDetailWindDir;
 uniform float seaDetailWindSpeed;
+uniform vec4 seaDetailFrame;
 float seaDetailSs( float a, float b, float x ) { float t = clamp( ( x - a ) / ( b - a ), 0.0, 1.0 ); return t * t * ( 3.0 - 2.0 * t ); }
 // hardware bilinear, repeat-wrapped, level 0 (smooth, low-frequency noise: no mipmaps needed)
 vec4 seaDetailLoad( vec2 uv ) { return textureLod( seaDetailNoise, uv, 0.0 ); }
@@ -46,9 +51,9 @@ vec4 seaDetailSample( vec2 xz ) {
 	float gustRaw = g1 * 0.62 + g2 * 0.38;
 	float gust = clamp( ( gustRaw - 0.5 ) * 2.4 * seaDetailAmounts.x + 0.5, 0.0, 1.0 );
 	// wind-aligned frame, lightly domain-warped so bands meander
-	vec2 w = seaDetailWindDir;
-	float along = dot( xz, w );
-	float across = dot( xz, vec2( - w.y, w.x ) ) + ( g2 - 0.5 ) * 26.0;
+	vec2 w = seaDetailWindDir, rel = xz - seaDetailFrame.xy;
+	float along = dot( rel, w ) + seaDetailFrame.z;
+	float across = dot( rel, vec2( - w.y, w.x ) ) + seaDetailFrame.w + ( g2 - 0.5 ) * 26.0;
 	// slicks: long bands, strongest in light wind, torn apart by gusts
 	float sl = seaDetailLoad( vec2( along / 1100.0, across / 70.0 ) ).z;
 	float calmWind = 1.0 - seaDetailSs( 4.0, 13.0, seaDetailWindSpeed );
@@ -69,12 +74,22 @@ ${ lite ? '' : /* glsl */`
 
 	}
 
-	update( dt ) {
+	update( dt, camera = null ) {
 
 		// gust patterns travel with the wind at roughly its speed near the surface
 		const w = G.windDir.value, s = G.windSpeed.value * 0.7 * dt;
 		this.offset.value.x += w.x * s;
 		this.offset.value.y += w.y * s;
+		// (Salt Life) the wind turned: the slicks' and windrows' frame moves to the camera, keeping their
+		// along and across distances there
+		const o = this._wind;
+		if ( camera && ( w.x !== o.x || w.y !== o.y ) ) {
+
+			const F = this.uniforms.seaDetailFrame.value, x = camera.position.x - F.x, z = camera.position.z - F.y;
+			F.set( camera.position.x, camera.position.z, x * o.x + z * o.y + F.z, - x * o.y + z * o.x + F.w );
+			o.copy( w );
+
+		}
 
 	}
 

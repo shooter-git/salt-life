@@ -80,7 +80,7 @@ float terrainHeightAt( vec2 xz ) {
 			terrainMapInfo: { value: new THREE.Vector3( terrainData.origin, terrainData.origin, terrainData.size ) },
 			terrainSeaLevel: G.seaLevel,
 			terrainWaterAbsorption: G.waterAbsorption,
-			terrainWindDir: G.windDir,
+			terrainWindDir: G.windPrevailing, // (Salt Life: the sand's ripples and the grass's comb, as the trades laid them)
 			terrainWindSpeed: G.windSpeed,
 			terrainGustOffset: { value: this.gustOffset },
 			terrainCaustics: { value: causticTexture() },

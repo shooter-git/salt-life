@@ -214,11 +214,11 @@ ${ SH ? /* glsl */`
 		float wcDist = length( cameraPosition - vWater );
 		float wcCrest = mix( smoothstep( 0.15, 0.5, ( vWater.y - waterSeaLevel_ ) * waveCrest ), 0.5, smoothstep( 80.0, 450.0, wcDist ) );
 		// they break here and there along a crest, not all along it: patches tens of metres across,
-		// drifting downwind
-		float wcPatch = smoothstep( 0.35, 0.8, waterNoise( vWater.xz * 0.045 - seaDetailWindDir * ( waterTime * 0.08 ) ) );
+		// drifting downwind (with the gusts' drift: integrated, so it follows the wind as it turns)
+		float wcPatch = smoothstep( 0.35, 0.8, waterNoise( ( vWater.xz - seaDetailOffset * 0.13 ) * 0.045 ) );
 		// (fading out toward the horizon, where the lace would crowd into a white band)
 		float wcCover = clamp( waterWhitecap * wcCrest * wcPatch * ( 0.5 + seaD.y ), 0.0, 0.55 ) * vWaterFade * ( 1.0 - smoothstep( 700.0, 2200.0, wcDist ) );
-		foam = max( foam, waterLace( vWater.xz * 0.35 - seaDetailWindDir * ( waterTime * 1.6 ), wcCover ) * 0.9 );
+		foam = max( foam, waterLace( ( vWater.xz - seaDetailOffset * 0.33 ) * 0.35, wcCover ) * 0.9 );
 	}
 	// the body of the water: light scattered back up from inside it (and off the sand under the
 	// shallows), lit by the sky and the sun whatever way the surface faces. Turquoise over sand,

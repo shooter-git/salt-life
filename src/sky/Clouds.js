@@ -298,8 +298,9 @@ export class Cirrus {
 
 		this.renderer = renderer;
 		this.fibRes = fibRes;
-		// cloud streets and the cirrus follow the initial wind
-		const w = G.windDir.value;
+		// cloud streets and the cirrus follow the upper wind: (Salt Life) the trades', whichever way the
+		// weather turns the wind at the surface
+		const w = G.windPrevailing.value;
 		this._rot = Math.atan2( w.y, w.x );
 		this.glsl = cirrusGLSL( this._rot );
 
@@ -373,7 +374,7 @@ export class Cirrus {
 		this.uniforms.cloudsCirrusFade.value = this.ready ? 1 : 0;
 
 		// the veil drifts with the upper wind (1.6 x the surface wind's speed, 12 m/s)
-		const w = G.windDir.value, l = Math.hypot( w.x, w.y ) || 1;
+		const w = G.windPrevailing.value, l = Math.hypot( w.x, w.y ) || 1;
 		const o = this._offset;
 		o.x += w.x / l * 12 * 1.6 * dt;
 		o.y += w.y / l * 12 * 1.6 * dt;

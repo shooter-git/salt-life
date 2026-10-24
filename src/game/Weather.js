@@ -4,29 +4,35 @@ import { FT } from './Units.js';
 // one clock (game/IslandClock.js) has the same weather and nothing is sent. Like the wanted lists
 // (Orders.js), it's worked out, not rolled: a forecast is the same function a little further on.
 //
-// Two slow, smooth fields over the island's time T (game hours since day 1 began): storminess, which
-// sets the wind and the swell (fair most of the time, a gale now and then), and cloudiness, which can
-// grey a calm day too. Each is value noise in two octaves (about 60 h and 14 h), mapped through its own
+// Three slow, smooth fields over the island's time T (game hours since day 1 began): storminess, which
+// sets the wind and the swell (fair most of the time, a gale now and then), cloudiness, which can grey a
+// calm day too, and how far the wind has turned from the trades. Each is value noise in two octaves (about 60 h and 14 h), mapped through its own
 // distribution so that it's spread evenly over 0..1, then read against the conditions' rows below. The
 // swell runs ahead of the wind: it comes from the storm a few hours off, so the surf builds before the
 // blow. A new player's first day is fair (and the checks', which start on day 1).
 //
 // Everything here is + - x / and integer hashes (Math.imul), never sin, exp or pow, so every device
 // works out the same condition from the same time. Pure (no three.js), for the tests under Node.
-//   islandTime( day, hour ) -> T      weatherAt( T, pick ) -> { id, wind, coverage, overcast, swell,
-//   windSea, surf, visibility }        forecast( T ) -> { id, at } | null      surfText( 0.34 ) -> '2–3 ft'
+//   islandTime( day, hour ) -> T      weatherAt( T, pick ) -> { id, wind, windAngle, coverage, overcast,
+//   swell, windSea, surf, period, visibility }   forecast( T ) -> { id, at } | null      surfText( 0.34 ) -> '2–3 ft'
+//   windFrom( dx, dz ) -> 'NNW' (where a wind blowing toward ( dx, dz ) comes from)
 
 // what a condition brings: wind (m/s at 10 m), cloud cover and how overcast it is (0..1), the open
-// sea's swell and wind sea (x today's), the surf (m, the shore waves' offshore amplitude H/2) and the
-// distance you see (x today's). Fair is the island as it always was.
+// sea's swell and wind sea (x today's), the surf (m, the shore waves' offshore amplitude H/2, and its
+// period, s) and the distance you see (x today's). Fair is the island as it always was.
 export const CONDITIONS = {
-	calm: { wind: 2.5, coverage: 0.35, overcast: 0, swell: 0.7, surf: 0.24, visibility: 1.1 },
-	fair: { wind: 7, coverage: 0.49, overcast: 0, swell: 1, surf: 0.34, visibility: 1 },
-	breezy: { wind: 11, coverage: 0.55, overcast: 0.1, swell: 1.25, surf: 0.42, visibility: 0.95 },
-	cloudy: { wind: 6, coverage: 0.82, overcast: 0.55, swell: 1, surf: 0.34, visibility: 0.8 },
-	blustery: { wind: 15, coverage: 0.75, overcast: 0.45, swell: 1.5, surf: 0.5, visibility: 0.75 },
-	gale: { wind: 20, coverage: 0.92, overcast: 0.8, swell: 1.8, surf: 0.6, visibility: 0.55 },
+	calm: { wind: 2.5, coverage: 0.35, overcast: 0, swell: 0.7, surf: 0.24, period: 10, visibility: 1.1 },
+	fair: { wind: 7, coverage: 0.49, overcast: 0, swell: 1, surf: 0.34, period: 9, visibility: 1 },
+	breezy: { wind: 11, coverage: 0.55, overcast: 0.1, swell: 1.25, surf: 0.42, period: 8.5, visibility: 0.95 },
+	cloudy: { wind: 6, coverage: 0.82, overcast: 0.55, swell: 1, surf: 0.34, period: 9, visibility: 0.8 },
+	blustery: { wind: 15, coverage: 0.75, overcast: 0.45, swell: 1.5, surf: 0.5, period: 8, visibility: 0.75 },
+	gale: { wind: 20, coverage: 0.92, overcast: 0.8, swell: 1.8, surf: 0.6, period: 7.5, visibility: 0.55 },
 };
+// the surf's period (s): a storm's own swell comes short and steep; one that's come far, from a storm
+// still on its way, long, and smaller than the storm's own sea by the time it's here. The longest it
+// gets, and the biggest such a swell gets (m: it runs further up the beach than a short one)
+export const PERIOD_MAX = 12;
+export const GROUNDSWELL_MAX = 0.4;
 export const WEATHER_IDS = [ 'calm', 'fair', 'breezy', 'cloudy', 'blustery', 'gale' ];
 export const WEATHER_NAMES = { calm: 'Calm', fair: 'Fair', breezy: 'Breezy', cloudy: 'Cloudy', blustery: 'Blustery', gale: 'Gale' };
 // the shore waves' largest amplitude (m): bigger, their run-up floods the beach and the sets break on
@@ -39,6 +45,8 @@ const FAIR_SURF = CONDITIONS.fair.surf;
 const ALONG = [ [ 0, 'calm' ], [ 0.3, 'fair' ], [ 0.55, 'fair' ], [ 0.72, 'breezy' ], [ 0.88, 'blustery' ], [ 1, 'gale' ] ];
 // the swell looks this far ahead (game hours) for the storm it comes from
 const SWELL_LEAD = [ 3, 6 ];
+// the most the wind turns from the trades, either way (rad: about 35 degrees)
+export const VEER = 0.6;
 
 const clamp01 = ( x ) => ( x < 0 ? 0 : x > 1 ? 1 : x );
 const lerp = ( a, b, t ) => a + ( b - a ) * t;
@@ -86,6 +94,8 @@ const field = ( T, a, b ) => even( noise( T / 60, a ) * 0.65 + noise( T / 14, b 
 // how stormy it is at T (0: dead calm .. 1: a full gale), and how cloudy (part storm, part its own)
 export const storminess = ( T ) => field( T, 0x5a17c0de, 0x1b0b5eed );
 export const cloudiness = ( T ) => field( T, 0x6c10d5e7, 0x2f00b1e5 ) * 0.7 + storminess( T ) * 0.3;
+// how far the wind has turned from the trades at T (rad, -VEER .. VEER)
+export const veer = ( T ) => ( field( T, 0x3c6ef372, 0x7a3b9d11 ) - 0.5 ) * 2 * VEER;
 
 // the rows' values at storminess s
 function along( s, key ) {
@@ -120,12 +130,12 @@ function nameOf( w ) {
 function row( id ) {
 
 	const c = CONDITIONS[ id ];
-	return { id, wind: c.wind, coverage: c.coverage, overcast: c.overcast, swell: c.swell, windSea: windSeaOf( c.wind ), surf: Math.min( SURF_MAX, c.surf ), visibility: c.visibility };
+	return { id, wind: c.wind, windAngle: 0, coverage: c.coverage, overcast: c.overcast, swell: c.swell, windSea: windSeaOf( c.wind ), surf: Math.min( SURF_MAX, c.surf ), period: c.period, visibility: c.visibility };
 
 }
 
 // the weather at island time T. `pick` (a condition's id) holds it there instead: on your own, you
-// can choose the day's weather
+// can choose the day's weather (its wind from the trades)
 export function weatherAt( T, pick = null ) {
 
 	if ( pick && CONDITIONS[ pick ] ) return row( pick );
@@ -143,7 +153,12 @@ export function weatherAt( T, pick = null ) {
 	const coverage = lerp( f.coverage, Math.max( along( s, 'coverage' ), lerp( along( s, 'coverage' ), CONDITIONS.cloudy.coverage, grey ) ), k );
 	const overcast = lerp( f.overcast, Math.max( along( s, 'overcast' ), CONDITIONS.cloudy.overcast * grey ), k );
 	const visibility = lerp( f.visibility, Math.min( along( s, 'visibility' ), lerp( 1, CONDITIONS.cloudy.visibility, grey ) ), k );
-	const w = { id: 'fair', wind, coverage, overcast, swell, windSea: windSeaOf( wind ), surf: Math.min( SURF_MAX, FAIR_SURF * swell ), visibility };
+	// the period: the storm's own (short), lengthened when the swell is from one still on its way
+	const far = clamp01( ( sw - s ) * 6 );
+	const period = lerp( f.period, Math.min( PERIOD_MAX, along( s, 'period' ) + 3.5 * far ), k );
+	// (the longer it is, the further it's come, and the smaller it's grown by the time it's here)
+	const surf = Math.min( lerp( SURF_MAX, GROUNDSWELL_MAX, clamp01( ( period - f.period ) / ( PERIOD_MAX - f.period ) ) ), FAIR_SURF * swell );
+	const w = { id: 'fair', wind, windAngle: veer( T ) * k, coverage, overcast, swell, windSea: windSeaOf( wind ), surf, period, visibility };
 	w.id = nameOf( w );
 	return w;
 
@@ -170,5 +185,14 @@ export function surfText( amplitude ) {
 
 	const lo = Math.max( 1, Math.round( amplitude * 2 * 0.8 / FT ) ), hi = Math.max( lo + 1, Math.round( amplitude * 2 * 1.5 / FT ) );
 	return `${ lo }–${ hi } ft`;
+
+}
+
+// where a wind blowing toward ( dx, dz ) comes from, on the island's compass (north is -z, east +x)
+const POINTS = [ 'N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW' ];
+export function windFrom( dx, dz ) {
+
+	const bearing = Math.atan2( - dx, dz ) / ( Math.PI * 2 ) * 16; // (of the point it comes from: - ( dx, dz ))
+	return POINTS[ ( ( Math.round( bearing ) % 16 ) + 16 ) % 16 ];
 
 }

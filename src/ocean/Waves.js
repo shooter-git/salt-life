@@ -7,7 +7,8 @@ import { WORLD } from '../world/WorldLayout.js';
 // four-cascade FFT ocean, which needs compute shaders. Longer swell rolls in toward the island along
 // WORLD.swellDir; shorter wind sea runs with G.windDir. Phones draw fewer waves than laptops; the CPU
 // always evaluates exactly the set the GPU draws, so what floats sits on what is seen. (Salt Life) The
-// weather sets the sea state (setSea): the swell's and the wind sea's heights, the directions as built.
+// weather sets the sea state (setSea: the swell's and the wind sea's heights) and turns the wind sea
+// with the wind (setWindDir: about the camera, so the sea you're on doesn't sweep past).
 //
 // A wave i at Lagrangian point x0 (the undisplaced grid point):
 //   theta = k (d . x0) - omega t + phase,  omega = sqrt( g k ) (deep water)
@@ -28,6 +29,7 @@ const SPECTRUM = [
 	{ L: 4.2, a: 0.012, from: 'w', rot: - 0.15 },
 ];
 const COUNT = { low: 4, mid: 6, high: 8 };
+const TAU = Math.PI * 2;
 const STEEPNESS = 0.55; // sum of the waves' crest sharpening (< 1: no loops)
 // a wave's crest sharpening (its horizontal travel), at most its share of STEEPNESS
 const crest = ( a, k, n ) => Math.min( a * 1.4, STEEPNESS / ( k * n ) );
@@ -56,6 +58,7 @@ export class Waves {
 
 		} );
 		this.sea = [ 1, 1 ]; // swell, wind sea: x today's heights (setSea)
+		this.windAngle = wind; // the wind sea's direction (setWindDir)
 		this.iterations = 2; // the CPU height's fixed-point steps (more on steep seas: setSea)
 		// 1 / the waves' summed height: a point's height over the sea, as a share of the highest crest
 		this.crest = { value: 1 / this.waves.reduce( ( s, w ) => s + w.a, 0 ) };
@@ -122,6 +125,31 @@ vec3 waveDisplacement( vec2 x0, float fade, out vec3 normal ) {
 		// land on the drawn surface (today's seas take 2 on every tier)
 		this.iterations = steep > 0.34 ? 4 : steep > 0.28 ? 3 : 2;
 		this.crest.value = 1 / sum;
+
+	}
+
+	// (Salt Life) the wind sea turns with the wind, `dir` (where it blows toward). Turned about the world's
+	// origin, a wave's crests would sweep across everything far from it; so each wave's phase is moved to
+	// keep it where it was at `at` (the camera): the sea turns about you. CPU and GPU together, as setSea
+	setWindDir( dir, at ) {
+
+		const a = Math.atan2( dir.y, dir.x );
+		if ( a === this.windAngle ) return;
+		this.windAngle = a;
+		const A = this.uniforms.waveA.value, B = this.uniforms.waveB.value;
+		this.waves.forEach( ( w, i ) => {
+
+			if ( w.from !== 'w' ) return;
+			const angle = a + SPECTRUM[ i ].rot, dx = Math.cos( angle ), dz = Math.sin( angle );
+			// k ( d_old . p ) + phase_old = k ( d_new . p ) + phase_new, at p = at
+			w.phase = ( w.phase + w.k * ( ( w.dx - dx ) * at.x + ( w.dz - dz ) * at.z ) ) % TAU;
+			w.dx = dx;
+			w.dz = dz;
+			A[ i ].x = dx;
+			A[ i ].y = dz;
+			B[ i ].z = w.phase;
+
+		} );
 
 	}
 

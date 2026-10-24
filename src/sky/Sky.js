@@ -65,6 +65,7 @@ uniform float skyStarIntensity;
 uniform float skyNight;
 uniform float skyUnderwater;
 uniform vec3 skyFogColor;
+uniform vec4 skyGrey; // (Salt Life) the horizon under a grey sky: ( its radiance, how much )
 uniform float skyTime;
 uniform float skyExposure;
 varying vec3 vSkyDir;
@@ -180,6 +181,8 @@ void main() {
 	vec4 c = cloudsSampleView( dir );
 	vec3 L = base * c.a + sun * cloudsSunTransmittance( c.a ) + c.rgb;
 #endif
+	// (Salt Life) under a grey sky the horizon greys, as the fog does (Sky.update): they meet in one grey
+	L = mix( L, skyGrey.rgb, skyGrey.a * ( 1.0 - smoothstep( 0.0, 0.3, dir.y ) ) );
 	gl_FragColor = vec4( L * skyExposure, 1.0 );
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
@@ -219,6 +222,7 @@ export class Sky {
 			// three hands it to its fog (in the space of the target drawn: the dome's onBeforeRender)
 			skyUnderwater: G.cameraUnderwater,
 			skyFogColor: { value: new THREE.Color() },
+			skyGrey: { value: new THREE.Vector4() },
 		};
 		this.moonDir = this.uniforms.skyMoonDir.value;
 		this.sunDiskIntensity = this.uniforms.skySunDiskIntensity;
@@ -413,8 +417,12 @@ export class Sky {
 		this.uniforms.skyExposure.value = skyAdapt;
 
 		// the horizon haze the fog fades into: the atmosphere's horizon (Tidewater's units, those of the
-		// sky behind the island) and the moonlit sky's at night
-		_c.copy( MOON_SKY ).multiplyScalar( night ).add( lit.horizon ).multiplyScalar( skyAdapt );
+		// sky behind the island) and the moonlit sky's at night. (Salt Life) Under a grey sky, a grey of
+		// its brightness, a little dimmer the greyer it is; the sky's dome takes the same toward its horizon
+		_c.copy( MOON_SKY ).multiplyScalar( night ).add( lit.horizon );
+		const grey = this.uniforms.skyGrey.value, gl = luminance( _c ) * ( 1 - 0.35 * this.overcast );
+		grey.set( 0.93 * gl, 0.96 * gl, gl, 0.85 * this.overcast );
+		_c.lerp( _tint.setRGB( grey.x, grey.y, grey.z ), grey.w ).multiplyScalar( skyAdapt );
 		this.fog.color.copy( _c );
 		G.horizonColor.value.copy( _c );
 		if ( this.scene.background && this.scene.background.isColor ) this.scene.background.copy( _c );
