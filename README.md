@@ -106,6 +106,13 @@ pnpm dev        # http://127.0.0.1:5189, standing in for All the Spaces
 pnpm test       # game logic and the asset list
 ```
 
+### Play it on GitHub Pages
+
+Each push to `main` builds the game and publishes it to GitHub Pages
+(`.github/workflows/pages.yml`): <https://shooter-git.github.io/salt-life/>. There it runs on its own,
+with the SDK standing in for All the Spaces: you play solo, and your progress is saved in that
+browser. (Turn it on once in the repository's Settings → Pages, with "GitHub Actions" as the source.)
+
 To run All the Spaces' publishing checks, from the All the Spaces checkout (after `pnpm install`
 there):
 
