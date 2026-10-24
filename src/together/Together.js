@@ -679,6 +679,7 @@ export class Together {
 
 			} );
 			await r.compileAsync( gltf.scene, app.camera, app.scene );
+			await app.useNewPrograms();
 			return gltf;
 
 		} ).catch( ( e ) => {
@@ -1357,17 +1358,15 @@ export class Together {
 	}
 
 	// for the load's shaders (prepareLate): the stand-in figures' program and the records board's,
-	// in the island's light
+	// in the island's light, and first used (App.useNewPrograms) before the board is drawn
 	async compile( renderer, camera, scene ) {
 
 		const stand = figureStandIn();
 		this.app.lightUp( stand );
-		stand.frustumCulled = false;
-		scene.add( stand );
 		await renderer.compileAsync( stand, camera, scene );
-		if ( ! this.board.group.parent ) scene.add( this.board.group );
 		await renderer.compileAsync( this.board.group, camera, scene );
-		scene.remove( stand );
+		await this.app.useNewPrograms();
+		if ( ! this.board.group.parent ) scene.add( this.board.group );
 		stand.geometry.dispose();
 		stand.material.dispose();
 		this.ready = true;
