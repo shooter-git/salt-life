@@ -61,8 +61,8 @@ export const SWEET = 0.74; // the moment in the wind-up that spins the net fully
 const SPIN_S = 0.16; // s the throw's sweep takes (the net leaves the hands at its end)
 const PULL_V = [ 0.8, 1.4 ]; // m/s of hand line, hand over hand: drawing the brails, hauling the purse in
 const HAUL_END = 0.55; // m of line left when the purse is up at the hands
-const LIFT_IN = 0.45; // s the horn takes from where it hung on the last of the hand line up into the hand
-const LIFT_S = 1.3; // s from that until the purse is dumped (LIFT_IN of it coming up)
+const LIFT_IN = 0.6; // s the horn takes from where it hung on the last of the hand line up into the hand
+const LIFT_S = 1.45; // s from that until the purse is dumped (LIFT_IN of it coming up)
 const DUMP_S = 0.9;
 const GATHER_S = 1.25;
 // wading deep, the loaded net is held up out of the water: the hands rise (up to LIFT_MAX) to keep
@@ -1052,7 +1052,8 @@ export class CastNet {
 
 			case 'held':
 			case 'windup':
-				this._heldPins( 1 );
+				// (just gathered in, it's drawn the last of the way into the hands over a moment)
+				this._heldPins( this.state === 'held' ? Math.min( 1, 0.2 + this.t * 4 ) : 1 );
 				break;
 			case 'throw':
 				this._heldPins( 1 );
@@ -1128,7 +1129,13 @@ export class CastNet {
 
 			const i = pid( RINGS, j ), i3 = i * 3;
 			Gy[ i ] = g( P[ i3 ], P[ i3 + 2 ], P[ i3 + 1 ] + reach( i ) );
-			for ( let k = 1; k < RINGS; k ++ ) Gy[ pid( k, j ) ] = Gy[ 0 ] + ( Gy[ i ] - Gy[ 0 ] ) * k / RINGS;
+			// between them it's guessed, unless the guess is over netting that hangs below it
+			for ( let k = 1; k < RINGS; k ++ ) {
+
+				const m = pid( k, j ), m3 = m * 3, f = Gy[ 0 ] + ( Gy[ i ] - Gy[ 0 ] ) * k / RINGS;
+				Gy[ m ] = f <= P[ m3 + 1 ] + reach( m ) ? f : g( P[ m3 ], P[ m3 + 2 ], P[ m3 + 1 ] + reach( m ) );
+
+			}
 
 		}
 

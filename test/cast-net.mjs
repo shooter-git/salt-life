@@ -120,18 +120,33 @@ for ( const c of cases ) {
 	check( off < Math.max( 0.9, aim.d * 0.18 ), `${ c.name }: where it was aimed (${ off.toFixed( 2 ) } m off)` );
 	check( widest > R * 0.8, `${ c.name }: opens to ${ widest.toFixed( 2 ) } m of its ${ R } m` );
 	check( fp.onFloor > 0.8 && fp.lead < fp.floor + 0.25, `${ c.name }: the lead line sinks to the bottom (${ ( fp.lead - fp.floor ).toFixed( 2 ) } m above it)` );
-	// drawn closed and hauled in
+	// drawn closed and hauled in (up a pier's or a boat's side too), then lifted, without a jolt
+	let fastest = 0, closest = Infinity;
+	const watch = () => {
+
+		const P = net.P, V = net.V, e = r.camera.position, up = net.state === 'lifted' || net.state === 'dumping';
+		const coming = net.state === 'sinking' || net.state === 'lifted';
+		for ( let i = 0; i < P.length; i += 3 ) {
+
+			if ( coming ) fastest = Math.max( fastest, Math.hypot( V[ i ], V[ i + 1 ], V[ i + 2 ] ) );
+			if ( up ) closest = Math.min( closest, Math.hypot( P[ i ] - e.x, P[ i + 1 ] - e.y, P[ i + 2 ] - e.z ) );
+
+		}
+
+	};
 	net.setPull( true );
 	r.run( 40, () => {
 
 		net.setPull( true );
+		watch();
 		return net.state !== 'sinking';
 
 	} );
 	check( r.events.includes( 'pursed' ) && r.events.includes( 'lifted' ) && net.state === 'lifted', `${ c.name }: drawn closed, then hauled up to the hands` );
 	net.setPull( false );
-	r.run( 5 );
+	r.run( 5, watch );
 	check( r.events.includes( 'dump' ) && net.state === 'held', `${ c.name }: shaken out and loaded again` );
+	check( fastest < 10 && closest > 0.25, `${ c.name }: no jolt hauling and lifting it (fastest ${ fastest.toFixed( 1 ) } m/s; ${ closest.toFixed( 2 ) } m from the eye at the closest)` );
 	check( finite( net ), `${ c.name }: no NaNs in the cloth` );
 
 }
