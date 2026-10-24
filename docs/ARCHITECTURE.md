@@ -185,9 +185,11 @@ The cast net is `src/game/CastNet.js` and its half of `src/game/Game.js`. The fi
   - States: `stowed`, `held`, `windup`, `throw`, `flying`, `sinking` (everything from the splash until it's out), `lifted`, `dumping`, `gather`. The game drains its moments with `takeEvents` (`'throw'`, `'splash'`, `'land'`, `'bottom'`, `'pursed'`, `'lifted'`, `'dump'`).
 - **Closing and hauling**: holding the button draws the hand line in. First it pulls the brails through the horn, closing the lead line under the net into a purse (`draw`, 0 to 1); then the purse comes in hand over hand, slower with a heavy catch (`load`). It hangs in front of you a moment, dripping, then the brails let go and the catch spills out.
 - **The fish under it** are the island's own fish (`Fish.netLand`, `netStep`):
-  - When the net lands on the water, every fish inside the lead line is in it, and the rest nearby scatter.
-  - A fish inside makes for the edge. One that gets there below the lead line slips out under it, until the lead line is on the bottom or drawn closed. A mullet may leap clear while it settles. A fish too long for the net tears out (`holdCm`); one small enough slips through the mesh (`meshCm`).
+  - When the net lands on the water, every fish inside the lead line (within `NET_EDGE` of it) is in it, and the rest nearby scatter.
+  - The lead line's ring of splashes turns the fish inside in toward the middle for a moment (`NET_TURN`). Then each makes for the edge. One that gets there below the lead line slips out under it, until the lead line is on the bottom or drawn closed. A mullet may leap clear while it settles. A fish too long for the net tears out (`holdCm`); one small enough slips through the mesh (`meshCm`).
+  - Drawn closed before it's on the bottom, the purse is the netting above the lead line, and a fish below it gets away. So in deep water (off the pier, round its piles) it's let sink first, and a heavier net gets down before they're out: from the deck, the 4 ft net keeps one now and then, the 10 ft net most of what it lands on.
   - Off a pier or a deck in deep water, the hand line runs out before the lead line reaches the bottom: the net purses where it hangs, and fish can still swim out under it until it's closed.
+  - The net counts the ones that got away and how (`Fish.net.out`). An empty haul says so, instead of a tip.
   - Once the brails are mostly drawn (`BAG_FROM`), the fish ride in the purse, kicking (`Fish.hold`).
 - **The haul** (`GameState.addHaul`): each fish is logged.
   - A mullet of 0.45 kg or more (`KEEPER_KG`) goes in the cooler (method `'net'`), and sells like any other fish.

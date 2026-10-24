@@ -54,6 +54,11 @@ const REFILL = [ 240, 420 ];
 // gets close, a sprint scatters them
 const WARY = [ [ 0.3, 0.5 ], [ 1.5, 1 ], [ 2.5, 1.55 ] ];
 const SPOOKED = 25; // s a fish stays warier after a fright (a sprint at it, a shot)
+// (Salt Life) the cast net: a fish this far out (of the lead line's radius) is at its edge, so not under
+// it as it lands, and out under it from there; and how long (s) the lead line's ring of splashes
+// turns the fish inside in toward the middle before they make for the edge
+const NET_EDGE = 0.9;
+const NET_TURN = [ 0.4, 1.2 ];
 const GRAVITY = 9.81;
 const LOD_PX0 = [ 320, 80, 22 ]; // screen length (px) below which the next level of detail takes over
 const LOD_BAND = 1.15; // cross-fade band above each switch (screen length ratio)
@@ -1872,7 +1877,8 @@ export class FishSchools {
 	netLand( fp, gear, waterY = 0 ) {
 
 		this.netEnd();
-		const net = this.net = { list: [], holdM: gear.holdCm / 100, slipM: gear.meshCm * 0.035, t: 0, sealed: false };
+		// (out: how many got away, and how: under the lead line, leapt clear, too big for it, through the mesh)
+		const net = this.net = { list: [], holdM: gear.holdCm / 100, slipM: gear.meshCm * 0.035, t: 0, sealed: false, out: { under: 0, leapt: 0, big: 0, mesh: 0 } };
 		for ( const g of this.groups ) {
 
 			if ( ! g.active || g.sp.mode === 'escort' || g.sp.mode === 'remora' ) continue;
@@ -1881,7 +1887,7 @@ export class FishSchools {
 
 				const i = g.offset + k, i3 = i * 3;
 				if ( this.held[ i ] || this.jump[ i ] > 1.5 ) continue;
-				if ( Math.hypot( this.pos[ i3 ] - fp.x, this.pos[ i3 + 2 ] - fp.z ) > fp.r * 0.97 ) continue;
+				if ( Math.hypot( this.pos[ i3 ] - fp.x, this.pos[ i3 + 2 ] - fp.z ) > fp.r * NET_EDGE ) continue;
 				this.inNet[ i ] = 1;
 				net.list.push( i );
 
@@ -1904,7 +1910,11 @@ export class FishSchools {
 		const net = this.net;
 		if ( ! net ) return 0;
 		net.t += dt;
+		const was = net.sealed;
 		const sealed = net.sealed = net.sealed || fp.onFloor > 0.7 || fp.purse > 0.4;
+		// drawn closed before it's on the bottom, the purse is the netting above the lead line: a fish
+		// below it then isn't in it
+		const pursedOver = sealed && ! was && fp.onFloor <= 0.7;
 		const P = this.pos, V = this.vel, list = net.list;
 		const top = Math.max( fp.top, fp.lead + 0.05 );
 		let n = 0;
@@ -1924,6 +1934,7 @@ export class FishSchools {
 			if ( ( L > net.holdM && net.t > 0.6 + s ) || L < net.slipM ) {
 
 				this.netFree( i, k );
+				net.out[ L < net.slipM ? 'mesh' : 'big' ] ++;
 				n --;
 				continue;
 
@@ -1934,9 +1945,10 @@ export class FishSchools {
 			const d = Math.hypot( dx, dz ) || 1e-4;
 			dx /= d;
 			dz /= d;
-			if ( ! sealed && y < fp.lead + L * 0.5 && d > fp.r * 0.9 ) {
+			if ( ( ! sealed && y < fp.lead + L * 0.5 && d > fp.r * NET_EDGE ) || ( pursedOver && y < fp.lead - L * 0.5 ) ) {
 
 				this.netFree( i, k );
+				net.out.under ++;
 				n --;
 				continue;
 
@@ -1946,6 +1958,7 @@ export class FishSchools {
 			if ( ! sealed && sp.mode === 'jumper' && s > 0.45 && this.jump[ i ] === 0 && Math.random() < dt * 0.9 ) {
 
 				this.netFree( i, k );
+				net.out.leapt ++;
 				this.jump[ i ] = 1;
 				V[ i3 ] += dx * 1.2;
 				V[ i3 + 2 ] += dz * 1.2;
@@ -1973,9 +1986,15 @@ export class FishSchools {
 			}
 
 			if ( y > top - L * 0.3 ) P[ i3 + 1 ] = top - L * 0.3;
-			// until it's sealed: a dash for the edge, low (some keep their heads; some just circle) after a
-			// moment's fright
-			if ( ! sealed && net.t > 0.15 + s * 0.4 ) {
+			// until it's sealed: turned in by the splashes, then a dash for the edge, low (some keep their
+			// heads; some just circle)
+			if ( ! sealed && net.t < NET_TURN[ 0 ] + ( NET_TURN[ 1 ] - NET_TURN[ 0 ] ) * s ) {
+
+				const a = sp.burst * L * 2 * dt;
+				V[ i3 ] -= dx * a;
+				V[ i3 + 2 ] -= dz * a;
+
+			} else if ( ! sealed ) {
 
 				const a = sp.burst * L * ( s > 0.35 ? 4 : 1.2 ) * dt;
 				V[ i3 ] += dx * a;

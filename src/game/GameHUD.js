@@ -607,16 +607,22 @@ export class GameHUD {
 
 	}
 
-	// (Salt Life) what the cast net brought up (GameState.addHaul's result; n: how many fish): into the
-	// bait bucket, into the cooler, back in the water and why; a new kind or a record. A few seconds,
-	// over the prompt; an empty net is only a toast
-	showHaul( r, n, ms = 5200 ) {
+	// (Salt Life) what the cast net brought up (GameState.addHaul's result; n: how many fish; out: the
+	// ones that got away, Fish.netStep): into the bait bucket, into the cooler, back in the water and
+	// why; a new kind or a record. A few seconds, over the prompt; an empty net is only a toast, saying
+	// why if any were under it
+	showHaul( r, n, out = null, ms = 5200 ) {
 
 		const s = this.game.state;
 		if ( ! n ) {
 
+			const k = ( x ) => x === 1 ? 'One' : x;
+			const heavier = nextLevel( s.upgrades, 'castNet' ) ? ' · a heavier net sinks faster' : ' · let it sink, then close it';
+			const why = ! out ? '' : out.under ? `${ k( out.under ) } got out under the lead line before it was down${ heavier }`
+				: out.leapt ? `${ k( out.leapt ) } leapt clear as it settled` : out.big ? `${ k( out.big ) } too big for this net tore out of it`
+					: out.mesh ? `${ k( out.mesh ) } slipped through the mesh` : '';
 			const tips = [ 'Look for nervous water and jumping mullet', 'Bait fish gather by the pier\'s pilings', 'Mullet run the trough by the beach at dawn and dusk', 'Throw ahead of a moving school' ];
-			this.toast( `Nothing in the net · ${ tips[ Math.floor( Math.random() * tips.length ) ] }`, 2600 );
+			this.toast( `Nothing in the net · ${ why || tips[ Math.floor( Math.random() * tips.length ) ] }`, why ? 3600 : 2600 );
 			return;
 
 		}

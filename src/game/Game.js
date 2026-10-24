@@ -970,13 +970,14 @@ export class Game {
 
 		}
 
+		const out = fish && fish.net ? fish.net.out : null;
 		if ( fish ) fish.netEnd();
 		this.netIn = 0;
 		// a mullet for the cooler counts toward the island's records, and the others hear of it
 		if ( this.app.together ) for ( const e of r.cooler ) this.app.together.caught( e.species, e.kg, e.cm, 'net' );
 		if ( caught.length && au && au.fishFlop ) au.fishFlop();
-		this.lastHaul = { r, n: caught.length };
-		if ( this.hud ) this.hud.showHaul( r, caught.length );
+		this.lastHaul = { r, n: caught.length, out };
+		if ( this.hud ) this.hud.showHaul( r, caught.length, out );
 		else this.toast( caught.length ? `The net came up with ${ caught.length } fish` : 'Nothing in the net', 2400 );
 
 	}

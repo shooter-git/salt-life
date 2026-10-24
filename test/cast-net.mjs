@@ -306,6 +306,61 @@ for ( const c of cases ) {
 
 	check( under > 0 && held > 0 && held <= under, `thrown over the runs: ${ under } under it as it landed, ${ held } still in it drawn closed` );
 
+	// off the pier, over the fish round its piles (3-4 m of water; seeded, so it's the same each run)
+	const random = Math.random;
+	let seed = 7;
+	Math.random = () => ( seed = seed * 16807 % 2147483647 ) / 2147483647;
+	const piles = fish.groups.filter( ( g ) => g.sp.mode === 'pile' );
+	const fromPier = ( level, closeAt ) => {
+
+		let kept = 0, got = 0;
+		for ( const g of piles ) for ( let k = 0; k < 3; k ++ ) {
+
+			// from the head or the walkway, whichever is nearer them
+			const head = [ Math.min( 60.9, Math.max( 49.1, g.center.x ) ), Math.min( 38.9, Math.max( 34.1, g.center.z ) ) ];
+			const walk = [ Math.min( 55.1, Math.max( 54.9, g.center.x ) ), Math.min( 33.1, g.center.z ) ];
+			const at = Math.hypot( head[ 0 ] - g.center.x, head[ 1 ] - g.center.z ) < Math.hypot( walk[ 0 ] - g.center.x, walk[ 1 ] - g.center.z ) ? head : walk;
+			const cam = new PerspectiveCamera( 70, 1.6, 0.1, 500 );
+			cam.position.set( at[ 0 ], 3.95, at[ 1 ] );
+			for ( let t = 0; t < 2; t += 1 / 30 ) fish.update( 1 / 30, cam.position );
+			cam.lookAt( g.center.x, 0, g.center.z );
+			cam.updateMatrixWorld();
+			const net = new CastNet( { scene: new Scene(), camera: cam } );
+			const gear = lv( level );
+			net.setGear( gear );
+			net.equip( true );
+			const env = { groundAt: ( x, z ) => terrain.heightAt( x, z ), waterY: 0 };
+			for ( let t = 0; t < 0.5; t += DT ) net.update( DT, env );
+			net.startWindup();
+			for ( let t = 0; t < SWEET * WIND_S; t += DT ) net.update( DT, env );
+			net.release();
+			let landed = false;
+			for ( let t = 0; t < 14; t += DT ) {
+
+				net.update( DT, env );
+				fish.update( DT, cam.position );
+				if ( ( net.takeEvents() || [] ).includes( 'splash' ) ) landed = fish.netLand( net.footprint, gear, 0 ) >= 0;
+				if ( fish.net ) fish.netStep( net.footprint, DT );
+				if ( landed && net.state === 'sinking' && ( closeAt === 'splash' || net.footprint.onFloor > 0.7 ) ) net.setPull( true );
+				if ( net.pursed ) break;
+
+			}
+
+			kept += fish.netFish().length;
+			if ( fish.net ) got += fish.net.out.under;
+			fish.netEnd();
+
+		}
+
+		return { kept, got };
+
+	};
+	const small = fromPier( 0, 'bottom' ), big = fromPier( 3, 'bottom' ), early = fromPier( 3, 'splash' );
+	Math.random = random;
+	check( small.kept > 0 && small.got > 0, `off the pier, the 4 ft net let sink: ${ small.kept } kept in 9 throws (${ small.got } got out under the lead line)` );
+	check( big.kept > small.kept * 3, `the 10 ft net, heavier, sinks before they're out: ${ big.kept } kept` );
+	check( early.kept < big.kept, `closed as it lands, the ones below the lead line aren't in the purse: ${ early.kept } kept` );
+
 }
 
 // ---- the haul: the cooler, the bait bucket, what goes back
