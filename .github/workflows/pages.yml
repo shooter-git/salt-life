@@ -1,11 +1,13 @@
 name: Pages
 
-# Salt Life on its own, on GitHub Pages: the SDK's standalone mode stands in for All the Spaces
-# (you play solo, and your progress is saved in the browser).
+# Salt Life on its own, on GitHub Pages (https://shooter-git.github.io/salt-life/): the SDK's
+# standalone mode stands in for All the Spaces (you play solo, and your progress is saved in the
+# browser). It goes out with each GitHub release, the same step that offers the new version to All
+# the Spaces, as Hallowed Lanterns does, or by hand from the Actions tab (Run workflow).
 
 on:
-  push:
-    branches: [main]
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
