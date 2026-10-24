@@ -25,6 +25,11 @@
 //              smaller one
 //   bounty     $ Joe pays for each one on top of its weight (the lionfish: every one taken helps the reef)
 //   net        a fish a cast net may take (mullet and the bait fish); the others it brings up go back
+//   cr         (with protected) a catch-and-release fish: a sport fish everyone lets go, rather than one
+//              the law protects from the table (the card says so)
+//   hand       taken by hand only, never speared or hooked (the spiny lobster: tickled out of its den
+//              and netted; its minCm is the gauge's 3-inch carapace as a total length: CARAPACE)
+//   bag        the most one person may keep in a day
 export const FISH = {
 	silverside: { name: 'Hardhead silverside', sci: 'Atherinomorus stipes', lw: [ 0.0074, 3.1 ], model: 'silverside', habitat: { shallows: 1, pier: 0.6, bay: 0.2 }, kg: [ 0.02, 0.08 ], price: 3, fight: 0.05, stamina: 1.5, time: 'any', rarity: 0.2, net: true },
 	mullet: { name: 'Striped mullet', sci: 'Mugil cephalus', lw: [ 0.0112, 2.98 ], model: 'mullet', habitat: { shallows: 1, pier: 0.4 }, kg: [ 0.4, 2.2 ], price: 5, fight: 0.3, stamina: 5, time: 'day', rarity: 0.8, net: true },
@@ -43,16 +48,33 @@ export const FISH = {
 	barracuda: { name: 'Great barracuda', sci: 'Sphyraena barracuda', lw: [ 0.0051, 3.08 ], model: 'barracuda', habitat: { reef: 0.5, bay: 0.8, deep: 0.5 }, kg: [ 2, 16 ], price: 5, fight: 0.7, stamina: 11, time: 'any', rarity: 0.45, spear: true },
 	// (critically endangered: no one may take one)
 	grouper: { name: 'Nassau grouper', sci: 'Epinephelus striatus', lw: [ 0.0107, 3.07 ], model: 'grouper', habitat: { reef: 0.6, deep: 0.6 }, kg: [ 3, 14 ], price: 15, fight: 0.6, stamina: 12, time: 'any', rarity: 0.3, protected: true },
-	redSnapper: { name: 'Red snapper', sci: 'Lutjanus campechanus', lw: [ 0.0137, 2.98 ], model: 'redSnapper', habitat: { deep: 1, bay: 0.2 }, kg: [ 1.5, 9 ], price: 18, fight: 0.5, stamina: 9, time: 'any', rarity: 0.7, spear: true, minCm: 41 },
+	// (a fish of the deep ledges offshore, never inshore)
+	redSnapper: { name: 'Red snapper', sci: 'Lutjanus campechanus', lw: [ 0.0137, 2.98 ], model: 'redSnapper', habitat: { deep: 1 }, kg: [ 1.5, 9 ], price: 18, fight: 0.5, stamina: 9, time: 'any', rarity: 0.7, spear: true, minCm: 41 },
 	tuna: { name: 'Blackfin tuna', sci: 'Thunnus atlanticus', lw: [ 0.0145, 3.0 ], model: 'tuna', habitat: { deep: 1 }, kg: [ 3, 14 ], price: 16, fight: 0.85, stamina: 16, time: 'dawnDusk', rarity: 0.5, spear: true },
 	mahi: { name: 'Mahi-mahi', sci: 'Coryphaena hippurus', lw: [ 0.0079, 3.0 ], model: 'mahi', habitat: { deep: 0.8 }, kg: [ 4, 18 ], price: 14, fight: 0.8, stamina: 15, time: 'day', rarity: 0.4, spear: true, minCm: 51 },
 	// (catch and release only)
-	tarpon: { name: 'Tarpon', sci: 'Megalops atlanticus', lw: [ 0.0077, 3.02 ], model: 'tarpon', habitat: { pier: 0.35, bay: 0.5, shallows: 0.15 }, kg: [ 10, 45 ], price: 4, fight: 1, stamina: 24, time: 'night', rarity: 0.2, protected: true, lights: 3 },
+	tarpon: { name: 'Tarpon', sci: 'Megalops atlanticus', lw: [ 0.0077, 3.02 ], model: 'tarpon', habitat: { pier: 0.35, bay: 0.5, shallows: 0.15 }, kg: [ 10, 45 ], price: 4, fight: 1, stamina: 24, time: 'night', rarity: 0.2, protected: true, cr: true, lights: 3 },
 	blackGrouper: { name: 'Black grouper', sci: 'Mycteroperca bonaci', lw: [ 0.0115, 3.03 ], model: 'blackGrouper', habitat: { reef: 0.4, deep: 0.7 }, kg: [ 3, 25 ], price: 16, fight: 0.75, stamina: 14, time: 'any', rarity: 0.35, spear: true, minCm: 61 },
 	muttonSnapper: { name: 'Mutton snapper', sci: 'Lutjanus analis', lw: [ 0.0157, 2.97 ], model: 'muttonSnapper', habitat: { reef: 0.6, bay: 0.4, deep: 0.3 }, kg: [ 1, 7 ], price: 14, fight: 0.55, stamina: 9, time: 'dawnDusk', rarity: 0.45, spear: true, minCm: 46 },
 	// (an invader from the Pacific with no predators here: every one taken helps the reef)
 	lionfish: { name: 'Red lionfish', sci: 'Pterois volitans', lw: [ 0.0119, 3.1 ], model: 'lionfish', habitat: { reef: 0.7, pier: 0.25, deep: 0.3 }, kg: [ 0.15, 1.1 ], price: 10, fight: 0.1, stamina: 2, time: 'any', rarity: 0.12, spear: true, bounty: 6 },
+	// (the snappers of the deep ledges: the silk offshore, the giant cubera on the drop-offs)
+	silkSnapper: { name: 'Silk snapper', sci: 'Lutjanus vivanus', lw: [ 0.0158, 2.95 ], model: 'silkSnapper', habitat: { deep: 1 }, kg: [ 0.5, 3.5 ], price: 15, fight: 0.45, stamina: 7, time: 'any', rarity: 0.5, spear: true, minCm: 30 },
+	cuberaSnapper: { name: 'Cubera snapper', sci: 'Lutjanus cyanopterus', lw: [ 0.0135, 3.0 ], model: 'cuberaSnapper', habitat: { deep: 0.6, reef: 0.15 }, kg: [ 8, 45 ], price: 9, fight: 0.95, stamina: 22, time: 'dawnDusk', rarity: 0.12, spear: true },
+	// (under the pier and over the reef; after dark they gather under the pier's lamps)
+	graySnapper: { name: 'Mangrove snapper', sci: 'Lutjanus griseus', lw: [ 0.0148, 2.98 ], model: 'graySnapper', habitat: { pier: 1, reef: 0.6, bay: 0.4, shallows: 0.2 }, kg: [ 0.3, 3 ], price: 13, fight: 0.45, stamina: 6, time: 'dawnDusk', rarity: 0.6, spear: true, minCm: 25, lights: 1.5 },
+	// (the grey ghost of the flats: everyone lets one go)
+	bonefish: { name: 'Bonefish', sci: 'Albula vulpes', lw: [ 0.0085, 3.1 ], model: 'bonefish', habitat: { shallows: 1 }, kg: [ 0.8, 5 ], price: 4, fight: 0.85, stamina: 14, time: 'day', rarity: 0.25, protected: true, cr: true },
+	// (protected in US waters since 1990: no one may take one)
+	goliathGrouper: { name: 'Goliath grouper', sci: 'Epinephelus itajara', lw: [ 0.0128, 3.05 ], model: 'goliathGrouper', habitat: { pier: 0.5, reef: 0.25, deep: 0.3 }, kg: [ 10, 100 ], price: 6, fight: 1, stamina: 30, time: 'any', rarity: 0.1, protected: true },
+	whiteMullet: { name: 'White mullet', sci: 'Mugil curema', lw: [ 0.0123, 2.95 ], model: 'whiteMullet', habitat: { shallows: 1, pier: 0.3 }, kg: [ 0.1, 0.8 ], price: 5, fight: 0.25, stamina: 3.5, time: 'day', rarity: 0.7, net: true },
+	// (it never takes a bait or a spear: tickled out of its den in the reef and netted, after dark)
+	lobster: { name: 'Spiny lobster', sci: 'Panulirus argus', lw: [ 0.0575, 2.9 ], model: 'lobster', habitat: {}, kg: [ 0.25, 3 ], price: 24, fight: 0, stamina: 1, time: 'night', rarity: 0, hand: true, minCm: 22.4, bag: 6 },
 };
+
+// (Salt Life) a spiny lobster's carapace length, of its total length (the gauge measures the
+// carapace: 3 inches, 7.62 cm, to keep one)
+export const CARAPACE = 0.34;
 
 export const FISH_IDS = Object.keys( FISH );
 
@@ -92,12 +114,13 @@ export function fishWeightKg( id, cm ) {
 
 }
 
-// may a spearfisher take this one? 'ok', or why not: 'protected', 'notTarget' (not a fish anyone
-// spears) or 'small' (under its minimum size)
+// may a spearfisher take this one? 'ok', or why not: 'byHand' (a spiny lobster: never speared),
+// 'protected', 'notTarget' (not a fish anyone spears) or 'small' (under its minimum size)
 export function spearRule( id, cm ) {
 
 	const f = FISH[ id ];
 	if ( ! f ) return 'notTarget';
+	if ( f.hand ) return 'byHand';
 	if ( f.protected ) return 'protected';
 	if ( ! f.spear ) return 'notTarget';
 	if ( f.minCm && cm < f.minCm ) return 'small';

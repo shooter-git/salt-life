@@ -48,6 +48,14 @@ export const UPGRADES = {
 		{ cost: 90, label: 'Aerated bait bucket', baitMax: 50 },
 		{ cost: 300, label: 'Livewell with a pump', baitMax: 120 },
 	] },
+	// (Salt Life) for the spiny lobster, by hand on a dive: a tickle stick to coax it out of its den
+	// (tickleM: how far it reaches; coaxS: seconds of tickling a lobster takes to walk out) and a hand
+	// net to clap over it, with a gauge for its carapace
+	lobster: { name: 'Lobster gear', levels: [
+		{ cost: 0, label: 'None', lobster: 0, tickleM: 0, coaxS: 0 },
+		{ cost: 45, label: 'Tickle stick, hand net and a lobster gauge', lobster: 1, tickleM: 0.9, coaxS: 2.5 },
+		{ cost: 160, label: 'Long aluminium tickle stick and a wide net', lobster: 2, tickleM: 1.3, coaxS: 1.6 },
+	] },
 	// boat
 	hold: { name: 'Fish hold', levels: [
 		{ cost: 0, label: 'Cooler', holdKg: 30 },

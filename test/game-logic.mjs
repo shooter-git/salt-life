@@ -1,5 +1,5 @@
 // Plain-node tests of the fishing game logic (no GPU): bites, the catch fight, inventory, save.
-import { FISH, FISH_IDS, fishValue, fishLengthCm, fishWeightKg, spearRule, isTrophy } from '../src/game/FishTable.js';
+import { FISH, FISH_IDS, CARAPACE, fishValue, fishLengthCm, fishWeightKg, spearRule, isTrophy } from '../src/game/FishTable.js';
 import { habitatAt, pickSpecies, rollWeight, biteDelay, lampsLit } from '../src/game/Bites.js';
 import { CatchMinigame } from '../src/game/CatchMinigame.js';
 import { GameState } from '../src/game/GameState.js';
@@ -44,8 +44,24 @@ ok( biteDelay( habitatAt( spots.sand ), 12, rng ) === Infinity, 'no bite delay o
 {
 
 	let deepOnly = 0;
-	for ( let i = 0; i < 500; i ++ ) if ( [ 'tuna', 'mahi', 'redSnapper', 'grouper', 'barracuda', 'blackGrouper', 'muttonSnapper', 'lionfish' ].includes( pickSpecies( habitatAt( spots.deep ), 12, rng ) ) ) deepOnly ++;
+	for ( let i = 0; i < 500; i ++ ) if ( [ 'tuna', 'mahi', 'redSnapper', 'grouper', 'barracuda', 'blackGrouper', 'muttonSnapper', 'lionfish', 'silkSnapper', 'cuberaSnapper', 'goliathGrouper' ].includes( pickSpecies( habitatAt( spots.deep ), 12, rng ) ) ) deepOnly ++;
 	ok( deepOnly === 500, 'deep water gives offshore species only' );
+	// (Salt Life) the red snapper is a fish of the deep ledges only; the mangrove snapper of the pier
+	let redInshore = 0, grayPier = 0;
+	for ( const spot of [ spots.shallows, spots.pier, spots.reef ] ) for ( let i = 0; i < 1500; i ++ ) if ( pickSpecies( habitatAt( spot ), 12, rng ) === 'redSnapper' ) redInshore ++;
+	for ( let i = 0; i < 3000; i ++ ) if ( pickSpecies( habitatAt( spots.pier ), 6, rng ) === 'graySnapper' ) grayPier ++;
+	ok( redInshore === 0 && grayPier > 60, `red snapper only offshore (${ redInshore } inshore); mangrove snapper at the pier (${ grayPier } of 3000 at dawn)` );
+	// bonefish on the flats; nothing takes a bait for a lobster
+	let bone = 0, lobster = 0;
+	for ( const spot of Object.values( spots ) ) for ( let i = 0; i < 2000; i ++ ) {
+
+		const id = pickSpecies( habitatAt( spot ), 12, rng );
+		if ( id === 'lobster' ) lobster ++;
+		if ( id === 'bonefish' && spot !== spots.shallows ) bone ++;
+
+	}
+
+	ok( lobster === 0 && bone === 0, 'no lobster ever takes a bait; bonefish only on the flats' );
 	let reefFish = 0;
 	for ( let i = 0; i < 500; i ++ ) if ( FISH[ pickSpecies( habitatAt( spots.reef ), 12, rng ) ].habitat.reef ) reefFish ++;
 	ok( reefFish > 400, `the reef gives mostly reef fish (${ reefFish / 5 }%)` );
@@ -292,6 +308,34 @@ ok( Object.keys( defaultUpgrades() ).length === Object.keys( UPGRADES ).length &
 	ok( g.gunCm === 75 && g.bands === 1 && g.spearM === 3 && ! g.spearReel, 'everyone starts with a 75 cm speargun' );
 	const lv = UPGRADES.speargun.levels;
 	ok( lv.every( ( l, i ) => i === 0 || ( l.spearM > lv[ i - 1 ].spearM && l.spearV > lv[ i - 1 ].spearV && l.cost > lv[ i - 1 ].cost && l.shaftM > l.gunCm / 100 ) ), 'each speargun reaches farther and shoots harder; shafts outreach their barrels' );
+
+}
+// ---- (Salt Life) the new sea life: the goliath and the bonefish let go, the snappers, and the spiny
+// lobster: by hand, a 3 in carapace, six a day, berried females back
+{
+
+	ok( spearRule( 'goliathGrouper', 150 ) === 'protected' && spearRule( 'bonefish', 60 ) === 'protected' && FISH.bonefish.cr && ! FISH.goliathGrouper.cr, 'the goliath grouper is protected; the bonefish is catch and release' );
+	ok( [ 'silkSnapper', 'cuberaSnapper', 'graySnapper' ].every( ( id ) => spearRule( id, 90 ) === 'ok' ) && spearRule( 'graySnapper', 20 ) === 'small' && spearRule( 'whiteMullet', 30 ) === 'notTarget', 'the snappers may be speared over their minimum sizes; nobody spears a mullet' );
+	ok( spearRule( 'lobster', 30 ) === 'byHand' && Object.keys( FISH.lobster.habitat ).length === 0 && FISH.lobster.hand, 'the spiny lobster: by hand only, never on a hook or a spear' );
+	ok( Math.abs( FISH.lobster.minCm * CARAPACE / 2.54 - 3 ) < 0.01 && FISH.lobster.bag === 6, 'the lobster gauge: a 3 in carapace; six a day' );
+	const lv = UPGRADES.lobster.levels, g0 = gearStats( defaultUpgrades() );
+	ok( g0.lobster === 0 && lv[ 1 ].cost > 0 && lv[ 2 ].cost > lv[ 1 ].cost && lv[ 2 ].tickleM > lv[ 1 ].tickleM && lv[ 2 ].coaxS < lv[ 1 ].coaxS, 'lobster gear at Marta\'s: none to start; a tickle stick and net; a longer stick that coaxes them out quicker' );
+	const m = new Map();
+	const st = new GameState( { getItem: ( k ) => m.get( k ) ?? null, setItem: ( k, v ) => m.set( k, v ) } );
+	st.money = 500;
+	ok( st.buy( 'lobster' ) && st.stats.lobster === 1 && st.stats.tickleM === lv[ 1 ].tickleM && st.stats.coaxS === lv[ 1 ].coaxS, 'buying the lobster gear' );
+	const kg = fishWeightKg( 'lobster', 30 );
+	const hand = ( cm, day, release = null ) => st.addFish( 'lobster', fishWeightKg( 'lobster', cm ), 22, { method: 'hand', cm, day, release } );
+	const six = [ 1, 2, 3, 4, 5, 6 ].map( () => hand( 30, 3 ) );
+	ok( six.every( ( f ) => f && f.method === 'hand' ) && st.lastCatch.bag.n === 6 && ! st.lastCatch.bag.full && kg > 0.8 && kg < 1.5, `six lobsters kept by hand (a 30 cm one: ${ kg.toFixed( 2 ) } kg)` );
+	ok( hand( 30, 3 ) === null && st.lastCatch.bag.full && ! st.lastCatch.kept && ! st.lastCatch.released, 'the seventh that day goes back: the bag is full' );
+	ok( hand( 30, 4 ) !== null && st.lastCatch.bag.n === 1, 'a new day, a new bag' );
+	ok( hand( 20, 4, 'short' ) === null && st.lastCatch.released && st.lastCatch.why === 'short' && st.lastCatch.bag.n === 1 && st.log.lobster.count === 9, 'a short one is measured and let go, and doesn\'t count against the bag' );
+	ok( hand( 34, 4, 'berried' ) === null && st.lastCatch.why === 'berried' && st.lastCatch.value > 0 && st.lastCatch.bag.n === 1, 'a berried female goes back too' );
+	st.addFish( 'bonefish', 2.5, 12 );
+	ok( st.lastCatch.released && st.lastCatch.why === 'protected', 'a bonefish on the line: measured and let go' );
+	const s3 = new GameState( { getItem: ( k ) => m.get( k ) ?? null, setItem: () => {} } );
+	ok( s3.load() && s3.bagged( 'lobster', 4 ) === 1 && s3.bagged( 'lobster', 3 ) === 0, 'the day\'s bag is saved' );
 
 }
 console.log( `value check ${ value }` );

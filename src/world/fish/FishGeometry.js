@@ -27,6 +27,7 @@ export const PART = {
 	BODY: 0, DORSAL1: 1, DORSAL2: 2, ANAL: 3, CAUDAL: 4, PECTORAL: 5, PELVIC: 6, FINLET: 7, EYE: 8,
 	MOUTH: 9, FLESH: 10, ICE: 11, LEAF: 12, SHELL: 13, FILLET: 14,
 	DISC: 15, WHIP: 16, CARAPACE: 17, SKIN: 18, FLIPPER: 19, // rays and the turtle (CreatureGeometry.js)
+	CHITIN: 20, LEG: 21, FEELER: 22, // (Salt Life) the spiny lobster (CreatureGeometry.js)
 };
 
 const TAU = Math.PI * 2;
@@ -541,6 +542,21 @@ function caudalFin( M, S, o ) {
 			y = span * s * ( 0.75 + 0.25 * a );
 			len = C.len * ( C.fork + ( 1 - C.fork ) * Math.pow( a, 1.8 ) );
 
+		} else if ( C.shape === 'heterocercal' ) {
+
+			// (Salt Life) a shark's: the long upper lobe swept up and back, a shorter lower one
+			if ( s >= 0 ) {
+
+				y = span * Math.pow( s, 0.9 );
+				len = C.len * ( C.fork + ( 1 - C.fork ) * Math.pow( s, 1.1 ) );
+
+			} else {
+
+				y = - span * C.lower * a;
+				len = C.len * ( C.fork + ( C.lowerLen - C.fork ) * Math.pow( a, 1.4 ) );
+
+			}
+
 		} else {
 
 			y = span * s;
@@ -571,6 +587,21 @@ function pairedFins( M, S, F, part, o ) {
 
 			const t = R > 1 ? k / ( R - 1 ) : 0; // 0 leading (upper) ray .. 1 last
 			let yb, xb, alpha, len, spread;
+			if ( ! pelvic && F.shape === 'shark' ) {
+
+				// (Salt Life) a shark's: stiff, low on the flank, its base running back along it
+				const ub = F.u + F.base * t;
+				yb = F.y;
+				xb = side * surfaceX( section( S, ub ), yb ) * 0.94;
+				alpha = lerp( - 0.25, - 0.15, t );
+				len = F.len * ( F.round ? 1 - 0.55 * Math.pow( t, 1.5 ) : 1 - 0.82 * Math.pow( t, 0.6 ) );
+				spread = lerp( F.spread[ 0 ], F.spread[ 1 ], t );
+				const dir = [ side * Math.sin( spread ) * Math.cos( alpha ), Math.sin( alpha ), - Math.cos( spread ) * Math.cos( alpha ) ];
+				const zb = zOf( ub );
+				return { b: [ xb, yb, zb ], t: [ xb + dir[ 0 ] * len, yb + dir[ 1 ] * len, zb + dir[ 2 ] * len ], ub: ub * L, ut: ub * L - dir[ 2 ] * len };
+
+			}
+
 			if ( pelvic ) {
 
 				yb = - c.B * 0.88;

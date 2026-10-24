@@ -12,13 +12,13 @@ export const OPENS = 5; // Joe opens at 5 am
 export const HOURS = { joe: [ OPENS, 19 ], marta: [ 7, 19 ] }; // [ open, close ) game hours
 export const NIGHT_BOX = 0.7; // what Joe's night box pays, of his price (the wanted list in full)
 
-// Joe's pick: one fish of the twilight (yellowtail, jacks and mutton snapper at dusk and dawn, tuna
-// offshore at first light) at double, and one more at half as much again. Never a protected fish: it's
-// let go (FishTable.js)
-const TWILIGHT = [ 'yellowtail', 'jack', 'tuna', 'muttonSnapper' ];
-const MORE = [ 'sergeant', 'grunt', 'tang', 'wrasse', 'lionfish', 'angel', 'barracuda', 'blackGrouper', 'redSnapper', 'mahi', 'mullet', 'needlefish' ];
+// Joe's pick: one fish of the twilight (yellowtail, jacks and mutton and mangrove snapper at dusk and
+// dawn, tuna offshore at first light) at double, and one more at half as much again (a spiny lobster
+// among them). Never a protected fish: it's let go (FishTable.js)
+const TWILIGHT = [ 'yellowtail', 'jack', 'tuna', 'muttonSnapper', 'graySnapper' ];
+const MORE = [ 'sergeant', 'grunt', 'tang', 'wrasse', 'lionfish', 'angel', 'barracuda', 'blackGrouper', 'redSnapper', 'mahi', 'mullet', 'needlefish', 'silkSnapper', 'lobster' ];
 // Marta's bait tank: $ a fish
-const BAIT = { silverside: 6, sergeant: 8, grunt: 10, mullet: 12, needlefish: 12 };
+const BAIT = { silverside: 6, sergeant: 8, grunt: 10, mullet: 12, needlefish: 12, whiteMullet: 10 };
 
 // which list is up: the day's from Joe opening, until he opens again
 export const tradeDay = ( hour, day ) => ( hour >= OPENS ? day : day - 1 );
@@ -66,6 +66,8 @@ export function biteHint( species ) {
 
 	const f = FISH[ species ];
 	if ( ! f ) return '';
+	// (the spiny lobster: by hand on a dive)
+	if ( f.hand ) return 'in the reef\'s ledges, by hand, after dark';
 	// (one that gathers under the pier's lamps after dark: there, then)
 	if ( f.lights ) return 'under the pier lights, after dark';
 	const best = Object.entries( f.habitat ).sort( ( a, b ) => b[ 1 ] - a[ 1 ] )[ 0 ];
