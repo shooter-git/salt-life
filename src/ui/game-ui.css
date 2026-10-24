@@ -183,6 +183,10 @@ html.is-touch .gm-panel { width: min(calc(420 * var(--tw-u)), calc(100vw - 2 * v
 html.is-touch .gm-btn,
 html.is-touch .gm-mini,
 html.is-touch .gm-tab { min-height: 44px; }
+html.is-touch .gm-mini,
+html.is-touch .gm-tab { min-width: 44px; }
+/* the tabs are tapped here: the keys that also switch them would crowd them */
+html.is-touch .gm-tabs-keys { display: none; }
 html.is-touch .gm-look { min-height: 60px; }
 html.is-touch .gm-guide-card { max-height: calc(100% - 2 * var(--tw-edge) - env(safe-area-inset-top) - env(safe-area-inset-bottom)); }
 html.is-touch .gm-guide-row { grid-template-columns: calc(100 * var(--tw-u)) 1fr; }
