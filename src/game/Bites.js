@@ -4,7 +4,9 @@ import { FISH, FISH_IDS } from './FishTable.js';
 //   depth     water depth under the bobber (m)
 //   reefDist  horizontal distance to the reef edge (m, < 0 inside it)
 //   pierDist  horizontal distance to the pier (piles / head) (m)
-// Returns weights per water type (they overlap: a spot can be both pier and bay).
+// Returns weights per water type (they overlap: a spot can be both pier and bay). (Salt Life) The game
+// adds flood, 0..1: how far the spot is in a boat's deck floodlights after dark (not a water type: it
+// draws in the fish that gather under lights, and the bait, so they bite sooner).
 export function habitatAt( { depth, reefDist, pierDist } ) {
 
 	const h = { shallows: 0, reef: 0, pier: 0, bay: 0, deep: 0 };
@@ -56,6 +58,8 @@ export function pickSpecies( habitat, hour, rng = Math.random ) {
 		for ( const k in f.habitat ) hw += f.habitat[ k ] * habitat[ k ];
 		// (Salt Life) some gather under the pier's lamps after dark
 		if ( f.lights && f.habitat.pier ) hw += f.lights * f.habitat.pier * habitat.pier * lit;
+		// and under a boat's deck floodlights
+		if ( f.flood && habitat.flood ) hw *= 1 + f.flood * habitat.flood;
 		const x = hw * f.rarity * activity( f.time, hour );
 		w.push( x );
 		total += x;
@@ -88,10 +92,11 @@ export function rollWeight( id, rng = Math.random ) {
 export function biteDelay( habitat, hour, rng = Math.random ) {
 
 	let rich = 0;
-	for ( const k in habitat ) rich += habitat[ k ];
+	for ( const k in habitat ) if ( k !== 'flood' ) rich += habitat[ k ];
 	if ( rich < 0.05 ) return Infinity;
-	// open water between the named habitats still has fish: never much slower than a poor spot
-	rich = Math.max( rich, 0.35 );
+	// open water between the named habitats still has fish: never much slower than a poor spot; (Salt
+	// Life) a boat's floodlights draw the bait in, and what feeds on it
+	rich = Math.max( rich, 0.35 ) + ( habitat.flood || 0 );
 	const light = hour > 6 && hour < 19 ? 1 : 0.8;
 	const mean = 8 / ( Math.min( rich, 1.6 ) * light );
 	return 2 + - Math.log( 1 - rng() * 0.98 ) * mean * 0.6;

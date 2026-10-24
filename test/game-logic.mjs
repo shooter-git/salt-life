@@ -4,6 +4,8 @@ import { habitatAt, pickSpecies, rollWeight, biteDelay, lampsLit } from '../src/
 import { CatchMinigame } from '../src/game/CatchMinigame.js';
 import { GameState } from '../src/game/GameState.js';
 import { gearStats, defaultUpgrades, UPGRADES } from '../src/game/Gear.js';
+import { BoatController } from '../src/player/BoatController.js';
+import { Vector3, Group } from '../src/engine/index.js';
 
 let fails = 0;
 const ok = ( c, msg ) => {
@@ -77,6 +79,27 @@ ok( biteDelay( habitatAt( spots.sand ), 12, rng ) === Infinity, 'no bite delay o
 	console.log( `     tarpon after dark: ${ ( 100 * lit ).toFixed( 1 ) }% of bites under the pier lights (${ ( 100 * dark ).toFixed( 1 ) }% without them), ${ ( 100 * bay ).toFixed( 1 ) }% in the open bay` );
 	ok( lit > 1.7 * dark && lit > bay, 'after dark the tarpon gather under the pier lights' );
 	ok( lampsLit( 12 ) === 0 && lampsLit( 22 ) === 1 && lampsLit( 3 ) === 1 && lampsLit( 19.5 ) > 0 && lampsLit( 19.5 ) < 1, 'the pier lamps: lit from dusk to dawn' );
+
+}
+// (Salt Life) a boat's deck floodlights after dark: yellowtail, jacks and houndfish gather in their
+// pool, and in open water the bites come sooner
+{
+
+	const drawn = [ 'yellowtail', 'jack', 'needlefish' ];
+	const bay = habitatAt( { depth: 6, reefDist: 200, pierDist: 60 } );
+	const share = ( h ) => {
+
+		let t = 0;
+		for ( let i = 0; i < 6000; i ++ ) if ( drawn.includes( pickSpecies( h, 22, rng ) ) ) t ++;
+		return t / 6000;
+
+	};
+	const dark = share( bay ), lit = share( { ...bay, flood: 1 } );
+	console.log( `     under the floodlights: ${ ( 100 * lit ).toFixed( 1 ) }% of night bites are yellowtail, jacks or houndfish (${ ( 100 * dark ).toFixed( 1 ) }% without them)` );
+	ok( drawn.every( ( id ) => FISH[ id ].flood > 0 ) && lit > 1.6 * dark, 'after dark yellowtail, jacks and houndfish gather under the floodlights' );
+	const once = ( h ) => biteDelay( h, 22, () => 0.5 );
+	ok( once( { ...bay, flood: 1 } ) < 0.8 * once( bay ), 'in open water the floodlights bring bites sooner' );
+	ok( pickSpecies( { ...habitatAt( spots.sand ), flood: 1 }, 22, rng ) === null && biteDelay( { ...habitatAt( spots.sand ), flood: 1 }, 22, rng ) === Infinity, 'the floodlights put no fish on dry sand' );
 
 }
 for ( const id of FISH_IDS ) {
@@ -208,6 +231,43 @@ ok( Object.keys( defaultUpgrades() ).length === Object.keys( UPGRADES ).length &
 	st.money = 1000;
 	ok( st.buy( 'fuel' ) && st.fuelL === 80, 'a new tank comes full' );
 	ok( st.buy( 'fishFinder' ) && st.stats.finder === true && st.buy( 'fishFinder' ) === null, 'fish finder: one level' );
+	ok( gearStats( defaultUpgrades() ).anchorM === 0 && st.buy( 'anchor' ) && st.stats.anchorM === 20 && st.buy( 'anchor' ) === null, 'anchor: one level, holds in 66 ft' );
+
+}
+// ---- (Salt Life) the anchor: the boat, let go out on the water, is brought up short by its rode and
+// stays near the spot; without it she coasts on
+{
+
+	const at = new Vector3( 600, 0, 600 );
+	const run = ( anchored ) => {
+
+		const n = 24, hullSamples = [];
+		for ( let i = 0; i < n; i ++ ) hullSamples.push( { position: new Vector3( ( i % 4 ) * 0.8 - 1.2, - 0.4, Math.floor( i / 4 ) * 1.3 - 3.3 ), area: 0.325 } );
+		const model = { hydro: {}, hullSamples, propeller: new Vector3( 0, - 0.6, - 3.3 ), rudder: new Vector3( 0, - 0.5, - 3.6 ), group: new Group(), setThrottle() {}, setSteering() {}, setPropellerRPM() {} };
+		const query = { allocate: () => 0, latency: 0, setPoint() {}, cpuValid: true, version: 1, resultTime: 0, cpu: new Float32Array( n * 4 ), resultInputs: new Float32Array( n * 4 ) };
+		const b = new BoatController( { model, query, terrain: { heightAt: () => - 10 }, colliders: null } );
+		b.moored = false;
+		b.position.copy( at );
+		b.quaternion.identity();
+		b.velocity.set( 0, 0, 2.5 );
+		if ( anchored ) b.anchor = b.toWorld( b.stemHead, new Vector3() ).setY( - 10 );
+		let far = 0;
+		const bow = new Vector3();
+		for ( let i = 0; i < 60 * 60; i ++ ) {
+
+			b.update( 1 / 60 );
+			if ( ! anchored ) continue;
+			b.toWorld( b.stemHead, bow );
+			far = Math.max( far, Math.hypot( bow.x - b.anchor.x, bow.z - b.anchor.z ) );
+
+		}
+
+		return { b, far, went: Math.hypot( b.position.x - at.x, b.position.z - at.z ) };
+
+	};
+	const held = run( true ), free = run( false );
+	console.log( `     let go at 2.5 m/s: at anchor the bow strays at most ${ held.far.toFixed( 1 ) } m from it and she's at ${ held.b.speed.toFixed( 2 ) } m/s after a minute; without, she coasts ${ free.went.toFixed( 0 ) } m` );
+	ok( held.b.isFinite() && held.far < 8 && held.b.speed < 0.25 && free.went > 3 * held.went, 'the anchor brings the boat up and holds her near the spot' );
 
 }
 // ---- (Salt Life) the speargun and the law

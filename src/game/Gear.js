@@ -51,9 +51,18 @@ export const UPGRADES = {
 		{ cost: 0, label: 'None', finder: false },
 		{ cost: 250, label: 'Fish finder (depth and fish on the HUD)', finder: true },
 	] },
+	// (Salt Life) the deck floodlights: after dark yellowtail, jacks and houndfish gather in their pool
+	// astern (FishTable flood, Game.floodAt)
 	lights: { name: 'Boat lights', levels: [
 		{ cost: 0, label: 'Nav lights only', deckLights: false },
-		{ cost: 140, label: 'Deck floodlights for night fishing', deckLights: true },
+		{ cost: 140, label: 'Deck floodlights (fish gather under them after dark)', deckLights: true },
+	] },
+	// (Salt Life) the anchor: it goes down when you leave the helm out on the water and comes up when
+	// you take it again (Game.updateAnchor); anchorM: the deepest water its rode holds in (at three
+	// times the depth, as rode is let out: 200 ft holds in 66)
+	anchor: { name: 'Anchor', levels: [
+		{ cost: 0, label: 'None', anchorM: 0 },
+		{ cost: 100, label: 'Danforth anchor, 200 ft of rode', anchorM: 20 },
 	] },
 };
 

@@ -664,6 +664,7 @@ export class Together {
 
 		if ( p.riding ) body.R = p.boat.owner;
 		if ( body.B && this.app.searchlight ) body.S = 1; // (your boat's searchlight is on)
+		if ( body.B && boat.anchor ) body.A = 1; // (it's at anchor: its lamps say so)
 		if ( m === 'h' ) body.E = r2( boat.rpm ); // (the engine's revs: what the others hear)
 		if ( m === 'd' ) body.D = [ r2( p.deckPos.x ), r2( p.deckPos.y ), r2( p.deckPos.z ) ];
 
@@ -900,6 +901,7 @@ export class Together {
 		cur.rod = near.r || 0;
 		cur.ride = typeof near.R === 'string' ? near.R : null;
 		cur.spot = near.S === 1;
+		cur.anchored = near.A === 1;
 		cur.rpm = ( Number( a.E ) || 0 ) + ( ( Number( b.E ) || 0 ) - ( Number( a.E ) || 0 ) ) * f;
 		cur.tension = b.k || 0;
 		cur.bobber = lerp3( cur._bobber, a.b, b.b );
@@ -955,7 +957,7 @@ export class Together {
 				boat.visible = true;
 				boat.position.copy( c.boat.pos );
 				boat.quaternion.copy( c.boat.quat );
-				boat.userData.lamps.set( { underway: c.mode === 'helm' || ! this._docked( c.boat.pos ), spot: c.spot } );
+				boat.userData.lamps.set( { underway: c.mode === 'helm' || ! ( c.anchored || this._docked( c.boat.pos ) ), spot: c.spot } );
 				frame = c.boat;
 
 			} else if ( this._docked( c.boat.pos ) ) frame = { pos: app.boatCtl.position, quat: app.boatCtl.quaternion };

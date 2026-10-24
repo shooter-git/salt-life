@@ -603,7 +603,7 @@ export class App {
 		this.water.detail.update( dt );
 		this.water.update( this.camera );
 		this.boat.update( dt );
-		this.boatLamps.set( { underway: this.boatCtl.driven || ! this.boatCtl.moored, spot: this.searchlight } );
+		this.boatLamps.set( { underway: this.boatCtl.driven || ! ( this.boatCtl.moored || this.boatCtl.anchor ), spot: this.searchlight } );
 		this.localLights.update( this.camera, dt );
 		cloudShadows.update( this.camera );
 		this.wake.update( dt );
