@@ -1,6 +1,6 @@
 import { DAY_RATE, REST, REST_NAMES, isOpen, restTo, sunUp, timeText } from './IslandClock.js';
 import { HOURS, shutFor } from './Orders.js';
-import { CONDITIONS, WEATHER_IDS, WEATHER_NAMES, islandTime, forecast, surfText, windFrom } from './Weather.js';
+import { CONDITIONS, WEATHER_IDS, WEATHER_NAMES, MURKY, islandTime, forecast, surfText, windFrom } from './Weather.js';
 import { G } from '../core/Globals.js';
 import { knots } from './Units.js';
 
@@ -201,17 +201,22 @@ export class TimeHUD {
 		}
 
 		this.render( st );
-		// keys and the gamepad: ← → (the d-pad) move between the choices, Space (A) takes one (Enter too)
+		// keys and the gamepad: ← → (the d-pad) move between the choices, Space (A) takes one (Enter too).
+		// (M10) Each press in turn, as they came: on a slow frame none is lost, and a Space takes the
+		// choice the arrows before it reached
 		const buttons = [ ...this.menu.querySelectorAll( 'button' ) ];
-		if ( buttons.length && ( inp.hit( 'ArrowLeft' ) || inp.hit( 'ArrowRight' ) || inp.hit( 'ArrowUp' ) || inp.hit( 'ArrowDown' ) ) ) {
+		for ( const code of inp.enabled ? inp.presses : [] ) {
 
-			const step = inp.hit( 'ArrowLeft' ) || inp.hit( 'ArrowUp' ) ? - 1 : 1;
-			this._focus = ( this._focus + step + buttons.length ) % buttons.length;
-			buttons[ this._focus ].focus( { preventScroll: true } );
+			if ( ! this.open ) break;
+			const step = code === 'ArrowLeft' || code === 'ArrowUp' ? - 1 : code === 'ArrowRight' || code === 'ArrowDown' ? 1 : 0;
+			if ( step && buttons.length ) {
+
+				this._focus = ( this._focus + step + buttons.length ) % buttons.length;
+				buttons[ this._focus ].focus( { preventScroll: true } );
+
+			} else if ( code === 'Space' && buttons.includes( document.activeElement ) ) document.activeElement.click();
 
 		}
-
-		if ( inp.hit( 'Space' ) && buttons.includes( document.activeElement ) ) document.activeElement.click();
 
 	}
 
@@ -263,7 +268,8 @@ export class TimeHUD {
 		const pick = chosen && this.app.weatherPick ? this.app.weatherPick() : chosen;
 		const next = wx && ! pick ? forecast( islandTime( st.day, st.hour ), 12 ) : null;
 		const wet = wxRain( wx );
-		const wxLine = wx ? `<b>${ WEATHER_NAMES[ wx.id ] }</b>${ wet ? ` · ${ wet }` : '' } · wind ${ wxWind( wx ) } ${ knots( wx.wind ) } · surf ${ surfText( wx.surf ) } at ${ Math.round( wx.period ) } s` : '';
+		// ((M10) and the water, while a blow's left it murky)
+		const wxLine = wx ? `<b>${ WEATHER_NAMES[ wx.id ] }</b>${ wet ? ` · ${ wet }` : '' } · wind ${ wxWind( wx ) } ${ knots( wx.wind ) } · surf ${ surfText( wx.surf ) } at ${ Math.round( wx.period ) } s${ wx.murk >= MURKY ? ' · water murky' : '' }` : '';
 		// (M9) in a gale or a thunderstorm they've both shut and gone home
 		const stalls = wx && shutFor( wx.id ) ? 'Joe and Marta have shut for the weather' : `${ stall( 'Joe', HOURS.joe ) } · ${ stall( 'Marta', HOURS.marta ) }`;
 		const wxNext = pick ? 'Your choice holds while you\'re on your own' : st.alone || ! wx ? ( next ? `Later: ${ WEATHER_NAMES[ next.id ].toLowerCase() }, from ${ at( next.at % 24 ) }` : 'Settled for now' )

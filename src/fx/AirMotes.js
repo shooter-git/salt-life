@@ -2,6 +2,9 @@ import * as THREE from 'three';
 import { G } from '../core/Globals.js';
 
 const GNAT_SWARMS = 4, GNATS_PER_SWARM = 12, SEEDS = 48;
+// (M10) a blow's debris: how many pieces, the wind it starts at and is all there by (m/s: a blustery
+// day's coming on, a gale's), and the share of the 10 m wind they're blown along by, near the ground
+const DEBRIS = 140, BLOW = [ 12, 18 ], DEBRIS_WIND = 0.8;
 const VISIBILITY = 8;
 
 const f = ( x ) => {
@@ -24,11 +27,14 @@ const f = ( x ) => {
 //
 // (Salt Life) On three's WebGL 2, mid and high only (fewer on mid). Without Tidewater's shadow
 // cascades, clouds' and hill's shadows at each speck: the sun reaches them all.
+// (M10) In a blow, its debris too: torn bits of leaf tumbling along up to head height, and sand streaming
+// low over the beach, blown far faster than the motes (their own drift); none below a blustery wind.
 //
 //   const motes = new AirMotes( { terrain, tier } ); scene.add( motes.mesh );
 //   motes.update( dt, camera, cameraWaterHeight, viewHeight )   (each frame)
 
-const COUNT = { mid: 1500, high: 3000 };
+// ((M10) and the debris's besides: as many motes as ever on a fair day)
+const COUNT = { mid: 1500 + DEBRIS, high: 3000 + DEBRIS };
 
 export class AirMotes {
 
@@ -43,6 +49,7 @@ export class AirMotes {
 			...terrain.heightUniforms,
 			airCamPos: { value: new THREE.Vector3() },
 			airDrift: { value: new THREE.Vector2() }, // wind drift, wrapped to the box (m)
+			airDebrisDrift: { value: new THREE.Vector2() }, // (M10) the debris's, blown faster
 			airIntensity: { value: 1 },
 			airViewHeight: { value: 720 },
 			airTime: G.time,
@@ -62,6 +69,7 @@ export class AirMotes {
 ${ terrain.heightGlsl }
 uniform vec3 airCamPos;
 uniform vec2 airDrift;
+uniform vec2 airDebrisDrift;
 uniform float airIntensity;
 uniform float airViewHeight;
 uniform float airTime;
@@ -85,6 +93,10 @@ void main() {
 	vec3 h3 = airHash3( id * 2.1733 + 11.7 );
 	bool isGnat = id < ${ f( NG ) };
 	bool isSeed = id >= ${ f( NG ) } && id < ${ f( NG + SEEDS ) };
+	// (M10) a blow's debris: torn leaf (the first half of them) and sand
+	bool isDebris = id >= ${ f( NG + SEEDS ) } && id < ${ f( NG + SEEDS + DEBRIS ) };
+	bool isLeaf = isDebris && h2.z < 0.5;
+	float blow = airSs( ${ f( BLOW[ 0 ] ) }, ${ f( BLOW[ 1 ] ) }, airWindSpeed );
 	float t = airTime;
 	float Bx = ${ B };
 
@@ -92,7 +104,7 @@ void main() {
 	float sid = floor( id / ${ f( GNATS_PER_SWARM ) } );
 	vec3 hs = airHash3( sid * 3.917 + 1.3 );
 	vec2 home = isGnat ? hs.xz : h.xz;
-	vec2 drift = isGnat ? vec2( 0.0 ) : airDrift;
+	vec2 drift = isGnat ? vec2( 0.0 ) : isDebris ? airDebrisDrift : airDrift;
 	vec2 local = ( fract( home + ( drift - airCamPos.xz ) / Bx ) - 0.5 ) * Bx;
 	vec2 xz0 = airCamPos.xz + local;
 	float ht = terrainHeightAt( xz0 );
@@ -102,7 +114,7 @@ void main() {
 	vec3 ph = h3 * 6.2832;
 	vec3 w1 = h2 * 0.5 + 0.35; // rad/s
 	vec3 w2 = h2.zxy * 1.4 + 1.5;
-	vec3 A1 = vec3( 0.45, 0.22, 0.45 ) * ( isSeed ? 1.6 : 1.0 );
+	vec3 A1 = vec3( 0.45, 0.22, 0.45 ) * ( isSeed ? 1.6 : isLeaf ? 2.2 : 1.0 );
 	vec3 A2 = vec3( 0.07, 0.05, 0.07 );
 	vec3 swirl = sin( w1 * t + ph ) * A1 + sin( w2 * t + ph.zxy ) * A2;
 	vec3 gw = h2 * 2.2 + 1.8;
@@ -115,7 +127,8 @@ void main() {
 	float yMote = pow( h.y, 1.8 ) * 6.5 + 0.2;
 	float ySeed = h.y * 2.5 + 0.3;
 	float yGnat = hs.y * 1.4 + 0.8;
-	float y = ground + ( isGnat ? yGnat : isSeed ? ySeed : yMote );
+	float yDebris = isLeaf ? h.y * 2.2 + 0.3 : h.y * h.y * 0.5 + 0.05; // (leaf tumbling, sand streaming low)
+	float y = ground + ( isGnat ? yGnat : isSeed ? ySeed : isDebris ? yDebris : yMote );
 	vec3 p = vec3( xz0.x, y, xz0.y ) + off;
 
 	// ---- how many live here: most over the beach and the plants, very few far out over the sea,
@@ -128,14 +141,16 @@ void main() {
 	float dMote = max( max( land * 0.85, shore ), 0.06 ) * day;
 	float dSeed = land * day;
 	float dGnat = airSs( 1.5, 4.0, hA ) * ( tileHash < 0.3 ? 1.0 : 0.0 ) * ( 1.0 - airNight );
-	float density = isGnat ? dGnat : isSeed ? dSeed : dMote;
+	// (the debris over the land and the beach, in a blow)
+	float dDebris = max( land, shore * 0.8 ) * blow;
+	float density = isGnat ? dGnat : isSeed ? dSeed : isDebris ? dDebris : dMote;
 	float keep = clamp( ( density - ( isGnat ? 0.5 : h3.y ) ) * 8.0, 0.0, 1.0 );
 
 	// ---- what: salt aerosol near the surf / over the sea, dust and pollen over the land
 	float salt = 1.0 - airSs( -0.5, 0.8, hA );
 	// (the size of what catches the eye in film: lint, pollen clumps, bits of plant, sea salt crystals)
 	float rMote = mix( 0.00015, 0.0005, h2.x * h2.x ) * mix( 1.0, 0.6, salt ) * ( h2.y > 0.96 ? 2.2 : 1.0 );
-	float r = isGnat ? mix( 0.0008, 0.0011, h2.x ) : isSeed ? mix( 0.0025, 0.0045, h2.x ) : rMote;
+	float r = isGnat ? mix( 0.0008, 0.0011, h2.x ) : isSeed ? mix( 0.0025, 0.0045, h2.x ) : isLeaf ? mix( 0.006, 0.014, h2.x ) : isDebris ? mix( 0.0004, 0.0009, h2.x ) : rMote;
 
 	// ---- lighting (per particle): forward-scattering phase
 	vec3 toCam = cameraPosition - p;
@@ -154,7 +169,10 @@ void main() {
 	vec3 cSeed = sun * ( airPhaseHG( cosT, 0.55 ) * 0.8 + 0.05 ) + airSky * 0.35;
 	// gnats: dark bodies (specks against the sky), wings that catch the light when backlit
 	vec3 cGnat = sun * ( airPhaseHG( cosT, 0.9 ) * 0.12 ) + airSky * 0.02;
-	vec3 col = isGnat ? cGnat : isSeed ? cSeed : cMote;
+	// (M10) torn leaf: green to dry brown, lit from any side; sand: pale, a glint against the sun
+	vec3 cLeaf = mix( vec3( 0.16, 0.22, 0.08 ), vec3( 0.36, 0.28, 0.16 ), h3.z ) * ( sun * ( max( dot( airSunDir, vec3( 0.0, 1.0, 0.0 ) ), 0.0 ) * 0.25 + 0.04 ) + airSky * 0.5 );
+	vec3 cSand = vec3( 0.95, 0.88, 0.72 ) * ( sun * phDust + airSky * 0.3 );
+	vec3 col = isGnat ? cGnat : isSeed ? cSeed : isLeaf ? cLeaf : isDebris ? cSand : cMote;
 
 	// ---- footprint: at least ~1.2 px wide, opacity = the real particle's coverage of it
 	float pixel = dist * 2.0 / ( projectionMatrix[ 1 ][ 1 ] * airViewHeight );
@@ -247,6 +265,10 @@ void main() {
 		const d = U.airDrift.value;
 		d.x = ( d.x + G.windDir.value.x * s ) % this.box;
 		d.y = ( d.y + G.windDir.value.y * s ) % this.box;
+		// (M10) the debris, blown along faster
+		const sd = G.windSpeed.value * DEBRIS_WIND * dt, dd = U.airDebrisDrift.value;
+		dd.x = ( dd.x + G.windDir.value.x * sd ) % this.box;
+		dd.y = ( dd.y + G.windDir.value.y * sd ) % this.box;
 
 	}
 

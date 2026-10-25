@@ -16,6 +16,7 @@ import { decodeIsland } from '../src/world/terrain/IslandDecode.js';
 import { ReefLayout } from '../src/world/reef/ReefLayout.js';
 import { FishSchools } from '../src/world/Fish.js';
 import { WORLD } from '../src/world/WorldLayout.js';
+import { G } from '../src/core/Globals.js';
 
 let failed = 0;
 const check = ( ok, what ) => {
@@ -148,6 +149,37 @@ for ( const c of cases ) {
 	check( r.events.includes( 'dump' ) && net.state === 'held', `${ c.name }: shaken out and loaded again` );
 	check( fastest < 10 && closest > 0.25, `${ c.name }: no jolt hauling and lifting it (fastest ${ fastest.toFixed( 1 ) } m/s; ${ closest.toFixed( 2 ) } m from the eye at the closest)` );
 	check( finite( net ), `${ c.name }: no NaNs in the cloth` );
+
+}
+
+// ---- (M10) a throw in a gale: the netting's carried off downwind (far more than the leads) and it
+// lands downwind of where it was aimed, and less open; on a fair day, where it was aimed (above)
+{
+
+	const at = ( wind, dir ) => {
+
+		G.windSpeed.value = wind;
+		G.windDir.value.set( dir[ 0 ], dir[ 1 ] );
+		const r = rig( { eye: 0.65, floor: - 1.0, pitch: - 0.12, level: 1 } ), net = r.net;
+		r.run( 1 );
+		const aim = { ...net.aim };
+		throwAt( r );
+		let widest = 0;
+		r.run( 12, () => {
+
+			widest = Math.max( widest, net.footprint.r );
+			return net.state === 'sinking' && net.footprint.onFloor > 0.8;
+
+		} );
+		const fp = net.footprint;
+		G.windSpeed.value = 7;
+		G.windDir.value.set( 0.35, 0.94 ).normalize();
+		return { dx: fp.x - aim.x, dz: fp.z - aim.z, widest, wet: fp.wet, ok: finite( net ) };
+
+	};
+	const fair = at( 7, [ 1, 0 ] ), gale = at( 20, [ 1, 0 ] );
+	console.log( `     a throw across the wind lands ${ fair.dx.toFixed( 2 ) } m aside on a fair day, ${ gale.dx.toFixed( 2 ) } m in a gale (open to ${ fair.widest.toFixed( 2 ) } m, ${ gale.widest.toFixed( 2 ) } m)` );
+	check( gale.ok && gale.wet && Math.abs( fair.dx ) < 0.4 && gale.dx > fair.dx + 0.4, 'a gale carries the net downwind of where it was aimed' );
 
 }
 
@@ -305,6 +337,33 @@ for ( const c of cases ) {
 	}
 
 	check( under > 0 && held > 0 && held <= under, `thrown over the runs: ${ under } under it as it landed, ${ held } still in it drawn closed` );
+
+	// (M10) the surf moves the breakers, and the runners keep inside them: a fair day's where they always
+	// were; in a big surf they're deeper, and some schools out of range go off
+	const bx = runs[ 0 ].home.x, bz = runs[ 0 ].home.z, fairBreak = fish.breakDepth( bx, bz );
+	fish.setSurf( 0.34 );
+	const same = fish.breakDepth( bx, bz ) === fairBreak && fish.surf === 1;
+	fish.setSurf( 0.6 );
+	const bigBreak = fish.breakDepth( bx, bz ), grid = fish.breakGrid;
+	const mullet = runs.find( ( g ) => g.sp.name === 'runnerMullet' );
+	let deeper = 0, tries = 0;
+	for ( let i = 0; i < 400; i ++ ) {
+
+		const x = mullet.home.x + ( i % 20 - 10 ) * 2, z = mullet.home.z + ( Math.floor( i / 20 ) - 10 ) * 2;
+		if ( fish.fits( mullet.sp, mullet.zone, x, z ) ) {
+
+			tries ++;
+			if ( fish.depthAt( x, z ) > mullet.sp.band[ 1 ] ) deeper ++;
+
+		}
+
+	}
+
+	const off = runs.filter( ( g ) => fish.offInSurf( g ) ).length;
+	fish.setSurf( 0.34 );
+	console.log( `     the breakers at a run: ${ fairBreak.toFixed( 2 ) } m deep on a fair day, ${ bigBreak.toFixed( 2 ) } m in the biggest surf; ${ deeper } of ${ tries } spots the mullet run to then are deeper than they ever go on a fair day; ${ off } of ${ runs.length } schools of runners go off` );
+	check( same && bigBreak > fairBreak * 1.4 && grid === null, 'the breakers follow the surf (a fair day\'s where they always were)' );
+	check( tries > 0 && deeper > 0 && off > 0 && off <= runs.length * 0.6 && runs.every( ( g ) => ! fish.offInSurf( g ) ), 'the runners keep inside them, deeper in a big surf, and some schools go off' );
 
 	// off the pier, over the fish round its piles (3-4 m of water; seeded, so it's the same each run)
 	const random = Math.random;

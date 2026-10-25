@@ -6,6 +6,7 @@ import { NIGHT_BOX, biteHint, orderTerms } from './Orders.js';
 import { WEEK_MUL, delivered, filled, mineOf, shareOf, weekEnds } from './WeekOrder.js';
 import { timeText } from './IslandClock.js';
 import { LB, IN, GAL, lb, pounds, inches, feet, gallons, lbOz, feetInches } from './Units.js';
+import { FLOOD_L } from './Hull.js';
 
 // (other players' names, into HTML)
 const escape = ( t ) => String( t ).replace( /[&<>"']/g, ( c ) => ( { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } )[ c ] );
@@ -153,6 +154,13 @@ html:has(.gm-panel.is-open) .hud-hint { visibility: hidden; }
 .gm-gauge b { font-family: var(--tw-mono); font-weight: 500; color: var(--tw-ink); }
 .gm-fuel-bar > span { background: var(--tw-sun); }
 .gm-fuel.is-low .gm-fuel-bar > span { background: var(--tw-coral); }
+/* (M10) the boat's hull once it's worn (what's left of it), and the water in her bilge (up to the engine);
+   it pulses as the water nears the engine, as the breath does */
+.gm-hull-bar > span { background: var(--tw-ink-2); }
+.gm-hull.is-low .gm-hull-bar > span { background: var(--tw-coral); }
+.gm-bilge-bar > span { background: var(--tw-aqua); }
+.gm-bilge.is-low .gm-bilge-bar > span { background: var(--tw-coral); }
+.gm-bilge.is-low { animation: gm-breath-pulse 0.9s ease-in-out infinite; }
 .gm-sonar-dots { letter-spacing: 1px; color: var(--tw-aqua); }
 /* (Salt Life) the held breath under water; what's under the speargun's sights; the edges of sight
    closing in as the breath runs out (dark when you black out) */
@@ -303,7 +311,7 @@ export class GameHUD {
 		style.textContent = CSS;
 		document.head.append( style );
 
-		this.purse = h( 'div', 'gm-purse tw-glass', `<span class="gm-money">$0</span><span class="gm-cooler"><span class="gm-cooler-label">Cooler</span><span class="gm-cooler-bar"><span></span></span><span class="gm-cooler-kg">0 / 66 lb</span></span><span class="gm-gauge gm-fuel"><span>Fuel</span><span class="gm-cooler-bar gm-fuel-bar"><span></span></span><b class="gm-fuel-l">11 gal</b></span><span class="gm-gauge gm-sonar"><span>Sonar</span><b class="gm-sonar-d">0 ft</b><span class="gm-sonar-dots"></span></span><span class="gm-gauge gm-breath"><span>Breath</span><span class="gm-cooler-bar gm-breath-bar"><span></span></span></span><span class="gm-gauge gm-bait"><span class="gm-bait-l">Bait</span><b class="gm-bait-t">Shrimp</b></span>` );
+		this.purse = h( 'div', 'gm-purse tw-glass', `<span class="gm-money">$0</span><span class="gm-cooler"><span class="gm-cooler-label">Cooler</span><span class="gm-cooler-bar"><span></span></span><span class="gm-cooler-kg">0 / 66 lb</span></span><span class="gm-gauge gm-fuel"><span>Fuel</span><span class="gm-cooler-bar gm-fuel-bar"><span></span></span><b class="gm-fuel-l">11 gal</b></span><span class="gm-gauge gm-hull"><span>Hull</span><span class="gm-cooler-bar gm-hull-bar"><span></span></span><b class="gm-hull-p">100%</b></span><span class="gm-gauge gm-bilge"><span>Bilge</span><span class="gm-cooler-bar gm-bilge-bar"><span></span></span><b class="gm-bilge-l">0 gal</b></span><span class="gm-gauge gm-sonar"><span>Sonar</span><b class="gm-sonar-d">0 ft</b><span class="gm-sonar-dots"></span></span><span class="gm-gauge gm-breath"><span>Breath</span><span class="gm-cooler-bar gm-breath-bar"><span></span></span></span><span class="gm-gauge gm-bait"><span class="gm-bait-l">Bait</span><b class="gm-bait-t">Shrimp</b></span>` );
 		this.baitEl = this.purse.querySelector( '.gm-bait' );
 		this.baitL = this.purse.querySelector( '.gm-bait-l' );
 		this.baitT = this.purse.querySelector( '.gm-bait-t' );
@@ -312,6 +320,12 @@ export class GameHUD {
 		this.fuelEl = this.purse.querySelector( '.gm-fuel' );
 		this.fuelBar = this.purse.querySelector( '.gm-fuel-bar > span' );
 		this.fuelL = this.purse.querySelector( '.gm-fuel-l' );
+		this.hullEl = this.purse.querySelector( '.gm-hull' );
+		this.hullBar = this.purse.querySelector( '.gm-hull-bar > span' );
+		this.hullP = this.purse.querySelector( '.gm-hull-p' );
+		this.bilgeEl = this.purse.querySelector( '.gm-bilge' );
+		this.bilgeBar = this.purse.querySelector( '.gm-bilge-bar > span' );
+		this.bilgeL = this.purse.querySelector( '.gm-bilge-l' );
 		this.sonarEl = this.purse.querySelector( '.gm-sonar' );
 		this.sonarD = this.purse.querySelector( '.gm-sonar-d' );
 		this.sonarDots = this.purse.querySelector( '.gm-sonar-dots' );
@@ -424,8 +438,9 @@ export class GameHUD {
 	// per frame
 	// (Salt Life) aim: what's under the speargun's sights ({ label, cm, rule, far }); breath: the swimmer's
 	// ({ s, max, blackout }) while it matters; netWind: the cast net's wind-up ({ charge, win: [ lo, hi ],
-	// tired }); bait: the chip in the purse ({ label, text }: the hook's bait, or the bucket)
-	update( { fight, casting, power, bite, aiming, fuel = null, sonar = null, aim = null, breath = null, netWind = null, bait = null } ) {
+	// tired }); bait: the chip in the purse ({ label, text }: the hook's bait, or the bucket); (M10) hull:
+	// the boat's wear (0..1) once it shows, bilge: the litres in her bilge while there are any
+	update( { fight, casting, power, bite, aiming, fuel = null, sonar = null, aim = null, breath = null, netWind = null, bait = null, hull = null, bilge = null } ) {
 
 		this.netWind.classList.toggle( 'is-on', !! netWind );
 		if ( netWind ) {
@@ -461,6 +476,26 @@ export class GameHUD {
 			this.fuelBar.style.width = `${ fuel.litres / fuel.tank * 100 }%`;
 			this.fuelL.textContent = `${ gallons( fuel.litres ) } gal`;
 			this.fuelEl.classList.toggle( 'is-low', fuel.litres < fuel.tank * 0.15 );
+
+		}
+
+		this.hullEl.classList.toggle( 'is-on', hull !== null );
+		if ( hull !== null ) {
+
+			const left = Math.round( ( 1 - hull ) * 100 );
+			this.hullBar.style.width = `${ left }%`;
+			if ( this.hullP.textContent !== `${ left }%` ) this.hullP.textContent = `${ left }%`;
+			this.hullEl.classList.toggle( 'is-low', hull >= 0.5 );
+
+		}
+
+		this.bilgeEl.classList.toggle( 'is-on', bilge !== null );
+		if ( bilge !== null ) {
+
+			this.bilgeBar.style.width = `${ Math.min( 1, bilge / FLOOD_L ) * 100 }%`;
+			const t = `${ gallons( bilge ) } gal`;
+			if ( this.bilgeL.textContent !== t ) this.bilgeL.textContent = t;
+			this.bilgeEl.classList.toggle( 'is-low', bilge >= FLOOD_L * 0.7 );
 
 		}
 
@@ -963,6 +998,10 @@ GameHUD.prototype.renderShop = function () {
 	// (Salt Life) your boat drifted off: Marta tows her back to the dock (out of hours too: into the box)
 	const job = g.towJob ? g.towJob() : null;
 	const towRow = job ? `<div class="gm-shop-row"><span>Tow your boat in<small>She's drifted ${ feet( job.metres ) } off the dock</small></span><button class="gm-btn" data-tow>Tow · $${ Math.min( job.fee, s.money ) }</button></div>` : '';
+	// (M10) her hull: Marta repairs it while she's open, with the boat at her dock (as far as your money goes)
+	const fix = g.repairJob ? g.repairJob() : null;
+	const pays = fix ? Math.min( fix.fee, s.money ) : 0;
+	const repairRow = fix ? `<div class="gm-shop-row"><span>Repair the hull<small>${ fix.here ? `She's ${ Math.round( fix.wear * 100 ) }% worn${ pays < fix.fee ? ` · $${ fix.fee } for all of it` : '' }` : 'Bring her in to the dock first' }</small></span>${ fix.here ? `<button class="gm-btn" data-repair ${ pays < 1 ? 'disabled' : '' }>Repair · $${ pays }</button>` : '' }</div>` : '';
 	const bindFuel = () => {
 
 		const f = this.stand.querySelector( '[data-fuel]' );
@@ -1012,11 +1051,18 @@ GameHUD.prototype.renderShop = function () {
 	this.drawStand( v, `
 		<div class="gm-head"><h2>${ v.name }</h2>
 		<p class="gm-sub">${ greeting } · You have $${ s.money.toLocaleString() }</p></div>
-		<div class="gm-list">${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ bucketRow }${ baitRows }${ towRow }${ fuelRow }${ rows }</div>
+		<div class="gm-list">${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ bucketRow }${ baitRows }${ towRow }${ repairRow }${ fuelRow }${ rows }</div>
 		<div class="gm-foot"><span class="gm-sub">Upgrades take effect at once</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>` );
 	bindFuel();
 	const sb = this.stand.querySelector( '[data-sellbait]' );
 	if ( sb ) sb.onclick = () => this.game.sellBait();
+	const rp = this.stand.querySelector( '[data-repair]' );
+	if ( rp ) rp.onclick = () => {
+
+		this.game.repair();
+		this.renderShop();
+
+	};
 	for ( const b of this.stand.querySelectorAll( '[data-buy]' ) ) b.onclick = () => this.game.buy( b.dataset.buy );
 	for ( const b of this.stand.querySelectorAll( '[data-sell]' ) ) b.onclick = () => this.game.sell( [ Number( b.dataset.sell ) ] );
 

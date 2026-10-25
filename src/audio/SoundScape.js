@@ -122,12 +122,26 @@ export const MIX = {
 	rainBoat: - 26, // a downpour drumming on the boat, aboard her
 	thunderNear: - 16, // a crack 1 km off (louder nearer, as the root of its nearness)
 	thunderFar: - 25, // a rumble 8 km off (falling to -35 at 20 km)
+	// (M10) the weather's cost to the boat, at the helm or on deck, and the shutters in a blow
+	starter: - 22, // the engine catching (its starter cranking some 12 dB under it, as recorded)
+	hullBump: - 26, // the hull knocking a pile at 6 m/s (gentler knocks quieter, down to 10 dB)
+	hullKnock: - 19, // and the heavy wooden bang under a hard one
+	keelScrape: - 25, // the keel grinding along the bottom at 4 m/s
+	bucket: - 31, // a scoop bailed over the side, in your hands
+	bilgePump: - 40, // the bilge pump's hum and its outflow
+	bilgeSlosh: - 33, // the water in her bilge, up to the engine, sloshing as she works in a sea
+	hullCreak: - 31, // the hull creaking in a heavy sea
+	shutter: - 22, // a shutter banging in a blow, at 10 m
 };
 
 // the fishing sounds (loaded when the rod comes out)
 const FISHING = [ 'reel_wind', 'reel_drag', 'line_strain', 'rod_swish', 'bail_click', 'line_out', 'plop', 'line_snap', 'fish_splash', 'fish_flop' ];
 // (Salt Life) and the cast net's besides (loaded when it comes out)
 const NET_SET = [ 'splash', 'swim', 'emerge', 'step_water', 'step_wetsand' ];
+// (M10) the boat's hull and engine in the weather (loaded once you're aboard: the starter's needed
+// at the helm); the shutters in a blow from this wind (m/s: blustery's coming on)
+const HULL_SET = [ 'starter', 'hull_bump', 'shutter', 'keel_scrape', 'bucket', 'bilge_pump', 'bilge_slosh', 'hull_creak' ];
+const SHUTTER_WIND = 12;
 
 // forest bird sprite: slices per source recording (a singer sings from one of them)
 const FOREST = [ [ 0, 1, 2, 3, 4, 5, 6 ], [ 7, 8, 9, 10, 11, 12 ] ];
@@ -145,12 +159,12 @@ const STEP = {
 };
 
 // max simultaneous one-shot voices per category (oldest is faded out beyond this)
-const LIMITS = { step: 3, swim: 2, splash: 3, trans: 2, hull: 3, gull: 2, crash: 7, wash: 5, back: 5, bird: 4, tern: 2, whale: 4, rod: 4, fish: 3, coin: 1, net: 6, thunder: 2 };
+const LIMITS = { step: 3, swim: 2, splash: 3, trans: 2, hull: 3, gull: 2, crash: 7, wash: 5, back: 5, bird: 4, tern: 2, whale: 4, rod: 4, fish: 3, coin: 1, net: 6, thunder: 2, start: 1, bucket: 2, creak: 2, shutter: 2 };
 // Salt Life: All the Spaces allows 16 / 32 / 64 sounds at once by device tier. Beds and one-shots
 // together stay under it (a new one-shot is left out when it's full), and the low tier keeps fewer of
 // each kind so the surf can't crowd out the footsteps.
 const VOICES = { low: 14, mid: 30, high: 62 };
-const LOW_LIMITS = { ...LIMITS, step: 2, splash: 2, hull: 2, gull: 1, crash: 3, wash: 2, back: 2, bird: 2, tern: 1, whale: 2, rod: 3, fish: 2, net: 3, thunder: 1 };
+const LOW_LIMITS = { ...LIMITS, step: 2, splash: 2, hull: 2, gull: 1, crash: 3, wash: 2, back: 2, bird: 2, tern: 1, whale: 2, rod: 3, fish: 2, net: 3, thunder: 1, creak: 1, shutter: 1 };
 // a bed that has been silent this long (s) stops, freeing its voice (it starts again when wanted)
 const BED_IDLE = 4;
 
@@ -210,6 +224,10 @@ export class SoundScape {
 		this._singers = [];
 		this._wh = { blow: false, breaches: - 1, splashes: - 1, fluke: 0, sing: 1 };
 		this._slapT = 0;
+		this._creakT = 2;
+		this._shutT = 3;
+		// (M10) where the village's shutters are (App: a point on each house), banging in a blow
+		this.shutters = [];
 		this._engine = 0; // 0..1 engine running (ramped in the mixer)
 		this._engineOn = false;
 		this._gust = { v: 0.4, target: 0.6, t: 0 };
@@ -223,6 +241,7 @@ export class SoundScape {
 			u: 0, depth: 0, surf: 0.5, shoreDist: 60, onLand: true, wind: 7, day: 1, nearPier: false, hour: null,
 			shoreX: 0, shoreZ: 1,
 			boat: { active: false, rpm: 0, speed: 0, x: 0, y: 0, z: 0, inside: false },
+			hull: { flood: 0, pump: false, scrape: 0, wear: 0, motion: 0 },
 		};
 		const sw = WORLD.swellDir || { x: - 0.12, y: - 1 };
 		const l = Math.hypot( sw.x, sw.y ) || 1;
@@ -335,6 +354,7 @@ export class SoundScape {
 			this._mix( now, step );
 			this._surf( step );
 			this._life( step );
+			this._blow( step );
 			this._birds( now, step );
 			this._whale( now, step );
 			this._reel( now );
@@ -393,6 +413,38 @@ export class SoundScape {
 	engineStop() {
 
 		this._engineOn = false;
+
+	}
+
+	// (M10) aboard: the hull's and the engine's sounds, ready before the helm's first crank
+	boatReady() {
+
+		for ( const n of HULL_SET ) this._want( n );
+
+	}
+
+	// the starter turning her over: a crank that won't catch, or one that does (as Hull.CRANK_S ends)
+	// and runs on into her idle as the engine's bed comes up (at its own speed, to keep that time)
+	crank( catches ) {
+
+		this._shot( 'starter', 'start', this.boatSum, MIX.starter, 1, 0, catches ? 1 : 0 );
+
+	}
+
+	// the hull knocking a pile, or dropping onto the bottom (closing speed, m/s): a gentle one's a bump;
+	// a hard one off a pile has a heavy wooden bang under it (the shutter's, slow and low)
+	hullKnock( speed, ground = false ) {
+
+		const v = clamp( num( speed, 1 ), 0, 12 ), k = smooth( 0.6, 6, v );
+		this._shot( 'hull_bump', 'hull', this.boatSum, MIX.hullBump - ( 1 - k ) * 10, ( ground ? 0.75 : 0.95 ) + Math.random() * 0.1 );
+		if ( ! ground && v > 1.5 ) this._shot( 'shutter', 'hull', this.boatSum, MIX.hullKnock - ( 1 - k ) * 8, 0.56 + Math.random() * 0.08 );
+
+	}
+
+	// a scoop of the bucket thrown over the side (its splash and drips run on under the next: two at once)
+	bailScoop() {
+
+		this._shot( 'bucket', 'bucket', this.near, MIX.bucket + ( Math.random() - 0.5 ) * 3, 0.92 + Math.random() * 0.16 );
 
 	}
 
@@ -776,6 +828,8 @@ export class SoundScape {
 			boat_engine: this.engineLP, boat_rush: this.boatSum, boat_lap: this.boatSum,
 			reel_wind: this.rod, reel_drag: this.rod, line_strain: this.rod,
 			rain_light: this.above, rain_heavy: this.above, rain_boat: this.above,
+			// (M10) the hull's: at the boat, as the water past her is
+			keel_scrape: this.boatSum, bilge_pump: this.boatSum, bilge_slosh: this.boatSum,
 		};
 
 	}
@@ -1242,6 +1296,14 @@ export class SoundScape {
 		eb.y = num( bp.y, eb.y );
 		eb.z = num( bp.z, eb.z );
 		eb.inside = !! b.listenerInside;
+		// (M10) the hull you're aboard: the water in her bilge (a share of what reaches the engine), her pump
+		// at work, the keel sliding along the bottom (m/s), her wear and how hard she's working in a sea
+		const hb = s.hull || EMPTY, eh = e.hull;
+		eh.flood = clamp( num( hb.flood, 0 ), 0, 3 );
+		eh.pump = !! hb.pump;
+		eh.scrape = Math.max( 0, num( hb.scrape, 0 ) );
+		eh.wear = clamp( num( hb.wear, 0 ), 0, 1 );
+		eh.motion = clamp( num( hb.motion, 0 ), 0, 1 );
 		e.onLand = typeof s.coastDistance === 'number' && Number.isFinite( s.coastDistance ) ? s.coastDistance < 0 : true;
 		if ( e.u > 0.01 || eb.active ) e.onLand = false;
 
@@ -1369,6 +1431,43 @@ export class SoundScape {
 			}
 
 		}
+
+		// (M10) the hull: the keel grinding along the bottom; aboard, the bilge pump at work and the water
+		// in her bilge sloshing as she works; and the hull creaking in a sea, more often the more she's worn
+		const eh = e.hull, inside = e.aboard ? 1 : nearBoat ? 0.3 : 0;
+		this._bed( 'keel_scrape', nearBoat && eh.scrape > 0.3 ? dB( MIX.keelScrape ) * clamp( eh.scrape / 4, 0.3, 1.6 ) / dB( BANK.keel_scrape.lufs ) : 0, now, 0.12, 0.8 + 0.08 * Math.min( eh.scrape, 5 ) );
+		this._bed( 'bilge_pump', eh.pump ? dB( MIX.bilgePump ) * inside / dB( BANK.bilge_pump.lufs ) : 0, now, 0.6 );
+		const slosh = smooth( 0.02, 1, eh.flood ) * ( 0.3 + 0.7 * eh.motion );
+		this._bed( 'bilge_slosh', dB( MIX.bilgeSlosh ) * slosh * inside / dB( BANK.bilge_slosh.lufs ), now, 0.5 );
+		if ( e.aboard && e.u < 0.5 && eh.motion > 0.15 ) {
+
+			this._creakT -= dt;
+			if ( this._creakT <= 0 ) {
+
+				this._creakT = ( 1.5 + Math.random() * 5 ) / ( ( 0.4 + 1.6 * eh.motion ) * ( 1 + 1.5 * eh.wear ) );
+				this._shot( 'hull_creak', 'creak', this.boatSum, MIX.hullCreak - ( 1 - eh.motion ) * 8 + ( Math.random() - 0.5 ) * 4, 0.9 + Math.random() * 0.2 );
+
+			}
+
+		}
+
+	}
+
+	// (M10) a blow: the village's shutters banging, the one that bangs one of those near you, more often
+	// the harder it blows and in the gusts
+	_blow( dt ) {
+
+		const e = this.env, w = e.wind;
+		if ( w < SHUTTER_WIND || ! this.shutters.length || e.u > 0.5 ) return;
+		this._want( 'shutter' );
+		this._shutT -= dt;
+		if ( this._shutT > 0 ) return;
+		const k = clamp( ( w - SHUTTER_WIND ) / 8, 0, 1 );
+		this._shutT = ( 3 + Math.random() * 9 ) / ( 0.3 + 1.7 * k * ( 0.5 + e.gust ) );
+		const near = this.shutters.filter( ( p ) => Math.hypot( p.x - e.lx, p.z - e.lz ) < 80 );
+		if ( ! near.length ) return;
+		const p = near[ Math.floor( Math.random() * near.length ) ];
+		this._shotAt( 'shutter', 'shutter', p.x, p.y, p.z, MIX.shutter - ( 1 - k ) * 6 + ( Math.random() - 0.5 ) * 4, 0.92 + Math.random() * 0.16, 0, 10 );
 
 	}
 

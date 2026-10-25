@@ -71,6 +71,7 @@ Materials are three's `MeshStandardMaterial` (or `MeshPhysicalMaterial`), with G
   - Aboard, you ride on their boat wherever they take it (`Player.ride()`); your pose names the boat's owner (`R`), so everyone draws you on it.
   - Your own boat stays at its mooring, so each player always has a boat of their own. Jumping off or stepping ashore ends the ride.
   - You hear the boat you ride in: its engine at the revs its skipper sends from the helm (`E`), and the water past the hull. On foot or in the water, you hear the nearest boat going by.
+  - (M10) An engine at the helm with its revs run down has stalled, and you hear it stop. While the skipper's starter turns her over the pose says so (`K`: 1 for a crank that won't catch, 2 for one that will), and you hear it too.
 - **The horn:** sounding it is a `'horn'` message (1 when it starts, 0 when it's let go). The others hear it from that player's boat.
   - Each device draws only the nearest few players and boats.
 - **The clock:** one time of day for everyone, kept in the shared value `'clock'` as `{ at, hour, day, speed }` (below).
@@ -157,23 +158,30 @@ Everyone keeps their own progress and their own fish.
   - whitecaps (`WaterSurface`): in a wind over fair's, Monahan's share of the sea breaking white, as patches along the crests near by and scattered further off. A uniform behind a branch: nothing is drawn for them on a fair day;
   - the surf (`ShoreWaves.setSurf`): its height, up to `SURF_MAX` (0.6 m: bigger, the sets break on the pier head and over the boat at the dock), and its period. Its run-up goes as the root of its height and in proportion to its period (Stockdon), so it never reaches the boardwalk (`test/waves.mjs`). The waves run on a clock (`ShoreWaves.clock`, the GPU's `shoreClock`) that's re-anchored whenever the period changes, counted from the bay's middle: every wave carries on, only the crests' spacing changes. The period changes at most 0.02 s a second, so the crests on their way in are hurried by no more than a few percent; the surf's sound and the shorebirds' swash take the same clock;
   - the cloud (`SkyProClouds`): its cover, and how grey it is (`overcast`: denser, its bases everywhere, darker below). Slow changes are followed by the panorama's progressive refresh and the view's history; only a step (a jump of the clock) makes a new panorama;
-  - the light (`Sky.overcast`): the sun dims under a grey sky (to 30% of a clear day's on low and mid; to 70% on high, where the clouds' shadows dim the rest), and the sky's light greys and rises a little;
+  - the light (`Sky.overcast`): the sun dims under a grey sky (to 30% of a clear day's on low and mid; to 70% on high, where the clouds' shadows dim the rest), and the sky's light greys and rises a little; (M10) the environment's level (`scene.environmentIntensity`: the lit materials' fill, and the sea's reflection of the sky) rises with it, by as much as the sky's light does under the grey and rain's deck (none under a clear sky);
   - how far you see (`Sky.visibility`): the tier's fog distances, nearer in murk;
   - the horizon: under a grey sky the fog greys, to a grey of the horizon's brightness, and the sky's dome takes the same grey toward its horizon (`skyGrey`, in the view and in the reflections), so the two meet without a seam;
   - the sound: the wind and the palms louder in a gale, the surf's waves louder as the root of the swell, and its far roar building faster;
   - (M9) the rain (`G.rain`: the streaks, the rings on the water) and how wet it's left everything (`G.wet`: soaked in seconds of a downpour, dry over four minutes once it's stopped);
   - (M9) rain's deck (`SkyProClouds.storm`, `Sky.storm`): its base 1.9 km lower, smoother below and darker, no cirrus above it, and no sun through it; of the sun it takes, half comes down through the cloud as the sky's light (`DECK_DIFFUSE`), and the eye adapts to a grey sky as a camera would;
   - (M9) the caustics on the seabed, faint under a grey sky and gone under rain's deck (`G.caustics`: the terrain's and `Underwater.js`'s), and the underwater fog dimmer under cloud;
+  - (M10) the water's murk after a blow (`G.murk`, eased with the sea): below;
   - (M9) the weather on its way, up the trades (`SkyProClouds.front`): the cover 12, 24 and 36 km upwind (and 12 km downwind) is the forecast's 1.5, 3 and 4.5 hours on, and the cloud's lead (a front comes in at 8 km a game hour, `FRONT_KMH`), against the cover here. The clouds' march reads it along the wind (`scFrontAt`, its largest rise bounding the empty cells), and so does the high tier's shadow map: a front's bank darkens the horizon before it's overhead;
   - (M9) the gusts: the cat's paws the sea shows (`SeaDetail.gustAt`, the same texels and drift on the CPU) raise and drop the wind by 22% either way, more in rain and squalls (`GUSTS`), where the boat is (`BoatController.windAt`) and where you're listening (the wind's and the palms' sound). A squall's downdraught freshens the wind while it passes (`SQUALL`, at most a gale's).
 - **Easing:** the wind and the sea come round over half a minute or so, the cloud more slowly (a minute or two from fair to a gale's), the rain in seconds. The cloud follows the weather 0.6 game hours on (`CLOUD_LEAD`), so a shower's cloud is over before it rains. A jump of the clock (a rest, adopting the host's clock, coming back to the tab) sets it all at once, and the boat takes the sea as she finds it.
-- **What stays as it was:** the swell's direction (its travel times around the island are baked when the island loads: [docs/M10.md](M10.md)).
+- **What stays as it was:** the swell's direction (its travel times around the island are baked when the island loads: [docs/M11.md](M11.md)).
 - **The rain** (`src/fx/Rain.js`): drops falling through a box that wraps around the camera, as the air motes do (a hash of the instance, no simulation), in one instanced draw: 1,400 on low, 3,200 on mid, 6,400 on high. Each falls at its size's speed (four sizes, eighths of 9 m/s, so each wraps whole) and is carried by the wind near the ground: a squall drives it slanting. It's drawn as the streak a moment's look leaves, at least a pixel or so across. How hard it rains is how many fall. They're lit by the sky, a glint of the sun against the light, and the lightning. None under the ground or the sea, or under the wheelhouse roof (`BoatModel.shelter`, a box in the boat's frame), or with the camera under water.
-- **The rings** (`WaterSurface`, `waterRainRing`): a ring spreading from each drop, in two layers of cells, as the slope of the sea's ripples within 45 m of the camera; the drops beat the wind's ripples down. Nothing's added on a dry day (a uniform branch).
+- **The rings** (`WaterSurface`, `waterRainRing`): a ring spreading from each drop, in two layers of cells, as the slope of the sea's ripples within 45 m of the camera; the drops beat the wind's ripples down there, and (M10) a downpour flattens them a third across the whole sea. Nothing's added on a dry day (a uniform branch).
+- **(M10) The splashes** (`Rain.splash`): a small crown popping where a drop lands and gone in 0.15 s, a ring spreading at its foot and three drops thrown up out of it, lit brighter than the ground under them (the sky's light caught in the drops).
+  - Hashed about the camera as the drops are (a 16 m square), each at a new spot each time it pops (every 0.3 to 0.7 s), as many as it's raining hard.
+  - Only where something takes them: the ground where it's above the sea (the sea has its rings), and the boat's cockpit sole aft of the wheelhouse (a box in her frame, `Rain.setDeck`). Not the pier, the boardwalk or the roofs, which have no height here (the drops fall through them too).
+  - One more instanced draw while it rains: 300 on low, 1,200 on mid, 2,400 on high.
 - **Wet surfaces** (`src/materials/Wet.js`): every lit material that `App.lightUp` gives the local lights gets wet too (`useWet`: the `WET_SURFACES` define). In three's lighting chunks, just before the lights read the surface, `G.wet` darkens what faces up and glosses it (the materials that rewrite their emissive or their lights keep their code and still get wet).
 - **The lightning** (`src/sky/Lightning.js`):
   - It looks at each second's strike once (`Weather.strikeIn`, with the eased thunder and the wind's direction).
   - A flash is two to five return strokes tens of milliseconds apart, each fading in 50 ms. The brightest flash lights the cloud from inside about the strike, brightest where it's thickest, and the murk toward the horizon (`skyFlash`, in the sky's main view on every tier: the panorama's and the trace's clouds alike). It lights the island from the sky too (the hemisphere light, bluish white; the eye adapted to the dark at night makes the most of it) and the rain.
+  - (M10) And the sea reflects it: the panorama the sea reflects is made over seconds and never has a flash, so the water adds the flash's lobe about the strike off its surface itself (`G.skyFlash`, shared with the sky with its eye adaptation, `G.skyExposure`), by the surface's Fresnel. A uniform branch: nothing's added without a flash.
+  - (The sea's reflection of the sky is weaker than `WaterSurface` asks for: three sets the `envMapIntensity` of a material without an `envMap` of its own to `scene.environmentIntensity`, about 0.05 to 0.09, not its 12. The sea's look was tuned with that; the flash's term doesn't go through it.)
   - A ground strike's bolt is built when it strikes: a main channel stepping down from the cloud's base in jagged runs, with branches that peter out and a few streaks under the base. It's drawn as ribbons a few pixels across in one draw, unfogged, dimmed by the rain's murk, and drawn nearer (as large in view) past 9 km, inside the camera's far plane.
   - The thunder reaches each listener its own distance at 343 m/s after (`onThunder( strike, distance, direction )`): a near crack within 3 km, a far rumble beyond, placed the way it came, dulled and slowed the farther it's come (`SoundScape.thunder`).
 - **The rain's sound** (`SoundScape`): a light shower's patter, a downpour's roar (crossfaded by how hard it rains), and aboard (on deck or at the helm) rain drumming on the boat, the rain beyond her quieter. Field recordings (CC0), built by `tools/audio/build-weather.mjs`.
@@ -195,6 +203,50 @@ Everyone keeps their own progress and their own fish.
   - what the weather is (where the wind comes from and its speed in knots, `windFrom`, `knots`; the surf as a report gives it, `surfText`, and its period) and what's coming (`forecast`);
   - on your own, a choice of it: the forecast or any condition. It's saved with the clock (`weather`), and holds only while you're surely alone (`Together.surelyAlone`: a solo session, or nobody else here once the first lists are in). In company the weather is the day's.
   - On its own (`pnpm dev`), `?weather=gale` holds it from the first frame, company or not; `?weather=forecast` is the day's.
+
+## What the weather costs
+
+(M10) Mild costs, never a game over: the boat's hull, the fishing in a blow, the water after one, and the island in it. None of it on a fair day.
+
+**The boat's hull** (`src/game/Hull.js`, pure, tested under Node by `test/hull.mjs` with the real boat in the CPU's sea; `Game.updateHull` feeds it each frame and does what it says):
+- **Wear** (`GameState.hull`, 0..1, saved until Marta repairs it):
+  - From slams into a sea past 0.5 (`slamWear`: a fair day's hardest flat out are under it). Flat out into a gale's sea she wears about 8% a minute; at half throttle, next to nothing.
+  - From knocks on the piles and drops onto the ground (`hitWear`, from 1.5 m/s closing: a pile at full speed, about a tenth), and from being driven along the bottom (`scrapeWear`, and a grind under power while she slides: a beaching at full speed, about a tenth). `BoatController.contact` records the hardest of each since the frame before.
+  - It costs her speed (`thrustMul`: fully worn, 35% of her thrust gets her anywhere, a quarter off her top speed) and it leaks (half a litre a second, fully worn).
+- **The bilge** (litres, for the voyage: not saved):
+  - In: the leak, the rain into her open cockpit (0.1 L/s in a downpour), and green water over the bow in a slam past 0.85.
+  - Out: the bucket (hold E on deck: 3 L/s, a scoop every 1.6 s; the rail's "Jump overboard" makes way for it, `Player.bailable`) and Marta's electric bilge pump (`bilgePump` in `Gear.js`, $120: 0.3 L/s, more than a downpour brings in).
+  - Her mass is hers and what's in it: she sits lower (+500 kg, 3.6 cm), and others see it in her pose.
+  - It reaches the engine at 500 L (`FLOOD_L`): the gauge pulses from 70% of it, and she coughs from 80% (her revs dip).
+- **The engine** (`Hull.engine`: off, cranking, running, stalled; `BoatController.engineOn`):
+  - Taking the helm cranks her (1.1 s, `CRANK_S`): a sound engine catches first time, one that's stalled takes a try or two (`crankChance`, less in a worn boat).
+  - She stalls when the water reaches the engine, and won't start again until it's under 80% of that; or on a hard slam (0.95) in a worn boat (30%), now and then; or when the tank's dry.
+  - Stalled, opening the throttle cranks her (W, the stick), and the helm's prompt says so. Not running, she has no thrust and her revs run down; she burns no fuel.
+- **Marta's repair** (`Game.repairJob`, `GameState.payRepair`): her panel's row while she's open, with the boat at her dock: $150 for all of it, or as much of it as your money pays for.
+- **The HUD**: the hull's gauge in the purse once it's worn, the bilge's while there's water in it; the guide's tips for the first water and the first wear; toasts when she stalls and as she wears.
+- **Sound** (`SoundScape`; CC0 field recordings built by `tools/audio/build-hull.mjs`):
+  - the starter (`starter.ogg`: a crank that won't catch, and one that catches as `CRANK_S` ends and runs into her idle, as the engine's bed comes up), on every start;
+  - the hull knocking a pile (`hull_bump.ogg`, with the shutter's bang slow and low under a hard one) and the keel's scrape (`keel_scrape.ogg`);
+  - the bucket (`bucket.ogg`), the pump (`bilge_pump.ogg`), the water sloshing in the bilge as she works (`bilge_slosh.ogg`), and the hull creaking in a sea, more often the more she's worn (`hull_creak.ogg`).
+  - The boat's set loads once you're aboard (`boatReady`), so the starter's ready for the helm.
+
+**Fishing in a blow** (the wind past a fair day's: `Weather.windBeyondFair`, `blowShare`):
+- **The cast** (`FishingRod`): the wind bellies the line and carries the float along (`LINE_WIND`): into a gale a full cast falls a few metres short, across one it's set aside; downwind it runs on as far as the rod casts.
+- **The float** drifts downwind, 2% of the wind past a fair day's, up to 6 m from where it came down and no shallower than 0.3 m. The bites follow it (`Game.habitat` reads where it is), and others see it in the pose.
+- **The cast net** (`CastNet._step`): in the air each piece is dragged toward the wind, not still air; the netting's carried off far more than the leads, so in a gale it lands downwind of where it was aimed.
+- **The fight** (`CatchMinigame`, `wind`): gusts on the line every few seconds, for a second or so, haul on it (`GUST`: 0.6 of the breaking point in a gale). Reel on through one and the line snaps; let it be and the drag gives it line (`GUST_EASED`). A fair fight draws nothing for it and goes as it did.
+
+**The water after a blow** (`Weather.murkAt`, 0..1): the strongest blow of the last day (storminess past a stiff breeze's, full in a gale), as murky for six hours after and clearing over eighteen more; day 1 counts as fair, a held pick has its own. It's quite murky about one hour in eight.
+- Under water the fog closes in (28 m down to 11 m) and turns a silty green-grey (`App`), and the caustics dim.
+- Joe's slate says the water's murky (unless a blow's coming, which it says first), and so does the clock's menu.
+
+**The surf and the fish in it** (`FishSchools.setSurf`, from the shore waves' height):
+- The breakers' depth follows the surf (`breakDepth`, a fair day's where it always was), and their look-ahead grid is built again once it's moved 3 cm.
+- The bait runners inside the breakers (`runnerMullet`, `runnerFry`) keep inside them, deeper in a big surf. From a surf of 0.5 m some of their schools go off, up to about half at the biggest: one that's out of range doesn't come back into it.
+
+**The island in a blow:**
+- The village's shutters bang, from a stiff blow (12 m/s), more often the harder it blows and in the gusts: one near you, placed at its house (`SoundScape._blow`, `shutter.ogg`).
+- Torn bits of leaf tumble along and sand streams low over the beach (`AirMotes`, mid and high): blown faster than the motes, none below a blustery wind.
 
 ## Spearfishing
 
@@ -323,6 +375,8 @@ Marta sells one (`anchor` in `Gear.js`: a Danforth on 200 ft of rode, `anchorM` 
 | Spray particles | 1k | 2k | 4k |
 | Extras | | air motes | air motes, sun shafts, refraction, bloom, the clouds' shadows |
 | Raindrops | 1,400 | 3,200 | 6,400 |
+| (M10) The rain's splashes | 300 | 1,200 | 2,400 |
+| (M10) A blow's debris | none | 140 | 140 |
 | The sun under a grey sky | 30% | 30% | 70% (the clouds' shadows do the rest) |
 
 The checks hold the low tier to its budgets: 150 draw calls, 300k triangles, 128 MB of textures and 150 MB of script memory. Mid stays under 1M triangles and high under 3M.
@@ -336,7 +390,7 @@ The checks' browser has no graphics card, and some laptops don't either. `App.cp
   - The loading frame is 8 × 8 px and draws only the sky, the ground and the sea.
   - The rest (`_late`: the rocks, the village, the stalls and their traders, the lobster boat) waits out of the scene once its geometry is on the GPU (`uploadLate`). Its shaders are made after the start (`lateReady`), then it's revealed a group per frame.
 - **Shaders compiled late:** every shader compiled before the start is load time, and All the Spaces' checks allow 45 s to `portal.ready()` on a machine much slower than most. Shaders not needed at once are compiled in `prepareLate`, after the start: the rod and its line, the speargun, the lobster gear, the cast net, the rain and the lightning, and the fish in the swimming fish's skin.
-  - three's `compile()` also compiles the materials of hidden objects. So what waits is taken out of the scene, not just hidden (`heldTools`, `_heldFish`, `_heldNet`, `_heldWeather`, `_lateHeld`).
+  - three's `compile()` also compiles the materials of hidden objects. So what waits is taken out of the scene, not just hidden (`heldTools`, `_heldFish`, `_heldNet`, `_heldWeather` (the rain, its splashes, the lightning), `_lateHeld`).
   - On two CPU cores, a phone upright is ready in about 7 s (v1.5.0: 10.6 s, when the tools and the late parts were only hidden and so compiled with the rest).
 - **Shaders first used off the frame:** a program's first use (three looking up its uniforms) waits for the GPU to finish everything queued before it, the program's own linking too. That's seconds there, with the page frozen; a frame that first uses one freezes it too.
   - After the start, `App.useNewPrograms` first waits for a fence (`gpuCaughtUp`, looked at between frames as `pacedFrame` does), so the page keeps answering. Then it uses every new program once, in a tick of `pacedFrame` that draws nothing, so the asking doesn't wait behind a frame.
@@ -346,7 +400,8 @@ The checks' browser has no graphics card, and some laptops don't either. `App.cp
 
 ## Testing
 
-- `pnpm test`: the game's logic (and the boat in the wind, and the tow, and the fish in the weather), the island's day (the clock, the stalls' hours and shutting for the weather, the wanted lists), the weather (and its rain, thunder and strikes), the waves (a gale's sea, the biggest surf), the reef and fish, the spearfishing, the cast net and bait, the whale and the spray, under Node. It also checks that the baked terrain matches its generator and that every asset has a licence.
+- `pnpm test`: the game's logic (and the boat in the wind, and the tow, and the fish in the weather, and (M10) the fight and the cast in a blow), the island's day (the clock, the stalls' hours and shutting for the weather, the wanted lists), (M10) the hull (the real boat in the CPU's sea: its wear in a gale, aground and on the piles, the bilge, the engine, Marta's repair), the weather (and its rain, thunder, strikes and murk), the waves (a gale's sea, the biggest surf), the reef and fish, the spearfishing, the cast net and bait (and the surf's runners), the whale and the spray, under Node. It also checks that the baked terrain matches its generator and that every asset has a licence.
 - Two players on one machine: `pnpm dev`, then `/tools/two-players/?name=Robin` and `?name=Sam` in two windows of one browser (`tools/two-players/`: a stand-in for the app and its realtime room).
 - All the Spaces' checks, from its checkout: `node packages/qa-browser/src/cli.ts check ../salt-life`. Run them from an up-to-date `main` there.
-- `qa/script.json` is what the checks play.
+- `qa/script.json` is what the checks play. (M10) It ends with the weather: a shower at noon and a thunderstorm at dusk, picked in the clock's menu (T, the arrows, Space: the checks play on their own, so a pick holds) and then rested to, so the clock jumps and the weather's all there at once. The checks judge the low tier's draw calls, triangles and memory there; their frame time isn't judged (on their machine `pacedFrame` holds it to the display's).
+  - The clock's menu takes each key press of a frame in turn (`Input.presses`), so on a slow frame none is lost or merged.

@@ -19,9 +19,11 @@ import { FT } from './Units.js';
 // Everything here is + - x / and integer hashes (Math.imul), never sin, exp or pow, so every device
 // works out the same condition from the same time. Pure (no three.js), for the tests under Node.
 //   islandTime( day, hour ) -> T      weatherAt( T, pick ) -> { id, wind, windAngle, coverage, overcast,
-//   swell, windSea, surf, period, visibility, rain, thunder, front }   forecast( T ) -> { id, at } | null
+//   swell, windSea, surf, period, visibility, rain, thunder, front, murk }   forecast( T ) -> { id, at } | null
 //   surfText( 0.34 ) -> '2–3 ft'   windFrom( dx, dz ) -> 'NNW' (where a wind blowing toward ( dx, dz ) comes from)
 //   strikeIn( second, thunder ) -> { at, x, z, dist, ground, seed, power } | null   (the lightning)
+//   (M10) windBeyondFair( m/s ) -> m/s   blowShare( m/s ) -> 0..1   (the wind on a cast, a float, a line)
+//   murkAt( T ) -> 0..1   (the water stirred up by a blow, clearing over a day)
 
 // what a condition brings: wind (m/s at 10 m), cloud cover and how overcast it is (0..1), the open
 // sea's swell and wind sea (x today's), the surf (m, the shore waves' offshore amplitude H/2, and its
@@ -48,6 +50,11 @@ export const WEATHER_NAMES = { calm: 'Calm', fair: 'Fair', breezy: 'Breezy', clo
 // the pier head and over the boat at the dock (test/waves.mjs)
 export const SURF_MAX = 0.6;
 const FAIR_SURF = CONDITIONS.fair.surf;
+// (M10) the wind past a fair day's (m/s): what carries a cast and the cast net, drifts a float and gusts
+// on a line. None on a fair day or a calmer one, so they're as they always were; as a share of a gale's
+export const FAIR_WIND = CONDITIONS.fair.wind;
+export const windBeyondFair = ( wind ) => Math.max( 0, wind - FAIR_WIND );
+export const blowShare = ( wind ) => Math.min( 1, windBeyondFair( wind ) / ( CONDITIONS.gale.wind - FAIR_WIND ) );
 // the trades blow toward ( 0.35, 0.94 ): from the NNW (core/Globals.js, G.windPrevailing)
 const TRADES = { x: 0.35 / Math.hypot( 0.35, 0.94 ), y: 0.94 / Math.hypot( 0.35, 0.94 ) };
 
@@ -65,6 +72,15 @@ const RAIN_CHANCE = [ 0, 0.28, 0.45, 0.75 ];
 const RAIN_EDGE = 0.22;
 // a blow on its way: how far ahead the fish feel it (game hours)
 const FRONT_LEAD = [ 2, 4 ];
+// (M10) the water's murk after a blow: from this storminess (a stiff breeze: none for less), full in
+// a gale; how long after it it's as murky (game hours) and how long it then takes to clear; the hours
+// back it looks; and how murky a held pick is (as if it had been blowing a while)
+const MURK_FROM = 0.8;
+const MURK_HOLD = 6, MURK_CLEAR = 18;
+const MURK_LAGS = [ 1, 2, 3, 4, 6, 8, 10, 12, 15, 18, 21, 24 ];
+const MURK_PICK = { blustery: 0.4, gale: 0.7, storm: 0.5 };
+// the murk from which the water's said to be murky (Joe's slate, the clock's menu)
+export const MURKY = 0.35;
 
 const clamp01 = ( x ) => ( x < 0 ? 0 : x > 1 ? 1 : x );
 const lerp = ( a, b, t ) => a + ( b - a ) * t;
@@ -154,7 +170,26 @@ function nameOf( w ) {
 function row( id ) {
 
 	const c = CONDITIONS[ id ];
-	return { id, wind: c.wind, windAngle: 0, coverage: c.coverage, overcast: c.overcast, swell: c.swell, windSea: windSeaOf( c.wind ), surf: Math.min( SURF_MAX, c.surf ), period: c.period, visibility: c.visibility, rain: c.rain, thunder: c.thunder, front: 0 };
+	return { id, wind: c.wind, windAngle: 0, coverage: c.coverage, overcast: c.overcast, swell: c.swell, windSea: windSeaOf( c.wind ), surf: Math.min( SURF_MAX, c.surf ), period: c.period, visibility: c.visibility, rain: c.rain, thunder: c.thunder, front: 0, murk: MURK_PICK[ id ] || 0 };
+
+}
+
+// (M10) the water's murk at T (0..1): the strongest blow of the last day, as murky as it made it for
+// MURK_HOLD hours after and clearing over MURK_CLEAR more (day 1, and its first hours on day 2, count as
+// fair, as the forecast does)
+export function murkAt( T ) {
+
+	let m = 0;
+	for ( const L of MURK_LAGS ) {
+
+		const t = T - L, day = clamp01( ( t - 24 ) / 6 );
+		if ( day === 0 ) continue;
+		const fade = L <= MURK_HOLD ? 1 : clamp01( 1 - ( L - MURK_HOLD ) / MURK_CLEAR );
+		m = Math.max( m, sstep( MURK_FROM, 1, storminess( t ) ) * day * fade );
+
+	}
+
+	return m;
 
 }
 
@@ -195,7 +230,7 @@ export function weatherAt( T, pick = null ) {
 		visibility: Math.min( visibility, lerp( 1, CONDITIONS.rain.visibility, rain ) - 0.13 * thunder ) };
 	// a blow on its way (0..1): the storm a few hours on, more than now (the fish feed hard ahead of it)
 	const front = clamp01( ( Math.max( storminess( T + FRONT_LEAD[ 0 ] ), storminess( T + FRONT_LEAD[ 1 ] ) ) - s ) * 12 ) * sstep( 0.45, 0.75, Math.max( storminess( T + FRONT_LEAD[ 1 ] ), s ) ) * k;
-	const w = { id: 'fair', wind, windAngle: veer( T ) * k, coverage: wet.coverage, overcast: wet.overcast, swell, windSea: windSeaOf( wind ), surf, period, visibility: wet.visibility, rain, thunder, front };
+	const w = { id: 'fair', wind, windAngle: veer( T ) * k, coverage: wet.coverage, overcast: wet.overcast, swell, windSea: windSeaOf( wind ), surf, period, visibility: wet.visibility, rain, thunder, front, murk: murkAt( T ) };
 	w.id = nameOf( w );
 	return w;
 

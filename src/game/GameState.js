@@ -23,6 +23,7 @@ export class GameState {
 		this.bag = { day: null, n: {} }; // (Salt Life) how many of each bag-limited kind (FishTable bag) you've kept that day
 		this.upgrades = defaultUpgrades();
 		this.fuel = null; // litres left (null = full tank)
+		this.hull = 0; // (M10) the boat's wear, 0..1 (game/Hull.js), until Marta repairs it
 		this.look = null; // (Salt Life) how the others see you: one of together/Avatar.js LOOKS (null: not chosen)
 		this.orders = { day: null, filled: {} }; // (Salt Life) the wanted lists (Orders.js): how many of each you've filled that day
 		this.weekPaid = null; // (Salt Life) the last week's order (WeekOrder.js) Joe paid you your share of
@@ -421,6 +422,20 @@ export class GameState {
 
 	}
 
+	// (M10) Marta's repair of the hull: her fee for all of it, or as much of it as what you have pays for;
+	// returns what was paid
+	payRepair( fee ) {
+
+		const paid = Math.max( 0, Math.min( fee, this.money ) );
+		if ( fee <= 0 || paid <= 0 ) return 0;
+		this.money -= paid;
+		this.hull = paid >= fee ? 0 : this.hull * ( 1 - paid / fee );
+		this.save();
+		this.emit();
+		return paid;
+
+	}
+
 	// buy the next level of an upgrade track; returns the new level entry or null
 	buy( key ) {
 
@@ -495,7 +510,7 @@ export class GameState {
 
 	toJSON() {
 
-		return { v: 1, money: this.money, inventory: this.inventory, log: this.log, upgrades: this.upgrades, fuel: this.fuel, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, bag: this.bag, nextId: this._nextId };
+		return { v: 1, money: this.money, inventory: this.inventory, log: this.log, upgrades: this.upgrades, fuel: this.fuel, hull: this.hull, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, bag: this.bag, nextId: this._nextId };
 
 	}
 
@@ -510,6 +525,7 @@ export class GameState {
 		for ( const [ k, v ] of Object.entries( this.log ) ) if ( FISH[ k ] && v && v.bestKg > 0 && ! Number.isFinite( v.bestCm ) ) v.bestCm = Math.round( fishLengthCm( k, v.bestKg ) );
 		this.upgrades = { ...defaultUpgrades(), ...( d.upgrades || {} ) };
 		this.fuel = Number.isFinite( d.fuel ) ? d.fuel : null;
+		this.hull = Number.isFinite( d.hull ) ? Math.min( 1, Math.max( 0, d.hull ) ) : 0;
 		this.look = typeof d.look === 'string' ? d.look : null;
 		const o = d.orders;
 		this.orders = o && Number.isFinite( o.day ) && o.filled && typeof o.filled === 'object' ? { day: o.day, filled: { ...o.filled } } : { day: null, filled: {} };
@@ -558,6 +574,7 @@ export class GameState {
 		this.log = {};
 		this.upgrades = defaultUpgrades();
 		this.fuel = null;
+		this.hull = 0;
 		this.orders = { day: null, filled: {} };
 		this.weekPaid = null;
 		this.bait = {};

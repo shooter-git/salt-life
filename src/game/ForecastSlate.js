@@ -1,6 +1,6 @@
 import { Mesh, PlaneGeometry, CanvasTexture, MeshStandardMaterial, SRGBColorSpace, Matrix4 } from '../engine/index.js';
 import { STAND } from './FishStand.js';
-import { WEATHER_NAMES, surfText } from './Weather.js';
+import { WEATHER_NAMES, MURKY, surfText } from './Weather.js';
 import { timeText } from './IslandClock.js';
 import { knots } from './Units.js';
 import { wxWind, wxRain } from './TimeHUD.js';
@@ -8,14 +8,16 @@ import { wxWind, wxRain } from './TimeHUD.js';
 // (M9) The forecast, chalked on a small slate hung on the front of Joe's counter, left of his wanted
 // list: the weather now (and its rain), the wind in knots and where it's from, the surf as a report
 // gives it, and what's coming (Weather.forecast). When a blow's on its way and the fish are feeding
-// hard ahead of it (Weather's front), Joe says so at the bottom. One plane, its frame painted into the
+// hard ahead of it (Weather's front), Joe says so at the bottom; (M10) or, after one, that the water's
+// still murky (Weather's murk: the spearfishing's poor). One plane, its frame painted into the
 // canvas; the same program as the records board's slate (together/RecordsBoard.js), as the wanted
 // list's. Drawn again only when what it says changes.
 //   const s = new ForecastSlate( { terrain } );  scene.add( s.mesh );  s.draw( weather, next, locale )
 
 const W = 448, H = 384; // the slate's canvas (0.5 × 0.43 m)
 const SPOT = { x: - 0.36, y: 0.6, z: 0.86 }; // in the stand's frame: on the counter front, left of centre
-// the front (0..1) from which Joe chalks that the fish are feeding
+// the front (0..1) from which Joe chalks that the fish are feeding ((M10) and that the water's murky:
+// Weather.MURKY)
 export const FEEDING = 0.4;
 
 // what the slate says: [ [ label, value ], … ] and the note at the bottom ('' for none). weather:
@@ -32,7 +34,7 @@ export function slateText( weather, next, locale = undefined ) {
 			[ 'Surf', `${ surfText( weather.surf ) }, ${ Math.round( weather.period ) } s` ],
 			[ 'Later', later ],
 		],
-		note: weather.front >= FEEDING ? 'Fish feeding: a blow\'s coming' : '',
+		note: weather.front >= FEEDING ? 'Fish feeding: a blow\'s coming' : weather.murk >= MURKY ? 'The water\'s murky after the blow' : '',
 	};
 
 }

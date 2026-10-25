@@ -5,6 +5,8 @@ import {
 import { prepare, mergePrepared, lathe, torus, cylinder, mat4 } from '../world/boat/GeoKit.js';
 import { createPropMaterial, PAT } from './GameMaterials.js';
 import { UNDERWATER_GLSL, underwaterUniforms } from '../materials/Underwater.js';
+import { G } from '../core/Globals.js';
+import { windBeyondFair } from './Weather.js';
 
 // (Salt Life) The cast net: thrown from the beach, wading, off the pier or a boat's deck, for bait and
 // mullet.
@@ -1145,6 +1147,8 @@ export class CastNet {
 
 		const P = this.P, V = this.V, Q = this.Q, K = this.K, Wf = this.Wf, Gy = this.Gy, wet = this.wet;
 		const wy = this.waterY, sink = this.gear.sinkMs, time = this.time;
+		// (M10) the wind past a fair day's: in the air each piece is dragged toward it, not toward still air
+		const ws = windBeyondFair( G.windSpeed.value ), wx = G.windDir.value.x * ws, wz = G.windDir.value.y * ws;
 		for ( let i = 0; i < N; i ++ ) {
 
 			const i3 = i * 3, kind = K[ i ];
@@ -1172,12 +1176,13 @@ export class CastNet {
 
 			} else {
 
-				// in the air: the leads barely slowed, the netting catching it
+				// in the air: the leads barely slowed, the netting catching it (M10: and the wind, in a blow:
+				// the netting's carried off downwind far more than the leads, and it opens lopsided)
 				vy -= GRAV * h;
 				const d = Math.exp( - h * ( kind === LEAD ? 0.03 : kind === CROWN ? 0.1 : 0.28 ) );
-				vx *= d;
+				vx = wx + ( vx - wx ) * d;
 				vy *= d;
-				vz *= d;
+				vz = wz + ( vz - wz ) * d;
 
 			}
 

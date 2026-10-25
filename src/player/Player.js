@@ -51,6 +51,9 @@ export class Player {
 		this.boat = boat;
 		this.ownBoat = boat; // (Salt Life) yours; this.boat is another player's while you ride along (ride)
 		this.riding = false;
+		// (M10) there's water to bail on your own boat's deck (Game.updateBail): the rail's "Jump overboard"
+		// makes way for the bucket
+		this.bailable = false;
 		this.rideOffer = null; // { name, boat }: someone's boat you're next to, aboard it (together/Together.js)
 		this.reef = reef;
 		this.audio = audio;
@@ -795,7 +798,7 @@ export class Player {
 
 				}
 
-			} else if ( atRail ) {
+			} else if ( atRail && ! this.bailable ) {
 
 				this.prompt = { key: 'E', text: 'Jump overboard' };
 				if ( inp.hit( 'KeyE' ) ) {

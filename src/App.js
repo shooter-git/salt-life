@@ -56,6 +56,7 @@ import { Together } from './together/Together.js';
 import { BoatLamps } from './world/boat/BoatLamps.js';
 import { createGameUI } from './ui/GameUI.js';
 import { PostChain } from './post/PostChain.js';
+import { FLOOD_L } from './game/Hull.js';
 import { releaseGeometries, releaseTextures, uploadTextures, watchContext } from './core/ReleaseAfterUpload.js';
 
 // Salt Life: the island, the sea and the boat, drawn with three.js inside All the Spaces. It follows
@@ -72,6 +73,9 @@ const ISLAND = { low: 'world/island-1024.bin', mid: 'world/island.bin', high: 'w
 const CPU_PIXELS = 360_000;
 const LENS_REACH = 0.02; // m below the surface before the view counts as under water
 const UNDERWATER = new THREE.Color( 0.03, 0.17, 0.2 );
+// (M10) the water a blow's stirred up: green-grey with silt, and the distance you see in it at its murkiest (m)
+const SILT = new THREE.Color( 0.07, 0.12, 0.09 );
+const MURK_FAR = 11;
 const _c = new THREE.Color();
 const _c3 = new THREE.Vector3();
 const _size = new THREE.Vector2();
@@ -278,7 +282,7 @@ export class App {
 		// (M9) the rain around the camera (fx/Rain.js), and the lightning (sky/Lightning.js: the strikes
 		// everyone sees, their flash on the clouds and the island, the bolts, the thunder)
 		this.rain = new Rain( { terrain: this.terrain, tier } );
-		scene.add( this.rain.mesh );
+		scene.add( this.rain.mesh, this.rain.splash );
 		this.lightning = new Lightning( { scene, sky: this.sky } );
 		// (its thunder, heard as it gets here)
 		this.lightning.onThunder = ( strike, m, dir ) => this.audio && this.audio.thunder( m, dir, strike.power );
@@ -311,6 +315,8 @@ export class App {
 		};
 
 		this.audio = new SoundScape( { context: () => portal.audio.context, output, tier } );
+		// (M10) the village's shutters, banging in a blow: a point on each house, at a window's height
+		this.audio.shutters = this.village.buildings.filter( ( b ) => b.shutters ).map( ( b ) => ( { x: b.x, y: b.floorY + 1.4, z: b.z } ) );
 		// (the surf follows the shore waves: Tidewater's are { value } uniforms, these plain params)
 		const P = this.shore.params, live = ( k ) => ( { get value() {
 
@@ -324,7 +330,13 @@ export class App {
 			field: this.shoreField, terrain: this.terrainData,
 		} );
 		this.player.audio = this.audio;
-		this.boatCtl.onSlam = ( strength ) => this.audio.hullSlap( strength );
+		// (and, M10, the hull: a slam's wear and the green water it ships, Game.hull)
+		this.boatCtl.onSlam = ( strength ) => {
+
+			this.audio.hullSlap( strength );
+			if ( this.game ) this.game.hull.slam( strength );
+
+		};
 
 		// ---------------------------------------------------------------- the fishing game
 		// Tidewater's Game: the rod, bites, the fight, the catch, the cooler and log, Joe's and Marta's
@@ -430,7 +442,7 @@ export class App {
 			this._heldNet = this.game.net.meshes.map( ( m ) => [ m, m.parent ] );
 			for ( const [ m ] of this._heldNet ) m.removeFromParent();
 			// ((M9) and the rain and the lightning: nothing to draw until it rains)
-			this._heldWeather = [ this.rain.mesh, this.lightning.mesh ].map( ( m ) => [ m, m.parent ] );
+			this._heldWeather = [ this.rain.mesh, this.rain.splash, this.lightning.mesh ].map( ( m ) => [ m, m.parent ] );
 			for ( const [ m ] of this._heldWeather ) m.removeFromParent();
 
 		}
@@ -589,11 +601,12 @@ export class App {
 		if ( under ) {
 
 			// under water: the light is green-blue and gone within a few tens of metres
-			// ((M9) and dimmer under a grey sky)
-			_c.copy( UNDERWATER ).multiplyScalar( ( 0.15 + 0.85 * ( 1 - G.night.value ) ) * ( 1 - 0.5 * this.sky.overcast ) );
+			// ((M9) and dimmer under a grey sky; (M10) after a blow, silty and closer in)
+			const murk = G.murk.value;
+			_c.copy( UNDERWATER ).lerp( SILT, 0.7 * murk ).multiplyScalar( ( 0.15 + 0.85 * ( 1 - G.night.value ) ) * ( 1 - 0.5 * this.sky.overcast ) );
 			this.scene.fog.color.copy( _c );
 			this.scene.fog.near = 0;
-			this.scene.fog.far = 28;
+			this.scene.fog.far = 28 + ( MURK_FAR - 28 ) * murk;
 
 		} else {
 
@@ -634,6 +647,7 @@ export class App {
 			this.fish.viewHeight = this.renderer.domElement.height;
 			this.fish.lit = lampsLit( this.settings.timeOfDay ); // (Salt Life: the tarpon gather under the pier's lamps)
 			this.fish.hour = this.settings.timeOfDay; // (Salt Life: the lobsters come out after dark)
+			this.fish.setSurf( this.shore.params.amplitude ); // (M10: the breakers, and the runners in them)
 			this.fish.update( dt, this.camera.position );
 			this.fish.cull( this.camera );
 
@@ -656,6 +670,7 @@ export class App {
 		this.boat.update( dt );
 		// (M9) no rain under the wheelhouse roof
 		this.rain.setShelter( _shelter.multiplyMatrices( this.boat.shelter, _c4.copy( this.boat.group.matrixWorld ).invert() ) );
+		this.rain.setDeck( this.boat.group.matrixWorld ); // (M10: the splashes on her cockpit's sole)
 		this.boatLamps.set( { underway: this.boatCtl.driven || ! ( this.boatCtl.moored || this.boatCtl.anchor ), spot: this.searchlight } );
 		this.localLights.update( this.camera, dt );
 		cloudShadows.update( this.camera );
@@ -1302,7 +1317,8 @@ export class App {
 		const amp = this.shore.params.amplitude, pier = WORLD.pier, boat = this.boatCtl;
 		// (the boat you hear: yours, or the one you ride in, or someone's going by: together/)
 		const theirs = this.together ? this.together.boatSound() : null;
-		const engine = theirs ? theirs.active : boat.driven;
+		// (M10) yours runs once it's caught (Hull: taking the helm cranks her, and she can stall)
+		const engine = theirs ? theirs.active : boat.driven && boat.engineOn;
 		if ( engine !== this._engineHeard ) {
 
 			if ( engine ) a.engineStart();
@@ -1310,6 +1326,11 @@ export class App {
 			this._engineHeard = engine;
 
 		}
+
+		// (M10) aboard someone else's boat, the skipper's starter as it turns her over (yours: Game.updateHull)
+		const crank = theirs ? theirs.crank | 0 : 0;
+		if ( crank && ! this._crankHeard ) a.crank( crank === 2 );
+		this._crankHeard = crank;
 
 		a.update( dt, {
 			listener: { position: p, forward: _fwd, up: _up },
@@ -1330,6 +1351,10 @@ export class App {
 				active: boat.driven, rpm: boat.rpm, throttle: boat.throttle, speed: boat.velocity.length(),
 				position: this.boat.group.position, listenerInside: this.player.mode === 'boat' && this.player.camMode === 'first',
 			},
+			// (M10) her hull (yours: none of it's sent to the others): the bilge as a share of what reaches the
+			// engine, the pump, the keel scraping, the wear, and how hard she's working (her roll and pitch)
+			hull: theirs || ! this.game ? null : { flood: this.game.hull.bilge / FLOOD_L, pump: this.game.hull.pumping, scrape: this.game.hull.scrape || 0,
+				wear: this.game.hull.wear, motion: Math.min( 1, Math.max( 0, ( boat.angular.length() - 0.05 ) / 0.4 ) ) },
 		} );
 
 	}

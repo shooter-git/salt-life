@@ -60,6 +60,8 @@ export class WaterSurface {
 			...this.detail.uniforms,
 			waterWhitecap: this.whitecap,
 			waterRain: G.rain, // (M9: the rings where the drops land)
+			waterFlash: G.skyFlash, // (M10: lightning in the reflections)
+			waterSkyExposure: G.skyExposure,
 		};
 
 		// envMapIntensity 12: the scene's environment intensity is only a small diffuse fill (Sky); the
@@ -151,6 +153,8 @@ uniform sampler2D waterRipples;
 uniform float waterWhitecap;
 uniform float waveCrest;
 uniform float waterRain;
+uniform vec4 waterFlash;
+uniform float waterSkyExposure;
 #ifdef WATER_REFRACT
 uniform sampler2D waterRefract;
 uniform vec2 waterRefractSize;
@@ -293,11 +297,13 @@ ${ SH ? /* glsl */`
 	vec2 r2 = texture2D( waterRipples, vWater.xz * 0.043 + 0.3 - waterTime * vec2( 0.02, 0.008 ) ).xy * 2.0 - 1.0;
 	vec2 rs = ( r1 * 0.6 + r2 * 0.4 ) * 0.32 * rippleK;
 	// (M9) the rings where the rain lands, near the camera; and the drops beat the wind's ripples down
+	// ((M10) all over the sea: a downpour flattens them as far as you see)
 	if ( waterRain > 0.0 ) {
+		float rainN = clamp( waterRain * 1.5, 0.0, 1.0 );
+		rs *= 1.0 - 0.35 * rainN;
 		float rainD = length( cameraPosition - vWater );
 		if ( rainD < 45.0 ) {
 			float rainK = ( 1.0 - smoothstep( 12.0, 45.0, rainD ) ) * ( 1.0 - foam );
-			float rainN = clamp( waterRain * 1.5, 0.0, 1.0 );
 			rs = rs * ( 1.0 - 0.4 * rainN * rainK ) + ( waterRainRing( vWater.xz, 0.55, 1.4, 0.0, rainN ) + waterRainRing( vWater.xz + 0.27, 0.8, 1.1, 3.7, rainN ) * 0.8 ) * 0.5 * rainK;
 		}
 	}
@@ -315,7 +321,16 @@ ${ SH ? /* glsl */`
 	} else
 #endif
 	// premultiplied: the water's own light by its opacity, reflections in full (less on foam)
-	gl_FragColor = vec4( waterBody * diffuseColor.a + totalSpecular * ( 1.0 - foam * 0.8 ) * sheetEdge, diffuseColor.a );` )
+	gl_FragColor = vec4( waterBody * diffuseColor.a + totalSpecular * ( 1.0 - foam * 0.8 ) * sheetEdge, diffuseColor.a );
+	// (M10) lightning in the reflections: the panorama the sea reflects is made over seconds and never
+	// has the flash, so its lobe about the strike (as the sky draws it) is added off the surface here
+	if ( waterFlash.w > 0.0 && gl_FrontFacing ) {
+		vec3 vd = normalize( vWater - cameraPosition ), rd = reflect( vd, nP );
+		rd.y = abs( rd.y );
+		float fres = 0.02 + 0.98 * pow( 1.0 - max( dot( - vd, nP ), 0.0 ), 5.0 );
+		float lobe = exp( ( dot( normalize( rd ), waterFlash.xyz ) - 1.0 ) * 7.0 );
+		gl_FragColor.rgb += ${ rgb( 0.82, 0.86, 1.0 ) } * waterFlash.w * ( 2.5 * lobe + 0.2 ) * fres * waterSkyExposure * ( 1.0 - foam * 0.8 ) * sheetEdge;
+	}` )
 				.replace( '#include <premultiplied_alpha_fragment>', '' );
 			shader.fragmentShader = shader.fragmentShader.replace( 'uniform float waterTime;', 'uniform float waterTime;\nuniform float waterSeaLevel_;' );
 			shader.uniforms.waterSeaLevel_ = G.seaLevel;

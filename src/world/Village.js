@@ -143,7 +143,7 @@ export class Village {
 
 			const B = s.harbor ? this.harbor : this.town;
 			const res = buildHouse( ctx( B ), s );
-			this.buildings.push( { name: s.name, x: s.x, z: s.z, floorY: res.floorY, roofTop: res.roofTop, stilts: s.foundation === 'stilts', footprint: res.footprint } );
+			this.buildings.push( { name: s.name, x: s.x, z: s.z, floorY: res.floorY, roofTop: res.roofTop, stilts: s.foundation === 'stilts', footprint: res.footprint, shutters: true } );
 			this.footprints.push( res.footprint );
 			if ( ++ built % 3 === 0 ) await step();
 

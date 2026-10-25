@@ -10,7 +10,7 @@ import { feet } from './Units.js';
 //  - one-time tips the first time something happens (rod out, first nibble, fish on, first catch,
 //    full cooler, next to the boat, at Joe's, at Marta's; Salt Life: the speargun out, its band to
 //    load, a big fish on the shaft, the breath running low, the cast net out, in the water, the first
-//    bait in the bucket), in a card above the minimap.
+//    bait in the bucket; M10: water in the boat's bilge, her hull worn), in a card above the minimap.
 // Seen state under 'tidewater.guide' (in the person's saves: core/SaveStore), wrapped in try/catch.
 //   const guide = new Guide( ui, game, minimap );  guide.update( dt );  guide.replay()
 
@@ -158,6 +158,7 @@ const TIPS = {
 		netOut: 'Look at the water where you want it and <b>hold the left mouse button</b> to swing it back. Let go <b>as the ring brightens</b> and it spins fully open. Mullet and bait fish school in the shallows, by the pier and round the boat.',
 		netSink: 'Let it <b>sink</b>: the lead line traps what\'s under it as it reaches the bottom. Then <b>hold the left mouse button</b> to draw it closed and haul it in.',
 		bait: 'Live bait goes in your <b>bucket</b>. With the rod out, <kbd>B</kbd> puts it on the hook: bigger fish take it, and sooner. A mullet can be cut up for bait in the cooler (<kbd>I</kbd>).',
+		bilge: 'There\'s <b>water in the bilge</b> (the gauge by your money). On deck, <b>hold <kbd>E</kbd></b> to bail it out before it reaches the engine. Marta sells a <b>bilge pump</b>.',
 	},
 	touch: {
 		rodOut: 'Hold <b>Cast</b> to wind up and let go to cast. Try deeper water, around the pier or over the reef.',
@@ -174,6 +175,7 @@ const TIPS = {
 		netOut: 'Look at the water where you want it and <b>hold Throw</b> to swing it back. Let go <b>as the ring brightens</b> and it spins fully open. Mullet and bait fish school in the shallows, by the pier and round the boat.',
 		netSink: 'Let it <b>sink</b>: the lead line traps what\'s under it as it reaches the bottom. Then <b>hold Close</b> to draw it shut and haul it in.',
 		bait: 'Live bait goes in your <b>bucket</b>. With the rod out, <b>Bait</b> puts it on the hook: bigger fish take it, and sooner. A mullet can be cut up for bait in the <b>Cooler</b>.',
+		bilge: 'There\'s <b>water in the bilge</b> (the gauge by your money). On deck, <b>hold Bail</b> to bail it out before it reaches the engine. Marta sells a <b>bilge pump</b>.',
 	},
 	gamepad: {
 		rodOut: 'Hold <kbd>RT</kbd> to wind up and release to cast. Try deeper water, around the pier or over the reef.',
@@ -190,8 +192,10 @@ const TIPS = {
 		netOut: 'Look at the water where you want it and <b>hold <kbd>RT</kbd></b> to swing it back. Let go <b>as the ring brightens</b> and it spins fully open. Mullet and bait fish school in the shallows, by the pier and round the boat.',
 		netSink: 'Let it <b>sink</b>: the lead line traps what\'s under it as it reaches the bottom. Then <b>hold <kbd>RT</kbd></b> to draw it closed and haul it in.',
 		bait: 'Live bait goes in your <b>bucket</b>. With the rod out, <kbd>D-pad ← →</kbd> puts it on the hook: bigger fish take it, and sooner. A mullet can be cut up for bait in the cooler (<kbd>Back</kbd>).',
+		bilge: 'There\'s <b>water in the bilge</b> (the gauge by your money). On deck, <b>hold <kbd>B</kbd></b> to bail it out before it reaches the engine. Marta sells a <b>bilge pump</b>.',
 	},
 	full: 'Your cooler is <b>full</b>. Sell to Joe, or buy a bigger hold from Marta at the chandlery.',
+	worn: 'Your boat\'s <b>hull is worn</b> (the gauge by your money): she\'s slower, and she leaks. Marta <b>repairs</b> it at the chandlery, with the boat at her dock.',
 };
 
 const tipText = ( id, device ) => ( TIPS[ device ] || TIPS.keyboard )[ id ] || TIPS[ id ];
@@ -463,6 +467,10 @@ export class Guide {
 		prev.baitN = baitN;
 
 		if ( s.holdKg >= s.stats.holdKg * 0.92 ) this.tip( 'full' );
+		// (M10) the boat's hull: the first water in the bilge, aboard; the first real wear
+		const hull = g.hull;
+		if ( hull && hull.bilge >= 20 && ( p.mode === 'deck' || p.mode === 'boat' ) && ! p.riding ) this.tip( 'bilge' );
+		if ( hull && hull.wear >= 0.1 ) this.tip( 'worn' );
 		if ( p.mode === 'walk' ) {
 
 			const bt = app.boatCtl;

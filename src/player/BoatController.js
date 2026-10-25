@@ -158,6 +158,15 @@ export class BoatController {
 		this.onSlam = null;
 		// (M9) the wind's speed where she is (m/s): the gusts on the sea, from WeatherDriver (null: the day's)
 		this.windAt = null;
+		// (M10) the hull (game/Hull.js, through Game): whether her engine's running (stalled, or cranking,
+		// it gives no thrust and its revs run down), what its revs are held to (it coughs as the water nears
+		// it), the share of her thrust a worn hull leaves; and what she's felt since Game last looked: the
+		// hardest closing speeds on a pile and onto the ground, the fastest sliding along the bottom (m/s),
+		// and whether she's touching it
+		this.engineOn = true;
+		this.cough = 1;
+		this.thrustMul = 1;
+		this.contact = { pile: 0, ground: 0, slide: 0, aground: false };
 		this._acc = 0;
 		this._age = 0; // s since the latest read-back was issued
 
@@ -265,10 +274,12 @@ export class BoatController {
 
 		}
 
-		// engine: spools up after the lever (~0.9 s), a little slower down; idles while driven
-		const lever = this.driven ? Math.abs( this.throttle ) : 0;
-		const target = Math.max( lever, this.driven ? 0.15 : 0 );
-		const tau = target > this.rpm ? 0.9 : 1.3;
+		// engine: spools up after the lever (~0.9 s), a little slower down; idles while driven. (M10) Stalled
+		// at the helm, its revs run down in a moment
+		const run = this.driven && this.engineOn;
+		const lever = run ? Math.abs( this.throttle ) : 0;
+		const target = Math.max( lever, run ? 0.15 : 0 ) * this.cough;
+		const tau = target > this.rpm ? 0.9 : this.driven && ! run ? 0.35 : 1.3;
 		this.rpm += ( target - this.rpm ) * ( 1 - Math.exp( - Math.min( dt, 0.1 ) / tau ) );
 
 		const h = 1 / 120;
@@ -399,12 +410,13 @@ export class BoatController {
 		const propW = this.toWorld( this.model.propeller, _p );
 		const propSub = this.sampleWaterAt( propW ) - propW.y;
 		const propWet = clamp( propSub / 0.3 + 0.5, 0, 1 );
-		const dir = this.driven ? Math.sign( this.throttle ) : 0;
-		const n = this.rpm * ( this.driven && Math.abs( this.throttle ) > 0.02 ? 1 : 0 );
+		const run = this.driven && this.engineOn;
+		const dir = run ? Math.sign( this.throttle ) : 0;
+		const n = this.rpm * ( run && Math.abs( this.throttle ) > 0.02 ? 1 : 0 );
 		let thrust = 0;
 		if ( dir > 0 ) thrust = this.maxThrust * n * n * Math.max( 0, 1 - Math.max( u, 0 ) / ( this.pitchSpeed * Math.max( n, 0.2 ) ) );
 		else if ( dir < 0 ) thrust = - this.reverseFactor * this.maxThrust * n * n * Math.max( 0, 1 - Math.max( - u, 0 ) / ( this.pitchSpeed * 0.6 * Math.max( n, 0.2 ) ) );
-		thrust *= propWet;
+		thrust *= propWet * this.thrustMul;
 		this.thrust = thrust;
 		addForceAt( _f.copy( fwd ).multiplyScalar( thrust ), propW );
 		if ( thrust < 0 ) addForceAt( _f.copy( side ).multiplyScalar( - thrust * 0.08 ), propW );
@@ -562,7 +574,7 @@ export class BoatController {
 			new THREE.Vector3( 1.1, - 0.4, 1.5 ), new THREE.Vector3( - 1.1, - 0.4, 1.5 ), new THREE.Vector3( 1.2, - 0.35, - 2.5 ), new THREE.Vector3( - 1.2, - 0.35, - 2.5 ),
 			new THREE.Vector3( 0, 0.2, 4.2 ),
 		] );
-		const pw = _c1, vp = _c2, f = _c3, r = _c4;
+		const pw = _c1, vp = _c2, f = _c3, r = _c4, c = this.contact;
 		for ( const lp of pts ) {
 
 			this.toWorld( lp, pw );
@@ -575,6 +587,10 @@ export class BoatController {
 				f.set( - vp.x * 6000, Math.max( fn, 0 ), - vp.z * 6000 );
 				F.add( f );
 				T.add( r.copy( pw ).sub( comW ).cross( f ) );
+				// (M10) what it does to her: a drop onto it, and sliding along it
+				c.aground = true;
+				c.ground = Math.max( c.ground, - vp.y );
+				c.slide = Math.max( c.slide, Math.hypot( vp.x, vp.z ) );
 
 			}
 
@@ -596,9 +612,13 @@ export class BoatController {
 				if ( this.colliders.resolveCapsule( tmp, 0.25, 1.6, 0 ) ) {
 
 					vp.copy( this.angular ).cross( r.copy( pw ).sub( comW ) ).add( this.velocity );
-					f.set( ( tmp.x - pw.x ) * 260000 - vp.x * 8000, 0, ( tmp.z - pw.z ) * 260000 - vp.z * 8000 );
+					const px = tmp.x - pw.x, pz = tmp.z - pw.z;
+					f.set( px * 260000 - vp.x * 8000, 0, pz * 260000 - vp.z * 8000 );
 					F.add( f );
 					T.add( r.copy( pw ).sub( comW ).cross( f ) );
+					// (M10) how fast she closed with it (against the way it pushes her out)
+					const pl = Math.hypot( px, pz );
+					if ( pl > 1e-6 ) c.pile = Math.max( c.pile, - ( vp.x * px + vp.z * pz ) / pl );
 
 				}
 
