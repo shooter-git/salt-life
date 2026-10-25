@@ -12,13 +12,14 @@ import { Chandlery, CHANDLERY } from './Chandlery.js';
 import { CatchDisplay } from './CatchDisplay.js';
 import { FishPortrait } from './FishPortrait.js';
 import { UPGRADES, fuelBurn, TOW, towFee } from './Gear.js';
+import { Hull, thrustMul, repairFee } from './Hull.js';
 import { GameHUD } from './GameHUD.js';
 import { TimeHUD } from './TimeHUD.js';
 import { timeText } from './IslandClock.js';
 import { NIGHT_BOX, ordersFor, tradeDay, stallOpen, shutFor } from './Orders.js';
 import { WantedBoard } from './WantedBoard.js';
 import { ForecastSlate } from './ForecastSlate.js';
-import { forecast, islandTime } from './Weather.js';
+import { forecast, islandTime, blowShare } from './Weather.js';
 import { ClosedSign } from './ClosedSign.js';
 import { delivered, filled, owed, weekEnds } from './WeekOrder.js';
 import { Minimap } from './Minimap.js';
@@ -37,6 +38,10 @@ const CATCH_CARD_MS = 9000;
 const BERTH_M = 14;
 const ANCHOR_SPEED = 2.5;
 const RODE_SEGS = 16;
+// (M10) the bucket's offered on deck from this much water in the bilge (litres), and the hull's wear
+// is saved whenever it's grown this much since it last was
+const BAIL_FROM = 20;
+const WEAR_SAVE = 0.02;
 const _a = new Vector3(), _b = new Vector3(), _h = new Vector3();
 const _pose = { pos: new Vector3(), head: new Vector3(), roll: 0, thrash: 0 };
 const BAG_FROM = 0.85; // the brails drawn this far: the netting has closed round what's under it (it rides in the purse)
@@ -146,6 +151,15 @@ export class Game {
 		// boat upgrades: engine (thrust / top speed) and deck floodlights for night fishing
 		const b = app.boatCtl;
 		this._engineBase = { maxThrust: b.maxThrust, pitchSpeed: b.pitchSpeed };
+		// (M10) the hull (Hull.js): her wear (in the save: the state is its store), the water in her bilge
+		// (her mass, as it's aboard) and her engine; the bucket going; what's been said
+		this.hull = new Hull( { store: this.state } );
+		this._massBase = b.mass;
+		this._wearSaved = this.state.hull;
+		this._bailing = false;
+		this._wornSaid = 0;
+		this._floodSaid = false; // (said the water's over the engine, until she next runs)
+		this._boatSounds = false;
 		this.floods = [];
 		if ( app.localLights ) this.addFloodlights( app.localLights, app.boat );
 		// (Salt Life) the anchor's rode while it's down, from the stem head to the bottom (the fishing
@@ -497,6 +511,8 @@ export class Game {
 		for ( const v of this.vendors ) v.update( dt, p.mode === 'walk' ? p.position : null );
 		this.updateVendors( inp, p );
 
+		// (M10) the bucket on deck; the crank at the helm while she's stalled
+		this.updateBail( inp, p );
 		// prompts when the player has nothing to say
 		if ( ! p.prompt && ( can || canSpear ) ) p.prompt = this.prompt();
 
@@ -505,6 +521,9 @@ export class Game {
 		if ( this.hud && this.hud.portrait ) this.hud.portrait.update( dt );
 		if ( this.hud ) this.hud.update( {
 			fuel: aboard ? { litres: this.state.fuelL, tank: this.state.stats.fuelL } : null,
+			// (M10) the hull once it's worn, and the bilge with water in it
+			hull: aboard && ! p.riding && this.hull.wear > 0.02 ? this.hull.wear : null,
+			bilge: aboard && ! p.riding && this.hull.bilge >= 1 ? this.hull.bilge : null,
 			sonar: aboard && this.state.stats.finder ? this._sonar : null,
 			fight: this.fight || this.spearFight,
 			casting: rod.state === 'windup',
@@ -561,22 +580,13 @@ export class Game {
 
 	}
 
-	// fuel burn at the helm (the engine stops when the tank is dry) and the fish finder
+	// fuel burn while the engine runs (it stalls when the tank is dry: Hull) and the fish finder
 	updateBoat( dt ) {
 
 		const app = this.app, b = app.boatCtl, p = app.player, s = this.state;
-		if ( b.driven ) {
-
-			const left = s.burn( fuelBurn( b.rpm ) * dt );
-			if ( left <= 0 ) {
-
-				b.throttle = 0;
-				if ( ! this._fuelOut ) this.toast( 'Out of fuel · buy diesel at the chandlery by the boathouse', 4000 );
-				this._fuelOut = true;
-
-			}
-
-		} else if ( this._wasDriven ) s.save();
+		if ( b.driven && b.engineOn ) s.burn( fuelBurn( b.rpm ) * dt );
+		else if ( this._wasDriven && ! b.driven ) s.save();
+		this.updateHull( dt );
 		this.updateAnchor( b.driven && ! this._wasDriven, ! b.driven && this._wasDriven );
 		this._wasDriven = b.driven;
 
@@ -596,6 +606,110 @@ export class Game {
 			}
 
 		}
+
+	}
+
+	// (M10) the hull (Hull.js): what she's felt, the water in and out of her, her engine; then her
+	// thrust, revs and mass, the sounds, and the word when she stalls or is getting worn
+	updateHull( dt ) {
+
+		const app = this.app, b = app.boatCtl, s = this.state, hull = this.hull, c = b.contact, a = app.audio;
+		// (her sounds, ready once you're aboard: the helm's first crank is the starter's)
+		const p = app.player;
+		if ( a && ! this._boatSounds && ( p.mode === 'deck' || p.mode === 'boat' ) ) {
+
+			a.boatReady();
+			this._boatSounds = true;
+
+		}
+
+		hull.step( dt, {
+			driven: b.driven, throttle: b.driven ? Math.abs( b.throttleTarget || 0 ) : 0, fuel: s.fuelL > 0, rain: G.rain.value,
+			bailing: this._bailing, pumpLs: s.stats.pumpLs, pile: c.pile, ground: c.ground, slide: c.slide, aground: c.aground,
+		} );
+		c.pile = c.ground = c.slide = 0;
+		c.aground = false;
+		b.engineOn = hull.engine === 'running';
+		b.cough = hull.cough;
+		b.thrustMul = thrustMul( hull.wear );
+		b.mass = this._massBase + hull.bilge;
+		for ( const e of hull.drain() ) {
+
+			if ( e.kind === 'crank' && a ) a.crank( e.catches );
+			else if ( e.kind === 'knock' && a ) a.hullKnock( e.speed, e.ground );
+			else if ( e.kind === 'scoop' && a ) a.bailScoop();
+			// (a crank that doesn't catch says why when there's a reason: a dry tank, the water over the engine)
+			else if ( e.kind === 'stall' || ( e.kind === 'failed' && ( e.why === 'fuel' || e.why === 'flooded' ) ) ) this.stallSaid( e.why );
+			else if ( e.kind === 'caught' ) this._floodSaid = false;
+
+		}
+
+		if ( hull.wear - this._wearSaved >= WEAR_SAVE ) {
+
+			s.save();
+			this._wearSaved = hull.wear;
+
+		}
+
+		// getting worn: said at a tenth, and again at a half
+		const said = hull.wear >= 0.5 ? 2 : hull.wear >= 0.1 ? 1 : 0;
+		if ( said > this._wornSaid ) this.toast( said > 1 ? 'She\'s badly worn · slow, and leaking · Marta can repair the hull' : 'She\'s taking a beating · Marta can repair the hull', 4000 );
+		this._wornSaid = Math.max( this._wornSaid, said );
+
+	}
+
+	stallSaid( why ) {
+
+		const touch = this.app.input.lastDevice === 'touch';
+		if ( why === 'fuel' ) {
+
+			if ( ! this._fuelOut ) this.toast( 'Out of fuel · buy diesel at the chandlery by the boathouse', 4000 );
+			this._fuelOut = true;
+
+		} else if ( why === 'flooded' ) {
+
+			if ( ! this._floodSaid ) this.toast( `The water's up to the engine · bail her out on deck${ touch ? '' : ` (hold ${ this.keyName( 'E' ) })` }`, 4200 );
+			this._floodSaid = true;
+
+		} else this.toast( `The engine's stalled · ${ touch ? 'push the stick ahead' : `open the throttle (${ this.keyName( 'W' ) })` } to crank her`, 3600 );
+
+	}
+
+	// (M10) on her deck with water in the bilge, the bucket: hold E (the rail's "Jump overboard" makes way
+	// for it, Player.bailable; stepping ashore and the helm don't). At the helm, stalled, the throttle
+	// cranks her: said beside leaving it
+	updateBail( inp, p ) {
+
+		const hull = this.hull;
+		p.bailable = p.mode === 'deck' && ! p.riding && ! p.busy && hull.bilge > 0 && ( hull.bilge >= BAIL_FROM || this._bailing );
+		if ( p.bailable && ! p.prompt ) {
+
+			p.prompt = { key: 'E', text: `${ this._bailing ? 'Bailing' : 'Bail (hold)' }   ·   ${ gallons( hull.bilge ) } gal in the bilge` };
+			this._bailing = inp.down( 'KeyE' );
+
+		} else this._bailing = false;
+		if ( p.mode === 'boat' && hull.engine === 'stalled' && p.prompt ) p.prompt = { key: p.prompt.key, text: `${ p.prompt.text }   ·   ${ this.keyName( 'W' ) }  crank her` };
+
+	}
+
+	// (M10) Marta's repair of the hull: { fee, wear, here } (here: the boat's at her dock), or null with
+	// nothing to repair; and the repair, as far as your money goes
+	repairJob() {
+
+		const fee = repairFee( this.hull.wear );
+		return fee ? { fee, wear: this.hull.wear, here: !! this.app.boatCtl.moored } : null;
+
+	}
+
+	repair() {
+
+		const job = this.repairJob();
+		if ( ! job || ! job.here ) return 0;
+		const paid = this.state.payRepair( job.fee );
+		this._wearSaved = this.state.hull;
+		this._wornSaid = this.state.hull >= 0.5 ? 2 : this.state.hull >= 0.1 ? 1 : 0;
+		if ( paid ) this.toast( paid < job.fee ? `Marta did $${ paid } of the work · the hull's ${ Math.round( this.state.hull * 100 ) }% worn` : `Marta repaired the hull · $${ paid }` );
+		return paid;
 
 	}
 
@@ -967,7 +1081,8 @@ export class Game {
 		}
 
 		const g = this.state.stats;
-		this.fight = new CatchMinigame( { species: b.species, kg: b.kg, lineKg: g.lineKg, reelSpeed: g.reelSpeed, distance: Math.max( 3, this.rod.lineOut ) } );
+		// (M10: in a blow, the wind gusting on the line)
+		this.fight = new CatchMinigame( { species: b.species, kg: b.kg, lineKg: g.lineKg, reelSpeed: g.reelSpeed, distance: Math.max( 3, this.rod.lineOut ), wind: blowShare( G.windSpeed.value ) } );
 		this.bite = null;
 		this.rod.hook();
 		this.toast( 'Fish on!', 1200 );
@@ -1233,7 +1348,7 @@ export class Game {
 	// a key as the device in use calls it, in the prompts' text
 	keyName( k ) {
 
-		return this.app.input.lastDevice === 'gamepad' ? { N: 'D-pad ↑', B: 'D-pad ← →', R: 'X' }[ k ] || k : k;
+		return this.app.input.lastDevice === 'gamepad' ? { N: 'D-pad ↑', B: 'D-pad ← →', R: 'X', E: 'B', W: 'Stick ↑' }[ k ] || k : k;
 
 	}
 

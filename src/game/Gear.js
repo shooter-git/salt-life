@@ -89,6 +89,12 @@ export const UPGRADES = {
 		{ cost: 0, label: 'None', anchorM: 0 },
 		{ cost: 100, label: 'Danforth anchor, 200 ft of rode', anchorM: 20 },
 	] },
+	// (M10) what takes the water out of her bilge (Hull.js) besides you with the bucket: an electric pump
+	// that clears it slowly by itself (pumpLs, litres a second: more than the rain brings in)
+	bilgePump: { name: 'Bilge pump', levels: [
+		{ cost: 0, label: 'A bucket', pumpLs: 0 },
+		{ cost: 120, label: 'Electric bilge pump', pumpLs: 0.3 },
+	] },
 };
 
 export const FUEL_PRICE = 1.5; // $ per litre of diesel at the chandlery

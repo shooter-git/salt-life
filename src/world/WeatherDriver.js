@@ -15,7 +15,8 @@ import { FRONT_KM } from '../sky/SkyProClouds.js';
 //   - (M9) the weather on its way, up the trades (SkyProClouds.front: the cover there, ahead of the
 //     clock: a shower's cloud comes over before it rains, a front's bank darkens the horizon first);
 //   - (M9) the gusts: the cat's paws on the sea, as the boat and the wind's sound feel them (windAt),
-//     stronger in rain and squalls, which freshen the wind a little while they pass.
+//     stronger in rain and squalls, which freshen the wind a little while they pass;
+//   - (M10) the water's murk after a blow (G.murk: the view under water closes in, App; the caustics dim).
 // The wind and the sea come round over half a minute or so, the cloud more slowly (a minute or two from
 // fair to a gale's, so the panorama's refresh keeps up and nothing pops), the rain in seconds. When the
 // clock jumps (a rest, the host's clock, coming back to the tab) it's all set at once, behind the dim a
@@ -47,7 +48,7 @@ const JUMP = 0.5; // game hours: more than this between frames, the clock jumped
 const monahan = ( u ) => 3.84e-6 * Math.pow( Math.max( 0, u ), 3.41 );
 const WHITECAP = 0.85;
 const whitecap = ( u ) => WHITECAP * Math.min( 1, Math.max( 0, monahan( u ) - monahan( 7 ) ) / ( monahan( 20 ) - monahan( 7 ) ) );
-const KEYS = [ 'wind', 'swell', 'windSea', 'surf', 'visibility' ];
+const KEYS = [ 'wind', 'swell', 'windSea', 'surf', 'visibility', 'murk' ];
 const QUICK = [ 'rain', 'thunder', 'front' ];
 // the surf's period changes slowly (s a second): a change hurries the crests a little on their way in
 const PERIOD_RATE = 0.02;
@@ -153,8 +154,10 @@ export class WeatherDriver {
 		// (a squall's downdraught freshens it while it passes)
 		G.windSpeed.value = Math.min( Math.max( GALE, w.wind ), w.wind + SQUALL[ 0 ] * w.rain + SQUALL[ 1 ] * w.thunder );
 		G.rain.value = w.rain;
-		// (the sun the waves focus on the seabed: little under a grey sky, none in the rain's deck)
-		G.caustics.value = Math.max( 0, 1 - 0.85 * w.overcast - 0.15 * w.storm );
+		// (the sun the waves focus on the seabed: little under a grey sky, none in the rain's deck, and
+		// (M10) less through the murk a blow's left)
+		G.caustics.value = Math.max( 0, 1 - 0.85 * w.overcast - 0.15 * w.storm ) * ( 1 - 0.7 * w.murk );
+		G.murk.value = w.murk;
 		// (turned from the trades: their own direction exactly when it hasn't)
 		const p = G.windPrevailing.value, c = Math.cos( w.windAngle ), s = Math.sin( w.windAngle );
 		if ( w.windAngle === 0 ) G.windDir.value.copy( p );

@@ -32,6 +32,9 @@ export class Input {
 		this.portal = portal;
 		this.keys = new Set();
 		this.pressed = new Set();
+		// (M10) every press since the last frame, in order: on a slow frame a menu taken from the keys
+		// (the clock's: TimeHUD) still gets each arrow and where the Space came among them
+		this.presses = [];
 		this.look = { x: 0, y: 0 };
 		this.move = { x: 0, y: 0 };
 		this.touchMove = { x: 0, y: 0 }; // written by the touch joystick
@@ -47,7 +50,13 @@ export class Input {
 		window.addEventListener( 'keydown', ( e ) => {
 
 			if ( e.target && ( e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.tagName === 'TEXTAREA' ) ) return;
-			if ( ! this.keys.has( e.code ) ) this.pressed.add( e.code );
+			if ( ! this.keys.has( e.code ) ) {
+
+				this.pressed.add( e.code );
+				this.presses.push( e.code );
+
+			}
+
 			this.keys.add( e.code );
 			this.lastDevice = 'keyboard';
 			if ( [ 'Space', 'ArrowUp', 'ArrowDown', 'Tab' ].includes( e.code ) ) e.preventDefault();
@@ -127,7 +136,13 @@ export class Input {
 
 		}
 
-		if ( ! this.keys.has( code ) ) this.pressed.add( code );
+		if ( ! this.keys.has( code ) ) {
+
+			this.pressed.add( code );
+			this.presses.push( code );
+
+		}
+
 		this.keys.add( code );
 		this._virtual.set( code, ( this._virtual.get( code ) || 0 ) + 1 );
 
@@ -244,6 +259,7 @@ export class Input {
 	endFrame() {
 
 		this.pressed.clear();
+		this.presses.length = 0;
 
 	}
 

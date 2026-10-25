@@ -782,6 +782,9 @@ export class Together {
 		if ( body.B && this.app.searchlight ) body.S = 1; // (your boat's searchlight is on)
 		if ( body.B && boat.anchor ) body.A = 1; // (it's at anchor: its lamps say so)
 		if ( m === 'h' ) body.E = r2( boat.rpm ); // (the engine's revs: what the others hear)
+		// (M10) the starter turning her over (1; 2: it'll catch), heard by whoever's aboard
+		const crank = m === 'h' && this.app.game ? this.app.game.hull.crank : 0;
+		if ( crank ) body.K = crank;
 		if ( m === 'd' ) body.D = [ r2( p.deckPos.x ), r2( p.deckPos.y ), r2( p.deckPos.z ) ];
 
 		return body;
@@ -1019,6 +1022,7 @@ export class Together {
 		cur.spot = near.S === 1;
 		cur.anchored = near.A === 1;
 		cur.rpm = ( Number( a.E ) || 0 ) + ( ( Number( b.E ) || 0 ) - ( Number( a.E ) || 0 ) ) * f;
+		cur.crank = near.K === 1 || near.K === 2 ? near.K : 0;
 		cur.tension = b.k || 0;
 		cur.bobber = lerp3( cur._bobber, a.b, b.b );
 		cur.gun = near.g || 0;
@@ -1336,14 +1340,15 @@ export class Together {
 
 	// the boat to hear (App, for the sound: null = your own): the one you're riding in; or on foot or in
 	// the water, the nearest someone is driving (its engine and the water past it, fading with
-	// distance in the sound's own panning)
+	// distance in the sound's own panning). (M10) An engine at the helm with its revs run down has stalled
+	// (an older copy of the game idles at 0.15); crank: the starter turning her over (Hull.crank)
 	boatSound() {
 
 		const p = this.app.player;
 		if ( p.riding ) {
 
 			const o = this.others.get( p.boat.owner ), c = o && o.cur;
-			return { active: !! ( c && c.mode === 'helm' ), rpm: c ? c.rpm : 0, speed: p.boat.speed, position: p.boat.position };
+			return { active: !! ( c && c.mode === 'helm' && c.rpm > 0.05 ), rpm: c ? c.rpm : 0, crank: c ? c.crank : 0, speed: p.boat.speed, position: p.boat.position };
 
 		}
 
@@ -1364,7 +1369,7 @@ export class Together {
 
 		}
 
-		return best ? { active: true, rpm: best.cur.rpm, speed: best.boatSpeed, position: best.cur.boat.pos } : null;
+		return best ? { active: best.cur.rpm > 0.05, rpm: best.cur.rpm, crank: best.cur.crank, speed: best.boatSpeed, position: best.cur.boat.pos } : null;
 
 	}
 

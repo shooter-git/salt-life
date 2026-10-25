@@ -20,8 +20,13 @@ const f = ( x ) => {
 //
 // Drawn premultiplied, one instanced draw; fewer drops on the lesser tiers (phones' fill rate is what
 // rain costs).
-//   const rain = new Rain( { terrain, tier } ); scene.add( rain.mesh );
+// (M10) And where they land, splashes: a small crown popping up and gone in a moment, on the ground
+// above the sea (the sea has its rings: WaterSurface) and on the boat's cockpit sole (the deck aft of
+// the wheelhouse, as a box in her frame: setDeck). Hashed about the camera too, each at a new spot each
+// time it pops; one more instanced draw, as many as the rain is hard.
+//   const rain = new Rain( { terrain, tier } ); scene.add( rain.mesh, rain.splash );
 //   rain.update( dt, camera, cameraWaterHeight, viewHeight )   (each frame)   rain.flash.value
+//   rain.setDeck( boatMatrixWorld )
 
 const COUNT = { low: 1400, mid: 3200, high: 6400 };
 const BOX = 22, HEIGHT = 14; // m: the box across, and its height (the camera a third of the way up)
@@ -30,6 +35,15 @@ const NEAR_WIND = 0.7; // the wind they're carried by: near the ground, of the 1
 const EXPOSURE = 0.04; // s: a look's motion blur (the streak's length)
 const VISIBILITY = 3.5; // how much more a streak shows than the drop's own breadth would
 const NO_ROOF = new THREE.Matrix4().makeScale( 0, 0, 0 ).setPosition( 10, 10, 10 ); // (no roof: everything's outside it)
+// (M10) the splashes: how many by tier, the square about the camera they pop in (m), how long one lasts
+// (s), how often each pops again (s, a spread), how big it's thrown (m); the cockpit's sole in the boat's
+// frame (her deckY, and the open deck aft of the wheelhouse: x either side, z from the transom forward)
+const SPLASH = { low: 300, mid: 1200, high: 2400 };
+const SPLASH_BOX = 16;
+const SPLASH_LIFE = 0.15;
+const SPLASH_PERIOD = [ 0.3, 0.7 ];
+const SPLASH_SIZE = 0.06;
+const COCKPIT = { y: 0.35, x: 1.1, z: [ - 3.7, - 1.0 ] };
 
 export class Rain {
 
@@ -180,6 +194,153 @@ void main() {
 		this.mesh.renderOrder = 22;
 		this.mesh.visible = false;
 
+		this.splash = this.buildSplash( terrain, tier );
+
+	}
+
+	// (M10) the splashes where the drops land (see above)
+	buildSplash( terrain, tier ) {
+
+		const count = SPLASH[ tier ] ?? SPLASH.low;
+		const U = this.splashUniforms = {
+			...THREE.UniformsUtils.clone( THREE.UniformsLib.fog ),
+			...terrain.heightUniforms,
+			splashCamPos: { value: new THREE.Vector3() },
+			splashTime: { value: 0 },
+			splashBoat: { value: new THREE.Matrix4() }, // the boat's frame -> the world, and back
+			splashBoatInv: { value: NO_ROOF.clone() },
+			rainAmount: G.rain,
+			rainViewHeight: this.uniforms.rainViewHeight,
+			rainSunDir: G.sunDir,
+			rainSun: G.sunColor,
+			rainSky: G.skyIrradiance,
+			rainSeaLevel: G.seaLevel,
+			rainFlash: this.flash,
+		};
+		const vertexShader = /* glsl */`
+#include <common>
+#include <fog_pars_vertex>
+${ terrain.heightGlsl }
+uniform vec3 splashCamPos;
+uniform float splashTime;
+uniform mat4 splashBoat;
+uniform mat4 splashBoatInv;
+uniform float rainAmount;
+uniform float rainViewHeight;
+uniform vec3 rainSunDir;
+uniform vec3 rainSun;
+uniform vec3 rainSky;
+uniform float rainSeaLevel;
+uniform float rainFlash;
+varying vec4 vSplashCol; // radiance, opacity
+varying vec3 vSplashUV; // quad corner, how far through its life
+vec4 rainHash4( float n ) { return fract( sin( vec4( n, n + 17.13, n + 43.71, n + 71.37 ) ) * vec4( 43758.5453, 22578.1459, 19642.3490, 31337.7217 ) ); }
+float rainSs( float a, float b, float x ) { float t = clamp( ( x - a ) / ( b - a ), 0.0, 1.0 ); return t * t * ( 3.0 - 2.0 * t ); }
+void main() {
+	float id = float( gl_InstanceID );
+	vec4 h = rainHash4( id * 0.917 + 2.3 );
+	// how many: the rain's strength; each pops every so often, at a new spot each time
+	float keep = clamp( ( rainAmount - h.w ) * 12.0, 0.0, 1.0 );
+	float period = mix( ${ f( SPLASH_PERIOD[ 0 ] ) }, ${ f( SPLASH_PERIOD[ 1 ] ) }, h.z );
+	float k = splashTime / period + h.y, cycle = floor( k );
+	float life = fract( k ) * period / ${ f( SPLASH_LIFE ) };
+	vec4 c = rainHash4( id * 0.917 + cycle * 7.13 + 11.0 );
+	float B = ${ f( SPLASH_BOX ) };
+	vec2 local = ( fract( c.xy - splashCamPos.xz / B ) - 0.5 ) * B;
+	vec3 p = vec3( splashCamPos.x + local.x, 0.0, splashCamPos.z + local.y );
+	// where it lands: the cockpit's sole, or the ground where it's above the sea
+	vec3 b = ( splashBoatInv * vec4( p, 1.0 ) ).xyz;
+	float deck = abs( b.x ) < ${ f( COCKPIT.x ) } && b.z > ${ f( COCKPIT.z[ 0 ] ) } && b.z < ${ f( COCKPIT.z[ 1 ] ) } ? 1.0 : 0.0;
+	float ground = terrainHeightAt( p.xz );
+	p = deck > 0.5 ? ( splashBoat * vec4( b.x, ${ f( COCKPIT.y ) }, b.z, 1.0 ) ).xyz : vec3( p.x, ground, p.z );
+	float land = max( deck, ground > rainSeaLevel + 0.03 ? 1.0 : 0.0 );
+	// a crown facing you (about the upright), at least a couple of pixels across
+	vec3 toCam = cameraPosition - p;
+	float dist = max( length( toCam ), 0.05 );
+	float pixel = dist * 2.0 / ( projectionMatrix[ 1 ][ 1 ] * rainViewHeight );
+	float w = max( ${ f( SPLASH_SIZE ) } * ( 0.5 + 0.5 * min( life, 1.0 ) ), pixel * 2.0 );
+	vec3 right = normalize( vec3( - toCam.z, 0.0, toCam.x ) + vec3( 1e-5, 0.0, 0.0 ) );
+	float fade = rainSs( 0.5, 1.5, dist ) * ( 1.0 - rainSs( B * 0.36, B * 0.5, max( abs( local.x ), abs( local.y ) ) ) );
+	float a = keep * land * fade * ( life < 1.0 ? 1.0 : 0.0 ) * 0.8;
+	// (lit as water thrown up: the sky's light caught in the drops, brighter than the ground's under it)
+	vec3 col = rainSky * 2.2 + rainSun * ( 0.1 + 0.5 * pow( max( - dot( toCam / dist, rainSunDir ), 0.0 ), 8.0 ) ) + vec3( 0.8, 0.85, 1.0 ) * rainFlash * 0.6;
+	vec2 corner = position.xy;
+	vec3 world = p + right * ( corner.x * w ) + vec3( 0.0, ( corner.y + 1.0 ) * 0.4 * w, 0.0 );
+	vSplashCol = vec4( col, a );
+	vSplashUV = vec3( corner, min( life, 1.0 ) );
+	vec4 mvPosition = viewMatrix * vec4( world, 1.0 );
+	gl_Position = projectionMatrix * mvPosition;
+	if ( a < 2e-4 ) gl_Position = vec4( 0.0, 0.0, 2.0, 1.0 );
+	#include <fog_vertex>
+}
+`;
+		// the crown: a thin ring spreading at its foot, and three drops thrown up and out of it
+		const fragmentShader = /* glsl */`
+#include <common>
+#include <fog_pars_fragment>
+varying vec4 vSplashCol;
+varying vec3 vSplashUV;
+void main() {
+	vec2 uv = vSplashUV.xy;
+	float s = vSplashUV.z, y = uv.y * 0.5 + 0.5;
+	float ring = exp( - pow( ( abs( uv.x ) - 0.3 - 0.6 * s ) * 7.0, 2.0 ) ) * exp( - y * 10.0 );
+	float up = sin( s * 3.14159 );
+	float drops = 0.0;
+	for ( int i = 0; i < 3; i ++ ) {
+		float fi = float( i ) - 1.0;
+		vec2 at = vec2( fi * 0.55 * s, 0.2 + up * ( 0.7 - 0.25 * abs( fi ) ) );
+		drops += smoothstep( 0.24, 0.06, length( vec2( uv.x - at.x, ( y - at.y ) * 1.3 ) ) );
+	}
+	float a = clamp( ( ring * 0.7 + drops ) * vSplashCol.w * ( 1.0 - 0.6 * s ), 0.0, 1.0 );
+	if ( a < 0.003 ) discard;
+	gl_FragColor = vec4( vSplashCol.rgb * a, a );
+	#include <tonemapping_fragment>
+	#include <colorspace_fragment>
+#ifdef USE_FOG
+	gl_FragColor.rgb = mix( gl_FragColor.rgb, fogColor * gl_FragColor.a, sceneFogFactor() );
+#endif
+}
+`;
+		const material = new THREE.ShaderMaterial( {
+			name: 'RainSplash',
+			uniforms: U,
+			vertexShader,
+			fragmentShader,
+			transparent: true,
+			depthWrite: false,
+			side: THREE.DoubleSide,
+			fog: true,
+			blending: THREE.CustomBlending,
+			blendSrc: THREE.OneFactor,
+			blendDst: THREE.OneMinusSrcAlphaFactor,
+			blendSrcAlpha: THREE.OneFactor,
+			blendDstAlpha: THREE.OneMinusSrcAlphaFactor,
+			premultipliedAlpha: true,
+		} );
+		material.forceSinglePass = true;
+		const plane = new THREE.PlaneGeometry( 2, 2 );
+		const geo = new THREE.InstancedBufferGeometry();
+		geo.index = plane.index;
+		geo.setAttribute( 'position', plane.getAttribute( 'position' ) );
+		geo.instanceCount = count;
+		geo.boundingSphere = new THREE.Sphere( new THREE.Vector3(), 1e5 );
+		const mesh = new THREE.Mesh( geo, material );
+		mesh.name = 'RainSplash';
+		mesh.frustumCulled = false;
+		mesh.matrixAutoUpdate = false;
+		mesh.renderOrder = 21;
+		mesh.visible = false;
+		return mesh;
+
+	}
+
+	// (M10) the boat, for the splashes on her cockpit's sole: her frame -> the world
+	setDeck( matrix ) {
+
+		const U = this.splashUniforms;
+		U.splashBoat.value.copy( matrix );
+		U.splashBoatInv.value.copy( matrix ).invert();
+
 	}
 
 	// a roof over part of the box: world -> its box (-1..1), or null for none
@@ -195,6 +356,8 @@ void main() {
 		const U = this.uniforms;
 		const visible = G.rain.value > 0.002 && camera.position.y > cameraWaterHeight;
 		this.mesh.visible = visible;
+		this.splash.visible = visible;
+		this.splashUniforms.splashTime.value = ( this.splashUniforms.splashTime.value + dt ) % 3600;
 		// (the drops fall and drift: wrapped to the box; the fastest's fall, the others take their eighths of
 		// it, so it's wrapped to eight boxes' heights)
 		const d = U.rainDrift.value, s = G.windSpeed.value * NEAR_WIND * dt;
@@ -204,6 +367,7 @@ void main() {
 		if ( ! visible ) return;
 		U.rainCamPos.value.copy( camera.position );
 		U.rainViewHeight.value = viewHeight;
+		this.splashUniforms.splashCamPos.value.copy( camera.position );
 
 	}
 
@@ -211,6 +375,8 @@ void main() {
 
 		this.mesh.geometry.dispose();
 		this.material.dispose();
+		this.splash.geometry.dispose();
+		this.splash.material.dispose();
 
 	}
 

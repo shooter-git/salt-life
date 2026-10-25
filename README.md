@@ -20,7 +20,7 @@ You can walk, swim and take the boat around the island. You can fish from the pi
 boat, or dive and spear a fish, sell your catch to Joe and buy better gear from Marta. It plays with a
 mouse and keyboard, a gamepad or a touch screen.
 
-Done, M0 to M9:
+Done, M0 to M10:
 - the sea and its shore, spray, gusts and slicks, and the haze;
 - the whole world: the village, the pier, the reef and its fish, the birds and crabs, the beach's
   debris, the whale and the lights at night;
@@ -62,6 +62,20 @@ Done, M0 to M9:
     lines, tarpon roll in the rain, bonefish leave the flats in a blow;
   - Joe and Marta shut for a gale or a thunderstorm (the night box and the diesel stay out), and
     Joe chalks the forecast on a slate beside his wanted list;
+- what the weather costs (M10), mildly:
+  - your boat's hull wears in a big sea, on the piles and aground: she gets slower and she leaks, and
+    Marta repairs her at her dock (as far as your money goes);
+  - the rain, the leak and green water fill the bilge: bail with the bucket (hold E on deck) or buy
+    Marta's pump; the water reaching the engine stalls her, and so can a hard slam in a worn boat;
+    she cranks every time you take the helm, and a stalled one takes a try or two;
+  - you hear it: the starter, the hull knocking and creaking, the keel scraping, the bucket, the
+    pump and the water sloshing below;
+  - in a blow the wind carries your cast and drifts your float, carries the cast net off, and gusts
+    snap a line you reel on through them;
+  - after a blow the water's murky for a day: you see less under water, and Joe's slate says so;
+  - the breakers follow the surf, the bait inside them with them, fewer of them in a big surf;
+  - rain splashes on the sand and the deck, the sea reflects the lightning, a downpour flattens the
+    sea's ripples, and in a blow leaves and sand stream by and the village's shutters bang;
 - playing together:
   - you see the others on the island, walking, swimming, fishing and out in their boats;
   - you pick your islander: two men and two women;
@@ -98,7 +112,8 @@ The island's day:
 | M7 | Spearfishing: the speargun, the law, the spearfisher's fish, fish that notice you, a held breath |
 | M8 | Weather: the day's wind, sea, surf, cloud and light; the boat in the wind, and Marta's tow |
 | M9 | Rain and thunderstorms: showers, lightning and thunder, wet surfaces, storm skies and fronts, gusts, fishing by the weather |
-| M10 | For consideration ([docs/M10.md](docs/M10.md)): rain curtains and drips, cumulonimbus, the sea and the surf, damage, the hurricane |
+| M10 | What the weather costs: the hull, the bilge and the engine, fishing in a blow, murky water, splashes, the lightning on the sea, shutters and debris in a blow, the weather in the checks |
+| M11 | For consideration ([docs/M11.md](docs/M11.md)): rain curtains and drips, cumulonimbus, the swell from another direction, the open sea breaking, rip currents, the hurricane |
 
 ## How it fits All the Spaces
 

@@ -1,6 +1,6 @@
 // Plain-node tests of the island's weather (no GPU): the forecast from the island's time, its
 // conditions, how it changes, and how it's read out.
-import { CONDITIONS, WEATHER_IDS, WEATHER_NAMES, SURF_MAX, PERIOD_MAX, GROUNDSWELL_MAX, VEER, STRIKE_RATE, islandTime, storminess, cloudiness, veer, showeriness, unsettled, weatherAt, forecast, surfText, windFrom, strikeIn } from '../src/game/Weather.js';
+import { CONDITIONS, WEATHER_IDS, WEATHER_NAMES, SURF_MAX, PERIOD_MAX, GROUNDSWELL_MAX, VEER, STRIKE_RATE, islandTime, storminess, cloudiness, veer, showeriness, unsettled, weatherAt, forecast, surfText, windFrom, strikeIn, murkAt, windBeyondFair, blowShare } from '../src/game/Weather.js';
 import { knots } from '../src/game/Units.js';
 
 let fails = 0;
@@ -159,6 +159,47 @@ for ( let k = 0; k < N; k ++ ) {
 }
 
 ok( upEarly > coming * 0.95 && upwind < hits * 0.8, 'a storm coming in strikes from where it comes from, overhead all round' );
+
+// ---- (M10) the water's murk after a blow: none on day 1 or without a blow in the last day, murky
+// through a gale and for hours after, clear again within a day; a held pick has its own
+{
+
+	let none = true, clearAfter = true, quiet = 0, gales = 0, murkyThrough = 0, murky = 0, n = 0;
+	for ( let T = 0; T < 30; T += 0.25 ) if ( murkAt( T ) !== 0 || weatherAt( T ).murk !== 0 ) none = false;
+	for ( let T = 30; T < 24 * 1000; T += 1 ) {
+
+		n ++;
+		if ( murkAt( T ) > 0.5 ) murky ++;
+		// no blow (storminess under a stiff breeze's) in the last day and a half: clear water
+		let blew = false;
+		for ( let L = 0; L <= 36; L += 0.5 ) if ( storminess( T - L ) >= 0.8 ) blew = true;
+		if ( ! blew ) {
+
+			quiet ++;
+			if ( murkAt( T ) !== 0 ) clearAfter = false;
+
+		}
+
+		if ( weatherAt( T ).id === 'gale' && weatherAt( T - 1 ).id !== 'gale' ) {
+
+			gales ++;
+			if ( murkAt( T + 3 ) > 0.6 && murkAt( T + 6 ) > 0.6 ) murkyThrough ++;
+
+		}
+
+	}
+
+	console.log( `     murky water (over half) ${ ( murky / n * 100 ).toFixed( 0 ) }% of the time; ${ murkyThrough } of ${ gales } gales leave it murky for hours` );
+	ok( none, 'day 1\'s water is clear' );
+	ok( quiet > 100 && clearAfter, 'with no blow in the last day and a half the water\'s clear' );
+	ok( gales > 5 && murkyThrough >= gales * 0.9, 'a gale leaves the water murky for hours' );
+	ok( murky / n > 0.04 && murky / n < 0.25, 'murky water now and then, not most days' );
+	ok( weatherAt( 500, 'gale' ).murk > 0.5 && weatherAt( 500, 'fair' ).murk === 0 && weatherAt( 500, 'calm' ).murk === 0, 'a held gale\'s water is murky; a held fair day\'s, clear' );
+
+}
+
+// ---- (M10) the wind past a fair day's, for the cast, the float and the line
+ok( windBeyondFair( 7 ) === 0 && windBeyondFair( 2.5 ) === 0 && windBeyondFair( 20 ) === 13 && blowShare( 7 ) === 0 && blowShare( 20 ) === 1 && blowShare( 30 ) === 1, 'the wind past a fair day\'s: none on a fair day, all of it in a gale' );
 
 // ---- read out as a marine forecast would
 ok( knots( 7 ) === '14 kt' && knots( 20 ) === '39 kt', 'wind in knots' );

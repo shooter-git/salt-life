@@ -1,5 +1,10 @@
 import { FISH } from './FishTable.js';
 
+// (M10) a gale's gust on the line, as tension (1: the breaking point); and what of it gets through the
+// reel's drag while you're not reeling (it gives line, as it does to the fish)
+const GUST = 0.6;
+const GUST_EASED = 0.2;
+
 // Line-tension fight. Hold to reel: the line shortens and the tension climbs; let go and it eases
 // off, but a running fish then takes line. Keep the tension in the green band: the fish tires there
 // fastest. Too much tension (above the line's strength for about half a second) snaps it; too little
@@ -8,13 +13,18 @@ import { FISH } from './FishTable.js';
 // (Salt Life) A fish on a speargun's line is only a few metres off: it's landed once it's tired
 // (tired: its stamina at most this) and within landAt metres.
 //
-//   const g = new CatchMinigame( { species, kg, lineKg, reelSpeed, distance, rng, landAt, tired } )
+// (M10) In a blow (wind: the wind past a fair day's as a share of a gale's, 0..1) it gusts on the line: a
+// gust bows it and hauls on it, and the tension jumps; reel on through one and it snaps (let it be and
+// the drag gives it line). None of it on a fair day, where nothing's drawn for it either: a fair fight
+// goes exactly as it did.
+//
+//   const g = new CatchMinigame( { species, kg, lineKg, reelSpeed, distance, rng, landAt, tired, wind } )
 //   g.update( dt, reeling ) -> 'fighting' | 'caught' | 'snapped' | 'escaped'
 //   g.tension (0..1+, 1 = breaking point), g.distance (m), g.stamina (0..1), g.surge (0..1),
 //   g.band = [ lo, hi ] (the green band)
 export class CatchMinigame {
 
-	constructor( { species, kg, lineKg = 7, reelSpeed = 1.1, distance = 15, rng = Math.random, landAt = 1.2, tired = 1 } ) {
+	constructor( { species, kg, lineKg = 7, reelSpeed = 1.1, distance = 15, rng = Math.random, landAt = 1.2, tired = 1, wind = 0 } ) {
 
 		const f = FISH[ species ];
 		this.species = species;
@@ -38,6 +48,10 @@ export class CatchMinigame {
 		this.state = 'fighting';
 		this.landAt = landAt;
 		this.tired = tired;
+		this.wind = Math.min( 1, Math.max( 0, wind ) );
+		this.gust = 0; // 0..1: a gust on the line
+		this._gustNext = 1;
+		this._gustOn = 0;
 
 	}
 
@@ -60,9 +74,25 @@ export class CatchMinigame {
 		const surgeTarget = this._surgeT > 0 ? 1 : 0;
 		this.surge += ( surgeTarget - this.surge ) * ( 1 - Math.exp( - dt * 6 ) );
 
-		// the fish's pull (0..~1.6) and the tension it and the reel make
+		// (M10) gusts on the line in a blow: one every few seconds, for a second or so
+		if ( this.wind > 0 ) {
+
+			this._gustNext -= dt;
+			if ( this._gustNext <= 0 ) {
+
+				this._gustOn = 0.4 + this.rng() * 1.1;
+				this._gustNext = this._gustOn + 1.5 + this.rng() * 4.5;
+
+			}
+
+			this._gustOn -= dt;
+			this.gust += ( ( this._gustOn > 0 ? 1 : 0 ) - this.gust ) * ( 1 - Math.exp( - dt * 5 ) );
+
+		}
+
+		// the fish's pull (0..~1.6) and the tension it and the reel make (and a gust's haul on the line)
 		const pull = this.power * ( 0.35 + 0.65 * this.surge ) * ( 1 - 0.65 * tired );
-		const target = reeling ? 0.25 + pull * 0.95 + 0.25 : pull * 0.72;
+		const target = reeling ? 0.25 + pull * 0.95 + 0.25 + GUST * this.wind * this.gust : ( pull + GUST_EASED * this.wind * this.gust ) * 0.72;
 		const rate = reeling ? 2.2 : 3.0;
 		this.tension += ( target - this.tension ) * ( 1 - Math.exp( - dt * rate ) );
 

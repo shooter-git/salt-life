@@ -30,6 +30,34 @@
 			"author": "qubodup, roboroo"
 		},
 		{
+			"path": "public/audio/bilge_pump.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/colinpoh/sounds/146347/",
+			"title": "Motor - Water Pump, Small Fountain",
+			"author": "colinpoh"
+		},
+		{
+			"path": "public/audio/bilge_pump.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/colinpoh/sounds/146347/",
+			"title": "Motor - Water Pump, Small Fountain",
+			"author": "colinpoh"
+		},
+		{
+			"path": "public/audio/bilge_slosh.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/supersplat1/sounds/388014/",
+			"title": "bucket sloshing.mp3",
+			"author": "supersplat1"
+		},
+		{
+			"path": "public/audio/bilge_slosh.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/supersplat1/sounds/388014/",
+			"title": "bucket sloshing.mp3",
+			"author": "supersplat1"
+		},
+		{
 			"path": "public/audio/bird_dove.m4a",
 			"license": "CC0-1.0",
 			"source": "https://freesound.org/people/nathankwright/sounds/456930/",
@@ -128,6 +156,20 @@
 			"author": "Pfannkuchn"
 		},
 		{
+			"path": "public/audio/bucket.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/levi_cunha/sounds/657176/",
+			"title": "Swinging bucket with water and throwing it in the tank",
+			"author": "levi_cunha"
+		},
+		{
+			"path": "public/audio/bucket.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/levi_cunha/sounds/657176/",
+			"title": "Swinging bucket with water and throwing it in the tank",
+			"author": "levi_cunha"
+		},
+		{
 			"path": "public/audio/coins.m4a",
 			"license": "CC0-1.0",
 			"source": "https://freesound.org/people/Anthousai/sounds/336585/",
@@ -212,6 +254,34 @@
 			"author": "squashy555, Soojay"
 		},
 		{
+			"path": "public/audio/hull_bump.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/magzlurban/sounds/506688/",
+			"title": "Boat Gently Bumping Dock.wav",
+			"author": "magzlurban"
+		},
+		{
+			"path": "public/audio/hull_bump.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/magzlurban/sounds/506688/",
+			"title": "Boat Gently Bumping Dock.wav",
+			"author": "magzlurban"
+		},
+		{
+			"path": "public/audio/hull_creak.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/Walter_Odington/sounds/31574/",
+			"title": "ship_creak.mp3",
+			"author": "Walter_Odington"
+		},
+		{
+			"path": "public/audio/hull_creak.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/Walter_Odington/sounds/31574/",
+			"title": "ship_creak.mp3",
+			"author": "Walter_Odington"
+		},
+		{
 			"path": "public/audio/hull_slap.m4a",
 			"license": "CC0-1.0",
 			"source": "https://freesound.org/people/kyles/sounds/637206/",
@@ -224,6 +294,20 @@
 			"source": "https://freesound.org/people/kyles/sounds/637206/",
 			"title": "boat knocks fiberglass water laps on hull.flac",
 			"author": "kyles"
+		},
+		{
+			"path": "public/audio/keel_scrape.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/launchsite/sounds/623692/",
+			"title": "sandbag drag.wav",
+			"author": "launchsite"
+		},
+		{
+			"path": "public/audio/keel_scrape.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/launchsite/sounds/623692/",
+			"title": "sandbag drag.wav",
+			"author": "launchsite"
 		},
 		{
 			"path": "public/audio/line_out.m4a",
@@ -394,6 +478,20 @@
 			"author": "Mrthenoronha, mwchristian95"
 		},
 		{
+			"path": "public/audio/shutter.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/DJKaren/sounds/829588/",
+			"title": "Open Window Banging In Wind",
+			"author": "DJKaren"
+		},
+		{
+			"path": "public/audio/shutter.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/DJKaren/sounds/829588/",
+			"title": "Open Window Banging In Wind",
+			"author": "DJKaren"
+		},
+		{
 			"path": "public/audio/splash.m4a",
 			"license": "CC0-1.0",
 			"source": "https://freesound.org/people/qubodup/sounds/212143/",
@@ -406,6 +504,20 @@
 			"source": "https://freesound.org/people/qubodup/sounds/212143/",
 			"title": "SPLASH (by blaukreuz); Foley_Natural_Water_Jump_Mono.wav",
 			"author": "qubodup, Nox_Sound"
+		},
+		{
+			"path": "public/audio/starter.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/bone666138/sounds/398416/",
+			"title": "Lobster Boat Starting and Stopping",
+			"author": "bone666138"
+		},
+		{
+			"path": "public/audio/starter.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/bone666138/sounds/398416/",
+			"title": "Lobster Boat Starting and Stopping",
+			"author": "bone666138"
 		},
 		{
 			"path": "public/audio/step_grass.m4a",

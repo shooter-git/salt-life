@@ -27,7 +27,15 @@ The weather's sounds (M9: the rain's beds and the thunder) are built the same wa
 `node build-weather.mjs` (its bank entries in `weather-bank.json`), then `tame.mjs`.
 
 The boat's horn is built the same way: `node dl.mjs 162350:felix.blume`, then `node build-horn.mjs` (three
-blasts in one sprite), then `tame.mjs`. Keep the scratch folders empty afterwards (or move them out):
+blasts in one sprite), then `tame.mjs`.
+
+The weather's cost (M10: the boat's starter, hull knocks and creaks, the keel's scrape, the bucket, the
+bilge pump and slosh, and the shutters in a blow) is built the same way: `node dl.mjs 398416:bone666138
+506688:magzlurban 623692:launchsite 657176:levi_cunha 146347:colinpoh 388014:supersplat1
+31574:Walter_Odington 829588:DJKaren`, then `node build-hull.mjs` (its bank entries in `hull-bank.json`),
+then `tame.mjs`. The starter's recording cranks for only 0.4 s before the engine fires, so the build lays
+that stretch end to end into a crank that doesn't catch and one that does, firing as the game's crank
+ends (`Hull.CRANK_S`). Keep the scratch folders empty afterwards (or move them out):
 All the Spaces' checks read the folder on disk and ask for a licence entry for every sound in it.
 
 ## All the Spaces' loudness rule, and the AAC copies

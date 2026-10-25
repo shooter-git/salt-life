@@ -115,6 +115,7 @@ ok( stallOpen( HOURS.joe, 12 ) && stallOpen( HOURS.joe, 12, 'fair' ) && stallOpe
 	ok( fair.rows.map( ( r ) => r[ 0 ] ).join() === 'Now,Wind,Surf,Later' && fair.rows[ 0 ][ 1 ] === 'Fair' && / 14 kt$/.test( fair.rows[ 1 ][ 1 ] ) && fair.rows[ 3 ][ 1 ] === 'Settled' && fair.note === '', 'the slate on a fair day' );
 	ok( gale.rows[ 0 ][ 1 ] === 'Gale, rain' && slateText( weatherAt( 0, 'storm' ) ).rows[ 0 ][ 1 ] === 'Thunderstorm', 'its rain, and a thunderstorm by name' );
 	ok( blow.rows[ 3 ][ 1 ] === 'Gale from 3:00 PM' && /blow's coming/.test( blow.note ) && slateText( null ).rows.length === 0, 'what\'s coming, and the fish feeding ahead of it' );
+	ok( /murky/.test( slateText( { ...weatherAt( 0, 'fair' ), murk: 0.6 } ).note ) && /blow's coming/.test( slateText( { ...weatherAt( 0, 'fair' ), murk: 0.6, front: 0.9 } ).note ), '(M10) after a blow, the water\'s murky (a blow coming says so first)' );
 
 }
 

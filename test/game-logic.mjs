@@ -3,11 +3,12 @@ import { FISH, FISH_IDS, CARAPACE, fishValue, fishLengthCm, fishWeightKg, spearR
 import { habitatAt, pickSpecies, rollWeight, biteDelay, lampsLit, weatherMood } from '../src/game/Bites.js';
 import { weatherAt } from '../src/game/Weather.js';
 import { CatchMinigame } from '../src/game/CatchMinigame.js';
+import { FishingRod } from '../src/game/FishingRod.js';
 import { GameState } from '../src/game/GameState.js';
 import { gearStats, defaultUpgrades, UPGRADES, TOW, towFee } from '../src/game/Gear.js';
 import { BoatController } from '../src/player/BoatController.js';
 import { G } from '../src/core/Globals.js';
-import { Vector3, Group } from '../src/engine/index.js';
+import { Vector3, Group, Scene, PerspectiveCamera } from '../src/engine/index.js';
 
 let fails = 0;
 const ok = ( c, msg ) => {
@@ -271,6 +272,98 @@ ok( table[ 'tuna/careful' ].st !== 'caught' && fight( 'tuna', 13, policies.caref
 ok( [ 'escaped' ].includes( table[ 'grunt/idle' ].st ), 'never reeling loses the fish' );
 ok( fight( 'tarpon', 35, policies.careful ).st !== 'caught', 'a 35 kg tarpon beats the starter line' );
 ok( fight( 'tarpon', 35, policies.careful, 50, 2.2 ).st === 'caught', 'the top line and reel land it' );
+
+// ---- (M10) the fight in a blow: gusts on the line snap it if you reel on through them; careful
+// reeling still lands them; a fair day's fight is exactly as it was (nothing's drawn for the wind)
+{
+
+	const lcg = ( s0 ) => () => ( ( s0 = ( s0 * 1664525 + 1013904223 ) >>> 0 ) / 4294967296 );
+	const run = ( species, kg, policy, wind, seed ) => {
+
+		const g = new CatchMinigame( { species, kg, lineKg: 7, reelSpeed: 1.1, distance: 18, rng: lcg( seed ), wind } );
+		let st = 'fighting';
+		for ( let i = 0; i < 60 * 180 && st === 'fighting'; i ++ ) st = g.update( 1 / 60, policy( g ) );
+		return { st, t: g.time };
+
+	};
+	// a player reels by the needle as it was nearly half a second ago (a hand's reaction): a gust catches
+	// them out
+	const late = ( lim ) => {
+
+		const seen = [];
+		return ( g ) => {
+
+			seen.push( g.tension );
+			return ( seen.length > 27 ? seen[ seen.length - 28 ] : 0.3 ) < lim;
+
+		};
+
+	};
+	const lost = ( wind ) => {
+
+		let n = 0;
+		for ( let i = 0; i < 120; i ++ ) if ( run( 'jack', 6, late( 0.9 ), wind, 1000 + i ).st !== 'caught' ) n ++;
+		return n;
+
+	};
+
+	const landed = ( species, kg, wind ) => {
+
+		let n = 0;
+		for ( let i = 0; i < 60; i ++ ) if ( run( species, kg, policies.careful, wind, 5000 + i ).st === 'caught' ) n ++;
+		return n / 60;
+
+	};
+	const fairLost = lost( 0 ), galeLost = lost( 1 );
+	console.log( `     a 6 kg jack reeled steadily by the needle: lost ${ fairLost } of 120 on a fair day, ${ galeLost } in a gale; reeled carefully in a gale, ${ ( landed( 'grunt', 0.8, 1 ) * 100 ).toFixed( 0 ) }% of grunts and ${ ( landed( 'jack', 6, 1 ) * 100 ).toFixed( 0 ) }% of 6 kg jacks landed` );
+	ok( galeLost > fairLost + 15, 'in a gale the same reeling loses more fish: the gusts snap the line' );
+	ok( landed( 'grunt', 0.8, 1 ) > 0.9 && landed( 'jack', 6, 1 ) > 0.8, '... and careful reeling still lands them' );
+	const a = run( 'tuna', 6, policies.careful, 0, 77 ), b = new CatchMinigame( { species: 'tuna', kg: 6, lineKg: 7, reelSpeed: 1.1, distance: 18, rng: lcg( 77 ) } );
+	let st = 'fighting';
+	for ( let i = 0; i < 60 * 180 && st === 'fighting'; i ++ ) st = b.update( 1 / 60, policies.careful( b ) );
+	ok( a.st === st && a.t === b.time, 'a fair day\'s fight goes exactly as it did' );
+
+}
+
+// ---- (M10) the cast in a blow: carried downwind, short into it, set aside across it; and the float
+// drifting downwind, up to 6 m, once it's down. On a fair day, as it always was
+{
+
+	const cast = ( wind, dir, secs = 0 ) => {
+
+		G.windSpeed.value = wind;
+		G.windDir.value.set( dir[ 0 ], dir[ 1 ] );
+		const n = 8, cpu = new Float32Array( n * 4 );
+		for ( let i = 0; i < n; i ++ ) cpu[ i * 4 + 3 ] = - 6; // flat water, 6 m deep
+		const query = { allocate: () => 0, setPoint() {}, cpuValid: true, cpu };
+		const camera = new PerspectiveCamera( 60, 1.6, 0.1, 500 );
+		camera.position.set( 0, 2, 0 );
+		camera.lookAt( 0, 2, 10 ); // looking along +z
+		camera.updateMatrixWorld( true );
+		const rod = new FishingRod( { scene: new Scene(), camera, query, terrain: { heightAt: () => - 6 } } );
+		rod.equip( true );
+		const frame = () => rod.update( 1 / 60, { visible: true } );
+		for ( let i = 0; i < 30; i ++ ) frame();
+		rod.startWindup();
+		for ( let i = 0; i < 80; i ++ ) frame();
+		rod.release();
+		for ( let i = 0; i < 60 * 6 && rod.state !== 'floating'; i ++ ) frame();
+		const at = rod.bobber.clone();
+		for ( let i = 0; i < 60 * secs; i ++ ) frame();
+		G.windSpeed.value = 7;
+		G.windDir.value.set( 0.35, 0.94 ).normalize();
+		return { at, now: rod.bobber.clone(), state: rod.state };
+
+	};
+	const fair = cast( 7, [ 0, 1 ] ), down = cast( 20, [ 0, 1 ] ), up = cast( 20, [ 0, - 1 ] ), across = cast( 20, [ 1, 0 ] );
+	console.log( `     a full cast: ${ fair.at.z.toFixed( 1 ) } m on a fair day; in a gale ${ down.at.z.toFixed( 1 ) } m downwind, ${ up.at.z.toFixed( 1 ) } m into it, set ${ across.at.x.toFixed( 1 ) } m aside across it` );
+	ok( fair.state === 'floating' && down.at.z >= fair.at.z - 0.5 && up.at.z < fair.at.z - 2 && Math.abs( across.at.x ) > 1.5, 'a gale carries the cast: short into it, aside across it' );
+	const driftFair = cast( 7, [ 1, 0 ], 40 ), driftGale = cast( 20, [ 1, 0 ], 40 );
+	const moved = ( r ) => Math.hypot( r.now.x - r.at.x, r.now.z - r.at.z );
+	console.log( `     the float after 40 s: ${ moved( driftFair ).toFixed( 2 ) } m on a fair day, ${ moved( driftGale ).toFixed( 1 ) } m in a gale` );
+	ok( moved( driftFair ) === 0 && moved( driftGale ) > 4 && moved( driftGale ) < 6.01 && driftGale.now.x > driftGale.at.x, 'in a gale the float drifts downwind (a fair day\'s stays put), up to 6 m' );
+
+}
 
 // ---- inventory, wallet, save round trip
 const mem = new Map();

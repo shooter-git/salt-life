@@ -1,4 +1,4 @@
-import { Color, Vector2, Vector3 } from 'three';
+import { Color, Vector2, Vector3, Vector4 } from 'three';
 
 // Shared simulation state. Each handle is a three.js uniform (`{ value }`), so the CPU code keeps its
 // `G.time.value` accessors and a shader can take the same object into its `uniforms`.
@@ -30,6 +30,12 @@ export const G = {
 	// (M9) how much of the sun's light the waves focus on the seabed (1 under a clear sky; a grey one
 	// leaves little of the caustics)
 	caustics: { value: 1 },
+	// (M10) the water's murk after a blow (0 clear .. 1 stirred up by a gale): the view under water closes in
+	murk: { value: 0 },
+	// (M10) the sky's: a lightning flash ( toward the strike, how bright: Sky, Lightning ) and the eye's
+	// adaptation to the sky's light, shared with the sea's reflections
+	skyFlash: { value: new Vector4() },
+	skyExposure: { value: 1 },
 	envIntensity: { value: 1 },
 };
 

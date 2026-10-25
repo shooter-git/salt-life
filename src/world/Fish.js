@@ -5,6 +5,7 @@ import { WORLD } from './WorldLayout.js';
 import { SPECIES } from './fish/FishSpecies.js';
 import { createSwimMaterial } from './fish/FishMaterial.js';
 import { bandFade } from '../materials/LODFade.js';
+import { CONDITIONS, SURF_MAX } from '../game/Weather.js';
 
 // Fish and other swimmers of the reef and the bay, simulated on the CPU and drawn in a single
 // batch (reef/KindBatch.js: one instanced draw per model and level of detail in view) with the
@@ -56,6 +57,13 @@ const TIER = {
 	high: { range: 32, schools: 1, lodPx: 1, fades: true, lite: false },
 };
 const SIM_RANGE = 65; // groups further than this from the camera are frozen (m)
+// (M10) a fair day's surf (m: ShoreWaves' amplitude); from this surf on, schools of the runners inside the
+// breakers go off, up to this share of them at the biggest (SURF_MAX); and the breakers' look-ahead grid
+// is built again once the surf's moved this much (m)
+const FAIR_SURF = CONDITIONS.fair.surf;
+const OFF_SURF = 0.5;
+const OFF_SHARE = 0.5;
+const GRID_SURF = 0.03;
 // (Salt Life) a landed fish's place is filled again after this long (s), out of sight
 const REFILL = [ 240, 420 ];
 // how far fish notice the diver (their flee distance), by the diver's speed (m/s): a slow approach
@@ -215,6 +223,9 @@ export class FishSchools {
 		this.radius = radius;
 		this.anchors = anchors.length ? anchors : [ [ center.x, center.z ] ];
 		this.shoreField = shoreField;
+		// (M10) the surf as a share of a fair day's (setSurf), and what the breakers' grid was built for
+		this.surf = 1;
+		this._gridSurf = 1;
 		this.rng = mulberry32( seed );
 		this.time = 0;
 		this.spray = null; // set by the owner (Spray.js): splashes of leaping mullet
@@ -333,17 +344,42 @@ export class FishSchools {
 
 		}
 
-		// the larger waves of a set (ShoreWaves: offshore amplitude 0.42 m, sets up to ~1.6x)
-		const A = 0.42 * 1.3 * e;
+		// the larger waves of a set (ShoreWaves: offshore amplitude 0.42 m, sets up to ~1.6x), (M10) with
+		// the day's surf as it is to a fair day's
+		const A = 0.42 * this.surf * 1.3 * e;
 		return Math.pow( A * 3.556 / 0.78, 0.8 );
 
 	}
 
-	// water deep enough for the species, clear of the breakers and of the reef framework
+	// (M10) the surf (ShoreWaves' amplitude, m): the breakers follow it, a fair day's where they always were;
+	// their look-ahead grid's built again once it's moved enough
+	setSurf( amplitude ) {
+
+		this.surf = amplitude / FAIR_SURF;
+		if ( Math.abs( this.surf - this._gridSurf ) * FAIR_SURF >= GRID_SURF ) {
+
+			this._gridSurf = this.surf;
+			this.breakGrid = null;
+
+		}
+
+	}
+
+	// (M10) in a big surf some schools of the runners inside the breakers go off: one that's out of range
+	// doesn't come back into it (one you're among stays)
+	offInSurf( g ) {
+
+		const a = this.surf * FAIR_SURF;
+		return !! g.sp.surf && a > OFF_SURF && g.offAt < OFF_SHARE * Math.min( 1, ( a - OFF_SURF ) / ( SURF_MAX - OFF_SURF ) );
+
+	}
+
+	// water deep enough for the species, clear of the breakers and of the reef framework ((M10) the
+	// runners inside the breakers keep inside them as they move with the surf)
 	fits( sp, zone, x, z ) {
 
-		const d = this.depthAt( x, z );
-		if ( d < zone.band[ 0 ] || d > zone.band[ 1 ] ) return false;
+		const d = this.depthAt( x, z ), k = sp.surf ? this.surf : 1;
+		if ( d < zone.band[ 0 ] * k || d > zone.band[ 1 ] * k ) return false;
 		if ( ! sp.surf && d < this.breakDepth( x, z ) + 0.3 ) return false;
 		const floor = Math.max( this.terrain.heightAt( x, z ), this.floorAt( x, z ) );
 		return - floor > sp.minDepth + 0.3;
@@ -356,6 +392,7 @@ export class FishSchools {
 		if ( count >= 20 ) count = Math.max( 8, Math.round( count * this.cfg.schools ) );
 		const sp = BEHAVIOUR[ name ];
 		const g = new Group( sp, count, this.n, zone, mulberry32( Math.floor( this.rng() * 1e9 ) ) );
+		g.offAt = ( this.groups.length * 0.618034 ) % 1; // (M10: where it comes in the surf's share going off)
 		this.n += count;
 		this.groups.push( g );
 		return g;
@@ -874,7 +911,7 @@ export class FishSchools {
 				g.active = !! ( w && w.ready ) && ( ! player || w.brain.position.distanceTo( player ) < SIM_RANGE + 20 );
 				if ( g.active && ! was ) this.attachEscort( g );
 
-			} else g.active = ! player || Math.hypot( g.center.x - player.x, g.center.z - player.z ) < SIM_RANGE + g.radius;
+			} else g.active = ( ! player || Math.hypot( g.center.x - player.x, g.center.z - player.z ) < SIM_RANGE + g.radius ) && ( was || ! this.offInSurf( g ) );
 			if ( g.active && ! was ) this.resume( g );
 			any = any || g.active;
 

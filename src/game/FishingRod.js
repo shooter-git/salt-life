@@ -1,6 +1,8 @@
 import { Mesh, BufferGeometry, Float32BufferAttribute, Matrix4, Quaternion, Vector3, Vector4, MathUtils } from '../engine/index.js';
 import { prepare, mergePrepared, cylinder, torus, sphere, rod, mat4, lathe, roundedBox, tube } from '../world/boat/GeoKit.js';
 import { createPropMaterial, createLineMaterial, PAT } from './GameMaterials.js';
+import { G } from '../core/Globals.js';
+import { windBeyondFair } from './Weather.js';
 
 // The fishing rod in the player's hands, its line and the bobber.
 //
@@ -35,6 +37,13 @@ const GEAR = 5.2; // rotor turns per crank turn
 const LINE_PER_CRANK = 0.8; // m of line per crank turn
 const LINE_SEGS = 48;
 const GRAV = 9.81;
+// (M10) in a blow, the cast carried by the wind on the line (m/s^2 for each m/s of wind past a fair
+// day's); and the float drifting: its speed for each m/s of it, how far it goes from where it came down
+// (m), and the shallowest water it drifts on (m)
+const LINE_WIND = 0.4;
+const DRIFT_K = 0.02;
+const DRIFT_M = 6;
+const DRIFT_DEPTH = 0.3;
 
 // guides: position along the rod, ring inner radius, ring centre height below the blank's axis
 const GUIDES = [
@@ -166,6 +175,7 @@ export class FishingRod {
 
 		this.bobber = new Vector3();
 		this.bobberVel = new Vector3();
+		this.landedAt = new Vector3(); // (M10) where it came down on the water (it drifts from there in a blow)
 		this.dip = 0; // bobber pulled under (bite cues / fish on)
 		this.waterY = 0;
 		this.depth = 0; // water depth under the bobber (from the query's floor)
@@ -474,9 +484,14 @@ export class FishingRod {
 		const ground = this.terrain.heightAt( this.bobber.x, this.bobber.z );
 		if ( this.state === 'flying' ) {
 
-			// ballistic with a little drag, capped by the rod's casting range
+			// ballistic with a little drag, capped by the rod's casting range. (M10) In a blow the wind past
+			// a fair day's bellies the line and carries the float along: a cast downwind runs on (as far
+			// as the rod casts), one into it falls short, and a cross wind sets it aside
 			this.bobberVel.y -= GRAV * dt;
 			this.bobberVel.multiplyScalar( Math.exp( - dt * 0.25 ) );
+			const wind = LINE_WIND * windBeyondFair( G.windSpeed.value ), wd = G.windDir.value;
+			this.bobberVel.x += wd.x * wind * dt;
+			this.bobberVel.z += wd.y * wind * dt;
 			this.bobber.addScaledVector( this.bobberVel, dt );
 			const range = Math.hypot( this.bobber.x - this.tip.x, this.bobber.z - this.tip.z );
 			if ( range > this.castM ) {
@@ -492,6 +507,7 @@ export class FishingRod {
 				this.bobber.y = surf;
 				const onWater = this.waterY > ground + 0.05;
 				this.setState( onWater ? 'floating' : 'retrieving' );
+				this.landedAt.copy( this.bobber );
 				this.bobberVel.set( 0, 0, 0 );
 				if ( onWater && this.audio && this.audio.plop ) this.audio.plop( this.bobber );
 				if ( this.onLand ) this.onLand( onWater ? 'water' : 'ground' );
@@ -500,7 +516,22 @@ export class FishingRod {
 
 		} else if ( this.state === 'floating' ) {
 
-			// riding the waves; dips with the bite cues
+			// riding the waves; dips with the bite cues. (M10) In a blow it drifts downwind, a few hundredths
+			// of the wind past a fair day's, up to DRIFT_M from where it came down, and no further into the
+			// shallows than a float rides (the bites follow it: Game.habitat reads where it is)
+			const drift = DRIFT_K * windBeyondFair( G.windSpeed.value );
+			if ( drift > 0 && this.depth > DRIFT_DEPTH ) {
+
+				const wd = G.windDir.value, x = this.bobber.x + wd.x * drift * dt, z = this.bobber.z + wd.y * drift * dt;
+				if ( Math.hypot( x - this.landedAt.x, z - this.landedAt.z ) < DRIFT_M ) {
+
+					this.bobber.x = x;
+					this.bobber.z = z;
+
+				}
+
+			}
+
 			const bob = Math.sin( this.t * 2.1 ) * 0.008;
 			const yT = this.waterY + 0.012 + bob - this.dip * 0.09;
 			this.bobber.y += ( yT - this.bobber.y ) * ( 1 - Math.exp( - dt * 12 ) );

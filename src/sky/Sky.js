@@ -234,14 +234,14 @@ export class Sky {
 			skyStarIntensity: { value: 0 },
 			skyNight: G.night,
 			skyTime: G.time,
-			skyExposure: { value: 1 },
+			skyExposure: G.skyExposure, // ((M10) shared: the sea's flash takes it too)
 			// (Salt Life) under water the dome is the fog: the camera's far plane is just past the fog
 			// there (App), so the dome shows where the sea floor would. skyFogColor: the fog's colour as
 			// three hands it to its fog (in the space of the target drawn: the dome's onBeforeRender)
 			skyUnderwater: G.cameraUnderwater,
 			skyFogColor: { value: new THREE.Color() },
 			skyGrey: { value: new THREE.Vector4() },
-			skyFlash: { value: new THREE.Vector4() },
+			skyFlash: G.skyFlash, // ((M10) shared: the sea reflects the flash)
 			skyFlashColor: { value: new THREE.Color( 0.82, 0.86, 1.0 ) },
 		};
 		this.moonDir = this.uniforms.skyMoonDir.value;
@@ -433,6 +433,9 @@ export class Sky {
 		// (a floor: at dusk the adapted eye still sees the land by the sky's light)
 		this.hemi.color.copy( _tint ).multiplyScalar( 0.32 + 0.68 * k ).lerp( MOON, night * 0.5 );
 		this.hemi.intensity = this.levels.sky * ( 0.65 + 0.35 * day ) * ( 1 + 0.3 * this.overcast ) + deck;
+		// ((M10) how much more of the sky's light there is under a grey sky and rain's deck: the
+		// environment's level rises with it, below; 1 under a clear sky)
+		const greyRise = this.hemi.intensity / Math.max( this.levels.sky * ( 0.65 + 0.35 * day ), 1e-6 );
 		this.hemi.groundColor.setRGB( 0.32, 0.28, 0.2 ).multiplyScalar( 0.1 + 0.9 * day );
 		// (M9) a flash of lightning lights the island from the sky, bluish white (more so at night, where the
 		// eye's adapted to the dark: the scene's exposure, which follows the sky, does the rest)
@@ -470,7 +473,7 @@ export class Sky {
 		F.set( this.flashDir.x, this.flashDir.y, this.flashDir.z, this.flash * FLASH );
 		if ( this.scene.background && this.scene.background.isColor ) this.scene.background.copy( _c );
 
-		this.scene.environmentIntensity = this.levels.env * ( 0.6 + 0.4 * day );
+		this.scene.environmentIntensity = this.levels.env * ( 0.6 + 0.4 * day ) * greyRise;
 		// (Salt Life) how far you see: the tier's fog distances, nearer in rain and murk (App takes them
 		// into the scene's fog above water)
 		const [ near, far ] = FOG_DISTANCE[ this.tier ];
