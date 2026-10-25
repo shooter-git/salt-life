@@ -56,6 +56,10 @@ slice table is in `src/audio/soundBank.js`.
 | `fish_splash.ogg` | 5 fish splashes / thrashing at the surface | [Fish Splashing Release 1.wav](https://freesound.org/people/paulprit/sounds/507094/), [Fish Splashing Release 2.wav](https://freesound.org/people/paulprit/sounds/507093/) | paulprit | CC0 1.0 |
 | `fish_flop.ogg` | landed fish flapping / flopping | [FishFlappingTail.wav](https://freesound.org/people/ramattahatta/sounds/649003/), [Fish Flopping.wav](https://freesound.org/people/RatBird/sounds/570208/) | ramattahatta, RatBird | CC0 1.0, CC0 1.0 |
 | `coins.ogg` | coins dropped in a bowl (selling fish) | [coins - in paper bowl 05.wav](https://freesound.org/people/Anthousai/sounds/336585/) | Anthousai | CC0 1.0 |
+| `rain_light.ogg` | light rain on a porch roof at night, Hawaii (high-passed; the night's insects, a whine about 3.4 kHz, notched out) — loop, a shower | [Light rain falling at night in Hawaii](https://freesound.org/people/Sassaby/sounds/400178/) | Sassaby | CC0 1.0 |
+| `rain_heavy.ogg` | a heavy downpour in the country (before its thunderclap) — loop | [Rain heavy 2 (rural)](https://freesound.org/people/jmbphilmes/sounds/200272/) | jmbphilmes | CC0 1.0 |
+| `rain_boat.ogg` | rain drumming on a boat in a harbour (a steady stretch between gusts) — loop, on deck and at the helm | [RAIN_ON_BOAT.wav](https://freesound.org/people/johndynaudio/sounds/567027/) | johndynaudio | CC0 1.0 |
+| `thunder.ogg` | 4 thunders: two near cracks and their roll, two far rumbles; heard each strike's distance at 343 m/s after its flash | [230724 Thunder, close crack light rain, mixpreroof, Toronto 5pm](https://freesound.org/people/TRP/sounds/717909/), [Thunder strike](https://freesound.org/people/AyaDrevis/sounds/652690/), [peal of thunder - distant](https://freesound.org/people/bastipictures/sounds/243782/), [Rolling_Distant_Thunder_In_Heavy_Rain_06](https://freesound.org/people/BlondPanda/sounds/778374/) | TRP, AyaDrevis, bastipictures, BlondPanda | CC0 1.0, CC0 1.0, CC0 1.0, CC0 1.0 |
 
 Note: `under_reef.ogg` uses the first ~200 s of 630436's preview (a narrow 1.7 kHz tone notched out).
 

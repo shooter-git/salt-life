@@ -15,11 +15,12 @@ uniform vec3 uwAbsorption;
 uniform sampler2D uwCaustics;
 uniform float uwTime;
 uniform float uwNight;
+uniform float uwCausticsK;
 float uwSs( float a, float b, float x ) { float t = clamp( ( x - a ) / ( b - a ), 0.0, 1.0 ); return t * t * ( 3.0 - 2.0 * t ); }
 vec3 uwShade( vec3 albedo, vec3 p, vec3 N ) {
 	float cWater = max( uwSeaLevel - p.y, 0.0 );
 	albedo *= exp( - uwAbsorption * cWater * 1.6 );
-	float cK = uwSs( 0.05, 0.7, cWater ) * exp( - cWater * 0.1 ) * ( 1.0 - uwNight ) * clamp( N.y * 0.8 + 0.2, 0.0, 1.0 );
+	float cK = uwSs( 0.05, 0.7, cWater ) * exp( - cWater * 0.1 ) * ( 1.0 - uwNight ) * uwCausticsK * clamp( N.y * 0.8 + 0.2, 0.0, 1.0 );
 	if ( cK > 0.001 ) {
 		float ca = min( texture( uwCaustics, p.xz * 0.19 + uwTime * vec2( 0.031, 0.018 ) ).r,
 			texture( uwCaustics, ${ rot2( 'p.xz', 0.8 ) } * 0.15 + 0.5 - uwTime * vec2( 0.017, 0.034 ) ).r );
@@ -32,6 +33,6 @@ vec3 uwShade( vec3 albedo, vec3 p, vec3 N ) {
 export function underwaterUniforms( ground ) {
 
 	const U = ground.uniforms;
-	return { uwSeaLevel: U.terrainSeaLevel, uwAbsorption: U.terrainWaterAbsorption, uwCaustics: U.terrainCaustics, uwTime: U.terrainTime, uwNight: U.terrainNight };
+	return { uwSeaLevel: U.terrainSeaLevel, uwAbsorption: U.terrainWaterAbsorption, uwCaustics: U.terrainCaustics, uwTime: U.terrainTime, uwNight: U.terrainNight, uwCausticsK: U.terrainCausticsK };
 
 }

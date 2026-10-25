@@ -15,6 +15,10 @@
 // faint and dull from above), and one-shots on its real events - blow, breach, re-entry, fluke-up dive -
 // all only within 100 m of it.
 //
+// (M9) The rain: a shower's patter and a downpour's roar, crossfaded by how hard it rains, and aboard
+// rain drumming on the boat. A thunderstorm's thunder (Lightning.onThunder) arrives its distance at
+// 343 m/s after the flash: a near crack within 3 km, a far rumble beyond, placed the way it came.
+//
 // Signal flow
 //   one-shots + beds above water → above ─→ muffle LP ×2 ─→ aboveOut ─┐
 //     surf events → per event HRTF panner (+ air absorption) → above   │
@@ -112,6 +116,12 @@ export const MIX = {
 	netPull: - 42, // hand over hand: the line through your hands, the netting dripping
 	netLift: - 31, // the purse coming up out of the water, streaming
 	netDump: - 30, // the catch spilled out, flapping
+	// (M9) the rain and the thunder
+	rain: - 29, // a downpour, out in it (a shower is the light patter's, a third of the way up to this)
+	rainLight: - 35, // a light shower's patter
+	rainBoat: - 26, // a downpour drumming on the boat, aboard her
+	thunderNear: - 16, // a crack 1 km off (louder nearer, as the root of its nearness)
+	thunderFar: - 25, // a rumble 8 km off (falling to -35 at 20 km)
 };
 
 // the fishing sounds (loaded when the rod comes out)
@@ -135,12 +145,12 @@ const STEP = {
 };
 
 // max simultaneous one-shot voices per category (oldest is faded out beyond this)
-const LIMITS = { step: 3, swim: 2, splash: 3, trans: 2, hull: 3, gull: 2, crash: 7, wash: 5, back: 5, bird: 4, tern: 2, whale: 4, rod: 4, fish: 3, coin: 1, net: 6 };
+const LIMITS = { step: 3, swim: 2, splash: 3, trans: 2, hull: 3, gull: 2, crash: 7, wash: 5, back: 5, bird: 4, tern: 2, whale: 4, rod: 4, fish: 3, coin: 1, net: 6, thunder: 2 };
 // Salt Life: All the Spaces allows 16 / 32 / 64 sounds at once by device tier. Beds and one-shots
 // together stay under it (a new one-shot is left out when it's full), and the low tier keeps fewer of
 // each kind so the surf can't crowd out the footsteps.
 const VOICES = { low: 14, mid: 30, high: 62 };
-const LOW_LIMITS = { ...LIMITS, step: 2, splash: 2, hull: 2, gull: 1, crash: 3, wash: 2, back: 2, bird: 2, tern: 1, whale: 2, rod: 3, fish: 2, net: 3 };
+const LOW_LIMITS = { ...LIMITS, step: 2, splash: 2, hull: 2, gull: 1, crash: 3, wash: 2, back: 2, bird: 2, tern: 1, whale: 2, rod: 3, fish: 2, net: 3, thunder: 1 };
 // a bed that has been silent this long (s) stops, freeing its voice (it starts again when wanted)
 const BED_IDLE = 4;
 
@@ -387,6 +397,28 @@ export class SoundScape {
 	}
 
 	// the bow slamming into a sea (strength 0..1): slap on the hull + spray
+	// (M9) thunder in a thunderstorm: loaded when it's thundery, so the first is ready to be heard
+	thunderReady() {
+
+		this._want( 'thunder' );
+
+	}
+
+	// a strike's thunder, as it gets here: m away (as it's come, from the cloud), from `dir` (a unit
+	// vector toward it), power 0..1. A crack near by (within 3 km), a rumble farther off; placed some way
+	// off the way it came, dulled by distance and slowed a little the farther it's come
+	thunder( m, dir, power = 1 ) {
+
+		const e = this.env, d = Math.max( 300, num( m, 3000 ) ), near = d < 3000;
+		const lufs = near ? MIX.thunderNear + 10 * Math.log10( 1000 / d ) : MIX.thunderFar - 10 * Math.log10( d / 8000 ) * 2.5;
+		const k = 80, dx = num( dir && dir.x, 0 ), dy = num( dir && dir.y, 0.3 ), dz = num( dir && dir.z, - 1 );
+		const v = this._shotAt( 'thunder', 'thunder', e.lx + dx * k, e.ly + Math.max( 10, dy * k ), e.lz + dz * k, lufs - ( 1 - clamp( power, 0, 1 ) ) * 4,
+			( near ? 0.97 : 0.9 ) + Math.random() * 0.06, 0, 60, 1, near ? Math.floor( Math.random() * 2 ) : 2 + Math.floor( Math.random() * 2 ) );
+		// (the farther, the more of its crack the air takes: only the roll gets here)
+		if ( v && v.extra ) v.extra[ 0 ].frequency.value = clamp( 9000 * Math.pow( 1000 / d, 0.8 ), 350, 9000 );
+
+	}
+
 	hullSlap( strength ) {
 
 		const s = clamp( num( strength, 0.5 ), 0, 1 );
@@ -743,6 +775,7 @@ export class SoundScape {
 			under_reef: this.under, birds_dawn: this.above, whale_song: this.songPan,
 			boat_engine: this.engineLP, boat_rush: this.boatSum, boat_lap: this.boatSum,
 			reel_wind: this.rod, reel_drag: this.rod, line_strain: this.rod,
+			rain_light: this.above, rain_heavy: this.above, rain_boat: this.above,
 		};
 
 	}
@@ -1195,6 +1228,9 @@ export class SoundScape {
 		e.surf = clamp( num( s.surfIntensity, 0.5 ), 0, 1 );
 		e.shoreDist = Math.max( 0, num( s.distanceToShore, 60 ) );
 		e.wind = clamp( num( s.windSpeed, 7 ), 0, 40 );
+		e.gust = clamp( num( s.gust, 0.5 ), 0, 1 ); // (M9) the sea's gusts here (0 a lull .. 1 a gust)
+		e.rain = clamp( num( s.rain, 0 ), 0, 1 ); // (M9) how hard it's raining, and whether you're aboard (on deck or at the helm)
+		e.aboard = !! s.aboard;
 		e.day = clamp( num( s.daylight, 1 ), 0, 1 );
 		e.nearPier = !! s.nearPier;
 		e.hour = typeof s.timeOfDay === 'number' && Number.isFinite( s.timeOfDay ) ? ( ( s.timeOfDay % 24 ) + 24 ) % 24 : null;
@@ -1285,19 +1321,29 @@ export class SoundScape {
 		}
 
 		g.v += ( g.target - g.v ) * ( 1 - Math.exp( - dt / 1.4 ) );
+		// (M9) within the gusts you see coming over the sea: louder in one, quieter in a lull
+		const gv = Math.min( 1.2, g.v * ( 0.4 + 1.2 * e.gust ) );
 		const w = Math.hypot( e.wind, eb.active ? eb.speed * 0.9 : 0 );
-		const gw = eb.active && eb.speed > 3 ? Math.max( g.v, 0.5 ) : g.v; // apparent wind on a running boat is steady
+		const gw = eb.active && eb.speed > 3 ? Math.max( gv, 0.5 ) : gv; // apparent wind on a running boat is steady
 		this._bed( 'wind', dB( MIX.wind ) * clamp( w / 7, 0, 3.5 ) * gw / dB( BANK.wind.lufs ), now, 0.3 );
 		this._ramp( this.windLP.frequency, 400 + ( 80 + 60 * gw ) * w, 0.4 );
 
 		// trees inland rustle in the gusts; crickets inland at night (daylight < 0.3)
 		const veg = e.onLand ? smooth( 6, 30, d ) : 0;
-		this._bed( 'palms', dB( MIX.palms ) * veg * clamp( e.wind / 7, 0.2, 2.6 ) * g.v * ( 0.3 + 0.7 * e.day ) / dB( BANK.palms.lufs ), now, 0.5 );
+		this._bed( 'palms', dB( MIX.palms ) * veg * clamp( e.wind / 7, 0.2, 2.6 ) * gv * ( 0.3 + 0.7 * e.day ) / dB( BANK.palms.lufs ), now, 0.5 );
 		const night = smooth( 0.3, 0.12, e.day );
 		this._bed( 'crickets', dB( MIX.crickets ) * night * ( e.onLand ? 0.35 + 0.65 * smooth( 5, 40, d ) : 0.1 ) / dB( BANK.crickets.lufs ), now, 1 );
 
 		// water lapping the pier piles
 		this._bed( 'pier_lap', ( e.nearPier ? dB( MIX.pierLap ) : 0 ) / dB( BANK.pier_lap.lufs ), now, 0.6 );
+
+		// (M9) the rain: a shower's patter, a downpour's roar; aboard (on deck or at the helm), drumming
+		// on the boat, the rain beyond her quieter. Under water it's muffled with the rest
+		const r = e.rain, light = smooth( 0, 0.15, r ) * ( 1 - smooth( 0.35, 0.8, r ) ), heavy = smooth( 0.2, 0.9, r ), onBoat = e.aboard ? 1 : 0;
+		const out = 1 - 0.7 * onBoat;
+		this._bed( 'rain_light', dB( MIX.rainLight ) * light * out / dB( BANK.rain_light.lufs ), now, 1.2 );
+		this._bed( 'rain_heavy', dB( MIX.rain ) * heavy * out / dB( BANK.rain_heavy.lufs ), now, 1.2 );
+		this._bed( 'rain_boat', dB( MIX.rainBoat ) * onBoat * smooth( 0, 0.9, r ) / dB( BANK.rain_boat.lufs ), now, 0.8 );
 
 		// boat: one engine recording, pitched and opened up with rpm; water past the hull with speed,
 		// lapping at rest, chop slapping the hull while running

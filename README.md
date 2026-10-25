@@ -20,7 +20,7 @@ You can walk, swim and take the boat around the island. You can fish from the pi
 boat, or dive and spear a fish, sell your catch to Joe and buy better gear from Marta. It plays with a
 mouse and keyboard, a gamepad or a touch screen.
 
-Done, M0 to M8:
+Done, M0 to M9:
 - the sea and its shore, spray, gusts and slicks, and the haze;
 - the whole world: the village, the pier, the reef and its fish, the birds and crabs, the beach's
   debris, the whale and the lights at night;
@@ -42,6 +42,26 @@ Done, M0 to M8:
   - the wind pushes your boat: left without her anchor she drifts, anchored she swings to it, and
     Marta tows her home if she gets away from you;
   - the clock's menu says what it is and what's coming; on your own you can choose it;
+- rain and thunderstorms (M9):
+  - showers pass over now and then, more under a grey sky and in a blow; the heaviest, in unsettled
+    air, are thunderstorms; their cloud comes over before the rain, and a front's bank darkens the
+    horizon up the trades before it arrives;
+  - rain falls around you, slanting in the wind, rings the water where it lands and leaves the sand,
+    the village and the boat dark and shining, drying slowly after; none falls under the wheelhouse
+    roof;
+  - lightning lights the clouds from inside and the island with them, a third of the strikes come down
+    as bolts, and everyone sees the same strike at the same moment; its thunder comes its distance
+    later, a crack near by, a rumble far off;
+  - you hear the rain: a shower's patter, a downpour's roar, and aboard, rain drumming on the boat;
+  - rain's deck hangs lower and darker, the cirrus goes, and under it the caustics fade from the
+    seabed and the sea goes dim below;
+  - the boat and the wind's sound feel the same gusts you see coming over the sea, stronger in
+    squalls;
+  - the fish feel it: they feed hard ahead of a blow, the predators hunt under a grey sky as at dusk,
+    a downpour puts them down, a big surf stirs up the shallows; mahi and tuna come up on the wind
+    lines, tarpon roll in the rain, bonefish leave the flats in a blow;
+  - Joe and Marta shut for a gale or a thunderstorm (the night box and the diesel stay out), and
+    Joe chalks the forecast on a slate beside his wanted list;
 - playing together:
   - you see the others on the island, walking, swimming, fishing and out in their boats;
   - you pick your islander: two men and two women;
@@ -77,7 +97,8 @@ The island's day:
 | M6 | Drop-in multiplayer: others in the space, catch announcements, a shared records board |
 | M7 | Spearfishing: the speargun, the law, the spearfisher's fish, fish that notice you, a held breath |
 | M8 | Weather: the day's wind, sea, surf, cloud and light; the boat in the wind, and Marta's tow |
-| M9 | For consideration ([docs/M9.md](docs/M9.md)): rain, thunder and lightning, storm skies, damage, the hurricane |
+| M9 | Rain and thunderstorms: showers, lightning and thunder, wet surfaces, storm skies and fronts, gusts, fishing by the weather |
+| M10 | For consideration ([docs/M10.md](docs/M10.md)): rain curtains and drips, cumulonimbus, the sea and the surf, damage, the hurricane |
 
 ## How it fits All the Spaces
 

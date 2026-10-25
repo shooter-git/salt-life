@@ -24,6 +24,12 @@ export const G = {
 	// ripples, the grass's comb and the clouds aloft follow
 	windPrevailing: { value: new Vector2( 0.35, 0.94 ).normalize() },
 	night: { value: 0 }, // 0 = day, 1 = full night
+	// (M9) the rain falling (0..1: a downpour), and how wet it's left everything (0 dry .. 1 soaked)
+	rain: { value: 0 },
+	wet: { value: 0 },
+	// (M9) how much of the sun's light the waves focus on the seabed (1 under a clear sky; a grey one
+	// leaves little of the caustics)
+	caustics: { value: 1 },
 	envIntensity: { value: 1 },
 };
 

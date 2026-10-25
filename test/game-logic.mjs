@@ -1,6 +1,7 @@
 // Plain-node tests of the fishing game logic (no GPU): bites, the catch fight, inventory, save.
 import { FISH, FISH_IDS, CARAPACE, fishValue, fishLengthCm, fishWeightKg, spearRule, isTrophy } from '../src/game/FishTable.js';
-import { habitatAt, pickSpecies, rollWeight, biteDelay, lampsLit } from '../src/game/Bites.js';
+import { habitatAt, pickSpecies, rollWeight, biteDelay, lampsLit, weatherMood } from '../src/game/Bites.js';
+import { weatherAt } from '../src/game/Weather.js';
 import { CatchMinigame } from '../src/game/CatchMinigame.js';
 import { GameState } from '../src/game/GameState.js';
 import { gearStats, defaultUpgrades, UPGRADES, TOW, towFee } from '../src/game/Gear.js';
@@ -117,6 +118,100 @@ ok( biteDelay( habitatAt( spots.sand ), 12, rng ) === Infinity, 'no bite delay o
 	const once = ( h ) => biteDelay( h, 22, () => 0.5 );
 	ok( once( { ...bay, flood: 1 } ) < 0.8 * once( bay ), 'in open water the floodlights bring bites sooner' );
 	ok( pickSpecies( { ...habitatAt( spots.sand ), flood: 1 }, 22, rng ) === null && biteDelay( { ...habitatAt( spots.sand ), flood: 1 }, 22, rng ) === Infinity, 'the floodlights put no fish on dry sand' );
+
+}
+// (M9) the weather on the bites (habitat.weather): a fair day is the island as it always was; ahead of
+// a blow they bite sooner and bigger; under a grey sky by day the predators bite as at dusk; a downpour
+// or a thunderstorm slows them; a gale's surf quiets the shallows and the pier, its wind the deep; and
+// each fish's own taste in weather (FishTable's weather)
+{
+
+	const seeded = ( s = 777 ) => () => ( ( s = ( s * 1664525 + 1013904223 ) >>> 0 ) / 4294967296 );
+	const fair = weatherAt( 0, 'fair' ), calm = weatherAt( 0, 'calm' ), cloudy = weatherAt( 0, 'cloudy' ), rain = weatherAt( 0, 'rain' );
+	const blustery = weatherAt( 0, 'blustery' ), gale = weatherAt( 0, 'gale' ), storm = weatherAt( 0, 'storm' );
+	// the same bites, one after another, from the same rolls
+	const seq = ( h, hour, bait = null ) => {
+
+		const r = seeded(), out = [];
+		for ( let i = 0; i < 300; i ++ ) out.push( pickSpecies( h, hour, r, bait ), biteDelay( h, hour, r, bait ) );
+		return out.join( ',' );
+
+	};
+	// a fair day from the forecast, with no blow on its way
+	let T = 30;
+	while ( weatherAt( T ).id !== 'fair' || weatherMood( weatherAt( T ) ) ) T += 0.25;
+	let same = true;
+	for ( const spot of Object.values( spots ) ) for ( const hour of [ 3, 6.5, 12, 18.5, 22 ] ) for ( const bait of [ null, 'silverside' ] ) for ( const w of [ fair, calm, weatherAt( T ) ] ) {
+
+		const h = habitatAt( spot );
+		if ( seq( h, hour, bait ) !== seq( { ...h, weather: w }, hour, bait ) || seq( { ...h, flood: 0.7 }, hour, bait ) !== seq( { ...h, flood: 0.7, weather: w }, hour, bait ) ) same = false;
+
+	}
+
+	for ( const id of FISH_IDS ) {
+
+		const a = seeded( 5 ), b = seeded( 5 );
+		for ( let i = 0; i < 50; i ++ ) if ( rollWeight( id, a, null ) !== rollWeight( id, b, null, fair ) ) same = false;
+
+	}
+
+	ok( same && weatherMood( fair ) === null && weatherMood( null ) === null, 'a fair day\'s weather changes nothing: the same fish bite, as soon and as big' );
+	let nightSame = true;
+	for ( const spot of Object.values( spots ) ) if ( seq( habitatAt( spot ), 22 ) !== seq( { ...habitatAt( spot ), weather: cloudy }, 22 ) ) nightSame = false;
+	ok( nightSame, 'nor does a grey sky at night' );
+	const pier = habitatAt( spots.pier ), shallows = habitatAt( spots.shallows ), deep = habitatAt( spots.deep );
+	const delay = ( h, w, hour = 12 ) => {
+
+		const r = seeded( 31 );
+		let t = 0;
+		for ( let i = 0; i < 4000; i ++ ) t += biteDelay( { ...h, weather: w }, hour, r );
+		return t / 4000;
+
+	};
+	const share = ( h, w, ids, hour = 12 ) => {
+
+		const r = seeded( 41 );
+		let n = 0;
+		for ( let i = 0; i < 6000; i ++ ) if ( ids.includes( pickSpecies( { ...h, weather: w }, hour, r ) ) ) n ++;
+		return n / 6000;
+
+	};
+	const kg = ( w ) => {
+
+		const r = seeded( 51 );
+		let t = 0;
+		for ( let i = 0; i < 4000; i ++ ) t += rollWeight( 'jack', r, null, w );
+		return t / 4000;
+
+	};
+	// ahead of a blow
+	const front = { ...fair, front: 1 };
+	console.log( `     bites off the pier at noon, every: ${ delay( pier, fair ).toFixed( 1 ) } s fair, ${ delay( pier, front ).toFixed( 1 ) } s ahead of a blow, ${ delay( pier, rain ).toFixed( 1 ) } s in the rain, ${ delay( pier, gale ).toFixed( 1 ) } s in a gale, ${ delay( pier, storm ).toFixed( 1 ) } s in a thunderstorm` );
+	console.log( `     in the shallows: ${ delay( shallows, fair ).toFixed( 1 ) } s fair, ${ delay( shallows, gale ).toFixed( 1 ) } s in a gale; offshore: ${ delay( deep, fair ).toFixed( 1 ) } s fair, ${ delay( deep, gale ).toFixed( 1 ) } s in a gale` );
+	console.log( `     a jack's weight on average: ${ kg( fair ).toFixed( 2 ) } kg fair, ${ kg( front ).toFixed( 2 ) } kg ahead of a blow` );
+	ok( delay( pier, front ) < 0.8 * delay( pier, fair ) && delay( shallows, front ) < 0.8 * delay( shallows, fair ), 'ahead of a blow the fish feed hard: bites come sooner' );
+	ok( kg( front ) > 1.1 * kg( fair ), 'and the big ones feed too' );
+	let at = 30;
+	while ( weatherAt( at ).front < 0.8 ) at += 0.25;
+	const coming = weatherAt( at );
+	ok( delay( pier, coming ) < delay( pier, { ...coming, front: 0 } ) && kg( coming ) > kg( { ...coming, front: 0 } ), `a blow on its way in the forecast (day ${ Math.floor( at / 24 ) + 1 }, ${ coming.id }, front ${ coming.front.toFixed( 2 ) }) brings them on` );
+	// the light, the rain, the surf and the wind
+	const predators = FISH_IDS.filter( ( id ) => [ 'dawnDusk', 'night' ].includes( FISH[ id ].time ) || id === 'barracuda' );
+	const grey = share( pier, cloudy, predators ), clear = share( pier, fair, predators );
+	console.log( `     predators' share of noon bites off the pier: ${ ( 100 * clear ).toFixed( 1 ) }% fair, ${ ( 100 * grey ).toFixed( 1 ) }% under a grey sky (${ ( 100 * share( pier, fair, predators, 18.5 ) ).toFixed( 1 ) }% at dusk)` );
+	ok( grey > 1.3 * clear, 'under a grey sky by day the jacks, snappers and tarpon bite better, as at dusk' );
+	ok( delay( pier, storm ) > 1.5 * delay( pier, fair ) && delay( pier, rain ) > delay( pier, fair ), 'a downpour or a thunderstorm slows the bites' );
+	ok( delay( shallows, gale ) > 1.5 * delay( shallows, fair ) && delay( pier, gale ) > 1.05 * delay( pier, fair ) && delay( deep, gale ) > 1.3 * delay( deep, fair ), 'a gale\'s surf quiets the shallows and the pier, and the deep is hard to fish' );
+	// each fish's own taste
+	const moods = Object.keys( weatherMood( storm ) );
+	ok( FISH_IDS.every( ( id ) => ! FISH[ id ].weather || Object.keys( FISH[ id ].weather ).every( ( k ) => moods.includes( k ) ) ), 'each fish\'s taste in weather is in what the fish feel of it' );
+	const mahi = [ share( deep, fair, [ 'mahi' ] ), share( deep, blustery, [ 'mahi' ] ) ], tuna = [ share( deep, fair, [ 'tuna' ], 7 ), share( deep, blustery, [ 'tuna' ], 7 ) ];
+	const bone = [ share( shallows, fair, [ 'bonefish' ] ), share( shallows, gale, [ 'bonefish' ] ) ], tarpon = [ share( pier, fair, [ 'tarpon' ], 22 ), share( pier, rain, [ 'tarpon' ], 22 ) ];
+	const pc = ( [ a, b ] ) => `${ ( 100 * a ).toFixed( 1 ) }% → ${ ( 100 * b ).toFixed( 1 ) }%`;
+	console.log( `     mahi offshore in a blow ${ pc( mahi ) }, tuna at dawn ${ pc( tuna ) }; bonefish on the flats in a gale ${ pc( bone ) }; tarpon at the pier at night in the rain ${ pc( tarpon ) }` );
+	ok( mahi[ 1 ] > 1.4 * mahi[ 0 ] && tuna[ 1 ] > 1.3 * tuna[ 0 ], 'mahi and tuna up with the wind lines in a blow' );
+	ok( bone[ 1 ] < 0.25 * bone[ 0 ], 'the bonefish leave the flats in a gale' );
+	ok( tarpon[ 1 ] > 1.5 * tarpon[ 0 ], 'tarpon roll and feed in the rain' );
 
 }
 for ( const id of FISH_IDS ) {

@@ -310,6 +310,48 @@
 			"author": "JoelMcDaniel, BranndyBottle"
 		},
 		{
+			"path": "public/audio/rain_boat.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/johndynaudio/sounds/567027/",
+			"title": "RAIN_ON_BOAT.wav",
+			"author": "johndynaudio"
+		},
+		{
+			"path": "public/audio/rain_boat.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/johndynaudio/sounds/567027/",
+			"title": "RAIN_ON_BOAT.wav",
+			"author": "johndynaudio"
+		},
+		{
+			"path": "public/audio/rain_heavy.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/jmbphilmes/sounds/200272/",
+			"title": "Rain heavy 2 (rural)",
+			"author": "jmbphilmes"
+		},
+		{
+			"path": "public/audio/rain_heavy.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/jmbphilmes/sounds/200272/",
+			"title": "Rain heavy 2 (rural)",
+			"author": "jmbphilmes"
+		},
+		{
+			"path": "public/audio/rain_light.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/Sassaby/sounds/400178/",
+			"title": "Light rain falling at night in Hawaii",
+			"author": "Sassaby"
+		},
+		{
+			"path": "public/audio/rain_light.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/Sassaby/sounds/400178/",
+			"title": "Light rain falling at night in Hawaii",
+			"author": "Sassaby"
+		},
+		{
 			"path": "public/audio/reel_drag.m4a",
 			"license": "CC0-1.0",
 			"source": "https://freesound.org/people/paulprit/sounds/507070/",
@@ -546,6 +588,20 @@
 			"source": "https://freesound.org/people/LaScienceMusicale/sounds/648386/",
 			"title": "LAC_DES_CHANTERAINES_Sternespierregarin_m32bitsfloat_192kHz.wav",
 			"author": "LaScienceMusicale"
+		},
+		{
+			"path": "public/audio/thunder.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/TRP/sounds/717909/",
+			"title": "230724 Thunder, close crack light rain, mixpreroof, Toronto 5pm; Thunder strike; peal of thunder - distant; Rolling_Distant_Thunder_In_Heavy_Rain_06",
+			"author": "TRP, AyaDrevis, bastipictures, BlondPanda"
+		},
+		{
+			"path": "public/audio/thunder.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/TRP/sounds/717909/",
+			"title": "230724 Thunder, close crack light rain, mixpreroof, Toronto 5pm; Thunder strike; peal of thunder - distant; Rolling_Distant_Thunder_In_Heavy_Rain_06",
+			"author": "TRP, AyaDrevis, bastipictures, BlondPanda"
 		},
 		{
 			"path": "public/audio/under_reef.m4a",

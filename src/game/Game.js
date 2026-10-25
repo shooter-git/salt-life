@@ -14,9 +14,11 @@ import { FishPortrait } from './FishPortrait.js';
 import { UPGRADES, fuelBurn, TOW, towFee } from './Gear.js';
 import { GameHUD } from './GameHUD.js';
 import { TimeHUD } from './TimeHUD.js';
-import { isOpen, timeText } from './IslandClock.js';
-import { NIGHT_BOX, ordersFor, tradeDay } from './Orders.js';
+import { timeText } from './IslandClock.js';
+import { NIGHT_BOX, ordersFor, tradeDay, stallOpen, shutFor } from './Orders.js';
 import { WantedBoard } from './WantedBoard.js';
+import { ForecastSlate } from './ForecastSlate.js';
+import { forecast, islandTime } from './Weather.js';
 import { ClosedSign } from './ClosedSign.js';
 import { delivered, filled, owed, weekEnds } from './WeekOrder.js';
 import { Minimap } from './Minimap.js';
@@ -113,6 +115,11 @@ export class Game {
 		this.orders = [];
 		this.tradeDay = null;
 		this.wanted = new WantedBoard( { terrain: app.terrainData } );
+		// (M9) and the forecast on a smaller slate beside it: hung from the wanted slate (where it is: attach),
+		// it goes up with it
+		this.forecastSlate = new ForecastSlate( { terrain: app.terrainData } );
+		this.wanted.mesh.attach( this.forecastSlate.mesh );
+		this._forecastT = 0;
 		app.lightUp( this.wanted.mesh );
 		if ( ! app.cpuGL ) app.scene.add( this.wanted.mesh );
 		this.state.onChange( () => this.drawWanted() );
@@ -120,7 +127,8 @@ export class Game {
 		this._weekSeen = null;
 		this.paidNote = 0;
 		// (Salt Life) a "Closed" board at each stall while its trader's gone home (Vendor.setOpen); on a device
-		// that draws on its CPU, up after the start with the slate (App.prepareLate)
+		// that draws on its CPU, up after the start with the slate (App.prepareLate). (M9) Shut for the
+		// weather, it says so
 		const back = ( v ) => `Back at ${ timeText( v.hours[ 0 ], app.portal && app.portal.locale, 60 ) }`;
 		const signs = [
 			[ this.stand.vendor, STAND, { x: 0.32, y: 1.045, z: 0.96, tilt: 0.24, roll: 0.03 }, 0.5, 'Fish in the night box' ],
@@ -128,7 +136,7 @@ export class Game {
 		];
 		this.signs = signs.filter( ( [ v ] ) => v && v.hours ).map( ( [ v, at, spot, width, left ] ) => {
 
-			const sign = new ClosedSign( { terrain: app.terrainData, at, spot, width, lines: [ back( v ), left ] } );
+			const sign = new ClosedSign( { terrain: app.terrainData, at, spot, width, lines: [ back( v ), left ], weatherLines: [ 'Shut for the weather', left ] } );
 			app.lightUp( sign.mesh );
 			if ( ! app.cpuGL ) app.scene.add( sign.mesh );
 			v.sign = sign.mesh;
@@ -296,6 +304,7 @@ export class Game {
 		this._cardDismissed = false;
 		this.updateDay();
 		this.updateWeek();
+		this.updateForecast( dt );
 		if ( ! this.hud && app.ui && app.ui.ui && typeof document !== 'undefined' && document.head ) {
 
 			const ui = app.ui.ui;
@@ -668,8 +677,17 @@ export class Game {
 		const hud = this.hud;
 		// (Salt Life) the traders keep hours: out of them they've gone home, and their stall offers what it
 		// does without them (Joe's night box, diesel on Marta's honesty box). Whoever is serving you when
-		// it's time finishes with you first
-		for ( const v of this.vendors ) v.setOpen( isOpen( v.hours, this.hour ) || ( v.open && !! hud && hud.standOpen && hud.vendor === v ) );
+		// it's time finishes with you first. (M9) In a gale or a thunderstorm they shut whatever the hour
+		// (Orders.shutFor), and their boards say so
+		const wx = this.weatherNow, shut = shutFor( wx && wx.id );
+		for ( const v of this.vendors ) {
+
+			v.setOpen( stallOpen( v.hours, this.hour, wx && wx.id ) || ( v.open && !! hud && hud.standOpen && hud.vendor === v ) );
+			v.weatherShut = shut && ! v.open;
+
+		}
+
+		for ( const s of this.signs ) s.forWeather( shut );
 		let near = null;
 		if ( p.mode === 'walk' ) for ( const v of this.vendors ) if ( v.inRange( p.position ) ) near = v;
 		for ( const v of this.vendors ) v.talking = !! ( hud && hud.standOpen && hud.vendor === v );
@@ -694,8 +712,9 @@ export class Game {
 
 		const name = v.name.split( ' ·' )[ 0 ];
 		if ( v.open ) return `Talk to ${ name }`;
-		const back = timeText( v.hours[ 0 ], this.app.portal && this.app.portal.locale, 60 );
-		return v.kind === 'shop' ? `Diesel on the honesty box   ·   ${ name }'s back at ${ back }` : `${ name }'s night box   ·   he's back at ${ back }`;
+		// (M9) or gone home for the weather
+		const back = v.weatherShut ? 'shut for the weather' : `back at ${ timeText( v.hours[ 0 ], this.app.portal && this.app.portal.locale, 60 ) }`;
+		return v.kind === 'shop' ? `Diesel on the honesty box   ·   ${ name }'s ${ back }` : `${ name }'s night box   ·   he's ${ back }`;
 
 	}
 
@@ -709,6 +728,19 @@ export class Game {
 		this.orders = ordersFor( day );
 		this.drawWanted();
 		if ( this.hud ) this.hud.refresh();
+
+	}
+
+	// (M9) Joe's forecast slate: the weather now and what's coming, looked at every second or so (it's
+	// drawn again only when what it says changes)
+	updateForecast( dt ) {
+
+		const wx = this.weatherNow;
+		this._forecastT -= dt;
+		if ( this._forecastT > 0 || ! wx ) return;
+		this._forecastT = 1;
+		const s = this.app.settings, pick = this.app.weatherPick ? this.app.weatherPick() : null;
+		this.forecastSlate.draw( wx, forecast( islandTime( s.day, s.timeOfDay ), 12, pick ), this.app.portal && this.app.portal.locale );
 
 	}
 
@@ -810,6 +842,8 @@ export class Game {
 		const h = this.habitatAtPoint( p.x, p.z, this.rod.depth );
 		// (Salt Life) in the deck floodlights' pool after dark (Bites: what gathers under lights)
 		h.flood = this.floodAt( p.x, p.z );
+		// (M9) and the weather (Bites.weatherMood: what the fish feel of it)
+		h.weather = this.weatherNow;
 		return h;
 
 	}
@@ -830,6 +864,15 @@ export class Game {
 	get hour() {
 
 		return this.app.settings.timeOfDay;
+
+	}
+
+	// (M9) the weather now (game/Weather.js): the day's, or what you chose on your own, as the weather
+	// driver works it out each frame (WeatherDriver.target); null before its first frame
+	get weatherNow() {
+
+		const w = this.app.weather;
+		return ( w && w.target ) || null;
 
 	}
 
@@ -871,7 +914,7 @@ export class Game {
 			}
 
 			b.species = species;
-			b.kg = rollWeight( species, Math.random, this.hookBait );
+			b.kg = rollWeight( species, Math.random, this.hookBait, h.weather );
 			b.phase = 'nibble';
 			b.nibbles = 1 + Math.floor( Math.random() * 3 );
 			b.t = 0.7 + Math.random() * 0.8;

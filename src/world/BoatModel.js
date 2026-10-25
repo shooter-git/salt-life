@@ -1,4 +1,4 @@
-import { Group, MathUtils, Mesh, Object3D, Quaternion, Vector3 } from '../engine/index.js';
+import { Group, MathUtils, Matrix4, Mesh, Object3D, Quaternion, Vector3 } from '../engine/index.js';
 import { G } from '../core/Globals.js';
 import { HullLines, RHO_SEAWATER } from './boat/HullLines.js';
 import { GeoKit, triangleCount } from './boat/GeoKit.js';
@@ -127,6 +127,10 @@ export class BoatModel {
 			waterlineBeam: 2 * this._maxHalfBeam(),
 			houseRoofHeight: roofTopY( 0 ),
 		};
+		// (M9) under the wheelhouse roof (the boat's frame -> the box under it, -1..1): no rain falls there
+		const yLo = lines.deckY - 0.5, yHi = HOUSE.roofUnderY, zLo = HOUSE.roofZ0, zHi = HOUSE.roofZ1;
+		this.shelter = new Matrix4().makeScale( 1 / 1.25, 2 / ( yHi - yLo ), 2 / ( zHi - zLo ) )
+			.multiply( new Matrix4().makeTranslation( 0, - ( yLo + yHi ) / 2, - ( zLo + zHi ) / 2 ) );
 
 		this.hydro = {
 			waterplaneArea: lines.waterplaneArea, // m^2

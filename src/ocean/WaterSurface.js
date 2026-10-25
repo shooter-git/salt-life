@@ -59,6 +59,7 @@ export class WaterSurface {
 			...whaleMarkUniforms,
 			...this.detail.uniforms,
 			waterWhitecap: this.whitecap,
+			waterRain: G.rain, // (M9: the rings where the drops land)
 		};
 
 		// envMapIntensity 12: the scene's environment intensity is only a small diffuse fill (Sky); the
@@ -149,6 +150,7 @@ varying vec3 vWaterN;
 uniform sampler2D waterRipples;
 uniform float waterWhitecap;
 uniform float waveCrest;
+uniform float waterRain;
 #ifdef WATER_REFRACT
 uniform sampler2D waterRefract;
 uniform vec2 waterRefractSize;
@@ -163,6 +165,23 @@ float waterNoise( vec2 p ) {
 	float c = fract( sin( dot( i + vec2( 0.0, 1.0 ), vec2( 127.1, 311.7 ) ) ) * 43758.5453 );
 	float d = fract( sin( dot( i + vec2( 1.0, 1.0 ), vec2( 127.1, 311.7 ) ) ) * 43758.5453 );
 	return mix( mix( a, b, u.x ), mix( c, d, u.x ), u.y );
+}
+// (M9) rain on the water: a ring spreading from each drop, in cells (one drop a cell at a time, somewhere
+// in its middle, its ring never reaching the cell's edge); the slope of the rings at p, scaled by how
+// hard it rains (fewer cells have a drop in a drizzle)
+vec2 waterRainRing( vec2 p, float cell, float rate, float seed, float amount ) {
+	vec2 c = floor( p / cell ), q = p / cell - c;
+	vec3 h = fract( sin( vec3( dot( c, vec2( 127.1, 311.7 ) ), dot( c, vec2( 269.5, 183.3 ) ), dot( c, vec2( 419.2, 371.9 ) ) ) + seed ) * 43758.5453 );
+	float age = fract( waterTime * rate + h.z );
+	// (its drop: which of the cell's turns rain on it, by how hard it rains)
+	float turn = floor( waterTime * rate + h.z );
+	if ( fract( sin( turn * 12.9898 + h.x * 78.233 ) * 43758.5453 ) > amount ) return vec2( 0.0 );
+	vec2 d = q - ( 0.4 + 0.2 * h.xy );
+	float r = length( d ), ring = age * 0.36;
+	float x = ( r - ring ) * 28.0;
+	// (a ripple's slope across the ring, fading as it spreads)
+	float slope = - 2.0 * x * exp( - x * x ) * ( 1.0 - age ) * ( 1.0 - age );
+	return d / max( r, 1e-4 ) * slope;
 }
 // foam lace: bubbles that cluster and tear into a net as the foam thins out
 float waterLace( vec2 p, float cover ) {
@@ -273,6 +292,15 @@ ${ SH ? /* glsl */`
 	vec2 r1 = texture2D( waterRipples, vWater.xz * 0.11 + waterTime * vec2( 0.012, 0.03 ) ).xy * 2.0 - 1.0;
 	vec2 r2 = texture2D( waterRipples, vWater.xz * 0.043 + 0.3 - waterTime * vec2( 0.02, 0.008 ) ).xy * 2.0 - 1.0;
 	vec2 rs = ( r1 * 0.6 + r2 * 0.4 ) * 0.32 * rippleK;
+	// (M9) the rings where the rain lands, near the camera; and the drops beat the wind's ripples down
+	if ( waterRain > 0.0 ) {
+		float rainD = length( cameraPosition - vWater );
+		if ( rainD < 45.0 ) {
+			float rainK = ( 1.0 - smoothstep( 12.0, 45.0, rainD ) ) * ( 1.0 - foam );
+			float rainN = clamp( waterRain * 1.5, 0.0, 1.0 );
+			rs = rs * ( 1.0 - 0.4 * rainN * rainK ) + ( waterRainRing( vWater.xz, 0.55, 1.4, 0.0, rainN ) + waterRainRing( vWater.xz + 0.27, 0.8, 1.1, 3.7, rainN ) * 0.8 ) * 0.5 * rainK;
+		}
+	}
 	vec3 nP = normalize( wN + vec3( - rs.x, 0.0, - rs.y ) );
 	nP = gl_FrontFacing ? nP : - nP;
 	normal = normalize( ( viewMatrix * vec4( nP, 0.0 ) ).xyz );` )

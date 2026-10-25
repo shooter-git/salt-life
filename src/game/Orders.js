@@ -1,16 +1,25 @@
 import { FISH } from './FishTable.js';
+import { isOpen } from './IslandClock.js';
 
 // (Salt Life) What Joe and Marta want today: Joe chalks two fish on the board by his stand and pays
 // over the odds for them, Marta buys one kind of bait fish at the chandlery. A new list each morning,
 // from the day alone, so everyone sharing an island's clock sees the same one and nothing is sent.
 // The day's list runs from Joe opening (OPENS) to his opening the next morning: a fish caught after he
 // shuts still counts, left in his night box. Each order takes a few fish from each player at its price.
+// (M9) In a gale or a thunderstorm Joe and Marta shut and go home (SHUT_FOR), as they do after hours:
+// Joe's night box and the diesel on Marta's honesty box are still out.
 //   const list = ordersFor( tradeDay( hour, day ) )   orderFor( list, 'joe', 'yellowtail' )
-//   orderPrice( order, value )
+//   orderPrice( order, value )   stallOpen( HOURS.joe, hour, weather.id )   shutFor( weather.id )
 
 export const OPENS = 5; // Joe opens at 5 am
 export const HOURS = { joe: [ OPENS, 19 ], marta: [ 7, 19 ] }; // [ open, close ) game hours
 export const NIGHT_BOX = 0.7; // what Joe's night box pays, of his price (the wanted list in full)
+export const SHUT_FOR = [ 'gale', 'storm' ]; // (M9) the weather they shut for (Weather.js ids)
+
+// (M9) are the stalls shut for the weather (a Weather.js id; none: the day's hours alone)?
+export const shutFor = ( weatherId ) => SHUT_FOR.includes( weatherId );
+// is a stall with these hours open at `hour`, in this weather?
+export const stallOpen = ( hours, hour, weatherId = null ) => isOpen( hours, hour ) && ! shutFor( weatherId );
 
 // Joe's pick: one fish of the twilight (yellowtail, jacks and mutton and mangrove snapper at dusk and
 // dawn, tuna offshore at first light) at double, and one more at half as much again (a spiny lobster
