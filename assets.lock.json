@@ -158,16 +158,16 @@
 		{
 			"path": "public/audio/bucket.m4a",
 			"license": "CC0-1.0",
-			"source": "https://freesound.org/people/levi_cunha/sounds/657176/",
-			"title": "Swinging bucket with water and throwing it in the tank",
-			"author": "levi_cunha"
+			"source": "https://freesound.org/people/wormer2/sounds/418417/",
+			"title": "Water splash, emptying a bucket 9; Footsteps_Walk.wav; Wading in Shallow Water.wav",
+			"author": "wormer2, Nox_Sound, ryansitz"
 		},
 		{
 			"path": "public/audio/bucket.ogg",
 			"license": "CC0-1.0",
-			"source": "https://freesound.org/people/levi_cunha/sounds/657176/",
-			"title": "Swinging bucket with water and throwing it in the tank",
-			"author": "levi_cunha"
+			"source": "https://freesound.org/people/wormer2/sounds/418417/",
+			"title": "Water splash, emptying a bucket 9; Footsteps_Walk.wav; Wading in Shallow Water.wav",
+			"author": "wormer2, Nox_Sound, ryansitz"
 		},
 		{
 			"path": "public/audio/coins.m4a",

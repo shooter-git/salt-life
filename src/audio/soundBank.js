@@ -61,7 +61,7 @@ export const BANK = {
 	bilge_slosh: { file: 'bilge_slosh.ogg', loop: true, lufs: -23.9 },
 	starter: { file: 'starter.ogg', slices: [ [ 0.08, 1.1 ], [ 1.26, 2.56 ] ], lufs: [ -15.7, -15.7 ] },
 	hull_bump: { file: 'hull_bump.ogg', slices: [ [ 0.08, 0.5 ], [ 0.66, 0.5 ], [ 1.24, 0.5 ], [ 1.82, 0.5 ], [ 2.4, 0.5 ], [ 2.98, 0.4992 ] ], lufs: [ -15.5, -17.1, -17.1, -18.5, -18.4, -17.6 ] },
-	bucket: { file: 'bucket.ogg', slices: [ [ 0.08, 1.5 ], [ 1.66, 1.4 ], [ 3.14, 1 ], [ 4.22, 1.6 ] ], lufs: [ -17.5, -15.5, -11.7, -17.6 ] },
+	bucket: { file: 'bucket.ogg', slices: [ [ 0.08, 2.89 ] ], lufs: [ -17 ] },
 	hull_creak: { file: 'hull_creak.ogg', slices: [ [ 0.08, 0.8005 ], [ 0.9605, 0.6981 ], [ 1.7386, 0.6 ], [ 2.4186, 0.8 ], [ 3.2986, 0.7 ], [ 4.0786, 0.7981 ] ], lufs: [ -24.6, -20.4, -20.1, -20.1, -23.9, -24.9 ] },
 	shutter: { file: 'shutter.ogg', slices: [ [ 0.08, 1 ], [ 1.16, 1 ], [ 2.24, 1 ] ], lufs: [ -18.3, -18.9, -19.1 ] },
 };

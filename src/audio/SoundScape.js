@@ -159,7 +159,7 @@ const STEP = {
 };
 
 // max simultaneous one-shot voices per category (oldest is faded out beyond this)
-const LIMITS = { step: 3, swim: 2, splash: 3, trans: 2, hull: 3, gull: 2, crash: 7, wash: 5, back: 5, bird: 4, tern: 2, whale: 4, rod: 4, fish: 3, coin: 1, net: 6, thunder: 2, start: 1, bucket: 1, creak: 2, shutter: 2 };
+const LIMITS = { step: 3, swim: 2, splash: 3, trans: 2, hull: 3, gull: 2, crash: 7, wash: 5, back: 5, bird: 4, tern: 2, whale: 4, rod: 4, fish: 3, coin: 1, net: 6, thunder: 2, start: 1, bucket: 2, creak: 2, shutter: 2 };
 // Salt Life: All the Spaces allows 16 / 32 / 64 sounds at once by device tier. Beds and one-shots
 // together stay under it (a new one-shot is left out when it's full), and the low tier keeps fewer of
 // each kind so the surf can't crowd out the footsteps.
@@ -441,7 +441,7 @@ export class SoundScape {
 
 	}
 
-	// a scoop of the bucket thrown over the side
+	// a scoop of the bucket thrown over the side (its splash and drips run on under the next: two at once)
 	bailScoop() {
 
 		this._shot( 'bucket', 'bucket', this.near, MIX.bucket + ( Math.random() - 0.5 ) * 3, 0.92 + Math.random() * 0.16 );

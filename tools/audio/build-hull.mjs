@@ -1,6 +1,6 @@
 // (M10) Builds the sounds of the weather's cost (the boat's hull, bilge and engine, and the shutters
 // banging in a blow) in public/audio from CC0 Freesound previews (see README.md):
-//   node dl.mjs 398416:bone666138 506688:magzlurban 623692:launchsite 657176:levi_cunha \
+//   node dl.mjs 398416:bone666138 506688:magzlurban 623692:launchsite 418417:wormer2 \
 //     146347:colinpoh 388014:supersplat1 31574:Walter_Odington 829588:DJKaren
 //   node build-hull.mjs              -> out/*.ogg + hull-bank.json (the bank entries for soundBank.js)
 // The beds (the keel's scrape, the bilge pump, the slosh) are loops: an excerpt, an equal-power
@@ -9,7 +9,7 @@
 // momentary loudness is measured. The starter: its recording cranks for only 0.4 s before the engine
 // fires, so that stretch is laid end to end (crossfaded) into a crank that doesn't catch (1.1 s) and
 // one that does, firing as the game's crank ends (Hull.CRANK_S) and running on into its idle.
-import { decode, writeWav, peak, gain, lufsOf, makeLoop, fade, encode, momentary, SR } from './lib.mjs';
+import { decode, writeWav, peak, gain, lufsOf, makeLoop, fade, encode, momentary, env, SR } from './lib.mjs';
 import fs from 'node:fs';
 
 const OUT = 'out', W = 'work';
@@ -149,8 +149,41 @@ function join( a, b, xf ) {
 // a boat bumping a dock, gently (its knocks in the lapping water); harder ones are the shutter's bang
 // played slow and low under it (SoundScape.hullKnock)
 sprite( 'hull_bump', [ 0.22, 1.12, 2.52, 3.82, 6.52, 7.82 ].map( ( t ) => cut( 506688, t, 0.5, 0.01, 0.22, hp( 60 ) ) ), [ 506688 ] );
-// a bucket of water swung and thrown: a scoop bailed over the side
-sprite( 'bucket', [ [ 36.2, 1.5 ], [ 38.3, 1.4 ], [ 40.1, 1.0 ], [ 41.9, 1.6 ] ].map( ( [ t, d ] ) => cut( 657176, t, d, 0.02, 0.25, hp( 80 ) ) ), [ 657176 ] );
+// a scoop bailed over the side: a wading swish through the water (step_water.ogg's second slice, in
+// public/audio) run straight into a bucket being emptied (its splash and the water settling, faded over
+// the drips), the two band-limited alike, each brought to the same loudness, crossfaded
+{
+
+	const BAND = 'highpass=f=100:p=2,lowpass=f=12000:p=2', XF = sec( 0.08 );
+	const same = ( x ) => gain( [ x ], 10 ** ( ( - 18 - Math.max( ...momentary( [ x ] ) ) ) / 20 ) );
+	let [ scoop ] = decode( '../../public/audio/step_water.ogg', 1, 1.014, 0.704, BAND );
+	// (to just after it's done: 0.12 s past its last 10 ms within 18 dB of its peak)
+	const e = env( scoop, 480 ), top = Math.max( ...e );
+	let last = 0;
+	e.forEach( ( v, k ) => {
+
+		if ( v > top * 10 ** ( - 18 / 20 ) ) last = k;
+
+	} );
+	scoop = scoop.slice( 0, Math.min( scoop.length, ( last + 1 ) * 480 + sec( 0.12 ) ) );
+	fade( [ scoop ], sec( 0.01 ), sec( 0.06 ) );
+	same( scoop );
+	const [ dump ] = decode( 'raw/418417.ogg', 1, 0, 2.3, BAND );
+	fade( [ dump ], sec( 0.005 ), sec( 0.6 ) );
+	same( dump );
+	const bail = new Float32Array( scoop.length + dump.length - XF );
+	bail.set( scoop.subarray( 0, scoop.length - XF ) );
+	for ( let i = 0; i < XF; i ++ ) {
+
+		const t = ( i + 0.5 ) / XF;
+		bail[ scoop.length - XF + i ] = scoop[ scoop.length - XF + i ] * Math.cos( t * Math.PI / 2 ) + dump[ i ] * Math.sin( t * Math.PI / 2 );
+
+	}
+
+	bail.set( dump.subarray( XF ), scoop.length );
+	sprite( 'bucket', [ bail ], [ 418417 ] );
+
+}
 // a wooden hull creaking (the recording's creaks, high-passed off the waves under them)
 sprite( 'hull_creak', [ [ 24.2, 0.8 ], [ 27.0, 0.7 ], [ 70.6, 0.6 ], [ 137.8, 0.8 ], [ 140.6, 0.7 ], [ 155.0, 0.8 ] ].map( ( [ t, d ] ) => cut( 31574, t, d, 0.02, 0.22, hp( 150 ) ) ), [ 31574 ] );
 // a window or gate banging in the wind: the village's shutters in a blow
