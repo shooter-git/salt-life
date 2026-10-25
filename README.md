@@ -108,10 +108,12 @@ pnpm test       # game logic and the asset list
 
 ### Play it on GitHub Pages
 
-Each push to `main` builds the game and publishes it to GitHub Pages
-(`.github/workflows/pages.yml`): <https://shooter-git.github.io/salt-life/>. There it runs on its own,
-with the SDK standing in for All the Spaces: you play solo, and your progress is saved in that
-browser. (Turn it on once in the repository's Settings → Pages, with "GitHub Actions" as the source.)
+Each release is also published on its own at <https://shooter-git.github.io/salt-life/> (GitHub
+Pages, by `.github/workflows/pages.yml`; or by hand from the Actions tab). There the SDK stands in
+for All the Spaces: you play solo, your progress is saved in that browser, the page shows its own
+loading screen, and the detail is chosen from the device as All the Spaces would (`?tier=low|mid|high`
+overrides it). Set **Settings → Pages → Source** to **GitHub Actions**, and in **Settings →
+Environments → github-pages** add a deployment tag rule `v*` (releases deploy from their tag).
 
 To run All the Spaces' publishing checks, from the All the Spaces checkout (after `pnpm install`
 there):
