@@ -1,6 +1,6 @@
 // Plain-node tests of the island's weather (no GPU): the forecast from the island's time, its
 // conditions, how it changes, and how it's read out.
-import { CONDITIONS, WEATHER_IDS, WEATHER_NAMES, SURF_MAX, PERIOD_MAX, GROUNDSWELL_MAX, VEER, islandTime, storminess, cloudiness, veer, weatherAt, forecast, surfText, windFrom } from '../src/game/Weather.js';
+import { CONDITIONS, WEATHER_IDS, WEATHER_NAMES, SURF_MAX, PERIOD_MAX, GROUNDSWELL_MAX, VEER, STRIKE_RATE, islandTime, storminess, cloudiness, veer, showeriness, unsettled, weatherAt, forecast, surfText, windFrom, strikeIn } from '../src/game/Weather.js';
 import { knots } from '../src/game/Units.js';
 
 let fails = 0;
@@ -9,16 +9,16 @@ const ok = ( c, msg ) => {
 	if ( ! c ) { fails ++; console.log( 'FAIL', msg ); } else console.log( 'ok  ', msg );
 
 };
-const KEYS = [ 'wind', 'windAngle', 'coverage', 'overcast', 'swell', 'windSea', 'surf', 'period', 'visibility' ];
+const KEYS = [ 'wind', 'windAngle', 'coverage', 'overcast', 'swell', 'windSea', 'surf', 'period', 'visibility', 'rain', 'thunder', 'front' ];
 
 // ---- the time, and the same weather for the same time
 ok( islandTime( 1, 9.5 ) === 9.5 && islandTime( 3, 0 ) === 48 && islandTime( 0, 6 ) === 6, 'island time: game hours since day 1 began' );
 ok( JSON.stringify( weatherAt( 1234.567 ) ) === JSON.stringify( weatherAt( 1234.567 ) ) && storminess( 999.9 ) === storminess( 999.9 ), 'the same time gives the same weather' );
 
 // ---- fair is the island as it always was, and day 1 is fair
-const today = { wind: 7, windAngle: 0, coverage: 0.49, overcast: 0, swell: 1, windSea: 1, surf: 0.34, period: 9, visibility: 1 };
+const today = { wind: 7, windAngle: 0, coverage: 0.49, overcast: 0, swell: 1, windSea: 1, surf: 0.34, period: 9, visibility: 1, rain: 0, thunder: 0, front: 0 };
 const fair = weatherAt( 100, 'fair' );
-ok( fair.id === 'fair' && KEYS.every( ( k ) => fair[ k ] === today[ k ] ), 'fair: today\'s wind, cloud, sea, surf and haze exactly' );
+ok( fair.id === 'fair' && KEYS.every( ( k ) => fair[ k ] === today[ k ] ), 'fair: today\'s wind, cloud, sea, surf and haze exactly, and dry' );
 let day1 = true;
 for ( let T = 0; T < 24; T += 0.25 ) {
 
@@ -43,7 +43,8 @@ for ( let T = 24 + 1 / 60; T < 24 * DAYS; T += 1 / 60 ) {
 
 	const w = weatherAt( T );
 	for ( const k of KEYS ) jump[ k ] = Math.max( jump[ k ], Math.abs( w[ k ] - prev[ k ] ) );
-	if ( w.wind < 2 || w.wind > 20.01 || Math.abs( w.windAngle ) > VEER || w.coverage < 0.3 || w.coverage > 0.93 || w.surf > SURF_MAX || w.period < 7.5 || w.period > PERIOD_MAX || w.visibility < 0.5 || w.visibility > 1.11 ) bounds = false;
+	if ( w.wind < 2 || w.wind > 20.01 || Math.abs( w.windAngle ) > VEER || w.coverage < 0.3 || w.coverage > 0.97 || w.surf > SURF_MAX || w.period < 7.5 || w.period > PERIOD_MAX || w.visibility < 0.4 || w.visibility > 1.11
+		|| w.rain < 0 || w.rain > 1 || w.thunder < 0 || w.thunder > 1 || w.front < 0 || w.front > 1 ) bounds = false;
 	if ( ( T * 60 | 0 ) % 30 === 0 ) { count[ w.id ] ++; n ++; }
 	prev = w;
 
@@ -53,14 +54,18 @@ const share = ( id ) => count[ id ] / n;
 console.log( `     over ${ DAYS } days: ${ WEATHER_IDS.map( ( id ) => `${ id } ${ ( share( id ) * 100 ).toFixed( 1 ) }%` ).join( ', ' ) }` );
 console.log( `     the most it moves in a game minute: ${ KEYS.map( ( k ) => `${ k } ${ jump[ k ].toFixed( 4 ) }` ).join( ', ' ) }` );
 ok( bounds, 'every value stays within its conditions\' range' );
-ok( jump.wind < 0.1 && jump.windAngle < 0.003 && jump.period < 0.05 && jump.coverage < 0.005 && jump.overcast < 0.005 && jump.swell < 0.01 && jump.surf < 0.004 && jump.visibility < 0.004, 'no step in a game minute, midnight included' );
+ok( jump.windAngle < 0.003 && jump.period < 0.05 && jump.swell < 0.01 && jump.surf < 0.004, 'no step in a game minute, midnight included' );
+// (a shower comes on in a few game minutes, and brings its cloud, haze and squall: WeatherDriver eases them)
+ok( jump.wind < 0.1 && jump.rain < 0.15 && jump.thunder < 0.35 && jump.coverage < 0.04 && jump.overcast < 0.15 && jump.visibility < 0.1 && jump.front < 0.03, 'a shower comes on over a few game minutes, never at once' );
 ok( share( 'fair' ) + share( 'calm' ) > 0.4 && share( 'gale' ) > 0.02 && share( 'gale' ) < 0.09 && share( 'blustery' ) + share( 'gale' ) < 0.25 && WEATHER_IDS.every( ( id ) => share( id ) > 0.02 ), 'mostly fair, a gale now and then, every condition comes' );
+ok( share( 'rain' ) + share( 'storm' ) > 0.07 && share( 'rain' ) + share( 'storm' ) < 0.2 && share( 'storm' ) < 0.05, 'rain about one hour in six, a thunderstorm one in twenty-five or so' );
 
 // ---- the swell comes ahead of the gale, and the forecast sees it coming
 let onsets = 0, early = 0, seen = 0;
 for ( let T = 30; T < 24 * 300; T += 0.5 ) {
 
-	if ( weatherAt( T ).id !== 'gale' || weatherAt( T - 0.5 ).id === 'gale' ) continue;
+	// (a gale's wind: in a thunderstorm the name is the storm's)
+	if ( weatherAt( T ).wind < 18 || weatherAt( T - 0.5 ).wind >= 18 ) continue;
 	onsets ++;
 	const before = weatherAt( T - 3 );
 	if ( before.wind < 18 && before.swell >= 1.4 ) early ++;
@@ -76,7 +81,7 @@ for ( let T = 30; T < 24 * 300; T += 0.5 ) {
 
 	const w = weatherAt( T );
 	if ( w.surf > GROUNDSWELL_MAX + ( SURF_MAX - GROUNDSWELL_MAX ) * Math.min( 1, ( PERIOD_MAX - w.period ) / ( PERIOD_MAX - 9 ) ) + 1e-9 ) bigLong = false;
-	if ( w.id !== 'gale' || weatherAt( T - 0.5 ).id === 'gale' ) continue;
+	if ( w.wind < 18 || weatherAt( T - 0.5 ).wind >= 18 ) continue;
 	gales ++;
 	ahead += weatherAt( T - 6 ).period;
 	own += w.period;
@@ -89,6 +94,71 @@ ok( bigLong, 'a long swell from afar is never as big as a gale\'s own' );
 ok( seen === onsets, 'the forecast says something\'s coming before every gale' );
 const f = forecast( 3000 );
 ok( f === null || ( f.at > 3000 && f.id !== weatherAt( 3000 ).id ), 'a forecast is a change still to come' );
+
+// ---- the rain: showers on a fair day now and then, more under a grey sky, most in a blow
+let fairShowers = 0, fairN = 0, galeWet = 0, galeN = 0, greyWet = 0, greyN = 0, showers = 0, wasWet = false, thunderDry = 0, fronts = 0, frontBefore = 0;
+for ( let T = 30; T < 24 * 600; T += 0.25 ) {
+
+	const w = weatherAt( T ), s = storminess( T ), c = cloudiness( T );
+	if ( s > 0.3 && s < 0.55 && c < 0.45 ) { fairN ++; if ( w.rain > 0.05 ) fairShowers ++; }
+	if ( c > 0.75 && s < 0.55 ) { greyN ++; if ( w.rain > 0.05 ) greyWet ++; }
+	if ( s > 0.95 ) { galeN ++; if ( w.rain > 0.05 ) galeWet ++; }
+	if ( w.thunder > 0.05 && w.rain < 0.5 ) thunderDry ++;
+	const wet = w.rain > 0.2;
+	if ( wet && ! wasWet ) showers ++;
+	wasWet = wet;
+	if ( w.wind >= 18 && weatherAt( T - 0.25 ).wind < 18 ) {
+
+		fronts ++;
+		if ( weatherAt( T - 2.5 ).front > 0.3 || weatherAt( T - 3.5 ).front > 0.3 ) frontBefore ++;
+
+	}
+
+}
+
+const pc = ( a, b ) => ( a / Math.max( b, 1 ) * 100 ).toFixed( 0 ) + '%';
+console.log( `     wet: ${ pc( fairShowers, fairN ) } of a clear fair day, ${ pc( greyWet, greyN ) } under a grey sky, ${ pc( galeWet, galeN ) } of a gale; ${ showers } showers in 600 days` );
+ok( fairShowers / fairN > 0.01 && fairShowers / fairN < 0.12 && greyWet / greyN > fairShowers / fairN * 2 && galeWet / galeN > 0.4, 'a passing shower on a fair day now and then, more under a grey sky, most of a gale' );
+ok( thunderDry === 0, 'thunder only in heavy rain' );
+console.log( `     ${ fronts } gales: the fish felt it coming 2-3 h before ${ frontBefore }` );
+ok( fronts > 5 && frontBefore >= fronts * 0.7, 'a blow on its way is felt a few hours ahead (the fish feed ahead of a front)' );
+const storm = weatherAt( 500, 'storm' ), rain = weatherAt( 500, 'rain' );
+ok( storm.id === 'storm' && storm.rain === 1 && storm.thunder === 1 && rain.id === 'rain' && rain.thunder === 0 && rain.rain > 0.5, 'rain and a thunderstorm can be picked' );
+ok( showeriness( 77 ) >= 0 && showeriness( 77 ) <= 1 && unsettled( 77 ) >= 0 && unsettled( 77 ) <= 1, 'the rain\'s fields stay in 0..1' );
+
+// ---- the lightning: the same strike for everyone in the same second, as often as the thunder says
+const S0 = 1761300000;
+ok( JSON.stringify( strikeIn( S0 + 17, 1 ) ) === JSON.stringify( strikeIn( S0 + 17, 1 ) ), 'the same second gives the same strike' );
+let hits = 0, ground = 0, near = 0, upwind = 0, inSecond = true, none = 0, halfHits = 0;
+const N = 20000;
+for ( let k = 0; k < N; k ++ ) {
+
+	if ( strikeIn( S0 + k, 0 ) ) none ++;
+	if ( strikeIn( S0 + k, 0.5 ) ) halfHits ++;
+	const s = strikeIn( S0 + k, 1, { x: 0.35, y: 0.94 } );
+	if ( ! s ) continue;
+	hits ++;
+	if ( s.ground ) ground ++;
+	if ( s.dist < 1500 ) near ++;
+	if ( s.at < S0 + k || s.at >= S0 + k + 1 ) inSecond = false;
+	if ( ( s.x * 0.35 + s.z * 0.94 ) / s.dist < 0 ) upwind ++;
+
+}
+
+console.log( `     a full thunderstorm: a strike every ${ ( N / hits ).toFixed( 1 ) } s, ${ pc( ground, hits ) } to the ground, ${ pc( near, hits ) } within 1.5 km` );
+ok( none === 0 && Math.abs( hits / N - STRIKE_RATE ) < 0.01 && Math.abs( halfHits / N - STRIKE_RATE / 2 ) < 0.01, 'no thunder, no lightning; strikes as often as the thunder says' );
+ok( inSecond && ground > hits * 0.25 && ground < hits * 0.45 && near > hits * 0.05 && near < hits * 0.25, 'a third come down as bolts, a few of them near' );
+let upEarly = 0, coming = 0;
+for ( let k = 0; k < N; k ++ ) {
+
+	const s = strikeIn( S0 + k, 0.15, { x: 0.35, y: 0.94 } );
+	if ( ! s ) continue;
+	coming ++;
+	if ( ( s.x * 0.35 + s.z * 0.94 ) / s.dist < 0 ) upEarly ++;
+
+}
+
+ok( upEarly > coming * 0.95 && upwind < hits * 0.8, 'a storm coming in strikes from where it comes from, overhead all round' );
 
 // ---- read out as a marine forecast would
 ok( knots( 7 ) === '14 kt' && knots( 20 ) === '39 kt', 'wind in knots' );

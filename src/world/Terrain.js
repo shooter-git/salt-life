@@ -86,6 +86,7 @@ float terrainHeightAt( vec2 xz ) {
 			terrainCaustics: { value: causticTexture() },
 			terrainTime: G.time,
 			terrainNight: G.night,
+			terrainCausticsK: G.caustics, // (M9: faint under a grey sky)
 		};
 
 		this.uniforms = uniforms;
@@ -120,6 +121,7 @@ uniform vec2 terrainGustOffset;
 uniform sampler2D terrainCaustics;
 uniform float terrainTime;
 uniform float terrainNight;
+uniform float terrainCausticsK;
 varying vec3 vTerrain;
 vec4 terDetail( vec2 uv ) { return texture( terrainDetailTex, uv ); }
 vec2 terrainUvOf( vec2 xz ) { return ( xz - terrainMapInfo.xy ) / terrainMapInfo.z; }
@@ -134,7 +136,7 @@ ${ TERRAIN_SHADING_GLSL }
 	float cWater = max( terrainSeaLevel - h, 0.0 );
 	tAlbedo *= exp( - terrainWaterAbsorption * cWater * 1.6 );
 	// caustics: the net of sunlight focused by the waves, drifting over the shallow sea floor
-	float cK = ss( 0.05, 0.7, cWater ) * exp( - cWater * 0.1 ) * ( 1.0 - terrainNight );
+	float cK = ss( 0.05, 0.7, cWater ) * exp( - cWater * 0.1 ) * ( 1.0 - terrainNight ) * terrainCausticsK;
 	if ( cK > 0.001 ) {
 		float ca = min( texture( terrainCaustics, xz * 0.19 + terrainTime * vec2( 0.031, 0.018 ) ).r,
 			texture( terrainCaustics, ${ rot2( 'xz', 0.8 ) } * 0.15 + 0.5 - terrainTime * vec2( 0.017, 0.034 ) ).r );

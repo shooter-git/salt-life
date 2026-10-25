@@ -920,7 +920,8 @@ export class GameHUD {
 			return fishItem( f, `<button class="gm-mini" data-sell="${ f.id }">${ box ? 'Drop' : 'Sell' }</button>`, q.prices.get( f.id ), q.wanted > 0 || q.weekN > 0 );
 
 		} ).join( '' );
-		const sub = box ? `Joe's back at ${ this.at( v.hours[ 0 ] ) }. The box pays ${ Math.round( NIGHT_BOX * 100 ) }% of his price, and his orders in full.`
+		// ((M9) or he's shut for the weather)
+		const sub = box ? `${ v.weatherShut ? 'Joe\'s shut for the weather' : `Joe's back at ${ this.at( v.hours[ 0 ] ) }` }. The box pays ${ Math.round( NIGHT_BOX * 100 ) }% of his price, and his orders in full.`
 			: g.paidNote ? `The restaurant's paid for the week's order. Here's your share: $${ g.paidNote }.`
 			: this.closingSoon( v ) ? `Last orders: I shut at ${ this.at( v.hours[ 1 ] ) }.`
 			: s.inventory.length ? v.greeting || 'Let\'s see what you caught.' : v.idle || 'Come back when you\'ve got fish.';
@@ -981,7 +982,7 @@ GameHUD.prototype.renderShop = function () {
 
 		this.drawStand( v, `
 			<div class="gm-head"><h2>Marta's honesty box</h2>
-			<p class="gm-sub">Marta's back at ${ this.at( v.hours[ 0 ] ) }. The diesel's left out: pay into the box. You have $${ s.money.toLocaleString() }</p></div>
+			<p class="gm-sub">${ v.weatherShut ? 'Marta\'s shut for the weather' : `Marta's back at ${ this.at( v.hours[ 0 ] ) }` }. The diesel's left out: pay into the box. You have $${ s.money.toLocaleString() }</p></div>
 			<div class="gm-list">${ towRow }${ fuelRow }</div>
 			<div class="gm-foot"><span class="gm-sub">Gear when she's back</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>` );
 		bindFuel();

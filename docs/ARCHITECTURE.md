@@ -41,11 +41,11 @@ Salt Life is [Tidewater](https://github.com/dgreenheck/tidewater) rebuilt as an 
 | `src/core` | Globals (shared uniforms such as `G.time`, `G.sunDir`, `G.night`), input, saving (`SaveStore`: `portal.save.personal`), the CDLOD grid, `ClassicWorker`, `ReleaseAfterUpload` |
 | `src/world` | The island: terrain, village, pier, rocks, plants, debris, reef and fish, wildlife, the whale, the boat model, colliders, the layout (`WorldLayout`); the weather's driver (`WeatherDriver`) |
 | `src/ocean` | The sea: Gerstner waves, shore waves, the water surface and its detail, the wake, the CPU water queries |
-| `src/sky` | Atmosphere, clouds, the sun and moon, the environment map |
-| `src/materials` | Shader pieces shared by many materials: local lights at night, the clouds' shadows (high), height haze (three's fog chunks, replaced), underwater light, LOD fades |
+| `src/sky` | Atmosphere, clouds, the sun and moon, the environment map, the lightning |
+| `src/materials` | Shader pieces shared by many materials: local lights at night, the clouds' shadows (high), wet surfaces, height haze (three's fog chunks, replaced), underwater light, LOD fades |
 | `src/player` | The player, the boat's physics, the bow spray |
 | `src/game` | The fishing game: the rod, bites, the fight, the catch card, the cooler and log, the stalls, Joe and Marta, the HUD, the minimap, the guide; the speargun; the cast net and the bait; the island's clock and its weather (`Weather.js`) |
-| `src/fx`, `src/post` | Spray, marine snow, air motes; the high tier's post chain and sun shafts |
+| `src/fx`, `src/post` | Spray, marine snow, air motes, the rain; the high tier's post chain and sun shafts |
 | `src/ui` | The HUD's DOM, touch controls, fonts |
 | `src/engine/index.js` | `three` itself, re-exported: the ported files still import it as Tidewater's engine |
 
@@ -102,7 +102,7 @@ Everyone keeps their own progress and their own fish.
 - **On your own** (a solo session, or nobody else here yet), you can hold the clock and rest until dawn, noon, dusk or night. In company it runs for everyone, and a rest needs all of you (Playing together, above).
 - **The clock in the HUD** (`TimeHUD.js`): the time at the left of the purse, with a sun, a moon, or two bars while it's held. T (R3 on a gamepad, or a tap) opens a small menu under the purse. It says when Joe and Marta open or shut, and offers holding and resting, or, in company, who wants to rest until when. A dot on the clock says someone else wants to rest. Nothing about the clock is a toast: a rest dims the world for a moment instead.
 
-**The stalls keep hours** (`Orders.HOURS`): Joe from 5 am to 7 pm, Marta from 7 am to 7 pm.
+**The stalls keep hours** (`Orders.HOURS`): Joe from 5 am to 7 pm, Marta from 7 am to 7 pm. In a gale or a thunderstorm they shut whatever the hour (`Orders.shutFor`, `stallOpen`: The weather, below).
 
 - Out of them the trader has gone home (`Vendor.setOpen`: not drawn), and their minimap marker greys.
 - A "Closed" board is out while they're away, saying when they're back and what's left out (`ClosedSign.js`: one plane drawn on a canvas, sharing the records board's program). Joe's is propped on his counter; Marta's leans on the front of her table.
@@ -138,12 +138,16 @@ Everyone keeps their own progress and their own fish.
 
 - **From the day alone:** the weather is a function of the island's time (`islandTime( day, hour )`, game hours since day 1 began), as the wanted lists are of the day. Everyone on one clock has the same weather, and nothing is sent.
   - Three slow fields over that time: storminess (the wind, the swell), cloudiness (it can grey a calm day too) and how far the wind has turned from the trades (`veer`: up to about 35° either way). Each is value noise in two octaves, about 60 h and 14 h, mapped through its own distribution so that it's spread evenly.
-  - They're read against the conditions' rows (`CONDITIONS`): calm, fair, breezy, cloudy, blustery and gale. About half the time it's fair, a tenth calm, and a gale about one hour in twenty-five.
+  - They're read against the conditions' rows (`CONDITIONS`): calm, fair, breezy, cloudy, rain, blustery, gale and thunderstorm (`storm`). About half the time it's fair, a tenth calm, and a gale (or a thunderstorm in a gale's wind) about one hour in twenty-five.
+  - **The rain** (M9) comes from two quicker fields: showeriness (about 3.5 h and 1.1 h) and how unsettled the air is (about 9 h and 3 h). It rains where it's showery enough for the sky: now and then a light shower on a clear fair day, about a third of the time under a grey sky, most of a gale (`RAIN_CHANCE`). It's heavier the greyer and stormier it is (`rain`, 0..1: 1 a tropical downpour), and the heaviest, in unsettled air, is a thunderstorm (`thunder`, 0..1). Rain brings its cloud, greys the sky and closes in the horizon. All told it rains about one hour in five (mostly showers), and thunders about one in twenty-five (`test/weather.mjs`).
+  - **A blow on its way** (`front`, 0..1): how much stormier it gets in the next 2 to 4 hours. The fish feel it (below).
+  - The name goes by a thunderstorm first, then the wind, then the rain and the cloud (`nameOf`).
   - The swell comes from the storm ahead (storminess 3 and 6 hours on), so the surf builds before a blow.
   - The surf's period: a storm's own swell is short (7.5 s in a gale), a swell from one still on its way long (up to `PERIOD_MAX`, 12 s), and by then smaller (`GROUNDSWELL_MAX`, 0.4 m, at the longest). Fair's is 9 s.
   - Only `+ − × ÷` and integer hashes: every device works out the same condition from the same time.
   - Day 1 is fair, and the forecast comes in over the first hours of day 2 (a new player's first morning; the checks start there).
-  - **Fair is the island as it always was:** 7 m/s of wind from the trades' direction, today's sea, surf (9 s), cloud and light.
+  - **Fair is the island as it always was:** 7 m/s of wind from the trades' direction, today's sea, surf (9 s), cloud and light, and dry.
+  - **The lightning's strikes** come from the real second and how thundery it is (`strikeIn`): in each second, a strike or none (at most `STRIKE_RATE`, one every 6 s or so in a full thunderstorm), where (from the island's middle, mostly up the trades until the storm's overhead, near ones rare), and whether it comes down as a bolt (a third do). Everyone on one clock sees the same strike at the same moment, whatever their island clock (held, or resting).
 - **What it drives** (`WeatherDriver`):
   - the wind, `G.windSpeed` and `G.windDir`: the plants, the village's flags and lanterns, the sea's gusts, slicks and windrows, the spray, the boat, the sound. The birds drift in no more than 10 m/s of it. Its direction turns about the trades' (`G.windPrevailing`), at most 0.003 rad a second:
     - the wind sea turns with it about the camera (`Waves.setWindDir`): each wave's phase is moved so that at the camera it's where it was (turned about the island's middle, the crests far from it would sweep past);
@@ -156,9 +160,31 @@ Everyone keeps their own progress and their own fish.
   - the light (`Sky.overcast`): the sun dims under a grey sky (to 30% of a clear day's on low and mid; to 70% on high, where the clouds' shadows dim the rest), and the sky's light greys and rises a little;
   - how far you see (`Sky.visibility`): the tier's fog distances, nearer in murk;
   - the horizon: under a grey sky the fog greys, to a grey of the horizon's brightness, and the sky's dome takes the same grey toward its horizon (`skyGrey`, in the view and in the reflections), so the two meet without a seam;
-  - the sound: the wind and the palms louder in a gale, the surf's waves louder as the root of the swell, and its far roar building faster.
-- **Easing:** the wind and the sea come round over half a minute or so, the cloud more slowly (a few minutes from fair to a gale's). A jump of the clock (a rest, adopting the host's clock, coming back to the tab) sets it all at once, and the boat takes the sea as she finds it.
-- **What stays as it was:** the swell's direction (its travel times around the island are baked when the island loads: [docs/M9.md](M9.md)).
+  - the sound: the wind and the palms louder in a gale, the surf's waves louder as the root of the swell, and its far roar building faster;
+  - (M9) the rain (`G.rain`: the streaks, the rings on the water) and how wet it's left everything (`G.wet`: soaked in seconds of a downpour, dry over four minutes once it's stopped);
+  - (M9) rain's deck (`SkyProClouds.storm`, `Sky.storm`): its base 1.9 km lower, smoother below and darker, no cirrus above it, and no sun through it; of the sun it takes, half comes down through the cloud as the sky's light (`DECK_DIFFUSE`), and the eye adapts to a grey sky as a camera would;
+  - (M9) the caustics on the seabed, faint under a grey sky and gone under rain's deck (`G.caustics`: the terrain's and `Underwater.js`'s), and the underwater fog dimmer under cloud;
+  - (M9) the weather on its way, up the trades (`SkyProClouds.front`): the cover 12, 24 and 36 km upwind (and 12 km downwind) is the forecast's 1.5, 3 and 4.5 hours on, and the cloud's lead (a front comes in at 8 km a game hour, `FRONT_KMH`), against the cover here. The clouds' march reads it along the wind (`scFrontAt`, its largest rise bounding the empty cells), and so does the high tier's shadow map: a front's bank darkens the horizon before it's overhead;
+  - (M9) the gusts: the cat's paws the sea shows (`SeaDetail.gustAt`, the same texels and drift on the CPU) raise and drop the wind by 22% either way, more in rain and squalls (`GUSTS`), where the boat is (`BoatController.windAt`) and where you're listening (the wind's and the palms' sound). A squall's downdraught freshens the wind while it passes (`SQUALL`, at most a gale's).
+- **Easing:** the wind and the sea come round over half a minute or so, the cloud more slowly (a minute or two from fair to a gale's), the rain in seconds. The cloud follows the weather 0.6 game hours on (`CLOUD_LEAD`), so a shower's cloud is over before it rains. A jump of the clock (a rest, adopting the host's clock, coming back to the tab) sets it all at once, and the boat takes the sea as she finds it.
+- **What stays as it was:** the swell's direction (its travel times around the island are baked when the island loads: [docs/M10.md](M10.md)).
+- **The rain** (`src/fx/Rain.js`): drops falling through a box that wraps around the camera, as the air motes do (a hash of the instance, no simulation), in one instanced draw: 1,400 on low, 3,200 on mid, 6,400 on high. Each falls at its size's speed (four sizes, eighths of 9 m/s, so each wraps whole) and is carried by the wind near the ground: a squall drives it slanting. It's drawn as the streak a moment's look leaves, at least a pixel or so across. How hard it rains is how many fall. They're lit by the sky, a glint of the sun against the light, and the lightning. None under the ground or the sea, or under the wheelhouse roof (`BoatModel.shelter`, a box in the boat's frame), or with the camera under water.
+- **The rings** (`WaterSurface`, `waterRainRing`): a ring spreading from each drop, in two layers of cells, as the slope of the sea's ripples within 45 m of the camera; the drops beat the wind's ripples down. Nothing's added on a dry day (a uniform branch).
+- **Wet surfaces** (`src/materials/Wet.js`): every lit material that `App.lightUp` gives the local lights gets wet too (`useWet`: the `WET_SURFACES` define). In three's lighting chunks, just before the lights read the surface, `G.wet` darkens what faces up and glosses it (the materials that rewrite their emissive or their lights keep their code and still get wet).
+- **The lightning** (`src/sky/Lightning.js`):
+  - It looks at each second's strike once (`Weather.strikeIn`, with the eased thunder and the wind's direction).
+  - A flash is two to five return strokes tens of milliseconds apart, each fading in 50 ms. The brightest flash lights the cloud from inside about the strike, brightest where it's thickest, and the murk toward the horizon (`skyFlash`, in the sky's main view on every tier: the panorama's and the trace's clouds alike). It lights the island from the sky too (the hemisphere light, bluish white; the eye adapted to the dark at night makes the most of it) and the rain.
+  - A ground strike's bolt is built when it strikes: a main channel stepping down from the cloud's base in jagged runs, with branches that peter out and a few streaks under the base. It's drawn as ribbons a few pixels across in one draw, unfogged, dimmed by the rain's murk, and drawn nearer (as large in view) past 9 km, inside the camera's far plane.
+  - The thunder reaches each listener its own distance at 343 m/s after (`onThunder( strike, distance, direction )`): a near crack within 3 km, a far rumble beyond, placed the way it came, dulled and slowed the farther it's come (`SoundScape.thunder`).
+- **The rain's sound** (`SoundScape`): a light shower's patter, a downpour's roar (crossfaded by how hard it rains), and aboard (on deck or at the helm) rain drumming on the boat, the rain beyond her quieter. Field recordings (CC0), built by `tools/audio/build-weather.mjs`.
+- **The fish in the weather** (`Bites.weatherMood`, `habitat.weather` from `Game.habitat()`): none of it on a fair day, which bites exactly as before.
+  - Ahead of a blow (`front`) the bites come up to 35% sooner and the big ones feed too (`rollWeight` skews less to the small end).
+  - Under a grey sky by day each fish bites up to 60% of the way toward how it does at dusk, when that's better: the predators hunt.
+  - A downpour or a thunderstorm puts them down: up to 80% slower.
+  - A big surf stirs up the shallows (half as rich) and round the pier (a third less); a blow out on the open sea, the deep (40% less).
+  - Their own taste (`weather` in `FishTable.js`): mahi and blackfin tuna up on the wind lines in a blow, tarpon rolling in the rain, bonefish off the flats in a big surf and a wind.
+- **Joe and Marta in the weather:** they shut for a gale or a thunderstorm (`Orders.shutFor`), whatever the hour. Whoever's being served finishes first; Joe's night box and the diesel on Marta's honesty box stay out; their "Closed" boards, prompts, panels and the clock's menu say they've shut for the weather.
+- **Joe's forecast slate** (`ForecastSlate.js`): chalked beside his wanted list (hung from it, so it goes up with it): the weather now and its rain, the wind in knots and where it's from, the surf, what's coming, and "Fish feeding: a blow's coming" when the front's on its way.
 - **The boat in the wind** (`BoatController`): drag on the apparent wind, 6 m² end-on and 11 m² abeam, at a centre of effort over the keel's centre of lateral resistance, up on the house. It moves toward the end the wind comes from as it comes round from abeam (as on a flat plate), so beam-on is how she lies.
   - Left to herself she comes round beam-on and drifts downwind (about 0.3 m/s on a fair day, 0.9 in a gale), heeling a little.
   - At anchor she lies head to wind.
@@ -296,6 +322,7 @@ Marta sells one (`anchor` in `Gear.js`: a Danforth on 200 ft of rode, `anchorM` 
 | Reef, fish | shorter range, fewer schools | fewer schools | Tidewater's |
 | Spray particles | 1k | 2k | 4k |
 | Extras | | air motes | air motes, sun shafts, refraction, bloom, the clouds' shadows |
+| Raindrops | 1,400 | 3,200 | 6,400 |
 | The sun under a grey sky | 30% | 30% | 70% (the clouds' shadows do the rest) |
 
 The checks hold the low tier to its budgets: 150 draw calls, 300k triangles, 128 MB of textures and 150 MB of script memory. Mid stays under 1M triangles and high under 3M.
@@ -318,7 +345,7 @@ The checks' browser has no graphics card, and some laptops don't either. `App.cp
 
 ## Testing
 
-- `pnpm test`: the game's logic (and the boat in the wind, and the tow), the island's day (the clock, the stalls' hours, the wanted lists), the weather, the waves (a gale's sea, the biggest surf), the reef and fish, the spearfishing, the cast net and bait, the whale and the spray, under Node. It also checks that the baked terrain matches its generator and that every asset has a licence.
+- `pnpm test`: the game's logic (and the boat in the wind, and the tow, and the fish in the weather), the island's day (the clock, the stalls' hours and shutting for the weather, the wanted lists), the weather (and its rain, thunder and strikes), the waves (a gale's sea, the biggest surf), the reef and fish, the spearfishing, the cast net and bait, the whale and the spray, under Node. It also checks that the baked terrain matches its generator and that every asset has a licence.
 - Two players on one machine: `pnpm dev`, then `/tools/two-players/?name=Robin` and `?name=Sam` in two windows of one browser (`tools/two-players/`: a stand-in for the app and its realtime room).
 - All the Spaces' checks, from its checkout: `node packages/qa-browser/src/cli.ts check ../salt-life`. Run them from an up-to-date `main` there.
 - `qa/script.json` is what the checks play.

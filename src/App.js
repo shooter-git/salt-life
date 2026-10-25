@@ -32,6 +32,7 @@ import { FishStand, STAND } from './game/FishStand.js';
 import { Chandlery, CHANDLERY } from './game/Chandlery.js';
 import { LocalLights, addBoatLights, addVillageLights, useLocalLights, holdLocalLights } from './materials/LocalLights.js';
 import { cloudShadows, useCloudShadows } from './materials/CloudShadows.js';
+import { useWet } from './materials/Wet.js';
 import { Wildlife } from './world/wildlife/Wildlife.js';
 import { Debris } from './world/Debris.js';
 import { Reef } from './world/Reef.js';
@@ -41,6 +42,8 @@ import { MarineSnow } from './fx/MarineSnow.js';
 import { Whale } from './world/marine/Whale.js';
 import { Spray } from './fx/Spray.js';
 import { AirMotes } from './fx/AirMotes.js';
+import { Rain } from './fx/Rain.js';
+import { Lightning } from './sky/Lightning.js';
 import { BoatSpray } from './player/BoatSpray.js';
 import { WhaleWater } from './ocean/WhaleWater.js';
 import { Character } from './game/Character.js';
@@ -75,6 +78,7 @@ const _size = new THREE.Vector2();
 const _fwd = new THREE.Vector3();
 const _up = new THREE.Vector3();
 const _hornAt = new THREE.Vector3( - 0.42, 3.4, 1.15 ); // (the boat's horn, if its model doesn't say)
+const _shelter = new THREE.Matrix4(), _c4 = new THREE.Matrix4(); // (M9: the wheelhouse roof over the rain)
 // what starts the sound: browsers allow it only after one of these
 const GESTURES = [ 'pointerdown', 'touchend', 'click', 'keydown' ];
 
@@ -263,12 +267,21 @@ export class App {
 		// (Salt Life) the weather: the day's, or the one picked on your own (game/Weather.js), on the wind,
 		// the sea, the surf, the cloud and the light (set from the first frame on)
 		this.weather = new WeatherDriver( { sky: this.sky, waves: this.waves, shore: this.shore, water: this.water, boat: this.boatCtl } );
+		// (M9: she feels the gusts on the sea where she is)
+		this.boatCtl.windAt = ( x, z ) => this.weather.windAt( x, z );
 		this.wake = new Wake( { scene, boat: this.boatCtl, waves: this.waves, tier } );
 		// spray (fx/Spray.js): off the boat's bow (and the slap of its hull on the water), the
 		// whale's blows and breaches, leaping mullet, diving birds
 		this.spray = new Spray( { waves: this.waves, terrain: this.terrainData, tier } );
 		scene.add( this.spray.mesh );
 		this.boatSpray = new BoatSpray( { boat: this.boatCtl, spray: this.spray } );
+		// (M9) the rain around the camera (fx/Rain.js), and the lightning (sky/Lightning.js: the strikes
+		// everyone sees, their flash on the clouds and the island, the bolts, the thunder)
+		this.rain = new Rain( { terrain: this.terrain, tier } );
+		scene.add( this.rain.mesh );
+		this.lightning = new Lightning( { scene, sky: this.sky } );
+		// (its thunder, heard as it gets here)
+		this.lightning.onThunder = ( strike, m, dir ) => this.audio && this.audio.thunder( m, dir, strike.power );
 		if ( tier === 'low' ) {
 
 			this.nearDetail = [];
@@ -499,6 +512,12 @@ export class App {
 		if ( ( this._clockSaveT -= dt ) <= 0 ) this.saveClock();
 		// (Salt Life) the weather, before anything it moves (the boat, the sky)
 		this.weather.update( dt, s.day, s.timeOfDay, this.weatherPick(), this.camera );
+		// (M9) the lightning, before the sky its flash lights
+		const wx = this.weather.live, cv = this.renderer.domElement;
+		this.lightning.setViewport( cv.width, cv.height );
+		this.lightning.update( wx.thunder, this.camera, G.windDir.value, this.sky.clouds.base, wx.visibility );
+		this.rain.flash.value = this.sky.flash;
+		if ( wx.thunder > 0 && this.audio ) this.audio.thunderReady();
 
 		// ---- player / boat (boat physics first so the cameras follow this frame's pose)
 		const input = this.input;
@@ -558,7 +577,8 @@ export class App {
 		if ( under ) {
 
 			// under water: the light is green-blue and gone within a few tens of metres
-			_c.copy( UNDERWATER ).multiplyScalar( 0.15 + 0.85 * ( 1 - G.night.value ) );
+			// ((M9) and dimmer under a grey sky)
+			_c.copy( UNDERWATER ).multiplyScalar( ( 0.15 + 0.85 * ( 1 - G.night.value ) ) * ( 1 - 0.5 * this.sky.overcast ) );
 			this.scene.fog.color.copy( _c );
 			this.scene.fog.near = 0;
 			this.scene.fog.far = 28;
@@ -616,11 +636,14 @@ export class App {
 		}
 		this.boatSpray.update( dt );
 		this.spray.update( dt, this.camera, this.renderer.domElement.height );
+		this.rain.update( dt, this.camera, this.cameraWaterHeight, this.renderer.domElement.height );
 		if ( this.motes ) this.motes.update( dt, this.camera, this.cameraWaterHeight, this.renderer.domElement.height );
 		this.water.detail.update( dt, this.camera );
 		this.shore.update( G.time.value ); // (Salt Life: the waves' clock, for the GPU)
 		this.water.update( this.camera );
 		this.boat.update( dt );
+		// (M9) no rain under the wheelhouse roof
+		this.rain.setShelter( _shelter.multiplyMatrices( this.boat.shelter, _c4.copy( this.boat.group.matrixWorld ).invert() ) );
 		this.boatLamps.set( { underway: this.boatCtl.driven || ! ( this.boatCtl.moored || this.boatCtl.anchor ), spot: this.searchlight } );
 		this.localLights.update( this.camera, dt );
 		cloudShadows.update( this.camera );
@@ -905,6 +928,7 @@ export class App {
 				lit.add( m );
 				useLocalLights( m, { cheap } );
 				if ( this.cloudShadows ) useCloudShadows( m );
+				useWet( m ); // (M9: darker and glossier in the rain)
 
 			}
 
@@ -1244,6 +1268,9 @@ export class App {
 			waveHeight: amp * 2,
 			windSpeed: G.windSpeed.value,
 			windDir: G.windDir.value,
+			gust: this.weather.gustAt( p.x, p.z ), // (M9: the cat's paws on the sea, as the boat feels them)
+			rain: G.rain.value, // (M9: and the rain; on the boat it drums on her)
+			aboard: this.player.mode === 'boat' || this.player.mode === 'deck',
 			daylight: 1 - G.night.value,
 			nearPier: Math.abs( p.x - pier.x ) < 12 && p.z > pier.zStart - 5 && p.z < pier.zEnd + 8,
 			boat: theirs ? { active: theirs.active, rpm: theirs.rpm, speed: theirs.speed, position: theirs.position, listenerInside: false } : {

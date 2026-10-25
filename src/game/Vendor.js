@@ -8,7 +8,8 @@ import { createPropMaterial, PAT } from './GameMaterials.js';
 // player comes up, talk gestures while their panel is open (vendor.talking).
 // (Salt Life) A trader keeps hours (game hours [ open, close ), Orders.HOURS): out of them they've gone
 // home (setOpen( false ): not drawn, their "Closed" board out: `sign`, Game), and the stall offers what
-// it does without them (Game).
+// it does without them (Game). (M9) In a gale or a thunderstorm they've gone home too (`weatherShut`,
+// set by Game: Orders.shutFor), whatever the hour.
 //   new Vendor( { name, position, yaw, radius, greeting, idle, material, character, hours } )
 //   vendor.group (add to the scene), vendor.inRange( p ), vendor.update( dt, lookAt ), vendor.setOpen( open )
 export class Vendor {
@@ -22,6 +23,7 @@ export class Vendor {
 		this.hours = hours;
 		this.open = true;
 		this.sign = null; // (Salt Life) the stall's "Closed" board (ClosedSign), shown while they're away
+		this.weatherShut = false; // (M9) gone home for the weather (Game), not for the hour
 		this.radius = radius;
 		this.position = position.clone();
 		this.yaw = yaw;

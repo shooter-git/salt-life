@@ -19,6 +19,9 @@ export class SeaDetail {
 	constructor( { size = 256, lite = false } = {} ) {
 
 		this.texture = makeNoiseTexture( size );
+		// (M9) its texels, for the gusts on the CPU (gustAt: the boat, the wind's sound)
+		this._noise = this.texture.image.data;
+		this._size = size;
 		this.uniforms = {
 			seaDetailNoise: { value: this.texture },
 			seaDetailOffset: { value: new THREE.Vector2() }, // accumulated wind drift (m)
@@ -71,6 +74,30 @@ ${ lite ? '' : /* glsl */`
 	return vec4( rough, gust, slick, streak );
 }
 `;
+
+	}
+
+	// (M9) the gusts at ( x, z ) as the sea shows them (0..1, a lull to a gust: seaDetailSample's), from
+	// the same texels and drift, so the boat feels the cat's paws you see coming across the water
+	gustAt( x, z ) {
+
+		const o = this.offset.value, px = x - o.x, pz = z - o.y;
+		const g1 = this._texel( px / 620, pz / 620, 0 );
+		const g2 = this._texel( px / 230 + G.time.value * 0.0009, pz / 230 + 0.37, 1 );
+		const raw = g1 * 0.62 + g2 * 0.38;
+		return Math.min( 1, Math.max( 0, ( raw - 0.5 ) * 2.4 * this.uniforms.seaDetailAmounts.value.x + 0.5 ) );
+
+	}
+
+	// a channel of the noise at ( u, v ), bilinear and repeat-wrapped as the GPU samples it
+	_texel( u, v, c ) {
+
+		const n = this._size, d = this._noise;
+		const x = u * n - 0.5, y = v * n - 0.5, x0 = Math.floor( x ), y0 = Math.floor( y ), fx = x - x0, fy = y - y0;
+		const i0 = ( ( x0 % n ) + n ) % n, j0 = ( ( y0 % n ) + n ) % n, i1 = ( i0 + 1 ) % n, j1 = ( j0 + 1 ) % n;
+		const at = ( i, j ) => d[ ( j * n + i ) * 4 + c ];
+		const a = at( i0, j0 ) + ( at( i1, j0 ) - at( i0, j0 ) ) * fx, b = at( i0, j1 ) + ( at( i1, j1 ) - at( i0, j1 ) ) * fx;
+		return ( a + ( b - a ) * fy ) / 255;
 
 	}
 

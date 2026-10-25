@@ -40,6 +40,9 @@ import { Cirrus, NoCirrus } from './Clouds.js';
 //   clouds.overcast   { value } 0..1 (Salt Life: the weather's grey sky: denser, darker cloud, bases
 //     everywhere). Slow changes of these are followed by the progressive refresh and the history; a
 //     step (more than 0.05 in a frame) makes a new panorama
+//   clouds.front   { value } Vector4 (M9: the weather on its way: the cover up the trades at FRONT_KM,
+//     less the cover here; WeatherDriver)
+//   clouds.storm   { value } 0..1 (M9: rain's deck, lower, smoother below and darker; a thunderstorm's)
 //   clouds.update( dt, camera, keyColor, nightSky, night, skyIrradiance ) (Tidewater's frame values;
 //     keyColor: the moon's light at night)
 //   clouds.resolutionScale, clouds.resetHistory(), clouds.invalidate()
@@ -47,6 +50,11 @@ import { Cirrus, NoCirrus } from './Clouds.js';
 //     strength ): the ground's shadow along the key light (1 = clear)
 
 const DEG = Math.PI / 180;
+// (M9) the distances up the trades (km, - behind) at which the weather on its way is told (clouds.front)
+export const FRONT_KM = [ - 12, 12, 24, 36 ];
+// (M9) rain's deck: its base this far down (m) at full storm, how much smoother its underside is (of the
+// erosion), how much less of the light it scatters and lets through to its underside
+const STORM = { lower: 1900, smooth: 0.6, albedo: 0.1, ambient: 0.12 };
 
 // "Partly cloudy": scattered fair-weather cumulus
 const PRESET = {
@@ -243,6 +251,9 @@ uniform vec4 scsShadow;
 uniform vec4 scsBounce;
 uniform vec4 scsWind;
 uniform vec4 scsFade;
+// (M9) the weather on its way: the cover's change at FRONT_KM up the trades; its largest rise
+uniform vec4 scsFront;
+uniform float scsFrontMax;
 // Tidewater's frame: the key light (the sun, or the moon at night: its colour), the night sky
 uniform vec3 scKeyDir;
 uniform vec3 scKeyColor;
@@ -287,6 +298,14 @@ struct ScCandidate {
 	float conservative; float edge; float top; float floorMask;
 	float shellHeight; float localHeight; float coverage; vec3 position;
 };
+// (M9) the cover's change at a point from the weather on its way, by how far up the trades it is
+float scFrontAt( vec2 xz ) {
+	float d = dot( xz - scfPosition.xz, - scsWind.xy ) * 0.001;
+	if ( d < 0.0 ) return scsFront.x * clamp( d / ${ f( FRONT_KM[ 0 ] ) }, 0.0, 1.0 );
+	if ( d < ${ f( FRONT_KM[ 1 ] ) } ) return scsFront.y * d / ${ f( FRONT_KM[ 1 ] ) };
+	if ( d < ${ f( FRONT_KM[ 2 ] ) } ) return mix( scsFront.y, scsFront.z, ( d - ${ f( FRONT_KM[ 1 ] ) } ) / ${ f( FRONT_KM[ 2 ] - FRONT_KM[ 1 ] ) } );
+	return mix( scsFront.z, scsFront.w, clamp( ( d - ${ f( FRONT_KM[ 2 ] ) } ) / ${ f( FRONT_KM[ 3 ] - FRONT_KM[ 2 ] ) }, 0.0, 1.0 ) );
+}
 float scShellHeight( vec3 p ) {
 	vec2 horizontal = p.xz - scfPosition.xz;
 	// parabolic radial height avoids subtracting two ~6,371,000 m floats
@@ -363,8 +382,12 @@ vec2 scCloudInterval( vec3 dir, float originHeight ) {
 // the ray march (sky-pro clouds.wgsl main(), as a function of the ray)
 const MARCH_GLSL = /* glsl */`
 uniform sampler2D scWeatherBounds;
-float scCoverageAt( float t ) {
-	return scsShell.w + scsHorizon.z * smoothstep( scsHorizon.x, scsHorizon.x + max( scsHorizon.y, 1.0 ), t );
+float scCoverageAt( float t, vec3 p ) {
+	return clamp( scsShell.w + scFrontAt( p.xz ), 0.0, 1.0 ) + scsHorizon.z * smoothstep( scsHorizon.x, scsHorizon.x + max( scsHorizon.y, 1.0 ), t );
+}
+// (the most it can be along a stretch of ray: the cells' emptiness test)
+float scCoverageBound( float t ) {
+	return min( 1.0, scsShell.w + scsFrontMax ) + scsHorizon.z * smoothstep( scsHorizon.x, scsHorizon.x + max( scsHorizon.y, 1.0 ), t );
 }
 float scHeightAlongRay( float t, vec3 dir, float originHeight ) {
 	float altitude = originHeight + dir.y * t + dot( dir.xz, dir.xz ) * t * t / ( 2.0 * SC_EARTH * 1000.0 );
@@ -374,7 +397,7 @@ bool scCellIsEmpty( float t, float end, vec3 dir, float originHeight, float maxi
 	float turningPoint = - dir.y * SC_EARTH * 1000.0 / max( dot( dir.xz, dir.xz ), 0.000001 );
 	float minHeight = scHeightAlongRay( clamp( turningPoint, t, end ), dir, originHeight );
 	float maxHeight = max( scHeightAlongRay( t, dir, originHeight ), scHeightAlongRay( end, dir, originHeight ) );
-	float coverage = scCoverageAt( end );
+	float coverage = scCoverageBound( end );
 	float maximumTop = maximumWeather + coverage - 1.0 + 1.34 * scsShape.z * coverage;
 	float edgeHeight = scsBase.z >= 0.0 ? minHeight : maxHeight;
 	float edge = max( scsBase.y * exp2( - max( edgeHeight, 0.0 ) * scsBase.z ), 0.0001 );
@@ -449,7 +472,7 @@ ScMarch scMarch( vec3 origin, vec3 dir, float dither, float pixelConeAngle, floa
 			float footprint = t * pixelConeAngle;
 			float fineStep = max( scfMarch.x, t * stepConeAngle * 1.5 );
 			vec3 p = origin + dir * t;
-			float coverage = scCoverageAt( t );
+			float coverage = scCoverageAt( t, p );
 			float baseLod = scConeLod( footprint, scsShape.y );
 			ScCandidate c = scCandidate( p, coverage, baseLod );
 			float erosionLod = scConeLod( footprint, scsShape.y * scsShape.w );
@@ -783,7 +806,7 @@ void main() {
 	for ( int i = 0; i < 16; i ++ ) {
 		float t = t0 + ( float( i ) + 0.5 ) * dt;
 		vec3 p = vec3( xz.x, 0.0, xz.y ) + vec3( L.x, ly, L.z ) * t;
-		tau += scLightDensity( p, scsShell.w, vec2( 2.0 ), false ) * scsShell.z * dt;
+		tau += scLightDensity( p, clamp( scsShell.w + scFrontAt( p.xz ), 0.0, 1.0 ), vec2( 2.0 ), false ) * scsShell.z * dt;
 		if ( tau > 12.0 ) break;
 	}
 	// multiple scattering lets some light through even thick cloud (as the view's octaves do)
@@ -821,6 +844,8 @@ export class SkyProClouds {
 			scsBounce: { value: [ ...l.groundBounceAlbedo, 0 ] },
 			scsWind: { value: [ 0, 1, P.wind.skew, 0 ] },
 			scsFade: { value: [ P.fade.hazeDensityScale, P.fade.horizonMeltStart, P.fade.horizonMeltEnd, 0 ] },
+			scsFront: { value: new THREE.Vector4() },
+			scsFrontMax: { value: 0 },
 			scsWeatherMass: { value: P.weather.mainMass.slice() },
 			scsWeatherDetail: { value: P.weather.detail.slice() },
 			scsWeather: { value: [ P.weather.coverage, 0, 0, 0 ] },
@@ -836,6 +861,8 @@ export class SkyProClouds {
 		// ---- public handles
 		this.coverage = { value: s.coverage };
 		this.overcast = { value: 0 };
+		this.front = U.scsFront;
+		this.storm = { value: 0 };
 		this.resolutionScale = 1;
 		this.outputSize = null;
 
@@ -907,6 +934,7 @@ export class SkyProClouds {
 		// Tidewater's cirrus veil (composited behind the cumulus by the trace and the panorama)
 		this.cirrus = q.fibres ? new Cirrus( renderer, { fibRes: q.fibres } ) : new NoCirrus();
 		this.cirrusAmount = this.cirrus.amount;
+		this._cirrus = this.cirrus.amount.value; // (M9: a fair sky's, thinned under a grey one)
 
 		this._buildPasses();
 
@@ -928,6 +956,7 @@ export class SkyProClouds {
 		this._prevLight = new THREE.Vector3();
 		this._lastCoverage = - 1;
 		this._lastOvercast = 0;
+		this._lastStorm = 0;
 		this.passes = 0; // passes drawn by the last update (stats)
 
 	}
@@ -1070,14 +1099,17 @@ export class SkyProClouds {
 		// a little every frame: the panorama's progressive refresh and the view's history follow on their
 		// own. Only a step (a pick, the clock jumping) makes a whole new panorama, and never restarts one
 		// already being made (the first one fades the clouds in, and brings the cirrus)
-		const cov = this.coverage.value, oc = this.overcast.value;
-		if ( cov !== this._lastCoverage || oc !== this._lastOvercast ) {
+		const cov = this.coverage.value, oc = this.overcast.value, st = this.storm.value;
+		const F = U.scsFront.value;
+		U.scsFrontMax.value = Math.max( 0, F.x, F.y, F.z, F.w );
+		if ( cov !== this._lastCoverage || oc !== this._lastOvercast || st !== this._lastStorm ) {
 
-			const step = Math.abs( cov - this._lastCoverage ) > 0.05 || Math.abs( oc - this._lastOvercast ) > 0.05;
+			const step = Math.abs( cov - this._lastCoverage ) > 0.05 || Math.abs( oc - this._lastOvercast ) > 0.05 || Math.abs( st - this._lastStorm ) > 0.05;
 			U.scsShell.value[ 3 ] = cov;
-			this._setOvercast( oc );
+			this._setOvercast( oc, st );
 			this._lastCoverage = cov;
 			this._lastOvercast = oc;
+			this._lastStorm = st;
 			if ( step ) {
 
 				this.historyValid = false;
@@ -1330,15 +1362,20 @@ export class SkyProClouds {
 	}
 
 	// (Salt Life) a grey sky (0: the preset's fair-weather cumulus): denser cloud, its bases forming
-	// everywhere, darker below, less light through it
-	_setOvercast( o ) {
+	// everywhere, darker below, less light through it. (M9) And rain's deck (`storm`): nimbostratus, its
+	// base lower, its underside smoother and darker still; the cirrus lost above it
+	_setOvercast( o, storm = 0 ) {
 
-		const S = PRESET.shape, L = PRESET.lighting, U = this.uniforms;
-		U.scsShell.value[ 2 ] = S.density * ( 1 + 1.2 * o );
-		U.scsBase.value[ 0 ] = S.baseWeatherStrength * ( 1 - 0.7 * o );
-		U.scsCloudLight.value[ 0 ] = L.scatteringAlbedo * ( 1 - 0.25 * o );
-		U.scsCloudLight.value[ 2 ] = L.ambientIntensity * ( 1 - 0.25 * o );
+		const S = PRESET.shape, L = PRESET.lighting, U = this.uniforms, E = S.erosionStrengthBase, P = S.erosionStrengthPeak;
+		U.scsShell.value[ 0 ] = S.altitude - STORM.lower * storm;
+		U.scsShell.value[ 2 ] = S.density * ( 1 + 1.2 * o + 0.8 * storm );
+		U.scsBase.value[ 0 ] = S.baseWeatherStrength * ( 1 - 0.7 * o ) * ( 1 - 0.6 * storm );
+		U.scsErosion.value[ 0 ] = E * ( 1 - STORM.smooth * storm );
+		U.scsErosion.value[ 1 ] = P * ( 1 - 0.3 * storm );
+		U.scsCloudLight.value[ 0 ] = L.scatteringAlbedo * ( 1 - 0.25 * o ) * ( 1 - STORM.albedo * storm );
+		U.scsCloudLight.value[ 2 ] = L.ambientIntensity * ( 1 - 0.25 * o ) * ( 1 - STORM.ambient * storm );
 		U.scsShadow.value[ 0 ] = L.baseShadowStrength + ( 1 - L.baseShadowStrength ) * o;
+		this.cirrus.amount.value = this._cirrus * ( 1 - 0.85 * Math.max( o, storm ) );
 
 	}
 
@@ -1352,6 +1389,13 @@ export class SkyProClouds {
 
 		if ( this.ready ) this.panoWarm = this.warmFrames;
 		this.resetHistory();
+
+	}
+
+	// (M9) the cloud's base (m): where rain falls from, and a bolt (lower in rain's deck)
+	get base() {
+
+		return this.uniforms.scsShell.value[ 0 ];
 
 	}
 

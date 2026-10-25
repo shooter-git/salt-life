@@ -47,6 +47,13 @@ const ENV = { low: { size: 64, interval: 60 }, mid: { size: 128, interval: 10 },
 // moonlit sky at the horizon (skyMoonSky)
 const NIGHT_LIGHT = new THREE.Color( 0.6, 0.7, 1.0 );
 const MOON_SKY = new THREE.Color( 0.005, 0.0068, 0.0105 ).multiplyScalar( 2.2 );
+// (M9) a flash's radiance on the clouds (the sky's units), and the light it throws on the island (of the
+// sky fill's level: a strike a few km off lights the land about as a dull day does)
+const FLASH = 0.5;
+const FLASH_FILL = 5;
+const FLASH_LIGHT = new THREE.Color( 0.8, 0.85, 1.0 );
+// (M9) of the sun's light rain's deck takes, the share it scatters down as the sky's light
+const DECK_DIFFUSE = 0.5;
 
 const SKY_VERTEX = /* glsl */`
 varying vec3 vSkyDir;
@@ -66,6 +73,8 @@ uniform float skyNight;
 uniform float skyUnderwater;
 uniform vec3 skyFogColor;
 uniform vec4 skyGrey; // (Salt Life) the horizon under a grey sky: ( its radiance, how much )
+uniform vec4 skyFlash; // (M9) lightning: ( toward the strike, how bright )
+uniform vec3 skyFlashColor;
 uniform float skyTime;
 uniform float skyExposure;
 varying vec3 vSkyDir;
@@ -183,6 +192,15 @@ void main() {
 #endif
 	// (Salt Life) under a grey sky the horizon greys, as the fog does (Sky.update): they meet in one grey
 	L = mix( L, skyGrey.rgb, skyGrey.a * ( 1.0 - smoothstep( 0.0, 0.3, dir.y ) ) );
+#ifndef SKY_ENVIRONMENT
+	// (M9) lightning: the cloud lit from inside about the strike, brightest where it's thickest, and the
+	// rain's murk to the horizon with it (the reflections' panorama isn't: it's made over seconds)
+	if ( skyFlash.w > 0.0 ) {
+		float lobe = exp( ( dot( dir, skyFlash.xyz ) - 1.0 ) * 7.0 );
+		float murk = skyGrey.a * ( 1.0 - smoothstep( 0.0, 0.3, dir.y ) );
+		L += skyFlashColor * skyFlash.w * ( ( 1.0 - c.a ) * ( 2.5 * lobe + 0.2 ) + murk * ( 0.6 * lobe + 0.1 ) );
+	}
+#endif
 	gl_FragColor = vec4( L * skyExposure, 1.0 );
 	#include <tonemapping_fragment>
 	#include <colorspace_fragment>
@@ -223,6 +241,8 @@ export class Sky {
 			skyUnderwater: G.cameraUnderwater,
 			skyFogColor: { value: new THREE.Color() },
 			skyGrey: { value: new THREE.Vector4() },
+			skyFlash: { value: new THREE.Vector4() },
+			skyFlashColor: { value: new THREE.Color( 0.82, 0.86, 1.0 ) },
 		};
 		this.moonDir = this.uniforms.skyMoonDir.value;
 		this.sunDiskIntensity = this.uniforms.skySunDiskIntensity;
@@ -276,6 +296,12 @@ export class Sky {
 		// tier's fog distances). 0 and 1 are the island's clear day
 		this.overcast = 0;
 		this.visibility = 1;
+		// (M9) rain's deck over it (0..1): no sun through it at all; the sky's light the more for it
+		this.storm = 0;
+		// (M9) lightning (Lightning): how bright its flash is now (0: none; 1 a strike a few km off, in the
+		// sky's units through FLASH), and toward it (a unit vector from the camera)
+		this.flash = 0;
+		this.flashDir = new THREE.Vector3( 0, 1, 0 );
 		this._lit = { sunTransmittance: new THREE.Color(), skyIrradiance: new THREE.Color(), horizon: new THREE.Color() };
 		this._noon = this.atmosphere.lighting( 1, { sunTransmittance: new THREE.Color(), skyIrradiance: new THREE.Color(), horizon: new THREE.Color() } );
 		// the sky's irradiance (luminance) below which the eye adapts: the sun 15 degrees up
@@ -350,7 +376,9 @@ export class Sky {
 		const horizonFade = THREE.MathUtils.smoothstep( dir.y, - 0.03, 0.02 );
 		const day = THREE.MathUtils.smoothstep( dir.y, - 0.04, 0.12 );
 		// (the sun, or the moon, through a grey sky)
-		const veiled = 1 - ( 1 - ( UNDER_CLOUD[ this.tier ] ?? UNDER_CLOUD.low ) ) * this.overcast;
+		const clouded = 1 - ( 1 - ( UNDER_CLOUD[ this.tier ] ?? UNDER_CLOUD.low ) ) * this.overcast, veiled = clouded * ( 1 - 0.8 * this.storm );
+		// ((M9) the sun rain's deck takes, a share of it scattered down through the cloud as the sky's light)
+		let deck = 0;
 		if ( sunUp ) {
 
 			const m = Math.max( T.r, T.g, T.b, 1e-6 );
@@ -358,6 +386,7 @@ export class Sky {
 			// (the square root: to the adapted eye a low sun reddens more than it dims; the full
 			// transmittance left golden hour dull at this game's exposure)
 			this.sun.intensity = this.levels.sun * Math.sqrt( m ) * horizonFade * veiled;
+			deck = this.levels.sun * Math.sqrt( m ) * horizonFade * ( clouded - veiled ) * DECK_DIFFUSE;
 
 		} else {
 
@@ -403,13 +432,23 @@ export class Sky {
 		_tint.setRGB( irr.r / il, irr.g / il, irr.b / il ).lerp( _c.setRGB( 1, 1, 1 ), 0.45 + 0.35 * this.overcast ).multiplyScalar( 0.68 );
 		// (a floor: at dusk the adapted eye still sees the land by the sky's light)
 		this.hemi.color.copy( _tint ).multiplyScalar( 0.32 + 0.68 * k ).lerp( MOON, night * 0.5 );
-		this.hemi.intensity = this.levels.sky * ( 0.65 + 0.35 * day ) * ( 1 + 0.3 * this.overcast );
+		this.hemi.intensity = this.levels.sky * ( 0.65 + 0.35 * day ) * ( 1 + 0.3 * this.overcast ) + deck;
 		this.hemi.groundColor.setRGB( 0.32, 0.28, 0.2 ).multiplyScalar( 0.1 + 0.9 * day );
+		// (M9) a flash of lightning lights the island from the sky, bluish white (more so at night, where the
+		// eye's adapted to the dark: the scene's exposure, which follows the sky, does the rest)
+		if ( this.flash > 0 ) {
+
+			const fl = this.flash * FLASH_FILL / ( 1 + 3 * day ) * ( 1 - 0.5 * night );
+			this.hemi.color.lerp( FLASH_LIGHT, Math.min( 1, fl / ( 1 + fl ) ) );
+			this.hemi.intensity += this.levels.sky * fl;
+
+		}
 		G.skyIrradiance.value.copy( this.hemi.color ).multiplyScalar( this.hemi.intensity );
 
 		// eye adaptation: the sky's exposure rises as its irradiance falls below that of a sun 15 degrees
 		// up (at most 6x, as Tidewater's auto exposure), at Tidewater's rates (1/s)
-		const target = THREE.MathUtils.clamp( Math.pow( this._adaptRef / Math.max( luminance( irr ) + 0.004 * night, 1e-5 ), 0.6 ), 1, 6 );
+		// ((M9) and under a grey sky, as a camera would: the clear sky's irradiance is more than the cloud lets down)
+		const target = THREE.MathUtils.clamp( Math.pow( this._adaptRef / Math.max( luminance( irr ) * ( 1 - 0.55 * this.overcast ) + 0.004 * night, 1e-5 ), 0.6 ), 1, 6 );
 		const jump = this._adaptSun.dot( dir ) < 0.9986; // a time of day jump (> 3 degrees): no adaptation
 		this._adaptSun.copy( dir );
 		this.adaptation = jump ? target : this.adaptation + ( target - this.adaptation ) * ( 1 - Math.exp( - dt * ( target > this.adaptation ? 1.6 : 1.1 ) ) );
@@ -423,8 +462,12 @@ export class Sky {
 		const grey = this.uniforms.skyGrey.value, gl = luminance( _c ) * ( 1 - 0.35 * this.overcast );
 		grey.set( 0.93 * gl, 0.96 * gl, gl, 0.85 * this.overcast );
 		_c.lerp( _tint.setRGB( grey.x, grey.y, grey.z ), grey.w ).multiplyScalar( skyAdapt );
+		// (M9: the murk lit by a flash)
+		if ( this.flash > 0 ) _c.lerp( _tint.copy( FLASH_LIGHT ).multiplyScalar( luminance( _c ) * 1.8 + 0.01 * this.flash ), Math.min( 0.3, this.flash * 0.12 ) );
 		this.fog.color.copy( _c );
 		G.horizonColor.value.copy( _c );
+		const F = this.uniforms.skyFlash.value;
+		F.set( this.flashDir.x, this.flashDir.y, this.flashDir.z, this.flash * FLASH );
 		if ( this.scene.background && this.scene.background.isColor ) this.scene.background.copy( _c );
 
 		this.scene.environmentIntensity = this.levels.env * ( 0.6 + 0.4 * day );

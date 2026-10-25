@@ -1,5 +1,5 @@
 import { DAY_RATE, REST, REST_NAMES, isOpen, restTo, sunUp, timeText } from './IslandClock.js';
-import { HOURS } from './Orders.js';
+import { HOURS, shutFor } from './Orders.js';
 import { CONDITIONS, WEATHER_IDS, WEATHER_NAMES, islandTime, forecast, surfText, windFrom } from './Weather.js';
 import { G } from '../core/Globals.js';
 import { knots } from './Units.js';
@@ -10,10 +10,11 @@ import { knots } from './Units.js';
 //   on your own   hold the clock or let it run, rest until dawn, noon, dusk or night
 //   in company    time runs for everyone; a rest happens once all of you want it (each choice shows
 //                 who wants it; a dot on the clock when someone else does and you haven't said)
-// It says when Joe and Marta open or shut, and (Salt Life) the weather: what it is, what's coming, and on
-// your own a choice of it (held while you're alone; in company it's the day's). No toasts: a rest dims
-// the world for a moment instead.
+// It says when Joe and Marta open or shut (M9: or that they've shut for the weather), and (Salt Life) the
+// weather: what it is (M9: and its rain), what's coming, and on your own a choice of it (held while
+// you're alone; in company it's the day's). No toasts: a rest dims the world for a moment instead.
 //   const t = new TimeHUD( game, purse, root );  t.update( dt )  (per frame)  t.toggle( open? )
+//   wxWind( weather ) -> 'NNW' (where it's from)   wxRain( weather ) -> 'rain' ('' dry, or the name says it)
 
 const ICON = {
 	sun: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3" fill="currentColor"/><g stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1"/></g></svg>',
@@ -57,6 +58,7 @@ const CSS = /* css */`
 .gm-time-rest button { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: var(--tw-2) 0; border-radius: var(--tw-r-md);
 	background: var(--tw-fill); border: 1px solid var(--tw-line); color: var(--tw-ink); font: 600 var(--tw-fs-sm) var(--tw-font); }
 .gm-time-rest button small { font: 500 var(--tw-fs-xs) var(--tw-mono); color: var(--tw-ink-3); }
+.gm-time-rest.is-wx { grid-template-columns: repeat(3, 1fr); } /* (M9) the forecast and eight kinds of weather: three rows of three */
 .gm-time-rest button.is-on { background: rgba(var(--tw-aqua-rgb), 0.14); border-color: var(--tw-aqua); box-shadow: inset 0 0 0 1px var(--tw-aqua); }
 .gm-time-hold:hover, .gm-time-rest button:hover { background: var(--tw-fill-2); }
 .gm-time-note { margin: var(--tw-2) 0 0; color: var(--tw-ink-2); font-size: var(--tw-fs-sm); min-height: 1.4em; }
@@ -73,6 +75,8 @@ html.is-touch .tw-root:has(.gm-time.is-open) :is(.gm-map, .gm-coach) { visibilit
 `;
 
 const WEATHER_WIND = Object.fromEntries( WEATHER_IDS.map( ( id ) => [ id, CONDITIONS[ id ].wind ] ) );
+// (M9) the picker's names: a third of the menu wide, 'Thunderstorm' doesn't fit
+const PICK_NAMES = { ...WEATHER_NAMES, storm: 'Thunder' };
 // the direction a wind turned `a` from the trades blows toward
 const turned = ( a ) => {
 
@@ -80,6 +84,19 @@ const turned = ( a ) => {
 	return [ p.x * c - p.y * s, p.x * s + p.y * c ];
 
 };
+
+// (M9) where the weather's wind comes from, on the island's compass ('NNW': the menu, and Joe's forecast slate)
+export const wxWind = ( wx ) => windFrom( ...turned( wx.windAngle ) );
+
+// (M9) its rain, a word or two, when the weather's name doesn't say it already ('' when it's dry)
+export function wxRain( wx ) {
+
+	if ( ! wx || wx.id === 'storm' ) return '';
+	if ( wx.thunder >= 0.15 ) return 'thunder';
+	if ( wx.id === 'rain' ) return wx.rain >= 0.8 ? 'heavy' : '';
+	return wx.rain >= 0.5 ? 'heavy rain' : wx.rain >= 0.12 ? 'rain' : wx.rain >= 0.03 ? 'showers' : '';
+
+}
 
 const h = ( tag, cls, html ) => {
 
@@ -245,7 +262,10 @@ export class TimeHUD {
 		const wx = this.app.weather && this.app.weather.target, chosen = st.alone ? this.app.settings.weather : null;
 		const pick = chosen && this.app.weatherPick ? this.app.weatherPick() : chosen;
 		const next = wx && ! pick ? forecast( islandTime( st.day, st.hour ), 12 ) : null;
-		const wxLine = wx ? `<b>${ WEATHER_NAMES[ wx.id ] }</b> · wind ${ windFrom( ...turned( wx.windAngle ) ) } ${ knots( wx.wind ) } · surf ${ surfText( wx.surf ) } at ${ Math.round( wx.period ) } s` : '';
+		const wet = wxRain( wx );
+		const wxLine = wx ? `<b>${ WEATHER_NAMES[ wx.id ] }</b>${ wet ? ` · ${ wet }` : '' } · wind ${ wxWind( wx ) } ${ knots( wx.wind ) } · surf ${ surfText( wx.surf ) } at ${ Math.round( wx.period ) } s` : '';
+		// (M9) in a gale or a thunderstorm they've both shut and gone home
+		const stalls = wx && shutFor( wx.id ) ? 'Joe and Marta have shut for the weather' : `${ stall( 'Joe', HOURS.joe ) } · ${ stall( 'Marta', HOURS.marta ) }`;
 		const wxNext = pick ? 'Your choice holds while you\'re on your own' : st.alone || ! wx ? ( next ? `Later: ${ WEATHER_NAMES[ next.id ].toLowerCase() }, from ${ at( next.at % 24 ) }` : 'Settled for now' )
 			: `The weather follows the island's day${ next ? ` · later ${ WEATHER_NAMES[ next.id ].toLowerCase() }` : '' }`;
 		const sig = [ timeText( st.hour, loc ), st.day, st.held, st.alone, st.mine, asks, st.here.length, this.app.input.lastDevice, wxLine, wxNext, chosen ].join( '|' );
@@ -266,12 +286,12 @@ export class TimeHUD {
 			const weather = [ null, ...WEATHER_IDS ].map( ( id ) => {
 
 				const on = ( chosen || null ) === id;
-				return `<button type="button" data-weather="${ id || '' }" class="${ on ? 'is-on' : '' }" aria-pressed="${ on }">${ id ? WEATHER_NAMES[ id ] : 'Forecast' }<small>${ id ? knots( WEATHER_WIND[ id ] ) : 'today' }</small></button>`;
+				return `<button type="button" data-weather="${ id || '' }" class="${ on ? 'is-on' : '' }" aria-pressed="${ on }">${ id ? PICK_NAMES[ id ] : 'Forecast' }<small>${ id ? knots( WEATHER_WIND[ id ] ) : 'today' }</small></button>`;
 
 			} ).join( '' );
 			body = `<button type="button" class="gm-time-hold" data-hold>${ st.held ? ICON.play : ICON.held }<span>${ st.held ? 'Let the day run' : 'Hold the clock' }</span><small>${ st.held ? 'held' : 'running' }</small></button>
 				<div class="gm-time-label">Rest until</div><div class="gm-time-rest">${ rest }</div>
-				<div class="gm-time-label">Weather</div><div class="gm-time-rest">${ weather }</div>`;
+				<div class="gm-time-label">Weather</div><div class="gm-time-rest is-wx">${ weather }</div>`;
 
 		} else {
 
@@ -287,7 +307,7 @@ export class TimeHUD {
 		const keys = d === 'touch' ? '' : d === 'gamepad' ? 'D-pad to choose, A to take it, R3 to close' : 'T or Esc to close';
 		this.menu.innerHTML = `
 			<div class="gm-time-head"><b class="gm-time-now">${ timeText( st.hour, loc ) }</b><span class="gm-time-day">Day ${ st.day }</span></div>
-			<p class="gm-time-sub">${ stall( 'Joe', HOURS.joe ) } · ${ stall( 'Marta', HOURS.marta ) }</p>
+			<p class="gm-time-sub">${ stalls }</p>
 			${ wxLine ? `<p class="gm-time-sub gm-time-wx">${ wxLine }</p><p class="gm-time-sub">${ wxNext }</p>` : '' }
 			${ body }
 			${ keys ? `<div class="gm-time-foot">${ keys }</div>` : '' }`;

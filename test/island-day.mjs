@@ -1,7 +1,12 @@
-// Plain-node tests of the island's day (no GPU): the clock, the stalls' hours, the wanted lists and
-// selling on them, and the week's order.
+// Plain-node tests of the island's day (no GPU): the clock, the stalls' hours (M9: and shutting for the
+// weather), the wanted lists and selling on them, and the week's order.
 import { DAY_RATE, NIGHT_X, START_HOUR, REST, pace, advance, clockAt, restTo, isOpen, timeText, dayLength, sunUp } from '../src/game/IslandClock.js';
-import { HOURS, OPENS, NIGHT_BOX, tradeDay, ordersFor, orderFor, orderPrice, orderTerms } from '../src/game/Orders.js';
+import { HOURS, OPENS, NIGHT_BOX, SHUT_FOR, tradeDay, ordersFor, orderFor, orderPrice, orderTerms, shutFor, stallOpen } from '../src/game/Orders.js';
+import { WEATHER_IDS, weatherAt } from '../src/game/Weather.js';
+import { Vendor } from '../src/game/Vendor.js';
+import { Game } from '../src/game/Game.js';
+import { slateText } from '../src/game/ForecastSlate.js';
+import { Vector3 } from '../src/engine/index.js';
 import { FISH } from '../src/game/FishTable.js';
 import { GameState } from '../src/game/GameState.js';
 import { WEEK_MUL, weekOrder, weekNumber, weekEnds, tallyFor, deliver, delivered, filled, mineOf, shareOf, owed } from '../src/game/WeekOrder.js';
@@ -63,6 +68,55 @@ ok( isOpen( HOURS.joe, 6 ) && ! isOpen( HOURS.joe, 19.5 ) && ! isOpen( HOURS.joe
 ok( isOpen( [ 20, 4 ], 23 ) && isOpen( [ 20, 4 ], 1 ) && ! isOpen( [ 20, 4 ], 12 ), 'hours past midnight' );
 ok( timeText( 18.67, 'en-US' ) === '6:40 PM' && timeText( 18.67, 'en-GB' ) === '18:40' && /^0?0:00$/.test( timeText( 0.02, 'en-GB' ) ), 'the time as people read it' );
 ok( sunUp( 12 ) && ! sunUp( 22 ), 'sun or moon' );
+
+// ---- (M9) shut for the weather: in a gale or a thunderstorm Joe and Marta go home whatever the hour,
+// and the stalls offer what they do after hours (Joe's night box, the diesel on Marta's honesty box)
+ok( SHUT_FOR.every( ( id ) => WEATHER_IDS.includes( id ) ) && shutFor( 'gale' ) && shutFor( 'storm' ) && WEATHER_IDS.filter( shutFor ).length === 2 && ! shutFor( null ), 'they shut for a gale or a thunderstorm, nothing less' );
+ok( stallOpen( HOURS.joe, 12 ) && stallOpen( HOURS.joe, 12, 'fair' ) && stallOpen( HOURS.marta, 12, 'rain' ) && ! stallOpen( HOURS.joe, 12, 'gale' ) && ! stallOpen( HOURS.marta, 12, 'storm' ) && ! stallOpen( HOURS.joe, 22, 'fair' ), 'open in their hours, unless the weather shuts them' );
+{
+
+	// the game's side of it (Game.updateVendors, vendorPrompt, saleTerms), on a stand-in for the game
+	const joe = new Vendor( { name: 'Joe · fish buyer', kind: 'buyer', position: new Vector3(), hours: HOURS.joe } );
+	const marta = new Vendor( { name: 'Marta · chandlery', kind: 'shop', position: new Vector3( 50, 0, 0 ), hours: HOURS.marta } );
+	const painted = [];
+	const g = { vendors: [ joe, marta ], signs: [ { forWeather: ( shut ) => painted.push( shut ) } ], hour: 12, weatherNow: weatherAt( 0, 'gale' ), hud: null,
+		app: { portal: null }, orders: [], tradeDay: 1, weekTerms: () => null, vendorPrompt: Game.prototype.vendorPrompt };
+	const frame = () => Game.prototype.updateVendors.call( g, { hit: () => false }, { mode: 'boat', position: new Vector3() } );
+	const rate = ( v ) => Game.prototype.saleTerms.call( g, v ).rate;
+	frame();
+	ok( ! joe.open && ! marta.open && joe.weatherShut && marta.weatherShut && painted.at( - 1 ) === true, 'a gale at noon: both gone home, their boards out saying why' );
+	ok( rate( joe ) === NIGHT_BOX && /night box .*shut for the weather/.test( g.vendorPrompt( joe ) ) && /honesty box .*shut for the weather/.test( g.vendorPrompt( marta ) ), 'Joe\'s night box and the diesel on Marta\'s honesty box, as after hours' );
+	g.weatherNow = weatherAt( 0, 'rain' );
+	frame();
+	ok( joe.open && marta.open && ! joe.weatherShut && painted.at( - 1 ) === false && rate( joe ) === 1 && /^Talk to Joe$/.test( g.vendorPrompt( joe ) ), 'back once it\'s blown over (rain doesn\'t shut them)' );
+	g.hud = { standOpen: true, vendor: joe, closeStand: () => {} };
+	g.weatherNow = weatherAt( 0, 'storm' );
+	frame();
+	ok( joe.open && ! marta.open, 'whoever\'s being served when a thunderstorm comes on finishes with you first' );
+	g.hud.standOpen = false;
+	frame();
+	ok( ! joe.open && joe.weatherShut, '... then goes home' );
+	g.weatherNow = weatherAt( 0, 'fair' );
+	g.hour = 22;
+	frame();
+	ok( ! joe.open && ! joe.weatherShut && painted.at( - 1 ) === false && rate( joe ) === NIGHT_BOX && /back at/.test( g.vendorPrompt( joe ) ), 'after hours on a fair night: the night box, and when he\'s back' );
+	g.weatherNow = null;
+	g.hour = 12;
+	frame();
+	ok( joe.open && marta.open, 'before the weather\'s known, the hours alone' );
+
+}
+// Joe's forecast slate: the weather now, the wind, the surf, what's coming, and the fish feeding ahead of a blow
+{
+
+	const fair = slateText( weatherAt( 0, 'fair' ), null, 'en-US' ), gale = slateText( weatherAt( 0, 'gale' ), null, 'en-US' );
+	const blow = slateText( { ...weatherAt( 0, 'breezy' ), front: 0.9 }, { id: 'gale', at: 3 * 24 + 15 }, 'en-US' );
+	console.log( `     the slate: ${ blow.rows.map( ( r ) => r.join( ' ' ) ).join( ' · ' ) } · ${ blow.note }` );
+	ok( fair.rows.map( ( r ) => r[ 0 ] ).join() === 'Now,Wind,Surf,Later' && fair.rows[ 0 ][ 1 ] === 'Fair' && / 14 kt$/.test( fair.rows[ 1 ][ 1 ] ) && fair.rows[ 3 ][ 1 ] === 'Settled' && fair.note === '', 'the slate on a fair day' );
+	ok( gale.rows[ 0 ][ 1 ] === 'Gale, rain' && slateText( weatherAt( 0, 'storm' ) ).rows[ 0 ][ 1 ] === 'Thunderstorm', 'its rain, and a thunderstorm by name' );
+	ok( blow.rows[ 3 ][ 1 ] === 'Gale from 3:00 PM' && /blow's coming/.test( blow.note ) && slateText( null ).rows.length === 0, 'what\'s coming, and the fish feeding ahead of it' );
+
+}
 
 // ---- the wanted lists
 ok( tradeDay( 4.9, 6 ) === 5 && tradeDay( OPENS, 6 ) === 6, 'the list runs from Joe opening to his opening the next morning' );

@@ -156,6 +156,8 @@ export class BoatController {
 		this.thrust = 0;
 		this.slam = 0;
 		this.onSlam = null;
+		// (M9) the wind's speed where she is (m/s): the gusts on the sea, from WeatherDriver (null: the day's)
+		this.windAt = null;
 		this._acc = 0;
 		this._age = 0; // s since the latest read-back was issued
 
@@ -357,7 +359,7 @@ export class BoatController {
 		// air drag on hull + house (Cd ~0.9, ~6 m^2 frontal area). (Salt Life) On the air moving past her,
 		// the wind with her own motion taken off (the apparent wind): on a still day the drag of her
 		// motion through the air as before; in a wind she's pushed downwind, more when it's on her beam
-		const ws = G.windSpeed.value, wdir = G.windDir.value;
+		const ws = this.windAt ? this.windAt( this.position.x, this.position.z ) : G.windSpeed.value, wdir = G.windDir.value;
 		_g.set( wdir.x * ws - this.velocity.x, 0, wdir.y * ws - this.velocity.z );
 		const aw = _g.length();
 		if ( aw > 1e-4 ) {

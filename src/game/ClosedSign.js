@@ -3,15 +3,16 @@ import { Mesh, PlaneGeometry, CanvasTexture, MeshStandardMaterial, SRGBColorSpac
 // (Salt Life) A trader's "Closed" board, out while they've gone home (Vendor.setOpen shows it): an old
 // plank painted by hand, with when they're back and what's left out for you. One plane drawn on a
 // canvas, in the records board's program (as the wanted slate: no new shader). Propped on Joe's
-// counter; leaning on the front of Marta's table.
-//   const s = new ClosedSign( { terrain, at: STAND, spot: { x, y, z, tilt }, width, lines: [ 'Back at 5 AM', … ] } )
-//   scene.add( s.mesh );  vendor.sign = s.mesh
+// counter; leaning on the front of Marta's table. (M9) Shut for the weather, it says so instead of
+// when they're back (weatherLines; forWeather paints it again only when that changes).
+//   const s = new ClosedSign( { terrain, at: STAND, spot: { x, y, z, tilt }, width, lines: [ 'Back at 5 AM', … ], weatherLines } )
+//   scene.add( s.mesh );  vendor.sign = s.mesh;  s.forWeather( shut )
 
 const W = 512, H = 288;
 
 export class ClosedSign {
 
-	constructor( { terrain, at, spot, width = 0.6, lines = [] } ) {
+	constructor( { terrain, at, spot, width = 0.6, lines = [], weatherLines = null } ) {
 
 		this.canvas = document.createElement( 'canvas' );
 		this.canvas.width = W;
@@ -29,6 +30,19 @@ export class ClosedSign {
 			.multiply( new Matrix4().makeTranslation( spot.x, spot.y, spot.z ) )
 			.multiply( new Matrix4().makeRotationX( - spot.tilt ) )
 			.multiply( new Matrix4().makeRotationZ( spot.roll || 0 ).setPosition( 0, h / 2, 0 ) ) );
+		this.lines = lines;
+		// (M9) what it says while they're shut for the weather
+		this.hourLines = lines;
+		this.weatherLines = weatherLines || lines;
+		this.draw();
+
+	}
+
+	// (M9) shut for the weather, or for the hour: painted again when that changes
+	forWeather( shut ) {
+
+		const lines = shut ? this.weatherLines : this.hourLines;
+		if ( lines === this.lines ) return;
 		this.lines = lines;
 		this.draw();
 

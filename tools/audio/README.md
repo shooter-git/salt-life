@@ -22,6 +22,10 @@ cp out/*.ogg ../../public/audio/         # then copy the entries of fishing-bank
 
 `raw/`, `work/` and `out/` are build scratch (not committed).
 
+The weather's sounds (M9: the rain's beds and the thunder) are built the same way: `node dl.mjs 400178:Sassaby
+200272:jmbphilmes 567027:johndynaudio 717909:TRP 652690:AyaDrevis 243782:bastipictures 778374:BlondPanda`, then
+`node build-weather.mjs` (its bank entries in `weather-bank.json`), then `tame.mjs`.
+
 The boat's horn is built the same way: `node dl.mjs 162350:felix.blume`, then `node build-horn.mjs` (three
 blasts in one sprite), then `tame.mjs`. Keep the scratch folders empty afterwards (or move them out):
 All the Spaces' checks read the folder on disk and ask for a licence entry for every sound in it.

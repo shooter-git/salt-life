@@ -16,6 +16,10 @@
 //             many times more while they're lit (Bites.pickSpecies)
 //   flood     (optional) after dark it gathers under a boat's deck floodlights: its weight counts
 //             this many times more in their pool (Bites.pickSpecies)
+//   weather   (optional, M9) its own taste in weather, beside what the weather does to every fish
+//             (Bites.weatherMood): for each of the mood's keys (front, grey, wind, rain, surf, heavy),
+//             its weight counts ( 1 + this x how much of it there is ) times, so 1 doubles it in a full
+//             blow and -1 keeps it away (Bites.pickSpecies)
 // (Salt Life) and for the law and the speargun:
 //   protected  never kept: one caught on a line is measured, logged and released (the island's
 //              records count it); the speargun won't fire at one
@@ -50,10 +54,11 @@ export const FISH = {
 	grouper: { name: 'Nassau grouper', sci: 'Epinephelus striatus', lw: [ 0.0107, 3.07 ], model: 'grouper', habitat: { reef: 0.6, deep: 0.6 }, kg: [ 3, 14 ], price: 15, fight: 0.6, stamina: 12, time: 'any', rarity: 0.3, protected: true },
 	// (a fish of the deep ledges offshore, never inshore)
 	redSnapper: { name: 'Red snapper', sci: 'Lutjanus campechanus', lw: [ 0.0137, 2.98 ], model: 'redSnapper', habitat: { deep: 1 }, kg: [ 1.5, 9 ], price: 18, fight: 0.5, stamina: 9, time: 'any', rarity: 0.7, spear: true, minCm: 41 },
-	tuna: { name: 'Blackfin tuna', sci: 'Thunnus atlanticus', lw: [ 0.0145, 3.0 ], model: 'tuna', habitat: { deep: 1 }, kg: [ 3, 14 ], price: 16, fight: 0.85, stamina: 16, time: 'dawnDusk', rarity: 0.5, spear: true },
-	mahi: { name: 'Mahi-mahi', sci: 'Coryphaena hippurus', lw: [ 0.0079, 3.0 ], model: 'mahi', habitat: { deep: 0.8 }, kg: [ 4, 18 ], price: 14, fight: 0.8, stamina: 15, time: 'day', rarity: 0.4, spear: true, minCm: 51 },
-	// (catch and release only)
-	tarpon: { name: 'Tarpon', sci: 'Megalops atlanticus', lw: [ 0.0077, 3.02 ], model: 'tarpon', habitat: { pier: 0.35, bay: 0.5, shallows: 0.15 }, kg: [ 10, 45 ], price: 4, fight: 1, stamina: 24, time: 'night', rarity: 0.2, protected: true, cr: true, lights: 3 },
+	// (M9: the blackfin and the mahi hunt along the wind lines and the weed they gather: up in a blow)
+	tuna: { name: 'Blackfin tuna', sci: 'Thunnus atlanticus', lw: [ 0.0145, 3.0 ], model: 'tuna', habitat: { deep: 1 }, kg: [ 3, 14 ], price: 16, fight: 0.85, stamina: 16, time: 'dawnDusk', rarity: 0.5, spear: true, weather: { wind: 0.8 } },
+	mahi: { name: 'Mahi-mahi', sci: 'Coryphaena hippurus', lw: [ 0.0079, 3.0 ], model: 'mahi', habitat: { deep: 0.8 }, kg: [ 4, 18 ], price: 14, fight: 0.8, stamina: 15, time: 'day', rarity: 0.4, spear: true, minCm: 51, weather: { wind: 1.5 } },
+	// (catch and release only; M9: they roll and feed in the rain)
+	tarpon: { name: 'Tarpon', sci: 'Megalops atlanticus', lw: [ 0.0077, 3.02 ], model: 'tarpon', habitat: { pier: 0.35, bay: 0.5, shallows: 0.15 }, kg: [ 10, 45 ], price: 4, fight: 1, stamina: 24, time: 'night', rarity: 0.2, protected: true, cr: true, lights: 3, weather: { rain: 1.5 } },
 	blackGrouper: { name: 'Black grouper', sci: 'Mycteroperca bonaci', lw: [ 0.0115, 3.03 ], model: 'blackGrouper', habitat: { reef: 0.4, deep: 0.7 }, kg: [ 3, 25 ], price: 16, fight: 0.75, stamina: 14, time: 'any', rarity: 0.35, spear: true, minCm: 61 },
 	muttonSnapper: { name: 'Mutton snapper', sci: 'Lutjanus analis', lw: [ 0.0157, 2.97 ], model: 'muttonSnapper', habitat: { reef: 0.6, bay: 0.4, deep: 0.3 }, kg: [ 1, 7 ], price: 14, fight: 0.55, stamina: 9, time: 'dawnDusk', rarity: 0.45, spear: true, minCm: 46 },
 	// (an invader from the Pacific with no predators here: every one taken helps the reef)
@@ -63,8 +68,8 @@ export const FISH = {
 	cuberaSnapper: { name: 'Cubera snapper', sci: 'Lutjanus cyanopterus', lw: [ 0.0135, 3.0 ], model: 'cuberaSnapper', habitat: { deep: 0.6, reef: 0.15 }, kg: [ 8, 45 ], price: 9, fight: 0.95, stamina: 22, time: 'dawnDusk', rarity: 0.12, spear: true },
 	// (under the pier and over the reef; after dark they gather under the pier's lamps)
 	graySnapper: { name: 'Mangrove snapper', sci: 'Lutjanus griseus', lw: [ 0.0148, 2.98 ], model: 'graySnapper', habitat: { pier: 1, reef: 0.6, bay: 0.4, shallows: 0.2 }, kg: [ 0.3, 3 ], price: 13, fight: 0.45, stamina: 6, time: 'dawnDusk', rarity: 0.6, spear: true, minCm: 25, lights: 1.5 },
-	// (the grey ghost of the flats: everyone lets one go)
-	bonefish: { name: 'Bonefish', sci: 'Albula vulpes', lw: [ 0.0085, 3.1 ], model: 'bonefish', habitat: { shallows: 1 }, kg: [ 0.8, 5 ], price: 4, fight: 0.85, stamina: 14, time: 'day', rarity: 0.25, protected: true, cr: true },
+	// (the grey ghost of the flats: everyone lets one go; M9: off the flats into deeper water in a blow)
+	bonefish: { name: 'Bonefish', sci: 'Albula vulpes', lw: [ 0.0085, 3.1 ], model: 'bonefish', habitat: { shallows: 1 }, kg: [ 0.8, 5 ], price: 4, fight: 0.85, stamina: 14, time: 'day', rarity: 0.25, protected: true, cr: true, weather: { surf: - 0.9, wind: - 0.5 } },
 	// (protected in US waters since 1990: no one may take one)
 	goliathGrouper: { name: 'Goliath grouper', sci: 'Epinephelus itajara', lw: [ 0.0128, 3.05 ], model: 'goliathGrouper', habitat: { pier: 0.5, reef: 0.25, deep: 0.3 }, kg: [ 10, 100 ], price: 6, fight: 1, stamina: 30, time: 'any', rarity: 0.1, protected: true },
 	whiteMullet: { name: 'White mullet', sci: 'Mugil curema', lw: [ 0.0123, 2.95 ], model: 'whiteMullet', habitat: { shallows: 1, pier: 0.3 }, kg: [ 0.1, 0.8 ], price: 5, fight: 0.25, stamina: 3.5, time: 'day', rarity: 0.7, net: true },

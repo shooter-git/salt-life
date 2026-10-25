@@ -1,0 +1,59 @@
+{
+ "rain_light": {
+  "file": "rain_light.ogg",
+  "loop": true,
+  "lufs": -27.3,
+  "src": [
+   400178
+  ]
+ },
+ "rain_heavy": {
+  "file": "rain_heavy.ogg",
+  "loop": true,
+  "lufs": -24.7,
+  "src": [
+   200272
+  ]
+ },
+ "rain_boat": {
+  "file": "rain_boat.ogg",
+  "loop": true,
+  "lufs": -23.7,
+  "src": [
+   567027
+  ]
+ },
+ "thunder": {
+  "file": "thunder.ogg",
+  "slices": [
+   [
+    0.08,
+    10.5
+   ],
+   [
+    10.66,
+    17
+   ],
+   [
+    27.74,
+    13
+   ],
+   [
+    40.82,
+    16
+   ]
+  ],
+  "lufs": [
+   -16.2,
+   -14.5,
+   -17.5,
+   -15.3
+  ],
+  "src": [
+   717909,
+   652690,
+   243782,
+   778374
+  ]
+ }
+}
