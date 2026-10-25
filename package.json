@@ -17,7 +17,7 @@
   "dependencies": {
     "@allthespaces/bridge-protocol": "link:../all-the-spaces/packages/bridge-protocol",
     "@allthespaces/portal": "link:../all-the-spaces/packages/portal-sdk",
-    "fflate": "0.8.2",
+    "fflate": "0.8.3",
     "three": "0.186.1"
   },
   "devDependencies": {
