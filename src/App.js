@@ -869,9 +869,9 @@ export class App {
 	// (its studio light and the blurred backdrop), the other players' figures, and on a device that
 	// draws on its CPU the rod and its line, the speargun and the lobster gear, the skinned fish, the
 	// cast net, the rain and the lightning (held back while loading: every shader compiled then is load
-	// time). All are compiled, then their programs first used (useNewPrograms: once the GPU has made them all, on a device that draws on its CPU), then
-	// they're shown: out of the scene, or held back, until then (three compiles a mesh's material
-	// whether it's visible or not)
+	// time). All are compiled, then their programs first used (useNewPrograms: once the GPU has made
+	// them all, on a device that draws on its CPU), then they're shown: out of the scene, or held back,
+	// until then (three compiles a mesh's material whether it's visible or not)
 	async prepareLate() {
 
 		if ( ! this.game ) return;
