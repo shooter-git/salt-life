@@ -8,7 +8,7 @@ Salt Life is [Tidewater](https://github.com/dgreenheck/tidewater) rebuilt as an 
 
 ## Start-up
 
-`src/main.js` connects to All the Spaces (`connect()` from `@allthespaces/portal`), then hands the portal to `App`:
+`src/main.js` connects to All the Spaces (`connect()` from `@allthespaces/portal`), then hands the portal to `App`, which it loads alongside (`import()`: most of the download). On its own (`pnpm dev`, GitHub Pages) there's no veil from the app, so `src/ui/LoadingVeil.js` puts one up at once, follows the same stages and lifts at the start; it also picks the device's tier, as All the Spaces would:
 
 1. `App.init(progress)` builds the island behind the loading veil, reporting each stage (`portal.progress`, and a `performance.mark('load: …')` for profiles).
 2. `portal.ready()`, then `App.start()`.
