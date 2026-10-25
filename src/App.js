@@ -403,16 +403,24 @@ export class App {
 		// WebGL drawn on the CPU: a shader's first draw is its slowest moment there (the driver builds
 		// it then), and drawing every part of the island in the loading frame was most of the load.
 		// The loading frame draws the sky, the ground and the sea; the rest appears over the first
-		// frames after the start, a group a frame (revealLate). The rod and its line, out of sight
-		// until the rod comes out, are compiled after the start (prepareLate).
+		// frames after the start, a group a frame (revealLate), its shaders made after the start too
+		// (lateReady). The rod and its line, out of sight until the rod comes out, are compiled after
+		// the start (prepareLate).
 		if ( this.cpuGL ) {
 
 			const named = ( ...names ) => scene.children.filter( ( c ) => names.some( ( n ) => c.name === n || c.name.startsWith( n + ':' ) ) );
 			this._late = [ named( 'Rocks' ), named( 'Village' ), named( 'FishStand', 'Chandlery', 'StallFish', 'Vendor' ), named( 'LobsterBoat' ) ];
 			for ( const group of this._late ) for ( const o of group ) o.visible = false;
-			this.game.rod.holdBack = true;
-			this.game.gun.holdBack = true; // (and the speargun, its bands, shaft and line)
-			this.game.tools.holdBack = true; // (and the lobster diver's tickle stick and net)
+			// the rod, the speargun and the lobster gear wait out of the scene, not just out of sight: three's
+			// compile() makes the shaders of what's hidden too, and theirs are six of the island's biggest
+			// (made before the start, they stretched the load past the 45 s All the Spaces' checks allow,
+			// on a busy machine)
+			for ( const [ held, meshes ] of this.heldTools() ) {
+
+				held.holdBack = true;
+				for ( const m of meshes ) m.removeFromParent();
+
+			}
 			// the fish in the swimming fish's skin (the village's and the stall's: two big shaders, the
 			// skin's and the fins') wait out of the scene, compiled after the start too
 			this._heldFish = [ ...( this.village.fish || [] ), this.game.display.stallMesh ]
@@ -421,6 +429,9 @@ export class App {
 			// (and the cast net: its netting, lead line and cords are shaders of their own)
 			this._heldNet = this.game.net.meshes.map( ( m ) => [ m, m.parent ] );
 			for ( const [ m ] of this._heldNet ) m.removeFromParent();
+			// ((M9) and the rain and the lightning: nothing to draw until it rains)
+			this._heldWeather = [ this.rain.mesh, this.lightning.mesh ].map( ( m ) => [ m, m.parent ] );
+			for ( const [ m ] of this._heldWeather ) m.removeFromParent();
 
 		}
 
@@ -488,6 +499,7 @@ export class App {
 		// last, once that loading's garbage is collected (settle), the reef, its fish and the specks;
 		// then, on every device, the whale)
 		const revealed = this._late ? new Promise( ( done ) => this._revealed = done ) : null;
+		this.lateReady();
 		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.loadCharacters() )
 			.then( () => this.pause() ).then( () => this.cpuGL && this.lifeAndDebris() ).then( () => this.pause() ).then( () => this.scansArrive() )
 			.then( () => this.cpuGL && this.settle() ).then( () => this.cpuGL && this.reefGrows() )
@@ -793,15 +805,41 @@ export class App {
 
 		}
 
-		for ( const group of this._late ) for ( const root of group ) root.visible = false;
+		// (hidden, and out of the scene until their shaders are made after the start: lateReady; the
+		// fish on the racks and the stall, held out already, come back with prepareLate's)
+		this._lateHeld = [];
+		for ( const group of this._late ) for ( const root of group ) {
+
+			root.visible = false;
+			if ( ! root.parent ) continue;
+			this._lateHeld.push( [ root, root.parent ] );
+			root.removeFromParent();
+
+		}
+
 		target.dispose();
 		plain.dispose();
 
 	}
 
-	// (WebGL drawn on the CPU) the parts held back from the loading frame, a group per drawn frame
+	// (WebGL drawn on the CPU) the parts held back from the loading frame: their shaders made after the
+	// start, not as part of the load (the village's, the rocks', the stalls' and the traders' are six of
+	// the island's biggest), then back in the scene, still hidden, for revealLate
+	async lateReady() {
+
+		const held = this._lateHeld;
+		if ( ! held ) return;
+		await this.readyToDraw( held.map( ( [ root ] ) => root ) );
+		for ( const [ root, parent ] of held ) parent.add( root );
+		this._lateHeld = null;
+
+	}
+
+	// (WebGL drawn on the CPU) the parts held back from the loading frame, a group per drawn frame, once
+	// their shaders are made (lateReady)
 	revealLate() {
 
+		if ( this._lateHeld ) return;
 		const group = this._late && this._late.shift();
 		if ( group ) for ( const o of group ) o.visible = true;
 		else if ( this._late ) {
@@ -813,11 +851,25 @@ export class App {
 
 	}
 
+	// what's held in the hand, by what holds it: the rod and its line and bobber, the speargun (its bands,
+	// shaft and line), the lobster diver's tickle stick and net (on a device that draws on its CPU, out
+	// of the scene until prepareLate)
+	heldTools() {
+
+		const { rod, gun, tools } = this.game;
+		return [
+			[ rod, [ rod.rodMesh, rod.lineMesh, rod.bobberMesh ] ],
+			[ gun, [ gun.gunMesh, gun.bandMesh, gun.shaftMesh, gun.lineMesh ] ],
+			[ tools, [ tools.stickMesh, tools.netMesh ] ],
+		];
+
+	}
+
 	// shaders not needed at the start, compiled and first used after it: the catch card's fish portrait
 	// (its studio light and the blurred backdrop), the other players' figures, and on a device that
-	// draws on its CPU the rod and its line, the skinned fish and the cast net (held back while
-	// loading: every shader compiled then is load time). All are compiled, then their programs first
-	// used (useNewPrograms: once the GPU has made them all, on a device that draws on its CPU), then
+	// draws on its CPU the rod and its line, the speargun and the lobster gear, the skinned fish, the
+	// cast net, the rain and the lightning (held back while loading: every shader compiled then is load
+	// time). All are compiled, then their programs first used (useNewPrograms: once the GPU has made them all, on a device that draws on its CPU), then
 	// they're shown: out of the scene, or held back, until then (three compiles a mesh's material
 	// whether it's visible or not)
 	async prepareLate() {
@@ -837,19 +889,19 @@ export class App {
 
 		}
 
-		const { rod, gun, tools } = game;
-		for ( const [ held, meshes ] of [
-			[ rod, [ rod.rodMesh, rod.lineMesh, rod.bobberMesh ] ],
-			[ gun, [ gun.gunMesh, gun.bandMesh, gun.shaftMesh, gun.lineMesh ] ],
-			[ tools, [ tools.stickMesh, tools.netMesh ] ],
-		] ) if ( held.holdBack ) {
+		for ( const [ held, meshes ] of this.heldTools() ) if ( held.holdBack ) {
 
 			roots.push( ...meshes );
-			show.push( () => held.holdBack = false );
+			show.push( () => {
+
+				for ( const m of meshes ) if ( ! m.parent ) this.scene.add( m );
+				held.holdBack = false;
+
+			} );
 
 		}
 
-		for ( const [ m, parent ] of [ ...( this._heldFish || [] ), ...( this._heldNet || [] ) ] ) {
+		for ( const [ m, parent ] of [ ...( this._heldFish || [] ), ...( this._heldNet || [] ), ...( this._heldWeather || [] ) ] ) {
 
 			roots.push( m );
 			show.push( () => parent.add( m ) );
@@ -858,6 +910,7 @@ export class App {
 
 		this._heldFish = null;
 		this._heldNet = null;
+		this._heldWeather = null;
 		for ( const root of roots ) await r.compileAsync( root, this.camera, this.scene );
 		await this.useNewPrograms();
 		for ( const f of show ) f();

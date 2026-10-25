@@ -334,9 +334,10 @@ The checks' browser has no graphics card, and some laptops don't either. `App.cp
 - **Small, staggered drawing:**
   - The canvas is held to a phone's pixels.
   - The loading frame is 8 × 8 px and draws only the sky, the ground and the sea.
-  - The rest (`_late`) is revealed a group per frame after the start.
-- **Shaders compiled late:** every shader compiled before the start is load time. Shaders not needed at once are compiled in `prepareLate`, after the start: the rod and its line, the speargun, the cast net, and the fish in the swimming fish's skin.
-  - three's `compile()` also compiles the materials of hidden objects. So what waits is taken out of the scene, not just hidden.
+  - The rest (`_late`: the rocks, the village, the stalls and their traders, the lobster boat) waits out of the scene once its geometry is on the GPU (`uploadLate`). Its shaders are made after the start (`lateReady`), then it's revealed a group per frame.
+- **Shaders compiled late:** every shader compiled before the start is load time, and All the Spaces' checks allow 45 s to `portal.ready()` on a machine much slower than most. Shaders not needed at once are compiled in `prepareLate`, after the start: the rod and its line, the speargun, the lobster gear, the cast net, the rain and the lightning, and the fish in the swimming fish's skin.
+  - three's `compile()` also compiles the materials of hidden objects. So what waits is taken out of the scene, not just hidden (`heldTools`, `_heldFish`, `_heldNet`, `_heldWeather`, `_lateHeld`).
+  - On two CPU cores, a phone upright is ready in about 7 s (v1.5.0: 10.6 s, when the tools and the late parts were only hidden and so compiled with the rest).
 - **Shaders first used off the frame:** a program's first use (three looking up its uniforms) waits for the GPU to finish everything queued before it, the program's own linking too. That's seconds there, with the page frozen; a frame that first uses one freezes it too.
   - After the start, `App.useNewPrograms` first waits for a fence (`gpuCaughtUp`, looked at between frames as `pacedFrame` does), so the page keeps answering. Then it uses every new program once, in a tick of `pacedFrame` that draws nothing, so the asking doesn't wait behind a frame.
   - What it readies stays out of the scene, or held back, until then: `readyToDraw` (`readyOffstage` for what's shown already: the wildlife, the debris), the parts in `prepareLate` (all at once, one wait), the plants, Joe and Marta, the records board, the other players' figures.
