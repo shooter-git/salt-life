@@ -38,6 +38,12 @@ that stretch end to end into a crank that doesn't catch and one that does, firin
 ends (`Hull.CRANK_S`). Keep the scratch folders empty afterwards (or move them out):
 All the Spaces' checks read the folder on disk and ask for a licence entry for every sound in it.
 
+The rain on what it falls on and the drips (M11) are built the same way: `node dl.mjs 683778:Elements-Library
+824671:buzkill 51813:kyles 572429:TRP 399281:Mjeno`, then `node build-surfaces.mjs` (its bank entries in
+`surfaces-bank.json`), then `tame.mjs`. `node build-surfaces.mjs --try` writes each loop and each drop on its own
+to `tools/sounds/try/` instead, for the listening page. The rain on a lake modulates from light to medium and
+back over its six minutes: its three loops are cut from its light, medium and heavier stretches.
+
 ## All the Spaces' loudness rule, and the AAC copies
 
 All the Spaces' build turns a sound down when it's louder than -14 LUFS integrated or peaks above -1 dBFS.

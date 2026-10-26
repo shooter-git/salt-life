@@ -11,6 +11,7 @@ import { setDetailData } from './world/terrain/DetailTextures.js';
 import { WORLD } from './world/WorldLayout.js';
 import { Colliders } from './world/Colliders.js';
 import { Village } from './world/Village.js';
+import { CoverMap, COVER, surroundings } from './world/Cover.js';
 import { Terrain } from './world/Terrain.js';
 import { Rocks } from './world/Rocks.js';
 import { Vegetation } from './world/Vegetation.js';
@@ -32,7 +33,7 @@ import { FishStand, STAND } from './game/FishStand.js';
 import { Chandlery, CHANDLERY } from './game/Chandlery.js';
 import { LocalLights, addBoatLights, addVillageLights, useLocalLights, holdLocalLights } from './materials/LocalLights.js';
 import { cloudShadows, useCloudShadows } from './materials/CloudShadows.js';
-import { useWet } from './materials/Wet.js';
+import { useWet, wetSurfaces } from './materials/Wet.js';
 import { Wildlife } from './world/wildlife/Wildlife.js';
 import { Debris } from './world/Debris.js';
 import { Reef } from './world/Reef.js';
@@ -43,6 +44,7 @@ import { Whale } from './world/marine/Whale.js';
 import { Spray } from './fx/Spray.js';
 import { AirMotes } from './fx/AirMotes.js';
 import { Rain } from './fx/Rain.js';
+import { Drips, eavePoints, palmPoints, wheelhousePoints } from './fx/Drips.js';
 import { Lightning } from './sky/Lightning.js';
 import { BoatSpray } from './player/BoatSpray.js';
 import { WhaleWater } from './ocean/WhaleWater.js';
@@ -233,6 +235,11 @@ export class App {
 		// textures are made from the heights) and everything placed on it
 		this.village = new Village( { scene, terrain: this.terrainData, colliders: this.colliders, tier, smallBakes: this.cpuGL } );
 		await this.village.init( renderer );
+		// (M11) what covers the island from above (world/Cover.js): the pier, the boardwalks, the roofs, the
+		// stalls; drawn once after the start (buildCover), nothing covers anything until then. The rain
+		// stops on it, and what's wet in the rain stays dry under it (every wet material from now on)
+		this.cover = new CoverMap();
+		wetSurfaces.under( this.cover );
 		// Joe's fish stand and Marta's chandlery (Tidewater's Game builds them; the fishing game isn't
 		// ported yet): their scanned props load while the rest of the island is made
 		this.stand = new FishStand( { scene, terrain: this.terrainData, colliders: this.colliders, tier } );
@@ -281,8 +288,13 @@ export class App {
 		this.boatSpray = new BoatSpray( { boat: this.boatCtl, spray: this.spray } );
 		// (M9) the rain around the camera (fx/Rain.js), and the lightning (sky/Lightning.js: the strikes
 		// everyone sees, their flash on the clouds and the island, the bolts, the thunder)
-		this.rain = new Rain( { terrain: this.terrain, tier } );
+		this.rain = new Rain( { terrain: this.terrain, cover: this.cover, tier } );
 		scene.add( this.rain.mesh, this.rain.splash );
+		// (M11) the drips (fx/Drips.js): off the wheelhouse roof from the start, the eaves and the palms once
+		// the cover map's built (buildCover)
+		this.drips = new Drips( { tier, flash: this.rain.flash } );
+		this.drips.setBoat( wheelhousePoints( this.boat.lines ) );
+		scene.add( this.drips.mesh );
 		this.lightning = new Lightning( { scene, sky: this.sky } );
 		// (its thunder, heard as it gets here)
 		this.lightning.onThunder = ( strike, m, dir ) => this.audio && this.audio.thunder( m, dir, strike.power );
@@ -441,8 +453,8 @@ export class App {
 			// (and the cast net: its netting, lead line and cords are shaders of their own)
 			this._heldNet = this.game.net.meshes.map( ( m ) => [ m, m.parent ] );
 			for ( const [ m ] of this._heldNet ) m.removeFromParent();
-			// ((M9) and the rain and the lightning: nothing to draw until it rains)
-			this._heldWeather = [ this.rain.mesh, this.rain.splash, this.lightning.mesh ].map( ( m ) => [ m, m.parent ] );
+			// ((M9) and the rain, (M11) its drips, and the lightning: nothing to draw until it rains)
+			this._heldWeather = [ this.rain.mesh, this.rain.splash, this.drips.mesh, this.lightning.mesh ].map( ( m ) => [ m, m.parent ] );
 			for ( const [ m ] of this._heldWeather ) m.removeFromParent();
 
 		}
@@ -512,7 +524,7 @@ export class App {
 		// then, on every device, the whale)
 		const revealed = this._late ? new Promise( ( done ) => this._revealed = done ) : null;
 		this.lateReady();
-		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.loadCharacters() )
+		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.buildCover() ).then( () => this.loadCharacters() )
 			.then( () => this.pause() ).then( () => this.cpuGL && this.lifeAndDebris() ).then( () => this.pause() ).then( () => this.scansArrive() )
 			.then( () => this.cpuGL && this.settle() ).then( () => this.cpuGL && this.reefGrows() )
 			.then( () => this.pause() ).then( () => this.whaleArrives() ).then( () => this.airArrives() );
@@ -670,7 +682,9 @@ export class App {
 		this.boat.update( dt );
 		// (M9) no rain under the wheelhouse roof
 		this.rain.setShelter( _shelter.multiplyMatrices( this.boat.shelter, _c4.copy( this.boat.group.matrixWorld ).invert() ) );
+		wetSurfaces.update( this.camera, _shelter ); // (M11: nor is anything wet under it, or under a cover)
 		this.rain.setDeck( this.boat.group.matrixWorld ); // (M10: the splashes on her cockpit's sole)
+		this.drips.update( dt, this.camera, this.cameraWaterHeight, this.renderer.domElement.height, this.boat.group.matrixWorld ); // (M11)
 		this.boatLamps.set( { underway: this.boatCtl.driven || ! ( this.boatCtl.moored || this.boatCtl.anchor ), spot: this.searchlight } );
 		this.localLights.update( this.camera, dt );
 		cloudShadows.update( this.camera );
@@ -929,6 +943,47 @@ export class App {
 		for ( const root of roots ) await r.compileAsync( root, this.camera, this.scene );
 		await this.useNewPrograms();
 		for ( const f of show ) f();
+
+	}
+
+	// (M11) the cover map (world/Cover.js), once the stalls are in: the village's merged meshes by what
+	// they're made of, Joe's stand under its tin roof, Marta's open table. Its pass is made and first
+	// used as the rest are (readyToDraw's way), and drawn in frames of its own (frameSlot). Then the
+	// drips find its eaves
+	async buildCover() {
+
+		const r = this.renderer;
+		try {
+
+			await Promise.all( [ this.stand.ready, this.chandlery.ready ] ).catch( () => {} );
+			const meshes = ( root, kind ) => {
+
+				const out = [];
+				if ( root ) root.traverse( ( o ) => o.isMesh && out.push( { mesh: o, kind } ) );
+				return out;
+
+			};
+			const parts = [ ...this.village.coverParts(), ...meshes( this.stand.group, COVER.TIN ), ...meshes( this.chandlery.group, COVER.WOOD ) ];
+			await this.cover.build( r, parts, {
+				slot: () => this.frameSlot(),
+				prepare: async ( scene, camera ) => {
+
+					await r.compileAsync( scene, camera );
+					await this.useNewPrograms();
+
+				},
+			} );
+			performance.mark( 'world: cover' );
+			// the drips off the eaves it shows, and off the palms (onto the ground, the sea or a cover)
+			const ground = this.terrainData, palms = this.vegetation.records ? this.vegetation.records.palms : [];
+			const groundAt = ( x, z ) => Math.max( ground.heightAt( x, z ), G.seaLevel.value );
+			this.drips.setPoints( eavePoints( this.cover, groundAt ).concat( palmPoints( palms, groundAt, this.cover ) ) );
+
+		} catch ( e ) {
+
+			console.warn( 'cover', e );
+
+		}
 
 	}
 
@@ -1331,6 +1386,17 @@ export class App {
 		const crank = theirs ? theirs.crank | 0 : 0;
 		if ( crank && ! this._crankHeard ) a.crank( crank === 2 );
 		this._crankHeard = crank;
+		// (M11) what the rain falls on about you (five times a second, while it rains), and the drips seen
+		// landing near you
+		this._rainOnT = ( this._rainOnT || 0 ) - dt;
+		if ( G.rain.value > 0.002 && this._rainOnT <= 0 ) {
+
+			this._rainOnT = 0.2;
+			this._rainOn = surroundings( this.cover, ( x, z ) => this.terrainData.heightAt( x, z ), G.seaLevel.value, p.x, p.y, p.z, this._rainOn );
+
+		}
+
+		for ( const l of this.drips.landed ) a.drip( l.x, l.y, l.z, l.on );
 
 		a.update( dt, {
 			listener: { position: p, forward: _fwd, up: _up },
@@ -1344,6 +1410,7 @@ export class App {
 			windDir: G.windDir.value,
 			gust: this.weather.gustAt( p.x, p.z ), // (M9: the cat's paws on the sea, as the boat feels them)
 			rain: G.rain.value, // (M9: and the rain; on the boat it drums on her)
+			rainOn: this._rainOn, // (M11: on what it falls on about you)
 			aboard: this.player.mode === 'boat' || this.player.mode === 'deck',
 			daylight: 1 - G.night.value,
 			nearPier: Math.abs( p.x - pier.x ) < 12 && p.z > pier.zStart - 5 && p.z < pier.zEnd + 8,

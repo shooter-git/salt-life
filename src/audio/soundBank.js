@@ -64,4 +64,14 @@ export const BANK = {
 	bucket: { file: 'bucket.ogg', slices: [ [ 0.08, 2.89 ] ], lufs: [ -17 ] },
 	hull_creak: { file: 'hull_creak.ogg', slices: [ [ 0.08, 0.8005 ], [ 0.9605, 0.6981 ], [ 1.7386, 0.6 ], [ 2.4186, 0.8 ], [ 3.2986, 0.7 ], [ 4.0786, 0.7981 ] ], lufs: [ -24.6, -20.4, -20.1, -20.1, -23.9, -24.9 ] },
 	shutter: { file: 'shutter.ogg', slices: [ [ 0.08, 1 ], [ 1.16, 1 ], [ 2.24, 1 ] ], lufs: [ -18.3, -18.9, -19.1 ] },
+	// (M11) the rain on what it falls on: the sea (light, medium, heavier; a downpour on a pond, close),
+	// wood (light, set in; drops slapping on a porch, close); and the drips (eight drops on thin metal)
+	rain_water_light: { file: 'rain_water_light.ogg', loop: true, lufs: -26 },
+	rain_water: { file: 'rain_water.ogg', loop: true, lufs: -23 },
+	rain_water_heavy: { file: 'rain_water_heavy.ogg', loop: true, lufs: -23 },
+	rain_pond: { file: 'rain_pond.ogg', loop: true, lufs: -23 },
+	rain_wood_light: { file: 'rain_wood_light.ogg', loop: true, lufs: -23.1 },
+	rain_wood_heavy: { file: 'rain_wood_heavy.ogg', loop: true, lufs: -23 },
+	rain_porch: { file: 'rain_porch.ogg', loop: true, lufs: -32.5 },
+	drips: { file: 'drips.ogg', slices: [ [ 0.05, 0.38 ], [ 0.48, 0.38 ], [ 0.91, 0.38 ], [ 1.34, 0.38 ], [ 1.77, 0.38 ], [ 2.2, 0.38 ], [ 2.63, 0.38 ], [ 3.06, 0.38 ] ], lufs: [ -23, -24.5, -24.8, -30.1, -29.1, -26.8, -26.7, -26.5 ] },
 };

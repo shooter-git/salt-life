@@ -198,6 +198,20 @@
 			"author": "hdfreema"
 		},
 		{
+			"path": "public/audio/drips.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/Elements-Library/sounds/683778/",
+			"title": "Water Dripping on Thin Metal",
+			"author": "Elements-Library"
+		},
+		{
+			"path": "public/audio/drips.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/Elements-Library/sounds/683778/",
+			"title": "Water Dripping on Thin Metal",
+			"author": "Elements-Library"
+		},
+		{
 			"path": "public/audio/emerge.m4a",
 			"license": "CC0-1.0",
 			"source": "https://freesound.org/people/felix.blume/sounds/434978/",
@@ -434,6 +448,104 @@
 			"source": "https://freesound.org/people/Sassaby/sounds/400178/",
 			"title": "Light rain falling at night in Hawaii",
 			"author": "Sassaby"
+		},
+		{
+			"path": "public/audio/rain_pond.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/Mjeno/sounds/399281/",
+			"title": "Rain on pond",
+			"author": "Mjeno"
+		},
+		{
+			"path": "public/audio/rain_pond.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/Mjeno/sounds/399281/",
+			"title": "Rain on pond",
+			"author": "Mjeno"
+		},
+		{
+			"path": "public/audio/rain_porch.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/kyles/sounds/51813/",
+			"title": "rain porch cu slapping drops.aiff",
+			"author": "kyles"
+		},
+		{
+			"path": "public/audio/rain_porch.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/kyles/sounds/51813/",
+			"title": "rain porch cu slapping drops.aiff",
+			"author": "kyles"
+		},
+		{
+			"path": "public/audio/rain_water.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/TRP/sounds/572429/",
+			"title": "180723 Rain, on water lake, modulating light to med, cottage ONTARIO.flac",
+			"author": "TRP"
+		},
+		{
+			"path": "public/audio/rain_water.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/TRP/sounds/572429/",
+			"title": "180723 Rain, on water lake, modulating light to med, cottage ONTARIO.flac",
+			"author": "TRP"
+		},
+		{
+			"path": "public/audio/rain_water_heavy.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/TRP/sounds/572429/",
+			"title": "180723 Rain, on water lake, modulating light to med, cottage ONTARIO.flac",
+			"author": "TRP"
+		},
+		{
+			"path": "public/audio/rain_water_heavy.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/TRP/sounds/572429/",
+			"title": "180723 Rain, on water lake, modulating light to med, cottage ONTARIO.flac",
+			"author": "TRP"
+		},
+		{
+			"path": "public/audio/rain_water_light.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/TRP/sounds/572429/",
+			"title": "180723 Rain, on water lake, modulating light to med, cottage ONTARIO.flac",
+			"author": "TRP"
+		},
+		{
+			"path": "public/audio/rain_water_light.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/TRP/sounds/572429/",
+			"title": "180723 Rain, on water lake, modulating light to med, cottage ONTARIO.flac",
+			"author": "TRP"
+		},
+		{
+			"path": "public/audio/rain_wood_heavy.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/buzkill/sounds/824671/",
+			"title": "RAINClth_Rain Wood Deck Furniture Nighttime Coastal_001_RambleRecordings",
+			"author": "buzkill"
+		},
+		{
+			"path": "public/audio/rain_wood_heavy.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/buzkill/sounds/824671/",
+			"title": "RAINClth_Rain Wood Deck Furniture Nighttime Coastal_001_RambleRecordings",
+			"author": "buzkill"
+		},
+		{
+			"path": "public/audio/rain_wood_light.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/buzkill/sounds/824671/",
+			"title": "RAINClth_Rain Wood Deck Furniture Nighttime Coastal_001_RambleRecordings",
+			"author": "buzkill"
+		},
+		{
+			"path": "public/audio/rain_wood_light.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/buzkill/sounds/824671/",
+			"title": "RAINClth_Rain Wood Deck Furniture Nighttime Coastal_001_RambleRecordings",
+			"author": "buzkill"
 		},
 		{
 			"path": "public/audio/reel_drag.m4a",
