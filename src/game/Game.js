@@ -854,7 +854,7 @@ export class Game {
 		if ( this._forecastT > 0 || ! wx ) return;
 		this._forecastT = 1;
 		const s = this.app.settings, pick = this.app.weatherPick ? this.app.weatherPick() : null;
-		this.forecastSlate.draw( wx, forecast( islandTime( s.day, s.timeOfDay ), 12, pick ), this.app.portal && this.app.portal.locale );
+		this.forecastSlate.draw( wx, forecast( islandTime( s.day, s.timeOfDay ), 12, pick, s.weatherSince ), this.app.portal && this.app.portal.locale, this.app.weather ? this.app.weather.news : null );
 
 	}
 

@@ -28,7 +28,7 @@ import { Player } from './player/Player.js';
 import { BoatController } from './player/BoatController.js';
 import { GameState } from './game/GameState.js';
 import { DAY_RATE, START_HOUR, advance } from './game/IslandClock.js';
-import { CONDITIONS } from './game/Weather.js';
+import { CONDITIONS, islandTime } from './game/Weather.js';
 import { WeatherDriver } from './world/WeatherDriver.js';
 import { lampsLit } from './game/Bites.js';
 import { FishStand, STAND } from './game/FishStand.js';
@@ -112,6 +112,8 @@ export class App {
 			exposure: 0.55,
 			// (Salt Life) the weather you picked on your own (an id from game/Weather.js), or null: the day's
 			weather: null,
+			// (M13) when you picked it (island time: a hurricane of your own passes from then)
+			weatherSince: 0,
 		};
 		this._clockSaveT = 0;
 
@@ -556,7 +558,7 @@ export class App {
 		// (the hour you're at, in your save now and again: you come back to it)
 		if ( ( this._clockSaveT -= dt ) <= 0 ) this.saveClock();
 		// (Salt Life) the weather, before anything it moves (the boat, the sky)
-		this.weather.update( dt, s.day, s.timeOfDay, this.weatherPick(), this.camera );
+		this.weather.update( dt, s.day, s.timeOfDay, this.weatherPick(), this.camera, s.weatherSince );
 		// (M12) a westerly's swell on its way: its shore field, solved off the page
 		if ( this.weather.target.west > 0 && ! this._westField && this._started ) this.solveWestField();
 		// (M9) the lightning, before the sky its flash lights
@@ -1471,6 +1473,7 @@ export class App {
 		r.x = x;
 		r.z = z;
 		r.chart = map && map._bake && map._bake.done ? map.canvas : null;
+		r.alert = this.weatherAlert();
 		this.instruments.update( dt, r );
 
 	}
@@ -1493,7 +1496,16 @@ export class App {
 		r.x = x;
 		r.z = z;
 		r.chart = map && map._bake && map._bake.done ? map.canvas : null;
+		r.alert = this.weatherAlert();
 		return r;
+
+	}
+
+	// (M13) the weather alert on the dash's plotter: a hurricane watched for or warned of ('' none)
+	weatherAlert() {
+
+		const n = this.weather && this.weather.news;
+		return n && n.stage !== 'outlook' ? `HURRICANE ${ n.stage === 'watch' ? 'WATCH' : 'WARNING' }` : '';
 
 	}
 
@@ -1620,6 +1632,7 @@ export class App {
 			s.day = Number.isFinite( saved.day ) ? Math.max( 1, Math.floor( saved.day ) ) : 1;
 			s.timeSpeed = saved.held ? 0 : DAY_RATE;
 			s.weather = CONDITIONS[ saved.weather ] ? saved.weather : null;
+			s.weatherSince = Number.isFinite( saved.since ) ? saved.since : islandTime( s.day, s.timeOfDay );
 
 		}
 
@@ -1634,6 +1647,8 @@ export class App {
 		if ( weather && ( CONDITIONS[ weather ] || weather === 'forecast' ) ) {
 
 			s.weather = CONDITIONS[ weather ] ? weather : null;
+			// ((M13) ?weather=hurricane: one of your own, coming in from the hour you start at)
+			s.weatherSince = islandTime( s.day, s.timeOfDay );
 			this._weatherAsked = true;
 
 		}
@@ -1721,12 +1736,12 @@ export class App {
 	}
 
 	// the hour and day you're at, into your save (written a moment later, with the rest of it); and the
-	// weather you picked (none: the day's)
+	// weather you picked (none: the day's), (M13) and when, for a hurricane of your own
 	saveClock() {
 
 		this._clockSaveT = 30;
 		const s = this.settings;
-		const text = JSON.stringify( { hour: Math.round( s.timeOfDay * 1000 ) / 1000, day: s.day, held: s.timeSpeed === 0, ...( s.weather ? { weather: s.weather } : {} ) } );
+		const text = JSON.stringify( { hour: Math.round( s.timeOfDay * 1000 ) / 1000, day: s.day, held: s.timeSpeed === 0, ...( s.weather ? { weather: s.weather } : {} ), ...( s.weather === 'hurricane' ? { since: s.weatherSince } : {} ) } );
 		if ( this.store && text !== this._clockSaved ) this.store.setItem( CLOCK_KEY, text );
 		this._clockSaved = text;
 

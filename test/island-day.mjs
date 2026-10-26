@@ -2,10 +2,11 @@
 // weather), the wanted lists and selling on them, and the week's order.
 import { DAY_RATE, NIGHT_X, START_HOUR, REST, pace, advance, clockAt, restTo, isOpen, timeText, dayLength, sunUp } from '../src/game/IslandClock.js';
 import { HOURS, OPENS, NIGHT_BOX, SHUT_FOR, tradeDay, ordersFor, orderFor, orderPrice, orderTerms, shutFor, stallOpen } from '../src/game/Orders.js';
-import { WEATHER_IDS, weatherAt } from '../src/game/Weather.js';
+import { WEATHER_IDS, weatherAt, hurricaneNews } from '../src/game/Weather.js';
 import { Vendor } from '../src/game/Vendor.js';
 import { Game } from '../src/game/Game.js';
 import { slateText } from '../src/game/ForecastSlate.js';
+import { wxNews } from '../src/game/TimeHUD.js';
 import { Vector3 } from '../src/engine/index.js';
 import { FISH } from '../src/game/FishTable.js';
 import { GameState } from '../src/game/GameState.js';
@@ -71,7 +72,7 @@ ok( sunUp( 12 ) && ! sunUp( 22 ), 'sun or moon' );
 
 // ---- (M9) shut for the weather: in a gale or a thunderstorm Joe and Marta go home whatever the hour,
 // and the stalls offer what they do after hours (Joe's night box, the diesel on Marta's honesty box)
-ok( SHUT_FOR.every( ( id ) => WEATHER_IDS.includes( id ) ) && shutFor( 'gale' ) && shutFor( 'storm' ) && WEATHER_IDS.filter( shutFor ).length === 2 && ! shutFor( null ), 'they shut for a gale or a thunderstorm, nothing less' );
+ok( SHUT_FOR.every( ( id ) => WEATHER_IDS.includes( id ) ) && shutFor( 'gale' ) && shutFor( 'storm' ) && shutFor( 'hurricane' ) && WEATHER_IDS.filter( shutFor ).length === 3 && ! shutFor( null ), 'they shut for a gale, a thunderstorm or (M13) a hurricane, nothing less' );
 ok( stallOpen( HOURS.joe, 12 ) && stallOpen( HOURS.joe, 12, 'fair' ) && stallOpen( HOURS.marta, 12, 'rain' ) && ! stallOpen( HOURS.joe, 12, 'gale' ) && ! stallOpen( HOURS.marta, 12, 'storm' ) && ! stallOpen( HOURS.joe, 22, 'fair' ), 'open in their hours, unless the weather shuts them' );
 {
 
@@ -116,6 +117,14 @@ ok( stallOpen( HOURS.joe, 12 ) && stallOpen( HOURS.joe, 12, 'fair' ) && stallOpe
 	ok( gale.rows[ 0 ][ 1 ] === 'Gale, rain' && slateText( weatherAt( 0, 'storm' ) ).rows[ 0 ][ 1 ] === 'Thunderstorm', 'its rain, and a thunderstorm by name' );
 	ok( blow.rows[ 3 ][ 1 ] === 'Gale from 3:00 PM' && /blow's coming/.test( blow.note ) && slateText( null ).rows.length === 0, 'what\'s coming, and the fish feeding ahead of it' );
 	ok( /murky/.test( slateText( { ...weatherAt( 0, 'fair' ), murk: 0.6 } ).note ) && /blow's coming/.test( slateText( { ...weatherAt( 0, 'fair' ), murk: 0.6, front: 0.9 } ).note ), '(M10) after a blow, the water\'s murky (a blow coming says so first)' );
+	// ((M13) a hurricane on its way, before anything else; in its eye, that there's more to come)
+	const since = 500, coming = hurricaneNews( since, 'hurricane', since ), eyeT = coming.eye;
+	const watch = { ...coming, stage: 'watch' }, outlook = { ...coming, stage: 'outlook' };
+	const say = ( n, w = weatherAt( 0, 'fair' ) ) => slateText( { ...w, front: 0.9, murk: 0.6 }, null, 'en-US', n ).note;
+	ok( say( outlook ) === 'A hurricane out to the NNW' && say( watch ) === 'Hurricane watch' && say( coming ) === 'Hurricane warning' && say( coming, weatherAt( eyeT, 'hurricane', since ) ) === 'The eye: more to come' && /blow's coming/.test( say( null ) ), '(M13) Joe chalks a hurricane on its way first: on the outlook, watched for, warned of; in its eye, more to come' );
+	const T0 = coming.onset - 40, said = ( n, T, w = weatherAt( T, 'hurricane', since ) ) => wxNews( n, w, T, 'en-US' );
+	console.log( `     the clock's menu: ${ [ said( outlook, T0 ), said( watch, T0 ), said( { ...coming }, coming.onset - 20 ), said( coming, eyeT - 1 ), said( coming, eyeT ), said( coming, eyeT + 1 ) ].join( ' · ' ) }` );
+	ok( /far off to the NNW/.test( said( outlook, T0 ) ) && /watch: its winds could be here .* tomorrow/.test( said( watch, T0 ) ) && /warning: its winds from/.test( said( coming, coming.onset - 20 ) ) && /eye passes over about/.test( said( coming, eyeT - 1 ) ) && /^The eye/.test( said( coming, eyeT ) ) && /ease from about/.test( said( coming, eyeT + 1 ) ) && said( null, eyeT ) === '', '(M13) and the clock\'s menu says it, and when' );
 
 }
 
