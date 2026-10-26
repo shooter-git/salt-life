@@ -87,6 +87,9 @@ float terrainHeightAt( vec2 xz ) {
 			terrainTime: G.time,
 			terrainNight: G.night,
 			terrainCausticsK: G.caustics, // (M9: faint under a grey sky)
+			// ((M13) what a hurricane's sea left: setStorm)
+			terrainStorm: { value: new THREE.Vector4( 0, 0, 0, 1 ) },
+			terrainStormPaths: { value: 0 },
 		};
 
 		this.uniforms = uniforms;
@@ -122,6 +125,8 @@ uniform sampler2D terrainCaustics;
 uniform float terrainTime;
 uniform float terrainNight;
 uniform float terrainCausticsK;
+uniform vec4 terrainStorm;
+uniform float terrainStormPaths;
 varying vec3 vTerrain;
 vec4 terDetail( vec2 uv ) { return texture( terrainDetailTex, uv ); }
 vec2 terrainUvOf( vec2 xz ) { return ( xz - terrainMapInfo.xy ) / terrainMapInfo.z; }
@@ -157,6 +162,16 @@ ${ TERRAIN_SHADING_GLSL }
 		this.mesh.frustumCulled = false;
 		this.mesh.receiveShadow = true;
 		scene.add( this.mesh );
+
+	}
+
+	// (M13) what the last hurricane's sea left (game/StormDamage.js's damageAt): the sand it washed up
+	// over the ground behind the beach, its line of wrack at how high it reached and how long ago, and
+	// the weed over the paths
+	setStorm( D ) {
+
+		this.uniforms.terrainStorm.value.set( D.sand, D.wrack, D.wrackH, D.wrackAge );
+		this.uniforms.terrainStormPaths.value = D.paths;
 
 	}
 

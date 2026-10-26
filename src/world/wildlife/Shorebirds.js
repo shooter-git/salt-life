@@ -35,6 +35,7 @@ export class Shorebirds {
 		this.rng = mulberry32( seed );
 		this.time = 0;
 		this.mood = wildlifeMood( null ); // ((M13) the weather, as they take it: the app sets it)
+		this.wrack = null; // ((M13) the height of a hurricane's fresh line of wrack up the beach, they feed along: the app sets it)
 		this.intoWind = 0;
 		this.birds = [];
 		this.flocks = [
@@ -230,6 +231,16 @@ export class Shorebirds {
 		// wanted position relative to the edge: just above the retreating water, well ahead of an uprush
 		let want = up ? 1.0 + b.margin * 1.2 : 0.15 + b.margin * 0.55;
 		if ( night > 0.6 ) want = 6 + b.margin * 1.5; // roost above the tide line
+		else if ( this.wrack !== null ) {
+
+			// ((M13) after a hurricane: working its line of wrack up the beach while it's fresh, for the
+			// sandhoppers and kelp flies in it, rather than the swash)
+			dm = ( h - this.wrack - ( b.margin - 0.5 ) * 0.25 ) / g;
+			want = 0;
+			up = false;
+			vf = 0;
+
+		}
 		let vUp = clamp( ( up ? vf : 0 ) + ( want - dm ) * 2.2, - 1.3, 2.4 );
 		// along the shore: keep the flock together, spaced out, running off when wary
 		let vAl = clamp( ( F.x + b.offset - b.x ) * 0.6, - 0.9, 0.9 );

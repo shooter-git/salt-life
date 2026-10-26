@@ -242,6 +242,14 @@ function shareProgram( list, T ) {
 export function createWoodMaterial( T ) {
 
 	const m = villageMaterial( { roughness: 0.85, metalness: 0, name: 'VillageWood' }, T, [ 'woodA', 'woodN', 'paintN', 'grime' ], { extra: [ TIDAL, GLASS ], surface: /* glsl */`
+// (M13) what a hurricane's sea left (Village.setDamage): x the sand, y the weed, z how high it reached
+// (m), w how long ago (0 fresh .. 1 dried)
+uniform vec4 vlmStorm;
+float vlmVN( vec2 p ) {
+	vec2 i = floor( p ), f = fract( p );
+	f = f * f * ( 3.0 - 2.0 * f );
+	return mix( mix( vlmHash21( i.x, i.y ), vlmHash21( i.x + 1.0, i.y ), f.x ), mix( vlmHash21( i.x, i.y + 1.0 ), vlmHash21( i.x + 1.0, i.y + 1.0 ), f.x ), f.y );
+}
 void vlmSurface( inout VlmSurf s, vec3 Ng ) {
 	vec3 aTint = vTint;
 	vec4 aData = vData;
@@ -450,9 +458,23 @@ void vlmSurface( inout VlmSurf s, vec3 Ng ) {
 	s.ao = mix( ao, 1.0, isGlass );
 	s.emissive = glass.emissive * isGlass;
 	s.normal = vlmNormalFromSlope( P, Ng, uv0, ( sM + sPat ) * ( 1.0 - isGlass ) );
+	// ((M13) the sand it drifted over the boardwalk behind the beach, and the strands of sargassum it
+	// left on the boards and on the pier's deck where its crests came over)
+	if ( vlmStorm.x + vlmStorm.y > 0.0 && Ng.y > 0.6 && P.y < vlmStorm.z + 0.5 && P.y > 0.5 && isGlass < 0.5 ) {
+		float drift = vlmVN( P.xz * 1.3 ) * 0.6 + vlmVN( P.xz * 5.1 + 3.7 ) * 0.4;
+		float sandK = vlmStorm.x * step( P.z, - 46.0 ) * smoothstep( 0.42, 0.62, drift + ( vlmStorm.z - P.y ) * 0.12 );
+		s.albedo = mix( s.albedo, vec3( 0.6, 0.5, 0.33 ) * ( 0.85 + vlmVN( P.xz * 23.0 ) * 0.3 ), sandK );
+		s.roughness = mix( s.roughness, 0.95, sandK );
+		s.normal = normalize( mix( s.normal, Ng, sandK ) );
+		float strand = smoothstep( 0.7, 0.8, vlmVN( vec2( P.x * 9.0 + P.z * 2.0, P.z * 3.0 - P.x * 1.5 ) ) ) * smoothstep( 0.45, 0.6, vlmVN( P.xz * 0.9 + 1.3 ) );
+		float weedK = vlmStorm.y * strand;
+		s.albedo = mix( s.albedo, mix( vec3( 0.15, 0.09, 0.02 ), vec3( 0.025, 0.02, 0.012 ), vlmStorm.w ), weedK );
+		s.roughness = mix( s.roughness, mix( 0.45, 0.8, vlmStorm.w ), weedK );
+	}
 }
 ` } );
 	m.name = 'VillageWood';
+	m.userData.vlm.uniforms.vlmStorm = { value: new THREE.Vector4( 0, 0, 0, 1 ) };
 	return m;
 
 }
@@ -462,9 +484,17 @@ void vlmSurface( inout VlmSurf s, vec3 Ng ) {
 // uv: u = distance up-slope from the eave (m), v = along the eave (m)
 // vdata: x seed, y rust amount, z galvanized (1) / painted (0)
 
+// (M13) sheets a hurricane can tear off (Village.roofHoles): each on one roof slab (its vdata seed), a run
+// of whole sheets along its eave (v, m) from the eave up (u < uTop, m), and its state: 0 whole, 1 gone (cut
+// out: the purlins and the dark of the roof space show through), 2 under a blue tarp (nailed over it and a
+// little past, battens along its edges), 3 a new sheet (+ how new: 0 just on .. 1 weathered in)
+export const ROOF_HOLES = 16;
+
 export function createRoofMetalMaterial( T ) {
 
 	const m = villageMaterial( { roughness: 0.5, metalness: 0.2, name: 'VillageRoofMetal' }, T, [ 'roofA', 'roofN', 'hardN' ], { surface: /* glsl */`
+uniform vec4 vlmHoles[ ${ ROOF_HOLES } ];
+uniform float vlmHoleS[ ${ ROOF_HOLES } ];
 void vlmSurface( inout VlmSurf s, vec3 Ng ) {
 	vec3 aTint = vTint;
 	vec4 aData = vData;
@@ -482,9 +512,25 @@ void vlmSurface( inout VlmSurf s, vec3 Ng ) {
 	vec4 Nt = texture( vlgRoofN, tuv );
 	vec4 macroV = texture( vlgRoofA, tuv * vec2( 0.13, 0.09 ) + vec2( seed, seed * 1.7 ) );
 
+	// ((M13) a sheet the storm took, a tarp over it, a new one)
+	float tarp = 0.0, fresh = 0.0;
+	vec4 tq = vec4( 0.0 ); // the tarp: up from the eave, along it (m), its length and width
+	for ( int k = 0; k < ${ ROOF_HOLES }; k ++ ) {
+		vec4 H = vlmHoles[ k ];
+		float st = vlmHoleS[ k ];
+		if ( st < 0.5 || abs( H.x - seed ) > 2e-5 ) continue;
+		bool inSheet = uvm.y > H.y && uvm.y < H.z && uvm.x < H.w;
+		if ( st < 1.5 ) { if ( inSheet ) discard; }
+		else if ( st < 2.5 ) {
+			// (the tarp: a little past the hole up the slope and either side)
+			vec4 q = vec4( uvm.x, uvm.y - H.y + 0.25, H.w + 0.3, H.z - H.y + 0.5 );
+			if ( q.x < q.z && q.y > 0.0 && q.y < q.w ) { tarp = 1.0; tq = q; }
+		} else if ( inSheet ) fresh = 1.0 - fract( st );
+	}
+
 	float eave = 1.0 - smoothstep( 0.0, 0.9, uvm.x );
 	float replaced = step( 0.86, sheetR );
-	float rustIn = clamp( rustAmt + 0.15 + replaced * 0.2 + ( macroV.r - 0.4 ) * 0.5, 0.0, 1.0 );
+	float rustIn = clamp( rustAmt + 0.15 + replaced * 0.2 + ( macroV.r - 0.4 ) * 0.5 - fresh, 0.0, 1.0 );
 	// rust channel quantiles: 50% 0.25, 70% 0.31, 90% 0.42 -> rust 0.4 ~10%, 0.6 ~25%, 0.8 ~45%
 	float thr = mix( 0.62, 0.23, rustIn ) - eave * 0.2;
 	float rust = smoothstep( thr - 0.04, thr + 0.04, M.r );
@@ -509,9 +555,36 @@ void vlmSurface( inout VlmSurf s, vec3 Ng ) {
 	s.metalness = mix( mix( 0.04, 0.5, galv ), 0.0, rust );
 	s.roughness = clamp( mix( mix( 0.55, 0.42, galv ) + ( Nt.b - 0.5 ) * 0.4 + fade * 0.15, 0.9, rust ) + M.a * 0.08, 0.05, 1.0 );
 	s.ao = Nt.a;
+	// ((M13) a new sheet: fresh paint, or bright new zinc, dulling over its first month)
+	if ( fresh > 0.0 ) {
+		vec3 newCol = mix( aTint * 1.04, vec3( 0.55, 0.56, 0.56 ), galv );
+		s.albedo = mix( s.albedo, newCol * mix( 1.0, Nt.a, 0.55 ), fresh * 0.85 );
+		s.metalness = mix( s.metalness, mix( 0.05, 0.75, galv ), fresh );
+		s.roughness = mix( s.roughness, mix( 0.4, 0.26, galv ), fresh );
+	}
+	// ((M13) a blue polyethylene tarp, wrinkled, pulled down over the corrugations, battens nailed along
+	// its top and sides)
+	if ( tarp > 0.0 ) {
+		vec4 Wr = texture( vlgHardN, tq.xy * vec2( 0.45, 0.3 ) + seed * 3.1 );
+		vec2 wsl = vlmSlopeOf( Wr ) * 0.5 + vec2( sT.y, sT.x ) * 0.35;
+		s.normal = vlmNormalFromSlope( vWP, Ng, uvm, wsl );
+		s.albedo = vec3( 0.012, 0.09, 0.42 ) * ( 0.85 + Wr.b * 0.3 );
+		s.metalness = 0.0;
+		s.roughness = 0.5 + Wr.b * 0.15;
+		s.ao = mix( 1.0, Nt.a, 0.4 );
+		// battens nailed along its top edge and down both sides, holding it down in the wind
+		float bat = max( 1.0 - step( 0.03, abs( tq.x - ( tq.z - 0.08 ) ) ), max( 1.0 - step( 0.03, abs( tq.y - 0.08 ) ), 1.0 - step( 0.03, abs( tq.y - ( tq.w - 0.08 ) ) ) ) );
+		if ( bat > 0.0 ) {
+			s.albedo = vec3( 0.2, 0.16, 0.11 ) * ( 0.8 + Wr.b * 0.4 );
+			s.roughness = 0.85;
+			s.normal = Ng;
+		}
+	}
 }
 ` } );
 	m.name = 'VillageRoofMetal';
+	m.userData.vlm.uniforms.vlmHoles = { value: Array.from( { length: ROOF_HOLES }, () => new THREE.Vector4( - 1, 0, 0, 0 ) ) };
+	m.userData.vlm.uniforms.vlmHoleS = { value: new Array( ROOF_HOLES ).fill( 0 ) };
 	return m;
 
 }

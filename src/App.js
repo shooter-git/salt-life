@@ -38,6 +38,9 @@ import { cloudShadows, useCloudShadows } from './materials/CloudShadows.js';
 import { useWet, wetSurfaces } from './materials/Wet.js';
 import { Wildlife } from './world/wildlife/Wildlife.js';
 import { wildlifeMood, wildlifeNews } from './game/WildlifeWeather.js';
+import { damageAt } from './game/StormDamage.js';
+import { StormWrack } from './world/debris/StormWrack.js';
+import { vegUniforms } from './world/vegetation/VegNodes.js';
 import { Debris } from './world/Debris.js';
 import { Reef } from './world/Reef.js';
 import { FishSchools } from './world/Fish.js';
@@ -625,6 +628,27 @@ export class App {
 		}
 
 		if ( this.fish ) this.fish.setWeather( mood.sharksAway );
+		// ((M13) what the last hurricane's done, and its mending, from the clock (game/StormDamage.js):
+		// the roofs' sheets, the pier's boards, the palms' fronds, the wrack and sand, the birds at the wrack)
+		if ( ! ( ( this._damageT -= dt ) > 0 ) ) {
+
+			this._damageT = 1;
+			const D = this.damage = damageAt( islandTime( s.day, s.timeOfDay ), this.weatherPick(), s.weatherSince, this.damage );
+			this.village.setDamage( D );
+			this.terrain.setStorm( D );
+			vegUniforms.vegStrip.value = D.strip;
+			// (its line of wrack, made once it's left one, with the debris's materials)
+			if ( ! this.stormWrack && this.debris && D.wrack > 0 ) this.stormWrack = new StormWrack( { terrain: this.terrainData, nature: this.debris.materials.nature, wood: this.village.materials.wood, parent: this.scene, lite: this.tier !== 'high' } );
+			if ( this.stormWrack ) this.stormWrack.set( D );
+			if ( this.wildlife ) {
+
+				this.wildlife.birds.setWrack( D.wrackH, D.feed );
+				this.wildlife.shorebirds.wrack = D.feed > 0.3 ? D.wrackH : null;
+
+			}
+
+		}
+
 		// (M9) the lightning, before the sky its flash lights
 		const wx = this.weather.live, cv = this.renderer.domElement;
 		this.lightning.setViewport( cv.width, cv.height );
@@ -724,6 +748,7 @@ export class App {
 		this.village.update( dt );
 		this.rocks.update( this.camera );
 		if ( this.debris ) this.debris.update( this.camera );
+		if ( this.stormWrack ) this.stormWrack.update( this.camera ); // ((M13) a hurricane's line of wrack, near you)
 		if ( this.reef ) this.reef.update( this.camera );
 		if ( this.whale ) {
 

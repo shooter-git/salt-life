@@ -746,6 +746,42 @@ export function hurricaneNews( T, pick = null, since = 0 ) {
 
 }
 
+// (M13 step 6) the last hurricane whose tropical-storm winds had reached the island by T, as long as they
+// went no more than `back` game hours before it (null: none): what its damage is reckoned from
+// (game/StormDamage.js). As the weather goes: on your own a picked one, and none in other held weather.
+// onset, ends: its tropical-storm winds come and go (island time); tc: its eye's closest; key: which it
+// is (the same for everyone)
+export function lastHurricane( T, back = 0, pick = null, since = 0 ) {
+
+	let list;
+	if ( pick === 'hurricane' ) list = [ pickedHurricane( since ) ];
+	else if ( pick ) return null;
+	else {
+
+		list = [];
+		const i1 = Math.round( T / TRACK_SPAN ) + 3;
+		for ( let i = Math.floor( ( T - back ) / TRACK_SPAN ) - 3; i <= i1; i ++ ) {
+
+			const h = hurricaneOf( i );
+			if ( h ) list.push( h );
+
+		}
+
+	}
+
+	let best = null;
+	for ( const h of list ) {
+
+		const half = tsHalf( h ), onset = h.tc - half, ends = h.tc + half;
+		if ( onset > T || ends < T - back || ( best && h.tc < best.tc ) ) continue;
+		best = { tc: h.tc, onset, ends, vmax: h.vmax, rmax: h.rmax, d: h.d, key: pick === 'hurricane' ? `picked:${ since }` : `h:${ h.i }` };
+
+	}
+
+	return best;
+
+}
+
 // (M9) how fast the weather comes down the trades (km a game hour): a front's bank is told this far up
 // them for each hour it's ahead (WeatherDriver, SkyProClouds.front), and (M11) the showers drift at it
 export const FRONT_KMH = 8;

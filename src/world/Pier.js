@@ -34,7 +34,17 @@ export const PIER = {
 const _v = new Vector3();
 const _h = new Vector3();
 
-export function buildPier( { B, terrain, colliders, rand, lights, inst, signB = null, hang = null } ) {
+// (M13) what a hurricane's crests can take off the pier (StormDamage's 'plank' and 'bay', by their ids):
+// runs of deck boards along the outer walkway, and one whole bay of it, its boards and stringers (the
+// piles, caps and rails stand). Each is built on its own (stormB() a fresh Builder: Village makes it its
+// own meshes) with its own deck collider, which gives way while it's gone. planks: walkway boards
+// [ i0, i1 ) (0.215 m each, from the pier's foot); bay: this many bays back from the head
+export const PIER_STORM = {
+	planks: [ { id: 0, walk: [ 296, 302 ] }, { id: 1, walk: [ 371, 376 ] }, { id: 2, walk: [ 430, 436 ] } ],
+	bay: { id: 0, back: 5 },
+};
+
+export function buildPier( { B, terrain, colliders, rand, lights, inst, signB = null, hang = null, stormB = null } ) {
 
 	const X = PIER.x, DK = PIER.deck, halfW = PIER.halfW;
 	const z0 = PIER.zStart, zH = PIER.headZ0, z1 = PIER.zEnd;
@@ -59,7 +69,17 @@ export function buildPier( { B, terrain, colliders, rand, lights, inst, signB = 
 	};
 	// a replacement board: fresh, warm, not yet silvered
 	const freshTone = () => [ rand.range( 1.04, 1.1 ), rand.range( 0.98, 1.02 ), rand.range( 0.9, 0.95 ) ];
-	const info = { lamps: [], bollards: [], hung: [] };
+	const info = { lamps: [], bollards: [], hung: [], storm: [] };
+	// ((M13) the pieces a hurricane can take: PIER_STORM; PB is where the boards being laid go)
+	let PB = B;
+	const piece = ( kind, id ) => {
+
+		if ( ! stormB ) return null;
+		const p = { kind, id, B: stormB(), boxes: [] };
+		info.storm.push( p );
+		return p;
+
+	};
 
 	const addBox = ( cx, cy, cz, hx, hy, hz, opts ) => colliders.addBox( _v.set( cx, cy, cz ), _h.set( hx, hy, hz ), 0, opts );
 
@@ -213,6 +233,10 @@ export function buildPier( { B, terrain, colliders, rand, lights, inst, signB = 
 
 	}
 
+	// ((M13) the bay a hurricane can take: PIER_STORM)
+	const stormBay = lastBent - PIER_STORM.bay.back, bayZ = [ bentZ[ stormBay ], bentZ[ stormBay + 1 ] ];
+	const bay = piece( 'bay', PIER_STORM.bay.id );
+
 	// stringers per bay (4 lines), extend onto the head's north cap row
 	const stringerXs = [ - 1.2, - 0.42, 0.42, 1.2 ];
 	for ( let bi = 0; bi < lastBent; bi ++ ) {
@@ -221,7 +245,7 @@ export function buildPier( { B, terrain, colliders, rand, lights, inst, signB = 
 		const zb = bentZ[ bi + 1 ];
 		for ( const sx of stringerXs ) {
 
-			B.box( 'wood', X + sx, stringerTop - PIER.stringerH / 2, ( za + zb ) / 2, 0.1, PIER.stringerH, zb - za + 0.04, { grain: 2, tint: tone(), data: pierWood( 0.7, 0.95 ) } );
+			( bay && bi === stormBay ? bay.B : B ).box( 'wood', X + sx, stringerTop - PIER.stringerH / 2, ( za + zb ) / 2, 0.1, PIER.stringerH, zb - za + 0.04, { grain: 2, tint: tone(), data: pierWood( 0.7, 0.95 ) } );
 
 		}
 
@@ -252,28 +276,48 @@ export function buildPier( { B, terrain, colliders, rand, lights, inst, signB = 
 
 			// split board: two pieces with a ragged gap
 			const xs = rand.range( xa + 0.4, xb - 0.4 );
-			B.box( 'wood', ( xa + xs - 0.01 ) / 2, DK - plankT / 2 - yOff, zj, xs - xa - 0.01, plankT, wdt, { ...opts(), data: WOOD( rand.next(), wth, walk( xa ), 7 ) } );
-			B.box( 'wood', ( xs + 0.012 + xb ) / 2, DK - plankT / 2 - yOff - 0.004, zj + rand.range( - 0.004, 0.004 ), xb - xs - 0.012, plankT, wdt * rand.range( 0.92, 1 ), { ...opts(), data: WOOD( rand.next(), wth, walk( xs + 0.012 ), 7 ) } );
+			PB.box( 'wood', ( xa + xs - 0.01 ) / 2, DK - plankT / 2 - yOff, zj, xs - xa - 0.01, plankT, wdt, { ...opts(), data: WOOD( rand.next(), wth, walk( xa ), 7 ) } );
+			PB.box( 'wood', ( xs + 0.012 + xb ) / 2, DK - plankT / 2 - yOff - 0.004, zj + rand.range( - 0.004, 0.004 ), xb - xs - 0.012, plankT, wdt * rand.range( 0.92, 1 ), { ...opts(), data: WOOD( rand.next(), wth, walk( xs + 0.012 ), 7 ) } );
 			return;
 
 		}
 
-		B.box( 'wood', ( xa + xb ) / 2, DK - plankT / 2 - yOff, zj, xb - xa, plankT, wdt, { ...opts(), data: WOOD( rand.next(), wth, walk( xa ), 7 ) } );
+		PB.box( 'wood', ( xa + xb ) / 2, DK - plankT / 2 - yOff, zj, xb - xa, plankT, wdt, { ...opts(), data: WOOD( rand.next(), wth, walk( xa ), 7 ) } );
 
 	}
 
-	// deck planks (walkway)
+	// deck planks (walkway); ((M13) the runs a hurricane can take, and the bay, each on its own)
 	const pitch = 0.215;
 	const nPl = Math.floor( ( zH - z0 ) / pitch );
+	const zOf = ( i ) => z0 + i * ( zH - z0 ) / nPl;
+	const runs = PIER_STORM.planks.map( ( r ) => ( { r, p: piece( 'plank', r.id ) } ) );
 	for ( let i = 0; i < nPl; i ++ ) {
 
 		const zc = z0 + ( i + 0.5 ) * ( zH - z0 ) / nPl;
+		const run = runs.find( ( q ) => q.p && i >= q.r.walk[ 0 ] && i < q.r.walk[ 1 ] );
+		PB = run ? run.p.B : bay && zc > bayZ[ 0 ] && zc < bayZ[ 1 ] ? bay.B : B;
 		plank( X, zc, PIER.width, false );
 
 	}
 
-	// walkway deck collider
-	addBox( X, DK - 0.04, ( z0 + zH ) / 2, halfW, 0.04, ( zH - z0 ) / 2, { walkable: true, solid: true, tag: 'pierDeck' } );
+	PB = B;
+
+	// walkway deck collider ((M13) in pieces about the ones that can go, each of those its own)
+	const gaps = [];
+	for ( const q of runs ) if ( q.p ) gaps.push( { z: [ zOf( q.r.walk[ 0 ] ), zOf( q.r.walk[ 1 ] ) ], p: q.p } );
+	if ( bay ) gaps.push( { z: bayZ, p: bay } );
+	gaps.sort( ( a, b ) => a.z[ 0 ] - b.z[ 0 ] );
+	let zFrom = z0;
+	const deckBox = ( za, zb ) => addBox( X, DK - 0.04, ( za + zb ) / 2, halfW, 0.04, ( zb - za ) / 2, { walkable: true, solid: true, tag: 'pierDeck' } );
+	for ( const g of gaps ) {
+
+		deckBox( zFrom, g.z[ 0 ] );
+		g.p.boxes.push( deckBox( g.z[ 0 ], g.z[ 1 ] ) );
+		zFrom = g.z[ 1 ];
+
+	}
+
+	deckBox( zFrom, zH );
 
 	// ------------------------------------------------------------------ railings (walkway)
 	const railTop = DK + 0.95;

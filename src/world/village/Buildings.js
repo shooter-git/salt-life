@@ -31,6 +31,99 @@ function frameFns( terrain, x, z, yaw ) {
 
 }
 
+// (M13) the sheets a hurricane can tear off a metal roof (ctx.holes: Village.roofHoles, StormDamage's
+// 'tin' by their place in it): on one of its slabs, a run of one to three whole sheets (0.84 m, as the
+// roof material lays them) from its eave up, at a corner or along an edge, where the uplift's greatest;
+// under them the purlins they were screwed to and the dark of the roof space, to show through once
+// they're gone. slabs: [ { pts, uDir, seed, T } ] in B's frame; inside: where the roof space starts up
+// from the eave (m: past the overhang), or null for none (open beneath: the boathouse). Chosen by their
+// own random stream (name's), so the village is built as it always was.
+const SHEET = 0.84;
+function roofHoles( ctx, slabs, name, inside = 0.5 ) {
+
+	if ( ! ctx.holes || ! slabs.length ) return;
+	const { B } = ctx;
+	let hs = 0x5eed;
+	for ( let i = 0; i < name.length; i ++ ) hs = Math.imul( hs ^ name.charCodeAt( i ), 0x01000193 );
+	const r = mulberry32( hs >>> 0 );
+	for ( let attempt = 0; attempt < 8; attempt ++ ) {
+
+		const sl = slabs[ Math.floor( r() * slabs.length ) ];
+		// the slab's frame, as slabPart makes it: n up out of it, u up from the eave, v along it
+		const pts = sl.pts, n = new Vector3();
+		for ( let i = 0; i < pts.length; i ++ ) {
+
+			const a = pts[ i ], b = pts[ ( i + 1 ) % pts.length ];
+			n.x += ( a.y - b.y ) * ( a.z + b.z );
+			n.y += ( a.z - b.z ) * ( a.x + b.x );
+			n.z += ( a.x - b.x ) * ( a.y + b.y );
+
+		}
+
+		n.normalize();
+		if ( n.y < 0 ) n.negate();
+		const u = sl.uDir.clone().sub( n.clone().multiplyScalar( sl.uDir.dot( n ) ) ).normalize(), v = n.clone().cross( u );
+		let uMin = Infinity, vMin = Infinity, uMax = - Infinity, vMax = - Infinity;
+		for ( const q of pts ) {
+
+			uMin = Math.min( uMin, q.dot( u ) ); uMax = Math.max( uMax, q.dot( u ) );
+			vMin = Math.min( vMin, q.dot( v ) ); vMax = Math.max( vMax, q.dot( v ) );
+
+		}
+
+		const poly = pts.map( ( q ) => [ q.dot( u ) - uMin, q.dot( v ) - vMin ] );
+		const within = ( pu, pv ) => {
+
+			let sgn = 0;
+			for ( let i = 0; i < poly.length; i ++ ) {
+
+				const a = poly[ i ], b = poly[ ( i + 1 ) % poly.length ];
+				const c = ( b[ 0 ] - a[ 0 ] ) * ( pv - a[ 1 ] ) - ( b[ 1 ] - a[ 1 ] ) * ( pu - a[ 0 ] );
+				if ( Math.abs( c ) < 1e-9 ) continue;
+				if ( sgn && Math.sign( c ) !== sgn ) return false;
+				sgn = Math.sign( c );
+
+			}
+
+			return true;
+
+		};
+		const nSheets = Math.floor( ( vMax - vMin ) / SHEET );
+		const wide = Math.min( nSheets, 1 + Math.floor( r() * r() * 3 ) );
+		if ( wide < 1 ) continue;
+		const corner = r() < 0.65;
+		const j = corner ? ( r() < 0.5 ? 0 : nSheets - wide ) : Math.floor( r() * ( nSheets - wide + 1 ) );
+		const v0 = j * SHEET, v1 = ( j + wide ) * SHEET;
+		const uTop = ( uMax - uMin ) * ( r() < 0.5 ? 1.02 : 0.45 + r() * 0.25 );
+		const uIn = Math.min( uTop, uMax - uMin );
+		if ( ! within( 0.02, v0 + 0.01 ) || ! within( 0.02, v1 - 0.01 ) || ! within( uIn - 0.02, v0 + 0.01 ) || ! within( uIn - 0.02, v1 - 0.01 ) ) continue;
+		// beneath: the purlins across the hole, and the roof space's dark
+		const plane = pts[ 0 ].dot( n );
+		const at = ( pu, pv, down ) => u.clone().multiplyScalar( pu + uMin ).add( v.clone().multiplyScalar( pv + vMin ) ).addScaledVector( n, plane - down );
+		// (and where it is, and the way its slope faces, in the world)
+		const c = at( uIn / 2, ( v0 + v1 ) / 2, 0 ), w = B.toWorld( c.x, c.y, c.z ), up = B.toWorld( c.x + n.x, c.y + n.y, c.z + n.z );
+		ctx.holes.push( { seed: sl.seed, v0, v1, uTop, name, at: { x: w.x, y: w.y, z: w.z }, n: { x: up.x - w.x, y: up.y - w.y, z: up.z - w.z } } );
+		const pdata = () => WOOD( r(), 0.85, 0, 0 );
+		for ( let pu = 0.3; pu < uIn - 0.1; pu += 0.6 ) {
+
+			const a = at( pu, Math.max( 0.02, v0 - 0.15 ), sl.T + 0.035 ), b = at( pu, v1 + 0.15, sl.T + 0.035 );
+			B.beam( 'wood', [ a.x, a.y, a.z ], [ b.x, b.y, b.z ], 0.07, 0.045, { tint: [ 0.85, 0.8, 0.72 ], data: pdata() } );
+
+		}
+
+		if ( inside !== null && uIn > inside + 0.2 ) {
+
+			const q = [ at( inside, v0 - 0.2, sl.T + 0.28 ), at( inside, v1 + 0.2, sl.T + 0.28 ), at( uIn + 0.15, v1 + 0.2, sl.T + 0.28 ), at( uIn + 0.15, v0 - 0.2, sl.T + 0.28 ) ];
+			B.slab( 'wood', q, 0.02, { up: n, uDir: u, tint: [ 0.07, 0.06, 0.05 ], data: WOOD( r(), 0.9, 0, 0 ) } );
+
+		}
+
+		return;
+
+	}
+
+}
+
 function linspace( a, b, n ) {
 
 	const out = [];
@@ -393,7 +486,15 @@ export function buildHouse( ctx, s ) {
 	const roofKey = isThatch ? 'thatch' : 'roofMetal';
 	const roofTint = isThatch ? [ 1, 1, 1 ] : ( s.roofColor || lin( 0xa5452f ) );
 	const roofData = () => ( isThatch ? [ rand.next(), s.thatchAge ?? 0.4, 0, 0 ] : [ rand.next(), s.rust ?? 0.4, s.galv ? 1 : 0, 0 ] );
-	const roofSlab = ( pts, uDir ) => B.slab( roofKey, pts, T, { uDir: uDir.normalize(), up: UP, tint: roofTint, data: roofData() } );
+	// ((M13) the metal ones kept: one may lose a sheet or two to a hurricane: roofHoles)
+	const slabs = [];
+	const roofSlab = ( pts, uDir ) => {
+
+		const data = roofData();
+		if ( ! isThatch ) slabs.push( { pts, uDir: uDir.clone().normalize(), seed: data[ 0 ], T } );
+		B.slab( roofKey, pts, T, { uDir: uDir.normalize(), up: UP, tint: roofTint, data } );
+
+	};
 	const Tv = T / Math.cos( a );
 	let roofTop = yE;
 	let ridge = null;
@@ -555,6 +656,8 @@ export function buildHouse( ctx, s ) {
 		ridge = { y: yR, axis: 'x', ta, yF: ye, zf: ZE };
 
 	}
+
+	if ( ! isThatch ) roofHoles( ctx, slabs, s.name, ovE + 0.15 );
 
 	// thatch eave fringe (ragged strands hanging below the eave edges)
 	if ( isThatch ) {
@@ -1104,8 +1207,20 @@ export function buildBoathouse( ctx, s ) {
 	const xe = w / 2 + ov, yF = yE + r0 - ov * ta;
 	const rd = () => [ rand.next(), 0.75, 0, 0 ];
 	const rt = s.roofColor || lin( 0x6d7f86 );
-	B.slab( 'roofMetal', [ V3( xe, yF, Z ), V3( xe, yF, - Z ), V3( 0, yR, - Z ), V3( 0, yR, Z ) ], 0.05, { up: UP, uDir: V3( - xe, yR - yF, 0 ).normalize(), tint: rt, data: rd() } );
-	B.slab( 'roofMetal', [ V3( - xe, yF, - Z ), V3( - xe, yF, Z ), V3( 0, yR, Z ), V3( 0, yR, - Z ) ], 0.05, { up: UP, uDir: V3( xe, yR - yF, 0 ).normalize(), tint: rt, data: rd() } );
+	// ((M13) either may lose a sheet or two to a hurricane: roofHoles; open beneath)
+	const slabs = [];
+	for ( const [ pts, uDir ] of [
+		[ [ V3( xe, yF, Z ), V3( xe, yF, - Z ), V3( 0, yR, - Z ), V3( 0, yR, Z ) ], V3( - xe, yR - yF, 0 ).normalize() ],
+		[ [ V3( - xe, yF, - Z ), V3( - xe, yF, Z ), V3( 0, yR, Z ), V3( 0, yR, - Z ) ], V3( xe, yR - yF, 0 ).normalize() ],
+	] ) {
+
+		const data = rd();
+		slabs.push( { pts, uDir, seed: data[ 0 ], T: 0.05 } );
+		B.slab( 'roofMetal', pts, 0.05, { up: UP, uDir, tint: rt, data } );
+
+	}
+
+	roofHoles( ctx, slabs, 'boathouse', null );
 	for ( const sz of [ - 1, 1 ] ) {
 
 		B.part( 'wood', gableEndPart( w, r0 - 0.03, r0 + ( w / 2 ) * ta - 0.03, 0.08 ), 0, yE, sz * ( d / 2 - 0.05 ), { ry: sz > 0 ? 0 : Math.PI, tint: wall, data: wdat( 2 ) } );
@@ -1614,7 +1729,10 @@ export function buildShed( ctx, s ) {
 	for ( const hy of [ 0.3, 1.5 ] ) B.box( 'hard', - 0.13, base + hy, d / 2 + 0.03, 0.25, 0.04, 0.01, { tint: C.iron, data: HARD( rand.next(), 0.8, 0.5, 0.6 ) } );
 	// shed roof
 	const rf = [ V3( - w / 2 - 0.2, base + hB + 0.02, - d / 2 - 0.25 ), V3( w / 2 + 0.2, base + hB + 0.02, - d / 2 - 0.25 ), V3( w / 2 + 0.2, base + hF + 0.08, d / 2 + 0.3 ), V3( - w / 2 - 0.2, base + hF + 0.08, d / 2 + 0.3 ) ];
-	B.slab( 'roofMetal', rf, 0.04, { up: UP, uDir: V3( 0, hF - hB, d + 0.55 ).normalize(), tint: s.roof || lin( 0x8a5a40 ), data: [ rand.next(), 0.8, s.galv ? 1 : 0, 0 ] } );
+	const rUp = V3( 0, hF - hB, d + 0.55 ).normalize(), rData = [ rand.next(), 0.8, s.galv ? 1 : 0, 0 ];
+	B.slab( 'roofMetal', rf, 0.04, { up: UP, uDir: rUp, tint: s.roof || lin( 0x8a5a40 ), data: rData } );
+	// ((M13) it may lose a sheet to a hurricane: roofHoles)
+	roofHoles( ctx, [ { pts: rf, uDir: rUp, seed: rData[ 0 ], T: 0.04 } ], s.name, 0.35 );
 	B.pop();
 	const c = toW( 0, 0 );
 	colliders.addBox( _v.set( c.x, ( gMin - 0.3 + base + hF ) / 2, c.z ), _h.set( w / 2 + 0.05, ( base + hF - gMin + 0.3 ) / 2, d / 2 + 0.05 ), yaw, { tag: 'shed' } );

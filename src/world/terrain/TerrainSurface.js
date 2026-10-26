@@ -284,6 +284,29 @@ export const TERRAIN_SURFACE_GLSL = /* glsl */`
 	}
 #endif
 
+	// ---- (M13) what a hurricane's sea left (terrainStorm: x the sand it washed up over the ground behind
+	// the beach, y its wrack, z how high it reached up the beach (m), w how long ago, 0 fresh .. 1 dried;
+	// terrainStormPaths: the weed it left over the paths): a line of sargassum, seagrass and broken
+	// fronds where it reached, heaped in banks, fresh olive-gold drying to near black; fans of pale sand
+	// over the paths and the grass behind, weed strewn over them
+	if ( terrainStorm.x + terrainStorm.y + terrainStormPaths > 0.0 ) {
+		float sH = terrainStorm.z;
+		// (the line meanders, 2-3 m across, in clumps: lumps of weed, the sand showing between, a dark
+		// stain of wet rot along its foot)
+		float sLine = h + ( dM.w - 0.5 ) * 0.22 + ( macroB - 0.5 ) * 0.18;
+		float band = ss( sH - 0.32, sH - 0.12, sLine ) * ss( sH + 0.1, sH - 0.02, sLine );
+		float bank = ss( 0.42, 0.58, dN.y * 0.5 + dF.y * 0.35 + macroB * 0.25 );
+		vec3 weedC = mix( ${ S( 0.3, 0.2, 0.06 ) }, ${ S( 0.09, 0.07, 0.05 ) }, terrainStorm.w ) * ( dF.y * 0.5 + 0.7 );
+		float stain = ss( sH - 0.45, sH - 0.2, sLine ) * ( 1.0 - band ) * ss( sH - 0.05, sH - 0.2, sLine );
+		albedo = albedo * ( 1.0 - stain * 0.18 * terrainStorm.y * landW );
+		albedo = mix( albedo, weedC, band * bank * terrainStorm.y * landW * notRock );
+		// (the sand from the beach's top to a little past where the sea reached, in fans thinning inland)
+		float behind = ss( sH + 0.5, sH - 0.3, h ) * ss( 0.6, 1.4, h ) * landW * notRock * ( 1.0 - sandW ) * ( 1.0 - jungleW * 0.8 );
+		float fan = ss( 0.3, 0.55, dM.w * 0.6 + macroA * 0.4 + ss( sH + 0.5, sH - 0.6, h ) * 0.3 );
+		albedo = mix( albedo, ${ S( 0.8, 0.73, 0.6 ) } * ( grain * 0.3 + 0.85 ), terrainStorm.x * behind * fan );
+		albedo = mix( albedo, weedC, terrainStormPaths * behind * ss( 0.62, 0.76, dN.y * 0.6 + dF.y * 0.4 ) );
+	}
+
 	// ---- wetness: the swash zone's damp band (Tidewater's shore simulation drew it wave by wave); ((M13)
 	// up from the water as it is: a storm surge moves it up the beach, and wets what it floods)
 	float hSea = h - terrainSeaLevel;

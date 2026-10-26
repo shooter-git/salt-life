@@ -1,12 +1,13 @@
 import { BufferGeometry, Color, DoubleSide, Euler, Group, Mesh, Vector3 } from '../engine/index.js';
 import { mulberry32 } from '../util/Noise.js';
 import { Builder, Batch, setGeometryDetail } from './village/GeoBuilder.js';
-import { createVillageMaterials } from './village/VillageMaterials.js';
+import { createVillageMaterials, ROOF_HOLES } from './village/VillageMaterials.js';
 import { VillageTextures } from './village/TextureBaker.js';
 import { buildHouse, buildBoathouse, buildMarketStall, buildShed, buildShelter, buildCradle } from './village/Buildings.js';
 import { SHELTER, CRADLE } from './village/StormPlaces.js';
 import { buildBoardwalk } from './village/Boardwalk.js';
 import { buildPier, PIER } from './Pier.js';
+import { pieceState, GONE, TARP, NEW } from '../game/StormDamage.js';
 import { G } from '../core/Globals.js';
 import { COVER } from './Cover.js';
 import {
@@ -115,7 +116,9 @@ export class Village {
 	async init( renderer ) {
 
 		const { terrain, colliders, rand, specs, scene } = this;
-		const ctx = ( B ) => ( { B, terrain, colliders, rand, lights: this.lights, inst: B === this.town ? this.townInst : this.harborInst, checks: this.foundationChecks } );
+		// ((M13) the sheets a hurricane can tear off the metal roofs: Buildings' roofHoles)
+		this.roofHoles = [];
+		const ctx = ( B ) => ( { B, terrain, colliders, rand, lights: this.lights, inst: B === this.town ? this.townInst : this.harborInst, checks: this.foundationChecks, holes: this.roofHoles } );
 		let t0 = performance.now();
 		const step = async () => {
 
@@ -129,7 +132,7 @@ export class Village {
 
 		// the fish sign at the pier entrance is its own small mesh: it swings in the wind (update())
 		this.signB = new Builder();
-		this.pierInfo = buildPier( { B: this.harbor, terrain, colliders, rand, lights: this.lights, inst: this.inst, signB: this.signB, hang: () => new Builder() } );
+		this.pierInfo = buildPier( { B: this.harbor, terrain, colliders, rand, lights: this.lights, inst: this.inst, signB: this.signB, hang: () => new Builder(), stormB: () => new Builder() } );
 
 		// boardwalk from the foot of the pier steps up to the plaza
 		const foot = this.pierInfo.stepFoot;
@@ -208,6 +211,7 @@ export class Village {
 		await this._assemble( step );
 		this._buildSign();
 		this._buildLanterns();
+		this._buildStorm();
 		scene.add( this.group );
 		await step();
 		await this.textures.bake( renderer );
@@ -832,6 +836,76 @@ export class Village {
 
 	}
 
+	// (M13) what a hurricane can take: the roofs' sheets (the roof material's holes, Buildings' roofHoles:
+	// each slab's seed, its sheets along the eave, how far up), and the pier's boards and bay (Pier's
+	// PIER_STORM), each its own mesh in its old timber and in new, and its deck collider
+	_buildStorm() {
+
+		const H = this.materials.roofMetal.userData.vlm.uniforms;
+		this.roofHoles.length = Math.min( this.roofHoles.length, ROOF_HOLES );
+		this.roofHoles.forEach( ( h, k ) => H.vlmHoles.value[ k ].set( h.seed, h.v0, h.v1, h.uTop ) );
+		this.stormPieces = [];
+		for ( const p of this.pierInfo.storm || [] ) {
+
+			const src = p.B.batches.wood;
+			p.B = null;
+			if ( ! src || src.vcount === 0 ) continue;
+			// (new timber: warm and pale, not yet silvered)
+			const fresh = new Batch();
+			fresh.append( src, ( d ) => [ d[ 0 ], d[ 1 ], d[ 2 ], 0.3 ] );
+			for ( let i = 0; i < fresh.vcount; i ++ ) {
+
+				fresh.tint[ i * 3 ] *= 1.16; fresh.tint[ i * 3 + 1 ] *= 1.06; fresh.tint[ i * 3 + 2 ] *= 0.9;
+
+			}
+
+			const mesh = ( b, name ) => {
+
+				const m = new Mesh( b.build(), this.materials.wood );
+				m.name = name;
+				m.castShadow = true;
+				m.receiveShadow = true;
+				m.matrixAutoUpdate = false;
+				this.group.add( m );
+				return m;
+
+			};
+			this.stormPieces.push( { kind: p.kind, id: p.id, old: mesh( src, `village_${ p.kind }${ p.id }` ), fresh: mesh( fresh, `village_${ p.kind }${ p.id }_new` ), boxes: p.boxes, state: - 1 } );
+			this.stormPieces[ this.stormPieces.length - 1 ].fresh.visible = false;
+
+		}
+
+	}
+
+	// (M13) what the last hurricane's done (game/StormDamage.js's damageAt), from the app now and again:
+	// the sheets off the roofs (gone, under a tarp, new), the pier's boards and bay (gone: its deck gives
+	// way; new timber once they're back)
+	setDamage( D ) {
+
+		if ( ! this.stormPieces ) return;
+		// (the sand and weed over the boardwalk and the pier's deck)
+		this.materials.wood.userData.vlm.uniforms.vlmStorm.value.set( D.sand, D.paths, D.wrackH, D.wrackAge );
+		const S = this.materials.roofMetal.userData.vlm.uniforms.vlmHoleS.value, st = this._ps || ( this._ps = {} );
+		for ( let k = 0; k < this.roofHoles.length; k ++ ) {
+
+			pieceState( D, 'tin', k, st );
+			S[ k ] = st.state === NEW ? NEW + Math.min( 0.99, st.age / ( 30 * 24 ) ) : st.state;
+
+		}
+
+		for ( const p of this.stormPieces ) {
+
+			pieceState( D, p.kind, p.id, st );
+			if ( st.state === p.state ) continue;
+			p.state = st.state;
+			p.old.visible = st.state !== GONE && st.state !== NEW;
+			p.fresh.visible = st.state === NEW || st.state === TARP;
+			for ( const b of p.boxes ) b.walkable = b.solid = st.state !== GONE;
+
+		}
+
+	}
+
 	_updateLanterns( dt ) {
 
 		if ( ! this.lanterns || ! this.lanterns.length ) return;
@@ -912,7 +986,9 @@ export class Village {
 	coverParts() {
 
 		const kinds = { village_wood: COVER.WOOD, village_hard: COVER.HARD, village_roofMetal: COVER.TIN, village_thatch: COVER.THATCH, village_stone: COVER.STONE, village_fabric: COVER.CANVAS };
-		return this.meshes.filter( ( m ) => kinds[ m.name ] ).map( ( mesh ) => ( { mesh, kind: kinds[ mesh.name ] } ) );
+		// ((M13) and the pier's boards a hurricane can take, as they are most days)
+		const storm = ( this.stormPieces || [] ).map( ( p ) => ( { mesh: p.old, kind: COVER.WOOD } ) );
+		return [ ...this.meshes.filter( ( m ) => kinds[ m.name ] ).map( ( mesh ) => ( { mesh, kind: kinds[ mesh.name ] } ) ), ...storm ];
 
 	}
 

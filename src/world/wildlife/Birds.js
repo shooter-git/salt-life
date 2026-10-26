@@ -168,6 +168,17 @@ export class Birds {
 
 		}
 
+		// ((M13) spots along a hurricane's line of wrack up the beach, where gulls pick through it while it's
+		// fresh: setWrack places them and opens them)
+		this.wrackPerches = [];
+		for ( const x of [ - 44, - 30, - 17, - 3, 12, 27, 84, 103, 126, 142 ] ) {
+
+			const p = { x: x + ( rng() - 0.5 ) * 4, y: 0, z: - 50, kind: 'wrack', kinds: [ 'gull' ], bird: null, yawJitter: ( rng() - 0.5 ) * 1.6, live: false, h: null };
+			P.push( p );
+			this.wrackPerches.push( p );
+
+		}
+
 		// loafing spots on the beach, just above the reach of the swash
 		const T = this.terrain;
 		for ( const x0 of [ - 38, - 31, - 35, - 27, 118, 124 ] ) {
@@ -413,6 +424,25 @@ export class Birds {
 
 	}
 
+	// (M13) a hurricane's line of wrack up the beach (StormDamage's damageAt: wrackH, how high the sea
+	// reached; feed, how fresh it is): its spots along the line, open to the gulls while it's fresh
+	setWrack( h, feed ) {
+
+		const live = feed > 0.25 && h > 1;
+		for ( const p of this.wrackPerches ) {
+
+			p.live = live;
+			if ( ! live || p.h === h ) continue;
+			p.h = h;
+			let z = - 110;
+			for ( ; z < - 20; z += 0.25 ) if ( this.terrain.heightAt( p.x, z ) < h ) break;
+			p.z = z + 0.4;
+			p.y = this.terrain.heightAt( p.x, p.z ) + 0.08;
+
+		}
+
+	}
+
 	// (M13) thunder this far off (m): a near clap puts the perched gulls and pelicans up, the nearer the more
 	thunder( m ) {
 
@@ -479,6 +509,16 @@ export class Birds {
 		const h = standHeight( sp ) * ( isPel ? 0.92 : 1 );
 		groundPose( P, p.x, p.y, p.z, a.perchYaw + yawBoat, isPel ? 0.12 : 0.24, h, phase, stride, sp.legs.toe * 0.3 );
 		this.idleHead( a, dt, isPel ? 0.75 : - 0.12, isPel ? 0.6 : 1.2 );
+		// ((M13) at the wrack: picking through it, head down in bouts)
+		if ( a.perch.kind === 'wrack' ) {
+
+			a.peckT = ( a.peckT || 0 ) + dt;
+			const bout = Math.sin( a.peckT * 0.7 + a.id * 2.3 ) > - 0.2 ? 1 : 0;
+			const jab = Math.pow( Math.max( 0, Math.sin( a.peckT * 3.1 + a.id ) ), 2 ) * bout;
+			a.hp += ( 1.15 * jab + 0.5 * bout - a.hp ) * approach( 12, dt );
+
+		}
+
 		const L = sp.length;
 		setHead( P, a.hy, a.hp, 0, ( isPel ? - 0.02 : 0.03 ) * L, ( isPel ? - 0.04 : 0.01 ) * L );
 
@@ -748,10 +788,12 @@ export class Birds {
 
 			if ( p.bird || ! p.kinds.includes( a.kind ) ) continue;
 			if ( p.kind === 'boat' && ( this.boat.driven || this.boat.speed > 0.5 ) ) continue;
+			if ( p.kind === 'wrack' && ! p.live ) continue;
 			const q = this.perchPosition( p, _v );
 			if ( this.threat( viewer, q.x, q.y, q.z ) < 18 ) continue;
 			const d = Math.hypot( q.x - a.f.x, q.z - a.f.z );
-			const s = - d * 0.01 + this.rng() * 2 + ( roost && p.kind !== 'sand' ? 1 : 0 );
+			// ((M13) fresh wrack draws them by day)
+			const s = - d * 0.01 + this.rng() * 2 + ( roost && p.kind !== 'sand' && p.kind !== 'wrack' ? 1 : 0 ) + ( p.kind === 'wrack' && ! roost ? 2.5 : 0 );
 			if ( s > bestS ) {
 
 				bestS = s;

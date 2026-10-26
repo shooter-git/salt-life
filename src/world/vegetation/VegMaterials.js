@@ -408,8 +408,8 @@ bool vegPlantMask() {
 		float hw = pow( max( 1.0 - tt, 0.0 ), 0.6 ) * 0.22 * ( ss( 0.0, 0.1, tt ) * 0.4 + 0.6 );
 		// split leaflets: a slit from the tip back along the midvein
 		bool split = r2 > 0.9 && tt > mix( 0.35, 0.7, r1 ) && abs( fx ) < hw * 0.3;
-		// torn-out runs of leaflets
-		bool torn = vegNoise( vec2( k * 0.21 + seed * 17.0, fseed * 37.0 ) ) > 0.83 - age * 0.2 && s > 0.3;
+		// torn-out runs of leaflets ((M13) many more on what's left after a hurricane)
+		bool torn = vegNoise( vec2( k * 0.21 + seed * 17.0, fseed * 37.0 ) ) > 0.83 - age * 0.2 - vegStrip * 0.5 && s > 0.3;
 		// sub-pixel leaflets widen instead of aliasing (fronds turn solid in the distance)
 		float hwE = max( hw, min( fwS * ( N * 0.6 ), 0.5 ) * ( tt < 1.0 ? 1.0 : 0.0 ) );
 		bool leaf = abs( fx ) < hwE && tt < 1.0 && s > 0.06 && ! split && ! torn;
@@ -439,7 +439,9 @@ bool vegPlantMask() {
 		float dead = step( 0.8, age );
 		// wind-torn strips: most tears start at the margin and run in along the veins, more on older
 		// leaves; dead leaves are shredded
-		bool tear = r1 < mix( 0.45 + age * 0.6, 0.95, dead ) && t > mix( 0.12, 0.75, r2 ) * mix( 1.0, 0.4, dead ) && fx > mix( 0.45, 0.37, r2 ) - dead * 0.12;
+		// ((M13) and shredded by a hurricane, as dead ones are)
+		float shred = max( dead, min( 1.0, vegStrip * 2.0 ) );
+		bool tear = r1 < mix( 0.45 + age * 0.6, 0.95, shred ) && t > mix( 0.12, 0.75, r2 ) * mix( 1.0, 0.4, shred ) && fx > mix( 0.45, 0.37, r2 ) - shred * 0.12;
 		bool edge = t < 0.985 - vegNoise( vec2( s * 60.0, fseed * 9.0 ) ) * 0.07;
 		m = ! tear && edge ? 1.0 : 0.0;
 	} else if ( part > 5.5 && s >= 0.0 ) {

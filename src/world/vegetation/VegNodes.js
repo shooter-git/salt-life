@@ -8,7 +8,8 @@ import { LOBE_TABLE, TREE_VARIANTS, SHRUB_VARIANTS } from './PlantGeometry.js';
 //
 // Uniforms (`vegUniforms`, shared by every vegetation material: put them in shader.uniforms):
 //   vegCamPos, vegGustOffset, vegCanopyNear, vegFernFade, vegLobeTable[], vegDetail (the terrain's detail
-//   texture), and the Globals handles vegTime, vegWindDir, vegWindSpeed, vegSunDir, vegNight.
+//   texture), vegStrip ((M13) the share of the palms' fronds a hurricane's torn off: StormDamage's strip),
+//   and the Globals handles vegTime, vegWindDir, vegWindSpeed, vegSunDir, vegNight.
 //   vegLodRange: per material (one per LOD level: three uploads uniforms per material, not per
 //   draw), see VegMaterials.
 // GLSL (VEG_GLSL, both stages):
@@ -43,6 +44,10 @@ export const vegUniforms = {
 	vegFernFade: { value: new Vector2( 42, 58 ) },
 	// the terrain's detail texture (set by Vegetation: it must not be generated at import time)
 	vegDetail: { value: null },
+	// (M13) how much of the palms' crowns a hurricane's torn off (0..~0.5; the app sets it from
+	// game/StormDamage.js: their older fronds first, more on some palms than others; and the bananas'
+	// leaves shredded)
+	vegStrip: { value: 0 },
 	vegTime: G.time,
 	vegWindDir: G.windDir,
 	vegWindSpeed: G.windSpeed,
@@ -74,6 +79,7 @@ uniform vec2 vegCanopyNear;
 uniform vec2 vegFernFade;
 uniform vec4 vegLobeTable[ ${ LOBE_VEC4 } ];
 uniform sampler2D vegDetail;
+uniform float vegStrip;
 uniform float vegTime;
 uniform vec2 vegWindDir;
 uniform float vegWindSpeed;
@@ -264,7 +270,11 @@ VegPlant vegPlantDeform( vec3 P, vec3 N0, vec4 iPos, vec4 iDat, vec4 veg, vec4 a
 
 	// the dead (hanging) frond is only kept on some palms
 	bool hideDead = part > 0.5 && part < 1.5 && aMat.y > 0.95 && fract( seed * 13.7 ) > 0.4;
-	vec3 crownPos2 = hideDead ? C : crownPos;
+	// ((M13) the fronds a hurricane's torn off: the older, lower ones first (age 0 young .. 0.55 old),
+	// more on some palms (and the most exposed) than others; never the youngest, the spear)
+	float tornK = vegStrip * mix( 0.4, 1.6, clamp( aMat.y / 0.55, 0.0, 1.0 ) ) * mix( 0.55, 1.45, fract( seed * 29.3 ) );
+	bool torn = part > 0.5 && part < 1.5 && aMat.y > 0.06 && vegHash12( vec2( aMat.w * 31.7 + 0.5, seed * 57.3 ) ) < tornK;
+	vec3 crownPos2 = hideDead || torn ? C : crownPos;
 
 	bool isStem = part < 0.5;
 	vec3 pos = isStem ? stemPos : crownPos2;
