@@ -18,11 +18,20 @@ import { useLocalLights, LOCAL_LIGHTS_MAX } from '../materials/LocalLights.js';
 // (premultiplied output: the water's own light is weighted by its opacity, the reflections are not).
 // (Salt Life) In a fresh wind the open sea's crests break: whitecaps (this.whitecap, set by the weather;
 // 0, and nothing drawn for them, in a fair day's breeze or less).
+// (M11) It reflects the sky as a mirror would (the scene's environment, made in the same light as the
+// sky you see, at REFLECT), as much as the water's Fresnel lets it: little looking down, nearly all of it
+// toward the horizon. From under water its underside keeps the faint fill it had (waterEnvUnder): there
+// a real one mirrors the dark sea below, not the sky.
 
 const LOD_GRID = { low: 7, mid: 20, high: 32 };
 // node size at the finest LOD (m): phones take a coarser sea (their triangle budget is 300k)
 const LEAF = { low: 16, mid: 8, high: 8 };
 const SHORE_DEEP = 26; // m: the shore waves' envelope is 0 beyond this depth
+// (M11) the sky's reflection off the surface: the environment as it is (1, a mirror's: the sky drawn as
+// you see it); and where three turns a reflected ray into the world (a ray pointing down is turned up)
+const REFLECT = 1;
+const REFLECT_RAY = 'reflectVec = transformDirectionByInverseViewMatrix( reflectVec, viewMatrix );';
+if ( ! THREE.ShaderChunk.envmap_physical_pars_fragment.includes( REFLECT_RAY ) ) throw new Error( 'WaterSurface: three\'s envmap_physical_pars_fragment changed (' + REFLECT_RAY + ')' );
 // an sRGB colour as a linear GLSL vec3 (shading is linear)
 const rgb = ( r, g, b ) => {
 
@@ -62,11 +71,16 @@ export class WaterSurface {
 			waterRain: G.rain, // (M9: the rings where the drops land)
 			waterFlash: G.skyFlash, // (M10: lightning in the reflections)
 			waterSkyExposure: G.skyExposure,
+			// (M11) the underside's reflection, of the surface's: the scene's fill (update)
+			waterEnvUnder: { value: 0.07 },
 		};
+		this.envUnder = uniforms.waterEnvUnder;
 
-		// envMapIntensity 12: the scene's environment intensity is only a small diffuse fill (Sky); the
-		// sea reflects the sky in full
-		const mat = this.material = new THREE.MeshStandardMaterial( { color: 0xffffff, roughness: 0.1, metalness: 0, envMapIntensity: 12, transparent: true, side: THREE.DoubleSide } );
+		// (M11) the sky it reflects: the scene's environment given to it as its own (update), so its strength
+		// is REFLECT (with no envMap of its own three would give it the scene's environmentIntensity: Sky's
+		// small fill for the lit materials, about 0.05 to 0.09, which the sea once reflected at)
+		this.scene = scene;
+		const mat = this.material = new THREE.MeshStandardMaterial( { color: 0xffffff, roughness: 0.1, metalness: 0, envMapIntensity: REFLECT, transparent: true, side: THREE.DoubleSide } );
 		// (high) refraction: the frame drawn so far (all that's opaque: the seabed, the reef, the hull
 		// under water) copied just before the sea is drawn (one copy a frame, no second scene pass),
 		// and seen through the surface bent by its waves and ripples
@@ -310,6 +324,13 @@ ${ SH ? /* glsl */`
 	vec3 nP = normalize( wN + vec3( - rs.x, 0.0, - rs.y ) );
 	nP = gl_FrontFacing ? nP : - nP;
 	normal = normalize( ( viewMatrix * vec4( nP, 0.0 ) ).xyz );` )
+				// (M11) a wave's face tilted toward you at a grazing angle reflects a ray that points down: on a
+				// real sea it meets the sky in the next wave's face, not the dark under the horizon (as the
+				// flash's lobe takes it, below)
+				.replace( '#include <envmap_physical_pars_fragment>', THREE.ShaderChunk.envmap_physical_pars_fragment.replace( REFLECT_RAY, REFLECT_RAY + '\n\t\t\treflectVec.y = abs( reflectVec.y );' ) )
+				.replace( '#include <lights_fragment_end>', /* glsl */`#include <lights_fragment_end>
+	// (M11) from under water, the underside's faint fill, not the sky's mirror
+	if ( ! gl_FrontFacing ) reflectedLight.indirectSpecular *= waterEnvUnder;` )
 				.replace( '#include <opaque_fragment>', /* glsl */`
 #ifdef WATER_REFRACT
 	if ( gl_FrontFacing ) {
@@ -332,7 +353,7 @@ ${ SH ? /* glsl */`
 		gl_FragColor.rgb += ${ rgb( 0.82, 0.86, 1.0 ) } * waterFlash.w * ( 2.5 * lobe + 0.2 ) * fres * waterSkyExposure * ( 1.0 - foam * 0.8 ) * sheetEdge;
 	}` )
 				.replace( '#include <premultiplied_alpha_fragment>', '' );
-			shader.fragmentShader = shader.fragmentShader.replace( 'uniform float waterTime;', 'uniform float waterTime;\nuniform float waterSeaLevel_;' );
+			shader.fragmentShader = shader.fragmentShader.replace( 'uniform float waterTime;', 'uniform float waterTime;\nuniform float waterSeaLevel_;\nuniform float waterEnvUnder;' );
 			shader.uniforms.waterSeaLevel_ = G.seaLevel;
 
 		};
@@ -374,6 +395,11 @@ ${ SH ? /* glsl */`
 	update( camera ) {
 
 		this.lod.update( camera );
+		// (M11) the sky it reflects, as the scene's environment is (made once, refreshed in place); its
+		// underside at the scene's fill
+		const env = this.scene.environment;
+		if ( this.material.envMap !== env ) this.material.envMap = env;
+		this.envUnder.value = this.scene.environmentIntensity / REFLECT;
 
 	}
 

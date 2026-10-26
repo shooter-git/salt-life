@@ -68,6 +68,14 @@ slice table is in `src/audio/soundBank.js`.
 | `bilge_slosh.ogg` | a bucket sloshing — loop, the water in her bilge as she rolls | [bucket sloshing.mp3](https://freesound.org/people/supersplat1/sounds/388014/) | supersplat1 | CC0 1.0 |
 | `hull_creak.ogg` | 6 creaks of a wooden hull (high-passed off the waves under them) — in a heavy sea, more the more she's worn | [ship_creak.mp3](https://freesound.org/people/Walter_Odington/sounds/31574/) | Walter_Odington | CC0 1.0 |
 | `shutter.ogg` | 3 bangs of a window or gate in the wind — the village's shutters in a blow | [Open Window Banging In Wind](https://freesound.org/people/DJKaren/sounds/829588/) | DJKaren | CC0 1.0 |
+| `rain_water_light.ogg` | rain on a lake by a cottage in Ontario, light (its first minute; high-passed) — loop, rain on the sea around you in a shower | [180723 Rain, on water lake, modulating light to med, cottage ONTARIO.flac](https://freesound.org/people/TRP/sounds/572429/) | TRP | CC0 1.0 |
+| `rain_water.ogg` | the same lake's rain, medium (from 120 s) — loop, rain on the sea | [180723 Rain, on water lake, modulating light to med, cottage ONTARIO.flac](https://freesound.org/people/TRP/sounds/572429/) | TRP | CC0 1.0 |
+| `rain_water_heavy.ogg` | the same lake's rain, heavier (from 192 s) — loop, rain on the sea in a downpour | [180723 Rain, on water lake, modulating light to med, cottage ONTARIO.flac](https://freesound.org/people/TRP/sounds/572429/) | TRP | CC0 1.0 |
+| `rain_pond.ogg` | rain drops hitting a pond in a rainstorm, close — loop, a downpour on the sea close by | [Rain on pond](https://freesound.org/people/Mjeno/sounds/399281/) | Mjeno | CC0 1.0 |
+| `rain_wood_light.ogg` | light rain on a wooden porch on the coast of Maine, heard from a window above it (from 125 s, clear of its knocks; high-passed) — loop, rain on the pier, the boardwalks and the porches | [RAINClth_Rain Wood Deck Furniture Nighttime Coastal_001_RambleRecordings](https://freesound.org/people/buzkill/sounds/824671/) | buzkill | CC0 1.0 |
+| `rain_wood_heavy.ogg` | the same porch once the rain's set in (from 905 s) — loop, rain on wood, heavier | [RAINClth_Rain Wood Deck Furniture Nighttime Coastal_001_RambleRecordings](https://freesound.org/people/buzkill/sounds/824671/) | buzkill | CC0 1.0 |
+| `rain_porch.ogg` | drops slapping on a porch, close (high-passed) — loop, rain on the wood under you | [rain porch cu slapping drops.aiff](https://freesound.org/people/kyles/sounds/51813/) | kyles | CC0 1.0 |
+| `drips.ogg` | 8 drops of water landing on thin metal, each through its ring — the drips off the eaves, the wheelhouse and the palms as they land (slowed and dulled onto wood or the boat) | [Water Dripping on Thin Metal](https://freesound.org/people/Elements-Library/sounds/683778/) | Elements-Library | CC0 1.0 |
 
 Note: `under_reef.ogg` uses the first ~200 s of 630436's preview (a narrow 1.7 kHz tone notched out).
 

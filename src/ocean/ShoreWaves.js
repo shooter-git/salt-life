@@ -18,7 +18,8 @@ import { G, GRAVITY } from '../core/Globals.js';
 //   ShoreSample shoreEvaluate( vec2 xz, float depth, float groundH )        (with the normal: the water mesh)
 //   vec4 terrainShoreSample( vec2 xz )        the shore field ( T, dir * exposure, shoreline T )
 //   vec4 shoreSwashEdge( vec2 xz, float t )   ( clipped film thickness, distance to the swash front, tau, Rt )
-//   vec3 shoreSurfScatter( vec2 xz, float depth )   milky surf-zone turbidity weight (0..1) * colour
+//   float shoreSurfTurbidity( vec2 xz, float depth )   how milky the surf zone is there (0..1; (M11) more
+//                                                      and further out in a big surf: shoreMilk)
 // CPU: sample( x, z, t, groundH ) -> { y, swashLevel, env } for WaterQuery.
 // (Salt Life) setSurf( amplitude, period ): the weather's surf (Weather.js). The waves' phase runs on a
 // clock re-anchored whenever the period changes (phase( t, T ), timeOf( s, T ); the GPU's shoreClock,
@@ -31,6 +32,12 @@ const SWASH_UP = 0.4, SWASH_DOWN = 0.55; // fractions of the period: uprush, bac
 const SWASH_OVERSHOOT = 1.2; // the mesh sheet reaches this far (m) past the leading edge
 const FAIR_AMPLITUDE = 0.34; // (Salt Life) the surf on a fair day (params.amplitude), run-up 1
 const FAIR_PERIOD = 9; // (and its period, s)
+// (M11) the surf zone's water is milky to this depth (m) on a fair day (deeper, and milkier, in a big
+// surf: its turbidity goes as the surf's height, and so does the depth the breakers stand in), at most
+// this much milkier than a fair day's
+const FAIR_TURBIDITY = 0.16;
+const MILK_DEPTH = 4.5;
+const MILK_MAX = 1.8;
 
 const f = ( x ) => {
 
@@ -61,7 +68,8 @@ export class ShoreWaves {
 			curl: 1.0,
 			runup: 1.0,
 			enabled: 1.0,
-			turbidity: 0.16, // sediment + bubble scattering in the surf zone (1/m)
+			turbidity: 0.16, // sediment + bubble scattering in the surf zone (1/m), on a fair day ((M11) the
+			// surf stirs it in proportion to its height: setSurf)
 		};
 		this.uniforms = {
 			shoreTex: { value: tex },
@@ -76,6 +84,9 @@ export class ShoreWaves {
 			shoreP0: { value: new THREE.Vector4() },
 			// breakSpan, curl, runup, enabled
 			shoreP1: { value: new THREE.Vector4() },
+			// (M11) the surf zone's milk: its turbidity, of a fair day's; the depth it reaches (m: where the
+			// breakers stand, deeper in a bigger surf)
+			shoreMilk: { value: new THREE.Vector2( 1, MILK_DEPTH ) },
 		};
 		this.syncUniforms();
 		this.glsl = SHORE_GLSL;
@@ -107,6 +118,7 @@ export class ShoreWaves {
 
 		P.amplitude = amplitude;
 		P.runup = Math.sqrt( FAIR_AMPLITUDE / amplitude ) * period / FAIR_PERIOD;
+		P.turbidity = FAIR_TURBIDITY * Math.min( MILK_MAX, amplitude / FAIR_AMPLITUDE );
 		this.syncUniforms();
 		this.update( t );
 
@@ -144,6 +156,7 @@ export class ShoreWaves {
 		const p = this.params;
 		this.uniforms.shoreP0.value.set( p.period, p.amplitude, p.variation, p.gamma );
 		this.uniforms.shoreP1.value.set( p.breakSpan, p.curl, p.runup, p.enabled );
+		this.uniforms.shoreMilk.value.set( p.turbidity / FAIR_TURBIDITY, MILK_DEPTH * Math.max( 1, p.amplitude / FAIR_AMPLITUDE ) );
 
 	}
 
@@ -348,6 +361,7 @@ uniform float shoreRef;
 uniform float shoreSeaLevel;
 uniform vec4 shoreP0; // period, amplitude, variation, gamma
 uniform vec4 shoreP1; // breakSpan, curl, runup, enabled
+uniform vec2 shoreMilk; // (M11) the surf zone's turbidity (of a fair day's), the depth it reaches (m)
 #define SHORE_PERIOD shoreP0.x
 #define SHORE_AMPLITUDE shoreP0.y
 #define SHORE_VARIATION shoreP0.z
@@ -667,13 +681,14 @@ ShoreSample shoreEvaluate( vec2 xz, float depth, float groundH ) {
 	return o;
 }
 
-// the surf zone's water: suspended sand and fine bubbles scatter light (milky, turquoise)
+// the surf zone's water: suspended sand and fine bubbles scatter light (milky, turquoise); (M11) as much
+// as the surf stirs up, out to where its breakers stand
 float shoreSurfTurbidity( vec2 xz, float depth ) {
-	float k = 0.0;
-	if ( depth < 4.5 && depth > -0.2 ) {
+	float k = 0.0, reach = shoreMilk.y;
+	if ( depth < reach && depth > -0.2 ) {
 		float expo = shSat( length( terrainShoreSample( xz ).yz ) * 1.4 );
-		k = shSS( 4.5, 1.2, depth ) * shSS( -0.2, 0.15, depth ) * expo * SHORE_ENABLED;
+		k = shSS( reach, reach * 0.27, depth ) * shSS( -0.2, 0.15, depth ) * expo * SHORE_ENABLED;
 	}
-	return k;
+	return min( k * shoreMilk.x, 1.0 );
 }
 `;

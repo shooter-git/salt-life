@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { G } from '../core/Globals.js';
+import { CoverMap, COVER } from '../world/Cover.js';
 
 const f = ( x ) => {
 
@@ -16,15 +17,18 @@ const f = ( x ) => {
 // centimetres), at least a pixel or so across, its opacity the real drop's share of that. The shower's
 // strength (G.rain) is how many of them fall. They're lit as the water they are: the sky's light through
 // them, a glint of the sun's against the light, the flash of lightning. None under the ground, the sea,
-// or a roof (the wheelhouse's, as a box in the boat's frame: shelter).
+// or a roof (the wheelhouse's, as a box in the boat's frame: shelter), and (M11) none under what covers
+// the island (the pier, the boardwalks, the roofs, the stalls: world/Cover.js).
 //
 // Drawn premultiplied, one instanced draw; fewer drops on the lesser tiers (phones' fill rate is what
 // rain costs).
 // (M10) And where they land, splashes: a small crown popping up and gone in a moment, on the ground
 // above the sea (the sea has its rings: WaterSurface) and on the boat's cockpit sole (the deck aft of
-// the wheelhouse, as a box in her frame: setDeck). Hashed about the camera too, each at a new spot each
-// time it pops; one more instanced draw, as many as the rain is hard.
-//   const rain = new Rain( { terrain, tier } ); scene.add( rain.mesh, rain.splash );
+// the wheelhouse, as a box in her frame: setDeck), and (M11) on what covers the island where it's the
+// top (the pier's deck, the boardwalks, the roofs and awnings; not the thatch, which takes it in), so
+// none under it. Hashed about the camera too, each at a new spot each time it pops; one more instanced
+// draw, as many as the rain is hard.
+//   const rain = new Rain( { terrain, cover, tier } ); scene.add( rain.mesh, rain.splash );
 //   rain.update( dt, camera, cameraWaterHeight, viewHeight )   (each frame)   rain.flash.value
 //   rain.setDeck( boatMatrixWorld )
 
@@ -45,10 +49,29 @@ const SPLASH_PERIOD = [ 0.3, 0.7 ];
 const SPLASH_SIZE = 0.06;
 const COCKPIT = { y: 0.35, x: 1.1, z: [ - 3.7, - 1.0 ] };
 
+// the crown a drop throws up where it lands, on its quad (uv: -1..1, y up; s: how far through its life,
+// 0..1): a thin ring spreading at its foot and three drops thrown up and out of it. Its coverage. (M11:
+// the drips' too, fx/Drips.js)
+export const CROWN_GLSL = /* glsl */`
+float splashCrown( vec2 uv, float s ) {
+	float y = uv.y * 0.5 + 0.5;
+	float ring = exp( - pow( ( abs( uv.x ) - 0.3 - 0.6 * s ) * 7.0, 2.0 ) ) * exp( - y * 10.0 );
+	float up = sin( s * 3.14159 );
+	float drops = 0.0;
+	for ( int i = 0; i < 3; i ++ ) {
+		float fi = float( i ) - 1.0;
+		vec2 at = vec2( fi * 0.55 * s, 0.2 + up * ( 0.7 - 0.25 * abs( fi ) ) );
+		drops += smoothstep( 0.24, 0.06, length( vec2( uv.x - at.x, ( y - at.y ) * 1.3 ) ) );
+	}
+	return ( ring * 0.7 + drops ) * ( 1.0 - 0.6 * s );
+}
+`;
+
 export class Rain {
 
-	// terrain: the Terrain (its heightGlsl / heightUniforms)
-	constructor( { terrain, tier = 'high' } ) {
+	// terrain: the Terrain (its heightGlsl / heightUniforms); cover: what covers the island (a CoverMap,
+	// built later: until then nothing does)
+	constructor( { terrain, cover = new CoverMap(), tier = 'high' } ) {
 
 		const count = COUNT[ tier ] ?? COUNT.low;
 		this.count = count;
@@ -56,6 +79,7 @@ export class Rain {
 		this.uniforms = {
 			...THREE.UniformsUtils.clone( THREE.UniformsLib.fog ),
 			...terrain.heightUniforms,
+			...cover.uniforms,
 			rainCamPos: { value: new THREE.Vector3() },
 			rainDrift: { value: new THREE.Vector3() }, // how far they've fallen and drifted, wrapped to the box (m)
 			rainAmount: G.rain,
@@ -75,6 +99,7 @@ export class Rain {
 #include <common>
 #include <fog_pars_vertex>
 ${ terrain.heightGlsl }
+${ cover.glsl }
 uniform vec3 rainCamPos;
 uniform vec3 rainDrift;
 uniform float rainAmount;
@@ -108,8 +133,9 @@ void main() {
 	vec3 moved = rainDrift * vec3( 1.0, eighths / 8.0, 1.0 );
 	vec3 local = ( fract( h.xyz + ( moved - rainCamPos ) / B ) - vec3( 0.5, 0.35, 0.5 ) ) * B;
 	vec3 p = rainCamPos + local;
-	// none under the ground or the sea, or under a roof
-	float ground = max( terrainHeightAt( p.xz ), rainSeaLevel );
+	// none under the ground or the sea, or under what covers it (the pier's deck, a roof), or under the
+	// wheelhouse's roof
+	float ground = max( max( terrainHeightAt( p.xz ), rainSeaLevel ), coverHeightAt( p.xz ) );
 	vec3 q = ( rainShelter * vec4( p, 1.0 ) ).xyz;
 	float dry = all( lessThan( abs( q ), vec3( 1.0 ) ) ) ? 0.0 : 1.0;
 	// the streak: along its fall, a look's motion blur long; at least ~1.2 px across
@@ -194,17 +220,18 @@ void main() {
 		this.mesh.renderOrder = 22;
 		this.mesh.visible = false;
 
-		this.splash = this.buildSplash( terrain, tier );
+		this.splash = this.buildSplash( terrain, cover, tier );
 
 	}
 
 	// (M10) the splashes where the drops land (see above)
-	buildSplash( terrain, tier ) {
+	buildSplash( terrain, cover, tier ) {
 
 		const count = SPLASH[ tier ] ?? SPLASH.low;
 		const U = this.splashUniforms = {
 			...THREE.UniformsUtils.clone( THREE.UniformsLib.fog ),
 			...terrain.heightUniforms,
+			...cover.uniforms,
 			splashCamPos: { value: new THREE.Vector3() },
 			splashTime: { value: 0 },
 			splashBoat: { value: new THREE.Matrix4() }, // the boat's frame -> the world, and back
@@ -221,6 +248,7 @@ void main() {
 #include <common>
 #include <fog_pars_vertex>
 ${ terrain.heightGlsl }
+${ cover.glsl }
 uniform vec3 splashCamPos;
 uniform float splashTime;
 uniform mat4 splashBoat;
@@ -248,12 +276,16 @@ void main() {
 	float B = ${ f( SPLASH_BOX ) };
 	vec2 local = ( fract( c.xy - splashCamPos.xz / B ) - 0.5 ) * B;
 	vec3 p = vec3( splashCamPos.x + local.x, 0.0, splashCamPos.z + local.y );
-	// where it lands: the cockpit's sole, or the ground where it's above the sea
+	// where it lands: the cockpit's sole, or the top of what's there where it's above the sea: what covers
+	// the ground (the pier's deck, a roof: not thatch, which takes it in), or the ground
 	vec3 b = ( splashBoatInv * vec4( p, 1.0 ) ).xyz;
 	float deck = abs( b.x ) < ${ f( COCKPIT.x ) } && b.z > ${ f( COCKPIT.z[ 0 ] ) } && b.z < ${ f( COCKPIT.z[ 1 ] ) } ? 1.0 : 0.0;
 	float ground = terrainHeightAt( p.xz );
-	p = deck > 0.5 ? ( splashBoat * vec4( b.x, ${ f( COCKPIT.y ) }, b.z, 1.0 ) ).xyz : vec3( p.x, ground, p.z );
-	float land = max( deck, ground > rainSeaLevel + 0.03 ? 1.0 : 0.0 );
+	vec2 over = coverAt( p.xz );
+	float top = max( ground, over.x );
+	bool thatch = over.x > ground && over.y == ${ f( COVER.THATCH ) };
+	p = deck > 0.5 ? ( splashBoat * vec4( b.x, ${ f( COCKPIT.y ) }, b.z, 1.0 ) ).xyz : vec3( p.x, top, p.z );
+	float land = max( deck, top > rainSeaLevel + 0.03 && ! thatch ? 1.0 : 0.0 );
 	// a crown facing you (about the upright), at least a couple of pixels across
 	vec3 toCam = cameraPosition - p;
 	float dist = max( length( toCam ), 0.05 );
@@ -274,24 +306,15 @@ void main() {
 	#include <fog_vertex>
 }
 `;
-		// the crown: a thin ring spreading at its foot, and three drops thrown up and out of it
+		// the crown (CROWN_GLSL)
 		const fragmentShader = /* glsl */`
 #include <common>
 #include <fog_pars_fragment>
 varying vec4 vSplashCol;
 varying vec3 vSplashUV;
+${ CROWN_GLSL }
 void main() {
-	vec2 uv = vSplashUV.xy;
-	float s = vSplashUV.z, y = uv.y * 0.5 + 0.5;
-	float ring = exp( - pow( ( abs( uv.x ) - 0.3 - 0.6 * s ) * 7.0, 2.0 ) ) * exp( - y * 10.0 );
-	float up = sin( s * 3.14159 );
-	float drops = 0.0;
-	for ( int i = 0; i < 3; i ++ ) {
-		float fi = float( i ) - 1.0;
-		vec2 at = vec2( fi * 0.55 * s, 0.2 + up * ( 0.7 - 0.25 * abs( fi ) ) );
-		drops += smoothstep( 0.24, 0.06, length( vec2( uv.x - at.x, ( y - at.y ) * 1.3 ) ) );
-	}
-	float a = clamp( ( ring * 0.7 + drops ) * vSplashCol.w * ( 1.0 - 0.6 * s ), 0.0, 1.0 );
+	float a = clamp( splashCrown( vSplashUV.xy, vSplashUV.z ) * vSplashCol.w, 0.0, 1.0 );
 	if ( a < 0.003 ) discard;
 	gl_FragColor = vec4( vSplashCol.rgb * a, a );
 	#include <tonemapping_fragment>

@@ -7,6 +7,7 @@ import { buildHouse, buildBoathouse, buildMarketStall, buildShed } from './villa
 import { buildBoardwalk } from './village/Boardwalk.js';
 import { buildPier, PIER } from './Pier.js';
 import { G } from '../core/Globals.js';
+import { COVER } from './Cover.js';
 import {
 	InstancedProps, Rand, lin, C, WOOD, rowboat, netRack, fishRack, fence, laundryLine, oar, buoy,
 	bench, ropeCoil, pathLight, lampPost, bucket, wreck, castNetHeap, CAST_NYLON, CAST_MONO,
@@ -866,6 +867,15 @@ export class Village {
 	getFootprints() {
 
 		return this.footprints;
+
+	}
+
+	// (M11) what the rain finds over the ground (world/Cover.js): the merged meshes by what they're made
+	// of; the drying nets let it through
+	coverParts() {
+
+		const kinds = { village_wood: COVER.WOOD, village_hard: COVER.HARD, village_roofMetal: COVER.TIN, village_thatch: COVER.THATCH, village_stone: COVER.STONE, village_fabric: COVER.CANVAS };
+		return this.meshes.filter( ( m ) => kinds[ m.name ] ).map( ( mesh ) => ( { mesh, kind: kinds[ mesh.name ] } ) );
 
 	}
 

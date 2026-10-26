@@ -6,6 +6,7 @@ import {
 import { houseHalfWidth, foredeckY, PALETTE } from './HullBuilder.js';
 import { lerp } from './HullLines.js';
 import { buoyGeometry } from './DeckGear.js';
+import { atlasUV } from './Instruments.js';
 
 const V = ( x, y, z ) => new Vector3( x, y, z );
 
@@ -45,6 +46,22 @@ export function wallX( L, z, y ) {
 export function roofTopY( x ) {
 
 	return 2.375 + 0.035 * ( 1 - ( x / 1.35 ) ** 2 );
+
+}
+
+// (M11) a geometry's uvs (0..1) moved into its rect of the instruments' atlas (turned over first, either
+// way, if they'd read mirrored or upside down)
+function toAtlas( geo, name, flipU = false, flipV = false ) {
+
+	const [ u0, v0, u1, v1 ] = atlasUV( name ), uv = geo.attributes.uv;
+	for ( let i = 0; i < uv.count; i ++ ) {
+
+		const u = flipU ? 1 - uv.getX( i ) : uv.getX( i ), v = flipV ? 1 - uv.getY( i ) : uv.getY( i );
+		uv.setXY( i, u0 + ( u1 - u0 ) * u, v0 + ( v1 - v0 ) * v );
+
+	}
+
+	return geo;
 
 }
 
@@ -446,8 +463,10 @@ function buildConsole( kit, L, parts ) {
 	fr.translate( 0, d.yTop + 0.02, d.zTop + 0.011 );
 	kit.add( 'wood', fr, { rough: 0.3 } );
 
-	// gauges (bezel + backlit dial)
-	for ( const [ x, f ] of [ [ - 0.76, 0.72 ], [ - 0.34, 0.72 ], [ - 0.55, 0.9 ], [ - 0.12, 0.5 ], [ 0.02, 0.5 ] ] ) {
+	// gauges (bezel + backlit dial): (M11) each its own in the instruments' atlas (Instruments.js): the
+	// tachometer over the wheel, the speed and the fuel either side of it, the engine's temperature and
+	// the battery's volts by the centre screen
+	for ( const [ x, f, name ] of [ [ - 0.76, 0.72, 'fuel' ], [ - 0.34, 0.72, 'speed' ], [ - 0.55, 0.9, 'tach' ], [ - 0.12, 0.5, 'temp' ], [ 0.02, 0.5, 'volts' ] ] ) {
 
 		const c = pf.at( x, f ).addScaledVector( pf.normal, 0.012 );
 		const m = new Matrix4().makeBasis( V( - 1, 0, 0 ), pf.along, pf.normal ).setPosition( c );
@@ -457,7 +476,7 @@ function buildConsole( kit, L, parts ) {
 		const dial = new CircleGeometry( 0.042, 20 );
 		// 3 mm proud of the panel face (was coplanar with it: z-fighting)
 		dial.applyMatrix4( new Matrix4().makeBasis( V( - 1, 0, 0 ), pf.along, pf.normal ).setPosition( c.clone().addScaledVector( pf.normal, 0.001 ) ) );
-		kit.add( 'glow', dial, { color: 0xffffff, rough: 0.2, pattern: 3 } );
+		kit.add( 'display', toAtlas( dial, name ), {} );
 
 	}
 
@@ -516,8 +535,9 @@ function buildConsole( kit, L, parts ) {
 	dome.translate( cx, d.yTop + 0.053, cz );
 	kit.add( 'glass', dome );
 
-	// electronics: radar display (centre) and chart plotter (port)
-	for ( const [ x, mode ] of [ [ - 0.06, 1 ], [ 0.38, 2 ] ] ) {
+	// electronics: (M11) the depth sounder / fish finder (centre) and the chart plotter (port), drawn live
+	// (Instruments.js)
+	for ( const [ x, name ] of [ [ - 0.06, 'sounder' ], [ 0.38, 'chart' ] ] ) {
 
 		const tilt = 0.3; // lean back so the screen faces the helmsman
 		const w = 0.36, h = 0.27;
@@ -532,10 +552,8 @@ function buildConsole( kit, L, parts ) {
 		screen.applyMatrix4( new Matrix4().makeRotationY( Math.PI ) );
 		screen.applyMatrix4( mat4( 0, 0.012, - 0.037 ) ); // 2 mm proud of the bezel face
 		screen.applyMatrix4( bodyM );
-		// PlaneGeometry uvs are flipped horizontally after the Y rotation; restore them
-		const uv = screen.attributes.uv;
-		for ( let i = 0; i < uv.count; i ++ ) uv.setX( i, 1 - uv.getX( i ) );
-		kit.add( 'glow', screen, { color: 0xffffff, rough: 0.15, pattern: mode } );
+		// (after the Y rotation its uvs read as the helm sees them)
+		kit.add( 'display', toAtlas( screen, name ), {} );
 
 	}
 

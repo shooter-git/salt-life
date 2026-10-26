@@ -18,6 +18,11 @@
 // (M9) The rain: a shower's patter and a downpour's roar, crossfaded by how hard it rains, and aboard
 // rain drumming on the boat. A thunderstorm's thunder (Lightning.onThunder) arrives its distance at
 // 343 m/s after the flash: a near crack within 3 km, a far rumble beyond, placed the way it came.
+// (M11) The rain on what it falls on about you (App, Cover.surroundings): on the sea, light, medium or
+// heavier, and a downpour hissing on it close by; on wood, light or set in, and its drops slapping right
+// by; on the rest (the ground, the roofs) the M9 beds. Each by its share about you. Under a roof (or the
+// pier's deck) it's all muffled. The drips (fx/Drips.js) as each is seen landing near you: tin rings,
+// wood or the boat dull (the same drops slowed, their top cut).
 //
 // Signal flow
 //   one-shots + beds above water → above ─→ muffle LP ×2 ─→ aboveOut ─┐
@@ -26,6 +31,7 @@
 //     hull / rush / slaps ┴→ boatSum ─┬→ HRTF panner (at the boat) → above   (from outside)
 //                                     └→ unpanned → above                    (at the helm)
 //     pier lapping → HRTF panner (under the pier, nearest point) → above
+//     (M11) the rain's beds → rain LP (shut down under a roof) → above
 //     footsteps → foot (dry, no reverb) → above
 //     birds, gulls, terns, whale blow / splashes → per event HRTF panner → above
 //   whale song → HRTF panner (at the whale) → song LP + gain (open underwater) ─────┤
@@ -120,6 +126,17 @@ export const MIX = {
 	rain: - 29, // a downpour, out in it (a shower is the light patter's, a third of the way up to this)
 	rainLight: - 35, // a light shower's patter
 	rainBoat: - 26, // a downpour drumming on the boat, aboard her
+	// (M11) the rain on what it falls on, all about you: the sea in a shower, in steady rain, in a
+	// downpour, and a downpour hissing on it close by; wood in a shower and in a downpour, and its drops
+	// slapping right by; a drip landing 2 m off
+	rainWaterLight: - 35,
+	rainWater: - 32,
+	rainWaterHeavy: - 29,
+	rainPond: - 29,
+	rainWoodLight: - 35,
+	rainWoodHeavy: - 30,
+	rainPorch: - 30,
+	drip: - 30,
 	thunderNear: - 16, // a crack 1 km off (louder nearer, as the root of its nearness)
 	thunderFar: - 25, // a rumble 8 km off (falling to -35 at 20 km)
 	// (M10) the weather's cost to the boat, at the helm or on deck, and the shutters in a blow
@@ -159,12 +176,12 @@ const STEP = {
 };
 
 // max simultaneous one-shot voices per category (oldest is faded out beyond this)
-const LIMITS = { step: 3, swim: 2, splash: 3, trans: 2, hull: 3, gull: 2, crash: 7, wash: 5, back: 5, bird: 4, tern: 2, whale: 4, rod: 4, fish: 3, coin: 1, net: 6, thunder: 2, start: 1, bucket: 2, creak: 2, shutter: 2 };
+const LIMITS = { step: 3, swim: 2, splash: 3, trans: 2, hull: 3, gull: 2, crash: 7, wash: 5, back: 5, bird: 4, tern: 2, whale: 4, rod: 4, fish: 3, coin: 1, net: 6, thunder: 2, start: 1, bucket: 2, creak: 2, shutter: 2, drip: 2 };
 // Salt Life: All the Spaces allows 16 / 32 / 64 sounds at once by device tier. Beds and one-shots
 // together stay under it (a new one-shot is left out when it's full), and the low tier keeps fewer of
 // each kind so the surf can't crowd out the footsteps.
 const VOICES = { low: 14, mid: 30, high: 62 };
-const LOW_LIMITS = { ...LIMITS, step: 2, splash: 2, hull: 2, gull: 1, crash: 3, wash: 2, back: 2, bird: 2, tern: 1, whale: 2, rod: 3, fish: 2, net: 3, thunder: 1, creak: 1, shutter: 1 };
+const LOW_LIMITS = { ...LIMITS, step: 2, splash: 2, hull: 2, gull: 1, crash: 3, wash: 2, back: 2, bird: 2, tern: 1, whale: 2, rod: 3, fish: 2, net: 3, thunder: 1, creak: 1, shutter: 1, drip: 1 };
 // a bed that has been silent this long (s) stops, freeing its voice (it starts again when wanted)
 const BED_IDLE = 4;
 
@@ -242,6 +259,7 @@ export class SoundScape {
 			shoreX: 0, shoreZ: 1,
 			boat: { active: false, rpm: 0, speed: 0, x: 0, y: 0, z: 0, inside: false },
 			hull: { flood: 0, pump: false, scrape: 0, wear: 0, motion: 0 },
+			rainOn: { water: 0, wood: 0, nearWater: 0, nearWood: 0, under: 0 },
 		};
 		const sw = WORLD.swellDir || { x: - 0.12, y: - 1 };
 		const l = Math.hypot( sw.x, sw.y ) || 1;
@@ -358,6 +376,25 @@ export class SoundScape {
 			this._birds( now, step );
 			this._whale( now, step );
 			this._reel( now );
+
+		} catch ( e ) {
+
+			this._warn( e );
+
+		}
+
+	}
+
+	// (M11) a drip landing near you (fx/Drips.js, as it's seen land) on what it sounds on (Drips.LANDS):
+	// 2 tin, it rings; 1 wood or the boat, dull (the drop slowed and its top cut)
+	drip( x, y, z, on ) {
+
+		if ( ! this.ctx || this._failed ) return;
+		try {
+
+			const dull = on === 1;
+			const v = this._shotAt( 'drips', 'drip', x, y + 0.03, z, MIX.drip + ( Math.random() - 0.5 ) * 4, ( dull ? 0.75 : 1 ) * ( 0.96 + Math.random() * 0.08 ), 0, 2 );
+			if ( v && dull ) v.extra[ 0 ].frequency.value = Math.min( v.extra[ 0 ].frequency.value, 2500 );
 
 		} catch ( e ) {
 
@@ -805,6 +842,8 @@ export class SoundScape {
 		this.engineLP = lowpass( 1200, 0.6, this.boatSum );
 		this.pierPan = panner( this.above, 3, 1.3 );
 		this.windLP = lowpass( 1400, 0.5, this.above );
+		// (M11) the rain's beds: muffled under a roof
+		this.rainLP = lowpass( 20000, 0.6, this.above );
 
 		// the rod and reel: held in front of you, a little to the right (the reel hangs lower right)
 		this.rodPan = c.createStereoPanner ? c.createStereoPanner() : null;
@@ -827,7 +866,10 @@ export class SoundScape {
 			under_reef: this.under, birds_dawn: this.above, whale_song: this.songPan,
 			boat_engine: this.engineLP, boat_rush: this.boatSum, boat_lap: this.boatSum,
 			reel_wind: this.rod, reel_drag: this.rod, line_strain: this.rod,
-			rain_light: this.above, rain_heavy: this.above, rain_boat: this.above,
+			rain_light: this.rainLP, rain_heavy: this.rainLP, rain_boat: this.above,
+			// (M11) on what it falls on
+			rain_water_light: this.rainLP, rain_water: this.rainLP, rain_water_heavy: this.rainLP, rain_pond: this.rainLP,
+			rain_wood_light: this.rainLP, rain_wood_heavy: this.rainLP, rain_porch: this.rainLP,
 			// (M10) the hull's: at the boat, as the water past her is
 			keel_scrape: this.boatSum, bilge_pump: this.boatSum, bilge_slosh: this.boatSum,
 		};
@@ -1304,6 +1346,14 @@ export class SoundScape {
 		eh.scrape = Math.max( 0, num( hb.scrape, 0 ) );
 		eh.wear = clamp( num( hb.wear, 0 ), 0, 1 );
 		eh.motion = clamp( num( hb.motion, 0 ), 0, 1 );
+		// (M11) what the rain falls on about you (Cover.surroundings): the sea's and wood's shares about you,
+		// and right by, and how much of right by is under a cover over your head
+		const ro = s.rainOn || EMPTY, er = e.rainOn;
+		er.water = clamp( num( ro.water, 0 ), 0, 1 );
+		er.wood = clamp( num( ro.wood, 0 ), 0, 1 - er.water );
+		er.nearWater = clamp( num( ro.nearWater, 0 ), 0, 1 );
+		er.nearWood = clamp( num( ro.nearWood, 0 ), 0, 1 );
+		er.under = clamp( num( ro.under, 0 ), 0, 1 );
 		e.onLand = typeof s.coastDistance === 'number' && Number.isFinite( s.coastDistance ) ? s.coastDistance < 0 : true;
 		if ( e.u > 0.01 || eb.active ) e.onLand = false;
 
@@ -1403,9 +1453,30 @@ export class SoundScape {
 		// on the boat, the rain beyond her quieter. Under water it's muffled with the rest
 		const r = e.rain, light = smooth( 0, 0.15, r ) * ( 1 - smooth( 0.35, 0.8, r ) ), heavy = smooth( 0.2, 0.9, r ), onBoat = e.aboard ? 1 : 0;
 		const out = 1 - 0.7 * onBoat;
-		this._bed( 'rain_light', dB( MIX.rainLight ) * light * out / dB( BANK.rain_light.lufs ), now, 1.2 );
-		this._bed( 'rain_heavy', dB( MIX.rain ) * heavy * out / dB( BANK.rain_heavy.lufs ), now, 1.2 );
+		// (M11) on what it falls on about you, each by its share (as power: the shares' sum is the rain's
+		// whole), the M9 beds on the rest; right by you, wood's slapping drops and a downpour hissing on the
+		// sea. Under a roof it's all muffled and quieter. (The low tier leaves out a share under a sixth,
+		// and the close ones, to keep its voices)
+		const ro = e.rainOn, lean = this.tier === 'low';
+		const share = ( v ) => ( lean && v < 0.16 ? 0 : Math.sqrt( v ) );
+		const sea = share( ro.water ), wood = share( ro.wood ), rest = share( Math.max( 0, 1 - ro.water - ro.wood ) );
+		const muffled = smooth( 0.2, 0.8, ro.under );
+		this._ramp( this.rainLP.frequency, lerp( 20000, 900, muffled ), 0.6 );
+		const rout = out * lerp( 1, 0.55, muffled );
+		this._bed( 'rain_light', dB( MIX.rainLight ) * light * rout * rest / dB( BANK.rain_light.lufs ), now, 1.2 );
+		this._bed( 'rain_heavy', dB( MIX.rain ) * heavy * rout * rest / dB( BANK.rain_heavy.lufs ), now, 1.2 );
 		this._bed( 'rain_boat', dB( MIX.rainBoat ) * onBoat * smooth( 0, 0.9, r ) / dB( BANK.rain_boat.lufs ), now, 0.8 );
+		// (the sea: light, medium, heavier as it rains harder; on the low tier the light and the heavier)
+		const wl = lean ? light : smooth( 0, 0.15, r ) * ( 1 - smooth( 0.25, 0.5, r ) );
+		const wm = lean ? 0 : smooth( 0.25, 0.5, r ) * ( 1 - smooth( 0.6, 0.9, r ) ), wh = lean ? heavy : smooth( 0.6, 0.9, r );
+		this._bed( 'rain_water_light', dB( MIX.rainWaterLight ) * wl * rout * sea / dB( BANK.rain_water_light.lufs ), now, 1.2 );
+		this._bed( 'rain_water', dB( MIX.rainWater ) * wm * rout * sea / dB( BANK.rain_water.lufs ), now, 1.2 );
+		this._bed( 'rain_water_heavy', dB( MIX.rainWaterHeavy ) * wh * rout * sea / dB( BANK.rain_water_heavy.lufs ), now, 1.2 );
+		this._bed( 'rain_pond', lean ? 0 : dB( MIX.rainPond ) * smooth( 0.6, 1, r ) * ro.nearWater * rout / dB( BANK.rain_pond.lufs ), now, 1.2 );
+		this._bed( 'rain_wood_light', dB( MIX.rainWoodLight ) * light * rout * wood / dB( BANK.rain_wood_light.lufs ), now, 1.2 );
+		this._bed( 'rain_wood_heavy', dB( MIX.rainWoodHeavy ) * heavy * rout * wood / dB( BANK.rain_wood_heavy.lufs ), now, 1.2 );
+		this._bed( 'rain_porch', lean ? 0 : dB( MIX.rainPorch ) * smooth( 0.2, 0.7, r ) * ro.nearWood * rout / dB( BANK.rain_porch.lufs ), now, 1.2 );
+		if ( r > 0.01 ) this._want( 'drips' );
 
 		// boat: one engine recording, pitched and opened up with rpm; water past the hull with speed,
 		// lapping at rest, chop slapping the hull while running

@@ -1,6 +1,6 @@
 // Plain-node tests of the island's weather (no GPU): the forecast from the island's time, its
 // conditions, how it changes, and how it's read out.
-import { CONDITIONS, WEATHER_IDS, WEATHER_NAMES, SURF_MAX, PERIOD_MAX, GROUNDSWELL_MAX, VEER, STRIKE_RATE, islandTime, storminess, cloudiness, veer, showeriness, unsettled, weatherAt, forecast, surfText, windFrom, strikeIn, murkAt, windBeyondFair, blowShare } from '../src/game/Weather.js';
+import { CONDITIONS, WEATHER_IDS, WEATHER_NAMES, SURF_MAX, PERIOD_MAX, GROUNDSWELL_MAX, VEER, STRIKE_RATE, islandTime, storminess, cloudiness, veer, showeriness, unsettled, weatherAt, forecast, surfText, windFrom, strikeIn, murkAt, windBeyondFair, blowShare, showers as showersAbout, FRONT_KMH } from '../src/game/Weather.js';
 import { knots } from '../src/game/Units.js';
 
 let fails = 0;
@@ -216,6 +216,36 @@ for ( let T = 24; T < 24 * 300; T += 0.5 ) {
 ok( lo < - VEER * 0.8 && hi > VEER * 0.8, `the wind turns both ways from the trades (${ ( lo * 57.3 ).toFixed( 0 ) }° to ${ ( hi * 57.3 ).toFixed( 0 ) }°)` );
 ok( surfText( 0.34 ) === '2–3 ft' && surfText( 0.24 ) === '1–2 ft' && surfText( SURF_MAX ) === '3–6 ft', 'surf as a report gives it' );
 ok( cloudiness( 77 ) >= 0 && cloudiness( 77 ) <= 1 && storminess( 77 ) >= 0 && storminess( 77 ) <= 1, 'the fields stay in 0..1' );
+
+// ---- (M11) the showers about the island, for their curtains in the distance
+{
+
+	const v = FRONT_KMH * 1000;
+	// (a rainy hour: rain over the island now)
+	let T = 48;
+	while ( weatherAt( T ).rain < 0.3 ) T += 0.25;
+	const cells = showersAbout( T );
+	ok( cells.length > 0 && cells.length < 40 && cells.every( ( c ) => Math.abs( c.along ) <= 26000 && c.r >= 1200 && c.r <= 3000 && c.rain > 0 ), `a rainy hour: ${ cells.length } showers within 26 km up and down the trades` );
+	const passing = cells.filter( ( c ) => Math.abs( c.side ) < c.r + 1000 );
+	ok( passing.length > 0 && passing.every( ( c ) => c.rain === weatherAt( T - c.along / v ).rain ), 'each that passes over the island brings the rain it has when it\'s over it' );
+	const over = passing.filter( ( c ) => Math.abs( c.along ) <= 2000 );
+	ok( over.length > 0, 'and one is over the island while it rains here' );
+	const later = showersAbout( T + 0.25 );
+	ok( cells.every( ( c ) => later.some( ( l ) => l.side === c.side && Math.abs( l.along - ( c.along + 0.25 * v ) ) < 1e-6 ) || c.along + 0.25 * v > 26000 ), 'they drift down the trades with the weather (8 km a game hour)' );
+	// (upwind: what's coming; the island's rain an hour on is the rain of the one an hour's drift upwind)
+	const ahead = passing.filter( ( c ) => c.along < - 4000 );
+	ok( ahead.every( ( c ) => c.rain === weatherAt( T + - c.along / v ).rain ), 'those upwind are the rain that\'s coming' );
+	const cache = new Map();
+	ok( JSON.stringify( showersAbout( T, null, 26000, [], cache ) ) === JSON.stringify( cells ) && cache.size > 0 && JSON.stringify( showersAbout( T, null, 26000, [], cache ) ) === JSON.stringify( cells ), 'the same with a cache of each slot\'s rain' );
+	// (a dry spell: no rain for the 6.5 game hours either side)
+	let D = 48;
+	const dry = ( t ) => { for ( let h = - 3.3; h <= 3.3; h += 0.1 ) if ( weatherAt( t + h ).rain >= 0.02 ) return false; return true; };
+	while ( ! dry( D ) ) D += 0.5;
+	ok( showersAbout( D ).length === 0, `a dry spell (day ${ Math.floor( D / 24 ) + 1 }): no showers about` );
+	ok( showersAbout( 10 ).length === 0, 'day 1 is fair: none' );
+	ok( showersAbout( T, 'fair' ).length === 0 && showersAbout( T, 'rain' ).length > 10 && showersAbout( T, 'rain' ).every( ( c ) => c.rain === CONDITIONS.rain.rain ), 'a picked weather: none for fair, a sky full of its rain for rain' );
+
+}
 
 console.log( fails ? `${ fails } FAILED` : 'all passed' );
 process.exit( fails ? 1 : 0 );

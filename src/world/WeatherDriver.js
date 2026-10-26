@@ -1,5 +1,5 @@
 import { G } from '../core/Globals.js';
-import { islandTime, weatherAt } from '../game/Weather.js';
+import { islandTime, weatherAt, showers, FRONT_KMH } from '../game/Weather.js';
 import { FRONT_KM } from '../sky/SkyProClouds.js';
 
 // (Salt Life) The island's weather, each frame: what the day brings (game/Weather.js), or what you picked
@@ -17,6 +17,8 @@ import { FRONT_KM } from '../sky/SkyProClouds.js';
 //   - (M9) the gusts: the cat's paws on the sea, as the boat and the wind's sound feel them (windAt),
 //     stronger in rain and squalls, which freshen the wind a little while they pass;
 //   - (M10) the water's murk after a blow (G.murk: the view under water closes in, App; the caustics dim).
+//   - (M11) the showers about the island, drifting down the trades (Weather.showers): their curtains in
+//     the distance (Sky.setCurtains), each frame from the clock.
 // The wind and the sea come round over half a minute or so, the cloud more slowly (a minute or two from
 // fair to a gale's, so the panorama's refresh keeps up and nothing pops), the rain in seconds. When the
 // clock jumps (a rest, the host's clock, coming back to the tab) it's all set at once, behind the dim a
@@ -31,9 +33,8 @@ const RAIN_EASE = 6;
 const SOAK = 12, DRY = 240;
 // the cloud comes over ahead of its rain: it follows the weather this far on (game hours)
 const CLOUD_LEAD = 0.6;
-// the weather up the trades: how far a front's bank comes in a game hour (km; the clouds are told the
-// cover at FRONT_KM), how often (s)
-const FRONT_KMH = 8;
+// the weather up the trades: the clouds are told the cover at FRONT_KM (a front's bank comes FRONT_KMH a
+// game hour: Weather.js), how often (s)
 const FRONT_EVERY = 0.5;
 // the gusts: how much the wind rises and falls in them (of its speed), in rain and in a squall besides;
 // the wind a squall's downdraught adds (m/s at full rain, at full thunder: at most a gale's)
@@ -69,6 +70,8 @@ export class WeatherDriver {
 		this._at = { x: 0, z: 0 }; // where the sea turns about (the camera)
 		this._frontT = 0;
 		this._pick = null;
+		this._showers = [];
+		this._showerRain = new Map(); // (each slot's rain, while the pick's the same)
 
 	}
 
@@ -145,6 +148,11 @@ export class WeatherDriver {
 		}
 
 		this.apply();
+		// (M11) the showers about the island, for their curtains in the distance (a picked weather's are
+		// its own; each slot's rain is kept while the pick is)
+		if ( picked || this._showerRain.size > 64 ) this._showerRain.clear();
+		showers( T, pick, 26000, this._showers, this._showerRain );
+		if ( camera ) this.sky.setCurtains( this._showers, camera.position );
 
 	}
 

@@ -20,7 +20,7 @@ You can walk, swim and take the boat around the island. You can fish from the pi
 boat, or dive and spear a fish, sell your catch to Joe and buy better gear from Marta. It plays with a
 mouse and keyboard, a gamepad or a touch screen.
 
-Done, M0 to M10:
+Done, M0 to M11:
 - the sea and its shore, spray, gusts and slicks, and the haze;
 - the whole world: the village, the pier, the reef and its fish, the birds and crabs, the beach's
   debris, the whale and the lights at night;
@@ -76,6 +76,22 @@ Done, M0 to M10:
   - the breakers follow the surf, the bait inside them with them, fewer of them in a big surf;
   - rain splashes on the sand and the deck, the sea reflects the lightning, a downpour flattens the
     sea's ripples, and in a blow leaves and sand stream by and the village's shutters bang;
+- the rain where you stand (M11):
+  - the rain stops on the pier, the boardwalks, the roofs and the stalls, and splashes on them; under
+    them, and under the wheelhouse roof, nothing gets wet;
+  - drips fall off the eaves, the wheelhouse roof and the palms, in the rain and for a minute or two
+    after, and you hear the ones near you land on tin, on wood and on the boat;
+  - you hear the rain on what it falls on around you: the sea, wood, the ground; right by you, a
+    downpour hissing on the sea and drops slapping on the wood under you; under a roof it's muffled;
+  - showers come down the trades with the weather: you see them in the distance as curtains of rain,
+    each the rain that's coming or the rain that went;
+  - the sea reflects the sky as a mirror does, more toward the horizon;
+  - in a big surf the water inside the breakers is milkier, further out; in the murk after a blow
+    the fish notice you later;
+  - whoever rides along hears the owner's bilge, pump and creaks;
+  - the boat's dash shows what it reads: the engine's revs, her speed, the fuel, the engine's
+    temperature and the battery; a depth sounder (and the fish, with Marta's fish finder) and a
+    chart plotter;
 - playing together:
   - you see the others on the island, walking, swimming, fishing and out in their boats;
   - you pick your islander: two men and two women;
@@ -113,7 +129,8 @@ The island's day:
 | M8 | Weather: the day's wind, sea, surf, cloud and light; the boat in the wind, and Marta's tow |
 | M9 | Rain and thunderstorms: showers, lightning and thunder, wet surfaces, storm skies and fronts, gusts, fishing by the weather |
 | M10 | What the weather costs: the hull, the bilge and the engine, fishing in a blow, murky water, splashes, the lightning on the sea, shutters and debris in a blow, the weather in the checks |
-| M11 | For consideration ([docs/M11.md](docs/M11.md)): rain curtains and drips, cumulonimbus, the swell from another direction, the open sea breaking, rip currents, the hurricane |
+| M11 | The rain where you stand: the rain on the pier and the roofs and dry under them, drips, the rain heard on what it falls on, showers' curtains in the distance, the sea mirroring the sky, the milkier surf, the fish in the murk, the hull heard riding along, the boat's instruments |
+| M12 | For consideration ([docs/M12.md](docs/M12.md)): storms from other directions, cumulonimbus, the swell from another direction, the open sea breaking, rip currents, the hurricane |
 
 ## How it fits All the Spaces
 
