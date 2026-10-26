@@ -785,6 +785,14 @@ export class Together {
 		// (M10) the starter turning her over (1; 2: it'll catch), heard by whoever's aboard
 		const crank = m === 'h' && this.app.game ? this.app.game.hull.crank : 0;
 		if ( crank ) body.K = crank;
+		// (M11) her hull as it's heard aboard (App.hullHeard: the bilge, the pump, the keel scraping, her wear,
+		// how hard she's working), for whoever rides along: while you're aboard and there's something to hear
+		if ( body.B && ! p.riding && ( m === 'd' || m === 'h' ) && this.app.game ) {
+
+			const h = this.app.hullHeard();
+			if ( h.flood > 0.005 || h.pump || h.scrape > 0.3 || h.motion > 0.05 ) body.H = [ r2( h.flood ), h.pump ? 1 : 0, r2( h.scrape ), r2( h.wear ), r2( h.motion ) ];
+
+		}
 		if ( m === 'd' ) body.D = [ r2( p.deckPos.x ), r2( p.deckPos.y ), r2( p.deckPos.z ) ];
 
 		return body;
@@ -1000,6 +1008,7 @@ export class Together {
 			pos: new Vector3(), yaw: 0, mode: 'walk', speed: 0, rod: 0, tension: 0, ride: null,
 			bobber: null, boat: null, deck: null, gun: 0, gunLevel: 0, shaft: null,
 			_bobber: new Vector3(), _deck: new Vector3(), _boat: { pos: new Vector3(), quat: new Quaternion() },
+			hull: null, _hull: { flood: 0, pump: false, scrape: 0, wear: 0, motion: 0 },
 			_shaft: { tail: new Vector3(), dir: new Vector3() },
 		} );
 		// a vector between two [ x, y, z ] (either may be missing: the other then)
@@ -1023,6 +1032,9 @@ export class Together {
 		cur.anchored = near.A === 1;
 		cur.rpm = ( Number( a.E ) || 0 ) + ( ( Number( b.E ) || 0 ) - ( Number( a.E ) || 0 ) ) * f;
 		cur.crank = near.K === 1 || near.K === 2 ? near.K : 0;
+		// (M11) her hull as the skipper hears it (none sent: nothing to hear)
+		const H = Array.isArray( near.H ) && near.H.length === 5 && near.H.every( Number.isFinite ) ? near.H : null;
+		cur.hull = H ? Object.assign( cur._hull, { flood: MathUtils.clamp( H[ 0 ], 0, 3 ), pump: H[ 1 ] === 1, scrape: Math.max( 0, H[ 2 ] ), wear: MathUtils.clamp( H[ 3 ], 0, 1 ), motion: MathUtils.clamp( H[ 4 ], 0, 1 ) } ) : null;
 		cur.tension = b.k || 0;
 		cur.bobber = lerp3( cur._bobber, a.b, b.b );
 		cur.gun = near.g || 0;
@@ -1261,6 +1273,8 @@ export class Together {
 			t.traverse( ( c ) => {
 
 				if ( c.isMesh ) c.castShadow = c.castShadow && app.tier === 'high';
+				// (M11) their dash on standby: the readings drawn are yours
+				if ( c.name === 'boat-display' && app.instruments ) c.material = app.instruments.standby;
 
 			} );
 
@@ -1341,14 +1355,15 @@ export class Together {
 	// the boat to hear (App, for the sound: null = your own): the one you're riding in; or on foot or in
 	// the water, the nearest someone is driving (its engine and the water past it, fading with
 	// distance in the sound's own panning). (M10) An engine at the helm with its revs run down has stalled
-	// (an older copy of the game idles at 0.15); crank: the starter turning her over (Hull.crank)
+	// (an older copy of the game idles at 0.15); crank: the starter turning her over (Hull.crank); (M11)
+	// hull: her hull as her skipper hears it (App.hullHeard), or null
 	boatSound() {
 
 		const p = this.app.player;
 		if ( p.riding ) {
 
 			const o = this.others.get( p.boat.owner ), c = o && o.cur;
-			return { active: !! ( c && c.mode === 'helm' && c.rpm > 0.05 ), rpm: c ? c.rpm : 0, crank: c ? c.crank : 0, speed: p.boat.speed, position: p.boat.position };
+			return { active: !! ( c && c.mode === 'helm' && c.rpm > 0.05 ), rpm: c ? c.rpm : 0, crank: c ? c.crank : 0, speed: p.boat.speed, position: p.boat.position, hull: c ? c.hull : null };
 
 		}
 
@@ -1369,7 +1384,7 @@ export class Together {
 
 		}
 
-		return best ? { active: best.cur.rpm > 0.05, rpm: best.cur.rpm, crank: best.cur.crank, speed: best.boatSpeed, position: best.cur.boat.pos } : null;
+		return best ? { active: best.cur.rpm > 0.05, rpm: best.cur.rpm, crank: best.cur.crank, speed: best.boatSpeed, position: best.cur.boat.pos, hull: best.cur.hull } : null;
 
 	}
 

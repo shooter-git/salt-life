@@ -45,6 +45,7 @@ import { Spray } from './fx/Spray.js';
 import { AirMotes } from './fx/AirMotes.js';
 import { Rain } from './fx/Rain.js';
 import { Drips, eavePoints, palmPoints, wheelhousePoints } from './fx/Drips.js';
+import { BoatInstruments } from './world/boat/Instruments.js';
 import { Lightning } from './sky/Lightning.js';
 import { BoatSpray } from './player/BoatSpray.js';
 import { WhaleWater } from './ocean/WhaleWater.js';
@@ -85,6 +86,7 @@ const _fwd = new THREE.Vector3();
 const _up = new THREE.Vector3();
 const _hornAt = new THREE.Vector3( - 0.42, 3.4, 1.15 ); // (the boat's horn, if its model doesn't say)
 const _shelter = new THREE.Matrix4(), _c4 = new THREE.Matrix4(); // (M9: the wheelhouse roof over the rain)
+const _fwdB = new THREE.Vector3(); // (M11: her heading, for her instruments)
 // what starts the sound: browsers allow it only after one of these
 const GESTURES = [ 'pointerdown', 'touchend', 'click', 'keydown' ];
 
@@ -266,6 +268,9 @@ export class App {
 		// ---------------------------------------------------------------- boat and player
 		await progress( 0.7, 'Mooring the boat' );
 		this.boat = new BoatModel();
+		// (M11) her instruments as they read (world/boat/Instruments.js): made now, so the dash's program is
+		// made with the rest
+		this.instruments = new BoatInstruments( { material: this.boat.materials.display, tier } );
 		scene.add( this.boat.group );
 		this.boat.group.position.copy( WORLD.boatDock.position );
 		this.boat.group.rotation.y = WORLD.boatDock.heading;
@@ -304,7 +309,7 @@ export class App {
 			// (the village's display fish, one mesh spanning the village, aren't built on these devices)
 			this.stand.group?.traverse( ( o ) => o.isMesh && this.nearDetail.push( { o, dist: 60 } ) );
 			this.chandlery.group?.traverse( ( o ) => o.isMesh && this.nearDetail.push( { o, dist: 60 } ) );
-			for ( const k of [ 'fittings', 'trap', 'wood', 'wheel', 'throttle', 'radar', 'propeller', 'rudder' ] ) if ( this.boat.meshes[ k ] ) this.nearDetail.push( { o: this.boat.meshes[ k ], dist: 70 } );
+			for ( const k of [ 'fittings', 'trap', 'wood', 'display', 'wheel', 'throttle', 'radar', 'propeller', 'rudder' ] ) if ( this.boat.meshes[ k ] ) this.nearDetail.push( { o: this.boat.meshes[ k ], dist: 70 } );
 			for ( const d of this.nearDetail ) if ( ! d.o.geometry.boundingSphere ) d.o.geometry.computeBoundingSphere();
 
 		}
@@ -685,6 +690,7 @@ export class App {
 		wetSurfaces.update( this.camera, _shelter ); // (M11: nor is anything wet under it, or under a cover)
 		this.rain.setDeck( this.boat.group.matrixWorld ); // (M10: the splashes on her cockpit's sole)
 		this.drips.update( dt, this.camera, this.cameraWaterHeight, this.renderer.domElement.height, this.boat.group.matrixWorld ); // (M11)
+		this.updateInstruments( dt );
 		this.boatLamps.set( { underway: this.boatCtl.driven || ! ( this.boatCtl.moored || this.boatCtl.anchor ), spot: this.searchlight } );
 		this.localLights.update( this.camera, dt );
 		cloudShadows.update( this.camera );
@@ -1418,11 +1424,48 @@ export class App {
 				active: boat.driven, rpm: boat.rpm, throttle: boat.throttle, speed: boat.velocity.length(),
 				position: this.boat.group.position, listenerInside: this.player.mode === 'boat' && this.player.camMode === 'first',
 			},
-			// (M10) her hull (yours: none of it's sent to the others): the bilge as a share of what reaches the
-			// engine, the pump, the keel scraping, the wear, and how hard she's working (her roll and pitch)
-			hull: theirs || ! this.game ? null : { flood: this.game.hull.bilge / FLOOD_L, pump: this.game.hull.pumping, scrape: this.game.hull.scrape || 0,
-				wear: this.game.hull.wear, motion: Math.min( 1, Math.max( 0, ( boat.angular.length() - 0.05 ) / 0.4 ) ) },
+			// (M10) her hull: yours, or (M11) the one you ride in, as her skipper hears it (hullHeard)
+			hull: theirs ? theirs.hull || null : this.game ? this.hullHeard() : null,
 		} );
+
+	}
+
+	// (M11) her instruments, while you're aboard her (riding along in someone else's, yours are ashore):
+	// her engine, revs, speed, heading and fuel; the depth under her, and the fish when she has a finder
+	// (Game's sonar); where she is, on the minimap's chart
+	updateInstruments( dt ) {
+
+		const p = this.player, b = this.boatCtl, g = this.game;
+		if ( ! g || p.riding || ( p.mode !== 'boat' && p.mode !== 'deck' ) ) return this.instruments.update( dt, null );
+		const r = this._reading || ( this._reading = {} ), f = b.forward( _fwdB ), x = b.position.x, z = b.position.z;
+		const map = g.minimap;
+		r.engine = g.hull.engine;
+		r.rpm = b.rpm;
+		r.speed = b.speed;
+		r.heading = Math.atan2( f.x, - f.z );
+		r.fuel = g.state.fuelL / g.state.stats.fuelL;
+		r.depth = Math.max( 0, G.seaLevel.value - this.terrainData.heightAt( x, z ) );
+		r.finder = !! g.state.stats.finder;
+		r.fish = g._sonar ? g._sonar.fish : 0;
+		r.x = x;
+		r.z = z;
+		r.chart = map && map._bake && map._bake.done ? map.canvas : null;
+		this.instruments.update( dt, r );
+
+	}
+
+	// (M10) your boat's hull as it's heard aboard: the bilge as a share of what reaches the engine, the pump,
+	// the keel scraping, the wear, and how hard she's working (her roll and pitch); (M11) sent to whoever
+	// rides along (Together)
+	hullHeard() {
+
+		const h = this.game.hull, out = this._hullHeard || ( this._hullHeard = {} );
+		out.flood = h.bilge / FLOOD_L;
+		out.pump = h.pumping;
+		out.scrape = h.scrape || 0;
+		out.wear = h.wear;
+		out.motion = Math.min( 1, Math.max( 0, ( this.boatCtl.angular.length() - 0.05 ) / 0.4 ) );
+		return out;
 
 	}
 

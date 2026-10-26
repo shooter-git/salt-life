@@ -65,6 +65,10 @@ export class BoatMaterials {
 		this.glass.name = 'boatGlass';
 		this.glow = this.createGlow();
 		this.trap = this.createTrap();
+		// (M11) the dash's screens and dials: what they show, unlit (they light themselves), drawn by the
+		// instruments (Instruments.js: their canvas is its map); a dark standby glass until then
+		this.display = new THREE.MeshBasicMaterial( { color: 0x0a1418 } );
+		this.display.name = 'boatDisplay';
 
 	}
 
@@ -100,8 +104,8 @@ export class BoatMaterials {
 
 	}
 
-	// Emissive parts. aux.z selects: 0 nav light, 1 radar display, 2 chart plotter, 3 gauge dial,
-	// 4 flood/spot light, 5 cabin dome light, 6 LCD.
+	// Emissive parts. aux.z selects: 0 nav light, 4 flood/spot light, 5 cabin dome light, 6 LCD ((M11) the
+	// screens and the gauges' dials, 1 to 3, are the display's now: they show what they read).
 	createGlow() {
 
 		const m = new THREE.MeshStandardMaterial( { color: 0x000000, roughness: 0.3, metalness: 0, emissive: 0xffffff } );
@@ -158,7 +162,7 @@ export class BoatMaterials {
 
 	dispose() {
 
-		for ( const k of [ 'hull', 'gelcoat', 'wood', 'fittings', 'glass', 'glow', 'trap' ] ) this[ k ].dispose();
+		for ( const k of [ 'hull', 'gelcoat', 'wood', 'fittings', 'glass', 'glow', 'trap', 'display' ] ) this[ k ].dispose();
 
 	}
 

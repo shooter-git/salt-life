@@ -236,6 +236,57 @@ export function weatherAt( T, pick = null ) {
 
 }
 
+// (M9) how fast the weather comes down the trades (km a game hour): a front's bank is told this far up
+// them for each hour it's ahead (WeatherDriver, SkyProClouds.front), and (M11) the showers drift at it
+export const FRONT_KMH = 8;
+// (M11) The showers about the island, for their curtains in the distance (Sky): cells of rain drifting
+// down the trades with the weather, each bringing the rain the island has when it's over it (weatherAt
+// then), so what you see coming is what comes, and what you saw go is what went.
+//   - Along the trades, a slot every SHOWER_GAP in a frame drifting at FRONT_KMH; two cells a slot, set
+//     off to either side (up to SHOWER_SIDE). Those that pass over the island rain whenever it does when
+//     they're over it; those off to the side half the time (the showers are patchy).
+//   - Each is { along, side, r, rain }: where it is now (m down the trades from the island's middle,
+//     upwind < 0; m to the left of them), its radius (m), and its rain (0..1). Within `range` along.
+//   - cache: a Map of each slot's rain (it's the slot's for good: keep one while the pick's the same)
+const SHOWER_GAP = 4000;
+const SHOWER_SIDE = 14000;
+const SHOWER_R = [ 1200, 3000 ];
+export function showers( T, pick = null, range = 26000, out = [], cache = null ) {
+
+	out.length = 0;
+	const v = FRONT_KMH * 1000, drift = T * v; // (how far the weather's come since day 1 began, m)
+	const k0 = Math.ceil( ( - range - drift ) / SHOWER_GAP ), k1 = Math.floor( ( range - drift ) / SHOWER_GAP );
+	for ( let k = k0; k <= k1; k ++ ) {
+
+		// (over the island when its slot is: k * SHOWER_GAP + drift = 0)
+		let rain = cache ? cache.get( k ) : undefined;
+		if ( rain === undefined ) {
+
+			rain = weatherAt( - k * SHOWER_GAP / v, pick ).rain;
+			if ( cache ) cache.set( k, rain );
+
+		}
+
+		if ( rain < 0.02 ) continue;
+		for ( let j = 0; j < 2; j ++ ) {
+
+			const n = k * 2 + j;
+			const side = ( hash( n, 0x51ee7 ) - 0.5 ) * 2 * SHOWER_SIDE;
+			const r = SHOWER_R[ 0 ] + ( SHOWER_R[ 1 ] - SHOWER_R[ 0 ] ) * hash( n, 0x2ad1 );
+			const passes = Math.abs( side ) < r + 1000;
+			if ( ! passes && hash( n, 0x7c3a ) > 0.5 ) continue;
+			// (those off to the side a little ahead or behind their slot)
+			const along = k * SHOWER_GAP + drift + ( passes ? 0 : ( hash( n, 0x39b1 ) - 0.5 ) * SHOWER_GAP * 0.6 );
+			out.push( { along, side, r, rain } );
+
+		}
+
+	}
+
+	return out;
+
+}
+
 // what's coming: the next change of condition within `ahead` game hours ({ id, at: T }), or null
 export function forecast( T, ahead = 12, pick = null ) {
 

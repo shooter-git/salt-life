@@ -54,6 +54,19 @@ const FLASH_FILL = 5;
 const FLASH_LIGHT = new THREE.Color( 0.8, 0.85, 1.0 );
 // (M9) of the sun's light rain's deck takes, the share it scatters down as the sky's light
 const DECK_DIFFUSE = 0.5;
+// (M11) the showers' curtains in the distance (setCurtains): how many are drawn at most (by tier: the
+// nearest), how thick a shaft is (per m through it at full rain), how high it reaches (m: a shower's
+// cloud is lower than the deck's, the shaft fades into the haze as it nears this, or the cloud's base
+// if that's lower), how far beyond its edge one comes in (m: you're in the rain nearer), how far off it
+// goes (m, faded over the last stretch), and how far a shaft leans with the wind (m across for each m
+// down, at a gale's wind)
+const CURTAINS = { low: 6, mid: 12, high: 12 };
+const CURTAIN_MAX = 12;
+const CURTAIN_DENSITY = 5e-4;
+const CURTAIN_TOP = 3000;
+const CURTAIN_NEAR = [ 2000, 5000 ];
+const CURTAIN_FAR = [ 20000, 26000 ];
+const CURTAIN_LEAN = 0.35;
 
 const SKY_VERTEX = /* glsl */`
 varying vec3 vSkyDir;
@@ -77,6 +90,9 @@ uniform vec4 skyFlash; // (M9) lightning: ( toward the strike, how bright )
 uniform vec3 skyFlashColor;
 uniform float skyTime;
 uniform float skyExposure;
+uniform vec4 skyCurtains[ ${ CURTAIN_MAX } ]; // (M11) the showers' curtains: ( x, z from the camera, radius (m), strength )
+uniform int skyCurtainCount;
+uniform vec4 skyCurtainInfo; // ( how high the shafts reach (m), the camera's height (m), the shafts' lean (x, z) )
 varying vec3 vSkyDir;
 
 float skySmooth( float e0, float e1, float x ) {
@@ -174,6 +190,50 @@ vec3 skyBackground( vec3 dir, float starK ) {
 	return L;
 }
 
+#ifndef SKY_ENVIRONMENT
+// (M11) the showers' curtains in the distance: each a shaft of rain from the sea up into the haze under
+// the cloud, leaning with the wind (lower down, carried further), in streaks drifting down. Seen along
+// dir: the light through them (the sky behind, a veil darker; silver toward the sun), and how much they
+// hide
+float skyCurtainNoise( vec2 p ) {
+	vec2 i = floor( p ), t = fract( p );
+	t = t * t * ( 3.0 - 2.0 * t );
+	float a = skyHash13( vec3( i, 3.0 ) ), b = skyHash13( vec3( i + vec2( 1.0, 0.0 ), 3.0 ) );
+	float c = skyHash13( vec3( i + vec2( 0.0, 1.0 ), 3.0 ) ), d = skyHash13( vec3( i + vec2( 1.0, 1.0 ), 3.0 ) );
+	return mix( mix( a, b, t.x ), mix( c, d, t.x ), t.y );
+}
+vec4 skyCurtain( vec3 dir, vec3 behind ) {
+	float hl = length( dir.xz );
+	float top = skyCurtainInfo.x, camY = skyCurtainInfo.y;
+	// (none overhead, or above their tops as near as one can be)
+	if ( skyCurtainCount == 0 || hl < 0.05 || camY + ${ f( CURTAIN_NEAR[ 0 ] ) } * dir.y / hl > top ) return vec4( 0.0 );
+	vec2 d2 = dir.xz / hl;
+	float tanE = dir.y / hl, tau = 0.0;
+	for ( int i = 0; i < ${ CURTAIN_MAX }; i ++ ) {
+		if ( i >= skyCurtainCount ) break;
+		vec4 c = skyCurtains[ i ];
+		// (where the ray passes it, and how high it is there)
+		float s = dot( c.xy, d2 );
+		if ( s <= 0.0 ) continue;
+		float y = camY + s * tanE;
+		if ( y > top ) continue;
+		vec2 axis = c.xy + skyCurtainInfo.zw * ( top - max( y, 0.0 ) );
+		float b = d2.x * axis.y - d2.y * axis.x;
+		float q = b / c.z;
+		if ( abs( q ) >= 1.0 ) continue;
+		// (as far as the ray goes through it, nearly as thick at its edge as its middle: an edge that shows)
+		vec2 fall = vec2( b + float( i ) * 2281.0, y + skyTime * 9.0 );
+		float streak = 0.35 + 0.4 * skyCurtainNoise( fall * vec2( 0.012, 0.0009 ) ) + 0.25 * skyCurtainNoise( fall * vec2( 0.04, 0.002 ) + 7.3 );
+		float up = 1.0 - smoothstep( top * 0.4, top, y );
+		tau += c.w * ( 1.0 - 0.5 * q * q ) * streak * up * 2.0 * c.z * sqrt( 1.0 - q * q );
+	}
+	float a = 1.0 - exp( - tau * ${ f( CURTAIN_DENSITY ) } );
+	float toSun = pow( max( dot( dir, atmoSunDir ), 0.0 ), 6.0 );
+	vec3 horizon = atmosphereSkyLuminance( normalize( vec3( d2.x, 0.06, d2.y ) ) );
+	return vec4( behind * 0.4 + horizon * toSun * 1.2, a );
+}
+#endif
+
 void main() {
 	vec3 dir = normalize( vSkyDir );
 #ifdef SKY_ENVIRONMENT
@@ -189,6 +249,9 @@ void main() {
 	vec3 sun = skySunDisk( dir );
 	vec4 c = cloudsSampleView( dir );
 	vec3 L = base * c.a + sun * cloudsSunTransmittance( c.a ) + c.rgb;
+	// (M11) the showers' curtains, under the cloud's base, in front of the cloud beyond them
+	vec4 curtain = skyCurtain( dir, L );
+	L = mix( L, curtain.rgb, curtain.a );
 #endif
 	// (Salt Life) under a grey sky the horizon greys, as the fog does (Sky.update): they meet in one grey
 	L = mix( L, skyGrey.rgb, skyGrey.a * ( 1.0 - smoothstep( 0.0, 0.3, dir.y ) ) );
@@ -243,7 +306,12 @@ export class Sky {
 			skyGrey: { value: new THREE.Vector4() },
 			skyFlash: G.skyFlash, // ((M10) shared: the sea reflects the flash)
 			skyFlashColor: { value: new THREE.Color( 0.82, 0.86, 1.0 ) },
+			// (M11) the showers' curtains in the distance (setCurtains)
+			skyCurtains: { value: Array.from( { length: CURTAIN_MAX }, () => new THREE.Vector4() ) },
+			skyCurtainCount: { value: 0 },
+			skyCurtainInfo: { value: new THREE.Vector4() },
 		};
+		this._curtains = [];
 		this.moonDir = this.uniforms.skyMoonDir.value;
 		this.sunDiskIntensity = this.uniforms.skySunDiskIntensity;
 		this.starIntensity = this.uniforms.skyStarIntensity;
@@ -290,7 +358,7 @@ export class Sky {
 		this.sunDir = new THREE.Vector3(); // true sun direction (the sky)
 		// light levels: the key light, the sky's fill (hemisphere) and its reflections (environment)
 		// (the sky's prefiltered map is bright and blue: as diffuse light it greys the sand, so it is a
-		// small fill here; the water reflects it at full strength through its own envMapIntensity)
+		// small fill here; (M11) the sea reflects it in full, as a mirror: WaterSurface)
 		this.levels = { sun: 3.2, sky: 0.25, env: 0.09 };
 		// (Salt Life) the weather (WeatherDriver): how grey the sky is (0..1), and how far you see (x the
 		// tier's fog distances). 0 and 1 are the island's clear day
@@ -494,6 +562,32 @@ export class Sky {
 		this._envVersion = version;
 		this.environment.update( dt, dir, soon );
 		this.stats.passes = this.atmosphere.passes + this.clouds.passes + this.environment.passes;
+
+	}
+
+	// (M11) the showers about the island (Weather.showers: { along, side, r, rain }, along the trades from
+	// the island's middle), as curtains in the distance: the nearest of them from 2 km beyond their edge
+	// (full from 5), out to 26 km (faded at both ends), as they're seen from `at` (the camera). Up into the
+	// haze under the cloud, leaning with the wind
+	setCurtains( cells, at ) {
+
+		const U = this.uniforms, list = U.skyCurtains.value, p = G.windPrevailing.value, near = this._curtains;
+		near.length = 0;
+		for ( const c of cells ) {
+
+			const x = p.x * c.along - p.y * c.side - at.x, z = p.y * c.along + p.x * c.side - at.z;
+			const d = Math.hypot( x, z );
+			const w = Math.min( 1, c.rain * 1.6 ) * THREE.MathUtils.smoothstep( d - c.r, CURTAIN_NEAR[ 0 ], CURTAIN_NEAR[ 1 ] ) * ( 1 - THREE.MathUtils.smoothstep( d, CURTAIN_FAR[ 0 ], CURTAIN_FAR[ 1 ] ) );
+			if ( w > 0.01 ) near.push( { x, z, r: c.r, w, d } );
+
+		}
+
+		near.sort( ( a, b ) => a.d - b.d );
+		const n = Math.min( near.length, CURTAINS[ this.tier ] );
+		for ( let i = 0; i < n; i ++ ) list[ i ].set( near[ i ].x, near[ i ].z, near[ i ].r, near[ i ].w );
+		U.skyCurtainCount.value = n;
+		const lean = CURTAIN_LEAN * Math.min( 1, G.windSpeed.value / 20 );
+		U.skyCurtainInfo.value.set( Math.min( CURTAIN_TOP, this.clouds.base ), at.y, G.windDir.value.x * lean, G.windDir.value.y * lean );
 
 	}
 

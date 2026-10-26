@@ -8,6 +8,7 @@ import { gearStats, defaultUpgrades, UPGRADES } from '../src/game/Gear.js';
 import { CatchMinigame } from '../src/game/CatchMinigame.js';
 import { fishWeightKg } from '../src/game/FishTable.js';
 import { Colliders } from '../src/world/Colliders.js';
+import { wariness } from '../src/world/Fish.js';
 
 let failed = 0;
 const check = ( ok, what ) => {
@@ -164,6 +165,16 @@ const run = ( gun, s, env = {} ) => {
 	check( jack.st === 'snapped', 'a big crevalle jack pulled hard all the way tears off the shaft' );
 	check( fight( 'wrasse', 60, 0, () => false ).st === 'escaped', 'one left to run takes the line and tears free' );
 	check( fight( 'blackGrouper', 112, 0, careful ).st !== 'caught' && fight( 'blackGrouper', 112, 2, careful ).st === 'caught', 'an 18 kg black grouper: too much for the starter gun, landed on the railgun' );
+
+}
+
+// ---- (M11) fish in murky water notice a diver later (they see as little as you do)
+{
+
+	const slow = wariness( 0.3 ), fast = wariness( 2.5 );
+	check( wariness( 0.3, 0 ) === slow && wariness( 2.5, 0 ) === fast && slow < fast, 'in clear water, as before: a slow approach gets closer than a sprint' );
+	check( Math.abs( wariness( 0.3, 1 ) - slow * 0.6 ) < 1e-9 && Math.abs( wariness( 2.5, 1 ) - fast * 0.6 ) < 1e-9, 'at the murkiest, they notice you at 60% of the distance' );
+	check( wariness( 1.5, 0.5 ) < wariness( 1.5, 0 ) && wariness( 1.5, 0.5 ) > wariness( 1.5, 1 ), 'the murkier, the closer you get' );
 
 }
 

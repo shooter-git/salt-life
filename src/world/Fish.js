@@ -6,6 +6,7 @@ import { SPECIES } from './fish/FishSpecies.js';
 import { createSwimMaterial } from './fish/FishMaterial.js';
 import { bandFade } from '../materials/LODFade.js';
 import { CONDITIONS, SURF_MAX } from '../game/Weather.js';
+import { G } from '../core/Globals.js';
 
 // Fish and other swimmers of the reef and the bay, simulated on the CPU and drawn in a single
 // batch (reef/KindBatch.js: one instanced draw per model and level of detail in view) with the
@@ -69,6 +70,9 @@ const REFILL = [ 240, 420 ];
 // how far fish notice the diver (their flee distance), by the diver's speed (m/s): a slow approach
 // gets close, a sprint scatters them
 const WARY = [ [ 0.3, 0.5 ], [ 1.5, 1 ], [ 2.5, 1.55 ] ];
+// (M11) and in murky water after a blow (G.murk), later: at this share of it when it's at its murkiest
+// (they see as little as you do)
+const MURK_WARY = 0.6;
 const SPOOKED = 25; // s a fish stays warier after a fright (a sprint at it, a shot)
 // (Salt Life) the cast net: a fish this far out (of the lead line's radius) is at its edge, so not under
 // it as it lands, and out under it from there; and how long (s) the lead line's ring of splashes
@@ -884,7 +888,7 @@ export class FishSchools {
 			dv.z = player.z;
 			dv.has = true;
 			dv.still = dv.speed < 0.35 ? dv.still + dt : 0;
-			this.wary = wariness( dv.speed );
+			this.wary = wariness( dv.speed, G.murk.value );
 
 		}
 
@@ -2699,22 +2703,23 @@ export class FishSchools {
 const _o3 = [ 0, 0, 0 ], _d3 = [ 0, 0, 0 ];
 
 // (Salt Life) WARY at the diver's speed (m/s): how far the fish notice them, as a share of their flee
-// distance
-function wariness( speed ) {
+// distance; (M11) nearer in murky water (murk 0..1: MURK_WARY of it at the murkiest)
+export function wariness( speed, murk = 0 ) {
 
-	if ( speed <= WARY[ 0 ][ 0 ] ) return WARY[ 0 ][ 1 ];
+	const sight = 1 - ( 1 - MURK_WARY ) * Math.min( 1, Math.max( 0, murk ) );
+	if ( speed <= WARY[ 0 ][ 0 ] ) return WARY[ 0 ][ 1 ] * sight;
 	for ( let k = 1; k < WARY.length; k ++ ) {
 
 		if ( speed <= WARY[ k ][ 0 ] ) {
 
 			const [ s0, w0 ] = WARY[ k - 1 ], [ s1, w1 ] = WARY[ k ];
-			return w0 + ( w1 - w0 ) * ( speed - s0 ) / ( s1 - s0 );
+			return ( w0 + ( w1 - w0 ) * ( speed - s0 ) / ( s1 - s0 ) ) * sight;
 
 		}
 
 	}
 
-	return WARY[ WARY.length - 1 ][ 1 ];
+	return WARY[ WARY.length - 1 ][ 1 ] * sight;
 
 }
 
