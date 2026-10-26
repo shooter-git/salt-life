@@ -546,6 +546,33 @@ ok( cloudiness( 77 ) >= 0 && cloudiness( 77 ) <= 1 && storminess( 77 ) >= 0 && s
 	ok( KEYS.every( ( k ) => later[ k ] === fair[ k ] ) && later.id === 'fair' && hurricaneNews( since + 110, 'hurricane', since ) === null, 'and once it\'s gone, a fair day again exactly' );
 	ok( forecast( since, 12, 'hurricane', since ) !== null && forecast( since, 12, 'gale' ) === null && hurricaneNews( since, 'gale' ) === null, 'it passes, so it has a forecast (a held pick still has none)' );
 
+	// (step 3) how far you see in it: its rain's and its spray's haze (3 / their extinction, m)
+	const seen = ( w, inland = 0 ) => {
+
+		const k = w.rainHaze + w.sprayHaze * ( 1 - 0.55 * inland );
+		return k > 0 ? 3 / k : Infinity;
+
+	};
+	let wall = Infinity, wallIn = Infinity, band = [ Infinity, 0 ], eyeSeen = Infinity, clear = true;
+	for ( let t = 0; t < 14; t += 0.05 ) {
+
+		const w = P( t );
+		if ( w.wind > HURRICANE_WIND && w.rain > 0.9 ) {
+
+			wall = Math.min( wall, seen( w ) );
+			wallIn = Math.min( wallIn, seen( w, 1 ) );
+
+		}
+
+		if ( w.wind < 22 && w.wind > 15 && w.rain > 0.8 ) band = [ Math.min( band[ 0 ], seen( w ) ), Math.max( band[ 1 ], seen( w ) ) ];
+		if ( w.eye > 0.99 ) eyeSeen = Math.min( eyeSeen, seen( w ) );
+
+	}
+
+	for ( let T = 30; T < 24 * 60; T += 0.5 ) if ( ! hurricaneAt( T ) && ( dayWeatherAt( T ).rainHaze !== 0 || dayWeatherAt( T ).sprayHaze !== 0 ) ) clear = false;
+	console.log( `     (step 3) seen in its wall ${ wall.toFixed( 0 ) } m at the shore, ${ wallIn.toFixed( 0 ) } m inland; under its rain ${ band[ 0 ].toFixed( 0 ) } to ${ band[ 1 ].toFixed( 0 ) } m; in its eye ${ eyeSeen > 1e5 ? 'clear' : eyeSeen.toFixed( 0 ) + ' m' }` );
+	ok( wall < 100 && wallIn > wall * 1.5 && wallIn < 300 && band[ 0 ] > 400 && band[ 1 ] < 2000 && eyeSeen > 5000 && clear, 'in its wall under 100 m seen at the shore, more inland; under its rain the better part of a km; its eye clear; no haze of it on another day' );
+
 }
 
 console.log( fails ? `${ fails } FAILED` : 'all passed' );

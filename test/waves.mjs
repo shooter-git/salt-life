@@ -12,6 +12,7 @@ import { WORLD } from '../src/world/WorldLayout.js';
 import { CHANDLERY } from '../src/game/Chandlery.js';
 import { weatherAt, SURF_MAX, PERIOD_MAX, GROUNDSWELL_MAX, SURF_HURRICANE, HURRICANE } from '../src/game/Weather.js';
 import { G } from '../src/core/Globals.js';
+import { windShove } from '../src/player/Player.js';
 
 let failed = 0;
 const check = ( ok, label ) => {
@@ -388,6 +389,16 @@ check( runs.every( ( [ start, foot, stall ] ) => start === 0 && foot < 0.01 && s
 	const dockDepth = - 0.6 - terrain.heightAt( WORLD.boatDock.position.x, WORLD.boatDock.position.z );
 	check( wetIn( plain, CHANDLERY.x, CHANDLERY.z ) === 0 && dockDepth > 2.5, `drawn out of the bay (0.6 m), the beach wider and the dock still ${ dockDepth.toFixed( 1 ) } m deep` );
 	G.seaLevel.value = 0;
+
+}
+
+// ---- (M13) the wind on someone standing in it: nothing up to a gale's; from a strong gale's they're
+// pushed along, in a hurricane's about as fast as they walk
+{
+
+	const at = ( U ) => windShove( U );
+	console.log( `     a hurricane's wind pushes someone standing in it along at ${ [ 20, 25, 30, 35, 40 ].map( ( U ) => `${ at( U ).toFixed( 1 ) } m/s in ${ U }` ).join( ', ' ) }` );
+	check( at( 7 ) === 0 && at( 20 ) === 0 && at( 25 ) > 0 && at( 35 ) > 2 && at( 35 ) < 3.2 && at( 42 ) < 4.5, '(M13) a gale\'s wind doesn\'t move you; a hurricane\'s pushes you along about as fast as you walk' );
 
 }
 

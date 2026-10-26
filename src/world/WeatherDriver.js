@@ -62,7 +62,7 @@ const JUMP = 0.5; // game hours: more than this between frames, the clock jumped
 const monahan = ( u ) => 3.84e-6 * Math.pow( Math.max( 0, u ), 3.41 );
 const WHITECAP = 0.85;
 const whitecap = ( u ) => WHITECAP * Math.min( 1, Math.max( 0, monahan( u ) - monahan( 7 ) ) / ( monahan( 20 ) - monahan( 7 ) ) );
-const KEYS = [ 'wind', 'swell', 'windSea', 'surf', 'west', 'visibility', 'murk', 'hurricane', 'surge' ];
+const KEYS = [ 'wind', 'swell', 'windSea', 'surf', 'west', 'visibility', 'murk', 'hurricane', 'surge', 'rainHaze', 'sprayHaze' ];
 const QUICK = [ 'rain', 'thunder', 'front', 'eye' ];
 // (M13) in a hurricane the wind comes round up to this many times quicker in light airs (its eye's), from
 // LIGHT[ 1 ] m/s down to LIGHT[ 0 ]
@@ -72,6 +72,14 @@ const NEWS_EVERY = 1;
 // (M13 step 2) the sea's culling box (m: WaterSurface's CDLOD, as it always was), moved with the surge
 // and opened by this much (m a metre) for a surf past a gale's: a hurricane's crests on its surge
 const SEA_BOX = [ - 4, 4 ], SEA_BOX_SURF = 4;
+// (M13) m/s: the sea streaked with blown foam from a storm's wind (Beaufort 10), all of it in a hurricane's
+const SPUME = [ 24.5, 34 ];
+const smoothstep = ( a, b, x ) => {
+
+	const t = Math.min( 1, Math.max( 0, ( x - a ) / ( b - a ) ) );
+	return t * t * ( 3 - 2 * t );
+
+};
 // the surf's period changes slowly (s a second): a change hurries the crests a little on their way in
 const PERIOD_RATE = 0.02;
 
@@ -235,6 +243,8 @@ export class WeatherDriver {
 		sky.storm = w.storm;
 		sky.visibility = w.visibility;
 		this.water.whitecap.value = whitecap( G.windSpeed.value );
+		// ((M13) the sea streaked white with blown foam, from a storm's wind (Beaufort 10) to a hurricane's)
+		if ( this.water.spume ) this.water.spume.value = smoothstep( SPUME[ 0 ], SPUME[ 1 ], G.windSpeed.value );
 
 	}
 

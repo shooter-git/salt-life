@@ -34,7 +34,8 @@ import { FT } from './Units.js';
 //   murkAt( T ) -> 0..1   (the water stirred up by a blow, clearing over a day)
 //   (M12) trackAt( T ) -> rad   towardOf( windAngle ) -> { x, y }   (where a blow comes from, and the
 //   way the weather goes)
-//   (M13) weatherAt( T, 'hurricane', since ): your own, picked at `since`   (and its values' hurricane, eye)
+//   (M13) weatherAt( T, 'hurricane', since ): your own, picked at `since`   (and its values' hurricane, eye,
+//   surge, rainHaze, sprayHaze)
 //   hurricaneAt( T, pick, since ) -> { r, x, z, rmax, ... } | null   hurricaneNews( T, pick, since ) ->
 //   { stage: 'outlook' | 'watch' | 'warning', onset, ends, eye, over, from } | null   dayWeatherAt( T )
 
@@ -53,7 +54,7 @@ export const CONDITIONS = {
 	storm: { wind: 14, coverage: 0.96, overcast: 0.95, swell: 1.35, surf: 0.46, period: 8, visibility: 0.42, rain: 1, thunder: 1 },
 	// (M13) a hurricane's wall at its height (what the menu says of it: a picked one passes, HURRICANE). Its
 	// sea is a gale's at most until the shore takes a hurricane's
-	hurricane: { wind: 38, coverage: 0.97, overcast: 1, swell: 1.8, surf: 0.6, period: 11, visibility: 0.03, rain: 1, thunder: 0.12 },
+	hurricane: { wind: 38, coverage: 0.97, overcast: 1, swell: 1.8, surf: 0.6, period: 11, visibility: 0.42, rain: 1, thunder: 0.12 },
 };
 // the surf's period (s): a storm's own swell comes short and steep; one that's come far, from a storm
 // still on its way, long, and smaller than the storm's own sea by the time it's here. The longest it
@@ -149,7 +150,10 @@ export const MURKY = 0.35;
 //     apart), thundering where they're heaviest; the eyewall seldom thunders (`wallThunder`). None in the
 //     eye: it stops at the eyewall's inner edge.
 //   - Its cloud spreads ahead of it (`cloud`), and greys the sky closer in; in the eye the sky opens.
-//   - The air in its wall is full of rain and spray (`visibility`: under 100 m).
+//   - (step 3) The air in it is full of rain and, in its wall, the spray torn off the sea: their
+//     extinction (`haze`, 1/m: you see about 3 / it, Koschmieder), the rain's as heavy rain's is (a
+//     50 mm/h downpour about 800 m: V = 10.5 R^-0.66 km), the spray's from a strong gale's wind, under
+//     100 m seen in its wall at the shore (App thins the spray inland).
 //   - Its swell runs out ahead of it (out to `swellReach`), long and low days ahead (`period`), shorter and
 //     higher close in (`swell`, on the open sea all round). (M13 step 2) Into the bay comes as much of its
 //     waves (`surf`) as come in the way they travel (BAY): close in they're its wind's own sea, going the
@@ -168,7 +172,8 @@ export const HURRICANE = {
 	speed: [ 14000, 24000 ], turn: 0.5, miss: 1.2, jitter: 12,
 	reach: [ 450000, 750000 ], cloud: [ 700000, 350000 ], grey: [ 600000, 250000 ],
 	core: [ 1.6, 3.2 ], band: { gap: 60000, arms: 2, reach: [ 360000, 460000 ], rain: 0.9, thunder: 0.85, from: [ 2.5, 5 ] }, wallThunder: 0.12,
-	visibility: 0.03, swellReach: [ 1500000, 80000 ], swell: 3.5, surf: 1.5, period: [ 11, 16 ], murk: [ - 8, 0, 24, 96 ],
+	haze: { rain: 0.000286, spray: 0.03, sprayWind: [ 22, 36 ] },
+	swellReach: [ 1500000, 80000 ], swell: 3.5, surf: 1.5, period: [ 11, 16 ], murk: [ - 8, 0, 24, 96 ],
 };
 // (M13 step 2) the surge: the sea drawn up by the fall of its pressure (m a hPa: the inverse barometer),
 // that fall at its eye (hPa a m/s of vmax: a Category 1's 980s), half of it at rmax; the wind's set-up on
@@ -337,7 +342,7 @@ function nameOf( w ) {
 function row( id ) {
 
 	const c = CONDITIONS[ id ];
-	return { id, wind: c.wind, windAngle: 0, coverage: c.coverage, overcast: c.overcast, swell: c.swell, windSea: windSeaOf( c.wind ), surf: Math.min( SURF_MAX, c.surf ), period: c.period, west: 0, visibility: c.visibility, rain: c.rain, thunder: c.thunder, front: 0, murk: MURK_PICK[ id ] || 0, hurricane: 0, eye: 0, surge: 0 };
+	return { id, wind: c.wind, windAngle: 0, coverage: c.coverage, overcast: c.overcast, swell: c.swell, windSea: windSeaOf( c.wind ), surf: Math.min( SURF_MAX, c.surf ), period: c.period, west: 0, visibility: c.visibility, rain: c.rain, thunder: c.thunder, front: 0, murk: MURK_PICK[ id ] || 0, hurricane: 0, eye: 0, surge: 0, rainHaze: 0, sprayHaze: 0 };
 
 }
 
@@ -426,7 +431,7 @@ export function dayWeatherAt( T ) {
 
 	// a blow on its way (0..1): the storm a few hours on, more than now (the fish feed hard ahead of it)
 	const front = clamp01( ( Math.max( storminess( T + FRONT_LEAD[ 0 ] ), storminess( T + FRONT_LEAD[ 1 ] ) ) - s ) * 12 ) * sstep( 0.45, 0.75, Math.max( storminess( T + FRONT_LEAD[ 1 ] ), s ) ) * k;
-	const w = { id: 'fair', wind, windAngle, coverage: wet.coverage, overcast: wet.overcast, swell, windSea: windSeaOf( wind ), surf, period, west, visibility: wet.visibility, rain, thunder, front, murk: murkAt( T ), hurricane: 0, eye: 0, surge: 0 };
+	const w = { id: 'fair', wind, windAngle, coverage: wet.coverage, overcast: wet.overcast, swell, windSea: windSeaOf( wind ), surf, period, west, visibility: wet.visibility, rain, thunder, front, murk: murkAt( T ), hurricane: 0, eye: 0, surge: 0, rainHaze: 0, sprayHaze: 0 };
 	w.id = nameOf( w );
 	return w;
 
@@ -583,7 +588,10 @@ function stormAt( h, T, out ) {
 	out.grey = sstep( H.grey[ 0 ], H.grey[ 1 ], r );
 	out.overcast = lerp( 1, 0.35, out.eye );
 	// the rain and the spray in its wind
-	out.visibility = Math.min( lerp( 1, H.visibility, sstep( 20, 34, out.wind ) ), lerp( 1, CONDITIONS.rain.visibility, rain ) - 0.13 * out.thunder );
+	out.visibility = lerp( 1, CONDITIONS.rain.visibility, rain ) - 0.13 * out.thunder;
+	// ((step 3) and its rain's and its spray's haze, 1/m: R = 50 mm/h in a downpour)
+	out.rainHaze = rain > 0 ? H.haze.rain * Math.pow( 50 * rain, 0.66 ) : 0;
+	out.sprayHaze = H.haze.spray * sstep( H.haze.sprayWind[ 0 ], H.haze.sprayWind[ 1 ], out.wind );
 	// its swell, long and low far ahead, shorter and higher close in
 	const near = sstep( H.swellReach[ 0 ], H.swellReach[ 1 ], r );
 	out.near = near * near;
@@ -682,6 +690,8 @@ function overHurricane( w, T, h ) {
 	w.murk = Math.max( w.murk, s.murk );
 	w.hurricane = k;
 	w.eye = s.eye;
+	w.rainHaze = s.rainHaze * k;
+	w.sprayHaze = s.sprayHaze * k;
 	// (its name inside its wall, eye and all, and wherever its wind's a hurricane's)
 	w.id = k >= 0.5 && ( s.r <= h.rmax || w.wind >= HURRICANE_WIND ) ? 'hurricane' : nameOf( w );
 	return w;

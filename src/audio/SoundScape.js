@@ -176,6 +176,8 @@ const FAIR_SURF = 0.34;
 const FAIR_SURF_FAR = FAIR_SURF / 0.6;
 // (M13) the surf's intensity at a hurricane's biggest (1: a gale's)
 const SURF_LOUDEST = SURF_HURRICANE / 0.6;
+// (M13) the wind (m/s) from which its lulls stay loud, all of them by the second (a hurricane's)
+const HOWL = [ 24, 34 ];
 
 // per-surface footstep trims (dB)
 const STEP = {
@@ -1459,7 +1461,9 @@ export class SoundScape {
 		g.t -= dt;
 		if ( g.t <= 0 ) {
 
-			g.target = Math.random() < 0.35 ? 0.03 + Math.random() * 0.12 : 0.3 + Math.random() * 0.7;
+			// ((M13) in a hurricane's wind the lulls never fall quiet: a roar that rises in the gusts)
+			const floor = smooth( HOWL[ 0 ], HOWL[ 1 ], e.wind ) * 0.5;
+			g.target = Math.max( floor, Math.random() < 0.35 ? 0.03 + Math.random() * 0.12 : 0.3 + Math.random() * 0.7 );
 			g.t = 2 + Math.random() * 6;
 
 		}
@@ -1469,12 +1473,13 @@ export class SoundScape {
 		const gv = Math.min( 1.2, g.v * ( 0.4 + 1.2 * e.gust ) );
 		const w = Math.hypot( e.wind, eb.active ? eb.speed * 0.9 : 0 );
 		const gw = eb.active && eb.speed > 3 ? Math.max( gv, 0.5 ) : gv; // apparent wind on a running boat is steady
-		this._bed( 'wind', dB( MIX.wind ) * clamp( w / 7, 0, 3.5 ) * gw / dB( BANK.wind.lufs ), now, 0.3 );
+		// ((M13) louder on past a strong gale's, about 3 dB more in a hurricane's)
+		this._bed( 'wind', dB( MIX.wind ) * ( clamp( w / 7, 0, 3.5 ) + 0.12 * Math.max( 0, w - 24.5 ) ) * gw / dB( BANK.wind.lufs ), now, 0.3 );
 		this._ramp( this.windLP.frequency, 400 + ( 80 + 60 * gw ) * w, 0.4 );
 
 		// trees inland rustle in the gusts; crickets inland at night (daylight < 0.3)
 		const veg = e.onLand ? smooth( 6, 30, d ) : 0;
-		this._bed( 'palms', dB( MIX.palms ) * veg * clamp( e.wind / 7, 0.2, 2.6 ) * gv * ( 0.3 + 0.7 * e.day ) / dB( BANK.palms.lufs ), now, 0.5 );
+		this._bed( 'palms', dB( MIX.palms ) * veg * ( clamp( e.wind / 7, 0.2, 2.6 ) + 0.06 * Math.max( 0, e.wind - 18.2 ) ) * gv * ( 0.3 + 0.7 * e.day ) / dB( BANK.palms.lufs ), now, 0.5 );
 		const night = smooth( 0.3, 0.12, e.day );
 		this._bed( 'crickets', dB( MIX.crickets ) * night * ( e.onLand ? 0.35 + 0.65 * smooth( 5, 40, d ) : 0.1 ) / dB( BANK.crickets.lufs ), now, 1 );
 

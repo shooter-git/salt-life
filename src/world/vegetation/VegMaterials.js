@@ -660,10 +660,11 @@ ${ lobes ? /* glsl */`
 	float t = vegTime;
 	float ph0 = seed * 6.2832;
 	float h2 = hf * hf;
-	float sway = ( w * w * 0.009 * ( g * 0.8 + 0.3 ) + sin( t * 0.9 + ph0 ) * w * 0.0045 * ( g + 0.4 ) ) * Hh * h2;
+	float load = vegWindLoad();
+	float sway = ( load * 0.009 * ( g * 0.8 + 0.3 ) + sin( t * 0.9 + ph0 ) * w * 0.0045 * ( g + 0.4 ) ) * Hh * h2;
 	float swayP = sin( t * 0.67 + ph0 * 1.3 ) * w * 0.002 * Hh * h2;
 	float branch = sin( t * ( ph + 1.7 ) + ph * 20.0 + ph0 ) * flex * w * sc * 0.07 * ( g + 0.5 )
-		- flex * w * w * sc * 0.04 * ( g + 0.3 ); // branches sag / stream in strong gusts
+		- flex * load * sc * 0.04 * ( g + 0.3 ); // branches sag / stream in strong gusts
 	float flutter = sin( t * 9.5 + ph * 50.0 + P.x * 1.9 + P.z * 2.3 ) * flut * sc * ( w * 0.035 + 0.005 );
 	vec3 pos = P + vegWindDir3() * sway + vegWindPerp3() * swayP + VEG_UP * branch + N * flutter;
 	// near LOD: trees and shrubs hand over to the impostors at their own distance

@@ -4,6 +4,19 @@ import { HOUSE } from '../world/boat/Wheelhouse.js';
 import { TUMBLE_H } from '../ocean/ShoreWaves.js';
 import { G } from '../core/Globals.js';
 
+// (M13) The wind on someone standing in it: what it drives them along at (m/s) against their footing, in
+// wind U (m/s). A person's drag (1/2 rho Cd A U^2, Cd A about 0.7 m^2, 75 kg) is a fifth of their weight in a
+// gale's 20 m/s, over two thirds in a hurricane's 35; past SHOVE_FROM of it (a strong gale's, Beaufort
+// 9-10: "walking very difficult") their footing gives, and they're pushed along by SHOVE_K m/s for each
+// share of their weight past it: in a hurricane's wind about as fast as they walk, faster in its gusts.
+// They lean into it (LEAN rad the view rolls for each m/s it pushes them across the way they face)
+export const SHOVE_FROM = 0.3, SHOVE_K = 6.25, LEAN = 0.025;
+export function windShove( U ) {
+
+	return Math.max( 0, 0.5 * 1.2 * 0.7 * U * U / ( 75 * 9.81 ) - SHOVE_FROM ) * SHOVE_K;
+
+}
+
 const HOUSE_HELM = { x: HOUSE.helmX, z: HOUSE.seatZ };
 
 const EYE = 1.62;
@@ -104,6 +117,9 @@ export class Player {
 		this.tumble = 0;
 		this.tumbles = 0;
 		this.roll = 0;
+		this.lean = 0; // (M13) leaning into a hurricane's wind (rad: the view's roll)
+		this.windAt = null; // (M13) the wind's speed at ( x, z ), in its gusts (m/s: App, the weather's)
+		this.sheltered = false; // (M13) out of the wind (the shelter: App)
 		this._tumble = { T: 1, k: 0, dx: 0, dz: 1, spin: 1 };
 		this._breaker = { n: 0, H: 0, b: - 9, dx: 0, dz: 1 };
 		this._crest = null;
@@ -312,8 +328,14 @@ export class Player {
 		const speed = ( sprint ? 6.2 : 3.0 ) * THREE.MathUtils.lerp( 1, 0.42, wade );
 		const accel = this.grounded ? 14 : 2.5;
 		const k = 1 - Math.exp( - accel * dt );
-		this.velocity.x += ( wish.x * speed - this.velocity.x ) * k;
-		this.velocity.z += ( wish.z * speed - this.velocity.z ) * k;
+		// ((M13) in a strong gale's wind and up you're pushed along by it, staggered in its gusts, leaning
+		// into it; the water about your legs holds you a little)
+		const U = this.sheltered ? 0 : this.windAt ? this.windAt( this.position.x, this.position.z ) : G.windSpeed.value;
+		const shove = windShove( U ) * ( 1 - 0.5 * wade ), wd = G.windDir.value;
+		this.velocity.x += ( wish.x * speed + wd.x * shove - this.velocity.x ) * k;
+		this.velocity.z += ( wish.z * speed + wd.y * shove - this.velocity.z ) * k;
+		this.lean += ( - ( wd.x * _right.x + wd.y * _right.z ) * shove * LEAN - this.lean ) * ( 1 - Math.exp( - dt * 3 ) );
+		this.roll = this.lean;
 
 		if ( this.grounded && inp.hit( 'Space' ) && depth < 0.9 ) {
 

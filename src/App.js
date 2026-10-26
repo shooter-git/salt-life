@@ -44,6 +44,8 @@ import { fishModelsAsync } from './world/fish/FishModelsAsync.js';
 import { MarineSnow } from './fx/MarineSnow.js';
 import { Whale } from './world/marine/Whale.js';
 import { Spray } from './fx/Spray.js';
+import { StormSpray } from './fx/StormSpray.js';
+import { FlyingDebris } from './fx/FlyingDebris.js';
 import { AirMotes } from './fx/AirMotes.js';
 import { Rain, SPLASH_ROCKS } from './fx/Rain.js';
 import { Drips, eavePoints, palmPoints, wheelhousePoints } from './fx/Drips.js';
@@ -84,6 +86,16 @@ const MURK_FAR = 11;
 // (M13) a hurricane's surge gets a shore field of its own when it rises past this (m), solved once it's
 // watched for (or warned of), or near (m from its eye)
 const SURGE_FIELD_FROM = 0.15, SURGE_FIELD_NEAR = 400000;
+// (M13) a hurricane's spray in the air thins inland: from this far from the shore (m) to this, by this share
+const SPRAY_INLAND = [ 20, 160, 0.55 ];
+// how much a sheet of rain driving past thickens the air (of its haze: the sheets' mean is 3/8)
+const SHEET_HAZE = 0.8;
+const smoothstep = ( a, b, x ) => {
+
+	const t = Math.min( 1, Math.max( 0, ( x - a ) / ( b - a ) ) );
+	return t * t * ( 3 - 2 * t );
+
+};
 const _c = new THREE.Color();
 const _c3 = new THREE.Vector3();
 const _size = new THREE.Vector2();
@@ -299,6 +311,8 @@ export class App {
 		this.spray = new Spray( { waves: this.waves, terrain: this.terrainData, tier } );
 		scene.add( this.spray.mesh );
 		this.boatSpray = new BoatSpray( { boat: this.boatCtl, spray: this.spray } );
+		// ((M13) and in a hurricane's wind, the spray torn off the sea)
+		this.stormSpray = new StormSpray( { spray: this.spray, terrain: this.terrainData, waves: this.waves, tier } );
 		// (M9) the rain around the camera (fx/Rain.js), and the lightning (sky/Lightning.js: the strikes
 		// everyone sees, their flash on the clouds and the island, the bolts, the thunder)
 		this.rain = new Rain( { terrain: this.terrain, cover: this.cover, tier } );
@@ -311,6 +325,9 @@ export class App {
 		this.lightning = new Lightning( { scene, sky: this.sky } );
 		// (its thunder, heard as it gets here)
 		this.lightning.onThunder = ( strike, m, dir ) => this.audio && this.audio.thunder( m, dir, strike.power );
+		// ((M13) and what a hurricane's wind tears off and carries: fx/FlyingDebris.js)
+		this.flying = new FlyingDebris( { terrain: this.terrain, tier } );
+		scene.add( this.flying.mesh );
 		if ( tier === 'low' ) {
 
 			this.nearDetail = [];
@@ -325,6 +342,8 @@ export class App {
 		// laptops: bloom and SMAA (phones draw straight to the screen)
 		this.post = tier === 'high' ? new PostChain( renderer, scene, camera ) : null;
 		this.player = new Player( { camera, input: this.input, terrain: this.terrainData, colliders: this.colliders, query: this.query, boat: this.boatCtl } );
+		// ((M13) the wind you stand in, in the gusts the sea shows: a hurricane's pushes you along)
+		this.player.windAt = ( x, z ) => this.weather.windAt( x, z );
 
 		// ---------------------------------------------------------------- sound
 		// Tidewater's field recordings (public/audio): surf wave by wave, wind, palms, birds by the
@@ -467,8 +486,9 @@ export class App {
 			// (and the cast net: its netting, lead line and cords are shaders of their own)
 			this._heldNet = this.game.net.meshes.map( ( m ) => [ m, m.parent ] );
 			for ( const [ m ] of this._heldNet ) m.removeFromParent();
-			// ((M9) and the rain, (M11) its drips, and the lightning: nothing to draw until it rains)
-			this._heldWeather = [ this.rain.mesh, this.rain.splash, this.drips.mesh, this.lightning.mesh ].map( ( m ) => [ m, m.parent ] );
+			// ((M9) and the rain, (M11) its drips, and the lightning: nothing to draw until it rains; (M13) and
+			// a hurricane's flying debris)
+			this._heldWeather = [ this.rain.mesh, this.rain.splash, this.drips.mesh, this.lightning.mesh, this.flying.mesh ].map( ( m ) => [ m, m.parent ] );
 			for ( const [ m ] of this._heldWeather ) m.removeFromParent();
 
 		}
@@ -562,6 +582,10 @@ export class App {
 		if ( ( this._clockSaveT -= dt ) <= 0 ) this.saveClock();
 		// (Salt Life) the weather, before anything it moves (the boat, the sky)
 		this.weather.update( dt, s.day, s.timeOfDay, this.weatherPick(), this.camera, s.weatherSince );
+		// ((M13) a hurricane's rain and spray in the air: the spray thinner inland, away from the sea it's torn off)
+		const lw = this.weather.live, spray = lw.sprayHaze > 0 ? lw.sprayHaze * ( 1 - SPRAY_INLAND[ 2 ] * smoothstep( SPRAY_INLAND[ 0 ], SPRAY_INLAND[ 1 ], - this.terrainData.coastDistance( this.camera.position.x, this.camera.position.z ).d ) ) : 0;
+		// (heavier, and the world gone for a moment, as a sheet of rain drives past: Rain.sheet)
+		this.sky.haze = ( lw.rainHaze + spray ) * ( 1 + SHEET_HAZE * ( this.rain.sheet - 0.375 ) );
 		// (M12) a westerly's swell on its way: its shore field, solved off the page
 		if ( this.weather.target.west > 0 && ! this._westField && this._started ) this.solveWestField();
 		// ((M13) a hurricane's surge: its field solved before it comes, at its highest, dropped once it's gone)
@@ -698,8 +722,10 @@ export class App {
 
 		}
 		this.boatSpray.update( dt );
+		this.stormSpray.update( dt, this.camera );
 		this.spray.update( dt, this.camera, this.renderer.domElement.height );
 		this.rain.update( dt, this.camera, this.cameraWaterHeight, this.renderer.domElement.height );
+		this.flying.update( dt, this.camera, this.cameraWaterHeight );
 		if ( this.motes ) this.motes.update( dt, this.camera, this.cameraWaterHeight, this.renderer.domElement.height );
 		this.water.detail.update( dt, this.camera );
 		this.shore.update( G.time.value ); // (Salt Life: the waves' clock, for the GPU)
