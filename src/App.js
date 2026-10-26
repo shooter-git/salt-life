@@ -37,6 +37,7 @@ import { LocalLights, addBoatLights, addVillageLights, useLocalLights, holdLocal
 import { cloudShadows, useCloudShadows } from './materials/CloudShadows.js';
 import { useWet, wetSurfaces } from './materials/Wet.js';
 import { Wildlife } from './world/wildlife/Wildlife.js';
+import { wildlifeMood, wildlifeNews } from './game/WildlifeWeather.js';
 import { Debris } from './world/Debris.js';
 import { Reef } from './world/Reef.js';
 import { FishSchools } from './world/Fish.js';
@@ -325,7 +326,12 @@ export class App {
 		scene.add( this.drips.mesh );
 		this.lightning = new Lightning( { scene, sky: this.sky } );
 		// (its thunder, heard as it gets here)
-		this.lightning.onThunder = ( strike, m, dir ) => this.audio && this.audio.thunder( m, dir, strike.power );
+		this.lightning.onThunder = ( strike, m, dir ) => {
+
+			if ( this.audio ) this.audio.thunder( m, dir, strike.power );
+			if ( this.wildlife ) this.wildlife.birds.thunder( m ); // ((M13) a near clap puts up the perched birds)
+
+		};
 		// ((M13) and what a hurricane's wind tears off and carries: fx/FlyingDebris.js)
 		this.flying = new FlyingDebris( { terrain: this.terrain, tier } );
 		this.flying.setRoom( roomMatrix( this.village.shelter && this.village.shelter.inside ) );
@@ -602,6 +608,23 @@ export class App {
 			this.solveSurgeField( h && h.peak > SURGE_FIELD_FROM && ( ( n && n.stage !== 'outlook' ) || h.r < SURGE_FIELD_NEAR ) ? h : null );
 
 		}
+		// ((M13) the island's animals in the weather: game/WildlifeWeather.js)
+		if ( ! ( ( this._wildNewsT -= dt ) > 0 ) ) {
+
+			this._wildNewsT = 2;
+			this._wildNews = wildlifeNews( islandTime( s.day, s.timeOfDay ), this.weatherPick(), s.weatherSince );
+
+		}
+
+		const mood = this.wildMood = wildlifeMood( this.weather.live, this._wildNews, islandTime( s.day, s.timeOfDay ), G.wet.value, this.wildMood );
+		if ( this.whale ) {
+
+			this.whale.brain.surfacing = mood.whaleSurface;
+			this.whale.brain.away = mood.whaleAway;
+
+		}
+
+		if ( this.fish ) this.fish.setWeather( mood.sharksAway );
 		// (M9) the lightning, before the sky its flash lights
 		const wx = this.weather.live, cv = this.renderer.domElement;
 		this.lightning.setViewport( cv.width, cv.height );
@@ -724,6 +747,7 @@ export class App {
 		if ( this.wildlife ) {
 
 			this.wildlife.viewHeight = this.renderer.domElement.height;
+			this.wildlife.birds.mood = this.wildlife.shorebirds.mood = this.wildlife.crabs.mood = this.wildMood;
 			this.wildlife.update( dt, this.camera, this.player );
 
 		}
@@ -1480,6 +1504,8 @@ export class App {
 			gust: this.weather.gustAt( p.x, p.z ), // (M9: the cat's paws on the sea, as the boat feels them)
 			rain: G.rain.value, // (M9: and the rain; on the boat it drums on her)
 			rainOn: this._rainOn, // (M11: on what it falls on about you)
+			songbirds: this.wildMood ? this.wildMood.song : 1, // ((M13) the island's birds in the weather)
+			gulls: this.wildMood ? this.wildMood.gull : 1,
 			aboard: this.player.mode === 'boat' || this.player.mode === 'deck',
 			daylight: 1 - G.night.value,
 			nearPier: Math.abs( p.x - pier.x ) < 12 && p.z > pier.zStart - 5 && p.z < pier.zEnd + 8,

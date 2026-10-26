@@ -234,6 +234,7 @@ export class FishSchools {
 		this.time = 0;
 		this.spray = null; // set by the owner (Spray.js): splashes of leaping mullet
 		this.lit = 0; // (Salt Life) the pier's lamps, 0..1 (the app sets it: Bites.lampsLit)
+		this.sharksAway = false; // ((M13) the blacktips gone to deep water: setWeather)
 		this.ground = ground;
 		this.group = new THREE.Group();
 		this.group.name = 'Fish';
@@ -375,6 +376,29 @@ export class FishSchools {
 
 		const a = this.surf * FAIR_SURF;
 		return !! g.sp.surf && a > OFF_SURF && g.offAt < OFF_SHARE * Math.min( 1, ( a - OFF_SURF ) / ( SURF_MAX - OFF_SURF ) );
+
+	}
+
+	// (M13) the weather, as the wildlife takes it (WildlifeWeather.wildlifeMood): sharksAway, the
+	// blacktips gone to deep water ahead of a blow. Any you're among swim off there; the rest, out of
+	// range, aren't seen until it's eased, and are back at home then
+	setWeather( sharksAway ) {
+
+		if ( sharksAway === this.sharksAway ) return;
+		this.sharksAway = sharksAway;
+		for ( const g of this.groups ) {
+
+			if ( ! g.storm ) continue;
+			if ( g.active ) g.timer = 0;
+			else if ( ! sharksAway && ! g.holding ) this.initGroup( g );
+
+		}
+
+	}
+
+	offInWeather( g ) {
+
+		return !! g.storm && this.sharksAway && Math.hypot( g.center.x - g.storm.x, g.center.z - g.storm.z ) > g.storm.r + 40;
 
 	}
 
@@ -582,8 +606,18 @@ export class FishSchools {
 
 		}
 
-		place( 'blacktipShark', 3, { x: 45, z: 125, r: 40 } );
-		place( 'blacktipShark', 2, { x: 0, z: 330, r: 80 } );
+		const tips = [ place( 'blacktipShark', 3, { x: 45, z: 125, r: 40 } ), place( 'blacktipShark', 2, { x: 0, z: 330, r: 80 } ) ];
+		// ((M13) ahead of a blow they leave for deep water, out past the snappers' grounds, and come back
+		// once it's eased: setWeather)
+		for ( const g of tips ) {
+
+			if ( ! g ) continue;
+			const n = { x: g.home.x * 0.5, z: 470, r: 90, band: [ 18, 1e9 ] };
+			n.home = new THREE.Vector3( n.x, this.depthFor( g.sp, n.x, n.z, 0.5 ), n.z );
+			g.storm = n;
+
+		}
+
 		for ( let i = 0; i < 2; i ++ ) place( 'nurseShark', 1, { ...reef, r: this.radius, band: [ 3, 12 ], sand: true } );
 		place( 'nurseShark', 1, { x: P.x, z: P.zEnd - 4, r: 8, band: [ 3, 10 ] } );
 		// spiny lobsters in dens at the coral heads (initGroup: makeDen)
@@ -761,7 +795,8 @@ export class FishSchools {
 
 		const sp = g.sp, rng = g.rng;
 		// (Salt Life) a group with a place for the night (the tarpon: under the pier's lamps) goes there once they're lit
-		const night = g.night && this.lit > 0.5 ? g.night : null;
+		// ((M13) and one with a place to wait out the weather (the blacktips: deep water) goes there)
+		const night = g.storm && this.sharksAway ? g.storm : g.night && this.lit > 0.5 ? g.night : null;
 		const zone = night || g.zone, home = night ? night.home : g.home;
 		const hold = sp.mode === 'solo' || sp.mode === 'lurk' ? [ 12, 25 ] : sp.mode === 'forage' ? [ 3, 7 ] : sp.mode === 'surface' ? [ 10, 20 ] : [ 6, 12 ];
 		if ( ! away && zone.path && zone.path.length > 1 && ( sp.mode === 'patrol' || sp.mode === 'cruise' ) ) {
@@ -913,10 +948,10 @@ export class FishSchools {
 			if ( g.sp.mode === 'escort' || g.sp.mode === 'remora' ) {
 
 				const w = this.whale;
-				g.active = !! ( w && w.ready ) && ( ! player || w.brain.position.distanceTo( player ) < SIM_RANGE + 20 );
+				g.active = !! ( w && w.ready && ! w.gone ) && ( ! player || w.brain.position.distanceTo( player ) < SIM_RANGE + 20 );
 				if ( g.active && ! was ) this.attachEscort( g );
 
-			} else g.active = ( ! player || Math.hypot( g.center.x - player.x, g.center.z - player.z ) < SIM_RANGE + g.radius ) && ( was || ! this.offInSurf( g ) );
+			} else g.active = ( ! player || Math.hypot( g.center.x - player.x, g.center.z - player.z ) < SIM_RANGE + g.radius ) && ( was || ! this.offInSurf( g ) && ! this.offInWeather( g ) );
 			if ( g.active && ! was ) this.resume( g );
 			any = any || g.active;
 

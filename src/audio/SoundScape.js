@@ -268,7 +268,7 @@ export class SoundScape {
 		this._warned = new Set();
 		this.env = {
 			lx: 0, ly: 1.7, lz: 0, fx: 0, fy: 0, fz: - 1, ux: 0, uy: 1, uz: 0,
-			u: 0, depth: 0, surf: 0.5, shoreDist: 60, onLand: true, wind: 7, day: 1, nearPier: false, hour: null, inside: 0,
+			u: 0, depth: 0, surf: 0.5, shoreDist: 60, onLand: true, wind: 7, day: 1, nearPier: false, hour: null, inside: 0, song: 1, gulls: 1,
 			shoreX: 0, shoreZ: 1,
 			boat: { active: false, rpm: 0, speed: 0, x: 0, y: 0, z: 0, inside: false },
 			hull: { flood: 0, pump: false, scrape: 0, wear: 0, motion: 0 },
@@ -1366,6 +1366,11 @@ export class SoundScape {
 		this._walls = WALLS * e.inside;
 		e.gust = clamp( num( s.gust, 0.5 ), 0, 1 ); // (M9) the sea's gusts here (0 a lull .. 1 a gust)
 		e.rain = clamp( num( s.rain, 0 ), 0, 1 ); // (M9) how hard it's raining, and whether you're aboard (on deck or at the helm)
+		// ((M13) the weather, as the island's birds take it (WildlifeWeather.wildlifeMood): songbirds
+		// singing, quiet in heavy rain and a strong wind, a burst as a shower clears; how much the gulls
+		// go about their day, sitting out a downpour and a gale)
+		e.song = clamp( num( s.songbirds, 1 ), 0, 2 );
+		e.gulls = clamp( num( s.gulls, 1 ), 0, 1 );
 		e.aboard = !! s.aboard;
 		e.day = clamp( num( s.daylight, 1 ), 0, 1 );
 		e.nearPier = !! s.nearPier;
@@ -1602,7 +1607,8 @@ export class SoundScape {
 
 				const a = this._pickBird( flock, 'gull', 170 );
 				this._gullT = a ? 5 + Math.random() * 15 : 3;
-				if ( a ) {
+				// ((M13) hunched on the beach in a downpour or a gale, they call less)
+				if ( a && Math.random() < 0.15 + 0.85 * e.gulls ) {
 
 					const P = a.f.P.pos;
 					this._shotAt( 'gull', 'gull', P[ 0 ], P[ 1 ], P[ 2 ], MIX.gull + ( Math.random() - 0.5 ) * 4, 0.93 + Math.random() * 0.14, 0, 10 );
@@ -1735,7 +1741,8 @@ export class SoundScape {
 	// never), each a bout of 1-4 phrases from one perch - a different slice of one recording each time
 	_birds( now, dt ) {
 
-		const e = this.env, { act, chorus, lull } = this._birdActivity();
+		const e = this.env, { act: act0, chorus: chorus0, lull } = this._birdActivity();
+		const act = act0 * e.song, chorus = chorus0 * Math.min( 1, e.song );
 		const inland = e.onLand ? smooth( 0, 45, e.shoreDist ) : 0;
 		const hab = e.onLand ? 0.25 + 0.75 * inland : 0.25 * ( 1 - smooth( 20, 90, e.shoreDist ) );
 
@@ -1826,8 +1833,9 @@ export class SoundScape {
 
 		// song: sung at depth while cruising (it stops to breathe); from above the surface only faint and
 		// dull. Only heard near the whale.
-		s.sing += ( ( b.state === 'cruise' ? 1 : 0.1 ) - s.sing ) * ( 1 - Math.exp( - dt / 4 ) );
-		const audible = d < WHALE_RANGE;
+		// ((M13) less in a wind's noise, as it turns to slapping and breaching: WhaleBrain.surfacing)
+		s.sing += ( ( b.state === 'cruise' ? 1 / Math.max( 1, num( b.surfacing, 1 ) ) : 0.1 ) - s.sing ) * ( 1 - Math.exp( - dt / 4 ) );
+		const audible = d < WHALE_RANGE && ! w.gone; // ((M13) not while it's gone offshore)
 		if ( audible || this._beds.has( 'whale_song' ) ) {
 
 			this._pos( this.songPan, p.x, p.y, p.z );
