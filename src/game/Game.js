@@ -1082,7 +1082,9 @@ export class Game {
 
 		const g = this.state.stats;
 		// (M10: in a blow, the wind gusting on the line)
-		this.fight = new CatchMinigame( { species: b.species, kg: b.kg, lineKg: g.lineKg, reelSpeed: g.reelSpeed, distance: Math.max( 3, this.rod.lineOut ), wind: blowShare( G.windSpeed.value ) } );
+		// (the line out: no more than the rod casts and a fish could have taken, whatever's gone wrong)
+		const out = Math.min( Math.max( 3, this.rod.lineOut ), this.rod.castM * 1.5 + 10 );
+		this.fight = new CatchMinigame( { species: b.species, kg: b.kg, lineKg: g.lineKg, reelSpeed: g.reelSpeed, distance: Number.isFinite( out ) ? out : 3, wind: blowShare( G.windSpeed.value ) } );
 		this.bite = null;
 		this.rod.hook();
 		this.toast( 'Fish on!', 1200 );

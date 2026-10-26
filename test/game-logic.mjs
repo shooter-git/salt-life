@@ -3,7 +3,7 @@ import { FISH, FISH_IDS, CARAPACE, fishValue, fishLengthCm, fishWeightKg, spearR
 import { habitatAt, pickSpecies, rollWeight, biteDelay, lampsLit, weatherMood } from '../src/game/Bites.js';
 import { weatherAt } from '../src/game/Weather.js';
 import { CatchMinigame } from '../src/game/CatchMinigame.js';
-import { FishingRod } from '../src/game/FishingRod.js';
+import { FishingRod, bendStep, BEND_K, BEND_C } from '../src/game/FishingRod.js';
 import { GameState } from '../src/game/GameState.js';
 import { gearStats, defaultUpgrades, UPGRADES, TOW, towFee } from '../src/game/Gear.js';
 import { BoatController } from '../src/player/BoatController.js';
@@ -574,5 +574,42 @@ ok( Object.keys( defaultUpgrades() ).length === Object.keys( UPGRADES ).length &
 
 }
 console.log( `value check ${ value }` );
+
+// ---- the rod's bend settles whatever the frame's length (stepped once a frame, frames of 0.1 s, the
+// longest the SDK gives, made it grow without end: the rod thrashing, its tip and the line flung far off)
+{
+
+	const once = ( s, target, dt ) => {
+
+		s.v += ( ( target - s.x ) * BEND_K - s.v * BEND_C ) * dt;
+		s.x += s.v * dt;
+		return s;
+
+	};
+	const run = ( step, dt, secs ) => {
+
+		const s = { x: 0, v: 0 };
+		let most = 0;
+		for ( let t = 0; t < secs; t += dt ) {
+
+			step( s, 0.3, dt );
+			most = Math.max( most, Math.abs( s.x ) );
+
+		}
+
+		return { s, most };
+
+	};
+	const old = run( once, 0.1, 20 ), slow = run( bendStep, 0.1, 20 ), fast = run( bendStep, 1 / 60, 20 );
+	console.log( `     the rod's bend at 10 frames a second, 20 s: stepped once a frame it reached ${ old.most.toExponential( 1 ) }; in substeps ${ slow.most.toFixed( 3 ) }, settled at ${ slow.s.x.toFixed( 3 ) }` );
+	ok( old.most > 1e3 && slow.most < 0.5 && Math.abs( slow.s.x - 0.3 ) < 1e-3 && Math.abs( fast.s.x - 0.3 ) < 1e-3, 'the rod\'s bend settles at any frame rate (it used to blow up at 10 frames a second)' );
+	const a = { x: 0.1, v: 0.5 }, b = { x: 0.1, v: 0.5 };
+	bendStep( a, 0.2, 1 / 60 );
+	once( b, 0.2, 1 / 60 );
+	ok( a.x === b.x && a.v === b.v, 'and at 60 frames a second it moves exactly as it always has' );
+	ok( bendStep( { x: NaN, v: 1 }, 0.2, 1 / 60 ).x === 0, 'a broken bend starts again at rest' );
+
+}
+
 console.log( fails ? `${ fails } FAILED` : 'all passed' );
 process.exit( fails ? 1 : 0 );
