@@ -2,6 +2,7 @@ import * as THREE from '../engine/index.js';
 import { G } from '../core/Globals.js';
 import { ATMOSPHERE_GLSL, Pass, floatTarget, f } from './Atmosphere.js';
 import { Cirrus, NoCirrus } from './Clouds.js';
+import { HURRICANE } from '../game/Weather.js';
 
 // Volumetric cumulus from sky-pro-webgpu (../sky-pro-webgpu, "Partly cloudy" preset): procedural
 // weather map, a 64³ Perlin-Worley shape noise with a height-dependent erosion, a cone-traced
@@ -44,6 +45,12 @@ import { Cirrus, NoCirrus } from './Clouds.js';
 //     less the cover here; WeatherDriver)
 //   clouds.frontDir   { value } Vector2 (M12: the way that weather comes, toward: down the blow's track)
 //   clouds.storm   { value } 0..1 (M9: rain's deck, lower, smoother below and darker; a thunderstorm's)
+//   clouds.eye   { value } Vector4 (M13: a hurricane's eye, xz (m), its rmax (m), its share of the weather
+//     here; 0: none), clouds.eyeTrack { value } Vector2 (the way it moves): its cloud about its eye
+//     (eyeCover): the clear eye, the wall towering round it, the deck beyond and its spiral bands, the
+//     cover everywhere as far as it's the weather (the weather's own cover lags, and looks ahead)
+//   clouds.drift   { value } Vector3 (M13: the way the clouds go, x z, and how fast (m/s); 0: the trades,
+//     at 12 m/s: a hurricane's wind racing them round it); clouds.upper (the cirrus's way: Clouds.js)
 //   clouds.update( dt, camera, keyColor, nightSky, night, skyIrradiance ) (Tidewater's frame values;
 //     keyColor: the moon's light at night)
 //   clouds.resolutionScale, clouds.resetHistory(), clouds.invalidate()
@@ -53,6 +60,42 @@ import { Cirrus, NoCirrus } from './Clouds.js';
 const DEG = Math.PI / 180;
 // (M9) the distances up the trades (km, - behind) at which the weather on its way is told (clouds.front)
 export const FRONT_KM = [ - 12, 12, 24, 36 ];
+// (M13) a hurricane's cloud about its eye, in its rmax (eyeCover): the clear eye's edge, the wall from its
+// inner face out to where it tapers to the deck, how much higher its towers go (cover past 1), the
+// deck's cover, solid over its rain's core (Weather's HURRICANE.core) and broken beyond it, the bands'
+// (Weather's HURRICANE.band) over it beyond the wall, their towering, the eye's own low cloud, and the
+// most cover anywhere (the march's emptiness bound)
+// (its cloud comes down to the sea in its wall and its deck, a few hundred metres up, and goes higher: the
+// shell's base lowered by `lower` (m) as far as it's the weather here, no lower than `base`, and deepened
+// by `deeper` of itself)
+const EYE = { clear: [ 0.42, 0.6 ], wall: [ 0.5, 0.68, 1.0, 1.8 ], tower: 0.45, deck: [ 1.0, 0.6 ], band: 0.62, bandFrom: [ 1.4, 2.4 ], floor: 0.25, top: 1.45, lower: 3400, base: 600, deeper: 0.5 };
+const CORE = HURRICANE.core;
+const B = HURRICANE.band;
+
+// (M13) the cover a hurricane brings at ( dx, dz ) m from its eye (rmax R, moving along ( tx, tz )), as
+// the clouds' shader has it (CORE_GLSL's scEyeCoverOf): its bands spiral in counter-clockwise, as the
+// weather's rain does (Weather's bandAt)
+export function eyeCover( dx, dz, R, tx, tz ) {
+
+	const ss = ( a, b, x ) => {
+
+		const t = Math.min( 1, Math.max( 0, ( x - a ) / ( b - a ) ) );
+		return t * t * ( 3 - 2 * t );
+
+	};
+	const r = Math.hypot( dx, dz ), E = EYE;
+	const eye = 1 - ss( E.clear[ 0 ] * R, E.clear[ 1 ] * R, r );
+	const wall = ss( E.wall[ 0 ] * R, E.wall[ 1 ] * R, r ) * ( 1 - ss( E.wall[ 2 ] * R, E.wall[ 3 ] * R, r ) );
+	const pm = dx * tx + dz * tz, pn = dx * tz - dz * tx;
+	const s = Math.abs( pm ) + Math.abs( pn ), t = s > 0 ? pn / s : 0;
+	const q = pm >= 0 ? ( pn >= 0 ? t : 4 + t ) : 2 - t;
+	const psi = r / B.gap + B.arms * q / 4, f = psi - Math.floor( psi );
+	const band = ss( 0, 0.1, f ) * ( 1 - ss( 0.25, 0.4, f ) ) * ss( E.bandFrom[ 0 ] * R, E.bandFrom[ 1 ] * R, r );
+	const deck = E.deck[ 0 ] + ( E.deck[ 1 ] - E.deck[ 0 ] ) * ss( CORE[ 0 ] * R, CORE[ 1 ] * R, r );
+	return ( deck + E.band * band ) * ( 1 - eye ) + E.floor * eye + E.tower * wall;
+
+}
+
 // (M9) rain's deck: its base this far down (m) at full storm, how much smoother its underside is (of the
 // erosion), how much less of the light it scatters and lets through to its underside
 const STORM = { lower: 1900, smooth: 0.6, albedo: 0.1, ambient: 0.12 };
@@ -106,6 +149,7 @@ const AP_DIST = 30000; // m: aerial perspective toward the horizon
 const PANO_MIN = - 4 * DEG, PANO_RANGE = 94 * DEG; // panorama elevations (v = sqrt of the fraction)
 
 const v4 = () => [ 0, 0, 0, 0 ];
+const _d = new THREE.Vector2();
 
 // ------------------------------------------------------------------ GLSL: noise volume and weather map
 
@@ -257,6 +301,10 @@ uniform vec4 scsFade;
 uniform vec4 scsFront;
 uniform float scsFrontMax;
 uniform vec2 scsFrontDir;
+// (M13) a hurricane's cloud about its eye (eyeCover): its eye's xz (m), its rmax (m), its share of the
+// weather here; the way it moves
+uniform vec4 scsEye;
+uniform vec2 scsEyeTrack;
 // Tidewater's frame: the key light (the sun, or the moon at night: its colour), the night sky
 uniform vec3 scKeyDir;
 uniform vec3 scKeyColor;
@@ -309,6 +357,27 @@ float scFrontAt( vec2 xz ) {
 	if ( d < ${ f( FRONT_KM[ 2 ] ) } ) return mix( scsFront.y, scsFront.z, ( d - ${ f( FRONT_KM[ 1 ] ) } ) / ${ f( FRONT_KM[ 2 ] - FRONT_KM[ 1 ] ) } );
 	return mix( scsFront.z, scsFront.w, clamp( ( d - ${ f( FRONT_KM[ 2 ] ) } ) / ${ f( FRONT_KM[ 3 ] - FRONT_KM[ 2 ] ) }, 0.0, 1.0 ) );
 }
+// (M13) a hurricane's cover at xz (eyeCover's), and what it adds to the cover here's
+float scEyeCoverOf( vec2 xz ) {
+	vec2 d = xz - scsEye.xy;
+	float R = scsEye.z, r = length( d );
+	float eye = 1.0 - smoothstep( ${ f( EYE.clear[ 0 ] ) } * R, ${ f( EYE.clear[ 1 ] ) } * R, r );
+	float wall = smoothstep( ${ f( EYE.wall[ 0 ] ) } * R, ${ f( EYE.wall[ 1 ] ) } * R, r ) * ( 1.0 - smoothstep( ${ f( EYE.wall[ 2 ] ) } * R, ${ f( EYE.wall[ 3 ] ) } * R, r ) );
+	float pm = dot( d, scsEyeTrack ), pn = d.x * scsEyeTrack.y - d.y * scsEyeTrack.x;
+	float s = abs( pm ) + abs( pn ), t = s > 0.0 ? pn / s : 0.0;
+	float q = pm >= 0.0 ? ( pn >= 0.0 ? t : 4.0 + t ) : 2.0 - t;
+	float psi = r / ${ f( B.gap ) } + ${ f( B.arms ) } * q / 4.0, fr = fract( psi );
+	float band = smoothstep( 0.0, 0.1, fr ) * ( 1.0 - smoothstep( 0.25, 0.4, fr ) ) * smoothstep( ${ f( EYE.bandFrom[ 0 ] ) } * R, ${ f( EYE.bandFrom[ 1 ] ) } * R, r );
+	float deck = mix( ${ f( EYE.deck[ 0 ] ) }, ${ f( EYE.deck[ 1 ] ) }, smoothstep( ${ f( CORE[ 0 ] ) } * R, ${ f( CORE[ 1 ] ) } * R, r ) );
+	return ( deck + ${ f( EYE.band ) } * band ) * ( 1.0 - eye ) + ${ f( EYE.floor ) } * eye + ${ f( EYE.tower ) } * wall;
+}
+// (the cover at xz: the weather's and the front's on its way, giving way to a hurricane's about its eye as
+// far as it's the weather here: past 1 only in its wall and its bands, where the towers go higher)
+float scCoverOf( vec2 xz ) {
+	float c = clamp( scsShell.w + scFrontAt( xz ), 0.0, 1.0 );
+	if ( scsEye.w > 0.0 ) c = clamp( mix( c, scEyeCoverOf( xz ), scsEye.w ), 0.0, ${ f( EYE.top ) } );
+	return c;
+}
 float scShellHeight( vec3 p ) {
 	vec2 horizontal = p.xz - scfPosition.xz;
 	// parabolic radial height avoids subtracting two ~6,371,000 m floats
@@ -321,8 +390,9 @@ ScCandidate scCandidate( vec3 p, float coverage, float lod ) {
 	ScCandidate result = ScCandidate( 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, vec3( 0.0 ) );
 	if ( h < -0.1 || h > 1.3 || coverage <= 0.0 ) { return result; }
 	vec2 windDirection = scsWind.xy;
+	// ((M13) its evolution a vector, scfWind.zw, integrated as the wind turns)
 	vec3 shapePosition = p - vec3( scfWind.x, 0.0, scfWind.y )
-		- vec3( windDirection.x, 0.0, windDirection.y ) * ( scsWind.z * max( h, 0.0 ) - scfWind.z );
+		- vec3( windDirection.x, 0.0, windDirection.y ) * scsWind.z * max( h, 0.0 ) + vec3( scfWind.z, 0.0, scfWind.w );
 	float weather = textureLod( scWeatherMap, ( p.xz - scfWind.xy ) / scsShape.x, 0.0 ).r;
 	float edge = max( scsBase.y * exp2( - max( h, 0.0 ) * scsBase.z ), 0.0001 );
 	// an all-one noise sample bounds top dilation; a failed bound avoids the volume fetch
@@ -386,11 +456,11 @@ vec2 scCloudInterval( vec3 dir, float originHeight ) {
 const MARCH_GLSL = /* glsl */`
 uniform sampler2D scWeatherBounds;
 float scCoverageAt( float t, vec3 p ) {
-	return clamp( scsShell.w + scFrontAt( p.xz ), 0.0, 1.0 ) + scsHorizon.z * smoothstep( scsHorizon.x, scsHorizon.x + max( scsHorizon.y, 1.0 ), t );
+	return scCoverOf( p.xz ) + scsHorizon.z * smoothstep( scsHorizon.x, scsHorizon.x + max( scsHorizon.y, 1.0 ), t );
 }
 // (the most it can be along a stretch of ray: the cells' emptiness test)
 float scCoverageBound( float t ) {
-	return min( 1.0, scsShell.w + scsFrontMax ) + scsHorizon.z * smoothstep( scsHorizon.x, scsHorizon.x + max( scsHorizon.y, 1.0 ), t );
+	return mix( min( 1.0, scsShell.w + scsFrontMax ), ${ f( EYE.top ) }, max( scsEye.w, 0.0 ) ) + scsHorizon.z * smoothstep( scsHorizon.x, scsHorizon.x + max( scsHorizon.y, 1.0 ), t );
 }
 float scHeightAlongRay( float t, vec3 dir, float originHeight ) {
 	float altitude = originHeight + dir.y * t + dot( dir.xz, dir.xz ) * t * t / ( 2.0 * SC_EARTH * 1000.0 );
@@ -809,7 +879,7 @@ void main() {
 	for ( int i = 0; i < 16; i ++ ) {
 		float t = t0 + ( float( i ) + 0.5 ) * dt;
 		vec3 p = vec3( xz.x, 0.0, xz.y ) + vec3( L.x, ly, L.z ) * t;
-		tau += scLightDensity( p, clamp( scsShell.w + scFrontAt( p.xz ), 0.0, 1.0 ), vec2( 2.0 ), false ) * scsShell.z * dt;
+		tau += scLightDensity( p, scCoverOf( p.xz ), vec2( 2.0 ), false ) * scsShell.z * dt;
 		if ( tau > 12.0 ) break;
 	}
 	// multiple scattering lets some light through even thick cloud (as the view's octaves do)
@@ -850,6 +920,8 @@ export class SkyProClouds {
 			scsFront: { value: new THREE.Vector4() },
 			scsFrontMax: { value: 0 },
 			scsFrontDir: { value: new THREE.Vector2( G.windPrevailing.value.x, G.windPrevailing.value.y ).normalize() },
+			scsEye: { value: new THREE.Vector4() },
+			scsEyeTrack: { value: new THREE.Vector2( 1, 0 ) },
 			scsWeatherMass: { value: P.weather.mainMass.slice() },
 			scsWeatherDetail: { value: P.weather.detail.slice() },
 			scsWeather: { value: [ P.weather.coverage, 0, 0, 0 ] },
@@ -867,6 +939,9 @@ export class SkyProClouds {
 		this.overcast = { value: 0 };
 		this.front = U.scsFront;
 		this.frontDir = U.scsFrontDir;
+		this.eye = U.scsEye;
+		this.eyeTrack = U.scsEyeTrack;
+		this.drift = { value: new THREE.Vector3() };
 		this.storm = { value: 0 };
 		this.resolutionScale = 1;
 		this.outputSize = null;
@@ -939,6 +1014,7 @@ export class SkyProClouds {
 		// Tidewater's cirrus veil (composited behind the cumulus by the trace and the panorama)
 		this.cirrus = q.fibres ? new Cirrus( renderer, { fibRes: q.fibres } ) : new NoCirrus();
 		this.cirrusAmount = this.cirrus.amount;
+		this.upper = this.cirrus.upper || { value: new THREE.Vector2( 1, 0 ) };
 		this._cirrus = this.cirrus.amount.value; // (M9: a fair sky's, thinned under a grey one)
 
 		this._buildPasses();
@@ -956,10 +1032,11 @@ export class SkyProClouds {
 		this._rebuild = 0; // view slots traced since the last cut
 		this._waited = false; // the generation starts on the second update (the first one is the sky's)
 		this.ready = false;
-		this._windX = 0; this._windZ = 0; this._evolution = 0; this._elapsed = 0;
+		this._windX = 0; this._windZ = 0; this._evoX = 0; this._evoZ = 0; this._elapsed = 0;
 		this._prevCam = null;
 		this._prevLight = new THREE.Vector3();
 		this._lastCoverage = - 1;
+		this._alt = PRESET.shape.altitude;
 		this._lastOvercast = 0;
 		this._lastStorm = 0;
 		this.passes = 0; // passes drawn by the last update (stats)
@@ -1125,11 +1202,17 @@ export class SkyProClouds {
 		}
 
 		// (Salt Life: aloft, the trades' direction, whichever way the weather turns the wind at the surface;
-		// the clouds' evolution runs along it, so it mustn't turn)
-		const wd = G.windPrevailing.value;
+		// (M13) a hurricane's wind round its eye: `drift`. The clouds' evolution runs along it: integrated as a
+		// vector, so a turn doesn't jump it)
+		const dr = this.drift.value, trades = ! ( dr.z > 0 );
+		const wd = trades ? G.windPrevailing.value : _d.set( dr.x, dr.y );
 		const wl = Math.hypot( wd.x, wd.y ) || 1;
 		const wx = wd.x / wl, wz = wd.y / wl;
 		U.scsWind.value[ 0 ] = wx; U.scsWind.value[ 1 ] = wz;
+		// ((M13) a hurricane's cloud down to the sea, and deeper)
+		const k = Math.max( 0, U.scsEye.value.w );
+		U.scsShell.value[ 0 ] = Math.max( EYE.base, this._alt - EYE.lower * k );
+		U.scsShell.value[ 1 ] = P.shape.thickness * ( 1 + EYE.deeper * k );
 
 		// ---- key light (Tidewater's frame.sunDir / sunColor / skyIrradiance)
 		const L = U.scKeyDir.value.copy( G.sunDir.value );
@@ -1175,11 +1258,12 @@ export class SkyProClouds {
 
 		// ---- clock and wind
 		this._elapsed += dt;
-		const speed = P.wind.speed;
+		const speed = trades ? P.wind.speed : dr.z;
 		const dx = wx * speed * dt, dz = wz * speed * dt;
-		this._windX += dx; this._windZ += dz; this._evolution += P.wind.evolutionSpeed * dt;
+		this._windX += dx; this._windZ += dz;
+		this._evoX += wx * P.wind.evolutionSpeed * dt; this._evoZ += wz * P.wind.evolutionSpeed * dt;
 		U.scfClock.value = [ this.frameIndex % 4096, this._elapsed, dt, 0 ];
-		U.scfWind.value = [ this._windX, this._windZ, this._evolution, 0 ];
+		U.scfWind.value = [ this._windX, this._windZ, this._evoX, this._evoZ ];
 		U.scfWindDelta.value = [ dx, dz, 0, 0 ];
 		U.scfDisplay.value = [ 0, q.lightReuseSteps, 0, 0 ];
 
@@ -1372,7 +1456,7 @@ export class SkyProClouds {
 	_setOvercast( o, storm = 0 ) {
 
 		const S = PRESET.shape, L = PRESET.lighting, U = this.uniforms, E = S.erosionStrengthBase, P = S.erosionStrengthPeak;
-		U.scsShell.value[ 0 ] = S.altitude - STORM.lower * storm;
+		this._alt = S.altitude - STORM.lower * storm; // ((M13) and a hurricane's: update)
 		U.scsShell.value[ 2 ] = S.density * ( 1 + 1.2 * o + 0.8 * storm );
 		U.scsBase.value[ 0 ] = S.baseWeatherStrength * ( 1 - 0.7 * o ) * ( 1 - 0.6 * storm );
 		U.scsErosion.value[ 0 ] = E * ( 1 - STORM.smooth * storm );

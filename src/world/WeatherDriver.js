@@ -1,6 +1,7 @@
+import { Vector2 } from '../engine/index.js';
 import { G } from '../core/Globals.js';
 import { islandTime, weatherAt, showers, towardOf, hurricaneAt, hurricaneNews, FRONT_KMH, STORM_RANGE, SURF_MAX } from '../game/Weather.js';
-import { FRONT_KM } from '../sky/SkyProClouds.js';
+import { FRONT_KM, eyeCover } from '../sky/SkyProClouds.js';
 
 // (Salt Life) The island's weather, each frame: what the day brings (game/Weather.js), or what you picked
 // on your own, eased onto everything that shows it:
@@ -242,6 +243,7 @@ export class WeatherDriver {
 		sky.overcast = w.overcast;
 		sky.storm = w.storm;
 		sky.visibility = w.visibility;
+		this.hurricaneSky( sky, w );
 		this.water.whitecap.value = whitecap( G.windSpeed.value );
 		// ((M13) the sea streaked white with blown foam, from a storm's wind (Beaufort 10) to a hurricane's)
 		if ( this.water.spume ) this.water.spume.value = smoothstep( SPUME[ 0 ], SPUME[ 1 ], G.windSpeed.value );
@@ -249,6 +251,52 @@ export class WeatherDriver {
 	}
 
 }
+
+// (M13) a hurricane in the sky (SkyProClouds' eye, drift and upper): its cloud about its eye, as far as
+// it's the weather here (its share); the clouds racing round it with its wind, as fast as it blows here
+// (no slower than the trades, a little slower in its calm eye); the cirrus in its outflow, spiralling
+// out of it clockwise (against its turning), as much as the trades' veered upper wind gives way to it
+const HURRICANE_DRIFT = { trades: 12, k: 0.9, least: 6 };
+const _up = new Vector2();
+WeatherDriver.prototype.hurricaneSky = function ( sky, w ) {
+
+	const C = sky.clouds;
+	if ( ! C.eye ) return;
+	const h = this.hurricane, k = h ? Math.min( 1, Math.max( 0, w.hurricane || 0 ) ) : 0;
+	if ( k <= 0 ) {
+
+		C.eye.value.w = 0;
+		C.drift.value.z = 0;
+		if ( C.upper && this._upper0 ) C.upper.value.copy( this._upper0 );
+		return;
+
+	}
+
+	C.eye.value.set( h.x, h.z, h.rmax, k );
+	C.eyeTrack.value.set( h.track.x, h.track.y );
+	// (its deck as it is here now: the weather's eases, and looks ahead to the cloud on its way, which in
+	// its eye is the wall coming round; and lighter in a gap between its outer bands, where its cloud breaks)
+	const now = this.target, here = eyeCover( - h.x, - h.z, h.rmax, h.track.x, h.track.y );
+	const oc = Math.min( now.overcast, 0.5 + 0.5 * Math.min( 1, Math.max( 0, ( here - 0.6 ) / 0.35 ) ) );
+	sky.overcast = C.overcast.value = w.overcast + ( oc - w.overcast ) * k;
+	sky.storm = C.storm.value = w.storm + ( now.rain - w.storm ) * k;
+	// (the clouds: the way the wind blows here, the trades' blended into the hurricane's by its share)
+	const p = G.windPrevailing.value, d = G.windDir.value, D = HURRICANE_DRIFT;
+	const dx = p.x * ( 1 - k ) + d.x * k, dz = p.y * ( 1 - k ) + d.y * k, l = Math.hypot( dx, dz ) || 1;
+	C.drift.value.set( dx / l, dz / l, D.trades * ( 1 - k ) + Math.max( D.least, D.k * G.windSpeed.value ) * k );
+	// (the cirrus: out from its eye and round clockwise; from here, the island's place from its eye along
+	// its track and to its left)
+	if ( ! C.upper ) return;
+	if ( ! this._upper0 ) this._upper0 = C.upper.value.clone();
+	const rx = - h.x, rz = - h.z, r = Math.hypot( rx, rz ) || 1, t = h.track;
+	const px = ( rx * t.x + rz * t.y ) / r, py = ( rx * t.y - rz * t.x ) / r;
+	const ua = 0.8 * px + 0.6 * py, ub = 0.8 * py - 0.6 * px;
+	const ox = ua * t.x + ub * t.y, oz = ua * t.y - ub * t.x;
+	const u0 = this._upper0;
+	_up.set( u0.x * ( 1 - k ) + ox * k, u0.y * ( 1 - k ) + oz * k );
+	C.upper.value.copy( _up.normalize() );
+
+};
 
 // a value moved by `d` toward its target, landing on it once it's all but there (so a fair day comes
 // back to fair exactly)
