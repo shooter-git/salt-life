@@ -2,6 +2,7 @@ import * as THREE from '../engine/index.js';
 import { WORLD } from '../world/WorldLayout.js';
 import { HOUSE } from '../world/boat/Wheelhouse.js';
 import { TUMBLE_H } from '../ocean/ShoreWaves.js';
+import { G } from '../core/Globals.js';
 
 const HOUSE_HELM = { x: HOUSE.helmX, z: HOUSE.seatZ };
 
@@ -145,9 +146,9 @@ export class Player {
 	waterHeight() {
 
 		const q = this.query;
-		if ( ! q.cpuValid ) return 0;
+		if ( ! q.cpuValid ) return G.seaLevel.value;
 		const h = q.cpu[ this.slot * 4 ];
-		return Number.isFinite( h ) ? h : this.waterH || 0;
+		return Number.isFinite( h ) ? h : this.waterH || G.seaLevel.value;
 
 	}
 
@@ -380,9 +381,10 @@ export class Player {
 		if ( depth > 0.12 ) return 'water';
 		const onWood = this.colliders.groundHeightAt( p.x, p.z, p.y + 0.1 ) > this.terrain.heightAt( p.x, p.z ) + 0.05;
 		if ( onWood ) return 'wood';
-		const h = this.terrain.heightAt( p.x, p.z );
+		// ((M13) the wet sand at the water's edge, where the surge has moved it)
+		const h = this.terrain.heightAt( p.x, p.z ) - G.seaLevel.value;
 		if ( h < 0.6 ) return 'wetsand';
-		if ( h > 3.6 ) return 'grass';
+		if ( h + G.seaLevel.value > 3.6 ) return 'grass';
 		return 'sand';
 
 	}
@@ -691,7 +693,7 @@ export class Player {
 	ashoreTarget() {
 
 		const b = this.boat;
-		const water = this.query.cpuValid ? this.query.cpu[ 0 ] : 0;
+		const water = this.query.cpuValid ? this.query.cpu[ 0 ] : G.seaLevel.value;
 		// the boat's starboard (local +x) direction in the world, level
 		const sx = _v2.set( 1, 0, 0 ).applyQuaternion( b.quaternion ).setY( 0 ).normalize();
 		const rx = sx.x, rz = sx.z;

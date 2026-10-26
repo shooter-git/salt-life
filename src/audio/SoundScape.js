@@ -44,6 +44,8 @@
 
 import { WORLD } from '../world/WorldLayout.js';
 import { BANK } from './soundBank.js';
+import { SURF_HURRICANE } from '../game/Weather.js';
+import { G } from '../core/Globals.js';
 
 const clamp = ( v, a, b ) => ( v < a ? a : v > b ? b : v );
 const lerp = ( a, b, t ) => a + ( b - a ) * t;
@@ -172,6 +174,8 @@ const WHALE_RANGE = 100;
 // (Salt Life) a fair day's surf: the shore waves' amplitude (m), and the far roar's intensity then (App)
 const FAIR_SURF = 0.34;
 const FAIR_SURF_FAR = FAIR_SURF / 0.6;
+// (M13) the surf's intensity at a hurricane's biggest (1: a gale's)
+const SURF_LOUDEST = SURF_HURRICANE / 0.6;
 
 // per-surface footstep trims (dB)
 const STEP = {
@@ -1143,7 +1147,8 @@ export class SoundScape {
 	_buildStations( src ) {
 
 		const e = this.env, { terrain } = src, f = [ 0, 0, 0, 0 ];
-		const sea = 0;
+		// ((M13) along the water's edge as it is, a storm surge's or a drawdown's)
+		const sea = src.stSea = G.seaLevel.value;
 		const h = ( x, z ) => terrain.heightAt( x, z ) - sea;
 		this._field( e.lx, e.lz, f, src );
 		let ex = Math.hypot( f[ 1 ], f[ 2 ] );
@@ -1236,7 +1241,7 @@ export class SoundScape {
 
 		const e = this.env, sh = src.shore;
 		const moved = Math.hypot( e.lx - src.stAt.x, e.lz - src.stAt.z );
-		if ( ! src.stations || moved > 12 ) {
+		if ( ! src.stations || moved > 12 || Math.abs( G.seaLevel.value - src.stSea ) > 0.15 ) {
 
 			src.stAt.x = e.lx;
 			src.stAt.z = e.lz;
@@ -1346,7 +1351,8 @@ export class SoundScape {
 
 		e.u = clamp( num( s.underwater, 0 ), 0, 1 );
 		e.depth = Math.max( 0, num( s.depthBelowSurface, 0 ) );
-		e.surf = clamp( num( s.surfIntensity, 0.5 ), 0, 1 );
+		// ((M13) 1 for a gale's surf, more in a hurricane's)
+		e.surf = clamp( num( s.surfIntensity, 0.5 ), 0, SURF_LOUDEST );
 		e.shoreDist = Math.max( 0, num( s.distanceToShore, 60 ) );
 		e.wind = clamp( num( s.windSpeed, 7 ), 0, 40 );
 		e.gust = clamp( num( s.gust, 0.5 ), 0, 1 ); // (M9) the sea's gusts here (0 a lull .. 1 a gust)
@@ -1443,8 +1449,9 @@ export class SoundScape {
 		}
 
 		// distant surf (the waves themselves are events, see _surf). (Salt Life) A big swell's roar builds
-		// faster than a fair day's surf would have it
-		const lvl = 0.6 + 0.7 * e.surf * Math.max( 1, e.surf / FAIR_SURF_FAR );
+		// faster than a fair day's surf would have it; (M13) past a gale's, a hurricane's grows on as its
+		// height (about 5 dB more at its biggest)
+		const sf = Math.min( 1, e.surf ), lvl = ( 0.6 + 0.7 * sf * Math.max( 1, sf / FAIR_SURF_FAR ) ) * ( 1 + 0.5 * Math.max( 0, e.surf - 1 ) );
 		this._bed( 'surf_far', dB( MIX.surfFar ) * 1.25 / ( 1 + d / 200 ) * lvl / dB( BANK.surf_far.lufs ), now, 0.5 );
 
 		// wind in gusts: a random target every 2-8 s (lulls near silent), eased towards

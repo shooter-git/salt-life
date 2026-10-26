@@ -81,6 +81,9 @@ const UNDERWATER = new THREE.Color( 0.03, 0.17, 0.2 );
 // (M10) the water a blow's stirred up: green-grey with silt, and the distance you see in it at its murkiest (m)
 const SILT = new THREE.Color( 0.07, 0.12, 0.09 );
 const MURK_FAR = 11;
+// (M13) a hurricane's surge gets a shore field of its own when it rises past this (m), solved once it's
+// watched for (or warned of), or near (m from its eye)
+const SURGE_FIELD_FROM = 0.15, SURGE_FIELD_NEAR = 400000;
 const _c = new THREE.Color();
 const _c3 = new THREE.Vector3();
 const _size = new THREE.Vector2();
@@ -561,6 +564,14 @@ export class App {
 		this.weather.update( dt, s.day, s.timeOfDay, this.weatherPick(), this.camera, s.weatherSince );
 		// (M12) a westerly's swell on its way: its shore field, solved off the page
 		if ( this.weather.target.west > 0 && ! this._westField && this._started ) this.solveWestField();
+		// ((M13) a hurricane's surge: its field solved before it comes, at its highest, dropped once it's gone)
+		if ( this._started ) {
+
+			const h = this.weather.hurricane;
+			const n = this.weather.news;
+			this.solveSurgeField( h && h.peak > SURGE_FIELD_FROM && ( ( n && n.stage !== 'outlook' ) || h.r < SURGE_FIELD_NEAR ) ? h : null );
+
+		}
 		// (M9) the lightning, before the sky its flash lights
 		const wx = this.weather.live, cv = this.renderer.domElement;
 		this.lightning.setViewport( cv.width, cv.height );
@@ -1426,7 +1437,7 @@ export class App {
 			listener: { position: p, forward: _fwd, up: _up },
 			underwater: p.y < h ? 1 : 0,
 			depthBelowSurface: Math.max( 0, h - p.y ),
-			surfIntensity: Math.min( 1, amp / 0.6 ),
+			surfIntensity: amp / 0.6, // ((M13) past 1 in a hurricane's surf: SoundScape)
 			distanceToShore: Math.abs( coast ),
 			coastDistance: coast,
 			waveHeight: amp * 2,
@@ -1669,9 +1680,48 @@ export class App {
 	solveWestField() {
 
 		if ( this._westField ) return this._westField;
-		const home = this.shoreField, swellDir = [ SWELL_WEST.x, SWELL_WEST.y ];
+		this._westField = this.solveShoreField( [ SWELL_WEST.x, SWELL_WEST.y ] ).then( ( field ) => {
+
+			this.shore.addField( field );
+			this.westSurfHeard();
+			return field;
+
+		} );
+		return this._westField;
+
+	}
+
+	// (M13) a hurricane's storm surge: the island's own swell's field solved again at the highest the sea
+	// rises (the hurricane's peak, m), as the westerly's is, before it comes; the shore waves blend it in
+	// as the sea rises toward it. Dropped once the hurricane's gone (none: null)
+	solveSurgeField( hurricane ) {
+
+		const key = hurricane ? `${ hurricane.tc }:${ hurricane.peak }` : null;
+		if ( key === this._surgeKey ) return;
+		this._surgeKey = key;
+		if ( ! key ) {
+
+			this.shore.setSurgeField( null );
+			return;
+
+		}
+
+		const level = hurricane.peak;
+		this.solveShoreField( [ WORLD.swellDir.x, WORLD.swellDir.y ], level ).then( ( field ) => {
+
+			if ( this._surgeKey === key ) this.shore.setSurgeField( field, level );
+
+		} );
+
+	}
+
+	// (M12) another shore field from the island's own field's depths (swellDir: where its swell travels;
+	// (M13) at the sea level seaLevel), in a worker where there is one, else on the page
+	solveShoreField( swellDir, seaLevel = 0 ) {
+
+		const home = this.shoreField;
 		const ground = { depth: home.depth, res: home.res, size: home.size, origin: home.origin };
-		this._westField = new Promise( ( resolve, reject ) => {
+		return new Promise( ( resolve, reject ) => {
 
 			const worker = classicWorker( ShoreWorker );
 			worker.onmessage = ( e ) => {
@@ -1689,21 +1739,14 @@ export class App {
 
 			};
 
-			worker.postMessage( { ground, swellDir } );
+			worker.postMessage( { ground, swellDir, seaLevel } );
 
 		} ).catch( ( e ) => {
 
-			console.warn( 'Shore: the west swell\'s field solved on the page (no worker)', e && e.message );
-			return computeShoreField( fieldGround( ground ), { res: home.res, swellDir } );
-
-		} ).then( ( field ) => {
-
-			this.shore.addField( field );
-			this.westSurfHeard();
-			return field;
+			console.warn( 'Shore: a swell\'s field solved on the page (no worker)', e && e.message );
+			return computeShoreField( fieldGround( ground ), { res: home.res, swellDir, seaLevel } );
 
 		} );
-		return this._westField;
 
 	}
 

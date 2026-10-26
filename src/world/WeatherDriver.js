@@ -1,5 +1,5 @@
 import { G } from '../core/Globals.js';
-import { islandTime, weatherAt, showers, towardOf, hurricaneAt, hurricaneNews, FRONT_KMH, STORM_RANGE } from '../game/Weather.js';
+import { islandTime, weatherAt, showers, towardOf, hurricaneAt, hurricaneNews, FRONT_KMH, STORM_RANGE, SURF_MAX } from '../game/Weather.js';
 import { FRONT_KM } from '../sky/SkyProClouds.js';
 
 // (Salt Life) The island's weather, each frame: what the day brings (game/Weather.js), or what you picked
@@ -29,6 +29,7 @@ import { FRONT_KM } from '../sky/SkyProClouds.js';
 //     (Weather.hurricaneNews: this.news, for Joe's slate, the clock's menu and the dash). Its wind can come
 //     round the compass as it passes, so the wind turns the shorter way to where it's going, and quicker
 //     in the light airs of its eye. On your own a picked one passes (pick 'hurricane', picked at `since`).
+//     (step 2) Its storm surge is the sea's level (G.seaLevel).
 // The wind and the sea come round over half a minute or so, the cloud more slowly (a minute or two from
 // fair to a gale's, so the panorama's refresh keeps up and nothing pops), the rain in seconds. When the
 // clock jumps (a rest, the host's clock, coming back to the tab) it's all set at once, behind the dim a
@@ -61,13 +62,16 @@ const JUMP = 0.5; // game hours: more than this between frames, the clock jumped
 const monahan = ( u ) => 3.84e-6 * Math.pow( Math.max( 0, u ), 3.41 );
 const WHITECAP = 0.85;
 const whitecap = ( u ) => WHITECAP * Math.min( 1, Math.max( 0, monahan( u ) - monahan( 7 ) ) / ( monahan( 20 ) - monahan( 7 ) ) );
-const KEYS = [ 'wind', 'swell', 'windSea', 'surf', 'west', 'visibility', 'murk', 'hurricane' ];
+const KEYS = [ 'wind', 'swell', 'windSea', 'surf', 'west', 'visibility', 'murk', 'hurricane', 'surge' ];
 const QUICK = [ 'rain', 'thunder', 'front', 'eye' ];
 // (M13) in a hurricane the wind comes round up to this many times quicker in light airs (its eye's), from
 // LIGHT[ 1 ] m/s down to LIGHT[ 0 ]
 const LIGHT_TURN = 3, LIGHT = [ 4, 12 ];
 // how often what's said of a hurricane is looked at (s)
 const NEWS_EVERY = 1;
+// (M13 step 2) the sea's culling box (m: WaterSurface's CDLOD, as it always was), moved with the surge
+// and opened by this much (m a metre) for a surf past a gale's: a hurricane's crests on its surge
+const SEA_BOX = [ - 4, 4 ], SEA_BOX_SURF = 4;
 // the surf's period changes slowly (s a second): a change hurries the crests a little on their way in
 const PERIOD_RATE = 0.02;
 
@@ -205,6 +209,16 @@ export class WeatherDriver {
 		// (M10) less through the murk a blow's left)
 		G.caustics.value = Math.max( 0, 1 - 0.85 * w.overcast - 0.15 * w.storm ) * ( 1 - 0.7 * w.murk );
 		G.murk.value = w.murk;
+		// ((M13) a hurricane's storm surge: the sea's level, everything that reads it following it, and the
+		// sea's culling box with it, opened for its surf's crests)
+		G.seaLevel.value = w.surge;
+		if ( this.water.lod ) {
+
+			const big = SEA_BOX_SURF * Math.max( 0, w.surf - SURF_MAX );
+			this.water.lod.minY = SEA_BOX[ 0 ] + Math.min( 0, w.surge ) - big;
+			this.water.lod.maxY = SEA_BOX[ 1 ] + Math.max( 0, w.surge ) + big;
+
+		}
 		// (turned from the trades: their own direction exactly when it hasn't)
 		const p = G.windPrevailing.value, c = Math.cos( w.windAngle ), s = Math.sin( w.windAngle );
 		if ( w.windAngle === 0 ) G.windDir.value.copy( p );

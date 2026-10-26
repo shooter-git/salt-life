@@ -652,7 +652,7 @@ export class Birds {
 
 		const f = a.f;
 		const lx = f.x + f.vx * 2, lz = f.z + f.vz * 2;
-		const ground = Math.max( this.terrain.heightAt( lx, lz ), this.terrain.heightAt( f.x, f.z ), 0 );
+		const ground = Math.max( this.terrain.heightAt( lx, lz ), this.terrain.heightAt( f.x, f.z ), G.seaLevel.value );
 		const minY = ground + ( ground > 0.5 ? 6 : 2 );
 		f.steer( dt, x, Math.max( y, minY ), z, speed, power, turn, this.wind );
 		if ( f.y < minY - 1.5 ) f.y += ( minY - 1.5 - f.y ) * approach( 3, dt );
@@ -863,7 +863,7 @@ export class Birds {
 		const tl = Math.hypot( tx, tz ) || 1;
 		const x = path.pt.x - tz / tl * side, z = path.pt.z + tx / tl * side;
 		const wh = this.water.height( a, x, z );
-		const y = Math.max( wh, 0 ) * 0.8 + path.pt.y + Math.sin( this.time * 0.7 + a.slot ) * 0.15;
+		const sea = G.seaLevel.value, y = sea + Math.max( wh - sea, 0 ) * 0.8 + path.pt.y + Math.sin( this.time * 0.7 + a.slot ) * 0.15;
 		if ( f.P.fresh ) f.place( x, y, z, Math.atan2( tx, tz ) );
 		const vx = ( x - f.x ) / Math.max( dt, 1e-4 ), vz = ( z - f.z ) / Math.max( dt, 1e-4 ), vy = ( y - f.y ) / Math.max( dt, 1e-4 );
 		const yaw = Math.atan2( tx, tz );

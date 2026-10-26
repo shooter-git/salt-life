@@ -235,7 +235,7 @@ export class BoatController {
 			const k = ( this.slot + i ) * 4;
 			// never let a bad GPU sample into the integrator (keep the last good value)
 			let h = c[ k ];
-			if ( ! Number.isFinite( h ) ) h = this.hasWater ? this.waterH[ i ] : 0;
+			if ( ! Number.isFinite( h ) ) h = this.hasWater ? this.waterH[ i ] : G.seaLevel.value;
 			const nx = Number.isFinite( c[ k + 1 ] ) ? c[ k + 1 ] : 0, nz = Number.isFinite( c[ k + 2 ] ) ? c[ k + 2 ] : 0;
 			const ny = Math.sqrt( Math.max( 1 - nx * nx - nz * nz, 0.05 ) );
 			const gx = - nx / ny, gz = - nz / ny; // surface slope dh/dx, dh/dz
@@ -530,6 +530,7 @@ export class BoatController {
 	reset() {
 
 		this.position.copy( WORLD.boatDock.position );
+		this.position.y = G.seaLevel.value; // ((M13) afloat at the dock, whatever the surge's made of the sea)
 		this.quaternion.setFromAxisAngle( new THREE.Vector3( 0, 1, 0 ), WORLD.boatDock.heading );
 		this.velocity.set( 0, 0, 0 );
 		this.angular.set( 0, 0, 0 );
@@ -554,12 +555,12 @@ export class BoatController {
 	sampleWaterAt( p ) {
 
 		// nearest hull sample's water height (good enough for the prop / rudder)
-		let best = 0, bd = Infinity;
+		let best = G.seaLevel.value, bd = Infinity;
 		for ( let i = 0; i < this.samples.length; i ++ ) {
 
 			this.toWorld( this.samples[ i ].p, _t );
 			const d = ( _t.x - p.x ) ** 2 + ( _t.z - p.z ) ** 2;
-			if ( d < bd ) { bd = d; best = this.hasWater ? this.hEff[ i ] : 0; }
+			if ( d < bd ) { bd = d; best = this.hasWater ? this.hEff[ i ] : G.seaLevel.value; }
 
 		}
 

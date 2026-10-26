@@ -597,7 +597,7 @@ export class Game {
 
 				this._sonarT = 0.5;
 				const x = b.position.x, z = b.position.z;
-				const depth = Math.max( 0, - app.terrainData.heightAt( x, z ) );
+				const depth = Math.max( 0, G.seaLevel.value - app.terrainData.heightAt( x, z ) ); // ((M13) the surge's sea too)
 				const h = this.habitatAtPoint( x, z, depth );
 				let rich = 0;
 				for ( const k in h ) rich += h[ k ];
@@ -773,7 +773,7 @@ export class Game {
 		if ( b.moored || Math.hypot( b.position.x - dock.x, b.position.z - dock.z ) < BERTH_M ) return;
 		const at = b.toWorld( b.stemHead, new Vector3() );
 		const floor = this.app.terrainData.heightAt( at.x, at.z );
-		const depth = Math.max( 0, - floor );
+		const depth = Math.max( 0, G.seaLevel.value - floor );
 		if ( depth > max ) {
 
 			this.toast( `Too deep to anchor · ${ feet( depth ) } of water, the rode holds in ${ feet( max ) }`, 3200 );

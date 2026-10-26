@@ -10,7 +10,8 @@ import { ShoreWaves, TUMBLE_H } from '../src/ocean/ShoreWaves.js';
 import { computeShoreField } from '../src/world/ShoreField.js';
 import { WORLD } from '../src/world/WorldLayout.js';
 import { CHANDLERY } from '../src/game/Chandlery.js';
-import { weatherAt, SURF_MAX, PERIOD_MAX, GROUNDSWELL_MAX } from '../src/game/Weather.js';
+import { weatherAt, SURF_MAX, PERIOD_MAX, GROUNDSWELL_MAX, SURF_HURRICANE, HURRICANE } from '../src/game/Weather.js';
+import { G } from '../src/core/Globals.js';
 
 let failed = 0;
 const check = ( ok, label ) => {
@@ -57,6 +58,10 @@ for ( const tier of [ 'low', 'mid', 'high' ] ) {
 	waves.setSea( gale.swell, gale.windSea );
 	const [ galeWorst, galeDeep ] = worstGap( waves ), share = galeWorst / seaHeight( waves );
 	check( galeDeep < 0.01 && share < 0.03, `${ tier }: in a gale's sea too (worst ${ ( galeDeep * 100 ).toFixed( 2 ) } cm in deep water; over the shallows ${ ( galeWorst * 100 ).toFixed( 2 ) } cm, ${ ( share * 100 ).toFixed( 1 ) }% of its ${ seaHeight( waves ).toFixed( 2 ) } m)` );
+	// ((M13) and a hurricane's)
+	waves.setSea( HURRICANE.swell, gale.windSea );
+	const [ hurWorst, hurDeep ] = worstGap( waves ), hurShare = hurWorst / seaHeight( waves );
+	check( hurDeep < 0.01 && hurShare < 0.05, `${ tier }: (M13) and a hurricane's (worst ${ ( hurDeep * 100 ).toFixed( 2 ) } cm in deep water; over the shallows ${ ( hurWorst * 100 ).toFixed( 2 ) } cm, ${ ( hurShare * 100 ).toFixed( 1 ) }% of its ${ seaHeight( waves ).toFixed( 2 ) } m)` );
 	waves.setSea( 1, 1 );
 	check( heights().every( ( h, i ) => h === before[ i ] ) && waves.uniforms.waveB.value.map( ( v ) => v.toArray().join() ).join() === B, `${ tier }: back to a fair sea, today's to the bit` );
 	check( waves.iterations === 2, `${ tier }: and its CPU heights take today's two steps` );
@@ -309,6 +314,80 @@ check( runs.every( ( [ start, foot, stall ] ) => start === 0 && foot < 0.01 && s
 	check( fair.along > fair.feed.length * 0.95 && big.along > big.feed.length * 0.95, 'out of the channels, inside the breakers, the current runs along the beach (into them)' );
 	check( fair.onSand === 0 && fair.far === 0 && big.far === 0, 'none where you can stand, nor out beyond the surf' );
 	check( fair.tumbling < 0.001 && big.tumbling > 0.05, `a fair day's breakers all but never tumble a swimmer (${ ( fair.tumbling * 100 ).toFixed( 3 ) }%); the biggest surf's often do` );
+
+}
+
+// ---- (M13) a hurricane's surf on its storm surge: green water over the pier's deck and the dock, the
+// beach and the stalls awash, the boardwalk now and then, the village kept dry; the surge's own field
+// read as far as the sea's risen toward it, the island's own field alone at the usual sea level; and the
+// sea drawn out of the bay
+{
+
+	const dir = [ WORLD.swellDir.x, WORLD.swellDir.y ], home = shore.field, LEVEL = 1;
+	const surgeField = computeShoreField( terrain, { res: 512, swellDir: dir, seaLevel: LEVEL } );
+	const hurSea = new Waves( { tier: 'high', terrain } );
+	hurSea.setSea( HURRICANE.swell, gale.windSea );
+	const plain = new ShoreWaves( { field: home } ), surged = new ShoreWaves( { field: home } );
+	surged.setSurgeField( surgeField, LEVEL );
+	// (at the usual sea level, the island's own field exactly)
+	let same = true;
+	G.seaLevel.value = 0;
+	for ( const sw of [ plain, surged ] ) sw.setSurf( SURF_HURRICANE, 11, 0, 0 );
+	for ( const [ x, z ] of [ [ 0, - 30 ], [ 55, 20 ], [ 150, - 10 ], [ - 100, 0 ] ] ) for ( let t = 0; t < 30; t += 1.7 ) {
+
+		const g = terrain.heightAt( x, z ), a = plain.sample( x, z, t, g, terrain ), b = surged.sample( x, z, t, g, terrain );
+		if ( a.y !== b.y || a.swashLevel !== b.swashLevel ) same = false;
+
+	}
+
+	check( same && surged.uniforms.shoreSurgeLevel.value === LEVEL, '(M13) at the usual sea level, a surge\'s field changes nothing' );
+	// (as the sea rises toward its level, the waves' phase moves over to its field without a jump)
+	let jump = 0;
+	const pts = [ [ 0, - 40 ], [ 55, - 20 ], [ - 80, - 35 ], [ 120, - 30 ] ];
+	let prev = pts.map( ( [ x, z ] ) => surged.fieldAt( x, z, [ 0, 0, 0, 0 ] )[ 0 ] );
+	for ( let L = 0.01; L <= LEVEL + 0.001; L += 0.01 ) {
+
+		G.seaLevel.value = L;
+		const now = pts.map( ( [ x, z ] ) => surged.fieldAt( x, z, [ 0, 0, 0, 0 ] )[ 0 ] );
+		now.forEach( ( T, i ) => jump = Math.max( jump, Math.abs( T - prev[ i ] ) / 11 ) );
+		prev = now;
+
+	}
+
+	const full = surged.fieldAt( 0, - 40, [ 0, 0, 0, 0 ] ), own = [ 0, 0, 0, 0 ];
+	const sf = new ShoreWaves( { field: surgeField } ).fieldAt( 0, - 40, own );
+	check( jump < 0.02 && full.every( ( v, i ) => Math.abs( v - sf[ i ] ) < 1e-6 ), `as the sea rises its field takes over, a wave's phase moving at most ${ ( jump * 100 ).toFixed( 2 ) }% of a wave a centimetre` );
+	// (the hurricane's surf at its height, on a metre of surge)
+	G.seaLevel.value = LEVEL;
+	surged.setSurf( SURF_HURRICANE, 11, 0, 0 );
+	const q = new WaterQuery( hurSea, terrain, surged );
+	const peakOn = ( x, z ) => {
+
+		let m = - 1e9;
+		for ( let t = 0; t < 300; t += 0.25 ) m = Math.max( m, q.heightAt( x, z, t ) );
+		return m;
+
+	};
+	const wetIn = ( sw, x, z ) => {
+
+		const g = terrain.heightAt( x, z );
+		let n = 0, all = 0;
+		for ( let t = 0; t < 600; t += 0.25, all ++ ) if ( sw.sample( x, z, t, g, terrain ).swashLevel > g + 0.005 ) n ++;
+		return n / all;
+
+	};
+	const over = Math.max( ...spots.slice( 0, 3 ).map( ( [ x, z ] ) => peakOn( x, z ) ) ), atDock = peakOn( WORLD.boatDock.position.x, WORLD.boatDock.position.z );
+	const awash = [ [ 'the beach\'s top', 0, - 60 ], [ 'Marta\'s stall', CHANDLERY.x, CHANDLERY.z ], [ 'the pier\'s foot', pier.x, pier.zStart ], [ 'the boardwalk', WORLD.start.position.x, WORLD.start.position.z ], [ 'the village\'s edge', 40, - 90 ] ].map( ( [ name, x, z ] ) => [ name, wetIn( surged, x, z ) ] );
+	console.log( `     a hurricane's surf (${ SURF_HURRICANE } m) on a ${ LEVEL } m surge: crests to ${ over.toFixed( 2 ) } m at the pier head (its deck ${ pier.deckHeight } m), ${ atDock.toFixed( 2 ) } m at the dock; wet ${ awash.map( ( [ n, v ] ) => `${ n } ${ ( v * 100 ).toFixed( 0 ) }%` ).join( ', ' ) } of the time` );
+	const wet = Object.fromEntries( awash );
+	check( over > pier.deckHeight + 1 && atDock > pier.deckHeight + 1, 'green water over the pier\'s deck and the dock' );
+	check( wet[ 'the beach\'s top' ] > 0.5 && wet[ 'Marta\'s stall' ] > 0.9 && wet[ 'the boardwalk' ] > 0.05 && wet[ 'the boardwalk' ] < 0.4 && wet[ 'the village\'s edge' ] < 0.1, 'the sea over the beach and the stalls, now and then the boardwalk; the village above it' );
+	// (the sea drawn out of the bay: the beach wider, the dock still afloat)
+	G.seaLevel.value = - 0.6;
+	plain.setSurf( 0.4, 9, 0, 0 );
+	const dockDepth = - 0.6 - terrain.heightAt( WORLD.boatDock.position.x, WORLD.boatDock.position.z );
+	check( wetIn( plain, CHANDLERY.x, CHANDLERY.z ) === 0 && dockDepth > 2.5, `drawn out of the bay (0.6 m), the beach wider and the dock still ${ dockDepth.toFixed( 1 ) } m deep` );
+	G.seaLevel.value = 0;
 
 }
 

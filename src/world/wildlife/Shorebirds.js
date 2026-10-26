@@ -392,7 +392,7 @@ export class Shorebirds {
 		const ahead = Math.hypot( tx - f.x, tz - f.z );
 		const speed = clamp( 9 + ( ahead - 2 ) * 1.2, 5, 16 );
 		f.steer( dt, tx, ty, tz, speed, b.t < 0.6 ? 2 : 1, 2.2 );
-		const ground = Math.max( this.terrain.heightAt( f.x, f.z ), 0 );
+		const ground = Math.max( this.terrain.heightAt( f.x, f.z ), G.seaLevel.value );
 		if ( f.y < ground + 0.25 ) f.y = ground + 0.25;
 		f.flare = smooth( 3, 0.8, dl ) * ( end ? 1 : 0.5 );
 		f.legs = smooth( 2.5, 0.8, dl );

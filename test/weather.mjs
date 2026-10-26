@@ -1,6 +1,6 @@
 // Plain-node tests of the island's weather (no GPU): the forecast from the island's time, its
 // conditions, how it changes, and how it's read out.
-import { CONDITIONS, WEATHER_IDS, WEATHER_NAMES, SURF_MAX, PERIOD_MAX, GROUNDSWELL_MAX, VEER, STRIKE_RATE, islandTime, storminess, cloudiness, veer, showeriness, unsettled, weatherAt, forecast, surfText, windFrom, strikeIn, murkAt, windBeyondFair, blowShare, showers as showersAbout, FRONT_KMH, FROM, TRACK_SPAN, trackAt, towardOf, swellFrom, distantStrikesIn, DISTANT_NEAR, STORM_RANGE, dayWeatherAt, hurricaneAt, hurricaneNews, HURRICANE, TS_WIND, HURRICANE_WIND, MURKY } from '../src/game/Weather.js';
+import { CONDITIONS, WEATHER_IDS, WEATHER_NAMES, SURF_MAX, PERIOD_MAX, GROUNDSWELL_MAX, VEER, STRIKE_RATE, islandTime, storminess, cloudiness, veer, showeriness, unsettled, weatherAt, forecast, surfText, windFrom, strikeIn, murkAt, windBeyondFair, blowShare, showers as showersAbout, FRONT_KMH, FROM, TRACK_SPAN, trackAt, towardOf, swellFrom, distantStrikesIn, DISTANT_NEAR, STORM_RANGE, dayWeatherAt, hurricaneAt, hurricaneNews, HURRICANE, TS_WIND, HURRICANE_WIND, MURKY, SURGE, SURF_HURRICANE, PERIOD_HURRICANE } from '../src/game/Weather.js';
 import { flashSeen, HEARD } from '../src/sky/Lightning.js';
 import { knots } from '../src/game/Units.js';
 
@@ -403,19 +403,24 @@ ok( cloudiness( 77 ) >= 0 && cloudiness( 77 ) <= 1 && storminess( 77 ) >= 0 && s
 	// each passage, every two game minutes from four days before its eye to four and a half after
 	const wrap = ( a ) => a - Math.round( a / ( 2 * Math.PI ) ) * 2 * Math.PI;
 	let cat1 = true, force = 0, weakest = 1e9, eyes = 0, overs = 0, eyeCalm = true, eyeLong = [ 1e9, 0 ], flipped = 0, sides = 0, backs = 0, veers = 0, smooth = true, named = true, thunderDry = 0;
-	let banded = 0, wallLoud = 0, watchOn = 0, warnOn = 0, outlooked = 0, gone = true, murky = 0, capped = true, stepMax = { wind: 0, rain: 0, angle: 0 };
+	let banded = 0, wallLoud = 0, watchOn = 0, warnOn = 0, outlooked = 0, gone = true, murky = 0, capped = true, stepMax = { wind: 0, rain: 0, angle: 0, surge: 0 };
+	const surges = { left: [], right: [], over: [] }, quietBay = [], peaked = [];
 	const N = 40;
 	for ( const h of list.slice( 0, N ) ) {
 
 		const dt = 1 / 30, over = h.over, rAt = ( T ) => Math.hypot( ( T - h.tc ) * h.speed, h.d );
-		let peak = 0, prev = null, eyeIn = null, eyeOut = null, turned = 0, onset = null, ends = null, bands = 0, inBand = false, sawWatch = null, sawWarn = null, sawOutlook = null, after = true;
+		let surgeHi = - 1e9, surgeLo = 1e9, quiet = 1e9, peak = 0, prev = null, eyeIn = null, eyeOut = null, turned = 0, onset = null, ends = null, bands = 0, inBand = false, sawWatch = null, sawWarn = null, sawOutlook = null, after = true;
 		for ( let t = - 96; t <= 108; t += dt ) {
 
 			const T = h.tc + t, w = weatherAt( T ), n = hurricaneNews( T );
 			peak = Math.max( peak, w.wind );
 			if ( w.wind >= TS_WIND && onset === null && w.hurricane > 0.5 ) onset = T;
 			if ( w.wind >= TS_WIND && w.hurricane > 0.5 ) ends = T;
-			if ( w.surf > SURF_MAX || w.period > PERIOD_MAX ) capped = false;
+			if ( w.surf > SURF_HURRICANE || w.period > PERIOD_HURRICANE || w.swell > HURRICANE.swell || w.surge < SURGE.low || w.surge > SURGE.high ) capped = false;
+			surgeHi = Math.max( surgeHi, w.surge );
+			surgeLo = Math.min( surgeLo, w.surge );
+			// (the bay in the lee while its wind blows out of it, at its worst)
+			if ( Math.abs( t ) < 0.5 && h.d < - 0.9 * h.rmax ) quiet = Math.min( quiet, - w.surf );
 			if ( w.thunder > 0.05 && w.rain < 0.5 ) thunderDry ++;
 			if ( ( w.id === 'hurricane' ) !== ( w.hurricane >= 0.5 && ( w.wind >= HURRICANE_WIND || rAt( T ) <= h.rmax ) ) ) named = false;
 			// (its outer bands, crossed one after another as it comes: they thunder; the eyewall seldom)
@@ -443,6 +448,7 @@ ok( cloudiness( 77 ) >= 0 && cloudiness( 77 ) <= 1 && storminess( 77 ) >= 0 && s
 				turned += da;
 				stepMax.wind = Math.max( stepMax.wind, Math.abs( w.wind - prev.wind ) );
 				stepMax.rain = Math.max( stepMax.rain, Math.abs( w.rain - prev.rain ) );
+				stepMax.surge = Math.max( stepMax.surge, Math.abs( w.surge - prev.surge ) );
 				if ( Math.min( w.wind, prev.wind ) > 8 ) stepMax.angle = Math.max( stepMax.angle, Math.abs( da ) );
 
 			}
@@ -463,6 +469,10 @@ ok( cloudiness( 77 ) >= 0 && cloudiness( 77 ) <= 1 && storminess( 77 ) >= 0 && s
 		}
 
 		if ( peak > 42.5 ) cat1 = false;
+		// (its surge: piled into the bay with the island on its left, drawn out of it on its right)
+		( over ? surges.over : h.d > 0.6 * h.rmax ? surges.left : h.d < - 0.6 * h.rmax ? surges.right : [] ).push( [ surgeHi, surgeLo ] );
+		if ( quiet < 1e9 ) quietBay.push( - quiet );
+		peaked.push( Math.abs( h.peak - Math.max( 0, surgeHi ) ) );
 		if ( peak >= HURRICANE_WIND ) force ++;
 		weakest = Math.min( weakest, peak );
 		if ( bands >= 2 ) banded ++;
@@ -512,7 +522,14 @@ ok( cloudiness( 77 ) >= 0 && cloudiness( 77 ) <= 1 && storminess( 77 ) >= 0 && s
 	ok( banded >= N * 0.8 && wallLoud === 0 && thunderDry === 0, 'its outer bands come over one after another, thundering; its eyewall seldom thunders; thunder only in heavy rain' );
 	ok( outlooked === N && watchOn === N && warnOn === N && gone, 'on the outlook four days before its winds, watched for two days, warned of a day and a half, and nothing said once they\'ve gone' );
 	ok( murky === 0, 'the water\'s murky for a day after its eye' );
-	ok( capped, 'its sea is a gale\'s at most for now (until the shore takes a hurricane\'s)' );
+	const fmt = ( a ) => a.map( ( [ hi, lo ] ) => `${ hi.toFixed( 2 ) }/${ lo.toFixed( 2 ) }` ).join( ' ' );
+	console.log( `     (step 2) its surge, highest/lowest (m): on its left ${ fmt( surges.left ) }; on its right ${ fmt( surges.right ) }; its eye over ${ fmt( surges.over ) }` );
+	console.log( `     the bay's surf at the worst with the island on its right (the wind blowing out): ${ quietBay.map( ( v ) => v.toFixed( 2 ) ).join( ' ' ) } m; the surge moves at most ${ ( stepMax.surge * 100 ).toFixed( 1 ) } cm in two game minutes` );
+	ok( capped, '(step 2) its surf, swell, period and surge within their bounds' );
+	ok( surges.left.length > 3 && surges.left.every( ( [ hi ] ) => hi > 0.4 ) && surges.right.length > 3 && surges.right.every( ( [ hi, lo ] ) => hi < 0.3 && lo < - 0.3 ) && surges.over.every( ( [ hi, lo ] ) => hi > 0.15 && lo < 0 ), 'its surge piles the sea into the bay on its left, draws it out on its right; over its eye, up then down' );
+	ok( quietBay.length >= 2 && quietBay.every( ( v ) => v < 0.9 ), 'the bay in the lee while its wind blows out of it' );
+	console.log( `     its highest, known before it comes, within ${ ( Math.max( ...peaked ) * 100 ).toFixed( 1 ) } cm` );
+	ok( stepMax.surge < 0.05 && peaked.every( ( d ) => d < 0.03 ), 'the surge comes and goes over hours (a metre a game hour at most); its highest is known before it comes' );
 
 	// on your own: one picked comes straight over, its eye passing over in a few game hours
 	const since = 2000.25, P = ( t ) => weatherAt( since + t, 'hurricane', since );
