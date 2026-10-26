@@ -181,6 +181,10 @@ export class BoatModel {
 
 		this.hullSamples = lines.buildHullSamples( 8 );
 		this.colliders = this._buildColliders();
+		// (M12) what of her takes the rain from above (Rain.setDeck: the splashes): the wheelhouse roof, the
+		// foredeck, the traps, the bait barrel and the hauler (her frame: x0, x1, z0, z1, and the top's y)
+		this.rainTops = this.colliders.filter( ( b ) => [ 'roof', 'foredeck', 'trap', 'baitBarrel', 'hauler' ].includes( b.tag ) )
+			.map( ( b ) => ( { x0: b.center.x - b.half.x, x1: b.center.x + b.half.x, z0: b.center.z - b.half.z, z1: b.center.z + b.half.z, y: b.center.y + b.half.y } ) );
 
 		// ---- state
 

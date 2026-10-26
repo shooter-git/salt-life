@@ -8,7 +8,9 @@ import { WORLD } from '../world/WorldLayout.js';
 // WORLD.swellDir; shorter wind sea runs with G.windDir. Phones draw fewer waves than laptops; the CPU
 // always evaluates exactly the set the GPU draws, so what floats sits on what is seen. (Salt Life) The
 // weather sets the sea state (setSea: the swell's and the wind sea's heights) and turns the wind sea
-// with the wind (setWindDir: about the camera, so the sea you're on doesn't sweep past).
+// with the wind (setWindDir: about the camera, so the sea you're on doesn't sweep past). (M12) A
+// westerly's swell (setSwellWest): the swell's shorter waves turn to come from the west, as far as the
+// swell's from there, while the longest stays the south's groundswell, so the two cross.
 //
 // A wave i at Lagrangian point x0 (the undisplaced grid point):
 //   theta = k (d . x0) - omega t + phase,  omega = sqrt( g k ) (deep water)
@@ -33,6 +35,10 @@ const TAU = Math.PI * 2;
 const STEEPNESS = 0.55; // sum of the waves' crest sharpening (< 1: no loops)
 // a wave's crest sharpening (its horizontal travel), at most its share of STEEPNESS
 const crest = ( a, k, n ) => Math.min( a * 1.4, STEEPNESS / ( k * n ) );
+
+// (M12) a westerly blow's swell (unit, travel direction: it wraps round the bay's western arm); the
+// island's own comes in along WORLD.swellDir
+export const SWELL_WEST = { x: 1, y: 0 };
 
 // depth (m) over which the open-sea waves fade out toward the beach
 export const SHALLOW_FADE = [ 1.5, 12.0 ]; // (the shore waves take over from ~13 m of depth in)
@@ -59,6 +65,10 @@ export class Waves {
 		} );
 		this.sea = [ 1, 1 ]; // swell, wind sea: x today's heights (setSea)
 		this.windAngle = wind; // the wind sea's direction (setWindDir)
+		// (M12) how far the swell's turned to the west's (setSwellWest), and the turn all the way
+		this.west = 0;
+		const turn = Math.atan2( SWELL_WEST.y, SWELL_WEST.x ) - swell;
+		this._westTurn = Math.atan2( Math.sin( turn ), Math.cos( turn ) );
 		this.iterations = 2; // the CPU height's fixed-point steps (more on steep seas: setSea)
 		// 1 / the waves' summed height: a point's height over the sea, as a share of the highest crest
 		this.crest = { value: 1 / this.waves.reduce( ( s, w ) => s + w.a, 0 ) };
@@ -142,6 +152,38 @@ vec3 waveDisplacement( vec2 x0, float fade, out vec3 normal ) {
 			if ( w.from !== 'w' ) return;
 			const angle = a + SPECTRUM[ i ].rot, dx = Math.cos( angle ), dz = Math.sin( angle );
 			// k ( d_old . p ) + phase_old = k ( d_new . p ) + phase_new, at p = at
+			w.phase = ( w.phase + w.k * ( ( w.dx - dx ) * at.x + ( w.dz - dz ) * at.z ) ) % TAU;
+			w.dx = dx;
+			w.dz = dz;
+			A[ i ].x = dx;
+			A[ i ].y = dz;
+			B[ i ].z = w.phase;
+
+		} );
+
+	}
+
+	// (M12) a westerly's swell: west (0..1), how much of the swell comes from the west. Every swell wave
+	// but the longest (the south's groundswell) turns that far to the west's direction, about `at` (the
+	// camera) as the wind sea does; west 0 is today's sea exactly
+	setSwellWest( west, at ) {
+
+		if ( west === this.west ) return;
+		this.west = west;
+		const A = this.uniforms.waveA.value, B = this.uniforms.waveB.value;
+		const swell = Math.atan2( WORLD.swellDir.y, WORLD.swellDir.x );
+		let first = true;
+		this.waves.forEach( ( w, i ) => {
+
+			if ( w.from !== 's' ) return;
+			if ( first ) {
+
+				first = false;
+				return;
+
+			}
+
+			const angle = swell + SPECTRUM[ i ].rot + west * this._westTurn, dx = Math.cos( angle ), dz = Math.sin( angle );
 			w.phase = ( w.phase + w.k * ( ( w.dx - dx ) * at.x + ( w.dz - dz ) * at.z ) ) % TAU;
 			w.dx = dx;
 			w.dz = dz;

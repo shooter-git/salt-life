@@ -13,7 +13,8 @@ import { FT, KT } from '../../game/Units.js';
 //     track, her speed and heading, where she is.
 // Redrawn a few times a second while you're aboard; ashore her screens are off and her needles rest.
 // Other players' boats show theirs on standby (ins.standby: the same program, a dark glass for its map;
-// the readings here are yours).
+// the readings here are yours). (M12) Riding along in theirs, it shows its skipper's (App.riddenReading),
+// and yours is on standby.
 //   const ins = new BoatInstruments( { material, tier } );   ins.update( dt, reading )
 
 export const ATLAS = { w: 1024, h: 512 };
@@ -112,6 +113,7 @@ export class BoatInstruments {
 		material.map = t;
 		material.color.set( 0xffffff );
 		material.needsUpdate = true;
+		this.material = material; // ((M12) on the dash of the boat you're aboard: yours, or the one you ride in)
 		// (others' boats: their dash dark, as yours is ashore, in the same program as yours)
 		const dark = new THREE.DataTexture( new Uint8Array( [ 10, 16, 20, 255 ] ), 1, 1 );
 		dark.colorSpace = THREE.SRGBColorSpace;

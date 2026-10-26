@@ -20,7 +20,7 @@ You can walk, swim and take the boat around the island. You can fish from the pi
 boat, or dive and spear a fish, sell your catch to Joe and buy better gear from Marta. It plays with a
 mouse and keyboard, a gamepad or a touch screen.
 
-Done, M0 to M11:
+Done, M0 to M12:
 - the sea and its shore, spray, gusts and slicks, and the haze;
 - the whole world: the village, the pier, the reef and its fish, the birds and crabs, the beach's
   debris, the whale and the lights at night;
@@ -92,6 +92,25 @@ Done, M0 to M11:
   - the boat's dash shows what it reads: the engine's revs, her speed, the fuel, the engine's
     temperature and the battery; a depth sounder (and the fish, with Marta's fish finder) and a
     chart plotter;
+- storms from other directions (M12):
+  - each blow comes its own way: most still down the trades, some from the south or the west, and
+    now and then a front that brings a line of showers, swings the wind from the south through the
+    west to the north as it passes, and clears behind it;
+  - the wind, the rain's slant, a front's bank on the horizon, the showers you see coming and the
+    lightning all come from up the blow's track: from the pier you see a southerly's showers coming;
+  - thunderstorms out to sea flash on the horizon, lighting their own towering cloud, before they get
+    here and after they've gone; their thunder rumbles in from up to 20 km or so, and farther off
+    they're silent;
+  - a westerly's swell comes in from the west, wraps round the bay's western arm and piles onto its
+    eastern shore, crossing the island's own swell from the south as one dies down and the other
+    builds; the slate and the clock's menu say where the swell's from;
+  - rip currents run out to sea through the gaps in the bar, milky past the breakers, fed by
+    currents along the beach: a few tenths of a metre a second on a fair day, near a metre a second
+    in a big surf's sets; swim along the beach to get out of one;
+  - a big breaker tumbles a swimmer it breaks on: rolled under and carried in, short of breath; dive
+    under it and it passes over;
+  - the rain splashes on the rocks about you, and on the boat's wheelhouse roof, foredeck and gear;
+  - riding along in someone's boat, her dash shows her skipper's readings;
 - playing together:
   - you see the others on the island, walking, swimming, fishing and out in their boats;
   - you pick your islander: two men and two women;
@@ -130,7 +149,8 @@ The island's day:
 | M9 | Rain and thunderstorms: showers, lightning and thunder, wet surfaces, storm skies and fronts, gusts, fishing by the weather |
 | M10 | What the weather costs: the hull, the bilge and the engine, fishing in a blow, murky water, splashes, the lightning on the sea, shutters and debris in a blow, the weather in the checks |
 | M11 | The rain where you stand: the rain on the pier and the roofs and dry under them, drips, the rain heard on what it falls on, showers' curtains in the distance, the sea mirroring the sky, the milkier surf, the fish in the murk, the hull heard riding along, the boat's instruments |
-| M12 | For consideration ([docs/M12.md](docs/M12.md)): storms from other directions, cumulonimbus, the swell from another direction, the open sea breaking, rip currents, the hurricane |
+| M12 | Storms from other directions: each blow its own track, fronts, thunderstorms on the horizon, the swell from the west crossing the island's own, rip currents and being tumbled, splashes on the rocks and the boat, the skipper's dash for riders |
+| M13 | For consideration ([docs/M13.md](docs/M13.md)): the hurricane, cumulonimbus, the open sea breaking, the clouds aloft turning with a front |
 
 ## How it fits All the Spaces
 

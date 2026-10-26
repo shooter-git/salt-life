@@ -1,6 +1,7 @@
 // Plain-node tests of the island's weather (no GPU): the forecast from the island's time, its
 // conditions, how it changes, and how it's read out.
-import { CONDITIONS, WEATHER_IDS, WEATHER_NAMES, SURF_MAX, PERIOD_MAX, GROUNDSWELL_MAX, VEER, STRIKE_RATE, islandTime, storminess, cloudiness, veer, showeriness, unsettled, weatherAt, forecast, surfText, windFrom, strikeIn, murkAt, windBeyondFair, blowShare, showers as showersAbout, FRONT_KMH } from '../src/game/Weather.js';
+import { CONDITIONS, WEATHER_IDS, WEATHER_NAMES, SURF_MAX, PERIOD_MAX, GROUNDSWELL_MAX, VEER, STRIKE_RATE, islandTime, storminess, cloudiness, veer, showeriness, unsettled, weatherAt, forecast, surfText, windFrom, strikeIn, murkAt, windBeyondFair, blowShare, showers as showersAbout, FRONT_KMH, FROM, TRACK_SPAN, trackAt, towardOf, swellFrom, distantStrikesIn, DISTANT_NEAR, STORM_RANGE } from '../src/game/Weather.js';
+import { flashSeen, HEARD } from '../src/sky/Lightning.js';
 import { knots } from '../src/game/Units.js';
 
 let fails = 0;
@@ -9,14 +10,14 @@ const ok = ( c, msg ) => {
 	if ( ! c ) { fails ++; console.log( 'FAIL', msg ); } else console.log( 'ok  ', msg );
 
 };
-const KEYS = [ 'wind', 'windAngle', 'coverage', 'overcast', 'swell', 'windSea', 'surf', 'period', 'visibility', 'rain', 'thunder', 'front' ];
+const KEYS = [ 'wind', 'windAngle', 'coverage', 'overcast', 'swell', 'windSea', 'surf', 'period', 'west', 'visibility', 'rain', 'thunder', 'front' ];
 
 // ---- the time, and the same weather for the same time
 ok( islandTime( 1, 9.5 ) === 9.5 && islandTime( 3, 0 ) === 48 && islandTime( 0, 6 ) === 6, 'island time: game hours since day 1 began' );
 ok( JSON.stringify( weatherAt( 1234.567 ) ) === JSON.stringify( weatherAt( 1234.567 ) ) && storminess( 999.9 ) === storminess( 999.9 ), 'the same time gives the same weather' );
 
 // ---- fair is the island as it always was, and day 1 is fair
-const today = { wind: 7, windAngle: 0, coverage: 0.49, overcast: 0, swell: 1, windSea: 1, surf: 0.34, period: 9, visibility: 1, rain: 0, thunder: 0, front: 0 };
+const today = { wind: 7, windAngle: 0, coverage: 0.49, overcast: 0, swell: 1, windSea: 1, surf: 0.34, period: 9, west: 0, visibility: 1, rain: 0, thunder: 0, front: 0 };
 const fair = weatherAt( 100, 'fair' );
 ok( fair.id === 'fair' && KEYS.every( ( k ) => fair[ k ] === today[ k ] ), 'fair: today\'s wind, cloud, sea, surf and haze exactly, and dry' );
 let day1 = true;
@@ -43,7 +44,7 @@ for ( let T = 24 + 1 / 60; T < 24 * DAYS; T += 1 / 60 ) {
 
 	const w = weatherAt( T );
 	for ( const k of KEYS ) jump[ k ] = Math.max( jump[ k ], Math.abs( w[ k ] - prev[ k ] ) );
-	if ( w.wind < 2 || w.wind > 20.01 || Math.abs( w.windAngle ) > VEER || w.coverage < 0.3 || w.coverage > 0.97 || w.surf > SURF_MAX || w.period < 7.5 || w.period > PERIOD_MAX || w.visibility < 0.4 || w.visibility > 1.11
+	if ( w.wind < 2 || w.wind > 20.01 || w.windAngle < FROM.south - 1e-9 || w.windAngle > Math.max( VEER, FROM.north ) || w.west < 0 || w.west > 1 || w.coverage < 0.3 || w.coverage > 0.97 || w.surf > SURF_MAX || w.period < 7.5 || w.period > PERIOD_MAX || w.visibility < 0.4 || w.visibility > 1.11
 		|| w.rain < 0 || w.rain > 1 || w.thunder < 0 || w.thunder > 1 || w.front < 0 || w.front > 1 ) bounds = false;
 	if ( ( T * 60 | 0 ) % 30 === 0 ) { count[ w.id ] ++; n ++; }
 	prev = w;
@@ -54,7 +55,8 @@ const share = ( id ) => count[ id ] / n;
 console.log( `     over ${ DAYS } days: ${ WEATHER_IDS.map( ( id ) => `${ id } ${ ( share( id ) * 100 ).toFixed( 1 ) }%` ).join( ', ' ) }` );
 console.log( `     the most it moves in a game minute: ${ KEYS.map( ( k ) => `${ k } ${ jump[ k ].toFixed( 4 ) }` ).join( ', ' ) }` );
 ok( bounds, 'every value stays within its conditions\' range' );
-ok( jump.windAngle < 0.003 && jump.period < 0.05 && jump.swell < 0.01 && jump.surf < 0.004, 'no step in a game minute, midnight included' );
+// ((M12) a front's wind swings round a quarter in two game hours: WeatherDriver turns the wind as fast)
+ok( jump.windAngle < 0.022 && jump.west < 0.02 && jump.period < 0.05 && jump.swell < 0.01 && jump.surf < 0.004, 'no step in a game minute, midnight included' );
 // (a shower comes on in a few game minutes, and brings its cloud, haze and squall: WeatherDriver eases them)
 ok( jump.wind < 0.1 && jump.rain < 0.15 && jump.thunder < 0.35 && jump.coverage < 0.04 && jump.overcast < 0.15 && jump.visibility < 0.1 && jump.front < 0.03, 'a shower comes on over a few game minutes, never at once' );
 ok( share( 'fair' ) + share( 'calm' ) > 0.4 && share( 'gale' ) > 0.02 && share( 'gale' ) < 0.09 && share( 'blustery' ) + share( 'gale' ) < 0.25 && WEATHER_IDS.every( ( id ) => share( id ) > 0.02 ), 'mostly fair, a gale now and then, every condition comes' );
@@ -215,7 +217,124 @@ for ( let T = 24; T < 24 * 300; T += 0.5 ) {
 
 ok( lo < - VEER * 0.8 && hi > VEER * 0.8, `the wind turns both ways from the trades (${ ( lo * 57.3 ).toFixed( 0 ) }° to ${ ( hi * 57.3 ).toFixed( 0 ) }°)` );
 ok( surfText( 0.34 ) === '2–3 ft' && surfText( 0.24 ) === '1–2 ft' && surfText( SURF_MAX ) === '3–6 ft', 'surf as a report gives it' );
+ok( swellFrom( 0 ) === 'S' && swellFrom( 0.5 ) === 'S + W' && swellFrom( 1 ) === 'W', '(M12) and where its swell\'s from' );
 ok( cloudiness( 77 ) >= 0 && cloudiness( 77 ) <= 1 && storminess( 77 ) >= 0 && storminess( 77 ) <= 1, 'the fields stay in 0..1' );
+
+// ---- (M12) thunderstorms on the horizon: the thundery showers about the island strike where they are,
+// past where the island's own storm does; seen far off, the storm's own cloud lit, next to no light here,
+// and no thunder past 20 km or so
+{
+
+	const cell = ( x, z, thunder, n ) => ( { x, z, r: 2000, rain: 1, thunder, n } );
+	const far = [ cell( 30000, 0, 1, 7 ) ], near = [ cell( 4000, 0, 1, 8 ) ], dry = [ cell( 30000, 0, 0, 9 ) ];
+	let hits = 0, nearHits = 0, dryHits = 0, inside = true, same = true;
+	for ( let k = 0; k < N; k ++ ) {
+
+		const a = distantStrikesIn( S0 + k, far );
+		nearHits += distantStrikesIn( S0 + k, near ).length;
+		dryHits += distantStrikesIn( S0 + k, dry ).length;
+		if ( JSON.stringify( a ) !== JSON.stringify( distantStrikesIn( S0 + k, far ) ) ) same = false;
+		for ( const s of a ) {
+
+			hits ++;
+			if ( Math.hypot( s.x - 30000, s.z ) > 1600 || s.at < S0 + k || s.at >= S0 + k + 1 ) inside = false;
+
+		}
+
+	}
+
+	ok( same && inside && nearHits === 0 && dryHits === 0, 'a thundery shower on the horizon strikes under itself, the same for everyone; none from one near the island (its own storm\'s) or a dry one' );
+	ok( Math.abs( hits / N - STRIKE_RATE / 2 ) < 0.01, `a storm cell on the horizon strikes about every ${ ( N / Math.max( 1, hits ) ).toFixed( 0 ) } s` );
+	// (a stormy night: the flashes on the horizon before the storm gets here)
+	let seenAhead = 0, nights = 0;
+	for ( let T = 48; T < 24 * 300; T += 0.5 ) {
+
+		if ( weatherAt( T ).thunder > 0 || ! ( weatherAt( T + 2 ).thunder > 0.5 ) ) continue;
+		nights ++;
+		const cells = showersAbout( T, null, STORM_RANGE );
+		let n = 0;
+		for ( let k = 0; k < 120; k ++ ) n += distantStrikesIn( S0 + k, cells ).length;
+		if ( n > 0 ) seenAhead ++;
+		T += 6;
+
+	}
+
+	ok( nights > 10 && seenAhead > nights * 0.8, `before a thunderstorm gets here, its lightning's seen on the horizon (${ seenAhead } of ${ nights })` );
+	const close = flashSeen( 2500, 1, true ), mid = flashSeen( 12000, 1, true ), away = flashSeen( 40000, 1, true ), hazy = flashSeen( 40000, 1, true, 0.4 );
+	ok( close.glow === 1 && close.fill === 1 && close.spread === 7 && close.far === 0, 'a strike a few km off is as it was: its glow lights the island as much' );
+	ok( away.fill < 0.02 && away.glow > 0.1 && away.spread > 100 && away.far === 1 && mid.fill < mid.glow && hazy.glow < away.glow * 0.5, `one on the horizon: its own cloud lit, tight about it (${ ( 2 * Math.atan( 1 / Math.sqrt( away.spread / 2 ) ) * 57.3 ).toFixed( 0 ) }°), dimmed by the air between, next to no light here` );
+	ok( HEARD > 15000 && HEARD < 25000, `its thunder heard to ${ HEARD / 1000 } km, no farther` );
+
+}
+
+// ---- (M12) each blow its own track
+{
+
+	const from = ( a ) => {
+
+		const t = towardOf( a );
+		return windFrom( t.x, t.y );
+
+	};
+	ok( from( 0 ) === 'NNW' && from( FROM.south ) === 'S' && from( FROM.west ) === 'W' && from( FROM.north ) === 'N', 'the tracks: down the trades (NNW), from the S, the W and the N' );
+	// (over a thousand days: short of a breeze the wind is the trades', as it always was; a blow's mostly
+	// down them, some from the south or the west; a westerly's swell from the west, no other's)
+	let off = 0, blows = 0, blowOff = 0, southerly = 0, westerly = 0, westSwell = 0, westWithout = 0, tradesWest = 0;
+	for ( let T = 30; T < 24 * DAYS; T += 0.5 ) {
+
+		const w = weatherAt( T );
+		if ( storminess( T ) < 0.55 && Math.abs( w.windAngle - veer( T ) ) > 1e-9 ) off ++;
+		if ( w.west > 0.5 ) {
+
+			westSwell ++;
+			let seen = false;
+			for ( let h = - 7; h <= 7 && ! seen; h += 0.5 ) seen = Math.abs( trackAt( T + h, 0 ) - FROM.west ) < 1;
+			if ( ! seen ) westWithout ++;
+
+		}
+
+		let trades = true;
+		for ( let h = - 7; h <= 7 && trades; h += 0.5 ) trades = trackAt( T + h, 0 ) === 0;
+		if ( trades && w.west > 0 ) tradesWest ++;
+		if ( w.wind < 11 ) continue;
+		blows ++;
+		const f = from( w.windAngle );
+		if ( Math.abs( w.windAngle ) > VEER ) blowOff ++;
+		if ( [ 'S', 'SSW', 'SSE' ].includes( f ) ) southerly ++;
+		if ( [ 'W', 'WSW', 'WNW' ].includes( f ) ) westerly ++;
+
+	}
+
+	ok( off === 0, 'short of a breeze, the wind is the trades\' (turned as they always were)' );
+	ok( blowOff > blows * 0.2 && blowOff < blows * 0.5 && southerly > blows * 0.05 && westerly > blows * 0.03, `a blow's mostly down the trades: ${ pc( blowOff, blows ) } from elsewhere (${ pc( southerly, blows ) } southerly, ${ pc( westerly, blows ) } westerly)` );
+	ok( westSwell > 0 && westWithout === 0 && tradesWest === 0, `a swell from the west only from a westerly blow, of the last few hours or on its way (${ pc( westSwell, 2 * 24 * DAYS ) } of the time)` );
+	// (a front: from the south ahead of it, through the west with its line of showers, round to the north,
+	// and clearing behind it)
+	let fronts = 0, swung = 0, line = 0, cleared = 0;
+	for ( let i = 1; i < 24 * DAYS / TRACK_SPAN; i ++ ) {
+
+		const T0 = i * TRACK_SPAN, a = weatherAt( T0 - 5 ), m = weatherAt( T0 + 1 ), b = weatherAt( T0 + 9.5 );
+		if ( ! ( a.windAngle < - 2 && m.windAngle > - 1.9 && m.windAngle < - 0.5 && b.windAngle > - 0.6 ) ) continue;
+		fronts ++;
+		let veering = true, rain = 0, before = 0, after = 0;
+		for ( let t = T0 - 1; t <= T0 + 9; t += 0.25 ) if ( weatherAt( t + 0.25 ).windAngle < weatherAt( t ).windAngle - 0.02 ) veering = false;
+		for ( let t = T0 - 4; t <= T0 + 4; t += 0.25 ) rain = Math.max( rain, weatherAt( t ).rain );
+		for ( let t = 4; t <= 8; t += 0.5 ) {
+
+			before += weatherAt( T0 - t ).coverage;
+			after += weatherAt( T0 + 2 + t ).coverage;
+
+		}
+
+		if ( veering ) swung ++;
+		if ( rain > 0.5 ) line ++;
+		if ( after < before - 0.5 ) cleared ++;
+
+	}
+
+	ok( fronts > 10 && swung === fronts && line === fronts && cleared > fronts * 0.8, `${ fronts } fronts in ${ DAYS } days, each veering the wind round from the south to the north behind a line of showers, and clearing` );
+
+}
 
 // ---- (M11) the showers about the island, for their curtains in the distance
 {
@@ -242,6 +361,19 @@ ok( cloudiness( 77 ) >= 0 && cloudiness( 77 ) <= 1 && storminess( 77 ) >= 0 && s
 	const dry = ( t ) => { for ( let h = - 3.3; h <= 3.3; h += 0.1 ) if ( weatherAt( t + h ).rain >= 0.02 ) return false; return true; };
 	while ( ! dry( D ) ) D += 0.5;
 	ok( showersAbout( D ).length === 0, `a dry spell (day ${ Math.floor( D / 24 ) + 1 }): no showers about` );
+	// ((M12) each slot comes the way the wind blows when it's over the island: a southerly's showers are
+	// seen coming up from the south)
+	ok( passing.every( ( c ) => {
+
+		const t = towardOf( weatherAt( T - c.along / v ).windAngle );
+		return Math.abs( c.x - ( t.x * c.along - t.y * c.side ) ) < 1e-6 && Math.abs( c.z - ( t.y * c.along + t.x * c.side ) ) < 1e-6;
+
+	} ), 'each comes the way the wind blows when it\'s over the island' );
+	let Ts = 48;
+	const southerly = ( t ) => weatherAt( t ).windAngle < - 2.3 && showersAbout( t ).some( ( c ) => c.along < - 4000 && weatherAt( t - c.along / v ).windAngle < - 2.3 );
+	while ( ! southerly( Ts ) && Ts < 24 * DAYS ) Ts += 0.5;
+	const coming = showersAbout( Ts ).filter( ( c ) => c.along < - 4000 && weatherAt( Ts - c.along / v ).windAngle < - 2.3 );
+	ok( coming.length > 0 && coming.every( ( c ) => c.z > Math.abs( c.along ) * 0.7 - Math.abs( c.side ) ), `a southerly (day ${ Math.floor( Ts / 24 ) + 1 }): its showers seen coming up from the south` );
 	ok( showersAbout( 10 ).length === 0, 'day 1 is fair: none' );
 	ok( showersAbout( T, 'fair' ).length === 0 && showersAbout( T, 'rain' ).length > 10 && showersAbout( T, 'rain' ).every( ( c ) => c.rain === CONDITIONS.rain.rain ), 'a picked weather: none for fair, a sky full of its rain for rain' );
 

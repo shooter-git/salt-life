@@ -35,6 +35,9 @@ export const G = {
 	// (M10) the sky's: a lightning flash ( toward the strike, how bright: Sky, Lightning ) and the eye's
 	// adaptation to the sky's light, shared with the sea's reflections
 	skyFlash: { value: new Vector4() },
+	// (M12) and its shape: how tight its glow is about the strike, the tan of its storm's top as it's seen,
+	// how much it's a storm of its own on the horizon (Lightning.flashSeen)
+	skyFlashShape: { value: new Vector4( 7, 1, 0, 0 ) },
 	skyExposure: { value: 1 },
 	envIntensity: { value: 1 },
 };
