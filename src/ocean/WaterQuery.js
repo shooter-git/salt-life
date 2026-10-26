@@ -85,6 +85,22 @@ export class WaterQuery {
 
 	}
 
+	// (M12) the surf's current at (x, z) (ShoreWaves.currentAt: the rips and their feeders), m/s
+	currentAt( x, z, t = G.time.value, out ) {
+
+		if ( ! this.shore || ! this.terrain ) return out ? ( out.x = out.z = out.rip = 0, out ) : { x: 0, z: 0, rip: 0 };
+		return this.shore.currentAt( x, z, t, this.terrain.heightAt( x, z ), out );
+
+	}
+
+	// (M12) the breaker a swimmer at (x, z) is in (ShoreWaves.breakerAt)
+	breakerAt( x, z, t = G.time.value, out ) {
+
+		if ( ! this.shore || ! this.terrain ) return null;
+		return this.shore.breakerAt( x, z, t, this.terrain.heightAt( x, z ), this.terrain, out );
+
+	}
+
 	update() {
 
 		const t = G.time.value;

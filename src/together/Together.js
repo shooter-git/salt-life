@@ -794,6 +794,14 @@ export class Together {
 
 		}
 		if ( m === 'd' ) body.D = [ r2( p.deckPos.x ), r2( p.deckPos.y ), r2( p.deckPos.z ) ];
+		// (M12) what her dash reads that a rider can't work out where they are: her fuel (a share), whether she
+		// has Marta's fish finder, and the fish it shows; while you're aboard her
+		if ( body.B && ! p.riding && ( m === 'd' || m === 'h' ) && this.app.game ) {
+
+			const g = this.app.game, st = g.state;
+			body.F = [ r2( st.fuelL / st.stats.fuelL ), st.stats.finder ? 1 : 0, r2( g._sonar ? g._sonar.fish : 0 ) ];
+
+		}
 
 		return body;
 
@@ -1009,6 +1017,7 @@ export class Together {
 			bobber: null, boat: null, deck: null, gun: 0, gunLevel: 0, shaft: null,
 			_bobber: new Vector3(), _deck: new Vector3(), _boat: { pos: new Vector3(), quat: new Quaternion() },
 			hull: null, _hull: { flood: 0, pump: false, scrape: 0, wear: 0, motion: 0 },
+			dash: null, _dash: { fuel: 0, finder: false, fish: 0 },
 			_shaft: { tail: new Vector3(), dir: new Vector3() },
 		} );
 		// a vector between two [ x, y, z ] (either may be missing: the other then)
@@ -1035,6 +1044,9 @@ export class Together {
 		// (M11) her hull as the skipper hears it (none sent: nothing to hear)
 		const H = Array.isArray( near.H ) && near.H.length === 5 && near.H.every( Number.isFinite ) ? near.H : null;
 		cur.hull = H ? Object.assign( cur._hull, { flood: MathUtils.clamp( H[ 0 ], 0, 3 ), pump: H[ 1 ] === 1, scrape: Math.max( 0, H[ 2 ] ), wear: MathUtils.clamp( H[ 3 ], 0, 1 ), motion: MathUtils.clamp( H[ 4 ], 0, 1 ) } ) : null;
+		// (M12) her dash's readings a rider can't work out (none sent: not aboard)
+		const F = Array.isArray( near.F ) && near.F.length === 3 && near.F.every( Number.isFinite ) ? near.F : null;
+		cur.dash = F ? Object.assign( cur._dash, { fuel: MathUtils.clamp( F[ 0 ], 0, 1 ), finder: F[ 1 ] === 1, fish: MathUtils.clamp( F[ 2 ], 0, 1 ) } ) : null;
 		cur.tension = b.k || 0;
 		cur.bobber = lerp3( cur._bobber, a.b, b.b );
 		cur.gun = near.g || 0;
@@ -1357,6 +1369,17 @@ export class Together {
 	// distance in the sound's own panning). (M10) An engine at the helm with its revs run down has stalled
 	// (an older copy of the game idles at 0.15); crank: the starter turning her over (Hull.crank); (M11)
 	// hull: her hull as her skipper hears it (App.hullHeard), or null
+	// (M12) the boat you're riding in, as it's drawn here (its group), and what its skipper's pose says
+	// (o.cur: rpm, crank, mode, dash), and how fast it goes; null when you're not
+	ridden() {
+
+		const p = this.app.player;
+		if ( ! p.riding ) return null;
+		const o = this.others.get( p.boat.owner );
+		return o && o.cur ? { group: o.boat || null, cur: o.cur, speed: o.boatSpeed || 0 } : null;
+
+	}
+
 	boatSound() {
 
 		const p = this.app.player;

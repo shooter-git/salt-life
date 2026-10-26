@@ -151,6 +151,10 @@ export const MIX = {
 	shutter: - 22, // a shutter banging in a blow, at 10 m
 };
 
+// (M12) thunder from far off: it fades from the first distance (m: refracted up over the listener) and is
+// gone by the second (Lightning hears none farther), by up to this many dB
+const THUNDER_FADE = [ 14000, 22000, 20 ];
+
 // the fishing sounds (loaded when the rod comes out)
 const FISHING = [ 'reel_wind', 'reel_drag', 'line_strain', 'rod_swish', 'bail_click', 'line_out', 'plop', 'line_snap', 'fish_splash', 'fish_flop' ];
 // (Salt Life) and the cast net's besides (loaded when it comes out)
@@ -248,9 +252,9 @@ export class SoundScape {
 		this._engine = 0; // 0..1 engine running (ramped in the mixer)
 		this._engineOn = false;
 		this._gust = { v: 0.4, target: 0.6, t: 0 };
-		this._shore = shore;
-		this._stations = null;
-		this._stAt = { x: 1e9, z: 1e9, t: - 1e9 };
+		this._shore = null;
+		if ( shore ) this.attachShore( shore );
+		this._shore2 = null; // (M12) a westerly's swell, crossing the south's (addShore)
 		this._fakeT = 3;
 		this._warned = new Set();
 		this.env = {
@@ -272,8 +276,16 @@ export class SoundScape {
 	// Optional: the game's shore waves (else taken from window.__app on first use).
 	attachShore( { shore, field, terrain } ) {
 
-		this._shore = shore && field && terrain ? { shore, field, terrain } : null;
-		this._stations = null;
+		this._shore = shore && field && terrain ? { shore, field, terrain, stations: null, stAt: { x: 1e9, z: 1e9 } } : null;
+
+	}
+
+	// (M12) a second swell's waves (a westerly's: its field, and its shore as attachShore's), heard
+	// breaking along the shore as the first's are, while they have a height
+	addShore( { shore, field } ) {
+
+		const first = this._shoreSrc();
+		this._shore2 = first && shore && field ? { shore, field, terrain: first.terrain, stations: null, stAt: { x: 1e9, z: 1e9 } } : null;
 
 	}
 
@@ -499,7 +511,10 @@ export class SoundScape {
 	thunder( m, dir, power = 1 ) {
 
 		const e = this.env, d = Math.max( 300, num( m, 3000 ) ), near = d < 3000;
-		const lufs = near ? MIX.thunderNear + 10 * Math.log10( 1000 / d ) : MIX.thunderFar - 10 * Math.log10( d / 8000 ) * 2.5;
+		// ((M12) past THUNDER_FADE[ 0 ] it's refracted up over the listener, and gone by THUNDER_FADE[ 1 ]:
+		// Lightning hears none farther)
+		const fade = clamp( ( d - THUNDER_FADE[ 0 ] ) / ( THUNDER_FADE[ 1 ] - THUNDER_FADE[ 0 ] ), 0, 1 );
+		const lufs = ( near ? MIX.thunderNear + 10 * Math.log10( 1000 / d ) : MIX.thunderFar - 10 * Math.log10( d / 8000 ) * 2.5 ) - THUNDER_FADE[ 2 ] * fade * fade;
 		const k = 80, dx = num( dir && dir.x, 0 ), dy = num( dir && dir.y, 0.3 ), dz = num( dir && dir.z, - 1 );
 		const v = this._shotAt( 'thunder', 'thunder', e.lx + dx * k, e.ly + Math.max( 10, dy * k ), e.lz + dz * k, lufs - ( 1 - clamp( power, 0, 1 ) ) * 4,
 			( near ? 0.97 : 0.9 ) + Math.random() * 0.06, 0, 60, 1, near ? Math.floor( Math.random() * 2 ) : 2 + Math.floor( Math.random() * 2 ) );
@@ -1073,7 +1088,7 @@ export class SoundScape {
 		const app = globalThis.__app;
 		if ( app && app.shore && app.shoreField && app.shoreField.data && app.terrainData ) {
 
-			this._shore = { shore: app.shore, field: app.shoreField, terrain: app.terrainData };
+			this._shore = { shore: app.shore, field: app.shoreField, terrain: app.terrainData, stations: null, stAt: { x: 1e9, z: 1e9 } };
 
 		}
 
@@ -1082,9 +1097,9 @@ export class SoundScape {
 	}
 
 	// shore field at (x, z): travel time T, direction (dx, dz) × exposure, time to the shoreline Ts
-	_field( x, z, o ) {
+	_field( x, z, o, src = this._shore ) {
 
-		const { field, terrain } = this._shore;
+		const { field, terrain } = src;
 		const res = field.res, data = field.data;
 		const fx = clamp( ( x - terrain.origin ) / terrain.size * res - 0.5, 0, res - 1.001 );
 		const fz = clamp( ( z - terrain.origin ) / terrain.size * res - 0.5, 0, res - 1.001 );
@@ -1108,9 +1123,9 @@ export class SoundScape {
 
 	}
 
-	_waveAmp( m, along ) {
+	_waveAmp( m, along, src = this._shore ) {
 
-		const sh = this._shore.shore;
+		const sh = src.shore;
 		const amp = sh.amplitude.value, vari = sh.variation.value;
 		const set = Math.abs( Math.sin( m * Math.PI / 7 ) ) * 0.6 + 0.55;
 		const h = Math.sin( m * 127.1 + 311.7 ) * 43758.5453;
@@ -1124,12 +1139,13 @@ export class SoundScape {
 	}
 
 	// a row of stations along the waterline near the listener, each with its transect out to sea
-	_buildStations() {
+	// ((M12) along a swell's own field: src)
+	_buildStations( src ) {
 
-		const e = this.env, { terrain } = this._shore, f = [ 0, 0, 0, 0 ];
+		const e = this.env, { terrain } = src, f = [ 0, 0, 0, 0 ];
 		const sea = 0;
 		const h = ( x, z ) => terrain.heightAt( x, z ) - sea;
-		this._field( e.lx, e.lz, f );
+		this._field( e.lx, e.lz, f, src );
 		let ex = Math.hypot( f[ 1 ], f[ 2 ] );
 		let dx = ex > 1e-3 ? f[ 1 ] / ex : this._swell.x, dz = ex > 1e-3 ? f[ 2 ] / ex : this._swell.z;
 		// the waterline on the line through the listener (seaward from land, landward from the water)
@@ -1155,7 +1171,7 @@ export class SoundScape {
 				const o = ( k - ( ST_N - 1 ) / 2 ) * ST_GAP;
 				let x = w0.x - dz * o, z = w0.z + dx * o;
 				// snap to the waterline along the local wave direction
-				this._field( x, z, f );
+				this._field( x, z, f, src );
 				ex = Math.hypot( f[ 1 ], f[ 2 ] );
 				if ( ex < 0.03 ) continue;
 				const ldx = f[ 1 ] / ex, ldz = f[ 2 ] / ex;
@@ -1174,7 +1190,7 @@ export class SoundScape {
 				}
 
 				if ( ! ok ) continue;
-				this._field( x, z, f );
+				this._field( x, z, f, src );
 				const st = {
 					x, z, dx: ldx, dz: ldz, Ts: f[ 3 ], exposure: clamp( ex * 1.4, 0, 1 ),
 					along: - x * ldz + z * ldx, depth: new Float32Array( TRANSECT ), T: new Float32Array( TRANSECT ),
@@ -1184,7 +1200,7 @@ export class SoundScape {
 
 					const xx = x - ldx * r, zz = z - ldz * r;
 					st.depth[ r ] = - h( xx, zz );
-					st.T[ r ] = this._field( xx, zz, f )[ 0 ];
+					st.T[ r ] = this._field( xx, zz, f, src )[ 0 ];
 
 				}
 
@@ -1194,13 +1210,12 @@ export class SoundScape {
 
 		}
 
-		this._stations = out;
+		src.stations = out;
 
 	}
 
 	_surf( dt ) {
 
-		const e = this.env;
 		const src = this._shoreSrc();
 		if ( ! src || ! src.shore.enabled || src.shore.enabled.value < 0.5 ) {
 
@@ -1209,13 +1224,23 @@ export class SoundScape {
 
 		}
 
-		const sh = src.shore;
-		const moved = Math.hypot( e.lx - this._stAt.x, e.lz - this._stAt.z );
-		if ( ! this._stations || moved > 12 ) {
+		this._surfFrom( src );
+		// ((M12) and a westerly's swell, while it's running)
+		const west = this._shore2;
+		if ( west && west.shore.amplitude.value > 0.005 ) this._surfFrom( west );
 
-			this._stAt.x = e.lx;
-			this._stAt.z = e.lz;
-			this._buildStations();
+	}
+
+	// the waves of one swell (src: its shore and field) breaking along the shore near the listener
+	_surfFrom( src ) {
+
+		const e = this.env, sh = src.shore;
+		const moved = Math.hypot( e.lx - src.stAt.x, e.lz - src.stAt.z );
+		if ( ! src.stations || moved > 12 ) {
+
+			src.stAt.x = e.lx;
+			src.stAt.z = e.lz;
+			this._buildStations( src );
 
 		}
 
@@ -1228,7 +1253,7 @@ export class SoundScape {
 		// (as the root of its height against a fair day's): the sets stand out as before, and a big swell
 		// is heard as one
 		const A0 = Math.max( 0.05, sh.amplitude.value ), big = Math.sqrt( A0 / FAIR_SURF );
-		for ( const st of this._stations ) {
+		for ( const st of src.stations ) {
 
 			const d = Math.hypot( st.x - e.lx, st.z - e.lz );
 			if ( d > 160 ) continue;
@@ -1236,7 +1261,7 @@ export class SoundScape {
 			const mw = Math.floor( phase( tNow, st.Ts ) + wob );
 			for ( let m = mw; m <= mw + 2; m ++ ) {
 
-				const A = this._waveAmp( m, st.along );
+				const A = this._waveAmp( m, st.along, src );
 				const rel = A / A0 * big, lvl = 16 * Math.log10( clamp( rel * st.exposure, 0.05, 3 ) );
 				// breaking: the crest reaches the depth where this wave plunges (H = gamma d, lip lands ~8% in)
 				const db = Math.pow( A * 3.556 / gamma, 0.8 ) * 0.92;

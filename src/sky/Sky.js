@@ -52,6 +52,14 @@ const MOON_SKY = new THREE.Color( 0.005, 0.0068, 0.0105 ).multiplyScalar( 2.2 );
 const FLASH = 0.5;
 const FLASH_FILL = 5;
 const FLASH_LIGHT = new THREE.Color( 0.8, 0.85, 1.0 );
+// (M12) a storm on the horizon lights the island from its side (flashLight), as much as its lit cloud does
+// as the sky draws it: its brightness over the sky it covers (as wide as its glow, up to this share of its
+// top on average, this much of that filled, lumpy as it is), against the sky's own over the whole dome
+// (the horizon's brightness, this much of it on average)
+const TOWER_BODY = 0.7;
+const TOWER_FILL = 0.8;
+const SKY_MEAN = 0.7;
+const _flashSky = new THREE.Color();
 // (M9) of the sun's light rain's deck takes, the share it scatters down as the sky's light
 const DECK_DIFFUSE = 0.5;
 // (M11) the showers' curtains in the distance (setCurtains): how many are drawn at most (by tier: the
@@ -87,6 +95,7 @@ uniform float skyUnderwater;
 uniform vec3 skyFogColor;
 uniform vec4 skyGrey; // (Salt Life) the horizon under a grey sky: ( its radiance, how much )
 uniform vec4 skyFlash; // (M9) lightning: ( toward the strike, how bright )
+uniform vec4 skyFlashShape; // (M12) its glow's tightness, its storm's top (tan), how far a storm of its own
 uniform vec3 skyFlashColor;
 uniform float skyTime;
 uniform float skyExposure;
@@ -259,9 +268,25 @@ void main() {
 	// (M9) lightning: the cloud lit from inside about the strike, brightest where it's thickest, and the
 	// rain's murk to the horizon with it (the reflections' panorama isn't: it's made over seconds)
 	if ( skyFlash.w > 0.0 ) {
-		float lobe = exp( ( dot( dir, skyFlash.xyz ) - 1.0 ) * 7.0 );
+		float lobe = exp( ( dot( dir, skyFlash.xyz ) - 1.0 ) * skyFlashShape.x );
 		float murk = skyGrey.a * ( 1.0 - smoothstep( 0.0, 0.3, dir.y ) );
-		L += skyFlashColor * skyFlash.w * ( ( 1.0 - c.a ) * ( 2.5 * lobe + 0.2 ) + murk * ( 0.6 * lobe + 0.1 ) );
+		float far = skyFlashShape.z;
+		L += skyFlashColor * skyFlash.w * ( 1.0 - far ) * ( ( 1.0 - c.a ) * ( 2.5 * lobe + 0.2 ) + murk * ( 0.6 * lobe + 0.1 ) );
+		// ((M12) a storm on the horizon: its own cloud lit from inside, about the strike, from the horizon up
+		// to its top, a lumpy tower highest at its middle; and the haze about it, faintly. Behind whatever
+		// cloud's between)
+		if ( far > 0.0 ) {
+			float hl = max( length( dir.xz ), 1e-3 ), rise = dir.y / hl;
+			vec2 fd = normalize( skyFlash.xz + vec2( 1e-6, 0.0 ) ), dh = dir.xz / hl;
+			float cosA = dot( dh, fd ), az = exp( ( cosA - 1.0 ) * skyFlashShape.x );
+			// (across it in its half-widths, up it as a share of its top)
+			float u = ( dh.x * fd.y - dh.y * fd.x ) * sqrt( skyFlashShape.x * 0.5 ), v = rise / skyFlashShape.y;
+			float lumps = skyCurtainNoise( vec2( u * 2.2 + 7.0, v * 5.0 ) ) * 0.6 + skyCurtainNoise( vec2( u * 5.1 + 3.0, v * 11.0 ) ) * 0.4;
+			float top = 0.45 + 0.5 * exp( - u * u * 0.7 ) + 0.18 * ( lumps - 0.5 );
+			float body = smoothstep( - 0.004, 0.004, rise ) * ( 1.0 - smoothstep( top - 0.2, top, v ) ) * ( 0.55 + 0.9 * lumps );
+			float haze = exp( ( cosA - 1.0 ) * skyFlashShape.x * 0.12 ) * ( 1.0 - smoothstep( 0.0, skyFlashShape.y * 1.6, rise ) ) * step( - 0.02, rise );
+			L += skyFlashColor * skyFlash.w * far * ( 2.5 * az * body + 0.15 * haze ) * ( 0.35 + 0.65 * c.a );
+		}
 	}
 #endif
 	gl_FragColor = vec4( L * skyExposure, 1.0 );
@@ -305,6 +330,7 @@ export class Sky {
 			skyFogColor: { value: new THREE.Color() },
 			skyGrey: { value: new THREE.Vector4() },
 			skyFlash: G.skyFlash, // ((M10) shared: the sea reflects the flash)
+			skyFlashShape: G.skyFlashShape, // ((M12) and its shape, shared too)
 			skyFlashColor: { value: new THREE.Color( 0.82, 0.86, 1.0 ) },
 			// (M11) the showers' curtains in the distance (setCurtains)
 			skyCurtains: { value: Array.from( { length: CURTAIN_MAX }, () => new THREE.Vector4() ) },
@@ -343,7 +369,12 @@ export class Sky {
 		this.shadowAhead = 0; // m
 		this.sun.name = 'Sun';
 		this.hemi = new THREE.HemisphereLight( 0x9cc4e4, 0x3a3326, 0.6 );
-		scene.add( this.sun, this.hemi );
+		// ((M12) a storm on the horizon's light, from its side: there from the start, dark, so no program's
+		// made again when one flashes. Aimed level, as a hemisphere's light wraps round further than a
+		// small source's: what faces up takes about half of what faces the storm)
+		this.flashLight = new THREE.HemisphereLight( FLASH_LIGHT, 0x000000, 0 );
+		this.flashLight.name = 'FlashLight';
+		scene.add( this.sun, this.hemi, this.flashLight );
 		if ( this.sun.target ) scene.add( this.sun.target );
 
 		const [ near, far ] = FOG_DISTANCE[ this.tier ];
@@ -370,6 +401,10 @@ export class Sky {
 		// sky's units through FLASH), and toward it (a unit vector from the camera)
 		this.flash = 0;
 		this.flashDir = new THREE.Vector3( 0, 1, 0 );
+		// ((M12) the light it throws on the island, as bright as `flash` for one a few km off, next to none
+		// for one on the horizon; and the brightest's shape: G.skyFlashShape)
+		this.flashFill = 0;
+		this.flashShape = G.skyFlashShape.value;
 		this._lit = { sunTransmittance: new THREE.Color(), skyIrradiance: new THREE.Color(), horizon: new THREE.Color() };
 		this._noon = this.atmosphere.lighting( 1, { sunTransmittance: new THREE.Color(), skyIrradiance: new THREE.Color(), horizon: new THREE.Color() } );
 		// the sky's irradiance (luminance) below which the eye adapts: the sun 15 degrees up
@@ -506,15 +541,32 @@ export class Sky {
 		const greyRise = this.hemi.intensity / Math.max( this.levels.sky * ( 0.65 + 0.35 * day ), 1e-6 );
 		this.hemi.groundColor.setRGB( 0.32, 0.28, 0.2 ).multiplyScalar( 0.1 + 0.9 * day );
 		// (M9) a flash of lightning lights the island from the sky, bluish white (more so at night, where the
-		// eye's adapted to the dark: the scene's exposure, which follows the sky, does the rest)
-		if ( this.flash > 0 ) {
+		// eye's adapted to the dark: the scene's exposure, which follows the sky, does the rest). ((M12) As
+		// far as it's the cloud overhead lit: a storm on the horizon's is flashLight's)
+		const S = this.flashShape, storm = this.flash > 0 ? S.z : 0, skyLight = luminance( this.hemi.color ) * this.hemi.intensity;
+		if ( this.flashFill > 0 && storm < 1 ) {
 
-			const fl = this.flash * FLASH_FILL / ( 1 + 3 * day ) * ( 1 - 0.5 * night );
+			const fl = this.flashFill * ( 1 - storm ) * FLASH_FILL / ( 1 + 3 * day ) * ( 1 - 0.5 * night );
 			this.hemi.color.lerp( FLASH_LIGHT, Math.min( 1, fl / ( 1 + fl ) ) );
 			this.hemi.intensity += this.levels.sky * fl;
 
 		}
+
 		G.skyIrradiance.value.copy( this.hemi.color ).multiplyScalar( this.hemi.intensity );
+		// ((M12) a storm on the horizon: its lit cloud's brightness as the sky draws it (FLASH, its tower's
+		// 2.5) over the sky it covers, against the sky's own over the dome, of the sky's light here; from its
+		// side, level)
+		if ( storm > 0 ) {
+
+			const sky = Math.max( luminance( _flashSky.copy( MOON_SKY ).multiplyScalar( night ).add( lit.horizon ) ) * SKY_MEAN, 1e-6 );
+			const omega = Math.sqrt( 2 * Math.PI / S.x ) * Math.atan( TOWER_BODY * Math.min( 2, S.y ) ) * TOWER_FILL;
+			const share = this.flash * FLASH * 2.5 * omega * storm / ( Math.PI * sky );
+			this.flashLight.intensity = skyLight * share / luminance( FLASH_LIGHT );
+			const f = this.flashDir, h = Math.hypot( f.x, f.z ) || 1;
+			this.flashLight.position.set( f.x / h, 0, f.z / h );
+			G.skyIrradiance.value.add( _flashSky.copy( FLASH_LIGHT ).multiplyScalar( this.flashLight.intensity * 0.5 ) );
+
+		} else this.flashLight.intensity = 0;
 
 		// eye adaptation: the sky's exposure rises as its irradiance falls below that of a sun 15 degrees
 		// up (at most 6x, as Tidewater's auto exposure), at Tidewater's rates (1/s)
@@ -534,7 +586,7 @@ export class Sky {
 		grey.set( 0.93 * gl, 0.96 * gl, gl, 0.85 * this.overcast );
 		_c.lerp( _tint.setRGB( grey.x, grey.y, grey.z ), grey.w ).multiplyScalar( skyAdapt );
 		// (M9: the murk lit by a flash)
-		if ( this.flash > 0 ) _c.lerp( _tint.copy( FLASH_LIGHT ).multiplyScalar( luminance( _c ) * 1.8 + 0.01 * this.flash ), Math.min( 0.3, this.flash * 0.12 ) );
+		if ( this.flashFill > 0 ) _c.lerp( _tint.copy( FLASH_LIGHT ).multiplyScalar( luminance( _c ) * 1.8 + 0.01 * this.flashFill ), Math.min( 0.3, this.flashFill * 0.12 ) );
 		this.fog.color.copy( _c );
 		G.horizonColor.value.copy( _c );
 		const F = this.uniforms.skyFlash.value;
@@ -565,17 +617,17 @@ export class Sky {
 
 	}
 
-	// (M11) the showers about the island (Weather.showers: { along, side, r, rain }, along the trades from
-	// the island's middle), as curtains in the distance: the nearest of them from 2 km beyond their edge
-	// (full from 5), out to 26 km (faded at both ends), as they're seen from `at` (the camera). Up into the
-	// haze under the cloud, leaning with the wind
+	// (M11) the showers about the island (Weather.showers: { r, rain, x, z }, x and z from the island's
+	// middle: (M12) each down its own track), as curtains in the distance: the nearest of them from 2 km
+	// beyond their edge (full from 5), out to 26 km (faded at both ends), as they're seen from `at` (the
+	// camera). Up into the haze under the cloud, leaning with the wind
 	setCurtains( cells, at ) {
 
-		const U = this.uniforms, list = U.skyCurtains.value, p = G.windPrevailing.value, near = this._curtains;
+		const U = this.uniforms, list = U.skyCurtains.value, near = this._curtains;
 		near.length = 0;
 		for ( const c of cells ) {
 
-			const x = p.x * c.along - p.y * c.side - at.x, z = p.y * c.along + p.x * c.side - at.z;
+			const x = c.x - at.x, z = c.z - at.z;
 			const d = Math.hypot( x, z );
 			const w = Math.min( 1, c.rain * 1.6 ) * THREE.MathUtils.smoothstep( d - c.r, CURTAIN_NEAR[ 0 ], CURTAIN_NEAR[ 1 ] ) * ( 1 - THREE.MathUtils.smoothstep( d, CURTAIN_FAR[ 0 ], CURTAIN_FAR[ 1 ] ) );
 			if ( w > 0.01 ) near.push( { x, z, r: c.r, w, d } );

@@ -25,6 +25,18 @@ import { G, GRAVITY } from '../core/Globals.js';
 // clock re-anchored whenever the period changes (phase( t, T ), timeOf( s, T ); the GPU's shoreClock,
 // set each frame by update( t )): a wave carries on from where it was, only the crests' spacing changes.
 // As ( t - T ) / period, with T in the thousands of seconds, a new period would set the breakers racing.
+// (M12) Two swells: the island's own (from the south: `field`) and, once its field is given
+// (addField), a westerly's, each a train of waves with its field, height, period and clock
+// (ShoreTrain; this.trains). setSurf( amplitude, period, west ) shares the weather's surf between them:
+// as a westerly's swell comes in the south's dies down to a background groundswell, and the two cross,
+// each breaking where it does (their heights add, the foam and the swash are whichever's more). The
+// second costs nothing until it's running (a uniform branch). params, phase(), timeOf() and clock()
+// are the south's; `surf` is the weather's.
+// (M12) The surf's currents and its breakers, for a swimmer (CPU: currentAt, breakerAt): the rips,
+// seaward through the bar's channels (shoreBar) from where you can't stand out past the breakers, fed by
+// currents along the beach inside them, as strong as the breakers there; and the breaker a swimmer's
+// in, each one that passes over (the bigger swell's). On the GPU the rips' water is milkier, in a plume
+// out past the breakers (shoreSurfTurbidity).
 
 const TAU = Math.PI * 2;
 const BEACH_SLOPE = 0.066; // run-up is converted to a horizontal excursion with this slope
@@ -38,6 +50,24 @@ const FAIR_PERIOD = 9; // (and its period, s)
 const FAIR_TURBIDITY = 0.16;
 const MILK_DEPTH = 4.5;
 const MILK_MAX = 1.8;
+// (M12) under a westerly's swell, the south's background groundswell: as high as a calm day's surf (at
+// most), and as long
+const BACKGROUND = [ 0.24, 10 ];
+// (M12) the rips: m/s for each metre of the breakers' height (MacMahan et al. 2006: a few tenths of a
+// m/s in 2-3 ft of surf, near 1 in a big one's pulses), pulsing with the sets (x RIP_PULSE[ 0 ] .. + [ 1 ]);
+// the feeders along the beach at FEED of that; the depths they run from (m: from where you can't stand,
+// in full from the next), and out to (x the breakers' depth: their neck, and their head beyond)
+const RIP = 0.5;
+const RIP_PULSE = [ 0.7, 0.8 ];
+const FEED = 0.45;
+const RIP_DEPTH = [ 1.0, 1.6 ];
+const RIP_OUT = [ 1.3, 2.6 ];
+// a breaker this high (m, trough to crest: breakerAt) tumbles a swimmer it breaks on (Player): all but
+// never on a fair day (one in thousands), now and then in a blustery surf, one in seven of a gale's
+export const TUMBLE_H = 2.8;
+// how milky a rip's plume is (of the surf zone's), and how far past the breakers it reaches (x their depth)
+const RIP_MILK = 0.7;
+const RIP_REACH = 2.2;
 
 const f = ( x ) => {
 
@@ -46,10 +76,11 @@ const f = ( x ) => {
 
 };
 
-export class ShoreWaves {
+// (M12) one swell's waves on the shore: its field (the travel times and directions it's refracted
+// along), its height (offshore amplitude, H/2) and period, its run-up, and its clock
+class ShoreTrain {
 
-	// field: computeShoreField() output { data (RGBA float), res, origin, size }
-	constructor( { field } ) {
+	constructor( field, amplitude = FAIR_AMPLITUDE, period = FAIR_PERIOD ) {
 
 		this.field = field;
 		const tex = new THREE.DataTexture( field.data, field.res, field.res, THREE.RGBAFormat, THREE.FloatType );
@@ -57,6 +88,83 @@ export class ShoreWaves {
 		tex.generateMipmaps = false;
 		tex.needsUpdate = true;
 		this.texture = tex;
+		this.amplitude = amplitude;
+		this.period = period;
+		this.runup = 1;
+		// (Salt Life) the clock: clock( t ) = c0 + ( t - t0 ) / period; at the start, ( t - ref ) / period,
+		// so a wave's phase there, clock( t ) - ( T - ref ) / period, is ( t - T ) / period as it always was.
+		// ref: the travel time at the bay's middle (there a change of period moves nothing)
+		this.ref = this.fieldAt( 0, 0 )[ 0 ];
+		this._t0 = 0;
+		this._c0 = - this.ref / period;
+
+	}
+
+	// its height and period: the clock carries on from where it is, at the new pace. Run-up goes as
+	// sqrt( H L ) (Stockdon 2006), L as the period squared: so as the root of their height, not in
+	// proportion (a big swell doesn't flood the beach), and in proportion to the period (a long
+	// groundswell runs further up); today's surf runs up as it always has
+	set( amplitude, period, t ) {
+
+		if ( period !== this.period ) {
+
+			this._c0 = this.clock( t );
+			this._t0 = t;
+			this.period = period;
+
+		}
+
+		this.amplitude = amplitude;
+		this.runup = amplitude > 0 ? Math.sqrt( FAIR_AMPLITUDE / amplitude ) * period / FAIR_PERIOD : 0;
+
+	}
+
+	// the waves' clock at time t (in waves); a wave's phase at a point whose travel time is T; and when a
+	// phase s comes to it
+	clock( t ) {
+
+		return this._c0 + ( t - this._t0 ) / this.period;
+
+	}
+
+	phase( t, T ) {
+
+		return this.clock( t ) - ( T - this.ref ) / this.period;
+
+	}
+
+	timeOf( s, T ) {
+
+		return this._t0 + ( s + ( T - this.ref ) / this.period - this._c0 ) * this.period;
+
+	}
+
+	// the field at a point (bilinear): [ T, dirX * exposure, dirZ * exposure, shoreline T ]
+	fieldAt( x, z, out = [ 0, 0, 0, 0 ] ) {
+
+		const F = this.field, res = F.res, d = F.data;
+		const fx = Math.min( Math.max( ( x - F.origin ) / F.size * res - 0.5, 0 ), res - 1.001 );
+		const fz = Math.min( Math.max( ( z - F.origin ) / F.size * res - 0.5, 0 ), res - 1.001 );
+		const i = Math.floor( fx ), j = Math.floor( fz ), tx = fx - i, tz = fz - j;
+		const k00 = ( j * res + i ) * 4, k10 = k00 + 4, k01 = k00 + res * 4, k11 = k01 + 4;
+		for ( let c = 0; c < 4; c ++ ) out[ c ] = ( d[ k00 + c ] * ( 1 - tx ) + d[ k10 + c ] * tx ) * ( 1 - tz ) + ( d[ k01 + c ] * ( 1 - tx ) + d[ k11 + c ] * tx ) * tz;
+		return out;
+
+	}
+
+}
+
+export class ShoreWaves {
+
+	// field: computeShoreField() output { data (RGBA float), res, origin, size }: the island's own swell's
+	constructor( { field } ) {
+
+		const home = new ShoreTrain( field );
+		this.trains = [ home ];
+		this.field = field;
+		this.texture = home.texture;
+		this.surf = FAIR_AMPLITUDE; // (M12) the weather's surf (both swells': the fish, the sound)
+		this.west = 0; // (M12) its share from the west (setSurf)
 
 		this.params = {
 			period: FAIR_PERIOD,
@@ -72,13 +180,13 @@ export class ShoreWaves {
 			// surf stirs it in proportion to its height: setSurf)
 		};
 		this.uniforms = {
-			shoreTex: { value: tex },
+			shoreTex: { value: home.texture },
 			shoreInfo: { value: new THREE.Vector4( field.origin, field.origin, field.size, field.res ) },
 			shoreTime: G.time,
 			// (Salt Life) the waves' clock: clock( t ), and the travel time it's counted from (the bay's
 			// middle: there a change of period moves nothing)
 			shoreClock: { value: 0 },
-			shoreRef: { value: 0 },
+			shoreRef: { value: home.ref },
 			shoreSeaLevel: G.seaLevel,
 			// period, amplitude, variation, gamma
 			shoreP0: { value: new THREE.Vector4() },
@@ -87,37 +195,46 @@ export class ShoreWaves {
 			// (M11) the surf zone's milk: its turbidity, of a fair day's; the depth it reaches (m: where the
 			// breakers stand, deeper in a bigger surf)
 			shoreMilk: { value: new THREE.Vector2( 1, MILK_DEPTH ) },
+			// (M12) the second swell: its field (the first's until it's given), its clock, ref, period and
+			// amplitude (0: not running), and its run-up
+			shoreTex2: { value: home.texture },
+			shoreTrain2: { value: new THREE.Vector4( 0, 0, FAIR_PERIOD, 0 ) },
+			shoreRunup2: { value: 0 },
 		};
 		this.syncUniforms();
 		this.glsl = SHORE_GLSL;
-		// (Salt Life) the clock: clock( t ) = c0 + ( t - t0 ) / period; at the start, ( t - ref ) / period,
-		// so a wave's phase there, clock( t ) - ( T - ref ) / period, is ( t - T ) / period as it always was
-		const ref = this.uniforms.shoreRef.value = this.fieldAt( 0, 0 )[ 0 ];
-		this._t0 = 0;
-		this._c0 = - ref / this.params.period;
 		this.update( G.time.value );
 
 	}
 
-	// (Salt Life) the surf the weather brings: the waves' offshore amplitude and their period. Run-up
-	// goes as sqrt( H L ) (Stockdon 2006), L as the period squared: so as the root of their height,
-	// not in proportion (a big swell doesn't flood the beach), and in proportion to the period (a long
-	// groundswell runs further up); today's surf runs up as it always has
-	setSurf( amplitude, period = this.params.period, t = G.time.value ) {
+	// (M12) the second swell's field (a westerly's: computeShoreField with its direction), once it's
+	// solved. Its waves stay flat until setSurf gives them a share
+	addField( field ) {
 
-		const P = this.params;
-		if ( amplitude === P.amplitude && period === P.period ) return;
-		if ( period !== P.period ) {
+		if ( this.trains[ 1 ] ) return;
+		const train = new ShoreTrain( field, 0, this.trains[ 0 ].period );
+		this.trains[ 1 ] = train;
+		this.uniforms.shoreTex2.value = train.texture;
+		this.setSurf( this.surf, this.trains[ 0 ].period, this.west, G.time.value, true );
 
-			// the clock carries on from where it is, at the new pace
-			this._c0 = this.clock( t );
-			this._t0 = t;
-			P.period = period;
+	}
 
-		}
+	// (Salt Life) the surf the weather brings: the waves' offshore amplitude and their period; (M12) and
+	// how much of it comes from the west (0..1: the second swell's, once it has a field; the south's dies
+	// down to its background groundswell as it comes in)
+	setSurf( amplitude, period = this.params.period, west = 0, t = G.time.value, force = false ) {
 
-		P.amplitude = amplitude;
-		P.runup = Math.sqrt( FAIR_AMPLITUDE / amplitude ) * period / FAIR_PERIOD;
+		const [ home, other ] = this.trains, P = this.params;
+		const w = other ? west : 0;
+		if ( ! force && amplitude === this.surf && period === this._period && w === this.west ) return;
+		this.surf = amplitude;
+		this._period = period;
+		this.west = w;
+		home.set( lerp( amplitude, Math.min( amplitude, BACKGROUND[ 0 ] ), w ), lerp( period, BACKGROUND[ 1 ], w ), t );
+		if ( other ) other.set( amplitude * w, period, t );
+		P.period = home.period;
+		P.amplitude = home.amplitude;
+		P.runup = home.runup;
 		P.turbidity = FAIR_TURBIDITY * Math.min( MILK_MAX, amplitude / FAIR_AMPLITUDE );
 		this.syncUniforms();
 		this.update( t );
@@ -125,52 +242,67 @@ export class ShoreWaves {
 	}
 
 	// (Salt Life) the waves' clock at time t (in waves); a wave's phase at a point whose travel time is T;
-	// and when a phase s comes to it
+	// and when a phase s comes to it (the south's)
 	clock( t ) {
 
-		return this._c0 + ( t - this._t0 ) / this.params.period;
+		return this.trains[ 0 ].clock( t );
 
 	}
 
 	phase( t, T ) {
 
-		return this.clock( t ) - ( T - this.uniforms.shoreRef.value ) / this.params.period;
+		return this.trains[ 0 ].phase( t, T );
 
 	}
 
 	timeOf( s, T ) {
 
-		return this._t0 + ( s + ( T - this.uniforms.shoreRef.value ) / this.params.period - this._c0 ) * this.params.period;
+		return this.trains[ 0 ].timeOf( s, T );
 
 	}
 
-	// each frame: the GPU's clock
+	// each frame: the GPU's clocks
 	update( t = G.time.value ) {
 
-		this.uniforms.shoreClock.value = this.clock( t );
+		this.uniforms.shoreClock.value = this.trains[ 0 ].clock( t );
+		const other = this.trains[ 1 ];
+		if ( other ) this.uniforms.shoreTrain2.value.x = other.clock( t );
 
 	}
 
 	syncUniforms() {
 
-		const p = this.params;
-		this.uniforms.shoreP0.value.set( p.period, p.amplitude, p.variation, p.gamma );
-		this.uniforms.shoreP1.value.set( p.breakSpan, p.curl, p.runup, p.enabled );
-		this.uniforms.shoreMilk.value.set( p.turbidity / FAIR_TURBIDITY, MILK_DEPTH * Math.max( 1, p.amplitude / FAIR_AMPLITUDE ) );
+		const p = this.params, U = this.uniforms;
+		U.shoreP0.value.set( p.period, p.amplitude, p.variation, p.gamma );
+		U.shoreP1.value.set( p.breakSpan, p.curl, p.runup, p.enabled );
+		U.shoreMilk.value.set( p.turbidity / FAIR_TURBIDITY, MILK_DEPTH * Math.max( 1, this.surf / FAIR_AMPLITUDE ) );
+		const other = this.trains[ 1 ];
+		if ( other ) {
+
+			U.shoreTrain2.value.set( other.clock( G.time.value ), other.ref, other.period, other.amplitude > 0.005 ? other.amplitude : 0 );
+			U.shoreRunup2.value = other.runup;
+
+		}
 
 	}
 
 	// ------------------------------------------------------------------ CPU mirror (water queries)
 
-	// the shore field at a point (bilinear): [ T, dirX * exposure, dirZ * exposure, shoreline T ]
+	// the shore field at a point (bilinear): [ T, dirX * exposure, dirZ * exposure, shoreline T ] (the
+	// south's)
 	fieldAt( x, z, out = [ 0, 0, 0, 0 ] ) {
 
-		const F = this.field, res = F.res, d = F.data;
-		const fx = Math.min( Math.max( ( x - F.origin ) / F.size * res - 0.5, 0 ), res - 1.001 );
-		const fz = Math.min( Math.max( ( z - F.origin ) / F.size * res - 0.5, 0 ), res - 1.001 );
-		const i = Math.floor( fx ), j = Math.floor( fz ), tx = fx - i, tz = fz - j;
-		const k00 = ( j * res + i ) * 4, k10 = k00 + 4, k01 = k00 + res * 4, k11 = k01 + 4;
-		for ( let c = 0; c < 4; c ++ ) out[ c ] = ( d[ k00 + c ] * ( 1 - tx ) + d[ k10 + c ] * tx ) * ( 1 - tz ) + ( d[ k01 + c ] * ( 1 - tx ) + d[ k11 + c ] * tx ) * tz;
+		return this.trains[ 0 ].fieldAt( x, z, out );
+
+	}
+
+	// (M12) the trains running: the south's, and the second while it has a height
+	_running( out ) {
+
+		out.length = 0;
+		out.push( this.trains[ 0 ] );
+		const other = this.trains[ 1 ];
+		if ( other && other.amplitude > 0.005 ) out.push( other );
 		return out;
 
 	}
@@ -178,80 +310,183 @@ export class ShoreWaves {
 	// (Salt Life) the swash on the sand at (x, z): the run-up of the most recent wave and the point's
 	// own distance up the beach (both in metres up the beach at the nominal slope), how fast the edge
 	// moves (dRt/dt, > 0 while the water runs up) and the swash cycle's phase. For the shorebirds
-	// (wildlife/SwashProbe): Tidewater evaluated this on the GPU and read it back.
+	// (wildlife/SwashProbe): Tidewater evaluated this on the GPU and read it back. (M12) Of two swells,
+	// whichever's run further up
 	swash( x, z, t, groundH, out = {} ) {
 
-		const P = this.params;
-		const sh = this.fieldAt( x, z, this._shs || ( this._shs = [ 0, 0, 0, 0 ] ) );
-		const exposure = Math.hypot( sh[ 1 ], sh[ 2 ] );
-		const dx = sh[ 1 ] / Math.max( exposure, 1e-4 ), dz = sh[ 2 ] / Math.max( exposure, 1e-4 );
-		const along = x * - dz + z * dx;
-		const runup = ( tt ) => {
+		const P = this.params, sh = this._shs || ( this._shs = [ 0, 0, 0, 0 ] );
+		let best = - Infinity;
+		for ( const tr of this._running( this._live || ( this._live = [] ) ) ) {
 
-			const ssw = this.phase( tt, sh[ 3 ] ) + wobble( along );
-			const ms = Math.floor( ssw ), tau = ssw - ms;
-			const Am = this.waveAmp( ms, along );
-			const RhMax = Am * 2.1 * P.runup * sat( exposure * 1.4 ) / BEACH_SLOPE;
-			const su = sat( tau / SWASH_UP ), sb = sat( ( tau - SWASH_UP ) / SWASH_DOWN );
-			const Rh = ( tau < SWASH_UP ? 1 - Math.pow( 1 - su, 1.5 ) : 1 - Math.pow( sb, 1.6 ) ) * RhMax - 0.3;
-			const lobes = Math.sin( along * 0.61 + ms * 2.3 ) * 0.5 + Math.sin( along * 1.73 + ms * 5.1 ) * 0.3 + Math.sin( along * 4.3 + ms * 1.7 ) * 0.2;
+			tr.fieldAt( x, z, sh );
+			const exposure = Math.hypot( sh[ 1 ], sh[ 2 ] );
+			const dx = sh[ 1 ] / Math.max( exposure, 1e-4 ), dz = sh[ 2 ] / Math.max( exposure, 1e-4 );
+			const along = x * - dz + z * dx;
+			let tau = 0;
+			const runup = ( tt ) => {
+
+				const ssw = tr.phase( tt, sh[ 3 ] ) + wobble( along );
+				const ms = Math.floor( ssw );
+				tau = ssw - ms;
+				const Am = this.waveAmp( ms, along, tr.amplitude );
+				const RhMax = Am * 2.1 * tr.runup * sat( exposure * 1.4 ) / BEACH_SLOPE;
+				const su = sat( tau / SWASH_UP ), sb = sat( ( tau - SWASH_UP ) / SWASH_DOWN );
+				const Rh = ( tau < SWASH_UP ? 1 - Math.pow( 1 - su, 1.5 ) : 1 - Math.pow( sb, 1.6 ) ) * RhMax - 0.3;
+				const lobes = Math.sin( along * 0.61 + ms * 2.3 ) * 0.5 + Math.sin( along * 1.73 + ms * 5.1 ) * 0.3 + Math.sin( along * 4.3 + ms * 1.7 ) * 0.2;
+				return Math.max( Rh + lobes * ( Math.max( Rh, 0 ) * 0.07 + 0.35 ), 0.35 ) * P.enabled;
+
+			};
+
+			const r1 = runup( t + 0.05 ), r0 = runup( t );
+			if ( r0 <= best ) continue;
+			best = r0;
 			out.tau = tau;
-			return Math.max( Rh + lobes * ( Math.max( Rh, 0 ) * 0.07 + 0.35 ), 0.35 ) * P.enabled;
+			out.runup = r0;
+			out.dRdt = ( r1 - r0 ) / 0.05;
 
-		};
+		}
 
-		const r1 = runup( t + 0.05 ), r0 = runup( t );
-		out.runup = r0;
-		out.dRdt = ( r1 - r0 ) / 0.05;
 		out.inland = Math.max( groundH - G.seaLevel.value, 0 ) / BEACH_SLOPE;
 		return out;
 
 	}
 
 	// the shore wave's height (m, relative to sea level, times its envelope) and the swash sheet's
-	// level at (x, z): the same as the GLSL shoreEvaluate() for a parcel resting there
+	// level at (x, z): the same as the GLSL shoreEvaluate() for a parcel resting there. (M12) Two
+	// swells' heights add; the swash is whichever's higher, the envelope whichever's more
 	sample( x, z, t, groundH, terrain ) {
 
-		const P = this.params, out = this._out || ( this._out = { y: 0, swashLevel: - 1e4, env: 0 } );
-		const sea = G.seaLevel.value;
-		const d = sea - groundH;
+		const out = this._out || ( this._out = { y: 0, swashLevel: - 1e4, env: 0 } );
 		out.y = 0;
 		out.env = 0;
 		out.swashLevel = - 1e4;
-		if ( d > 26 || P.enabled <= 0 ) return out;
-		const sh = this.fieldAt( x, z, this._sh || ( this._sh = [ 0, 0, 0, 0 ] ) );
+		if ( G.seaLevel.value - groundH > 26 || this.params.enabled <= 0 ) return out;
+		for ( const tr of this._running( this._live || ( this._live = [] ) ) ) this._sampleTrain( tr, x, z, t, groundH, terrain, out );
+		return out;
+
+	}
+
+	_sampleTrain( tr, x, z, t, groundH, terrain, out ) {
+
+		const P = this.params;
+		const sea = G.seaLevel.value;
+		const d = sea - groundH;
+		const sh = tr.fieldAt( x, z, this._sh || ( this._sh = [ 0, 0, 0, 0 ] ) );
 		const exposure = Math.hypot( sh[ 1 ], sh[ 2 ] );
 		const dx = sh[ 1 ] / Math.max( exposure, 1e-4 ), dz = sh[ 2 ] / Math.max( exposure, 1e-4 );
 		const along = x * - dz + z * dx;
-		const s = this.phase( t, sh[ 0 ] ) + wobble( along );
-		const c = Math.sqrt( clamp( d, 0.3, 25 ) * GRAVITY ), lam = c * P.period;
+		const s = tr.phase( t, sh[ 0 ] ) + wobble( along );
+		const c = Math.sqrt( clamp( d, 0.3, 25 ) * GRAVITY ), lam = c * tr.period;
 		const m = Math.floor( s + 0.5 ), u = s - m;
-		const A0 = this.waveAmp( m, along ), An = this.waveAmp( m + Math.sign( u ), along );
+		const A0 = this.waveAmp( m, along, tr.amplitude ), An = this.waveAmp( m + Math.sign( u ), along, tr.amplitude );
 		const A = A0 + ( An - A0 ) * smooth( 0.32, 0.5, Math.abs( u ) ) * 0.5;
 		// the breaking state comes from the depth under the wave's crest
 		const dc = sea - terrain.heightAt( x + dx * u * lam, z + dz * u * lam );
 		const dB = dc + ( d - dc ) * smooth( 0.3, 0.5, Math.abs( u ) );
 		const env = smooth( 26, 13, d ) * smooth( - 0.25, 0.05, d ) * sat( exposure * 1.4 ) * P.enabled;
-		out.env = env;
-		out.y = this.profileY( u, A, dB, lam ) * env;
+		out.env = Math.max( out.env, env );
+		out.y += this.profileY( u, A, dB, lam ) * env;
 		// swash run-up of the most recent wave on the sand
 		const inland = Math.max( groundH - sea, 0 ) / BEACH_SLOPE;
-		const ssw = this.phase( t, sh[ 3 ] ) + wobble( along );
+		const ssw = tr.phase( t, sh[ 3 ] ) + wobble( along );
 		const ms = Math.floor( ssw ), tau = ssw - ms;
-		const Am = this.waveAmp( ms, along );
-		const RhMax = Am * 2.1 * P.runup * sat( exposure * 1.4 ) / BEACH_SLOPE;
+		const Am = this.waveAmp( ms, along, tr.amplitude );
+		const RhMax = Am * 2.1 * tr.runup * sat( exposure * 1.4 ) / BEACH_SLOPE;
 		const su = sat( tau / SWASH_UP ), sb = sat( ( tau - SWASH_UP ) / SWASH_DOWN );
 		const Rh = ( tau < SWASH_UP ? 1 - Math.pow( 1 - su, 1.5 ) : 1 - Math.pow( sb, 1.6 ) ) * RhMax - 0.3;
 		const lobes = Math.sin( along * 0.61 + ms * 2.3 ) * 0.5 + Math.sin( along * 1.73 + ms * 5.1 ) * 0.3 + Math.sin( along * 4.3 + ms * 1.7 ) * 0.2;
 		const Rt = Math.max( Rh + lobes * ( Math.max( Rh, 0 ) * 0.07 + 0.35 ), 0.35 ) * P.enabled;
 		const fm = Rt - inland + SWASH_OVERSHOOT;
 		const thick = clamp( Math.min( fm * 0.3, Math.max( fm - 0.1, 0 ) * ( BEACH_SLOPE * 0.22 ) + 0.03 ), - 0.1, 0.12 );
-		out.swashLevel = groundH + thick;
+		out.swashLevel = Math.max( out.swashLevel, groundH + thick );
 		return out;
 
 	}
 
-	waveAmp( m, along ) {
+	// (M12) the bigger swell's height reaching (x, z), as an offshore amplitude (m), and its train
+	_reaching( x, z, sh ) {
+
+		let best = 0, train = this.trains[ 0 ];
+		for ( const tr of this._running( this._live || ( this._live = [] ) ) ) {
+
+			tr.fieldAt( x, z, sh );
+			const A = tr.amplitude * sat( Math.hypot( sh[ 1 ], sh[ 2 ] ) * 1.4 );
+			if ( A > best ) {
+
+				best = A;
+				train = tr;
+
+			}
+
+		}
+
+		this._reachTrain = train;
+		return best;
+
+	}
+
+	// (M12) the surf's current at (x, z) (ground: the bottom's height there): out { x, z } (m/s), and rip
+	// (0..1: how much of it is a rip's)
+	currentAt( x, z, t, ground, out = { x: 0, z: 0, rip: 0 } ) {
+
+		out.x = out.z = out.rip = 0;
+		const P = this.params, d = G.seaLevel.value - ground;
+		if ( d < RIP_DEPTH[ 0 ] || d > 26 || P.enabled <= 0 ) return out;
+		const sh = this._shc || ( this._shc = [ 0, 0, 0, 0 ] );
+		const A = this._reaching( x, z, sh );
+		// (the bar's channels are the bottom's: along the south's field, whichever swell's breaking)
+		const home = this.trains[ 0 ];
+		home.fieldAt( x, z, sh );
+		const exposure = Math.hypot( sh[ 1 ], sh[ 2 ] );
+		if ( exposure < 0.05 || A < 0.02 ) return out;
+		const dx = sh[ 1 ] / exposure, dz = sh[ 2 ] / exposure, along = x * - dz + z * dx;
+		const db = Math.pow( A * 3.556 / P.gamma, 0.8 );
+		const V = RIP * 2 * A * ( RIP_PULSE[ 0 ] + RIP_PULSE[ 1 ] * Math.abs( Math.sin( home.clock( t ) * Math.PI / 7 ) ) );
+		const rip = bar( along ).rip, inside = smooth( RIP_DEPTH[ 0 ], RIP_DEPTH[ 1 ], d );
+		const neck = rip * inside * ( 1 - smooth( db * RIP_OUT[ 0 ], db * RIP_OUT[ 1 ], d ) );
+		const feed = ( 1 - rip ) * inside * ( 1 - smooth( db * 0.8, db * 1.2, d ) ) * Math.sign( barSlope( along ) ) * FEED;
+		// (seaward is against the waves' way, - dir; along the beach, ( - dz, dx ))
+		out.x = ( - dx * neck - dz * feed ) * V;
+		out.z = ( - dz * neck + dx * feed ) * V;
+		out.rip = neck;
+		return out;
+
+	}
+
+	// (M12) the breaker at (x, z) (ground: the bottom's height), of the swell that's bigger there: out
+	// { n: its crest's count (one more each wave that's passed over; another swell's are counted apart),
+	// H: its height (m, trough to crest), b: how far it's broken (< 0 still rising, 0..1 plunging, > 1 a
+	// bore), dx, dz: the way it runs }
+	breakerAt( x, z, t, ground, terrain, out = { n: 0, H: 0, b: - 9, dx: 0, dz: 1 } ) {
+
+		const P = this.params, sea = G.seaLevel.value, d = sea - ground;
+		out.H = 0;
+		out.b = - 9;
+		if ( d > 26 || d < - 0.2 || P.enabled <= 0 ) return out;
+		const sh = this._shb || ( this._shb = [ 0, 0, 0, 0 ] );
+		this._reaching( x, z, sh );
+		const tr = this._reachTrain;
+		tr.fieldAt( x, z, sh );
+		const exposure = Math.hypot( sh[ 1 ], sh[ 2 ] );
+		const dx = sh[ 1 ] / Math.max( exposure, 1e-4 ), dz = sh[ 2 ] / Math.max( exposure, 1e-4 );
+		const along = x * - dz + z * dx;
+		const s = tr.phase( t, sh[ 0 ] ) + wobble( along );
+		const m = Math.floor( s + 0.5 ), u = s - m;
+		const lam = Math.sqrt( clamp( d, 0.3, 25 ) * GRAVITY ) * tr.period;
+		const A = this.waveAmp( m, along, tr.amplitude );
+		const dc = sea - terrain.heightAt( x + dx * u * lam, z + dz * u * lam );
+		const B = breakParams( A, dc + ( d - dc ) * smooth( 0.3, 0.5, Math.abs( u ) ), P );
+		const env = smooth( 26, 13, d ) * sat( exposure * 1.4 );
+		out.n = Math.floor( s ) + ( tr === this.trains[ 0 ] ? 0 : 1e7 );
+		out.H = B.H * env;
+		out.b = B.b;
+		out.dx = dx;
+		out.dz = dz;
+		return out;
+
+	}
+
+	waveAmp( m, along, amplitude = this.params.amplitude ) {
 
 		const P = this.params;
 		const waveSet = Math.abs( Math.sin( m * Math.PI / 7 ) ) * 0.6 + 0.55;
@@ -261,7 +496,7 @@ export class ShoreWaves {
 		const a2 = Math.sin( along * 0.13 + m * 4.1 + 1.3 - warp * 0.7 );
 		const a3 = Math.sin( along * 0.29 + m * 2.3 + warp * 0.5 ) * 0.6 + Math.sin( along * 0.47 + m * 5.9 + 0.8 ) * 0.4;
 		const alongV = a1 * 0.6 + a2 * 0.4 + a3 * 0.28;
-		return Math.max( P.amplitude * waveSet * ( 1 + rnd * P.variation * 0.5 + alongV * P.variation * 0.7 ) * bar( along ).k, 0.02 );
+		return Math.max( amplitude * waveSet * ( 1 + rnd * P.variation * 0.5 + alongV * P.variation * 0.7 ) * bar( along ).k, 0.02 );
 
 	}
 
@@ -320,6 +555,14 @@ function bar( along ) {
 
 }
 
+// (M12) which way a rip channel is along the beach: > 0 toward greater `along` (where bar()'s r rises)
+function barSlope( along ) {
+
+	const w = Math.sin( along * 0.021 + 1.9 ) * 1.4 + Math.sin( along * 0.009 + 0.3 ) * 0.9;
+	return Math.cos( along * 0.059 + w );
+
+}
+
 function wobble( along ) {
 
 	return Math.sin( along * 0.029 + 0.7 ) * 0.07 + Math.sin( along * 0.083 + 2.1 ) * 0.035
@@ -362,6 +605,10 @@ uniform float shoreSeaLevel;
 uniform vec4 shoreP0; // period, amplitude, variation, gamma
 uniform vec4 shoreP1; // breakSpan, curl, runup, enabled
 uniform vec2 shoreMilk; // (M11) the surf zone's turbidity (of a fair day's), the depth it reaches (m)
+// (M12) the second swell: its field, its clock, ref, period and amplitude (0: not running), its run-up
+uniform highp sampler2D shoreTex2;
+uniform vec4 shoreTrain2;
+uniform float shoreRunup2;
 #define SHORE_PERIOD shoreP0.x
 #define SHORE_AMPLITUDE shoreP0.y
 #define SHORE_VARIATION shoreP0.z
@@ -377,22 +624,31 @@ const float SHORE_SWASH_UP = ${ f( SWASH_UP ) };
 const float SHORE_SWASH_DOWN = ${ f( SWASH_DOWN ) };
 const float SHORE_SWASH_OVERSHOOT = ${ f( SWASH_OVERSHOOT ) };
 
+// (M12) a swell's train of waves: its clock, the travel time that's counted from, its period, height
+// (offshore amplitude) and run-up. The south's, and the second (a westerly's) while it's running
+struct ShoreTrain { float clock; float ref; float period; float amplitude; float runup; };
+ShoreTrain shoreTrain1() { return ShoreTrain( shoreClock, shoreRef, SHORE_PERIOD, SHORE_AMPLITUDE, SHORE_RUNUP ); }
+ShoreTrain shoreTrain2_() { return ShoreTrain( shoreTrain2.x, shoreTrain2.y, shoreTrain2.z, shoreTrain2.w, shoreRunup2 ); }
+#define SHORE_TWO ( shoreTrain2.w > 0.0 )
+
 float shSS( float a, float b, float x ) { float t = clamp( ( x - a ) / ( b - a ), 0.0, 1.0 ); return t * t * ( 3.0 - 2.0 * t ); }
 float shSat( float x ) { return clamp( x, 0.0, 1.0 ); }
 
-// the shore field ( T, dir * exposure, shoreline T ), bilinear from 4 exact loads (float data)
-vec4 terrainShoreSample( vec2 xz ) {
+// a shore field ( T, dir * exposure, shoreline T ), bilinear from 4 exact loads (float data)
+vec4 shoreFieldSample( highp sampler2D tex, vec2 xz ) {
 	float res = shoreInfo.w;
 	vec2 fp = ( xz - shoreInfo.xy ) / shoreInfo.z * res - 0.5;
 	vec2 fc = clamp( fp, vec2( 0.0 ), vec2( res - 1.001 ) );
 	ivec2 i = ivec2( floor( fc ) );
 	vec2 t = fract( fc );
-	vec4 a = texelFetch( shoreTex, i, 0 );
-	vec4 b = texelFetch( shoreTex, i + ivec2( 1, 0 ), 0 );
-	vec4 c = texelFetch( shoreTex, i + ivec2( 0, 1 ), 0 );
-	vec4 d = texelFetch( shoreTex, i + ivec2( 1, 1 ), 0 );
+	vec4 a = texelFetch( tex, i, 0 );
+	vec4 b = texelFetch( tex, i + ivec2( 1, 0 ), 0 );
+	vec4 c = texelFetch( tex, i + ivec2( 0, 1 ), 0 );
+	vec4 d = texelFetch( tex, i + ivec2( 1, 1 ), 0 );
 	return mix( mix( a, b, t.x ), mix( c, d, t.x ), t.y );
 }
+// the south's
+vec4 terrainShoreSample( vec2 xz ) { return shoreFieldSample( shoreTex, xz ); }
 
 float shoreHash1( float x ) { return fract( sin( x * 127.1 + 311.7 ) * 43758.5453 ); }
 vec2 shoreHash2( vec2 p ) { return fract( sin( vec2( dot( p, vec2( 127.1, 311.7 ) ), dot( p, vec2( 269.5, 183.3 ) ) ) ) * 43758.5453 ) * 2.0 - 1.0; }
@@ -457,7 +713,7 @@ float shoreWobble( float along ) {
 }
 
 // per-wave height: sets of ~7 waves, randomness, along-shore peaks so waves peel instead of closing out
-float shoreWaveAmp( float m, float along ) {
+float shoreWaveAmp( float m, float along, float amplitude ) {
 	float waveSet = abs( sin( m * ${ f( Math.PI / 7 ) } ) ) * 0.6 + 0.55;
 	float rnd = ( shoreHash1( m ) - 0.5 ) * 2.0;
 	float warp = sin( along * 0.016 + m * 0.9 ) * 1.6;
@@ -465,7 +721,7 @@ float shoreWaveAmp( float m, float along ) {
 	float a2 = sin( along * 0.13 + m * 4.1 + 1.3 - warp * 0.7 );
 	float a3 = sin( along * 0.29 + m * 2.3 + warp * 0.5 ) * 0.6 + sin( along * 0.47 + m * 5.9 + 0.8 ) * 0.4;
 	float alongV = a1 * 0.6 + a2 * 0.4 + a3 * 0.28;
-	return max( SHORE_AMPLITUDE * waveSet * ( 1.0 + rnd * SHORE_VARIATION * 0.5 + alongV * SHORE_VARIATION * 0.7 ) * shoreBar( along ).x, 0.02 );
+	return max( amplitude * waveSet * ( 1.0 + rnd * SHORE_VARIATION * 0.5 + alongV * SHORE_VARIATION * 0.7 ) * shoreBar( along ).x, 0.02 );
 }
 
 ShoreBreak shoreBreakParams( float A, float d ) {
@@ -555,26 +811,26 @@ float shoreBreakDepth( vec2 xz, vec2 dir, float u, float lam, float d ) {
 	return mix( dc, d, shSS( 0.3, 0.5, abs( u ) ) );
 }
 
-ShorePhase shorePhaseAt( vec2 xz ) {
-	vec4 sh = terrainShoreSample( xz );
+ShorePhase shorePhaseAt( highp sampler2D tex, ShoreTrain tr, vec2 xz ) {
+	vec4 sh = shoreFieldSample( tex, xz );
 	vec2 dirE = sh.yz;
 	float exposure = length( dirE );
 	vec2 dir = dirE / max( exposure, 1e-4 );
 	float along = dot( xz, vec2( - dir.y, dir.x ) );
-	float s = shoreClock - ( sh.x - shoreRef ) / SHORE_PERIOD + shoreWobble( along );
+	float s = tr.clock - ( sh.x - tr.ref ) / tr.period + shoreWobble( along );
 	return ShorePhase( sh, sh.x, dir, exposure, along, s );
 }
 
 // run-up of the most recent wave at a point on the beach (distances in metres up the beach face)
-ShoreRunup shoreSwashRunup( vec4 sh, float along, float groundH ) {
-	float Tp = SHORE_PERIOD;
+ShoreRunup shoreSwashRunup( ShoreTrain tr, vec4 sh, float along, float groundH ) {
+	float Tp = tr.period;
 	float exposure = length( sh.yz );
 	float inland = max( groundH - shoreSeaLevel, 0.0 ) / SHORE_BEACH_SLOPE;
-	float ssw = shoreClock - ( sh.w - shoreRef ) / Tp + shoreWobble( along );
+	float ssw = tr.clock - ( sh.w - tr.ref ) / Tp + shoreWobble( along );
 	float ms = floor( ssw );
 	float tau = ssw - ms;
-	float Am = shoreWaveAmp( ms, along );
-	float RhMax = Am * 2.1 * SHORE_RUNUP * shSat( exposure * 1.4 ) / SHORE_BEACH_SLOPE;
+	float Am = shoreWaveAmp( ms, along, tr.amplitude );
+	float RhMax = Am * 2.1 * tr.runup * shSat( exposure * 1.4 ) / SHORE_BEACH_SLOPE;
 	float su = shSat( tau / SHORE_SWASH_UP );
 	float sb = shSat( ( tau - SHORE_SWASH_UP ) / SHORE_SWASH_DOWN );
 	bool isUp = tau < SHORE_SWASH_UP;
@@ -584,30 +840,39 @@ ShoreRunup shoreSwashRunup( vec4 sh, float along, float groundH ) {
 	return ShoreRunup( tau, Rt, inland, RhMax, su, sb, isUp );
 }
 
-// film thickness clipped at the swash front, distance to the front (m), tau, run-up
+// film thickness clipped at the swash front, distance to the front (m), tau, run-up; (M12) of two
+// swells, whichever's swash has run further up
+vec4 shoreSwashEdgeOf( vec2 p, float t, float g, ShorePhase ph, ShoreTrain tr ) {
+	ShoreRunup r = shoreSwashRunup( tr, ph.sh, ph.along, g );
+	float front = r.Rt - r.inland;
+	float w = shSS( shoreSeaLevel - 0.8, shoreSeaLevel - 0.4, g ) * shSS( 0.3, 0.15, t );
+	return w > 0.0 ? vec4( mix( t, min( t, front * 0.08 ), w ), front / max( w, 1e-3 ), r.tau, r.Rt * w ) : vec4( t, 1e3, 0.0, 0.0 );
+}
 vec4 shoreSwashEdge( vec2 p, float t ) {
 	vec4 o = vec4( t, 1e3, 0.0, 0.0 );
 	if ( t < 0.3 ) {
 		float g = terrainHeightAt( p );
 		if ( g > shoreSeaLevel - 0.8 ) {
-			ShorePhase ph = shorePhaseAt( p );
-			ShoreRunup r = shoreSwashRunup( ph.sh, ph.along, g );
-			float front = r.Rt - r.inland;
-			float w = shSS( shoreSeaLevel - 0.8, shoreSeaLevel - 0.4, g ) * shSS( 0.3, 0.15, t );
-			if ( w > 0.0 ) o = vec4( mix( t, min( t, front * 0.08 ), w ), front / max( w, 1e-3 ), r.tau, r.Rt * w );
+			ShoreTrain a = shoreTrain1();
+			o = shoreSwashEdgeOf( p, t, g, shorePhaseAt( shoreTex, a, p ), a );
+			if ( SHORE_TWO ) {
+				ShoreTrain b = shoreTrain2_();
+				vec4 o2 = shoreSwashEdgeOf( p, t, g, shorePhaseAt( shoreTex2, b, p ), b );
+				if ( o2.y > o.y && o2.y < 999.0 ) o = o2;
+			}
 		}
 	}
 	return o;
 }
 
-// the water mesh's view of the shore waves at a parcel resting at xz
-ShoreSample shoreEvaluate( vec2 xz, float depth, float groundH ) {
-	ShorePhase ph = shorePhaseAt( xz );
+// the water mesh's view of one swell's waves at a parcel resting at xz
+ShoreSample shoreEvaluateTrain( highp sampler2D tex, ShoreTrain tr, vec2 xz, float depth, float groundH ) {
+	ShorePhase ph = shorePhaseAt( tex, tr, xz );
 	vec4 sh = ph.sh;
 	float exposure = ph.exposure;
 	float along = ph.along;
 	vec2 dir = ph.dir;
-	float Tp = SHORE_PERIOD;
+	float Tp = tr.period;
 	float d = depth;
 	float c = sqrt( clamp( d, 0.3, 25.0 ) * SHORE_GRAVITY );
 	float lam = c * Tp;
@@ -615,8 +880,8 @@ ShoreSample shoreEvaluate( vec2 xz, float depth, float groundH ) {
 	float m = floor( s + 0.5 );
 	float u = s - m;
 	// wave height with smooth hand-over between consecutive waves at the trough
-	float A0 = shoreWaveAmp( m, along );
-	float An = shoreWaveAmp( m + sign( u ), along );
+	float A0 = shoreWaveAmp( m, along, tr.amplitude );
+	float An = shoreWaveAmp( m + sign( u ), along, tr.amplitude );
 	float A = mix( A0, An, shSS( 0.32, 0.5, abs( u ) ) * 0.5 );
 	float dB = shoreBreakDepth( xz, dir, u, lam, d );
 	// offshore fade-in (the open sea covers deep water) and fade on land (the swash sheet takes over)
@@ -662,7 +927,7 @@ ShoreSample shoreEvaluate( vec2 xz, float depth, float groundH ) {
 	}
 
 	// swash: run-up of the most recent wave on the sand
-	ShoreRunup swr = shoreSwashRunup( sh, along, groundH );
+	ShoreRunup swr = shoreSwashRunup( tr, sh, along, groundH );
 	float front = swr.Rt - swr.inland;
 	bool covered = front > 0.0;
 	float fm = front + SHORE_SWASH_OVERSHOOT;
@@ -681,13 +946,47 @@ ShoreSample shoreEvaluate( vec2 xz, float depth, float groundH ) {
 	return o;
 }
 
+// the water mesh's view of the shore waves at a parcel resting at xz: (M12) of two swells crossing,
+// their heights and slopes added, the rest whichever's more (the crest's, of the bigger wave there)
+ShoreSample shoreEvaluate( vec2 xz, float depth, float groundH ) {
+	ShoreSample a = shoreEvaluateTrain( shoreTex, shoreTrain1(), xz, depth, groundH );
+	if ( ! SHORE_TWO ) return a;
+	ShoreSample b = shoreEvaluateTrain( shoreTex2, shoreTrain2_(), xz, depth, groundH );
+	ShoreSample o = a;
+	if ( abs( b.disp.y ) > abs( a.disp.y ) ) o = b;
+	o.disp = a.disp + b.disp;
+	vec2 slope = a.nShore.xz / max( a.nShore.y, 0.2 ) + b.nShore.xz / max( b.nShore.y, 0.2 );
+	o.nShore = normalize( vec3( slope.x, 1.0, slope.y ) );
+	o.env = max( a.env, b.env );
+	o.foam = max( a.foam, b.foam );
+	o.breaking = max( a.breaking, b.breaking );
+	o.exposure = max( a.exposure, b.exposure );
+	o.face = max( a.face, b.face );
+	o.roller = max( a.roller, b.roller );
+	bool bSwash = b.swashLevel > a.swashLevel;
+	o.swashLevel = bSwash ? b.swashLevel : a.swashLevel;
+	o.swashCovered = max( a.swashCovered, b.swashCovered );
+	o.thick = bSwash ? b.thick : a.thick;
+	o.swashFoam = max( a.swashFoam, b.swashFoam );
+	o.runup = max( a.runup, b.runup );
+	return o;
+}
+
 // the surf zone's water: suspended sand and fine bubbles scatter light (milky, turquoise); (M11) as much
-// as the surf stirs up, out to where its breakers stand
+// as the surf stirs up, out to where its breakers stand; (M12) and a rip's plume, carried out through its
+// channel past the breakers
 float shoreSurfTurbidity( vec2 xz, float depth ) {
 	float k = 0.0, reach = shoreMilk.y;
-	if ( depth < reach && depth > -0.2 ) {
-		float expo = shSat( length( terrainShoreSample( xz ).yz ) * 1.4 );
-		k = shSS( reach, reach * 0.27, depth ) * shSS( -0.2, 0.15, depth ) * expo * SHORE_ENABLED;
+	if ( depth < reach * ${ f( RIP_REACH ) } && depth > -0.2 ) {
+		vec4 sh = terrainShoreSample( xz );
+		float e = length( sh.yz );
+		vec2 dir = sh.yz / max( e, 1e-4 );
+		float rip = shoreBar( dot( xz, vec2( - dir.y, dir.x ) ) ).y;
+		if ( SHORE_TWO ) e = max( e, length( shoreFieldSample( shoreTex2, xz ).yz ) );
+		float expo = shSat( e * 1.4 );
+		float zone = shSS( reach, reach * 0.27, depth );
+		float plume = rip * shSS( reach * ${ f( RIP_REACH ) }, reach * 0.6, depth ) * ${ f( RIP_MILK ) };
+		k = max( zone, plume ) * shSS( -0.2, 0.15, depth ) * expo * SHORE_ENABLED;
 	}
 	return min( k * shoreMilk.x, 1.0 );
 }

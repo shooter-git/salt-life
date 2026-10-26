@@ -70,6 +70,7 @@ export class WaterSurface {
 			waterWhitecap: this.whitecap,
 			waterRain: G.rain, // (M9: the rings where the drops land)
 			waterFlash: G.skyFlash, // (M10: lightning in the reflections)
+			waterFlashShape: G.skyFlashShape, // ((M12) its glow's shape: Sky's)
 			waterSkyExposure: G.skyExposure,
 			// (M11) the underside's reflection, of the surface's: the scene's fill (update)
 			waterEnvUnder: { value: 0.07 },
@@ -168,6 +169,7 @@ uniform float waterWhitecap;
 uniform float waveCrest;
 uniform float waterRain;
 uniform vec4 waterFlash;
+uniform vec4 waterFlashShape;
 uniform float waterSkyExposure;
 #ifdef WATER_REFRACT
 uniform sampler2D waterRefract;
@@ -349,8 +351,8 @@ ${ SH ? /* glsl */`
 		vec3 vd = normalize( vWater - cameraPosition ), rd = reflect( vd, nP );
 		rd.y = abs( rd.y );
 		float fres = 0.02 + 0.98 * pow( 1.0 - max( dot( - vd, nP ), 0.0 ), 5.0 );
-		float lobe = exp( ( dot( normalize( rd ), waterFlash.xyz ) - 1.0 ) * 7.0 );
-		gl_FragColor.rgb += ${ rgb( 0.82, 0.86, 1.0 ) } * waterFlash.w * ( 2.5 * lobe + 0.2 ) * fres * waterSkyExposure * ( 1.0 - foam * 0.8 ) * sheetEdge;
+		float lobe = exp( ( dot( normalize( rd ), waterFlash.xyz ) - 1.0 ) * waterFlashShape.x );
+		gl_FragColor.rgb += ${ rgb( 0.82, 0.86, 1.0 ) } * waterFlash.w * ( 2.5 * lobe + 0.2 * ( 1.0 - waterFlashShape.z ) ) * fres * waterSkyExposure * ( 1.0 - foam * 0.8 ) * sheetEdge;
 	}` )
 				.replace( '#include <premultiplied_alpha_fragment>', '' );
 			shader.fragmentShader = shader.fragmentShader.replace( 'uniform float waterTime;', 'uniform float waterTime;\nuniform float waterSeaLevel_;\nuniform float waterEnvUnder;' );

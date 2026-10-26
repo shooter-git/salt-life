@@ -75,6 +75,24 @@ class MinHeap {
 
 }
 
+// (M12) the ground under a field already solved (its depths, at its cells' middles), as the solve reads
+// the terrain: so another swell's field can be solved from it (in a worker: shore/ShoreWorker) without
+// the terrain's arrays, at the same cells
+export function fieldGround( { depth, res, size, origin }, seaLevel = 0 ) {
+
+	const h = size / res;
+	return {
+		size, origin,
+		heightAt: ( x, z ) => {
+
+			const i = Math.min( res - 1, Math.max( 0, Math.floor( ( x - origin ) / h ) ) ), j = Math.min( res - 1, Math.max( 0, Math.floor( ( z - origin ) / h ) ) );
+			return seaLevel - depth[ j * res + i ];
+
+		},
+	};
+
+}
+
 export function computeShoreField( terrain, { res = 512, swellDir = [ 0, - 1 ], seaLevel = 0, maxDepth = 25, minDepth = 0.25 } = {} ) {
 
 	const size = terrain.size;

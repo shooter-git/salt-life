@@ -87,6 +87,11 @@ export class Rocks {
 			};
 
 			this.buckets.push( { members, near: mk( near, `rocks-${ ROCK_STYLES[ s ].name }-near` ), far: mk( far, `rocks-${ ROCK_STYLES[ s ].name }-far` ), nearTris: near.index.count / 3, farTris: far.index.count / 3 } );
+			// ((M12) the shape as an ellipsoid in its bounds, for the rain's splashes: splashRocks)
+			if ( ! far.boundingBox ) far.computeBoundingBox();
+			const c = far.boundingBox.getCenter( new THREE.Vector3() ), h = far.boundingBox.getSize( new THREE.Vector3() ).multiplyScalar( 0.5 );
+			this._ellipsoids = this._ellipsoids || [];
+			this._ellipsoids[ s ] = new THREE.Matrix4().compose( c, new THREE.Quaternion(), h );
 
 		}
 
@@ -97,6 +102,34 @@ export class Rocks {
 		this._sphere = new THREE.Sphere();
 		this._lastQuat = new THREE.Quaternion();
 		scene.add( this.group );
+
+	}
+
+	// (M12) the rocks standing out of the sea within r of ( x, z ), nearest first (at most n), for the rain's
+	// splashes on them (Rain.setRocks): each one's world -> unit sphere matrix (its shape, as the ellipsoid
+	// in its bounds). out: an array of Matrix4s, refilled
+	splashRocks( x, z, r, n, out = [] ) {
+
+		out.length = 0;
+		const near = this._splash || ( this._splash = [] );
+		near.length = 0;
+		for ( const k of this.instances ) {
+
+			const d = Math.hypot( k.x - x, k.z - z ) - k.radius;
+			if ( d < r && k.y + k.size * k.sy * 0.8 > - 0.3 ) near.push( { k, d } );
+
+		}
+
+		near.sort( ( a, b ) => a.d - b.d );
+		for ( let i = 0; i < Math.min( n, near.length ); i ++ ) {
+
+			const k = near[ i ].k;
+			if ( ! k.unit ) k.unit = new THREE.Matrix4().multiplyMatrices( k.matrix, this._ellipsoids[ k.style ] ).invert();
+			out.push( k.unit );
+
+		}
+
+		return out;
 
 	}
 

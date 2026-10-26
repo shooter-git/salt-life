@@ -42,6 +42,7 @@ import { Cirrus, NoCirrus } from './Clouds.js';
 //     step (more than 0.05 in a frame) makes a new panorama
 //   clouds.front   { value } Vector4 (M9: the weather on its way: the cover up the trades at FRONT_KM,
 //     less the cover here; WeatherDriver)
+//   clouds.frontDir   { value } Vector2 (M12: the way that weather comes, toward: down the blow's track)
 //   clouds.storm   { value } 0..1 (M9: rain's deck, lower, smoother below and darker; a thunderstorm's)
 //   clouds.update( dt, camera, keyColor, nightSky, night, skyIrradiance ) (Tidewater's frame values;
 //     keyColor: the moon's light at night)
@@ -251,9 +252,11 @@ uniform vec4 scsShadow;
 uniform vec4 scsBounce;
 uniform vec4 scsWind;
 uniform vec4 scsFade;
-// (M9) the weather on its way: the cover's change at FRONT_KM up the trades; its largest rise
+// (M9) the weather on its way: the cover's change at FRONT_KM up the trades; its largest rise; (M12) the
+// way it comes (toward: down the blow's track)
 uniform vec4 scsFront;
 uniform float scsFrontMax;
+uniform vec2 scsFrontDir;
 // Tidewater's frame: the key light (the sun, or the moon at night: its colour), the night sky
 uniform vec3 scKeyDir;
 uniform vec3 scKeyColor;
@@ -298,9 +301,9 @@ struct ScCandidate {
 	float conservative; float edge; float top; float floorMask;
 	float shellHeight; float localHeight; float coverage; vec3 position;
 };
-// (M9) the cover's change at a point from the weather on its way, by how far up the trades it is
+// (M9) the cover's change at a point from the weather on its way, by how far up its track it is
 float scFrontAt( vec2 xz ) {
-	float d = dot( xz - scfPosition.xz, - scsWind.xy ) * 0.001;
+	float d = dot( xz - scfPosition.xz, - scsFrontDir ) * 0.001;
 	if ( d < 0.0 ) return scsFront.x * clamp( d / ${ f( FRONT_KM[ 0 ] ) }, 0.0, 1.0 );
 	if ( d < ${ f( FRONT_KM[ 1 ] ) } ) return scsFront.y * d / ${ f( FRONT_KM[ 1 ] ) };
 	if ( d < ${ f( FRONT_KM[ 2 ] ) } ) return mix( scsFront.y, scsFront.z, ( d - ${ f( FRONT_KM[ 1 ] ) } ) / ${ f( FRONT_KM[ 2 ] - FRONT_KM[ 1 ] ) } );
@@ -846,6 +849,7 @@ export class SkyProClouds {
 			scsFade: { value: [ P.fade.hazeDensityScale, P.fade.horizonMeltStart, P.fade.horizonMeltEnd, 0 ] },
 			scsFront: { value: new THREE.Vector4() },
 			scsFrontMax: { value: 0 },
+			scsFrontDir: { value: new THREE.Vector2( G.windPrevailing.value.x, G.windPrevailing.value.y ).normalize() },
 			scsWeatherMass: { value: P.weather.mainMass.slice() },
 			scsWeatherDetail: { value: P.weather.detail.slice() },
 			scsWeather: { value: [ P.weather.coverage, 0, 0, 0 ] },
@@ -862,6 +866,7 @@ export class SkyProClouds {
 		this.coverage = { value: s.coverage };
 		this.overcast = { value: 0 };
 		this.front = U.scsFront;
+		this.frontDir = U.scsFrontDir;
 		this.storm = { value: 0 };
 		this.resolutionScale = 1;
 		this.outputSize = null;

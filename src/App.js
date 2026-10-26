@@ -17,11 +17,13 @@ import { Rocks } from './world/Rocks.js';
 import { Vegetation } from './world/Vegetation.js';
 import { BoatModel } from './world/BoatModel.js';
 import { Sky } from './sky/Sky.js';
-import { Waves } from './ocean/Waves.js';
+import { Waves, SWELL_WEST } from './ocean/Waves.js';
 import { WaterQuery } from './ocean/WaterQuery.js';
 import { WaterSurface } from './ocean/WaterSurface.js';
 import { ShoreWaves } from './ocean/ShoreWaves.js';
-import { computeShoreField } from './world/ShoreField.js';
+import { computeShoreField, fieldGround } from './world/ShoreField.js';
+import ShoreWorker from './world/shore/ShoreWorker.js?worker&inline';
+import { classicWorker } from './core/ClassicWorker.js';
 import { Player } from './player/Player.js';
 import { BoatController } from './player/BoatController.js';
 import { GameState } from './game/GameState.js';
@@ -43,7 +45,7 @@ import { MarineSnow } from './fx/MarineSnow.js';
 import { Whale } from './world/marine/Whale.js';
 import { Spray } from './fx/Spray.js';
 import { AirMotes } from './fx/AirMotes.js';
-import { Rain } from './fx/Rain.js';
+import { Rain, SPLASH_ROCKS } from './fx/Rain.js';
 import { Drips, eavePoints, palmPoints, wheelhousePoints } from './fx/Drips.js';
 import { BoatInstruments } from './world/boat/Instruments.js';
 import { Lightning } from './sky/Lightning.js';
@@ -86,6 +88,7 @@ const _fwd = new THREE.Vector3();
 const _up = new THREE.Vector3();
 const _hornAt = new THREE.Vector3( - 0.42, 3.4, 1.15 ); // (the boat's horn, if its model doesn't say)
 const _shelter = new THREE.Matrix4(), _c4 = new THREE.Matrix4(); // (M9: the wheelhouse roof over the rain)
+const SPLASH_REACH = 13; // m: (M12) the rocks the splashes about the camera can land on (Rain's 16 m square, and a step)
 const _fwdB = new THREE.Vector3(); // (M11: her heading, for her instruments)
 // what starts the sound: browsers allow it only after one of these
 const GESTURES = [ 'pointerdown', 'touchend', 'click', 'keydown' ];
@@ -346,6 +349,7 @@ export class App {
 				phase: ( t, T ) => this.shore.phase( t, T ), timeOf: ( s, T ) => this.shore.timeOf( s, T ) },
 			field: this.shoreField, terrain: this.terrainData,
 		} );
+		this.westSurfHeard();
 		this.player.audio = this.audio;
 		// (and, M10, the hull: a slam's wear and the green water it ships, Game.hull)
 		this.boatCtl.onSlam = ( strength ) => {
@@ -553,11 +557,14 @@ export class App {
 		if ( ( this._clockSaveT -= dt ) <= 0 ) this.saveClock();
 		// (Salt Life) the weather, before anything it moves (the boat, the sky)
 		this.weather.update( dt, s.day, s.timeOfDay, this.weatherPick(), this.camera );
+		// (M12) a westerly's swell on its way: its shore field, solved off the page
+		if ( this.weather.target.west > 0 && ! this._westField && this._started ) this.solveWestField();
 		// (M9) the lightning, before the sky its flash lights
 		const wx = this.weather.live, cv = this.renderer.domElement;
 		this.lightning.setViewport( cv.width, cv.height );
-		this.lightning.update( wx.thunder, this.camera, G.windDir.value, this.sky.clouds.base, wx.visibility );
-		this.rain.flash.value = this.sky.flash;
+		// ((M12) from up the blow's track, from the clock: everyone's strikes in the same place)
+		this.lightning.update( wx.thunder, this.camera, this.weather.track, this.sky.clouds.base, wx.visibility, Date.now(), this.weather.cells );
+		this.rain.flash.value = this.sky.flashFill; // ((M12) the light about you: none from a storm on the horizon)
 		if ( wx.thunder > 0 && this.audio ) this.audio.thunderReady();
 
 		// ---- player / boat (boat physics first so the cameras follow this frame's pose)
@@ -664,7 +671,7 @@ export class App {
 			this.fish.viewHeight = this.renderer.domElement.height;
 			this.fish.lit = lampsLit( this.settings.timeOfDay ); // (Salt Life: the tarpon gather under the pier's lamps)
 			this.fish.hour = this.settings.timeOfDay; // (Salt Life: the lobsters come out after dark)
-			this.fish.setSurf( this.shore.params.amplitude ); // (M10: the breakers, and the runners in them)
+			this.fish.setSurf( this.shore.surf ); // (M10: the breakers, and the runners in them; (M12) both swells')
 			this.fish.update( dt, this.camera.position );
 			this.fish.cull( this.camera );
 
@@ -688,7 +695,16 @@ export class App {
 		// (M9) no rain under the wheelhouse roof
 		this.rain.setShelter( _shelter.multiplyMatrices( this.boat.shelter, _c4.copy( this.boat.group.matrixWorld ).invert() ) );
 		wetSurfaces.update( this.camera, _shelter ); // (M11: nor is anything wet under it, or under a cover)
-		this.rain.setDeck( this.boat.group.matrixWorld ); // (M10: the splashes on her cockpit's sole)
+		this.rain.setDeck( this.boat.group.matrixWorld, this.boat.rainTops ); // (M10: the splashes on her cockpit's sole; (M12) her roof, foredeck and gear)
+		// ((M12) and on the rocks about you, looked for again as you move, while it rains)
+		const cam = this.camera.position, at = this._rocksAt || ( this._rocksAt = { x: 1e9, z: 1e9 } );
+		if ( G.rain.value > 0.002 && this.rocks && Math.hypot( cam.x - at.x, cam.z - at.z ) > 1.5 ) {
+
+			at.x = cam.x;
+			at.z = cam.z;
+			this.rain.setRocks( this.rocks.splashRocks( cam.x, cam.z, SPLASH_REACH, SPLASH_ROCKS, this._splashRocks || ( this._splashRocks = [] ) ) );
+
+		}
 		this.drips.update( dt, this.camera, this.cameraWaterHeight, this.renderer.domElement.height, this.boat.group.matrixWorld ); // (M11)
 		this.updateInstruments( dt );
 		this.boatLamps.set( { underway: this.boatCtl.driven || ! ( this.boatCtl.moored || this.boatCtl.anchor ), spot: this.searchlight } );
@@ -1375,7 +1391,7 @@ export class App {
 		_up.set( 0, 1, 0 ).applyQuaternion( cam.quaternion );
 		const h = this.cameraWaterHeight ?? 0;
 		const coast = this.terrainData.coastDistance( p.x, p.z ).d;
-		const amp = this.shore.params.amplitude, pier = WORLD.pier, boat = this.boatCtl;
+		const amp = this.shore.surf, pier = WORLD.pier, boat = this.boatCtl;
 		// (the boat you hear: yours, or the one you ride in, or someone's going by: together/)
 		const theirs = this.together ? this.together.boatSound() : null;
 		// (M10) yours runs once it's caught (Hull: taking the helm cranks her, and she can stall)
@@ -1436,6 +1452,11 @@ export class App {
 	updateInstruments( dt ) {
 
 		const p = this.player, b = this.boatCtl, g = this.game;
+		// ((M12) riding along: the skipper's, on their dash; yours on standby until you're back)
+		const ride = p.riding && this.together ? this.together.ridden() : null;
+		this.dashOn( ride ? ride.group : null );
+		// (on the low tier others' boats have no dash to show it on)
+		if ( ride && g && p.mode === 'deck' && this.tier !== 'low' ) return this.instruments.update( dt, this.riddenReading( ride ) );
 		if ( ! g || p.riding || ( p.mode !== 'boat' && p.mode !== 'deck' ) ) return this.instruments.update( dt, null );
 		const r = this._reading || ( this._reading = {} ), f = b.forward( _fwdB ), x = b.position.x, z = b.position.z;
 		const map = g.minimap;
@@ -1451,6 +1472,41 @@ export class App {
 		r.z = z;
 		r.chart = map && map._bake && map._bake.done ? map.canvas : null;
 		this.instruments.update( dt, r );
+
+	}
+
+	// (M12) the dash of the boat you're riding in (ride: Together.ridden()): the engine's revs and the
+	// starter from the skipper's pose, its fuel and fish finder as they send them (none: on empty, no
+	// finder), its speed and heading as it goes; the depth under it and the chart where it is, here
+	riddenReading( ride ) {
+
+		const p = this.player, c = ride.cur, d = c.dash, r = this._ridden || ( this._ridden = {} );
+		const f = p.boat.forward( _fwdB ), x = p.boat.position.x, z = p.boat.position.z, map = this.game.minimap;
+		r.engine = c.crank ? 'cranking' : c.mode === 'helm' && c.rpm > 0.02 ? 'running' : 'off';
+		r.rpm = c.rpm;
+		r.speed = ride.speed;
+		r.heading = Math.atan2( f.x, - f.z );
+		r.fuel = d ? d.fuel : 0;
+		r.depth = Math.max( 0, G.seaLevel.value - this.terrainData.heightAt( x, z ) );
+		r.finder = !! ( d && d.finder );
+		r.fish = d ? d.fish : 0;
+		r.x = x;
+		r.z = z;
+		r.chart = map && map._bake && map._bake.done ? map.canvas : null;
+		return r;
+
+	}
+
+	// (M12) which boat's dash shows the readings: the one you're riding in (its group), or yours (null);
+	// the other's on standby
+	dashOn( group ) {
+
+		if ( group === this._dashOn ) return;
+		const ins = this.instruments, swap = ( root, material ) => root && root.traverse( ( c ) => c.name === 'boat-display' && ( c.material = material ) );
+		swap( this._dashOn, ins.standby );
+		this._dashOn = group;
+		swap( this.boat.group, group ? ins.standby : ins.material );
+		swap( group, ins.material );
 
 	}
 
@@ -1570,6 +1626,9 @@ export class App {
 		const q = this.portal.standalone ? new URLSearchParams( location.search ) : null;
 		const asked = q && q.has( 'hour' ) ? Number( q.get( 'hour' ) ) : NaN;
 		if ( asked >= 0 && asked < 24 ) s.timeOfDay = asked;
+		// ((M12) ?day=53: that day's weather, for trying it)
+		const day = q && q.has( 'day' ) ? Number( q.get( 'day' ) ) : NaN;
+		if ( day >= 1 ) s.day = Math.floor( day );
 		// (?weather=gale: that weather; ?weather=forecast: the day's)
 		const weather = q && q.get( 'weather' );
 		if ( weather && ( CONDITIONS[ weather ] || weather === 'forecast' ) ) {
@@ -1584,6 +1643,69 @@ export class App {
 			this.saveClock();
 			return this.store.flush();
 
+		} );
+
+	}
+
+	// (M12) a westerly's swell: its shore field (the travel times it's refracted along, round the bay's
+	// western arm), solved once one's on its way, in a worker where there is one (a few tenths of a
+	// second on a laptop, a few seconds on a phone; never at load), from the island's own field's depths.
+	// Then the shore waves cross it with the south's, and the surf's sound hears it break
+	solveWestField() {
+
+		if ( this._westField ) return this._westField;
+		const home = this.shoreField, swellDir = [ SWELL_WEST.x, SWELL_WEST.y ];
+		const ground = { depth: home.depth, res: home.res, size: home.size, origin: home.origin };
+		this._westField = new Promise( ( resolve, reject ) => {
+
+			const worker = classicWorker( ShoreWorker );
+			worker.onmessage = ( e ) => {
+
+				worker.terminate();
+				if ( e.data.error ) reject( new Error( e.data.error ) );
+				else resolve( e.data.field );
+
+			};
+
+			worker.onerror = ( e ) => {
+
+				worker.terminate();
+				reject( e );
+
+			};
+
+			worker.postMessage( { ground, swellDir } );
+
+		} ).catch( ( e ) => {
+
+			console.warn( 'Shore: the west swell\'s field solved on the page (no worker)', e && e.message );
+			return computeShoreField( fieldGround( ground ), { res: home.res, swellDir } );
+
+		} ).then( ( field ) => {
+
+			this.shore.addField( field );
+			this.westSurfHeard();
+			return field;
+
+		} );
+		return this._westField;
+
+	}
+
+	// (M12) the west swell's waves to the surf's sound, once both are here
+	westSurfHeard() {
+
+		const train = this.shore && this.shore.trains[ 1 ], P = this.shore && this.shore.params;
+		if ( ! train || ! this.audio ) return;
+		const value = ( get ) => ( { get value() {
+
+			return get();
+
+		} } );
+		this.audio.addShore( {
+			shore: { amplitude: value( () => train.amplitude ), variation: value( () => P.variation ), period: value( () => train.period ), gamma: value( () => P.gamma ), enabled: value( () => P.enabled ), time: G.time,
+				phase: ( t, T ) => train.phase( t, T ), timeOf: ( s, T ) => train.timeOf( s, T ) },
+			field: train.field,
 		} );
 
 	}

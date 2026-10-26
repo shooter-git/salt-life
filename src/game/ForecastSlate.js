@@ -1,6 +1,6 @@
 import { Mesh, PlaneGeometry, CanvasTexture, MeshStandardMaterial, SRGBColorSpace, Matrix4 } from '../engine/index.js';
 import { STAND } from './FishStand.js';
-import { WEATHER_NAMES, MURKY, surfText } from './Weather.js';
+import { WEATHER_NAMES, MURKY, surfText, swellFrom } from './Weather.js';
 import { timeText } from './IslandClock.js';
 import { knots } from './Units.js';
 import { wxWind, wxRain } from './TimeHUD.js';
@@ -31,7 +31,7 @@ export function slateText( weather, next, locale = undefined ) {
 		rows: [
 			[ 'Now', `${ WEATHER_NAMES[ weather.id ] }${ wet ? `, ${ wet }` : '' }` ],
 			[ 'Wind', `${ wxWind( weather ) } ${ knots( weather.wind ) }` ],
-			[ 'Surf', `${ surfText( weather.surf ) }, ${ Math.round( weather.period ) } s` ],
+			[ 'Surf', `${ surfText( weather.surf ) } ${ swellFrom( weather.west || 0 ) }, ${ Math.round( weather.period ) } s` ],
 			[ 'Later', later ],
 		],
 		note: weather.front >= FEEDING ? 'Fish feeding: a blow\'s coming' : weather.murk >= MURKY ? 'The water\'s murky after the blow' : '',

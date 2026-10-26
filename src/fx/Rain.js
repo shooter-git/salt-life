@@ -24,13 +24,18 @@ const f = ( x ) => {
 // rain costs).
 // (M10) And where they land, splashes: a small crown popping up and gone in a moment, on the ground
 // above the sea (the sea has its rings: WaterSurface) and on the boat's cockpit sole (the deck aft of
-// the wheelhouse, as a box in her frame: setDeck), and (M11) on what covers the island where it's the
+// the wheelhouse, as a box in her frame: setDeck), (M12) and on whatever's highest of her: the
+// wheelhouse roof, the foredeck, the traps (setDeck's tops), and on the rocks about you (setRocks: each
+// as an ellipsoid, as Rocks.splashRocks gives them), and (M11) on what covers the island where it's the
 // top (the pier's deck, the boardwalks, the roofs and awnings; not the thatch, which takes it in), so
 // none under it. Hashed about the camera too, each at a new spot each time it pops; one more instanced
 // draw, as many as the rain is hard.
 //   const rain = new Rain( { terrain, cover, tier } ); scene.add( rain.mesh, rain.splash );
 //   rain.update( dt, camera, cameraWaterHeight, viewHeight )   (each frame)   rain.flash.value
-//   rain.setDeck( boatMatrixWorld )
+//   rain.setDeck( boatMatrixWorld, tops )   (tops: (M12) what of her takes the rain, in her frame:
+//     [ { x0, x1, z0, z1, y } ]; given once)
+//   rain.setRocks( [ Matrix4 ] )   ((M12) the rocks about the camera: world -> unit sphere, SPLASH_ROCKS
+//     at most)
 
 const COUNT = { low: 1400, mid: 3200, high: 6400 };
 const BOX = 22, HEIGHT = 14; // m: the box across, and its height (the camera a third of the way up)
@@ -48,6 +53,10 @@ const SPLASH_LIFE = 0.15;
 const SPLASH_PERIOD = [ 0.3, 0.7 ];
 const SPLASH_SIZE = 0.06;
 const COCKPIT = { y: 0.35, x: 1.1, z: [ - 3.7, - 1.0 ] };
+// (M12) and the rest of her that takes the rain from above, at most (setDeck's tops); the rocks about
+// the camera the splashes land on, at most (setRocks)
+const TOPS = 12;
+export const SPLASH_ROCKS = 16;
 
 // the crown a drop throws up where it lands, on its quad (uv: -1..1, y up; s: how far through its life,
 // 0..1): a thin ring spreading at its foot and three drops thrown up and out of it. Its coverage. (M11:
@@ -236,6 +245,13 @@ void main() {
 			splashTime: { value: 0 },
 			splashBoat: { value: new THREE.Matrix4() }, // the boat's frame -> the world, and back
 			splashBoatInv: { value: NO_ROOF.clone() },
+			// (M12) her tops: ( x0, x1, z0, z1 ) and their heights, in her frame (the cockpit's sole first)
+			splashTops: { value: Array.from( { length: TOPS }, () => new THREE.Vector4() ) },
+			splashTopY: { value: new Array( TOPS ).fill( 0 ) },
+			splashTopCount: { value: 0 },
+			// (M12) the rocks about the camera: world -> the unit sphere of each one's ellipsoid
+			splashRocks: { value: Array.from( { length: SPLASH_ROCKS }, () => new THREE.Matrix4() ) },
+			splashRockCount: { value: 0 },
 			rainAmount: G.rain,
 			rainViewHeight: this.uniforms.rainViewHeight,
 			rainSunDir: G.sunDir,
@@ -253,6 +269,11 @@ uniform vec3 splashCamPos;
 uniform float splashTime;
 uniform mat4 splashBoat;
 uniform mat4 splashBoatInv;
+uniform vec4 splashTops[ ${ TOPS } ];
+uniform float splashTopY[ ${ TOPS } ];
+uniform int splashTopCount;
+uniform mat4 splashRocks[ ${ SPLASH_ROCKS } ];
+uniform int splashRockCount;
 uniform float rainAmount;
 uniform float rainViewHeight;
 uniform vec3 rainSunDir;
@@ -276,15 +297,29 @@ void main() {
 	float B = ${ f( SPLASH_BOX ) };
 	vec2 local = ( fract( c.xy - splashCamPos.xz / B ) - 0.5 ) * B;
 	vec3 p = vec3( splashCamPos.x + local.x, 0.0, splashCamPos.z + local.y );
-	// where it lands: the cockpit's sole, or the top of what's there where it's above the sea: what covers
-	// the ground (the pier's deck, a roof: not thatch, which takes it in), or the ground
+	// where it lands: the highest of the boat's tops there ((M12) her cockpit's sole, the wheelhouse roof,
+	// the foredeck, the traps), or the top of what's there where it's above the sea: what covers the
+	// ground (the pier's deck, a roof: not thatch, which takes it in), or the ground
 	vec3 b = ( splashBoatInv * vec4( p, 1.0 ) ).xyz;
-	float deck = abs( b.x ) < ${ f( COCKPIT.x ) } && b.z > ${ f( COCKPIT.z[ 0 ] ) } && b.z < ${ f( COCKPIT.z[ 1 ] ) } ? 1.0 : 0.0;
+	float deckY = -1e4;
+	for ( int i = 0; i < ${ TOPS }; i ++ ) {
+		if ( i >= splashTopCount ) break;
+		vec4 t = splashTops[ i ];
+		if ( b.x > t.x && b.x < t.y && b.z > t.z && b.z < t.w ) deckY = max( deckY, splashTopY[ i ] );
+	}
+	float deck = deckY > -1e3 ? 1.0 : 0.0;
 	float ground = terrainHeightAt( p.xz );
 	vec2 over = coverAt( p.xz );
 	float top = max( ground, over.x );
+	// ((M12) a rock's top: where a drop falling there first meets its ellipsoid)
+	for ( int i = 0; i < ${ SPLASH_ROCKS }; i ++ ) {
+		if ( i >= splashRockCount ) break;
+		vec3 o = ( splashRocks[ i ] * vec4( p.x, 500.0, p.z, 1.0 ) ).xyz, d = mat3( splashRocks[ i ] ) * vec3( 0.0, - 1.0, 0.0 );
+		float a = dot( d, d ), b = dot( o, d ), disc = b * b - a * ( dot( o, o ) - 1.0 );
+		if ( disc > 0.0 ) top = max( top, 500.0 - ( - b - sqrt( disc ) ) / a );
+	}
 	bool thatch = over.x > ground && over.y == ${ f( COVER.THATCH ) };
-	p = deck > 0.5 ? ( splashBoat * vec4( b.x, ${ f( COCKPIT.y ) }, b.z, 1.0 ) ).xyz : vec3( p.x, top, p.z );
+	p = deck > 0.5 ? ( splashBoat * vec4( b.x, deckY, b.z, 1.0 ) ).xyz : vec3( p.x, top, p.z );
 	float land = max( deck, top > rainSeaLevel + 0.03 && ! thatch ? 1.0 : 0.0 );
 	// a crown facing you (about the upright), at least a couple of pixels across
 	vec3 toCam = cameraPosition - p;
@@ -357,12 +392,32 @@ void main() {
 
 	}
 
-	// (M10) the boat, for the splashes on her cockpit's sole: her frame -> the world
-	setDeck( matrix ) {
+	// (M10) the boat, for the splashes on her cockpit's sole: her frame -> the world; (M12) and the rest
+	// of her that takes the rain from above (tops, in her frame: [ { x0, x1, z0, z1, y } ], given once)
+	setDeck( matrix, tops = null ) {
 
 		const U = this.splashUniforms;
 		U.splashBoat.value.copy( matrix );
 		U.splashBoatInv.value.copy( matrix ).invert();
+		if ( ! tops || this._tops ) return;
+		this._tops = true;
+		const all = [ { x0: - COCKPIT.x, x1: COCKPIT.x, z0: COCKPIT.z[ 0 ], z1: COCKPIT.z[ 1 ], y: COCKPIT.y }, ...tops ].slice( 0, TOPS );
+		all.forEach( ( t, i ) => {
+
+			U.splashTops.value[ i ].set( t.x0, t.x1, t.z0, t.z1 );
+			U.splashTopY.value[ i ] = t.y;
+
+		} );
+		U.splashTopCount.value = all.length;
+
+	}
+
+	// (M12) the rocks about the camera (Rocks.splashRocks: world -> each one's unit sphere)
+	setRocks( list ) {
+
+		const U = this.splashUniforms, n = Math.min( list.length, SPLASH_ROCKS );
+		for ( let i = 0; i < n; i ++ ) U.splashRocks.value[ i ].copy( list[ i ] );
+		U.splashRockCount.value = n;
 
 	}
 

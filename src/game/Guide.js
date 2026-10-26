@@ -196,6 +196,9 @@ const TIPS = {
 	},
 	full: 'Your cooler is <b>full</b>. Sell to Joe, or buy a bigger hold from Marta at the chandlery.',
 	worn: 'Your boat\'s <b>hull is worn</b> (the gauge by your money): she\'s slower, and she leaks. Marta <b>repairs</b> it at the chandlery, with the boat at her dock.',
+	// (M12) the surf
+	rip: 'You\'re in a <b>rip current</b>, carried out through a gap in the breakers (the milky water). Swim <b>along the beach</b> out of it, not against it.',
+	tumble: 'A <b>breaker</b> tumbled you. In a big surf, <b>dive under</b> a big one before it breaks on you, or keep out beyond the breakers.',
 };
 
 const tipText = ( id, device ) => ( TIPS[ device ] || TIPS.keyboard )[ id ] || TIPS[ id ];
@@ -452,6 +455,10 @@ export class Guide {
 		if ( gun && gun.state === 'empty' && [ 'landing', 'pulling' ].includes( prev.gunState ) ) this.tip( 'gunLoad' );
 		if ( g.spearFight && ! prev.spearFight ) this.tip( 'spearFight' );
 		if ( p.mode === 'swim' && p.under && p.breath < p.breathMax * 0.3 ) this.tip( 'breath' );
+		// ((M12) the surf: carried out by a rip for a few seconds; the first tumble in a breaker)
+		if ( p.inRip > 4 ) this.tip( 'rip' );
+		if ( prev.tumbles !== undefined && p.tumbles > prev.tumbles ) this.tip( 'tumble' );
+		prev.tumbles = p.tumbles;
 		prev.gun = !! ( gun && gun.equipped );
 		prev.gunState = gun && gun.state;
 		prev.spearFight = !! g.spearFight;

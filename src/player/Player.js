@@ -1,6 +1,7 @@
 import * as THREE from '../engine/index.js';
 import { WORLD } from '../world/WorldLayout.js';
 import { HOUSE } from '../world/boat/Wheelhouse.js';
+import { TUMBLE_H } from '../ocean/ShoreWaves.js';
 
 const HOUSE_HELM = { x: HOUSE.helmX, z: HOUSE.seatZ };
 
@@ -15,6 +16,17 @@ const STAND_DEPTH = 1.1;
 // and how long it takes to get it all back at the surface (s)
 export const BREATH = 50;
 const BREATH_BACK = 10;
+// (M12) a breaker past TUMBLE_H (ShoreWaves.js), this far broken (plunging), tumbles a swimmer it breaks
+// on: carried toward the beach for up to TUMBLE_S s (at TUMBLE_CARRY m/s at first), rolled over and held
+// under (TUMBLE_DOWN m), and out of breath by up to TUMBLE_BREATH s; the more, the bigger it is (in full
+// TUMBLE_SPAN m higher). Dived under it, more than TUMBLE_UNDER of its height, it passes over
+const TUMBLE_B = 0.85;
+const TUMBLE_SPAN = 1.4;
+const TUMBLE_S = [ 1.3, 2.4 ];
+const TUMBLE_CARRY = [ 1.8, 3.2 ];
+const TUMBLE_DOWN = [ 0.7, 1.6 ];
+const TUMBLE_BREATH = [ 2, 6 ];
+const TUMBLE_UNDER = 0.55;
 const GASP = 3; // s at the surface after a blackout before you can dive again
 
 const _v = new THREE.Vector3();
@@ -84,6 +96,16 @@ export class Player {
 		this.breathPaused = false; // (the game: while a catch card is up, the world waits)
 		this.blackout = 0; // 1 while blacked out and floating up, then the gasp at the surface (s)
 		this.blackouts = 0; // how many times (the game notices a new one)
+		// (M12) the surf: its current where you swim (a rip's: ShoreWaves.currentAt), how long you've been
+		// carried out by one; and a breaker tumbling you (tumble: s left of it, tumbles: how many times)
+		this.current = { x: 0, z: 0, rip: 0 };
+		this.inRip = 0;
+		this.tumble = 0;
+		this.tumbles = 0;
+		this.roll = 0;
+		this._tumble = { T: 1, k: 0, dx: 0, dz: 1, spin: 1 };
+		this._breaker = { n: 0, H: 0, b: - 9, dx: 0, dz: 1 };
+		this._crest = null;
 		this.stalk = false; // set by the game: the speargun is out (a slow, quiet pace under water)
 		this.slot = query.allocate( 'player', 1 );
 		this.prompt = null;
@@ -158,6 +180,8 @@ export class Player {
 		this.waterH = this.waterHeight();
 		this.waterMean = this.waterMean === null ? this.waterH : this.waterMean + ( this.waterH - this.waterMean ) * ( 1 - Math.exp( - dt / 4 ) );
 		this.prompt = null;
+		// ((M12) a tumble ends when you're out of the water, or find your feet)
+		if ( this.mode !== 'swim' ) this.tumble = this.roll = this.inRip = 0;
 
 		if ( this.mode === 'boat' ) {
 
@@ -230,7 +254,38 @@ export class Player {
 		eye.y += this.camOff;
 		this.camera.position.copy( eye );
 		this._camY = this.camera.position.y;
-		this.camera.quaternion.setFromEuler( _e.set( this.pitch, this.yaw, 0 ) );
+		this.camera.quaternion.setFromEuler( _e.set( this.pitch, this.yaw, this.roll ) );
+
+	}
+
+	// (M12) the surf where you swim: carried by its current (a rip's seaward through its channel, the
+	// feeders along the beach into it), and tumbled by a big breaker as it breaks on you
+	surf( dt ) {
+
+		const p = this.position, q = this.query;
+		if ( ! q.currentAt ) return;
+		const c = q.currentAt( p.x, p.z, undefined, this.current );
+		p.x += c.x * dt;
+		p.z += c.z * dt;
+		this.inRip = c.rip > 0.5 && Math.hypot( c.x, c.z ) > 0.2 ? this.inRip + dt : 0;
+		const br = q.breakerAt( p.x, p.z, undefined, this._breaker );
+		if ( ! br ) return;
+		const passed = this._crest !== null && br.n === this._crest + 1;
+		this._crest = br.n;
+		if ( passed && this.tumble <= 0 && this.blackout === 0 && br.b > TUMBLE_B && br.H > TUMBLE_H && p.y > ( this.waterMean ?? this.waterH ) - TUMBLE_UNDER * br.H ) {
+
+			const k = Math.min( 1, ( br.H - TUMBLE_H ) / TUMBLE_SPAN ), T = this._tumble;
+			T.T = this.tumble = THREE.MathUtils.lerp( TUMBLE_S[ 0 ], TUMBLE_S[ 1 ], k );
+			T.k = k;
+			T.dx = br.dx;
+			T.dz = br.dz;
+			T.spin = Math.random() < 0.5 ? - 1 : 1;
+			this.tumbles ++;
+			this.floating = false;
+			this.breath = Math.max( 0, this.breath - THREE.MathUtils.lerp( TUMBLE_BREATH[ 0 ], TUMBLE_BREATH[ 1 ], k ) );
+			if ( this.audio ) this.audio.splash( 0.6 + 0.4 * k, p );
+
+		}
 
 	}
 
@@ -356,6 +411,8 @@ export class Player {
 		// (Salt Life) blacked out: limp, floating up to the surface; then a few breaths before diving
 		if ( this.blackout === 1 ) wish.set( 0, 1, 0 );
 		else if ( this.blackout > 0 ) wish.y = Math.max( wish.y, 0 );
+		// ((M12) tumbled in a breaker: no say in it until it lets you go)
+		if ( this.tumble > 0 ) wish.set( 0, 0, 0 );
 
 		const sprint = ( inp.down( 'ShiftLeft' ) || inp.down( 'ShiftRight' ) ) && this.blackout !== 1;
 		// (Salt Life) hunting with the speargun: a slow, quiet glide along (fish notice a fast diver
@@ -381,6 +438,27 @@ export class Player {
 		}
 
 		p.addScaledVector( this.velocity, dt );
+		// (M12) the surf's current carries you; a breaker tumbles you over and under, toward the beach
+		this.surf( dt );
+		if ( this.tumble > 0 ) {
+
+			const T = this._tumble, f = 1 - this.tumble / T.T, k = T.k;
+			const carry = THREE.MathUtils.lerp( TUMBLE_CARRY[ 0 ], TUMBLE_CARRY[ 1 ], k ) * ( 1 - f );
+			p.x += T.dx * carry * dt;
+			p.z += T.dz * carry * dt;
+			const down = surfaceY - SWIM_EYE - THREE.MathUtils.lerp( TUMBLE_DOWN[ 0 ], TUMBLE_DOWN[ 1 ], k ) * Math.sin( Math.PI * Math.min( 1, f * 1.4 ) );
+			p.y += ( down - p.y ) * ( 1 - Math.exp( - dt * 6 ) );
+			this.roll = T.spin * Math.sin( Math.PI * f ) * ( 0.9 + 1.6 * k ) + Math.sin( f * 17 ) * 0.12 * ( 1 - f );
+			this.tumble = Math.max( 0, this.tumble - dt );
+			if ( this.tumble === 0 ) {
+
+				this.roll = 0;
+				this.floating = true;
+
+			}
+
+		}
+
 		p.y = Math.min( p.y, surfaceY + 0.05 );
 		this.colliders.resolveCapsule( p, RADIUS, 1.0, 0 );
 		const g = this.groundAt( p.x, p.z, p.y + 0.3 );

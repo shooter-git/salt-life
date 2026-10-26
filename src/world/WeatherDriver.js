@@ -1,5 +1,5 @@
 import { G } from '../core/Globals.js';
-import { islandTime, weatherAt, showers, FRONT_KMH } from '../game/Weather.js';
+import { islandTime, weatherAt, showers, towardOf, FRONT_KMH, STORM_RANGE } from '../game/Weather.js';
 import { FRONT_KM } from '../sky/SkyProClouds.js';
 
 // (Salt Life) The island's weather, each frame: what the day brings (game/Weather.js), or what you picked
@@ -8,7 +8,8 @@ import { FRONT_KM } from '../sky/SkyProClouds.js';
 //     the spray, the boat, the sound). It turns slowly about the trades' direction (G.windPrevailing),
 //     and the wind sea and the slicks turn with it about the camera (Waves.setWindDir, SeaDetail);
 //   - the open sea (Waves.setSea: the swell, the wind sea) and its whitecaps (WaterSurface);
-//   - the surf (ShoreWaves.setSurf: its height and its period, on a clock that carries on);
+//   - the surf (ShoreWaves.setSurf: its height and its period, on a clock that carries on; (M12) and how
+//     much of it is a westerly's swell, crossing the south's: Waves.setSwellWest offshore);
 //   - the cloud (SkyProClouds: cover, and how grey) and the light and the distance seen under it (Sky).
 //   - (M9) the rain (G.rain: the streaks, the rings on the water, the sound) and what it leaves wet
 //     (G.wet: the ground, the village, the boat, drying slowly after), and the thunder (Lightning);
@@ -19,6 +20,11 @@ import { FRONT_KM } from '../sky/SkyProClouds.js';
 //   - (M10) the water's murk after a blow (G.murk: the view under water closes in, App; the caustics dim).
 //   - (M11) the showers about the island, drifting down the trades (Weather.showers): their curtains in
 //     the distance (Sky.setCurtains), each frame from the clock.
+//   - (M12) the blow's track (Weather.trackAt): the wind comes round to it (a front's swings it through
+//     half the compass in a few game hours), the weather on its way is told up it (SkyProClouds.front,
+//     frontDir), and the showers and the lightning come from up it (track: where the weather goes, from
+//     the clock alone, so everyone's strikes are in the same place). The showers are looked for out to
+//     STORM_RANGE (cells): the thundery ones on the horizon strike too (Lightning, distantStrikesIn).
 // The wind and the sea come round over half a minute or so, the cloud more slowly (a minute or two from
 // fair to a gale's, so the panorama's refresh keeps up and nothing pops), the rain in seconds. When the
 // clock jumps (a rest, the host's clock, coming back to the tab) it's all set at once, behind the dim a
@@ -41,7 +47,9 @@ const FRONT_EVERY = 0.5;
 const GUSTS = [ 0.22, 0.18, 0.15 ];
 const SQUALL = [ 1.5, 3 ];
 const GALE = 20;
-const TURN_RATE = 0.003; // rad a second at most: the wind comes round slowly (the far sea turns with it)
+// rad a second at most: the wind comes round (the far sea turns with it), (M12) as fast as a front swings it
+// (about a quarter of the compass in two game hours)
+const TURN_RATE = 0.015;
 const JUMP = 0.5; // game hours: more than this between frames, the clock jumped
 // whitecaps: the share of the sea that breaks white goes as U^3.41 (Monahan & O'Muircheartaigh 1980);
 // none counted at a fair day's breeze or less, so the sea is as it always was. The water takes it as a
@@ -49,7 +57,7 @@ const JUMP = 0.5; // game hours: more than this between frames, the clock jumped
 const monahan = ( u ) => 3.84e-6 * Math.pow( Math.max( 0, u ), 3.41 );
 const WHITECAP = 0.85;
 const whitecap = ( u ) => WHITECAP * Math.min( 1, Math.max( 0, monahan( u ) - monahan( 7 ) ) / ( monahan( 20 ) - monahan( 7 ) ) );
-const KEYS = [ 'wind', 'swell', 'windSea', 'surf', 'visibility', 'murk' ];
+const KEYS = [ 'wind', 'swell', 'windSea', 'surf', 'west', 'visibility', 'murk' ];
 const QUICK = [ 'rain', 'thunder', 'front' ];
 // the surf's period changes slowly (s a second): a change hurries the crests a little on their way in
 const PERIOD_RATE = 0.02;
@@ -71,7 +79,9 @@ export class WeatherDriver {
 		this._frontT = 0;
 		this._pick = null;
 		this._showers = [];
-		this._showerRain = new Map(); // (each slot's rain, while the pick's the same)
+		this._showerRain = new Map(); // (each slot's weather, while the pick's the same)
+		this.cells = this._showers; // (M12) the showers about the island, out to STORM_RANGE (Weather.showers)
+		this.track = { x: 0, y: 1 }; // (M12) where the weather goes now (from the clock: Lightning)
 
 	}
 
@@ -101,6 +111,7 @@ export class WeatherDriver {
 
 		const T = islandTime( day, hour );
 		const target = this.target = weatherAt( T, pick );
+		towardOf( target.windAngle, this.track );
 		// (the cloud a shower brings comes over before it rains, and stays a while after)
 		const ahead = pick ? target : weatherAt( T + CLOUD_LEAD );
 		const cloud = this.cloud = { coverage: Math.max( target.coverage, ahead.coverage ), overcast: Math.max( target.overcast, ahead.overcast ), storm: Math.max( target.rain, ahead.rain ) };
@@ -142,6 +153,8 @@ export class WeatherDriver {
 
 				const at = pick ? target : weatherAt( T + CLOUD_LEAD + FRONT_KM[ i ] / FRONT_KMH );
 				f.value.setComponent( i, pick ? 0 : at.coverage - this.live.coverage );
+				// ((M12) told up the track of the weather that's 24 km off: the bank's)
+				if ( i === 2 && this.sky.clouds.frontDir ) towardOf( at.windAngle, this.sky.clouds.frontDir.value );
 
 			}
 
@@ -150,8 +163,8 @@ export class WeatherDriver {
 		this.apply();
 		// (M11) the showers about the island, for their curtains in the distance (a picked weather's are
 		// its own; each slot's rain is kept while the pick is)
-		if ( picked || this._showerRain.size > 64 ) this._showerRain.clear();
-		showers( T, pick, 26000, this._showers, this._showerRain );
+		if ( picked || this._showerRain.size > 160 ) this._showerRain.clear();
+		showers( T, pick, STORM_RANGE, this._showers, this._showerRain );
 		if ( camera ) this.sky.setCurtains( this._showers, camera.position );
 
 	}
@@ -172,7 +185,9 @@ export class WeatherDriver {
 		else G.windDir.value.set( p.x * c - p.y * s, p.x * s + p.y * c );
 		this.waves.setWindDir( G.windDir.value, this._at );
 		this.waves.setSea( w.swell, w.windSea );
-		if ( this.shore ) this.shore.setSurf( w.surf, w.period );
+		// ((M12) a westerly's swell from the west: offshore, and on the shore once its field's solved)
+		this.waves.setSwellWest( w.west, this._at );
+		if ( this.shore ) this.shore.setSurf( w.surf, w.period, w.west );
 		sky.clouds.coverage.value = w.coverage;
 		sky.clouds.overcast.value = w.overcast;
 		sky.clouds.storm.value = w.storm;
