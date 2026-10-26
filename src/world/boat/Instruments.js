@@ -84,9 +84,12 @@ export function batteryVolts( engine ) {
 }
 
 // where she is, as a plotter shows it ( '24°33.126′N', '81°46.272′W' )
+// (M13) as degrees, [ lat, lon ] (west negative: the shelter's tracking chart)
+export const latLon = ( x, z ) => [ LAT0 - z * DEG_M, LON0 + x * DEG_M / Math.cos( LAT0 * Math.PI / 180 ) ];
+
 export function position( x, z ) {
 
-	const lat = LAT0 - z * DEG_M, lon = LON0 + x * DEG_M / Math.cos( LAT0 * Math.PI / 180 );
+	const [ lat, lon ] = latLon( x, z );
 	const dm = ( v ) => {
 
 		const a = Math.abs( v ), d = Math.floor( a );

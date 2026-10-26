@@ -35,7 +35,7 @@ import { FT } from './Units.js';
 //   (M12) trackAt( T ) -> rad   towardOf( windAngle ) -> { x, y }   (where a blow comes from, and the
 //   way the weather goes)
 //   (M13) weatherAt( T, 'hurricane', since ): your own, picked at `since`   (and its values' hurricane, eye,
-//   surge, rainHaze, sprayHaze)
+//   surge, rainHaze, sprayHaze, boarded: (step 4) the island shut for it)
 //   hurricaneAt( T, pick, since ) -> { r, x, z, rmax, ... } | null   hurricaneNews( T, pick, since ) ->
 //   { stage: 'outlook' | 'watch' | 'warning', onset, ends, eye, over, from } | null   dayWeatherAt( T )
 
@@ -195,6 +195,9 @@ export const TS_WIND = 17.5, HURRICANE_WIND = 32.7;
 // game hours before its tropical-storm winds that it's on the outlook, watched for and warned of (as the
 // National Hurricane Center does: a watch 48 h ahead, a warning 36 h)
 const H_NEWS = { outlook: 96, watch: 48, warning: 36 };
+// (step 4) the island boards up (Joe and Marta shut and go home: `boarded`) this long before its
+// tropical-storm winds, and opens again this long after they've gone (game hours)
+const H_BOARD = [ 12, 6 ];
 // (on your own, a hurricane picked at `since` comes straight at the island, its eye over it `lead` game
 // hours on, passing just to the island's left, so the island's on the stronger side of its wall)
 const H_PICKED = { lead: 6, vmax: 33, rmax: 24000, speed: 20000, miss: - 0.2 };
@@ -342,7 +345,7 @@ function nameOf( w ) {
 function row( id ) {
 
 	const c = CONDITIONS[ id ];
-	return { id, wind: c.wind, windAngle: 0, coverage: c.coverage, overcast: c.overcast, swell: c.swell, windSea: windSeaOf( c.wind ), surf: Math.min( SURF_MAX, c.surf ), period: c.period, west: 0, visibility: c.visibility, rain: c.rain, thunder: c.thunder, front: 0, murk: MURK_PICK[ id ] || 0, hurricane: 0, eye: 0, surge: 0, rainHaze: 0, sprayHaze: 0 };
+	return { id, wind: c.wind, windAngle: 0, coverage: c.coverage, overcast: c.overcast, swell: c.swell, windSea: windSeaOf( c.wind ), surf: Math.min( SURF_MAX, c.surf ), period: c.period, west: 0, visibility: c.visibility, rain: c.rain, thunder: c.thunder, front: 0, murk: MURK_PICK[ id ] || 0, hurricane: 0, eye: 0, surge: 0, rainHaze: 0, sprayHaze: 0, boarded: 0 };
 
 }
 
@@ -431,7 +434,7 @@ export function dayWeatherAt( T ) {
 
 	// a blow on its way (0..1): the storm a few hours on, more than now (the fish feed hard ahead of it)
 	const front = clamp01( ( Math.max( storminess( T + FRONT_LEAD[ 0 ] ), storminess( T + FRONT_LEAD[ 1 ] ) ) - s ) * 12 ) * sstep( 0.45, 0.75, Math.max( storminess( T + FRONT_LEAD[ 1 ] ), s ) ) * k;
-	const w = { id: 'fair', wind, windAngle, coverage: wet.coverage, overcast: wet.overcast, swell, windSea: windSeaOf( wind ), surf, period, west, visibility: wet.visibility, rain, thunder, front, murk: murkAt( T ), hurricane: 0, eye: 0, surge: 0, rainHaze: 0, sprayHaze: 0 };
+	const w = { id: 'fair', wind, windAngle, coverage: wet.coverage, overcast: wet.overcast, swell, windSea: windSeaOf( wind ), surf, period, west, visibility: wet.visibility, rain, thunder, front, murk: murkAt( T ), hurricane: 0, eye: 0, surge: 0, rainHaze: 0, sprayHaze: 0, boarded: 0 };
 	w.id = nameOf( w );
 	return w;
 
@@ -530,6 +533,14 @@ function vortexAt( h, r ) {
 	return h.vmax * ( h.rmax + a ) / ( r + a ) * ( 1 - sstep( H.reach[ 0 ], H.reach[ 1 ], r ) );
 
 }
+
+// the game hours either side of its closest that its tropical-storm winds blow at the island
+const tsHalf = ( h ) => {
+
+	const rts = radiusOf( h, TS_WIND );
+	return Math.sqrt( Math.max( 0, rts * rts - h.d * h.d ) ) / h.speed;
+
+};
 
 // how far from its eye its vortex's wind is `wind` (m), beyond rmax
 const radiusOf = ( h, wind ) => {
@@ -692,6 +703,9 @@ function overHurricane( w, T, h ) {
 	w.eye = s.eye;
 	w.rainHaze = s.rainHaze * k;
 	w.sprayHaze = s.sprayHaze * k;
+	// ((step 4) boarded up for it, from a while before its winds to a while after)
+	const half = tsHalf( h );
+	w.boarded = T >= h.tc - half - H_BOARD[ 0 ] && T < h.tc + half + H_BOARD[ 1 ] ? 1 : 0;
 	// (its name inside its wall, eye and all, and wherever its wind's a hurricane's)
 	w.id = k >= 0.5 && ( s.r <= h.rmax || w.wind >= HURRICANE_WIND ) ? 'hurricane' : nameOf( w );
 	return w;
@@ -721,8 +735,7 @@ export function hurricaneNews( T, pick = null, since = 0 ) {
 	const list = pick === 'hurricane' ? [ pickedHurricane( since ) ] : pick ? [] : hurricanesAbout( T );
 	for ( const h of list ) {
 
-		const rts = radiusOf( h, TS_WIND ), half = Math.sqrt( Math.max( 0, rts * rts - h.d * h.d ) ) / h.speed;
-		const onset = h.tc - half, ends = h.tc + half;
+		const half = tsHalf( h ), onset = h.tc - half, ends = h.tc + half;
 		if ( T >= ends || T < onset - H_NEWS.outlook ) continue;
 		const stage = T >= onset - H_NEWS.warning ? 'warning' : T >= onset - H_NEWS.watch ? 'watch' : 'outlook';
 		return { stage, onset, ends, eye: h.tc, over: Math.abs( h.d ) < HURRICANE.over * h.rmax, from: windFrom( h.track.x, h.track.y ) };

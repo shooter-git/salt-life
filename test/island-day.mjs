@@ -7,6 +7,7 @@ import { Vendor } from '../src/game/Vendor.js';
 import { Game } from '../src/game/Game.js';
 import { slateText } from '../src/game/ForecastSlate.js';
 import { wxNews } from '../src/game/TimeHUD.js';
+import { insideRoom, roomMatrix, SHELTER } from '../src/world/village/StormPlaces.js';
 import { Vector3 } from '../src/engine/index.js';
 import { FISH } from '../src/game/FishTable.js';
 import { GameState } from '../src/game/GameState.js';
@@ -237,6 +238,24 @@ const money = sw.money;
 sw.collect( 120, w0.week );
 const sw2 = new GameState( { getItem: ( k ) => m.get( 'w' + k ) ?? null, setItem: () => {} } );
 ok( sw.money === money + 120 && sw2.load() && sw2.weekPaid === w0.week && sw2.money === money + 120, 'your share paid, and saved' );
+
+// ---- (M13) the shelter's room: inside it, out of the weather; its doorway and the porch outside aren't
+{
+
+	const room = { x: SHELTER.x, z: SHELTER.z, yaw: SHELTER.yaw, hx: SHELTER.w / 2 - 0.22, hz: SHELTER.d / 2 - 0.22, y0: 5.3, y1: 8.8 };
+	const at = ( lx, lz, y = 6 ) => {
+
+		const c = Math.cos( room.yaw ), s = Math.sin( room.yaw );
+		return [ room.x + lx * c + lz * s, y, room.z - lx * s + lz * c ];
+
+	};
+	const m = roomMatrix( room ), unit = ( p ) => new Vector3( ...p ).applyMatrix4( m );
+	const inside = [ [ 0, 0 ], [ 4.9, 3.3 ], [ - 4.9, - 3.3 ] ], out = [ [ 0, 3.9 ], [ 0, 6 ], [ 6, 0 ], [ 0, 0, 10 ] ];
+	ok( inside.every( ( [ a, b ] ) => insideRoom( room, ...at( a, b ) ) && unit( at( a, b ) ).toArray().every( ( v ) => Math.abs( v ) < 1 ) )
+		&& out.every( ( [ a, b, y ] ) => ! insideRoom( room, ...at( a, b, y ) ) && unit( at( a, b, y ) ).toArray().some( ( v ) => Math.abs( v ) > 1 ) ) && ! insideRoom( null, 0, 0, 0 ),
+	'(M13) in the shelter\'s room you\'re out of the weather (and the shaders keep its debris out); on its porch, beyond its walls or over its roof you aren\'t' );
+
+}
 
 console.log( fails ? `${ fails } FAILED` : 'all passed' );
 process.exit( fails ? 1 : 0 );

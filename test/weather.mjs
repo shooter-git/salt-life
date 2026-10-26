@@ -571,6 +571,17 @@ ok( cloudiness( 77 ) >= 0 && cloudiness( 77 ) <= 1 && storminess( 77 ) >= 0 && s
 
 	for ( let T = 30; T < 24 * 60; T += 0.5 ) if ( ! hurricaneAt( T ) && ( dayWeatherAt( T ).rainHaze !== 0 || dayWeatherAt( T ).sprayHaze !== 0 ) ) clear = false;
 	console.log( `     (step 3) seen in its wall ${ wall.toFixed( 0 ) } m at the shore, ${ wallIn.toFixed( 0 ) } m inland; under its rain ${ band[ 0 ].toFixed( 0 ) } to ${ band[ 1 ].toFixed( 0 ) } m; in its eye ${ eyeSeen > 1e5 ? 'clear' : eyeSeen.toFixed( 0 ) + ' m' }` );
+	// (step 4) the island boarded up for it: from a while before its winds until a while after
+	const n0 = hurricaneNews( since, 'hurricane', since );
+	let boardedRight = true;
+	for ( let T = since - 30; T < n0.ends + 20; T += 0.25 ) {
+
+		const want = T >= n0.onset - 12 && T < n0.ends + 6;
+		if ( ( P( T - since ).boarded === 1 ) !== want ) boardedRight = false;
+
+	}
+
+	ok( boardedRight && dayWeatherAt( 3000 ).boarded === 0, '(step 4) boarded up from 12 game hours before its winds until 6 after; never on another day' );
 	ok( wall < 100 && wallIn > wall * 1.5 && wallIn < 300 && band[ 0 ] > 400 && band[ 1 ] < 2000 && eyeSeen > 5000 && clear, 'in its wall under 100 m seen at the shore, more inland; under its rain the better part of a km; its eye clear; no haze of it on another day' );
 
 }

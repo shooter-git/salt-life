@@ -60,6 +60,8 @@ export class AirMotes {
 			airWindDir: G.windDir,
 			airWindSpeed: G.windSpeed,
 			airSeaLevel: G.seaLevel,
+			// ((M13) the world into the shelter's room: no blow's debris in there)
+			airRoom: { value: new THREE.Matrix4().makeScale( 0, 0, 0 ).setPosition( 1e4, 1e4, 1e4 ) },
 		};
 		const B = f( box ), NG = GNAT_SWARMS * GNATS_PER_SWARM;
 
@@ -80,6 +82,7 @@ uniform float airNight;
 uniform vec2 airWindDir;
 uniform float airWindSpeed;
 uniform float airSeaLevel;
+uniform mat4 airRoom;
 varying vec4 vAirCol; // radiance, opacity
 varying vec2 vAirUV; // quad corner
 vec3 airHash3( float n ) { return fract( sin( vec3( n, n + 17.13, n + 43.71 ) ) * vec3( 43758.5453, 22578.1459, 19642.3490 ) ); }
@@ -145,6 +148,8 @@ void main() {
 	float dDebris = max( land, shore * 0.8 ) * blow;
 	float density = isGnat ? dGnat : isSeed ? dSeed : isDebris ? dDebris : dMote;
 	float keep = clamp( ( density - ( isGnat ? 0.5 : h3.y ) ) * 8.0, 0.0, 1.0 );
+	// ((M13) a blow's debris stays out of the shelter's room)
+	if ( isDebris && all( lessThan( abs( ( airRoom * vec4( p, 1.0 ) ).xyz ), vec3( 1.0 ) ) ) ) keep = 0.0;
 
 	// ---- what: salt aerosol near the surf / over the sea, dust and pollen over the land
 	float salt = 1.0 - airSs( -0.5, 0.8, hA );
@@ -269,6 +274,13 @@ void main() {
 		const sd = G.windSpeed.value * DEBRIS_WIND * dt, dd = U.airDebrisDrift.value;
 		dd.x = ( dd.x + G.windDir.value.x * sd ) % this.box;
 		dd.y = ( dd.y + G.windDir.value.y * sd ) % this.box;
+
+	}
+
+	// (M13) the shelter's room (StormPlaces.roomMatrix: the world into its box)
+	setRoom( matrix ) {
+
+		this.uniforms.airRoom.value.copy( matrix );
 
 	}
 

@@ -46,6 +46,7 @@ import { Whale } from './world/marine/Whale.js';
 import { Spray } from './fx/Spray.js';
 import { StormSpray } from './fx/StormSpray.js';
 import { FlyingDebris } from './fx/FlyingDebris.js';
+import { insideRoom, roomMatrix } from './world/village/StormPlaces.js';
 import { AirMotes } from './fx/AirMotes.js';
 import { Rain, SPLASH_ROCKS } from './fx/Rain.js';
 import { Drips, eavePoints, palmPoints, wheelhousePoints } from './fx/Drips.js';
@@ -327,6 +328,7 @@ export class App {
 		this.lightning.onThunder = ( strike, m, dir ) => this.audio && this.audio.thunder( m, dir, strike.power );
 		// ((M13) and what a hurricane's wind tears off and carries: fx/FlyingDebris.js)
 		this.flying = new FlyingDebris( { terrain: this.terrain, tier } );
+		this.flying.setRoom( roomMatrix( this.village.shelter && this.village.shelter.inside ) );
 		scene.add( this.flying.mesh );
 		if ( tier === 'low' ) {
 
@@ -586,6 +588,10 @@ export class App {
 		const lw = this.weather.live, spray = lw.sprayHaze > 0 ? lw.sprayHaze * ( 1 - SPRAY_INLAND[ 2 ] * smoothstep( SPRAY_INLAND[ 0 ], SPRAY_INLAND[ 1 ], - this.terrainData.coastDistance( this.camera.position.x, this.camera.position.z ).d ) ) : 0;
 		// (heavier, and the world gone for a moment, as a sheet of rain drives past: Rain.sheet)
 		this.sky.haze = ( lw.rainHaze + spray ) * ( 1 + SHEET_HAZE * ( this.rain.sheet - 0.375 ) );
+		// ((M13) in the shelter's room you're out of the weather; your boat on her cradle is in your way)
+		const pp = this.player.position;
+		this.player.sheltered = insideRoom( this.village.shelter && this.village.shelter.inside, pp.x, pp.y + 0.9, pp.z );
+		if ( this.village.cradleHull ) this.village.cradleHull.solid = !! this.boatCtl.hauled;
 		// (M12) a westerly's swell on its way: its shore field, solved off the page
 		if ( this.weather.target.west > 0 && ! this._westField && this._started ) this.solveWestField();
 		// ((M13) a hurricane's surge: its field solved before it comes, at its highest, dropped once it's gone)
@@ -1274,6 +1280,7 @@ export class App {
 
 		if ( this.motes || this.tier === 'low' ) return;
 		const motes = new AirMotes( { terrain: this.terrain, tier: this.tier } );
+		motes.setRoom( roomMatrix( this.village.shelter && this.village.shelter.inside ) ); // ((M13) none in the shelter)
 		await this.readyToDraw( motes.mesh );
 		this.scene.add( motes.mesh );
 		await this.firstDraws( [ motes.mesh ] );
@@ -1464,6 +1471,7 @@ export class App {
 			underwater: p.y < h ? 1 : 0,
 			depthBelowSurface: Math.max( 0, h - p.y ),
 			surfIntensity: amp / 0.6, // ((M13) past 1 in a hurricane's surf: SoundScape)
+			inside: this.player.sheltered, // ((M13) in the shelter: the storm through its walls)
 			distanceToShore: Math.abs( coast ),
 			coastDistance: coast,
 			waveHeight: amp * 2,

@@ -45,6 +45,8 @@ export class FlyingDebris {
 			debrisWindDir: G.windDir,
 			debrisSeaLevel: G.seaLevel,
 			debrisWet: G.wet,
+			// (the world into the shelter's room: none flies in there, App's setRoom)
+			debrisRoom: { value: new THREE.Matrix4().makeScale( 0, 0, 0 ).setPosition( 1e4, 1e4, 1e4 ) },
 		};
 		const vertexShader = /* glsl */`
 #include <common>
@@ -60,6 +62,7 @@ uniform vec3 debrisSky;
 uniform vec2 debrisWindDir;
 uniform float debrisSeaLevel;
 uniform float debrisWet;
+uniform mat4 debrisRoom;
 varying vec2 vDebrisUV;
 varying vec4 vDebrisCol; // radiance, opacity
 varying float vDebrisKind; // 0 frond, 1 leaf, 2 twig
@@ -86,6 +89,9 @@ void main() {
 	// (fewer out over the sea: what's torn off the island's trees, out past its shore)
 	float land = debrisSs( debrisSeaLevel - 3.0, debrisSeaLevel + 0.5, terrainHeightAt( xz ) );
 	keep *= mix( 0.35, 1.0, land );
+	// (none in the shelter's room)
+	vec3 qr = ( debrisRoom * vec4( p, 1.0 ) ).xyz;
+	if ( all( lessThan( abs( qr ), vec3( 1.0 ) ) ) ) keep = 0.0;
 	// tumbling: its length turns about an axis of its own, as fast as it's small
 	vec3 axis = normalize( debrisHash4( id * 3.71 + 2.3 ).xyz - 0.5 + vec3( 0.0, 1e-3, 0.0 ) );
 	float spin = ( 2.0 + h2.z * 6.0 ) * ( kind > 0.5 ? 1.6 : 1.0 ) * t + h.x * 6.2832;
@@ -184,6 +190,13 @@ void main() {
 		this.mesh.visible = visible;
 		if ( ! visible ) return;
 		U.debrisCamPos.value.copy( camera.position );
+
+	}
+
+	// (M13) the shelter's room (StormPlaces.roomMatrix: the world into its box)
+	setRoom( matrix ) {
+
+		this.uniforms.debrisRoom.value.copy( matrix );
 
 	}
 

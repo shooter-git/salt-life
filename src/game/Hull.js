@@ -63,6 +63,13 @@ export const CRANK_S = 1.1;
 const CRANK_GAP = 0.7;
 // Marta's full repair ($: a tow tops out at $90, the engine upgrades are $300 and $700)
 export const REPAIR_FULL = 150;
+// (M13) left in the water in a storm, unattended (at the dock, at anchor, adrift), she's battered by it: the
+// wind and the sea it raises work her against her lines, the piles and her anchor. From a gale's wind
+// (STORM_FROM m/s), as the square of how far past it in STORM_SPAN (per second): a hurricane passing over
+// leaves her about half worn, its weak side less. Hauled out (Marta's, before it comes), none of it
+export const STORM_FROM = 20;
+const STORM_SPAN = 15, STORM_K = 0.002;
+export const stormWear = ( U ) => ( U > STORM_FROM ? STORM_K * ( ( U - STORM_FROM ) / STORM_SPAN ) ** 2 : 0 );
 
 export const slamWear = ( s ) => ( s > SLAM_FROM ? SLAM_K * ( s - SLAM_FROM ) * ( s - SLAM_FROM ) : 0 );
 export const hitWear = ( v ) => ( v > HIT_FROM ? HIT_K * Math.pow( v - HIT_FROM, 1.5 ) : 0 );
@@ -179,6 +186,8 @@ export class Hull {
 	step( dt, i ) {
 
 		this._hitT = Math.max( 0, this._hitT - dt );
+		// ((M13) battered at her lines in a storm, while nobody's at her helm: i.storm, the wind at her)
+		if ( ! i.driven && i.storm > STORM_FROM ) this.wear = Math.min( 1, this.wear + stormWear( i.storm ) * dt );
 		this._knock( i.pile || 0, false );
 		this._knock( i.ground || 0, true );
 		// on the bottom: scraped by the sliding, ground away under power; a beaching's first touch knocks

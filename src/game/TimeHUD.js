@@ -297,7 +297,8 @@ export class TimeHUD {
 		// ((M10) and the water, while a blow's left it murky)
 		const wxLine = wx ? `<b>${ WEATHER_NAMES[ wx.id ] }</b>${ wet ? ` · ${ wet }` : '' } · wind ${ wxWind( wx ) } ${ knots( wx.wind ) } · surf ${ surfText( wx.surf ) } ${ swellFrom( wx.west || 0 ) } at ${ Math.round( wx.period ) } s${ wx.murk >= MURKY ? ' · water murky' : '' }` : '';
 		// (M9) in a gale or a thunderstorm they've both shut and gone home
-		const stalls = wx && shutFor( wx.id ) ? 'Joe and Marta have shut for the weather' : `${ stall( 'Joe', HOURS.joe ) } · ${ stall( 'Marta', HOURS.marta ) }`;
+		// ((M13) and ahead of a hurricane they board up and go home)
+		const stalls = wx && wx.boarded ? 'Joe and Marta have boarded up for the hurricane' : wx && shutFor( wx.id ) ? 'Joe and Marta have shut for the weather' : `${ stall( 'Joe', HOURS.joe ) } · ${ stall( 'Marta', HOURS.marta ) }`;
 		// ((M13) and what's said of a hurricane on its way: a picked one passes as one of the day's would)
 		const T = islandTime( st.day, st.hour ), news = wxNews( this.app.weather && this.app.weather.news, wx, T, loc );
 		const wxNext = pick === 'hurricane' ? `Your own hurricane${ news ? ` · ${ news }` : ', gone by' }` : pick ? 'Your choice holds while you\'re on your own'

@@ -3,7 +3,8 @@ import { mulberry32 } from '../util/Noise.js';
 import { Builder, Batch, setGeometryDetail } from './village/GeoBuilder.js';
 import { createVillageMaterials } from './village/VillageMaterials.js';
 import { VillageTextures } from './village/TextureBaker.js';
-import { buildHouse, buildBoathouse, buildMarketStall, buildShed } from './village/Buildings.js';
+import { buildHouse, buildBoathouse, buildMarketStall, buildShed, buildShelter, buildCradle } from './village/Buildings.js';
+import { SHELTER, CRADLE } from './village/StormPlaces.js';
 import { buildBoardwalk } from './village/Boardwalk.js';
 import { buildPier, PIER } from './Pier.js';
 import { G } from '../core/Globals.js';
@@ -165,6 +166,20 @@ export class Village {
 		];
 
 		this.footprints.push( buildBoathouse( ctx( this.harbor ), specs.boathouse ).footprint );
+		// ((M13) the shelter, and Marta's cradle for your boat)
+		const shelter = buildShelter( ctx( this.town ), specs.shelter );
+		this.shelter = { ...specs.shelter, floorY: shelter.floorY, yE: shelter.yE, inside: shelter.inside };
+		this.footprints.push( shelter.footprint );
+		// (her waterline on the cradle: her keel shoe on blocks a third of a metre over the highest ground
+		// under her)
+		const c = specs.cradle, cc = Math.cos( c.yaw ), cs = Math.sin( c.yaw );
+		let under = - Infinity;
+		for ( let k = - 3.7; k <= 3.7; k += 0.5 ) under = Math.max( under, this.terrain.heightAt( c.x + k * cs, c.z + k * cc ) );
+		const y = under + 0.35 + 0.77;
+		const cradle = buildCradle( ctx( this.harbor ), { ...c, y } );
+		this.cradle = { position: new Vector3( c.x, y, c.z ), heading: c.yaw };
+		this.cradleHull = cradle.hull;
+		this.footprints.push( cradle.footprint );
 		this.footprints.push( buildMarketStall( ctx( this.town ), specs.stall ).footprint );
 
 		await step();
@@ -251,6 +266,11 @@ export class Village {
 			houses: [ ...houses, ...huts ],
 			sheds,
 			boathouse: { x: 92.5, z: - 57.5, yaw: - 0.08, wall: lin( 0x8fb3a8 ), paint: 0.58 },
+			// (M13) the hurricane shelter (the community hall: Buildings.buildShelter), on high ground behind
+			// the plaza by the trail inland, facing the bay as the houses round it do; and Marta's hauling yard
+			// above the beach, its cradle for your boat (WORLD's: CRADLE in game/Chandlery.js)
+			shelter: SHELTER,
+			cradle: CRADLE,
 			stall: { x: 40.2, z: - 113.2, yaw: 0.05 },
 		};
 
@@ -278,6 +298,23 @@ export class Village {
 
 			const r = Math.hypot( s.w, s.d + pd ) / 2 + 0.3;
 			t.flatten( cx, czw, r, sum / n, 3.5 );
+
+		}
+
+		// ((M13) the shelter's pad, its porch and all)
+		{
+
+			const s = specs.shelter, pd = s.porch, cy = Math.cos( s.yaw ), sy = Math.sin( s.yaw );
+			const cx = s.x + pd / 2 * sy, cz = s.z + pd / 2 * cy;
+			let sum = 0, n = 0;
+			for ( let i = - 2; i <= 2; i ++ ) for ( let j = - 2; j <= 2; j ++ ) {
+
+				sum += t.heightAt( cx + i * s.w / 5, cz + j * ( s.d + pd ) / 5 );
+				n ++;
+
+			}
+
+			t.flatten( cx, cz, Math.hypot( s.w, s.d + pd ) / 2 + 0.3, sum / n, 3.5 );
 
 		}
 

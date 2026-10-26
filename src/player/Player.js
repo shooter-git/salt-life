@@ -180,7 +180,8 @@ export class Player {
 
 	nearBoat() {
 
-		if ( ! this.boat ) return false;
+		// ((M13) not on her cradle ashore)
+		if ( ! this.boat || this.boat.hauled ) return false;
 		const bp = this.boat.toWorld( this.boat.model.boardPoint, _v );
 		const d = Math.hypot( bp.x - this.position.x, bp.z - this.position.z );
 		const dy = Math.abs( bp.y - this.position.y );
