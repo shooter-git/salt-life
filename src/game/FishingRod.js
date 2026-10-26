@@ -28,6 +28,30 @@ import { windBeyondFair } from './Weather.js';
 // air) -> 'floating' (on the water; bites come here) -> 'fighting' (fish on) -> back to 'idle';
 // 'retrieving' reels an empty line in.
 export const ROD_L = 2.13; // 7 ft
+
+// The blank's bend: a damped spring toward its load (~2.5 Hz, lightly damped), stepped in substeps of at
+// most BEND_STEP whatever the frame's length. Stepped once a frame, a frame of 0.0985 s or more (the
+// SDK lets one run to 0.1 s: a slow device, a stall as the screen turns from portrait to landscape, a
+// bake's frame owed to the next) made it grow every frame instead of settling, the rod thrashing and its
+// tip, and the line's end with it, flung kilometres off. s: { x (the bend), v (its rate) }, filled
+export const BEND_K = 250, BEND_C = 8, BEND_STEP = 1 / 60;
+export function bendStep( s, target, dt ) {
+
+	const n = Math.max( 1, Math.ceil( dt / BEND_STEP - 1e-9 ) ), h = dt / n;
+	for ( let i = 0; i < n; i ++ ) {
+
+		s.v += ( ( target - s.x ) * BEND_K - s.v * BEND_C ) * h;
+		s.x += s.v * h;
+
+	}
+
+	// (and never a broken one: a bad value starts it again at rest)
+	if ( ! Number.isFinite( s.x ) || ! Number.isFinite( s.v ) ) s.x = s.v = 0;
+	return s;
+
+}
+const _bs = { x: 0, v: 0 };
+
 const BLANK_START = 0.535; // front of the fore grip: the blank bends from here
 export const SEAT_Y = 0.405; // the hand holds the reel seat (reel foot between the fingers)
 const REEL_Z = - 0.092; // reel axis below the blank
@@ -395,9 +419,11 @@ export class FishingRod {
 
 		}
 
-		const K = 250, C = 8; // ~2.5 Hz, lightly damped
-		this.bendVel += ( ( bendT - this.bend ) * K - this.bendVel * C ) * dt;
-		this.bend += this.bendVel * dt;
+		_bs.x = this.bend;
+		_bs.v = this.bendVel;
+		bendStep( _bs, bendT, dt );
+		this.bend = _bs.x;
+		this.bendVel = _bs.v;
 		this.load += ( loadT - this.load ) * ( 1 - Math.exp( - dt * 6 ) );
 		// bend direction: toward the bobber (rod space, across the blank) when the line is out,
 		// otherwise down toward the reel side (negative bend = loaded back up)
