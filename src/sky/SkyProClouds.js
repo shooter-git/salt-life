@@ -65,27 +65,36 @@ export const FRONT_KM = [ - 12, 12, 24, 36 ];
 // (M13) a hurricane's cloud about its eye, in its rmax (eyeCover): the clear eye's edge, the wall from its
 // inner face out to where it tapers to the deck, how much higher its towers go (cover past 1), the
 // deck's cover, solid over its rain's core (Weather's HURRICANE.core) and broken beyond it, the bands'
-// (Weather's HURRICANE.band) over it beyond the wall, their towering, the eye's own low cloud, and the
-// most cover anywhere (the march's emptiness bound)
+// (Weather's HURRICANE.band) over it beyond the wall ((M14) a solid deck: their towers are their cells',
+// bandCells), the eye's own low cloud, and the most cover anywhere (the march's emptiness bound)
 // (its cloud comes down to the sea in its wall and its deck, a few hundred metres up, and goes higher: the
 // shell's base lowered by `lower` (m) as far as it's the weather here, no lower than `base`, and deepened
 // by `deeper` of itself: (M14) with its rain's deck's (STORM), 7.8 km deep, as it was over the old base)
-const EYE = { clear: [ 0.42, 0.6 ], wall: [ 0.5, 0.68, 1.0, 1.8 ], tower: 0.45, deck: [ 1.0, 0.6 ], band: 0.62, bandFrom: [ 1.4, 2.4 ], floor: 0.25, top: 1.45, lower: 400, base: 500, deeper: 1.65 };
+// (M14) and its wall a stadium, as photographs from inside eyes (Katrina's, Irma's, Epsilon's) show it:
+// sloping out as it rises (the eye `slope` m wider for each m up, out to its wall's outer edge: leaned out
+// with it, its outer bands' undersides made a grey ceiling over a break),
+// its face smooth, not heaped cumulus (the cloud's heaping noise and its erosion `smooth` gone there)
+// (M14) and its rain where it is: its bands, its rain's core and its wall each with rain's deck's own look
+// (dark, dense, its base flat and low: BAND_LOOK), its broken deck between them its own, as photographs of
+// outer bands coming in show them (Emily's, Florence's, Debby's), not the whole sky one or the other by
+// whether it's raining where you are. Over the cover `rain` (from its broken deck's, with the horizon's
+// fill, to its core's)
+const EYE = { clear: [ 0.42, 0.6 ], wall: [ 0.5, 0.68, 1.0, 1.8 ], tower: 0.45, deck: [ 1.0, 0.6 ], band: 0.42, bandFrom: [ 1.4, 2.4 ], floor: 0.25, top: 1.45, lower: 400, base: 500, deeper: 1.65, slope: 0.8, smooth: 0.85, rain: [ 0.72, 0.97 ] };
 const CORE = HURRICANE.core;
 const B = HURRICANE.band;
 
 // (M13) the cover a hurricane brings at ( dx, dz ) m from its eye (rmax R, moving along ( tx, tz )), as
 // the clouds' shader has it (CORE_GLSL's scEyeCoverOf): its bands spiral in counter-clockwise, as the
-// weather's rain does (Weather's bandAt)
-export function eyeCover( dx, dz, R, tx, tz ) {
+// weather's rain does (Weather's bandAt); (M14) `h` m above the cloud's base (the eye wider up it)
+const ss = ( a, b, x ) => {
 
-	const ss = ( a, b, x ) => {
+	const t = Math.min( 1, Math.max( 0, ( x - a ) / ( b - a ) ) );
+	return t * t * ( 3 - 2 * t );
 
-		const t = Math.min( 1, Math.max( 0, ( x - a ) / ( b - a ) ) );
-		return t * t * ( 3 - 2 * t );
+};
+export function eyeCover( dx, dz, R, tx, tz, h = 0 ) {
 
-	};
-	const r = Math.hypot( dx, dz ), E = EYE;
+	const E = EYE, d = Math.hypot( dx, dz ), r = Math.max( 0, d - E.slope * Math.max( 0, h ) * ( 1 - ss( E.wall[ 3 ] * R, E.bandFrom[ 1 ] * R, d ) ) );
 	const eye = 1 - ss( E.clear[ 0 ] * R, E.clear[ 1 ] * R, r );
 	const wall = ss( E.wall[ 0 ] * R, E.wall[ 1 ] * R, r ) * ( 1 - ss( E.wall[ 2 ] * R, E.wall[ 3 ] * R, r ) );
 	const pm = dx * tx + dz * tz, pn = dx * tz - dz * tx;
@@ -95,6 +104,63 @@ export function eyeCover( dx, dz, R, tx, tz ) {
 	const band = ss( 0, 0.1, f ) * ( 1 - ss( 0.25, 0.4, f ) ) * ss( E.bandFrom[ 0 ] * R, E.bandFrom[ 1 ] * R, r );
 	const deck = E.deck[ 0 ] + ( E.deck[ 1 ] - E.deck[ 0 ] ) * ss( CORE[ 0 ] * R, CORE[ 1 ] * R, r );
 	return ( deck + E.band * band ) * ( 1 - eye ) + E.floor * eye + E.tower * wall;
+
+}
+
+// (M14) A hurricane's outer bands' cells of rain, each its own cloud towering over it as a shower's is
+// (stormMap): a band coming in is a line of cumulonimbus, dark under, its rain hanging from it, as
+// photographs of outer bands show them. Along the middle of each band (eyeCover's, its phase `phase`), one
+// every `every` m or so, each set off along it and across it a little (`across`, of the band's width), as
+// wide as `r` (m), raining as hard as `rain` as far as its band's out there (from EYE.bandFrom, to its
+// reach), and as thundery as the weather's bands are there (HURRICANE.band's thunder, from its `from`),
+// some of them not (`calm`: congestus, their tops lower, no anvil). Fixed about its eye, each its own for
+// good (`n`, past any shower's), within `range` m of the island's middle (the storm map's). h: the
+// hurricane (Weather.hurricaneAt: x, z from the island's middle, rmax, track). Into out (its objects
+// filled again each call), after `from` of them
+const BAND_CELLS = { phase: 0.175, every: 7000, across: 0.25, r: [ 2000, 3600 ], rain: [ 0.75, 1 ], calm: 0.4, range: 42000, n: 1 << 24 };
+export function bandCells( h, out, from = 0 ) {
+
+	const C = BAND_CELLS, R = h.rmax, tx = h.track.x, tz = h.track.y, gap = B.gap;
+	let count = from;
+	// (the island from its eye, and the windings of its bands within reach of it)
+	const D = Math.hypot( h.x, h.z ), lo = Math.max( EYE.bandFrom[ 0 ] * R, D - C.range - C.r[ 1 ] ), hi = Math.min( B.reach[ 1 ], D + C.range + C.r[ 1 ] );
+	if ( hi <= lo ) { out.length = count; return out; }
+	const m0 = Math.max( 0, Math.floor( lo / gap - C.phase ) ), m1 = Math.ceil( hi / gap - C.phase + B.arms );
+	for ( let m = m0; m <= m1; m ++ ) {
+
+		// (round it from q = 0, a step at a time as far along as `every` is there: the same steps every time)
+		let q = 0;
+		for ( let j = 0; q < 4 && j < 4096; j ++ ) {
+
+			const r0 = gap * ( m + C.phase - B.arms * q / 4 ), id = m * 4096 + j;
+			const step = C.every / ( 0.5 * Math.PI * Math.max( r0, 10000 ) );
+			const qa = q + ( hash( id, 0x3c1 ) - 0.5 ) * 0.6 * step;
+			q += step;
+			const r = r0 + ( hash( id, 0x7e5 ) - 0.5 ) * 2 * C.across * 0.25 * gap;
+			if ( r < lo || r > hi ) continue;
+			// (the way round it: the pseudo-angle's, eyeCover's, back to a direction along its track and to its left)
+			const w = ( ( qa % 4 ) + 4 ) % 4;
+			let pm, pn;
+			if ( w < 1 ) { pm = 1 - w; pn = w; } else if ( w < 3 ) { pn = 2 - w; pm = - ( 1 - Math.abs( pn ) ); } else { pn = w - 4; pm = 1 - Math.abs( pn ); }
+			const l = Math.hypot( pm, pn );
+			pm *= r / l; pn *= r / l;
+			const x = h.x + pm * tx + pn * tz, z = h.z + pm * tz - pn * tx;
+			if ( Math.abs( x ) > C.range || Math.abs( z ) > C.range ) continue;
+			const k = ss( EYE.bandFrom[ 0 ] * R, EYE.bandFrom[ 1 ] * R, r ) * ( 1 - ss( B.reach[ 0 ], B.reach[ 1 ], r ) );
+			if ( k < 0.05 ) continue;
+			const c = out[ count ] || ( out[ count ] = {} );
+			count ++;
+			c.x = x; c.z = z; c.band = 1; c.n = C.n + id;
+			c.r = C.r[ 0 ] + ( C.r[ 1 ] - C.r[ 0 ] ) * hash( id, 0x2f9 );
+			c.rain = k * ( C.rain[ 0 ] + ( C.rain[ 1 ] - C.rain[ 0 ] ) * hash( id, 0x4d3 ) );
+			c.thunder = B.thunder * ss( B.from[ 0 ] * R, B.from[ 1 ] * R, r ) * ( hash( id, 0x6b7 ) < C.calm ? 0 : 1 );
+
+		}
+
+	}
+
+	out.length = count;
+	return out;
 
 }
 
@@ -155,7 +221,8 @@ const STORM = { lower: 500, deeper: 0.6, smooth: 0.6, albedo: 0.1, ambient: 0.12
 //     cumulus's billows on it came out a grey fuzz, a cap on the tower), and lit as the rest are, white;
 //   - seen farther than the rest: up past them they melt into the sky from as far as the rest are gone to
 //     `melt` times that;
-//   - none in a hurricane's own cloud (as far as it's the weather here): its wall and bands are its towers;
+//   - none in a hurricane's own cloud (as far as it's the weather here): its wall is its tower, and its
+//     outer bands' cells (bandCells, `band`) are its showers there, each towering as a shower's does;
 //   - the map: `res`² texels over `span` m about the island's middle, made again every `every` s and slid
 //     on between (the cells drift at the weather's 8 km a game hour, 80 m a second): each texel its foot,
 //     1 - (r / R)² about the nearest turret out to its edge, or the mass's about the main updraft (r), its
@@ -266,14 +333,13 @@ export function stormMap( cells, data, ux, uz, base, depth, hurricane = 0, from 
 	};
 	const C = CB, N = C.res, S = C.span, cell = S / N, M = C.margin, P = C.shoulder / 2;
 	if ( from === 0 ) data.fill( 0 );
-	if ( hurricane >= 1 ) return 0;
 	const ul = Math.hypot( ux, uz ) || 1;
 	ux /= ul; uz /= ul;
 	let towers = 0;
 	for ( let n = from; n < Math.min( to, cells.length ); n ++ ) {
 
 		const c = cells[ n ];
-		const k0 = ss( 0.02, 0.15, c.rain ) * ( 1 - hurricane );
+		const k0 = ss( 0.02, 0.15, c.rain ) * ( c.band ? 1 : 1 - hurricane );
 		if ( k0 <= 0 ) continue;
 		const thunder = ss( 0, 0.25, Math.max( 0, c.thunder || 0 ) );
 		// (its turrets; its main updraft's top: a light shower's lower)
@@ -435,6 +501,33 @@ const PRESET = {
 // (M14) how far off the clouds melt into the sky (m): a thunderstorm's own tower is drawn nearer
 export const CLOUD_MELT = [ PRESET.fade.horizonMeltStart, PRESET.fade.horizonMeltEnd ];
 
+// (Salt Life) the cloud's look under a grey sky (o; 0: the preset's fair-weather cumulus): denser, its
+// bases forming everywhere, darker below, less light through it; (M9) and in rain's deck (storm):
+// nimbostratus, its underside smoother and darker still. [ density, the weather a base takes, erosion at
+// its base and at its peak; albedo, ambient light, its base's shadow ]
+function cloudLook( o, storm, out = [] ) {
+
+	const S = PRESET.shape, L = PRESET.lighting;
+	out[ 0 ] = S.density * ( 1 + 1.2 * o + 0.8 * storm );
+	out[ 1 ] = S.baseWeatherStrength * ( 1 - 0.7 * o ) * ( 1 - 0.6 * storm );
+	out[ 2 ] = S.erosionStrengthBase * ( 1 - STORM.smooth * storm );
+	out[ 3 ] = S.erosionStrengthPeak * ( 1 - 0.3 * storm );
+	out[ 4 ] = L.scatteringAlbedo * ( 1 - 0.25 * o ) * ( 1 - STORM.albedo * storm );
+	out[ 5 ] = L.ambientIntensity * ( 1 - 0.25 * o ) * ( 1 - STORM.ambient * storm );
+	out[ 6 ] = L.baseShadowStrength + ( 1 - L.baseShadowStrength ) * o;
+	return out;
+
+}
+const _look = [];
+// (M14) how high the weather's cloud goes, of the shell's depth (its march's ceiling with no tower: a
+// hurricane's wall and bands, their cover past 1, go a little over its top)
+const SHELL_OVER = 1.3;
+// (M14) over how much of a hurricane's cover past its broken deck's its bands' turrets rise (their cells',
+// bandCells: the storm map's turrets spill a few km round their cells)
+const BAND_EDGE = 0.25;
+// (M14) a hurricane's rain's own look, where it is (EYE.rain): a grey sky's and rain's deck's, all of both
+const BAND_LOOK = cloudLook( 1, 1 );
+
 // per tier: the view trace (sky-pro "high" quality on high; the history at most historyBudget pixels),
 // the panorama and the weather map
 const QUALITY = {
@@ -458,6 +551,19 @@ const WEATHER_STRIPS = 8;
 // ((M14) the march's empty cells, about 420 m across over the weather map's 11 km, as sky-pro's were over its 29)
 const BOUNDS_RES = 26;
 const WARM_LATTICE = 4; // a whole new panorama: a 4x4 lattice, 16 frames (per tier: quality.warmLattice)
+// (M14) what a hurricane's cloud moves by (its eye, the clouds' drift and evolution, the storm map's slide and
+// its turrets'): held at a panorama's moment while it's made, in a hurricane with no view trace (the eye
+// goes by at 180 m a real second: made a slot a frame, a panorama streaked its walls)
+const STEADY = [ 'scsEye', 'scsEyeTrack', 'scfWind', 'scsStorm', 'scsStormDrift' ];
+const cloneOf = ( v ) => Array.isArray( v ) ? v.slice() : v.clone();
+// (a uniform's value set to `to` for a pass; the live one it had, to put back)
+function swapIn( u, to ) {
+
+	const live = u.value;
+	u.value = to;
+	return live;
+
+}
 const REBUILD_SLOTS = 4; // view slots traced per frame while the history is rebuilt after a cut
 const AP_DIST = 30000; // m: aerial perspective toward the horizon
 // (M14) the haze's top (m: the trades' inversion), and how much thinner the air is above it: the march's
@@ -623,6 +729,10 @@ uniform vec2 scsFrontDir;
 // weather here; the way it moves
 uniform vec4 scsEye;
 uniform vec2 scsEyeTrack;
+// (M14) its rain's own look, where it is (BAND_LOOK, as cloudLook gives it): its density, the weather its
+// base takes, its erosion at its base and its peak; its albedo, ambient light and its base's shadow
+uniform vec4 scsBand0;
+uniform vec4 scsBand1;
 // (M14) a shower's own cloud, towering over it (CB, stormMap): the storm map's middle (xz, m: slid on as the
 // cells drift), its span (m), and whether any tower in it; the march's ceiling (m) and it as a shell height,
 // the tropopause as one, and an anvil's depth as one
@@ -675,7 +785,7 @@ vec3 scPhases( float mu ) {
 // ---- density (sky-pro density.wgsl)
 struct ScCandidate {
 	float conservative; float edge; float top; float bottom; float floorMask;
-	float shellHeight; float localHeight; float coverage; float heaped; vec3 position;
+	float shellHeight; float localHeight; float coverage; float heaped; float soft; float grey; vec3 position;
 };
 // (M9) the cover's change at a point from the weather on its way, by how far up its track it is
 float scFrontAt( vec2 xz ) {
@@ -685,12 +795,23 @@ float scFrontAt( vec2 xz ) {
 	if ( d < ${ f( FRONT_KM[ 2 ] ) } ) return mix( scsFront.y, scsFront.z, ( d - ${ f( FRONT_KM[ 1 ] ) } ) / ${ f( FRONT_KM[ 2 ] - FRONT_KM[ 1 ] ) } );
 	return mix( scsFront.z, scsFront.w, clamp( ( d - ${ f( FRONT_KM[ 2 ] ) } ) / ${ f( FRONT_KM[ 3 ] - FRONT_KM[ 2 ] ) }, 0.0, 1.0 ) );
 }
-// (M13) a hurricane's cover at xz (eyeCover's), and what it adds to the cover here's
-float scEyeCoverOf( vec2 xz ) {
+// (M14) how far a point hm m over the cloud's base is from a hurricane's eye, as its wall has it: the eye
+// wider up it, out to the wall's outer edge (EYE.slope); and how much it's in its wall there (0..1)
+float scEyeR( vec2 xz, float hm ) {
+	float d = length( xz - scsEye.xy );
+	return max( d - ${ f( EYE.slope ) } * max( hm, 0.0 ) * ( 1.0 - smoothstep( ${ f( EYE.wall[ 3 ] ) } * scsEye.z, ${ f( EYE.bandFrom[ 1 ] ) } * scsEye.z, d ) ), 0.0 );
+}
+float scEyeWallAt( float r ) {
+	float R = scsEye.z;
+	return smoothstep( ${ f( EYE.wall[ 0 ] ) } * R, ${ f( EYE.wall[ 1 ] ) } * R, r ) * ( 1.0 - smoothstep( ${ f( EYE.wall[ 2 ] ) } * R, ${ f( EYE.wall[ 3 ] ) } * R, r ) );
+}
+// (M13) a hurricane's cover at xz (eyeCover's), (M14) hm m over the cloud's base, and what it adds to the
+// cover here's
+float scEyeCoverOf( vec2 xz, float hm ) {
 	vec2 d = xz - scsEye.xy;
-	float R = scsEye.z, r = length( d );
+	float R = scsEye.z, r = scEyeR( xz, hm );
 	float eye = 1.0 - smoothstep( ${ f( EYE.clear[ 0 ] ) } * R, ${ f( EYE.clear[ 1 ] ) } * R, r );
-	float wall = smoothstep( ${ f( EYE.wall[ 0 ] ) } * R, ${ f( EYE.wall[ 1 ] ) } * R, r ) * ( 1.0 - smoothstep( ${ f( EYE.wall[ 2 ] ) } * R, ${ f( EYE.wall[ 3 ] ) } * R, r ) );
+	float wall = scEyeWallAt( r );
 	float pm = dot( d, scsEyeTrack ), pn = d.x * scsEyeTrack.y - d.y * scsEyeTrack.x;
 	float s = abs( pm ) + abs( pn ), t = s > 0.0 ? pn / s : 0.0;
 	float q = pm >= 0.0 ? ( pn >= 0.0 ? t : 4.0 + t ) : 2.0 - t;
@@ -699,13 +820,20 @@ float scEyeCoverOf( vec2 xz ) {
 	float deck = mix( ${ f( EYE.deck[ 0 ] ) }, ${ f( EYE.deck[ 1 ] ) }, smoothstep( ${ f( CORE[ 0 ] ) } * R, ${ f( CORE[ 1 ] ) } * R, r ) );
 	return ( deck + ${ f( EYE.band ) } * band ) * ( 1.0 - eye ) + ${ f( EYE.floor ) } * eye + ${ f( EYE.tower ) } * wall;
 }
-// (the cover at xz: the weather's and the front's on its way, giving way to a hurricane's about its eye as
-// far as it's the weather here: past 1 only in its wall and its bands, where the towers go higher)
-float scCoverOf( vec2 xz ) {
+// (the cover at xz, (M14) hm m over the cloud's base: the weather's and the front's on its way, giving way
+// to a hurricane's about its eye as far as it's the weather here: past 1 only in its wall and its bands,
+// where the towers go higher)
+float scCoverOf( vec2 xz, float hm ) {
 	float c = clamp( scsShell.w + scFrontAt( xz ), 0.0, 1.0 );
-	if ( scsEye.w > 0.0 ) c = clamp( mix( c, scEyeCoverOf( xz ), scsEye.w ), 0.0, ${ f( EYE.top ) } );
+	if ( scsEye.w > 0.0 ) c = clamp( mix( c, scEyeCoverOf( xz, hm ), scsEye.w ), 0.0, ${ f( EYE.top ) } );
 	return c;
 }
+// (M14) how far cloud of this cover is in a hurricane's rain (its bands, its core, its wall: EYE.rain), as
+// far as it's the weather here; and so how dense it is
+float scGreyOf( float coverage ) {
+	return scsEye.w > 0.0 ? scsEye.w * smoothstep( ${ f( EYE.rain[ 0 ] ) }, ${ f( EYE.rain[ 1 ] ) }, coverage ) : 0.0;
+}
+float scDensityOf( float coverage ) { return mix( scsShell.z, scsBand0.x, scGreyOf( coverage ) ); }
 // (M14) the storm map at xz, as far up as h (a shell height): leaning downwind on the upper wind
 vec4 scStormAt( vec2 xz, float h ) {
 	vec2 lean = scsStormWind.xy * scsStormWind.z * max( h, 0.0 ) * scsShell.y;
@@ -728,7 +856,7 @@ float scShellHeight( vec3 p ) {
 float scConeLod( float footprint, float scale ) { return max( 0.0, log2( max( footprint * 64.0 / scale, 1.0 ) ) ); }
 ScCandidate scCandidate( vec3 p, float coverage, float lod ) {
 	float h = scShellHeight( p );
-	ScCandidate result = ScCandidate( 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, vec3( 0.0 ) );
+	ScCandidate result = ScCandidate( 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, vec3( 0.0 ) );
 	if ( h < -0.1 || h > scsCeil.y ) { return result; }
 	// ((M14) a shower's own cloud where it is (leaning downwind as it rises): a thunderstorm's anvil's
 	// footprint, and whether a tower's near)
@@ -753,8 +881,11 @@ ScCandidate scCandidate( vec3 p, float coverage, float lod ) {
 		vec2 w = textureLod( scNoise, q / ${ f( CB.warpScale ) }, max( lod - log2( ${ f( CB.warpScale ) } / scsShape.y ), 0.0 ) ).rg;
 		storm.rga = scStormAt( p.xz + clamp( ( w - 0.48 ) / 0.24, -1.0, 1.0 ) * ${ f( CB.warp ) }, h ).rga;
 		vec3 big = textureLod( scNoise, q / ${ f( CB.bulgeScale ) } + 0.37, max( lod - log2( ${ f( CB.bulgeScale ) } / scsShape.y ), 0.0 ) ).rgb;
-		float T = ( storm.g * ${ f( CB.topMax ) } - scsShell.x ) / scsShell.y;
-		present = smoothstep( 0.0, 0.04, storm.g );
+		// ((M14) in a hurricane, only in its bands: its cover past its broken deck's, the turrets tapering off
+		// over a band's edge into a steep face, none spilling into a break)
+		float banded = 1.0 - scsEye.w * ( 1.0 - smoothstep( ${ f( EYE.deck[ 1 ] ) }, ${ f( EYE.deck[ 1 ] + BAND_EDGE ) }, coverage ) );
+		float T = ( storm.g * ${ f( CB.topMax ) } - scsShell.x ) / scsShell.y * banded;
+		present = smoothstep( 0.0, 0.04, storm.g ) * smoothstep( 0.0, 0.2, banded );
 		if ( present > 0.0 ) {
 			tower = T + ( ( big.g - 0.48 ) * ${ f( CB.bulge[ 0 ] ) } + ( big.b - 0.48 ) * ${ f( CB.bulge[ 1 ] ) } ) / ( 0.12 * scsShell.y ) * present;
 			// (flattened against the tropopause, lumpy there and no mesa, but where a thunderstorm's main updraft's
@@ -764,19 +895,31 @@ ScCandidate scCandidate( vec3 p, float coverage, float lod ) {
 		}
 		// (and a thunderstorm's broad mass at its foot, lumpy on top)
 		float foot = clamp( ( storm.a * 255.0 - 128.0 ) / 127.0, 0.0, 1.0 );
-		mass = ${ f( CB.massTop ) } / scsShell.y * sqrt( clamp( foot * storm.r, 0.0, 1.0 ) ) * clamp( 1.0 + ( big.b - 0.48 ) / 0.12 * ${ f( CB.massLumps ) }, 0.2, 1.8 );
+		mass = banded * ${ f( CB.massTop ) } / scsShell.y * sqrt( clamp( foot * storm.r, 0.0, 1.0 ) ) * clamp( 1.0 + ( big.b - 0.48 ) / 0.12 * ${ f( CB.massLumps ) }, 0.2, 1.8 );
 		maximumTop = max( maximumTop, max( tower, mass ) );
 	}
 	float anvilDepth = scsCeil.w * ( 0.3 + 0.7 * smoothstep( 0.0, 0.5, storm.b ) ), anvilBottom = tropo - anvilDepth;
 	bool anvil = storm.b > 0.0 && h > anvilBottom - 0.15 * anvilDepth - edge && h < tropo + edge;
 	if ( maximumTop < h - edge && ! anvil ) { return result; }
-	float required = ( 1.0 - smoothstep( scsBase.w, max( scsErosion.w, scsBase.w + 0.001 ), h ) ) * scsBase.x;
+	// ((M14) in a hurricane's rain, its base everywhere: flat and low)
+	float grey = scGreyOf( coverage );
+	float required = ( 1.0 - smoothstep( scsBase.w, max( scsErosion.w, scsBase.w + 0.001 ), h ) ) * mix( scsBase.x, scsBand0.y, grey );
 	float floorMask = smoothstep( required - 0.1, required, weather );
 	float heaped = max( present, smoothstep( 0.0, 0.05, mass ) ), own = near ? max( tower, mass ) : -1.0;
 	if ( floorMask <= 0.0 && ! anvil && own < h - edge ) { return result; }
 	vec3 baseSample = textureLod( scNoise, shapePosition / scsShape.y, lod ).rgb;
-	float dilation = dot( baseSample, vec3( 0.7, 0.41, 0.23 ) ) * scsShape.z;
-	float top = weather + coverage - 1.0 + dilation * coverage, bottom = 0.0;
+	// ((M14) in a hurricane's wall, its face smooth: the heaping noise as good as gone there)
+	float smoothed = 0.0;
+	if ( scsEye.w > 0.0 ) {
+		// (over the wall and its inner face, from where the clear eye begins: the face seen from the eye)
+		float R = scsEye.z, re = scEyeR( p.xz, max( h, 0.0 ) * scsShell.y );
+		smoothed = scsEye.w * smoothstep( ${ f( EYE.clear[ 0 ] ) } * R, ${ f( EYE.wall[ 0 ] ) } * R, re ) * ( 1.0 - smoothstep( ${ f( EYE.wall[ 2 ] ) } * R, ${ f( EYE.wall[ 3 ] ) } * R, re ) ) * ${ f( EYE.smooth ) };
+	}
+	float dilation = mix( dot( baseSample, vec3( 0.7, 0.41, 0.23 ) ), ${ f( 0.48 * 1.34 ) }, smoothed ) * scsShape.z;
+	// ((M14) the weather's cloud, and a hurricane's past 1, up to a little over the shell's top, as when the
+	// march stopped there: only a tower goes on up past it (the ceiling raised for a tower anywhere let a
+	// hurricane's bands and its core heap up to the tropopause, one grey wall)
+	float top = min( weather + coverage - 1.0 + dilation * coverage, ${ f( SHELL_OVER ) } ), bottom = 0.0;
 	// ((M14) where a turret or the mass stands over the cumulus: its base forms there. Not where it's lower:
 	// the cumulus about a storm are as the weather has them, no plate of cloud about its foot)
 	if ( own > top ) { top = own; floorMask = max( floorMask, heaped ); }
@@ -794,13 +937,14 @@ ScCandidate scCandidate( vec3 p, float coverage, float lod ) {
 	result.edge = edge; result.top = top; result.bottom = bottom; result.floorMask = floorMask;
 	result.shellHeight = h; result.localHeight = clamp( ( h - bottom ) / max( top - bottom, 0.001 ), 0.0, 1.0 );
 	// ((M14) a tower's heaped: its surface billows)
-	result.coverage = mix( coverage, max( coverage, ${ f( CB.heap ) } ), heaped ); result.heaped = heaped; result.position = shapePosition;
+	result.coverage = mix( coverage, max( coverage, ${ f( CB.heap ) } ), heaped ); result.heaped = heaped; result.soft = smoothed; result.grey = grey; result.position = shapePosition;
 	return result;
 }
 float scErodedDensity( ScCandidate c, float lod ) {
 	if ( c.conservative <= 0.0 ) { return 0.0; }
-	// ((M14) a tower's at its own strength, its field billowy)
-	float strength = mix( mix( scsErosion.x, scsErosion.y, c.localHeight ), ${ f( CB.erode ) }, c.heaped );
+	// ((M14) a tower's at its own strength, its field billowy; a hurricane's wall's, shallow: its face
+	// smooth; in a hurricane's rain, its underside smoother)
+	float strength = mix( mix( mix( scsErosion.x, scsBand0.z, c.grey ), mix( scsErosion.y, scsBand0.w, c.grey ), c.localHeight ), ${ f( CB.erode ) }, c.heaped ) * ( 1.0 - 0.7 * c.soft );
 	float maximumErosion = 0.173 * strength * c.coverage;
 	if ( min( c.top - c.shellHeight, c.shellHeight - c.bottom ) >= maximumErosion + c.edge ) { return c.floorMask; }
 	vec3 s = textureLod( scNoise, c.position / ( scsShape.y * scsShape.w ), lod ).rgb;
@@ -845,7 +989,7 @@ vec2 scCloudInterval( vec3 dir, float originHeight ) {
 const MARCH_GLSL = /* glsl */`
 uniform sampler2D scWeatherBounds;
 float scCoverageAt( float t, vec3 p ) {
-	return scCoverOf( p.xz ) + scsHorizon.z * smoothstep( scsHorizon.x, scsHorizon.x + max( scsHorizon.y, 1.0 ), t );
+	return scCoverOf( p.xz, scShellHeight( p ) * scsShell.y ) + scsHorizon.z * smoothstep( scsHorizon.x, scsHorizon.x + max( scsHorizon.y, 1.0 ), t );
 }
 // (the most it can be along a stretch of ray: the cells' emptiness test)
 float scCoverageBound( float t ) {
@@ -865,25 +1009,29 @@ bool scCellIsEmpty( float t, float end, vec3 dir, float originHeight, float maxi
 	float maximumTop = maximumWeather + coverage - 1.0 + 1.34 * scsShape.z * coverage;
 	float edgeHeight = scsBase.z >= 0.0 ? minHeight : maxHeight;
 	float edge = max( scsBase.y * exp2( - max( edgeHeight, 0.0 ) * scsBase.z ), 0.0001 );
-	float required = ( 1.0 - smoothstep( scsBase.w, max( scsErosion.w, scsBase.w + 0.001 ), maxHeight ) ) * scsBase.x;
+	// ((M14) in a hurricane, as little as its rain's base takes)
+	float required = ( 1.0 - smoothstep( scsBase.w, max( scsErosion.w, scsBase.w + 0.001 ), maxHeight ) ) * ( scsEye.w > 0.0 ? min( scsBase.x, scsBand0.y ) : scsBase.x );
 	return maximumTop < minHeight - edge || maximumWeather <= required - 0.1;
 }
 float scLightOpticalDepth( vec3 p, float coverage, vec2 lods, bool cheap ) {
-	float opticalDepth = 0.0;
+	float opticalDepth = 0.0, density = scDensityOf( coverage );
 	for ( int i = 1; i < 8; i ++ ) {
 		if ( i >= int( scfMarch.z ) ) { break; }
 		vec4 tap = scfLightOffsets[ i ];
-		opticalDepth += scLightDensity( p + tap.xyz, coverage, max( lods, scfLightLods[ i ].xy ), cheap ) * tap.w * scsShell.z;
+		opticalDepth += scLightDensity( p + tap.xyz, coverage, max( lods, scfLightLods[ i ].xy ), cheap ) * tap.w * density;
 		if ( opticalDepth >= 32.0 ) { break; }
 	}
 	// ((M14) and on through a tower, kilometres toward the light (CB.shade): the taps reach a few hundred m.
 	// Under the anvil: it's lit as the rest are, white, as photographs have it (shaded through its own
-	// depth, it came out a grey lid on the tower)
+	// depth, it came out a grey lid on the tower). (M14) And through a hurricane's rain, its bands and its
+	// core kilometres deep: dark under, as a band coming in is. Not its wall: its face is lit smooth and
+	// white from its eye, as photographs from inside eyes show it (shaded through it, it heaped up again)
 	float sh = scShellHeight( p );
-	if ( opticalDepth < 32.0 && scsStorm.w > 0.0 && sh < scsCeil.z - scsCeil.w && scStormAt( p.xz, sh ).a > 0.5 ) {
+	bool rain = scGreyOf( coverage ) > 0.5 && scEyeR( p.xz, max( sh, 0.0 ) * scsShell.y ) > ${ f( EYE.wall[ 3 ] ) } * scsEye.z;
+	if ( opticalDepth < 32.0 && ( rain || scsStorm.w > 0.0 && sh < scsCeil.z - scsCeil.w && scStormAt( p.xz, sh ).a > 0.5 ) ) {
 		for ( int i = 0; i < ${ CB.shade[ 1 ] }; i ++ ) {
 			float d = ${ f( CB.shade[ 0 ] ) } * exp2( float( i ) );
-			opticalDepth += scLightDensity( p + scKeyDir * d, coverage, lods + vec2( 1.0 + float( i ) ), true ) * d * 0.7 * scsShell.z;
+			opticalDepth += scLightDensity( p + scKeyDir * d, coverage, lods + vec2( 1.0 + float( i ) ), true ) * d * 0.7 * density;
 			if ( opticalDepth >= 32.0 ) { break; }
 		}
 	}
@@ -982,11 +1130,13 @@ ScMarch scMarch( vec3 origin, vec3 dir, float dither, float pixelConeAngle, floa
 				t += coarse ? fineStep * 4.0 : fineStep; continue;
 			}
 			emptyRun = 0; refineEnd = -1.0;
-			float sigmaT = density * scsShell.z;
+			// ((M14) in a hurricane's rain, its own look: denser, its base darker, less light through it)
+			float dense = mix( scsShell.z, scsBand0.x, c.grey );
+			float sigmaT = density * dense;
 			float surfaceStep = clamp( 0.5 / max( sigmaT, 0.000001 ), fineStep * 0.15, fineStep );
 			float stepLength = min( mix( surfaceStep, fineStep * 3.0, smoothstep( 1.0, 3.0, accumulatedDepth ) ), interval.y - t );
 			float height = clamp( c.shellHeight, 0.0, 1.0 );
-			float baseShadow = mix( 1.0, mix( 0.15, 1.0, smoothstep( 0.0, max( scsShadow.y, 0.001 ), height ) ), scsShadow.x );
+			float baseShadow = mix( 1.0, mix( 0.15, 1.0, smoothstep( 0.0, max( scsShadow.y, 0.001 ), height ) ), mix( scsShadow.x, scsBand1.z, c.grey ) );
 			// darken thin margins away from the sun; keep the forward scattered silver linings
 			float powderWeight = scsCloudLight.y * ( 1.0 - smoothstep( 0.2, 0.95, lightCosine ) );
 			float powder = mix( 1.0, 1.0 - exp( - density * 2.0 ), powderWeight );
@@ -998,16 +1148,18 @@ ScMarch scMarch( vec3 origin, vec3 dir, float dither, float pixelConeAngle, floa
 				if ( hasDirectLight ) { shadowTau = scLightOpticalDepth( p, coverage, lods, cheap ); }
 				vec2 skyLods = lods + vec2( 1.0 );
 				skyTau = ( scLightDensity( p + vec3( 0.0, 125.0, 0.0 ), coverage, skyLods, true ) * 250.0
-					+ scLightDensity( p + vec3( 0.0, 600.0, 0.0 ), coverage, skyLods, true ) * 700.0 ) * scsShell.z;
+					+ scLightDensity( p + vec3( 0.0, 600.0, 0.0 ), coverage, skyLods, true ) * 700.0 ) * dense;
 				shadowAt = t; shadowDensity = density; shadowCheap = cheap;
 			}
 			if ( hasDirectLight ) {
 				energy = scLightEnergy( shadowTau + sigmaT * scfLightOffsets[ 0 ].w, phase );
 			}
 			float skyVisibility = 0.2 + 0.8 / ( 1.0 + ( skyTau + sigmaT * 25.0 ) * 0.35 );
-			vec3 ambient = ( mix( mix( zenith, horizon, 0.55 ), zenith, sqrt( height ) ) * skyVisibility + bounce * ( 1.0 - height ) )
-				* scsCloudLight.z * ( 1.0 + scsCloudLight.w );
-			vec3 light = ( direct * energy * powder * baseShadow + ambient ) * scsCloudLight.x;
+			// ((M14) no sunlit sea under a hurricane's bands and its core to light them from below: it's in their
+			// shadow. Its wall's, over its eye's, is lit)
+			vec3 ambient = ( mix( mix( zenith, horizon, 0.55 ), zenith, sqrt( height ) ) * skyVisibility + bounce * ( 1.0 - height ) * ( 1.0 - c.grey * ( 1.0 - c.soft / ${ f( EYE.smooth ) } ) ) )
+				* mix( scsCloudLight.z, scsBand1.y, c.grey ) * ( 1.0 + scsCloudLight.w );
+			vec3 light = ( direct * energy * powder * baseShadow + ambient ) * mix( scsCloudLight.x, scsBand1.x, c.grey );
 			float stepT = exp( - sigmaT * stepLength );
 			float alpha = transmission * ( 1.0 - stepT );
 			color += alpha * light; weightedDepth += alpha * t;
@@ -1207,6 +1359,11 @@ void main() {
 
 export const CLOUDS_GLSL = /* glsl */`
 uniform sampler2D cloudsPanorama;
+// (M14) the panorama before it, and how far the sky's gone over from it to this one (1: all this one): in a
+// hurricane on a tier with no view trace each is made whole at one moment, and gone over to while the next
+// is made (made a slot a frame as its eye went by, a panorama streaked its walls: STEADY)
+uniform sampler2D cloudsPanoramaPrev;
+uniform float cloudsSwap;
 uniform sampler2D cloudsView;
 uniform vec3 cloudsViewRight;
 uniform vec3 cloudsViewUp;
@@ -1228,13 +1385,14 @@ vec4 cloudsPanoramaFaded( vec4 s, vec3 dir ) {
 }
 // vec4( rgb in-scattered radiance, a transmittance ) for a view direction (panorama)
 vec4 cloudsSample( vec3 dir ) {
-	return cloudsPanoramaFaded( textureLod( cloudsPanorama, cloudsPanoramaUV( dir ), 0.0 ), dir );
+	vec2 uv = cloudsPanoramaUV( dir );
+	vec4 s = textureLod( cloudsPanorama, uv, 0.0 );
+	if ( cloudsSwap < 1.0 ) s = mix( textureLod( cloudsPanoramaPrev, uv, 0.0 ), s, cloudsSwap );
+	return cloudsPanoramaFaded( s, dir );
 }
 // the same, bicubic (Catmull-Rom in 5 bilinear taps): the main view's clouds where there is no view
 // trace (the low tier) keep crisper edges magnified
-vec4 cloudsSampleSharp( vec3 dir ) {
-	vec2 size = vec2( textureSize( cloudsPanorama, 0 ) );
-	vec2 position = cloudsPanoramaUV( dir ) * size;
+vec4 cloudsSharpOf( sampler2D pano, vec2 position, vec2 size ) {
 	vec2 center = floor( position - 0.5 ) + 0.5;
 	vec2 fr = position - center;
 	vec2 w0 = fr * ( fr * ( -0.5 * fr + 1.0 ) - 0.5 );
@@ -1247,12 +1405,18 @@ vec4 cloudsSampleSharp( vec3 dir ) {
 	vec2 uv12 = ( center + w2 / w12 ) / size;
 	vec4 weights = vec4( w12.x * w0.y, w0.x * w12.y, w12.x * w12.y, w3.x * w12.y );
 	float bottomWeight = w12.x * w3.y;
-	vec4 value = textureLod( cloudsPanorama, vec2( uv12.x, uv0.y ), 0.0 ) * weights.x
-		+ textureLod( cloudsPanorama, vec2( uv0.x, uv12.y ), 0.0 ) * weights.y
-		+ textureLod( cloudsPanorama, uv12, 0.0 ) * weights.z
-		+ textureLod( cloudsPanorama, vec2( uv3.x, uv12.y ), 0.0 ) * weights.w
-		+ textureLod( cloudsPanorama, vec2( uv12.x, uv3.y ), 0.0 ) * bottomWeight;
-	value /= dot( weights, vec4( 1.0 ) ) + bottomWeight;
+	vec4 value = textureLod( pano, vec2( uv12.x, uv0.y ), 0.0 ) * weights.x
+		+ textureLod( pano, vec2( uv0.x, uv12.y ), 0.0 ) * weights.y
+		+ textureLod( pano, uv12, 0.0 ) * weights.z
+		+ textureLod( pano, vec2( uv3.x, uv12.y ), 0.0 ) * weights.w
+		+ textureLod( pano, vec2( uv12.x, uv3.y ), 0.0 ) * bottomWeight;
+	return value / ( dot( weights, vec4( 1.0 ) ) + bottomWeight );
+}
+vec4 cloudsSampleSharp( vec3 dir ) {
+	vec2 size = vec2( textureSize( cloudsPanorama, 0 ) );
+	vec2 position = cloudsPanoramaUV( dir ) * size;
+	vec4 value = cloudsSharpOf( cloudsPanorama, position, size );
+	if ( cloudsSwap < 1.0 ) value = mix( cloudsSharpOf( cloudsPanoramaPrev, position, size ), value, cloudsSwap );
 	return cloudsPanoramaFaded( clamp( value, vec4( 0.0 ), vec4( 64.0, 64.0, 64.0, 1.0 ) ), dir );
 }
 
@@ -1296,7 +1460,8 @@ void main() {
 	for ( int i = 0; i < 16; i ++ ) {
 		float t = t0 + ( float( i ) + 0.5 ) * dt;
 		vec3 p = vec3( xz.x, 0.0, xz.y ) + vec3( L.x, ly, L.z ) * t;
-		tau += scLightDensity( p, scCoverOf( p.xz ), vec2( 2.0 ), false ) * scsShell.z * dt;
+		float cover = scCoverOf( p.xz, p.y - scsShell.x );
+		tau += scLightDensity( p, cover, vec2( 2.0 ), false ) * scDensityOf( cover ) * dt;
 		if ( tau > 12.0 ) break;
 	}
 	// multiple scattering lets some light through even thick cloud (as the view's octaves do)
@@ -1339,6 +1504,8 @@ export class SkyProClouds {
 			scsFrontDir: { value: new THREE.Vector2( G.windPrevailing.value.x, G.windPrevailing.value.y ).normalize() },
 			scsEye: { value: new THREE.Vector4() },
 			scsEyeTrack: { value: new THREE.Vector2( 1, 0 ) },
+			scsBand0: { value: BAND_LOOK.slice( 0, 4 ) },
+			scsBand1: { value: [ ...BAND_LOOK.slice( 4, 7 ), 0 ] },
 			scsStorm: { value: new THREE.Vector4( 0, 0, CB.span, 0 ) },
 			scsCeil: { value: new THREE.Vector4( s.altitude + s.thickness, 1.3, 0, 0 ) },
 			scsStormWind: { value: new THREE.Vector4( 1, 0, CB.lean, 0 ) },
@@ -1397,8 +1564,11 @@ export class SkyProClouds {
 		this._stormDrift = { clock: 0, time: 0, x: 0, z: 0, vx: 0, vz: 0 };
 
 		const [ PW, PH ] = q.pano;
-		// the panorama and its back buffer (a whole new one is made there over warmFrames frames, then swapped in)
+		// the panorama and its back buffer (a whole new one is made there over warmFrames frames, then swapped in);
+		// ((M14) with no view trace, a third: the one before, gone over from in a hurricane, STEADY)
 		this.panoramas = [ floatTarget( PW, PH, { wrapS: THREE.RepeatWrapping } ), floatTarget( PW, PH, { wrapS: THREE.RepeatWrapping } ) ];
+		if ( ! q.view ) this.panoramas.push( floatTarget( PW, PH, { wrapS: THREE.RepeatWrapping } ) );
+		this._steady = null; // (M14) the moment a whole panorama's made at, while it's made
 		this.panorama = this.panoramas[ 0 ];
 		// one slot of the panorama's lattice (the largest marched in a frame: the warm-up's)
 		this.warmLattice = q.warmLattice || WARM_LATTICE;
@@ -1433,6 +1603,8 @@ export class SkyProClouds {
 		// ---- sampling (every consumer: the sky, its environment)
 		this.sampleUniforms = {
 			cloudsPanorama: { value: this.panorama.texture },
+			cloudsPanoramaPrev: { value: this.panorama.texture },
+			cloudsSwap: { value: 1 },
 			cloudsView: { value: this.panorama.texture },
 			cloudsViewRight: { value: new THREE.Vector3( 1, 0, 0 ) },
 			cloudsViewUp: { value: new THREE.Vector3( 0, 1, 0 ) },
@@ -1648,12 +1820,13 @@ export class SkyProClouds {
 		// ((M13) a hurricane's cloud down to the sea, and deeper)
 		const k = Math.max( 0, U.scsEye.value.w );
 		U.scsShell.value[ 0 ] = Math.max( EYE.base, this._alt - EYE.lower * k );
-		U.scsShell.value[ 1 ] = P.shape.thickness * ( 1 + EYE.deeper * k + this._deeper );
+		// ((M14) as deep as its rain's deck all over it: its rain's look is its own where it is, scsBand)
+		U.scsShell.value[ 1 ] = P.shape.thickness * ( 1 + EYE.deeper * k + Math.max( this._deeper, STORM.deeper * k ) );
 		// ((M14) the march's ceiling: the shell's top, or while showers tower over it the tropopause, and a
 		// thunderstorm's top over it, overshooting and lumpy)
 		const alt = U.scsShell.value[ 0 ], depth = U.scsShell.value[ 1 ];
 		const ceil = Math.max( alt + depth, this.towers > 0 ? CB.top + CB.overshoot + 3 * CB.ceiling : 0 );
-		U.scsCeil.value.set( ceil, ( ceil - alt ) / depth + 0.3, ( CB.top - alt ) / depth, CB.anvil / depth );
+		U.scsCeil.value.set( ceil, ( ceil - alt ) / depth + SHELL_OVER - 1, ( CB.top - alt ) / depth, CB.anvil / depth );
 
 		// ---- key light (Tidewater's frame.sunDir / sunColor / skyIrradiance)
 		const L = U.scKeyDir.value.copy( G.sunDir.value );
@@ -1760,11 +1933,16 @@ export class SkyProClouds {
 		// ---- panorama: the first one over 16 frames (4x4 lattice), then one slot of the lattice per frame
 		const PL = q.panoLattice;
 		U.scfMarch.value = [ q.stepMeters, q.panoSteps, q.panoLightTaps, q.fullLightingAlpha ];
+		// ((M14) in a hurricane with no view trace, each panorama made whole as a new one is, at the moment it's
+		// begun at (its eye, the clouds' drift, the storm map's slide), and the next begun as it's done)
+		const S = this.sampleUniforms, steady = ! q.view && U.scsEye.value.w > 0;
+		if ( steady && this.panoWarm === 0 ) this.panoWarm = this.warmFrames;
 		const warming = this.panoWarm > 0;
 		if ( warming ) {
 
 			const k = this.warmFrames - this.panoWarm --, WL = this.warmLattice;
 			U.scfPano.value = [ k % WL, Math.floor( k / WL ), WL, 0 ];
+			if ( k === 0 ) this._steady = steady ? STEADY.map( ( n ) => cloneOf( U[ n ].value ) ) : null;
 
 		} else {
 
@@ -1778,18 +1956,26 @@ export class SkyProClouds {
 		sl.viewport.set( 0, 0, Math.ceil( PW / lat ), Math.ceil( PH / lat ) );
 		sl.scissor.copy( sl.viewport );
 		sl.scissorTest = true;
+		const live = warming && this._steady ? STEADY.map( ( n, i ) => swapIn( U[ n ], this._steady[ i ] ) ) : null;
 		this.panoPass.render( r, sl );
+		if ( live ) STEADY.forEach( ( n, i ) => { U[ n ].value = live[ i ]; } );
 		this.panoScatterPass.render( r, warming ? this.panoramas[ 1 ] : this.panorama, false );
 		this.passes += 2;
+		// ((M14) gone over to the newest as the next is made)
+		S.cloudsSwap.value = Math.min( 1, S.cloudsSwap.value + 1 / this.warmFrames );
 		if ( warming && this.panoWarm === 0 ) {
 
-			// the new panorama is complete: it becomes the one the sky samples
+			// the new panorama is complete: it becomes the one the sky samples ((M14) in a hurricane with no
+			// view trace, gone over to from the one before, which is kept while it is)
 			this.panoVersion ++;
-			this.panoramas.reverse();
+			const P = this.panoramas, crossing = this._steady && P.length > 2;
+			if ( crossing ) this.panoramas = [ P[ 1 ], P[ 2 ], P[ 0 ] ];
+			else [ P[ 0 ], P[ 1 ] ] = [ P[ 1 ], P[ 0 ] ];
 			this.panorama = this.panoramas[ 0 ];
-			const S = this.sampleUniforms;
 			if ( S.cloudsView.value === S.cloudsPanorama.value ) S.cloudsView.value = this.panorama.texture;
 			S.cloudsPanorama.value = this.panorama.texture;
+			S.cloudsPanoramaPrev.value = crossing ? this.panoramas[ 2 ].texture : this.panorama.texture;
+			S.cloudsSwap.value = crossing ? 0 : 1;
 
 		}
 
@@ -1891,21 +2077,20 @@ export class SkyProClouds {
 
 	}
 
-	// (Salt Life) a grey sky (0: the preset's fair-weather cumulus): denser cloud, its bases forming
-	// everywhere, darker below, less light through it. (M9) And rain's deck (`storm`): nimbostratus, its
-	// base lower, its underside smoother and darker still; the cirrus lost above it
+	// (Salt Life) a grey sky and (M9) rain's deck (cloudLook); its base lower in rain, and the cirrus lost
+	// above it
 	_setOvercast( o, storm = 0 ) {
 
-		const S = PRESET.shape, L = PRESET.lighting, U = this.uniforms, E = S.erosionStrengthBase, P = S.erosionStrengthPeak;
-		this._alt = S.altitude - STORM.lower * storm; // ((M13) and a hurricane's: update)
+		const U = this.uniforms, k = cloudLook( o, storm, _look );
+		this._alt = PRESET.shape.altitude - STORM.lower * storm; // ((M13) and a hurricane's: update)
 		this._deeper = STORM.deeper * storm;
-		U.scsShell.value[ 2 ] = S.density * ( 1 + 1.2 * o + 0.8 * storm );
-		U.scsBase.value[ 0 ] = S.baseWeatherStrength * ( 1 - 0.7 * o ) * ( 1 - 0.6 * storm );
-		U.scsErosion.value[ 0 ] = E * ( 1 - STORM.smooth * storm );
-		U.scsErosion.value[ 1 ] = P * ( 1 - 0.3 * storm );
-		U.scsCloudLight.value[ 0 ] = L.scatteringAlbedo * ( 1 - 0.25 * o ) * ( 1 - STORM.albedo * storm );
-		U.scsCloudLight.value[ 2 ] = L.ambientIntensity * ( 1 - 0.25 * o ) * ( 1 - STORM.ambient * storm );
-		U.scsShadow.value[ 0 ] = L.baseShadowStrength + ( 1 - L.baseShadowStrength ) * o;
+		U.scsShell.value[ 2 ] = k[ 0 ];
+		U.scsBase.value[ 0 ] = k[ 1 ];
+		U.scsErosion.value[ 0 ] = k[ 2 ];
+		U.scsErosion.value[ 1 ] = k[ 3 ];
+		U.scsCloudLight.value[ 0 ] = k[ 4 ];
+		U.scsCloudLight.value[ 2 ] = k[ 5 ];
+		U.scsShadow.value[ 0 ] = k[ 6 ];
 		this.cirrus.amount.value = this._cirrus * ( 1 - 0.85 * Math.max( o, storm ) );
 
 	}
@@ -1943,7 +2128,7 @@ export class SkyProClouds {
 			for ( let i = 0; i < cells.length; i ++ ) {
 
 				const c = cells[ i ], d = list[ i ] || ( list[ i ] = {} );
-				d.x = c.x; d.z = c.z; d.r = c.r; d.rain = c.rain; d.thunder = c.thunder; d.n = c.n;
+				d.x = c.x; d.z = c.z; d.r = c.r; d.rain = c.rain; d.thunder = c.thunder; d.n = c.n; d.band = c.band || 0;
 
 			}
 
@@ -1963,9 +2148,10 @@ export class SkyProClouds {
 				job.at = - 1;
 				// (how far they've drifted since the last map, each matched by which it is, and how fast: not
 				// over a jump)
-				const was = this._stormWas;
+				// ((M14) in a hurricane, its bands' cells: they go with it, and they're what's drawn)
+				const was = this._stormWas, banded = job.cells.some( ( c ) => c.band );
 				let dx = 0, dz = 0, k = 0;
-				for ( const c of job.cells ) for ( const w of was ) if ( w.n === c.n ) {
+				for ( const c of job.cells ) if ( c.band || ! banded ) for ( const w of was ) if ( w.n === c.n ) {
 
 					dx += c.x - w.x; dz += c.z - w.z; k ++;
 					break;
@@ -2017,7 +2203,7 @@ export class SkyProClouds {
 	get memory() {
 
 		const q = this.quality;
-		let b = NOISE_RES ** 3 * 4 * 8 / 7 + q.weather ** 2 + BOUNDS_RES ** 2 + CB.res ** 2 * 4 + q.pano[ 0 ] * q.pano[ 1 ] * 18 + this.cirrus.memory;
+		let b = NOISE_RES ** 3 * 4 * 8 / 7 + q.weather ** 2 + BOUNDS_RES ** 2 + CB.res ** 2 * 4 + q.pano[ 0 ] * q.pano[ 1 ] * 9 * this.panoramas.length + this.cirrus.memory;
 		if ( q.view ) b += this.sourceWidth * this.sourceHeight * 12 + this.historyWidth * this.historyHeight * 12 * 2;
 		if ( this.shadowMap ) b += SHADOW_RES * SHADOW_RES * 2;
 		return Math.round( b );

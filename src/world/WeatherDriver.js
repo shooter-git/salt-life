@@ -1,7 +1,7 @@
 import { Vector2 } from '../engine/index.js';
 import { G } from '../core/Globals.js';
-import { islandTime, weatherAt, showers, towardOf, hurricaneAt, hurricaneNews, FRONT_KMH, STORM_RANGE, SURF_MAX } from '../game/Weather.js';
-import { FRONT_KM, eyeCover } from '../sky/SkyProClouds.js';
+import { islandTime, weatherAt, showers, towardOf, hurricaneAt, hurricaneNews, hash, FRONT_KMH, STORM_RANGE, SURF_MAX } from '../game/Weather.js';
+import { FRONT_KM, eyeCover, bandCells } from '../sky/SkyProClouds.js';
 
 // (Salt Life) The island's weather, each frame: what the day brings (game/Weather.js), or what you picked
 // on your own, eased onto everything that shows it:
@@ -20,7 +20,9 @@ import { FRONT_KM, eyeCover } from '../sky/SkyProClouds.js';
 //     stronger in rain and squalls, which freshen the wind a little while they pass;
 //   - (M10) the water's murk after a blow (G.murk: the view under water closes in, App; the caustics dim).
 //   - (M11) the showers about the island, drifting down the trades (Weather.showers): their curtains in
-//     the distance (Sky.setCurtains), each frame from the clock.
+//     the distance (Sky.setCurtains), each frame from the clock. (M14) In a hurricane, as far as it's the
+//     weather here, its outer bands' instead: their curtains where they are (bandCurtains), and their
+//     cells towering over them (SkyProClouds' bandCells, into setStorms with the showers').
 //   - (M12) the blow's track (Weather.trackAt): the wind comes round to it (a front's swings it through
 //     half the compass in a few game hours), the weather on its way is told up it (SkyProClouds.front,
 //     frontDir), and the showers and the lightning come from up it (track: where the weather goes, from
@@ -105,6 +107,9 @@ export class WeatherDriver {
 		this._showers = [];
 		this._showerRain = new Map(); // (each slot's weather, while the pick's the same)
 		this.cells = this._showers; // (M12) the showers about the island, out to STORM_RANGE (Weather.showers)
+		this._curtains = []; // (M14) the curtains in a hurricane (bandCurtains)
+		this._bandCells = []; // (M14) its outer bands' cells (SkyProClouds' bandCells), and with the showers'
+		this._stormCells = [];
 		this.track = { x: 0, y: 1 }; // (M12) where the weather goes now (from the clock: Lightning)
 		this.hurricane = null; // (M13) the hurricane about the island (Weather.hurricaneAt), or null
 		this.news = null; // (M13) what's said of the next one (Weather.hurricaneNews), or null
@@ -206,9 +211,26 @@ export class WeatherDriver {
 		// its own; each slot's rain is kept while the pick is)
 		if ( picked || this._showerRain.size > 160 ) this._showerRain.clear();
 		showers( T, pick, STORM_RANGE, this._showers, this._showerRain, since );
-		if ( camera ) this.sky.setCurtains( this._showers, camera.position );
-		// ((M14) and each its own cloud, towering over it)
-		if ( this.sky.clouds.setStorms ) this.sky.clouds.setStorms( this._showers, dt, jumped || picked );
+		// ((M14) in a hurricane, its bands' curtains where they are, in place of the showers')
+		const k = this.hurricane ? Math.min( 1, Math.max( 0, this.live.hurricane || 0 ) ) : 0;
+		if ( camera ) this.sky.setCurtains( k > 0 ? bandCurtains( this.hurricane, camera.position, k, this._showers, this._curtains ) : this._showers, camera.position );
+		// ((M14) and each its own cloud, towering over it; in a hurricane, its outer bands' cells too)
+		if ( this.sky.clouds.setStorms ) {
+
+			let cells = this._showers;
+			if ( k > 0 ) {
+
+				bandCells( this.hurricane, this._bandCells );
+				cells = this._stormCells;
+				cells.length = 0;
+				for ( const c of this._showers ) cells.push( c );
+				for ( const c of this._bandCells ) cells.push( c );
+
+			}
+
+			this.sky.clouds.setStorms( cells, dt, jumped || picked );
+
+		}
 
 	}
 
@@ -261,6 +283,9 @@ export class WeatherDriver {
 // (no slower than the trades, a little slower in its calm eye); the cirrus in its outflow, spiralling
 // out of it clockwise (against its turning), as much as the trades' veered upper wind gives way to it
 const HURRICANE_DRIFT = { trades: 12, k: 0.9, least: 6 };
+// ((M14) between its outer bands, its deck broken: as grey as this, the sun through it now and then, as
+// photographs of bands coming in show it)
+const GAP_OVERCAST = 0.25;
 const _up = new Vector2();
 WeatherDriver.prototype.hurricaneSky = function ( sky, w ) {
 
@@ -281,9 +306,13 @@ WeatherDriver.prototype.hurricaneSky = function ( sky, w ) {
 	// (its deck as it is here now: the weather's eases, and looks ahead to the cloud on its way, which in
 	// its eye is the wall coming round; and lighter in a gap between its outer bands, where its cloud breaks)
 	const now = this.target, here = eyeCover( - h.x, - h.z, h.rmax, h.track.x, h.track.y );
-	const oc = Math.min( now.overcast, 0.5 + 0.5 * Math.min( 1, Math.max( 0, ( here - 0.6 ) / 0.35 ) ) );
-	sky.overcast = C.overcast.value = w.overcast + ( oc - w.overcast ) * k;
-	sky.storm = C.storm.value = w.storm + ( now.rain - w.storm ) * k;
+	const oc = Math.min( now.overcast, GAP_OVERCAST + ( 1 - GAP_OVERCAST ) * Math.min( 1, Math.max( 0, ( here - 0.6 ) / 0.35 ) ) );
+	sky.overcast = w.overcast + ( oc - w.overcast ) * k;
+	sky.storm = w.storm + ( now.rain - w.storm ) * k;
+	// ((M14) the clouds' own, its deck's between its bands: its rain's is its own where it is, the clouds'
+	// band look, so a band's seen coming dark from a break, and the sky's the same one passing in and out)
+	C.overcast.value = w.overcast + ( Math.min( now.overcast, GAP_OVERCAST ) - w.overcast ) * k;
+	C.storm.value = w.storm * ( 1 - k );
 	// (the clouds: the way the wind blows here, the trades' blended into the hurricane's by its share)
 	const p = G.windPrevailing.value, d = G.windDir.value, D = HURRICANE_DRIFT;
 	const dx = p.x * ( 1 - k ) + d.x * k, dz = p.y * ( 1 - k ) + d.y * k, l = Math.hypot( dx, dz ) || 1;
@@ -308,5 +337,52 @@ function toward( v, target, d ) {
 
 	const next = v + d;
 	return Math.abs( target - next ) < 1e-4 ? target : next;
+
+}
+
+// (M14) A hurricane's rain bands' curtains in the distance, where they are (its cover past BAND_CURTAIN.at,
+// eyeCover's at its cloud's base: the clouds' band look's), as photographs of outer bands coming in show
+// them: shafts of rain hanging from a band's near edge to the sea. Each of `ways` ways round from `at` (the
+// camera), out past any rain you're in, where its rain's first met (out to `far`), a shaft that far in, as
+// wide as a band's cells of rain are (`r`, m), each its own, as heavy as its rain (`rain`). After the
+// showers' (Weather.showers: theirs as far as the hurricane isn't the weather here, its share k), into out
+// (its objects filled again each call): for Sky.setCurtains
+const BAND_CURTAIN = { ways: 16, near: 1500, far: 40000, step: 1000, at: 0.9, r: [ 1600, 3200 ], rain: [ 0.6, 0.95 ] };
+export function bandCurtains( h, at, k, cells, out ) {
+
+	const B = BAND_CURTAIN;
+	let n = 0;
+	const put = ( x, z, r, rain ) => {
+
+		const c = out[ n ] || ( out[ n ] = {} );
+		n ++;
+		c.x = x; c.z = z; c.r = r; c.rain = rain;
+
+	};
+	if ( k < 1 ) for ( const c of cells ) put( c.x, c.z, c.r, c.rain * ( 1 - k ) );
+	const wet = ( m, dx, dz ) => eyeCover( at.x + dx * m - h.x, at.z + dz * m - h.z, h.rmax, h.track.x, h.track.y ) > B.at;
+	for ( let i = 0; i < B.ways; i ++ ) {
+
+		const a = ( i + 0.5 ) / B.ways * Math.PI * 2, dx = Math.cos( a ), dz = Math.sin( a );
+		let m = B.near;
+		while ( m < B.far && wet( m, dx, dz ) ) m += B.step;
+		while ( m < B.far && ! wet( m, dx, dz ) ) m += B.step;
+		if ( m >= B.far ) continue;
+		// (its edge, nearer: halved down to a few tens of m)
+		let lo = m - B.step, hi = m;
+		for ( let j = 0; j < 5; j ++ ) {
+
+			const mid = 0.5 * ( lo + hi );
+			if ( wet( mid, dx, dz ) ) hi = mid; else lo = mid;
+
+		}
+
+		const r = B.r[ 0 ] + ( B.r[ 1 ] - B.r[ 0 ] ) * hash( i, 0xb4d ), d = hi + r;
+		put( at.x + dx * d, at.z + dz * d, r, k * ( B.rain[ 0 ] + ( B.rain[ 1 ] - B.rain[ 0 ] ) * hash( i, 0x5a1 ) ) );
+
+	}
+
+	out.length = n;
+	return out;
 
 }
