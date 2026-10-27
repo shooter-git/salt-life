@@ -61,24 +61,30 @@ Materials are three's `MeshStandardMaterial` (or `MeshPhysicalMaterial`), with G
     - walking, swimming, on deck or at the helm;
     - their speed;
     - the rod's state, their bobber and the line's tension;
-    - their boat's pose, when it's away from its mooring or they're aboard.
+    - their boat's pose, wherever she is (moored too: without it, someone whose own boat was out saw an empty berth);
+    - the sea's height under their boat, their bobber and themselves while they swim (`B[7]`, `b[3]`, `w`), on their own sea.
   - Others are drawn 0.15 s behind the newest pose and eased between poses.
   - Each player is one of four Rocketbox islanders (`Avatar.js`): two men and two women. Everyone picks theirs on the cooler's Islander tab; it's saved with their progress and sent in the pose (`l`). Until someone picks, the same person always gets the same one. Each has their name over them in their colour and a dot on the minimap.
-  - Their boat is a copy of yours that shares its meshes and materials. When both boats are at the dock, yours stands in for theirs.
+  - Their boat is a copy of yours that shares its meshes and materials. When both boats are at the dock, yours stands in for theirs. Its radar turns and its propeller runs at their engine's revs (`_spin`), and its wheel, rudder and lever sit amidships (as yours were when it was copied, they stayed).
+  - **On your sea:** each device's sea is its own (wind turns re-phase the waves about each camera, and the tiers draw 4, 6 or 8 waves), so their boat, their bobber and a swimmer are put as high over your sea as over theirs (`floatBoat`, and the same for the bobber and swimmer). Their boat was awash on yours, its deck under your waves. Their figure at the helm stands on the wheelhouse sole (it was 12 cm into it), and a figure aboard a boat this device doesn't draw isn't shown (it stood on the sea).
   - Their rod, line and bobber are the rod's (`FishingRod.tackle()`).
-  - Their boat shows its lamps (below): lit as under way when they're at the helm or away from the dock and not at anchor (`A`), and their searchlight when the pose says it's on (`S`).
+  - Their boat shows its lamps (below): lit as under way when they're at the helm or neither moored nor at anchor (`A`), and their searchlight when the pose says it's on (`S`).
 - **Riding along:** standing by someone's boat offers "Board their boat".
   - Aboard, you ride on their boat wherever they take it (`Player.ride()`); your pose names the boat's owner (`R`), so everyone draws you on it.
   - Your own boat stays at its mooring, so each player always has a boat of their own. Jumping off or stepping ashore ends the ride.
+  - The rain is kept out from under the roof of the boat you ride in, and splashes on her deck (`App`: the boat you're aboard; it was your own, at the dock).
   - You hear the boat you ride in: its engine at the revs its skipper sends from the helm (`E`), and the water past the hull. On foot or in the water, you hear the nearest boat going by.
   - (M10) An engine at the helm with its revs run down has stalled, and you hear it stop. While the skipper's starter turns her over the pose says so (`K`: 1 for a crank that won't catch, 2 for one that will), and you hear it too.
 - **The horn:** sounding it is a `'horn'` message (1 when it starts, 0 when it's let go). The others hear it from that player's boat.
   - Each device draws only the nearest few players and boats.
 - **The clock:** one time of day for everyone, kept in the shared value `'clock'` as `{ at, hour, day, speed }` (below).
   - The host sets it if there's none: a new room starts from its first player's saved clock.
-  - When someone arrives, the host sets it again for everyone, running (in company it can't be held).
+  - When someone arrives, the host sets it again for everyone, running (in company it can't be held), from the room's clock as it is (a hidden tab's settings lag behind it).
   - Each device works the hour out from the record and its own clock (`IslandClock.clockAt`).
   - Resting needs everyone here: each player's wish is their own shared value, `'rest.<id>'` (`{ to, c }`, `c`: the clock it was made on). Whoever's wish completes the agreement moves the clock, and so does the host when it sees it (the wishes arrive as events, so a host whose game is paused still hears them). A wish lasts two minutes, or until the clock changes.
+- **The weather picked:** one for everyone, in the shared value `'weather'` (`{ id, since }`: null the day's; a hurricane's start). Anyone's pick in the clock's menu is everyone's; a new room starts from its host's, and whoever joins takes the room's.
+- **The sea:** the waves' time (`G.time`) is everyone's, from the shared `'waves'` (ms since 1970 when it was 0), which the host sets from its own so its sea doesn't jump; someone joining jumps once to it. On the same tier, with the wind steady, the same waves roll under everyone; boats, bobbers and swimmers are put on your own sea anyway (above).
+- **Lightning** strikes as the weather is, not as it's easing on each device (`Weather.strikeIn` with the target's thunder), so everyone's strikes come at the same moments.
 - **Catches:** a landed fish is a `'catch'` message to the others.
   - They hear the player cheer, and the fish hangs on the player's line for a moment.
   - Only a fish worth hearing of is a toast: an island record, or a trophy (the top fifth of its kind's size range, about one catch in ten: `FishTable.isTrophy`). On a busy island a toast for every catch would add up.
@@ -100,7 +106,7 @@ Everyone keeps their own progress and their own fish.
 - **Pace:** by day an hour takes 100 s (`DAY_RATE`, 0.01 game hours a second). Deep night, from about 20:30 to 3:30, runs four times faster (`NIGHT_X`), eased in and out, so dusk and dawn linger and the dark passes in a few minutes. A whole day is about half an hour.
 - **One record:** the time is worked out from `{ at, hour, day, speed }`, the hour and day at `at` (ms since 1970) running at `speed` (0: held). A table of the day's pace turns real seconds into hours, so every device gets the same hour from the same record without anything ticking over the network.
 - **Saved:** the hour, the day and whether you'd held it are in your save (`'clock'`, written every 30 s, when the app covers the game and when you leave), so you come back to where you were. A new player starts at 9:30 on day 1. On its own (`pnpm dev`), `?hour=21` starts at that hour.
-- **On your own** (a solo session, or nobody else here yet), you can hold the clock and rest until dawn, noon, dusk or night. In company it runs for everyone, and a rest needs all of you (Playing together, above).
+- **On your own** (a solo session, or nobody else here once the first lists are in: `Together.surelyAlone`), you can hold the clock and rest until dawn, noon, dusk or night. In company it runs for everyone, and a rest needs all of you (Playing together, above). (Just after joining, before the lists named everyone, holding or resting set the room's clock.)
 - **The clock in the HUD** (`TimeHUD.js`): the time at the left of the purse, with a sun, a moon, or two bars while it's held. T (R3 on a gamepad, or a tap) opens a small menu under the purse. It says when Joe and Marta open or shut, and offers holding and resting, or, in company, who wants to rest until when. A dot on the clock says someone else wants to rest. Nothing about the clock is a toast: a rest dims the world for a moment instead.
 
 **The stalls keep hours** (`Orders.HOURS`): Joe from 5 am to 7 pm, Marta from 7 am to 7 pm. In a gale or a thunderstorm they shut whatever the hour (`Orders.shutFor`, `stallOpen`: The weather, below).
@@ -239,8 +245,8 @@ Everyone keeps their own progress and their own fish.
 - **Marta's tow:** when your boat has drifted more than 30 m from the dock with nobody at her helm, Marta's panel (and her honesty box) offers to tow her in (`Game.tow`): $20 and a little every 100 m, at most $90 (`towFee`). Short of it, she takes what you have.
 - **The clock's menu** (`TimeHUD`):
   - what the weather is (where the wind comes from and its speed in knots, `windFrom`, `knots`; the surf as a report gives it, `surfText`, and its period) and what's coming (`forecast`);
-  - on your own, a choice of it: the forecast or any condition. It's saved with the clock (`weather`), and holds only while you're surely alone (`Together.surelyAlone`: a solo session, or nobody else here once the first lists are in). In company the weather is the day's.
-  - On its own (`pnpm dev`), `?weather=gale` holds it from the first frame, company or not; `?weather=forecast` is the day's.
+  - a choice of it: the forecast or any condition. It's saved with the clock (`weather`). In company it's everyone's (`Together.setWeather`, the shared `'weather'`: Playing together, above).
+  - On its own (`pnpm dev`), `?weather=gale` holds it from the first frame; `?weather=forecast` is the day's.
 
 ## What the weather costs
 

@@ -41,7 +41,8 @@ Done, M0 to M13:
   - cloud comes over, the light dims, the haze closes in and the horizon greys;
   - the wind pushes your boat: left without her anchor she drifts, anchored she swings to it, and
     Marta tows her home if she gets away from you;
-  - the clock's menu says what it is and what's coming; on your own you can choose it;
+  - the clock's menu says what it is and what's coming, and you can choose it (in company, for
+    everyone);
 - rain and thunderstorms (M9):
   - showers pass over now and then, more under a grey sky and in a blow; the heaviest, in unsettled
     air, are thunderstorms; their cloud comes over before the rain, and a front's bank darkens the
