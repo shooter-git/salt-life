@@ -59,10 +59,15 @@ export class FishStand {
 
 			} );
 			const board = PRICES.clone().premultiply( new Matrix4().makeTranslation( 0, Math.min( ...feet ) - y, 0 ) );
-			const mesh = new Mesh( buildStallKit( a, board ), a.material );
+			const mesh = new Mesh( buildStallKit( a ), a.material );
 			mesh.name = 'FishStandStall';
 			mesh.castShadow = tier === 'high'; // (its scanned props: ~40-50k triangles in the shadow pass, under the stall's roof)
 			this.group.add( mesh );
+			// (the price board out on the sand, its own: its shadow on every tier, a few boxes)
+			const boardMesh = new Mesh( buildBoardKit( a, board ), a.material );
+			boardMesh.name = 'FishStandPrices';
+			boardMesh.castShadow = true;
+			this.group.add( boardMesh );
 			// the prices, chalked over the board's slate
 			this.prices = new PriceBoard();
 			this.prices.mesh.applyMatrix4( chalkPanel( board, true ).multiply( place( 0, 0.455, 0.009 ) ) );
@@ -239,8 +244,7 @@ function corrugated( w, l, ribs ) {
 
 // Local frame as above: 2.6 m wide (x), 1.6 m deep (z), counter and customers at +z, roof sloping
 // back. Joe stands on the floor between the shelf (z -0.78..-0.48) and the counter (top from 0.58).
-// board: where the price chalkboard stands (its feet on the sand)
-function buildStallKit( assets, board ) {
+function buildStallKit( assets ) {
 
 	const K = new KitBuilder( assets, 7 );
 	const { WALL, DECK, TIN, SIGN, CHALK, PLAIN, FLOAT, DIAL } = LAYER;
@@ -344,12 +348,20 @@ function buildStallKit( assets, board ) {
 	// an old net drying over the outside of the left wall, a few floats still on its head rope
 	net( K, - 1.335, 1.08, - 0.68, 0.62, 0.8 );
 
-	// outside: crates stacked on the left, a long crate on the right, a bucket, the price board
+	// outside: crates stacked on the left, a long crate on the right, a bucket
 	K.prop( 'wooden_crate_01', place( - 1.85, 0, 0.25, Math.PI / 2 + 0.06 ) );
 	K.prop( 'wooden_crate_01', place( - 1.84, 0.335, 0.28, Math.PI / 2 - 0.1 ), { detail: true } );
 	K.prop( 'wooden_crate_02', place( 1.8, 0, - 0.2, 0.03 ) );
 	K.prop( 'wooden_bucket_01', place( 1.55, 0, 1.05, 0.7 ) );
-	chalkboard( K, board, { layer: DECK, color: tone() } );
+	return K.build();
+
+}
+
+// the price chalkboard, standing where `board` puts it (its feet on the sand), in the stall's wood
+function buildBoardKit( assets, board ) {
+
+	const K = new KitBuilder( assets, 11 ), t = 0.86 + K.rnd() * 0.22;
+	chalkboard( K, board, { layer: LAYER.DECK, color: [ t, t * ( 0.97 + K.rnd() * 0.05 ), t * ( 0.94 + K.rnd() * 0.06 ) ] } );
 	return K.build();
 
 }
