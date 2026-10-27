@@ -1,4 +1,4 @@
-import { Vector3, Color, Mesh } from '../engine/index.js';
+import { Vector3, Color, Mesh, BoxGeometry, MeshStandardMaterial, Group } from '../engine/index.js';
 import { G } from '../core/Globals.js';
 import { WORLD } from '../world/WorldLayout.js';
 import { FISH, CARAPACE, fishWeightKg, spearRule } from './FishTable.js';
@@ -20,6 +20,9 @@ import { NIGHT_BOX, ordersFor, tradeDay, stallOpen, shutFor } from './Orders.js'
 import { WantedBoard } from './WantedBoard.js';
 import { ForecastSlate } from './ForecastSlate.js';
 import { forecast, islandTime, blowShare } from './Weather.js';
+import { wxNews } from './TimeHUD.js';
+import { CRADLE } from '../world/village/StormPlaces.js';
+import { StormChart, shelterSign } from './StormChart.js';
 import { ClosedSign } from './ClosedSign.js';
 import { delivered, filled, owed, weekEnds } from './WeekOrder.js';
 import { Minimap } from './Minimap.js';
@@ -42,6 +45,8 @@ const RODE_SEGS = 16;
 // is saved whenever it's grown this much since it last was
 const BAIL_FROM = 20;
 const WEAR_SAVE = 0.02;
+// (M13) Marta's haul-out ahead of a hurricane ($: less than the repair a hurricane leaves to do)
+export const HAUL_FEE = 40;
 const _a = new Vector3(), _b = new Vector3(), _h = new Vector3();
 const _pose = { pos: new Vector3(), head: new Vector3(), roll: 0, thrash: 0 };
 const BAG_FROM = 0.85; // the brails drawn this far: the netting has closed round what's under it (it rides in the purse)
@@ -120,6 +125,49 @@ export class Game {
 		this.orders = [];
 		this.tradeDay = null;
 		this.wanted = new WantedBoard( { terrain: app.terrainData } );
+		// (M13) boarded up for a hurricane: plywood over Joe's counter, a blue tarp roped over Marta's table
+		// and shelves (shown while they're shut for one)
+		this.boards = new Group();
+		this.boards.name = 'BoardedUp';
+		this.boards.visible = false;
+		{
+
+			const ply = new MeshStandardMaterial( { color: 0xb89a6a, roughness: 0.85 } ), tarp = new MeshStandardMaterial( { color: 0x2f6fb0, roughness: 0.7 } );
+			const at = ( mat, sx, sy, sz, cx, lx, ly, lz, yaw ) => {
+
+				const m = new Mesh( new BoxGeometry( sx, sy, sz ), mat );
+				const c = Math.cos( yaw ), s = Math.sin( yaw ), g = app.terrainData.heightAt( cx.x, cx.z );
+				m.position.set( cx.x + lx * c + lz * s, g + ly, cx.z - lx * s + lz * c );
+				m.rotation.y = yaw;
+				this.boards.add( m );
+
+			};
+			at( ply, 2.8, 1.25, 0.03, STAND, 0, 1.62, 0.97, STAND.yaw );
+			at( ply, 0.03, 1.25, 1.8, STAND, 1.44, 1.62, 0.05, STAND.yaw );
+			at( ply, 0.03, 1.25, 1.8, STAND, - 1.44, 1.62, 0.05, STAND.yaw );
+			at( tarp, 2.25, 1.0, 1.0, CHANDLERY, 0, 0.5, 0, CHANDLERY.yaw );
+			at( tarp, 1.45, 1.7, 0.55, CHANDLERY, 0, 0.85, - 1.4, CHANDLERY.yaw );
+			app.scene.add( this.boards );
+
+		}
+
+		// (M13) the shelter's sign over its door, and the tracking chart on its back wall inside
+		const sh = app.village && app.village.shelter;
+		this.stormChart = sh && typeof document !== 'undefined' ? new StormChart() : null;
+		if ( this.stormChart ) {
+
+			const on = ( mesh, lx, y, lz ) => {
+
+				const c = Math.cos( sh.yaw ), s = Math.sin( sh.yaw );
+				mesh.position.set( sh.x + lx * c + lz * s, y, sh.z - lx * s + lz * c );
+				mesh.rotation.y = sh.yaw;
+				app.scene.add( mesh );
+
+			};
+			on( shelterSign(), 0, sh.floorY + 2.72, sh.d / 2 + 0.03 );
+			on( this.stormChart.mesh, - 1.6, sh.floorY + 1.75, - sh.inside.hz + 0.02 );
+
+		}
 		// (M9) and the forecast on a smaller slate beside it: hung from the wanted slate (where it is: attach),
 		// it goes up with it
 		this.forecastSlate = new ForecastSlate( { terrain: app.terrainData } );
@@ -159,6 +207,8 @@ export class Game {
 		this._bailing = false;
 		this._wornSaid = 0;
 		this._floodSaid = false; // (said the water's over the engine, until she next runs)
+		// ((M13) hauled out ahead of a hurricane when you left: she's on her cradle still)
+		if ( this.state.hauled ) b.setHauled( this.cradle );
 		this._boatSounds = false;
 		this.floods = [];
 		if ( app.localLights ) this.addFloodlights( app.localLights, app.boat );
@@ -263,7 +313,7 @@ export class Game {
 	towJob() {
 
 		const b = this.app.boatCtl, dock = WORLD.boatDock.position;
-		if ( ! b || b.moored || b.driven ) return null;
+		if ( ! b || b.moored || b.driven || b.hauled ) return null;
 		const metres = Math.hypot( b.position.x - dock.x, b.position.z - dock.z );
 		return metres > TOW.from ? { metres, fee: towFee( metres ) } : null;
 
@@ -319,6 +369,7 @@ export class Game {
 		this.updateDay();
 		this.updateWeek();
 		this.updateForecast( dt );
+		this.updateHurricane();
 		if ( ! this.hud && app.ui && app.ui.ui && typeof document !== 'undefined' && document.head ) {
 
 			const ui = app.ui.ui;
@@ -597,7 +648,7 @@ export class Game {
 
 				this._sonarT = 0.5;
 				const x = b.position.x, z = b.position.z;
-				const depth = Math.max( 0, - app.terrainData.heightAt( x, z ) );
+				const depth = Math.max( 0, G.seaLevel.value - app.terrainData.heightAt( x, z ) ); // ((M13) the surge's sea too)
 				const h = this.habitatAtPoint( x, z, depth );
 				let rich = 0;
 				for ( const k in h ) rich += h[ k ];
@@ -623,8 +674,11 @@ export class Game {
 
 		}
 
+		// ((M13) hauled out, she's out of it: no storm, no rain in her; left in the water, the storm works her)
+		const ashore = !! b.hauled;
 		hull.step( dt, {
-			driven: b.driven, throttle: b.driven ? Math.abs( b.throttleTarget || 0 ) : 0, fuel: s.fuelL > 0, rain: G.rain.value,
+			driven: b.driven, throttle: b.driven ? Math.abs( b.throttleTarget || 0 ) : 0, fuel: s.fuelL > 0, rain: ashore ? 0 : G.rain.value,
+			storm: ashore || ! app.weather ? 0 : app.weather.windAt( b.position.x, b.position.z ),
 			bailing: this._bailing, pumpLs: s.stats.pumpLs, pile: c.pile, ground: c.ground, slide: c.slide, aground: c.aground,
 		} );
 		c.pile = c.ground = c.slide = 0;
@@ -692,12 +746,83 @@ export class Game {
 
 	}
 
+	// (M13) her cradle in her hauling yard: the village's (its height from the ground there), or where it is
+	get cradle() {
+
+		return ( this.app.village && this.app.village.cradle ) || CRADLE;
+
+	}
+
+	// (M13) Marta's haul-out ahead of a hurricane: once it's watched for or warned of and before she boards
+	// up, with the boat at her dock, she lifts her out onto a cradle ashore for HAUL_FEE, and puts her back
+	// in once it's gone (or when you ask). { fee, here } to haul her, { back } hauled (back: it's gone by), or
+	// null
+	haulJob() {
+
+		const s = this.state, n = this.app.weather && this.app.weather.news;
+		if ( s.hauled ) return { back: ! n };
+		if ( ! n || n.stage === 'outlook' ) return null;
+		return { fee: HAUL_FEE, here: !! this.app.boatCtl.moored };
+
+	}
+
+	haul() {
+
+		const job = this.haulJob();
+		if ( ! job || ! job.here || ! this.state.spend( job.fee ) ) return false;
+		this.state.hauled = true;
+		this.state.save();
+		this.app.boatCtl.setHauled( this.cradle );
+		this.toast( `Marta's hauled her out onto a cradle ashore · $${ job.fee } · she'll put her back in once it's gone by`, 4200 );
+		return true;
+
+	}
+
+	relaunch( said = 'Marta\'s put your boat back in at the dock' ) {
+
+		if ( ! this.state.hauled ) return;
+		this.state.hauled = false;
+		this.state.save();
+		this.app.boatCtl.setHauled( null );
+		this.toast( said, 3200 );
+
+	}
+
+	// (M13) what's said of a hurricane as it comes (a toast when it's watched for, warned of, and when its
+	// winds arrive), and Marta putting your boat back in once it's gone (when she's at her stall)
+	updateHurricane() {
+
+		const app = this.app, n = app.weather && app.weather.news, s = app.settings;
+		const T = islandTime( s.day, s.timeOfDay );
+		const stage = n ? ( T >= n.onset ? 'here' : n.stage ) : null;
+		if ( stage !== this._hurricaneSaid ) {
+
+			const said = this._hurricaneSaid;
+			this._hurricaneSaid = stage;
+			// (not on a first look: only as it changes while you play)
+			if ( said !== undefined && stage && stage !== 'outlook' ) {
+
+				const news = wxNews( n, this.weatherNow, T, app.portal && app.portal.locale );
+				this.toast( stage === 'here' ? `${ news } · the shelter's open` : stage === 'warning' ? `${ news } · Marta can haul your boat out before she boards up` : news, 5200 );
+				if ( this.guide && stage !== 'watch' ) this.guide.tip( 'hurricane' );
+
+			}
+
+		}
+
+		const marta = this.chandlery && this.chandlery.vendor;
+		if ( this.state.hauled && ! n && marta && marta.open ) this.relaunch();
+
+	}
+
 	// (M10) Marta's repair of the hull: { fee, wear, here } (here: the boat's at her dock), or null with
 	// nothing to repair; and the repair, as far as your money goes
 	repairJob() {
 
 		const fee = repairFee( this.hull.wear );
-		return fee ? { fee, wear: this.hull.wear, here: !! this.app.boatCtl.moored } : null;
+		// ((M13) or on her cradle ashore: hauled out, the best place to work on her)
+		const b = this.app.boatCtl;
+		return fee ? { fee, wear: this.hull.wear, here: !! ( b.moored || b.hauled ) } : null;
 
 	}
 
@@ -773,7 +898,7 @@ export class Game {
 		if ( b.moored || Math.hypot( b.position.x - dock.x, b.position.z - dock.z ) < BERTH_M ) return;
 		const at = b.toWorld( b.stemHead, new Vector3() );
 		const floor = this.app.terrainData.heightAt( at.x, at.z );
-		const depth = Math.max( 0, - floor );
+		const depth = Math.max( 0, G.seaLevel.value - floor );
 		if ( depth > max ) {
 
 			this.toast( `Too deep to anchor · ${ feet( depth ) } of water, the rode holds in ${ feet( max ) }`, 3200 );
@@ -793,15 +918,18 @@ export class Game {
 		// does without them (Joe's night box, diesel on Marta's honesty box). Whoever is serving you when
 		// it's time finishes with you first. (M9) In a gale or a thunderstorm they shut whatever the hour
 		// (Orders.shutFor), and their boards say so
-		const wx = this.weatherNow, shut = shutFor( wx && wx.id );
+		// ((M13) and they board up ahead of a hurricane, from a while before its winds to a while after)
+		const wx = this.weatherNow, boarded = !! ( wx && wx.boarded ), shut = shutFor( wx && wx.id ) || boarded;
 		for ( const v of this.vendors ) {
 
-			v.setOpen( stallOpen( v.hours, this.hour, wx && wx.id ) || ( v.open && !! hud && hud.standOpen && hud.vendor === v ) );
+			v.setOpen( ( stallOpen( v.hours, this.hour, wx && wx.id ) && ! boarded ) || ( v.open && !! hud && hud.standOpen && hud.vendor === v ) );
 			v.weatherShut = shut && ! v.open;
+			v.boarded = boarded && ! v.open; // ((M13) boarded up for a hurricane)
 
 		}
 
 		for ( const s of this.signs ) s.forWeather( shut );
+		if ( this.boards ) this.boards.visible = boarded;
 		let near = null;
 		if ( p.mode === 'walk' ) for ( const v of this.vendors ) if ( v.inRange( p.position ) ) near = v;
 		for ( const v of this.vendors ) v.talking = !! ( hud && hud.standOpen && hud.vendor === v );
@@ -827,7 +955,7 @@ export class Game {
 		const name = v.name.split( ' ·' )[ 0 ];
 		if ( v.open ) return `Talk to ${ name }`;
 		// (M9) or gone home for the weather
-		const back = v.weatherShut ? 'shut for the weather' : `back at ${ timeText( v.hours[ 0 ], this.app.portal && this.app.portal.locale, 60 ) }`;
+		const back = v.boarded ? 'boarded up for the hurricane' : v.weatherShut ? 'shut for the weather' : `back at ${ timeText( v.hours[ 0 ], this.app.portal && this.app.portal.locale, 60 ) }`;
 		return v.kind === 'shop' ? `Diesel on the honesty box   ·   ${ name }'s ${ back }` : `${ name }'s night box   ·   he's ${ back }`;
 
 	}
@@ -854,7 +982,9 @@ export class Game {
 		if ( this._forecastT > 0 || ! wx ) return;
 		this._forecastT = 1;
 		const s = this.app.settings, pick = this.app.weatherPick ? this.app.weatherPick() : null;
-		this.forecastSlate.draw( wx, forecast( islandTime( s.day, s.timeOfDay ), 12, pick ), this.app.portal && this.app.portal.locale );
+		this.forecastSlate.draw( wx, forecast( islandTime( s.day, s.timeOfDay ), 12, pick, s.weatherSince ), this.app.portal && this.app.portal.locale, this.app.weather ? this.app.weather.news : null );
+		// ((M13) and the shelter's tracking chart)
+		if ( this.stormChart ) this.stormChart.draw( this.app.weather.hurricane, this.app.weather.news, islandTime( s.day, s.timeOfDay ), this.app.portal && this.app.portal.locale );
 
 	}
 

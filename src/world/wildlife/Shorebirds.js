@@ -6,16 +6,22 @@ import { BIRD } from './BirdShapes.js';
 import { Flyer } from './Flight.js';
 import { groundPose, setHead, setWings, standHeight, storePrevious, resetPrevious } from './BirdPose.js';
 import { TAU, clamp, lerp, smooth, angleDiff, approach } from './Kit.js';
+import { wildlifeMood } from '../../game/WildlifeWeather.js';
 
 // Sanderlings working the swash: small flocks that chase the backwash down the wet sand, probing
 // as they go, and scurry up the beach ahead of every uprush (the edge of the water comes from
 // SwashProbe: the exact run-up the water shader draws). They run from someone walking up, and
 // flush when pressed: the flock bursts up and flies off low over the surf, wheels, and lands
 // further along the beach. At night they roost in a tight group above the tide line.
+// (M13) They roost there through a downpour and a gale as well, facing into the wind (a shower doesn't
+// stop them working the swash); ahead of a hurricane each flock flies off along the beach and is gone
+// once it's out of sight, back after it where nobody's looking (mood: WildlifeWeather.wildlifeMood).
 
 const SLOPE = 0.066; // ShoreWaves' nominal beach slope (run-up is measured along it)
 const DRAW = 190;
 const WARY = 15, FLUSH = 8; // m
+const HIDE = 70; // m: (M13) a flock off out of a hurricane's way is gone this far from the camera
+const BRAKE = 12; // m/s²: (M13) how hard one slows coming in to land
 
 const _r = { runup: 0, inland: 0, speed: 0, tau: 0, x: 0, z: 0, age: 0 };
 const _p = new THREE.Vector3(), _t = new THREE.Vector3();
@@ -28,6 +34,9 @@ export class Shorebirds {
 		this.probe = probe;
 		this.rng = mulberry32( seed );
 		this.time = 0;
+		this.mood = wildlifeMood( null ); // ((M13) the weather, as they take it: the app sets it)
+		this.wrack = null; // ((M13) the height of a hurricane's fresh line of wrack up the beach, they feed along: the app sets it)
+		this.intoWind = 0;
 		this.birds = [];
 		this.flocks = [
 			{ x: 22, range: [ - 135, WORLD.pier.x - 9 ], n: 12 },
@@ -93,7 +102,9 @@ export class Shorebirds {
 
 		this.time += dt;
 		const cp = camera.position;
-		const night = G.night.value;
+		// ((M13) roosting by night, and through a downpour or a gale, facing into the wind)
+		const night = Math.max( G.night.value, this.mood.shore ), gone = this.mood.gone;
+		this.intoWind = Math.atan2( - G.windDir.value.x, - G.windDir.value.y );
 		for ( const F of this.flocks ) {
 
 			// nothing to do while nobody is anywhere near
@@ -101,13 +112,22 @@ export class Shorebirds {
 			for ( const b of F.birds ) cx += b.x;
 			cx /= F.birds.length;
 			F.cx = cx;
+			// ((M13) ahead of a hurricane: off along the coast, gone once out of sight (on the wing or down);
+			// back after it, where they were, where nobody's looking)
+			const flying = F.state === 'fly' && F.px !== undefined;
+			const far = Math.hypot( ( flying ? F.px : cx ) - cp.x, ( flying ? F.pz : - 40 ) - cp.z ) > HIDE;
+			if ( far && gone && ! F.hidden ) this.hide( F );
+			else if ( far && ! gone ) F.hidden = false;
+			if ( F.hidden ) continue;
 			if ( Math.hypot( cx - cp.x, - 40 - cp.z ) > DRAW + 120 ) continue;
 			this.updateFlock( F, dt, viewer, night );
+			if ( gone && F.state === 'feed' && F.away ) this.flush( F, viewer, true );
 
 		}
 
 		for ( const b of this.birds ) {
 
+			if ( b.F.hidden ) continue;
 			const P = b.f.P;
 			const d = Math.hypot( P.pos[ 0 ] - cp.x, P.pos[ 1 ] - cp.y, P.pos[ 2 ] - cp.z );
 			if ( d > DRAW ) continue;
@@ -154,7 +174,8 @@ export class Shorebirds {
 		if ( F.state === 'feed' ) {
 
 			if ( this.rng() < dt / 25 ) F.drift = - F.drift;
-			F.x += F.drift * 0.25 * dt + ( F.wary ? F.away * 1.4 * dt : 0 );
+			// ((M13) not while they're roosting)
+			F.x += F.drift * 0.25 * dt * ( night > 0.6 ? 0 : 1 ) + ( F.wary ? F.away * 1.4 * dt : 0 );
 			F.x = clamp( F.x, F.range[ 0 ] + 8, F.range[ 1 ] - 8 );
 
 		}
@@ -210,6 +231,16 @@ export class Shorebirds {
 		// wanted position relative to the edge: just above the retreating water, well ahead of an uprush
 		let want = up ? 1.0 + b.margin * 1.2 : 0.15 + b.margin * 0.55;
 		if ( night > 0.6 ) want = 6 + b.margin * 1.5; // roost above the tide line
+		else if ( this.wrack !== null ) {
+
+			// ((M13) after a hurricane: working its line of wrack up the beach while it's fresh, for the
+			// sandhoppers and kelp flies in it, rather than the swash)
+			dm = ( h - this.wrack - ( b.margin - 0.5 ) * 0.25 ) / g;
+			want = 0;
+			up = false;
+			vf = 0;
+
+		}
 		let vUp = clamp( ( up ? vf : 0 ) + ( want - dm ) * 2.2, - 1.3, 2.4 );
 		// along the shore: keep the flock together, spaced out, running off when wary
 		let vAl = clamp( ( F.x + b.offset - b.x ) * 0.6, - 0.9, 0.9 );
@@ -240,7 +271,7 @@ export class Shorebirds {
 
 		} else if ( Math.abs( err ) < 0.3 && Math.abs( vAl ) < 0.55 && ! caught && ! F.wary ) {
 
-			b.stop = 0.5 + this.rng() * 1.6;
+			b.stop = night > 0.6 ? 4 + this.rng() * 8 : 0.5 + this.rng() * 1.6; // ((M13) roosting: a long rest)
 
 		}
 
@@ -254,14 +285,17 @@ export class Shorebirds {
 		b.z += b.vz * dt;
 		b.x = clamp( b.x, F.range[ 0 ], F.range[ 1 ] );
 		if ( b.v > 0.15 ) b.yaw += angleDiff( Math.atan2( b.vx, b.vz ), b.yaw ) * approach( 16, dt );
+		// ((M13) roosting in a wind: each settles facing into it)
+		else if ( night > 0.6 && G.windSpeed.value > 5 ) b.yaw += angleDiff( this.intoWind + ( b.margin - 0.5 ) * 0.3, b.yaw ) * approach( 1.5, dt );
 
 		// caught by the water: a flutter hop up the beach
 		if ( caught && dm < - 0.35 && b.hop <= 0 ) b.hop = 0.45;
 		b.hop = Math.max( 0, b.hop - dt );
 
 		// probing: quick jabs of the bill while stopped
-		b.peckT += dt * ( b.stop > 0 ? 4.5 : 0 );
-		const jab = b.stop > 0 ? Math.pow( Math.max( 0, Math.sin( b.peckT * Math.PI ) ), 0.6 ) : 0;
+		const probing = b.stop > 0 && night <= 0.6; // ((M13) none at the roost)
+		b.peckT += dt * ( probing ? 4.5 : 0 );
+		const jab = probing ? Math.pow( Math.max( 0, Math.sin( b.peckT * Math.PI ) ), 0.6 ) : 0;
 		b.head += ( jab - b.head ) * approach( 30, dt );
 
 		// legs: sanderlings run with a blur of tiny, very fast steps
@@ -305,15 +339,32 @@ export class Shorebirds {
 
 	// ------------------------------------------------------------------ flight
 
-	// the whole flock bursts up: out over the surf, along the beach, back in to land further on
-	flush( F, viewer ) {
+	// (M13) out of sight: down where they took off from, to be there when they're back
+	hide( F ) {
+
+		F.hidden = true;
+		F.state = 'feed';
+		F.x = F.cx;
+		for ( const b of F.birds ) {
+
+			b.state = 'feed';
+			b.stop = 0;
+			b.f.P.fresh = true;
+
+		}
+
+	}
+
+	// the whole flock bursts up: out over the surf, along the beach, back in to land further on;
+	// ((M13) leaving: on along the coast, past their stretch of beach and out of sight)
+	flush( F, viewer, leaving = false ) {
 
 		F.state = 'fly';
 		const rng = this.rng;
 		const cx = F.cx;
 		let dir = F.away;
-		let dest = cx + dir * ( 55 + rng() * 50 );
-		if ( dest < F.range[ 0 ] + 10 || dest > F.range[ 1 ] - 10 ) {
+		let dest = cx + dir * ( leaving ? HIDE * 2.5 : 55 + rng() * 50 );
+		if ( ! leaving && ( dest < F.range[ 0 ] + 10 || dest > F.range[ 1 ] - 10 ) ) {
 
 			// no room that way: swing out to sea and back past the viewer
 			dir = - dir;
@@ -392,12 +443,21 @@ export class Shorebirds {
 		const ahead = Math.hypot( tx - f.x, tz - f.z );
 		const speed = clamp( 9 + ( ahead - 2 ) * 1.2, 5, 16 );
 		f.steer( dt, tx, ty, tz, speed, b.t < 0.6 ? 2 : 1, 2.2 );
-		const ground = Math.max( this.terrain.heightAt( f.x, f.z ), 0 );
+		const ground = Math.max( this.terrain.heightAt( f.x, f.z ), G.seaLevel.value );
+		// ((M13) slowing hard and down a glide path onto its spot: its speed and height were eased too
+		// slowly to come in from the flight's, and it overshot, went round, and round again)
+		if ( F.s > F.len - 14 ) {
+
+			// (braking at up to BRAKE m/s², flared)
+			f.speed = Math.min( f.speed, Math.max( 3 + dl * 0.7, f.speed - BRAKE * dt ) );
+			if ( dl < 6 ) f.y = Math.min( f.y, Math.max( this.terrain.heightAt( b.lx, b.lz ), G.seaLevel.value ) + 0.1 + dl * 0.25 );
+
+		}
 		if ( f.y < ground + 0.25 ) f.y = ground + 0.25;
 		f.flare = smooth( 3, 0.8, dl ) * ( end ? 1 : 0.5 );
 		f.legs = smooth( 2.5, 0.8, dl );
 		f.animate( dt );
-		if ( dl < 0.6 && f.y < ground + 0.45 && F.s > F.len - 14 ) {
+		if ( dl < 1.2 && f.y < ground + 0.45 && F.s > F.len - 14 ) {
 
 			// touch down, running on a few steps
 			b.state = 'feed';

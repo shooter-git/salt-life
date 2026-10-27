@@ -212,7 +212,7 @@ ${ common }
 	float w = vegWindStrength();
 	float g = vegGustAt( base.xz );
 	float ph0 = iDatI.w * 6.2832;
-	float sway = ( w * w * 0.009 * ( g * 0.8 + 0.3 ) + sin( vegTime * 0.9 + ph0 ) * w * 0.0045 * ( g + 0.4 ) ) * iDatI.z * 0.45;
+	float sway = ( vegWindLoad() * 0.009 * ( g * 0.8 + 0.3 ) + sin( vegTime * 0.9 + ph0 ) * w * 0.0045 * ( g + 0.4 ) ) * iDatI.z * 0.45;
 	vec3 swayV = vegWindDir3() * sway;
 	vec3 Cs = C + swayV;
 	vImp = vec4( swayV, s );

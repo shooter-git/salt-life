@@ -234,6 +234,7 @@ export class FishSchools {
 		this.time = 0;
 		this.spray = null; // set by the owner (Spray.js): splashes of leaping mullet
 		this.lit = 0; // (Salt Life) the pier's lamps, 0..1 (the app sets it: Bites.lampsLit)
+		this.sharksAway = false; // ((M13) the blacktips gone to deep water: setWeather)
 		this.ground = ground;
 		this.group = new THREE.Group();
 		this.group.name = 'Fish';
@@ -375,6 +376,29 @@ export class FishSchools {
 
 		const a = this.surf * FAIR_SURF;
 		return !! g.sp.surf && a > OFF_SURF && g.offAt < OFF_SHARE * Math.min( 1, ( a - OFF_SURF ) / ( SURF_MAX - OFF_SURF ) );
+
+	}
+
+	// (M13) the weather, as the wildlife takes it (WildlifeWeather.wildlifeMood): sharksAway, the
+	// blacktips gone to deep water ahead of a blow. Any you're among swim off there; the rest, out of
+	// range, aren't seen until it's eased, and are back at home then
+	setWeather( sharksAway ) {
+
+		if ( sharksAway === this.sharksAway ) return;
+		this.sharksAway = sharksAway;
+		for ( const g of this.groups ) {
+
+			if ( ! g.storm ) continue;
+			if ( g.active ) g.timer = 0;
+			else if ( ! sharksAway && ! g.holding ) this.initGroup( g );
+
+		}
+
+	}
+
+	offInWeather( g ) {
+
+		return !! g.storm && this.sharksAway && Math.hypot( g.center.x - g.storm.x, g.center.z - g.storm.z ) > g.storm.r + 40;
 
 	}
 
@@ -582,8 +606,18 @@ export class FishSchools {
 
 		}
 
-		place( 'blacktipShark', 3, { x: 45, z: 125, r: 40 } );
-		place( 'blacktipShark', 2, { x: 0, z: 330, r: 80 } );
+		const tips = [ place( 'blacktipShark', 3, { x: 45, z: 125, r: 40 } ), place( 'blacktipShark', 2, { x: 0, z: 330, r: 80 } ) ];
+		// ((M13) ahead of a blow they leave for deep water, out past the snappers' grounds, and come back
+		// once it's eased: setWeather)
+		for ( const g of tips ) {
+
+			if ( ! g ) continue;
+			const n = { x: g.home.x * 0.5, z: 470, r: 90, band: [ 18, 1e9 ] };
+			n.home = new THREE.Vector3( n.x, this.depthFor( g.sp, n.x, n.z, 0.5 ), n.z );
+			g.storm = n;
+
+		}
+
 		for ( let i = 0; i < 2; i ++ ) place( 'nurseShark', 1, { ...reef, r: this.radius, band: [ 3, 12 ], sand: true } );
 		place( 'nurseShark', 1, { x: P.x, z: P.zEnd - 4, r: 8, band: [ 3, 10 ] } );
 		// spiny lobsters in dens at the coral heads (initGroup: makeDen)
@@ -741,7 +775,7 @@ export class FishSchools {
 	depthFor( sp, x, z, k ) {
 
 		const floor = Math.max( this.terrain.heightAt( x, z ), this.floorAt( x, z ) );
-		const ceil = sp.ceiling;
+		const ceil = sp.ceiling + G.seaLevel.value; // ((M13) under the sea as it is: a surge's, a drawdown's)
 		if ( sp.mode === 'surface' ) return ceil - 0.08;
 		if ( sp.mode === 'glide' ) return floor + FLOOR_CLEARANCE + 0.15;
 		const f = sp.depth[ 0 ] + ( sp.depth[ 1 ] - sp.depth[ 0 ] ) * k;
@@ -752,7 +786,7 @@ export class FishSchools {
 	clampY( sp, x, z, y ) {
 
 		const h = Math.max( this.terrain.heightAt( x, z ), this.floorAt( x, z ) );
-		return Math.min( sp.ceiling - 0.02, Math.max( h + FLOOR_CLEARANCE + 0.02, y ) );
+		return Math.min( sp.ceiling + G.seaLevel.value - 0.02, Math.max( h + FLOOR_CLEARANCE + 0.02, y ) );
 
 	}
 
@@ -761,7 +795,8 @@ export class FishSchools {
 
 		const sp = g.sp, rng = g.rng;
 		// (Salt Life) a group with a place for the night (the tarpon: under the pier's lamps) goes there once they're lit
-		const night = g.night && this.lit > 0.5 ? g.night : null;
+		// ((M13) and one with a place to wait out the weather (the blacktips: deep water) goes there)
+		const night = g.storm && this.sharksAway ? g.storm : g.night && this.lit > 0.5 ? g.night : null;
 		const zone = night || g.zone, home = night ? night.home : g.home;
 		const hold = sp.mode === 'solo' || sp.mode === 'lurk' ? [ 12, 25 ] : sp.mode === 'forage' ? [ 3, 7 ] : sp.mode === 'surface' ? [ 10, 20 ] : [ 6, 12 ];
 		if ( ! away && zone.path && zone.path.length > 1 && ( sp.mode === 'patrol' || sp.mode === 'cruise' ) ) {
@@ -895,11 +930,12 @@ export class FishSchools {
 		if ( this.taken.size ) this.refill( player );
 		if ( player ) {
 
-			if ( player.y < - 0.1 ) threat = player;
+			const sea = G.seaLevel.value;
+			if ( player.y < sea - 0.1 ) threat = player;
 			else {
 
 				const ground = this.terrain.heightAt( player.x, player.z );
-				if ( ground < - 0.2 && player.y - ground < 2.4 ) threat = _threat.set( player.x, Math.max( ground + 0.3, Math.min( - 0.3, player.y - 1.3 ) ), player.z );
+				if ( ground < sea - 0.2 && player.y - ground < 2.4 ) threat = _threat.set( player.x, Math.max( ground + 0.3, Math.min( sea - 0.3, player.y - 1.3 ) ), player.z );
 
 			}
 
@@ -912,10 +948,10 @@ export class FishSchools {
 			if ( g.sp.mode === 'escort' || g.sp.mode === 'remora' ) {
 
 				const w = this.whale;
-				g.active = !! ( w && w.ready ) && ( ! player || w.brain.position.distanceTo( player ) < SIM_RANGE + 20 );
+				g.active = !! ( w && w.ready && ! w.gone ) && ( ! player || w.brain.position.distanceTo( player ) < SIM_RANGE + 20 );
 				if ( g.active && ! was ) this.attachEscort( g );
 
-			} else g.active = ( ! player || Math.hypot( g.center.x - player.x, g.center.z - player.z ) < SIM_RANGE + g.radius ) && ( was || ! this.offInSurf( g ) );
+			} else g.active = ( ! player || Math.hypot( g.center.x - player.x, g.center.z - player.z ) < SIM_RANGE + g.radius ) && ( was || ! this.offInSurf( g ) && ! this.offInWeather( g ) );
 			if ( g.active && ! was ) this.resume( g );
 			any = any || g.active;
 
@@ -1009,7 +1045,7 @@ export class FishSchools {
 			g.breath -= dt;
 			if ( g.breath < 0 && g.breath + dt >= 0 ) {
 
-				g.goal.set( g.center.x + g.heading.x * 4, sp.ceiling, g.center.z + g.heading.z * 4 );
+				g.goal.set( g.center.x + g.heading.x * 4, sp.ceiling + G.seaLevel.value, g.center.z + g.heading.z * 4 );
 				g.timer = 14;
 
 			}
@@ -1062,7 +1098,7 @@ export class FishSchools {
 			const dx = g.center.x - px, dz = g.center.z - pz, dl = Math.hypot( dx, dz ) || 1;
 			if ( dl < 24 ) {
 
-				g.goal.set( px + dx / dl * sp.curious, Math.min( sp.ceiling - 0.3, py ), pz + dz / dl * sp.curious );
+				g.goal.set( px + dx / dl * sp.curious, Math.min( sp.ceiling + G.seaLevel.value - 0.3, py ), pz + dz / dl * sp.curious );
 				g.timer = Math.max( g.timer, 2 );
 				hunt = null;
 
@@ -1131,7 +1167,7 @@ export class FishSchools {
 				x += vx * dt;
 				y += vy * dt;
 				z += vz * dt;
-				if ( y < - 0.05 && vy < 0 ) {
+				if ( y < G.seaLevel.value - 0.05 && vy < 0 ) {
 
 					this.jump[ i ] = 0;
 					this.splash( x, z, vx, vz, L, 1.4 );
@@ -1216,7 +1252,7 @@ export class FishSchools {
 				tx = pl[ 0 ] + Math.cos( ang ) * r;
 				tz = pl[ 1 ] + Math.sin( ang ) * r;
 				const floor = this.terrain.heightAt( tx, tz );
-				ty = floor + FLOOR_CLEARANCE + 0.3 + ( sp.ceiling - floor ) * ( sp.depth[ 0 ] + ( sp.depth[ 1 ] - sp.depth[ 0 ] ) * ( ( s * 5.7 ) % 1 ) );
+				ty = floor + FLOOR_CLEARANCE + 0.3 + ( sp.ceiling + G.seaLevel.value - floor ) * ( sp.depth[ 0 ] + ( sp.depth[ 1 ] - sp.depth[ 0 ] ) * ( ( s * 5.7 ) % 1 ) );
 
 			} else if ( sp.mode === 'lurk' && g.alarm > 0 ) {
 
@@ -1328,7 +1364,7 @@ export class FishSchools {
 
 				const lx = x + vx * 0.7, lz = z + vz * 0.7;
 				this.floorC[ i ] = Math.max( this.floorAt( x, z ), this.floorAt( lx, lz ) );
-				const deepAhead = - this.terrain.heightAt( lx, lz );
+				const deepAhead = G.seaLevel.value - this.terrain.heightAt( lx, lz );
 				this.shallowC[ i ] = deepAhead < sp.minDepth || ( ! sp.surf && deepAhead < this.breakDepthFast( lx, lz ) ) ? 1 : 0;
 
 			}
@@ -1345,7 +1381,7 @@ export class FishSchools {
 
 			}
 
-			const ceil = sp.ceiling, under = sp.mode === 'flats' ? 0.08 : 0.3;
+			const ceil = sp.ceiling + G.seaLevel.value, under = sp.mode === 'flats' ? 0.08 : 0.3;
 			if ( y > ceil - under && ! ( sp.mode === 'jumper' && this.jump[ i ] > 0.5 ) ) ay -= ( y - ( ceil - under ) ) * 8;
 			if ( sp.mode !== 'turtle' ) ay -= vy * 1.5; // fish prefer to swim level
 
@@ -1387,7 +1423,7 @@ export class FishSchools {
 			}
 
 			let nx = x + vx * dt, nz = z + vz * dt;
-			if ( this.shallowC[ i ] && - this.terrain.heightAt( nx, nz ) < sp.minDepth ) {
+			if ( this.shallowC[ i ] && G.seaLevel.value - this.terrain.heightAt( nx, nz ) < sp.minDepth ) {
 
 				nx = x;
 				nz = z;
@@ -1398,7 +1434,7 @@ export class FishSchools {
 
 			const bottom = this.floorC[ i ] + ( sp.hug ? 0.02 + sp.hug * L : sp.mode === 'glide' ? 0.02 : sp.mode === 'flats' ? 0.03 + L * 0.1 : FLOOR_CLEARANCE );
 			let ny = y + vy * dt;
-			if ( this.jump[ i ] > 0.5 && ny > - 0.25 ) {
+			if ( this.jump[ i ] > 0.5 && ny > G.seaLevel.value - 0.25 ) {
 
 				// break the surface: fly
 				this.jump[ i ] = 2;
@@ -1577,7 +1613,7 @@ export class FishSchools {
 
 			this.panic[ i ] = panic;
 			// keep off the bottom and below the surface
-			ty2 = Math.min( sp.ceiling - 0.2, Math.max( ballFloor, ty2 ) );
+			ty2 = Math.min( sp.ceiling + G.seaLevel.value - 0.2, Math.max( ballFloor, ty2 ) );
 			const ax = ( tx2 - x ) * kP + ( vtx - vx ) * kD + ( rng() - 0.5 ) * 0.6;
 			const ay = ( ty2 - y ) * kP + ( vty - vy ) * kD;
 			const az = ( tz2 - z ) * kP + ( vtz - vz ) * kD + ( rng() - 0.5 ) * 0.6;
@@ -1771,7 +1807,7 @@ export class FishSchools {
 	splash( x, z, vx, vz, L, strength ) {
 
 		if ( ! this.spray ) return;
-		_v.set( x, 0.02, z );
+		_v.set( x, G.seaLevel.value + 0.02, z );
 		_w.set( vx * 0.2, 1.2 * strength, vz * 0.2 );
 		this.spray.emit( _v, _w, Math.round( 10 + 18 * strength ), 0.012 + L * 0.02, 0, { spread: 0.9, life: 1.1 } );
 
@@ -2339,9 +2375,9 @@ export class FishSchools {
 		this.vel[ i3 + 1 ] = v.y;
 		this.vel[ i3 + 2 ] = v.z;
 		this.panic[ i ] = 1;
-		if ( y > - 0.05 ) {
+		if ( y > G.seaLevel.value - 0.05 ) {
 
-			if ( g.sp.mode === 'bait' ) this.pos[ i3 + 1 ] = - 0.3; // (the bait ball's steering has no flight)
+			if ( g.sp.mode === 'bait' ) this.pos[ i3 + 1 ] = G.seaLevel.value - 0.3; // (the bait ball's steering has no flight)
 			else this.jump[ i ] = 2;
 
 		}
@@ -2531,7 +2567,7 @@ export class FishSchools {
 
 			// on its legs on the bottom (in the den, on the sand under the coral's edge)
 			const ground = st === LOB.den ? S[ i4 + 3 ] : Math.max( this.terrain.heightAt( x, z ), this.floorAt( x, z ) );
-			const y = Math.min( y0 + ( ground + LOB_STAND * L + lift - y0 ) * Math.min( 1, dt * 6 ), - 0.1 );
+			const y = Math.min( y0 + ( ground + LOB_STAND * L + lift - y0 ) * Math.min( 1, dt * 6 ), G.seaLevel.value - 0.1 );
 			X[ k + 5 ] += ( walk - X[ k + 5 ] ) * Math.min( 1, dt * 5 );
 			X[ k + 6 ] += ( curl - X[ k + 6 ] ) * Math.min( 1, dt * ( st === LOB.flip ? 30 : 4 ) );
 			P[ i3 ] = x;

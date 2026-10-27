@@ -1,6 +1,7 @@
 import * as THREE from '../engine/index.js';
 import { Noise2D, mulberry32, smoothstep as sstep } from '../util/Noise.js';
 import { WORLD } from './WorldLayout.js';
+import { G } from '../core/Globals.js';
 import { buildRockGeometry, ROCK_STYLES } from './terrain/RockGeometry.js';
 import { rot2, srgb, TERRAIN_SHADING_GLSL } from './terrain/TerrainShading.js';
 
@@ -116,7 +117,7 @@ export class Rocks {
 		for ( const k of this.instances ) {
 
 			const d = Math.hypot( k.x - x, k.z - z ) - k.radius;
-			if ( d < r && k.y + k.size * k.sy * 0.8 > - 0.3 ) near.push( { k, d } );
+			if ( d < r && k.y + k.size * k.sy * 0.8 > G.seaLevel.value - 0.3 ) near.push( { k, d } );
 
 		}
 

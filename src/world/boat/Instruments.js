@@ -10,7 +10,8 @@ import { FT, KT } from '../../game/Units.js';
 //   - The centre screen: the depth sounder every boat has, the bottom under her scrolling by and the
 //     depth in feet; with Marta's fish finder, the fish under her too (Game's sonar: how rich the water).
 //   - The port screen: a chart plotter, north up: the island's chart (the minimap's, baked once), her
-//     track, her speed and heading, where she is.
+//     track, her speed and heading, where she is; (M13) and a weather alert across it while a hurricane's
+//     watched for or warned of (reading.alert), as a plotter with a weather service shows one.
 // Redrawn a few times a second while you're aboard; ashore her screens are off and her needles rest.
 // Other players' boats show theirs on standby (ins.standby: the same program, a dark glass for its map;
 // the readings here are yours). (M12) Riding along in theirs, it shows its skipper's (App.riddenReading),
@@ -83,9 +84,12 @@ export function batteryVolts( engine ) {
 }
 
 // where she is, as a plotter shows it ( '24°33.126′N', '81°46.272′W' )
+// (M13) as degrees, [ lat, lon ] (west negative: the shelter's tracking chart)
+export const latLon = ( x, z ) => [ LAT0 - z * DEG_M, LON0 + x * DEG_M / Math.cos( LAT0 * Math.PI / 180 ) ];
+
 export function position( x, z ) {
 
-	const lat = LAT0 - z * DEG_M, lon = LON0 + x * DEG_M / Math.cos( LAT0 * Math.PI / 180 );
+	const [ lat, lon ] = latLon( x, z );
 	const dm = ( v ) => {
 
 		const a = Math.abs( v ), d = Math.floor( a );
@@ -420,6 +424,18 @@ export class BoatInstruments {
 		g.fillRect( x + w - 110, y + h - 14, 100, 2 );
 		g.textAlign = 'right';
 		g.fillText( `${ Math.round( 100 / s / FT ) } ft`, x + w - 10, y + h - 24 );
+		// ((M13) the weather alert under the data bar, flashing for a warning)
+		if ( reading.alert ) {
+
+			const warn = /WARNING/.test( reading.alert ), on = ! warn || ( Date.now() % 1600 ) < 1100;
+			g.fillStyle = warn ? ( on ? '#c8202c' : '#5a0f16' ) : '#c98a12';
+			g.fillRect( x, y + 30, w, 24 );
+			g.fillStyle = '#ffffff';
+			g.font = '800 14px system-ui, sans-serif';
+			g.textAlign = 'center';
+			g.fillText( reading.alert, x + w / 2, y + 43 );
+
+		}
 
 	}
 

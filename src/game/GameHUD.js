@@ -956,7 +956,7 @@ export class GameHUD {
 
 		} ).join( '' );
 		// ((M9) or he's shut for the weather)
-		const sub = box ? `${ v.weatherShut ? 'Joe\'s shut for the weather' : `Joe's back at ${ this.at( v.hours[ 0 ] ) }` }. The box pays ${ Math.round( NIGHT_BOX * 100 ) }% of his price, and his orders in full.`
+		const sub = box ? `${ v.boarded ? 'Joe\'s boarded up for the hurricane' : v.weatherShut ? 'Joe\'s shut for the weather' : `Joe's back at ${ this.at( v.hours[ 0 ] ) }` }. The box pays ${ Math.round( NIGHT_BOX * 100 ) }% of his price, and his orders in full.`
 			: g.paidNote ? `The restaurant's paid for the week's order. Here's your share: $${ g.paidNote }.`
 			: this.closingSoon( v ) ? `Last orders: I shut at ${ this.at( v.hours[ 1 ] ) }.`
 			: s.inventory.length ? v.greeting || 'Let\'s see what you caught.' : v.idle || 'Come back when you\'ve got fish.';
@@ -1001,6 +1001,11 @@ GameHUD.prototype.renderShop = function () {
 	// (M10) her hull: Marta repairs it while she's open, with the boat at her dock (as far as your money goes)
 	const fix = g.repairJob ? g.repairJob() : null;
 	const pays = fix ? Math.min( fix.fee, s.money ) : 0;
+	// (M13) ahead of a hurricane she hauls your boat out onto a cradle ashore, and puts her back in after
+	const haul = g.haulJob ? g.haulJob() : null;
+	const haulRow = ! haul ? '' : haul.back !== undefined
+		? `<div class="gm-shop-row"><span>Put her back in<small>${ haul.back ? 'She\'s on her cradle ashore · the hurricane\'s gone by' : 'She\'s on her cradle ashore until the hurricane\'s gone by' }</small></span><button class="gm-btn" data-relaunch>Back in</button></div>`
+		: `<div class="gm-shop-row"><span>Haul her out for the hurricane<small>${ haul.here ? 'On a cradle ashore, out of the storm · back in once it\'s gone by' : 'Bring her in to the dock first' }</small></span>${ haul.here ? `<button class="gm-btn" data-haul ${ s.money < haul.fee ? 'disabled' : '' }>Haul out · $${ haul.fee }</button>` : '' }</div>`;
 	const repairRow = fix ? `<div class="gm-shop-row"><span>Repair the hull<small>${ fix.here ? `She's ${ Math.round( fix.wear * 100 ) }% worn${ pays < fix.fee ? ` · $${ fix.fee } for all of it` : '' }` : 'Bring her in to the dock first' }</small></span>${ fix.here ? `<button class="gm-btn" data-repair ${ pays < 1 ? 'disabled' : '' }>Repair · $${ pays }</button>` : '' }</div>` : '';
 	const bindFuel = () => {
 
@@ -1021,7 +1026,7 @@ GameHUD.prototype.renderShop = function () {
 
 		this.drawStand( v, `
 			<div class="gm-head"><h2>Marta's honesty box</h2>
-			<p class="gm-sub">${ v.weatherShut ? 'Marta\'s shut for the weather' : `Marta's back at ${ this.at( v.hours[ 0 ] ) }` }. The diesel's left out: pay into the box. You have $${ s.money.toLocaleString() }</p></div>
+			<p class="gm-sub">${ v.boarded ? 'Marta\'s boarded up for the hurricane' : v.weatherShut ? 'Marta\'s shut for the weather' : `Marta's back at ${ this.at( v.hours[ 0 ] ) }` }. The diesel's left out: pay into the box. You have $${ s.money.toLocaleString() }</p></div>
 			<div class="gm-list">${ towRow }${ fuelRow }</div>
 			<div class="gm-foot"><span class="gm-sub">Gear when she's back</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>` );
 		bindFuel();
@@ -1051,11 +1056,25 @@ GameHUD.prototype.renderShop = function () {
 	this.drawStand( v, `
 		<div class="gm-head"><h2>${ v.name }</h2>
 		<p class="gm-sub">${ greeting } · You have $${ s.money.toLocaleString() }</p></div>
-		<div class="gm-list">${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ bucketRow }${ baitRows }${ towRow }${ repairRow }${ fuelRow }${ rows }</div>
+		<div class="gm-list">${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ bucketRow }${ baitRows }${ haulRow }${ towRow }${ repairRow }${ fuelRow }${ rows }</div>
 		<div class="gm-foot"><span class="gm-sub">Upgrades take effect at once</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>` );
 	bindFuel();
 	const sb = this.stand.querySelector( '[data-sellbait]' );
 	if ( sb ) sb.onclick = () => this.game.sellBait();
+	const hl = this.stand.querySelector( '[data-haul]' );
+	if ( hl ) hl.onclick = () => {
+
+		this.game.haul();
+		this.renderShop();
+
+	};
+	const rl = this.stand.querySelector( '[data-relaunch]' );
+	if ( rl ) rl.onclick = () => {
+
+		this.game.relaunch();
+		this.renderShop();
+
+	};
 	const rp = this.stand.querySelector( '[data-repair]' );
 	if ( rp ) rp.onclick = () => {
 

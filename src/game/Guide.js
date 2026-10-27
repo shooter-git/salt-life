@@ -199,6 +199,8 @@ const TIPS = {
 	// (M12) the surf
 	rip: 'You\'re in a <b>rip current</b>, carried out through a gap in the breakers (the milky water). Swim <b>along the beach</b> out of it, not against it.',
 	tumble: 'A <b>breaker</b> tumbled you. In a big surf, <b>dive under</b> a big one before it breaks on you, or keep out beyond the breakers.',
+	// (M13) a hurricane
+	hurricane: 'A <b>hurricane</b> is coming. Ahead of it Marta can <b>haul your boat out</b>, before she boards up; left in the water the storm batters her. In it, the <b>shelter</b> (on your map) keeps you safe from the wind, the rain and the sea. You can always step out to watch.',
 };
 
 const tipText = ( id, device ) => ( TIPS[ device ] || TIPS.keyboard )[ id ] || TIPS[ id ];

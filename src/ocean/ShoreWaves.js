@@ -32,6 +32,11 @@ import { G, GRAVITY } from '../core/Globals.js';
 // each breaking where it does (their heights add, the foam and the swash are whichever's more). The
 // second costs nothing until it's running (a uniform branch). params, phase(), timeOf() and clock()
 // are the south's; `surf` is the weather's.
+// (M13) A storm surge: the sea's level (G.seaLevel) rises over the beach, and the shore field solved at
+// its sea level wouldn't know the water there. So a hurricane's surge gets a field of its own, solved at
+// its highest (setSurgeField: a worker's, before it comes), and the island's own swell reads the two
+// blended as far as the sea's risen toward it (surgeMix): the waves run on over the flooded beach as they
+// would in water that deep. At the usual sea level it's the island's own field alone, as it always was.
 // (M12) The surf's currents and its breakers, for a swimmer (CPU: currentAt, breakerAt): the rips,
 // seaward through the bar's channels (shoreBar) from where you can't stand out past the breakers, fed by
 // currents along the beach inside them, as strong as the breakers there; and the breaker a swimmer's
@@ -83,11 +88,8 @@ class ShoreTrain {
 	constructor( field, amplitude = FAIR_AMPLITUDE, period = FAIR_PERIOD ) {
 
 		this.field = field;
-		const tex = new THREE.DataTexture( field.data, field.res, field.res, THREE.RGBAFormat, THREE.FloatType );
-		tex.minFilter = tex.magFilter = THREE.NearestFilter;
-		tex.generateMipmaps = false;
-		tex.needsUpdate = true;
-		this.texture = tex;
+		this.texture = fieldTexture( field );
+		this.surge = null; // (M13) { field, level, texture }: a surge's (the island's own swell's only)
 		this.amplitude = amplitude;
 		this.period = period;
 		this.runup = 1;
@@ -139,20 +141,55 @@ class ShoreTrain {
 
 	}
 
-	// the field at a point (bilinear): [ T, dirX * exposure, dirZ * exposure, shoreline T ]
+	// the field at a point (bilinear): [ T, dirX * exposure, dirZ * exposure, shoreline T ]; (M13) blended
+	// with a surge's field as far as the sea's risen toward the level it was solved at
 	fieldAt( x, z, out = [ 0, 0, 0, 0 ] ) {
 
-		const F = this.field, res = F.res, d = F.data;
-		const fx = Math.min( Math.max( ( x - F.origin ) / F.size * res - 0.5, 0 ), res - 1.001 );
-		const fz = Math.min( Math.max( ( z - F.origin ) / F.size * res - 0.5, 0 ), res - 1.001 );
-		const i = Math.floor( fx ), j = Math.floor( fz ), tx = fx - i, tz = fz - j;
-		const k00 = ( j * res + i ) * 4, k10 = k00 + 4, k01 = k00 + res * 4, k11 = k01 + 4;
-		for ( let c = 0; c < 4; c ++ ) out[ c ] = ( d[ k00 + c ] * ( 1 - tx ) + d[ k10 + c ] * tx ) * ( 1 - tz ) + ( d[ k01 + c ] * ( 1 - tx ) + d[ k11 + c ] * tx ) * tz;
+		sampleField( this.field, x, z, out );
+		const m = this.surgeMix();
+		if ( m > 0 ) {
+
+			const o = sampleField( this.surge.field, x, z, this._surgeAt || ( this._surgeAt = [ 0, 0, 0, 0 ] ) );
+			for ( let c = 0; c < 4; c ++ ) out[ c ] += ( o[ c ] - out[ c ] ) * m;
+
+		}
+
 		return out;
 
 	}
 
+	// (M13) how far the sea's risen toward the surge field's level (0: none, or no field)
+	surgeMix() {
+
+		const S = this.surge;
+		return S ? Math.min( 1, Math.max( 0, G.seaLevel.value / S.level ) ) : 0;
+
+	}
+
 }
+
+// a shore field at a point (bilinear), into out
+function sampleField( F, x, z, out ) {
+
+	const res = F.res, d = F.data;
+	const fx = Math.min( Math.max( ( x - F.origin ) / F.size * res - 0.5, 0 ), res - 1.001 );
+	const fz = Math.min( Math.max( ( z - F.origin ) / F.size * res - 0.5, 0 ), res - 1.001 );
+	const i = Math.floor( fx ), j = Math.floor( fz ), tx = fx - i, tz = fz - j;
+	const k00 = ( j * res + i ) * 4, k10 = k00 + 4, k01 = k00 + res * 4, k11 = k01 + 4;
+	for ( let c = 0; c < 4; c ++ ) out[ c ] = ( d[ k00 + c ] * ( 1 - tx ) + d[ k10 + c ] * tx ) * ( 1 - tz ) + ( d[ k01 + c ] * ( 1 - tx ) + d[ k11 + c ] * tx ) * tz;
+	return out;
+
+}
+
+const fieldTexture = ( field ) => {
+
+	const tex = new THREE.DataTexture( field.data, field.res, field.res, THREE.RGBAFormat, THREE.FloatType );
+	tex.minFilter = tex.magFilter = THREE.NearestFilter;
+	tex.generateMipmaps = false;
+	tex.needsUpdate = true;
+	return tex;
+
+};
 
 export class ShoreWaves {
 
@@ -200,6 +237,10 @@ export class ShoreWaves {
 			shoreTex2: { value: home.texture },
 			shoreTrain2: { value: new THREE.Vector4( 0, 0, FAIR_PERIOD, 0 ) },
 			shoreRunup2: { value: 0 },
+			// (M13) a surge's field (the island's own until it's given), and the sea level it was solved at
+			// (0: none)
+			shoreTexS: { value: home.texture },
+			shoreSurgeLevel: { value: 0 },
 		};
 		this.syncUniforms();
 		this.glsl = SHORE_GLSL;
@@ -216,6 +257,18 @@ export class ShoreWaves {
 		this.trains[ 1 ] = train;
 		this.uniforms.shoreTex2.value = train.texture;
 		this.setSurf( this.surf, this.trains[ 0 ].period, this.west, G.time.value, true );
+
+	}
+
+	// (M13) a surge's field for the island's own swell (computeShoreField at the sea level `level`, m), or
+	// null to drop it once the surge's gone. The waves read it as far as the sea's risen toward `level`
+	setSurgeField( field, level = 0 ) {
+
+		const home = this.trains[ 0 ], U = this.uniforms;
+		if ( home.surge ) home.surge.texture.dispose();
+		home.surge = field && level > 0 ? { field, level, texture: fieldTexture( field ) } : null;
+		U.shoreTexS.value = home.surge ? home.surge.texture : home.texture;
+		U.shoreSurgeLevel.value = home.surge ? level : 0;
 
 	}
 
@@ -609,6 +662,9 @@ uniform vec2 shoreMilk; // (M11) the surf zone's turbidity (of a fair day's), th
 uniform highp sampler2D shoreTex2;
 uniform vec4 shoreTrain2;
 uniform float shoreRunup2;
+// (M13) a surge's field for the island's own swell, and the sea level it was solved at (0: none)
+uniform highp sampler2D shoreTexS;
+uniform float shoreSurgeLevel;
 #define SHORE_PERIOD shoreP0.x
 #define SHORE_AMPLITUDE shoreP0.y
 #define SHORE_VARIATION shoreP0.z
@@ -647,8 +703,15 @@ vec4 shoreFieldSample( highp sampler2D tex, vec2 xz ) {
 	vec4 d = texelFetch( tex, i + ivec2( 1, 1 ), 0 );
 	return mix( mix( a, b, t.x ), mix( c, d, t.x ), t.y );
 }
-// the south's
-vec4 terrainShoreSample( vec2 xz ) { return shoreFieldSample( shoreTex, xz ); }
+// the south's; (M13) blended with a surge's field as far as the sea's risen toward its level
+vec4 terrainShoreSample( vec2 xz ) {
+	vec4 a = shoreFieldSample( shoreTex, xz );
+	if ( shoreSurgeLevel > 0.0 ) {
+		float m = clamp( shoreSeaLevel / shoreSurgeLevel, 0.0, 1.0 );
+		if ( m > 0.0 ) a = mix( a, shoreFieldSample( shoreTexS, xz ), m );
+	}
+	return a;
+}
 
 float shoreHash1( float x ) { return fract( sin( x * 127.1 + 311.7 ) * 43758.5453 ); }
 vec2 shoreHash2( vec2 p ) { return fract( sin( vec2( dot( p, vec2( 127.1, 311.7 ) ), dot( p, vec2( 269.5, 183.3 ) ) ) ) * 43758.5453 ) * 2.0 - 1.0; }
@@ -811,8 +874,7 @@ float shoreBreakDepth( vec2 xz, vec2 dir, float u, float lam, float d ) {
 	return mix( dc, d, shSS( 0.3, 0.5, abs( u ) ) );
 }
 
-ShorePhase shorePhaseAt( highp sampler2D tex, ShoreTrain tr, vec2 xz ) {
-	vec4 sh = shoreFieldSample( tex, xz );
+ShorePhase shorePhaseAt( vec4 sh, ShoreTrain tr, vec2 xz ) {
 	vec2 dirE = sh.yz;
 	float exposure = length( dirE );
 	vec2 dir = dirE / max( exposure, 1e-4 );
@@ -854,10 +916,10 @@ vec4 shoreSwashEdge( vec2 p, float t ) {
 		float g = terrainHeightAt( p );
 		if ( g > shoreSeaLevel - 0.8 ) {
 			ShoreTrain a = shoreTrain1();
-			o = shoreSwashEdgeOf( p, t, g, shorePhaseAt( shoreTex, a, p ), a );
+			o = shoreSwashEdgeOf( p, t, g, shorePhaseAt( terrainShoreSample( p ), a, p ), a );
 			if ( SHORE_TWO ) {
 				ShoreTrain b = shoreTrain2_();
-				vec4 o2 = shoreSwashEdgeOf( p, t, g, shorePhaseAt( shoreTex2, b, p ), b );
+				vec4 o2 = shoreSwashEdgeOf( p, t, g, shorePhaseAt( shoreFieldSample( shoreTex2, p ), b, p ), b );
 				if ( o2.y > o.y && o2.y < 999.0 ) o = o2;
 			}
 		}
@@ -866,8 +928,8 @@ vec4 shoreSwashEdge( vec2 p, float t ) {
 }
 
 // the water mesh's view of one swell's waves at a parcel resting at xz
-ShoreSample shoreEvaluateTrain( highp sampler2D tex, ShoreTrain tr, vec2 xz, float depth, float groundH ) {
-	ShorePhase ph = shorePhaseAt( tex, tr, xz );
+ShoreSample shoreEvaluateTrain( vec4 field, ShoreTrain tr, vec2 xz, float depth, float groundH ) {
+	ShorePhase ph = shorePhaseAt( field, tr, xz );
 	vec4 sh = ph.sh;
 	float exposure = ph.exposure;
 	float along = ph.along;
@@ -949,9 +1011,9 @@ ShoreSample shoreEvaluateTrain( highp sampler2D tex, ShoreTrain tr, vec2 xz, flo
 // the water mesh's view of the shore waves at a parcel resting at xz: (M12) of two swells crossing,
 // their heights and slopes added, the rest whichever's more (the crest's, of the bigger wave there)
 ShoreSample shoreEvaluate( vec2 xz, float depth, float groundH ) {
-	ShoreSample a = shoreEvaluateTrain( shoreTex, shoreTrain1(), xz, depth, groundH );
+	ShoreSample a = shoreEvaluateTrain( terrainShoreSample( xz ), shoreTrain1(), xz, depth, groundH );
 	if ( ! SHORE_TWO ) return a;
-	ShoreSample b = shoreEvaluateTrain( shoreTex2, shoreTrain2_(), xz, depth, groundH );
+	ShoreSample b = shoreEvaluateTrain( shoreFieldSample( shoreTex2, xz ), shoreTrain2_(), xz, depth, groundH );
 	ShoreSample o = a;
 	if ( abs( b.disp.y ) > abs( a.disp.y ) ) o = b;
 	o.disp = a.disp + b.disp;

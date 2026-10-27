@@ -14,7 +14,7 @@ import { isOpen } from './IslandClock.js';
 export const OPENS = 5; // Joe opens at 5 am
 export const HOURS = { joe: [ OPENS, 19 ], marta: [ 7, 19 ] }; // [ open, close ) game hours
 export const NIGHT_BOX = 0.7; // what Joe's night box pays, of his price (the wanted list in full)
-export const SHUT_FOR = [ 'gale', 'storm' ]; // (M9) the weather they shut for (Weather.js ids)
+export const SHUT_FOR = [ 'gale', 'storm', 'hurricane' ]; // (M9) the weather they shut for (Weather.js ids)
 
 // (M9) are the stalls shut for the weather (a Weather.js id; none: the day's hours alone)?
 export const shutFor = ( weatherId ) => SHUT_FOR.includes( weatherId );

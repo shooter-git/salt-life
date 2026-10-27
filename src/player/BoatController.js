@@ -167,6 +167,7 @@ export class BoatController {
 		this.cough = 1;
 		this.thrustMul = 1;
 		this.contact = { pile: 0, ground: 0, slide: 0, aground: false };
+		this.hauled = null; // (M13) on her cradle ashore (Marta's haul-out: { position, heading }), or null
 		this._acc = 0;
 		this._age = 0; // s since the latest read-back was issued
 
@@ -235,7 +236,7 @@ export class BoatController {
 			const k = ( this.slot + i ) * 4;
 			// never let a bad GPU sample into the integrator (keep the last good value)
 			let h = c[ k ];
-			if ( ! Number.isFinite( h ) ) h = this.hasWater ? this.waterH[ i ] : 0;
+			if ( ! Number.isFinite( h ) ) h = this.hasWater ? this.waterH[ i ] : G.seaLevel.value;
 			const nx = Number.isFinite( c[ k + 1 ] ) ? c[ k + 1 ] : 0, nz = Number.isFinite( c[ k + 2 ] ) ? c[ k + 2 ] : 0;
 			const ny = Math.sqrt( Math.max( 1 - nx * nx - nz * nz, 0.05 ) );
 			const gx = - nx / ny, gz = - nz / ny; // surface slope dh/dx, dh/dz
@@ -267,6 +268,15 @@ export class BoatController {
 	update( dt ) {
 
 		this.readQueries();
+		// ((M13) hauled out, she sits on her cradle)
+		if ( this.hauled ) {
+
+			this.rpm = 0;
+			this.apply();
+			return;
+
+		}
+
 		if ( ! this.hasWater ) {
 
 			this.apply();
@@ -527,9 +537,33 @@ export class BoatController {
 	}
 
 	// back to the berth, at rest (safety net if the integration ever blows up; and Marta's tow)
+	// (M13) onto her cradle ashore ({ position, heading }: Marta's haul-out), or back in at the dock (null)
+	setHauled( cradle ) {
+
+		this.hauled = cradle || null;
+		if ( ! cradle ) {
+
+			this.reset();
+			return;
+
+		}
+
+		this.position.copy( cradle.position );
+		this.quaternion.setFromAxisAngle( new THREE.Vector3( 0, 1, 0 ), cradle.heading );
+		this.velocity.set( 0, 0, 0 );
+		this.angular.set( 0, 0, 0 );
+		this.throttle = this.steer = this.rpm = 0;
+		this.moored = false;
+		this.anchor = null;
+		this.apply();
+
+	}
+
 	reset() {
 
+		this.hauled = null;
 		this.position.copy( WORLD.boatDock.position );
+		this.position.y = G.seaLevel.value; // ((M13) afloat at the dock, whatever the surge's made of the sea)
 		this.quaternion.setFromAxisAngle( new THREE.Vector3( 0, 1, 0 ), WORLD.boatDock.heading );
 		this.velocity.set( 0, 0, 0 );
 		this.angular.set( 0, 0, 0 );
@@ -554,12 +588,12 @@ export class BoatController {
 	sampleWaterAt( p ) {
 
 		// nearest hull sample's water height (good enough for the prop / rudder)
-		let best = 0, bd = Infinity;
+		let best = G.seaLevel.value, bd = Infinity;
 		for ( let i = 0; i < this.samples.length; i ++ ) {
 
 			this.toWorld( this.samples[ i ].p, _t );
 			const d = ( _t.x - p.x ) ** 2 + ( _t.z - p.z ) ** 2;
-			if ( d < bd ) { bd = d; best = this.hasWater ? this.hEff[ i ] : 0; }
+			if ( d < bd ) { bd = d; best = this.hasWater ? this.hEff[ i ] : G.seaLevel.value; }
 
 		}
 

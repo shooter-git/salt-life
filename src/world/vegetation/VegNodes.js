@@ -8,14 +8,15 @@ import { LOBE_TABLE, TREE_VARIANTS, SHRUB_VARIANTS } from './PlantGeometry.js';
 //
 // Uniforms (`vegUniforms`, shared by every vegetation material: put them in shader.uniforms):
 //   vegCamPos, vegGustOffset, vegCanopyNear, vegFernFade, vegLobeTable[], vegDetail (the terrain's detail
-//   texture), and the Globals handles vegTime, vegWindDir, vegWindSpeed, vegSunDir, vegNight.
+//   texture), vegStrip ((M13) the share of the palms' fronds a hurricane's torn off: StormDamage's strip),
+//   and the Globals handles vegTime, vegWindDir, vegWindSpeed, vegSunDir, vegNight.
 //   vegLodRange: per material (one per LOD level: three uploads uniforms per material, not per
 //   draw), see VegMaterials.
 // GLSL (VEG_GLSL, both stages):
 //   float ss( a, b, x )                              smoothstep that also takes a > b
 //   float vegHash12( vec2 p )                        Dave Hoskins' sine-free hash, [0, 1)
 //   float vegNoise( vec2 p )                         value noise
-//   float vegWindStrength(); vec3 vegWindDir3(); vec3 vegWindPerp3()
+//   float vegWindStrength(); float vegWindLoad() ((M13) w^2 up to a gale's); vec3 vegWindDir3(); vec3 vegWindPerp3()
 //   float vegGustAt( vec2 xz )                       travelling gust field in [0, 1]
 //   vec3 vegRotUpTo( vec3 v, vec3 T )                rotation taking +Y to T, applied to v
 //   vec3 vegInstanceNormal( mat4 m, vec3 n )         three's instance normal transform
@@ -43,6 +44,10 @@ export const vegUniforms = {
 	vegFernFade: { value: new Vector2( 42, 58 ) },
 	// the terrain's detail texture (set by Vegetation: it must not be generated at import time)
 	vegDetail: { value: null },
+	// (M13) how much of the palms' crowns a hurricane's torn off (0..~0.5; the app sets it from
+	// game/StormDamage.js: their older fronds first, more on some palms than others; and the bananas'
+	// leaves shredded)
+	vegStrip: { value: 0 },
 	vegTime: G.time,
 	vegWindDir: G.windDir,
 	vegWindSpeed: G.windSpeed,
@@ -74,6 +79,7 @@ uniform vec2 vegCanopyNear;
 uniform vec2 vegFernFade;
 uniform vec4 vegLobeTable[ ${ LOBE_VEC4 } ];
 uniform sampler2D vegDetail;
+uniform float vegStrip;
 uniform float vegTime;
 uniform vec2 vegWindDir;
 uniform float vegWindSpeed;
@@ -119,6 +125,10 @@ float bayer4( vec2 pixel ) {
 
 // 0 (calm) .. 2.5 (storm). Tiny floor so nothing is ever perfectly frozen.
 float vegWindStrength() { return max( vegWindSpeed * 0.1, 0.03 ); }
+// (M13) the wind's load on a plant, as the square of that up to a gale's (2: as it always was), and
+// slower past it, as fronds and leaves stream and fold out of the wind (their drag grows as U^1.2 or
+// so, not U^2: reconfiguration), to the most a palm's trunk bends (a hurricane's, ~9)
+float vegWindLoad() { float w = vegWindStrength(); return w <= 2.0 ? w * w : min( 4.0 + ( w - 2.0 ) * 2.4, 9.0 ); }
 vec3 vegWindDir3() { return vec3( vegWindDir.x, 0.0, vegWindDir.y ); }
 vec3 vegWindPerp3() { return vec3( -vegWindDir.y, 0.0, vegWindDir.x ); }
 
@@ -221,7 +231,8 @@ VegPlant vegPlantDeform( vec3 P, vec3 N0, vec4 iPos, vec4 iDat, vec4 veg, vec4 a
 	vec3 windPerp3 = vegWindPerp3();
 
 	// stem sway: horizontal offset of the top as a fraction of H
-	float sway = w * w * 0.014 * ( g * 0.9 + 0.3 ) + sin( t * 0.83 + ph0 ) * w * 0.0065 * ( g + 0.45 );
+	float load = vegWindLoad();
+	float sway = load * 0.014 * ( g * 0.9 + 0.3 ) + sin( t * 0.83 + ph0 ) * w * 0.0065 * ( g + 0.45 );
 	float swayP = sin( t * 0.61 + ph0 * 1.7 ) * w * 0.0028;
 	vec3 windOff = windDir3 * sway + windPerp3 * swayP;
 
@@ -247,7 +258,7 @@ VegPlant vegPlantDeform( vec3 P, vec3 N0, vec4 iPos, vec4 iDat, vec4 veg, vec4 a
 	// frond / leaf motion: gust bending + slow bounce + leaflet flutter, applied as a
 	// length preserving rotation about the crown centre so fronds stream downwind in storms.
 	float s2 = s * s;
-	float bend = s2 * sc * 4.5 * ( w * w * 0.16 * ( g * 0.8 + 0.35 )
+	float bend = s2 * sc * 4.5 * ( load * 0.16 * ( g * 0.8 + 0.35 )
 		+ sin( t * ( ph * 0.5 + 1.3 ) + ph * 23.0 + ph0 ) * w * 0.075 * ( g + 0.3 ) );
 	float bounce = sin( t * ( ph + 2.1 ) + ph * 41.0 ) * s2 * w * sc * 0.1;
 	float flutter = flut * sc * ( sin( t * ( ph * 5.0 + 11.0 ) + ph * 60.0 + s * 9.0 ) * ( w * 0.045 + 0.008 )
@@ -259,7 +270,11 @@ VegPlant vegPlantDeform( vec3 P, vec3 N0, vec4 iPos, vec4 iDat, vec4 veg, vec4 a
 
 	// the dead (hanging) frond is only kept on some palms
 	bool hideDead = part > 0.5 && part < 1.5 && aMat.y > 0.95 && fract( seed * 13.7 ) > 0.4;
-	vec3 crownPos2 = hideDead ? C : crownPos;
+	// ((M13) the fronds a hurricane's torn off: the older, lower ones first (age 0 young .. 0.55 old),
+	// more on some palms (and the most exposed) than others; never the youngest, the spear)
+	float tornK = vegStrip * mix( 0.4, 1.6, clamp( aMat.y / 0.55, 0.0, 1.0 ) ) * mix( 0.55, 1.45, fract( seed * 29.3 ) );
+	bool torn = part > 0.5 && part < 1.5 && aMat.y > 0.06 && vegHash12( vec2( aMat.w * 31.7 + 0.5, seed * 57.3 ) ) < tornK;
+	vec3 crownPos2 = hideDead || torn ? C : crownPos;
 
 	bool isStem = part < 0.5;
 	vec3 pos = isStem ? stemPos : crownPos2;

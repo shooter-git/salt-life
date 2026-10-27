@@ -3,6 +3,7 @@ import { WORLD } from '../WorldLayout.js';
 import { mulberry32 } from '../../util/Noise.js';
 import { CRITTER } from './CritterShapes.js';
 import { TAU, clamp, smooth, angleDiff, approach, qGround } from './Kit.js';
+import { wildlifeMood } from '../../game/WildlifeWeather.js';
 
 // Ghost crabs and hermit crabs.
 //
@@ -15,6 +16,11 @@ import { TAU, clamp, smooth, angleDiff, approach, qGround } from './Kit.js';
 //
 // Hermit crabs trundle about under the vegetation at the back of the beach and pull into their
 // shells when approached, coming out again slowly.
+//
+// (M13) In the weather (mood: WildlifeWeather.wildlifeMood): the ghost crabs go down and stay down in
+// rain and a wind that blows the sand (they plug their burrows); the hermit crabs are about more in a
+// light shower and the damp after it, and pulled in in a downpour or a gale (the first of them as the
+// weather turns, all of them in the worst of it).
 
 const ACTIVE = 36; // m: burrows / homes simulated within this distance of the viewer
 const DRAW = 34; // m: crabs shrink away before this distance
@@ -35,6 +41,7 @@ export class Crabs {
 		this.ghosts = [];
 		this.hermits = [];
 		this.time = 0;
+		this.mood = wildlifeMood( null ); // ((M13) the weather, as they take it: the app sets it)
 		this.scan = 0;
 		this.nearBurrows = [];
 		this._rec = {
@@ -153,7 +160,7 @@ export class Crabs {
 		const night = G.night.value;
 		// dusk / night: ghost crabs come out
 		const sunY = G.sunDir.value.y;
-		this.activity = clamp( 0.45 + 0.5 * Math.max( night, smooth( 0.35, 0.05, sunY ) ), 0, 0.95 );
+		this.activity = clamp( 0.45 + 0.5 * Math.max( night, smooth( 0.35, 0.05, sunY ) ), 0, 0.95 ) * this.mood.ghost;
 
 		// (re)assign the pool to the burrows near the viewer, a few times a second
 		this.scan -= dt;
@@ -383,6 +390,8 @@ export class Crabs {
 				c.visible = false;
 				c.out = 0;
 				if ( th.d < 10 ) c.t = Math.max( c.t, 4 + this.rng() * 6 );
+				// ((M13) stays down while the weather's against it)
+				if ( c.t <= 0 && this.rng() > this.mood.ghost ) c.t = 5 + this.rng() * 10;
 				if ( c.t <= 0 ) {
 
 					c.state = 'peek';
@@ -439,7 +448,7 @@ export class Crabs {
 				} else if ( c.t <= 0 ) {
 
 					const r = this.rng();
-					if ( r < 0.15 && this.time > 2 ) {
+					if ( r < 0.15 + 0.85 * ( 1 - this.mood.ghost ) && this.time > 2 ) {
 
 						// home for a while
 						c.state = 'return';
@@ -636,15 +645,17 @@ export class Crabs {
 		const th = this.threat( c, viewer );
 		c.t -= dt;
 		const close = th.d < 2.2 + th.closing * 0.6;
+		// ((M13) pulled in out of a downpour or a gale; about more in a shower and the damp after it)
+		const sheltering = c.home.seed > this.mood.hermit, keen = Math.max( 1, this.mood.hermit );
 		switch ( c.state ) {
 
 			case 'idle':
 				this.moveTo( c, dt, 0 );
-				if ( close ) this.withdraw( c );
+				if ( close || sheltering ) this.withdraw( c );
 				else if ( c.t <= 0 ) {
 
 					c.state = 'walk';
-					this.pickSpot( c, 0, 3 );
+					this.pickSpot( c, 0, 3 * keen );
 					c.t = 20;
 
 				}
@@ -654,11 +665,11 @@ export class Crabs {
 			case 'walk': {
 
 				const d = this.moveTo( c, dt, 0.035 + c.seed * 0.03, 0.3 );
-				if ( close ) this.withdraw( c );
+				if ( close || sheltering ) this.withdraw( c );
 				else if ( d < 0.03 || c.t <= 0 ) {
 
 					c.state = 'idle';
-					c.t = 3 + this.rng() * 12;
+					c.t = ( 3 + this.rng() * 12 ) / keen;
 
 				}
 
@@ -670,7 +681,7 @@ export class Crabs {
 				// in the shell until it has been quiet for a while, then out again, slowly
 				c.speed = 0;
 				c.out = Math.max( 0, c.out - dt / 0.25 );
-				if ( th.d < 4 ) c.t = Math.max( c.t, 6 + this.rng() * 8 );
+				if ( th.d < 4 || sheltering ) c.t = Math.max( c.t, 6 + this.rng() * 8 );
 				if ( c.t <= 0 ) c.state = 'emerge';
 				break;
 

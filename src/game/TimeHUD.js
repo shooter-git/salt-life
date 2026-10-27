@@ -15,6 +15,7 @@ import { knots } from './Units.js';
 // you're alone; in company it's the day's). No toasts: a rest dims the world for a moment instead.
 //   const t = new TimeHUD( game, purse, root );  t.update( dt )  (per frame)  t.toggle( open? )
 //   wxWind( weather ) -> 'NNW' (where it's from)   wxRain( weather ) -> 'rain' ('' dry, or the name says it)
+//   (M13) wxNews( news, weather, T, locale ) -> 'Hurricane warning: its winds from 03:00 tomorrow' ('' none)
 
 const ICON = {
 	sun: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3" fill="currentColor"/><g stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1"/></g></svg>',
@@ -59,6 +60,9 @@ const CSS = /* css */`
 	background: var(--tw-fill); border: 1px solid var(--tw-line); color: var(--tw-ink); font: 600 var(--tw-fs-sm) var(--tw-font); }
 .gm-time-rest button small { font: 500 var(--tw-fs-xs) var(--tw-mono); color: var(--tw-ink-3); }
 .gm-time-rest.is-wx { grid-template-columns: repeat(3, 1fr); } /* (M9) the forecast and eight kinds of weather: three rows of three */
+.gm-time-rest.is-wx button[data-weather="hurricane"] { grid-column: 1 / -1; } /* (M13) and a hurricane of your own, across under them */
+.gm-time-news { color: var(--tw-sun); font-weight: 600; }
+.gm-time-news.is-warn { color: var(--tw-coral); }
 .gm-time-rest button.is-on { background: rgba(var(--tw-aqua-rgb), 0.14); border-color: var(--tw-aqua); box-shadow: inset 0 0 0 1px var(--tw-aqua); }
 .gm-time-hold:hover, .gm-time-rest button:hover { background: var(--tw-fill-2); }
 .gm-time-note { margin: var(--tw-2) 0 0; color: var(--tw-ink-2); font-size: var(--tw-fs-sm); min-height: 1.4em; }
@@ -88,13 +92,35 @@ const turned = ( a ) => {
 // (M9) where the weather's wind comes from, on the island's compass ('NNW': the menu, and Joe's forecast slate)
 export const wxWind = ( wx ) => windFrom( ...turned( wx.windAngle ) );
 
-// (M9) its rain, a word or two, when the weather's name doesn't say it already ('' when it's dry)
+// (M9) its rain, a word or two, when the weather's name doesn't say it already ('' when it's dry); (M13)
+// in a hurricane's eye, that it's the eye
 export function wxRain( wx ) {
 
 	if ( ! wx || wx.id === 'storm' ) return '';
+	if ( wx.id === 'hurricane' ) return wx.eye >= 0.5 ? 'the eye' : '';
 	if ( wx.thunder >= 0.15 ) return 'thunder';
 	if ( wx.id === 'rain' ) return wx.rain >= 0.8 ? 'heavy' : '';
 	return wx.rain >= 0.5 ? 'heavy rain' : wx.rain >= 0.12 ? 'rain' : wx.rain >= 0.03 ? 'showers' : '';
+
+}
+
+// (M13) what's said of a hurricane on its way (Weather.hurricaneNews: news), at island time T, in the
+// weather wx: on the outlook, watched for, warned of, here ('' none)
+export function wxNews( news, wx, T, locale = undefined ) {
+
+	if ( ! news ) return '';
+	const when = ( t ) => {
+
+		const days = Math.floor( t / 24 ) - Math.floor( T / 24 );
+		return `${ timeText( ( ( t % 24 ) + 24 ) % 24, locale, 30 ) }${ days === 1 ? ' tomorrow' : days > 1 ? ` on day ${ Math.floor( t / 24 ) + 1 }` : '' }`;
+
+	};
+	if ( news.stage === 'outlook' ) return `A hurricane far off to the ${ news.from }, coming this way`;
+	if ( news.stage === 'watch' ) return `Hurricane watch: its winds could be here by ${ when( news.onset ) }`;
+	if ( T < news.onset ) return `Hurricane warning: its winds from ${ when( news.onset ) }`;
+	if ( wx && wx.eye >= 0.5 ) return 'The eye: the other side of its wall is still to come';
+	if ( T < news.eye ) return news.over ? `Hurricane: its eye passes over about ${ when( news.eye ) }` : `Hurricane: at its worst about ${ when( news.eye ) }`;
+	return `Hurricane: its winds ease from about ${ when( news.ends ) }`;
 
 }
 
@@ -271,10 +297,15 @@ export class TimeHUD {
 		// ((M10) and the water, while a blow's left it murky)
 		const wxLine = wx ? `<b>${ WEATHER_NAMES[ wx.id ] }</b>${ wet ? ` · ${ wet }` : '' } · wind ${ wxWind( wx ) } ${ knots( wx.wind ) } · surf ${ surfText( wx.surf ) } ${ swellFrom( wx.west || 0 ) } at ${ Math.round( wx.period ) } s${ wx.murk >= MURKY ? ' · water murky' : '' }` : '';
 		// (M9) in a gale or a thunderstorm they've both shut and gone home
-		const stalls = wx && shutFor( wx.id ) ? 'Joe and Marta have shut for the weather' : `${ stall( 'Joe', HOURS.joe ) } · ${ stall( 'Marta', HOURS.marta ) }`;
-		const wxNext = pick ? 'Your choice holds while you\'re on your own' : st.alone || ! wx ? ( next ? `Later: ${ WEATHER_NAMES[ next.id ].toLowerCase() }, from ${ at( next.at % 24 ) }` : 'Settled for now' )
-			: `The weather follows the island's day${ next ? ` · later ${ WEATHER_NAMES[ next.id ].toLowerCase() }` : '' }`;
-		const sig = [ timeText( st.hour, loc ), st.day, st.held, st.alone, st.mine, asks, st.here.length, this.app.input.lastDevice, wxLine, wxNext, chosen ].join( '|' );
+		// ((M13) and ahead of a hurricane they board up and go home)
+		const stalls = wx && wx.boarded ? 'Joe and Marta have boarded up for the hurricane' : wx && shutFor( wx.id ) ? 'Joe and Marta have shut for the weather' : `${ stall( 'Joe', HOURS.joe ) } · ${ stall( 'Marta', HOURS.marta ) }`;
+		// ((M13) and what's said of a hurricane on its way: a picked one passes as one of the day's would)
+		const T = islandTime( st.day, st.hour ), news = wxNews( this.app.weather && this.app.weather.news, wx, T, loc );
+		const wxNext = pick === 'hurricane' ? `Your own hurricane${ news ? ` · ${ news }` : ', gone by' }` : pick ? 'Your choice holds while you\'re on your own'
+			: st.alone || ! wx ? ( next ? `Later: ${ WEATHER_NAMES[ next.id ].toLowerCase() }, from ${ at( next.at % 24 ) }` : 'Settled for now' )
+				: `The weather follows the island's day${ next ? ` · later ${ WEATHER_NAMES[ next.id ].toLowerCase() }` : '' }`;
+		const wxSaid = pick ? '' : news, warned = this.app.weather && this.app.weather.news && this.app.weather.news.stage === 'warning';
+		const sig = [ timeText( st.hour, loc ), st.day, st.held, st.alone, st.mine, asks, st.here.length, this.app.input.lastDevice, wxLine, wxNext, wxSaid, chosen ].join( '|' );
 		if ( sig === this._sig ) return;
 		this._sig = sig;
 		const focused = this.menu.contains( document.activeElement ) ? [ ...this.menu.querySelectorAll( 'button' ) ].indexOf( document.activeElement ) : - 1;
@@ -314,7 +345,7 @@ export class TimeHUD {
 		this.menu.innerHTML = `
 			<div class="gm-time-head"><b class="gm-time-now">${ timeText( st.hour, loc ) }</b><span class="gm-time-day">Day ${ st.day }</span></div>
 			<p class="gm-time-sub">${ stalls }</p>
-			${ wxLine ? `<p class="gm-time-sub gm-time-wx">${ wxLine }</p><p class="gm-time-sub">${ wxNext }</p>` : '' }
+			${ wxLine ? `<p class="gm-time-sub gm-time-wx">${ wxLine }</p>${ wxSaid ? `<p class="gm-time-sub gm-time-news${ warned ? ' is-warn' : '' }">${ wxSaid }</p>` : '' }<p class="gm-time-sub">${ wxNext }</p>` : '' }
 			${ body }
 			${ keys ? `<div class="gm-time-foot">${ keys }</div>` : '' }`;
 		const hold = this.menu.querySelector( '[data-hold]' );
@@ -339,7 +370,10 @@ export class TimeHUD {
 	// (Salt Life) the weather you choose on your own (null: the day's); it comes in over a minute or two
 	pickWeather( id ) {
 
-		this.app.settings.weather = id;
+		const s = this.app.settings;
+		// ((M13) a hurricane of your own comes in from now)
+		if ( id === 'hurricane' && s.weather !== 'hurricane' ) s.weatherSince = islandTime( s.day, s.timeOfDay );
+		s.weather = id;
 		this.app.saveClock && this.app.saveClock();
 		this._sig = '';
 

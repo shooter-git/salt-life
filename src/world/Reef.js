@@ -7,6 +7,7 @@ import { releaseTexture } from '../core/ReleaseAfterUpload.js';
 import { ReefLayout, reefFloorAt, CELL, RANGE_FAR, SHADOW_RANGE, SHADOW_SIZE } from './reef/ReefLayout.js';
 import ReefWorker from './reef/ReefWorker.js?worker&inline';
 import { classicWorker } from '../core/ClassicWorker.js';
+import { G } from '../core/Globals.js';
 
 // Caribbean fringing reef around WORLD.reef, 1.5 - 12 m deep: Tidewater's (its zonation, models,
 // placement and culling: reef/ReefLayout.js). Salt Life draws it on WebGL 2:
@@ -190,9 +191,10 @@ export class Reef {
 		this._cullQuat.copy( q );
 		_m.multiplyMatrices( camera.projectionMatrix, camera.matrixWorldInverse );
 		_frustum.setFromProjectionMatrix( _m, camera.coordinateSystem );
-		// from above the water the range grows with the height on high (aerial views of the bay)
-		const C = this.cfg;
-		const range = p.y < 0.3 ? C.under : Math.min( RANGE_FAR, C.above + Math.max( 0, p.y ) * C.aboveK );
+		// from above the water the range grows with the height on high (aerial views of the bay); ((M13) over
+		// the sea as it is, a surge and all)
+		const C = this.cfg, sea = G.seaLevel.value, up = p.y - sea;
+		const range = up < 0.3 ? C.under : Math.min( RANGE_FAR, C.above + Math.max( 0, up ) * C.aboveK );
 		this.view.position.value.copy( p );
 		this.view.range.value = range;
 		const maxR = range + CELL;
@@ -213,7 +215,7 @@ export class Reef {
 			const shadowCell = d2 < shadowR * shadowR;
 			if ( ! visible && ! shadowCell ) continue;
 			// (from above the water: only cells reaching up near the surface)
-			const seen = visible && ( cy < 0.3 || cell.ymax > C.shallow );
+			const seen = visible && ( up < 0.3 || cell.ymax > C.shallow + sea );
 			this.cullList( cell.hard, this.cull.hard, hard, cx, cy, cz, range, seen );
 			if ( seen ) this.cullList( cell.soft, this.cull.soft, soft, cx, cy, cz, range, true );
 
@@ -227,7 +229,7 @@ export class Reef {
 	cullList( ids, D, batch, cx, cy, cz, range, visible ) {
 
 		const C = this.cfg, k = C.lod, minSize = C.minSize;
-		const shallow = cy < 0.3 ? - Infinity : C.shallow;
+		const sea = G.seaLevel.value, shallow = cy - sea < 0.3 ? - Infinity : C.shallow + sea;
 		for ( let j = 0; j < ids.length; j ++ ) {
 
 			const i = ids[ j ];

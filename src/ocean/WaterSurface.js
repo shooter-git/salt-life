@@ -17,7 +17,8 @@ import { useLocalLights, LOCAL_LIGHTS_MAX } from '../materials/LocalLights.js';
 // shallows it lets the sea floor show through; its reflections stay at full strength there
 // (premultiplied output: the water's own light is weighted by its opacity, the reflections are not).
 // (Salt Life) In a fresh wind the open sea's crests break: whitecaps (this.whitecap, set by the weather;
-// 0, and nothing drawn for them, in a fair day's breeze or less).
+// 0, and nothing drawn for them, in a fair day's breeze or less). (M13) In a hurricane's wind the sea's
+// streaked white with foam blown into long streaks along the wind, the bay and all (this.spume).
 // (M11) It reflects the sky as a mirror would (the scene's environment, made in the same light as the
 // sky you see, at REFLECT), as much as the water's Fresnel lets it: little looking down, nearly all of it
 // toward the horizon. From under water its underside keeps the faint fill it had (waterEnvUnder): there
@@ -53,6 +54,8 @@ export class WaterSurface {
 		this.detail = new SeaDetail( { lite: tier === 'low' } );
 		// (Salt Life) how much of the open sea's crests break white (WeatherDriver: from the wind)
 		this.whitecap = { value: 0 };
+		// (M13) how much of the sea's streaked with blown foam (0..1: the weather's, in a hurricane's wind)
+		this.spume = { value: 0 };
 
 		const uniforms = {
 			...this.lod.uniforms,
@@ -68,6 +71,7 @@ export class WaterSurface {
 			...whaleMarkUniforms,
 			...this.detail.uniforms,
 			waterWhitecap: this.whitecap,
+			waterSpume: this.spume,
 			waterRain: G.rain, // (M9: the rings where the drops land)
 			waterFlash: G.skyFlash, // (M10: lightning in the reflections)
 			waterFlashShape: G.skyFlashShape, // ((M12) its glow's shape: Sky's)
@@ -166,6 +170,7 @@ varying vec4 vSurf;
 varying vec3 vWaterN;
 uniform sampler2D waterRipples;
 uniform float waterWhitecap;
+uniform float waterSpume;
 uniform float waveCrest;
 uniform float waterRain;
 uniform vec4 waterFlash;
@@ -258,6 +263,17 @@ ${ SH ? /* glsl */`
 		// (fading out toward the horizon, where the lace would crowd into a white band)
 		float wcCover = clamp( waterWhitecap * wcCrest * wcPatch * ( 0.5 + seaD.y ), 0.0, 0.55 ) * vWaterFade * ( 1.0 - smoothstep( 700.0, 2200.0, wcDist ) );
 		foam = max( foam, waterLace( ( vWater.xz - seaDetailOffset * 0.33 ) * 0.35, wcCover ) * 0.9 );
+	}
+	// (M13) in a hurricane's wind the sea's streaked white (Beaufort 10 to 12: "dense streaks of foam along
+	// the direction of the wind", "the sea completely white"): foam blown into streaks tens of metres long and
+	// a metre or two across, drifting downwind, over the bay as well as the open sea (not on the sand's film)
+	if ( waterSpume > 0.0 ) {
+		vec2 wd = seaDetailWindDir, wp = vec2( - wd.y, wd.x ), q = vWater.xz - seaDetailOffset * 0.5;
+		vec2 s = vec2( dot( q, wd ) * 0.025, dot( q, wp ) * 0.45 );
+		float streak = smoothstep( 0.45, 0.8, waterNoise( s ) ) * smoothstep( 0.25, 0.65, waterNoise( s * vec2( 2.3, 0.6 ) + 5.3 ) );
+		float spDist = length( cameraPosition - vWater );
+		float spCover = waterSpume * ( 0.75 * streak + 0.2 * waterNoise( q * 0.08 ) ) * smoothstep( 0.15, 0.8, depth ) * ( 1.0 - smoothstep( 600.0, 2000.0, spDist ) );
+		foam = max( foam, waterLace( q * 0.5, min( spCover, 0.75 ) ) * 0.85 );
 	}
 	// the body of the water: light scattered back up from inside it (and off the sand under the
 	// shallows), lit by the sky and the sun whatever way the surface faces. Turquoise over sand,

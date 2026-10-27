@@ -41,6 +41,8 @@ const FOG_DISTANCE = { low: [ 250, 1600 ], mid: [ 400, 3000 ], high: [ 600, 5000
 // (Salt Life) under a grey sky (overcast 1) the sun's direct light falls to this share of a clear day's;
 // on high the clouds' shadow map already dims it where they are, so less is taken off here
 const UNDER_CLOUD = { low: 0.3, mid: 0.3, high: 0.7 };
+// (M13) the depth of a hurricane's rain and spray looked up through to its cloud (m: its base is low)
+const MURK_DEPTH = 300;
 // the environment: cube size, s between refreshes for the drifting clouds (low: when the sun moves)
 const ENV = { low: { size: 64, interval: 60 }, mid: { size: 128, interval: 10 }, high: { size: 128, interval: 4 } };
 // Tidewater's night (its units): the moon's light on the clouds and the night sky's ambient, the
@@ -94,6 +96,7 @@ uniform float skyNight;
 uniform float skyUnderwater;
 uniform vec3 skyFogColor;
 uniform vec4 skyGrey; // (Salt Life) the horizon under a grey sky: ( its radiance, how much )
+uniform float skyMurk; // (M13) how much of the sky's lost in a hurricane's rain and spray (0..1)
 uniform vec4 skyFlash; // (M9) lightning: ( toward the strike, how bright )
 uniform vec4 skyFlashShape; // (M12) its glow's tightness, its storm's top (tan), how far a storm of its own
 uniform vec3 skyFlashColor;
@@ -263,13 +266,14 @@ void main() {
 	L = mix( L, curtain.rgb, curtain.a );
 #endif
 	// (Salt Life) under a grey sky the horizon greys, as the fog does (Sky.update): they meet in one grey
-	L = mix( L, skyGrey.rgb, skyGrey.a * ( 1.0 - smoothstep( 0.0, 0.3, dir.y ) ) );
+	// ((M13) and in a hurricane's rain and spray it's all that grey: the murk between you and the cloud)
+	L = mix( L, skyGrey.rgb, max( skyGrey.a * ( 1.0 - smoothstep( 0.0, 0.3, dir.y ) ), skyMurk ) );
 #ifndef SKY_ENVIRONMENT
 	// (M9) lightning: the cloud lit from inside about the strike, brightest where it's thickest, and the
 	// rain's murk to the horizon with it (the reflections' panorama isn't: it's made over seconds)
 	if ( skyFlash.w > 0.0 ) {
 		float lobe = exp( ( dot( dir, skyFlash.xyz ) - 1.0 ) * skyFlashShape.x );
-		float murk = skyGrey.a * ( 1.0 - smoothstep( 0.0, 0.3, dir.y ) );
+		float murk = max( skyGrey.a * ( 1.0 - smoothstep( 0.0, 0.3, dir.y ) ), skyMurk );
 		float far = skyFlashShape.z;
 		L += skyFlashColor * skyFlash.w * ( 1.0 - far ) * ( ( 1.0 - c.a ) * ( 2.5 * lobe + 0.2 ) + murk * ( 0.6 * lobe + 0.1 ) );
 		// ((M12) a storm on the horizon: its own cloud lit from inside, about the strike, from the horizon up
@@ -329,6 +333,7 @@ export class Sky {
 			skyUnderwater: G.cameraUnderwater,
 			skyFogColor: { value: new THREE.Color() },
 			skyGrey: { value: new THREE.Vector4() },
+			skyMurk: { value: 0 },
 			skyFlash: G.skyFlash, // ((M10) shared: the sea reflects the flash)
 			skyFlashShape: G.skyFlashShape, // ((M12) and its shape, shared too)
 			skyFlashColor: { value: new THREE.Color( 0.82, 0.86, 1.0 ) },
@@ -395,6 +400,7 @@ export class Sky {
 		// tier's fog distances). 0 and 1 are the island's clear day
 		this.overcast = 0;
 		this.visibility = 1;
+		this.haze = 0; // (M13) a hurricane's rain and spray (1/m: App)
 		// (M9) rain's deck over it (0..1): no sun through it at all; the sky's light the more for it
 		this.storm = 0;
 		// (M9) lightning (Lightning): how bright its flash is now (0: none; 1 a strike a few km off, in the
@@ -584,6 +590,8 @@ export class Sky {
 		_c.copy( MOON_SKY ).multiplyScalar( night ).add( lit.horizon );
 		const grey = this.uniforms.skyGrey.value, gl = luminance( _c ) * ( 1 - 0.35 * this.overcast );
 		grey.set( 0.93 * gl, 0.96 * gl, gl, 0.85 * this.overcast );
+		// ((M13) the murk overhead: the haze through the air up to a hurricane's cloud, MURK_DEPTH m of it)
+		this.uniforms.skyMurk.value = this.haze > 0 ? 1 - Math.exp( - this.haze * MURK_DEPTH ) : 0;
 		_c.lerp( _tint.setRGB( grey.x, grey.y, grey.z ), grey.w ).multiplyScalar( skyAdapt );
 		// (M9: the murk lit by a flash)
 		if ( this.flashFill > 0 ) _c.lerp( _tint.copy( FLASH_LIGHT ).multiplyScalar( luminance( _c ) * 1.8 + 0.01 * this.flashFill ), Math.min( 0.3, this.flashFill * 0.12 ) );
@@ -596,9 +604,11 @@ export class Sky {
 		this.scene.environmentIntensity = this.levels.env * ( 0.6 + 0.4 * day ) * greyRise;
 		// (Salt Life) how far you see: the tier's fog distances, nearer in rain and murk (App takes them
 		// into the scene's fog above water)
-		const [ near, far ] = FOG_DISTANCE[ this.tier ];
-		this.fogNear = near * this.visibility;
-		this.fogFar = far * this.visibility;
+		// ((M13) and in a hurricane's rain and spray, as far as their haze lets you, in metres on every tier:
+		// about 3 / its extinction)
+		const [ near, far ] = FOG_DISTANCE[ this.tier ], seen = this.haze > 0 ? 3 / this.haze : Infinity;
+		this.fogNear = Math.min( near * this.visibility, seen * 0.05 );
+		this.fogFar = Math.min( far * this.visibility, seen );
 
 		// ---- the GPU side: sky view LUT, clouds, environment
 		const cameraY = camera ? camera.position.y : 2;

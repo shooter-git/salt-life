@@ -284,6 +284,13 @@ export class Whale {
 
 	}
 
+	// (M13) gone offshore out of a hurricane's way (once it's dived from its last breath: WhaleBrain.away)
+	get gone() {
+
+		return !! this.brain && this.brain.away && ! this.brain.seq;
+
+	}
+
 	// ------------------------------------------------------------------ per frame
 
 	update( dt, camera ) {
@@ -316,6 +323,8 @@ export class Whale {
 			if ( ! camUnder && b.backDepth > 7 && d > 70 ) visible = false;
 
 		}
+
+		if ( this.gone ) visible = false;
 
 		for ( let i = 0; i < this.meshes.length; i ++ ) {
 

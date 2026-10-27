@@ -7,6 +7,11 @@ import * as THREE from '../../engine/index.js';
 // Outputs for the rig (Whale._pose): root pose (position, quaternion), path orientation history
 // (the body follows the route), stroke phase / amplitude, arch, head pitch, flipper rotations,
 // and events: blow intensity (0..1) and fluke-lift (drips).
+//
+// (M13) In the weather (the app sets them from WildlifeWeather.wildlifeMood): `surfacing` (1 on a fair
+// day, up to 2.5 in a gale), how much more often it slaps and breaches, as humpbacks turn from song to
+// surface signals in a wind's noise; and `away`, gone offshore out of a hurricane's way (it surfaces no
+// more until it's back: Whale.gone).
 
 // route (x, z) through the bay, checked against TerrainData
 // passes ~130 m off the beach and ~65 m from the pier head; >= 8.8 m of water everywhere
@@ -60,6 +65,8 @@ export class WhaleBrain {
 		this.slap = null; // flipper slap at the surface: { side, t }
 		this.slapTimer = 12;
 		this.slaps = 0; // counter of slaps hitting the water (Whale.js splashes)
+		this.surfacing = 1; // ((M13) the weather's: slaps and breaches, more often in a wind)
+		this.away = false; // ((M13) gone offshore out of a hurricane's way)
 		this.yawRate = 0;
 		this.time = 0;
 		// path history: root orientation stamped with the travelled distance (ring buffer, one
@@ -214,7 +221,7 @@ export class WhaleBrain {
 			if ( this.slapTimer < 0 ) {
 
 				this.slap = { side: this.rand() < 0.5 ? 0 : 1, t: 0 };
-				this.slapTimer = 18 + this.rand() * 25;
+				this.slapTimer = ( 18 + this.rand() * 25 ) / this.surfacing;
 
 			}
 
@@ -329,7 +336,7 @@ export class WhaleBrain {
 
 		// now and then (about every other surfacing, i.e. every few minutes) a breach: sound, then
 		// drive up and launch two thirds of the body out of the water, twist, fall back on the side
-		if ( this.rand() < ( this.forceBreach ? 1 : 0.5 ) ) {
+		if ( this.rand() < ( this.forceBreach ? 1 : Math.min( 0.9, 0.5 * this.surfacing ) ) ) {
 
 			k.push( { t: 7, depth: 9, pitch: - 0.2, arch: 0, follow: 0.6, speed: 2.4, stroke: 0.1 } );
 			k.push( { t: 6, depth: 9, pitch: 0.45, arch: 0, follow: 0.3, speed: 3.5, stroke: 0.14, breach: 'launch' } );
@@ -383,7 +390,7 @@ export class WhaleBrain {
 
 		// ---- sequencer
 		const frac = ( ( this.u / this.length ) % 1 + 1 ) % 1;
-		if ( this.state === 'cruise' && frac > SURFACE_AT && frac < SURFACE_AT + 0.05 && ! this.lastWrap ) {
+		if ( this.state === 'cruise' && frac > SURFACE_AT && frac < SURFACE_AT + 0.05 && ! this.lastWrap && ! this.away ) {
 
 			this._startSequence();
 			this.lastWrap = true;

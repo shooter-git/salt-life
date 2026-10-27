@@ -6,6 +6,7 @@ import { BIRD } from './BirdShapes.js';
 import { Flyer } from './Flight.js';
 import { setHead, groundPose, standHeight, storePrevious, resetPrevious, setWings, tuckLegs } from './BirdPose.js';
 import { TAU, clamp, lerp, smooth, angleDiff, approach, qYawPitchRoll } from './Kit.js';
+import { wildlifeMood, seabirdAbout } from '../../game/WildlifeWeather.js';
 
 // (Salt Life) fx/Spray.js's particle kinds: that module draws with WebGPU and isn't ported yet (the
 // splashes are skipped while there is no spray)
@@ -31,6 +32,12 @@ const _v = new THREE.Vector3(), _w = new THREE.Vector3();
 
 // flight initiation distances (m) by species when walking up to them
 const FLUSH = { [ BIRD.GULL ]: 7, [ BIRD.PELICAN ]: 5.5, [ BIRD.TERN ]: 9 };
+// (M13) a bird off to roost or out of a storm's way: it flies off this far out from the island's middle,
+// and is gone once it's this far from the camera (or after this long); one coming back comes in from
+// this far out, growing into view over FADE_IN s. A thunderclap within FLUSH_THUNDER m puts the perched
+// gulls and pelicans up
+const LEAVE = { far: 700, height: 40, gone: 260, after: 40 }, BACK = 280, FADE_IN = 2.5, FLUSH_THUNDER = 2500;
+const MIDDLE = { x: 20, z: - 60 };
 
 export class Birds {
 
@@ -46,6 +53,8 @@ export class Birds {
 		this.agents = [];
 		this.perches = this.buildPerches( village, colliders );
 		this.wind = new THREE.Vector2();
+		// (M13) how the weather has them (game/WildlifeWeather.js: Wildlife's, from App each frame)
+		this.mood = wildlifeMood( null );
 
 		const rng = this.rng;
 		const add = ( kind, species, init ) => {
@@ -156,6 +165,17 @@ export class Birds {
 
 			const local = new THREE.Vector3( - 0.5, this.boatModel.dimensions.houseRoofHeight, 0.15 );
 			add( 0, 0, 0, 'boat', [ 'gull' ], { local } );
+
+		}
+
+		// ((M13) spots along a hurricane's line of wrack up the beach, where gulls pick through it while it's
+		// fresh: setWrack places them and opens them)
+		this.wrackPerches = [];
+		for ( const x of [ - 44, - 30, - 17, - 3, 12, 27, 84, 103, 126, 142 ] ) {
+
+			const p = { x: x + ( rng() - 0.5 ) * 4, y: 0, z: - 50, kind: 'wrack', kinds: [ 'gull' ], bird: null, yawJitter: ( rng() - 0.5 ) * 1.6, live: false, h: null };
+			P.push( p );
+			this.wrackPerches.push( p );
 
 		}
 
@@ -276,13 +296,38 @@ export class Birds {
 		this.lastViewer = viewer;
 		// (Salt Life: in a gale they keep low and in the lee, out of the strongest of it, rather than fly backwards)
 		this.wind.set( G.windDir.value.x, G.windDir.value.y ).multiplyScalar( Math.min( G.windSpeed.value, BIRD_WIND ) );
-		const day = 1 - G.night.value;
+		const day = 1 - G.night.value, mood = this.mood;
 		this.updateSquad( dt );
 		for ( const a of this.agents ) {
 
+			// ((M13) off to roost by night, out of the rain and the wind, out of a hurricane's way, and back
+			// when it's over; the gulls sit out a downpour and a gale where they are. Pelicans on their perch
+			// roost there)
+			const roosting = a.kind === 'pelican' && a.state === 'perched' && ! mood.gone;
+			const about = roosting || seabirdAbout( a.kind, mood, G.night.value, ! a.away );
+			if ( ! about && ! a.away ) this.leave( a );
+			else if ( about && a.away && a.hidden ) this.comeBack( a, camera );
+			if ( a.away ) {
+
+				this.leaving( a, dt, camera );
+				continue;
+
+			}
+
+			a.fade = Math.min( 1, ( a.fade ?? 1 ) + dt / FADE_IN );
+			// (frigatebirds caught up in a hurricane's eye circle in the calm over the island)
+			if ( a.kind === 'frigate' ) {
+
+				a.home0 = a.home0 || { ...a.home };
+				const h = mood.eyeBirds ? { x: camera.position.x + ( a.id % 3 - 1 ) * 40, z: camera.position.z - 30 } : a.home0;
+				a.home.x = h.x;
+				a.home.z = h.z;
+
+			}
+
 			switch ( a.kind ) {
 
-				case 'gull': this.updateGull( a, dt, viewer, day ); break;
+				case 'gull': this.updateGull( a, dt, viewer, day * mood.gull ); break;
 				case 'tern': this.updateTern( a, dt, viewer ); break;
 				case 'pelican': this.updatePelican( a, dt, viewer ); break;
 				case 'frigate': this.updateFrigate( a, dt ); break;
@@ -301,9 +346,112 @@ export class Birds {
 			const far = a.kind === 'frigate' ? 1400 : a.kind === 'pelican' ? 800 : 550;
 			if ( d > far ) continue;
 			const k = a.f.scale0 || ( a.f.scale0 = P.scale );
-			P.scale = k * smooth( far, far * 0.8, d );
+			P.scale = k * smooth( far, far * 0.8, d ) * ( a.fade ?? 1 );
 			batch.write( P );
 			P.scale = k;
+
+		}
+
+	}
+
+	// (M13) off it goes: up and away out from the island, to roost or out of a storm's way
+	leave( a ) {
+
+		const f = a.f;
+		if ( a.state === 'perched' ) this.takeOff( a, f.P.pos[ 0 ] - MIDDLE.x, f.P.pos[ 2 ] - MIDDLE.z );
+		else this.unperch( a );
+		a.away = true;
+		a.hidden = false;
+		a.leftAt = this.time;
+		const dx = ( f.x || f.P.pos[ 0 ] ) - MIDDLE.x, dz = ( f.z || f.P.pos[ 2 ] ) - MIDDLE.z, l = Math.hypot( dx, dz ) || 1;
+		a.out = { x: dx / l, z: l > 1 ? dz / l : 1 };
+
+	}
+
+	leaving( a, dt, camera ) {
+
+		if ( a.hidden ) return;
+		const f = a.f;
+		if ( a.state === 'takeoff' ) {
+
+			this.takeoffStep( a, dt, () => { a.state = 'leave'; } );
+			return;
+
+		}
+
+		a.state = 'leave';
+		this.flyTo( a, dt, f.x + a.out.x * LEAVE.far, LEAVE.height, f.z + a.out.z * LEAVE.far, f.cfg.speed * 1.1, 1 );
+		const d = Math.hypot( f.x - camera.position.x, f.z - camera.position.z );
+		if ( d > LEAVE.gone || this.time - a.leftAt > LEAVE.after ) {
+
+			a.hidden = true;
+			a.visible = false;
+
+		}
+
+	}
+
+	// back again, flying in from out over the sea, each kind to what it does
+	comeBack( a, camera ) {
+
+		const f = a.f, out = a.out || { x: 0, z: 1 }, r = this.rng;
+		a.away = a.hidden = false;
+		a.visible = true;
+		a.fade = 0;
+		const x = camera.position.x + out.x * BACK, z = camera.position.z + out.z * BACK;
+		f.place( x, 25, z, Math.atan2( - out.x, - out.z ) );
+		if ( a.kind === 'gull' ) {
+
+			this.newGullGoal( a );
+			a.state = 'fly';
+
+		} else if ( a.kind === 'tern' ) {
+
+			f.place( a.lane.x0 - 120, a.lane.y, a.lane.z, Math.PI / 2 );
+			a.state = 'patrol';
+			a.t = 4 + r() * 8;
+
+		} else if ( a.kind === 'pelican' ) {
+
+			if ( a.slot !== undefined ) {
+
+				a.state = 'line';
+				f.P.fresh = true;
+
+			} else this.startForage( a, 20 + r() * 60, 35 + r() * 20 );
+
+		} else a.state = 'soar';
+
+	}
+
+	// (M13) a hurricane's line of wrack up the beach (StormDamage's damageAt: wrackH, how high the sea
+	// reached; feed, how fresh it is): its spots along the line, open to the gulls while it's fresh
+	setWrack( h, feed ) {
+
+		const live = feed > 0.25 && h > 1;
+		for ( const p of this.wrackPerches ) {
+
+			p.live = live;
+			if ( ! live || p.h === h ) continue;
+			p.h = h;
+			let z = - 110;
+			for ( ; z < - 20; z += 0.25 ) if ( this.terrain.heightAt( p.x, z ) < h ) break;
+			p.z = z + 0.4;
+			p.y = this.terrain.heightAt( p.x, p.z ) + 0.08;
+
+		}
+
+	}
+
+	// (M13) thunder this far off (m): a near clap puts the perched gulls and pelicans up, the nearer the more
+	thunder( m ) {
+
+		if ( m > FLUSH_THUNDER ) return;
+		const k = 1 - m / FLUSH_THUNDER;
+		for ( const a of this.agents ) {
+
+			if ( a.state !== 'perched' || a.away || this.rng() > k ) continue;
+			this.takeOff( a, Math.sin( a.perchYaw ) + ( this.rng() - 0.5 ), Math.cos( a.perchYaw ) + ( this.rng() - 0.5 ) );
 
 		}
 
@@ -361,6 +509,16 @@ export class Birds {
 		const h = standHeight( sp ) * ( isPel ? 0.92 : 1 );
 		groundPose( P, p.x, p.y, p.z, a.perchYaw + yawBoat, isPel ? 0.12 : 0.24, h, phase, stride, sp.legs.toe * 0.3 );
 		this.idleHead( a, dt, isPel ? 0.75 : - 0.12, isPel ? 0.6 : 1.2 );
+		// ((M13) at the wrack: picking through it, head down in bouts)
+		if ( a.perch.kind === 'wrack' ) {
+
+			a.peckT = ( a.peckT || 0 ) + dt;
+			const bout = Math.sin( a.peckT * 0.7 + a.id * 2.3 ) > - 0.2 ? 1 : 0;
+			const jab = Math.pow( Math.max( 0, Math.sin( a.peckT * 3.1 + a.id ) ), 2 ) * bout;
+			a.hp += ( 1.15 * jab + 0.5 * bout - a.hp ) * approach( 12, dt );
+
+		}
+
 		const L = sp.length;
 		setHead( P, a.hy, a.hp, 0, ( isPel ? - 0.02 : 0.03 ) * L, ( isPel ? - 0.04 : 0.01 ) * L );
 
@@ -630,10 +788,12 @@ export class Birds {
 
 			if ( p.bird || ! p.kinds.includes( a.kind ) ) continue;
 			if ( p.kind === 'boat' && ( this.boat.driven || this.boat.speed > 0.5 ) ) continue;
+			if ( p.kind === 'wrack' && ! p.live ) continue;
 			const q = this.perchPosition( p, _v );
 			if ( this.threat( viewer, q.x, q.y, q.z ) < 18 ) continue;
 			const d = Math.hypot( q.x - a.f.x, q.z - a.f.z );
-			const s = - d * 0.01 + this.rng() * 2 + ( roost && p.kind !== 'sand' ? 1 : 0 );
+			// ((M13) fresh wrack draws them by day)
+			const s = - d * 0.01 + this.rng() * 2 + ( roost && p.kind !== 'sand' && p.kind !== 'wrack' ? 1 : 0 ) + ( p.kind === 'wrack' && ! roost ? 2.5 : 0 );
 			if ( s > bestS ) {
 
 				bestS = s;
@@ -652,7 +812,7 @@ export class Birds {
 
 		const f = a.f;
 		const lx = f.x + f.vx * 2, lz = f.z + f.vz * 2;
-		const ground = Math.max( this.terrain.heightAt( lx, lz ), this.terrain.heightAt( f.x, f.z ), 0 );
+		const ground = Math.max( this.terrain.heightAt( lx, lz ), this.terrain.heightAt( f.x, f.z ), G.seaLevel.value );
 		const minY = ground + ( ground > 0.5 ? 6 : 2 );
 		f.steer( dt, x, Math.max( y, minY ), z, speed, power, turn, this.wind );
 		if ( f.y < minY - 1.5 ) f.y += ( minY - 1.5 - f.y ) * approach( 3, dt );
@@ -707,7 +867,8 @@ export class Birds {
 				if ( a.t <= 0 ) {
 
 					f.windK = 0.35;
-					if ( this.rng() < 0.45 ) {
+					// ((M13) fewer plunges as rain and a chop hide the fish)
+					if ( this.rng() < 0.45 * this.mood.tern ) {
 
 						a.state = 'dive';
 						a.t = 0;
@@ -863,7 +1024,7 @@ export class Birds {
 		const tl = Math.hypot( tx, tz ) || 1;
 		const x = path.pt.x - tz / tl * side, z = path.pt.z + tx / tl * side;
 		const wh = this.water.height( a, x, z );
-		const y = Math.max( wh, 0 ) * 0.8 + path.pt.y + Math.sin( this.time * 0.7 + a.slot ) * 0.15;
+		const sea = G.seaLevel.value, y = sea + Math.max( wh - sea, 0 ) * 0.8 + path.pt.y + Math.sin( this.time * 0.7 + a.slot ) * 0.15;
 		if ( f.P.fresh ) f.place( x, y, z, Math.atan2( tx, tz ) );
 		const vx = ( x - f.x ) / Math.max( dt, 1e-4 ), vz = ( z - f.z ) / Math.max( dt, 1e-4 ), vy = ( y - f.y ) / Math.max( dt, 1e-4 );
 		const yaw = Math.atan2( tx, tz );
@@ -896,7 +1057,8 @@ export class Birds {
 				this.perchedPose( a, dt );
 				const P = f.P;
 				const th = this.threat( viewer, P.pos[ 0 ], P.pos[ 1 ], P.pos[ 2 ] );
-				a.t -= dt;
+				// ((M13) roosting there by night and through the weather)
+				a.t -= seabirdAbout( 'pelican', this.mood, G.night.value ) ? dt : 0;
 				if ( th < FLUSH[ BIRD.PELICAN ] ) {
 
 					a.alarm = ( a.alarm || 0 ) + dt;
@@ -922,7 +1084,7 @@ export class Birds {
 				this.flyTo( a, dt, c.x + Math.cos( ang ) * c.r, c.y, c.z + Math.sin( ang ) * c.r, f.cfg.speed * 0.9, 1, 1.2 );
 				if ( a.t <= 0 ) {
 
-					if ( this.rng() < 0.6 ) {
+					if ( this.rng() < 0.6 * this.mood.pelican ) { // ((M13) fewer in the weather)
 
 						a.state = 'dive';
 						a.t = 0;

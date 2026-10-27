@@ -28,7 +28,7 @@ import { Player } from './player/Player.js';
 import { BoatController } from './player/BoatController.js';
 import { GameState } from './game/GameState.js';
 import { DAY_RATE, START_HOUR, advance } from './game/IslandClock.js';
-import { CONDITIONS } from './game/Weather.js';
+import { CONDITIONS, islandTime } from './game/Weather.js';
 import { WeatherDriver } from './world/WeatherDriver.js';
 import { lampsLit } from './game/Bites.js';
 import { FishStand, STAND } from './game/FishStand.js';
@@ -37,6 +37,10 @@ import { LocalLights, addBoatLights, addVillageLights, useLocalLights, holdLocal
 import { cloudShadows, useCloudShadows } from './materials/CloudShadows.js';
 import { useWet, wetSurfaces } from './materials/Wet.js';
 import { Wildlife } from './world/wildlife/Wildlife.js';
+import { wildlifeMood, wildlifeNews } from './game/WildlifeWeather.js';
+import { damageAt } from './game/StormDamage.js';
+import { StormWrack } from './world/debris/StormWrack.js';
+import { vegUniforms } from './world/vegetation/VegNodes.js';
 import { Debris } from './world/Debris.js';
 import { Reef } from './world/Reef.js';
 import { FishSchools } from './world/Fish.js';
@@ -44,6 +48,9 @@ import { fishModelsAsync } from './world/fish/FishModelsAsync.js';
 import { MarineSnow } from './fx/MarineSnow.js';
 import { Whale } from './world/marine/Whale.js';
 import { Spray } from './fx/Spray.js';
+import { StormSpray } from './fx/StormSpray.js';
+import { FlyingDebris } from './fx/FlyingDebris.js';
+import { insideRoom, roomMatrix } from './world/village/StormPlaces.js';
 import { AirMotes } from './fx/AirMotes.js';
 import { Rain, SPLASH_ROCKS } from './fx/Rain.js';
 import { Drips, eavePoints, palmPoints, wheelhousePoints } from './fx/Drips.js';
@@ -81,6 +88,19 @@ const UNDERWATER = new THREE.Color( 0.03, 0.17, 0.2 );
 // (M10) the water a blow's stirred up: green-grey with silt, and the distance you see in it at its murkiest (m)
 const SILT = new THREE.Color( 0.07, 0.12, 0.09 );
 const MURK_FAR = 11;
+// (M13) a hurricane's surge gets a shore field of its own when it rises past this (m), solved once it's
+// watched for (or warned of), or near (m from its eye)
+const SURGE_FIELD_FROM = 0.15, SURGE_FIELD_NEAR = 400000;
+// (M13) a hurricane's spray in the air thins inland: from this far from the shore (m) to this, by this share
+const SPRAY_INLAND = [ 20, 160, 0.55 ];
+// how much a sheet of rain driving past thickens the air (of its haze: the sheets' mean is 3/8)
+const SHEET_HAZE = 0.8;
+const smoothstep = ( a, b, x ) => {
+
+	const t = Math.min( 1, Math.max( 0, ( x - a ) / ( b - a ) ) );
+	return t * t * ( 3 - 2 * t );
+
+};
 const _c = new THREE.Color();
 const _c3 = new THREE.Vector3();
 const _size = new THREE.Vector2();
@@ -112,6 +132,8 @@ export class App {
 			exposure: 0.55,
 			// (Salt Life) the weather you picked on your own (an id from game/Weather.js), or null: the day's
 			weather: null,
+			// (M13) when you picked it (island time: a hurricane of your own passes from then)
+			weatherSince: 0,
 		};
 		this._clockSaveT = 0;
 
@@ -294,6 +316,8 @@ export class App {
 		this.spray = new Spray( { waves: this.waves, terrain: this.terrainData, tier } );
 		scene.add( this.spray.mesh );
 		this.boatSpray = new BoatSpray( { boat: this.boatCtl, spray: this.spray } );
+		// ((M13) and in a hurricane's wind, the spray torn off the sea)
+		this.stormSpray = new StormSpray( { spray: this.spray, terrain: this.terrainData, waves: this.waves, tier } );
 		// (M9) the rain around the camera (fx/Rain.js), and the lightning (sky/Lightning.js: the strikes
 		// everyone sees, their flash on the clouds and the island, the bolts, the thunder)
 		this.rain = new Rain( { terrain: this.terrain, cover: this.cover, tier } );
@@ -305,7 +329,16 @@ export class App {
 		scene.add( this.drips.mesh );
 		this.lightning = new Lightning( { scene, sky: this.sky } );
 		// (its thunder, heard as it gets here)
-		this.lightning.onThunder = ( strike, m, dir ) => this.audio && this.audio.thunder( m, dir, strike.power );
+		this.lightning.onThunder = ( strike, m, dir ) => {
+
+			if ( this.audio ) this.audio.thunder( m, dir, strike.power );
+			if ( this.wildlife ) this.wildlife.birds.thunder( m ); // ((M13) a near clap puts up the perched birds)
+
+		};
+		// ((M13) and what a hurricane's wind tears off and carries: fx/FlyingDebris.js)
+		this.flying = new FlyingDebris( { terrain: this.terrain, tier } );
+		this.flying.setRoom( roomMatrix( this.village.shelter && this.village.shelter.inside ) );
+		scene.add( this.flying.mesh );
 		if ( tier === 'low' ) {
 
 			this.nearDetail = [];
@@ -320,6 +353,8 @@ export class App {
 		// laptops: bloom and SMAA (phones draw straight to the screen)
 		this.post = tier === 'high' ? new PostChain( renderer, scene, camera ) : null;
 		this.player = new Player( { camera, input: this.input, terrain: this.terrainData, colliders: this.colliders, query: this.query, boat: this.boatCtl } );
+		// ((M13) the wind you stand in, in the gusts the sea shows: a hurricane's pushes you along)
+		this.player.windAt = ( x, z ) => this.weather.windAt( x, z );
 
 		// ---------------------------------------------------------------- sound
 		// Tidewater's field recordings (public/audio): surf wave by wave, wind, palms, birds by the
@@ -462,8 +497,9 @@ export class App {
 			// (and the cast net: its netting, lead line and cords are shaders of their own)
 			this._heldNet = this.game.net.meshes.map( ( m ) => [ m, m.parent ] );
 			for ( const [ m ] of this._heldNet ) m.removeFromParent();
-			// ((M9) and the rain, (M11) its drips, and the lightning: nothing to draw until it rains)
-			this._heldWeather = [ this.rain.mesh, this.rain.splash, this.drips.mesh, this.lightning.mesh ].map( ( m ) => [ m, m.parent ] );
+			// ((M9) and the rain, (M11) its drips, and the lightning: nothing to draw until it rains; (M13) and
+			// a hurricane's flying debris)
+			this._heldWeather = [ this.rain.mesh, this.rain.splash, this.drips.mesh, this.lightning.mesh, this.flying.mesh ].map( ( m ) => [ m, m.parent ] );
 			for ( const [ m ] of this._heldWeather ) m.removeFromParent();
 
 		}
@@ -556,9 +592,63 @@ export class App {
 		// (the hour you're at, in your save now and again: you come back to it)
 		if ( ( this._clockSaveT -= dt ) <= 0 ) this.saveClock();
 		// (Salt Life) the weather, before anything it moves (the boat, the sky)
-		this.weather.update( dt, s.day, s.timeOfDay, this.weatherPick(), this.camera );
+		this.weather.update( dt, s.day, s.timeOfDay, this.weatherPick(), this.camera, s.weatherSince );
+		// ((M13) a hurricane's rain and spray in the air: the spray thinner inland, away from the sea it's torn off)
+		const lw = this.weather.live, spray = lw.sprayHaze > 0 ? lw.sprayHaze * ( 1 - SPRAY_INLAND[ 2 ] * smoothstep( SPRAY_INLAND[ 0 ], SPRAY_INLAND[ 1 ], - this.terrainData.coastDistance( this.camera.position.x, this.camera.position.z ).d ) ) : 0;
+		// (heavier, and the world gone for a moment, as a sheet of rain drives past: Rain.sheet)
+		this.sky.haze = ( lw.rainHaze + spray ) * ( 1 + SHEET_HAZE * ( this.rain.sheet - 0.375 ) );
+		// ((M13) in the shelter's room you're out of the weather; your boat on her cradle is in your way)
+		const pp = this.player.position;
+		this.player.sheltered = insideRoom( this.village.shelter && this.village.shelter.inside, pp.x, pp.y + 0.9, pp.z );
+		if ( this.village.cradleHull ) this.village.cradleHull.solid = !! this.boatCtl.hauled;
 		// (M12) a westerly's swell on its way: its shore field, solved off the page
 		if ( this.weather.target.west > 0 && ! this._westField && this._started ) this.solveWestField();
+		// ((M13) a hurricane's surge: its field solved before it comes, at its highest, dropped once it's gone)
+		if ( this._started ) {
+
+			const h = this.weather.hurricane;
+			const n = this.weather.news;
+			this.solveSurgeField( h && h.peak > SURGE_FIELD_FROM && ( ( n && n.stage !== 'outlook' ) || h.r < SURGE_FIELD_NEAR ) ? h : null );
+
+		}
+		// ((M13) the island's animals in the weather: game/WildlifeWeather.js)
+		if ( ! ( ( this._wildNewsT -= dt ) > 0 ) ) {
+
+			this._wildNewsT = 2;
+			this._wildNews = wildlifeNews( islandTime( s.day, s.timeOfDay ), this.weatherPick(), s.weatherSince );
+
+		}
+
+		const mood = this.wildMood = wildlifeMood( this.weather.live, this._wildNews, islandTime( s.day, s.timeOfDay ), G.wet.value, this.wildMood );
+		if ( this.whale ) {
+
+			this.whale.brain.surfacing = mood.whaleSurface;
+			this.whale.brain.away = mood.whaleAway;
+
+		}
+
+		if ( this.fish ) this.fish.setWeather( mood.sharksAway );
+		// ((M13) what the last hurricane's done, and its mending, from the clock (game/StormDamage.js):
+		// the roofs' sheets, the pier's boards, the palms' fronds, the wrack and sand, the birds at the wrack)
+		if ( ! ( ( this._damageT -= dt ) > 0 ) ) {
+
+			this._damageT = 1;
+			const D = this.damage = damageAt( islandTime( s.day, s.timeOfDay ), this.weatherPick(), s.weatherSince, this.damage );
+			this.village.setDamage( D );
+			this.terrain.setStorm( D );
+			vegUniforms.vegStrip.value = D.strip;
+			// (its line of wrack, made once it's left one, with the debris's materials)
+			if ( ! this.stormWrack && this.debris && D.wrack > 0 ) this.stormWrack = new StormWrack( { terrain: this.terrainData, nature: this.debris.materials.nature, wood: this.village.materials.wood, parent: this.scene, lite: this.tier !== 'high' } );
+			if ( this.stormWrack ) this.stormWrack.set( D );
+			if ( this.wildlife ) {
+
+				this.wildlife.birds.setWrack( D.wrackH, D.feed );
+				this.wildlife.shorebirds.wrack = D.feed > 0.3 ? D.wrackH : null;
+
+			}
+
+		}
+
 		// (M9) the lightning, before the sky its flash lights
 		const wx = this.weather.live, cv = this.renderer.domElement;
 		this.lightning.setViewport( cv.width, cv.height );
@@ -658,6 +748,7 @@ export class App {
 		this.village.update( dt );
 		this.rocks.update( this.camera );
 		if ( this.debris ) this.debris.update( this.camera );
+		if ( this.stormWrack ) this.stormWrack.update( this.camera ); // ((M13) a hurricane's line of wrack, near you)
 		if ( this.reef ) this.reef.update( this.camera );
 		if ( this.whale ) {
 
@@ -681,12 +772,15 @@ export class App {
 		if ( this.wildlife ) {
 
 			this.wildlife.viewHeight = this.renderer.domElement.height;
+			this.wildlife.birds.mood = this.wildlife.shorebirds.mood = this.wildlife.crabs.mood = this.wildMood;
 			this.wildlife.update( dt, this.camera, this.player );
 
 		}
 		this.boatSpray.update( dt );
+		this.stormSpray.update( dt, this.camera );
 		this.spray.update( dt, this.camera, this.renderer.domElement.height );
 		this.rain.update( dt, this.camera, this.cameraWaterHeight, this.renderer.domElement.height );
+		this.flying.update( dt, this.camera, this.cameraWaterHeight );
 		if ( this.motes ) this.motes.update( dt, this.camera, this.cameraWaterHeight, this.renderer.domElement.height );
 		this.water.detail.update( dt, this.camera );
 		this.shore.update( G.time.value ); // (Salt Life: the waves' clock, for the GPU)
@@ -1235,6 +1329,7 @@ export class App {
 
 		if ( this.motes || this.tier === 'low' ) return;
 		const motes = new AirMotes( { terrain: this.terrain, tier: this.tier } );
+		motes.setRoom( roomMatrix( this.village.shelter && this.village.shelter.inside ) ); // ((M13) none in the shelter)
 		await this.readyToDraw( motes.mesh );
 		this.scene.add( motes.mesh );
 		await this.firstDraws( [ motes.mesh ] );
@@ -1424,7 +1519,8 @@ export class App {
 			listener: { position: p, forward: _fwd, up: _up },
 			underwater: p.y < h ? 1 : 0,
 			depthBelowSurface: Math.max( 0, h - p.y ),
-			surfIntensity: Math.min( 1, amp / 0.6 ),
+			surfIntensity: amp / 0.6, // ((M13) past 1 in a hurricane's surf: SoundScape)
+			inside: this.player.sheltered, // ((M13) in the shelter: the storm through its walls)
 			distanceToShore: Math.abs( coast ),
 			coastDistance: coast,
 			waveHeight: amp * 2,
@@ -1433,6 +1529,8 @@ export class App {
 			gust: this.weather.gustAt( p.x, p.z ), // (M9: the cat's paws on the sea, as the boat feels them)
 			rain: G.rain.value, // (M9: and the rain; on the boat it drums on her)
 			rainOn: this._rainOn, // (M11: on what it falls on about you)
+			songbirds: this.wildMood ? this.wildMood.song : 1, // ((M13) the island's birds in the weather)
+			gulls: this.wildMood ? this.wildMood.gull : 1,
 			aboard: this.player.mode === 'boat' || this.player.mode === 'deck',
 			daylight: 1 - G.night.value,
 			nearPier: Math.abs( p.x - pier.x ) < 12 && p.z > pier.zStart - 5 && p.z < pier.zEnd + 8,
@@ -1471,6 +1569,7 @@ export class App {
 		r.x = x;
 		r.z = z;
 		r.chart = map && map._bake && map._bake.done ? map.canvas : null;
+		r.alert = this.weatherAlert();
 		this.instruments.update( dt, r );
 
 	}
@@ -1493,7 +1592,16 @@ export class App {
 		r.x = x;
 		r.z = z;
 		r.chart = map && map._bake && map._bake.done ? map.canvas : null;
+		r.alert = this.weatherAlert();
 		return r;
+
+	}
+
+	// (M13) the weather alert on the dash's plotter: a hurricane watched for or warned of ('' none)
+	weatherAlert() {
+
+		const n = this.weather && this.weather.news;
+		return n && n.stage !== 'outlook' ? `HURRICANE ${ n.stage === 'watch' ? 'WATCH' : 'WARNING' }` : '';
 
 	}
 
@@ -1620,6 +1728,7 @@ export class App {
 			s.day = Number.isFinite( saved.day ) ? Math.max( 1, Math.floor( saved.day ) ) : 1;
 			s.timeSpeed = saved.held ? 0 : DAY_RATE;
 			s.weather = CONDITIONS[ saved.weather ] ? saved.weather : null;
+			s.weatherSince = Number.isFinite( saved.since ) ? saved.since : islandTime( s.day, s.timeOfDay );
 
 		}
 
@@ -1634,6 +1743,8 @@ export class App {
 		if ( weather && ( CONDITIONS[ weather ] || weather === 'forecast' ) ) {
 
 			s.weather = CONDITIONS[ weather ] ? weather : null;
+			// ((M13) ?weather=hurricane: one of your own, coming in from the hour you start at)
+			s.weatherSince = islandTime( s.day, s.timeOfDay );
 			this._weatherAsked = true;
 
 		}
@@ -1654,9 +1765,48 @@ export class App {
 	solveWestField() {
 
 		if ( this._westField ) return this._westField;
-		const home = this.shoreField, swellDir = [ SWELL_WEST.x, SWELL_WEST.y ];
+		this._westField = this.solveShoreField( [ SWELL_WEST.x, SWELL_WEST.y ] ).then( ( field ) => {
+
+			this.shore.addField( field );
+			this.westSurfHeard();
+			return field;
+
+		} );
+		return this._westField;
+
+	}
+
+	// (M13) a hurricane's storm surge: the island's own swell's field solved again at the highest the sea
+	// rises (the hurricane's peak, m), as the westerly's is, before it comes; the shore waves blend it in
+	// as the sea rises toward it. Dropped once the hurricane's gone (none: null)
+	solveSurgeField( hurricane ) {
+
+		const key = hurricane ? `${ hurricane.tc }:${ hurricane.peak }` : null;
+		if ( key === this._surgeKey ) return;
+		this._surgeKey = key;
+		if ( ! key ) {
+
+			this.shore.setSurgeField( null );
+			return;
+
+		}
+
+		const level = hurricane.peak;
+		this.solveShoreField( [ WORLD.swellDir.x, WORLD.swellDir.y ], level ).then( ( field ) => {
+
+			if ( this._surgeKey === key ) this.shore.setSurgeField( field, level );
+
+		} );
+
+	}
+
+	// (M12) another shore field from the island's own field's depths (swellDir: where its swell travels;
+	// (M13) at the sea level seaLevel), in a worker where there is one, else on the page
+	solveShoreField( swellDir, seaLevel = 0 ) {
+
+		const home = this.shoreField;
 		const ground = { depth: home.depth, res: home.res, size: home.size, origin: home.origin };
-		this._westField = new Promise( ( resolve, reject ) => {
+		return new Promise( ( resolve, reject ) => {
 
 			const worker = classicWorker( ShoreWorker );
 			worker.onmessage = ( e ) => {
@@ -1674,21 +1824,14 @@ export class App {
 
 			};
 
-			worker.postMessage( { ground, swellDir } );
+			worker.postMessage( { ground, swellDir, seaLevel } );
 
 		} ).catch( ( e ) => {
 
-			console.warn( 'Shore: the west swell\'s field solved on the page (no worker)', e && e.message );
-			return computeShoreField( fieldGround( ground ), { res: home.res, swellDir } );
-
-		} ).then( ( field ) => {
-
-			this.shore.addField( field );
-			this.westSurfHeard();
-			return field;
+			console.warn( 'Shore: a swell\'s field solved on the page (no worker)', e && e.message );
+			return computeShoreField( fieldGround( ground ), { res: home.res, swellDir, seaLevel } );
 
 		} );
-		return this._westField;
 
 	}
 
@@ -1721,12 +1864,12 @@ export class App {
 	}
 
 	// the hour and day you're at, into your save (written a moment later, with the rest of it); and the
-	// weather you picked (none: the day's)
+	// weather you picked (none: the day's), (M13) and when, for a hurricane of your own
 	saveClock() {
 
 		this._clockSaveT = 30;
 		const s = this.settings;
-		const text = JSON.stringify( { hour: Math.round( s.timeOfDay * 1000 ) / 1000, day: s.day, held: s.timeSpeed === 0, ...( s.weather ? { weather: s.weather } : {} ) } );
+		const text = JSON.stringify( { hour: Math.round( s.timeOfDay * 1000 ) / 1000, day: s.day, held: s.timeSpeed === 0, ...( s.weather ? { weather: s.weather } : {} ), ...( s.weather === 'hurricane' ? { since: s.weatherSince } : {} ) } );
 		if ( this.store && text !== this._clockSaved ) this.store.setItem( CLOCK_KEY, text );
 		this._clockSaved = text;
 

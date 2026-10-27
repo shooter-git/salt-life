@@ -1,6 +1,7 @@
 import { WORLD } from '../world/WorldLayout.js';
 import { STAND } from './FishStand.js';
 import { CHANDLERY } from './Chandlery.js';
+import { SHELTER } from '../world/village/StormPlaces.js';
 
 // Minimap, lower right: the island baked once from the terrain data into a 2D canvas (depth-tinted
 // sea, reef and seagrass, sand, grass and forest by height, rock, paths, village pads, the pier,
@@ -38,6 +39,7 @@ const CSS = /* css */`
 .gm-mk.is-marta > i { background: var(--tw-aqua); }
 .gm-mk.is-shut > i { filter: saturate(0.25) brightness(0.75); }
 .gm-mk.is-boat > i { background: #f2efe6; }
+.gm-mk.is-shelter > i { background: #2f6fb0; color: #fff; }
 .gm-mk.is-player > i { width: calc(16 * var(--tw-u)); height: calc(16 * var(--tw-u)); margin: calc(-8 * var(--tw-u)) 0 0 calc(-8 * var(--tw-u)); color: #fff;
 	text-shadow: 0 1px 1px rgba(0,0,0,0.6); }
 .gm-mk > b { position: absolute; left: 0; top: 0; width: 0; height: 0; border-left: calc(5 * var(--tw-u)) solid transparent; border-right: calc(5 * var(--tw-u)) solid transparent;
@@ -69,6 +71,8 @@ const ICON = {
 	fish: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 12c3-4 7-6 11-6 3 0 5 2 7 4l-2 2 2 2c-2 2-4 4-7 4-4 0-8-2-11-6Zm12-1.2a1.2 1.2 0 1 0 0 2.4 1.2 1.2 0 0 0 0-2.4Z"/></svg>',
 	anchor: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><circle cx="12" cy="5" r="2"/><path d="M12 7v13M7 11h10M4 14c1 4 4 6 8 6s7-2 8-6"/></svg>',
 	boat: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v9H6l6-9Zm1 2 5 7h-5V5ZM3 14h18l-3 5H6l-3-5Z"/></svg>',
+	// (M13) the shelter: a house under a roof
+	shelter: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 1.5 10.5h3V21h15V10.5h3L12 2Zm-2.2 11.5h4.4V21H9.8v-7.5Z"/></svg>',
 };
 
 const h = ( tag, cls, html ) => {
@@ -136,6 +140,13 @@ export class Minimap {
 		this.markers = [
 			{ id: 'joe', ...mk( 'joe', ICON.fish ), pos: () => ( { x: STAND.x, z: STAND.z } ), vendor: () => game.stand.vendor },
 			{ id: 'marta', ...mk( 'marta', ICON.anchor ), pos: () => ( { x: CHANDLERY.x, z: CHANDLERY.z } ), vendor: () => game.chandlery.vendor },
+			// ((M13) the shelter, while a hurricane's watched for, warned of, or here)
+			{ id: 'shelter', ...mk( 'shelter', ICON.shelter ), pos: () => ( { x: SHELTER.x, z: SHELTER.z } ), hideWhen: () => {
+
+				const n = game.app.weather && game.app.weather.news;
+				return ! n || n.stage === 'outlook';
+
+			} },
 			{ id: 'boat', ...mk( 'boat', ICON.boat ), pos: () => {
 
 				const b = game.app.boatCtl;

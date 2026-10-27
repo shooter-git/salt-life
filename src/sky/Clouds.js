@@ -20,6 +20,8 @@ const EARTH_R = 6360000;
 // cirrus veil: coverage varying over hundreds of km, fibres (flow line streaks, mipmapped)
 const SYN_RES = 256, SYN_SIZE = 409600; // m
 const FIB_TILE = 40000; // m
+// rad: the upper wind's frame, veered from the trades
+const VEER = 0.6;
 const AP_DIST = 30000; // m, aerial perspective scale toward the horizon
 // the flow and fibre textures are made a strip of rows per frame (the fibres' line integrals are the
 // costly part: ~0.3 s a strip on a CPU WebGL device)
@@ -129,9 +131,10 @@ void main() {
 
 // ------------------------------------------------------------ GLSL: the veil
 
-function cirrusGLSL( rot ) {
+// (M13: the upper wind's frame is a uniform, cloudsWind, so the veil can turn with a hurricane's outflow;
+// its drift is kept in that frame, so a turn swings it about you, not about the world's far-off origin)
+function cirrusGLSL() {
 
-	const ha = rot + 0.6; // frame of the upper wind (veered from the trades)
 	return /* glsl */`
 uniform sampler2D cloudsSynTex;
 uniform sampler2D cloudsFibTex;
@@ -141,7 +144,8 @@ uniform float cloudsCirrusFade; // 0 until its textures are made
 uniform float cloudsCirrusAlt; // m
 uniform float cloudsCamY;
 uniform vec2 cloudsCamXZ;
-uniform vec2 cloudsHOffset; // drift (faster upper wind)
+uniform vec2 cloudsHOffset; // drift (faster upper wind), in its frame
+uniform vec2 cloudsWind; // the upper wind's frame: the cos and sin of its angle
 uniform vec3 cloudsSkyIrradiance; // Tidewater's frame.skyIrradiance (E / PI)
 #define CL_EARTH_R ${ f( EARTH_R ) }
 
@@ -176,12 +180,12 @@ vec4 cloudsBspline( vec2 uv, float lod ) {
 		+ textureLod( cloudsFibTex, vec2( p1.x, p1.y ), lod ) * ( g1.x * g1.y );
 }
 
-vec2 cloudsToWind( vec2 v ) { return vec2( v.x * ${ f( Math.cos( ha ) ) } + v.y * ${ f( Math.sin( ha ) ) }, v.y * ${ f( Math.cos( ha ) ) } - v.x * ${ f( Math.sin( ha ) ) } ); }
+vec2 cloudsToWind( vec2 v ) { return vec2( v.x * cloudsWind.x + v.y * cloudsWind.y, v.y * cloudsWind.x - v.x * cloudsWind.y ); }
 
 // anisotropic filtering: n taps along the long axis of the footprint at the mip of its short axis
 vec4 cloudsFibres( vec2 q, vec2 fA, vec2 fB, float tile, float rot ) {
 	float cr = cos( rot ); float sr = sin( rot );
-	vec2 wq = cloudsToWind( q ); vec2 wa = cloudsToWind( fA ); vec2 wb = cloudsToWind( fB );
+	vec2 wq = q; vec2 wa = cloudsToWind( fA ); vec2 wb = cloudsToWind( fB );
 	vec2 uv = vec2( wq.x * cr + wq.y * sr, wq.y * cr - wq.x * sr ) / tile;
 	vec2 a = vec2( wa.x * cr + wa.y * sr, wa.y * cr - wa.x * sr ) / tile;
 	vec2 b = vec2( wb.x * cr + wb.y * sr, wb.y * cr - wb.x * sr ) / tile;
@@ -221,10 +225,10 @@ vec4 cloudsHigh( vec3 rd, float pxAngle ) {
 	vec2 radial = normalize( rd.xz + vec2( 1e-6, 0.0 ) );
 	vec2 fA = vec2( - radial.y, radial.x ) * ( t * pxAngle );
 	vec2 fB = radial * ( t * pxAngle / mu );
-	vec2 q = pxz + cloudsCamXZ - cloudsHOffset;
+	vec2 q = cloudsToWind( pxz + cloudsCamXZ ) - cloudsHOffset; // (in the upper wind's frame)
 
 	// coverage: patches of 5 - 50 km with clear gaps, modulated over hundreds of km, broad bands
-	vec4 syn = textureLod( cloudsSynTex, cloudsToWind( q ) * ${ f( 1 / SYN_SIZE ) }, 0.0 );
+	vec4 syn = textureLod( cloudsSynTex, q * ${ f( 1 / SYN_SIZE ) }, 0.0 );
 	float cov = smoothstep( 0.15, 0.85, syn.x ) * smoothstep( 0.4, 0.72, syn.z ) * ( syn.y * 0.4 + 0.6 );
 	// fibres at two scales (hides the tiling of the texture)
 	vec4 f1 = cloudsFibres( q, fA, fB, ${ f( FIB_TILE ) }, 0.0 );
@@ -298,11 +302,13 @@ export class Cirrus {
 
 		this.renderer = renderer;
 		this.fibRes = fibRes;
-		// cloud streets and the cirrus follow the upper wind: (Salt Life) the trades', whichever way the
-		// weather turns the wind at the surface
+		// cloud streets and the cirrus follow the upper wind: (Salt Life) the trades', veered, whichever way
+		// the weather turns the wind at the surface; ((M13) a hurricane's outflow: `upper`, the way it
+		// blows, set by WeatherDriver)
 		const w = G.windPrevailing.value;
 		this._rot = Math.atan2( w.y, w.x );
-		this.glsl = cirrusGLSL( this._rot );
+		this.glsl = cirrusGLSL();
+		this.upper = { value: new THREE.Vector2( Math.cos( this._rot + VEER ), Math.sin( this._rot + VEER ) ) };
 
 		const rgba8 = { type: THREE.UnsignedByteType, wrapS: THREE.RepeatWrapping, wrapT: THREE.RepeatWrapping };
 		// r = cirrus coverage (hundreds of km), g = broad streets along the upper wind, b = patches (5 - 50 km)
@@ -322,6 +328,7 @@ export class Cirrus {
 			cloudsCamY: { value: 2 },
 			cloudsCamXZ: { value: new THREE.Vector2() },
 			cloudsHOffset: { value: new THREE.Vector2() },
+			cloudsWind: { value: new THREE.Vector2( Math.cos( this._rot + VEER ), Math.sin( this._rot + VEER ) ) },
 			cloudsSkyIrradiance: { value: new THREE.Color() },
 		};
 		this.amount = this.uniforms.cloudsCirrus;
@@ -373,12 +380,14 @@ export class Cirrus {
 		// made a step per frame once the cumulus are ready, then shown (SkyProClouds makes a new panorama)
 		this.uniforms.cloudsCirrusFade.value = this.ready ? 1 : 0;
 
-		// the veil drifts with the upper wind (1.6 x the surface wind's speed, 12 m/s)
-		const w = G.windPrevailing.value, l = Math.hypot( w.x, w.y ) || 1;
-		const o = this._offset;
-		o.x += w.x / l * 12 * 1.6 * dt;
-		o.y += w.y / l * 12 * 1.6 * dt;
-		const U = this.uniforms;
+		// the veil drifts with the upper wind (1.6 x the surface wind's speed, 12 m/s), the way the trades
+		// blow at the surface (VEER back from its frame: as it always has); its frame follows `upper`
+		const U = this.uniforms, up = this.upper.value, l = Math.hypot( up.x, up.y ) || 1;
+		U.cloudsWind.value.set( up.x / l, up.y / l );
+		// (the drift in the frame, along it turned back by VEER)
+		const o = this._offset, v = 12 * 1.6 * dt;
+		o.x += Math.cos( VEER ) * v;
+		o.y -= Math.sin( VEER ) * v;
 		U.cloudsHOffset.value.copy( o );
 		U.cloudsCamY.value = THREE.MathUtils.clamp( camera.position.y, 1, 3000 );
 		U.cloudsCamXZ.value.set( camera.position.x, camera.position.z );

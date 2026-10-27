@@ -9,10 +9,12 @@ import { wxWind, wxRain } from './TimeHUD.js';
 // list: the weather now (and its rain), the wind in knots and where it's from, the surf as a report
 // gives it, and what's coming (Weather.forecast). When a blow's on its way and the fish are feeding
 // hard ahead of it (Weather's front), Joe says so at the bottom; (M10) or, after one, that the water's
-// still murky (Weather's murk: the spearfishing's poor). One plane, its frame painted into the
+// still murky (Weather's murk: the spearfishing's poor); (M13) a hurricane on its way first (Weather's
+// hurricaneNews: on the outlook, watched for, warned of; and in its eye, that there's more to come).
+// One plane, its frame painted into the
 // canvas; the same program as the records board's slate (together/RecordsBoard.js), as the wanted
 // list's. Drawn again only when what it says changes.
-//   const s = new ForecastSlate( { terrain } );  scene.add( s.mesh );  s.draw( weather, next, locale )
+//   const s = new ForecastSlate( { terrain } );  scene.add( s.mesh );  s.draw( weather, next, locale, news )
 
 const W = 448, H = 384; // the slate's canvas (0.5 × 0.43 m)
 const SPOT = { x: - 0.36, y: 0.6, z: 0.86 }; // in the stand's frame: on the counter front, left of centre
@@ -21,8 +23,9 @@ const SPOT = { x: - 0.36, y: 0.6, z: 0.86 }; // in the stand's frame: on the cou
 export const FEEDING = 0.4;
 
 // what the slate says: [ [ label, value ], … ] and the note at the bottom ('' for none). weather:
-// Weather.weatherAt's (null: not yet known); next: Weather.forecast's ({ id, at }, or null: settled)
-export function slateText( weather, next, locale = undefined ) {
+// Weather.weatherAt's (null: not yet known); next: Weather.forecast's ({ id, at }, or null: settled);
+// (M13) news: Weather.hurricaneNews's (null: none)
+export function slateText( weather, next, locale = undefined, news = null ) {
 
 	if ( ! weather ) return { rows: [], note: '' };
 	const wet = wxRain( weather );
@@ -34,8 +37,17 @@ export function slateText( weather, next, locale = undefined ) {
 			[ 'Surf', `${ surfText( weather.surf ) } ${ swellFrom( weather.west || 0 ) }, ${ Math.round( weather.period ) } s` ],
 			[ 'Later', later ],
 		],
-		note: weather.front >= FEEDING ? 'Fish feeding: a blow\'s coming' : weather.murk >= MURKY ? 'The water\'s murky after the blow' : '',
+		note: news ? hurricaneNote( news, weather ) : weather.front >= FEEDING ? 'Fish feeding: a blow\'s coming' : weather.murk >= MURKY ? 'The water\'s murky after the blow' : '',
 	};
+
+}
+
+// (M13) what Joe chalks of a hurricane on its way
+function hurricaneNote( news, weather ) {
+
+	if ( news.stage === 'outlook' ) return `A hurricane out to the ${ news.from }`;
+	if ( news.stage === 'watch' ) return 'Hurricane watch';
+	return weather.eye >= 0.5 ? 'The eye: more to come' : 'Hurricane warning';
 
 }
 
@@ -62,14 +74,15 @@ export class ForecastSlate {
 
 	}
 
-	// weather: the weather now (WeatherDriver.target); next: what's coming (Weather.forecast)
-	draw( weather = null, next = null, locale = undefined ) {
+	// weather: the weather now (WeatherDriver.target); next: what's coming (Weather.forecast); (M13) news:
+	// what's said of a hurricane (WeatherDriver.news)
+	draw( weather = null, next = null, locale = undefined, news = null ) {
 
-		const text = slateText( weather, next, locale );
+		const text = slateText( weather, next, locale, news );
 		const key = JSON.stringify( text );
 		if ( key === this._key ) return;
 		this._key = key;
-		this._last = [ weather, next, locale ];
+		this._last = [ weather, next, locale, news ];
 		const font = '"Caveat Brush", "Comic Sans MS", cursive';
 		// (the chalk font is the HUD's: drawn again once it has loaded)
 		if ( ! this._font && document.fonts && document.fonts.load ) {

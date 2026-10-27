@@ -12,10 +12,12 @@ import { BoatModel } from '../src/world/BoatModel.js';
 import { BoatController } from '../src/player/BoatController.js';
 import { BoatSpray } from '../src/player/BoatSpray.js';
 import { weatherAt } from '../src/game/Weather.js';
-import { Hull, slamWear, hitWear, thrustMul, leakLs, rainLs, repairFee, crankChance, SLAM_FROM, FLOOD_L, RESTART, CRANK_S, BAIL_LS, REPAIR_FULL } from '../src/game/Hull.js';
+import { Hull, slamWear, hitWear, thrustMul, leakLs, rainLs, repairFee, crankChance, stormWear, STORM_FROM, SLAM_FROM, FLOOD_L, RESTART, CRANK_S, BAIL_LS, REPAIR_FULL } from '../src/game/Hull.js';
+import { weatherAt as weatherNow, hurricaneNews } from '../src/game/Weather.js';
 import { GameState } from '../src/game/GameState.js';
 import { gearStats, defaultUpgrades } from '../src/game/Gear.js';
-import { Game } from '../src/game/Game.js';
+import { Game, HAUL_FEE } from '../src/game/Game.js';
+import { CRADLE } from '../src/world/village/StormPlaces.js';
 
 let fails = 0;
 const ok = ( c, msg ) => {
@@ -217,6 +219,46 @@ function drive( { cond = 'fair', throttle = 1, yaw = 0, secs = 60, from = SEA, c
 	ok( job && job.here && job.fee === repairFee( 0.3 ) && ! Game.prototype.repairJob.call( g ).here, 'the repair is hers to do with the boat at her dock' );
 	g.hull.wear = 0;
 	ok( Game.prototype.repairJob.call( g ) === null, 'and there\'s nothing to repair on a sound hull' );
+
+}
+
+// ---- (M13) left in the water through a hurricane she's battered; hauled out, she isn't
+{
+
+	ok( stormWear( 7 ) === 0 && stormWear( STORM_FROM ) === 0 && stormWear( 30 ) > 0 && stormWear( 38 ) > stormWear( 30 ), 'a gale\'s wind leaves her be; past it, the harder the more' );
+	const since = 3000, passage = ( hauled ) => {
+
+		const h = new Hull( { store: { hull: 0 }, random: () => 0.5 } );
+		for ( let t = - 20; t < 30; t += 1 / 60 ) h.step( 1.25, { driven: false, storm: hauled ? 0 : weatherNow( since + 6 + t, 'hurricane', since ).wind, rain: 0 } );
+		return h.wear;
+
+	};
+	// (a game hour's about 75 s of play by day)
+	const left = passage( false ), hauled = passage( true );
+	console.log( `     a hurricane over her at the dock wears her ${ Math.round( left * 100 ) }% ($${ repairFee( left ) } to repair); hauled out ($${ HAUL_FEE }), ${ Math.round( hauled * 100 ) }%` );
+	ok( left > 0.3 && left < 0.8 && hauled === 0 && repairFee( left ) > HAUL_FEE, 'a hurricane over her at the dock leaves her badly worn (more than the haul-out would have cost); hauled out, sound' );
+	const h = new Hull( { store: { hull: 0 }, random: () => 0.5 } );
+	h.step( 0.1, { driven: true, fuel: true } );
+	h.step( 10, { driven: true, fuel: true, storm: 38 } );
+	ok( h.wear === 0, '(at her helm, it\'s the slams that wear her, not this)' );
+
+	// Marta's row: once it's watched for, with the boat at her dock; hauled, she puts her back in after
+	const st = new GameState( null );
+	st.money = 100;
+	const news = hurricaneNews( since, 'hurricane', since );
+	const boat = { moored: true, hauled: null, setHauled( c ) { this.hauled = c || null; this.moored = ! c; } };
+	const g = { state: st, app: { weather: { news }, boatCtl: boat }, toast() {}, haulJob: Game.prototype.haulJob, cradle: CRADLE };
+	const job = Game.prototype.haulJob.call( g );
+	ok( job && job.here && job.fee === HAUL_FEE && Game.prototype.haul.call( g ) && st.hauled && st.money === 100 - HAUL_FEE && boat.hauled, 'Marta hauls her out ahead of a hurricane, at her dock, for her fee' );
+	ok( Game.prototype.haulJob.call( g ).back === false, 'and she\'s on her cradle until it\'s gone by' );
+	g.app.weather.news = null;
+	ok( Game.prototype.haulJob.call( g ).back === true, '... then Marta can put her back in' );
+	Game.prototype.relaunch.call( g );
+	ok( ! st.hauled && ! boat.hauled && boat.moored, 'and she does, at the dock' );
+	ok( Game.prototype.haulJob.call( { ...g, state: new GameState( null ) } ) === null, 'no haul-out with no hurricane coming' );
+	const t2 = new GameState( null );
+	st.hauled = true;
+	ok( t2.fromJSON( JSON.parse( JSON.stringify( st.toJSON() ) ) ) && t2.hauled === true, 'hauled out, she\'s saved so' );
 
 }
 

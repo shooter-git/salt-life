@@ -20,7 +20,7 @@ You can walk, swim and take the boat around the island. You can fish from the pi
 boat, or dive and spear a fish, sell your catch to Joe and buy better gear from Marta. It plays with a
 mouse and keyboard, a gamepad or a touch screen.
 
-Done, M0 to M12:
+Done, M0 to M13:
 - the sea and its shore, spray, gusts and slicks, and the haze;
 - the whole world: the village, the pier, the reef and its fish, the birds and crabs, the beach's
   debris, the whale and the lights at night;
@@ -111,6 +111,26 @@ Done, M0 to M12:
     under it and it passes over;
   - the rain splashes on the rocks about you, and on the boat's wheelhouse roof, foredeck and gear;
   - riding along in someone's boat, her dash shows her skipper's readings;
+- the hurricane (M13):
+  - now and then, about every forty days, a Category 1 hurricane passes down the trades, the same
+    one for everyone: an outlook four days ahead, a watch two days ahead and a warning a day and a
+    half ahead, on Joe's slate, the clock's menu and the boat's chart plotter; on your own you can
+    pick one;
+  - its swell runs in days ahead of it; its surge raises the sea up to a metre over the beach on its
+    strong side and drains the bay on its weak one, and its surf breaks green over the pier;
+  - its wind comes round the compass as it passes, calm in its eye; its rain comes in bands, then in
+    sheets with the spray torn off the sea, under 100 m seen in its wall; the palms bend as far as
+    they go, bits of frond and twigs fly past, and the wind pushes you along;
+  - Marta hauls your boat out for a fee (left in the water, the storm batters her), the island boards
+    up, and the shelter on the hill keeps you safe; you can step out to watch it whenever you like;
+  - the animals take the weather as they really do, from a blow up: the seabirds roost or leave, the
+    sanderlings huddle facing the wind, the crabs go down, the whale slaps and breaches more, the
+    sharks go to deep water, and ahead of a hurricane they're all gone;
+  - it tears sheets off the roofs, lifts the pier's boards and strips the palms, and leaves a line of
+    wrack up the beach that the gulls and sanderlings feed along; over the days after, the roofs are
+    tarped, then mended, the boards go back in new timber and the palms grow back;
+  - in its eye the sky opens to blue over a stadium of towering cloud, and the clouds race round with
+    its wind;
 - playing together:
   - you see the others on the island, walking, swimming, fishing and out in their boats;
   - you pick your islander: two men and two women;
@@ -150,7 +170,8 @@ The island's day:
 | M10 | What the weather costs: the hull, the bilge and the engine, fishing in a blow, murky water, splashes, the lightning on the sea, shutters and debris in a blow, the weather in the checks |
 | M11 | The rain where you stand: the rain on the pier and the roofs and dry under them, drips, the rain heard on what it falls on, showers' curtains in the distance, the sea mirroring the sky, the milkier surf, the fish in the murk, the hull heard riding along, the boat's instruments |
 | M12 | Storms from other directions: each blow its own track, fronts, thunderstorms on the horizon, the swell from the west crossing the island's own, rip currents and being tumbled, splashes on the rocks and the boat, the skipper's dash for riders |
-| M13 | For consideration ([docs/M13.md](docs/M13.md)): the hurricane, cumulonimbus, the open sea breaking, the clouds aloft turning with a front |
+| M13 | The hurricane: its surge and surf, its wind and rain, the warnings, the haul-out and the shelter, the wildlife in the weather, the damage and its mending, the eye's sky |
+| M14 | For consideration ([docs/M14.md](docs/M14.md)): cumulonimbus, the open sea breaking, the clouds aloft turning with a front, the radar, rain on a tin roof, more of the hurricane |
 
 ## How it fits All the Spaces
 

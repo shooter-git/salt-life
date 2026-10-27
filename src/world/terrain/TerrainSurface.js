@@ -284,24 +284,49 @@ export const TERRAIN_SURFACE_GLSL = /* glsl */`
 	}
 #endif
 
-	// ---- wetness: the swash zone's damp band (Tidewater's shore simulation drew it wave by wave)
-	float wet = ss( 0.5, 0.0, h ) * ( 1.0 - jungleW * 0.8 ) * landW;
+	// ---- (M13) what a hurricane's sea left (terrainStorm: x the sand it washed up over the ground behind
+	// the beach, y its wrack, z how high it reached up the beach (m), w how long ago, 0 fresh .. 1 dried;
+	// terrainStormPaths: the weed it left over the paths): a line of sargassum, seagrass and broken
+	// fronds where it reached, heaped in banks, fresh olive-gold drying to near black; fans of pale sand
+	// over the paths and the grass behind, weed strewn over them
+	if ( terrainStorm.x + terrainStorm.y + terrainStormPaths > 0.0 ) {
+		float sH = terrainStorm.z;
+		// (the line meanders, 2-3 m across, in clumps: lumps of weed, the sand showing between, a dark
+		// stain of wet rot along its foot)
+		float sLine = h + ( dM.w - 0.5 ) * 0.22 + ( macroB - 0.5 ) * 0.18;
+		float band = ss( sH - 0.32, sH - 0.12, sLine ) * ss( sH + 0.1, sH - 0.02, sLine );
+		float bank = ss( 0.42, 0.58, dN.y * 0.5 + dF.y * 0.35 + macroB * 0.25 );
+		vec3 weedC = mix( ${ S( 0.3, 0.2, 0.06 ) }, ${ S( 0.09, 0.07, 0.05 ) }, terrainStorm.w ) * ( dF.y * 0.5 + 0.7 );
+		float stain = ss( sH - 0.45, sH - 0.2, sLine ) * ( 1.0 - band ) * ss( sH - 0.05, sH - 0.2, sLine );
+		albedo = albedo * ( 1.0 - stain * 0.18 * terrainStorm.y * landW );
+		albedo = mix( albedo, weedC, band * bank * terrainStorm.y * landW * notRock );
+		// (the sand from the beach's top to a little past where the sea reached, in fans thinning inland)
+		float behind = ss( sH + 0.5, sH - 0.3, h ) * ss( 0.6, 1.4, h ) * landW * notRock * ( 1.0 - sandW ) * ( 1.0 - jungleW * 0.8 );
+		float fan = ss( 0.3, 0.55, dM.w * 0.6 + macroA * 0.4 + ss( sH + 0.5, sH - 0.6, h ) * 0.3 );
+		albedo = mix( albedo, ${ S( 0.8, 0.73, 0.6 ) } * ( grain * 0.3 + 0.85 ), terrainStorm.x * behind * fan );
+		albedo = mix( albedo, weedC, terrainStormPaths * behind * ss( 0.62, 0.76, dN.y * 0.6 + dF.y * 0.4 ) );
+	}
+
+	// ---- wetness: the swash zone's damp band (Tidewater's shore simulation drew it wave by wave); ((M13)
+	// up from the water as it is: a storm surge moves it up the beach, and wets what it floods)
+	float hSea = h - terrainSeaLevel;
+	float wet = ss( 0.5, 0.0, hSea ) * ( 1.0 - jungleW * 0.8 ) * landW;
 	float dampMottle = ss( 0.3, 0.7, dM.w + ( dN.y - 0.45 ) * 0.6 + ( macroB - 0.5 ) * 0.4 );
-	float damp = ss( 1.7, 0.5, h + dM.w * 0.3 ) * sandW * mix( 0.22, 0.5, dampMottle );
+	float damp = ss( 1.7, 0.5, hSea + dM.w * 0.3 ) * sandW * mix( 0.22, 0.5, dampMottle );
 	float mottle = ss( 0.25, 0.75, dM.w + ( dN.y - 0.45 ) * 0.5 );
 	float dryEdge = ss( 0.0, 0.6, wet ) * ss( 1.0, 0.6, wet );
 	float wetK = max( wet, damp ) * ( 1.0 - dryEdge * mottle * 0.6 ) * notRock;
 	vec2 slopeDir = normalize( N0.xz + vec2( 1e-4, 0.0 ) );
-	float rillK = ss( 0.2, 0.9, wet ) * ss( 0.05, 0.6, h ) * sandW;
+	float rillK = ss( 0.2, 0.9, wet ) * ss( 0.05, 0.6, hSea ) * sandW;
 	float rill = 0.5;
 	if ( rillK > 0.0 ) { rill = terDetail( vec2( dot( xz, slopeDir ) / 3.2, dot( xz, vec2( -slopeDir.y, slopeDir.x ) ) / 0.3 ) ).w; }
 	vec3 wetAlbedo = terrainSaturation( albedo * 0.58, 1.15 ) * vec3( 0.97, 0.98, 1.0 ) * ( ( rill - 0.5 ) * 0.25 * rillK + 1.0 );
 	albedo = mix( albedo, wetAlbedo, wetK );
 	// swash marks: thin wavy lines of grit left at the limits of earlier uprushes
-	float sl = ( h + dM.w * 0.18 + dN.w * 0.05 ) / 0.13;
+	float sl = ( hSea + dM.w * 0.18 + dN.w * 0.05 ) / 0.13;
 	float slD = abs( fract( sl ) - 0.5 );
 	float slW = fwidth( sl ) + 1e-4;
-	float swashLine = ss( slW * 1.5 + 0.04, 0.0, slD ) * ss( 0.2, 0.4, h ) * ss( 1.6, 1.2, h )
+	float swashLine = ss( slW * 1.5 + 0.04, 0.0, slD ) * ss( 0.2, 0.4, hSea ) * ss( 1.6, 1.2, hSea )
 		* ss( 0.45, 0.65, dM.y + ( macroB - 0.5 ) * 0.4 ) * sandW * ( 1.0 - ss( 0.8, 2.0, slW * 10.0 ) );
 	albedo = mix( albedo * ( 1.0 - swashLine * 0.3 ), ${ S( 0.9, 0.88, 0.84 ) }, swashLine * ss( 0.6, 0.75, dF.z ) * 0.5 );
 

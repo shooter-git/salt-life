@@ -6,6 +6,7 @@ import { Crabs } from './Crabs.js';
 import { ShadowBlobs } from './ShadowBlobs.js';
 import { SwashProbe } from './SwashProbe.js';
 import { Shorebirds } from './Shorebirds.js';
+import { G } from '../../core/Globals.js';
 
 // Water heights for birds on / just above the sea (pelicans skimming, floating, diving): a few
 // WaterQuery slots handed out to whoever asks, read back 1-3 frames later. Falls back to sea level.
@@ -53,7 +54,7 @@ class WaterHeights {
 		q.setPoint( slot, x, z );
 		const h = q.cpu[ slot * 4 ];
 		// the result is valid once the point has been in the queue for a few frames
-		return q.cpuValid && this.frame - this.since[ k ] > 4 && Number.isFinite( h ) ? h : 0;
+		return q.cpuValid && this.frame - this.since[ k ] > 4 && Number.isFinite( h ) ? h : G.seaLevel.value;
 
 	}
 

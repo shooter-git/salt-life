@@ -43,6 +43,17 @@ const FALL = 9; // m/s, the biggest drops' (the others fall 5, 6 or 7 eighths as
 const NEAR_WIND = 0.7; // the wind they're carried by: near the ground, of the 10 m wind
 const EXPOSURE = 0.04; // s: a look's motion blur (the streak's length)
 const VISIBILITY = 3.5; // how much more a streak shows than the drop's own breadth would
+// (M13) in a hurricane's wind (from SHEETS[ 0 ] m/s, in full by [ 1 ]) the rain comes in sheets driven
+// past with the air: bands across the wind SHEET_GAP m apart, wavering along their length over
+// SHEET_ALONG m, heaviest in a sheet and thin between (SHEET_LOW of it)
+export const SHEETS = [ 18, 30 ], SHEET_GAP = 30, SHEET_ALONG = 45, SHEET_LOW = 0.3;
+// how heavy the sheets are at u (in gaps along the wind, less their phase), 0..1
+export const sheetAt = ( u ) => {
+
+	const s = Math.sin( u * Math.PI * 2 ) * 0.5 + 0.5;
+	return s * s;
+
+};
 const NO_ROOF = new THREE.Matrix4().makeScale( 0, 0, 0 ).setPosition( 10, 10, 10 ); // (no roof: everything's outside it)
 // (M10) the splashes: how many by tier, the square about the camera they pop in (m), how long one lasts
 // (s), how often each pops again (s, a spread), how big it's thrown (m); the cockpit's sole in the boat's
@@ -102,7 +113,11 @@ export class Rain {
 			rainFlash: this.flash,
 			// (a roof: world -> its box, -1..1; none: everything lands far outside it)
 			rainShelter: { value: NO_ROOF.clone() },
+			// ((M13) the sheets: their phase, in gaps along the wind (kept at the camera as the wind turns))
+			rainSheet: { value: 0 },
 		};
+		this.sheet = 0; // (M13) how heavy the sheet passing the camera is (0..1: App dims the view in it)
+		this._sheetDir = new THREE.Vector2( 0, 1 );
 
 		const vertexShader = /* glsl */`
 #include <common>
@@ -121,6 +136,7 @@ uniform float rainWindSpeed;
 uniform float rainSeaLevel;
 uniform float rainFlash;
 uniform mat4 rainShelter;
+uniform float rainSheet;
 varying vec4 vRainCol; // radiance, opacity
 varying vec2 vRainUV; // quad corner
 vec4 rainHash4( float n ) { return fract( sin( vec4( n, n + 17.13, n + 43.71, n + 71.37 ) ) * vec4( 43758.5453, 22578.1459, 19642.3490, 31337.7217 ) ); }
@@ -166,6 +182,14 @@ void main() {
 	float cosT = - dot( Vd, rainSunDir );
 	vec3 col = rainSky * 0.9 + rainSun * ( 0.04 + 0.5 * pow( max( cosT, 0.0 ), 8.0 ) ) + vec3( 0.8, 0.85, 1.0 ) * rainFlash * 0.4;
 	float a = cover * fade * keep * dry;
+	// ((M13) in a hurricane's wind, in sheets driven past with the air)
+	float sheetK = rainSs( ${ f( SHEETS[ 0 ] ) }, ${ f( SHEETS[ 1 ] ) }, rainWindSpeed );
+	if ( sheetK > 0.0 ) {
+		vec2 perp = vec2( - rainWindDir.y, rainWindDir.x );
+		float u = dot( p.xz, rainWindDir ) / ${ f( SHEET_GAP ) } - rainSheet + sin( dot( p.xz, perp ) / ${ f( SHEET_ALONG ) } * 6.2832 ) * 0.18;
+		float s = sin( u * 6.2832 ) * 0.5 + 0.5;
+		a *= mix( 1.0, ${ f( SHEET_LOW ) } + ( 2.0 - ${ f( SHEET_LOW ) } ) * s * s, sheetK );
+	}
 	vec2 corner = position.xy; // plane is 2 x 2
 	vec3 world = p + across * ( corner.x * width ) + axis * ( corner.y * len * 0.5 );
 	vRainCol = vec4( col, a );
@@ -442,6 +466,11 @@ void main() {
 		d.x = ( d.x + G.windDir.value.x * s ) % BOX;
 		d.y = ( d.y - FALL * dt ) % ( HEIGHT * 8 );
 		d.z = ( d.z + G.windDir.value.y * s ) % BOX;
+		// ((M13) the sheets go by with the air; as the wind comes round, their phase at the camera is kept)
+		const wd = G.windDir.value, sd = this._sheetDir, cp = camera.position;
+		U.rainSheet.value = ( U.rainSheet.value + ( cp.x * ( wd.x - sd.x ) + cp.z * ( wd.y - sd.y ) ) / SHEET_GAP + s / SHEET_GAP ) % 1e3;
+		sd.copy( wd );
+		this.sheet = G.windSpeed.value > SHEETS[ 0 ] ? sheetAt( ( cp.x * wd.x + cp.z * wd.y ) / SHEET_GAP - U.rainSheet.value + Math.sin( ( cp.z * wd.x - cp.x * wd.y ) / SHEET_ALONG * Math.PI * 2 ) * 0.18 ) : 0;
 		if ( ! visible ) return;
 		U.rainCamPos.value.copy( camera.position );
 		U.rainViewHeight.value = viewHeight;

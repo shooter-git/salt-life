@@ -44,6 +44,8 @@
 
 import { WORLD } from '../world/WorldLayout.js';
 import { BANK } from './soundBank.js';
+import { SURF_HURRICANE } from '../game/Weather.js';
+import { G } from '../core/Globals.js';
 
 const clamp = ( v, a, b ) => ( v < a ? a : v > b ? b : v );
 const lerp = ( a, b, t ) => a + ( b - a ) * t;
@@ -172,6 +174,12 @@ const WHALE_RANGE = 100;
 // (Salt Life) a fair day's surf: the shore waves' amplitude (m), and the far roar's intensity then (App)
 const FAIR_SURF = 0.34;
 const FAIR_SURF_FAR = FAIR_SURF / 0.6;
+// (M13) the surf's intensity at a hurricane's biggest (1: a gale's)
+const SURF_LOUDEST = SURF_HURRICANE / 0.6;
+// (M13) the wind (m/s) from which its lulls stay loud, all of them by the second (a hurricane's)
+const HOWL = [ 24, 34 ];
+// (M13) dB the shelter's walls take off the storm outside (its wind, surf, rain; half of it off the thunder)
+const WALLS = 13;
 
 // per-surface footstep trims (dB)
 const STEP = {
@@ -255,11 +263,12 @@ export class SoundScape {
 		this._shore = null;
 		if ( shore ) this.attachShore( shore );
 		this._shore2 = null; // (M12) a westerly's swell, crossing the south's (addShore)
+		this._walls = 0; // (M13) dB the shelter's walls take off the storm (WALLS, while you're inside)
 		this._fakeT = 3;
 		this._warned = new Set();
 		this.env = {
 			lx: 0, ly: 1.7, lz: 0, fx: 0, fy: 0, fz: - 1, ux: 0, uy: 1, uz: 0,
-			u: 0, depth: 0, surf: 0.5, shoreDist: 60, onLand: true, wind: 7, day: 1, nearPier: false, hour: null,
+			u: 0, depth: 0, surf: 0.5, shoreDist: 60, onLand: true, wind: 7, day: 1, nearPier: false, hour: null, inside: 0, song: 1, gulls: 1,
 			shoreX: 0, shoreZ: 1,
 			boat: { active: false, rpm: 0, speed: 0, x: 0, y: 0, z: 0, inside: false },
 			hull: { flood: 0, pump: false, scrape: 0, wear: 0, motion: 0 },
@@ -373,6 +382,7 @@ export class SoundScape {
 		if ( ! this.ctx || this._failed ) return;
 		try {
 
+			this._dtEnv = clamp( num( dt, 1 / 60 ), 0, 0.25 );
 			this._readState( state && typeof state === 'object' ? state : EMPTY );
 			if ( this.ctx.state !== 'running' ) return;
 			this._acc += clamp( num( dt, 1 / 60 ), 0, 0.25 );
@@ -516,7 +526,7 @@ export class SoundScape {
 		const fade = clamp( ( d - THUNDER_FADE[ 0 ] ) / ( THUNDER_FADE[ 1 ] - THUNDER_FADE[ 0 ] ), 0, 1 );
 		const lufs = ( near ? MIX.thunderNear + 10 * Math.log10( 1000 / d ) : MIX.thunderFar - 10 * Math.log10( d / 8000 ) * 2.5 ) - THUNDER_FADE[ 2 ] * fade * fade;
 		const k = 80, dx = num( dir && dir.x, 0 ), dy = num( dir && dir.y, 0.3 ), dz = num( dir && dir.z, - 1 );
-		const v = this._shotAt( 'thunder', 'thunder', e.lx + dx * k, e.ly + Math.max( 10, dy * k ), e.lz + dz * k, lufs - ( 1 - clamp( power, 0, 1 ) ) * 4,
+		const v = this._shotAt( 'thunder', 'thunder', e.lx + dx * k, e.ly + Math.max( 10, dy * k ), e.lz + dz * k, lufs - ( 1 - clamp( power, 0, 1 ) ) * 4 - this._walls * 0.5,
 			( near ? 0.97 : 0.9 ) + Math.random() * 0.06, 0, 60, 1, near ? Math.floor( Math.random() * 2 ) : 2 + Math.floor( Math.random() * 2 ) );
 		// (the farther, the more of its crack the air takes: only the roll gets here)
 		if ( v && v.extra ) v.extra[ 0 ].frequency.value = clamp( 9000 * Math.pow( 1000 / d, 0.8 ), 350, 9000 );
@@ -1143,7 +1153,8 @@ export class SoundScape {
 	_buildStations( src ) {
 
 		const e = this.env, { terrain } = src, f = [ 0, 0, 0, 0 ];
-		const sea = 0;
+		// ((M13) along the water's edge as it is, a storm surge's or a drawdown's)
+		const sea = src.stSea = G.seaLevel.value;
 		const h = ( x, z ) => terrain.heightAt( x, z ) - sea;
 		this._field( e.lx, e.lz, f, src );
 		let ex = Math.hypot( f[ 1 ], f[ 2 ] );
@@ -1236,7 +1247,7 @@ export class SoundScape {
 
 		const e = this.env, sh = src.shore;
 		const moved = Math.hypot( e.lx - src.stAt.x, e.lz - src.stAt.z );
-		if ( ! src.stations || moved > 12 ) {
+		if ( ! src.stations || moved > 12 || Math.abs( G.seaLevel.value - src.stSea ) > 0.15 ) {
 
 			src.stAt.x = e.lx;
 			src.stAt.z = e.lz;
@@ -1274,7 +1285,7 @@ export class SoundScape {
 					const x = st.x - st.dx * rb, z = st.z - st.dz * rb;
 					if ( Math.hypot( x - e.lx, z - e.lz ) < 150 && A > 0.06 ) {
 
-						this._shotAt( 'surf_crash', 'crash', x, 0.4, z, MIX.crash + lvl + ( Math.random() - 0.5 ) * 3,
+						this._shotAt( 'surf_crash', 'crash', x, 0.4, z, MIX.crash + lvl - this._walls + ( Math.random() - 0.5 ) * 3,
 							clamp( 1.06 - 0.25 * rel, 0.82, 1.08 ) * ( 0.96 + Math.random() * 0.08 ), audioNow + Math.max( 0, tc - tNow ), 10, 0.65 );
 
 					}
@@ -1286,7 +1297,7 @@ export class SoundScape {
 				if ( m > st.last.wash && tw >= tNow - 0.1 && tw < tNow + LOOK ) {
 
 					st.last.wash = m;
-					if ( d < 70 ) this._shotAt( 'surf_wash', 'wash', st.x - st.dx, 0.1, st.z - st.dz, MIX.wash + lvl + ( Math.random() - 0.5 ) * 3,
+					if ( d < 70 ) this._shotAt( 'surf_wash', 'wash', st.x - st.dx, 0.1, st.z - st.dz, MIX.wash + lvl - this._walls + ( Math.random() - 0.5 ) * 3,
 						0.95 + Math.random() * 0.1, audioNow + Math.max( 0, tw - tNow ), 5, 0.8 );
 
 				}
@@ -1294,7 +1305,7 @@ export class SoundScape {
 				if ( m > st.last.back && tb >= tNow - 0.1 && tb < tNow + LOOK ) {
 
 					st.last.back = m;
-					if ( d < 60 ) this._shotAt( 'surf_backwash', 'back', st.x - st.dx * 2, 0, st.z - st.dz * 2, MIX.backwash + lvl + ( Math.random() - 0.5 ) * 3,
+					if ( d < 60 ) this._shotAt( 'surf_backwash', 'back', st.x - st.dx * 2, 0, st.z - st.dz * 2, MIX.backwash + lvl - this._walls + ( Math.random() - 0.5 ) * 3,
 						0.95 + Math.random() * 0.1, audioNow + Math.max( 0, tb - tNow ), 5, 0.8 );
 
 				}
@@ -1346,11 +1357,20 @@ export class SoundScape {
 
 		e.u = clamp( num( s.underwater, 0 ), 0, 1 );
 		e.depth = Math.max( 0, num( s.depthBelowSurface, 0 ) );
-		e.surf = clamp( num( s.surfIntensity, 0.5 ), 0, 1 );
+		// ((M13) 1 for a gale's surf, more in a hurricane's)
+		e.surf = clamp( num( s.surfIntensity, 0.5 ), 0, SURF_LOUDEST );
 		e.shoreDist = Math.max( 0, num( s.distanceToShore, 60 ) );
 		e.wind = clamp( num( s.windSpeed, 7 ), 0, 40 );
+		// ((M13) inside the shelter: the storm heard through its concrete walls, eased as you go in and out)
+		e.inside += ( ( s.inside ? 1 : 0 ) - e.inside ) * ( 1 - Math.exp( - ( this._dtEnv || 0.016 ) * 4 ) );
+		this._walls = WALLS * e.inside;
 		e.gust = clamp( num( s.gust, 0.5 ), 0, 1 ); // (M9) the sea's gusts here (0 a lull .. 1 a gust)
 		e.rain = clamp( num( s.rain, 0 ), 0, 1 ); // (M9) how hard it's raining, and whether you're aboard (on deck or at the helm)
+		// ((M13) the weather, as the island's birds take it (WildlifeWeather.wildlifeMood): songbirds
+		// singing, quiet in heavy rain and a strong wind, a burst as a shower clears; how much the gulls
+		// go about their day, sitting out a downpour and a gale)
+		e.song = clamp( num( s.songbirds, 1 ), 0, 2 );
+		e.gulls = clamp( num( s.gulls, 1 ), 0, 1 );
 		e.aboard = !! s.aboard;
 		e.day = clamp( num( s.daylight, 1 ), 0, 1 );
 		e.nearPier = !! s.nearPier;
@@ -1443,16 +1463,19 @@ export class SoundScape {
 		}
 
 		// distant surf (the waves themselves are events, see _surf). (Salt Life) A big swell's roar builds
-		// faster than a fair day's surf would have it
-		const lvl = 0.6 + 0.7 * e.surf * Math.max( 1, e.surf / FAIR_SURF_FAR );
-		this._bed( 'surf_far', dB( MIX.surfFar ) * 1.25 / ( 1 + d / 200 ) * lvl / dB( BANK.surf_far.lufs ), now, 0.5 );
+		// faster than a fair day's surf would have it; (M13) past a gale's, a hurricane's grows on as its
+		// height (about 5 dB more at its biggest)
+		const sf = Math.min( 1, e.surf ), lvl = ( 0.6 + 0.7 * sf * Math.max( 1, sf / FAIR_SURF_FAR ) ) * ( 1 + 0.5 * Math.max( 0, e.surf - 1 ) );
+		this._bed( 'surf_far', dB( MIX.surfFar - this._walls ) * 1.25 / ( 1 + d / 200 ) * lvl / dB( BANK.surf_far.lufs ), now, 0.5 );
 
 		// wind in gusts: a random target every 2-8 s (lulls near silent), eased towards
 		const g = this._gust;
 		g.t -= dt;
 		if ( g.t <= 0 ) {
 
-			g.target = Math.random() < 0.35 ? 0.03 + Math.random() * 0.12 : 0.3 + Math.random() * 0.7;
+			// ((M13) in a hurricane's wind the lulls never fall quiet: a roar that rises in the gusts)
+			const floor = smooth( HOWL[ 0 ], HOWL[ 1 ], e.wind ) * 0.5;
+			g.target = Math.max( floor, Math.random() < 0.35 ? 0.03 + Math.random() * 0.12 : 0.3 + Math.random() * 0.7 );
 			g.t = 2 + Math.random() * 6;
 
 		}
@@ -1462,12 +1485,14 @@ export class SoundScape {
 		const gv = Math.min( 1.2, g.v * ( 0.4 + 1.2 * e.gust ) );
 		const w = Math.hypot( e.wind, eb.active ? eb.speed * 0.9 : 0 );
 		const gw = eb.active && eb.speed > 3 ? Math.max( gv, 0.5 ) : gv; // apparent wind on a running boat is steady
-		this._bed( 'wind', dB( MIX.wind ) * clamp( w / 7, 0, 3.5 ) * gw / dB( BANK.wind.lufs ), now, 0.3 );
-		this._ramp( this.windLP.frequency, 400 + ( 80 + 60 * gw ) * w, 0.4 );
+		// ((M13) louder on past a strong gale's, about 3 dB more in a hurricane's)
+		// ((M13) inside the shelter, a low roar through its walls)
+		this._bed( 'wind', dB( MIX.wind - this._walls ) * ( clamp( w / 7, 0, 3.5 ) + 0.12 * Math.max( 0, w - 24.5 ) ) * gw / dB( BANK.wind.lufs ), now, 0.3 );
+		this._ramp( this.windLP.frequency, lerp( 400 + ( 80 + 60 * gw ) * w, 420, e.inside ), 0.4 );
 
 		// trees inland rustle in the gusts; crickets inland at night (daylight < 0.3)
 		const veg = e.onLand ? smooth( 6, 30, d ) : 0;
-		this._bed( 'palms', dB( MIX.palms ) * veg * clamp( e.wind / 7, 0.2, 2.6 ) * gv * ( 0.3 + 0.7 * e.day ) / dB( BANK.palms.lufs ), now, 0.5 );
+		this._bed( 'palms', dB( MIX.palms - this._walls * 1.3 ) * veg * ( clamp( e.wind / 7, 0.2, 2.6 ) + 0.06 * Math.max( 0, e.wind - 18.2 ) ) * gv * ( 0.3 + 0.7 * e.day ) / dB( BANK.palms.lufs ), now, 0.5 );
 		const night = smooth( 0.3, 0.12, e.day );
 		this._bed( 'crickets', dB( MIX.crickets ) * night * ( e.onLand ? 0.35 + 0.65 * smooth( 5, 40, d ) : 0.1 ) / dB( BANK.crickets.lufs ), now, 1 );
 
@@ -1486,8 +1511,9 @@ export class SoundScape {
 		const share = ( v ) => ( lean && v < 0.16 ? 0 : Math.sqrt( v ) );
 		const sea = share( ro.water ), wood = share( ro.wood ), rest = share( Math.max( 0, 1 - ro.water - ro.wood ) );
 		const muffled = smooth( 0.2, 0.8, ro.under );
-		this._ramp( this.rainLP.frequency, lerp( 20000, 900, muffled ), 0.6 );
-		const rout = out * lerp( 1, 0.55, muffled );
+		// ((M13) and inside the shelter, through its concrete roof and walls)
+		this._ramp( this.rainLP.frequency, lerp( lerp( 20000, 900, muffled ), 450, e.inside ), 0.6 );
+		const rout = out * lerp( 1, 0.55, muffled ) * lerp( 1, 0.35, e.inside );
 		this._bed( 'rain_light', dB( MIX.rainLight ) * light * rout * rest / dB( BANK.rain_light.lufs ), now, 1.2 );
 		this._bed( 'rain_heavy', dB( MIX.rain ) * heavy * rout * rest / dB( BANK.rain_heavy.lufs ), now, 1.2 );
 		this._bed( 'rain_boat', dB( MIX.rainBoat ) * onBoat * smooth( 0, 0.9, r ) / dB( BANK.rain_boat.lufs ), now, 0.8 );
@@ -1581,7 +1607,8 @@ export class SoundScape {
 
 				const a = this._pickBird( flock, 'gull', 170 );
 				this._gullT = a ? 5 + Math.random() * 15 : 3;
-				if ( a ) {
+				// ((M13) hunched on the beach in a downpour or a gale, they call less)
+				if ( a && Math.random() < 0.15 + 0.85 * e.gulls ) {
 
 					const P = a.f.P.pos;
 					this._shotAt( 'gull', 'gull', P[ 0 ], P[ 1 ], P[ 2 ], MIX.gull + ( Math.random() - 0.5 ) * 4, 0.93 + Math.random() * 0.14, 0, 10 );
@@ -1714,7 +1741,8 @@ export class SoundScape {
 	// never), each a bout of 1-4 phrases from one perch - a different slice of one recording each time
 	_birds( now, dt ) {
 
-		const e = this.env, { act, chorus, lull } = this._birdActivity();
+		const e = this.env, { act: act0, chorus: chorus0, lull } = this._birdActivity();
+		const act = act0 * e.song, chorus = chorus0 * Math.min( 1, e.song );
 		const inland = e.onLand ? smooth( 0, 45, e.shoreDist ) : 0;
 		const hab = e.onLand ? 0.25 + 0.75 * inland : 0.25 * ( 1 - smooth( 20, 90, e.shoreDist ) );
 
@@ -1805,8 +1833,9 @@ export class SoundScape {
 
 		// song: sung at depth while cruising (it stops to breathe); from above the surface only faint and
 		// dull. Only heard near the whale.
-		s.sing += ( ( b.state === 'cruise' ? 1 : 0.1 ) - s.sing ) * ( 1 - Math.exp( - dt / 4 ) );
-		const audible = d < WHALE_RANGE;
+		// ((M13) less in a wind's noise, as it turns to slapping and breaching: WhaleBrain.surfacing)
+		s.sing += ( ( b.state === 'cruise' ? 1 / Math.max( 1, num( b.surfacing, 1 ) ) : 0.1 ) - s.sing ) * ( 1 - Math.exp( - dt / 4 ) );
+		const audible = d < WHALE_RANGE && ! w.gone; // ((M13) not while it's gone offshore)
 		if ( audible || this._beds.has( 'whale_song' ) ) {
 
 			this._pos( this.songPan, p.x, p.y, p.z );

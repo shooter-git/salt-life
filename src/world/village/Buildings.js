@@ -31,6 +31,99 @@ function frameFns( terrain, x, z, yaw ) {
 
 }
 
+// (M13) the sheets a hurricane can tear off a metal roof (ctx.holes: Village.roofHoles, StormDamage's
+// 'tin' by their place in it): on one of its slabs, a run of one to three whole sheets (0.84 m, as the
+// roof material lays them) from its eave up, at a corner or along an edge, where the uplift's greatest;
+// under them the purlins they were screwed to and the dark of the roof space, to show through once
+// they're gone. slabs: [ { pts, uDir, seed, T } ] in B's frame; inside: where the roof space starts up
+// from the eave (m: past the overhang), or null for none (open beneath: the boathouse). Chosen by their
+// own random stream (name's), so the village is built as it always was.
+const SHEET = 0.84;
+function roofHoles( ctx, slabs, name, inside = 0.5 ) {
+
+	if ( ! ctx.holes || ! slabs.length ) return;
+	const { B } = ctx;
+	let hs = 0x5eed;
+	for ( let i = 0; i < name.length; i ++ ) hs = Math.imul( hs ^ name.charCodeAt( i ), 0x01000193 );
+	const r = mulberry32( hs >>> 0 );
+	for ( let attempt = 0; attempt < 8; attempt ++ ) {
+
+		const sl = slabs[ Math.floor( r() * slabs.length ) ];
+		// the slab's frame, as slabPart makes it: n up out of it, u up from the eave, v along it
+		const pts = sl.pts, n = new Vector3();
+		for ( let i = 0; i < pts.length; i ++ ) {
+
+			const a = pts[ i ], b = pts[ ( i + 1 ) % pts.length ];
+			n.x += ( a.y - b.y ) * ( a.z + b.z );
+			n.y += ( a.z - b.z ) * ( a.x + b.x );
+			n.z += ( a.x - b.x ) * ( a.y + b.y );
+
+		}
+
+		n.normalize();
+		if ( n.y < 0 ) n.negate();
+		const u = sl.uDir.clone().sub( n.clone().multiplyScalar( sl.uDir.dot( n ) ) ).normalize(), v = n.clone().cross( u );
+		let uMin = Infinity, vMin = Infinity, uMax = - Infinity, vMax = - Infinity;
+		for ( const q of pts ) {
+
+			uMin = Math.min( uMin, q.dot( u ) ); uMax = Math.max( uMax, q.dot( u ) );
+			vMin = Math.min( vMin, q.dot( v ) ); vMax = Math.max( vMax, q.dot( v ) );
+
+		}
+
+		const poly = pts.map( ( q ) => [ q.dot( u ) - uMin, q.dot( v ) - vMin ] );
+		const within = ( pu, pv ) => {
+
+			let sgn = 0;
+			for ( let i = 0; i < poly.length; i ++ ) {
+
+				const a = poly[ i ], b = poly[ ( i + 1 ) % poly.length ];
+				const c = ( b[ 0 ] - a[ 0 ] ) * ( pv - a[ 1 ] ) - ( b[ 1 ] - a[ 1 ] ) * ( pu - a[ 0 ] );
+				if ( Math.abs( c ) < 1e-9 ) continue;
+				if ( sgn && Math.sign( c ) !== sgn ) return false;
+				sgn = Math.sign( c );
+
+			}
+
+			return true;
+
+		};
+		const nSheets = Math.floor( ( vMax - vMin ) / SHEET );
+		const wide = Math.min( nSheets, 1 + Math.floor( r() * r() * 3 ) );
+		if ( wide < 1 ) continue;
+		const corner = r() < 0.65;
+		const j = corner ? ( r() < 0.5 ? 0 : nSheets - wide ) : Math.floor( r() * ( nSheets - wide + 1 ) );
+		const v0 = j * SHEET, v1 = ( j + wide ) * SHEET;
+		const uTop = ( uMax - uMin ) * ( r() < 0.5 ? 1.02 : 0.45 + r() * 0.25 );
+		const uIn = Math.min( uTop, uMax - uMin );
+		if ( ! within( 0.02, v0 + 0.01 ) || ! within( 0.02, v1 - 0.01 ) || ! within( uIn - 0.02, v0 + 0.01 ) || ! within( uIn - 0.02, v1 - 0.01 ) ) continue;
+		// beneath: the purlins across the hole, and the roof space's dark
+		const plane = pts[ 0 ].dot( n );
+		const at = ( pu, pv, down ) => u.clone().multiplyScalar( pu + uMin ).add( v.clone().multiplyScalar( pv + vMin ) ).addScaledVector( n, plane - down );
+		// (and where it is, and the way its slope faces, in the world)
+		const c = at( uIn / 2, ( v0 + v1 ) / 2, 0 ), w = B.toWorld( c.x, c.y, c.z ), up = B.toWorld( c.x + n.x, c.y + n.y, c.z + n.z );
+		ctx.holes.push( { seed: sl.seed, v0, v1, uTop, name, at: { x: w.x, y: w.y, z: w.z }, n: { x: up.x - w.x, y: up.y - w.y, z: up.z - w.z } } );
+		const pdata = () => WOOD( r(), 0.85, 0, 0 );
+		for ( let pu = 0.3; pu < uIn - 0.1; pu += 0.6 ) {
+
+			const a = at( pu, Math.max( 0.02, v0 - 0.15 ), sl.T + 0.035 ), b = at( pu, v1 + 0.15, sl.T + 0.035 );
+			B.beam( 'wood', [ a.x, a.y, a.z ], [ b.x, b.y, b.z ], 0.07, 0.045, { tint: [ 0.85, 0.8, 0.72 ], data: pdata() } );
+
+		}
+
+		if ( inside !== null && uIn > inside + 0.2 ) {
+
+			const q = [ at( inside, v0 - 0.2, sl.T + 0.28 ), at( inside, v1 + 0.2, sl.T + 0.28 ), at( uIn + 0.15, v1 + 0.2, sl.T + 0.28 ), at( uIn + 0.15, v0 - 0.2, sl.T + 0.28 ) ];
+			B.slab( 'wood', q, 0.02, { up: n, uDir: u, tint: [ 0.07, 0.06, 0.05 ], data: WOOD( r(), 0.9, 0, 0 ) } );
+
+		}
+
+		return;
+
+	}
+
+}
+
 function linspace( a, b, n ) {
 
 	const out = [];
@@ -393,7 +486,15 @@ export function buildHouse( ctx, s ) {
 	const roofKey = isThatch ? 'thatch' : 'roofMetal';
 	const roofTint = isThatch ? [ 1, 1, 1 ] : ( s.roofColor || lin( 0xa5452f ) );
 	const roofData = () => ( isThatch ? [ rand.next(), s.thatchAge ?? 0.4, 0, 0 ] : [ rand.next(), s.rust ?? 0.4, s.galv ? 1 : 0, 0 ] );
-	const roofSlab = ( pts, uDir ) => B.slab( roofKey, pts, T, { uDir: uDir.normalize(), up: UP, tint: roofTint, data: roofData() } );
+	// ((M13) the metal ones kept: one may lose a sheet or two to a hurricane: roofHoles)
+	const slabs = [];
+	const roofSlab = ( pts, uDir ) => {
+
+		const data = roofData();
+		if ( ! isThatch ) slabs.push( { pts, uDir: uDir.clone().normalize(), seed: data[ 0 ], T } );
+		B.slab( roofKey, pts, T, { uDir: uDir.normalize(), up: UP, tint: roofTint, data } );
+
+	};
 	const Tv = T / Math.cos( a );
 	let roofTop = yE;
 	let ridge = null;
@@ -555,6 +656,8 @@ export function buildHouse( ctx, s ) {
 		ridge = { y: yR, axis: 'x', ta, yF: ye, zf: ZE };
 
 	}
+
+	if ( ! isThatch ) roofHoles( ctx, slabs, s.name, ovE + 0.15 );
 
 	// thatch eave fringe (ragged strands hanging below the eave edges)
 	if ( isThatch ) {
@@ -1104,8 +1207,20 @@ export function buildBoathouse( ctx, s ) {
 	const xe = w / 2 + ov, yF = yE + r0 - ov * ta;
 	const rd = () => [ rand.next(), 0.75, 0, 0 ];
 	const rt = s.roofColor || lin( 0x6d7f86 );
-	B.slab( 'roofMetal', [ V3( xe, yF, Z ), V3( xe, yF, - Z ), V3( 0, yR, - Z ), V3( 0, yR, Z ) ], 0.05, { up: UP, uDir: V3( - xe, yR - yF, 0 ).normalize(), tint: rt, data: rd() } );
-	B.slab( 'roofMetal', [ V3( - xe, yF, - Z ), V3( - xe, yF, Z ), V3( 0, yR, Z ), V3( 0, yR, - Z ) ], 0.05, { up: UP, uDir: V3( xe, yR - yF, 0 ).normalize(), tint: rt, data: rd() } );
+	// ((M13) either may lose a sheet or two to a hurricane: roofHoles; open beneath)
+	const slabs = [];
+	for ( const [ pts, uDir ] of [
+		[ [ V3( xe, yF, Z ), V3( xe, yF, - Z ), V3( 0, yR, - Z ), V3( 0, yR, Z ) ], V3( - xe, yR - yF, 0 ).normalize() ],
+		[ [ V3( - xe, yF, - Z ), V3( - xe, yF, Z ), V3( 0, yR, Z ), V3( 0, yR, - Z ) ], V3( xe, yR - yF, 0 ).normalize() ],
+	] ) {
+
+		const data = rd();
+		slabs.push( { pts, uDir, seed: data[ 0 ], T: 0.05 } );
+		B.slab( 'roofMetal', pts, 0.05, { up: UP, uDir, tint: rt, data } );
+
+	}
+
+	roofHoles( ctx, slabs, 'boathouse', null );
 	for ( const sz of [ - 1, 1 ] ) {
 
 		B.part( 'wood', gableEndPart( w, r0 - 0.03, r0 + ( w / 2 ) * ta - 0.03, 0.08 ), 0, yE, sz * ( d / 2 - 0.05 ), { ry: sz > 0 ? 0 : Math.PI, tint: wall, data: wdat( 2 ) } );
@@ -1180,6 +1295,230 @@ export function buildBoathouse( ctx, s ) {
 // ---------------------------------------------------------------------------
 // Market stall with a thatched roof (local +z = customer side)
 
+// (M13) The village's hurricane shelter: its community hall, a single storey of rendered concrete block
+// on high ground behind the plaza (above any surge and its surf), as the islands' shelters are (a school,
+// a church, a hall): a hip roof of metal strapped down, storm shutters over its windows, a concrete porch
+// under a canopy and a wide doorway, its doors open. Inside, one room: benches along the walls, folding
+// cots, water and supplies stacked by the back wall, a table with a radio and a lantern, and the tracking
+// chart on the wall (Game's: game/StormChart.js). You walk in on its floor; its walls keep the weather out
+// (App: what's inside the box it returns, `inside`, is sheltered).
+//   s: { x, z, yaw, w, d, porch }  ->  { footprint, floorY, yE, inside: { x, z, yaw, hx, hz, y0, y1 } }
+export function buildShelter( ctx, s ) {
+
+	const { B, terrain, colliders, rand, lights, checks } = ctx;
+	const { x, z, yaw, w, d } = s, pd = s.porch ?? 2.4;
+	const { toW, gAt } = frameFns( terrain, x, z, yaw );
+	const fr = {
+		toW, gAt, checks,
+		worldPt: ( lx, y, lz ) => {
+
+			const p = toW( lx, lz );
+			return { x: p.x, y, z: p.z };
+
+		},
+		addBoxL: ( lx, ly, lz, hx, hy, hz, opts ) => {
+
+			const p = toW( lx, lz );
+			return colliders.addBox( _v.set( p.x, ly, p.z ), _h.set( hx, hy, hz ), yaw, opts );
+
+		},
+	};
+	let gMin = Infinity, gMax = - Infinity;
+	for ( let i = 0; i <= 6; i ++ ) for ( let j = 0; j <= 6; j ++ ) {
+
+		const g = gAt( ( i / 6 - 0.5 ) * w, - d / 2 + j / 6 * ( d + pd ) );
+		gMin = Math.min( gMin, g );
+		gMax = Math.max( gMax, g );
+
+	}
+
+	const t = 0.22, H = 3.3, floorY = gMax + 0.32, yE = floorY + H;
+	const render = s.wall || lin( 0xe9dcae ), band = lin( 0x8a9a92 ), trim = lin( 0x2f5f7a );
+	const sd = ( style = 1 ) => [ rand.next(), style, 0, 0 ];
+	const doorW = 1.9, doorH = 2.35;
+	B.pushAt( x, 0, z, yaw );
+
+	// the slab, the floor inside, and the porch: concrete
+	const slabBot = gMin - 0.3;
+	B.box( 'stone', 0, ( slabBot + floorY ) / 2, 0, w + 0.1, floorY - slabBot, d + 0.1, { grain: 0, tint: lin( 0xb8b4a8 ), data: sd( 1 ) } );
+	B.box( 'stone', 0, ( slabBot + floorY - 0.04 ) / 2, d / 2 + pd / 2, 5.2, floorY - 0.04 - slabBot, pd, { grain: 0, tint: lin( 0xb0ac9f ), data: sd( 1 ) } );
+	fr.addBoxL( 0, ( slabBot + floorY ) / 2, 0, w / 2 + 0.05, ( floorY - slabBot ) / 2, d / 2 + 0.05, { walkable: true, solid: true, tag: 'shelterFloor' } );
+	fr.addBoxL( 0, ( slabBot + floorY - 0.04 ) / 2, d / 2 + pd / 2, 2.6, ( floorY - 0.04 - slabBot ) / 2, pd / 2, { walkable: true, solid: true, tag: 'porch' } );
+	for ( const [ cx, cz ] of [ [ - w / 2, - d / 2 ], [ w / 2, - d / 2 ], [ w / 2, d / 2 ], [ - w / 2, d / 2 ] ] ) checks.push( fr.worldPt( cx, slabBot, cz ) );
+
+	// the walls: rendered block, a painted band at their foot, the door's gap in the front
+	const wallH = yE - floorY, wy = floorY + wallH / 2;
+	const side = ( w - doorW ) / 2;
+	const wallsL = [
+		[ 0, - d / 2 + t / 2, w, t ],
+		[ - w / 2 + t / 2, 0, t, d - 2 * t ], [ w / 2 - t / 2, 0, t, d - 2 * t ],
+		[ - ( doorW / 2 + side / 2 ), d / 2 - t / 2, side, t ], [ doorW / 2 + side / 2, d / 2 - t / 2, side, t ],
+	];
+	for ( const [ cx, cz, sx, sz ] of wallsL ) {
+
+		B.box( 'stone', cx, wy, cz, sx, wallH, sz, { grain: sx > sz ? 0 : 2, tint: render, data: sd( 1 ) } );
+		B.box( 'stone', cx, floorY + 0.3, cz, sx + 0.02, 0.6, sz + 0.02, { grain: sx > sz ? 0 : 2, tint: band, data: sd( 1 ) } );
+		fr.addBoxL( cx, ( slabBot + yE ) / 2, cz, sx / 2, ( yE - slabBot ) / 2, sz / 2, { tag: 'shelter' } );
+
+	}
+
+	// over the doorway, and its two doors swung in against the front wall
+	B.box( 'stone', 0, ( floorY + doorH + yE ) / 2, d / 2 - t / 2, doorW, yE - floorY - doorH, t, { grain: 0, tint: render, data: sd( 1 ) } );
+	fr.addBoxL( 0, ( floorY + doorH + yE ) / 2, d / 2 - t / 2, doorW / 2, ( yE - floorY - doorH ) / 2, t / 2, { tag: 'shelter' } );
+	for ( const sx of [ - 1, 1 ] ) {
+
+		B.box( 'wood', sx * ( doorW / 2 + 0.04 ), floorY + doorH / 2, d / 2 - t - 0.48, 0.05, doorH - 0.05, doorW / 2 - 0.04, { grain: 1, tint: trim, data: WOOD( rand.next(), 0.6, 0.85, 3 ) } );
+		B.box( 'wood', sx * ( doorW / 2 + 0.05 ), floorY + doorH / 2, d / 2 + 0.01, 0.1, doorH + 0.1, 0.06, { grain: 1, tint: trim, data: WOOD( rand.next(), 0.6, 0.85, 0 ) } );
+
+	}
+
+	B.box( 'wood', 0, floorY + doorH + 0.05, d / 2 + 0.01, doorW + 0.2, 0.1, 0.06, { grain: 0, tint: trim, data: WOOD( rand.next(), 0.6, 0.85, 0 ) } );
+
+	// storm shutters over the windows (board, in the trim's blue), on the sides and the back
+	const st = { trim: trim, accent: trim, paint: 0.85, trimPaint: 0.9, weather: 0.45, shutters: 'board', closed: true, closedPattern: 3 };
+	const walls = [
+		{ L: w, fx: 0, fz: - d / 2, ry: Math.PI, xs: [ - w / 4, w / 4 ] },
+		{ L: d, fx: w / 2, fz: 0, ry: Math.PI / 2, xs: [ - d / 4, d / 4 ] },
+		{ L: d, fx: - w / 2, fz: 0, ry: - Math.PI / 2, xs: [ - d / 4, d / 4 ] },
+		{ L: w, fx: 0, fz: d / 2, ry: 0, xs: [ - w / 2 + 1.5, w / 2 - 1.5 ] },
+	];
+	for ( const wl of walls ) {
+
+		B.pushAt( wl.fx, 0, wl.fz, wl.ry );
+		for ( const px of wl.xs ) windowUnit( B, rand, px, floorY + 1.0, 1.0, 1.2, st );
+		B.pop();
+
+	}
+
+	// the ceiling inside, and the hip roof over it, its eaves well out
+	B.box( 'wood', 0, yE - 0.03, 0, w - 2 * t, 0.06, d - 2 * t, { grain: 0, tint: lin( 0xe8e2d0 ), data: WOOD( rand.next(), 0.3, 0.9, 0 ) } );
+	B.box( 'stone', 0, yE + 0.12, 0, w + 0.06, 0.24, d + 0.06, { grain: 0, tint: render, data: sd( 1 ) } );
+	{
+
+		const ov = 0.55, a = 0.38, ta = Math.tan( a );
+		const X = w / 2 + ov, Z = d / 2 + ov, y0 = yE + 0.24 - ov * ta, ridge = ( Z ) * ta;
+		const yR = y0 + ridge, rx = X - Z;
+		const rt = lin( 0x7a8e94 ), rd = () => [ rand.next(), 0.6, 0, 0 ];
+		B.slab( 'roofMetal', [ V3( - X, y0, Z ), V3( X, y0, Z ), V3( rx, yR, 0 ), V3( - rx, yR, 0 ) ], 0.05, { up: UP, uDir: V3( 0, ridge, - Z ).normalize(), tint: rt, data: rd() } );
+		B.slab( 'roofMetal', [ V3( X, y0, - Z ), V3( - X, y0, - Z ), V3( - rx, yR, 0 ), V3( rx, yR, 0 ) ], 0.05, { up: UP, uDir: V3( 0, ridge, Z ).normalize(), tint: rt, data: rd() } );
+		B.slab( 'roofMetal', [ V3( X, y0, Z ), V3( X, y0, - Z ), V3( rx, yR, 0 ) ], 0.05, { up: UP, uDir: V3( - Z, ridge, 0 ).normalize(), tint: rt, data: rd() } );
+		B.slab( 'roofMetal', [ V3( - X, y0, - Z ), V3( - X, y0, Z ), V3( - rx, yR, 0 ) ], 0.05, { up: UP, uDir: V3( Z, ridge, 0 ).normalize(), tint: rt, data: rd() } );
+		B.box( 'roofMetal', 0, yR + 0.02, 0, 2 * rx + 0.1, 0.06, 0.14, { tint: rt, data: rd() } );
+
+	}
+
+	// the porch's canopy on two posts, and its steps down to the ground
+	{
+
+		const cw = 5.0, cy = floorY + 2.75;
+		for ( const sx of [ - 1, 1 ] ) {
+
+			B.box( 'stone', sx * ( cw / 2 - 0.15 ), ( floorY + cy ) / 2, d / 2 + pd - 0.2, 0.24, cy - floorY, 0.24, { grain: 1, tint: render, data: sd( 1 ) } );
+			const p = toW( sx * ( cw / 2 - 0.15 ), d / 2 + pd - 0.2 );
+			colliders.addCylinder( p.x, p.z, 0.16, floorY - 0.1, cy, { tag: 'post' } );
+
+		}
+
+		B.slab( 'roofMetal', [ V3( - cw / 2 - 0.2, cy + 0.32, d / 2 ), V3( cw / 2 + 0.2, cy + 0.32, d / 2 ), V3( cw / 2 + 0.2, cy, d / 2 + pd + 0.2 ), V3( - cw / 2 - 0.2, cy, d / 2 + pd + 0.2 ) ], 0.06, { up: UP, uDir: V3( 0, - 0.32, pd + 0.2 ).normalize(), tint: lin( 0x7a8e94 ), data: [ rand.next(), 0.6, 0, 0 ] } );
+		stairRun( ctx, fr, 0, d / 2 + pd, floorY, 2.4, { trim, trimPaint: 0.8, stepTint: lin( 0xb0ac9f ), stepPaint: 0.6 } );
+
+	}
+
+	// inside: benches along the side walls, folding cots, water and supplies by the back wall, a table with a
+	// radio and a lantern (the chart on the wall above it is Game's)
+	const inX = w / 2 - t, inZ = d / 2 - t;
+	for ( const sx of [ - 1, 1 ] ) {
+
+		const bx = sx * ( inX - 0.25 );
+		B.box( 'wood', bx, floorY + 0.44, 0.2, 0.4, 0.05, d - 2.6, { grain: 2, data: WOOD( rand.next(), 0.7, 0, 0 ) } );
+		for ( const pz of [ - ( d - 2.6 ) / 2 + 0.2 + 0.2, 0.2, ( d - 2.6 ) / 2 ] ) B.box( 'wood', bx, floorY + 0.21, pz, 0.36, 0.42, 0.06, { grain: 1, data: WOOD( rand.next(), 0.7, 0, 0 ) } );
+		fr.addBoxL( bx, floorY + 0.23, 0.2, 0.2, 0.23, ( d - 2.6 ) / 2, { walkable: true, solid: true, tag: 'bench' } );
+
+	}
+
+	for ( let i = 0; i < 4; i ++ ) {
+
+		const cx = - 2.6 + i * 1.75, cz = - 0.2 + ( i % 2 ) * 0.35;
+		B.box( 'cloth', cx, floorY + 0.42, cz, 0.72, 0.04, 1.9, { tint: lin( 0x6b7346 ), data: [ rand.next(), 0, 0, 0 ] } );
+		for ( const ex of [ - 0.37, 0.37 ] ) B.box( 'hard', cx + ex, floorY + 0.4, cz, 0.03, 0.03, 1.95, { tint: C.galv, data: HARD( rand.next(), 0.1, 0.8, 0.4 ) } );
+		for ( const ez of [ - 0.85, 0.85 ] ) B.beam( 'hard', [ cx - 0.36, floorY, cz + ez ], [ cx + 0.36, floorY + 0.4, cz + ez ], 0.025, 0.025, { tint: C.galv, data: HARD( rand.next(), 0.1, 0.8, 0.4 ) } );
+		fr.addBoxL( cx, floorY + 0.22, cz, 0.38, 0.22, 0.97, { walkable: true, solid: true, tag: 'cot' } );
+
+	}
+
+	// (water: blue five-gallon jugs, two high; supplies in cartons)
+	for ( let i = 0; i < 6; i ++ ) {
+
+		const jx = inX - 0.35 - ( i % 3 ) * 0.33, jy = floorY + 0.24 + Math.floor( i / 3 ) * 0.5, jz = - inZ + 0.3;
+		B.cyl( 'hard', jx, jy, jz, 0.14, 0.14, 0.46, { segs: 8, capTop: true, capBot: true, tint: lin( 0x2f6fb0 ), data: HARD( rand.next(), 0, 0, 0.3 ) } );
+
+	}
+
+	for ( let i = 0; i < 5; i ++ ) {
+
+		const bx = inX - 1.6 - ( i % 3 ) * 0.52, by = floorY + 0.2 + Math.floor( i / 3 ) * 0.4;
+		B.box( 'wood', bx, by, - inZ + 0.32, 0.48, 0.4, 0.44, { grain: 0, tint: lin( 0xa8865a ), data: WOOD( rand.next(), 0.2, 0.6, 0 ) } );
+
+	}
+
+	fr.addBoxL( inX - 1.3, floorY + 0.5, - inZ + 0.32, 1.25, 0.5, 0.3, { tag: 'supplies' } );
+	// (the table, its radio and lantern)
+	const tx = - 1.6, tz = - inZ + 0.65;
+	B.box( 'wood', tx, floorY + 0.76, tz, 1.8, 0.05, 0.8, { grain: 2, data: WOOD( rand.next(), 0.5, 0, 0 ) } );
+	for ( const ex of [ - 0.82, 0.82 ] ) for ( const ez of [ - 0.33, 0.33 ] ) B.box( 'wood', tx + ex, floorY + 0.37, tz + ez, 0.06, 0.74, 0.06, { grain: 1, data: WOOD( rand.next(), 0.5, 0, 0 ) } );
+	fr.addBoxL( tx, floorY + 0.4, tz, 0.92, 0.4, 0.42, { tag: 'table' } );
+	B.box( 'hard', tx + 0.45, floorY + 0.86, tz - 0.1, 0.32, 0.17, 0.12, { tint: lin( 0x222222 ), data: HARD( rand.next(), 0, 0.2, 0.5 ) } );
+	B.rod( 'hard', [ tx + 0.58, floorY + 0.94, tz - 0.1 ], [ tx + 0.66, floorY + 1.3, tz - 0.12 ], 0.004, 0.004, { segs: 4, tint: C.galv, data: HARD( rand.next(), 0, 0.9, 0.3 ) } );
+	const lp = lantern( B, tx - 0.4, floorY + 1.0, tz, rand.next() );
+	lights.push( { position: B.toWorld( lp[ 0 ], lp[ 1 ], lp[ 2 ] ), color: WARM.clone(), intensity: 3.5, kind: 'lantern' } );
+	// (and a light over the doorway outside)
+	const lw = wallLantern( B, doorW / 2 + 0.45, floorY + 2.3, d / 2, rand.next() );
+	lights.push( { position: lw, color: WARM.clone(), intensity: 3.5, kind: 'lantern' } );
+	B.pop();
+
+	return {
+		footprint: { x, z, r: Math.hypot( w, d + pd ) / 2 + 1, kind: 'building' },
+		floorY, yE,
+		inside: { x, z, yaw, hx: inX, hz: inZ, y0: floorY - 0.2, y1: yE },
+	};
+
+}
+
+// (M13) Marta's hauling yard: keel blocks and stands for your boat (WORLD.boatCradle's place), where she
+// sets her ashore ahead of a hurricane. A hull's box keeps you off her while she's there (its `solid`,
+// App, while she's hauled). c: { x, z, yaw (her heading), y (her waterline on the cradle) }
+export function buildCradle( ctx, c ) {
+
+	const { B, terrain, colliders, rand } = ctx;
+	const { x, z, yaw } = c;
+	const { toW, gAt } = frameFns( terrain, x, z, yaw );
+	const keel = c.y - 0.77; // (her keel shoe, below her waterline)
+	B.pushAt( x, 0, z, yaw );
+	// keel blocks under her length, and two pairs of stands under her bilges
+	for ( const pz of [ - 2.6, - 0.4, 1.8 ] ) {
+
+		const g = gAt( 0, pz );
+		B.box( 'wood', 0, ( g + keel ) / 2, pz, 0.36, keel - g + 0.02, 0.5, { grain: 1, data: WOOD( rand.next(), 0.9, 0, 0 ) } );
+
+	}
+
+	for ( const pz of [ - 1.8, 1.2 ] ) for ( const sx of [ - 1, 1 ] ) {
+
+		const g = gAt( sx * 1.0, pz );
+		B.rod( 'hard', [ sx * 1.15, g, pz ], [ sx * 0.92, keel + 0.75, pz ], 0.03, 0.03, { segs: 5, tint: lin( 0x2f6fb0 ), data: HARD( rand.next(), 0.5, 0.7, 0.5 ) } );
+		B.box( 'hard', sx * 1.18, g + 0.02, pz, 0.36, 0.04, 0.36, { tint: lin( 0x2f6fb0 ), data: HARD( rand.next(), 0.5, 0.7, 0.5 ) } );
+
+	}
+
+	B.pop();
+	const p = toW( 0, 0 );
+	const hull = colliders.addBox( _v.set( p.x, keel + 1.1, p.z ), _h.set( 1.25, 1.1, 3.9 ), yaw, { tag: 'cradle' } );
+	hull.solid = false;
+	return { footprint: { x, z, r: 5, kind: 'prop' }, hull };
+
+}
+
+// ---------------------------------------------------------------------------
 export function buildMarketStall( ctx, s ) {
 
 	const { B, terrain, colliders, rand, lights, checks } = ctx;
@@ -1390,7 +1729,10 @@ export function buildShed( ctx, s ) {
 	for ( const hy of [ 0.3, 1.5 ] ) B.box( 'hard', - 0.13, base + hy, d / 2 + 0.03, 0.25, 0.04, 0.01, { tint: C.iron, data: HARD( rand.next(), 0.8, 0.5, 0.6 ) } );
 	// shed roof
 	const rf = [ V3( - w / 2 - 0.2, base + hB + 0.02, - d / 2 - 0.25 ), V3( w / 2 + 0.2, base + hB + 0.02, - d / 2 - 0.25 ), V3( w / 2 + 0.2, base + hF + 0.08, d / 2 + 0.3 ), V3( - w / 2 - 0.2, base + hF + 0.08, d / 2 + 0.3 ) ];
-	B.slab( 'roofMetal', rf, 0.04, { up: UP, uDir: V3( 0, hF - hB, d + 0.55 ).normalize(), tint: s.roof || lin( 0x8a5a40 ), data: [ rand.next(), 0.8, s.galv ? 1 : 0, 0 ] } );
+	const rUp = V3( 0, hF - hB, d + 0.55 ).normalize(), rData = [ rand.next(), 0.8, s.galv ? 1 : 0, 0 ];
+	B.slab( 'roofMetal', rf, 0.04, { up: UP, uDir: rUp, tint: s.roof || lin( 0x8a5a40 ), data: rData } );
+	// ((M13) it may lose a sheet to a hurricane: roofHoles)
+	roofHoles( ctx, [ { pts: rf, uDir: rUp, seed: rData[ 0 ], T: 0.04 } ], s.name, 0.35 );
 	B.pop();
 	const c = toW( 0, 0 );
 	colliders.addBox( _v.set( c.x, ( gMin - 0.3 + base + hF ) / 2, c.z ), _h.set( w / 2 + 0.05, ( base + hF - gMin + 0.3 ) / 2, d / 2 + 0.05 ), yaw, { tag: 'shed' } );

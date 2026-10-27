@@ -19,6 +19,9 @@ import { FT } from './Units.js';
 // west, and now and then a front swings the wind round as it passes (south, west, north) behind a line
 // of showers, and clears. The weather comes the way the wind blows, so the showers, the front's bank and
 // the lightning come from up the track, and a westerly blow's swell from the west (`west`).
+// (M13) Now and then a blow is a hurricane's (HURRICANE): a vortex passing the island down the trades,
+// its eye over the island or to one side, its rain bands spiralling in, its swell days ahead of it, the
+// water murky days after. Watched for two days ahead and warned of a day and a half (hurricaneNews).
 //
 // Everything here is + - x / and integer hashes (Math.imul), never sin, exp or pow, so every device
 // works out the same condition from the same time. Pure (no three.js), for the tests under Node.
@@ -31,6 +34,10 @@ import { FT } from './Units.js';
 //   murkAt( T ) -> 0..1   (the water stirred up by a blow, clearing over a day)
 //   (M12) trackAt( T ) -> rad   towardOf( windAngle ) -> { x, y }   (where a blow comes from, and the
 //   way the weather goes)
+//   (M13) weatherAt( T, 'hurricane', since ): your own, picked at `since`   (and its values' hurricane, eye,
+//   surge, rainHaze, sprayHaze, boarded: (step 4) the island shut for it)
+//   hurricaneAt( T, pick, since ) -> { r, x, z, rmax, ... } | null   hurricaneNews( T, pick, since ) ->
+//   { stage: 'outlook' | 'watch' | 'warning', onset, ends, eye, over, from } | null   dayWeatherAt( T )
 
 // what a condition brings: wind (m/s at 10 m), cloud cover and how overcast it is (0..1), the open
 // sea's swell and wind sea (x today's), the surf (m, the shore waves' offshore amplitude H/2, and its
@@ -45,14 +52,17 @@ export const CONDITIONS = {
 	blustery: { wind: 15, coverage: 0.75, overcast: 0.45, swell: 1.5, surf: 0.5, period: 8, visibility: 0.75, rain: 0, thunder: 0 },
 	gale: { wind: 20, coverage: 0.92, overcast: 0.8, swell: 1.8, surf: 0.6, period: 7.5, visibility: 0.55, rain: 0.45, thunder: 0 },
 	storm: { wind: 14, coverage: 0.96, overcast: 0.95, swell: 1.35, surf: 0.46, period: 8, visibility: 0.42, rain: 1, thunder: 1 },
+	// (M13) a hurricane's wall at its height (what the menu says of it: a picked one passes, HURRICANE). Its
+	// sea is a gale's at most until the shore takes a hurricane's
+	hurricane: { wind: 38, coverage: 0.97, overcast: 1, swell: 1.8, surf: 0.6, period: 11, visibility: 0.42, rain: 1, thunder: 0.12 },
 };
 // the surf's period (s): a storm's own swell comes short and steep; one that's come far, from a storm
 // still on its way, long, and smaller than the storm's own sea by the time it's here. The longest it
 // gets, and the biggest such a swell gets (m: it runs further up the beach than a short one)
 export const PERIOD_MAX = 12;
 export const GROUNDSWELL_MAX = 0.4;
-export const WEATHER_IDS = [ 'calm', 'fair', 'breezy', 'cloudy', 'rain', 'blustery', 'gale', 'storm' ];
-export const WEATHER_NAMES = { calm: 'Calm', fair: 'Fair', breezy: 'Breezy', cloudy: 'Cloudy', rain: 'Rain', blustery: 'Blustery', gale: 'Gale', storm: 'Thunderstorm' };
+export const WEATHER_IDS = [ 'calm', 'fair', 'breezy', 'cloudy', 'rain', 'blustery', 'gale', 'storm', 'hurricane' ];
+export const WEATHER_NAMES = { calm: 'Calm', fair: 'Fair', breezy: 'Breezy', cloudy: 'Cloudy', rain: 'Rain', blustery: 'Blustery', gale: 'Gale', storm: 'Thunderstorm', hurricane: 'Hurricane' };
 // the shore waves' largest amplitude (m): bigger, their run-up floods the beach and the sets break on
 // the pier head and over the boat at the dock (test/waves.mjs)
 export const SURF_MAX = 0.6;
@@ -122,6 +132,75 @@ const MURK_LAGS = [ 1, 2, 3, 4, 6, 8, 10, 12, 15, 18, 21, 24 ];
 const MURK_PICK = { blustery: 0.4, gale: 0.7, storm: 0.5 };
 // the murk from which the water's said to be murky (Joe's slate, the clock's menu)
 export const MURKY = 0.35;
+// (M13) The hurricane. Now and then a blow on the lattice is a hurricane's: one in `oneIn`, about every
+// 40 days (a candidate, and none on either of the two before it, so two never come within a week), never
+// before day `fromDay` (a new player's first fortnight). A Category 1 (Saffir-Simpson: 33 to 42 m/s, a minute's sustained
+// wind), steered down the trades as the easterlies steer real ones (turned a little either way), passing
+// at its own speed, its eye over the island's middle or to one side of it (within `miss` rmax: its calm
+// passes over within `over` rmax, a quarter of them).
+//   - Its strongest wind is on the right of its track; on the left of it a strong gale, as on the weak
+//     side of a real Category 1.
+//   - Its wind is a vortex's: counter-clockwise (the northern hemisphere's) and turned in toward the eye
+//     (`inflow`), calm in the eye (within 0.4 rmax), rising through its wall to `vmax` at rmax, and
+//     broad beyond it (vmax ( rmax + a ) / ( r + a ), a = `outer` rmax: tropical-storm winds 150 to 200
+//     km out, hurricane force 30 to 40). The storm's own motion adds to it (`motion`), so it's stronger
+//     on the right of its track. Out past `reach` it fades, and the island's own weather comes back.
+//   - Its rain: the eyewall's downpour and the rain shield about it (`core`), and the outer bands spiralling
+//     in toward the eye (counter-clockwise, `band`: crossed one after another as it comes, a few hours
+//     apart), thundering where they're heaviest; the eyewall seldom thunders (`wallThunder`). None in the
+//     eye: it stops at the eyewall's inner edge.
+//   - Its cloud spreads ahead of it (`cloud`), and greys the sky closer in; in the eye the sky opens.
+//   - (step 3) The air in it is full of rain and, in its wall, the spray torn off the sea: their
+//     extinction (`haze`, 1/m: you see about 3 / it, Koschmieder), the rain's as heavy rain's is (a
+//     50 mm/h downpour about 800 m: V = 10.5 R^-0.66 km), the spray's from a strong gale's wind, under
+//     100 m seen in its wall at the shore (App thins the spray inland).
+//   - Its swell runs out ahead of it (out to `swellReach`), long and low days ahead (`period`), shorter and
+//     higher close in (`swell`, on the open sea all round). (M13 step 2) Into the bay comes as much of its
+//     waves (`surf`) as come in the way they travel (BAY): close in they're its wind's own sea, going the
+//     way the wind blows, further off its swell, running out from the eye. The bay opens to the south, so
+//     one coming down the trades leaves it in the island's lee until its wind blows in from the sea.
+//   - (step 2) The storm surge (`surge`, m, SURGE): the sea drawn up under its low pressure, and piled into
+//     the bay by its wind blowing in over the last hour, or drawn out of it by a wind blowing out. The sea's
+//     level follows it (G.seaLevel).
+//   - The water's murky from a few hours before its eye passes until a day after, clearing over three
+//     more (`murk`).
+//   - All of it + - x / and sqrt (correctly rounded everywhere) on the clock, as the rest is; only the
+//     wind's direction takes atan2.
+export const HURRICANE = {
+	oneIn: 16, fromDay: 15,
+	vmax: [ 32, 37 ], rmax: [ 20000, 32000 ], over: 0.3, outer: 5.6, motion: 0.6, inflow: [ 0.9397, 0.342 ],
+	speed: [ 14000, 24000 ], turn: 0.5, miss: 1.2, jitter: 12,
+	reach: [ 450000, 750000 ], cloud: [ 700000, 350000 ], grey: [ 600000, 250000 ],
+	core: [ 1.6, 3.2 ], band: { gap: 60000, arms: 2, reach: [ 360000, 460000 ], rain: 0.9, thunder: 0.85, from: [ 2.5, 5 ] }, wallThunder: 0.12,
+	haze: { rain: 0.000286, spray: 0.03, sprayWind: [ 22, 36 ] },
+	swellReach: [ 1500000, 80000 ], swell: 3.5, surf: 1.5, period: [ 11, 16 ], murk: [ - 8, 0, 24, 96 ],
+};
+// (M13 step 2) the surge: the sea drawn up by the fall of its pressure (m a hPa: the inverse barometer),
+// that fall at its eye (hPa a m/s of vmax: a Category 1's 980s), half of it at rmax; the wind's set-up on
+// the bay's shelf (m per (m/s)² of wind blowing into the bay, over the `lag` hours before: its full wind
+// straight in sets the sea up about 1.2 m, as a Category 1's does on a narrow shelf like the Keys'), the
+// most an offshore wind draws it down, and the most it gets
+export const SURGE = { ib: 0.0099, drop: 0.8, setup: 8.3e-4, lag: [ 0, 0.5, 1 ], low: - 0.7, high: 1.6 };
+// the bay: the way waves travel into it (the island's own swell's, from the south: WORLD.swellDir), and
+// the way a westerly's do, round its western arm (Waves.SWELL_WEST); a little gets in from anywhere; and
+// how much of the confused sea about its eye does (coming from its walls all round)
+const BAY = { south: [ - 0.1191, - 0.9929 ], west: [ 1, 0 ], floor: 0.15, confused: 0.6 };
+// the hurricane's surf at its biggest, straight into the bay (m: the shore waves' amplitude), and its
+// longest swell's period (s)
+export const SURF_HURRICANE = HURRICANE.surf, PERIOD_HURRICANE = HURRICANE.period[ 1 ];
+// the candidates' share of the lattice (with none of the two before: a hurricane one in `oneIn`)
+const H_CAND = 0.072;
+// m/s: tropical-storm force (34 kt) and hurricane force (64 kt), a minute's sustained wind
+export const TS_WIND = 17.5, HURRICANE_WIND = 32.7;
+// game hours before its tropical-storm winds that it's on the outlook, watched for and warned of (as the
+// National Hurricane Center does: a watch 48 h ahead, a warning 36 h)
+const H_NEWS = { outlook: 96, watch: 48, warning: 36 };
+// (step 4) the island boards up (Joe and Marta shut and go home: `boarded`) this long before its
+// tropical-storm winds, and opens again this long after they've gone (game hours)
+const H_BOARD = [ 12, 6 ];
+// (on your own, a hurricane picked at `since` comes straight at the island, its eye over it `lead` game
+// hours on, passing just to the island's left, so the island's on the stronger side of its wall)
+const H_PICKED = { lead: 6, vmax: 33, rmax: 24000, speed: 20000, miss: - 0.2 };
 
 const clamp01 = ( x ) => ( x < 0 ? 0 : x > 1 ? 1 : x );
 const lerp = ( a, b, t ) => a + ( b - a ) * t;
@@ -266,7 +345,7 @@ function nameOf( w ) {
 function row( id ) {
 
 	const c = CONDITIONS[ id ];
-	return { id, wind: c.wind, windAngle: 0, coverage: c.coverage, overcast: c.overcast, swell: c.swell, windSea: windSeaOf( c.wind ), surf: Math.min( SURF_MAX, c.surf ), period: c.period, west: 0, visibility: c.visibility, rain: c.rain, thunder: c.thunder, front: 0, murk: MURK_PICK[ id ] || 0 };
+	return { id, wind: c.wind, windAngle: 0, coverage: c.coverage, overcast: c.overcast, swell: c.swell, windSea: windSeaOf( c.wind ), surf: Math.min( SURF_MAX, c.surf ), period: c.period, west: 0, visibility: c.visibility, rain: c.rain, thunder: c.thunder, front: 0, murk: MURK_PICK[ id ] || 0, hurricane: 0, eye: 0, surge: 0, rainHaze: 0, sprayHaze: 0, boarded: 0 };
 
 }
 
@@ -290,10 +369,20 @@ export function murkAt( T ) {
 }
 
 // the weather at island time T. `pick` (a condition's id) holds it there instead: on your own, you
-// can choose the day's weather (its wind from the trades)
-export function weatherAt( T, pick = null ) {
+// can choose the day's weather (its wind from the trades); (M13) a hurricane of your own, picked at
+// island time `since`, passes over a fair day
+export function weatherAt( T, pick = null, since = 0 ) {
 
+	if ( pick === 'hurricane' ) return overHurricane( row( 'fair' ), T, pickedHurricane( since ) );
 	if ( pick && CONDITIONS[ pick ] ) return row( pick );
+	const w = dayWeatherAt( T ), h = hurricaneNear( T );
+	return h ? overHurricane( w, T, h ) : w;
+
+}
+
+// the day's weather at island time T, as it would be with no hurricane about
+export function dayWeatherAt( T ) {
+
 	// day 1 is fair; the forecast comes in over the first hours of day 2
 	const k = clamp01( ( T - 24 ) / 6 );
 	if ( k === 0 ) return row( 'fair' );
@@ -345,9 +434,351 @@ export function weatherAt( T, pick = null ) {
 
 	// a blow on its way (0..1): the storm a few hours on, more than now (the fish feed hard ahead of it)
 	const front = clamp01( ( Math.max( storminess( T + FRONT_LEAD[ 0 ] ), storminess( T + FRONT_LEAD[ 1 ] ) ) - s ) * 12 ) * sstep( 0.45, 0.75, Math.max( storminess( T + FRONT_LEAD[ 1 ] ), s ) ) * k;
-	const w = { id: 'fair', wind, windAngle, coverage: wet.coverage, overcast: wet.overcast, swell, windSea: windSeaOf( wind ), surf, period, west, visibility: wet.visibility, rain, thunder, front, murk: murkAt( T ) };
+	const w = { id: 'fair', wind, windAngle, coverage: wet.coverage, overcast: wet.overcast, swell, windSea: windSeaOf( wind ), surf, period, west, visibility: wet.visibility, rain, thunder, front, murk: murkAt( T ), hurricane: 0, eye: 0, surge: 0, rainHaze: 0, sprayHaze: 0, boarded: 0 };
 	w.id = nameOf( w );
 	return w;
+
+}
+
+// ---- (M13) the hurricane (HURRICANE)
+
+// one passing: its eye closest to the island's middle at tc (game hours), its strongest wind (m/s, the
+// vortex's own) at rmax (m), its speed (m a game hour) along `track` (the trades' turned `turn`), and
+// where its eye passes (d, m: to the island's left of its track, + , or its right, -)
+function storm( tc, vmax, rmax, speed, turn, d ) {
+
+	const track = towardOf( turn );
+	// (left: the left of its track on the island's compass, x east and z south)
+	return { tc, vmax, rmax, speed, turn, d, track, left: { x: track.y, y: - track.x } };
+
+}
+
+// the hurricane at lattice point i, if there's one (null)
+const _hurricanes = new Map();
+const candidate = ( i ) => hash( i, 0x4e77ac15 ) < H_CAND;
+function hurricaneOf( i ) {
+
+	let h = _hurricanes.get( i );
+	if ( h !== undefined ) return h;
+	h = null;
+	const H = HURRICANE;
+	if ( i * TRACK_SPAN >= ( H.fromDay - 1 ) * 24 + H.jitter && candidate( i ) && ! candidate( i - 1 ) && ! candidate( i - 2 ) ) {
+
+		const u = ( k ) => hash( i, 0x3b9f7700 + k ), rmax = lerp( H.rmax[ 0 ], H.rmax[ 1 ], u( 2 ) );
+		h = storm( i * TRACK_SPAN + ( u( 1 ) - 0.5 ) * 2 * H.jitter, lerp( H.vmax[ 0 ], H.vmax[ 1 ], u( 3 ) ), rmax, lerp( H.speed[ 0 ], H.speed[ 1 ], u( 4 ) ),
+			( u( 5 ) - 0.5 ) * 2 * H.turn, ( u( 6 ) - 0.5 ) * 2 * H.miss * rmax );
+		h.i = i;
+
+	}
+
+	if ( _hurricanes.size > 64 ) _hurricanes.clear();
+	_hurricanes.set( i, h );
+	return h;
+
+}
+
+// (your own: the same one for the same `since`)
+let _picked = null;
+function pickedHurricane( since ) {
+
+	const P = H_PICKED;
+	if ( ! _picked || _picked.since !== since ) {
+
+		_picked = storm( since + P.lead, P.vmax, P.rmax, P.speed, 0, P.miss * P.rmax );
+		_picked.since = since;
+
+	}
+
+	return _picked;
+
+}
+
+// the hurricanes on the lattice about T, in time (any whose reach could take in T)
+function* hurricanesAbout( T ) {
+
+	const i0 = Math.round( T / TRACK_SPAN );
+	for ( let i = i0 - 2; i <= i0 + 3; i ++ ) {
+
+		const h = hurricaneOf( i );
+		if ( h ) yield h;
+
+	}
+
+}
+
+// whether hurricane h touches the island at T: its swell, its murk after it
+const touches = ( h, T ) => {
+
+	const dt = T - h.tc, M = HURRICANE.murk;
+	return ( dt > M[ 0 ] && dt < M[ 3 ] ) || Math.abs( dt ) * h.speed < HURRICANE.swellReach[ 0 ];
+
+};
+
+// the hurricane touching the island at T (the nearest in time), or null
+function hurricaneNear( T ) {
+
+	let best = null;
+	for ( const h of hurricanesAbout( T ) ) if ( touches( h, T ) && ( ! best || Math.abs( T - h.tc ) < Math.abs( T - best.tc ) ) ) best = h;
+	return best;
+
+}
+
+// its vortex's wind at r (m) from its eye (m/s): calm in the eye, rising through its wall to vmax at rmax,
+// broad beyond, fading out past its reach
+function vortexAt( h, r ) {
+
+	const H = HURRICANE;
+	if ( r <= h.rmax ) return h.vmax * sstep( 0.4 * h.rmax, h.rmax, r );
+	const a = H.outer * h.rmax;
+	return h.vmax * ( h.rmax + a ) / ( r + a ) * ( 1 - sstep( H.reach[ 0 ], H.reach[ 1 ], r ) );
+
+}
+
+// the game hours either side of its closest that its tropical-storm winds blow at the island
+const tsHalf = ( h ) => {
+
+	const rts = radiusOf( h, TS_WIND );
+	return Math.sqrt( Math.max( 0, rts * rts - h.d * h.d ) ) / h.speed;
+
+};
+
+// how far from its eye its vortex's wind is `wind` (m), beyond rmax
+const radiusOf = ( h, wind ) => {
+
+	const a = HURRICANE.outer * h.rmax;
+	return h.vmax * ( h.rmax + a ) / wind - a;
+
+};
+
+// its outer bands at ( pm, pn ) from its eye (m: along its track, and to its left), r away: 0..1, the
+// heart of a band 1. They spiral in counter-clockwise (the phase of each: r / gap + arms x the way round,
+// a pseudo-angle of + - x / alone, 0..4 counter-clockwise from ahead of it)
+function bandAt( pm, pn, r ) {
+
+	const B = HURRICANE.band, s = Math.abs( pm ) + Math.abs( pn ), t = s > 0 ? pn / s : 0;
+	const q = pm >= 0 ? ( pn >= 0 ? t : 4 + t ) : 2 - t;
+	const psi = r / B.gap + B.arms * q / 4, f = psi - Math.floor( psi );
+	return sstep( 0, 0.1, f ) * ( 1 - sstep( 0.25, 0.4, f ) );
+
+}
+
+// what hurricane h brings the island's middle at T (out: filled and returned)
+//   r, pm, pn: where the island is from its eye (m: along its track, ahead +, and to its left)
+//   (step 2) waveX, waveZ: the way its waves travel at the island (unit: its wind's sea close in, its
+//   swell from the eye further off), and how confused its sea is (0..1: from all round, about its eye)
+//   wind (m/s) toward ( x, z ) (m/s, the vector: on the island's compass), share (0..1: how much of the
+//   weather is its), eye (0..1: in its eye), rain, thunder, cover (0..1: how much of the cloud is its)
+//   and its coverage, grey (and its overcast), visibility, near (0..1: how much of the sea its swell's),
+//   swell, surf, period, murk
+function stormAt( h, T, out ) {
+
+	const H = HURRICANE, pm = - ( T - h.tc ) * h.speed, pn = h.d;
+	const r = Math.max( 1, Math.sqrt( pm * pm + pn * pn ) );
+	out.r = r;
+	out.pm = pm;
+	out.pn = pn;
+	// the wind: the vortex's, turned in toward the eye, and the storm's motion (along its track: a, to its
+	// left: b)
+	const v = vortexAt( h, r ), px = pm / r, py = pn / r, [ c, s ] = H.inflow;
+	const a = v * ( - c * py - s * px ) + H.motion * h.speed / 3600, b = v * ( c * px - s * py );
+	out.wind = Math.sqrt( a * a + b * b );
+	out.x = a * h.track.x + b * h.left.x;
+	out.z = a * h.track.y + b * h.left.y;
+	out.share = 1 - sstep( H.reach[ 0 ], H.reach[ 1 ], r );
+	out.eye = 1 - sstep( 0.4 * h.rmax, 0.6 * h.rmax, r );
+	// the rain: the eyewall's and the shield about it, the outer bands, none in the eye
+	const B = H.band, core = 1 - sstep( H.core[ 0 ] * h.rmax, H.core[ 1 ] * h.rmax, r );
+	const band = r < B.reach[ 1 ] ? bandAt( pm, pn, r ) * ( 1 - sstep( B.reach[ 0 ], B.reach[ 1 ], r ) ) : 0;
+	const rain = out.rain = sstep( 0.45 * h.rmax, 0.65 * h.rmax, r ) * Math.max( core, B.rain * band );
+	// (the outer bands thunder where they're heaviest; the eyewall seldom)
+	const wall = ( 1 - out.eye ) * ( 1 - sstep( 1.2 * h.rmax, 2 * h.rmax, r ) );
+	out.thunder = Math.max( B.thunder * sstep( 0.55, 0.85, B.rain * band ) * sstep( B.from[ 0 ] * h.rmax, B.from[ 1 ] * h.rmax, r ), H.wallThunder * wall ) * sstep( 0.5, 0.8, rain );
+	// its cloud ahead of it, grey closer in; the sky open over the eye
+	out.cover = sstep( H.cloud[ 0 ], H.cloud[ 1 ], r );
+	out.coverage = lerp( 0.97, 0.3, out.eye );
+	out.grey = sstep( H.grey[ 0 ], H.grey[ 1 ], r );
+	out.overcast = lerp( 1, 0.35, out.eye );
+	// the rain and the spray in its wind
+	out.visibility = lerp( 1, CONDITIONS.rain.visibility, rain ) - 0.13 * out.thunder;
+	// ((step 3) and its rain's and its spray's haze, 1/m: R = 50 mm/h in a downpour)
+	out.rainHaze = rain > 0 ? H.haze.rain * Math.pow( 50 * rain, 0.66 ) : 0;
+	out.sprayHaze = H.haze.spray * sstep( H.haze.sprayWind[ 0 ], H.haze.sprayWind[ 1 ], out.wind );
+	// its swell, long and low far ahead, shorter and higher close in
+	const near = sstep( H.swellReach[ 0 ], H.swellReach[ 1 ], r );
+	out.near = near * near;
+	out.period = lerp( H.period[ 0 ], H.period[ 1 ], sstep( 150000, 900000, r ) );
+	// (its waves: its wind's own sea where it blows hard, its swell running out from the eye beyond)
+	const sea = sstep( 12, 28, out.wind ) / Math.max( out.wind, 1e-6 );
+	const wx = out.x * sea + ( px * h.track.x + py * h.left.x ) * ( 1 - sea * out.wind ), wz = out.z * sea + ( px * h.track.y + py * h.left.y ) * ( 1 - sea * out.wind );
+	const wl = Math.sqrt( wx * wx + wz * wz ) || 1;
+	out.waveX = wx / wl;
+	out.waveZ = wz / wl;
+	out.confused = 1 - sstep( 0.5 * h.rmax, 1.2 * h.rmax, r );
+	// the water stirred up: from a few hours before its eye to a day after, clearing over three more
+	const dt = T - h.tc, M = H.murk;
+	out.murk = sstep( M[ 0 ], M[ 1 ], dt ) * ( 1 - sstep( M[ 2 ], M[ 3 ], dt ) );
+	return out;
+
+}
+
+// the day's weather w with hurricane h over it at T (w: filled and returned)
+const _now = {}, _ahead = {}, _lag = {}, _peak = {};
+
+// (step 2) the surge hurricane h brings the island at T (m), s its stormAt there: the sea drawn up under
+// its low pressure, and set up by its wind blowing into the bay over the hour before (drawn down by one
+// blowing out)
+function surgeOf( h, T, s ) {
+
+	const S = SURGE, B = BAY.south;
+	let on = 0;
+	for ( const L of S.lag ) {
+
+		const a = L === 0 ? s : stormAt( h, T - L, _lag );
+		on += ( a.x * B[ 0 ] + a.z * B[ 1 ] ) * a.wind * a.share;
+
+	}
+
+	const setup = Math.max( S.low, S.setup * on / S.lag.length );
+	return Math.min( S.high, setup + S.ib * S.drop * h.vmax * h.rmax / ( s.r + h.rmax ) * s.share );
+
+}
+
+// the highest it gets as h passes (m: for the shore's field, solved at it before it comes)
+function peakSurge( h ) {
+
+	if ( h.peak === undefined ) {
+
+		h.peak = 0;
+		for ( let t = - 24; t <= 24; t += 0.25 ) h.peak = Math.max( h.peak, surgeOf( h, h.tc + t, stormAt( h, h.tc + t, _peak ) ) );
+
+	}
+
+	return h.peak;
+
+}
+function overHurricane( w, T, h ) {
+
+	const s = stormAt( h, T, _now ), k = s.share;
+	// (a blow on its way: its wind a few hours on, more than now; the fish feed hard ahead of it)
+	const on = stormAt( h, T + FRONT_LEAD[ 1 ] - 1, _ahead ), ahead = on.wind * on.share;
+	const front = clamp01( ( ahead - s.wind * k ) / 8 ) * sstep( 12, 18, ahead );
+	if ( k === 0 && s.cover === 0 && s.near === 0 && s.murk === 0 && front === 0 ) return w;
+	if ( k > 0 ) {
+
+		// its wind's direction, as its wind and the day's summed (turned from the day's: the shorter way
+		// from it, so it's the day's exactly where it isn't the hurricane's), and its speed
+		const d = towardOf( w.windAngle ), bx = d.x * w.wind * ( 1 - k ) + s.x * k, bz = d.y * w.wind * ( 1 - k ) + s.z * k;
+		w.windAngle += Math.atan2( d.x * bz - d.y * bx, d.x * bx + d.y * bz );
+		w.wind = lerp( w.wind, s.wind, k );
+		w.windSea = windSeaOf( w.wind );
+
+	}
+
+	w.coverage = lerp( w.coverage, s.coverage, s.cover );
+	w.overcast = lerp( w.overcast, s.overcast, s.grey );
+	// (the day's rain giving way to its, and the day's thunder with it, as the day's own goes with its rain)
+	const rain = w.rain * ( 1 - k );
+	if ( k > 0 && w.thunder > 0 ) w.thunder *= sstep( 0.45, 0.9, rain ) / sstep( 0.45, 0.9, w.rain );
+	w.rain = Math.max( rain, s.rain );
+	w.thunder = Math.max( w.thunder, s.thunder );
+	w.visibility = lerp( w.visibility, s.visibility, k );
+	// (step 2) its swell on the open sea all round, over the day's; into the bay, as much of its waves as
+	// come in the way they travel (the south's way in, and the west's round the bay's western arm), and its
+	// period and their share from the west as far as they're the bigger
+	const H = HURRICANE, B = BAY;
+	// (those coming from the north, off the island, never get in: round the western arm only from the west)
+	const south = Math.max( 0, s.waveX * B.south[ 0 ] + s.waveZ * B.south[ 1 ] ), west = Math.max( 0, s.waveX * B.west[ 0 ] + s.waveZ * B.west[ 1 ] ) * sstep( 0.5, 0, s.waveZ );
+	// (about its eye a confused sea, from its walls all round)
+	const into = lerp( Math.min( 1, Math.max( B.floor, south + west ) ), B.confused, s.confused );
+	const surf = lerp( w.surf, Math.max( w.surf, H.surf * into ), s.near );
+	const its = sstep( 0.02, 0.15, surf - w.surf );
+	w.period = lerp( w.period, s.period, its );
+	w.west = lerp( w.west * ( 1 - k ), south + west > 0 ? west / ( south + west ) * ( 1 - s.confused ) : 0, its );
+	w.surf = surf;
+	w.swell = lerp( w.swell, Math.max( w.swell, H.swell ), s.near );
+	w.surge = surgeOf( h, T, s );
+	w.front = Math.max( w.front, front );
+	w.murk = Math.max( w.murk, s.murk );
+	w.hurricane = k;
+	w.eye = s.eye;
+	w.rainHaze = s.rainHaze * k;
+	w.sprayHaze = s.sprayHaze * k;
+	// ((step 4) boarded up for it, from a while before its winds to a while after)
+	const half = tsHalf( h );
+	w.boarded = T >= h.tc - half - H_BOARD[ 0 ] && T < h.tc + half + H_BOARD[ 1 ] ? 1 : 0;
+	// (its name inside its wall, eye and all, and wherever its wind's a hurricane's)
+	w.id = k >= 0.5 && ( s.r <= h.rmax || w.wind >= HURRICANE_WIND ) ? 'hurricane' : nameOf( w );
+	return w;
+
+}
+
+// (M13) the hurricane about the island at T, for what shows it (null: none near enough to touch it). On
+// your own, a picked one (pick 'hurricane', picked at `since`). Its eye is at ( x, z ) from the island's
+// middle (m) and r away, at T; (step 2) peak: the highest its surge gets (m)
+export function hurricaneAt( T, pick = null, since = 0 ) {
+
+	const h = pick === 'hurricane' ? pickedHurricane( since ) : pick ? null : hurricaneNear( T );
+	if ( ! h ) return null;
+	const pm = - ( T - h.tc ) * h.speed, pn = h.d;
+	return { tc: h.tc, vmax: h.vmax, rmax: h.rmax, speed: h.speed, d: h.d, track: h.track, left: h.left, over: Math.abs( h.d ) < HURRICANE.over * h.rmax, peak: peakSurge( h ),
+		r: Math.sqrt( pm * pm + pn * pn ), x: - ( pm * h.track.x + pn * h.left.x ), z: - ( pm * h.track.y + pn * h.left.y ) };
+
+}
+
+// (M13) what's said of the next hurricane at T, as the hurricane centre would say it: on the outlook four
+// days before its tropical-storm winds reach the island, watched for two days before, warned of a day and
+// a half before and until they've gone (null: none). onset, ends: its tropical-storm winds come and go
+// (island time); eye: when its eye's closest; over: whether it passes over; from: where it comes from
+// ('NNW')
+export function hurricaneNews( T, pick = null, since = 0 ) {
+
+	const list = pick === 'hurricane' ? [ pickedHurricane( since ) ] : pick ? [] : hurricanesAbout( T );
+	for ( const h of list ) {
+
+		const half = tsHalf( h ), onset = h.tc - half, ends = h.tc + half;
+		if ( T >= ends || T < onset - H_NEWS.outlook ) continue;
+		const stage = T >= onset - H_NEWS.warning ? 'warning' : T >= onset - H_NEWS.watch ? 'watch' : 'outlook';
+		return { stage, onset, ends, eye: h.tc, over: Math.abs( h.d ) < HURRICANE.over * h.rmax, from: windFrom( h.track.x, h.track.y ) };
+
+	}
+
+	return null;
+
+}
+
+// (M13 step 6) the last hurricane whose tropical-storm winds had reached the island by T, as long as they
+// went no more than `back` game hours before it (null: none): what its damage is reckoned from
+// (game/StormDamage.js). As the weather goes: on your own a picked one, and none in other held weather.
+// onset, ends: its tropical-storm winds come and go (island time); tc: its eye's closest; key: which it
+// is (the same for everyone)
+export function lastHurricane( T, back = 0, pick = null, since = 0 ) {
+
+	let list;
+	if ( pick === 'hurricane' ) list = [ pickedHurricane( since ) ];
+	else if ( pick ) return null;
+	else {
+
+		list = [];
+		const i1 = Math.round( T / TRACK_SPAN ) + 3;
+		for ( let i = Math.floor( ( T - back ) / TRACK_SPAN ) - 3; i <= i1; i ++ ) {
+
+			const h = hurricaneOf( i );
+			if ( h ) list.push( h );
+
+		}
+
+	}
+
+	let best = null;
+	for ( const h of list ) {
+
+		const half = tsHalf( h ), onset = h.tc - half, ends = h.tc + half;
+		if ( onset > T || ends < T - back || ( best && h.tc < best.tc ) ) continue;
+		best = { tc: h.tc, onset, ends, vmax: h.vmax, rmax: h.rmax, d: h.d, key: pick === 'hurricane' ? `picked:${ since }` : `h:${ h.i }` };
+
+	}
+
+	return best;
 
 }
 
@@ -372,7 +803,7 @@ export const FRONT_KMH = 8;
 const SHOWER_GAP = 4000;
 const SHOWER_SIDE = 14000;
 const SHOWER_R = [ 1200, 3000 ];
-export function showers( T, pick = null, range = 26000, out = [], cache = null ) {
+export function showers( T, pick = null, range = 26000, out = [], cache = null, since = 0 ) {
 
 	let count = 0;
 	const v = FRONT_KMH * 1000, drift = T * v; // (how far the weather's come since day 1 began, m)
@@ -383,7 +814,7 @@ export function showers( T, pick = null, range = 26000, out = [], cache = null )
 		let slot = cache ? cache.get( k ) : undefined;
 		if ( slot === undefined ) {
 
-			const t = - k * SHOWER_GAP / v, w = weatherAt( t, pick );
+			const t = - k * SHOWER_GAP / v, w = weatherAt( t, pick, since );
 			slot = towardOf( w.windAngle );
 			slot.rain = w.rain;
 			slot.thunder = w.thunder;
@@ -452,14 +883,15 @@ export function distantStrikesIn( second, cells, out = [] ) {
 
 }
 
-// what's coming: the next change of condition within `ahead` game hours ({ id, at: T }), or null
-export function forecast( T, ahead = 12, pick = null ) {
+// what's coming: the next change of condition within `ahead` game hours ({ id, at: T }), or null. A
+// picked condition holds (none); (M13) a picked hurricane passes
+export function forecast( T, ahead = 12, pick = null, since = 0 ) {
 
-	if ( pick && CONDITIONS[ pick ] ) return null;
-	const now = weatherAt( T ).id;
+	if ( pick && pick !== 'hurricane' && CONDITIONS[ pick ] ) return null;
+	const now = weatherAt( T, pick, since ).id;
 	for ( let t = 0.5; t <= ahead; t += 0.5 ) {
 
-		const id = weatherAt( T + t ).id;
+		const id = weatherAt( T + t, pick, since ).id;
 		if ( id !== now ) return { id, at: T + t };
 
 	}
