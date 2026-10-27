@@ -58,5 +58,35 @@ check( flukes > 0, `it dives flukes up (${ ( flukes * dt ).toFixed( 1 ) } s with
 check( states.has( 'cruise' ) && states.has( 'surface' ), `it cruises and surfaces (${ [ ...states ].join( ', ' ) })` );
 check( worstRig < 1e-3, `the CPU pose lands on the spine frames (worst ${ worstRig.toExponential( 1 ) } m)` );
 
+// (M14) playing together: a guest's whale follows the host's (WhaleBrain.snapshot, followHost)
+{
+
+	const host = new Whale( { scene: null, terrain, ground: null } ).brain, guest = new Whale( { scene: null, terrain, ground: null } ).brain;
+	for ( let i = 0; i < 70 / dt; i ++ ) host.update( dt ); // (the host's a while into its loop)
+	guest.followHost( host.snapshot(), 0.2 );
+	const jumped = Math.abs( guest.u - ( host.u + host.speed * 0.2 ) ) < 0.01 && guest.hCount > 40 && guest.led;
+	let ok = true;
+	for ( let i = 0; i < 4 / dt; i ++ ) { host.update( dt ); guest.update( dt ); if ( ! Number.isFinite( guest.position.x + guest.y ) ) ok = false; }
+	check( jumped && ok, `joining, the guest's whale is where the host's is (its path laid behind it)` );
+	// (drifted a little apart: taken up over a couple of seconds, not jumped)
+	guest.u -= 6;
+	guest.followHost( host.snapshot(), 0 );
+	const before = host.u - guest.u;
+	for ( let i = 0; i < 4 / dt; i ++ ) { host.update( dt ); guest.update( dt ); }
+	check( before > 5 && Math.abs( host.u - guest.u ) < 0.2 * before, `a few metres apart, it closes up over a few seconds (${ before.toFixed( 1 ) } m, then ${ Math.abs( host.u - guest.u ).toFixed( 2 ) })` );
+	// (its surfacings the host's, none of its own)
+	host.u = host.length * 0.255; host.lastWrap = false; host.state = 'cruise'; host.seq = null;
+	guest.followHost( host.snapshot(), 0 );
+	let ownStart = false;
+	for ( let i = 0; i < 2 / dt; i ++ ) { guest.update( dt ); if ( guest.seq ) ownStart = true; }
+	host._startSequence();
+	guest.followHost( host.snapshot(), 0 );
+	check( ! ownStart && guest.seq && guest.seq.keys.length === host.seq.keys.length && guest.state === 'surface', 'it surfaces when the host\'s does, and not of its own' );
+	host.seq = null; host.state = 'cruise';
+	guest.followHost( host.snapshot(), 0 );
+	check( ! guest.seq && guest.state === 'cruise', 'and goes under when the host\'s has' );
+
+}
+
 console.log( failed ? `${ failed } failed` : 'all passed' );
 process.exit( failed ? 1 : 0 );

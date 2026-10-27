@@ -295,8 +295,7 @@ WeatherDriver.prototype.hurricaneSky = function ( sky, w ) {
 	if ( k <= 0 ) {
 
 		C.eye.value.w = 0;
-		C.drift.value.z = 0;
-		if ( C.upper && this._upper0 ) C.upper.value.copy( this._upper0 );
+		frontSky.call( this, C, w );
 		return;
 
 	}
@@ -330,6 +329,35 @@ WeatherDriver.prototype.hurricaneSky = function ( sky, w ) {
 	C.upper.value.copy( _up.normalize() );
 
 };
+
+// (M14) Behind a front, the clouds aloft turn with it as they do with a hurricane's wind (the trades'
+// otherwise): as far as the wind's swung round from the trades (FRONT_SKY.turn, rad: from a third of the
+// compass), they drift the way it blows, as fast as it does (no slower than the trades), and the cirrus
+// with them: a front's westerly behind it sets the whole sky going west to east. this: the driver (its
+// _upper0, the cirrus's own frame)
+const FRONT_SKY = { turn: [ 0.9, 1.6 ] };
+export function frontSky( C, w ) {
+
+	const turn = Math.abs( Math.atan2( Math.sin( w.windAngle || 0 ), Math.cos( w.windAngle || 0 ) ) );
+	const t = smoothstep( FRONT_SKY.turn[ 0 ], FRONT_SKY.turn[ 1 ], turn );
+	if ( C.upper && ! this._upper0 ) this._upper0 = C.upper.value.clone();
+	if ( t <= 0 ) {
+
+		C.drift.value.z = 0;
+		if ( C.upper && this._upper0 ) C.upper.value.copy( this._upper0 );
+		return;
+
+	}
+
+	const p = G.windPrevailing.value, d = G.windDir.value, D = HURRICANE_DRIFT;
+	const dx = p.x * ( 1 - t ) + d.x * t, dz = p.y * ( 1 - t ) + d.y * t, l = Math.hypot( dx, dz ) || 1;
+	C.drift.value.set( dx / l, dz / l, D.trades * ( 1 - t ) + Math.max( D.trades, D.k * G.windSpeed.value ) * t );
+	if ( ! C.upper ) return;
+	const u0 = this._upper0;
+	_up.set( u0.x * ( 1 - t ) + d.x * t, u0.y * ( 1 - t ) + d.y * t );
+	C.upper.value.copy( _up.normalize() );
+
+}
 
 // a value moved by `d` toward its target, landing on it once it's all but there (so a fair day comes
 // back to fair exactly)

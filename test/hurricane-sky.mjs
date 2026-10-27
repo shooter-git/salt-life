@@ -6,7 +6,7 @@
 import { Vector2, Vector3, Vector4 } from '../src/engine/index.js';
 import { G } from '../src/core/Globals.js';
 import { eyeCover, bandCells } from '../src/sky/SkyProClouds.js';
-import { WeatherDriver, bandCurtains } from '../src/world/WeatherDriver.js';
+import { WeatherDriver, bandCurtains, frontSky } from '../src/world/WeatherDriver.js';
 import { hurricaneAt, hurricaneNews, weatherAt, HURRICANE, towardOf } from '../src/game/Weather.js';
 
 let failed = 0;
@@ -201,6 +201,24 @@ const check = ( ok, what ) => {
 	// (as far as it's the weather here: the showers' theirs as far as it isn't)
 	const half = bandCurtains( h, gapAt, 0.5, [ { x: 1, z: 2, r: 1500, rain: 0.8 } ], [] );
 	check( half[ 0 ].rain === 0.4 && half.slice( 1 ).every( ( c ) => c.rain <= 0.5 ), 'half the weather here: the showers\' curtains half theirs, its bands\' half its' );
+
+}
+
+// ---- (M14) behind a front, the clouds aloft turn with its wind; on an ordinary day, the trades'
+{
+
+	const C = { drift: { value: new Vector3() }, upper: { value: new Vector2( 0.4, 0.9 ).normalize() } }, driver = {};
+	const p = G.windPrevailing.value.clone();
+	// (a westerly: the wind turned some 120 degrees from the trades)
+	const a = 2.1, c = Math.cos( a ), s = Math.sin( a );
+	G.windDir.value.set( p.x * c - p.y * s, p.x * s + p.y * c );
+	G.windSpeed.value = 13;
+	frontSky.call( driver, C, { windAngle: a } );
+	const d = C.drift.value, wd = G.windDir.value, up = C.upper.value;
+	check( d.z >= 12 && d.x * wd.x + d.y * wd.y > 0.99 && up.x * wd.x + up.y * wd.y > 0.99, `behind a front the clouds drift its way (${ d.z.toFixed( 1 ) } m/s), the cirrus with them` );
+	G.windDir.value.copy( p );
+	frontSky.call( driver, C, { windAngle: 0.2 } );
+	check( C.drift.value.z === 0 && Math.abs( C.upper.value.x - driver._upper0.x ) < 1e-9 && Math.abs( C.upper.value.y - driver._upper0.y ) < 1e-9, 'on an ordinary day, the trades\' (the cirrus in its own frame again)' );
 
 }
 

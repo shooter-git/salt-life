@@ -659,6 +659,7 @@ export class App {
 		// moment: as the weather is, not as it's easing here, which isn't everyone's)
 		this.lightning.update( this.weather.target.thunder, this.camera, this.weather.track, this.sky.clouds.base, wx.visibility, Date.now(), this.weather.cells );
 		this.rain.flash.value = this.sky.flashFill; // ((M12) the light about you: none from a storm on the horizon)
+		this.spray.uniforms.sprayGrey.value = this.sky.overcast; // ((M14) the spray lit as the sky is)
 		if ( wx.thunder > 0 && this.audio ) this.audio.thunderReady();
 
 		// ---- player / boat (boat physics first so the cameras follow this frame's pose)
@@ -1165,7 +1166,7 @@ export class App {
 		const visit = ( o, cheap ) => {
 
 			if ( cheapRoots.includes( o ) ) cheap = true;
-			else if ( o === boat ) cheap = false;
+			else if ( o === boat || o.userData.boatCopy ) cheap = false; // ((M14) and the others' copies of her: Together)
 			if ( o.isMesh ) for ( const m of [ o.material ].flat() ) {
 
 				if ( ! m || lit.has( m ) || ! ( m.isMeshStandardMaterial || m.isMeshLambertMaterial || m.isMeshPhongMaterial ) ) continue;
@@ -1527,6 +1528,7 @@ export class App {
 			depthBelowSurface: Math.max( 0, h - p.y ),
 			surfIntensity: amp / 0.6, // ((M13) past 1 in a hurricane's surf: SoundScape)
 			inside: this.player.sheltered, // ((M13) in the shelter: the storm through its walls)
+			radio: !! ( this.weather.target && this.weather.target.boarded ), // ((M14) its radio on, the island boarded up for a hurricane)
 			distanceToShore: Math.abs( coast ),
 			coastDistance: coast,
 			waveHeight: amp * 2,

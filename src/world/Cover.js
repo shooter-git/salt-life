@@ -319,7 +319,7 @@ export class CoverMap {
 const AROUND = [ [ 0, 1, 2 ], [ 3, 8, 1 ], [ 8, 12, 0.5 ] ]; // radius (m), samples, the weight of each
 export function surroundings( cover, terrainAt, sea, x, y, z, out = {} ) {
 
-	let all = 0, water = 0, wood = 0, near = 0, nearWater = 0, nearWood = 0, over = 0;
+	let all = 0, water = 0, wood = 0, near = 0, nearWater = 0, nearWood = 0, over = 0, tin = 0, tinOver = 0;
 	for ( const [ r, n, w ] of AROUND ) for ( let k = 0; k < n; k ++ ) {
 
 		const a = k / n * Math.PI * 2 + r * 0.37;
@@ -334,7 +334,18 @@ export function surroundings( cover, terrainAt, sea, x, y, z, out = {} ) {
 		near += w;
 		if ( isWater ) nearWater += w;
 		if ( isWood ) nearWood += w;
-		if ( top > y + 0.3 ) over += w;
+		if ( top > y + 0.3 ) {
+
+			over += w;
+			// ((M14) and how much of it's tin, and whether right over you is: a small roof drums over your head)
+			if ( cover.kindAt( sx, sz ) === COVER.TIN ) {
+
+				tin += w;
+				if ( r === 0 ) tinOver = 1;
+
+			}
+
+		}
 
 	}
 
@@ -343,6 +354,8 @@ export function surroundings( cover, terrainAt, sea, x, y, z, out = {} ) {
 	out.nearWater = nearWater / near;
 	out.nearWood = nearWood / near;
 	out.under = over / near;
+	out.tin = tin / near;
+	out.tinOver = tinOver;
 	return out;
 
 }

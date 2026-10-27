@@ -139,6 +139,11 @@ export const MIX = {
 	rainWoodHeavy: - 30,
 	rainPorch: - 30,
 	drip: - 30,
+	// (M14) the rain on a tin roof over you, heard from beneath it (as it sets in; heavier): louder than the
+	// rain out in it, as a tin roof is; and the shelter's radio, across its hall, under the storm
+	rainTinLight: - 28,
+	rainTin: - 22,
+	radio: - 34,
 	thunderNear: - 16, // a crack 1 km off (louder nearer, as the root of its nearness)
 	thunderFar: - 25, // a rumble 8 km off (falling to -35 at 20 km)
 	// (M10) the weather's cost to the boat, at the helm or on deck, and the shutters in a blow
@@ -272,7 +277,7 @@ export class SoundScape {
 			shoreX: 0, shoreZ: 1,
 			boat: { active: false, rpm: 0, speed: 0, x: 0, y: 0, z: 0, inside: false },
 			hull: { flood: 0, pump: false, scrape: 0, wear: 0, motion: 0 },
-			rainOn: { water: 0, wood: 0, nearWater: 0, nearWood: 0, under: 0 },
+			rainOn: { water: 0, wood: 0, nearWater: 0, nearWood: 0, under: 0, tin: 0, tinOver: 0 },
 		};
 		const sw = WORLD.swellDir || { x: - 0.12, y: - 1 };
 		const l = Math.hypot( sw.x, sw.y ) || 1;
@@ -895,6 +900,8 @@ export class SoundScape {
 			// (M11) on what it falls on
 			rain_water_light: this.rainLP, rain_water: this.rainLP, rain_water_heavy: this.rainLP, rain_pond: this.rainLP,
 			rain_wood_light: this.rainLP, rain_wood_heavy: this.rainLP, rain_porch: this.rainLP,
+			// (M14) a tin roof over you, and the shelter's radio: right here, nothing between
+			rain_tin_light: this.above, rain_tin_heavy: this.above, shelter_radio: this.above,
 			// (M10) the hull's: at the boat, as the water past her is
 			keel_scrape: this.boatSum, bilge_pump: this.boatSum, bilge_slosh: this.boatSum,
 		};
@@ -1399,6 +1406,9 @@ export class SoundScape {
 		er.nearWater = clamp( num( ro.nearWater, 0 ), 0, 1 );
 		er.nearWood = clamp( num( ro.nearWood, 0 ), 0, 1 );
 		er.under = clamp( num( ro.under, 0 ), 0, 1 );
+		er.tin = clamp( num( ro.tin, 0 ), 0, er.under ); // ((M14) how much of what's over you is tin, and right over you)
+		er.tinOver = ro.tinOver ? 1 : 0;
+		e.radio = !! s.radio;
 		e.onLand = typeof s.coastDistance === 'number' && Number.isFinite( s.coastDistance ) ? s.coastDistance < 0 : true;
 		if ( e.u > 0.01 || eb.active ) e.onLand = false;
 
@@ -1527,6 +1537,12 @@ export class SoundScape {
 		this._bed( 'rain_wood_light', dB( MIX.rainWoodLight ) * light * rout * wood / dB( BANK.rain_wood_light.lufs ), now, 1.2 );
 		this._bed( 'rain_wood_heavy', dB( MIX.rainWoodHeavy ) * heavy * rout * wood / dB( BANK.rain_wood_heavy.lufs ), now, 1.2 );
 		this._bed( 'rain_porch', lean ? 0 : dB( MIX.rainPorch ) * smooth( 0.2, 0.7, r ) * ro.nearWood * rout / dB( BANK.rain_porch.lufs ), now, 1.2 );
+		// ((M14) a tin roof over you drumming, as it sets in and heavier (the low tier: the heavier alone, as
+		// hard as it rains, to keep its voices); and in the hurricane shelter its radio, under the storm)
+		const tin = Math.max( smooth( 0.15, 0.6, ro.tin ), 0.8 * ro.tinOver );
+		this._bed( 'rain_tin_light', lean ? 0 : dB( MIX.rainTinLight ) * light * tin / dB( BANK.rain_tin_light.lufs ), now, 1.2 );
+		this._bed( 'rain_tin_heavy', dB( MIX.rainTin ) * ( lean ? smooth( 0, 0.9, r ) : heavy ) * tin / dB( BANK.rain_tin_heavy.lufs ), now, 1.2 );
+		this._bed( 'shelter_radio', e.radio ? dB( MIX.radio ) * e.inside / dB( BANK.shelter_radio.lufs ) : 0, now, 1.5 );
 		if ( r > 0.01 ) this._want( 'drips' );
 
 		// boat: one engine recording, pitched and opened up with rpm; water past the hull with speed,

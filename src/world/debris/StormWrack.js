@@ -93,7 +93,9 @@ export class StormWrack {
 				if ( rand() > 0.15 + 0.85 * bank * bank * ( row === 2 ? 0.5 : 1 ) ) continue;
 				const wx = x + ( rand() - 0.5 ) * step, wz = z + ( row - 0.8 ) * 0.7 + ( rand() - 0.5 ) * 0.5;
 				if ( this.sandAt( wx, wz ) < 0.4 ) continue;
-				const seg = Math.min( SEGMENTS - 1, Math.floor( ( wx - BEACH[ 0 ] ) / span ) );
+				// (jittered past the beach's west end, a clump's in its first segment: it wasn't in any, and
+				// the build threw, a hurricane's wrack now and then never laid)
+				const seg = Math.max( 0, Math.min( SEGMENTS - 1, Math.floor( ( wx - BEACH[ 0 ] ) / span ) ) );
 				const B = Bs[ Math.floor( rand() * GROUPS ) * SEGMENTS + seg ], r = rand();
 				if ( r < 0.72 ) weedMat( B, ground, wx, wz, 0.25 + rand() * 0.45 * ( 0.5 + bank * 0.7 ), 0.06 + rand() * 0.12 * bank, rand, { dry: rand() * 0.3, aspect: 1.3 + rand() * 0.9, rot: rand() * 0.6 - 0.3, strands: this.lite ? 0 : Math.floor( rand() * 2 ), fringe: ! this.lite } );
 				else if ( r < 0.87 ) seagrassWrack( B, ground, wx, wz, 0.25 + rand() * 0.3, rand, { dry: 0.3 + rand() * 0.3, dir: Math.PI / 2 + ( rand() - 0.5 ) * 0.6 } );

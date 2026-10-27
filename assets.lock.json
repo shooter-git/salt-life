@@ -478,6 +478,34 @@
 			"author": "kyles"
 		},
 		{
+			"path": "public/audio/rain_tin_heavy.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/Sassaby/sounds/771981/",
+			"title": "Medium rain on a tin roof",
+			"author": "Sassaby"
+		},
+		{
+			"path": "public/audio/rain_tin_heavy.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/Sassaby/sounds/771981/",
+			"title": "Medium rain on a tin roof",
+			"author": "Sassaby"
+		},
+		{
+			"path": "public/audio/rain_tin_light.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/Sassaby/sounds/771981/",
+			"title": "Medium rain on a tin roof",
+			"author": "Sassaby"
+		},
+		{
+			"path": "public/audio/rain_tin_light.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/Sassaby/sounds/771981/",
+			"title": "Medium rain on a tin roof",
+			"author": "Sassaby"
+		},
+		{
 			"path": "public/audio/rain_water.m4a",
 			"license": "CC0-1.0",
 			"source": "https://freesound.org/people/TRP/sounds/572429/",
@@ -588,6 +616,20 @@
 			"source": "https://freesound.org/people/Mrthenoronha/sounds/371313/",
 			"title": "Fishing Rod Swish Swoosh.wav; Fishing Rod Cast - Swoosh",
 			"author": "Mrthenoronha, mwchristian95"
+		},
+		{
+			"path": "public/audio/shelter_radio.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/relwin/sounds/397088/",
+			"title": "noaa_oceanweather.wav",
+			"author": "relwin"
+		},
+		{
+			"path": "public/audio/shelter_radio.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/relwin/sounds/397088/",
+			"title": "noaa_oceanweather.wav",
+			"author": "relwin"
 		},
 		{
 			"path": "public/audio/shutter.m4a",

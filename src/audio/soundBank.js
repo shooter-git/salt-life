@@ -73,5 +73,10 @@ export const BANK = {
 	rain_wood_light: { file: 'rain_wood_light.ogg', loop: true, lufs: -23.1 },
 	rain_wood_heavy: { file: 'rain_wood_heavy.ogg', loop: true, lufs: -23 },
 	rain_porch: { file: 'rain_porch.ogg', loop: true, lufs: -32.5 },
+	// (M14) the rain on a tin roof, heard from beneath it (as it sets in; heavier), and the radio in the
+	// hurricane shelter, reading the forecast across the hall, its words lost
+	rain_tin_light: { file: 'rain_tin_light.ogg', loop: true, lufs: -23.3 },
+	rain_tin_heavy: { file: 'rain_tin_heavy.ogg', loop: true, lufs: -23.1 },
+	shelter_radio: { file: 'shelter_radio.ogg', loop: true, lufs: -24 },
 	drips: { file: 'drips.ogg', slices: [ [ 0.05, 0.38 ], [ 0.48, 0.38 ], [ 0.91, 0.38 ], [ 1.34, 0.38 ], [ 1.77, 0.38 ], [ 2.2, 0.38 ], [ 2.63, 0.38 ], [ 3.06, 0.38 ] ], lufs: [ -23, -24.5, -24.8, -30.1, -29.1, -26.8, -26.7, -26.5 ] },
 };

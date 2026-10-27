@@ -522,6 +522,10 @@ function cloudLook( o, storm, out = [] ) {
 
 }
 const _look = [];
+// (M14) following another's drift: over how long the difference is taken up (s), and farther apart than
+// this (m) it's taken at once
+const FOLLOW_S = 2, FOLLOW_JUMP = 500;
+const _fd = [ 0, 0, 0, 0 ];
 // (M14) how high the weather's cloud goes, of the shell's depth (its march's ceiling with no tower: a
 // hurricane's wall and bands, their cover past 1, go a little over its top)
 const SHELL_OVER = 1.3;
@@ -1649,6 +1653,8 @@ export class SkyProClouds {
 		this._waited = false; // the generation starts on the second update (the first one is the sky's)
 		this.ready = false;
 		this._windX = 0; this._windZ = 0; this._evoX = 0; this._evoZ = 0; this._elapsed = 0;
+		this._driftV = [ 0, 0, 0, 0 ]; // ((M14) how fast they're drifting and evolving now, m/s)
+		this._follow = null; // ((M14) following another's drift: { d: what's left to take up, left: s })
 		this._prevCam = null;
 		this._prevLight = new THREE.Vector3();
 		this._lastCoverage = - 1;
@@ -1882,9 +1888,20 @@ export class SkyProClouds {
 		// ---- clock and wind
 		this._elapsed += dt;
 		const speed = trades ? P.wind.speed : dr.z;
-		const dx = wx * speed * dt, dz = wz * speed * dt;
+		// ((M14) and what's left of the difference from the drift they follow: followDrift)
+		const fol = this._follow, fk = fol ? Math.min( 1, dt / Math.max( fol.left, 1e-3 ) ) : 0, fd = _fd.fill( 0 );
+		if ( fol ) {
+
+			for ( let i = 0; i < 4; i ++ ) { fd[ i ] = fol.d[ i ] * fk; fol.d[ i ] -= fd[ i ]; }
+			if ( ( fol.left -= dt ) <= 0 ) this._follow = null;
+
+		}
+
+		const dx = wx * speed * dt + fd[ 0 ], dz = wz * speed * dt + fd[ 1 ];
 		this._windX += dx; this._windZ += dz;
-		this._evoX += wx * P.wind.evolutionSpeed * dt; this._evoZ += wz * P.wind.evolutionSpeed * dt;
+		this._evoX += wx * P.wind.evolutionSpeed * dt + fd[ 2 ]; this._evoZ += wz * P.wind.evolutionSpeed * dt + fd[ 3 ];
+		this._driftV[ 0 ] = wx * speed; this._driftV[ 1 ] = wz * speed;
+		this._driftV[ 2 ] = wx * P.wind.evolutionSpeed; this._driftV[ 3 ] = wz * P.wind.evolutionSpeed;
 		U.scfClock.value = [ this.frameIndex % 4096, this._elapsed, dt, 0 ];
 		U.scfWind.value = [ this._windX, this._windZ, this._evoX, this._evoZ ];
 		U.scfWindDelta.value = [ dx, dz, 0, 0 ];
@@ -2198,6 +2215,37 @@ export class SkyProClouds {
 		const t = Math.min( S.clock - S.time, 2 * CB.every ), ox = S.vx * t, oz = S.vz * t;
 		U.scsStorm.value.x = ox; U.scsStorm.value.y = oz;
 		U.scsStormDrift.value.x = S.x + ox; U.scsStormDrift.value.y = S.z + oz;
+
+	}
+
+	// (M14) Playing together, the host's clouds are everyone's (Together): where they've drifted to and
+	// how far they've evolved, the cirrus's drift and the storms' turrets' (their noise), to send; and
+	// another's, followed (sent `late` s ago): the cumulus's difference taken up over FOLLOW_S, or at once
+	// when they're far apart (someone joining: a whole new panorama); the cirrus's and the turrets' at once
+	driftState() {
+
+		const S = this._stormDrift, c = this.cirrus._offset, r = ( v ) => Math.round( v * 10 ) / 10;
+		return [ r( this._windX ), r( this._windZ ), r( this._evoX ), r( this._evoZ ), c ? r( c.x ) : 0, c ? r( c.y ) : 0, r( S.x ), r( S.z ), r( this.uniforms.scsStormDrift.value.z ) ];
+
+	}
+
+	followDrift( d, late = 0 ) {
+
+		if ( ! Array.isArray( d ) || d.length < 9 || ! d.every( Number.isFinite ) ) return;
+		const v = this._driftV, mine = [ this._windX, this._windZ, this._evoX, this._evoZ ];
+		const diff = [ 0, 1, 2, 3 ].map( ( i ) => d[ i ] + v[ i ] * late - mine[ i ] );
+		if ( Math.hypot( diff[ 0 ], diff[ 1 ] ) > FOLLOW_JUMP ) {
+
+			this._windX += diff[ 0 ]; this._windZ += diff[ 1 ]; this._evoX += diff[ 2 ]; this._evoZ += diff[ 3 ];
+			this._follow = null;
+			this.invalidate();
+
+		} else this._follow = { d: diff, left: FOLLOW_S };
+
+		if ( this.cirrus._offset ) this.cirrus._offset.set( d[ 4 ], d[ 5 ] );
+		const S = this._stormDrift;
+		S.x = d[ 6 ]; S.z = d[ 7 ];
+		this.uniforms.scsStormDrift.value.z = d[ 8 ];
 
 	}
 

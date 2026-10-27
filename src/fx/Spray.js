@@ -38,6 +38,9 @@ export const SPRAY = { DROPLET: 0, MIST: 1, LIGAMENT: 2, SPRAY: 3, SHEET: 4 };
 // per-kind constants: droplet (a drop of a few mm, ballistic), mist (fine drops that follow the air),
 // ligament (an elongated blob of water, ~1-2 cm, torn off a sheet or jet), spray (a cloud of drops:
 // the white of splashes), sheet (a thin clear sheet of water peeling off a hull, spreading and tearing)
+// (M14) of the sky's light the spray takes under a grey sky (Sky.overcast 1), against a clear one's: a
+// white surface's share of it (1 / pi) and a little more, the spray scattering it from every side
+const GREY_SKY = 0.5;
 const KIND = {
 	tau: [ 3.0, 0.35, 5.0, 1.8, 2.5 ], // drag time constant toward the air velocity (s): ~ drop size^2
 	grav: [ GRAVITY, 0.3, GRAVITY, 8.5, GRAVITY ], // effective gravity (mist barely settles; torn sheets fall back)
@@ -87,6 +90,7 @@ attribute vec4 iInfo; // kind, life (s), water height under it, seed
 uniform vec3 spraySunDir;
 uniform vec3 spraySun;
 uniform vec3 spraySky;
+uniform float sprayGrey; // (M14) how grey the sky is (Sky.overcast)
 uniform float sprayIntensity;
 uniform float sprayMaxDistance;
 uniform float sprayViewHeight;
@@ -159,22 +163,26 @@ void main() {
 	// ---- lighting (per particle)
 	vec3 L = spraySunDir;
 	float cosT = dot( - Vd, L ); // 1 = looking toward the sun through the particle
+	// ((M14) the sky's light on it: as tuned against a clear sky's, but under a grey one, where it's all the
+	// light there is, no more than a white surface takes from it: at the full irradiance a whale's blow in
+	// the rain glowed several times brighter than anything about it, a blue ball on a grey horizon)
+	vec3 spraySkyLit = spraySky * mix( 1.0, ${ GREY_SKY.toFixed( 3 ) }, sprayGrey );
 	float cosA = dot( Vd, L );
 	vec3 sun = spraySun;
 	// clear water (drop, ligament): the bright sky it refracts and reflects, a strong forward lobe
 	// (diffraction + refraction) when backlit, a small glint from any side
-	vec3 cWater = spraySky * 0.9 + sun * ( sprayPhaseHG( cosT, 0.85 ) * 1.2 + 0.12 );
+	vec3 cWater = spraySkyLit * 0.9 + sun * ( sprayPhaseHG( cosT, 0.85 ) * 1.2 + 0.12 );
 	// dense spray: multiply scattered, white from any side (a diffuse sphere: its far side is in its
 	// own shadow), plus a forward lobe
 	float lambert = ( sqrt( max( 1.0 - cosA * cosA, 0.0 ) ) + ( PI - acos( clamp( cosA, -1.0, 1.0 ) ) ) * cosA ) / PI;
-	vec3 cSpray = sun * ( ( lambert * 0.65 + 0.35 ) / PI ) + spraySky * 1.15;
+	vec3 cSpray = sun * ( ( lambert * 0.65 + 0.35 ) / PI ) + spraySkyLit * 1.15;
 	vec3 fSpray = sun * ( sprayPhaseHG( cosT, 0.6 ) * 0.9 );
 	// mist: a thin veil of fine drops, strongly forward scattering, tinted by the sky
-	vec3 cMist = sun * ( 0.25 / PI ) + spraySky * 0.9;
+	vec3 cMist = sun * ( 0.25 / PI ) + spraySkyLit * 0.9;
 	vec3 fMist = sun * sprayPhaseHG( cosT, 0.75 );
 	// clear sheet: thin water, the sky it shows and a little sun off its surface; the sun shining
 	// through it (forward lobe) is passed on: the thin torn parts glow when backlit
-	vec3 cClear = spraySky * 0.95 + sun * 0.05;
+	vec3 cClear = spraySkyLit * 0.95 + sun * 0.05;
 	vec3 fClear = sun * ( sprayPhaseHG( cosT, 0.8 ) * 1.1 );
 	vec3 col = water ? cWater : isMist ? cMist : isClear ? cClear : cSpray;
 	vFwd = vec4( water ? vec3( 0.0 ) : isMist ? fMist : isClear ? fClear : fSpray, halfX / pixel );
@@ -602,6 +610,7 @@ export class Spray {
 			spraySunDir: G.sunDir,
 			spraySun: G.sunColor,
 			spraySky: G.skyIrradiance,
+			sprayGrey: { value: 0 },
 			sprayIntensity: { value: 1 },
 			sprayMaxDistance: { value: 320 },
 			sprayViewHeight: { value: 720 },

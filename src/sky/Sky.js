@@ -99,6 +99,8 @@ uniform vec4 skyGrey; // (Salt Life) the horizon under a grey sky: ( its radianc
 uniform float skyMurk; // (M13) how much of the sky's lost in a hurricane's rain and spray (0..1)
 uniform vec4 skyFlash; // (M9) lightning: ( toward the strike, how bright )
 uniform vec4 skyFlashShape; // (M12) its glow's tightness, its storm's top (tan), how far a storm of its own
+uniform vec4 skyFlash2; // (M14) the next brightest flash, at the same time: as skyFlash
+uniform vec4 skyFlashShape2; // (M14) and its shape
 uniform vec3 skyFlashColor;
 uniform float skyTime;
 uniform float skyExposure;
@@ -246,6 +248,38 @@ vec4 skyCurtain( vec3 dir, vec3 behind ) {
 }
 #endif
 
+#ifndef SKY_ENVIRONMENT
+// (M9) a flash of lightning seen along dir (F: toward it, how bright; S: (M12) its glow's tightness, its
+// storm's top (tan), how far a storm of its own), through the clouds c: the light it adds
+vec3 skyFlashLight( vec3 dir, vec4 c, vec4 F, vec4 S ) {
+	vec3 add = vec3( 0.0 );
+	float lobe = exp( ( dot( dir, F.xyz ) - 1.0 ) * S.x );
+	float murk = max( skyGrey.a * ( 1.0 - smoothstep( 0.0, 0.3, dir.y ) ), skyMurk );
+	float far = S.z;
+	add += skyFlashColor * F.w * ( 1.0 - far ) * ( ( 1.0 - c.a ) * ( 2.5 * lobe + 0.2 ) + murk * ( 0.6 * lobe + 0.1 ) );
+	// ((M12) a storm on the horizon: its own cloud lit from inside, about the strike, from the horizon up
+	// to its top, a lumpy tower highest at its middle; and the haze about it, faintly. Behind whatever
+	// cloud's between)
+	if ( far > 0.0 ) {
+		float hl = max( length( dir.xz ), 1e-3 ), rise = dir.y / hl;
+		vec2 fd = normalize( F.xz + vec2( 1e-6, 0.0 ) ), dh = dir.xz / hl;
+		float cosA = dot( dh, fd ), az = exp( ( cosA - 1.0 ) * S.x );
+		// (across it in its half-widths, up it as a share of its top)
+		float u = ( dh.x * fd.y - dh.y * fd.x ) * sqrt( S.x * 0.5 ), v = rise / S.y;
+		float lumps = skyCurtainNoise( vec2( u * 2.2 + 7.0, v * 5.0 ) ) * 0.6 + skyCurtainNoise( vec2( u * 5.1 + 3.0, v * 11.0 ) ) * 0.4;
+		float top = 0.45 + 0.5 * exp( - u * u * 0.7 ) + 0.18 * ( lumps - 0.5 );
+		float body = smoothstep( - 0.004, 0.004, rise ) * ( 1.0 - smoothstep( top - 0.2, top, v ) ) * ( 0.55 + 0.9 * lumps );
+		float haze = exp( ( cosA - 1.0 ) * S.x * 0.12 ) * ( 1.0 - smoothstep( 0.0, S.y * 1.6, rise ) ) * step( - 0.02, rise );
+		// ((M14) nearer than the clouds melt into the sky its own tower is drawn (c.a: what the cloud lets
+		// through): that's what's lit, in its own shape)
+		float drawn = 1.0 - smoothstep( ${ f( CLOUD_MELT[ 0 ] ) }, ${ f( CLOUD_MELT[ 1 ] ) }, ${ f( CB.top ) } / max( S.y, 1e-4 ) );
+		float lit = mix( body, smoothstep( - 0.004, 0.004, rise ) * ( 1.0 - smoothstep( 0.9, 1.2, v ) ), drawn );
+		add += skyFlashColor * F.w * far * ( 2.5 * az * lit * mix( 0.35 + 0.65 * c.a, 1.0 - c.a, drawn ) + 0.15 * haze * ( 0.35 + 0.65 * c.a ) );
+	}
+	return add;
+}
+#endif
+
 void main() {
 	vec3 dir = normalize( vSkyDir );
 #ifdef SKY_ENVIRONMENT
@@ -270,32 +304,10 @@ void main() {
 	L = mix( L, skyGrey.rgb, max( skyGrey.a * ( 1.0 - smoothstep( 0.0, 0.3, dir.y ) ), skyMurk ) );
 #ifndef SKY_ENVIRONMENT
 	// (M9) lightning: the cloud lit from inside about the strike, brightest where it's thickest, and the
-	// rain's murk to the horizon with it (the reflections' panorama isn't: it's made over seconds)
-	if ( skyFlash.w > 0.0 ) {
-		float lobe = exp( ( dot( dir, skyFlash.xyz ) - 1.0 ) * skyFlashShape.x );
-		float murk = max( skyGrey.a * ( 1.0 - smoothstep( 0.0, 0.3, dir.y ) ), skyMurk );
-		float far = skyFlashShape.z;
-		L += skyFlashColor * skyFlash.w * ( 1.0 - far ) * ( ( 1.0 - c.a ) * ( 2.5 * lobe + 0.2 ) + murk * ( 0.6 * lobe + 0.1 ) );
-		// ((M12) a storm on the horizon: its own cloud lit from inside, about the strike, from the horizon up
-		// to its top, a lumpy tower highest at its middle; and the haze about it, faintly. Behind whatever
-		// cloud's between)
-		if ( far > 0.0 ) {
-			float hl = max( length( dir.xz ), 1e-3 ), rise = dir.y / hl;
-			vec2 fd = normalize( skyFlash.xz + vec2( 1e-6, 0.0 ) ), dh = dir.xz / hl;
-			float cosA = dot( dh, fd ), az = exp( ( cosA - 1.0 ) * skyFlashShape.x );
-			// (across it in its half-widths, up it as a share of its top)
-			float u = ( dh.x * fd.y - dh.y * fd.x ) * sqrt( skyFlashShape.x * 0.5 ), v = rise / skyFlashShape.y;
-			float lumps = skyCurtainNoise( vec2( u * 2.2 + 7.0, v * 5.0 ) ) * 0.6 + skyCurtainNoise( vec2( u * 5.1 + 3.0, v * 11.0 ) ) * 0.4;
-			float top = 0.45 + 0.5 * exp( - u * u * 0.7 ) + 0.18 * ( lumps - 0.5 );
-			float body = smoothstep( - 0.004, 0.004, rise ) * ( 1.0 - smoothstep( top - 0.2, top, v ) ) * ( 0.55 + 0.9 * lumps );
-			float haze = exp( ( cosA - 1.0 ) * skyFlashShape.x * 0.12 ) * ( 1.0 - smoothstep( 0.0, skyFlashShape.y * 1.6, rise ) ) * step( - 0.02, rise );
-			// ((M14) nearer than the clouds melt into the sky its own tower is drawn (c.a: what the cloud lets
-			// through): that's what's lit, in its own shape)
-			float drawn = 1.0 - smoothstep( ${ f( CLOUD_MELT[ 0 ] ) }, ${ f( CLOUD_MELT[ 1 ] ) }, ${ f( CB.top ) } / max( skyFlashShape.y, 1e-4 ) );
-			float lit = mix( body, smoothstep( - 0.004, 0.004, rise ) * ( 1.0 - smoothstep( 0.9, 1.2, v ) ), drawn );
-			L += skyFlashColor * skyFlash.w * far * ( 2.5 * az * lit * mix( 0.35 + 0.65 * c.a, 1.0 - c.a, drawn ) + 0.15 * haze * ( 0.35 + 0.65 * c.a ) );
-		}
-	}
+	// rain's murk to the horizon with it (the reflections' panorama isn't: it's made over seconds); ((M14) the
+	// brightest flash and the next, each where it is, as bright as it is: two at once in a line of storms)
+	if ( skyFlash.w > 0.0 ) L += skyFlashLight( dir, c, skyFlash, skyFlashShape );
+	if ( skyFlash2.w > 0.0 ) L += skyFlashLight( dir, c, skyFlash2, skyFlashShape2 );
 #endif
 	gl_FragColor = vec4( L * skyExposure, 1.0 );
 	#include <tonemapping_fragment>
@@ -340,6 +352,8 @@ export class Sky {
 			skyMurk: { value: 0 },
 			skyFlash: G.skyFlash, // ((M10) shared: the sea reflects the flash)
 			skyFlashShape: G.skyFlashShape, // ((M12) and its shape, shared too)
+			skyFlash2: { value: new THREE.Vector4() }, // ((M14) the next brightest, at the same time)
+			skyFlashShape2: { value: new THREE.Vector4( 1, 0.5, 0, 0 ) },
 			skyFlashColor: { value: new THREE.Color( 0.82, 0.86, 1.0 ) },
 			// (M11) the showers' curtains in the distance (setCurtains)
 			skyCurtains: { value: Array.from( { length: CURTAIN_MAX }, () => new THREE.Vector4() ) },
@@ -415,6 +429,10 @@ export class Sky {
 		// for one on the horizon; and the brightest's shape: G.skyFlashShape)
 		this.flashFill = 0;
 		this.flashShape = G.skyFlashShape.value;
+		// ((M14) the next brightest flash at the same time, as flash, flashDir and flashShape are: 0 none)
+		this.flash2 = 0;
+		this.flashDir2 = new THREE.Vector3( 0, 1, 0 );
+		this.flashShape2 = this.uniforms.skyFlashShape2.value;
 		this._lit = { sunTransmittance: new THREE.Color(), skyIrradiance: new THREE.Color(), horizon: new THREE.Color() };
 		this._noon = this.atmosphere.lighting( 1, { sunTransmittance: new THREE.Color(), skyIrradiance: new THREE.Color(), horizon: new THREE.Color() } );
 		// the sky's irradiance (luminance) below which the eye adapts: the sun 15 degrees up
@@ -603,6 +621,7 @@ export class Sky {
 		G.horizonColor.value.copy( _c );
 		const F = this.uniforms.skyFlash.value;
 		F.set( this.flashDir.x, this.flashDir.y, this.flashDir.z, this.flash * FLASH );
+		this.uniforms.skyFlash2.value.set( this.flashDir2.x, this.flashDir2.y, this.flashDir2.z, this.flash2 * FLASH );
 		if ( this.scene.background && this.scene.background.isColor ) this.scene.background.copy( _c );
 
 		this.scene.environmentIntensity = this.levels.env * ( 0.6 + 0.4 * day ) * greyRise;

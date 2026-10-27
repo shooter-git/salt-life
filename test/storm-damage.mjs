@@ -13,6 +13,7 @@ import { Builder } from '../src/world/village/GeoBuilder.js';
 import { Colliders } from '../src/world/Colliders.js';
 import { Rand, InstancedProps } from '../src/world/Props.js';
 import { mulberry32 } from '../src/util/Noise.js';
+import { StormWrack } from '../src/world/debris/StormWrack.js';
 import { buildPier, PIER, PIER_STORM } from '../src/world/Pier.js';
 import { buildHouse, buildShed, buildBoathouse } from '../src/world/village/Buildings.js';
 import { Shorebirds } from '../src/world/wildlife/Shorebirds.js';
@@ -238,6 +239,28 @@ const terrain = new TerrainData( 7, decodeIsland( new Uint8Array( readFileSync( 
 	sb.wrack = null;
 	for ( let i = 0; i < 30 * 60; i ++ ) sb.update( 1 / 30, null, batch, camera );
 	check( sb.birds.every( ( b ) => terrain.heightAt( b.x, b.z ) < 1.6 ), 'and once it\'s stale, back to the swash' );
+
+}
+
+// ---- (M14) the wrack laid for any storm: a clump jittered past the beach's west end once fell in no segment
+// and the build threw (a page error now and then in a hurricane, its wrack never laid)
+{
+
+	let threw = 0, built = 0, meshes = 0;
+	const parent = { add: () => meshes ++ };
+	for ( let k = 0; k < 120; k ++ ) {
+
+		const w = new StormWrack( { terrain, nature: {}, wood: {}, parent, lite: k % 2 === 0 } );
+		try {
+
+			w.build( `storm-${ k }:${ ( 1.8 + ( k % 7 ) * 0.2 ).toFixed( 2 ) }`, 1.8 + ( k % 7 ) * 0.2 );
+			built ++;
+
+		} catch ( e ) { threw ++; }
+
+	}
+
+	check( threw === 0 && built === 120 && meshes > 0, `the wrack laid for 120 storms, none failing (${ threw } threw)` );
 
 }
 
