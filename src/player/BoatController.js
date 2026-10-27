@@ -80,7 +80,7 @@ export class BoatController {
 		this.mass = hydro.suggestedMass || 3200;
 		this.com = hydro.centerOfMass ? new THREE.Vector3().copy( hydro.centerOfMass ) : new THREE.Vector3( 0, 0.3, - 0.74 );
 		// principal inertia in the boat frame (+Z forward, +X port): x = pitch, y = yaw, z = roll. Gear
-		// high on deck (traps, hauler, wheelhouse) gives a larger roll radius than the bare hull.
+		// high on deck (hauler, wheelhouse) gives a larger roll radius than the bare hull.
 		this.inertia = hydro.inertia ? hydro.inertia.clone() : new THREE.Vector3( 14600, 15700, 3500 );
 		this.inertia.z *= 1.24;
 		// added mass / inertia when fully wet (fraction of the rigid-body value): surge, sway, heave;

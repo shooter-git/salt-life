@@ -5,10 +5,10 @@ import { GeoKit, triangleCount } from './boat/GeoKit.js';
 import { BoatMaterials } from './boat/BoatMaterials.js';
 import { buildHull, buildHullVolume, keelVolume, houseHalfWidth, KEEL } from './boat/HullBuilder.js';
 import { buildWheelhouse, wheelGeometry, throttleGeometry, radarArrayGeometry, HOUSE, roofTopY } from './boat/Wheelhouse.js';
-import { buildDeckGear, TRAPS, TRAP, HAULER } from './boat/DeckGear.js';
+import { buildDeckGear, HAULER } from './boat/DeckGear.js';
 import { propellerGeometry, rudderGeometry, PROP, RUDDER } from './boat/Running.js';
 
-const STATIC_BUCKETS = [ 'hull', 'gelcoat', 'wood', 'fittings', 'trap', 'glow', 'display', 'glass' ];
+const STATIC_BUCKETS = [ 'hull', 'gelcoat', 'wood', 'fittings', 'glow', 'display', 'glass' ];
 const WHEEL_TURNS = 0.75; // wheel turns from centre to hard over
 const THROTTLE_ANGLE = 0.6; // lever travel (rad) from neutral to full
 const RADAR_RPM = 24;
@@ -182,8 +182,8 @@ export class BoatModel {
 		this.hullSamples = lines.buildHullSamples( 8 );
 		this.colliders = this._buildColliders();
 		// (M12) what of her takes the rain from above (Rain.setDeck: the splashes): the wheelhouse roof, the
-		// foredeck, the traps, the bait barrel and the hauler (her frame: x0, x1, z0, z1, and the top's y)
-		this.rainTops = this.colliders.filter( ( b ) => [ 'roof', 'foredeck', 'trap', 'baitBarrel', 'hauler' ].includes( b.tag ) )
+		// foredeck, the bait barrel and the hauler (her frame: x0, x1, z0, z1, and the top's y)
+		this.rainTops = this.colliders.filter( ( b ) => [ 'roof', 'foredeck', 'baitBarrel', 'hauler' ].includes( b.tag ) )
 			.map( ( b ) => ( { x0: b.center.x - b.half.x, x1: b.center.x + b.half.x, z0: b.center.z - b.half.z, z1: b.center.z + b.half.z, y: b.center.y + b.half.y } ) );
 
 		// ---- state
@@ -369,13 +369,6 @@ export class BoatModel {
 		add( 'helmSeat', V( HOUSE.helmX - 0.23, L.deckY, HOUSE.seatZ - 0.24 ), V( HOUSE.helmX + 0.23, 1.05, HOUSE.seatZ + 0.21 ) );
 		add( 'bench', V( 0.65, L.deckY, 0.075 ), V( 1.07, L.deckY + 0.47, 0.825 ), true );
 		add( 'roof', V( - 1.25, HOUSE.roofUnderY, HOUSE.roofZ0 ), V( 1.25, roofTopY( 0 ), HOUSE.roofZ1 ), true );
-		for ( const [ x, level, z ] of TRAPS ) {
-
-			const y0 = L.deckY + 0.03 + level * ( TRAP.H + 0.035 );
-			add( 'trap', V( x - TRAP.W / 2, y0, z - TRAP.L / 2 ), V( x + TRAP.W / 2, y0 + TRAP.H, z + TRAP.L / 2 ), true );
-
-		}
-
 		add( 'hauler', V( HAULER.x - 0.2, L.deckY, HAULER.z - 0.08 ), V( HAULER.x + 0.2, HAULER.y + 0.2, HAULER.z + 0.25 ) );
 		add( 'baitBarrel', V( 0.6, L.deckY, - 1.06 ), V( 1.12, L.deckY + 0.8, - 0.54 ) );
 		// foredeck steps (walkable) from the house front to the stem head
