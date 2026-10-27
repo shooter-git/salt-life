@@ -193,7 +193,7 @@ const check = ( ok, what ) => {
 
 	}
 
-	check( list.length >= 8 && wrong === 0, `in a break, its bands' curtains hang from their near edges (${ edges } of ${ list.length }), ${ ( Math.min( ...list.map( ( c ) => Math.hypot( c.x - gapAt.x, c.z - gapAt.z ) - c.r ) ) / 1000 ).toFixed( 1 ) } km off at the nearest` );
+	check( list.length >= 4 && list.length < 16 && wrong === 0, `in a break, its bands' curtains hang from their near edges, with gaps between (${ edges } of ${ list.length } ways), ${ ( Math.min( ...list.map( ( c ) => Math.hypot( c.x - gapAt.x, c.z - gapAt.z ) - c.r ) ) / 1000 ).toFixed( 1 ) } km off at the nearest` );
 	// (in its eye: its wall's rain all round; at its middle, beyond the clear eye)
 	const eye = bandCurtains( h, { x: 0, z: 0 }, 1, [], [] );
 	const reach = eye.map( ( c ) => Math.hypot( c.x, c.z ) - c.r );

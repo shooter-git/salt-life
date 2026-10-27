@@ -78,8 +78,11 @@ export const FRONT_KM = [ - 12, 12, 24, 36 ];
 // (dark, dense, its base flat and low: BAND_LOOK), its broken deck between them its own, as photographs of
 // outer bands coming in show them (Emily's, Florence's, Debby's), not the whole sky one or the other by
 // whether it's raining where you are. Over the cover `rain` (from its broken deck's, with the horizon's
-// fill, to its core's)
-const EYE = { clear: [ 0.42, 0.6 ], wall: [ 0.5, 0.68, 1.0, 1.8 ], tower: 0.45, deck: [ 1.0, 0.6 ], band: 0.42, bandFrom: [ 1.4, 2.4 ], floor: 0.25, top: 1.45, lower: 400, base: 500, deeper: 1.65, slope: 0.8, smooth: 0.85, rain: [ 0.72, 0.97 ] };
+// fill, to its core's). Its bands' outer edge, the one that comes to you, sharp: from `edge` of the way
+// on to the next band (2.4 km: the weather's rain's eases off over 9, its first light rain from under it);
+// its rain's deck no higher than `deckTop` of the shell (5.6 km: outer bands' stratiform tops), their
+// towers over it, and the sky's light under it `sky` of the open sky's
+const EYE = { clear: [ 0.42, 0.6 ], wall: [ 0.5, 0.68, 1.0, 1.8 ], tower: 0.45, deck: [ 1.0, 0.6 ], band: 0.42, bandFrom: [ 1.4, 2.4 ], floor: 0.25, top: 1.45, lower: 400, base: 500, deeper: 1.65, slope: 0.8, smooth: 0.85, rain: [ 0.72, 0.97 ], edge: [ 0.3, 0.34 ], sky: 0.03, deckTop: 0.65 };
 const CORE = HURRICANE.core;
 const B = HURRICANE.band;
 
@@ -101,7 +104,7 @@ export function eyeCover( dx, dz, R, tx, tz, h = 0 ) {
 	const s = Math.abs( pm ) + Math.abs( pn ), t = s > 0 ? pn / s : 0;
 	const q = pm >= 0 ? ( pn >= 0 ? t : 4 + t ) : 2 - t;
 	const psi = r / B.gap + B.arms * q / 4, f = psi - Math.floor( psi );
-	const band = ss( 0, 0.1, f ) * ( 1 - ss( 0.25, 0.4, f ) ) * ss( E.bandFrom[ 0 ] * R, E.bandFrom[ 1 ] * R, r );
+	const band = ss( 0, 0.1, f ) * ( 1 - ss( E.edge[ 0 ], E.edge[ 1 ], f ) ) * ss( E.bandFrom[ 0 ] * R, E.bandFrom[ 1 ] * R, r );
 	const deck = E.deck[ 0 ] + ( E.deck[ 1 ] - E.deck[ 0 ] ) * ss( CORE[ 0 ] * R, CORE[ 1 ] * R, r );
 	return ( deck + E.band * band ) * ( 1 - eye ) + E.floor * eye + E.tower * wall;
 
@@ -816,7 +819,7 @@ float scEyeCoverOf( vec2 xz, float hm ) {
 	float s = abs( pm ) + abs( pn ), t = s > 0.0 ? pn / s : 0.0;
 	float q = pm >= 0.0 ? ( pn >= 0.0 ? t : 4.0 + t ) : 2.0 - t;
 	float psi = r / ${ f( B.gap ) } + ${ f( B.arms ) } * q / 4.0, fr = fract( psi );
-	float band = smoothstep( 0.0, 0.1, fr ) * ( 1.0 - smoothstep( 0.25, 0.4, fr ) ) * smoothstep( ${ f( EYE.bandFrom[ 0 ] ) } * R, ${ f( EYE.bandFrom[ 1 ] ) } * R, r );
+	float band = smoothstep( 0.0, 0.1, fr ) * ( 1.0 - smoothstep( ${ f( EYE.edge[ 0 ] ) }, ${ f( EYE.edge[ 1 ] ) }, fr ) ) * smoothstep( ${ f( EYE.bandFrom[ 0 ] ) } * R, ${ f( EYE.bandFrom[ 1 ] ) } * R, r );
 	float deck = mix( ${ f( EYE.deck[ 0 ] ) }, ${ f( EYE.deck[ 1 ] ) }, smoothstep( ${ f( CORE[ 0 ] ) } * R, ${ f( CORE[ 1 ] ) } * R, r ) );
 	return ( deck + ${ f( EYE.band ) } * band ) * ( 1.0 - eye ) + ${ f( EYE.floor ) } * eye + ${ f( EYE.tower ) } * wall;
 }
@@ -919,7 +922,10 @@ ScCandidate scCandidate( vec3 p, float coverage, float lod ) {
 	// ((M14) the weather's cloud, and a hurricane's past 1, up to a little over the shell's top, as when the
 	// march stopped there: only a tower goes on up past it (the ceiling raised for a tower anywhere let a
 	// hurricane's bands and its core heap up to the tropopause, one grey wall)
-	float top = min( weather + coverage - 1.0 + dilation * coverage, ${ f( SHELL_OVER ) } ), bottom = 0.0;
+	// (and a hurricane's rain's deck no higher than EYE.deckTop: its bands' towers stand over it, their
+	// faces heaped and lit, as a band coming in shows them, not one smooth slab up to the shell's top. Not
+	// its wall)
+	float top = min( weather + coverage - 1.0 + dilation * coverage, mix( ${ f( SHELL_OVER ) }, ${ f( EYE.deckTop ) }, grey * ( 1.0 - smoothed / ${ f( EYE.smooth ) } ) ) ), bottom = 0.0;
 	// ((M14) where a turret or the mass stands over the cumulus: its base forms there. Not where it's lower:
 	// the cumulus about a storm are as the weather has them, no plate of cloud about its foot)
 	if ( own > top ) { top = own; floorMask = max( floorMask, heaped ); }
@@ -1154,10 +1160,13 @@ ScMarch scMarch( vec3 origin, vec3 dir, float dither, float pixelConeAngle, floa
 			if ( hasDirectLight ) {
 				energy = scLightEnergy( shadowTau + sigmaT * scfLightOffsets[ 0 ].w, phase );
 			}
-			float skyVisibility = 0.2 + 0.8 / ( 1.0 + ( skyTau + sigmaT * 25.0 ) * 0.35 );
-			// ((M14) no sunlit sea under a hurricane's bands and its core to light them from below: it's in their
-			// shadow. Its wall's, over its eye's, is lit)
-			vec3 ambient = ( mix( mix( zenith, horizon, 0.55 ), zenith, sqrt( height ) ) * skyVisibility + bounce * ( 1.0 - height ) * ( 1.0 - c.grey * ( 1.0 - c.soft / ${ f( EYE.smooth ) } ) ) )
+			// ((M14) under a hurricane's rain, beyond its wall's face, kilometres of cloud over it: the sky's light
+			// a few hundredths of the open sky's, not a fifth, as under a thunderstorm (EYE.sky). So a band's
+			// underside is dark against a break, as photographs of them coming in have it; and no sunlit sea
+			// under it to light it from below. Its wall's face, over its eye, is lit)
+			float shade = c.grey * ( 1.0 - c.soft / ${ f( EYE.smooth ) } );
+			float skyVisibility = mix( 0.2, ${ f( EYE.sky ) }, shade ) + 0.8 / ( 1.0 + ( skyTau + sigmaT * 25.0 ) * 0.35 );
+			vec3 ambient = ( mix( mix( zenith, horizon, 0.55 ), zenith, sqrt( height ) ) * skyVisibility + bounce * ( 1.0 - height ) * ( 1.0 - shade ) )
 				* mix( scsCloudLight.z, scsBand1.y, c.grey ) * ( 1.0 + scsCloudLight.w );
 			vec3 light = ( direct * energy * powder * baseShadow + ambient ) * mix( scsCloudLight.x, scsBand1.x, c.grey );
 			float stepT = exp( - sigmaT * stepLength );

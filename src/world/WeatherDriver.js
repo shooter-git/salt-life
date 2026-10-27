@@ -285,7 +285,7 @@ export class WeatherDriver {
 const HURRICANE_DRIFT = { trades: 12, k: 0.9, least: 6 };
 // ((M14) between its outer bands, its deck broken: as grey as this, the sun through it now and then, as
 // photographs of bands coming in show it)
-const GAP_OVERCAST = 0.25;
+const GAP_OVERCAST = 0.1;
 const _up = new Vector2();
 WeatherDriver.prototype.hurricaneSky = function ( sky, w ) {
 
@@ -344,10 +344,12 @@ function toward( v, target, d ) {
 // eyeCover's at its cloud's base: the clouds' band look's), as photographs of outer bands coming in show
 // them: shafts of rain hanging from a band's near edge to the sea. Each of `ways` ways round from `at` (the
 // camera), out past any rain you're in, where its rain's first met (out to `far`), a shaft that far in, as
-// wide as a band's cells of rain are (`r`, m), each its own, as heavy as its rain (`rain`). After the
+// wide as a band's cells of rain are (`r`, m), each its own, as heavy as its rain (`rain`); out among its
+// bands, beyond its wall (EYE's, `wall` of its rmax), not every way (`gaps` of them none): a band's rain
+// hangs in shafts with gaps between, as photographs have it, not one fence along the horizon. After the
 // showers' (Weather.showers: theirs as far as the hurricane isn't the weather here, its share k), into out
 // (its objects filled again each call): for Sky.setCurtains
-const BAND_CURTAIN = { ways: 16, near: 1500, far: 40000, step: 1000, at: 0.9, r: [ 1600, 3200 ], rain: [ 0.6, 0.95 ] };
+const BAND_CURTAIN = { ways: 16, near: 1500, far: 40000, step: 1000, at: 0.9, r: [ 1600, 3200 ], rain: [ 0.35, 1 ], gaps: 0.35, wall: 1.8 };
 export function bandCurtains( h, at, k, cells, out ) {
 
 	const B = BAND_CURTAIN;
@@ -377,8 +379,9 @@ export function bandCurtains( h, at, k, cells, out ) {
 
 		}
 
-		const r = B.r[ 0 ] + ( B.r[ 1 ] - B.r[ 0 ] ) * hash( i, 0xb4d ), d = hi + r;
-		put( at.x + dx * d, at.z + dz * d, r, k * ( B.rain[ 0 ] + ( B.rain[ 1 ] - B.rain[ 0 ] ) * hash( i, 0x5a1 ) ) );
+		const r = B.r[ 0 ] + ( B.r[ 1 ] - B.r[ 0 ] ) * hash( i, 0xb4d ), d = hi + r, x = at.x + dx * d, z = at.z + dz * d;
+		if ( hash( i, 0x9e1 ) < B.gaps && Math.hypot( x - h.x, z - h.z ) > B.wall * h.rmax ) continue;
+		put( x, z, r, k * ( B.rain[ 0 ] + ( B.rain[ 1 ] - B.rain[ 0 ] ) * hash( i, 0x5a1 ) ) );
 
 	}
 
