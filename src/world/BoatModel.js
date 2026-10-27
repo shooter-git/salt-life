@@ -11,8 +11,8 @@ import { propellerGeometry, rudderGeometry, PROP, RUDDER } from './boat/Running.
 const STATIC_BUCKETS = [ 'hull', 'gelcoat', 'wood', 'fittings', 'glow', 'display', 'glass' ];
 const WHEEL_TURNS = 0.75; // wheel turns from centre to hard over
 const THROTTLE_ANGLE = 0.6; // lever travel (rad) from neutral to full
-const RADAR_RPM = 24;
-const PROP_DISPLAY_RPS = 5;
+export const RADAR_RPM = 24;
+export const PROP_DISPLAY_RPS = 5;
 
 const _v = new Vector3();
 const _pos = new Vector3();

@@ -11,8 +11,8 @@ import { knots } from './Units.js';
 //   in company    time runs for everyone; a rest happens once all of you want it (each choice shows
 //                 who wants it; a dot on the clock when someone else does and you haven't said)
 // It says when Joe and Marta open or shut (M9: or that they've shut for the weather), and (Salt Life) the
-// weather: what it is (M9: and its rain), what's coming, and on your own a choice of it (held while
-// you're alone; in company it's the day's). No toasts: a rest dims the world for a moment instead.
+// weather: what it is (M9: and its rain), what's coming, and a choice of it (in company, for everyone
+// here: Together.setWeather). No toasts: a rest dims the world for a moment instead.
 //   const t = new TimeHUD( game, purse, root );  t.update( dt )  (per frame)  t.toggle( open? )
 //   wxWind( weather ) -> 'NNW' (where it's from)   wxRain( weather ) -> 'rain' ('' dry, or the name says it)
 //   (M13) wxNews( news, weather, T, locale ) -> 'Hurricane warning: its winds from 03:00 tomorrow' ('' none)
@@ -181,7 +181,7 @@ export class TimeHUD {
 	state() {
 
 		const s = this.app.settings, t = this.app.together;
-		const st = { hour: s.timeOfDay, day: s.day, held: s.timeSpeed === 0, alone: ! t || t.alone, wishes: new Map(), here: [], mine: null, asks: [] };
+		const st = { hour: s.timeOfDay, day: s.day, held: s.timeSpeed === 0, alone: ! t || t.surelyAlone, wishes: new Map(), here: [], mine: null, asks: [] };
 		if ( t && ! st.alone ) {
 
 			const w = t.restWishes();
@@ -289,9 +289,9 @@ export class TimeHUD {
 		const asks = st.asks.map( ( a ) => `${ a.name }:${ a.to }` ).join( ',' );
 		// (Salt Life) the weather as it's going to be (not as it's easing there: the menu isn't drawn again
 		// every frame), and what's coming
-		// (chosen: what you picked; pick: whether it holds yet, once you're surely alone)
-		const wx = this.app.weather && this.app.weather.target, chosen = st.alone ? this.app.settings.weather : null;
-		const pick = chosen && this.app.weatherPick ? this.app.weatherPick() : chosen;
+		// (chosen: what's picked, yours or, in company, anyone's for everyone)
+		const wx = this.app.weather && this.app.weather.target, chosen = this.app.settings.weather || null;
+		const pick = chosen;
 		const next = wx && ! pick ? forecast( islandTime( st.day, st.hour ), 12 ) : null;
 		const wet = wxRain( wx );
 		// ((M10) and the water, while a blow's left it murky)
@@ -301,7 +301,7 @@ export class TimeHUD {
 		const stalls = wx && wx.boarded ? 'Joe and Marta have boarded up for the hurricane' : wx && shutFor( wx.id ) ? 'Joe and Marta have shut for the weather' : `${ stall( 'Joe', HOURS.joe ) } · ${ stall( 'Marta', HOURS.marta ) }`;
 		// ((M13) and what's said of a hurricane on its way: a picked one passes as one of the day's would)
 		const T = islandTime( st.day, st.hour ), news = wxNews( this.app.weather && this.app.weather.news, wx, T, loc );
-		const wxNext = pick === 'hurricane' ? `Your own hurricane${ news ? ` · ${ news }` : ', gone by' }` : pick ? 'Your choice holds while you\'re on your own'
+		const wxNext = pick === 'hurricane' ? `${ st.alone ? 'Your own' : 'A chosen' } hurricane${ news ? ` · ${ news }` : ', gone by' }` : pick ? ( st.alone ? 'Your choice holds' : 'Chosen for everyone here' )
 			: st.alone || ! wx ? ( next ? `Later: ${ WEATHER_NAMES[ next.id ].toLowerCase() }, from ${ at( next.at % 24 ) }` : 'Settled for now' )
 				: `The weather follows the island's day${ next ? ` · later ${ WEATHER_NAMES[ next.id ].toLowerCase() }` : '' }`;
 		const wxSaid = pick ? '' : news, warned = this.app.weather && this.app.weather.news && this.app.weather.news.stage === 'warning';
@@ -316,16 +316,16 @@ export class TimeHUD {
 			return `<button type="button" data-rest="${ to }" class="${ st.mine === to ? 'is-on' : '' }" aria-pressed="${ st.mine === to }">${ REST_NAMES[ to ] }<small>${ small }</small></button>`;
 
 		} ).join( '' );
+		// (Salt Life) the weather: the day's, or one picked (in company, for everyone here)
+		const weather = [ null, ...WEATHER_IDS ].map( ( id ) => {
+
+			const on = chosen === id;
+			return `<button type="button" data-weather="${ id || '' }" class="${ on ? 'is-on' : '' }" aria-pressed="${ on }">${ id ? PICK_NAMES[ id ] : 'Forecast' }<small>${ id ? knots( WEATHER_WIND[ id ] ) : 'today' }</small></button>`;
+
+		} ).join( '' );
 		let body, note = '';
 		if ( st.alone ) {
 
-			// (Salt Life) the weather: the day's, or one of your own while you're alone
-			const weather = [ null, ...WEATHER_IDS ].map( ( id ) => {
-
-				const on = ( chosen || null ) === id;
-				return `<button type="button" data-weather="${ id || '' }" class="${ on ? 'is-on' : '' }" aria-pressed="${ on }">${ id ? PICK_NAMES[ id ] : 'Forecast' }<small>${ id ? knots( WEATHER_WIND[ id ] ) : 'today' }</small></button>`;
-
-			} ).join( '' );
 			body = `<button type="button" class="gm-time-hold" data-hold>${ st.held ? ICON.play : ICON.held }<span>${ st.held ? 'Let the day run' : 'Hold the clock' }</span><small>${ st.held ? 'held' : 'running' }</small></button>
 				<div class="gm-time-label">Rest until</div><div class="gm-time-rest">${ rest }</div>
 				<div class="gm-time-label">Weather</div><div class="gm-time-rest is-wx">${ weather }</div>`;
@@ -336,7 +336,8 @@ export class TimeHUD {
 			if ( st.mine ) note = `Waiting for everyone to rest until ${ REST_NAMES[ st.mine ].toLowerCase() }. Tap it again to change your mind.`;
 			else if ( ask ) note = `<b>${ esc( ask.name ) }</b> would rest until ${ REST_NAMES[ ask.to ].toLowerCase() }. Choose it too to agree.`;
 			body = `<p class="gm-time-sub">Time runs for everyone here. You rest once all of you choose the same.</p>
-				<div class="gm-time-label">Rest until</div><div class="gm-time-rest">${ rest }</div><p class="gm-time-note">${ note }</p>`;
+				<div class="gm-time-label">Rest until</div><div class="gm-time-rest">${ rest }</div><p class="gm-time-note">${ note }</p>
+				<div class="gm-time-label">Weather, for everyone here</div><div class="gm-time-rest is-wx">${ weather }</div>`;
 
 		}
 
@@ -367,13 +368,21 @@ export class TimeHUD {
 
 	}
 
-	// (Salt Life) the weather you choose on your own (null: the day's); it comes in over a minute or two
+	// (Salt Life) the weather you choose (null: the day's; in company, for everyone here); it comes in over
+	// a minute or two
 	pickWeather( id ) {
 
-		const s = this.app.settings;
+		const s = this.app.settings, t = this.app.together;
 		// ((M13) a hurricane of your own comes in from now)
-		if ( id === 'hurricane' && s.weather !== 'hurricane' ) s.weatherSince = islandTime( s.day, s.timeOfDay );
-		s.weather = id;
+		const since = id === 'hurricane' && s.weather !== 'hurricane' ? islandTime( s.day, s.timeOfDay ) : s.weatherSince;
+		if ( t ) t.setWeather( id, since );
+		else {
+
+			s.weather = id;
+			s.weatherSince = since;
+
+		}
+
 		this.app.saveClock && this.app.saveClock();
 		this._sig = '';
 
@@ -384,7 +393,7 @@ export class TimeHUD {
 
 		const t = this.app.together, s = this.app.settings;
 		this._sig = '';
-		if ( t && ! t.alone ) {
+		if ( t && ! t.surelyAlone ) {
 
 			t.rest( to );
 			return;
