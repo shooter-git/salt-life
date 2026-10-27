@@ -70,15 +70,12 @@ export class Waves {
 		const turn = Math.atan2( SWELL_WEST.y, SWELL_WEST.x ) - swell;
 		this._westTurn = Math.atan2( Math.sin( turn ), Math.cos( turn ) );
 		this.iterations = 2; // the CPU height's fixed-point steps (more on steep seas: setSea)
-		// 1 / the waves' summed height: a point's height over the sea, as a share of the highest crest
-		this.crest = { value: 1 / this.waves.reduce( ( s, w ) => s + w.a, 0 ) };
 
 		// GLSL: uniforms waveA[ i ] = ( d.x, d.z, k, omega ), waveB[ i ] = ( a, qa, phase, 0 )
 		this.uniforms = {
 			waveA: { value: this.waves.map( ( w ) => new Vector4( w.dx, w.dz, w.k, w.omega ) ) },
 			waveB: { value: this.waves.map( ( w ) => new Vector4( w.a, w.qa, w.phase, 0 ) ) },
 			waveTime: G.time,
-			waveCrest: this.crest,
 		};
 		this.glsl = /* glsl */`
 #define WAVE_COUNT ${ n }
@@ -124,7 +121,7 @@ vec3 waveDisplacement( vec2 x0, float fade, out vec3 normal ) { return waveDispl
 		this.sea[ 0 ] = swell;
 		this.sea[ 1 ] = windSea;
 		const n = this.waves.length;
-		let steep = 0, sum = 0;
+		let steep = 0;
 		this.waves.forEach( ( w, i ) => {
 
 			w.a = w.a0 * ( w.from === 's' ? swell : windSea );
@@ -133,13 +130,11 @@ vec3 waveDisplacement( vec2 x0, float fade, out vec3 normal ) { return waveDispl
 			B.x = w.a;
 			B.y = w.qa;
 			steep += w.k * w.qa;
-			sum += w.a;
 
 		} );
 		// a steeper sea moves its points further: the CPU's inversion (heightAt) takes more steps to
 		// land on the drawn surface (today's seas take 2 on every tier)
 		this.iterations = steep > 0.34 ? 4 : steep > 0.28 ? 3 : 2;
-		this.crest.value = 1 / sum;
 
 	}
 

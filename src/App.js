@@ -49,6 +49,7 @@ import { MarineSnow } from './fx/MarineSnow.js';
 import { Whale } from './world/marine/Whale.js';
 import { Spray } from './fx/Spray.js';
 import { StormSpray } from './fx/StormSpray.js';
+import { WhitecapSpray } from './fx/WhitecapSpray.js';
 import { FlyingDebris } from './fx/FlyingDebris.js';
 import { insideRoom, roomMatrix } from './world/village/StormPlaces.js';
 import { AirMotes } from './fx/AirMotes.js';
@@ -319,6 +320,8 @@ export class App {
 		this.boatSpray = new BoatSpray( { boat: this.boatCtl, spray: this.spray } );
 		// ((M13) and in a hurricane's wind, the spray torn off the sea)
 		this.stormSpray = new StormSpray( { spray: this.spray, terrain: this.terrainData, waves: this.waves, tier } );
+		// ((M14) and off the open sea's whitecaps near you, in any breeze)
+		this.whitecapSpray = new WhitecapSpray( { spray: this.spray, caps: this.water.whitecaps, waves: this.waves, tier } );
 		// (M9) the rain around the camera (fx/Rain.js), and the lightning (sky/Lightning.js: the strikes
 		// everyone sees, their flash on the clouds and the island, the bolts, the thunder)
 		this.rain = new Rain( { terrain: this.terrain, cover: this.cover, tier } );
@@ -783,6 +786,7 @@ export class App {
 		}
 		this.boatSpray.update( dt );
 		this.stormSpray.update( dt, this.camera );
+		this.whitecapSpray.update( dt, this.camera );
 		this.spray.update( dt, this.camera, this.renderer.domElement.height );
 		this.rain.update( dt, this.camera, this.cameraWaterHeight, this.renderer.domElement.height );
 		this.flying.update( dt, this.camera, this.cameraWaterHeight );

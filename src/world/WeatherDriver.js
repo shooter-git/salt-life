@@ -61,12 +61,6 @@ const GALE = 20;
 // (about a quarter of the compass in two game hours)
 const TURN_RATE = 0.015;
 const JUMP = 0.5; // game hours: more than this between frames, the clock jumped
-// whitecaps: the share of the sea that breaks white goes as U^3.41 (Monahan & O'Muircheartaigh 1980);
-// none counted at a fair day's breeze or less, so the sea is as it always was. The water takes it as a
-// strength, 0 to WHITECAP in a gale's wind
-const monahan = ( u ) => 3.84e-6 * Math.pow( Math.max( 0, u ), 3.41 );
-const WHITECAP = 0.85;
-const whitecap = ( u ) => WHITECAP * Math.min( 1, Math.max( 0, monahan( u ) - monahan( 7 ) ) / ( monahan( 20 ) - monahan( 7 ) ) );
 const KEYS = [ 'wind', 'swell', 'windSea', 'surf', 'west', 'visibility', 'murk', 'hurricane', 'surge', 'rainHaze', 'sprayHaze' ];
 const QUICK = [ 'rain', 'thunder', 'front', 'eye' ];
 // (M13) in a hurricane the wind comes round up to this many times quicker in light airs (its eye's), from
@@ -270,7 +264,8 @@ export class WeatherDriver {
 		sky.storm = w.storm;
 		sky.visibility = w.visibility;
 		this.hurricaneSky( sky, w );
-		this.water.whitecap.value = whitecap( G.windSpeed.value );
+		// (the whitecaps: (M14) Monahan's share of the sea breaking white for the wind, from a light breeze up)
+		this.water.whitecaps.set( G.windSpeed.value );
 		// ((M13) the sea streaked white with blown foam, from a storm's wind (Beaufort 10) to a hurricane's)
 		if ( this.water.spume ) this.water.spume.value = smoothstep( SPUME[ 0 ], SPUME[ 1 ], G.windSpeed.value );
 
