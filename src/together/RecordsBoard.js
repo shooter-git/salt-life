@@ -22,7 +22,14 @@ export class RecordsBoard {
 		this.group.name = 'RecordsBoard';
 		const m = new Matrix4().makeRotationY( STAND.yaw ).setPosition( STAND.x, 0, STAND.z ).multiply( new Matrix4().makeRotationY( SPOT.yaw ).setPosition( SPOT.x, 0, SPOT.z ) );
 		this.group.applyMatrix4( m );
-		this.group.position.y = terrain.heightAt( this.group.position.x, this.group.position.z );
+		// (on its lowest foot: the sand slopes under it, and on the height at its middle two feet stood in
+		// the air)
+		this.group.position.y = Math.min( ...[ [ - 0.29, 0.21 ], [ 0.29, 0.21 ], [ - 0.29, - 0.21 ], [ 0.29, - 0.21 ] ].map( ( [ fx, fz ] ) => {
+
+			const e = this.group.matrix.elements;
+			return terrain.heightAt( this.group.position.x + e[ 0 ] * fx + e[ 8 ] * fz, this.group.position.z + e[ 2 ] * fx + e[ 10 ] * fz );
+
+		} ) );
 
 		// the A-frame: two panels leaning together, meeting at the top (their feet 2 × 0.9 sin 0.24 m
 		// apart), weathered wood; the slate's chalk on the front one

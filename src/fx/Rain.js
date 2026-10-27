@@ -25,7 +25,7 @@ const f = ( x ) => {
 // (M10) And where they land, splashes: a small crown popping up and gone in a moment, on the ground
 // above the sea (the sea has its rings: WaterSurface) and on the boat's cockpit sole (the deck aft of
 // the wheelhouse, as a box in her frame: setDeck), (M12) and on whatever's highest of her: the
-// wheelhouse roof, the foredeck, the traps (setDeck's tops), and on the rocks about you (setRocks: each
+// wheelhouse roof, the foredeck, the bait barrel (setDeck's tops), and on the rocks about you (setRocks: each
 // as an ellipsoid, as Rocks.splashRocks gives them), and (M11) on what covers the island where it's the
 // top (the pier's deck, the boardwalks, the roofs and awnings; not the thatch, which takes it in), so
 // none under it. Hashed about the camera too, each at a new spot each time it pops; one more instanced
@@ -322,7 +322,7 @@ void main() {
 	vec2 local = ( fract( c.xy - splashCamPos.xz / B ) - 0.5 ) * B;
 	vec3 p = vec3( splashCamPos.x + local.x, 0.0, splashCamPos.z + local.y );
 	// where it lands: the highest of the boat's tops there ((M12) her cockpit's sole, the wheelhouse roof,
-	// the foredeck, the traps), or the top of what's there where it's above the sea: what covers the
+	// the foredeck, the bait barrel), or the top of what's there where it's above the sea: what covers the
 	// ground (the pier's deck, a roof: not thatch, which takes it in), or the ground
 	vec3 b = ( splashBoatInv * vec4( p, 1.0 ) ).xyz;
 	float deckY = -1e4;
