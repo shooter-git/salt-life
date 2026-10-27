@@ -4,6 +4,7 @@ import { Avatar, LOOKS, lookOf } from './Avatar.js';
 import { figureStandIn } from './Figure.js';
 import { RecordsBoard } from './RecordsBoard.js';
 import { BoatLamps } from '../world/boat/BoatLamps.js';
+import { RADAR_RPM, PROP_DISPLAY_RPS } from '../world/BoatModel.js';
 import { FISH, fishLengthCm, isTrophy } from '../game/FishTable.js';
 import { ROD_L, SEAT_Y } from '../game/FishingRod.js';
 import { gunModels, setBands } from '../game/Speargun.js';
@@ -23,6 +24,11 @@ import { WORLD } from '../world/WorldLayout.js';
 //  - the time of day: one clock for everyone (the shared value 'clock': { at, hour, day, speed }, see
 //    game/IslandClock.js), which the host sets if there's none. On your own you can hold it and rest
 //    until later; in company it runs, and a rest needs everyone here to want it ('rest.<id>')
+//  - the weather picked: one for everyone (the shared value 'weather': { id, since }: null the day's;
+//    since, a hurricane's start), anyone's pick, a new room starting from its host's
+//  - the sea: its waves' time (G.time) from the shared 'waves' (ms since 1970 when it was 0), which the host
+//    sets from its own, so the same waves roll under everyone (each kept its own, and a boat, a swimmer or
+//    a bobber sat on another's sea as it was there: someone's boat awash, its deck under your waves)
 //  - catches: a message to the others ('catch'), who see the fish on your line and you cheering; a
 //    toast only for one worth hearing of (an island record or a trophy-sized fish)
 //  - the island's records: each species' heaviest fish anyone in the group has landed, who and when,
@@ -43,8 +49,9 @@ import { WORLD } from '../world/WorldLayout.js';
 //   const t = new Together( app );  t.track( dt )  (before the player: where everyone is, the boat
 //   you ride);  t.update( dt )  (after the game: the camera is placed)
 //   t.syncClock( settings )  (each frame: the time of day from the shared clock)
+//   t.syncWaves()  (each frame, after the time's moved on: the waves' time from the shared one)
 //   t.alone  t.holdClock( held )  t.rest( 'dawn' )  t.restWishes()  (the clock's menu: game/TimeHUD.js)
-//   t.surelyAlone  (the weather you pick holds only then: world/WeatherDriver.js)
+//   t.setWeather( id, since )  (a pick, for everyone here)
 //   t.week()  (this week's order's tally)  t.deliver( kg )  (a sale toward it)
 
 const SEND = 0.1; // s between poses
@@ -137,6 +144,16 @@ class TheirBoat {
 
 const _fw = new Vector3();
 
+// another player's boat as their pose has it ({ pos, quat, water: the sea's height under her there, or
+// null }) on your sea: as high over it as over theirs, so she's never awash here, nor out of it, whatever
+// the difference between the two (the waves' time a moment apart, a tier's fewer waves). waves: Waves
+export function floatBoat( boat, waves ) {
+
+	if ( boat && typeof boat.water === 'number' && waves ) boat.pos.y += waves.heightAt( boat.pos.x, boat.pos.z ) - boat.water;
+	return boat;
+
+}
+
 export class Together {
 
 	constructor( app ) {
@@ -167,6 +184,7 @@ export class Together {
 		if ( clock ) this._adopt( clock );
 		else if ( s.isHost ) this.setClock( app.settings.timeOfDay, app.settings.day, app.settings.timeSpeed );
 		s.onChange( 'clock', ( value ) => this._adopt( value ) );
+		this._shareWorld();
 		if ( s.onAnyChange ) s.onAnyChange( ( key ) => key.startsWith( 'rest.' ) && this._restVote() );
 		if ( s.onHostChange ) s.onHostChange( () => {
 
@@ -438,11 +456,69 @@ export class Together {
 
 	}
 
-	// (Salt Life) alone and sure of it: a solo session, or nobody else here once the lists have had time
-	// to name everyone (the game's first list may not have whoever was already there)
+	// alone and sure of it: a solo session, or nobody else here once the lists have had time to name
+	// everyone (the game's first list may not have whoever was already there: holding or resting the
+	// clock then set the room's, held for everyone)
 	get surelyAlone() {
 
 		return this.session.mode === 'solo' || ( this.others.size === 0 && ( this._settled || Date.now() - this._since > SETTLE_MS ) );
+
+	}
+
+	// the weather picked and the waves' time: the session's, or yours if there's none and you host (and
+	// again if you come to host a room that has none)
+	_shareWorld() {
+
+		const s = this.session, set = this.app.settings;
+		this._waves = null;
+		const share = () => {
+
+			if ( ! s.isHost ) return;
+			if ( ! s.get( 'weather' ) ) this.setWeather( set.weather, set.weatherSince );
+			if ( typeof s.get( 'waves' ) !== 'number' ) this._setWaves();
+
+		};
+		const wx = s.get( 'weather' ), waves = s.get( 'waves' );
+		if ( wx ) this._adoptWeather( wx );
+		if ( typeof waves === 'number' ) this._waves = waves;
+		share();
+		s.onChange( 'weather', ( value ) => this._adoptWeather( value ) );
+		s.onChange( 'waves', ( value ) => { if ( typeof value === 'number' ) this._waves = value; } );
+		if ( s.onHostChange ) s.onHostChange( share );
+
+	}
+
+	// the weather picked, for everyone here (id null: the day's; since: a hurricane's start, an
+	// island time), and as it's adopted from the session
+	setWeather( id, since ) {
+
+		const value = { id: id || null, since: Number.isFinite( since ) ? since : 0 };
+		this._adoptWeather( value );
+		if ( this.session.mode !== 'solo' ) this.session.set( 'weather', value ).catch( ( e ) => console.warn( 'weather', e ) );
+
+	}
+
+	_adoptWeather( value ) {
+
+		if ( ! value || typeof value !== 'object' ) return;
+		const s = this.app.settings;
+		s.weather = typeof value.id === 'string' ? value.id : null;
+		s.weatherSince = Number.isFinite( value.since ) ? value.since : 0;
+
+	}
+
+	// the waves' time: the room's, from the host's own (so the host's sea doesn't jump)
+	_setWaves() {
+
+		if ( this.session.mode === 'solo' ) return;
+		this._waves = Date.now() - G.time.value * 1000;
+		this.session.set( 'waves', this._waves ).catch( ( e ) => console.warn( 'waves', e ) );
+
+	}
+
+	syncWaves() {
+
+		if ( this._waves !== null && this.session.mode !== 'solo' ) G.time.value = ( Date.now() - this._waves ) / 1000;
 
 	}
 
@@ -482,7 +558,7 @@ export class Together {
 	// hold the clock, or let it run again: only on your own -> done?
 	holdClock( held ) {
 
-		if ( ! this.alone ) return false;
+		if ( ! this.surelyAlone ) return false;
 		const s = this.app.settings;
 		this.setClock( s.timeOfDay, s.day, held ? 0 : DAY_RATE );
 		return true;
@@ -494,7 +570,7 @@ export class Together {
 	rest( to ) {
 
 		const s = this.app.settings;
-		if ( this.alone ) {
+		if ( this.surelyAlone ) {
 
 			if ( REST[ to ] === undefined ) return false;
 			const t = restTo( s.timeOfDay, s.day, to );
@@ -575,8 +651,10 @@ export class Together {
 		}
 		// someone new: the host says what time it is (a clock set before the session was joined stayed
 		// on this device), and a held clock runs again: in company it runs for everyone
-		const s = this.app.settings;
-		if ( came && ! first && this.session.isHost ) this.setClock( s.timeOfDay, s.day, s.timeSpeed || DAY_RATE );
+		// (the room's clock as it is now: your settings catch up with it only as your frames run, and a hidden
+		// tab's don't)
+		const s = this.app.settings, now = this._clock ? clockAt( this._clock ) : { hour: s.timeOfDay, day: s.day };
+		if ( came && ! first && this.session.isHost ) this.setClock( now.hour, now.day, s.timeSpeed || DAY_RATE );
 
 		for ( const [ id, o ] of this.others ) {
 
@@ -764,23 +842,21 @@ export class Together {
 		if ( r ) {
 
 			body.r = r;
-			if ( r >= 3 && rod.lineInWater ) body.b = [ r2( rod.bobber.x ), r2( rod.bobber.y ), r2( rod.bobber.z ) ];
+			if ( r >= 3 && rod.lineInWater ) body.b = [ r2( rod.bobber.x ), r2( rod.bobber.y ), r2( rod.bobber.z ), r2( app.waves.heightAt( rod.bobber.x, rod.bobber.z ) ) ];
 			if ( r === 5 && app.game.fight ) body.k = r2( Math.min( 1, app.game.fight.tension || 0 ) );
 
 		}
 
-		// your boat: whenever it's away from its mooring, or you're aboard it; riding along in someone
-		// else's, whose (R), and where on its deck
-		if ( ! boat.moored || ( ! p.riding && ( m === 'd' || m === 'h' ) ) ) {
-
-			const q = boat.quaternion;
-			body.B = [ r2( boat.position.x ), r2( boat.position.y ), r2( boat.position.z ), r3( q.x ), r3( q.y ), r3( q.z ), r3( q.w ) ];
-
-		}
-
+		// (the sea's height where you swim: a swimmer's put as far under another's sea)
+		if ( m === 's' ) body.w = r2( app.waves.heightAt( p.position.x, p.position.z ) );
+		// your boat, wherever she is (moored too: without it, someone whose own was out saw an empty
+		// berth), and the sea's height under her here (on another's sea she floats as high over theirs);
+		// riding along in someone else's, whose (R), and where on its deck
+		const q = boat.quaternion, bp = boat.position;
+		body.B = [ r2( bp.x ), r2( bp.y ), r2( bp.z ), r3( q.x ), r3( q.y ), r3( q.z ), r3( q.w ), r2( app.waves.heightAt( bp.x, bp.z ) ) ];
 		if ( p.riding ) body.R = p.boat.owner;
 		if ( body.B && this.app.searchlight ) body.S = 1; // (your boat's searchlight is on)
-		if ( body.B && boat.anchor ) body.A = 1; // (it's at anchor: its lamps say so)
+		if ( body.B && ( boat.anchor || boat.moored ) ) body.A = 1; // (it's at anchor or moored: its lamps say so)
 		if ( m === 'h' ) body.E = r2( boat.rpm ); // (the engine's revs: what the others hear)
 		// (M10) the starter turning her over (1; 2: it'll catch), heard by whoever's aboard
 		const crank = m === 'h' && this.app.game ? this.app.game.hull.crank : 0;
@@ -817,6 +893,15 @@ export class Together {
 		for ( const o of this.others.values() ) {
 
 			o.cur = now - o.last < this.stale ? this._at( o, now - DELAY ) : null;
+			// (their boat on your sea, and everyone aboard her with it; a swimmer and a bobber too)
+			const c = o.cur;
+			if ( c && app.waves ) {
+
+				floatBoat( c.boat, app.waves );
+				if ( c.mode === 'swim' && c.water !== null ) c.pos.y += app.waves.heightAt( c.pos.x, c.pos.z ) - c.water;
+				if ( c.bobber && c.bobberWater !== null ) c.bobber.y += app.waves.heightAt( c.bobber.x, c.bobber.z ) - c.bobberWater;
+
+			}
 			// how fast their boat goes (for its sound)
 			const bp = o.cur && o.cur.boat && o.cur.boat.pos;
 			if ( bp && o._boatAt && dt > 0 ) o.boatSpeed += ( bp.distanceTo( o._boatAt ) / dt - o.boatSpeed ) * ( 1 - Math.exp( - dt * 4 ) );
@@ -1015,7 +1100,7 @@ export class Together {
 		const cur = o.state || ( o.state = {
 			pos: new Vector3(), yaw: 0, mode: 'walk', speed: 0, rod: 0, tension: 0, ride: null,
 			bobber: null, boat: null, deck: null, gun: 0, gunLevel: 0, shaft: null,
-			_bobber: new Vector3(), _deck: new Vector3(), _boat: { pos: new Vector3(), quat: new Quaternion() },
+			_bobber: new Vector3(), _deck: new Vector3(), _boat: { pos: new Vector3(), quat: new Quaternion(), water: null },
 			hull: null, _hull: { flood: 0, pump: false, scrape: 0, wear: 0, motion: 0 },
 			dash: null, _dash: { fuel: 0, finder: false, fish: 0 },
 			_shaft: { tail: new Vector3(), dir: new Vector3() },
@@ -1032,6 +1117,10 @@ export class Together {
 		};
 
 		lerp3( cur.pos, a.p, b.p );
+		// (a number in each, eased; else null)
+		const lerp1 = ( A, B ) => typeof A === 'number' && typeof B === 'number' ? A + ( B - A ) * f : null;
+		// (the sea's height where they swim, theirs: a swimmer's put as far under yours)
+		cur.water = lerp1( a.w, b.w );
 		cur.yaw = a.a + Math.atan2( Math.sin( b.a - a.a ), Math.cos( b.a - a.a ) ) * f;
 		cur.mode = NAMES[ near.m ] || 'walk';
 		cur.speed = ( a.v || 0 ) + ( ( b.v || 0 ) - ( a.v || 0 ) ) * f;
@@ -1049,6 +1138,8 @@ export class Together {
 		cur.dash = F ? Object.assign( cur._dash, { fuel: MathUtils.clamp( F[ 0 ], 0, 1 ), finder: F[ 1 ] === 1, fish: MathUtils.clamp( F[ 2 ], 0, 1 ) } ) : null;
 		cur.tension = b.k || 0;
 		cur.bobber = lerp3( cur._bobber, a.b, b.b );
+		// (and where their bobber floats, theirs)
+		cur.bobberWater = cur.bobber && Array.isArray( a.b ) && Array.isArray( b.b ) ? lerp1( a.b[ 3 ], b.b[ 3 ] ) : null;
 		cur.gun = near.g || 0;
 		cur.gunLevel = MathUtils.clamp( near.gl | 0, 0, 2 );
 		cur.net = MathUtils.clamp( near.n | 0, 0, NET_STATE.length - 1 );
@@ -1081,6 +1172,7 @@ export class Together {
 			_qa.set( A[ 3 ], A[ 4 ], A[ 5 ], A[ 6 ] ).normalize();
 			_qb.set( B[ 3 ], B[ 4 ], B[ 5 ], B[ 6 ] ).normalize();
 			cur.boat.quat.slerpQuaternions( _qa, _qb, f );
+			cur.boat.water = lerp1( A[ 7 ], B[ 7 ] );
 
 		}
 
@@ -1105,7 +1197,8 @@ export class Together {
 				boat.visible = true;
 				boat.position.copy( c.boat.pos );
 				boat.quaternion.copy( c.boat.quat );
-				boat.userData.lamps.set( { underway: c.mode === 'helm' || ! ( c.anchored || this._docked( c.boat.pos ) ), spot: c.spot } );
+				boat.userData.lamps.set( { underway: c.mode === 'helm' || ! c.anchored, spot: c.spot } );
+				this._spin( boat, c.rpm, dt );
 				frame = c.boat;
 
 			} else if ( this._docked( c.boat.pos ) ) frame = { pos: app.boatCtl.position, quat: app.boatCtl.quaternion };
@@ -1127,9 +1220,17 @@ export class Together {
 			else {
 
 				const ow = this.others.get( c.ride ), ob = ow && ow.cur && ow.cur.boat;
-				deck = ! ob ? null : ( ow.boat && ow.boat.visible ) || ! this._docked( ob.pos ) ? ob : { pos: app.boatCtl.position, quat: app.boatCtl.quaternion };
+				deck = ! ob ? null : ow.boat && ow.boat.visible ? ob : this._docked( ob.pos ) ? { pos: app.boatCtl.position, quat: app.boatCtl.quaternion } : null;
 
 			}
+
+		}
+
+		// (aboard a boat that isn't drawn here, past your device's few: not shown, rather than standing on the sea)
+		if ( c && ( ( c.mode === 'helm' && ! frame ) || ( c.mode === 'deck' && ! deck ) ) ) {
+
+			visible = false;
+			g.visible = o.shown = false;
 
 		}
 
@@ -1149,8 +1250,9 @@ export class Together {
 		// the figure: aboard, it stands where they stand on their deck or at the helm
 		if ( frame && c.mode === 'helm' ) {
 
+			// (on the wheelhouse's sole: its camera's eye is lower than a figure standing there)
 			const helm = app.boat.helmEye;
-			_bp.set( helm.x, helm.y - EYE, helm.z ).applyQuaternion( frame.quat ).add( frame.pos );
+			_bp.set( helm.x, app.boat.dimensions.deckHeight, helm.z ).applyQuaternion( frame.quat ).add( frame.pos );
 			g.position.copy( _bp );
 			_bq.setFromAxisAngle( _up, c.yaw + Math.PI );
 			g.quaternion.copy( _bq );
@@ -1287,6 +1389,10 @@ export class Together {
 				if ( c.isMesh ) c.castShadow = c.castShadow && app.tier === 'high';
 				// (M11) their dash on standby: the readings drawn are yours
 				if ( c.name === 'boat-display' && app.instruments ) c.material = app.instruments.standby;
+				// (the wheel, the rudder and the lever amidships: as yours were when copied, they stayed)
+				if ( c.name === 'boat-wheel' ) c.rotation.z = 0;
+				if ( c.name === 'boat-rudder' ) c.rotation.y = 0;
+				if ( c.name === 'boat-throttle' ) c.rotation.x = 0;
 
 			} );
 
@@ -1294,12 +1400,25 @@ export class Together {
 
 		const b = this._boatTemplate.clone( true );
 		b.name = 'PlayerBoat';
+		// (her radar turning and her propeller as her engine runs, as yours do: _spin)
+		b.userData.radar = b.getObjectByName( 'boat-radar' );
+		b.userData.prop = b.getObjectByName( 'boat-propeller' );
 		// its own lamps (their state is theirs), its searchlight's light among the island's
 		const lamps = b.userData.lamps = new BoatLamps( app.boat );
 		lamps.addLight( app.localLights );
 		b.add( lamps.group );
 		app.scene.add( b );
 		return b;
+
+	}
+
+	// their boat's radar turning, and her propeller at her engine's revs (rpm: 0..1, as sent), as yours do
+	// (BoatModel.update)
+	_spin( boat, rpm, dt ) {
+
+		const u = boat.userData;
+		if ( u.radar ) u.radar.rotation.y = ( u.radar.rotation.y + RADAR_RPM / 60 * Math.PI * 2 * dt ) % ( Math.PI * 2 );
+		if ( u.prop ) u.prop.rotation.z = ( u.prop.rotation.z + PROP_DISPLAY_RPS * Math.tanh( rpm * 40 / PROP_DISPLAY_RPS ) * Math.PI * 2 * dt ) % ( Math.PI * 2 );
 
 	}
 

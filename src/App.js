@@ -108,6 +108,7 @@ const _fwd = new THREE.Vector3();
 const _up = new THREE.Vector3();
 const _hornAt = new THREE.Vector3( - 0.42, 3.4, 1.15 ); // (the boat's horn, if its model doesn't say)
 const _shelter = new THREE.Matrix4(), _c4 = new THREE.Matrix4(); // (M9: the wheelhouse roof over the rain)
+const _ride = new THREE.Matrix4(), _one = new THREE.Vector3( 1, 1, 1 ); // (riding along: the boat you're on)
 const SPLASH_REACH = 13; // m: (M12) the rocks the splashes about the camera can land on (Rain's 16 m square, and a step)
 const _fwdB = new THREE.Vector3(); // (M11: her heading, for her instruments)
 // what starts the sound: browsers allow it only after one of these
@@ -587,6 +588,8 @@ export class App {
 		const s = this.settings;
 		G.dt.value = dt;
 		G.time.value += dt;
+		// (in company, the waves' time everyone's: the same sea under all of you)
+		if ( this.together ) this.together.syncWaves();
 		if ( s.timeSpeed !== 0 ) Object.assign( s, timeOf( advance( s.timeOfDay, s.day, s.timeSpeed, dt ) ) );
 		if ( this.together ) this.together.syncClock( s );
 		// (the hour you're at, in your save now and again: you come back to it)
@@ -652,8 +655,9 @@ export class App {
 		// (M9) the lightning, before the sky its flash lights
 		const wx = this.weather.live, cv = this.renderer.domElement;
 		this.lightning.setViewport( cv.width, cv.height );
-		// ((M12) from up the blow's track, from the clock: everyone's strikes in the same place)
-		this.lightning.update( wx.thunder, this.camera, this.weather.track, this.sky.clouds.base, wx.visibility, Date.now(), this.weather.cells );
+		// ((M12) from up the blow's track, from the clock: everyone's strikes in the same place, (and at the same
+		// moment: as the weather is, not as it's easing here, which isn't everyone's)
+		this.lightning.update( this.weather.target.thunder, this.camera, this.weather.track, this.sky.clouds.base, wx.visibility, Date.now(), this.weather.cells );
 		this.rain.flash.value = this.sky.flashFill; // ((M12) the light about you: none from a storm on the horizon)
 		if ( wx.thunder > 0 && this.audio ) this.audio.thunderReady();
 
@@ -786,10 +790,12 @@ export class App {
 		this.shore.update( G.time.value ); // (Salt Life: the waves' clock, for the GPU)
 		this.water.update( this.camera );
 		this.boat.update( dt );
+		// (the boat you're aboard: yours, or riding along, the one you're on as it's drawn here)
+		const p = this.player, aboard = p.riding ? _ride.compose( p.boat.position, p.boat.quaternion, _one ) : this.boat.group.matrixWorld;
 		// (M9) no rain under the wheelhouse roof
-		this.rain.setShelter( _shelter.multiplyMatrices( this.boat.shelter, _c4.copy( this.boat.group.matrixWorld ).invert() ) );
+		this.rain.setShelter( _shelter.multiplyMatrices( this.boat.shelter, _c4.copy( aboard ).invert() ) );
 		wetSurfaces.update( this.camera, _shelter ); // (M11: nor is anything wet under it, or under a cover)
-		this.rain.setDeck( this.boat.group.matrixWorld, this.boat.rainTops ); // (M10: the splashes on her cockpit's sole; (M12) her roof, foredeck and gear)
+		this.rain.setDeck( aboard, this.boat.rainTops ); // (M10: the splashes on her cockpit's sole; (M12) her roof, foredeck and gear)
 		// ((M12) and on the rocks about you, looked for again as you move, while it rains)
 		const cam = this.camera.position, at = this._rocksAt || ( this._rocksAt = { x: 1e9, z: 1e9 } );
 		if ( G.rain.value > 0.002 && this.rocks && Math.hypot( cam.x - at.x, cam.z - at.z ) > 1.5 ) {
@@ -799,7 +805,7 @@ export class App {
 			this.rain.setRocks( this.rocks.splashRocks( cam.x, cam.z, SPLASH_REACH, SPLASH_ROCKS, this._splashRocks || ( this._splashRocks = [] ) ) );
 
 		}
-		this.drips.update( dt, this.camera, this.cameraWaterHeight, this.renderer.domElement.height, this.boat.group.matrixWorld ); // (M11)
+		this.drips.update( dt, this.camera, this.cameraWaterHeight, this.renderer.domElement.height, aboard ); // (M11)
 		this.updateInstruments( dt );
 		this.boatLamps.set( { underway: this.boatCtl.driven || ! ( this.boatCtl.moored || this.boatCtl.anchor ), spot: this.searchlight } );
 		this.localLights.update( this.camera, dt );
@@ -1745,7 +1751,6 @@ export class App {
 			s.weather = CONDITIONS[ weather ] ? weather : null;
 			// ((M13) ?weather=hurricane: one of your own, coming in from the hour you start at)
 			s.weatherSince = islandTime( s.day, s.timeOfDay );
-			this._weatherAsked = true;
 
 		}
 		this.portal.on( 'pause', () => this.saveClock() );
@@ -1853,13 +1858,11 @@ export class App {
 
 	}
 
-	// (Salt Life) the weather you picked holds while you're on your own; in company it's the day's.
-	// (?weather= on its own holds from the first frame, company or not: for trying it)
+	// (Salt Life) the weather you picked (null: the day's); in company, the one picked for everyone here
+	// (Together's shared 'weather', adopted into the settings)
 	weatherPick() {
 
-		const s = this.settings, t = this.together;
-		if ( ! s.weather ) return null;
-		return this._weatherAsked || ! t || t.surelyAlone ? s.weather : null;
+		return this.settings.weather || null;
 
 	}
 
