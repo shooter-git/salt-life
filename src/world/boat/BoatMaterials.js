@@ -3,7 +3,7 @@ import * as THREE from '../../engine/index.js';
 // The lobster boat's materials, for WebGL 2. Its geometry carries the look: GeoKit's `color` is the
 // linear albedo and `aux` = ( roughness, metalness, pattern, animation weight ). Tidewater's WGSL
 // materials added procedural wear (non-skid, grime, streaks, the radar and chart plotter screens);
-// these keep the paint, the finishes, the glowing lenses and the trap netting.
+// these keep the paint, the finishes and the glowing lenses.
 
 const linear = ( hex ) => new THREE.Color().setHex( hex ).convertSRGBToLinear();
 const vec3 = ( c ) => `vec3( ${ c.r.toFixed( 5 ) }, ${ c.g.toFixed( 5 ) }, ${ c.b.toFixed( 5 ) } )`;
@@ -64,7 +64,6 @@ export class BoatMaterials {
 		this.glass.forceSinglePass = true; // (thin panes: no back-then-front passes, one program)
 		this.glass.name = 'boatGlass';
 		this.glow = this.createGlow();
-		this.trap = this.createTrap();
 		// (M11) the dash's screens and dials: what they show, unlit (they light themselves), drawn by the
 		// instruments (Instruments.js: their canvas is its map); a dark standby glass until then
 		this.display = new THREE.MeshBasicMaterial( { color: 0x0a1418 } );
@@ -122,38 +121,6 @@ export class BoatMaterials {
 
 	}
 
-	// Wire traps and their netting: alpha-tested mesh drawn from the UVs (metres).
-	createTrap() {
-
-		const m = new THREE.MeshStandardMaterial( { roughness: 0.55, metalness: 0, side: THREE.DoubleSide, alphaTest: 0.5 } );
-		m.name = 'boatTrap';
-		withAux( m, { roughness: false, fragment: /* glsl */`
-	float net = step( abs( vAux.z - 1.0 ), 0.5 );
-	vec2 u = vTrapUv;
-	vec2 diag = vec2( u.x + u.y, u.x - u.y ) * 0.7071;
-	vec2 q = mix( u / 0.038, diag / 0.05, net );
-	vec2 fr = abs( fract( q ) - 0.5 );
-	vec2 fw = fwidth( q );
-	float halfW = mix( ${ ( 0.5 - 0.0045 / 0.038 ).toFixed( 5 ) }, ${ ( 0.5 - 0.002 / 0.05 ).toFixed( 5 ) }, net );
-	float lineX = smoothstep( halfW - fw.x, halfW, fr.x );
-	float lineY = smoothstep( halfW - fw.y, halfW, fr.y );
-	float b = 0.014;
-	float inner = step( b, u.x ) * step( b, u.y ) * step( u.x, vAux.x - b ) * step( u.y, vAux.y - b );
-	float border = ( 1.0 - inner ) * ( 1.0 - net );
-	diffuseColor.a = max( max( lineX, lineY ), border );
-	diffuseColor.rgb *= mix( 1.0, 0.8, border );
-` } );
-		return extend( m, ( shader ) => {
-
-			shader.vertexShader = shader.vertexShader
-				.replace( '#include <common>', '#include <common>\nvarying vec2 vTrapUv;' )
-				.replace( '#include <begin_vertex>', '#include <begin_vertex>\n\tvTrapUv = uv;' );
-			shader.fragmentShader = shader.fragmentShader.replace( '#include <common>', '#include <common>\nvarying vec2 vTrapUv;' );
-
-		} );
-
-	}
-
 	setNavLights( on ) {
 
 		this.navOn.value = on ? 1 : 0;
@@ -162,7 +129,7 @@ export class BoatMaterials {
 
 	dispose() {
 
-		for ( const k of [ 'hull', 'gelcoat', 'wood', 'fittings', 'glass', 'glow', 'trap', 'display' ] ) this[ k ].dispose();
+		for ( const k of [ 'hull', 'gelcoat', 'wood', 'fittings', 'glass', 'glow', 'display' ] ) this[ k ].dispose();
 
 	}
 
