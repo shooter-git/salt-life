@@ -3,7 +3,9 @@ import { StaleSaveError } from '@allthespaces/portal';
 // What Tidewater kept in localStorage, kept in the person's saves in All the Spaces instead (a
 // creation's sealed frame has no browser storage). A synchronous Storage-like object
 // (getItem / setItem / removeItem), as GameState and the guide expect: everything is read once before
-// the game starts, and changes are written back a moment later (and when the person leaves).
+// the game starts, and changes are written back a moment later, one write at a time, and at once when
+// the app covers the game (a hidden tab, the app gone to the background, where it may be closed), when
+// the page goes, and when the person leaves.
 
 // Tidewater's keys -> keys in the person's saves (anything else lives only for this visit)
 const KEYS = {
@@ -15,7 +17,7 @@ const WRITE_AFTER_MS = 1200;
 
 export class SaveStore {
 
-	constructor( portal, { onError = () => {} } = {} ) {
+	constructor( portal, { onError = () => {}, writeAfterMs = WRITE_AFTER_MS } = {} ) {
 
 		this.portal = portal;
 		this.onError = onError;
@@ -23,8 +25,16 @@ export class SaveStore {
 		this.memory = new Map(); // keys that aren't saved
 		this.dirty = new Set();
 		this.stopped = false; // saved from elsewhere (another device): stop overwriting it
+		this.writeAfterMs = writeAfterMs;
 		this._timer = 0;
+		// (the write out now, if any: the next waits for it. Two out at once, the second made on the
+		// version the first was, were turned down as saved from elsewhere, and saving stopped for the
+		// rest of the visit: a hold full of fish gone)
+		this._writing = Promise.resolve();
 		portal.onExit( () => this.flush() );
+		if ( portal.on ) portal.on( 'pause', () => this.flush() );
+		// (and the page going: closed, or reloaded)
+		if ( typeof addEventListener === 'function' ) addEventListener( 'pagehide', () => this.flush() );
 
 	}
 
@@ -80,7 +90,7 @@ export class SaveStore {
 		this.values.set( key, value );
 		this.dirty.add( key );
 		clearTimeout( this._timer );
-		this._timer = setTimeout( () => this.flush(), WRITE_AFTER_MS );
+		this._timer = setTimeout( () => this.flush(), this.writeAfterMs );
 
 	}
 
@@ -99,9 +109,17 @@ export class SaveStore {
 
 	}
 
-	async flush() {
+	// what's changed, written after any write already out
+	flush() {
 
 		clearTimeout( this._timer );
+		this._writing = this._writing.then( () => this._write() );
+		return this._writing;
+
+	}
+
+	async _write() {
+
 		if ( this.stopped ) return;
 		const keys = [ ...this.dirty ];
 		this.dirty.clear();
