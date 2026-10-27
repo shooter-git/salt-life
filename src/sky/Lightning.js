@@ -1,6 +1,7 @@
 import * as THREE from '../engine/index.js';
 import { strikeIn, distantStrikesIn } from '../game/Weather.js';
 import { mulberry32 } from '../util/Noise.js';
+import { CB, CLOUD_BASE } from './SkyProClouds.js';
 
 // (M9) The lightning in a thunderstorm.
 //   - The strikes are the weather's (Weather.strikeIn): one or none in each real second, from the second
@@ -40,9 +41,10 @@ const EXTINCTION = 30000;
 const LIT_R = 4000;
 const SPREAD_MIN = 7;
 const FAR_FROM = 6000, FAR_FULL = 14000;
-const CB_TOP = 12000;
-// (M12) a thunderstorm's base on the horizon (m): the cloud overhead's isn't its
-const STORM_BASE = 1200;
+const CB_TOP = CB.top; // ((M14) the tops the clouds tower to)
+// (M12) a thunderstorm's base on the horizon (m): the cloud overhead's isn't its ((M14) the cumulus's, as
+// its tower's is)
+const STORM_BASE = CLOUD_BASE;
 // the bolt: the most segments it has (its main channel and branches), the farthest it's drawn (m: past
 // this it's drawn nearer, as large in view, inside the camera's far plane)
 const SEGMENTS = 200;

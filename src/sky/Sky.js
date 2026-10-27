@@ -1,7 +1,7 @@
 import * as THREE from '../engine/index.js';
 import { G } from '../core/Globals.js';
 import { Atmosphere, ATMOSPHERE_GLSL, SUN_ANGULAR_RADIUS, SUN_ILLUMINANCE, f } from './Atmosphere.js';
-import { SkyProClouds, CLOUDS_GLSL } from './SkyProClouds.js';
+import { SkyProClouds, CLOUDS_GLSL, CB, CLOUD_MELT } from './SkyProClouds.js';
 import { Environment } from './Environment.js';
 import { SunLight } from 'three/addons/lights/SunLight.js';
 
@@ -65,17 +65,17 @@ const _flashSky = new THREE.Color();
 // (M9) of the sun's light rain's deck takes, the share it scatters down as the sky's light
 const DECK_DIFFUSE = 0.5;
 // (M11) the showers' curtains in the distance (setCurtains): how many are drawn at most (by tier: the
-// nearest), how thick a shaft is (per m through it at full rain), how high it reaches (m: a shower's
-// cloud is lower than the deck's, the shaft fades into the haze as it nears this, or the cloud's base
-// if that's lower), how far beyond its edge one comes in (m: you're in the rain nearer), how far off it
-// goes (m, faded over the last stretch), and how far a shaft leans with the wind (m across for each m
-// down, at a gale's wind)
+// nearest), how thick a shaft is (per m through it at full rain), how high it reaches ((M14) the cloud's
+// base: each shower's own cloud towers over it, from there; the shaft fades into it over the last `CURTAIN_FADE`
+// of the way), how far beyond its edge one comes in (m: you're in the rain nearer), how far off it goes (m,
+// faded over the last stretch: (M14) as far as its tower's seen), and how far a shaft leans with the wind
+// (m across for each m down, at a gale's wind)
 const CURTAINS = { low: 6, mid: 12, high: 12 };
 const CURTAIN_MAX = 12;
 const CURTAIN_DENSITY = 5e-4;
-const CURTAIN_TOP = 3000;
+const CURTAIN_FADE = 0.3;
 const CURTAIN_NEAR = [ 2000, 5000 ];
-const CURTAIN_FAR = [ 20000, 26000 ];
+const CURTAIN_FAR = [ 30000, 40000 ];
 const CURTAIN_LEAN = 0.35;
 
 const SKY_VERTEX = /* glsl */`
@@ -236,7 +236,7 @@ vec4 skyCurtain( vec3 dir, vec3 behind ) {
 		// (as far as the ray goes through it, nearly as thick at its edge as its middle: an edge that shows)
 		vec2 fall = vec2( b + float( i ) * 2281.0, y + skyTime * 9.0 );
 		float streak = 0.35 + 0.4 * skyCurtainNoise( fall * vec2( 0.012, 0.0009 ) ) + 0.25 * skyCurtainNoise( fall * vec2( 0.04, 0.002 ) + 7.3 );
-		float up = 1.0 - smoothstep( top * 0.4, top, y );
+		float up = 1.0 - smoothstep( top * ${ f( 1 - CURTAIN_FADE ) }, top, y );
 		tau += c.w * ( 1.0 - 0.5 * q * q ) * streak * up * 2.0 * c.z * sqrt( 1.0 - q * q );
 	}
 	float a = 1.0 - exp( - tau * ${ f( CURTAIN_DENSITY ) } );
@@ -289,7 +289,11 @@ void main() {
 			float top = 0.45 + 0.5 * exp( - u * u * 0.7 ) + 0.18 * ( lumps - 0.5 );
 			float body = smoothstep( - 0.004, 0.004, rise ) * ( 1.0 - smoothstep( top - 0.2, top, v ) ) * ( 0.55 + 0.9 * lumps );
 			float haze = exp( ( cosA - 1.0 ) * skyFlashShape.x * 0.12 ) * ( 1.0 - smoothstep( 0.0, skyFlashShape.y * 1.6, rise ) ) * step( - 0.02, rise );
-			L += skyFlashColor * skyFlash.w * far * ( 2.5 * az * body + 0.15 * haze ) * ( 0.35 + 0.65 * c.a );
+			// ((M14) nearer than the clouds melt into the sky its own tower is drawn (c.a: what the cloud lets
+			// through): that's what's lit, in its own shape)
+			float drawn = 1.0 - smoothstep( ${ f( CLOUD_MELT[ 0 ] ) }, ${ f( CLOUD_MELT[ 1 ] ) }, ${ f( CB.top ) } / max( skyFlashShape.y, 1e-4 ) );
+			float lit = mix( body, smoothstep( - 0.004, 0.004, rise ) * ( 1.0 - smoothstep( 0.9, 1.2, v ) ), drawn );
+			L += skyFlashColor * skyFlash.w * far * ( 2.5 * az * lit * mix( 0.35 + 0.65 * c.a, 1.0 - c.a, drawn ) + 0.15 * haze * ( 0.35 + 0.65 * c.a ) );
 		}
 	}
 #endif
@@ -629,8 +633,8 @@ export class Sky {
 
 	// (M11) the showers about the island (Weather.showers: { r, rain, x, z }, x and z from the island's
 	// middle: (M12) each down its own track), as curtains in the distance: the nearest of them from 2 km
-	// beyond their edge (full from 5), out to 26 km (faded at both ends), as they're seen from `at` (the
-	// camera). Up into the haze under the cloud, leaning with the wind
+	// beyond their edge (full from 5), out to 40 km ((M14) as far as their towers are seen; faded at both
+	// ends), as they're seen from `at` (the camera). Up to the cloud's base, leaning with the wind
 	setCurtains( cells, at ) {
 
 		const U = this.uniforms, list = U.skyCurtains.value, near = this._curtains;
@@ -649,7 +653,7 @@ export class Sky {
 		for ( let i = 0; i < n; i ++ ) list[ i ].set( near[ i ].x, near[ i ].z, near[ i ].r, near[ i ].w );
 		U.skyCurtainCount.value = n;
 		const lean = CURTAIN_LEAN * Math.min( 1, G.windSpeed.value / 20 );
-		U.skyCurtainInfo.value.set( Math.min( CURTAIN_TOP, this.clouds.base ), at.y, G.windDir.value.x * lean, G.windDir.value.y * lean );
+		U.skyCurtainInfo.value.set( this.clouds.base, at.y, G.windDir.value.x * lean, G.windDir.value.y * lean );
 
 	}
 

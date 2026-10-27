@@ -31,6 +31,8 @@ import { FRONT_KM, eyeCover } from '../sky/SkyProClouds.js';
 //     round the compass as it passes, so the wind turns the shorter way to where it's going, and quicker
 //     in the light airs of its eye. On your own a picked one passes (pick 'hurricane', picked at `since`).
 //     (step 2) Its storm surge is the sea's level (G.seaLevel).
+//   - (M14) each of the showers its own cloud towering over it (SkyProClouds.setStorms): a shower's
+//     towering cumulus, a thunderstorm's cumulonimbus and its anvil.
 // The wind and the sea come round over half a minute or so, the cloud more slowly (a minute or two from
 // fair to a gale's, so the panorama's refresh keeps up and nothing pops), the rain in seconds. When the
 // clock jumps (a rest, the host's clock, coming back to the tab) it's all set at once, behind the dim a
@@ -205,6 +207,8 @@ export class WeatherDriver {
 		if ( picked || this._showerRain.size > 160 ) this._showerRain.clear();
 		showers( T, pick, STORM_RANGE, this._showers, this._showerRain, since );
 		if ( camera ) this.sky.setCurtains( this._showers, camera.position );
+		// ((M14) and each its own cloud, towering over it)
+		if ( this.sky.clouds.setStorms ) this.sky.clouds.setStorms( this._showers, dt, jumped || picked );
 
 	}
 

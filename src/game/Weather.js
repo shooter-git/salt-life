@@ -214,7 +214,7 @@ const sstep = ( a, b, x ) => {
 // the island's time: game hours since day 1 began
 export const islandTime = ( day, hour ) => ( Math.max( 1, Math.floor( day ) || 1 ) - 1 ) * 24 + hour;
 
-function hash( i, seed ) {
+export function hash( i, seed ) {
 
 	let a = ( Math.imul( i, 0x9e3779b1 ) ^ seed ) >>> 0;
 	a = Math.imul( a ^ ( a >>> 16 ), 0x45d9f3b );
