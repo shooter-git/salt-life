@@ -123,7 +123,7 @@ varying vec3 vWaterN;
 	float depth = waterSeaLevel - ground;
 	float fade = waveFade( depth );
 	vec3 wn;
-	vec3 total = waveDisplacement( x0, fade, wn );
+	vec3 total = waveDisplacementLod( x0, fade, lod.spacing, wn );
 	vec3 objectNormal = normalize( wn );
 	vSurf = vec4( 0.0 );
 	float y = waterSeaLevel + total.y;
@@ -133,9 +133,12 @@ ${ SH ? /* glsl */`
 		ShoreSample sw = shoreEvaluate( x0, depth, ground );
 		total += sw.disp;
 		y = waterSeaLevel + total.y;
-		// the open sea's slopes ride on the shore wave's normal
+		// the open sea's slopes ride on the shore wave's, added as slopes: where the shore wave's gone (at
+		// SHORE_DEEP) it's the open sea's own normal, as beyond (its up part kept: a seam along that depth
+		// lit up as each crest crossed it)
 		vec3 nS = sw.nShore;
-		objectNormal = normalize( nS + vec3( objectNormal.x, 0.0, objectNormal.z ) );
+		vec2 slope = nS.xz / max( nS.y, 0.2 ) + objectNormal.xz / max( objectNormal.y, 0.2 );
+		objectNormal = normalize( vec3( slope.x, 1.0, slope.y ) );
 		vSurf = vec4( sw.foam, sw.face, sw.roller, 0.0 );
 		// thin run-up sheet on the sand: take whichever surface is higher (smooth max)
 		float k = 0.04;

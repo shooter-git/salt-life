@@ -88,8 +88,11 @@ uniform float waveTime;
 
 float waveFade( float depth ) { return smoothstep( ${ SHALLOW_FADE[ 0 ].toFixed( 2 ) }, ${ SHALLOW_FADE[ 1 ].toFixed( 2 ) }, depth ); }
 
-// displacement of the surface at Lagrangian point x0; normal (unnormalized) out
-vec3 waveDisplacement( vec2 x0, float fade, out vec3 normal ) {
+// displacement of the surface at Lagrangian point x0; normal (unnormalized) out. (For a grid spacing m
+// between its vertices: the waves too short for it to draw faded out, from 5 vertices a wavelength to 2.5,
+// so where a coarser grid takes over both draw the same waves: on the low tier's sea the 11 m wave stopped
+// at a straight edge 10-35 m off, a seam in the water.)
+vec3 waveDisplacementLod( vec2 x0, float fade, float spacing, out vec3 normal ) {
 	vec3 d = vec3( 0.0 );
 	vec3 n = vec3( 0.0, 1.0, 0.0 );
 	for ( int i = 0; i < WAVE_COUNT; i ++ ) {
@@ -97,7 +100,8 @@ vec3 waveDisplacement( vec2 x0, float fade, out vec3 normal ) {
 		vec4 B = waveB[ i ];
 		float theta = A.z * dot( A.xy, x0 ) - A.w * waveTime + B.z;
 		float c = cos( theta ), s = sin( theta );
-		float a = B.x * fade, qa = B.y * fade;
+		float drawn = 1.0 - smoothstep( 0.2, 0.4, spacing * A.z * ${ ( 1 / ( 2 * Math.PI ) ).toFixed( 6 ) } );
+		float a = B.x * fade * drawn, qa = B.y * fade * drawn;
 		d.xz += A.xy * ( qa * c );
 		d.y += a * s;
 		n.xz -= A.xy * ( A.z * a * c );
@@ -106,6 +110,7 @@ vec3 waveDisplacement( vec2 x0, float fade, out vec3 normal ) {
 	normal = n;
 	return d;
 }
+vec3 waveDisplacement( vec2 x0, float fade, out vec3 normal ) { return waveDisplacementLod( x0, fade, 0.0, normal ); }
 `;
 
 	}
