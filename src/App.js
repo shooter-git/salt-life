@@ -1734,7 +1734,8 @@ export class App {
 	}
 
 	// low-powered devices: small detail (the boat's fittings and gear, the stalls) only near the camera,
-	// for their triangle budget
+	// for their triangle budget; ((M14) what's not to be shown at all, as a storm's left it, not then
+	// either: userData.shown false, Joe's roof's sheets)
 	updateNearDetail() {
 
 		const cam = this.camera.position;
@@ -1742,7 +1743,7 @@ export class App {
 
 			const s = d.o.geometry.boundingSphere;
 			_c3.copy( s.center ).applyMatrix4( d.o.matrixWorld );
-			d.o.visible = _c3.distanceTo( cam ) - s.radius * d.o.matrixWorld.getMaxScaleOnAxis() < d.dist;
+			d.o.visible = d.o.userData.shown !== false && _c3.distanceTo( cam ) - s.radius * d.o.matrixWorld.getMaxScaleOnAxis() < d.dist;
 
 		}
 

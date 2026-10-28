@@ -16,6 +16,7 @@ import { buildHouse } from '../src/world/village/Buildings.js';
 import { hurricaneAt, hurricaneNews, towardOf, weatherAt } from '../src/game/Weather.js';
 import { damageAt, pieceState, GONE } from '../src/game/StormDamage.js';
 import { flightOf, poseAt, flightSeconds, clearAt, FlyingSheets } from '../src/world/debris/FlyingSheets.js';
+import { FishStand } from '../src/game/FishStand.js';
 
 let failed = 0;
 const check = ( ok, what ) => {
@@ -168,6 +169,15 @@ const terrain = new TerrainData( 7, decodeIsland( new Uint8Array( readFileSync( 
 	check( ! before[ 0 ].shown && soon[ 0 ].shown && soon[ 0 ].y > y0 - 1 && later[ 0 ].shown && later[ 0 ].f.flight.end && ! gone[ 0 ].shown, 'shown from the moment its wind\'s reached it, in the air, then lying, until it\'s cleared away' );
 	check( ! early && between, 'and from the very moment it goes, between the island\'s reckonings of its damage' );
 	check( fs.list[ 1 ].went > fs.list[ 0 ].went && flightSeconds( fs.list[ 1 ].went, fs.list[ 0 ].went ) > 0.9, 'a run of sheets peels off one after another' );
+
+	// ((M14) Joe's plain stall, the low tier's: its roof's three sheets its own, where the scanned stall's
+	// are (0.9 m apart, 2.4 m up its front), and the one this hurricane takes gone from it, as on the others)
+	const plain = new FishStand( { scene: { add: () => {} }, terrain, colliders: null, tier: 'low' } );
+	const flyers = plain.sheetFlyers(), at3 = flyers.map( ( q ) => new Vector3().setFromMatrixPosition( q.frame ) ), y = terrain.heightAt( 49.9, - 74.6 );
+	plain.setDamage( damageAt( hurricaneNews( h.tc ).ends + 1 ) );
+	const shown = plain.sheets.map( ( q ) => q.old.visible );
+	check( flyers.length === 3 && flyers.every( ( q, i ) => q.kind === 'stand' && q.id === i && q.w === 0.98 ) && Math.abs( at3[ 0 ].distanceTo( at3[ 1 ] ) - 0.9 ) < 0.05 && at3.every( ( p ) => Math.abs( p.y - y - 2.41 ) < 0.05 ) && ! shown[ 0 ] && ! plain.sheets[ 0 ].tarp.visible,
+		`Joe's plain stall (low): three sheets of its own where the scanned stall's are, the one taken gone (${ shown.map( ( v ) => v ? 'on' : 'off' ).join( ', ' ) })` );
 
 }
 

@@ -22,6 +22,14 @@ export const STAND = { x: 49.9, z: - 74.6, yaw: 1.45 }; // beside the boardwalk 
 const STALL_FLOOR = 0.06; // top of the stall's plank floor (local y)
 const ICE_TOP = 1.27; // top of the ice in the chest on the counter (local y)
 const PRICES = place( 1.95, 0, 1.45, - 0.35 ); // where the price chalkboard stands, out by the front right corner (on the floor's level)
+// ((M14) a sheet, its tarp or its new one shown or not, as the storms have left it: kept in userData.shown
+// too, as the low tier's near detail shows the stall's meshes only near you (App.updateNearDetail))
+const shown = ( m, on ) => {
+
+	m.visible = on;
+	m.userData.shown = on;
+
+};
 
 export class FishStand {
 
@@ -38,10 +46,15 @@ export class FishStand {
 		// textures and 29k triangles)
 		const plain = () => {
 
-			const mesh = new Mesh( buildStall(), this.material );
+			const stall = buildStall();
+			const mesh = new Mesh( stall.geo, this.material );
 			mesh.name = 'FishStandStall';
 			mesh.castShadow = true;
 			this.group.add( mesh );
+			// ((M14) its roof's sheets, each its own, where the scanned stall's are: a hurricane takes the same
+			// one on every device)
+			this.sheets = this._sheets( stall.sheets, this.material );
+			this.kitMaterial = this.material;
 
 		};
 		if ( tier === 'low' ) {
@@ -66,24 +79,7 @@ export class FishStand {
 			mesh.castShadow = tier === 'high'; // (its scanned props: ~40-50k triangles in the shadow pass, under the stall's roof)
 			this.group.add( mesh );
 			// ((M14) its roof's sheets, each its own: a hurricane can take one, a tarp over the gap, a new one)
-			this.sheets = kit.sheets.map( ( q, i ) => {
-
-				const one = ( geo, name, matrix ) => {
-
-					const m = new Mesh( geo, a.material );
-					m.name = name;
-					m.castShadow = true;
-					m.matrixAutoUpdate = false;
-					m.matrix.copy( matrix );
-					this.group.add( m );
-					return m;
-
-				};
-				const s = { matrix: q.matrix, old: one( q.old, `FishStandSheet${ i }`, q.matrix ), tarp: one( q.tarp, `FishStandSheet${ i }_tarp`, new Matrix4() ), fresh: one( q.fresh, `FishStandSheet${ i }_new`, q.matrix ), state: - 1 };
-				s.tarp.visible = s.fresh.visible = false;
-				return s;
-
-			} );
+			this.sheets = this._sheets( kit.sheets, a.material );
 			this.kitMaterial = a.material;
 			// (the price board out on the sand, its own: its shadow on every tier, a few boxes)
 			const boardMesh = new Mesh( buildBoardKit( a, board ), a.material );
@@ -134,6 +130,32 @@ export class FishStand {
 
 	}
 
+	// ((M14) the roof's sheets as meshes of their own in the stall: each as it is, a tarp over the gap (built
+	// in the stall's frame), a new one; [ { matrix, old, tarp, fresh } ] (geometries)
+	_sheets( sheets, material ) {
+
+		return sheets.map( ( q, i ) => {
+
+			const one = ( geo, name, matrix ) => {
+
+				const m = new Mesh( geo, material );
+				m.name = name;
+				m.castShadow = true;
+				m.matrixAutoUpdate = false;
+				m.matrix.copy( matrix );
+				this.group.add( m );
+				return m;
+
+			};
+			const s = { matrix: q.matrix, old: one( q.old, `FishStandSheet${ i }`, q.matrix ), tarp: one( q.tarp, `FishStandSheet${ i }_tarp`, new Matrix4() ), fresh: one( q.fresh, `FishStandSheet${ i }_new`, q.matrix ), state: - 1 };
+			shown( s.tarp, false );
+			shown( s.fresh, false );
+			return s;
+
+		} );
+
+	}
+
 	// fish laid on the ice chest (world frames for CatchDisplay): { species, frame, L, pose }
 	iceFish() {
 
@@ -171,9 +193,9 @@ export class FishStand {
 			pieceState( D, 'stand', i, st );
 			if ( st.state === s.state ) return;
 			s.state = st.state;
-			s.old.visible = st.state === WHOLE;
-			s.tarp.visible = st.state === TARP;
-			s.fresh.visible = st.state === NEW;
+			shown( s.old, st.state === WHOLE );
+			shown( s.tarp, st.state === TARP );
+			shown( s.fresh, st.state === NEW );
 
 		} );
 
@@ -200,7 +222,8 @@ export class FishStand {
 
 }
 
-// Stall in local space: 2.6 m wide (x), 1.6 m deep (z, counter at +z), roof sloping back.
+// Stall in local space: 2.6 m wide (x), 1.6 m deep (z, counter at +z), roof sloping back. (M14) Its
+// roof's three sheets built apart, as the scanned stall's are, where they are: { geo, sheets }
 function buildStall() {
 
 	const P = [];
@@ -251,13 +274,22 @@ function buildStall() {
 
 	}
 
-	// roof: rafters and corrugated tin sheets, one lifted and rusted through at the edge
+	// roof: rafters and three corrugated tin sheets, overlapping, the last lifted a little ((M14) each its
+	// own, at the origin: as it is, a blue tarp over the rafters where it was (in the stall's frame), and a
+	// new one of bright zinc; where the scanned stall's are, the same sizes)
 	for ( const x of [ - 1.25, 0, 1.25 ] ) add( box( 0.07, 0.09, 2.0 ), { ...WOOD( 0x6d604e ), matrix: mat4( x, 2.33, 0, - 0.16 ) } );
-	for ( let i = 0; i < 4; i ++ ) {
+	const sheets = [];
+	for ( let i = 0; i < 3; i ++ ) {
 
-		const x = - 1.14 + i * 0.76;
-		const g = corrugated( 0.8, 2.1, 9 );
-		add( g, { ...TIN, matrix: mat4( x, 2.4 + ( i === 3 ? 0.03 : 0 ), 0.04, - 0.16 + ( i === 3 ? 0.03 : 0 ), jit( 0.02 ), jit( 0.02 ) ) } );
+		const matrix = place( - 0.9 + i * 0.9, 2.405 + i * 0.006 + ( i === 2 ? 0.02 : 0 ), 0.04, jit( 0.02 ), - 0.16 + ( i === 2 ? 0.02 : 0 ), jit( 0.02 ) );
+		const tarp = [ prepare( box( 1.02, 0.006, 2.18 ), { color: 0x1f4f9c, rough: 0.6, matrix: matrix.clone().multiply( place( 0, - 0.015, 0 ) ) } ) ];
+		for ( const sd of [ - 1, 1 ] ) tarp.push( prepare( box( 0.04, 0.025, 2.2 ), { ...WOOD( 0xa08e74 ), matrix: matrix.clone().multiply( place( sd * 0.47, 0, 0 ) ) } ) );
+		sheets.push( {
+			matrix,
+			old: mergePrepared( [ prepare( corrugated( 0.98, 2.12, 11 ), TIN ) ] ),
+			tarp: mergePrepared( tarp ),
+			fresh: mergePrepared( [ prepare( corrugated( 0.98, 2.12, 11 ), { color: 0xb7bec2, rough: 0.35, metal: 1 } ) ] ),
+		} );
 
 	}
 
@@ -278,7 +310,7 @@ function buildStall() {
 	// a board propped against the front: the price chalkboard
 	add( box( 0.55, 0.75, 0.03 ), { color: 0x2a302c, rough: 0.9, matrix: mat4( 1.75, 0.4, 1.0, - 0.28, 0.3, 0 ) } );
 	add( box( 0.6, 0.8, 0.02 ), { ...WOOD( 0x7a6b58 ), matrix: mat4( 1.75, 0.4, 0.985, - 0.28, 0.3, 0 ) } );
-	return mergePrepared( P );
+	return { geo: mergePrepared( P ), sheets };
 
 }
 
