@@ -147,10 +147,13 @@ Done, M0 to M14:
     hurricane's bands coming in;
   - now and then a hurricane's a Category 2 or 3, and its surge reaches into the village;
   - it tears more of the island: the thatch, Joe's stand and Marta's sign, the drying nets, the flag
-    and Marta's berth; the sheets torn off the roofs cartwheel away down the wind;
+    and Marta's berth; the sheets torn off the roofs cartwheel away down the wind, and you hear each
+    tear off and land; after it, its sand and sargassum lie over the boardwalk and the pier's foot;
   - the rocks keep the rain off what's under them and, in a wind, in their lee; three overhangs on the
     shore about the bay to shelter under: a ledge notched by the sea, a heap of rock with a cave in it,
-    and a crag standing in the shallows with a cave to wade into;
+    and a crag standing in the shallows with a cave to wade into, its layers of lava catching the light;
+    under one the rain's quieter, and under them and the pier the sea lies without its rings;
+  - a snapped line leaves its float drifting off on the water, and you tie on a new hook;
 - playing together:
   - you see the others on the island, walking, swimming, fishing and out in their boats;
   - you pick your islander: two men and two women;

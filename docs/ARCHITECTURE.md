@@ -577,6 +577,8 @@ Marta sells one (`anchor` in `Gear.js`: a Danforth on 200 ft of rode, `anchorM` 
 
 The checks hold the low tier to its budgets: 150 draw calls, 300k triangles, 128 MB of textures and 150 MB of script memory. Mid stays under 1M triangles and high under 3M.
 
+(M14) They count the sounds playing at once too (16 at most): every source from its start to its end. The soundscape's cap (`VOICES`: 14 on low) counts a voice it's stopped until it has ended (`_fading`: a bed stopped once it's been silent a while, a one-shot pushed out of its category and fading), as theirs does; before that a hurricane's peak, the sheets torn off among its beds, came to 16 by their count. At M14's end, on all four screens (13.3 minutes of play): 14 sounds at most, 140 MB of script memory, 277k triangles and 98 draw calls a frame.
+
 ## Devices that draw on the CPU
 
 The checks' browser has no graphics card, and some laptops don't either. `App.cpuGL` (from `probeCpuGL`) changes how loading works there:

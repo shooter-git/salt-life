@@ -265,6 +265,9 @@ export class SoundScape {
 		this._loading = new Map(); // name -> Promise
 		this._beds = new Map(); // name -> { src, gain, trim }
 		this._voices = {}; // category -> [ { src, gain, end } ]
+		// ((M14) voices stopped, fading out, still sounding till they end: counted against the cap, as All the
+		// Spaces' checks count them, from their start to their end)
+		this._fading = 0;
 		this._last = {}; // bank -> last slice index
 		this._acc = 0;
 		this._gullT = 6;
@@ -984,6 +987,7 @@ export class SoundScape {
 				try {
 
 					bed.src.stop();
+					this._fade( bed.src );
 
 				} catch ( e ) { /* already stopped */ }
 
@@ -1063,6 +1067,7 @@ export class SoundScape {
 			try {
 
 				old.src.stop( c.currentTime + 0.3 );
+				this._fade( old.src );
 
 			} catch ( e ) { /* already stopped */ }
 
@@ -1951,9 +1956,17 @@ export class SoundScape {
 	// ------------------------------------------------------------------ helpers
 
 	// sounds playing now: the beds and the one-shots
+	// (M14) a voice stopped and still sounding till it ends, counted (_fading) till then
+	_fade( src ) {
+
+		this._fading ++;
+		src.addEventListener( 'ended', () => this._fading --, { once: true } );
+
+	}
+
 	_playing() {
 
-		let n = this._beds.size;
+		let n = this._beds.size + this._fading;
 		for ( const k in this._voices ) n += this._voices[ k ].length;
 		return n;
 
