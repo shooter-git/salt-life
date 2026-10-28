@@ -28,7 +28,7 @@ import { Player } from './player/Player.js';
 import { BoatController } from './player/BoatController.js';
 import { GameState } from './game/GameState.js';
 import { DAY_RATE, START_HOUR, advance } from './game/IslandClock.js';
-import { islandTime, isPick, NORTH } from './game/Weather.js';
+import { islandTime, isPick, NORTH, weatherAt, towardOf } from './game/Weather.js';
 import { WeatherDriver } from './world/WeatherDriver.js';
 import { lampsLit } from './game/Bites.js';
 import { FishStand, STAND } from './game/FishStand.js';
@@ -40,6 +40,7 @@ import { Wildlife } from './world/wildlife/Wildlife.js';
 import { wildlifeMood, wildlifeNews } from './game/WildlifeWeather.js';
 import { damageAt } from './game/StormDamage.js';
 import { StormWrack } from './world/debris/StormWrack.js';
+import { FlyingSheets } from './world/debris/FlyingSheets.js';
 import { vegUniforms } from './world/vegetation/VegNodes.js';
 import { Debris } from './world/Debris.js';
 import { Reef } from './world/Reef.js';
@@ -275,6 +276,21 @@ export class App {
 		// ported yet): their scanned props load while the rest of the island is made
 		this.stand = new FishStand( { scene, terrain: this.terrainData, colliders: this.colliders, tier } );
 		this.chandlery = new Chandlery( { scene, terrain: this.terrainData, colliders: this.colliders, tier } );
+		// ((M14) the sheets a hurricane tears off the roofs, Joe's, and Marta's sign, flying down the wind
+		// as it was when each went (the same for everyone): world/debris/FlyingSheets)
+		this.flyingSheets = new FlyingSheets( {
+			scene, terrain: this.terrainData,
+			windAt: ( T ) => {
+
+				const w = weatherAt( T, this.weatherPick(), this.settings.weatherSince );
+				return { wind: w.wind, toward: towardOf( w.windAngle ), surge: w.surge };
+
+			},
+			walls: this.village.buildings.filter( ( b ) => b.footprint && b.roofTop ).map( ( b ) => ( { x: b.x, z: b.z, r: ( b.footprint.r - 1 ) * 0.85, top: b.roofTop } ) ),
+		} );
+		this.flyingSheets.add( this.village.sheetFlyers() );
+		this.stand.ready.then( () => this.flyingSheets.add( this.stand.sheetFlyers() ) );
+		this.chandlery.ready.then( () => this.flyingSheets.add( this.chandlery.sheetFlyers() ) );
 		this.terrain = new Terrain( { scene, terrainData: this.terrainData, tier } );
 		uploadTextures( renderer, [ this.terrain.heightTexture, this.terrain.normalTexture, this.terrain.splatTexture ] );
 		// boulders, blocks, talus and outcrops (shaded like the ground's rock)
@@ -430,7 +446,9 @@ export class App {
 
 			const c = Math.cos( st.yaw ), sn = Math.sin( st.yaw );
 			const x = st.x + lx * c + lz * sn, z = st.z - lx * sn + lz * c;
-			this.localLights.add( { position: new THREE.Vector3( x, this.terrainData.heightAt( st.x, st.z ) + ly, z ), color: new THREE.Color( 1.0, 0.72, 0.42 ), intensity: 5 * 1.5, range: 11, kind: 'lantern', flicker: 0.08 } );
+			const lamp = this.localLights.add( { position: new THREE.Vector3( x, this.terrainData.heightAt( st.x, st.z ) + ly, z ), color: new THREE.Color( 1.0, 0.72, 0.42 ), intensity: 5 * 1.5, range: 11, kind: 'lantern', flicker: 0.08 } );
+			// ((M14) Marta's hangs from her sign: out while a hurricane's taken it)
+			if ( st === CHANDLERY ) this._signLamp = lamp;
 
 		}
 
@@ -652,9 +670,15 @@ export class App {
 		// the roofs' sheets, the pier's boards, the palms' fronds, the wrack and sand, the birds at the wrack)
 		if ( ! ( ( this._damageT -= dt ) > 0 ) ) {
 
-			this._damageT = 1;
-			const D = this.damage = damageAt( islandTime( s.day, s.timeOfDay ), this.weatherPick(), s.weatherSince, this.damage );
+			const T = islandTime( s.day, s.timeOfDay );
+			const D = this.damage = damageAt( T, this.weatherPick(), s.weatherSince, this.damage );
+			// ((M14) ten times a second while its winds blow: what it tears off goes as it does)
+			this._damageT = D.storm && D.after < 0 ? 0.1 : 1;
 			this.village.setDamage( D );
+			// ((M14) Joe's roof, Marta's sign, and the sheets off them and the roofs, flying)
+			this.stand.setDamage( D );
+			this.chandlery.setDamage( D, this._signLamp );
+			this.flyingSheets.set( D, T );
 			this.terrain.setStorm( D );
 			vegUniforms.vegStrip.value = D.strip;
 			// (its line of wrack, made once it's left one, with the debris's materials)
@@ -771,6 +795,7 @@ export class App {
 		this.rocks.update( this.camera );
 		if ( this.debris ) this.debris.update( this.camera );
 		if ( this.stormWrack ) this.stormWrack.update( this.camera ); // ((M13) a hurricane's line of wrack, near you)
+		this.flyingSheets.update( islandTime( s.day, s.timeOfDay ) ); // ((M14) the sheets it's torn off, flying and lying)
 		if ( this.reef ) this.reef.update( this.camera );
 		if ( this.whale ) {
 

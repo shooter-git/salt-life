@@ -7,6 +7,7 @@ import { FISH } from './FishTable.js';
 import { Vendor } from './Vendor.js';
 import { HOURS } from './Orders.js';
 import { PriceBoard } from './PriceBoard.js';
+import { pieceState, WHOLE, TARP, NEW } from './StormDamage.js';
 
 // The fish buyer's stall on the beach by the pier: a weathered plank shack with a rusty tin roof,
 // a wooden fish box of crushed ice on the counter, a hanging spring scale, floats, crates, a
@@ -59,10 +60,31 @@ export class FishStand {
 
 			} );
 			const board = PRICES.clone().premultiply( new Matrix4().makeTranslation( 0, Math.min( ...feet ) - y, 0 ) );
-			const mesh = new Mesh( buildStallKit( a ), a.material );
+			const kit = buildStallKit( a );
+			const mesh = new Mesh( kit.geo, a.material );
 			mesh.name = 'FishStandStall';
 			mesh.castShadow = tier === 'high'; // (its scanned props: ~40-50k triangles in the shadow pass, under the stall's roof)
 			this.group.add( mesh );
+			// ((M14) its roof's sheets, each its own: a hurricane can take one, a tarp over the gap, a new one)
+			this.sheets = kit.sheets.map( ( q, i ) => {
+
+				const one = ( geo, name, matrix ) => {
+
+					const m = new Mesh( geo, a.material );
+					m.name = name;
+					m.castShadow = true;
+					m.matrixAutoUpdate = false;
+					m.matrix.copy( matrix );
+					this.group.add( m );
+					return m;
+
+				};
+				const s = { matrix: q.matrix, old: one( q.old, `FishStandSheet${ i }`, q.matrix ), tarp: one( q.tarp, `FishStandSheet${ i }_tarp`, new Matrix4() ), fresh: one( q.fresh, `FishStandSheet${ i }_new`, q.matrix ), state: - 1 };
+				s.tarp.visible = s.fresh.visible = false;
+				return s;
+
+			} );
+			this.kitMaterial = a.material;
 			// (the price board out on the sand, its own: its shadow on every tier, a few boxes)
 			const boardMesh = new Mesh( buildBoardKit( a, board ), a.material );
 			boardMesh.name = 'FishStandPrices';
@@ -136,6 +158,43 @@ export class FishStand {
 	update( dt, player ) {
 
 		if ( this.vendor ) this.vendor.update( dt, player );
+
+	}
+
+	// ((M14) what the last hurricane's done to its roof (StormDamage's 'stand', by the sheet's place): gone,
+	// a tarp over the rafters, a new sheet)
+	setDamage( D ) {
+
+		const st = this._ps || ( this._ps = {} );
+		( this.sheets || [] ).forEach( ( s, i ) => {
+
+			pieceState( D, 'stand', i, st );
+			if ( st.state === s.state ) return;
+			s.state = st.state;
+			s.old.visible = st.state === WHOLE;
+			s.tarp.visible = st.state === TARP;
+			s.fresh.visible = st.state === NEW;
+
+		} );
+
+	}
+
+	// ((M14) its sheets as they fly (world/debris/FlyingSheets): as Village.sheetFlyers)
+	sheetFlyers() {
+
+		this.group.updateMatrixWorld( true );
+		return ( this.sheets || [] ).map( ( s, i ) => ( {
+			kind: 'stand', id: i, sub: 0, w: 0.98, len: 2.12, kgm2: 4.2,
+			frame: new Matrix4().multiplyMatrices( this.group.matrixWorld, s.matrix ),
+			mesh: () => {
+
+				const m = new Mesh( s.old.geometry, this.kitMaterial );
+				m.name = `FishStandSheet${ i }_flying`;
+				m.castShadow = true;
+				return m;
+
+			},
+		} ) );
 
 	}
 
@@ -275,12 +334,22 @@ function buildStallKit( assets ) {
 	K.box( 2.5, 0.035, 0.3, place( 0, 0.7, - 0.63 ), { layer: DECK, along: 'x', color: tone() } );
 	for ( const x of [ - 1.1, 0, 1.1 ] ) K.box( 0.03, 0.18, 0.26, place( x, 0.6, - 0.66 ), { layer: DECK, along: 'y', color: tone() } );
 
-	// roof: rafters and three corrugated sheets, overlapping, one lifted a little
+	// roof: rafters and three corrugated sheets, overlapping, one lifted a little ((M14) each built at
+	// the origin, in its own: as it is, a blue tarp over the rafters where it was, and a new one of bright
+	// zinc)
 	for ( const x of [ - 1.25, 0, 1.25 ] ) K.box( 0.07, 0.09, 2.0, place( x, 2.33, 0, 0, - 0.16 ), { layer: DECK, along: 'z', color: tone() } );
+	const sheets = [];
 	for ( let i = 0; i < 3; i ++ ) {
 
 		const x = - 0.9 + i * 0.9;
-		K.corrugated( 0.98, 2.12, place( x, 2.405 + i * 0.006 + ( i === 2 ? 0.02 : 0 ), 0.04, J( 0.02 ), - 0.16 + ( i === 2 ? 0.02 : 0 ), J( 0.02 ) ), K.rnd(), [ 1, 1, 1 ] );
+		const matrix = place( x, 2.405 + i * 0.006 + ( i === 2 ? 0.02 : 0 ), 0.04, J( 0.02 ), - 0.16 + ( i === 2 ? 0.02 : 0 ), J( 0.02 ) ), u0 = K.rnd();
+		const old = new KitBuilder( assets, 31 + i ), tarp = new KitBuilder( assets, 41 + i ), fresh = new KitBuilder( assets, 51 + i );
+		old.corrugated( 0.98, 2.12, new Matrix4(), u0, [ 1, 1, 1 ] );
+		fresh.corrugated( 0.98, 2.12, new Matrix4(), u0, [ 0.62, 0.64, 0.65 ], { layer: PLAIN, params: [ 0.32, 1 ] } );
+		// (the tarp: pulled over the rafters, a little wider than the gap, held by battens along its sides)
+		tarp.box( 1.02, 0.006, 2.18, matrix.clone().multiply( place( 0, - 0.015, 0 ) ), { layer: PLAIN, color: [ 0.012, 0.09, 0.42 ], params: [ 0.55, 0 ] } );
+		for ( const s of [ - 1, 1 ] ) tarp.box( 0.04, 0.025, 2.2, matrix.clone().multiply( place( s * 0.47, 0.0, 0 ) ), { layer: DECK, along: 'z', color: [ 0.8, 0.72, 0.6 ] } );
+		sheets.push( { matrix, old: old.build(), tarp: tarp.build(), fresh: fresh.build() } );
 
 	}
 
@@ -353,7 +422,7 @@ function buildStallKit( assets ) {
 	K.prop( 'wooden_crate_01', place( - 1.84, 0.335, 0.28, Math.PI / 2 - 0.1 ), { detail: true } );
 	K.prop( 'wooden_crate_02', place( 1.8, 0, - 0.2, 0.03 ) );
 	K.prop( 'wooden_bucket_01', place( 1.55, 0, 1.05, 0.7 ) );
-	return K.build();
+	return { geo: K.build(), sheets };
 
 }
 

@@ -593,10 +593,17 @@ void vlmSurface( inout VlmSurf s, vec3 Ng ) {
 // PALM THATCH
 // uv: u = distance up-slope from the eave (m), v = along the eave (m)
 // vdata: x seed, y age (0 golden .. 1 grey)
+// (M14) a patch a hurricane can strip (Village.thatchHoles, Buildings' roofHoles): as the metal roofs'
+// holes, on one slab (its seed), along its eave (v) from the eave up (u < uTop), and its state: 0 whole,
+// 1 stripped (ragged at its edges, as torn thatch is, the thatch about it ruffled; the battens and rafters
+// show), 2 under a tarp, 3 new fronds tied on (+ how new: green-gold, drying to straw over a month)
+export const THATCH_HOLES = 8;
 
 export function createThatchMaterial( T ) {
 
-	const m = villageMaterial( { roughness: 0.95, metalness: 0, name: 'VillageThatch' }, T, [ 'thatchA', 'thatchN', 'grime' ], { surface: /* glsl */`
+	const m = villageMaterial( { roughness: 0.95, metalness: 0, name: 'VillageThatch' }, T, [ 'thatchA', 'thatchN', 'grime', 'hardN' ], { surface: /* glsl */`
+uniform vec4 vlmThatchHoles[ ${ THATCH_HOLES } ];
+uniform float vlmThatchS[ ${ THATCH_HOLES } ];
 void vlmSurface( inout VlmSurf s, vec3 Ng ) {
 	vec4 aData = vData;
 	float seed = aData.x;
@@ -609,20 +616,65 @@ void vlmSurface( inout VlmSurf s, vec3 Ng ) {
 	vec4 Gm = texture( vlgGrime, vec2( tuv.x * 0.23, tuv.y * 0.19 ) + seed );
 	vec4 Gs = texture( vlgGrime, vec2( tuv.x * 0.5, tuv.y * 0.25 ) + seed * 1.7 );
 
+	// ((M14) a patch the storm stripped, a tarp over it, new fronds)
+	float tarp = 0.0, fresh = 0.0, ruffle = 0.0;
+	vec4 tq = vec4( 0.0 );
+	for ( int k = 0; k < ${ THATCH_HOLES }; k ++ ) {
+		vec4 H = vlmThatchHoles[ k ];
+		float st = vlmThatchS[ k ];
+		if ( st < 0.5 || abs( H.x - seed ) > 2e-5 ) continue;
+		// its edges ragged: torn back unevenly along the battens, the strands' ends hanging over its top
+		float rT = texture( vlgGrime, vec2( uvm.y * 0.7, 0.31 ) + seed * 5.0 ).a + texture( vlgGrime, vec2( uvm.y * 3.1, 0.67 ) + seed ).a * 0.6 - 0.8;
+		float r0 = texture( vlgGrime, vec2( 0.13, uvm.x * 0.8 ) + seed * 3.0 ).a + texture( vlgGrime, vec2( 0.53, uvm.x * 2.9 ) + seed ).a * 0.6 - 0.8;
+		float r1 = texture( vlgGrime, vec2( 0.77, uvm.x * 0.8 ) + seed * 7.0 ).a + texture( vlgGrime, vec2( 0.91, uvm.x * 2.9 ) + seed ).a * 0.6 - 0.8;
+		float strands = ( Nt.a - 0.6 ) * 0.25;
+		float d = min( min( uvm.y - H.y - r0 * 0.35, H.z - uvm.y - r1 * 0.35 ), H.w + rT * 0.45 + strands - uvm.x );
+		if ( st < 1.5 ) {
+			if ( d > 0.0 ) discard;
+			ruffle = max( ruffle, 1.0 - smoothstep( 0.0, 0.4, - d ) );
+		} else if ( st < 2.5 ) {
+			// (the tarp: a little past the patch up the slope and either side)
+			vec4 q = vec4( uvm.x, uvm.y - H.y + 0.3, H.w + 0.45, H.z - H.y + 0.6 );
+			if ( q.x < q.z && q.y > 0.0 && q.y < q.w ) { tarp = 1.0; tq = q; }
+		} else if ( d > 0.0 ) fresh = 1.0 - fract( st );
+	}
+
 	float lum = dot( A.rgb, vec3( 0.3, 0.59, 0.11 ) );
 	vec3 greyed = vec3( lum ) * vec3( 0.95, 0.9, 0.8 );
-	float ageL = clamp( age + ( Gm.a - 0.5 ) * 0.9, 0.0, 1.0 );
+	float ageL = clamp( age + ( Gm.a - 0.5 ) * 0.9, 0.0, 1.0 ) * ( 1.0 - fresh );
 	vec3 col = mix( A.rgb, greyed, ageL * 0.8 ) * ( Gm.a * 0.35 + 0.82 ) * ( 1.0 - ageL * 0.2 );
-	col = col * ( 1.0 - Gs.r * 0.25 ) * ( 1.0 - Gs.b * 0.35 );
+	col = col * ( 1.0 - Gs.r * 0.25 * ( 1.0 - fresh ) ) * ( 1.0 - Gs.b * 0.35 * ( 1.0 - fresh ) );
+	// (new fronds: green and glossy as cut, gold within a fortnight)
+	col = mix( col, col * vec3( 0.72, 0.92, 0.42 ), fresh * fresh );
 	col = col * mix( 1.0, Nt.a, 0.55 );
 	vec2 sT = vlmSlopeOf( Nt );
-	s.normal = vlmNormalFromSlope( vWP, Ng, uvm, vec2( sT.y, sT.x ) );
-	s.albedo = col;
-	s.roughness = Nt.b;
-	s.ao = Nt.a;
+	// (about a stripped patch: what's left lifted and tangled, its underside's darker straw showing)
+	vec2 sR = vlmSlopeOf( texture( vlgThatchN, tuv * vec2( 1.7, 0.6 ) + 0.37 ) );
+	s.normal = vlmNormalFromSlope( vWP, Ng, uvm, vec2( sT.y, sT.x ) + vec2( sR.y, sR.x ) * ruffle * 1.5 );
+	s.albedo = col * ( 1.0 - ruffle * 0.3 );
+	s.roughness = mix( Nt.b, 0.6, fresh * fresh );
+	s.ao = Nt.a * ( 1.0 - ruffle * 0.25 );
+	// ((M14) a blue tarp pulled over it, its battens nailed along its top and down its sides, over the
+	// thatch's lumps)
+	if ( tarp > 0.0 ) {
+		vec4 Wr = texture( vlgHardN, tq.xy * vec2( 0.45, 0.3 ) + seed * 3.1 );
+		vec2 wsl = vlmSlopeOf( Wr ) * 0.5 + vec2( sT.y, sT.x ) * 0.6;
+		s.normal = vlmNormalFromSlope( vWP, Ng, uvm, wsl );
+		s.albedo = vec3( 0.012, 0.09, 0.42 ) * ( 0.85 + Wr.b * 0.3 );
+		s.roughness = 0.5 + Wr.b * 0.15;
+		s.ao = mix( 1.0, Nt.a, 0.5 );
+		float bat = max( 1.0 - step( 0.03, abs( tq.x - ( tq.z - 0.08 ) ) ), max( 1.0 - step( 0.03, abs( tq.y - 0.08 ) ), 1.0 - step( 0.03, abs( tq.y - ( tq.w - 0.08 ) ) ) ) );
+		if ( bat > 0.0 ) {
+			s.albedo = vec3( 0.2, 0.16, 0.11 ) * ( 0.8 + Wr.b * 0.4 );
+			s.roughness = 0.85;
+			s.normal = Ng;
+		}
+	}
 }
 ` } );
 	m.name = 'VillageThatch';
+	m.userData.vlm.uniforms.vlmThatchHoles = { value: Array.from( { length: THATCH_HOLES }, () => new THREE.Vector4( - 1, 0, 0, 0 ) ) };
+	m.userData.vlm.uniforms.vlmThatchS = { value: new Array( THATCH_HOLES ).fill( 0 ) };
 	return m;
 
 }
@@ -760,12 +812,21 @@ export function createFabricMaterial( T ) {
 	transformed = mix( swayPos, flagPos, isFlag );
 `,
 		surface: /* glsl */`
+// ((M14) a flag shredded from its fly end by a hurricane's wind (Village.setDamage): how much of it's gone,
+// 0..1, in strips of their own lengths, threads trailing)
+uniform float vlmFlagTorn;
 void vlmSurface( inout VlmSurf s, vec3 Ng ) {
 	vec3 aTint = vTint;
 	vec4 aData = vData;
 	float isFlag = step( 5000.0, aData.z );
 	float isNet = step( 0.001, aData.z ) * ( 1.0 - isFlag );
 	vec2 uvm = vUv0;
+	if ( isFlag > 0.5 && vlmFlagTorn > 0.0 ) {
+		float strip = floor( uvm.y * 22.0 );
+		float len = vlmHash21( strip, aData.x * 13.0 ), thread = step( 0.8, vlmHash21( floor( uvm.y * 90.0 ), aData.x ) );
+		float keep = 1.3 * ( 1.0 - vlmFlagTorn * ( 0.55 + 0.45 * len ) );
+		if ( aData.y > keep + thread * 0.25 * vlmFlagTorn ) discard;
+	}
 
 	// net
 	float tile = max( aData.z, 0.02 ) * 4.0;
@@ -802,6 +863,7 @@ void vlmSurface( inout VlmSurf s, vec3 Ng ) {
 `,
 	} );
 	m.name = 'VillageFabric';
+	m.userData.vlm.uniforms.vlmFlagTorn = { value: 0 };
 	return m;
 
 }
@@ -818,10 +880,13 @@ export function createNetMaterial( T ) {
 		// sway (as the fabric)
 		vertex: SWAY + '\ttransformed = swayPos;\n',
 		surface: /* glsl */`
+// ((M14) the nets a hurricane's blown off their rack or rail (Village.setDamage): their seeds, -1 none)
+uniform vec4 vlmNetGone;
 void vlmSurface( inout VlmSurf s, vec3 Ng ) {
 	vec3 aTint = vTint;
 	vec4 aData = vData;
 	vec2 uvm = vUv0;
+	if ( any( lessThan( abs( vlmNetGone - aData.x ), vec4( 2e-5 ) ) ) ) discard;
 	float tile = max( aData.z, 0.02 ) * 4.0;
 	vec2 nuv = uvm / tile;
 	vec4 Nt = texture( vlgNet, nuv );
@@ -838,6 +903,7 @@ void vlmSurface( inout VlmSurf s, vec3 Ng ) {
 `,
 	} );
 	m.name = 'VillageNet';
+	m.userData.vlm.uniforms.vlmNetGone = { value: new THREE.Vector4( - 1, - 1, - 1, - 1 ) };
 	m.forceSinglePass = true; // (thin mesh: no back-then-front passes, one program)
 	return m;
 

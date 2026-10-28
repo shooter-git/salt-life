@@ -710,7 +710,9 @@ export function wreck( B, x, y, z, ry, rand, o = {} ) {
 
 // Net drying rack: two T-posts with a pole, a net draped over it. Local frame: along x.
 // (Salt Life) cast: [ { x, R, tint } ] hangs cast nets from the pole by their horns instead (castNetHung)
-export function netRack( B, x, gy, z, ry, len = 3.2, netTint = lin( 0x3f6f5f ), seed = 0.5, groundFn = null, cast = null ) {
+// ((M14) floats: a Builder of their own for the floats on a draped net's head rope, to go with it when a
+// hurricane blows it off the rack: Village.stormNets)
+export function netRack( B, x, gy, z, ry, len = 3.2, netTint = lin( 0x3f6f5f ), seed = 0.5, groundFn = null, cast = null, floats = null ) {
 
 	B.pushAt( x, 0, z, ry );
 	const h = 1.95;
@@ -758,17 +760,20 @@ export function netRack( B, x, gy, z, ry, len = 3.2, netTint = lin( 0x3f6f5f ), 
 	} );
 	B.add( 'net', part, new Matrix4(), netTint, ( px, py ) => [ seed, Math.min( 1, Math.max( 0, ( top - py ) / drop ) ) * 0.8, 0.045, 0 ] );
 	// float line along the bottom edges (not on low-powered devices)
+	const FB = floats || B;
+	if ( floats ) floats.push( B.frame );
 	if ( ! B.lite ) for ( const side of [ - 1, 1 ] ) {
 
 		for ( let i = 0; i < 5; i ++ ) {
 
 			const xx = ( ( i + 0.5 ) / 5 - 0.5 ) * ( len - 0.4 );
-			buoy( B, xx, top - drop - 0.06, side * 0.27, C.orange, C.orange, 2, seed + i * 0.1, { rx: side * 0.2 } );
+			buoy( FB, xx, top - drop - 0.06, side * 0.27, C.orange, C.orange, 2, seed + i * 0.1, { rx: side * 0.2 } );
 
 		}
 
 	}
 
+	if ( floats ) floats.pop();
 	B.pop();
 
 }

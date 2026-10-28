@@ -3,6 +3,7 @@ import { prepare, mergePrepared, box, cylinder, sphere, rod, torus, mat4 } from 
 import { loadStallAssets, KitBuilder, LAYER, ATLAS, place, Shapes, PAT, createPlainMaterial } from './StallKit.js';
 import { Vendor } from './Vendor.js';
 import { HOURS } from './Orders.js';
+import { pieceState, GONE } from './StormDamage.js';
 
 // The upgrade trader by the boathouse: a scanned work table with a tackle box, spools of line and
 // reels, display shelves of rope and floats behind her, a rack of rods, jerrycans of diesel, fenders,
@@ -38,10 +39,18 @@ export class Chandlery {
 
 		} else this.ready = loadStallAssets( tier ).then( ( a ) => {
 
-			const mesh = new Mesh( buildChandleryKit( a ), a.material );
+			const kit = buildChandleryKit( a );
+			const mesh = new Mesh( kit.geo, a.material );
 			mesh.name = 'ChandleryStall';
 			mesh.castShadow = tier === 'high'; // (its scanned props: ~40-50k triangles in the shadow pass, under the stall's roof)
 			this.group.add( mesh );
+			// ((M14) her sign, and the lantern hung from it, its own: a hurricane can tear it off its posts)
+			this.sign = new Mesh( kit.sign.geo, a.material );
+			this.sign.name = 'ChandlerySign';
+			this.sign.castShadow = true;
+			this.group.add( this.sign );
+			this.signBoard = kit.sign;
+			this.kitMaterial = a.material;
 
 		} ).catch( ( e ) => {
 
@@ -83,6 +92,38 @@ export class Chandlery {
 	update( dt, player ) {
 
 		if ( this.vendor ) this.vendor.update( dt, player );
+
+	}
+
+	// ((M14) what the last hurricane's done: her sign off its posts (StormDamage's 'sign'), its lantern
+	// with it (lamp: App's light for it, out while it's gone), until she's nailed it back up
+	setDamage( D, lamp = null ) {
+
+		const gone = pieceState( D, 'sign', 0, this._ps || ( this._ps = {} ) ).state === GONE;
+		if ( this.sign ) this.sign.visible = ! gone;
+		if ( lamp ) lamp.scale = gone ? 0 : 1;
+
+	}
+
+	// ((M14) her sign's board as it flies (world/debris/FlyingSheets): as Village.sheetFlyers (the board
+	// lying in its frame's xz, its face up)
+	sheetFlyers() {
+
+		if ( ! this.signBoard ) return [];
+		this.group.updateMatrixWorld( true );
+		const b = this.signBoard;
+		return [ {
+			kind: 'sign', id: 0, sub: 0, w: 2.3, len: 0.56, kgm2: 14,
+			frame: new Matrix4().multiplyMatrices( this.group.matrixWorld, b.matrix ).multiply( new Matrix4().makeRotationX( Math.PI / 2 ) ),
+			mesh: () => {
+
+				const m = new Mesh( b.flying, this.kitMaterial );
+				m.name = 'ChandlerySign_flying';
+				m.castShadow = true;
+				return m;
+
+			},
+		} ];
 
 	}
 
@@ -172,9 +213,14 @@ function buildChandleryKit( assets ) {
 
 	} );
 
-	// the sign on two posts above the shelves, fenders hanging from the posts
+	// the sign on two posts above the shelves, fenders hanging from the posts ((M14) the board, and the
+	// lantern hung from it, in a kit of their own (S), and the board alone at the origin, its face up (F),
+	// to fly: the stall's own draws are as they were)
+	const S = new KitBuilder( assets, 61 ), F = new KitBuilder( assets, 62 );
 	for ( const sx of [ - 1, 1 ] ) K.box( 0.09, 2.7, 0.09, place( sx * 1.08, 1.35, - 1.72, J( 0.2 ), J( 0.02 ), J( 0.02 ) ), { layer: DECK, along: 'y', color: tone() } );
-	K.box( 2.3, 0.56, 0.04, place( 0, 2.28, - 1.66, 0, 0, J( 0.012 ) ), { layer: SIGN, along: 'x', uv2Rect: ATLAS.marta } );
+	const board = place( 0, 2.28, - 1.66, 0, 0, J( 0.012 ) ), off = [ K.rnd(), K.rnd() ];
+	S.box( 2.3, 0.56, 0.04, board, { layer: SIGN, along: 'x', uv2Rect: ATLAS.marta, off } );
+	F.box( 2.3, 0.56, 0.04, new Matrix4().makeRotationX( - Math.PI / 2 ), { layer: SIGN, along: 'x', uv2Rect: ATLAS.marta, off } );
 	// a white fender and a blue one on the left post, the lifebuoy on the right one
 	K.rope( [ V( - 1.08, 1.9, - 1.66 ), V( - 1.13, 1.62, - 1.58 ) ], 0.006 );
 	K.geometry( fenderGeo(), place( - 1.14, 1.36, - 1.57, J( 1 ), 0, - 0.08 ), { layer: FLOAT, color: [ 0.84, 0.83, 0.8 ] } );
@@ -182,8 +228,8 @@ function buildChandleryKit( assets ) {
 	K.prop( 'lifebuoy', place( 1.08, 1.47, - 1.6, 0.04, 0, - 0.05 ) );
 
 	// a lantern hanging from the sign's lower edge, left of Marta (lit from dusk, see App)
-	K.rope( [ V( - 0.75, 2.0, - 1.62 ), V( - 0.75, 1.86, - 1.45 ) ], 0.004 );
-	K.prop( 'wooden_lantern_01', place( - 0.75, 1.36, - 1.45, 0.3 ) );
+	S.rope( [ V( - 0.75, 2.0, - 1.62 ), V( - 0.75, 1.86, - 1.45 ) ], 0.004 );
+	S.prop( 'wooden_lantern_01', place( - 0.75, 1.36, - 1.45, 0.3 ) );
 
 	// the life jacket hangs from the left post
 	K.prop( 'life_jacket', place( - 1.08, 1.05, - 1.6, 0.08 ), { detail: true } );
@@ -211,7 +257,7 @@ function buildChandleryKit( assets ) {
 
 	}
 
-	return K.build();
+	return { geo: K.build(), sign: { geo: S.build(), flying: F.build(), matrix: board } };
 
 }
 

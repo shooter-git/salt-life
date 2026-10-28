@@ -15,7 +15,7 @@ import { Rand, InstancedProps } from '../src/world/Props.js';
 import { mulberry32 } from '../src/util/Noise.js';
 import { StormWrack } from '../src/world/debris/StormWrack.js';
 import { buildPier, PIER, PIER_STORM } from '../src/world/Pier.js';
-import { buildHouse, buildShed, buildBoathouse } from '../src/world/village/Buildings.js';
+import { buildHouse, buildShed, buildBoathouse, buildMarketStall } from '../src/world/village/Buildings.js';
 import { Shorebirds } from '../src/world/wildlife/Shorebirds.js';
 import { hurricaneAt, hurricaneNews, lastHurricane, HURRICANE } from '../src/game/Weather.js';
 import { damageAt, pieceState, DAMAGE, WHOLE, GONE, TARP, NEW } from '../src/game/StormDamage.js';
@@ -143,6 +143,47 @@ const count = ( D, kind, n, states ) => {
 	const life = [ 1, 45, 200 ].map( ( a ) => pieceState( damageAt( n.ends + a ), 'tin', id ) );
 	check( life[ 0 ].state === GONE && life[ 1 ].state === TARP && life[ 2 ].state === NEW && life[ 2 ].age > 0 && life[ 2 ].age < 200, `a sheet's life: gone, a tarp over it, a new one (${ life[ 2 ].age.toFixed( 0 ) } h old)` );
 
+	// ((M14) the rest of the island: the thatch, Joe's sheets, Marta's sign, the nets, the flag, her berth
+	// and its fenders; more of it by a stronger one; all of it back within a week; and each piece's going
+	// (went) the moment its state turns)
+	const KINDS = { thatch: 8, stand: 3, sign: 1, net: 4, flag: 1, dock: 1, fender: 4 };
+	const torn = { 1: {}, 2: {}, 3: {} }, storms = { 1: 0, 2: 0, 3: 0 };
+	let back = true, wentOk = true, wentN = 0;
+	for ( const h of list ) {
+
+		const n = hurricaneNews( h.tc ), at = ( t ) => {
+
+			const D = damageAt( t );
+			return D.storm && D.storm.tc === h.tc ? D : D.prev && D.prev.storm.tc === h.tc ? D.prev : null;
+
+		};
+		const D = at( n.ends + 1 ), D7 = at( n.ends + 169 );
+		if ( ! D ) continue;
+		storms[ h.cat ] ++;
+		for ( const kind in KINDS ) {
+
+			torn[ h.cat ][ kind ] = ( torn[ h.cat ][ kind ] || 0 ) + count( D, kind, KINDS[ kind ], [ GONE, TARP ] ) / KINDS[ kind ];
+			if ( D7 && count( D7, kind, KINDS[ kind ], [ GONE, TARP ] ) ) back = false;
+			for ( let i = 0; i < KINDS[ kind ]; i ++ ) {
+
+				const st = pieceState( D, kind, i );
+				if ( st.state === WHOLE || st.storm !== D.storm ) continue;
+				wentN ++;
+				const a = at( st.went - 0.02 ), b = at( st.went + 0.02 );
+				if ( ! ( st.went > n.onset - 13 && st.went < n.ends + 13 ) || ( a && pieceState( a, kind, i ).state !== WHOLE && pieceState( a, kind, i ).storm === D.storm ) || ! b || pieceState( b, kind, i ).state === WHOLE ) wentOk = false;
+
+			}
+
+		}
+
+	}
+
+	const share = ( c, kind ) => storms[ c ] ? torn[ c ][ kind ] / storms[ c ] : 0;
+	for ( const c of [ 1, 2, 3 ] ) console.log( `     (M14) a Category ${ c } (${ storms[ c ] }): ${ Object.keys( KINDS ).map( ( k ) => `${ k } ${ ( share( c, k ) * 100 ).toFixed( 0 ) }%` ).join( ', ' ) }` );
+	check( Object.keys( KINDS ).every( ( k ) => share( 3, k ) >= share( 1, k ) ) && share( 1, 'flag' ) > 0.6 && share( 1, 'thatch' ) > 0.1 && share( 3, 'thatch' ) > 0.6 && share( 3, 'stand' ) > 0.6 && share( 3, 'dock' ) > 0.5, '(M14) the thatch, Joe\'s sheets, Marta\'s sign and berth, the nets and the flag torn: some by a Category 1, most by a 3' );
+	check( back, '(M14) and all of it back within a week' );
+	check( wentOk && wentN > 100, `(M14) each piece goes the moment its wind or water's reached it (when it went: ${ wentN } of them)` );
+
 }
 
 const terrain = new TerrainData( 7, decodeIsland( new Uint8Array( readFileSync( new URL( '../public/world/island-1024.bin', import.meta.url ) ) ) ) );
@@ -152,8 +193,34 @@ const terrain = new TerrainData( 7, decodeIsland( new Uint8Array( readFileSync( 
 
 	const B = new Builder(), colliders = new Colliders(), rand = new Rand( mulberry32( 90210 ) );
 	const info = buildPier( { B, terrain, colliders, rand, lights: [], inst: new InstancedProps( B ), signB: new Builder(), hang: () => new Builder(), stormB: () => new Builder() } );
-	const pieces = info.storm;
-	check( pieces.length === PLANKS + 1 && pieces.every( ( p ) => p.B.batches.wood && p.B.batches.wood.vcount > 0 && p.boxes.length === 1 ), `the pieces a hurricane can take: ${ pieces.map( ( p ) => p.kind + p.id ).join( ', ' ) }, each its own geometry and deck collider` );
+	const pieces = info.storm.filter( ( p ) => p.kind === 'plank' || p.kind === 'bay' );
+	check( pieces.length === PLANKS + 1 && pieces.every( ( p ) => p.B.batches.wood && p.B.batches.wood.vcount > 0 && p.boxes.length === 1 ), `the pieces a hurricane can take: ${ info.storm.map( ( p ) => p.kind + p.id ).join( ', ' ) }, each its own geometry and deck collider` );
+	// ((M14) Marta's berth: its boards' outer lengths, its own deck there, giving way while they're gone;
+	// its four tyre fenders, each its own)
+	const dock = info.storm.find( ( p ) => p.kind === 'dock' ), fenders = info.storm.filter( ( p ) => p.kind === 'fender' );
+	{
+
+		const b = dock.boxes[ 0 ], pos = dock.B.batches.wood.pos, n = dock.B.batches.wood.vcount;
+		let x0 = Infinity, x1 = - Infinity, z0 = Infinity, z1 = - Infinity;
+		for ( let i = 0; i < n; i ++ ) {
+
+			x0 = Math.min( x0, pos[ i * 3 ] ); x1 = Math.max( x1, pos[ i * 3 ] );
+			z0 = Math.min( z0, pos[ i * 3 + 2 ] ); z1 = Math.max( z1, pos[ i * 3 + 2 ] );
+
+		}
+
+		const at = ( ) => colliders.groundHeightAt( b.center.x, b.center.z, 10 );
+		const whole = at() > PIER.deck - 0.1;
+		b.walkable = b.solid = false;
+		const gone = at() === - Infinity || at() < 0;
+		b.walkable = b.solid = true;
+		// (the rest of the head's deck, all about it, still there)
+		const about = [ [ b.center.x - b.half.x - 0.5, b.center.z ], [ b.center.x, b.center.z - b.half.z - 0.3 ], [ b.center.x, b.center.z + b.half.z + 0.3 ] ].every( ( [ x, z ] ) => colliders.groundHeightAt( x, z, 10 ) > PIER.deck - 0.1 );
+		console.log( `     Marta's berth: boards x ${ x0.toFixed( 1 ) } to ${ x1.toFixed( 1 ) }, z ${ z0.toFixed( 1 ) } to ${ z1.toFixed( 1 ) }; its deck ${ ( b.half.x * 2 ).toFixed( 1 ) } x ${ ( b.half.z * 2 ).toFixed( 1 ) } m` );
+		check( x1 > PIER.headX1 - 0.3 && x0 > PIER.headX0 + 5 && z0 > b.center.z - b.half.z - 0.15 && z1 < b.center.z + b.half.z + 0.15 && whole && gone && about, '(M14) Marta\'s berth: its boards along the head\'s boat side, its deck giving way while they\'re gone, the rest of the head\'s still there' );
+		check( fenders.length === 4 && fenders.every( ( f ) => f.B.batches.hard && f.B.batches.hard.vcount > 0 && f.boxes.length === 0 ), '(M14) its four tyre fenders, each its own' );
+
+	}
 	// the walkway's deck: its boxes end to end from the pier's foot to its head
 	const walk = colliders.boxes.filter( ( b ) => b.tag === 'pierDeck' && b.center.z < PIER.headZ0 ).sort( ( a, b ) => a.center.z - b.center.z );
 	let tiles = Math.abs( walk[ 0 ].center.z - walk[ 0 ].half.z - PIER.zStart ) < 1e-6 && Math.abs( walk[ walk.length - 1 ].center.z + walk[ walk.length - 1 ].half.z - PIER.headZ0 ) < 1e-6;
@@ -182,6 +249,20 @@ const terrain = new TerrainData( 7, decodeIsland( new Uint8Array( readFileSync( 
 
 	check( inside, 'each piece\'s boards lie over its own stretch of deck' );
 	check( gives && pieces.find( ( p ) => p.kind === 'bay' ).boxes[ 0 ].half.z * 2 > 2.5, 'its deck gives way while it\'s gone (a bay\'s 3 m: you fall in), and holds again once it\'s back' );
+
+}
+
+// ---- (M14) the thatched roofs' patches: the stilt huts' and the market stall's
+{
+
+	const base = { trim: [ 1, 1, 1 ], accent: [ 0, 0, 0.3 ], wall: [ 0.9, 0.5, 0.4 ], siding: 2, paint: 0.5, foundation: 'stilts', roofMat: 'thatch', thatchAge: 0.5, harbor: true, porch: { depth: 1.6, rail: 'x' }, shutters: 'board', fewWindows: true, porchBench: false };
+	const thatchHoles = [], B = new Builder(), colliders = new Colliders(), rand = new Rand( mulberry32( 11 ) );
+	const ctx = { B, terrain, colliders, rand, lights: [], inst: new InstancedProps( B ), checks: [], holes: [], thatchHoles };
+	for ( const s of [ { ...base, name: 'S2', x: 79.8, z: - 70.4, yaw: - 0.12, w: 4.4, d: 4.0, floorY: 3.05, roof: 'gableFront' }, { ...base, name: 'S3', x: 37.2, z: - 72.4, yaw: 0.18, w: 4.0, d: 4.0, floorY: 3.15, roof: 'gable' } ] ) buildHouse( ctx, s );
+	buildMarketStall( ctx, { x: 40.2, z: - 113.2, yaw: 0.05 } );
+	const sizes = thatchHoles.map( ( h ) => `${ h.name } ${ ( h.v1 - h.v0 ).toFixed( 1 ) } x ${ Math.min( h.uTop, 9 ).toFixed( 1 ) } m` );
+	console.log( `     ${ sizes.join( ', ' ) }` );
+	check( thatchHoles.length === 3 && thatchHoles.every( ( h ) => h.v1 - h.v0 >= 0.8 && h.v1 - h.v0 <= 2.6 && h.uTop > 0.4 && h.sheets.length === 0 && h.at.y > 3 ), '(M14) a patch on each thatched roof, 0.9 to 2.6 m along its eave from it up, on the roof' );
 
 }
 

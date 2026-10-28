@@ -1,7 +1,7 @@
-import { BufferGeometry, Color, DoubleSide, Euler, Group, Mesh, Vector3 } from '../engine/index.js';
+import { BufferGeometry, Color, DoubleSide, Euler, Group, Matrix4, Mesh, Vector3 } from '../engine/index.js';
 import { mulberry32 } from '../util/Noise.js';
 import { Builder, Batch, setGeometryDetail } from './village/GeoBuilder.js';
-import { createVillageMaterials, ROOF_HOLES } from './village/VillageMaterials.js';
+import { createVillageMaterials, ROOF_HOLES, THATCH_HOLES } from './village/VillageMaterials.js';
 import { VillageTextures } from './village/TextureBaker.js';
 import { buildHouse, buildBoathouse, buildMarketStall, buildShed, buildShelter, buildCradle } from './village/Buildings.js';
 import { Shutters } from './village/Shutters.js';
@@ -117,12 +117,16 @@ export class Village {
 	async init( renderer ) {
 
 		const { terrain, colliders, rand, specs, scene } = this;
-		// ((M13) the sheets a hurricane can tear off the metal roofs: Buildings' roofHoles)
+		// ((M13) the sheets a hurricane can tear off the metal roofs: Buildings' roofHoles; (M14) the
+		// patches it can strip off the thatched ones, and the nets it can blow off a rack or a rail)
 		this.roofHoles = [];
+		this.thatchHoles = [];
+		this.stormNets = [];
+		this.netPieces = [];
 		// ((M14) the houses' side-hung shutters into a mesh of their own, that they can swing: Shutters)
 		this.shutterB = new Builder();
 		this.shutterList = [];
-		const ctx = ( B ) => ( { B, terrain, colliders, rand, lights: this.lights, inst: B === this.town ? this.townInst : this.harborInst, checks: this.foundationChecks, holes: this.roofHoles, shutterB: this.shutterB, shutterList: this.shutterList } );
+		const ctx = ( B ) => ( { B, terrain, colliders, rand, lights: this.lights, inst: B === this.town ? this.townInst : this.harborInst, checks: this.foundationChecks, holes: this.roofHoles, thatchHoles: this.thatchHoles, nets: this.stormNets, shutterB: this.shutterB, shutterList: this.shutterList } );
 		let t0 = performance.now();
 		const step = async () => {
 
@@ -428,8 +432,18 @@ export class Village {
 		];
 		for ( const [ x, z, ry, tint, cast ] of racks ) {
 
-			const cy = Math.cos( ry ), sy = Math.sin( ry );
-			netRack( B, x, g( x, z ), z, ry, 3.2, tint, rand.next(), ( lx, lz ) => g( x + lx * cy + lz * sy, z - lx * sy + lz * cy ), cast );
+			const cy = Math.cos( ry ), sy = Math.sin( ry ), seed = rand.next();
+			// ((M14) a gill net drying over it can blow off it in a hurricane, the floats on its head rope
+			// with it; the cast nets hang by their horns, weighted with their leads)
+			const floats = cast ? null : new Builder();
+			if ( floats ) floats.lite = B.lite;
+			netRack( B, x, g( x, z ), z, ry, 3.2, tint, seed, ( lx, lz ) => g( x + lx * cy + lz * sy, z - lx * sy + lz * cy ), cast, floats );
+			if ( floats ) {
+
+				this.stormNets.push( { seed, name: 'rack' } );
+				this.netPieces.push( { kind: 'net', id: this.stormNets.length - 1, B: floats, boxes: [] } );
+
+			}
 			for ( const sx of [ - 1.6, 1.6 ] ) {
 
 				const px = x + sx * cy, pz = z - sx * sy;
@@ -846,42 +860,95 @@ export class Village {
 
 	// (M13) what a hurricane can take: the roofs' sheets (the roof material's holes, Buildings' roofHoles:
 	// each slab's seed, its sheets along the eave, how far up), and the pier's boards and bay (Pier's
-	// PIER_STORM), each its own mesh in its old timber and in new, and its deck collider
+	// PIER_STORM), each its own mesh in its old timber and in new, and its deck collider. ((M14) And the
+	// thatch's patches (the thatch material's holes, as the tin's), Marta's berth and its fenders (Pier's),
+	// the nets on a rack or a rail (the net material's: their seeds) and the flag (the fabric's))
 	_buildStorm() {
 
 		const H = this.materials.roofMetal.userData.vlm.uniforms;
 		this.roofHoles.length = Math.min( this.roofHoles.length, ROOF_HOLES );
 		this.roofHoles.forEach( ( h, k ) => H.vlmHoles.value[ k ].set( h.seed, h.v0, h.v1, h.uTop ) );
+		const HT = this.materials.thatch.userData.vlm.uniforms;
+		this.thatchHoles.length = Math.min( this.thatchHoles.length, THATCH_HOLES );
+		this.thatchHoles.forEach( ( h, k ) => HT.vlmThatchHoles.value[ k ].set( h.seed, h.v0, h.v1, h.uTop ) );
+		this.stormNets.length = Math.min( this.stormNets.length, 4 );
 		this.stormPieces = [];
-		for ( const p of this.pierInfo.storm || [] ) {
+		for ( const p of [ ...( this.pierInfo.storm || [] ), ...this.netPieces ] ) {
 
-			const src = p.B.batches.wood;
+			const bs = p.B.batches;
 			p.B = null;
-			if ( ! src || src.vcount === 0 ) continue;
-			// (new timber: warm and pale, not yet silvered)
-			const fresh = new Batch();
-			fresh.append( src, ( d ) => [ d[ 0 ], d[ 1 ], d[ 2 ], 0.3 ] );
-			for ( let i = 0; i < fresh.vcount; i ++ ) {
+			// (as the village's: rope folded into the hard surfaces)
+			if ( bs.rope ) {
 
-				fresh.tint[ i * 3 ] *= 1.16; fresh.tint[ i * 3 + 1 ] *= 1.06; fresh.tint[ i * 3 + 2 ] *= 0.9;
+				( bs.hard || ( bs.hard = new Batch() ) ).append( bs.rope, ( d ) => [ d[ 0 ], 0, 0, 2 + d[ 1 ] ] );
+				delete bs.rope;
 
 			}
 
-			const mesh = ( b, name ) => {
+			const piece = { kind: p.kind, id: p.id, old: [], fresh: [], boxes: p.boxes, state: - 1 };
+			for ( const key of [ 'wood', 'hard' ] ) {
 
-				const m = new Mesh( b.build(), this.materials.wood );
-				m.name = name;
-				m.castShadow = true;
-				m.receiveShadow = true;
-				m.matrixAutoUpdate = false;
-				this.group.add( m );
-				return m;
+				const src = bs[ key ];
+				if ( ! src || src.vcount === 0 ) continue;
+				// (new timber: warm and pale, not yet silvered; a new tyre and chain: blacker, brighter; a net's
+				// floats hung back up as they were)
+				const fresh = new Batch(), same = p.kind === 'net';
+				fresh.append( src, key === 'wood' ? ( d ) => [ d[ 0 ], d[ 1 ], d[ 2 ], 0.3 ] : ( d ) => [ d[ 0 ], same ? d[ 1 ] : d[ 1 ] * 0.2, d[ 2 ], d[ 3 ] ] );
+				const k = same ? [ 1, 1, 1 ] : key === 'wood' ? [ 1.16, 1.06, 0.9 ] : [ 0.8, 0.8, 0.8 ];
+				for ( let i = 0; i < fresh.vcount; i ++ ) for ( let c = 0; c < 3; c ++ ) fresh.tint[ i * 3 + c ] *= k[ c ];
+				const mesh = ( b, name ) => {
 
-			};
-			this.stormPieces.push( { kind: p.kind, id: p.id, old: mesh( src, `village_${ p.kind }${ p.id }` ), fresh: mesh( fresh, `village_${ p.kind }${ p.id }_new` ), boxes: p.boxes, state: - 1 } );
-			this.stormPieces[ this.stormPieces.length - 1 ].fresh.visible = false;
+					const m = new Mesh( b.build(), this.materials[ key ] );
+					m.name = name;
+					m.castShadow = true;
+					m.receiveShadow = true;
+					m.matrixAutoUpdate = false;
+					this.group.add( m );
+					return m;
+
+				};
+				piece.old.push( mesh( src, `village_${ p.kind }${ p.id }_${ key }` ) );
+				piece.fresh.push( mesh( fresh, `village_${ p.kind }${ p.id }_${ key }_new` ) );
+				piece.fresh[ piece.fresh.length - 1 ].visible = false;
+
+			}
+
+			if ( piece.old.length ) this.stormPieces.push( piece );
 
 		}
+
+	}
+
+	// ((M14) the sheets off the metal roofs, as they fly (world/debris/FlyingSheets): each hole's, by its
+	// place in them ('tin', k) and the sheet's in the run (sub); where it lay (its centre, and its frame:
+	// x along the eave, y out of the roof, z up the slope), its size, and a mesh of it at the origin in that
+	// frame, in its roof's colour, bent where it buckled)
+	sheetFlyers() {
+
+		const out = [];
+		this.roofHoles.forEach( ( h, k ) => h.sheets.forEach( ( q, sub ) => out.push( {
+			kind: 'tin', id: k, sub, w: q.w, len: q.len, kgm2: 4.2,
+			frame: new Matrix4().makeBasis( q.v, q.n, q.u ).setPosition( q.c ),
+			mesh: () => {
+
+				const B = new Builder(), hw = q.w / 2, hl = q.len / 2;
+				// (its own seed: the hole it left is cut out of its roof's)
+				const data = [ ( h.data[ 0 ] + 0.5 ) % 1, h.data[ 1 ], h.data[ 2 ], h.data[ 3 ] ];
+				// (bent across its length where it buckled as it tore: a little or a lot, here or there)
+				const r = mulberry32( ( k * 7919 + sub * 104729 + 17 ) >>> 0 );
+				const zf = - hl + q.len * ( 0.3 + 0.4 * r() ), a = 0.15 + 0.45 * r();
+				const P = ( x, z ) => z <= zf ? new Vector3( x, 0, z ) : new Vector3( x, ( z - zf ) * Math.sin( a ), zf + ( z - zf ) * Math.cos( a ) );
+				B.slab( 'roofMetal', [ P( - hw, - hl ), P( hw, - hl ), P( hw, zf ), P( - hw, zf ) ], 0.012, { up: new Vector3( 0, 1, 0 ), uDir: new Vector3( 0, 0, 1 ), tint: h.tint, data } );
+				B.slab( 'roofMetal', [ P( - hw, zf ), P( hw, zf ), P( hw, hl ), P( - hw, hl ) ], 0.012, { up: new Vector3( 0, Math.cos( a ), - Math.sin( a ) ), uDir: new Vector3( 0, Math.sin( a ), Math.cos( a ) ), tint: h.tint, data } );
+				const m = new Mesh( B.batches.roofMetal.build(), this.materials.roofMetal );
+				m.name = `village_sheet${ k }_${ sub }`;
+				m.castShadow = true;
+				m.receiveShadow = true;
+				return m;
+
+			},
+		} ) ) );
+		return out;
 
 	}
 
@@ -901,13 +968,29 @@ export class Village {
 
 		}
 
+		// ((M14) the thatch's patches: as the tin's)
+		const ST = this.materials.thatch.userData.vlm.uniforms.vlmThatchS.value;
+		for ( let k = 0; k < this.thatchHoles.length; k ++ ) {
+
+			pieceState( D, 'thatch', k, st );
+			ST[ k ] = st.state === NEW ? NEW + Math.min( 0.99, st.age / ( 30 * 24 ) ) : st.state;
+
+		}
+
+		// ((M14) the nets blown off their rack or rail; the flag shredded as the wind goes on past its
+		// threshold, a new one up once it's been replaced)
+		const NG = this.materials.net.userData.vlm.uniforms.vlmNetGone.value;
+		for ( let k = 0; k < 4; k ++ ) NG.setComponent( k, k < this.stormNets.length && pieceState( D, 'net', k, st ).state === GONE ? this.stormNets[ k ].seed : - 1 );
+		pieceState( D, 'flag', 0, st );
+		this.materials.fabric.userData.vlm.uniforms.vlmFlagTorn.value = st.state === GONE ? 0.2 + 0.5 * Math.min( 1, st.over / 16 ) : 0;
+
 		for ( const p of this.stormPieces ) {
 
 			pieceState( D, p.kind, p.id, st );
 			if ( st.state === p.state ) continue;
 			p.state = st.state;
-			p.old.visible = st.state !== GONE && st.state !== NEW;
-			p.fresh.visible = st.state === NEW || st.state === TARP;
+			for ( const m of p.old ) m.visible = st.state !== GONE && st.state !== NEW;
+			for ( const m of p.fresh ) m.visible = st.state === NEW || st.state === TARP;
 			for ( const b of p.boxes ) b.walkable = b.solid = st.state !== GONE;
 
 		}
@@ -995,7 +1078,7 @@ export class Village {
 
 		const kinds = { village_wood: COVER.WOOD, village_hard: COVER.HARD, village_roofMetal: COVER.TIN, village_thatch: COVER.THATCH, village_stone: COVER.STONE, village_fabric: COVER.CANVAS };
 		// ((M13) and the pier's boards a hurricane can take, as they are most days)
-		const storm = ( this.stormPieces || [] ).map( ( p ) => ( { mesh: p.old, kind: COVER.WOOD } ) );
+		const storm = ( this.stormPieces || [] ).filter( ( p ) => p.kind === 'plank' || p.kind === 'bay' || p.kind === 'dock' ).map( ( p ) => ( { mesh: p.old[ 0 ], kind: COVER.WOOD } ) );
 		return [ ...this.meshes.filter( ( m ) => kinds[ m.name ] ).map( ( mesh ) => ( { mesh, kind: kinds[ mesh.name ] } ) ), ...storm ];
 
 	}
