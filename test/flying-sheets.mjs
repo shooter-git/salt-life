@@ -170,6 +170,33 @@ const terrain = new TerrainData( 7, decodeIsland( new Uint8Array( readFileSync( 
 	check( ! early && between, 'and from the very moment it goes, between the island\'s reckonings of its damage' );
 	check( fs.list[ 1 ].went > fs.list[ 0 ].went && flightSeconds( fs.list[ 1 ].went, fs.list[ 0 ].went ) > 0.9, 'a run of sheets peels off one after another' );
 
+	// ((M14) what's heard of it: its going, from its roof, then each time it hits (a bounce, where it comes to
+	// rest, the sea), as they happen, the clock run on a twentieth of a second at a time; nothing of it
+	// that happened before you're there to hear it)
+	const one = () => {
+
+		const f = new FlyingSheets( { scene, terrain, windAt: ( T ) => { const w = weatherAt( T ); return { wind: w.wind, toward: towardOf( w.windAngle ), surge: w.surge }; } } );
+		f.add( [ { kind: 'stand', id: 0, sub: 0, w: 0.98, len: 2.12, kgm2: 4.2, frame, mesh: () => new Mesh( new BoxGeometry( 1, 0.01, 2 ) ) } ] );
+		f.set( damageAt( went - hour( 2 ) ), went - hour( 2 ) );
+		return f;
+
+	};
+	const live = one(), heard = [];
+	for ( let k = - 10; k < 400; k ++ ) {
+
+		live.update( went + hour( k * 0.05 ) );
+		for ( const h of live.heard ) heard.push( { ...h, s: k * 0.05 } );
+
+	}
+
+	const late = one();
+	late.update( went + hour( 30 ) );
+	late.update( went + hour( 30.05 ) );
+	const hits = heard.filter( ( h ) => h.what !== 'tear' );
+	console.log( `     heard: ${ heard.map( ( h ) => `${ h.what } at ${ h.s.toFixed( 2 ) } s${ h.speed ? ` (${ h.speed.toFixed( 1 ) } m/s)` : '' }` ).join( ', ' ) }` );
+	check( heard[ 0 ].what === 'tear' && heard[ 0 ].s < 0.1 && Math.abs( heard[ 0 ].y - y0 ) < 0.01 && hits.length >= 1 && hits.length <= 3 && hits.every( ( h, i ) => h.s > 0.2 && ( i === 0 || h.s > hits[ i - 1 ].s ) ) && ! late.heard.length,
+		'heard: its going, from its roof, then each time it hits as it does; nothing of it come on later' );
+
 	// ((M14) Joe's plain stall, the low tier's: its roof's three sheets its own, where the scanned stall's
 	// are (0.9 m apart, 2.4 m up its front), and the one this hurricane takes gone from it, as on the others)
 	const plain = new FishStand( { scene: { add: () => {} }, terrain, colliders: null, tier: 'low' } );

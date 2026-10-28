@@ -48,6 +48,10 @@ The rain on a tin roof heard from beneath it and the hurricane shelter's radio (
 `node dl.mjs 771981:Sassaby 397088:relwin`, then `node build-shelter.mjs` (its bank entries in
 `shelter-bank.json`), then `tame.mjs`. The radio's words are made out by nobody: it's low-passed twice at 300 Hz.
 
+The roofs' sheets a hurricane tears off, tearing and landing (M14), are built the same way: `node dl.mjs
+840435:SieuAmThanh 453351:kyles`, then `node build-sheets.mjs` (its bank entries in `sheets-bank.json`), then
+`tame.mjs`. `node build-sheets.mjs --try` writes each slice on its own to `tools/sounds/try/`.
+
 ## All the Spaces' loudness rule, and the AAC copies
 
 All the Spaces' build turns a sound down when it's louder than -14 LUFS integrated or peaks above -1 dBFS.

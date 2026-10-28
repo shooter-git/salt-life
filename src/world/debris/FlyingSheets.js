@@ -53,7 +53,8 @@ const _n = new Vector3(), _s = new Vector3(), _x = new Vector3(), _m = new Matri
 // its flight from frame (Matrix4: where it lay), w x len (m), kgm2; wind (m/s) blowing toward { x, y };
 // sea: the water's height; ground( x, z ); walls: [ { x, z, r, top } ] (any it starts inside are its
 // own: left out); seed. -> { t: [ s ], pos: Float32Array, quat: Float32Array, n, end ('ground' | 'sea'),
-// at (s: when it came down) }
+// at (s: when it came down), (M14) hits: Float32Array of [ s, what (HIT), x, y, z, speed (m/s) ] (each
+// bounce and where it comes to rest, a wall it's thrown against, the sea it falls in: for their sounds) }
 export function flightOf( { frame, w, len, kgm2, wind, toward, sea = 0, ground, walls = [], seed = 0.5 } ) {
 
 	const F = FLIGHT, A = w * len, m = kgm2 * A, rnd = mulberry32( Math.floor( seed * 4294967296 ) >>> 0 );
@@ -67,7 +68,16 @@ export function flightOf( { frame, w, len, kgm2, wind, toward, sea = 0, ground, 
 	// (torn up out of the roof by its suction, already turning)
 	u.set( 0, 1, 0 ).applyQuaternion( q ).multiplyScalar( F.suction * wind * ( 0.7 + 0.6 * rnd() ) );
 	if ( u.y < 0 ) u.negate();
-	const T = [], P = [], Q = [];
+	const T = [], P = [], Q = [], H = [];
+	// (the ground hit again within 0.15 s is the same hit: a bounce that barely leaves it)
+	let lastGround = - 1;
+	const hit = ( what, speed ) => {
+
+		if ( what === HIT.ground && t - lastGround < 0.15 ) return;
+		if ( what === HIT.ground ) lastGround = t;
+		H.push( t, what, p.x, p.y, p.z, speed );
+
+	};
 	const keep = ( t ) => {
 
 		T.push( t );
@@ -157,6 +167,8 @@ export function flightOf( { frame, w, len, kgm2, wind, toward, sea = 0, ground, 
 
 			if ( p.y < c.top && Math.hypot( p.x - c.x, p.z - c.z ) < c.r ) {
 
+				const speed = Math.hypot( u.x, u.z );
+				if ( speed > 2 ) hit( HIT.wall, speed );
 				p.x = px;
 				p.z = pz;
 				u.x *= - 0.15;
@@ -175,10 +187,12 @@ export function flightOf( { frame, w, len, kgm2, wind, toward, sea = 0, ground, 
 
 			end = 'sea';
 			at = t;
+			hit( HIT.sea, u.length() );
 
 		} else if ( low < g ) {
 
 			p.y += g - low;
+			hit( HIT.ground, u.length() );
 			if ( bounces < 2 && - u.y > 2.5 ) {
 
 				u.y = - u.y * F.bounce;
@@ -218,9 +232,14 @@ export function flightOf( { frame, w, len, kgm2, wind, toward, sea = 0, ground, 
 
 	}
 
-	return { t: Float32Array.from( T ), pos: Float32Array.from( P ), quat: Float32Array.from( Q ), n: T.length, end, at };
+	return { t: Float32Array.from( T ), pos: Float32Array.from( P ), quat: Float32Array.from( Q ), n: T.length, end, at, hits: Float32Array.from( H ) };
 
 }
+
+// ((M14) what a flight's hit: the ground (a bounce, or where it comes to rest), a wall, the sea; and how
+// long after a sound's moment it's still heard (s))
+export const HIT = { ground: 0, wall: 1, sea: 2 };
+const HITS = [ 'ground', 'wall', 'sea' ], HEARD = 1.5;
 
 // its pose s seconds into its flight: into pos (Vector3) and quat (Quaternion); false once it's sunk
 export function poseAt( fl, s, pos, quat ) {
@@ -280,6 +299,10 @@ export class FlyingSheets {
 		this.walls = walls;
 		this.list = [];
 		this._st = {};
+		// ((M14) what's heard of them this frame (update): each going, each hit as it's seen to happen (none
+		// that happened more than HEARD s ago, as when the clock's rested past it or a save's come back to it):
+		// [ { what: 'tear' | 'ground' | 'wall' | 'sea', x, y, z, speed (m/s) } ]
+		this.heard = [];
 
 	}
 
@@ -324,9 +347,13 @@ export class FlyingSheets {
 	update( T ) {
 
 		let made = 0;
+		this.heard.length = 0;
 		for ( const f of this.list ) {
 
-			const s = f.show ? flightSeconds( T, f.went ) : - 1;
+			const s = f.show ? flightSeconds( T, f.went ) : - 1, was = f.s;
+			f.s = s;
+			const heard = ( at ) => was !== undefined && was < at && at <= s && s - at < HEARD;
+			if ( heard( 0 ) ) this.heard.push( { what: 'tear', x: f.frame.elements[ 12 ], y: f.frame.elements[ 13 ], z: f.frame.elements[ 14 ], speed: 0 } );
 			if ( s < 0 ) {
 
 				if ( f.obj ) f.obj.visible = false;
@@ -343,6 +370,8 @@ export class FlyingSheets {
 
 			}
 
+			const H = f.flight.hits;
+			for ( let k = 0; k < H.length; k += 6 ) if ( heard( H[ k ] ) ) this.heard.push( { what: HITS[ H[ k + 1 ] ], x: H[ k + 2 ], y: H[ k + 3 ], z: H[ k + 4 ], speed: H[ k + 5 ] } );
 			if ( ! f.obj ) {
 
 				f.obj = f.mesh();

@@ -156,6 +156,12 @@ export const MIX = {
 	bilgeSlosh: - 33, // the water in her bilge, up to the engine, sloshing as she works in a sea
 	hullCreak: - 31, // the hull creaking in a heavy sea
 	shutter: - 22, // a shutter banging in a blow, at 10 m
+	// (M14) a roof's sheet torn off in a hurricane, at 10 m (a bigger slam than a shutter's: about as loud as
+	// the hurricane's wind there, heard under its roar 30 m off), and one landing at 10 m: against a wall or
+	// on something hard as a shutter bangs, on the sand or the grass duller and SHEET_SOFT dB quieter (as
+	// hard as it comes down: up to 8 dB quieter, slow)
+	sheetTear: - 19,
+	sheetLand: - 22,
 };
 
 // (M12) thunder from far off: it fades from the first distance (m: refracted up over the listener) and is
@@ -170,6 +176,10 @@ const NET_SET = [ 'splash', 'swim', 'emerge', 'step_water', 'step_wetsand' ];
 // at the helm); the shutters in a blow from this wind (m/s: (M14) a fresh breeze's, the loose ones begin)
 const HULL_SET = [ 'starter', 'hull_bump', 'shutter', 'keel_scrape', 'bucket', 'bilge_pump', 'bilge_slosh', 'hull_creak' ];
 const SHUTTER_WIND = 9;
+// ((M14) the roofs' sheets torn off and landing: loaded once the wind's near what tears them off (m/s: Marta's
+// sign goes from 27); a landing on the sand or the grass this much quieter (dB), slowed and its
+// top cut)
+const SHEET_WIND = 24, SHEET_SOFT = 8;
 
 // forest bird sprite: slices per source recording (a singer sings from one of them)
 const FOREST = [ [ 0, 1, 2, 3, 4, 5, 6 ], [ 7, 8, 9, 10, 11, 12 ] ];
@@ -198,12 +208,12 @@ const STEP = {
 };
 
 // max simultaneous one-shot voices per category (oldest is faded out beyond this)
-const LIMITS = { step: 3, swim: 2, splash: 3, trans: 2, hull: 3, gull: 2, crash: 7, wash: 5, back: 5, bird: 4, tern: 2, whale: 4, rod: 4, fish: 3, coin: 1, net: 6, thunder: 2, start: 1, bucket: 2, creak: 2, shutter: 2, drip: 2 };
+const LIMITS = { step: 3, swim: 2, splash: 3, trans: 2, hull: 3, gull: 2, crash: 7, wash: 5, back: 5, bird: 4, tern: 2, whale: 4, rod: 4, fish: 3, coin: 1, net: 6, thunder: 2, start: 1, bucket: 2, creak: 2, shutter: 2, drip: 2, sheet: 3 };
 // Salt Life: All the Spaces allows 16 / 32 / 64 sounds at once by device tier. Beds and one-shots
 // together stay under it (a new one-shot is left out when it's full), and the low tier keeps fewer of
 // each kind so the surf can't crowd out the footsteps.
 const VOICES = { low: 14, mid: 30, high: 62 };
-const LOW_LIMITS = { ...LIMITS, step: 2, splash: 2, hull: 2, gull: 1, crash: 3, wash: 2, back: 2, bird: 2, tern: 1, whale: 2, rod: 3, fish: 2, net: 3, thunder: 1, creak: 1, shutter: 1, drip: 1 };
+const LOW_LIMITS = { ...LIMITS, step: 2, splash: 2, hull: 2, gull: 1, crash: 3, wash: 2, back: 2, bird: 2, tern: 1, whale: 2, rod: 3, fish: 2, net: 3, thunder: 1, creak: 1, shutter: 1, drip: 1, sheet: 2 };
 // a bed that has been silent this long (s) stops, freeing its voice (it starts again when wanted)
 const BED_IDLE = 4;
 
@@ -1605,6 +1615,43 @@ export class SoundScape {
 
 		const e = this.env;
 		if ( e.wind >= SHUTTER_WIND ) this._want( 'shutter' );
+		if ( e.wind >= SHEET_WIND ) {
+
+			this._want( 'sheet_tear' );
+			this._want( 'sheet_land' );
+
+		}
+
+	}
+
+	// (M14) a roof's sheet torn off at ( x, y, z ) (world/debris/FlyingSheets' heard)
+	sheetTear( x, y, z ) {
+
+		const e = this.env;
+		if ( ! this.enabled || e.u > 0.5 || Math.hypot( x - e.lx, z - e.lz ) > 120 ) return;
+		this._want( 'sheet_tear' );
+		this._shotAt( 'sheet_tear', 'sheet', x, y, z, MIX.sheetTear + ( Math.random() - 0.5 ) * 3, 0.92 + Math.random() * 0.16, 0, 10 );
+
+	}
+
+	// (M14) and one landing at ( x, y, z ), coming down at `speed` (m/s): on the ground ('ground': the sand,
+	// the grass), against a wall ('wall'), in the sea ('sea': a splash)
+	sheetHit( x, y, z, what, speed = 10 ) {
+
+		const e = this.env;
+		if ( ! this.enabled || e.u > 0.5 || Math.hypot( x - e.lx, z - e.lz ) > 120 ) return;
+		const k = clamp( speed / 12, 0, 1 );
+		if ( what === 'sea' ) {
+
+			this._shotAt( 'splash', 'splash', x, y, z, MIX.splash - ( 1 - k ) * 8, 0.9 + Math.random() * 0.15, 0, 10 );
+			return;
+
+		}
+
+		const soft = what === 'ground';
+		this._want( 'sheet_land' );
+		const v = this._shotAt( 'sheet_land', 'sheet', x, y + 0.05, z, MIX.sheetLand - ( soft ? SHEET_SOFT : 0 ) - ( 1 - k ) * 8 + ( Math.random() - 0.5 ) * 3, ( soft ? 0.8 : 1 ) * ( 0.94 + Math.random() * 0.12 ), 0, 10 );
+		if ( v && soft ) v.extra[ 0 ].frequency.value = Math.min( v.extra[ 0 ].frequency.value, 2500 );
 
 	}
 

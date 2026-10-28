@@ -1572,6 +1572,13 @@ export class App {
 		}
 
 		for ( const l of this.drips.landed ) a.drip( l.x, l.y, l.z, l.on );
+		// ((M14) the roofs' sheets a hurricane tears off: each as it goes, and as it hits)
+		for ( const h of this.flyingSheets.heard ) {
+
+			if ( h.what === 'tear' ) a.sheetTear( h.x, h.y, h.z );
+			else a.sheetHit( h.x, h.y, h.z, h.what, h.speed );
+
+		}
 
 		a.update( dt, {
 			listener: { position: p, forward: _fwd, up: _up },

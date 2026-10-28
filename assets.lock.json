@@ -618,6 +618,34 @@
 			"author": "Mrthenoronha, mwchristian95"
 		},
 		{
+			"path": "public/audio/sheet_land.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/kyles/sounds/453351/",
+			"title": "metal sheet thin drop on pile2.flac",
+			"author": "kyles"
+		},
+		{
+			"path": "public/audio/sheet_land.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/kyles/sounds/453351/",
+			"title": "metal sheet thin drop on pile2.flac",
+			"author": "kyles"
+		},
+		{
+			"path": "public/audio/sheet_tear.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/SieuAmThanh/sounds/840435/",
+			"title": "Đưa Miến Tôn Lên Nắp Nhà - Thin Metal On House Roof",
+			"author": "SieuAmThanh"
+		},
+		{
+			"path": "public/audio/sheet_tear.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/SieuAmThanh/sounds/840435/",
+			"title": "Đưa Miến Tôn Lên Nắp Nhà - Thin Metal On House Roof",
+			"author": "SieuAmThanh"
+		},
+		{
 			"path": "public/audio/shelter_radio.m4a",
 			"license": "CC0-1.0",
 			"source": "https://freesound.org/people/relwin/sounds/397088/",

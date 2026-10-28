@@ -79,6 +79,8 @@ slice table is in `src/audio/soundBank.js`.
 | `rain_tin_heavy.ogg` | the same roof once the rain's heavier (from 86 s) — loop, a tin roof over you in a downpour | [Medium rain on a tin roof](https://freesound.org/people/Sassaby/sounds/771981/) | Sassaby | CC0 1.0 |
 | `shelter_radio.ogg` | a NOAA marine forecast off an SDR, through a small speaker's band and low-passed twice at 300 Hz so none of its words can be made out — loop, the radio in the hurricane shelter | [noaa_oceanweather.wav](https://freesound.org/people/relwin/sounds/397088/) | relwin | CC0 1.0 |
 | `drips.ogg` | 8 drops of water landing on thin metal, each through its ring — the drips off the eaves, the wheelhouse and the palms as they land (slowed and dulled onto wood or the boat) | [Water Dripping on Thin Metal](https://freesound.org/people/Elements-Library/sounds/683778/) | Elements-Library | CC0 1.0 |
+| `sheet_tear.ogg` | 5 bangs of a long corrugated roofing sheet being put up on a house roof, their rattle and ring (high-passed) — a roof's sheet a hurricane tears off | [Đưa Miến Tôn Lên Nắp Nhà - Thin Metal On House Roof](https://freesound.org/people/SieuAmThanh/sounds/840435/) | SieuAmThanh | CC0 1.0 |
+| `sheet_land.ogg` | 4 drops of a thin metal sheet on a pile, each with its bounce and rattle — the sheet landing (slowed and dulled on the sand and the grass) | [metal sheet thin drop on pile2.flac](https://freesound.org/people/kyles/sounds/453351/) | kyles | CC0 1.0 |
 
 Note: `under_reef.ogg` uses the first ~200 s of 630436's preview (a narrow 1.7 kHz tone notched out).
 
