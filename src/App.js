@@ -12,6 +12,7 @@ import { WORLD } from './world/WorldLayout.js';
 import { Colliders } from './world/Colliders.js';
 import { Village } from './world/Village.js';
 import { CoverMap, COVER, surroundings } from './world/Cover.js';
+import { RockCover } from './world/RockCover.js';
 import { Terrain } from './world/Terrain.js';
 import { Rocks } from './world/Rocks.js';
 import { Vegetation } from './world/Vegetation.js';
@@ -55,7 +56,7 @@ import { FlyingDebris } from './fx/FlyingDebris.js';
 import { BlownLitter } from './fx/BlownLitter.js';
 import { insideRoom, roomMatrix } from './world/village/StormPlaces.js';
 import { AirMotes } from './fx/AirMotes.js';
-import { Rain, SPLASH_ROCKS } from './fx/Rain.js';
+import { Rain } from './fx/Rain.js';
 import { Drips, eavePoints, palmPoints, wheelhousePoints } from './fx/Drips.js';
 import { BoatInstruments } from './world/boat/Instruments.js';
 import { BoatRadar } from './world/boat/Radar.js';
@@ -113,7 +114,6 @@ const _up = new THREE.Vector3();
 const _hornAt = new THREE.Vector3( - 0.42, 3.4, 1.15 ); // (the boat's horn, if its model doesn't say)
 const _shelter = new THREE.Matrix4(), _c4 = new THREE.Matrix4(); // (M9: the wheelhouse roof over the rain)
 const _ride = new THREE.Matrix4(), _one = new THREE.Vector3( 1, 1, 1 ); // (riding along: the boat you're on)
-const SPLASH_REACH = 13; // m: (M12) the rocks the splashes about the camera can land on (Rain's 16 m square, and a step)
 const _fwdB = new THREE.Vector3(); // (M11: her heading, for her instruments)
 // what starts the sound: browsers allow it only after one of these
 const GESTURES = [ 'pointerdown', 'touchend', 'click', 'keydown' ];
@@ -271,7 +271,9 @@ export class App {
 		// stalls; drawn once after the start (buildCover), nothing covers anything until then. The rain
 		// stops on it, and what's wet in the rain stays dry under it (every wet material from now on)
 		this.cover = new CoverMap();
-		wetSurfaces.under( this.cover );
+		// ((M14) and the rocks about you, drawn as you go while it rains or anything's wet: world/RockCover.js)
+		this.rockCover = new RockCover();
+		wetSurfaces.under( this.cover, this.rockCover );
 		// Joe's fish stand and Marta's chandlery (Tidewater's Game builds them; the fishing game isn't
 		// ported yet): their scanned props load while the rest of the island is made
 		this.stand = new FishStand( { scene, terrain: this.terrainData, colliders: this.colliders, tier } );
@@ -345,7 +347,7 @@ export class App {
 		this.whitecapSpray = new WhitecapSpray( { spray: this.spray, caps: this.water.whitecaps, waves: this.waves, tier } );
 		// (M9) the rain around the camera (fx/Rain.js), and the lightning (sky/Lightning.js: the strikes
 		// everyone sees, their flash on the clouds and the island, the bolts, the thunder)
-		this.rain = new Rain( { terrain: this.terrain, cover: this.cover, tier } );
+		this.rain = new Rain( { terrain: this.terrain, cover: this.cover, rocks: this.rockCover, tier } );
 		scene.add( this.rain.mesh, this.rain.splash );
 		// (M11) the drips (fx/Drips.js): off the wheelhouse roof from the start, the eaves and the palms once
 		// the cover map's built (buildCover)
@@ -841,13 +843,14 @@ export class App {
 		this.rain.setShelter( _shelter.multiplyMatrices( this.boat.shelter, _c4.copy( aboard ).invert() ) );
 		wetSurfaces.update( this.camera, _shelter ); // (M11: nor is anything wet under it, or under a cover)
 		this.rain.setDeck( aboard, this.boat.rainTops ); // (M10: the splashes on her cockpit's sole; (M12) her roof, foredeck and gear)
-		// ((M12) and on the rocks about you, looked for again as you move, while it rains)
-		const cam = this.camera.position, at = this._rocksAt || ( this._rocksAt = { x: 1e9, z: 1e9 } );
-		if ( G.rain.value > 0.002 && this.rocks && Math.hypot( cam.x - at.x, cam.z - at.z ) > 1.5 ) {
+		// ((M12) and on the rocks about you; (M14) none under a rock's overhang or in its lee, nor anything wet
+		// there: the rocks about you drawn again as you go, while it rains or anything's wet, once the cover
+		// map's pass is made (buildCover: it's the same))
+		const cam = this.camera.position;
+		if ( ( G.rain.value > 0.002 || G.wet.value > 0.001 ) && this.rocks && this.cover.data ) {
 
-			at.x = cam.x;
-			at.z = cam.z;
-			this.rain.setRocks( this.rocks.splashRocks( cam.x, cam.z, SPLASH_REACH, SPLASH_ROCKS, this._splashRocks || ( this._splashRocks = [] ) ) );
+			const list = this._rockList || ( this._rockList = [] );
+			this.rockCover.update( this.renderer, cam.x, cam.z, ( x0, z0, x1, z1 ) => this.rocks.around( x0, z0, x1, z1, list ) );
 
 		}
 		this.drips.update( dt, this.camera, this.cameraWaterHeight, this.renderer.domElement.height, aboard ); // (M11)
@@ -1207,6 +1210,8 @@ export class App {
 		const lit = this._lit || ( this._lit = new WeakSet() );
 		const cheapRoots = [ this.terrain.mesh, this.rocks.group, this.vegetation.group, this.debris && this.debris.group ];
 		const boat = this.boat ? this.boat.group : null;
+		// ((M14) the village's materials are never under a rock: Wet's rocks)
+		const village = new Set( Object.values( this.village.materials || {} ) );
 		const visit = ( o, cheap ) => {
 
 			if ( cheapRoots.includes( o ) ) cheap = true;
@@ -1218,7 +1223,7 @@ export class App {
 				lit.add( m );
 				useLocalLights( m, { cheap } );
 				if ( this.cloudShadows ) useCloudShadows( m );
-				useWet( m ); // (M9: darker and glossier in the rain)
+				useWet( m, { rocks: ! village.has( m ) } ); // (M9: darker and glossier in the rain)
 
 			}
 
@@ -1561,7 +1566,7 @@ export class App {
 		if ( G.rain.value > 0.002 && this._rainOnT <= 0 ) {
 
 			this._rainOnT = 0.2;
-			this._rainOn = surroundings( this.cover, ( x, z ) => this.terrainData.heightAt( x, z ), G.seaLevel.value, p.x, p.y, p.z, this._rainOn );
+			this._rainOn = surroundings( this.cover, ( x, z ) => this.terrainData.heightAt( x, z ), G.seaLevel.value, p.x, p.y, p.z, this._rainOn, this.rockCover );
 
 		}
 

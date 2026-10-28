@@ -1,7 +1,6 @@
 import * as THREE from '../engine/index.js';
 import { Noise2D, mulberry32, smoothstep as sstep } from '../util/Noise.js';
 import { WORLD } from './WorldLayout.js';
-import { G } from '../core/Globals.js';
 import { buildRockGeometry, ROCK_STYLES } from './terrain/RockGeometry.js';
 import { rot2, srgb, TERRAIN_SHADING_GLSL } from './terrain/TerrainShading.js';
 
@@ -26,6 +25,7 @@ const FAR_SUBDIV = 2; // 320 triangles
 const NEAR_DIST = 60; // m (+ 6 x rock size)
 const FAR_DIST = 700; // m (+ 60 x rock size): faded out beyond
 const BAND = 0.12; // cross-fade band, share of the switch distance (Bayer screen-door, see LODFade)
+const RAIN_REACHES = - 3; // m: (M14) the rocks topping out above this are those the rain may fall on (its tide at its lowest, and more)
 
 export class Rocks {
 
@@ -88,11 +88,6 @@ export class Rocks {
 			};
 
 			this.buckets.push( { members, near: mk( near, `rocks-${ ROCK_STYLES[ s ].name }-near` ), far: mk( far, `rocks-${ ROCK_STYLES[ s ].name }-far` ), nearTris: near.index.count / 3, farTris: far.index.count / 3 } );
-			// ((M12) the shape as an ellipsoid in its bounds, for the rain's splashes: splashRocks)
-			if ( ! far.boundingBox ) far.computeBoundingBox();
-			const c = far.boundingBox.getCenter( new THREE.Vector3() ), h = far.boundingBox.getSize( new THREE.Vector3() ).multiplyScalar( 0.5 );
-			this._ellipsoids = this._ellipsoids || [];
-			this._ellipsoids[ s ] = new THREE.Matrix4().compose( c, new THREE.Quaternion(), h );
 
 		}
 
@@ -106,27 +101,17 @@ export class Rocks {
 
 	}
 
-	// (M12) the rocks standing out of the sea within r of ( x, z ), nearest first (at most n), for the rain's
-	// splashes on them (Rain.setRocks): each one's world -> unit sphere matrix (its shape, as the ellipsoid
-	// in its bounds). out: an array of Matrix4s, refilled
-	splashRocks( x, z, r, n, out = [] ) {
+	// (M14) the rocks over the square ( x0, z0 )..( x1, z1 ) that the rain can reach (their tops above the
+	// sea at its lowest), for what keeps it off about you (world/RockCover.js): each one's shape as it's
+	// drawn near (its geometry) and where it is (its matrix). out: an array, refilled
+	around( x0, z0, x1, z1, out = [] ) {
 
 		out.length = 0;
-		const near = this._splash || ( this._splash = [] );
-		near.length = 0;
 		for ( const k of this.instances ) {
 
-			const d = Math.hypot( k.x - x, k.z - z ) - k.radius;
-			if ( d < r && k.y + k.size * k.sy * 0.8 > G.seaLevel.value - 0.3 ) near.push( { k, d } );
-
-		}
-
-		near.sort( ( a, b ) => a.d - b.d );
-		for ( let i = 0; i < Math.min( n, near.length ); i ++ ) {
-
-			const k = near[ i ].k;
-			if ( ! k.unit ) k.unit = new THREE.Matrix4().multiplyMatrices( k.matrix, this._ellipsoids[ k.style ] ).invert();
-			out.push( k.unit );
+			if ( k.x + k.radius < x0 || k.x - k.radius > x1 || k.z + k.radius < z0 || k.z - k.radius > z1 ) continue;
+			if ( k.y + k.size * k.sy < RAIN_REACHES ) continue;
+			out.push( { geometry: this.buckets[ k.style ].near.geometry, matrix: k.matrix } );
 
 		}
 

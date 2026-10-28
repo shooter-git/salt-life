@@ -4,7 +4,8 @@ import * as THREE from '../engine/index.js';
 // porches, the stalls and the village's clutter, as the rain finds them. Drawn once from straight
 // above after the start (build): each texel keeps the height of the highest surface over it and
 // what that surface is (wood, tin, thatch, canvas, stone, or the hard bits: rails, lamps, rope).
-// The terrain isn't in it, nor the boat (she moves: her own boxes), the rocks or the plants.
+// The terrain isn't in it, nor the boat (she moves: her own boxes), the rocks ((M14) they're the
+// RockCover's, about you: world/RockCover.js) or the plants.
 //
 // One RGBA8 texel each: the height in centimetres from BASE below the sea in r and g, the kind in b.
 // The same bytes are kept for the CPU (heightAt, kindAt, over) and uploaded for the GPU (glsl:
@@ -16,7 +17,7 @@ import * as THREE from '../engine/index.js';
 
 export const COVER = { NONE: 0, WOOD: 1, TIN: 2, THATCH: 3, CANVAS: 4, STONE: 5, HARD: 6 };
 export const NO_COVER = - 1000; // m: what heightAt gives where nothing covers
-const BASE = 100; // m below the sea the heights are counted from (up to 555 m above it)
+export const BASE = 100; // m below the sea the heights are counted from (up to 555 m above it)
 const TEXEL = 0.2; // m: the map's texel, unless the covers spread further than MAX_SIDE of them
 const MAX_SIDE = 1024;
 const PAD = 1; // m: the map's margin around the covers
@@ -77,6 +78,20 @@ void main() {
 	gl_FragColor = vec4( hi / 255.0, ( v - hi * 256.0 ) / 255.0, coverKind / 255.0, 1.0 );
 }
 `;
+
+// the pass's material for what's of a kind (COVER): drawn from above, the highest kept; ((M14) from below,
+// the lowest: RockCover's undersides). Each the same program
+export function coverPassMaterial( kind ) {
+
+	return new THREE.ShaderMaterial( {
+		name: 'CoverPass',
+		uniforms: { coverKind: { value: kind } },
+		vertexShader: PASS_VERTEX,
+		fragmentShader: PASS_FRAGMENT,
+		side: THREE.DoubleSide,
+	} );
+
+}
 
 export class CoverMap {
 
@@ -232,13 +247,7 @@ export class CoverMap {
 		const materials = new Map();
 		const material = ( kind ) => {
 
-			if ( ! materials.has( kind ) ) materials.set( kind, new THREE.ShaderMaterial( {
-				name: 'CoverPass',
-				uniforms: { coverKind: { value: kind } },
-				vertexShader: PASS_VERTEX,
-				fragmentShader: PASS_FRAGMENT,
-				side: THREE.DoubleSide,
-			} ) );
+			if ( ! materials.has( kind ) ) materials.set( kind, coverPassMaterial( kind ) );
 			return materials.get( kind );
 
 		};
@@ -314,10 +323,10 @@ export class CoverMap {
 // (M11) What the rain falls on about a listener at ( x, y, z ), for its sound: the shares of the sea and
 // of wood around (the spot, 3 m out and 8 m out, the nearer weighing more; the rest is the ground and the
 // roofs); how much of the sea and the wood is right by (the spot and 3 m out); and how much of that is
-// under a cover over your head (the pier's deck above you, a roof, an awning). terrainAt( x, z ): the
-// ground's height; sea: the sea's level
+// under a cover over your head (the pier's deck above you, a roof, an awning, (M14) a rock's overhang:
+// rocks, a RockCover). terrainAt( x, z ): the ground's height; sea: the sea's level
 const AROUND = [ [ 0, 1, 2 ], [ 3, 8, 1 ], [ 8, 12, 0.5 ] ]; // radius (m), samples, the weight of each
-export function surroundings( cover, terrainAt, sea, x, y, z, out = {} ) {
+export function surroundings( cover, terrainAt, sea, x, y, z, out = {}, rocks = null ) {
 
 	let all = 0, water = 0, wood = 0, near = 0, nearWater = 0, nearWood = 0, over = 0, tin = 0, tinOver = 0;
 	for ( const [ r, n, w ] of AROUND ) for ( let k = 0; k < n; k ++ ) {
@@ -325,8 +334,13 @@ export function surroundings( cover, terrainAt, sea, x, y, z, out = {} ) {
 		const a = k / n * Math.PI * 2 + r * 0.37;
 		const sx = x + Math.cos( a ) * r, sz = z + Math.sin( a ) * r;
 		const ground = terrainAt( sx, sz ), top = cover.heightAt( sx, sz );
-		const covered = top > Math.max( ground, sea );
-		const isWood = covered && cover.kindAt( sx, sz ) === COVER.WOOD, isWater = ! covered && ground < sea;
+		// ((M14) a rock there: the rain on it is on stone, the rest's, and its underside may be over you; right
+		// where you are, any of it over you is (you can't stand in one: an overhang whose foot runs on under
+		// the sea or the ground, its lowest below you)
+		const rock = rocks ? rocks.topAt( sx, sz ) : NO_COVER;
+		const rockOver = rocks && ( r === 0 ? rock : rocks.bottomAt( sx, sz ) ) > y + 0.3;
+		const covered = Math.max( top, rock ) > Math.max( ground, sea );
+		const isWood = covered && top >= rock && cover.kindAt( sx, sz ) === COVER.WOOD, isWater = ! covered && ground < sea;
 		all += w;
 		if ( isWater ) water += w;
 		if ( isWood ) wood += w;
@@ -334,7 +348,8 @@ export function surroundings( cover, terrainAt, sea, x, y, z, out = {} ) {
 		near += w;
 		if ( isWater ) nearWater += w;
 		if ( isWood ) nearWood += w;
-		if ( top > y + 0.3 ) {
+		if ( rockOver ) over += w;
+		else if ( top > y + 0.3 ) {
 
 			over += w;
 			// ((M14) and how much of it's tin, and whether right over you is: a small roof drums over your head)
