@@ -195,7 +195,8 @@ The island's day:
 | M12 | Storms from other directions: each blow its own track, fronts, thunderstorms on the horizon, the swell from the west crossing the island's own, rip currents and being tumbled, splashes on the rocks and the boat, the skipper's dash for riders |
 | M13 | The hurricane: its surge and surf, its wind and rain, the warnings, the haul-out and the shelter, the wildlife in the weather, the damage and its mending, the eye's sky |
 | M14 | Storm skies and the sea: cumulonimbus, the eye's stadium and its bands, the open sea breaking, the north shore's sea, being knocked over wading, shutters and litter in a blow, the radar, rain heard on tin, Category 2 and 3 hurricanes, more of the island torn and its roof sheets flying, shelter under the rocks ([what's left over](docs/M14.md)) |
-| M15 | For consideration ([docs/M15.md](docs/M15.md)) |
+| M15 | The world, for consideration: the island worth going all the way round, the north side, and the sea past it ([docs/M15.md](docs/M15.md)) |
+| M16 | The boats, for consideration: the boats to work up to, once M15's bigger sea is there for them ([docs/M16.md](docs/M16.md)) |
 
 ## How it fits All the Spaces
 
