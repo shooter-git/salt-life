@@ -16,7 +16,7 @@ const rects = Object.entries( RECTS );
 ok( rects.every( ( [ , [ x, y, w, h ] ] ) => x >= 0 && y >= 0 && x + w <= ATLAS.w && y + h <= ATLAS.h ), 'every instrument fits the atlas' );
 ok( rects.every( ( [ a, A ], i ) => rects.every( ( [ b, B ], j ) => i === j || A[ 0 ] + A[ 2 ] <= B[ 0 ] || B[ 0 ] + B[ 2 ] <= A[ 0 ] || A[ 1 ] + A[ 3 ] <= B[ 1 ] || B[ 1 ] + B[ 3 ] <= A[ 1 ] ) ), 'and none overlaps another' );
 const [ u0, v0, u1, v1 ] = atlasUV( 'chart' );
-ok( u0 === 512 / 1024 && v1 === 1 && v0 < v1 && u1 > u0, 'a rect\'s uvs: v up, the canvas\'s top at 1' );
+ok( u0 === 512 / ATLAS.w && v1 === 1 && v0 < v1 && u1 > u0, 'a rect\'s uvs: v up, the canvas\'s top at 1' );
 ok( Math.abs( RECTS.sounder[ 2 ] / RECTS.sounder[ 3 ] - 0.31 / 0.21 ) < 0.01, 'the screens drawn at their glass\'s shape' );
 // (the dash's display: every uv in the atlas, the screens' and the dials' in their rects)
 const boat = new BoatModel();

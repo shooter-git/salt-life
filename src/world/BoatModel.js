@@ -268,6 +268,13 @@ export class BoatModel {
 
 	}
 
+	// (M14) where her radar's beam points, clockwise from her bow (rad): the radar's sweep (Radar.js)
+	get radarBearing() {
+
+		return this._radarAngle;
+
+	}
+
 	update( dt ) {
 
 		if ( ! ( dt > 0 ) ) return;
@@ -279,8 +286,10 @@ export class BoatModel {
 		this._propAngle = ( this._propAngle + shown * Math.PI * 2 * dt ) % ( Math.PI * 2 );
 		this.propMesh.rotation.z = this._propAngle;
 
+		// ((M14) clockwise from above, as a radar's array turns: its beam off its striped face, at this angle
+		// clockwise from her bow, radarBearing: the radar's sweep)
 		this._radarAngle = ( this._radarAngle + RADAR_RPM / 60 * Math.PI * 2 * dt ) % ( Math.PI * 2 );
-		this.radarMesh.rotation.y = this._radarAngle;
+		this.radarMesh.rotation.y = - this._radarAngle;
 
 		// apparent wind (true wind minus boat velocity) in the boat frame drives the ensign
 		this.group.updateWorldMatrix( true, false );

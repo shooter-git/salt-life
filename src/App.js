@@ -57,6 +57,7 @@ import { AirMotes } from './fx/AirMotes.js';
 import { Rain, SPLASH_ROCKS } from './fx/Rain.js';
 import { Drips, eavePoints, palmPoints, wheelhousePoints } from './fx/Drips.js';
 import { BoatInstruments } from './world/boat/Instruments.js';
+import { BoatRadar } from './world/boat/Radar.js';
 import { Lightning } from './sky/Lightning.js';
 import { BoatSpray } from './player/BoatSpray.js';
 import { WhaleWater } from './ocean/WhaleWater.js';
@@ -299,6 +300,9 @@ export class App {
 		// (M11) her instruments as they read (world/boat/Instruments.js): made now, so the dash's program is
 		// made with the rest
 		this.instruments = new BoatInstruments( { material: this.boat.materials.display, tier } );
+		// ((M14) and her radar, on the dash's third screen: Radar.js)
+		this.radar = new BoatRadar( { terrain: this.terrainData, seaLevel: () => G.seaLevel.value, size: tier === 'low' ? 150 : 300 } );
+		this._radarBoats = [];
 		scene.add( this.boat.group );
 		this.boat.group.position.copy( WORLD.boatDock.position );
 		this.boat.group.rotation.y = WORLD.boatDock.heading;
@@ -1578,7 +1582,7 @@ export class App {
 		const ride = p.riding && this.together ? this.together.ridden() : null;
 		this.dashOn( ride ? ride.group : null );
 		// (on the low tier others' boats have no dash to show it on)
-		if ( ride && g && p.mode === 'deck' && this.tier !== 'low' ) return this.instruments.update( dt, this.riddenReading( ride ) );
+		if ( ride && g && p.mode === 'deck' && this.tier !== 'low' ) return this.instruments.update( dt, this.riddenReading( ride, dt ) );
 		if ( ! g || p.riding || ( p.mode !== 'boat' && p.mode !== 'deck' ) ) return this.instruments.update( dt, null );
 		const r = this._reading || ( this._reading = {} ), f = b.forward( _fwdB ), x = b.position.x, z = b.position.z;
 		const map = g.minimap;
@@ -1594,14 +1598,27 @@ export class App {
 		r.z = z;
 		r.chart = map && map._bake && map._bake.done ? map.canvas : null;
 		r.alert = this.weatherAlert();
+		// ((M14) her radar, swept with her array; at the helm, ← → its range, as the panels aren't up)
+		if ( p.mode === 'boat' && g.quietKeys && g.quietKeys() && ( this.input.hit( 'ArrowLeft' ) || this.input.hit( 'ArrowRight' ) ) ) this.radar.step( this.input.hit( 'ArrowRight' ) ? 1 : - 1 );
+		r.radar = this.sweepRadar( dt, r, this.boat.radarBearing );
 		this.instruments.update( dt, r );
+
+	}
+
+	// (M14) the radar of the boat you're aboard sweeping as her array turns (beam: its bearing from her bow):
+	// the land, the rain about her, the sea's clutter, the other boats
+	sweepRadar( dt, r, beam ) {
+
+		const live = this.weather.live, sea = live ? Math.min( 1, Math.max( 0, ( ( live.windSea || 1 ) - 0.8 ) / 2 ) ) : 0;
+		this.radar.update( dt, { x: r.x, z: r.z, heading: r.heading, beam, sea, rainAt: this._rainAt || ( this._rainAt = ( x, z ) => this.weather.rainAt( x, z ) ), boats: this.together ? this.together.boatsAbout( this._radarBoats ) : this._radarBoats } );
+		return this.radar;
 
 	}
 
 	// (M12) the dash of the boat you're riding in (ride: Together.ridden()): the engine's revs and the
 	// starter from the skipper's pose, its fuel and fish finder as they send them (none: on empty, no
 	// finder), its speed and heading as it goes; the depth under it and the chart where it is, here
-	riddenReading( ride ) {
+	riddenReading( ride, dt = 1 / 60 ) {
 
 		const p = this.player, c = ride.cur, d = c.dash, r = this._ridden || ( this._ridden = {} );
 		const f = p.boat.forward( _fwdB ), x = p.boat.position.x, z = p.boat.position.z, map = this.game.minimap;
@@ -1617,6 +1634,9 @@ export class App {
 		r.z = z;
 		r.chart = map && map._bake && map._bake.done ? map.canvas : null;
 		r.alert = this.weatherAlert();
+		// ((M14) and their radar, as their array turns)
+		const arr = ride.group && ride.group.userData.radar;
+		r.radar = this.sweepRadar( dt, r, arr ? ( ( - arr.rotation.y ) % ( Math.PI * 2 ) + Math.PI * 2 ) % ( Math.PI * 2 ) : 0 );
 		return r;
 
 	}

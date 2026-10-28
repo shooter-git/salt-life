@@ -121,6 +121,25 @@ export class WeatherDriver {
 
 	}
 
+	// (M14) how hard it rains at ( x, z ) (0..1: a downpour 1), for the boat's radar: the showers about the
+	// island (Weather.showers' cells, heaviest at their middles), and as far as a hurricane's the weather
+	// here, its bands (its cloud past its rain's, eyeCover: as their curtains are, BAND_CURTAIN)
+	rainAt( x, z ) {
+
+		let r = 0;
+		for ( const c of this.cells ) {
+
+			const d = Math.hypot( x - c.x, z - c.z );
+			if ( d < c.r ) r = Math.max( r, c.rain * smoothstep( c.r, c.r * 0.35, d ) );
+
+		}
+
+		const h = this.hurricane, k = h && this.live ? Math.min( 1, Math.max( 0, this.live.hurricane || 0 ) ) : 0;
+		if ( k > 0 ) r = Math.max( r, k * smoothstep( BAND_CURTAIN.at - 0.1, BAND_CURTAIN.at + 0.08, eyeCover( x - h.x, z - h.z, h.rmax, h.track.x, h.track.y ) ) );
+		return r;
+
+	}
+
 	// a lull (0) to a gust (1) at ( x, z ): the cat's paws on the sea
 	gustAt( x, z ) {
 

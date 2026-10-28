@@ -12,17 +12,20 @@ import { FT, KT } from '../../game/Units.js';
 //   - The port screen: a chart plotter, north up: the island's chart (the minimap's, baked once), her
 //     track, her speed and heading, where she is; (M13) and a weather alert across it while a hurricane's
 //     watched for or warned of (reading.alert), as a plotter with a weather service shows one.
+//   - (M14) The third, to port of the plotter: the radar (reading.radar: Radar.js, heading up, swept with
+//     her array turning on the roof).
 // Redrawn a few times a second while you're aboard; ashore her screens are off and her needles rest.
 // Other players' boats show theirs on standby (ins.standby: the same program, a dark glass for its map;
 // the readings here are yours). (M12) Riding along in theirs, it shows its skipper's (App.riddenReading),
 // and yours is on standby.
 //   const ins = new BoatInstruments( { material, tier } );   ins.update( dt, reading )
 
-export const ATLAS = { w: 1024, h: 512 };
+export const ATLAS = { w: 1536, h: 512 };
 // where each is in the atlas (px, y down): the screens 0.31 x 0.21 m, the dials round
 export const RECTS = {
 	sounder: [ 0, 0, 492, 334 ],
 	chart: [ 512, 0, 492, 334 ],
+	radar: [ 1024, 0, 492, 334 ], // ((M14) the third screen)
 	tach: [ 0, 352, 144, 144 ],
 	speed: [ 160, 352, 144, 144 ],
 	fuel: [ 320, 352, 144, 144 ],
@@ -219,8 +222,11 @@ export class BoatInstruments {
 
 			this._sounder( reading );
 			this._chart( reading );
+			if ( reading.radar ) reading.radar.draw( g, RECTS.radar, reading );
 
-		} else for ( const name of [ 'sounder', 'chart' ] ) {
+		}
+
+		for ( const name of reading ? ( reading.radar ? [] : [ 'radar' ] ) : [ 'sounder', 'chart', 'radar' ] ) {
 
 			// (off: a dark glass)
 			const [ x, y, w, h ] = RECTS[ name ];

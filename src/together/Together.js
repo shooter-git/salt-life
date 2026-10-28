@@ -1473,7 +1473,7 @@ export class Together {
 	_spin( boat, rpm, dt ) {
 
 		const u = boat.userData;
-		if ( u.radar ) u.radar.rotation.y = ( u.radar.rotation.y + RADAR_RPM / 60 * Math.PI * 2 * dt ) % ( Math.PI * 2 );
+		if ( u.radar ) u.radar.rotation.y = ( u.radar.rotation.y - RADAR_RPM / 60 * Math.PI * 2 * dt ) % ( Math.PI * 2 );
 		if ( u.prop ) u.prop.rotation.z = ( u.prop.rotation.z + PROP_DISPLAY_RPS * Math.tanh( rpm * 40 / PROP_DISPLAY_RPS ) * Math.PI * 2 * dt ) % ( Math.PI * 2 );
 
 	}
@@ -1546,6 +1546,18 @@ export class Together {
 	// hull: her hull as her skipper hears it (App.hullHeard), or null
 	// (M12) the boat you're riding in, as it's drawn here (its group), and what its skipper's pose says
 	// (o.cur: rpm, crank, mode, dash), and how fast it goes; null when you're not
+	// (M14) where the others' boats are, afloat (for the radar: out, filled again), and yours if you're riding
+	// in someone else's
+	boatsAbout( out = [] ) {
+
+		out.length = 0;
+		for ( const o of this.others.values() ) if ( o.boat && o.boat.visible && o.boat.parent ) out.push( o.boat.position );
+		const p = this.app.player;
+		if ( p.riding && this.app.boat && this.app.boat.group.visible ) out.push( this.app.boatCtl.position );
+		return out;
+
+	}
+
 	ridden() {
 
 		const p = this.app.player;

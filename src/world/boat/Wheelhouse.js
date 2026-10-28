@@ -536,8 +536,8 @@ function buildConsole( kit, L, parts ) {
 	kit.add( 'glass', dome );
 
 	// electronics: (M11) the depth sounder / fish finder (centre) and the chart plotter (port), drawn live
-	// (Instruments.js)
-	for ( const [ x, name ] of [ [ - 0.06, 'sounder' ], [ 0.38, 'chart' ] ] ) {
+	// (Instruments.js); (M14) and the radar, to port of the plotter
+	for ( const [ x, name ] of [ [ - 0.06, 'sounder' ], [ 0.38, 'chart' ], [ 0.82, 'radar' ] ] ) {
 
 		const tilt = 0.3; // lean back so the screen faces the helmsman
 		const w = 0.36, h = 0.27;

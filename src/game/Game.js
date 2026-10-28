@@ -470,7 +470,7 @@ export class Game {
 		if ( panelOpen && lDown && this.hud.invOpen && this.hud.invTab === 'islander' && this.hud.device === 'gamepad' ) this.hud.nextLook();
 
 		// (Salt Life) the bait for the hook: B, or the d-pad's ← → with the rod out
-		const quiet = ! panelOpen && ! ( this.time && this.time.open ) && ! ( this.guide && this.guide.open );
+		const quiet = this.quietKeys();
 		if ( rod.equipped && quiet && ( inp.hit( 'KeyB' ) || inp.hit( 'ArrowRight' ) || inp.hit( 'ArrowLeft' ) ) ) this.cycleBait( inp.hit( 'ArrowLeft' ) ? - 1 : 1 );
 		else if ( net.equipped && quiet && inp.hit( 'KeyB' ) ) this.toast( this.bucketText(), 2400 );
 
@@ -1306,6 +1306,15 @@ export class Game {
 	// ---- (Salt Life) the cast net
 
 	// N: out (the rod goes away for it), or away
+	// whether the keys are free of the panels: the cooler or a stall, the clock's menu, the guide ((M14) the
+	// radar's range, at the helm, takes the arrows as the bait does)
+	quietKeys() {
+
+		const panelOpen = this.hud && ( this.hud.invOpen || this.hud.standOpen );
+		return ! panelOpen && ! ( this.time && this.time.open ) && ! ( this.guide && this.guide.open );
+
+	}
+
 	toggleNet() {
 
 		const net = this.net;
