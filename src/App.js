@@ -265,7 +265,8 @@ export class App {
 		this.colliders = new Colliders();
 		// the village flattens building pads into the heightmap: build it before the ground (whose
 		// textures are made from the heights) and everything placed on it
-		this.village = new Village( { scene, terrain: this.terrainData, colliders: this.colliders, tier, smallBakes: this.cpuGL } );
+		// (WebGL drawn on the CPU: its textures baked after the start, lateReady)
+		this.village = new Village( { scene, terrain: this.terrainData, colliders: this.colliders, tier, smallBakes: this.cpuGL, bakeLater: this.cpuGL } );
 		await this.village.init( renderer );
 		// (M11) what covers the island from above (world/Cover.js): the pier, the boardwalks, the roofs, the
 		// stalls; drawn once after the start (buildCover), nothing covers anything until then. The rain
@@ -1022,13 +1023,15 @@ export class App {
 
 	}
 
-	// (WebGL drawn on the CPU) the parts held back from the loading frame: their shaders made after the
-	// start, not as part of the load (the village's, the rocks', the stalls' and the traders' are six of
-	// the island's biggest), then back in the scene, still hidden, for revealLate
+	// (WebGL drawn on the CPU) the parts held back from the loading frame: the village's textures baked (a
+	// set a frame) and their shaders made after the start, not as part of the load (the village's, the
+	// rocks', the stalls' and the traders' are six of the island's biggest, and the bake's nine programs
+	// seconds more), then back in the scene, still hidden, for revealLate
 	async lateReady() {
 
 		const held = this._lateHeld;
 		if ( ! held ) return;
+		await this.village.textures.bake( this.renderer, { slot: () => this.frameSlot(), ready: () => this.useNewPrograms() } );
 		await this.readyToDraw( held.map( ( [ root ] ) => root ) );
 		for ( const [ root, parent ] of held ) parent.add( root );
 		this._lateHeld = null;
@@ -1051,14 +1054,14 @@ export class App {
 
 	}
 
-	// what's held in the hand, by what holds it: the rod and its line and bobber, the speargun (its bands,
-	// shaft and line), the lobster diver's tickle stick and net (on a device that draws on its CPU, out
-	// of the scene until prepareLate)
+	// what's held in the hand, by what holds it: the rod and its line and bobber ((M14) and a float lost
+	// with its line), the speargun (its bands, shaft and line), the lobster diver's tickle stick and net
+	// (on a device that draws on its CPU, out of the scene until prepareLate)
 	heldTools() {
 
 		const { rod, gun, tools } = this.game;
 		return [
-			[ rod, [ rod.rodMesh, rod.lineMesh, rod.bobberMesh ] ],
+			[ rod, [ rod.rodMesh, rod.lineMesh, rod.bobberMesh, rod.lostMesh, rod.lostLine ] ],
 			[ gun, [ gun.gunMesh, gun.bandMesh, gun.shaftMesh, gun.lineMesh ] ],
 			[ tools, [ tools.stickMesh, tools.netMesh ] ],
 		];

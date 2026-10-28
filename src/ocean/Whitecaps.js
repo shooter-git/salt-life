@@ -199,39 +199,53 @@ vec3 wcEvent( float n, float s, float tau, float T, float chance, uint salt, flo
 	return vec3( vec2( 1.0 - smoothstep( edge - soft, edge, x ), ( 1.0 - smoothstep( edge * ${ f( LIP ) } - soft, edge * ${ f( LIP ) }, x ) ) * ${ f( LIP_WHITE ) } ) * I,
 		edge > 0.0 ? max( 0.0, 1.0 - ( x / edge ) * ( x / edge ) ) : 0.0 );
 }
-// one wave's whitecaps at Lagrangian point x0: ( its roller, its white: the roller or the foam left )
-vec2 wcCarrier( vec2 x0, vec4 A, vec4 B, float chance, float far, uint salt ) {
+// where x0 is among a wave's crests: u falls through n as crest n goes by; s along them, in cells
+float wcCrest( vec2 x0, vec4 A, vec4 B ) { return ( A.z * dot( A.xy, x0 ) - A.w * waveTime + B.z - 1.5707963 ) * 0.15915494; }
+float wcAlong( vec2 x0, vec4 A ) { return dot( vec2( - A.y, A.x ), x0 ) * A.z * ${ f( 1 / ( 2 * Math.PI * CELL ) ) }; }
+// one wave's whitecaps at u, s (wcCrest, wcAlong; du, ds: their change across the pixel): ( its roller, its
+// white: the roller or the foam left )
+vec2 wcCarrier( vec4 A, float u, float s, float du, float ds, float chance, float far, uint salt ) {
 	float T = 6.2831853 / A.w;
-	// (crests: u falls through n as crest n goes by; s along them, in cells)
-	float u = ( A.z * dot( A.xy, x0 ) - A.w * waveTime + B.z - 1.5707963 ) * 0.15915494;
-	float s = dot( vec2( - A.y, A.x ), x0 ) * A.z * ${ f( 1 / ( 2 * Math.PI * CELL ) ) };
-	float du = fwidth( u ), ds = fwidth( s );
 	// (seen from afar, a crest or more a pixel: its share of white, spread)
 	float away = smoothstep( 0.45, 0.9, du );
 	if ( away >= 1.0 || chance <= 0.0 ) return vec2( 0.0, far );
 	float fu = floor( u ), a = u - fu;
 	// the roller: ahead of the crest coming, breaking now, (step 5) thinning to its ends, its front ragged;
-	// and its lip along the crest
-	vec3 now = a < ${ f( ROLLER * ( 1 + ROLLER_RAG[ 0 ] + ROLLER_RAG[ 1 ] ) ) } + du ? wcEvent( fu, s, waveTime, T, chance, salt, ds ) : vec3( 0.0 );
-	float wd = ${ f( ROLLER ) } * sqrt( now.z ) * ( 1.0 + ${ f( ROLLER_RAG[ 0 ] ) } * sin( s * 41.0 + fu * 7.3 ) + ${ f( ROLLER_RAG[ 1 ] ) } * sin( s * 97.0 - fu * 3.1 ) );
-	float band = 1.0 - smoothstep( wd * 0.55 - du, wd + du, a );
-	float lipBand = 1.0 - smoothstep( ${ f( LIP_W * 0.4 ) } - du, ${ f( LIP_W ) } + du, a );
-	float roller = max( band * now.x, lipBand * now.y );
-	// the foam behind the crests gone by while they broke, laid as each passed here, spreading and thinning
-	// at its edges as it ages
-	float white = roller;
-	for ( int j = 1; j <= ${ ages }; j ++ ) {
-		float age = ( fu + float( j ) - u ) * T;
-		float left = exp( - age / ( ${ f( DECAY ) } * T ) ) * ( 1.0 - smoothstep( ${ f( ages - 0.8 ) } * T, ${ f( ages ) } * T, age ) );
-		white = max( white, left * ${ f( LEFT ) } * wcEvent( fu + float( j ), s, waveTime - age, T, chance, salt, ds + ${ f( SPREAD ) } * age / T ).x );
+	// and its lip along the crest. Then the foam behind the crests gone by while they broke, laid as each
+	// passed here, spreading and thinning at its edges as it ages. (A crest a time round a loop: wcEvent is
+	// in the program once, not once for each)
+	float roller = 0.0, white = 0.0;
+	for ( int j = 0; j <= ${ ages }; j ++ ) {
+		if ( j == 0 && a >= ${ f( ROLLER * ( 1 + ROLLER_RAG[ 0 ] + ROLLER_RAG[ 1 ] ) ) } + du ) continue;
+		float age = j == 0 ? 0.0 : ( fu + float( j ) - u ) * T;
+		vec3 e = wcEvent( fu + float( j ), s, waveTime - age, T, chance, salt, ds + ${ f( SPREAD ) } * age / T );
+		if ( j == 0 ) {
+			float wd = ${ f( ROLLER ) } * sqrt( e.z ) * ( 1.0 + ${ f( ROLLER_RAG[ 0 ] ) } * sin( s * 41.0 + fu * 7.3 ) + ${ f( ROLLER_RAG[ 1 ] ) } * sin( s * 97.0 - fu * 3.1 ) );
+			float band = 1.0 - smoothstep( wd * 0.55 - du, wd + du, a );
+			float lipBand = 1.0 - smoothstep( ${ f( LIP_W * 0.4 ) } - du, ${ f( LIP_W ) } + du, a );
+			roller = max( band * e.x, lipBand * e.y );
+			white = roller;
+		} else {
+			float left = exp( - age / ( ${ f( DECAY ) } * T ) ) * ( 1.0 - smoothstep( ${ f( ages - 0.8 ) } * T, ${ f( ages ) } * T, age ) );
+			white = max( white, left * ${ f( LEFT ) } * e.x );
+		}
 	}
 	return mix( vec2( roller, white ), vec2( 0.0, far ), away );
 }
-// all of them: ( roller, white )
+// all of them: ( roller, white ). (Both waves' crests here and their change across the pixel first, where
+// every pixel's at: derivatives. Then a wave a time round a loop, as the crests: wcCarrier once in the program)
 vec2 whitecapsAt( vec2 x0 ) {
-	vec2 a = wcCarrier( x0, waveA[ ${ CARRIERS[ 0 ].wave } ], waveB[ ${ CARRIERS[ 0 ].wave } ], whitecapChance.x, whitecapChance.z, ${ CARRIERS[ 0 ].salt }u );
-	vec2 b = wcCarrier( x0, waveA[ ${ CARRIERS[ 1 ].wave } ], waveB[ ${ CARRIERS[ 1 ].wave } ], whitecapChance.y, whitecapChance.w, ${ CARRIERS[ 1 ].salt }u );
-	return max( a, b );
+	vec2 u = vec2( wcCrest( x0, waveA[ ${ CARRIERS[ 0 ].wave } ], waveB[ ${ CARRIERS[ 0 ].wave } ] ), wcCrest( x0, waveA[ ${ CARRIERS[ 1 ].wave } ], waveB[ ${ CARRIERS[ 1 ].wave } ] ) );
+	vec2 s = vec2( wcAlong( x0, waveA[ ${ CARRIERS[ 0 ].wave } ] ), wcAlong( x0, waveA[ ${ CARRIERS[ 1 ].wave } ] ) );
+	vec2 du = fwidth( u ), ds = fwidth( s );
+	vec2 r = vec2( 0.0 );
+	for ( int k = 0; k < 2; k ++ ) {
+		bool first = k == 0;
+		vec2 c = wcCarrier( waveA[ first ? ${ CARRIERS[ 0 ].wave } : ${ CARRIERS[ 1 ].wave } ], first ? u.x : u.y, first ? s.x : s.y, first ? du.x : du.y, first ? ds.x : ds.y,
+			first ? whitecapChance.x : whitecapChance.y, first ? whitecapChance.z : whitecapChance.w, first ? ${ CARRIERS[ 0 ].salt }u : ${ CARRIERS[ 1 ].salt }u );
+		r = first ? c : max( r, c );
+	}
+	return r;
 }
 `;
 

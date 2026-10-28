@@ -68,8 +68,10 @@ const _lanternEuler = new Euler();
 
 export class Village {
 
-	// smallBakes: its baked textures at half size (WebGL drawn on the CPU)
-	constructor( { scene, terrain, colliders, tier = 'high', smallBakes = false } ) {
+	// smallBakes: its baked textures at half size (WebGL drawn on the CPU); bakeLater: baked not by init()
+	// but after the start (textures.bake(), WebGL drawn on the CPU: the bake's programs are seconds of the
+	// load there)
+	constructor( { scene, terrain, colliders, tier = 'high', smallBakes = false, bakeLater = false } ) {
 
 		const t0 = performance.now();
 		this.scene = scene;
@@ -82,10 +84,11 @@ export class Village {
 		this.buildings = [];
 		this.group = new Group();
 		this.group.name = 'Village';
+		this.bakeLater = bakeLater;
 
 		const rand = new Rand( mulberry32( 90210 ) );
 		this.rand = rand;
-		// tileable PBR texture sets, baked on the GPU while the game loads (init())
+		// tileable PBR texture sets, baked on the GPU while the game loads (init()), or after the start
 		this.textures = new VillageTextures( { tier, smaller: smallBakes ? 0.5 : 1 } );
 		this.materials = createVillageMaterials( this.textures, { shared: tier === 'low' } );
 		// fewer segments on round parts on low-powered devices
@@ -226,7 +229,7 @@ export class Village {
 		this.shutterB = this.shutterList = null;
 		scene.add( this.group );
 		await step();
-		await this.textures.bake( renderer );
+		if ( ! this.bakeLater ) await this.textures.bake( renderer );
 
 	}
 
