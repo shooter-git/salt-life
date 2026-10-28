@@ -55,22 +55,32 @@ const share = ( id ) => count[ id ] / n;
 console.log( `     over ${ DAYS } days: ${ WEATHER_IDS.map( ( id ) => `${ id } ${ ( share( id ) * 100 ).toFixed( 1 ) }%` ).join( ', ' ) }` );
 console.log( `     the most it moves in a game minute: ${ KEYS.map( ( k ) => `${ k } ${ jump[ k ].toFixed( 4 ) }` ).join( ', ' ) }` );
 ok( bounds, 'every value stays within its conditions\' range' );
-// ((M12) a front's wind swings round a quarter in two game hours: WeatherDriver turns the wind as fast)
-ok( jump.windAngle < 0.022 && jump.west < 0.02 && jump.period < 0.05 && jump.swell < 0.01 && jump.surf < 0.004 && jump.north < 0.01, 'no step in a game minute, midnight included' );
+// ((M12) a front's wind swings round a quarter in two game hours: WeatherDriver turns the wind as fast;
+// (M14) the period a little faster where a swell from the south comes in behind a blow down the trades:
+// WeatherDriver eases it at 0.02 s a second)
+ok( jump.windAngle < 0.022 && jump.west < 0.02 && jump.period < 0.06 && jump.swell < 0.01 && jump.surf < 0.004 && jump.north < 0.01, 'no step in a game minute, midnight included' );
 // (a shower comes on in a few game minutes, and brings its cloud, haze and squall: WeatherDriver eases them)
 ok( jump.wind < 0.1 && jump.rain < 0.15 && jump.thunder < 0.35 && jump.coverage < 0.04 && jump.overcast < 0.15 && jump.visibility < 0.1 && jump.front < 0.03, 'a shower comes on over a few game minutes, never at once' );
 ok( share( 'fair' ) + share( 'calm' ) > 0.4 && share( 'gale' ) > 0.02 && share( 'gale' ) < 0.09 && share( 'blustery' ) + share( 'gale' ) < 0.25 && WEATHER_IDS.every( ( id ) => id === 'hurricane' || share( id ) > 0.02 ), 'mostly fair, a gale now and then, every condition comes' );
 ok( share( 'rain' ) + share( 'storm' ) > 0.07 && share( 'rain' ) + share( 'storm' ) < 0.2 && share( 'storm' ) < 0.05, 'rain about one hour in six, a thunderstorm one in twenty-five or so' );
 
-// ---- the swell comes ahead of the gale, and the forecast sees it coming
-let onsets = 0, early = 0, seen = 0, quiet = 0;
+// ---- the swell comes ahead of the gale, and the forecast sees it coming; ((M14) into the bay, of a gale
+// whose sea gets there; onto the north shore, of one down the trades: the bay's in the island's lee)
+let onsets = 0, early = 0, seen = 0, quiet = 0, trades = 0, tradesEarly = 0, tradesLee = 0;
 for ( let T = 30; T < 24 * 300; T += 0.5 ) {
 
 	// (a gale's wind: in a thunderstorm the name is the storm's)
-	if ( dayWeatherAt( T ).wind < 18 || dayWeatherAt( T - 0.5 ).wind >= 18 ) continue;
+	const now = dayWeatherAt( T );
+	if ( now.wind < 18 || dayWeatherAt( T - 0.5 ).wind >= 18 ) continue;
 	onsets ++;
 	const before = dayWeatherAt( T - 3 );
-	if ( before.wind < 18 && before.swell >= 1.4 ) early ++;
+	if ( Math.abs( now.windAngle ) < VEER && Math.abs( before.windAngle ) < VEER ) {
+
+		trades ++;
+		if ( before.wind < 18 && before.north >= 0.6 ) tradesEarly ++;
+		if ( now.surf <= 0.42 ) tradesLee ++;
+
+	} else if ( before.wind < 18 && before.swell >= 1.4 ) early ++;
 	// (where no hurricane touches the hours the forecast looks over: it's the day's there)
 	if ( hurricaneAt( T - 4 ) || hurricaneAt( T + 8 ) ) { quiet ++; continue; }
 	const f = forecast( T - 4 );
@@ -78,8 +88,9 @@ for ( let T = 30; T < 24 * 300; T += 0.5 ) {
 
 }
 
-console.log( `     ${ onsets } gales in 300 days: the swell up 3 h before ${ early }, a change forecast 4 h before ${ seen }` );
-ok( onsets > 5 && early >= onsets * 0.8, 'the surf builds before a gale' );
+console.log( `     ${ onsets } gales in 300 days: ${ onsets - trades } from where their sea gets into the bay, the swell up 3 h before ${ early }; ${ trades } down the trades, the north shore's sea up 3 h before ${ tradesEarly }, the bay in their lee (2–4 ft at most) in ${ tradesLee }; a change forecast 4 h before ${ seen }` );
+ok( onsets > 5 && early >= ( onsets - trades ) * 0.8 && trades > 3 && tradesEarly >= trades * 0.8, 'the surf builds before a gale: (M14) the bay\'s, or the north shore\'s of one down the trades' );
+ok( tradesLee === trades, '(M14) a gale down the trades leaves the bay in the island\'s lee' );
 let ahead = 0, own = 0, gales = 0, bigLong = true;
 for ( let T = 30; T < 24 * 300; T += 0.5 ) {
 
@@ -317,9 +328,10 @@ ok( cloudiness( 77 ) >= 0 && cloudiness( 77 ) <= 1 && storminess( 77 ) >= 0 && s
 		const w = dayWeatherAt( T );
 		northAll ++;
 		if ( w.north > 0.85 ) northBig ++;
-		// (a sea outlasts its wind: none where it's blown well off the trades for the hours it lasts)
+		// (a sea outlasts its wind, and runs a little ahead of it: none where it's blown well off the trades
+		// for the hours about)
 		let off = true;
-		for ( let h = 0; h <= 4 && off; h += 0.25 ) off = Math.abs( dayWeatherAt( T - h ).windAngle ) > NORTH.onto[ 0 ];
+		for ( let h = - 4; h <= 4 && off; h += 0.25 ) off = Math.abs( dayWeatherAt( T - h ).windAngle ) > NORTH.onto[ 0 ];
 		if ( off && w.north > 0 ) northOff ++;
 
 	}
