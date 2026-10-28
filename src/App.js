@@ -297,7 +297,7 @@ export class App {
 		uploadTextures( renderer, [ this.terrain.heightTexture, this.terrain.normalTexture, this.terrain.splatTexture ] );
 		// boulders, blocks, talus and outcrops (shaded like the ground's rock)
 		this.rocks = new Rocks( { scene, terrain: this.terrain, colliders: this.colliders, village: this.village, castShadow: tier !== 'low', lite: tier === 'low' } );
-		this.vegetation = new Vegetation( { scene, terrain: this.terrainData, ground: this.terrain, renderer, tier, village: this.village, smallBakes: this.cpuGL, bakeSlot: () => this.frameSlot() } );
+		this.vegetation = new Vegetation( { scene, terrain: this.terrainData, ground: this.terrain, renderer, tier, village: this.village, rocks: this.rocks, smallBakes: this.cpuGL, bakeSlot: () => this.frameSlot() } );
 		// (WebGL drawn on the CPU: the plants grow in once the game has started, in start(); their
 		// programs and bakes take seconds there, and a creation has 45 s to load)
 		if ( ! this.cpuGL ) await this.plantsGrow();
@@ -596,14 +596,14 @@ export class App {
 		this._started = true;
 		this.hud.showHint( this.input.lastDevice );
 		// (on a device that draws on its CPU, one after another, so their garbage doesn't pile up: the
-		// island's held-back parts appear, the plants grow, then the catch card's shaders, then Joe and
-		// Marta (their loading is the high point of script memory: before the animals and the debris
+		// island's held-back parts appear, the plants grow, then the catch card's shaders, (M14) the cover map
+		// and the rocks' overhangs made finer (a frame each, on every device), then Joe and Marta (their loading is the high point of script memory: before the animals and the debris
 		// add theirs), then the animals and the debris, then the scanned debris, with pauses between;
 		// last, once that loading's garbage is collected (settle), the reef, its fish and the specks;
 		// then, on every device, the whale)
 		const revealed = this._late ? new Promise( ( done ) => this._revealed = done ) : null;
 		this.lateReady();
-		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.buildCover() ).then( () => this.loadCharacters() )
+		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.buildCover() ).then( () => this.rocks.refineOverhangs( { slot: () => this.frameSlot() } ) ).then( () => this.loadCharacters() )
 			.then( () => this.pause() ).then( () => this.cpuGL && this.lifeAndDebris() ).then( () => this.pause() ).then( () => this.scansArrive() )
 			.then( () => this.cpuGL && this.settle() ).then( () => this.cpuGL && this.reefGrows() )
 			.then( () => this.pause() ).then( () => this.whaleArrives() ).then( () => this.airArrives() );

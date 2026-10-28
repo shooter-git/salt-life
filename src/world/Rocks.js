@@ -2,6 +2,7 @@ import * as THREE from '../engine/index.js';
 import { Noise2D, mulberry32, smoothstep as sstep } from '../util/Noise.js';
 import { WORLD } from './WorldLayout.js';
 import { buildRockGeometry, ROCK_STYLES } from './terrain/RockGeometry.js';
+import { OVERHANGS, buildOverhang, overhangColliders, clears } from './terrain/Overhangs.js';
 import { rot2, srgb, TERRAIN_SHADING_GLSL } from './terrain/TerrainShading.js';
 
 // Fade factor across a distance band [start, end] (0 before, 1 after), for the level that takes over
@@ -26,6 +27,8 @@ const NEAR_DIST = 60; // m (+ 6 x rock size)
 const FAR_DIST = 700; // m (+ 60 x rock size): faded out beyond
 const BAND = 0.12; // cross-fade band, share of the switch distance (Bayer screen-door, see LODFade)
 const RAIN_REACHES = - 3; // m: (M14) the rocks topping out above this are those the rain may fall on (its tide at its lowest, and more)
+// ((M14) the overhangs' grids: near (the low tier's coarser) and far, m)
+const OVERHANG_CELL = { near: 0.25, lite: 0.3, far: 0.5 };
 
 export class Rocks {
 
@@ -44,6 +47,11 @@ export class Rocks {
 
 		const t0 = performance.now();
 		this.instances = this._place( mulberry32( seed ) );
+		// ((M14) and the overhangs to shelter under, placed by hand (terrain/Overhangs.js): made coarse now
+		// (their far shape, and from it what's in the way of standing under them), their near shape after the
+		// start (refineOverhangs); the scattered rocks where they stand taken away, the rest as they were)
+		this.overhangs = OVERHANGS.map( ( site ) => buildOverhang( site, this.terrainData, { cell: OVERHANG_CELL.far } ) );
+		this.instances = this.instances.filter( ( r ) => ! this.overhangs.some( ( o ) => Math.hypot( r.x - o.x, r.z - o.z ) < o.radius + r.size ) );
 		const t1 = performance.now();
 
 		if ( colliders ) {
@@ -57,39 +65,52 @@ export class Rocks {
 
 			}
 
+			// ((M14) the overhangs: what's in the way of standing under them, not their roofs)
+			for ( const o of this.overhangs ) for ( const b of overhangColliders( o ) ) colliders.addBox( b.center, b.half, b.rotY, { tag: 'rock' } );
+
 		}
 
 		this.material = this._createMaterial();
 		this.meshes = [];
 		this.buckets = [];
+		const mk = ( geo, name, members ) => {
+
+			const g = geo.clone();
+			const lod = new THREE.InstancedBufferAttribute( new Float32Array( Math.max( 1, members.length ) * 2 ), 2 );
+			lod.setUsage( THREE.DynamicDrawUsage );
+			g.setAttribute( 'iLod', lod );
+			const m = new THREE.InstancedMesh( g, this.material, Math.max( 1, members.length ) );
+			m.name = name;
+			m.count = 0;
+			m.castShadow = castShadow && name.endsWith( 'near' );
+			m.receiveShadow = true;
+			m.frustumCulled = false;
+			m.instanceMatrix.setUsage( THREE.DynamicDrawUsage );
+			this.group.add( m );
+			this.meshes.push( m );
+			return m;
+
+		};
+		const bucket = this._bucket = ( members, near, far, name ) => this.buckets.push( { members, near: mk( near, `${ name }-near`, members ), far: mk( far, `${ name }-far`, members ), nearTris: near.index.count / 3, farTris: far.index.count / 3 } );
 		for ( let s = 0; s < ROCK_STYLES.length; s ++ ) {
 
-			const members = this.instances.filter( ( r ) => r.style === s );
 			// (the low tier: one subdivision less, a quarter of the triangles)
 			const near = buildRockGeometry( s, 17 + s * 101, NEAR_SUBDIV - ( lite ? 1 : 0 ) );
 			const far = buildRockGeometry( s, 17 + s * 101, FAR_SUBDIV - ( lite ? 1 : 0 ) );
-			const mk = ( geo, name ) => {
-
-				const g = geo.clone();
-				const lod = new THREE.InstancedBufferAttribute( new Float32Array( Math.max( 1, members.length ) * 2 ), 2 );
-				lod.setUsage( THREE.DynamicDrawUsage );
-				g.setAttribute( 'iLod', lod );
-				const m = new THREE.InstancedMesh( g, this.material, Math.max( 1, members.length ) );
-				m.name = name;
-				m.count = 0;
-				m.castShadow = castShadow && name.endsWith( 'near' );
-				m.receiveShadow = true;
-				m.frustumCulled = false;
-				m.instanceMatrix.setUsage( THREE.DynamicDrawUsage );
-				this.group.add( m );
-				this.meshes.push( m );
-				return m;
-
-			};
-
-			this.buckets.push( { members, near: mk( near, `rocks-${ ROCK_STYLES[ s ].name }-near` ), far: mk( far, `rocks-${ ROCK_STYLES[ s ].name }-far` ), nearTris: near.index.count / 3, farTris: far.index.count / 3 } );
+			bucket( this.instances.filter( ( r ) => r.style === s ), near, far, `rocks-${ ROCK_STYLES[ s ].name }` );
 
 		}
+
+		// ((M14) each overhang a bucket of its own: its own shape, near (its far one until it's refined) and
+		// far, one of it; among the rocks for the rest (the rain's rock cover, the debris kept off it))
+		this.overhangs.forEach( ( o, k ) => {
+
+			const r = { x: o.x, y: o.y, z: o.z, size: 4, sy: ( o.top - o.y ) / 4, style: ROCK_STYLES.length + k, matrix: o.matrix, radius: o.radius, overhang: o.site.kind };
+			this.instances.push( r );
+			bucket( [ r ], o.geometry, o.geometry, `rocks-overhang-${ o.site.kind }` );
+
+		} );
+		this._nearCell = lite ? OVERHANG_CELL.lite : OVERHANG_CELL.near;
 
 		this.timings = { place: t1 - t0, build: performance.now() - t1 };
 		this._lastCam = new THREE.Vector3( 1e9, 0, 0 );
@@ -98,6 +119,33 @@ export class Rocks {
 		this._sphere = new THREE.Sphere();
 		this._lastQuat = new THREE.Quaternion();
 		scene.add( this.group );
+
+	}
+
+	// (M14) the overhangs' near shapes, finer than their far ones, made one at a time (slot(): a promise of
+	// a frame of its own for each, a few tens of milliseconds on a laptop) and put in for the far ones
+	async refineOverhangs( { slot = () => Promise.resolve() } = {} ) {
+
+		for ( let k = 0; k < this.overhangs.length; k ++ ) {
+
+			const o = this.overhangs[ k ];
+			if ( o.fine ) continue;
+			await slot();
+			const fine = o.fine = buildOverhang( o.site, this.terrainData, { cell: this._nearCell } );
+			const b = this.buckets[ ROCK_STYLES.length + k ], was = b.near.geometry, g = fine.geometry;
+			g.setAttribute( 'iLod', was.attributes.iLod );
+			b.near.geometry = g;
+			b.nearTris = g.index.count / 3;
+			was.dispose();
+
+		}
+
+	}
+
+	// (M14) whether nothing grows at ( x, z ): along an overhang, under it and out of its mouth
+	clears( x, z ) {
+
+		return this.overhangs.some( ( o ) => clears( o, x, z ) );
 
 	}
 
@@ -417,9 +465,11 @@ float rockBayer4( vec2 pixel ) {
 ` )
 				.replace( '#include <color_fragment>', /* glsl */`
 	// LOD cross-fade: iLod = (fade, outgoing); the incoming level keeps the dither cells below
-	// fade, the outgoing one the others
+	// fade, the outgoing one the others ((M14) as materials/LODFade.js has it: it was the other way
+	// about, so the near level, outgoing at fade 0, kept none: no rock within about sixty metres of you
+	// was drawn, only its shadow)
 	float lodT = rockBayer4( gl_FragCoord.xy );
-	if ( vLod.y > 0.5 ? lodT >= vLod.x : lodT < vLod.x ) discard;
+	if ( vLod.y > 0.5 ? lodT < vLod.x : lodT >= vLod.x ) discard;
 	vec3 p = vRockP;
 	vec3 N = normalize( vRockN );
 	float mcr = texture( terrainDetailTex, ${ rot2( 'p.xz', 0.9 ) } / 61.0 ).w * 0.6
