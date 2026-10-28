@@ -1,6 +1,6 @@
 import { DAY_RATE, REST, REST_NAMES, isOpen, restTo, sunUp, timeText } from './IslandClock.js';
 import { HOURS, shutFor } from './Orders.js';
-import { CONDITIONS, WEATHER_IDS, WEATHER_NAMES, MURKY, NORTH, islandTime, forecast, surfText, swellFrom, windFrom } from './Weather.js';
+import { CONDITIONS, PICK_IDS, SOUTHERLY, WEATHER_NAMES, MURKY, NORTH, islandTime, forecast, surfText, swellFrom, windFrom } from './Weather.js';
 import { G } from '../core/Globals.js';
 import { knots } from './Units.js';
 
@@ -60,7 +60,7 @@ const CSS = /* css */`
 	background: var(--tw-fill); border: 1px solid var(--tw-line); color: var(--tw-ink); font: 600 var(--tw-fs-sm) var(--tw-font); }
 .gm-time-rest button small { font: 500 var(--tw-fs-xs) var(--tw-mono); color: var(--tw-ink-3); }
 .gm-time-rest.is-wx { grid-template-columns: repeat(3, 1fr); } /* (M9) the forecast and eight kinds of weather: three rows of three */
-.gm-time-rest.is-wx button[data-weather="hurricane"] { grid-column: 1 / -1; } /* (M13) and a hurricane of your own, across under them */
+.gm-time-rest.is-wx button[data-weather="hurricane"] { grid-column: span 2; } /* (M13) and a hurricane of your own; (M14) beside the thunderstorm, under the southerly gale */
 .gm-time-news { color: var(--tw-sun); font-weight: 600; }
 .gm-time-news.is-warn { color: var(--tw-coral); }
 .gm-time-rest button.is-on { background: rgba(var(--tw-aqua-rgb), 0.14); border-color: var(--tw-aqua); box-shadow: inset 0 0 0 1px var(--tw-aqua); }
@@ -78,9 +78,9 @@ html.is-touch .tw-root:has(.gm-time.is-open) :is(.gm-map, .gm-coach) { visibilit
 @media (prefers-reduced-motion: reduce) { .gm-time, .gm-rest-fade { transition: none; } }
 `;
 
-const WEATHER_WIND = Object.fromEntries( WEATHER_IDS.map( ( id ) => [ id, CONDITIONS[ id ].wind ] ) );
-// (M9) the picker's names: a third of the menu wide, 'Thunderstorm' doesn't fit
-const PICK_NAMES = { ...WEATHER_NAMES, storm: 'Thunder' };
+const WEATHER_WIND = Object.fromEntries( PICK_IDS.map( ( id ) => [ id, CONDITIONS[ id === SOUTHERLY ? 'gale' : id ].wind ] ) );
+// (M9) the picker's names: a third of the menu wide, 'Thunderstorm' doesn't fit; (M14) a southerly gale
+const PICK_NAMES = { ...WEATHER_NAMES, storm: 'Thunder', [ SOUTHERLY ]: 'Southerly' };
 // the direction a wind turned `a` from the trades blows toward
 const turned = ( a ) => {
 
@@ -318,7 +318,7 @@ export class TimeHUD {
 
 		} ).join( '' );
 		// (Salt Life) the weather: the day's, or one picked (in company, for everyone here)
-		const weather = [ null, ...WEATHER_IDS ].map( ( id ) => {
+		const weather = [ null, ...PICK_IDS ].map( ( id ) => {
 
 			const on = chosen === id;
 			return `<button type="button" data-weather="${ id || '' }" class="${ on ? 'is-on' : '' }" aria-pressed="${ on }">${ id ? PICK_NAMES[ id ] : 'Forecast' }<small>${ id ? knots( WEATHER_WIND[ id ] ) : 'today' }</small></button>`;

@@ -1,7 +1,7 @@
 // Plain-node tests of the fishing game logic (no GPU): bites, the catch fight, inventory, save.
 import { FISH, FISH_IDS, CARAPACE, fishValue, fishLengthCm, fishWeightKg, spearRule, isTrophy } from '../src/game/FishTable.js';
 import { habitatAt, pickSpecies, rollWeight, biteDelay, lampsLit, weatherMood } from '../src/game/Bites.js';
-import { weatherAt } from '../src/game/Weather.js';
+import { weatherAt, SOUTHERLY } from '../src/game/Weather.js';
 import { CatchMinigame } from '../src/game/CatchMinigame.js';
 import { FishingRod, bendStep, BEND_K, BEND_C } from '../src/game/FishingRod.js';
 import { GameState } from '../src/game/GameState.js';
@@ -129,7 +129,8 @@ ok( biteDelay( habitatAt( spots.sand ), 12, rng ) === Infinity, 'no bite delay o
 
 	const seeded = ( s = 777 ) => () => ( ( s = ( s * 1664525 + 1013904223 ) >>> 0 ) / 4294967296 );
 	const fair = weatherAt( 0, 'fair' ), calm = weatherAt( 0, 'calm' ), cloudy = weatherAt( 0, 'cloudy' ), rain = weatherAt( 0, 'rain' );
-	const blustery = weatherAt( 0, 'blustery' ), gale = weatherAt( 0, 'gale' ), storm = weatherAt( 0, 'storm' );
+	// ((M14) a gale whose surf is in the bay: a picked gale's blows down the trades, its sea on the north shore)
+	const blustery = weatherAt( 0, 'blustery' ), gale = weatherAt( 0, SOUTHERLY ), storm = weatherAt( 0, 'storm' );
 	// the same bites, one after another, from the same rolls
 	const seq = ( h, hour, bait = null ) => {
 
@@ -201,7 +202,8 @@ ok( biteDelay( habitatAt( spots.sand ), 12, rng ) === Infinity, 'no bite delay o
 	const grey = share( pier, cloudy, predators ), clear = share( pier, fair, predators );
 	console.log( `     predators' share of noon bites off the pier: ${ ( 100 * clear ).toFixed( 1 ) }% fair, ${ ( 100 * grey ).toFixed( 1 ) }% under a grey sky (${ ( 100 * share( pier, fair, predators, 18.5 ) ).toFixed( 1 ) }% at dusk)` );
 	ok( grey > 1.3 * clear, 'under a grey sky by day the jacks, snappers and tarpon bite better, as at dusk' );
-	ok( delay( pier, storm ) > 1.5 * delay( pier, fair ) && delay( pier, rain ) > delay( pier, fair ), 'a downpour or a thunderstorm slows the bites' );
+	// ((M14) a thunderstorm down the trades brings the bay no surf of its own: its rain slows them)
+	ok( delay( pier, storm ) > 1.4 * delay( pier, fair ) && delay( pier, rain ) > delay( pier, fair ), 'a downpour or a thunderstorm slows the bites' );
 	ok( delay( shallows, gale ) > 1.5 * delay( shallows, fair ) && delay( pier, gale ) > 1.05 * delay( pier, fair ) && delay( deep, gale ) > 1.3 * delay( deep, fair ), 'a gale\'s surf quiets the shallows and the pier, and the deep is hard to fish' );
 	// each fish's own taste
 	const moods = Object.keys( weatherMood( storm ) );

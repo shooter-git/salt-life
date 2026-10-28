@@ -63,6 +63,12 @@ export const CONDITIONS = {
 export const PERIOD_MAX = 12;
 export const GROUNDSWELL_MAX = 0.4;
 export const WEATHER_IDS = [ 'calm', 'fair', 'breezy', 'cloudy', 'rain', 'blustery', 'gale', 'storm', 'hurricane' ];
+// (M14) the weathers you can pick (the clock's menu): the conditions, and after the gale a southerly one
+// (SOUTHERLY: a gale blowing in from the south, its sea into the bay). The others' wind is the trades', so
+// a picked gale's sea breaks on the north shore, the bay in the island's lee (row)
+export const SOUTHERLY = 'southerly';
+export const PICK_IDS = [ 'calm', 'fair', 'breezy', 'cloudy', 'rain', 'blustery', 'gale', SOUTHERLY, 'storm', 'hurricane' ];
+export const isPick = ( id ) => PICK_IDS.includes( id );
 export const WEATHER_NAMES = { calm: 'Calm', fair: 'Fair', breezy: 'Breezy', cloudy: 'Cloudy', rain: 'Rain', blustery: 'Blustery', gale: 'Gale', storm: 'Thunderstorm', hurricane: 'Hurricane' };
 // the shore waves' largest amplitude (m): bigger, their run-up floods the beach and the sets break on
 // the pier head and over the boat at the dock (test/waves.mjs)
@@ -393,8 +399,26 @@ function nameOf( w ) {
 
 function row( id ) {
 
-	const c = CONDITIONS[ id ];
-	return { id, wind: c.wind, windAngle: 0, coverage: c.coverage, overcast: c.overcast, swell: c.swell, windSea: windSeaOf( c.wind ), surf: Math.min( SURF_MAX, c.surf ), period: c.period, west: 0, north: northOf( c.wind, 0 ), northPeriod: northPeriodOf( c.wind ), visibility: c.visibility, rain: c.rain, thunder: c.thunder, front: 0, murk: MURK_PICK[ id ] || 0, hurricane: 0, eye: 0, surge: 0, rainHaze: 0, sprayHaze: 0, boarded: 0 };
+	const c = CONDITIONS[ id ], f = CONDITIONS.fair;
+	// ((M14) its wind's the trades', so of a blow's sea and swell only as much gets into the bay as from one
+	// down them (bayInto): a picked gale's breaks on the north shore, the bay in the island's lee)
+	const lee = c.swell > f.swell ? bayInto( TRADES ) : 1;
+	return { id, wind: c.wind, windAngle: 0, coverage: c.coverage, overcast: c.overcast, swell: lerp( f.swell, c.swell, lee ), windSea: windSeaOf( c.wind ), surf: lerp( FAIR_SURF, Math.min( SURF_MAX, c.surf ), lee ), period: lerp( f.period, c.period, lee ), west: 0, north: northOf( c.wind, 0 ), northPeriod: northPeriodOf( c.wind ), visibility: c.visibility, rain: c.rain, thunder: c.thunder, front: 0, murk: MURK_PICK[ id ] || 0, hurricane: 0, eye: 0, surge: 0, rainHaze: 0, sprayHaze: 0, boarded: 0 };
+
+}
+
+// (M14) a southerly gale (picked: SOUTHERLY): a gale's, blowing in from the south (FROM.south), its sea and
+// swell into the bay (3–6 ft, the clouds and the showers coming up from the south) and none onto the north
+// shore, in the island's lee
+function southerly() {
+
+	const w = row( 'gale' ), c = CONDITIONS.gale;
+	w.windAngle = FROM.south;
+	w.swell = c.swell;
+	w.surf = Math.min( SURF_MAX, c.surf );
+	w.period = c.period;
+	w.north = northOf( c.wind, FROM.south );
+	return w;
 
 }
 
@@ -423,6 +447,7 @@ export function murkAt( T ) {
 export function weatherAt( T, pick = null, since = 0 ) {
 
 	if ( pick === 'hurricane' ) return overHurricane( row( 'fair' ), T, pickedHurricane( since ) );
+	if ( pick === SOUTHERLY ) return southerly();
 	if ( pick && CONDITIONS[ pick ] ) return row( pick );
 	const w = dayWeatherAt( T ), h = hurricaneNear( T );
 	return h ? overHurricane( w, T, h ) : w;

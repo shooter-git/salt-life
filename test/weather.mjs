@@ -1,6 +1,6 @@
 // Plain-node tests of the island's weather (no GPU): the forecast from the island's time, its
 // conditions, how it changes, and how it's read out.
-import { CONDITIONS, WEATHER_IDS, WEATHER_NAMES, SURF_MAX, PERIOD_MAX, GROUNDSWELL_MAX, VEER, STRIKE_RATE, islandTime, storminess, cloudiness, veer, showeriness, unsettled, weatherAt, forecast, surfText, windFrom, strikeIn, murkAt, windBeyondFair, blowShare, showers as showersAbout, FRONT_KMH, FROM, TRACK_SPAN, trackAt, towardOf, swellFrom, distantStrikesIn, DISTANT_NEAR, STORM_RANGE, dayWeatherAt, hurricaneAt, hurricaneNews, HURRICANE, TS_WIND, HURRICANE_WIND, MURKY, SURGE, SURF_HURRICANE, PERIOD_HURRICANE, NORTH } from '../src/game/Weather.js';
+import { CONDITIONS, WEATHER_IDS, WEATHER_NAMES, SURF_MAX, PERIOD_MAX, GROUNDSWELL_MAX, VEER, STRIKE_RATE, islandTime, storminess, cloudiness, veer, showeriness, unsettled, weatherAt, forecast, surfText, windFrom, strikeIn, murkAt, windBeyondFair, blowShare, showers as showersAbout, FRONT_KMH, FROM, TRACK_SPAN, trackAt, towardOf, swellFrom, distantStrikesIn, DISTANT_NEAR, STORM_RANGE, dayWeatherAt, hurricaneAt, hurricaneNews, HURRICANE, TS_WIND, HURRICANE_WIND, MURKY, SURGE, SURF_HURRICANE, PERIOD_HURRICANE, NORTH, SOUTHERLY, PICK_IDS, isPick } from '../src/game/Weather.js';
 import { flashSeen, HEARD } from '../src/sky/Lightning.js';
 import { knots } from '../src/game/Units.js';
 
@@ -20,6 +20,17 @@ ok( JSON.stringify( weatherAt( 1234.567 ) ) === JSON.stringify( weatherAt( 1234.
 const today = { wind: 7, windAngle: 0, coverage: 0.49, overcast: 0, swell: 1, windSea: 1, surf: 0.34, period: 9, west: 0, north: NORTH.fair, visibility: 1, rain: 0, thunder: 0, front: 0 };
 const fair = weatherAt( 100, 'fair' );
 ok( fair.id === 'fair' && KEYS.every( ( k ) => fair[ k ] === today[ k ] ), 'fair: today\'s wind, cloud, sea, surf and haze exactly, and dry' );
+// ((M14) a picked weather's wind is the trades': a picked gale's sea on the north shore, the bay in the
+// island's lee; the southerly gale's in the bay, none on the north shore)
+{
+
+	const g = weatherAt( 100, 'gale' ), s = weatherAt( 100, SOUTHERLY );
+	ok( g.surf < 0.4 && g.north === NORTH.max && g.windAngle === 0 && s.id === 'gale' && s.surf === SURF_MAX && s.north === 0 && Math.abs( s.windAngle - FROM.south ) < 1e-9 && s.swell === CONDITIONS.gale.swell,
+		`(M14) a picked gale: the bay ${ surfText( g.surf ) }, the north shore ${ surfText( g.north ) }; a southerly gale: the bay ${ surfText( s.surf ) }, the north shore none` );
+	ok( PICK_IDS.every( isPick ) && ! isPick( 'forecast' ) && ! isPick( null ) && PICK_IDS.indexOf( SOUTHERLY ) === PICK_IDS.indexOf( 'gale' ) + 1 && WEATHER_IDS.every( ( id ) => PICK_IDS.includes( id ) ), '(M14) every weather can be picked, and a southerly gale after the gale' );
+
+}
+
 let day1 = true;
 for ( let T = 0; T < 24; T += 0.25 ) {
 

@@ -28,7 +28,7 @@ import { Player } from './player/Player.js';
 import { BoatController } from './player/BoatController.js';
 import { GameState } from './game/GameState.js';
 import { DAY_RATE, START_HOUR, advance } from './game/IslandClock.js';
-import { CONDITIONS, islandTime, NORTH } from './game/Weather.js';
+import { islandTime, isPick, NORTH } from './game/Weather.js';
 import { WeatherDriver } from './world/WeatherDriver.js';
 import { lampsLit } from './game/Bites.js';
 import { FishStand, STAND } from './game/FishStand.js';
@@ -1743,7 +1743,7 @@ export class App {
 			s.timeOfDay = ( ( saved.hour % 24 ) + 24 ) % 24;
 			s.day = Number.isFinite( saved.day ) ? Math.max( 1, Math.floor( saved.day ) ) : 1;
 			s.timeSpeed = saved.held ? 0 : DAY_RATE;
-			s.weather = CONDITIONS[ saved.weather ] ? saved.weather : null;
+			s.weather = isPick( saved.weather ) ? saved.weather : null;
 			s.weatherSince = Number.isFinite( saved.since ) ? saved.since : islandTime( s.day, s.timeOfDay );
 
 		}
@@ -1756,9 +1756,9 @@ export class App {
 		if ( day >= 1 ) s.day = Math.floor( day );
 		// (?weather=gale: that weather; ?weather=forecast: the day's)
 		const weather = q && q.get( 'weather' );
-		if ( weather && ( CONDITIONS[ weather ] || weather === 'forecast' ) ) {
+		if ( weather && ( isPick( weather ) || weather === 'forecast' ) ) {
 
-			s.weather = CONDITIONS[ weather ] ? weather : null;
+			s.weather = isPick( weather ) ? weather : null;
 			// ((M13) ?weather=hurricane: one of your own, coming in from the hour you start at)
 			s.weatherSince = islandTime( s.day, s.timeOfDay );
 
