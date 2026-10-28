@@ -268,6 +268,7 @@ export class SoundScape {
 		this._shore = null;
 		if ( shore ) this.attachShore( shore );
 		this._shore2 = null; // (M12) a westerly's swell, crossing the south's (addShore)
+		this._shore3 = null; // (M14) the north shore's sea (addShore( ..., 2 ))
 		this._walls = 0; // (M13) dB the shelter's walls take off the storm (WALLS, while you're inside)
 		this._fakeT = 3;
 		this._warned = new Set();
@@ -295,11 +296,12 @@ export class SoundScape {
 	}
 
 	// (M12) a second swell's waves (a westerly's: its field, and its shore as attachShore's), heard
-	// breaking along the shore as the first's are, while they have a height
-	addShore( { shore, field } ) {
+	// breaking along the shore as the first's are, while they have a height; (M14) or the third's (slot 2:
+	// the north shore's sea)
+	addShore( { shore, field }, slot = 1 ) {
 
 		const first = this._shoreSrc();
-		this._shore2 = first && shore && field ? { shore, field, terrain: first.terrain, stations: null, stAt: { x: 1e9, z: 1e9 } } : null;
+		this[ slot === 2 ? '_shore3' : '_shore2' ] = first && shore && field ? { shore, field, terrain: first.terrain, stations: null, stAt: { x: 1e9, z: 1e9 } } : null;
 
 	}
 
@@ -1243,9 +1245,8 @@ export class SoundScape {
 		}
 
 		this._surfFrom( src );
-		// ((M12) and a westerly's swell, while it's running)
-		const west = this._shore2;
-		if ( west && west.shore.amplitude.value > 0.005 ) this._surfFrom( west );
+		// ((M12) and a westerly's swell, while it's running; (M14) and the north shore's sea)
+		for ( const other of [ this._shore2, this._shore3 ] ) if ( other && other.shore.amplitude.value > 0.005 ) this._surfFrom( other );
 
 	}
 

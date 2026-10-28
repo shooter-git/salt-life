@@ -10,7 +10,8 @@ import { FRONT_KM, eyeCover, bandCells } from '../sky/SkyProClouds.js';
 //     and the wind sea and the slicks turn with it about the camera (Waves.setWindDir, SeaDetail);
 //   - the open sea (Waves.setSea: the swell, the wind sea) and its whitecaps (WaterSurface);
 //   - the surf (ShoreWaves.setSurf: its height and its period, on a clock that carries on; (M12) and how
-//     much of it is a westerly's swell, crossing the south's: Waves.setSwellWest offshore);
+//     much of it is a westerly's swell, crossing the south's: Waves.setSwell offshore, (M14) each at its
+//     own period there too); (M14) the north shore's sea (ShoreWaves.setNorth);
 //   - the cloud (SkyProClouds: cover, and how grey) and the light and the distance seen under it (Sky).
 //   - (M9) the rain (G.rain: the streaks, the rings on the water, the sound) and what it leaves wet
 //     (G.wet: the ground, the village, the boat, drying slowly after), and the thunder (Lightning);
@@ -61,7 +62,7 @@ const GALE = 20;
 // (about a quarter of the compass in two game hours)
 const TURN_RATE = 0.015;
 const JUMP = 0.5; // game hours: more than this between frames, the clock jumped
-const KEYS = [ 'wind', 'swell', 'windSea', 'surf', 'west', 'visibility', 'murk', 'hurricane', 'surge', 'rainHaze', 'sprayHaze' ];
+const KEYS = [ 'wind', 'swell', 'windSea', 'surf', 'west', 'north', 'visibility', 'murk', 'hurricane', 'surge', 'rainHaze', 'sprayHaze' ];
 const QUICK = [ 'rain', 'thunder', 'front', 'eye' ];
 // (M13) in a hurricane the wind comes round up to this many times quicker in light airs (its eye's), from
 // LIGHT[ 1 ] m/s down to LIGHT[ 0 ]
@@ -175,6 +176,7 @@ export class WeatherDriver {
 			G.wet.value = soaked > wet ? wet + ( soaked - wet ) * ( 1 - Math.exp( - dt / SOAK ) ) : Math.max( soaked, wet - dt / DRY );
 			const pace = PERIOD_RATE * dt;
 			live.period = toward( live.period, target.period, Math.max( - pace, Math.min( pace, target.period - live.period ) ) );
+			live.northPeriod = toward( live.northPeriod, target.northPeriod, Math.max( - pace, Math.min( pace, target.northPeriod - live.northPeriod ) ) );
 			// ((M13) the shorter way round to it: a hurricane's comes round the compass, and its eye's light
 			// airs come round quicker)
 			const light = target.hurricane > 0 ? 1 + ( LIGHT_TURN - 1 ) * Math.min( 1, Math.max( 0, ( LIGHT[ 1 ] - live.wind ) / ( LIGHT[ 1 ] - LIGHT[ 0 ] ) ) ) : 1;
@@ -254,9 +256,18 @@ export class WeatherDriver {
 		else G.windDir.value.set( p.x * c - p.y * s, p.x * s + p.y * c );
 		this.waves.setWindDir( G.windDir.value, this._at );
 		this.waves.setSea( w.swell, w.windSea );
-		// ((M12) a westerly's swell from the west: offshore, and on the shore once its field's solved)
-		this.waves.setSwellWest( w.west, this._at );
-		if ( this.shore ) this.shore.setSurf( w.surf, w.period, w.west );
+		// ((M12) a westerly's swell from the west: on the shore once its field's solved, and offshore; (M14)
+		// there each train at its own period, the shore's: the south's, and the westerly's)
+		const shore = this.shore;
+		if ( shore ) {
+
+			shore.setSurf( w.surf, w.period, w.west );
+			// ((M14) and the north shore's sea, once its field's solved)
+			shore.setNorth( w.north, w.northPeriod );
+
+		}
+
+		this.waves.setSwell( w.west, shore ? shore.trains[ 0 ].period : w.period, w.period, this._at );
 		sky.clouds.coverage.value = w.coverage;
 		sky.clouds.overcast.value = w.overcast;
 		sky.clouds.storm.value = w.storm;

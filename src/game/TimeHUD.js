@@ -1,6 +1,6 @@
 import { DAY_RATE, REST, REST_NAMES, isOpen, restTo, sunUp, timeText } from './IslandClock.js';
 import { HOURS, shutFor } from './Orders.js';
-import { CONDITIONS, WEATHER_IDS, WEATHER_NAMES, MURKY, islandTime, forecast, surfText, swellFrom, windFrom } from './Weather.js';
+import { CONDITIONS, WEATHER_IDS, WEATHER_NAMES, MURKY, NORTH, islandTime, forecast, surfText, swellFrom, windFrom } from './Weather.js';
 import { G } from '../core/Globals.js';
 import { knots } from './Units.js';
 
@@ -294,8 +294,9 @@ export class TimeHUD {
 		const pick = chosen;
 		const next = wx && ! pick ? forecast( islandTime( st.day, st.hour ), 12 ) : null;
 		const wet = wxRain( wx );
-		// ((M10) and the water, while a blow's left it murky)
-		const wxLine = wx ? `<b>${ WEATHER_NAMES[ wx.id ] }</b>${ wet ? ` · ${ wet }` : '' } · wind ${ wxWind( wx ) } ${ knots( wx.wind ) } · surf ${ surfText( wx.surf ) } ${ swellFrom( wx.west || 0 ) } at ${ Math.round( wx.period ) } s${ wx.murk >= MURKY ? ' · water murky' : '' }` : '';
+		// ((M10) and the water, while a blow's left it murky; (M14) and a big surf on the north shore)
+		const north = wx && wx.north >= NORTH.big ? ` · north shore ${ surfText( wx.north ) }` : '';
+		const wxLine = wx ? `<b>${ WEATHER_NAMES[ wx.id ] }</b>${ wet ? ` · ${ wet }` : '' } · wind ${ wxWind( wx ) } ${ knots( wx.wind ) } · surf ${ surfText( wx.surf ) } ${ swellFrom( wx.west || 0 ) } at ${ Math.round( wx.period ) } s${ north }${ wx.murk >= MURKY ? ' · water murky' : '' }` : '';
 		// (M9) in a gale or a thunderstorm they've both shut and gone home
 		// ((M13) and ahead of a hurricane they board up and go home)
 		const stalls = wx && wx.boarded ? 'Joe and Marta have boarded up for the hurricane' : wx && shutFor( wx.id ) ? 'Joe and Marta have shut for the weather' : `${ stall( 'Joe', HOURS.joe ) } · ${ stall( 'Marta', HOURS.marta ) }`;

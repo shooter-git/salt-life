@@ -34,20 +34,26 @@ const REACH = [ 0.08, 0.36 ]; // its stretch's half-length at its widest (of a c
 // foam was a white block)
 const FIT = 2.2;
 const ROLLER = 0.08; // wavelengths: the roller down the front face, ahead of the crest
+// (step 5) how much its front's ragged along the crest (of its width: it thins to its ends as its stretch
+// does, a lens on the face, not the strip it was: a gale's big ones were white slabs)
+const ROLLER_RAG = [ 0.18, 0.1 ];
 // its lip: a thin line of white along the crest either side of the roller (LIP: of its stretch, LIP_W
 // wavelengths wide, as bright), where it's only beginning to spill
 const LIP = 1.35, LIP_W = 0.025, LIP_WHITE = 0.55;
 const DECAY = 1; // periods: its foam's e-folding behind it (seen to go in two or three)
 const LEFT = 0.7; // how white the foam it leaves is, at first (the roller's 1: it's lacy at once)
+// cells a period: the foam left spreading and thinning at its edges as it ages (its edge softened by so
+// much more: a gale's big ones were white blocks, their sides as straight as when they were laid)
+const SPREAD = 0.08;
 const AGES = 3; // crests behind looked at: the foam's gone by then (the low tier's GPU looks at two)
 // the share of the sea a wave's whitecaps whiten, a unit of chance at size 1 (test/whitecaps.mjs measures
 // it), and as their size goes (bigger, and breaking longer: as size^SIZE_COVER, measured)
-export const COVER = 0.025;
+export const COVER = 0.0158;
 const SIZE_COVER = 1.25;
 // m/s: none below the first; Monahan's share capped at the second's (a gale's: past it the sea's streaked
 // with blown foam, WaterSurface's spume); and their size, from a light breeze's to a gale's
 const WIND = [ 3, 19 ];
-const SIZE = [ 0.7, 1.3 ];
+const SIZE = [ 0.7, 1.6 ];
 const monahan = ( u ) => 3.84e-6 * Math.pow( Math.max( 0, u ), 3.41 );
 const smooth = ( a, b, x ) => {
 
@@ -79,15 +85,16 @@ export function pcg3d( x, y, z, out = [ 0, 0, 0 ] ) {
 const u32 = ( f ) => ( f | 0 ) >>> 0; // (a float holding an integer, as uint( int( f ) ))
 const fract = ( x ) => x - Math.floor( x );
 const _h = [ 0, 0, 0 ], _h2 = [ 0, 0, 0 ];
-const _ev = { on: 0, lip: 0, ph: 0, c: 0, reach: 0, open: 0, f: 0, m: 0 };
+const _ev = { on: 0, lip: 0, ph: 0, c: 0, reach: 0, open: 0, f: 0, m: 0, prof: 0 };
 
 // a crest's break: crest n, s along it (cells), at time tau, a wave of period T; how strong it is there
 // (0..1; 0 where it isn't breaking) in _ev.on, and its lip's (_ev.lip), with where it is along the cell
-// (_ev.c, _ev.reach, and how far open now, _ev.open) and how far on (_ev.ph). fw: the pixel's span of s (cells: its edge softened as the
+// (_ev.c, _ev.reach, and how far open now, _ev.open; _ev.prof, how far in from its ends) and how far on
+// (_ev.ph). fw: the pixel's span of s (cells: its edge softened as the
 // GPU's is)
 function event( n, s, tau, T, chance, salt, size, fw = 0 ) {
 
-	_ev.on = _ev.lip = _ev.ph = _ev.c = _ev.reach = _ev.open = 0;
+	_ev.on = _ev.lip = _ev.ph = _ev.c = _ev.reach = _ev.open = _ev.prof = 0;
 	const un = u32( n );
 	pcg3d( un, salt, 0x51ed27, _h );
 	const q = s + _h[ 0 ] * INV32;
@@ -108,10 +115,11 @@ function event( n, s, tau, T, chance, salt, size, fw = 0 ) {
 	if ( ph < 0 || ph > 1 ) return _ev;
 	const c0 = 0.3 + 0.4 * r2y;
 	const reach = Math.min( ( REACH[ 0 ] + ( REACH[ 1 ] - REACH[ 0 ] ) * r2x ) * size, Math.min( c0, 1 - c0 ) / FIT );
-	// (its shape, its own: opening from a point as it starts, widest early or late, full or pointed, its
+	// (its shape, its own: opening from a point as it starts (never blunt: a straight front), widest early or
+	// late, full or pointed, its
 	// middle wandering and bending along the crest as it goes, a lens, a crescent or a blunt head, its edge
 	// ragged)
-	const k = 0.5 + 1.1 * fract( r2z * 13.7 ), full = 0.55 + 0.6 * fract( r2y * 9.1 ), bend = ( fract( r2x * 5.3 ) - 0.5 ) * 0.8;
+	const k = 0.75 + 0.9 * fract( r2z * 13.7 ), full = 0.7 + 0.6 * fract( r2y * 9.1 ), bend = ( fract( r2x * 5.3 ) - 0.5 ) * 0.8;
 	const c = c0 + ( r2z - 0.5 ) * 0.3 * reach * ( ph - 0.5 ) + bend * reach * ( 4 * ( ph - 0.5 ) ** 2 - 0.33 );
 	const rag = 0.18 * Math.sin( f * 37 + r2z * 61 + ph * 7 ) + 0.12 * Math.sin( f * 83 - ph * 13 + ry * 29 );
 	const open = Math.pow( Math.sin( Math.PI * Math.pow( ph, k ) ), full ), edge = open * ( 1 + rag );
@@ -119,6 +127,8 @@ function event( n, s, tau, T, chance, salt, size, fw = 0 ) {
 	const x = Math.abs( f - c ) / reach;
 	const I = smooth( 0, 0.1, ph ) * ( 1 - 0.6 * ph );
 	_ev.on = ( 1 - smooth( edge - soft, edge, x ) ) * I;
+	// (how far in from its ends: 1 at its middle, 0 at its edge)
+	_ev.prof = edge > 0 ? Math.max( 0, 1 - ( x / edge ) ** 2 ) : 0;
 	_ev.lip = ( 1 - smooth( edge * LIP - soft, edge * LIP, x ) ) * I * LIP_WHITE;
 	_ev.ph = ph;
 	_ev.c = c;
@@ -127,6 +137,10 @@ function event( n, s, tau, T, chance, salt, size, fw = 0 ) {
 	return _ev;
 
 }
+
+// (step 5) the roller's width (wavelengths) at s along crest n, `prof` in from its stretch's ends: thinning
+// to them, its front ragged
+const rollerWidth = ( prof, s, n ) => ROLLER * Math.sqrt( prof ) * ( 1 + ROLLER_RAG[ 0 ] * Math.sin( s * 41 + n * 7.3 ) + ROLLER_RAG[ 1 ] * Math.sin( s * 97 - n * 3.1 ) );
 
 export class Whitecaps {
 
@@ -156,9 +170,9 @@ uvec3 wcHash( uvec3 v ) {
 	return v;
 }
 uint wcU( float f ) { return uint( int( f ) ); }
-// a crest's break (crest n, s along it in cells, at time tau, period T): how strong it is there, and its
-// lip (0..1)
-vec2 wcEvent( float n, float s, float tau, float T, float chance, uint salt, float fw ) {
+// a crest's break (crest n, s along it in cells, at time tau, period T): how strong it is there, its lip
+// (0..1), and how far in from its ends (1 at its middle)
+vec3 wcEvent( float n, float s, float tau, float T, float chance, uint salt, float fw ) {
 	uint un = wcU( n );
 	float q = s + float( wcHash( uvec3( un, salt, 0x51ed27u ) ).x ) * ${ INV32.toExponential( 10 ) };
 	float m = floor( q ), f = q - m;
@@ -168,21 +182,22 @@ vec2 wcEvent( float n, float s, float tau, float T, float chance, uint salt, flo
 	float e = floor( tau / E + ho );
 	uvec3 h = wcHash( uvec3( un, um, wcU( e ) ^ salt ) );
 	vec3 r = vec3( h ) * ${ INV32.toExponential( 10 ) };
-	if ( r.x >= chance ) return vec2( 0.0 );
+	if ( r.x >= chance ) return vec3( 0.0 );
 	vec3 r2 = vec3( wcHash( h ) ) * ${ INV32.toExponential( 10 ) };
 	float D = mix( ${ f( DUR[ 0 ] ) }, ${ f( DUR[ 1 ] ) }, r.z ) * T * whitecapSize;
 	float tb = ( e - ho ) * E + r.y * ( E - D );
 	float ph = ( tau - tb ) / D;
-	if ( ph < 0.0 || ph > 1.0 ) return vec2( 0.0 );
+	if ( ph < 0.0 || ph > 1.0 ) return vec3( 0.0 );
 	float c0 = 0.3 + 0.4 * r2.y;
 	float reach = min( mix( ${ f( REACH[ 0 ] ) }, ${ f( REACH[ 1 ] ) }, r2.x ) * whitecapSize, min( c0, 1.0 - c0 ) / ${ f( FIT ) } );
-	float k = 0.5 + 1.1 * fract( r2.z * 13.7 ), full = 0.55 + 0.6 * fract( r2.y * 9.1 ), bend = ( fract( r2.x * 5.3 ) - 0.5 ) * 0.8;
+	float k = 0.75 + 0.9 * fract( r2.z * 13.7 ), full = 0.7 + 0.6 * fract( r2.y * 9.1 ), bend = ( fract( r2.x * 5.3 ) - 0.5 ) * 0.8;
 	float c = c0 + ( r2.z - 0.5 ) * 0.3 * reach * ( ph - 0.5 ) + bend * reach * ( 4.0 * ( ph - 0.5 ) * ( ph - 0.5 ) - 0.33 );
 	float rag = 0.18 * sin( f * 37.0 + r2.z * 61.0 + ph * 7.0 ) + 0.12 * sin( f * 83.0 - ph * 13.0 + r.y * 29.0 );
 	float edge = pow( sin( 3.14159265 * pow( ph, k ) ), full ) * ( 1.0 + rag );
 	float soft = 0.45 + fw / reach;
 	float x = abs( f - c ) / reach, I = smoothstep( 0.0, 0.1, ph ) * ( 1.0 - 0.6 * ph );
-	return vec2( 1.0 - smoothstep( edge - soft, edge, x ), ( 1.0 - smoothstep( edge * ${ f( LIP ) } - soft, edge * ${ f( LIP ) }, x ) ) * ${ f( LIP_WHITE ) } ) * I;
+	return vec3( vec2( 1.0 - smoothstep( edge - soft, edge, x ), ( 1.0 - smoothstep( edge * ${ f( LIP ) } - soft, edge * ${ f( LIP ) }, x ) ) * ${ f( LIP_WHITE ) } ) * I,
+		edge > 0.0 ? max( 0.0, 1.0 - ( x / edge ) * ( x / edge ) ) : 0.0 );
 }
 // one wave's whitecaps at Lagrangian point x0: ( its roller, its white: the roller or the foam left )
 vec2 wcCarrier( vec2 x0, vec4 A, vec4 B, float chance, float far, uint salt ) {
@@ -195,17 +210,20 @@ vec2 wcCarrier( vec2 x0, vec4 A, vec4 B, float chance, float far, uint salt ) {
 	float away = smoothstep( 0.45, 0.9, du );
 	if ( away >= 1.0 || chance <= 0.0 ) return vec2( 0.0, far );
 	float fu = floor( u ), a = u - fu;
-	// the roller: ahead of the crest coming, breaking now; and its lip along the crest
-	float band = 1.0 - smoothstep( ${ f( ROLLER * 0.55 ) } - du, ${ f( ROLLER ) } + du, a );
+	// the roller: ahead of the crest coming, breaking now, (step 5) thinning to its ends, its front ragged;
+	// and its lip along the crest
+	vec3 now = a < ${ f( ROLLER * ( 1 + ROLLER_RAG[ 0 ] + ROLLER_RAG[ 1 ] ) ) } + du ? wcEvent( fu, s, waveTime, T, chance, salt, ds ) : vec3( 0.0 );
+	float wd = ${ f( ROLLER ) } * sqrt( now.z ) * ( 1.0 + ${ f( ROLLER_RAG[ 0 ] ) } * sin( s * 41.0 + fu * 7.3 ) + ${ f( ROLLER_RAG[ 1 ] ) } * sin( s * 97.0 - fu * 3.1 ) );
+	float band = 1.0 - smoothstep( wd * 0.55 - du, wd + du, a );
 	float lipBand = 1.0 - smoothstep( ${ f( LIP_W * 0.4 ) } - du, ${ f( LIP_W ) } + du, a );
-	vec2 now = band > 0.0 ? wcEvent( fu, s, waveTime, T, chance, salt, ds ) : vec2( 0.0 );
 	float roller = max( band * now.x, lipBand * now.y );
-	// the foam behind the crests gone by while they broke, laid as each passed here
+	// the foam behind the crests gone by while they broke, laid as each passed here, spreading and thinning
+	// at its edges as it ages
 	float white = roller;
 	for ( int j = 1; j <= ${ ages }; j ++ ) {
 		float age = ( fu + float( j ) - u ) * T;
 		float left = exp( - age / ( ${ f( DECAY ) } * T ) ) * ( 1.0 - smoothstep( ${ f( ages - 0.8 ) } * T, ${ f( ages ) } * T, age ) );
-		white = max( white, left * ${ f( LEFT ) } * wcEvent( fu + float( j ), s, waveTime - age, T, chance, salt, ds ).x );
+		white = max( white, left * ${ f( LEFT ) } * wcEvent( fu + float( j ), s, waveTime - age, T, chance, salt, ds + ${ f( SPREAD ) } * age / T ).x );
 	}
 	return mix( vec2( roller, white ), vec2( 0.0, far ), away );
 }
@@ -260,11 +278,12 @@ vec2 whitecapsAt( vec2 x0 ) {
 			if ( chance <= 0 ) return;
 			const w = this.waves.waves[ c.wave ], T = 2 * Math.PI / w.omega;
 			const { u, s } = this._crest( w, x0, z0, t ), fu = Math.floor( u ), a = u - fu;
-			const band = 1 - smooth( ROLLER * 0.55, ROLLER, a ), lipBand = 1 - smooth( LIP_W * 0.4, LIP_W, a );
 			let roller = 0;
-			if ( band > 0 ) {
+			if ( a < ROLLER * ( 1 + ROLLER_RAG[ 0 ] + ROLLER_RAG[ 1 ] ) ) {
 
 				const ev = event( fu, s, t, T, chance, c.salt, this.size );
+				const wd = rollerWidth( ev.prof, s, fu );
+				const band = wd > 0 ? 1 - smooth( wd * 0.55, wd, a ) : 0, lipBand = 1 - smooth( LIP_W * 0.4, LIP_W, a );
 				roller = Math.max( band * ev.on, lipBand * ev.lip );
 
 			}
@@ -274,7 +293,7 @@ vec2 whitecapsAt( vec2 x0 ) {
 
 				const age = ( fu + j - u ) * T;
 				const left = Math.exp( - age / ( DECAY * T ) ) * ( 1 - smooth( ( AGES - 0.8 ) * T, AGES * T, age ) );
-				white = Math.max( white, left * LEFT * event( fu + j, s, t - age, T, chance, c.salt, this.size ).on );
+				white = Math.max( white, left * LEFT * event( fu + j, s, t - age, T, chance, c.salt, this.size, SPREAD * age / T ).on );
 
 			}
 
@@ -313,7 +332,8 @@ vec2 whitecapsAt( vec2 x0 ) {
 					const sc = m + ev.c - off, reach = ev.reach, open = ev.open;
 					// (its strength at its middle: where it's widest)
 					const on = event( n, sc, t, T, chance, c.salt, this.size ).on;
-					if ( on <= 0.05 ) continue;
+					// (one only beginning to spill throws no spray)
+					if ( on <= 0.2 ) continue;
 					const half = reach * open * L * CELL;
 					const ds = ( sc - s ) * L * CELL;
 					const px = x + w.dx * along - w.dz * ds, pz = z + w.dz * along + w.dx * ds;

@@ -28,7 +28,7 @@ import { Player } from './player/Player.js';
 import { BoatController } from './player/BoatController.js';
 import { GameState } from './game/GameState.js';
 import { DAY_RATE, START_HOUR, advance } from './game/IslandClock.js';
-import { CONDITIONS, islandTime } from './game/Weather.js';
+import { CONDITIONS, islandTime, NORTH } from './game/Weather.js';
 import { WeatherDriver } from './world/WeatherDriver.js';
 import { lampsLit } from './game/Bites.js';
 import { FishStand, STAND } from './game/FishStand.js';
@@ -388,7 +388,8 @@ export class App {
 				phase: ( t, T ) => this.shore.phase( t, T ), timeOf: ( s, T ) => this.shore.timeOf( s, T ) },
 			field: this.shoreField, terrain: this.terrainData,
 		} );
-		this.westSurfHeard();
+		this.surfHeard( 1 );
+		this.surfHeard( 2 );
 		this.player.audio = this.audio;
 		// (and, M10, the hull: a slam's wear and the green water it ships, Game.hull)
 		this.boatCtl.onSlam = ( strength ) => {
@@ -609,6 +610,8 @@ export class App {
 		if ( this.village.cradleHull ) this.village.cradleHull.solid = !! this.boatCtl.hauled;
 		// (M12) a westerly's swell on its way: its shore field, solved off the page
 		if ( this.weather.target.west > 0 && ! this._westField && this._started ) this.solveWestField();
+		// ((M14) and the north shore's sea, once it has one: most days, a little after the start)
+		if ( this.weather.target.north > 0.02 && ! this._northField && this._started ) this.solveNorthField();
 		// ((M13) a hurricane's surge: its field solved before it comes, at its highest, dropped once it's gone)
 		if ( this._started ) {
 
@@ -1497,7 +1500,8 @@ export class App {
 		_up.set( 0, 1, 0 ).applyQuaternion( cam.quaternion );
 		const h = this.cameraWaterHeight ?? 0;
 		const coast = this.terrainData.coastDistance( p.x, p.z ).d;
-		const amp = this.shore.surf, pier = WORLD.pier, boat = this.boatCtl;
+		// ((M14) and the north shore's sea, near it: the bay's surf heard as it always was elsewhere)
+		const amp = Math.max( this.shore.surf, this.shore.northNear( p.x, p.z ) ), pier = WORLD.pier, boat = this.boatCtl;
 		// (the boat you hear: yours, or the one you ride in, or someone's going by: together/)
 		const theirs = this.together ? this.together.boatSound() : null;
 		// (M10) yours runs once it's caught (Hull: taking the helm cranks her, and she can stall)
@@ -1779,11 +1783,29 @@ export class App {
 		this._westField = this.solveShoreField( [ SWELL_WEST.x, SWELL_WEST.y ] ).then( ( field ) => {
 
 			this.shore.addField( field );
-			this.westSurfHeard();
+			this.surfHeard( 1 );
 			return field;
 
 		} );
 		return this._westField;
+
+	}
+
+	// (M14) the north shore's sea: its shore field (along the trades, Weather.NORTH.dir: onto the island's
+	// windward side, round its shoulders; a wind sea's, so none in its lee, the bay: ShoreField.shelter),
+	// solved as the westerly's is, once it has a
+	// height (most days, a little after the start). Then its waves break there, and are heard
+	solveNorthField() {
+
+		if ( this._northField ) return this._northField;
+		this._northField = this.solveShoreField( [ NORTH.dir.x, NORTH.dir.y ], 0, true ).then( ( field ) => {
+
+			this.shore.addField( field, 2 );
+			this.surfHeard( 2 );
+			return field;
+
+		} );
+		return this._northField;
 
 	}
 
@@ -1812,8 +1834,9 @@ export class App {
 	}
 
 	// (M12) another shore field from the island's own field's depths (swellDir: where its swell travels;
-	// (M13) at the sea level seaLevel), in a worker where there is one, else on the page
-	solveShoreField( swellDir, seaLevel = 0 ) {
+	// (M13) at the sea level seaLevel; (M14) a wind sea's, its lee taken out), in a worker where there is
+	// one, else on the page
+	solveShoreField( swellDir, seaLevel = 0, lee = false ) {
 
 		const home = this.shoreField;
 		const ground = { depth: home.depth, res: home.res, size: home.size, origin: home.origin };
@@ -1835,21 +1858,22 @@ export class App {
 
 			};
 
-			worker.postMessage( { ground, swellDir, seaLevel } );
+			worker.postMessage( { ground, swellDir, seaLevel, lee } );
 
 		} ).catch( ( e ) => {
 
 			console.warn( 'Shore: a swell\'s field solved on the page (no worker)', e && e.message );
-			return computeShoreField( fieldGround( ground ), { res: home.res, swellDir, seaLevel } );
+			const field = computeShoreField( fieldGround( ground ), { res: home.res, swellDir, seaLevel } );
+			return lee ? shelter( field, swellDir ) : field;
 
 		} );
 
 	}
 
-	// (M12) the west swell's waves to the surf's sound, once both are here
-	westSurfHeard() {
+	// (M12) the west swell's waves to the surf's sound, once both are here; (M14) or the north shore's (slot 2)
+	surfHeard( slot ) {
 
-		const train = this.shore && this.shore.trains[ 1 ], P = this.shore && this.shore.params;
+		const train = this.shore && this.shore.trains[ slot ], P = this.shore && this.shore.params;
 		if ( ! train || ! this.audio ) return;
 		const value = ( get ) => ( { get value() {
 
@@ -1860,7 +1884,7 @@ export class App {
 			shore: { amplitude: value( () => train.amplitude ), variation: value( () => P.variation ), period: value( () => train.period ), gamma: value( () => P.gamma ), enabled: value( () => P.enabled ), time: G.time,
 				phase: ( t, T ) => train.phase( t, T ), timeOf: ( s, T ) => train.timeOf( s, T ) },
 			field: train.field,
-		} );
+		}, slot );
 
 	}
 

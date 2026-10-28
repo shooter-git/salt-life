@@ -26,7 +26,8 @@ import { FT } from './Units.js';
 // Everything here is + - x / and integer hashes (Math.imul), never sin, exp or pow, so every device
 // works out the same condition from the same time. Pure (no three.js), for the tests under Node.
 //   islandTime( day, hour ) -> T      weatherAt( T, pick ) -> { id, wind, windAngle, coverage, overcast,
-//   swell, windSea, surf, period, west, visibility, rain, thunder, front, murk }   forecast( T ) -> { id, at } | null
+//   swell, windSea, surf, period, west, north, northPeriod, visibility, rain, thunder, front, murk }
+//   forecast( T ) -> { id, at } | null
 //   surfText( 0.34 ) -> '2–3 ft'   windFrom( dx, dz ) -> 'NNW' (where a wind blowing toward ( dx, dz ) comes from)
 //   (M12) swellFrom( west ) -> 'S' | 'S + W' | 'W'
 //   strikeIn( second, thunder ) -> { at, x, z, dist, ground, seed, power } | null   (the lightning)
@@ -74,6 +75,17 @@ export const windBeyondFair = ( wind ) => Math.max( 0, wind - FAIR_WIND );
 export const blowShare = ( wind ) => Math.min( 1, windBeyondFair( wind ) / ( CONDITIONS.gale.wind - FAIR_WIND ) );
 // the trades blow toward ( 0.35, 0.94 ): from the NNW (core/Globals.js, G.windPrevailing)
 const TRADES = { x: 0.35 / Math.hypot( 0.35, 0.94 ), y: 0.94 / Math.hypot( 0.35, 0.94 ) };
+// (M14) the north shore's sea (`north`, `northPeriod`): the trades' own, raised by their wind over the open
+// ocean up them and breaking on the island's windward side, its north shore, in the mountain's lee from the
+// village, as a windward shore's trade swell does: a few feet on a fair day (`fair`, m: the shore waves'
+// amplitude, H/2), growing as the wind sea does (wind^1.5), to `max` in a gale (6 to 12 ft); its period
+// the wind's (period[ 0 ] s and period[ 1 ] of its m/s: 6.4 s on a fair day, 9 in a gale). As much as the
+// wind blows down the trades (`onto`, rad from them: all of it within 0.5, none past 1.2, so none from a
+// southerly or a westerly). It builds over hours as the wind comes on, and outlasts it, dying down over
+// hours once it's dropped or swung away: the wind's sea of the last few (`past`: game hours back, and
+// each one's share). Its waves travel along `dir`, the trades' (ShoreWaves' third train). Past `big` (4 to
+// 7 ft), Joe's slate and the clock's menu tell of it
+export const NORTH = { fair: 0.28, max: 1.2, period: [ 5, 0.2 ], onto: [ 1.2, 0.5 ], past: [ [ 0, 0.3 ], [ 1, 0.25 ], [ 2, 0.2 ], [ 3, 0.15 ], [ 4, 0.1 ] ], big: 0.75, dir: TRADES };
 // (M12) the way the weather goes, turned `angle` (rad: + veers, clockwise on the island's compass) from
 // the trades'
 export function towardOf( angle, out = { x: 0, y: 0 } ) {
@@ -328,6 +340,35 @@ const windSeaOf = ( wind ) => {
 
 };
 
+// (M14) the north shore's sea for a wind (m/s) turned `angle` (rad) from the trades (NORTH): its height
+// (m) and its period (s)
+const northOf = ( wind, angle ) => {
+
+	const r = wind / FAIR_WIND, a = Math.abs( angle - Math.round( angle / ( 2 * Math.PI ) ) * 2 * Math.PI );
+	return Math.min( NORTH.max, NORTH.fair * r * Math.sqrt( r ) ) * sstep( NORTH.onto[ 0 ], NORTH.onto[ 1 ], a );
+
+};
+const northPeriodOf = ( wind ) => NORTH.period[ 0 ] + NORTH.period[ 1 ] * wind;
+// the day's north shore sea at T (dayWeatherAt's wind, now and NORTH.past hours back): into w's north and
+// northPeriod (the period of the most of it)
+function northAt( T, w ) {
+
+	let n = 0, p = 0;
+	for ( const [ h, share ] of NORTH.past ) {
+
+		const t = T - h, k = clamp01( ( t - 24 ) / 6 ), s = storminess( t ), v = veer( t );
+		const wind = lerp( FAIR_WIND, along( s, 'wind' ), k ), a = northOf( wind, lerp( v, trackAt( t, v ), blowOf( s ) ) * k ) * share;
+		n += a;
+		p += a * northPeriodOf( wind );
+
+	}
+
+	w.north = n;
+	w.northPeriod = n > 0 ? p / n : northPeriodOf( FAIR_WIND );
+	return w;
+
+}
+
 // the name a set of values goes by: a thunderstorm first, then the wind, the rain and the cloud
 function nameOf( w ) {
 
@@ -345,7 +386,7 @@ function nameOf( w ) {
 function row( id ) {
 
 	const c = CONDITIONS[ id ];
-	return { id, wind: c.wind, windAngle: 0, coverage: c.coverage, overcast: c.overcast, swell: c.swell, windSea: windSeaOf( c.wind ), surf: Math.min( SURF_MAX, c.surf ), period: c.period, west: 0, visibility: c.visibility, rain: c.rain, thunder: c.thunder, front: 0, murk: MURK_PICK[ id ] || 0, hurricane: 0, eye: 0, surge: 0, rainHaze: 0, sprayHaze: 0, boarded: 0 };
+	return { id, wind: c.wind, windAngle: 0, coverage: c.coverage, overcast: c.overcast, swell: c.swell, windSea: windSeaOf( c.wind ), surf: Math.min( SURF_MAX, c.surf ), period: c.period, west: 0, north: northOf( c.wind, 0 ), northPeriod: northPeriodOf( c.wind ), visibility: c.visibility, rain: c.rain, thunder: c.thunder, front: 0, murk: MURK_PICK[ id ] || 0, hurricane: 0, eye: 0, surge: 0, rainHaze: 0, sprayHaze: 0, boarded: 0 };
 
 }
 
@@ -434,7 +475,8 @@ export function dayWeatherAt( T ) {
 
 	// a blow on its way (0..1): the storm a few hours on, more than now (the fish feed hard ahead of it)
 	const front = clamp01( ( Math.max( storminess( T + FRONT_LEAD[ 0 ] ), storminess( T + FRONT_LEAD[ 1 ] ) ) - s ) * 12 ) * sstep( 0.45, 0.75, Math.max( storminess( T + FRONT_LEAD[ 1 ] ), s ) ) * k;
-	const w = { id: 'fair', wind, windAngle, coverage: wet.coverage, overcast: wet.overcast, swell, windSea: windSeaOf( wind ), surf, period, west, visibility: wet.visibility, rain, thunder, front, murk: murkAt( T ), hurricane: 0, eye: 0, surge: 0, rainHaze: 0, sprayHaze: 0, boarded: 0 };
+	const w = { id: 'fair', wind, windAngle, coverage: wet.coverage, overcast: wet.overcast, swell, windSea: windSeaOf( wind ), surf, period, west, north: 0, northPeriod: 0, visibility: wet.visibility, rain, thunder, front, murk: murkAt( T ), hurricane: 0, eye: 0, surge: 0, rainHaze: 0, sprayHaze: 0, boarded: 0 };
+	northAt( T, w );
 	w.id = nameOf( w );
 	return w;
 
@@ -686,7 +728,8 @@ function overHurricane( w, T, h ) {
 	// come in the way they travel (the south's way in, and the west's round the bay's western arm), and its
 	// period and their share from the west as far as they're the bigger
 	const H = HURRICANE, B = BAY;
-	// (those coming from the north, off the island, never get in: round the western arm only from the west)
+	// (those coming from the north, off the island, never get in: round the western arm only from the west;
+	// (M14) they break on the north shore)
 	const south = Math.max( 0, s.waveX * B.south[ 0 ] + s.waveZ * B.south[ 1 ] ), west = Math.max( 0, s.waveX * B.west[ 0 ] + s.waveZ * B.west[ 1 ] ) * sstep( 0.5, 0, s.waveZ );
 	// (about its eye a confused sea, from its walls all round)
 	const into = lerp( Math.min( 1, Math.max( B.floor, south + west ) ), B.confused, s.confused );
@@ -695,6 +738,11 @@ function overHurricane( w, T, h ) {
 	w.period = lerp( w.period, s.period, its );
 	w.west = lerp( w.west * ( 1 - k ), south + west > 0 ? west / ( south + west ) * ( 1 - s.confused ) : 0, its );
 	w.surf = surf;
+	// ((M14) and onto the north shore as much of them as come that way, as into the bay)
+	const onto = Math.max( 0, s.waveX * NORTH.dir.x + s.waveZ * NORTH.dir.y );
+	const north = lerp( w.north, Math.max( w.north, H.surf * lerp( Math.min( 1, Math.max( B.floor, onto ) ), B.confused, s.confused ) ), s.near );
+	w.northPeriod = lerp( w.northPeriod, s.period, sstep( 0.02, 0.15, north - w.north ) );
+	w.north = north;
 	w.swell = lerp( w.swell, Math.max( w.swell, H.swell ), s.near );
 	w.surge = surgeOf( h, T, s );
 	w.front = Math.max( w.front, front );

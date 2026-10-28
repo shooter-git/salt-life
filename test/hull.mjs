@@ -54,6 +54,8 @@ function drive( { cond = 'fair', throttle = 1, yaw = 0, secs = 60, from = SEA, c
 	const w = weatherAt( 30, cond );
 	const waves = new Waves( { tier: 'low', terrain } );
 	waves.setSea( w.swell, w.windSea );
+	// ((M14) its swell at its period, as the weather sets it)
+	waves.setSwell( 0, w.period, w.period, from );
 	G.windSpeed.value = w.wind;
 	const query = new WaterQuery( waves, terrain );
 	const b = new BoatController( { model, query, terrain, colliders } );

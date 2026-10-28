@@ -1,6 +1,6 @@
 // Plain-node tests of the island's weather (no GPU): the forecast from the island's time, its
 // conditions, how it changes, and how it's read out.
-import { CONDITIONS, WEATHER_IDS, WEATHER_NAMES, SURF_MAX, PERIOD_MAX, GROUNDSWELL_MAX, VEER, STRIKE_RATE, islandTime, storminess, cloudiness, veer, showeriness, unsettled, weatherAt, forecast, surfText, windFrom, strikeIn, murkAt, windBeyondFair, blowShare, showers as showersAbout, FRONT_KMH, FROM, TRACK_SPAN, trackAt, towardOf, swellFrom, distantStrikesIn, DISTANT_NEAR, STORM_RANGE, dayWeatherAt, hurricaneAt, hurricaneNews, HURRICANE, TS_WIND, HURRICANE_WIND, MURKY, SURGE, SURF_HURRICANE, PERIOD_HURRICANE } from '../src/game/Weather.js';
+import { CONDITIONS, WEATHER_IDS, WEATHER_NAMES, SURF_MAX, PERIOD_MAX, GROUNDSWELL_MAX, VEER, STRIKE_RATE, islandTime, storminess, cloudiness, veer, showeriness, unsettled, weatherAt, forecast, surfText, windFrom, strikeIn, murkAt, windBeyondFair, blowShare, showers as showersAbout, FRONT_KMH, FROM, TRACK_SPAN, trackAt, towardOf, swellFrom, distantStrikesIn, DISTANT_NEAR, STORM_RANGE, dayWeatherAt, hurricaneAt, hurricaneNews, HURRICANE, TS_WIND, HURRICANE_WIND, MURKY, SURGE, SURF_HURRICANE, PERIOD_HURRICANE, NORTH } from '../src/game/Weather.js';
 import { flashSeen, HEARD } from '../src/sky/Lightning.js';
 import { knots } from '../src/game/Units.js';
 
@@ -10,14 +10,14 @@ const ok = ( c, msg ) => {
 	if ( ! c ) { fails ++; console.log( 'FAIL', msg ); } else console.log( 'ok  ', msg );
 
 };
-const KEYS = [ 'wind', 'windAngle', 'coverage', 'overcast', 'swell', 'windSea', 'surf', 'period', 'west', 'visibility', 'rain', 'thunder', 'front' ];
+const KEYS = [ 'wind', 'windAngle', 'coverage', 'overcast', 'swell', 'windSea', 'surf', 'period', 'west', 'north', 'visibility', 'rain', 'thunder', 'front' ];
 
 // ---- the time, and the same weather for the same time
 ok( islandTime( 1, 9.5 ) === 9.5 && islandTime( 3, 0 ) === 48 && islandTime( 0, 6 ) === 6, 'island time: game hours since day 1 began' );
 ok( JSON.stringify( weatherAt( 1234.567 ) ) === JSON.stringify( weatherAt( 1234.567 ) ) && storminess( 999.9 ) === storminess( 999.9 ), 'the same time gives the same weather' );
 
 // ---- fair is the island as it always was, and day 1 is fair
-const today = { wind: 7, windAngle: 0, coverage: 0.49, overcast: 0, swell: 1, windSea: 1, surf: 0.34, period: 9, west: 0, visibility: 1, rain: 0, thunder: 0, front: 0 };
+const today = { wind: 7, windAngle: 0, coverage: 0.49, overcast: 0, swell: 1, windSea: 1, surf: 0.34, period: 9, west: 0, north: NORTH.fair, visibility: 1, rain: 0, thunder: 0, front: 0 };
 const fair = weatherAt( 100, 'fair' );
 ok( fair.id === 'fair' && KEYS.every( ( k ) => fair[ k ] === today[ k ] ), 'fair: today\'s wind, cloud, sea, surf and haze exactly, and dry' );
 let day1 = true;
@@ -45,7 +45,7 @@ for ( let T = 24 + 1 / 60; T < 24 * DAYS; T += 1 / 60 ) {
 	const w = dayWeatherAt( T );
 	for ( const k of KEYS ) jump[ k ] = Math.max( jump[ k ], Math.abs( w[ k ] - prev[ k ] ) );
 	if ( w.wind < 2 || w.wind > 20.01 || w.windAngle < FROM.south - 1e-9 || w.windAngle > Math.max( VEER, FROM.north ) || w.west < 0 || w.west > 1 || w.coverage < 0.3 || w.coverage > 0.97 || w.surf > SURF_MAX || w.period < 7.5 || w.period > PERIOD_MAX || w.visibility < 0.4 || w.visibility > 1.11
-		|| w.rain < 0 || w.rain > 1 || w.thunder < 0 || w.thunder > 1 || w.front < 0 || w.front > 1 ) bounds = false;
+		|| w.rain < 0 || w.rain > 1 || w.thunder < 0 || w.thunder > 1 || w.front < 0 || w.front > 1 || w.north < 0 || w.north > NORTH.max || w.northPeriod < 5 || w.northPeriod > 9.01 ) bounds = false;
 	if ( ( T * 60 | 0 ) % 30 === 0 ) { count[ w.id ] ++; n ++; }
 	prev = w;
 
@@ -56,7 +56,7 @@ console.log( `     over ${ DAYS } days: ${ WEATHER_IDS.map( ( id ) => `${ id } $
 console.log( `     the most it moves in a game minute: ${ KEYS.map( ( k ) => `${ k } ${ jump[ k ].toFixed( 4 ) }` ).join( ', ' ) }` );
 ok( bounds, 'every value stays within its conditions\' range' );
 // ((M12) a front's wind swings round a quarter in two game hours: WeatherDriver turns the wind as fast)
-ok( jump.windAngle < 0.022 && jump.west < 0.02 && jump.period < 0.05 && jump.swell < 0.01 && jump.surf < 0.004, 'no step in a game minute, midnight included' );
+ok( jump.windAngle < 0.022 && jump.west < 0.02 && jump.period < 0.05 && jump.swell < 0.01 && jump.surf < 0.004 && jump.north < 0.01, 'no step in a game minute, midnight included' );
 // (a shower comes on in a few game minutes, and brings its cloud, haze and squall: WeatherDriver eases them)
 ok( jump.wind < 0.1 && jump.rain < 0.15 && jump.thunder < 0.35 && jump.coverage < 0.04 && jump.overcast < 0.15 && jump.visibility < 0.1 && jump.front < 0.03, 'a shower comes on over a few game minutes, never at once' );
 ok( share( 'fair' ) + share( 'calm' ) > 0.4 && share( 'gale' ) > 0.02 && share( 'gale' ) < 0.09 && share( 'blustery' ) + share( 'gale' ) < 0.25 && WEATHER_IDS.every( ( id ) => id === 'hurricane' || share( id ) > 0.02 ), 'mostly fair, a gale now and then, every condition comes' );
@@ -310,6 +310,23 @@ ok( cloudiness( 77 ) >= 0 && cloudiness( 77 ) <= 1 && storminess( 77 ) >= 0 && s
 	ok( off === 0, 'short of a breeze, the wind is the trades\' (turned as they always were)' );
 	ok( blowOff > blows * 0.2 && blowOff < blows * 0.5 && southerly > blows * 0.05 && westerly > blows * 0.03, `a blow's mostly down the trades: ${ pc( blowOff, blows ) } from elsewhere (${ pc( southerly, blows ) } southerly, ${ pc( westerly, blows ) } westerly)` );
 	ok( westSwell > 0 && westWithout === 0 && tradesWest === 0, `a swell from the west only from a westerly blow, of the last few hours or on its way (${ pc( westSwell, 2 * 24 * DAYS ) } of the time)` );
+	// ((M14) the north shore's sea: the trades' own, as big as they blow, none from a southerly or a westerly)
+	let northBig = 0, northOff = 0, northAll = 0;
+	for ( let T = 30; T < 24 * DAYS; T += 0.5 ) {
+
+		const w = dayWeatherAt( T );
+		northAll ++;
+		if ( w.north > 0.85 ) northBig ++;
+		// (a sea outlasts its wind: none where it's blown well off the trades for the hours it lasts)
+		let off = true;
+		for ( let h = 0; h <= 4 && off; h += 0.25 ) off = Math.abs( dayWeatherAt( T - h ).windAngle ) > NORTH.onto[ 0 ];
+		if ( off && w.north > 0 ) northOff ++;
+
+	}
+
+	const g = weatherAt( 100, 'gale' ), fairN = weatherAt( 100, 'fair' ), calmN = weatherAt( 100, 'calm' ), b = weatherAt( 100, 'breezy' );
+	console.log( `     (M14) the north shore's sea: calm ${ surfText( calmN.north ) }, fair ${ surfText( fairN.north ) } at ${ fairN.northPeriod.toFixed( 1 ) } s, breezy ${ surfText( b.north ) }, a gale ${ surfText( g.north ) } at ${ g.northPeriod.toFixed( 1 ) } s; past 5 ft ${ pc( northBig, northAll ) } of the time` );
+	ok( calmN.north < 0.1 && fairN.north === NORTH.fair && b.north > fairN.north * 1.6 && g.north === NORTH.max && g.northPeriod > fairN.northPeriod + 2 && northOff === 0 && northBig > northAll * 0.02, '(M14) the north shore\'s sea: a few feet on a fair day, as high as the trades blow, none from the south or the west' );
 	// (a front: from the south ahead of it, through the west with its line of showers, round to the north,
 	// and clearing behind it)
 	let fronts = 0, swung = 0, line = 0, cleared = 0;

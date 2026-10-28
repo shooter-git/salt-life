@@ -144,6 +144,9 @@ ${ SH ? /* glsl */`
 		vec2 slope = nS.xz / max( nS.y, 0.2 ) + objectNormal.xz / max( objectNormal.y, 0.2 );
 		objectNormal = normalize( vec3( slope.x, 1.0, slope.y ) );
 		vSurf = vec4( sw.foam, sw.face, sw.roller, 0.0 );
+		// ((M14) seen from afar, where the grid's too coarse for the breakers (a few vertices a wave), the
+		// white they'd leave there on average: a reef's break line seen from a boat or the air)
+		vSurf.x = mix( vSurf.x, sw.meanFoam, smoothstep( 0.12, 0.3, lod.spacing / max( sw.lam, 1.0 ) ) );
 		// thin run-up sheet on the sand: take whichever surface is higher (smooth max)
 		float k = 0.04;
 		float hmx = clamp( ( sw.swashLevel - y ) / k * 0.5 + 0.5, 0.0, 1.0 );
