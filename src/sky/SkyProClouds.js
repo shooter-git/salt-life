@@ -558,11 +558,16 @@ const WEATHER_STRIPS = 8;
 // ((M14) the march's empty cells, about 420 m across over the weather map's 11 km, as sky-pro's were over its 29)
 const BOUNDS_RES = 26;
 const WARM_LATTICE = 4; // a whole new panorama: a 4x4 lattice, 16 frames (per tier: quality.warmLattice)
-// (M14) what a hurricane's cloud moves by (its eye, the clouds' drift and evolution, the storm map's slide and
-// its turrets'): held at a panorama's moment while it's made, in a hurricane with no view trace (the eye
-// goes by at 180 m a real second: made a slot a frame, a panorama streaked its walls)
-const STEADY = [ 'scsEye', 'scsEyeTrack', 'scfWind', 'scsStorm', 'scsStormDrift' ];
-const cloneOf = ( v ) => Array.isArray( v ) ? v.slice() : v.clone();
+// (M14) in a hurricane with no view trace (the eye goes by at 180 m a real second: made a slot a frame, a
+// panorama streaked its walls), everything the panorama's march reads held at the moment a panorama's
+// begun while it's made: all its uniforms but the slot it's making (scfPano), and the storm map as it was
+// then (its own copy: the live one's made again every few seconds). Not only the eye, the drift and the
+// storm map's slide, as at first: the sun, the front's look ahead, the winds, the storm map itself and the
+// march's jitter went on changing over its 64 frames on low, and as each row of its lattice is made 8
+// frames after the last, the walls were striped across in rows (seen on an iPhone)
+const cloneOf = ( v ) => typeof v !== 'object' || v === null ? v : Array.isArray( v ) ? v.map( cloneOf ) : ArrayBuffer.isView( v ) ? v.slice() : typeof v.clone === 'function' ? v.clone() : v;
+// (a uniform held as its value: not a texture's, which is held by a copy (the storm map's) or not at all)
+const heldAsValue = ( u ) => ! ( u.value && u.value.isTexture );
 // (a uniform's value set to `to` for a pass; the live one it had, to put back)
 function swapIn( u, to ) {
 
@@ -1374,7 +1379,7 @@ export const CLOUDS_GLSL = /* glsl */`
 uniform sampler2D cloudsPanorama;
 // (M14) the panorama before it, and how far the sky's gone over from it to this one (1: all this one): in a
 // hurricane on a tier with no view trace each is made whole at one moment, and gone over to while the next
-// is made (made a slot a frame as its eye went by, a panorama streaked its walls: STEADY)
+// is made (made a slot a frame as its eye went by, a panorama streaked its walls: _hold)
 uniform sampler2D cloudsPanoramaPrev;
 uniform float cloudsSwap;
 uniform sampler2D cloudsView;
@@ -1578,10 +1583,10 @@ export class SkyProClouds {
 
 		const [ PW, PH ] = q.pano;
 		// the panorama and its back buffer (a whole new one is made there over warmFrames frames, then swapped in);
-		// ((M14) with no view trace, a third: the one before, gone over from in a hurricane, STEADY)
+		// ((M14) with no view trace, a third: the one before, gone over from in a hurricane, _hold)
 		this.panoramas = [ floatTarget( PW, PH, { wrapS: THREE.RepeatWrapping } ), floatTarget( PW, PH, { wrapS: THREE.RepeatWrapping } ) ];
 		if ( ! q.view ) this.panoramas.push( floatTarget( PW, PH, { wrapS: THREE.RepeatWrapping } ) );
-		this._steady = null; // (M14) the moment a whole panorama's made at, while it's made
+		this._steady = null; // (M14) what a whole panorama's made with while it's made ([ uniform, value ]: _hold)
 		this.panorama = this.panoramas[ 0 ];
 		// one slot of the panorama's lattice (the largest marched in a frame: the warm-up's)
 		this.warmLattice = q.warmLattice || WARM_LATTICE;
@@ -1776,6 +1781,33 @@ export class SkyProClouds {
 
 	}
 
+	// (M14) a hurricane's panorama, begun: what its march reads now, [ uniform, value ] each, to make all of
+	// it with (but the slot), and the storm map as it is now in a copy of its own
+	_hold() {
+
+		const PU = this.panoPass.uniforms, held = [];
+		for ( const n in PU ) if ( n !== 'scfPano' && heldAsValue( PU[ n ] ) ) held.push( [ PU[ n ], cloneOf( PU[ n ].value ) ] );
+		if ( PU.scStormMap ) {
+
+			const live = this.stormTexture.image;
+			let st = this._stormHeld;
+			if ( ! st ) {
+
+				st = this._stormHeld = new THREE.DataTexture( new Uint8Array( live.data.length ), live.width, live.height, THREE.RGBAFormat, THREE.UnsignedByteType );
+				st.minFilter = st.magFilter = THREE.LinearFilter;
+
+			}
+
+			st.image.data.set( live.data );
+			st.needsUpdate = true;
+			held.push( [ PU.scStormMap, st ] );
+
+		}
+
+		return held;
+
+	}
+
 	update( dt, camera, keyColor, nightSky, night, skyIrradiance ) {
 
 		const q = this.quality, P = PRESET, U = this.uniforms;
@@ -1960,7 +1992,7 @@ export class SkyProClouds {
 		const PL = q.panoLattice;
 		U.scfMarch.value = [ q.stepMeters, q.panoSteps, q.panoLightTaps, q.fullLightingAlpha ];
 		// ((M14) in a hurricane with no view trace, each panorama made whole as a new one is, at the moment it's
-		// begun at (its eye, the clouds' drift, the storm map's slide), and the next begun as it's done)
+		// begun at (all the march reads: _hold), and the next begun as it's done)
 		const S = this.sampleUniforms, steady = ! q.view && U.scsEye.value.w > 0;
 		if ( steady && this.panoWarm === 0 ) this.panoWarm = this.warmFrames;
 		const warming = this.panoWarm > 0;
@@ -1968,7 +2000,7 @@ export class SkyProClouds {
 
 			const k = this.warmFrames - this.panoWarm --, WL = this.warmLattice;
 			U.scfPano.value = [ k % WL, Math.floor( k / WL ), WL, 0 ];
-			if ( k === 0 ) this._steady = steady ? STEADY.map( ( n ) => cloneOf( U[ n ].value ) ) : null;
+			if ( k === 0 ) this._steady = steady ? this._hold() : null;
 
 		} else {
 
@@ -1982,9 +2014,9 @@ export class SkyProClouds {
 		sl.viewport.set( 0, 0, Math.ceil( PW / lat ), Math.ceil( PH / lat ) );
 		sl.scissor.copy( sl.viewport );
 		sl.scissorTest = true;
-		const live = warming && this._steady ? STEADY.map( ( n, i ) => swapIn( U[ n ], this._steady[ i ] ) ) : null;
+		const held = warming ? this._steady : null, live = held ? held.map( ( [ u, v ] ) => swapIn( u, v ) ) : null;
 		this.panoPass.render( r, sl );
-		if ( live ) STEADY.forEach( ( n, i ) => { U[ n ].value = live[ i ]; } );
+		if ( live ) held.forEach( ( [ u ], i ) => { u.value = live[ i ]; } );
 		this.panoScatterPass.render( r, warming ? this.panoramas[ 1 ] : this.panorama, false );
 		this.passes += 2;
 		// ((M14) gone over to the newest as the next is made)
@@ -2272,6 +2304,7 @@ export class SkyProClouds {
 		for ( const t of [ this.noise, this.weatherMap, this.weatherBounds, ...this.panoramas, this.panoSlot, this.source, ...( this.history || [] ), this.shadowMap ] ) if ( t ) t.dispose();
 		for ( const p of this.passList ) p.dispose();
 		this.stormTexture.dispose();
+		if ( this._stormHeld ) this._stormHeld.dispose();
 		this.cirrus.dispose();
 
 	}
