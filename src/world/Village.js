@@ -4,6 +4,7 @@ import { Builder, Batch, setGeometryDetail } from './village/GeoBuilder.js';
 import { createVillageMaterials, ROOF_HOLES } from './village/VillageMaterials.js';
 import { VillageTextures } from './village/TextureBaker.js';
 import { buildHouse, buildBoathouse, buildMarketStall, buildShed, buildShelter, buildCradle } from './village/Buildings.js';
+import { Shutters } from './village/Shutters.js';
 import { SHELTER, CRADLE } from './village/StormPlaces.js';
 import { buildBoardwalk } from './village/Boardwalk.js';
 import { buildPier, PIER } from './Pier.js';
@@ -118,7 +119,10 @@ export class Village {
 		const { terrain, colliders, rand, specs, scene } = this;
 		// ((M13) the sheets a hurricane can tear off the metal roofs: Buildings' roofHoles)
 		this.roofHoles = [];
-		const ctx = ( B ) => ( { B, terrain, colliders, rand, lights: this.lights, inst: B === this.town ? this.townInst : this.harborInst, checks: this.foundationChecks, holes: this.roofHoles } );
+		// ((M14) the houses' side-hung shutters into a mesh of their own, that they can swing: Shutters)
+		this.shutterB = new Builder();
+		this.shutterList = [];
+		const ctx = ( B ) => ( { B, terrain, colliders, rand, lights: this.lights, inst: B === this.town ? this.townInst : this.harborInst, checks: this.foundationChecks, holes: this.roofHoles, shutterB: this.shutterB, shutterList: this.shutterList } );
 		let t0 = performance.now();
 		const step = async () => {
 
@@ -212,6 +216,10 @@ export class Village {
 		this._buildSign();
 		this._buildLanterns();
 		this._buildStorm();
+		// ((M14) the shutters, swinging in a blow: App updates them and hears them bang)
+		this.shutters = new Shutters( { batch: this.shutterB.batch( 'wood' ), list: this.shutterList, material: this.materials.wood } );
+		this.group.add( this.shutters.mesh );
+		this.shutterB = this.shutterList = null;
 		scene.add( this.group );
 		await step();
 		await this.textures.bake( renderer );

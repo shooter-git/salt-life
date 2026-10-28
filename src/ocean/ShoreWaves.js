@@ -573,12 +573,13 @@ export class ShoreWaves {
 
 	// (M12) the breaker at (x, z) (ground: the bottom's height), of the swell that's bigger there: out
 	// { n: its crest's count (one more each wave that's passed over; another swell's are counted apart),
-	// H: its height (m, trough to crest), b: how far it's broken (< 0 still rising, 0..1 plunging, > 1 a
-	// bore), dx, dz: the way it runs }
-	breakerAt( x, z, t, ground, terrain, out = { n: 0, H: 0, b: - 9, dx: 0, dz: 1 } ) {
+	// H: its height (m, trough to crest), (M14) Hb: its bore's (the whitewater it runs on as, over the
+	// still water: m), b: how far it's broken (< 0 still rising, 0..1 plunging, > 1 a bore), dx, dz: the way
+	// it runs }
+	breakerAt( x, z, t, ground, terrain, out = { n: 0, H: 0, Hb: 0, b: - 9, dx: 0, dz: 1 } ) {
 
 		const P = this.params, sea = G.seaLevel.value, d = sea - ground;
-		out.H = 0;
+		out.H = out.Hb = 0;
 		out.b = - 9;
 		if ( d > 26 || d < - 0.2 || P.enabled <= 0 ) return out;
 		const sh = this._shb || ( this._shb = [ 0, 0, 0, 0 ] );
@@ -597,6 +598,7 @@ export class ShoreWaves {
 		const env = smooth( 26, 13, d ) * sat( exposure * 1.4 );
 		out.n = Math.floor( s ) + tr.slot * 1e7;
 		out.H = B.H * env;
+		out.Hb = B.Hb * env;
 		out.b = B.b;
 		out.dx = dx;
 		out.dz = dz;

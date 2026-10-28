@@ -190,10 +190,18 @@ function windowUnit( B, rand, cx, sillY, ww, wh, st ) {
 
 		const sw = ww / 2 + 0.03, sh = wh + 0.05;
 		const pat = st.shutters === 'louver' ? 4 : 3;
+		// ((M14) into a mesh of their own where there's one (Shutters: they swing in a blow), each with its
+		// hinge, the way its wall faces and it opens along it, its size, how far it stands open, and its
+		// vertices; the same rolls as ever)
+		const SB = st.shutterB || B, list = st.shutterList;
+		if ( SB !== B ) SB.frame = B.frame.clone();
 		for ( const s of [ - 1, 1 ] ) {
 
 			const hx = cx + s * ( ww / 2 + tw );
 			const open = rand.range( 0.02, 0.45 );
+			const v0 = list ? SB.batch( 'wood' ).vcount : 0;
+			const hinge = list ? SB.toWorld( hx, sillY + wh / 2, 0.03 ) : null;
+			const B = SB;
 			B.pushAt( hx, 0, 0.03, - s * open );
 			B.box( 'wood', s * ( sw / 2 + 0.01 ), sillY + wh / 2, 0.016, sw, sh, 0.028, { grain: 0, tint: st.accent, data: [ rand.next(), st.paint, pat, st.weather ] } );
 			if ( pat === 4 ) {
@@ -213,6 +221,12 @@ function windowUnit( B, rand, cx, sillY, ww, wh, st ) {
 			}
 
 			B.pop();
+			if ( list ) {
+
+				const a = SB.toWorld( hx + s, sillY + wh / 2, 0.03 ).sub( hinge ), n = SB.toWorld( hx, sillY + wh / 2, 1.03 ).sub( hinge );
+				list.push( { x: hinge.x, y: hinge.y, z: hinge.z, A: [ a.x, a.z ], N: [ n.x, n.z ], sign: s, w: sw, h: sh, open, v0, v1: SB.batch( 'wood' ).vcount } );
+
+			}
 
 		}
 
@@ -353,6 +367,7 @@ export function buildHouse( ctx, s ) {
 		trim: s.trim, accent: s.accent, curtain: s.curtain || lin( 0xd8c8a8 ),
 		paint: s.paint ?? 0.7, trimPaint: Math.min( 1, ( s.paint ?? 0.7 ) + 0.16 ), weather: s.weather ?? 0.6,
 		shutters: s.shutters || 'louver', doorGlass: !! s.doorGlass, litChance: s.litChance ?? 0.6,
+		shutterB: ctx.shutterB, shutterList: ctx.shutterList, // ((M14) its side-hung shutters swing: Shutters)
 		stepTint: s.porchPaint || null, stepPaint: s.porchPaint ? 0.5 : 0,
 	};
 	const wallData = () => [ rand.next(), st.paint, s.siding ?? 1, st.weather ];

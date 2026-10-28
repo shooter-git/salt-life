@@ -12,7 +12,7 @@ import { WORLD } from '../src/world/WorldLayout.js';
 import { CHANDLERY } from '../src/game/Chandlery.js';
 import { weatherAt, SURF_MAX, PERIOD_MAX, GROUNDSWELL_MAX, SURF_HURRICANE, HURRICANE, NORTH } from '../src/game/Weather.js';
 import { G } from '../src/core/Globals.js';
-import { windShove } from '../src/player/Player.js';
+import { windShove, knockHeight } from '../src/player/Player.js';
 
 let failed = 0;
 const check = ( ok, label ) => {
@@ -466,6 +466,72 @@ check( runs.every( ( [ start, foot, stall ] ) => start === 0 && foot < 0.01 && s
 	const dockDepth = - 0.6 - terrain.heightAt( WORLD.boatDock.position.x, WORLD.boatDock.position.z );
 	check( wetIn( plain, CHANDLERY.x, CHANDLERY.z ) === 0 && dockDepth > 2.5, `drawn out of the bay (0.6 m), the beach wider and the dock still ${ dockDepth.toFixed( 1 ) } m deep` );
 	G.seaLevel.value = 0;
+
+}
+
+// ---- (M14) knocked off your feet wading: each broken wave that passes someone standing in the bay's surf at
+// a depth, past knockHeight there; never at the knee on a fair day, often at the waist in the biggest surf,
+// less side-on
+{
+
+	const sw = new ShoreWaves( { field: computeShoreField( terrain, { res: 512, swellDir: [ WORLD.swellDir.x, WORLD.swellDir.y ] } ) } );
+	const spots = ( d ) => {
+
+		const out = [];
+		for ( let x = - 120; x <= 150; x += 15 ) {
+
+			if ( Math.abs( x - WORLD.pier.x ) < 12 ) continue;
+			for ( let z = - 50; z < 120; z += 0.5 ) {
+
+				const g = terrain.heightAt( x, z );
+				if ( - g >= d ) {
+
+					out.push( [ x, z, g ] );
+					break;
+
+				}
+
+			}
+
+		}
+
+		return out;
+
+	};
+	const knocked = ( A, T, d, face = 1 ) => {
+
+		sw.setSurf( A, T, 0, 0 );
+		let n = 0, k = 0;
+		const H0 = knockHeight( d, face );
+		for ( const [ x, z, g ] of spots( d ) ) {
+
+			let last = null;
+			for ( let t = 0; t < 300; t += 0.1 ) {
+
+				const b = sw.breakerAt( x, z, t, g, terrain );
+				if ( last !== null && b.n === last + 1 ) {
+
+					n ++;
+					if ( b.b > 0.85 && b.H > H0 ) k ++;
+
+				}
+
+				last = b.n;
+
+			}
+
+		}
+
+		return k / Math.max( 1, n );
+
+	};
+	const pc = ( v ) => `${ ( v * 100 ).toFixed( 1 ) }%`;
+	const rows = { fair: [ 0.34, 9 ], blustery: [ 0.5, 8 ], biggest: [ SURF_MAX, 7.5 ] };
+	const at = {};
+	for ( const [ name, [ A, T ] ] of Object.entries( rows ) ) at[ name ] = [ 0.3, 0.6, 0.9 ].map( ( d ) => knocked( A, T, d ) );
+	const side = knocked( SURF_MAX, 7.5, 0.9, 0 );
+	console.log( `     (M14) waves that knock a wader over, at the knee, the thigh and the waist: ${ Object.entries( at ).map( ( [ n, v ] ) => `${ n } ${ v.map( pc ).join( ' ' ) }` ).join( '; ' ) }; the biggest at the waist side-on ${ pc( side ) }` );
+	check( at.fair[ 0 ] === 0 && at.fair[ 2 ] < 0.06 && at.biggest[ 0 ] < 0.15 && at.biggest[ 2 ] > 0.35 && at.blustery[ 1 ] > at.fair[ 1 ] && side < at.biggest[ 2 ] * 0.6, '(M14) a breaker knocks a wader over: never at the knee on a fair day, often at the waist in the biggest surf, less side-on' );
 
 }
 

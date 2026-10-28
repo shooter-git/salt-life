@@ -330,6 +330,25 @@ export const TERRAIN_SURFACE_GLSL = /* glsl */`
 		* ss( 0.45, 0.65, dM.y + ( macroB - 0.5 ) * 0.4 ) * sandW * ( 1.0 - ss( 0.8, 2.0, slW * 10.0 ) );
 	albedo = mix( albedo * ( 1.0 - swashLine * 0.3 ), ${ S( 0.9, 0.88, 0.84 ) }, swashLine * ss( 0.6, 0.75, dF.z ) * 0.5 );
 
+	// ---- (M14) the sand blowing over the dry beach in a strong breeze (terrainBlow: the way the wind blows,
+	// how far its streamers have run, how much is blowing), as photographs of a beach in a blow show it:
+	// sand snakes, streamers a few cm deep and tens of cm across, braided and running along the wind, paler
+	// than the sand they run over; where a pixel's too big to hold them, a pale haze over it. Not on wet sand,
+	// the paths, or the grass
+	if ( terrainBlow.w > 0.0 ) {
+		float blowK = terrainBlow.w * sandW * ss( 0.6, 1.4, hSea ) * ( 1.0 - wetK ) * ( 1.0 - pathW * 0.6 ) * landW;
+		vec2 bw = terrainBlow.xy;
+		float bA = dot( xz, bw ) - terrainBlow.z, bC = dot( xz, vec2( - bw.y, bw.x ) );
+		// (snaking: each streamer wanders across the wind as it runs, a few tens of cm over a metre or two)
+		vec4 bW = terDetail( vec2( bA / 7.0, bC / 2.5 ) + 0.13 );
+		bC += ( bW.w - 0.5 ) * 0.9 + sin( bA * 2.1 + bW.y * 6.0 ) * 0.06;
+		vec4 bS1 = terDetail( vec2( bA / 2.4, bC / 0.3 ) );
+		vec4 bS2 = terDetail( vec2( ( bA - terrainBlow.z * 0.6 ) / 1.5 + 0.37, bC / 0.2 + 0.61 ) );
+		float snake = ss( 0.52, 0.72, bS1.w ) * ss( 0.35, 0.65, bS2.w ) + ss( 0.6, 0.78, bS2.w ) * 0.5;
+		snake = mix( snake, 0.22, ss( 0.4, 1.2, fwidth( bC / 0.35 ) ) );
+		albedo = mix( albedo, albedo * 1.22 + 0.02, sat( snake ) * blowK * 0.55 );
+	}
+
 	// ---- roughness
 	float rough = mix( 0.88, 0.93, sandW );
 	rough = mix( rough, 0.9, pathW );

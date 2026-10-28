@@ -41,6 +41,24 @@ const TUMBLE_CARRY = [ 1.8, 3.2 ];
 const TUMBLE_DOWN = [ 0.7, 1.6 ];
 const TUMBLE_BREATH = [ 2, 6 ];
 const TUMBLE_UNDER = 0.55;
+// (M14) a breaker knocks someone wading off their feet: one this far broken, past KNOCK_H at the still
+// depth they stand in (m: the breaker's height, as TUMBLE_H is), less the deeper they stand (KNOCK_H[ 1 ] a
+// metre), as the water takes their weight off their feet and more of them meets it (a person's footing in
+// moving water: Jonkman & Penning-Rowsell 2008). At the knee only a big surf's do, now and then; at the
+// waist a fair day's set wave sometimes, the biggest surf's one in three (test/waves.mjs). Side-on to it, less
+// of them meets it (KNOCK_SIDE more it takes), as lifeguards tell waders to stand. Knocked over, they're
+// tumbled toward the beach as a swimmer is, more briefly (KNOCK_S, KNOCK_CARRY, KNOCK_DOWN, KNOCK_BREATH),
+// and find their feet again
+const KNOCK_DEPTH = 0.25;
+const KNOCK_H = [ 4.6, 2.7 ];
+const KNOCK_SIDE = 0.3;
+const KNOCK_S = [ 0.9, 1.8 ];
+const KNOCK_CARRY = [ 1.2, 2.6 ];
+const KNOCK_DOWN = [ 0.3, 0.9 ];
+const KNOCK_BREATH = [ 1, 3 ];
+// (the breaker's height that knocks someone standing in still water `depth` deep, facing the way it runs
+// by `face` (1 head on or back to it, 0 side-on))
+export const knockHeight = ( depth, face = 1 ) => ( KNOCK_H[ 0 ] - KNOCK_H[ 1 ] * depth ) * ( 1 + KNOCK_SIDE * ( 1 - face ) );
 const GASP = 3; // s at the surface after a blackout before you can dive again
 
 const _v = new THREE.Vector3();
@@ -116,11 +134,12 @@ export class Player {
 		this.inRip = 0;
 		this.tumble = 0;
 		this.tumbles = 0;
+		this.knocks = 0; // (M14) how many times a breaker's knocked you off your feet, wading
 		this.roll = 0;
 		this.lean = 0; // (M13) leaning into a hurricane's wind (rad: the view's roll)
 		this.windAt = null; // (M13) the wind's speed at ( x, z ), in its gusts (m/s: App, the weather's)
 		this.sheltered = false; // (M13) out of the wind (the shelter: App)
-		this._tumble = { T: 1, k: 0, dx: 0, dz: 1, spin: 1 };
+		this._tumble = { T: 1, k: 0, dx: 0, dz: 1, spin: 1, carry: TUMBLE_CARRY, down: TUMBLE_DOWN };
 		this._breaker = { n: 0, H: 0, b: - 9, dx: 0, dz: 1 };
 		this._crest = null;
 		this.stalk = false; // set by the game: the speargun is out (a slow, quiet pace under water)
@@ -298,12 +317,46 @@ export class Player {
 			T.dx = br.dx;
 			T.dz = br.dz;
 			T.spin = Math.random() < 0.5 ? - 1 : 1;
+			T.carry = TUMBLE_CARRY;
+			T.down = TUMBLE_DOWN;
 			this.tumbles ++;
 			this.floating = false;
 			this.breath = Math.max( 0, this.breath - THREE.MathUtils.lerp( TUMBLE_BREATH[ 0 ], TUMBLE_BREATH[ 1 ], k ) );
 			if ( this.audio ) this.audio.splash( 0.6 + 0.4 * k, p );
 
 		}
+
+	}
+
+	// (M14) the surf where you wade: a breaker past knockHeight knocks you off your feet as it passes, and
+	// tumbles you toward the beach until you find them again (true: you're down, swimming for it)
+	wadeSurf() {
+
+		const p = this.position, q = this.query;
+		if ( ! q.breakerAt ) return false;
+		const br = q.breakerAt( p.x, p.z, undefined, this._breaker );
+		if ( ! br ) return false;
+		const passed = this._crest !== null && br.n === this._crest + 1;
+		this._crest = br.n;
+		if ( ! passed || br.b <= TUMBLE_B ) return false;
+		const face = Math.abs( - Math.sin( this.yaw ) * br.dx - Math.cos( this.yaw ) * br.dz );
+		const H0 = knockHeight( this.waterMean - p.y, face );
+		if ( br.H <= H0 ) return false;
+		const k = Math.min( 1, ( br.H - H0 ) / TUMBLE_SPAN ), T = this._tumble;
+		T.T = this.tumble = THREE.MathUtils.lerp( KNOCK_S[ 0 ], KNOCK_S[ 1 ], k );
+		T.k = k;
+		T.dx = br.dx;
+		T.dz = br.dz;
+		T.spin = Math.random() < 0.5 ? - 1 : 1;
+		T.carry = KNOCK_CARRY;
+		T.down = KNOCK_DOWN;
+		this.knocks ++;
+		this.mode = 'swim';
+		this.floating = false;
+		this.velocity.set( br.dx * KNOCK_CARRY[ 0 ], 0, br.dz * KNOCK_CARRY[ 0 ] );
+		this.breath = Math.max( 0, this.breath - THREE.MathUtils.lerp( KNOCK_BREATH[ 0 ], KNOCK_BREATH[ 1 ], k ) );
+		if ( this.audio ) this.audio.splash( 0.5 + 0.4 * k, p );
+		return true;
 
 	}
 
@@ -348,6 +401,8 @@ export class Player {
 		this.velocity.y -= 9.81 * dt;
 		// water drag while wading
 		if ( depth > 0 ) this.velocity.multiplyScalar( Math.exp( - dt * depth * 0.8 ) );
+		// ((M14) and a breaker taking your feet from under you)
+		if ( this.grounded && this.waterMean - this.position.y > KNOCK_DEPTH && this.wadeSurf() ) return;
 
 		const p = this.position;
 		const old = p.clone();
@@ -468,10 +523,10 @@ export class Player {
 		if ( this.tumble > 0 ) {
 
 			const T = this._tumble, f = 1 - this.tumble / T.T, k = T.k;
-			const carry = THREE.MathUtils.lerp( TUMBLE_CARRY[ 0 ], TUMBLE_CARRY[ 1 ], k ) * ( 1 - f );
+			const carry = THREE.MathUtils.lerp( T.carry[ 0 ], T.carry[ 1 ], k ) * ( 1 - f );
 			p.x += T.dx * carry * dt;
 			p.z += T.dz * carry * dt;
-			const down = surfaceY - SWIM_EYE - THREE.MathUtils.lerp( TUMBLE_DOWN[ 0 ], TUMBLE_DOWN[ 1 ], k ) * Math.sin( Math.PI * Math.min( 1, f * 1.4 ) );
+			const down = surfaceY - SWIM_EYE - THREE.MathUtils.lerp( T.down[ 0 ], T.down[ 1 ], k ) * Math.sin( Math.PI * Math.min( 1, f * 1.4 ) );
 			p.y += ( down - p.y ) * ( 1 - Math.exp( - dt * 6 ) );
 			this.roll = T.spin * Math.sin( Math.PI * f ) * ( 0.9 + 1.6 * k ) + Math.sin( f * 17 ) * 0.12 * ( 1 - f );
 			this.tumble = Math.max( 0, this.tumble - dt );
@@ -511,7 +566,8 @@ export class Player {
 
 		// shallow enough to stand -> walk (update() eases the view up to standing height). The mean
 		// level decides, so a passing wave doesn't flip you between swimming and standing.
-		if ( this.waterMean - g < STAND_DEPTH ) {
+		// ((M14) not while a breaker's tumbling you: knocked over wading, you're under it until it's passed)
+		if ( this.waterMean - g < STAND_DEPTH && this.tumble <= 0 ) {
 
 			this.mode = 'walk';
 			p.y = g;

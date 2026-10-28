@@ -199,6 +199,7 @@ const TIPS = {
 	// (M12) the surf
 	rip: 'You\'re in a <b>rip current</b>, carried out through a gap in the breakers (the milky water). Swim <b>along the beach</b> out of it, not against it.',
 	tumble: 'A <b>breaker</b> tumbled you. In a big surf, <b>dive under</b> a big one before it breaks on you, or keep out beyond the breakers.',
+	knocked: 'A <b>breaker</b> knocked you off your feet. Wading in a big surf, <b>turn side-on</b> to the waves as they break, or keep to the shallows.',
 	// (M13) a hurricane
 	hurricane: 'A <b>hurricane</b> is coming. Ahead of it Marta can <b>haul your boat out</b>, before she boards up; left in the water the storm batters her. In it, the <b>shelter</b> (on your map) keeps you safe from the wind, the rain and the sea. You can always step out to watch.',
 };
@@ -461,6 +462,9 @@ export class Guide {
 		if ( p.inRip > 4 ) this.tip( 'rip' );
 		if ( prev.tumbles !== undefined && p.tumbles > prev.tumbles ) this.tip( 'tumble' );
 		prev.tumbles = p.tumbles;
+		// ((M14) and the first time one knocks you off your feet, wading)
+		if ( prev.knocks !== undefined && p.knocks > prev.knocks ) this.tip( 'knocked' );
+		prev.knocks = p.knocks;
 		prev.gun = !! ( gun && gun.equipped );
 		prev.gunState = gun && gun.state;
 		prev.spearFight = !! g.spearFight;

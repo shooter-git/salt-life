@@ -78,7 +78,8 @@ export function releaseGeometries( root ) {
 
 	root.traverse( ( o ) => {
 
-		if ( o.isMesh && ! o.isInstancedMesh && o.geometry && ! o.geometry.isInstancedBufferGeometry ) releaseGeometry( o.geometry );
+		// ((M14) but those whose vertices move: userData.keepArrays, the village's shutters)
+		if ( o.isMesh && ! o.isInstancedMesh && ! o.userData.keepArrays && o.geometry && ! o.geometry.isInstancedBufferGeometry ) releaseGeometry( o.geometry );
 
 	} );
 

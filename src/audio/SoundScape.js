@@ -167,9 +167,9 @@ const FISHING = [ 'reel_wind', 'reel_drag', 'line_strain', 'rod_swish', 'bail_cl
 // (Salt Life) and the cast net's besides (loaded when it comes out)
 const NET_SET = [ 'splash', 'swim', 'emerge', 'step_water', 'step_wetsand' ];
 // (M10) the boat's hull and engine in the weather (loaded once you're aboard: the starter's needed
-// at the helm); the shutters in a blow from this wind (m/s: blustery's coming on)
+// at the helm); the shutters in a blow from this wind (m/s: (M14) a fresh breeze's, the loose ones begin)
 const HULL_SET = [ 'starter', 'hull_bump', 'shutter', 'keel_scrape', 'bucket', 'bilge_pump', 'bilge_slosh', 'hull_creak' ];
-const SHUTTER_WIND = 12;
+const SHUTTER_WIND = 9;
 
 // forest bird sprite: slices per source recording (a singer sings from one of them)
 const FOREST = [ [ 0, 1, 2, 3, 4, 5, 6 ], [ 7, 8, 9, 10, 11, 12 ] ];
@@ -259,9 +259,6 @@ export class SoundScape {
 		this._wh = { blow: false, breaches: - 1, splashes: - 1, fluke: 0, sing: 1 };
 		this._slapT = 0;
 		this._creakT = 2;
-		this._shutT = 3;
-		// (M10) where the village's shutters are (App: a point on each house), banging in a blow
-		this.shutters = [];
 		this._engine = 0; // 0..1 engine running (ramped in the mixer)
 		this._engineOn = false;
 		this._gust = { v: 0.4, target: 0.6, t: 0 };
@@ -1592,21 +1589,22 @@ export class SoundScape {
 
 	}
 
-	// (M10) a blow: the village's shutters banging, the one that bangs one of those near you, more often
-	// the harder it blows and in the gusts
-	_blow( dt ) {
+	// (M10) a blow: the village's shutters banging; (M14) each as one bangs (Village's Shutters: shutterBang),
+	// the sound loaded once the wind's up enough to set them going
+	_blow() {
 
-		const e = this.env, w = e.wind;
-		if ( w < SHUTTER_WIND || ! this.shutters.length || e.u > 0.5 ) return;
+		const e = this.env;
+		if ( e.wind >= SHUTTER_WIND ) this._want( 'shutter' );
+
+	}
+
+	// (M14) a shutter banging at ( x, y, z ), as hard as k (0..1)
+	shutterBang( x, y, z, k = 0.5 ) {
+
+		const e = this.env;
+		if ( ! this.enabled || e.u > 0.5 || Math.hypot( x - e.lx, z - e.lz ) > 80 ) return;
 		this._want( 'shutter' );
-		this._shutT -= dt;
-		if ( this._shutT > 0 ) return;
-		const k = clamp( ( w - SHUTTER_WIND ) / 8, 0, 1 );
-		this._shutT = ( 3 + Math.random() * 9 ) / ( 0.3 + 1.7 * k * ( 0.5 + e.gust ) );
-		const near = this.shutters.filter( ( p ) => Math.hypot( p.x - e.lx, p.z - e.lz ) < 80 );
-		if ( ! near.length ) return;
-		const p = near[ Math.floor( Math.random() * near.length ) ];
-		this._shotAt( 'shutter', 'shutter', p.x, p.y, p.z, MIX.shutter - ( 1 - k ) * 6 + ( Math.random() - 0.5 ) * 4, 0.92 + Math.random() * 0.16, 0, 10 );
+		this._shotAt( 'shutter', 'shutter', x, y, z, MIX.shutter - ( 1 - k ) * 8 + ( Math.random() - 0.5 ) * 3, 0.9 + Math.random() * 0.2, 0, 10 );
 
 	}
 

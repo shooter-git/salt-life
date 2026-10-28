@@ -51,6 +51,7 @@ import { Spray } from './fx/Spray.js';
 import { StormSpray } from './fx/StormSpray.js';
 import { WhitecapSpray } from './fx/WhitecapSpray.js';
 import { FlyingDebris } from './fx/FlyingDebris.js';
+import { BlownLitter } from './fx/BlownLitter.js';
 import { insideRoom, roomMatrix } from './world/village/StormPlaces.js';
 import { AirMotes } from './fx/AirMotes.js';
 import { Rain, SPLASH_ROCKS } from './fx/Rain.js';
@@ -343,6 +344,10 @@ export class App {
 		this.flying = new FlyingDebris( { terrain: this.terrain, tier } );
 		this.flying.setRoom( roomMatrix( this.village.shelter && this.village.shelter.inside ) );
 		scene.add( this.flying.mesh );
+		// ((M14) and what a blow sets skittering along the ground: fx/BlownLitter.js)
+		this.litter = new BlownLitter( { terrain: this.terrain, tier } );
+		this.litter.setRoom( roomMatrix( this.village.shelter && this.village.shelter.inside ) );
+		scene.add( this.litter.mesh );
 		if ( tier === 'low' ) {
 
 			this.nearDetail = [];
@@ -374,8 +379,8 @@ export class App {
 		};
 
 		this.audio = new SoundScape( { context: () => portal.audio.context, output, tier } );
-		// (M10) the village's shutters, banging in a blow: a point on each house, at a window's height
-		this.audio.shutters = this.village.buildings.filter( ( b ) => b.shutters ).map( ( b ) => ( { x: b.x, y: b.floorY + 1.4, z: b.z } ) );
+		// (M10) the village's shutters, banging in a blow: (M14) each loose one as it hits the wall or its frame
+		if ( this.village.shutters ) this.village.shutters.onBang = ( x, y, z, k ) => this.audio.shutterBang( x, y, z, k );
 		// (the surf follows the shore waves: Tidewater's are { value } uniforms, these plain params)
 		const P = this.shore.params, live = ( k ) => ( { get value() {
 
@@ -503,8 +508,8 @@ export class App {
 			this._heldNet = this.game.net.meshes.map( ( m ) => [ m, m.parent ] );
 			for ( const [ m ] of this._heldNet ) m.removeFromParent();
 			// ((M9) and the rain, (M11) its drips, and the lightning: nothing to draw until it rains; (M13) and
-			// a hurricane's flying debris)
-			this._heldWeather = [ this.rain.mesh, this.rain.splash, this.drips.mesh, this.lightning.mesh, this.flying.mesh ].map( ( m ) => [ m, m.parent ] );
+			// a hurricane's flying debris; (M14) and a blow's litter)
+			this._heldWeather = [ this.rain.mesh, this.rain.splash, this.drips.mesh, this.lightning.mesh, this.flying.mesh, this.litter.mesh ].map( ( m ) => [ m, m.parent ] );
 			for ( const [ m ] of this._heldWeather ) m.removeFromParent();
 
 		}
@@ -608,6 +613,8 @@ export class App {
 		const pp = this.player.position;
 		this.player.sheltered = insideRoom( this.village.shelter && this.village.shelter.inside, pp.x, pp.y + 0.9, pp.z );
 		if ( this.village.cradleHull ) this.village.cradleHull.solid = !! this.boatCtl.hauled;
+		// ((M14) the village's loose shutters swinging in the wind, all shut for a hurricane)
+		if ( this.village.shutters ) this.village.shutters.update( dt, this.player.windAt, G.windDir.value, !! this.weather.target.boarded );
 		// (M12) a westerly's swell on its way: its shore field, solved off the page
 		if ( this.weather.target.west > 0 && ! this._westField && this._started ) this.solveWestField();
 		// ((M14) and the north shore's sea, once it has one: most days, a little after the start)
@@ -793,6 +800,7 @@ export class App {
 		this.spray.update( dt, this.camera, this.renderer.domElement.height );
 		this.rain.update( dt, this.camera, this.cameraWaterHeight, this.renderer.domElement.height );
 		this.flying.update( dt, this.camera, this.cameraWaterHeight );
+		this.litter.update( dt, this.camera, this.cameraWaterHeight );
 		if ( this.motes ) this.motes.update( dt, this.camera, this.cameraWaterHeight, this.renderer.domElement.height );
 		this.water.detail.update( dt, this.camera );
 		this.shore.update( G.time.value ); // (Salt Life: the waves' clock, for the GPU)

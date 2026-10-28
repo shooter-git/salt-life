@@ -20,6 +20,8 @@ import { causticTexture } from '../ocean/SeaTextures.js';
 // `terrain.heightGlsl` define `float terrainHeightAt( vec2 xz )` (-90 outside the domain).
 
 const LOD_GRID = { low: 12, mid: 24, high: 40 };
+// (M14) m/s: the dry sand begins to blow, and all of it is by (TerrainSurface: its streamers)
+const BLOW = [ 8, 16 ];
 const HEIGHT_RES = { low: 1024, mid: 2048, high: 2048 };
 const MAP_RES = 1024; // the baked maps: 2 m is plenty for macro shading (the detail adds the rest)
 
@@ -70,6 +72,7 @@ float terrainHeightAt( vec2 xz ) {
 		this.splatTexture = mapTexture( maps.splat, mapSource.res );
 		this.detailTexture = getDetailTexture();
 		this.gustOffset = new THREE.Vector2();
+		this.blow = new THREE.Vector4( 1, 0, 0, 0 );
 
 		const uniforms = {
 			...this.lod.uniforms,
@@ -83,6 +86,9 @@ float terrainHeightAt( vec2 xz ) {
 			terrainWindDir: G.windPrevailing, // (Salt Life: the sand's ripples and the grass's comb, as the trades laid them)
 			terrainWindSpeed: G.windSpeed,
 			terrainGustOffset: { value: this.gustOffset },
+			// ((M14) the sand blowing over the dry beach: the way the wind blows, how far it's carried the
+			// sand's streamers (m), and how much is blowing)
+			terrainBlow: { value: this.blow },
 			terrainCaustics: { value: causticTexture() },
 			terrainTime: G.time,
 			terrainNight: G.night,
@@ -121,6 +127,7 @@ uniform vec3 terrainWaterAbsorption;
 uniform vec2 terrainWindDir;
 uniform float terrainWindSpeed;
 uniform vec2 terrainGustOffset;
+uniform vec4 terrainBlow;
 uniform sampler2D terrainCaustics;
 uniform float terrainTime;
 uniform float terrainNight;
@@ -182,6 +189,13 @@ ${ TERRAIN_SHADING_GLSL }
 		const wd = G.windDir.value, speed = 0.7 * G.windSpeed.value + 1.5, dt = G.dt.value;
 		this.gustOffset.x += wd.x * speed * dt;
 		this.gustOffset.y += wd.y * speed * dt;
+		// ((M14) dry sand blows from a strong breeze (Bagnold's threshold for fine sand: about 8 m/s at 10 m),
+		// all of it by a near gale's; none wet from the rain. Its streamers run at a quarter of the wind)
+		const ws = G.windSpeed.value, b = this.blow;
+		b.x = wd.x;
+		b.y = wd.y;
+		b.z = ( b.z + 0.25 * ws * dt ) % 1e5;
+		b.w = THREE.MathUtils.smoothstep( ws, BLOW[ 0 ], BLOW[ 1 ] ) * ( 1 - Math.min( 1, G.wet.value * 1.5 ) );
 
 	}
 
