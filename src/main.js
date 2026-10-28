@@ -10,6 +10,10 @@ import './style.css';
 const alone = window.parent === window;
 let veil = alone ? new LoadingVeil() : null;
 veil?.show( 0.02, 'Fetching the game' );
+// ((M15) ?readout on its own: what the game's using as you play, its watches set before anything's drawn
+// or heard: ui/Readout.js)
+const readout = alone && new URLSearchParams( location.search ).has( 'readout' ) ? await import( './ui/Readout.js' ) : null;
+readout?.installProbes();
 
 try {
 
@@ -44,6 +48,7 @@ try {
 	app.start();
 	veil?.lift();
 	portal.ready();
+	if ( readout ) new readout.Readout( { app } );
 
 } catch ( e ) {
 
