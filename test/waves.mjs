@@ -13,6 +13,7 @@ import { CHANDLERY } from '../src/game/Chandlery.js';
 import { weatherAt, SURF_MAX, PERIOD_MAX, GROUNDSWELL_MAX, SURF_HURRICANE, HURRICANE, NORTH } from '../src/game/Weather.js';
 import { G } from '../src/core/Globals.js';
 import { windShove, knockHeight } from '../src/player/Player.js';
+import { seaBox } from '../src/world/WeatherDriver.js';
 
 let failed = 0;
 const check = ( ok, label ) => {
@@ -63,6 +64,22 @@ for ( const tier of [ 'low', 'mid', 'high' ] ) {
 	waves.setSea( HURRICANE.swell, gale.windSea );
 	const [ hurWorst, hurDeep ] = worstGap( waves ), hurShare = hurWorst / seaHeight( waves );
 	check( hurDeep < 0.01 && hurShare < 0.05, `${ tier }: (M13) and a hurricane's (worst ${ ( hurDeep * 100 ).toFixed( 2 ) } cm in deep water; over the shallows ${ ( hurWorst * 100 ).toFixed( 2 ) } cm, ${ ( hurShare * 100 ).toFixed( 1 ) }% of its ${ seaHeight( waves ).toFixed( 2 ) } m)` );
+	// ((M14) a Category 3's open sea (its swell the biggest a hurricane brings, its wind sea at its most) in
+	// the sea's culling box: its highest crest and lowest trough over a few thousand points and moments,
+	// against the box on no surge and no surf past a gale's; and the box as it was, for a fair day's)
+	const cat3 = [ HURRICANE.swell * HURRICANE.cats[ 2 ].size, 3 ];
+	waves.setSea( ...cat3 );
+	let hi = - 1e9, lo = 1e9;
+	for ( let k = 0; k < 4000; k ++ ) {
+
+		const y = waves.heightAt( - 900 + ( k % 40 ) * 47, 400 + Math.floor( k / 40 ) * 41, k * 0.37 );
+		hi = Math.max( hi, y );
+		lo = Math.min( lo, y );
+
+	}
+
+	const box = seaBox( 0, SURF_MAX, waves.reachOf( ...cat3 ) ), fair = seaBox( 0, SURF_MAX, waves.reachOf( 1, 1 ) );
+	check( hi < box[ 1 ] && lo > box[ 0 ] && waves.reachOf( ...cat3 ) <= box[ 1 ] && fair[ 0 ] === - 4 && fair[ 1 ] === 4, `${ tier }: (M14) a Category 3's open sea in its culling box (crests to ${ hi.toFixed( 2 ) } m, troughs to ${ lo.toFixed( 2 ) }, all in step ${ waves.reachOf( ...cat3 ).toFixed( 2 ) }; the box ${ box[ 0 ].toFixed( 2 ) } to ${ box[ 1 ].toFixed( 2 ) } m), a fair day's as it was` );
 	waves.setSea( 1, 1 );
 	check( heights().every( ( h, i ) => h === before[ i ] ) && waves.uniforms.waveB.value.map( ( v ) => v.toArray().join() ).join() === B, `${ tier }: back to a fair sea, today's to the bit` );
 	check( waves.iterations === 2, `${ tier }: and its CPU heights take today's two steps` );

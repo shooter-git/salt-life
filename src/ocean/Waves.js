@@ -124,6 +124,14 @@ vec3 waveDisplacement( vec2 x0, float fade, out vec3 normal ) { return waveDispl
 
 	}
 
+	// (M14) the highest the open sea's crests could rise over its still water (and its troughs fall under
+	// it), with the swell's and the wind sea's heights x today's: its waves' amplitudes all in step
+	reachOf( swell = 1, windSea = 1 ) {
+
+		return this.waves.reduce( ( r, w ) => r + w.a0 * ( w.from === 's' ? swell : windSea ), 0 );
+
+	}
+
 	// (Salt Life) the sea state (Weather): the swell's and the wind sea's heights, x today's. Only the
 	// heights change, in place (the CPU's waves and the GPU's waveB), never the phases, so the sea
 	// builds and calms where it is; setSea( 1, 1 ) is today's sea exactly

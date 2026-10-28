@@ -367,6 +367,48 @@ ok( fight( 'tarpon', 35, policies.careful, 50, 2.2 ).st === 'caught', 'the top l
 
 }
 
+// ---- (M14) a snapped line: the float and the broken end of the line left drifting off downwind, and a new
+// hook and float tied on before the next cast (however the rod's put away meanwhile)
+{
+
+	G.windSpeed.value = 10;
+	G.windDir.value.set( 1, 0 );
+	const n = 8, cpu = new Float32Array( n * 4 );
+	for ( let i = 0; i < n; i ++ ) cpu[ i * 4 + 3 ] = - 6;
+	const query = { allocate: () => 0, setPoint() {}, cpuValid: true, cpu };
+	const camera = new PerspectiveCamera( 60, 1.6, 0.1, 500 );
+	camera.position.set( 0, 2, 0 );
+	camera.lookAt( 0, 2, 10 );
+	camera.updateMatrixWorld( true );
+	const rod = new FishingRod( { scene: new Scene(), camera, query, terrain: { heightAt: () => - 6 } } );
+	rod.equip( true );
+	const frame = () => rod.update( 1 / 60, { visible: true } );
+	for ( let i = 0; i < 30; i ++ ) frame();
+	rod.startWindup();
+	for ( let i = 0; i < 80; i ++ ) frame();
+	rod.release();
+	for ( let i = 0; i < 60 * 6 && rod.state !== 'floating'; i ++ ) frame();
+	rod.hook();
+	for ( let i = 0; i < 30; i ++ ) frame();
+	const at = rod.bobber.clone();
+	rod.snap();
+	const snapped = rod.state === 'rigging' && rod.lost && rod.lost.pos.distanceTo( at ) < 0.01 && ! rod.startWindup();
+	for ( let i = 0; i < 60 * 3; i ++ ) frame();
+	rod.equip( false );
+	for ( let i = 0; i < 30; i ++ ) frame();
+	rod.equip( true );
+	for ( let i = 0; i < 10; i ++ ) frame();
+	const still = rod.state === 'rigging' && ! rod.startWindup();
+	let t = 3.7;
+	for ( ; t < 20 && rod.state !== 'idle'; t += 1 / 60 ) frame();
+	const drifted = rod.lost.pos.x - at.x, ready = rod.state === 'idle' && rod.startWindup();
+	console.log( `     a snapped line: a new hook and float tied on in ${ t.toFixed( 1 ) } s; meanwhile its lost float's drifted ${ drifted.toFixed( 2 ) } m downwind in a 10 m/s wind` );
+	ok( snapped && still && ready && t > 7.5 && t < 8.5 && drifted > 0.5 && rod.lostMesh.visible && rod.lostLine.visible, 'a snapped line: its float drifts off, and no cast till a new hook\'s on, the rod put away or not' );
+	G.windSpeed.value = 7;
+	G.windDir.value.set( 0.35, 0.94 ).normalize();
+
+}
+
 // ---- inventory, wallet, save round trip
 const mem = new Map();
 const storage = { getItem: ( k ) => mem.get( k ) ?? null, setItem: ( k, v ) => mem.set( k, v ) };

@@ -458,18 +458,28 @@ void vlmSurface( inout VlmSurf s, vec3 Ng ) {
 	s.ao = mix( ao, 1.0, isGlass );
 	s.emissive = glass.emissive * isGlass;
 	s.normal = vlmNormalFromSlope( P, Ng, uv0, ( sM + sPat ) * ( 1.0 - isGlass ) );
-	// ((M13) the sand it drifted over the boardwalk behind the beach, and the strands of sargassum it
-	// left on the boards and on the pier's deck where its crests came over)
+	// ((M13) the sand it drifted over the boardwalk behind the beach, and the sargassum it left on the boards
+	// and on the pier's deck where its crests came over; (M14) as photographs after storms have them (Island
+	// Beach after Sandy, Wells-next-the-Sea, sargassum ashore in Cuba and Puerto Rico): the sand a pale sheet
+	// over the boards, more of it the deeper the water was over them, thin and broken at its edges; the weed
+	// in mats and clumps with strands between, raised off the boards, golden-olive fresh, russet in a day or
+	// so, dark brown once it's lain three days)
 	if ( vlmStorm.x + vlmStorm.y > 0.0 && Ng.y > 0.6 && P.y < vlmStorm.z + 0.5 && P.y > 0.5 && isGlass < 0.5 ) {
-		float drift = vlmVN( P.xz * 1.3 ) * 0.6 + vlmVN( P.xz * 5.1 + 3.7 ) * 0.4;
-		float sandK = vlmStorm.x * step( P.z, - 46.0 ) * smoothstep( 0.42, 0.62, drift + ( vlmStorm.z - P.y ) * 0.12 );
-		s.albedo = mix( s.albedo, vec3( 0.6, 0.5, 0.33 ) * ( 0.85 + vlmVN( P.xz * 23.0 ) * 0.3 ), sandK );
+		float under = clamp( ( vlmStorm.z - P.y ) * 0.4 + 0.3, 0.0, 1.0 );
+		float drift = vlmVN( P.xz * 0.9 ) * 0.55 + vlmVN( P.xz * 3.1 + 3.7 ) * 0.3 + vlmVN( P.xz * 11.0 + 1.3 ) * 0.15;
+		float sandK = vlmStorm.x * step( P.z, - 46.0 ) * smoothstep( 0.3, 0.5, drift * 0.7 + under * 0.55 );
+		s.albedo = mix( s.albedo, vec3( 0.62, 0.53, 0.37 ) * ( 0.88 + vlmVN( P.xz * 23.0 ) * 0.24 ), sandK );
 		s.roughness = mix( s.roughness, 0.95, sandK );
-		s.normal = normalize( mix( s.normal, Ng, sandK ) );
-		float strand = smoothstep( 0.7, 0.8, vlmVN( vec2( P.x * 9.0 + P.z * 2.0, P.z * 3.0 - P.x * 1.5 ) ) ) * smoothstep( 0.45, 0.6, vlmVN( P.xz * 0.9 + 1.3 ) );
-		float weedK = vlmStorm.y * strand;
-		s.albedo = mix( s.albedo, mix( vec3( 0.15, 0.09, 0.02 ), vec3( 0.025, 0.02, 0.012 ), vlmStorm.w ), weedK );
-		s.roughness = mix( s.roughness, mix( 0.45, 0.8, vlmStorm.w ), weedK );
+		s.normal = normalize( mix( s.normal, Ng, smoothstep( 0.2, 0.8, sandK ) ) );
+		float mat = vlmVN( P.xz * 0.7 + 7.1 ) * 0.6 + vlmVN( P.xz * 2.3 + 2.9 ) * 0.4;
+		float strand = smoothstep( 0.7, 0.8, vlmVN( vec2( P.x * 9.0 + P.z * 2.0, P.z * 3.0 - P.x * 1.5 ) ) ) * smoothstep( 0.4, 0.55, mat );
+		float weedK = vlmStorm.y * max( smoothstep( 0.56, 0.66, mat ), strand );
+		float frond = vlmVN( P.xz * 31.0 ), age = vlmStorm.w;
+		vec3 weedC = mix( mix( vec3( 0.26, 0.16, 0.025 ), vec3( 0.12, 0.035, 0.012 ), smoothstep( 0.0, 0.4, age ) ), vec3( 0.045, 0.03, 0.015 ), smoothstep( 0.4, 1.0, age ) );
+		s.albedo = mix( s.albedo, weedC * ( 0.7 + frond * 0.6 ), weedK );
+		s.roughness = mix( s.roughness, mix( 0.45, 0.85, age ), weedK );
+		vec2 bump = vec2( vlmVN( P.xz * 31.0 + vec2( 0.06, 0.0 ) ) - frond, vlmVN( P.xz * 31.0 + vec2( 0.0, 0.06 ) ) - frond ) * 5.0;
+		s.normal = normalize( mix( s.normal, normalize( Ng + vec3( bump.x, 0.0, bump.y ) ), weedK * 0.8 ) );
 	}
 }
 ` } );

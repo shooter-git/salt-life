@@ -625,6 +625,7 @@ export class Game {
 				? { key: 'LMB', text: 'Too much tension · let go!' }
 				: { key: 'LMB', text: 'Hold to reel · let go when the tension goes red' };
 			case 'landing': return null;
+			case 'rigging': return { key: '…', text: 'Tying on a new hook and float' };
 			default: return null;
 
 		}
@@ -1240,7 +1241,7 @@ export class Game {
 			this.rod.dip = 0;
 			this.toast( `${ upper( thief ) } took your fish off the hook`, 2800 );
 			if ( au && au.lineSnap ) au.lineSnap();
-			this.rod.setState( 'idle' );
+			this.rod.snap(); // ((M14) and your float and hook with it: a new one to tie on)
 			return;
 
 		}
@@ -1280,9 +1281,10 @@ export class Game {
 
 		} else if ( st === 'snapped' ) {
 
-			this.toast( 'Snap! The line broke', 2400 );
+			this.toast( 'Snap! The line broke · tying on a new hook', 2800 );
 			if ( au && au.lineSnap ) au.lineSnap();
-			this.rod.setState( 'idle' );
+			// ((M14) the float and the broken line left drifting, a new hook and float to tie on)
+			this.rod.snap();
 
 		} else {
 

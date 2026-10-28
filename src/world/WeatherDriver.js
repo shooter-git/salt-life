@@ -70,8 +70,22 @@ const LIGHT_TURN = 3, LIGHT = [ 4, 12 ];
 // how often what's said of a hurricane is looked at (s)
 const NEWS_EVERY = 1;
 // (M13 step 2) the sea's culling box (m: WaterSurface's CDLOD, as it always was), moved with the surge
-// and opened by this much (m a metre) for a surf past a gale's: a hurricane's crests on its surge
-const SEA_BOX = [ - 4, 4 ], SEA_BOX_SURF = 4;
+// and opened by this much (m a metre) for a surf past a gale's: a hurricane's crests on its surge; ((M14)
+// and never smaller than the open sea's own reach (Waves.reachOf), with this much to spare)
+const SEA_BOX = [ - 4, 4 ], SEA_BOX_SURF = 4, SEA_BOX_REACH = 1.15;
+const _box = [ 0, 0 ];
+
+// (M14) the sea's culling box [ bottom, top ] (m) on a surge (m), with a surf (Weather's) and the open sea's
+// reach (m: its highest crest over its still water, Waves.reachOf): a Category 3's swell on the high
+// tier's eight waves comes to 3.85 m all in step, inside the 4 m it always was by 15 cm
+export function seaBox( surge, surf, reach, out = [ 0, 0 ] ) {
+
+	const big = SEA_BOX_SURF * Math.max( 0, surf - SURF_MAX ), r = Math.max( SEA_BOX[ 1 ], - SEA_BOX[ 0 ], reach * SEA_BOX_REACH );
+	out[ 0 ] = - r + Math.min( 0, surge ) - big;
+	out[ 1 ] = r + Math.max( 0, surge ) + big;
+	return out;
+
+}
 // (M13) m/s: the sea streaked with blown foam from a storm's wind (Beaufort 10), all of it in a hurricane's
 const SPUME = [ 24.5, 34 ];
 const smoothstep = ( a, b, x ) => {
@@ -264,9 +278,9 @@ export class WeatherDriver {
 		G.seaLevel.value = w.surge;
 		if ( this.water.lod ) {
 
-			const big = SEA_BOX_SURF * Math.max( 0, w.surf - SURF_MAX );
-			this.water.lod.minY = SEA_BOX[ 0 ] + Math.min( 0, w.surge ) - big;
-			this.water.lod.maxY = SEA_BOX[ 1 ] + Math.max( 0, w.surge ) + big;
+			seaBox( w.surge, w.surf, this.waves.reachOf( w.swell, w.windSea ), _box );
+			this.water.lod.minY = _box[ 0 ];
+			this.water.lod.maxY = _box[ 1 ];
 
 		}
 		// (turned from the trades: their own direction exactly when it hasn't)
