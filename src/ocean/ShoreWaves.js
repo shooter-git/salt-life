@@ -980,6 +980,19 @@ ShoreRunup shoreSwashRunup( ShoreTrain tr, vec4 sh, float along, float groundH )
 	return ShoreRunup( tau, Rt, inland, RhMax, su, sb, isUp );
 }
 
+// (M14) swell k (0 the south's, 1 a westerly's, 2 the north shore's) at xz: its field there and its train;
+// false where it isn't running, or its field doesn't reach
+bool shoreTrainAt( int k, vec2 xz, out vec4 field, out ShoreTrain tr ) {
+	if ( k == 0 ) { field = terrainShoreSample( xz ); tr = shoreTrain1(); return true; }
+	if ( k == 1 ) {
+		if ( ! SHORE_TWO ) return false;
+		field = shoreFieldSample( shoreTex2, xz ); tr = shoreTrain2_(); return true;
+	}
+	if ( ! SHORE_THREE ) return false;
+	field = shoreFieldSample( shoreTex3, xz ); tr = shoreTrain3_();
+	return SHORE_REACHES( field );
+}
+
 // film thickness clipped at the swash front, distance to the front (m), tau, run-up; (M12) of two
 // swells, whichever's swash has run further up
 vec4 shoreSwashEdgeOf( vec2 p, float t, float g, ShorePhase ph, ShoreTrain tr ) {
@@ -993,20 +1006,13 @@ vec4 shoreSwashEdge( vec2 p, float t ) {
 	if ( t < 0.3 ) {
 		float g = terrainHeightAt( p );
 		if ( g > shoreSeaLevel - 0.8 ) {
-			ShoreTrain a = shoreTrain1();
-			o = shoreSwashEdgeOf( p, t, g, shorePhaseAt( terrainShoreSample( p ), a, p ), a );
-			if ( SHORE_TWO ) {
-				ShoreTrain b = shoreTrain2_();
-				vec4 o2 = shoreSwashEdgeOf( p, t, g, shorePhaseAt( shoreFieldSample( shoreTex2, p ), b, p ), b );
-				if ( o2.y > o.y && o2.y < 999.0 ) o = o2;
-			}
-			if ( SHORE_THREE ) {
-				vec4 f3 = shoreFieldSample( shoreTex3, p );
-				if ( SHORE_REACHES( f3 ) ) {
-					ShoreTrain c = shoreTrain3_();
-					vec4 o3 = shoreSwashEdgeOf( p, t, g, shorePhaseAt( f3, c, p ), c );
-					if ( o3.y > o.y && o3.y < 999.0 ) o = o3;
-				}
+			// (a swell a time round a loop, as in shoreEvaluate)
+			for ( int k = 0; k < 3; k ++ ) {
+				vec4 field;
+				ShoreTrain tr;
+				if ( ! shoreTrainAt( k, p, field, tr ) ) continue;
+				vec4 e = shoreSwashEdgeOf( p, t, g, shorePhaseAt( field, tr, p ), tr );
+				if ( k == 0 || e.y > o.y && e.y < 999.0 ) o = e;
 			}
 		}
 	}
@@ -1125,13 +1131,18 @@ ShoreSample shoreCross( ShoreSample a, ShoreSample b ) {
 }
 
 // the water mesh's view of the shore waves at a parcel resting at xz: the south's, (M12) a westerly's
-// crossing them, (M14) and the north shore's sea where its field reaches
+// crossing them, (M14) and the north shore's sea where its field reaches. (A swell a time round a loop: the
+// swell's code is in the program once, not once for each, and a device that draws on its CPU makes the
+// sea's program a third quicker for it, while the game loads)
 ShoreSample shoreEvaluate( vec2 xz, float depth, float groundH ) {
-	ShoreSample a = shoreEvaluateTrain( terrainShoreSample( xz ), shoreTrain1(), xz, depth, groundH );
-	if ( SHORE_TWO ) a = shoreCross( a, shoreEvaluateTrain( shoreFieldSample( shoreTex2, xz ), shoreTrain2_(), xz, depth, groundH ) );
-	if ( SHORE_THREE ) {
-		vec4 f3 = shoreFieldSample( shoreTex3, xz );
-		if ( SHORE_REACHES( f3 ) ) a = shoreCross( a, shoreEvaluateTrain( f3, shoreTrain3_(), xz, depth, groundH ) );
+	ShoreSample a;
+	for ( int k = 0; k < 3; k ++ ) {
+		vec4 field;
+		ShoreTrain tr;
+		if ( ! shoreTrainAt( k, xz, field, tr ) ) continue;
+		ShoreSample b = shoreEvaluateTrain( field, tr, xz, depth, groundH );
+		if ( k == 0 ) a = b;
+		else a = shoreCross( a, b );
 	}
 	return a;
 }

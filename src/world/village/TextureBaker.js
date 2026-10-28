@@ -2,7 +2,8 @@ import * as THREE from '../../engine/index.js';
 
 // GPU-baked, tileable PBR texture sets for the village materials (WebGL 2).
 //
-// Every set is generated once, while the game loads (Village.init() -> bake( renderer )), by
+// Every set is generated once, while the game loads (Village.init() -> bake( renderer )), or (WebGL drawn
+// on the CPU) after the start, a set a frame (App.lateReady), by
 // fullscreen fragment-shader passes into render targets; nothing is ever read back to the CPU:
 //   1. a "fields" pass (one small program per set: only its own generator) writes height /
 //      roughness / occlusion into a transient RGBA8 target (the height packed into two channels:
@@ -682,8 +683,10 @@ export class VillageTextures {
 	}
 
 	// Renders every set (once). The programs are compiled first (in parallel where the driver can),
-	// then the passes are drawn; the GPU runs them while the game keeps loading.
-	async bake( renderer ) {
+	// then the passes are drawn; the GPU runs them while the game keeps loading. slot: a promise for a
+	// frame of each set's own (after the start: App.frameSlot), or all of them at once; ready: once the
+	// programs are compiled, their first use before they're drawn (App.useNewPrograms)
+	async bake( renderer, { slot = null, ready = null } = {} ) {
 
 		if ( this.baked ) return;
 		this.baked = true;
@@ -715,12 +718,15 @@ export class VillageTextures {
 
 		const deriveScene = quad( derive ), copyScene = quad( copy );
 		await Promise.all( [ ...steps.map( ( s ) => s.scene ), deriveScene, copyScene ].map( ( s ) => renderer.compileAsync( s, camera ) ) );
+		if ( ready ) await ready();
 
-		const prevTarget = renderer.getRenderTarget();
-		const prevAutoClear = renderer.autoClear;
-		renderer.autoClear = false;
 		for ( const { job, gen, scene } of steps ) {
 
+			if ( slot ) await slot();
+			// (the renderer as it was, after each set: the game's frames are drawn between them)
+			const prevTarget = renderer.getRenderTarget();
+			const prevAutoClear = renderer.autoClear;
+			renderer.autoClear = false;
 			const { set } = job;
 			if ( ! job.nra ) {
 
@@ -754,11 +760,11 @@ export class VillageTextures {
 			}
 
 			gen.dispose();
+			renderer.setRenderTarget( prevTarget );
+			renderer.autoClear = prevAutoClear;
 
 		}
 
-		renderer.setRenderTarget( prevTarget );
-		renderer.autoClear = prevAutoClear;
 		derive.dispose();
 		copy.dispose();
 		tri.dispose();
