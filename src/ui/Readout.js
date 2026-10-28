@@ -11,6 +11,10 @@ import './readout.css';
 // with --enable-precise-memory-info (as the checks start it): the panel says so when the figure never
 // moves. Each figure's peak goes into localStorage every 2 s, so a page the browser killed and loaded
 // again tells you what it was using just before.
+//
+// &ballast (=MB, 50 by default) adds a Fill button: memory taken that much at a time every 15 s, filled
+// with noise (a phone may compress what repeats), until the browser kills the page; loaded again, it says
+// how much it held then. What the game uses plus that is all the page can have on that device.
 
 // what a creation may use, by the least capable devices it runs on (All the Spaces' qa/budgets.ts)
 const BUDGETS = {
@@ -31,6 +35,7 @@ const state = {
 	peak: { calls: 0, triangles: 0, textureMB: 0, gpuMB: 0, voices: 0, heapMB: 0, frameMs: 0 },
 	heap: [], // the latest usedJSHeapSize samples, to tell a live figure from a rounded, kept one
 	since: performance.now(),
+	ballast: { held: [], mb: 0, adding: 0 }, // &ballast: memory taken on purpose (MB), and being taken
 };
 
 const gpuBytes = () => state.textureBytes + state.bufferBytes + state.renderbufferBytes + state.drawingBufferBytes;
@@ -270,6 +275,8 @@ export function installProbes() {
 
 	};
 	requestAnimationFrame( onFrame );
+	// (no frames while the page is hidden: the wait isn't a frame)
+	document.addEventListener( 'visibilitychange', () => last = 0 );
 
 	// script memory, four times a second
 	setInterval( () => {
@@ -338,6 +345,8 @@ export function snapshot() {
 		triangles: pct( fr.map( ( f ) => f.triangles ), 0.95 ),
 		peak: Object.fromEntries( Object.entries( state.peak ).map( ( [ k, v ] ) => [ k, + v.toFixed( 1 ) ] ) ),
 		contextLost: state.lost,
+		ballastMB: state.ballast.mb,
+		ballastAdding: state.ballast.adding,
 		device: {
 			memoryGB: navigator.deviceMemory ?? null,
 			cores: navigator.hardwareConcurrency ?? null,
@@ -346,6 +355,27 @@ export function snapshot() {
 			agent: navigator.userAgent,
 		},
 	};
+
+}
+
+// (&ballast) mb more memory held, filled with noise; kept in localStorage as it's taken and once it's held
+function addBallast( mb ) {
+
+	const b = state.ballast;
+	b.adding = mb;
+	keep( true );
+	const a = new Float64Array( mb * MB / 8 );
+	let x = ( Math.random() * 0xffffffff ) | 1;
+	for ( let i = 0; i < a.length; i ++ ) {
+
+		x ^= x << 13; x ^= x >>> 17; x ^= x << 5;
+		a[ i ] = x;
+
+	}
+	b.held.push( a );
+	b.mb += mb;
+	b.adding = 0;
+	keep( true );
 
 }
 
@@ -379,7 +409,7 @@ export class Readout {
 			<div class="readout-body">
 				<pre data-figures></pre>
 				<p class="readout-note" data-note></p>
-				<div class="readout-buttons"><button data-reset>Reset peaks</button><button data-copy>Copy</button></div>
+				<div class="readout-buttons"><button data-reset>Reset peaks</button><button data-copy>Copy</button><button data-fill hidden>Fill memory</button></div>
 				<textarea data-text readonly hidden></textarea>
 			</div>`;
 		document.body.appendChild( el );
@@ -394,6 +424,23 @@ export class Readout {
 
 		};
 		el.querySelector( '[data-copy]' ).onclick = () => this.copy();
+		const q = new URLSearchParams( location.search );
+		if ( q.has( 'ballast' ) ) {
+
+			this.step = Number( q.get( 'ballast' ) ) || 50;
+			const fill = el.querySelector( '[data-fill]' );
+			fill.hidden = false;
+			fill.onclick = () => {
+
+				clearInterval( this._filling );
+				this._filling = this._filling ? null : setInterval( () => addBallast( this.step ), 15000 );
+				if ( this._filling ) addBallast( this.step );
+				fill.textContent = this._filling ? 'Stop filling' : 'Fill memory';
+				this.update();
+
+			};
+
+		}
 		// (stop taps on the panel reaching the game: the look and the touch controls)
 		for ( const ev of [ 'pointerdown', 'touchstart', 'mousedown', 'wheel' ] ) el.addEventListener( ev, ( e ) => e.stopPropagation(), { passive: true } );
 		this.update();
@@ -414,6 +461,7 @@ export class Readout {
 			`draws     ${ s.drawCalls }, peak ${ of( pk.calls, b.drawCalls ) }`,
 			`triangles ${ fmtK( s.triangles ) }, peak ${ fmtK( pk.triangles ) } of ${ fmtK( b.triangles ) }`,
 			`sounds    ${ s.voices }, peak ${ of( pk.voices, b.voices ) }`,
+			...( this.step ? [ `ballast   ${ s.ballastMB } MB held${ this._filling ? `, ${ this.step } MB more every 15 s` : '' }` ] : [] ),
 			`device    ${ s.device.memoryGB ?? '?' } GB, ${ s.device.cores ?? '?' } cores, ${ s.device.screen }, canvas ${ s.device.canvas }`,
 			`for       ${ Math.floor( s.seconds / 60 ) } min ${ s.seconds % 60 } s`,
 		].join( '\n' );
@@ -421,7 +469,7 @@ export class Readout {
 		if ( s.heapLive === false ) notes.push( 'Script memory (~) is rounded and held by the browser here: it needs Chrome started with --enable-precise-memory-info, or USB debugging.' );
 		if ( s.contextLost ) notes.push( `The graphics were lost ${ s.contextLost } time(s): the phone ran short of graphics memory.` );
 		const lv = state.lastVisit;
-		if ( lv ) notes.push( `The last visit ended without leaving (killed?) after ${ Math.round( lv.seconds / 60 ) } min: peaks then, script ${ lv.peak.heapMB } MB, graphics ${ lv.peak.gpuMB } MB.` );
+		if ( lv ) notes.push( `The last visit ended without leaving (killed?) after ${ Math.round( lv.seconds / 60 ) } min: peaks then, script ${ lv.peak.heapMB } MB, graphics ${ lv.peak.gpuMB } MB${ lv.ballastMB || lv.ballastAdding ? `, holding ${ lv.ballastMB } MB of ballast${ lv.ballastAdding ? ` and taking ${ lv.ballastAdding } MB more` : '' }` : '' }.` );
 		this.note.textContent = notes.join( ' ' );
 
 	}
