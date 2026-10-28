@@ -139,6 +139,11 @@ export const MIX = {
 	rainWoodHeavy: - 30,
 	rainPorch: - 30,
 	drip: - 30,
+	// (M14) the rain on a tin roof over you, heard from beneath it (as it sets in; heavier): louder than the
+	// rain out in it, as a tin roof is; and the shelter's radio, across its hall, under the storm
+	rainTinLight: - 28,
+	rainTin: - 22,
+	radio: - 34,
 	thunderNear: - 16, // a crack 1 km off (louder nearer, as the root of its nearness)
 	thunderFar: - 25, // a rumble 8 km off (falling to -35 at 20 km)
 	// (M10) the weather's cost to the boat, at the helm or on deck, and the shutters in a blow
@@ -151,6 +156,12 @@ export const MIX = {
 	bilgeSlosh: - 33, // the water in her bilge, up to the engine, sloshing as she works in a sea
 	hullCreak: - 31, // the hull creaking in a heavy sea
 	shutter: - 22, // a shutter banging in a blow, at 10 m
+	// (M14) a roof's sheet torn off in a hurricane, at 10 m (a bigger slam than a shutter's: about as loud as
+	// the hurricane's wind there, heard under its roar 30 m off), and one landing at 10 m: against a wall or
+	// on something hard as a shutter bangs, on the sand or the grass duller and SHEET_SOFT dB quieter (as
+	// hard as it comes down: up to 8 dB quieter, slow)
+	sheetTear: - 19,
+	sheetLand: - 22,
 };
 
 // (M12) thunder from far off: it fades from the first distance (m: refracted up over the listener) and is
@@ -162,9 +173,13 @@ const FISHING = [ 'reel_wind', 'reel_drag', 'line_strain', 'rod_swish', 'bail_cl
 // (Salt Life) and the cast net's besides (loaded when it comes out)
 const NET_SET = [ 'splash', 'swim', 'emerge', 'step_water', 'step_wetsand' ];
 // (M10) the boat's hull and engine in the weather (loaded once you're aboard: the starter's needed
-// at the helm); the shutters in a blow from this wind (m/s: blustery's coming on)
+// at the helm); the shutters in a blow from this wind (m/s: (M14) a fresh breeze's, the loose ones begin)
 const HULL_SET = [ 'starter', 'hull_bump', 'shutter', 'keel_scrape', 'bucket', 'bilge_pump', 'bilge_slosh', 'hull_creak' ];
-const SHUTTER_WIND = 12;
+const SHUTTER_WIND = 9;
+// ((M14) the roofs' sheets torn off and landing: loaded once the wind's near what tears them off (m/s: Marta's
+// sign goes from 27); a landing on the sand or the grass this much quieter (dB), slowed and its
+// top cut)
+const SHEET_WIND = 24, SHEET_SOFT = 8;
 
 // forest bird sprite: slices per source recording (a singer sings from one of them)
 const FOREST = [ [ 0, 1, 2, 3, 4, 5, 6 ], [ 7, 8, 9, 10, 11, 12 ] ];
@@ -178,6 +193,11 @@ const FAIR_SURF_FAR = FAIR_SURF / 0.6;
 const SURF_LOUDEST = SURF_HURRICANE / 0.6;
 // (M13) the wind (m/s) from which its lulls stay loud, all of them by the second (a hurricane's)
 const HOWL = [ 24, 34 ];
+// (M14) the rain under a rock: the share of what you hear of it that's the drops on you and within arm's
+// reach (by their distances from your ears: those within 1.2 m and on you, against those out to 30 m), and
+// of the rain beyond a rock's face, what's heard round its edges (as power)
+const RAIN_NEAR = 0.15, ROUND_ROCK = 0.25;
+
 // (M13) dB the shelter's walls take off the storm outside (its wind, surf, rain; half of it off the thunder)
 const WALLS = 13;
 
@@ -188,12 +208,12 @@ const STEP = {
 };
 
 // max simultaneous one-shot voices per category (oldest is faded out beyond this)
-const LIMITS = { step: 3, swim: 2, splash: 3, trans: 2, hull: 3, gull: 2, crash: 7, wash: 5, back: 5, bird: 4, tern: 2, whale: 4, rod: 4, fish: 3, coin: 1, net: 6, thunder: 2, start: 1, bucket: 2, creak: 2, shutter: 2, drip: 2 };
+const LIMITS = { step: 3, swim: 2, splash: 3, trans: 2, hull: 3, gull: 2, crash: 7, wash: 5, back: 5, bird: 4, tern: 2, whale: 4, rod: 4, fish: 3, coin: 1, net: 6, thunder: 2, start: 1, bucket: 2, creak: 2, shutter: 2, drip: 2, sheet: 3 };
 // Salt Life: All the Spaces allows 16 / 32 / 64 sounds at once by device tier. Beds and one-shots
 // together stay under it (a new one-shot is left out when it's full), and the low tier keeps fewer of
 // each kind so the surf can't crowd out the footsteps.
 const VOICES = { low: 14, mid: 30, high: 62 };
-const LOW_LIMITS = { ...LIMITS, step: 2, splash: 2, hull: 2, gull: 1, crash: 3, wash: 2, back: 2, bird: 2, tern: 1, whale: 2, rod: 3, fish: 2, net: 3, thunder: 1, creak: 1, shutter: 1, drip: 1 };
+const LOW_LIMITS = { ...LIMITS, step: 2, splash: 2, hull: 2, gull: 1, crash: 3, wash: 2, back: 2, bird: 2, tern: 1, whale: 2, rod: 3, fish: 2, net: 3, thunder: 1, creak: 1, shutter: 1, drip: 1, sheet: 2 };
 // a bed that has been silent this long (s) stops, freeing its voice (it starts again when wanted)
 const BED_IDLE = 4;
 
@@ -245,6 +265,9 @@ export class SoundScape {
 		this._loading = new Map(); // name -> Promise
 		this._beds = new Map(); // name -> { src, gain, trim }
 		this._voices = {}; // category -> [ { src, gain, end } ]
+		// ((M14) voices stopped, fading out, still sounding till they end: counted against the cap, as All the
+		// Spaces' checks count them, from their start to their end)
+		this._fading = 0;
 		this._last = {}; // bank -> last slice index
 		this._acc = 0;
 		this._gullT = 6;
@@ -254,15 +277,13 @@ export class SoundScape {
 		this._wh = { blow: false, breaches: - 1, splashes: - 1, fluke: 0, sing: 1 };
 		this._slapT = 0;
 		this._creakT = 2;
-		this._shutT = 3;
-		// (M10) where the village's shutters are (App: a point on each house), banging in a blow
-		this.shutters = [];
 		this._engine = 0; // 0..1 engine running (ramped in the mixer)
 		this._engineOn = false;
 		this._gust = { v: 0.4, target: 0.6, t: 0 };
 		this._shore = null;
 		if ( shore ) this.attachShore( shore );
 		this._shore2 = null; // (M12) a westerly's swell, crossing the south's (addShore)
+		this._shore3 = null; // (M14) the north shore's sea (addShore( ..., 2 ))
 		this._walls = 0; // (M13) dB the shelter's walls take off the storm (WALLS, while you're inside)
 		this._fakeT = 3;
 		this._warned = new Set();
@@ -272,7 +293,7 @@ export class SoundScape {
 			shoreX: 0, shoreZ: 1,
 			boat: { active: false, rpm: 0, speed: 0, x: 0, y: 0, z: 0, inside: false },
 			hull: { flood: 0, pump: false, scrape: 0, wear: 0, motion: 0 },
-			rainOn: { water: 0, wood: 0, nearWater: 0, nearWood: 0, under: 0 },
+			rainOn: { water: 0, wood: 0, nearWater: 0, nearWood: 0, under: 0, tin: 0, tinOver: 0, overhead: 0, walled: 0 },
 		};
 		const sw = WORLD.swellDir || { x: - 0.12, y: - 1 };
 		const l = Math.hypot( sw.x, sw.y ) || 1;
@@ -290,11 +311,12 @@ export class SoundScape {
 	}
 
 	// (M12) a second swell's waves (a westerly's: its field, and its shore as attachShore's), heard
-	// breaking along the shore as the first's are, while they have a height
-	addShore( { shore, field } ) {
+	// breaking along the shore as the first's are, while they have a height; (M14) or the third's (slot 2:
+	// the north shore's sea)
+	addShore( { shore, field }, slot = 1 ) {
 
 		const first = this._shoreSrc();
-		this._shore2 = first && shore && field ? { shore, field, terrain: first.terrain, stations: null, stAt: { x: 1e9, z: 1e9 } } : null;
+		this[ slot === 2 ? '_shore3' : '_shore2' ] = first && shore && field ? { shore, field, terrain: first.terrain, stations: null, stAt: { x: 1e9, z: 1e9 } } : null;
 
 	}
 
@@ -895,6 +917,8 @@ export class SoundScape {
 			// (M11) on what it falls on
 			rain_water_light: this.rainLP, rain_water: this.rainLP, rain_water_heavy: this.rainLP, rain_pond: this.rainLP,
 			rain_wood_light: this.rainLP, rain_wood_heavy: this.rainLP, rain_porch: this.rainLP,
+			// (M14) a tin roof over you, and the shelter's radio: right here, nothing between
+			rain_tin_light: this.above, rain_tin_heavy: this.above, shelter_radio: this.above,
 			// (M10) the hull's: at the boat, as the water past her is
 			keel_scrape: this.boatSum, bilge_pump: this.boatSum, bilge_slosh: this.boatSum,
 		};
@@ -963,6 +987,7 @@ export class SoundScape {
 				try {
 
 					bed.src.stop();
+					this._fade( bed.src );
 
 				} catch ( e ) { /* already stopped */ }
 
@@ -1042,6 +1067,7 @@ export class SoundScape {
 			try {
 
 				old.src.stop( c.currentTime + 0.3 );
+				this._fade( old.src );
 
 			} catch ( e ) { /* already stopped */ }
 
@@ -1236,9 +1262,8 @@ export class SoundScape {
 		}
 
 		this._surfFrom( src );
-		// ((M12) and a westerly's swell, while it's running)
-		const west = this._shore2;
-		if ( west && west.shore.amplitude.value > 0.005 ) this._surfFrom( west );
+		// ((M12) and a westerly's swell, while it's running; (M14) and the north shore's sea)
+		for ( const other of [ this._shore2, this._shore3 ] ) if ( other && other.shore.amplitude.value > 0.005 ) this._surfFrom( other );
 
 	}
 
@@ -1399,6 +1424,11 @@ export class SoundScape {
 		er.nearWater = clamp( num( ro.nearWater, 0 ), 0, 1 );
 		er.nearWood = clamp( num( ro.nearWood, 0 ), 0, 1 );
 		er.under = clamp( num( ro.under, 0 ), 0, 1 );
+		er.tin = clamp( num( ro.tin, 0 ), 0, er.under ); // ((M14) how much of what's over you is tin, and right over you)
+		er.tinOver = ro.tinOver ? 1 : 0;
+		er.overhead = clamp( num( ro.overhead, 0 ), 0, 1 ); // ((M14) and how much within arm's reach, and how much of a rock's face is round you)
+		er.walled = clamp( num( ro.walled, 0 ), 0, 1 );
+		e.radio = !! s.radio;
 		e.onLand = typeof s.coastDistance === 'number' && Number.isFinite( s.coastDistance ) ? s.coastDistance < 0 : true;
 		if ( e.u > 0.01 || eb.active ) e.onLand = false;
 
@@ -1511,9 +1541,12 @@ export class SoundScape {
 		const share = ( v ) => ( lean && v < 0.16 ? 0 : Math.sqrt( v ) );
 		const sea = share( ro.water ), wood = share( ro.wood ), rest = share( Math.max( 0, 1 - ro.water - ro.wood ) );
 		const muffled = smooth( 0.2, 0.8, ro.under );
+		// ((M14) under a rock: the drops on you and at your feet gone, and the rain beyond a rock's face about
+		// you heard only round its edges, its highs lost (RAIN_NEAR, ROUND_ROCK))
+		const shade = Math.sqrt( ( 1 - RAIN_NEAR * ro.overhead ) * ( 1 - ( 1 - ROUND_ROCK ) * ro.walled ) );
 		// ((M13) and inside the shelter, through its concrete roof and walls)
-		this._ramp( this.rainLP.frequency, lerp( lerp( 20000, 900, muffled ), 450, e.inside ), 0.6 );
-		const rout = out * lerp( 1, 0.55, muffled ) * lerp( 1, 0.35, e.inside );
+		this._ramp( this.rainLP.frequency, lerp( Math.min( lerp( 20000, 900, muffled ), lerp( 20000, 3000, ro.walled * ro.walled ) ), 450, e.inside ), 0.6 );
+		const rout = out * lerp( 1, 0.55, muffled ) * shade * lerp( 1, 0.35, e.inside );
 		this._bed( 'rain_light', dB( MIX.rainLight ) * light * rout * rest / dB( BANK.rain_light.lufs ), now, 1.2 );
 		this._bed( 'rain_heavy', dB( MIX.rain ) * heavy * rout * rest / dB( BANK.rain_heavy.lufs ), now, 1.2 );
 		this._bed( 'rain_boat', dB( MIX.rainBoat ) * onBoat * smooth( 0, 0.9, r ) / dB( BANK.rain_boat.lufs ), now, 0.8 );
@@ -1527,6 +1560,12 @@ export class SoundScape {
 		this._bed( 'rain_wood_light', dB( MIX.rainWoodLight ) * light * rout * wood / dB( BANK.rain_wood_light.lufs ), now, 1.2 );
 		this._bed( 'rain_wood_heavy', dB( MIX.rainWoodHeavy ) * heavy * rout * wood / dB( BANK.rain_wood_heavy.lufs ), now, 1.2 );
 		this._bed( 'rain_porch', lean ? 0 : dB( MIX.rainPorch ) * smooth( 0.2, 0.7, r ) * ro.nearWood * rout / dB( BANK.rain_porch.lufs ), now, 1.2 );
+		// ((M14) a tin roof over you drumming, as it sets in and heavier (the low tier: the heavier alone, as
+		// hard as it rains, to keep its voices); and in the hurricane shelter its radio, under the storm)
+		const tin = Math.max( smooth( 0.15, 0.6, ro.tin ), 0.8 * ro.tinOver );
+		this._bed( 'rain_tin_light', lean ? 0 : dB( MIX.rainTinLight ) * light * tin / dB( BANK.rain_tin_light.lufs ), now, 1.2 );
+		this._bed( 'rain_tin_heavy', dB( MIX.rainTin ) * ( lean ? smooth( 0, 0.9, r ) : heavy ) * tin / dB( BANK.rain_tin_heavy.lufs ), now, 1.2 );
+		this._bed( 'shelter_radio', e.radio ? dB( MIX.radio ) * e.inside / dB( BANK.shelter_radio.lufs ) : 0, now, 1.5 );
 		if ( r > 0.01 ) this._want( 'drips' );
 
 		// boat: one engine recording, pitched and opened up with rpm; water past the hull with speed,
@@ -1575,21 +1614,59 @@ export class SoundScape {
 
 	}
 
-	// (M10) a blow: the village's shutters banging, the one that bangs one of those near you, more often
-	// the harder it blows and in the gusts
-	_blow( dt ) {
+	// (M10) a blow: the village's shutters banging; (M14) each as one bangs (Village's Shutters: shutterBang),
+	// the sound loaded once the wind's up enough to set them going
+	_blow() {
 
-		const e = this.env, w = e.wind;
-		if ( w < SHUTTER_WIND || ! this.shutters.length || e.u > 0.5 ) return;
+		const e = this.env;
+		if ( e.wind >= SHUTTER_WIND ) this._want( 'shutter' );
+		if ( e.wind >= SHEET_WIND ) {
+
+			this._want( 'sheet_tear' );
+			this._want( 'sheet_land' );
+
+		}
+
+	}
+
+	// (M14) a roof's sheet torn off at ( x, y, z ) (world/debris/FlyingSheets' heard)
+	sheetTear( x, y, z ) {
+
+		const e = this.env;
+		if ( ! this.enabled || e.u > 0.5 || Math.hypot( x - e.lx, z - e.lz ) > 120 ) return;
+		this._want( 'sheet_tear' );
+		this._shotAt( 'sheet_tear', 'sheet', x, y, z, MIX.sheetTear + ( Math.random() - 0.5 ) * 3, 0.92 + Math.random() * 0.16, 0, 10 );
+
+	}
+
+	// (M14) and one landing at ( x, y, z ), coming down at `speed` (m/s): on the ground ('ground': the sand,
+	// the grass), against a wall ('wall'), in the sea ('sea': a splash)
+	sheetHit( x, y, z, what, speed = 10 ) {
+
+		const e = this.env;
+		if ( ! this.enabled || e.u > 0.5 || Math.hypot( x - e.lx, z - e.lz ) > 120 ) return;
+		const k = clamp( speed / 12, 0, 1 );
+		if ( what === 'sea' ) {
+
+			this._shotAt( 'splash', 'splash', x, y, z, MIX.splash - ( 1 - k ) * 8, 0.9 + Math.random() * 0.15, 0, 10 );
+			return;
+
+		}
+
+		const soft = what === 'ground';
+		this._want( 'sheet_land' );
+		const v = this._shotAt( 'sheet_land', 'sheet', x, y + 0.05, z, MIX.sheetLand - ( soft ? SHEET_SOFT : 0 ) - ( 1 - k ) * 8 + ( Math.random() - 0.5 ) * 3, ( soft ? 0.8 : 1 ) * ( 0.94 + Math.random() * 0.12 ), 0, 10 );
+		if ( v && soft ) v.extra[ 0 ].frequency.value = Math.min( v.extra[ 0 ].frequency.value, 2500 );
+
+	}
+
+	// (M14) a shutter banging at ( x, y, z ), as hard as k (0..1)
+	shutterBang( x, y, z, k = 0.5 ) {
+
+		const e = this.env;
+		if ( ! this.enabled || e.u > 0.5 || Math.hypot( x - e.lx, z - e.lz ) > 80 ) return;
 		this._want( 'shutter' );
-		this._shutT -= dt;
-		if ( this._shutT > 0 ) return;
-		const k = clamp( ( w - SHUTTER_WIND ) / 8, 0, 1 );
-		this._shutT = ( 3 + Math.random() * 9 ) / ( 0.3 + 1.7 * k * ( 0.5 + e.gust ) );
-		const near = this.shutters.filter( ( p ) => Math.hypot( p.x - e.lx, p.z - e.lz ) < 80 );
-		if ( ! near.length ) return;
-		const p = near[ Math.floor( Math.random() * near.length ) ];
-		this._shotAt( 'shutter', 'shutter', p.x, p.y, p.z, MIX.shutter - ( 1 - k ) * 6 + ( Math.random() - 0.5 ) * 4, 0.92 + Math.random() * 0.16, 0, 10 );
+		this._shotAt( 'shutter', 'shutter', x, y, z, MIX.shutter - ( 1 - k ) * 8 + ( Math.random() - 0.5 ) * 3, 0.9 + Math.random() * 0.2, 0, 10 );
 
 	}
 
@@ -1879,9 +1956,17 @@ export class SoundScape {
 	// ------------------------------------------------------------------ helpers
 
 	// sounds playing now: the beds and the one-shots
+	// (M14) a voice stopped and still sounding till it ends, counted (_fading) till then
+	_fade( src ) {
+
+		this._fading ++;
+		src.addEventListener( 'ended', () => this._fading --, { once: true } );
+
+	}
+
 	_playing() {
 
-		let n = this._beds.size;
+		let n = this._beds.size + this._fading;
 		for ( const k in this._voices ) n += this._voices[ k ].length;
 		return n;
 

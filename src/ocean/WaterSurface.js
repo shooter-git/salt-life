@@ -4,6 +4,7 @@ import { G } from '../core/Globals.js';
 import { rippleTexture } from './SeaTextures.js';
 import { WHALE_WATER_GLSL, whaleMarkUniforms } from './WhaleWater.js';
 import { SeaDetail } from './SeaDetail.js';
+import { Whitecaps } from './Whitecaps.js';
 import { useLocalLights, LOCAL_LIGHTS_MAX } from '../materials/LocalLights.js';
 
 // The sea: one instanced CDLOD grid that follows the camera out to the horizon. Its surface is the
@@ -16,8 +17,8 @@ import { useLocalLights, LOCAL_LIGHTS_MAX } from '../materials/LocalLights.js';
 // blue offshore, milky in the surf, by the depth read from the terrain's height texture. Over the
 // shallows it lets the sea floor show through; its reflections stay at full strength there
 // (premultiplied output: the water's own light is weighted by its opacity, the reflections are not).
-// (Salt Life) In a fresh wind the open sea's crests break: whitecaps (this.whitecap, set by the weather;
-// 0, and nothing drawn for them, in a fair day's breeze or less). (M13) In a hurricane's wind the sea's
+// (Salt Life) In a breeze the open sea's crests break: whitecaps ((M14) each its own: Whitecaps.js, set by
+// the weather; none, and nothing drawn for them, in light airs). (M13) In a hurricane's wind the sea's
 // streaked white with foam blown into long streaks along the wind, the bay and all (this.spume).
 // (M11) It reflects the sky as a mirror would (the scene's environment, made in the same light as the
 // sky you see, at REFLECT), as much as the water's Fresnel lets it: little looking down, nearly all of it
@@ -43,7 +44,7 @@ const rgb = ( r, g, b ) => {
 
 export class WaterSurface {
 
-	constructor( { scene, waves, terrain, shore = null, tier = 'low' } ) {
+	constructor( { scene, waves, terrain, shore = null, cover = null, rocks = null, tier = 'low' } ) {
 
 		this.waves = waves;
 		this.terrain = terrain;
@@ -52,8 +53,10 @@ export class WaterSurface {
 		const SH = !! shore;
 		// gusts, slicks and windrows drifting with the wind (update( dt ) moves them)
 		this.detail = new SeaDetail( { lite: tier === 'low' } );
-		// (Salt Life) how much of the open sea's crests break white (WeatherDriver: from the wind)
-		this.whitecap = { value: 0 };
+		// (Salt Life) the open sea's crests breaking white ((M14) Whitecaps: set by WeatherDriver from the wind);
+		// whitecap, the share of the sea they whiten
+		this.whitecaps = new Whitecaps( { waves, tier } );
+		this.whitecap = this.whitecaps.cover;
 		// (M13) how much of the sea's streaked with blown foam (0..1: the weather's, in a hurricane's wind)
 		this.spume = { value: 0 };
 
@@ -70,9 +73,13 @@ export class WaterSurface {
 			waterRipples: { value: rippleTexture() },
 			...whaleMarkUniforms,
 			...this.detail.uniforms,
-			waterWhitecap: this.whitecap,
+			...this.whitecaps.uniforms,
 			waterSpume: this.spume,
 			waterRain: G.rain, // (M9: the rings where the drops land)
+			// ((M14) none under what covers the sea: the pier, the boathouse (world/Cover.js), a rock's overhang
+			// (world/RockCover.js))
+			...( cover ? cover.uniforms : {} ),
+			...( rocks ? rocks.uniforms : {} ),
 			waterFlash: G.skyFlash, // (M10: lightning in the reflections)
 			waterFlashShape: G.skyFlashShape, // ((M12) its glow's shape: Sky's)
 			waterSkyExposure: G.skyExposure,
@@ -115,6 +122,7 @@ varying vec3 vWater;
 varying float vWaterFade;
 varying vec4 vSurf; // whitewater, clear plunging face, roller relief, swash sheet (0..1)
 varying vec3 vWaterN;
+varying vec2 vWaterX0; // (M14) the grid's point: the water's own (its foam rides it)
 ` )
 				.replace( '#include <beginnormal_vertex>', /* glsl */`
 	${ this.lod.vertexNodes() }
@@ -140,6 +148,9 @@ ${ SH ? /* glsl */`
 		vec2 slope = nS.xz / max( nS.y, 0.2 ) + objectNormal.xz / max( objectNormal.y, 0.2 );
 		objectNormal = normalize( vec3( slope.x, 1.0, slope.y ) );
 		vSurf = vec4( sw.foam, sw.face, sw.roller, 0.0 );
+		// ((M14) seen from afar, where the grid's too coarse for the breakers (a few vertices a wave), the
+		// white they'd leave there on average: a reef's break line seen from a boat or the air)
+		vSurf.x = mix( vSurf.x, sw.meanFoam, smoothstep( 0.12, 0.3, lod.spacing / max( sw.lam, 1.0 ) ) );
 		// thin run-up sheet on the sand: take whichever surface is higher (smooth max)
 		float k = 0.04;
 		float hmx = clamp( ( sw.swashLevel - y ) / k * 0.5 + 0.5, 0.0, 1.0 );
@@ -157,12 +168,13 @@ ${ SH ? /* glsl */`
 	if ( y < ground ) y = min( y, below );
 	vec3 wPos = vec3( x0.x + total.x, y, x0.y + total.z );
 	vWater = wPos;
+	vWaterX0 = x0;
 	vWaterFade = fade;
 	vWaterN = objectNormal;` )
 				.replace( '#include <begin_vertex>', 'vec3 transformed = wPos;' );
 
 			shader.fragmentShader = shader.fragmentShader
-				.replace( '#include <common>', '#include <common>\n' + terrain.heightGlsl + ( SH ? shore.glsl : '' ) + /* glsl */`
+				.replace( '#include <common>', '#include <common>\n' + terrain.heightGlsl + ( SH ? shore.glsl : '' ) + waves.glsl + this.whitecaps.glsl + ( cover ? cover.glsl : '' ) + ( rocks ? rocks.glsl : '' ) + /* glsl */`
 uniform float waterTime;
 uniform vec3 waterSunColor;
 uniform vec3 waterSunDir;
@@ -171,10 +183,9 @@ varying vec3 vWater;
 varying float vWaterFade;
 varying vec4 vSurf;
 varying vec3 vWaterN;
+varying vec2 vWaterX0;
 uniform sampler2D waterRipples;
-uniform float waterWhitecap;
 uniform float waterSpume;
-uniform float waveCrest;
 uniform float waterRain;
 uniform vec4 waterFlash;
 uniform vec4 waterFlashShape;
@@ -250,22 +261,38 @@ ${ SH ? /* glsl */`
 	// the humpback's marks: churned white water, and the flat slick of its fluke print (WhaleWater)
 	vec2 whaleMk = whaleMarksOn > 0.5 ? whaleWater( vWater.xz ) : vec2( 0.0 );
 	foam = max( foam, whaleMk.x );
-	// the sea's large-scale detail: rougher gusts, calm slicks, a trace of foam on the windrows
+	// the sea's large-scale detail: rougher gusts, calm slicks, the windrows' foam ((M14) beaded lines of it,
+	// granular as the whitecaps' foam; seen from afar, as much white spread)
 	vec4 seaD = seaDetailSample( vWater.xz );
-	foam = max( foam, seaD.w * 0.3 );
-	// (Salt Life) whitecaps: in a fresh wind the crests break, white patches thickest in the gusts and
-	// streaming downwind. Near by, on the crests themselves (the height over the sea, as a share of the
-	// highest a crest gets); further off, where the coarse grid no longer has the crests, scattered
-	// over the sea as they'd be seen from afar. Out over the open sea only (the shore waves have their own)
-	if ( waterWhitecap > 0.0 ) {
-		float wcDist = length( cameraPosition - vWater );
-		float wcCrest = mix( smoothstep( 0.15, 0.5, ( vWater.y - waterSeaLevel_ ) * waveCrest ), 0.5, smoothstep( 80.0, 450.0, wcDist ) );
-		// they break here and there along a crest, not all along it: patches tens of metres across,
-		// drifting downwind (with the gusts' drift: integrated, so it follows the wind as it turns)
-		float wcPatch = smoothstep( 0.35, 0.8, waterNoise( ( vWater.xz - seaDetailOffset * 0.13 ) * 0.045 ) );
-		// (fading out toward the horizon, where the lace would crowd into a white band)
-		float wcCover = clamp( waterWhitecap * wcCrest * wcPatch * ( 0.5 + seaD.y ), 0.0, 0.55 ) * vWaterFade * ( 1.0 - smoothstep( 700.0, 2200.0, wcDist ) );
-		foam = max( foam, waterLace( ( vWater.xz - seaDetailOffset * 0.33 ) * 0.35, wcCover ) * 0.9 );
+	float wrFw = length( fwidth( vWaterX0 ) );
+	if ( seaD.w > 0.0 ) {
+		float wr = min( seaD.w * 1.5, 0.75 );
+		foam = max( foam, mix( waterLace( vWaterX0 * 3.3, wr ), wr, smoothstep( 0.35, 1.2, wrFw ) ) * 0.8 );
+	}
+	// (Salt Life) whitecaps: ((M14) the open sea's crests breaking here and there, each its own: a roller down
+	// a crest's face while it breaks, and the foam it's left behind it thinning (Whitecaps.js)); more in the
+	// gusts; out over the open sea only (the shore waves have their own)
+	if ( whitecapCover > 0.0 ) {
+		vec2 wc = min( whitecapsAt( vWaterX0 ) * vWaterFade * ( 0.55 + 0.9 * seaD.y ), 1.0 );
+		// the foam left marbled (white with dark veins, swirled and drawn out along the wind), thinning
+		// unevenly and tearing into lace, froth at its edges, less white than the roller; the roller solid,
+		// its edge torn. (Seen from afar, as much white spread)
+		vec2 wcD = seaDetailWindDir, wcQ = vec2( dot( vWaterX0, wcD ), dot( vWaterX0, vec2( - wcD.y, wcD.x ) ) ) * vec2( 2.2, 3.6 );
+		float wcFw = length( fwidth( wcQ ) );
+		if ( wc.y > 0.002 ) {
+			vec2 q = wcQ + 1.1 * vec2( waterNoise( wcQ * 0.3 ), waterNoise( wcQ * 0.3 + 3.7 ) );
+			float fine = 1.0 - smoothstep( 0.25, 0.7, wcFw );
+			float n = waterNoise( q ) * 0.5 + waterNoise( q * 2.3 + 7.1 ) * 0.3 + waterNoise( q * 5.3 + 2.6 ) * 0.2 * fine;
+			float net = mix( n + 0.1 * ( 1.0 - fine ), 1.0 - abs( waterNoise( q * 1.3 + 1.9 ) - 0.5 ) * 2.0, 0.45 );
+			float cover = min( wc.y * ( 0.5 + waterNoise( wcQ * 0.12 + 9.2 ) ), 0.8 ); // (never a solid sheet)
+			float w = 0.14 + wcFw * 0.5, far = smoothstep( 1.2, 3.5, wcFw );
+			float left = mix( smoothstep( 1.0 - cover - w * 0.5, 1.0 - cover + w * 0.5, net ), cover, far );
+			// (froth: its bubbles, near by)
+			left *= mix( 1.0, 0.35 + 0.65 * waterLace( vWaterX0 * 4.5, 0.7 ), fine );
+			// (the roller's whitest in a head or two along the crest)
+			float roll = smoothstep( 0.2, 0.6, wc.x * ( 0.6 + 0.8 * mix( net, 0.5, far ) ) * ( 0.45 + 0.9 * waterNoise( wcQ * 0.15 + 5.5 ) ) );
+			foam = max( foam, max( left * 0.78, roll ) );
+		}
 	}
 	// (M13) in a hurricane's wind the sea's streaked white (Beaufort 10 to 12: "dense streaks of foam along
 	// the direction of the wind", "the sea completely white"): foam blown into streaks tens of metres long and
@@ -332,9 +359,13 @@ ${ SH ? /* glsl */`
 	vec2 r2 = texture2D( waterRipples, vWater.xz * 0.043 + 0.3 - waterTime * vec2( 0.02, 0.008 ) ).xy * 2.0 - 1.0;
 	vec2 rs = ( r1 * 0.6 + r2 * 0.4 ) * 0.32 * rippleK;
 	// (M9) the rings where the rain lands, near the camera; and the drops beat the wind's ripples down
-	// ((M10) all over the sea: a downpour flattens them as far as you see)
+	// ((M10) all over the sea: a downpour flattens them as far as you see; (M14) not under the pier, the
+	// boathouse or a rock's overhang)
 	if ( waterRain > 0.0 ) {
 		float rainN = clamp( waterRain * 1.5, 0.0, 1.0 );
+		float rainOver = ${ cover ? 'coverHeightAt( vWater.xz )' : '-1e4' };
+		${ rocks ? 'rainOver = max( rainOver, rockUndersideAt( vWater.xz ) );' : '' }
+		rainN *= step( rainOver, vWater.y + 0.1 );
 		rs *= 1.0 - 0.35 * rainN;
 		float rainD = length( cameraPosition - vWater );
 		if ( rainD < 45.0 ) {

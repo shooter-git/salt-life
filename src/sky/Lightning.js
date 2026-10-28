@@ -1,6 +1,7 @@
 import * as THREE from '../engine/index.js';
 import { strikeIn, distantStrikesIn } from '../game/Weather.js';
 import { mulberry32 } from '../util/Noise.js';
+import { CB, CLOUD_BASE } from './SkyProClouds.js';
 
 // (M9) The lightning in a thunderstorm.
 //   - The strikes are the weather's (Weather.strikeIn): one or none in each real second, from the second
@@ -40,9 +41,10 @@ const EXTINCTION = 30000;
 const LIT_R = 4000;
 const SPREAD_MIN = 7;
 const FAR_FROM = 6000, FAR_FULL = 14000;
-const CB_TOP = 12000;
-// (M12) a thunderstorm's base on the horizon (m): the cloud overhead's isn't its
-const STORM_BASE = 1200;
+const CB_TOP = CB.top; // ((M14) the tops the clouds tower to)
+// (M12) a thunderstorm's base on the horizon (m): the cloud overhead's isn't its ((M14) the cumulus's, as
+// its tower's is)
+const STORM_BASE = CLOUD_BASE;
 // the bolt: the most segments it has (its main channel and branches), the farthest it's drawn (m: past
 // this it's drawn nearer, as large in view, inside the camera's far plane)
 const SEGMENTS = 200;
@@ -189,11 +191,12 @@ export class Lightning {
 
 		this._second = second + 1;
 
-		// the flashes: their strokes now, summed; the brightest lights the sky from its way ((M12) as tight
-		// about it as it's seen from here, its own cloud on the horizon if it's far), and they all light the
-		// island, the farther the less
+		// the flashes: their strokes now; the brightest lights the sky from its way ((M12) as tight about it
+		// as it's seen from here, its own cloud on the horizon if it's far), ((M14) and the next brightest
+		// from its own, each as bright as it is (two at once in a line of storms: with all their light the
+		// brightest's glow had both), and they all light the island, the farther the less
 		const sky = this.sky;
-		let light = 0, fill = 0, best = null, bestLight = 0;
+		let fill = 0, best = null, bestLight = 0, next = null, nextLight = 0;
 		for ( let i = this.flashes.length - 1; i >= 0; i -- ) {
 
 			const f = this.flashes[ i ], dt = t - f.strike.at;
@@ -209,23 +212,39 @@ export class Lightning {
 			for ( const s of f.strokes ) if ( dt >= s.t ) k += s.p * Math.exp( - ( dt - s.t ) / STROKE_FADE );
 			if ( dt < f.strokes[ f.strokes.length - 1 ].t + 0.25 ) k += CHANNEL_GLOW;
 			f.now = k * f.light;
-			light += f.now;
 			fill += k * f.fill;
 			if ( f.now > bestLight ) {
 
+				next = best; nextLight = bestLight;
 				bestLight = f.now;
 				best = f;
+
+			} else if ( f.now > nextLight ) {
+
+				next = f; nextLight = f.now;
 
 			}
 
 		}
 
-		sky.flash = light;
+		sky.flash = bestLight;
 		sky.flashFill = fill;
 		if ( best ) {
 
 			sky.flashDir.copy( best.dir );
 			sky.flashShape.set( best.spread, best.top, best.far, 0 );
+
+		}
+
+		if ( sky.flashDir2 ) {
+
+			sky.flash2 = nextLight;
+			if ( next ) {
+
+				sky.flashDir2.copy( next.dir );
+				sky.flashShape2.set( next.spread, next.top, next.far, 0 );
+
+			}
 
 		}
 

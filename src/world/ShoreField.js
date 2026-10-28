@@ -75,6 +75,45 @@ class MinHeap {
 
 }
 
+// (M14) a wind sea's field, its lee taken out: where the wind (blowing along `dir`, unit) comes to a point
+// over the island, its sea doesn't, so its exposure (g, b) there is scaled by how many of a fan of rays
+// (`fan`, rad either side of straight upwind) run clear of land from `near` to `far` m upwind (the land
+// nearer than `near` is a headland it wraps round: the solve's refraction has that), looked at every
+// `step` m on a grid of twice the field's cells and spread over it. Only where the shore waves are
+// (shallower than `deep`). The solve alone carries a front on round an island's shoulders into its lee,
+// and the bay would have a trades gale's breakers on its eastern shore. In place
+export function shelter( field, dir, { near = 150, far = 1200, step = 16, fan = [ 0, 0.14, - 0.14, 0.28, - 0.28 ], deep = 30 } = {} ) {
+	const { data, depth, res, origin, size } = field, h = size / res, R = res >> 1, H = 2 * h;
+	const rays = fan.map( ( a ) => [ - ( dir[ 0 ] * Math.cos( a ) - dir[ 1 ] * Math.sin( a ) ), - ( dir[ 0 ] * Math.sin( a ) + dir[ 1 ] * Math.cos( a ) ) ] );
+	const land = ( x, z ) => {
+		const i = Math.floor( ( x - origin ) / h ), j = Math.floor( ( z - origin ) / h );
+		return i >= 0 && j >= 0 && i < res && j < res && depth[ j * res + i ] <= 0;
+	};
+	// (the share clear at each coarse cell, at the corner of four of the field's)
+	const keep = new Float32Array( R * R ).fill( 1 );
+	for ( let J = 0; J < R; J ++ ) for ( let I = 0; I < R; I ++ ) {
+		const x = origin + ( I + 1 ) * H - h, z = origin + ( J + 1 ) * H - h;
+		const d = depth[ Math.min( res - 1, 2 * J + 1 ) * res + Math.min( res - 1, 2 * I + 1 ) ];
+		if ( d <= - 4 || d > deep + 6 ) continue;
+		let clear = 0;
+		for ( const [ rx, rz ] of rays ) {
+			let open = true;
+			for ( let r = near; r <= far && open; r += step ) open = ! land( x + rx * r, z + rz * r );
+			if ( open ) clear ++;
+		}
+		keep[ J * R + I ] = clear / rays.length;
+	}
+	for ( let j = 0; j < res; j ++ ) for ( let i = 0; i < res; i ++ ) {
+		const k = j * res + i, d = depth[ k ];
+		if ( d <= - 2 || d > deep || ( data[ k * 4 + 1 ] === 0 && data[ k * 4 + 2 ] === 0 ) ) continue;
+		const u = Math.min( Math.max( ( i - 0.5 ) / 2, 0 ), R - 1.001 ), v = Math.min( Math.max( ( j - 0.5 ) / 2, 0 ), R - 1.001 );
+		const I = Math.floor( u ), J = Math.floor( v ), a = u - I, b = v - J, q = J * R + I;
+		const s = ( keep[ q ] * ( 1 - a ) + keep[ q + 1 ] * a ) * ( 1 - b ) + ( keep[ q + R ] * ( 1 - a ) + keep[ q + R + 1 ] * a ) * b;
+		data[ k * 4 + 1 ] *= s;
+		data[ k * 4 + 2 ] *= s;
+	}
+	return field;
+}
 // (M12) the ground under a field already solved (its depths, at its cells' middles), as the solve reads
 // the terrain: so another swell's field can be solved from it (in a worker: shore/ShoreWorker) without
 // the terrain's arrays, at the same cells

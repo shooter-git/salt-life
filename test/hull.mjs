@@ -11,7 +11,7 @@ import { WaterQuery } from '../src/ocean/WaterQuery.js';
 import { BoatModel } from '../src/world/BoatModel.js';
 import { BoatController } from '../src/player/BoatController.js';
 import { BoatSpray } from '../src/player/BoatSpray.js';
-import { weatherAt } from '../src/game/Weather.js';
+import { weatherAt, SOUTHERLY } from '../src/game/Weather.js';
 import { Hull, slamWear, hitWear, thrustMul, leakLs, rainLs, repairFee, crankChance, stormWear, STORM_FROM, SLAM_FROM, FLOOD_L, RESTART, CRANK_S, BAIL_LS, REPAIR_FULL } from '../src/game/Hull.js';
 import { weatherAt as weatherNow, hurricaneNews } from '../src/game/Weather.js';
 import { GameState } from '../src/game/GameState.js';
@@ -54,6 +54,8 @@ function drive( { cond = 'fair', throttle = 1, yaw = 0, secs = 60, from = SEA, c
 	const w = weatherAt( 30, cond );
 	const waves = new Waves( { tier: 'low', terrain } );
 	waves.setSea( w.swell, w.windSea );
+	// ((M14) its swell at its period, as the weather sets it)
+	waves.setSwell( 0, w.period, w.period, from );
 	G.windSpeed.value = w.wind;
 	const query = new WaterQuery( waves, terrain );
 	const b = new BoatController( { model, query, terrain, colliders } );
@@ -99,7 +101,8 @@ function drive( { cond = 'fair', throttle = 1, yaw = 0, secs = 60, from = SEA, c
 	// flat out on a fair day, into the swell and across it: no wear
 	const fair = [ 0, 1.6 ].map( ( yaw ) => drive( { yaw } ) );
 	// a gale, into the sea: flat out, at the usual throttle (W), and at half
-	const flat = drive( { cond: 'gale' } ), usual = drive( { cond: 'gale', throttle: 0.7 } ), half = drive( { cond: 'gale', throttle: 0.5 } );
+	// ((M14) a gale whose sea is about her: a picked gale's blows down the trades, its sea on the north shore)
+	const flat = drive( { cond: SOUTHERLY } ), usual = drive( { cond: SOUTHERLY, throttle: 0.7 } ), half = drive( { cond: SOUTHERLY, throttle: 0.5 } );
 	console.log( `     a minute flat out on a fair day: ${ fair.map( ( r ) => `${ r.slams } slams, ${ pct( r.hull.wear ) }` ).join( '; ' ) }. In a gale: flat out ${ flat.slams } slams, ${ pct( flat.hull.wear ) } and ${ flat.hull.bilge.toFixed( 0 ) } L shipped; at W ${ pct( usual.hull.wear ) }; at half throttle ${ pct( half.hull.wear ) }` );
 	ok( fair.every( ( r ) => r.b.isFinite() && r.hull.wear === 0 && r.hull.bilge === 0 ), 'flat out on a fair day she takes no wear' );
 	ok( flat.hull.wear > 0.03 && flat.hull.wear < 0.12, 'a gale flat out wears her: about a quarter in five minutes' );

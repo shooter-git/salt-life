@@ -1,6 +1,6 @@
 import { Mesh, PlaneGeometry, CanvasTexture, MeshStandardMaterial, SRGBColorSpace, Matrix4 } from '../engine/index.js';
 import { STAND } from './FishStand.js';
-import { WEATHER_NAMES, MURKY, surfText, swellFrom } from './Weather.js';
+import { WEATHER_NAMES, MURKY, NORTH, surfText, swellFrom } from './Weather.js';
 import { timeText } from './IslandClock.js';
 import { knots } from './Units.js';
 import { wxWind, wxRain } from './TimeHUD.js';
@@ -10,7 +10,8 @@ import { wxWind, wxRain } from './TimeHUD.js';
 // gives it, and what's coming (Weather.forecast). When a blow's on its way and the fish are feeding
 // hard ahead of it (Weather's front), Joe says so at the bottom; (M10) or, after one, that the water's
 // still murky (Weather's murk: the spearfishing's poor); (M13) a hurricane on its way first (Weather's
-// hurricaneNews: on the outlook, watched for, warned of; and in its eye, that there's more to come).
+// hurricaneNews: on the outlook, watched for, warned of; and in its eye, that there's more to come);
+// (M14) or, last, a big surf on the north shore (Weather's north, past NORTH.big).
 // One plane, its frame painted into the
 // canvas; the same program as the records board's slate (together/RecordsBoard.js), as the wanted
 // list's. Drawn again only when what it says changes.
@@ -37,7 +38,8 @@ export function slateText( weather, next, locale = undefined, news = null ) {
 			[ 'Surf', `${ surfText( weather.surf ) } ${ swellFrom( weather.west || 0 ) }, ${ Math.round( weather.period ) } s` ],
 			[ 'Later', later ],
 		],
-		note: news ? hurricaneNote( news, weather ) : weather.front >= FEEDING ? 'Fish feeding: a blow\'s coming' : weather.murk >= MURKY ? 'The water\'s murky after the blow' : '',
+		note: news ? hurricaneNote( news, weather ) : weather.front >= FEEDING ? 'Fish feeding: a blow\'s coming' : weather.murk >= MURKY ? 'The water\'s murky after the blow'
+			: weather.north >= NORTH.big ? `North shore ${ surfText( weather.north ) }` : '',
 	};
 
 }
@@ -45,9 +47,11 @@ export function slateText( weather, next, locale = undefined, news = null ) {
 // (M13) what Joe chalks of a hurricane on its way
 function hurricaneNote( news, weather ) {
 
-	if ( news.stage === 'outlook' ) return `A hurricane out to the ${ news.from }`;
-	if ( news.stage === 'watch' ) return 'Hurricane watch';
-	return weather.eye >= 0.5 ? 'The eye: more to come' : 'Hurricane warning';
+	// ((M14) its category: 'Cat 3 hurricane warning')
+	const cat = news.cat ? `Cat ${ news.cat } ` : '';
+	if ( news.stage === 'outlook' ) return `A ${ cat }hurricane out to the ${ news.from }`;
+	if ( news.stage === 'watch' ) return `${ cat }hurricane watch`.replace( /^./, ( c ) => c.toUpperCase() );
+	return weather.eye >= 0.5 ? 'The eye: more to come' : `${ cat }hurricane warning`.replace( /^./, ( c ) => c.toUpperCase() );
 
 }
 

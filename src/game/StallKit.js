@@ -575,8 +575,9 @@ export class KitBuilder {
 	}
 
 	// a corrugated iron sheet in its local xz plane (ribs along z), w wide, l long, under matrix.
-	// The ribs line up with the texture's (u = x / 1.8 m).
-	corrugated( w, l, matrix, u0 = 0, color = [ 1, 1, 1 ] ) {
+	// The ribs line up with the texture's (u = x / 1.8 m). ((M14) o.layer, o.params: another surface for
+	// it, as box's: a new sheet's bright zinc)
+	corrugated( w, l, matrix, u0 = 0, color = [ 1, 1, 1 ], o = {} ) {
 
 		const nx = Math.ceil( w / 1.8 * RIBS * 8 ), nz = 2;
 		_n.getNormalMatrix( matrix );
@@ -594,7 +595,7 @@ export class KitBuilder {
 			const dh = ( hAt( x + 1e-3 ) - hAt( x - 1e-3 ) ) / 2e-3;
 			const p = new Vector3( x, hAt( x ), z ).applyMatrix4( matrix );
 			const n = new Vector3( - dh, 1, 0 ).normalize().applyMatrix3( _n ).normalize();
-			this._vert( p, n, [ x / 1.8 + u0, - z / 1.8 ], color, LAYER.TIN, [ 0, 0 ] );
+			this._vert( p, n, [ x / 1.8 + u0, - z / 1.8 ], color, o.layer ?? LAYER.TIN, o.params || [ 0, 0 ] );
 
 		}
 

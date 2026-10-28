@@ -14,7 +14,9 @@ import { G, GRAVITY } from '../core/Globals.js';
 //
 // GLSL (this.glsl, needs terrainHeightAt( xz ) from the terrain; uniforms: this.uniforms):
 //   struct ShoreSample { disp, nShore, env, foam, breaking, u, dir, exposure, swashLevel, swashCovered,
-//                        thick, swashFoam, runup, inland, face, roller }
+//                        thick, swashFoam, runup, inland, face, roller, meanFoam, lam }
+//   ((M14) meanFoam: the white the breakers leave there on average, for where the water's grid is too
+//   coarse to draw them, seen from afar: the breaker line and the whitewater inside it; lam: their length)
 //   ShoreSample shoreEvaluate( vec2 xz, float depth, float groundH )        (with the normal: the water mesh)
 //   vec4 terrainShoreSample( vec2 xz )        the shore field ( T, dir * exposure, shoreline T )
 //   vec4 shoreSwashEdge( vec2 xz, float t )   ( clipped film thickness, distance to the swash front, tau, Rt )
@@ -32,6 +34,9 @@ import { G, GRAVITY } from '../core/Globals.js';
 // each breaking where it does (their heights add, the foam and the swash are whichever's more). The
 // second costs nothing until it's running (a uniform branch). params, phase(), timeOf() and clock()
 // are the south's; `surf` is the weather's.
+// (M14) A third, the north shore's sea (the trades' own, Weather.NORTH: addField( field, 2 ), setNorth):
+// breaking on the island's windward side, apart from the bay's two (it takes none of their surf), as a
+// westerly's does; a uniform branch too, and on the GPU only where its field reaches (its exposure).
 // (M13) A storm surge: the sea's level (G.seaLevel) rises over the beach, and the shore field solved at
 // its sea level wouldn't know the water there. So a hurricane's surge gets a field of its own, solved at
 // its highest (setSurgeField: a worker's, before it comes), and the island's own swell reads the two
@@ -74,6 +79,9 @@ export const TUMBLE_H = 2.8;
 const RIP_MILK = 0.7;
 const RIP_REACH = 2.2;
 
+// (M14) where northNear looks: the point, and r off it each way
+const NEAR = [ [ 0, 0 ], [ 1, 0 ], [ - 1, 0 ], [ 0, 1 ], [ 0, - 1 ] ];
+
 const f = ( x ) => {
 
 	const s = String( x );
@@ -85,9 +93,10 @@ const f = ( x ) => {
 // along), its height (offshore amplitude, H/2) and period, its run-up, and its clock
 class ShoreTrain {
 
-	constructor( field, amplitude = FAIR_AMPLITUDE, period = FAIR_PERIOD ) {
+	constructor( field, amplitude = FAIR_AMPLITUDE, period = FAIR_PERIOD, slot = 0 ) {
 
 		this.field = field;
+		this.slot = slot; // (0: the south's, 1: a westerly's, (M14) 2: the north shore's)
 		this.texture = fieldTexture( field );
 		this.surge = null; // (M13) { field, level, texture }: a surge's (the island's own swell's only)
 		this.amplitude = amplitude;
@@ -202,6 +211,7 @@ export class ShoreWaves {
 		this.texture = home.texture;
 		this.surf = FAIR_AMPLITUDE; // (M12) the weather's surf (both swells': the fish, the sound)
 		this.west = 0; // (M12) its share from the west (setSurf)
+		this.north = [ 0, FAIR_PERIOD ]; // (M14) the north shore's sea: its height and period (setNorth)
 
 		this.params = {
 			period: FAIR_PERIOD,
@@ -231,12 +241,16 @@ export class ShoreWaves {
 			shoreP1: { value: new THREE.Vector4() },
 			// (M11) the surf zone's milk: its turbidity, of a fair day's; the depth it reaches (m: where the
 			// breakers stand, deeper in a bigger surf)
-			shoreMilk: { value: new THREE.Vector2( 1, MILK_DEPTH ) },
+			shoreMilk: { value: new THREE.Vector4( 1, MILK_DEPTH, 0, 0 ) },
 			// (M12) the second swell: its field (the first's until it's given), its clock, ref, period and
 			// amplitude (0: not running), and its run-up
 			shoreTex2: { value: home.texture },
 			shoreTrain2: { value: new THREE.Vector4( 0, 0, FAIR_PERIOD, 0 ) },
 			shoreRunup2: { value: 0 },
+			// (M14) the third, the north shore's: as the second's
+			shoreTex3: { value: home.texture },
+			shoreTrain3: { value: new THREE.Vector4( 0, 0, FAIR_PERIOD, 0 ) },
+			shoreRunup3: { value: 0 },
 			// (M13) a surge's field (the island's own until it's given), and the sea level it was solved at
 			// (0: none)
 			shoreTexS: { value: home.texture },
@@ -249,14 +263,31 @@ export class ShoreWaves {
 	}
 
 	// (M12) the second swell's field (a westerly's: computeShoreField with its direction), once it's
-	// solved. Its waves stay flat until setSurf gives them a share
-	addField( field ) {
+	// solved. Its waves stay flat until setSurf gives them a share. (M14) Or the third's (slot 2: the north
+	// shore's, along Weather.NORTH.dir, its lee taken out: ShoreField.shelter), as high as setNorth has it
+	addField( field, slot = 1 ) {
 
-		if ( this.trains[ 1 ] ) return;
-		const train = new ShoreTrain( field, 0, this.trains[ 0 ].period );
-		this.trains[ 1 ] = train;
-		this.uniforms.shoreTex2.value = train.texture;
-		this.setSurf( this.surf, this.trains[ 0 ].period, this.west, G.time.value, true );
+		if ( this.trains[ slot ] ) return;
+		const train = new ShoreTrain( field, 0, slot === 2 ? this.north[ 1 ] : this.trains[ 0 ].period, slot );
+		this.trains[ slot ] = train;
+		this.uniforms[ slot === 2 ? 'shoreTex3' : 'shoreTex2' ].value = train.texture;
+		if ( slot === 2 ) this.setNorth( this.north[ 0 ], this.north[ 1 ], G.time.value, true );
+		else this.setSurf( this.surf, this.trains[ 0 ].period, this.west, G.time.value, true );
+
+	}
+
+	// (M14) the north shore's sea (Weather's north, northPeriod): its height (offshore amplitude, m) and
+	// period, on its own train's clock once its field's given. The bay's surf is setSurf's
+	setNorth( amplitude, period, t = G.time.value, force = false ) {
+
+		if ( ! force && amplitude === this.north[ 0 ] && period === this.north[ 1 ] ) return;
+		this.north[ 0 ] = amplitude;
+		this.north[ 1 ] = period;
+		const train = this.trains[ 2 ];
+		if ( ! train ) return;
+		train.set( amplitude, period, t );
+		this.syncUniforms();
+		this.update( t );
 
 	}
 
@@ -318,8 +349,9 @@ export class ShoreWaves {
 	update( t = G.time.value ) {
 
 		this.uniforms.shoreClock.value = this.trains[ 0 ].clock( t );
-		const other = this.trains[ 1 ];
+		const other = this.trains[ 1 ], north = this.trains[ 2 ];
 		if ( other ) this.uniforms.shoreTrain2.value.x = other.clock( t );
+		if ( north ) this.uniforms.shoreTrain3.value.x = north.clock( t );
 
 	}
 
@@ -328,12 +360,21 @@ export class ShoreWaves {
 		const p = this.params, U = this.uniforms;
 		U.shoreP0.value.set( p.period, p.amplitude, p.variation, p.gamma );
 		U.shoreP1.value.set( p.breakSpan, p.curl, p.runup, p.enabled );
-		U.shoreMilk.value.set( p.turbidity / FAIR_TURBIDITY, MILK_DEPTH * Math.max( 1, this.surf / FAIR_AMPLITUDE ) );
-		const other = this.trains[ 1 ];
+		const nA = this.trains[ 2 ] ? this.north[ 0 ] : 0;
+		U.shoreMilk.value.set( p.turbidity / FAIR_TURBIDITY, MILK_DEPTH * Math.max( 1, this.surf / FAIR_AMPLITUDE ),
+			Math.min( MILK_MAX, nA / FAIR_AMPLITUDE ), nA > 0.005 ? MILK_DEPTH * Math.max( 1, nA / FAIR_AMPLITUDE ) : 0 );
+		const other = this.trains[ 1 ], north = this.trains[ 2 ];
 		if ( other ) {
 
 			U.shoreTrain2.value.set( other.clock( G.time.value ), other.ref, other.period, other.amplitude > 0.005 ? other.amplitude : 0 );
 			U.shoreRunup2.value = other.runup;
+
+		}
+
+		if ( north ) {
+
+			U.shoreTrain3.value.set( north.clock( G.time.value ), north.ref, north.period, north.amplitude > 0.005 ? north.amplitude : 0 );
+			U.shoreRunup3.value = north.runup;
 
 		}
 
@@ -349,13 +390,18 @@ export class ShoreWaves {
 
 	}
 
-	// (M12) the trains running: the south's, and the second while it has a height
+	// (M12) the trains running: the south's, and the second while it has a height; (M14) and the third
 	_running( out ) {
 
 		out.length = 0;
 		out.push( this.trains[ 0 ] );
-		const other = this.trains[ 1 ];
-		if ( other && other.amplitude > 0.005 ) out.push( other );
+		for ( let i = 1; i < this.trains.length; i ++ ) {
+
+			const tr = this.trains[ i ];
+			if ( tr && tr.amplitude > 0.005 ) out.push( tr );
+
+		}
+
 		return out;
 
 	}
@@ -456,6 +502,25 @@ export class ShoreWaves {
 
 	}
 
+	// (M14) the north shore's sea reaching about (x, z): its height (m) as far as its field reaches there or
+	// `r` m off (on land, the bluff over it), for the surf's far roar; 0 with none
+	northNear( x, z, r = 60 ) {
+
+		const tr = this.trains[ 2 ];
+		if ( ! tr || tr.amplitude <= 0.005 ) return 0;
+		const sh = this._shn || ( this._shn = [ 0, 0, 0, 0 ] );
+		let e = 0;
+		for ( const [ ox, oz ] of NEAR ) {
+
+			tr.fieldAt( x + ox * r, z + oz * r, sh );
+			e = Math.max( e, Math.hypot( sh[ 1 ], sh[ 2 ] ) );
+
+		}
+
+		return tr.amplitude * sat( e * 1.4 );
+
+	}
+
 	// (M12) the bigger swell's height reaching (x, z), as an offshore amplitude (m), and its train
 	_reaching( x, z, sh ) {
 
@@ -508,12 +573,13 @@ export class ShoreWaves {
 
 	// (M12) the breaker at (x, z) (ground: the bottom's height), of the swell that's bigger there: out
 	// { n: its crest's count (one more each wave that's passed over; another swell's are counted apart),
-	// H: its height (m, trough to crest), b: how far it's broken (< 0 still rising, 0..1 plunging, > 1 a
-	// bore), dx, dz: the way it runs }
-	breakerAt( x, z, t, ground, terrain, out = { n: 0, H: 0, b: - 9, dx: 0, dz: 1 } ) {
+	// H: its height (m, trough to crest), (M14) Hb: its bore's (the whitewater it runs on as, over the
+	// still water: m), b: how far it's broken (< 0 still rising, 0..1 plunging, > 1 a bore), dx, dz: the way
+	// it runs }
+	breakerAt( x, z, t, ground, terrain, out = { n: 0, H: 0, Hb: 0, b: - 9, dx: 0, dz: 1 } ) {
 
 		const P = this.params, sea = G.seaLevel.value, d = sea - ground;
-		out.H = 0;
+		out.H = out.Hb = 0;
 		out.b = - 9;
 		if ( d > 26 || d < - 0.2 || P.enabled <= 0 ) return out;
 		const sh = this._shb || ( this._shb = [ 0, 0, 0, 0 ] );
@@ -530,8 +596,9 @@ export class ShoreWaves {
 		const dc = sea - terrain.heightAt( x + dx * u * lam, z + dz * u * lam );
 		const B = breakParams( A, dc + ( d - dc ) * smooth( 0.3, 0.5, Math.abs( u ) ), P );
 		const env = smooth( 26, 13, d ) * sat( exposure * 1.4 );
-		out.n = Math.floor( s ) + ( tr === this.trains[ 0 ] ? 0 : 1e7 );
+		out.n = Math.floor( s ) + tr.slot * 1e7;
 		out.H = B.H * env;
+		out.Hb = B.Hb * env;
 		out.b = B.b;
 		out.dx = dx;
 		out.dz = dz;
@@ -657,11 +724,15 @@ uniform float shoreRef;
 uniform float shoreSeaLevel;
 uniform vec4 shoreP0; // period, amplitude, variation, gamma
 uniform vec4 shoreP1; // breakSpan, curl, runup, enabled
-uniform vec2 shoreMilk; // (M11) the surf zone's turbidity (of a fair day's), the depth it reaches (m)
+uniform vec4 shoreMilk; // (M11) the surf zone's turbidity (of a fair day's), the depth it reaches (m); (M14) the north shore's
 // (M12) the second swell: its field, its clock, ref, period and amplitude (0: not running), its run-up
 uniform highp sampler2D shoreTex2;
 uniform vec4 shoreTrain2;
 uniform float shoreRunup2;
+// (M14) the third, the north shore's sea: as the second's
+uniform highp sampler2D shoreTex3;
+uniform vec4 shoreTrain3;
+uniform float shoreRunup3;
 // (M13) a surge's field for the island's own swell, and the sea level it was solved at (0: none)
 uniform highp sampler2D shoreTexS;
 uniform float shoreSurgeLevel;
@@ -681,11 +752,16 @@ const float SHORE_SWASH_DOWN = ${ f( SWASH_DOWN ) };
 const float SHORE_SWASH_OVERSHOOT = ${ f( SWASH_OVERSHOOT ) };
 
 // (M12) a swell's train of waves: its clock, the travel time that's counted from, its period, height
-// (offshore amplitude) and run-up. The south's, and the second (a westerly's) while it's running
+// (offshore amplitude) and run-up. The south's, and the second (a westerly's) while it's running; (M14)
+// and the third (the north shore's)
 struct ShoreTrain { float clock; float ref; float period; float amplitude; float runup; };
 ShoreTrain shoreTrain1() { return ShoreTrain( shoreClock, shoreRef, SHORE_PERIOD, SHORE_AMPLITUDE, SHORE_RUNUP ); }
 ShoreTrain shoreTrain2_() { return ShoreTrain( shoreTrain2.x, shoreTrain2.y, shoreTrain2.z, shoreTrain2.w, shoreRunup2 ); }
+ShoreTrain shoreTrain3_() { return ShoreTrain( shoreTrain3.x, shoreTrain3.y, shoreTrain3.z, shoreTrain3.w, shoreRunup3 ); }
 #define SHORE_TWO ( shoreTrain2.w > 0.0 )
+#define SHORE_THREE ( shoreTrain3.w > 0.0 )
+// (M14) where the third's field reaches (its exposure): nothing's evaluated for it elsewhere, the bay
+#define SHORE_REACHES( f ) ( dot( f.yz, f.yz ) > 1e-4 )
 
 float shSS( float a, float b, float x ) { float t = clamp( ( x - a ) / ( b - a ), 0.0, 1.0 ); return t * t * ( 3.0 - 2.0 * t ); }
 float shSat( float x ) { return clamp( x, 0.0, 1.0 ); }
@@ -743,6 +819,8 @@ struct ShoreSample {
 	float inland;
 	float face;
 	float roller;
+	float meanFoam; // (M14) the white its breakers leave here on average (seen from afar)
+	float lam; // (M14) its wavelength here (m)
 };
 
 struct ShorePhase { vec4 sh; float T; vec2 dir; float exposure; float along; float s; };
@@ -922,6 +1000,14 @@ vec4 shoreSwashEdge( vec2 p, float t ) {
 				vec4 o2 = shoreSwashEdgeOf( p, t, g, shorePhaseAt( shoreFieldSample( shoreTex2, p ), b, p ), b );
 				if ( o2.y > o.y && o2.y < 999.0 ) o = o2;
 			}
+			if ( SHORE_THREE ) {
+				vec4 f3 = shoreFieldSample( shoreTex3, p );
+				if ( SHORE_REACHES( f3 ) ) {
+					ShoreTrain c = shoreTrain3_();
+					vec4 o3 = shoreSwashEdgeOf( p, t, g, shorePhaseAt( f3, c, p ), c );
+					if ( o3.y > o.y && o3.y < 999.0 ) o = o3;
+				}
+			}
 		}
 	}
 	return o;
@@ -1005,15 +1091,17 @@ ShoreSample shoreEvaluateTrain( vec4 field, ShoreTrain tr, vec2 xz, float depth,
 	o.exposure = exposure; o.swashLevel = groundH + thick; o.swashCovered = covered ? 1.0 : 0.0; o.thick = thick;
 	o.swashFoam = edge * 0.9; o.runup = swr.Rt; o.inland = swr.inland;
 	o.face = face; o.roller = roller;
+	// ((M14) the white a wave of the train's height leaves here on average: brightest along the break line,
+	// thinner over the bores inside it, a small surf's thinner)
+	float bm = shoreBreakParams( tr.amplitude, d ).b;
+	o.meanFoam = shSS( -0.6, 0.2, bm ) * mix( 0.85, 0.4, shSS( 1.5, 6.0, bm ) ) * mix( 0.45, 1.0, shSS( 0.1, 0.8, tr.amplitude ) ) * env;
+	o.lam = lam;
 	return o;
 }
 
-// the water mesh's view of the shore waves at a parcel resting at xz: (M12) of two swells crossing,
-// their heights and slopes added, the rest whichever's more (the crest's, of the bigger wave there)
-ShoreSample shoreEvaluate( vec2 xz, float depth, float groundH ) {
-	ShoreSample a = shoreEvaluateTrain( terrainShoreSample( xz ), shoreTrain1(), xz, depth, groundH );
-	if ( ! SHORE_TWO ) return a;
-	ShoreSample b = shoreEvaluateTrain( shoreFieldSample( shoreTex2, xz ), shoreTrain2_(), xz, depth, groundH );
+// (M12) two swells crossing: their heights and slopes added, the rest whichever's more (the crest's, of
+// the bigger wave there)
+ShoreSample shoreCross( ShoreSample a, ShoreSample b ) {
 	ShoreSample o = a;
 	if ( abs( b.disp.y ) > abs( a.disp.y ) ) o = b;
 	o.disp = a.disp + b.disp;
@@ -1025,6 +1113,8 @@ ShoreSample shoreEvaluate( vec2 xz, float depth, float groundH ) {
 	o.exposure = max( a.exposure, b.exposure );
 	o.face = max( a.face, b.face );
 	o.roller = max( a.roller, b.roller );
+	o.meanFoam = max( a.meanFoam, b.meanFoam );
+	o.lam = b.meanFoam > a.meanFoam ? b.lam : a.lam;
 	bool bSwash = b.swashLevel > a.swashLevel;
 	o.swashLevel = bSwash ? b.swashLevel : a.swashLevel;
 	o.swashCovered = max( a.swashCovered, b.swashCovered );
@@ -1032,6 +1122,18 @@ ShoreSample shoreEvaluate( vec2 xz, float depth, float groundH ) {
 	o.swashFoam = max( a.swashFoam, b.swashFoam );
 	o.runup = max( a.runup, b.runup );
 	return o;
+}
+
+// the water mesh's view of the shore waves at a parcel resting at xz: the south's, (M12) a westerly's
+// crossing them, (M14) and the north shore's sea where its field reaches
+ShoreSample shoreEvaluate( vec2 xz, float depth, float groundH ) {
+	ShoreSample a = shoreEvaluateTrain( terrainShoreSample( xz ), shoreTrain1(), xz, depth, groundH );
+	if ( SHORE_TWO ) a = shoreCross( a, shoreEvaluateTrain( shoreFieldSample( shoreTex2, xz ), shoreTrain2_(), xz, depth, groundH ) );
+	if ( SHORE_THREE ) {
+		vec4 f3 = shoreFieldSample( shoreTex3, xz );
+		if ( SHORE_REACHES( f3 ) ) a = shoreCross( a, shoreEvaluateTrain( f3, shoreTrain3_(), xz, depth, groundH ) );
+	}
+	return a;
 }
 
 // the surf zone's water: suspended sand and fine bubbles scatter light (milky, turquoise); (M11) as much
@@ -1050,6 +1152,13 @@ float shoreSurfTurbidity( vec2 xz, float depth ) {
 		float plume = rip * shSS( reach * ${ f( RIP_REACH ) }, reach * 0.6, depth ) * ${ f( RIP_MILK ) };
 		k = max( zone, plume ) * shSS( -0.2, 0.15, depth ) * expo * SHORE_ENABLED;
 	}
-	return min( k * shoreMilk.x, 1.0 );
+	k = min( k * shoreMilk.x, 1.0 );
+	// ((M14) the north shore's surf zone, as milky as its own surf stirs it, where its field reaches)
+	if ( SHORE_THREE && depth < shoreMilk.w && depth > -0.2 ) {
+		vec4 f3 = shoreFieldSample( shoreTex3, xz );
+		float zone = shSS( shoreMilk.w, shoreMilk.w * 0.27, depth ) * shSS( -0.2, 0.15, depth ) * shSat( length( f3.yz ) * 1.4 ) * SHORE_ENABLED;
+		k = max( k, min( zone * shoreMilk.z, 1.0 ) );
+	}
+	return k;
 }
 `;

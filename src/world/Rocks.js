@@ -1,8 +1,8 @@
 import * as THREE from '../engine/index.js';
 import { Noise2D, mulberry32, smoothstep as sstep } from '../util/Noise.js';
 import { WORLD } from './WorldLayout.js';
-import { G } from '../core/Globals.js';
 import { buildRockGeometry, ROCK_STYLES } from './terrain/RockGeometry.js';
+import { OVERHANGS, buildOverhang, overhangBuild, overhangColliders, clears } from './terrain/Overhangs.js';
 import { rot2, srgb, TERRAIN_SHADING_GLSL } from './terrain/TerrainShading.js';
 
 // Fade factor across a distance band [start, end] (0 before, 1 after), for the level that takes over
@@ -26,6 +26,13 @@ const FAR_SUBDIV = 2; // 320 triangles
 const NEAR_DIST = 60; // m (+ 6 x rock size)
 const FAR_DIST = 700; // m (+ 60 x rock size): faded out beyond
 const BAND = 0.12; // cross-fade band, share of the switch distance (Bayer screen-door, see LODFade)
+const RAIN_REACHES = - 3; // m: (M14) the rocks topping out above this are those the rain may fall on (its tide at its lowest, and more)
+// ((M14) the overhangs' grids: near (the low tier's coarser) and far, m)
+const OVERHANG_CELL = { near: 0.25, lite: 0.3, far: 0.5 };
+// ((M14) their fine shapes made a slice at a time: at most this long (ms) after each frame drawn, out of the
+// way of the next (with no frames, as under Node, the next task's)
+const SLICE_MS = 6;
+const afterFrame = () => new Promise( ( resolve ) => typeof requestAnimationFrame === 'function' ? requestAnimationFrame( () => setTimeout( resolve, 0 ) ) : setTimeout( resolve, 0 ) );
 
 export class Rocks {
 
@@ -44,6 +51,11 @@ export class Rocks {
 
 		const t0 = performance.now();
 		this.instances = this._place( mulberry32( seed ) );
+		// ((M14) and the overhangs to shelter under, placed by hand (terrain/Overhangs.js): made coarse now
+		// (their far shape, and from it what's in the way of standing under them), their near shape after the
+		// start (refineOverhangs); the scattered rocks where they stand taken away, the rest as they were)
+		this.overhangs = OVERHANGS.map( ( site ) => buildOverhang( site, this.terrainData, { cell: OVERHANG_CELL.far } ) );
+		this.instances = this.instances.filter( ( r ) => ! this.overhangs.some( ( o ) => Math.hypot( r.x - o.x, r.z - o.z ) < o.radius + r.size ) );
 		const t1 = performance.now();
 
 		if ( colliders ) {
@@ -57,44 +69,54 @@ export class Rocks {
 
 			}
 
+			// ((M14) the overhangs: what's in the way of standing under them, not their roofs)
+			for ( const o of this.overhangs ) for ( const b of overhangColliders( o ) ) colliders.addBox( b.center, b.half, b.rotY, { tag: 'rock' } );
+
 		}
 
 		this.material = this._createMaterial();
 		this.meshes = [];
 		this.buckets = [];
+		const mk = ( geo, name, members ) => {
+
+			const g = geo.clone();
+			// ((M14) an overhang's flows, for its shading; the other rocks have none)
+			if ( ! g.attributes.flow ) g.setAttribute( 'flow', new THREE.BufferAttribute( new Float32Array( g.attributes.position.count * 2 ), 2 ) );
+			const lod = new THREE.InstancedBufferAttribute( new Float32Array( Math.max( 1, members.length ) * 2 ), 2 );
+			lod.setUsage( THREE.DynamicDrawUsage );
+			g.setAttribute( 'iLod', lod );
+			const m = new THREE.InstancedMesh( g, this.material, Math.max( 1, members.length ) );
+			m.name = name;
+			m.count = 0;
+			m.castShadow = castShadow && name.endsWith( 'near' );
+			m.receiveShadow = true;
+			m.frustumCulled = false;
+			m.instanceMatrix.setUsage( THREE.DynamicDrawUsage );
+			this.group.add( m );
+			this.meshes.push( m );
+			return m;
+
+		};
+		const bucket = this._bucket = ( members, near, far, name ) => this.buckets.push( { members, near: mk( near, `${ name }-near`, members ), far: mk( far, `${ name }-far`, members ), nearTris: near.index.count / 3, farTris: far.index.count / 3 } );
 		for ( let s = 0; s < ROCK_STYLES.length; s ++ ) {
 
-			const members = this.instances.filter( ( r ) => r.style === s );
 			// (the low tier: one subdivision less, a quarter of the triangles)
 			const near = buildRockGeometry( s, 17 + s * 101, NEAR_SUBDIV - ( lite ? 1 : 0 ) );
 			const far = buildRockGeometry( s, 17 + s * 101, FAR_SUBDIV - ( lite ? 1 : 0 ) );
-			const mk = ( geo, name ) => {
-
-				const g = geo.clone();
-				const lod = new THREE.InstancedBufferAttribute( new Float32Array( Math.max( 1, members.length ) * 2 ), 2 );
-				lod.setUsage( THREE.DynamicDrawUsage );
-				g.setAttribute( 'iLod', lod );
-				const m = new THREE.InstancedMesh( g, this.material, Math.max( 1, members.length ) );
-				m.name = name;
-				m.count = 0;
-				m.castShadow = castShadow && name.endsWith( 'near' );
-				m.receiveShadow = true;
-				m.frustumCulled = false;
-				m.instanceMatrix.setUsage( THREE.DynamicDrawUsage );
-				this.group.add( m );
-				this.meshes.push( m );
-				return m;
-
-			};
-
-			this.buckets.push( { members, near: mk( near, `rocks-${ ROCK_STYLES[ s ].name }-near` ), far: mk( far, `rocks-${ ROCK_STYLES[ s ].name }-far` ), nearTris: near.index.count / 3, farTris: far.index.count / 3 } );
-			// ((M12) the shape as an ellipsoid in its bounds, for the rain's splashes: splashRocks)
-			if ( ! far.boundingBox ) far.computeBoundingBox();
-			const c = far.boundingBox.getCenter( new THREE.Vector3() ), h = far.boundingBox.getSize( new THREE.Vector3() ).multiplyScalar( 0.5 );
-			this._ellipsoids = this._ellipsoids || [];
-			this._ellipsoids[ s ] = new THREE.Matrix4().compose( c, new THREE.Quaternion(), h );
+			bucket( this.instances.filter( ( r ) => r.style === s ), near, far, `rocks-${ ROCK_STYLES[ s ].name }` );
 
 		}
+
+		// ((M14) each overhang a bucket of its own: its own shape, near (its far one until it's refined) and
+		// far, one of it; among the rocks for the rest (the rain's rock cover, the debris kept off it))
+		this.overhangs.forEach( ( o, k ) => {
+
+			const r = { x: o.x, y: o.y, z: o.z, size: 4, sy: ( o.top - o.y ) / 4, style: ROCK_STYLES.length + k, matrix: o.matrix, radius: o.radius, overhang: o.site.kind };
+			this.instances.push( r );
+			bucket( [ r ], o.geometry, o.geometry, `rocks-overhang-${ o.site.kind }` );
+
+		} );
+		this._nearCell = lite ? OVERHANG_CELL.lite : OVERHANG_CELL.near;
 
 		this.timings = { place: t1 - t0, build: performance.now() - t1 };
 		this._lastCam = new THREE.Vector3( 1e9, 0, 0 );
@@ -106,27 +128,59 @@ export class Rocks {
 
 	}
 
-	// (M12) the rocks standing out of the sea within r of ( x, z ), nearest first (at most n), for the rain's
-	// splashes on them (Rain.setRocks): each one's world -> unit sphere matrix (its shape, as the ellipsoid
-	// in its bounds). out: an array of Matrix4s, refilled
-	splashRocks( x, z, r, n, out = [] ) {
+	// (M14) the overhangs' near shapes, finer than their far ones, made one at a time and put in for the far
+	// ones: each a slice at a time, at most `budget` ms of it after each frame drawn (slice(): a promise of
+	// then), 150 to 390 ms of slices each on a laptop
+	async refineOverhangs( { slice = afterFrame, budget = SLICE_MS } = {} ) {
 
-		out.length = 0;
-		const near = this._splash || ( this._splash = [] );
-		near.length = 0;
-		for ( const k of this.instances ) {
+		for ( let k = 0; k < this.overhangs.length; k ++ ) {
 
-			const d = Math.hypot( k.x - x, k.z - z ) - k.radius;
-			if ( d < r && k.y + k.size * k.sy * 0.8 > G.seaLevel.value - 0.3 ) near.push( { k, d } );
+			const o = this.overhangs[ k ];
+			if ( o.fine ) continue;
+			const build = overhangBuild( o.site, this.terrainData, { cell: this._nearCell } );
+			let r, t = - Infinity;
+			for ( ;; ) {
+
+				if ( performance.now() - t > budget ) {
+
+					await slice();
+					t = performance.now();
+
+				}
+
+				if ( ( r = build.next() ).done ) break;
+
+			}
+
+			const fine = o.fine = r.value;
+			const b = this.buckets[ ROCK_STYLES.length + k ], was = b.near.geometry, g = fine.geometry;
+			g.setAttribute( 'iLod', was.attributes.iLod );
+			b.near.geometry = g;
+			b.nearTris = g.index.count / 3;
+			was.dispose();
 
 		}
 
-		near.sort( ( a, b ) => a.d - b.d );
-		for ( let i = 0; i < Math.min( n, near.length ); i ++ ) {
+	}
 
-			const k = near[ i ].k;
-			if ( ! k.unit ) k.unit = new THREE.Matrix4().multiplyMatrices( k.matrix, this._ellipsoids[ k.style ] ).invert();
-			out.push( k.unit );
+	// (M14) whether nothing grows at ( x, z ): along an overhang, under it and out of its mouth
+	clears( x, z ) {
+
+		return this.overhangs.some( ( o ) => clears( o, x, z ) );
+
+	}
+
+	// (M14) the rocks over the square ( x0, z0 )..( x1, z1 ) that the rain can reach (their tops above the
+	// sea at its lowest), for what keeps it off about you (world/RockCover.js): each one's shape as it's
+	// drawn near (its geometry) and where it is (its matrix). out: an array, refilled
+	around( x0, z0, x1, z1, out = [] ) {
+
+		out.length = 0;
+		for ( const k of this.instances ) {
+
+			if ( k.x + k.radius < x0 || k.x - k.radius > x1 || k.z + k.radius < z0 || k.z - k.radius > z1 ) continue;
+			if ( k.y + k.size * k.sy < RAIN_REACHES ) continue;
+			out.push( { geometry: this.buckets[ k.style ].near.geometry, matrix: k.matrix } );
 
 		}
 
@@ -398,10 +452,11 @@ export class Rocks {
 
 			Object.assign( shader.uniforms, uniforms );
 			shader.vertexShader = shader.vertexShader
-				.replace( '#include <common>', '#include <common>\nattribute vec2 iLod;\nattribute float ao;\nvarying vec2 vLod;\nvarying float vCav;\nvarying vec3 vRockP;\nvarying vec3 vRockN;' )
+				.replace( '#include <common>', '#include <common>\nattribute vec2 iLod;\nattribute float ao;\nattribute vec2 flow;\nvarying vec2 vLod;\nvarying float vCav;\nvarying vec2 vFlow;\nvarying vec3 vRockP;\nvarying vec3 vRockN;' )
 				.replace( '#include <begin_vertex>', /* glsl */`#include <begin_vertex>
 	vLod = iLod;
 	vCav = ao;
+	vFlow = flow;
 	mat4 rockM = modelMatrix;
 #ifdef USE_INSTANCING
 	rockM = modelMatrix * instanceMatrix;
@@ -417,6 +472,7 @@ uniform sampler2D terrainSplatTex;
 uniform vec3 terrainMapInfo;
 varying vec2 vLod;
 varying float vCav;
+varying vec2 vFlow;
 varying vec3 vRockP;
 varying vec3 vRockN;
 ${ T.heightGlsl.replace( 'uniform highp sampler2D terrainHeightMap;\nuniform vec4 terrainHeightInfo;\n', '' ) }
@@ -432,9 +488,11 @@ float rockBayer4( vec2 pixel ) {
 ` )
 				.replace( '#include <color_fragment>', /* glsl */`
 	// LOD cross-fade: iLod = (fade, outgoing); the incoming level keeps the dither cells below
-	// fade, the outgoing one the others
+	// fade, the outgoing one the others ((M14) as materials/LODFade.js has it: it was the other way
+	// about, so the near level, outgoing at fade 0, kept none: no rock within about sixty metres of you
+	// was drawn, only its shadow)
 	float lodT = rockBayer4( gl_FragCoord.xy );
-	if ( vLod.y > 0.5 ? lodT >= vLod.x : lodT < vLod.x ) discard;
+	if ( vLod.y > 0.5 ? lodT < vLod.x : lodT >= vLod.x ) discard;
 	vec3 p = vRockP;
 	vec3 N = normalize( vRockN );
 	float mcr = texture( terrainDetailTex, ${ rot2( 'p.xz', 0.9 ) } / 61.0 ).w * 0.6
@@ -453,6 +511,10 @@ float rockBayer4( vec2 pixel ) {
 	vec3 rockAlbedo = R.albedo;
 	float rockRough = R.rough, rockHd = R.hd, rockHeight = R.height;
 #endif
+	// ((M14) an overhang's flows: each its own tone, and the crust at each one's top rusted browner, as
+	// the layers of lava shores are in photographs; the other rocks have none)
+	rockAlbedo *= 1.0 + vFlow.x * 0.15;
+	rockAlbedo = mix( rockAlbedo, PAL_rockWarm * 0.75, vFlow.y * 0.55 );
 	// contact with the ground: sand / soil drifted against the base, darker crevice
 	float groundH = terrainHeightAt( p.xz );
 	float above = p.y - groundH;

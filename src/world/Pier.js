@@ -39,9 +39,13 @@ const _h = new Vector3();
 // piles, caps and rails stand). Each is built on its own (stormB() a fresh Builder: Village makes it its
 // own meshes) with its own deck collider, which gives way while it's gone. planks: walkway boards
 // [ i0, i1 ) (0.215 m each, from the pier's foot); bay: this many bays back from the head
+// ((M14) and Marta's berth, the head's boat side: 'dock', its boards' outer lengths over rows [ r0, r1 )
+// of the head's deck (north of the cleat, the ladder and bollards clear of it), back to x (its collider:
+// the stringers stand beneath the rest); 'fender', its tyre fenders, by their place along its face)
 export const PIER_STORM = {
 	planks: [ { id: 0, walk: [ 296, 302 ] }, { id: 1, walk: [ 371, 376 ] }, { id: 2, walk: [ 430, 436 ] } ],
 	bay: { id: 0, back: 5 },
+	dock: { id: 0, rows: [ 18, 25 ], x: 58.8 },
 };
 
 export function buildPier( { B, terrain, colliders, rand, lights, inst, signB = null, hang = null, stormB = null } ) {
@@ -506,6 +510,7 @@ export function buildPier( { B, terrain, colliders, rand, lights, inst, signB = 
 
 	// head planks (along x, staggered butt joints)
 	const nRows = Math.floor( ( z1 - zH ) / pitch );
+	const dock = piece( 'dock', PIER_STORM.dock.id ), dr = PIER_STORM.dock.rows;
 	for ( let r = 0; r < nRows; r ++ ) {
 
 		const zc = zH + ( r + 0.5 ) * ( z1 - zH ) / nRows;
@@ -522,13 +527,25 @@ export function buildPier( { B, terrain, colliders, rand, lights, inst, signB = 
 		for ( let j = 0; j < joints.length - 1; j ++ ) {
 
 			const xa = joints[ j ] + 0.004, xb = joints[ j + 1 ] - 0.004;
+			// ((M14) Marta's berth: the boards reaching past its x, in its rows)
+			PB = dock && r >= dr[ 0 ] && r < dr[ 1 ] && xb > PIER_STORM.dock.x ? dock.B : B;
 			plank( ( xa + xb ) / 2, zc, xb - xa - 0.1, true );
 
 		}
 
 	}
 
-	addBox( X, DK - 0.04, ( zH + z1 ) / 2, ( hx1 - hx0 ) / 2, 0.04, ( z1 - zH ) / 2, { walkable: true, solid: true, tag: 'pierDeck' } );
+	PB = B;
+	if ( dock ) {
+
+		// (the head's deck collider about it, and its own)
+		const za = zH + dr[ 0 ] * ( z1 - zH ) / nRows, zb = zH + dr[ 1 ] * ( z1 - zH ) / nRows, xd = PIER_STORM.dock.x;
+		addBox( ( hx0 + xd ) / 2, DK - 0.04, ( zH + z1 ) / 2, ( xd - hx0 ) / 2, 0.04, ( z1 - zH ) / 2, { walkable: true, solid: true, tag: 'pierDeck' } );
+		addBox( ( xd + hx1 ) / 2, DK - 0.04, ( zH + za ) / 2, ( hx1 - xd ) / 2, 0.04, ( za - zH ) / 2, { walkable: true, solid: true, tag: 'pierDeck' } );
+		addBox( ( xd + hx1 ) / 2, DK - 0.04, ( zb + z1 ) / 2, ( hx1 - xd ) / 2, 0.04, ( z1 - zb ) / 2, { walkable: true, solid: true, tag: 'pierDeck' } );
+		dock.boxes.push( addBox( ( xd + hx1 ) / 2, DK - 0.04, ( za + zb ) / 2, ( hx1 - xd ) / 2, 0.04, ( zb - za ) / 2, { walkable: true, solid: true, tag: 'pierDeck' } ) );
+
+	} else addBox( X, DK - 0.04, ( zH + z1 ) / 2, ( hx1 - hx0 ) / 2, 0.04, ( z1 - zH ) / 2, { walkable: true, solid: true, tag: 'pierDeck' } );
 
 	// head railings: south edge, west edge, north edge (both sides of the walkway)
 	const railRun = ( ax, az, bx, bz ) => {
@@ -567,8 +584,13 @@ export function buildPier( { B, terrain, colliders, rand, lights, inst, signB = 
 	cleat( B, edgeX - 0.22, DK, 36.5, Math.PI / 2, rand.next() );
 	info.bollards.push( new Vector3( edgeX - 0.22, DK + 0.1, 36.5 ) );
 
-	// tyre fenders on the berthing face
-	for ( const fz of [ 33.75, 36.0, 37.35, 39.25 ] ) tireFender( B, edgeX, DK - 0.04, fz, 0, rand.range( 0.65, 0.85 ), rand.next() );
+	// tyre fenders on the berthing face ((M14) each its own: a hurricane's sea can part its chain)
+	[ 33.75, 36.0, 37.35, 39.25 ].forEach( ( fz, k ) => {
+
+		const f = piece( 'fender', k );
+		tireFender( f ? f.B : B, edgeX, DK - 0.04, fz, 0, rand.range( 0.65, 0.85 ), rand.next() );
+
+	} );
 
 	// ladder down into the water on the boat side
 	{

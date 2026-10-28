@@ -40,15 +40,18 @@ export function f( x ) {
 
 }
 
-// ---- palette (sRGB picked from photo references, stored linear)
+// ---- palette (sRGB picked from photo references, stored linear). (M14) The basalt's, from photographs of
+// lava shores (Malarrif, Snaefellsnes; Akun Island; Kauai's north shore): its lower quartile, its median and
+// its upper quartile, grey-brown (it had been nearly black, 0.15, 0.3 and 0.48); the splash zone's black
+// lichen a little lifted from charcoal
 export const PALETTE = {
-	rockDark: srgb( 0.15, 0.145, 0.135 ),
-	rockMid: srgb( 0.3, 0.285, 0.265 ),
-	rockLight: srgb( 0.48, 0.455, 0.42 ),
-	rockWarm: srgb( 0.44, 0.37, 0.30 ),
+	rockDark: srgb( 0.22, 0.21, 0.195 ),
+	rockMid: srgb( 0.37, 0.345, 0.32 ),
+	rockLight: srgb( 0.5, 0.475, 0.44 ),
+	rockWarm: srgb( 0.48, 0.41, 0.33 ),
 	lichenPale: srgb( 0.70, 0.70, 0.64 ),
 	lichenOrange: srgb( 0.78, 0.50, 0.20 ),
-	blackZone: srgb( 0.075, 0.075, 0.07 ),
+	blackZone: srgb( 0.12, 0.12, 0.115 ),
 	barnacle: srgb( 0.78, 0.76, 0.70 ),
 	algae: srgb( 0.20, 0.27, 0.10 ),
 	coralline: srgb( 0.62, 0.44, 0.46 ),

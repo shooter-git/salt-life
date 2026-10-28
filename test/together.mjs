@@ -123,5 +123,27 @@ const player = ( session, weather = null, since = 0 ) => {
 
 }
 
+// ---- (M14) the host's clouds and whale, followed by everyone else's
+{
+
+	const got = [];
+	const app = { sky: { clouds: { followDrift: ( d, late ) => got.push( [ 'sky', d, late ] ) } }, whale: { brain: { followHost: ( w, late ) => got.push( [ 'whale', w, late ] ) } } };
+	const msg = { at: Date.now() - 300, sky: [ 1, 2, 3, 4, 5, 6, 7, 8, 9 ], whale: { u: 40 } };
+	const guest = Object.create( Together.prototype );
+	guest.session = { isHost: false };
+	guest.app = app;
+	guest._theirWorld( msg );
+	const late = got.length === 2 ? got[ 0 ][ 2 ] : - 1;
+	check( got.length === 2 && got[ 0 ][ 1 ][ 0 ] === 1 && got[ 1 ][ 1 ].u === 40 && late > 0.25 && late < 0.4, `a guest's clouds and whale follow the host's, as late as it came (${ late.toFixed( 2 ) } s)` );
+	got.length = 0;
+	const host = Object.create( Together.prototype );
+	host.session = { isHost: true };
+	host.app = app;
+	host._theirWorld( msg );
+	guest._theirWorld( { at: Date.now() + 60000, sky: null, whale: { u: 1 } } );
+	check( got.length === 1 && got[ 0 ][ 2 ] === 0, 'the host leads (its own are its own), and a message stamped ahead of this device\'s clock is taken as now' );
+
+}
+
 console.log( failed ? `${ failed } failed` : 'all passed' );
 process.exit( failed ? 1 : 0 );

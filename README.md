@@ -20,7 +20,7 @@ You can walk, swim and take the boat around the island. You can fish from the pi
 boat, or dive and spear a fish, sell your catch to Joe and buy better gear from Marta. It plays with a
 mouse and keyboard, a gamepad or a touch screen.
 
-Done, M0 to M13:
+Done, M0 to M14:
 - the sea and its shore, spray, gusts and slicks, and the haze;
 - the whole world: the village, the pier, the reef and its fish, the birds and crabs, the beach's
   debris, the whale and the lights at night;
@@ -132,6 +132,28 @@ Done, M0 to M13:
     tarped, then mended, the boards go back in new timber and the palms grow back;
   - in its eye the sky opens to blue over a stadium of towering cloud, and the clouds race round with
     its wind;
+- storm skies and the sea (M14):
+  - each shower towers in its own cloud, a thunderstorm's spreading into an anvil; a hurricane's eye
+    is a sloping stadium, and its bands come in dark under their towers, each its own rain;
+  - the clouds aloft turn with a front; two flashes at once both light the sky;
+  - under a tin roof you hear the rain drumming on it, and the shelter's radio reads the advisories;
+  - the open sea's crests break, each its own, with spray torn off them on an ordinary day, and the
+    wind's slicks lie in rows;
+  - the trades raise a sea of their own on the north shore while the bay lies in the island's lee;
+    each swell runs at its own period; a southerly gale can be picked, to bring the sea into the bay;
+  - a big surf knocks you off your feet wading; the village's shutters swing and bang, and litter
+    and sand blow along in a blow;
+  - the boat's radar on a third screen, swept with her array: the coast, the others' boats and a
+    hurricane's bands coming in;
+  - now and then a hurricane's a Category 2 or 3, and its surge reaches into the village;
+  - it tears more of the island: the thatch, Joe's stand and Marta's sign, the drying nets, the flag
+    and Marta's berth; the sheets torn off the roofs cartwheel away down the wind, and you hear each
+    tear off and land; after it, its sand and sargassum lie over the boardwalk and the pier's foot;
+  - the rocks keep the rain off what's under them and, in a wind, in their lee; three overhangs on the
+    shore about the bay to shelter under: a ledge notched by the sea, a heap of rock with a cave in it,
+    and a crag standing in the shallows with a cave to wade into, its layers of lava catching the light;
+    under one the rain's quieter, and under them and the pier the sea lies without its rings;
+  - a snapped line leaves its float drifting off on the water, and you tie on a new hook;
 - playing together:
   - you see the others on the island, walking, swimming, fishing and out in their boats;
   - you pick your islander: two men and two women;
@@ -172,7 +194,9 @@ The island's day:
 | M11 | The rain where you stand: the rain on the pier and the roofs and dry under them, drips, the rain heard on what it falls on, showers' curtains in the distance, the sea mirroring the sky, the milkier surf, the fish in the murk, the hull heard riding along, the boat's instruments |
 | M12 | Storms from other directions: each blow its own track, fronts, thunderstorms on the horizon, the swell from the west crossing the island's own, rip currents and being tumbled, splashes on the rocks and the boat, the skipper's dash for riders |
 | M13 | The hurricane: its surge and surf, its wind and rain, the warnings, the haul-out and the shelter, the wildlife in the weather, the damage and its mending, the eye's sky |
-| M14 | For consideration ([docs/M14.md](docs/M14.md)): cumulonimbus, the open sea breaking, the clouds aloft turning with a front, the radar, rain on a tin roof, more of the hurricane |
+| M14 | Storm skies and the sea: cumulonimbus, the eye's stadium and its bands, the open sea breaking, the north shore's sea, being knocked over wading, shutters and litter in a blow, the radar, rain heard on tin, Category 2 and 3 hurricanes, more of the island torn and its roof sheets flying, shelter under the rocks ([what's left over](docs/M14.md)) |
+| M15 | The world, for consideration: the island worth going all the way round, the north side, and the sea past it ([docs/M15.md](docs/M15.md)) |
+| M16 | The boats, for consideration: the boats to work up to, once M15's bigger sea is there for them ([docs/M16.md](docs/M16.md)) |
 
 ## How it fits All the Spaces
 

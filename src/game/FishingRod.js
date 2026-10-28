@@ -26,7 +26,8 @@ import { windBeyondFair } from './Weather.js';
 //
 // States: 'stowed' -> 'idle' -> ( hold ) 'windup' -> ( release ) 'flick' -> 'flying' (bobber in the
 // air) -> 'floating' (on the water; bites come here) -> 'fighting' (fish on) -> back to 'idle';
-// 'retrieving' reels an empty line in.
+// 'retrieving' reels an empty line in; ((M14) 'rigging': a new hook and float tied on after the line's
+// snapped, the lost one drifting off: snap()).
 export const ROD_L = 2.13; // 7 ft
 
 // The blank's bend: a damped spring toward its load (~2.5 Hz, lightly damped), stepped in substeps of at
@@ -68,6 +69,11 @@ const LINE_WIND = 0.4;
 const DRIFT_K = 0.02;
 const DRIFT_M = 6;
 const DRIFT_DEPTH = 0.3;
+// (M14) a snapped line: a new hook and float tied on (s: a few, where a real one's a minute or two), and
+// the lost float with the broken end of the line (LOST_TAIL m of it, lying back the way it broke) left on
+// the water, drifting off downwind (LOST_DRIFT of the wind, at least LOST_DRIFT_MIN m/s, as a float and its
+// line are pushed), washed up where the water ends, until it's out of sight (LOST_FAR m) or LOST_S s on
+const RIG_S = 8, LOST_TAIL = 1.6, LOST_DRIFT = 0.03, LOST_DRIFT_MIN = 0.08, LOST_FAR = 120, LOST_S = 150;
 
 // guides: position along the rod, ring inner radius, ring centre height below the blank's axis
 const GUIDES = [
@@ -105,6 +111,7 @@ export const POSES = {
 	floating: { elev: 0.4, side: 0.18, hand: [ 0.15, - 0.06, - 0.46 ] },
 	fighting: { elev: 0.9, side: 0.12, hand: [ 0.14, - 0.03, - 0.43 ] },
 	landing: { elev: 0.85, side: 0.3, hand: [ 0.16, - 0.08, - 0.46 ] }, // rod up, the fish swinging in view
+	rigging: { elev: 0.12, side: 0.3, hand: [ 0.12, - 0.16, - 0.36 ] }, // ((M14) held low and close, tying on a new hook)
 };
 
 // the rod's material: the carbon blank, its wraps and the reel, with the reel's and the blank's
@@ -186,6 +193,7 @@ export class FishingRod {
 		this.terrain = terrain;
 		this.audio = audio;
 		this.slot = query.allocate( 'bobber', 1 );
+		this.lostSlot = query.allocate( 'lostFloat', 1 ); // ((M14) a snapped line's float, drifting off)
 
 		this.state = 'stowed';
 		this.equipped = false;
@@ -209,6 +217,8 @@ export class FishingRod {
 		this._wander = 0;
 		this.onLand = null; // callback( 'water' | 'ground' ) when the bobber lands
 		this.tip = new Vector3();
+		this._rig = 0; // ((M14) s left tying on a new hook and float)
+		this.lost = null; // ((M14) a snapped line's float: { pos, back (unit: the way it broke), t, waterY, ashore })
 
 		// reel / bend animation state
 		this.bendVel = 0;
@@ -243,7 +253,22 @@ export class FishingRod {
 		this.lineMesh.castShadow = false;
 		this.lineMesh.visible = false;
 
-		scene.add( this.rodMesh, this.bobberMesh, this.lineMesh );
+		// ((M14) a snapped line's float and the broken end of its line (the float's and the line's own
+		// programs)
+		this.lostMesh = new Mesh( this.bobberMesh.geometry, this.bobberMat );
+		this.lostMesh.name = 'LostFloat';
+		this.lostLineMat = createLineMaterial( LINE_SEGS );
+		this.lostLine = new Mesh( this.lineMesh.geometry, this.lostLineMat );
+		this.lostLine.name = 'LostLine';
+		for ( const m of [ this.lostMesh, this.lostLine ] ) {
+
+			m.frustumCulled = false;
+			m.castShadow = false;
+			m.visible = false;
+
+		}
+
+		scene.add( this.rodMesh, this.bobberMesh, this.lineMesh, this.lostMesh, this.lostLine );
 
 	}
 
@@ -338,6 +363,23 @@ export class FishingRod {
 
 	}
 
+	// (M14) the line's snapped: its float and the broken end of the line left on the water where it was, to
+	// drift off; a new hook and float to tie on before the next cast
+	snap() {
+
+		if ( this.lineInWater ) {
+
+			const back = new Vector3( this.tip.x - this.bobber.x, 0, this.tip.z - this.bobber.z );
+			if ( back.lengthSq() < 1e-6 ) back.set( 0, 0, 1 );
+			this.lost = { pos: this.bobber.clone(), back: back.normalize(), t: 0, waterY: this.waterY, ashore: false };
+
+		}
+
+		this._rig = RIG_S;
+		this.setState( 'rigging' );
+
+	}
+
 	// fish lost: line back to the rod
 	endFight() {
 
@@ -355,6 +397,10 @@ export class FishingRod {
 		this.t += dt;
 		const cam = this.camera;
 		const tipOld = _tipOld.copy( this.tip );
+		// ((M14) tying on a new hook and float after a snap: no cast until it's on, whatever's happened since)
+		if ( this._rig > 0 ) this._rig = Math.max( 0, this._rig - dt );
+		if ( this.state === 'idle' && this._rig > 0 ) this.setState( 'rigging' );
+		else if ( this.state === 'rigging' && this._rig <= 0 ) this.setState( 'idle' );
 
 		// charge while winding up
 		if ( this.state === 'windup' ) this.power = Math.min( 1, this.power + dt / 1.1 );
@@ -619,6 +665,53 @@ export class FishingRod {
 		this.bobberMesh.scale.setScalar( Math.max( 1, camD / 7 ) );
 		// bobber tilts toward the pull
 		this.bobberMesh.rotation.set( this.dip * 0.4, 0, 0 );
+		this._drift( dt, visible );
+
+	}
+
+	// (M14) a snapped line's float, drifting off downwind on the waves with the broken end of its line lying
+	// back the way it broke; washed up where the water ends, lying on its side; gone once it's out of sight
+	_drift( dt, visible ) {
+
+		const L = this.lost;
+		if ( ! L ) return;
+		L.t += dt;
+		this.query.setPoint( this.lostSlot, L.pos.x, L.pos.z );
+		if ( this.query.cpuValid ) {
+
+			const h = this.query.cpu[ this.lostSlot * 4 ];
+			if ( Number.isFinite( h ) ) L.waterY = h;
+
+		}
+
+		const ground = this.terrain.heightAt( L.pos.x, L.pos.z );
+		if ( ! L.ashore && L.waterY < ground + 0.03 ) L.ashore = true;
+		if ( ! L.ashore ) {
+
+			const wd = G.windDir.value, v = Math.max( LOST_DRIFT_MIN, LOST_DRIFT * G.windSpeed.value );
+			L.pos.x += wd.x * v * dt;
+			L.pos.z += wd.y * v * dt;
+
+		}
+
+		const yT = L.ashore ? ground + 0.02 : L.waterY + 0.012 + Math.sin( L.t * 2.1 ) * 0.008;
+		L.pos.y += ( yT - L.pos.y ) * ( 1 - Math.exp( - dt * 8 ) );
+		const camD = L.pos.distanceTo( this.camera.position );
+		this.lostMesh.position.copy( L.pos );
+		this.lostMesh.rotation.set( L.ashore ? 1.4 : 0.2 * Math.sin( L.t * 1.3 ), L.t * 0.15, 0 );
+		this.lostMesh.scale.setScalar( Math.max( 1, camD / 7 ) );
+		const lm = this.lostLineMat.uniforms;
+		lm.lineA.value.copy( L.pos );
+		lm.lineB.value.set( L.pos.x + L.back.x * LOST_TAIL, L.pos.y - 0.01, L.pos.z + L.back.z * LOST_TAIL );
+		lm.lineCtl.value.copy( lm.lineA.value ).lerp( lm.lineB.value, 0.5 ).y -= 0.02;
+		lm.lineShow.value = 1;
+		this.lostMesh.visible = this.lostLine.visible = visible;
+		if ( L.t > LOST_S || camD > LOST_FAR ) {
+
+			this.lost = null;
+			this.lostMesh.visible = this.lostLine.visible = false;
+
+		}
 
 	}
 

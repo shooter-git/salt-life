@@ -1,0 +1,26 @@
+{
+	"rain_tin_light": {
+		"file": "rain_tin_light.ogg",
+		"loop": true,
+		"lufs": -23.3,
+		"src": [
+			771981
+		]
+	},
+	"rain_tin_heavy": {
+		"file": "rain_tin_heavy.ogg",
+		"loop": true,
+		"lufs": -23.1,
+		"src": [
+			771981
+		]
+	},
+	"shelter_radio": {
+		"file": "shelter_radio.ogg",
+		"loop": true,
+		"lufs": -24,
+		"src": [
+			397088
+		]
+	}
+}

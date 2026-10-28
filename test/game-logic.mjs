@@ -1,7 +1,7 @@
 // Plain-node tests of the fishing game logic (no GPU): bites, the catch fight, inventory, save.
 import { FISH, FISH_IDS, CARAPACE, fishValue, fishLengthCm, fishWeightKg, spearRule, isTrophy } from '../src/game/FishTable.js';
 import { habitatAt, pickSpecies, rollWeight, biteDelay, lampsLit, weatherMood } from '../src/game/Bites.js';
-import { weatherAt } from '../src/game/Weather.js';
+import { weatherAt, SOUTHERLY } from '../src/game/Weather.js';
 import { CatchMinigame } from '../src/game/CatchMinigame.js';
 import { FishingRod, bendStep, BEND_K, BEND_C } from '../src/game/FishingRod.js';
 import { GameState } from '../src/game/GameState.js';
@@ -129,7 +129,8 @@ ok( biteDelay( habitatAt( spots.sand ), 12, rng ) === Infinity, 'no bite delay o
 
 	const seeded = ( s = 777 ) => () => ( ( s = ( s * 1664525 + 1013904223 ) >>> 0 ) / 4294967296 );
 	const fair = weatherAt( 0, 'fair' ), calm = weatherAt( 0, 'calm' ), cloudy = weatherAt( 0, 'cloudy' ), rain = weatherAt( 0, 'rain' );
-	const blustery = weatherAt( 0, 'blustery' ), gale = weatherAt( 0, 'gale' ), storm = weatherAt( 0, 'storm' );
+	// ((M14) a gale whose surf is in the bay: a picked gale's blows down the trades, its sea on the north shore)
+	const blustery = weatherAt( 0, 'blustery' ), gale = weatherAt( 0, SOUTHERLY ), storm = weatherAt( 0, 'storm' );
 	// the same bites, one after another, from the same rolls
 	const seq = ( h, hour, bait = null ) => {
 
@@ -201,7 +202,8 @@ ok( biteDelay( habitatAt( spots.sand ), 12, rng ) === Infinity, 'no bite delay o
 	const grey = share( pier, cloudy, predators ), clear = share( pier, fair, predators );
 	console.log( `     predators' share of noon bites off the pier: ${ ( 100 * clear ).toFixed( 1 ) }% fair, ${ ( 100 * grey ).toFixed( 1 ) }% under a grey sky (${ ( 100 * share( pier, fair, predators, 18.5 ) ).toFixed( 1 ) }% at dusk)` );
 	ok( grey > 1.3 * clear, 'under a grey sky by day the jacks, snappers and tarpon bite better, as at dusk' );
-	ok( delay( pier, storm ) > 1.5 * delay( pier, fair ) && delay( pier, rain ) > delay( pier, fair ), 'a downpour or a thunderstorm slows the bites' );
+	// ((M14) a thunderstorm down the trades brings the bay no surf of its own: its rain slows them)
+	ok( delay( pier, storm ) > 1.4 * delay( pier, fair ) && delay( pier, rain ) > delay( pier, fair ), 'a downpour or a thunderstorm slows the bites' );
 	ok( delay( shallows, gale ) > 1.5 * delay( shallows, fair ) && delay( pier, gale ) > 1.05 * delay( pier, fair ) && delay( deep, gale ) > 1.3 * delay( deep, fair ), 'a gale\'s surf quiets the shallows and the pier, and the deep is hard to fish' );
 	// each fish's own taste
 	const moods = Object.keys( weatherMood( storm ) );
@@ -362,6 +364,48 @@ ok( fight( 'tarpon', 35, policies.careful, 50, 2.2 ).st === 'caught', 'the top l
 	const moved = ( r ) => Math.hypot( r.now.x - r.at.x, r.now.z - r.at.z );
 	console.log( `     the float after 40 s: ${ moved( driftFair ).toFixed( 2 ) } m on a fair day, ${ moved( driftGale ).toFixed( 1 ) } m in a gale` );
 	ok( moved( driftFair ) === 0 && moved( driftGale ) > 4 && moved( driftGale ) < 6.01 && driftGale.now.x > driftGale.at.x, 'in a gale the float drifts downwind (a fair day\'s stays put), up to 6 m' );
+
+}
+
+// ---- (M14) a snapped line: the float and the broken end of the line left drifting off downwind, and a new
+// hook and float tied on before the next cast (however the rod's put away meanwhile)
+{
+
+	G.windSpeed.value = 10;
+	G.windDir.value.set( 1, 0 );
+	const n = 8, cpu = new Float32Array( n * 4 );
+	for ( let i = 0; i < n; i ++ ) cpu[ i * 4 + 3 ] = - 6;
+	const query = { allocate: () => 0, setPoint() {}, cpuValid: true, cpu };
+	const camera = new PerspectiveCamera( 60, 1.6, 0.1, 500 );
+	camera.position.set( 0, 2, 0 );
+	camera.lookAt( 0, 2, 10 );
+	camera.updateMatrixWorld( true );
+	const rod = new FishingRod( { scene: new Scene(), camera, query, terrain: { heightAt: () => - 6 } } );
+	rod.equip( true );
+	const frame = () => rod.update( 1 / 60, { visible: true } );
+	for ( let i = 0; i < 30; i ++ ) frame();
+	rod.startWindup();
+	for ( let i = 0; i < 80; i ++ ) frame();
+	rod.release();
+	for ( let i = 0; i < 60 * 6 && rod.state !== 'floating'; i ++ ) frame();
+	rod.hook();
+	for ( let i = 0; i < 30; i ++ ) frame();
+	const at = rod.bobber.clone();
+	rod.snap();
+	const snapped = rod.state === 'rigging' && rod.lost && rod.lost.pos.distanceTo( at ) < 0.01 && ! rod.startWindup();
+	for ( let i = 0; i < 60 * 3; i ++ ) frame();
+	rod.equip( false );
+	for ( let i = 0; i < 30; i ++ ) frame();
+	rod.equip( true );
+	for ( let i = 0; i < 10; i ++ ) frame();
+	const still = rod.state === 'rigging' && ! rod.startWindup();
+	let t = 3.7;
+	for ( ; t < 20 && rod.state !== 'idle'; t += 1 / 60 ) frame();
+	const drifted = rod.lost.pos.x - at.x, ready = rod.state === 'idle' && rod.startWindup();
+	console.log( `     a snapped line: a new hook and float tied on in ${ t.toFixed( 1 ) } s; meanwhile its lost float's drifted ${ drifted.toFixed( 2 ) } m downwind in a 10 m/s wind` );
+	ok( snapped && still && ready && t > 7.5 && t < 8.5 && drifted > 0.5 && rod.lostMesh.visible && rod.lostLine.visible, 'a snapped line: its float drifts off, and no cast till a new hook\'s on, the rod put away or not' );
+	G.windSpeed.value = 7;
+	G.windDir.value.set( 0.35, 0.94 ).normalize();
 
 }
 

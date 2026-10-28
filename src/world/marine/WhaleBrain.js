@@ -12,12 +12,19 @@ import * as THREE from '../../engine/index.js';
 // day, up to 2.5 in a gale), how much more often it slaps and breaches, as humpbacks turn from song to
 // surface signals in a wind's noise; and `away`, gone offshore out of a hurricane's way (it surfaces no
 // more until it's back: Whale.gone).
+//
+// (M14) Playing together, the host's whale is everyone's (Together): the host sends where it is on its
+// loop and what it's doing (snapshot()), and everyone else's follows it (followHost( snapshot, late )): taken
+// up over FOLLOW_S as they drift apart, or at once when they're far apart (someone joining); its
+// surfacings the host's, none started of its own (led).
 
 // route (x, z) through the bay, checked against TerrainData
 // passes ~130 m off the beach and ~65 m from the pier head; >= 8.8 m of water everywhere
 const ROUTE = [ [ 70, 300 ], [ 60, 200 ], [ 35, 120 ], [ 5, 88 ], [ - 25, 100 ], [ - 52, 128 ], [ - 75, 178 ], [ - 52, 262 ], [ - 10, 330 ] ];
 const SURFACE_AT = 0.25; // route fraction where the surfacing sequence starts (heading in toward the beach)
 const CRUISE_SPEED = 2.6; // m/s underwater
+const FOLLOW_S = 2; // (M14) s over which a whale following another's takes up the difference
+const FOLLOW_JUMP = 30; // (M14) m along its route: farther apart than this, it jumps there
 const SURFACE_SPEED = 1.5;
 const TAU = Math.PI * 2;
 
@@ -69,6 +76,8 @@ export class WhaleBrain {
 		this.away = false; // ((M13) gone offshore out of a hurricane's way)
 		this.yawRate = 0;
 		this.time = 0;
+		this.led = false; // ((M14) following another's: its surfacings theirs)
+		this._lead = 0; // ((M14) m along its route still to take up, following another's
 		// path history: root orientation stamped with the travelled distance (ring buffer, one
 		// entry per update). The tail samples it at (arc - d) with interpolation, so the body
 		// follows the route continuously at any frame rate.
@@ -390,7 +399,7 @@ export class WhaleBrain {
 
 		// ---- sequencer
 		const frac = ( ( this.u / this.length ) % 1 + 1 ) % 1;
-		if ( this.state === 'cruise' && frac > SURFACE_AT && frac < SURFACE_AT + 0.05 && ! this.lastWrap && ! this.away ) {
+		if ( this.state === 'cruise' && frac > SURFACE_AT && frac < SURFACE_AT + 0.05 && ! this.lastWrap && ! this.away && ! this.led ) {
 
 			this._startSequence();
 			this.lastWrap = true;
@@ -491,12 +500,79 @@ export class WhaleBrain {
 		this.bob = - this.strokeAmp * 0.12 * Math.sin( this.strokePhase + 0.5 );
 		this._flippers( dt, target );
 
-		// ---- advance along the route (horizontal speed shrinks when steeply pitched)
-		const du = this.speed * Math.cos( this.pitch ) * dt;
+		// ---- advance along the route (horizontal speed shrinks when steeply pitched), ((M14) taking up what's
+		// left between it and the whale it follows)
+		const lead = this._lead * Math.min( 1, dt / FOLLOW_S );
+		this._lead -= lead;
+		const du = this.speed * Math.cos( this.pitch ) * dt + lead;
 		this.u += du;
 		this._place( dt );
 		// path history (orientation at this travelled distance)
 		this.arc += du;
+		this._record( this.arc );
+
+	}
+
+	// (M14) where it is on its loop and what it's doing, to send (Together)
+	snapshot() {
+
+		const r = ( v ) => Math.round( v * 100 ) / 100, s = this.seq;
+		return { u: r( this.u ), y: r( this.y ), vy: r( this.vy ), speed: r( this.speed ), q: s ? { k: s.keys, i: s.i, t: r( s.t ) } : null };
+
+	}
+
+	// (M14) following another's whale (its snapshot, sent `late` s ago): along its route to where it is now,
+	// at once when they're far apart; surfacing as it is
+	followHost( snap, late = 0 ) {
+
+		if ( ! snap || ! Number.isFinite( snap.u ) ) return;
+		this.led = true;
+		const u = snap.u + ( Number.isFinite( snap.speed ) ? snap.speed : CRUISE_SPEED ) * late;
+		if ( Math.abs( u - this.u ) > FOLLOW_JUMP ) {
+
+			this.y = Number.isFinite( snap.y ) ? snap.y : this.y;
+			this.vy = Number.isFinite( snap.vy ) ? snap.vy : 0;
+			this.speed = Number.isFinite( snap.speed ) ? snap.speed : this.speed;
+			this._rebase( u );
+
+		} else this._lead = u - this.u;
+
+		const q = snap.q, s = this.seq;
+		if ( q && Array.isArray( q.k ) && q.k.length ) {
+
+			if ( ! s || s.keys.length !== q.k.length || s.i !== q.i ) {
+
+				this.seq = { keys: q.k, i: Math.min( q.i, q.k.length - 1 ), t: ( q.t || 0 ) + late, blown: true };
+				this.state = 'surface';
+				this.lastWrap = true;
+
+			}
+
+		} else if ( s ) {
+
+			this.seq = null;
+			this.state = 'cruise';
+
+		}
+
+	}
+
+	// (M14) at u along its route at once: its path behind it laid along the route, so its body follows it
+	_rebase( u ) {
+
+		this.u = u;
+		this._lead = 0;
+		this.hHead = - 1;
+		this.hCount = 0;
+		for ( let d = 40; d > 0; d -= 0.5 ) {
+
+			_e.set( - this.pitch, this.routeYaw( u - d ), 0, 'YXZ' );
+			this.quaternion.setFromEuler( _e );
+			this._record( this.arc - d );
+
+		}
+
+		this._place( 0 );
 		this._record( this.arc );
 
 	}

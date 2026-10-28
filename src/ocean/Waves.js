@@ -9,27 +9,37 @@ import { WORLD } from '../world/WorldLayout.js';
 // always evaluates exactly the set the GPU draws, so what floats sits on what is seen. (Salt Life) The
 // weather sets the sea state (setSea: the swell's and the wind sea's heights) and turns the wind sea
 // with the wind (setWindDir: about the camera, so the sea you're on doesn't sweep past). (M12) A
-// westerly's swell (setSwellWest): the swell's shorter waves turn to come from the west, as far as the
-// swell's from there, while the longest stays the south's groundswell, so the two cross.
+// westerly's swell (setSwell): the swell's shorter waves turn to come from the west, as far as the
+// swell's from there, while the longest stays the south's groundswell, so the two cross. (M14) Each swell
+// wave's period is its share of its train's (setSwell): the groundswell's the south's, the rest the
+// south's or, as far as they've turned, the westerly's, so the two trains cross each at its own period,
+// as on the shore (ShoreWaves' trains). Their lengths are the deep water's for it (L = g T^2 / 2 pi: on a
+// fair day the shore's 9 s is a 126 m swell; before M14 it was 72 m, 6.8 s, whatever the surf's).
 //
 // A wave i at Lagrangian point x0 (the undisplaced grid point):
 //   theta = k (d . x0) - omega t + phase,  omega = sqrt( g k ) (deep water)
 //   x = x0 + qa d cos( theta ),  y = a sin( theta )
 // and every wave fades out over shallow water (the shore waves take over there).
 
-// wavelength (m), amplitude (m), direction: rotation (rad) from the swell (s) or the wind (w)
+// wavelength (m) or, (M14) for the swell's, period (its share of its train's, T), amplitude (m), direction:
+// rotation (rad) from the swell (s) or the wind (w). (The swell's shares are as their lengths were before
+// M14: 72, 44, 31 and 16 m)
 const SPECTRUM = [
-	{ L: 72, a: 0.32, from: 's', rot: 0 },
-	{ L: 44, a: 0.18, from: 's', rot: 0.35 },
+	{ T: 1, a: 0.32, from: 's', rot: 0 },
+	{ T: 0.782, a: 0.18, from: 's', rot: 0.35 },
 	{ L: 23, a: 0.09, from: 'w', rot: 0.25 },
 	{ L: 11, a: 0.045, from: 'w', rot: - 0.4 },
 	// mid and up
-	{ L: 31, a: 0.12, from: 's', rot: - 0.5 },
+	{ T: 0.656, a: 0.12, from: 's', rot: - 0.5 },
 	{ L: 7, a: 0.025, from: 'w', rot: 0.6 },
 	// high
-	{ L: 16, a: 0.06, from: 's', rot: 0.9 },
+	{ T: 0.471, a: 0.06, from: 's', rot: 0.9 },
 	{ L: 4.2, a: 0.012, from: 'w', rot: - 0.15 },
 ];
+// (M14) the swell's period on a fair day (s: the shore's, ShoreWaves' FAIR_PERIOD), and a wave's k for a
+// period (deep water: omega^2 = g k)
+export const SWELL_PERIOD = 9;
+const kOf = ( T ) => ( 2 * Math.PI / T ) ** 2 / GRAVITY;
 const COUNT = { low: 4, mid: 6, high: 8 };
 const TAU = Math.PI * 2;
 const STEEPNESS = 0.55; // sum of the waves' crest sharpening (< 1: no loops)
@@ -54,7 +64,7 @@ export class Waves {
 		this.waves = SPECTRUM.slice( 0, n ).map( ( w, i ) => {
 
 			const angle = ( w.from === 's' ? swell : wind ) + w.rot;
-			const k = 2 * Math.PI / w.L;
+			const k = w.from === 's' ? kOf( w.T * SWELL_PERIOD ) : 2 * Math.PI / w.L;
 			return {
 				dx: Math.cos( angle ), dz: Math.sin( angle ), k, omega: Math.sqrt( GRAVITY * k ), a: w.a,
 				qa: crest( w.a, k, n ),
@@ -65,20 +75,19 @@ export class Waves {
 		} );
 		this.sea = [ 1, 1 ]; // swell, wind sea: x today's heights (setSea)
 		this.windAngle = wind; // the wind sea's direction (setWindDir)
-		// (M12) how far the swell's turned to the west's (setSwellWest), and the turn all the way
+		// (M12) how far the swell's turned to the west's (setSwell), and the turn all the way; (M14) the
+		// south's period and the westerly's (setSwell)
 		this.west = 0;
+		this.periods = [ SWELL_PERIOD, SWELL_PERIOD ];
 		const turn = Math.atan2( SWELL_WEST.y, SWELL_WEST.x ) - swell;
 		this._westTurn = Math.atan2( Math.sin( turn ), Math.cos( turn ) );
 		this.iterations = 2; // the CPU height's fixed-point steps (more on steep seas: setSea)
-		// 1 / the waves' summed height: a point's height over the sea, as a share of the highest crest
-		this.crest = { value: 1 / this.waves.reduce( ( s, w ) => s + w.a, 0 ) };
 
 		// GLSL: uniforms waveA[ i ] = ( d.x, d.z, k, omega ), waveB[ i ] = ( a, qa, phase, 0 )
 		this.uniforms = {
 			waveA: { value: this.waves.map( ( w ) => new Vector4( w.dx, w.dz, w.k, w.omega ) ) },
 			waveB: { value: this.waves.map( ( w ) => new Vector4( w.a, w.qa, w.phase, 0 ) ) },
 			waveTime: G.time,
-			waveCrest: this.crest,
 		};
 		this.glsl = /* glsl */`
 #define WAVE_COUNT ${ n }
@@ -115,6 +124,14 @@ vec3 waveDisplacement( vec2 x0, float fade, out vec3 normal ) { return waveDispl
 
 	}
 
+	// (M14) the highest the open sea's crests could rise over its still water (and its troughs fall under
+	// it), with the swell's and the wind sea's heights x today's: its waves' amplitudes all in step
+	reachOf( swell = 1, windSea = 1 ) {
+
+		return this.waves.reduce( ( r, w ) => r + w.a0 * ( w.from === 's' ? swell : windSea ), 0 );
+
+	}
+
 	// (Salt Life) the sea state (Weather): the swell's and the wind sea's heights, x today's. Only the
 	// heights change, in place (the CPU's waves and the GPU's waveB), never the phases, so the sea
 	// builds and calms where it is; setSea( 1, 1 ) is today's sea exactly
@@ -124,7 +141,6 @@ vec3 waveDisplacement( vec2 x0, float fade, out vec3 normal ) { return waveDispl
 		this.sea[ 0 ] = swell;
 		this.sea[ 1 ] = windSea;
 		const n = this.waves.length;
-		let steep = 0, sum = 0;
 		this.waves.forEach( ( w, i ) => {
 
 			w.a = w.a0 * ( w.from === 's' ? swell : windSea );
@@ -132,14 +148,9 @@ vec3 waveDisplacement( vec2 x0, float fade, out vec3 normal ) { return waveDispl
 			const B = this.uniforms.waveB.value[ i ];
 			B.x = w.a;
 			B.y = w.qa;
-			steep += w.k * w.qa;
-			sum += w.a;
 
 		} );
-		// a steeper sea moves its points further: the CPU's inversion (heightAt) takes more steps to
-		// land on the drawn surface (today's seas take 2 on every tier)
-		this.iterations = steep > 0.34 ? 4 : steep > 0.28 ? 3 : 2;
-		this.crest.value = 1 / sum;
+		this._steps();
 
 	}
 
@@ -170,33 +181,48 @@ vec3 waveDisplacement( vec2 x0, float fade, out vec3 normal ) { return waveDispl
 
 	// (M12) a westerly's swell: west (0..1), how much of the swell comes from the west. Every swell wave
 	// but the longest (the south's groundswell) turns that far to the west's direction, about `at` (the
-	// camera) as the wind sea does; west 0 is today's sea exactly
-	setSwellWest( west, at ) {
+	// camera) as the wind sea does; west 0 is today's sea exactly. (M14) And each its train's period (s):
+	// the groundswell the south's (`south`), the rest between the south's and the westerly's (`westPeriod`)
+	// as far as they've turned, their lengths with it, about `at` at time t as well: a wave carries on
+	// where it is, only the crests' spacing and speed change, as the shore's clock does
+	setSwell( west, south = SWELL_PERIOD, westPeriod = south, at = { x: 0, z: 0 }, t = G.time.value ) {
 
-		if ( west === this.west ) return;
+		if ( west === this.west && south === this.periods[ 0 ] && westPeriod === this.periods[ 1 ] ) return;
 		this.west = west;
-		const A = this.uniforms.waveA.value, B = this.uniforms.waveB.value;
+		this.periods[ 0 ] = south;
+		this.periods[ 1 ] = westPeriod;
+		const A = this.uniforms.waveA.value, B = this.uniforms.waveB.value, n = this.waves.length;
 		const swell = Math.atan2( WORLD.swellDir.y, WORLD.swellDir.x );
 		let first = true;
 		this.waves.forEach( ( w, i ) => {
 
 			if ( w.from !== 's' ) return;
-			if ( first ) {
-
-				first = false;
-				return;
-
-			}
-
-			const angle = swell + SPECTRUM[ i ].rot + west * this._westTurn, dx = Math.cos( angle ), dz = Math.sin( angle );
-			w.phase = ( w.phase + w.k * ( ( w.dx - dx ) * at.x + ( w.dz - dz ) * at.z ) ) % TAU;
+			const turn = first ? 0 : west;
+			first = false;
+			const angle = swell + SPECTRUM[ i ].rot + turn * this._westTurn, dx = Math.cos( angle ), dz = Math.sin( angle );
+			const k = kOf( SPECTRUM[ i ].T * ( south + ( westPeriod - south ) * turn ) ), omega = Math.sqrt( GRAVITY * k );
+			// (k ( d . at ) - omega t + phase, the same before and after)
+			w.phase = ( w.phase + w.k * ( w.dx * at.x + w.dz * at.z ) - k * ( dx * at.x + dz * at.z ) - ( w.omega - omega ) * t ) % TAU;
 			w.dx = dx;
 			w.dz = dz;
-			A[ i ].x = dx;
-			A[ i ].y = dz;
+			w.k = k;
+			w.omega = omega;
+			w.qa = crest( w.a, k, n );
+			A[ i ].set( dx, dz, k, omega );
+			B[ i ].y = w.qa;
 			B[ i ].z = w.phase;
 
 		} );
+		this._steps();
+
+	}
+
+	// a steeper sea moves its points further: the CPU's inversion (heightAt) takes more steps to land on
+	// the drawn surface (today's seas take 2 on every tier)
+	_steps() {
+
+		const steep = this.waves.reduce( ( s, w ) => s + w.k * w.qa, 0 );
+		this.iterations = steep > 0.34 ? 4 : steep > 0.28 ? 3 : 2;
 
 	}
 

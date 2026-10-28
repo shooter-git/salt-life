@@ -122,13 +122,14 @@ export class Vegetation {
 	// smallBakes: the leaf atlas and the impostors baked at half size (WebGL drawn on the CPU).
 	// bakeSlot: () => a promise that resolves when a bake may draw (the app's: a frame without the
 	// world, so no frame counts both; by default the next task)
-	constructor( { scene, terrain, renderer, tier = 'low', ground = null, village = null, smallBakes = false, bakeSlot = null } ) {
+	constructor( { scene, terrain, renderer, tier = 'low', ground = null, village = null, rocks = null, smallBakes = false, bakeSlot = null } ) {
 
 		this.scene = scene;
 		this.terrain = terrain;
 		this.renderer = renderer;
 		this.ground = ground;
 		this.village = village;
+		this.rocks = rocks; // ((M14) its overhangs kept clear: Rocks.clears)
 		this.tier = TIERS[ tier ] ? tier : 'low';
 		this.cfg = TIERS[ this.tier ];
 		this.smallBakes = smallBakes;
@@ -175,9 +176,29 @@ export class Vegetation {
 		const site = new VegSite( terrain, villageObstacles( this.village ) );
 		this.site = site;
 		const recs = await run( scatterSteps( site, 99, { ferns: !! cfg.fernFade } ) );
+		// ((M14) none under the rocks' overhangs or in their mouths: taken out after, so the rest are as they were)
+		if ( this.rocks ) for ( const k of Object.keys( recs ) ) if ( Array.isArray( recs[ k ] ) ) recs[ k ] = recs[ k ].filter( ( p ) => ! this.rocks.clears( p.x, p.z ) );
 		this.records = recs;
 		const t1 = performance.now();
 		const grassMask = cfg.grass ? await run( grassMaskSteps( site ) ) : null;
+		// ((M14) nor any grass there, a texel about it too, so the filtering doesn't bleed in)
+		if ( grassMask && this.rocks ) {
+
+			const { data, res } = grassMask, t = site.terrain, texel = t.size / res, R = this.rocks;
+			for ( const o of R.overhangs ) {
+
+				const i0 = Math.floor( ( o.x - o.radius - 2 - t.origin ) / texel ), i1 = Math.ceil( ( o.x + o.radius + 2 - t.origin ) / texel );
+				const j0 = Math.floor( ( o.z - o.radius - 2 - t.origin ) / texel ), j1 = Math.ceil( ( o.z + o.radius + 2 - t.origin ) / texel );
+				for ( let j = Math.max( 0, j0 ); j <= Math.min( res - 1, j1 ); j ++ ) for ( let i = Math.max( 0, i0 ); i <= Math.min( res - 1, i1 ); i ++ ) {
+
+					const x = t.origin + ( i + 0.5 ) * texel, z = t.origin + ( j + 0.5 ) * texel;
+					if ( [ [ 0, 0 ], [ texel, 0 ], [ - texel, 0 ], [ 0, texel ], [ 0, - texel ] ].some( ( [ dx, dz ] ) => R.clears( x + dx, z + dz ) ) ) data.fill( 0, ( j * res + i ) * 4, ( j * res + i ) * 4 + 4 );
+
+				}
+
+			}
+
+		}
 		this.timings.scatter = t1 - t0;
 		this.timings.mask = performance.now() - t1;
 		await new Promise( ( resolve ) => setTimeout( resolve, 0 ) );

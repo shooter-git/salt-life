@@ -4,15 +4,16 @@
 import { readFileSync } from 'node:fs';
 import { TerrainData } from '../src/world/TerrainData.js';
 import { decodeIsland } from '../src/world/terrain/IslandDecode.js';
-import { Waves, SWELL_WEST } from '../src/ocean/Waves.js';
+import { Waves, SWELL_WEST, SWELL_PERIOD } from '../src/ocean/Waves.js';
 import { WaterQuery } from '../src/ocean/WaterQuery.js';
 import { ShoreWaves, TUMBLE_H } from '../src/ocean/ShoreWaves.js';
-import { computeShoreField } from '../src/world/ShoreField.js';
+import { computeShoreField, shelter } from '../src/world/ShoreField.js';
 import { WORLD } from '../src/world/WorldLayout.js';
 import { CHANDLERY } from '../src/game/Chandlery.js';
-import { weatherAt, SURF_MAX, PERIOD_MAX, GROUNDSWELL_MAX, SURF_HURRICANE, HURRICANE } from '../src/game/Weather.js';
+import { weatherAt, SURF_MAX, PERIOD_MAX, GROUNDSWELL_MAX, SURF_HURRICANE, HURRICANE, NORTH } from '../src/game/Weather.js';
 import { G } from '../src/core/Globals.js';
-import { windShove } from '../src/player/Player.js';
+import { windShove, knockHeight } from '../src/player/Player.js';
+import { seaBox } from '../src/world/WeatherDriver.js';
 
 let failed = 0;
 const check = ( ok, label ) => {
@@ -63,6 +64,22 @@ for ( const tier of [ 'low', 'mid', 'high' ] ) {
 	waves.setSea( HURRICANE.swell, gale.windSea );
 	const [ hurWorst, hurDeep ] = worstGap( waves ), hurShare = hurWorst / seaHeight( waves );
 	check( hurDeep < 0.01 && hurShare < 0.05, `${ tier }: (M13) and a hurricane's (worst ${ ( hurDeep * 100 ).toFixed( 2 ) } cm in deep water; over the shallows ${ ( hurWorst * 100 ).toFixed( 2 ) } cm, ${ ( hurShare * 100 ).toFixed( 1 ) }% of its ${ seaHeight( waves ).toFixed( 2 ) } m)` );
+	// ((M14) a Category 3's open sea (its swell the biggest a hurricane brings, its wind sea at its most) in
+	// the sea's culling box: its highest crest and lowest trough over a few thousand points and moments,
+	// against the box on no surge and no surf past a gale's; and the box as it was, for a fair day's)
+	const cat3 = [ HURRICANE.swell * HURRICANE.cats[ 2 ].size, 3 ];
+	waves.setSea( ...cat3 );
+	let hi = - 1e9, lo = 1e9;
+	for ( let k = 0; k < 4000; k ++ ) {
+
+		const y = waves.heightAt( - 900 + ( k % 40 ) * 47, 400 + Math.floor( k / 40 ) * 41, k * 0.37 );
+		hi = Math.max( hi, y );
+		lo = Math.min( lo, y );
+
+	}
+
+	const box = seaBox( 0, SURF_MAX, waves.reachOf( ...cat3 ) ), fair = seaBox( 0, SURF_MAX, waves.reachOf( 1, 1 ) );
+	check( hi < box[ 1 ] && lo > box[ 0 ] && waves.reachOf( ...cat3 ) <= box[ 1 ] && fair[ 0 ] === - 4 && fair[ 1 ] === 4, `${ tier }: (M14) a Category 3's open sea in its culling box (crests to ${ hi.toFixed( 2 ) } m, troughs to ${ lo.toFixed( 2 ) }, all in step ${ waves.reachOf( ...cat3 ).toFixed( 2 ) }; the box ${ box[ 0 ].toFixed( 2 ) } to ${ box[ 1 ].toFixed( 2 ) } m), a fair day's as it was` );
 	waves.setSea( 1, 1 );
 	check( heights().every( ( h, i ) => h === before[ i ] ) && waves.uniforms.waveB.value.map( ( v ) => v.toArray().join() ).join() === B, `${ tier }: back to a fair sea, today's to the bit` );
 	check( waves.iterations === 2, `${ tier }: and its CPU heights take today's two steps` );
@@ -91,6 +108,32 @@ for ( const tier of [ 'low', 'mid', 'high' ] ) {
 	const d = [ 0, 0, 0 ];
 	still.displacement( at.x, at.z, t, d );
 	check( Math.abs( still.heightAt( at.x + d[ 0 ], at.z + d[ 2 ], t ) - d[ 1 ] ) < 0.02 && still.waves.every( ( w ) => Number.isFinite( w.phase ) ), 'and the CPU still sits on the turned sea' );
+
+}
+
+// (M14) each swell train at its own period: the groundswell the south's, the rest the westerly's as far as
+// they've turned; their lengths the deep water's for it, changed about the camera as the wind sea turns
+{
+
+	const at = { x: 260, z: 420 }, t = 3.7, sea = new Waves( { tier: 'high', terrain } );
+	const swell = sea.waves.filter( ( w ) => w.from === 's' ), period = ( w ) => 2 * Math.PI / w.omega, len = ( w ) => 2 * Math.PI / w.k;
+	check( Math.abs( period( swell[ 0 ] ) - SWELL_PERIOD ) < 1e-9 && Math.abs( len( swell[ 0 ] ) - 126.5 ) < 0.1, `(M14) a fair day's swell on the open sea at the shore's 9 s: ${ len( swell[ 0 ] ).toFixed( 0 ) } m` );
+	const near = ( w, tt = t ) => [ [ 0, 0 ], [ 3, 0 ], [ 0, - 3 ] ].map( ( [ dx, dz ] ) => w.heightAt( at.x + dx, at.z + dz, tt ) );
+	const B0 = sea.uniforms.waveB.value.map( ( v ) => v.toArray().join() ).join(), before = near( sea );
+	// (a frame of the period changing as fast as the weather changes it: 0.02 s a second, at 60 frames)
+	sea.setSwell( 0, SWELL_PERIOD + 0.02 / 60, SWELL_PERIOD + 0.02 / 60, at, t );
+	const moved = Math.max( ...near( sea ).map( ( h, i ) => Math.abs( h - before[ i ] ) ) );
+	sea.setSwell( 1, 10, 7.5, at, t );
+	const groundswell = period( swell[ 0 ] ), westerly = swell.slice( 1 ).map( ( w, i ) => period( w ) / sea.waves.filter( ( q ) => q.from === 's' )[ i + 1 ].omega * w.omega );
+	const turned = swell.slice( 1 ).every( ( w ) => Math.abs( Math.atan2( w.dz, w.dx ) - Math.atan2( SWELL_WEST.y, SWELL_WEST.x ) ) < 1 );
+	console.log( `     (M14) a frame of the swell's period changing: the sea at the camera moves ${ ( moved * 1000 ).toFixed( 2 ) } mm; a westerly's swell at ${ period( swell[ 1 ] ).toFixed( 1 ) } s and shorter, the south's groundswell at ${ groundswell.toFixed( 1 ) } s` );
+	check( moved < 0.002 && Math.abs( groundswell - 10 ) < 1e-9 && Math.abs( period( swell[ 1 ] ) - 7.5 * 0.782 ) < 1e-6 && turned && westerly.length === 3, '(M14) a westerly\'s swell crosses the south\'s offshore each at its own period, changed about the camera' );
+	const d = [ 0, 0, 0 ];
+	sea.displacement( at.x, at.z, t, d );
+	check( Math.abs( sea.heightAt( at.x + d[ 0 ], at.z + d[ 2 ], t ) - d[ 1 ] ) < 0.02 && sea.waves.every( ( w ) => Number.isFinite( w.phase ) ), '(M14) and the CPU still sits on it' );
+	sea.setSwell( 0, SWELL_PERIOD, SWELL_PERIOD, at, t );
+	const back = sea.uniforms.waveB.value.map( ( v ) => v.toArray().slice( 0, 2 ).join() ).join() === sea.uniforms.waveB.value.map( ( v, i ) => B0.split( ',' ).slice( i * 4, i * 4 + 2 ).join() ).join();
+	check( back && swell.every( ( w, i ) => Math.abs( period( w ) - SWELL_PERIOD * [ 1, 0.782, 0.656, 0.471 ][ i ] ) < 1e-9 ), '(M14) and back to a fair day\'s periods' );
 
 }
 
@@ -238,6 +281,57 @@ check( runs.every( ( [ start, foot, stall ] ) => start === 0 && foot < 0.01 && s
 
 	} ) );
 	check( highest < under, `two swells crossing stay below the pier's deck (${ highest.toFixed( 2 ) } m)` );
+
+}
+
+// ---- (M14) the north shore's sea: its own field along the trades, breaking on the island's windward
+// side as high as they blow, none of it in the bay
+{
+
+	const north = new ShoreWaves( { field: computeShoreField( terrain, { res: 512, swellDir: [ WORLD.swellDir.x, WORLD.swellDir.y ] } ) } );
+	const alone = new ShoreWaves( { field: north.field } );
+	const g = weatherAt( 100, 'gale' ), fair = weatherAt( 100, 'fair' );
+	north.setNorth( g.north, g.northPeriod, 0 );
+	const t0 = Date.now(), field = computeShoreField( terrain, { res: 512, swellDir: [ NORTH.dir.x, NORTH.dir.y ] } ), t1 = Date.now();
+	shelter( field, [ NORTH.dir.x, NORTH.dir.y ] );
+	console.log( `     (M14) the north shore's field solved in ${ t1 - t0 } ms, its lee taken out in ${ Date.now() - t1 } ms` );
+	north.addField( field, 2 );
+	for ( const sw of [ north, alone ] ) sw.setSurf( SURF_MAX, g.period, 0, 0 );
+	let same = true;
+	for ( const [ x, z ] of [ [ 0, - 30 ], [ 55, 20 ], [ 150, - 10 ], [ - 100, 0 ], [ 55, 40 ] ] ) for ( let t = 0; t < 30; t += 1.7 ) {
+
+		const gr = terrain.heightAt( x, z ), a = north.sample( x, z, t, gr, terrain ), b = alone.sample( x, z, t, gr, terrain );
+		if ( a.y !== b.y || a.swashLevel !== b.swashLevel ) same = false;
+
+	}
+
+	check( same && north.trains[ 2 ].amplitude === NORTH.max && north.trains[ 2 ].period === g.northPeriod, '(M14) the north shore\'s gale sea running, the bay\'s surf is as it always was' );
+	const breaking = ( sw, x0, x1, z0, z1 ) => {
+
+		let s = 0, n = 0, top = 0;
+		for ( let x = x0; x <= x1; x += 8 ) for ( let z = z0; z <= z1; z += 8 ) {
+
+			const gr = terrain.heightAt( x, z );
+			if ( - gr < 1 || - gr > 6 ) continue;
+			for ( let t = 0; t < 60; t += 2.3 ) {
+
+				const b = sw.breakerAt( x, z, t, gr, terrain );
+				s += b.b > 0.85 ? b.H : 0;
+				top = Math.max( top, b.H );
+				n ++;
+
+			}
+
+		}
+
+		return [ s / Math.max( n, 1 ), top ];
+
+	};
+	const [ shore, top ] = breaking( north, - 400, 400, - 1000, - 820 ), [ bay ] = breaking( north, - 150, 170, - 40, 60 );
+	north.setNorth( fair.north, fair.northPeriod, 0 );
+	const [ fairShore, fairTop ] = breaking( north, - 400, 400, - 1000, - 820 );
+	console.log( `     (M14) the north shore's breakers: a gale's ${ shore.toFixed( 2 ) } m a wave (at most ${ top.toFixed( 1 ) } m), a fair day's ${ fairShore.toFixed( 2 ) } (${ fairTop.toFixed( 1 ) } m); in the bay its own ${ bay.toFixed( 2 ) }` );
+	check( shore > 0.5 && top > 3 && fairShore < shore * 0.4 && fairShore > 0.02, '(M14) a trades gale\'s sea breaks big on the north shore, a fair day\'s a little' );
 
 }
 
@@ -389,6 +483,72 @@ check( runs.every( ( [ start, foot, stall ] ) => start === 0 && foot < 0.01 && s
 	const dockDepth = - 0.6 - terrain.heightAt( WORLD.boatDock.position.x, WORLD.boatDock.position.z );
 	check( wetIn( plain, CHANDLERY.x, CHANDLERY.z ) === 0 && dockDepth > 2.5, `drawn out of the bay (0.6 m), the beach wider and the dock still ${ dockDepth.toFixed( 1 ) } m deep` );
 	G.seaLevel.value = 0;
+
+}
+
+// ---- (M14) knocked off your feet wading: each broken wave that passes someone standing in the bay's surf at
+// a depth, past knockHeight there; never at the knee on a fair day, often at the waist in the biggest surf,
+// less side-on
+{
+
+	const sw = new ShoreWaves( { field: computeShoreField( terrain, { res: 512, swellDir: [ WORLD.swellDir.x, WORLD.swellDir.y ] } ) } );
+	const spots = ( d ) => {
+
+		const out = [];
+		for ( let x = - 120; x <= 150; x += 15 ) {
+
+			if ( Math.abs( x - WORLD.pier.x ) < 12 ) continue;
+			for ( let z = - 50; z < 120; z += 0.5 ) {
+
+				const g = terrain.heightAt( x, z );
+				if ( - g >= d ) {
+
+					out.push( [ x, z, g ] );
+					break;
+
+				}
+
+			}
+
+		}
+
+		return out;
+
+	};
+	const knocked = ( A, T, d, face = 1 ) => {
+
+		sw.setSurf( A, T, 0, 0 );
+		let n = 0, k = 0;
+		const H0 = knockHeight( d, face );
+		for ( const [ x, z, g ] of spots( d ) ) {
+
+			let last = null;
+			for ( let t = 0; t < 300; t += 0.1 ) {
+
+				const b = sw.breakerAt( x, z, t, g, terrain );
+				if ( last !== null && b.n === last + 1 ) {
+
+					n ++;
+					if ( b.b > 0.85 && b.H > H0 ) k ++;
+
+				}
+
+				last = b.n;
+
+			}
+
+		}
+
+		return k / Math.max( 1, n );
+
+	};
+	const pc = ( v ) => `${ ( v * 100 ).toFixed( 1 ) }%`;
+	const rows = { fair: [ 0.34, 9 ], blustery: [ 0.5, 8 ], biggest: [ SURF_MAX, 7.5 ] };
+	const at = {};
+	for ( const [ name, [ A, T ] ] of Object.entries( rows ) ) at[ name ] = [ 0.3, 0.6, 0.9 ].map( ( d ) => knocked( A, T, d ) );
+	const side = knocked( SURF_MAX, 7.5, 0.9, 0 );
+	console.log( `     (M14) waves that knock a wader over, at the knee, the thigh and the waist: ${ Object.entries( at ).map( ( [ n, v ] ) => `${ n } ${ v.map( pc ).join( ' ' ) }` ).join( '; ' ) }; the biggest at the waist side-on ${ pc( side ) }` );
+	check( at.fair[ 0 ] === 0 && at.fair[ 2 ] < 0.06 && at.biggest[ 0 ] < 0.15 && at.biggest[ 2 ] > 0.35 && at.blustery[ 1 ] > at.fair[ 1 ] && side < at.biggest[ 2 ] * 0.6, '(M14) a breaker knocks a wader over: never at the knee on a fair day, often at the waist in the biggest surf, less side-on' );
 
 }
 

@@ -269,6 +269,14 @@ vec4 cloudsHigh( vec3 rd, float pxAngle ) {
 
 // the low tier's sky has no veil: its textures take ~50 frames of line integrals to make, which the
 // weakest devices feel. The same interface as Cirrus, with a clear sky behind the cumulus.
+// the upper wind's way (toward): the trades', veered (VEER)
+export function upperWind( out = new THREE.Vector2() ) {
+
+	const w = G.windPrevailing.value, a = Math.atan2( w.y, w.x ) + VEER;
+	return out.set( Math.cos( a ), Math.sin( a ) );
+
+}
+
 export class NoCirrus {
 
 	constructor() {
@@ -278,6 +286,8 @@ vec4 cloudsHigh( vec3 rd, float pxAngle ) { return vec4( 0.0, 0.0, 0.0, 1.0 ); }
 `;
 		this.uniforms = { cloudsCirrus: { value: 0 }, cloudsCirrusFade: { value: 0 } };
 		this.amount = this.uniforms.cloudsCirrus;
+		// ((M14) no veil on low, but the upper wind still carries a thunderstorm's anvil)
+		this.upper = { value: upperWind() };
 		this.passList = [];
 		this.ready = true;
 		this.memory = 0;
@@ -308,7 +318,7 @@ export class Cirrus {
 		const w = G.windPrevailing.value;
 		this._rot = Math.atan2( w.y, w.x );
 		this.glsl = cirrusGLSL();
-		this.upper = { value: new THREE.Vector2( Math.cos( this._rot + VEER ), Math.sin( this._rot + VEER ) ) };
+		this.upper = { value: upperWind() };
 
 		const rgba8 = { type: THREE.UnsignedByteType, wrapS: THREE.RepeatWrapping, wrapT: THREE.RepeatWrapping };
 		// r = cirrus coverage (hundreds of km), g = broad streets along the upper wind, b = patches (5 - 50 km)

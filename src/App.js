@@ -12,6 +12,7 @@ import { WORLD } from './world/WorldLayout.js';
 import { Colliders } from './world/Colliders.js';
 import { Village } from './world/Village.js';
 import { CoverMap, COVER, surroundings } from './world/Cover.js';
+import { RockCover } from './world/RockCover.js';
 import { Terrain } from './world/Terrain.js';
 import { Rocks } from './world/Rocks.js';
 import { Vegetation } from './world/Vegetation.js';
@@ -28,7 +29,7 @@ import { Player } from './player/Player.js';
 import { BoatController } from './player/BoatController.js';
 import { GameState } from './game/GameState.js';
 import { DAY_RATE, START_HOUR, advance } from './game/IslandClock.js';
-import { CONDITIONS, islandTime } from './game/Weather.js';
+import { islandTime, isPick, NORTH, weatherAt, towardOf } from './game/Weather.js';
 import { WeatherDriver } from './world/WeatherDriver.js';
 import { lampsLit } from './game/Bites.js';
 import { FishStand, STAND } from './game/FishStand.js';
@@ -40,6 +41,7 @@ import { Wildlife } from './world/wildlife/Wildlife.js';
 import { wildlifeMood, wildlifeNews } from './game/WildlifeWeather.js';
 import { damageAt } from './game/StormDamage.js';
 import { StormWrack } from './world/debris/StormWrack.js';
+import { FlyingSheets } from './world/debris/FlyingSheets.js';
 import { vegUniforms } from './world/vegetation/VegNodes.js';
 import { Debris } from './world/Debris.js';
 import { Reef } from './world/Reef.js';
@@ -49,12 +51,15 @@ import { MarineSnow } from './fx/MarineSnow.js';
 import { Whale } from './world/marine/Whale.js';
 import { Spray } from './fx/Spray.js';
 import { StormSpray } from './fx/StormSpray.js';
+import { WhitecapSpray } from './fx/WhitecapSpray.js';
 import { FlyingDebris } from './fx/FlyingDebris.js';
+import { BlownLitter } from './fx/BlownLitter.js';
 import { insideRoom, roomMatrix } from './world/village/StormPlaces.js';
 import { AirMotes } from './fx/AirMotes.js';
-import { Rain, SPLASH_ROCKS } from './fx/Rain.js';
+import { Rain } from './fx/Rain.js';
 import { Drips, eavePoints, palmPoints, wheelhousePoints } from './fx/Drips.js';
 import { BoatInstruments } from './world/boat/Instruments.js';
+import { BoatRadar } from './world/boat/Radar.js';
 import { Lightning } from './sky/Lightning.js';
 import { BoatSpray } from './player/BoatSpray.js';
 import { WhaleWater } from './ocean/WhaleWater.js';
@@ -109,7 +114,6 @@ const _up = new THREE.Vector3();
 const _hornAt = new THREE.Vector3( - 0.42, 3.4, 1.15 ); // (the boat's horn, if its model doesn't say)
 const _shelter = new THREE.Matrix4(), _c4 = new THREE.Matrix4(); // (M9: the wheelhouse roof over the rain)
 const _ride = new THREE.Matrix4(), _one = new THREE.Vector3( 1, 1, 1 ); // (riding along: the boat you're on)
-const SPLASH_REACH = 13; // m: (M12) the rocks the splashes about the camera can land on (Rain's 16 m square, and a step)
 const _fwdB = new THREE.Vector3(); // (M11: her heading, for her instruments)
 // what starts the sound: browsers allow it only after one of these
 const GESTURES = [ 'pointerdown', 'touchend', 'click', 'keydown' ];
@@ -267,16 +271,33 @@ export class App {
 		// stalls; drawn once after the start (buildCover), nothing covers anything until then. The rain
 		// stops on it, and what's wet in the rain stays dry under it (every wet material from now on)
 		this.cover = new CoverMap();
-		wetSurfaces.under( this.cover );
+		// ((M14) and the rocks about you, drawn as you go while it rains or anything's wet: world/RockCover.js)
+		this.rockCover = new RockCover();
+		wetSurfaces.under( this.cover, this.rockCover );
 		// Joe's fish stand and Marta's chandlery (Tidewater's Game builds them; the fishing game isn't
 		// ported yet): their scanned props load while the rest of the island is made
 		this.stand = new FishStand( { scene, terrain: this.terrainData, colliders: this.colliders, tier } );
 		this.chandlery = new Chandlery( { scene, terrain: this.terrainData, colliders: this.colliders, tier } );
+		// ((M14) the sheets a hurricane tears off the roofs, Joe's, and Marta's sign, flying down the wind
+		// as it was when each went (the same for everyone): world/debris/FlyingSheets)
+		this.flyingSheets = new FlyingSheets( {
+			scene, terrain: this.terrainData,
+			windAt: ( T ) => {
+
+				const w = weatherAt( T, this.weatherPick(), this.settings.weatherSince );
+				return { wind: w.wind, toward: towardOf( w.windAngle ), surge: w.surge };
+
+			},
+			walls: this.village.buildings.filter( ( b ) => b.footprint && b.roofTop ).map( ( b ) => ( { x: b.x, z: b.z, r: ( b.footprint.r - 1 ) * 0.85, top: b.roofTop } ) ),
+		} );
+		this.flyingSheets.add( this.village.sheetFlyers() );
+		this.stand.ready.then( () => this.flyingSheets.add( this.stand.sheetFlyers() ) );
+		this.chandlery.ready.then( () => this.flyingSheets.add( this.chandlery.sheetFlyers() ) );
 		this.terrain = new Terrain( { scene, terrainData: this.terrainData, tier } );
 		uploadTextures( renderer, [ this.terrain.heightTexture, this.terrain.normalTexture, this.terrain.splatTexture ] );
 		// boulders, blocks, talus and outcrops (shaded like the ground's rock)
 		this.rocks = new Rocks( { scene, terrain: this.terrain, colliders: this.colliders, village: this.village, castShadow: tier !== 'low', lite: tier === 'low' } );
-		this.vegetation = new Vegetation( { scene, terrain: this.terrainData, ground: this.terrain, renderer, tier, village: this.village, smallBakes: this.cpuGL, bakeSlot: () => this.frameSlot() } );
+		this.vegetation = new Vegetation( { scene, terrain: this.terrainData, ground: this.terrain, renderer, tier, village: this.village, rocks: this.rocks, smallBakes: this.cpuGL, bakeSlot: () => this.frameSlot() } );
 		// (WebGL drawn on the CPU: the plants grow in once the game has started, in start(); their
 		// programs and bakes take seconds there, and a creation has 45 s to load)
 		if ( ! this.cpuGL ) await this.plantsGrow();
@@ -288,7 +309,7 @@ export class App {
 		this.shoreField = computeShoreField( this.terrainData, { res: 512, swellDir: [ WORLD.swellDir.x, WORLD.swellDir.y ] } );
 		this.shore = new ShoreWaves( { field: this.shoreField } );
 		this.query = new WaterQuery( this.waves, this.terrainData, this.shore );
-		this.water = new WaterSurface( { scene, waves: this.waves, terrain: this.terrain, shore: this.shore, tier } );
+		this.water = new WaterSurface( { scene, waves: this.waves, terrain: this.terrain, shore: this.shore, cover: this.cover, rocks: this.rockCover, tier } );
 		if ( this.cloudShadows ) useCloudShadows( this.water.material );
 
 		// ---------------------------------------------------------------- boat and player
@@ -297,6 +318,9 @@ export class App {
 		// (M11) her instruments as they read (world/boat/Instruments.js): made now, so the dash's program is
 		// made with the rest
 		this.instruments = new BoatInstruments( { material: this.boat.materials.display, tier } );
+		// ((M14) and her radar, on the dash's third screen: Radar.js)
+		this.radar = new BoatRadar( { terrain: this.terrainData, seaLevel: () => G.seaLevel.value, size: tier === 'low' ? 150 : 300 } );
+		this._radarBoats = [];
 		scene.add( this.boat.group );
 		this.boat.group.position.copy( WORLD.boatDock.position );
 		this.boat.group.rotation.y = WORLD.boatDock.heading;
@@ -319,9 +343,11 @@ export class App {
 		this.boatSpray = new BoatSpray( { boat: this.boatCtl, spray: this.spray } );
 		// ((M13) and in a hurricane's wind, the spray torn off the sea)
 		this.stormSpray = new StormSpray( { spray: this.spray, terrain: this.terrainData, waves: this.waves, tier } );
+		// ((M14) and off the open sea's whitecaps near you, in any breeze)
+		this.whitecapSpray = new WhitecapSpray( { spray: this.spray, caps: this.water.whitecaps, waves: this.waves, tier } );
 		// (M9) the rain around the camera (fx/Rain.js), and the lightning (sky/Lightning.js: the strikes
 		// everyone sees, their flash on the clouds and the island, the bolts, the thunder)
-		this.rain = new Rain( { terrain: this.terrain, cover: this.cover, tier } );
+		this.rain = new Rain( { terrain: this.terrain, cover: this.cover, rocks: this.rockCover, tier } );
 		scene.add( this.rain.mesh, this.rain.splash );
 		// (M11) the drips (fx/Drips.js): off the wheelhouse roof from the start, the eaves and the palms once
 		// the cover map's built (buildCover)
@@ -340,6 +366,10 @@ export class App {
 		this.flying = new FlyingDebris( { terrain: this.terrain, tier } );
 		this.flying.setRoom( roomMatrix( this.village.shelter && this.village.shelter.inside ) );
 		scene.add( this.flying.mesh );
+		// ((M14) and what a blow sets skittering along the ground: fx/BlownLitter.js)
+		this.litter = new BlownLitter( { terrain: this.terrain, tier } );
+		this.litter.setRoom( roomMatrix( this.village.shelter && this.village.shelter.inside ) );
+		scene.add( this.litter.mesh );
 		if ( tier === 'low' ) {
 
 			this.nearDetail = [];
@@ -371,8 +401,8 @@ export class App {
 		};
 
 		this.audio = new SoundScape( { context: () => portal.audio.context, output, tier } );
-		// (M10) the village's shutters, banging in a blow: a point on each house, at a window's height
-		this.audio.shutters = this.village.buildings.filter( ( b ) => b.shutters ).map( ( b ) => ( { x: b.x, y: b.floorY + 1.4, z: b.z } ) );
+		// (M10) the village's shutters, banging in a blow: (M14) each loose one as it hits the wall or its frame
+		if ( this.village.shutters ) this.village.shutters.onBang = ( x, y, z, k ) => this.audio.shutterBang( x, y, z, k );
 		// (the surf follows the shore waves: Tidewater's are { value } uniforms, these plain params)
 		const P = this.shore.params, live = ( k ) => ( { get value() {
 
@@ -385,7 +415,8 @@ export class App {
 				phase: ( t, T ) => this.shore.phase( t, T ), timeOf: ( s, T ) => this.shore.timeOf( s, T ) },
 			field: this.shoreField, terrain: this.terrainData,
 		} );
-		this.westSurfHeard();
+		this.surfHeard( 1 );
+		this.surfHeard( 2 );
 		this.player.audio = this.audio;
 		// (and, M10, the hull: a slam's wear and the green water it ships, Game.hull)
 		this.boatCtl.onSlam = ( strength ) => {
@@ -417,7 +448,9 @@ export class App {
 
 			const c = Math.cos( st.yaw ), sn = Math.sin( st.yaw );
 			const x = st.x + lx * c + lz * sn, z = st.z - lx * sn + lz * c;
-			this.localLights.add( { position: new THREE.Vector3( x, this.terrainData.heightAt( st.x, st.z ) + ly, z ), color: new THREE.Color( 1.0, 0.72, 0.42 ), intensity: 5 * 1.5, range: 11, kind: 'lantern', flicker: 0.08 } );
+			const lamp = this.localLights.add( { position: new THREE.Vector3( x, this.terrainData.heightAt( st.x, st.z ) + ly, z ), color: new THREE.Color( 1.0, 0.72, 0.42 ), intensity: 5 * 1.5, range: 11, kind: 'lantern', flicker: 0.08 } );
+			// ((M14) Marta's hangs from her sign: out while a hurricane's taken it)
+			if ( st === CHANDLERY ) this._signLamp = lamp;
 
 		}
 
@@ -499,8 +532,8 @@ export class App {
 			this._heldNet = this.game.net.meshes.map( ( m ) => [ m, m.parent ] );
 			for ( const [ m ] of this._heldNet ) m.removeFromParent();
 			// ((M9) and the rain, (M11) its drips, and the lightning: nothing to draw until it rains; (M13) and
-			// a hurricane's flying debris)
-			this._heldWeather = [ this.rain.mesh, this.rain.splash, this.drips.mesh, this.lightning.mesh, this.flying.mesh ].map( ( m ) => [ m, m.parent ] );
+			// a hurricane's flying debris; (M14) and a blow's litter)
+			this._heldWeather = [ this.rain.mesh, this.rain.splash, this.drips.mesh, this.lightning.mesh, this.flying.mesh, this.litter.mesh ].map( ( m ) => [ m, m.parent ] );
 			for ( const [ m ] of this._heldWeather ) m.removeFromParent();
 
 		}
@@ -563,14 +596,15 @@ export class App {
 		this._started = true;
 		this.hud.showHint( this.input.lastDevice );
 		// (on a device that draws on its CPU, one after another, so their garbage doesn't pile up: the
-		// island's held-back parts appear, the plants grow, then the catch card's shaders, then Joe and
-		// Marta (their loading is the high point of script memory: before the animals and the debris
+		// island's held-back parts appear, the plants grow, then the catch card's shaders, (M14) the cover map
+		// and the rocks' overhangs made finer (a few milliseconds after each frame, on every device), then Joe
+		// and Marta (their loading is the high point of script memory: before the animals and the debris
 		// add theirs), then the animals and the debris, then the scanned debris, with pauses between;
 		// last, once that loading's garbage is collected (settle), the reef, its fish and the specks;
 		// then, on every device, the whale)
 		const revealed = this._late ? new Promise( ( done ) => this._revealed = done ) : null;
 		this.lateReady();
-		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.buildCover() ).then( () => this.loadCharacters() )
+		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.buildCover() ).then( () => this.rocks.refineOverhangs() ).then( () => this.loadCharacters() )
 			.then( () => this.pause() ).then( () => this.cpuGL && this.lifeAndDebris() ).then( () => this.pause() ).then( () => this.scansArrive() )
 			.then( () => this.cpuGL && this.settle() ).then( () => this.cpuGL && this.reefGrows() )
 			.then( () => this.pause() ).then( () => this.whaleArrives() ).then( () => this.airArrives() );
@@ -604,8 +638,12 @@ export class App {
 		const pp = this.player.position;
 		this.player.sheltered = insideRoom( this.village.shelter && this.village.shelter.inside, pp.x, pp.y + 0.9, pp.z );
 		if ( this.village.cradleHull ) this.village.cradleHull.solid = !! this.boatCtl.hauled;
+		// ((M14) the village's loose shutters swinging in the wind, all shut for a hurricane)
+		if ( this.village.shutters ) this.village.shutters.update( dt, this.player.windAt, G.windDir.value, !! this.weather.target.boarded );
 		// (M12) a westerly's swell on its way: its shore field, solved off the page
 		if ( this.weather.target.west > 0 && ! this._westField && this._started ) this.solveWestField();
+		// ((M14) and the north shore's sea, once it has one: most days, a little after the start)
+		if ( this.weather.target.north > 0.02 && ! this._northField && this._started ) this.solveNorthField();
 		// ((M13) a hurricane's surge: its field solved before it comes, at its highest, dropped once it's gone)
 		if ( this._started ) {
 
@@ -635,9 +673,15 @@ export class App {
 		// the roofs' sheets, the pier's boards, the palms' fronds, the wrack and sand, the birds at the wrack)
 		if ( ! ( ( this._damageT -= dt ) > 0 ) ) {
 
-			this._damageT = 1;
-			const D = this.damage = damageAt( islandTime( s.day, s.timeOfDay ), this.weatherPick(), s.weatherSince, this.damage );
+			const T = islandTime( s.day, s.timeOfDay );
+			const D = this.damage = damageAt( T, this.weatherPick(), s.weatherSince, this.damage );
+			// ((M14) ten times a second while its winds blow: what it tears off goes as it does)
+			this._damageT = D.storm && D.after < 0 ? 0.1 : 1;
 			this.village.setDamage( D );
+			// ((M14) Joe's roof, Marta's sign, and the sheets off them and the roofs, flying)
+			this.stand.setDamage( D );
+			this.chandlery.setDamage( D, this._signLamp );
+			this.flyingSheets.set( D, T );
 			this.terrain.setStorm( D );
 			vegUniforms.vegStrip.value = D.strip;
 			// (its line of wrack, made once it's left one, with the debris's materials)
@@ -659,6 +703,7 @@ export class App {
 		// moment: as the weather is, not as it's easing here, which isn't everyone's)
 		this.lightning.update( this.weather.target.thunder, this.camera, this.weather.track, this.sky.clouds.base, wx.visibility, Date.now(), this.weather.cells );
 		this.rain.flash.value = this.sky.flashFill; // ((M12) the light about you: none from a storm on the horizon)
+		this.spray.uniforms.sprayGrey.value = this.sky.overcast; // ((M14) the spray lit as the sky is)
 		if ( wx.thunder > 0 && this.audio ) this.audio.thunderReady();
 
 		// ---- player / boat (boat physics first so the cameras follow this frame's pose)
@@ -753,6 +798,7 @@ export class App {
 		this.rocks.update( this.camera );
 		if ( this.debris ) this.debris.update( this.camera );
 		if ( this.stormWrack ) this.stormWrack.update( this.camera ); // ((M13) a hurricane's line of wrack, near you)
+		this.flyingSheets.update( islandTime( s.day, s.timeOfDay ) ); // ((M14) the sheets it's torn off, flying and lying)
 		if ( this.reef ) this.reef.update( this.camera );
 		if ( this.whale ) {
 
@@ -782,9 +828,11 @@ export class App {
 		}
 		this.boatSpray.update( dt );
 		this.stormSpray.update( dt, this.camera );
+		this.whitecapSpray.update( dt, this.camera );
 		this.spray.update( dt, this.camera, this.renderer.domElement.height );
 		this.rain.update( dt, this.camera, this.cameraWaterHeight, this.renderer.domElement.height );
 		this.flying.update( dt, this.camera, this.cameraWaterHeight );
+		this.litter.update( dt, this.camera, this.cameraWaterHeight );
 		if ( this.motes ) this.motes.update( dt, this.camera, this.cameraWaterHeight, this.renderer.domElement.height );
 		this.water.detail.update( dt, this.camera );
 		this.shore.update( G.time.value ); // (Salt Life: the waves' clock, for the GPU)
@@ -796,13 +844,14 @@ export class App {
 		this.rain.setShelter( _shelter.multiplyMatrices( this.boat.shelter, _c4.copy( aboard ).invert() ) );
 		wetSurfaces.update( this.camera, _shelter ); // (M11: nor is anything wet under it, or under a cover)
 		this.rain.setDeck( aboard, this.boat.rainTops ); // (M10: the splashes on her cockpit's sole; (M12) her roof, foredeck and gear)
-		// ((M12) and on the rocks about you, looked for again as you move, while it rains)
-		const cam = this.camera.position, at = this._rocksAt || ( this._rocksAt = { x: 1e9, z: 1e9 } );
-		if ( G.rain.value > 0.002 && this.rocks && Math.hypot( cam.x - at.x, cam.z - at.z ) > 1.5 ) {
+		// ((M12) and on the rocks about you; (M14) none under a rock's overhang or in its lee, nor anything wet
+		// there: the rocks about you drawn again as you go, while it rains or anything's wet, once its passes
+		// are made (buildCover: the cover map's, and its peeling pass))
+		const cam = this.camera.position;
+		if ( ( G.rain.value > 0.002 || G.wet.value > 0.001 ) && this.rocks && this.rockCover.prepared ) {
 
-			at.x = cam.x;
-			at.z = cam.z;
-			this.rain.setRocks( this.rocks.splashRocks( cam.x, cam.z, SPLASH_REACH, SPLASH_ROCKS, this._splashRocks || ( this._splashRocks = [] ) ) );
+			const list = this._rockList || ( this._rockList = [] );
+			this.rockCover.update( this.renderer, cam.x, cam.z, ( x0, z0, x1, z1 ) => this.rocks.around( x0, z0, x1, z1, list ) );
 
 		}
 		this.drips.update( dt, this.camera, this.cameraWaterHeight, this.renderer.domElement.height, aboard ); // (M11)
@@ -1086,15 +1135,15 @@ export class App {
 
 			};
 			const parts = [ ...this.village.coverParts(), ...meshes( this.stand.group, COVER.TIN ), ...meshes( this.chandlery.group, COVER.WOOD ) ];
-			await this.cover.build( r, parts, {
-				slot: () => this.frameSlot(),
-				prepare: async ( scene, camera ) => {
+			const prepare = async ( scene, camera ) => {
 
-					await r.compileAsync( scene, camera );
-					await this.useNewPrograms();
+				await r.compileAsync( scene, camera );
+				await this.useNewPrograms();
 
-				},
-			} );
+			};
+			await this.cover.build( r, parts, { slot: () => this.frameSlot(), prepare } );
+			// ((M14) and the rock cover's peeling pass, the same way: the rest of it is the cover map's)
+			await this.rockCover.prepare( r, prepare );
 			performance.mark( 'world: cover' );
 			// the drips off the eaves it shows, and off the palms (onto the ground, the sea or a cover)
 			const ground = this.terrainData, palms = this.vegetation.records ? this.vegetation.records.palms : [];
@@ -1162,10 +1211,12 @@ export class App {
 		const lit = this._lit || ( this._lit = new WeakSet() );
 		const cheapRoots = [ this.terrain.mesh, this.rocks.group, this.vegetation.group, this.debris && this.debris.group ];
 		const boat = this.boat ? this.boat.group : null;
+		// ((M14) the village's materials are never under a rock: Wet's rocks)
+		const village = new Set( Object.values( this.village.materials || {} ) );
 		const visit = ( o, cheap ) => {
 
 			if ( cheapRoots.includes( o ) ) cheap = true;
-			else if ( o === boat ) cheap = false;
+			else if ( o === boat || o.userData.boatCopy ) cheap = false; // ((M14) and the others' copies of her: Together)
 			if ( o.isMesh ) for ( const m of [ o.material ].flat() ) {
 
 				if ( ! m || lit.has( m ) || ! ( m.isMeshStandardMaterial || m.isMeshLambertMaterial || m.isMeshPhongMaterial ) ) continue;
@@ -1173,7 +1224,7 @@ export class App {
 				lit.add( m );
 				useLocalLights( m, { cheap } );
 				if ( this.cloudShadows ) useCloudShadows( m );
-				useWet( m ); // (M9: darker and glossier in the rain)
+				useWet( m, { rocks: ! village.has( m ) } ); // (M9: darker and glossier in the rain)
 
 			}
 
@@ -1492,7 +1543,8 @@ export class App {
 		_up.set( 0, 1, 0 ).applyQuaternion( cam.quaternion );
 		const h = this.cameraWaterHeight ?? 0;
 		const coast = this.terrainData.coastDistance( p.x, p.z ).d;
-		const amp = this.shore.surf, pier = WORLD.pier, boat = this.boatCtl;
+		// ((M14) and the north shore's sea, near it: the bay's surf heard as it always was elsewhere)
+		const amp = Math.max( this.shore.surf, this.shore.northNear( p.x, p.z ) ), pier = WORLD.pier, boat = this.boatCtl;
 		// (the boat you hear: yours, or the one you ride in, or someone's going by: together/)
 		const theirs = this.together ? this.together.boatSound() : null;
 		// (M10) yours runs once it's caught (Hull: taking the helm cranks her, and she can stall)
@@ -1515,11 +1567,18 @@ export class App {
 		if ( G.rain.value > 0.002 && this._rainOnT <= 0 ) {
 
 			this._rainOnT = 0.2;
-			this._rainOn = surroundings( this.cover, ( x, z ) => this.terrainData.heightAt( x, z ), G.seaLevel.value, p.x, p.y, p.z, this._rainOn );
+			this._rainOn = surroundings( this.cover, ( x, z ) => this.terrainData.heightAt( x, z ), G.seaLevel.value, p.x, p.y, p.z, this._rainOn, this.rockCover );
 
 		}
 
 		for ( const l of this.drips.landed ) a.drip( l.x, l.y, l.z, l.on );
+		// ((M14) the roofs' sheets a hurricane tears off: each as it goes, and as it hits)
+		for ( const h of this.flyingSheets.heard ) {
+
+			if ( h.what === 'tear' ) a.sheetTear( h.x, h.y, h.z );
+			else a.sheetHit( h.x, h.y, h.z, h.what, h.speed );
+
+		}
 
 		a.update( dt, {
 			listener: { position: p, forward: _fwd, up: _up },
@@ -1527,6 +1586,7 @@ export class App {
 			depthBelowSurface: Math.max( 0, h - p.y ),
 			surfIntensity: amp / 0.6, // ((M13) past 1 in a hurricane's surf: SoundScape)
 			inside: this.player.sheltered, // ((M13) in the shelter: the storm through its walls)
+			radio: !! ( this.weather.target && this.weather.target.boarded ), // ((M14) its radio on, the island boarded up for a hurricane)
 			distanceToShore: Math.abs( coast ),
 			coastDistance: coast,
 			waveHeight: amp * 2,
@@ -1560,7 +1620,7 @@ export class App {
 		const ride = p.riding && this.together ? this.together.ridden() : null;
 		this.dashOn( ride ? ride.group : null );
 		// (on the low tier others' boats have no dash to show it on)
-		if ( ride && g && p.mode === 'deck' && this.tier !== 'low' ) return this.instruments.update( dt, this.riddenReading( ride ) );
+		if ( ride && g && p.mode === 'deck' && this.tier !== 'low' ) return this.instruments.update( dt, this.riddenReading( ride, dt ) );
 		if ( ! g || p.riding || ( p.mode !== 'boat' && p.mode !== 'deck' ) ) return this.instruments.update( dt, null );
 		const r = this._reading || ( this._reading = {} ), f = b.forward( _fwdB ), x = b.position.x, z = b.position.z;
 		const map = g.minimap;
@@ -1576,14 +1636,27 @@ export class App {
 		r.z = z;
 		r.chart = map && map._bake && map._bake.done ? map.canvas : null;
 		r.alert = this.weatherAlert();
+		// ((M14) her radar, swept with her array; at the helm, ← → its range, as the panels aren't up)
+		if ( p.mode === 'boat' && g.quietKeys && g.quietKeys() && ( this.input.hit( 'ArrowLeft' ) || this.input.hit( 'ArrowRight' ) ) ) this.radar.step( this.input.hit( 'ArrowRight' ) ? 1 : - 1 );
+		r.radar = this.sweepRadar( dt, r, this.boat.radarBearing );
 		this.instruments.update( dt, r );
+
+	}
+
+	// (M14) the radar of the boat you're aboard sweeping as her array turns (beam: its bearing from her bow):
+	// the land, the rain about her, the sea's clutter, the other boats
+	sweepRadar( dt, r, beam ) {
+
+		const live = this.weather.live, sea = live ? Math.min( 1, Math.max( 0, ( ( live.windSea || 1 ) - 0.8 ) / 2 ) ) : 0;
+		this.radar.update( dt, { x: r.x, z: r.z, heading: r.heading, beam, sea, rainAt: this._rainAt || ( this._rainAt = ( x, z ) => this.weather.rainAt( x, z ) ), boats: this.together ? this.together.boatsAbout( this._radarBoats ) : this._radarBoats } );
+		return this.radar;
 
 	}
 
 	// (M12) the dash of the boat you're riding in (ride: Together.ridden()): the engine's revs and the
 	// starter from the skipper's pose, its fuel and fish finder as they send them (none: on empty, no
 	// finder), its speed and heading as it goes; the depth under it and the chart where it is, here
-	riddenReading( ride ) {
+	riddenReading( ride, dt = 1 / 60 ) {
 
 		const p = this.player, c = ride.cur, d = c.dash, r = this._ridden || ( this._ridden = {} );
 		const f = p.boat.forward( _fwdB ), x = p.boat.position.x, z = p.boat.position.z, map = this.game.minimap;
@@ -1599,6 +1672,9 @@ export class App {
 		r.z = z;
 		r.chart = map && map._bake && map._bake.done ? map.canvas : null;
 		r.alert = this.weatherAlert();
+		// ((M14) and their radar, as their array turns)
+		const arr = ride.group && ride.group.userData.radar;
+		r.radar = this.sweepRadar( dt, r, arr ? ( ( - arr.rotation.y ) % ( Math.PI * 2 ) + Math.PI * 2 ) % ( Math.PI * 2 ) : 0 );
 		return r;
 
 	}
@@ -1665,7 +1741,8 @@ export class App {
 	}
 
 	// low-powered devices: small detail (the boat's fittings and gear, the stalls) only near the camera,
-	// for their triangle budget
+	// for their triangle budget; ((M14) what's not to be shown at all, as a storm's left it, not then
+	// either: userData.shown false, Joe's roof's sheets)
 	updateNearDetail() {
 
 		const cam = this.camera.position;
@@ -1673,7 +1750,7 @@ export class App {
 
 			const s = d.o.geometry.boundingSphere;
 			_c3.copy( s.center ).applyMatrix4( d.o.matrixWorld );
-			d.o.visible = _c3.distanceTo( cam ) - s.radius * d.o.matrixWorld.getMaxScaleOnAxis() < d.dist;
+			d.o.visible = d.o.userData.shown !== false && _c3.distanceTo( cam ) - s.radius * d.o.matrixWorld.getMaxScaleOnAxis() < d.dist;
 
 		}
 
@@ -1733,7 +1810,7 @@ export class App {
 			s.timeOfDay = ( ( saved.hour % 24 ) + 24 ) % 24;
 			s.day = Number.isFinite( saved.day ) ? Math.max( 1, Math.floor( saved.day ) ) : 1;
 			s.timeSpeed = saved.held ? 0 : DAY_RATE;
-			s.weather = CONDITIONS[ saved.weather ] ? saved.weather : null;
+			s.weather = isPick( saved.weather ) ? saved.weather : null;
 			s.weatherSince = Number.isFinite( saved.since ) ? saved.since : islandTime( s.day, s.timeOfDay );
 
 		}
@@ -1746,9 +1823,9 @@ export class App {
 		if ( day >= 1 ) s.day = Math.floor( day );
 		// (?weather=gale: that weather; ?weather=forecast: the day's)
 		const weather = q && q.get( 'weather' );
-		if ( weather && ( CONDITIONS[ weather ] || weather === 'forecast' ) ) {
+		if ( weather && ( isPick( weather ) || weather === 'forecast' ) ) {
 
-			s.weather = CONDITIONS[ weather ] ? weather : null;
+			s.weather = isPick( weather ) ? weather : null;
 			// ((M13) ?weather=hurricane: one of your own, coming in from the hour you start at)
 			s.weatherSince = islandTime( s.day, s.timeOfDay );
 
@@ -1773,11 +1850,29 @@ export class App {
 		this._westField = this.solveShoreField( [ SWELL_WEST.x, SWELL_WEST.y ] ).then( ( field ) => {
 
 			this.shore.addField( field );
-			this.westSurfHeard();
+			this.surfHeard( 1 );
 			return field;
 
 		} );
 		return this._westField;
+
+	}
+
+	// (M14) the north shore's sea: its shore field (along the trades, Weather.NORTH.dir: onto the island's
+	// windward side, round its shoulders; a wind sea's, so none in its lee, the bay: ShoreField.shelter),
+	// solved as the westerly's is, once it has a
+	// height (most days, a little after the start). Then its waves break there, and are heard
+	solveNorthField() {
+
+		if ( this._northField ) return this._northField;
+		this._northField = this.solveShoreField( [ NORTH.dir.x, NORTH.dir.y ], 0, true ).then( ( field ) => {
+
+			this.shore.addField( field, 2 );
+			this.surfHeard( 2 );
+			return field;
+
+		} );
+		return this._northField;
 
 	}
 
@@ -1806,8 +1901,9 @@ export class App {
 	}
 
 	// (M12) another shore field from the island's own field's depths (swellDir: where its swell travels;
-	// (M13) at the sea level seaLevel), in a worker where there is one, else on the page
-	solveShoreField( swellDir, seaLevel = 0 ) {
+	// (M13) at the sea level seaLevel; (M14) a wind sea's, its lee taken out), in a worker where there is
+	// one, else on the page
+	solveShoreField( swellDir, seaLevel = 0, lee = false ) {
 
 		const home = this.shoreField;
 		const ground = { depth: home.depth, res: home.res, size: home.size, origin: home.origin };
@@ -1829,21 +1925,22 @@ export class App {
 
 			};
 
-			worker.postMessage( { ground, swellDir, seaLevel } );
+			worker.postMessage( { ground, swellDir, seaLevel, lee } );
 
 		} ).catch( ( e ) => {
 
 			console.warn( 'Shore: a swell\'s field solved on the page (no worker)', e && e.message );
-			return computeShoreField( fieldGround( ground ), { res: home.res, swellDir, seaLevel } );
+			const field = computeShoreField( fieldGround( ground ), { res: home.res, swellDir, seaLevel } );
+			return lee ? shelter( field, swellDir ) : field;
 
 		} );
 
 	}
 
-	// (M12) the west swell's waves to the surf's sound, once both are here
-	westSurfHeard() {
+	// (M12) the west swell's waves to the surf's sound, once both are here; (M14) or the north shore's (slot 2)
+	surfHeard( slot ) {
 
-		const train = this.shore && this.shore.trains[ 1 ], P = this.shore && this.shore.params;
+		const train = this.shore && this.shore.trains[ slot ], P = this.shore && this.shore.params;
 		if ( ! train || ! this.audio ) return;
 		const value = ( get ) => ( { get value() {
 
@@ -1854,7 +1951,7 @@ export class App {
 			shore: { amplitude: value( () => train.amplitude ), variation: value( () => P.variation ), period: value( () => train.period ), gamma: value( () => P.gamma ), enabled: value( () => P.enabled ), time: G.time,
 				phase: ( t, T ) => train.phase( t, T ), timeOf: ( s, T ) => train.timeOf( s, T ) },
 			field: train.field,
-		} );
+		}, slot );
 
 	}
 

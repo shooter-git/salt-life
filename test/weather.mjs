@@ -1,6 +1,6 @@
 // Plain-node tests of the island's weather (no GPU): the forecast from the island's time, its
 // conditions, how it changes, and how it's read out.
-import { CONDITIONS, WEATHER_IDS, WEATHER_NAMES, SURF_MAX, PERIOD_MAX, GROUNDSWELL_MAX, VEER, STRIKE_RATE, islandTime, storminess, cloudiness, veer, showeriness, unsettled, weatherAt, forecast, surfText, windFrom, strikeIn, murkAt, windBeyondFair, blowShare, showers as showersAbout, FRONT_KMH, FROM, TRACK_SPAN, trackAt, towardOf, swellFrom, distantStrikesIn, DISTANT_NEAR, STORM_RANGE, dayWeatherAt, hurricaneAt, hurricaneNews, HURRICANE, TS_WIND, HURRICANE_WIND, MURKY, SURGE, SURF_HURRICANE, PERIOD_HURRICANE } from '../src/game/Weather.js';
+import { CONDITIONS, WEATHER_IDS, WEATHER_NAMES, SURF_MAX, PERIOD_MAX, GROUNDSWELL_MAX, VEER, STRIKE_RATE, islandTime, storminess, cloudiness, veer, showeriness, unsettled, weatherAt, forecast, surfText, windFrom, strikeIn, murkAt, windBeyondFair, blowShare, showers as showersAbout, FRONT_KMH, FROM, TRACK_SPAN, trackAt, towardOf, swellFrom, distantStrikesIn, DISTANT_NEAR, STORM_RANGE, dayWeatherAt, hurricaneAt, hurricaneNews, HURRICANE, TS_WIND, HURRICANE_WIND, MURKY, SURGE, SURF_HURRICANE, PERIOD_HURRICANE, NORTH, SOUTHERLY, PICK_IDS, isPick, SURF_BIGGEST, categoryOf } from '../src/game/Weather.js';
 import { flashSeen, HEARD } from '../src/sky/Lightning.js';
 import { knots } from '../src/game/Units.js';
 
@@ -10,16 +10,27 @@ const ok = ( c, msg ) => {
 	if ( ! c ) { fails ++; console.log( 'FAIL', msg ); } else console.log( 'ok  ', msg );
 
 };
-const KEYS = [ 'wind', 'windAngle', 'coverage', 'overcast', 'swell', 'windSea', 'surf', 'period', 'west', 'visibility', 'rain', 'thunder', 'front' ];
+const KEYS = [ 'wind', 'windAngle', 'coverage', 'overcast', 'swell', 'windSea', 'surf', 'period', 'west', 'north', 'visibility', 'rain', 'thunder', 'front' ];
 
 // ---- the time, and the same weather for the same time
 ok( islandTime( 1, 9.5 ) === 9.5 && islandTime( 3, 0 ) === 48 && islandTime( 0, 6 ) === 6, 'island time: game hours since day 1 began' );
 ok( JSON.stringify( weatherAt( 1234.567 ) ) === JSON.stringify( weatherAt( 1234.567 ) ) && storminess( 999.9 ) === storminess( 999.9 ), 'the same time gives the same weather' );
 
 // ---- fair is the island as it always was, and day 1 is fair
-const today = { wind: 7, windAngle: 0, coverage: 0.49, overcast: 0, swell: 1, windSea: 1, surf: 0.34, period: 9, west: 0, visibility: 1, rain: 0, thunder: 0, front: 0 };
+const today = { wind: 7, windAngle: 0, coverage: 0.49, overcast: 0, swell: 1, windSea: 1, surf: 0.34, period: 9, west: 0, north: NORTH.fair, visibility: 1, rain: 0, thunder: 0, front: 0 };
 const fair = weatherAt( 100, 'fair' );
 ok( fair.id === 'fair' && KEYS.every( ( k ) => fair[ k ] === today[ k ] ), 'fair: today\'s wind, cloud, sea, surf and haze exactly, and dry' );
+// ((M14) a picked weather's wind is the trades': a picked gale's sea on the north shore, the bay in the
+// island's lee; the southerly gale's in the bay, none on the north shore)
+{
+
+	const g = weatherAt( 100, 'gale' ), s = weatherAt( 100, SOUTHERLY );
+	ok( g.surf < 0.4 && g.north === NORTH.max && g.windAngle === 0 && s.id === 'gale' && s.surf === SURF_MAX && s.north === 0 && Math.abs( s.windAngle - FROM.south ) < 1e-9 && s.swell === CONDITIONS.gale.swell,
+		`(M14) a picked gale: the bay ${ surfText( g.surf ) }, the north shore ${ surfText( g.north ) }; a southerly gale: the bay ${ surfText( s.surf ) }, the north shore none` );
+	ok( PICK_IDS.every( isPick ) && ! isPick( 'forecast' ) && ! isPick( null ) && PICK_IDS.indexOf( SOUTHERLY ) === PICK_IDS.indexOf( 'gale' ) + 1 && WEATHER_IDS.every( ( id ) => PICK_IDS.includes( id ) ), '(M14) every weather can be picked, and a southerly gale after the gale' );
+
+}
+
 let day1 = true;
 for ( let T = 0; T < 24; T += 0.25 ) {
 
@@ -45,7 +56,7 @@ for ( let T = 24 + 1 / 60; T < 24 * DAYS; T += 1 / 60 ) {
 	const w = dayWeatherAt( T );
 	for ( const k of KEYS ) jump[ k ] = Math.max( jump[ k ], Math.abs( w[ k ] - prev[ k ] ) );
 	if ( w.wind < 2 || w.wind > 20.01 || w.windAngle < FROM.south - 1e-9 || w.windAngle > Math.max( VEER, FROM.north ) || w.west < 0 || w.west > 1 || w.coverage < 0.3 || w.coverage > 0.97 || w.surf > SURF_MAX || w.period < 7.5 || w.period > PERIOD_MAX || w.visibility < 0.4 || w.visibility > 1.11
-		|| w.rain < 0 || w.rain > 1 || w.thunder < 0 || w.thunder > 1 || w.front < 0 || w.front > 1 ) bounds = false;
+		|| w.rain < 0 || w.rain > 1 || w.thunder < 0 || w.thunder > 1 || w.front < 0 || w.front > 1 || w.north < 0 || w.north > NORTH.max || w.northPeriod < 5 || w.northPeriod > 9.01 ) bounds = false;
 	if ( ( T * 60 | 0 ) % 30 === 0 ) { count[ w.id ] ++; n ++; }
 	prev = w;
 
@@ -55,22 +66,32 @@ const share = ( id ) => count[ id ] / n;
 console.log( `     over ${ DAYS } days: ${ WEATHER_IDS.map( ( id ) => `${ id } ${ ( share( id ) * 100 ).toFixed( 1 ) }%` ).join( ', ' ) }` );
 console.log( `     the most it moves in a game minute: ${ KEYS.map( ( k ) => `${ k } ${ jump[ k ].toFixed( 4 ) }` ).join( ', ' ) }` );
 ok( bounds, 'every value stays within its conditions\' range' );
-// ((M12) a front's wind swings round a quarter in two game hours: WeatherDriver turns the wind as fast)
-ok( jump.windAngle < 0.022 && jump.west < 0.02 && jump.period < 0.05 && jump.swell < 0.01 && jump.surf < 0.004, 'no step in a game minute, midnight included' );
+// ((M12) a front's wind swings round a quarter in two game hours: WeatherDriver turns the wind as fast;
+// (M14) the period a little faster where a swell from the south comes in behind a blow down the trades:
+// WeatherDriver eases it at 0.02 s a second)
+ok( jump.windAngle < 0.022 && jump.west < 0.02 && jump.period < 0.06 && jump.swell < 0.01 && jump.surf < 0.004 && jump.north < 0.01, 'no step in a game minute, midnight included' );
 // (a shower comes on in a few game minutes, and brings its cloud, haze and squall: WeatherDriver eases them)
 ok( jump.wind < 0.1 && jump.rain < 0.15 && jump.thunder < 0.35 && jump.coverage < 0.04 && jump.overcast < 0.15 && jump.visibility < 0.1 && jump.front < 0.03, 'a shower comes on over a few game minutes, never at once' );
 ok( share( 'fair' ) + share( 'calm' ) > 0.4 && share( 'gale' ) > 0.02 && share( 'gale' ) < 0.09 && share( 'blustery' ) + share( 'gale' ) < 0.25 && WEATHER_IDS.every( ( id ) => id === 'hurricane' || share( id ) > 0.02 ), 'mostly fair, a gale now and then, every condition comes' );
 ok( share( 'rain' ) + share( 'storm' ) > 0.07 && share( 'rain' ) + share( 'storm' ) < 0.2 && share( 'storm' ) < 0.05, 'rain about one hour in six, a thunderstorm one in twenty-five or so' );
 
-// ---- the swell comes ahead of the gale, and the forecast sees it coming
-let onsets = 0, early = 0, seen = 0, quiet = 0;
+// ---- the swell comes ahead of the gale, and the forecast sees it coming; ((M14) into the bay, of a gale
+// whose sea gets there; onto the north shore, of one down the trades: the bay's in the island's lee)
+let onsets = 0, early = 0, seen = 0, quiet = 0, trades = 0, tradesEarly = 0, tradesLee = 0;
 for ( let T = 30; T < 24 * 300; T += 0.5 ) {
 
 	// (a gale's wind: in a thunderstorm the name is the storm's)
-	if ( dayWeatherAt( T ).wind < 18 || dayWeatherAt( T - 0.5 ).wind >= 18 ) continue;
+	const now = dayWeatherAt( T );
+	if ( now.wind < 18 || dayWeatherAt( T - 0.5 ).wind >= 18 ) continue;
 	onsets ++;
 	const before = dayWeatherAt( T - 3 );
-	if ( before.wind < 18 && before.swell >= 1.4 ) early ++;
+	if ( Math.abs( now.windAngle ) < VEER && Math.abs( before.windAngle ) < VEER ) {
+
+		trades ++;
+		if ( before.wind < 18 && before.north >= 0.6 ) tradesEarly ++;
+		if ( now.surf <= 0.42 ) tradesLee ++;
+
+	} else if ( before.wind < 18 && before.swell >= 1.4 ) early ++;
 	// (where no hurricane touches the hours the forecast looks over: it's the day's there)
 	if ( hurricaneAt( T - 4 ) || hurricaneAt( T + 8 ) ) { quiet ++; continue; }
 	const f = forecast( T - 4 );
@@ -78,8 +99,9 @@ for ( let T = 30; T < 24 * 300; T += 0.5 ) {
 
 }
 
-console.log( `     ${ onsets } gales in 300 days: the swell up 3 h before ${ early }, a change forecast 4 h before ${ seen }` );
-ok( onsets > 5 && early >= onsets * 0.8, 'the surf builds before a gale' );
+console.log( `     ${ onsets } gales in 300 days: ${ onsets - trades } from where their sea gets into the bay, the swell up 3 h before ${ early }; ${ trades } down the trades, the north shore's sea up 3 h before ${ tradesEarly }, the bay in their lee (2–4 ft at most) in ${ tradesLee }; a change forecast 4 h before ${ seen }` );
+ok( onsets > 5 && early >= ( onsets - trades ) * 0.8 && trades > 3 && tradesEarly >= trades * 0.8, 'the surf builds before a gale: (M14) the bay\'s, or the north shore\'s of one down the trades' );
+ok( tradesLee === trades, '(M14) a gale down the trades leaves the bay in the island\'s lee' );
 let ahead = 0, own = 0, gales = 0, bigLong = true;
 for ( let T = 30; T < 24 * 300; T += 0.5 ) {
 
@@ -310,6 +332,24 @@ ok( cloudiness( 77 ) >= 0 && cloudiness( 77 ) <= 1 && storminess( 77 ) >= 0 && s
 	ok( off === 0, 'short of a breeze, the wind is the trades\' (turned as they always were)' );
 	ok( blowOff > blows * 0.2 && blowOff < blows * 0.5 && southerly > blows * 0.05 && westerly > blows * 0.03, `a blow's mostly down the trades: ${ pc( blowOff, blows ) } from elsewhere (${ pc( southerly, blows ) } southerly, ${ pc( westerly, blows ) } westerly)` );
 	ok( westSwell > 0 && westWithout === 0 && tradesWest === 0, `a swell from the west only from a westerly blow, of the last few hours or on its way (${ pc( westSwell, 2 * 24 * DAYS ) } of the time)` );
+	// ((M14) the north shore's sea: the trades' own, as big as they blow, none from a southerly or a westerly)
+	let northBig = 0, northOff = 0, northAll = 0;
+	for ( let T = 30; T < 24 * DAYS; T += 0.5 ) {
+
+		const w = dayWeatherAt( T );
+		northAll ++;
+		if ( w.north > 0.85 ) northBig ++;
+		// (a sea outlasts its wind, and runs a little ahead of it: none where it's blown well off the trades
+		// for the hours about)
+		let off = true;
+		for ( let h = - 4; h <= 4 && off; h += 0.25 ) off = Math.abs( dayWeatherAt( T - h ).windAngle ) > NORTH.onto[ 0 ];
+		if ( off && w.north > 0 ) northOff ++;
+
+	}
+
+	const g = weatherAt( 100, 'gale' ), fairN = weatherAt( 100, 'fair' ), calmN = weatherAt( 100, 'calm' ), b = weatherAt( 100, 'breezy' );
+	console.log( `     (M14) the north shore's sea: calm ${ surfText( calmN.north ) }, fair ${ surfText( fairN.north ) } at ${ fairN.northPeriod.toFixed( 1 ) } s, breezy ${ surfText( b.north ) }, a gale ${ surfText( g.north ) } at ${ g.northPeriod.toFixed( 1 ) } s; past 5 ft ${ pc( northBig, northAll ) } of the time` );
+	ok( calmN.north < 0.1 && fairN.north === NORTH.fair && b.north > fairN.north * 1.6 && g.north === NORTH.max && g.northPeriod > fairN.northPeriod + 2 && northOff === 0 && northBig > northAll * 0.02, '(M14) the north shore\'s sea: a few feet on a fair day, as high as the trades blow, none from the south or the west' );
 	// (a front: from the south ahead of it, through the west with its line of showers, round to the north,
 	// and clearing behind it)
 	let fronts = 0, swung = 0, line = 0, cleared = 0;
@@ -402,6 +442,7 @@ ok( cloudiness( 77 ) >= 0 && cloudiness( 77 ) <= 1 && storminess( 77 ) >= 0 && s
 
 	// each passage, every two game minutes from four days before its eye to four and a half after
 	const wrap = ( a ) => a - Math.round( a / ( 2 * Math.PI ) ) * 2 * Math.PI;
+	const cats = [ 0, 0, 0, 0, 0 ];
 	let cat1 = true, force = 0, weakest = 1e9, eyes = 0, overs = 0, eyeCalm = true, eyeLong = [ 1e9, 0 ], flipped = 0, sides = 0, backs = 0, veers = 0, smooth = true, named = true, thunderDry = 0;
 	let banded = 0, wallLoud = 0, watchOn = 0, warnOn = 0, outlooked = 0, gone = true, murky = 0, capped = true, stepMax = { wind: 0, rain: 0, angle: 0, surge: 0 };
 	const surges = { left: [], right: [], over: [] }, quietBay = [], peaked = [];
@@ -416,7 +457,8 @@ ok( cloudiness( 77 ) >= 0 && cloudiness( 77 ) <= 1 && storminess( 77 ) >= 0 && s
 			peak = Math.max( peak, w.wind );
 			if ( w.wind >= TS_WIND && onset === null && w.hurricane > 0.5 ) onset = T;
 			if ( w.wind >= TS_WIND && w.hurricane > 0.5 ) ends = T;
-			if ( w.surf > SURF_HURRICANE || w.period > PERIOD_HURRICANE || w.swell > HURRICANE.swell || w.surge < SURGE.low || w.surge > SURGE.high ) capped = false;
+			// ((M14) a Category 2's or 3's waves bigger)
+			if ( w.surf > SURF_HURRICANE * h.size + 1e-9 || w.surf > SURF_BIGGEST || w.period > PERIOD_HURRICANE || w.swell > HURRICANE.swell * h.size + 1e-9 || w.surge < SURGE.low || w.surge > SURGE.high ) capped = false;
 			surgeHi = Math.max( surgeHi, w.surge );
 			surgeLo = Math.min( surgeLo, w.surge );
 			// (the bay in the lee while its wind blows out of it, at its worst)
@@ -468,7 +510,9 @@ ok( cloudiness( 77 ) >= 0 && cloudiness( 77 ) <= 1 && storminess( 77 ) >= 0 && s
 
 		}
 
-		if ( peak > 42.5 ) cat1 = false;
+		// ((M14) each within its category's wind: a 1's to 42 m/s, a 2's 49, a 3's 58)
+		if ( peak > [ 0, 42.5, 49.5, 58.5 ][ h.cat ] ) cat1 = false;
+		cats[ h.cat ] ++;
 		// (its surge: piled into the bay with the island on its left, drawn out of it on its right)
 		( over ? surges.over : h.d > 0.6 * h.rmax ? surges.left : h.d < - 0.6 * h.rmax ? surges.right : [] ).push( [ surgeHi, surgeLo ] );
 		if ( quiet < 1e9 ) quietBay.push( - quiet );
@@ -513,11 +557,14 @@ ok( cloudiness( 77 ) >= 0 && cloudiness( 77 ) <= 1 && storminess( 77 ) >= 0 && s
 
 	console.log( `     ${ N } hurricanes: ${ force } at hurricane force (the weakest side's ${ weakest.toFixed( 1 ) } m/s); ${ eyes } of ${ overs } over the island in their eye (${ eyeLong[ 0 ].toFixed( 1 ) } to ${ eyeLong[ 1 ].toFixed( 1 ) } h of calm); ${ backs } + ${ veers } of ${ sides } by them backing or veering` );
 	console.log( `     the most a value moves in two game minutes: wind ${ stepMax.wind.toFixed( 2 ) } m/s, rain ${ stepMax.rain.toFixed( 3 ) }, the wind's direction ${ stepMax.angle.toFixed( 3 ) } rad (out of the eye)` );
-	ok( cat1 && force >= N * 0.6 && weakest > 24, 'a Category 1: hurricane force on most passages, a strong gale on the weak side of the rest, never past 42 m/s' );
+	console.log( `     (M14) of the ${ N }: ${ cats[ 1 ] } Category 1, ${ cats[ 2 ] } Category 2, ${ cats[ 3 ] } Category 3` );
+	ok( cat1 && force >= N * 0.6 && weakest > 24, 'each its category: hurricane force on most passages, a strong gale on the weak side of the rest, never past its category\'s wind' );
+	ok( cats[ 1 ] > N * 0.3 && cats[ 2 ] > N * 0.15 && cats[ 3 ] > N * 0.1 && cats[ 4 ] === 0, '(M14) a Category 1 most often, a 2 or a 3 now and then, never a 4' );
 	ok( eyes === overs && overs > N * 0.2 && eyeCalm && eyeLong[ 0 ] > 0.4 && eyeLong[ 1 ] < 3, 'when its eye passes over, an hour or so of calm, dry air in it' );
 	ok( flipped === eyes, 'and its wind from across the compass on the far side of the eye' );
 	ok( sides > 5 && backs + veers === sides && backs > 0 && veers > 0, 'passing to one side, the wind backs through the worst of it (the island on its left) or veers (on its right)' );
-	ok( stepMax.wind < 3 && stepMax.rain < 0.3 && stepMax.angle < 0.25, 'its wind, rain and wind\'s direction change over minutes, not at once (the driver eases them)' );
+	// ((M14) a Category 3's wall comes over a little faster than a 1's)
+	ok( stepMax.wind < 4 && stepMax.rain < 0.3 && stepMax.angle < 0.25, 'its wind, rain and wind\'s direction change over minutes, not at once (the driver eases them)' );
 	ok( named, 'named a hurricane in its wall and its eye, and wherever its wind\'s a hurricane\'s' );
 	ok( banded >= N * 0.8 && wallLoud === 0 && thunderDry === 0, 'its outer bands come over one after another, thundering; its eyewall seldom thunders; thunder only in heavy rain' );
 	ok( outlooked === N && watchOn === N && warnOn === N && gone, 'on the outlook four days before its winds, watched for two days, warned of a day and a half, and nothing said once they\'ve gone' );
@@ -526,10 +573,11 @@ ok( cloudiness( 77 ) >= 0 && cloudiness( 77 ) <= 1 && storminess( 77 ) >= 0 && s
 	console.log( `     (step 2) its surge, highest/lowest (m): on its left ${ fmt( surges.left ) }; on its right ${ fmt( surges.right ) }; its eye over ${ fmt( surges.over ) }` );
 	console.log( `     the bay's surf at the worst with the island on its right (the wind blowing out): ${ quietBay.map( ( v ) => v.toFixed( 2 ) ).join( ' ' ) } m; the surge moves at most ${ ( stepMax.surge * 100 ).toFixed( 1 ) } cm in two game minutes` );
 	ok( capped, '(step 2) its surf, swell, period and surge within their bounds' );
-	ok( surges.left.length > 3 && surges.left.every( ( [ hi ] ) => hi > 0.4 ) && surges.right.length > 3 && surges.right.every( ( [ hi, lo ] ) => hi < 0.3 && lo < - 0.3 ) && surges.over.every( ( [ hi, lo ] ) => hi > 0.15 && lo < 0 ), 'its surge piles the sea into the bay on its left, draws it out on its right; over its eye, up then down' );
+	// ((M14) a stronger one's lower pressure lifts the sea a little even as its wind draws the bay down)
+	ok( surges.left.length > 3 && surges.left.every( ( [ hi ] ) => hi > 0.4 ) && surges.right.length > 3 && surges.right.every( ( [ hi, lo ] ) => hi < 0.6 && lo < - 0.3 ) && surges.over.every( ( [ hi, lo ] ) => hi > 0.15 && lo < 0 ), 'its surge piles the sea into the bay on its left, draws it out on its right; over its eye, up then down' );
 	ok( quietBay.length >= 2 && quietBay.every( ( v ) => v < 0.9 ), 'the bay in the lee while its wind blows out of it' );
 	console.log( `     its highest, known before it comes, within ${ ( Math.max( ...peaked ) * 100 ).toFixed( 1 ) } cm` );
-	ok( stepMax.surge < 0.05 && peaked.every( ( d ) => d < 0.03 ), 'the surge comes and goes over hours (a metre a game hour at most); its highest is known before it comes' );
+	ok( stepMax.surge < 0.07 && peaked.every( ( d ) => d < 0.03 ), 'the surge comes and goes over hours (two metres a game hour at most, a Category 3\'s); its highest is known before it comes' );
 
 	// on your own: one picked comes straight over, its eye passing over in a few game hours
 	const since = 2000.25, P = ( t ) => weatherAt( since + t, 'hurricane', since );

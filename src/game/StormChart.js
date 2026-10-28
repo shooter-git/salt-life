@@ -209,7 +209,7 @@ export class StormChart {
 		// what's known of it
 		const mph = Math.round( ( hurricane.vmax + 0.6 * hurricane.speed / 3600 ) * MPH / 5 ) * 5;
 		const heading = windFrom( - hurricane.track.x, - hurricane.track.y ); // (where it's going)
-		const lines = [ `Hurricane · Category 1 · winds ${ mph } mph`, `Moving ${ heading } at ${ Math.round( hurricane.speed / 1000 * KMH_MPH ) } mph` ];
+		const lines = [ `Hurricane · Category ${ hurricane.cat || 1 } · winds ${ mph } mph`, `Moving ${ heading } at ${ Math.round( hurricane.speed / 1000 * KMH_MPH ) } mph` ];
 		if ( news && news.stage !== 'outlook' ) lines.push( `${ news.stage === 'watch' ? 'Hurricane watch' : 'Hurricane warning' } for the island · its eye nearest ${ timeText( ( ( news.eye % 24 ) + 24 ) % 24, locale, 60 ) }` );
 		g.fillStyle = 'rgba(243, 240, 230, 0.92)';
 		g.fillRect( 38, H - 40 - lines.length * 20, 430, lines.length * 20 + 6 );

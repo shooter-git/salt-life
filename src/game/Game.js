@@ -470,7 +470,7 @@ export class Game {
 		if ( panelOpen && lDown && this.hud.invOpen && this.hud.invTab === 'islander' && this.hud.device === 'gamepad' ) this.hud.nextLook();
 
 		// (Salt Life) the bait for the hook: B, or the d-pad's ← → with the rod out
-		const quiet = ! panelOpen && ! ( this.time && this.time.open ) && ! ( this.guide && this.guide.open );
+		const quiet = this.quietKeys();
 		if ( rod.equipped && quiet && ( inp.hit( 'KeyB' ) || inp.hit( 'ArrowRight' ) || inp.hit( 'ArrowLeft' ) ) ) this.cycleBait( inp.hit( 'ArrowLeft' ) ? - 1 : 1 );
 		else if ( net.equipped && quiet && inp.hit( 'KeyB' ) ) this.toast( this.bucketText(), 2400 );
 
@@ -625,6 +625,7 @@ export class Game {
 				? { key: 'LMB', text: 'Too much tension · let go!' }
 				: { key: 'LMB', text: 'Hold to reel · let go when the tension goes red' };
 			case 'landing': return null;
+			case 'rigging': return { key: '…', text: 'Tying on a new hook and float' };
 			default: return null;
 
 		}
@@ -1240,7 +1241,7 @@ export class Game {
 			this.rod.dip = 0;
 			this.toast( `${ upper( thief ) } took your fish off the hook`, 2800 );
 			if ( au && au.lineSnap ) au.lineSnap();
-			this.rod.setState( 'idle' );
+			this.rod.snap(); // ((M14) and your float and hook with it: a new one to tie on)
 			return;
 
 		}
@@ -1280,9 +1281,10 @@ export class Game {
 
 		} else if ( st === 'snapped' ) {
 
-			this.toast( 'Snap! The line broke', 2400 );
+			this.toast( 'Snap! The line broke · tying on a new hook', 2800 );
 			if ( au && au.lineSnap ) au.lineSnap();
-			this.rod.setState( 'idle' );
+			// ((M14) the float and the broken line left drifting, a new hook and float to tie on)
+			this.rod.snap();
 
 		} else {
 
@@ -1306,6 +1308,15 @@ export class Game {
 	// ---- (Salt Life) the cast net
 
 	// N: out (the rod goes away for it), or away
+	// whether the keys are free of the panels: the cooler or a stall, the clock's menu, the guide ((M14) the
+	// radar's range, at the helm, takes the arrows as the bait does)
+	quietKeys() {
+
+		const panelOpen = this.hud && ( this.hud.invOpen || this.hud.standOpen );
+		return ! panelOpen && ! ( this.time && this.time.open ) && ! ( this.guide && this.guide.open );
+
+	}
+
 	toggleNet() {
 
 		const net = this.net;

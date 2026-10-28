@@ -118,14 +118,17 @@ ok( stallOpen( HOURS.joe, 12 ) && stallOpen( HOURS.joe, 12, 'fair' ) && stallOpe
 	ok( gale.rows[ 0 ][ 1 ] === 'Gale, rain' && slateText( weatherAt( 0, 'storm' ) ).rows[ 0 ][ 1 ] === 'Thunderstorm', 'its rain, and a thunderstorm by name' );
 	ok( blow.rows[ 3 ][ 1 ] === 'Gale from 3:00 PM' && /blow's coming/.test( blow.note ) && slateText( null ).rows.length === 0, 'what\'s coming, and the fish feeding ahead of it' );
 	ok( /murky/.test( slateText( { ...weatherAt( 0, 'fair' ), murk: 0.6 } ).note ) && /blow's coming/.test( slateText( { ...weatherAt( 0, 'fair' ), murk: 0.6, front: 0.9 } ).note ), '(M10) after a blow, the water\'s murky (a blow coming says so first)' );
+	ok( slateText( { ...weatherAt( 0, 'blustery' ), murk: 0 } ).note === 'North shore 5–9 ft' && slateText( weatherAt( 0, 'breezy' ) ).note === '' && /murky/.test( slateText( { ...weatherAt( 0, 'gale' ), murk: 0.6 } ).note ), '(M14) a big surf on the north shore, last' );
 	// ((M13) a hurricane on its way, before anything else; in its eye, that there's more to come)
 	const since = 500, coming = hurricaneNews( since, 'hurricane', since ), eyeT = coming.eye;
 	const watch = { ...coming, stage: 'watch' }, outlook = { ...coming, stage: 'outlook' };
 	const say = ( n, w = weatherAt( 0, 'fair' ) ) => slateText( { ...w, front: 0.9, murk: 0.6 }, null, 'en-US', n ).note;
-	ok( say( outlook ) === 'A hurricane out to the NNW' && say( watch ) === 'Hurricane watch' && say( coming ) === 'Hurricane warning' && say( coming, weatherAt( eyeT, 'hurricane', since ) ) === 'The eye: more to come' && /blow's coming/.test( say( null ) ), '(M13) Joe chalks a hurricane on its way first: on the outlook, watched for, warned of; in its eye, more to come' );
+	// ((M14) its category with it: this one's a 2)
+	const c = coming.cat;
+	ok( say( outlook ) === `A Cat ${ c } hurricane out to the NNW` && say( watch ) === `Cat ${ c } hurricane watch` && say( coming ) === `Cat ${ c } hurricane warning` && say( coming, weatherAt( eyeT, 'hurricane', since ) ) === 'The eye: more to come' && /blow's coming/.test( say( null ) ), '(M13) Joe chalks a hurricane on its way first: on the outlook, watched for, warned of ((M14) and its category); in its eye, more to come' );
 	const T0 = coming.onset - 40, said = ( n, T, w = weatherAt( T, 'hurricane', since ) ) => wxNews( n, w, T, 'en-US' );
 	console.log( `     the clock's menu: ${ [ said( outlook, T0 ), said( watch, T0 ), said( { ...coming }, coming.onset - 20 ), said( coming, eyeT - 1 ), said( coming, eyeT ), said( coming, eyeT + 1 ) ].join( ' · ' ) }` );
-	ok( /far off to the NNW/.test( said( outlook, T0 ) ) && /watch: its winds could be here .* tomorrow/.test( said( watch, T0 ) ) && /warning: its winds from/.test( said( coming, coming.onset - 20 ) ) && /eye passes over about/.test( said( coming, eyeT - 1 ) ) && /^The eye/.test( said( coming, eyeT ) ) && /ease from about/.test( said( coming, eyeT + 1 ) ) && said( null, eyeT ) === '', '(M13) and the clock\'s menu says it, and when' );
+	ok( new RegExp( `^A Category ${ c } hurricane far off to the NNW` ).test( said( outlook, T0 ) ) && new RegExp( `watch \\(Category ${ c }\\): its winds could be here .* (tomorrow|on day \\d+)` ).test( said( watch, T0 ) ) && /warning \(Category \d\): its winds from/.test( said( coming, coming.onset - 20 ) ) && /eye passes over about/.test( said( coming, eyeT - 1 ) ) && /^The eye/.test( said( coming, eyeT ) ) && /ease from about/.test( said( coming, eyeT + 1 ) ) && said( null, eyeT ) === '', '(M13) and the clock\'s menu says it, and when' );
 
 }
 
