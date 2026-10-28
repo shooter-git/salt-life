@@ -153,12 +153,15 @@ const MURK_PICK = { blustery: 0.4, gale: 0.7, storm: 0.5 };
 export const MURKY = 0.35;
 // (M13) The hurricane. Now and then a blow on the lattice is a hurricane's: one in `oneIn`, about every
 // 40 days (a candidate, and none on either of the two before it, so two never come within a week), never
-// before day `fromDay` (a new player's first fortnight). A Category 1 (Saffir-Simpson: 33 to 42 m/s, a minute's sustained
-// wind), steered down the trades as the easterlies steer real ones (turned a little either way), passing
+// before day `fromDay` (a new player's first fortnight). (M14) Of its category (Saffir-Simpson, by its
+// strongest wind, a minute's sustained, its motion and all: a 1's 33 to 42 m/s, a 2's 43 to 49, a 3's 50 to
+// 58; categoryOf) as often as they've struck the US mainland (NOAA, 1851-2020: of the 271 Categories 1 to 3,
+// 45% a 1, 32% a 2, 23% a 3; none stronger here: `cats`), its waves the bigger for it (`size`: as its wind,
+// a 2's a fifth over a 1's, a 3's two fifths); before M14 they were all a 1. Steered down the trades as the easterlies steer real ones (turned a little either way), passing
 // at its own speed, its eye over the island's middle or to one side of it (within `miss` rmax: its calm
 // passes over within `over` rmax, a quarter of them).
 //   - Its strongest wind is on the right of its track; on the left of it a strong gale, as on the weak
-//     side of a real Category 1.
+//     side of a real Category 1 (a whole gale on a 2's or a 3's).
 //   - Its wind is a vortex's: counter-clockwise (the northern hemisphere's) and turned in toward the eye
 //     (`inflow`), calm in the eye (within 0.4 rmax), rising through its wall to `vmax` at rmax, and
 //     broad beyond it (vmax ( rmax + a ) / ( r + a ), a = `outer` rmax: tropical-storm winds 150 to 200
@@ -187,7 +190,10 @@ export const MURKY = 0.35;
 //     wind's direction takes atan2.
 export const HURRICANE = {
 	oneIn: 16, fromDay: 15,
-	vmax: [ 32, 37 ], rmax: [ 20000, 32000 ], over: 0.3, outer: 5.6, motion: 0.6, inflow: [ 0.9397, 0.342 ],
+	vmax: [ 32, 37 ], rmax: [ 20000, 32000 ], over: 0.3,
+	// (M14) each category's share, its vortex's strongest wind (m/s: its motion adds 2 to 4 more) and how big
+	// its waves (of a 1's)
+	cats: [ { share: 0.45, vmax: [ 32, 37 ], size: 1 }, { share: 0.32, vmax: [ 41, 45 ], size: 1.2 }, { share: 0.23, vmax: [ 48, 54 ], size: 1.4 } ], outer: 5.6, motion: 0.6, inflow: [ 0.9397, 0.342 ],
 	speed: [ 14000, 24000 ], turn: 0.5, miss: 1.2, jitter: 12,
 	reach: [ 450000, 750000 ], cloud: [ 700000, 350000 ], grey: [ 600000, 250000 ],
 	core: [ 1.6, 3.2 ], band: { gap: 60000, arms: 2, reach: [ 360000, 460000 ], rain: 0.9, thunder: 0.85, from: [ 2.5, 5 ] }, wallThunder: 0.12,
@@ -198,8 +204,9 @@ export const HURRICANE = {
 // that fall at its eye (hPa a m/s of vmax: a Category 1's 980s), half of it at rmax; the wind's set-up on
 // the bay's shelf (m per (m/s)² of wind blowing into the bay, over the `lag` hours before: its full wind
 // straight in sets the sea up about 1.2 m, as a Category 1's does on a narrow shelf like the Keys'), the
-// most an offshore wind draws it down, and the most it gets
-export const SURGE = { ib: 0.0099, drop: 0.8, setup: 8.3e-4, lag: [ 0, 0.5, 1 ], low: - 0.7, high: 1.6 };
+// most an offshore wind draws it down, and the most it gets ((M14) a Category 3's, 2 to 3 m: the sea into
+// the village's first row; it was 1.6, a 1's)
+export const SURGE = { ib: 0.0099, drop: 0.8, setup: 8.3e-4, lag: [ 0, 0.5, 1 ], low: - 0.7, high: 3.2 };
 // the bay: the way waves travel into it (the island's own swell's, from the south: WORLD.swellDir), and
 // the way a westerly's do, round its western arm (Waves.SWELL_WEST); a little gets in from anywhere; and
 // how much of the confused sea about its eye does (coming from its walls all round)
@@ -212,6 +219,8 @@ const _way = { x: 0, y: 0 };
 // the hurricane's surf at its biggest, straight into the bay (m: the shore waves' amplitude), and its
 // longest swell's period (s)
 export const SURF_HURRICANE = HURRICANE.surf, PERIOD_HURRICANE = HURRICANE.period[ 1 ];
+// (M14) and a Category 3's surf, the biggest
+export const SURF_BIGGEST = HURRICANE.surf * HURRICANE.cats[ HURRICANE.cats.length - 1 ].size;
 // the candidates' share of the lattice (with none of the two before: a hurricane one in `oneIn`)
 const H_CAND = 0.072;
 // m/s: tropical-storm force (34 kt) and hurricane force (64 kt), a minute's sustained wind
@@ -223,7 +232,8 @@ const H_NEWS = { outlook: 96, watch: 48, warning: 36 };
 // tropical-storm winds, and opens again this long after they've gone (game hours)
 const H_BOARD = [ 12, 6 ];
 // (on your own, a hurricane picked at `since` comes straight at the island, its eye over it `lead` game
-// hours on, passing just to the island's left, so the island's on the stronger side of its wall)
+// hours on, passing just to the island's left, so the island's on the stronger side of its wall; (M14) its
+// category as the day's come, from when it's picked)
 const H_PICKED = { lead: 6, vmax: 33, rmax: 24000, speed: 20000, miss: - 0.2 };
 
 const clamp01 = ( x ) => ( x < 0 ? 0 : x > 1 ? 1 : x );
@@ -536,6 +546,22 @@ function storm( tc, vmax, rmax, speed, turn, d ) {
 
 }
 
+// (M14) a hurricane's category (Saffir-Simpson: its strongest wind, the vortex's and its motion's, m/s)
+export const categoryOf = ( h ) => {
+
+	const v = h.vmax + HURRICANE.motion * h.speed / 3600;
+	return v < 43 ? 1 : v < 50 ? 2 : v < 58 ? 3 : 4;
+
+};
+// and which of HURRICANE.cats it is, for a hash u (0..1): a 1 as often as they come, then a 2, then a 3
+const catOf = ( u ) => {
+
+	let i = 0, acc = HURRICANE.cats[ 0 ].share;
+	while ( i < HURRICANE.cats.length - 1 && u >= acc ) acc += HURRICANE.cats[ ++ i ].share;
+	return i;
+
+};
+
 // the hurricane at lattice point i, if there's one (null)
 const _hurricanes = new Map();
 const candidate = ( i ) => hash( i, 0x4e77ac15 ) < H_CAND;
@@ -548,9 +574,13 @@ function hurricaneOf( i ) {
 	if ( i * TRACK_SPAN >= ( H.fromDay - 1 ) * 24 + H.jitter && candidate( i ) && ! candidate( i - 1 ) && ! candidate( i - 2 ) ) {
 
 		const u = ( k ) => hash( i, 0x3b9f7700 + k ), rmax = lerp( H.rmax[ 0 ], H.rmax[ 1 ], u( 2 ) );
-		h = storm( i * TRACK_SPAN + ( u( 1 ) - 0.5 ) * 2 * H.jitter, lerp( H.vmax[ 0 ], H.vmax[ 1 ], u( 3 ) ), rmax, lerp( H.speed[ 0 ], H.speed[ 1 ], u( 4 ) ),
+		// ((M14) of its category, as often as they come: a Category 1 as they all were before)
+		const c = H.cats[ catOf( u( 7 ) ) ];
+		h = storm( i * TRACK_SPAN + ( u( 1 ) - 0.5 ) * 2 * H.jitter, lerp( c.vmax[ 0 ], c.vmax[ 1 ], u( 3 ) ), rmax, lerp( H.speed[ 0 ], H.speed[ 1 ], u( 4 ) ),
 			( u( 5 ) - 0.5 ) * 2 * H.turn, ( u( 6 ) - 0.5 ) * 2 * H.miss * rmax );
 		h.i = i;
+		h.size = c.size;
+		h.cat = categoryOf( h );
 
 	}
 
@@ -567,8 +597,12 @@ function pickedHurricane( since ) {
 	const P = H_PICKED;
 	if ( ! _picked || _picked.since !== since ) {
 
-		_picked = storm( since + P.lead, P.vmax, P.rmax, P.speed, 0, P.miss * P.rmax );
+		// ((M14) of its category as the day's are, now and then a 2 or a 3: a hash of when it's picked)
+		const c = HURRICANE.cats[ catOf( hash( Math.floor( since * 60 ), 0x51c0ffee ) ) ];
+		_picked = storm( since + P.lead, c === HURRICANE.cats[ 0 ] ? P.vmax : ( c.vmax[ 0 ] + c.vmax[ 1 ] ) / 2, P.rmax, P.speed, 0, P.miss * P.rmax );
 		_picked.since = since;
+		_picked.size = c.size;
+		_picked.cat = categoryOf( _picked );
 
 	}
 
@@ -732,7 +766,8 @@ function peakSurge( h ) {
 	if ( h.peak === undefined ) {
 
 		h.peak = 0;
-		for ( let t = - 24; t <= 24; t += 0.25 ) h.peak = Math.max( h.peak, surgeOf( h, h.tc + t, stormAt( h, h.tc + t, _peak ) ) );
+		// ((M14) finely enough for a Category 3's, which rises faster)
+		for ( let t = - 24; t <= 24; t += 0.1 ) h.peak = Math.max( h.peak, surgeOf( h, h.tc + t, stormAt( h, h.tc + t, _peak ) ) );
 
 	}
 
@@ -776,17 +811,17 @@ function overHurricane( w, T, h ) {
 	_way.x = s.waveX;
 	_way.y = s.waveZ;
 	const into = lerp( bayInto( _way ), B.confused, s.confused );
-	const surf = lerp( w.surf, Math.max( w.surf, H.surf * into ), s.near );
+	const surf = lerp( w.surf, Math.max( w.surf, H.surf * ( h.size || 1 ) * into ), s.near );
 	const its = sstep( 0.02, 0.15, surf - w.surf );
 	w.period = lerp( w.period, s.period, its );
 	w.west = lerp( w.west * ( 1 - k ), south + west > 0 ? west / ( south + west ) * ( 1 - s.confused ) : 0, its );
 	w.surf = surf;
 	// ((M14) and onto the north shore as much of them as come that way, as into the bay)
 	const onto = Math.max( 0, s.waveX * NORTH.dir.x + s.waveZ * NORTH.dir.y );
-	const north = lerp( w.north, Math.max( w.north, H.surf * lerp( Math.min( 1, Math.max( B.floor, onto ) ), B.confused, s.confused ) ), s.near );
+	const north = lerp( w.north, Math.max( w.north, H.surf * ( h.size || 1 ) * lerp( Math.min( 1, Math.max( B.floor, onto ) ), B.confused, s.confused ) ), s.near );
 	w.northPeriod = lerp( w.northPeriod, s.period, sstep( 0.02, 0.15, north - w.north ) );
 	w.north = north;
-	w.swell = lerp( w.swell, Math.max( w.swell, H.swell ), s.near );
+	w.swell = lerp( w.swell, Math.max( w.swell, H.swell * ( h.size || 1 ) ), s.near );
 	w.surge = surgeOf( h, T, s );
 	w.front = Math.max( w.front, front );
 	w.murk = Math.max( w.murk, s.murk );
@@ -811,7 +846,7 @@ export function hurricaneAt( T, pick = null, since = 0 ) {
 	const h = pick === 'hurricane' ? pickedHurricane( since ) : pick ? null : hurricaneNear( T );
 	if ( ! h ) return null;
 	const pm = - ( T - h.tc ) * h.speed, pn = h.d;
-	return { tc: h.tc, vmax: h.vmax, rmax: h.rmax, speed: h.speed, d: h.d, track: h.track, left: h.left, over: Math.abs( h.d ) < HURRICANE.over * h.rmax, peak: peakSurge( h ),
+	return { tc: h.tc, vmax: h.vmax, rmax: h.rmax, speed: h.speed, cat: h.cat || categoryOf( h ), d: h.d, track: h.track, left: h.left, over: Math.abs( h.d ) < HURRICANE.over * h.rmax, peak: peakSurge( h ),
 		r: Math.sqrt( pm * pm + pn * pn ), x: - ( pm * h.track.x + pn * h.left.x ), z: - ( pm * h.track.y + pn * h.left.y ) };
 
 }
@@ -829,7 +864,7 @@ export function hurricaneNews( T, pick = null, since = 0 ) {
 		const half = tsHalf( h ), onset = h.tc - half, ends = h.tc + half;
 		if ( T >= ends || T < onset - H_NEWS.outlook ) continue;
 		const stage = T >= onset - H_NEWS.warning ? 'warning' : T >= onset - H_NEWS.watch ? 'watch' : 'outlook';
-		return { stage, onset, ends, eye: h.tc, over: Math.abs( h.d ) < HURRICANE.over * h.rmax, from: windFrom( h.track.x, h.track.y ) };
+		return { stage, onset, ends, eye: h.tc, over: Math.abs( h.d ) < HURRICANE.over * h.rmax, from: windFrom( h.track.x, h.track.y ), cat: h.cat || categoryOf( h ) };
 
 	}
 

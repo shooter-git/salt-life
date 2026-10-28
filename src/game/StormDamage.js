@@ -47,7 +47,7 @@ export const DAMAGE = {
 	tin: { wind: [ 31, 44 ], tarp: [ 12, 40 ], fixed: [ 72, 150 ] },
 	plank: { water: [ 2.15, 3.0 ], fixed: [ 40, 96 ] },
 	bay: { water: [ 2.5, 3.2 ], fixed: [ 96, 168 ] },
-	palm: { wind: [ 24, 42 ], most: 0.5, regrow: 21 * 24 },
+	palm: { wind: [ 24, 42 ], most: 0.5, more: [ 42, 56, 0.35 ], regrow: 21 * 24 },
 	sand: { water: [ 2.1, 3.0 ], swept: [ 12, 40 ] },
 	wrack: { water: [ 1.9, 2.8 ], paths: [ 6, 30 ], beach: [ 72, 240 ], feed: [ 30, 60 ] },
 };
@@ -140,7 +140,8 @@ function of( h, T, pick, since, out ) {
 	out.after = T - h.ends;
 	const after = Math.max( 0, out.after );
 	// the palms: stripped as the wind rises, growing back once it's gone
-	out.strip = D.palm.most * ss( D.palm.wind[ 0 ], D.palm.wind[ 1 ], out.wind ) * ( 1 - Math.min( 1, after / D.palm.regrow ) );
+	// ((M14) and a Category 2's or 3's strips them bare but for their crowns: more past a 1's wind)
+	out.strip = ( D.palm.most * ss( D.palm.wind[ 0 ], D.palm.wind[ 1 ], out.wind ) + D.palm.more[ 2 ] * ss( D.palm.more[ 0 ], D.palm.more[ 1 ], out.wind ) ) * ( 1 - Math.min( 1, after / D.palm.regrow ) );
 	// what the sea left as it fell back from its highest: a line of wrack up the beach, sand and weed
 	// over the paths behind it
 	const left = ss( tr.peakAt, tr.peakAt + 3, T );

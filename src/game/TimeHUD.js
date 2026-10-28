@@ -115,9 +115,11 @@ export function wxNews( news, wx, T, locale = undefined ) {
 		return `${ timeText( ( ( t % 24 ) + 24 ) % 24, locale, 30 ) }${ days === 1 ? ' tomorrow' : days > 1 ? ` on day ${ Math.floor( t / 24 ) + 1 }` : '' }`;
 
 	};
-	if ( news.stage === 'outlook' ) return `A hurricane far off to the ${ news.from }, coming this way`;
-	if ( news.stage === 'watch' ) return `Hurricane watch: its winds could be here by ${ when( news.onset ) }`;
-	if ( T < news.onset ) return `Hurricane warning: its winds from ${ when( news.onset ) }`;
+	// ((M14) and its category, as the hurricane centre gives it)
+	const cat = news.cat ? `Category ${ news.cat }` : '';
+	if ( news.stage === 'outlook' ) return `A ${ cat ? `${ cat } hurricane` : 'hurricane' } far off to the ${ news.from }, coming this way`;
+	if ( news.stage === 'watch' ) return `Hurricane watch${ cat ? ` (${ cat })` : '' }: its winds could be here by ${ when( news.onset ) }`;
+	if ( T < news.onset ) return `Hurricane warning${ cat ? ` (${ cat })` : '' }: its winds from ${ when( news.onset ) }`;
 	if ( wx && wx.eye >= 0.5 ) return 'The eye: the other side of its wall is still to come';
 	if ( T < news.eye ) return news.over ? `Hurricane: its eye passes over about ${ when( news.eye ) }` : `Hurricane: at its worst about ${ when( news.eye ) }`;
 	return `Hurricane: its winds ease from about ${ when( news.ends ) }`;

@@ -83,8 +83,9 @@ const count = ( D, kind, n, states ) => {
 		bayGone += count( D, 'bay', 1, [ GONE ] );
 		stripMax = Math.max( stripMax, D.strip );
 		wrackMax = Math.max( wrackMax, D.wrack );
-		// the storm's weak side: the bay drawn down, little surf in it: no wrack, the pier untouched
-		if ( h.peak < 0.15 ) {
+		// the storm's weak side: the bay drawn down, little surf in it: no wrack, the pier untouched ((M14) a
+		// Category 1's: a stronger one's confused sea about its eye throws its wrack up even so)
+		if ( h.peak < 0.15 && h.cat === 1 ) {
 
 			weak ++;
 			if ( D.wrack > 0.02 || D.sand > 0.02 || count( D, 'plank', PLANKS, [ GONE ] ) || count( D, 'bay', 1, [ GONE ] ) ) weakClean = false;
@@ -111,7 +112,19 @@ const count = ( D, kind, n, states ) => {
 	check( monotone && order, 'its strongest wind and highest water only grow as it passes, and what\'s gone stays gone' );
 	check( tinGone > list.length * 2 && tinGone < list.length * TIN * 0.75, `sheets off the roofs' weak spots: ${ ( tinGone / list.length ).toFixed( 1 ) } of ${ TIN } a hurricane` );
 	check( plankGone > 0 && bayGone > 0 && bayGone < list.length / 2, `the pier's boards lifted (${ plankGone } runs) and now and then a bay taken (${ bayGone } in ${ list.length })` );
-	check( stripMax > 0.3 && stripMax <= DAMAGE.palm.most, `the palms stripped, up to ${ ( stripMax * 100 ).toFixed( 0 ) }% of a crown` );
+	check( stripMax > 0.3 && stripMax <= DAMAGE.palm.most + DAMAGE.palm.more[ 2 ], `the palms stripped, up to ${ ( stripMax * 100 ).toFixed( 0 ) }% of a crown ((M14) more by a Category 2 or 3)` );
+	// ((M14) a Category 3's sea up into the village's front row (its ground 3.3 to 3.8 m), a Category 1's never)
+	const reach = { 1: 0, 2: 0, 3: 0 }, into = { 1: 0, 3: 0 };
+	for ( const h of list ) {
+
+		const D = damageAt( h.tc + 30 ), w = D.storm && D.storm.tc === h.tc ? D.water : 0;
+		reach[ h.cat ] = Math.max( reach[ h.cat ], w );
+		if ( h.cat !== 2 && w > 3.5 ) into[ h.cat ] ++;
+
+	}
+
+	console.log( `     (M14) the highest water: a Category 1's ${ reach[ 1 ].toFixed( 2 ) } m, a 2's ${ reach[ 2 ].toFixed( 2 ) }, a 3's ${ reach[ 3 ].toFixed( 2 ) } (the village's front row stands at 3.3 to 3.8)` );
+	check( reach[ 1 ] < 3.3 && into[ 1 ] === 0 && reach[ 3 ] > 3.8 && into[ 3 ] > 0 && reach[ 3 ] > reach[ 2 ] && reach[ 2 ] > reach[ 1 ], '(M14) a Category 3\'s sea into the village, a 1\'s never' );
 	check( wrackMax > 0.8 && weak > 0 && weakClean, `a line of wrack and sand where the sea came up the beach; none on a storm's weak side (${ weak } of those)` );
 	check( tarps, 'blue tarps over every hole within two days' );
 	check( mended, 'everything mended within a week: new tin, the boards and the bay back' );

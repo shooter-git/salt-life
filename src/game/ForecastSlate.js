@@ -47,9 +47,11 @@ export function slateText( weather, next, locale = undefined, news = null ) {
 // (M13) what Joe chalks of a hurricane on its way
 function hurricaneNote( news, weather ) {
 
-	if ( news.stage === 'outlook' ) return `A hurricane out to the ${ news.from }`;
-	if ( news.stage === 'watch' ) return 'Hurricane watch';
-	return weather.eye >= 0.5 ? 'The eye: more to come' : 'Hurricane warning';
+	// ((M14) its category: 'Cat 3 hurricane warning')
+	const cat = news.cat ? `Cat ${ news.cat } ` : '';
+	if ( news.stage === 'outlook' ) return `A ${ cat }hurricane out to the ${ news.from }`;
+	if ( news.stage === 'watch' ) return `${ cat }hurricane watch`.replace( /^./, ( c ) => c.toUpperCase() );
+	return weather.eye >= 0.5 ? 'The eye: more to come' : `${ cat }hurricane warning`.replace( /^./, ( c ) => c.toUpperCase() );
 
 }
 
