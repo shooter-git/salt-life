@@ -71,15 +71,24 @@ for ( const file of [ 'island-1024.bin', 'island.bin' ] ) {
 		ok( met >= sample.length * 0.9 && near >= sample.length * 0.85, `${ name }: straight up from where you stand the rain meets the rock (${ met } of ${ sample.length }), where the field has its underside (${ near })` );
 
 		// closed (each edge two triangles'), and facing out of the rock
-		const I = g.index.array, edges = new Map();
+		// (by where its ends are: a crease splits a vertex in two at one place)
+		const I = g.index.array, edges = new Map(), at = new Map(), where = ( v ) => {
+
+			const key = `${ P.getX( v ).toFixed( 4 ) },${ P.getY( v ).toFixed( 4 ) },${ P.getZ( v ).toFixed( 4 ) }`;
+			if ( ! at.has( key ) ) at.set( key, at.size );
+			return at.get( key );
+
+		};
 		for ( let t = 0; t < I.length; t += 3 ) for ( let e = 0; e < 3; e ++ ) {
 
-			const a = I[ t + e ], b = I[ t + ( e + 1 ) % 3 ], key = a < b ? a * 1e6 + b : b * 1e6 + a;
+			const a = where( I[ t + e ] ), b = where( I[ t + ( e + 1 ) % 3 ] ), key = a < b ? a * 1e7 + b : b * 1e7 + a;
 			edges.set( key, ( edges.get( key ) || 0 ) + 1 );
 
 		}
 
-		const open = [ ...edges.values() ].filter( ( n ) => n !== 2 ).length;
+		// (an edge of one triangle is a hole; of four, two surfaces touching along it, as surface nets leaves
+		// where the basalt's steps meet in a cell: no hole)
+		const open = [ ...edges.values() ].filter( ( n ) => n === 1 || n === 3 ).length;
 		const N = g.attributes.normal;
 		let out = 0;
 		for ( let q = 0; q < P.count; q += 13 ) {
@@ -90,7 +99,9 @@ for ( const file of [ 'island-1024.bin', 'island.bin' ] ) {
 		}
 
 		const checked = Math.ceil( P.count / 13 );
-		ok( open <= edges.size * 0.002 && out >= checked * 0.97, `${ name }: closed (${ open } of ${ edges.size } edges not shared by two), facing out (${ out } of ${ checked })` );
+		// (where it's creased, a vertex's normal is one side's, and 0.3 m out along it at a concave crease may
+		// be the rock across it: an inside-out mesh would be under half)
+		ok( open <= edges.size * 0.002 && out >= checked * 0.9, `${ name }: closed (${ open } of ${ edges.size } edges open), facing out (${ out } of ${ checked })` );
 
 		// its colliders (made with its far shape, at the load: the rocks' way): how much of it you can stand
 		// in and be left where you are (not up against its sides, someone's breadth); at its foot against its

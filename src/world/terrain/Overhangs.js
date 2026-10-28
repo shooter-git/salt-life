@@ -12,8 +12,9 @@ import { hash2 } from './TerrainNoise.js';
 //     and cut into on one side in an arched cave you can wade into (Akun Island's sea cave; El Tunco)
 // Each is a signed distance (negative in the rock) in its own frame: a jumble of fractured blocks, each its
 // own, fused, bent by a broad warp, then carved (its notch, hollow or cave, their roofs reckoned from the
-// ground under them: a roof's underside keeps its height over the ground), meshed by surface nets on a
-// grid (overhangMesh) and shaded as the rocks are. What's worked out once a column is (column), and the
+// ground under them: a roof's underside keeps its height over the ground), and near its surface made
+// basalt (its flows' layers, the joints they cooled into, broken back: basalt), meshed by surface nets on a
+// grid (overhangMesh), creased where its faces meet sharply (creased), and shaded as the rocks are. What's worked out once a column is (column), and the
 // weathering's fine detail only near the surface (DETAIL). Its colliders come from the same grid, column
 // by column: what's in the way of someone standing there, not the roof over them (overhangColliders).
 //   const o = buildOverhang( site, terrain, { cell } )   { geometry, matrix, x, y, z, radius, top, at }
@@ -31,7 +32,11 @@ export const OVERHANGS = [
 export const HEADROOM = 1.9; // m: room to stand under it
 const STEP = 0.35, BODY = 1.75; // m: what of someone standing there the rock mustn't reach (the step they take up, their height)
 const COLUMN = 0.35; // m: the colliders' columns
-const DETAIL = 0.45; // m: the weathering's fine detail only this near the surface (it can't move it further)
+const DETAIL = 0.7; // m: the basalt's detail only this near the surface (it can't move it further)
+const GROW = 0.25; // m: the blocks grown by about what the basalt's detail cuts back on the whole
+// basalt: its flows' layers about this thick (m), each boundary up or down by up to 0.3 of it; the columns
+// its joints part each layer into, about this across (m)
+const LAYER = 0.9, COLUMNS = 1.1;
 
 // value noise on the integer lattice (-1..1) and its sum over octaves, as the rocks' (RockGeometry's
 // noise3, fbm3), but with nothing made a call: the fields are sampled a few hundred thousand times
@@ -133,14 +138,15 @@ function blockAt( b, x, y, z ) {
 	const u = ( e[ 0 ] * dx + e[ 1 ] * dy + e[ 2 ] * dz ) / b.rx, v = ( e[ 4 ] * dx + e[ 5 ] * dy + e[ 6 ] * dz ) / b.ry, w = ( e[ 8 ] * dx + e[ 9 ] * dy + e[ 10 ] * dz ) / b.rz;
 	let poly = - 1e9;
 	for ( let i = 0; i < P.length; i += 4 ) poly = Math.max( poly, P[ i ] * u + P[ i + 1 ] * v + P[ i + 2 ] * w - P[ i + 3 ] );
-	return smax( poly, Math.sqrt( u * u + v * v + w * w ) - 1, 0.05 ) * b.m;
+	return smax( poly, Math.sqrt( u * u + v * v + w * w ) - 1, 0.03 ) * b.m;
 
 }
 
 // the blocks that may reach a column ( x, z ) (with the warp's reach, A m)
 const nearColumn = ( blocks, x, z, A ) => blocks.filter( ( b ) => Math.hypot( x - b.cx, z - b.cz ) < b.R + 0.8 + A );
 
-// the jumble's distance: the blocks fused (k m; those that may reach its column) and its hollow cut out of
+// the jumble's distance: the blocks fused (k m; those that may reach its column; grown by GROW, which the
+// basalt's detail takes back) and its hollow cut out of
 // them (hollow( x, y, z, a, warped ): negative in it; cut rounded, kc m); where it's near enough to the
 // surface to matter, both in a space bent by the warp (A m, over 1/f m), so the hollow's edges bend with
 // the rock, and the hollow's walls roughened: nothing of it a plane or a straight line
@@ -148,18 +154,80 @@ function carved( blocks, hollow, x, y, z, a, A, f, s, k = 0.3, kc = 0.45 ) {
 
 	let u = FAR;
 	for ( let i = 0; i < blocks.length; i ++ ) u = smin( u, blockAt( blocks[ i ], x, y, z ), k );
-	const d = smax( u, - hollow( x, y, z, a, false ), kc );
+	const d = smax( u - GROW, - hollow( x, y, z, a, false ), kc );
 	if ( Math.abs( d ) > A * 0.8 + 0.7 ) return d;
 	const wx = x + noise3( x * f, y * f, z * f, s ) * A, wy = y + noise3( x * f + 5.2, y * f, z * f, s + 1 ) * A * 0.6, wz = z + noise3( x * f, y * f + 3.7, z * f, s + 2 ) * A;
 	u = FAR;
 	for ( let i = 0; i < blocks.length; i ++ ) u = smin( u, blockAt( blocks[ i ], wx, wy, wz ), k );
-	return smax( u, - ( hollow( wx, wy, wz, a + wy - y, true ) + fbm3( x * 0.75, y * 0.75, z * 0.75, 2, s + 3 ) * 0.1 ), kc );
+	return smax( u - GROW, - ( hollow( wx, wy, wz, a + wy - y, true ) + fbm3( x * 0.75, y * 0.75, z * 0.75, 2, s + 3 ) * 0.1 ), kc );
 
 }
 
-// weathered: lumpy, chipped along its edges, pitted (only near the surface: it can't move it further)
-const weather = ( d, x, y, z, s ) => Math.abs( d ) > DETAIL ? d : d + fbm3( x * 0.9, y * 0.9, z * 0.9, 2, s ) * 0.12
-	+ ( 1 - Math.abs( noise3( x * 1.7, y * 1.7, z * 1.7, s + 2 ) ) ) * 0.07 + Math.abs( noise3( x * 2.4, y * 2.4, z * 2.4, s + 1 ) ) * 0.06;
+// ---- basalt, near its surface (as photographs of lava shores have it): the flows it's built of, in layers
+// each its own thickness, each stepped back by its own amount, their boundaries wavering;
+// the joints it cooled into, parting each layer into columns (in plan, a crack where two of a layer's cells
+// meet, the cells its own in each layer); each column's face broken back by its own amount; and pitted.
+// All of it cuts into the rock, none builds it out, so no roof comes lower than it was cut
+const bound = ( k, s ) => ( k + ( hash2( k, 1, s ) - 0.5 ) * 0.6 ) * LAYER;
+const _layer = [ 0 ], _joint = [ 0, 0 ];
+function layerAt( yy, s ) {
+
+	const k = Math.floor( yy / LAYER );
+	let li = k, lo = bound( k, s ), hi = bound( k + 1, s );
+	if ( yy < lo ) {
+
+		li = k - 1;
+		hi = lo;
+		lo = bound( k - 1, s );
+
+	} else if ( yy >= hi ) {
+
+		li = k + 1;
+		lo = hi;
+		hi = bound( k + 2, s );
+
+	}
+
+	_layer[ 0 ] = li;
+
+}
+
+function jointAt( x, z, li, s ) {
+
+	const gx = x / COLUMNS, gz = z / COLUMNS, ix = Math.floor( gx ), iz = Math.floor( gz );
+	let f1 = 9, f2 = 9, id = 0;
+	for ( let dz = - 1; dz <= 1; dz ++ ) for ( let dx = - 1; dx <= 1; dx ++ ) {
+
+		const cx = ix + dx, cz = iz + dz;
+		const px = cx + 0.15 + hash2( cx * 7 + li, cz, s ) * 0.7, pz = cz + 0.15 + hash2( cx, cz * 7 + li, s + 1 ) * 0.7;
+		const d = Math.hypot( gx - px, gz - pz );
+		if ( d < f1 ) {
+
+			f2 = f1;
+			f1 = d;
+			id = hash2( cx + li * 31, cz, s + 2 );
+
+		} else if ( d < f2 ) f2 = d;
+
+	}
+
+	_joint[ 0 ] = ( f2 - f1 ) * COLUMNS * 0.5;
+	_joint[ 1 ] = id;
+
+}
+
+let detailed = true; // (buildOverhang's: none of it on a grid too coarse to show it)
+function basalt( d, x, y, z, s ) {
+
+	if ( ! detailed || Math.abs( d ) > DETAIL ) return d;
+	layerAt( y + noise3( x * 0.18, 0.5, z * 0.18, s ) * 0.6, s );
+	const li = _layer[ 0 ];
+	jointAt( x, z, li, s + 3 );
+	const crack = _joint[ 0 ], column = _joint[ 1 ];
+	const cut = hash2( li, 5, s + 4 ) * 0.24 + column * 0.1 + 0.25 * Math.max( 0, 1 - crack / 0.18 );
+	return d + cut + fbm3( x * 0.9, y * 0.9, z * 0.9, 2, s + 5 ) * 0.05 + Math.abs( noise3( x * 2.4, y * 2.4, z * 2.4, s + 6 ) ) * 0.05;
+
+}
 
 // ---- the shapes: each built from its seed and the ground in its frame (x along its opening, z out of
 // it, y up from where it's reckoned from: the ground at its opening, or the sea); its field ( x, y, z, a,
@@ -195,9 +263,10 @@ function ledge( s, ground ) {
 
 	}
 
-	// the notch: its ends and how deep it goes along it, uneven; its roof over the ground
+	// the notch: its ends (abrupt, as where a joint stopped the sea) and how deep it goes along it, uneven;
+	// its roof over the ground
 	const x0 = - 6.0 + r() * 0.8, x1 = 5.0 + r() * 0.8;
-	const deepAt = ( x ) => 5.0 * sstep( x0, x0 + 2.2, x ) * sstep( x1, x1 - 2.2, x ) * ( 1 + fbm3( x * 0.4, 5.5, 0, 1, s + 5 ) * 0.2 );
+	const deepAt = ( x ) => 5.0 * sstep( x0, x0 + 0.7, x ) * sstep( x1, x1 - 0.7, x ) * ( 1 + fbm3( x * 0.4, 5.5, 0, 1, s + 5 ) * 0.2 );
 	const roofAt = ( x, z ) => 2.45 + fbm3( x * 0.35, 0.3, z * 0.5, 2, s + 4 ) * 0.35;
 	return {
 		bounds: [ [ - 10.4, - 2.6, - 7.2 ], [ 10.4, 5.4, 2.6 ] ],
@@ -219,7 +288,7 @@ function ledge( s, ground ) {
 				return smax( a - roof, back - z, 0.5 );
 
 			};
-			return weather( carved( col[ 0 ], hollow, x, y, z, a, 0.55, 0.28, s + 20, 0.2, 0.5 ), x, y, z, s + 7 );
+			return basalt( carved( col[ 0 ], hollow, x, y, z, a, 0.35, 0.28, s + 20, 0.3, 0.4 ), x, y, z, s + 7 );
 
 		},
 	};
@@ -237,12 +306,12 @@ function slab( s, ground ) {
 	const roofAt = ( x, z ) => 2.5 + fbm3( x * 0.5, 0.2, z * 0.5, 2, s + 3 ) * 0.25;
 	const blocks = [];
 	const add = ( cx, cz, rx, ry, rz, up, tip = 0.5 ) => blocks.push( block( s, blocks.length, cx, g( cx, cz ) + up, cz, rx, ry, rz, r() * 6.3, ( r() - 0.5 ) * tip, ( r() - 0.5 ) * tip ) );
-	add( 0.1, - 1.5, 3.7, 2.7, 3.2, 1.5, 0.2 );
-	add( - 2.7, 0.1, 1.9, 2.1, 1.9, 1.2 );
-	add( 2.8, - 0.3, 1.8, 2.0, 1.8, 1.1 );
-	add( 0.4, 0.9, 2.3, 1.1, 1.5, 3.1, 0.4 );
-	add( - 0.9, - 1.0, 1.7, 1.0, 1.6, 3.6 );
-	add( 1.3, - 2.4, 1.5, 0.9, 1.4, 3.4 );
+	add( 0.1, - 1.6, 4.1, 3.1, 3.5, 1.3, 0.2 );
+	add( - 2.8, 0.1, 2.2, 2.4, 2.1, 1.2 );
+	add( 2.9, - 0.3, 2.1, 2.3, 2.0, 1.1 );
+	add( 0.3, 1.0, 2.6, 1.3, 1.6, 2.95, 0.3 );
+	add( - 0.9, - 1.0, 1.9, 1.2, 1.8, 3.5 );
+	add( 1.3, - 2.4, 1.7, 1.1, 1.6, 3.3 );
 	for ( const [ R0, up, size ] of [ [ 4.4, 0.9, 1.4 ], [ 5.5, 0.3, 1.0 ] ] ) for ( let k = 0; k < 11; k ++ ) {
 
 		const t = ( k / 11 + r() * 0.06 ) * Math.PI * 2, cx = Math.sin( t ) * ( R0 + r() * 0.6 ), cz = - 1.0 - Math.cos( t ) * ( R0 * 0.9 + r() * 0.6 );
@@ -268,7 +337,7 @@ function slab( s, ground ) {
 				return smax( smax( Math.abs( x - 0.1 ) - side, back - z, 1.0 ), a - ( bent ? roofAt( x, z ) : col[ 1 ] ), 1.1 );
 
 			};
-			return weather( carved( col[ 0 ], hollow, x, y, z, a, 0.45, 0.32, s + 20, 0.3, 0.5 ), x, y, z, s + 7 );
+			return basalt( carved( col[ 0 ], hollow, x, y, z, a, 0.3, 0.32, s + 20, 0.45, 0.45 ), x, y, z, s + 7 );
 
 		},
 	};
@@ -282,10 +351,10 @@ function stack( s ) {
 	let n = 0;
 	const r = () => hash2( s, n ++, 77 );
 	const blocks = [
-		block( s, 0, 0.2, 2.1, - 0.2, 2.4, 3.3, 2.2, r() * 6.3, 0.06, - 0.05 ),
+		block( s, 0, 0.2, 2.2, - 0.2, 2.5, 3.6, 2.3, r() * 6.3, 0.06, - 0.05 ),
 		block( s, 1, - 1.8, 1.6, - 0.9, 1.6, 2.9, 1.5, r() * 6.3, - 0.1, 0.22 ),
 		block( s, 2, 1.8, 2.9, - 1.0, 1.3, 1.7, 1.4, r() * 6.3, 0.15, - 0.2 ),
-		block( s, 3, - 0.4, 4.5, 0.1, 1.5, 1.0, 1.3, r() * 6.3, 0.25, 0.1 ),
+		block( s, 3, - 0.3, 3.9, 0.0, 1.8, 1.25, 1.6, r() * 6.3, 0.25, 0.1 ),
 		block( s, 4, 0.1, - 0.3, - 0.5, 3.6, 1.6, 3.1, r() * 6.3, 0.05, 0.08 ),
 		block( s, 5, 2.5, 0.9, 0.2, 1.4, 1.3, 1.3, r() * 6.3, 0.3, 0.2 ),
 		block( s, 6, - 2.6, 0.8, 0.1, 1.5, 1.2, 1.3, r() * 6.3, - 0.2, 0.3 ),
@@ -310,10 +379,10 @@ function stack( s ) {
 				return smax( arch * 1.3, back - z, 0.5 );
 
 			};
-			let d = carved( near, hollow, x, y, z, a, 0.35, 0.35, s + 20, 0.22, 0.4 );
+			let d = carved( near, hollow, x, y, z, a, 0.25, 0.35, s + 20, 0.4, 0.35 );
 			// the notch all round at the waterline (bitten in by the sea and what lives in it)
 			d += 0.25 * sstep( - 0.5, 0, y ) * sstep( 0.9, 0.4, y );
-			return weather( d, x, y, z, s + 4 );
+			return basalt( d, x, y, z, s + 4 );
 
 		},
 	};
@@ -331,6 +400,84 @@ function trilinear( F, n, fx, fy, fz ) {
 	const at = ( a, b, c ) => F[ a + nx * ( b + ny * c ) ];
 	const l = ( a, b, f ) => a + ( b - a ) * f;
 	return l( l( l( at( i, j, k ), at( i + 1, j, k ), u ), l( at( i, j + 1, k ), at( i + 1, j + 1, k ), u ), w ), l( l( at( i, j, k + 1 ), at( i + 1, j, k + 1 ), u ), l( at( i, j + 1, k + 1 ), at( i + 1, j + 1, k + 1 ), u ), w ), t );
+
+}
+
+// ---- the faces of the mesh meeting at more than CREASE (radians) meet at a crease, as broken rock does:
+// the vertex there is split, each side's faces smoothed among themselves, its normal theirs (area-weighted);
+// faces meeting more gently are smoothed together
+const CREASE = 0.6;
+function creased( pos, idx, angle ) {
+
+	const nv = pos.length / 3, nt = idx.length / 3, fn = new Float32Array( nt * 3 );
+	for ( let t = 0; t < nt; t ++ ) {
+
+		const a = idx[ t * 3 ] * 3, b = idx[ t * 3 + 1 ] * 3, c = idx[ t * 3 + 2 ] * 3;
+		const ux = pos[ b ] - pos[ a ], uy = pos[ b + 1 ] - pos[ a + 1 ], uz = pos[ b + 2 ] - pos[ a + 2 ];
+		const vx = pos[ c ] - pos[ a ], vy = pos[ c + 1 ] - pos[ a + 1 ], vz = pos[ c + 2 ] - pos[ a + 2 ];
+		fn[ t * 3 ] = uy * vz - uz * vy;
+		fn[ t * 3 + 1 ] = uz * vx - ux * vz;
+		fn[ t * 3 + 2 ] = ux * vy - uy * vx;
+
+	}
+
+	// the faces about each vertex
+	const start = new Int32Array( nv + 1 );
+	for ( const v of idx ) start[ v + 1 ] ++;
+	for ( let v = 0; v < nv; v ++ ) start[ v + 1 ] += start[ v ];
+	const fill = start.slice( 0, nv ), around = new Int32Array( idx.length );
+	for ( let k = 0; k < idx.length; k ++ ) around[ fill[ idx[ k ] ] ++ ] = k;
+	// each vertex's faces in groups of those within the angle of the group's normal: a vertex out for each
+	const cos = Math.cos( angle ), P = [], N = [], out = new Uint32Array( idx.length );
+	const unit = ( t ) => {
+
+		const x = fn[ t * 3 ], y = fn[ t * 3 + 1 ], z = fn[ t * 3 + 2 ], l = Math.hypot( x, y, z ) || 1;
+		return [ x / l, y / l, z / l ];
+
+	};
+	for ( let v = 0; v < nv; v ++ ) {
+
+		const groups = [];
+		for ( let i = start[ v ]; i < start[ v + 1 ]; i ++ ) {
+
+			const corner = around[ i ], t = Math.floor( corner / 3 ), [ x, y, z ] = unit( t );
+			let gr = null;
+			for ( const q of groups ) {
+
+				const l = Math.hypot( q.x, q.y, q.z ) || 1;
+				if ( ( q.x * x + q.y * y + q.z * z ) / l > cos ) {
+
+					gr = q;
+					break;
+
+				}
+
+			}
+
+			if ( ! gr ) groups.push( gr = { x: 0, y: 0, z: 0, corners: [] } );
+			gr.x += fn[ t * 3 ];
+			gr.y += fn[ t * 3 + 1 ];
+			gr.z += fn[ t * 3 + 2 ];
+			gr.corners.push( corner );
+
+		}
+
+		for ( const q of groups ) {
+
+			const id = P.length / 3, l = Math.hypot( q.x, q.y, q.z ) || 1;
+			P.push( pos[ v * 3 ], pos[ v * 3 + 1 ], pos[ v * 3 + 2 ] );
+			N.push( q.x / l, q.y / l, q.z / l );
+			for ( const corner of q.corners ) out[ corner ] = id;
+
+		}
+
+	}
+
+	const g = new THREE.BufferGeometry();
+	g.setAttribute( 'position', new THREE.BufferAttribute( new Float32Array( P ), 3 ) );
+	g.setAttribute( 'normal', new THREE.BufferAttribute( new Float32Array( N ), 3 ) );
+	g.setIndex( new THREE.BufferAttribute( out, 1 ) );
+	return g;
 
 }
 
@@ -403,10 +550,7 @@ export function overhangMesh( F, o, n, c ) {
 
 	}
 
-	const g = new THREE.BufferGeometry();
-	g.setAttribute( 'position', new THREE.BufferAttribute( new Float32Array( pos ), 3 ) );
-	g.setIndex( idx );
-	g.computeVertexNormals();
+	const g = creased( pos, idx, CREASE );
 	// the cavity: how far the field's risen a step out along the normal (as open as a flat face, or shut in)
 	const P = g.attributes.position, Nn = g.attributes.normal, ao = new Float32Array( P.count );
 	const sample = ( x, y, z ) => trilinear( F, n, Math.min( nx - 1, Math.max( 0, ( x - o[ 0 ] ) / c ) ), Math.min( ny - 1, Math.max( 0, ( y - o[ 1 ] ) / c ) ), Math.min( nz - 1, Math.max( 0, ( z - o[ 2 ] ) / c ) ) );
@@ -450,6 +594,7 @@ export function buildOverhang( site, terrain, { cell = 0.2 } = {} ) {
 
 	};
 	const coarse = sample( cell * 3 ), { n, F } = sample( cell ), CC = cell * 3, near = cell * 6;
+	detailed = cell < 0.4;
 	for ( const [ grid, c, rough ] of [ [ coarse, CC, null ], [ { n, F }, cell, coarse ] ] ) for ( let k = 0; k < grid.n[ 2 ]; k ++ ) for ( let i = 0; i < grid.n[ 0 ]; i ++ ) {
 
 		const x = lo[ 0 ] + i * c, z = lo[ 2 ] + k * c, g = ground( x, z ), col = shape.column( x, z );
