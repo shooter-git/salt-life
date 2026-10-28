@@ -27,19 +27,23 @@ import { G } from '../core/Globals.js';
 // Waves' wind sea that carries them (11 m, 23 m), and each one's salt and share of the white
 export const CARRIERS = [ { wave: 3, salt: 0x68bc21eb, share: 0.5 }, { wave: 2, salt: 0x02e5be93, share: 0.5 } ];
 const CELL = 1; // a crest's cells (wavelengths along it)
-const EPOCH = 2.5; // periods: each cell breaks at most once in this long
-const DUR = [ 0.35, 0.8 ]; // periods: how long a crest breaks
-const REACH = [ 0.08, 0.36 ]; // its stretch's half-length at its widest (of a cell, at size 1; 0.38 at most)
+const EPOCH = 1.6; // periods: each cell breaks at most once in this long
+const DUR = [ 0.35, 0.8 ]; // periods: how long a crest breaks (at size 1: longer as they're bigger)
+const REACH = [ 0.08, 0.36 ]; // its stretch's half-length at its widest (of a cell, at size 1)
+// (and no more than fits its cell, lip and all, from where its middle is: cut off at the cell's end, its
+// foam was a white block)
+const FIT = 2.2;
 const ROLLER = 0.08; // wavelengths: the roller down the front face, ahead of the crest
 // its lip: a thin line of white along the crest either side of the roller (LIP: of its stretch, LIP_W
 // wavelengths wide, as bright), where it's only beginning to spill
-const LIP = 1.9, LIP_W = 0.025, LIP_WHITE = 0.55;
+const LIP = 1.35, LIP_W = 0.025, LIP_WHITE = 0.55;
 const DECAY = 1; // periods: its foam's e-folding behind it (seen to go in two or three)
 const LEFT = 0.7; // how white the foam it leaves is, at first (the roller's 1: it's lacy at once)
 const AGES = 3; // crests behind looked at: the foam's gone by then (the low tier's GPU looks at two)
 // the share of the sea a wave's whitecaps whiten, a unit of chance at size 1 (test/whitecaps.mjs measures
-// it: 2.7% at a little chance, a tenth less at a gale's, where they begin to overlap)
-export const COVER = 0.026;
+// it), and as their size goes (bigger, and breaking longer: as size^SIZE_COVER, measured)
+export const COVER = 0.025;
+const SIZE_COVER = 1.25;
 // m/s: none below the first; Monahan's share capped at the second's (a gale's: past it the sea's streaked
 // with blown foam, WaterSurface's spume); and their size, from a light breeze's to a gale's
 const WIND = [ 3, 19 ];
@@ -98,15 +102,17 @@ function event( n, s, tau, T, chance, salt, size, fw = 0 ) {
 	const ry = _h[ 1 ] * INV32, rz = _h[ 2 ] * INV32;
 	pcg3d( _h[ 0 ], _h[ 1 ], _h[ 2 ], _h2 );
 	const r2x = _h2[ 0 ] * INV32, r2y = _h2[ 1 ] * INV32, r2z = _h2[ 2 ] * INV32;
-	const D = ( DUR[ 0 ] + ( DUR[ 1 ] - DUR[ 0 ] ) * rz ) * T;
+	const D = ( DUR[ 0 ] + ( DUR[ 1 ] - DUR[ 0 ] ) * rz ) * T * size;
 	const tb = ( e - ho ) * E + ry * ( E - D );
 	const ph = ( tau - tb ) / D;
 	if ( ph < 0 || ph > 1 ) return _ev;
-	const reach = Math.min( ( REACH[ 0 ] + ( REACH[ 1 ] - REACH[ 0 ] ) * r2x ) * size, 0.38 );
-	// (its shape, its own: widest early or late, full or pointed, its middle wandering and bending along
-	// the crest as it goes, a crescent or a blunt head, its edge ragged)
-	const k = 0.5 + 1.1 * fract( r2z * 13.7 ), full = 0.3 + 0.5 * fract( r2y * 9.1 ), bend = ( fract( r2x * 5.3 ) - 0.5 ) * 0.8;
-	const c = 1.3 * reach + r2y * ( 1 - 2.6 * reach ) + ( r2z - 0.5 ) * 0.3 * reach * ( ph - 0.5 ) + bend * reach * ( 4 * ( ph - 0.5 ) ** 2 - 0.33 );
+	const c0 = 0.3 + 0.4 * r2y;
+	const reach = Math.min( ( REACH[ 0 ] + ( REACH[ 1 ] - REACH[ 0 ] ) * r2x ) * size, Math.min( c0, 1 - c0 ) / FIT );
+	// (its shape, its own: opening from a point as it starts, widest early or late, full or pointed, its
+	// middle wandering and bending along the crest as it goes, a lens, a crescent or a blunt head, its edge
+	// ragged)
+	const k = 0.5 + 1.1 * fract( r2z * 13.7 ), full = 0.55 + 0.6 * fract( r2y * 9.1 ), bend = ( fract( r2x * 5.3 ) - 0.5 ) * 0.8;
+	const c = c0 + ( r2z - 0.5 ) * 0.3 * reach * ( ph - 0.5 ) + bend * reach * ( 4 * ( ph - 0.5 ) ** 2 - 0.33 );
 	const rag = 0.18 * Math.sin( f * 37 + r2z * 61 + ph * 7 ) + 0.12 * Math.sin( f * 83 - ph * 13 + ry * 29 );
 	const open = Math.pow( Math.sin( Math.PI * Math.pow( ph, k ) ), full ), edge = open * ( 1 + rag );
 	const soft = 0.45 + fw / reach;
@@ -164,13 +170,14 @@ vec2 wcEvent( float n, float s, float tau, float T, float chance, uint salt, flo
 	vec3 r = vec3( h ) * ${ INV32.toExponential( 10 ) };
 	if ( r.x >= chance ) return vec2( 0.0 );
 	vec3 r2 = vec3( wcHash( h ) ) * ${ INV32.toExponential( 10 ) };
-	float D = mix( ${ f( DUR[ 0 ] ) }, ${ f( DUR[ 1 ] ) }, r.z ) * T;
+	float D = mix( ${ f( DUR[ 0 ] ) }, ${ f( DUR[ 1 ] ) }, r.z ) * T * whitecapSize;
 	float tb = ( e - ho ) * E + r.y * ( E - D );
 	float ph = ( tau - tb ) / D;
 	if ( ph < 0.0 || ph > 1.0 ) return vec2( 0.0 );
-	float reach = min( mix( ${ f( REACH[ 0 ] ) }, ${ f( REACH[ 1 ] ) }, r2.x ) * whitecapSize, 0.38 );
-	float k = 0.5 + 1.1 * fract( r2.z * 13.7 ), full = 0.3 + 0.5 * fract( r2.y * 9.1 ), bend = ( fract( r2.x * 5.3 ) - 0.5 ) * 0.8;
-	float c = 1.3 * reach + r2.y * ( 1.0 - 2.6 * reach ) + ( r2.z - 0.5 ) * 0.3 * reach * ( ph - 0.5 ) + bend * reach * ( 4.0 * ( ph - 0.5 ) * ( ph - 0.5 ) - 0.33 );
+	float c0 = 0.3 + 0.4 * r2.y;
+	float reach = min( mix( ${ f( REACH[ 0 ] ) }, ${ f( REACH[ 1 ] ) }, r2.x ) * whitecapSize, min( c0, 1.0 - c0 ) / ${ f( FIT ) } );
+	float k = 0.5 + 1.1 * fract( r2.z * 13.7 ), full = 0.55 + 0.6 * fract( r2.y * 9.1 ), bend = ( fract( r2.x * 5.3 ) - 0.5 ) * 0.8;
+	float c = c0 + ( r2.z - 0.5 ) * 0.3 * reach * ( ph - 0.5 ) + bend * reach * ( 4.0 * ( ph - 0.5 ) * ( ph - 0.5 ) - 0.33 );
 	float rag = 0.18 * sin( f * 37.0 + r2.z * 61.0 + ph * 7.0 ) + 0.12 * sin( f * 83.0 - ph * 13.0 + r.y * 29.0 );
 	float edge = pow( sin( 3.14159265 * pow( ph, k ) ), full ) * ( 1.0 + rag );
 	float soft = 0.45 + fw / reach;
@@ -221,9 +228,10 @@ vec2 whitecapsAt( vec2 x0 ) {
 		const v = this.uniforms.whitecapChance.value;
 		CARRIERS.forEach( ( c, i ) => {
 
-			this.chance[ i ] = Math.min( 0.95, c.share * W / ( COVER * this.size ) );
+			const per = COVER * Math.pow( this.size, SIZE_COVER );
+			this.chance[ i ] = Math.min( 0.95, c.share * W / per );
 			v.setComponent( i, this.chance[ i ] );
-			v.setComponent( i + 2, this.chance[ i ] * COVER * this.size );
+			v.setComponent( i + 2, this.chance[ i ] * per );
 
 		} );
 		this.uniforms.whitecapSize.value = this.size;

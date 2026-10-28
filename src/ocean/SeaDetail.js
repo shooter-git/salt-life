@@ -7,11 +7,15 @@ import { mulberry32 } from '../util/Noise.js';
 //    of the bright horizon sky, so from a low viewpoint gusts read as irregular dark patches.
 //  - slicks: long calm bands along the wind (surfactant films) where capillary waves are damped;
 //    mirror-like and bright, mostly in light to moderate wind.
-//  - windrows: thin wavy foam lines along the wind in fresh wind (Langmuir circulation).
+//  - windrows: lines along the wind in a fresh wind (Langmuir circulation), where the surface water
+//    converges and gathers the whitecaps' foam. (M14) As photographs of a sea in a blow show them (a
+//    fjord in a gale, a line of sargassum): thin, nearly straight and parallel, unevenly spaced, each a
+//    chain of foam in dashes and gaps that starts and stops over tens of metres.
 //
 // GLSL (this.glsl, with this.uniforms):
 //   vec4 seaDetailSample( vec2 xz )   ( rough: short-wave slope multiplier, gust 0..1, slick 0..1,
-//                                       streak 0..1 )
+//                                       streak 0..1: (M14) the windrows' foam, as a cover; in the
+//                                       fragment only: their lines are drawn by the pixel's width )
 // (Salt Life) On three's WebGL 2, read by WaterSurface. Low-powered devices (lite) take the gusts
 // and slicks only: two texture taps instead of four.
 export class SeaDetail {
@@ -25,7 +29,7 @@ export class SeaDetail {
 		this.uniforms = {
 			seaDetailNoise: { value: this.texture },
 			seaDetailOffset: { value: new THREE.Vector2() }, // accumulated wind drift (m)
-			seaDetailAmounts: { value: new THREE.Vector3( 1, 1, 0.3 ) }, // gust, slick, streak
+			seaDetailAmounts: { value: new THREE.Vector3( 1, 1, 1 ) }, // gust, slick, streak
 			seaDetailTime: G.time,
 			seaDetailWindDir: G.windDir,
 			seaDetailWindSpeed: G.windSpeed,
@@ -46,6 +50,26 @@ uniform vec4 seaDetailFrame;
 float seaDetailSs( float a, float b, float x ) { float t = clamp( ( x - a ) / ( b - a ), 0.0, 1.0 ); return t * t * ( 3.0 - 2.0 * t ); }
 // hardware bilinear, repeat-wrapped, level 0 (smooth, low-frequency noise: no mipmaps needed)
 vec4 seaDetailLoad( vec2 uv ) { return textureLod( seaDetailNoise, uv, 0.0 ); }
+// (M14) one set of windrows: cells (cell) m wide across the wind, three in four with a line in them,
+// somewhere in the middle, each bending a metre or two its own way over a hundred or so, wiggling a little
+// over a few; a chain of foam clumps of uneven size, threadlike in places and wide in others, on and off
+// along it over tens of metres. Its cover at ( ac, along ) (m), with fw the pixel's width across (a line
+// thinner than a pixel is spread over it, fainter)
+float seaDetailRow( float ac, float along, float cell, float salt, float fw ) {
+	float c = floor( ac / cell );
+	vec3 h = fract( sin( vec3( c * 12.9898 + salt, c * 78.233 + salt * 1.7, c * 37.719 + salt * 2.3 ) ) * 43758.5453 );
+	if ( h.x > 0.75 ) return 0.0;
+	vec4 n = seaDetailLoad( vec2( along / 150.0 + h.z * 9.0, h.y * 5.0 + salt ) );
+	vec4 b = seaDetailLoad( vec2( along / 31.0 + h.z * 5.0, h.x * 3.0 + salt * 0.3 ) );
+	// (and its clumps a few metres apart, ragged from side to side)
+	vec4 g = seaDetailLoad( vec2( along / 6.5 + h.y * 11.0, h.z * 7.0 + salt * 0.7 ) );
+	float at = ( 0.25 + 0.5 * h.y ) * cell + ( n.x - 0.5 ) * 3.0 + ( b.z - 0.5 ) * 0.8 + ( g.x - 0.5 ) * 0.5;
+	float hw = ( 0.12 + 0.25 * h.z ) * ( 0.4 + 1.2 * b.w ) * ( 0.5 + g.w ), wide = max( hw, fw );
+	float line = ( 1.0 - seaDetailSs( wide * 0.3, wide, abs( ac - c * cell - at ) ) ) * hw / wide;
+	float on = seaDetailSs( 0.42, 0.6, n.w );
+	float clumps = seaDetailSs( 0.32, 0.62, b.y ) * ( 0.5 + 0.5 * b.x ) * mix( mix( 0.35, 1.0, seaDetailSs( 0.25, 0.55, g.y ) ), 1.0, seaDetailSs( 0.5, 2.0, fw ) );
+	return line * on * mix( clumps, 1.0, 0.1 ) * ( 0.6 + 0.55 * h.x );
+}
 vec4 seaDetailSample( vec2 xz ) {
 	vec2 p = xz - seaDetailOffset;
 	// gusts: two octaves (~600 m and ~230 m features), the second slowly morphing
@@ -63,11 +87,14 @@ vec4 seaDetailSample( vec2 xz ) {
 	float slick = seaDetailSs( 0.64, 0.76, sl ) * ( 1.0 - gust * 0.8 ) * calmWind * seaDetailAmounts.y;
 	float streak = 0.0;
 ${ lite ? '' : /* glsl */`
-	// windrows: thin foam lines ~10 m apart that come and go along their length
-	float st = seaDetailLoad( vec2( along / 380.0, across / 11.0 ) + vec2( 0.13, 0.71 ) ).w;
-	float breakUp = seaDetailLoad( vec2( along / 140.0, across / 40.0 ) + vec2( 0.51, 0.29 ) ).x;
-	float freshWind = seaDetailSs( 6.0, 12.0, seaDetailWindSpeed );
-	streak = seaDetailSs( 0.68, 0.82, st ) * seaDetailSs( 0.4, 0.62, breakUp ) * freshWind * seaDetailAmounts.z;` }
+	// windrows ((M14) as the whitecaps bring them foam: faint on a fair day, clear from a fresh breeze up): a strong line every 26 m or so, fainter ones between every 11, their
+	// meander a metre or two over hundreds (not the slicks' warp)
+	float freshWind = seaDetailSs( 5.0, 13.0, seaDetailWindSpeed );
+	if ( freshWind > 0.0 ) {
+		float ac = dot( rel, vec2( - w.y, w.x ) ) + seaDetailFrame.w + ( seaDetailLoad( vec2( along / 900.0, 0.37 ) ).x - 0.5 ) * 4.0;
+		float fwA = fwidth( ac );
+		streak = max( seaDetailRow( ac, along, 26.0, 0.0, fwA ), 0.6 * seaDetailRow( ac + 7.3, along, 11.0, 3.1, fwA ) ) * freshWind * seaDetailAmounts.z;
+	}` }
 	// windrows show mostly as smooth lanes (surfactant and debris collect in the convergence lines
 	// and damp the ripples), with only a trace of foam
 	float rough = mix( 0.5, 1.5, gust ) * ( 1.0 - slick * 0.8 ) * ( 1.0 - streak / max( seaDetailAmounts.z, 1e-3 ) * 0.45 );

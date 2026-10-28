@@ -254,9 +254,14 @@ ${ SH ? /* glsl */`
 	// the humpback's marks: churned white water, and the flat slick of its fluke print (WhaleWater)
 	vec2 whaleMk = whaleMarksOn > 0.5 ? whaleWater( vWater.xz ) : vec2( 0.0 );
 	foam = max( foam, whaleMk.x );
-	// the sea's large-scale detail: rougher gusts, calm slicks, a trace of foam on the windrows
+	// the sea's large-scale detail: rougher gusts, calm slicks, the windrows' foam ((M14) beaded lines of it,
+	// granular as the whitecaps' foam; seen from afar, as much white spread)
 	vec4 seaD = seaDetailSample( vWater.xz );
-	foam = max( foam, seaD.w * 0.3 );
+	float wrFw = length( fwidth( vWaterX0 ) );
+	if ( seaD.w > 0.0 ) {
+		float wr = min( seaD.w * 1.5, 0.75 );
+		foam = max( foam, mix( waterLace( vWaterX0 * 3.3, wr ), wr, smoothstep( 0.35, 1.2, wrFw ) ) * 0.8 );
+	}
 	// (Salt Life) whitecaps: ((M14) the open sea's crests breaking here and there, each its own: a roller down
 	// a crest's face while it breaks, and the foam it's left behind it thinning (Whitecaps.js)); more in the
 	// gusts; out over the open sea only (the shore waves have their own)
