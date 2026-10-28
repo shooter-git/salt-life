@@ -79,8 +79,8 @@ void main() {
 }
 `;
 
-// the pass's material for what's of a kind (COVER): drawn from above, the highest kept; ((M14) from below,
-// the lowest: RockCover's undersides). Each the same program
+// the pass's material for what's of a kind (COVER): drawn from above, the highest kept ((M14) RockCover's
+// tops too). Each the same program
 export function coverPassMaterial( kind ) {
 
 	return new THREE.ShaderMaterial( {
@@ -334,11 +334,10 @@ export function surroundings( cover, terrainAt, sea, x, y, z, out = {}, rocks = 
 		const a = k / n * Math.PI * 2 + r * 0.37;
 		const sx = x + Math.cos( a ) * r, sz = z + Math.sin( a ) * r;
 		const ground = terrainAt( sx, sz ), top = cover.heightAt( sx, sz );
-		// ((M14) a rock there: the rain on it is on stone, the rest's, and its underside may be over you; right
-		// where you are, any of it over you is (you can't stand in one: an overhang whose foot runs on under
-		// the sea or the ground, its lowest below you)
+		// ((M14) a rock there: the rain on it is on stone, the rest's, and the underside of its top layer may be
+		// over you)
 		const rock = rocks ? rocks.topAt( sx, sz ) : NO_COVER;
-		const rockOver = rocks && ( r === 0 ? rock : rocks.bottomAt( sx, sz ) ) > y + 0.3;
+		const rockOver = rocks && rocks.bottomAt( sx, sz ) > y + 0.3;
 		const covered = Math.max( top, rock ) > Math.max( ground, sea );
 		const isWood = covered && top >= rock && cover.kindAt( sx, sz ) === COVER.WOOD, isWater = ! covered && ground < sea;
 		all += w;

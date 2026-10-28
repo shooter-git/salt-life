@@ -2,7 +2,8 @@
 // to the centimetre, what's under a rock's overhang and what isn't, nothing off the map or before it's
 // drawn, the rain's sound under one (Cover.surroundings), and the rocks it's drawn from (Rocks.around, on
 // the real island). The map itself is drawn on the GPU (RockCover.update); here it's laid out by hand, a
-// texel at a time, as the passes write them: the tops in its left half, the undersides in its right.
+// texel at a time, as the passes write them: the tops in its left half, in its right the undersides of
+// the topmost layer of rock (the peeling pass's).
 import { readFileSync } from 'node:fs';
 import * as THREE from '../src/engine/index.js';
 import { RockCover, ROCK_TEXEL } from '../src/world/RockCover.js';
@@ -71,12 +72,13 @@ const top = surroundings( none, flat, - 1, ox, 3.2, oz, {}, rocks );
 ok( top.under === 0, 'nor standing on it' );
 const sea = surroundings( none, () => - 3, 0, ox, 0.5, oz, {}, rocks );
 ok( sea.nearWater < 1 && sea.under > 0, `a rock standing out of the sea: the rain on it isn't on the sea, and under it you're covered (${ sea.nearWater.toFixed( 2 ) })` );
-// (an overhang standing out of the sea, its foot on under the water: its lowest underside below you, its
-// top over you, over ( 160..199, 120..159 ))
-for ( let j = 120; j < 160; j ++ ) for ( let i = 160; i < 200; i ++ ) put( i, j, 1.6, - 0.9 );
+// (an overhang standing out of the sea, its foot running on under it and the water: the map has the
+// underside of its top layer, the roof over you (1.45), not the foot's under the sea, over
+// ( 160..199, 120..159 ))
+for ( let j = 120; j < 160; j ++ ) for ( let i = 160; i < 200; i ++ ) put( i, j, 1.6, 1.45 );
 const [ sx, sz ] = at( 180, 140 );
 const wading = surroundings( none, () => - 0.3, 0, sx, - 0.3, sz, {}, rocks );
-ok( wading.under > 0 && ! rocks.over( sx, - 0.3, sz ), `wading under a sea rock's overhang, its foot under the water: covered where you stand (${ wading.under.toFixed( 2 ) }), though its lowest is under you` );
+ok( wading.under > 0 && rocks.over( sx, - 0.3, sz ) && rocks.over( sx, 1.1, sz ), `wading under a sea rock's overhang, its foot under the water and you: covered where you stand (${ wading.under.toFixed( 2 ) }: 3 m out is past its 5 m)` );
 const plain = surroundings( none, flat, - 1, ox, 0, oz, {} );
 ok( plain.under === 0, 'without the rocks, as before M14: nothing over you' );
 

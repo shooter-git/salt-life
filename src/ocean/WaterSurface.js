@@ -44,7 +44,7 @@ const rgb = ( r, g, b ) => {
 
 export class WaterSurface {
 
-	constructor( { scene, waves, terrain, shore = null, tier = 'low' } ) {
+	constructor( { scene, waves, terrain, shore = null, cover = null, rocks = null, tier = 'low' } ) {
 
 		this.waves = waves;
 		this.terrain = terrain;
@@ -76,6 +76,10 @@ export class WaterSurface {
 			...this.whitecaps.uniforms,
 			waterSpume: this.spume,
 			waterRain: G.rain, // (M9: the rings where the drops land)
+			// ((M14) none under what covers the sea: the pier, the boathouse (world/Cover.js), a rock's overhang
+			// (world/RockCover.js))
+			...( cover ? cover.uniforms : {} ),
+			...( rocks ? rocks.uniforms : {} ),
 			waterFlash: G.skyFlash, // (M10: lightning in the reflections)
 			waterFlashShape: G.skyFlashShape, // ((M12) its glow's shape: Sky's)
 			waterSkyExposure: G.skyExposure,
@@ -170,7 +174,7 @@ ${ SH ? /* glsl */`
 				.replace( '#include <begin_vertex>', 'vec3 transformed = wPos;' );
 
 			shader.fragmentShader = shader.fragmentShader
-				.replace( '#include <common>', '#include <common>\n' + terrain.heightGlsl + ( SH ? shore.glsl : '' ) + waves.glsl + this.whitecaps.glsl + /* glsl */`
+				.replace( '#include <common>', '#include <common>\n' + terrain.heightGlsl + ( SH ? shore.glsl : '' ) + waves.glsl + this.whitecaps.glsl + ( cover ? cover.glsl : '' ) + ( rocks ? rocks.glsl : '' ) + /* glsl */`
 uniform float waterTime;
 uniform vec3 waterSunColor;
 uniform vec3 waterSunDir;
@@ -355,9 +359,13 @@ ${ SH ? /* glsl */`
 	vec2 r2 = texture2D( waterRipples, vWater.xz * 0.043 + 0.3 - waterTime * vec2( 0.02, 0.008 ) ).xy * 2.0 - 1.0;
 	vec2 rs = ( r1 * 0.6 + r2 * 0.4 ) * 0.32 * rippleK;
 	// (M9) the rings where the rain lands, near the camera; and the drops beat the wind's ripples down
-	// ((M10) all over the sea: a downpour flattens them as far as you see)
+	// ((M10) all over the sea: a downpour flattens them as far as you see; (M14) not under the pier, the
+	// boathouse or a rock's overhang)
 	if ( waterRain > 0.0 ) {
 		float rainN = clamp( waterRain * 1.5, 0.0, 1.0 );
+		float rainOver = ${ cover ? 'coverHeightAt( vWater.xz )' : '-1e4' };
+		${ rocks ? 'rainOver = max( rainOver, rockUndersideAt( vWater.xz ) );' : '' }
+		rainN *= step( rainOver, vWater.y + 0.1 );
 		rs *= 1.0 - 0.35 * rainN;
 		float rainD = length( cameraPosition - vWater );
 		if ( rainD < 45.0 ) {

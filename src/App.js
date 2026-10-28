@@ -309,7 +309,7 @@ export class App {
 		this.shoreField = computeShoreField( this.terrainData, { res: 512, swellDir: [ WORLD.swellDir.x, WORLD.swellDir.y ] } );
 		this.shore = new ShoreWaves( { field: this.shoreField } );
 		this.query = new WaterQuery( this.waves, this.terrainData, this.shore );
-		this.water = new WaterSurface( { scene, waves: this.waves, terrain: this.terrain, shore: this.shore, tier } );
+		this.water = new WaterSurface( { scene, waves: this.waves, terrain: this.terrain, shore: this.shore, cover: this.cover, rocks: this.rockCover, tier } );
 		if ( this.cloudShadows ) useCloudShadows( this.water.material );
 
 		// ---------------------------------------------------------------- boat and player
@@ -844,10 +844,10 @@ export class App {
 		wetSurfaces.update( this.camera, _shelter ); // (M11: nor is anything wet under it, or under a cover)
 		this.rain.setDeck( aboard, this.boat.rainTops ); // (M10: the splashes on her cockpit's sole; (M12) her roof, foredeck and gear)
 		// ((M12) and on the rocks about you; (M14) none under a rock's overhang or in its lee, nor anything wet
-		// there: the rocks about you drawn again as you go, while it rains or anything's wet, once the cover
-		// map's pass is made (buildCover: it's the same))
+		// there: the rocks about you drawn again as you go, while it rains or anything's wet, once its passes
+		// are made (buildCover: the cover map's, and its peeling pass))
 		const cam = this.camera.position;
-		if ( ( G.rain.value > 0.002 || G.wet.value > 0.001 ) && this.rocks && this.cover.data ) {
+		if ( ( G.rain.value > 0.002 || G.wet.value > 0.001 ) && this.rocks && this.rockCover.prepared ) {
 
 			const list = this._rockList || ( this._rockList = [] );
 			this.rockCover.update( this.renderer, cam.x, cam.z, ( x0, z0, x1, z1 ) => this.rocks.around( x0, z0, x1, z1, list ) );
@@ -1134,15 +1134,15 @@ export class App {
 
 			};
 			const parts = [ ...this.village.coverParts(), ...meshes( this.stand.group, COVER.TIN ), ...meshes( this.chandlery.group, COVER.WOOD ) ];
-			await this.cover.build( r, parts, {
-				slot: () => this.frameSlot(),
-				prepare: async ( scene, camera ) => {
+			const prepare = async ( scene, camera ) => {
 
-					await r.compileAsync( scene, camera );
-					await this.useNewPrograms();
+				await r.compileAsync( scene, camera );
+				await this.useNewPrograms();
 
-				},
-			} );
+			};
+			await this.cover.build( r, parts, { slot: () => this.frameSlot(), prepare } );
+			// ((M14) and the rock cover's peeling pass, the same way: the rest of it is the cover map's)
+			await this.rockCover.prepare( r, prepare );
 			performance.mark( 'world: cover' );
 			// the drips off the eaves it shows, and off the palms (onto the ground, the sea or a cover)
 			const ground = this.terrainData, palms = this.vegetation.records ? this.vegetation.records.palms : [];
