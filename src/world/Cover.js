@@ -324,11 +324,16 @@ export class CoverMap {
 // of wood around (the spot, 3 m out and 8 m out, the nearer weighing more; the rest is the ground and the
 // roofs); how much of the sea and the wood is right by (the spot and 3 m out); and how much of that is
 // under a cover over your head (the pier's deck above you, a roof, an awning, (M14) a rock's overhang:
-// rocks, a RockCover). terrainAt( x, z ): the ground's height; sea: the sea's level
+// rocks, a RockCover). (M14) And how much of what's within arm's reach is under one (overhead: the spot
+// and 1.2 m out, the drops on you and at your feet), and how many of eight ways about you a rock's face
+// stands between you and the rain beyond it, 1.5 or 3 m off, its top over your head (walled).
+// terrainAt( x, z ): the ground's height; sea: the sea's level
 const AROUND = [ [ 0, 1, 2 ], [ 3, 8, 1 ], [ 8, 12, 0.5 ] ]; // radius (m), samples, the weight of each
+const REACH = [ 1.2, 6 ]; // (M14) arm's reach about you (m), its samples
+const EARS = 1.6; // m over your feet
 export function surroundings( cover, terrainAt, sea, x, y, z, out = {}, rocks = null ) {
 
-	let all = 0, water = 0, wood = 0, near = 0, nearWater = 0, nearWood = 0, over = 0, tin = 0, tinOver = 0;
+	let all = 0, water = 0, wood = 0, near = 0, nearWater = 0, nearWood = 0, over = 0, tin = 0, tinOver = 0, overhead = 0, walled = 0;
 	for ( const [ r, n, w ] of AROUND ) for ( let k = 0; k < n; k ++ ) {
 
 		const a = k / n * Math.PI * 2 + r * 0.37;
@@ -347,6 +352,13 @@ export function surroundings( cover, terrainAt, sea, x, y, z, out = {}, rocks = 
 		near += w;
 		if ( isWater ) nearWater += w;
 		if ( isWood ) nearWood += w;
+		if ( r === 0 && ( rockOver || top > y + 0.3 ) ) overhead += 2;
+		if ( r === 3 && rocks ) {
+
+			const face = ( fx, fz ) => rocks.topAt( fx, fz ) > y + EARS && rocks.bottomAt( fx, fz ) < y + EARS;
+			if ( face( sx, sz ) || face( x + Math.cos( a ) * 1.5, z + Math.sin( a ) * 1.5 ) ) walled ++;
+
+		}
 		if ( rockOver ) over += w;
 		else if ( top > y + 0.3 ) {
 
@@ -363,6 +375,13 @@ export function surroundings( cover, terrainAt, sea, x, y, z, out = {}, rocks = 
 
 	}
 
+	for ( let k = 0; k < REACH[ 1 ]; k ++ ) {
+
+		const a = k / REACH[ 1 ] * Math.PI * 2 + 0.2, sx = x + Math.cos( a ) * REACH[ 0 ], sz = z + Math.sin( a ) * REACH[ 0 ];
+		if ( ( rocks && rocks.bottomAt( sx, sz ) > y + 0.3 ) || cover.heightAt( sx, sz ) > y + 0.3 ) overhead ++;
+
+	}
+
 	out.water = water / all;
 	out.wood = wood / all;
 	out.nearWater = nearWater / near;
@@ -370,6 +389,8 @@ export function surroundings( cover, terrainAt, sea, x, y, z, out = {}, rocks = 
 	out.under = over / near;
 	out.tin = tin / near;
 	out.tinOver = tinOver;
+	out.overhead = overhead / ( 2 + REACH[ 1 ] );
+	out.walled = walled / AROUND[ 1 ][ 1 ];
 	return out;
 
 }

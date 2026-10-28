@@ -2,7 +2,7 @@ import * as THREE from '../engine/index.js';
 import { Noise2D, mulberry32, smoothstep as sstep } from '../util/Noise.js';
 import { WORLD } from './WorldLayout.js';
 import { buildRockGeometry, ROCK_STYLES } from './terrain/RockGeometry.js';
-import { OVERHANGS, buildOverhang, overhangColliders, clears } from './terrain/Overhangs.js';
+import { OVERHANGS, buildOverhang, overhangBuild, overhangColliders, clears } from './terrain/Overhangs.js';
 import { rot2, srgb, TERRAIN_SHADING_GLSL } from './terrain/TerrainShading.js';
 
 // Fade factor across a distance band [start, end] (0 before, 1 after), for the level that takes over
@@ -29,6 +29,10 @@ const BAND = 0.12; // cross-fade band, share of the switch distance (Bayer scree
 const RAIN_REACHES = - 3; // m: (M14) the rocks topping out above this are those the rain may fall on (its tide at its lowest, and more)
 // ((M14) the overhangs' grids: near (the low tier's coarser) and far, m)
 const OVERHANG_CELL = { near: 0.25, lite: 0.3, far: 0.5 };
+// ((M14) their fine shapes made a slice at a time: at most this long (ms) after each frame drawn, out of the
+// way of the next (with no frames, as under Node, the next task's)
+const SLICE_MS = 6;
+const afterFrame = () => new Promise( ( resolve ) => typeof requestAnimationFrame === 'function' ? requestAnimationFrame( () => setTimeout( resolve, 0 ) ) : setTimeout( resolve, 0 ) );
 
 export class Rocks {
 
@@ -76,6 +80,8 @@ export class Rocks {
 		const mk = ( geo, name, members ) => {
 
 			const g = geo.clone();
+			// ((M14) an overhang's flows, for its shading; the other rocks have none)
+			if ( ! g.attributes.flow ) g.setAttribute( 'flow', new THREE.BufferAttribute( new Float32Array( g.attributes.position.count * 2 ), 2 ) );
 			const lod = new THREE.InstancedBufferAttribute( new Float32Array( Math.max( 1, members.length ) * 2 ), 2 );
 			lod.setUsage( THREE.DynamicDrawUsage );
 			g.setAttribute( 'iLod', lod );
@@ -122,16 +128,31 @@ export class Rocks {
 
 	}
 
-	// (M14) the overhangs' near shapes, finer than their far ones, made one at a time (slot(): a promise of
-	// a frame of its own for each, a few tens of milliseconds on a laptop) and put in for the far ones
-	async refineOverhangs( { slot = () => Promise.resolve() } = {} ) {
+	// (M14) the overhangs' near shapes, finer than their far ones, made one at a time and put in for the far
+	// ones: each a slice at a time, at most `budget` ms of it after each frame drawn (slice(): a promise of
+	// then), 150 to 390 ms of slices each on a laptop
+	async refineOverhangs( { slice = afterFrame, budget = SLICE_MS } = {} ) {
 
 		for ( let k = 0; k < this.overhangs.length; k ++ ) {
 
 			const o = this.overhangs[ k ];
 			if ( o.fine ) continue;
-			await slot();
-			const fine = o.fine = buildOverhang( o.site, this.terrainData, { cell: this._nearCell } );
+			const build = overhangBuild( o.site, this.terrainData, { cell: this._nearCell } );
+			let r, t = - Infinity;
+			for ( ;; ) {
+
+				if ( performance.now() - t > budget ) {
+
+					await slice();
+					t = performance.now();
+
+				}
+
+				if ( ( r = build.next() ).done ) break;
+
+			}
+
+			const fine = o.fine = r.value;
 			const b = this.buckets[ ROCK_STYLES.length + k ], was = b.near.geometry, g = fine.geometry;
 			g.setAttribute( 'iLod', was.attributes.iLod );
 			b.near.geometry = g;
@@ -431,10 +452,11 @@ export class Rocks {
 
 			Object.assign( shader.uniforms, uniforms );
 			shader.vertexShader = shader.vertexShader
-				.replace( '#include <common>', '#include <common>\nattribute vec2 iLod;\nattribute float ao;\nvarying vec2 vLod;\nvarying float vCav;\nvarying vec3 vRockP;\nvarying vec3 vRockN;' )
+				.replace( '#include <common>', '#include <common>\nattribute vec2 iLod;\nattribute float ao;\nattribute vec2 flow;\nvarying vec2 vLod;\nvarying float vCav;\nvarying vec2 vFlow;\nvarying vec3 vRockP;\nvarying vec3 vRockN;' )
 				.replace( '#include <begin_vertex>', /* glsl */`#include <begin_vertex>
 	vLod = iLod;
 	vCav = ao;
+	vFlow = flow;
 	mat4 rockM = modelMatrix;
 #ifdef USE_INSTANCING
 	rockM = modelMatrix * instanceMatrix;
@@ -450,6 +472,7 @@ uniform sampler2D terrainSplatTex;
 uniform vec3 terrainMapInfo;
 varying vec2 vLod;
 varying float vCav;
+varying vec2 vFlow;
 varying vec3 vRockP;
 varying vec3 vRockN;
 ${ T.heightGlsl.replace( 'uniform highp sampler2D terrainHeightMap;\nuniform vec4 terrainHeightInfo;\n', '' ) }
@@ -488,6 +511,10 @@ float rockBayer4( vec2 pixel ) {
 	vec3 rockAlbedo = R.albedo;
 	float rockRough = R.rough, rockHd = R.hd, rockHeight = R.height;
 #endif
+	// ((M14) an overhang's flows: each its own tone, and the crust at each one's top rusted browner, as
+	// the layers of lava shores are in photographs; the other rocks have none)
+	rockAlbedo *= 1.0 + vFlow.x * 0.15;
+	rockAlbedo = mix( rockAlbedo, PAL_rockWarm * 0.75, vFlow.y * 0.55 );
 	// contact with the ground: sand / soil drifted against the base, darker crevice
 	float groundH = terrainHeightAt( p.xz );
 	float above = p.y - groundH;

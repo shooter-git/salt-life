@@ -597,13 +597,14 @@ export class App {
 		this.hud.showHint( this.input.lastDevice );
 		// (on a device that draws on its CPU, one after another, so their garbage doesn't pile up: the
 		// island's held-back parts appear, the plants grow, then the catch card's shaders, (M14) the cover map
-		// and the rocks' overhangs made finer (a frame each, on every device), then Joe and Marta (their loading is the high point of script memory: before the animals and the debris
+		// and the rocks' overhangs made finer (a few milliseconds after each frame, on every device), then Joe
+		// and Marta (their loading is the high point of script memory: before the animals and the debris
 		// add theirs), then the animals and the debris, then the scanned debris, with pauses between;
 		// last, once that loading's garbage is collected (settle), the reef, its fish and the specks;
 		// then, on every device, the whale)
 		const revealed = this._late ? new Promise( ( done ) => this._revealed = done ) : null;
 		this.lateReady();
-		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.buildCover() ).then( () => this.rocks.refineOverhangs( { slot: () => this.frameSlot() } ) ).then( () => this.loadCharacters() )
+		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.buildCover() ).then( () => this.rocks.refineOverhangs() ).then( () => this.loadCharacters() )
 			.then( () => this.pause() ).then( () => this.cpuGL && this.lifeAndDebris() ).then( () => this.pause() ).then( () => this.scansArrive() )
 			.then( () => this.cpuGL && this.settle() ).then( () => this.cpuGL && this.reefGrows() )
 			.then( () => this.pause() ).then( () => this.whaleArrives() ).then( () => this.airArrives() );

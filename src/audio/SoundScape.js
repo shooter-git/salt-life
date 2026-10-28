@@ -183,6 +183,11 @@ const FAIR_SURF_FAR = FAIR_SURF / 0.6;
 const SURF_LOUDEST = SURF_HURRICANE / 0.6;
 // (M13) the wind (m/s) from which its lulls stay loud, all of them by the second (a hurricane's)
 const HOWL = [ 24, 34 ];
+// (M14) the rain under a rock: the share of what you hear of it that's the drops on you and within arm's
+// reach (by their distances from your ears: those within 1.2 m and on you, against those out to 30 m), and
+// of the rain beyond a rock's face, what's heard round its edges (as power)
+const RAIN_NEAR = 0.15, ROUND_ROCK = 0.25;
+
 // (M13) dB the shelter's walls take off the storm outside (its wind, surf, rain; half of it off the thunder)
 const WALLS = 13;
 
@@ -275,7 +280,7 @@ export class SoundScape {
 			shoreX: 0, shoreZ: 1,
 			boat: { active: false, rpm: 0, speed: 0, x: 0, y: 0, z: 0, inside: false },
 			hull: { flood: 0, pump: false, scrape: 0, wear: 0, motion: 0 },
-			rainOn: { water: 0, wood: 0, nearWater: 0, nearWood: 0, under: 0, tin: 0, tinOver: 0 },
+			rainOn: { water: 0, wood: 0, nearWater: 0, nearWood: 0, under: 0, tin: 0, tinOver: 0, overhead: 0, walled: 0 },
 		};
 		const sw = WORLD.swellDir || { x: - 0.12, y: - 1 };
 		const l = Math.hypot( sw.x, sw.y ) || 1;
@@ -1406,6 +1411,8 @@ export class SoundScape {
 		er.under = clamp( num( ro.under, 0 ), 0, 1 );
 		er.tin = clamp( num( ro.tin, 0 ), 0, er.under ); // ((M14) how much of what's over you is tin, and right over you)
 		er.tinOver = ro.tinOver ? 1 : 0;
+		er.overhead = clamp( num( ro.overhead, 0 ), 0, 1 ); // ((M14) and how much within arm's reach, and how much of a rock's face is round you)
+		er.walled = clamp( num( ro.walled, 0 ), 0, 1 );
 		e.radio = !! s.radio;
 		e.onLand = typeof s.coastDistance === 'number' && Number.isFinite( s.coastDistance ) ? s.coastDistance < 0 : true;
 		if ( e.u > 0.01 || eb.active ) e.onLand = false;
@@ -1519,9 +1526,12 @@ export class SoundScape {
 		const share = ( v ) => ( lean && v < 0.16 ? 0 : Math.sqrt( v ) );
 		const sea = share( ro.water ), wood = share( ro.wood ), rest = share( Math.max( 0, 1 - ro.water - ro.wood ) );
 		const muffled = smooth( 0.2, 0.8, ro.under );
+		// ((M14) under a rock: the drops on you and at your feet gone, and the rain beyond a rock's face about
+		// you heard only round its edges, its highs lost (RAIN_NEAR, ROUND_ROCK))
+		const shade = Math.sqrt( ( 1 - RAIN_NEAR * ro.overhead ) * ( 1 - ( 1 - ROUND_ROCK ) * ro.walled ) );
 		// ((M13) and inside the shelter, through its concrete roof and walls)
-		this._ramp( this.rainLP.frequency, lerp( lerp( 20000, 900, muffled ), 450, e.inside ), 0.6 );
-		const rout = out * lerp( 1, 0.55, muffled ) * lerp( 1, 0.35, e.inside );
+		this._ramp( this.rainLP.frequency, lerp( Math.min( lerp( 20000, 900, muffled ), lerp( 20000, 3000, ro.walled * ro.walled ) ), 450, e.inside ), 0.6 );
+		const rout = out * lerp( 1, 0.55, muffled ) * shade * lerp( 1, 0.35, e.inside );
 		this._bed( 'rain_light', dB( MIX.rainLight ) * light * rout * rest / dB( BANK.rain_light.lufs ), now, 1.2 );
 		this._bed( 'rain_heavy', dB( MIX.rain ) * heavy * rout * rest / dB( BANK.rain_heavy.lufs ), now, 1.2 );
 		this._bed( 'rain_boat', dB( MIX.rainBoat ) * onBoat * smooth( 0, 0.9, r ) / dB( BANK.rain_boat.lufs ), now, 0.8 );

@@ -57,7 +57,8 @@ for ( const file of [ 'island-1024.bin', 'island.bin' ] ) {
 		mesh.matrixWorld.copy( o.matrix );
 		const ray = new THREE.Raycaster();
 		let met = 0, near = 0;
-		const sample = room.spots.filter( ( s, k ) => k % 7 === 0 );
+		// (every third spot: a sample of a few tens, so a few at its lip don't decide it)
+		const sample = room.spots.filter( ( s, k ) => k % 3 === 0 );
 		for ( const s of sample ) {
 
 			ray.set( new THREE.Vector3( s.x, s.ground + 0.05, s.z ), new THREE.Vector3( 0, 1, 0 ) );
@@ -102,6 +103,34 @@ for ( const file of [ 'island-1024.bin', 'island.bin' ] ) {
 		// (where it's creased, a vertex's normal is one side's, and 0.3 m out along it at a concave crease may
 		// be the rock across it: an inside-out mesh would be under half)
 		ok( open <= edges.size * 0.002 && out >= checked * 0.9, `${ name }: closed (${ open } of ${ edges.size } edges open), facing out (${ out } of ${ checked })` );
+
+		// (M14) one piece: nothing of it loose (no block cut off by the basalt's grooves and floating, none of
+		// the grid's specks), its triangles joined by where their corners are
+		const parent = Array.from( { length: at.size }, ( _, i ) => i ), root = ( a ) => {
+
+			while ( parent[ a ] !== a ) a = parent[ a ] = parent[ parent[ a ] ];
+			return a;
+
+		};
+		for ( let t = 0; t < I.length; t += 3 ) {
+
+			const a = root( where( I[ t ] ) );
+			parent[ root( where( I[ t + 1 ] ) ) ] = a;
+			parent[ root( where( I[ t + 2 ] ) ) ] = a;
+
+		}
+
+		const pieces = new Set( Array.from( I, ( v ) => root( where( v ) ) ) ).size;
+		// and its flows, for its shading: each flow's own tone, its top's crust
+		const F2 = g.attributes.flow, tones = new Set(), crust = [ 0, 0 ];
+		for ( let q = 0; q < F2.count; q ++ ) {
+
+			tones.add( F2.getX( q ).toFixed( 3 ) );
+			crust[ F2.getY( q ) > 0.5 ? 1 : 0 ] ++;
+
+		}
+
+		ok( pieces === 1 && tones.size >= 4 && crust[ 1 ] > crust[ 0 ] * 0.15 && crust[ 1 ] < crust[ 0 ], `${ name }: one piece, ${ tones.size } flows each its own tone, ${ ( crust[ 1 ] / F2.count * 100 ).toFixed( 0 ) }% of it their tops' crusts` );
 
 		// its colliders (made with its far shape, at the load: the rocks' way): how much of it you can stand
 		// in and be left where you are (not up against its sides, someone's breadth); at its foot against its

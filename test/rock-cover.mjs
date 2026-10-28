@@ -79,8 +79,22 @@ for ( let j = 120; j < 160; j ++ ) for ( let i = 160; i < 200; i ++ ) put( i, j,
 const [ sx, sz ] = at( 180, 140 );
 const wading = surroundings( none, () => - 0.3, 0, sx, - 0.3, sz, {}, rocks );
 ok( wading.under > 0 && rocks.over( sx, - 0.3, sz ) && rocks.over( sx, 1.1, sz ), `wading under a sea rock's overhang, its foot under the water and you: covered where you stand (${ wading.under.toFixed( 2 ) }: 3 m out is past its 5 m)` );
+// ((M14) within arm's reach under it (overhead), and a rock's face about you between you and the rain
+// beyond it (walled): under the roof none (its underside's over your head), beside the boulder one way in
+// eight, in a cave three sides walled, its mouth open)
+ok( under.overhead === 1 && under.walled === 0 && open.overhead === 0 && open.walled === 0, 'under the overhang all within arm\'s reach is covered and no face of rock stands about you; in the open, neither' );
+// (3 m from its middle, the way one of the samples 3 m about you looks: Cover's AROUND, turned 0.37 a metre)
+const a7 = 7 / 8 * Math.PI * 2 + 3 * 0.37, wx = bx - Math.cos( a7 ) * 3, wz = bz - Math.sin( a7 ) * 3;
+const beside = surroundings( none, flat, - 1, wx, 0, wz, {}, rocks );
+ok( beside.overhead === 0 && beside.walled === 1 / 8, `3 m from the boulder: nothing over you, its face one way of eight (${ beside.walled })` );
+// (a cave: rock over ( 216..255, 170..230 ), hollowed under a roof 2.2 m up over ( 216..243, 186..213 ), its
+// mouth to the west)
+for ( let j = 170; j <= 230; j ++ ) for ( let i = 216; i < 256; i ++ ) put( i, j, 3.4, i < 244 && j >= 186 && j <= 213 ? 2.2 : - 0.5 );
+const [ cx, cz ] = at( 228, 200 );
+const cave = surroundings( none, flat, - 1, cx, 0, cz, {}, rocks );
+ok( cave.overhead === 1 && cave.walled >= 0.5 && cave.walled < 1, `in a cave: all within arm's reach covered, ${ cave.walled * 8 } ways of eight a face of rock, its mouth not (its roof over ${ ( cave.under * 100 ).toFixed( 0 ) }% of 3 m about you)` );
 const plain = surroundings( none, flat, - 1, ox, 0, oz, {} );
-ok( plain.under === 0, 'without the rocks, as before M14: nothing over you' );
+ok( plain.under === 0 && plain.overhead === 0 && plain.walled === 0, 'without the rocks, as before M14: nothing over you' );
 
 // ---- the rocks it's drawn from, on the real island as the low tier has it (Rocks.around): placed as the
 // game places them, clear of the village (its textures aren't baked here: no GPU)

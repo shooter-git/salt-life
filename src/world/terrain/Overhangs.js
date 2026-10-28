@@ -18,6 +18,9 @@ import { hash2 } from './TerrainNoise.js';
 // weathering's fine detail only near the surface (DETAIL). Its colliders come from the same grid, column
 // by column: what's in the way of someone standing there, not the roof over them (overhangColliders).
 //   const o = buildOverhang( site, terrain, { cell } )   { geometry, matrix, x, y, z, radius, top, at }
+//   overhangBuild( site, terrain, { cell } )   the same, a slice at a time: a generator that yields between
+//     slices (a column of its grid sampled, a row of its cells meshed, a few hundred vertices creased or
+//     shaded) and returns it
 //   overhangColliders( o )   [ { center, half, rotY } ] (boxes about y)
 //   standingRoom( o )   the ground under it with HEADROOM over it: { area, spots }
 //   clears( o, x, z )   whether nothing grows at ( x, z ) (under it, in its mouth)
@@ -34,9 +37,12 @@ const STEP = 0.35, BODY = 1.75; // m: what of someone standing there the rock mu
 const COLUMN = 0.35; // m: the colliders' columns
 const DETAIL = 0.7; // m: the basalt's detail only this near the surface (it can't move it further)
 const GROW = 0.25; // m: the blocks grown by about what the basalt's detail cuts back on the whole
-// basalt: its flows' layers about this thick (m), each boundary up or down by up to 0.3 of it; the columns
-// its joints part each layer into, about this across (m)
-const LAYER = 0.9, COLUMNS = 1.1;
+// basalt: its flows' layers about this thick (m), each boundary up or down by up to 0.3 of it and wavering
+// along it by up to WAVER (m); the columns its joints part each layer into, about this across (m)
+const LAYER = 0.9, COLUMNS = 1.1, WAVER = 0.35;
+// each flow stepped back by up to SETBACK (m); the groove weathered along each boundary (its rubbly crusts)
+// up to GROOVE deep (m), GROOVE_H either side of it (m)
+const SETBACK = 0.24, GROOVE = 0.22, GROOVE_H = 0.22;
 
 // value noise on the integer lattice (-1..1) and its sum over octaves, as the rocks' (RockGeometry's
 // noise3, fbm3), but with nothing made a call: the fields are sampled a few hundred thousand times
@@ -164,12 +170,15 @@ function carved( blocks, hollow, x, y, z, a, A, f, s, k = 0.3, kc = 0.45 ) {
 }
 
 // ---- basalt, near its surface (as photographs of lava shores have it): the flows it's built of, in layers
-// each its own thickness, each stepped back by its own amount, their boundaries wavering;
+// each its own thickness, each stepped back by its own amount, their boundaries wavering, ((M14) a groove
+// weathered back along each, where the crusts are rubbly, so the flow's top under it is a ledge catching
+// the light and the one over it a lip shading it: a rock shelter's in the Oregon Badlands);
 // the joints it cooled into, parting each layer into columns (in plan, a crack where two of a layer's cells
 // meet, the cells its own in each layer); each column's face broken back by its own amount; and pitted.
 // All of it cuts into the rock, none builds it out, so no roof comes lower than it was cut
 const bound = ( k, s ) => ( k + ( hash2( k, 1, s ) - 0.5 ) * 0.6 ) * LAYER;
-const _layer = [ 0 ], _joint = [ 0, 0 ];
+const _layer = [ 0, 0, 0 ], _joint = [ 0, 0 ];
+// (the flow at height yy: its index, its foot and its top)
 function layerAt( yy, s ) {
 
 	const k = Math.floor( yy / LAYER );
@@ -189,8 +198,13 @@ function layerAt( yy, s ) {
 	}
 
 	_layer[ 0 ] = li;
+	_layer[ 1 ] = lo;
+	_layer[ 2 ] = hi;
 
 }
+
+// the height ( x, y, z ) is in the flows (wavering along them)
+const flowY = ( x, y, z, s ) => y + noise3( x * 0.18, 0.5, z * 0.18, s ) * WAVER;
 
 function jointAt( x, z, li, s ) {
 
@@ -220,18 +234,22 @@ let detailed = true; // (buildOverhang's: none of it on a grid too coarse to sho
 function basalt( d, x, y, z, s ) {
 
 	if ( ! detailed || Math.abs( d ) > DETAIL ) return d;
-	layerAt( y + noise3( x * 0.18, 0.5, z * 0.18, s ) * 0.6, s );
-	const li = _layer[ 0 ];
+	const yy = flowY( x, y, z, s );
+	layerAt( yy, s );
+	const li = _layer[ 0 ], edge = Math.min( yy - _layer[ 1 ], _layer[ 2 ] - yy ) / GROOVE_H;
 	jointAt( x, z, li, s + 3 );
 	const crack = _joint[ 0 ], column = _joint[ 1 ];
-	const cut = hash2( li, 5, s + 4 ) * 0.24 + column * 0.1 + 0.25 * Math.max( 0, 1 - crack / 0.18 );
+	// (a groove's depth wanders along it; where a joint's crack meets it, the deeper of the two)
+	const groove = edge < 1 ? ( 1 - edge * edge ) ** 2 * GROOVE * ( 0.6 + 0.4 * noise3( x * 0.5, li * 3.1, z * 0.5, s + 8 ) ) : 0;
+	const cut = hash2( li, 5, s + 4 ) * SETBACK + column * 0.1 + Math.max( 0.25 * Math.max( 0, 1 - crack / 0.18 ), groove );
 	return d + cut + fbm3( x * 0.9, y * 0.9, z * 0.9, 2, s + 5 ) * 0.05 + Math.abs( noise3( x * 2.4, y * 2.4, z * 2.4, s + 6 ) ) * 0.05;
 
 }
 
 // ---- the shapes: each built from its seed and the ground in its frame (x along its opening, z out of
 // it, y up from where it's reckoned from: the ground at its opening, or the sea); its field ( x, y, z, a,
-// what's the column's ), a the height over the ground there; the bounds of its grid; what's kept clear
+// what's the column's ), a the height over the ground there; the bounds of its grid; what's kept clear;
+// its basalt's seed (the one its field's made basalt with)
 
 function ledge( s, ground ) {
 
@@ -270,6 +288,7 @@ function ledge( s, ground ) {
 	const roofAt = ( x, z ) => 2.45 + fbm3( x * 0.35, 0.3, z * 0.5, 2, s + 4 ) * 0.35;
 	return {
 		bounds: [ [ - 10.4, - 2.6, - 7.2 ], [ 10.4, 5.4, 2.6 ] ],
+		basalt: s + 7,
 		clear: [ - 3.2, 3.5 ], // (z: under it and out of its mouth; its top, back in the hill, as the hill is)
 		column( x, z ) {
 
@@ -322,6 +341,7 @@ function slab( s, ground ) {
 
 	return {
 		bounds: [ [ - 7.8, - 2.4, - 7.8 ], [ 7.8, 6.0, 4.6 ] ],
+		basalt: s + 7,
 		clear: [ - 7.8, 4.6 ],
 		column( x, z ) {
 
@@ -361,6 +381,7 @@ function stack( s ) {
 	];
 	return {
 		bounds: [ [ - 4.8, - 1.6, - 4.0 ], [ 4.8, 6.2, 4.0 ] ],
+		basalt: s + 4,
 		clear: [ - 4.0, 4.5 ],
 		column( x, z ) {
 
@@ -407,11 +428,12 @@ function trilinear( F, n, fx, fy, fz ) {
 // the vertex there is split, each side's faces smoothed among themselves, its normal theirs (area-weighted);
 // faces meeting more gently are smoothed together
 const CREASE = 0.6;
-function creased( pos, idx, angle ) {
+function* creased( pos, idx, angle ) {
 
 	const nv = pos.length / 3, nt = idx.length / 3, fn = new Float32Array( nt * 3 );
 	for ( let t = 0; t < nt; t ++ ) {
 
+		if ( t % 4000 === 3999 ) yield;
 		const a = idx[ t * 3 ] * 3, b = idx[ t * 3 + 1 ] * 3, c = idx[ t * 3 + 2 ] * 3;
 		const ux = pos[ b ] - pos[ a ], uy = pos[ b + 1 ] - pos[ a + 1 ], uz = pos[ b + 2 ] - pos[ a + 2 ];
 		const vx = pos[ c ] - pos[ a ], vy = pos[ c + 1 ] - pos[ a + 1 ], vz = pos[ c + 2 ] - pos[ a + 2 ];
@@ -437,6 +459,7 @@ function creased( pos, idx, angle ) {
 	};
 	for ( let v = 0; v < nv; v ++ ) {
 
+		if ( v % 100 === 99 ) yield;
 		const groups = [];
 		for ( let i = start[ v ]; i < start[ v + 1 ]; i ++ ) {
 
@@ -482,9 +505,11 @@ function creased( pos, idx, angle ) {
 }
 
 // ---- the mesh: surface nets over the field sampled on a grid (cell m), its outer layer outside so the
-// surface closes; the cavity term in the ao attribute (as the rocks' geometry has it: 0.35 shut in .. 1 open)
+// surface closes; the cavity term in the ao attribute (as the rocks' geometry has it: 0.35 shut in .. 1 open).
+// A row of cells at a time (overhangBuild's slices)
 const EDGES = [ [ 0, 1 ], [ 2, 3 ], [ 4, 5 ], [ 6, 7 ], [ 0, 2 ], [ 1, 3 ], [ 4, 6 ], [ 5, 7 ], [ 0, 4 ], [ 1, 5 ], [ 2, 6 ], [ 3, 7 ] ];
-export function overhangMesh( F, o, n, c ) {
+const SPECK = 48;
+function* overhangMesh( F, o, n, c ) {
 
 	const [ nx, ny, nz ] = n, NX = nx - 1, NY = ny - 1;
 	const at = ( i, j, k ) => F[ i + nx * ( j + ny * k ) ];
@@ -493,6 +518,7 @@ export function overhangMesh( F, o, n, c ) {
 	const v = new Float32Array( 8 );
 	for ( let k = 0; k < nz - 1; k ++ ) for ( let j = 0; j < ny - 1; j ++ ) for ( let i = 0; i < nx - 1; i ++ ) {
 
+		if ( i === 0 ) yield;
 		let mask = 0;
 		for ( let q = 0; q < 8; q ++ ) {
 
@@ -531,6 +557,7 @@ export function overhangMesh( F, o, n, c ) {
 	};
 	for ( let k = 1; k < nz - 1; k ++ ) for ( let j = 1; j < ny - 1; j ++ ) for ( let i = 0; i < nx - 1; i ++ ) {
 
+		if ( i === 0 && j % 8 === 1 ) yield;
 		const a = at( i, j, k ) < 0, b = at( i + 1, j, k ) < 0;
 		if ( a !== b ) quad( C( i, j - 1, k - 1 ), C( i, j, k - 1 ), C( i, j, k ), C( i, j - 1, k ), b );
 
@@ -538,6 +565,7 @@ export function overhangMesh( F, o, n, c ) {
 
 	for ( let k = 1; k < nz - 1; k ++ ) for ( let j = 0; j < ny - 1; j ++ ) for ( let i = 1; i < nx - 1; i ++ ) {
 
+		if ( i === 1 && j % 8 === 0 ) yield;
 		const a = at( i, j, k ) < 0, b = at( i, j + 1, k ) < 0;
 		if ( a !== b ) quad( C( i - 1, j, k - 1 ), C( i - 1, j, k ), C( i, j, k ), C( i, j, k - 1 ), b );
 
@@ -545,17 +573,39 @@ export function overhangMesh( F, o, n, c ) {
 
 	for ( let k = 0; k < nz - 1; k ++ ) for ( let j = 1; j < ny - 1; j ++ ) for ( let i = 1; i < nx - 1; i ++ ) {
 
+		if ( i === 1 && j % 8 === 1 ) yield;
 		const a = at( i, j, k ) < 0, b = at( i, j, k + 1 ) < 0;
 		if ( a !== b ) quad( C( i - 1, j - 1, k ), C( i, j - 1, k ), C( i, j, k ), C( i - 1, j, k ), b );
 
 	}
 
-	const g = creased( pos, idx, CREASE );
+	// (pieces of it of fewer than SPECK triangles left out: the grid's specks, in the rock or by it)
+	const parent = new Int32Array( pos.length / 3 ).map( ( _, i ) => i );
+	const root = ( a ) => {
+
+		while ( parent[ a ] !== a ) a = parent[ a ] = parent[ parent[ a ] ];
+		return a;
+
+	};
+	for ( let t = 0; t < idx.length; t += 3 ) {
+
+		const a = root( idx[ t ] );
+		parent[ root( idx[ t + 1 ] ) ] = a;
+		parent[ root( idx[ t + 2 ] ) ] = root( idx[ t + 1 ] );
+
+	}
+
+	yield;
+	const tris = new Int32Array( parent.length );
+	for ( let t = 0; t < idx.length; t += 3 ) tris[ root( idx[ t ] ) ] ++;
+	const kept = idx.filter( ( v, k ) => tris[ root( idx[ k - k % 3 ] ) ] >= SPECK );
+	const g = yield* creased( pos, kept, CREASE );
 	// the cavity: how far the field's risen a step out along the normal (as open as a flat face, or shut in)
 	const P = g.attributes.position, Nn = g.attributes.normal, ao = new Float32Array( P.count );
 	const sample = ( x, y, z ) => trilinear( F, n, Math.min( nx - 1, Math.max( 0, ( x - o[ 0 ] ) / c ) ), Math.min( ny - 1, Math.max( 0, ( y - o[ 1 ] ) / c ) ), Math.min( nz - 1, Math.max( 0, ( z - o[ 2 ] ) / c ) ) );
 	for ( let q = 0; q < P.count; q ++ ) {
 
+		if ( q % 300 === 299 ) yield;
 		const r = 0.6;
 		const f = sample( P.getX( q ) + Nn.getX( q ) * r, P.getY( q ) + Nn.getY( q ) * r, P.getZ( q ) + Nn.getZ( q ) * r ) / r;
 		ao[ q ] = Math.max( 0.35, Math.min( 1, 0.3 + f * 0.75 ) );
@@ -570,8 +620,18 @@ export function overhangMesh( F, o, n, c ) {
 }
 
 // the overhang at a site: its frame (the ground at its opening, or the sea for the stack), its field there
-// (frame coordinates in, the ground under each point looked up), its mesh at `cell` m
-export function buildOverhang( site, terrain, { cell = 0.2 } = {} ) {
+// (frame coordinates in, the ground under each point looked up), its mesh at `cell` m; at once, or a slice
+// at a time (overhangBuild)
+export function buildOverhang( site, terrain, opts ) {
+
+	const build = overhangBuild( site, terrain, opts );
+	let r;
+	while ( ! ( r = build.next() ).done );
+	return r.value;
+
+}
+
+export function* overhangBuild( site, terrain, { cell = 0.2 } = {} ) {
 
 	const yaw = Math.atan2( site.toward[ 0 ], site.toward[ 1 ] ), cs = Math.cos( yaw ), sn = Math.sin( yaw );
 	const y0 = site.kind === 'stack' ? 0 : terrain.heightAt( site.x, site.z );
@@ -593,10 +653,12 @@ export function buildOverhang( site, terrain, { cell = 0.2 } = {} ) {
 		return { n, F: new Float32Array( n[ 0 ] * n[ 1 ] * n[ 2 ] ) };
 
 	};
-	const coarse = sample( cell * 3 ), { n, F } = sample( cell ), CC = cell * 3, near = cell * 6;
-	detailed = cell < 0.4;
+	const coarse = sample( cell * 3 ), { n, F } = sample( cell ), CC = cell * 3, near = cell * 6, fine = cell < 0.4;
 	for ( const [ grid, c, rough ] of [ [ coarse, CC, null ], [ { n, F }, cell, coarse ] ] ) for ( let k = 0; k < grid.n[ 2 ]; k ++ ) for ( let i = 0; i < grid.n[ 0 ]; i ++ ) {
 
+		// (a column a slice; another's build may have run between them)
+		yield;
+		detailed = fine;
 		const x = lo[ 0 ] + i * c, z = lo[ 2 ] + k * c, g = ground( x, z ), col = shape.column( x, z );
 		for ( let j = 0; j < grid.n[ 1 ]; j ++ ) {
 
@@ -609,7 +671,21 @@ export function buildOverhang( site, terrain, { cell = 0.2 } = {} ) {
 
 	}
 
-	const geometry = overhangMesh( F, lo, n, cell );
+	const geometry = yield* overhangMesh( F, lo, n, cell );
+	// ((M14) each vertex's flow, for its shading: the flow's own tone (-1..1), and how near its top's crust
+	// it is (0..1), where the lava cooled frothy and rusted)
+	const P = geometry.attributes.position, flow = new Float32Array( P.count * 2 ), bs = shape.basalt;
+	for ( let q = 0; q < P.count; q ++ ) {
+
+		if ( q % 1000 === 999 ) yield;
+		const yy = flowY( P.getX( q ), P.getY( q ), P.getZ( q ), bs );
+		layerAt( yy, bs );
+		flow[ q * 2 ] = hash2( _layer[ 0 ], 9, bs ) * 2 - 1;
+		flow[ q * 2 + 1 ] = sstep( _layer[ 2 ] - 0.45, _layer[ 2 ] - 0.05, yy );
+
+	}
+
+	geometry.setAttribute( 'flow', new THREE.BufferAttribute( flow, 2 ) );
 	const matrix = new THREE.Matrix4().makeRotationY( yaw ).setPosition( site.x, y0, site.z );
 	const b = geometry.boundingSphere, c = b.center.clone().applyMatrix4( matrix );
 	// the field as sampled, anywhere in its frame (trilinear; outside it, outside the rock)
