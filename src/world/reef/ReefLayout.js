@@ -4,6 +4,8 @@ import { mulberry32, Noise2D, smoothstep } from '../../util/Noise.js';
 import * as Geo from './ReefGeometry.js';
 import { SURFACE, packColor } from './ReefSurfaces.js';
 import { ROW } from './KindBatch.js';
+import { inWreck } from '../wreck/WreckPlan.js';
+import { wreckGeometries } from '../Wreck.js';
 
 // Caribbean fringing reef around WORLD.reef, 1.5 - 12 m deep.
 //
@@ -33,7 +35,9 @@ const MAX_TOP = - 0.6; // nothing rises above this (m)
 // layout (its own seed and noise), drawn by a Reef of its own. The bay's is as it always was
 export const REEF_SITES = {
 	bay: { center: WORLD.reef.center, radius: WORLD.reef.radius, swell: [ WORLD.swellDir.x, WORLD.swellDir.y ], seed: 20260923, noise: [ 4242, 977 ], heads: 42, bay: true },
-	north: { center: WORLD.northReef.center, radius: WORLD.northReef.radius, swell: [ 0.35, 0.94 ], seed: 20261029, noise: [ 5151, 1303 ], heads: 60, bay: false },
+	north: { center: WORLD.northReef.center, radius: WORLD.northReef.radius, swell: [ 0.35, 0.94 ], seed: 20261029, noise: [ 5151, 1303 ], heads: 60, bay: false,
+		// (nothing grows through the wreck's hull: wreck/WreckPlan.js)
+		clear: ( x, z, r ) => inWreck( x, z, r + 0.3 ), wreck: true },
 };
 export const CELL = 8; // culling cell (m)
 export const RANGE = 45; // underwater draw distance (m): beyond ~40 m the water leaves < 10% contrast
@@ -568,6 +572,7 @@ export class ReefLayout {
 		let sy = t.sy[ 0 ] + ( t.sy[ 1 ] - t.sy[ 0 ] ) * rng();
 		let s = s0;
 		const foot = model.radius * s * 0.8;
+		if ( this.site.clear && ! this._onWreck && this.site.clear( x, z, foot ) ) return false;
 		if ( this.occupied( layer, x, z, foot, allow ) ) return false;
 
 		// settle on the seabed or on the structures below
@@ -733,6 +738,8 @@ export class ReefLayout {
 
 		if ( this.site.bay ) this.placeBay( rng, stats );
 		lap( 'bay' );
+		if ( this.site.wreck ) this.placeWreck( rng, stats );
+		lap( 'wreck' );
 		this.placeMeadows( rng, stats );
 		lap( 'meadows' );
 		this.placeAnchors();
@@ -1101,6 +1108,82 @@ export class ReefLayout {
 
 	}
 
+	// (M15) The wreck on the windward reef (world/Wreck.js): its faces that look up, under the sea, stamped into
+	// the height field (its decks and its holds' floors and its fallen plates: ground the swimmer and the fish
+	// stand on), and what's grown on it over the years settled on them, as on a wreck decades down: sponges
+	// (tube, rope, vase, barrel), sea fans, rods and whips, small coral heads and fire coral, urchins and
+	// anemones; thicker where it's deeper and out of the surge, none in the surf over its bow
+	placeWreck( rng, stats ) {
+
+		const geos = wreckGeometries(), hf = this.hf, W = this.hfW, H = this.hfH, c = HF_CELL, x0 = this.hx0, z0 = this.hz0;
+		for ( const g of Object.values( geos ) ) {
+
+			const P = g.attributes.position.array, idx = g.index.array, M = g.attributes.aMeta.array;
+			for ( let t = 0; t < idx.length; t += 3 ) {
+
+				const a = idx[ t ], b = idx[ t + 1 ], d = idx[ t + 2 ];
+				// (plating only, not its thin members: a beam or a rail isn't ground)
+				if ( M[ a * 2 ] > 2.5 ) continue;
+				const ax = P[ a * 3 ], ay = P[ a * 3 + 1 ], az = P[ a * 3 + 2 ], bx = P[ b * 3 ], by = P[ b * 3 + 1 ], bz = P[ b * 3 + 2 ], dx = P[ d * 3 ], dy = P[ d * 3 + 1 ], dz = P[ d * 3 + 2 ];
+				if ( Math.max( ay, by, dy ) > - 0.8 ) continue;
+				// (looking up: its normal's y, either way round: the plating's two-sided)
+				const ux = bx - ax, uy = by - ay, uz = bz - az, vx = dx - ax, vy = dy - ay, vz = dz - az;
+				const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+				if ( Math.abs( ny ) < 0.6 * Math.hypot( nx, ny, nz ) ) continue;
+				const i0 = Math.max( 0, Math.floor( ( Math.min( ax, bx, dx ) - x0 ) / c ) ), i1 = Math.min( W - 1, Math.floor( ( Math.max( ax, bx, dx ) - x0 ) / c ) );
+				const j0 = Math.max( 0, Math.floor( ( Math.min( az, bz, dz ) - z0 ) / c ) ), j1 = Math.min( H - 1, Math.floor( ( Math.max( az, bz, dz ) - z0 ) / c ) );
+				const det = ( bz - dz ) * ( ax - dx ) + ( dx - bx ) * ( az - dz );
+				if ( Math.abs( det ) < 1e-9 ) continue;
+				for ( let j = j0; j <= j1; j ++ ) for ( let i = i0; i <= i1; i ++ ) {
+
+					const px = x0 + ( i + 0.5 ) * c, pz = z0 + ( j + 0.5 ) * c;
+					const l1 = ( ( bz - dz ) * ( px - dx ) + ( dx - bx ) * ( pz - dz ) ) / det, l2 = ( ( dz - az ) * ( px - dx ) + ( ax - dx ) * ( pz - dz ) ) / det, l3 = 1 - l1 - l2;
+					if ( l1 < - 1e-4 || l2 < - 1e-4 || l3 < - 1e-4 ) continue;
+					const y = l1 * ay + l2 * by + l3 * dy, k = j * W + i;
+					if ( y > hf[ k ] ) hf[ k ] = y;
+
+				}
+
+			}
+
+			g.dispose();
+
+		}
+
+		// what grows on it: a pick by depth (the shallow, surged parts sparser, in tougher kinds)
+		const T = this.terrain, step = 0.5;
+		const deep = [ [ 'tube', 3 ], [ 'rope', 2.5 ], [ 'vase', 1.2 ], [ 'barrel', 0.5 ], [ 'fan', 2 ], [ 'rod', 1.6 ], [ 'whip', 1 ], [ 'starlet', 1.6 ], [ 'brain', 0.7 ], [ 'urchin', 1 ], [ 'anemone', 0.6 ], [ 'ear', 0.8 ] ];
+		const shallow = [ [ 'fire', 2.5 ], [ 'starlet', 2 ], [ 'urchin', 2 ], [ 'rope', 1 ], [ 'fan', 1 ], [ 'anemone', 0.8 ] ];
+		const pick = ( list ) => {
+
+			let tot = 0;
+			for ( const [ , w ] of list ) tot += w;
+			let r = rng() * tot;
+			for ( const [ n, w ] of list ) if ( ( r -= w ) <= 0 ) return n;
+			return list[ 0 ][ 0 ];
+
+		};
+		this._onWreck = true;
+		let n = 0;
+		for ( let z = this.z0; z < this.z1; z += step ) for ( let x = this.x0; x < this.x1; x += step ) {
+
+			const px = x + ( rng() - 0.5 ) * step, pz = z + ( rng() - 0.5 ) * step;
+			if ( ! inWreck( px, pz, 0 ) ) continue;
+			const top = this.structureAt( px, pz );
+			// (on the wreck: its stamped decks over the reef, under the sea, past the surge)
+			if ( ! ( top > T.heightAt( px, pz ) + 0.4 ) || top > - 1.6 ) continue;
+			const depth = - top, dens = 0.55 * smoothstep( 1.6, 4.5, depth ) + 0.15;
+			if ( rng() > dens ) continue;
+			const name = pick( depth > 3.5 ? deep : shallow );
+			if ( TYPES[ name ] && this.place( name, px, pz, rng, { layer: name === 'urchin' || name === 'anemone' ? 2 : 1, allow: 0.35 } ) ) n ++;
+
+		}
+
+		this._onWreck = false;
+		stats.wreck = n;
+
+	}
+
 	// (M15) A reef's coral heads for its fish found from its habitat alone, before it's laid out (the fish are
 	// there from the start; the windward reef's laid out once you come near it): where its framework's densest,
 	// 2 to 12 m down, within the site's `heads` of its middle, 7 m apart, as many as placeAnchors finds
@@ -1111,7 +1194,7 @@ export class ReefLayout {
 
 			if ( Math.hypot( x - c.x, z - c.z ) > L.site.heads ) continue;
 			L.habitat( x, z, hab );
-			if ( hab.f > 0.7 && hab.depth > 2 && hab.depth < 12 ) pts.push( [ x, z, hab.f + 0.2 * L.noise2.noise( x / 4, z / 4 ) ] );
+			if ( hab.f > 0.7 && hab.depth > 2 && hab.depth < 12 && ! ( L.site.clear && L.site.clear( x, z, 1 ) ) ) pts.push( [ x, z, hab.f + 0.2 * L.noise2.noise( x / 4, z / 4 ) ] );
 
 		}
 

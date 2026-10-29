@@ -683,6 +683,21 @@ export class FishSchools {
 
 		}
 
+		// ---- (M15) the wreck on it (wreck/WreckPlan.js): along its sides, as wreck fish keep station by the steel:
+		// a goliath grouper (the wrecks' fish), black groupers, mutton and mangrove snappers, a barracuda hanging
+		// over it, jacks, sergeant majors by the bow in the shallows, silversides in its lee
+		if ( ! N.wreck || ! N.wreck.length ) return;
+		const wx = N.wreck.reduce( ( a, p ) => a + p[ 0 ], 0 ) / N.wreck.length, wzc = N.wreck.reduce( ( a, p ) => a + p[ 1 ], 0 ) / N.wreck.length;
+		const wz = { x: wx, z: wzc, r: 26, anchors: N.wreck };
+		place( 'goliathGrouper', 1, { ...wz, band: [ 3, 14 ] }, true );
+		for ( let i = 0; i < 2; i ++ ) place( 'blackGrouper', 1, big( wz ), true );
+		for ( const c of [ 4, 3 ] ) place( 'muttonSnapper', c, big( wz ), true );
+		for ( const c of [ 10, 8 ] ) place( 'graySnapper', c, big( wz, 1.2 ), true );
+		place( 'barracuda', 1, big( wz, 1.25 ) );
+		place( 'jack', 8, wz );
+		place( 'sergeant', 14, { ...wz, band: [ 0.8, 4 ] }, true );
+		place( 'silverside', 160, wz );
+
 	}
 
 	// The humpback (world/marine/Whale.js): its escort follows the posed body.

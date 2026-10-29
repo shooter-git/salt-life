@@ -11,6 +11,9 @@ import { decodeIsland } from '../src/world/terrain/IslandDecode.js';
 import { WORLD } from '../src/world/WorldLayout.js';
 import { LIGHTHOUSE, flashAt, horizonOf } from '../src/world/Lighthouse.js';
 import { HARBOUR_LIGHTS, lightAt } from '../src/world/HarbourLights.js';
+import { WRECK, SECTIONS, toWorld, inWreck, wreckSpots } from '../src/world/wreck/WreckPlan.js';
+import { wreckGeometries } from '../src/world/Wreck.js';
+import { ReefLayout } from '../src/world/reef/ReefLayout.js';
 
 let failed = 0;
 const check = ( ok, what ) => {
@@ -96,6 +99,47 @@ const T = new TerrainData( 7, decodeIsland( read( 'island.bin' ) ) );
 	};
 	check( Math.abs( lit( E ) - 0.125 ) < 0.01 && Math.abs( lit( W ) - 0.125 ) < 0.01 && Math.abs( lit( P ) - 0.5 ) < 0.01, 'flashing half a second in four (Fl R 4s, Fl G 4s); the pier\'s as long lit as dark (Iso W 4s)' );
 	check( [ E, W ].every( ( l ) => T.heightAt( l.x, l.z ) > 5 ) && Math.min( E.z, W.z ) > 150 && P.z < Math.min( E.z, W.z ), 'each on its headland\'s end, high on the rocks, at the bay\'s mouth' );
+
+}
+
+// ---- the wreck on the windward reef: its bow wedged on the crest, out of the water; its stern down the fore
+// reef; the hull lying on the reef, not in it nor over it; its corals kept out of it, and what's grown on it
+{
+
+	const bowDeck = toWorld( 'bow', 0.9 * WRECK.length, WRECK.depth, 0 )[ 1 ], sternKeel = toWorld( 'stern', 0, 0, 0 )[ 1 ];
+	console.log( `     the bow's forecastle ${ bowDeck.toFixed( 1 ) } m over the sea, the stern's keel ${ ( - sternKeel ).toFixed( 1 ) } m down` );
+	check( bowDeck > 1 && sternKeel < - 6, 'its bow wedged on the crest, out of the water; its stern slid down the fore reef' );
+	// (its keel along each piece: on the bottom within a metre, never buried more than one)
+	let worst = 0;
+	for ( const name of [ 'bow', 'stern' ] ) {
+
+		const sec = SECTIONS[ name ];
+		for ( let x = sec.x0 + 1; x < sec.x1 - 1; x += 1 ) {
+
+			const [ wx, wy, wz ] = toWorld( name, x, 0, 0 ), g = T.heightAt( wx, wz );
+			worst = Math.max( worst, Math.abs( wy - g ) );
+
+		}
+
+	}
+
+	check( worst < 1.9, `lying on the reef along its keel (within ${ worst.toFixed( 1 ) } m of the bottom)` );
+	const geos = wreckGeometries();
+	let tris = 0, finite = true;
+	for ( const g of Object.values( geos ) ) {
+
+		tris += g.index.count / 3;
+		for ( const v of g.attributes.position.array ) if ( ! Number.isFinite( v ) ) finite = false;
+
+	}
+
+	console.log( `     ${ tris } triangles, ${ wreckSpots().length } spots about it for its fish` );
+	check( finite && tris > 10000 && tris < 40000, 'built: its plating, frames, decks, gear and house, in a few tens of thousands of triangles' );
+	// (the windward reef's layout: no coral grown through its hull; things grown on its sunken decks)
+	const L = new ReefLayout( { terrain: T, site: 'north' } );
+	const through = L.items.hard.filter( ( it ) => inWreck( it.x, it.z, 0 ) && L.structureAt( it.x, it.z ) <= T.heightAt( it.x, it.z ) + 0.4 ).length;
+	console.log( `     ${ L.counts.wreck } things grown on its decks; ${ through } corals through its hull` );
+	check( L.counts.wreck > 60 && through === 0, 'sponges, fans and small corals grown on its sunken decks, none of the reef\'s corals through its hull' );
 
 }
 

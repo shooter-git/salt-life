@@ -97,6 +97,10 @@ New code that draws from world positions on the GPU takes the same care: a point
 
 The bay's harbour lights (`world/HarbourLights.js`, `HARBOUR_LIGHTS`: where, their colours, daymarks and characters, `lightAt( t, char )`) are built and updated the same way, their footprints and colliders too; a glare each, its colour boosted (`gain`) for a coloured light's single channel.
 
+## The wreck
+
+(M15) `world/wreck/WreckPlan.js` (pure): `WRECK` its measures, `SECTIONS` each piece's span and lie, `toWorld( piece, x, y, z )` from the ship's frame, `inWreck( x, z, pad )`, `wreckSpots()` for the fish. `world/Wreck.js`: `wreckGeometries()` builds each piece in the ship's frame (a `Builder` of shared-vertex grids, plates, boxes and tubes; each vertex's `aMeta`: what it is, hull, deck, plate or solid, and a value for its holes) and takes it to the world; `Wreck` draws them in one material whose `onBeforeCompile` cuts the holes (discard), the relief (a bump from `wkRel`), the rust and the growth (in the plates' metres above the sea, the world's below it), and holds the environment map at `FILL` x the scene's. Its colliders: boxes along each piece. The windward reef's layout (`REEF_SITES.north`: `clear`, `wreck`) keeps its corals out of the hull and, in `placeWreck`, stamps the wreck's sunken upward faces into its height field and settles organisms on them. `FishSchools`' north population takes `north.wreck` (the spots) for its wreck fish.
+
 ## The windward reef
 
 (M15) A second reef off the north-west point (`WORLD.northReef`), the bay's machinery run again for it:

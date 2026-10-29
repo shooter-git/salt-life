@@ -52,6 +52,8 @@ import { Debris } from './world/Debris.js';
 import { Reef } from './world/Reef.js';
 import { Lighthouse } from './world/Lighthouse.js';
 import { HarbourLights } from './world/HarbourLights.js';
+import { Wreck } from './world/Wreck.js';
+import { wreckSpots } from './world/wreck/WreckPlan.js';
 import { ReefLayout } from './world/reef/ReefLayout.js';
 import { FishSchools } from './world/Fish.js';
 import { fishModelsAsync } from './world/fish/FishModelsAsync.js';
@@ -325,6 +327,8 @@ export class App {
 		// ((M15) and the bay's harbour lights: red to starboard coming in, green to port, white on the pier head)
 		this.harbourLights = new HarbourLights( { scene, terrain: this.terrainData, colliders: this.colliders } );
 		this.village.footprints.push( ...this.harbourLights.footprints );
+		// ((M15) the wreck on the windward reef: a coaster broken in two on its crest)
+		this.wreck = new Wreck( { scene, colliders: this.colliders } );
 		await this.village.init( renderer );
 		// (M11) what covers the island from above (world/Cover.js): the pier, the boardwalks, the roofs, the
 		// stalls; drawn once after the start (buildCover), nothing covers anything until then. The rain
@@ -1437,7 +1441,7 @@ export class App {
 			floorAt: ( x, z ) => this.reefs.floorHeightAt( x, z ), center: WORLD.reef.center, radius: WORLD.reef.radius + 10,
 			anchors: reef.anchors, shoreField: this.shoreField,
 			// ((M15) and the windward reef's: its coral heads from its habitat, before it's laid out)
-			north: { center: WORLD.northReef.center, radius: WORLD.northReef.radius, anchors: ReefLayout.heads( this.terrainData, 'north' ) },
+			north: { center: WORLD.northReef.center, radius: WORLD.northReef.radius, anchors: ReefLayout.heads( this.terrainData, 'north' ), wreck: wreckSpots() },
 		} );
 		// (their models are made in a worker: fish/FishModels.js)
 		fish.setModels( await fishModelsAsync( fish.modelNames ) );
