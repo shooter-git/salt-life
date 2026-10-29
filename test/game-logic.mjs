@@ -208,10 +208,12 @@ ok( biteDelay( habitatAt( spots.sand ), 12, rng ) === Infinity, 'no bite delay o
 	// each fish's own taste
 	const moods = Object.keys( weatherMood( storm ) );
 	ok( FISH_IDS.every( ( id ) => ! FISH[ id ].weather || Object.keys( FISH[ id ].weather ).every( ( k ) => moods.includes( k ) ) ), 'each fish\'s taste in weather is in what the fish feel of it' );
-	const mahi = [ share( deep, fair, [ 'mahi' ] ), share( deep, blustery, [ 'mahi' ] ) ], tuna = [ share( deep, fair, [ 'tuna' ], 7 ), share( deep, blustery, [ 'tuna' ], 7 ) ];
+	// ((M15) on the top of the drop-off, where they mix with the bottom fish: Bites.habitatAt's edge)
+	const drop = habitatAt( { depth: 150, reefDist: 3000, pierDist: 3000, slope: 0.4 } );
+	const mahi = [ share( drop, fair, [ 'mahi' ] ), share( drop, blustery, [ 'mahi' ] ) ], tuna = [ share( drop, fair, [ 'tuna' ], 7 ), share( drop, blustery, [ 'tuna' ], 7 ) ];
 	const bone = [ share( shallows, fair, [ 'bonefish' ] ), share( shallows, gale, [ 'bonefish' ] ) ], tarpon = [ share( pier, fair, [ 'tarpon' ], 22 ), share( pier, rain, [ 'tarpon' ], 22 ) ];
 	const pc = ( [ a, b ] ) => `${ ( 100 * a ).toFixed( 1 ) }% → ${ ( 100 * b ).toFixed( 1 ) }%`;
-	console.log( `     mahi offshore in a blow ${ pc( mahi ) }, tuna at dawn ${ pc( tuna ) }; bonefish on the flats in a gale ${ pc( bone ) }; tarpon at the pier at night in the rain ${ pc( tarpon ) }` );
+	console.log( `     on the drop-off: mahi in a blow ${ pc( mahi ) }, tuna at dawn ${ pc( tuna ) }; bonefish on the flats in a gale ${ pc( bone ) }; tarpon at the pier at night in the rain ${ pc( tarpon ) }` );
 	ok( mahi[ 1 ] > 1.4 * mahi[ 0 ] && tuna[ 1 ] > 1.3 * tuna[ 0 ], 'mahi and tuna up with the wind lines in a blow' );
 	ok( bone[ 1 ] < 0.25 * bone[ 0 ], 'the bonefish leave the flats in a gale' );
 	ok( tarpon[ 1 ] > 1.5 * tarpon[ 0 ], 'tarpon roll and feed in the rain' );

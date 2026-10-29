@@ -5,19 +5,42 @@ import { BAITS, baitWeight } from './Bait.js';
 //   depth     water depth under the bobber (m)
 //   reefDist  horizontal distance to the reef edge (m, < 0 inside it)
 //   pierDist  horizontal distance to the pier (piles / head) (m)
-// Returns weights per water type (they overlap: a spot can be both pier and bay). (Salt Life) The game
-// adds flood, 0..1: how far the spot is in a boat's deck floodlights after dark (not a water type: it
-// draws in the fish that gather under lights, and the bait, so they bite sooner), and (M9) weather: the
-// weather now (Weather.weatherAt's; none, or a fair day's, changes nothing: weatherMood).
-export function habitatAt( { depth, reefDist, pierDist } ) {
+//   (M15) and out past the island, each optional:
+//   slope     how steeply the bottom falls away there (rise over run)
+//   patch     0..1: patch reefs on the bottom out there (the bank's top)
+//   weed, debris, birds   0..1: how near a weedline, a piece of floating debris, or a school with birds
+//             working it (game/Finds.js) the spot is
+// Returns weights per water type (they overlap: a spot can be both pier and bay). The shallows, the reef,
+// the pier, the bay, and:
+//   deep    the shelf's deep water, 20 to 150 m (and the top of the slope below it): the snappers and
+//           groupers on its bottom, within a bait's reach
+//   (M15) edge   where the bottom falls away steeply, 40 to 900 m down: the drop-off off the shelf, the
+//                hump's flanks, the canyon's walls and the bank's (the front between the green water and
+//                the blue lies over the drop-off): the tuna's
+//         ledge  a flat bottom 150 to 300 m down (the north's ledge, the canyon's floor): the deep
+//                snappers'
+//         blue   the open ocean, past 150 to 400 m: few fish, and those the wanderers (mahi, tuna)
+//         weed, debris, birds: where they gather (the mahi under the weed and the debris, the tuna
+//                under the birds), and the bites come sooner
+// (Salt Life) The game adds flood, 0..1: how far the spot is in a boat's deck floodlights after dark (not
+// a water type: it draws in the fish that gather under lights, and the bait, so they bite sooner), and
+// (M9) weather: the weather now (Weather.weatherAt's; none, or a fair day's, changes nothing: weatherMood).
+export const BLUE = 0.35; // (the open ocean's fish, sparse: its weight; a spot's floor is the same: biteDelay)
+export function habitatAt( { depth, reefDist, pierDist, slope = 0, patch = 0, weed = 0, debris = 0, birds = 0 } ) {
 
-	const h = { shallows: 0, reef: 0, pier: 0, bay: 0, deep: 0 };
+	const h = { shallows: 0, reef: 0, pier: 0, bay: 0, deep: 0, edge: 0, ledge: 0, blue: 0, weed: 0, debris: 0, birds: 0 };
 	if ( depth < 0.25 ) return h; // on the sand
 	h.shallows = smooth( 3.5, 1.0, depth );
-	h.reef = smooth( 12, - 6, reefDist ) * smooth( 0.8, 2.5, depth );
+	h.reef = Math.max( smooth( 12, - 6, reefDist ), patch ) * smooth( 0.8, 2.5, depth );
 	h.pier = smooth( 9, 2, pierDist ) * smooth( 0.6, 2, depth );
 	h.bay = smooth( 1.5, 4, depth ) * ( 1 - smooth( 18, 30, depth ) );
-	h.deep = smooth( 16, 28, depth );
+	h.deep = smooth( 16, 28, depth ) * ( 1 - smooth( 110, 200, depth ) );
+	h.edge = smooth( 0.12, 0.35, slope ) * smooth( 40, 80, depth ) * ( 1 - smooth( 500, 900, depth ) );
+	h.ledge = smooth( 140, 180, depth ) * ( 1 - smooth( 280, 340, depth ) ) * ( 1 - smooth( 0.08, 0.2, slope ) );
+	h.blue = BLUE * smooth( 150, 400, depth );
+	h.weed = weed * smooth( 8, 30, depth );
+	h.debris = debris * smooth( 8, 30, depth );
+	h.birds = birds * smooth( 8, 30, depth );
 	return h;
 
 }
@@ -70,13 +93,14 @@ export function weatherMood( w ) {
 //   GREY_DUSK      under a grey sky by day each fish bites this far toward how it does at dusk, when
 //                  that's better (the jacks, snappers, tuna, tarpon and barracuda)
 //   HEAVY_SLOWER   in a downpour or a thunderstorm the bites come this much slower again
-//   ROUGH          what a big surf (the shallows, the pier) or a blow (the deep) does to a water type:
-//                  it counts this much less, so it bites slower and the other waters' fish come more
+//   ROUGH          what a big surf (the shallows, the pier) or a blow (the deep, (M15) the ledge: the boat
+//                  drifts too fast to hold a bait on the bottom) does to a water type: it counts this much
+//                  less, so it bites slower and the other waters' fish come more
 export const FRONT_SOONER = 0.35;
 export const FRONT_BIGGER = 0.3;
 export const GREY_DUSK = 0.6;
 export const HEAVY_SLOWER = 0.8;
-export const ROUGH = { shallows: [ 'surf', 0.5 ], pier: [ 'surf', 0.35 ], deep: [ 'wind', 0.4 ] };
+export const ROUGH = { shallows: [ 'surf', 0.5 ], pier: [ 'surf', 0.35 ], deep: [ 'wind', 0.4 ], ledge: [ 'wind', 0.4 ] };
 
 // the water types as the weather leaves them (m: weatherMood's)
 function roughed( habitat, m ) {
@@ -121,6 +145,8 @@ export function pickSpecies( habitat, hour, rng = Math.random, bait = null ) {
 		if ( f.flood && habitat.flood ) hw *= 1 + f.flood * habitat.flood;
 		let act = activity( f.time, hour );
 		if ( grey > 0 ) act += Math.max( 0, activity( f.time, 18.5 ) - act ) * grey;
+		// ((M15) under the birds, what's busting the bait is feeding now, whatever the hour)
+		if ( habitat.birds && f.habitat.birds ) act += ( 1 - act ) * habitat.birds;
 		let x = hw * f.rarity * act * baitWeight( bait, id );
 		if ( m && f.weather ) x *= weatherWeight( f.weather, m );
 		w.push( x );

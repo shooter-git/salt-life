@@ -33,6 +33,7 @@ import { BAITS, BAIT_IDS } from './Bait.js';
 import { LobsterTools } from './LobsterTools.js';
 import { lb, feet, gallons } from './Units.js';
 import { SPECIES } from '../world/fish/FishSpecies.js';
+import { SEABED } from '../world/terrain/SeabedModel.js';
 
 // how long the catch card stays up unless dismissed (ms)
 const CATCH_CARD_MS = 9000;
@@ -1104,7 +1105,43 @@ export class Game {
 		const rect = ( x0, x1, z0, z1 ) => Math.hypot( Math.max( x0 - b.x, 0, b.x - x1 ), Math.max( z0 - b.z, 0, b.z - z1 ) );
 		const walk = rect( P.x - P.width / 2, P.x + P.width / 2, P.zStart, P.zEnd );
 		const head = rect( P.x - P.headWidth / 2, P.x + P.headWidth / 2, P.zEnd - P.headDepth, P.zEnd );
-		return habitatAt( { depth, reefDist, pierDist: Math.min( walk, head ) } );
+		// ((M15) out past the island: how steeply the bottom falls away there, across the offshore map's 32 m
+		// texels; the bank's patch reefs, on its top, the only water that shallow that far out; and what's
+		// found out there)
+		const T = this.app.terrainData, e = 32;
+		const slope = depth > 30 ? Math.hypot( T.heightAt( x + e, z ) - T.heightAt( x - e, z ), T.heightAt( x, z + e ) - T.heightAt( x, z - e ) ) / ( 2 * e ) : 0;
+		const B = SEABED.bank;
+		const patch = depth < 34 && Math.hypot( x - B.x, z - B.z ) < B.a + 1500 ? 0.8 * Math.min( 1, ( 34 - depth ) / 10 ) : 0;
+		const f = this.findsNear( x, z );
+		return habitatAt( { depth, reefDist, pierDist: Math.min( walk, head ), slope, patch, weed: f.weed, debris: f.debris, birds: f.birds } );
+
+	}
+
+	// (M15) how near ( x, z ) is to what's found out there (App.finds, game/Finds.js), each 0..1 by its life:
+	// a weedline (within a few m of its edge, fading by 45 m out), a piece of floating debris (the fish about
+	// it, by 60 m) and a school being worked (inside it, fading by 80 m out)
+	findsNear( x, z ) {
+
+		const out = this._near || ( this._near = { weed: 0, debris: 0, birds: 0 } ), f = this.app.finds;
+		out.weed = out.debris = out.birds = 0;
+		if ( ! f ) return out;
+		const fade = ( a, b, d ) => {
+
+			const t = Math.min( 1, Math.max( 0, ( d - a ) / ( b - a ) ) );
+			return 1 - t * t * ( 3 - 2 * t );
+
+		};
+		for ( const w of f.weed ) {
+
+			const ex = w.x1 - w.x0, ez = w.z1 - w.z0, t = Math.min( 1, Math.max( 0, ( ( x - w.x0 ) * ex + ( z - w.z0 ) * ez ) / Math.max( ex * ex + ez * ez, 1e-6 ) ) );
+			const d = Math.hypot( x - w.x0 - ex * t, z - w.z0 - ez * t ) - w.width / 2;
+			out.weed = Math.max( out.weed, w.life * fade( 3, 45, d ) );
+
+		}
+
+		for ( const q of f.debris ) out.debris = Math.max( out.debris, q.life * fade( 8, 60, Math.hypot( x - q.x, z - q.z ) - q.size / 2 ) );
+		for ( const q of f.bait ) out.birds = Math.max( out.birds, q.life * fade( 0, 80, Math.hypot( x - q.x, z - q.z ) - q.r ) );
+		return out;
 
 	}
 
