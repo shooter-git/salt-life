@@ -5,6 +5,7 @@ import { rippleTexture } from './SeaTextures.js';
 import { WHALE_WATER_GLSL, whaleMarkUniforms } from './WhaleWater.js';
 import { SeaDetail } from './SeaDetail.js';
 import { Whitecaps } from './Whitecaps.js';
+import { LEE } from './Waves.js';
 import { useLocalLights, LOCAL_LIGHTS_MAX } from '../materials/LocalLights.js';
 
 // The sea: one instanced CDLOD grid that follows the camera out to the horizon. Its surface is the
@@ -48,15 +49,24 @@ const FROTH = 4.5, ROWS = 3.3;
 const MARBLE_NOISE = [ [ 0.3, 0 ], [ 0.3, 3.7 ], [ 1, 0 ], [ 2.3, 7.1 ], [ 5.3, 2.6 ], [ 1.3, 1.9 ], [ 0.12, 9.2 ], [ 0.15, 5.5 ] ];
 const MARBLE = [ 2.2, 3.6 ];
 const KEY = { froth: 0, rows: 4, marble: 8, count: 16 };
-// (M15) the water's colour (sRGB, as the light it sends back up: the body's below). Its own: the shelf's,
-// greener (an island's coastal water: its run-off and the life over the shelf), and the open ocean's past the
-// drop-off, the bluest, darkest water there is. The front between them at about front[0] m of depth,
-// wandering ±front[1] m of it (a noise `wander` m across: off the slope's contours, as the currents set it),
-// sharp over ±front[2] m: on the drop-off's 30 to 40 degrees a line you can see. Over it, the sand's light
-// coming back up (`sand`: as the shallowest water shows it, the bay's turquoise at 0.8 m, as it always was),
-// fading by colour as the water takes it, both ways: e^-kd, k the water's absorption (Globals', as the seabed's
-// own tint: 1.6 x a) by channel
-const WATER = { shelf: [ 0.03, 0.15, 0.19 ], deep: [ 0.01, 0.045, 0.13 ], sand: [ 0.26, 0.65, 0.61 ], front: [ 160, 55, 22 ], wander: 1700, k: G.waterAbsorption.value.toArray().map( ( a ) => a * 1.6 ) };
+// (M15) the water's colour (sRGB, as the light it sends back up: the body's below). Its own: the island's
+// coastal water over its shelf, the green water (its run-off and the life over the shelf: teal, its blue less
+// than its green, and less clear, its plankton taking the blue: `murk`), within `coast` m of the island's
+// middle; and the open ocean's past the drop-off and out there (over the bank too), the blue water (the
+// clearest there is, sending back the most blue and the least green: a vivid blue beside the shelf's teal):
+// the edge where the green water meets the blue, as fishermen have it. The front between them over the shelf's edge, at about
+// front[0] m of depth, wandering ±front[1] m of it (a noise `wander` m across: off the slope's contours, as the
+// currents set it), sharp over ±front[2] m. Along it a slick (`slick`: the two waters converge there, and a
+// front's seen from a boat by its line of glassy water, mirroring the sky, and the foam gathered down its
+// middle): within width[0] m of it, gone by width[1], in stretches (a noise `patch` m across), its water
+// flattened by `flat` and a line of foam `foam[0]` m wide, as white as foam[1] at most. Over it all, the sand's light coming back up (`sand`: as the
+// shallowest water shows it, the bay's turquoise at 0.8 m, as it always was), fading by colour as the water
+// takes it, both ways: e^-kd, k the water's absorption (Globals', as the seabed's own tint: 1.6 x a)
+const WATER = {
+	shelf: [ 0.032, 0.16, 0.152 ], deep: [ 0.01, 0.066, 0.196 ], sand: [ 0.26, 0.65, 0.61 ],
+	front: [ 110, 30, 12 ], wander: 1700, slick: { width: [ 6, 22 ], patch: 90, flat: 0.55, foam: [ 4, 0.5 ] },
+	k: G.waterAbsorption.value.toArray().map( ( a ) => a * 1.6 ), murk: [ 0, 0.025, 0.05 ], coast: [ 3500, 6000 ],
+};
 const g = ( v ) => Number.isInteger( v ) ? v.toFixed( 1 ) : String( v ); // (a GLSL float)
 // (M15) the foam's noises' keys (waterKey's) at the sea's origin O: the lace's on the water, the marbling's
 // on its frame M ( x, z, along, across, wind ), moved to the camera cam first if the wind w has turned
@@ -429,9 +439,30 @@ ${ SH ? /* glsl */`
 	// (e^-2Kd: the red first, then the green, the blue last: turquoise in the shallows, a bright blue over
 	// sand tens of metres down), over the water's own: the shelf's, greener, and past the drop-off the open
 	// ocean's, its bluest, the line between them wandering off the slope as the currents have it: WATER)
-	float blueWater = smoothstep( - ${ g( WATER.front[ 2 ] ) }, ${ g( WATER.front[ 2 ] ) }, meanDepth - ${ g( WATER.front[ 0 ] ) } - ${ g( WATER.front[ 1 ] ) } * ( waterNoise( vWater.xz / ${ g( WATER.wander ) } ) * 2.0 - 1.0 ) );
-	vec3 body = mix( ${ rgb( ...WATER.shelf ) }, ${ rgb( ...WATER.deep ) }, blueWater );
-	body += ( ${ rgb( ...WATER.sand ) } - body ) * exp( - vec3( ${ WATER.k.map( ( v ) => g( + v.toFixed( 4 ) ) ).join( ', ' ) } ) * depth );
+	float frontOff = meanDepth - ${ g( WATER.front[ 0 ] ) } - ${ g( WATER.front[ 1 ] ) } * ( waterNoise( vWater.xz / ${ g( WATER.wander ) } ) * 2.0 - 1.0 );
+	float blueWater = smoothstep( - ${ g( WATER.front[ 2 ] ) }, ${ g( WATER.front[ 2 ] ) }, frontOff );
+	// ((M15) and the slick along it: how far off the line (m across it: its depth off the front's over the
+	// slope there), glassy water damping the ripples, in stretches)
+	float waterFrontSlick = 0.0;
+	if ( abs( frontOff ) < 80.0 ) {
+		vec2 sx = vec2( 8.0, 0.0 );
+		vec2 slope = vec2( terrainHeightAt( vWater.xz + sx ) - terrainHeightAt( vWater.xz - sx ), terrainHeightAt( vWater.xz + sx.yx ) - terrainHeightAt( vWater.xz - sx.yx ) ) / 16.0;
+		float across = abs( frontOff ) / max( length( slope ), 0.02 );
+		float stretch = smoothstep( 0.3, 0.55, waterNoise( vWater.xz / ${ g( WATER.slick.patch ) } + 4.1 ) );
+		stretch *= 1.0 - smoothstep( ${ g( WATER.coast[ 0 ] ) }, ${ g( WATER.coast[ 1 ] ) }, length( vWater.xz - vec2( ${ g( LEE.x ) }, ${ g( LEE.z ) } ) ) );
+		waterFrontSlick = ( 1.0 - smoothstep( ${ g( WATER.slick.width[ 0 ] ) }, ${ g( WATER.slick.width[ 1 ] ) }, across ) ) * stretch;
+		seaD.z = max( seaD.z, waterFrontSlick );
+		seaD.x *= 1.0 - 0.85 * waterFrontSlick;
+		// (the foam gathered down its middle, ragged: in clumps and gaps, wider and narrower, wandering a few
+		// metres off the line, a thin lace near by and as much white spread from afar)
+		float clumps = smoothstep( 0.45, 0.7, waterNoise( vWater.xz / 55.0 + 7.3 ) ) * stretch;
+		float wide = ${ g( WATER.slick.foam[ 0 ] ) } * ( 0.4 + 1.2 * waterNoise( vWater.xz / 23.0 + 2.9 ) );
+		float line = ( 1.0 - smoothstep( 0.0, wide, abs( across - 5.0 * ( waterNoise( vWater.xz / 40.0 + 5.5 ) - 0.5 ) ) ) ) * clumps;
+		if ( line > 0.0 ) foam = max( foam, mix( waterLace( vWater.xz * 0.9 + 1.7, 0.45 ), 0.4, smoothstep( 0.4, 1.5, length( fwidth( vWater.xz ) ) ) ) * line * ${ g( WATER.slick.foam[ 1 ] ) } * ( 0.35 + 0.65 * waterNoise( vWater.xz / 9.0 + 1.3 ) ) );
+	}
+	float coastal = ( 1.0 - blueWater ) * ( 1.0 - smoothstep( ${ g( WATER.coast[ 0 ] ) }, ${ g( WATER.coast[ 1 ] ) }, length( vWater.xz - vec2( ${ g( LEE.x ) }, ${ g( LEE.z ) } ) ) ) );
+	vec3 body = mix( ${ rgb( ...WATER.deep ) }, ${ rgb( ...WATER.shelf ) }, coastal );
+	body += ( ${ rgb( ...WATER.sand ) } - body ) * exp( - ( vec3( ${ WATER.k.map( ( v ) => g( + v.toFixed( 4 ) ) ).join( ', ' ) } ) + coastal * vec3( ${ WATER.murk.map( g ).join( ', ' ) } ) ) * depth );
 	body = mix( body, ${ rgb( 0.42, 0.72, 0.66 ) }, turbid * 0.55 );
 	cover = max( cover, turbid * 0.75 );
 	// light through the thin, clear face of a plunging wave and its crest: it glows turquoise
@@ -496,6 +527,8 @@ ${ SH ? /* glsl */`
 		}
 	}
 	vec3 nP = normalize( wN + vec3( - rs.x, 0.0, - rs.y ) );
+	// ((M15) along the front's slick, glassier water: the sky in it as in a mirror)
+	nP = normalize( mix( nP, vec3( 0.0, 1.0, 0.0 ), ${ g( WATER.slick.flat ) } * waterFrontSlick ) );
 	nP = gl_FrontFacing ? nP : - nP;
 	normal = normalize( ( viewMatrix * vec4( nP, 0.0 ) ).xyz );` )
 				// (M11) a wave's face tilted toward you at a grazing angle reflects a ray that points down: on a
