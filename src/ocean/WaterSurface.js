@@ -63,8 +63,8 @@ const KEY = { froth: 0, rows: 4, marble: 8, count: 16 };
 // shallowest water shows it, the bay's turquoise at 0.8 m, as it always was), fading by colour as the water
 // takes it, both ways: e^-kd, k the water's absorption (Globals', as the seabed's own tint: 1.6 x a)
 const WATER = {
-	shelf: [ 0.032, 0.16, 0.152 ], deep: [ 0.01, 0.066, 0.196 ], sand: [ 0.26, 0.65, 0.61 ],
-	front: [ 110, 30, 12 ], wander: 1700, slick: { width: [ 6, 22 ], patch: 90, flat: 0.55, foam: [ 4, 0.5 ] },
+	shelf: [ 0.05, 0.24, 0.205 ], deep: [ 0.01, 0.066, 0.196 ], sand: [ 0.26, 0.65, 0.61 ],
+	front: [ 110, 30, 12 ], wander: 1700, slick: { width: [ 14, 42 ], patch: 160, flat: 0.75, foam: [ 4, 0.65 ] },
 	k: G.waterAbsorption.value.toArray().map( ( a ) => a * 1.6 ), murk: [ 0, 0.025, 0.05 ], coast: [ 3500, 6000 ],
 };
 const g = ( v ) => Number.isInteger( v ) ? v.toFixed( 1 ) : String( v ); // (a GLSL float)
@@ -391,6 +391,29 @@ ${ SH ? /* glsl */`
 	// the sea's large-scale detail: rougher gusts, calm slicks, the windrows' foam ((M14) beaded lines of it,
 	// granular as the whitecaps' foam; seen from afar, as much white spread)
 	vec4 seaD = seaDetailSample( vWater.xz );
+	// ((M15) the edge where the green water meets the blue, and the slick along it: worked out here, as it
+	// sweeps the whitecaps and windrows off its water)
+	float frontOff = meanDepth - ${ g( WATER.front[ 0 ] ) } - ${ g( WATER.front[ 1 ] ) } * ( waterNoise( vWater.xz / ${ g( WATER.wander ) } ) * 2.0 - 1.0 );
+	float blueWater = smoothstep( - ${ g( WATER.front[ 2 ] ) }, ${ g( WATER.front[ 2 ] ) }, frontOff );
+	// ((M15) and the slick along it: how far off the line (m across it: its depth off the front's over the
+	// slope there), glassy water damping the ripples, in stretches)
+	float waterFrontSlick = 0.0, frontAcross = 1e4, frontStretch = 0.0;
+	if ( abs( frontOff ) < 80.0 ) {
+		vec2 sx = vec2( 8.0, 0.0 );
+		vec2 slope = vec2( terrainHeightAt( vWater.xz + sx ) - terrainHeightAt( vWater.xz - sx ), terrainHeightAt( vWater.xz + sx.yx ) - terrainHeightAt( vWater.xz - sx.yx ) ) / 16.0;
+		float across = abs( frontOff ) / max( length( slope ), 0.02 );
+		float stretch = smoothstep( 0.25, 0.45, waterNoise( vWater.xz / ${ g( WATER.slick.patch ) } + 4.1 ) );
+		stretch *= 1.0 - smoothstep( ${ g( WATER.coast[ 0 ] ) }, ${ g( WATER.coast[ 1 ] ) }, length( vWater.xz - vec2( ${ g( LEE.x ) }, ${ g( LEE.z ) } ) ) );
+		// (its edges ragged: wider and narrower as it goes)
+		float edge = ${ g( WATER.slick.width[ 1 ] ) } * ( 0.6 + 0.8 * waterNoise( vWater.xz / 70.0 + 3.3 ) );
+		waterFrontSlick = ( 1.0 - smoothstep( ${ g( WATER.slick.width[ 0 ] ) }, edge, across ) ) * stretch;
+		frontAcross = across;
+		frontStretch = stretch;
+		seaD.z = max( seaD.z, waterFrontSlick );
+		seaD.x *= 1.0 - 0.9 * waterFrontSlick;
+		// (and the windrows' foam swept off it: the surface film holds the water still)
+		seaD.w *= 1.0 - waterFrontSlick;
+	}
 	float wrFw = length( fwidth( vWaterX0 ) );
 	if ( seaD.w > 0.0 ) {
 		float wr = min( seaD.w * 1.5, 0.75 );
@@ -400,7 +423,7 @@ ${ SH ? /* glsl */`
 	// a crest's face while it breaks, and the foam it's left behind it thinning (Whitecaps.js)); more in the
 	// gusts; out over the open sea only (the shore waves have their own)
 	if ( whitecapCover > 0.0 ) {
-		vec2 wc = min( whitecapsAt( vWaterX0 ) * vWaterFade * vWaterWind * ( 0.55 + 0.9 * seaD.y ), 1.0 );
+		vec2 wc = min( whitecapsAt( vWaterX0 ) * vWaterFade * vWaterWind * ( 0.55 + 0.9 * seaD.y ), 1.0 ) * ( 1.0 - waterFrontSlick );
 		// the foam left marbled (white with dark veins, swirled and drawn out along the wind), thinning
 		// unevenly and tearing into lace, froth at its edges, less white than the roller; the roller solid,
 		// its edge torn. (Seen from afar, as much white spread.) ((M15) Its frame along and across the wind about
@@ -433,33 +456,20 @@ ${ SH ? /* glsl */`
 		float spCover = waterSpume * ( 0.75 * streak + 0.2 * waterNoise( q * 0.08 ) ) * smoothstep( 0.15, 0.8, depth ) * ( 1.0 - smoothstep( 600.0, 2000.0, spDist ) );
 		foam = max( foam, waterLace( q * 0.5, min( spCover, 0.75 ) ) * 0.85 );
 	}
+	if ( frontAcross < 30.0 ) {
+		// ((M15) the foam gathered down the front's middle, ragged: in clumps and gaps, wider and narrower, wandering a few
+		// metres off the line, a thin lace near by and as much white spread from afar)
+		float clumps = smoothstep( 0.3, 0.55, waterNoise( vWater.xz / 55.0 + 7.3 ) ) * frontStretch;
+		float wide = ${ g( WATER.slick.foam[ 0 ] ) } * ( 0.4 + 1.2 * waterNoise( vWater.xz / 23.0 + 2.9 ) );
+		float line = ( 1.0 - smoothstep( 0.0, wide, abs( frontAcross - 5.0 * ( waterNoise( vWater.xz / 40.0 + 5.5 ) - 0.5 ) ) ) ) * clumps;
+		if ( line > 0.0 ) foam = max( foam, mix( waterLace( vWater.xz * 0.9 + 1.7, 0.45 ), 0.4, smoothstep( 0.4, 1.5, length( fwidth( vWater.xz ) ) ) ) * line * ${ g( WATER.slick.foam[ 1 ] ) } * ( 0.35 + 0.65 * waterNoise( vWater.xz / 9.0 + 1.3 ) ) );
+	}
 	// the body of the water: light scattered back up from inside it and off the sand under it, lit by the
 	// sky and the sun whatever way the surface faces; milky in the surf (suspended sand and fine bubbles).
 	// ((M15) The sand's light coming back up through the water, each colour fading as the water takes it
 	// (e^-2Kd: the red first, then the green, the blue last: turquoise in the shallows, a bright blue over
 	// sand tens of metres down), over the water's own: the shelf's, greener, and past the drop-off the open
 	// ocean's, its bluest, the line between them wandering off the slope as the currents have it: WATER)
-	float frontOff = meanDepth - ${ g( WATER.front[ 0 ] ) } - ${ g( WATER.front[ 1 ] ) } * ( waterNoise( vWater.xz / ${ g( WATER.wander ) } ) * 2.0 - 1.0 );
-	float blueWater = smoothstep( - ${ g( WATER.front[ 2 ] ) }, ${ g( WATER.front[ 2 ] ) }, frontOff );
-	// ((M15) and the slick along it: how far off the line (m across it: its depth off the front's over the
-	// slope there), glassy water damping the ripples, in stretches)
-	float waterFrontSlick = 0.0;
-	if ( abs( frontOff ) < 80.0 ) {
-		vec2 sx = vec2( 8.0, 0.0 );
-		vec2 slope = vec2( terrainHeightAt( vWater.xz + sx ) - terrainHeightAt( vWater.xz - sx ), terrainHeightAt( vWater.xz + sx.yx ) - terrainHeightAt( vWater.xz - sx.yx ) ) / 16.0;
-		float across = abs( frontOff ) / max( length( slope ), 0.02 );
-		float stretch = smoothstep( 0.3, 0.55, waterNoise( vWater.xz / ${ g( WATER.slick.patch ) } + 4.1 ) );
-		stretch *= 1.0 - smoothstep( ${ g( WATER.coast[ 0 ] ) }, ${ g( WATER.coast[ 1 ] ) }, length( vWater.xz - vec2( ${ g( LEE.x ) }, ${ g( LEE.z ) } ) ) );
-		waterFrontSlick = ( 1.0 - smoothstep( ${ g( WATER.slick.width[ 0 ] ) }, ${ g( WATER.slick.width[ 1 ] ) }, across ) ) * stretch;
-		seaD.z = max( seaD.z, waterFrontSlick );
-		seaD.x *= 1.0 - 0.85 * waterFrontSlick;
-		// (the foam gathered down its middle, ragged: in clumps and gaps, wider and narrower, wandering a few
-		// metres off the line, a thin lace near by and as much white spread from afar)
-		float clumps = smoothstep( 0.45, 0.7, waterNoise( vWater.xz / 55.0 + 7.3 ) ) * stretch;
-		float wide = ${ g( WATER.slick.foam[ 0 ] ) } * ( 0.4 + 1.2 * waterNoise( vWater.xz / 23.0 + 2.9 ) );
-		float line = ( 1.0 - smoothstep( 0.0, wide, abs( across - 5.0 * ( waterNoise( vWater.xz / 40.0 + 5.5 ) - 0.5 ) ) ) ) * clumps;
-		if ( line > 0.0 ) foam = max( foam, mix( waterLace( vWater.xz * 0.9 + 1.7, 0.45 ), 0.4, smoothstep( 0.4, 1.5, length( fwidth( vWater.xz ) ) ) ) * line * ${ g( WATER.slick.foam[ 1 ] ) } * ( 0.35 + 0.65 * waterNoise( vWater.xz / 9.0 + 1.3 ) ) );
-	}
 	float coastal = ( 1.0 - blueWater ) * ( 1.0 - smoothstep( ${ g( WATER.coast[ 0 ] ) }, ${ g( WATER.coast[ 1 ] ) }, length( vWater.xz - vec2( ${ g( LEE.x ) }, ${ g( LEE.z ) } ) ) ) );
 	vec3 body = mix( ${ rgb( ...WATER.deep ) }, ${ rgb( ...WATER.shelf ) }, coastal );
 	body += ( ${ rgb( ...WATER.sand ) } - body ) * exp( - ( vec3( ${ WATER.k.map( ( v ) => g( + v.toFixed( 4 ) ) ).join( ', ' ) } ) + coastal * vec3( ${ WATER.murk.map( g ).join( ', ' ) } ) ) * depth );
@@ -502,7 +512,7 @@ ${ SH ? /* glsl */`
 	diffuseColor.rgb = vec3( 0.0 );
 	diffuseColor.a = clamp( max( max( cover, glow * 0.6 ), foam ), 0.0, 1.0 ) * sheetEdge;
 ` )
-				.replace( '#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = mix( roughnessFactor * mix( 1.0, 0.35, seaD.z ) * mix( 1.0, 1.6, seaD.y ), 0.85, foam );' )
+				.replace( '#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = mix( roughnessFactor * mix( 1.0, 0.35, seaD.z ) * mix( 1.0, 1.6, seaD.y ) * ( 1.0 - 0.6 * waterFrontSlick ), 0.85, foam );' )
 				.replace( '#include <normal_fragment_maps>', /* glsl */`
 	// short wind ripples and capillary waves on the waves near the camera (two drifting samples),
 	// calmed by the foam
