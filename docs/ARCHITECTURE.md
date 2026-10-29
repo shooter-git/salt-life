@@ -91,6 +91,10 @@ New code that draws from world positions on the GPU takes the same care: a point
 - `Orders.ordersFor` adds one ask a day for a place's fish (`PLACE_ASKS`, drawn last so the rest of the list is as it was; never the same kind as the others): `{ place, mul: PLACE_MUL }`, or Marta's tag-and-release `{ place, each, tag }`. `ordersOf( list, who, species, place )` is what a fish fills, its place's first (`GameState.quote`, `wantedIds`); `tagFor` and `GameState.tag` pay a tagged one as it's let go (`Game`, at the rod's catch).
 - `Together.caught( …, place )` keeps the place's heaviest under `'@' + place` in the shared `records` (with `s`, the kind); `_setRecords` keeps them; the cooler's Records tab lists them.
 
+## The lighthouse
+
+(M15) `world/Lighthouse.js` (`LIGHTHOUSE`: where, its parts' sizes, its light's character). Built by App after the village and before the ground's drawn: it levels its pad (`TerrainData.flatten`, as the village's), its footprint joins the village's (the rocks and the plants keep off it), its post a collider. One merged mesh of vertex colours (its tower's bands, plinth, gallery, railing, lantern frames, dome), its panes, its lens (lit by `G.night`), its beams (two additive cones turning with the lens, soft at their sides, faint), and its glare (an additive sprite): `update( camera, visibility, heightPx )` puts the glare along its line of sight no further than 11 km (the far plane's 12), no smaller than a few pixels, as bright as `flashAt` (the panels' beams turning past you), `horizonOf` (the earth's curve) and the air (`exp( -3 d / range )`, the Sky's visibility) let it be.
+
 ## The windward reef
 
 (M15) A second reef off the north-west point (`WORLD.northReef`), the bay's machinery run again for it:

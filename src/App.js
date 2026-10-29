@@ -50,6 +50,7 @@ import { FlyingSheets } from './world/debris/FlyingSheets.js';
 import { vegUniforms } from './world/vegetation/VegNodes.js';
 import { Debris } from './world/Debris.js';
 import { Reef } from './world/Reef.js';
+import { Lighthouse } from './world/Lighthouse.js';
 import { ReefLayout } from './world/reef/ReefLayout.js';
 import { FishSchools } from './world/Fish.js';
 import { fishModelsAsync } from './world/fish/FishModelsAsync.js';
@@ -316,6 +317,10 @@ export class App {
 		// textures are made from the heights) and everything placed on it
 		// (WebGL drawn on the CPU: its textures baked after the start, lateReady)
 		this.village = new Village( { scene, terrain: this.terrainData, colliders: this.colliders, tier, smallBakes: this.cpuGL, bakeLater: this.cpuGL } );
+		// ((M15) the lighthouse on the north-west headland: it levels its pad as the village does, before the
+		// ground's drawn; the rocks and the plants keep off it as they do the village's buildings)
+		this.lighthouse = new Lighthouse( { scene, terrain: this.terrainData, colliders: this.colliders } );
+		this.village.footprints.push( ...this.lighthouse.footprints );
 		await this.village.init( renderer );
 		// (M11) what covers the island from above (world/Cover.js): the pier, the boardwalks, the roofs, the
 		// stalls; drawn once after the start (buildCover), nothing covers anything until then. The rain
@@ -855,6 +860,8 @@ export class App {
 		if ( this.debris ) this.debris.update( this.camera );
 		if ( this.stormWrack ) this.stormWrack.update( this.camera ); // ((M13) a hurricane's line of wrack, near you)
 		this.flyingSheets.update( islandTime( s.day, s.timeOfDay ) ); // ((M14) the sheets it's torn off, flying and lying)
+		// ((M15) the lighthouse's light: lit from dusk, its flash as it's seen from here)
+		this.lighthouse.update( this.camera, this.sky.visibility, this.renderer.domElement.height );
 		// ((M15) the reefs: the bay's, and the windward one once you're near it)
 		if ( this.reefs ) {
 
