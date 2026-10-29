@@ -6,6 +6,7 @@ import { RecordsBoard } from './RecordsBoard.js';
 import { BoatLamps } from '../world/boat/BoatLamps.js';
 import { RADAR_RPM, PROP_DISPLAY_RPS } from '../world/BoatModel.js';
 import { FISH, fishLengthCm, isTrophy } from '../game/FishTable.js';
+import { PLACES } from '../game/Places.js';
 import { ROD_L, SEAT_Y } from '../game/FishingRod.js';
 import { gunModels, setBands } from '../game/Speargun.js';
 import { CastNet } from '../game/CastNet.js';
@@ -277,6 +278,8 @@ export class Together {
 		if ( ! r || typeof r !== 'object' ) r = {};
 		const clean = {};
 		for ( const [ k, v ] of Object.entries( r ) ) if ( FISH[ k ] && v && typeof v.kg === 'number' ) clean[ k ] = v;
+		// ((M15) and each place's: '@' and its id, which fish it was)
+		for ( const [ k, v ] of Object.entries( r ) ) if ( k[ 0 ] === '@' && PLACES[ k.slice( 1 ) ] && v && typeof v.kg === 'number' && FISH[ v.s ] ) clean[ k ] = v;
 		this.records = clean;
 		this.board.draw( clean );
 		if ( this.app.game.hud && this.app.game.hud.inv && ! this.app.game.hud.inv.hidden ) this.app.game.hud.renderInventory();
@@ -316,20 +319,24 @@ export class Together {
 	// save is then brought up to date, and the others told)
 	// (Salt Life) method: 'rod', 'spear', 'net' or 'hand' (a lobster); a speared, netted or hand-taken
 	// record says so (m: 's' | 'n' | 'h')
-	caught( species, kg, cm, method = 'rod' ) {
+	// (M15) place: where (Places.js): the heaviest fish anyone's had there is the place's record, under '@'
+	// and its id in the same shared save (-> place: true when this one is, and placeHeld: the one it beat)
+	caught( species, kg, cm, method = 'rod', place = null ) {
 
 		const held = this.records[ species ];
 		const island = ! held || kg > held.kg;
+		const pk = place && PLACES[ place ] ? '@' + place : null, placeHeld = pk ? this.records[ pk ] || null : null;
+		const atPlace = !! pk && ( ! placeHeld || kg > placeHeld.kg );
 		const m = { spear: 's', net: 'n', hand: 'h' }[ method ] || null;
 		const tell = ( record ) => {
 
 			if ( this.others.size ) this.session.send( 'catch', m ? { s: species, kg: r3( kg ), cm, rec: record, m } : { s: species, kg: r3( kg ), cm, rec: record } );
 
 		};
-		if ( ! island ) {
+		if ( ! island && ! atPlace ) {
 
 			tell( false );
-			return { island: false, held };
+			return { island: false, held, place: false, placeHeld };
 
 		}
 
@@ -339,14 +346,17 @@ export class Together {
 
 			const next = cur && typeof cur === 'object' ? { ...cur } : {};
 			const r = next[ species ];
-			if ( ! r || kg > r.kg ) next[ species ] = mine;
+			if ( island && ( ! r || kg > r.kg ) ) next[ species ] = mine;
+			// ((M15) the place's: which fish, too)
+			const rp = pk && next[ pk ];
+			if ( atPlace && ( ! rp || kg > rp.kg ) ) next[ pk ] = { ...mine, s: species };
 			return next;
 
 		} ).then( ( saved ) => {
 
 			this._setRecords( saved );
-			const ours = saved[ species ] && saved[ species ].id === this.me.id && saved[ species ].at === mine.at;
-			tell( ours );
+			const ours = island && saved[ species ] && saved[ species ].id === this.me.id && saved[ species ].at === mine.at;
+			tell( !! ours );
 
 		} ).catch( ( e ) => {
 
@@ -354,7 +364,7 @@ export class Together {
 			tell( false );
 
 		} );
-		return { island: true, held };
+		return { island, held, place: atPlace, placeHeld };
 
 	}
 

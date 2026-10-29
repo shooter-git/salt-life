@@ -149,10 +149,10 @@ for ( let d = 0; d < 40; d ++ ) {
 }
 ok( differ >= 38, 'a new list (nearly) every day' );
 ok( tw === 40, 'Joe always wants one fish of the dusk, dawn or dark' );
-ok( a.length === 3 && a.every( ( o ) => FISH[ o.species ] && o.max > 0 ), 'Joe\'s two and Marta\'s one' );
+ok( a.length === 4 && a.every( ( o ) => FISH[ o.species ] && o.max > 0 ) && a.filter( ( o ) => o.place ).length === 1, 'Joe\'s two, Marta\'s one, and (M15) one for a place\'s fish' );
 let wantsProtected = 0;
-for ( let d = 0; d < 400; d ++ ) if ( ordersFor( d ).some( ( o ) => FISH[ o.species ].protected ) ) wantsProtected ++;
-ok( wantsProtected === 0, 'nobody wants a protected fish: it\'s let go' );
+for ( let d = 0; d < 400; d ++ ) if ( ordersFor( d ).some( ( o ) => FISH[ o.species ].protected && ! o.tag ) ) wantsProtected ++;
+ok( wantsProtected === 0, 'nobody wants a protected fish to keep: it\'s let go ((M15) Marta\'s tag-and-release log asks for one let go)' );
 console.log( `     day 12: ${ a.map( ( o ) => `${ o.who } ${ o.species } ${ orderTerms( o ) }` ).join( '; ' ) }` );
 
 // ---- selling on them

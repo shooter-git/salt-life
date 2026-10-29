@@ -24,6 +24,7 @@ import { wxNews } from './TimeHUD.js';
 import { CRADLE } from '../world/village/StormPlaces.js';
 import { StormChart, shelterSign } from './StormChart.js';
 import { ClosedSign } from './ClosedSign.js';
+import { Signpost } from './Signpost.js';
 import { delivered, filled, owed, weekEnds } from './WeekOrder.js';
 import { Minimap } from './Minimap.js';
 import { Guide } from './Guide.js';
@@ -36,6 +37,8 @@ import { SPECIES } from '../world/fish/FishSpecies.js';
 import { SEABED } from '../world/terrain/SeabedModel.js';
 import { mangroveAt } from '../world/terrain/Mangrove.js';
 import { northReefMask } from '../world/TerrainData.js';
+import { placeOf, placeName } from './Places.js';
+import { ordersOf, tagFor } from './Orders.js';
 
 // how long the catch card stays up unless dismissed (ms)
 const CATCH_CARD_MS = 9000;
@@ -178,6 +181,9 @@ export class Game {
 		// (M9) and the forecast on a smaller slate beside it: hung from the wanted slate (where it is: attach),
 		// it goes up with it
 		this.forecastSlate = new ForecastSlate( { terrain: app.terrainData } );
+		// ((M15) the fingerpost by the boardwalk: the way round the island, read from the start)
+		this.signpost = new Signpost( { terrain: app.terrainData, colliders: app.colliders } );
+		app.scene.add( this.signpost.group );
 		this.wanted.mesh.attach( this.forecastSlate.mesh );
 		this._forecastT = 0;
 		app.lightUp( this.wanted.mesh );
@@ -1105,6 +1111,16 @@ export class Game {
 
 	}
 
+	// (M15) the place ( x, z ) is (Places.js), from its water
+	placeAt( x, z ) {
+
+		const T = this.app.terrainData, h = this.habitatAtPoint( x, z, Math.max( 0, G.seaLevel.value - T.heightAt( x, z ) ) );
+		h.side = this.windwardAt( x, z );
+		h.big = this.windReefAt( x, z );
+		return placeOf( h, x, z );
+
+	}
+
 	// (M15) how much ( x, z ) is on the windward reef off the north-west point (0..1: its platform, TerrainData's)
 	windReefAt( x, z ) {
 
@@ -1250,6 +1266,7 @@ export class Game {
 
 			b.species = species;
 			b.kg = rollWeight( species, Math.random, this.hookBait, h.weather, h.big );
+			b.place = placeOf( h, this.rod.bobber.x, this.rod.bobber.z ); // ((M15) where it bit: Places.js)
 			b.phase = 'nibble';
 			b.nibbles = 1 + Math.floor( Math.random() * 3 );
 			b.t = 0.7 + Math.random() * 0.8;
@@ -1306,6 +1323,7 @@ export class Game {
 		// (the line out: no more than the rod casts and a fish could have taken, whatever's gone wrong)
 		const out = Math.min( Math.max( 3, this.rod.lineOut ), this.rod.castM * 1.5 + 10 );
 		this.fight = new CatchMinigame( { species: b.species, kg: b.kg, lineKg: g.lineKg, reelSpeed: g.reelSpeed, distance: Number.isFinite( out ) ? out : 3, wind: blowShare( G.windSpeed.value ) } );
+		this.fight.place = b.place;
 		this.bite = null;
 		this.rod.hook();
 		this.toast( 'Fish on!', 1200 );
@@ -1343,16 +1361,20 @@ export class Game {
 		const name = FISH[ f.species ].name;
 		if ( st === 'caught' ) {
 
-			const entry = this.state.addFish( f.species, f.kg, this.hour, { day: this.tradeDay } );
+			const entry = this.state.addFish( f.species, f.kg, this.hour, { day: this.tradeDay, place: f.place } );
 			const info = this.state.lastCatch;
 			info.wanted = entry ? this.wantedFor( entry ) : null; // (Salt Life) on today's wanted list
+			// ((M15) let go where Marta's tag-and-release ask wants one: paid there and then)
+			const tag = info.released && tagFor( this.orders, f.species, f.place );
+			info.tagged = tag ? this.state.tag( tag, this.tradeDay ) : 0;
 			// (Salt Life) the others hear of it; the island's records (together/): the card says when
 			// it's the heaviest of its kind anyone here has landed
 			if ( this.app.together ) {
 
-				const isle = this.app.together.caught( f.species, f.kg, info.cm );
+				const isle = this.app.together.caught( f.species, f.kg, info.cm, 'rod', info.place );
 				info.islandRecord = isle.island;
 				info.islandHeld = isle.held || null;
+				info.placeRecord = isle.place ? info.place : null; // ((M15) the heaviest anyone's had there)
 
 			}
 			if ( au && au.fishSplash ) au.fishSplash( this.rod.bobber, 0.8 );
@@ -1558,7 +1580,7 @@ export class Game {
 			return { i, species: id, label: id ? FISH[ id ].name : sp.label, cm, kg: id ? fishWeightKg( id, cm ) : 0 };
 
 		} );
-		const r = this.state.addHaul( caught, this.hour );
+		const r = this.state.addHaul( caught, this.hour, this.placeAt( net.footprint.x, net.footprint.z ), this.tradeDay );
 		const to = net.lastThrow;
 		_b.set( to ? to.x - b.x : 0, 0, to ? to.z - b.z : 1 );
 		if ( _b.lengthSq() < 1e-6 ) _b.set( 0, 0, 1 );
@@ -1574,7 +1596,7 @@ export class Game {
 		if ( fish ) fish.netEnd();
 		this.netIn = 0;
 		// a mullet for the cooler counts toward the island's records, and the others hear of it
-		if ( this.app.together ) for ( const e of r.cooler ) this.app.together.caught( e.species, e.kg, e.cm, 'net' );
+		if ( this.app.together ) for ( const e of r.cooler ) this.app.together.caught( e.species, e.kg, e.cm, 'net', e.place );
 		if ( caught.length && au && au.fishFlop ) au.fishFlop();
 		this.lastHaul = { r, n: caught.length, out };
 		if ( this.hud ) this.hud.showHaul( r, caught.length, out );
@@ -1898,14 +1920,15 @@ export class Game {
 
 		const sp = this.speared, gun = this.gun;
 		this.calmThief( sp );
-		const entry = this.state.addFish( sp.id, sp.kg, this.hour, { method: 'spear', cm: sp.cm, day: this.tradeDay } );
+		const entry = this.state.addFish( sp.id, sp.kg, this.hour, { method: 'spear', cm: sp.cm, day: this.tradeDay, place: this.placeAt( this.app.camera.position.x, this.app.camera.position.z ) } );
 		const info = this.state.lastCatch;
 		info.wanted = entry ? this.wantedFor( entry ) : null;
 		if ( this.app.together ) {
 
-			const isle = this.app.together.caught( sp.id, info.kg, info.cm, 'spear' );
+			const isle = this.app.together.caught( sp.id, info.kg, info.cm, 'spear', info.place );
 			info.islandRecord = isle.island;
 			info.islandHeld = isle.held || null;
+			info.placeRecord = isle.place ? info.place : null;
 
 		}
 
@@ -2105,14 +2128,15 @@ export class Game {
 		const n = this.netted;
 		n.gauged = true;
 		const release = n.cm < FISH.lobster.minCm ? 'short' : n.berried ? 'berried' : null;
-		const entry = this.state.addFish( 'lobster', n.kg, this.hour, { method: 'hand', cm: n.cm, day: this.tradeDay, release } );
+		const entry = this.state.addFish( 'lobster', n.kg, this.hour, { method: 'hand', cm: n.cm, day: this.tradeDay, release, place: this.placeAt( this.app.camera.position.x, this.app.camera.position.z ) } );
 		const info = this.state.lastCatch;
 		info.wanted = entry ? this.wantedFor( entry ) : null;
 		if ( this.app.together ) {
 
-			const isle = this.app.together.caught( 'lobster', info.kg, info.cm, 'hand' );
+			const isle = this.app.together.caught( 'lobster', info.kg, info.cm, 'hand', info.place );
 			info.islandRecord = isle.island;
 			info.islandHeld = isle.held || null;
+			info.placeRecord = isle.place ? info.place : null;
 
 		}
 
@@ -2229,8 +2253,9 @@ export class Game {
 	// card): { text } or null
 	wantedFor( fish ) {
 
-		const o = this.orders.find( ( x ) => x.species === fish.species );
-		if ( o && this.state.wantedIds( this.orders, this.tradeDay ).has( fish.id ) ) return { order: o, text: `${ o.who === 'marta' ? 'Marta' : 'Joe' } wants it` };
+		// ((M15) a place's ask first, for a fish from its place)
+		const o = ordersOf( this.orders, 'joe', fish.species, fish.place )[ 0 ] || ordersOf( this.orders, 'marta', fish.species, fish.place )[ 0 ];
+		if ( o && this.state.wantedIds( this.orders, this.tradeDay ).has( fish.id ) ) return { order: o, text: `${ o.who === 'marta' ? 'Marta' : 'Joe' } wants it${ o.place ? ` from ${ placeName( o.place ) }` : '' }` };
 		const w = this.weekTerms();
 		if ( w && this.state.wantedIds( null, null, w ).has( fish.id ) ) return { text: 'For the week\'s order' };
 		return null;

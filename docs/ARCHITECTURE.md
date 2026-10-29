@@ -84,6 +84,13 @@ New code that draws from world positions on the GPU takes the same care: a point
 - **The shore's waves**: `computeShoreField` scales each cell's exposure by the stand, so the shore waves die in it, every field alike (the south's, the west's, the north's).
 - **The bites**: `Game.habitatAtPoint` passes the creek and the fringe as `creek` to `Bites.habitatAt`.
 
+## The places a fish is caught
+
+(M15) `game/Places.js`: `PLACES` (ids and names) and `placeOf( habitat, x, z )`, from `Bites.habitatAt`'s water with the game's `side` and `big` (`Game.placeAt( x, z )` works it out for a spot). Each catch carries it:
+- `GameState.addFish( …, { place } )`, `addHaul( fish, hour, place, day )`: the entry's `place`; `logPlace` keeps `places` (saved: `{ n, day, first }` a place) and `lastCatch.firstAt` when it's the first there.
+- `Orders.ordersFor` adds one ask a day for a place's fish (`PLACE_ASKS`, drawn last so the rest of the list is as it was; never the same kind as the others): `{ place, mul: PLACE_MUL }`, or Marta's tag-and-release `{ place, each, tag }`. `ordersOf( list, who, species, place )` is what a fish fills, its place's first (`GameState.quote`, `wantedIds`); `tagFor` and `GameState.tag` pay a tagged one as it's let go (`Game`, at the rod's catch).
+- `Together.caught( …, place )` keeps the place's heaviest under `'@' + place` in the shared `records` (with `s`, the kind); `_setRecords` keeps them; the cooler's Records tab lists them.
+
 ## The windward reef
 
 (M15) A second reef off the north-west point (`WORLD.northReef`), the bay's machinery run again for it:

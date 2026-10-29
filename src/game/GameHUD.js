@@ -2,11 +2,12 @@ import { FISH, CARAPACE, fishLengthCm } from './FishTable.js';
 import { UPGRADES, nextLevel, FUEL_PRICE } from './Gear.js';
 import { BAITS, BAIT_IDS, chunksOf } from './Bait.js';
 import { LOOKS, LOOK_NAMES } from '../together/Avatar.js';
-import { NIGHT_BOX, biteHint, orderTerms } from './Orders.js';
+import { NIGHT_BOX, biteHint, orderTerms, orderPlace } from './Orders.js';
 import { WEEK_MUL, delivered, filled, mineOf, shareOf, weekEnds } from './WeekOrder.js';
 import { timeText } from './IslandClock.js';
 import { LB, IN, GAL, lb, pounds, inches, feet, gallons, lbOz, feetInches } from './Units.js';
 import { FLOOD_L } from './Hull.js';
+import { PLACES, placeName } from './Places.js';
 
 // (other players' names, into HTML)
 const escape = ( t ) => String( t ).replace( /[&<>"']/g, ( c ) => ( { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } )[ c ] );
@@ -626,6 +627,7 @@ export class GameHUD {
 		const room = this.game.state.roomFor( info ), where = this.game.state.upgrades.hold > 0 ? 'hold' : 'cooler';
 		if ( info.why === 'short' ) note = `<div class="gm-catch-note is-warn">Short: under ${ ( f.minCm * CARAPACE / IN ).toFixed( 0 ) } in on the gauge · back it goes, to grow${ board }.</div>`;
 		else if ( info.why === 'berried' ) note = `<div class="gm-catch-note is-warn">Berried: she's carrying eggs under her tail · back she goes${ board }.</div>`;
+		else if ( info.tagged ) note = `<div class="gm-catch-note">Tagged and let go alive for Marta's tag-and-release log: <b>$${ info.tagged }</b>${ board }.</div>`;
 		else if ( info.released ) note = `<div class="gm-catch-note">${ f.cr ? 'Catch and release: everyone lets one go. Measured and' : 'Protected: measured and' } let go alive${ board }.</div>`;
 		else if ( info.bag && info.bag.full ) note = `<div class="gm-catch-note is-warn">That's your ${ info.bag.max } for today, the most anyone may keep · back it goes</div>`;
 		else if ( room ) note = `<div class="gm-catch-note is-warn">No room in the ${ where } for it · let fish go to make room, or let this one go</div>`;
@@ -633,7 +635,9 @@ export class GameHUD {
 		else if ( f.bounty && ! info.islandRecord && ! info.record ) note = `<div class="gm-catch-note">An invader on the reef: Joe pays $${ f.bounty } a fish on top.</div>`;
 		else if ( info.islandRecord ) note = `<div class="gm-catch-note">The heaviest anyone here has landed${ isle ? `. It beats ${ escape( isle.who || 'someone' ) }'s <b>${ lb( isle.kg ) }</b>` : '' }. It goes on the board at the fish stand.</div>`;
 		else if ( info.record ) note = `<div class="gm-catch-note">Previous best <b>${ lb( info.prevBestKg ) }</b> · ${ sizeOf( info.species, info.prevBestCm ) }. Beaten by ${ lb( info.kg - info.prevBestKg ) }.</div>`;
-		else if ( info.newSpecies ) note = '<div class="gm-catch-note">First one in your fish log.</div>';
+		else if ( info.placeRecord ) note = `<div class="gm-catch-note">The heaviest fish anyone here has had from ${ placeName( info.placeRecord ) }. It's on the records, in your cooler.</div>`;
+		else if ( info.newSpecies ) note = `<div class="gm-catch-note">First one in your fish log${ info.firstAt ? `, and your first fish from ${ placeName( info.firstAt ) }` : '' }.</div>`;
+		else if ( info.firstAt ) note = `<div class="gm-catch-note">Your first fish from ${ placeName( info.firstAt ) }: it's in your log.</div>`;
 		else note = `<div class="gm-catch-note">Your best: ${ lb( info.prevBestKg ) } · ${ sizeOf( info.species, info.prevBestCm ) }</div>`;
 		// splash burst around the fish as it lands in view
 		let drops = '';
@@ -899,13 +903,19 @@ export class GameHUD {
 
 			body = logged.map( ( [ k, v ] ) => item( FISH[ k ].name, `${ v.count } caught`, `<span class="gm-item-num">${ lb( v.bestKg ) } · ${ sizeOf( k, v.bestCm ?? fishLengthCm( k, v.bestKg ) ) }</span>` ) ).join( '' )
 				|| empty( 'Each kind you catch is logged here, with your best.' );
-			hint = 'Your best of each kind';
+			// ((M15) and the places you've fished: how many there, and the first)
+			const places = Object.entries( s.places || {} ).filter( ( [ k ] ) => PLACES[ k ] );
+			if ( places.length ) body += `<div class="gm-wanted"><span class="gm-wanted-h">Places you've fished</span>${ places.map( ( [ k, p ] ) => item( placeName( k, true ), `first ${ p.first && FISH[ p.first ] ? `a ${ FISH[ p.first ].name.toLowerCase() }` : 'a fish' }${ Number.isFinite( p.day ) ? `, day ${ p.day + 1 }` : '' }`, `<span class="gm-item-num">${ p.n } fish</span>` ) ).join( '' ) }</div>`;
+			hint = 'Your best of each kind, and where you\'ve fished';
 
 		} else if ( tab === 'records' ) {
 
 			body = isle.map( ( [ k, r ] ) => item( FISH[ k ].name, ( r.id === me ? '<b>You</b>' : escape( r.who || '?' ) ) + ( { s: ' · speared', n: ' · netted', h: ' · by hand' }[ r.m ] || '' ), `<span class="gm-item-num">${ lb( r.kg ) }${ r.cm ? ` · ${ sizeOf( k, r.cm ) }` : '' }</span>` ) ).join( '' )
 				|| empty( 'None yet: the first of each kind anyone lands here sets one.' );
-			hint = 'The heaviest of each kind anyone here has landed';
+			// ((M15) and each place's: the heaviest fish anyone's had there)
+			const at = Object.entries( together.records ).filter( ( [ k, r ] ) => k[ 0 ] === '@' && PLACES[ k.slice( 1 ) ] && FISH[ r.s ] ).sort( ( a, b ) => b[ 1 ].kg - a[ 1 ].kg );
+			if ( at.length ) body += `<div class="gm-wanted"><span class="gm-wanted-h">The heaviest from each place</span>${ at.map( ( [ k, r ] ) => item( placeName( k.slice( 1 ), true ), `${ FISH[ r.s ].name } · ${ r.id === me ? '<b>You</b>' : escape( r.who || '?' ) }`, `<span class="gm-item-num">${ lb( r.kg ) }</span>` ) ).join( '' ) }</div>`;
+			hint = 'The heaviest of each kind anyone here has landed, and from each place';
 
 		} else {
 
@@ -1008,7 +1018,7 @@ export class GameHUD {
 		const g = this.game, s = g.state;
 		const rows = ( g.orders || [] ).filter( ( o ) => o.who === who ).map( ( o ) => {
 
-			const n = s.filledOf( o, g.tradeDay ), hint = who === 'marta' ? 'for her bait tank' : biteHint( o.species );
+			const n = s.filledOf( o, g.tradeDay ), hint = o.place ? orderPlace( o ) : who === 'marta' ? 'for her bait tank' : biteHint( o.species );
 			return item( FISH[ o.species ].name, `${ orderTerms( o ) }${ hint ? ` · ${ hint }` : '' }`, `<span class="gm-item-num">${ n } / ${ o.max }</span>` )
 				.replace( 'class="gm-item"', `class="gm-item${ n >= o.max ? ' is-done' : '' }"` );
 

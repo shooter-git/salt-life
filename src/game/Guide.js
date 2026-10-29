@@ -202,6 +202,9 @@ const TIPS = {
 	rip: 'You\'re in a <b>rip current</b>, carried out through a gap in the breakers (the milky water). Swim <b>along the beach</b> out of it, not against it.',
 	tumble: 'A <b>breaker</b> tumbled you. In a big surf, <b>dive under</b> a big one before it breaks on you, or keep out beyond the breakers.',
 	knocked: 'A <b>breaker</b> knocked you off your feet. Wading in a big surf, <b>turn side-on</b> to the waves as they break, or keep to the shallows.',
+	// (M15) once you've the hang of the bay, the rest of the island; and out on the far water, what to look for
+	goRound: 'You\'ve the hang of the bay. There\'s more of the island: the <b>north beach\'s surf</b> for pompano (best on a surf day: Joe\'s slate says), the <b>mangrove creek</b> on the west for snook at dawn and dusk, and the <b>windward reef</b> off the north-west point, its groupers bigger than the bay\'s. Take the boat round, or walk over the ridge to the north beach.',
+	farWater: 'Out here the fish are <b>under things</b>: look for <b>weedlines</b> (mahi), <b>floating debris</b>, and <b>birds working bait</b> (tuna). On the <b>drop-off</b> the tuna come at first light.',
 	// (M13) a hurricane
 	hurricane: 'A <b>hurricane</b> is coming. Ahead of it Marta can <b>haul your boat out</b>, before she boards up; left in the water the storm batters her. In it, the <b>shelter</b> (on your map) keeps you safe from the wind, the rain and the sea. You can always step out to watch.',
 };
@@ -482,6 +485,12 @@ export class Guide {
 		prev.baitN = baitN;
 
 		if ( s.holdKg >= s.stats.holdKg * 0.92 ) this.tip( 'full' );
+		// ((M15) the hang of the bay: a dozen fish in your log; the far water: 3 km out from the island's middle)
+		let logged = 0;
+		for ( const k in s.log ) logged += s.log[ k ].count | 0;
+		if ( logged >= 12 ) this.tip( 'goRound' );
+		const cam = app.camera.position;
+		if ( Math.hypot( cam.x, cam.z + 320 ) > 3000 ) this.tip( 'farWater' );
 		// (M10) the boat's hull: the first water in the bilge, aboard; the first real wear
 		const hull = g.hull;
 		if ( hull && hull.bilge >= 20 && ( p.mode === 'deck' || p.mode === 'boat' ) && ! p.riding ) this.tip( 'bilge' );
@@ -513,7 +522,7 @@ export class Guide {
 			this._save();
 			this.coachText.innerHTML = tipText( id, this.device );
 			this.coach.classList.add( 'is-on' );
-			this._coachT = 7.5;
+			this._coachT = Math.max( 7.5, this.coachText.textContent.length / 22 ); // ((M15) longer to read a longer one)
 
 		}
 

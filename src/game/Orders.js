@@ -1,5 +1,6 @@
 import { FISH } from './FishTable.js';
 import { isOpen } from './IslandClock.js';
+import { placeName } from './Places.js';
 
 // (Salt Life) What Joe and Marta want today: Joe chalks two fish on the board by his stand and pays
 // over the odds for them, Marta buys one kind of bait fish at the chandlery. A new list each morning,
@@ -28,6 +29,24 @@ const TWILIGHT = [ 'yellowtail', 'jack', 'tuna', 'muttonSnapper', 'graySnapper' 
 const MORE = [ 'sergeant', 'grunt', 'tang', 'wrasse', 'lionfish', 'angel', 'barracuda', 'blackGrouper', 'redSnapper', 'mahi', 'mullet', 'needlefish', 'silkSnapper', 'lobster' ];
 // Marta's bait tank: $ a fish
 const BAIT = { silverside: 6, sergeant: 8, grunt: 10, mullet: 12, needlefish: 12, whiteMullet: 10 };
+// (M15) and one ask a day for a place's fish (Places.js), paid as no other (PLACE_MUL): Joe's for the table
+// (pompano from the north beach's surf, a snook or a mangrove snapper from the mangrove creek, a black grouper
+// or a mutton snapper from the windward reef, a tuna off the drop-off, a mahi from the blue water, a silk
+// snapper from the north ledge), or Marta's for her tag-and-release log for the fisheries office: a tarpon
+// let go in the creek, a permit on the north beach, paid as it's let go (tag: GameState.tag)
+const PLACE_ASKS = [
+	{ who: 'joe', species: 'pompano', place: 'northBeach', max: 3 },
+	{ who: 'joe', species: 'snook', place: 'creek', max: 1 },
+	{ who: 'joe', species: 'graySnapper', place: 'creek', max: 3 },
+	{ who: 'joe', species: 'blackGrouper', place: 'windReef', max: 2 },
+	{ who: 'joe', species: 'muttonSnapper', place: 'windReef', max: 3 },
+	{ who: 'joe', species: 'tuna', place: 'dropoff', max: 2 },
+	{ who: 'joe', species: 'mahi', place: 'blue', max: 2 },
+	{ who: 'joe', species: 'silkSnapper', place: 'ledge', max: 3 },
+	{ who: 'marta', species: 'tarpon', place: 'creek', max: 1, tag: 35 },
+	{ who: 'marta', species: 'permit', place: 'northBeach', max: 1, tag: 40 },
+];
+export const PLACE_MUL = 2.5;
 
 // which list is up: the day's from Joe opening, until he opens again
 export const tradeDay = ( hour, day ) => ( hour >= OPENS ? day : day - 1 );
@@ -48,22 +67,33 @@ function rng( seed ) {
 
 const pick = ( list, r ) => list[ Math.floor( r() * list.length ) % list.length ];
 
-// the day's orders: [ { id, who, species, mul | each, max } ]
+// the day's orders: [ { id, who, species, mul | each, max, place?, tag? } ] ((M15) the place's ask drawn last:
+// the others are as they always were)
 export function ordersFor( day ) {
 
 	const r = rng( Math.floor( day ) );
 	const bait = pick( Object.keys( BAIT ), r );
 	const a = pick( TWILIGHT, r );
 	const b = pick( MORE.filter( ( s ) => s !== bait ), r );
+	const p = pick( PLACE_ASKS.filter( ( q ) => ! [ a, b, bait ].includes( q.species ) ), r );
 	return [
 		{ id: 'joe-a', who: 'joe', species: a, mul: 2, max: 3 },
 		{ id: 'joe-b', who: 'joe', species: b, mul: 1.5, max: 3 },
 		{ id: 'marta', who: 'marta', species: bait, each: BAIT[ bait ], max: 4 },
+		p.tag ? { id: 'place', who: p.who, species: p.species, place: p.place, each: p.tag, max: p.max, tag: true } : { id: 'place', who: p.who, species: p.species, place: p.place, mul: PLACE_MUL, max: p.max },
 	].filter( ( o ) => FISH[ o.species ] );
 
 }
 
-export const orderFor = ( list, who, species ) => ( list || [] ).find( ( o ) => o.who === who && o.species === species ) || null;
+// the orders a fish from `place` would fill, the place's own first (none that's a tag-and-release one: those
+// are paid as they're let go)
+export const ordersOf = ( list, who, species, place = null ) => ( list || [] ).filter( ( o ) => o.who === who && o.species === species && ! o.tag && ( ! o.place || o.place === place ) )
+	.sort( ( a, b ) => ( b.place ? 1 : 0 ) - ( a.place ? 1 : 0 ) );
+export const orderFor = ( list, who, species, place = null ) => ordersOf( list, who, species, place )[ 0 ] || null;
+// (M15) Marta's tag-and-release ask a fish let go at `place` fills, or null
+export const tagFor = ( list, species, place ) => ( list || [] ).find( ( o ) => o.tag && o.species === species && o.place === place ) || null;
+// (M15) where an order's fish has to come from, as it's said ('from the north beach'; '' for none)
+export const orderPlace = ( o ) => ( o.place ? `${ o.tag ? 'tagged and let go at' : 'from' } ${ placeName( o.place ) }` : '' );
 
 // what an order pays for a fish Joe would give `value` for
 export const orderPrice = ( o, value ) => ( o.each ?? Math.round( value * o.mul ) );
@@ -86,5 +116,5 @@ export function biteHint( species ) {
 
 }
 
-// how an order reads ('pays double', '$12 each')
-export const orderTerms = ( o ) => ( o.each ? `$${ o.each } each` : o.mul === 2 ? 'pays double' : `pays ×${ o.mul }` );
+// how an order reads ('pays double', '$12 each'; (M15) a tag-and-release ask: '$35 tagged')
+export const orderTerms = ( o ) => ( o.tag ? `$${ o.each } tagged` : o.each ? `$${ o.each } each` : o.mul === 2 ? 'pays double' : `pays ×${ o.mul }` );
