@@ -22,6 +22,9 @@ const SPRAY = { DROPLET: 0, MIST: 1, LIGAMENT: 2, SPRAY: 3, SHEET: 4 };
 //                foragers that circle, twist into a plunge dive with a splash, float and take off
 //                again, and a few resting on the pier head
 //   frigatebirds soar high over the bay and the island on motionless, crooked wings
+//   (M15) working  out at sea, terns diving into a school's bait and frigatebirds circling over it (work():
+//                game/Finds' bait, the nearest being worked within WORK.reach of you); away until there's one,
+//                flying in from the open sea to it, and off again when it's done
 //
 // Every bird is a Flyer (Flight.js) while airborne; perched / floating poses are set here.
 
@@ -38,6 +41,12 @@ const FLUSH = { [ BIRD.GULL ]: 7, [ BIRD.PELICAN ]: 5.5, [ BIRD.TERN ]: 9 };
 // gulls and pelicans up
 const LEAVE = { far: 700, height: 40, gone: 260, after: 40 }, BACK = 280, FADE_IN = 2.5, FLUSH_THUNDER = 2500;
 const MIDDLE = { x: 20, z: - 60 };
+// (M15) the birds working bait: how many terns and frigatebirds, how near a school has to be (m), how far they
+// come in from (m: about it), how high the frigatebirds circle and how wide (m), how much likelier a working
+// tern is to dive, how far they're seen (m: a flock diving's what you look for), how far off they go before
+// they're gone (m), and the least they're drawn (pixels about: the eye still makes out a working flock's specks
+// a few hundred m off, finer than a screen's pixels) by growing them, to at most `grow` times their size
+const WORK = { terns: 14, frigates: 4, reach: 2500, from: [ 120, 300 ], high: [ 55, 110 ], circle: [ 40, 90 ], dive: 0.9, seen: [ 900, 1600 ], gone: 700, least: 2.5, grow: 4 };
 
 export class Birds {
 
@@ -112,7 +121,80 @@ export class Birds {
 
 		} );
 
+		// ---- (M15) birds working bait out at sea: away until there's some
+		this.spot = null;
+		for ( let i = 0; i < WORK.terns + WORK.frigates; i ++ ) add( i < WORK.terns ? 'tern' : 'frigate', i < WORK.terns ? BIRD.TERN : BIRD.FRIGATE, ( a ) => {
+
+			a.working = true;
+			a.idle = true;
+			a.visible = false;
+			a.lane = { x0: 0, x1: 0, z: 0, y: 10 };
+			a.home = { x: 0, z: 0 };
+			a.circle = { x: 0, y: 80, z: 0, r: 60, dir: rng() < 0.5 ? - 1 : 1, t: rng() * 100 };
+			a.workOff = { u: rng() - 0.5, v: rng() - 0.5 };
+			if ( a.kind === 'frigate' ) a.f.windK = 0.6;
+
+		} );
+
 		for ( const a of this.agents ) a.f.P.fresh = true;
+
+	}
+
+	// (M15) the bait being worked (game/Finds' bait: { x, z, r, life }), or null: the working birds go to it
+	work( spot ) {
+
+		this.spot = spot && spot.life > 0.25 ? spot : null;
+
+	}
+
+	// (M15) a working bird flying in to the bait from the open sea about it, high, fading in
+	arrive( a, s ) {
+
+		const f = a.f, r = this.rng, ang = r() * TAU, d = WORK.from[ 0 ] + ( WORK.from[ 1 ] - WORK.from[ 0 ] ) * r();
+		a.idle = a.off = false;
+		a.visible = true;
+		a.fade = 0;
+		if ( a.kind === 'tern' ) {
+
+			f.place( s.x + Math.cos( ang ) * d, 14 + r() * 6, s.z + Math.sin( ang ) * d, ang + Math.PI );
+			a.state = 'patrol';
+			a.t = 2 + r() * 4;
+
+		} else {
+
+			const c = a.circle;
+			c.x = s.x; c.z = s.z;
+			c.y = WORK.high[ 0 ] + ( WORK.high[ 1 ] - WORK.high[ 0 ] ) * r();
+			c.r = WORK.circle[ 0 ] + ( WORK.circle[ 1 ] - WORK.circle[ 0 ] ) * r();
+			f.place( s.x + Math.cos( ang ) * d * 1.5, c.y, s.z + Math.sin( ang ) * d * 1.5, ang + Math.PI / 2 );
+			a.state = 'soar';
+
+		}
+
+		f.P.fresh = true;
+
+	}
+
+	// (M15) done working: up and away from you, gone once it's far enough
+	offWork( a, dt, camera ) {
+
+		const f = a.f, c = camera.position;
+		if ( a.state === 'dive' || a.state === 'under' ) {
+
+			a.state = 'patrol';
+			a.visible = true;
+			f.dive = 0;
+
+		}
+
+		const dx = f.x - c.x, dz = f.z - c.z, l = Math.hypot( dx, dz ) || 1;
+		this.flyTo( a, dt, f.x + dx / l * 400, a.kind === 'frigate' ? 140 : 40, f.z + dz / l * 400, f.cfg.speed * 1.1, 1 );
+		if ( l > WORK.gone || this.time - a.offAt > 60 ) {
+
+			a.idle = true;
+			a.visible = false;
+
+		}
 
 	}
 
@@ -303,6 +385,47 @@ export class Birds {
 			// ((M13) off to roost by night, out of the rain and the wind, out of a hurricane's way, and back
 			// when it's over; the gulls sit out a downpour and a gale where they are. Pelicans on their perch
 			// roost there)
+			// ((M15) the birds working bait: to it, at it, or off from it; away at night and out of a storm's way, as the
+			// others are)
+			if ( a.working ) {
+
+				const s = this.spot && seabirdAbout( a.kind, mood, G.night.value, true ) ? this.spot : null;
+				if ( s && a.idle ) this.arrive( a, s );
+				else if ( ! s && ! a.idle && ! a.off ) {
+
+					a.off = true;
+					a.offAt = this.time;
+
+				}
+
+				if ( a.idle ) continue;
+				a.fade = Math.min( 1, ( a.fade ?? 1 ) + dt / FADE_IN );
+				if ( a.off ) {
+
+					this.offWork( a, dt, camera );
+					continue;
+
+				}
+
+				// (its lane across the school, its circle over it, as the school moves)
+				const o = a.workOff;
+				if ( a.kind === 'tern' ) {
+
+					const L = a.lane;
+					L.x0 = s.x - s.r - 25; L.x1 = s.x + s.r + 25; L.z = s.z + o.v * s.r * 1.2; L.y = 9 + o.u * 4;
+					this.updateTern( a, dt, viewer );
+
+				} else {
+
+					a.home.x = s.x + o.u * 30; a.home.z = s.z + o.v * 30;
+					this.updateFrigate( a, dt );
+
+				}
+
+				continue;
+
+			}
+
 			const roosting = a.kind === 'pelican' && a.state === 'perched' && ! mood.gone;
 			const about = roosting || seabirdAbout( a.kind, mood, G.night.value, ! a.away );
 			if ( ! about && ! a.away ) this.leave( a );
@@ -343,10 +466,17 @@ export class Birds {
 			if ( ! a.visible ) continue;
 			const P = a.f.P;
 			const d = Math.hypot( P.pos[ 0 ] - cp.x, P.pos[ 1 ] - cp.y, P.pos[ 2 ] - cp.z );
-			const far = a.kind === 'frigate' ? 1400 : a.kind === 'pelican' ? 800 : 550;
+			const far = a.working ? WORK.seen[ a.kind === 'frigate' ? 1 : 0 ] : a.kind === 'frigate' ? 1400 : a.kind === 'pelican' ? 800 : 550;
 			if ( d > far ) continue;
 			const k = a.f.scale0 || ( a.f.scale0 = P.scale );
 			P.scale = k * smooth( far, far * 0.8, d ) * ( a.fade ?? 1 );
+			if ( a.working && batch.cull ) {
+
+				const px = batch.cull.pixels( P.pos[ 0 ], P.pos[ 1 ], P.pos[ 2 ], batch.radius[ P.species ] * P.scale );
+				if ( px < WORK.least ) P.scale *= Math.min( WORK.grow, WORK.least / px );
+
+			}
+
 			batch.write( P );
 			P.scale = k;
 
@@ -825,7 +955,8 @@ export class Birds {
 	updateTern( a, dt, viewer ) {
 
 		const f = a.f, L = a.lane;
-		const wh = this.water.height( a, f.x, f.z );
+		// ((M15) out at sea, working: the open sea's height there)
+		const wh = a.working ? this.water.open( f.x, f.z ) : this.water.height( a, f.x, f.z );
 		switch ( a.state ) {
 
 			case 'patrol': {
@@ -868,7 +999,7 @@ export class Birds {
 
 					f.windK = 0.35;
 					// ((M13) fewer plunges as rain and a chop hide the fish)
-					if ( this.rng() < 0.45 * this.mood.tern ) {
+					if ( this.rng() < ( a.working ? WORK.dive : 0.45 ) * this.mood.tern ) {
 
 						a.state = 'dive';
 						a.t = 0;

@@ -52,6 +52,12 @@ const MARBLE = [ 2.2, 3.6 ];
 // offset), and its lace's scale on the water (its four noises LACE_NOISE's), on the marbling's frame
 const SPUME_NOISE = [ [ 0.025, 0.45, 0 ], [ 0.0575, 0.27, 5.3 ], [ 0.08, 0.08, 0 ] ], SPUME_LACE = 0.5;
 const KEY = { froth: 0, rows: 4, marble: 8, spume: 16, count: 23 };
+// (M15) what's found out there (game/Finds.js, setFinds): the weedlines drawn (the nearest, by tier) and the
+// bait boils; the weed's colour (sRGB, wet Sargassum: an olive-brown and its golden tips), how it's broken
+// into mats along a line (m: the mats' and the gaps' length, as a noise's), and the boil's white water's
+// patches (m) and how fast they come and go
+const WEED_MAX = { low: 6, mid: 12, high: 12 }, BOIL_MAX = 4;
+const WEED = { dark: [ 0.21, 0.17, 0.07 ], gold: [ 0.55, 0.44, 0.19 ], mats: 14, edge: 2.5, front: [ 3, 0.8 ] };
 // (M15) the water's colour (sRGB, as the light it sends back up: the body's below). Its own: the island's
 // coastal water over its shelf, the green water (its run-off and the life over the shelf: teal, its blue less
 // than its green, and less clear, its plankton taking the blue: `murk`), within `coast` m of the island's
@@ -156,6 +162,12 @@ export class WaterSurface {
 			...this.detail.uniforms,
 			...this.whitecaps.uniforms,
 			waterSpume: this.spume,
+			// (M15) the weedlines ( x0, z0, x1, z1 about the sea's origin; width, life, seed ) and the boils ( x, z
+			// about the origin, r, life ): setFinds
+			waterWeed: { value: Array.from( { length: 2 * ( WEED_MAX[ tier ] ?? WEED_MAX.low ) }, () => new THREE.Vector4() ) },
+			waterWeedCount: { value: 0 },
+			waterBoil: { value: Array.from( { length: BOIL_MAX }, () => new THREE.Vector4() ) },
+			waterBoilCount: { value: 0 },
 			waterRain: G.rain, // (M9: the rings where the drops land)
 			// ((M15) the ripple textures' offsets for the sea's origin: each's own scale, fract'd in doubles)
 			waterRippleAt: { value: new THREE.Vector4() },
@@ -179,6 +191,7 @@ export class WaterSurface {
 		this.ringAt = uniforms.waterRingAt;
 		this.ringCells = uniforms.waterRingCells;
 		this.keys = uniforms.waterKey.value;
+		this._finds = { weed: uniforms.waterWeed, weedCount: uniforms.waterWeedCount, boil: uniforms.waterBoil, boilCount: uniforms.waterBoilCount, max: WEED_MAX[ tier ] ?? WEED_MAX.low, near: [] };
 		// (M15) the whitecaps' marbling's frame along and across the wind: a point, and the along and across
 		// distances there (m). As the wind turns it's moved to the camera, so the marbling turns about you (about
 		// the world's origin, tens of km out it swept across the sea as the wind went round)
@@ -290,6 +303,10 @@ varying vec3 vWaterN;
 varying vec2 vWaterX0;
 uniform sampler2D waterRipples;
 uniform float waterSpume;
+uniform vec4 waterWeed[ ${ 2 * ( WEED_MAX[ tier ] ?? WEED_MAX.low ) } ];
+uniform int waterWeedCount;
+uniform vec4 waterBoil[ ${ BOIL_MAX } ];
+uniform int waterBoilCount;
 uniform float waterRain;
 uniform vec4 waterFlash;
 uniform vec4 waterFlashShape;
@@ -474,6 +491,74 @@ ${ SH ? /* glsl */`
 		float line = ( 1.0 - smoothstep( 0.0, wide, abs( frontAcross - 5.0 * ( waterNoise( vWater.xz / 40.0 + 5.5 ) - 0.5 ) ) ) ) * clumps;
 		if ( line > 0.0 ) foam = max( foam, mix( waterLace( vWater.xz * 0.9 + 1.7, 0.45 ), 0.4, smoothstep( 0.4, 1.5, length( fwidth( vWater.xz ) ) ) ) * line * ${ g( WATER.slick.foam[ 1 ] ) } * ( 0.35 + 0.65 * waterNoise( vWater.xz / 9.0 + 1.3 ) ) );
 	}
+	// ((M15) what's found out there (setFinds): the weedlines, mats of Sargassum strung along each, broken
+	// and ragged, with stray clumps beside them, all in the line's own frame (along it and across it: as the
+	// sea's origin moves it doesn't); and the weed the front gathers, along its slick. From afar, as much
+	// colour spread)
+	float weed = 0.0, weedTone = 0.0;
+	float fw = length( fwidth( vWaterX0 ) );
+	for ( int i = 0; i < ${ WEED_MAX[ tier ] ?? WEED_MAX.low }; i ++ ) {
+		if ( i >= waterWeedCount ) break;
+		vec4 A = waterWeed[ 2 * i ], B = waterWeed[ 2 * i + 1 ];
+		vec2 e = A.zw - A.xy;
+		float L = length( e );
+		vec2 ax = e / max( L, 1e-3 );
+		vec2 rp = vWaterX0 - A.xy;
+		float u = dot( rp, ax ), v = dot( rp, vec2( - ax.y, ax.x ) );
+		float reach = B.x * 2.5 + ${ g( WEED.edge ) } * 2.0;
+		if ( abs( v ) > reach + fw || u < - reach || u > L + reach ) continue;
+		// (mats along it, and gaps; wider and narrower; ragged at their edges)
+		float matN = waterNoise( vec2( u / ${ g( WEED.mats ) }, B.z ) );
+		float mats = smoothstep( 0.4, 0.55, matN ) * smoothstep( 0.0, 30.0, u ) * smoothstep( L, L - 30.0, u );
+		float hw = B.x * 0.5 * ( 0.5 + waterNoise( vec2( u / 37.0, B.z + 7.7 ) ) );
+		// (two noises at an angle to each other: no grid in its ragged edge)
+		vec2 lp = vec2( u, v ), lr = mat2( 0.8, 0.6, - 0.6, 0.8 ) * lp;
+		float rag = ( waterNoise( lp / ${ g( WEED.edge ) } + B.z * 3.1 ) * 0.65 + waterNoise( lr / 0.9 + B.z ) * 0.35 - 0.5 ) * ${ g( WEED.edge ) } * 1.6;
+		float mat = mats * ( 1.0 - smoothstep( hw * 0.6, hw + 0.5, abs( v ) + rag ) );
+		// (near by, not solid: clumps of it, a forearm, a hand and a few fingers across, packed in a mat's middle
+		// and parting toward its ragged edge, the water between them; each size of them evened out to its
+		// share as it gets finer than the pixel)
+		float pack = 1.0 - smoothstep( 0.0, hw + 0.5, abs( v ) + rag );
+		float k1 = 1.0 - smoothstep( 0.5, 1.5, fw ), k2 = 1.0 - smoothstep( 0.18, 0.5, fw ), k3 = 1.0 - smoothstep( 0.07, 0.2, fw );
+		float cl = 0.5 + ( waterNoise( lr + B.z * 6.1 ) - 0.5 ) * 0.4 * k1 + ( waterNoise( lp / 0.35 + B.z * 2.3 ) - 0.5 ) * 0.4 * k2 + ( waterNoise( vec2( lr.y, - lr.x ) / 0.13 + B.z * 4.1 ) - 0.5 ) * 0.3 * k3;
+		// (its relief: the tangles' tops, their fronds and bladders, and the hollows down between them, a hand,
+		// a finger and less across; the holes open where they're deepest)
+		float k4 = 1.0 - smoothstep( 0.03, 0.09, fw );
+		float rl = 0.5 + ( waterNoise( vec2( lp.y, - lp.x ) / 0.25 + B.z * 7.3 ) - 0.5 ) * 0.5 * k2 + ( waterNoise( lr / 0.1 + B.z * 1.9 ) - 0.5 ) * 0.35 * k3 + ( waterNoise( lp / 0.04 + B.z ) - 0.5 ) * 0.25 * k4;
+		float cut = mix( 0.78, 0.22, pack ), soft = 0.05 + 0.25 * ( 1.0 - ( 0.4 * k1 + 0.4 * k2 + 0.3 * k3 ) / 1.1 );
+		mat *= smoothstep( cut - soft, cut + soft, cl + ( rl - 0.5 ) * 0.6 );
+		// (stray clumps a few m out from it)
+		float stray = smoothstep( 0.8, 0.9, waterNoise( lr / 0.9 + B.z * 1.7 ) + ( rl - 0.5 ) * 0.5 ) * smoothstep( 0.4, 0.5, mix( 0.5, cl, k2 ) ) * ( 1.0 - smoothstep( hw, hw + 1.2 * B.x, abs( v ) ) ) * 0.7 * mats;
+		// (awash at its fringe: the water over it)
+		float w = max( mat, stray ) * B.y * ( 1.0 - 0.35 * ( 1.0 - smoothstep( 0.0, 0.4, pack ) ) );
+		// (from afar: its share of the pixel)
+		w = mix( w, mats * B.y * min( 1.0, B.x / max( fw, 1e-3 ) ) * 0.7, smoothstep( 1.0, 4.0, fw ) );
+		if ( w > weed ) {
+			weed = w;
+			// (the tops in the light, darker down between them; goldener and browner patches)
+			weedTone = clamp( 0.5 + ( rl - 0.5 ) * 2.0 + ( waterNoise( lr / 2.6 + B.z * 5.3 ) - 0.5 ) * 0.7, 0.0, 1.0 );
+		}
+	}
+	if ( frontAcross < 30.0 ) {
+		float fl = ( 1.0 - smoothstep( 0.0, ${ g( WEED.front[ 0 ] ) } * ( 0.5 + waterNoise( vWater.xz / 17.0 + 3.9 ) ), abs( frontAcross - 2.0 ) ) ) * frontStretch;
+		fl *= smoothstep( 0.42, 0.62, waterNoise( vWater.xz / 26.0 + 8.1 ) ) * ${ g( WEED.front[ 1 ] ) };
+		if ( fl > weed ) {
+			weed = fl;
+			weedTone = waterNoise( vWater.xz / 0.7 + 2.2 );
+		}
+	}
+	weed = clamp( weed, 0.0, 1.0 ) * smoothstep( 0.3, 1.0, depth );
+	// (the water boiling white where a school's driven bait up, in patches that come and go)
+	for ( int i = 0; i < ${ BOIL_MAX }; i ++ ) {
+		if ( i >= waterBoilCount ) break;
+		vec4 b = waterBoil[ i ];
+		vec2 rp = vWaterX0 - b.xy;
+		float r = length( rp );
+		if ( r > b.z * 1.3 ) continue;
+		float bp = smoothstep( 0.62, 0.8, waterNoise( rp / 3.5 + vec2( waterTime * 0.35, float( i ) * 7.3 ) ) );
+		float churn = waterLace( rp * 1.3 + waterTime * 0.2, 0.55 );
+		foam = max( foam, bp * churn * b.w * ( 1.0 - smoothstep( b.z * 0.6, b.z * 1.3, r ) ) );
+	}
 	// the body of the water: light scattered back up from inside it and off the sand under it, lit by the
 	// sky and the sun whatever way the surface faces; milky in the surf (suspended sand and fine bubbles).
 	// ((M15) The sand's light coming back up through the water, each colour fading as the water takes it
@@ -519,6 +604,11 @@ ${ SH ? /* glsl */`
 	}
 #endif
 	vec3 waterBody = mix( body * waterLight, ${ rgb( 0.93, 0.96, 0.96 ) } * foamLight, foam * 0.92 ) + lampSum * 0.06 * ( 1.0 - foam );
+	// ((M15) the weed: a matte surface floating on it, lit as the foam is, its tips golden, wet and dark
+	// beneath; nearly all of what's seen where it lies)
+	vec3 weedC = mix( ${ rgb( ...WEED.dark ) }, ${ rgb( ...WEED.gold ) }, smoothstep( 0.0, 1.0, weedTone ) );
+	waterBody = mix( waterBody, weedC * foamLight * 0.8, weed * 0.95 );
+	foam = max( foam, weed * 0.85 );
 	diffuseColor.rgb = vec3( 0.0 );
 	diffuseColor.a = clamp( max( max( cover, glow * 0.6 ), foam ), 0.0, 1.0 ) * sheetEdge;
 ` )
@@ -616,6 +706,43 @@ ${ SH ? /* glsl */`
 			};
 
 		}
+
+	}
+
+	// (M15) what's found out there (game/Finds.js' findsAbout): the weedlines nearest the camera, as many as
+	// the tier draws, and the bait's boils, about the sea's origin (its origin as update() left it)
+	setFinds( finds, camera ) {
+
+		const F = this._finds, O = this.lod.origin, c = camera.position, near = F.near;
+		near.length = 0;
+		for ( const w of finds.weed ) {
+
+			const ex = w.x1 - w.x0, ez = w.z1 - w.z0, L2 = ex * ex + ez * ez || 1;
+			const t = Math.min( 1, Math.max( 0, ( ( c.x - w.x0 ) * ex + ( c.z - w.z0 ) * ez ) / L2 ) );
+			near.push( { w, d: Math.hypot( c.x - w.x0 - ex * t, c.z - w.z0 - ez * t ) } );
+
+		}
+
+		near.sort( ( a, b ) => a.d - b.d );
+		const n = Math.min( near.length, F.max ), W = F.weed.value;
+		for ( let i = 0; i < n; i ++ ) {
+
+			const w = near[ i ].w;
+			W[ 2 * i ].set( w.x0 - O.x, w.z0 - O.z, w.x1 - O.x, w.z1 - O.z );
+			W[ 2 * i + 1 ].set( w.width, w.life, ( ( ( w.n % 997 ) + 997 ) % 997 ) * 0.731, 0 );
+
+		}
+
+		F.weedCount.value = n;
+		const B = F.boil.value, m = Math.min( finds.bait.length, B.length );
+		for ( let i = 0; i < m; i ++ ) {
+
+			const b = finds.bait[ i ];
+			B[ i ].set( b.x - O.x, b.z - O.z, b.r, b.life );
+
+		}
+
+		F.boilCount.value = m;
 
 	}
 

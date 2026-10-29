@@ -60,7 +60,7 @@ Materials are three's `MeshStandardMaterial` (or `MeshPhysicalMaterial`), with G
 - **The sun's shadows** (`materials/ViewShadows.js`): looked up from view space; the light's matrices (mid's, high's cascades) times the camera's world matrix, in doubles, for each render's camera; three's `shadowmap_vertex` patched on import.
 - **The fishing line and the anchor's rode** (`createLineMaterial`): its ends about a point by its first end, the view's matrix to that point given for each render (`onBeforeRender`); the uniforms the game sets stay the world's.
 - **Particles and cloth** (the cast net, the spray, the wake, the drips): their positions in doubles (`Float64Array`), drawn about a point by the camera or by them, to a metre, the mesh put there; the shaders use `modelViewMatrix`, and the camera less that point. The boat's lamps are drawn by their own matrices; the water's queries (`WaterQuery`, the boat's) are doubles.
-- Not yet: the birds (from a 32-bit texture of world positions) and the whale's marks (keyed on world positions): M15's step 7. (A hurricane's spume is, since step 6: The weather where you are.) The rain and the air motes wrap a box about the camera from its world position; measured, their few mm don't show.
+- The birds too, since step 7 (their instance records about an origin near the camera: What's found out there); a hurricane's spume since step 6 (The weather where you are). Not the whale's marks, keyed on world positions: it stays in the bay. The rain and the air motes wrap a box about the camera from its world position; measured, their few mm don't show.
 
 New code that draws from world positions on the GPU takes the same care: a point near it, in doubles.
 
@@ -336,6 +336,18 @@ Everyone keeps their own progress and their own fish.
 - **The showers** are worked out first each frame, about the camera (`showers( ..., at )`): within `STORM_RANGE` of you along the weather's way, and in rows beside the island's (each another 28 km wide, its cells off to the side half the time, their `n` past `ROW_N` for each row out), as many as reach within `ROW_REACH` (30 km) of you. At the island that's the island's row and one either side.
 - **The storm map** (`SkyProClouds.setStorms( cells, dt, now, at )`) is laid out about `stormCentre( at )`, the camera a `STORM_STEP` (12 km) at a time; when you've moved a step it's made again, its cells matched by where they are in the world so the drift carries on. A hurricane's band cells are kept within reach of the same middle (`bandCells( h, out, from, centre )`).
 - **A hurricane's spume** is drawn on the whitecaps' marbling frame about the sea's origin (`SPUME_NOISE`, `KEY.spume`: `foamKeys` with the frame drifted down the wind, `marble.spume`), held tens of km out (`test/sea-origin.mjs`) and turning about you.
+
+## What's found out there
+
+(M15) `game/Finds.js` (`findsAbout( T, x, z, range, out, depthAt )`; `test/finds.mjs`): weedlines, debris and bait, out past `FINDS.near` (3 km) of the island's middle, from the island's time and where they are alone.
+
+- **The lattice**: 2 km squares (`cell`) in a frame drifting down the trades `drift` (30) m a game hour. Each square has its own run of epochs (`every`, set off by its own phase) and in each a thing or none (`chance`), its life faded in and out over its ends (`fade`), and over `fadeIn` m out from `near`.
+- **A school** is settled at its epoch's middle (the hour then, the square's weed then, the depth there: `depthAt`), so it never comes or goes but as its life does.
+- **`App.findsHere`** looks each frame within `FIND_RANGE` (3 km) of the camera:
+  - `WaterSurface.setFinds` takes the nearest weedlines (12, 6 on low: `WEED_MAX`) and the boils (4) as uniforms about the sea's origin. The shader draws each line in its own frame (along and across it: the noise never moves as the origin does) as mats, gaps, ragged edges and stray clumps. Close to, clumps of three sizes (about 1 m, 35 cm and 13 cm) are cut from their noises, packed toward the line's middle; each size is evened out to its mean as the pixel grows past it, and the cut's softened to match, so the coverage holds and nothing shimmers. From afar, as much colour spread. The weed is a matte layer like the foam (`foam` raised under it, so its specular's cut). The front's weed is the slick's (`frontAcross`). The boils are white-water patches coming and going, on the foam.
+  - `Flotsam` floats the debris within 900 m (8 at most, a mesh each, by kind).
+  - `Birds.work( spot )` gets the nearest school within `FIND_BIRDS` (2.5 km). Its working flock (`WORK`: 14 terns and 4 frigatebirds, idle until then) arrives from the open sea about it, works it (the terns on a lane across it, diving more often, `WORK.dive`; the frigatebirds circling over it), and flies off when it's done. They read the open sea's height from the waves themselves (`WaterHeights.open`), taking none of the water query's slots. They're drawn no smaller than `WORK.least` pixels about (grown up to `grow` times their size, from `ViewCull.pixels`), so the flock shows as specks from a few hundred metres, as it does to the eye.
+- **The birds' instance records** are kept about an origin near the camera (`BirdBatch.begin( origin )`, 64 m steps; `Wildlife`), the meshes drawn there.
 
 ## What the weather costs
 

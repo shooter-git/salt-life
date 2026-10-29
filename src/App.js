@@ -25,6 +25,8 @@ import { WaterQuery } from './ocean/WaterQuery.js';
 import { WaterSurface } from './ocean/WaterSurface.js';
 import { ShoreWaves, FAIR_AMPLITUDE } from './ocean/ShoreWaves.js';
 import { SEABED } from './world/terrain/SeabedModel.js';
+import { findsAbout } from './game/Finds.js';
+import { Flotsam } from './world/Flotsam.js';
 import { computeShoreField, fieldGround, shelter } from './world/ShoreField.js';
 import ShoreWorker from './world/shore/ShoreWorker.js?worker&inline';
 import { classicWorker } from './core/ClassicWorker.js';
@@ -94,6 +96,9 @@ const SEABED_BIN = { low: 'world/offshore-512.bin', mid: 'world/offshore.bin', h
 // (M15) the bank's waves: its shore field's square (m, about its middle) and cells a side (14 m; 28 on low),
 // solved once you're this near it (m)
 const BANK = { size: 7168, res: { low: 256, mid: 512, high: 512 }, near: 9000 };
+// (M15) how far about you what's found out there is looked for (m), and how near the bait the birds work has
+// to be
+const FIND_RANGE = 3000, FIND_BIRDS = 2500;
 // WebGL drawn on the CPU draws at most a phone screen's pixels (a laptop's is three times as many)
 const CPU_PIXELS = 360_000;
 const LENS_REACH = 0.02; // m below the surface before the view counts as under water
@@ -318,6 +323,9 @@ export class App {
 		this.shore = new ShoreWaves( { field: this.shoreField } );
 		this.query = new WaterQuery( this.waves, this.terrainData, this.shore );
 		this.water = new WaterSurface( { scene, waves: this.waves, terrain: this.terrain, shore: this.shore, cover: this.cover, rocks: this.rockCover, tier } );
+		// (M15) what's found out there: the debris floating (game/Finds.js; the weed and the bait's boils are the
+		// sea's own, the birds working it Wildlife's)
+		this.flotsam = new Flotsam( { scene, waves: this.waves } );
 		if ( this.cloudShadows ) useCloudShadows( this.water.material );
 
 		// ---------------------------------------------------------------- boat and player
@@ -848,6 +856,7 @@ export class App {
 		this.water.detail.update( dt, this.camera );
 		this.shore.update( G.time.value ); // (Salt Life: the waves' clock, for the GPU)
 		this.water.update( this.camera );
+		this.findsHere();
 		this.boat.update( dt );
 		// (the boat you're aboard: yours, or riding along, the one you're on as it's drawn here)
 		const p = this.player, aboard = p.riding ? _ride.compose( p.boat.position, p.boat.quaternion, _one ) : this.boat.group.matrixWorld;
@@ -1910,6 +1919,37 @@ export class App {
 			if ( this._surgeKey === key ) this.shore.setSurgeField( field, level );
 
 		} );
+
+	}
+
+	// (M15) what's found out there about you (game/Finds.js, from the island's time: everyone's in the same
+	// place): the weedlines and the bait's boils drawn on the sea, the debris floating, the birds working the
+	// nearest bait
+	findsHere() {
+
+		const s = this.settings, c = this.camera.position;
+		const depthAt = this._depthAt || ( this._depthAt = ( x, z ) => - this.terrainData.heightAt( x, z ) );
+		const f = this.finds = findsAbout( islandTime( s.day, s.timeOfDay ), c.x, c.z, FIND_RANGE, this.finds || { weed: [], debris: [], bait: [] }, depthAt );
+		this.water.setFinds( f, this.camera );
+		this.flotsam.update( f.debris, this.camera );
+		if ( this.wildlife ) {
+
+			let best = null, bd = Infinity;
+			for ( const b of f.bait ) {
+
+				const d = Math.hypot( b.x - c.x, b.z - c.z );
+				if ( d < bd && d < FIND_BIRDS ) {
+
+					bd = d;
+					best = b;
+
+				}
+
+			}
+
+			this.wildlife.birds.work( best );
+
+		}
 
 	}
 
