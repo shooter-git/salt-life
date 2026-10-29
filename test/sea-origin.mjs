@@ -4,7 +4,9 @@
 // vertex morphs), so nothing moves as the origin jumps; and a grid that doesn't follow keeps the world's.
 // What the sea's drawn with about that origin as the world's: the whitecaps' crests and cells, the foam's
 // noises (its lace, the whitecaps' marbling), and the marbling's frame turning about you as the wind turns.
-import { PerspectiveCamera, Vector2, Vector4 } from '../src/engine/index.js';
+// And the fishing line (and the anchor's rode) drawn about a point by its first end.
+import { PerspectiveCamera, Vector2, Vector4, Object3D } from '../src/engine/index.js';
+import { createLineMaterial } from '../src/game/GameMaterials.js';
 import { CDLOD } from '../src/core/CDLOD.js';
 import { foamKeys, FOAM_NOISE } from '../src/ocean/WaterSurface.js';
 import { Waves } from '../src/ocean/Waves.js';
@@ -260,6 +262,37 @@ function noiseK( px, pz, key ) {
 		ok( wrong === 0 && most < 1e-3, `at ${ km } km: the whitecaps' crests and cells at ${ n } points about the origin the world's (${ wrong } wrong), within ${ most.toExponential( 1 ) } of one` );
 
 	}
+
+}
+
+// the fishing line at 40 km: its ends where the GPU puts them (the view's matrix to its point and the ends
+// about it, in 32-bit floats) where they are, to a tenth of a mm
+{
+
+	const m = createLineMaterial( 8 ), U = m.uniforms;
+	const cam = new PerspectiveCamera( 70, 16 / 9, 0.1, 12000 );
+	cam.position.set( 40064.37, 2.31, 15036.92 );
+	cam.lookAt( 40070, 0.2, 15050 );
+	cam.updateMatrixWorld();
+	U.lineA.value.set( 40064.913, 3.402, 15037.661 );
+	U.lineB.value.set( 40071.258, 0.113, 15049.874 );
+	U.lineCtl.value.copy( U.lineA.value ).lerp( U.lineB.value, 0.5 ).y -= 0.4;
+	const line = new Object3D();
+	line.updateMatrixWorld();
+	m.onBeforeRender( null, null, cam, null, line );
+	// (its shader as three would compile it: the uniforms it's drawn with)
+	const V = { uniforms: {}, vertexShader: '#include <common>\n#include <beginnormal_vertex>\n#include <begin_vertex>\n#include <project_vertex>\n#include <worldpos_vertex>' };
+	m.onBeforeCompile( V );
+	const e = V.uniforms.lineView.value.elements.map( f );
+	const mv = ( p ) => [ 0, 1, 2 ].map( ( r ) => f( f( f( f( e[ r ] * f( p.x ) ) + f( e[ 4 + r ] * f( p.y ) ) ) + f( e[ 8 + r ] * f( p.z ) ) ) + e[ 12 + r ] ) );
+	let most = 0;
+	for ( const [ local, world ] of [ [ V.uniforms.lineAL.value, U.lineA.value ], [ V.uniforms.lineBL.value, U.lineB.value ] ] ) {
+
+		const want = world.clone().applyMatrix4( cam.matrixWorldInverse ), got = mv( local );
+		most = Math.max( most, Math.abs( got[ 0 ] - want.x ), Math.abs( got[ 1 ] - want.y ), Math.abs( got[ 2 ] - want.z ) );
+
+	}
+	ok( most < 1e-4 && /lineView \* vec4\( transformed/.test( V.vertexShader ), `the fishing line at 40 km: its ends drawn within ${ ( most * 1000 ).toFixed( 3 ) } mm of where they are` );
 
 }
 

@@ -42,7 +42,9 @@ void main() {
 	float glare = lampKind > 1.5 ? pow( max( dot( eyeDir, normalize( lampSector.xyz ) ), 0.0 ), 8.0 ) * 2.5 + 0.4 : 1.0;
 	vColor = lampColor;
 	vAlpha = on * inSector * lampNight * glare;
-	vec4 mv = viewMatrix * world;
+	// ((M15) drawn from the lamp about the camera, in doubles (modelViewMatrix): from its world position, in
+	// 32-bit floats, tens of km out it shook against the boat)
+	vec4 mv = modelViewMatrix * vec4( position, 1.0 );
 	gl_Position = projectionMatrix * mv;
 	// a few pixels at any distance (a lamp is a point of light: nav lights are made to be seen for
 	// miles), bigger up close
@@ -74,7 +76,7 @@ void main() {
 	vY = world.y;
 	vNormal = normalize( mat3( modelMatrix ) * normal );
 	vView = normalize( cameraPosition - world.xyz );
-	gl_Position = projectionMatrix * viewMatrix * world;
+	gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
 }
 `;
 

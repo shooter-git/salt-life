@@ -16,13 +16,14 @@ export class WaterQuery {
 		this.waves = waves;
 		this.terrain = terrain;
 		this.shore = shore; // ShoreWaves: the breakers and the swash sheet near the beach
-		this.inputs = new Float32Array( MAX_QUERIES * 4 );
+		// ((M15) in doubles: tens of km out a 32-bit float's step, 4 mm at 40 km, shook the boat's heights)
+		this.inputs = new Float64Array( MAX_QUERIES * 4 );
 		this.count = 1;
 		this.cpu = new Float32Array( MAX_QUERIES * 4 );
 		this.cpuValid = false;
 		this.version = 0;
 		this.resultTime = 0;
-		this.resultInputs = new Float32Array( MAX_QUERIES * 4 );
+		this.resultInputs = new Float64Array( MAX_QUERIES * 4 );
 		this.latency = 0; // s: results describe this frame (the boat leads its samples by this much)
 		this.slots = new Map();
 

@@ -99,6 +99,8 @@ async function jitter( name ) {
 		const x0 = cam.position.x, z0 = cam.position.z;
 		const right = { x: Math.cos( cam.rotation.y ), z: - Math.sin( cam.rotation.y ) };
 		const most = new Float32Array( W * H );
+		// (and by the screen's thirds, top to bottom: where it is)
+		const band = [ 0, 0, 0 ];
 		let prev = null, sum = 0, frames = 0;
 		for ( let k = 0; k <= 40; k ++ ) {
 
@@ -116,6 +118,7 @@ async function jitter( name ) {
 					const d = Math.max( Math.abs( px[ i ] - prev[ i ] ), Math.abs( px[ i + 1 ] - prev[ i + 1 ] ), Math.abs( px[ i + 2 ] - prev[ i + 2 ] ) );
 					if ( d > most[ j ] ) most[ j ] = d;
 					sum += d;
+					band[ Math.min( 2, Math.floor( Math.floor( j / W ) * 3 / H ) ) ] += d;
 
 				}
 				frames ++;
@@ -137,8 +140,9 @@ async function jitter( name ) {
 		}
 		ctx.putImageData( img, 0, 0 );
 		a.frame = frame; a.adaptResolution = adapt;
-		// the mean change a pixel a frame (of 255), and the share of pixels that once jumped by more than 24
-		return { meanStep: sum / ( frames * W * H ), jumped: jumped / ( W * H ), heat: c2.toDataURL( 'image/png' ) };
+		// the mean change a pixel a frame (of 255), (in each third of the screen, top to bottom), and the share of
+		// pixels that once jumped by more than 24
+		return { meanStep: sum / ( frames * W * H ), thirds: band.map( ( b ) => + ( b * 3 / ( frames * W * H ) ).toFixed( 4 ) ), jumped: jumped / ( W * H ), heat: c2.toDataURL( 'image/png' ) };
 
 	} );
 	writeFileSync( join( OUT, `${ name }-heat.png` ), Buffer.from( r.heat.split( ',' )[ 1 ], 'base64' ) );

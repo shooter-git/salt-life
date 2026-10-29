@@ -145,8 +145,8 @@ export class BoatController {
 		this.waterV = new Float32Array( n ); // vertical velocity of the water (m/s)
 		this.waterOff = new Float32Array( n ); // blends the step when a new read-back arrives
 		this.hEff = new Float32Array( n ); // water height used by the integrator (interpolated)
-		this.qx = new Float32Array( n ); // query point + slope of the last result
-		this.qz = new Float32Array( n );
+		this.qx = new Float64Array( n ); // query point + slope of the last result ((M15) where: in doubles)
+		this.qz = new Float64Array( n );
 		this.gx = new Float32Array( n );
 		this.gz = new Float32Array( n );
 		this.hasWater = false;

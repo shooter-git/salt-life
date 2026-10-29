@@ -94,6 +94,7 @@ uniform float sprayGrey; // (M14) how grey the sky is (Sky.overcast)
 uniform float sprayIntensity;
 uniform float sprayMaxDistance;
 uniform float sprayViewHeight;
+uniform vec3 sprayAt; // (M15) where the particles are drawn about (the mesh's place)
 varying vec2 vUV;
 varying vec4 vCol; // radiance, opacity
 varying vec4 vMisc; // kind + 0.45 * life fraction, water height, size, seed
@@ -111,7 +112,7 @@ void main() {
 	bool isMist = kind > 0.5 && kind < 1.5;
 	bool water = isDrop || isLig; // clear water: drops and ligaments
 
-	vec3 toCam = cameraPosition - p;
+	vec3 toCam = ( cameraPosition - sprayAt ) - p;
 	float dist = max( length( toCam ), 0.05 );
 	vec3 Vd = toCam / dist;
 
@@ -199,8 +200,8 @@ void main() {
 	vUV = corner;
 	vCol = vec4( col, a );
 	vMisc = vec4( kind + clamp( t, 0.0, 1.0 ) * 0.45, iInfo.z, size, fract( iInfo.w ) );
-	vWorldY = world.y;
-	vec4 mvPosition = viewMatrix * vec4( world, 1.0 );
+	vWorldY = world.y + sprayAt.y;
+	vec4 mvPosition = modelViewMatrix * vec4( world, 1.0 );
 	gl_Position = projectionMatrix * mvPosition;
 	// (spent: off the screen)
 	if ( a < 1e-4 ) gl_Position = vec4( 0.0, 0.0, 2.0, 1.0 );
@@ -294,7 +295,10 @@ export class Spray {
 		this.cloud = T.cloud;
 		const N = this.N = T.capacity;
 		// pos: xyz, age (s) | vel: xyz, radius (m) | info: kind, life (s, 0 = dead), water height, seed
-		this.pos = new Float32Array( N * 4 );
+		// ((M15) where they are in doubles, drawn about a point by the camera, to a metre (at: the mesh put
+		// there): in 32-bit floats tens of km out (4 mm a step at 40 km) a slow mist stuck and stepped)
+		this.pos = new Float64Array( N * 4 );
+		this.at = new THREE.Vector3();
 		this.vel = new Float32Array( N * 4 );
 		this.info = new Float32Array( N * 4 );
 		this.head = 0; // ring: a new particle takes the oldest slot
@@ -487,6 +491,14 @@ export class Spray {
 		const P = this.pos, V = this.vel, I = this.info, N = this.N;
 		const wd = G.windDir.value, ws = G.windSpeed.value * 0.7;
 		const ap = this.aPos.array, av = this.aVel.array, ai = this.aInfo.array;
+		const at = this.at;
+		if ( camera ) at.set( Math.round( camera.position.x ), 0, Math.round( camera.position.z ) );
+		if ( ! this.mesh.position.equals( at ) ) {
+
+			this.mesh.position.copy( at );
+			this.mesh.updateMatrix();
+
+		}
 		let live = 0;
 		for ( let i = 0; i < N; i ++ ) {
 
@@ -554,11 +566,14 @@ export class Spray {
 			const d = live * 4;
 			for ( let c = 0; c < 4; c ++ ) {
 
-				ap[ d + c ] = P[ o + c ];
 				av[ d + c ] = V[ o + c ];
 				ai[ d + c ] = I[ o + c ];
 
 			}
+			ap[ d ] = P[ o ] - at.x;
+			ap[ d + 1 ] = P[ o + 1 ];
+			ap[ d + 2 ] = P[ o + 2 ] - at.z;
+			ap[ d + 3 ] = P[ o + 3 ];
 
 			live ++;
 
@@ -614,6 +629,7 @@ export class Spray {
 			sprayIntensity: { value: 1 },
 			sprayMaxDistance: { value: 320 },
 			sprayViewHeight: { value: 720 },
+			sprayAt: { value: this.at },
 		};
 		const mat = this.material = new THREE.ShaderMaterial( {
 			name: 'Spray',

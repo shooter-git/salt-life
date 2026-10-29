@@ -361,21 +361,25 @@ export class CastNet {
 		this._dripT = 0;
 		this._pullT = 0;
 
-		this.P = new Float32Array( N * 3 );
-		this.V = new Float32Array( N * 3 );
-		this.Q = new Float32Array( N * 3 );
+		// ((M15) where they are, in doubles: tens of km out a 32-bit float's step, 4 mm at 40 km, was more than
+		// the net's twines move a step as it settles)
+		this.P = new Float64Array( N * 3 );
+		this.V = new Float64Array( N * 3 );
+		this.Q = new Float64Array( N * 3 );
 		this.W = new Float32Array( N ); // inverse masses
 		this.Wf = new Float32Array( N ); // the same, less what the hands pin
 		this.K = new Uint8Array( N );
 		this.Gy = new Float32Array( N ).fill( - 1e3 );
-		this.T = new Float32Array( N * 3 ); // where the hands pin them
+		this.T = new Float64Array( N * 3 ); // where the hands pin them
 		this.pin = new Float32Array( N ); // how firmly (0..1)
 		this.wet = new Uint8Array( N );
 		this.phase = new Float32Array( N );
 		for ( let i = 0; i < N; i ++ ) this.phase[ i ] = Math.random() * Math.PI * 2;
-		this.ring = new Float32Array( ( RINGS + 1 ) * COLS * 3 ); // the drawn surface, round each ring
-		this.surf = new Float32Array( ROWS * COLS * 3 );
-		this.leadPts = new Float32Array( LEAD_PTS * 3 );
+		this.ring = new Float64Array( ( RINGS + 1 ) * COLS * 3 ); // the drawn surface, round each ring
+		this.surf = new Float64Array( ROWS * COLS * 3 );
+		this.leadPts = new Float64Array( LEAD_PTS * 3 );
+		// (M15) and drawn about a point by the horn (to a metre: the meshes put there), as the GPU's floats are
+		this.at = new Vector3();
 
 		this.meshMat = createNetMaterial( 'mesh', ground );
 		this.meshMatUp = createNetMaterial( 'mesh', ground );
@@ -1456,6 +1460,8 @@ export class CastNet {
 
 	_draw() {
 
+		const at = this.at.set( Math.round( this.P[ 0 ] ), Math.round( this.P[ 1 ] ), Math.round( this.P[ 2 ] ) );
+		for ( const m of [ this.netMesh, this.netMeshUp, this.leadMesh, this.cordMesh ] ) m.position.copy( at );
 		this._hornFrame();
 		this._drawNetting();
 		this._drawLead();
@@ -1527,7 +1533,7 @@ export class CastNet {
 
 	_drawNetting() {
 
-		const P = this.P, ring = this.ring, surf = this.surf;
+		const P = this.P, ring = this.ring, surf = this.surf, at = this.at;
 		// round each ring: the horn (the netting's laced round its foot), then through the particles
 		const ax = this.hornAxis;
 		for ( let c = 0; c < COLS; c ++ ) {
@@ -1566,9 +1572,9 @@ export class CastNet {
 		for ( let r = 0; r < ROWS; r ++ ) for ( let c = 0; c <= COLS; c ++ ) {
 
 			const cc = c % COLS, s = ( r * COLS + cc ) * 3, o = ( r * ( COLS + 1 ) + c ) * 3;
-			pos[ o ] = surf[ s ];
-			pos[ o + 1 ] = surf[ s + 1 ];
-			pos[ o + 2 ] = surf[ s + 2 ];
+			pos[ o ] = surf[ s ] - at.x;
+			pos[ o + 1 ] = surf[ s + 1 ] - at.y;
+			pos[ o + 2 ] = surf[ s + 2 ] - at.z;
 			// the normal from the neighbours round and along
 			const cp = ( r * COLS + ( cc + 1 ) % COLS ) * 3, cm = ( r * COLS + ( cc + COLS - 1 ) % COLS ) * 3;
 			const rp = ( Math.min( ROWS - 1, r + 1 ) * COLS + cc ) * 3, rm = ( Math.max( 0, r - 1 ) * COLS + cc ) * 3;
@@ -1591,7 +1597,7 @@ export class CastNet {
 
 	_drawLead() {
 
-		const P = this.P, L = this.leadPts, fp = this.footprint;
+		const P = this.P, L = this.leadPts, fp = this.footprint, at = this.at;
 		for ( let i = 0; i < LEAD_PTS; i ++ ) {
 
 			const j = Math.floor( i / LEAD_SUB ), w = W_L[ i % LEAD_SUB ];
@@ -1621,9 +1627,9 @@ export class CastNet {
 				const t = s / LEAD_RAD * Math.PI * 2, cs = Math.cos( t ), sn = Math.sin( t );
 				const nx = _b.x * cs + _c.x * sn, ny = _b.y * cs + _c.y * sn, nz = _b.z * cs + _c.z * sn;
 				const o = ( i * LEAD_RAD + s ) * 3;
-				pos[ o ] = _x.x + nx * LEAD_R;
-				pos[ o + 1 ] = _x.y + ny * LEAD_R;
-				pos[ o + 2 ] = _x.z + nz * LEAD_R;
+				pos[ o ] = _x.x + nx * LEAD_R - at.x;
+				pos[ o + 1 ] = _x.y + ny * LEAD_R - at.y;
+				pos[ o + 2 ] = _x.z + nz * LEAD_R - at.z;
 				nor[ o ] = nx;
 				nor[ o + 1 ] = ny;
 				nor[ o + 2 ] = nz;
@@ -1641,7 +1647,7 @@ export class CastNet {
 	// turned to the camera, a pixel wide at least, sagging where they're slack
 	_drawCords() {
 
-		const P = this.P, geo = this.cordMesh.geometry, pos = geo.attributes.position.array, nor = geo.attributes.normal.array;
+		const P = this.P, at = this.at, geo = this.cordMesh.geometry, pos = geo.attributes.position.array, nor = geo.attributes.normal.array;
 		const e = this.frame.elements, cam = _z.set( e[ 12 ], e[ 13 ], e[ 14 ] );
 		const eye = this.camera || this.viewer;
 		if ( eye ) cam.setFromMatrixPosition( eye.matrixWorld );
@@ -1666,9 +1672,9 @@ export class CastNet {
 				_y.multiplyScalar( 1 / dist );
 				for ( let s = - 1; s <= 1; s += 2 ) {
 
-					pos[ o ] = px + _w.x * hw * s;
-					pos[ o + 1 ] = py + _w.y * hw * s;
-					pos[ o + 2 ] = pz + _w.z * hw * s;
+					pos[ o ] = px + _w.x * hw * s - at.x;
+					pos[ o + 1 ] = py + _w.y * hw * s - at.y;
+					pos[ o + 2 ] = pz + _w.z * hw * s - at.z;
 					nor[ o ] = _y.x;
 					nor[ o + 1 ] = _y.y;
 					nor[ o + 2 ] = _y.z;
