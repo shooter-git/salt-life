@@ -384,7 +384,8 @@ export class Game {
 		}
 
 		const can = this.canFish, canSpear = this.canSpear, gun = this.gun, net = this.net;
-		if ( inp.hit( 'KeyR' ) && can && ! this.fight && ! net.busy ) {
+		const room = this.makingRoom;
+		if ( inp.hit( 'KeyR' ) && can && ! this.fight && ! net.busy && ! room ) {
 
 			// (Salt Life) the cast net goes away for it
 			if ( net.equipped ) this.dropNet();
@@ -393,8 +394,8 @@ export class Game {
 			const cast = { touch: 'hold Cast and let go', gamepad: 'hold RT to cast' }[ app.input.lastDevice ] || 'hold left mouse or F to cast';
 			this.toast( rod.equipped ? `Rod out · ${ cast }` : 'Rod away', 1600 );
 
-		} else if ( inp.hit( 'KeyN' ) && can && ! this.fight && ! net.busy ) this.toggleNet();
-		else if ( inp.hit( 'KeyR' ) && canSpear && ! gun.shaftOut && ! this.tools.busy ) {
+		} else if ( inp.hit( 'KeyN' ) && can && ! this.fight && ! net.busy && ! room ) this.toggleNet();
+		else if ( inp.hit( 'KeyR' ) && canSpear && ! gun.shaftOut && ! this.tools.busy && ! room ) {
 
 			// (Salt Life) in the water R is the speargun's; then, with the gear, the lobster tools'
 			const tools = this.tools;
@@ -447,7 +448,7 @@ export class Game {
 
 		}
 
-		if ( this.hud && ( inp.hit( 'KeyI' ) || inp.hit( 'Tab' ) ) ) this.hud.toggleInventory();
+		if ( this.hud && ( inp.hit( 'KeyI' ) || inp.hit( 'Tab' ) ) && ! room ) this.hud.toggleInventory();
 		// the cooler's tabs: ← →, the d-pad
 		if ( this.hud && this.hud.invOpen && ( inp.hit( 'ArrowLeft' ) || inp.hit( 'ArrowRight' ) ) ) this.hud.cycleTab( inp.hit( 'ArrowRight' ) ? 1 : - 1 );
 		// (H at the helm is the horn)
@@ -527,7 +528,8 @@ export class Game {
 					// a slow turn so both flanks show
 					L.cardT += dt;
 					yaw += Math.sin( L.cardT * 0.7 ) * 0.55;
-					if ( lDown || inp.hit( 'KeyE' ) || inp.hit( 'Escape' ) || this.hud.takeCatchTap() || L.cardT > CATCH_CARD_MS / 1000 ) {
+					const end = this.cardEnd( L.card, L.cardT, lDown );
+					if ( end ) {
 
 						this._cardDismissed = true; // this frame's E / click belong to the card
 						this.endLanding();
@@ -1295,6 +1297,40 @@ export class Game {
 
 	}
 
+	// the catch card up for `t` s (info: its GameState.lastCatch): whether it's done with ('go': in the cooler
+	// or let go, as it says; 'keep': kept after all), or null. (M15) One with no room for its fish waits, with
+	// no timer and no tap away, while you let fish go from the cooler to make room for it (the card's own
+	// buttons; ← → or the d-pad to pick one, R or X to let it go): kept once it fits (its button, Enter, RT
+	// or F), or let go (its button, E, B or Esc)
+	cardEnd( info, t, lDown ) {
+
+		const inp = this.app.input, hud = this.hud, R = hud.room;
+		if ( ! R ) return lDown || inp.hit( 'KeyE' ) || inp.hit( 'Escape' ) || hud.takeCatchTap() || t > CATCH_CARD_MS / 1000 ? 'go' : null;
+		if ( inp.hit( 'ArrowLeft' ) || inp.hit( 'ArrowRight' ) ) hud.roomStep( inp.hit( 'ArrowRight' ) ? 1 : - 1 );
+		if ( inp.hit( 'KeyR' ) ) hud.roomLetGo();
+		let act = hud.takeCatchAct();
+		if ( ! act && R.fits && ( lDown || inp.hit( 'Enter' ) || inp.hit( 'NumpadEnter' ) ) ) act = 'keep';
+		if ( ! act && ( inp.hit( 'KeyE' ) || inp.hit( 'Escape' ) ) ) act = 'go';
+		if ( act === 'keep' ) {
+
+			const entry = this.state.keepLast( info );
+			if ( ! entry ) return null;
+			info.wanted = this.wantedFor( entry );
+			this.toast( `${ FISH[ entry.species ].name } · ${ lb( entry.kg ) } · $${ entry.value } · in the ${ this.state.upgrades.hold > 0 ? 'hold' : 'cooler' }`, 2600 );
+
+		}
+
+		return act;
+
+	}
+
+	// whether the catch card is making room for its fish (it has the keys: Game.cardEnd)
+	get makingRoom() {
+
+		return !! ( this.hud && this.hud.room );
+
+	}
+
 	// the landed fish goes in the cooler: card, fish and line away
 	endLanding() {
 
@@ -1313,7 +1349,7 @@ export class Game {
 	quietKeys() {
 
 		const panelOpen = this.hud && ( this.hud.invOpen || this.hud.standOpen );
-		return ! panelOpen && ! ( this.time && this.time.open ) && ! ( this.guide && this.guide.open );
+		return ! panelOpen && ! this.makingRoom && ! ( this.time && this.time.open ) && ! ( this.guide && this.guide.open );
 
 	}
 
@@ -1692,7 +1728,7 @@ export class Game {
 		if ( sp.card && gun.state === 'landing' ) {
 
 			sp.cardT += dt;
-			if ( lDown || inp.hit( 'KeyE' ) || inp.hit( 'Escape' ) || this.hud.takeCatchTap() || sp.cardT > CATCH_CARD_MS / 1000 ) {
+			if ( this.cardEnd( sp.card, sp.cardT, lDown ) ) {
 
 				this._cardDismissed = true;
 				this.finishSpeared();
@@ -1964,7 +2000,7 @@ export class Game {
 
 			n.cardT += dt;
 			app.player.breathPaused = true;
-			if ( lDown || inp.hit( 'KeyE' ) || inp.hit( 'Escape' ) || this.hud.takeCatchTap() || n.cardT > CATCH_CARD_MS / 1000 ) {
+			if ( this.cardEnd( n.card, n.cardT, lDown ) ) {
 
 				this._cardDismissed = true;
 				this.finishLobster();

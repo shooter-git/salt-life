@@ -489,6 +489,12 @@ Everyone keeps their own progress and their own fish.
 - **The clouds race with its wind** (`drift`: about 28 m/s in its wall, at least 6 in the eye's calm) instead of drifting with the trades, and their evolution is integrated as the wind turns (`scfWind`'s second pair). **The cirrus turns into its outflow** (`upper`): out of the eye and round it clockwise, against its spin. Since M13 the cirrus is drawn in a wind frame it's given (`cloudsWind`), not a compiled angle.
 - Outside a hurricane the sky draws as it did.
 
+## A catch with no room for it
+
+(M15) `GameState.addFish` logs every catch; one that doesn't fit isn't kept, and `lastCatch` keeps what's needed to keep it later (`at`, `day`). `GameState.roomFor( info )` says whether room could be made for it (not let go for its own sake, no heavier than the cooler), and `keepLast( info )` keeps it once it fits (counting a bag-limited one in that day's bag), only once.
+
+The catch card (`GameHUD.showCatch`) for such a catch is a room card (`hud.room`): the cooler's fish to let go (`renderRoom`, redrawn by `refresh` as the cooler changes), no timer, and taps on its background ignored. `Game.cardEnd( info, t, lDown )` ends every catch card, the rod's, the speargun's and the lobster net's: a room card with its own buttons (`takeCatchAct`) and keys (← → `roomStep`, R `roomLetGo`, Enter, E, Esc), keeping the fish on 'keep'; any other as before. `Game.makingRoom` keeps R, N, I / Tab and the arrows from the gear and the panels while it's up.
+
 ## Spearfishing
 
 The speargun is `src/game/Speargun.js` and its half of `src/game/Game.js`. The fish's side is in `src/world/Fish.js`, and the held breath in `src/player/Player.js`.

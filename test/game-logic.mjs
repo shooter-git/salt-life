@@ -452,6 +452,16 @@ ok( s2.addFish( 'grunt', 0.5 ).id > b.id, 'ids keep counting after a load' );
 	ok( i3.record && i3.prevBestKg === 3.2 && i3.prevBestCm === i1.cm && st.log.jack.bestKg === 4.05 && st.log.jack.bestCm === i3.cm, 'a bigger one: new record, previous best reported, log updated' );
 	st.addFish( 'blackGrouper', 24 );
 	ok( st.lastCatch.kept === false && ! st.lastCatch.released && st.lastCatch.newSpecies, 'a fish that does not fit: logged, card says let go' );
+	// (M15) room made for it on the card: fish let go from the cooler, then it's kept after all (logged once)
+	const big = st.lastCatch, n0 = st.inventory.length;
+	ok( st.roomFor( big ) && st.keepLast( big ) === null && ! big.kept, 'no room: room could be made for it, but it isn\'t kept until there is' );
+	st.release( st.inventory.find( ( f ) => f.kg === 4.05 ).id );
+	const kept = st.keepLast( big );
+	ok( kept && kept.species === 'blackGrouper' && kept.kg === 24 && kept.cm === big.cm && big.kept && st.inventory.length === n0 && st.log.blackGrouper.count === 1 && st.holdKg <= st.stats.holdKg, 'a jack let go to make room: the grouper kept after all, logged once' );
+	ok( st.keepLast( big ) === null && st.inventory.length === n0, 'and only once' );
+	st.addFish( 'blackGrouper', 31 );
+	ok( ! st.roomFor( st.lastCatch ), 'no room is made for one heavier than the cooler holds' );
+	st.release( kept.id );
 	// protected species: measured, logged and released, never kept or sold
 	const tp = st.addFish( 'tarpon', 30, 22 ), it = st.lastCatch;
 	ok( tp === null && it.released && ! it.kept && it.value === 0 && st.log.tarpon.count === 1 && ! st.inventory.some( ( f ) => f.species === 'tarpon' ), 'a protected tarpon is logged and released, worth nothing' );
@@ -613,8 +623,15 @@ ok( Object.keys( defaultUpgrades() ).length === Object.keys( UPGRADES ).length &
 	ok( hand( 34, 4, 'berried' ) === null && st.lastCatch.why === 'berried' && st.lastCatch.value > 0 && st.lastCatch.bag.n === 1, 'a berried female goes back too' );
 	st.addFish( 'bonefish', 2.5, 12 );
 	ok( st.lastCatch.released && st.lastCatch.why === 'protected', 'a bonefish on the line: measured and let go' );
+	ok( ! st.roomFor( st.lastCatch ), 'nor for one let go for its own sake' );
 	const s3 = new GameState( { getItem: ( k ) => m.get( k ) ?? null, setItem: () => {} } );
 	ok( s3.load() && s3.bagged( 'lobster', 4 ) === 1 && s3.bagged( 'lobster', 3 ) === 0, 'the day\'s bag is saved' );
+	// (M15) one with no room: kept after all once there's room, and counted in that day's bag then
+	const filler = st.addFish( 'jack', st.stats.holdKg - st.holdKg - 0.5 );
+	ok( filler && hand( 30, 5 ) === null && st.roomFor( st.lastCatch ) && st.bagged( 'lobster', 5 ) === 0, 'a lobster with no room for it: not in the day\'s bag yet' );
+	const lob = st.lastCatch;
+	st.release( filler.id );
+	ok( st.keepLast( lob ) && lob.kept && lob.bag.n === 1 && st.bagged( 'lobster', 5 ) === 1, 'room made: kept, and in the day\'s bag' );
 
 }
 console.log( `value check ${ value }` );

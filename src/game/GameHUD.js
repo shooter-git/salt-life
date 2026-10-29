@@ -257,6 +257,37 @@ html:has(.gm-panel.is-open) .hud-hint { visibility: hidden; }
 .gm-catch-timer > span { display: block; height: 100%; width: 100%; background: rgba(244, 234, 214, 0.55); transform-origin: 0 50%; }
 .gm-catch.is-on .gm-catch-timer > span { animation: gm-timer var(--gm-catch-ms, 9000ms) linear forwards; }
 @keyframes gm-timer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+/* (M15) no room for it: the cooler's fish, cheapest first, each to let go to make room, and the room it
+   needs; the card waits */
+.gm-room { width: min(94vw, 760px); margin-top: var(--tw-3); }
+.gm-room-head { display: flex; align-items: center; gap: var(--tw-3); font-size: var(--tw-fs-sm); color: rgba(244, 234, 214, 0.78); }
+.gm-room-head b { color: #ff9a8a; font-weight: 700; white-space: nowrap; }
+.gm-room-head b.is-ok { color: #6fd6c6; }
+.gm-room-meter { position: relative; flex: 1; height: calc(6 * var(--tw-u)); border-radius: 99px; background: rgba(244, 234, 214, 0.12); overflow: hidden; }
+.gm-room-meter > span { position: absolute; top: 0; bottom: 0; left: 0; border-radius: inherit; transition: width var(--tw-med) var(--tw-ease), left var(--tw-med) var(--tw-ease); }
+.gm-room-meter > .is-in { background: rgba(244, 234, 214, 0.55); }
+.gm-room-meter > .is-new { background: #ff9a8a; }
+.gm-room-meter > .is-new.is-ok { background: #6fd6c6; }
+.gm-room-list { display: flex; gap: var(--tw-2); margin-top: var(--tw-2); padding-bottom: var(--tw-1); overflow-x: auto; scroll-snap-type: x proximity; overscroll-behavior: contain; }
+.gm-room-fish { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: calc(128 * var(--tw-u)); padding: var(--tw-2) var(--tw-3);
+	border-radius: 6px; text-align: left; scroll-snap-align: start; background: rgba(232, 220, 192, 0.08); box-shadow: inset 0 0 0 1px rgba(214, 180, 110, 0.3); }
+.gm-room-fish.is-pick { box-shadow: inset 0 0 0 2px #f0c46a; background: rgba(240, 196, 106, 0.14); }
+.gm-room-fish b { font-weight: 600; color: #fbf1dc; white-space: nowrap; }
+.gm-room-fish span { font-family: var(--tw-mono); font-size: var(--tw-fs-sm); color: rgba(244, 234, 214, 0.6); white-space: nowrap; }
+.gm-room-fish .gm-mini { margin-top: var(--tw-1); color: #f4ead6; background: rgba(244, 234, 214, 0.1); border-color: rgba(244, 234, 214, 0.3); }
+.gm-room-acts { display: flex; justify-content: center; gap: var(--tw-3); margin-top: var(--tw-3); }
+.gm-room-keys { margin-top: var(--tw-2); font-size: var(--tw-fs-xs); color: rgba(244, 234, 214, 0.5); }
+/* (the fish's stage gives way to it: smaller, and gone on a short screen) */
+.gm-catch.has-room .gm-catch-stage, .gm-catch.has-room.is-gl .gm-catch-stage { width: min(94vw, 1400px, calc(max(0px, min(40vh, 100vh - 600px)) * 2.4)); }
+.gm-catch.has-room.is-flat .gm-catch-stage { width: 100%; }
+@media (max-height: 500px) {
+	.gm-catch.has-room .gm-catch-stats { margin-top: 0; }
+	.gm-catch.has-room .gm-stat { padding: 6px 10px; }
+	.gm-catch.has-room .gm-stat i { display: none; }
+	.gm-room { margin-top: var(--tw-1); }
+	.gm-room-fish { padding: var(--tw-1) var(--tw-2); }
+	.gm-room-acts { margin-top: var(--tw-2); }
+}
 @media (prefers-reduced-motion: reduce) {
 	.gm-catch.is-on .gm-catch-top, .gm-catch.is-on .gm-catch-bottom { animation: none; opacity: 1; }
 	.gm-catch.is-on .gm-badge, .gm-catch.is-on .gm-badge.is-record { animation: none; transform: rotate(-3deg); opacity: 1; }
@@ -362,9 +393,11 @@ export class GameHUD {
 		this._catchTap = false;
 		this.catchCard.addEventListener( 'pointerdown', () => {
 
-			if ( this.catchOpen ) this._catchTap = true;
+			if ( this.catchOpen && ! this.room ) this._catchTap = true;
 
 		} );
+		this.room = null; // (M15) { info, pick, ids, fits } while the card's making room for its fish
+		this._catchAct = null;
 		const hud = ui.hud || ui.root;
 		hud.append( this.veil, this.catchScrim, this.purse, this.fight, this.bite, this.cast, this.netWind, this.haul, this.dot, this.aimTag, this.catchCard );
 		// (Salt Life) on touch screens the minimap, the tips and the fight panel line up under the purse,
@@ -432,6 +465,7 @@ export class GameHUD {
 		this._last.money = s.money;
 		if ( this.invOpen ) this.renderInventory();
 		if ( this.standOpen ) this.vendor && this.vendor.kind === 'shop' ? this.renderShop() : this.renderStand();
+		if ( this.room ) this.renderRoom();
 
 	}
 
@@ -588,11 +622,14 @@ export class GameHUD {
 		// (Salt Life: a protected fish is measured and let go, as is a catch-and-release one and a short or
 		// berried lobster; one over the day's bag goes back; the lionfish's bounty)
 		const board = info.islandRecord ? '. It still goes on the board at the fish stand' : '';
+		// ((M15) no room for one that could be kept: the card waits while you make room for it)
+		const room = this.game.state.roomFor( info ), where = this.game.state.upgrades.hold > 0 ? 'hold' : 'cooler';
 		if ( info.why === 'short' ) note = `<div class="gm-catch-note is-warn">Short: under ${ ( f.minCm * CARAPACE / IN ).toFixed( 0 ) } in on the gauge · back it goes, to grow${ board }.</div>`;
 		else if ( info.why === 'berried' ) note = `<div class="gm-catch-note is-warn">Berried: she's carrying eggs under her tail · back she goes${ board }.</div>`;
 		else if ( info.released ) note = `<div class="gm-catch-note">${ f.cr ? 'Catch and release: everyone lets one go. Measured and' : 'Protected: measured and' } let go alive${ board }.</div>`;
 		else if ( info.bag && info.bag.full ) note = `<div class="gm-catch-note is-warn">That's your ${ info.bag.max } for today, the most anyone may keep · back it goes</div>`;
-		else if ( ! info.kept ) note = `<div class="gm-catch-note is-warn">No room in the ${ this.game.state.upgrades.hold > 0 ? 'hold' : 'cooler' } · you let it go</div>`;
+		else if ( room ) note = `<div class="gm-catch-note is-warn">No room in the ${ where } for it · let fish go to make room, or let this one go</div>`;
+		else if ( ! info.kept ) note = `<div class="gm-catch-note is-warn">${ info.kg > this.game.state.stats.holdKg ? `Too big for the ${ where }, even empty` : `No room in the ${ where }` } · you let it go</div>`;
 		else if ( f.bounty && ! info.islandRecord && ! info.record ) note = `<div class="gm-catch-note">An invader on the reef: Joe pays $${ f.bounty } a fish on top.</div>`;
 		else if ( info.islandRecord ) note = `<div class="gm-catch-note">The heaviest anyone here has landed${ isle ? `. It beats ${ escape( isle.who || 'someone' ) }'s <b>${ lb( isle.kg ) }</b>` : '' }. It goes on the board at the fish stand.</div>`;
 		else if ( info.record ) note = `<div class="gm-catch-note">Previous best <b>${ lb( info.prevBestKg ) }</b> · ${ sizeOf( info.species, info.prevBestCm ) }. Beaten by ${ lb( info.kg - info.prevBestKg ) }.</div>`;
@@ -620,10 +657,10 @@ export class GameHUD {
 				<div class="gm-catch-stats">
 					${ info.species === 'lobster' ? `<div class="gm-stat"><span>Carapace</span><b>${ carapaceIn( info.cm ).toFixed( 2 ) }<small>in</small></b><i>${ inches( info.cm ) } long</i></div>` : `<div class="gm-stat"><span>Length</span><b>${ inch.toFixed( 1 ) }<small>in</small></b><i>${ feetInches( info.cm ) || '&nbsp;' }</i></div>` }
 					<div class="gm-stat"><span>Weight</span>${ lbs * 16 < 15.5 ? `<b>${ Math.max( 1, Math.round( lbs * 16 ) ) }<small>oz</small></b><i>&nbsp;</i>` : `<b>${ lbs.toFixed( 1 ) }<small>lb</small></b><i>${ lbOz( info.kg ) }</i>` }</div>
-					<div class="gm-stat is-value"><span>Value</span><b>${ info.released ? '—' : `$${ info.value }` }</b><i>${ info.released ? 'released' : ! info.kept ? 'let go' : info.wanted ? info.wanted.text : info.bag ? `${ info.bag.n } of ${ info.bag.max } today` : 'in the cooler' }</i></div>
+					<div class="gm-stat is-value"><span>Value</span><b>${ info.released ? '—' : `$${ info.value }` }</b><i>${ info.released ? 'released' : room ? 'no room yet' : ! info.kept ? 'let go' : info.wanted ? info.wanted.text : info.bag ? `${ info.bag.n } of ${ info.bag.max } today` : 'in the cooler' }</i></div>
 				</div>
 				${ note }
-				<div class="gm-catch-foot">${ { touch: 'Tap to continue', gamepad: '<kbd>RT</kbd> or <kbd>B</kbd> to continue' }[ this.device ] || '<kbd>Click</kbd> or <kbd>E</kbd> to continue' }<span class="gm-catch-timer"><span></span></span></div>
+				${ room ? '<div class="gm-room"></div>' : `<div class="gm-catch-foot">${ { touch: 'Tap to continue', gamepad: '<kbd>RT</kbd> or <kbd>B</kbd> to continue' }[ this.device ] || '<kbd>Click</kbd> or <kbd>E</kbd> to continue' }<span class="gm-catch-timer"><span></span></span></div>` }
 			</div>`;
 		// restart the entrance even when a card is already up
 		c.classList.remove( 'is-on' );
@@ -631,6 +668,15 @@ export class GameHUD {
 		c.classList.add( 'is-on' );
 		this.catchScrim.classList.add( 'is-on' );
 		this.catchOpen = true;
+		this._catchAct = null;
+		this.room = room ? { info, pick: 0, ids: [], fits: false } : null;
+		c.classList.toggle( 'has-room', !! room );
+		if ( room ) {
+
+			this.renderRoom();
+			releaseMouse(); // (the pointer, for its buttons)
+
+		}
 		// the fish itself: the real model in a studio, drawn live into the stage canvas
 		// (Salt Life: the game's FishPortrait, drawn in the game's canvas under the card: no blur above it)
 		let live = false;
@@ -721,6 +767,67 @@ export class GameHUD {
 
 	}
 
+	// (M15) what the card's own buttons said, once: 'keep' (room made: keep it), 'go' (let it go), or null
+	takeCatchAct() {
+
+		const a = this._catchAct;
+		this._catchAct = null;
+		return a;
+
+	}
+
+	// (M15) the card making room for its fish: the room it needs, the cooler's fish (cheapest first), each to
+	// let go, and keep it or let it go
+	renderRoom() {
+
+		const R = this.room, el = this.catchCard.querySelector( '.gm-room' );
+		if ( ! R || ! el ) return;
+		const s = this.game.state, info = R.info, cap = s.stats.holdKg, held = s.holdKg;
+		const need = held + info.kg - cap;
+		const fish = s.inventory.slice().sort( ( a, b ) => a.value - b.value || a.kg - b.kg );
+		R.ids = fish.map( ( f ) => f.id );
+		R.pick = Math.max( 0, Math.min( R.pick, fish.length - 1 ) );
+		R.fits = need <= 1e-6;
+		const d = this.device, where = s.upgrades.hold > 0 ? 'hold' : 'cooler';
+		const pct = ( kg ) => Math.max( 0, Math.min( 100, kg / cap * 100 ) ).toFixed( 1 );
+		const chips = fish.map( ( f, i ) => `<div class="gm-room-fish${ i === R.pick && d !== 'touch' ? ' is-pick' : '' }"><b>${ FISH[ f.species ].name }</b><span>${ lb( f.kg ) } · $${ f.value }</span><button class="gm-mini" data-let="${ f.id }">Let go</button></div>` ).join( '' );
+		const keys = { gamepad: '<kbd>←</kbd> <kbd>→</kbd> on the d-pad to pick one · <kbd>X</kbd> lets it go', keyboard: '<kbd>←</kbd> <kbd>→</kbd> to pick one · <kbd>R</kbd> lets it go' }[ d ];
+		el.innerHTML = `
+			<div class="gm-room-head"><span>${ upper( where ) } ${ pounds( held ) } of ${ pounds( cap ) } lb</span>
+				<span class="gm-room-meter"><span class="is-in" style="width:${ pct( held ) }%"></span><span class="is-new${ R.fits ? ' is-ok' : '' }" style="left:${ pct( held ) }%;width:${ pct( info.kg ) }%"></span></span>
+				<b class="${ R.fits ? 'is-ok' : '' }">${ R.fits ? 'Room for it' : `${ lb( need, 1 ) } short` }</b></div>
+			<div class="gm-room-list">${ chips }</div>
+			<div class="gm-room-acts"><button class="gm-btn is-ghost" data-go>${ this.keyed( 'Let it go', 'E', 'B' ) }</button><button class="gm-btn" data-keep ${ R.fits ? '' : 'disabled' }>${ this.keyed( 'Keep it', 'Enter', 'RT' ) }</button></div>
+			${ keys ? `<div class="gm-room-keys">${ keys }</div>` : '' }`;
+		for ( const b of el.querySelectorAll( '[data-let]' ) ) b.onclick = () => s.release( Number( b.dataset.let ) );
+		el.querySelector( '[data-go]' ).onclick = () => this._catchAct = 'go';
+		el.querySelector( '[data-keep]' ).onclick = () => {
+
+			if ( this.room && this.room.fits ) this._catchAct = 'keep';
+
+		};
+		const pick = el.querySelector( '.gm-room-fish.is-pick' );
+		if ( pick ) pick.scrollIntoView( { block: 'nearest', inline: 'nearest' } );
+
+	}
+
+	// (M15) the next or previous fish to let go (← →, the d-pad), and letting it go (R, X)
+	roomStep( step ) {
+
+		const R = this.room;
+		if ( ! R || ! R.ids.length ) return;
+		R.pick = ( R.pick + step + R.ids.length ) % R.ids.length;
+		this.renderRoom();
+
+	}
+
+	roomLetGo() {
+
+		const R = this.room;
+		if ( R && R.ids.length ) this.game.state.release( R.ids[ R.pick ] );
+
+	}
+
 	// the input in use ('keyboard' | 'touch' | 'gamepad'), for what the panels call the controls
 	get device() {
 
@@ -734,6 +841,8 @@ export class GameHUD {
 		this.catchScrim.classList.remove( 'is-on' );
 		this.catchOpen = false;
 		this._catchTap = false;
+		this._catchAct = null;
+		this.room = null;
 		if ( this.portrait ) this.portrait.detach();
 
 	}

@@ -18,7 +18,7 @@ export class GameState {
 		this.inventory = []; // { id, species, kg, cm, value, caughtAt (game hours), record, method }
 		this.log = {}; // species -> { count, bestKg, bestCm }
 		// the last addFish: { species, kg, cm, value, newSpecies, record, prevBestKg, prevBestCm, kept,
-		// released, why, method, bag } (the catch card)
+		// released, why, method, bag, at, day } (the catch card)
 		this.lastCatch = null;
 		this.bag = { day: null, n: {} }; // (Salt Life) how many of each bag-limited kind (FishTable bag) you've kept that day
 		this.upgrades = defaultUpgrades();
@@ -85,7 +85,7 @@ export class GameState {
 		if ( kept && max ) this.bagOne( species, day );
 		const bag = max ? { n: this.bagged( species, day ), max, full } : null;
 		const why = release || ( FISH[ species ].protected ? 'protected' : null );
-		this.lastCatch = { species, kg, cm, value, newSpecies, record, prevBestKg, prevBestCm, kept, released, why, method, bag };
+		this.lastCatch = { species, kg, cm, value, newSpecies, record, prevBestKg, prevBestCm, kept, released, why, method, bag, at: timeOfDay, day };
 		if ( ! kept ) {
 
 			this.save();
@@ -95,6 +95,36 @@ export class GameState {
 		}
 
 		const f = { id: this._nextId ++, species, kg, cm, value, caughtAt: timeOfDay, record, method };
+		this.inventory.push( f );
+		this.save();
+		this.emit();
+		return f;
+
+	}
+
+	// (M15) whether room could be made for a catch there was none for, by letting fish go from the cooler:
+	// one not let go for its own sake (protected, short, over the bag) and no heavier than the cooler holds
+	roomFor( info = this.lastCatch ) {
+
+		return !! info && ! info.kept && ! info.released && ! ( info.bag && info.bag.full ) && info.kg <= this.stats.holdKg + 1e-6;
+
+	}
+
+	// (M15) that catch kept after all, once there's room for it (it's in the log already: addFish) -> its
+	// entry, or null while it still doesn't fit
+	keepLast( info = this.lastCatch ) {
+
+		if ( ! this.roomFor( info ) || ! this.fits( info.kg ) ) return null;
+		const max = info.day !== null && info.day !== undefined ? FISH[ info.species ].bag || 0 : 0;
+		if ( max ) {
+
+			this.bagOne( info.species, info.day );
+			info.bag = { n: this.bagged( info.species, info.day ), max, full: false };
+
+		}
+
+		info.kept = true;
+		const f = { id: this._nextId ++, species: info.species, kg: info.kg, cm: info.cm, value: info.value, caughtAt: info.at, record: info.record, method: info.method };
 		this.inventory.push( f );
 		this.save();
 		this.emit();
