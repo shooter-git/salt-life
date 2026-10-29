@@ -312,7 +312,8 @@ vec2 whitecapsAt( vec2 x0 ) {
 
 	}
 
-	// the whitecaps at Lagrangian point ( x0, z0 ) at time t, as the GPU draws them near by (no far fade)
+	// the whitecaps at Lagrangian point ( x0, z0 ) at time t, as the GPU draws them near by (no far fade;
+	// (M15) as few as the wind sea's grown there, in the island's lee: Waves.windGrownAt)
 	foamAt( x0, z0, t = G.time.value, out = { roller: 0, foam: 0 } ) {
 
 		out.roller = 0;
@@ -347,6 +348,9 @@ vec2 whitecapsAt( vec2 x0 ) {
 			out.foam = Math.max( out.foam, white );
 
 		} );
+		const grown = this.waves.windGrownAt( x0, z0 );
+		out.roller *= grown;
+		out.foam *= grown;
 		return out;
 
 	}
@@ -376,14 +380,14 @@ vec2 whitecapsAt( vec2 x0 ) {
 					const ev = event( n, m - off + 0.5, t, T, chance, c.salt, this.size );
 					if ( ev.reach === 0 ) continue;
 					const sc = m + ev.c - off, reach = ev.reach, open = ev.open;
-					// (its strength at its middle: where it's widest)
-					const on = event( n, sc, t, T, chance, c.salt, this.size ).on;
-					// (one only beginning to spill throws no spray)
-					if ( on <= 0.2 ) continue;
+					// (its strength at its middle: where it's widest; (M15) as grown as the wind sea is there)
 					const half = reach * open * L * CELL;
 					const ds = ( sc - s ) * L * CELL;
 					const px = x + w.dx * along - w.dz * ds, pz = z + w.dz * along + w.dx * ds;
 					if ( ( px - x ) ** 2 + ( pz - z ) ** 2 > R * R ) continue;
+					const on = event( n, sc, t, T, chance, c.salt, this.size ).on * this.waves.windGrownAt( px, pz );
+					// (one only beginning to spill throws no spray)
+					if ( on <= 0.2 ) continue;
 					cb( px, pz, [ - w.dz, w.dx ], half, on, w );
 
 				}

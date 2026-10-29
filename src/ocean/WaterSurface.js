@@ -48,6 +48,15 @@ const FROTH = 4.5, ROWS = 3.3;
 const MARBLE_NOISE = [ [ 0.3, 0 ], [ 0.3, 3.7 ], [ 1, 0 ], [ 2.3, 7.1 ], [ 5.3, 2.6 ], [ 1.3, 1.9 ], [ 0.12, 9.2 ], [ 0.15, 5.5 ] ];
 const MARBLE = [ 2.2, 3.6 ];
 const KEY = { froth: 0, rows: 4, marble: 8, count: 16 };
+// (M15) the water's colour (sRGB, as the light it sends back up: the body's below). Its own: the shelf's,
+// greener (an island's coastal water: its run-off and the life over the shelf), and the open ocean's past the
+// drop-off, the bluest, darkest water there is. The front between them at about front[0] m of depth,
+// wandering ±front[1] m of it (a noise `wander` m across: off the slope's contours, as the currents set it),
+// sharp over ±front[2] m: on the drop-off's 30 to 40 degrees a line you can see. Over it, the sand's light
+// coming back up (`sand`: as the shallowest water shows it, the bay's turquoise at 0.8 m, as it always was),
+// fading by colour as the water takes it, both ways: e^-kd, k the water's absorption (Globals', as the seabed's
+// own tint: 1.6 x a) by channel
+const WATER = { shelf: [ 0.03, 0.15, 0.19 ], deep: [ 0.01, 0.045, 0.13 ], sand: [ 0.26, 0.65, 0.61 ], front: [ 160, 55, 22 ], wander: 1700, k: G.waterAbsorption.value.toArray().map( ( a ) => a * 1.6 ) };
 const g = ( v ) => Number.isInteger( v ) ? v.toFixed( 1 ) : String( v ); // (a GLSL float)
 // (M15) the foam's noises' keys (waterKey's) at the sea's origin O: the lace's on the water, the marbling's
 // on its frame M ( x, z, along, across, wind ), moved to the camera cam first if the wind w has turned
@@ -191,6 +200,7 @@ uniform float waterSeaLevel;
 varying vec3 vWater;
 varying vec3 vWaterL; // (M15) about the sea's origin
 varying float vWaterFade;
+varying float vWaterWind; // (M15) how grown the wind sea is here (the island's lee: Waves' waveWindGrown)
 varying vec4 vSurf; // whitewater, clear plunging face, roller relief, swash sheet (0..1)
 varying vec3 vWaterN;
 varying vec2 vWaterX0; // (M14) the grid's point: the water's own (its foam rides it); (M15) about the sea's origin
@@ -245,6 +255,7 @@ ${ SH ? /* glsl */`
 	vWater = wPos + vec3( oceanLodAt.x, 0.0, oceanLodAt.y );
 	vWaterX0 = xL;
 	vWaterFade = fade;
+	vWaterWind = waveWindGrown;
 	vWaterN = objectNormal;` )
 				.replace( '#include <begin_vertex>', 'vec3 transformed = wPos;' );
 
@@ -256,6 +267,7 @@ uniform vec3 waterSunDir;
 uniform vec3 waterSky;
 varying vec3 vWater;
 varying float vWaterFade;
+varying float vWaterWind; // (M15) how grown the wind sea is here (the island's lee: Waves' waveWindGrown)
 varying vec4 vSurf;
 varying vec3 vWaterN;
 varying vec2 vWaterX0;
@@ -378,7 +390,7 @@ ${ SH ? /* glsl */`
 	// a crest's face while it breaks, and the foam it's left behind it thinning (Whitecaps.js)); more in the
 	// gusts; out over the open sea only (the shore waves have their own)
 	if ( whitecapCover > 0.0 ) {
-		vec2 wc = min( whitecapsAt( vWaterX0 ) * vWaterFade * ( 0.55 + 0.9 * seaD.y ), 1.0 );
+		vec2 wc = min( whitecapsAt( vWaterX0 ) * vWaterFade * vWaterWind * ( 0.55 + 0.9 * seaD.y ), 1.0 );
 		// the foam left marbled (white with dark veins, swirled and drawn out along the wind), thinning
 		// unevenly and tearing into lace, froth at its edges, less white than the roller; the roller solid,
 		// its edge torn. (Seen from afar, as much white spread.) ((M15) Its frame along and across the wind about
@@ -411,11 +423,15 @@ ${ SH ? /* glsl */`
 		float spCover = waterSpume * ( 0.75 * streak + 0.2 * waterNoise( q * 0.08 ) ) * smoothstep( 0.15, 0.8, depth ) * ( 1.0 - smoothstep( 600.0, 2000.0, spDist ) );
 		foam = max( foam, waterLace( q * 0.5, min( spCover, 0.75 ) ) * 0.85 );
 	}
-	// the body of the water: light scattered back up from inside it (and off the sand under the
-	// shallows), lit by the sky and the sun whatever way the surface faces. Turquoise over sand,
-	// deep blue offshore, milky in the surf (suspended sand and fine bubbles)
-	vec3 body = mix( ${ rgb( 0.2, 0.62, 0.6 ) }, ${ rgb( 0.035, 0.16, 0.25 ) }, smoothstep( 0.8, 14.0, depth ) );
-	body = mix( body, ${ rgb( 0.012, 0.06, 0.11 ) }, smoothstep( 14.0, 60.0, depth ) );
+	// the body of the water: light scattered back up from inside it and off the sand under it, lit by the
+	// sky and the sun whatever way the surface faces; milky in the surf (suspended sand and fine bubbles).
+	// ((M15) The sand's light coming back up through the water, each colour fading as the water takes it
+	// (e^-2Kd: the red first, then the green, the blue last: turquoise in the shallows, a bright blue over
+	// sand tens of metres down), over the water's own: the shelf's, greener, and past the drop-off the open
+	// ocean's, its bluest, the line between them wandering off the slope as the currents have it: WATER)
+	float blueWater = smoothstep( - ${ g( WATER.front[ 2 ] ) }, ${ g( WATER.front[ 2 ] ) }, meanDepth - ${ g( WATER.front[ 0 ] ) } - ${ g( WATER.front[ 1 ] ) } * ( waterNoise( vWater.xz / ${ g( WATER.wander ) } ) * 2.0 - 1.0 ) );
+	vec3 body = mix( ${ rgb( ...WATER.shelf ) }, ${ rgb( ...WATER.deep ) }, blueWater );
+	body += ( ${ rgb( ...WATER.sand ) } - body ) * exp( - vec3( ${ WATER.k.map( ( v ) => g( + v.toFixed( 4 ) ) ).join( ', ' ) } ) * depth );
 	body = mix( body, ${ rgb( 0.42, 0.72, 0.66 ) }, turbid * 0.55 );
 	cover = max( cover, turbid * 0.75 );
 	// light through the thin, clear face of a plunging wave and its crest: it glows turquoise

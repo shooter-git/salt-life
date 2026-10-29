@@ -23,8 +23,9 @@ import { Sky } from './sky/Sky.js';
 import { Waves, SWELL_WEST } from './ocean/Waves.js';
 import { WaterQuery } from './ocean/WaterQuery.js';
 import { WaterSurface } from './ocean/WaterSurface.js';
-import { ShoreWaves } from './ocean/ShoreWaves.js';
-import { computeShoreField, fieldGround } from './world/ShoreField.js';
+import { ShoreWaves, FAIR_AMPLITUDE } from './ocean/ShoreWaves.js';
+import { SEABED } from './world/terrain/SeabedModel.js';
+import { computeShoreField, fieldGround, shelter } from './world/ShoreField.js';
 import ShoreWorker from './world/shore/ShoreWorker.js?worker&inline';
 import { classicWorker } from './core/ClassicWorker.js';
 import { Player } from './player/Player.js';
@@ -89,7 +90,10 @@ import { releaseGeometries, releaseTextures, uploadTextures, watchContext } from
 const SHADOW = { mid: { size: 2048, box: 48, ahead: 14 }, high: { size: 2048, distance: 110 } };
 const ISLAND = { low: 'world/island-1024.bin', mid: 'world/island.bin', high: 'world/island.bin' };
 // (M15) the seabed past the island: 32 m, or 64 m on low-powered devices
-const SEABED = { low: 'world/offshore-512.bin', mid: 'world/offshore.bin', high: 'world/offshore.bin' };
+const SEABED_BIN = { low: 'world/offshore-512.bin', mid: 'world/offshore.bin', high: 'world/offshore.bin' };
+// (M15) the bank's waves: its shore field's square (m, about its middle) and cells a side (14 m; 28 on low),
+// solved once you're this near it (m)
+const BANK = { size: 7168, res: { low: 256, mid: 512, high: 512 }, near: 9000 };
 // WebGL drawn on the CPU draws at most a phone screen's pixels (a laptop's is three times as many)
 const CPU_PIXELS = 360_000;
 const LENS_REACH = 0.02; // m below the surface before the view counts as under water
@@ -165,7 +169,7 @@ export class App {
 			// low-powered devices get the island at 2 m (a quarter of the memory), as their ground is drawn
 			fetched( ISLAND[ tier ] ?? ISLAND.low ),
 			fetched( 'world/detail.bin' ),
-			fetched( SEABED[ tier ] ?? SEABED.low ),
+			fetched( SEABED_BIN[ tier ] ?? SEABED_BIN.low ),
 			this.store.load(),
 		] );
 		setDetailData( new Uint8Array( detail ) );
@@ -648,6 +652,8 @@ export class App {
 		if ( this.weather.target.west > 0 && ! this._westField && this._started ) this.solveWestField();
 		// ((M14) and the north shore's sea, once it has one: most days, a little after the start)
 		if ( this.weather.target.north > 0.02 && ! this._northField && this._started ) this.solveNorthField();
+		// ((M15) and the bank's, out at sea, once you're near it)
+		if ( this._started ) this.bankSea();
 		// ((M13) a hurricane's surge: its field solved before it comes, at its highest, dropped once it's gone)
 		if ( this._started ) {
 
@@ -1906,13 +1912,55 @@ export class App {
 
 	}
 
+	// (M15) the bank's waves, out at sea (SEABED.bank: its rim and its sandbar break in a swell): its sea, the
+	// biggest out there (the south's swell, or the trades' sea from the north, by the power each carries, H^2
+	// T: the other takes over at a third more), and once you're within BANK.near of it, its shore field for
+	// that sea, solved as the westerly's is over a square of its own round it; solved again when the other
+	// takes over
+	bankSea() {
+
+		const shore = this.shore, live = this.weather.live, c = this.camera.position;
+		if ( ! shore || ! live ) return;
+		const south = FAIR_AMPLITUDE * ( live.swell ?? 1 ), north = live.north || 0;
+		const ps = live.period || 9, pn = live.northPeriod || 5;
+		const ratio = ( north * north * pn ) / Math.max( 1e-6, south * south * ps );
+		const fromNorth = this._bankKey === 'north' ? ratio > 0.75 : ratio > 1.33;
+		const key = fromNorth ? 'north' : 'south';
+		shore.setBankSea( fromNorth ? north : south, fromNorth ? pn : ps );
+		const B = SEABED.bank;
+		if ( this._bankKey === key || Math.hypot( c.x - B.x, c.z - B.z ) > BANK.near ) return;
+		this._bankKey = key;
+		const dir = fromNorth ? [ NORTH.dir.x, NORTH.dir.y ] : [ WORLD.swellDir.x, WORLD.swellDir.y ];
+		this.solveShoreField( dir, 0, false, this.bankGround() ).then( ( field ) => {
+
+			if ( this._bankKey !== key ) return;
+			shore.setBank( field, [ B.x, B.z ] );
+			shore.setBankSea( fromNorth ? north : south, fromNorth ? pn : ps );
+
+		} ).catch( ( e ) => console.warn( 'Shore: the bank\'s field', e && e.message ) );
+
+	}
+
+	// (M15) the seabed's depths over the bank's square (BANK: its size, and its field's cells a side, fewer on
+	// low), for its shore field
+	bankGround() {
+
+		if ( this._bankGround ) return this._bankGround;
+		const B = SEABED.bank, res = BANK.res[ this.tier ] ?? BANK.res.low, size = BANK.size, h = size / res;
+		const origin = B.x - size / 2, originZ = B.z - size / 2, depth = new Float32Array( res * res );
+		for ( let j = 0; j < res; j ++ ) for ( let i = 0; i < res; i ++ ) depth[ j * res + i ] = - this.terrainData.heightAt( origin + ( i + 0.5 ) * h, originZ + ( j + 0.5 ) * h );
+		return ( this._bankGround = { depth, res, size, origin, originZ } );
+
+	}
+
 	// (M12) another shore field from the island's own field's depths (swellDir: where its swell travels;
 	// (M13) at the sea level seaLevel; (M14) a wind sea's, its lee taken out), in a worker where there is
-	// one, else on the page
-	solveShoreField( swellDir, seaLevel = 0, lee = false ) {
+	// one, else on the page; (M15) or over another square's depths, `over` ({ depth, res, size, origin,
+	// originZ }: the bank's)
+	solveShoreField( swellDir, seaLevel = 0, lee = false, over = null ) {
 
 		const home = this.shoreField;
-		const ground = { depth: home.depth, res: home.res, size: home.size, origin: home.origin };
+		const ground = over || { depth: home.depth, res: home.res, size: home.size, origin: home.origin };
 		return new Promise( ( resolve, reject ) => {
 
 			const worker = classicWorker( ShoreWorker );
@@ -1936,7 +1984,7 @@ export class App {
 		} ).catch( ( e ) => {
 
 			console.warn( 'Shore: a swell\'s field solved on the page (no worker)', e && e.message );
-			const field = computeShoreField( fieldGround( ground ), { res: home.res, swellDir, seaLevel } );
+			const field = computeShoreField( fieldGround( ground ), { res: ground.res, swellDir, seaLevel } );
 			return lee ? shelter( field, swellDir ) : field;
 
 		} );

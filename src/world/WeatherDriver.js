@@ -289,6 +289,8 @@ export class WeatherDriver {
 		else G.windDir.value.set( p.x * c - p.y * s, p.x * s + p.y * c );
 		this.waves.setWindDir( G.windDir.value, this._at );
 		this.waves.setSea( w.swell, w.windSea );
+		// ((M15) and the fetch its waves need to be grown, by the wind: the island's lee calmer)
+		this.waves.setWind( w.wind );
 		// ((M12) a westerly's swell from the west: on the shore once its field's solved, and offshore; (M14)
 		// there each train at its own period, the shore's: the south's, and the westerly's)
 		const shore = this.shore;

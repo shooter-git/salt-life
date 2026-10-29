@@ -76,6 +76,22 @@ New code that draws from world positions on the GPU takes the same care: a point
 - **The sounder** loses the bottom past `SOUNDER_REACH` (1,200 ft): "-- ft", no bottom drawn, the fish still.
 - `tools/seabed-chart.mjs` draws a chart of it all (shaded relief, depth colours and contours) into `qa-output/seabed/`. `test/seabed.mjs` tests it.
 
+## The sea out there
+
+(M15) The sea by where it is (`test/sea-out-there.mjs`):
+
+- **Its colour by its depth** (`WaterSurface`, `WATER`). The sand's light comes back up through the water (`sand`: the bay's turquoise at 0.8 m, as it always was), each colour fading as the water takes it (e^-kd, k = 1.6 x Globals' `waterAbsorption`, as the seabed's own tint). It shows over the water's own colour: the shelf's, greener (an island's coastal water), and past the drop-off the open ocean's, its bluest.
+  - So it's turquoise in the shallows (as before to 5 m), a bright blue over sand 10 to 30 m down (the bank, 20 m, is pale blue; this was a dark teal), then the shelf's green-blue, the deep's navy.
+  - The front between the shelf's water and the deep's is at about 160 m of depth, wandering ±55 m of it as a noise 1.7 km across, sharp over ±22 m: on the drop-off's slope a line you can see.
+  - The bottom's taken for sand past where the seabed's drawn through the water (4.5 m). Its seagrass and rubble seen deeper would need the seabed's map in the sea's shader, which is at 16 textures on high, a phone GPU's limit.
+- **The wind's sea, as grown as its fetch lets it** (`Waves`: `LEE`, `setWind`, `leeAt`; on the GPU `waveLeeOf`). Each wind wave needs a fetch to be grown, JONSWAP's (`fetchFor`): in the trades (7 m/s) 2.8 km for the 4 m chop, 36 km for the 23 m wave, less in a stronger wind. The island, as a disc, blocks part of each wave's spread of directions (±40° for the wind sea), and the blocked share is grown only over the open water between (`grownOver`).
+  - So in its lee (the bay, in the trades) there's hardly any wind sea. Downwind it fills in from either side as it goes: half at 1.6 km, 89% at 6 km. Upwind and abeam it's the open ocean's.
+  - The swell (±18°) is shadowed behind the island, to 15% of it 1.2 km off the north shore for the south's, filling in further off.
+  - CPU and GPU alike (`heightAt` takes each wave's share at the point), so what floats sits on what's drawn. The whitecaps go with the wind sea's grown share (`windGrownAt`, `waveWindGrown`): none in the bay, as many as ever in the open.
+- **The bank's breakers** (`ShoreWaves`' fourth train: `setBank`, `setBankSea`; on the GPU `shoreTex4`, `shoreInfo4`, `shoreFieldSampleIn`). The island's own shore-wave model on the bank, its field solved over a square of its own round it (7.2 km, 14 m cells, 28 on low; a field's square can now sit off the world's diagonal: `originZ`). It's solved once you're within 9 km of it, in a worker (`App.bankSea`, 0.2 s on a laptop), for whichever sea's the bigger out there by the power it carries (H² T): the south's swell or the trades' sea from the north, solved again when the other takes over by a third.
+  - A fair day's swell breaks on the sandbar's crest. A bigger one builds as it comes onto the bar and breaks across it from 2 m of water. Its rim breaks in a bigger sea still. The bank's middle never does, and its waves add nothing at the island.
+  - The boat feels them (the CPU's trains), and its surf zone is milky as the island's is.
+
 ## Playing together
 
 `src/together/Together.js` handles everyone else on the island. It works through `portal.session`, the SDK's live session for the people in the space.
