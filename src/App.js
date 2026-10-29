@@ -50,6 +50,7 @@ import { FlyingSheets } from './world/debris/FlyingSheets.js';
 import { vegUniforms } from './world/vegetation/VegNodes.js';
 import { Debris } from './world/Debris.js';
 import { Reef } from './world/Reef.js';
+import { ReefLayout } from './world/reef/ReefLayout.js';
 import { FishSchools } from './world/Fish.js';
 import { fishModelsAsync } from './world/fish/FishModelsAsync.js';
 import { MarineSnow } from './fx/MarineSnow.js';
@@ -99,6 +100,42 @@ const BANK = { size: 7168, res: { low: 256, mid: 512, high: 512 }, near: 9000 };
 // (M15) how far about you what's found out there is looked for (m), and how near the bait the birds work has
 // to be
 const FIND_RANGE = 3000, FIND_BIRDS = 2500;
+// (M15) the sand that isn't rock, 0..255 at 4 m texels (the average of the island's 1 m or 2 m masks over each),
+// for the bites once the masks are let go: { data, res, texel, origin }
+function beachMask( T ) {
+
+	const k = Math.max( 1, Math.round( 4 / T.texel ) ), res = Math.floor( T.res / k ), data = new Uint8Array( res * res );
+	for ( let j = 0; j < res; j ++ ) for ( let i = 0; i < res; i ++ ) {
+
+		let a = 0;
+		for ( let b = 0; b < k; b ++ ) for ( let c = 0; c < k; c ++ ) {
+
+			const m = ( j * k + b ) * T.res + i * k + c;
+			a += T.sand[ m ] * ( 1 - T.rock[ m ] );
+
+		}
+
+		data[ j * res + i ] = Math.round( a / ( k * k ) );
+
+	}
+
+	return { data, res, texel: T.texel * k, origin: T.origin };
+
+}
+
+// (M15) a square window of one of the island's masks, `half` m about c: { i0, j0, w, h, data } (in its texels)
+function maskWindow( T, mask, c, half ) {
+
+	const i0 = Math.max( 0, Math.floor( ( c.x - half - T.origin ) / T.texel ) ), j0 = Math.max( 0, Math.floor( ( c.z - half - T.origin ) / T.texel ) );
+	const w = Math.min( T.res - i0, Math.ceil( 2 * half / T.texel ) ), h = Math.min( T.res - j0, Math.ceil( 2 * half / T.texel ) ), data = new Uint8Array( w * h );
+	for ( let j = 0; j < h; j ++ ) data.set( mask.subarray( ( j0 + j ) * T.res + i0, ( j0 + j ) * T.res + i0 + w ), j * w );
+	return { i0, j0, w, h, data };
+
+}
+
+// (M15) the windward reef (WORLD.northReef): laid out once you're within `near` m of it; on low, let go again
+// past `far` (its 13 MB: the low tier's memory)
+const NORTH_REEF = { near: 450, far: 800 };
 // WebGL drawn on the CPU draws at most a phone screen's pixels (a laptop's is three times as many)
 const CPU_PIXELS = 360_000;
 const LENS_REACH = 0.02; // m below the surface before the view counts as under water
@@ -818,7 +855,13 @@ export class App {
 		if ( this.debris ) this.debris.update( this.camera );
 		if ( this.stormWrack ) this.stormWrack.update( this.camera ); // ((M13) a hurricane's line of wrack, near you)
 		this.flyingSheets.update( islandTime( s.day, s.timeOfDay ) ); // ((M14) the sheets it's torn off, flying and lying)
-		if ( this.reef ) this.reef.update( this.camera );
+		// ((M15) the reefs: the bay's, and the windward one once you're near it)
+		if ( this.reefs ) {
+
+			this.northReefNear();
+			for ( const r of this.reefs.list ) r.update( this.camera );
+
+		}
 		if ( this.whale ) {
 
 			this.whale.update( dt, this.camera );
@@ -1323,9 +1366,50 @@ export class App {
 		} );
 		await this.firstDraws( [ reef.batches.hard, reef.batches.soft ].map( ( b ) => b.meshes.find( ( m ) => m.layers.isEnabled( 0 ) ) ) );
 		this.reef = reef;
-		this.player.reef = reef;
+		// ((M15) the reefs the swimmer and the fish stand on: the bay's now, the windward one once it's laid out)
+		const reefs = this.reefs = { list: [ reef ], floorHeightAt: ( x, z ) => {
+
+			let g = - Infinity;
+			for ( const r of reefs.list ) g = Math.max( g, r.floorHeightAt( x, z ) );
+			return g;
+
+		} };
+		this.player.reef = reefs;
 		await this.pause();
 		await this.fishSwim();
+
+	}
+
+	// (M15) the windward reef (world/Reef.js, its own layout: ReefLayout's REEF_SITES.north), laid out in a worker
+	// once you come within NORTH_REEF.near of it, and drawn as the bay's is (hidden until its culling picks
+	// it); on low, let go again past NORTH_REEF.far. Its fish are there from the start (fishSwim)
+	northReefNear() {
+
+		const c = this.camera.position, R = WORLD.northReef.center, d = Math.hypot( c.x - R.x, c.z - R.z );
+		if ( ! this.northReef && ! this._northReefP && d < NORTH_REEF.near ) {
+
+			this._northReefP = Reef.create( { scene: this.scene, terrain: this.terrainData, ground: this.terrain, tier: this.tier, site: 'north' } ).then( ( reef ) => {
+
+				this._northReefP = null;
+				reef.shadowsFrom( this.sky.sun );
+				this.northReef = reef;
+				this.reefs.list.push( reef );
+
+			}, ( e ) => {
+
+				console.warn( 'the windward reef', e );
+				this._northReefP = null;
+				this._northReefFailed = true;
+
+			} );
+
+		} else if ( this.northReef && this.tier === 'low' && d > NORTH_REEF.far ) {
+
+			this.reefs.list = this.reefs.list.filter( ( r ) => r !== this.northReef );
+			this.northReef.dispose();
+			this.northReef = null;
+
+		}
 
 	}
 
@@ -1338,8 +1422,10 @@ export class App {
 		const reef = this.reef;
 		const fish = new FishSchools( {
 			parent: this.scene, terrain: this.terrainData, ground: this.terrain, tier: this.tier,
-			floorAt: ( x, z ) => reef.floorHeightAt( x, z ), center: WORLD.reef.center, radius: WORLD.reef.radius + 10,
+			floorAt: ( x, z ) => this.reefs.floorHeightAt( x, z ), center: WORLD.reef.center, radius: WORLD.reef.radius + 10,
 			anchors: reef.anchors, shoreField: this.shoreField,
+			// ((M15) and the windward reef's: its coral heads from its habitat, before it's laid out)
+			north: { center: WORLD.northReef.center, radius: WORLD.northReef.radius, anchors: ReefLayout.heads( this.terrainData, 'north' ) },
 		} );
 		// (their models are made in a worker: fish/FishModels.js)
 		fish.setModels( await fishModelsAsync( fish.modelNames ) );
@@ -1549,9 +1635,22 @@ export class App {
 
 		const T = this.terrainData;
 		if ( ! this._plantsGrown || ! this.game || ! this.game.minimap || ! this.game.minimap._bake.done ) return;
-		if ( T.rock !== null ) for ( const k of [ 'rock', 'sand', 'path', 'gully', 'rubble', 'scarp' ] ) T[ k ] = null;
-		// (the seagrass meadows: once the reef is laid out on them)
-		if ( this._reefLaid ) T.seagrass = null;
+		if ( T.rock !== null ) {
+
+			// ((M15) what the bites keep of them: the sand that isn't rock, at 4 m (the beaches' wash: Game.sandAt))
+			T.beach = beachMask( T );
+			for ( const k of [ 'rock', 'sand', 'path', 'gully', 'rubble', 'scarp' ] ) T[ k ] = null;
+
+		}
+
+		// (the seagrass meadows: once the reef is laid out on them; (M15) the windward reef's window of them kept,
+		// for when it's laid out)
+		if ( this._reefLaid && T.seagrass ) {
+
+			T.seagrassWin = maskWindow( T, T.seagrass, WORLD.northReef.center, 140 );
+			T.seagrass = null;
+
+		}
 
 	}
 

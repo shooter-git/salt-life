@@ -179,7 +179,8 @@ const fine = mine.map( ( r ) => rocks.buckets[ r.style ].nearTris );
 ok( fine.every( ( n, k ) => n > coarse[ k ] * 2 ) && mine.every( ( r ) => rocks.buckets[ r.style ].near.geometry.attributes.iLod ), `after the start, their near shapes made finer (${ coarse.join( ', ' ) } to ${ fine.join( ', ' ) } triangles, ${ ( performance.now() - t0 ).toFixed( 0 ) } ms), faded as the rocks are` );
 const crowding = rocks.instances.filter( ( r ) => ! r.overhang && rocks.overhangs.some( ( o ) => Math.hypot( r.x - o.x, r.z - o.z ) < o.radius + r.size ) );
 ok( crowding.length === 0, 'no scattered rock where one stands' );
-ok( rocks.instances.length > 600, `the rest of the rocks as they were (${ rocks.instances.length })` );
+// ((M15) a few fewer: none out on the windward reef)
+ok( rocks.instances.length > 590, `the rest of the rocks as they were (${ rocks.instances.length })` );
 for ( const o of rocks.overhangs ) {
 
 	const around = rocks.around( o.x - 2, o.z - 2, o.x + 2, o.z + 2 );

@@ -11,12 +11,13 @@ import { decodeIsland } from '../src/world/terrain/IslandDecode.js';
 import { Offshore, decodeSeabed } from '../src/world/terrain/Offshore.js';
 import { WORLD } from '../src/world/WorldLayout.js';
 import { Game } from '../src/game/Game.js';
-import { pickSpecies, biteDelay } from '../src/game/Bites.js';
+import { pickSpecies, biteDelay, rollWeight } from '../src/game/Bites.js';
 import { weatherAt, NORTH } from '../src/game/Weather.js';
 import { FISH } from '../src/game/FishTable.js';
 import { biteHint } from '../src/game/Orders.js';
 import { SPECIES, SKIN } from '../src/world/fish/FishSpecies.js';
 import { MANGROVE, mangroveAt } from '../src/world/terrain/Mangrove.js';
+import { ReefLayout, REEF_SITES } from '../src/world/reef/ReefLayout.js';
 
 let failed = 0;
 const check = ( ok, what ) => {
@@ -30,12 +31,13 @@ const T = new TerrainData( 7, decodeIsland( read( 'island.bin' ) ), { offshore: 
 let seed = 5;
 const rng = () => ( ( seed = ( seed * 1664525 + 1013904223 ) >>> 0 ) / 4294967296 );
 const P = Game.prototype;
-const game = { app: { terrainData: T, finds: null }, _pier: WORLD.pier, findsNear: P.findsNear, windwardAt: P.windwardAt, sandAt: P.sandAt };
-// a spot as the bobber's would be (Game.habitat: its waters, its side, the weather)
+const game = { app: { terrainData: T, finds: null }, _pier: WORLD.pier, findsNear: P.findsNear, windwardAt: P.windwardAt, sandAt: P.sandAt, windReefAt: P.windReefAt };
+// a spot as the bobber's would be (Game.habitat: its waters, its side, the windward reef's, the weather)
 const spot = ( x, z, w = null ) => {
 
 	const h = P.habitatAtPoint.call( game, x, z, Math.max( 0, - T.heightAt( x, z ) ) );
 	h.side = P.windwardAt.call( game, x, z );
+	h.big = P.windReefAt.call( game, x, z );
 	h.weather = w;
 	return h;
 
@@ -151,6 +153,48 @@ check( breezy.north >= NORTH.day && breezy.north < NORTH.big && blustery.north >
 	console.log( `     the creek (${ creek.length } spots 2 m apart): at dawn ${ its( dawn ) } (snook ${ Math.round( snook.share * 100 ) }%); tarpon after dark ${ Math.round( night.share * 100 ) }%; the north blown out ${ its( gale ) }; a southerly ${ its( south ) }` );
 	check( creek.length > 100 && dawn.share > 0.45 && snook.share > 0.15 && night.share > 0.12, 'the creek the snook\'s, the mangrove snapper\'s and the tarpon\'s' );
 	check( Math.abs( gale.wait - dawn.wait ) < 0.15 * dawn.wait && Math.abs( south.wait - dawn.wait ) < 0.15 * dawn.wait, 'sheltered: it fishes as ever when the north\'s blown out, and in a southerly' );
+
+}
+
+// ---- the windward reef off the north-west point: reef water as the bay's, its big fish more of the bites and
+// bigger, and a big north sea roughing it as it does the north shore
+{
+
+	const wind = [], bayReef = [];
+	for ( let z = - 900; z < - 680; z += 3 ) for ( let x = - 600; x < - 300; x += 3 ) {
+
+		const h = spot( x, z ), d = - T.heightAt( x, z );
+		if ( h.big > 0.9 && h.reef > 0.8 && d > 2 && d < 10 ) wind.push( [ x, z ] );
+
+	}
+
+	for ( let z = 0; z < 120; z += 3 ) for ( let x = - 150; x < 0; x += 3 ) {
+
+		const h = spot( x, z ), d = - T.heightAt( x, z );
+		if ( h.reef > 0.8 && d > 2 && d < 10 ) bayReef.push( [ x, z ] );
+
+	}
+
+	const pick = ( list ) => list.filter( ( _, i ) => i % Math.max( 1, Math.floor( list.length / 40 ) ) === 0 ).slice( 0, 40 );
+	const W = pick( wind ), Bp = pick( bayReef );
+	const preds = [ 'blackGrouper', 'muttonSnapper', 'cuberaSnapper', 'yellowtail', 'graySnapper', 'barracuda', 'jack', 'grouper' ];
+	const w0 = share( W, preds, fair ), b0 = share( Bp, preds, fair ), wb = share( W, preds, blustery );
+	const kg = ( big ) => {
+
+		let t = 0;
+		for ( let i = 0; i < 4000; i ++ ) t += rollWeight( 'blackGrouper', rng, null, null, big );
+		return t / 4000;
+
+	};
+	console.log( `     the windward reef (${ wind.length } spots 3 m apart): ${ pc( w0, 'groupers, snappers and the like' ) }; the bay's reef ${ pc( b0, 'of them' ) }; a black grouper ${ kg( 1 ).toFixed( 1 ) } kg on average there, ${ kg( 0 ).toFixed( 1 ) } in the bay; its north sea blown out ${ pc( wb, 'of them' ) }` );
+	check( wind.length > 200 && w0.share > b0.share * 1.3, 'the windward reef: reef water, its groupers and snappers more of the bites than on the bay\'s reef' );
+	check( kg( 1 ) > 1.25 * kg( 0 ), 'and bigger' );
+	check( wb.wait > 1.15 * w0.wait, 'a big north sea roughs it, as it does the north shore' );
+	// (its crest raised to 1 to 3 m, its fore reef falling away up the trades' sea; its fish's coral heads)
+	const c = WORLD.northReef.center, up = { x: - REEF_SITES.north.swell[ 0 ], z: - REEF_SITES.north.swell[ 1 ] };
+	const crest = - T.heightAt( c.x, c.z ), fore = - T.heightAt( c.x + up.x * 70, c.z + up.z * 70 ), heads = ReefLayout.heads( T, 'north' );
+	console.log( `     its crest ${ crest.toFixed( 1 ) } m down, its fore reef ${ fore.toFixed( 1 ) } m at 70 m seaward; ${ heads.length } coral heads for its fish` );
+	check( crest > 0.8 && crest < 4 && fore > crest + 5 && heads.length >= 30 && heads.every( ( [ x, z ] ) => - T.heightAt( x, z ) > 1.5 ), 'its crest just under the water, its fore reef falling away seaward, its coral heads under water' );
 
 }
 

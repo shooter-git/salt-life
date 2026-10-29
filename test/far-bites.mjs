@@ -29,7 +29,7 @@ const rng = () => ( ( seed = ( seed * 1664525 + 1013904223 ) >>> 0 ) / 429496729
 
 // the game's own reading of a spot (Game.habitatAtPoint), with what's found out there given
 const none = { weed: [], debris: [], bait: [] };
-const game = { app: { terrainData: T, finds: none }, _pier: WORLD.pier, findsNear: Game.prototype.findsNear, windwardAt: Game.prototype.windwardAt, sandAt: Game.prototype.sandAt };
+const game = { app: { terrainData: T, finds: none }, _pier: WORLD.pier, findsNear: Game.prototype.findsNear, windwardAt: Game.prototype.windwardAt, sandAt: Game.prototype.sandAt, windReefAt: Game.prototype.windReefAt };
 const at = ( x, z, finds = none ) => {
 
 	game.app.finds = finds;

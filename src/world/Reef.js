@@ -40,19 +40,19 @@ export class Reef {
 
 	// Lays the reef out (in a worker where it can: reef/ReefWorker) and returns a Reef.
 	// terrain: TerrainData; ground: the Terrain (the shared underwater shading); tier; data: the
-	// layout if it was started earlier (Reef.layout)
-	static async create( { scene, terrain, ground, tier = 'high', data = null } ) {
+	// layout if it was started earlier (Reef.layout); (M15) site: which reef (ReefLayout's REEF_SITES)
+	static async create( { scene, terrain, ground, tier = 'high', data = null, site = 'bay' } ) {
 
-		data = await ( data || Reef.layout( terrain ) );
-		return new Reef( { scene, terrain, ground, tier, data } );
+		data = await ( data || Reef.layout( terrain, site ) );
+		return new Reef( { scene, terrain, ground, tier, data, site } );
 
 	}
 
 	// the layout: a promise of ReefLayout's toData() (in a worker; on the page if there's none)
-	static async layout( terrain ) {
+	static async layout( terrain, site = 'bay' ) {
 
 		const T = terrain;
-		const input = { terrain: { res: T.res, texel: T.texel, origin: T.origin, size: T.size, heights: T.heights, seagrass: T.seagrass } };
+		const input = { site, terrain: { res: T.res, texel: T.texel, origin: T.origin, size: T.size, heights: T.heights, seagrass: T.seagrass, seagrassWin: T.seagrassWin || null } };
 		try {
 
 			return await new Promise( ( resolve, reject ) => {
@@ -80,20 +80,21 @@ export class Reef {
 		} catch ( e ) {
 
 			console.warn( 'Reef: laid out on the page (no worker)', e && e.message );
-			return new ReefLayout( { terrain } ).toData();
+			return new ReefLayout( { terrain, site } ).toData();
 
 		}
 
 	}
 
 	// data: ReefLayout's toData()
-	constructor( { scene, terrain, ground, tier = 'high', data } ) {
+	constructor( { scene, terrain, ground, tier = 'high', data, site = 'bay' } ) {
 
 		this.terrain = terrain;
+		this.site = site;
 		this.tier = TIER[ tier ] ? tier : 'high';
 		this.cfg = TIER[ this.tier ];
 		this.group = new THREE.Group();
-		this.group.name = 'Reef';
+		this.group.name = site === 'bay' ? 'Reef' : `Reef.${ site }`;
 		this.hf = data.hf;
 		this.cells = data.cells;
 		this.extent = data.extent;

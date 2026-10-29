@@ -18,6 +18,18 @@ const ellipseDist = ( x, z, cx, cz, rx, rz ) => {
 
 };
 
+// (M15) the windward reef's platform (WORLD.northReef), 0..1: an ellipse in its frame (u seaward, up the
+// trades' sea, v along the shore), longer seaward than shoreward; its edge ragged
+const NR = WORLD.northReef, NR_UP = { x: - 0.35 / Math.hypot( 0.35, 0.94 ), z: - 0.94 / Math.hypot( 0.35, 0.94 ) };
+export function northReefMask( x, z, rag = 0 ) {
+
+	const dx = x - NR.center.x, dz = z - NR.center.z;
+	const u = dx * NR_UP.x + dz * NR_UP.z, v = dx * NR_UP.z - dz * NR_UP.x;
+	const ru = u > 0 ? u / NR.radius : - u / ( NR.radius * 0.6 ), rv = v / ( NR.radius * 1.25 );
+	return 1 - smoothstep( 0.35, 1, Math.hypot( ru, rv ) + rag );
+
+}
+
 // central bay: the beach and its underwater profile stay smooth (the surf is tuned for it)
 const beachZoneAt = ( x, z ) => ( 1 - smoothstep( 120, 205, Math.abs( x - 10 ) ) ) * ( 1 - smoothstep( 40, 140, z + 40 ) ) * smoothstep( - 260, - 120, z );
 
@@ -227,6 +239,17 @@ export class TerrainData {
 				const bumps = n2.ridged( x / 11, z / 11, 4 ) * 2.8 + n.fbm( x / 5, z / 5, 2 ) * 0.5;
 				h += reefMask * ( 1.2 + bumps );
 				h = Math.min( h, - 1.4 );
+
+			}
+
+			// ((M15) and the windward reef's, off the north-west point: along its shore, longer seaward
+			// than shoreward, raised to its crest)
+			const nm = northReefMask( x, z );
+			if ( nm > 0 ) {
+
+				const bumps = n2.ridged( x / 11 + 31, z / 11, 4 ) * 2.8 + n.fbm( x / 5, z / 5 + 17, 2 ) * 0.5;
+				h += nm * ( 1.6 + bumps );
+				h = Math.min( h, - 1.3 );
 
 			}
 
@@ -771,7 +794,7 @@ export class TerrainData {
 
 				// exclusions (with ragged edges): reef core, the sandy swim / boat channel along the pier
 				const rag = n2.noise( x / 9, z / 9 ) * 5 + n3.noise( x / 3.1, z / 3.1 ) * 1.5;
-				const reef = 1 - smoothstep( rr * 0.6, rr * 0.8, Math.hypot( x - rc.x, z - rc.z ) + rag * 2 );
+				const reef = Math.max( 1 - smoothstep( rr * 0.6, rr * 0.8, Math.hypot( x - rc.x, z - rc.z ) + rag * 2 ), smoothstep( 0.25, 0.45, northReefMask( x, z, rag * 0.02 ) ) );
 				const channel = ( 1 - smoothstep( 9, 13, Math.abs( x - px - 4 ) + rag ) ) * smoothstep( - 70, - 55, z ) * ( 1 - smoothstep( 45, 60, z + rag * 2 ) );
 				const keep = ( 1 - reef ) * ( 1 - channel );
 				if ( keep <= 0 ) continue;

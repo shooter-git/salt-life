@@ -9,7 +9,7 @@ self.onmessage = ( e ) => {
 	try {
 
 		const terrain = Object.assign( Object.create( TerrainData.prototype ), e.data.terrain );
-		const data = new ReefLayout( { terrain } ).toData();
+		const data = new ReefLayout( { terrain, site: e.data.site || 'bay' } ).toData();
 		data.noise = noiseVolumeData();
 		self.postMessage( { data }, [ ...reefTransferables( data ), data.noise.buffer ] );
 

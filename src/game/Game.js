@@ -35,6 +35,7 @@ import { lb, feet, gallons } from './Units.js';
 import { SPECIES } from '../world/fish/FishSpecies.js';
 import { SEABED } from '../world/terrain/SeabedModel.js';
 import { mangroveAt } from '../world/terrain/Mangrove.js';
+import { northReefMask } from '../world/TerrainData.js';
 
 // how long the catch card stays up unless dismissed (ms)
 const CATCH_CARD_MS = 9000;
@@ -1099,7 +1100,16 @@ export class Game {
 		// island it's on, for which sea roughs its water)
 		h.weather = this.weatherNow;
 		h.side = this.windwardAt( p.x, p.z );
+		h.big = this.windReefAt( p.x, p.z );
 		return h;
+
+	}
+
+	// (M15) how much ( x, z ) is on the windward reef off the north-west point (0..1: its platform, TerrainData's)
+	windReefAt( x, z ) {
+
+		const m = northReefMask( x, z ), t = Math.min( 1, Math.max( 0, ( m - 0.15 ) / 0.35 ) );
+		return t * t * ( 3 - 2 * t );
 
 	}
 
@@ -1120,13 +1130,17 @@ export class Game {
 	}
 
 	// (M15) the sand under ( x, z ), 0..1 (the island's 1 m sand cover, less its rock: the beaches, the bay's
-	// floor, the flats); none past the island's map
+	// floor, the flats; once those masks are let go, the 4 m one App keeps of them: T.beach); none past the
+	// island's map
 	sandAt( x, z ) {
 
-		const T = this.app.terrainData, i = Math.floor( ( x - T.origin ) / T.texel ), j = Math.floor( ( z - T.origin ) / T.texel );
-		if ( i < 0 || j < 0 || i >= T.res || j >= T.res ) return 0;
-		const k = j * T.res + i;
-		return T.sand[ k ] / 255 * ( 1 - T.rock[ k ] );
+		const T = this.app.terrainData, B = T.sand ? null : T.beach;
+		if ( ! T.sand && ! B ) return 0;
+		const res = B ? B.res : T.res, texel = B ? B.texel : T.texel;
+		const i = Math.floor( ( x - T.origin ) / texel ), j = Math.floor( ( z - T.origin ) / texel );
+		if ( i < 0 || j < 0 || i >= res || j >= res ) return 0;
+		const k = j * res + i;
+		return B ? B.data[ k ] / 255 : T.sand[ k ] / 255 * ( 1 - T.rock[ k ] );
 
 	}
 
@@ -1150,7 +1164,7 @@ export class Game {
 		// ((M15) and the wash's: the sand, on which side; and the mangroves' creek, their pool and their edge)
 		const beach = depth < 5 ? this.sandAt( x, z ) : 0, windward = beach > 0 ? this.windwardAt( x, z ) : 0;
 		const mg = depth < 6 ? mangroveAt( x, z ) : null, creek = mg ? Math.max( mg.creek, mg.fringe ) : 0;
-		return habitatAt( { depth, reefDist, pierDist: Math.min( walk, head ), slope, patch, weed: f.weed, debris: f.debris, birds: f.birds, beach, windward, creek } );
+		return habitatAt( { depth, reefDist, pierDist: Math.min( walk, head ), slope, patch, weed: f.weed, debris: f.debris, birds: f.birds, beach, windward, creek, windReef: this.windReefAt( x, z ) } );
 
 	}
 
@@ -1235,7 +1249,7 @@ export class Game {
 			}
 
 			b.species = species;
-			b.kg = rollWeight( species, Math.random, this.hookBait, h.weather );
+			b.kg = rollWeight( species, Math.random, this.hookBait, h.weather, h.big );
 			b.phase = 'nibble';
 			b.nibbles = 1 + Math.floor( Math.random() * 3 );
 			b.t = 0.7 + Math.random() * 0.8;

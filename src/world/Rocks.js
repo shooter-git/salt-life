@@ -267,6 +267,8 @@ export class Rocks {
 			if ( Math.abs( x - pier.x ) < r + 9 && z > pier.zStart - 8 && z < pier.zEnd + 12 ) return true;
 			if ( Math.hypot( x - spawn.x, z - spawn.z ) < r + 10 ) return true;
 			if ( Math.hypot( x - reef.center.x, z - reef.center.z ) < reef.radius + r + 12 ) return true;
+			// ((M15) and the windward reef: its corals, not loose rocks)
+			if ( Math.hypot( x - WORLD.northReef.center.x, z - WORLD.northReef.center.z ) < WORLD.northReef.radius * 1.2 + r ) return true;
 			if ( T.pathDistance && T.pathDistance( x, z ) < r + 1.5 ) return true;
 			// the sandy beach of the bay stays clear above the waterline (a few rocks at its ends)
 			if ( x > - 125 && x < 155 && z > - 125 && h > - 1.2 && z < 40 ) return true;

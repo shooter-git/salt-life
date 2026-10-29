@@ -215,10 +215,11 @@ const _frustum = new THREE.Frustum(), _sphere = new THREE.Sphere(), _m = new THR
 export class FishSchools {
 
 	// floorAt( x, z ): highest obstacle (seabed or reef); anchors: [ [ x, z ], ... ] coral heads;
-	// bay: also populate the bay, the pier and the beach; shoreField (optional, ShoreField.js)
+	// bay: also populate the bay, the pier and the beach; (M15) north: the windward reef's { center, radius,
+	// anchors } (its own fish too); shoreField (optional, ShoreField.js)
 	// locates the breakers (without it every beach counts as fully exposed)
 	// (Salt Life) ground: the Terrain (the shared underwater shading); tier
-	constructor( { parent, terrain, ground, floorAt = null, center, radius, anchors = [], seed = 23, bay = true, shoreField = null, tier = 'high' } ) {
+	constructor( { parent, terrain, ground, floorAt = null, center, radius, anchors = [], seed = 23, bay = true, shoreField = null, tier = 'high', north = null } ) {
 
 		this.cfg = TIER[ tier ] || TIER.high;
 		this.terrain = terrain;
@@ -226,6 +227,7 @@ export class FishSchools {
 		this.center = center.clone();
 		this.radius = radius;
 		this.anchors = anchors.length ? anchors : [ [ center.x, center.z ] ];
+		this.north = north; // ((M15) the windward reef: { center, radius, anchors }, or null: layout)
 		this.shoreField = shoreField;
 		// (M10) the surf as a share of a fair day's (setSurf), and what the breakers' grid was built for
 		this.surf = 1;
@@ -628,6 +630,59 @@ export class FishSchools {
 
 		}
 
+		// ---- (M15) the windward reef off the north-west point: its own reef fish; its groupers and snappers
+		// bigger than the bay's (zone.big: their lengths), and its hogfish, yellowtail, parrotfish and
+		// barracuda; jacks, a cubera or two, an eagle ray and a reef shark along its drop-off; its lobsters. (Placed
+		// last: everyone else keeps their places)
+		const N = this.north;
+		if ( ! N ) return;
+		const nr = { x: N.center.x, z: N.center.z, r: N.radius * 0.75, anchors: N.anchors };
+		const big = ( zone, k = 1.3 ) => ( { ...zone, big: k } );
+		for ( const c of [ 12, 10, 10 ] ) place( 'sergeant', c, nr, true );
+		for ( const c of [ 24, 20, 22, 18 ] ) place( 'chromis', c, nr, true );
+		for ( const c of [ 22, 18, 16 ] ) place( 'grunt', c, nr, true );
+		for ( const c of [ 18, 14 ] ) place( 'yellowtail', c, big( nr, 1.15 ) );
+		for ( const c of [ 16, 12 ] ) place( 'tang', c, nr );
+		for ( const c of [ 12, 12, 10 ] ) place( 'wrasse', c, nr );
+		for ( const c of [ 4, 4, 3 ] ) place( 'parrot', c, big( nr, 1.2 ) );
+		for ( let i = 0; i < 3; i ++ ) place( 'angel', 2, nr, true );
+		for ( let i = 0; i < 3; i ++ ) place( 'grouper', 1, big( nr ), true );
+		for ( let i = 0; i < 3; i ++ ) place( 'barracuda', 1, big( nr, 1.2 ) );
+		place( 'silverside', 140, nr );
+		for ( const c of [ 3, 2, 2 ] ) place( 'hogfish', c, big( { ...nr, r: N.radius, sand: true }, 1.2 ) );
+		for ( let i = 0; i < 5; i ++ ) place( 'blackGrouper', 1, big( nr ), true );
+		for ( let i = 0; i < 5; i ++ ) place( 'lionfish', i % 2 ? 1 : 2, nr, true );
+		for ( const c of [ 3, 3, 2 ] ) place( 'muttonSnapper', c, big( { ...nr, r: N.radius } ) );
+		for ( const c of [ 6, 5 ] ) place( 'graySnapper', c, big( nr, 1.2 ), true );
+		place( 'goliathGrouper', 1, { ...nr, band: [ 7, 20 ] }, true );
+		const ndrop = this.dropOff( N.center, N.radius );
+		const nmid = ndrop[ Math.floor( ndrop.length / 2 ) ] || [ nr.x, nr.z - nr.r ];
+		const ndz = { x: nmid[ 0 ], z: nmid[ 1 ], r: 30, path: ndrop };
+		for ( const c of [ 8, 6 ] ) {
+
+			const g = place( 'jack', c, ndz );
+			if ( g ) g.zone.path = ndrop;
+
+		}
+
+		place( 'cuberaSnapper', 2, big( ndz ) );
+		for ( const name of [ 'eagleRay', 'reefShark' ] ) {
+
+			const g = place( name, 1, ndz );
+			if ( g ) g.zone.path = ndrop;
+
+		}
+
+		place( 'stingray', 1, { ...nr, r: N.radius, band: [ 3, 12 ], sand: true } );
+		place( 'turtle', 1, { ...nr, r: N.radius, band: [ 3, 10 ] } );
+		place( 'nurseShark', 1, { ...nr, r: N.radius, band: [ 3, 12 ], sand: true } );
+		for ( let i = 0; i < 8; i ++ ) {
+
+			const g = place( 'lobster', i % 3 ? 1 : 2, nr, true );
+			if ( g ) this.lobsterGroups.push( g );
+
+		}
+
 	}
 
 	// The humpback (world/marine/Whale.js): its escort follows the posed body.
@@ -637,17 +692,17 @@ export class FishSchools {
 
 	}
 
-	// Points along the reef's seaward slope (10 - 15 m deep), ordered along it.
-	dropOff() {
+	// Points along the reef's seaward slope (10 - 15 m deep), ordered along it. ((M15) about c, out to radius:
+	// the bay's reef, or the windward one)
+	dropOff( c = this.center, radius = this.radius ) {
 
 		const pts = [];
-		const c = this.center;
 		for ( let a = 0; a < 64; a ++ ) {
 
 			const t = a / 64 * TAU;
 			const dx = Math.cos( t ), dz = Math.sin( t );
 			// walk outward from the reef centre to where the water gets 11 m deep
-			for ( let r = 10; r < this.radius * 1.4; r += 2 ) {
+			for ( let r = 10; r < radius * 1.4; r += 2 ) {
 
 				const x = c.x + dx * r, z = c.z + dz * r;
 				const d = this.depthAt( x, z );
@@ -698,7 +753,7 @@ export class FishSchools {
 			}
 
 			const y = this.clampY( sp, x, z, g.home.y + ( rng() - 0.5 ) * spread * 0.5 );
-			const L = sp.length[ 0 ] + ( sp.length[ 1 ] - sp.length[ 0 ] ) * rng();
+			const L = ( sp.length[ 0 ] + ( sp.length[ 1 ] - sp.length[ 0 ] ) * rng() ) * ( g.zone.big || 1 );
 			this.size[ i ] = L;
 			this.pos.set( [ x, y, z ], i * 3 );
 			this.prev.set( [ x, y, z ], i * 3 );
@@ -2137,7 +2192,7 @@ export class FishSchools {
 			// (Salt Life) another lobster in the den, of its own size
 			if ( sp.mode === 'lobster' ) {
 
-				this.size[ i ] = sp.length[ 0 ] + ( sp.length[ 1 ] - sp.length[ 0 ] ) * Math.random();
+				this.size[ i ] = ( sp.length[ 0 ] + ( sp.length[ 1 ] - sp.length[ 0 ] ) * Math.random() ) * ( g.zone.big || 1 );
 				this.makeDen( g, i );
 
 			}

@@ -15,6 +15,7 @@ import { NORTH } from './Weather.js';
 //   windward  0..1: how much the spot's on the island's windward side, its north shore, facing the trades
 //   beach     0..1: sand under the spot (the beaches' wash; the bay's floor and the flats too)
 //   creek     0..1: the mangroves' creek, their pool, and the water off their edge (terrain/Mangrove.js)
+//   windReef  0..1: the windward reef off the north-west point (WORLD.northReef): reef water, as the bay's
 // Returns weights per water type (they overlap: a spot can be both pier and bay). The shallows, the reef,
 // the pier, the bay, and:
 //   deep    the shelf's deep water, 20 to 150 m (and the top of the slope below it): the snappers and
@@ -33,17 +34,18 @@ import { NORTH } from './Weather.js';
 //                down and more: the snook's, the mangrove snapper's, the tarpon's, young barracuda's and
 //                jacks'; sheltered, no sea or wind roughs it (it fishes when the rest is blown out)
 // (M15) The game adds side too, as it does flood (not a water type): the spot's windward share, for the sea
-// that roughs its water (the north shore's or the bay's surf: roughed).
+// that roughs its water (the north shore's or the bay's surf: roughed); and big, 0..1: how much it's on the
+// windward reef, whose fish run bigger and whose big fish bite more (BIG: pickSpecies, rollWeight).
 // (Salt Life) The game adds flood, 0..1: how far the spot is in a boat's deck floodlights after dark (not
 // a water type: it draws in the fish that gather under lights, and the bait, so they bite sooner), and
 // (M9) weather: the weather now (Weather.weatherAt's; none, or a fair day's, changes nothing: weatherMood).
 export const BLUE = 0.35; // (the open ocean's fish, sparse: its weight; a spot's floor is the same: biteDelay)
-export function habitatAt( { depth, reefDist, pierDist, slope = 0, patch = 0, weed = 0, debris = 0, birds = 0, windward = 0, beach = 0, creek = 0 } ) {
+export function habitatAt( { depth, reefDist, pierDist, slope = 0, patch = 0, weed = 0, debris = 0, birds = 0, windward = 0, beach = 0, creek = 0, windReef = 0 } ) {
 
 	const h = { shallows: 0, reef: 0, pier: 0, bay: 0, deep: 0, edge: 0, ledge: 0, blue: 0, weed: 0, debris: 0, birds: 0, wash: 0, creek: 0 };
 	if ( depth < 0.25 ) return h; // on the sand
 	h.shallows = smooth( 3.5, 1.0, depth );
-	h.reef = Math.max( smooth( 12, - 6, reefDist ), patch ) * smooth( 0.8, 2.5, depth );
+	h.reef = Math.max( smooth( 12, - 6, reefDist ), patch, windReef ) * smooth( 0.8, 2.5, depth );
 	h.pier = smooth( 9, 2, pierDist ) * smooth( 0.6, 2, depth );
 	h.bay = smooth( 1.5, 4, depth ) * ( 1 - smooth( 18, 30, depth ) );
 	h.deep = smooth( 16, 28, depth ) * ( 1 - smooth( 110, 200, depth ) );
@@ -132,8 +134,12 @@ export const HEAVY_SLOWER = 0.8;
 //                  as it's blown out (northBig), when it counts `blown` less
 export const ROUGH = { shallows: [ 'surf', 0.5 ], pier: [ 'surf', 0.35 ], deep: [ 'wind', 0.4 ], ledge: [ 'wind', 0.4 ] };
 export const WASH = { day: 0.9, blown: 0.85, open: 0.5 };
+// (M15) the windward reef's (habitat.big): its fish's weights skew this much less to the small end
+// (rollWeight), and the big kinds (`kg` past `from` at their biggest) bite up to `more` again as often; and a big
+// north sea roughs its water as it does the north shore's (`blown`)
+export const BIG = { skew: 0.5, from: 4, more: 1.5, blown: 0.4 };
 // (not water types: what the game adds to a spot's habitat)
-const NOT_WATER = { flood: true, weather: true, side: true };
+const NOT_WATER = { flood: true, weather: true, side: true, big: true };
 
 // the water types as the weather leaves them (m: weatherMood's)
 function roughed( habitat, m ) {
@@ -145,6 +151,7 @@ function roughed( habitat, m ) {
 	const blown = m.northBig * side;
 	if ( h.wash ) h.wash *= ( 1 + WASH.day * ( m.surf + ( m.north * ( 1 - m.northBig ) - m.surf ) * side ) ) * ( 1 - WASH.blown * blown );
 	if ( h.bay ) h.bay *= 1 - WASH.open * blown;
+	if ( h.reef && habitat.big ) h.reef *= 1 - BIG.blown * m.northBig * habitat.big;
 	return h;
 
 }
@@ -185,6 +192,8 @@ export function pickSpecies( habitat, hour, rng = Math.random, bait = null ) {
 		// ((M15) under the birds, what's busting the bait is feeding now, whatever the hour)
 		if ( habitat.birds && f.habitat.birds ) act += ( 1 - act ) * habitat.birds;
 		let x = hw * f.rarity * act * baitWeight( bait, id );
+		// ((M15) on the windward reef the big ones bite more)
+		if ( habitat.big && f.kg[ 1 ] >= BIG.from ) x *= 1 + BIG.more * habitat.big;
 		if ( m && f.weather ) x *= weatherWeight( f.weather, m );
 		w.push( x );
 		total += x;
@@ -207,11 +216,11 @@ export function pickSpecies( habitat, hour, rng = Math.random, bait = null ) {
 }
 
 // Weight in kg: skewed toward the small end (most fish are small, trophies are rare; less so on a
-// big bait, and (M9) ahead of a blow: weather, habitat.weather)
-export function rollWeight( id, rng = Math.random, bait = null, weather = null ) {
+// big bait, and (M9) ahead of a blow: weather, habitat.weather; (M15) and on the windward reef: big)
+export function rollWeight( id, rng = Math.random, bait = null, weather = null, big = 0 ) {
 
 	const [ a, b ] = FISH[ id ].kg;
-	let skew = 2.2 * ( BAITS[ bait ] ? BAITS[ bait ].skew : 1 );
+	let skew = 2.2 * ( BAITS[ bait ] ? BAITS[ bait ].skew : 1 ) * ( 1 - BIG.skew * big );
 	const m = weatherMood( weather );
 	if ( m && m.front > 0 ) skew *= 1 - FRONT_BIGGER * m.front;
 	const t = Math.pow( rng(), skew );

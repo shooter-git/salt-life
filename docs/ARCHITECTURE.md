@@ -84,6 +84,16 @@ New code that draws from world positions on the GPU takes the same care: a point
 - **The shore's waves**: `computeShoreField` scales each cell's exposure by the stand, so the shore waves die in it, every field alike (the south's, the west's, the north's).
 - **The bites**: `Game.habitatAtPoint` passes the creek and the fringe as `creek` to `Bites.habitatAt`.
 
+## The windward reef
+
+(M15) A second reef off the north-west point (`WORLD.northReef`), the bay's machinery run again for it:
+- **Its site**: `ReefLayout`'s `REEF_SITES` (the bay's and `north`: centre, radius, the swell it faces, its seed and noise, how far about its middle its coral heads are, whether the bay's floor is scattered too). `ReefLayout( { terrain, site } )`, the worker (`ReefWorker`) and `Reef.create( { …, site } )` take it; the bay's is unchanged.
+- **Its ground**: `TerrainData.northReefMask` (an ellipse in its frame) raises the platform in `_base`, keeps seagrass off it in `_seabed`; `TerrainSurface` draws its flat; `Rocks` keeps clear of it. It's baked.
+- **Laid out lazily**: `App.northReefNear` starts it within `NORTH_REEF.near` and, on low, disposes it past `far`. `App.reefs` (`list`, `floorHeightAt`: the highest of them) is what the swimmer (`Player.reef`) and the fish stand on.
+- **Its fish**: `FishSchools( { north } )` lays its population out last in `layout()` (everyone else keeps their places), its coral heads from `ReefLayout.heads` (the habitat alone, `fields: true`), its drop-off from `dropOff( centre, radius )`; `zone.big` scales its groups' lengths.
+- **Its bites**: `Game.windReefAt` (the platform's mask) is `habitatAt`'s `windReef` (reef water) and the habitat's `big` (`Bites.BIG`: bigger fish in `rollWeight`, the big kinds more often in `pickSpecies`, and a big north sea's roughing in `roughed`).
+- **The masks it needs later**: App keeps the windward reef's window of the seagrass (`T.seagrassWin`, which `placeMeadows` reads) and a 4 m sand-not-rock mask (`T.beach`, for `Game.sandAt`) before it lets the island's masks go.
+
 ## The sea out there
 
 (M15) The sea by where it is (`test/sea-out-there.mjs`):
