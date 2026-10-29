@@ -1,5 +1,7 @@
 import * as THREE from '../../engine/index.js';
 import { hash2 } from './TerrainNoise.js';
+import { CAVES, CAVE, tunnelAt } from './SeaCaves.js';
+import { caveLightGrid, caveLightAttribute, caveWaterLight } from './CaveLight.js';
 
 // (M14) Rock overhangs to shelter under on the shore: few of the scattered rocks overhang ground you can
 // stand on (they sit sunk into it), so three are placed by hand, each its own, shaped after photographs
@@ -410,7 +412,76 @@ function stack( s ) {
 
 }
 
-const KINDS = { ledge, slab, stack };
+// (M15) a sea cave (terrain/SeaCaves.js, its plan: the ground's cut its floor in, the gully, the inlet and the
+// cave): the inlet's walls, near sheer, splaying a little to the sea and upward; at its head the cave, cut into
+// the rock under the slope: a cleft (tall and narrow, widest low down, closing to a crack, its walls bulging and
+// pinching) running in, lower and narrower, to the beach at its back; and over the slot the floor's cut leaves,
+// the rock up to the slope's own surface (as the ground either side of the cut has it), a little proud of it
+// over the cut and under it past the cut's edges. In its frame x is the plan's -x (the overhangs' frame turns
+// the other way)
+function seacave( s, ground, site ) {
+
+	const c = site.cave, M = - c.inset, B = M - c.depth;
+	const T = ( z ) => tunnelAt( c, Math.min( 0.5, z ) );
+	// (the slope's own height over a column the floor's cut: from the ground either side of the cut)
+	const orig = ( x, z ) => {
+
+		const t = T( z ), xc = - t.wander, hc = t.half + CAVE.margin + 1.4;
+		if ( Math.abs( x - xc ) >= hc ) return ground( x, z );
+		const a = ground( xc - hc, z ), b = ground( xc + hc, z ), u = ( x - xc + hc ) / ( 2 * hc );
+		return a + ( b - a ) * u;
+
+	};
+	let top = 0;
+	for ( let z = B - 5; z <= 1; z += 1.5 ) for ( let x = - 11; x <= 11; x += 1.5 ) top = Math.max( top, orig( x, z ) );
+	return {
+		bounds: [ [ - 11.5, - 3.6, B - 5 ], [ 11.5, top + 1.5, 1.5 ] ],
+		basalt: s + 7,
+		clear: [ B - 5, 1.5 ],
+		// (nothing grows over the cut, nor in the inlet: a strip of bare rock up the slope over it)
+		clearHalf: 8.5,
+		column( x, z ) {
+
+			// the rock's top: the slope's, a little proud of it over the cut, under it past the cut's edges and
+			// its inland end
+			// (its edges ragged: out past the cut here and there, each side its own)
+			const t = T( z ), xc = - t.wander, e = t.half + CAVE.margin + 0.5 + 1.6 * Math.max( 0, noise3( x > xc ? 3.1 : - 3.1, 0.7, z * 0.16, s + 11 ) + 0.25 );
+			const past = Math.max( sstep( e, e + 1.5, Math.abs( x - xc ) ), sstep( B - 1, B - 2.5, z ) );
+			return [ orig( x, z ) + 0.2 - past * 0.9, t, xc ];
+
+		},
+		f( x, y, z, a, col ) {
+
+			const [ roof, t, xc ] = col;
+			const A = 0.4, fr = 0.22;
+			const wx = x + noise3( x * fr, y * fr, z * fr, s ) * A, wy = y + noise3( x * fr + 5.2, y * fr, z * fr, s + 1 ) * A * 0.6, wz = z + noise3( x * fr, y * fr + 3.7, z * fr, s + 2 ) * A;
+			const rock = Math.max( wy - roof - 0.15 * noise3( x * 0.4, 0.5, z * 0.4, s + 4 ), wz - 0.6 );
+			const across = Math.abs( wx - xc ), wall = 0.16 * noise3( 0.3, y * 0.5, z * 0.3, s + 6 );
+			// the inlet: from the waterline in to the cave's mouth, open to the sky
+			const hwN = t.half * ( 1 + 0.3 * sstep( M, 0, z ) ) * ( 1 + 0.03 * Math.max( 0, wy ) ) * ( 1 + wall );
+			const inlet = Math.max( across - hwN, M + 0.5 * noise3( x * 0.3, y * 0.3, 0.5, s + 8 ) - wz );
+			// the cave: from below the floor (the ground's the floor) to its top, widest low down, closing to a
+			// crack; its back rounded off
+			const tp = Math.min( t.top, 1e3 ), yb = t.floor - 1.4, u = Math.min( 1, Math.max( 0, ( wy - yb ) / ( tp - yb ) ) );
+			const hw = t.half * Math.pow( Math.max( 0, 1 - u * u ), 0.55 ) * ( 1 + wall );
+			const cave = Math.max( across - hw, wy - tp, B + 0.8 * noise3( x * 0.4, y * 0.4, 0.5, s + 7 ) - wz, wz - M - 0.5 );
+			// (the basalt's flows and joints in its walls; its top, the slope's, only roughened, as the ground
+			// about it: its flows' steps read as brickwork up the slope)
+			const hollow = Math.min( inlet, cave ), d = smax( rock, - hollow, 0.4 ), walls = sstep( 3.5, 1.5, hollow );
+			if ( walls <= 0 ) return d + fbm3( x * 0.6, y * 0.6, z * 0.6, 2, s + 9 ) * 0.12;
+			return d + ( basalt( d, x, y, z, s + 7 ) - d ) * walls + fbm3( x * 0.6, y * 0.6, z * 0.6, 2, s + 9 ) * 0.12 * ( 1 - walls );
+
+		},
+	};
+
+}
+
+const KINDS = { ledge, slab, stack, seacave };
+
+// (M15) the sea caves as overhang sites (terrain/SeaCaves.js' plan): each its own (its frame turned to its
+// mouth, the sea's height), on a grid a little coarser than the shelters' (cellK: a far bigger rock; still
+// fine enough on the low tier for the basalt's detail)
+export const SEA_CAVE_SITES = CAVES.map( ( c, k ) => ( { kind: 'seacave', x: c.x, z: c.z, toward: c.out, seed: 17 + k * 6, cave: c, cellK: 1.3 } ) );
 
 // a grid's value at ( fx, fy, fz ) in its cells (n: its points along x y z), trilinear
 function trilinear( F, n, fx, fy, fz ) {
@@ -631,10 +702,11 @@ export function buildOverhang( site, terrain, opts ) {
 
 }
 
-export function* overhangBuild( site, terrain, { cell = 0.2 } = {} ) {
+export function* overhangBuild( site, terrain, { cell = 0.2, light = null } = {} ) {
 
+	cell *= site.cellK || 1;
 	const yaw = Math.atan2( site.toward[ 0 ], site.toward[ 1 ] ), cs = Math.cos( yaw ), sn = Math.sin( yaw );
-	const y0 = site.kind === 'stack' ? 0 : terrain.heightAt( site.x, site.z );
+	const y0 = site.kind === 'stack' || site.kind === 'seacave' ? 0 : terrain.heightAt( site.x, site.z );
 	const world = ( x, z ) => [ site.x + cs * x + sn * z, site.z - sn * x + cs * z ];
 	const ground = ( x, z ) => {
 
@@ -642,7 +714,7 @@ export function* overhangBuild( site, terrain, { cell = 0.2 } = {} ) {
 		return terrain.heightAt( wx, wz ) - y0;
 
 	};
-	const shape = KINDS[ site.kind ]( site.seed, ground );
+	const shape = KINDS[ site.kind ]( site.seed, ground, site );
 	// sampled column by column (the ground and what's the column's looked up once): first on a grid three
 	// times as coarse, then finely only where that's within two of its cells of the surface (further off,
 	// the coarse grid's value will do: it's the sign that matters there)
@@ -696,16 +768,31 @@ export function* overhangBuild( site, terrain, { cell = 0.2 } = {} ) {
 		return trilinear( F, n, fx, fy, fz );
 
 	};
-	return { site, geometry, matrix, yaw, y0, x: c.x, y: c.y, z: c.z, radius: b.radius, top: geometry.boundingBox.max.y + y0, at, ground, world, bounds: shape.bounds, clear: shape.clear };
+	const o = { site, geometry, matrix, yaw, y0, x: c.x, y: c.y, z: c.z, radius: b.radius, top: geometry.boundingBox.max.y + y0, at, ground, world, bounds: shape.bounds, clear: shape.clear, clearHalf: shape.clearHalf };
+	// ((M15) a sea cave's light: what each place in it sees of the sky and the sunlit sea (CaveLight.js), worked
+	// out once (its finer rock takes its coarser's), its rock's faces' and the sea's in it)
+	if ( site.kind === 'seacave' ) {
+
+		o.light = light || ( yield* caveLightGrid( o, shape.column ) );
+		caveLightAttribute( geometry, o.light );
+		o.waterLight = caveWaterLight( o.light );
+
+	}
+
+	return o;
 
 }
 
 // what's in the way of someone standing under it, column by column (COLUMN m): wherever the rock reaches
 // between the step they take and their height over the ground there, a box from under the ground up to
-// its top in that column; runs along its length merged. The roof over them isn't in the way
+// its top in that column; runs along its length merged. The roof over them isn't in the way. ((M15) A sea
+// cave's: what's in the way of someone wading or swimming in it, or a boat (up to CAVE_REACH over the sea),
+// its boxes no higher than that, so that over it, on its roof, nothing's in the way (Rocks.roofAt has them
+// stand on it))
+const CAVE_REACH = 2.0, CAVE_WALL = 3.5;
 export function overhangColliders( o ) {
 
-	const [ lo, hi ] = o.bounds, out = [];
+	const [ lo, hi ] = o.bounds, out = [], cave = o.site.kind === 'seacave';
 	const nz = Math.ceil( ( hi[ 2 ] - lo[ 2 ] ) / COLUMN ), nx = Math.ceil( ( hi[ 0 ] - lo[ 0 ] ) / COLUMN );
 	for ( let k = 0; k < nz; k ++ ) {
 
@@ -715,7 +802,7 @@ export function overhangColliders( o ) {
 			if ( ! run ) return;
 			const cx = ( run.x0 + run.x1 ) / 2, cz = lo[ 2 ] + ( k + 0.5 ) * COLUMN;
 			const [ wx, wz ] = o.world( cx, cz );
-			const bottom = run.bottom + o.y0 - 0.6, top = run.top + o.y0;
+			const bottom = run.bottom + o.y0 - 0.6, top = cave ? Math.min( run.top, CAVE_WALL ) + o.y0 : run.top + o.y0;
 			out.push( { center: new THREE.Vector3( wx, ( bottom + top ) / 2, wz ), half: new THREE.Vector3( ( run.x1 - run.x0 ) / 2, ( top - bottom ) / 2, COLUMN / 2 ), rotY: o.yaw } );
 			run = null;
 
@@ -724,7 +811,7 @@ export function overhangColliders( o ) {
 
 			const x = lo[ 0 ] + ( i + 0.5 ) * COLUMN, z = lo[ 2 ] + ( k + 0.5 ) * COLUMN, g = o.ground( x, z );
 			let blocks = false;
-			for ( let y = g + STEP; y <= g + BODY; y += 0.12 ) if ( o.at( x, y, z ) < 0 ) {
+			for ( let y = g + STEP, y1 = cave ? Math.max( g + BODY, CAVE_REACH ) : g + BODY; y <= y1; y += 0.12 ) if ( o.at( x, y, z ) < 0 ) {
 
 				blocks = true;
 				break;
@@ -739,7 +826,7 @@ export function overhangColliders( o ) {
 			}
 
 			let top = g + BODY;
-			for ( let y = g + BODY; y < hi[ 1 ]; y += 0.15 ) if ( o.at( x, y, z ) < 0 ) top = y;
+			for ( let y = g + BODY, y1 = cave ? CAVE_WALL + 0.2 : hi[ 1 ]; y < y1; y += 0.15 ) if ( o.at( x, y, z ) < 0 ) top = y;
 			if ( run && Math.abs( top - run.top ) < 0.5 ) {
 
 				run.x1 = x + COLUMN / 2;
@@ -760,6 +847,58 @@ export function overhangColliders( o ) {
 	}
 
 	return out;
+
+}
+
+// (M15) a sea cave's roof, for walking on (the ground under it is cut to its floor): over each ROOF_STEP m
+// column of it, the rock's top where it's over the cut ground (NaN elsewhere: the inlet's open, the ground
+// itself past the cut). Looked up by caveRoofAt (world x z, the height or -Infinity)
+const ROOF_STEP = 0.5;
+export function caveRoof( o ) {
+
+	const [ lo, hi ] = o.bounds, nx = Math.ceil( ( hi[ 0 ] - lo[ 0 ] ) / ROOF_STEP ) + 1, nz = Math.ceil( ( hi[ 2 ] - lo[ 2 ] ) / ROOF_STEP ) + 1;
+	const H = new Float32Array( nx * nz ).fill( NaN );
+	for ( let k = 0; k < nz; k ++ ) for ( let i = 0; i < nx; i ++ ) {
+
+		const x = lo[ 0 ] + i * ROOF_STEP, z = lo[ 2 ] + k * ROOF_STEP, g = o.ground( x, z );
+		// (down from over its top till the rock's met)
+		let prev = o.at( x, hi[ 1 ], z );
+		for ( let y = hi[ 1 ] - 0.15; y > g + 0.8; y -= 0.15 ) {
+
+			const v = o.at( x, y, z );
+			if ( v < 0 ) {
+
+				H[ k * nx + i ] = y + 0.15 * v / ( v - prev ) + o.y0;
+				break;
+
+			}
+
+			prev = v;
+
+		}
+
+	}
+
+	return { H, nx, nz, lo: [ lo[ 0 ], lo[ 2 ] ] };
+
+}
+
+export function caveRoofAt( o, roof, x, z ) {
+
+	const dx = x - o.site.x, dz = z - o.site.z, cs = Math.cos( o.yaw ), sn = Math.sin( o.yaw );
+	const fx = ( cs * dx - sn * dz - roof.lo[ 0 ] ) / ROOF_STEP, fz = ( sn * dx + cs * dz - roof.lo[ 1 ] ) / ROOF_STEP;
+	if ( fx < 0 || fz < 0 || fx > roof.nx - 1 || fz > roof.nz - 1 ) return - Infinity;
+	const i = Math.min( roof.nx - 2, Math.floor( fx ) ), k = Math.min( roof.nz - 2, Math.floor( fz ) ), u = fx - i, v = fz - k, H = roof.H, n = roof.nx;
+	const a = H[ k * n + i ], b = H[ k * n + i + 1 ], c = H[ ( k + 1 ) * n + i ], d = H[ ( k + 1 ) * n + i + 1 ];
+	// (by its nearest corner where it's at its edge)
+	if ( Number.isNaN( a + b + c + d ) ) {
+
+		const h = H[ Math.round( fz ) * n + Math.round( fx ) ];
+		return Number.isNaN( h ) ? - Infinity : h;
+
+	}
+
+	return ( a * ( 1 - u ) + b * u ) * ( 1 - v ) + ( c * ( 1 - u ) + d * u ) * v;
 
 }
 
@@ -803,6 +942,7 @@ export function clears( o, x, z ) {
 
 	const dx = x - o.site.x, dz = z - o.site.z, cs = Math.cos( o.yaw ), sn = Math.sin( o.yaw );
 	const lx = cs * dx - sn * dz, lz = sn * dx + cs * dz;
-	return lx > o.bounds[ 0 ][ 0 ] && lx < o.bounds[ 1 ][ 0 ] && lz > o.clear[ 0 ] && lz < o.clear[ 1 ];
+	const h = o.clearHalf;
+	return ( h ? Math.abs( lx ) < h : lx > o.bounds[ 0 ][ 0 ] && lx < o.bounds[ 1 ][ 0 ] ) && lz > o.clear[ 0 ] && lz < o.clear[ 1 ];
 
 }

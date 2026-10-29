@@ -7,6 +7,7 @@ import { SeaDetail } from './SeaDetail.js';
 import { Whitecaps } from './Whitecaps.js';
 import { LEE } from './Waves.js';
 import { useLocalLights, LOCAL_LIGHTS_MAX } from '../materials/LocalLights.js';
+import { SEA_CAVE_GLSL, SEA_CAVE_CALM_GLSL, seaCaveUniforms } from '../world/terrain/CaveLight.js';
 
 // The sea: one instanced CDLOD grid that follows the camera out to the horizon. Its surface is the
 // open sea's Gerstner waves (Waves), fading out over the outer surf zone, plus Tidewater's breaking
@@ -223,9 +224,9 @@ export class WaterSurface {
 		mat.premultipliedAlpha = true;
 		mat.onBeforeCompile = ( shader ) => {
 
-			Object.assign( shader.uniforms, uniforms );
+			Object.assign( shader.uniforms, uniforms, seaCaveUniforms );
 			shader.vertexShader = shader.vertexShader
-				.replace( '#include <common>', '#include <common>\n' + this.lod.glsl + terrain.heightGlsl + waves.glsl + ( SH ? shore.glsl : '' ) + /* glsl */`
+				.replace( '#include <common>', '#include <common>\n' + this.lod.glsl + terrain.heightGlsl + waves.glsl + ( SH ? shore.glsl : '' ) + SEA_CAVE_CALM_GLSL + /* glsl */`
 uniform float waterSeaLevel;
 varying vec3 vWater;
 varying vec3 vWaterL; // (M15) about the sea's origin
@@ -245,6 +246,10 @@ varying vec2 vWaterX0; // (M14) the grid's point: the water's own (its foam ride
 	float fade = waveFade( depth );
 	vec3 wn;
 	vec3 total = waveDisplacementLod( x0, fade, lod.spacing, wn );
+	// ((M15) in a sea cave's gully, inlet and cave: a gentler surge)
+	float caveCalm = seaCaveCalm( x0 );
+	total *= 1.0 - 0.4 * caveCalm;
+	wn = normalize( mix( wn, vec3( 0.0, 1.0, 0.0 ), 0.4 * caveCalm ) );
 	vec3 objectNormal = normalize( wn );
 	vSurf = vec4( 0.0 );
 	float y = waterSeaLevel + total.y;
@@ -252,6 +257,14 @@ ${ SH ? /* glsl */`
 	// near the shore: the breaking waves on top of the open sea, and the run-up sheet on the sand
 	if ( depth < ${ SHORE_DEEP.toFixed( 1 ) } ) {
 		ShoreSample sw = shoreEvaluate( x0, depth, ground );
+		// ((M15) and no breakers there, nor a run-up sheet up its walls)
+		float calmK = 1.0 - 0.85 * caveCalm;
+		sw.disp *= calmK;
+		sw.nShore = normalize( mix( vec3( 0.0, 1.0, 0.0 ), sw.nShore, calmK ) );
+		sw.face *= calmK;
+		sw.roller *= calmK;
+		sw.foam *= mix( 1.0, 0.35, caveCalm );
+		sw.swashLevel = mix( waterSeaLevel - 5.0, sw.swashLevel, calmK );
 		total += sw.disp;
 		y = waterSeaLevel + total.y;
 		// the open sea's slopes ride on the shore wave's, added as slopes: where the shore wave's gone (at
@@ -290,7 +303,7 @@ ${ SH ? /* glsl */`
 				.replace( '#include <begin_vertex>', 'vec3 transformed = wPos;' );
 
 			shader.fragmentShader = shader.fragmentShader
-				.replace( '#include <common>', '#include <common>\n' + terrain.heightGlsl + ( SH ? shore.glsl : '' ) + waves.glsl + this.whitecaps.glsl + ( cover ? cover.glsl : '' ) + ( rocks ? rocks.glsl : '' ) + /* glsl */`
+				.replace( '#include <common>', '#include <common>\n' + SEA_CAVE_GLSL + SEA_CAVE_CALM_GLSL + terrain.heightGlsl + ( SH ? shore.glsl : '' ) + waves.glsl + this.whitecaps.glsl + ( cover ? cover.glsl : '' ) + ( rocks ? rocks.glsl : '' ) + /* glsl */`
 uniform float waterTime;
 uniform vec3 waterSunColor;
 uniform vec3 waterSunDir;
@@ -387,7 +400,7 @@ float waterLaceK( vec2 p, int k, float cover ) {
 	float meanDepth = max( waterSeaLevel_ - floorH, 0.0 );
 	// see-through only over the shallows: deeper, the water's own colour is all there is
 	float cover = smoothstep( 0.0, 4.5, depth ) * 0.85 + 0.15;
-	float turbid = ${ SH ? 'shoreSurfTurbidity( vWater.xz, meanDepth )' : '0.0' };
+	float turbid = ${ SH ? 'shoreSurfTurbidity( vWater.xz, meanDepth ) * ( 1.0 - 0.8 * seaCaveCalm( vWater.xz ) )' : '0.0' };
 	// whitewater: the breakers' foam as lace, denser at the roller; a soft line where the swash
 	// runs out on the sand
 	vec2 drift = vec2( 0.0, waterTime * 0.12 );
@@ -402,7 +415,7 @@ ${ SH ? /* glsl */`
 	vec4 se = shoreSwashEdge( vWater.xz, film );
 	float frontD = se.y;
 	float uprush = smoothstep( 0.46, 0.32, se.z );
-	float frontFoam = smoothstep( 0.9, 0.0, frontD ) * smoothstep( -0.05, 0.08, frontD ) * uprush;
+	float frontFoam = smoothstep( 0.9, 0.0, frontD ) * smoothstep( -0.05, 0.08, frontD ) * uprush * ( 1.0 - 0.9 * seaCaveCalm( vWater.xz ) );
 	foam = max( foam, waterLace( vWater.xz * 4.5 + 3.7, 0.65 ) * frontFoam * 0.85 );
 	// the swash sheet ends on its analytic front, not on the mesh triangles
 	float sheetEdge = smoothstep( 0.0, 0.012, se.x );` : `
@@ -581,6 +594,11 @@ ${ SH ? /* glsl */`
 	vec3 waterLight = waterSunColor * ( max( waterSunDir.y, 0.0 ) * 0.22 * cloudSh ) + waterSky * 0.55;
 	// foam is a white surface on top: lit like the sand (the sun by its height in the sky, the sky's fill)
 	vec3 foamLight = waterSunColor * ( max( waterSunDir.y, 0.0 ) * cloudSh ) + waterSky * 1.2 + 0.02;
+	// ((M15) in a sea cave: lit as much as it sees of the sky over it, and by the sunlit sea's light coming in
+	// under the water from the mouth (its glow: the turquoise of a sea cave's water); the foam by the sky's)
+	vec2 caveL = seaCaveLightAt( vWater.xz ).xy;
+	waterLight *= max( caveL.x, caveL.y * 0.55 );
+	foamLight *= max( caveL.x, caveL.y * 0.3 );
 	vec3 lampSum = vec3( 0.0 );
 #ifdef LOCAL_LIGHTS_WATER
 	// lamps and searchlights on the sea (LocalLights): their light scattered back up from inside the
@@ -647,7 +665,10 @@ ${ SH ? /* glsl */`
 				.replace( '#include <envmap_physical_pars_fragment>', THREE.ShaderChunk.envmap_physical_pars_fragment.replace( REFLECT_RAY, REFLECT_RAY + '\n\t\t\treflectVec.y = abs( reflectVec.y );' ) )
 				.replace( '#include <lights_fragment_end>', /* glsl */`#include <lights_fragment_end>
 	// (M11) from under water, the underside's faint fill, not the sky's mirror
-	if ( ! gl_FrontFacing ) reflectedLight.indirectSpecular *= waterEnvUnder;` )
+	if ( ! gl_FrontFacing ) reflectedLight.indirectSpecular *= waterEnvUnder;
+	// ((M15) in a sea cave: the sky in it as much as there's sky over it, the sun's glint where the sun gets in)
+	reflectedLight.indirectSpecular *= sqrt( caveL.x );
+	reflectedLight.directSpecular *= smoothstep( 0.05, 0.4, caveL.x );` )
 				.replace( '#include <opaque_fragment>', /* glsl */`
 #ifdef WATER_REFRACT
 	if ( gl_FrontFacing ) {

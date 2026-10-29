@@ -450,6 +450,7 @@ export class App {
 		// laptops: bloom and SMAA (phones draw straight to the screen)
 		this.post = tier === 'high' ? new PostChain( renderer, scene, camera ) : null;
 		this.player = new Player( { camera, input: this.input, terrain: this.terrainData, colliders: this.colliders, query: this.query, boat: this.boatCtl } );
+		this.player.rocks = this.rocks; // ((M15) the sea caves' roofs to walk on)
 		// ((M13) the wind you stand in, in the gusts the sea shows: a hurricane's pushes you along)
 		this.player.windAt = ( x, z ) => this.weather.windAt( x, z );
 
@@ -943,7 +944,17 @@ export class App {
 
 		// ---- render
 		if ( this.nearDetail ) this.updateNearDetail();
-		this.renderer.toneMappingExposure = s.exposure * this.sky.adaptation;
+		// ((M15) in a sea cave the eye adapts to its dark as to dusk's: as far as the light's less where you are and
+		// where you're looking (a few metres on: looking into it from its mouth, you're looking into its dark), up
+		// to 12 x, slower into the dark than back out)
+		const eye = this.camera.position, ahead = this.camera.getWorldDirection( this._caveDir || ( this._caveDir = new THREE.Vector3() ) );
+		const at = this._caveAt || ( this._caveAt = new THREE.Vector3() );
+		const caveHere = this.rocks.caveLevel( eye );
+		let caveSeen = caveHere;
+		for ( const d of [ 2, 5, 9 ] ) caveSeen = Math.min( caveSeen, this.rocks.caveLevel( at.copy( ahead ).multiplyScalar( d ).add( eye ) ) );
+		const caveT = Math.min( 12, Math.max( 1, 1 / Math.max( 0.3 * caveHere + 0.7 * caveSeen, 0.01 ) ) );
+		this.caveAdapt = this.caveAdapt === undefined ? caveT : this.caveAdapt + ( caveT - this.caveAdapt ) * ( 1 - Math.exp( - dt * ( caveT > this.caveAdapt ? 0.8 : 2 ) ) );
+		this.renderer.toneMappingExposure = s.exposure * this.sky.adaptation * this.caveAdapt;
 		// (while the catch card is up its fish portrait is drawn in place of the world: FishPortrait)
 		const portrait = this.game && this.game.portrait;
 		if ( portrait && portrait.active ) portrait.render( this.renderer, () => this.drawWorld() );

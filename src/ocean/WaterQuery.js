@@ -1,4 +1,5 @@
 import { G } from '../core/Globals.js';
+import { seaCaveCalm } from '../world/terrain/CaveLight.js';
 
 export const MAX_QUERIES = 64;
 
@@ -72,11 +73,16 @@ export class WaterQuery {
 	heightAt( x, z, t ) {
 
 		let h = this.waves.heightAt( x, z, t );
+		// ((M15) in a sea cave's gully, inlet and cave: a gentler surge, no breakers nor run-up, as the water's drawn)
+		const calm = seaCaveCalm( x, z );
+		if ( calm > 0 ) h = G.seaLevel.value + ( h - G.seaLevel.value ) * ( 1 - 0.4 * calm );
 		if ( this.shore && this.terrain ) {
 
 			const ground = this.terrain.heightAt( x, z );
 			const sw = this.shore.sample( x, z, t, ground, this.terrain );
-			h += sw.y;
+			const calmK = 1 - 0.85 * calm;
+			h += sw.y * calmK;
+			if ( calm > 0 ) sw.swashLevel = G.seaLevel.value - 5 + ( sw.swashLevel - G.seaLevel.value + 5 ) * calmK;
 			const k = 0.04, m = Math.min( 1, Math.max( 0, ( sw.swashLevel - h ) / k * 0.5 + 0.5 ) );
 			h = h + ( sw.swashLevel - h ) * m + m * ( 1 - m ) * k;
 

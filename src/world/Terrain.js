@@ -3,10 +3,11 @@ import { CDLOD } from '../core/CDLOD.js';
 import { G } from '../core/Globals.js';
 import { bakeTerrainMaps } from './terrain/TerrainBake.js';
 import { getDetailTexture } from './terrain/DetailTextures.js';
-import { TERRAIN_SHADING_GLSL, rot2 } from './terrain/TerrainShading.js';
+import { TERRAIN_SHADING_GLSL, rot2, srgb } from './terrain/TerrainShading.js';
 import { TERRAIN_SURFACE_GLSL } from './terrain/TerrainSurface.js';
 import { halfIsland } from './terrain/IslandBake.js';
 import { causticTexture } from '../ocean/SeaTextures.js';
+import { SEA_CAVE_GLSL, seaCaveUniforms } from './terrain/CaveLight.js';
 
 // The island's ground, drawn with one instanced CDLOD grid (core/CDLOD.js): every vertex reads its
 // height from a float texture of TerrainData's heightmap. The surface is Tidewater's terrain
@@ -135,7 +136,7 @@ float terrainHeightAt( vec2 xz ) {
 		if ( tier === 'low' ) mat.defines = { TERRAIN_LITE: '' };
 		mat.onBeforeCompile = ( shader ) => {
 
-			Object.assign( shader.uniforms, uniforms );
+			Object.assign( shader.uniforms, uniforms, seaCaveUniforms );
 			shader.vertexShader = shader.vertexShader
 				.replace( '#include <common>', '#include <common>\n' + this.lod.glsl + this.heightGlsl + /* glsl */`
 varying vec3 vTerrain;
@@ -164,6 +165,7 @@ vec4 terrainSeaOf( vec2 xz, float e ) {
 
 			shader.fragmentShader = shader.fragmentShader
 				.replace( '#include <common>', /* glsl */`#include <common>
+${ SEA_CAVE_GLSL }
 uniform sampler2D terrainDetailTex;
 uniform sampler2D terrainNormalTex;
 uniform sampler2D terrainSplatTex;
@@ -204,11 +206,20 @@ vec4 terrainSplat( vec2 xz ) {
 ${ TERRAIN_SHADING_GLSL }
 ` )
 				.replace( '#include <color_fragment>', TERRAIN_SURFACE_GLSL + /* glsl */`
+	// ((M15) in a sea cave: its floor's cobbles and boulders, the basalt's, rolled by the sea; and as much of the
+	// sky's light as its floor sees, no sun nor caustics in its dark)
+	vec3 caveL = seaCaveLightAt( xz );
+	if ( caveL.z > 0.01 ) {
+		vec4 cb = terDetail( xz / 1.7 + 0.31 ), cs = terDetail( xz / 0.45 + 0.77 );
+		float stone = ss( 0.42, 0.58, cs.w + ( cb.w - 0.5 ) * 0.6 );
+		vec3 cob = mix( ${ srgb( 0.08, 0.075, 0.07 ) }, mix( ${ srgb( 0.2, 0.19, 0.18 ) }, ${ srgb( 0.3, 0.27, 0.24 ) }, cb.y ), stone ) * ( 0.8 + 0.4 * cs.x );
+		tAlbedo = mix( tAlbedo, cob, caveL.z );
+	}
 	// under the sea: the water takes the red out first, then the green, on the way down and back
 	float cWater = max( terrainSeaLevel - h, 0.0 );
 	tAlbedo *= exp( - terrainWaterAbsorption * cWater * 1.6 );
 	// caustics: the net of sunlight focused by the waves, drifting over the shallow sea floor
-	float cK = ss( 0.05, 0.7, cWater ) * exp( - cWater * 0.1 ) * ( 1.0 - terrainNight ) * terrainCausticsK;
+	float cK = ss( 0.05, 0.7, cWater ) * exp( - cWater * 0.1 ) * ( 1.0 - terrainNight ) * terrainCausticsK * ss( 0.2, 0.6, caveL.x );
 	if ( cK > 0.001 ) {
 		float ca = min( texture( terrainCaustics, xz * 0.19 + terrainTime * vec2( 0.031, 0.018 ) ).r,
 			texture( terrainCaustics, ${ rot2( 'xz', 0.8 ) } * 0.15 + 0.5 - terrainTime * vec2( 0.017, 0.034 ) ).r );
@@ -219,8 +230,10 @@ ${ TERRAIN_SHADING_GLSL }
 				.replace( '#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = tRough;' )
 				.replace( '#include <normal_fragment_maps>', 'normal = normalize( ( viewMatrix * vec4( tNormal, 0.0 ) ).xyz );' )
 				.replace( '#include <aomap_fragment>', /* glsl */`
-	reflectedLight.indirectDiffuse *= tAO;
-	reflectedLight.indirectSpecular *= tAO;` );
+	reflectedLight.indirectDiffuse *= tAO * caveL.x;
+	reflectedLight.indirectSpecular *= tAO * caveL.x;
+	reflectedLight.directDiffuse *= ss( 0.03, 0.3, caveL.x );
+	reflectedLight.directSpecular *= ss( 0.03, 0.3, caveL.x );` );
 
 		};
 

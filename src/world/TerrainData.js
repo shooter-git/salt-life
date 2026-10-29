@@ -3,6 +3,7 @@ import { WORLD } from './WorldLayout.js';
 import { softRamp, erosionNoise, sampleGrid, upsample2, boxBlur } from './terrain/TerrainNoise.js';
 import { ridgeEnvelope, SEA_STACKS, PATHS, polylineDistance } from './terrain/IslandShape.js';
 import { MANGROVE, mangroveAt } from './terrain/Mangrove.js';
+import { CAVES, carveAt } from './terrain/SeaCaves.js';
 
 const smin = ( a, b, k ) => {
 
@@ -90,6 +91,10 @@ export class TerrainData {
 		this._F = { wx: 0, wz: 0, f170: 0, und: 0, deep: 0, E: 0, gx: 0, gz: 0 };
 		this._out = { h: 0, rock: 0, d: 0, bz: 0, carve: 0 };
 		if ( ! baked ) this.generate();
+		// ((M15) the sea caves' floors cut in as a bake's loaded (the bake's the ground as it was): the rocks and the
+		// plants are placed from the ground as it was (this.uncut), each from one random stream, so the cut moved
+		// every one placed after it)
+		if ( baked ) this._seaCaves();
 		this.offshore = offshore;
 		if ( offshore ) this._blendEdge();
 		this.buildMinMax();
@@ -447,6 +452,8 @@ export class TerrainData {
 		// ((M15) the mangroves on the west: their floor and their creek)
 		this._mangrove( H );
 		tick( 'mangrove' );
+
+		// ((M15) the sea caves: their floors and their gullies, cut in)
 
 		this._masks( H, D, R0, BZ, CV );
 		this._mangroveMasks( H );
@@ -870,6 +877,44 @@ export class TerrainData {
 			return m.stand < 0.2 && m.creek < 0.2;
 
 		} );
+
+	}
+
+	// (M15) the sea caves (terrain/SeaCaves.js): each one's floor (its gully through the rock platform, its
+	// inlet, its cave, its beach) cut into the ground, at whatever its texels are; their rock's built over them
+	// (Overhangs' 'seacave'). What the cut ground was is kept (_uncut: texel -> height), and this.uncut is the
+	// ground as it was (heightAt, normalAt; the rest as this), for placing the rocks and the plants: each is
+	// placed from one random stream, so the cut, taken as the ground, moved every one placed after it. The rock
+	// sites on the floors are kept (Rocks takes its rocks off them after placing them all)
+	_seaCaves() {
+
+		const res = this.res, o = this.origin, t = this.texel, H = this.heights, U = this._uncut = new Map();
+		for ( const c of CAVES ) {
+
+			const r = Math.max( c.inset + c.depth, c.gully ) + 14;
+			const i0 = Math.max( 1, Math.floor( ( c.x - r - o ) / t ) ), i1 = Math.min( res - 2, Math.ceil( ( c.x + r - o ) / t ) );
+			const j0 = Math.max( 1, Math.floor( ( c.z - r - o ) / t ) ), j1 = Math.min( res - 2, Math.ceil( ( c.z + r - o ) / t ) );
+			for ( let j = j0; j <= j1; j ++ ) for ( let i = i0; i <= i1; i ++ ) {
+
+				const k = j * res + i, cut = carveAt( o + ( i + 0.5 ) * t, o + ( j + 0.5 ) * t );
+				if ( ! cut ) continue;
+				if ( ! U.has( k ) ) U.set( k, H[ k ] );
+				H[ k ] = lerp( H[ k ], Math.min( H[ k ], cut.h ), cut.k );
+
+			}
+
+		}
+
+		const T = this;
+		this.uncut = Object.create( this, { heightAt: { value( x, z ) {
+
+			const h = T.heightAt( x, z );
+			const fx = ( x - o ) / t - 0.5, fz = ( z - o ) / t - 0.5, i = Math.floor( fx ), j = Math.floor( fz ), k = j * res + i;
+			if ( ! ( U.has( k ) || U.has( k + 1 ) || U.has( k + res ) || U.has( k + res + 1 ) ) ) return h;
+			const at = ( q ) => U.has( q ) ? U.get( q ) : H[ q ], tx = fx - i, tz = fz - j;
+			return ( at( k ) * ( 1 - tx ) + at( k + 1 ) * tx ) * ( 1 - tz ) + ( at( k + res ) * ( 1 - tx ) + at( k + res + 1 ) * tx ) * tz;
+
+		} } } );
 
 	}
 

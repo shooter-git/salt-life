@@ -193,6 +193,8 @@ export class Player {
 		const c = this.colliders.groundHeightAt( x, z, maxY );
 		if ( c > g ) g = c;
 		if ( this.reef && this.reef.floorHeightAt ) g = Math.max( g, this.reef.floorHeightAt( x, z ) );
+		// ((M15) on a sea cave's roof: its ground's cut to its floor)
+		if ( this.rocks ) g = Math.max( g, this.rocks.roofAt( x, z, maxY ) );
 		return g;
 
 	}

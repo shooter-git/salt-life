@@ -1,5 +1,5 @@
-// (M15) The island's landmarks (world/Lighthouse.js, and the others as they come): the lighthouse on the
-// north-west headland, its light's character (one white flash every ten seconds, a third of a second long),
+// (M15) The island's landmarks (world/Lighthouse.js, and the others as they come; the sea caves:
+// terrain/SeaCaves.js): the lighthouse on the north-west headland, its light's character (one white flash every ten seconds, a third of a second long),
 // how far it's seen over the earth's curve, and its place: high on the headland, looking down on the windward
 // reef it warns ships off, nothing of the island in the way.
 //
@@ -14,6 +14,10 @@ import { HARBOUR_LIGHTS, lightAt } from '../src/world/HarbourLights.js';
 import { WRECK, SECTIONS, toWorld, inWreck, wreckSpots } from '../src/world/wreck/WreckPlan.js';
 import { wreckGeometries } from '../src/world/Wreck.js';
 import { ReefLayout } from '../src/world/reef/ReefLayout.js';
+import { CAVE, tunnelAt, worldOf } from '../src/world/terrain/SeaCaves.js';
+import { SEA_CAVE_SITES, buildOverhang, overhangColliders, caveRoof, caveRoofAt } from '../src/world/terrain/Overhangs.js';
+import { caveLightAt } from '../src/world/terrain/CaveLight.js';
+import { Colliders } from '../src/world/Colliders.js';
 
 let failed = 0;
 const check = ( ok, what ) => {
@@ -140,6 +144,78 @@ const T = new TerrainData( 7, decodeIsland( read( 'island.bin' ) ) );
 	const through = L.items.hard.filter( ( it ) => inWreck( it.x, it.z, 0 ) && L.structureAt( it.x, it.z ) <= T.heightAt( it.x, it.z ) + 0.4 ).length;
 	console.log( `     ${ L.counts.wreck } things grown on its decks; ${ through } corals through its hull` );
 	check( L.counts.wreck > 60 && through === 0, 'sponges, fans and small corals grown on its sunken decks, none of the reef\'s corals through its hull' );
+
+}
+
+// ---- the sea caves (as Na Pali's and Skye's): an inlet cut into the slope, open to the sky, and at its head the
+// cave running in under it to a beach; swum or rowed into from the gully through the platform; dark inside
+{
+
+	const low = new TerrainData( 7, decodeIsland( read( 'island-1024.bin' ) ) );
+	for ( const site of SEA_CAVE_SITES ) {
+
+		const c = site.cave, M = - c.inset, B = M - c.depth, name = `the ${ c.id } cave`;
+		// its floor, on both islands: water to swim in from the gully's mouth to the beach at its back
+		for ( const [ tier, TT ] of [ [ 'high', T ], [ 'low', low ] ] ) {
+
+			let shallowest = - Infinity;
+			for ( let fz = c.gully - 4; fz > B + CAVE.beachLength; fz -= 0.5 ) {
+
+				const [ x, z ] = worldOf( c, tunnelAt( c, Math.min( fz, 0 ) ).wander * ( fz > 0 ? 1 - fz / c.gully : 1 ), fz );
+				shallowest = Math.max( shallowest, TT.heightAt( x, z ) );
+
+			}
+
+			const [ bx, bz ] = worldOf( c, tunnelAt( c, B + 1.5 ).wander, B + 1.5 ), beach = TT.heightAt( bx, bz );
+			check( shallowest < - 1.2 && beach > 0.05, `${ name } (${ tier }): ${ ( - shallowest ).toFixed( 2 ) } m of water at the least from the gully's mouth to its beach, the beach ${ beach.toFixed( 2 ) } m up` );
+
+		}
+
+		const o = buildOverhang( site, T, { cell: 0.5 } );
+		// room in it: along its middle, nothing from the sea up to two-thirds of its height (the inlet's to 6 m)
+		let shut = 0;
+		for ( let fz = 0.5; fz > B + 1; fz -= 0.5 ) {
+
+			const t = tunnelAt( c, fz );
+			for ( let y = 0.3; y < Math.min( t.top, 6 ) * 0.66; y += 0.25 ) if ( o.at( - t.wander, y, fz ) < 0 ) shut ++;
+
+		}
+
+		check( shut === 0, `${ name }: clear along its middle from the sea up, from the inlet's mouth to its back` );
+		// its light: the sky over the inlet, less at the cave's mouth, none at its back
+		const L = ( fz ) => caveLightAt( o.light, - tunnelAt( c, fz ).wander, 1.2, fz, 0, 1, 0 )[ 0 ];
+		console.log( `     the sky seen straight up: ${ [ M / 2, M, M - 4, B + 2 ].map( ( z ) => L( z ).toFixed( 2 ) ).join( ', ' ) } (the inlet, the mouth, 4 m in, the back)` );
+		check( L( M / 2 ) > 0.35 && L( M ) < L( M / 2 ) && L( M - 4 ) < 0.15 && L( B + 2 ) < 0.03, `${ name }: open to the sky in its inlet, dimmer at its mouth, dark at its back` );
+		// swum or rowed in along its middle, nothing in the way; its walls are
+		const col = new Colliders();
+		for ( const b of overhangColliders( o ) ) col.addBox( b.center, b.half, b.rotY, { tag: 'rock' } );
+		let stopped = 0, held = 0, walls = 0;
+		for ( let fz = 6; fz > B + 2; fz -= 0.4 ) {
+
+			const t = tunnelAt( c, fz ), [ x, z ] = worldOf( c, t.wander, fz );
+			if ( col.resolveCapsule( { x, y: - 1.2, z }, 0.3, 1.0, 0 ) ) stopped ++;
+			if ( fz > M - 6 && col.resolveCapsule( { x, y: - 0.3, z }, 0.25, 1.6, 0 ) ) stopped ++;
+			// (its walls: in the inlet, splayed to the sea; none out in the gully)
+			if ( fz > - 1 ) continue;
+			for ( const side of [ - 1, 1 ] ) {
+
+				const [ wx, wz ] = worldOf( c, t.wander + side * ( t.half * ( t.open ? 1.55 : 1.2 ) + 0.6 ), fz );
+				walls ++;
+				if ( col.resolveCapsule( { x: wx, y: - 1.2, z: wz }, 0.3, 1.0, 0 ) ) held ++;
+
+			}
+
+		}
+
+		check( stopped === 0 && held > walls * 0.9, `${ name }: swum in to its back (and rowed in past its mouth) along its middle (${ stopped } stops); its walls in the way (${ held } of ${ walls })` );
+		// over it, its roof to walk on, at the slope's height either side of it, nothing in the way up there
+		const roof = caveRoof( o ), fz = M - c.depth / 2, t = tunnelAt( c, fz ), [ rx, rz ] = worldOf( c, t.wander, fz );
+		const hc = t.half + CAVE.margin + 1.4, h = caveRoofAt( o, roof, rx, rz );
+		const side = ( T.heightAt( ...worldOf( c, t.wander - hc, fz ) ) + T.heightAt( ...worldOf( c, t.wander + hc, fz ) ) ) / 2;
+		const up = col.resolveCapsule( { x: rx, y: h, z: rz }, 0.3, 1.75, 0.4 );
+		check( Math.abs( h - side ) < 1 && h > t.top + 2 && ! up, `${ name }: its roof walked on over its middle, ${ h.toFixed( 1 ) } m up (the slope either side of it ${ side.toFixed( 1 ) } m)` );
+
+	}
 
 }
 

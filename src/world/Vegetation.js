@@ -173,7 +173,8 @@ export class Vegetation {
 		};
 
 		vegUniforms.vegDetail.value = getDetailTexture();
-		const site = new VegSite( terrain, villageObstacles( this.village ) );
+		// ((M15) placed on the ground as it was before the sea caves' floors were cut, as the rocks are)
+		const site = new VegSite( terrain.uncut || terrain, villageObstacles( this.village ) );
 		this.site = site;
 		const recs = await run( scatterSteps( site, 99, { ferns: !! cfg.fernFade } ) );
 		// ((M14) none under the rocks' overhangs or in their mouths: taken out after, so the rest are as they were)
