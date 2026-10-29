@@ -253,7 +253,7 @@ export function createNatureMaterial( terrain, { lite = false } = {} ) {
 	mat.name = 'DebrisNature';
 	if ( lite ) mat.defines = { DEBRIS_LITE: '' };
 	const U = terrain.uniforms;
-	const uniforms = { terrainHeightMap: U.terrainHeightMap, terrainHeightInfo: U.terrainHeightInfo, terrainDetailTex: U.terrainDetailTex };
+	const uniforms = { terrainHeightMap: U.terrainHeightMap, terrainHeightInfo: U.terrainHeightInfo, offshoreHeightMap: U.offshoreHeightMap, offshoreHeightInfo: U.offshoreHeightInfo, terrainDetailTex: U.terrainDetailTex };
 	mat.onBeforeCompile = ( shader ) => {
 
 		Object.assign( shader.uniforms, uniforms );

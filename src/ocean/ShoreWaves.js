@@ -78,6 +78,7 @@ export const TUMBLE_H = 2.8;
 // how milky a rip's plume is (of the surf zone's), and how far past the breakers it reaches (x their depth)
 const RIP_MILK = 0.7;
 const RIP_REACH = 2.2;
+const EDGE = 100; // (M15) m: the shore's waves fade out over its field's last
 
 // (M14) where northNear looks: the point, and r off it each way
 const NEAR = [ [ 0, 0 ], [ 1, 0 ], [ - 1, 0 ], [ 0, 1 ], [ 0, - 1 ] ];
@@ -177,7 +178,8 @@ class ShoreTrain {
 
 }
 
-// a shore field at a point (bilinear), into out
+// a shore field at a point (bilinear), into out. ((M15) Its waves are the island's: they fade out over the
+// last EDGE m of its square, the shallows of the seabed out there given none of them)
 function sampleField( F, x, z, out ) {
 
 	const res = F.res, d = F.data;
@@ -186,6 +188,9 @@ function sampleField( F, x, z, out ) {
 	const i = Math.floor( fx ), j = Math.floor( fz ), tx = fx - i, tz = fz - j;
 	const k00 = ( j * res + i ) * 4, k10 = k00 + 4, k01 = k00 + res * 4, k11 = k01 + 4;
 	for ( let c = 0; c < 4; c ++ ) out[ c ] = ( d[ k00 + c ] * ( 1 - tx ) + d[ k10 + c ] * tx ) * ( 1 - tz ) + ( d[ k01 + c ] * ( 1 - tx ) + d[ k11 + c ] * tx ) * tz;
+	const keep = smooth( 0, EDGE, Math.min( x - F.origin, z - F.origin, F.origin + F.size - x, F.origin + F.size - z ) );
+	out[ 1 ] *= keep;
+	out[ 2 ] *= keep;
 	return out;
 
 }
@@ -777,7 +782,11 @@ vec4 shoreFieldSample( highp sampler2D tex, vec2 xz ) {
 	vec4 b = texelFetch( tex, i + ivec2( 1, 0 ), 0 );
 	vec4 c = texelFetch( tex, i + ivec2( 0, 1 ), 0 );
 	vec4 d = texelFetch( tex, i + ivec2( 1, 1 ), 0 );
-	return mix( mix( a, b, t.x ), mix( c, d, t.x ), t.y );
+	vec4 s = mix( mix( a, b, t.x ), mix( c, d, t.x ), t.y );
+	// ((M15) the island's own: faded out over the last of its square, none out there)
+	vec2 e = min( xz - shoreInfo.xy, shoreInfo.xy + shoreInfo.z - xz );
+	s.yz *= shSS( 0.0, ${ f( EDGE ) }, min( e.x, e.y ) );
+	return s;
 }
 // the south's; (M13) blended with a surge's field as far as the sea's risen toward its level
 vec4 terrainShoreSample( vec2 xz ) {

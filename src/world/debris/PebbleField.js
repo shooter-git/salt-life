@@ -248,7 +248,7 @@ export class PebbleField {
 		const T = this.terrain, k = this.radius / R_FAR;
 		const U = this.ground.uniforms;
 		const uniforms = {
-			terrainHeightMap: U.terrainHeightMap, terrainHeightInfo: U.terrainHeightInfo, terrainDetailTex: U.terrainDetailTex,
+			terrainHeightMap: U.terrainHeightMap, terrainHeightInfo: U.terrainHeightInfo, offshoreHeightMap: U.offshoreHeightMap, offshoreHeightInfo: U.offshoreHeightInfo, terrainDetailTex: U.terrainDetailTex,
 			debrisPebbleMask: { value: this.maskTex },
 			// the mask covers the terrain domain: origin x, z, size
 			pebDomain: { value: new THREE.Vector3( T.origin, T.origin, T.size ) },

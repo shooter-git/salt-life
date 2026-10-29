@@ -445,7 +445,7 @@ export class Rocks {
 		if ( this.lite ) mat.defines = { ROCKS_LITE: '' };
 		const U = T.uniforms;
 		const uniforms = {
-			terrainHeightMap: U.terrainHeightMap, terrainHeightInfo: U.terrainHeightInfo,
+			terrainHeightMap: U.terrainHeightMap, terrainHeightInfo: U.terrainHeightInfo, offshoreHeightMap: U.offshoreHeightMap, offshoreHeightInfo: U.offshoreHeightInfo,
 			terrainDetailTex: U.terrainDetailTex, terrainSplatTex: U.terrainSplatTex, terrainMapInfo: U.terrainMapInfo,
 		};
 		mat.onBeforeCompile = ( shader ) => {

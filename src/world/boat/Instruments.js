@@ -55,6 +55,11 @@ export const ENGINE = { maxRpm: 3600, hot: 178, cold: 84, warm: 70, cool: 400, r
 // the sounder's history: a column every this long (s), this many across; the chart: metres across
 // the screen, a track point every this long (s), and the most kept
 const PING = 0.25, COLUMNS = 120;
+// (M15) how deep the sounder finds the bottom (m): a workboat's 600 W, 50 kHz one, about half what its
+// makers claim (the salt and the hull's noise take the rest); deeper it's lost, and shows none
+export const SOUNDER_REACH = 1200 * FT;
+// the depth the sounder shows (m), or null: no bottom found
+const echo = ( depth ) => depth > SOUNDER_REACH ? null : depth;
 const CHART_M = 640, TRACK_EVERY = 2, TRACK_MAX = 90;
 // the minimap's bake (Minimap.js): metres covered, and the world at its (0, 0)
 const MAP = { ext: 1280, x0: - 640, z0: - 180 - 640 };
@@ -162,7 +167,7 @@ export class BoatInstruments {
 		if ( this._on !== true ) {
 
 			this.pings.length = 0;
-			for ( let n = 0; n < COLUMNS; n ++ ) this.pings.push( { depth: reading.depth, fish: [] } );
+			for ( let n = 0; n < COLUMNS; n ++ ) this.pings.push( { depth: echo( reading.depth ), fish: [] } );
 			this.track.length = 0;
 
 		}
@@ -174,7 +179,7 @@ export class BoatInstruments {
 			this._ping = PING;
 			const fish = [];
 			if ( reading.finder && reading.depth > 1 ) for ( let n = 0; n < 3; n ++ ) if ( this._rand() < reading.fish * 0.35 ) fish.push( 0.25 + 0.65 * this._rand() );
-			this.pings.push( { depth: reading.depth, fish } );
+			this.pings.push( { depth: echo( reading.depth ), fish } );
 			if ( this.pings.length > COLUMNS ) this.pings.shift();
 
 		}
@@ -301,8 +306,16 @@ export class BoatInstruments {
 
 		const g = this.ctx, [ x, y, w, h ] = RECTS.sounder;
 		const P = this.pings, top = y + 30, bottom = y + h - 6, col = w / COLUMNS;
-		let deep = 10 * FT;
-		for ( const p of P ) deep = Math.max( deep, p.depth );
+		// ((M15) with no bottom found, its whole reach)
+		let deep = 10 * FT, found = false;
+		for ( const p of P ) if ( p.depth !== null ) {
+
+			deep = Math.max( deep, p.depth );
+			found = true;
+
+		}
+
+		if ( ! found ) deep = SOUNDER_REACH / 1.25;
 		const range = Math.ceil( deep * 1.25 / FT / 10 ) * 10 * FT; // (to the next 10 ft)
 		const grad = g.createLinearGradient( 0, top, 0, bottom );
 		grad.addColorStop( 0, '#062a5a' );
@@ -313,18 +326,24 @@ export class BoatInstruments {
 		// (the bottom: a strong red return, fading into the sand under it)
 		for ( let i = 0; i < P.length; i ++ ) {
 
-			const px = x + w - ( P.length - i ) * col;
-			const yb = yAt( P[ i ].depth );
-			g.fillStyle = '#e8402a';
-			g.fillRect( px, yb, col + 0.5, 4 );
-			g.fillStyle = '#b8902a';
-			g.fillRect( px, yb + 4, col + 0.5, 5 );
-			g.fillStyle = '#5a3a1e';
-			g.fillRect( px, yb + 9, col + 0.5, bottom - yb - 9 );
+			const px = x + w - ( P.length - i ) * col, d = P[ i ].depth;
+			// ((M15) past its reach, no bottom: only the fish it finds on the way down)
+			if ( d !== null ) {
+
+				const yb = yAt( d );
+				g.fillStyle = '#e8402a';
+				g.fillRect( px, yb, col + 0.5, 4 );
+				g.fillStyle = '#b8902a';
+				g.fillRect( px, yb + 4, col + 0.5, 5 );
+				g.fillStyle = '#5a3a1e';
+				g.fillRect( px, yb + 9, col + 0.5, bottom - yb - 9 );
+
+			}
+
 			for ( const f of P[ i ].fish ) {
 
 				// (a fish: an arch, the sound's cone sweeping over it)
-				const fy = yAt( P[ i ].depth * f );
+				const fy = yAt( ( d ?? range ) * f );
 				g.strokeStyle = '#ffd23a';
 				g.lineWidth = 2.5;
 				g.beginPath();
@@ -346,7 +365,7 @@ export class BoatInstruments {
 		g.fillStyle = '#e8f4ff';
 		g.textAlign = 'left';
 		g.font = '700 22px system-ui, sans-serif';
-		g.fillText( reading.depth > 0.3 ? `${ Math.round( reading.depth / FT ) } ft` : '-- ft', x + 10, y + 16 );
+		g.fillText( reading.depth > 0.3 && echo( reading.depth ) !== null ? `${ Math.round( reading.depth / FT ) } ft` : '-- ft', x + 10, y + 16 );
 		g.font = '600 13px system-ui, sans-serif';
 		g.textAlign = 'right';
 		g.fillStyle = reading.finder ? '#ffd23a' : 'rgba(220,235,245,0.6)';

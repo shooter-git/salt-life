@@ -47,8 +47,10 @@ const VILLAGE = WORLD.village.center;
 export class TerrainData {
 
 	// `baked`: the fields generate() makes, read from public/world/island.bin (terrain/IslandBake.js)
-	// instead of generated, which takes seconds on a phone
-	constructor( seed = 7, baked = null ) {
+	// instead of generated, which takes seconds on a phone. (M15) `offshore`: the seabed past the square
+	// (terrain/Offshore.js, read from public/world/offshore.bin), read where the island's map ends, and the
+	// square's edge blended into it (without it, a flat 90 m past the square, as the bake makes it)
+	constructor( seed = 7, baked = null, { offshore = null } = {} ) {
 
 		this.size = WORLD.terrainSize;
 		this.res = baked ? baked.res : RES; // a bake may be coarser (2 m for low-powered devices)
@@ -75,7 +77,45 @@ export class TerrainData {
 		this._F = { wx: 0, wz: 0, f170: 0, und: 0, deep: 0, E: 0, gx: 0, gz: 0 };
 		this._out = { h: 0, rock: 0, d: 0, bz: 0, carve: 0 };
 		if ( ! baked ) this.generate();
+		this.offshore = offshore;
+		if ( offshore ) this._blendEdge();
 		this.buildMinMax();
+
+	}
+
+	// (M15) the square's edge blended into the seabed past it. generate() fades the last 120 m to a flat
+	// 90 m (_fadeBorder: lerp( -90, h, t ) at each 1 m texel, kept in the bake); to the seabed out there
+	// instead, lerp( sea, h, t ), is that plus ( 1 - t ) * ( sea + 90 ), averaged over the 1 m texels in a
+	// coarser one
+	_blendEdge() {
+
+		const sea = this.offshore;
+		const res = this.res, f = RES / res, H = this.heights, o = this.origin, tx = this.texel;
+		const ring = Math.ceil( 122 / f ) + 1;
+		const blend = ( i, j ) => {
+
+			let lost = 0;
+			for ( let b = 0; b < f; b ++ ) for ( let a = 0; a < f; a ++ ) {
+
+				const i1 = i * f + a, j1 = j * f + b;
+				lost += 1 - smoothstep( 0, 120, Math.min( i1, j1, RES - 1 - i1, RES - 1 - j1 ) );
+
+			}
+
+			if ( lost > 0 ) H[ j * res + i ] += lost / ( f * f ) * ( sea.heightAt( o + ( i + 0.5 ) * tx, o + ( j + 0.5 ) * tx ) + 90 );
+
+		};
+
+		for ( let j = 0; j < res; j ++ ) {
+
+			if ( Math.min( j, res - 1 - j ) > ring ) {
+
+				for ( let i = 0; i <= ring; i ++ ) blend( i, j );
+				for ( let i = res - 1 - ring; i < res; i ++ ) blend( i, j );
+
+			} else for ( let i = 0; i < res; i ++ ) blend( i, j );
+
+		}
 
 	}
 
@@ -875,7 +915,8 @@ export class TerrainData {
 
 		const { res, texel, origin, heights } = this;
 		const fx = ( x - origin ) / texel - 0.5, fz = ( z - origin ) / texel - 0.5;
-		if ( fx < 0 || fz < 0 || fx >= res - 1 || fz >= res - 1 ) return - 90;
+		// ((M15) past the square, the seabed out there)
+		if ( fx < 0 || fz < 0 || fx >= res - 1 || fz >= res - 1 ) return this.offshore ? this.offshore.heightAt( x, z ) : - 90;
 		const i = Math.floor( fx ), j = Math.floor( fz );
 		const tx = fx - i, tz = fz - j;
 		const k = j * res + i;
@@ -987,8 +1028,10 @@ export class TerrainData {
 
 		if ( outside ) {
 
-			mn = Math.min( mn, - 90 );
-			mx = Math.max( mx, - 90 );
+			// ((M15) the seabed out there, over the whole box)
+			const [ a, b ] = this.offshore ? this.offshore.boundsFor( x0, z0, x1, z1 ) : [ - 90, - 90 ];
+			mn = Math.min( mn, a );
+			mx = Math.max( mx, b );
 
 		}
 

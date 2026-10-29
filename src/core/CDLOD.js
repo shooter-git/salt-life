@@ -41,6 +41,8 @@ export class CDLOD {
 		center = null, // optional fixed world bounds for root grid { x, z, size }
 		prefix = 'cdlod', // GLSL name prefix of this instance's functions and uniforms
 		follow = 0, // (M15) metres the origin follows the camera by (0: the world's origin)
+		reach = 1, // (M15) root nodes laid out each way about the camera's (without a fixed root)
+		below = - Infinity, // (M15) nodes wholly lower than this (m) aren't drawn (a seabed too deep to be seen)
 	} = {} ) {
 
 		this.G = gridSize;
@@ -50,6 +52,8 @@ export class CDLOD {
 		this.maxY = maxY;
 		this.heightBounds = heightBounds;
 		this.fixedRoot = center;
+		this.reach = reach;
+		this.below = below;
 
 		this.ranges = [];
 		const morph = [];
@@ -231,7 +235,8 @@ ${ Cap }Vertex ${ P }Morph_( vec4 node, vec2 grid, vec3 viewPos, float y0 ) {
 
 			const cx = Math.floor( this._cam.x / rootSize );
 			const cz = Math.floor( this._cam.z / rootSize );
-			for ( let j = - 1; j <= 1; j ++ ) for ( let i = - 1; i <= 1; i ++ ) {
+			const R = this.reach;
+			for ( let j = - R; j <= R; j ++ ) for ( let i = - R; i <= R; i ++ ) {
 
 				this._select( ( cx + i ) * rootSize, ( cz + j ) * rootSize, rootSize, top );
 
@@ -333,7 +338,7 @@ ${ Cap }Vertex ${ P }Morph_( vec4 node, vec2 grid, vec3 viewPos, float y0 ) {
 
 		const box = this._bounds( x, z, size );
 		if ( ! this._intersectsSphere( box, this.ranges[ lod ] ) ) return false;
-		if ( ! this._frustum.intersectsBox( box ) ) return true;
+		if ( ! this._frustum.intersectsBox( box ) || box.max.y < this.below ) return true;
 
 		if ( lod === 0 || ! this._intersectsSphere( box, this.ranges[ lod - 1 ] ) ) {
 
@@ -350,7 +355,7 @@ ${ Cap }Vertex ${ P }Morph_( vec4 node, vec2 grid, vec3 viewPos, float y0 ) {
 
 				// quadrant outside the finer range: draw it at this node's LOD
 				const b = this._bounds( cx, cz, h );
-				if ( this._frustum.intersectsBox( b ) ) this._add( cx, cz, h, lod );
+				if ( this._frustum.intersectsBox( b ) && b.max.y >= this.below ) this._add( cx, cz, h, lod );
 
 			}
 

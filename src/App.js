@@ -8,6 +8,7 @@ import { Input } from './core/Input.js';
 import { SaveStore } from './core/SaveStore.js';
 import { TerrainData } from './world/TerrainData.js';
 import { decodeIsland } from './world/terrain/IslandDecode.js';
+import { Offshore, decodeSeabed } from './world/terrain/Offshore.js';
 import { setDetailData } from './world/terrain/DetailTextures.js';
 import { WORLD } from './world/WorldLayout.js';
 import { Colliders } from './world/Colliders.js';
@@ -87,6 +88,8 @@ import { releaseGeometries, releaseTextures, uploadTextures, watchContext } from
 // a texel: the railings' shadows were stairs at mid's earlier 6 cm)
 const SHADOW = { mid: { size: 2048, box: 48, ahead: 14 }, high: { size: 2048, distance: 110 } };
 const ISLAND = { low: 'world/island-1024.bin', mid: 'world/island.bin', high: 'world/island.bin' };
+// (M15) the seabed past the island: 32 m, or 64 m on low-powered devices
+const SEABED = { low: 'world/offshore-512.bin', mid: 'world/offshore.bin', high: 'world/offshore.bin' };
 // WebGL drawn on the CPU draws at most a phone screen's pixels (a laptop's is three times as many)
 const CPU_PIXELS = 360_000;
 const LENS_REACH = 0.02; // m below the surface before the view counts as under water
@@ -152,20 +155,17 @@ export class App {
 		// ---------------------------------------------------------------- saves and the island
 		await progress( 0.05, 'Fetching the island' );
 		this.store = new SaveStore( portal, { onError: ( e ) => this.hud && this.hud.toast( saveErrorText( e ) ) } );
-		const [ bytes, detail ] = await Promise.all( [
+		const fetched = ( url ) => fetch( url ).then( ( r ) => {
+
+			if ( ! r.ok ) throw new Error( `${ r.url }: ${ r.status }` );
+			return r.arrayBuffer();
+
+		} );
+		const [ bytes, detail, seabed ] = await Promise.all( [
 			// low-powered devices get the island at 2 m (a quarter of the memory), as their ground is drawn
-			fetch( ISLAND[ tier ] ?? ISLAND.low ).then( ( r ) => {
-
-				if ( ! r.ok ) throw new Error( `${ r.url }: ${ r.status }` );
-				return r.arrayBuffer();
-
-			} ),
-			fetch( 'world/detail.bin' ).then( ( r ) => {
-
-				if ( ! r.ok ) throw new Error( `${ r.url }: ${ r.status }` );
-				return r.arrayBuffer();
-
-			} ),
+			fetched( ISLAND[ tier ] ?? ISLAND.low ),
+			fetched( 'world/detail.bin' ),
+			fetched( SEABED[ tier ] ?? SEABED.low ),
 			this.store.load(),
 		] );
 		setDetailData( new Uint8Array( detail ) );
@@ -174,7 +174,7 @@ export class App {
 		this.loadClock();
 
 		await progress( 0.25, 'Shaping the island' );
-		this.terrainData = new TerrainData( 7, decodeIsland( new Uint8Array( bytes ) ) );
+		this.terrainData = new TerrainData( 7, decodeIsland( new Uint8Array( bytes ) ), { offshore: new Offshore( decodeSeabed( new Uint8Array( seabed ) ) ) } );
 
 		// ---------------------------------------------------------------- stage
 		// WebGL drawn on the CPU (no graphics card, or a blocklisted one): frames are paced (pacedFrame)
