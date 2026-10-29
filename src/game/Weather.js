@@ -93,8 +93,10 @@ const TRADES = { x: 0.35 / Math.hypot( 0.35, 0.94 ), y: 0.94 / Math.hypot( 0.35,
 // trades), builds over hours as the wind comes on, and outlasts it, dying down over hours once it's dropped
 // or swung away: the wind's sea of the hours about (`hours`: game hours back, the first ahead, and each
 // one's share). Its waves travel along `dir`, the trades' (ShoreWaves' third train). Past `big` (4 to 7
-// ft), Joe's slate and the clock's menu tell of it
-export const NORTH = { fair: 0.28, max: 1.2, period: [ 5, 0.2 ], onto: [ 1.2, 0.5 ], hours: [ [ - 4, 0.1 ], [ - 2, 0.15 ], [ 0, 0.25 ], [ 1, 0.2 ], [ 2, 0.15 ], [ 4, 0.15 ] ], big: 0.75, dir: TRADES };
+// ft), Joe's slate and the clock's menu tell of it ((M15) and to fish the bay); (M15) from `day` (3 to 5
+// ft) it's a surf day on the north beach (the pompano in its wash: Bites), and under `flat` (calm, or the
+// wind round from the south or the west) the north side's open
+export const NORTH = { fair: 0.28, max: 1.2, period: [ 5, 0.2 ], onto: [ 1.2, 0.5 ], hours: [ [ - 4, 0.1 ], [ - 2, 0.15 ], [ 0, 0.25 ], [ 1, 0.2 ], [ 2, 0.15 ], [ 4, 0.15 ] ], big: 0.75, day: 0.45, flat: 0.12, dir: TRADES };
 // (M12) the way the weather goes, turned `angle` (rad: + veers, clockwise on the island's compass) from
 // the trades'
 export function towardOf( angle, out = { x: 0, y: 0 } ) {
@@ -1123,6 +1125,17 @@ export function surfText( amplitude ) {
 
 	const lo = Math.max( 1, Math.round( amplitude * 2 * 0.8 / FT ) ), hi = Math.max( lo + 1, Math.round( amplitude * 2 * 1.5 / FT ) );
 	return `${ lo }–${ hi } ft`;
+
+}
+
+// (M15) which side of the island fishes, from the north shore's sea (`north`): blown out past its big (fish
+// the bay, in its lee), a surf day on the north beach (its pompano), or flat (go round); '' on an ordinary day
+export function sideText( north ) {
+
+	if ( north >= NORTH.big ) return `north shore ${ surfText( north ) }: fish the bay`;
+	if ( north >= NORTH.day ) return `north shore ${ surfText( north ) }: pompano in its surf`;
+	if ( north < NORTH.flat ) return 'north shore flat: go round';
+	return '';
 
 }
 

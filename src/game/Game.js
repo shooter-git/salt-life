@@ -19,7 +19,7 @@ import { timeText } from './IslandClock.js';
 import { NIGHT_BOX, ordersFor, tradeDay, stallOpen, shutFor } from './Orders.js';
 import { WantedBoard } from './WantedBoard.js';
 import { ForecastSlate } from './ForecastSlate.js';
-import { forecast, islandTime, blowShare } from './Weather.js';
+import { forecast, islandTime, blowShare, NORTH } from './Weather.js';
 import { wxNews } from './TimeHUD.js';
 import { CRADLE } from '../world/village/StormPlaces.js';
 import { StormChart, shelterSign } from './StormChart.js';
@@ -37,6 +37,10 @@ import { SEABED } from '../world/terrain/SeabedModel.js';
 
 // how long the catch card stays up unless dismissed (ms)
 const CATCH_CARD_MS = 9000;
+// (M15) the island's middle, and up the trades from it (Weather's NORTH.dir, the way they blow, turned
+// round): the windward side's (Game.windwardAt)
+const ISLE = { x: 30, z: - 320 };
+const UPWIND = { x: - NORTH.dir.x, z: - NORTH.dir.y };
 // (Salt Life) the anchor: within this of the berth the dock lines hold the boat instead (Player.exitBoat),
 // and it goes down once the boat is slower than this (m/s)
 const BERTH_M = 14;
@@ -1090,9 +1094,38 @@ export class Game {
 		const h = this.habitatAtPoint( p.x, p.z, this.rod.depth );
 		// (Salt Life) in the deck floodlights' pool after dark (Bites: what gathers under lights)
 		h.flood = this.floodAt( p.x, p.z );
-		// (M9) and the weather (Bites.weatherMood: what the fish feel of it)
+		// (M9) and the weather (Bites.weatherMood: what the fish feel of it); ((M15) and which side of the
+		// island it's on, for which sea roughs its water)
 		h.weather = this.weatherNow;
+		h.side = this.windwardAt( p.x, p.z );
 		return h;
+
+	}
+
+	// (M15) how much ( x, z ) is on the island's windward side, its north shore (0..1): out past its coast
+	// on the side facing up the trades from the island's middle (the north beach all of it, the bay none,
+	// the west and the east coasts little)
+	windwardAt( x, z ) {
+
+		const dx = x - ISLE.x, dz = z - ISLE.z, d = Math.max( Math.hypot( dx, dz ), 1 );
+		const k = ( a, b, v ) => {
+
+			const t = Math.min( 1, Math.max( 0, ( v - a ) / ( b - a ) ) );
+			return t * t * ( 3 - 2 * t );
+
+		};
+		return k( 0.05, 0.5, ( dx * UPWIND.x + dz * UPWIND.z ) / d ) * k( 150, 400, d );
+
+	}
+
+	// (M15) the sand under ( x, z ), 0..1 (the island's 1 m sand cover, less its rock: the beaches, the bay's
+	// floor, the flats); none past the island's map
+	sandAt( x, z ) {
+
+		const T = this.app.terrainData, i = Math.floor( ( x - T.origin ) / T.texel ), j = Math.floor( ( z - T.origin ) / T.texel );
+		if ( i < 0 || j < 0 || i >= T.res || j >= T.res ) return 0;
+		const k = j * T.res + i;
+		return T.sand[ k ] / 255 * ( 1 - T.rock[ k ] );
 
 	}
 
@@ -1113,7 +1146,9 @@ export class Game {
 		const B = SEABED.bank;
 		const patch = depth < 34 && Math.hypot( x - B.x, z - B.z ) < B.a + 1500 ? 0.8 * Math.min( 1, ( 34 - depth ) / 10 ) : 0;
 		const f = this.findsNear( x, z );
-		return habitatAt( { depth, reefDist, pierDist: Math.min( walk, head ), slope, patch, weed: f.weed, debris: f.debris, birds: f.birds } );
+		// ((M15) and the wash's: the sand, on which side)
+		const beach = depth < 5 ? this.sandAt( x, z ) : 0, windward = beach > 0 ? this.windwardAt( x, z ) : 0;
+		return habitatAt( { depth, reefDist, pierDist: Math.min( walk, head ), slope, patch, weed: f.weed, debris: f.debris, birds: f.birds, beach, windward } );
 
 	}
 
@@ -1292,7 +1327,7 @@ export class Game {
 		const name = FISH[ f.species ].name;
 		if ( st === 'caught' ) {
 
-			const entry = this.state.addFish( f.species, f.kg, this.hour );
+			const entry = this.state.addFish( f.species, f.kg, this.hour, { day: this.tradeDay } );
 			const info = this.state.lastCatch;
 			info.wanted = entry ? this.wantedFor( entry ) : null; // (Salt Life) on today's wanted list
 			// (Salt Life) the others hear of it; the island's records (together/): the card says when
@@ -1847,7 +1882,7 @@ export class Game {
 
 		const sp = this.speared, gun = this.gun;
 		this.calmThief( sp );
-		const entry = this.state.addFish( sp.id, sp.kg, this.hour, { method: 'spear', cm: sp.cm } );
+		const entry = this.state.addFish( sp.id, sp.kg, this.hour, { method: 'spear', cm: sp.cm, day: this.tradeDay } );
 		const info = this.state.lastCatch;
 		info.wanted = entry ? this.wantedFor( entry ) : null;
 		if ( this.app.together ) {

@@ -612,6 +612,33 @@ const SURFACE = /* glsl */`
 		float pecB = ( 1.0 - fishSs( 0.006, 0.011, length( pc * vec2( 1.0, 1.4 ) ) ) ) * bodyK;
 		c = mix( c, vec3( 0.04, 0.06, 0.12 ), pecB * 0.8 );
 		c = P == ${ PA( 'CAUDAL' ) } ? mix( c, edgeC * 0.6, fishSs( 0.8, 1.0, t ) * 0.5 ) : c;
+	} else if ( pat == ${ PT( 'pompano' ) } ) {
+		// (M15) Florida pompano: bright silver under a blue-grey back, the throat and the belly washed
+		// yellow, more so forward; the anal and pelvic fins yellow, the soft dorsal's lobe and the tail
+		// dusky
+		float yel = fishSs( -0.15, -0.7, h ) * fishSs( -0.25, 0.25, z ) * bodyK;
+		c = mix( c, vec3( 0.86, 0.68, 0.2 ), yel * 0.55 );
+		c = ( P == ${ PA( 'ANAL' ) } || P == ${ PA( 'PELVIC' ) } ) ? mix( c, vec3( 0.82, 0.6, 0.12 ), 0.7 ) : c;
+		c = ( P == ${ PA( 'DORSAL2' ) } || P == ${ PA( 'CAUDAL' ) } ) ? mix( c, back * 0.8, 0.35 + 0.4 * fishSs( 0.5, 1.0, t ) ) : c;
+	} else if ( pat == ${ PT( 'permit' ) } ) {
+		// (M15) permit: silver under a dark back; the soft dorsal's and the anal fin's sickles and the
+		// tail's long lobes black; a faint orange wash on the breast ahead of the anal fin, and on some a
+		// dark round patch on the flank behind the pectoral
+		c = mix( c, vec3( 0.8, 0.55, 0.3 ), fishSs( -0.4, -0.8, h ) * fishSs( -0.2, 0.0, z ) * fishSs( 0.2, 0.05, z ) * bodyK * 0.35 );
+		vec2 pc = vec2( z - ${ f( 0.5 - 0.36 * SPECIES.permit.body ) }, y + 0.01 );
+		float blot = ( 1.0 - fishSs( 0.03, 0.05, length( pc ) ) ) * bodyK * step( 0.5, fract( seed * 3.7 ) );
+		c = mix( c, back * 0.55, blot * 0.45 );
+		c = ( P == ${ PA( 'DORSAL2' ) } || P == ${ PA( 'ANAL' ) } || P == ${ PA( 'CAUDAL' ) } ) ? mix( c, edgeC, 0.75 ) : c;
+	} else if ( pat == ${ PT( 'snook' ) } ) {
+		// (M15) common snook: an olive-brown back over silver, the lateral line a bold black stripe from the
+		// gill cover on out through the tail's middle rays; the pelvic and anal fins yellow, the dorsal fins
+		// dusky
+		float hl0 = lat.x + lat.y * ( 1.0 - fishSs( 0.12, 0.55, u ) );
+		float stripe = fishBand( h, hl0, 0.03, fwH + 0.01 ) * fishSs( 0.26, 0.3, u ) * bodyK;
+		c = mix( c, vec3( 0.03, 0.03, 0.025 ), stripe * 0.9 );
+		c = P == ${ PA( 'CAUDAL' ) } ? mix( c, vec3( 0.04, 0.04, 0.035 ), ( 1.0 - fishSs( 0.5, 1.2, abs( w - 8.0 ) ) ) * 0.85 ) : c;
+		c = ( P == ${ PA( 'ANAL' ) } || P == ${ PA( 'PELVIC' ) } ) ? mix( c, vec3( 0.82, 0.66, 0.16 ), 0.6 ) : c;
+		c = ( P == ${ PA( 'DORSAL1' ) } || P == ${ PA( 'DORSAL2' ) } ) ? mix( c, back * 0.7, 0.5 ) : c;
 	} else if ( pat >= ${ PT( 'reefShark' ) } && pat <= ${ PT( 'nurseShark' ) } ) {
 		// sharks: smooth skin; the fins solid, the body's colour (no rays, hardly lit through); five
 		// gill slits ahead of the pectoral fin. Blacktip: black tips on the first dorsal, the paired

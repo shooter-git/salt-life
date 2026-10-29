@@ -1,5 +1,6 @@
 import { FISH, FISH_IDS } from './FishTable.js';
 import { BAITS, baitWeight } from './Bait.js';
+import { NORTH } from './Weather.js';
 
 // Where the bobber is and what lives there.
 //   depth     water depth under the bobber (m)
@@ -10,6 +11,9 @@ import { BAITS, baitWeight } from './Bait.js';
 //   patch     0..1: patch reefs on the bottom out there (the bank's top)
 //   weed, debris, birds   0..1: how near a weedline, a piece of floating debris, or a school with birds
 //             working it (game/Finds.js) the spot is
+//   (M15) and about the island:
+//   windward  0..1: how much the spot's on the island's windward side, its north shore, facing the trades
+//   beach     0..1: sand under the spot (the beaches' wash; the bay's floor and the flats too)
 // Returns weights per water type (they overlap: a spot can be both pier and bay). The shallows, the reef,
 // the pier, the bay, and:
 //   deep    the shelf's deep water, 20 to 150 m (and the top of the slope below it): the snappers and
@@ -22,13 +26,17 @@ import { BAITS, baitWeight } from './Bait.js';
 //         blue   the open ocean, past 150 to 400 m: few fish, and those the wanderers (mahi, tuna)
 //         weed, debris, birds: where they gather (the mahi under the weed and the debris, the tuna
 //                under the birds), and the bites come sooner
+//         wash   a sandy beach's surf zone, 0.3 to 3 m down: the pompano's, the permit's and the snook's,
+//                more than twice as much on the windward north beach (and its weather: weatherMood's north)
+// (M15) The game adds side too, as it does flood (not a water type): the spot's windward share, for the sea
+// that roughs its water (the north shore's or the bay's surf: roughed).
 // (Salt Life) The game adds flood, 0..1: how far the spot is in a boat's deck floodlights after dark (not
 // a water type: it draws in the fish that gather under lights, and the bait, so they bite sooner), and
 // (M9) weather: the weather now (Weather.weatherAt's; none, or a fair day's, changes nothing: weatherMood).
 export const BLUE = 0.35; // (the open ocean's fish, sparse: its weight; a spot's floor is the same: biteDelay)
-export function habitatAt( { depth, reefDist, pierDist, slope = 0, patch = 0, weed = 0, debris = 0, birds = 0 } ) {
+export function habitatAt( { depth, reefDist, pierDist, slope = 0, patch = 0, weed = 0, debris = 0, birds = 0, windward = 0, beach = 0 } ) {
 
-	const h = { shallows: 0, reef: 0, pier: 0, bay: 0, deep: 0, edge: 0, ledge: 0, blue: 0, weed: 0, debris: 0, birds: 0 };
+	const h = { shallows: 0, reef: 0, pier: 0, bay: 0, deep: 0, edge: 0, ledge: 0, blue: 0, weed: 0, debris: 0, birds: 0, wash: 0 };
 	if ( depth < 0.25 ) return h; // on the sand
 	h.shallows = smooth( 3.5, 1.0, depth );
 	h.reef = Math.max( smooth( 12, - 6, reefDist ), patch ) * smooth( 0.8, 2.5, depth );
@@ -41,6 +49,10 @@ export function habitatAt( { depth, reefDist, pierDist, slope = 0, patch = 0, we
 	h.weed = weed * smooth( 8, 30, depth );
 	h.debris = debris * smooth( 8, 30, depth );
 	h.birds = birds * smooth( 8, 30, depth );
+	const band = beach * smooth( 0.25, 0.7, depth ) * ( 1 - smooth( 2.5, 4.5, depth ) );
+	h.wash = band * ( 0.7 + 1.1 * windward );
+	// (a windward beach's surf zone isn't the calm sand's: the mullet and the bonefish keep to the bay's)
+	h.shallows *= 1 - 0.6 * band * windward;
 	return h;
 
 }
@@ -77,11 +89,16 @@ export function lampsLit( hour ) {
 //   rain   rain on the water
 //   surf   a big surf, past a breezy day's: the shallows and round the pier stirred up murky
 //   heavy  a downpour or a thunderstorm: the fish go down and wait for it to pass
+//   (M15) the north shore's sea (Weather's north), for the island's windward side (habitat.side):
+//   north     a surf day there (3 to 5 ft: NORTH.day): the wash's fish feeding in it
+//   northBig  past its big (NORTH.big, 4 to 7 ft): blown out, its shallows stirred up as the bay's are in
+//             a big surf, and the wash too rough to fish; the bay in the island's lee fishes
 export function weatherMood( w ) {
 
 	if ( ! w ) return null;
 	const m = { front: ramp( 0, 1, w.front ), grey: ramp( 0.2, 0.6, w.overcast ), wind: ramp( 9.5, 15.5, w.wind ), rain: ramp( 0, 1, w.rain ),
-		surf: ramp( 0.42, 0.58, w.surf ), heavy: Math.max( ramp( 0.5, 1, w.rain ), ramp( 0, 1, w.thunder ) ) };
+		surf: ramp( 0.42, 0.58, w.surf ), heavy: Math.max( ramp( 0.5, 1, w.rain ), ramp( 0, 1, w.thunder ) ),
+		north: ramp( NORTH.fair + 0.07, NORTH.day, w.north ), northBig: ramp( NORTH.big - 0.05, NORTH.big + 0.1, w.north ) };
 	for ( const k in m ) if ( m[ k ] > 0 ) return m;
 	return null;
 
@@ -100,14 +117,26 @@ export const FRONT_SOONER = 0.35;
 export const FRONT_BIGGER = 0.3;
 export const GREY_DUSK = 0.6;
 export const HEAVY_SLOWER = 0.8;
+//   (M15) a big surf on the windward side is the north shore's sea, past its big (northBig), not the bay's;
+//                  and there it stirs up the open water off the shore too (the bay type: WASH.open)
+//   WASH           what the sea does to the wash: a surf day (the bay's big surf, the north's 3 to 5 ft) makes
+//                  it count `day` more (the surf turning up the crabs and clams the pompano dig for), fading
+//                  as it's blown out (northBig), when it counts `blown` less
 export const ROUGH = { shallows: [ 'surf', 0.5 ], pier: [ 'surf', 0.35 ], deep: [ 'wind', 0.4 ], ledge: [ 'wind', 0.4 ] };
+export const WASH = { day: 0.9, blown: 0.85, open: 0.5 };
+// (not water types: what the game adds to a spot's habitat)
+const NOT_WATER = { flood: true, weather: true, side: true };
 
 // the water types as the weather leaves them (m: weatherMood's)
 function roughed( habitat, m ) {
 
 	if ( ! m ) return habitat;
-	const h = { ...habitat };
-	for ( const k in ROUGH ) if ( h[ k ] ) h[ k ] *= 1 - ROUGH[ k ][ 1 ] * m[ ROUGH[ k ][ 0 ] ];
+	const h = { ...habitat }, side = habitat.side || 0;
+	const big = m.surf + ( m.northBig - m.surf ) * side;
+	for ( const k in ROUGH ) if ( h[ k ] ) h[ k ] *= 1 - ROUGH[ k ][ 1 ] * ( ROUGH[ k ][ 0 ] === 'surf' ? big : m[ ROUGH[ k ][ 0 ] ] );
+	const blown = m.northBig * side;
+	if ( h.wash ) h.wash *= ( 1 + WASH.day * ( m.surf + ( m.north * ( 1 - m.northBig ) - m.surf ) * side ) ) * ( 1 - WASH.blown * blown );
+	if ( h.bay ) h.bay *= 1 - WASH.open * blown;
 	return h;
 
 }
@@ -187,7 +216,7 @@ export function rollWeight( id, rng = Math.random, bait = null, weather = null )
 export function biteDelay( habitat, hour, rng = Math.random, bait = null ) {
 
 	let rich = 0;
-	for ( const k in habitat ) if ( k !== 'flood' && k !== 'weather' ) rich += habitat[ k ];
+	for ( const k in habitat ) if ( ! NOT_WATER[ k ] ) rich += habitat[ k ];
 	if ( rich < 0.05 ) return Infinity;
 	// open water between the named habitats still has fish: never much slower than a poor spot; (Salt
 	// Life) a boat's floodlights draw the bait in, and what feeds on it
@@ -202,7 +231,7 @@ export function biteDelay( habitat, hour, rng = Math.random, bait = null ) {
 
 		const water = roughed( habitat, m );
 		let left = 0;
-		for ( const k in water ) if ( k !== 'flood' && k !== 'weather' ) left += water[ k ];
+		for ( const k in water ) if ( ! NOT_WATER[ k ] ) left += water[ k ];
 		mean *= ( 1 - FRONT_SOONER * m.front ) * ( 1 + HEAVY_SLOWER * m.heavy ) * all / left;
 
 	}

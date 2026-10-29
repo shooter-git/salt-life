@@ -310,6 +310,7 @@ Everyone keeps their own progress and their own fish.
 - **The fish in the weather** (`Bites.weatherMood`, `habitat.weather` from `Game.habitat()`): none of it on a fair day, which bites exactly as before.
   - Ahead of a blow (`front`) the bites come up to 35% sooner and the big ones feed too (`rollWeight` skews less to the small end).
   - Under a grey sky by day each fish bites up to 60% of the way toward how it does at dusk, when that's better: the predators hunt.
+  - (M15) Each side of the island has its own sea (`Bites.roughed`, `habitat.side` from `Game.windwardAt`): the bay's surf roughs the bay's shallows and pier, the north shore's (`weatherMood`'s `northBig`) the windward side's, and its open water too (`WASH.open`). The wash (a sandy beach's surf zone, `Game.sandAt` off the 1 m sand cover, more on the windward side) comes on with a surf day (`north`, or the bay's big surf) and goes when blown out (`WASH`). `Weather.sideText` is what Joe's slate and the clock's menu say of it.
   - A downpour or a thunderstorm puts them down: up to 80% slower.
   - A big surf stirs up the shallows (half as rich) and round the pier (a third less); a blow out on the open sea, the deep (40% less).
   - Their own taste (`weather` in `FishTable.js`): mahi and blackfin tuna up on the wind lines in a blow, tarpon rolling in the rain, bonefish off the flats in a big surf and a wind.

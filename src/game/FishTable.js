@@ -7,7 +7,8 @@
 //   habitat   weights per water type (see Bites.habitatAt): shallows (sand, < 3 m), reef (over the
 //             reef), pier (around the piles), bay (open water 3–20 m), deep (the shelf's, 20–150 m);
 //             (M15) out past it: edge (the drop-off and the steep walls), ledge (a flat bottom 150–300
-//             m down), blue (the open ocean), and by what's found out there: weed, debris, birds
+//             m down), blue (the open ocean), and by what's found out there: weed, debris, birds; and
+//             about the island: wash (a sandy beach's surf zone, the north beach's best)
 //   kg        [ min, max ] weight; sizes follow a skewed distribution (most fish are small)
 //   price     $ per kg at the fish stand
 //   fight     0..1 how hard it pulls (surge strength and frequency in the catch mini-game)
@@ -78,6 +79,12 @@ export const FISH = {
 	// (protected in US waters since 1990: no one may take one)
 	goliathGrouper: { name: 'Goliath grouper', sci: 'Epinephelus itajara', lw: [ 0.0128, 3.05 ], model: 'goliathGrouper', habitat: { pier: 0.5, reef: 0.25, deep: 0.3 }, kg: [ 10, 100 ], price: 6, fight: 1, stamina: 30, time: 'any', rarity: 0.1, protected: true },
 	whiteMullet: { name: 'White mullet', sci: 'Mugil curema', lw: [ 0.0123, 2.95 ], model: 'whiteMullet', habitat: { shallows: 1, pier: 0.3 }, kg: [ 0.1, 0.8 ], price: 5, fight: 0.25, stamina: 3.5, time: 'day', rarity: 0.7, net: true },
+	// (M15) the surf's: the pompano and the permit feed in the troughs of a beach's surf on the mole crabs and
+	// the clams it turns up, best on the windward north beach on a surf day; the snook hunt the wash at dawn
+	// and dusk. The permit everyone lets go, as the bonefish; one snook a day
+	pompano: { name: 'Florida pompano', sci: 'Trachinotus carolinus', lw: [ 0.0174, 2.95 ], model: 'pompano', habitat: { wash: 1, shallows: 0.1 }, kg: [ 0.4, 2.8 ], price: 20, fight: 0.6, stamina: 7, time: 'any', rarity: 0.8 },
+	permit: { name: 'Permit', sci: 'Trachinotus falcatus', lw: [ 0.0216, 2.96 ], model: 'permit', habitat: { wash: 0.45, shallows: 0.2 }, kg: [ 3, 18 ], price: 8, fight: 0.9, stamina: 18, time: 'day', rarity: 0.12, protected: true, cr: true },
+	snook: { name: 'Common snook', sci: 'Centropomus undecimalis', lw: [ 0.0075, 3.04 ], model: 'snook', habitat: { wash: 0.6, shallows: 0.1 }, kg: [ 1.5, 12 ], price: 13, fight: 0.8, stamina: 13, time: 'dawnDusk', rarity: 0.35, bag: 1 },
 	// (it never takes a bait or a spear: tickled out of its den in the reef and netted, after dark)
 	lobster: { name: 'Spiny lobster', sci: 'Panulirus argus', lw: [ 0.0575, 2.9 ], model: 'lobster', habitat: {}, kg: [ 0.25, 3 ], price: 24, fight: 0, stamina: 1, time: 'night', rarity: 0, hand: true, minCm: 22.4, bag: 6 },
 };
