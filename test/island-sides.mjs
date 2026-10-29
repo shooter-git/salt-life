@@ -16,6 +16,7 @@ import { weatherAt, NORTH } from '../src/game/Weather.js';
 import { FISH } from '../src/game/FishTable.js';
 import { biteHint } from '../src/game/Orders.js';
 import { SPECIES, SKIN } from '../src/world/fish/FishSpecies.js';
+import { MANGROVE, mangroveAt } from '../src/world/terrain/Mangrove.js';
 
 let failed = 0;
 const check = ( ok, what ) => {
@@ -89,7 +90,7 @@ bay.splice( 0, bay.length, ...some( bay ) );
 const surfFish = [ 'pompano', 'permit', 'snook' ];
 const fair = weatherAt( 0, 'fair' ), breezy = weatherAt( 0, 'breezy' ), blustery = { ...weatherAt( 0, 'blustery' ), surf: weatherAt( 0, 'fair' ).surf };
 const nFair = share( north, surfFish, fair ), bFair = share( bay, surfFish, fair ), nSurf = share( north, surfFish, breezy ), nBlown = share( north, surfFish, blustery ), bBlown = share( bay, surfFish, blustery );
-const pc = ( r ) => `${ Math.round( r.share * 100 ) }% surf fish, a bite every ${ r.wait.toFixed( 1 ) } s`;
+const pc = ( r, what = 'surf fish' ) => `${ Math.round( r.share * 100 ) }% ${ what }, a bite every ${ r.wait.toFixed( 1 ) } s`;
 console.log( `     the north beach's wash: fair ${ pc( nFair ) }; a surf day (breezy, north ${ ( breezy.north * 2 / 0.3048 ).toFixed( 0 ) } ft) ${ pc( nSurf ) }; blown out (blustery) ${ pc( nBlown ) }` );
 console.log( `     the bay's beach: fair ${ pc( bFair ) }; with the north blown out ${ pc( bBlown ) }` );
 check( nFair.share > 0.33 && nFair.share > 1.6 * bFair.share, 'the surf fish the north beach\'s: most of its bites by far, and well more than on the bay\'s beach' );
@@ -107,7 +108,53 @@ check( breezy.north >= NORTH.day && breezy.north < NORTH.big && blustery.north >
 
 }
 
-check( biteHint( 'pompano' ) === 'in the surf' && biteHint( 'snook' ) === 'in the surf, at dawn and dusk', `Joe's hints: pompano "${ biteHint( 'pompano' ) }", snook "${ biteHint( 'snook' ) }"` );
+// ---- the west's mangroves: their floor just awash, their creek and pool a boat's depth, the land kept; the
+// snook's, the mangrove snapper's and the tarpon's, and sheltered from every sea
+{
+
+	let floor = 0, nf = 0, creekD = [], nStand = 0;
+	const [ x0, z0, x1, z1 ] = MANGROVE.window;
+	for ( let z = z0; z < z1; z += 1.5 ) for ( let x = x0; x < x1; x += 1.5 ) {
+
+		const m = mangroveAt( x, z ), h = T.heightAt( x, z );
+		if ( m.stand > 0.95 && m.creek < 0.05 && h < 0.3 ) {
+
+			floor += h;
+			nf ++;
+
+		}
+
+		if ( m.stand > 0.95 && h < 0.3 ) nStand ++;
+		if ( m.creek > 0.95 ) creekD.push( - h );
+
+	}
+
+	creekD.sort( ( a, b ) => a - b );
+	const med = creekD[ creekD.length >> 1 ];
+	console.log( `     the mangroves: ${ nStand * 2.25 | 0 } m² of stand, its mud ${ ( floor / nf ).toFixed( 2 ) } m on average; the creek and the pool ${ med.toFixed( 2 ) } m deep at the median, ${ creekD[ 0 ].toFixed( 2 ) } at the least` );
+	check( nf > 2000 && Math.abs( floor / nf - MANGROVE.floor ) < 0.08 && T.heightAt( - 425, - 200 ) > 15 && T.heightAt( - 400, - 160 ) > 15, 'the stand\'s floor mud just awash, the hillside behind it kept' );
+	check( med > 1.5 && creekD[ 0 ] > 0.6, 'its creek and its pool a boat\'s depth' );
+	// (the creek and the pool, and the water off the stand's edge)
+	const creek = [];
+	for ( let z = z0; z < z1; z += 2 ) for ( let x = x0; x < x1; x += 2 ) {
+
+		const h = spot( x, z );
+		if ( h.creek > 0.8 ) creek.push( [ x, z ] );
+
+	}
+
+	const pts = creek.filter( ( _, i ) => i % Math.max( 1, Math.floor( creek.length / 40 ) ) === 0 ).slice( 0, 40 );
+	const theirs = [ 'snook', 'graySnapper', 'tarpon' ];
+	const dawn = share( pts, theirs, fair, 6.5 ), night = share( pts, [ 'tarpon' ], fair, 22 ), snook = share( pts, [ 'snook' ], fair, 6.5 );
+	const gale = share( pts, theirs, { ...blustery, wind: 20 }, 6.5 ), south = share( pts, theirs, { ...weatherAt( 0, 'southerly' ), rain: 0, thunder: 0, front: 0 }, 6.5 );
+	const its = ( r ) => pc( r, 'its fish' );
+	console.log( `     the creek (${ creek.length } spots 2 m apart): at dawn ${ its( dawn ) } (snook ${ Math.round( snook.share * 100 ) }%); tarpon after dark ${ Math.round( night.share * 100 ) }%; the north blown out ${ its( gale ) }; a southerly ${ its( south ) }` );
+	check( creek.length > 100 && dawn.share > 0.45 && snook.share > 0.15 && night.share > 0.12, 'the creek the snook\'s, the mangrove snapper\'s and the tarpon\'s' );
+	check( Math.abs( gale.wait - dawn.wait ) < 0.15 * dawn.wait && Math.abs( south.wait - dawn.wait ) < 0.15 * dawn.wait, 'sheltered: it fishes as ever when the north\'s blown out, and in a southerly' );
+
+}
+
+check( biteHint( 'pompano' ) === 'in the surf' && biteHint( 'snook' ) === 'in the mangrove creek, at dawn and dusk', `Joe's hints: pompano "${ biteHint( 'pompano' ) }", snook "${ biteHint( 'snook' ) }"` );
 
 console.log( failed ? `${ failed } failed` : 'all passed' );
 process.exit( failed ? 1 : 0 );

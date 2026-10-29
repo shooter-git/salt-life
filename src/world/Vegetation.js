@@ -6,9 +6,9 @@ import { GrassField, GRASS_TIERS } from './vegetation/GrassField.js';
 import { vegUniforms, uCamPos, uGustOffset } from './vegetation/VegNodes.js';
 import {
 	buildPalmNear, buildPalmFar, buildYoungPalm, buildFern, buildTreeNear, buildShrubNear, buildBanana, buildElephantEar, buildHeliconia, buildStrelitzia,
-	lobeVariantGeometry, LOBE_TABLE, TREE_VARIANTS, SHRUB_VARIANTS, UNDERSTORY, BROADLEAF, buildMonsteraMesh, buildPlantKind,
+	lobeVariantGeometry, LOBE_TABLE, TREE_VARIANTS, SHRUB_VARIANTS, UNDERSTORY, BROADLEAF, buildMonsteraMesh, buildPlantKind, buildMangroveRoots,
 } from './vegetation/PlantGeometry.js';
-import { vegMaterial, PLANT_LEAF, canopyMaterialDef, createCanopyBakeMaterials, impostorColor, uCanopyNear } from './vegetation/VegMaterials.js';
+import { vegMaterial, PLANT_LEAF, canopyMaterialDef, rootMaterialDef, createCanopyBakeMaterials, impostorColor, uCanopyNear } from './vegetation/VegMaterials.js';
 import { ImpostorAtlas, buildImpostorQuad } from './vegetation/Impostors.js';
 import { LeafAtlas } from './vegetation/LeafTextures.js';
 import { getDetailTexture } from './terrain/DetailTextures.js';
@@ -100,15 +100,15 @@ function axisSphere( geometry ) {
 //   range + margin (refilled after the camera moved 60 % of it)
 const TIERS = {
 	low: {
-		palmNear: 35, treeNear: 14, shrubNear: 10, underFade: [ 40, 50 ], fernFade: null, broadFade: [ 12, 16 ], bananaFade: [ 22, 28 ], margin: 5,
+		palmNear: 35, treeNear: 14, shrubNear: 10, underFade: [ 40, 50 ], fernFade: null, broadFade: [ 12, 16 ], bananaFade: [ 22, 28 ], rootFade: [ 20, 28 ], margin: 5,
 		palmFar: [ 260, 320 ], canopyFar: [ 900, 1100 ], framePx: 96, blendDist: 40, grass: null, shadows: { plants: false, canopy: false },
 	},
 	mid: {
-		palmNear: 70, treeNear: 30, shrubNear: 22, underFade: [ 70, 85 ], fernFade: [ 26, 36 ], broadFade: [ 32, 42 ], bananaFade: [ 50, 62 ], margin: 8,
+		palmNear: 70, treeNear: 30, shrubNear: 22, underFade: [ 70, 85 ], fernFade: [ 26, 36 ], broadFade: [ 32, 42 ], bananaFade: [ 50, 62 ], rootFade: [ 55, 70 ], margin: 8,
 		palmFar: [ 1400, 1600 ], canopyFar: [ 2200, 2400 ], framePx: 128, blendDist: 70, grass: GRASS_TIERS.mid, shadows: { plants: true, canopy: false },
 	},
 	high: {
-		palmNear: 120, treeNear: 65, shrubNear: 45, underFade: [ 120, 140 ], fernFade: [ 42, 58 ], broadFade: [ 85, 105 ], bananaFade: [ 100, 120 ], margin: 10,
+		palmNear: 120, treeNear: 65, shrubNear: 45, underFade: [ 120, 140 ], fernFade: [ 42, 58 ], broadFade: [ 85, 105 ], bananaFade: [ 100, 120 ], rootFade: [ 110, 140 ], margin: 10,
 		palmFar: [ 2600, 2800 ], canopyFar: [ 2600, 2800 ], framePx: 128, blendDist: 100, grass: GRASS_TIERS.high, shadows: { plants: true, canopy: true },
 	},
 };
@@ -311,6 +311,17 @@ export class Vegetation {
 			fade: [ cfg.shrubNear, cfg.shrubNear + 0.01 ], ...near, sortNear: true,
 			near: [ { geometry: shrub.geometry, material: canopyMat, castShadow: cfg.shadows.canopy, name: 'veg-shrubs' } ],
 		} ) );
+		// ((M15) the mangroves' prop roots: their crowns are canopy trees (Scatter), the roots their own, out to
+		// rootFade, past the trees' near range: from a boat it's the roots you see)
+		if ( recs.mangroves && recs.mangroves.length ) {
+
+			const rootMat = ( lodRange ) => this._keep( vegMaterial( rootMaterialDef( this.leafAtlas ), lodRange ) );
+			this.mangroveRoots = add( new VegType( 'mangroveRoots', recs.mangroves.map( ( r ) => ( { ...r, qr: cfg.rootFade[ 1 ] + cfg.margin } ) ), {
+				fade: cfg.rootFade, ...near, sortNear: true,
+				near: [ { geometry: buildMangroveRoots().geometry, material: rootMat, castShadow: cfg.shadows.canopy, name: 'veg-mangrove-roots' } ],
+			} ) );
+
+		}
 
 		// alpha-tested foliage after the opaque ground (terrain, rocks, buildings) and the far crowns
 		// after the near ones, so the early depth test rejects what those already cover

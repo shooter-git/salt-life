@@ -1,4 +1,5 @@
 import { GRAVITY } from '../core/Globals.js';
+import { mangroveAt } from './terrain/Mangrove.js';
 
 // Offline wave-propagation field for shoreline waves.
 //
@@ -299,9 +300,10 @@ export function computeShoreField( terrain, { res = 512, swellDir = [ 0, - 1 ], 
 		if ( gz === 0 && isFinite( tu ) && isFinite( t ) ) gz = tu - t;
 		const len = Math.hypot( gx, gz ) || 1;
 		const dx = gx / len, dz = gz / len;
-		// exposure: how directly the local wave direction faces the incoming swell
+		// exposure: how directly the local wave direction faces the incoming swell; ((M15) none inside the
+		// west's mangroves: a forest of prop roots takes a wave out within tens of metres, their creek too)
 		const align = ( dx * sdx + dz * sdz ) / sl;
-		const exposure = Math.min( 1, Math.max( 0.02, align * 1.4 + 0.1 ) );
+		const exposure = Math.min( 1, Math.max( 0.02, align * 1.4 + 0.1 ) ) * ( 1 - 0.97 * mangroveAt( origin + ( i + 0.5 ) * h, originZ + ( j + 0.5 ) * h ).stand );
 		// direction scaled by exposure (length = exposure), alpha = shoreline arrival time
 		data[ k * 4 ] = isFinite( t ) ? t : 1e5;
 		data[ k * 4 + 1 ] = dx * exposure;

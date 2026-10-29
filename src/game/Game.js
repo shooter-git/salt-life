@@ -34,6 +34,7 @@ import { LobsterTools } from './LobsterTools.js';
 import { lb, feet, gallons } from './Units.js';
 import { SPECIES } from '../world/fish/FishSpecies.js';
 import { SEABED } from '../world/terrain/SeabedModel.js';
+import { mangroveAt } from '../world/terrain/Mangrove.js';
 
 // how long the catch card stays up unless dismissed (ms)
 const CATCH_CARD_MS = 9000;
@@ -1146,9 +1147,10 @@ export class Game {
 		const B = SEABED.bank;
 		const patch = depth < 34 && Math.hypot( x - B.x, z - B.z ) < B.a + 1500 ? 0.8 * Math.min( 1, ( 34 - depth ) / 10 ) : 0;
 		const f = this.findsNear( x, z );
-		// ((M15) and the wash's: the sand, on which side)
+		// ((M15) and the wash's: the sand, on which side; and the mangroves' creek, their pool and their edge)
 		const beach = depth < 5 ? this.sandAt( x, z ) : 0, windward = beach > 0 ? this.windwardAt( x, z ) : 0;
-		return habitatAt( { depth, reefDist, pierDist: Math.min( walk, head ), slope, patch, weed: f.weed, debris: f.debris, birds: f.birds, beach, windward } );
+		const mg = depth < 6 ? mangroveAt( x, z ) : null, creek = mg ? Math.max( mg.creek, mg.fringe ) : 0;
+		return habitatAt( { depth, reefDist, pierDist: Math.min( walk, head ), slope, patch, weed: f.weed, debris: f.debris, birds: f.birds, beach, windward, creek } );
 
 	}
 

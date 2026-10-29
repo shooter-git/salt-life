@@ -71,7 +71,7 @@ export const orderPrice = ( o, value ) => ( o.each ?? Math.round( value * o.mul 
 // where and when a fish bites, from its table entry ('over the reef, at dawn and dusk'): Joe's hint
 const WHERE = { shallows: 'in the shallows', pier: 'off the pier', reef: 'over the reef', bay: 'in the bay', deep: 'offshore',
 	edge: 'on the drop-off', ledge: 'on the deep ledges', blue: 'in the blue water', weed: 'under the weedlines', debris: 'under floating debris', birds: 'where the birds are working',
-	wash: 'in the surf' };
+	wash: 'in the surf', creek: 'in the mangrove creek' };
 const WHEN = { dawnDusk: 'at dawn and dusk', night: 'after dark', day: 'by day', any: '' };
 export function biteHint( species ) {
 

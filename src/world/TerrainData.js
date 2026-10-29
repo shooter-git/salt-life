@@ -2,6 +2,7 @@ import { Noise2D, smoothstep, clamp, lerp } from '../util/Noise.js';
 import { WORLD } from './WorldLayout.js';
 import { softRamp, erosionNoise, sampleGrid, upsample2, boxBlur } from './terrain/TerrainNoise.js';
 import { ridgeEnvelope, SEA_STACKS, PATHS, polylineDistance } from './terrain/IslandShape.js';
+import { MANGROVE, mangroveAt } from './terrain/Mangrove.js';
 
 const smin = ( a, b, k ) => {
 
@@ -420,7 +421,12 @@ export class TerrainData {
 		this._seabed( H, R0 );
 		tick( 'seabed' );
 
+		// ((M15) the mangroves on the west: their floor and their creek)
+		this._mangrove( H );
+		tick( 'mangrove' );
+
 		this._masks( H, D, R0, BZ, CV );
+		this._mangroveMasks( H );
 		// soften the 1 m masks so material transitions never show the texel grid
 		this.rock = boxBlur( this.rock, RES, RES, 1 );
 		tick( 'masks' );
@@ -811,6 +817,63 @@ export class TerrainData {
 	}
 
 	// rock / sand / gully masks from the final shape
+	// (M15) the mangroves on the west (terrain/Mangrove.js): the bight's flat raised to their mud, just awash,
+	// in to its waterline (never the land above it), and the creek cut through it to the pool; no loose rock
+	// out on it
+	_mangrove( H ) {
+
+		const res = RES, o = this.origin, [ x0, z0, x1, z1 ] = MANGROVE.window, m = {};
+		for ( let j = Math.max( 1, Math.floor( z0 - o ) ); j < Math.min( res - 1, Math.ceil( z1 - o ) ); j ++ ) {
+
+			const z = o + j + 0.5;
+			for ( let i = Math.max( 1, Math.floor( x0 - o ) ); i < Math.min( res - 1, Math.ceil( x1 - o ) ); i ++ ) {
+
+				const x = o + i + 0.5, k = j * res + i;
+				mangroveAt( x, z, m );
+				if ( m.stand <= 0 && m.creek <= 0 ) continue;
+				let h = H[ k ];
+				const stand = m.stand * ( 1 - smoothstep( 0.1, 0.7, h ) );
+				h = lerp( h, m.floor, stand );
+				h = lerp( h, Math.min( h, m.bed ), m.creek );
+				H[ k ] = h;
+
+			}
+
+		}
+
+		this.rockSites = this.rockSites.filter( ( r ) => {
+
+			mangroveAt( r.x, r.z, m );
+			return m.stand < 0.2 && m.creek < 0.2;
+
+		} );
+
+	}
+
+	// (M15) and their mud: dark, no sand to speak of, no rock, rubble or seagrass on it
+	_mangroveMasks( H ) {
+
+		const res = RES, o = this.origin, [ x0, z0, x1, z1 ] = MANGROVE.window, m = {};
+		for ( let j = Math.max( 1, Math.floor( z0 - o ) ); j < Math.min( res - 1, Math.ceil( z1 - o ) ); j ++ ) {
+
+			const z = o + j + 0.5;
+			for ( let i = Math.max( 1, Math.floor( x0 - o ) ); i < Math.min( res - 1, Math.ceil( x1 - o ) ); i ++ ) {
+
+				const x = o + i + 0.5, k = j * res + i;
+				mangroveAt( x, z, m );
+				const mud = Math.max( m.stand, m.creek ) * ( 1 - smoothstep( 0.2, 0.8, H[ k ] ) );
+				if ( mud <= 0 ) continue;
+				this.sand[ k ] = Math.round( lerp( this.sand[ k ], 50, mud ) );
+				this.rock[ k ] *= 1 - mud;
+				this.rubble[ k ] = Math.round( this.rubble[ k ] * ( 1 - mud ) );
+				this.seagrass[ k ] = Math.round( this.seagrass[ k ] * ( 1 - mud ) );
+
+			}
+
+		}
+
+	}
+
 	_masks( H, D, R0, BZ, CV ) {
 
 		const res = RES, o = this.origin, n2 = this.noise2, n3 = this.noise3;

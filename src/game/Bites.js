@@ -14,6 +14,7 @@ import { NORTH } from './Weather.js';
 //   (M15) and about the island:
 //   windward  0..1: how much the spot's on the island's windward side, its north shore, facing the trades
 //   beach     0..1: sand under the spot (the beaches' wash; the bay's floor and the flats too)
+//   creek     0..1: the mangroves' creek, their pool, and the water off their edge (terrain/Mangrove.js)
 // Returns weights per water type (they overlap: a spot can be both pier and bay). The shallows, the reef,
 // the pier, the bay, and:
 //   deep    the shelf's deep water, 20 to 150 m (and the top of the slope below it): the snappers and
@@ -28,15 +29,18 @@ import { NORTH } from './Weather.js';
 //                under the birds), and the bites come sooner
 //         wash   a sandy beach's surf zone, 0.3 to 3 m down: the pompano's, the permit's and the snook's,
 //                more than twice as much on the windward north beach (and its weather: weatherMood's north)
+//         creek  the mangroves' (the west's): their creek, their pool and the water off their edge, 0.4 m
+//                down and more: the snook's, the mangrove snapper's, the tarpon's, young barracuda's and
+//                jacks'; sheltered, no sea or wind roughs it (it fishes when the rest is blown out)
 // (M15) The game adds side too, as it does flood (not a water type): the spot's windward share, for the sea
 // that roughs its water (the north shore's or the bay's surf: roughed).
 // (Salt Life) The game adds flood, 0..1: how far the spot is in a boat's deck floodlights after dark (not
 // a water type: it draws in the fish that gather under lights, and the bait, so they bite sooner), and
 // (M9) weather: the weather now (Weather.weatherAt's; none, or a fair day's, changes nothing: weatherMood).
 export const BLUE = 0.35; // (the open ocean's fish, sparse: its weight; a spot's floor is the same: biteDelay)
-export function habitatAt( { depth, reefDist, pierDist, slope = 0, patch = 0, weed = 0, debris = 0, birds = 0, windward = 0, beach = 0 } ) {
+export function habitatAt( { depth, reefDist, pierDist, slope = 0, patch = 0, weed = 0, debris = 0, birds = 0, windward = 0, beach = 0, creek = 0 } ) {
 
-	const h = { shallows: 0, reef: 0, pier: 0, bay: 0, deep: 0, edge: 0, ledge: 0, blue: 0, weed: 0, debris: 0, birds: 0, wash: 0 };
+	const h = { shallows: 0, reef: 0, pier: 0, bay: 0, deep: 0, edge: 0, ledge: 0, blue: 0, weed: 0, debris: 0, birds: 0, wash: 0, creek: 0 };
 	if ( depth < 0.25 ) return h; // on the sand
 	h.shallows = smooth( 3.5, 1.0, depth );
 	h.reef = Math.max( smooth( 12, - 6, reefDist ), patch ) * smooth( 0.8, 2.5, depth );
@@ -53,6 +57,10 @@ export function habitatAt( { depth, reefDist, pierDist, slope = 0, patch = 0, we
 	h.wash = band * ( 0.7 + 1.1 * windward );
 	// (a windward beach's surf zone isn't the calm sand's: the mullet and the bonefish keep to the bay's)
 	h.shallows *= 1 - 0.6 * band * windward;
+	h.creek = creek * smooth( 0.4, 1.0, depth );
+	// (its mud isn't the sand flats' water: the creek's own fish take most of their place)
+	h.shallows *= 1 - 0.7 * h.creek;
+	h.bay *= 1 - 0.5 * h.creek;
 	return h;
 
 }

@@ -27,6 +27,7 @@ const SOURCES = [
 	'src/world/terrain/IslandShape.js',
 	'src/world/terrain/TerrainNoise.js',
 	'src/world/terrain/IslandBake.js',
+	'src/world/terrain/Mangrove.js',
 	'src/util/Noise.js',
 ];
 

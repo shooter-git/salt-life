@@ -76,6 +76,14 @@ New code that draws from world positions on the GPU takes the same care: a point
 - **The sounder** loses the bottom past `SOUNDER_REACH` (1,200 ft): "-- ft", no bottom drawn, the fish still.
 - `tools/seabed-chart.mjs` draws a chart of it all (shaded relief, depth colours and contours) into `qa-output/seabed/`. `test/seabed.mjs` tests it.
 
+## The west's mangroves
+
+(M15) `terrain/Mangrove.js` lays them out (`MANGROVE`: the shore they're along, the stand's width, its floor, the creek's line, width and bed, the pool) and `mangroveAt( x, z )` says, anywhere, how much of the stand, the creek and the fringe it is, and the floor's and the bed's heights there. Four things read it:
+- **The ground**: `TerrainData._mangrove` raises the bight's flat to the stand's floor (never the land above the waterline) and cuts the creek; `_mangroveMasks` makes it mud; loose rock sites out on it are dropped. It's baked (`tools/bake-terrain.mjs` lists the file among the island's sources).
+- **The trees**: `Scatter` places them last, on their own random numbers (nothing else on the island moves), as canopy trees (`out.trees`: `vegTreeSpecies` 2, scaled from `PlantGeometry.MANGROVE_TREE`, their trunks' feet `lift` over the water) with their prop roots (`out.mangroves`), drawn by `Vegetation`'s `mangroveRoots` kind in their own material (`VegMaterials.rootMaterialDef`: the canopy's bark, without its cross-fade into the impostors, out to `rootFade`).
+- **The shore's waves**: `computeShoreField` scales each cell's exposure by the stand, so the shore waves die in it, every field alike (the south's, the west's, the north's).
+- **The bites**: `Game.habitatAtPoint` passes the creek and the fringe as `creek` to `Bites.habitatAt`.
+
 ## The sea out there
 
 (M15) The sea by where it is (`test/sea-out-there.mjs`):
