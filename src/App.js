@@ -710,8 +710,9 @@ export class App {
 		const wx = this.weather.live, cv = this.renderer.domElement;
 		this.lightning.setViewport( cv.width, cv.height );
 		// ((M12) from up the blow's track, from the clock: everyone's strikes in the same place, (and at the same
-		// moment: as the weather is, not as it's easing here, which isn't everyone's)
-		this.lightning.update( this.weather.target.thunder, this.camera, this.weather.track, this.sky.clouds.base, wx.visibility, Date.now(), this.weather.cells );
+		// moment: as the weather is, not as it's easing here, which isn't everyone's); (M15) the island's own
+		// storm's about the island, wherever you are, and the showers' about you
+		this.lightning.update( this.weather.island.thunder, this.camera, this.weather.track, this.sky.clouds.base, wx.visibility, Date.now(), this.weather.cells );
 		this.rain.flash.value = this.sky.flashFill; // ((M12) the light about you: none from a storm on the horizon)
 		this.spray.uniforms.sprayGrey.value = this.sky.overcast; // ((M14) the spray lit as the sky is)
 		if ( wx.thunder > 0 && this.audio ) this.audio.thunderReady();

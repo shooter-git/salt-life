@@ -168,7 +168,7 @@ function noiseK( px, pz, key ) {
 // the foam's noises tens of km out: each keyed about the origin (as the shader draws it) the world's, near you
 {
 
-	const { LACE_NOISE, FROTH, ROWS, MARBLE_NOISE, MARBLE, KEY } = FOAM_NOISE;
+	const { LACE_NOISE, FROTH, ROWS, MARBLE_NOISE, MARBLE, KEY, SPUME_NOISE, SPUME_LACE } = FOAM_NOISE;
 	const keys = Array.from( { length: KEY.count }, () => new Vector4( 0, 0, 0, 0 ) );
 	for ( const km of [ 5, 40, 60 ] ) {
 
@@ -176,7 +176,7 @@ function noiseK( px, pz, key ) {
 		const O = { x: Math.round( cam.x / STEP ) * STEP, z: Math.round( cam.z / STEP ) * STEP };
 		// (the marbling's frame where an earlier wind left it)
 		const wind = new Vector2( 0.35, 0.94 ).normalize();
-		const M = { x: km * 700, z: 1234.5, along: 5021.3, across: - 777.7, wind: wind.clone() };
+		const M = { x: km * 700, z: 1234.5, along: 5021.3, across: - 777.7, wind: wind.clone(), spume: 3456.7 };
 		foamKeys( O, M, wind, cam, keys );
 		let most = 0, n = 0;
 		for ( let k = 0; k < 400; k ++ ) {
@@ -203,6 +203,23 @@ function noiseK( px, pz, key ) {
 
 				const gpu = noiseK( f( qx * f( a ) ), f( qz * f( a ) ), keys[ KEY.marble + i ] );
 				most = Math.max( most, Math.abs( gpu - noise( a * Qx + b, a * Qz + b ) ) );
+				n ++;
+
+			} );
+			// ((M15) a hurricane's spume, on the same frame unscaled, drifted down the wind)
+			const sx = f( f( xL * f( wind.x ) ) + f( zL * f( wind.y ) ) ), sz = f( f( - xL * f( wind.y ) ) + f( zL * f( wind.x ) ) );
+			const Sx = ( x - M.x ) * wind.x + ( z - M.z ) * wind.y + M.along - M.spume, Sz = - ( x - M.x ) * wind.y + ( z - M.z ) * wind.x + M.across;
+			SPUME_NOISE.forEach( ( [ u, v, o ], i ) => {
+
+				const gpu = noiseK( f( sx * f( u ) ), f( sz * f( v ) ), keys[ KEY.spume + i ] );
+				most = Math.max( most, Math.abs( gpu - noise( u * Sx + o, v * Sz + o ) ) );
+				n ++;
+
+			} );
+			LACE_NOISE.forEach( ( [ a, b ], i ) => {
+
+				const gpu = noiseK( f( f( sx * f( SPUME_LACE ) ) * f( a ) ), f( f( sz * f( SPUME_LACE ) ) * f( a ) ), keys[ KEY.spume + 3 + i ] );
+				most = Math.max( most, Math.abs( gpu - noise( a * SPUME_LACE * Sx + b, a * SPUME_LACE * Sz + b ) ) );
 				n ++;
 
 			} );

@@ -1,6 +1,6 @@
 import { Vector2 } from '../engine/index.js';
 import { G } from '../core/Globals.js';
-import { islandTime, weatherAt, showers, towardOf, hurricaneAt, hurricaneNews, hash, FRONT_KMH, STORM_RANGE, SURF_MAX } from '../game/Weather.js';
+import { islandTime, weatherHere, showers, towardOf, hurricaneAt, hurricaneNews, hash, FRONT_KMH, STORM_RANGE, SURF_MAX } from '../game/Weather.js';
 import { FRONT_KM, eyeCover, bandCells } from '../sky/SkyProClouds.js';
 
 // (Salt Life) The island's weather, each frame: what the day brings (game/Weather.js), or what you picked
@@ -36,11 +36,16 @@ import { FRONT_KM, eyeCover, bandCells } from '../sky/SkyProClouds.js';
 //     (step 2) Its storm surge is the sea's level (G.seaLevel).
 //   - (M14) each of the showers its own cloud towering over it (SkyProClouds.setStorms): a shower's
 //     towering cumulus, a thunderstorm's cumulonimbus and its anvil.
+//   - (M15) all of it the weather where you are (the camera: Weather.weatherHere), out past the island the
+//     weather drifting over you, its showers about you (Weather.showers( ..., at )) and raining on you only
+//     under one, a hurricane's vortex where you are in it; the island's own (`island`: Weather.weatherAt)
+//     for its surf, the sea's level, its boarding up and its own storm's lightning (track).
 // The wind and the sea come round over half a minute or so, the cloud more slowly (a minute or two from
 // fair to a gale's, so the panorama's refresh keeps up and nothing pops), the rain in seconds. When the
 // clock jumps (a rest, the host's clock, coming back to the tab) it's all set at once, behind the dim a
 // rest gives.
-//   weather.update( dt, day, hour, pick, camera, since )   weather.target, weather.live   ({ id, wind, ... })
+//   weather.update( dt, day, hour, pick, camera, since )   weather.target, weather.live   ({ id, wind, ... }:
+//   where you are), (M15) weather.island (the island's)
 //   weather.windAt( x, z ) -> m/s   weather.gustAt( x, z ) -> 0..1
 
 const EASE = 30; // s: the time constant of the wind and the sea coming round
@@ -106,7 +111,8 @@ export class WeatherDriver {
 		this.shore = shore;
 		this.water = water;
 		this.boat = boat;
-		this.target = null; // what the weather is (game/Weather.js)
+		this.target = null; // what the weather is (game/Weather.js): (M15) where you are
+		this.island = null; // (M15) and at the island
 		this.live = null; // what's shown, on its way there
 		this.cloud = null; // (M9) the cloud it's bringing (a little ahead: CLOUD_LEAD)
 		this._T = null;
@@ -115,7 +121,7 @@ export class WeatherDriver {
 		this._pick = null;
 		this._showers = [];
 		this._showerRain = new Map(); // (each slot's weather, while the pick's the same)
-		this.cells = this._showers; // (M12) the showers about the island, out to STORM_RANGE (Weather.showers)
+		this.cells = this._showers; // (M12) the showers about the island, out to STORM_RANGE (Weather.showers); (M15) about you
 		this._curtains = []; // (M14) the curtains in a hurricane (bandCurtains)
 		this._bandCells = []; // (M14) its outer bands' cells (SkyProClouds' bandCells), and with the showers'
 		this._stormCells = [];
@@ -171,12 +177,18 @@ export class WeatherDriver {
 		}
 
 		const T = islandTime( day, hour );
-		const target = this.target = weatherAt( T, pick, since );
-		towardOf( target.windAngle, this.track );
+		// ((M15) the showers about you first: the rain where you are is theirs, out past the island)
+		const picked0 = pick !== this._pick || since !== this._since;
+		if ( picked0 || this._showerRain.size > 160 ) this._showerRain.clear();
+		showers( T, pick, STORM_RANGE, this._showers, this._showerRain, since, this._at );
+		const at = this._at, target = this.target = weatherHere( T, pick, since, at.x, at.z, this._showers );
+		this.island = target.island;
+		// ((M12) the island's own storm's: its strikes from up its track)
+		towardOf( this.island.windAngle, this.track );
 		// (a held pick holds; (M13) a picked hurricane passes, as the day's weather does)
 		const held = pick && pick !== 'hurricane';
 		// (the cloud a shower brings comes over before it rains, and stays a while after)
-		const ahead = held ? target : weatherAt( T + CLOUD_LEAD, pick, since );
+		const ahead = held ? target : weatherHere( T + CLOUD_LEAD, pick, since, at.x, at.z );
 		const cloud = this.cloud = { coverage: Math.max( target.coverage, ahead.coverage ), overcast: Math.max( target.overcast, ahead.overcast ), storm: Math.max( target.rain, ahead.rain ) };
 		const jumped = this._T !== null && Math.abs( T - this._T ) > JUMP;
 		const picked = pick !== this._pick || since !== this._since;
@@ -226,10 +238,10 @@ export class WeatherDriver {
 			const f = this.sky.clouds.front;
 			if ( f ) for ( let i = 0; i < FRONT_KM.length; i ++ ) {
 
-				const at = held ? target : weatherAt( T + CLOUD_LEAD + FRONT_KM[ i ] / FRONT_KMH, pick, since );
-				f.value.setComponent( i, held ? 0 : at.coverage - this.live.coverage );
+				const up = held ? target : weatherHere( T + CLOUD_LEAD + FRONT_KM[ i ] / FRONT_KMH, pick, since, at.x, at.z );
+				f.value.setComponent( i, held ? 0 : up.coverage - this.live.coverage );
 				// ((M12) told up the track of the weather that's 24 km off: the bank's)
-				if ( i === 2 && this.sky.clouds.frontDir ) towardOf( at.windAngle, this.sky.clouds.frontDir.value );
+				if ( i === 2 && this.sky.clouds.frontDir ) towardOf( up.windAngle, this.sky.clouds.frontDir.value );
 
 			}
 
@@ -237,9 +249,7 @@ export class WeatherDriver {
 
 		this.apply();
 		// (M11) the showers about the island, for their curtains in the distance (a picked weather's are
-		// its own; each slot's rain is kept while the pick is)
-		if ( picked || this._showerRain.size > 160 ) this._showerRain.clear();
-		showers( T, pick, STORM_RANGE, this._showers, this._showerRain, since );
+		// its own; each slot's rain is kept while the pick is): (M15) worked out first, about you
 		// ((M14) in a hurricane, its bands' curtains where they are, in place of the showers')
 		const k = this.hurricane ? Math.min( 1, Math.max( 0, this.live.hurricane || 0 ) ) : 0;
 		if ( camera ) this.sky.setCurtains( k > 0 ? bandCurtains( this.hurricane, camera.position, k, this._showers, this._curtains ) : this._showers, camera.position );
@@ -249,7 +259,7 @@ export class WeatherDriver {
 			let cells = this._showers;
 			if ( k > 0 ) {
 
-				bandCells( this.hurricane, this._bandCells );
+				bandCells( this.hurricane, this._bandCells, 0, this.sky.clouds.stormCentre( this._at ) );
 				cells = this._stormCells;
 				cells.length = 0;
 				for ( const c of this._showers ) cells.push( c );
@@ -257,7 +267,7 @@ export class WeatherDriver {
 
 			}
 
-			this.sky.clouds.setStorms( cells, dt, jumped || picked );
+			this.sky.clouds.setStorms( cells, dt, jumped || picked, this._at );
 
 		}
 

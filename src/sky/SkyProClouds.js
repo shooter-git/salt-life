@@ -117,16 +117,17 @@ export function eyeCover( dx, dz, R, tx, tz, h = 0 ) {
 // wide as `r` (m), raining as hard as `rain` as far as its band's out there (from EYE.bandFrom, to its
 // reach), and as thundery as the weather's bands are there (HURRICANE.band's thunder, from its `from`),
 // some of them not (`calm`: congestus, their tops lower, no anvil). Fixed about its eye, each its own for
-// good (`n`, past any shower's), within `range` m of the island's middle (the storm map's). h: the
-// hurricane (Weather.hurricaneAt: x, z from the island's middle, rmax, track). Into out (its objects
-// filled again each call), after `from` of them
+// good (`n`, past any shower's), within `range` m of the island's middle (the storm map's; (M15) or of
+// `centre`, the map's middle about you). h: the hurricane (Weather.hurricaneAt: x, z from the island's
+// middle, rmax, track). Into out (its objects filled again each call), after `from` of them
 const BAND_CELLS = { phase: 0.175, every: 7000, across: 0.25, r: [ 2000, 3600 ], rain: [ 0.75, 1 ], calm: 0.4, range: 42000, n: 1 << 24 };
-export function bandCells( h, out, from = 0 ) {
+export function bandCells( h, out, from = 0, centre = null ) {
 
 	const C = BAND_CELLS, R = h.rmax, tx = h.track.x, tz = h.track.y, gap = B.gap;
+	const cx = centre ? centre.x : 0, cz = centre ? centre.z : 0;
 	let count = from;
-	// (the island from its eye, and the windings of its bands within reach of it)
-	const D = Math.hypot( h.x, h.z ), lo = Math.max( EYE.bandFrom[ 0 ] * R, D - C.range - C.r[ 1 ] ), hi = Math.min( B.reach[ 1 ], D + C.range + C.r[ 1 ] );
+	// (the island from its eye, and the windings of its bands within reach of it; (M15) the map's middle)
+	const D = Math.hypot( h.x - cx, h.z - cz ), lo = Math.max( EYE.bandFrom[ 0 ] * R, D - C.range - C.r[ 1 ] ), hi = Math.min( B.reach[ 1 ], D + C.range + C.r[ 1 ] );
 	if ( hi <= lo ) { out.length = count; return out; }
 	const m0 = Math.max( 0, Math.floor( lo / gap - C.phase ) ), m1 = Math.ceil( hi / gap - C.phase + B.arms );
 	for ( let m = m0; m <= m1; m ++ ) {
@@ -148,7 +149,7 @@ export function bandCells( h, out, from = 0 ) {
 			const l = Math.hypot( pm, pn );
 			pm *= r / l; pn *= r / l;
 			const x = h.x + pm * tx + pn * tz, z = h.z + pm * tz - pn * tx;
-			if ( Math.abs( x ) > C.range || Math.abs( z ) > C.range ) continue;
+			if ( Math.abs( x - cx ) > C.range || Math.abs( z - cz ) > C.range ) continue;
 			const k = ss( EYE.bandFrom[ 0 ] * R, EYE.bandFrom[ 1 ] * R, r ) * ( 1 - ss( B.reach[ 0 ], B.reach[ 1 ], r ) );
 			if ( k < 0.05 ) continue;
 			const c = out[ count ] || ( out[ count ] = {} );
@@ -245,6 +246,8 @@ export const CB = {
 
 // (M14) the storm map's cells made a frame (setStorms: a whole map over a few frames, so none is long)
 export const STORM_CELLS = 2;
+// (M15) the storm map's middle follows you this far at a time (m: it reaches CB.span / 2 about it)
+export const STORM_STEP = 12000;
 // (M14) a storm's turrets (CB): its cell ({ x, z, n }), how wide its rain's cloud is (m: its main updraft
 // goes by it), its main updraft's top and the base (m), and how thundery it is (0..1): into `out` ({ x, z,
 // r, top }, m: the first its main updraft's core, then its steps down, the turrets crowding its core, and
@@ -1580,6 +1583,7 @@ export class SkyProClouds {
 		// (m/s))
 		this._stormWas = [];
 		this._stormDrift = { clock: 0, time: 0, x: 0, z: 0, vx: 0, vz: 0 };
+		this._stormC = { x: 0, z: 0 }; // ((M15) the map's middle, as it was made: stormCentre)
 
 		const [ PW, PH ] = q.pano;
 		// the panorama and its back buffer (a whole new one is made there over warmFrames frames, then swapped in);
@@ -2169,24 +2173,27 @@ export class SkyProClouds {
 	// (M14) the showers about the island (Weather.showers: { x, z, r, rain, thunder, n }, x and z from the
 	// island's middle), each its own cloud towering over it: the storm map (stormMap), made again every
 	// CB.every s, a few cells a frame (and at once when `now`: a jump of the clock, a pick), and slid on
-	// between as they drift (as fast as they did between the last two)
-	setStorms( cells, dt, now = false ) {
+	// between as they drift (as fast as they did between the last two). (M15) The map's about `at` (where you
+	// are: stormCentre's, a STORM_STEP at a time), made again straight away when you've moved on a step
+	setStorms( cells, dt, now = false, at = null ) {
 
 		const U = this.uniforms, job = this._stormJob, S = this._stormDrift;
 		this._stormT -= dt;
 		S.clock += dt;
 		// (their turrets' billows rising as they boil)
 		U.scsStormDrift.value.z += CB.boil * dt;
-		if ( now || ( job.at < 0 && this._stormT <= 0 ) ) {
+		const c0 = this.stormCentre( at ), moved = c0.x !== this._stormC.x || c0.z !== this._stormC.z;
+		if ( now || ( job.at < 0 && ( this._stormT <= 0 || moved ) ) ) {
 
-			// (the cells as they are now: each frame's are filled again)
+			// (the cells as they are now, about the map's middle: each frame's are filled again)
 			this._stormT = CB.every;
 			const up = this.upper.value, list = job.cells;
+			job.cx = c0.x; job.cz = c0.z;
 			list.length = cells.length;
 			for ( let i = 0; i < cells.length; i ++ ) {
 
 				const c = cells[ i ], d = list[ i ] || ( list[ i ] = {} );
-				d.x = c.x; d.z = c.z; d.r = c.r; d.rain = c.rain; d.thunder = c.thunder; d.n = c.n; d.band = c.band || 0;
+				d.x = c.x - c0.x; d.z = c.z - c0.z; d.r = c.r; d.rain = c.rain; d.thunder = c.thunder; d.n = c.n; d.band = c.band || 0;
 
 			}
 
@@ -2207,11 +2214,12 @@ export class SkyProClouds {
 				// (how far they've drifted since the last map, each matched by which it is, and how fast: not
 				// over a jump)
 				// ((M14) in a hurricane, its bands' cells: they go with it, and they're what's drawn)
+				// ((M15) matched where they are in the world: the map's middle may have moved)
 				const was = this._stormWas, banded = job.cells.some( ( c ) => c.band );
 				let dx = 0, dz = 0, k = 0;
 				for ( const c of job.cells ) if ( c.band || ! banded ) for ( const w of was ) if ( w.n === c.n ) {
 
-					dx += c.x - w.x; dz += c.z - w.z; k ++;
+					dx += c.x + job.cx - w.x; dz += c.z + job.cz - w.z; k ++;
 					break;
 
 				}
@@ -2227,9 +2235,10 @@ export class SkyProClouds {
 				job.cells.forEach( ( c, i ) => {
 
 					const w = was[ i ] || ( was[ i ] = {} );
-					w.n = c.n; w.x = c.x; w.z = c.z;
+					w.n = c.n; w.x = c.x + job.cx; w.z = c.z + job.cz;
 
 				} );
+				this._stormC.x = job.cx; this._stormC.z = job.cz;
 				const front = this.stormData;
 				this.stormData = this.stormTexture.image.data = job.back;
 				job.back = front;
@@ -2244,9 +2253,21 @@ export class SkyProClouds {
 		}
 
 		// (the map slid on as far as they've drifted since it was made, and their turrets' billows with them)
+		// ((M15) about its middle)
 		const t = Math.min( S.clock - S.time, 2 * CB.every ), ox = S.vx * t, oz = S.vz * t;
-		U.scsStorm.value.x = ox; U.scsStorm.value.y = oz;
+		U.scsStorm.value.x = this._stormC.x + ox; U.scsStorm.value.y = this._stormC.z + oz;
 		U.scsStormDrift.value.x = S.x + ox; U.scsStormDrift.value.y = S.z + oz;
+
+	}
+
+	// (M15) the storm map's middle for you at `at` (the camera; the island's middle with none): a STORM_STEP at a
+	// time, so it's made again only now and then as you go
+	stormCentre( at ) {
+
+		const c = this._stormAt || ( this._stormAt = { x: 0, z: 0 } );
+		c.x = at ? Math.round( at.x / STORM_STEP ) * STORM_STEP : 0;
+		c.z = at ? Math.round( at.z / STORM_STEP ) * STORM_STEP : 0;
+		return c;
 
 	}
 

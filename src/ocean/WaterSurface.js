@@ -48,7 +48,10 @@ const LACE_NOISE = [ [ 1.7, 0 ], [ 4.3, 7.1 ], [ 11, 3.3 ], [ 2.6, 1.9 ] ];
 const FROTH = 4.5, ROWS = 3.3;
 const MARBLE_NOISE = [ [ 0.3, 0 ], [ 0.3, 3.7 ], [ 1, 0 ], [ 2.3, 7.1 ], [ 5.3, 2.6 ], [ 1.3, 1.9 ], [ 0.12, 9.2 ], [ 0.15, 5.5 ] ];
 const MARBLE = [ 2.2, 3.6 ];
-const KEY = { froth: 0, rows: 4, marble: 8, count: 16 };
+// (M15) a hurricane's spume's: its streaks' two noises and its broad one (along and across the wind: scale,
+// offset), and its lace's scale on the water (its four noises LACE_NOISE's), on the marbling's frame
+const SPUME_NOISE = [ [ 0.025, 0.45, 0 ], [ 0.0575, 0.27, 5.3 ], [ 0.08, 0.08, 0 ] ], SPUME_LACE = 0.5;
+const KEY = { froth: 0, rows: 4, marble: 8, spume: 16, count: 23 };
 // (M15) the water's colour (sRGB, as the light it sends back up: the body's below). Its own: the island's
 // coastal water over its shelf, the green water (its run-off and the life over the shelf: teal, its blue less
 // than its green, and less clear, its plankton taking the blue: `murk`), within `coast` m of the island's
@@ -94,12 +97,16 @@ export function foamKeys( O, M, w, cam, keys ) {
 		M.wind.copy( w );
 
 	}
-	const dx = O.x - M.x, dz = O.z - M.z;
-	const along = ( dx * w.x + dz * w.y + M.along ) * MARBLE[ 0 ], across = ( - dx * w.y + dz * w.x + M.across ) * MARBLE[ 1 ];
+	const dx = O.x - M.x, dz = O.z - M.z, a = dx * w.x + dz * w.y + M.along, c = - dx * w.y + dz * w.x + M.across;
+	const along = a * MARBLE[ 0 ], across = c * MARBLE[ 1 ];
 	MARBLE_NOISE.forEach( ( [ s, o ], i ) => key( KEY.marble + i, s * along + o, s * across + o ) );
+	// ((M15) a hurricane's spume, on the same frame, drifted down the wind by M.spume m)
+	const sa = a - ( M.spume || 0 );
+	SPUME_NOISE.forEach( ( [ u, v, o ], i ) => key( KEY.spume + i, u * sa + o, v * c + o ) );
+	LACE_NOISE.forEach( ( [ s, o ], i ) => key( KEY.spume + 3 + i, s * SPUME_LACE * sa + o, s * SPUME_LACE * c + o ) );
 
 }
-export const FOAM_NOISE = { LACE_NOISE, FROTH, ROWS, MARBLE_NOISE, MARBLE, KEY };
+export const FOAM_NOISE = { LACE_NOISE, FROTH, ROWS, MARBLE_NOISE, MARBLE, KEY, SPUME_NOISE, SPUME_LACE };
 
 // (the marbling's noise i of arg, about the origin: GLSL)
 const marble = ( i, arg ) => `waterNoiseK( ${ arg } * ${ g( MARBLE_NOISE[ i ][ 0 ] ) }, waterKey[ ${ KEY.marble + i } ] )`;
@@ -175,7 +182,7 @@ export class WaterSurface {
 		// (M15) the whitecaps' marbling's frame along and across the wind: a point, and the along and across
 		// distances there (m). As the wind turns it's moved to the camera, so the marbling turns about you (about
 		// the world's origin, tens of km out it swept across the sea as the wind went round)
-		this.marble = { x: 0, z: 0, along: 0, across: 0, wind: G.windDir.value.clone() };
+		this.marble = { x: 0, z: 0, along: 0, across: 0, wind: G.windDir.value.clone(), spume: 0 };
 
 		// (M11) the sky it reflects: the scene's environment given to it as its own (update), so its strength
 		// is REFLECT (with no envMap of its own three would give it the scene's environmentIntensity: Sky's
@@ -449,12 +456,15 @@ ${ SH ? /* glsl */`
 	// the direction of the wind", "the sea completely white"): foam blown into streaks tens of metres long and
 	// a metre or two across, drifting downwind, over the bay as well as the open sea (not on the sand's film)
 	if ( waterSpume > 0.0 ) {
-		vec2 wd = seaDetailWindDir, wp = vec2( - wd.y, wd.x ), q = vWater.xz - seaDetailOffset * 0.5;
-		vec2 s = vec2( dot( q, wd ) * 0.025, dot( q, wp ) * 0.45 );
-		float streak = smoothstep( 0.45, 0.8, waterNoise( s ) ) * smoothstep( 0.25, 0.65, waterNoise( s * vec2( 2.3, 0.6 ) + 5.3 ) );
+		// ((M15) along and across the wind about the sea's origin, on the marbling's frame, its noises keyed
+		// (foamKeys: the origin's place on it, drifted down the wind): its lace held tens of km out, and turning
+		// about you as the wind turns)
+		vec2 wd = seaDetailWindDir, wp = vec2( - wd.y, wd.x ), sq = vec2( dot( vWaterX0, wd ), dot( vWaterX0, wp ) );
+		float streak = smoothstep( 0.45, 0.8, waterNoiseK( sq * vec2( ${ g( SPUME_NOISE[ 0 ][ 0 ] ) }, ${ g( SPUME_NOISE[ 0 ][ 1 ] ) } ), waterKey[ ${ KEY.spume } ] ) )
+			* smoothstep( 0.25, 0.65, waterNoiseK( sq * vec2( ${ g( SPUME_NOISE[ 1 ][ 0 ] ) }, ${ g( SPUME_NOISE[ 1 ][ 1 ] ) } ), waterKey[ ${ KEY.spume + 1 } ] ) );
 		float spDist = length( oceanLodView - vWaterL );
-		float spCover = waterSpume * ( 0.75 * streak + 0.2 * waterNoise( q * 0.08 ) ) * smoothstep( 0.15, 0.8, depth ) * ( 1.0 - smoothstep( 600.0, 2000.0, spDist ) );
-		foam = max( foam, waterLace( q * 0.5, min( spCover, 0.75 ) ) * 0.85 );
+		float spCover = waterSpume * ( 0.75 * streak + 0.2 * waterNoiseK( sq * ${ g( SPUME_NOISE[ 2 ][ 0 ] ) }, waterKey[ ${ KEY.spume + 2 } ] ) ) * smoothstep( 0.15, 0.8, depth ) * ( 1.0 - smoothstep( 600.0, 2000.0, spDist ) );
+		foam = max( foam, waterLaceK( sq * ${ g( SPUME_LACE ) }, ${ KEY.spume + 3 }, min( spCover, 0.75 ) ) * 0.85 );
 	}
 	if ( frontAcross < 30.0 ) {
 		// ((M15) the foam gathered down the front's middle, ragged: in clumps and gaps, wider and narrower, wandering a few
@@ -620,7 +630,9 @@ ${ SH ? /* glsl */`
 		const [ a, b ] = RING_CELL;
 		this.ringAt.value.set( fr( O.x / a ) * a, fr( O.z / a ) * a, fr( O.x / b ) * b, fr( O.z / b ) * b );
 		this.ringCells.value.set( Math.floor( O.x / a ), Math.floor( O.z / a ), Math.floor( O.x / b ), Math.floor( O.z / b ) );
-		// (the whitecaps' crests and cells at it, and the foam's noises' keys)
+		// (the whitecaps' crests and cells at it, and the foam's noises' keys; (M15) the spume drifting down the
+		// wind as fast as it did, half the gusts' pace)
+		this.marble.spume += 0.35 * G.windSpeed.value * G.dt.value;
 		this.whitecaps.place( O.x, O.z );
 		foamKeys( O, this.marble, G.windDir.value, camera.position, this.keys );
 		// (M11) the sky it reflects, as the scene's environment is (made once, refreshed in place); its

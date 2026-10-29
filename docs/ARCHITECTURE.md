@@ -60,7 +60,7 @@ Materials are three's `MeshStandardMaterial` (or `MeshPhysicalMaterial`), with G
 - **The sun's shadows** (`materials/ViewShadows.js`): looked up from view space; the light's matrices (mid's, high's cascades) times the camera's world matrix, in doubles, for each render's camera; three's `shadowmap_vertex` patched on import.
 - **The fishing line and the anchor's rode** (`createLineMaterial`): its ends about a point by its first end, the view's matrix to that point given for each render (`onBeforeRender`); the uniforms the game sets stay the world's.
 - **Particles and cloth** (the cast net, the spray, the wake, the drips): their positions in doubles (`Float64Array`), drawn about a point by the camera or by them, to a metre, the mesh put there; the shaders use `modelViewMatrix`, and the camera less that point. The boat's lamps are drawn by their own matrices; the water's queries (`WaterQuery`, the boat's) are doubles.
-- Not yet: the birds (from a 32-bit texture of world positions), the whale's marks and a hurricane's spume (both keyed on world positions): M15's steps 6 and 7. The rain and the air motes wrap a box about the camera from its world position; measured, their few mm don't show.
+- Not yet: the birds (from a 32-bit texture of world positions) and the whale's marks (keyed on world positions): M15's step 7. (A hurricane's spume is, since step 6: The weather where you are.) The rain and the air motes wrap a box about the camera from its world position; measured, their few mm don't show.
 
 New code that draws from world positions on the GPU takes the same care: a point near it, in doubles.
 
@@ -325,6 +325,17 @@ Everyone keeps their own progress and their own fish.
   - what the weather is (where the wind comes from and its speed in knots, `windFrom`, `knots`; the surf as a report gives it, `surfText`, and its period) and what's coming (`forecast`);
   - a choice of it: the forecast or any condition. It's saved with the clock (`weather`). In company it's everyone's (`Together.setWeather`, the shared `'weather'`: Playing together, above).
   - On its own (`pnpm dev`), `?weather=gale` holds it from the first frame; `?weather=forecast` is the day's.
+
+### The weather where you are
+
+(M15) `WeatherDriver` works out the weather where the camera is (`Weather.weatherHere`; `test/weather-out-there.mjs`), and keeps the island's own as `weather.island` (`weatherAt`):
+
+- **Within `HERE.near[ 0 ]` (2.5 km) of the island's middle**, `weatherHere` is `weatherAt` exactly. It blends to the weather out there by `HERE.near[ 1 ]` (6 km).
+- **Out there**, the day's weather is the island's at T less how far down the wind you are over `FRONT_KMH` (the frozen pattern the showers already drift in), its swell the open sea's (`dayWeatherAt( T, open )`). Its rain and thunder are the showers' about you (`cellsAt`: each as hard as it rains at its middle, its thunder out to 1.5 r), or under a grey sky (overcast past `HERE.deck`) the day's deck everywhere. A hurricane's vortex is where you are in it (`stormAt`, `overHurricane` take a place).
+- **The island's own** (`ISLAND_KEYS`: surf, period, north, northPeriod, surge, boarded) are copied from the island's. The lightning's own storm (`strikeIn`, about the island's middle) is the island's thunder (`App`: `weather.island.thunder`), its track the island's. The showers' strikes (`distantStrikesIn`) come down about them wherever they are.
+- **The showers** are worked out first each frame, about the camera (`showers( ..., at )`): within `STORM_RANGE` of you along the weather's way, and in rows beside the island's (each another 28 km wide, its cells off to the side half the time, their `n` past `ROW_N` for each row out), as many as reach within `ROW_REACH` (30 km) of you. At the island that's the island's row and one either side.
+- **The storm map** (`SkyProClouds.setStorms( cells, dt, now, at )`) is laid out about `stormCentre( at )`, the camera a `STORM_STEP` (12 km) at a time; when you've moved a step it's made again, its cells matched by where they are in the world so the drift carries on. A hurricane's band cells are kept within reach of the same middle (`bandCells( h, out, from, centre )`).
+- **A hurricane's spume** is drawn on the whitecaps' marbling frame about the sea's origin (`SPUME_NOISE`, `KEY.spume`: `foamKeys` with the frame drifted down the wind, `marble.spume`), held tens of km out (`test/sea-origin.mjs`) and turning about you.
 
 ## What the weather costs
 
