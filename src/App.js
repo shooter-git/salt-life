@@ -1,5 +1,6 @@
 import * as THREE from './engine/index.js';
 import './materials/HeightHaze.js'; // (three's fog chunks: before anything is compiled)
+import { viewShadows } from './materials/ViewShadows.js'; // ((M15) and its shadows' chunk)
 import { createStage, gltfLoader } from '@allthespaces/portal/three';
 import { ResolutionGovernor } from '@allthespaces/portal/resolution';
 import { G } from './core/Globals.js';
@@ -257,6 +258,8 @@ export class App {
 				if ( ! had ) camera.layers.disable( 1 );
 
 			};
+			// ((M15) and looked up about the camera: exact tens of km out, materials/ViewShadows)
+			viewShadows( renderer );
 
 		}
 

@@ -1,5 +1,8 @@
 import { Vector2, Vector4, Box3, Frustum, Matrix4, Vector3, Sphere, InstancedBufferGeometry, BufferAttribute, InstancedBufferAttribute } from '../engine/index.js';
 
+// (M15) the parity of an integer, for a negative one too
+const parity = ( k ) => ( ( k % 2 ) + 2 ) % 2;
+
 // Continuous distance-dependent LOD (Strugar 2010) quadtree grid.
 // A single G x G grid mesh is instanced for every selected node. Vertices near the
 // outer edge of each LOD range geomorph toward the next coarser grid so there are
@@ -10,9 +13,19 @@ import { Vector2, Vector4, Box3, Frustum, Matrix4, Vector3, Sphere, InstancedBuf
 //   vec2 cdlodSnapped( vec4 node, vec2 grid )                         the vertex on its LOD's lattice
 //   CdlodVertex cdlodMorph( vec4 node, vec2 grid, vec3 viewPos, float y0 )
 //        (y0 = height at cdlodSnapped(), for the morph distance; 0 for the sea)
-//   struct CdlodVertex { vec2 worldXZ; float spacing; float morphK; float lod; float size; }
+//   struct CdlodVertex { vec2 xz; float spacing; float morphK; float lod; float size; }
+//        (xz: about the grid's origin)
 // Uniforms (`cdlod.uniforms`, merged into the material's): <prefix>Morph[ lod ] = ( morph start,
-// 1 / morph range, grid spacing, 0 ).
+// 1 / morph range, grid spacing, 0 ); (M15) <prefix>Origin[ lod ] = ( how far the origin is past a
+// point of that LOD's lattice, x and z (m), the parity of that point's index, x and z ); <prefix>At, the
+// origin (world xz); <prefix>View, the camera about it.
+//
+// (M15) The origin is the world's, or with `follow` (m) it follows the camera that many metres at a time:
+// the nodes are sent and laid out about it, so a GPU's 32-bit floats keep their fineness tens of
+// kilometres from the world's middle (at 20 km a float's step is 2 mm, and the lattice's snap missed on
+// mid). The mesh is drawn at `origin` (three takes it there in doubles, on the CPU); each LOD's lattice is
+// still the world's (its offset from the origin, and its parity, in <prefix>Origin), so nothing moves as the
+// origin jumps.
 export class CDLOD {
 
 	constructor( {
@@ -27,6 +40,7 @@ export class CDLOD {
 		heightBounds = null, // optional (x0,z0,x1,z1) => [minY,maxY]
 		center = null, // optional fixed world bounds for root grid { x, z, size }
 		prefix = 'cdlod', // GLSL name prefix of this instance's functions and uniforms
+		follow = 0, // (M15) metres the origin follows the camera by (0: the world's origin)
 	} = {} ) {
 
 		this.G = gridSize;
@@ -57,33 +71,48 @@ export class CDLOD {
 		this.uSpacing = { array: spacings };
 		const P = prefix;
 		const Cap = P[ 0 ].toUpperCase() + P.slice( 1 );
-		this.uniforms = { [ P + 'Morph' ]: { value: morph.map( ( m, l ) => new Vector4( m.x, m.y, spacings[ l ], 0 ) ) } };
+		this.uniforms = {
+			[ P + 'Morph' ]: { value: morph.map( ( m, l ) => new Vector4( m.x, m.y, spacings[ l ], 0 ) ) },
+			[ P + 'Origin' ]: { value: spacings.map( () => new Vector4( 0, 0, 0, 0 ) ) }, // (a Vector4's w is 1 unless said)
+			[ P + 'At' ]: { value: new Vector2() },
+			[ P + 'View' ]: { value: new Vector3() },
+		};
 		this.prefix = P;
+		// (M15) the origin the nodes are laid out about (world, y 0), and how far it follows the camera
+		this.follow = follow;
+		this.origin = new Vector3();
+		this._spacings = spacings;
 		this.glsl = /* glsl */`
 attribute vec4 nodeData;
 uniform vec4 ${ P }Morph[ ${ levels } ];
-struct ${ Cap }Vertex { vec2 worldXZ; float spacing; float morphK; float lod; float size; };
+uniform vec4 ${ P }Origin[ ${ levels } ];
+uniform vec2 ${ P }At;
+uniform vec3 ${ P }View;
+struct ${ Cap }Vertex { vec2 xz; float spacing; float morphK; float lod; float size; };
 
 // Morph in world space on the LOD's own vertex lattice (spacing h). Quarter nodes of a
 // partially subdivided parent carry the parent's LOD, so their extra vertices first snap
-// onto that lattice; every node covering a point then computes the same position.
+// onto that lattice; every node covering a point then computes the same position. ((M15) Counted from
+// the lattice's point just short of the origin, and given about the origin)
 vec2 ${ P }Snapped( vec4 node, vec2 grid ) {
 	float h = ${ P }Morph[ int( node.w ) ].z;
-	vec2 p = node.xy + grid * node.z;
-	return floor( p / h + 1e-3 ) * h;
+	vec4 o = ${ P }Origin[ int( node.w ) ];
+	vec2 p = node.xy + grid * node.z + o.xy;
+	return floor( p / h + 1e-3 ) * h - o.xy;
 }
 
 ${ Cap }Vertex ${ P }Morph_( vec4 node, vec2 grid, vec3 viewPos, float y0 ) {
 	vec4 m = ${ P }Morph[ int( node.w ) ];
+	vec4 og = ${ P }Origin[ int( node.w ) ];
 	float h = m.z;
-	vec2 p = node.xy + grid * node.z;
+	vec2 p = node.xy + grid * node.z + og.xy;
 	vec2 idx = floor( p / h + 1e-3 );
-	vec2 snapped = idx * h;
+	vec2 snapped = idx * h - og.xy;
 	float dist = length( viewPos - vec3( snapped.x, y0, snapped.y ) );
 	float morphK = clamp( ( dist - m.x ) * m.y, 0.0, 1.0 );
-	vec2 odd = fract( idx * 0.5 ) * 2.0;
+	vec2 odd = fract( ( idx + og.zw ) * 0.5 ) * 2.0;
 	${ Cap }Vertex o;
-	o.worldXZ = snapped - odd * h * morphK;
+	o.xz = snapped - odd * h * morphK;
 	o.spacing = h * ( morphK + 1.0 );
 	o.morphK = morphK;
 	o.lod = node.w;
@@ -161,10 +190,11 @@ ${ Cap }Vertex ${ P }Morph_( vec4 node, vec2 grid, vec3 viewPos, float y0 ) {
 
 	// GLSL statement (vertex shader) computing `<Cap>Vertex <out> = <prefix>Morph_( ... )` for the
 	// current vertex. `heightFn` optional GLSL function name ( vec2 xz ) -> float used for the morph
-	// distance (defaults to sea level 0); `viewPos` a GLSL vec3 (defaults to the camera).
-	vertexNodes( heightFn = null, { out = 'lod', viewPos = 'cameraPosition' } = {} ) {
+	// distance (defaults to sea level 0); `viewPos` a GLSL vec3 (defaults to the camera, (M15) about the origin).
+	vertexNodes( heightFn = null, { out = 'lod', viewPos = null } = {} ) {
 
 		const P = this.prefix;
+		viewPos = viewPos || ( this.follow ? P + 'View' : 'cameraPosition' );
 		const Cap = P[ 0 ].toUpperCase() + P.slice( 1 );
 		const y0 = heightFn ? `${ heightFn }( ${ P }Snapped( nodeData, position.xz ) )` : '0.0';
 		return `${ Cap }Vertex ${ out } = ${ P }Morph_( nodeData, position.xz, ${ viewPos }, ${ y0 } );`;
@@ -177,6 +207,9 @@ ${ Cap }Vertex ${ P }Morph_( vec4 node, vec2 grid, vec3 viewPos, float y0 ) {
 		this._mat.multiplyMatrices( camera.projectionMatrix, camera.matrixWorldInverse );
 		this._frustum.setFromProjectionMatrix( this._mat, camera.coordinateSystem );
 		camera.getWorldPosition( this._cam );
+		if ( this.follow ) this._follow( this._cam );
+		const O = this.origin;
+		this.uniforms[ this.prefix + 'View' ].value.subVectors( this._cam, O );
 
 		this.count = 0;
 		this.lodCounts.fill( 0 );
@@ -211,7 +244,7 @@ ${ Cap }Vertex ${ P }Morph_( vec4 node, vec2 grid, vec3 viewPos, float y0 ) {
 		const order = this._order || ( this._order = [] );
 		order.length = n;
 		const arr = this.nodeArray;
-		const c = this._cam;
+		const c = this.uniforms[ this.prefix + 'View' ].value; // (the camera about the origin, as the nodes are)
 		for ( let i = 0; i < n; i ++ ) {
 
 			const s = arr[ i * 4 + 2 ];
@@ -233,6 +266,24 @@ ${ Cap }Vertex ${ P }Morph_( vec4 node, vec2 grid, vec3 viewPos, float y0 ) {
 		this.nodeAttr.clearUpdateRanges();
 		this.nodeAttr.addUpdateRange( 0, this.count * 4 );
 		this.nodeAttr.needsUpdate = true;
+
+	}
+
+	// (M15) the origin moved on to the camera's step, and each LOD's lattice's offset from it
+	_follow( cam ) {
+
+		const s = this.follow, O = this.origin;
+		const x = Math.round( cam.x / s ) * s, z = Math.round( cam.z / s ) * s;
+		if ( x === O.x && z === O.z ) return;
+		O.set( x, 0, z );
+		this.uniforms[ this.prefix + 'At' ].value.set( x, z );
+		const off = this.uniforms[ this.prefix + 'Origin' ].value;
+		this._spacings.forEach( ( h, l ) => {
+
+			const kx = Math.floor( x / h + 1e-9 ), kz = Math.floor( z / h + 1e-9 );
+			off[ l ].set( x - kx * h, z - kz * h, parity( kx ), parity( kz ) );
+
+		} );
 
 	}
 
@@ -269,8 +320,8 @@ ${ Cap }Vertex ${ P }Morph_( vec4 node, vec2 grid, vec3 viewPos, float y0 ) {
 
 		if ( this.count >= this.maxInstances ) return;
 		const o = this.count * 4;
-		this.nodeArray[ o ] = x;
-		this.nodeArray[ o + 1 ] = z;
+		this.nodeArray[ o ] = x - this.origin.x;
+		this.nodeArray[ o + 1 ] = z - this.origin.z;
 		this.nodeArray[ o + 2 ] = size;
 		this.nodeArray[ o + 3 ] = lod;
 		this.count ++;

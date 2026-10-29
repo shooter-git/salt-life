@@ -110,7 +110,7 @@ float terrainHeightAt( vec2 xz ) {
 				.replace( '#include <common>', '#include <common>\n' + this.lod.glsl + this.heightGlsl + 'varying vec3 vTerrain;\n' )
 				.replace( '#include <beginnormal_vertex>', /* glsl */`
 	${ this.lod.vertexNodes( 'terrainHeightAt' ) }
-	vec2 tXZ = lod.worldXZ;
+	vec2 tXZ = lod.xz; // (the world's: the terrain's grid stays at the world's origin)
 	float tH = terrainHeightAt( tXZ );
 	vec3 objectNormal = vec3( 0.0, 1.0, 0.0 ); // the fragment shader takes the normal from the baked map
 	vTerrain = vec3( tXZ, tH );` )

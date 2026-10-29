@@ -60,6 +60,9 @@ const placeAt = ( d ) => page.evaluate( ( [ x, z ] ) => {
 	b.position.x = x; b.position.z = z;
 	b.velocity.set( 0, 0, 0 ); b.angular.set( 0, 0, 0 );
 	b.quaternion.set( 0, 0, 0, 1 );
+	// (aboard still: a slow start can leave you on the pier)
+	const p = window.__app.player;
+	if ( p.mode !== 'deck' && p.mode !== 'boat' ) p.boardBoat();
 
 }, [ dock.x, dock.z + d ] );
 
@@ -152,7 +155,8 @@ for ( const d of DISTANCES ) {
 	const at = await page.evaluate( () => {
 
 		const b = window.__app.boatCtl;
-		return { boat: b.position.toArray().map( ( v ) => + v.toFixed( 3 ) ), afloat: b.hasWater, wet: + b.wetFraction.toFixed( 3 ) };
+		const c = window.__app.camera.position;
+		return { boat: b.position.toArray().map( ( v ) => + v.toFixed( 3 ) ), afloat: b.hasWater, wet: + b.wetFraction.toFixed( 3 ), aboard: c.distanceTo( b.position ) < 20 };
 
 	} );
 	await view( `${ d }-ahead`, 0, - 0.05 );

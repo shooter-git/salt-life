@@ -17,7 +17,8 @@
 // The same on the CPU (foamAt, rollers: the spray off them, fx/WhitecapSpray), with the same integer hash,
 // so the spray flies where you see a crest breaking.
 //   const caps = new Whitecaps( { waves, tier } );  caps.uniforms, caps.glsl   (WaterSurface's fragment:
-//   whitecapsAt( x0 ) -> ( roller, white ))
+//   whitecapsAt( x0 ) -> ( roller, white ): (M15) x0 about the sea's origin)
+//   caps.place( x, z )   (WaterSurface, each frame: the sea's origin)
 //   caps.set( windSpeed )   (WeatherDriver, each frame)
 //   caps.foamAt( x0, z0, t ) -> { roller, foam }   caps.rollers( x, z, R, t, cb )
 
@@ -156,12 +157,20 @@ export class Whitecaps {
 			whitecapCover: this.cover,
 			whitecapChance: { value: new Vector4() },
 			whitecapSize: { value: 1 },
+			// ((M15) where the sea's origin is among each carrier's crests (place): how far past one (of a crest),
+			// how many from the world's origin, and the same along them (cells); and the rollers' ragged
+			// fronts' phases there, carrier by carrier. Tens of km out a 32-bit float's step (4 mm at 40 km)
+			// set the crests' edges flickering, so whitecapsAt takes x0 about the origin and adds these)
+			whitecapAt: { value: [ new Vector4( 0, 0, 0, 0 ), new Vector4( 0, 0, 0, 0 ) ] },
+			whitecapRag: { value: new Vector4( 0, 0, 0, 0 ) },
 		};
 		const f = ( x ) => x.toFixed( 6 );
 		this.glsl = /* glsl */`
 uniform float whitecapCover;
 uniform vec4 whitecapChance;
 uniform float whitecapSize;
+uniform vec4 whitecapAt[ 2 ];
+uniform vec4 whitecapRag;
 uvec3 wcHash( uvec3 v ) {
 	v = v * 1664525u + 1013904223u;
 	v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
@@ -171,12 +180,13 @@ uvec3 wcHash( uvec3 v ) {
 }
 uint wcU( float f ) { return uint( int( f ) ); }
 // a crest's break (crest n, s along it in cells, at time tau, period T): how strong it is there, its lip
-// (0..1), and how far in from its ends (1 at its middle)
-vec3 wcEvent( float n, float s, float tau, float T, float chance, uint salt, float fw ) {
+// (0..1), and how far in from its ends (1 at its middle). ((M15) s about the sea's origin, sCells the whole
+// cells it is from the world's)
+vec3 wcEvent( float n, float s, float sCells, float tau, float T, float chance, uint salt, float fw ) {
 	uint un = wcU( n );
 	float q = s + float( wcHash( uvec3( un, salt, 0x51ed27u ) ).x ) * ${ INV32.toExponential( 10 ) };
 	float m = floor( q ), f = q - m;
-	uint um = wcU( m );
+	uint um = wcU( m + sCells );
 	float ho = float( wcHash( uvec3( un, um, salt ) ).y ) * ${ INV32.toExponential( 10 ) };
 	float E = ${ f( EPOCH ) } * T;
 	float e = floor( tau / E + ho );
@@ -203,8 +213,9 @@ vec3 wcEvent( float n, float s, float tau, float T, float chance, uint salt, flo
 float wcCrest( vec2 x0, vec4 A, vec4 B ) { return ( A.z * dot( A.xy, x0 ) - A.w * waveTime + B.z - 1.5707963 ) * 0.15915494; }
 float wcAlong( vec2 x0, vec4 A ) { return dot( vec2( - A.y, A.x ), x0 ) * A.z * ${ f( 1 / ( 2 * Math.PI * CELL ) ) }; }
 // one wave's whitecaps at u, s (wcCrest, wcAlong; du, ds: their change across the pixel): ( its roller, its
-// white: the roller or the foam left )
-vec2 wcCarrier( vec4 A, float u, float s, float du, float ds, float chance, float far, uint salt ) {
+// white: the roller or the foam left ). ((M15) u, s about the sea's origin; at, rag: whitecapAt's and
+// whitecapRag's, the carrier's)
+vec2 wcCarrier( vec4 A, float u, float s, float du, float ds, float chance, float far, uint salt, vec4 at, vec2 rag ) {
 	float T = 6.2831853 / A.w;
 	// (seen from afar, a crest or more a pixel: its share of white, spread)
 	float away = smoothstep( 0.45, 0.9, du );
@@ -218,9 +229,9 @@ vec2 wcCarrier( vec4 A, float u, float s, float du, float ds, float chance, floa
 	for ( int j = 0; j <= ${ ages }; j ++ ) {
 		if ( j == 0 && a >= ${ f( ROLLER * ( 1 + ROLLER_RAG[ 0 ] + ROLLER_RAG[ 1 ] ) ) } + du ) continue;
 		float age = j == 0 ? 0.0 : ( fu + float( j ) - u ) * T;
-		vec3 e = wcEvent( fu + float( j ), s, waveTime - age, T, chance, salt, ds + ${ f( SPREAD ) } * age / T );
+		vec3 e = wcEvent( fu + at.y + float( j ), s, at.w, waveTime - age, T, chance, salt, ds + ${ f( SPREAD ) } * age / T );
 		if ( j == 0 ) {
-			float wd = ${ f( ROLLER ) } * sqrt( e.z ) * ( 1.0 + ${ f( ROLLER_RAG[ 0 ] ) } * sin( s * 41.0 + fu * 7.3 ) + ${ f( ROLLER_RAG[ 1 ] ) } * sin( s * 97.0 - fu * 3.1 ) );
+			float wd = ${ f( ROLLER ) } * sqrt( e.z ) * ( 1.0 + ${ f( ROLLER_RAG[ 0 ] ) } * sin( s * 41.0 + fu * 7.3 + rag.x ) + ${ f( ROLLER_RAG[ 1 ] ) } * sin( s * 97.0 - fu * 3.1 + rag.y ) );
 			float band = 1.0 - smoothstep( wd * 0.55 - du, wd + du, a );
 			float lipBand = 1.0 - smoothstep( ${ f( LIP_W * 0.4 ) } - du, ${ f( LIP_W ) } + du, a );
 			roller = max( band * e.x, lipBand * e.y );
@@ -233,21 +244,42 @@ vec2 wcCarrier( vec4 A, float u, float s, float du, float ds, float chance, floa
 	return mix( vec2( roller, white ), vec2( 0.0, far ), away );
 }
 // all of them: ( roller, white ). (Both waves' crests here and their change across the pixel first, where
-// every pixel's at: derivatives. Then a wave a time round a loop, as the crests: wcCarrier once in the program)
+// every pixel's at: derivatives. Then a wave a time round a loop, as the crests: wcCarrier once in the program.)
+// ((M15) x0 about the sea's origin: its crests and cells counted from there, the origin's own added)
 vec2 whitecapsAt( vec2 x0 ) {
-	vec2 u = vec2( wcCrest( x0, waveA[ ${ CARRIERS[ 0 ].wave } ], waveB[ ${ CARRIERS[ 0 ].wave } ] ), wcCrest( x0, waveA[ ${ CARRIERS[ 1 ].wave } ], waveB[ ${ CARRIERS[ 1 ].wave } ] ) );
-	vec2 s = vec2( wcAlong( x0, waveA[ ${ CARRIERS[ 0 ].wave } ] ), wcAlong( x0, waveA[ ${ CARRIERS[ 1 ].wave } ] ) );
+	vec2 u = vec2( wcCrest( x0, waveA[ ${ CARRIERS[ 0 ].wave } ], waveB[ ${ CARRIERS[ 0 ].wave } ] ), wcCrest( x0, waveA[ ${ CARRIERS[ 1 ].wave } ], waveB[ ${ CARRIERS[ 1 ].wave } ] ) ) + vec2( whitecapAt[ 0 ].x, whitecapAt[ 1 ].x );
+	vec2 s = vec2( wcAlong( x0, waveA[ ${ CARRIERS[ 0 ].wave } ] ), wcAlong( x0, waveA[ ${ CARRIERS[ 1 ].wave } ] ) ) + vec2( whitecapAt[ 0 ].z, whitecapAt[ 1 ].z );
 	vec2 du = fwidth( u ), ds = fwidth( s );
 	vec2 r = vec2( 0.0 );
 	for ( int k = 0; k < 2; k ++ ) {
 		bool first = k == 0;
 		vec2 c = wcCarrier( waveA[ first ? ${ CARRIERS[ 0 ].wave } : ${ CARRIERS[ 1 ].wave } ], first ? u.x : u.y, first ? s.x : s.y, first ? du.x : du.y, first ? ds.x : ds.y,
-			first ? whitecapChance.x : whitecapChance.y, first ? whitecapChance.z : whitecapChance.w, first ? ${ CARRIERS[ 0 ].salt }u : ${ CARRIERS[ 1 ].salt }u );
+			first ? whitecapChance.x : whitecapChance.y, first ? whitecapChance.z : whitecapChance.w, first ? ${ CARRIERS[ 0 ].salt }u : ${ CARRIERS[ 1 ].salt }u,
+			whitecapAt[ first ? 0 : 1 ], first ? whitecapRag.xy : whitecapRag.zw );
 		r = first ? c : max( r, c );
 	}
 	return r;
 }
 `;
+
+	}
+
+	// (M15) the sea's origin ( x, z ) (m), the GPU's x0 drawn about it: where it is among each carrier's
+	// crests, split into whole crests and cells and a fraction of one, in doubles, and the rollers' ragged
+	// fronts' phases there
+	place( x, z ) {
+
+		const at = this.uniforms.whitecapAt.value, rag = this.uniforms.whitecapRag.value;
+		CARRIERS.forEach( ( c, i ) => {
+
+			const w = this.waves.waves[ c.wave ];
+			const u = w.k * ( w.dx * x + w.dz * z ) / ( 2 * Math.PI ), s = ( - w.dz * x + w.dx * z ) * w.k / ( 2 * Math.PI * CELL );
+			const n = Math.floor( u ), m = Math.floor( s );
+			at[ i ].set( u - n, n, s - m, m );
+			rag.setComponent( i * 2, ( 41 * m + 7.3 * n ) % ( 2 * Math.PI ) );
+			rag.setComponent( i * 2 + 1, ( 97 * m - 3.1 * n ) % ( 2 * Math.PI ) );
+
+		} );
 
 	}
 
