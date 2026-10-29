@@ -1,5 +1,6 @@
 import * as THREE from '../engine/index.js';
 import { G } from '../core/Globals.js';
+import { Glare, horizonOf, seen, lightsOn } from './Glare.js';
 
 // (M15) The lighthouse on the north-west headland, over the windward reef it warns ships off: a masonry tower
 // in red and white bands on an octagonal stone plinth, its gallery and railing, a glazed lantern (its frames
@@ -27,8 +28,7 @@ export const LIGHTHOUSE = {
 	colours: { white: 0xece8de, red: 0xa8302a, stone: 0x8f877a, frame: 0x7a1f1a, roof: 0x8a2420, rail: 0x2a2826 },
 };
 
-const NEAREST = 11000; // m: the glare drawn no further than this along its line of sight (the far plane's 12 km)
-const EARTH = 6371000;
+export { horizonOf };
 
 // how much of a flash is seen at time t (s) from a bearing (rad, about the light: atan2( - dz, dx ) of the
 // way to the one seeing it), 0..1: its panels' beams turning past
@@ -48,8 +48,7 @@ export function flashAt( t, bearing ) {
 
 }
 
-// how far apart two heights over the sea (m) see each other over the earth's curve (m)
-export const horizonOf = ( h1, h2 ) => Math.sqrt( 2 * EARTH * Math.max( 0, h1 ) ) + Math.sqrt( 2 * EARTH * Math.max( 0.5, h2 ) );
+
 
 // a lathe's points from [ r, y ] pairs
 const lathe = ( pts, seg ) => new THREE.LatheGeometry( pts.map( ( [ r, y ] ) => new THREE.Vector2( r, y ) ), seg );
@@ -206,8 +205,8 @@ export class Lighthouse {
 		this.beams = this.beamMesh();
 		this.beams.position.y = this.focal;
 		this.group.add( this.beams );
-		this.glare = this.glareSprite();
-		scene.add( this.glare );
+		this.glare = new Glare( 0xfff4de, 'LighthouseGlare' );
+		scene.add( this.glare.sprite );
 
 		this.footprints = [ { x: L.x, z: L.z, r: P.r + 2.5 } ];
 		if ( colliders ) colliders.addCylinder( L.x, L.z, P.r + 0.35, y0 - 0.6, y0 + yd + 1.2, { tag: 'lighthouse' } );
@@ -275,39 +274,13 @@ export class Lighthouse {
 
 	}
 
-	// its flash as it's seen: a glare (a soft disc of light with a few short rays), its size kept to at least a
-	// few pixels however far off, drawn at most NEAREST m along its line of sight
-	glareSprite() {
-
-		const S = 128, c = document.createElement( 'canvas' );
-		c.width = c.height = S;
-		const g = c.getContext( '2d' ), grad = g.createRadialGradient( S / 2, S / 2, 0, S / 2, S / 2, S / 2 );
-		grad.addColorStop( 0, 'rgba(255,255,255,1)' );
-		grad.addColorStop( 0.12, 'rgba(255,250,236,0.85)' );
-		grad.addColorStop( 0.35, 'rgba(255,240,210,0.18)' );
-		grad.addColorStop( 1, 'rgba(255,235,200,0)' );
-		g.fillStyle = grad;
-		g.fillRect( 0, 0, S, S );
-		const map = new THREE.CanvasTexture( c );
-		map.colorSpace = THREE.SRGBColorSpace;
-		const m = this.glareMat = new THREE.SpriteMaterial( { map, color: 0xffffff, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, toneMapped: false } );
-		m.name = 'LighthouseGlare';
-		const s = new THREE.Sprite( m );
-		s.name = 'LighthouseGlare';
-		s.renderOrder = 5;
-		s.visible = false;
-		s.frustumCulled = false;
-		return s;
-
-	}
-
 	// per frame: lit from dusk to dawn; the lens's turn; the flash as seen from the camera
 	update( camera, visibility = 1, heightPx = 720 ) {
 
-		const L = LIGHTHOUSE, lit = this._lit = Math.min( 1, Math.max( 0, ( G.night.value - 0.15 ) / 0.25 ) );
+		const L = LIGHTHOUSE, lit = this._lit = lightsOn();
 		const on = lit > 0;
 		this.beams.visible = on;
-		this.glare.visible = on;
+		if ( ! on ) this.glare.sprite.visible = false;
 		const t = G.time.value, turn = ( t / L.period ) * Math.PI * 2;
 		this.beams.rotation.y = turn;
 		this.lensMat.color.setRGB( 0.44 + 2.2 * lit, 0.45 + 2.1 * lit, 0.44 + 1.9 * lit );
@@ -320,19 +293,10 @@ export class Lighthouse {
 		// the flash: how near a panel's beam is to pointing at the camera (its bearing; the beams lie along +x
 		// turned by rotation.y)
 		const k = flashAt( t, Math.atan2( - dz, dx ) );
-		// over the horizon? (the earth's curve: each sees the other's height off its own horizon)
-		const horizon = horizonOf( fy - G.seaLevel.value, c.y - G.seaLevel.value );
-		const over = 1 - Math.min( 1, Math.max( 0, ( d - horizon ) / 300 ) );
-		// the air between (its visibility tonight)
-		const air = Math.exp( - 3 * d / ( L.visible * Math.max( 0.05, visibility ) ) );
-		const bright = lit * over * air * ( L.glow + ( 1 - L.glow ) * k );
-		// drawn along its line of sight, no further than NEAREST; its size: a lantern's, or a few pixels
-		const s = Math.min( 1, NEAREST / d ), px = 2 * Math.tan( camera.fov * Math.PI / 360 ) / Math.max( 1, heightPx ); // (rad a pixel)
-		this.glare.position.set( c.x - dx * s, c.y - dy * s, c.z - dz * s );
-		const shown = d * s, world = 3.5 + 6 * k;
-		this.glare.scale.setScalar( Math.max( world * s, shown * px * ( 6 + 26 * k ) ) );
-		this.glareMat.opacity = Math.min( 1, bright * 1.6 );
-		this.glare.visible = bright > 0.004;
+		// as it's seen from here: over the horizon, through the air; its lantern's size, or a few pixels (more in
+		// a flash)
+		const bright = lit * seen( d, fy - G.seaLevel.value, c.y - G.seaLevel.value, L.visible, visibility ) * ( L.glow + ( 1 - L.glow ) * k );
+		this.glare.place( camera, fx, fy, fz, bright, 3.5 + 6 * k, heightPx, 6 + 26 * k );
 
 	}
 

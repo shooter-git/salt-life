@@ -10,6 +10,7 @@ import { TerrainData } from '../src/world/TerrainData.js';
 import { decodeIsland } from '../src/world/terrain/IslandDecode.js';
 import { WORLD } from '../src/world/WorldLayout.js';
 import { LIGHTHOUSE, flashAt, horizonOf } from '../src/world/Lighthouse.js';
+import { HARBOUR_LIGHTS, lightAt } from '../src/world/HarbourLights.js';
 
 let failed = 0;
 const check = ( ok, what ) => {
@@ -77,6 +78,24 @@ const T = new TerrainData( 7, decodeIsland( read( 'island.bin' ) ) );
 	}
 
 	check( clear && Math.hypot( R.x - L.x, R.z - L.z ) < 300, 'looking down on the windward reef, a few hundred metres off: the danger it marks' );
+
+}
+
+// ---- the harbour lights: red right returning (IALA region B), coming in northward from the sea
+{
+
+	const by = Object.fromEntries( HARBOUR_LIGHTS.map( ( l ) => [ l.id, l ] ) ), E = by.east, W = by.west, P = by.pier;
+	const red = ( c ) => ( c >> 16 & 255 ) > 200 && ( c >> 8 & 255 ) < 100, green = ( c ) => ( c >> 8 & 255 ) > 200 && ( c >> 16 & 255 ) < 100;
+	check( red( E.colour ) && E.mark === 'triangle' && green( W.colour ) && W.mark === 'square' && E.x > W.x && P.x > W.x && P.x < E.x, 'red to starboard on the east headland (a triangle), green to port on the west (a square), the pier\'s white light between' );
+	const lit = ( l ) => {
+
+		let on = 0;
+		for ( let t = 0; t < 40; t += 0.01 ) on += lightAt( t, l.char ) > 0.5 ? 0.01 : 0;
+		return on / 40;
+
+	};
+	check( Math.abs( lit( E ) - 0.125 ) < 0.01 && Math.abs( lit( W ) - 0.125 ) < 0.01 && Math.abs( lit( P ) - 0.5 ) < 0.01, 'flashing half a second in four (Fl R 4s, Fl G 4s); the pier\'s as long lit as dark (Iso W 4s)' );
+	check( [ E, W ].every( ( l ) => T.heightAt( l.x, l.z ) > 5 ) && Math.min( E.z, W.z ) > 150 && P.z < Math.min( E.z, W.z ), 'each on its headland\'s end, high on the rocks, at the bay\'s mouth' );
 
 }
 
