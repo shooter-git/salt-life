@@ -53,6 +53,7 @@ import { Reef } from './world/Reef.js';
 import { Lighthouse } from './world/Lighthouse.js';
 import { HarbourLights } from './world/HarbourLights.js';
 import { Wreck } from './world/Wreck.js';
+import { NestingTurtles } from './world/NestingTurtles.js';
 import { wreckSpots } from './world/wreck/WreckPlan.js';
 import { ReefLayout } from './world/reef/ReefLayout.js';
 import { FishSchools } from './world/Fish.js';
@@ -329,6 +330,8 @@ export class App {
 		this.village.footprints.push( ...this.harbourLights.footprints );
 		// ((M15) the wreck on the windward reef: a coaster broken in two on its crest)
 		this.wreck = new Wreck( { scene, colliders: this.colliders } );
+		// ((M15) the green turtles nesting on the north coast's turtle beach: world/NestingTurtles.js)
+		this.turtles = new NestingTurtles( { scene, terrain: this.terrainData } );
 		await this.village.init( renderer );
 		// (M11) what covers the island from above (world/Cover.js): the pier, the boardwalks, the roofs, the
 		// stalls; drawn once after the start (buildCover), nothing covers anything until then. The rain
@@ -872,6 +875,7 @@ export class App {
 		// ((M15) the lighthouse's light: lit from dusk, its flash as it's seen from here)
 		this.lighthouse.update( this.camera, this.sky.visibility, this.renderer.domElement.height );
 		this.harbourLights.update( this.camera, this.sky.visibility, this.renderer.domElement.height );
+		this.turtles.update( dt, this.camera, this.settings.timeOfDay, this.settings.day );
 		// ((M15) the reefs: the bay's, and the windward one once you're near it)
 		if ( this.reefs ) {
 

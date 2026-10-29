@@ -135,6 +135,15 @@ export class VegSite {
 		const i = Math.floor( fx ), j = Math.floor( fz );
 		const tx = fx - i, tz = fz - j;
 		const k = j * t.res + i;
+		// ((M15) as it was, where the turtle beach has been made since: TerrainData.uncut's masksBefore)
+		const was = t.masksBefore && t.masksBefore.get( arr );
+		if ( was && was.size ) {
+
+			const at = ( q ) => was.has( q ) ? was.get( q ) : arr[ q ];
+			return ( ( at( k ) * ( 1 - tx ) + at( k + 1 ) * tx ) * ( 1 - tz ) + ( at( k + t.res ) * ( 1 - tx ) + at( k + t.res + 1 ) * tx ) * tz ) * scale;
+
+		}
+
 		return ( ( arr[ k ] * ( 1 - tx ) + arr[ k + 1 ] * tx ) * ( 1 - tz ) + ( arr[ k + t.res ] * ( 1 - tx ) + arr[ k + t.res + 1 ] * tx ) * tz ) * scale;
 
 	}

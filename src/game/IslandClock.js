@@ -7,6 +7,7 @@
 // Pure (no three.js), for the tests under Node.
 //   clockAt( record, now ) -> { hour, day }     advance( hour, day, speed, seconds ) -> { hour, day }
 //   restTo( hour, day, 'dawn' ) -> { hour, day }  isOpen( [ 5, 19 ], hour )  timeText( hour, locale )
+//   secondsBetween( hour0, day0, hour, day ) -> real seconds between them at DAY_RATE (M15)
 
 export const DAY_RATE = 0.01; // game hours per real second by day
 export const NIGHT_X = 4; // deep night runs this much faster
@@ -78,6 +79,15 @@ export function advance( hour, day, speed, seconds ) {
 	const b = base( hour ) + seconds * speed;
 	const days = Math.floor( b / DAY );
 	return { hour: hourAt( b - days * DAY ), day: day + days };
+
+}
+
+// (M15) the real seconds from ( hour0, day0 ) to ( hour, day ) as the clock runs at DAY_RATE (the night's
+// speed-up undone: a turtle crawls up the beach at her own pace, however fast the night's passing), negative
+// before it
+export function secondsBetween( hour0, day0, hour, day ) {
+
+	return ( ( day - day0 ) * DAY + base( wrap( hour ) ) - base( wrap( hour0 ) ) ) / DAY_RATE;
 
 }
 

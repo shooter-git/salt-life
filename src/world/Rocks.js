@@ -56,6 +56,16 @@ export class Rocks {
 
 		const t0 = performance.now();
 		this.instances = this._place( mulberry32( seed ) );
+		// ((M15) placed on the ground as it was (TerrainData.uncut): each back on it where it's been raised or cut,
+		// the north beach's berm)
+		if ( this.terrainData.raisedAt ) for ( const r of this.instances ) {
+
+			const dy = this.terrainData.raisedAt( r.x, r.z );
+			if ( Math.abs( dy ) < 0.01 ) continue;
+			r.y += dy;
+			r.matrix.elements[ 13 ] += dy;
+
+		}
 		// ((M14) and the overhangs to shelter under, placed by hand (terrain/Overhangs.js): made coarse now
 		// (their far shape, and from it what's in the way of standing under them), their near shape after the
 		// start (refineOverhangs); the scattered rocks where they stand taken away, the rest as they were)
@@ -281,7 +291,9 @@ export class Rocks {
 
 			const fx = ( x - T.origin ) / T.texel - 0.5, fz = ( z - T.origin ) / T.texel - 0.5;
 			const i = Math.max( 0, Math.min( T.res - 2, Math.floor( fx ) ) ), j = Math.max( 0, Math.min( T.res - 2, Math.floor( fz ) ) );
-			return T.rock[ j * T.res + i ];
+			// ((M15) as it was, where the turtle beach has been made since: TerrainData.uncut)
+			const k = j * T.res + i, was = T.masksBefore && T.masksBefore.get( T.rock );
+			return was && was.has( k ) ? was.get( k ) : T.rock[ k ];
 
 		};
 

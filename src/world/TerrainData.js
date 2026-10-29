@@ -4,6 +4,7 @@ import { softRamp, erosionNoise, sampleGrid, upsample2, boxBlur } from './terrai
 import { ridgeEnvelope, SEA_STACKS, PATHS, polylineDistance } from './terrain/IslandShape.js';
 import { MANGROVE, mangroveAt } from './terrain/Mangrove.js';
 import { CAVES, carveAt } from './terrain/SeaCaves.js';
+import { beachBerm } from './terrain/NorthBeach.js';
 
 const smin = ( a, b, k ) => {
 
@@ -94,7 +95,20 @@ export class TerrainData {
 		// ((M15) the sea caves' floors cut in as a bake's loaded (the bake's the ground as it was): the rocks and the
 		// plants are placed from the ground as it was (this.uncut), each from one random stream, so the cut moved
 		// every one placed after it)
-		if ( baked ) this._seaCaves();
+		if ( baked ) {
+
+			this._seaCaves();
+			// ((M15) and the turtle beach on the north coast, its dry sand for the turtles' nests:
+			// terrain/NorthBeach.js; its masks' old values kept as its heights' are, for the placing)
+			const M = this._masksBefore;
+			beachBerm( this, ( k, h ) => this._uncut.has( k ) || this._uncut.set( k, h ), ( a, k, v ) => {
+
+				const m = M.get( a ) || M.set( a, new Map() ).get( a );
+				if ( ! m.has( k ) ) m.set( k, v );
+
+			} );
+
+		}
 		this.offshore = offshore;
 		if ( offshore ) this._blendEdge();
 		this.buildMinMax();
@@ -882,13 +896,15 @@ export class TerrainData {
 
 	// (M15) the sea caves (terrain/SeaCaves.js): each one's floor (its gully through the rock platform, its
 	// inlet, its cave, its beach) cut into the ground, at whatever its texels are; their rock's built over them
-	// (Overhangs' 'seacave'). What the cut ground was is kept (_uncut: texel -> height), and this.uncut is the
-	// ground as it was (heightAt, normalAt; the rest as this), for placing the rocks and the plants: each is
-	// placed from one random stream, so the cut, taken as the ground, moved every one placed after it. The rock
-	// sites on the floors are kept (Rocks takes its rocks off them after placing them all)
+	// (Overhangs' 'seacave'). What the cut ground was is kept (_uncut: texel -> height; _masksBefore: a mask's
+	// array -> texel -> value, the turtle beach's), and this.uncut is the ground as it was (heightAt, normalAt,
+	// masksBefore for the masks; the rest as this), for placing the rocks and the plants: each is
+	// placed from one random stream, so the cut, taken as the ground, moved every one placed after it (raisedAt:
+	// how far a thing so placed is to be moved up or down to be back on the ground). The rock sites on the floors
+	// are kept (Rocks takes its rocks off them after placing them all)
 	_seaCaves() {
 
-		const res = this.res, o = this.origin, t = this.texel, H = this.heights, U = this._uncut = new Map();
+		const res = this.res, o = this.origin, t = this.texel, H = this.heights, U = this._uncut = new Map(), MB = this._masksBefore = new Map();
 		for ( const c of CAVES ) {
 
 			const r = Math.max( c.inset + c.depth, c.gully ) + 14;
@@ -906,7 +922,10 @@ export class TerrainData {
 		}
 
 		const T = this;
-		this.uncut = Object.create( this, { heightAt: { value( x, z ) {
+		// (how much the ground at ( x, z ) is raised or cut from what it was: for setting the rocks and the plants
+		// placed on it back on it)
+		this.raisedAt = ( x, z ) => U.size ? T.heightAt( x, z ) - T.uncut.heightAt( x, z ) : 0;
+		this.uncut = Object.create( this, { masksBefore: { value: MB }, heightAt: { value( x, z ) {
 
 			const h = T.heightAt( x, z );
 			const fx = ( x - o ) / t - 0.5, fz = ( z - o ) / t - 0.5, i = Math.floor( fx ), j = Math.floor( fz ), k = j * res + i;

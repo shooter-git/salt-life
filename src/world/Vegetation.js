@@ -179,6 +179,8 @@ export class Vegetation {
 		const recs = await run( scatterSteps( site, 99, { ferns: !! cfg.fernFade } ) );
 		// ((M14) none under the rocks' overhangs or in their mouths: taken out after, so the rest are as they were)
 		if ( this.rocks ) for ( const k of Object.keys( recs ) ) if ( Array.isArray( recs[ k ] ) ) recs[ k ] = recs[ k ].filter( ( p ) => ! this.rocks.clears( p.x, p.z ) );
+		// ((M15) and each back on the ground where it's been raised or cut since: the north beach's berm)
+		if ( terrain.raisedAt ) for ( const k of Object.keys( recs ) ) if ( Array.isArray( recs[ k ] ) ) for ( const p of recs[ k ] ) if ( p.y !== undefined ) p.y += terrain.raisedAt( p.x, p.z );
 		this.records = recs;
 		const t1 = performance.now();
 		const grassMask = cfg.grass ? await run( grassMaskSteps( site ) ) : null;
