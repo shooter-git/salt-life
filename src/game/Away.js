@@ -1,7 +1,7 @@
 import { weatherHere, hurricaneNews, towardOf, squallWind, gustShare } from './Weather.js';
 import { secondsBetween, timeText } from './IslandClock.js';
 import { stormWear, STORM_FROM } from './Hull.js';
-import { towFee, HAUL_FEE } from './Gear.js';
+import { awayTowFee, HAUL_FEE } from './Gear.js';
 import { HOURS } from './Orders.js';
 import { feet } from './Units.js';
 
@@ -110,7 +110,7 @@ export function leftOf( text ) {
 // had to be fetched) } ], fee, where: 'dock' | 'cradle' | 'anchor' | 'adrift' | 'aground', x, z, heading, anchor }
 export function awayOf( left, T, env ) {
 
-	const { dock, pick = null, since = 0, depth = () => Infinity, fee = towFee, haul = HAUL_FEE } = env;
+	const { dock, pick = null, since = 0, depth = () => Infinity, fee = awayTowFee, haul = HAUL_FEE } = env;
 	const weather = env.weather || ( ( t, x, z ) => weatherHere( t, pick, since, x, z ) );
 	const newsAt = env.news || ( ( t ) => hurricaneNews( t, pick, since ) );
 	const hours = Math.max( 0, T - left.T );
@@ -351,7 +351,7 @@ export function cleanBoats( raw, now = Date.now() ) {
 // is out in this room (Marta tows her in, for her fee and the haul-out); gone a week by the real clock (she
 // brings her in); else the weather here takes its toll over `seconds` of play. rate: wearRate at her. A boat's
 // pose is never touched: it's her owner's
-export function keepBoat( r, { now = Date.now(), warned = false, rate = 0, seconds = 0, dock, fee = towFee, haul = HAUL_FEE } ) {
+export function keepBoat( r, { now = Date.now(), warned = false, rate = 0, seconds = 0, dock, fee = awayTowFee, haul = HAUL_FEE } ) {
 
 	if ( r.tow || now - r.at < BACK_MS ) return r;
 	const metres = Math.hypot( r.x - dock.x, r.z - dock.z );

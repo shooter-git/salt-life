@@ -17,7 +17,7 @@ export async function resolve( specifier, context, next ) {
 const { Together } = await import( '../src/together/Together.js' );
 const { Vector3, Quaternion } = await import( '../src/engine/index.js' );
 const { BACK_MS, DRIFT, FOUND_M, ISLE, KEEP_H, WEEK_H, WEEK_MS, anchorLie, sheerAt, swingRate, awayClock, awayOf, boatLeft, boatRecord, cleanBoats, keepBoat, leftOf, tellOf, wearRate, withRecord } = await import( '../src/game/Away.js' );
-const { towFee, HAUL_FEE } = await import( '../src/game/Gear.js' );
+const { towFee, awayTowFee, AWAY_TOW_MAX, HAUL_FEE } = await import( '../src/game/Gear.js' );
 const { weatherAt, towardOf, hurricaneNews, islandTime } = await import( '../src/game/Weather.js' );
 const { WORLD } = await import( '../src/world/WorldLayout.js' );
 const { GameState } = await import( '../src/game/GameState.js' );
@@ -120,11 +120,17 @@ const anchored = ( where ) => at( where, { anchor: { ...where } } );
 	const n = awayOf( at( FAR ), T0 + 96, { dock, ...fairly } );
 	check( n.where === 'adrift' && n.fee === 0, 'out of sight of the island nobody finds her in four days' );
 	const w = awayOf( at( FAR ), T0 + WEEK_H + 1, { dock, ...fairly } );
-	check( w.tows.length === 1 && w.tows[ 0 ].why === 'week' && w.where === 'dock' && w.x === dock.x && w.fee === towFee( w.tows[ 0 ].metres ), 'after a week she\'s towed in, by the distance' );
+	check( w.tows.length === 1 && w.tows[ 0 ].why === 'week' && w.where === 'dock' && w.x === dock.x && w.fee === awayTowFee( w.tows[ 0 ].metres ), 'after a week she\'s towed in, by the distance' );
+
+	// (a tow while you're away has a ceiling: the far grounds' edge's, the radio's has none)
+	check( AWAY_TOW_MAX === 1220 && awayTowFee( 24000 ) === 1220 && awayTowFee( 200000 ) === 1220 && towFee( 200000 ) > 1220 && awayTowFee( 1000 ) === towFee( 1000 ), 'a tow while you\'re away is by the distance up to $1,220' );
+	const blown = awayOf( at( { x: 0, z: 40000 } ), T0 + WEEK_H + 1, { dock, ...fairly } );
+	check( blown.tows[ 0 ].metres > 24000 && blown.fee === 1220, `left ${ Math.round( blown.tows[ 0 ].metres / 1000 ) } km off and towed in after a week, $${ blown.fee }` );
+	check( keepBoat( { x: 200000, z: 0, h: 0, a: [ 200000, 0 ], at: 0, wear: 0 }, { now: WEEK_MS, dock } ).tow.fee === 1220, 'and the same in the group\'s save' );
 
 	// near the island she's seen, in Marta's hours
 	const d = awayOf( at( NEAR ), T0 + 6, { dock, ...fairly } );
-	check( d.tows.length === 1 && d.tows[ 0 ].why === 'adrift' && d.where === 'dock' && d.fee === towFee( d.tows[ 0 ].metres ) && d.tows[ 0 ].x !== NEAR.x, 'adrift within sight of the island she\'s found and towed in, for her tow by the distance' );
+	check( d.tows.length === 1 && d.tows[ 0 ].why === 'adrift' && d.where === 'dock' && d.fee === awayTowFee( d.tows[ 0 ].metres ) && d.tows[ 0 ].x !== NEAR.x, 'adrift within sight of the island she\'s found and towed in, for her tow by the distance' );
 	const night = islandTime( 30, 22 );
 	const dn = awayOf( { ...at( NEAR ), T: night }, night + 8, { dock, ...fairly } );
 	check( dn.tows.length === 0 && dn.where === 'adrift', 'not before Marta\'s day starts' );
@@ -144,7 +150,7 @@ const anchored = ( where ) => at( where, { anchor: { ...where } } );
 {
 
 	const s = awayOf( anchored( NEAR ), T0 + WEEK_H + 2, { dock, ...fairly } );
-	check( s.tows.length === 1 && s.tows[ 0 ].why === 'week' && s.where === 'dock' && s.anchor === null && s.fee === towFee( s.tows[ 0 ].metres ), 'gone a week, she\'s towed in from her anchor' );
+	check( s.tows.length === 1 && s.tows[ 0 ].why === 'week' && s.where === 'dock' && s.anchor === null && s.fee === awayTowFee( s.tows[ 0 ].metres ), 'gone a week, she\'s towed in from her anchor' );
 	const e = awayOf( anchored( NEAR ), T0 + WEEK_H - 1, { dock, ...fairly } );
 	check( ! e.tows.length, 'not before' );
 	const m = awayOf( at( dock, { moored: true } ), T0 + WEEK_H + 2, { dock, ...fairly } );
@@ -160,7 +166,7 @@ const anchored = ( where ) => at( where, { anchor: { ...where } } );
 	const s = awayOf( anchored( NEAR ), T0 + 24, env );
 	const n = hurricaneNews( since, 'hurricane', since );
 	check( !! n, `(one's about: ${ n && n.stage })` );
-	check( s.where === 'cradle' && s.tows.length === 1 && s.tows[ 0 ].why === 'hurricane' && s.tows[ 0 ].out && s.fee === towFee( s.tows[ 0 ].metres ) + HAUL_FEE && s.anchor === null, 'at anchor as its warning comes, Marta tows her in and hauls her out: her tow and her haul-out' );
+	check( s.where === 'cradle' && s.tows.length === 1 && s.tows[ 0 ].why === 'hurricane' && s.tows[ 0 ].out && s.fee === awayTowFee( s.tows[ 0 ].metres ) + HAUL_FEE && s.anchor === null, 'at anchor as its warning comes, Marta tows her in and hauls her out: her tow and her haul-out' );
 	check( s.wear === 0, 'and she never meets it' );
 	const m = awayOf( at( dock, { moored: true } ), T0 + 24, env );
 	check( m.where === 'cradle' && ! m.tows[ 0 ].out && m.fee === HAUL_FEE, 'at the dock, the haul-out alone' );
@@ -286,10 +292,10 @@ const anchored = ( where ) => at( where, { anchor: { ...where } } );
 	const fresh = boatRecord( { name: 'Pearl', x: 500, z: 600, heading: 0.5, anchor: { x: 496, z: 600 }, at: now - 1000 } );
 	check( keepBoat( fresh, { now, warned: true, rate: 1, seconds: 10, dock } ) === fresh, 'and a reload isn\'t going away: nothing, even with a warning out' );
 	const W = keepBoat( r, { now, warned: true, dock } );
-	check( W.tow.why === 'hurricane' && W.tow.where === 'cradle' && W.tow.fee === towFee( W.tow.metres ) + HAUL_FEE && W.tow.at === now && W.x === r.x, 'a hurricane\'s warning: towed in, her fee and the haul-out, a note to come' );
+	check( W.tow.why === 'hurricane' && W.tow.where === 'cradle' && W.tow.fee === awayTowFee( W.tow.metres ) + HAUL_FEE && W.tow.at === now && W.x === r.x, 'a hurricane\'s warning: towed in, her fee and the haul-out, a note to come' );
 	check( keepBoat( W, { now, warned: true, dock } ) === W, 'and once' );
 	const week = keepBoat( { ...r, at: now - WEEK_MS - 1 }, { now, dock } );
-	check( week.tow.why === 'week' && week.tow.where === 'dock' && week.tow.fee === towFee( week.tow.metres ), 'gone a week by the real clock: towed in' );
+	check( week.tow.why === 'week' && week.tow.where === 'dock' && week.tow.fee === awayTowFee( week.tow.metres ), 'gone a week by the real clock: towed in' );
 	const clean = cleanBoats( { a: r, b: { v: 2, x: 1, z: 1, at: 1 }, c: 'no', d: { v: 1, x: 'x', z: 1, at: 1 }, n: { ...r, a: null }, e: { ...r, wear: 9 }, f: { ...r, tow: { why: 'week', fee: 5, where: 'dock', at: now - 200 * 864e5 } }, g: { ...r, tow: { why: 'x' } } }, now );
 	check( Object.keys( clean ).join() === 'a,e,g' && clean.e.wear === 1 && clean.g.tow === null, 'what\'s not a boat is dropped, a long-towed one let go' );
 	check( Object.keys( cleanBoats( null ) ).length === 0, 'none' );

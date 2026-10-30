@@ -114,6 +114,10 @@ export const FUEL_PRICE = 1.5; // $ per litre of diesel at the chandlery
 // swim to her)
 export const TOW = { base: 20, per100m: 5, from: 30, out: 9.3, back: 3.1 };
 export const towFee = ( metres ) => Math.round( TOW.base + TOW.per100m * Math.max( 0, metres ) / 100 );
+// (M15) and for one that happens while you're away (Away.js), no more than from the far grounds' edge (24 km): a boat
+// left adrift can lie 200 km off in a week, and that's too hard on someone who wasn't there
+export const AWAY_TOW_MAX = towFee( 24000 );
+export const awayTowFee = ( metres ) => Math.min( AWAY_TOW_MAX, towFee( metres ) );
 // (M15) how long she's out on it (s: the real world's, as the boat runs)
 export const towTime = ( metres ) => Math.max( 0, metres ) * ( 1 / TOW.out + 1 / TOW.back );
 // (M13) Marta's haul-out ahead of a hurricane ($: less than the repair a hurricane leaves to do)
