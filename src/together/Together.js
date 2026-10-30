@@ -7,6 +7,7 @@ import { BoatLamps } from '../world/boat/BoatLamps.js';
 import { RADAR_RPM, PROP_DISPLAY_RPS } from '../world/BoatModel.js';
 import { FISH, fishLengthCm, isTrophy } from '../game/FishTable.js';
 import { PLACES } from '../game/Places.js';
+import { VARIATION } from '../game/Chart.js';
 import { ROD_L, SEAT_Y } from '../game/FishingRod.js';
 import { gunModels, setBands } from '../game/Speargun.js';
 import { CastNet } from '../game/CastNet.js';
@@ -96,7 +97,7 @@ const r3 = ( v ) => Math.round( v * 1000 ) / 1000;
 const _p = new Vector3(), _q = new Vector3(), _tip = new Vector3(), _hand = new Vector3(), _d = new Vector3();
 const _x = new Vector3(), _y = new Vector3(), _z = new Vector3(), _up = new Vector3( 0, 1, 0 );
 const _qa = new Quaternion(), _qb = new Quaternion(), _m = new Matrix4(), _mt = new Matrix4();
-const _bp = new Vector3(), _bq = new Quaternion();
+const _bp = new Vector3(), _bq = new Quaternion(), _bow = new Vector3();
 
 // another player's boat, to ride in: the boat's shape (yours: the same model) at their boat's pose,
 // with what the Player asks of a boat while you're on its deck
@@ -1469,6 +1470,7 @@ export class Together {
 		// (her radar turning and her propeller as her engine runs, as yours do: _spin)
 		b.userData.radar = b.getObjectByName( 'boat-radar' );
 		b.userData.prop = b.getObjectByName( 'boat-propeller' );
+		b.userData.compass = b.getObjectByName( 'boat-compass' ); // ((M15) its card to the north as she turns)
 		// its own lamps (their state is theirs), its searchlight's light among the island's
 		const lamps = b.userData.lamps = new BoatLamps( app.boat );
 		lamps.addLight( app.localLights );
@@ -1485,6 +1487,12 @@ export class Together {
 		const u = boat.userData;
 		if ( u.radar ) u.radar.rotation.y = ( u.radar.rotation.y - RADAR_RPM / 60 * Math.PI * 2 * dt ) % ( Math.PI * 2 );
 		if ( u.prop ) u.prop.rotation.z = ( u.prop.rotation.z + PROP_DISPLAY_RPS * Math.tanh( rpm * 40 / PROP_DISPLAY_RPS ) * Math.PI * 2 * dt ) % ( Math.PI * 2 );
+		if ( u.compass ) {
+
+			const f = _bow.set( 0, 0, 1 ).applyQuaternion( boat.quaternion );
+			u.compass.rotation.y = Math.PI - VARIATION - Math.atan2( f.x, f.z );
+
+		}
 
 	}
 

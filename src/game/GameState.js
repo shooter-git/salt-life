@@ -5,6 +5,7 @@ import { ordersOf, orderPrice } from './Orders.js';
 import { WEEK_MUL } from './WeekOrder.js';
 import { BAITS, KEEPER_KG, baitOf, chunksOf } from './Bait.js';
 import { PLACES } from './Places.js';
+import { ChartLog } from './Chart.js';
 
 const SAVE_KEY = 'tidewater.save.v1';
 
@@ -40,8 +41,10 @@ export class GameState {
 		// last few days': they'd have gone by now anyway), so they're not there again)
 		this.finds = []; // { id, kind, day, seed }
 		this.picked = [];
+		this.chart = new ChartLog(); // ((M15) the chart you fill in: Chart.js)
 		this._nextId = 1;
 		this.listeners = new Set();
+		this._chartBought();
 
 	}
 
@@ -567,6 +570,7 @@ export class GameState {
 		this.money -= next.cost;
 		this.upgrades[ key ] = next.index;
 		if ( key === 'fuel' ) this.fuel = null; // a new tank comes full
+		this._chartBought();
 		this.save();
 		this.emit();
 		return next;
@@ -632,7 +636,7 @@ export class GameState {
 
 	toJSON() {
 
-		return { v: 1, money: this.money, inventory: this.inventory, log: this.log, places: this.places, upgrades: this.upgrades, fuel: this.fuel, hull: this.hull, hauled: this.hauled, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, bag: this.bag, finds: this.finds, picked: this.picked, nextId: this._nextId };
+		return { v: 1, money: this.money, inventory: this.inventory, log: this.log, places: this.places, upgrades: this.upgrades, fuel: this.fuel, hull: this.hull, hauled: this.hauled, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, bag: this.bag, finds: this.finds, picked: this.picked, chart: this.chart.toJSON(), nextId: this._nextId };
 
 	}
 
@@ -664,6 +668,9 @@ export class GameState {
 		// ((M15) beachcombing: saves from before had none)
 		this.finds = Array.isArray( d.finds ) ? d.finds.filter( ( f ) => f && FINDS[ f.kind ] && typeof f.id === 'string' ).map( ( f ) => ( { id: f.id, kind: f.kind, day: f.day | 0, seed: f.seed | 0 } ) ) : [];
 		this.picked = Array.isArray( d.picked ) ? d.picked.filter( ( id ) => typeof id === 'string' ).slice( - 200 ) : [];
+		// ((M15) the chart: saves from before had the bay alone)
+		this.chart.fromJSON( d.chart );
+		this._chartBought();
 		this._nextId = Math.max( d.nextId | 0, ...this.inventory.map( ( f ) => f.id + 1 ), 1 );
 		return true;
 
@@ -713,8 +720,20 @@ export class GameState {
 		this.bag = { day: null, n: {} };
 		this.finds = [];
 		this.picked = [];
+		this.chart.reset();
+		this._chartBought();
 		this.save();
 		this.emit();
+
+	}
+
+	// (M15) Marta's chart bought (Gear's chart): the chart has the island's sheet
+	_chartBought() {
+
+		const b = !! this.stats.chart;
+		if ( this.chart.bought === b ) return;
+		this.chart.bought = b;
+		this.chart.version ++;
 
 	}
 

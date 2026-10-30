@@ -520,20 +520,54 @@ function buildConsole( kit, L, parts ) {
 	kit.add( 'fittings', tp, STAINLESS );
 	parts.throttlePivot = V( tx, d.yTop + 0.09, tz );
 
-	// compass binnacle with a glass dome
-	const cx = HOUSE.helmX, cz = 1.3;
-	const cb = lathe( [ [ 0, 0 ], [ 0.07, 0 ], [ 0.072, 0.02 ], [ 0.062, 0.045 ], [ 0, 0.045 ] ], 20 );
-	cb.translate( cx, d.yTop + 0.01, cz );
-	kit.add( 'fittings', cb, BLACK_PLASTIC );
-	const card = cylinder( 0.05, 0.05, 0.01, 20 );
-	card.translate( cx, d.yTop + 0.06, cz );
-	kit.add( 'fittings', card, { color: 0x2c2c2a, rough: 0.5 } );
-	const lubber = box( 0.004, 0.02, 0.008 );
-	lubber.translate( cx, d.yTop + 0.07, cz + 0.045 );
-	kit.add( 'fittings', lubber, { color: 0xd0402a, rough: 0.5 } );
-	const dome = sphere( 0.058, 20, 8, 0, Math.PI * 2, 0, Math.PI / 2 );
-	dome.translate( cx, d.yTop + 0.053, cz );
+	// ((M15) the compass, after a bracket-mounted Ritchie Helmsman with its CombiDial, as photographed (HB-741): a
+	// U-bracket with its knobs, a slotted bowl, a hooded dome. Its card turns in the bowl (BoatModel, parts.compassAt):
+	// read from over it at the far yellow lubber, or from the front at the near one, the red ones at 45° either side)
+	const cx = HOUSE.helmX, cz = 1.25, y0 = d.yTop + 0.01, C = COMPASS_CARD;
+	const plate = box( 0.141, 0.004, 0.06 );
+	plate.translate( cx, y0 + 0.002, cz );
+	kit.add( 'fittings', plate, BLACK_PLASTIC );
+	for ( const s of [ - 1, 1 ] ) {
+
+		const arm = box( 0.005, 0.115, 0.026 );
+		arm.translate( cx + s * 0.0705, y0 + 0.0575, cz );
+		kit.add( 'fittings', arm, BLACK_PLASTIC );
+		const knob = cylinder( 0.0085, 0.0085, 0.014, 12 );
+		knob.applyMatrix4( mat4( cx + s * 0.08, y0 + 0.11, cz, 0, 0, Math.PI / 2 ) );
+		kit.add( 'fittings', knob, BLACK_PLASTIC );
+		const slot = box( 0.005, 0.034, 0.002 );
+		slot.translate( cx + s * 0.04, y0 + 0.078, cz - 0.0515 );
+		kit.add( 'fittings', slot, { color: 0x030303, rough: 0.9 } );
+		const screw = cylinder( 0.003, 0.003, 0.002, 8 );
+		screw.translate( cx + s * 0.042, y0 + 0.11, cz - 0.04 );
+		kit.add( 'fittings', screw, STAINLESS );
+
+	}
+
+	const bowl = lathe( [ [ 0, 0 ], [ 0.043, 0 ], [ 0.056, 0.012 ], [ 0.062, 0.045 ], [ 0.066, 0.07 ], [ 0.066, 0.076 ], [ 0.053, 0.077 ], [ 0, 0.077 ] ], 28 );
+	bowl.translate( cx, y0 + 0.033, cz );
+	kit.add( 'fittings', bowl, BLACK_PLASTIC );
+	// (the card's dark column, under it)
+	const dome = sphere( 0.052, 24, 8, 0, Math.PI * 2, 0, Math.PI / 2 );
+	dome.translate( cx, y0 + 0.11, cz );
 	kit.add( 'glass', dome );
+	// (the sun hood over the dome's far half; its inside's seen through the glass)
+	const hood = sphere( 0.0575, 20, 6, 0, Math.PI, 0, Math.PI / 2 );
+	hood.translate( cx, y0 + 0.11, cz );
+	kit.add( 'fittings', hood, BLACK_PLASTIC );
+	const inside = hood.clone(), ix = inside.index.array, nr = inside.attributes.normal;
+	for ( let i = 0; i < ix.length; i += 3 ) [ ix[ i + 1 ], ix[ i + 2 ] ] = [ ix[ i + 2 ], ix[ i + 1 ] ];
+	for ( let i = 0; i < nr.count; i ++ ) nr.setXYZ( i, - nr.getX( i ), - nr.getY( i ), - nr.getZ( i ) );
+	kit.add( 'fittings', inside, { color: 0x0a0a0b, rough: 0.8 } );
+	parts.compassAt = V( cx, y0 + C.at, cz );
+	// (the lubbers, painted in the atlas as the card is: lit with it)
+	for ( const [ a, name ] of [ [ 0, 'lubber' ], [ Math.PI, 'lubber' ], [ Math.PI * 0.75, 'lubberRed' ], [ Math.PI * 1.25, 'lubberRed' ] ] ) {
+
+		const r = C.skirt + 0.0015, tall = a === 0 ? 0.04 : 0.024, line = box( 0.0016, tall, 0.0008 );
+		line.applyMatrix4( mat4( cx + Math.sin( a ) * r, y0 + C.at - C.drop + tall / 2, cz + Math.cos( a ) * r, 0, a, 0 ) );
+		kit.add( 'display', toAtlas( line, name ), {} );
+
+	}
 
 	// electronics: (M11) the depth sounder / fish finder (centre) and the chart plotter (port), drawn live
 	// (Instruments.js); (M14) and the radar, to port of the plotter
@@ -1081,6 +1115,54 @@ function buildRoofGear( kit, L, parts ) {
 
 // Steering wheel: varnished mahogany destroyer wheel with a brass hub.
 // Local frame: +Z is the shaft axis (into the dash), spokes in the XY plane.
+// (M15) the compass's card, a CombiDial: its flat top (Instruments' RECTS.compass, north up the atlas: the card's +Z,
+// toward her bow while it points north with her, east to starboard), read from over it at the far lubber; and the
+// skirt falling from its edge (RECTS.compassBand), read from the front at the near lubber, so each point of it says
+// the bearing opposite: where the top says south, 0. Its figures run up to the left, as a direct-reading dial's do
+export const COMPASS_CARD = { r: 0.043, skirt: 0.047, drop: 0.019, at: 0.13 };
+export function compassCardGeometry() {
+
+	const { r, skirt, drop } = COMPASS_CARD, n = 48, pos = [], nor = [], uv = [], idx = [];
+	const [ u0, v0, u1, v1 ] = atlasUV( 'compass' ), [ a0, b0, a1, b1 ] = atlasUV( 'compassBand' );
+	pos.push( 0, 0, 0 );
+	nor.push( 0, 1, 0 );
+	uv.push( ( u0 + u1 ) / 2, ( v0 + v1 ) / 2 );
+	for ( let i = 0; i <= n; i ++ ) {
+
+		const a = i / n * Math.PI * 2, x = Math.cos( a ) * r, z = Math.sin( a ) * r;
+		pos.push( x, 0, z );
+		nor.push( 0, 1, 0 );
+		uv.push( u0 + ( u1 - u0 ) * ( 0.5 - x / ( 2 * r ) ), v0 + ( v1 - v0 ) * ( 0.5 + z / ( 2 * r ) ) );
+		if ( i ) idx.push( 0, i + 1, i );
+
+	}
+
+	const first = pos.length / 3, lean = ( skirt - r ) / drop, l = Math.hypot( 1, lean );
+	for ( let i = 0; i <= n; i ++ ) {
+
+		// (from the skirt's 0, on the card's south, clockwise)
+		const t = i / n, a = Math.PI + t * Math.PI * 2, dx = - Math.sin( a ), dz = Math.cos( a );
+		pos.push( dx * r, 0, dz * r, dx * skirt, - drop, dz * skirt );
+		nor.push( dx / l, lean / l, dz / l, dx / l, lean / l, dz / l );
+		uv.push( a0 + ( a1 - a0 ) * ( 1 - t ), b1, a0 + ( a1 - a0 ) * ( 1 - t ), b0 );
+		if ( i ) {
+
+			const p = first + ( i - 1 ) * 2, q = p + 2;
+			idx.push( p, q, q + 1, p, q + 1, p + 1 );
+
+		}
+
+	}
+
+	const g = new BufferGeometry();
+	g.setAttribute( 'position', new Float32BufferAttribute( pos, 3 ) );
+	g.setAttribute( 'normal', new Float32BufferAttribute( nor, 3 ) );
+	g.setAttribute( 'uv', new Float32BufferAttribute( uv, 2 ) );
+	g.setIndex( idx );
+	return g;
+
+}
+
 export function wheelGeometry() {
 
 	const list = [];

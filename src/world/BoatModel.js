@@ -4,10 +4,14 @@ import { HullLines, RHO_SEAWATER } from './boat/HullLines.js';
 import { GeoKit, triangleCount } from './boat/GeoKit.js';
 import { BoatMaterials } from './boat/BoatMaterials.js';
 import { buildHull, buildHullVolume, keelVolume, houseHalfWidth, KEEL } from './boat/HullBuilder.js';
-import { buildWheelhouse, wheelGeometry, throttleGeometry, radarArrayGeometry, HOUSE, roofTopY } from './boat/Wheelhouse.js';
+import { buildWheelhouse, wheelGeometry, throttleGeometry, radarArrayGeometry, compassCardGeometry, HOUSE, roofTopY } from './boat/Wheelhouse.js';
+import { VARIATION } from '../game/Chart.js';
 import { buildDeckGear, HAULER } from './boat/DeckGear.js';
 import { propellerGeometry, rudderGeometry, PROP, RUDDER } from './boat/Running.js';
 
+// (M15) the compass's card: its natural period (s) and damping (of critical), a small boat's dash compass's (a
+// liquid-filled card settles in a few seconds, with a little overshoot)
+export const COMPASS = { period: 3, damping: 0.55 };
 const STATIC_BUCKETS = [ 'hull', 'gelcoat', 'wood', 'fittings', 'glow', 'display', 'glass' ];
 const WHEEL_TURNS = 0.75; // wheel turns from centre to hard over
 const THROTTLE_ANGLE = 0.6; // lever travel (rad) from neutral to full
@@ -99,6 +103,10 @@ export class BoatModel {
 
 		this.throttleMesh = addPart( 'throttle', throttleGeometry(), materials.fittings, parts.throttlePivot );
 		this.radarMesh = addPart( 'radar', radarArrayGeometry(), materials.fittings, parts.radarPivot );
+		// ((M15) the compass's card, its face the instruments' (lit as the dash is): turned to the magnetic north)
+		this.compassMesh = addPart( 'compass', compassCardGeometry(), materials.display, parts.compassAt );
+		this.compassMesh.castShadow = false;
+		this._card = null;
 		this.searchlight = parts.searchlight; // (boat frame: the searchlight's lens, the horn's mouth)
 		this.hornAt = parts.horn;
 		this.propMesh = addPart( 'propeller', propellerGeometry(), materials.fittings, PROP.position );
@@ -303,6 +311,7 @@ export class BoatModel {
 
 		this._lastPos.copy( _pos );
 		this._hasLastPos = true;
+		this.swingCompass( dt, _q );
 
 		const wd = G.windDir.value, ws = G.windSpeed.value;
 		_v.set( wd.x * ws, 0, wd.y * ws ).sub( this._vel ).applyQuaternion( _q.invert() );
@@ -320,6 +329,37 @@ export class BoatModel {
 		this._flagWind += ( MathUtils.clamp( speed / 9, 0, 1 ) - this._flagWind ) * ( 1 - Math.exp( - dt * 2 ) );
 		this.materials.flagDir.value.copy( this._flagDir );
 		this.materials.flagWind.value = this._flagWind;
+
+	}
+
+	// (M15) the compass's card swinging to the magnetic north in its bowl (q: her world rotation): a damped
+	// pendulum, the fluid dragging it round with the bowl, so it lags in a turn and settles after it, as a
+	// compass's card does (COMPASS: its period, damping)
+	swingCompass( dt, q ) {
+
+		_v.set( 0, 0, 1 ).applyQuaternion( q ); // her bow, in the world
+		const her = Math.atan2( _v.x, _v.z ), north = Math.PI - VARIATION; // (about the world's up: her bow's angle, the card's to be)
+		const wrap = ( a ) => a - Math.PI * 2 * Math.round( a / ( Math.PI * 2 ) );
+		const c = this._card || ( this._card = { a: north, w: 0, her } );
+		const bowl = wrap( her - c.her ) / dt;
+		c.her = her;
+		const k = Math.PI * 2 / COMPASS.period, n = Math.max( 1, Math.ceil( dt / 0.02 ) ), h = dt / n;
+		for ( let i = 0; i < n; i ++ ) {
+
+			c.w += ( - k * k * wrap( c.a - north ) - 2 * COMPASS.damping * k * ( c.w - bowl ) ) * h;
+			c.a = wrap( c.a + c.w * h );
+
+		}
+
+		this.compassMesh.rotation.y = c.a - her;
+
+	}
+
+	// (M15) her heading by the compass (rad, clockwise from the magnetic north): what the lubber line's over
+	get compassHeading() {
+
+		const c = this._card;
+		return c ? ( ( c.a - c.her ) % ( Math.PI * 2 ) + Math.PI * 2 ) % ( Math.PI * 2 ) : 0;
 
 	}
 

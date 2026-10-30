@@ -95,6 +95,13 @@ export const UPGRADES = {
 		{ cost: 0, label: 'A bucket', pumpLs: 0 },
 		{ cost: 120, label: 'Electric bilge pump', pumpLs: 0.3 },
 	] },
+	// (M15) a chart of the island and its waters out to the drop-off, for those who'd rather not chart it
+	// themselves (Chart.js: the island's sheet and its names, the far sheet within SOLD.r); a waterproof one,
+	// as a chandlery sells them, at what one costs
+	chart: { name: 'Chart', levels: [
+		{ cost: 0, label: 'Your own, as you go', chart: false },
+		{ cost: 30, label: 'Waterproof chart of the island, to the drop-off', chart: true },
+	] },
 };
 
 export const FUEL_PRICE = 1.5; // $ per litre of diesel at the chandlery
