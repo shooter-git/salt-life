@@ -16,6 +16,7 @@ import { feet } from './Units.js';
 //   tellOf( story, { paid, hull, T, ... } ) -> { note: [ paragraphs ] | null, toast }   (Marta's note)
 //   (playing together: the group's shared save, 'boats')
 //   boatRecord( ... ) -> record   cleanBoats( raw ) -> { id: record }   keepBoat( record, ... ) -> record
+//   driftOf( record, T, env ) -> story   (one left with no anchor out)
 //   anchorLie( ax, az, wx, wz, U, off ) -> { x, z, heading, reach }   swingRate( U ) -> /s   sheerAt( t, U, id ) -> rad
 //   (how she lies at anchor)
 //   withRecord( story, record, dock ) -> story   (what the others' weather did to her, into your own reckoning)
@@ -288,13 +289,13 @@ function milesOf( m ) {
 
 // ---- playing together: anchored boats whose owners are away, in the group's shared save.
 // portal.save.shared 'boats': { [ owner's id ]: { v: 1, n: their name, x, z, h: heading (rad), a: [ x, z ] where her
-// anchor lies, at: ms they were last here with her at anchor, wear: what the weather's taken off her hull since
+// anchor lies, or null with T: the island's time she was left, adrift, at: ms they were last here with her, wear: what the weather's taken off her hull since
 // (0..1), tow: null | { why: 'hurricane' | 'week', x, z, metres, fee, where: 'cradle' | 'dock', out, at: ms } } }.
 // Only ever written by her owner (her pose and her anchor: when she's anchored, while they're here, and as they
 // leave) and the host in their absence (her wear and her tow, never her pose). Each device draws her from it, on its
 // own sea, lying to its own wind from where her anchor is.
 
-export const boatRecord = ( { name, x, z, heading, anchor, at } ) => ( { v: 1, n: String( name || '' ).slice( 0, 40 ), x: round( x ), z: round( z ), h: Math.round( heading * 1000 ) / 1000, a: [ round( anchor.x ), round( anchor.z ) ], at, wear: 0, tow: null } );
+export const boatRecord = ( { name, x, z, heading, anchor, at, T } ) => ( { v: 1, n: String( name || '' ).slice( 0, 40 ), x: round( x ), z: round( z ), h: Math.round( heading * 1000 ) / 1000, a: anchor ? [ round( anchor.x ), round( anchor.z ) ] : null, ...( anchor ? {} : { T } ), at, wear: 0, tow: null } );
 
 // How she lies at anchor in a steady wind blowing toward ( wx, wz ) at U m/s: head to it, her bow downwind of the
 // anchor by the rode's slack and its stretch. off: her origin's distance from the anchor with no stretch (the slack,
@@ -335,11 +336,13 @@ export function cleanBoats( raw, now = Date.now() ) {
 	for ( const [ id, r ] of Object.entries( raw ) ) {
 
 		if ( ! r || r.v !== 1 || ! Number.isFinite( r.x ) || ! Number.isFinite( r.z ) || ! Number.isFinite( r.at ) ) continue;
-		if ( ! Array.isArray( r.a ) || r.a.length !== 2 || ! r.a.every( Number.isFinite ) ) continue;
+		// (her anchor, or with none out the island's time she was left: adrift)
+		const A = Array.isArray( r.a ) && r.a.length === 2 && r.a.every( Number.isFinite ) ? [ r.a[ 0 ], r.a[ 1 ] ] : null;
+		if ( ! A && ! Number.isFinite( r.T ) ) continue;
 		const t = r.tow && typeof r.tow === 'object' && Number.isFinite( r.tow.fee ) && ( r.tow.where === 'dock' || r.tow.where === 'cradle' ) ? r.tow : null;
 		// (long towed, and they've not been back: let go)
 		if ( t && Number.isFinite( t.at ) && now - t.at > TOW_KEPT_MS ) continue;
-		out[ id ] = { v: 1, n: typeof r.n === 'string' ? r.n : '', x: r.x, z: r.z, h: Number.isFinite( r.h ) ? r.h : 0, a: [ r.a[ 0 ], r.a[ 1 ] ], at: r.at, wear: Number.isFinite( r.wear ) ? Math.min( 1, Math.max( 0, r.wear ) ) : 0, tow: t };
+		out[ id ] = { v: 1, n: typeof r.n === 'string' ? r.n : '', x: r.x, z: r.z, h: Number.isFinite( r.h ) ? r.h : 0, a: A, ...( A ? {} : { T: r.T } ), at: r.at, wear: Number.isFinite( r.wear ) ? Math.min( 1, Math.max( 0, r.wear ) ) : 0, tow: t };
 
 	}
 
@@ -347,16 +350,23 @@ export function cleanBoats( raw, now = Date.now() ) {
 
 }
 
+// An away boat with no anchor out: what's become of her by the island's time T, as her owner's own reckoning has it when
+// they're back (awayOf). The same on every device in a room, whose clock and weather are one; a room on another day
+// has her elsewhere, as it has the rest of its day. r: a record with T. env: awayOf's.
+export const driftOf = ( r, T, env ) => awayOf( { x: r.x, z: r.z, heading: r.h, anchor: null, moored: false, hauled: false, T: r.T }, T, env );
+
 // The host's look at an away boat: its record, or a new one if something's happened. warned: a hurricane's warning
 // is out in this room (Marta tows her in, for her fee and the haul-out); gone a week by the real clock (she
 // brings her in); else the weather here takes its toll over `seconds` of play. rate: wearRate at her. A boat's
-// pose is never touched: it's her owner's
-export function keepBoat( r, { now = Date.now(), warned = false, rate = 0, seconds = 0, dock, fee = awayTowFee, haul = HAUL_FEE } ) {
+// pose is never touched: it's her owner's. drift: adrift, driftOf's: she's towed from where she's got to, and when
+// it has her found
+export function keepBoat( r, { now = Date.now(), warned = false, rate = 0, seconds = 0, dock, fee = awayTowFee, haul = HAUL_FEE, drift = null } ) {
 
 	if ( r.tow || now - r.at < BACK_MS ) return r;
-	const metres = Math.hypot( r.x - dock.x, r.z - dock.z );
-	if ( warned ) return { ...r, tow: { why: 'hurricane', x: r.x, z: r.z, metres, fee: fee( metres ) + haul, where: 'cradle', out: true, at: now } };
-	if ( now - r.at >= WEEK_MS ) return { ...r, tow: { why: 'week', x: r.x, z: r.z, metres, fee: fee( metres ), where: 'dock', out: true, at: now } };
+	if ( drift && drift.tows.length ) return { ...r, tow: { ...drift.tows[ 0 ], at: now } };
+	const x = drift ? drift.x : r.x, z = drift ? drift.z : r.z, metres = Math.hypot( x - dock.x, z - dock.z );
+	if ( warned ) return { ...r, tow: { why: 'hurricane', x, z, metres, fee: fee( metres ) + haul, where: 'cradle', out: true, at: now } };
+	if ( now - r.at >= WEEK_MS ) return { ...r, tow: { why: 'week', x, z, metres, fee: fee( metres ), where: 'dock', out: true, at: now } };
 	const add = rate * seconds;
 	return add > 0 ? { ...r, wear: Math.min( 1, r.wear + add ) } : r;
 

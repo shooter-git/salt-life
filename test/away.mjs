@@ -16,7 +16,7 @@ export async function resolve( specifier, context, next ) {
 }` ) );
 const { Together } = await import( '../src/together/Together.js' );
 const { Vector3, Quaternion } = await import( '../src/engine/index.js' );
-const { BACK_MS, DRIFT, FOUND_M, ISLE, KEEP_H, WEEK_H, WEEK_MS, anchorLie, sheerAt, swingRate, awayClock, awayOf, boatLeft, boatRecord, cleanBoats, keepBoat, leftOf, tellOf, wearRate, withRecord } = await import( '../src/game/Away.js' );
+const { BACK_MS, DRIFT, FOUND_M, ISLE, KEEP_H, WEEK_H, WEEK_MS, driftOf, anchorLie, sheerAt, swingRate, awayClock, awayOf, boatLeft, boatRecord, cleanBoats, keepBoat, leftOf, tellOf, wearRate, withRecord } = await import( '../src/game/Away.js' );
 const { towFee, awayTowFee, AWAY_TOW_MAX, HAUL_FEE } = await import( '../src/game/Gear.js' );
 const { weatherAt, towardOf, hurricaneNews, islandTime } = await import( '../src/game/Weather.js' );
 const { WORLD } = await import( '../src/world/WorldLayout.js' );
@@ -352,7 +352,7 @@ const player = ( g, id, { host = false, tier = 'high', waves = seaAt( () => 0.5 
 	t.portal = { save: { shared: g.shared } };
 	t.session = { isHost: host, send: ( k, v ) => sent.push( [ k, v ] ) };
 	t.sent = sent;
-	t.limits = { boats: tier === 'low' ? 1 : 6 };
+	t.limits = { boats: tier === 'low' ? 1 : 6, see: tier === 'low' ? 1800 : 5500 };
 	t.others = new Map();
 	t.boats = {};
 	t.away = new Map();
@@ -375,8 +375,10 @@ const player = ( g, id, { host = false, tier = 'high', waves = seaAt( () => 0.5 
 {
 
 	const g = group(), a = player( g, 'a' ), b = player( g, 'b', { host: true } );
+	a.app.boatCtl.moored = true;
 	await a.mineBoat();
-	check( ! g.v.has( 'boats' ), 'no anchor down, nothing in the group\'s save' );
+	check( ! g.v.has( 'boats' ), 'at her berth, nothing in the group\'s save' );
+	a.app.boatCtl.moored = false;
 	a.app.boatCtl.anchor = new Vector3( 300, - 5, 700 );
 	await a.mineBoat();
 	const r = g.v.get( 'boats' ).a;
@@ -672,6 +674,83 @@ const player = ( g, id, { host = false, tier = 'high', waves = seaAt( () => 0.5 
 	t.away.clear();
 	t.track( 1 / 60 );
 	check( t.away.size === 0, 'none drawn before the game\'s started (the load\'s shaders)' );
+
+}
+
+// ---- (M15 step 18) far apart, and a boat left adrift
+{
+
+	const g = group(), a = player( g, 'a' ), b = player( g, 'b', { host: true } ), c = a.app.boatCtl;
+	const NOW = Date.now();
+	c.position.set( 9000, 0, 9000 );
+	await a.mineBoat( true );
+	const r = g.v.get( 'boats' ).a;
+	check( r && r.a === null && Number.isFinite( r.T ) && r.x === 9000 && r.tow === null, 'out on the water with no anchor down, she\'s in the group\'s save, adrift from the island\'s time you left' );
+	const clean = cleanBoats( { ok: r, none: { ...r, T: undefined }, bad: { ...r, a: [ 1 ], T: undefined } } );
+	check( clean.ok && clean.ok.a === null && clean.ok.T === r.T && ! clean.none && ! clean.bad, 'kept by anyone who reads it, and a record with neither an anchor nor a time isn\'t' );
+	c.anchor = new Vector3( 9000, - 15, 9000 );
+	await a.mineBoat();
+	check( Array.isArray( g.v.get( 'boats' ).a.a ) && g.v.get( 'boats' ).a.T === undefined, 'the anchor down: written at once, not waiting its few minutes' );
+	c.anchor = null;
+	await a.mineBoat();
+	check( g.v.get( 'boats' ).a.a === null, 'and up again' );
+	c.moored = true;
+	await a.mineBoat();
+	check( ! g.v.get( 'boats' ).a, 'home at her berth: gone' );
+	c.moored = false;
+
+	// where she's got to, as her owner's reckoning has it
+	const dockAt = { x: 0, z: 0 }, Tl = r.T, rec = { ...r, x: 9000, z: 9000 };
+	const d = driftOf( rec, Tl + 10, { dock: dockAt, ...fairly } );
+	const own = awayOf( { ...at( { x: 9000, z: 9000 } ), T: Tl }, Tl + 10, { dock: dockAt, ...fairly } );
+	check( d.where === 'adrift' && Math.hypot( d.x - 9000, d.z - 9000 ) > 100 && Math.abs( d.x - own.x ) < 1e-6 && Math.abs( d.z - own.z ) < 1e-6, `ten hours on she's ${ Math.round( Math.hypot( d.x - 9000, d.z - 9000 ) ) } m downwind, where her owner will find her` );
+	check( driftOf( rec, Tl - 5, { dock: dockAt, ...fairly } ).x === 9000, 'and where she was left, on a clock behind it' );
+
+	// the host keeps her from there
+	const left = { ...rec, at: NOW - 10 * 60e3 };
+	const warned = keepBoat( left, { now: NOW, warned: true, dock: dockAt, drift: d } );
+	check( warned.tow.why === 'hurricane' && warned.tow.x === d.x && warned.tow.fee === awayTowFee( Math.hypot( d.x, d.z ) ) + HAUL_FEE && warned.x === 9000, 'a hurricane\'s warning: towed from where she\'s got to, her record\'s pose as it was' );
+	const near = { ...rec, x: ISLE.x + 1500, z: ISLE.z, T: T0, at: NOW - 10 * 60e3 };
+	const seen = driftOf( near, T0 + 6, { dock: dockAt, ...fairly } );
+	const found = keepBoat( near, { now: NOW, dock: dockAt, drift: seen } );
+	check( seen.tows.length === 1 && found.tow && found.tow.why === 'adrift' && found.tow.at === NOW && found.tow.fee === seen.fee, 'seen from the shore and fetched: the tow her owner\'s reckoning would have had, in the group\'s save' );
+	check( keepBoat( { ...left, at: NOW - 1000 }, { now: NOW, warned: true, dock: dockAt, drift: d } ).tow === null, 'gone a moment: nothing' );
+
+	// drawn, adrift: no rode, nobody boards her, and she's the radar's wherever she is
+	await a.mineBoat( true );
+	const s = g.v.get( 'boats' ).a;
+	b._setBoats( { a: s } );
+	b.app.camera.position.set( s.x + 50, 2, s.z );
+	b.app.player.position.set( s.x + 50, 0, s.z );
+	b._awayBoats( 0.016 );
+	const e = b.away.get( 'a' );
+	check( e.boat && e.boat.visible && ! e.rode.visible, 'adrift she\'s drawn, with no rode' );
+	check( Math.hypot( e.frame.pos.x - s.x, e.frame.pos.z - s.z ) < 100, 'where she\'s got to in the time since' );
+	check( b._driftSpot( e ).where === 'adrift', 'worked out as her owner\'s is' );
+
+	// too far off to see, she's not drawn, but the radar has her
+	const low = player( g, 'c', { tier: 'low' } );
+	low._setBoats( { a: s } );
+	low.app.camera.position.set( s.x + 3000, 2, s.z );
+	low._awayBoats( 0.016 );
+	const faraway = low.away.get( 'a' );
+	check( ! faraway.boat || ! faraway.boat.visible, '3 km off on a phone the fog has her: not drawn' );
+	const onRadar = low.boatsAbout();
+	check( onRadar.length === 1 && Math.hypot( onRadar[ 0 ].x - s.x, onRadar[ 0 ].z - s.z ) < 100, 'and the radar still shows her' );
+	low.app.camera.position.set( s.x + 1000, 2, s.z );
+	low._awayBoats( 0.016 );
+	check( low.away.get( 'a' ).boat && low.away.get( 'a' ).boat.visible, 'a kilometre off, she is' );
+
+	// who's near enough to see you
+	const t = player( g, 'd' );
+	t.app.player.position.set( 20000, 0, 0 );
+	check( t._inSight() === false, 'on your own: nobody to see you' );
+	t.others.set( 'x', { cur: null } );
+	check( t._inSight() === true, 'someone not heard from yet might' );
+	t.others.set( 'x', { cur: { pos: new Vector3( 0, 0, 0 ) } } );
+	check( t._inSight() === false, '20 km apart they can\'t' );
+	t.others.set( 'x', { cur: { pos: new Vector3( 15000, 0, 0 ) } } );
+	check( t._inSight() === true, '5 km apart they might' );
 
 }
 
