@@ -17,8 +17,8 @@ import { S52, rgb, SHADES } from '../../game/ChartBake.js';
 //     (Chart.js: the minimap's two sheets as you've charted them, S-52's colours, ChartBake.js) with its
 //     soundings and names, your marks and where the fish were; zoomed by steps as a plotter is, out as you go
 //     further from the island; her heading magnetic, as her compass; how far home and the fuel for it.
-//   - (M15) The compass on the dash top: its card (RECTS.compass, drawn here; turned by BoatModel, as a
-//     compass's card swings to the north in its bowl).
+//   - (M15) The compass on the dash top: its card (RECTS.compass, compassBand, drawn here; turned by BoatModel, as
+//     a compass's card swings to the north in its bowl).
 //   - (M14) The third, to port of the plotter: the radar (reading.radar: Radar.js, heading up, swept with
 //     her array turning on the roof).
 // Redrawn a few times a second while you're aboard; ashore her screens are off and her needles rest.
@@ -38,7 +38,11 @@ export const RECTS = {
 	fuel: [ 320, 352, 144, 144 ],
 	temp: [ 480, 352, 144, 144 ],
 	volts: [ 640, 352, 144, 144 ],
-	compass: [ 800, 352, 160, 160 ], // ((M15) the compass's card)
+	// ((M15) the compass's card: its flat top, its skirt as a strip, its lubbers' paint)
+	compass: [ 800, 352, 160, 160 ],
+	compassBand: [ 976, 352, 544, 68 ],
+	lubber: [ 976, 432, 16, 16 ],
+	lubberRed: [ 1000, 432, 16, 16 ],
 };
 // a rect's uvs ( u0, v0, u1, v1: v up, as the canvas's texture is flipped )
 export function atlasUV( name ) {
@@ -235,7 +239,7 @@ export class BoatInstruments {
 		g.fillStyle = '#05080a';
 		g.fillRect( 0, 0, ATLAS.w, ATLAS.h );
 		for ( const name in DIALS ) this._dial( name, reading );
-		this._compassCard( !! reading );
+		this._compassCard( !! reading, reading ? reading.night || 0 : 0 );
 		if ( reading ) {
 
 			this._sounder( reading );
@@ -386,53 +390,91 @@ export class BoatInstruments {
 
 	}
 
-	// (M15) the compass's card, as a small boat's dash compass has it (after a Ritchie's): black, white figures read
-	// from its middle, a mark every 5°, the figures every 30°, the cardinal points; north up the atlas (the card's
-	// bow-ward edge, BoatModel turning it). Lit at night, as a compass's light is, while you're aboard
-	_compassCard( lit ) {
+	// (M15) the compass's card, a CombiDial's, after a Ritchie Helmsman's as photographed: black, white. Its flat top: a
+	// mark every 5° about its rim, a serif N, the other points inside it, read from over it. Its skirt, a strip that
+	// wraps it: a mark every 5° along its foot and the figures every 30° over them, 360 at its left and 0 at its right
+	// (Wheelhouse.compassCardGeometry). Lit while you're aboard, green after dark as its lamp is
+	_compassCard( lit, night = 0 ) {
 
 		const g = this.ctx, [ x, y, w ] = RECTS.compass, cx = x + w / 2, cy = y + w / 2, r = w / 2;
+		const channel = ( a, b ) => Math.round( a + ( b - a ) * night );
+		const ink = lit ? `rgb(${ channel( 244, 96 ) },${ channel( 242, 255 ) },${ channel( 234, 140 ) })` : '#9a9890';
+		const ground = lit ? '#0d0f10' : '#08090a';
 		g.save();
 		g.fillStyle = '#05080a';
 		g.fillRect( x, y, w, w );
 		g.beginPath();
 		g.arc( cx, cy, r, 0, Math.PI * 2 );
-		g.fillStyle = lit ? '#0d0f10' : '#08090a';
+		g.fillStyle = ground;
 		g.fill();
-		const ink = lit ? '#f4f2ea' : '#9a9890';
 		g.strokeStyle = g.fillStyle = ink;
-		g.lineCap = 'butt';
 		for ( let d = 0; d < 360; d += 5 ) {
 
 			const a = ( d - 90 ) * Math.PI / 180, long = d % 10 === 0;
-			g.lineWidth = d % 30 === 0 ? 2.4 : 1.4;
+			g.lineWidth = d % 30 === 0 ? 2.6 : 1.5;
 			g.beginPath();
-			g.moveTo( cx + Math.cos( a ) * r * ( long ? 0.8 : 0.86 ), cy + Math.sin( a ) * r * ( long ? 0.8 : 0.86 ) );
-			g.lineTo( cx + Math.cos( a ) * r * 0.97, cy + Math.sin( a ) * r * 0.97 );
+			g.moveTo( cx + Math.cos( a ) * r * ( long ? 0.86 : 0.9 ), cy + Math.sin( a ) * r * ( long ? 0.86 : 0.9 ) );
+			g.lineTo( cx + Math.cos( a ) * r * 0.98, cy + Math.sin( a ) * r * 0.98 );
 			g.stroke();
 
 		}
 
 		g.textAlign = 'center';
 		g.textBaseline = 'middle';
-		for ( let d = 0; d < 360; d += 30 ) {
+		for ( const [ d, text, big ] of [ [ 0, 'N', 1 ], [ 45, 'NE', 0 ], [ 90, 'E', 1 ], [ 135, 'SE', 0 ], [ 180, 'S', 1 ], [ 225, 'SW', 0 ], [ 270, 'W', 1 ], [ 315, 'NW', 0 ] ] ) {
 
-			const a = d * Math.PI / 180, card = { 0: 'N', 90: 'E', 180: 'S', 270: 'W' }[ d ];
 			g.save();
 			g.translate( cx, cy );
-			g.rotate( a );
-			g.font = card ? `800 ${ Math.round( r * 0.26 ) }px system-ui, sans-serif` : `700 ${ Math.round( r * 0.15 ) }px system-ui, sans-serif`;
-			g.fillText( card || String( d ), 0, - r * ( card ? 0.5 : 0.66 ) );
+			g.rotate( d * Math.PI / 180 );
+			g.font = big ? `700 ${ Math.round( r * ( d === 0 ? 0.34 : 0.28 ) ) }px Georgia, 'Times New Roman', serif` : `600 ${ Math.round( r * 0.17 ) }px Georgia, 'Times New Roman', serif`;
+			g.fillText( text, 0, - r * ( big ? 0.62 : 0.66 ) );
 			g.restore();
 
 		}
 
-		// (the card's pivot)
+		// (its column, seen under the dome)
 		g.beginPath();
-		g.arc( cx, cy, r * 0.07, 0, Math.PI * 2 );
-		g.fillStyle = '#3a3f44';
+		g.arc( cx, cy, r * 0.2, 0, Math.PI * 2 );
+		g.fillStyle = '#17191b';
 		g.fill();
+		// the skirt
+		const [ sx, sy, sw, sh ] = RECTS.compassBand;
+		g.fillStyle = ground;
+		g.fillRect( sx, sy, sw, sh );
+		g.beginPath();
+		g.rect( sx, sy, sw, sh );
+		g.clip();
+		g.strokeStyle = g.fillStyle = ink;
+		for ( let d = 0; d <= 360; d += 5 ) {
+
+			const px = sx + sw * ( 1 - d / 360 ), major = d % 30 === 0, ten = d % 10 === 0;
+			g.lineWidth = major ? 2.4 : 1.4;
+			g.beginPath();
+			g.moveTo( px, sy + sh - ( major ? 15 : ten ? 12 : 8 ) );
+			g.lineTo( px, sy + sh );
+			g.stroke();
+			if ( ! major ) continue;
+			// (a strip, wider than it's tall on the card: its figures narrowed to their shape there)
+			g.save();
+			g.translate( px, sy + sh * 0.38 );
+			g.scale( 0.46, 1 );
+			g.font = '600 38px system-ui, sans-serif';
+			g.fillText( String( d % 360 ), 0, 0 );
+			g.restore();
+
+		}
+
 		g.restore();
+		// the lubbers' paint
+		const paint = ( name, c ) => {
+
+			const [ px, py, pw, ph ] = RECTS[ name ];
+			g.fillStyle = c;
+			g.fillRect( px, py, pw, ph );
+
+		};
+		paint( 'lubber', lit ? '#f2d21e' : '#6e6012' );
+		paint( 'lubberRed', lit ? '#e8341f' : '#6a1c12' );
 
 	}
 

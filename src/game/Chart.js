@@ -45,7 +45,7 @@ export const MAX_MARKS = 40, MAX_SPOTS = 80;
 // The names on the chart: x, z where it's written; learned within `r` of (x, z) (about as far as you see it from
 // the sea, SIGHT) or over `place`'s water;
 // `water`: written in italics, as a chart names water; `island`: on Marta's chart; `known`: from the start;
-// `light`: a light's characteristic under it (as a chart gives it)
+// `light`: a light's characteristic under it (as a chart gives it). (The names are on what they name: test/charts.mjs)
 const lh = LIGHTHOUSE, east = HARBOUR_LIGHTS[ 0 ], west = HARBOUR_LIGHTS[ 1 ], pier = HARBOUR_LIGHTS[ 2 ];
 export const NAMES = [
 	{ id: 'bay', name: 'The Bay', x: 10, z: 110, water: true, island: true, known: true },
@@ -56,7 +56,8 @@ export const NAMES = [
 	{ id: 'creek', name: 'Mangrove Creek', x: - 470, z: - 150, r: 280, water: true, island: true },
 	{ id: 'westCave', name: 'Sea Cave', x: CAVES[ 0 ].x - 50, z: CAVES[ 0 ].z, r: 220, island: true, small: true },
 	{ id: 'nwCave', name: 'Sea Cave', x: CAVES[ 1 ].x - 20, z: CAVES[ 1 ].z - 50, r: 220, island: true, small: true },
-	{ id: 'lighthouse', name: 'Lighthouse Point', x: lh.x + 10, z: lh.z + 70, r: 340, island: true, light: 'Fl 10s' },
+	{ id: 'northWest', name: 'North-west Point', x: - 385, z: - 715, r: 340, island: true }, // (the island's corner, as the Guide calls it, written on the land just in from it)
+	{ id: 'lighthouse', name: 'Lighthouse', x: lh.x + 34, z: lh.z + 34, r: 340, island: true, small: true, light: 'Fl 10s' },
 	{ id: 'windReef', name: 'Windward Reef', x: - 455, z: - 900, r: 340, water: true, island: true },
 	{ id: 'wreck', name: 'Wreck', x: - 520, z: - 845, r: 240, island: true, small: true },
 	{ id: 'northBeach', name: 'North Beach', x: 195, z: - 790, r: 340, island: true },
@@ -65,7 +66,8 @@ export const NAMES = [
 	{ id: 'ledge', name: 'North Ledge', x: 0, z: - 2550, place: 'ledge', water: true },
 	{ id: 'hump', name: 'The Hump', x: SEABED.hump[ 0 ][ 0 ], z: SEABED.hump[ 0 ][ 1 ] - 500, place: 'hump', water: true },
 	{ id: 'bank', name: 'The Bank', x: SEABED.bank.x, z: SEABED.bank.z, place: 'bank', water: true },
-	{ id: 'sandbar', name: 'Sandbar', x: SEABED.bank.x + 400, z: SEABED.bank.z + 1300, r: 900, water: true, small: true },
+	// (on the bar's middle; its surf's seen from a long way, so named from a long way)
+	{ id: 'sandbar', name: 'Sandbar', x: SEABED.bank.x + SEABED.sandbar.lee * 0.349, z: SEABED.bank.z + SEABED.sandbar.lee * 0.937, r: 900, water: true, small: true },
 ];
 export const NAME = Object.fromEntries( NAMES.map( ( n ) => [ n.id, n ] ) );
 

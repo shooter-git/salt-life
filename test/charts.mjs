@@ -11,7 +11,7 @@ import { Offshore, decodeSeabed } from '../src/world/terrain/Offshore.js';
 import { SHEETS, SOLD, SIGHT, NAMES, HOME, VARIATION, CRUISE, MAX_MARKS, MAX_SPOTS, Sheet, ChartLog, sightOf, legTo, magnetic, fuelFor } from '../src/game/Chart.js';
 import { SheetBake, S52, SHADES, CONTOURS, shadeOf, bandOf } from '../src/game/ChartBake.js';
 import { RECTS, ATLAS, atlasUV, plotterAcross, PLOTTER_NM, niceLength } from '../src/world/boat/Instruments.js';
-import { compassCardGeometry } from '../src/world/boat/Wheelhouse.js';
+import { compassCardGeometry, COMPASS_CARD } from '../src/world/boat/Wheelhouse.js';
 import { BoatModel, COMPASS } from '../src/world/BoatModel.js';
 import { BoatController } from '../src/player/BoatController.js';
 import { Waves } from '../src/ocean/Waves.js';
@@ -21,6 +21,8 @@ import { fuelBurn, UPGRADES, gearStats, defaultUpgrades } from '../src/game/Gear
 import { GameState } from '../src/game/GameState.js';
 import { FT } from '../src/game/Units.js';
 import { SEABED } from '../src/world/terrain/SeabedModel.js';
+import { LIGHTHOUSE } from '../src/world/Lighthouse.js';
+import { placeOf, PLACES } from '../src/game/Places.js';
 
 let fails = 0;
 const ok = ( c, msg ) => {
@@ -219,6 +221,26 @@ ok( HOME.x === 64.5 && HOME.z === 36.5, 'home is the boat\'s berth by the pier' 
 	const sd = near.soundings( 'near' );
 	ok( sd.length > 1000 && sd.every( ( p ) => p.d > 0.5 && T.heightAt( p.x, p.z ) < 0 ), `${ sd.length } soundings on the island's sheet, every one in the water` );
 	ok( Math.abs( near.heightAt( 0, 100 ) - T.heightAt( 0, 100 ) ) < 1, 'its heights read back where they were baked' );
+	// (the names, on what they name)
+	const named = Object.fromEntries( NAMES.map( ( n ) => [ n.id, n ] ) );
+	const hgt = ( n ) => T.heightAt( n.x, n.z );
+	ok( hgt( named.sandbar ) < 0 && hgt( named.sandbar ) > - 3, `Sandbar on the bar (${ ( - hgt( named.sandbar ) ).toFixed( 1 ) } m of water under it)` );
+	ok( Math.abs( named.summit.name - 302.39 / FT ) < 1, 'the summit\'s height, in feet' );
+	ok( hgt( named.ledge ) < - 150 && hgt( named.ledge ) > - 300 && hgt( named.hump ) < - 100 && hgt( named.bank ) > - 30, 'North Ledge, the Hump and the Bank over their water' );
+	// (the island's north-west corner: as far along that way as its land goes)
+	let corner = null, most = - Infinity;
+	for ( let x = - 800; x <= 0; x += 4 ) for ( let z = - 1000; z <= - 400; z += 4 ) if ( T.heightAt( x, z ) > 2 && - x - z > most ) {
+
+		most = - x - z;
+		corner = [ x, z ];
+
+	}
+
+	ok( Math.hypot( named.northWest.x - corner[ 0 ], named.northWest.z - corner[ 1 ] ) < 60 && hgt( named.northWest ) > 0, `North-west Point just in from the island's corner (${ corner })` );
+	ok( Math.hypot( named.lighthouse.x - LIGHTHOUSE.x, named.lighthouse.z - LIGHTHOUSE.z ) < 60 && named.lighthouse.light === 'Fl 10s', 'the Lighthouse beside its light, its characteristic under it' );
+	// (each place's own name; the north ledge only in the north: the canyon's floor off the bay is as flat and as deep)
+	ok( NAMES.filter( ( n ) => PLACES[ n.id ] ).every( ( n ) => PLACES[ n.id ].name.toLowerCase().replace( /^the /, '' ) === n.name.toLowerCase().replace( /^the /, '' ) ), 'the chart\'s names are the places\' names' );
+	ok( placeOf( { ledge: 1 }, 0, - 2550 ) === 'ledge' && placeOf( { ledge: 1 }, 1100, - 2200 ) === 'ledge' && placeOf( { ledge: 1 }, 100, 1800 ) === 'shelf', 'the north ledge is the north\'s: the canyon\'s floor is the shelf' );
 
 }
 
@@ -230,16 +252,66 @@ ok( niceLength( 130 ) === 200 * FT && niceLength( 500 ) === 0.25 * 1852 && niceL
 ok( RECTS.compass[ 0 ] + RECTS.compass[ 2 ] <= ATLAS.w && RECTS.compass[ 1 ] + RECTS.compass[ 3 ] <= ATLAS.h, 'its card in the instruments\' atlas' );
 {
 
-	const g = compassCardGeometry(), uv = g.attributes.uv, p = g.attributes.position, [ u0, v0, u1, v1 ] = atlasUV( 'compass' );
-	let inside = true, top = - 1;
-	for ( let i = 0; i < uv.count; i ++ ) {
+	// (its faces outward: its top up, its skirt away from its middle)
+	const g = compassCardGeometry(), p = g.attributes.position, ix = g.index.array, A = new Vector3(), B = new Vector3(), D = new Vector3(), n = new Vector3();
+	let out = true;
+	for ( let i = 0; i < ix.length; i += 3 ) {
 
-		inside = inside && uv.getX( i ) >= u0 - 1e-6 && uv.getX( i ) <= u1 + 1e-6 && uv.getY( i ) >= v0 - 1e-6 && uv.getY( i ) <= v1 + 1e-6;
-		if ( p.getZ( i ) > p.getZ( Math.max( 0, top ) ) || top < 0 ) top = i;
+		A.fromBufferAttribute( p, ix[ i ] );
+		B.fromBufferAttribute( p, ix[ i + 1 ] );
+		D.fromBufferAttribute( p, ix[ i + 2 ] );
+		n.copy( B ).sub( A ).cross( D.clone().sub( A ) );
+		const mid = A.clone().add( B ).add( D ).divideScalar( 3 ), skirt = mid.y < - 1e-6;
+		if ( n.lengthSq() > 1e-16 && ( skirt ? n.x * mid.x + n.z * mid.z <= 0 : n.y <= 0 ) ) out = false;
 
 	}
 
-	ok( inside && Math.abs( uv.getY( top ) - v1 ) < 0.01 * ( v1 - v0 ) && p.array.every( ( v, i ) => i % 3 !== 1 || Math.abs( v ) < 1e-9 ), 'its card lies flat, its north the atlas\'s top, toward her bow' );
+	ok( out, 'its top faces up, its skirt faces out' );
+
+}
+
+// (what's under each lubber, from the card's own geometry and its place in the atlas: the far one over its top, the
+// near one on its skirt)
+{
+
+	const b = new BoatModel(), q = new Quaternion(), up = new Vector3( 0, 1, 0 ), m = b.compassMesh, uv = m.geometry.attributes.uv, p = m.geometry.attributes.position;
+	const [ u0, v0, u1, v1 ] = atlasUV( 'compass' ), [ a0, , a1 ] = atlasUV( 'compassBand' ), rim = 49, skirtFrom = 50;
+	const under = ( to, from, count, step ) => {
+
+		const L = new Vector3( 0, 0, to ).applyAxisAngle( up, - m.rotation.y );
+		let best = from, e = 1e9;
+		for ( let i = from; i < from + count; i += step ) {
+
+			const d = Math.hypot( p.getX( i ) - L.x * COMPASS_CARD.r, p.getZ( i ) - L.z * COMPASS_CARD.r );
+			if ( d < e ) {
+
+				e = d;
+				best = i;
+
+			}
+
+		}
+
+		return best;
+
+	};
+	const off = ( a, c ) => Math.abs( ( ( a - c + 540 ) % 360 ) - 180 );
+	let far = 0, near = 0;
+	for ( const psi of [ 0, 45, 90, 137, 180, 225, 270, 359 ] ) {
+
+		q.setFromAxisAngle( up, Math.PI - psi * Math.PI / 180 );
+		for ( let i = 0; i < 900; i ++ ) b.swingCompass( 1 / 60, q );
+		const want = ( psi + 6.3 ) % 360;
+		// (7.5° between the card's points: within half that)
+		const t = under( 1, 1, rim, 1 ), cx = ( uv.getX( t ) - u0 ) / ( u1 - u0 ) - 0.5, cy = 0.5 - ( uv.getY( t ) - v0 ) / ( v1 - v0 );
+		far = Math.max( far, off( Math.atan2( cx, - cy ) * 180 / Math.PI + 360, want ) );
+		const k = under( - 1, skirtFrom, 98, 2 );
+		near = Math.max( near, off( 360 * ( 1 - ( uv.getX( k ) - a0 ) / ( a1 - a0 ) ), want ) );
+
+	}
+
+	ok( far <= 3.8, `the far lubber reads her heading on the card's top (within ${ far.toFixed( 1 ) }°)` );
+	ok( near <= 3.8, `and the near one on its skirt (within ${ near.toFixed( 1 ) }°)` );
 
 }
 

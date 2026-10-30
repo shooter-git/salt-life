@@ -1874,6 +1874,7 @@ export class App {
 
 		r.chart = map && map._bake && map._bake.done ? map : null;
 		r.log = this.game.state.chart;
+		r.night = G.night.value; // ((M15) the compass's lamp)
 		r.names = NAMES;
 		r.view = map ? map.radiusM : 0;
 
