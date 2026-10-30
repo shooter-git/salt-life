@@ -493,9 +493,9 @@ ok( Object.keys( defaultUpgrades() ).length === Object.keys( UPGRADES ).length &
 	ok( st.buy( 'fuel' ) && st.fuelL === 80, 'a new tank comes full' );
 	ok( st.buy( 'fishFinder' ) && st.stats.finder === true && st.buy( 'fishFinder' ) === null, 'fish finder: one level' );
 	ok( gearStats( defaultUpgrades() ).anchorM === 0 && st.buy( 'anchor' ) && st.stats.anchorM === 20 && st.buy( 'anchor' ) === null, 'anchor: one level, holds in 66 ft' );
-	// (Salt Life) Marta's tow: a call-out and a little a hundred metres, never past its cap, and never
-	// more than you have
-	ok( towFee( TOW.from ) === TOW.base + 2 && towFee( 1000 ) === TOW.base + 10 * TOW.per100m && towFee( 1e6 ) === TOW.max, 'the tow: more the further she\'s drifted, up to a cap' );
+	// (Salt Life) Marta's tow: a call-out and a little a hundred metres, ((M15) as far as it is: no cap),
+	// and never more than you have
+	ok( towFee( TOW.from ) === TOW.base + 2 && towFee( 1000 ) === TOW.base + 10 * TOW.per100m && towFee( 10000 ) === TOW.base + 100 * TOW.per100m, 'the tow: more the further she\'s drifted, as far as it is' );
 	st.money = 30;
 	const paid = st.payTow( towFee( 2000 ) );
 	ok( paid === 30 && st.money === 0 && st.payTow( 50 ) === 0 && st.money === 0, 'short of the fee, she tows you in for what you have' );

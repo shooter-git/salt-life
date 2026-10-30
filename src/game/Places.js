@@ -12,6 +12,9 @@ import { SEABED } from '../world/terrain/SeabedModel.js';
 //   bay         the bay's water, its beach, its pier and its reef
 //   shelf / coast   the island's deep water, or its shallows, anywhere else round it
 //   placeOf( habitat, x, z ) -> a PLACES id
+// (M15) The far places (FAR_PLACES) are noted the first time you're there (GameState.found, Game.updateFound),
+// whether you fish or not, and the log and the records name them only once you've found them (farName). `what`:
+// what the note says of it.
 
 export const PLACES = {
 	bay: { name: 'the bay' },
@@ -20,13 +23,14 @@ export const PLACES = {
 	creek: { name: 'the mangrove creek' },
 	windReef: { name: 'the windward reef' },
 	shelf: { name: 'the shelf' },
-	dropoff: { name: 'the drop-off' },
-	ledge: { name: 'the north ledge' },
-	hump: { name: 'the hump' },
-	bank: { name: 'the bank' },
-	blue: { name: 'the blue water' },
+	dropoff: { name: 'the drop-off', far: true, what: 'where the shelf falls away to the deep' },
+	ledge: { name: 'the north ledge', far: true, what: 'a terrace 700 ft down the slope' },
+	hump: { name: 'the hump', far: true, what: 'a seamount rising out of the deep' },
+	bank: { name: 'the bank', far: true, what: 'a reef-rimmed bank, its sandbar awash on its lee side' },
+	blue: { name: 'the blue water', far: true, what: 'the open ocean, past the drop-off' },
 };
 export const PLACE_IDS = Object.keys( PLACES );
+export const FAR_PLACES = PLACE_IDS.filter( ( k ) => PLACES[ k ].far );
 // the bay's water: between its headlands, from its beach out past its mouth (m)
 const BAY = { x: [ - 330, 330 ], z: [ - 160, 330 ] };
 // about the bank and the hump: as far out from them as counts as theirs (m)
@@ -47,6 +51,10 @@ export function placeOf( h, x, z ) {
 	return h.deep > 0.5 ? 'shelf' : 'coast';
 
 }
+
+// a far place's name once `found` (GameState.found) has it, else what it goes by until then; the others' always
+export const FAR_UNKNOWN = 'somewhere far out';
+export const farName = ( id, found, upper = false ) => ( ! PLACES[ id ] || ! PLACES[ id ].far || ( found && found[ id ] !== undefined ) ? placeName( id, upper ) : upper ? 'Somewhere far out' : FAR_UNKNOWN );
 
 // a place's name, with its first letter up when it starts a line ('The north beach')
 export const placeName = ( id, upper = false ) => {

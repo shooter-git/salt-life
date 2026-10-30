@@ -160,6 +160,7 @@ export class Player {
 		this.orbitYaw = 0;
 		this.orbitPitch = 0.22;
 		this.orbitDist = 13;
+		this.helmHeld = false; // ((M15) the radio's panel is up at the helm, and has the E key: Radio.js)
 		this.helmYaw = 0;
 		this.helmPitch = - 0.05;
 		this.camPos = new THREE.Vector3();
@@ -1016,7 +1017,8 @@ export class Player {
 		const wheel = inp.consumeWheel();
 
 		if ( inp.hit( 'KeyV' ) ) this.camMode = this.camMode === 'first' ? 'third' : 'first';
-		if ( inp.hit( 'KeyE' ) ) {
+		// ((M15) with the radio's panel up, E closes that: Radio.js)
+		if ( inp.hit( 'KeyE' ) && ! this.helmHeld ) {
 
 			this.leaveHelm();
 			return;
@@ -1038,7 +1040,7 @@ export class Player {
 		}
 
 		b.setInput( throttle, steer, dt );
-		this.prompt = { key: 'E', text: 'Leave helm   ·   V  camera' };
+		this.prompt = { key: 'E', text: this.helmHeld ? 'Close the radio' : 'Leave helm   ·   V  camera   ·   R  radio' };
 
 		// keep the player attached (for audio / queries)
 		b.toWorld( b.model.helmEye, this.position );

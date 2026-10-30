@@ -563,30 +563,60 @@ function buildConsole( kit, L, parts ) {
 	oc.applyMatrix4( mat4( - 0.15, oy, oz, - 0.25, 0, 0 ) );
 	kit.add( 'fittings', oc, { color: 0x24262a, rough: 0.6 } );
 	const face = mat4( - 0.15, oy, oz, - 0.25, 0, 0 ); // aft face tilted down toward the helm
-	const vhf = box( 0.2, 0.06, 0.02 );
-	vhf.applyMatrix4( new Matrix4().makeTranslation( - 0.18, 0, - 0.155 ) );
-	vhf.applyMatrix4( face );
-	kit.add( 'fittings', vhf, { color: 0x111214, rough: 0.4 } );
-	const lcd = new PlaneGeometry( 0.09, 0.03 );
-	lcd.applyMatrix4( new Matrix4().makeRotationY( Math.PI ) );
-	lcd.applyMatrix4( new Matrix4().makeTranslation( - 0.2, 0.005, - 0.168 ) ); // 3 mm proud of the radio face
-	lcd.applyMatrix4( face );
-	kit.add( 'glow', lcd, { color: 0x7dff9a, rough: 0.2, pattern: 6 } );
-	for ( const k of [ - 0.06, 0.1, 0.26 ] ) {
+	// ((M15) the VHF: a fixed-mount set let into the console, after the workboat sets (Standard Horizon's, a
+	// Uniden's): a black face 18 x 7.6 cm, drawn with its LCD and rubber keys in the instruments' atlas
+	// (Instruments' RECTS.vhf: it lights itself, or it would be black in the shade up here), the volume and
+	// squelch knobs left of its LCD, the channel knob right of it. Its fist mic beside it on a clip, on a short
+	// coiled cord)
+	const rx = - 0.18, onFace = ( g, x, y, z ) => {
 
-		const knob = cylinder( 0.012, 0.012, 0.02, 10 );
-		knob.applyMatrix4( new Matrix4().makeRotationX( Math.PI / 2 ) );
-		knob.applyMatrix4( new Matrix4().makeTranslation( k, 0, - 0.16 ) );
-		knob.applyMatrix4( face );
-		kit.add( 'fittings', knob, STAINLESS );
+		g.applyMatrix4( new Matrix4().makeTranslation( x, y, z ) );
+		g.applyMatrix4( face );
+		return g;
+
+	};
+	kit.add( 'fittings', onFace( roundedBox( 0.18, 0.076, 0.02, 0.005, 1 ), rx, 0, - 0.155 ), { color: 0x111214, rough: 0.45 } );
+	const vhfFace = new PlaneGeometry( 0.176, 0.072 );
+	vhfFace.applyMatrix4( new Matrix4().makeRotationY( Math.PI ) );
+	kit.add( 'display', toAtlas( onFace( vhfFace, rx, 0, - 0.1656 ), 'vhf' ), {} );
+	const knob = ( x, y, r, h ) => {
+
+		const k = cylinder( r, r * 1.04, h, 14 );
+		k.applyMatrix4( new Matrix4().makeRotationX( Math.PI / 2 ) );
+		// (x as the helm sees it, to its right: the face's mirrored from behind it)
+		kit.add( 'fittings', onFace( k, rx - x, y, - 0.1656 - h / 2 ), { color: 0x1a1b1e, rough: 0.7 } );
+		kit.add( 'fittings', onFace( box( 0.0016, r * 0.7, 0.001 ), rx - x, y + r * 0.5, - 0.1661 - h ), { color: 0xd8d8d2, rough: 0.5 } );
+
+	};
+	knob( - 0.075, 0.018, 0.0075, 0.012 ); // (volume)
+	knob( - 0.075, - 0.012, 0.0075, 0.012 ); // (squelch)
+	knob( 0.06, 0.008, 0.015, 0.016 ); // (the channel)
+	// (the console's other two knobs: its lights)
+	for ( const k of [ 0.1, 0.26 ] ) {
+
+		const sw = cylinder( 0.012, 0.012, 0.02, 10 );
+		sw.applyMatrix4( new Matrix4().makeRotationX( Math.PI / 2 ) );
+		kit.add( 'fittings', onFace( sw, k, 0, - 0.16 ), STAINLESS );
 
 	}
 
-	// microphone hanging from the VHF
-	const mic = roundedBox( 0.05, 0.08, 0.03, 0.01, 1 );
-	mic.translate( - 0.02, oy - 0.2, oz - 0.12 );
-	kit.add( 'fittings', mic, BLACK_PLASTIC );
-	kit.add( 'fittings', tube( [ V( - 0.05, oy - 0.04, oz - 0.15 ), V( - 0.08, oy - 0.1, oz - 0.14 ), V( - 0.04, oy - 0.14, oz - 0.13 ), V( - 0.02, oy - 0.16, oz - 0.12 ) ], 0.004, 16, 4 ), BLACK_PLASTIC );
+	// (its mic on its clip on the console's face, out of the way of the windshield, and the coiled cord
+	// from its foot along the console's lower edge to the set)
+	const mx = - 0.055, mz = - 0.169;
+	kit.add( 'fittings', onFace( box( 0.02, 0.026, 0.008 ), mx, 0.022, - 0.154 ), { color: 0x24262a, rough: 0.6 } );
+	kit.add( 'fittings', onFace( roundedBox( 0.052, 0.085, 0.03, 0.01, 1 ), mx, - 0.002, mz ), BLACK_PLASTIC );
+	kit.add( 'fittings', onFace( roundedBox( 0.036, 0.04, 0.003, 0.001, 1 ), mx, 0.01, mz - 0.0155 ), { color: 0x2e3034, rough: 0.9 } );
+	kit.add( 'fittings', onFace( box( 0.006, 0.026, 0.012 ), mx - 0.028, 0.01, mz ), { color: 0x34363a, rough: 0.7 } );
+	const coil = [], turns = 6, cr = 0.005;
+	for ( let i = 0; i <= turns * 6; i ++ ) {
+
+		const t = i / ( turns * 6 ), a = t * turns * Math.PI * 2;
+		const v = V( lerp( mx, rx + 0.085, t ) + Math.cos( a ) * cr, lerp( - 0.046, - 0.036, t ) - 0.018 * 4 * t * ( 1 - t ) + Math.sin( a ) * cr, lerp( mz, - 0.16, t ) + Math.sin( a ) * cr * 0.7 );
+		coil.push( v.applyMatrix4( face ) );
+
+	}
+
+	kit.add( 'fittings', tube( coil, 0.002, coil.length, 3 ), BLACK_PLASTIC );
 
 	// cabin dome light
 	const dl = cylinder( 0.08, 0.085, 0.012, 20 );

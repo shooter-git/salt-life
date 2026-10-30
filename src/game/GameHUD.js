@@ -5,9 +5,9 @@ import { LOOKS, LOOK_NAMES } from '../together/Avatar.js';
 import { NIGHT_BOX, biteHint, orderTerms, orderPlace } from './Orders.js';
 import { WEEK_MUL, delivered, filled, mineOf, shareOf, weekEnds } from './WeekOrder.js';
 import { timeText } from './IslandClock.js';
-import { LB, IN, GAL, lb, pounds, inches, feet, gallons, lbOz, feetInches } from './Units.js';
+import { LB, IN, GAL, lb, pounds, inches, feet, farOff, gallons, lbOz, feetInches } from './Units.js';
 import { FLOOD_L } from './Hull.js';
-import { PLACES, placeName } from './Places.js';
+import { PLACES, FAR_PLACES, placeName, farName } from './Places.js';
 import { FINDS, messageOf } from './Beachcomb.js';
 import { CAMP } from './FishCamp.js';
 
@@ -924,15 +924,18 @@ export class GameHUD {
 			// ((M15) and the places you've fished: how many there, and the first)
 			const places = Object.entries( s.places || {} ).filter( ( [ k ] ) => PLACES[ k ] );
 			if ( places.length ) body += `<div class="gm-wanted"><span class="gm-wanted-h">Places you've fished</span>${ places.map( ( [ k, p ] ) => item( placeName( k, true ), `first ${ p.first && FISH[ p.first ] ? `a ${ FISH[ p.first ].name.toLowerCase() }` : 'a fish' }${ Number.isFinite( p.day ) ? `, day ${ p.day + 1 }` : '' }`, `<span class="gm-item-num">${ p.n } fish</span>` ) ).join( '' ) }</div>`;
+			// ((M15) the far places you've come to and not fished yet, and how many are still out there)
+			const seen = FAR_PLACES.filter( ( k ) => s.found[ k ] !== undefined && ! s.places[ k ] ), left = FAR_PLACES.filter( ( k ) => s.found[ k ] === undefined ).length;
+			if ( seen.length || left ) body += `<div class="gm-wanted"><span class="gm-wanted-h">Far places you've found</span>${ seen.map( ( k ) => item( placeName( k, true ), `${ PLACES[ k ].what }${ Number.isFinite( s.found[ k ] ) ? `, day ${ s.found[ k ] + 1 }` : '' }`, '<span class="gm-item-num">no fish yet</span>' ) ).join( '' ) }${ left ? `<div class="gm-item"><span class="gm-item-main"><span class="gm-item-meta">${ left } more out there, not found yet</span></span></div>` : '' }</div>`;
 			hint = 'Your best of each kind, and where you\'ve fished';
 
 		} else if ( tab === 'records' ) {
 
 			body = isle.map( ( [ k, r ] ) => item( FISH[ k ].name, ( r.id === me ? '<b>You</b>' : escape( r.who || '?' ) ) + ( { s: ' · speared', n: ' · netted', h: ' · by hand' }[ r.m ] || '' ), `<span class="gm-item-num">${ lb( r.kg ) }${ r.cm ? ` · ${ sizeOf( k, r.cm ) }` : '' }</span>` ) ).join( '' )
 				|| empty( 'None yet: the first of each kind anyone lands here sets one.' );
-			// ((M15) and each place's: the heaviest fish anyone's had there)
+			// ((M15) and each place's: the heaviest fish anyone's had there; a far place named once you've found it)
 			const at = Object.entries( together.records ).filter( ( [ k, r ] ) => k[ 0 ] === '@' && PLACES[ k.slice( 1 ) ] && FISH[ r.s ] ).sort( ( a, b ) => b[ 1 ].kg - a[ 1 ].kg );
-			if ( at.length ) body += `<div class="gm-wanted"><span class="gm-wanted-h">The heaviest from each place</span>${ at.map( ( [ k, r ] ) => item( placeName( k.slice( 1 ), true ), `${ FISH[ r.s ].name } · ${ r.id === me ? '<b>You</b>' : escape( r.who || '?' ) }`, `<span class="gm-item-num">${ lb( r.kg ) }</span>` ) ).join( '' ) }</div>`;
+			if ( at.length ) body += `<div class="gm-wanted"><span class="gm-wanted-h">The heaviest from each place</span>${ at.map( ( [ k, r ] ) => item( farName( k.slice( 1 ), s.found, true ), `${ FISH[ r.s ].name } · ${ r.id === me ? '<b>You</b>' : escape( r.who || '?' ) }`, `<span class="gm-item-num">${ lb( r.kg ) }</span>` ) ).join( '' ) }</div>`;
 			hint = 'The heaviest of each kind anyone here has landed, and from each place';
 
 		} else {
@@ -1226,7 +1229,7 @@ GameHUD.prototype.renderShop = function () {
 	const fuelRow = `<div class="gm-shop-row"><span>Diesel · $${ ( FUEL_PRICE * GAL ).toFixed( 2 ) } / gal<small>Tank: ${ gallons( s.fuelL ) } of ${ gallons( s.stats.fuelL ) } gal</small></span>${ missing > 0.5 ? `<button class="gm-btn" data-fuel ${ s.money < FUEL_PRICE ? 'disabled' : '' }>Fill · $${ s.refuelCost() }</button>` : '<span class="gm-have">Full</span>' }</div>`;
 	// (Salt Life) your boat drifted off: Marta tows her back to the dock (out of hours too: into the box)
 	const job = g.towJob ? g.towJob() : null;
-	const towRow = job ? `<div class="gm-shop-row"><span>Tow your boat in<small>She's drifted ${ feet( job.metres ) } off the dock</small></span><button class="gm-btn" data-tow>Tow · $${ Math.min( job.fee, s.money ) }</button></div>` : '';
+	const towRow = job ? `<div class="gm-shop-row"><span>Tow your boat in<small>She's drifted ${ farOff( job.metres ) } off the dock</small></span><button class="gm-btn" data-tow>Tow · $${ Math.min( job.fee, s.money ) }</button></div>` : '';
 	// (M10) her hull: Marta repairs it while she's open, with the boat at her dock (as far as your money goes)
 	const fix = g.repairJob ? g.repairJob() : null;
 	const pays = fix ? Math.min( fix.fee, s.money ) : 0;
