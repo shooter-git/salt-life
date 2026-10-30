@@ -520,19 +520,26 @@ function buildConsole( kit, L, parts ) {
 	kit.add( 'fittings', tp, STAINLESS );
 	parts.throttlePivot = V( tx, d.yTop + 0.09, tz );
 
-	// compass binnacle with a glass dome
-	const cx = HOUSE.helmX, cz = 1.3;
-	const cb = lathe( [ [ 0, 0 ], [ 0.07, 0 ], [ 0.072, 0.02 ], [ 0.062, 0.045 ], [ 0, 0.045 ] ], 20 );
-	cb.translate( cx, d.yTop + 0.01, cz );
+	// compass binnacle with a glass dome; ((M15) a workboat's: a 5-inch card, on a bracket that lifts it over the
+	// wheel into the helmsman's sight; its card turns in its bowl, BoatModel's: parts.compassAt, read at the
+	// lubber line on its bow-ward edge, as a top-reading compass is)
+	const cx = HOUSE.helmX, cz = 1.3, lift = 0.07;
+	const bracket = box( 0.07, lift, 0.05 );
+	bracket.translate( cx, d.yTop + 0.01 + lift / 2, cz );
+	kit.add( 'fittings', bracket, BLACK_PLASTIC );
+	const cb = lathe( [ [ 0, 0 ], [ 0.088, 0 ], [ 0.091, 0.022 ], [ 0.079, 0.05 ], [ 0, 0.05 ] ], 24 );
+	cb.translate( cx, d.yTop + 0.01 + lift, cz );
 	kit.add( 'fittings', cb, BLACK_PLASTIC );
-	const card = cylinder( 0.05, 0.05, 0.01, 20 );
-	card.translate( cx, d.yTop + 0.06, cz );
-	kit.add( 'fittings', card, { color: 0x2c2c2a, rough: 0.5 } );
-	const lubber = box( 0.004, 0.02, 0.008 );
-	lubber.translate( cx, d.yTop + 0.07, cz + 0.045 );
+	// (the bowl under the card, dark)
+	const bowl = cylinder( 0.07, 0.07, 0.008, 28 );
+	bowl.translate( cx, d.yTop + lift + 0.056, cz );
+	kit.add( 'fittings', bowl, { color: 0x101112, rough: 0.6 } );
+	parts.compassAt = V( cx, d.yTop + lift + 0.062, cz );
+	const lubber = box( 0.004, 0.02, 0.006 );
+	lubber.translate( cx, d.yTop + lift + 0.071, cz + 0.067 );
 	kit.add( 'fittings', lubber, { color: 0xd0402a, rough: 0.5 } );
-	const dome = sphere( 0.058, 20, 8, 0, Math.PI * 2, 0, Math.PI / 2 );
-	dome.translate( cx, d.yTop + 0.053, cz );
+	const dome = sphere( 0.075, 24, 8, 0, Math.PI * 2, 0, Math.PI / 2 );
+	dome.translate( cx, d.yTop + lift + 0.058, cz );
 	kit.add( 'glass', dome );
 
 	// electronics: (M11) the depth sounder / fish finder (centre) and the chart plotter (port), drawn live
@@ -1081,6 +1088,18 @@ function buildRoofGear( kit, L, parts ) {
 
 // Steering wheel: varnished mahogany destroyer wheel with a brass hub.
 // Local frame: +Z is the shaft axis (into the dash), spokes in the XY plane.
+// (M15) the compass's card: a disc lying flat, its face from the instruments' atlas (Instruments' RECTS.compass,
+// north up the atlas: the card's +Z, toward her bow while it points north with her, east to starboard)
+export function compassCardGeometry( r = 0.0635 ) {
+
+	const g = new CircleGeometry( r, 48 );
+	g.applyMatrix4( new Matrix4().makeRotationX( - Math.PI / 2 ) );
+	const [ u0, v0, u1, v1 ] = atlasUV( 'compass' ), p = g.attributes.position, uv = g.attributes.uv;
+	for ( let i = 0; i < p.count; i ++ ) uv.setXY( i, u0 + ( u1 - u0 ) * ( 0.5 - p.getX( i ) / ( 2 * r ) ), v0 + ( v1 - v0 ) * ( 0.5 + p.getZ( i ) / ( 2 * r ) ) );
+	return g;
+
+}
+
 export function wheelGeometry() {
 
 	const list = [];

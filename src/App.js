@@ -8,6 +8,7 @@ import { Input } from './core/Input.js';
 import { SaveStore } from './core/SaveStore.js';
 import { TerrainData } from './world/TerrainData.js';
 import { decodeIsland } from './world/terrain/IslandDecode.js';
+import { NAMES } from './game/Chart.js';
 import { Offshore, decodeSeabed } from './world/terrain/Offshore.js';
 import { setDetailData } from './world/terrain/DetailTextures.js';
 import { WORLD } from './world/WorldLayout.js';
@@ -1819,7 +1820,9 @@ export class App {
 		r.fish = g._sonar ? g._sonar.fish : 0;
 		r.x = x;
 		r.z = z;
-		r.chart = map && map._bake && map._bake.done ? map.canvas : null;
+		this.chartReading( r, map );
+		r.fuelL = g.state.fuelL;
+		r.speedMul = g.state.stats.speedMul || 1;
 		r.alert = this.weatherAlert();
 		// ((M14) her radar, swept with her array; at the helm, ← → its range, as the panels aren't up)
 		if ( p.mode === 'boat' && g.quietKeys && g.quietKeys() && ( this.input.hit( 'ArrowLeft' ) || this.input.hit( 'ArrowRight' ) ) ) this.radar.step( this.input.hit( 'ArrowRight' ) ? 1 : - 1 );
@@ -1855,12 +1858,24 @@ export class App {
 		r.fish = d ? d.fish : 0;
 		r.x = x;
 		r.z = z;
-		r.chart = map && map._bake && map._bake.done ? map.canvas : null;
+		this.chartReading( r, map );
+		r.fuelL = null; // (theirs: only how full, from their pose)
 		r.alert = this.weatherAlert();
 		// ((M14) and their radar, as their array turns)
 		const arr = ride.group && ride.group.userData.radar;
 		r.radar = this.sweepRadar( dt, r, arr ? ( ( - arr.rotation.y ) % ( Math.PI * 2 ) + Math.PI * 2 ) % ( Math.PI * 2 ) : 0 );
 		return r;
+
+	}
+
+	// (M15) the plotter's chart: the minimap's sheets (once the island's is baked), your chart (Chart.js) and its
+	// names, and how far out the minimap shows (the plotter's range follows it)
+	chartReading( r, map ) {
+
+		r.chart = map && map._bake && map._bake.done ? map : null;
+		r.log = this.game.state.chart;
+		r.names = NAMES;
+		r.view = map ? map.radiusM : 0;
 
 	}
 

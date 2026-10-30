@@ -10,6 +10,7 @@ import { FLOOD_L } from './Hull.js';
 import { PLACES, placeName } from './Places.js';
 import { FINDS, messageOf } from './Beachcomb.js';
 import { CAMP } from './FishCamp.js';
+import { NAMES, MAX_MARKS, legTo, magnetic } from './Chart.js';
 
 // (other players' names, into HTML)
 const escape = ( t ) => String( t ).replace( /[&<>"']/g, ( c ) => ( { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } )[ c ] );
@@ -881,7 +882,7 @@ export class GameHUD {
 		const logged = Object.entries( s.log ).filter( ( [ k ] ) => FISH[ k ] );
 		// (Salt Life) the island's records: the group's heaviest of each kind (together/)
 		const isle = together ? Object.entries( together.records ).filter( ( [ k ] ) => FISH[ k ] ).sort( ( a, b ) => b[ 1 ].kg - a[ 1 ].kg ) : [];
-		const tabs = [ [ 'fish', 'Fish', s.inventory.length ], [ 'bait', 'Bait', Object.values( s.bait ).reduce( ( a, n ) => a + n, 0 ) ], [ 'finds', 'Finds', s.finds.length ], [ 'log', 'Log', logged.length ] ];
+		const tabs = [ [ 'fish', 'Fish', s.inventory.length ], [ 'bait', 'Bait', Object.values( s.bait ).reduce( ( a, n ) => a + n, 0 ) ], [ 'finds', 'Finds', s.finds.length ], [ 'log', 'Log', logged.length ], [ 'chart', 'Chart', s.chart.marks.length ] ];
 		if ( together ) tabs.push( [ 'records', 'Records', isle.length ], [ 'islander', 'Islander', 0 ] );
 		this._invTabs = tabs.map( ( t ) => t[ 0 ] );
 		const tab = this._invTabs.includes( this.invTab ) ? this.invTab : 'fish';
@@ -925,6 +926,24 @@ export class GameHUD {
 			const places = Object.entries( s.places || {} ).filter( ( [ k ] ) => PLACES[ k ] );
 			if ( places.length ) body += `<div class="gm-wanted"><span class="gm-wanted-h">Places you've fished</span>${ places.map( ( [ k, p ] ) => item( placeName( k, true ), `first ${ p.first && FISH[ p.first ] ? `a ${ FISH[ p.first ].name.toLowerCase() }` : 'a fish' }${ Number.isFinite( p.day ) ? `, day ${ p.day + 1 }` : '' }`, `<span class="gm-item-num">${ p.n } fish</span>` ) ).join( '' ) }</div>`;
 			hint = 'Your best of each kind, and where you\'ve fished';
+
+		} else if ( tab === 'chart' ) {
+
+			// ((M15) your chart (Chart.js): your marks, how far and which way each is from you (magnetic, as the
+			// compass), the names you've come to)
+			const c = s.chart, a = this.game.app, aboard = a.player.mode === 'boat' || a.player.mode === 'deck';
+			const at = aboard && a.boatCtl ? a.boatCtl.position : a.camera.position;
+			const named = NAMES.filter( ( n ) => c.named( n.id ) && ! n.peak ).map( ( n ) => n.name );
+			body = `<div class="gm-shop-row"><span>Mark where you are<small>${ c.marks.length } of ${ MAX_MARKS } marks · on the map and the boat's plotter</small></span><button class="gm-btn" data-mark>Mark here</button></div>`
+				+ c.marks.map( ( m ) => {
+
+					const leg = legTo( at.x, at.z, m.x, m.z ), far = leg.m < 1852 * 0.2 ? feet( leg.m ) : `${ ( leg.m / 1852 ).toFixed( 1 ) } NM`;
+					return item( `Mark ${ m.id }`, `${ far } · ${ String( magnetic( leg.bearing ) ).padStart( 3, '0' ) }°${ Number.isFinite( m.day ) ? ` · day ${ m.day + 1 }` : '' }`, '<span class="gm-btns">' + `<button class="gm-mini" data-unmark="${ m.id }">Remove</button></span>` );
+
+				} ).join( '' );
+			if ( ! c.marks.length ) body += empty( 'Your chart\'s drawn in where you go: the coast as you see it, the far grounds\' depths as you run over them, each place\'s name as you come to it. Mark a good spot to find it again.' );
+			if ( named.length ) body += `<div class="gm-wanted"><span class="gm-wanted-h">Named on your chart</span><p class="gm-sub">${ named.join( ' · ' ) }</p></div>`;
+			hint = `${ d === 'touch' ? 'Mark here' : d === 'gamepad' ? 'Mark here' : '<kbd>P</kbd>' } marks where you are${ c.bought ? '' : ' · Marta sells a chart of the island' }`;
 
 		} else if ( tab === 'records' ) {
 
@@ -977,6 +996,15 @@ export class GameHUD {
 
 		};
 		for ( const b of this.inv.querySelectorAll( '[data-dump]' ) ) b.onclick = () => s.dumpBait( b.dataset.dump );
+		for ( const b of this.inv.querySelectorAll( '[data-unmark]' ) ) b.onclick = () => {
+
+			s.chart.unmark( Number( b.dataset.unmark ) );
+			s.save();
+			this.renderInventory();
+
+		};
+		const mk = this.inv.querySelector( '[data-mark]' );
+		if ( mk ) mk.onclick = () => this.game.addMark();
 		for ( const b of this.inv.querySelectorAll( '[data-look]' ) ) b.onclick = () => {
 
 			together.setLook( b.dataset.look );

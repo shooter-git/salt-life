@@ -28,6 +28,7 @@ import { Signpost, TRAIL_POSTS } from './Signpost.js';
 import { FishCamp, CAMP } from './FishCamp.js';
 import { delivered, filled, owed, weekEnds } from './WeekOrder.js';
 import { Minimap } from './Minimap.js';
+import { sightOf, MAX_MARKS } from './Chart.js';
 import { Guide } from './Guide.js';
 import { Speargun, groundHit } from './Speargun.js';
 import { CastNet, sweetWindow } from './CastNet.js';
@@ -399,7 +400,7 @@ export class Game {
 			// (Salt Life) the island's clock, at the left of the purse (T: its menu)
 			this.time = new TimeHUD( this, this.hud.purse, ui.root );
 			// the minimap (lower right) and the first-play guide (intro, one-time tips; replay with H)
-			this.minimap = new Minimap( ui.hud || ui.root, this );
+			this.minimap = new Minimap( ui.hud || ui.root, this, { tier: app.tier } );
 			this.guide = new Guide( ui, this, this.minimap );
 			ui.onReplayGuide = () => this.guide.replay();
 
@@ -623,6 +624,7 @@ export class Game {
 			breath: p.mode === 'swim' && ( p.under || p.breath < p.breathMax - 0.5 || p.blackout ) ? { s: p.breath, max: p.breathMax, blackout: p.blackout } : null,
 		} );
 		if ( this.time ) this.time.update( dt );
+		this.updateChart( dt, inp );
 		if ( this.minimap ) this.minimap.update( dt );
 		if ( this.guide ) this.guide.update( dt );
 
@@ -1206,6 +1208,52 @@ export class Game {
 
 	}
 
+	// (M15) the chart you fill in (Chart.js; the minimap and the plotter draw it): what you see about you charted,
+	// further from high ground and from the sea; the names you come to (near, or over their water: at sea, the
+	// place under you), each told; your own mark where you are (P); kept in the save now and then as it fills in
+	updateChart( dt, inp ) {
+
+		const chart = this.state.chart, p = this.app.player;
+		if ( inp && inp.hit( 'KeyP' ) && ! ( this.hud && this.hud.catchOpen ) ) this.addMark();
+		if ( ( this._chartT = ( this._chartT || 0 ) - dt ) > 0 ) return;
+		this._chartT = 0.4;
+		const c = this.app.camera.position, b = this.app.boatCtl, aboard = p.mode === 'boat' || p.mode === 'deck';
+		const x = aboard && b ? b.position.x : c.x, z = aboard && b ? b.position.z : c.z;
+		const seen = chart.look( x, z, sightOf( p.mode, c.y - G.seaLevel.value ) );
+		const sea = aboard || p.mode === 'swim';
+		for ( const n of chart.learn( x, z, sea ? this.placeAt( x, z ) : null ) ) this.toast( `On your chart: ${ n.peak ? 'the summit' : n.name }`, 2600 );
+		this._chartDirty = this._chartDirty || seen;
+		if ( this._chartDirty && ( this._chartSaved = ( this._chartSaved || 0 ) + 0.4 ) > 15 ) {
+
+			this._chartDirty = false;
+			this._chartSaved = 0;
+			this.state.save();
+
+		}
+
+	}
+
+	// (M15) a fish had at `place` ( at: { x, z } ): on the chart (the plotter's fish; the place marked at your first there)
+	charted( species, place, at ) {
+
+		if ( ! at || ! species ) return;
+		this.state.chart.caught( species, place, at.x, at.z, this.tradeDay );
+		this.state.save();
+
+	}
+
+	// (M15) your own mark on the chart, where you are (the boat's spot when you're aboard)
+	addMark() {
+
+		const p = this.app.player, b = this.app.boatCtl, c = this.app.camera.position, aboard = p.mode === 'boat' || p.mode === 'deck';
+		const m = this.state.chart.mark( aboard && b ? b.position.x : c.x, aboard && b ? b.position.z : c.z, this.tradeDay );
+		this.toast( m ? `Mark ${ m.id } on your chart` : `Your chart has ${ MAX_MARKS } marks: take one off first (I, Chart)`, 2200 );
+		if ( m ) this.state.save();
+		if ( this.hud && this.hud.invOpen ) this.hud.renderInventory();
+		return m;
+
+	}
+
 	// (M15) how much ( x, z ) is on the windward reef off the north-west point (0..1: its platform, TerrainData's)
 	windReefAt( x, z ) {
 
@@ -1352,6 +1400,7 @@ export class Game {
 			b.species = species;
 			b.kg = rollWeight( species, Math.random, this.hookBait, h.weather, h.big );
 			b.place = placeOf( h, this.rod.bobber.x, this.rod.bobber.z ); // ((M15) where it bit: Places.js)
+			b.at = { x: this.rod.bobber.x, z: this.rod.bobber.z }; // ((M15) and there, for the chart)
 			b.phase = 'nibble';
 			b.nibbles = 1 + Math.floor( Math.random() * 3 );
 			b.t = 0.7 + Math.random() * 0.8;
@@ -1409,6 +1458,7 @@ export class Game {
 		const out = Math.min( Math.max( 3, this.rod.lineOut ), this.rod.castM * 1.5 + 10 );
 		this.fight = new CatchMinigame( { species: b.species, kg: b.kg, lineKg: g.lineKg, reelSpeed: g.reelSpeed, distance: Number.isFinite( out ) ? out : 3, wind: blowShare( G.windSpeed.value ) } );
 		this.fight.place = b.place;
+		this.fight.at = b.at;
 		this.bite = null;
 		this.rod.hook();
 		this.toast( 'Fish on!', 1200 );
@@ -1448,6 +1498,7 @@ export class Game {
 
 			const entry = this.state.addFish( f.species, f.kg, this.hour, { day: this.tradeDay, place: f.place } );
 			const info = this.state.lastCatch;
+			this.charted( f.species, f.place, f.at );
 			info.wanted = entry ? this.wantedFor( entry ) : null; // (Salt Life) on today's wanted list
 			// ((M15) let go where Marta's tag-and-release ask wants one: paid there and then)
 			const tag = info.released && tagFor( this.orders, f.species, f.place );
@@ -1665,7 +1716,10 @@ export class Game {
 			return { i, species: id, label: id ? FISH[ id ].name : sp.label, cm, kg: id ? fishWeightKg( id, cm ) : 0 };
 
 		} );
-		const r = this.state.addHaul( caught, this.hour, this.placeAt( net.footprint.x, net.footprint.z ), this.tradeDay );
+		const where = this.placeAt( net.footprint.x, net.footprint.z );
+		const r = this.state.addHaul( caught, this.hour, where, this.tradeDay );
+		const got = caught.find( ( f ) => f.species );
+		if ( got ) this.charted( got.species, where, net.footprint );
 		const to = net.lastThrow;
 		_b.set( to ? to.x - b.x : 0, 0, to ? to.z - b.z : 1 );
 		if ( _b.lengthSq() < 1e-6 ) _b.set( 0, 0, 1 );
@@ -2007,6 +2061,7 @@ export class Game {
 		this.calmThief( sp );
 		const entry = this.state.addFish( sp.id, sp.kg, this.hour, { method: 'spear', cm: sp.cm, day: this.tradeDay, place: this.placeAt( this.app.camera.position.x, this.app.camera.position.z ) } );
 		const info = this.state.lastCatch;
+		this.charted( sp.id, info.place, this.app.camera.position );
 		info.wanted = entry ? this.wantedFor( entry ) : null;
 		if ( this.app.together ) {
 
@@ -2215,6 +2270,7 @@ export class Game {
 		const release = n.cm < FISH.lobster.minCm ? 'short' : n.berried ? 'berried' : null;
 		const entry = this.state.addFish( 'lobster', n.kg, this.hour, { method: 'hand', cm: n.cm, day: this.tradeDay, release, place: this.placeAt( this.app.camera.position.x, this.app.camera.position.z ) } );
 		const info = this.state.lastCatch;
+		this.charted( 'lobster', info.place, this.app.camera.position );
 		info.wanted = entry ? this.wantedFor( entry ) : null;
 		if ( this.app.together ) {
 

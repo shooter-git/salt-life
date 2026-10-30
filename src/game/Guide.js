@@ -1,6 +1,7 @@
 import { STAND } from './FishStand.js';
 import { CHANDLERY } from './Chandlery.js';
 import { CAMP } from './FishCamp.js';
+import { NAMES } from './Chart.js';
 import { feet } from './Units.js';
 
 // First-play guide:
@@ -113,6 +114,7 @@ const AROUND = {
 	keyboard: [ [ k( 'W', 'A', 'S', 'D' ), 'Move, mouse to look, <kbd>Shift</kbd> to run' ], [ k( 'E' ), 'Board the boat, take the helm, talk to Joe and Marta' ],
 		[ k( 'L' ), 'Flashlight (at night). At the helm, the searchlight' ], [ k( 'H' ), 'This guide again. At the helm, hold for the horn' ],
 		[ k( '←', '→' ), 'At the helm, the radar\'s range' ],
+		[ k( 'P' ), 'A mark of your own on your chart, where you are' ],
 		[ k( 'T' ), 'The clock: hold it or rest until later (with others, once everyone agrees)' ] ],
 	touch: [ [ k( 'Left side' ), 'Drag to walk, from wherever your thumb lands' ], [ k( 'Right side' ), 'Drag to look around' ],
 		[ k( 'Gold button' ), 'Board the boat, take the helm, talk to Joe and Marta' ], [ k( 'Torch' ), 'Flashlight, after dusk. At the helm: the searchlight' ],
@@ -154,6 +156,7 @@ const TIPS = {
 		boat: 'Your boat. <kbd>E</kbd> to board, <kbd>E</kbd> again at the wheel to drive (<kbd>W</kbd><kbd>S</kbd> throttle, <kbd>A</kbd><kbd>D</kbd> steer). Diesel is sold by Marta.',
 		joe: '<b>Joe</b> buys your fish. <kbd>E</kbd> to see what he will pay.',
 		marta: '<b>Marta</b> sells upgrades and diesel. <kbd>E</kbd> to see her stock.',
+		chart: 'Your <b>chart</b> fills in where you go: the coast as you see it, the depths as you run over them, each place\'s name as you come to it, on the map and the boat\'s plotter. <kbd>P</kbd> marks a good spot (<kbd>I</kbd>, Chart, lists them). Marta sells a chart of the island, if you\'d rather not.',
 		gunOut: 'Dive (look down and swim) and <b>fin slowly</b> up to a fish: rush it and it bolts. Put it in the sights and <b>click</b>. They tell you what it is, and whether you may take it.',
 		gunLoad: '<b>Hold the left mouse button</b> to draw the band back to its notch on the shaft.',
 		spearFight: 'A big one. <b>Hold the left mouse button</b> to pull it in, let go when it runs, until it tires.',
@@ -206,6 +209,7 @@ const TIPS = {
 	// (M15) once you've the hang of the bay, the rest of the island; and out on the far water, what to look for
 	goRound: 'You\'ve the hang of the bay. There\'s more of the island: the <b>north beach\'s surf</b> for pompano (best on a surf day: Joe\'s slate says), the <b>mangrove creek</b> on the west for snook at dawn and dusk, and the <b>windward reef</b> off the north-west point, its groupers bigger than the bay\'s. Take the boat round, or walk: the trail from the square goes round the east to the north beach, and <b>Pearl\'s fish camp</b> there buys fish and sells diesel.',
 	camp: '<b>Pearl\'s fish camp</b>: she buys your catch at ' + Math.round( CAMP.rate * 100 ) + '% of Joe\'s price (she takes it round to market herself) and sells <b>diesel</b> from her drums, so a trip round the island needn\'t end in the bay. Tie up at her jetty.',
+	chart: 'Your <b>chart</b> fills in where you go: the coast as you see it, the depths as you run over them, each place\'s name as you come to it, on the map and the boat\'s plotter. Mark a good spot from the cooler\'s <b>Chart</b> tab. Marta sells a chart of the island, if you\'d rather not.',
 	farWater: 'Out here the fish are <b>under things</b>: look for <b>weedlines</b> (mahi), <b>floating debris</b>, and <b>birds working bait</b> (tuna). On the <b>drop-off</b> the tuna come at first light.',
 	// (M13) a hurricane
 	hurricane: 'A <b>hurricane</b> is coming. Ahead of it Marta can <b>haul your boat out</b>, before she boards up; left in the water the storm batters her. In it, the <b>shelter</b> (on your map) keeps you safe from the wind, the rain and the sea. You can always step out to watch.',
@@ -493,6 +497,8 @@ export class Guide {
 		if ( logged >= 12 ) this.tip( 'goRound' );
 		const cam = app.camera.position;
 		if ( Math.hypot( cam.x, cam.z + 320 ) > 3000 ) this.tip( 'farWater' );
+		// ((M15) the first name you come to past the bay's)
+		if ( s.chart.names.size > NAMES.filter( ( n ) => n.known ).length ) this.tip( 'chart' );
 		// ((M15) the first time you come to the fish camp, ashore or alongside its jetty)
 		if ( Math.hypot( cam.x - CAMP.keeper.x, cam.z - CAMP.keeper.z ) < 30 ) this.tip( 'camp' );
 		// (M10) the boat's hull: the first water in the bilge, aboard; the first real wear

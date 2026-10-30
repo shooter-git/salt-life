@@ -1,5 +1,7 @@
 import * as THREE from '../../engine/index.js';
-import { FT, KT } from '../../game/Units.js';
+import { FT, KT, gallons } from '../../game/Units.js';
+import { SHEETS, HOME, legTo, magnetic, fuelFor } from '../../game/Chart.js';
+import { S52, rgb, SHADES } from '../../game/ChartBake.js';
 
 // (M11) The boat's instruments as they read: five gauges about the helm and two screens on the dash,
 // drawn into one canvas that the dash's display meshes take their uvs from (RECTS, atlasUV: built in
@@ -11,7 +13,12 @@ import { FT, KT } from '../../game/Units.js';
 //     depth in feet; with Marta's fish finder, the fish under her too (Game's sonar: how rich the water).
 //   - The port screen: a chart plotter, north up: the island's chart (the minimap's, baked once), her
 //     track, her speed and heading, where she is; (M13) and a weather alert across it while a hurricane's
-//     watched for or warned of (reading.alert), as a plotter with a weather service shows one.
+//     watched for or warned of (reading.alert), as a plotter with a weather service shows one. (M15) Your chart
+//     (Chart.js: the minimap's two sheets as you've charted them, S-52's colours, ChartBake.js) with its
+//     soundings and names, your marks and where the fish were; zoomed by steps as a plotter is, out as you go
+//     further from the island; her heading magnetic, as her compass; how far home and the fuel for it.
+//   - (M15) The compass on the dash top: its card (RECTS.compass, drawn here; turned by BoatModel, as a
+//     compass's card swings to the north in its bowl).
 //   - (M14) The third, to port of the plotter: the radar (reading.radar: Radar.js, heading up, swept with
 //     her array turning on the roof).
 // Redrawn a few times a second while you're aboard; ashore her screens are off and her needles rest.
@@ -31,6 +38,7 @@ export const RECTS = {
 	fuel: [ 320, 352, 144, 144 ],
 	temp: [ 480, 352, 144, 144 ],
 	volts: [ 640, 352, 144, 144 ],
+	compass: [ 800, 352, 160, 160 ], // ((M15) the compass's card)
 };
 // a rect's uvs ( u0, v0, u1, v1: v up, as the canvas's texture is flipped )
 export function atlasUV( name ) {
@@ -61,8 +69,12 @@ export const SOUNDER_REACH = 1200 * FT;
 // the depth the sounder shows (m), or null: no bottom found
 const echo = ( depth ) => depth > SOUNDER_REACH ? null : depth;
 const CHART_M = 640, TRACK_EVERY = 2, TRACK_MAX = 90;
-// the minimap's bake (Minimap.js): metres covered, and the world at its (0, 0)
-const MAP = { ext: 1280, x0: - 640, z0: - 180 - 640 };
+// ((M15) the plotter's ranges, its screen across (NM), stepped as a plotter's zoom is; it picks the least that
+// shows half what the minimap does (reading.view, its radius, m): closer in, as a skipper keeps it)
+export const PLOTTER_NM = [ CHART_M / 1852, 0.75, 1.5, 3, 6, 12, 24 ];
+export const plotterAcross = ( view ) => ( PLOTTER_NM.find( ( nm ) => nm * 1852 >= view * 1.1 ) ?? PLOTTER_NM[ PLOTTER_NM.length - 1 ] ) * 1852;
+// the soundings written black where shallower than this (m: S-52's safety depth, here the 60 ft shade), grey deeper
+const SAFETY = SHADES[ 1 ];
 // where the island is, for the plotter's position (a made-up spot off the Florida Keys), and degrees
 // of latitude in a metre
 const LAT0 = 24.5521, LON0 = - 81.7712, DEG_M = 1 / 111320;
@@ -223,6 +235,7 @@ export class BoatInstruments {
 		g.fillStyle = '#05080a';
 		g.fillRect( 0, 0, ATLAS.w, ATLAS.h );
 		for ( const name in DIALS ) this._dial( name, reading );
+		this._compassCard( !! reading );
 		if ( reading ) {
 
 			this._sounder( reading );
@@ -373,24 +386,192 @@ export class BoatInstruments {
 
 	}
 
-	// the chart plotter: north up, about her, her track, her heading, speed and position
+	// (M15) the compass's card, as a small boat's dash compass has it (after a Ritchie's): black, white figures read
+	// from its middle, a mark every 5°, the figures every 30°, the cardinal points; north up the atlas (the card's
+	// bow-ward edge, BoatModel turning it). Lit at night, as a compass's light is, while you're aboard
+	_compassCard( lit ) {
+
+		const g = this.ctx, [ x, y, w ] = RECTS.compass, cx = x + w / 2, cy = y + w / 2, r = w / 2;
+		g.save();
+		g.fillStyle = '#05080a';
+		g.fillRect( x, y, w, w );
+		g.beginPath();
+		g.arc( cx, cy, r, 0, Math.PI * 2 );
+		g.fillStyle = lit ? '#0d0f10' : '#08090a';
+		g.fill();
+		const ink = lit ? '#f4f2ea' : '#9a9890';
+		g.strokeStyle = g.fillStyle = ink;
+		g.lineCap = 'butt';
+		for ( let d = 0; d < 360; d += 5 ) {
+
+			const a = ( d - 90 ) * Math.PI / 180, long = d % 10 === 0;
+			g.lineWidth = d % 30 === 0 ? 2.4 : 1.4;
+			g.beginPath();
+			g.moveTo( cx + Math.cos( a ) * r * ( long ? 0.8 : 0.86 ), cy + Math.sin( a ) * r * ( long ? 0.8 : 0.86 ) );
+			g.lineTo( cx + Math.cos( a ) * r * 0.97, cy + Math.sin( a ) * r * 0.97 );
+			g.stroke();
+
+		}
+
+		g.textAlign = 'center';
+		g.textBaseline = 'middle';
+		for ( let d = 0; d < 360; d += 30 ) {
+
+			const a = d * Math.PI / 180, card = { 0: 'N', 90: 'E', 180: 'S', 270: 'W' }[ d ];
+			g.save();
+			g.translate( cx, cy );
+			g.rotate( a );
+			g.font = card ? `800 ${ Math.round( r * 0.26 ) }px system-ui, sans-serif` : `700 ${ Math.round( r * 0.15 ) }px system-ui, sans-serif`;
+			g.fillText( card || String( d ), 0, - r * ( card ? 0.5 : 0.66 ) );
+			g.restore();
+
+		}
+
+		// (the card's pivot)
+		g.beginPath();
+		g.arc( cx, cy, r * 0.07, 0, Math.PI * 2 );
+		g.fillStyle = '#3a3f44';
+		g.fill();
+		g.restore();
+
+	}
+
+	// the chart plotter: north up, about her, her track, her heading, speed and position; (M15) your chart, its
+	// soundings and names, your marks, where the fish were, home and the fuel for it
 	_chart( reading ) {
 
 		const g = this.ctx, [ x, y, w, h ] = RECTS.chart;
-		const s = w / CHART_M; // px a metre
+		const across = plotterAcross( reading.view || 0 ), s = w / across; // px a metre
+		const rx = reading.x, rz = reading.z;
 		g.save();
 		g.beginPath();
 		g.rect( x, y, w, h );
 		g.clip();
-		g.fillStyle = '#0b2c48';
+		g.fillStyle = rgb( S52.NODTA );
 		g.fillRect( x, y, w, h );
 		const cx = x + w / 2, cy = y + h / 2 + 12;
-		if ( reading.chart ) {
+		const sx = ( wx ) => cx + ( wx - rx ) * s, sy = ( wz ) => cy + ( wz - rz ) * s;
+		const map = reading.chart, log = reading.log;
+		if ( map && map.sheets ) {
 
-			// (the minimap's bake: N px over MAP.ext metres, north up)
-			const ppm = reading.chart.width / MAP.ext;
 			g.imageSmoothingEnabled = true;
-			g.drawImage( reading.chart, cx - ( reading.x - MAP.x0 ) * s, cy - ( reading.z - MAP.z0 ) * s, reading.chart.width / ppm * s, reading.chart.height / ppm * s );
+			// (the sheets, coarsest first, from the finest that covers the screen)
+			const covers = ( sp ) => sx( sp.x0 ) <= x && sy( sp.z0 ) <= y && sx( sp.x0 + sp.ext ) >= x + w && sy( sp.z0 + sp.ext ) >= y + h;
+			const S = map.sheets, list = [ S.far, S.mid, S.near ];
+			const from = covers( S.near.spec ) ? 2 : covers( S.mid.spec ) ? 1 : 0;
+			for ( const sh of list.slice( from ) ) if ( sh.drawn >= 0 ) {
+
+				const sp = sh.spec;
+				g.drawImage( sh.view, sx( sp.x0 ), sy( sp.z0 ), sp.ext * s, sp.ext * s );
+
+			}
+
+		}
+
+		if ( map && map.soundings && log ) {
+
+			// soundings, in feet, those charted that fit: the finest sheet's first (the island's close in, then its
+			// waters', then the far grounds'), the others' only where they leave room
+			const lists = [ across < 1500 && map.soundings.near, across < 12000 && map.soundings.mid, map.soundings.far ];
+			const drawn = [];
+			g.font = '500 11px system-ui, sans-serif';
+			g.textAlign = 'center';
+			g.textBaseline = 'middle';
+			for ( const list of lists ) if ( list ) for ( const p of list ) {
+
+				const px = sx( p.x ), py = sy( p.z );
+				if ( px < x + 8 || px > x + w - 8 || py < y + 34 || py > y + h - 28 ) continue;
+				// (none closer to another than a sounding's width, as a chart spaces them)
+				if ( drawn.some( ( [ qx, qy ] ) => Math.abs( qx - px ) < 34 && Math.abs( qy - py ) < 18 ) || ! log.seen( p.x, p.z ) ) continue;
+				drawn.push( [ px, py ] );
+				g.fillStyle = rgb( p.d < SAFETY ? S52.SNDG2 : S52.SNDG1 );
+				g.fillText( String( Math.round( p.d / FT ) ), px, py );
+
+			}
+
+		}
+
+		// the names you've come to, upright: the water's in italics, a light's characteristic under it in magenta
+		if ( log ) {
+
+			// (the bigger names first; one that would sit on another left off)
+			const boxes = [];
+			for ( const n of [ ...( reading.names || [] ) ].sort( ( a, b ) => ( a.small ? 1 : 0 ) - ( b.small ? 1 : 0 ) ) ) {
+
+				const far = !! n.place || n.id === 'sandbar', fits = far || ( n.small ? across < 1500 : across < 7000 );
+				if ( ! fits || ! log.named( n.id ) ) continue;
+				const px = sx( n.x ), py = sy( n.z );
+				if ( px < x - 60 || px > x + w + 60 || py < y + 30 || py > y + h ) continue;
+				g.textAlign = 'center';
+				g.textBaseline = 'middle';
+				g.font = `${ n.water ? 'italic 500' : '600' } ${ n.small ? 12 : 14 }px system-ui, sans-serif`;
+				const half = g.measureText( n.peak ? `▲ ${ n.name }` : n.name ).width / 2 + 3, tall = n.light ? 22 : 10;
+				if ( boxes.some( ( b ) => Math.abs( b.x - px ) < b.half + half && py - 9 < b.y + b.tall && py + tall > b.y - 9 ) ) continue;
+				boxes.push( { x: px, y: py, half, tall } );
+				g.lineWidth = 3;
+				g.strokeStyle = 'rgba(255,255,255,0.75)';
+				const text = n.peak ? `▲ ${ n.name }` : n.name;
+				g.strokeText( text, px, py );
+				g.fillStyle = rgb( S52.CHBLK );
+				g.fillText( text, px, py );
+				if ( n.light ) {
+
+					g.font = '600 11px system-ui, sans-serif';
+					g.fillStyle = rgb( S52.CHMGD );
+					g.fillText( n.light, px, py + 13 );
+
+				}
+
+			}
+
+			// where the fish were: a plotter's fish mark at each catch
+			for ( const f of log.spots ) {
+
+				const px = sx( f.x ), py = sy( f.z );
+				if ( px < x || px > x + w || py < y + 30 || py > y + h ) continue;
+				g.save();
+				g.translate( px, py );
+				g.fillStyle = '#1d5b8f';
+				g.strokeStyle = '#ffffff';
+				g.lineWidth = 1.5;
+				g.beginPath();
+				g.ellipse( - 1, 0, 6, 3.4, 0, 0, Math.PI * 2 );
+				g.moveTo( 4, 0 );
+				g.lineTo( 9, - 4 );
+				g.lineTo( 9, 4 );
+				g.closePath();
+				g.stroke();
+				g.fill();
+				g.restore();
+
+			}
+
+			// your marks: a waypoint's red diamond and its number
+			g.font = '700 12px system-ui, sans-serif';
+			g.textAlign = 'left';
+			for ( const m of log.marks ) {
+
+				const px = sx( m.x ), py = sy( m.z );
+				if ( px < x || px > x + w || py < y + 30 || py > y + h ) continue;
+				g.beginPath();
+				g.moveTo( px, py - 7 );
+				g.lineTo( px + 7, py );
+				g.lineTo( px, py + 7 );
+				g.lineTo( px - 7, py );
+				g.closePath();
+				g.fillStyle = '#d6303a';
+				g.strokeStyle = '#ffffff';
+				g.lineWidth = 1.5;
+				g.fill();
+				g.stroke();
+				g.lineWidth = 3;
+				g.strokeStyle = 'rgba(255,255,255,0.8)';
+				const label = String( m.id ).padStart( 3, '0' );
+				g.strokeText( label, px + 10, py );
+				g.fillStyle = rgb( S52.CHBLK );
+				g.fillText( label, px + 10, py );
+
+			}
 
 		}
 
@@ -398,13 +579,13 @@ export class BoatInstruments {
 		const T = this.track;
 		if ( T.length > 1 ) {
 
-			g.strokeStyle = 'rgba(255,255,255,0.7)';
+			g.strokeStyle = 'rgba(30,30,30,0.75)';
 			g.setLineDash( [ 5, 4 ] );
 			g.lineWidth = 2;
 			g.beginPath();
 			T.forEach( ( [ tx, tz ], i ) => {
 
-				const px = cx + ( tx - reading.x ) * s, py = cy + ( tz - reading.z ) * s;
+				const px = sx( tx ), py = sy( tz );
 				if ( i ) g.lineTo( px, py ); else g.moveTo( px, py );
 
 			} );
@@ -418,7 +599,7 @@ export class BoatInstruments {
 		g.translate( cx, cy );
 		g.rotate( reading.heading );
 		g.fillStyle = '#ff6a2a';
-		g.strokeStyle = '#ffffff';
+		g.strokeStyle = '#1a1a1a';
 		g.lineWidth = 2;
 		g.beginPath();
 		g.moveTo( 0, - 12 );
@@ -429,26 +610,45 @@ export class BoatInstruments {
 		g.fill();
 		g.stroke();
 		g.restore();
-		// the data bar: her speed and heading, where she is; a scale and north
+		// the data bar: her speed and heading (magnetic, as her compass), where she is; a scale and north
 		g.fillStyle = 'rgba(2,8,14,0.82)';
 		g.fillRect( x, y, w, 30 );
 		g.fillStyle = '#e8f4ff';
 		g.font = '700 16px system-ui, sans-serif';
 		g.textAlign = 'left';
 		g.textBaseline = 'middle';
-		const hdg = ( ( Math.round( reading.heading * 180 / Math.PI ) % 360 ) + 360 ) % 360;
-		g.fillText( `SOG ${ ( reading.speed / KT ).toFixed( 1 ) } kt   HDG ${ String( hdg ).padStart( 3, '0' ) }°`, x + 10, y + 16 );
+		g.fillText( `SOG ${ ( reading.speed / KT ).toFixed( 1 ) } kt   HDG ${ String( magnetic( reading.heading ) ).padStart( 3, '0' ) }°M`, x + 10, y + 16 );
 		const [ lat, lon ] = position( reading.x, reading.z );
 		g.font = '600 12px system-ui, sans-serif';
 		g.textAlign = 'right';
 		g.fillText( lat, x + w - 10, y + 9 );
 		g.fillText( lon, x + w - 10, y + 22 );
-		g.fillStyle = 'rgba(232,244,255,0.85)';
+		// ((M15) home: how far and which way, and the fuel for it, along the foot)
+		g.fillStyle = 'rgba(2,8,14,0.82)';
+		g.fillRect( x, y + h - 24, w, 24 );
+		const leg = legTo( rx, rz, HOME.x, HOME.z );
+		g.font = '700 13px system-ui, sans-serif';
 		g.textAlign = 'left';
-		g.fillText( 'N ↑', x + 10, y + h - 14 );
-		g.fillRect( x + w - 110, y + h - 14, 100, 2 );
+		g.fillStyle = '#e8f4ff';
+		g.fillText( `HOME ${ leg.m < 0.2 * 1852 ? `${ Math.round( leg.m / FT ) } ft` : `${ ( leg.m / 1852 ).toFixed( 1 ) } NM` } ${ String( magnetic( leg.bearing ) ).padStart( 3, '0' ) }°M`, x + 10, y + h - 12 );
+		if ( Number.isFinite( reading.fuelL ) ) {
+
+			const f = fuelFor( leg.m, reading.fuelL, { rpm: reading.rpm, speed: reading.speed, speedMul: reading.speedMul || 1 } );
+			g.textAlign = 'right';
+			g.fillStyle = f.state === 'ok' ? '#8fdc8a' : f.state === 'tight' ? '#f2c14e' : '#ff7a6a';
+			g.fillText( `FUEL ${ gallons( reading.fuelL ) } gal · ${ gallons( f.litres ) } to get home${ f.state === 'short' ? ' · SHORT' : '' }`, x + w - 10, y + h - 12 );
+
+		}
+
+		g.fillStyle = 'rgba(16,20,22,0.85)';
+		g.textAlign = 'left';
+		g.font = '700 12px system-ui, sans-serif';
+		g.fillText( 'N ↑', x + 10, y + h - 38 );
+		// (a scale bar a round length, about a fifth of the screen)
+		const bar = niceLength( across / 5 ), bw = bar * s;
+		g.fillRect( x + w - 10 - bw, y + h - 34, bw, 2 );
 		g.textAlign = 'right';
-		g.fillText( `${ Math.round( 100 / s / FT ) } ft`, x + w - 10, y + h - 24 );
+		g.fillText( bar < 0.2 * 1852 ? `${ Math.round( bar / FT ) } ft` : `${ +( bar / 1852 ).toFixed( 2 ) } NM`, x + w - 10, y + h - 44 );
 		// ((M13) the weather alert under the data bar, flashing for a warning)
 		if ( reading.alert ) {
 
@@ -463,5 +663,16 @@ export class BoatInstruments {
 		}
 
 	}
+
+}
+
+// (M15) a scale bar's length (m): the roundest under `m`, in feet close in (100, 200, 500 ft), else in nautical
+// miles (0.25, 0.5, 1, 2, 5 …)
+export function niceLength( m ) {
+
+	const ft = [ 50, 100, 200, 500 ].map( ( f ) => f * FT ), nm = [ 0.25, 0.5, 1, 2, 5, 10 ].map( ( n ) => n * 1852 );
+	let best = ft[ 0 ];
+	for ( const v of [ ...ft, ...nm ] ) if ( v <= m ) best = v;
+	return best;
 
 }
