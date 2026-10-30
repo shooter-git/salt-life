@@ -1257,7 +1257,9 @@ export class Game {
 		const x = aboard && b ? b.position.x : c.x, z = aboard && b ? b.position.z : c.z;
 		const seen = chart.look( x, z, sightOf( p.mode, c.y - G.seaLevel.value ) );
 		const sea = aboard || p.mode === 'swim';
-		for ( const n of chart.learn( x, z, sea ? this.placeAt( x, z ) : null ) ) this.toast( `On your chart: ${ n.peak ? 'the summit' : n.name }`, 2600 );
+		// (a far place's name comes with finding it: updateFound's toast has that, and a toast takes the last one's place)
+		const told = ( n ) => n.place && PLACES[ n.place ].far && ! ( this.state.found[ n.place ] < this.tradeDay );
+		for ( const n of chart.learn( x, z, sea ? this.placeAt( x, z ) : null ) ) if ( ! told( n ) ) this.toast( `On your chart: ${ n.peak ? 'the summit' : n.name }`, 2600 );
 		this._chartDirty = this._chartDirty || seen;
 		if ( this._chartDirty && ( this._chartSaved = ( this._chartSaved || 0 ) + 0.4 ) > 15 ) {
 
