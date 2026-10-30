@@ -40,7 +40,8 @@ import { FT } from './Units.js';
 //   hurricaneAt( T, pick, since ) -> { r, x, z, rmax, ... } | null   hurricaneNews( T, pick, since ) ->
 //   { stage: 'outlook' | 'watch' | 'warning', onset, ends, eye, over, from } | null   dayWeatherAt( T )
 //   (M15) weatherHere( T, pick, since, x, z, cells ): the weather where you are (HERE), and showers( ..., at )
-//   about you
+//   about you; withEdge( w, x, z ): past the far grounds, the open ocean's fresher trades (EDGE), and
+//   seaHeight( swell, windSea ) -> m (the seas, as a forecast gives them)
 
 // what a condition brings: wind (m/s at 10 m), cloud cover and how overcast it is (0..1), the open
 // sea's swell and wind sea (x today's), the surf (m, the shore waves' offshore amplitude H/2, and its
@@ -516,6 +517,35 @@ export function weatherHere( T, pick = null, since = 0, x = 0, z = 0, cells = nu
 
 }
 const _here = { x: 0, y: 0 }, _cell = { rain: 0, thunder: 0 };
+
+// (M15) The soft edge, no wall: past the far grounds (EDGE.from m from the island's middle, out past the bank
+// and the hump) the sea's the open ocean's, clear of the island's lee and its slowing of the wind. By
+// EDGE.full the trades are a force fresher (EDGE.wind m/s more: a fair day's 14 knots 19, as the open
+// Atlantic's 15 to 20 are to an island's), its wind sea grown in that wind, and the swell half again
+// (EDGE.swell): the National Weather Service's offshore waters, a few feet bigger than its coastal ones. As
+// rough as that however far you go. A place's, not a weather's: a held pick has it too. On top of
+// weatherHere's ( w: its values, changed in place; `edge`: how far out in it, 0..1 )
+export const EDGE = { from: 14000, full: 24000, wind: 2.5, swell: 0.5 };
+export const edgeAt = ( x, z ) => sstep( EDGE.from, EDGE.full, Math.sqrt( x * x + z * z ) );
+export function withEdge( w, x, z ) {
+
+	const k = edgeAt( x, z );
+	w.edge = k;
+	if ( k === 0 ) return w;
+	w.wind += EDGE.wind * k;
+	w.windSea = windSeaOf( w.wind );
+	w.swell *= 1 + EDGE.swell * k;
+	return w;
+
+}
+
+// (M15) the open sea's height, as a forecast gives it: the significant wave height (m: four times the
+// standard deviation of the surface, Hs = 4 sqrt( sum a^2 / 2 )) of the swell's and the wind sea's waves at
+// `swell` and `windSea` x today's, their amplitudes (m) the high tier's (ocean/Waves.js' SPECTRUM: a fair
+// day's 1.1 m, 3 to 4 ft)
+export const SEA_A = { swell: [ 0.32, 0.18, 0.12, 0.06 ], wind: [ 0.09, 0.045, 0.025, 0.012 ] };
+const SEA_SS = SEA_A.swell.reduce( ( s, a ) => s + a * a, 0 ), SEA_WW = SEA_A.wind.reduce( ( s, a ) => s + a * a, 0 );
+export const seaHeight = ( swell, windSea ) => 4 * Math.sqrt( ( swell * swell * SEA_SS + windSea * windSea * SEA_WW ) / 2 );
 
 // (M15) the showers' rain and thunder at ( x, z ) (0..1: cells, showers()'): each as hard as it rains at its
 // middle, nothing past its edge; its thunder out a little past it

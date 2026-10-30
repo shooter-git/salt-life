@@ -29,8 +29,8 @@ import { WORLD } from '../world/WorldLayout.js';
 
 // wavelength (m) or, (M14) for the swell's, period (its share of its train's, T), amplitude (m), direction:
 // rotation (rad) from the swell (s) or the wind (w). (The swell's shares are as their lengths were before
-// M14: 72, 44, 31 and 16 m)
-const SPECTRUM = [
+// M14: 72, 44, 31 and 16 m). (M15) Their amplitudes are the forecast's seas too (Weather's SEA_A)
+export const SPECTRUM = [
 	{ T: 1, a: 0.32, from: 's', rot: 0 },
 	{ T: 0.782, a: 0.18, from: 's', rot: 0.35 },
 	{ L: 23, a: 0.09, from: 'w', rot: 0.25 },

@@ -1,4 +1,4 @@
-import { hash, towardOf, weatherAt } from './Weather.js';
+import { hash, towardOf, weatherAt, edgeAt } from './Weather.js';
 
 // (M15) Something to find out there: weedlines, floating debris and birds working bait, placed about you
 // as you go and drifting, from where they are and the island's time alone (as the weather is), so everyone
@@ -17,6 +17,7 @@ import { hash, towardOf, weatherAt } from './Weather.js';
 //     frigatebirds circling over, terns diving), in the middle of its epoch, a quarter of a game hour to a few
 //     (a few real minutes to ten); more where there's weed in the cell, over the drop-off and the hump, and
 //     at dawn and dusk.
+// Past the far grounds (the soft edge: Weather.edgeAt) the bait and the debris are fewer (`far`): the sea emptier.
 // The front between the shelf's water and the deep's (WaterSurface's, step 5) gathers weed along it too: the
 // sea's shader draws it there.
 //
@@ -32,6 +33,11 @@ export const FINDS = {
 	weed: { every: 36, chance: 0.2, lines: [ 1, 3 ], length: [ 300, 1200 ], width: [ 3, 9 ], gap: [ 40, 160 ], turn: 0.14, fade: 0.12 },
 	debris: { every: 120, chance: 0.07, kinds: [ 'log', 'plank', 'pallet', 'crate', 'float' ], fade: 0.02 },
 	bait: { every: 6, chance: 0.07, weed: 3, slope: 2.5, dawn: 2, on: [ 0.3, 0.7 ], r: [ 25, 60 ], fade: 0.06 },
+	// (M15) past the far grounds (the soft edge: Weather.edgeAt), the share of each that's still there at full.
+	// The island mass effect: the bait's richest about an island and thins out within tens of km of it, and
+	// the terns working it keep within reach of where they nest; the drift's fewer for less of the island's
+	// own wood; the weed's the ocean's, as much out there as anywhere
+	far: { weed: 1, debris: 0.6, bait: 0.3 },
 };
 export const DEBRIS_SIZE = { log: [ 3, 6 ], plank: [ 1.6, 2.6 ], pallet: [ 1.2, 1.2 ], crate: [ 0.6, 0.9 ], float: [ 0.3, 0.5 ] };
 
@@ -53,6 +59,10 @@ function epochOf( T, every, id, salt ) {
 	return [ e, t - e ];
 
 }
+
+// (M15) a cell's share of its kind still there past the far grounds (FINDS.far), from where the cell is at
+// island time t (the middle of the epoch it's had for: it never comes or goes but as its life does)
+const thinned = ( i, j, t, keep ) => keep >= 1 ? 1 : 1 - ( 1 - keep ) * edgeAt( ( i + 0.5 ) * FINDS.cell + TRADES.x * FINDS.drift * t, ( j + 0.5 ) * FINDS.cell + TRADES.y * FINDS.drift * t );
 
 const _wind = new Map();
 // the wind's way (where it blows toward) at island time t, to the half hour (kept: it's the same for all)
@@ -77,7 +87,7 @@ function windAt( t ) {
 function weedField( T, id, i, j, W, C ) {
 
 	const [ e, f ] = epochOf( T, W.every, id, 0x3e1 ), n = Math.imul( id, 31 ) + e;
-	if ( hash( n, 0x7a1 ) >= W.chance ) return null;
+	if ( hash( n, 0x7a1 ) >= W.chance * thinned( i, j, ( e + 0.5 - hash( id, 0x3e1 ) ) * W.every, C.far.weed ) ) return null;
 	const h = ( k ) => hash( n, 0x5c00 + k );
 	const wind = windAt( ( e + 0.5 - hash( id, 0x3e1 ) ) * W.every ), turn = ( h( 1 ) - 0.5 ) * 2 * W.turn;
 	const ax = wind.x * Math.cos( turn ) - wind.y * Math.sin( turn ), az = wind.x * Math.sin( turn ) + wind.y * Math.cos( turn );
@@ -135,7 +145,7 @@ export function findsAbout( T, x, z, range = 3000, out = OUT, depthAt = null ) {
 		{
 
 			const [ e, f ] = epochOf( T, D.every, id, 0x9d3 ), n = Math.imul( id, 37 ) + e;
-			if ( hash( n, 0x4b2 ) < D.chance ) {
+			if ( hash( n, 0x4b2 ) < D.chance * thinned( i, j, ( e + 0.5 - hash( id, 0x9d3 ) ) * D.every, C.far.debris ) ) {
 
 				const h = ( k ) => hash( n, 0x6100 + k );
 				const px = cx + ( h( 1 ) - 0.5 ) * C.cell * 0.9, pz = cz + ( h( 2 ) - 0.5 ) * C.cell * 0.9;
@@ -171,7 +181,7 @@ export function findsAbout( T, x, z, range = 3000, out = OUT, depthAt = null ) {
 			}
 
 			const hm = ( ( mid % 24 ) + 24 ) % 24, dawn = Math.max( sstep( 4.5, 6, hm ) * ( 1 - sstep( 7, 8.5, hm ) ), sstep( 16.5, 18, hm ) * ( 1 - sstep( 19, 20, hm ) ) );
-			let chance = B.chance * ( 1 + ( B.weed - 1 ) * weedy ) * ( 1 + ( B.dawn - 1 ) * dawn );
+			let chance = B.chance * ( 1 + ( B.weed - 1 ) * weedy ) * ( 1 + ( B.dawn - 1 ) * dawn ) * thinned( i, j, mid, C.far.bait );
 			if ( depthAt ) {
 
 				const d = depthAt( fx + TRADES.x * C.drift * mid, fz + TRADES.y * C.drift * mid );
