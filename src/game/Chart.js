@@ -49,8 +49,8 @@ export const MAX_MARKS = 40, MAX_SPOTS = 80;
 const lh = LIGHTHOUSE, east = HARBOUR_LIGHTS[ 0 ], west = HARBOUR_LIGHTS[ 1 ], pier = HARBOUR_LIGHTS[ 2 ];
 export const NAMES = [
 	{ id: 'bay', name: 'The Bay', x: 10, z: 110, water: true, island: true, known: true },
-	{ id: 'eastPoint', name: 'East Point', x: east.x + 40, z: east.z + 30, island: true, known: true, light: 'Fl R 4s' },
-	{ id: 'westPoint', name: 'West Point', x: west.x - 40, z: west.z + 30, island: true, known: true, light: 'Fl G 4s' },
+	{ id: 'eastHead', name: 'Bay\'s East Head', x: east.x - 35, z: east.z + 30, island: true, known: true, light: 'Fl R 4s' },
+	{ id: 'westHead', name: 'Bay\'s West Head', x: west.x + 30, z: west.z + 30, island: true, known: true, light: 'Fl G 4s' },
 	{ id: 'pier', name: 'Pier', x: pier.x - 34, z: pier.z + 14, island: true, known: true, light: 'Iso 4s', small: true },
 	{ id: 'summit', name: '992', x: - 24, z: - 492, island: true, known: true, peak: true }, // (302 m: in feet, as the chart's heights)
 	{ id: 'creek', name: 'Mangrove Creek', x: - 470, z: - 150, r: 280, water: true, island: true },

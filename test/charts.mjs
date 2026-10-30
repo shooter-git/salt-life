@@ -51,7 +51,7 @@ ok( SHEETS.mid.ext >= 8000 && SHEETS.far.ext === SEABED.size, 'its waters\' 8 km
 const c = new ChartLog();
 ok( c.seen( 0, 100 ) && c.seen( 55, 30 ) && c.seen( 40, - 118 ) && c.seen( - 256, 176 ) && c.seen( 290, 196 ), 'from the start: the bay, the pier, the village and the headlands' );
 ok( ! c.seen( 150, - 830 ) && ! c.seen( - 480, - 160 ) && ! c.seen( - 452, - 792 ) && ! c.seen( 0, 2000 ), 'not the north beach, the mangroves, the windward reef nor the open sea' );
-ok( [ 'bay', 'eastPoint', 'westPoint', 'pier', 'summit' ].every( ( id ) => c.named( id ) ) && ! c.named( 'northBeach' ) && ! c.named( 'bank' ), 'the bay\'s names known, the rest to come to' );
+ok( [ 'bay', 'eastHead', 'westHead', 'pier', 'summit' ].every( ( id ) => c.named( id ) ) && ! c.named( 'northBeach' ) && ! c.named( 'bank' ), 'the bay\'s names known, the rest to come to' );
 const v0 = c.version;
 ok( c.look( 150, - 1000, sightOf( 'boat' ) ) && c.seen( 150, - 830 ) && c.seen( 150, - 1300 ) && c.version > v0, 'off the north beach at sea: its coast charted' );
 ok( ! c.look( 150, - 1000, sightOf( 'boat' ) ), 'and nothing new the second time' );
