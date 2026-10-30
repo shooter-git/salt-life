@@ -16,7 +16,8 @@ import { feet } from './Units.js';
 //   tellOf( story, { paid, hull, T, ... } ) -> { note: [ paragraphs ] | null, toast }   (Marta's note)
 //   (playing together: the group's shared save, 'boats')
 //   boatRecord( ... ) -> record   cleanBoats( raw ) -> { id: record }   keepBoat( record, ... ) -> record
-//   anchorLie( ax, az, wx, wz, U, off ) -> { x, z, heading, reach }   swingRate( U ) -> /s   (how she lies at anchor)
+//   anchorLie( ax, az, wx, wz, U, off ) -> { x, z, heading, reach }   swingRate( U ) -> /s   sheerAt( t, U, id ) -> rad
+//   (how she lies at anchor)
 //   withRecord( story, record, dock ) -> story   (what the others' weather did to her, into your own reckoning)
 
 // how long the catch keeps in the box, in the island's hours: with no ice (M16 sells it) and the box at the sea's
@@ -201,15 +202,18 @@ const DRIFT_SAID = 50; // (and she's drifted this far, m)
 // Marta's note on what happened (its paragraphs, or null with nothing to say), and what's told apart from it (the
 // fish gone off in a box she never had reason to open). story: awayOf's. paid: what she took of its fee; hull: her
 // wear now; fish: how many went off; T: the island's time; news: a hurricane about now (Weather.hurricaneNews), or
-// null; locale; from: where she was left ({ x, z }: how far she's drifted). She signs it: GameHUD's note
-export function tellOf( story, { paid = 0, hull = 0, fish = 0, T = 0, news = null, locale = undefined, from = {} } = {} ) {
+// null; open: Marta's at her stall now; locale; from: where she was left ({ x, z }: how far she's drifted). She signs
+// it: GameHUD's note
+export function tellOf( story, { paid = 0, hull = 0, fish = 0, T = 0, news = null, open = true, locale = undefined, from = {} } = {} ) {
 
 	const note = [], tows = story.tows;
 	for ( const t of tows ) {
 
 		const far = Math.hypot( t.x - ISLE.x, t.z - ISLE.z ) > FOUND_M;
 		const out = far ? `${ milesOf( t.metres ) } out to the ${ sideOf( t.x, t.z ) }` : `off the ${ sideOf( t.x, t.z ) } side`;
-		if ( t.why === 'hurricane' ) note.push( t.out ? 'Towed your boat in ahead of the hurricane. She\'s up on blocks in my yard till it\'s gone by.' : 'Hauled your boat out ahead of the hurricane. She\'s up on blocks in my yard till it\'s gone by.' );
+		// (gone by already, and she's back in, or will be once Marta next opens: Game.updateHurricane)
+		const did = t.out ? 'Towed your boat in' : 'Hauled your boat out';
+		if ( t.why === 'hurricane' ) note.push( news ? `${ did } ahead of the hurricane. She's up on blocks in my yard till it's gone by.` : `${ did } ahead of the hurricane and kept her up on blocks in my yard till it had gone by. ${ open ? 'She\'s back in at my dock.' : 'I\'ll put her back in at my dock when I next open.' }` );
 		else if ( t.why === 'week' ) note.push( 'Your boat lay out there a week with nobody aboard, so I brought her in. She\'s at my dock.' );
 		else if ( t.why === 'aground' ) note.push( `Found your boat ashore on the ${ sideOf( t.x, t.z ) } side and pulled her off. She's at my dock.` );
 		else note.push( `Found your boat adrift ${ out } and towed her in. She's at my dock.` );
@@ -295,7 +299,8 @@ export const boatRecord = ( { name, x, z, heading, anchor, at } ) => ( { v: 1, n
 // How she lies at anchor in a steady wind blowing toward ( wx, wz ) at U m/s: head to it, her bow downwind of the
 // anchor by the rode's slack and its stretch. off: her origin's distance from the anchor with no stretch (the slack,
 // and her stem head forward of her origin). Measured from her own physics (BoatController, in the CPU's sea, 2.5 to
-// 20 m/s: within 3 degrees of the wind, her bow 4.0 to 4.6 m off, the stretch as the wind's push, U^2).
+// 20 m/s: on average within 5 degrees of the wind, the calmer the further, her bow 4.0 to 4.6 m off, the stretch as
+// the wind's push, U^2).
 // -> { x, z, heading, reach: her origin's distance from the anchor }
 export function anchorLie( ax, az, wx, wz, U, off ) {
 
@@ -307,6 +312,20 @@ export function anchorLie( ax, az, wx, wz, U, off ) {
 // how fast she comes round to it (a share of the way, a second): beam-on to within 20 degrees of it took her 370 / U
 // seconds in the same measurements, at any wind
 export const swingRate = ( U ) => Math.max( U, 1 ) / 250;
+
+// How far she's sheered off it just now (rad), the bow held by the rode and the stern swinging: over her own physics
+// on the high tier, a slow wander of about 45 s and a quicker one of about 10 s, the two together a standard deviation
+// of 0.17 degrees for each m/s of wind, up to 3. t: the waves' time, so it's the same on every device; id: her
+// owner's, so no two boats sheer in step
+const SHEER = [ 47, 9.7 ], SHEER_QUICK = 0.8, SHEER_NORM = Math.sqrt( ( 1 + SHEER_QUICK * SHEER_QUICK ) / 2 );
+export function sheerAt( t, U, id = '' ) {
+
+	let seed = 0;
+	for ( let i = 0; i < id.length; i ++ ) seed = ( seed * 31 + id.charCodeAt( i ) ) % 997;
+	const sd = Math.min( 3, 0.17 * U ) * Math.PI / 180 / SHEER_NORM;
+	return sd * ( Math.sin( 2 * Math.PI * t / SHEER[ 0 ] + seed ) + SHEER_QUICK * Math.sin( 2 * Math.PI * t / SHEER[ 1 ] + seed * 2.3 ) );
+
+}
 
 // the shared save's boats, as far as they're boats (others' saves, of any version)
 export function cleanBoats( raw, now = Date.now() ) {

@@ -16,7 +16,7 @@ export async function resolve( specifier, context, next ) {
 }` ) );
 const { Together } = await import( '../src/together/Together.js' );
 const { Vector3, Quaternion } = await import( '../src/engine/index.js' );
-const { BACK_MS, DRIFT, FOUND_M, ISLE, KEEP_H, WEEK_H, WEEK_MS, anchorLie, swingRate, awayClock, awayOf, boatLeft, boatRecord, cleanBoats, keepBoat, leftOf, tellOf, wearRate, withRecord } = await import( '../src/game/Away.js' );
+const { BACK_MS, DRIFT, FOUND_M, ISLE, KEEP_H, WEEK_H, WEEK_MS, anchorLie, sheerAt, swingRate, awayClock, awayOf, boatLeft, boatRecord, cleanBoats, keepBoat, leftOf, tellOf, wearRate, withRecord } = await import( '../src/game/Away.js' );
 const { towFee, HAUL_FEE } = await import( '../src/game/Gear.js' );
 const { weatherAt, towardOf, hurricaneNews, islandTime } = await import( '../src/game/Weather.js' );
 const { WORLD } = await import( '../src/world/WorldLayout.js' );
@@ -211,6 +211,8 @@ const anchored = ( where ) => at( where, { anchor: { ...where } } );
 	const h = awayOf( anchored( NEAR ), T0 + 24, { dock, pick: 'hurricane', since: T0 + 2 } );
 	const told = tell( h, { paid: h.fee } );
 	check( told.note[ 0 ].includes( 'Towed your boat in ahead of the hurricane' ) && told.note[ 0 ].includes( 'blocks in my yard' ) && told.note[ 1 ] === `$${ h.fee }, out of what you had.`, 'a hurricane\'s tow: where she went and what it cost' );
+	const coming = { stage: 'warning', onset: T0 + 29, ends: T0 + 60, eye: T0 + 40, cat: 2, from: 'NNW' };
+	check( tell( h, { paid: h.fee, news: coming, T: T0 } ).note[ 0 ] === 'Towed your boat in ahead of the hurricane. She\'s up on blocks in my yard till it\'s gone by.', 'still about: on blocks till it\'s gone by' );
 	const short = tell( h, { paid: 10 } );
 	check( short.note[ 1 ] === `That's $${ h.fee }. You had $10, so I took that.`, 'short of it: what you had' );
 	const broke = tell( h, { paid: 0 } );
@@ -240,6 +242,12 @@ const anchored = ( where ) => at( where, { anchor: { ...where } } );
 	check( ashore.toast === 'Your boat drifted ashore while you were away', 'and fetched up ashore' );
 	const f = tell( off, { fish: 5 } );
 	check( f.note === null && f.toast.includes( 'gone off' ), 'the fish gone off in a box she\'d no reason to open: said apart from her note' );
+	const gone = tell( h, { paid: h.fee, open: true } );
+	check( gone.note[ 0 ] === 'Towed your boat in ahead of the hurricane and kept her up on blocks in my yard till it had gone by. She\'s back in at my dock.', `it's gone by, and she's back: "${ gone.note[ 0 ]}"` );
+	const shutNow = tell( h, { paid: h.fee, open: false } );
+	check( shutNow.note[ 0 ].endsWith( 'till it had gone by. I\'ll put her back in at my dock when I next open.' ), 'and with Marta shut, she will be' );
+	const hd = tell( awayOf( at( dock, { moored: true } ), T0 + 24, { dock, pick: 'hurricane', since: T0 + 2 } ), { paid: HAUL_FEE, open: true } );
+	check( hd.note[ 0 ].startsWith( 'Hauled your boat out ahead of the hurricane and kept her' ), 'at the dock, she only hauled her' );
 	const f2 = tell( h, { paid: h.fee, fish: 5 } );
 	check( f2.toast === null && f2.note.some( ( p ) => p.includes( 'gone off' ) ), 'she fetched her: she\'d have seen them' );
 
@@ -458,14 +466,21 @@ const player = ( g, id, { host = false, tier = 'high', waves = seaAt( () => 0.5 
 	t.track( 1 / 60 );
 	const a = t.away.get( 'p' );
 	const fwd = ( q ) => new Vector3( 0, 0, 1 ).applyQuaternion( q );
-	check( a && a.boat && a.boat.visible && Math.abs( a.boat.position.x - 300 ) < 1e-6 && Math.abs( a.boat.position.z - ( 700 - reach ) ) < 1e-6, 'she\'s on your sea, downwind of her anchor by her rode and her length' );
-	check( fwd( a.boat.quaternion ).z > 0.99, 'found head to the wind, whatever her heading when she was left' );
+	const off = ( p ) => Math.hypot( p.x - 300, p.z - 700 );
+	check( a && a.boat && a.boat.visible && Math.abs( off( a.boat.position ) - reach ) < 1e-6 && a.boat.position.z < 700 && Math.abs( a.boat.position.x - 300 ) < 1, 'she\'s on your sea, downwind of her anchor by her rode and her length' );
+	check( fwd( a.boat.quaternion ).z > 0.99 && Math.abs( a.heading ) < 1e-9, 'found head to the wind, whatever her heading when she was left' );
 	check( Math.abs( a.boat.position.y - 0.5 ) < 0.1, 'floating at its height here (nobody\'s sending it)' );
 	const up = new Vector3( 1, 0, 0 ).applyQuaternion( a.boat.quaternion );
 	check( Math.abs( up.y ) > 0.005, `and leaning with the sea under her (${ up.y.toFixed( 3 ) } across her beam)` );
 	const R = a.rode.material.uniforms;
 	check( a.rode.visible && R.lineB.value.x === 300 && R.lineB.value.z === 700 && R.lineB.value.y === - 9, 'her rode down to her anchor on the bottom' );
-	check( Math.abs( R.lineA.value.z - ( 700 - RODE_SLACK - 0.16 ) ) < 0.05 && Math.abs( R.lineA.value.x - 300 ) < 0.05, `from her stem head, ${ ( 700 - R.lineA.value.z ).toFixed( 2 ) } m off the anchor` );
+	check( Math.abs( off( R.lineA.value ) - ( RODE_SLACK + 0.16 ) ) < 0.01, `from her stem head, ${ off( R.lineA.value ).toFixed( 2 ) } m off the anchor` );
+	// her sheering: the bow held, the stern swinging
+	const was = a.boat.position.x;
+	Globals.time.value += 12;
+	t.track( 1 / 60 );
+	Globals.time.value -= 12;
+	check( Math.abs( a.boat.position.x - was ) > 0.01 && Math.abs( off( R.lineA.value ) - ( RODE_SLACK + 0.16 ) ) < 0.01, 'she sheers about it, her bow where the rode holds it' );
 	// the wind comes round: so does she, about her anchor
 	Globals.windDir.value.set( 1, 0 );
 	const before = a.heading;
@@ -473,7 +488,7 @@ const player = ( g, id, { host = false, tier = 'high', waves = seaAt( () => 0.5 
 	check( Math.abs( a.heading - before ) > 0 && Math.abs( a.heading - before ) < 0.02, 'the wind comes round, and she\'s slow to follow it' );
 	for ( let i = 0; i < 400; i ++ ) t.track( 1 );
 	const f2 = fwd( a.boat.quaternion );
-	check( f2.x < - 0.99 && Math.abs( a.boat.position.x - ( 300 + reach ) ) < 0.2 && Math.abs( a.boat.position.z - 700 ) < 0.2, 'until she\'s head to it again, the other side of her anchor, as she goes about it' );
+	check( f2.x < - 0.99 && Math.abs( a.boat.position.x - ( 300 + reach ) ) < 0.2 && Math.abs( a.boat.position.z - 700 ) < 1, 'until she\'s head to it again, the other side of her anchor, as she goes about it' );
 	check( t.boats.p.h === 2 && Math.abs( t.boats.p.z - ( 700 - reach + 3 ) ) < 0.1 && g.v.size === 0, 'her saved pose untouched, nothing written: it\'s only how she lies here' );
 	// back as it was, for the boarding
 	Globals.windDir.value.set( 0, - 1 );
@@ -489,7 +504,7 @@ const player = ( g, id, { host = false, tier = 'high', waves = seaAt( () => 0.5 
 	p.boat = boat;
 	p.mode = 'deck';
 	t.track( 1 / 60 );
-	check( Math.abs( boat.position.x - 300 ) < 0.2 && boat.owner === 'p' && ! p.exited, 'aboard, you ride her where she lies' );
+	check( Math.abs( boat.position.x - 300 ) < 1 && boat.owner === 'p' && ! p.exited, 'aboard, you ride her where she lies' );
 	check( t.ridden() === null && t.boatSound().active === false, 'her dash and engine dark: nobody at her helm' );
 	// her owner's back: their pose takes over
 	const o = { person: { id: 'p', name: 'Pearl' }, cur: null, boat: null, last: - Infinity, fixed: null };
@@ -505,13 +520,39 @@ const player = ( g, id, { host = false, tier = 'high', waves = seaAt( () => 0.5 
 	check( ! p.exited && boat.position.x === 301 && ! t.away.has( 'p' ), 'then she goes by their pose, and you\'re still aboard' );
 	t.others.delete( 'p' );
 	t.track( 1 / 60 );
-	check( t.away.has( 'p' ) && Math.abs( boat.position.x - 300 ) < 0.2 && ! p.exited, 'gone again: back to where the save has her' );
+	check( t.away.has( 'p' ) && Math.abs( boat.position.x - 300 ) < 1 && ! p.exited, 'gone again: back to where the save has her' );
 	// towed from under you
 	t.boats.p = { ...t.boats.p, tow: { why: 'hurricane', fee: 60, where: 'cradle', at: Date.now() } };
 	let said = '';
 	t.app.game.toast = ( m ) => said = m;
 	t.track( 1 / 60 );
 	check( p.exited && said.includes( 'Marta\'s towed Pearl\'s boat in' ) && ! t.away.has( 'p' ), 'Marta tows her in: over the side you go, and she\'s gone' );
+
+}
+
+// her sheering, as measured on the high tier
+{
+
+	const measured = { 2.5: 0.44, 7: 1.12, 11: 1.54, 15: 3.38, 20: 2.82 };
+	for ( const [ U, sd ] of Object.entries( measured ) ) {
+
+		let s = 0, m = 0, n = 0;
+		for ( let t = 0; t < 3000; t += 0.25 ) {
+
+			const y = sheerAt( t, + U, 'pearl' ) * 180 / Math.PI;
+			s += y * y;
+			m += y;
+			n ++;
+
+		}
+
+		const got = Math.sqrt( s / n );
+		console.log( `     sheering at ${ U } m/s: ${ got.toFixed( 2 ) } deg (her physics ${ sd })` );
+		check( Math.abs( got - sd ) < 0.9 && Math.abs( m / n ) < 0.1, `about the wind, by about as much as she does at ${ U } m/s` );
+
+	}
+
+	check( sheerAt( 100, 7, 'pearl' ) === sheerAt( 100, 7, 'pearl' ) && sheerAt( 100, 7, 'pearl' ) !== sheerAt( 100, 7, 'robin' ), 'the same on every device, and no two boats in step' );
 
 }
 
@@ -526,11 +567,13 @@ const player = ( g, id, { host = false, tier = 'high', waves = seaAt( () => 0.5 
 	const { BoatModel } = await import( '../src/world/BoatModel.js' );
 	const { BoatController } = await import( '../src/player/BoatController.js' );
 	const terrain = new TerrainData( 7, decodeIsland( new Uint8Array( read( new URL( '../public/world/island.bin', import.meta.url ) ) ) ) );
+	// (the wind first: the waves' wind sea runs with it as they're made, and a sea running against it holds her about
+	// 8 degrees off it)
+	Globals.windDir.value.set( 0.35, 0.94 ).normalize();
+	Globals.windSpeed.value = 11;
 	const w = weatherAt( 30, 'breezy' ), waves = new Waves( { tier: 'low', terrain } );
 	waves.setSea( w.swell, w.windSea );
 	waves.setSwell( 0, w.period, w.period, { x: 65, z: 560 } );
-	Globals.windDir.value.set( 0.35, 0.94 ).normalize();
-	Globals.windSpeed.value = 11;
 	const query = new WaterQuery( waves, terrain ), b = new BoatController( { model: new BoatModel(), query, terrain, colliders: null } );
 	const wd = Globals.windDir.value;
 	b.moored = false;
@@ -559,7 +602,7 @@ const player = ( g, id, { host = false, tier = 'high', waves = seaAt( () => 0.5 
 	}
 	const gap = Math.hypot( b.position.x - lie.x, b.position.z - lie.z );
 	console.log( `     her physics at 11 m/s: head to it by ${ by && by.toFixed( 0 ) } s, ${ ( off() * 180 / Math.PI ).toFixed( 1 ) } deg off, ${ gap.toFixed( 2 ) } m from where she's drawn` );
-	check( off() < 12 * Math.PI / 180 && gap < 1.2, 'where she\'s drawn is where she lies at anchor' );
+	check( off() < 5 * Math.PI / 180 && gap < 0.6, 'where she\'s drawn is where she lies at anchor' );
 	check( by !== null && Math.abs( by - Math.log( 90 / 20 ) / swingRate( 11 ) ) < 12, 'and she comes round as fast' );
 
 }
@@ -574,6 +617,8 @@ const player = ( g, id, { host = false, tier = 'high', waves = seaAt( () => 0.5 
 	g.awayTold = { story, paid: 0, hull: 0, fish: 0, from: NEAR };
 	g.hud = { showAwayNote: ( n ) => shown.push( n ) };
 	g.toast = () => {};
+	Object.defineProperty( g, 'weatherNow', { value: null } );
+	Object.defineProperty( g, 'hour', { get: () => s.timeOfDay } );
 	g.app = { _started: true, together: known, settings: s, weather: { news: { stage: 'warning', onset: islandTime( 30, 10 ) + 9, cat: 1, from: 'N' } }, portal: {} };
 	g.tellAway();
 	check( shown.length === 0 && g.awayTold, 'in a room, the note waits until its clock has reached you' );
@@ -586,6 +631,22 @@ const player = ( g, id, { host = false, tier = 'high', waves = seaAt( () => 0.5 
 	g.app.weather.news = { stage: 'warning', onset: islandTime( 90, 10 ) + 9, cat: 1, from: 'N' };
 	g.tellAway();
 	check( shown.length === 1 && shown[ 0 ][ 0 ].includes( 'You\'ve 9 hours to run for port' ), `the room's has: "${ shown[ 0 ] && shown[ 0 ][ 0 ] }"` );
+	// Marta's hours: the stall's own flag is open until it's told otherwise, on the first frame
+	let back = 0;
+	const h = Object.create( Game.prototype );
+	Object.defineProperty( h, 'weatherNow', { value: null } );
+	const hs = { day: 33, timeOfDay: 20.6 };
+	Object.defineProperty( h, 'hour', { get: () => hs.timeOfDay } );
+	h.state = { hauled: true };
+	h.relaunch = () => back ++;
+	h.chandlery = { vendor: { open: true } };
+	h._hurricaneSaid = null;
+	h.app = { weather: { news: null }, settings: hs };
+	h.updateHurricane();
+	check( back === 0 && ! h.martaIn, 'hauled out and it\'s gone by, she stays on her cradle by night' );
+	hs.timeOfDay = 8;
+	h.updateHurricane();
+	check( back === 1 && h.martaIn, 'and Marta puts her back in once she\'s in' );
 
 }
 

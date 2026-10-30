@@ -17,7 +17,7 @@ import { tellOf } from './Away.js';
 import { GameHUD } from './GameHUD.js';
 import { TimeHUD } from './TimeHUD.js';
 import { timeText } from './IslandClock.js';
-import { NIGHT_BOX, ordersFor, tradeDay, stallOpen, shutFor } from './Orders.js';
+import { HOURS, NIGHT_BOX, ordersFor, tradeDay, stallOpen, shutFor } from './Orders.js';
 import { WantedBoard } from './WantedBoard.js';
 import { ForecastSlate } from './ForecastSlate.js';
 import { forecast, islandTime, blowShare, NORTH } from './Weather.js';
@@ -818,6 +818,15 @@ export class Game {
 
 	}
 
+	// (M15) whether Marta keeps her stall now, by her hours and the weather, whatever the stall's been told yet (it's
+	// open until the first frame's told it otherwise)
+	get martaIn() {
+
+		const wx = this.weatherNow;
+		return stallOpen( HOURS.marta, this.hour, wx && wx.id ) && ! ( wx && wx.boarded );
+
+	}
+
 	// (M15) what happened while you were away (App.pickUp), once you're here to read it, and once any room's clock has
 	// reached you: a hurricane's word is the one about now, in the room you've come to
 	tellAway() {
@@ -826,7 +835,7 @@ export class Game {
 		if ( ! away || ! this.hud || ! app._started || ! app.together.roomKnown ) return;
 		this.awayTold = null;
 		const s = app.settings;
-		const told = tellOf( away.story, { ...away, T: islandTime( s.day, s.timeOfDay ), news: app.weather.news, locale: app.portal && app.portal.locale } );
+		const told = tellOf( away.story, { ...away, T: islandTime( s.day, s.timeOfDay ), news: app.weather.news, open: this.martaIn, locale: app.portal && app.portal.locale } );
 		if ( told.note ) this.hud.showAwayNote( told.note );
 		if ( told.toast ) this.toast( told.toast, 5200 );
 
@@ -855,7 +864,7 @@ export class Game {
 		}
 
 		const marta = this.chandlery && this.chandlery.vendor;
-		if ( this.state.hauled && ! n && marta && marta.open ) this.relaunch();
+		if ( this.state.hauled && ! n && marta && marta.open && this.martaIn ) this.relaunch();
 
 	}
 

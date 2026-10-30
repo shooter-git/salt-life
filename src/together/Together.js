@@ -17,7 +17,7 @@ import { weekOrder, weekNumber, tallyFor, deliver, delivered } from '../game/Wee
 import { lb } from '../game/Units.js';
 import { WORLD } from '../world/WorldLayout.js';
 import { islandTime, weatherHere } from '../game/Weather.js';
-import { anchorLie, boatRecord, cleanBoats, keepBoat, swingRate, wearRate } from '../game/Away.js';
+import { anchorLie, boatRecord, cleanBoats, keepBoat, sheerAt, swingRate, wearRate } from '../game/Away.js';
 import { RODE_SLACK } from '../player/BoatController.js';
 
 // (Salt Life) Playing together: whoever else is on the island (portal.session, All the Spaces), drawn
@@ -423,7 +423,7 @@ export class Together {
 
 	_awayEntry( id ) {
 
-		const a = { r: null, boat: null, rode: null, theirBoat: null, frame: { pos: new Vector3(), quat: new Quaternion(), water: null }, y: null, heading: 0, pitch: 0, roll: 0, near: false };
+		const a = { id, r: null, boat: null, rode: null, theirBoat: null, frame: { pos: new Vector3(), quat: new Quaternion(), water: null }, y: null, heading: 0, pitch: 0, roll: 0, near: false };
 		this.away.set( id, a );
 		return a;
 
@@ -461,7 +461,8 @@ export class Together {
 
 		}
 
-		const sin = Math.sin( a.heading ), cos = Math.cos( a.heading );
+		// (and sheering about it: the bow held by the rode, the stern swinging)
+		const heading = a.heading + sheerAt( G.time.value, U, a.id ), sin = Math.sin( heading ), cos = Math.cos( heading );
 		const x = r.a[ 0 ] - sin * lie.reach, z = r.a[ 1 ] - cos * lie.reach;
 		let h = w ? w.heightAt( x, z ) : 0, pitch = 0, roll = 0;
 		if ( w && a.near ) {
@@ -480,7 +481,7 @@ export class Together {
 		a.pitch += ( pitch - a.pitch ) * k;
 		a.roll += ( roll - a.roll ) * k;
 		f.pos.set( x, a.y, z );
-		f.quat.setFromAxisAngle( _up, a.heading ).multiply( _qa.setFromAxisAngle( _x.set( 1, 0, 0 ), a.pitch ) ).multiply( _qb.setFromAxisAngle( _z.set( 0, 0, 1 ), a.roll ) );
+		f.quat.setFromAxisAngle( _up, heading ).multiply( _qa.setFromAxisAngle( _x.set( 1, 0, 0 ), a.pitch ) ).multiply( _qb.setFromAxisAngle( _z.set( 0, 0, 1 ), a.roll ) );
 
 	}
 
