@@ -99,6 +99,12 @@ class ShoreTrain {
 		this.field = field;
 		this.slot = slot; // (0: the south's, 1: a westerly's, (M14) 2: the north shore's, (M15) 3: the bank's)
 		this.texture = fieldTexture( field );
+		// ((M15) the waves' along-shore measure (their sets, wobble, bars and rips, run-up lobes), across the way
+		// the swell came: taken across the local direction it jumped tens of metres a metre far from the
+		// origin, where that turns a few degrees in a few metres (the north beach, 850 m out: its breakers drawn
+		// as streaks). Old fields without it: the south's way)
+		const sd = field.swellDir || [ - 0.12, - 1 ], sl = Math.hypot( sd[ 0 ], sd[ 1 ] ) || 1;
+		this.across = [ - sd[ 1 ] / sl, sd[ 0 ] / sl ];
 		this.surge = null; // (M13) { field, level, texture }: a surge's (the island's own swell's only)
 		this.amplitude = amplitude;
 		this.period = period;
@@ -143,6 +149,13 @@ class ShoreTrain {
 	phase( t, T ) {
 
 		return this.clock( t ) - ( T - this.ref ) / this.period;
+
+	}
+
+	// (M15) where ( x, z ) is along the shore, as its waves reckon it (m)
+	alongAt( x, z ) {
+
+		return x * this.across[ 0 ] + z * this.across[ 1 ];
 
 	}
 
@@ -264,6 +277,10 @@ export class ShoreWaves {
 			shoreRunup4: { value: 0 },
 			shoreInfo4: { value: new THREE.Vector4( 0, 0, 1, 2 ) },
 			shoreMilk4: { value: new THREE.Vector2( 0, 0 ) },
+			// (M15) each train's along-shore measure (ShoreTrain.across): the south's and the second's, the north's
+			// and the bank's
+			shoreAcross: { value: new THREE.Vector4( ...home.across, ...home.across ) },
+			shoreAcross2: { value: new THREE.Vector4( ...home.across, ...home.across ) },
 			// (M13) a surge's field (the island's own until it's given), and the sea level it was solved at
 			// (0: none)
 			shoreTexS: { value: home.texture },
@@ -406,6 +423,9 @@ export class ShoreWaves {
 	syncUniforms() {
 
 		const p = this.params, U = this.uniforms;
+		const across = ( k ) => ( this.trains[ k ] || this.trains[ 0 ] ).across;
+		U.shoreAcross.value.set( ...across( 0 ), ...across( 1 ) );
+		U.shoreAcross2.value.set( ...across( 2 ), ...across( 3 ) );
 		U.shoreP0.value.set( p.period, p.amplitude, p.variation, p.gamma );
 		U.shoreP1.value.set( p.breakSpan, p.curl, p.runup, p.enabled );
 		const nA = this.trains[ 2 ] ? this.north[ 0 ] : 0;
@@ -477,8 +497,7 @@ export class ShoreWaves {
 
 			tr.fieldAt( x, z, sh );
 			const exposure = Math.hypot( sh[ 1 ], sh[ 2 ] );
-			const dx = sh[ 1 ] / Math.max( exposure, 1e-4 ), dz = sh[ 2 ] / Math.max( exposure, 1e-4 );
-			const along = x * - dz + z * dx;
+			const along = tr.alongAt( x, z );
 			let tau = 0;
 			const runup = ( tt ) => {
 
@@ -531,7 +550,7 @@ export class ShoreWaves {
 		const sh = tr.fieldAt( x, z, this._sh || ( this._sh = [ 0, 0, 0, 0 ] ) );
 		const exposure = Math.hypot( sh[ 1 ], sh[ 2 ] );
 		const dx = sh[ 1 ] / Math.max( exposure, 1e-4 ), dz = sh[ 2 ] / Math.max( exposure, 1e-4 );
-		const along = x * - dz + z * dx;
+		const along = tr.alongAt( x, z );
 		const s = tr.phase( t, sh[ 0 ] ) + wobble( along );
 		const c = Math.sqrt( clamp( d, 0.3, 25 ) * GRAVITY ), lam = c * tr.period;
 		const m = Math.floor( s + 0.5 ), u = s - m;
@@ -615,7 +634,7 @@ export class ShoreWaves {
 		home.fieldAt( x, z, sh );
 		const exposure = Math.hypot( sh[ 1 ], sh[ 2 ] );
 		if ( exposure < 0.05 || A < 0.02 ) return out;
-		const dx = sh[ 1 ] / exposure, dz = sh[ 2 ] / exposure, along = x * - dz + z * dx;
+		const dx = sh[ 1 ] / exposure, dz = sh[ 2 ] / exposure, along = home.alongAt( x, z );
 		const db = Math.pow( A * 3.556 / P.gamma, 0.8 );
 		const V = RIP * 2 * A * ( RIP_PULSE[ 0 ] + RIP_PULSE[ 1 ] * Math.abs( Math.sin( home.clock( t ) * Math.PI / 7 ) ) );
 		const rip = bar( along ).rip, inside = smooth( RIP_DEPTH[ 0 ], RIP_DEPTH[ 1 ], d );
@@ -646,7 +665,7 @@ export class ShoreWaves {
 		tr.fieldAt( x, z, sh );
 		const exposure = Math.hypot( sh[ 1 ], sh[ 2 ] );
 		const dx = sh[ 1 ] / Math.max( exposure, 1e-4 ), dz = sh[ 2 ] / Math.max( exposure, 1e-4 );
-		const along = x * - dz + z * dx;
+		const along = tr.alongAt( x, z );
 		const s = tr.phase( t, sh[ 0 ] ) + wobble( along );
 		const m = Math.floor( s + 0.5 ), u = s - m;
 		const lam = Math.sqrt( clamp( d, 0.3, 25 ) * GRAVITY ) * tr.period;
@@ -798,6 +817,10 @@ uniform vec4 shoreTrain4;
 uniform float shoreRunup4;
 uniform vec4 shoreInfo4;
 uniform vec2 shoreMilk4;
+// (M15) each train's along-shore measure: across the way its swell came (the south's, the second's; the
+// north's, the bank's)
+uniform vec4 shoreAcross;
+uniform vec4 shoreAcross2;
 // (M13) a surge's field for the island's own swell, and the sea level it was solved at (0: none)
 uniform highp sampler2D shoreTexS;
 uniform float shoreSurgeLevel;
@@ -819,11 +842,11 @@ const float SHORE_SWASH_OVERSHOOT = ${ f( SWASH_OVERSHOOT ) };
 // (M12) a swell's train of waves: its clock, the travel time that's counted from, its period, height
 // (offshore amplitude) and run-up. The south's, and the second (a westerly's) while it's running; (M14)
 // and the third (the north shore's)
-struct ShoreTrain { float clock; float ref; float period; float amplitude; float runup; };
-ShoreTrain shoreTrain1() { return ShoreTrain( shoreClock, shoreRef, SHORE_PERIOD, SHORE_AMPLITUDE, SHORE_RUNUP ); }
-ShoreTrain shoreTrain2_() { return ShoreTrain( shoreTrain2.x, shoreTrain2.y, shoreTrain2.z, shoreTrain2.w, shoreRunup2 ); }
-ShoreTrain shoreTrain3_() { return ShoreTrain( shoreTrain3.x, shoreTrain3.y, shoreTrain3.z, shoreTrain3.w, shoreRunup3 ); }
-ShoreTrain shoreTrain4_() { return ShoreTrain( shoreTrain4.x, shoreTrain4.y, shoreTrain4.z, shoreTrain4.w, shoreRunup4 ); }
+struct ShoreTrain { float clock; float ref; float period; float amplitude; float runup; vec2 across; };
+ShoreTrain shoreTrain1() { return ShoreTrain( shoreClock, shoreRef, SHORE_PERIOD, SHORE_AMPLITUDE, SHORE_RUNUP, shoreAcross.xy ); }
+ShoreTrain shoreTrain2_() { return ShoreTrain( shoreTrain2.x, shoreTrain2.y, shoreTrain2.z, shoreTrain2.w, shoreRunup2, shoreAcross.zw ); }
+ShoreTrain shoreTrain3_() { return ShoreTrain( shoreTrain3.x, shoreTrain3.y, shoreTrain3.z, shoreTrain3.w, shoreRunup3, shoreAcross2.xy ); }
+ShoreTrain shoreTrain4_() { return ShoreTrain( shoreTrain4.x, shoreTrain4.y, shoreTrain4.z, shoreTrain4.w, shoreRunup4, shoreAcross2.zw ); }
 #define SHORE_TWO ( shoreTrain2.w > 0.0 )
 #define SHORE_THREE ( shoreTrain3.w > 0.0 )
 #define SHORE_FOUR ( shoreTrain4.w > 0.0 )
@@ -1030,7 +1053,7 @@ ShorePhase shorePhaseAt( vec4 sh, ShoreTrain tr, vec2 xz ) {
 	vec2 dirE = sh.yz;
 	float exposure = length( dirE );
 	vec2 dir = dirE / max( exposure, 1e-4 );
-	float along = dot( xz, vec2( - dir.y, dir.x ) );
+	float along = dot( xz, tr.across );
 	float s = tr.clock - ( sh.x - tr.ref ) / tr.period + shoreWobble( along );
 	return ShorePhase( sh, sh.x, dir, exposure, along, s );
 }
@@ -1235,7 +1258,7 @@ float shoreSurfTurbidity( vec2 xz, float depth ) {
 		vec4 sh = terrainShoreSample( xz );
 		float e = length( sh.yz );
 		vec2 dir = sh.yz / max( e, 1e-4 );
-		float rip = shoreBar( dot( xz, vec2( - dir.y, dir.x ) ) ).y;
+		float rip = shoreBar( dot( xz, shoreAcross.xy ) ).y;
 		if ( SHORE_TWO ) e = max( e, length( shoreFieldSample( shoreTex2, xz ).yz ) );
 		float expo = shSat( e * 1.4 );
 		float zone = shSS( reach, reach * 0.27, depth );

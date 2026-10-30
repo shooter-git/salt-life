@@ -312,6 +312,7 @@ export function computeShoreField( terrain, { res = 512, swellDir = [ 0, - 1 ], 
 
 	}
 
-	return { data, res, cellSize: h, origin, originZ, size, depth };
+	// ((M15) and the way the swell came: the waves' own along-shore measure is taken across it)
+	return { data, res, cellSize: h, origin, originZ, size, depth, swellDir: [ sdx / sl, sdz / sl ] };
 
 }

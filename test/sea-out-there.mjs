@@ -133,7 +133,10 @@ const f2 = ( v ) => v.toFixed( 2 );
 	console.log( `       a 1.6 m swell breaking ${ big.map( ( q ) => Math.round( q.broke * 100 ) ).join( ' ' ) } %, its crests ${ big.map( ( q ) => q.hi.toFixed( 1 ) ).join( ' ' ) } m` );
 	check( crest.broke > 0.9 && fair.filter( ( q ) => q.broke > 0.05 ).length <= 3, 'on a fair day the swell breaks on the sandbar\'s crest, and only there' );
 	check( big.filter( ( q ) => q.broke > 0.3 ).length >= 3 && mid.broke === 0, 'a bigger swell breaks across the bar from further out, never over the bank\'s 20 m' );
-	check( at( 50 ).hi > at( 250 ).hi * 1.3 && at( 50 ).hi > 0.8, `it builds as it comes onto the bar: its crests ${ at( 250 ).hi.toFixed( 1 ) } m over ${ at( 250 ).d.toFixed( 0 ) } m of water, ${ at( 50 ).hi.toFixed( 1 ) } m over ${ at( 50 ).d.toFixed( 1 ) } m` );
+	// (on the bar's flank, before it breaks: once broken, in a metre or so of water, its crest's held down by
+	// the depth)
+	const flank = at( 50 ).hi > at( 100 ).hi ? at( 50 ) : at( 100 );
+	check( flank.hi > at( 250 ).hi * 1.3 && flank.hi > 0.8, `it builds as it comes onto the bar: its crests ${ at( 250 ).hi.toFixed( 1 ) } m over ${ at( 250 ).d.toFixed( 0 ) } m of water, ${ flank.hi.toFixed( 1 ) } m over ${ flank.d.toFixed( 1 ) } m` );
 	const there = shore.sample( 0, 900, 3, T.heightAt( 0, 900 ), T );
 	shore.setBankSea( 0, 9, 0 );
 	const without = shore.sample( 0, 900, 3, T.heightAt( 0, 900 ), T );

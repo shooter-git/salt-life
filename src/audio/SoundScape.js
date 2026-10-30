@@ -1179,6 +1179,10 @@ export class SoundScape {
 	_buildStations( src ) {
 
 		const e = this.env, { terrain } = src, f = [ 0, 0, 0, 0 ];
+		// ((M15) where a station is along the shore as the drawn waves reckon it: across the way the swell came,
+		// ShoreTrain.across)
+		const sd = src.field.swellDir || [ - 0.12, - 1 ], sl = Math.hypot( sd[ 0 ], sd[ 1 ] ) || 1;
+		const alongAt = ( x, z ) => ( - x * sd[ 1 ] + z * sd[ 0 ] ) / sl;
 		// ((M13) along the water's edge as it is, a storm surge's or a drawdown's)
 		const sea = src.stSea = G.seaLevel.value;
 		const h = ( x, z ) => terrain.heightAt( x, z ) - sea;
@@ -1230,7 +1234,7 @@ export class SoundScape {
 				this._field( x, z, f, src );
 				const st = {
 					x, z, dx: ldx, dz: ldz, Ts: f[ 3 ], exposure: clamp( ex * 1.4, 0, 1 ),
-					along: - x * ldz + z * ldx, depth: new Float32Array( TRANSECT ), T: new Float32Array( TRANSECT ),
+					along: alongAt( x, z ), depth: new Float32Array( TRANSECT ), T: new Float32Array( TRANSECT ),
 					last: { crash: - 1e9, wash: - 1e9, back: - 1e9 },
 				};
 				for ( let r = 0; r < TRANSECT; r ++ ) {
