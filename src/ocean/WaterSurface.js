@@ -57,6 +57,8 @@ const KEY = { froth: 0, rows: 4, marble: 8, spume: 16, count: 23 };
 // bait boils; the weed's colour (sRGB, wet Sargassum: an olive-brown and its golden tips), how it's broken
 // into mats along a line (m: the mats' and the gaps' length, as a noise's), and the boil's white water's
 // patches (m) and how fast they come and go
+// (step 20) a device that draws on its CPU's sea has no caves in it (lean)
+const SEA_CAVE_LEAN = 'float seaCaveCalm( vec2 xz ) { return 0.0; }\nvec3 seaCaveLightAt( vec2 xz ) { return vec3( 1.0, 0.0, 0.0 ); }\n';
 const WEED_MAX = { low: 6, mid: 12, high: 12 }, BOIL_MAX = 4;
 const WEED = { dark: [ 0.21, 0.17, 0.07 ], gold: [ 0.55, 0.44, 0.19 ], mats: 14, edge: 2.5, front: [ 3, 0.8 ] };
 // (M15) the water's colour (sRGB, as the light it sends back up: the body's below). Its own: the island's
@@ -132,7 +134,9 @@ const rgb = ( r, g, b ) => {
 
 export class WaterSurface {
 
-	constructor( { scene, waves, terrain, shore = null, cover = null, rocks = null, tier = 'low' } ) {
+	// lean: (step 20) a device that draws on its CPU: no weedlines nor the front's slick in the sea's shader, a third
+	// of what it took to build there, in the 45 s a creation has to load, and nowhere it could go at a playable rate
+	constructor( { scene, waves, terrain, shore = null, cover = null, rocks = null, tier = 'low', lean = false } ) {
 
 		this.waves = waves;
 		this.terrain = terrain;
@@ -226,7 +230,7 @@ export class WaterSurface {
 
 			Object.assign( shader.uniforms, uniforms, seaCaveUniforms );
 			shader.vertexShader = shader.vertexShader
-				.replace( '#include <common>', '#include <common>\n' + this.lod.glsl + terrain.heightGlsl + waves.glsl + ( SH ? shore.glsl : '' ) + SEA_CAVE_CALM_GLSL + /* glsl */`
+				.replace( '#include <common>', '#include <common>\n' + this.lod.glsl + terrain.heightGlsl + waves.glsl + ( SH ? shore.glsl : '' ) + ( lean ? SEA_CAVE_LEAN : SEA_CAVE_CALM_GLSL ) + /* glsl */`
 uniform float waterSeaLevel;
 varying vec3 vWater;
 varying vec3 vWaterL; // (M15) about the sea's origin
@@ -303,7 +307,7 @@ ${ SH ? /* glsl */`
 				.replace( '#include <begin_vertex>', 'vec3 transformed = wPos;' );
 
 			shader.fragmentShader = shader.fragmentShader
-				.replace( '#include <common>', '#include <common>\n' + SEA_CAVE_GLSL + SEA_CAVE_CALM_GLSL + terrain.heightGlsl + ( SH ? shore.glsl : '' ) + waves.glsl + this.whitecaps.glsl + ( cover ? cover.glsl : '' ) + ( rocks ? rocks.glsl : '' ) + /* glsl */`
+				.replace( '#include <common>', '#include <common>\n' + ( lean ? SEA_CAVE_LEAN : SEA_CAVE_GLSL + SEA_CAVE_CALM_GLSL ) + terrain.heightGlsl + ( SH ? shore.glsl : '' ) + waves.glsl + this.whitecaps.glsl + ( cover ? cover.glsl : '' ) + ( rocks ? rocks.glsl : '' ) + /* glsl */`
 uniform float waterTime;
 uniform vec3 waterSunColor;
 uniform vec3 waterSunDir;
@@ -336,25 +340,22 @@ uniform vec2 waterRefractSize;
 #endif
 ${ WHALE_WATER_GLSL }
 ${ this.detail.glsl }
-// (M15) a cell's value, 0..1: an integer hash (pcg2d) of it and k. The sin of a dot it was grew too big for a
-// float's fineness tens of km out: the whitecaps' foam went flat and the rain's rings fell into a lattice
+// (M15) a cell's value, 0..1: an integer hash of it and k. The sin of a dot it was grew too big for a float's
+// fineness tens of km out: the whitecaps' foam went flat and the rain's rings fell into a lattice. (Step 20) Two
+// multiplies: the fuller pcg2d this was doubled what the sea's shader took to build and to draw on a CPU's GPU,
+// it being in every noise, and this one's noise looks the same (test/phones.mjs)
 float waterHash( vec2 c, uint k ) {
 	uvec2 v = uvec2( ivec2( c ) ) + uvec2( k * 7919u, k * 104729u );
-	v = v * 1664525u + 1013904223u;
-	v.x += v.y * 1664525u; v.y += v.x * 1664525u;
-	v ^= v >> 16u;
-	v.x += v.y * 1664525u; v.y += v.x * 1664525u;
-	v ^= v >> 16u;
-	return float( ( v.x ^ v.y ) >> 8u ) * ( 1.0 / 16777216.0 );
+	uint h = ( v.x * 1597334677u ^ v.y * 3812015801u ) * 1597334677u;
+	return float( ( h ^ h >> 16u ) >> 8u ) * ( 1.0 / 16777216.0 );
 }
-// (the noise in cell i, f into it)
+// (the noise in cell i, f into it: the same hash of its four corners at once)
 float waterNoiseAt( vec2 i, vec2 f ) {
 	vec2 u = f * f * ( 3.0 - 2.0 * f );
-	float a = waterHash( i, 0u );
-	float b = waterHash( i + vec2( 1.0, 0.0 ), 0u );
-	float c = waterHash( i + vec2( 0.0, 1.0 ), 0u );
-	float d = waterHash( i + vec2( 1.0, 1.0 ), 0u );
-	return mix( mix( a, b, u.x ), mix( c, d, u.x ), u.y );
+	uvec2 v = uvec2( ivec2( i ) );
+	uvec4 h = ( ( v.xxxx + uvec4( 0u, 1u, 0u, 1u ) ) * 1597334677u ^ ( v.yyyy + uvec4( 0u, 0u, 1u, 1u ) ) * 3812015801u ) * 1597334677u;
+	vec4 n = vec4( ( h ^ h >> 16u ) >> 8u ) * ( 1.0 / 16777216.0 );
+	return mix( mix( n.x, n.y, u.x ), mix( n.z, n.w, u.x ), u.y );
 }
 float waterNoise( vec2 p ) { vec2 i = floor( p ); return waterNoiseAt( i, p - i ); }
 // (M15) the same, p about the sea's origin and keyed (waterKey's: the noise's whole cells and fraction there)
@@ -386,12 +387,19 @@ float waterLaceOf( vec4 m, float cover ) {
 	float net = mix( n, 1.0 - cells, 0.45 );
 	return smoothstep( 1.0 - cover, 1.0 - cover + 0.18, net );
 }
+// ((step 20) its noises round a loop: a call's a copy of the code to the compiler, and there are ten laces)
 float waterLace( vec2 p, float cover ) {
-	return waterLaceOf( vec4( ${ LACE_NOISE.map( ( [ a, b ] ) => `waterNoise( p * ${ g( a ) } + ${ g( b ) } )` ).join( ', ' ) } ), cover );
+	const vec2 N[ 4 ] = vec2[ 4 ]( ${ LACE_NOISE.map( ( [ a, b ] ) => `vec2( ${ g( a ) }, ${ g( b ) } )` ).join( ', ' ) } );
+	vec4 m;
+	for ( int i = 0; i < 4; i ++ ) m[ i ] = waterNoise( p * N[ i ].x + N[ i ].y );
+	return waterLaceOf( m, cover );
 }
 // ((M15) p about the sea's origin, its noises' keys from waterKey[ k ] on)
 float waterLaceK( vec2 p, int k, float cover ) {
-	return waterLaceOf( vec4( ${ LACE_NOISE.map( ( [ a ], i ) => `waterNoiseK( p * ${ g( a ) }, waterKey[ k + ${ i } ] )` ).join( ', ' ) } ), cover );
+	const float N[ 4 ] = float[ 4 ]( ${ LACE_NOISE.map( ( [ a ] ) => g( a ) ).join( ', ' ) } );
+	vec4 m;
+	for ( int i = 0; i < 4; i ++ ) m[ i ] = waterNoiseK( p * N[ i ], waterKey[ k + i ] );
+	return waterLaceOf( m, cover );
 }
 ` )
 				.replace( '#include <color_fragment>', /* glsl */`
@@ -435,9 +443,15 @@ ${ SH ? /* glsl */`
 	// ((M15) and the slick along it: how far off the line (m across it: its depth off the front's over the
 	// slope there), glassy water damping the ripples, in stretches)
 	float waterFrontSlick = 0.0, frontAcross = 1e4, frontStretch = 0.0;
+${ lean ? '' : /* glsl */`
 	if ( abs( frontOff ) < 80.0 ) {
-		vec2 sx = vec2( 8.0, 0.0 );
-		vec2 slope = vec2( terrainHeightAt( vWater.xz + sx ) - terrainHeightAt( vWater.xz - sx ), terrainHeightAt( vWater.xz + sx.yx ) - terrainHeightAt( vWater.xz - sx.yx ) ) / 16.0;
+		// (round a loop: the ground's height, two maps' worth, is big to have four copies of)
+		vec2 slope = vec2( 0.0 );
+		for ( int i = 0; i < 4; i ++ ) {
+			vec2 at = vec2( i == 0 ? 8.0 : i == 1 ? - 8.0 : 0.0, i == 2 ? 8.0 : i == 3 ? - 8.0 : 0.0 );
+			slope += at / 8.0 * terrainHeightAt( vWater.xz + at );
+		}
+		slope /= 16.0;
 		float across = abs( frontOff ) / max( length( slope ), 0.02 );
 		float stretch = smoothstep( 0.25, 0.45, waterNoise( vWater.xz / ${ g( WATER.slick.patch ) } + 4.1 ) );
 		stretch *= 1.0 - smoothstep( ${ g( WATER.coast[ 0 ] ) }, ${ g( WATER.coast[ 1 ] ) }, length( vWater.xz - vec2( ${ g( LEE.x ) }, ${ g( LEE.z ) } ) ) );
@@ -451,6 +465,7 @@ ${ SH ? /* glsl */`
 		// (and the windrows' foam swept off it: the surface film holds the water still)
 		seaD.w *= 1.0 - waterFrontSlick;
 	}
+`}
 	float wrFw = length( fwidth( vWaterX0 ) );
 	if ( seaD.w > 0.0 ) {
 		float wr = min( seaD.w * 1.5, 0.75 );
@@ -496,6 +511,7 @@ ${ SH ? /* glsl */`
 		float spCover = waterSpume * ( 0.75 * streak + 0.2 * waterNoiseK( sq * ${ g( SPUME_NOISE[ 2 ][ 0 ] ) }, waterKey[ ${ KEY.spume + 2 } ] ) ) * smoothstep( 0.15, 0.8, depth ) * ( 1.0 - smoothstep( 600.0, 2000.0, spDist ) );
 		foam = max( foam, waterLaceK( sq * ${ g( SPUME_LACE ) }, ${ KEY.spume + 3 }, min( spCover, 0.75 ) ) * 0.85 );
 	}
+${ lean ? '' : /* glsl */`
 	if ( frontAcross < 30.0 ) {
 		// ((M15) the foam gathered down the front's middle, ragged: in clumps and gaps, wider and narrower, wandering a few
 		// metres off the line, a thin lace near by and as much white spread from afar)
@@ -504,18 +520,19 @@ ${ SH ? /* glsl */`
 		float line = ( 1.0 - smoothstep( 0.0, wide, abs( frontAcross - 5.0 * ( waterNoise( vWater.xz / 40.0 + 5.5 ) - 0.5 ) ) ) ) * clumps;
 		if ( line > 0.0 ) foam = max( foam, mix( waterLace( vWater.xz * 0.9 + 1.7, 0.45 ), 0.4, smoothstep( 0.4, 1.5, length( fwidth( vWater.xz ) ) ) ) * line * ${ g( WATER.slick.foam[ 1 ] ) } * ( 0.35 + 0.65 * waterNoise( vWater.xz / 9.0 + 1.3 ) ) );
 	}
+`}
 	// ((M15) what's found out there (setFinds): the weedlines, mats of Sargassum strung along each, broken
 	// and ragged, with stray clumps beside them, all in the line's own frame (along it and across it: as the
 	// sea's origin moves it doesn't); and the weed the front gathers, along its slick. From afar, as much
 	// colour spread)
 	float weed = 0.0, weedTone = 0.0;
 	float fw = length( fwidth( vWaterX0 ) );
+${ lean ? '' : /* glsl */`
 	for ( int i = 0; i < ${ WEED_MAX[ tier ] ?? WEED_MAX.low }; i ++ ) {
 		if ( i >= waterWeedCount ) break;
 		vec4 A = waterWeed[ 2 * i ], B = waterWeed[ 2 * i + 1 ];
-		vec2 e = A.zw - A.xy;
-		float L = length( e );
-		vec2 ax = e / max( L, 1e-3 );
+		vec2 ax = A.zw;
+		float L = B.w;
 		vec2 rp = vWaterX0 - A.xy;
 		float u = dot( rp, ax ), v = dot( rp, vec2( - ax.y, ax.x ) );
 		float reach = B.x * 2.5 + ${ g( WEED.edge ) } * 2.0;
@@ -560,6 +577,7 @@ ${ SH ? /* glsl */`
 			weedTone = waterNoise( vWater.xz / 0.7 + 2.2 );
 		}
 	}
+`}
 	weed = clamp( weed, 0.0, 1.0 ) * smoothstep( 0.3, 1.0, depth );
 	// (the water boiling white where a school's driven bait up, in patches that come and go)
 	for ( int i = 0; i < ${ BOIL_MAX }; i ++ ) {
@@ -731,8 +749,10 @@ ${ SH ? /* glsl */`
 	}
 
 	// (M15) what's found out there (game/Finds.js' findsAbout): the weedlines nearest the camera, as many as
-	// the tier draws, and the bait's boils, about the sea's origin (its origin as update() left it)
-	setFinds( finds, camera ) {
+	// the tier draws, and the bait's boils, about the sea's origin (its origin as update() left it). Only those
+	// nearer than `seen` (m: where the fog has the sea whole): every pixel of the sea looks at every one it's given,
+	// and they were nearly half its cost in open water on a phone (step 20)
+	setFinds( finds, camera, seen = Infinity ) {
 
 		const F = this._finds, O = this.lod.origin, c = camera.position, near = F.near;
 		near.length = 0;
@@ -740,7 +760,8 @@ ${ SH ? /* glsl */`
 
 			const ex = w.x1 - w.x0, ez = w.z1 - w.z0, L2 = ex * ex + ez * ez || 1;
 			const t = Math.min( 1, Math.max( 0, ( ( c.x - w.x0 ) * ex + ( c.z - w.z0 ) * ez ) / L2 ) );
-			near.push( { w, d: Math.hypot( c.x - w.x0 - ex * t, c.z - w.z0 - ez * t ) } );
+			const d = Math.hypot( c.x - w.x0 - ex * t, c.z - w.z0 - ez * t );
+			if ( d < seen + w.width ) near.push( { w, d } );
 
 		}
 
@@ -749,20 +770,17 @@ ${ SH ? /* glsl */`
 		for ( let i = 0; i < n; i ++ ) {
 
 			const w = near[ i ].w;
-			W[ 2 * i ].set( w.x0 - O.x, w.z0 - O.z, w.x1 - O.x, w.z1 - O.z );
-			W[ 2 * i + 1 ].set( w.width, w.life, ( ( ( w.n % 997 ) + 997 ) % 997 ) * 0.731, 0 );
+			// (where it starts, which way it runs and how long it is: for each pixel not to work them out)
+			const ex = w.x1 - w.x0, ez = w.z1 - w.z0, L = Math.hypot( ex, ez ), k = 1 / Math.max( L, 1e-3 );
+			W[ 2 * i ].set( w.x0 - O.x, w.z0 - O.z, ex * k, ez * k );
+			W[ 2 * i + 1 ].set( w.width, w.life, ( ( ( w.n % 997 ) + 997 ) % 997 ) * 0.731, L );
 
 		}
 
 		F.weedCount.value = n;
-		const B = F.boil.value, m = Math.min( finds.bait.length, B.length );
-		for ( let i = 0; i < m; i ++ ) {
-
-			const b = finds.bait[ i ];
-			B[ i ].set( b.x - O.x, b.z - O.z, b.r, b.life );
-
-		}
-
+		const B = F.boil.value;
+		let m = 0;
+		for ( const b of finds.bait ) if ( m < B.length && Math.hypot( b.x - c.x, b.z - c.z ) < seen + b.r ) B[ m ++ ].set( b.x - O.x, b.z - O.z, b.r, b.life );
 		F.boilCount.value = m;
 
 	}

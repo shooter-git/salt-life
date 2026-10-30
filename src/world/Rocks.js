@@ -45,7 +45,10 @@ export class Rocks {
 	// terrain: the Terrain (its maps and detail texture shade the rocks like the ground's rock).
 	// castShadow: the near LOD (rocks within ~60-80 m) casts shadow-map shadows; far rocks never do.
 	// lite: the low tier's cheaper surface (no triplanar detail).
-	constructor( { scene, terrain, village = null, colliders = null, seed = 4242, castShadow = true, lite = false } ) {
+	// coarseCaves: (M15) a device that draws on its CPU: the sea caves' far shapes twice as coarse, an eighth of the
+	// cells to make in the load, and their light worked out with their near shapes after the start: they're on the
+	// far side of the island from where you start.
+	constructor( { scene, terrain, village = null, colliders = null, seed = 4242, castShadow = true, lite = false, coarseCaves = false } ) {
 
 		this.scene = scene;
 		this.terrain = terrain;
@@ -70,7 +73,7 @@ export class Rocks {
 		// ((M14) and the overhangs to shelter under, placed by hand (terrain/Overhangs.js): made coarse now
 		// (their far shape, and from it what's in the way of standing under them), their near shape after the
 		// start (refineOverhangs); the scattered rocks where they stand taken away, the rest as they were)
-		this.overhangs = [ ...OVERHANGS, ...SEA_CAVE_SITES ].map( ( site ) => buildOverhang( site, this.terrainData, { cell: OVERHANG_CELL.far } ) );
+		this.overhangs = [ ...OVERHANGS, ...SEA_CAVE_SITES ].map( ( site ) => buildOverhang( site, this.terrainData, coarseCaves && site.kind === 'seacave' ? { cell: OVERHANG_CELL.far * 2, lightLater: true } : { cell: OVERHANG_CELL.far } ) );
 		this.instances = this.instances.filter( ( r ) => ! this.overhangs.some( ( o ) => this._crowds( o, r ) ) );
 		// ((M15) nor on the way over to the north beach: terrain/NorthTrail.js)
 		this.instances = this.instances.filter( ( r ) => ! trailClears( r.x, r.z, r.size * 0.5 ) );
@@ -138,7 +141,7 @@ export class Rocks {
 		} );
 		this._nearCell = lite ? OVERHANG_CELL.lite : OVERHANG_CELL.near;
 		// ((M15) the sea caves' light on the sea and the ground in them, for the water's and the terrain's shaders)
-		seaCaveUniforms.seaCaveLight.value = caveLightTexture( this.overhangs.filter( ( o ) => o.waterLight ).map( ( o ) => o.waterLight ) );
+		this._caveLight();
 
 		this.timings = { place: t1 - t0, build: performance.now() - t1 };
 		this._lastCam = new THREE.Vector3( 1e9, 0, 0 );
@@ -147,6 +150,13 @@ export class Rocks {
 		this._sphere = new THREE.Sphere();
 		this._lastQuat = new THREE.Quaternion();
 		scene.add( this.group );
+
+	}
+
+	// (M15) a cave's place on the map's strip is its own, whether its light's been worked out yet or not
+	_caveLight() {
+
+		seaCaveUniforms.seaCaveLight.value = caveLightTexture( this.overhangs.filter( ( o ) => o.site.kind === 'seacave' ).map( ( o ) => o.waterLight || null ) );
 
 	}
 
@@ -175,6 +185,15 @@ export class Rocks {
 			}
 
 			const fine = o.fine = r.value;
+			// ((M15) a sea cave's light, if it was left till now: coarseCaves)
+			if ( fine.light && ! o.light ) {
+
+				o.light = fine.light;
+				o.waterLight = fine.waterLight;
+				this._caveLight();
+
+			}
+
 			const b = this.buckets[ ROCK_STYLES.length + k ], was = b.near.geometry, g = fine.geometry;
 			g.setAttribute( 'iLod', was.attributes.iLod );
 			b.near.geometry = g;
@@ -723,6 +742,9 @@ float rockBayer4( vec2 pixel ) {
 
 			b.near.count = nn;
 			b.far.count = nf;
+			// ((M15) none of a kind in view, as out at sea: no call for it, nor its program and uniforms set)
+			b.near.visible = nn > 0;
+			b.far.visible = nf > 0;
 			for ( const [ a, c ] of [ [ nl, nn ], [ fl, nf ] ] ) {
 
 				a.clearUpdateRanges();

@@ -702,7 +702,7 @@ export function buildOverhang( site, terrain, opts ) {
 
 }
 
-export function* overhangBuild( site, terrain, { cell = 0.2, light = null } = {} ) {
+export function* overhangBuild( site, terrain, { cell = 0.2, light = null, lightLater = false } = {} ) {
 
 	cell *= site.cellK || 1;
 	const yaw = Math.atan2( site.toward[ 0 ], site.toward[ 1 ] ), cs = Math.cos( yaw ), sn = Math.sin( yaw );
@@ -771,7 +771,7 @@ export function* overhangBuild( site, terrain, { cell = 0.2, light = null } = {}
 	const o = { site, geometry, matrix, yaw, y0, x: c.x, y: c.y, z: c.z, radius: b.radius, top: geometry.boundingBox.max.y + y0, at, ground, world, bounds: shape.bounds, clear: shape.clear, clearHalf: shape.clearHalf };
 	// ((M15) a sea cave's light: what each place in it sees of the sky and the sunlit sea (CaveLight.js), worked
 	// out once (its finer rock takes its coarser's), its rock's faces' and the sea's in it)
-	if ( site.kind === 'seacave' ) {
+	if ( site.kind === 'seacave' && ! lightLater ) {
 
 		o.light = light || ( yield* caveLightGrid( o, shape.column ) );
 		caveLightAttribute( geometry, o.light );

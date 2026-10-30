@@ -337,7 +337,8 @@ export class App {
 		this.harbourLights = new HarbourLights( { scene, terrain: this.terrainData, colliders: this.colliders } );
 		this.village.footprints.push( ...this.harbourLights.footprints );
 		// ((M15) the wreck on the windward reef: a coaster broken in two on its crest)
-		this.wreck = new Wreck( { scene, colliders: this.colliders } );
+		// ((step 20) on a device that draws on its CPU, after the start: lifeAndDebris)
+		if ( ! this.cpuGL ) this.wreck = new Wreck( { scene, colliders: this.colliders } );
 		// ((M15) the green turtles nesting on the north coast's turtle beach: world/NestingTurtles.js)
 		this.turtles = new NestingTurtles( { scene, terrain: this.terrainData } );
 		// ((M15) the island seen from far off, where its own ground isn't drawn: world/FarIsland.js)
@@ -372,7 +373,7 @@ export class App {
 		this.terrain = new Terrain( { scene, terrainData: this.terrainData, tier } );
 		uploadTextures( renderer, [ this.terrain.heightTexture, this.terrain.normalTexture, this.terrain.splatTexture ] );
 		// boulders, blocks, talus and outcrops (shaded like the ground's rock)
-		this.rocks = new Rocks( { scene, terrain: this.terrain, colliders: this.colliders, village: this.village, castShadow: tier !== 'low', lite: tier === 'low' } );
+		this.rocks = new Rocks( { scene, terrain: this.terrain, colliders: this.colliders, village: this.village, castShadow: tier !== 'low', lite: tier === 'low', coarseCaves: this.cpuGL } );
 		this.vegetation = new Vegetation( { scene, terrain: this.terrainData, ground: this.terrain, renderer, tier, village: this.village, rocks: this.rocks, smallBakes: this.cpuGL, bakeSlot: () => this.frameSlot() } );
 		// (WebGL drawn on the CPU: the plants grow in once the game has started, in start(); their
 		// programs and bakes take seconds there, and a creation has 45 s to load)
@@ -385,7 +386,7 @@ export class App {
 		this.shoreField = computeShoreField( this.terrainData, { res: 512, swellDir: [ WORLD.swellDir.x, WORLD.swellDir.y ] } );
 		this.shore = new ShoreWaves( { field: this.shoreField } );
 		this.query = new WaterQuery( this.waves, this.terrainData, this.shore );
-		this.water = new WaterSurface( { scene, waves: this.waves, terrain: this.terrain, shore: this.shore, cover: this.cover, rocks: this.rockCover, tier } );
+		this.water = new WaterSurface( { scene, waves: this.waves, terrain: this.terrain, shore: this.shore, cover: this.cover, rocks: this.rockCover, tier, lean: this.cpuGL && ! new URLSearchParams( location.search ).has( 'fullsea' ) } );
 		// (M15) what's found out there: the debris floating (game/Finds.js; the weed and the bait's boils are the
 		// sea's own, the birds working it Wildlife's)
 		this.flotsam = new Flotsam( { scene, waves: this.waves } );
@@ -617,6 +618,13 @@ export class App {
 			// a hurricane's flying debris; (M14) and a blow's litter)
 			this._heldWeather = [ this.rain.mesh, this.rain.splash, this.drips.mesh, this.lightning.mesh, this.flying.mesh, this.litter.mesh ].map( ( m ) => [ m, m.parent ] );
 			for ( const [ m ] of this._heldWeather ) m.removeFromParent();
+
+			// ((M15) and what M15 added about the island, none of it where you start but the signposts: the lighthouse,
+			// the harbour lights, the wreck, the turtles, the island's far shape, the signs. Theirs were nine more
+			// programs, and the load back past what v1.10.0 failed All the Spaces' checks at: 5.4 s to 9 s)
+			const landmarks = /^(Lighthouse|LighthouseGlare|HarbourLights|HarbourGlare|Wreck|Turtles|FarIsland|Signpost|ShelterSign|StormChart|BoardedUp)/;
+			this._heldLandmarks = scene.children.filter( ( c ) => landmarks.test( c.name ) ).map( ( m ) => [ m, m.parent ] );
+			for ( const [ m ] of this._heldLandmarks ) m.removeFromParent();
 
 		}
 
@@ -880,6 +888,7 @@ export class App {
 		// ---- world
 		this.terrain.update( this.camera );
 		this.village.update( dt );
+		this.village.updateSight( dt, this.camera, this._groundAt || ( this._groundAt = ( x, z ) => this.terrainData.heightAt( x, z ) ) );
 		this.rocks.update( this.camera );
 		if ( this.debris ) this.debris.update( this.camera );
 		// ((M15) beachcombing's finds and the north beach's wrack line, once the beach's debris materials are made)
@@ -1213,7 +1222,7 @@ export class App {
 
 		}
 
-		for ( const [ m, parent ] of [ ...( this._heldFish || [] ), ...( this._heldNet || [] ), ...( this._heldWeather || [] ) ] ) {
+		for ( const [ m, parent ] of [ ...( this._heldFish || [] ), ...( this._heldNet || [] ), ...( this._heldWeather || [] ), ...( this._heldLandmarks || [] ) ] ) {
 
 			roots.push( m );
 			show.push( () => parent.add( m ) );
@@ -1223,6 +1232,7 @@ export class App {
 		this._heldFish = null;
 		this._heldNet = null;
 		this._heldWeather = null;
+		this._heldLandmarks = null;
 		for ( const root of roots ) await r.compileAsync( root, this.camera, this.scene );
 		await this.useNewPrograms();
 		for ( const f of show ) f();
@@ -1691,6 +1701,7 @@ export class App {
 	// the end of loading, on a device that draws on its CPU after the start (start())
 	async lifeAndDebris() {
 
+		if ( ! this.wreck ) this.wreck = new Wreck( { scene: this.scene, colliders: this.colliders } );
 		await this.lifeArrives();
 		await this.pause();
 		await this.debrisLands();
@@ -2148,7 +2159,7 @@ export class App {
 		const s = this.settings, c = this.camera.position;
 		const depthAt = this._depthAt || ( this._depthAt = ( x, z ) => - this.terrainData.heightAt( x, z ) );
 		const f = this.finds = findsAbout( islandTime( s.day, s.timeOfDay ), c.x, c.z, FIND_RANGE, this.finds || { weed: [], debris: [], bait: [] }, depthAt );
-		this.water.setFinds( f, this.camera );
+		this.water.setFinds( f, this.camera, this.sky.fogFar * 1.1 );
 		this.flotsam.update( f.debris, this.camera );
 		if ( this.wildlife ) {
 

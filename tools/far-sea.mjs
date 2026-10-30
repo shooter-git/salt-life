@@ -22,7 +22,7 @@ const { chromium } = await import( join( ROOT, '../all-the-spaces/node_modules/p
 const [ TIER = 'high', WEATHER = 'fair', HOUR = '11', LIST = '600,1500,5000,10000,20000,40000' ] = process.argv.slice( 2 );
 const DISTANCES = LIST.split( ',' ).map( Number );
 const OUT = join( ROOT, 'qa-output/far-sea', `${ TIER }-${ WEATHER }` );
-const URL_ = `http://127.0.0.1:5189/?tier=${ TIER }&weather=${ WEATHER }&hour=${ HOUR }`;
+const URL_ = `http://127.0.0.1:5189/?tier=${ TIER }&weather=${ WEATHER }&hour=${ HOUR }&fullsea`;
 mkdirSync( OUT, { recursive: true } );
 
 const T0 = Date.now();
