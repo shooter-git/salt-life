@@ -81,6 +81,9 @@ slice table is in `src/audio/soundBank.js`.
 | `drips.ogg` | 8 drops of water landing on thin metal, each through its ring — the drips off the eaves, the wheelhouse and the palms as they land (slowed and dulled onto wood or the boat) | [Water Dripping on Thin Metal](https://freesound.org/people/Elements-Library/sounds/683778/) | Elements-Library | CC0 1.0 |
 | `sheet_tear.ogg` | 5 bangs of a long corrugated roofing sheet being put up on a house roof, their rattle and ring (high-passed) — a roof's sheet a hurricane tears off | [Đưa Miến Tôn Lên Nắp Nhà - Thin Metal On House Roof](https://freesound.org/people/SieuAmThanh/sounds/840435/) | SieuAmThanh | CC0 1.0 |
 | `sheet_land.ogg` | 4 drops of a thin metal sheet on a pile, each with its bounce and rattle — the sheet landing (slowed and dulled on the sand and the grass) | [metal sheet thin drop on pile2.flac](https://freesound.org/people/kyles/sounds/453351/) | kyles | CC0 1.0 |
+| `sea_open.ogg` | the open sea's wash, heard from a cliff (the chosen 22 s, high-passed 60 Hz) — loop, as rough as the wind's sea where you are | [Kimolos Mavrospilia Seawash From Cliff](https://freesound.org/people/Sotiris_Laskaris/sounds/583205/) | Sotiris_Laskaris | CC0 1.0 |
+| `wind_sea.ogg` | wind over open water, Storm Henk over a reservoir (everything under 180 Hz cut, mostly wind on the microphone's cover) — loop, the wind out at sea | [Wind howling over Reservoir No 2](https://freesound.org/people/pnwheeler/sounds/830338/) | pnwheeler | CC0 1.0 |
+| `whitecap.ogg` | 5 swells of water about a floating jetty in waves on a windy lake (high-passed 120 Hz); played per crest, where it's seen to break | [Floating dock in plunging waves](https://freesound.org/people/LarsErikErtzgaardRingen/sounds/607261/) | LarsErikErtzgaardRingen | CC0 1.0 |
 
 Note: `under_reef.ogg` uses the first ~200 s of 630436's preview (a narrow 1.7 kHz tone notched out).
 

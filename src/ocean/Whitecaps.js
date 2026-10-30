@@ -105,6 +105,7 @@ function event( n, s, tau, T, chance, salt, size, fw = 0 ) {
 	pcg3d( un, um, salt, _h );
 	const ho = _h[ 1 ] * INV32, E = EPOCH * T;
 	const e = Math.floor( tau / E + ho );
+	_ev.e = e;
 	pcg3d( un, um, ( u32( e ) ^ salt ) >>> 0, _h );
 	if ( _h[ 0 ] * INV32 >= chance ) return _ev;
 	const ry = _h[ 1 ] * INV32, rz = _h[ 2 ] * INV32;
@@ -356,8 +357,8 @@ vec2 whitecapsAt( vec2 x0 ) {
 	}
 
 	// the crests breaking now within R m of ( x, z ) (Lagrangian: near enough for spray): cb( x0, z0, along,
-	// half, strength, wave ) for each, at its roller's middle, (along: the crest's direction, a unit
-	// [ x, z ]; half: its half-length, m; wave: Waves' wave carrying it)
+	// half, strength, wave, id ) for each, at its roller's middle, (along: the crest's direction, a unit
+	// [ x, z ]; half: its half-length, m; wave: Waves' wave carrying it; id: (M15) its own while it's breaking)
 	rollers( x, z, R, t, cb ) {
 
 		if ( this.cover.value <= 0 ) return;
@@ -388,7 +389,7 @@ vec2 whitecapsAt( vec2 x0 ) {
 					const on = event( n, sc, t, T, chance, c.salt, this.size ).on * this.waves.windGrownAt( px, pz );
 					// (one only beginning to spill throws no spray)
 					if ( on <= 0.2 ) continue;
-					cb( px, pz, [ - w.dz, w.dx ], half, on, w );
+					cb( px, pz, [ - w.dz, w.dx ], half, on, w, ( ( n * 65536 + m ) * 1024 + ( ev.e & 1023 ) ) * 2 + i );
 
 				}
 

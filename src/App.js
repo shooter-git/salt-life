@@ -68,6 +68,7 @@ import { Whale } from './world/marine/Whale.js';
 import { Spray } from './fx/Spray.js';
 import { StormSpray } from './fx/StormSpray.js';
 import { WhitecapSpray } from './fx/WhitecapSpray.js';
+import { SurfLine } from './audio/OpenSea.js';
 import { FlyingDebris } from './fx/FlyingDebris.js';
 import { BlownLitter } from './fx/BlownLitter.js';
 import { insideRoom, roomMatrix } from './world/village/StormPlaces.js';
@@ -496,6 +497,7 @@ export class App {
 		} );
 		this.surfHeard( 1 );
 		this.surfHeard( 2 );
+		this.audio.attachSea( this.water.whitecaps );
 		this.player.audio = this.audio;
 		// (and, M10, the hull: a slam's wear and the green water it ships, Game.hull)
 		this.boatCtl.onSlam = ( strength ) => {
@@ -1382,6 +1384,7 @@ export class App {
 			// (mid: its triangles are mostly spent on the island already)
 			castShadow: this.tier === 'high',
 		} );
+		this.wildlife.birds.onSplash = ( x, y, z, k ) => this.audio.birdSplash( x, y, z, k );
 		// (birds and crabs smaller than this many pixels aren't drawn)
 		this.wildlife.minPx = this.tier === 'low' ? 1.5 : 0.75;
 		const meshes = [ this.wildlife.birdBatch.mesh, this.wildlife.birdBatch.farMesh, this.wildlife.critterBatch.mesh, this.wildlife.critterBatch.farMesh, this.wildlife.blobs.mesh ];
@@ -1770,8 +1773,23 @@ export class App {
 
 		}
 
+		// (M15) out at sea (four times a second): the surf that's heard there, how grown the wind's sea is, how big
+		// the sea is against a fair day's open sea, and the bottom under you
+		this._seaHeardT = ( this._seaHeardT || 0 ) - dt;
+		if ( this._seaHeardT <= 0 ) {
+
+			this._seaHeardT = 0.25;
+			const B = SEABED.bank, line = this._surfLine || ( this._surfLine = new SurfLine( this.terrainData, { bank: { x: B.x, z: B.z, size: BANK.size } } ) );
+			const q = this._seaHeard = line.heard( p.x, p.z, this.shore.trains, this._seaHeard || {}, this.shore.params.gamma ), live = this.weather.live, w = this.waves;
+			q.grown = w.windGrownAt( p.x, p.z );
+			q.big = live ? w.reachOf( live.swell, live.windSea * q.grown ) / w.reachOf( 1, 1 ) : 1;
+			q.bottom = G.seaLevel.value - this.terrainData.heightAt( p.x, p.z );
+
+		}
+
 		a.update( dt, {
 			listener: { position: p, forward: _fwd, up: _up },
+			sea: this._seaHeard,
 			underwater: p.y < h ? 1 : 0,
 			depthBelowSurface: Math.max( 0, h - p.y ),
 			surfIntensity: amp / 0.6, // ((M13) past 1 in a hurricane's surf: SoundScape)
@@ -2177,6 +2195,7 @@ export class App {
 			if ( this._bankKey !== key ) return;
 			shore.setBank( field, [ B.x, B.z ] );
 			shore.setBankSea( fromNorth ? north : south, fromNorth ? pn : ps );
+			this.surfHeard( 3 );
 
 		} ).catch( ( e ) => console.warn( 'Shore: the bank\'s field', e && e.message ) );
 
@@ -2232,7 +2251,8 @@ export class App {
 
 	}
 
-	// (M12) the west swell's waves to the surf's sound, once both are here; (M14) or the north shore's (slot 2)
+	// (M12) the west swell's waves to the surf's sound, once both are here; (M14) or the north shore's (slot 2);
+	// (M15) or the bank's (slot 3), whenever its field's given
 	surfHeard( slot ) {
 
 		const train = this.shore && this.shore.trains[ slot ], P = this.shore && this.shore.params;
