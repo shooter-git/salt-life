@@ -52,6 +52,10 @@ The roofs' sheets a hurricane tears off, tearing and landing (M14), are built th
 840435:SieuAmThanh 453351:kyles`, then `node build-sheets.mjs` (its bank entries in `sheets-bank.json`), then
 `tame.mjs`. `node build-sheets.mjs --try` writes each slice on its own to `tools/sounds/try/`.
 
+The open sea's own (M15: its wash, the wind off open water, and a crest spilling) are built the same way: `node
+dl.mjs 583205:Sotiris_Laskaris 830338:pnwheeler 607261:LarsErikErtzgaardRingen`, then `node build-sea.mjs` (its bank
+entries in `sea-bank.json`), then `tame.mjs`.
+
 ## All the Spaces' loudness rule, and the AAC copies
 
 All the Spaces' build turns a sound down when it's louder than -14 LUFS integrated or peaks above -1 dBFS.

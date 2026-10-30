@@ -1073,6 +1073,7 @@ export class Birds {
 
 	splash( x, y, z, k ) {
 
+		if ( this.onSplash ) this.onSplash( x, y, z, k ); // ((M15) heard: SoundScape.birdSplash)
 		if ( ! this.spray ) return;
 		const s = this.spray;
 		_v.set( x, y + 0.05, z );
