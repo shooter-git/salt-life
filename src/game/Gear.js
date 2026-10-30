@@ -106,10 +106,16 @@ export const UPGRADES = {
 
 export const FUEL_PRICE = 1.5; // $ per litre of diesel at the chandlery
 // (Salt Life) Marta's tow: she fetches your boat back to the dock when it's drifted off (the wind pushes
-// a boat left without its anchor). A call-out and a little for every 100 m, up to a cap; nothing to tow
-// within `from` metres of the dock (walk or swim to her)
-export const TOW = { base: 20, per100m: 5, max: 90, from: 30 };
-export const towFee = ( metres ) => Math.min( TOW.max, Math.round( TOW.base + TOW.per100m * Math.max( 0, metres ) / 100 ) );
+// a boat left without its anchor), and (M15) when you call her on the radio, out of fuel far out. A call-out
+// and a little for every 100 m, as far as it is (it had a cap of $90: 1.4 km). It's her time she's paid
+// for, as a towing firm bills it: out to you at `out` m/s (18 knots) and back with you in tow at `back` (6
+// knots), so a 10 km tow is an hour and ten minutes of it and $520, about $435 an hour (Sea Tow gives $250 to
+// $500 for those who aren't members, dock to dock). Nothing to tow within `from` metres of the dock (walk or
+// swim to her)
+export const TOW = { base: 20, per100m: 5, from: 30, out: 9.3, back: 3.1 };
+export const towFee = ( metres ) => Math.round( TOW.base + TOW.per100m * Math.max( 0, metres ) / 100 );
+// (M15) how long she's out on it (s: the real world's, as the boat runs)
+export const towTime = ( metres ) => Math.max( 0, metres ) * ( 1 / TOW.out + 1 / TOW.back );
 // litres per second at the helm: idle plus a lot more at full rpm (40 L lasts ~25 min flat out)
 export function fuelBurn( rpm ) {
 

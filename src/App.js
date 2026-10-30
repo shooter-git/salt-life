@@ -1824,6 +1824,9 @@ export class App {
 		r.fuelL = g.state.fuelL;
 		r.speedMul = g.state.stats.speedMul || 1;
 		r.alert = this.weatherAlert();
+		// ((M15) the VHF, overhead: Radio.js)
+		r.vhf = g.radio ? g.radio.reading : null;
+		r.night = G.night.value;
 		// ((M14) her radar, swept with her array; at the helm, ← → its range, as the panels aren't up)
 		if ( p.mode === 'boat' && g.quietKeys && g.quietKeys() && ( this.input.hit( 'ArrowLeft' ) || this.input.hit( 'ArrowRight' ) ) ) this.radar.step( this.input.hit( 'ArrowRight' ) ? 1 : - 1 );
 		r.radar = this.sweepRadar( dt, r, this.boat.radarBearing );

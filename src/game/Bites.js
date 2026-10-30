@@ -36,9 +36,15 @@ import { NORTH } from './Weather.js';
 // (M15) The game adds side too, as it does flood (not a water type): the spot's windward share, for the sea
 // that roughs its water (the north shore's or the bay's surf: roughed); and big, 0..1: how much it's on the
 // windward reef, whose fish run bigger and whose big fish bite more (BIG: pickSpecies, rollWeight).
+// (M15) And far, 0..1: how far the spot is out in the soft edge past the far grounds (Weather.edgeAt), where
+// the open blue's emptier (FAR_SLOWER: biteDelay). Not a water type.
 // (Salt Life) The game adds flood, 0..1: how far the spot is in a boat's deck floodlights after dark (not
 // a water type: it draws in the fish that gather under lights, and the bait, so they bite sooner), and
 // (M9) weather: the weather now (Weather.weatherAt's; none, or a fair day's, changes nothing: weatherMood).
+// (M15) the island mass effect: about an island the water's richer (its plankton, the bait, what feeds on
+// them), thinning out within tens of km (Doty and Oguri, 1956); past the far grounds the blue's bites come
+// this much slower again at full (twice as slow: far, Weather.edgeAt), the weed's and the debris' as they were
+export const FAR_SLOWER = 1;
 export const BLUE = 0.35; // (the open ocean's fish, sparse: its weight; a spot's floor is the same: biteDelay)
 export function habitatAt( { depth, reefDist, pierDist, slope = 0, patch = 0, weed = 0, debris = 0, birds = 0, windward = 0, beach = 0, creek = 0, windReef = 0 } ) {
 
@@ -139,7 +145,7 @@ export const WASH = { day: 0.9, blown: 0.85, open: 0.5 };
 // north sea roughs its water as it does the north shore's (`blown`)
 export const BIG = { skew: 0.5, from: 4, more: 1.5, blown: 0.4 };
 // (not water types: what the game adds to a spot's habitat)
-const NOT_WATER = { flood: true, weather: true, side: true, big: true };
+const NOT_WATER = { flood: true, weather: true, side: true, big: true, far: true };
 
 // the water types as the weather leaves them (m: weatherMood's)
 function roughed( habitat, m ) {
@@ -241,6 +247,8 @@ export function biteDelay( habitat, hour, rng = Math.random, bait = null ) {
 	rich = Math.max( rich, 0.35 ) + ( habitat.flood || 0 );
 	const light = hour > 6 && hour < 19 ? 1 : 0.8;
 	let mean = 8 / ( Math.min( rich, 1.6 ) * light ) * ( BAITS[ bait ] ? BAITS[ bait ].speed : 1 );
+	// ((M15) past the far grounds the open blue's emptier still (FAR): for its share of the spot's water)
+	if ( habitat.far > 0 ) mean *= 1 + FAR_SLOWER * habitat.far * ( habitat.blue || 0 ) / all;
 	// (M9) the weather: sooner ahead of a blow, slower in a downpour, and slower for the share of the
 	// spot's water a big surf or a blow has stirred up
 	const m = weatherMood( habitat.weather );

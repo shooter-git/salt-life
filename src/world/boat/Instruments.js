@@ -21,13 +21,15 @@ import { S52, rgb, SHADES } from '../../game/ChartBake.js';
 //     a compass's card swings to the north in its bowl).
 //   - (M14) The third, to port of the plotter: the radar (reading.radar: Radar.js, heading up, swept with
 //     her array turning on the roof).
+//   - (M15) Overhead, the VHF's face (reading.vhf: game/Radio.js): black segments on a grey-green LCD by day,
+//     as a fixed-mount set's are, amber-backlit after dark (reading.night), and its rubber keys.
 // Redrawn a few times a second while you're aboard; ashore her screens are off and her needles rest.
 // Other players' boats show theirs on standby (ins.standby: the same program, a dark glass for its map;
 // the readings here are yours). (M12) Riding along in theirs, it shows its skipper's (App.riddenReading),
 // and yours is on standby.
 //   const ins = new BoatInstruments( { material, tier } );   ins.update( dt, reading )
 
-export const ATLAS = { w: 1536, h: 512 };
+export const ATLAS = { w: 1536, h: 544 };
 // where each is in the atlas (px, y down): the screens 0.31 x 0.21 m, the dials round
 export const RECTS = {
 	sounder: [ 0, 0, 492, 334 ],
@@ -43,6 +45,7 @@ export const RECTS = {
 	compassBand: [ 976, 352, 544, 68 ],
 	lubber: [ 976, 432, 16, 16 ],
 	lubberRed: [ 1000, 432, 16, 16 ],
+	vhf: [ 1032, 424, 288, 118 ], // ((M15) the radio's face, in the overhead console: 0.176 x 0.072 m)
 };
 // a rect's uvs ( u0, v0, u1, v1: v up, as the canvas's texture is flipped )
 export function atlasUV( name ) {
@@ -121,6 +124,54 @@ export function position( x, z ) {
 
 	};
 	return [ `${ dm( lat ) }${ lat >= 0 ? 'N' : 'S' }`, `${ dm( lon ) }${ lon >= 0 ? 'E' : 'W' }` ];
+
+}
+
+// (M15) the VHF's LCD, idle on channel 16 (and on a boat you're riding on); its colour (rgb, its day's
+// grey-green in the shade under the overhead console, its amber backlight at night) at `night` (0..1)
+const VHF_IDLE = { big: '16', mark: '', freq: '156.800', tag: 'HAIL · DISTRESS', on: false };
+// its face as it's laid out (mm; Wheelhouse.js has the plane and the knobs), at ppm px to the mm in the atlas:
+// the LCD's middle and size, and the keys' legends
+const VHF_FACE = { w: 176, h: 72, ppm: 288 / 176, lcd: [ - 12, 12, 85, 40 ], keys: [ '16/9', 'WX', 'SCAN', 'DUAL', 'MENU' ] };
+const LCD = { day: [ 92, 102, 84 ], dark: [ 22, 25, 21 ], amber: [ 190, 118, 34 ] };
+function lcdBack( night, on ) {
+
+	const t = Math.min( 1, Math.max( 0, ( night - 0.2 ) / 0.5 ) ), c = on ? LCD.amber : LCD.dark, k = on ? t : 1;
+	const mix = ( i ) => Math.round( LCD.day[ i ] + ( c[ i ] - LCD.day[ i ] ) * k );
+	return `rgb(${ mix( 0 ) }, ${ mix( 1 ) }, ${ mix( 2 ) })`;
+
+}
+
+// seven-segment digits, as a radio's LCD draws them: which of a g segments each digit lights, the segments
+// as they lie in a cell 1 wide and 2 tall (x0, y0, x1, y1)
+const SEG_ON = { 0: 'abcdef', 1: 'bc', 2: 'abged', 3: 'abgcd', 4: 'fgbc', 5: 'afgcd', 6: 'afgedc', 7: 'abc', 8: 'abcdefg', 9: 'abcdfg' };
+const SEG_LEAN = 0.08;
+const SEG_AT = { a: [ 0, 0, 1, 0 ], b: [ 1, 0, 1, 1 ], c: [ 1, 1, 1, 2 ], d: [ 0, 2, 1, 2 ], e: [ 0, 1, 0, 2 ], f: [ 0, 0, 0, 1 ], g: [ 0, 1, 1, 1 ] };
+function segments( g, text, x, y, h, colour ) {
+
+	const cell = h / 2, width = h * 0.13;
+	g.strokeStyle = colour;
+	g.lineWidth = width;
+	g.lineCap = 'butt';
+	let cx = x;
+	for ( const c of String( text ) ) {
+
+		const on = SEG_ON[ c ];
+		if ( on ) for ( const name of on ) {
+
+			const [ x0, y0, x1, y1 ] = SEG_AT[ name ], gap = width * 0.75;
+			const dx = x1 - x0, dy = y1 - y0;
+			// (each segment a little short of its corners; leaning a little, as they're cut)
+			g.beginPath();
+			g.moveTo( cx + x0 * cell + dx * gap + ( 2 - y0 ) * cell * SEG_LEAN, y + y0 * cell + dy * gap );
+			g.lineTo( cx + x1 * cell - dx * gap + ( 2 - y1 ) * cell * SEG_LEAN, y + y1 * cell - dy * gap );
+			g.stroke();
+
+		}
+
+		cx += cell * 1.45;
+
+	}
 
 }
 
@@ -240,6 +291,7 @@ export class BoatInstruments {
 		g.fillRect( 0, 0, ATLAS.w, ATLAS.h );
 		for ( const name in DIALS ) this._dial( name, reading );
 		this._compassCard( !! reading, reading ? reading.night || 0 : 0 );
+		this._vhf( reading );
 		if ( reading ) {
 
 			this._sounder( reading );
@@ -314,6 +366,70 @@ export class BoatInstruments {
 		g.arc( cx, cy, r * 0.08, 0, Math.PI * 2 );
 		g.fillStyle = '#2a3036';
 		g.fill();
+		g.restore();
+
+	}
+
+	// (M15) the VHF's face: its LCD (its channel in big segments, what's on it and its frequency small, a
+	// signal's bars while it's receiving; off ashore, blank) and its keys, as bright as the shade under the
+	// console leaves them by day; after dark, the LCD amber-backlit and the keys' legends faintly lit
+	_vhf( reading ) {
+
+		const g = this.ctx, [ x0, y0 ] = RECTS.vhf, W = VHF_FACE, night = reading ? reading.night || 0 : 0;
+		const t = Math.min( 1, Math.max( 0, ( night - 0.2 ) / 0.5 ) ), dim = 1 - 0.6 * t, shade = ( v ) => Math.round( v * dim );
+		const X = ( mm ) => x0 + ( mm + W.w / 2 ) * W.ppm, Y = ( mm ) => y0 + ( W.h / 2 - mm ) * W.ppm;
+		g.save();
+		g.fillStyle = `rgb(${ shade( 38 ) }, ${ shade( 39 ) }, ${ shade( 42 ) })`;
+		g.fillRect( x0, y0, W.w * W.ppm, W.h * W.ppm );
+		g.strokeStyle = `rgb(${ shade( 74 ) }, ${ shade( 76 ) }, ${ shade( 80 ) })`;
+		g.lineWidth = 2;
+		g.strokeRect( x0 + 1, y0 + 1, W.w * W.ppm - 2, W.h * W.ppm - 2 );
+		// (the keys, and the red distress key under its cover)
+		for ( let i = 0; i < W.keys.length; i ++ ) {
+
+			const kx = X( - 44 + i * 16 ), ky = Y( - 24 );
+			g.fillStyle = `rgb(${ shade( 92 ) }, ${ shade( 94 ) }, ${ shade( 98 ) })`;
+			g.fillRect( kx - 10, ky - 5, 20, 10 );
+			g.fillStyle = reading && t > 0 ? `rgba(255, 190, 110, ${ 0.9 * t })` : 'rgba(240, 240, 235, 0.85)';
+			g.font = '700 7px ui-monospace, monospace';
+			g.textAlign = 'center';
+			g.textBaseline = 'middle';
+			g.fillText( W.keys[ i ], kx, ky + 0.5 );
+
+		}
+
+		g.fillStyle = `rgb(${ shade( 170 ) }, ${ shade( 42 ) }, ${ shade( 34 ) })`;
+		g.fillRect( X( 62 ) - 11, Y( - 26 ) - 6, 22, 12 );
+		// (the LCD)
+		const lx = X( W.lcd[ 0 ] - W.lcd[ 2 ] / 2 ), ly = Y( W.lcd[ 1 ] + W.lcd[ 3 ] / 2 ), lw = W.lcd[ 2 ] * W.ppm, lh = W.lcd[ 3 ] * W.ppm;
+		g.fillStyle = lcdBack( night, !! reading );
+		g.fillRect( lx, ly, lw, lh );
+		if ( reading ) {
+
+			const v = reading.vhf || VHF_IDLE, ink = '#10140e', big = lh * 0.58;
+			// (the unlit segments' ghost under the lit)
+			segments( g, '88', lx + lw * 0.2, ly + 6, big, 'rgba(16, 20, 14, 0.07)' );
+			segments( g, v.big, lx + lw * 0.2, ly + 6, big, ink );
+			g.fillStyle = ink;
+			g.textBaseline = 'alphabetic';
+			g.textAlign = 'left';
+			if ( v.mark ) {
+
+				g.font = '800 13px ui-monospace, monospace';
+				g.fillText( v.mark, lx + 4, ly + 17 );
+
+			}
+
+			g.font = '700 8px ui-monospace, monospace';
+			g.fillText( v.tag, lx + 4, ly + lh - 4 );
+			g.textAlign = 'right';
+			g.font = '700 11px ui-monospace, monospace';
+			g.fillText( v.freq, lx + lw - 3, ly + lh * 0.62 );
+			// (the signal: four bars, while it's receiving)
+			if ( v.on ) for ( let i = 0; i < 4; i ++ ) g.fillRect( lx + lw - 30 + i * 7, ly + 16 - i * 3, 5, 3 + i * 3 );
+
+		}
+
 		g.restore();
 
 	}

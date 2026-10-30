@@ -1,6 +1,6 @@
 import { Vector2 } from '../engine/index.js';
 import { G } from '../core/Globals.js';
-import { islandTime, weatherHere, showers, towardOf, hurricaneAt, hurricaneNews, hash, FRONT_KMH, STORM_RANGE, SURF_MAX } from '../game/Weather.js';
+import { islandTime, weatherHere, withEdge, showers, towardOf, hurricaneAt, hurricaneNews, hash, FRONT_KMH, STORM_RANGE, SURF_MAX } from '../game/Weather.js';
 import { FRONT_KM, eyeCover, bandCells } from '../sky/SkyProClouds.js';
 
 // (Salt Life) The island's weather, each frame: what the day brings (game/Weather.js), or what you picked
@@ -39,7 +39,8 @@ import { FRONT_KM, eyeCover, bandCells } from '../sky/SkyProClouds.js';
 //   - (M15) all of it the weather where you are (the camera: Weather.weatherHere), out past the island the
 //     weather drifting over you, its showers about you (Weather.showers( ..., at )) and raining on you only
 //     under one, a hurricane's vortex where you are in it; the island's own (`island`: Weather.weatherAt)
-//     for its surf, the sea's level, its boarding up and its own storm's lightning (track).
+//     for its surf, the sea's level, its boarding up and its own storm's lightning (track). Past the far
+//     grounds, the open ocean's fresher trades and bigger sea (Weather.withEdge: the soft edge).
 // The wind and the sea come round over half a minute or so, the cloud more slowly (a minute or two from
 // fair to a gale's, so the panorama's refresh keeps up and nothing pops), the rain in seconds. When the
 // clock jumps (a rest, the host's clock, coming back to the tab) it's all set at once, behind the dim a
@@ -181,7 +182,7 @@ export class WeatherDriver {
 		const picked0 = pick !== this._pick || since !== this._since;
 		if ( picked0 || this._showerRain.size > 160 ) this._showerRain.clear();
 		showers( T, pick, STORM_RANGE, this._showers, this._showerRain, since, this._at );
-		const at = this._at, target = this.target = weatherHere( T, pick, since, at.x, at.z, this._showers );
+		const at = this._at, target = this.target = withEdge( weatherHere( T, pick, since, at.x, at.z, this._showers ), at.x, at.z );
 		this.island = target.island;
 		// ((M12) the island's own storm's: its strikes from up its track)
 		towardOf( this.island.windAngle, this.track );

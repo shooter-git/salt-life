@@ -11,15 +11,16 @@ import { FishStand, STAND } from './FishStand.js';
 import { Chandlery, CHANDLERY } from './Chandlery.js';
 import { CatchDisplay } from './CatchDisplay.js';
 import { FishPortrait } from './FishPortrait.js';
-import { UPGRADES, fuelBurn, TOW, towFee } from './Gear.js';
+import { UPGRADES, fuelBurn, TOW, towFee, towTime } from './Gear.js';
 import { Hull, thrustMul, repairFee } from './Hull.js';
 import { GameHUD } from './GameHUD.js';
 import { TimeHUD } from './TimeHUD.js';
+import { Radio } from './Radio.js';
 import { timeText } from './IslandClock.js';
 import { NIGHT_BOX, ordersFor, tradeDay, stallOpen, shutFor } from './Orders.js';
 import { WantedBoard } from './WantedBoard.js';
 import { ForecastSlate } from './ForecastSlate.js';
-import { forecast, islandTime, blowShare, NORTH } from './Weather.js';
+import { forecast, islandTime, blowShare, NORTH, edgeAt } from './Weather.js';
 import { wxNews } from './TimeHUD.js';
 import { CRADLE } from '../world/village/StormPlaces.js';
 import { StormChart, shelterSign } from './StormChart.js';
@@ -39,7 +40,7 @@ import { SPECIES } from '../world/fish/FishSpecies.js';
 import { SEABED } from '../world/terrain/SeabedModel.js';
 import { mangroveAt } from '../world/terrain/Mangrove.js';
 import { northReefMask } from '../world/TerrainData.js';
-import { placeOf, placeName } from './Places.js';
+import { PLACES, placeOf, placeName } from './Places.js';
 import { FINDS, lying, messageOf } from './Beachcomb.js';
 import { ordersOf, tagFor } from './Orders.js';
 
@@ -53,6 +54,8 @@ const UPWIND = { x: - NORTH.dir.x, z: - NORTH.dir.y };
 // and it goes down once the boat is slower than this (m/s)
 const BERTH_M = 14;
 const ANCHOR_SPEED = 2.5;
+// (M15) the far places are looked for from this far from the middle of the world (m: Game.updateFound)
+const FOUND_FROM = 1000;
 const RODE_SEGS = 16;
 // (M10) the bucket's offered on deck from this much water in the bilge (litres), and the hull's wear
 // is saved whenever it's grown this much since it last was
@@ -332,25 +335,37 @@ export class Game {
 	}
 
 	// (Salt Life) Marta's tow: your boat, drifted off (or left) more than TOW.from from the dock with
-	// nobody at her helm, as { metres, fee }; null when there's nothing to tow
-	towJob() {
+	// nobody at her helm, as { metres, fee, time (s: hers, out and back) }; null when there's nothing to tow.
+	// (M15) aboard: called for over the radio (Radio.js), you with her: she comes for you wherever you are
+	towJob( aboard = false ) {
 
 		const b = this.app.boatCtl, dock = WORLD.boatDock.position;
-		if ( ! b || b.moored || b.driven || b.hauled ) return null;
+		if ( ! b || b.moored || b.hauled || ( b.driven && ! aboard ) ) return null;
 		const metres = Math.hypot( b.position.x - dock.x, b.position.z - dock.z );
-		return metres > TOW.from ? { metres, fee: towFee( metres ) } : null;
+		return metres > TOW.from ? { metres, fee: towFee( metres ), time: towTime( metres ) } : null;
 
 	}
 
-	// she brings her back to the dock (you're at her stall, so not aboard); returns what you paid
-	tow() {
+	// she brings her back to the dock (you're at her stall, so not aboard: (M15) or aboard, having called her
+	// on the radio: the world dims while she does, and you're on deck at the dock); returns what you paid
+	tow( aboard = false ) {
 
-		const job = this.towJob();
+		const job = this.towJob( aboard );
 		if ( ! job ) return 0;
 		const paid = this.state.payTow( job.fee );
 		this._anchorDue = false;
-		this.app.boatCtl.reset();
-		this.toast( paid < job.fee ? `Marta towed her in for the $${ paid } you had · she's at the dock` : `Marta towed her in · $${ paid } · she's at the dock` );
+		const p = this.app.player, b = this.app.boatCtl;
+		const go = () => {
+
+			// (off the helm first: moored at the dock, she'd be pulled back to it from wherever she went next)
+			if ( p.mode === 'boat' && p.boat === b ) p.leaveHelm();
+			b.reset();
+			if ( aboard && p.mode === 'deck' && p.boat === b ) p.deckToWorld();
+			this.toast( paid < job.fee ? `Marta towed her in for the $${ paid } you had · she's at the dock` : `Marta towed her in · $${ paid } · she's at the dock`, aboard ? 4200 : 2600 );
+
+		};
+		if ( aboard && this.time && this.time.dim() ) setTimeout( go, 230 );
+		else go();
 		return paid;
 
 	}
@@ -403,6 +418,8 @@ export class Game {
 			this.minimap = new Minimap( ui.hud || ui.root, this, { tier: app.tier } );
 			this.guide = new Guide( ui, this, this.minimap );
 			ui.onReplayGuide = () => this.guide.replay();
+			// ((M15) the VHF at the helm)
+			this.radio = new Radio( ui, this );
 
 		}
 
@@ -487,6 +504,7 @@ export class Game {
 		// F and G do the same from the keyboard, for trackpads and All the Spaces' checks' scripts)
 		const lmb = ( inp.mouseDown || inp.down( 'KeyF' ) ) && inp.enabled, rmb = ( inp.rightDown || inp.down( 'KeyG' ) ) && inp.enabled;
 		const lDown = lmb && ! this._lmb, lUp = ! lmb && this._lmb, rDown = rmb && ! this._rmb;
+		if ( this.radio ) this.radio.update( dt, inp, lDown );
 		this._lmb = lmb;
 		this._rmb = rmb;
 		const panelOpen = this.hud && ( this.hud.invOpen || this.hud.standOpen );
@@ -579,6 +597,7 @@ export class Game {
 		p.busy = rod.lineInWater || rod.state === 'windup' || gun.shaftOut || net.busy || net.state === 'windup' || this.tools.busy;
 
 		this.updateBoat( dt );
+		this.updateFound( dt );
 		// (Salt Life) the floodlights' lenses glow when they're fitted, from dusk like their light
 		const mats = app.boat && app.boat.materials;
 		if ( mats && mats.floodOn ) mats.floodOn.value = this.floodsOn;
@@ -668,6 +687,19 @@ export class Game {
 
 	}
 
+	// (M15) the far places, noted as you first come to them (GameState.found: the log and the records name them
+	// from then on), wherever you are on or in the water, once a second
+	updateFound( dt ) {
+
+		if ( ( this._foundT = ( this._foundT || 0 ) - dt ) > 0 ) return;
+		this._foundT = 1;
+		const p = this.app.player, x = p.position.x, z = p.position.z;
+		if ( x * x + z * z < FOUND_FROM * FOUND_FROM ) return;
+		const place = this.placeAt( x, z );
+		if ( this.state.findPlace( place, this.tradeDay ) ) this.toast( `You've found ${ placeName( place ) }: ${ PLACES[ place ].what } · it's in your log`, 5200 );
+
+	}
+
 	// fuel burn while the engine runs (it stalls when the tank is dry: Hull) and the fish finder
 	updateBoat( dt ) {
 
@@ -754,7 +786,9 @@ export class Game {
 		const touch = this.app.input.lastDevice === 'touch';
 		if ( why === 'fuel' ) {
 
-			if ( ! this._fuelOut ) this.toast( 'Out of fuel · buy diesel at the chandlery by the boathouse', 4000 );
+			// ((M15) away from the dock, Marta's tow is a call on the radio)
+			const far = this.towJob( true ), radio = touch ? 'the Radio button' : this.keyName( 'R' );
+			if ( ! this._fuelOut ) this.toast( far ? `Out of fuel · call Marta on the radio for a tow (${ radio })` : 'Out of fuel · buy diesel at the chandlery by the boathouse', 4600 );
 			this._fuelOut = true;
 
 		} else if ( why === 'flooded' ) {
@@ -1194,6 +1228,8 @@ export class Game {
 		h.weather = this.weatherNow;
 		h.side = this.windwardAt( p.x, p.z );
 		h.big = this.windReefAt( p.x, p.z );
+		// ((M15) and how far out past the far grounds: the blue's emptier there)
+		h.far = edgeAt( p.x, p.z );
 		return h;
 
 	}
@@ -1595,7 +1631,7 @@ export class Game {
 	quietKeys() {
 
 		const panelOpen = this.hud && ( this.hud.invOpen || this.hud.standOpen );
-		return ! panelOpen && ! this.makingRoom && ! ( this.time && this.time.open ) && ! ( this.guide && this.guide.open );
+		return ! panelOpen && ! this.makingRoom && ! ( this.time && this.time.open ) && ! ( this.guide && this.guide.open ) && ! ( this.radio && this.radio.open );
 
 	}
 

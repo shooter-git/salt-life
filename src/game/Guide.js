@@ -3,6 +3,7 @@ import { CHANDLERY } from './Chandlery.js';
 import { CAMP } from './FishCamp.js';
 import { NAMES } from './Chart.js';
 import { feet } from './Units.js';
+import { edgeAt } from './Weather.js';
 
 // First-play guide:
 //  - an intro (3 cards) the first time the game starts, after the start overlay: the goal, the fishing
@@ -113,14 +114,14 @@ const FISHING = {
 const AROUND = {
 	keyboard: [ [ k( 'W', 'A', 'S', 'D' ), 'Move, mouse to look, <kbd>Shift</kbd> to run' ], [ k( 'E' ), 'Board the boat, take the helm, talk to Joe and Marta' ],
 		[ k( 'L' ), 'Flashlight (at night). At the helm, the searchlight' ], [ k( 'H' ), 'This guide again. At the helm, hold for the horn' ],
-		[ k( '←', '→' ), 'At the helm, the radar\'s range' ],
+		[ k( '←', '→' ), 'At the helm, the radar\'s range' ], [ k( 'R' ), 'At the helm, the radio: the forecast, and Marta\'s tow' ],
 		[ k( 'P' ), 'A mark of your own on your chart, where you are' ],
 		[ k( 'T' ), 'The clock: hold it or rest until later (with others, once everyone agrees)' ] ],
 	touch: [ [ k( 'Left side' ), 'Drag to walk, from wherever your thumb lands' ], [ k( 'Right side' ), 'Drag to look around' ],
 		[ k( 'Gold button' ), 'Board the boat, take the helm, talk to Joe and Marta' ], [ k( 'Torch' ), 'Flashlight, after dusk. At the helm: the searchlight' ],
-		[ k( 'Horn' ), 'At the helm, hold it to sound the horn' ], [ k( 'Time' ), 'Tap the time at the top right to hold the clock or rest until later' ] ],
+		[ k( 'Horn' ), 'At the helm, hold it to sound the horn' ], [ k( 'Radio' ), 'At the helm, the forecast, and Marta\'s tow' ], [ k( 'Time' ), 'Tap the time at the top right to hold the clock or rest until later' ] ],
 	gamepad: [ [ k( 'Left stick' ), 'Move, right stick to look' ], [ k( 'B' ), 'Board the boat, take the helm, talk to Joe and Marta' ], [ k( 'D-pad ↓' ), 'Flashlight. At the helm, the searchlight' ],
-		[ k( 'D-pad ← →' ), 'At the helm, the radar\'s range' ],
+		[ k( 'D-pad ← →' ), 'At the helm, the radar\'s range' ], [ k( 'X' ), 'At the helm, the radio: the forecast, and Marta\'s tow' ],
 		[ k( 'L3' ), 'At the helm, press and hold the left stick for the horn' ], [ k( 'R3' ), 'The clock: hold it or rest until later' ] ],
 };
 
@@ -149,6 +150,7 @@ const CARD_COUNT = 3;
 
 const TIPS = {
 	keyboard: {
+		radio: 'The <b>radio</b> at the helm (<kbd>R</kbd>): the <b>weather</b> for these waters, read out on WX1 while you steer, and <b>Marta</b> on channel 16, who\'ll come and tow you in if you run dry, her fee by the distance.',
 		rodOut: 'Hold the <b>left mouse button</b> to wind up and release to cast. Try deeper water, around the pier or over the reef.',
 		nibble: 'The bobber is dipping: something is <b>nibbling</b>. Wait until it is <b>pulled under</b>, then click to strike.',
 		fishOn: '<b>Hold the left mouse button</b> to reel. When the tension needle nears the <b>red</b>, let go until it settles, then reel again.',
@@ -167,6 +169,7 @@ const TIPS = {
 		bilge: 'There\'s <b>water in the bilge</b> (the gauge by your money). On deck, <b>hold <kbd>E</kbd></b> to bail it out before it reaches the engine. Marta sells a <b>bilge pump</b>.',
 	},
 	touch: {
+		radio: 'The <b>radio</b> at the helm (the <b>Radio</b> button): the <b>weather</b> for these waters, read out on WX1 while you steer, and <b>Marta</b> on channel 16, who\'ll come and tow you in if you run dry, her fee by the distance.',
 		rodOut: 'Hold <b>Cast</b> to wind up and let go to cast. Try deeper water, around the pier or over the reef.',
 		nibble: 'The bobber is dipping: something is <b>nibbling</b>. Wait until it is <b>pulled under</b>, then tap <b>Strike</b>.',
 		fishOn: '<b>Hold Reel</b> to reel in. When the tension needle nears the <b>red</b>, let go until it settles, then reel again.',
@@ -184,6 +187,7 @@ const TIPS = {
 		bilge: 'There\'s <b>water in the bilge</b> (the gauge by your money). On deck, <b>hold Bail</b> to bail it out before it reaches the engine. Marta sells a <b>bilge pump</b>.',
 	},
 	gamepad: {
+		radio: 'The <b>radio</b> at the helm (<kbd>X</kbd>): the <b>weather</b> for these waters, read out on WX1 while you steer, and <b>Marta</b> on channel 16, who\'ll come and tow you in if you run dry, her fee by the distance.',
 		rodOut: 'Hold <kbd>RT</kbd> to wind up and release to cast. Try deeper water, around the pier or over the reef.',
 		nibble: 'The bobber is dipping: something is <b>nibbling</b>. Wait until it is <b>pulled under</b>, then <kbd>RT</kbd> to strike.',
 		fishOn: '<b>Hold <kbd>RT</kbd></b> to reel. When the tension needle nears the <b>red</b>, let go until it settles, then reel again.',
@@ -210,6 +214,7 @@ const TIPS = {
 	goRound: 'You\'ve the hang of the bay. There\'s more of the island: the <b>north beach\'s surf</b> for pompano (best on a surf day: Joe\'s slate says), the <b>mangrove creek</b> on the west for snook at dawn and dusk, and the <b>windward reef</b> off the north-west point, its groupers bigger than the bay\'s. Take the boat round, or walk: the trail from the square goes round the east to the north beach, and <b>Pearl\'s fish camp</b> there buys fish and sells diesel.',
 	camp: '<b>Pearl\'s fish camp</b>: she buys your catch at ' + Math.round( CAMP.rate * 100 ) + '% of Joe\'s price (she takes it round to market herself) and sells <b>diesel</b> from her drums, so a trip round the island needn\'t end in the bay. Tie up at her jetty.',
 	chart: 'Your <b>chart</b> fills in where you go: the coast as you see it, the depths as you run over them, each place\'s name as you come to it, on the map and the boat\'s plotter. Mark a good spot from the cooler\'s <b>Chart</b> tab. Marta sells a chart of the island, if you\'d rather not.',
+	edge: 'You\'re past the far grounds. The sea\'s the open ocean\'s out here: the <b>wind fresher</b>, the <b>seas bigger</b>, fewer birds and fewer fish. Nothing stops you going on, but <b>watch your fuel</b>: Marta\'s tow is by the distance.',
 	farWater: 'Out here the fish are <b>under things</b>: look for <b>weedlines</b> (mahi), <b>floating debris</b>, and <b>birds working bait</b> (tuna). On the <b>drop-off</b> the tuna come at first light.',
 	// (M13) a hurricane
 	hurricane: 'A <b>hurricane</b> is coming. Ahead of it Marta can <b>haul your boat out</b>, before she boards up; left in the water the storm batters her. In it, the <b>shelter</b> (on your map) keeps you safe from the wind, the rain and the sea. You can always step out to watch.',
@@ -499,6 +504,9 @@ export class Guide {
 		if ( Math.hypot( cam.x, cam.z + 320 ) > 3000 ) this.tip( 'farWater' );
 		// ((M15) the first name you come to past the bay's)
 		if ( s.chart.names.size > NAMES.filter( ( n ) => n.known ).length ) this.tip( 'chart' );
+		// ((M15) the radio, the first time you're well out at the helm; and past the far grounds, the soft edge)
+		if ( p.mode === 'boat' && ! p.riding && Math.hypot( cam.x, cam.z + 320 ) > 2000 ) this.tip( 'radio' );
+		if ( edgeAt( cam.x, cam.z ) > 0.15 ) this.tip( 'edge' );
 		// ((M15) the first time you come to the fish camp, ashore or alongside its jetty)
 		if ( Math.hypot( cam.x - CAMP.keeper.x, cam.z - CAMP.keeper.z ) < 30 ) this.tip( 'camp' );
 		// (M10) the boat's hull: the first water in the bilge, aboard; the first real wear
