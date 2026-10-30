@@ -1119,7 +1119,7 @@ export class GameHUD {
 
 	}
 
-	// the open trader's panel: Marta's shop, (M15) Errol's camp, or Joe's stand
+	// the open trader's panel: Marta's shop, (M15) Pearl's camp, or Joe's stand
 	renderTrader() {
 
 		const k = this.vendor && this.vendor.kind;
@@ -1129,8 +1129,8 @@ export class GameHUD {
 
 	}
 
-	// (M15) Errol at the fish camp on the north beach: your catch at his price (Joe's, less the trip round to
-	// market), diesel from his drums at his; gone round to market, nothing
+	// (M15) Pearl at the fish camp on the north beach: your catch at her price (Joe's, less the trip round to
+	// market), diesel from her drums at hers; gone round to market, nothing
 	renderCamp() {
 
 		const g = this.game, s = g.state, v = this.vendor, name = v.name.split( ' ·' )[ 0 ];
@@ -1138,8 +1138,8 @@ export class GameHUD {
 
 			this.drawStand( v, `
 				<div class="gm-head"><h2>${ v.name }</h2>
-				<p class="gm-sub">${ v.boarded ? `${ name }'s boarded up for the hurricane` : v.weatherShut ? `${ name }'s shut for the weather` : `${ name }'s gone round to market with the day's fish. He's back at ${ this.at( v.hours[ 0 ] ) }` }.</p></div>
-				<div class="gm-foot"><span class="gm-sub">His drums are locked while he's away</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>` );
+				<p class="gm-sub">${ v.boarded ? `${ name }'s boarded up for the hurricane` : v.weatherShut ? `${ name }'s shut for the weather` : `${ name }'s gone round to market with the day's fish. She's back at ${ this.at( v.hours[ 0 ] ) }` }.</p></div>
+				<div class="gm-foot"><span class="gm-sub">Her drums are locked while she's away</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>` );
 			this.stand.querySelector( '[data-close]' ).onclick = () => this.closeStand();
 			return;
 
@@ -1148,11 +1148,11 @@ export class GameHUD {
 		const terms = g.saleTerms( v ), all = s.quote( null, terms );
 		const rows = s.inventory.map( ( f ) => fishItem( f, `<button class="gm-mini" data-sell="${ f.id }">Sell</button>`, s.quote( [ f.id ], terms ).prices.get( f.id ), false ) ).join( '' );
 		const missing = s.stats.fuelL - s.fuelL;
-		const fuelRow = `<div class="gm-shop-row"><span>Diesel · $${ ( CAMP.fuel * GAL ).toFixed( 2 ) } / gal<small>From his drums by the jetty · tank: ${ gallons( s.fuelL ) } of ${ gallons( s.stats.fuelL ) } gal</small></span>${ missing > 0.5 ? `<button class="gm-btn" data-fuel ${ s.money < CAMP.fuel ? 'disabled' : '' }>Fill · $${ Math.min( s.refuelCost( CAMP.fuel ), Math.floor( s.money / CAMP.fuel ) * CAMP.fuel ) }</button>` : '<span class="gm-have">Full</span>' }</div>`;
+		const fuelRow = `<div class="gm-shop-row"><span>Diesel · $${ ( CAMP.fuel * GAL ).toFixed( 2 ) } / gal<small>From her drums by the jetty · tank: ${ gallons( s.fuelL ) } of ${ gallons( s.stats.fuelL ) } gal</small></span>${ missing > 0.5 ? `<button class="gm-btn" data-fuel ${ s.money < CAMP.fuel ? 'disabled' : '' }>Fill · $${ Math.min( s.refuelCost( CAMP.fuel ), Math.floor( s.money / CAMP.fuel ) * CAMP.fuel ) }</button>` : '<span class="gm-have">Full</span>' }</div>`;
 		const sub = this.closingSoon( v ) ? `I'm off round to market at ${ this.at( v.hours[ 1 ] ) }.` : s.inventory.length ? v.greeting : v.idle;
 		this.drawStand( v, `
 			<div class="gm-head"><h2>${ v.name }</h2>
-			<p class="gm-sub">${ sub } He pays ${ Math.round( CAMP.rate * 100 ) }% of Joe's price. You have $${ s.money.toLocaleString() }</p></div>
+			<p class="gm-sub">${ sub } She pays ${ Math.round( CAMP.rate * 100 ) }% of Joe's price. You have $${ s.money.toLocaleString() }</p></div>
 			<div class="gm-list">${ fuelRow }<div class="gm-rows">${ rows || '<div class="gm-empty">Your cooler is empty.</div>' }</div></div>
 			<div class="gm-foot"><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button><button class="gm-btn" data-all ${ s.inventory.length ? '' : 'disabled' }>Sell all · $${ all.total }</button></div>` );
 		// (each drawn again by the state's change: refresh)

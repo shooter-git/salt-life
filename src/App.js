@@ -1271,7 +1271,7 @@ export class App {
 
 		if ( ! this.game ) return;
 		performance.mark( 'world: characters' );
-		// ((M15) those far off loaded when you first come near them: Errol at the fish camp, Game)
+		// ((M15) those far off loaded when you first come near them: Pearl at the fish camp, Game)
 		for ( const v of this.game.vendors ) if ( ! v.lazy ) await this.loadVendorCharacter( v );
 
 	}
@@ -1299,7 +1299,7 @@ export class App {
 		try {
 
 			const c = await v.loadCharacter( this._characterLoad );
-			// ((M15) as much of the sand's light as reaches them where they stand: Errol's sand's in the cliff's shadow)
+			// ((M15) as much of the sand's light as reaches them where they stand: Pearl's sand's in the cliff's shadow)
 			const open = v.characterSpec && v.characterSpec.open;
 			if ( c && open !== undefined ) for ( const m of c.materials ) if ( m.userData.groundBounceOpen ) m.userData.groundBounceOpen.value = open;
 			if ( c && this.nearDetail ) c.group.traverse( ( o ) => {

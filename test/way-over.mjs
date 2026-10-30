@@ -3,7 +3,7 @@
 // grade, as Tobler's hiking function has it, never quite stopping; the trail from the valley's to the north beach
 // on both islands, joined to it at one end and on the beach's sand at the other, its tread graded and level
 // across, a walk of some ten minutes; the ground cut only along it; nothing to grow or lie on it; the camp on the
-// backshore by its foot, its jetty out to water a boat can lie alongside in, what Errol pays and charges, and
+// backshore by its foot, its jetty out to water a boat can lie alongside in, what Pearl pays and charges, and
 // the camp built only when you come near it.
 //
 //   node test/way-over.mjs
@@ -115,7 +115,7 @@ for ( const file of [ 'island.bin', 'island-1024.bin' ] ) {
 
 }
 
-// ---- the fish camp at its foot: where it stands, its jetty, what Errol pays and charges, built
+// ---- the fish camp at its foot: where it stands, its jetty, what Pearl pays and charges, built
 {
 
 	for ( const file of [ 'island.bin', 'island-1024.bin' ] ) {
@@ -131,10 +131,10 @@ for ( const file of [ 'island.bin', 'island-1024.bin' ] ) {
 	for ( const [ x, z ] of [ [ CAMP.shed.x, CAMP.shed.z ], [ CAMP.keeper.x, CAMP.keeper.z ], [ CAMP.jetty.x, CAMP.jetty.z0 ], [ 121.4, - 837.6 ] ] ) if ( trailAt( x, z )[ 0 ] < 3 ) clear = false;
 	check( clear, 'the camp clear of the trail it stands at the foot of' );
 
-	// what he pays: Joe's price less the trip to market, no orders, no week's order
+	// what she pays: Joe's price less the trip to market, no orders, no week's order
 	const vendor = { kind: 'camp', open: true };
 	const terms = Game.prototype.saleTerms.call( { orders: [ { id: 1, who: 'joe', species: 'snapper', max: 9 } ], tradeDay: 4, weekTerms: () => ( { species: 'snapper', left: 50 } ) }, vendor );
-	check( terms.who === 'camp' && terms.rate === CAMP.rate && ! terms.week && ! terms.orders, `Errol buys at ${ Math.round( CAMP.rate * 100 ) }% of Joe's price, no list, no week's order` );
+	check( terms.who === 'camp' && terms.rate === CAMP.rate && ! terms.week && ! terms.orders, `Pearl buys at ${ Math.round( CAMP.rate * 100 ) }% of Joe's price, no list, no week's order` );
 	const st = new GameState( null );
 	st.inventory = [ { id: 1, species: 'snapper', value: 40, kg: 2 }, { id: 2, species: 'jack', value: 15, kg: 1 } ];
 	const q = st.quote( null, terms );
@@ -143,7 +143,7 @@ for ( const file of [ 'island.bin', 'island-1024.bin' ] ) {
 	st.fuel = 10;
 	const atMarta = st.refuelCost(), atCamp = st.refuelCost( CAMP.fuel );
 	const litres = st.refuel( CAMP.fuel );
-	check( atCamp > atMarta && atCamp === Math.ceil( ( st.stats.fuelL - 10 ) * CAMP.fuel ) && litres > 0 && st.money === 1000 - atCamp, `his diesel dearer than Marta's ($${ atCamp } to fill up against her $${ atMarta }), it comes over in drums` );
+	check( atCamp > atMarta && atCamp === Math.ceil( ( st.stats.fuelL - 10 ) * CAMP.fuel ) && litres > 0 && st.money === 1000 - atCamp, `her diesel dearer than Marta's ($${ atCamp } to fill up against Marta's $${ atMarta }), it comes over in drums` );
 
 	// built (on the low tier's island, its village built as the game does, its textures not baked)
 	const terrain = new TerrainData( 7, decodeIsland( read( 'island-1024.bin' ) ) );

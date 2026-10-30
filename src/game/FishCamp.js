@@ -10,13 +10,15 @@ import { paintedBoard } from './Signpost.js';
 // (M15) The fish camp on the north beach, at the foot of the way over (world/terrain/NorthTrail.js), after the
 // landing beaches of the Caribbean's windward coasts (Tobago's Charlotteville, Grenada's Gouyave, St Lucia's
 // Anse La Raye): a plank shed with a rusted tin roof on the backshore, its front to the sea, a lean-to over
-// the counter where Errol buys the catch; a timber jetty out over the beach's flat to water a boat can lie
+// the counter where Pearl buys the catch; a timber jetty out over the beach's flat to water a boat can lie
 // alongside in (2.5 m at its head, 38 m out), its fuel drums at its foot; fish pots stacked by the shed, a
 // net on its rack, fish drying, two boats hauled up on the sand, a fire pit, a woodpile, a rain barrel.
 // Built when you first come within CAMP.build of it (the village's builders and materials: Buildings,
-// Props), after the debris is placed (so nothing of the bay's moves for it); Errol's stand-in figure at once,
-// his character (game/Vendor.js, App.loadVendorCharacter) once the camp's built. He buys fish at CAMP.rate of Joe's price (he takes it round to the market himself) and sells diesel
-// at CAMP.fuel a litre (it comes over in drums), from CAMP.hours[ 0 ] to CAMP.hours[ 1 ].
+// Props), after the debris is placed (so nothing of the bay's moves for it); Pearl's stand-in figure at once,
+// her character (game/Vendor.js, App.loadVendorCharacter) once the camp's built. She buys fish at CAMP.rate of
+// Joe's price (she takes it round to the market herself, as the island's fish vendors do: at the Caribbean's
+// landing beaches it's mostly women who buy the catch off the boats and sell it on) and sells diesel at CAMP.fuel
+// a litre (it comes over in drums), from CAMP.hours[ 0 ] to CAMP.hours[ 1 ].
 //   const camp = new FishCamp( { scene, terrain, colliders, village } ); camp.update( camera ); camp.vendor
 
 export const CAMP = {
@@ -41,20 +43,20 @@ export class FishCamp {
 		this.village = village;
 		const k = CAMP.keeper;
 		this.vendor = new Vendor( {
-			name: 'Errol · Fish camp',
+			name: 'Pearl · Fish camp',
 			kind: 'camp',
 			position: new Vector3( k.x, terrain.heightAt( k.x, k.z ), k.z ),
 			yaw: k.yaw,
 			radius: 2.8,
 			greeting: 'Come round from the bay? I\'ll take what you caught, and there\'s diesel in the drums.',
 			idle: 'Nothing today? Diesel\'s in the drums by the jetty if you need it.',
-			// (Rocketbox's Male_Adult_18, as Joe and Marta are theirs: tools/characters/build.sh; his long-sleeved hooded
-			// sun shirt, work trousers and boots a fisherman's)
-			character: { url: 'models/characters/errol.glb', idle: 'idle_neutral_01', talk: 'gestic_talk_relaxed_01', greet: 'wave_01' },
-			look: { shirt: 0x8a8a84, trousers: 0x2a2a2c, apron: 0x8a8a84, hat: 0x8a8a84, hair: 0x1a1410, skin: 0x4a2e1e },
+			// (Rocketbox's, as Joe and Marta are theirs (tools/characters/build.sh): Female_Party_02's face and hair on
+			// Sports_Female_02's body, its skin made hers: a vest, cargo trousers and trainers for the heat and the work)
+			character: { url: 'models/characters/pearl.glb', idle: 'idle_neutral_01', talk: 'gestic_talk_relaxed_01', greet: 'wave_01' },
+			look: { shirt: 0xc8c8c4, trousers: 0x2a2e36, apron: 0xc8c8c4, hat: 0x1a1410, hair: 0x1a1410, skin: 0x9a6a46 },
 			hours: CAMP.hours,
 		} );
-		// (his character loaded the first time you come near the camp, not with Joe's and Marta's: App)
+		// (her character loaded the first time you come near the camp, not with Joe's and Marta's: App)
 		this.vendor.lazy = true;
 		scene.add( this.vendor.group );
 		this.built = false;
@@ -98,14 +100,14 @@ export class FishCamp {
 
 			B.box( 'wood', S.x, low - 0.06, out + 0.1, 3.8, 0.12, 0.1, { grain: 1, data: wd } );
 			// its board, hand-painted, along the lean-to's front beam
-			const board = paintedBoard( { width: 1.9, height: 0.46, lines: [ 'Errol\'s fish camp', 'fish bought · diesel' ], paint: 0x2a6f8f } );
+			const board = paintedBoard( { width: 1.9, height: 0.46, lines: [ 'Pearl\'s fish camp', 'fish bought · diesel' ], paint: 0x2a6f8f } );
 			board.position.set( S.x - 0.6, low + 0.16, out + 0.04 );
 			board.rotation.set( - 0.08, Math.PI, 0.015 );
 			this.scene.add( board );
 			this.board = board;
 			const rf = [ new Vector3( S.x - 2.0, top + 0.03, front ), new Vector3( S.x + 2.0, top + 0.03, front ), new Vector3( S.x + 2.0, low + 0.02, out - 0.2 ), new Vector3( S.x - 2.0, low + 0.02, out - 0.2 ) ];
 			B.slab( 'roofMetal', rf, 0.035, { up: new Vector3( 0, 1, 0 ), uDir: new Vector3( 0, low - top, out - front ).normalize(), tint: lin( 0x8a5a40 ), data: [ rand.next(), 0.85, 0, 0 ] } );
-			// the counter: planks on two trestles, between Errol and whoever's selling
+			// the counter: planks on two trestles, between Pearl and whoever's selling
 			const cz = out + 0.55, cy = g( S.x, cz ) + 0.92;
 			for ( let i = 0; i < 4; i ++ ) B.box( 'wood', S.x + 0.4, cy, cz - 0.2 + i * 0.135, 2.0, 0.045, 0.125, { grain: 0, data: WOOD( rand.next(), 0.8 ) } );
 			for ( const sx of [ - 0.45, 1.25 ] ) {

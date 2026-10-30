@@ -7,7 +7,7 @@ import { Group, Mesh, BoxGeometry, PlaneGeometry, Shape, ExtrudeGeometry, Canvas
 // pier, so they're read from there. Each plank's letters are a canvas (both its faces), in the HUD's hand font
 // once that's loaded.
 // (M15) And the way over's fingerposts (TRAIL_POSTS): at the square, where it leaves the valley's trail, and at
-// its foot on the north beach by Errol's camp.
+// its foot on the north beach by Pearl's camp.
 //   const s = new Signpost( { terrain, colliders, spec } );  scene.add( s.group )   (colliders: its post, solid;
 //   spec: another post's { x, z, height, arms }, SIGNPOST's without)
 
@@ -42,7 +42,7 @@ export const TRAIL_POSTS = [
 		{ text: 'The spur', sub: 'up the valley', toward: 2.07, y: 1.38 },
 	] },
 	{ x: 121, z: - 829.5, height: 2.45, arms: [
-		{ text: 'Fish camp', sub: 'Errol\'s', toward: 3.0, y: 2.06 },
+		{ text: 'Fish camp', sub: 'Pearl\'s', toward: 3.0, y: 2.06 },
 		{ text: 'The village', sub: 'by the trail · 1.4 km', toward: - 2.05, y: 1.72 },
 	] },
 ];

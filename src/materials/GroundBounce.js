@@ -2,7 +2,7 @@ import * as THREE from '../engine/index.js';
 import { G } from '../core/Globals.js';
 
 // (M15) The light the sunlit sand throws back up, on a person. The engine has no bounce light: someone in the
-// shade (Joe under his stall's roof, Errol under his lean-to in the cliff's shadow) was lit by the sky's small
+// shade (Joe under his stall's roof, Pearl under her lean-to in the cliff's shadow) was lit by the sky's small
 // fill alone (kept low for the sand: Sky's levels) and came out nearly black, where on a real beach the sand
 // (coral sand reflects about 43% of the light on it) lights a person from below and from the sides at about a
 // fifth of the sun. That's the ground's irradiance on a face whose normal n is ( 1 - n.y ) / 2 of the sand's

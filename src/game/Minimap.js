@@ -8,7 +8,7 @@ import { CAMP } from './FishCamp.js';
 // sea, reef and seagrass, sand, grass and forest by height, rock, paths, village pads, the pier,
 // hill shading and a coastline), shown in a round window that turns with the view (forward is up,
 // a small N on the rim). Markers: the player (centre arrow), Joe's fish stand, Marta's chandlery,
-// (M15) Errol's fish camp, and the boat; markers beyond the rim sit on it with an arrow. With the fish
+// (M15) Pearl's fish camp, and the boat; markers beyond the rim sit on it with an arrow. With the fish
 // finder upgrade, a couple of soft rings mark the richest water in view.
 //
 // Per frame it only writes a few CSS transforms. The bake runs in row chunks over the first frames.
@@ -144,7 +144,7 @@ export class Minimap {
 		this.markers = [
 			{ id: 'joe', ...mk( 'joe', ICON.fish ), pos: () => ( { x: STAND.x, z: STAND.z } ), vendor: () => game.stand.vendor },
 			{ id: 'marta', ...mk( 'marta', ICON.anchor ), pos: () => ( { x: CHANDLERY.x, z: CHANDLERY.z } ), vendor: () => game.chandlery.vendor },
-			// ((M15) Errol's fish camp on the north beach)
+			// ((M15) Pearl's fish camp on the north beach)
 			{ id: 'camp', ...mk( 'camp', ICON.fish ), pos: () => ( { x: CAMP.keeper.x, z: CAMP.keeper.z } ), vendor: () => game.camp.vendor },
 			// ((M13) the shelter, while a hurricane's watched for, warned of, or here)
 			{ id: 'shelter', ...mk( 'shelter', ICON.shelter ), pos: () => ( { x: SHELTER.x, z: SHELTER.z } ), hideWhen: () => {

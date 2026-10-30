@@ -131,7 +131,7 @@ export class Game {
 		this.portrait = new FishPortrait( this.display.material, { lite: app.tier === 'low' } );
 		this.landing = null; // { species, kg } while the caught fish swings in view
 		this.chandlery = app.chandlery || new Chandlery( { scene: app.scene, terrain: app.terrainData, colliders: app.colliders, material: this.stand.material } );
-		// ((M15) and Errol at the fish camp on the north beach: game/FishCamp.js, built when you come near it)
+		// ((M15) and Pearl at the fish camp on the north beach: game/FishCamp.js, built when you come near it)
 		this.camp = new FishCamp( { scene: app.scene, terrain: app.terrainData, colliders: app.colliders, village: app.village } );
 		this.vendors = [ this.stand.vendor, this.chandlery.vendor, this.camp.vendor ].filter( Boolean );
 		// (Salt Life) the day's wanted lists (Orders.js), chalked on a slate on Joe's counter. On a device
@@ -315,7 +315,7 @@ export class Game {
 
 	}
 
-	// (diesel at a litre's price: Marta's, or (M15) Errol's at the camp)
+	// (diesel at a litre's price: Marta's, or (M15) Pearl's at the camp)
 	refuel( price = undefined ) {
 
 		const l = this.state.refuel( price );
@@ -591,7 +591,7 @@ export class Game {
 		if ( app.debris && ! this.camp.built ) {
 
 			this.camp.update( app.camera );
-			// (and Errol's character, now you've come near: App.loadVendorCharacter)
+			// (and Pearl's character, now you've come near: App.loadVendorCharacter)
 			if ( this.camp.built && app.loadVendorCharacter ) app.loadVendorCharacter( this.camp.vendor );
 
 		}
@@ -1149,7 +1149,7 @@ export class Game {
 	saleTerms( vendor ) {
 
 		const who = vendor && vendor.kind === 'shop' ? 'marta' : vendor && vendor.kind === 'camp' ? 'camp' : 'joe';
-		// ((M15) Errol: his price, Joe's less the trip to market; no list, no week's order)
+		// ((M15) Pearl: her price, Joe's less the trip to market; no list, no week's order)
 		if ( who === 'camp' ) return { who, orders: null, day: this.tradeDay, rate: CAMP.rate, week: null };
 		return { who, orders: this.orders, day: this.tradeDay, rate: who === 'joe' && vendor && ! vendor.open ? NIGHT_BOX : 1, week: who === 'joe' ? this.weekTerms() : null };
 

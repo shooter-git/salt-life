@@ -593,7 +593,7 @@ export class GameState {
 
 	}
 
-	// fill up as far as the money goes, at `price` a litre (Marta's; (M15) or Errol's); returns litres bought
+	// fill up as far as the money goes, at `price` a litre (Marta's; (M15) or Pearl's); returns litres bought
 	refuel( price = FUEL_PRICE ) {
 
 		const missing = this.stats.fuelL - this.fuelL;

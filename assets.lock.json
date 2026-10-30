@@ -968,20 +968,6 @@
 			"author": "bruno.auzet"
 		},
 		{
-			"path": "public/models/characters/errol-512.glb",
-			"license": "MIT",
-			"source": "https://github.com/microsoft/Microsoft-Rocketbox",
-			"title": "Rocketbox avatar (errol-512.glb)",
-			"author": "Microsoft Corporation"
-		},
-		{
-			"path": "public/models/characters/errol.glb",
-			"license": "MIT",
-			"source": "https://github.com/microsoft/Microsoft-Rocketbox",
-			"title": "Rocketbox avatar (errol.glb)",
-			"author": "Microsoft Corporation"
-		},
-		{
 			"path": "public/models/characters/joe-512.glb",
 			"license": "MIT",
 			"source": "https://github.com/microsoft/Microsoft-Rocketbox",
@@ -1007,6 +993,20 @@
 			"license": "MIT",
 			"source": "https://github.com/microsoft/Microsoft-Rocketbox",
 			"title": "Rocketbox avatar (marta.glb)",
+			"author": "Microsoft Corporation"
+		},
+		{
+			"path": "public/models/characters/pearl-512.glb",
+			"license": "MIT",
+			"source": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"title": "Rocketbox avatar (pearl-512.glb)",
+			"author": "Microsoft Corporation"
+		},
+		{
+			"path": "public/models/characters/pearl.glb",
+			"license": "MIT",
+			"source": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"title": "Rocketbox avatar (pearl.glb)",
 			"author": "Microsoft Corporation"
 		},
 		{
