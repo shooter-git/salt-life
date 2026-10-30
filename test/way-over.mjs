@@ -20,6 +20,7 @@ import { Village } from '../src/world/Village.js';
 import { FishCamp, CAMP } from '../src/game/FishCamp.js';
 import { GameState } from '../src/game/GameState.js';
 import { Game } from '../src/game/Game.js';
+import { useGroundBounce, SAND } from '../src/materials/GroundBounce.js';
 
 let failed = 0;
 const check = ( ok, what ) => {
@@ -158,6 +159,22 @@ for ( const file of [ 'island.bin', 'island-1024.bin' ] ) {
 	let walk = true;
 	for ( let z = J.z0 - 0.5; z > J.z1 + 0.3; z -= 2 ) if ( Math.abs( colliders.groundHeightAt( J.x, z, J.deck + 0.5 ) - J.deck ) > 0.05 ) walk = false;
 	check( walk && Math.abs( colliders.groundHeightAt( J.x + 1.2, J.z1 + 1, J.deck + 0.5 ) - J.deck ) < 0.05, 'its jetty walked on, foot to head' );
+
+}
+
+// ---- the people at the traders lit by the sunlit sand about them (materials/GroundBounce.js)
+{
+
+	const m = new THREE.MeshStandardMaterial(), keyBefore = m.customProgramCacheKey();
+	useGroundBounce( m, { open: 0.7 } );
+	const shader = { uniforms: {}, vertexShader: '', fragmentShader: '#include <common>\nvoid main() {\n#include <lights_fragment_maps>\n#include <lights_fragment_end>\n}' };
+	m.onBeforeCompile( shader );
+	const fs = shader.fragmentShader;
+	check( /lights_fragment_maps>\s*\{[\s\S]*irradiance \+= groundBounceSun/.test( fs ) && fs.indexOf( 'groundBounceSun' ) < fs.indexOf( 'lights_fragment_end' ) && shader.uniforms.groundBounceOpen.value === 0.7, 'the sand\'s light added to the indirect diffuse, before it\'s shaded' );
+	check( m.customProgramCacheKey() !== keyBefore && /groundBounce/.test( m.customProgramCacheKey() ) && m.userData.groundBounceOpen === shader.uniforms.groundBounceOpen, 'its program kept apart, its share of the sand\'s light set later without compiling again' );
+	// (at noon, the sun 3.2 straight overhead: on a face turned to the side, a fifth of the sun or so)
+	const lum = 0.2126 * SAND.r + 0.7152 * SAND.g + 0.0722 * SAND.b, side = 3.2 * 1 * lum * 0.5;
+	check( lum > 0.35 && lum < 0.5 && side / 3.2 > 0.15 && side / 3.2 < 0.25, `the sand reflects ${ Math.round( lum * 100 ) }% of the light on it: a face turned to the side gets ${ Math.round( side / 3.2 * 100 ) }% of the noon sun's light from it` );
 
 }
 

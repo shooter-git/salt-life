@@ -50,8 +50,7 @@ export class FishCamp {
 			idle: 'Nothing today? Diesel\'s in the drums by the jetty if you need it.',
 			// (Rocketbox's Male_Adult_18, as Joe and Marta are theirs: tools/characters/build.sh; his long-sleeved hooded
 			// sun shirt, work trousers and boots a fisherman's)
-			// (and lit as one standing in the shade by a sunlit beach: Vendor's fill)
-			character: { url: 'models/characters/errol.glb', idle: 'idle_neutral_01', talk: 'gestic_talk_relaxed_01', greet: 'wave_01', fill: 4 },
+			character: { url: 'models/characters/errol.glb', idle: 'idle_neutral_01', talk: 'gestic_talk_relaxed_01', greet: 'wave_01' },
 			look: { shirt: 0x8a8a84, trousers: 0x2a2a2c, apron: 0x8a8a84, hat: 0x8a8a84, hair: 0x1a1410, skin: 0x4a2e1e },
 			hours: CAMP.hours,
 		} );

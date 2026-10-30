@@ -42,6 +42,7 @@ import { Chandlery, CHANDLERY } from './game/Chandlery.js';
 import { LocalLights, addBoatLights, addVillageLights, useLocalLights, holdLocalLights } from './materials/LocalLights.js';
 import { cloudShadows, useCloudShadows } from './materials/CloudShadows.js';
 import { useWet, wetSurfaces } from './materials/Wet.js';
+import { useGroundBounce } from './materials/GroundBounce.js';
 import { Wildlife } from './world/wildlife/Wildlife.js';
 import { wildlifeMood, wildlifeNews } from './game/WildlifeWeather.js';
 import { damageAt } from './game/StormDamage.js';
@@ -1285,7 +1286,7 @@ export class App {
 			this._characterLoad = async ( url, clips = null ) => {
 
 				const c = new Character( await loader.loadAsync( this.tier === 'low' ? url.replace( /\.glb$/, '-512.glb' ) : url ), { clips } );
-				this.lightUp( c.group );
+				this.lightPerson( c.group );
 				for ( const t of c.textures() ) r.initTexture( t );
 				await r.compileAsync( c.group, this.camera, this.scene );
 				await this.useNewPrograms();
@@ -1298,6 +1299,9 @@ export class App {
 		try {
 
 			const c = await v.loadCharacter( this._characterLoad );
+			// ((M15) as much of the sand's light as reaches them where they stand: Errol's sand's in the cliff's shadow)
+			const open = v.characterSpec && v.characterSpec.open;
+			if ( c && open !== undefined ) for ( const m of c.materials ) if ( m.userData.groundBounceOpen ) m.userData.groundBounceOpen.value = open;
 			if ( c && this.nearDetail ) c.group.traverse( ( o ) => {
 
 				if ( ! o.isMesh ) return;
@@ -1344,6 +1348,19 @@ export class App {
 
 		};
 		visit( root, this.tier === 'low' );
+
+	}
+
+	// (M15) a person's materials under `root` lit as everything's (lightUp), and by the sunlit sand about them, as
+	// someone on a beach is (GroundBounce): the traders, the other players
+	lightPerson( root ) {
+
+		this.lightUp( root );
+		root.traverse( ( o ) => {
+
+			if ( o.isMesh ) for ( const m of [ o.material ].flat() ) if ( m ) useGroundBounce( m );
+
+		} );
 
 	}
 

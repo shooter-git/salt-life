@@ -711,7 +711,7 @@ export class Together {
 		const avatar = new Avatar( person );
 		avatar.group.visible = false;
 		app.scene.add( avatar.group );
-		app.lightUp( avatar.group );
+		app.lightPerson( avatar.group );
 		const tackle = app.game.rod.tackle();
 		app.scene.add( tackle.rod, tackle.bobber, tackle.line );
 		// (Salt Life) and their speargun, its shaft and line
@@ -732,7 +732,7 @@ export class Together {
 
 			if ( ! gltf || ! this.others.has( o.person.id ) || o.wearing !== look ) return;
 			o.avatar.setLook( gltf, { shadows: this.app.tier === 'high' } );
-			this.app.lightUp( o.avatar.group );
+			this.app.lightPerson( o.avatar.group );
 
 		} );
 

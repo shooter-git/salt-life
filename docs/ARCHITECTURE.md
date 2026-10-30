@@ -119,6 +119,8 @@ The bay's harbour lights (`world/HarbourLights.js`, `HARBOUR_LIGHTS`: where, the
 
 (M15) `game/FishCamp.js`: `CAMP` (the shed, Errol's place, the jetty, his hours, `rate` of Joe's price, `fuel` a litre, `build` distance). `FishCamp` makes Errol's `Vendor` (kind `'camp'`) at once and the rest the first time `update( camera )` finds you within `CAMP.build` (Game calls it once `App.debris` exists): a `Builder` with an `InstancedProps` (drums, pots), `Buildings.buildShed` with the village's context (its own `holes`, so no storm damage), `Props`' emitters, its colliders, then `Village._assembleBuilder( B, 'camp' )` for the meshes in the village's materials; its board is `Signpost.paintedBoard`. `Game.saleTerms` gives `'camp'` terms (`rate`, no orders or week); `GameState.refuel( price )` / `refuelCost( price )`; `GameHUD.renderTrader()` picks `renderShop`, `renderCamp` or `renderStand`. `Signpost` takes a `spec` (`TRAIL_POSTS`). The minimap's bake starts 100 m further north (`Z0`) and marks the camp.
 
+(M15) `materials/GroundBounce.js`: `useGroundBounce( material, { open } )` adds to a standard material's indirect diffuse irradiance (after `lights_fragment_maps`) the sunlit sand's light, `G.sunColor` × the sun's height (`G.sunDir.y`) × `SAND` × ( 1 - n·up ) / 2, and the sky's (`G.skyIrradiance` × ( 1 + n·up ) / 2), both × `open` (`material.userData.groundBounceOpen`, set without compiling again); its program key chained as `Wet`'s is. `App.lightPerson( root )` is `lightUp` and this, for the traders' characters (`loadVendorCharacter`, their `characterSpec.open`) and the other players' avatars (`Together`).
+
 ## The windward reef
 
 (M15) A second reef off the north-west point (`WORLD.northReef`), the bay's machinery run again for it:
