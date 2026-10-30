@@ -11,7 +11,7 @@ import { FishStand, STAND } from './FishStand.js';
 import { Chandlery, CHANDLERY } from './Chandlery.js';
 import { CatchDisplay } from './CatchDisplay.js';
 import { FishPortrait } from './FishPortrait.js';
-import { UPGRADES, fuelBurn, TOW, towFee } from './Gear.js';
+import { UPGRADES, fuelBurn, TOW, towFee, HAUL_FEE } from './Gear.js';
 import { Hull, thrustMul, repairFee } from './Hull.js';
 import { GameHUD } from './GameHUD.js';
 import { TimeHUD } from './TimeHUD.js';
@@ -57,8 +57,7 @@ const RODE_SEGS = 16;
 // is saved whenever it's grown this much since it last was
 const BAIL_FROM = 20;
 const WEAR_SAVE = 0.02;
-// (M13) Marta's haul-out ahead of a hurricane ($: less than the repair a hurricane leaves to do)
-export const HAUL_FEE = 40;
+export { HAUL_FEE };
 const _a = new Vector3(), _b = new Vector3(), _h = new Vector3();
 const _pose = { pos: new Vector3(), head: new Vector3(), roll: 0, thrash: 0 };
 const BAG_FROM = 0.85; // the brails drawn this far: the netting has closed round what's under it (it rides in the purse)
@@ -402,6 +401,16 @@ export class Game {
 			this.minimap = new Minimap( ui.hud || ui.root, this );
 			this.guide = new Guide( ui, this, this.minimap );
 			ui.onReplayGuide = () => this.guide.replay();
+
+		}
+
+		// ((M15) what happened while you were away, once you're here to read it: App.pickUp)
+		if ( this.awayTold && this.hud && app._started ) {
+
+			const told = this.awayTold;
+			this.awayTold = null;
+			if ( told.note ) this.hud.showAwayNote( told.note );
+			if ( told.toast ) this.toast( told.toast, 5200 );
 
 		}
 

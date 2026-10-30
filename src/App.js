@@ -34,7 +34,8 @@ import { Player } from './player/Player.js';
 import { BoatController } from './player/BoatController.js';
 import { GameState } from './game/GameState.js';
 import { DAY_RATE, START_HOUR, advance } from './game/IslandClock.js';
-import { islandTime, isPick, NORTH, weatherAt, towardOf } from './game/Weather.js';
+import { islandTime, isPick, NORTH, weatherAt, towardOf, hurricaneNews } from './game/Weather.js';
+import { BACK_MS, awayClock, awayOf, boatLeft, cleanBoats, leftOf, tellOf, withRecord } from './game/Away.js';
 import { WeatherDriver } from './world/WeatherDriver.js';
 import { lampsLit } from './game/Bites.js';
 import { FishStand, STAND } from './game/FishStand.js';
@@ -221,6 +222,8 @@ export class App {
 			fetched( 'world/detail.bin' ),
 			fetched( SEABED_BIN[ tier ] ?? SEABED_BIN.low ),
 			this.store.load(),
+			// ((M15) the group's anchored boats, yours among them: pickUp)
+			portal.save.shared.get( 'boats' ).catch( () => null ).then( ( boats ) => this._boatsRead = boats ),
 		] );
 		setDetailData( new Uint8Array( detail ) );
 		this.state = new GameState( this.store );
@@ -532,6 +535,7 @@ export class App {
 		this.game = new Game( this );
 		// whoever else is on the island, and the time of day you share (together/)
 		this.together = new Together( this );
+		this.pickUp();
 		if ( ! this.cpuGL ) await this.lifeAndDebris();
 		if ( this.nearDetail ) {
 
@@ -1994,6 +1998,15 @@ export class App {
 
 			s.timeOfDay = ( ( saved.hour % 24 ) + 24 ) % 24;
 			s.day = Number.isFinite( saved.day ) ? Math.max( 1, Math.floor( saved.day ) ) : 1;
+			// ((M15) it went on without you, an island hour a real hour, unless you'd held it. In company the room's
+			// is everyone's: Together)
+			if ( ! saved.held ) {
+
+				const t = awayClock( s.timeOfDay, s.day, saved.at );
+				s.timeOfDay = t.hour;
+				s.day = t.day;
+
+			}
 			s.timeSpeed = saved.held ? 0 : DAY_RATE;
 			s.weather = isPick( saved.weather ) ? saved.weather : null;
 			s.weatherSince = Number.isFinite( saved.since ) ? saved.since : islandTime( s.day, s.timeOfDay );
@@ -2015,11 +2028,16 @@ export class App {
 			s.weatherSince = islandTime( s.day, s.timeOfDay );
 
 		}
-		this.portal.on( 'pause', () => this.saveClock() );
+		this.portal.on( 'pause', () => {
+
+			this.saveClock();
+			if ( this.together ) this.together.mineBoat( true );
+
+		} );
 		this.portal.onExit( () => {
 
 			this.saveClock();
-			return this.store.flush();
+			return Promise.all( [ this.store.flush(), this.together && this.together.mineBoat( true ) ] );
 
 		} );
 
@@ -2239,20 +2257,103 @@ export class App {
 	}
 
 	// the hour and day you're at, into your save (written a moment later, with the rest of it); and the
-	// weather you picked (none: the day's), (M13) and when, for a hurricane of your own
+	// weather you picked (none: the day's), (M13) and when, for a hurricane of your own; (M15) when (at: the clock
+	// goes on from there while you're away), and your boat
 	saveClock() {
 
 		this._clockSaveT = 30;
-		const s = this.settings;
-		const text = JSON.stringify( { hour: Math.round( s.timeOfDay * 1000 ) / 1000, day: s.day, held: s.timeSpeed === 0, ...( s.weather ? { weather: s.weather } : {} ), ...( s.weather === 'hurricane' ? { since: s.weatherSince } : {} ) } );
+		const s = this.settings, held = s.timeSpeed === 0;
+		const text = JSON.stringify( { hour: Math.round( s.timeOfDay * 1000 ) / 1000, day: s.day, held, ...( held ? {} : { at: Date.now() } ), ...( s.weather ? { weather: s.weather } : {} ), ...( s.weather === 'hurricane' ? { since: s.weatherSince } : {} ) } );
 		if ( this.store && text !== this._clockSaved ) this.store.setItem( CLOCK_KEY, text );
 		this._clockSaved = text;
+		this.saveBoat();
+
+	}
+
+	// (M15) where your boat lies, her heading, her anchor, and whether you're aboard, into your save
+	saveBoat() {
+
+		const b = this.boatCtl, p = this.player, s = this.settings;
+		if ( ! this._pickedUp || ! this.store ) return;
+		const dock = WORLD.boatDock.position;
+		// (as stepping ashore makes her fast: Player.exitBoat)
+		const moored = b.moored || ( ! b.anchor && ! b.hauled && Math.hypot( b.position.x - dock.x, b.position.z - dock.z ) < 14 && b.speed < 1.5 );
+		const aboard = p.riding ? null : p.mode === 'deck' ? 'deck' : p.mode === 'boat' ? 'helm' : null;
+		this.store.setItem( BOAT_KEY, JSON.stringify( boatLeft( { x: b.position.x, z: b.position.z, heading: b.getYaw(), anchor: b.anchor, moored, aboard, T: islandTime( s.day, s.timeOfDay ), at: Date.now() } ) ) );
+		if ( this.together ) this.together.mineBoat();
+
+	}
+
+	// (M15) Picking up where you left off (game/Away.js): your boat where you left her, as whatever's happened since
+	// has left her (your own reckoning from the island's weather, and the group's save if she was out on everyone's
+	// sea), its fee paid, and you aboard if you were and she's still where you left her. Told once you're here
+	pickUp() {
+
+		const s = this.settings, st = this.state, b = this.boatCtl, p = this.player, g = this.game;
+		this._pickedUp = true;
+		const boats = cleanBoats( this._boatsRead ), mine = boats[ this.portal.me.id ] || null;
+		this.together.setBoats( boats, !! mine );
+		const left = leftOf( this.store.getItem( BOAT_KEY ) );
+		if ( ! left ) return;
+		left.hauled = st.hauled;
+		const T = islandTime( s.day, s.timeOfDay ), dock = WORLD.boatDock.position, pick = this.weatherPick(), since = s.weatherSince;
+		const depth = ( x, z ) => Math.max( 0, G.seaLevel.value - this.terrainData.heightAt( x, z ) );
+		const away = ! ( Date.now() - left.at < BACK_MS );
+		const story = withRecord( awayOf( left, away ? T : left.T, { dock, pick, since, depth } ), away ? mine : null, dock );
+		const paid = st.payTow( story.fee ), towed = story.tows.length > 0;
+		if ( story.wear > 0 ) {
+
+			st.hull = Math.min( 1, st.hull + story.wear );
+			st.save();
+			g._wearSaved = st.hull;
+
+		}
+
+		const fish = story.spoiled ? st.spoil() : 0;
+		const yaw = new THREE.Vector3( 0, 1, 0 );
+		if ( story.where === 'cradle' ) {
+
+			st.hauled = true;
+			st.save();
+			b.setHauled( g.cradle );
+
+		} else if ( towed ) b.reset();
+		else if ( story.where !== 'dock' || Math.hypot( left.x - dock.x, left.z - dock.z ) > 0.5 ) {
+
+			b.position.set( story.x, G.seaLevel.value, story.z );
+			b.quaternion.setFromAxisAngle( yaw, story.heading );
+			b.velocity.set( 0, 0, 0 );
+			b.angular.set( 0, 0, 0 );
+			b.moored = story.where === 'dock';
+			if ( b.moored ) {
+
+				b.mooring.anchor.set( story.x, 0, story.z );
+				b.mooring.heading = story.heading;
+
+			}
+
+			b.anchor = story.anchor ? new THREE.Vector3( story.anchor.x, this.terrainData.heightAt( story.anchor.x, story.anchor.z ), story.anchor.z ) : null;
+			b.hasWater = false;
+			b.apply();
+
+		}
+
+		if ( left.aboard && ! towed && ! b.hauled ) {
+
+			p.boardBoat();
+			if ( left.aboard === 'helm' ) p.takeHelm();
+
+		}
+
+		if ( away ) g.awayTold = tellOf( story, { paid, hull: st.hull, fish, T, news: hurricaneNews( T, pick, since ), locale: this.portal.locale, from: left } );
+		this.together.mineBoat( true );
 
 	}
 
 }
 
 const CLOCK_KEY = 'saltlife.clock';
+const BOAT_KEY = 'saltlife.boat';
 const timeOf = ( t ) => ( { timeOfDay: t.hour, day: t.day } );
 
 // drawsOnCpu, asked of a throwaway context (let go of straight away)

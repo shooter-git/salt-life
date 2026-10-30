@@ -1,6 +1,6 @@
 import { Vector2 } from '../engine/index.js';
 import { G } from '../core/Globals.js';
-import { islandTime, weatherHere, showers, towardOf, hurricaneAt, hurricaneNews, hash, FRONT_KMH, STORM_RANGE, SURF_MAX } from '../game/Weather.js';
+import { islandTime, weatherHere, showers, towardOf, hurricaneAt, hurricaneNews, hash, squallWind, gustShare, FRONT_KMH, STORM_RANGE, SURF_MAX } from '../game/Weather.js';
 import { FRONT_KM, eyeCover, bandCells } from '../sky/SkyProClouds.js';
 
 // (Salt Life) The island's weather, each frame: what the day brings (game/Weather.js), or what you picked
@@ -48,6 +48,7 @@ import { FRONT_KM, eyeCover, bandCells } from '../sky/SkyProClouds.js';
 //   where you are), (M15) weather.island (the island's)
 //   weather.windAt( x, z ) -> m/s   weather.gustAt( x, z ) -> 0..1
 
+const NO_RAIN = { rain: 0, thunder: 0 };
 const EASE = 30; // s: the time constant of the wind and the sea coming round
 const CLOUD_RATE = 0.008; // cover and greyness a second, at most
 // (M9) the rain comes on and eases off in seconds; what it wets soaks in over a few, and dries over minutes
@@ -58,11 +59,6 @@ const CLOUD_LEAD = 0.6;
 // the weather up the trades: the clouds are told the cover at FRONT_KM (a front's bank comes FRONT_KMH a
 // game hour: Weather.js), how often (s)
 const FRONT_EVERY = 0.5;
-// the gusts: how much the wind rises and falls in them (of its speed), in rain and in a squall besides;
-// the wind a squall's downdraught adds (m/s at full rain, at full thunder: at most a gale's)
-const GUSTS = [ 0.22, 0.18, 0.15 ];
-const SQUALL = [ 1.5, 3 ];
-const GALE = 20;
 // rad a second at most: the wind comes round (the far sea turns with it), (M12) as fast as a front swings it
 // (about a quarter of the compass in two game hours)
 const TURN_RATE = 0.015;
@@ -136,7 +132,7 @@ export class WeatherDriver {
 	// (M9) the wind's speed at ( x, z ), in the gusts the sea shows there (m/s)
 	windAt( x, z ) {
 
-		const w = this.live, g = GUSTS[ 0 ] + ( w ? GUSTS[ 1 ] * w.rain + GUSTS[ 2 ] * w.thunder : 0 );
+		const g = gustShare( this.live || NO_RAIN );
 		return G.windSpeed.value * ( 1 + g * ( this.gustAt( x, z ) - 0.5 ) * 2 );
 
 	}
@@ -277,7 +273,7 @@ export class WeatherDriver {
 
 		const w = this.live, sky = this.sky;
 		// (a squall's downdraught freshens it while it passes)
-		G.windSpeed.value = Math.min( Math.max( GALE, w.wind ), w.wind + SQUALL[ 0 ] * w.rain + SQUALL[ 1 ] * w.thunder );
+		G.windSpeed.value = squallWind( w );
 		G.rain.value = w.rain;
 		// (the sun the waves focus on the seabed: little under a grey sky, none in the rain's deck, and
 		// (M10) less through the murk a blow's left)

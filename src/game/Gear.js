@@ -103,6 +103,8 @@ export const FUEL_PRICE = 1.5; // $ per litre of diesel at the chandlery
 // within `from` metres of the dock (walk or swim to her)
 export const TOW = { base: 20, per100m: 5, max: 90, from: 30 };
 export const towFee = ( metres ) => Math.min( TOW.max, Math.round( TOW.base + TOW.per100m * Math.max( 0, metres ) / 100 ) );
+// (M13) Marta's haul-out ahead of a hurricane ($: less than the repair a hurricane leaves to do)
+export const HAUL_FEE = 40;
 // litres per second at the helm: idle plus a lot more at full rpm (40 L lasts ~25 min flat out)
 export function fuelBurn( rpm ) {
 

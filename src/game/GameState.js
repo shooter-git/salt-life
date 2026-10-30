@@ -544,6 +544,22 @@ export class GameState {
 
 	}
 
+	// (M15) the catch gone off while you were away (Away.js): over the side; returns how many
+	spoil() {
+
+		const n = this.inventory.length;
+		if ( n ) {
+
+			this.inventory = [];
+			this.save();
+			this.emit();
+
+		}
+
+		return n;
+
+	}
+
 	// (M10) Marta's repair of the hull: her fee for all of it, or as much of it as what you have pays for;
 	// returns what was paid
 	payRepair( fee ) {

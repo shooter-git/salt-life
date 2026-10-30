@@ -192,6 +192,14 @@ export const MURKY = 0.35;
 //     more (`murk`).
 //   - All of it + - x / and sqrt (correctly rounded everywhere) on the clock, as the rest is; only the
 //     wind's direction takes atan2.
+// (M9) the gusts: how much the wind rises and falls in them (of its speed), in rain and in a squall besides; the
+// wind a squall's downdraught adds (m/s at full rain, at full thunder: at most a gale's). WeatherDriver's wind, and
+// (M15) what a boat left out feels of it (Away.js)
+export const GUSTS = [ 0.22, 0.18, 0.15 ];
+export const SQUALL = [ 1.5, 3 ];
+const GALE_WIND = 20;
+export const squallWind = ( w ) => Math.min( Math.max( GALE_WIND, w.wind ), w.wind + SQUALL[ 0 ] * w.rain + SQUALL[ 1 ] * w.thunder );
+export const gustShare = ( w ) => GUSTS[ 0 ] + GUSTS[ 1 ] * w.rain + GUSTS[ 2 ] * w.thunder;
 export const HURRICANE = {
 	oneIn: 16, fromDay: 15,
 	vmax: [ 32, 37 ], rmax: [ 20000, 32000 ], over: 0.3,
