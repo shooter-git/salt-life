@@ -587,19 +587,19 @@ export class GameState {
 
 	}
 
-	refuelCost() {
+	refuelCost( price = FUEL_PRICE ) {
 
-		return Math.ceil( ( this.stats.fuelL - this.fuelL ) * FUEL_PRICE );
+		return Math.ceil( ( this.stats.fuelL - this.fuelL ) * price );
 
 	}
 
-	// fill up as far as the money goes; returns litres bought
-	refuel() {
+	// fill up as far as the money goes, at `price` a litre (Marta's; (M15) or Errol's); returns litres bought
+	refuel( price = FUEL_PRICE ) {
 
 		const missing = this.stats.fuelL - this.fuelL;
-		const litres = Math.min( missing, Math.floor( this.money / FUEL_PRICE ) );
+		const litres = Math.min( missing, Math.floor( this.money / price ) );
 		if ( litres <= 0 ) return 0;
-		this.money -= Math.ceil( litres * FUEL_PRICE );
+		this.money -= Math.ceil( litres * price );
 		this.fuel = this.fuelL + litres;
 		if ( this.fuel >= this.stats.fuelL - 1e-3 ) this.fuel = null;
 		this.save();

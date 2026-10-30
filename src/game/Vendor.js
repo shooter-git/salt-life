@@ -42,7 +42,7 @@ export class Vendor {
 		this.character = null;
 		this.talking = false;
 		this._near = false;
-		this.characterSpec = character; // { url, idle, talk, greet }: loadCharacter
+		this.characterSpec = character; // { url, idle, talk, greet, (M15) fill }: loadCharacter
 
 	}
 
@@ -63,6 +63,36 @@ export class Vendor {
 		model.onClipEnd = () => model.play( this.talking ? talk : idle, { fade: 0.5 } );
 		this.character = model;
 		this.setModel( model.group );
+		// ((M15) one who stands in deep shade (Errol under his lean-to, in the cliff's shadow): the sky's light, and
+		// the sand's thrown up into the shade, `fill` times the world's (whose fill is kept low for the sand) through
+		// an environment map of the materials' own (three puts the scene's intensity in place of a material's that
+		// reads the scene's))
+		if ( spec.fill ) {
+
+			const sync = ( renderer, scene ) => {
+
+				for ( const m of model.materials ) {
+
+					if ( m.envMap !== scene.environment ) {
+
+						if ( ! m.envMap !== ! scene.environment ) m.needsUpdate = true;
+						m.envMap = scene.environment;
+
+					}
+
+					m.envMapIntensity = scene.environmentIntensity * spec.fill;
+
+				}
+
+			};
+			model.group.traverse( ( o ) => {
+
+				if ( o.isMesh ) o.onBeforeRender = sync;
+
+			} );
+
+		}
+
 		return model;
 
 	}

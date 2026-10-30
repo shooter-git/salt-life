@@ -9,6 +9,7 @@ import { LB, IN, GAL, lb, pounds, inches, feet, gallons, lbOz, feetInches } from
 import { FLOOD_L } from './Hull.js';
 import { PLACES, placeName } from './Places.js';
 import { FINDS, messageOf } from './Beachcomb.js';
+import { CAMP } from './FishCamp.js';
 
 // (other players' names, into HTML)
 const escape = ( t ) => String( t ).replace( /[&<>"']/g, ( c ) => ( { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } )[ c ] );
@@ -470,7 +471,7 @@ export class GameHUD {
 
 		this._last.money = s.money;
 		if ( this.invOpen ) this.renderInventory();
-		if ( this.standOpen ) this.vendor && this.vendor.kind === 'shop' ? this.renderShop() : this.renderStand();
+		if ( this.standOpen ) this.renderTrader();
 		if ( this.room ) this.renderRoom();
 
 	}
@@ -1019,9 +1020,8 @@ export class GameHUD {
 		this._standDrawn = null; // (opened again: its list from the top)
 		this.toggleInventory( false );
 		// (Salt Life) Joe pays your share of a filled week's order when he's in
-		if ( vendor.kind !== 'shop' && this.game.collectWeek ) this.game.collectWeek();
-		if ( vendor.kind === 'shop' ) this.renderShop();
-		else this.renderStand();
+		if ( vendor.kind === 'buyer' && this.game.collectWeek ) this.game.collectWeek();
+		this.renderTrader();
 		this.stand.classList.add( 'is-open' );
 		releaseMouse();
 
@@ -1116,6 +1116,51 @@ export class GameHUD {
 		this.stand.querySelector( '[data-all]' ).onclick = () => this.game.sellAll();
 		for ( const b of this.stand.querySelectorAll( '[data-sell]' ) ) b.onclick = () => this.game.sell( [ Number( b.dataset.sell ) ] );
 		this.bindFinds( 'joe' );
+
+	}
+
+	// the open trader's panel: Marta's shop, (M15) Errol's camp, or Joe's stand
+	renderTrader() {
+
+		const k = this.vendor && this.vendor.kind;
+		if ( k === 'shop' ) this.renderShop();
+		else if ( k === 'camp' ) this.renderCamp();
+		else this.renderStand();
+
+	}
+
+	// (M15) Errol at the fish camp on the north beach: your catch at his price (Joe's, less the trip round to
+	// market), diesel from his drums at his; gone round to market, nothing
+	renderCamp() {
+
+		const g = this.game, s = g.state, v = this.vendor, name = v.name.split( ' ·' )[ 0 ];
+		if ( ! v.open ) {
+
+			this.drawStand( v, `
+				<div class="gm-head"><h2>${ v.name }</h2>
+				<p class="gm-sub">${ v.boarded ? `${ name }'s boarded up for the hurricane` : v.weatherShut ? `${ name }'s shut for the weather` : `${ name }'s gone round to market with the day's fish. He's back at ${ this.at( v.hours[ 0 ] ) }` }.</p></div>
+				<div class="gm-foot"><span class="gm-sub">His drums are locked while he's away</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>` );
+			this.stand.querySelector( '[data-close]' ).onclick = () => this.closeStand();
+			return;
+
+		}
+
+		const terms = g.saleTerms( v ), all = s.quote( null, terms );
+		const rows = s.inventory.map( ( f ) => fishItem( f, `<button class="gm-mini" data-sell="${ f.id }">Sell</button>`, s.quote( [ f.id ], terms ).prices.get( f.id ), false ) ).join( '' );
+		const missing = s.stats.fuelL - s.fuelL;
+		const fuelRow = `<div class="gm-shop-row"><span>Diesel · $${ ( CAMP.fuel * GAL ).toFixed( 2 ) } / gal<small>From his drums by the jetty · tank: ${ gallons( s.fuelL ) } of ${ gallons( s.stats.fuelL ) } gal</small></span>${ missing > 0.5 ? `<button class="gm-btn" data-fuel ${ s.money < CAMP.fuel ? 'disabled' : '' }>Fill · $${ Math.min( s.refuelCost( CAMP.fuel ), Math.floor( s.money / CAMP.fuel ) * CAMP.fuel ) }</button>` : '<span class="gm-have">Full</span>' }</div>`;
+		const sub = this.closingSoon( v ) ? `I'm off round to market at ${ this.at( v.hours[ 1 ] ) }.` : s.inventory.length ? v.greeting : v.idle;
+		this.drawStand( v, `
+			<div class="gm-head"><h2>${ v.name }</h2>
+			<p class="gm-sub">${ sub } He pays ${ Math.round( CAMP.rate * 100 ) }% of Joe's price. You have $${ s.money.toLocaleString() }</p></div>
+			<div class="gm-list">${ fuelRow }<div class="gm-rows">${ rows || '<div class="gm-empty">Your cooler is empty.</div>' }</div></div>
+			<div class="gm-foot"><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button><button class="gm-btn" data-all ${ s.inventory.length ? '' : 'disabled' }>Sell all · $${ all.total }</button></div>` );
+		// (each drawn again by the state's change: refresh)
+		this.stand.querySelector( '[data-close]' ).onclick = () => this.closeStand();
+		this.stand.querySelector( '[data-all]' ).onclick = () => this.game.sellAll();
+		for ( const b of this.stand.querySelectorAll( '[data-sell]' ) ) b.onclick = () => this.game.sell( [ Number( b.dataset.sell ) ] );
+		const f = this.stand.querySelector( '[data-fuel]' );
+		if ( f ) f.onclick = () => this.game.refuel( CAMP.fuel );
 
 	}
 

@@ -24,7 +24,8 @@ import { wxNews } from './TimeHUD.js';
 import { CRADLE } from '../world/village/StormPlaces.js';
 import { StormChart, shelterSign } from './StormChart.js';
 import { ClosedSign } from './ClosedSign.js';
-import { Signpost } from './Signpost.js';
+import { Signpost, TRAIL_POSTS } from './Signpost.js';
+import { FishCamp, CAMP } from './FishCamp.js';
 import { delivered, filled, owed, weekEnds } from './WeekOrder.js';
 import { Minimap } from './Minimap.js';
 import { Guide } from './Guide.js';
@@ -130,7 +131,9 @@ export class Game {
 		this.portrait = new FishPortrait( this.display.material, { lite: app.tier === 'low' } );
 		this.landing = null; // { species, kg } while the caught fish swings in view
 		this.chandlery = app.chandlery || new Chandlery( { scene: app.scene, terrain: app.terrainData, colliders: app.colliders, material: this.stand.material } );
-		this.vendors = [ this.stand.vendor, this.chandlery.vendor ].filter( Boolean );
+		// ((M15) and Errol at the fish camp on the north beach: game/FishCamp.js, built when you come near it)
+		this.camp = new FishCamp( { scene: app.scene, terrain: app.terrainData, colliders: app.colliders, village: app.village } );
+		this.vendors = [ this.stand.vendor, this.chandlery.vendor, this.camp.vendor ].filter( Boolean );
 		// (Salt Life) the day's wanted lists (Orders.js), chalked on a slate on Joe's counter. On a device
 		// that draws on its CPU it goes up after the start, with the records board (App.prepareLate)
 		this.orders = [];
@@ -185,6 +188,9 @@ export class Game {
 		// ((M15) the fingerpost by the boardwalk: the way round the island, read from the start)
 		this.signpost = new Signpost( { terrain: app.terrainData, colliders: app.colliders } );
 		app.scene.add( this.signpost.group );
+		// ((M15) and the way over's, at its fork and at its foot by the camp)
+		this.trailPosts = TRAIL_POSTS.map( ( spec ) => new Signpost( { terrain: app.terrainData, colliders: app.colliders, spec } ) );
+		for ( const t of this.trailPosts ) app.scene.add( t.group );
 		this.wanted.mesh.attach( this.forecastSlate.mesh );
 		this._forecastT = 0;
 		app.lightUp( this.wanted.mesh );
@@ -200,6 +206,7 @@ export class Game {
 		const signs = [
 			[ this.stand.vendor, STAND, { x: 0.32, y: 1.045, z: 0.96, tilt: 0.24, roll: 0.03 }, 0.5, 'Fish in the night box' ],
 			[ this.chandlery.vendor, CHANDLERY, { x: 0.35, y: 0, z: 0.41, tilt: 0.33, roll: - 0.02 }, 0.6, 'Diesel: pay into the box' ], // (leaning on the table's front, z 0.29)
+			[ this.camp.vendor, CAMP.keeper, { x: - 0.6, y: 0, z: 1.3, tilt: 0.3, roll: 0.04 }, 0.6, 'Gone round to market' ], // ((M15) leaning on the counter's front)
 		];
 		this.signs = signs.filter( ( [ v ] ) => v && v.hours ).map( ( [ v, at, spot, width, left ] ) => {
 
@@ -308,9 +315,10 @@ export class Game {
 
 	}
 
-	refuel() {
+	// (diesel at a litre's price: Marta's, or (M15) Errol's at the camp)
+	refuel( price = undefined ) {
 
-		const l = this.state.refuel();
+		const l = this.state.refuel( price );
 		if ( l > 0 ) {
 
 			this._fuelOut = false;
@@ -579,6 +587,14 @@ export class Game {
 		this.updateVendors( inp, p );
 		// ((M15) what the sea's left on the beaches, to pick up)
 		this.updateBeachcomb( inp, p );
+		// ((M15) the fish camp built as you first come near it, once the debris has been placed)
+		if ( app.debris && ! this.camp.built ) {
+
+			this.camp.update( app.camera );
+			// (and Errol's character, now you've come near: App.loadVendorCharacter)
+			if ( this.camp.built && app.loadVendorCharacter ) app.loadVendorCharacter( this.camp.vendor );
+
+		}
 
 		// (M10) the bucket on deck; the crank at the helm while she's stalled
 		this.updateBail( inp, p );
@@ -1023,8 +1039,7 @@ export class Game {
 
 		if ( this.hud && this.hud.standOpen ) {
 
-			if ( who === 'marta' ) this.hud.renderShop();
-			else this.hud.renderStand();
+			this.hud.renderTrader();
 
 		}
 
@@ -1039,6 +1054,7 @@ export class Game {
 		if ( v.open ) return `Talk to ${ name }`;
 		// (M9) or gone home for the weather
 		const back = v.boarded ? 'boarded up for the hurricane' : v.weatherShut ? 'shut for the weather' : `back at ${ timeText( v.hours[ 0 ], this.app.portal && this.app.portal.locale, 60 ) }`;
+		if ( v.kind === 'camp' ) return `${ name }'s ${ back }`;
 		return v.kind === 'shop' ? `Diesel on the honesty box   ·   ${ name }'s ${ back }` : `${ name }'s night box   ·   he's ${ back }`;
 
 	}
@@ -1132,7 +1148,9 @@ export class Game {
 	// his night box when he's gone home (less, but the orders in full); Marta: only the bait she's after
 	saleTerms( vendor ) {
 
-		const who = vendor && vendor.kind === 'shop' ? 'marta' : 'joe';
+		const who = vendor && vendor.kind === 'shop' ? 'marta' : vendor && vendor.kind === 'camp' ? 'camp' : 'joe';
+		// ((M15) Errol: his price, Joe's less the trip to market; no list, no week's order)
+		if ( who === 'camp' ) return { who, orders: null, day: this.tradeDay, rate: CAMP.rate, week: null };
 		return { who, orders: this.orders, day: this.tradeDay, rate: who === 'joe' && vendor && ! vendor.open ? NIGHT_BOX : 1, week: who === 'joe' ? this.weekTerms() : null };
 
 	}

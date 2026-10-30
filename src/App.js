@@ -1270,37 +1270,45 @@ export class App {
 
 		if ( ! this.game ) return;
 		performance.mark( 'world: characters' );
-		const loader = gltfLoader(), r = this.renderer;
-		const load = async ( url, clips = null ) => {
+		// ((M15) those far off loaded when you first come near them: Errol at the fish camp, Game)
+		for ( const v of this.game.vendors ) if ( ! v.lazy ) await this.loadVendorCharacter( v );
 
-			const c = new Character( await loader.loadAsync( this.tier === 'low' ? url.replace( /\.glb$/, '-512.glb' ) : url ), { clips } );
-			this.lightUp( c.group );
-			for ( const t of c.textures() ) r.initTexture( t );
-			await r.compileAsync( c.group, this.camera, this.scene );
-			await this.useNewPrograms();
-			return c;
+	}
 
-		};
+	// a trader's skinned character swapped in for their stand-in (Vendor.loadCharacter): the device's copy (low:
+	// 512² textures), its programs readied; on a low-powered device drawn only near the camera, like the stand-in
+	async loadVendorCharacter( v ) {
 
-		for ( const v of this.game.vendors ) {
+		if ( ! this._characterLoad ) {
 
-			try {
+			const loader = gltfLoader(), r = this.renderer;
+			this._characterLoad = async ( url, clips = null ) => {
 
-				const c = await v.loadCharacter( load );
-				// (low-powered devices: only near the camera, like the stand-in)
-				if ( c && this.nearDetail ) c.group.traverse( ( o ) => {
+				const c = new Character( await loader.loadAsync( this.tier === 'low' ? url.replace( /\.glb$/, '-512.glb' ) : url ), { clips } );
+				this.lightUp( c.group );
+				for ( const t of c.textures() ) r.initTexture( t );
+				await r.compileAsync( c.group, this.camera, this.scene );
+				await this.useNewPrograms();
+				return c;
 
-					if ( ! o.isMesh ) return;
-					if ( ! o.geometry.boundingSphere ) o.geometry.computeBoundingSphere();
-					this.nearDetail.push( { o, dist: 60 } );
+			};
 
-				} );
+		}
 
-			} catch ( e ) {
+		try {
 
-				console.warn( `${ v.name }: the character didn't load; the stand-in stays`, e );
+			const c = await v.loadCharacter( this._characterLoad );
+			if ( c && this.nearDetail ) c.group.traverse( ( o ) => {
 
-			}
+				if ( ! o.isMesh ) return;
+				if ( ! o.geometry.boundingSphere ) o.geometry.computeBoundingSphere();
+				this.nearDetail.push( { o, dist: 60 } );
+
+			} );
+
+		} catch ( e ) {
+
+			console.warn( `${ v.name }: the character didn't load; the stand-in stays`, e );
 
 		}
 

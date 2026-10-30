@@ -1,18 +1,21 @@
 # Characters
 
-The vendors (Joe at the fish stand, Marta at the chandlery) are avatars from the
-[Microsoft Rocketbox](https://github.com/microsoft/Microsoft-Rocketbox) library (MIT license,
-`credits/LICENSE-Rocketbox.md`), converted offline to one GLB each
-(`public/models/characters/joe.glb`, `marta.glb`): mesh (~7.5k triangles, 80-bone Bip01 skin),
-1024² textures and the clips below.
+The vendors (Joe at the fish stand, Marta at the chandlery, (M15) Errol at the fish camp) are avatars
+from the [Microsoft Rocketbox](https://github.com/microsoft/Microsoft-Rocketbox) library (MIT license,
+`credits/LICENSE-Rocketbox.md`: `Wood_Male_01`, `Female_Adult_04`, `Male_Adult_18`), converted offline
+to one GLB each (`public/models/characters/joe.glb`, `marta.glb`, `errol.glb`): mesh (~6.5-7.5k
+triangles, 80-bone Bip01 skin), 1024² textures and the clips below.
 
     tools/characters/build.sh [workdir]      # fetch -> textures -> Blender -> public/models/characters/
+    ONLY=errol tools/characters/build.sh     # one of them (BLENDER=…, MAGICK=convert for ImageMagick 6)
+
+(bash, since M15: it was zsh. A file already fetched into the work directory isn't fetched again.)
 
 - `fetch.sh`: one file from the Rocketbox repo (Git LFS media URL, raw fallback).
 - `textures.sh`: the 2048² TGA maps to 1024² JPEG / PNG; the specular map becomes the roughness
   channel of an ORM texture (R 1, G roughness = 0.92 - 0.6 × specular, B metalness 0); the opacity
   map (hair, lashes) keeps its alpha.
-- `convert.py` (Blender 4.2+, tested with 5.2, run in the background): imports the avatar, builds
+- `convert.py` (Blender 3.4+, tested with 3.4 and 5.2, run in the background): imports the avatar, builds
   glTF-exportable materials (`body`, `head`, `opacity`), imports each clip FBX and retargets it by
   bone name in world space (the clips' skeleton rests with the arms down, the avatars in a T-pose,
   so local rotations can't be copied): every avatar bone copies its clip bone's world rotation
@@ -23,8 +26,9 @@ Clips (the in-place `motextr_static` versions, `m_` for men and `f_` for women):
 `idle_breathe_01`, `idle_look_around_01`, `gestic_talk_neutral_01`, `gestic_talk_relaxed_01`,
 `wave_01`, `gestic_shrug_01`.
 
-Low-powered devices (All the Spaces' `low` tier) load copies with 512² textures, `joe-512.glb` and
-`marta-512.glb`, made from the 1024² files with glTF-Transform:
+Low-powered devices (All the Spaces' `low` tier) load copies with 512² textures, `joe-512.glb`,
+`marta-512.glb` and `errol-512.glb`. `build.sh` makes them itself now, its textures at 512² (Errol's
+were made so); Joe's and Marta's were made from their 1024² files with glTF-Transform:
 
     npx @gltf-transform/cli@4.2.1 resize joe.glb joe-512.glb --width 512 --height 512
 

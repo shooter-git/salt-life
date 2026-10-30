@@ -1,8 +1,10 @@
-// (M15) The way over to the north beach on foot (world/terrain/NorthTrail.js) and walking on the ground's slopes
-// (Player's slopePace), under Node: a walker's pace by the grade, as Tobler's hiking function has it, never quite
-// stopping; the trail from the valley's to the north beach on both islands, joined to it at one end and on the
-// beach's sand at the other, its tread graded and level across, a walk of some ten minutes; the ground cut only
-// along it; nothing to grow or lie on it; and its foot below the cliff a beach a turtle could cross.
+// (M15) The way over to the north beach on foot (world/terrain/NorthTrail.js), walking on the ground's slopes
+// (Player's slopePace) and the fish camp at its foot (game/FishCamp.js), under Node: a walker's pace by the
+// grade, as Tobler's hiking function has it, never quite stopping; the trail from the valley's to the north beach
+// on both islands, joined to it at one end and on the beach's sand at the other, its tread graded and level
+// across, a walk of some ten minutes; the ground cut only along it; nothing to grow or lie on it; the camp on the
+// backshore by its foot, its jetty out to water a boat can lie alongside in, what Errol pays and charges, and
+// the camp built only when you come near it.
 //
 //   node test/way-over.mjs
 
@@ -12,6 +14,12 @@ import { decodeIsland } from '../src/world/terrain/IslandDecode.js';
 import { PATHS, polylineDistance } from '../src/world/terrain/IslandShape.js';
 import { TRAIL, trailAt, trailClears, trailTexels } from '../src/world/terrain/NorthTrail.js';
 import { slopePace, SCRAMBLE } from '../src/player/Player.js';
+import * as THREE from '../src/engine/index.js';
+import { Colliders } from '../src/world/Colliders.js';
+import { Village } from '../src/world/Village.js';
+import { FishCamp, CAMP } from '../src/game/FishCamp.js';
+import { GameState } from '../src/game/GameState.js';
+import { Game } from '../src/game/Game.js';
 
 let failed = 0;
 const check = ( ok, what ) => {
@@ -103,6 +111,53 @@ for ( const file of [ 'island.bin', 'island-1024.bin' ] ) {
 	let texels = 0;
 	trailTexels( 2048, - 1024, 1, 0.5, () => texels ++ );
 	check( texels > 1400 * 2 && texels < 1400 * 6, `its texels found from its segments (${ texels } of the 1 m grid within half a metre of its tread)` );
+
+}
+
+// ---- the fish camp at its foot: where it stands, its jetty, what Errol pays and charges, built
+{
+
+	for ( const file of [ 'island.bin', 'island-1024.bin' ] ) {
+
+		const T = new TerrainData( 7, decodeIsland( read( file ) ) ), J = CAMP.jetty, S = CAMP.shed;
+		const head = - T.heightAt( J.x + 0.8, J.z1 + 1 ), foot = J.deck - T.heightAt( J.x, J.z0 ), sh = T.heightAt( S.x, S.z );
+		check( head > 2.2 && J.deck > 1 && J.deck < 2 && foot > 0 && foot < 0.6, `${ file }: its jetty out to ${ head.toFixed( 1 ) } m of water at its head (a boat alongside), its deck ${ J.deck } m over the sea at rest, ${ foot.toFixed( 2 ) } m over the sand at its foot` );
+		check( sh > 1.4 && sh < 2.5, `${ file }: its shed on the backshore, ${ sh.toFixed( 1 ) } m up (above the wrack, under the cliff)` );
+
+	}
+
+	let clear = true;
+	for ( const [ x, z ] of [ [ CAMP.shed.x, CAMP.shed.z ], [ CAMP.keeper.x, CAMP.keeper.z ], [ CAMP.jetty.x, CAMP.jetty.z0 ], [ 121.4, - 837.6 ] ] ) if ( trailAt( x, z )[ 0 ] < 3 ) clear = false;
+	check( clear, 'the camp clear of the trail it stands at the foot of' );
+
+	// what he pays: Joe's price less the trip to market, no orders, no week's order
+	const vendor = { kind: 'camp', open: true };
+	const terms = Game.prototype.saleTerms.call( { orders: [ { id: 1, who: 'joe', species: 'snapper', max: 9 } ], tradeDay: 4, weekTerms: () => ( { species: 'snapper', left: 50 } ) }, vendor );
+	check( terms.who === 'camp' && terms.rate === CAMP.rate && ! terms.week && ! terms.orders, `Errol buys at ${ Math.round( CAMP.rate * 100 ) }% of Joe's price, no list, no week's order` );
+	const st = new GameState( null );
+	st.inventory = [ { id: 1, species: 'snapper', value: 40, kg: 2 }, { id: 2, species: 'jack', value: 15, kg: 1 } ];
+	const q = st.quote( null, terms );
+	check( q.total === Math.round( 40 * CAMP.rate ) + Math.round( 15 * CAMP.rate ) && q.count === 2, `two fish Joe would give $55 for: $${ q.total } at the camp` );
+	st.money = 1000;
+	st.fuel = 10;
+	const atMarta = st.refuelCost(), atCamp = st.refuelCost( CAMP.fuel );
+	const litres = st.refuel( CAMP.fuel );
+	check( atCamp > atMarta && atCamp === Math.ceil( ( st.stats.fuelL - 10 ) * CAMP.fuel ) && litres > 0 && st.money === 1000 - atCamp, `his diesel dearer than Marta's ($${ atCamp } to fill up against her $${ atMarta }), it comes over in drums` );
+
+	// built (on the low tier's island, its village built as the game does, its textures not baked)
+	const terrain = new TerrainData( 7, decodeIsland( read( 'island-1024.bin' ) ) );
+	const colliders = new Colliders(), village = new Village( { scene: new THREE.Scene(), terrain, colliders, tier: 'low' } );
+	village.textures.bake = async () => {};
+	await village.init( null );
+	const scene = new THREE.Scene(), camp = new FishCamp( { scene, terrain, colliders, village } ), meshes = village.meshes.length;
+	camp.update( { position: { x: 0, z: - 100 } } );
+	const far = camp.built;
+	camp.update( { position: { x: 110, z: - 900 } } );
+	check( ! far && camp.built && village.meshes.length > meshes && camp.triangles > 5000 && camp.triangles < 40000, `built only when you come near it: its shed, jetty and gear, ${ Math.round( camp.triangles / 1000 ) }k triangles` );
+	const J = CAMP.jetty;
+	let walk = true;
+	for ( let z = J.z0 - 0.5; z > J.z1 + 0.3; z -= 2 ) if ( Math.abs( colliders.groundHeightAt( J.x, z, J.deck + 0.5 ) - J.deck ) > 0.05 ) walk = false;
+	check( walk && Math.abs( colliders.groundHeightAt( J.x + 1.2, J.z1 + 1, J.deck + 0.5 ) - J.deck ) < 0.05, 'its jetty walked on, foot to head' );
 
 }
 

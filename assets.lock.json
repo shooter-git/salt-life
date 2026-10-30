@@ -968,6 +968,20 @@
 			"author": "bruno.auzet"
 		},
 		{
+			"path": "public/models/characters/errol-512.glb",
+			"license": "MIT",
+			"source": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"title": "Rocketbox avatar (errol-512.glb)",
+			"author": "Microsoft Corporation"
+		},
+		{
+			"path": "public/models/characters/errol.glb",
+			"license": "MIT",
+			"source": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"title": "Rocketbox avatar (errol.glb)",
+			"author": "Microsoft Corporation"
+		},
+		{
 			"path": "public/models/characters/joe-512.glb",
 			"license": "MIT",
 			"source": "https://github.com/microsoft/Microsoft-Rocketbox",
@@ -1536,6 +1550,16 @@
 		},
 		{
 			"path": "public/world/island.bin",
+			"license": "own",
+			"title": "The island, baked by tools/bake-terrain.mjs"
+		},
+		{
+			"path": "public/world/offshore-512.bin",
+			"license": "own",
+			"title": "The island, baked by tools/bake-terrain.mjs"
+		},
+		{
+			"path": "public/world/offshore.bin",
 			"license": "own",
 			"title": "The island, baked by tools/bake-terrain.mjs"
 		},

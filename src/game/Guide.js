@@ -1,5 +1,6 @@
 import { STAND } from './FishStand.js';
 import { CHANDLERY } from './Chandlery.js';
+import { CAMP } from './FishCamp.js';
 import { feet } from './Units.js';
 
 // First-play guide:
@@ -203,7 +204,8 @@ const TIPS = {
 	tumble: 'A <b>breaker</b> tumbled you. In a big surf, <b>dive under</b> a big one before it breaks on you, or keep out beyond the breakers.',
 	knocked: 'A <b>breaker</b> knocked you off your feet. Wading in a big surf, <b>turn side-on</b> to the waves as they break, or keep to the shallows.',
 	// (M15) once you've the hang of the bay, the rest of the island; and out on the far water, what to look for
-	goRound: 'You\'ve the hang of the bay. There\'s more of the island: the <b>north beach\'s surf</b> for pompano (best on a surf day: Joe\'s slate says), the <b>mangrove creek</b> on the west for snook at dawn and dusk, and the <b>windward reef</b> off the north-west point, its groupers bigger than the bay\'s. Take the boat round, or walk over the ridge to the north beach.',
+	goRound: 'You\'ve the hang of the bay. There\'s more of the island: the <b>north beach\'s surf</b> for pompano (best on a surf day: Joe\'s slate says), the <b>mangrove creek</b> on the west for snook at dawn and dusk, and the <b>windward reef</b> off the north-west point, its groupers bigger than the bay\'s. Take the boat round, or walk: the trail from the square goes round the east to the north beach, and <b>Errol\'s fish camp</b> there buys fish and sells diesel.',
+	camp: '<b>Errol\'s fish camp</b>: he buys your catch at ' + Math.round( CAMP.rate * 100 ) + '% of Joe\'s price (he takes it round to market himself) and sells <b>diesel</b> from his drums, so a trip round the island needn\'t end in the bay. Tie up at his jetty.',
 	farWater: 'Out here the fish are <b>under things</b>: look for <b>weedlines</b> (mahi), <b>floating debris</b>, and <b>birds working bait</b> (tuna). On the <b>drop-off</b> the tuna come at first light.',
 	// (M13) a hurricane
 	hurricane: 'A <b>hurricane</b> is coming. Ahead of it Marta can <b>haul your boat out</b>, before she boards up; left in the water the storm batters her. In it, the <b>shelter</b> (on your map) keeps you safe from the wind, the rain and the sea. You can always step out to watch.',
@@ -491,6 +493,8 @@ export class Guide {
 		if ( logged >= 12 ) this.tip( 'goRound' );
 		const cam = app.camera.position;
 		if ( Math.hypot( cam.x, cam.z + 320 ) > 3000 ) this.tip( 'farWater' );
+		// ((M15) the first time you come to the fish camp, ashore or alongside its jetty)
+		if ( Math.hypot( cam.x - CAMP.keeper.x, cam.z - CAMP.keeper.z ) < 30 ) this.tip( 'camp' );
 		// (M10) the boat's hull: the first water in the bilge, aboard; the first real wear
 		const hull = g.hull;
 		if ( hull && hull.bilge >= 20 && ( p.mode === 'deck' || p.mode === 'boat' ) && ! p.riding ) this.tip( 'bilge' );

@@ -59,7 +59,7 @@ Salt Life ships its skin maps at 2048×1024 and 1024×512, box-filtered from Tid
 
 ## Characters: `public/models/characters/`
 
-The vendors (`joe.glb`, `marta.glb`) are avatars `Wood_Male_01` and `Female_Adult_04` and their
+The vendors (`joe.glb`, `marta.glb`, and Errol at the fish camp, `errol.glb`) are avatars `Wood_Male_01`, `Female_Adult_04` and `Male_Adult_18` and their
 idle, talk, wave and shrug animations from the [Microsoft Rocketbox Avatar Library](https://github.com/microsoft/Microsoft-Rocketbox)
 (© Microsoft Corporation, MIT license, included as [`credits/LICENSE-Rocketbox.md`](credits/LICENSE-Rocketbox.md)), converted with
 `tools/characters/` (textures resized, animations retargeted and baked). The other players

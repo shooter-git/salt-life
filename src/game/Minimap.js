@@ -2,20 +2,23 @@ import { WORLD } from '../world/WorldLayout.js';
 import { STAND } from './FishStand.js';
 import { CHANDLERY } from './Chandlery.js';
 import { SHELTER } from '../world/village/StormPlaces.js';
+import { CAMP } from './FishCamp.js';
 
 // Minimap, lower right: the island baked once from the terrain data into a 2D canvas (depth-tinted
 // sea, reef and seagrass, sand, grass and forest by height, rock, paths, village pads, the pier,
 // hill shading and a coastline), shown in a round window that turns with the view (forward is up,
-// a small N on the rim). Markers: the player (centre arrow), Joe's fish stand, Marta's chandlery
-// and the boat; markers beyond the rim sit on it with an arrow. With the fish finder upgrade, a
-// couple of soft rings mark the richest water in view.
+// a small N on the rim). Markers: the player (centre arrow), Joe's fish stand, Marta's chandlery,
+// (M15) Errol's fish camp, and the boat; markers beyond the rim sit on it with an arrow. With the fish
+// finder upgrade, a couple of soft rings mark the richest water in view.
 //
 // Per frame it only writes a few CSS transforms. The bake runs in row chunks over the first frames.
 //   const map = new Minimap( hudEl, game );  map.update( dt );  map.highlight( [ 'joe', 'marta' ] )
 
 const N = 640; // baked canvas size (px)
 const EXT = 1280; // metres covered by the bake
-const X0 = - EXT / 2, Z0 = - 180 - EXT / 2; // world at canvas (0, 0): the island sits north of the bay
+// world at canvas (0, 0): the island sits north of the bay; ((M15) 100 m more north than it was: the north
+// beach, its camp and the windward reef on it)
+const X0 = - EXT / 2, Z0 = - 280 - EXT / 2;
 const PPM = N / EXT; // canvas px per metre
 const ROWS_PER_FRAME = 48;
 
@@ -40,6 +43,7 @@ const CSS = /* css */`
 .gm-mk.is-shut > i { filter: saturate(0.25) brightness(0.75); }
 .gm-mk.is-boat > i { background: #f2efe6; }
 .gm-mk.is-shelter > i { background: #2f6fb0; color: #fff; }
+.gm-mk.is-camp > i { background: #d9825a; }
 .gm-mk.is-player > i { width: calc(16 * var(--tw-u)); height: calc(16 * var(--tw-u)); margin: calc(-8 * var(--tw-u)) 0 0 calc(-8 * var(--tw-u)); color: #fff;
 	text-shadow: 0 1px 1px rgba(0,0,0,0.6); }
 .gm-mk > b { position: absolute; left: 0; top: 0; width: 0; height: 0; border-left: calc(5 * var(--tw-u)) solid transparent; border-right: calc(5 * var(--tw-u)) solid transparent;
@@ -140,6 +144,8 @@ export class Minimap {
 		this.markers = [
 			{ id: 'joe', ...mk( 'joe', ICON.fish ), pos: () => ( { x: STAND.x, z: STAND.z } ), vendor: () => game.stand.vendor },
 			{ id: 'marta', ...mk( 'marta', ICON.anchor ), pos: () => ( { x: CHANDLERY.x, z: CHANDLERY.z } ), vendor: () => game.chandlery.vendor },
+			// ((M15) Errol's fish camp on the north beach)
+			{ id: 'camp', ...mk( 'camp', ICON.fish ), pos: () => ( { x: CAMP.keeper.x, z: CAMP.keeper.z } ), vendor: () => game.camp.vendor },
 			// ((M13) the shelter, while a hurricane's watched for, warned of, or here)
 			{ id: 'shelter', ...mk( 'shelter', ICON.shelter ), pos: () => ( { x: SHELTER.x, z: SHELTER.z } ), hideWhen: () => {
 
