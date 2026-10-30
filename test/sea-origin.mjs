@@ -5,10 +5,11 @@
 // What the sea's drawn with about that origin as the world's: the whitecaps' crests and cells, the foam's
 // noises (its lace, the whitecaps' marbling), and the marbling's frame turning about you as the wind turns.
 // And the fishing line (and the anchor's rode) drawn about a point by its first end.
-import { PerspectiveCamera, Vector2, Vector4, Object3D } from '../src/engine/index.js';
+import { PerspectiveCamera, Vector2, Vector3, Vector4, Object3D } from '../src/engine/index.js';
 import { createLineMaterial } from '../src/game/GameMaterials.js';
 import { CDLOD } from '../src/core/CDLOD.js';
-import { foamKeys, FOAM_NOISE } from '../src/ocean/WaterSurface.js';
+import { readFileSync } from 'node:fs';
+import { foamKeys, FOAM_NOISE, WaterSurface } from '../src/ocean/WaterSurface.js';
 import { Waves } from '../src/ocean/Waves.js';
 import { Whitecaps, CARRIERS } from '../src/ocean/Whitecaps.js';
 
@@ -310,6 +311,102 @@ function noiseK( px, pz, key ) {
 
 	}
 	ok( most < 1e-4 && /lineView \* vec4\( transformed/.test( V.vertexShader ), `the fishing line at 40 km: its ends drawn within ${ ( most * 1000 ).toFixed( 3 ) } mm of where they are` );
+
+}
+
+// ---- (step 21) the rest of what's drawn about the origin: the ripples, the rain's rings and what's found out there
+{
+
+	const f32 = Math.fround, { RIPPLE, RING_CELL } = FOAM_NOISE;
+	const near = ( a, b ) => {
+
+		const d = Math.abs( a - b ) % 1;
+		return Math.min( d, 1 - d );
+
+	};
+
+	const sea = () => {
+
+		const w = Object.create( WaterSurface.prototype );
+		w.lod = { update() {}, origin: new Vector3() };
+		w.mesh = { position: new Vector3() };
+		w.rippleAt = { value: new Vector4() };
+		w.ringAt = { value: new Vector4() };
+		w.ringCells = { value: new Vector4() };
+		w.marble = { x: 0, z: 0, u: 0, v: 0, wind: new Vector2( 0, 1 ), spume: 0 };
+		w.whitecaps = { place() {} };
+		w.keys = Array.from( { length: 64 }, () => new Vector4() );
+		w.scene = { environment: null, environmentIntensity: 1 };
+		w.material = { envMap: null };
+		w.envUnder = { value: 0 };
+		w._finds = { near: [], max: 6, weed: { value: Array.from( { length: 12 }, () => new Vector4() ) }, weedCount: { value: 0 }, boil: { value: Array.from( { length: 4 }, () => new Vector4() ) }, boilCount: { value: 0 } };
+		return w;
+
+	};
+
+	for ( const km of [ 5, 20, 40 ] ) {
+
+		const w = sea(), O = w.lod.origin, step = 4096;
+		O.set( Math.floor( km * 1000 * 0.6 / step ) * step, 0, Math.floor( km * 1000 * 0.8 / step ) * step );
+		w.update( { position: new Vector3( O.x + 300, 2, O.z + 200 ) } );
+		const R = w.rippleAt.value, Ra = w.ringAt.value, Rc = w.ringCells.value;
+		let rip = 0, ring = 0, cells = 0, n = 0;
+		for ( let i = 0; i < 200; i ++ ) {
+
+			// (a point about the origin, as the shader has it: small, in 32-bit floats; the world's as the game has it)
+			const lx = f32( ( i * 37.7 ) % 700 - 350 ), lz = f32( ( i * 91.3 ) % 700 - 350 ), wx = O.x + lx, wz = O.z + lz;
+			rip = Math.max( rip, near( f32( lx * RIPPLE[ 0 ] + f32( R.x ) ), wx * RIPPLE[ 0 ] ), near( f32( lz * RIPPLE[ 1 ] + f32( R.w ) ), wz * RIPPLE[ 1 ] ) );
+			const [ a, b ] = RING_CELL;
+			const qx = ( lx + f32( Ra.x ) ) / a, qz = ( lz + f32( Ra.w ) ) / b;
+			ring = Math.max( ring, near( qx, wx / a ), near( qz, wz / b ) );
+			if ( Math.floor( qx ) + Rc.x !== Math.floor( wx / a ) && near( qx, 0 ) > 1e-3 ) cells ++;
+			if ( Math.floor( qz ) + Rc.w !== Math.floor( wz / b ) && near( qz, 0 ) > 1e-3 ) cells ++;
+			n ++;
+
+		}
+
+		ok( rip < 1e-4, `at ${ km } km: the ripples at ${ n } points about the origin the world's within ${ rip.toExponential( 1 ) } of their repeat` );
+		ok( ring < 1e-3 && cells === 0, `at ${ km } km: the rain's rings too, in the same cells (${ ring.toExponential( 1 ) })` );
+
+		// the weedlines, each from where it starts, which way it runs and how long it is, about the origin
+		const x0 = O.x + 120.5, z0 = O.z - 75.25, x1 = x0 + 480, z1 = z0 + 360, cam = { position: new Vector3( x0 + 10, 3, z0 + 10 ) };
+		const line = { x0, z0, x1, z1, width: 9, life: 1, n: - 5 }, gone = { x0: x0 + 9000, z0, x1: x1 + 9000, z1, width: 9, life: 1, n: 3 };
+		const bait = { x: x0, z: z0, r: 30, life: 1 }, farBait = { x: x0 + 9000, z: z0, r: 30, life: 1 };
+		w.setFinds( { weed: [ gone, line ], bait: [ farBait, bait ] }, cam, 2000 );
+		const A = w._finds.weed.value[ 0 ], B = w._finds.weed.value[ 1 ];
+		ok( w._finds.weedCount.value === 1 && w._finds.boilCount.value === 1, `at ${ km } km: only what the fog hasn't got is given to the sea` );
+		ok( Math.abs( Math.hypot( A.z, A.w ) - 1 ) < 1e-6 && Math.abs( B.w - 600 ) < 1e-6 && Math.abs( A.z - 0.8 ) < 1e-6, 'a line\'s way along it, and its length' );
+		// (a point on it, as the shader finds it: in 32-bit floats about the origin)
+		const px = f32( x0 + 240 - O.x ), pz = f32( z0 + 180 - O.z ), rx = f32( px - f32( A.x ) ), rz = f32( pz - f32( A.y ) );
+		const u = f32( rx * f32( A.z ) + rz * f32( A.w ) ), v = f32( rz * f32( A.z ) - rx * f32( A.w ) );
+		ok( Math.abs( u - 300 ) < 1e-3 && Math.abs( v ) < 1e-3, `at ${ km } km: a point on it found ${ ( Math.abs( v ) * 1000 ).toFixed( 3 ) } mm off its middle` );
+		ok( near( w._finds.boil.value[ 0 ].x, x0 - O.x ) < 1e-3, 'and the bait\'s boils about the origin' );
+
+	}
+
+	const all = sea();
+	all.setFinds( { weed: [ { x0: 9000, z0: 0, x1: 9500, z1: 0, width: 9, life: 1, n: 1 } ], bait: [] }, { position: new Vector3() } );
+	ok( all._finds.weedCount.value === 1, 'told nothing of the fog, it\'s given them all' );
+
+}
+
+// ---- (step 21) the checks' spots offshore
+{
+
+	const { CHECK_SPOTS, checkSpotAt } = await import( '../src/game/CheckSpots.js' );
+	const { findsAbout } = await import( '../src/game/Finds.js' );
+	ok( CHECK_SPOTS[ CHECK_SPOTS.length - 1 ].id === 'home' && CHECK_SPOTS.length >= 4, 'the checks\' spots end back where you were' );
+	const script = JSON.parse( readFileSync( new URL( '../qa/script.json', import.meta.url ), 'utf8' ) );
+	const presses = script.steps.filter( ( s ) => s.press === 'F8' ).length;
+	ok( presses === CHECK_SPOTS.length, `the script goes to all ${ presses } and comes back` );
+	ok( script.steps.length <= 200, `its ${ script.steps.length } steps within what the checks take (200)` );
+	const game = readFileSync( new URL( '../src/game/Game.js', import.meta.url ), 'utf8' );
+	ok( /navigator\.webdriver && inp\.hit\( 'F8' \)/.test( game ), 'F8 does it in a driven browser alone' );
+	const spot = CHECK_SPOTS.find( ( s ) => s.find ), T = 5 * 24 + 10;
+	const a = checkSpotAt( spot, T ), b = checkSpotAt( spot, T );
+	ok( a.x === b.x && a.z === b.z, 'the weedline\'s spot the same each time' );
+	const lines = findsAbout( T, spot.x, spot.z, 6000, { weed: [], debris: [], bait: [] }, null ).weed;
+	ok( lines.some( ( w ) => Math.hypot( ( w.x0 + w.x1 ) / 2 - a.x, ( w.z0 + w.z1 ) / 2 - a.z ) < 1 ), 'and it\'s on one' );
 
 }
 

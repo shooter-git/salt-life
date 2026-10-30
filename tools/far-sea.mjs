@@ -8,6 +8,8 @@
 //   pnpm dev, then
 //   node tools/far-sea.mjs [tier] [weather] [hour] [metres out, comma separated]
 //   node tools/far-sea.mjs high fair 11 600,1500,5000,10000,20000,40000
+//   node tools/far-sea.mjs mid blustery 10 dropoff,weedline,bank,far,edge     ((M15) or the checks' spots: game/CheckSpots.js)
+//   SEA_PORT=5190 node tools/far-sea.mjs ...     (a dev server on another port than 5189)
 //
 // Drawn on the CPU (headless Chromium on SwiftShader, from ../all-the-spaces' Playwright), into
 // qa-output/far-sea/<tier>-<weather>/. A run takes about 3 minutes, and 2.5 more for each distance.
@@ -20,9 +22,9 @@ const ROOT = fileURLToPath( new URL( '..', import.meta.url ) );
 const { chromium } = await import( join( ROOT, '../all-the-spaces/node_modules/playwright/index.mjs' ) );
 
 const [ TIER = 'high', WEATHER = 'fair', HOUR = '11', LIST = '600,1500,5000,10000,20000,40000' ] = process.argv.slice( 2 );
-const DISTANCES = LIST.split( ',' ).map( Number );
+const DISTANCES = LIST.split( ',' );
 const OUT = join( ROOT, 'qa-output/far-sea', `${ TIER }-${ WEATHER }` );
-const URL_ = `http://127.0.0.1:5189/?tier=${ TIER }&weather=${ WEATHER }&hour=${ HOUR }&fullsea`;
+const URL_ = `http://127.0.0.1:${ process.env.SEA_PORT || 5189 }/?tier=${ TIER }&weather=${ WEATHER }&hour=${ HOUR }&fullsea`;
 mkdirSync( OUT, { recursive: true } );
 
 const T0 = Date.now();
@@ -51,8 +53,16 @@ await wait( 100 ); // the clouds come in
 log( 'aboard' );
 const dock = await page.evaluate( () => { const p = window.__app.boatCtl.position; return { x: p.x, z: p.z }; } );
 
-// d metres south of the dock, held there by her mooring lines (moved with her), her stern to the island
-const placeAt = ( d ) => page.evaluate( ( [ x, z ] ) => {
+// d metres south of the dock, or the checks' spot of that name, held there by her mooring lines (moved with her),
+// her stern to the island
+const spotAt = ( d ) => Number.isFinite( + d ) ? [ dock.x, dock.z + Number( d ) ] : page.evaluate( async ( id ) => {
+
+	const { CHECK_SPOTS, checkSpotAt } = await import( '/src/game/CheckSpots.js' ), { islandTime } = await import( '/src/game/Weather.js' );
+	const a = window.__app, s = a.settings, at = checkSpotAt( CHECK_SPOTS.find( ( q ) => q.id === id ), islandTime( s.day, s.timeOfDay ), ( x, z ) => - a.terrainData.heightAt( x, z ) );
+	return [ at.x, at.z ];
+
+}, d );
+const placeAt = async ( d ) => page.evaluate( ( [ x, z ] ) => {
 
 	const b = window.__app.boatCtl;
 	b.mooring.anchor.set( x, 0, z );
@@ -64,7 +74,7 @@ const placeAt = ( d ) => page.evaluate( ( [ x, z ] ) => {
 	const p = window.__app.player;
 	if ( p.mode !== 'deck' && p.mode !== 'boat' ) p.boardBoat();
 
-}, [ dock.x, dock.z + d ] );
+}, await spotAt( d ) );
 
 async function view( name, yaw, pitch ) {
 

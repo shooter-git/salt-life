@@ -639,6 +639,8 @@ export class Game {
 		} );
 		if ( this.time ) this.time.update( dt );
 		this.updateChart( dt, inp );
+		// ((M15) the checks' way offshore, in a driven browser alone: CheckSpots.js)
+		if ( inp && navigator.webdriver && inp.hit( 'F8' ) ) this.app.nextCheckSpot();
 		if ( this.minimap ) this.minimap.update( dt );
 		if ( this.guide ) this.guide.update( dt );
 

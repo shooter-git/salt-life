@@ -27,6 +27,7 @@ import { WaterSurface } from './ocean/WaterSurface.js';
 import { ShoreWaves, FAIR_AMPLITUDE } from './ocean/ShoreWaves.js';
 import { SEABED } from './world/terrain/SeabedModel.js';
 import { findsAbout } from './game/Finds.js';
+import { CHECK_SPOTS, checkSpotAt } from './game/CheckSpots.js';
 import { Flotsam } from './world/Flotsam.js';
 import { computeShoreField, fieldGround, shelter } from './world/ShoreField.js';
 import ShoreWorker from './world/shore/ShoreWorker.js?worker&inline';
@@ -2154,6 +2155,38 @@ export class App {
 	// (M15) what's found out there about you (game/Finds.js, from the island's time: everyone's in the same
 	// place): the weedlines and the bait's boils drawn on the sea, the debris floating, the birds working the
 	// nearest bait
+	// (M15) the next of the checks' spots offshore (game/CheckSpots.js), at the helm; the last brings you back
+	nextCheckSpot() {
+
+		const k = this._checkSpot = ( ( this._checkSpot ?? - 1 ) + 1 ) % CHECK_SPOTS.length, spot = CHECK_SPOTS[ k ];
+		const p = this.player, b = this.boatCtl, s = this.settings;
+		if ( k === 0 && p.mode === 'walk' ) this._checkFrom = { out: { x: p.position.x, z: p.position.z }, g: p.position.y };
+		if ( spot.id === 'home' ) {
+
+			if ( this._checkFrom ) p.exitBoat( this._checkFrom );
+			b.reset();
+			return;
+
+		}
+
+		if ( p.mode !== 'boat' ) {
+
+			p.boardBoat();
+			p.takeHelm();
+
+		}
+
+		b.moored = false;
+		const at = checkSpotAt( spot, islandTime( s.day, s.timeOfDay ), ( x, z ) => - this.terrainData.heightAt( x, z ) );
+		// (the chase camera with her, or it spends the checks' few frames catching up)
+		p.camPos.x += at.x - b.position.x;
+		p.camPos.z += at.z - b.position.z;
+		b.position.set( at.x, b.position.y, at.z );
+		b.velocity.set( 0, 0, 0 );
+		b.angular.set( 0, 0, 0 );
+
+	}
+
 	findsHere() {
 
 		const s = this.settings, c = this.camera.position;

@@ -115,7 +115,7 @@ export function foamKeys( O, M, w, cam, keys ) {
 	LACE_NOISE.forEach( ( [ s, o ], i ) => key( KEY.spume + 3 + i, s * SPUME_LACE * sa + o, s * SPUME_LACE * c + o ) );
 
 }
-export const FOAM_NOISE = { LACE_NOISE, FROTH, ROWS, MARBLE_NOISE, MARBLE, KEY, SPUME_NOISE, SPUME_LACE };
+export const FOAM_NOISE = { LACE_NOISE, FROTH, ROWS, MARBLE_NOISE, MARBLE, KEY, SPUME_NOISE, SPUME_LACE, RIPPLE, RING_CELL };
 
 // (the marbling's noise i of arg, about the origin: GLSL)
 const marble = ( i, arg ) => `waterNoiseK( ${ arg } * ${ g( MARBLE_NOISE[ i ][ 0 ] ) }, waterKey[ ${ KEY.marble + i } ] )`;
