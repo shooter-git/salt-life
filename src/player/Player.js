@@ -17,6 +17,15 @@ export function windShove( U ) {
 
 }
 
+// (M15) Walking up and down the ground's slopes, at the pace a walker keeps there: Tobler's hiking function
+// (Tobler 1993, from Imhof's measurements of walkers in the Alps), 6 e^( -3.5 | grade + 0.05 | ) km/h, as a share
+// of its pace on the flat: best a little downhill (5%, 19% quicker), half up a 20% climb, a sixth up 50%, a
+// thirtieth at 45°; and steep ground's slow going down too (a 30% descent at half). Never slower than SCRAMBLE:
+// up or down anything on all fours, so there's no hollow you can't climb out of, only ground you go round. The
+// grade's the ground's (not a deck's or a pier's) over SLOPE_BASE m the way you're going
+export const SCRAMBLE = 0.06, SLOPE_BASE = 0.8;
+export const slopePace = ( grade ) => Math.max( SCRAMBLE, Math.exp( - 3.5 * ( Math.abs( grade + 0.05 ) - 0.05 ) ) );
+
 const HOUSE_HELM = { x: HOUSE.helmX, z: HOUSE.seatZ };
 
 const EYE = 1.62;
@@ -381,7 +390,10 @@ export class Player {
 		const wade = THREE.MathUtils.clamp( depth / 1.2, 0, 1 );
 		this.wade = wade;
 		const sprint = inp.down( 'ShiftLeft' ) || inp.down( 'ShiftRight' );
-		const speed = ( sprint ? 6.2 : 3.0 ) * THREE.MathUtils.lerp( 1, 0.42, wade );
+		// ((M15) at the ground's slope the way you're going, standing on it)
+		const pace = this.paceAt( wish );
+		this.pace = pace;
+		const speed = ( sprint ? 6.2 : 3.0 ) * THREE.MathUtils.lerp( 1, 0.42, wade ) * pace;
 		const accel = this.grounded ? 14 : 2.5;
 		const k = 1 - Math.exp( - accel * dt );
 		// ((M13) in a strong gale's wind and up you're pushed along by it, staggered in its gusts, leaning
@@ -452,6 +464,19 @@ export class Player {
 			if ( this.audio ) this.audio.splash( wadedIn ? 0.2 : 0.5, p );
 
 		}
+
+	}
+
+	// (M15) your pace on the ground's slope the way you mean to go (wish): slopePace of its grade over
+	// SLOPE_BASE m; on a deck, a pier or a rock's top, or standing still, as on the flat
+	paceAt( wish ) {
+
+		const p = this.position, w = Math.hypot( wish.x, wish.z );
+		if ( w < 1e-3 ) return 1;
+		const T = this.terrain, h = T.heightAt( p.x, p.z );
+		if ( p.y > h + 0.08 ) return 1;
+		const ax = p.x + wish.x / w * SLOPE_BASE, az = p.z + wish.z / w * SLOPE_BASE;
+		return slopePace( ( T.heightAt( ax, az ) - h ) / SLOPE_BASE );
 
 	}
 

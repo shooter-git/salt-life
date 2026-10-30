@@ -6,6 +6,7 @@ import { OVERHANGS, SEA_CAVE_SITES, buildOverhang, overhangBuild, overhangCollid
 import { rot2, srgb, TERRAIN_SHADING_GLSL } from './terrain/TerrainShading.js';
 import { caveLightTexture, caveOpenness, seaCaveUniforms } from './terrain/CaveLight.js';
 import { carveAt } from './terrain/SeaCaves.js';
+import { trailClears } from './terrain/NorthTrail.js';
 
 // Fade factor across a distance band [start, end] (0 before, 1 after), for the level that takes over
 // at `end` (as materials/LODFade.js bandFade)
@@ -71,6 +72,8 @@ export class Rocks {
 		// start (refineOverhangs); the scattered rocks where they stand taken away, the rest as they were)
 		this.overhangs = [ ...OVERHANGS, ...SEA_CAVE_SITES ].map( ( site ) => buildOverhang( site, this.terrainData, { cell: OVERHANG_CELL.far } ) );
 		this.instances = this.instances.filter( ( r ) => ! this.overhangs.some( ( o ) => this._crowds( o, r ) ) );
+		// ((M15) nor on the way over to the north beach: terrain/NorthTrail.js)
+		this.instances = this.instances.filter( ( r ) => ! trailClears( r.x, r.z, r.size * 0.5 ) );
 		const t1 = performance.now();
 
 		if ( colliders ) {

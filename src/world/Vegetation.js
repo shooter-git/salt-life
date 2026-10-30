@@ -12,6 +12,7 @@ import { vegMaterial, PLANT_LEAF, canopyMaterialDef, rootMaterialDef, createCano
 import { ImpostorAtlas, buildImpostorQuad } from './vegetation/Impostors.js';
 import { LeafAtlas } from './vegetation/LeafTextures.js';
 import { getDetailTexture } from './terrain/DetailTextures.js';
+import { trailClears, trailTexels } from './terrain/NorthTrail.js';
 
 // GLSL variant index of an instance (VegNodes.vegVariantOf)
 const variantOf = ( seed, isShrub ) => `vegVariantOf( ${ seed }, ${ isShrub } )`;
@@ -179,11 +180,20 @@ export class Vegetation {
 		const recs = await run( scatterSteps( site, 99, { ferns: !! cfg.fernFade } ) );
 		// ((M14) none under the rocks' overhangs or in their mouths: taken out after, so the rest are as they were)
 		if ( this.rocks ) for ( const k of Object.keys( recs ) ) if ( Array.isArray( recs[ k ] ) ) recs[ k ] = recs[ k ].filter( ( p ) => ! this.rocks.clears( p.x, p.z ) );
+		// ((M15) nor on the way over to the north beach: terrain/NorthTrail.js, its trees' trunks back from it)
+		for ( const k of Object.keys( recs ) ) if ( Array.isArray( recs[ k ] ) ) recs[ k ] = recs[ k ].filter( ( p ) => p.x === undefined || ! trailClears( p.x, p.z, 0.3 * ( p.s || 1 ) ) );
 		// ((M15) and each back on the ground where it's been raised or cut since: the north beach's berm)
 		if ( terrain.raisedAt ) for ( const k of Object.keys( recs ) ) if ( Array.isArray( recs[ k ] ) ) for ( const p of recs[ k ] ) if ( p.y !== undefined ) p.y += terrain.raisedAt( p.x, p.z );
 		this.records = recs;
 		const t1 = performance.now();
 		const grassMask = cfg.grass ? await run( grassMaskSteps( site ) ) : null;
+		// ((M15) nor on the way over's tread: its worn path, as it's not in the ground the site reads)
+		if ( grassMask ) {
+
+			const { data, res } = grassMask, t = site.terrain, texel = t.size / res;
+			trailTexels( res, t.origin, texel, texel * 0.75, ( i, j ) => data.fill( 0, ( j * res + i ) * 4, ( j * res + i ) * 4 + 4 ) );
+
+		}
 		// ((M14) nor any grass there, a texel about it too, so the filtering doesn't bleed in)
 		if ( grassMask && this.rocks ) {
 

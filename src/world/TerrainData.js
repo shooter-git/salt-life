@@ -5,6 +5,7 @@ import { ridgeEnvelope, SEA_STACKS, PATHS, polylineDistance } from './terrain/Is
 import { MANGROVE, mangroveAt } from './terrain/Mangrove.js';
 import { CAVES, carveAt } from './terrain/SeaCaves.js';
 import { beachBerm } from './terrain/NorthBeach.js';
+import { trailCut } from './terrain/NorthTrail.js';
 
 const smin = ( a, b, k ) => {
 
@@ -100,13 +101,16 @@ export class TerrainData {
 			this._seaCaves();
 			// ((M15) and the turtle beach on the north coast, its dry sand for the turtles' nests:
 			// terrain/NorthBeach.js; its masks' old values kept as its heights' are, for the placing)
-			const M = this._masksBefore;
-			beachBerm( this, ( k, h ) => this._uncut.has( k ) || this._uncut.set( k, h ), ( a, k, v ) => {
+			const M = this._masksBefore, record = ( k, h ) => this._uncut.has( k ) || this._uncut.set( k, h );
+			const recordMask = ( a, k, v ) => {
 
 				const m = M.get( a ) || M.set( a, new Map() ).get( a );
 				if ( ! m.has( k ) ) m.set( k, v );
 
-			} );
+			};
+			beachBerm( this, record, recordMask );
+			// ((M15) and the way over to it on foot, its trail cut into the slopes: terrain/NorthTrail.js)
+			trailCut( this, record, recordMask );
 
 		}
 		this.offshore = offshore;
