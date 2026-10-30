@@ -38,6 +38,7 @@ import { SEABED } from '../world/terrain/SeabedModel.js';
 import { mangroveAt } from '../world/terrain/Mangrove.js';
 import { northReefMask } from '../world/TerrainData.js';
 import { placeOf, placeName } from './Places.js';
+import { FINDS, lying, messageOf } from './Beachcomb.js';
 import { ordersOf, tagFor } from './Orders.js';
 
 // how long the catch card stays up unless dismissed (ms)
@@ -576,6 +577,8 @@ export class Game {
 		// the traders
 		for ( const v of this.vendors ) v.update( dt, p.mode === 'walk' ? p.position : null );
 		this.updateVendors( inp, p );
+		// ((M15) what the sea's left on the beaches, to pick up)
+		this.updateBeachcomb( inp, p );
 
 		// (M10) the bucket on deck; the crank at the helm while she's stalled
 		this.updateBail( inp, p );
@@ -962,6 +965,70 @@ export class Game {
 			else hud.openStand( near );
 
 		}
+
+	}
+
+	// (M15) beachcombing (Beachcomb.js): what's on the sand today (the last few days' finds you haven't picked
+	// up), drawn by the app's Beachcombing; walking by one, E picks it up
+	updateBeachcomb( inp, p ) {
+
+		const app = this.app, B = app.beachcomb, s = this.state, hud = this.hud;
+		if ( ! B ) return;
+		// (what you've picked up's pruned as you pick more: so its last, not its length)
+		const day = app.settings.day, key = `${ day }:${ s.picked.length }:${ s.picked[ s.picked.length - 1 ] || '' }`;
+		if ( key !== this._combKey ) {
+
+			this._combKey = key;
+			const picked = new Set( s.picked );
+			B.set( lying( day, ( d ) => app.beachDays( d ) ).filter( ( f ) => ! picked.has( f.id ) ) );
+
+		}
+
+		if ( hud && hud.noteOpen ) {
+
+			if ( inp.hit( 'KeyE' ) || inp.hit( 'Escape' ) ) hud.closeNote();
+			return;
+
+		}
+
+		if ( p.mode !== 'walk' || p.prompt || this.fight || ( hud && ( hud.standOpen || hud.invOpen || hud.catchOpen ) ) ) return;
+		const f = B.nearest( p.position.x, p.position.z, 1.4 );
+		if ( ! f ) return;
+		const name = FINDS[ f.kind ].name;
+		p.prompt = { key: 'E', text: `Pick up ${ /^[AEIOU]/.test( name ) ? 'an' : 'a' } ${ name.toLowerCase() }` };
+		if ( inp.hit( 'KeyE' ) ) this.pickFind( f );
+
+	}
+
+	pickFind( f ) {
+
+		if ( ! this.state.pickFind( f ) ) return false;
+		const F = FINDS[ f.kind ];
+		if ( f.kind === 'bottle' && this.hud ) this.hud.showNote( messageOf( f.seed ) );
+		else this.toast( `${ F.name }: ${ F.what }${ F.who ? ` · ${ F.who === 'joe' ? 'Joe' : 'Marta' } buys these` : '' }` );
+		return true;
+
+	}
+
+	// (M15) your finds sold to `who` ('marta' | 'joe'): these, or all they buy
+	sellFinds( who, ids = null ) {
+
+		const r = this.state.sellFinds( who, ids );
+		if ( r.count ) {
+
+			this.toast( `Sold ${ r.count === 1 ? 'it' : `${ r.count } finds` } for $${ r.total }` );
+			if ( this.app.audio && this.app.audio.coin ) this.app.audio.coin();
+
+		}
+
+		if ( this.hud && this.hud.standOpen ) {
+
+			if ( who === 'marta' ) this.hud.renderShop();
+			else this.hud.renderStand();
+
+		}
+
+		return r;
 
 	}
 

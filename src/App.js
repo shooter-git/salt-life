@@ -46,6 +46,7 @@ import { Wildlife } from './world/wildlife/Wildlife.js';
 import { wildlifeMood, wildlifeNews } from './game/WildlifeWeather.js';
 import { damageAt } from './game/StormDamage.js';
 import { StormWrack } from './world/debris/StormWrack.js';
+import { Beachcombing } from './world/Beachcombing.js';
 import { FlyingSheets } from './world/debris/FlyingSheets.js';
 import { vegUniforms } from './world/vegetation/VegNodes.js';
 import { Debris } from './world/Debris.js';
@@ -873,6 +874,9 @@ export class App {
 		this.village.update( dt );
 		this.rocks.update( this.camera );
 		if ( this.debris ) this.debris.update( this.camera );
+		// ((M15) beachcombing's finds and the north beach's wrack line, once the beach's debris materials are made)
+		if ( ! this.beachcomb && this.debris ) this.beachcomb = new Beachcombing( { terrain: this.terrainData, materials: { nature: this.debris.materials.nature, wood: this.village.materials.wood, hard: this.village.materials.hard }, parent: this.scene, lite: this.tier === 'low' } );
+		if ( this.beachcomb ) this.beachcomb.update( this.camera );
 		if ( this.stormWrack ) this.stormWrack.update( this.camera ); // ((M13) a hurricane's line of wrack, near you)
 		this.flyingSheets.update( islandTime( s.day, s.timeOfDay ) ); // ((M14) the sheets it's torn off, flying and lying)
 		// ((M15) the lighthouse's light: lit from dusk, its flash as it's seen from here)
@@ -2181,6 +2185,23 @@ export class App {
 				phase: ( t, T ) => train.phase( t, T ), timeOf: ( s, T ) => train.timeOf( s, T ) },
 			field: train.field,
 		}, slot );
+
+	}
+
+	// (M15) what brought a day's finds in (game/Beachcomb.js): how big the north sea was the night before
+	// (0..1 of a breezy day's 1.5 m), and a hurricane's wrack that day
+	beachDays( d ) {
+
+		const c = this._beachDays || ( this._beachDays = new Map() ), s = this.settings, key = `${ d }:${ this.weatherPick() }:${ s.weatherSince }`;
+		if ( ! c.has( key ) ) {
+
+			if ( c.size > 32 ) c.clear();
+			const w = weatherAt( islandTime( d, 2 ), this.weatherPick(), s.weatherSince ), D = damageAt( islandTime( d, 7 ), this.weatherPick(), s.weatherSince );
+			c.set( key, { north: Math.min( 1, ( w.north || 0 ) / 1.5 ), storm: D.wrack > 0.3 } );
+
+		}
+
+		return c.get( key );
 
 	}
 

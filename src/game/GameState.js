@@ -1,3 +1,4 @@
+import { FINDS, LIES } from './Beachcomb.js';
 import { FISH, fishValue, fishLengthCm } from './FishTable.js';
 import { defaultUpgrades, gearStats, nextLevel, UPGRADES, FUEL_PRICE } from './Gear.js';
 import { ordersOf, orderPrice } from './Orders.js';
@@ -35,6 +36,10 @@ export class GameState {
 		// the frozen shrimp)
 		this.bait = {};
 		this.baitPick = null;
+		// ((M15) beachcombing (Beachcomb.js): what you've picked up off the sand, and which finds you've had (the
+		// last few days': they'd have gone by now anyway), so they're not there again)
+		this.finds = []; // { id, kind, day, seed }
+		this.picked = [];
 		this._nextId = 1;
 		this.listeners = new Set();
 
@@ -470,6 +475,53 @@ export class GameState {
 	}
 
 	// spend money (upgrade shop); false when it can't be afforded
+	// (M15) a find picked up off the sand (Beachcomb.findsOf's): into your bag, and not on the sand again
+	pickFind( f ) {
+
+		if ( ! FINDS[ f.kind ] || this.picked.includes( f.id ) ) return false;
+		this.picked = this.picked.filter( ( id ) => parseInt( id, 10 ) > f.day - LIES - 1 );
+		this.picked.push( f.id );
+		this.finds.push( { id: f.id, kind: f.kind, day: f.day, seed: f.seed } );
+		this.save();
+		this.emit();
+		return true;
+
+	}
+
+	// (M15) what `who` ('marta' | 'joe') buys of your finds, and for how much: { items, total }
+	quoteFinds( who ) {
+
+		const items = this.finds.filter( ( f ) => FINDS[ f.kind ].who === who );
+		return { items, total: items.reduce( ( s, f ) => s + FINDS[ f.kind ].price, 0 ) };
+
+	}
+
+	// (M15) sold to `who`: the finds with these ids (all they buy, with none): { count, total }
+	sellFinds( who, ids = null ) {
+
+		const sold = this.finds.filter( ( f ) => FINDS[ f.kind ].who === who && ( ! ids || ids.includes( f.id ) ) );
+		if ( ! sold.length ) return { count: 0, total: 0 };
+		const total = sold.reduce( ( s, f ) => s + FINDS[ f.kind ].price, 0 );
+		this.finds = this.finds.filter( ( f ) => ! sold.includes( f ) );
+		this.money += total;
+		this.save();
+		this.emit();
+		return { count: sold.length, total };
+
+	}
+
+	// (M15) a find thrown back (or a read bottle kept: left on the sand)
+	dropFind( id ) {
+
+		const n = this.finds.length;
+		this.finds = this.finds.filter( ( f ) => f.id !== id );
+		if ( this.finds.length === n ) return false;
+		this.save();
+		this.emit();
+		return true;
+
+	}
+
 	spend( amount ) {
 
 		if ( amount > this.money ) return false;
@@ -580,7 +632,7 @@ export class GameState {
 
 	toJSON() {
 
-		return { v: 1, money: this.money, inventory: this.inventory, log: this.log, places: this.places, upgrades: this.upgrades, fuel: this.fuel, hull: this.hull, hauled: this.hauled, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, bag: this.bag, nextId: this._nextId };
+		return { v: 1, money: this.money, inventory: this.inventory, log: this.log, places: this.places, upgrades: this.upgrades, fuel: this.fuel, hull: this.hull, hauled: this.hauled, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, bag: this.bag, finds: this.finds, picked: this.picked, nextId: this._nextId };
 
 	}
 
@@ -609,6 +661,9 @@ export class GameState {
 		this.baitPick = BAITS[ d.baitPick ] ? d.baitPick : null;
 		const b = d.bag;
 		this.bag = b && Number.isFinite( b.day ) && b.n && typeof b.n === 'object' ? { day: b.day, n: { ...b.n } } : { day: null, n: {} };
+		// ((M15) beachcombing: saves from before had none)
+		this.finds = Array.isArray( d.finds ) ? d.finds.filter( ( f ) => f && FINDS[ f.kind ] && typeof f.id === 'string' ).map( ( f ) => ( { id: f.id, kind: f.kind, day: f.day | 0, seed: f.seed | 0 } ) ) : [];
+		this.picked = Array.isArray( d.picked ) ? d.picked.filter( ( id ) => typeof id === 'string' ).slice( - 200 ) : [];
 		this._nextId = Math.max( d.nextId | 0, ...this.inventory.map( ( f ) => f.id + 1 ), 1 );
 		return true;
 
@@ -656,6 +711,8 @@ export class GameState {
 		this.bait = {};
 		this.baitPick = null;
 		this.bag = { day: null, n: {} };
+		this.finds = [];
+		this.picked = [];
 		this.save();
 		this.emit();
 
