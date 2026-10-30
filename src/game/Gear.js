@@ -116,6 +116,8 @@ export const TOW = { base: 20, per100m: 5, from: 30, out: 9.3, back: 3.1 };
 export const towFee = ( metres ) => Math.round( TOW.base + TOW.per100m * Math.max( 0, metres ) / 100 );
 // (M15) how long she's out on it (s: the real world's, as the boat runs)
 export const towTime = ( metres ) => Math.max( 0, metres ) * ( 1 / TOW.out + 1 / TOW.back );
+// (M13) Marta's haul-out ahead of a hurricane ($: less than the repair a hurricane leaves to do)
+export const HAUL_FEE = 40;
 // litres per second at the helm: idle plus a lot more at full rpm (40 L lasts ~25 min flat out)
 export function fuelBurn( rpm ) {
 

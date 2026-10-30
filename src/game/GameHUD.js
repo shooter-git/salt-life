@@ -1228,6 +1228,20 @@ export class GameHUD {
 
 	}
 
+	// (M15) Marta's note: what happened to your boat while you were away (Away.tellOf)
+	showAwayNote( paragraphs ) {
+
+		this.noteOpen = true;
+		this.note.innerHTML = `
+			<div class="gm-head"><h2>A note from Marta</h2><p class="gm-sub">While you were away</p></div>
+			<div class="gm-list">${ paragraphs.map( ( p ) => `<p class="gm-note-text">${ escape( p ) }</p>` ).join( '' ) }<p class="gm-note-text">— Marta</p></div>
+			<div class="gm-foot"><span></span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Close', 'E', 'B' ) }</button></div>`;
+		this.note.querySelector( '[data-close]' ).onclick = () => this.closeNote();
+		this.note.classList.add( 'is-open' );
+		releaseMouse();
+
+	}
+
 	closeNote() {
 
 		this.noteOpen = false;
