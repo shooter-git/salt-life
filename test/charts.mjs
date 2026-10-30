@@ -353,5 +353,16 @@ ok( RECTS.compass[ 0 ] + RECTS.compass[ 2 ] <= ATLAS.w && RECTS.compass[ 1 ] + R
 
 }
 
+// ---- where a rider is
+{
+
+	const { Game } = await import( '../src/game/Game.js' );
+	const own = { x: 64, z: 36 }, here = { x: 5000, z: 9000 }, spot = ( player ) => Object.getOwnPropertyDescriptor( Game.prototype, 'chartSpot' ).get.call( { app: { player, boatCtl: { position: own }, camera: { position: here } } } );
+	ok( spot( { mode: 'boat' } ) === own && spot( { mode: 'deck' } ) === own, 'aboard your own boat, the chart goes by her spot' );
+	ok( spot( { mode: 'deck', riding: true } ) === here, 'riding in someone else\'s, by where you are, not your own boat at the dock' );
+	ok( spot( { mode: 'walk' } ) === here, 'and ashore by where you are' );
+
+}
+
 console.log( fails ? `${ fails } FAILED` : 'all passed' );
 process.exit( fails ? 1 : 0 );

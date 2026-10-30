@@ -1291,10 +1291,9 @@ export class Game {
 		if ( inp && inp.hit( 'KeyP' ) && ! ( this.hud && this.hud.catchOpen ) ) this.addMark();
 		if ( ( this._chartT = ( this._chartT || 0 ) - dt ) > 0 ) return;
 		this._chartT = 0.4;
-		const c = this.app.camera.position, b = this.app.boatCtl, aboard = p.mode === 'boat' || p.mode === 'deck';
-		const x = aboard && b ? b.position.x : c.x, z = aboard && b ? b.position.z : c.z;
+		const c = this.app.camera.position, { x, z } = this.chartSpot;
 		const seen = chart.look( x, z, sightOf( p.mode, c.y - G.seaLevel.value ) );
-		const sea = aboard || p.mode === 'swim';
+		const sea = p.mode === 'boat' || p.mode === 'deck' || p.mode === 'swim';
 		// (a far place's name comes with finding it: updateFound's toast has that, and a toast takes the last one's place)
 		const told = ( n ) => n.place && PLACES[ n.place ].far && ! ( this.state.found[ n.place ] < this.tradeDay );
 		for ( const n of chart.learn( x, z, sea ? this.placeAt( x, z ) : null ) ) if ( ! told( n ) ) this.toast( `On your chart: ${ n.peak ? 'the summit' : n.name }`, 2600 );
@@ -1318,11 +1317,19 @@ export class Game {
 
 	}
 
+	// (M15) where you are on the chart: your boat's spot aboard her; riding in someone else's, where you are
+	get chartSpot() {
+
+		const p = this.app.player, b = this.app.boatCtl;
+		return ( p.mode === 'boat' || p.mode === 'deck' ) && ! p.riding && b ? b.position : this.app.camera.position;
+
+	}
+
 	// (M15) your own mark on the chart, where you are (the boat's spot when you're aboard)
 	addMark() {
 
-		const p = this.app.player, b = this.app.boatCtl, c = this.app.camera.position, aboard = p.mode === 'boat' || p.mode === 'deck';
-		const m = this.state.chart.mark( aboard && b ? b.position.x : c.x, aboard && b ? b.position.z : c.z, this.tradeDay );
+		const { x, z } = this.chartSpot;
+		const m = this.state.chart.mark( x, z, this.tradeDay );
 		this.toast( m ? `Mark ${ m.id } on your chart` : `Your chart has ${ MAX_MARKS } marks: take one off first (I, Chart)`, 2200 );
 		if ( m ) this.state.save();
 		if ( this.hud && this.hud.invOpen ) this.hud.renderInventory();
