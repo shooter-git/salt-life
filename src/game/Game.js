@@ -13,6 +13,7 @@ import { CatchDisplay } from './CatchDisplay.js';
 import { FishPortrait } from './FishPortrait.js';
 import { UPGRADES, fuelBurn, TOW, towFee, HAUL_FEE } from './Gear.js';
 import { Hull, thrustMul, repairFee } from './Hull.js';
+import { tellOf } from './Away.js';
 import { GameHUD } from './GameHUD.js';
 import { TimeHUD } from './TimeHUD.js';
 import { timeText } from './IslandClock.js';
@@ -234,13 +235,7 @@ export class Game {
 		if ( app.localLights ) this.addFloodlights( app.localLights, app.boat );
 		// (Salt Life) the anchor's rode while it's down, from the stem head to the bottom (the fishing
 		// line's ribbon, in rope's colour); and a leave of the helm still waiting for the boat to slow
-		this.rode = new Mesh( buildLineGeometry( RODE_SEGS ), createLineMaterial( RODE_SEGS ) );
-		this.rode.name = 'AnchorRode';
-		this.rode.material.color.set( 0xcfc6ad );
-		this.rode.material.uniforms.lineShow.value = 2; // twice the fishing line's width
-		this.rode.frustumCulled = false;
-		this.rode.castShadow = false;
-		this.rode.visible = false;
+		this.rode = this.rodeCopy( buildLineGeometry( RODE_SEGS ) );
 		app.scene.add( this.rode );
 		this._anchorDue = false;
 		this._fuelOut = false;
@@ -404,16 +399,7 @@ export class Game {
 
 		}
 
-		// ((M15) what happened while you were away, once you're here to read it: App.pickUp)
-		if ( this.awayTold && this.hud && app._started ) {
-
-			const told = this.awayTold;
-			this.awayTold = null;
-			if ( told.note ) this.hud.showAwayNote( told.note );
-			if ( told.toast ) this.toast( told.toast, 5200 );
-
-		}
-
+		this.tellAway();
 		const can = this.canFish, canSpear = this.canSpear, gun = this.gun, net = this.net;
 		const room = this.makingRoom;
 		if ( inp.hit( 'KeyR' ) && can && ! this.fight && ! net.busy && ! room ) {
@@ -832,6 +818,20 @@ export class Game {
 
 	}
 
+	// (M15) what happened while you were away (App.pickUp), once you're here to read it, and once any room's clock has
+	// reached you: a hurricane's word is the one about now, in the room you've come to
+	tellAway() {
+
+		const app = this.app, away = this.awayTold;
+		if ( ! away || ! this.hud || ! app._started || ! app.together.roomKnown ) return;
+		this.awayTold = null;
+		const s = app.settings;
+		const told = tellOf( away.story, { ...away, T: islandTime( s.day, s.timeOfDay ), news: app.weather.news, locale: app.portal && app.portal.locale } );
+		if ( told.note ) this.hud.showAwayNote( told.note );
+		if ( told.toast ) this.toast( told.toast, 5200 );
+
+	}
+
 	// (M13) what's said of a hurricane as it comes (a toast when it's watched for, warned of, and when its
 	// winds arrive), and Marta putting your boat back in once it's gone (when she's at her stall)
 	updateHurricane() {
@@ -927,11 +927,31 @@ export class Game {
 		const rode = this.rode;
 		rode.visible = !! b.anchor;
 		if ( ! b.anchor ) return;
-		// it comes down from the stem head and lies along the bottom to the anchor
-		const u = rode.material.uniforms, a = b.anchor;
-		b.toWorld( b.stemHead, u.lineA.value );
-		u.lineB.value.copy( a );
-		u.lineCtl.value.copy( u.lineA.value ).lerp( a, 0.8 ).y = a.y;
+		b.toWorld( b.stemHead, rode.material.uniforms.lineA.value );
+		this.layRode( rode, b.anchor );
+
+	}
+
+	// a rode's line, out of sight ((M15) the geometry shared with others': an away boat's, on your sea: Together)
+	rodeCopy( geometry = this.rode.geometry ) {
+
+		const rode = new Mesh( geometry, createLineMaterial( RODE_SEGS ) );
+		rode.name = 'AnchorRode';
+		rode.material.color.set( 0xcfc6ad );
+		rode.material.uniforms.lineShow.value = 2; // twice the fishing line's width
+		rode.frustumCulled = false;
+		rode.castShadow = false;
+		rode.visible = false;
+		return rode;
+
+	}
+
+	// it comes down from the stem head (lineA, set) and lies along the bottom to the anchor
+	layRode( rode, anchor ) {
+
+		const u = rode.material.uniforms;
+		u.lineB.value.copy( anchor );
+		u.lineCtl.value.copy( u.lineA.value ).lerp( anchor, 0.8 ).y = anchor.y;
 
 	}
 

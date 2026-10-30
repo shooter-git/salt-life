@@ -17,7 +17,8 @@ import { weekOrder, weekNumber, tallyFor, deliver, delivered } from '../game/Wee
 import { lb } from '../game/Units.js';
 import { WORLD } from '../world/WorldLayout.js';
 import { islandTime, weatherHere } from '../game/Weather.js';
-import { boatRecord, cleanBoats, keepBoat, wearRate } from '../game/Away.js';
+import { anchorLie, boatRecord, cleanBoats, keepBoat, swingRate, wearRate } from '../game/Away.js';
+import { RODE_SLACK } from '../player/BoatController.js';
 
 // (Salt Life) Playing together: whoever else is on the island (portal.session, All the Spaces), drawn
 // where they are, doing what they do. Light, drop-in: everyone keeps their own progress and their own
@@ -303,7 +304,7 @@ export class Together {
 		if ( ! now && this._boatSaved && t - this._boatSavedAt < MINE_MS ) return Promise.resolve();
 		this._boatSaved = true;
 		this._boatSavedAt = t;
-		const r = boatRecord( { name: this.me.name, x: b.position.x, z: b.position.z, heading: b.getYaw(), at: t } );
+		const r = boatRecord( { name: this.me.name, x: b.position.x, z: b.position.z, heading: b.getYaw(), anchor: b.anchor, at: t } );
 		return this._saveBoats( ( cur ) => {
 
 			cur[ id ] = r;
@@ -392,16 +393,22 @@ export class Together {
 
 				a.boat = this._boatCopy();
 				a.boat.userData.lamps.set( { underway: false, spot: false } ); // (her anchor light)
+				a.rode = app.game.rodeCopy();
+				app.scene.add( a.rode );
 
 			}
 
 			if ( a.boat ) {
 
 				a.boat.visible = on;
+				a.rode.visible = on;
 				if ( on ) {
 
 					a.boat.position.copy( a.frame.pos );
 					a.boat.quaternion.copy( a.frame.quat );
+					// (her rode, from her stem head to where her anchor lies)
+					a.rode.material.uniforms.lineA.value.copy( app.boatCtl.stemHead ).applyQuaternion( a.frame.quat ).add( a.frame.pos );
+					app.game.layRode( a.rode, _q.set( a.r.a[ 0 ], app.terrainData.heightAt( a.r.a[ 0 ], a.r.a[ 1 ] ), a.r.a[ 1 ] ) );
 
 				}
 
@@ -416,7 +423,7 @@ export class Together {
 
 	_awayEntry( id ) {
 
-		const a = { r: null, boat: null, theirBoat: null, frame: { pos: new Vector3(), quat: new Quaternion(), water: null }, y: null, pitch: 0, roll: 0, near: false };
+		const a = { r: null, boat: null, rode: null, theirBoat: null, frame: { pos: new Vector3(), quat: new Quaternion(), water: null }, y: null, heading: 0, pitch: 0, roll: 0, near: false };
 		this.away.set( id, a );
 		return a;
 
@@ -430,6 +437,8 @@ export class Together {
 			app.scene.remove( a.boat );
 			a.boat.userData.lamps.removeLight( app.localLights );
 			a.boat.userData.lamps.dispose();
+			app.scene.remove( a.rode );
+			a.rode.material.dispose();
 
 		}
 
@@ -437,17 +446,29 @@ export class Together {
 
 	}
 
-	// on your own sea: heaving, pitching and rolling with it (her ends' and sides' heights), a little behind it as a
-	// hull is. Nobody's sending her pose; this is each device's own, where she lies
+	// on your own sea and in your own wind: lying to it from her anchor as she does (anchorLie; found lying so, and
+	// coming round as it does), heaving, pitching and rolling with the sea (her ends' and sides' heights), a little
+	// behind it as a hull is. Nobody's sending her pose; this is each device's own, where she lies
 	_floatAway( a, dt ) {
 
-		const w = this.app.waves, r = a.r, f = a.frame, sin = Math.sin( r.h ), cos = Math.cos( r.h );
-		let h = w ? w.heightAt( r.x, r.z ) : 0, pitch = 0, roll = 0;
+		const app = this.app, w = app.waves, r = a.r, f = a.frame, wind = G.windDir.value, U = G.windSpeed.value;
+		const lie = anchorLie( r.a[ 0 ], r.a[ 1 ], wind.x, wind.y, U, RODE_SLACK + app.boatCtl.stemHead.z );
+		if ( a.y === null ) a.heading = lie.heading;
+		else {
+
+			const gap = lie.heading - a.heading;
+			a.heading += Math.atan2( Math.sin( gap ), Math.cos( gap ) ) * ( 1 - Math.exp( - dt * swingRate( U ) ) );
+
+		}
+
+		const sin = Math.sin( a.heading ), cos = Math.cos( a.heading );
+		const x = r.a[ 0 ] - sin * lie.reach, z = r.a[ 1 ] - cos * lie.reach;
+		let h = w ? w.heightAt( x, z ) : 0, pitch = 0, roll = 0;
 		if ( w && a.near ) {
 
 			const L = 3.5, B = 1.4;
-			const bow = w.heightAt( r.x + sin * L, r.z + cos * L ), stern = w.heightAt( r.x - sin * L, r.z - cos * L );
-			const port = w.heightAt( r.x + cos * B, r.z - sin * B ), star = w.heightAt( r.x - cos * B, r.z + sin * B );
+			const bow = w.heightAt( x + sin * L, z + cos * L ), stern = w.heightAt( x - sin * L, z - cos * L );
+			const port = w.heightAt( x + cos * B, z - sin * B ), star = w.heightAt( x - cos * B, z + sin * B );
 			h = ( bow + stern + port + star ) / 4;
 			pitch = Math.atan2( stern - bow, 2 * L );
 			roll = Math.atan2( port - star, 2 * B );
@@ -458,8 +479,8 @@ export class Together {
 		a.y = a.y === null ? h : a.y + ( h - a.y ) * k;
 		a.pitch += ( pitch - a.pitch ) * k;
 		a.roll += ( roll - a.roll ) * k;
-		f.pos.set( r.x, a.y, r.z );
-		f.quat.setFromAxisAngle( _up, r.h ).multiply( _qa.setFromAxisAngle( _x.set( 1, 0, 0 ), a.pitch ) ).multiply( _qb.setFromAxisAngle( _z.set( 0, 0, 1 ), a.roll ) );
+		f.pos.set( x, a.y, z );
+		f.quat.setFromAxisAngle( _up, a.heading ).multiply( _qa.setFromAxisAngle( _x.set( 1, 0, 0 ), a.pitch ) ).multiply( _qb.setFromAxisAngle( _z.set( 0, 0, 1 ), a.roll ) );
 
 	}
 
@@ -729,6 +750,13 @@ export class Together {
 	// alone and sure of it: a solo session, or nobody else here once the lists have had time to name
 	// everyone (the game's first list may not have whoever was already there: holding or resting the
 	// clock then set the room's, held for everyone)
+	// (M15) whether any room's clock and weather have reached you yet (on your own there's none to wait for)
+	get roomKnown() {
+
+		return this.session.mode === 'solo' || Date.now() - this._since > SETTLE_MS;
+
+	}
+
 	get surelyAlone() {
 
 		return this.session.mode === 'solo' || ( this.others.size === 0 && ( this._settled || Date.now() - this._since > SETTLE_MS ) );

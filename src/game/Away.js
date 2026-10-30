@@ -16,6 +16,7 @@ import { feet } from './Units.js';
 //   tellOf( story, { paid, hull, T, ... } ) -> { note: [ paragraphs ] | null, toast }   (Marta's note)
 //   (playing together: the group's shared save, 'boats')
 //   boatRecord( ... ) -> record   cleanBoats( raw ) -> { id: record }   keepBoat( record, ... ) -> record
+//   anchorLie( ax, az, wx, wz, U, off ) -> { x, z, heading, reach }   swingRate( U ) -> /s   (how she lies at anchor)
 //   withRecord( story, record, dock ) -> story   (what the others' weather did to her, into your own reckoning)
 
 // how long the catch keeps in the box, in the island's hours: with no ice (M16 sells it) and the box at the sea's
@@ -282,13 +283,30 @@ function milesOf( m ) {
 }
 
 // ---- playing together: anchored boats whose owners are away, in the group's shared save.
-// portal.save.shared 'boats': { [ owner's id ]: { v: 1, n: their name, x, z, h: heading (rad), at: ms they were last
-// here with her at anchor, wear: what the weather's taken off her hull since (0..1), tow: null | { why: 'hurricane' |
-// 'week', x, z, metres, fee, where: 'cradle' | 'dock', out, at: ms } } }.
-// Only ever written by her owner (her pose: when she's anchored, while they're here, and as they leave) and the
-// host in their absence (her wear and her tow, never her pose). Each device draws her from it, on its own sea.
+// portal.save.shared 'boats': { [ owner's id ]: { v: 1, n: their name, x, z, h: heading (rad), a: [ x, z ] where her
+// anchor lies, at: ms they were last here with her at anchor, wear: what the weather's taken off her hull since
+// (0..1), tow: null | { why: 'hurricane' | 'week', x, z, metres, fee, where: 'cradle' | 'dock', out, at: ms } } }.
+// Only ever written by her owner (her pose and her anchor: when she's anchored, while they're here, and as they
+// leave) and the host in their absence (her wear and her tow, never her pose). Each device draws her from it, on its
+// own sea, lying to its own wind from where her anchor is.
 
-export const boatRecord = ( { name, x, z, heading, at } ) => ( { v: 1, n: String( name || '' ).slice( 0, 40 ), x: round( x ), z: round( z ), h: Math.round( heading * 1000 ) / 1000, at, wear: 0, tow: null } );
+export const boatRecord = ( { name, x, z, heading, anchor, at } ) => ( { v: 1, n: String( name || '' ).slice( 0, 40 ), x: round( x ), z: round( z ), h: Math.round( heading * 1000 ) / 1000, a: [ round( anchor.x ), round( anchor.z ) ], at, wear: 0, tow: null } );
+
+// How she lies at anchor in a steady wind blowing toward ( wx, wz ) at U m/s: head to it, her bow downwind of the
+// anchor by the rode's slack and its stretch. off: her origin's distance from the anchor with no stretch (the slack,
+// and her stem head forward of her origin). Measured from her own physics (BoatController, in the CPU's sea, 2.5 to
+// 20 m/s: within 3 degrees of the wind, her bow 4.0 to 4.6 m off, the stretch as the wind's push, U^2).
+// -> { x, z, heading, reach: her origin's distance from the anchor }
+export function anchorLie( ax, az, wx, wz, U, off ) {
+
+	const reach = off + 0.0016 * U * U;
+	return { x: ax + wx * reach, z: az + wz * reach, heading: Math.atan2( - wx, - wz ), reach };
+
+}
+
+// how fast she comes round to it (a share of the way, a second): beam-on to within 20 degrees of it took her 370 / U
+// seconds in the same measurements, at any wind
+export const swingRate = ( U ) => Math.max( U, 1 ) / 250;
 
 // the shared save's boats, as far as they're boats (others' saves, of any version)
 export function cleanBoats( raw, now = Date.now() ) {
@@ -298,10 +316,11 @@ export function cleanBoats( raw, now = Date.now() ) {
 	for ( const [ id, r ] of Object.entries( raw ) ) {
 
 		if ( ! r || r.v !== 1 || ! Number.isFinite( r.x ) || ! Number.isFinite( r.z ) || ! Number.isFinite( r.at ) ) continue;
+		if ( ! Array.isArray( r.a ) || r.a.length !== 2 || ! r.a.every( Number.isFinite ) ) continue;
 		const t = r.tow && typeof r.tow === 'object' && Number.isFinite( r.tow.fee ) && ( r.tow.where === 'dock' || r.tow.where === 'cradle' ) ? r.tow : null;
 		// (long towed, and they've not been back: let go)
 		if ( t && Number.isFinite( t.at ) && now - t.at > TOW_KEPT_MS ) continue;
-		out[ id ] = { v: 1, n: typeof r.n === 'string' ? r.n : '', x: r.x, z: r.z, h: Number.isFinite( r.h ) ? r.h : 0, at: r.at, wear: Number.isFinite( r.wear ) ? Math.min( 1, Math.max( 0, r.wear ) ) : 0, tow: t };
+		out[ id ] = { v: 1, n: typeof r.n === 'string' ? r.n : '', x: r.x, z: r.z, h: Number.isFinite( r.h ) ? r.h : 0, a: [ r.a[ 0 ], r.a[ 1 ] ], at: r.at, wear: Number.isFinite( r.wear ) ? Math.min( 1, Math.max( 0, r.wear ) ) : 0, tow: t };
 
 	}
 

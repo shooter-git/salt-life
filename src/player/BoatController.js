@@ -10,7 +10,7 @@ const sstep = THREE.MathUtils.smoothstep;
 const clamp = THREE.MathUtils.clamp;
 // (Salt Life) the anchor rode: how far the bow swings from over the anchor before it comes taut (a
 // short scope, so the boat stays on the spot), and its stretch and damping (N/m, N s/m)
-const RODE_SLACK = 4;
+export const RODE_SLACK = 4;
 const RODE_K = 2500;
 const RODE_C = 2500;
 // (Salt Life) the wind on her: the area she shows it end-on and abeam (m^2: the hull's side and the

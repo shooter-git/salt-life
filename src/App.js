@@ -34,8 +34,8 @@ import { Player } from './player/Player.js';
 import { BoatController } from './player/BoatController.js';
 import { GameState } from './game/GameState.js';
 import { DAY_RATE, START_HOUR, advance } from './game/IslandClock.js';
-import { islandTime, isPick, NORTH, weatherAt, towardOf, hurricaneNews } from './game/Weather.js';
-import { BACK_MS, awayClock, awayOf, boatLeft, cleanBoats, leftOf, tellOf, withRecord } from './game/Away.js';
+import { islandTime, isPick, NORTH, weatherAt, towardOf } from './game/Weather.js';
+import { BACK_MS, awayClock, awayOf, boatLeft, cleanBoats, leftOf, withRecord } from './game/Away.js';
 import { WeatherDriver } from './world/WeatherDriver.js';
 import { lampsLit } from './game/Bites.js';
 import { FishStand, STAND } from './game/FishStand.js';
@@ -2345,7 +2345,7 @@ export class App {
 
 		}
 
-		if ( away ) g.awayTold = tellOf( story, { paid, hull: st.hull, fish, T, news: hurricaneNews( T, pick, since ), locale: this.portal.locale, from: left } );
+		if ( away ) g.awayTold = { story, paid, hull: st.hull, fish, from: left };
 		this.together.mineBoat( true );
 
 	}
