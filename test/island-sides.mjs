@@ -146,7 +146,7 @@ check( breezy.north >= NORTH.day && breezy.north < NORTH.big && blustery.north >
 	}
 
 	const pts = creek.filter( ( _, i ) => i % Math.max( 1, Math.floor( creek.length / 40 ) ) === 0 ).slice( 0, 40 );
-	const theirs = [ 'snook', 'graySnapper', 'tarpon' ];
+	const theirs = [ 'snook', 'graySnapper', 'tarpon', 'redfish' ]; // ((M16) the redfish along the mangroves' edge too)
 	const dawn = share( pts, theirs, fair, 6.5 ), night = share( pts, [ 'tarpon' ], fair, 22 ), snook = share( pts, [ 'snook' ], fair, 6.5 );
 	const gale = share( pts, theirs, { ...blustery, wind: 20 }, 6.5 ), south = share( pts, theirs, { ...weatherAt( 0, 'southerly' ), rain: 0, thunder: 0, front: 0 }, 6.5 );
 	const its = ( r ) => pc( r, 'its fish' );

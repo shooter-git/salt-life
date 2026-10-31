@@ -635,7 +635,8 @@ function pairedFins( M, S, F, part, o ) {
 				// along the flank: the lionfish's fans, open like wings)
 				spread = dead ? 0.16 : Array.isArray( F.spread ) ? lerp( F.spread[ 0 ], F.spread[ 1 ], t ) : F.spread;
 				if ( dead ) alpha = alpha * 0.6 - 0.08; // relaxed: rays closer together, pointing back
-				alpha -= F.droop ?? 0; // ((M16) held down from the flank: a swordfish's and a marlin's)
+				// ((M16) fan: how far the rays open, a marlin's narrow as a scythe; droop: held down from the flank)
+				alpha = alpha * ( F.fan ?? 1 ) - ( F.droop ?? 0 );
 
 			}
 

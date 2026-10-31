@@ -901,7 +901,8 @@ export class FishSchools {
 
 			if ( Math.hypot( g.center.x - at.x, g.center.z - at.z ) < FAR.keep ) continue;
 			const s = this.farSpot( g.sp.far, finds, at, hour, g );
-			if ( ! s ) continue;
+			if ( ! s || s.key === g.farKey ) continue;
+			g.farKey = s.key;
 			g.zone.x = s.x;
 			g.zone.z = s.z;
 			g.home.set( s.x, 0, s.z );
@@ -917,7 +918,7 @@ export class FishSchools {
 		const offset = ( q, r ) => {
 
 			const a = g.rng() * TAU, d = r * g.rng();
-			return { x: q.x + Math.cos( a ) * d, z: q.z + Math.sin( a ) * d };
+			return { x: q.x + Math.cos( a ) * d, z: q.z + Math.sin( a ) * d, key: q.n };
 
 		};
 		let best = null, bd = Infinity;
@@ -941,7 +942,7 @@ export class FishSchools {
 				// (the nearest of a weedline)
 				const ex = w.x1 - w.x0, ez = w.z1 - w.z0, t = Math.min( 1, Math.max( 0, ( ( at.x - w.x0 ) * ex + ( at.z - w.z0 ) * ez ) / Math.max( ex * ex + ez * ez, 1e-6 ) ) );
 				const x = w.x0 + ex * t, z = w.z0 + ez * t;
-				look( { x, z }, x, z, FAR.near.debris );
+				look( { x, z, n: w.n }, x, z, FAR.near.debris );
 
 			}
 
@@ -963,7 +964,7 @@ export class FishSchools {
 		const salt = ( Math.imul( i, 73856093 ) ^ Math.imul( j, 19349663 ) ^ Math.imul( e, 83492791 ) ^ g.offset ) >>> 0;
 		if ( ( Math.imul( salt, 2654435761 ) >>> 0 ) / 4294967296 > ( far === 'night' ? FAR.night : FAR.open ) ) return null;
 		const x = ( i + 0.5 ) * FAR.cell, z = ( j + 0.5 ) * FAR.cell;
-		return this.depthAt( x, z ) > FAR.deep ? offset( { x, z }, 120 ) : null;
+		return this.depthAt( x, z ) > FAR.deep ? offset( { x, z, n: salt }, 120 ) : null;
 
 	}
 

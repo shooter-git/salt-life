@@ -121,8 +121,8 @@ export function biteHint( species ) {
 	// (the spiny lobster: by hand on a dive)
 	if ( f.hand ) return 'in the reef\'s ledges, by hand, after dark';
 	// (one that gathers under the pier's lamps after dark: there, then)
-	if ( f.lights ) return 'under the pier lights, after dark';
 	if ( f.hint ) return f.hint;
+	if ( f.lights ) return 'under the pier lights, after dark';
 	const best = Object.entries( f.habitat ).sort( ( a, b ) => b[ 1 ] - a[ 1 ] )[ 0 ];
 	return [ best && WHERE[ best[ 0 ] ], WHEN[ f.time ] ].filter( Boolean ).join( ', ' );
 

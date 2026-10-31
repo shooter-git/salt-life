@@ -17,7 +17,7 @@ Wahoo, sailfish, white and blue marlin, swordfish and yellowfin in the far water
 | Blackfin | unchanged (within 10% of FishBase's 0.0115 TL^3.05 over its range) | | 3 to 20 | 0.6 to 1.1 m | 20.6 kg (FishBase) |
 | Mahi | unchanged (FishBase: 0.0118 TL^2.88) | | 1.5 to 32 | 0.6 to 1.6 m | 39.5 kg |
 | Redfish | 8.51e-6 TL^3.07 (FishBase) | | 1 to 14 | 0.45 to 1.05 m | 42.7 kg |
-| Spotted seatrout | 8.32e-6 TL^3.05 (FishBase) | | 0.3 to 4 | 0.3 to 0.7 m | 7.9 kg |
+| Spotted seatrout | 8.32e-6 TL^3.05 (FishBase) | | 0.3 to 3.6 | 0.3 to 0.7 m | 7.9 kg |
 
 Where and when, from the sources:
 
