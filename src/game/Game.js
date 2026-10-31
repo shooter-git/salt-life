@@ -1574,6 +1574,7 @@ export class Game {
 
 		const f = this.fight;
 		const st = f.update( dt, reeling );
+		if ( this.app.together ) this.app.together.backDown( f, dt ); // ((M16) someone else at the helm)
 		// the fish thrashes at the surface as each run starts
 		const au = this.app.audio;
 		if ( f.surge > 0.6 && ! f._splashed && au && au.fishSplash ) au.fishSplash( this.rod.bobber, 0.3 + 0.5 * Math.min( 1, f.kg / 8 ) );

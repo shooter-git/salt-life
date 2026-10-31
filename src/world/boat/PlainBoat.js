@@ -84,6 +84,14 @@ export class PlainBoat extends Vessel {
 		this.wake = { quarterX: 0.5 * beam, quarterZ: - 0.24 * length, washZ: L.zAft - 0.3 };
 		this.lamps = { port: [ 0.3, L.sheerY( 0.5 ) + 1, 0 ], masthead: [ 0, L.sheerY( 0.5 ) + 1.5, 0 ], anchor: [ 0, L.sheerY( 0.5 ) + 1.55, 0 ], stern: [ 0, L.sheerY( 0 ) + 0.1, L.zAft - 0.05 ] };
 		this.bowWalk = L.zBow - 0.3;
+		// (a big boat's crew: where they'd be, a platform up where her tower's top would be and the chair aft)
+		if ( id === 'sportfisher' ) {
+
+			const top = L.deckY + 8, z = 0.05 * length;
+			this.colliders.push( { tag: 'tower', center: new Vector3( 0, top - 0.05, z ), half: new Vector3( 0.8, 0.05, 0.8 ), walkable: true, solid: false } );
+			this.stations = { tower: { x: 0, y: top, z, r: 1.2 }, chair: { x: 0, y, z: - 0.3 * length, r: 0.8, facing: Math.PI } };
+
+		}
 
 	}
 

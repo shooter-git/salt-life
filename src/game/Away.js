@@ -295,7 +295,7 @@ function milesOf( m ) {
 // leave) and the host in their absence (her wear and her tow, never her pose). Each device draws her from it, on its
 // own sea, lying to its own wind from where her anchor is.
 
-export const boatRecord = ( { name, x, z, heading, anchor, at, T } ) => ( { v: 1, n: String( name || '' ).slice( 0, 40 ), x: round( x ), z: round( z ), h: Math.round( heading * 1000 ) / 1000, a: anchor ? [ round( anchor.x ), round( anchor.z ) ] : null, ...( anchor ? {} : { T } ), at, wear: 0, tow: null } );
+export const boatRecord = ( { name, x, z, heading, anchor, at, T, boat } ) => ( { v: 1, ...( boat ? { b: boat } : {} ), n: String( name || '' ).slice( 0, 40 ), x: round( x ), z: round( z ), h: Math.round( heading * 1000 ) / 1000, a: anchor ? [ round( anchor.x ), round( anchor.z ) ] : null, ...( anchor ? {} : { T } ), at, wear: 0, tow: null } );
 
 // How she lies at anchor in a steady wind blowing toward ( wx, wz ) at U m/s: head to it, her bow downwind of the
 // anchor by the rode's slack and its stretch. off: her origin's distance from the anchor with no stretch (the slack,
@@ -342,7 +342,7 @@ export function cleanBoats( raw, now = Date.now() ) {
 		const t = r.tow && typeof r.tow === 'object' && Number.isFinite( r.tow.fee ) && ( r.tow.where === 'dock' || r.tow.where === 'cradle' ) ? r.tow : null;
 		// (long towed, and they've not been back: let go)
 		if ( t && Number.isFinite( t.at ) && now - t.at > TOW_KEPT_MS ) continue;
-		out[ id ] = { v: 1, n: typeof r.n === 'string' ? r.n : '', x: r.x, z: r.z, h: Number.isFinite( r.h ) ? r.h : 0, a: A, ...( A ? {} : { T: r.T } ), at: r.at, wear: Number.isFinite( r.wear ) ? Math.min( 1, Math.max( 0, r.wear ) ) : 0, tow: t };
+		out[ id ] = { v: 1, ...( typeof r.b === 'string' ? { b: r.b } : {} ), n: typeof r.n === 'string' ? r.n : '', x: r.x, z: r.z, h: Number.isFinite( r.h ) ? r.h : 0, a: A, ...( A ? {} : { T: r.T } ), at: r.at, wear: Number.isFinite( r.wear ) ? Math.min( 1, Math.max( 0, r.wear ) ) : 0, tow: t };
 
 	}
 

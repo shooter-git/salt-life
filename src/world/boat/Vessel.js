@@ -30,6 +30,9 @@ import { triangleCount } from './GeoKit.js';
 //   hornAt, searchlight    Vector3s, or null when she hasn't one
 //   seated                 she's sat in, not walked about: there's no deck mode, boarding takes the helm
 //   nearDetail             mesh names a phone may leave out far off (App.nearDetail)
+//   stations               where a crew's jobs are done: { tower: { x, y, z, r }, chair: { x, y, z, r, facing } } (feet; r: how near is
+//                          there; facing: rad from her bow, about +y). Whoever's there is spotting, or in the chair (together/Crew.js)
+//   lowCopy                mesh names of what a phone draws of someone else's her (together/BoatCopies.js); perch: where a rider sits on a seated boat
 //
 // And these, which do nothing until a boat needs them: setSteering, setThrottle, setPropellerRPM, setNavLights, update.
 export class Vessel {
@@ -48,6 +51,7 @@ export class Vessel {
 		this.footstep = 'wood';
 		this.rainTops = [];
 		this.nearDetail = [];
+		this.stations = {};
 		this.lamps = {};
 		this._rpm = 0;
 

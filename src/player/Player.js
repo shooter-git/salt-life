@@ -673,7 +673,7 @@ export class Player {
 	// ------------------------------------------------------------------ boat
 
 	// (Salt Life) aboard someone else's boat (together/Together.js: a stand-in with the boat's shape and
-	// their boat's pose): on its deck while they drive; you can't take their helm
+	// their boat's pose): on its deck while they drive; (M16) their helm yours if they're aboard and away from it
 	ride( boat ) {
 
 		this.boat = boat;
@@ -947,7 +947,7 @@ export class Player {
 
 		// prompts: take the helm, or step ashore
 		const hx = b.model.helm.x, hz = b.model.helm.z;
-		const nearHelm = Math.hypot( p.x - hx, p.z - hz ) < HELM_REACH && ! this.busy && ! this.riding;
+		const nearHelm = Math.hypot( p.x - hx, p.z - hz ) < HELM_REACH && ! this.busy && ( ! this.riding || b.helmFree ); // ((M16) a crew's)
 		this._ashoreT -= dt;
 		if ( this._ashoreT <= 0 ) {
 
