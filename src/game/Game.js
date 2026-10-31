@@ -136,7 +136,7 @@ export class Game {
 		this.landing = null; // { species, kg } while the caught fish swings in view
 		this.chandlery = app.chandlery || new Chandlery( { scene: app.scene, terrain: app.terrainData, colliders: app.colliders, material: this.stand.material } );
 		// ((M15) and Pearl at the fish camp on the north beach: game/FishCamp.js, built when you come near it)
-		this.camp = new FishCamp( { scene: app.scene, terrain: app.terrainData, colliders: app.colliders, village: app.village } );
+		this.camp = new FishCamp( { scene: app.scene, terrain: app.terrainData, colliders: app.colliders, village: app.village, app } );
 		this.vendors = [ this.stand.vendor, this.chandlery.vendor, this.camp.vendor ].filter( Boolean );
 		// (Salt Life) the day's wanted lists (Orders.js), chalked on a slate on Joe's counter. On a device
 		// that draws on its CPU it goes up after the start, with the records board (App.prepareLate)
@@ -633,6 +633,9 @@ export class Game {
 			if ( this.camp.built && app.loadVendorCharacter ) app.loadVendorCharacter( this.camp.vendor );
 
 		}
+
+		// ((M16) and its day: her boat, its lights)
+		this.camp.live( dt );
 
 		// (M10) the bucket on deck; the crank at the helm while she's stalled
 		this.updateBail( inp, p );

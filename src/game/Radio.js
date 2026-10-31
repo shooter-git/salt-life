@@ -3,6 +3,7 @@ import { CONDITIONS, islandTime } from './Weather.js';
 import { broadcast } from './MarineForecast.js';
 import { TOW } from './Gear.js';
 import { farOff } from './Units.js';
+import { canJob, canWords, deliverCan, pearlCall, pearlJob, towToPearl } from './Help.js';
 
 // (M15) The VHF at the helm (R, the pad's X, the Radio button; on the boat's dash its set: world/boat/Wheelhouse.js,
 // its display drawn by Instruments.js from Radio.reading). Its panel has two things on it:
@@ -14,6 +15,7 @@ import { farOff } from './Units.js';
 //   - Marta, on channel 16: her tow in, called for from wherever you are (Game.towJob( true )): what it'll
 //     cost and how long she'll be, her fee by the distance (Gear.towFee). Not in a blow: she won't come out in
 //     a gale (`NO_TOW`) or once a hurricane's warned of, until it's gone by.
+//   - (M16) her can of diesel, on the same call, and Pearl on the north side: game/Help.js.
 // Keys while its panel's open: ← → picks, Enter (RT, F) does it, R (X), E (B) or Esc closes it (E doesn't
 // leave the helm while it's open).
 //   const r = new Radio( ui, game );   r.update( dt, inp, lDown )   r.reading -> { channel, big, mark, freq, tag, on }
@@ -158,7 +160,7 @@ export class Radio {
 		this.open = true;
 		this.game.app.player.helmHeld = true;
 		this.call = null;
-		this.pick = this.game.towJob( true ) && this.game.state.fuelL <= 0 ? 1 : 0;
+		this.pick = this.game.towJob( true ) && this.game.state.fuelL <= 0 ? ( this._pearl() ? 2 : 1 ) : 0;
 		this.draw();
 		this.panel.classList.add( 'is-open' );
 		try {
@@ -180,7 +182,7 @@ export class Radio {
 
 	step( by ) {
 
-		const n = this.call ? ( this.call.can ? 2 : 1 ) : 2;
+		const n = this.call ? ( this.call.can ? ( this.call.drop ? 3 : 2 ) : 1 ) : ( pearlJob( this.game ) ? 3 : 2 );
 		this.pick = ( this.pick + by + n ) % n;
 		this.draw();
 
@@ -191,6 +193,7 @@ export class Radio {
 		if ( this.call ) {
 
 			if ( this.call.can && this.pick === 0 ) this.takeTow();
+			else if ( this.call.drop && this.pick === 1 ) this.takeCan();
 			else this.hangUp();
 
 		} else if ( this.pick === 0 ) {
@@ -198,7 +201,8 @@ export class Radio {
 			this.listen( ! this.listening );
 			this.close();
 
-		} else if ( this.game.towJob( true ) ) this.callMarta();
+		} else if ( this.pick === 2 ) this.callPearl();
+		else if ( this.game.towJob( true ) ) this.callMarta();
 
 	}
 
@@ -208,17 +212,20 @@ export class Radio {
 		const g = this.game, job = g.towJob( true ), wx = g.weatherNow, news = g.app.weather && g.app.weather.news;
 		if ( ! job ) return;
 		const blown = wx && wx.wind >= NO_TOW, warned = news && news.stage === 'warning';
-		let say, can = false;
+		let say, can = false, drop = null;
 		if ( blown || warned ) say = `Marta here. Not in this: ${ warned ? 'there\'s a hurricane on its way' : 'it\'s blowing a gale' }, and I'd not get to you. Anchor if you can, ride it out, and call me when it's blown through.`;
 		else {
 
 			const pays = Math.min( job.fee, g.state.money ), short = pays < job.fee, out = job.metres / TOW.out;
 			say = `Marta here. I have you, ${ farOff( job.metres ) } off my dock. Give me ${ towWords( out ) } to get out to you, and it's ${ towWords( job.time - out ) } back in tow. That's $${ job.fee.toLocaleString() }.${ short ? ` You've only $${ pays.toLocaleString() }? I'll take that.` : '' }`;
 			can = true;
+			// ((M16) or a can of diesel: Help.js)
+			drop = canJob( g );
+			if ( drop ) say += canWords( g, drop );
 
 		}
 
-		this.call = { job, say, can };
+		this.call = { job, say, can, drop };
 		this.pick = 0;
 		this.draw();
 
@@ -226,16 +233,43 @@ export class Radio {
 
 	takeTow() {
 
+		const pearl = this.call && this.call.who === 'pearl';
 		this.close();
 		this.listen( false );
-		this.game.tow( true );
+		if ( pearl ) towToPearl( this.game );
+		else this.game.tow( true );
+
+	}
+
+	// (M16) Help.js: Pearl, on the north side, through her hours; Marta's can
+	_pearl() {
+
+		const j = pearlJob( this.game );
+		return !! j && j.open && ! j.here;
+
+	}
+
+	callPearl() {
+
+		if ( ! this._pearl() ) return;
+		this.call = pearlCall( this.game );
+		this.pick = 0;
+		this.draw();
+
+	}
+
+	takeCan() {
+
+		this.close();
+		this.listen( false );
+		deliverCan( this.game );
 
 	}
 
 	hangUp() {
 
+		this.pick = this.call && this.call.who === 'pearl' ? 2 : 1;
 		this.call = null;
-		this.pick = 1;
 		this.draw();
 
 	}
@@ -250,8 +284,10 @@ export class Radio {
 
 			const c = this.call;
 			list = `<p class="rd-say">“${ c.say }”</p>`;
-			if ( c.can ) list += `<div class="gm-shop-row rd-row${ this.pick === 0 ? ' is-sel' : '' }"><span>Tow me in<small>Back at her dock, on deck</small></span><button class="gm-btn" data-go>$${ Math.min( c.job.fee, g.state.money ).toLocaleString() }</button></div>`;
-			list += `<div class="gm-shop-row rd-row${ this.pick === ( c.can ? 1 : 0 ) ? ' is-sel' : '' }"><span>${ c.can ? 'Never mind' : 'Thanks, out' }</span><button class="gm-btn is-ghost" data-back>Back</button></div>`;
+			if ( c.can ) list += `<div class="gm-shop-row rd-row${ this.pick === 0 ? ' is-sel' : '' }"><span>Tow me in<small>${ c.who === 'pearl' ? 'To her jetty, on deck' : 'Back at her dock, on deck' }</small></span><button class="gm-btn" data-go>$${ Math.min( c.job.fee, g.state.money ).toLocaleString() }</button></div>`;
+			if ( c.drop ) list += `<div class="gm-shop-row rd-row${ this.pick === 1 ? ' is-sel' : '' }"><span>Bring a can<small>${ c.drop.litres } L in the tank, and you're where you were</small></span><button class="gm-btn" data-can>$${ Math.min( c.drop.fee, g.state.money ).toLocaleString() }</button></div>`;
+			const last = c.can ? ( c.drop ? 2 : 1 ) : 0;
+			list += `<div class="gm-shop-row rd-row${ this.pick === last ? ' is-sel' : '' }"><span>${ c.can ? 'Never mind' : 'Thanks, out' }</span><button class="gm-btn is-ghost" data-back>Back</button></div>`;
 			sub = 'Channel 16';
 
 		} else {
@@ -259,6 +295,9 @@ export class Radio {
 			const job = g.towJob( true );
 			list = `<div class="gm-shop-row rd-row${ this.pick === 0 ? ' is-sel' : '' }"><span>The weather, WX1<small>The forecast for the island's waters and beyond, read on a loop while you steer</small></span><button class="gm-btn" data-wx>${ this.listening ? 'Stop' : 'Listen' }</button></div>`;
 			list += `<div class="gm-shop-row rd-row${ this.pick === 1 ? ' is-sel' : '' }"><span>Marta, channel 16<small>${ job ? `A tow in, from ${ farOff( job.metres ) } off her dock` : 'You\'re at her dock' }</small></span>${ job ? '<button class="gm-btn" data-call>Call</button>' : '' }</div>`;
+			// ((M16) Pearl, on the north side: Help.js)
+			const pearl = pearlJob( g );
+			if ( pearl ) list += `<div class="gm-shop-row rd-row${ this.pick === 2 ? ' is-sel' : '' }"><span>Pearl, channel 16<small>${ pearl.here ? 'You\'re at her jetty' : ! pearl.open ? 'No answer: the camp\'s shut till morning' : `A tow in to her jetty, from ${ farOff( pearl.metres ) } off it` }</small></span>${ pearl.open && ! pearl.here ? '<button class="gm-btn" data-pearl>Call</button>' : '' }</div>`;
 			sub = 'The VHF at the helm';
 
 		}
@@ -281,6 +320,8 @@ export class Radio {
 		} );
 		on( '[data-call]', () => this.callMarta() );
 		on( '[data-go]', () => this.takeTow() );
+		on( '[data-can]', () => this.takeCan() );
+		on( '[data-pearl]', () => this.callPearl() );
 		on( '[data-back]', () => this.hangUp() );
 
 	}
