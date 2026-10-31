@@ -13,6 +13,7 @@ import { shellTab, bindShellTab, shellShopRow, SHELL_CSS } from './ShellCase.js'
 import { shellsHave } from './Shells.js';
 import { CAMP } from './FishCamp.js';
 import { NAMES, MAX_MARKS, legTo, magnetic, namedAs } from './Chart.js';
+import { ChartMap, CHART_MAP_CSS } from './ChartMap.js';
 
 // (other players' names, into HTML)
 const escape = ( t ) => String( t ).replace( /[&<>"']/g, ( c ) => ( { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } )[ c ] );
@@ -380,7 +381,7 @@ export class GameHUD {
 		this.ui = ui;
 		this.game = game;
 		const style = h( 'style' );
-		style.textContent = CSS + SHELL_CSS;
+		style.textContent = CSS + SHELL_CSS + CHART_MAP_CSS;
 		document.head.append( style );
 
 		this.purse = h( 'div', 'gm-purse tw-glass', `<span class="gm-money">$0</span><span class="gm-cooler"><span class="gm-cooler-label">Cooler</span><span class="gm-cooler-bar"><span></span></span><span class="gm-cooler-kg">0 / 66 lb</span></span><span class="gm-gauge gm-fuel"><span>Fuel</span><span class="gm-cooler-bar gm-fuel-bar"><span></span></span><b class="gm-fuel-l">11 gal</b></span><span class="gm-gauge gm-hull"><span>Hull</span><span class="gm-cooler-bar gm-hull-bar"><span></span></span><b class="gm-hull-p">100%</b></span><span class="gm-gauge gm-bilge"><span>Bilge</span><span class="gm-cooler-bar gm-bilge-bar"><span></span></span><b class="gm-bilge-l">0 gal</b></span><span class="gm-gauge gm-sonar"><span>Sonar</span><b class="gm-sonar-d">0 ft</b><span class="gm-sonar-dots"></span></span><span class="gm-gauge gm-breath"><span>Breath</span><span class="gm-cooler-bar gm-breath-bar"><span></span></span></span><span class="gm-gauge gm-bait"><span class="gm-bait-l">Bait</span><b class="gm-bait-t">Shrimp</b></span>` );
@@ -978,7 +979,8 @@ export class GameHUD {
 			const c = s.chart, a = this.game.app, aboard = a.player.mode === 'boat' || a.player.mode === 'deck';
 			const at = aboard && a.boatCtl ? a.boatCtl.position : a.camera.position;
 			const named = NAMES.filter( ( n ) => c.named( n.id ) && ! n.peak ).map( namedAs );
-			body = `<div class="gm-shop-row"><span>Mark where you are<small>${ c.marks.length } of ${ MAX_MARKS } marks · on the map and the boat's plotter</small></span><button class="gm-btn" data-mark>Mark here</button></div>`
+			// ((M16) and the whole chart to look at: ChartMap)
+			body = `<div class="gm-chartmap-slot"></div><div class="gm-shop-row"><span>Mark where you are<small>${ c.marks.length } of ${ MAX_MARKS } marks · on the map and the boat's plotter</small></span><button class="gm-btn" data-mark>Mark here</button></div>`
 				+ c.marks.map( ( m ) => {
 
 					const leg = legTo( at.x, at.z, m.x, m.z ), far = leg.m < 1852 * 0.2 ? feet( leg.m ) : `${ ( leg.m / 1852 ).toFixed( 1 ) } NM`;
@@ -1025,6 +1027,7 @@ export class GameHUD {
 		this.inv.querySelector( '[data-close]' ).onclick = () => this.toggleInventory( false );
 		for ( const b of this.inv.querySelectorAll( '[data-tab]' ) ) b.onclick = () => this.showTab( b.dataset.tab );
 		if ( tab === 'shells' ) bindShellTab( this.inv, s, () => this.renderInventory() );
+		if ( tab === 'chart' ) ( this._chartMap ||= new ChartMap( this.game ) ).mount( this.inv.querySelector( '.gm-chartmap-slot' ) );
 		for ( const b of this.inv.querySelectorAll( '[data-release]' ) ) b.onclick = () => s.release( Number( b.dataset.release ) );
 		for ( const b of this.inv.querySelectorAll( '[data-cut]' ) ) b.onclick = () => {
 
