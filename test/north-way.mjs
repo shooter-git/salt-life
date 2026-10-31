@@ -10,7 +10,7 @@ import { TerrainData } from '../src/world/TerrainData.js';
 import { decodeIsland } from '../src/world/terrain/IslandDecode.js';
 import { halfIsland } from '../src/world/terrain/IslandBake.js';
 import { bakeTerrainMaps } from '../src/world/terrain/TerrainBake.js';
-import { TRAIL, VALLEY, WAY, trailClears, wearWay } from '../src/world/terrain/NorthTrail.js';
+import { TRAIL, VALLEY, WAY, POST_SPOTS, trailClears, wearWay } from '../src/world/terrain/NorthTrail.js';
 import { polylineDistance } from '../src/world/terrain/IslandShape.js';
 import { TRAIL_POSTS, SIGNPOST, Signpost } from '../src/game/Signpost.js';
 import { drawWay } from '../src/game/ChartBake.js';
@@ -136,6 +136,7 @@ check( VALLEY.every( ( [ x, z ] ) => trailClears( x, z ) ) && ! trailClears( 53,
 
 	}
 
+	check( POST_SPOTS.every( ( [ x, z ] ) => TRAIL_POSTS.some( ( p ) => p.x === x && p.z === z ) && trailClears( x + 1.5, z ) ) && posts.filter( ( p ) => POST_SPOTS.some( ( q ) => q[ 0 ] === p.x && q[ 1 ] === p.z ) ).length === POST_SPOTS.length, 'nothing grows about those among the plants' );
 	check( beside && ground, `${ posts.length } fingerposts along it, each on the ground a step or two off the tread` );
 	check( reads, 'each one\'s arm on is side on enough to read from the way you come to it' );
 	check( far === 0, 'each says how far it is, truly' );

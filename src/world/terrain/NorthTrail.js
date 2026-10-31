@@ -49,6 +49,9 @@ const BOX = SEGS.reduce( ( o, s ) => [ Math.min( o[ 0 ], s.x0 ), Math.min( o[ 1 
 // the valley's trail from the square up to the fork, from where the plaza's path comes in
 export const VALLEY = [ [ 35.5, - 108.5 ], ...PATHS[ 1 ].pts.slice( 0, PATHS[ 1 ].pts.findIndex( ( p ) => p[ 0 ] === TRAIL.pts[ 0 ][ 0 ] && p[ 1 ] === TRAIL.pts[ 0 ][ 1 ] ) + 1 ) ];
 export const WAY = [ ...VALLEY, ...TRAIL.pts.slice( 1 ) ];
+// where the fingerposts along it stand (game/Signpost.js' TRAIL_POSTS): nothing grows on those few metres, so they're seen
+export const POST_SPOTS = [ [ 45.2, - 118.2 ], [ 51.6, - 163.5 ], [ 24.5, - 235 ], [ 252.7, - 147.5 ], [ 398.6, - 410 ], [ 354, - 542 ], [ 380.6, - 527.3 ], [ 182, - 798.8 ], [ 122.7, - 775.5 ] ];
+const POST_CLEAR = 2.2; // m about one
 const WORN = 1.05; // m either side: full down the middle, gone by twice that, its edge broken by the ground's own detail
 const VALLEY_SEGS = VALLEY.slice( 1 ).map( ( b, n ) => {
 
@@ -67,7 +70,8 @@ export function trailAt( x, z, reach = 12 ) {
 
 export function trailClears( x, z, r = 0 ) {
 
-	return trailAt( x, z )[ 0 ] < TRAIL.w + CLEAR + r || polylineDistance( VALLEY, x, z )[ 0 ] < TRAIL.w + CLEAR + r;
+	return trailAt( x, z )[ 0 ] < TRAIL.w + CLEAR + r || polylineDistance( VALLEY, x, z )[ 0 ] < TRAIL.w + CLEAR + r
+		|| POST_SPOTS.some( ( p ) => Math.hypot( x - p[ 0 ], z - p[ 1 ] ) < POST_CLEAR + r );
 
 }
 
