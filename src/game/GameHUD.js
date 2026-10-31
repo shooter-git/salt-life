@@ -44,6 +44,7 @@ const CSS = /* css */`
 @keyframes gm-bump { 30% { transform: scale(1.08); } }
 .gm-money { font-family: var(--tw-mono); color: var(--tw-sun); font-weight: 600; }
 .gm-cooler { display: flex; align-items: center; gap: var(--tw-2); color: var(--tw-ink-2); font-size: var(--tw-fs-md); }
+.gm-cooler-kg { white-space: nowrap; }
 .gm-cooler-bar { width: calc(64 * var(--tw-u)); height: calc(5 * var(--tw-u)); border-radius: 99px; background: var(--tw-fill-2); overflow: hidden; }
 .gm-cooler-bar > span { display: block; height: 100%; width: 0; background: var(--tw-aqua); border-radius: inherit; transition: width var(--tw-med) var(--tw-ease); }
 .gm-cooler.is-full .gm-cooler-bar > span { background: var(--tw-coral); }
@@ -116,6 +117,7 @@ const CSS = /* css */`
 .gm-empty { color: var(--tw-ink-3); padding: var(--tw-4) 0; text-align: center; }
 .gm-note-text { margin: var(--tw-2) 0 var(--tw-3); font-style: italic; line-height: 1.5; color: var(--tw-ink); }
 .gm-foot { display: flex; justify-content: space-between; align-items: center; margin-top: var(--tw-3); gap: var(--tw-3); }
+.gm-foot .gm-btn { flex: none; white-space: nowrap; }
 .gm-btn { font: 600 var(--tw-fs-md) var(--tw-font); color: #0b1418; background: var(--tw-aqua); border: 0; border-radius: 999px; padding: var(--tw-2) var(--tw-4); cursor: pointer; }
 .gm-btn[disabled] { opacity: 0.4; cursor: default; }
 .gm-btn.is-ghost { background: var(--tw-fill-2); color: var(--tw-ink); }
@@ -123,13 +125,13 @@ const CSS = /* css */`
 .gm-mini.is-on { color: #0b1418; background: var(--tw-aqua); border-color: transparent; }
 /* (Salt Life) the cooler's tabs (the fish in it, your log, the island's records, your islander), and
    the rows of the cooler and Joe's stand: a fish's name over its numbers, its value and a button */
-.gm-tabs { display: flex; gap: 2px; padding: 3px; margin: 0 0 var(--tw-2); border-radius: 999px; background: var(--tw-fill); border: 1px solid var(--tw-line); }
-.gm-tab { flex: 1 1 auto; display: inline-flex; align-items: center; justify-content: center; gap: 0.45em; padding: var(--tw-1) var(--tw-2);
+.gm-tabs { display: flex; flex-wrap: wrap; gap: 2px; padding: 3px; margin: 0 0 var(--tw-2); border-radius: calc(16 * var(--tw-u)); background: var(--tw-fill); border: 1px solid var(--tw-line); }
+.gm-tab { flex: 1 1 auto; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: 0.35em; padding: var(--tw-1) calc(5 * var(--tw-u));
 	font: 600 var(--tw-fs-sm) var(--tw-font); color: var(--tw-ink-2); background: none; border: 0; border-radius: 999px; white-space: nowrap; cursor: pointer; }
 .gm-tab small { font: 500 0.92em var(--tw-mono); color: var(--tw-ink-3); }
 .gm-tab.is-on { color: #0b1418; background: var(--tw-aqua); }
 .gm-tab.is-on small { color: rgba(11, 20, 24, 0.62); }
-.gm-tabs-keys { align-self: center; padding: 0 var(--tw-2) 0 var(--tw-1); color: var(--tw-ink-3); font-size: var(--tw-fs-xs); white-space: nowrap; }
+.gm-tabs-keys { position: absolute; top: var(--tw-4); right: var(--tw-4); color: var(--tw-ink-3); font-size: var(--tw-fs-xs); white-space: nowrap; }
 .gm-item { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--tw-3); align-items: center; padding: var(--tw-2) 0; border-bottom: 1px solid var(--tw-line); }
 .gm-item:last-child { border-bottom: 0; }
 .gm-item-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
@@ -300,8 +302,40 @@ html:has(.gm-panel.is-open) .hud-hint { visibility: hidden; }
 }
 @media (max-width: 640px) {
 	.gm-catch-stage { width: 96vw; }
-	.gm-catch-stats { gap: 6px; }
-	.gm-stat { min-width: 0; padding: 8px 10px; }
+	.gm-catch-stats { gap: 6px; width: 100%; }
+	.gm-stat { flex: 1 1 0; min-width: 0; padding: 8px 6px; }
+}
+/* (a fish's whole name and size, over two lines if need be, not cut off beside its buttons; its best under it, in the log) */
+@media (max-width: 640px), (max-height: 500px) {
+	.gm-item { gap: var(--tw-2); }
+	.gm-item-name, .gm-item-meta { white-space: normal; overflow: visible; }
+	.gm-item-name small { white-space: nowrap; }
+}
+@media (max-width: 640px) {
+	/* (seven tabs in two rows at most: their counts are on the lists themselves, and in the head) */
+	.gm-tab small { display: none; }
+	.gm-stat i { white-space: normal; }
+	.gm-item:has(.gm-item-num) { grid-template-columns: minmax(0, 1fr); row-gap: 1px; }
+	.gm-item:has(.gm-item-num) .gm-item-num { text-align: left; }
+}
+/* (a short phone: a panel from under the purse to the foot of the screen, not 70% of it in the middle) */
+@media (max-width: 640px) and (max-height: 700px) {
+	.gm-panel { top: calc(var(--gm-band, 56px) + var(--tw-2)); transform: translate(-50%, 2%); max-height: calc(100vh - var(--gm-band, 56px) - 2 * var(--tw-2)); max-height: calc(100dvh - var(--gm-band, 56px) - 2 * var(--tw-2)); }
+	.gm-panel.is-open { transform: translate(-50%, 0); }
+}
+/* (a narrow phone: a fish with two buttons has its name over them, the whole width, not squeezed beside them) */
+@media (max-width: 420px) {
+	.gm-item:has(.gm-btns > :nth-child(2)) { row-gap: var(--tw-1); }
+	.gm-item:has(.gm-btns > :nth-child(2)) .gm-item-main { grid-column: 1 / -1; }
+	.gm-item:has(.gm-btns > :nth-child(2)) .gm-btns { grid-column: 2 / -1; }
+}
+/* (nothing over a card or a panel: the first hint's words under its title; on a short screen the purse's too) */
+body:has(.gm-catch.is-on, .gm-panel.is-open) .hud-hint { visibility: hidden; }
+@media (max-height: 500px) {
+	.gm-tab small { display: none; }
+}
+@media (max-height: 500px), (max-width: 480px) and (max-height: 700px) {
+	.tw-root:has(.gm-catch.is-on) .gm-purse { visibility: hidden; }
 }
 /* (Salt Life) the portrait is drawn in the game's canvas, under the card (FishPortrait): the dimming
    and blur are drawn there too, so nothing above it blurs */

@@ -57,8 +57,8 @@ const dock = await page.evaluate( () => { const p = window.__app.boatCtl.positio
 // her stern to the island
 const spotAt = ( d ) => Number.isFinite( + d ) ? [ dock.x, dock.z + Number( d ) ] : page.evaluate( async ( id ) => {
 
-	const { CHECK_SPOTS, checkSpotAt } = await import( '/src/game/CheckSpots.js' ), { islandTime } = await import( '/src/game/Weather.js' );
-	const a = window.__app, s = a.settings, at = checkSpotAt( CHECK_SPOTS.find( ( q ) => q.id === id ), islandTime( s.day, s.timeOfDay ), ( x, z ) => - a.terrainData.heightAt( x, z ) );
+	const { FAR_SPOTS, checkSpotAt } = await import( '/src/game/CheckSpots.js' ), { islandTime } = await import( '/src/game/Weather.js' );
+	const a = window.__app, s = a.settings, at = checkSpotAt( FAR_SPOTS.find( ( q ) => q.id === id ), islandTime( s.day, s.timeOfDay ), ( x, z ) => - a.terrainData.heightAt( x, z ) );
 	return [ at.x, at.z ];
 
 }, d );

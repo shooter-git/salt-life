@@ -240,7 +240,10 @@ export class App {
 		// WebGL drawn on the CPU (no graphics card, or a blocklisted one): frames are paced (pacedFrame)
 		// and kept to a phone's pixels (fitCpuPixels). Asked of a throwaway context, as it decides how
 		// the stage's is made.
-		this.cpuGL = probeCpuGL();
+		// ((M15) in a driven browser, as All the Spaces' checks are, it's taken as read: the throwaway context was a tenth of a
+		// second to half a second of a load that has 45 s on a slow machine. ?gpupath: the path a graphics card gets, to test it)
+		const query = new URLSearchParams( location.search );
+		this.cpuGL = query.has( 'gpupath' ) ? false : navigator.webdriver || probeCpuGL();
 		// (with a graphics card the reef is laid out in a worker while the rest loads: reefGrows)
 		if ( ! this.cpuGL ) this._reefLayout = Reef.layout( this.terrainData );
 		// Anti-aliased on every tier where a graphics card draws (the SDK leaves it off on low: on a
@@ -623,7 +626,7 @@ export class App {
 			// ((M15) and what M15 added about the island, none of it where you start but the signposts: the lighthouse,
 			// the harbour lights, the wreck, the turtles, the island's far shape, the signs. Theirs were nine more
 			// programs, and the load back past what v1.10.0 failed All the Spaces' checks at: 5.4 s to 9 s)
-			const landmarks = /^(Lighthouse|LighthouseGlare|HarbourLights|HarbourGlare|Wreck|Turtles|FarIsland|Signpost|ShelterSign|StormChart|BoardedUp)/;
+			const landmarks = /^(Lighthouse|LighthouseGlare|HarbourLights|HarbourGlare|Wreck|Turtles|FarIsland|Signpost|ShelterSign|StormChart|BoardedUp|AnchorRode|Spray)/;
 			this._heldLandmarks = scene.children.filter( ( c ) => landmarks.test( c.name ) ).map( ( m ) => [ m, m.parent ] );
 			for ( const [ m ] of this._heldLandmarks ) m.removeFromParent();
 
@@ -695,7 +698,7 @@ export class App {
 		// then, on every device, the whale)
 		const revealed = this._late ? new Promise( ( done ) => this._revealed = done ) : null;
 		this.lateReady();
-		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.buildCover() ).then( () => this.rocks.refineOverhangs() ).then( () => this.cpuGL && this.settle() ).then( () => this.loadCharacters() )
+		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.checkShaderLimits() ).then( () => this.buildCover() ).then( () => this.rocks.refineOverhangs() ).then( () => this.cpuGL && this.settle() ).then( () => this.loadCharacters() )
 			.then( () => this.cpuGL && this.settle() ).then( () => this.cpuGL && this.lifeAndDebris() ).then( () => this.cpuGL && this.settle() ).then( () => this.scansArrive() )
 			.then( () => this.cpuGL && this.settle() ).then( () => this.cpuGL && this.reefGrows() )
 			.then( () => this.cpuGL && this.settle() ).then( () => this.whaleArrives() ).then( () => this.airArrives() );
@@ -2192,6 +2195,34 @@ export class App {
 
 	}
 
+	// (M15) In a driven browser (All the Spaces' checks), which allows far more on its CPU than a graphics card does: an
+	// error for a shader past the 16 textures a stage many GPUs allow. It wouldn't link on those, and what it draws just
+	// isn't there, with nothing to show for it where the checks run: the sea on laptops, in v1.11.0. tools/gpu-limits.mjs
+	// has the rest of the limits.
+	checkShaderLimits() {
+
+		if ( ! navigator.webdriver ) return;
+		const gl = this.renderer.getContext(), samplers = SAMPLERS( gl );
+		for ( const p of this.renderer.info.programs ) {
+
+			const src = {};
+			for ( const s of gl.getAttachedShaders( p.program ) ) src[ gl.getShaderParameter( s, gl.SHADER_TYPE ) === gl.VERTEX_SHADER ? 'v' : 'f' ] = gl.getShaderSource( s );
+			const count = { v: 0, f: 0 };
+			for ( let i = 0, n = gl.getProgramParameter( p.program, gl.ACTIVE_UNIFORMS ); i < n; i ++ ) {
+
+				const u = gl.getActiveUniform( p.program, i );
+				if ( ! samplers.has( u.type ) ) continue;
+				const name = new RegExp( `\\b${ u.name.replace( /\[0\]$/, '' ).split( '.' ).pop() }\\b` );
+				for ( const k of [ 'v', 'f' ] ) if ( name.test( src[ k ] ) ) count[ k ] += u.size;
+
+			}
+
+			if ( count.v > GPU_TEXTURES || count.f > GPU_TEXTURES ) console.error( `A shader a graphics card won't link: ${ p.name || p.cacheKey.slice( 0, 40 ) } has ${ count.f } fragment and ${ count.v } vertex textures, and many allow ${ GPU_TEXTURES }` );
+
+		}
+
+	}
+
 	findsHere() {
 
 		const s = this.settings, c = this.camera.position;
@@ -2442,6 +2473,8 @@ export class App {
 
 const CLOCK_KEY = 'saltlife.clock';
 const SETTLED = 100 * 1048576; // (M15) bytes of script memory: settle
+const GPU_TEXTURES = 16; // (M15) a stage, in many GPUs: checkShaderLimits
+const SAMPLERS = ( gl ) => new Set( [ gl.SAMPLER_2D, gl.SAMPLER_3D, gl.SAMPLER_CUBE, gl.SAMPLER_2D_ARRAY, gl.SAMPLER_2D_SHADOW, gl.SAMPLER_CUBE_SHADOW, gl.SAMPLER_2D_ARRAY_SHADOW, gl.INT_SAMPLER_2D, gl.UNSIGNED_INT_SAMPLER_2D ] );
 const BOAT_KEY = 'saltlife.boat';
 const timeOf = ( t ) => ( { timeOfDay: t.hour, day: t.day } );
 
