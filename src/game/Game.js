@@ -44,6 +44,8 @@ import { northReefMask } from '../world/TerrainData.js';
 import { PLACES, placeOf, placeName } from './Places.js';
 import { FINDS, lying, messageOf } from './Beachcomb.js';
 import { ordersOf, tagFor } from './Orders.js';
+import { Rigs } from './rigs/Rigs.js';
+import { atHook } from './rigs/Presentation.js';
 
 // how long the catch card stays up unless dismissed (ms)
 const CATCH_CARD_MS = 9000;
@@ -125,6 +127,7 @@ export class Game {
 		// speargun, once you have them); the lobster being netted, the one in the net ({ i, cm, kg,
 		// berried, t, card }), and the one in front of you
 		this.tools = new LobsterTools( { scene: app.scene, camera: app.camera, ground: app.terrain, audio: app.audio } );
+		this.rigs = new Rigs( this ); // ((M16) the rig on the line, and what's out past the rod in your hands)
 		this._scoop = null;
 		this.netted = null;
 		this.lobsterAim = null;
@@ -261,7 +264,8 @@ export class Game {
 	applyGear() {
 
 		const g = this.state.stats;
-		this.rod.setGear( { castM: g.castM, reelSpeed: g.reelSpeed } );
+		this.rod.setGear( { castM: g.castM, reelSpeed: g.reelSpeed, spoolM: g.spoolM, standUp: g.standUp } );
+		if ( this.app.player && this.app.player.setDive ) this.app.player.setDive( g );
 		if ( this.gun ) this.gun.setGear( g );
 		if ( this.net ) this.net.setGear( g );
 		if ( this.tools ) this.tools.setGear( g );
@@ -330,6 +334,14 @@ export class Game {
 		const r = this.state.buy( key );
 		if ( r ) this.toast( `${ UPGRADES[ key ].name }: ${ r.label }` );
 		return r;
+
+	}
+
+	// (M16) frozen bait or chum, by the trip's lot
+	buyBait( kind ) {
+
+		const b = BAITS[ kind ];
+		if ( this.state.buyBait( kind ) ) this.toast( `${ b.name } · ${ b.per > 1 ? `${ b.per } more` : 'a block' }`, 1800 );
 
 	}
 
@@ -440,7 +452,11 @@ export class Game {
 		this.tellAway();
 		const can = this.canFish, canSpear = this.canSpear, gun = this.gun, net = this.net;
 		const room = this.makingRoom;
-		if ( inp.hit( 'KeyR' ) && can && ! this.fight && ! net.busy && ! room ) {
+		if ( inp.hit( 'KeyR' ) && this.rigs.rodOn && this.rigs.takeRod() ) {
+
+			// ((M16) a rod's gone off in its holder, and you've taken it)
+
+		} else if ( inp.hit( 'KeyR' ) && can && ! this.fight && ! net.busy && ! room ) {
 
 			// (Salt Life) the cast net goes away for it
 			if ( net.equipped ) this.dropNet();
@@ -530,10 +546,16 @@ export class Game {
 		const quiet = this.quietKeys();
 		if ( rod.equipped && quiet && ( inp.hit( 'KeyB' ) || inp.hit( 'ArrowRight' ) || inp.hit( 'ArrowLeft' ) ) ) this.cycleBait( inp.hit( 'ArrowLeft' ) ? - 1 : 1 );
 		else if ( net.equipped && quiet && inp.hit( 'KeyB' ) ) this.toast( this.bucketText(), 2400 );
+		// ((M16) the rig on the line: C, or LB)
+		if ( rod.equipped && quiet && rod.state === 'idle' && inp.hit( 'KeyC' ) ) this.rigs.cycle();
 
 		if ( rod.equipped && ! panelOpen ) {
 
-			if ( rod.state === 'idle' && lDown ) rod.startWindup();
+			if ( rod.state === 'idle' && lDown ) {
+
+				if ( ! this.rigs.press() ) rod.startWindup();
+
+			}
 			else if ( rod.state === 'windup' && lUp ) {
 
 				if ( rod.release() !== false ) this.baitHook();
@@ -556,6 +578,7 @@ export class Game {
 		if ( rod.state === 'floating' ) this.updateBite( dt );
 		else if ( ! this.fight ) rod.dip = Math.max( 0, rod.dip - dt * 4 );
 		if ( this.fight ) this.updateFight( dt, lmb && ! panelOpen );
+		this.rigs.update( dt, { rDown: rDown && ! panelOpen, inp } );
 
 		rod.update( dt, { visible: can, fight: this.fight } );
 		// (Salt Life) the cast net; the speargun; the lobster tools
@@ -607,7 +630,7 @@ export class Game {
 
 			}
 
-		} else if ( this.landing || this.display.shown ) this.endLanding();
+		} else if ( this.landing || ( this.display.shown && ! this.rigs.leaping ) ) this.endLanding();
 
 		p.busy = rod.lineInWater || rod.state === 'windup' || gun.shaftOut || net.busy || net.state === 'windup' || this.tools.busy;
 
@@ -635,6 +658,7 @@ export class Game {
 		this.updateBail( inp, p );
 		// prompts when the player has nothing to say
 		if ( ! p.prompt && ( can || canSpear ) ) p.prompt = this.prompt();
+		if ( this.rigs.alert ) p.prompt = this.rigs.alert;
 
 		const aboard = p.mode === 'boat' || p.mode === 'deck';
 		// the catch card's live fish portrait (or one queued thumbnail)
@@ -682,10 +706,10 @@ export class Game {
 
 		}
 
-		const b = this.bite;
+		const b = this.bite, said = this.rigs.prompt();
+		if ( said ) return said;
 		switch ( rod.state ) {
 
-			case 'idle': return { key: 'LMB', text: `Hold to wind up, release to cast   ·   ${ this.keyName( 'B' ) }  bait   ·   R  put the rod away` };
 			case 'windup': return { key: 'LMB', text: 'Release to cast (hold longer to cast farther)' };
 			case 'flying': return null;
 			case 'floating':
@@ -983,7 +1007,7 @@ export class Game {
 
 			}
 
-		} else if ( left ) this._anchorDue = this.state.stats.anchorM > 0 && ! b.anchor;
+		} else if ( left ) this._anchorDue = this.state.stats.anchorM > 0 && ! b.anchor && ! this.rigs.linesOut; // ((M16) not with a spread out)
 		if ( this._anchorDue && ! b.driven && b.speed < ANCHOR_SPEED ) {
 
 			this._anchorDue = false;
@@ -1279,10 +1303,18 @@ export class Game {
 	// ---- bites
 	habitat() {
 
-		const p = this.rod.bobber;
-		const h = this.habitatAtPoint( p.x, p.z, this.rod.depth );
-		// (Salt Life) in the deck floodlights' pool after dark (Bites: what gathers under lights)
-		h.flood = this.floodAt( p.x, p.z );
+		const p = this.rigs.hookAt || this.rod.bobber;
+		// ((M16) as the hook finds it, however deep it is: rigs/Presentation.js)
+		return atHook( this.habitatOf( p.x, p.z, this.rod.depth ), this.rigs.handRig() );
+
+	}
+
+	habitatOf( x, z, depth ) {
+
+		const p = { x, z };
+		const h = this.habitatAtPoint( p.x, p.z, depth );
+		// (Salt Life) in the deck floodlights' pool after dark (Bites: what gathers under lights); ((M16) or up a chum slick)
+		h.flood = Math.max( this.floodAt( p.x, p.z ), this.rigs.slickAt( p.x, p.z ) );
 		// (M9) and the weather (Bites.weatherMood: what the fish feel of it); ((M15) and which side of the
 		// island it's on, for which sea roughs its water)
 		h.weather = this.weatherNow;
@@ -1474,7 +1506,8 @@ export class Game {
 
 		}
 
-		this.bite = { phase: 'wait', t: biteDelay( this.habitat(), this.hour, Math.random, this.hookBait ) };
+		// ((M16) on a lead, not till it's down: Rigs.update)
+		this.bite = this.rod.rig === 'bottom' ? null : { phase: 'wait', t: biteDelay( this.habitat(), this.hour, Math.random, this.hookBait ) };
 
 	}
 
@@ -1560,8 +1593,10 @@ export class Game {
 		const g = this.state.stats;
 		// (M10: in a blow, the wind gusting on the line)
 		// (the line out: no more than the rod casts and a fish could have taken, whatever's gone wrong)
-		const out = Math.min( Math.max( 3, this.rod.lineOut ), this.rod.castM * 1.5 + 10 );
-		this.fight = new CatchMinigame( { species: b.species, kg: b.kg, lineKg: g.lineKg, reelSpeed: g.reelSpeed, distance: Number.isFinite( out ) ? out : 3, wind: blowShare( G.windSpeed.value ) } );
+		// ((M16) past a cast, what the rig has out: and the terms of it, by the tackle on the rod)
+		const out = this.rigs.fightOut( Math.min( Math.max( 3, this.rod.lineOut ), this.rod.castM * 1.5 + 10 ) );
+		this.fight = new CatchMinigame( { species: b.species, kg: b.kg, ...this.rigs.fightTerms( b ), distance: Number.isFinite( out ) ? out : 3, wind: blowShare( G.windSpeed.value ) } );
+		this.fight.leader = this.rigs.fightTerms( b ).leader;
 		this.fight.place = b.place;
 		this.fight.at = b.at;
 		this.bite = null;
@@ -1573,7 +1608,13 @@ export class Game {
 	updateFight( dt, reeling ) {
 
 		const f = this.fight;
-		const st = f.update( dt, reeling );
+		// ((M16) and she takes line too, running from it: the helm's backing down on it if she's closing)
+		const bv = this.app.boatCtl.velocity, to = _a.subVectors( this.rod.bobber, this.rod.tip ).setY( 0 ).normalize();
+		const riding = this.app.player.mode === 'deck' || this.app.player.mode === 'boat';
+		let st = f.update( dt, reeling, riding ? - ( bv.x * to.x + bv.z * to.z ) : 0 );
+		this.rigs.leap( f, dt );
+		// ((M16) at the boat: lifted aboard, or shaken off)
+		if ( st === 'caught' && ! this.rigs.landedAtBoat( f ) ) st = 'shook';
 		// the fish thrashes at the surface as each run starts
 		const au = this.app.audio;
 		if ( f.surge > 0.6 && ! f._splashed && au && au.fishSplash ) au.fishSplash( this.rod.bobber, 0.3 + 0.5 * Math.min( 1, f.kg / 8 ) );
@@ -1638,6 +1679,18 @@ export class Game {
 			if ( au && au.lineSnap ) au.lineSnap();
 			// ((M14) the float and the broken line left drifting, a new hook and float to tie on)
 			this.rod.snap();
+
+		} else if ( st === 'cut' || st === 'spooled' ) {
+
+			// ((M16) what the tackle couldn't hold)
+			this.toast( this.rigs.why( st, f ), 3600 );
+			if ( au && au.lineSnap ) au.lineSnap();
+			this.rod.snap();
+
+		} else if ( st === 'shook' ) {
+
+			this.toast( `${ upper( name ) } shook off at the boat · too heavy to lift by hand: Marta sells a gaff`, 3600 );
+			this.rod.endFight();
 
 		} else {
 
@@ -1891,10 +1944,10 @@ export class Game {
 	cycleBait( step = 1 ) {
 
 		const s = this.state;
-		const kinds = [ null, ...BAIT_IDS.filter( ( k ) => s.bait[ k ] > 0 ) ];
-		if ( kinds.length === 1 ) {
+		const kinds = this.rigs.baitChoices(); // ((M16) those that go on this rig)
+		if ( kinds.length <= 1 ) {
 
-			this.say( `Only shrimp · throw the cast net (${ this.keyName( 'N' ) }) for live bait` );
+			this.say( kinds[ 0 ] === null ? `Only shrimp · throw the cast net (${ this.keyName( 'N' ) }) for live bait` : this.rigs.pickText( kinds[ 0 ] || null ) );
 			return;
 
 		}
@@ -1902,7 +1955,7 @@ export class Game {
 		const i = Math.max( 0, kinds.indexOf( s.baitPick ) );
 		const next = kinds[ ( i + step + kinds.length ) % kinds.length ];
 		s.pickBait( next );
-		const what = next ? `${ BAITS[ next ].name } · ${ s.bait[ next ] } in the bucket` : 'Frozen shrimp';
+		const what = next ? ( BAITS[ next ].lure ? BAITS[ next ].name : `${ BAITS[ next ].name } · ${ s.bait[ next ] } ${ BAITS[ next ].live ? 'in the bucket' : 'left' }` ) : 'Frozen shrimp';
 		this.toast( `${ this.rod.lineInWater ? 'Next cast' : 'Bait' }: ${ what }`, 1800 );
 
 	}
@@ -1929,8 +1982,7 @@ export class Game {
 	// the HUD's bait chip with the rod out
 	baitChip() {
 
-		const s = this.state, k = s.baitPick;
-		return BAITS[ k ] ? { label: 'Bait', text: `${ BAITS[ k ].name } ×${ ( s.bait[ k ] | 0 ) + ( this.hookBait === k ? 1 : 0 ) }` } : { label: 'Bait', text: 'Shrimp' };
+		return this.rigs.chip();
 
 	}
 
@@ -2515,6 +2567,7 @@ export class Game {
 		if ( this.fight ) this.calmThief( this.fight );
 		this.fight = null;
 		this.bite = null;
+		this.rigs.lineCancelled();
 		if ( this.rod.state !== 'stowed' ) this.rod.setState( this.rod.equipped ? 'idle' : 'stowed' );
 
 	}

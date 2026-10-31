@@ -4,6 +4,9 @@ import { FISH } from './FishTable.js';
 // reel's drag while you're not reeling (it gives line, as it does to the fish)
 const GUST = 0.6;
 const GUST_EASED = 0.2;
+// (M16) a run past the drag, m/s for each time over it (a blue marlin's first run is ten or more); and the s of a heavy
+// load your arms have in them, standing and in a chair
+const RUN = 2.2, ARMS = 280, ARMS_CHAIR = 1500;
 
 // Line-tension fight. Hold to reel: the line shortens and the tension climbs; let go and it eases
 // off, but a running fish then takes line. Keep the tension in the green band: the fish tires there
@@ -18,13 +21,23 @@ const GUST_EASED = 0.2;
 // the drag gives it line). None of it on a fair day, where nothing's drawn for it either: a fair fight
 // goes exactly as it did.
 //
-//   const g = new CatchMinigame( { species, kg, lineKg, reelSpeed, distance, rng, landAt, tired, wind } )
-//   g.update( dt, reeling ) -> 'fighting' | 'caught' | 'snapped' | 'escaped'
+// (M16) On a reel with a drag (dragKg: what the reel can hold; holdKg: what you can lean back against, standing or in a
+// chair) the line isn't the fish's limit: a fish pulling past the drag strips line from the reel instead of breaking
+// it, and the spool (spoolM of line) is what it can beat you with. So a fish far over the line can be fought as they
+// are, for a long time, and it's lost when it spools you, or at the boat. A fish within the drag fights exactly as it
+// did. You tire too (arms: 1 fresh .. 0 done, and then you hold less and reel slower), hardly at all in a chair
+// (chair). cut, wear: the chance at each run that teeth, or a bill, go through the leader (Presentation.leaderRisk).
+// electric: the reel winds itself, and your arms aren't in it; twoSpeed: low gear gets line back from a heavy fish.
+// hookM: how deep the fish was hooked (the rod draws the line down to it, shallower as it comes up).
+//
+//   const g = new CatchMinigame( { species, kg, lineKg, reelSpeed, distance, rng, landAt, tired, wind, dragKg, holdKg, spoolM, ... } )
+//   g.update( dt, reeling, away ) -> 'fighting' | 'caught' | 'snapped' | 'escaped' | 'cut' | 'spooled'
+//   (away: m/s the boat's going from the fish, as line it takes out)
 //   g.tension (0..1+, 1 = breaking point), g.distance (m), g.stamina (0..1), g.surge (0..1),
 //   g.band = [ lo, hi ] (the green band)
 export class CatchMinigame {
 
-	constructor( { species, kg, lineKg = 7, reelSpeed = 1.1, distance = 15, rng = Math.random, landAt = 1.2, tired = 1, wind = 0 } ) {
+	constructor( { species, kg, lineKg = 7, reelSpeed = 1.1, distance = 15, rng = Math.random, landAt = 1.2, tired = 1, wind = 0, dragKg = null, holdKg = Infinity, spoolM = null, chair = false, electric = false, twoSpeed = false, cut = 0, wear = 0, hookM = 0, leaps = false } ) {
 
 		const f = FISH[ species ];
 		this.species = species;
@@ -32,16 +45,32 @@ export class CatchMinigame {
 		this.rng = rng;
 		this.reelSpeed = reelSpeed;
 		// pull relative to the line: a fish near the line rating is hard, one far above it is a lottery
-		this.power = Math.min( 2.2, ( 0.25 + 0.75 * f.fight ) * Math.pow( kg / Math.max( lineKg * 0.5, 0.2 ), 0.55 ) );
+		const power = ( 0.25 + 0.75 * f.fight ) * Math.pow( kg / Math.max( lineKg * 0.5, 0.2 ), 0.55 );
+		this.drag = dragKg !== null;
+		this.power = this.drag ? power : Math.min( 2.2, power ); // ((M16) with no drag past this it's a lottery anyway)
+		this.lineKg = lineKg;
+		this.dragKg = dragKg;
+		this.holdKg = holdKg;
+		this.chair = chair;
+		this.electric = electric;
+		this.twoSpeed = twoSpeed;
+		this.cut = cut;
+		this.wear = wear;
+		this.hookStart = this.hookM = hookM;
+		this.leaps = leaps;
+		this.leap = 0; // (M16) s left of a leap, for what's drawn of it
+		this.arms = 1;
 		this.staminaMax = f.stamina * Math.pow( Math.max( kg / f.kg[ 1 ], 0.15 ), 0.35 );
 		this.stamina = 1;
 		this.distance = distance;
-		this.maxDistance = Math.max( 60, distance + 40 ); // spooled: the fish takes all the line
+		this.maxDistance = spoolM !== null ? spoolM : Math.max( 60, distance + 40 ); // spooled: the fish takes all the line
+		this.lineSpooled = spoolM !== null;
 		this.tension = 0.3;
 		this.surge = 0;
 		this.slack = 0;
 		this.time = 0;
 		this.band = [ 0.3, 0.85 ];
+		if ( this.drag ) this.band[ 0 ] = Math.min( 0.3, this._give() * 0.9 ); // (it tires on what your drag can hold)
 		this.overload = 0; // seconds above the breaking point: the line snaps only if it's held there
 		this._nextSurge = 1.2 + rng() * 2;
 		this._surgeT = 0;
@@ -55,7 +84,15 @@ export class CatchMinigame {
 
 	}
 
-	update( dt, reeling ) {
+	// what the drag slips at, as the share of the line's breaking strength: the reel's, your back's, as you're tired
+	_give() {
+
+		const arms = this.arms < 0.25 ? 0.5 + 2 * this.arms : 1;
+		return Math.min( this.dragKg, this.holdKg * arms ) / this.lineKg;
+
+	}
+
+	update( dt, reeling, away = 0 ) {
 
 		if ( this.state !== 'fighting' ) return this.state;
 		this.time += dt;
@@ -67,9 +104,15 @@ export class CatchMinigame {
 
 			this._surgeT = 0.8 + this.rng() * 1.2 * ( 1 - tired * 0.6 );
 			this._nextSurge = ( 2 + this.rng() * 3 ) * ( 1 + tired );
+			// (M16) and at each the leader may go, and it may come out of the water
+			if ( this.cut > 0 && this.rng() < this.cut ) this.state = 'cut';
+			else if ( this.wear > 0 && this.rng() < this.wear * Math.min( 1, this.time / 60 ) ) this.state = 'cut';
+			else if ( this.leaps && this.rng() < 0.6 * ( 1 - tired * 0.7 ) && this.distance > 6 && this.hookM < 5 ) this.leap = 1.1;
+			if ( this.state === 'cut' ) return this.state;
 
 		}
 
+		this.leap = Math.max( 0, this.leap - dt );
 		this._surgeT -= dt;
 		const surgeTarget = this._surgeT > 0 ? 1 : 0;
 		this.surge += ( surgeTarget - this.surge ) * ( 1 - Math.exp( - dt * 6 ) );
@@ -92,13 +135,37 @@ export class CatchMinigame {
 
 		// the fish's pull (0..~1.6) and the tension it and the reel make (and a gust's haul on the line)
 		const pull = this.power * ( 0.35 + 0.65 * this.surge ) * ( 1 - 0.65 * tired );
-		const target = reeling ? 0.25 + pull * 0.95 + 0.25 + GUST * this.wind * this.gust : ( pull + GUST_EASED * this.wind * this.gust ) * 0.72;
+		let target = reeling ? 0.25 + pull * 0.95 + 0.25 + GUST * this.wind * this.gust : ( pull + GUST_EASED * this.wind * this.gust ) * 0.72;
+		// (M16) the drag slips before the line goes: it gets nowhere near it unless you lean into a run on the reel. What
+		// the fish pulls past the drag is its way of taking line (over: how far past it)
+		let over = 0;
+		if ( this.drag ) {
+
+			const give = this._give();
+			over = Math.max( 0, pull * 0.72 / give - 1 );
+			// (an electric reel's motor stalls at its drag: there's no leaning into a run with it)
+			target = Math.min( target, reeling ? give + ( this.electric ? 0.3 : 0.75 ) : give );
+			// (you tire against what you're holding; a chair and its harness take it on your legs and back, an electric reel the winding)
+			const held = Math.min( this.tension * this.lineKg, this.holdKg ) / Math.max( this.holdKg, 1 );
+			this.arms = Math.max( 0, this.arms - dt * held * held / ( this.chair ? ARMS_CHAIR : ARMS ) * ( reeling && ! this.electric ? 1 : 0.5 ) );
+
+		}
+
 		const rate = reeling ? 2.2 : 3.0;
 		this.tension += ( target - this.tension ) * ( 1 - Math.exp( - dt * rate ) );
 
 		// line in / out
-		if ( reeling ) this.distance -= this.reelSpeed * dt * ( 1.15 - 0.6 * this.surge * ( 1 - tired ) );
-		else this.distance += pull * 1.4 * dt;
+		if ( reeling ) {
+
+			// ((M16) low gear still gets line back from a heavy fish; past that the spool just slips)
+			const gain = Math.max( this.twoSpeed ? 0.35 : 0, 1 - over );
+			const worn = this.drag && ! this.electric && this.arms < 0.25 ? 0.5 + 2 * this.arms : 1;
+			this.distance -= this.reelSpeed * dt * ( 1.15 - 0.6 * this.surge * ( 1 - tired ) ) * gain * worn;
+
+		} else this.distance += pull * 1.4 * dt;
+		if ( over > 0 ) this.distance += Math.min( over, 4 ) * RUN * dt;
+		this.distance += Math.max( - 3, away ) * dt;
+		if ( this.hookM > 0 ) this.hookM = Math.min( this.hookM, Math.max( 0, this.distance ) ) * ( this.hookStart > 5 ? 1 : Math.exp( - dt * 0.3 ) );
 		this.distance = Math.max( this.stamina > this.tired ? this.landAt * 0.8 : 0, this.distance );
 
 		// tiring: fastest in the band, slowly otherwise
@@ -111,7 +178,8 @@ export class CatchMinigame {
 		else {
 
 			this.slack = this.tension < 0.12 ? this.slack + dt : Math.max( 0, this.slack - dt * 2 );
-			if ( this.slack > 4 || this.distance > this.maxDistance ) this.state = 'escaped';
+			if ( this.distance > this.maxDistance ) this.state = this.lineSpooled ? 'spooled' : 'escaped';
+			else if ( this.slack > 4 ) this.state = 'escaped';
 			else if ( this.distance < this.landAt && this.stamina <= this.tired ) this.state = 'caught';
 
 		}

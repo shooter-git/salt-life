@@ -324,8 +324,22 @@ export class GameState {
 	// one off the bucket for the hook -> whether there was one
 	takeBait( kind ) {
 
+		if ( BAITS[ kind ] && BAITS[ kind ].lure ) return true; // ((M16) yours for good)
 		if ( ! ( this.bait[ kind ] > 0 ) ) return false;
 		if ( -- this.bait[ kind ] === 0 ) delete this.bait[ kind ];
+		this.save();
+		this.emit();
+		return true;
+
+	}
+
+	// (M16) frozen bait or chum from Marta, by the trip's lot -> whether you could
+	buyBait( kind ) {
+
+		const b = BAITS[ kind ];
+		if ( ! b || ! b.price || b.price > this.money ) return false;
+		this.money -= b.price;
+		this.bait[ kind ] = ( this.bait[ kind ] | 0 ) + b.per;
 		this.save();
 		this.emit();
 		return true;
@@ -335,7 +349,7 @@ export class GameState {
 	// back in the bucket (off the hook as the rod goes away): it goes in even when the bucket's full
 	returnBait( kind ) {
 
-		if ( ! BAITS[ kind ] ) return;
+		if ( ! BAITS[ kind ] || BAITS[ kind ].lure ) return;
 		this.bait[ kind ] = ( this.bait[ kind ] | 0 ) + 1;
 		this.save();
 		this.emit();

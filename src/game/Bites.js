@@ -1,6 +1,7 @@
 import { FISH, FISH_IDS } from './FishTable.js';
 import { BAITS, baitWeight } from './Bait.js';
 import { NORTH } from './Weather.js';
+import { rigWeight, rigDelay } from './rigs/Presentation.js';
 
 // Where the bobber is and what lives there.
 //   depth     water depth under the bobber (m)
@@ -145,7 +146,7 @@ export const WASH = { day: 0.9, blown: 0.85, open: 0.5 };
 // north sea roughs its water as it does the north shore's (`blown`)
 export const BIG = { skew: 0.5, from: 4, more: 1.5, blown: 0.4 };
 // (not water types: what the game adds to a spot's habitat)
-const NOT_WATER = { flood: true, weather: true, side: true, big: true, far: true };
+const NOT_WATER = { flood: true, weather: true, side: true, big: true, far: true, rig: true };
 
 // the water types as the weather leaves them (m: weatherMood's)
 function roughed( habitat, m ) {
@@ -197,7 +198,7 @@ export function pickSpecies( habitat, hour, rng = Math.random, bait = null ) {
 		if ( grey > 0 ) act += Math.max( 0, activity( f.time, 18.5 ) - act ) * grey;
 		// ((M15) under the birds, what's busting the bait is feeding now, whatever the hour)
 		if ( habitat.birds && f.habitat.birds ) act += ( 1 - act ) * habitat.birds;
-		let x = hw * f.rarity * act * baitWeight( bait, id );
+		let x = hw * f.rarity * act * baitWeight( bait, id ) * rigWeight( habitat.rig, id, hour );
 		// ((M15) on the windward reef the big ones bite more)
 		if ( habitat.big && f.kg[ 1 ] >= BIG.from ) x *= 1 + BIG.more * habitat.big;
 		if ( m && f.weather ) x *= weatherWeight( f.weather, m );
@@ -246,7 +247,7 @@ export function biteDelay( habitat, hour, rng = Math.random, bait = null ) {
 	const all = rich;
 	rich = Math.max( rich, 0.35 ) + ( habitat.flood || 0 );
 	const light = hour > 6 && hour < 19 ? 1 : 0.8;
-	let mean = 8 / ( Math.min( rich, 1.6 ) * light ) * ( BAITS[ bait ] ? BAITS[ bait ].speed : 1 );
+	let mean = 8 / ( Math.min( rich, 1.6 ) * light ) * ( BAITS[ bait ] ? BAITS[ bait ].speed : 1 ) * rigDelay( habitat.rig );
 	// ((M15) past the far grounds the open blue's emptier still (FAR): for its share of the spot's water)
 	if ( habitat.far > 0 ) mean *= 1 + FAR_SLOWER * habitat.far * ( habitat.blue || 0 ) / all;
 	// (M9) the weather: sooner ahead of a blow, slower in a downpour, and slower for the share of the
