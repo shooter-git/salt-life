@@ -252,9 +252,17 @@ export class Rigs {
 		L.p.y = this.app.waves.heightAt( L.p.x, L.p.z );
 		this.lines.push( L );
 		this._trollT = null;
+		this._poles( true );
 		if ( this.app.audio && this.app.audio.lineOut ) this.app.audio.lineOut( 0.4 );
 		const left = spots.length - this.lines.length;
 		g.toast( `${ BAITS[ bait ].name } out on the ${ free.name } · ${ left ? `room for ${ left } more` : 'all out' }, then to the helm`, 2800 );
+
+	}
+
+	// her outriggers down with a spread out, and up again without (only the sportfisher has any to swing)
+	_poles( out ) {
+
+		this.app.boat.setOutriggersOut?.( out && !! this.stats.outriggers );
 
 	}
 
@@ -262,10 +270,10 @@ export class Rigs {
 	_place( L ) {
 
 		const b = this.app.boatCtl, m = this.app.boat, S = m.lines, o = L.spot;
-		const holders = m.rodHolders;
-		const list = this.spots();
-		const i = list.indexOf( o );
-		if ( holders && holders[ i ] ) _a.copy( holders[ i ] );
+		// (her own holders, if she says, aft-most first on each side: the flats aft, the riggers next, the shotgun's on the last)
+		const side = o.side || 1, mine = m.rodHolders ? m.rodHolders.filter( ( h ) => Math.sign( h.x ) === side ).sort( ( x, y ) => x.z - y.z ) : [];
+		const held = mine[ Math.min( mine.length - 1, o.kind === 'flat' ? 0 : o.kind === 'rigger' ? 1 : 2 ) ];
+		if ( held ) _a.copy( held );
 		else if ( o.kind === 'shotgun' ) _a.set( 0, S.sheerY( 0 ) + 2.2, S.zAft + 2 );
 		else {
 
@@ -284,7 +292,7 @@ export class Rigs {
 		if ( o.kind === 'rigger' && ! L.on ) {
 
 			const tips = m.outriggerTips;
-			if ( tips ) _a.copy( tips[ o.side > 0 ? 1 : 0 ] );
+			if ( tips ) _a.copy( tips.find( ( t ) => Math.sign( t.x ) === o.side ) || tips[ 0 ] );
 			else _a.set( o.side * ( S.sheerX( 0.5 ) + 4.2 ), S.sheerY( 0.5 ) + 5.2, 0 );
 			L.clip = b.toWorld( _a, L._clip || ( L._clip = new Vector3() ) );
 
@@ -332,6 +340,7 @@ export class Rigs {
 
 		}
 
+		if ( ! this.lines.length ) this._poles( false );
 		const on = this.rodOn;
 		if ( on ) this._onRod( on, dt );
 		else if ( open && ! this.game.fight ) this._troll( dt, knots );
@@ -443,6 +452,7 @@ export class Rigs {
 	clearLines() {
 
 		this.lines.length = 0;
+		this._poles( false );
 		this._trollT = null;
 		this.game.rod.scream = 0;
 
