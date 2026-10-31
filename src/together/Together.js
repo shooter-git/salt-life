@@ -659,8 +659,18 @@ export class Together {
 		const c = o.cur;
 		if ( ! c || ! c.boat ) return false;
 		// ((M16) hers as she's built: any boat's, or with none or not yet, over her middle)
-		const frame = c.drawn || c.boat, M = o.boat && o.boat.userData.model;
-		_bp.copy( M && M.hornAt || _bp.set( 0, sizeOf( c.boatId ).air * 0.8, 0 ) ).applyQuaternion( frame.quat ).add( frame.pos );
+		// ((M16) at the helm of the boat they're riding in: hers)
+		const on = c.ride && c.mode === 'helm' ? c.ride === this.me.id ? this : this.others.get( c.ride ) : null;
+		if ( on === this ) {
+
+			_bp.copy( this.app.boat.hornAt || _bp.set( 0, 2, 0 ) ).applyQuaternion( this.app.boatCtl.quaternion ).add( this.app.boatCtl.position );
+			return true;
+
+		}
+
+		const skipper = on && on.cur && on.cur.boat ? on : o, S = skipper.cur;
+		const frame = S.drawn || S.boat, M = skipper.boat && skipper.boat.userData.model;
+		_bp.copy( M && M.hornAt || _bp.set( 0, sizeOf( S.boatId ).air * 0.8, 0 ) ).applyQuaternion( frame.quat ).add( frame.pos );
 		return true;
 
 	}
