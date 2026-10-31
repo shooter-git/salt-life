@@ -24,6 +24,7 @@ import { ForecastSlate } from './ForecastSlate.js';
 import { forecast, islandTime, blowShare, NORTH, edgeAt } from './Weather.js';
 import { wxNews } from './TimeHUD.js';
 import { CRADLE } from '../world/village/StormPlaces.js';
+import { soakStep } from '../world/boat/console/Soak.js';
 import { StormChart, shelterSign } from './StormChart.js';
 import { ClosedSign } from './ClosedSign.js';
 import { Signpost, TRAIL_POSTS } from './Signpost.js';
@@ -633,6 +634,8 @@ export class Game {
 
 		// (M10) the bucket on deck; the crank at the helm while she's stalled
 		this.updateBail( inp, p );
+		// ((M16) out on her open deck in a squall: world/boat/console/Soak.js)
+		soakStep( this, dt );
 		// prompts when the player has nothing to say
 		if ( ! p.prompt && ( can || canSpear ) ) p.prompt = this.prompt();
 

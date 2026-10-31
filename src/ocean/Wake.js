@@ -132,16 +132,20 @@ void main() {
 		const rx = fz, rz = - fx; // its port side
 		const p = b.model.group.position;
 		// shed foam with distance travelled: the faster, the more
-		this._t += dt * ( speed > 0.8 ? speed * 0.9 + ( b.rpm || 0 ) * 3 : 0 );
+		// ((M16) a boat can say her own: how many a metre (a fast boat's are further apart, and last), how big, how fast the
+		// arms go out, and where her wash is if she's two engines; Vessel.wake)
+		const W = b.model.wake;
+		this._t += dt * ( speed > 0.8 ? speed * ( W.shed ?? 0.9 ) + ( b.rpm || 0 ) * 3 : 0 );
 		while ( this._t > 1 ) {
 
 			this._t -= 1;
 			const jitter = ( Math.random() - 0.5 ) * 0.6;
 			// the arms of the wake at the quarters, spreading out sideways
-			const W = b.model.wake;
-			for ( const side of [ - 1, 1 ] ) this._spawn( p.x + fx * W.quarterZ + rx * side * W.quarterX, p.z + fz * W.quarterZ + rz * side * W.quarterX, rx * side * 0.9, rz * side * 0.9, 1.0 + jitter * 0.3, 0.45 );
+			const out = W.armOut ?? 0.9;
+			for ( const side of [ - 1, 1 ] ) this._spawn( p.x + fx * W.quarterZ + rx * side * W.quarterX, p.z + fz * W.quarterZ + rz * side * W.quarterX, rx * side * out, rz * side * out, ( W.armSize ?? 1.0 ) + jitter * 0.3, 0.45 );
 			// the propeller wash astern
-			this._spawn( p.x + fx * W.washZ + rx * jitter, p.z + fz * W.washZ + rz * jitter, - fx * 0.4, - fz * 0.4, 1.6, 0.35 );
+			const wx = jitter + ( this._next & 1 ? 1 : - 1 ) * ( W.washX ?? 0 );
+			this._spawn( p.x + fx * W.washZ + rx * wx, p.z + fz * W.washZ + rz * wx, - fx * 0.4, - fz * 0.4, W.washSize ?? 1.6, 0.35 );
 
 		}
 

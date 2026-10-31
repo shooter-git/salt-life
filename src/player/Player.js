@@ -211,10 +211,12 @@ export class Player {
 
 		// ((M13) not on her cradle ashore)
 		if ( ! this.boat || this.boat.hauled ) return false;
-		const bp = this.boat.toWorld( this.boat.model.boardPoint, _v );
+		// ((M16) a boat can have you board from the water at one place: her ladder (Vessel.boardFrom))
+		const M = this.boat.model, from = M.boardFrom && M.boardFrom( this.mode );
+		const bp = this.boat.toWorld( from ? from.at : M.boardPoint, _v );
 		const d = Math.hypot( bp.x - this.position.x, bp.z - this.position.z );
 		const dy = Math.abs( bp.y - this.position.y );
-		return d < 4.2 && dy < 3.2;
+		return d < ( from ? from.reach : 4.2 ) && dy < 3.2;
 
 	}
 
@@ -262,7 +264,8 @@ export class Player {
 
 		} else if ( this.nearBoat() && ! this.busy ) {
 
-			this.prompt = { key: 'E', text: 'Board boat' };
+			const M = this.boat.model, from = M.boardFrom && M.boardFrom( this.mode );
+			this.prompt = { key: 'E', text: from ? from.text : 'Board boat' };
 			if ( inp.hit( 'KeyE' ) ) {
 
 				this.boardBoat();
@@ -693,9 +696,9 @@ export class Player {
 	// step aboard from the pier / beach / water: onto the cockpit sole at the boarding point
 	boardBoat() {
 
-		const b = this.boat;
+		const b = this.boat, from = b.model.boardFrom && b.model.boardFrom( this.mode );
 		this.mode = 'deck';
-		this.deckPos.copy( b.model.boardPoint );
+		this.deckPos.copy( from ? from.at : b.model.boardPoint );
 		this.deckVel.set( 0, 0, 0 );
 		// keep looking where you looked (relative to the boat)
 		this.deckYaw = this.yaw - ( b.getYaw() + Math.PI );
@@ -775,12 +778,14 @@ export class Player {
 
 		} else {
 
-			const w = b.toWorld( new THREE.Vector3( 2.2 * ( side || 1 ), 0, 0 ), new THREE.Vector3() );
+			// ((M16) a boat can say where you go in from where you stand: Vessel.overboard)
+			const over = b.model.overboard && b.model.overboard( this.deckPos, side || 1 );
+			const w = b.toWorld( over ? over.at : new THREE.Vector3( 2.2 * ( side || 1 ), 0, 0 ), new THREE.Vector3() );
 			// (the boat floats at the water line: the walker's water height is stale while aboard)
 			this.waterH = this.waterMean = b.position.y;
 			this.position.set( w.x, b.position.y - 0.2, w.z );
 			this.mode = 'swim';
-			if ( this.audio ) this.audio.splash( 0.8, this.position );
+			if ( this.audio && ! ( over && over.quiet ) ) this.audio.splash( 0.8, this.position );
 
 		}
 
@@ -983,7 +988,8 @@ export class Player {
 
 			} else if ( atRail && ! this.bailable ) {
 
-				this.prompt = { key: 'E', text: 'Jump overboard' };
+				const over = b.model.overboard && b.model.overboard( p, Math.sign( p.x ) || 1 );
+				this.prompt = { key: 'E', text: over && over.text ? over.text : 'Jump overboard' };
 				if ( inp.hit( 'KeyE' ) ) {
 
 					this.exitBoat( null, Math.sign( p.x ) || 1 );

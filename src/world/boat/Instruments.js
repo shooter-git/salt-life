@@ -178,8 +178,9 @@ function segments( g, text, x, y, h, colour ) {
 export class BoatInstruments {
 
 	// (M16) onto the dash of another boat of yours (App.setBoat)
-	fit( material ) {
+	fit( material, gauges ) {
 
+		this.gauges( gauges );
 		if ( ! material ) return;
 		material.map = this.texture;
 		material.color.set( 0xffffff );
@@ -188,8 +189,19 @@ export class BoatInstruments {
 
 	}
 
+	// (M16) her dials' scales, a boat's own: { maxRpm, tachMax (x100), knotsMax } (none: the lobster boat's)
+	gauges( g = {} ) {
+
+		this._maxRpm = g.maxRpm || ENGINE.maxRpm;
+		DIALS.tach.max = g.tachMax || 40;
+		DIALS.speed.max = g.knotsMax || 30;
+
+	}
+
 	// material: the dash's display (BoatMaterials.display); tier: the low one draws at half size
-	constructor( { material, tier = 'high' } ) {
+	constructor( { material, tier = 'high', gauges } ) {
+
+		this.gauges( gauges );
 
 		const k = this.k = tier === 'low' ? 0.5 : 1;
 		const c = this.canvas = document.createElement( 'canvas' );
@@ -274,7 +286,7 @@ export class BoatInstruments {
 		// the needles, as a gauge's own swing lags
 		const N = this.needles, q = 1 - Math.exp( - dt * 5 );
 		const target = {
-			tach: running || reading.engine === 'cranking' ? reading.rpm * ENGINE.maxRpm / 100 + ( reading.engine === 'cranking' ? 2 : 0 ) : 0,
+			tach: running || reading.engine === 'cranking' ? reading.rpm * this._maxRpm / 100 + ( reading.engine === 'cranking' ? 2 : 0 ) : 0,
 			speed: reading.speed / KT,
 			fuel: reading.fuel,
 			temp: this.temp,
