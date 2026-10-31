@@ -1,12 +1,12 @@
 import { FISH, CARAPACE, fishLengthCm } from './FishTable.js';
-import { UPGRADES, nextLevel, FUEL_PRICE } from './Gear.js';
+import { UPGRADES, nextLevel, fuelOf, fuelPrice } from './Gear.js';
+import { FLEET_CSS, fleetRows, bindFleet } from './fleet/FleetPanel.js';
 import { BAITS, BAIT_IDS, chunksOf } from './Bait.js';
 import { LOOKS, LOOK_NAMES } from '../together/Avatar.js';
 import { NIGHT_BOX, biteHint, orderTerms, orderPlace } from './Orders.js';
 import { WEEK_MUL, delivered, filled, mineOf, shareOf, weekEnds } from './WeekOrder.js';
 import { timeText } from './IslandClock.js';
 import { LB, IN, GAL, lb, pounds, inches, feet, farOff, gallons, lbOz, feetInches } from './Units.js';
-import { FLOOD_L } from './Hull.js';
 import { PLACES, FAR_PLACES, placeName, farName } from './Places.js';
 import { FINDS, messageOf } from './Beachcomb.js';
 import { CAMP } from './FishCamp.js';
@@ -378,7 +378,7 @@ export class GameHUD {
 		this.ui = ui;
 		this.game = game;
 		const style = h( 'style' );
-		style.textContent = CSS;
+		style.textContent = CSS + FLEET_CSS;
 		document.head.append( style );
 
 		this.purse = h( 'div', 'gm-purse tw-glass', `<span class="gm-money">$0</span><span class="gm-cooler"><span class="gm-cooler-label">Cooler</span><span class="gm-cooler-bar"><span></span></span><span class="gm-cooler-kg">0 / 66 lb</span></span><span class="gm-gauge gm-fuel"><span>Fuel</span><span class="gm-cooler-bar gm-fuel-bar"><span></span></span><b class="gm-fuel-l">11 gal</b></span><span class="gm-gauge gm-hull"><span>Hull</span><span class="gm-cooler-bar gm-hull-bar"><span></span></span><b class="gm-hull-p">100%</b></span><span class="gm-gauge gm-bilge"><span>Bilge</span><span class="gm-cooler-bar gm-bilge-bar"><span></span></span><b class="gm-bilge-l">0 gal</b></span><span class="gm-gauge gm-sonar"><span>Sonar</span><b class="gm-sonar-d">0 ft</b><span class="gm-sonar-dots"></span></span><span class="gm-gauge gm-breath"><span>Breath</span><span class="gm-cooler-bar gm-breath-bar"><span></span></span></span><span class="gm-gauge gm-bait"><span class="gm-bait-l">Bait</span><b class="gm-bait-t">Shrimp</b></span>` );
@@ -568,10 +568,10 @@ export class GameHUD {
 		this.bilgeEl.classList.toggle( 'is-on', bilge !== null );
 		if ( bilge !== null ) {
 
-			this.bilgeBar.style.width = `${ Math.min( 1, bilge / FLOOD_L ) * 100 }%`;
+			this.bilgeBar.style.width = `${ Math.min( 1, bilge / this.game.hull.floodL ) * 100 }%`;
 			const t = `${ gallons( bilge ) } gal`;
 			if ( this.bilgeL.textContent !== t ) this.bilgeL.textContent = t;
-			this.bilgeEl.classList.toggle( 'is-low', bilge >= FLOOD_L * 0.7 );
+			this.bilgeEl.classList.toggle( 'is-low', bilge >= this.game.hull.floodL * 0.7 );
 
 		}
 
@@ -1212,8 +1212,9 @@ export class GameHUD {
 
 		const terms = g.saleTerms( v ), all = s.quote( null, terms );
 		const rows = s.inventory.map( ( f ) => fishItem( f, `<button class="gm-mini" data-sell="${ f.id }">Sell</button>`, s.quote( [ f.id ], terms ).prices.get( f.id ), false ) ).join( '' );
-		const missing = s.stats.fuelL - s.fuelL;
-		const fuelRow = `<div class="gm-shop-row"><span>Diesel · $${ ( CAMP.fuel * GAL ).toFixed( 2 ) } / gal<small>From her drums by the jetty · tank: ${ gallons( s.fuelL ) } of ${ gallons( s.stats.fuelL ) } gal</small></span>${ missing > 0.5 ? `<button class="gm-btn" data-fuel ${ s.money < CAMP.fuel ? 'disabled' : '' }>Fill · $${ Math.min( s.refuelCost( CAMP.fuel ), Math.floor( s.money / CAMP.fuel ) * CAMP.fuel ) }</button>` : '<span class="gm-have">Full</span>' }</div>`;
+		// ((M16) what your boat burns, at what she charges over Marta)
+		const missing = s.stats.fuelL - s.fuelL, F = fuelOf( s.boat ), litre = fuelPrice( s.boat, CAMP.fuel );
+		const fuelRow = ! F ? '' : `<div class="gm-shop-row"><span>${ F.name } · $${ ( litre * GAL ).toFixed( 2 ) } / gal<small>From her drums by the jetty · tank: ${ gallons( s.fuelL ) } of ${ gallons( s.stats.fuelL ) } gal</small></span>${ missing > 0.5 ? `<button class="gm-btn" data-fuel ${ s.money < litre ? 'disabled' : '' }>Fill · $${ Math.min( s.refuelCost( litre ), Math.floor( s.money / litre ) * litre ) }</button>` : '<span class="gm-have">Full</span>' }</div>`;
 		const sub = this.closingSoon( v ) ? `I'm off round to market at ${ this.at( v.hours[ 1 ] ) }.` : s.inventory.length ? v.greeting : v.idle;
 		this.drawStand( v, `
 			<div class="gm-head"><h2>${ v.name }</h2>
@@ -1225,7 +1226,7 @@ export class GameHUD {
 		this.stand.querySelector( '[data-all]' ).onclick = () => this.game.sellAll();
 		for ( const b of this.stand.querySelectorAll( '[data-sell]' ) ) b.onclick = () => this.game.sell( [ Number( b.dataset.sell ) ] );
 		const f = this.stand.querySelector( '[data-fuel]' );
-		if ( f ) f.onclick = () => this.game.refuel( CAMP.fuel );
+		if ( f ) f.onclick = () => this.game.refuel( litre );
 
 	}
 
@@ -1299,10 +1300,12 @@ export class GameHUD {
 
 GameHUD.prototype.renderShop = function () {
 
+	// ((M16) typing her name: not drawn again under you)
+	if ( this._fleetTyping ) return;
 	const g = this.game, s = g.state;
 	const v = this.vendor;
-	const missing = s.stats.fuelL - s.fuelL;
-	const fuelRow = `<div class="gm-shop-row"><span>Diesel · $${ ( FUEL_PRICE * GAL ).toFixed( 2 ) } / gal<small>Tank: ${ gallons( s.fuelL ) } of ${ gallons( s.stats.fuelL ) } gal</small></span>${ missing > 0.5 ? `<button class="gm-btn" data-fuel ${ s.money < FUEL_PRICE ? 'disabled' : '' }>Fill · $${ s.refuelCost() }</button>` : '<span class="gm-have">Full</span>' }</div>`;
+	const missing = s.stats.fuelL - s.fuelL, F = fuelOf( s.boat ), litre = fuelPrice( s.boat );
+	const fuelRow = ! F ? '' : `<div class="gm-shop-row"><span>${ F.name } · $${ ( litre * GAL ).toFixed( 2 ) } / gal<small>Tank: ${ gallons( s.fuelL ) } of ${ gallons( s.stats.fuelL ) } gal</small></span>${ missing > 0.5 ? `<button class="gm-btn" data-fuel ${ s.money < litre ? 'disabled' : '' }>Fill · $${ s.refuelCost() }</button>` : '<span class="gm-have">Full</span>' }</div>`;
 	// (Salt Life) your boat drifted off: Marta tows her back to the dock (out of hours too: into the box)
 	const job = g.towJob ? g.towJob() : null;
 	const towRow = job ? `<div class="gm-shop-row"><span>Tow your boat in<small>She's drifted ${ farOff( job.metres ) } off the dock</small></span><button class="gm-btn" data-tow>Tow · $${ Math.min( job.fee, s.money ) }</button></div>` : '';
@@ -1334,7 +1337,7 @@ GameHUD.prototype.renderShop = function () {
 
 		this.drawStand( v, `
 			<div class="gm-head"><h2>Marta's honesty box</h2>
-			<p class="gm-sub">${ v.boarded ? 'Marta\'s boarded up for the hurricane' : v.weatherShut ? 'Marta\'s shut for the weather' : `Marta's back at ${ this.at( v.hours[ 0 ] ) }` }. The diesel's left out: pay into the box. You have $${ s.money.toLocaleString() }</p></div>
+			<p class="gm-sub">${ v.boarded ? 'Marta\'s boarded up for the hurricane' : v.weatherShut ? 'Marta\'s shut for the weather' : `Marta's back at ${ this.at( v.hours[ 0 ] ) }` }. ${ F ? `The ${ F.name.toLowerCase() }'s left out: pay into the box.` : 'Everything\'s locked up.' } You have $${ s.money.toLocaleString() }</p></div>
 			<div class="gm-list">${ towRow }${ fuelRow }</div>
 			<div class="gm-foot"><span class="gm-sub">Gear when she's back</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>` );
 		bindFuel();
@@ -1349,7 +1352,8 @@ GameHUD.prototype.renderShop = function () {
 	// (Salt Life) and from the bait bucket, alive
 	const bq = terms ? s.quoteBait( terms ) : null;
 	const bucketRow = bq && bq.n ? item( `${ FISH[ bq.species ].name }<small class="is-wanted">wanted</small>`, `${ bq.n } live from your bait bucket · $${ bq.each } each`, `<span class="gm-item-val">$${ bq.total }</span>`, `<button class="gm-mini" data-sellbait>Sell ${ bq.n }</button>` ) : '';
-	const rows = Object.entries( UPGRADES ).map( ( [ key, track ] ) => {
+	// ((M16) your own gear, then the boat's you're in: the others' wait till you are)
+	const track = ( [ key, track ] ) => {
 
 		const cur = track.levels[ s.upgrades[ key ] | 0 ];
 		const next = nextLevel( s.upgrades, key );
@@ -1358,15 +1362,28 @@ GameHUD.prototype.renderShop = function () {
 			: '<span class="gm-have">Top of the line</span>';
 		return `<div class="gm-shop-row"><span>${ track.name }: ${ next ? next.label : cur.label }<small>Now: ${ cur.label }</small></span>${ btn }</div>`;
 
-	} ).join( '' );
+	};
+
+	const tracks = Object.entries( UPGRADES ), mine = tracks.filter( ( [ , t ] ) => ! t.on ), hers = tracks.filter( ( [ , t ] ) => t.on === s.boat );
+	const rows = `<span class="gm-boat-section">Your gear</span>${ mine.map( track ).join( '' ) }${ hers.length ? `<span class="gm-boat-section">For ${ escape( s.boatName() ) }</span>${ hers.map( track ).join( '' ) }` : '' }`;
 	const greeting = this.closingSoon( v ) ? `I'm shutting at ${ this.at( v.hours[ 1 ] ) }` : v.greeting;
+	const boats = this._shopTab === 'boats';
+	const tabs = `<div class="gm-tabs" role="tablist">${ [ [ 'gear', 'Gear' ], [ 'boats', 'Boats' ] ].map( ( [ id, label ] ) => `<button class="gm-tab${ boats === ( id === 'boats' ) ? ' is-on' : '' }" role="tab" aria-selected="${ boats === ( id === 'boats' ) }" data-shoptab="${ id }">${ label }</button>` ).join( '' ) }</div>`;
 	// (her wanted list scrolls with the rest, as Joe's does)
 	this.drawStand( v, `
 		<div class="gm-head"><h2>${ v.name }</h2>
 		<p class="gm-sub">${ greeting } · You have $${ s.money.toLocaleString() }</p></div>
-		<div class="gm-list">${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ this.findsBlock( 'marta', 'From the beach: she\'ll buy' ) }${ bucketRow }${ baitRows }${ haulRow }${ towRow }${ repairRow }${ fuelRow }${ rows }</div>
-		<div class="gm-foot"><span class="gm-sub">Upgrades take effect at once</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>` );
+		${ tabs }
+		<div class="gm-list">${ boats ? fleetRows( this ) : `${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ this.findsBlock( 'marta', 'From the beach: she\'ll buy' ) }${ bucketRow }${ baitRows }${ haulRow }${ towRow }${ repairRow }${ fuelRow }${ rows }` }</div>
+		<div class="gm-foot"><span class="gm-sub">${ boats ? 'Boats stay at their berths till you take one out' : 'Upgrades take effect at once' }</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>` );
 	bindFuel();
+	for ( const b of this.stand.querySelectorAll( '[data-shoptab]' ) ) b.onclick = () => {
+
+		this._shopTab = b.dataset.shoptab;
+		this.renderShop();
+
+	};
+	bindFleet( this );
 	const sb = this.stand.querySelector( '[data-sellbait]' );
 	if ( sb ) sb.onclick = () => this.game.sellBait();
 	const hl = this.stand.querySelector( '[data-haul]' );

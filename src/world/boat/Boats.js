@@ -3,17 +3,18 @@
 //
 //   name, feet     as Marta's list says it
 //   fuel           what her engine burns: 'gasoline', 'diesel', or null with no engine
-//   stats          what she is before any of her upgrades (game/Gear.js gearStats: her tracks' levels go over these)
+//   stats          what she is before any of her upgrades (game/Gear.js gearStats: her tracks' levels go over these);
+//                  burnIdle, burnFull and cruise: her fuel burn (L/s, Gear.fuelBurn) and how she'd go home (Chart.fuelFor)
 //   load           makes her model
 export const BOATS = {
 	kayak: {
 		name: 'Fishing kayak', feet: 12, fuel: null,
-		stats: { holdKg: 12, fuelL: 0, speedMul: 1, baitMax: 12, finder: false, deckLights: false, anchorM: 0, pumpLs: 0 },
+		stats: { holdKg: 12, fuelL: 0, speedMul: 1, baitMax: 12, finder: false, deckLights: false, anchorM: 0, pumpLs: 0, burnIdle: 0, burnFull: 0 },
 		load: () => import( './kayak/KayakModel.js' ).then( ( m ) => new m.KayakModel() ),
 	},
 	console: {
 		name: 'Center console', feet: 23, fuel: 'gasoline',
-		stats: { holdKg: 60, fuelL: 200, speedMul: 1, baitMax: 24, finder: false, deckLights: false, anchorM: 0, pumpLs: 0.3 },
+		stats: { holdKg: 60, fuelL: 200, speedMul: 1, baitMax: 24, finder: false, deckLights: false, anchorM: 0, pumpLs: 0.3, burnIdle: 0.001, burnFull: 0.024, cruise: { rpm: 0.65, speed: 13 } },
 		load: () => import( './console/ConsoleModel.js' ).then( ( m ) => new m.ConsoleModel() ),
 	},
 	lobster: {
@@ -23,7 +24,7 @@ export const BOATS = {
 	},
 	sportfisher: {
 		name: 'Offshore sportfisher', feet: 48, fuel: 'diesel',
-		stats: { holdKg: 300, fuelL: 2200, speedMul: 1, baitMax: 120, finder: true, deckLights: true, anchorM: 0, pumpLs: 1 },
+		stats: { holdKg: 300, fuelL: 2200, speedMul: 1, baitMax: 120, finder: true, deckLights: true, anchorM: 0, pumpLs: 1, burnIdle: 0.006, burnFull: 0.095, cruise: { rpm: 0.8, speed: 13 } },
 		load: () => import( './sportfisher/SportfisherModel.js' ).then( ( m ) => new m.SportfisherModel() ),
 	},
 };

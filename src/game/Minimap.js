@@ -567,7 +567,7 @@ export class Minimap {
 		if ( ! on ) return;
 		const b = this.game.app.boatCtl, s = this.game.state;
 		// ((M15) riding in someone else's, it's their fuel, and you don't know it)
-		const f = p.riding ? null : fuelFor( leg.m, s.fuelL, { rpm: b.rpm, speed: b.speed, speedMul: s.stats.speedMul || 1 } );
+		const f = p.riding || ! ( s.stats.fuelL > 0 ) ? null : fuelFor( leg.m, s.fuelL, { rpm: b.rpm, speed: b.speed, speedMul: s.stats.speedMul || 1, stats: s.stats } );
 		const text = `<b>Home</b> ${ ( leg.m / 1852 ).toFixed( 1 ) } NM · ${ String( magnetic( leg.bearing ) ).padStart( 3, '0' ) }°${ f ? ` · <i class="is-${ f.state }">fuel ${ f.state === 'ok' ? 'ok' : f.state === 'tight' ? 'tight' : 'short' }</i>` : '' }`;
 		if ( this.label.__text !== text ) this.label.innerHTML = this.label.__text = text;
 

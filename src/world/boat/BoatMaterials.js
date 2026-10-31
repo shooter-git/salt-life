@@ -19,7 +19,7 @@ function withAux( material, { fragment = '', uniforms = {}, roughness = true } =
 			.replace( '#include <common>', '#include <common>\nattribute vec4 aux;\nvarying vec4 vAux;\nvarying vec3 vLocal;' )
 			.replace( '#include <begin_vertex>', '#include <begin_vertex>\n\tvAux = aux;\n\tvLocal = position;' );
 		shader.fragmentShader = shader.fragmentShader
-			.replace( '#include <common>', '#include <common>\nvarying vec4 vAux;\nvarying vec3 vLocal;\n' + Object.keys( uniforms ).map( ( k ) => `uniform float ${ k };` ).join( '\n' ) )
+			.replace( '#include <common>', '#include <common>\nvarying vec4 vAux;\nvarying vec3 vLocal;\n' + Object.keys( uniforms ).map( ( k ) => `uniform ${ uniforms[ k ].value.isColor ? 'vec3' : 'float' } ${ k };` ).join( '\n' ) )
 			.replace( '#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n\tmetalnessFactor = vAux.y;' )
 			.replace( '#include <color_fragment>', '#include <color_fragment>\n' + fragment );
 		if ( roughness ) shader.fragmentShader = shader.fragmentShader.replace( '#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = max( vAux.x, 0.04 );' );
@@ -54,6 +54,8 @@ export class BoatMaterials {
 		this.flagPivot = { value: new THREE.Vector3() };
 		this.flagDir = { value: new THREE.Vector3( 1, 0, 0 ) };
 		this.flagWind = { value: 0 };
+		// ((M16) her topsides' paint: state.fleet.lobster.paint)
+		this.hullPaint = { value: new THREE.Color( 0xf2efe6 ) };
 
 		this.hull = this.createHull( hullShape );
 		this.gelcoat = withAux( new THREE.MeshStandardMaterial( { side: THREE.DoubleSide } ) );
@@ -77,7 +79,7 @@ export class BoatMaterials {
 
 		const m = new THREE.MeshStandardMaterial( { roughness: 0.25, metalness: 0 } );
 		m.name = 'boatHull';
-		withAux( m, { roughness: false, fragment: /* glsl */`
+		withAux( m, { roughness: false, uniforms: { hullPaint: this.hullPaint }, fragment: /* glsl */`
 	vec3 p = vLocal;
 	float tS = clamp( ( p.z - ${ shape.zAft.toFixed( 4 ) } ) / ${ shape.length.toFixed( 4 ) }, 0.0, 1.0 );
 	float sheer = pow( tS, 2.2 ) * 0.62 + 0.98 + pow( max( 1.0 - tS / 0.2, 0.0 ), 2.0 ) * 0.04;
@@ -90,7 +92,7 @@ export class BoatMaterials {
 	float aaS = fwidth( below ) + 1e-4;
 	float cove = smoothstep( -aaS, aaS, below - 0.1 ) * ( 1.0 - smoothstep( -aaS, aaS, below - 0.122 ) );
 	vec3 c = mix( ${ vec3( linear( 0x7a1d15 ) ) }, ${ vec3( linear( 0x0f1a30 ) ) }, aboveBottom );
-	c = mix( c, ${ vec3( linear( 0xf2efe6 ) ) }, aboveStripe );
+	c = mix( c, hullPaint, aboveStripe );
 	c = mix( c, ${ vec3( linear( 0x0f1a30 ) ) }, cove );
 	diffuseColor.rgb = c;
 	float hullRough = mix( mix( 0.75, 0.35, aboveBottom ), 0.2, aboveStripe );

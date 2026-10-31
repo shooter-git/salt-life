@@ -1,3 +1,4 @@
+import { berthOf } from '../game/fleet/Berths.js';
 import { Vector3, Quaternion, Matrix4, MathUtils } from '../engine/index.js';
 import { gltfLoader } from '@allthespaces/portal/three';
 import { Avatar, LOOKS, lookOf } from './Avatar.js';
@@ -293,7 +294,7 @@ export class Together {
 	// (written at once, and brought up to date every few minutes and as you go: now), gone once she isn't
 	mineBoat( now = false ) {
 
-		const app = this.app, b = app.boatCtl, id = this.me.id, t = Date.now(), dock = WORLD.boatDock.position;
+		const app = this.app, b = app.boatCtl, id = this.me.id, t = Date.now(), dock = berthOf( b.model && b.model.id ).position;
 		// ((M15) out on the water with no anchor down, she's adrift if you go: as stepping ashore makes her fast, Player.exitBoat)
 		const berthed = b.moored || b.hauled || ( Math.hypot( b.position.x - dock.x, b.position.z - dock.z ) < 14 && b.speed < 1.5 );
 		if ( ( b.anchor && b.driven ) || ( ! b.anchor && berthed ) ) {

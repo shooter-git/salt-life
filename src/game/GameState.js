@@ -1,6 +1,8 @@
 import { FINDS, LIES } from './Beachcomb.js';
 import { FISH, fishValue, fishLengthCm } from './FishTable.js';
-import { defaultUpgrades, gearStats, nextLevel, UPGRADES, FUEL_PRICE } from './Gear.js';
+import { defaultUpgrades, gearStats, nextLevel, UPGRADES, fuelPrice, unlockProgress } from './Gear.js';
+import { repairFee } from './Hull.js';
+import { FLEET, TRADE, SALE, MONTH, MOST_MONTHS, DUES_LEAVE, gearWorth, monthly, cleanName, paintOf, kindOf } from './fleet/Fleet.js';
 import { ordersOf, orderPrice } from './Orders.js';
 import { WEEK_MUL } from './WeekOrder.js';
 import { BAITS, KEEPER_KG, baitOf, chunksOf } from './Bait.js';
@@ -11,12 +13,14 @@ import { BOATS, START_BOAT } from '../world/boat/Boats.js';
 const SAVE_KEY = 'tidewater.save.v1';
 
 // (M16) a boat you own, as the save keeps her while you're in another
+// (paid: what she cost you; null: she came with the game, and is worth what Marta could sell her for, a kayak nothing)
 const newBoat = ( b = {} ) => ( {
 	fuel: Number.isFinite( b.fuel ) ? b.fuel : null,
 	hull: Number.isFinite( b.hull ) ? Math.min( 1, Math.max( 0, b.hull ) ) : 0,
 	hauled: b.hauled === true,
-	name: typeof b.name === 'string' ? b.name : null,
-	paint: typeof b.paint === 'string' ? b.paint : null,
+	name: typeof b.name === 'string' ? cleanName( b.name ) || null : null,
+	paint: paintOf( b.paint ) ? b.paint : null,
+	paid: Number.isFinite( b.paid ) ? b.paid : null,
 } );
 
 // Everything the player owns: wallet, the fish in the cooler / hold, the fish log and the gear
@@ -42,6 +46,8 @@ export class GameState {
 		// (fuel, hull and hauled below are hers, the one you're in)
 		this.boat = START_BOAT;
 		this.fleet = { [ START_BOAT ]: newBoat() };
+		this.earned = false; // (M16) the sportfisher's unlocked (kept: selling the lobster boat doesn't lock her again)
+		this.dues = { day: null, owed: 0 }; // (M16) the day your slips and upkeep are paid to, and what's on Marta's tab
 		this.fuel = null; // litres left (null = full tank)
 		this.hull = 0; // (M10) the boat's wear, 0..1 (game/Hull.js), until Marta repairs it
 		this.hauled = false; // (M13) Marta's hauled her out ahead of a hurricane (on her cradle ashore)
@@ -66,6 +72,13 @@ export class GameState {
 	get stats() {
 
 		return gearStats( this.upgrades, this.boat );
+
+	}
+
+	// (M16) what another of your boats is, with her own gear
+	statsOf( id ) {
+
+		return gearStats( this.upgrades, id );
 
 	}
 
@@ -96,6 +109,175 @@ export class GameState {
 		this.hauled = b.hauled;
 		this.save();
 		return true;
+
+	}
+
+	// what she'd pay for a boat you own: of what you paid for her and her upgrades, less her repair (terms: TRADE, SALE)
+	boatWorth( id, terms = TRADE ) {
+
+		const b = this.fleet[ id ];
+		if ( ! b ) return 0;
+		const paid = b.paid ?? ( id === 'kayak' ? 0 : FLEET[ id ].price );
+		const wear = id === this.boat ? this.hull : b.hull;
+		return Math.max( 0, Math.round( paid * terms.boat + gearWorth( this.upgrades, id ) * terms.gear ) - repairFee( wear, id ) );
+
+	}
+
+	// (M16) whether the sportfisher's shown yet, and how far you are (Gear.unlockProgress)
+	get unlock() {
+
+		return unlockProgress( this.upgrades );
+
+	}
+
+	unlocked( id ) {
+
+		return id !== 'sportfisher' || this.earned || this.unlock.met;
+
+	}
+
+	// what buying a boat comes to, trading in another (id) or none: { price, trade, net, can, why }
+	quoteBoat( id, trade = null ) {
+
+		const price = FLEET[ id ] ? FLEET[ id ].price : 0, t = trade && trade !== id ? this.boatWorth( trade ) : 0, net = price - t;
+		const why = ! BOATS[ id ] || ! FLEET[ id ] ? 'none' : this.fleet[ id ] ? 'owned' : ! this.unlocked( id ) ? 'locked' : trade && ! this.fleet[ trade ] ? 'none' : this.dues.owed > 0 ? 'owed' : net > this.money ? 'money' : null;
+		return { price, trade: t, net, can: ! why, why };
+
+	}
+
+	// She's yours: paid for, less what she gave for `trade`, which goes (unless you're in her: get out, then dropBoat).
+	// -> { paid: what it cost you (less than nothing when she's paid you), trade: what she gave } or null
+	buyBoat( id, trade = null ) {
+
+		const q = this.quoteBoat( id, trade );
+		if ( ! q.can ) return null;
+		this.money -= q.net;
+		this.fleet[ id ] = newBoat( { paid: q.price } );
+		if ( trade && trade !== this.boat ) this.dropBoat( trade );
+		this.save();
+		this.emit();
+		return { paid: q.net, trade: q.trade };
+
+	}
+
+	// gone: her record, and her upgrades with her (never the boat you're in)
+	dropBoat( id ) {
+
+		if ( id === this.boat || ! this.fleet[ id ] ) return false;
+		delete this.fleet[ id ];
+		for ( const [ k, t ] of Object.entries( UPGRADES ) ) if ( t.on === id ) this.upgrades[ k ] = 0;
+		this.save();
+		this.emit();
+		return true;
+
+	}
+
+	// sold to Marta for cash -> what she paid, or null: you'd need to be in another, and to have one left
+	sellBoat( id ) {
+
+		if ( ! this.fleet[ id ] || id === this.boat || Object.keys( this.fleet ).length < 2 ) return null;
+		const paid = this.boatWorth( id, SALE );
+		this.money += paid;
+		this.dropBoat( id );
+		return paid;
+
+	}
+
+	// her name (blank: none), free; her paint, for the yard's price -> whether it's done
+	nameBoat( id, name ) {
+
+		if ( ! this.fleet[ id ] ) return false;
+		this.fleet[ id ].name = cleanName( name ) || null;
+		this.save();
+		this.emit();
+		return true;
+
+	}
+
+	paintBoat( id, paint ) {
+
+		const b = this.fleet[ id ];
+		if ( ! b || ! paintOf( paint ) || b.paint === paint || ! this.spend( FLEET[ id ].paintJob ) ) return false;
+		b.paint = paint;
+		this.save();
+		this.emit();
+		return true;
+
+	}
+
+	// as you'd call her: 'Miss Behavin', or the lobster boat
+	boatName( id = this.boat ) {
+
+		const b = this.fleet[ id ];
+		return ( b && b.name ) || `the ${ kindOf( id ) }`;
+
+	}
+
+	// A boat you're not in hauled out, or back in. Her fee's paid first -> whether she is now
+	haulBoat( id, fee ) {
+
+		const b = this.fleet[ id ];
+		if ( ! b || id === this.boat || b.hauled || ! this.spend( fee ) ) return false;
+		b.hauled = true;
+		this.save();
+		this.emit();
+		return true;
+
+	}
+
+	// and her repair: as far as your money goes, as payRepair -> what was paid
+	repairBoat( id ) {
+
+		const b = this.fleet[ id ];
+		if ( ! b || id === this.boat ) return 0;
+		const fee = repairFee( b.hull, id ), paid = Math.min( fee, this.money );
+		if ( paid <= 0 ) return 0;
+		this.money -= paid;
+		b.hull = paid >= fee ? 0 : b.hull * ( 1 - paid / fee );
+		this.save();
+		this.emit();
+		return paid;
+
+	}
+
+	// The month's slips and upkeep on the island's `day`, every MONTH days from the day you first came to them (a clock
+	// running behind, in a room on an earlier day, owes nothing). She takes what you have, down to DUES_LEAVE, and the rest
+	// goes on her tab: you can't buy another boat until it's settled. She never takes a boat for it
+	// -> { months, due, paid, owed } when a bill's come, else null
+	chargeDues( day ) {
+
+		const d = this.dues;
+		if ( ! Number.isFinite( day ) ) return null;
+		if ( d.day === null ) {
+
+			d.day = day;
+			return null;
+
+		}
+
+		const months = Math.floor( ( day - d.day ) / MONTH );
+		if ( months < 1 ) return null;
+		d.day += months * MONTH;
+		const bill = Math.min( months, MOST_MONTHS ) * monthly( this.fleet );
+		const due = bill + d.owed, paid = Math.min( due, Math.max( 0, this.money - DUES_LEAVE ) );
+		this.money -= paid;
+		d.owed = due - paid;
+		this.save();
+		this.emit();
+		return bill > 0 ? { months: Math.min( months, MOST_MONTHS ), due, paid, owed: d.owed } : null;
+
+	}
+
+	// what's on the tab, paid as far as your money goes -> what was paid
+	settleDues() {
+
+		const paid = Math.min( this.dues.owed, this.money );
+		if ( paid <= 0 ) return 0;
+		this.money -= paid;
+		this.dues.owed -= paid;
+		this.save();
+		this.emit();
+		return paid;
 
 	}
 
@@ -647,12 +829,14 @@ export class GameState {
 	// buy the next level of an upgrade track; returns the new level entry or null
 	buy( key ) {
 
-		if ( ! UPGRADES[ key ] ) return null;
+		// ((M16) the boat's own, while she's the boat you're in)
+		if ( ! UPGRADES[ key ] || ( UPGRADES[ key ].on && UPGRADES[ key ].on !== this.boat ) ) return null;
 		const next = nextLevel( this.upgrades, key );
 		if ( ! next || next.cost > this.money ) return null;
 		this.money -= next.cost;
 		this.upgrades[ key ] = next.index;
 		if ( key === 'fuel' ) this.fuel = null; // a new tank comes full
+		if ( this.unlock.met ) this.earned = true;
 		this._chartBought();
 		this.save();
 		this.emit();
@@ -674,14 +858,15 @@ export class GameState {
 
 	}
 
-	refuelCost( price = FUEL_PRICE ) {
+	// (M16) price: a litre of the fuel she burns, at Marta's (Gear.fuelPrice)
+	refuelCost( price = fuelPrice( this.boat ) ) {
 
 		return Math.ceil( ( this.stats.fuelL - this.fuelL ) * price );
 
 	}
 
 	// fill up as far as the money goes, at `price` a litre (Marta's; (M15) or Pearl's); returns litres bought
-	refuel( price = FUEL_PRICE ) {
+	refuel( price = fuelPrice( this.boat ) ) {
 
 		const missing = this.stats.fuelL - this.fuelL;
 		const litres = Math.min( missing, Math.floor( this.money / price ) );
@@ -720,7 +905,7 @@ export class GameState {
 	toJSON() {
 
 		this._boatAway();
-		return { v: 2, boat: this.boat, fleet: this.fleet, money: this.money, inventory: this.inventory, log: this.log, places: this.places, found: this.found, upgrades: this.upgrades, fuel: this.fuel, hull: this.hull, hauled: this.hauled, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, bag: this.bag, finds: this.finds, picked: this.picked, chart: this.chart.toJSON(), nextId: this._nextId };
+		return { v: 2, boat: this.boat, fleet: this.fleet, earned: this.earned, dues: this.dues, money: this.money, inventory: this.inventory, log: this.log, places: this.places, found: this.found, upgrades: this.upgrades, fuel: this.fuel, hull: this.hull, hauled: this.hauled, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, bag: this.bag, finds: this.finds, picked: this.picked, chart: this.chart.toJSON(), nextId: this._nextId };
 
 	}
 
@@ -749,6 +934,9 @@ export class GameState {
 		for ( const [ k, b ] of Object.entries( d.v === 2 && d.fleet && typeof d.fleet === 'object' ? d.fleet : { lobster: {}, kayak: {} } ) ) if ( BOATS[ k ] ) this.fleet[ k ] = newBoat( b );
 		this.boat = BOATS[ d.boat ] && this.fleet[ d.boat ] ? d.boat : d.v === 1 ? 'lobster' : Object.keys( this.fleet )[ 0 ] || START_BOAT;
 		if ( ! this.fleet[ this.boat ] ) this.fleet[ this.boat ] = newBoat();
+		this.earned = d.earned === true || this.unlock.met;
+		const du = d.dues;
+		this.dues = du && typeof du === 'object' ? { day: Number.isFinite( du.day ) ? du.day : null, owed: Number.isFinite( du.owed ) ? Math.max( 0, du.owed ) : 0 } : { day: null, owed: 0 };
 		this.look = typeof d.look === 'string' ? d.look : null;
 		const o = d.orders;
 		this.orders = o && Number.isFinite( o.day ) && o.filled && typeof o.filled === 'object' ? { day: o.day, filled: { ...o.filled } } : { day: null, filled: {} };
@@ -804,6 +992,10 @@ export class GameState {
 		this.places = {};
 		this.found = {};
 		this.upgrades = defaultUpgrades();
+		this.boat = START_BOAT;
+		this.fleet = { [ START_BOAT ]: newBoat() };
+		this.earned = false;
+		this.dues = { day: null, owed: 0 };
 		this.fuel = null;
 		this.hull = 0;
 		this.hauled = false;

@@ -11,7 +11,9 @@ import { FishStand, STAND } from './FishStand.js';
 import { Chandlery, CHANDLERY } from './Chandlery.js';
 import { CatchDisplay } from './CatchDisplay.js';
 import { FishPortrait } from './FishPortrait.js';
-import { UPGRADES, fuelBurn, TOW, towFee, towTime, HAUL_FEE } from './Gear.js';
+import { UPGRADES, fuelBurn, fuelOf, TOW, towFee, towTime, HAUL_FEE } from './Gear.js';
+import { FLEET } from './fleet/Fleet.js';
+import { FleetDesk } from './fleet/FleetDesk.js';
 import { Hull, thrustMul, repairFee } from './Hull.js';
 import { tellOf } from './Away.js';
 import { GameHUD } from './GameHUD.js';
@@ -226,7 +228,9 @@ export class Game {
 		this._engineBase = { maxThrust: b.maxThrust, pitchSpeed: b.pitchSpeed };
 		// (M10) the hull (Hull.js): her wear (in the save: the state is its store), the water in her bilge
 		// (her mass, as it's aboard) and her engine; the bucket going; what's been said
-		this.hull = new Hull( { store: this.state } );
+		this.hull = new Hull( { store: this.state, boat: this.state.boat } );
+		// ((M16) your fleet: fleet/FleetDesk.js)
+		this.fleet = new FleetDesk( this );
 		this._massBase = b.mass;
 		this._wearSaved = this.state.hull;
 		this._bailing = false;
@@ -274,6 +278,8 @@ export class Game {
 		}
 
 		for ( const f of this.floods || [] ) f.scale = g.deckLights ? 1 : 0;
+		// ((M16) and what's fitted on her shows)
+		if ( this.app.boat && this.app.boat.fit ) this.app.boat.fit( g );
 
 	}
 
@@ -284,6 +290,11 @@ export class Game {
 		this._engineBase = { maxThrust: b.maxThrust, pitchSpeed: b.pitchSpeed };
 		this._massBase = b.mass;
 		this._wearSaved = this.state.hull;
+		this.hull.setBoat( this.state.boat );
+		this._wornSaid = this.state.hull >= 0.5 ? 2 : this.state.hull >= 0.1 ? 1 : 0;
+		this._floodSaid = this._fuelOut = this._anchorDue = this._bailing = false;
+		this._sonar = null;
+		this.fleet.boatChanged();
 		if ( this.state.hauled ) b.setHauled( this.cradle );
 		if ( app.localLights ) {
 
@@ -353,8 +364,9 @@ export class Game {
 	// (M15) aboard: called for over the radio (Radio.js), you with her: she comes for you wherever you are
 	towJob( aboard = false ) {
 
-		const b = this.app.boatCtl, dock = WORLD.boatDock.position;
+		const b = this.app.boatCtl;
 		if ( ! b || b.moored || b.hauled || ( b.driven && ! aboard ) ) return null;
+		const dock = b.berth.position;
 		const metres = Math.hypot( b.position.x - dock.x, b.position.z - dock.z );
 		return metres > TOW.from ? { metres, fee: towFee( metres ), time: towTime( metres ) } : null;
 
@@ -422,6 +434,7 @@ export class Game {
 		this.updateWeek();
 		this.updateForecast( dt );
 		this.updateHurricane();
+		this.fleet.update( dt );
 		if ( ! this.hud && app.ui && app.ui.ui && typeof document !== 'undefined' && document.head ) {
 
 			const ui = app.ui.ui;
@@ -633,6 +646,8 @@ export class Game {
 
 		// (M10) the bucket on deck; the crank at the helm while she's stalled
 		this.updateBail( inp, p );
+		// ((M16) beside a boat of yours you're not in: get into her)
+		this.fleet.updatePrompt( inp, p );
 		// prompts when the player has nothing to say
 		if ( ! p.prompt && ( can || canSpear ) ) p.prompt = this.prompt();
 
@@ -640,7 +655,7 @@ export class Game {
 		// the catch card's live fish portrait (or one queued thumbnail)
 		if ( this.hud && this.hud.portrait ) this.hud.portrait.update( dt );
 		if ( this.hud ) this.hud.update( {
-			fuel: aboard ? { litres: this.state.fuelL, tank: this.state.stats.fuelL } : null,
+			fuel: aboard && this.state.stats.fuelL > 0 ? { litres: this.state.fuelL, tank: this.state.stats.fuelL } : null,
 			// (M10) the hull once it's worn, and the bilge with water in it
 			hull: aboard && ! p.riding && this.hull.wear > 0.02 ? this.hull.wear : null,
 			bilge: aboard && ! p.riding && this.hull.bilge >= 1 ? this.hull.bilge : null,
@@ -721,7 +736,7 @@ export class Game {
 	updateBoat( dt ) {
 
 		const app = this.app, b = app.boatCtl, p = app.player, s = this.state;
-		if ( b.driven && b.engineOn ) s.burn( fuelBurn( b.rpm ) * dt );
+		if ( b.driven && b.engineOn && s.stats.fuelL > 0 ) s.burn( fuelBurn( b.rpm, s.stats ) * dt );
 		else if ( this._wasDriven && ! b.driven ) s.save();
 		this.updateHull( dt );
 		this.updateAnchor( b.driven && ! this._wasDriven, ! b.driven && this._wasDriven );
@@ -804,8 +819,8 @@ export class Game {
 		if ( why === 'fuel' ) {
 
 			// ((M15) away from the dock, Marta's tow is a call on the radio)
-			const far = this.towJob( true ), radio = touch ? 'the Radio button' : this.keyName( 'R' );
-			if ( ! this._fuelOut ) this.toast( far ? `Out of fuel · call Marta on the radio for a tow (${ radio })` : 'Out of fuel · buy diesel at the chandlery by the boathouse', 4600 );
+			const far = this.towJob( true ), radio = touch ? 'the Radio button' : this.keyName( 'R' ), F = fuelOf( this.state.boat );
+			if ( ! this._fuelOut ) this.toast( far ? `Out of fuel · call Marta on the radio for a tow (${ radio })` : `Out of fuel · buy ${ F ? F.name.toLowerCase() : 'fuel' } at the chandlery by the boathouse`, 4600 );
 			this._fuelOut = true;
 
 		} else if ( why === 'flooded' ) {
@@ -835,8 +850,10 @@ export class Game {
 	}
 
 	// (M13) her cradle in her hauling yard: the village's (its height from the ground there), or where it is
+	// ((M16) each boat her own, by her length: fleet/FleetDesk.js)
 	get cradle() {
 
+		if ( this.state.boat !== 'lobster' ) return this.fleet.cradleOf( this.state.boat );
 		return ( this.app.village && this.app.village.cradle ) || CRADLE;
 
 	}
@@ -850,7 +867,7 @@ export class Game {
 		const s = this.state, n = this.app.weather && this.app.weather.news;
 		if ( s.hauled ) return { back: ! n };
 		if ( ! n || n.stage === 'outlook' ) return null;
-		return { fee: HAUL_FEE, here: !! this.app.boatCtl.moored };
+		return { fee: FLEET[ s.boat ].haul, here: !! this.app.boatCtl.moored };
 
 	}
 
@@ -894,7 +911,9 @@ export class Game {
 		this.awayTold = null;
 		const s = app.settings;
 		const told = tellOf( away.story, { ...away, T: islandTime( s.day, s.timeOfDay ), news: app.weather.news, open: this.martaIn, locale: app.portal && app.portal.locale } );
-		if ( told.note ) this.hud.showAwayNote( told.note );
+		// ((M16) and what became of the others, at their berths)
+		const note = [ ...( told.note || [] ), ...( away.others || [] ) ];
+		if ( note.length ) this.hud.showAwayNote( note );
 		if ( told.toast ) this.toast( told.toast, 5200 );
 
 	}
@@ -930,7 +949,7 @@ export class Game {
 	// nothing to repair; and the repair, as far as your money goes
 	repairJob() {
 
-		const fee = repairFee( this.hull.wear );
+		const fee = repairFee( this.hull.wear, this.hull.boat );
 		// ((M13) or on her cradle ashore: hauled out, the best place to work on her)
 		const b = this.app.boatCtl;
 		return fee ? { fee, wear: this.hull.wear, here: !! ( b.moored || b.hauled ) } : null;
@@ -1025,7 +1044,7 @@ export class Game {
 	// where the boat is, unless the dock lines have her or it's deeper than the rode holds in
 	dropAnchor() {
 
-		const b = this.app.boatCtl, max = this.state.stats.anchorM, dock = WORLD.boatDock.position;
+		const b = this.app.boatCtl, max = this.state.stats.anchorM, dock = b.berth.position;
 		if ( b.moored || Math.hypot( b.position.x - dock.x, b.position.z - dock.z ) < BERTH_M ) return;
 		const at = b.toWorld( b.stemHead, new Vector3() );
 		const floor = this.app.terrainData.heightAt( at.x, at.z );

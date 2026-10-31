@@ -380,10 +380,11 @@ export const CRUISE = { rpm: 0.7, speed: 7.1 };
 // Fuel for the way home. `perM`: litres a metre as she's going (her burn over her speed, when she's making
 // way), else at her cruise; the mariner's rule of thirds: a third out, a third back, a third kept
 //   -> { litres (to get there), state: 'ok' | 'tight' (into the last third) | 'short' (not enough) }
-export function fuelFor( metres, fuelL, { rpm = 0, speed = 0, speedMul = 1 } = {} ) {
+// (M16) stats: the boat's (Gear.gearStats): her burn and her own cruise; the lobster boat's without
+export function fuelFor( metres, fuelL, { rpm = 0, speed = 0, speedMul = 1, stats = null } = {} ) {
 
-	const under = speed > 2 && rpm > 0.1;
-	const perM = under ? fuelBurn( rpm ) / speed : fuelBurn( CRUISE.rpm ) / ( CRUISE.speed * speedMul );
+	const under = speed > 2 && rpm > 0.1, cruise = ( stats && stats.cruise ) || CRUISE;
+	const perM = under ? fuelBurn( rpm, stats ) / speed : fuelBurn( cruise.rpm, stats ) / ( cruise.speed * speedMul );
 	const litres = metres * perM;
 	return { litres, perM, state: fuelL < litres ? 'short' : fuelL < litres * 1.5 ? 'tight' : 'ok' };
 

@@ -1,5 +1,5 @@
 import * as THREE from '../engine/index.js';
-import { WORLD } from '../world/WorldLayout.js';
+import { berthOf } from '../game/fleet/Berths.js';
 import { G } from '../core/Globals.js';
 
 const RHO = 1025; // sea water density
@@ -66,8 +66,9 @@ export class BoatController {
 		this.slot = query.allocate( 'boatHull', MAX_HULL_SAMPLES );
 
 		// state (position = model origin at the design waterline)
-		this.position = new THREE.Vector3().copy( WORLD.boatDock.position );
-		this.quaternion = new THREE.Quaternion().setFromAxisAngle( new THREE.Vector3( 0, 1, 0 ), WORLD.boatDock.heading );
+		const berth = berthOf( model.id );
+		this.position = new THREE.Vector3().copy( berth.position );
+		this.quaternion = new THREE.Quaternion().setFromAxisAngle( new THREE.Vector3( 0, 1, 0 ), berth.heading );
 		this.velocity = new THREE.Vector3();
 		this.angular = new THREE.Vector3();
 
@@ -76,7 +77,7 @@ export class BoatController {
 		this.rpm = 0; // engine 0..1 (spools after the lever)
 		this.driven = false;
 		this.moored = true;
-		this.mooring = { anchor: WORLD.boatDock.position.clone(), heading: WORLD.boatDock.heading };
+		this.mooring = { anchor: berth.position.clone(), heading: berth.heading };
 		// (Salt Life) where the anchor lies on the bottom while it's down (Game sets it), else null; its
 		// rode is made fast at the stem head
 		this.anchor = null;
@@ -537,20 +538,28 @@ export class BoatController {
 
 	}
 
+	// (M16) where she's kept (game/fleet/Berths.js)
+	get berth() {
+
+		return berthOf( this.model.id );
+
+	}
+
 	reset() {
 
+		const berth = this.berth;
 		this.hauled = null;
-		this.position.copy( WORLD.boatDock.position );
+		this.position.copy( berth.position );
 		this.position.y = G.seaLevel.value; // ((M13) afloat at the dock, whatever the surge's made of the sea)
-		this.quaternion.setFromAxisAngle( new THREE.Vector3( 0, 1, 0 ), WORLD.boatDock.heading );
+		this.quaternion.setFromAxisAngle( new THREE.Vector3( 0, 1, 0 ), berth.heading );
 		this.velocity.set( 0, 0, 0 );
 		this.angular.set( 0, 0, 0 );
 		this.throttle = 0;
 		this.steer = 0;
 		this.rpm = 0;
 		this.moored = true;
-		this.mooring.anchor.copy( WORLD.boatDock.position );
-		this.mooring.heading = WORLD.boatDock.heading;
+		this.mooring.anchor.copy( berth.position );
+		this.mooring.heading = berth.heading;
 		this.anchor = null;
 		this.hasWater = false; // (Salt Life: the water where she was is no use here)
 

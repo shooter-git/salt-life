@@ -161,6 +161,13 @@ export class BoatModel extends Vessel {
 
 	}
 
+	// (M16) her topsides, in her hull's shader
+	setPaint( hex ) {
+
+		this.materials.hullPaint.value.set( hex ?? 0xf2efe6 );
+
+	}
+
 	// Closed, low-poly hull volume (shell + transom + lid at the sheer) in the boat frame.
 	// Not added to the group: useful as a water-exclusion mask (e.g. depth/stencil pre-pass
 	// so the ocean surface is not drawn inside the cockpit), occlusion or physics proxies.
