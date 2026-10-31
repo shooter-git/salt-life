@@ -215,6 +215,9 @@ const TIPS = {
 	camp: '<b>Pearl\'s fish camp</b>: she buys your catch at ' + Math.round( CAMP.rate * 100 ) + '% of Joe\'s price (she takes it round to market herself) and sells <b>diesel</b> from her drums, so a trip round the island needn\'t end in the bay. Tie up at her jetty.',
 	chart: 'Your <b>chart</b> fills in where you go: the coast as you see it, the depths as you run over them, each place\'s name as you come to it, on the map and the boat\'s plotter. Mark a good spot from the cooler\'s <b>Chart</b> tab. Marta sells a chart of the island, if you\'d rather not.',
 	edge: 'You\'re past the far grounds. The sea\'s the open ocean\'s out here: the <b>wind fresher</b>, the <b>seas bigger</b>, fewer birds and fewer fish. Nothing stops you going on, but <b>watch your fuel</b>: Marta\'s tow is by the distance.',
+	stand: 'Every boat has <b>what she can stand</b>. Past it she ships water and takes a beating: the <b>radio</b> says how the sea is for her, and the lee of the island is calmer. Run for shelter, or for port.',
+	ice: 'Fish goes off in the heat: about <b>12 hours</b> in a box with no ice, its price falling after 6. Marta sells <b>ice by the bag</b>, and on ice it keeps for days as long as the ice lasts.',
+	bunk: 'She has <b>bunks</b>. Sleep aboard to pass the night, and bring <b>food and water</b> from Marta for days out. Anchor first, or stream a <b>drift sock</b>: she goes where the wind takes her while you sleep.',
 	farWater: 'Out here the fish are <b>under things</b>: look for <b>weedlines</b> (mahi), <b>floating debris</b>, and <b>birds working bait</b> (tuna). On the <b>drop-off</b> the tuna come at first light.',
 	// (M13) a hurricane
 	hurricane: 'A <b>hurricane</b> is coming. Ahead of it Marta can <b>haul your boat out</b>, before she boards up; left in the water the storm batters her. In it, the <b>shelter</b> (on your map) keeps you safe from the wind, the rain and the sea. You can always step out to watch.',
@@ -507,6 +510,10 @@ export class Guide {
 		// ((M15) the radio, the first time you're well out at the helm; and past the far grounds, the soft edge)
 		if ( p.mode === 'boat' && ! p.riding && Math.hypot( cam.x, cam.z + 320 ) > 2000 ) this.tip( 'radio' );
 		if ( edgeAt( cam.x, cam.z ) > 0.15 ) this.tip( 'edge' );
+		// ((M16) days out: the sea more than she likes; the catch going soft; bunks to sleep in)
+		if ( g.daysOut.aboard && g.daysOut.strain >= 0.6 ) this.tip( 'stand' );
+		if ( s.inventory.some( ( f ) => f.w > 3 ) ) this.tip( 'ice' );
+		if ( g.daysOut.aboard && app.boatCtl.model.bunks.length ) this.tip( 'bunk' );
 		// ((M15) the first time you come to the fish camp, ashore or alongside its jetty)
 		if ( Math.hypot( cam.x - CAMP.keeper.x, cam.z - CAMP.keeper.z ) < 30 ) this.tip( 'camp' );
 		// (M10) the boat's hull: the first water in the bilge, aboard; the first real wear

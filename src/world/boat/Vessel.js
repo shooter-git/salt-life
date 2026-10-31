@@ -30,6 +30,7 @@ import { triangleCount } from './GeoKit.js';
 //   hornAt, searchlight    Vector3s, or null when she hasn't one
 //   seated                 she's sat in, not walked about: there's no deck mode, boarding takes the helm
 //   nearDetail             mesh names a phone may leave out far off (App.nearDetail)
+//   bunks                  [ { x, y, z } ] where you stand to turn in, for a boat that has them (game/DaysOut.js)
 //
 // And these, which do nothing until a boat needs them: setSteering, setThrottle, setPropellerRPM, setNavLights, update.
 export class Vessel {
@@ -48,6 +49,7 @@ export class Vessel {
 		this.footstep = 'wood';
 		this.rainTops = [];
 		this.nearDetail = [];
+		this.bunks = [];
 		this.lamps = {};
 		this._rpm = 0;
 

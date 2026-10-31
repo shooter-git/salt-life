@@ -1,5 +1,6 @@
 import { FISH, CARAPACE, fishLengthCm } from './FishTable.js';
 import { UPGRADES, nextLevel, FUEL_PRICE } from './Gear.js';
+import { FRESH_H } from './Seaworthy.js';
 import { BAITS, BAIT_IDS, chunksOf } from './Bait.js';
 import { LOOKS, LOOK_NAMES } from '../together/Avatar.js';
 import { NIGHT_BOX, biteHint, orderTerms, orderPlace } from './Orders.js';
@@ -18,7 +19,7 @@ const escape = ( t ) => String( t ).replace( /[&<>"']/g, ( c ) => ( { '&': '&amp
 const item = ( name, meta, ...right ) => `<div class="gm-item"><span class="gm-item-main"><span class="gm-item-name">${ name }</span><span class="gm-item-meta">${ meta }</span></span>${ right.join( '' ) }</div>`;
 // (Salt Life) price: what it fetches here (a wanted fish: the order's price); wanted: on today's list
 const fishItem = ( f, button, price = f.value, wanted = false ) => item( `${ FISH[ f.species ].name }${ f.record ? '<small>record</small>' : '' }${ wanted ? '<small class="is-wanted">wanted</small>' : '' }`,
-	`${ sizeOf( f.species, f.cm ?? fishLengthCm( f.species, f.kg ) ) } · ${ lb( f.kg ) }${ { spear: ' · speared', net: ' · netted', hand: ' · by hand' }[ f.method ] || '' }`, `<span class="gm-item-val">$${ price }</span>`, button );
+	`${ sizeOf( f.species, f.cm ?? fishLengthCm( f.species, f.kg ) ) } · ${ lb( f.kg ) }${ { spear: ' · speared', net: ' · netted', hand: ' · by hand' }[ f.method ] || '' }${ f.w > FRESH_H ? ' · <span class="is-going">going soft</span>' : '' }`, `<span class="gm-item-val">$${ price }</span>`, button );
 // (Salt Life) why the net's catch went back (GameState.addHaul)
 const BACK = { protected: 'protected', notNet: 'not bait', full: 'no room in the cooler', bucket: 'the bucket\'s full' };
 const upper = ( t ) => t.charAt( 0 ).toUpperCase() + t.slice( 1 );
@@ -169,6 +170,7 @@ html:has(.gm-panel.is-open) .hud-hint { visibility: hidden; }
 .gm-bilge.is-low .gm-bilge-bar > span { background: var(--tw-coral); }
 .gm-bilge.is-low { animation: gm-breath-pulse 0.9s ease-in-out infinite; }
 .gm-sonar-dots { letter-spacing: 1px; color: var(--tw-aqua); }
+.is-going { color: var(--tw-coral); }
 /* (Salt Life) the held breath under water; what's under the speargun's sights; the edges of sight
    closing in as the breath runs out (dark when you black out) */
 .gm-breath-bar > span { background: var(--tw-aqua); }
@@ -491,7 +493,8 @@ export class GameHUD {
 		const s = this.game.state;
 		const st = s.stats;
 		this.moneyEl.textContent = `$${ s.money.toLocaleString() }`;
-		const kg = s.holdKg;
+		// ((M16) the ice takes room in it too: DaysOut)
+		const kg = s.holdKg + ( this.game.daysOut ? this.game.daysOut.box.ice : 0 );
 		this.coolerLabel.textContent = s.upgrades.hold > 0 ? 'Hold' : 'Cooler';
 		this.coolerKg.textContent = `${ pounds( kg ) } / ${ pounds( st.holdKg ) } lb`;
 		this.coolerBar.style.width = `${ Math.min( 100, kg / st.holdKg * 100 ) }%`;
@@ -578,7 +581,7 @@ export class GameHUD {
 		this.sonarEl.classList.toggle( 'is-on', !! sonar );
 		if ( sonar ) {
 
-			this.sonarD.textContent = feet( sonar.depth );
+			this.sonarD.textContent = sonar.depth === null ? 'no bottom' : feet( sonar.depth );
 			const n = Math.round( sonar.fish * 4 );
 			this.sonarDots.textContent = '●'.repeat( n ) + '○'.repeat( 4 - n );
 
@@ -1349,7 +1352,7 @@ GameHUD.prototype.renderShop = function () {
 	// (Salt Life) and from the bait bucket, alive
 	const bq = terms ? s.quoteBait( terms ) : null;
 	const bucketRow = bq && bq.n ? item( `${ FISH[ bq.species ].name }<small class="is-wanted">wanted</small>`, `${ bq.n } live from your bait bucket · $${ bq.each } each`, `<span class="gm-item-val">$${ bq.total }</span>`, `<button class="gm-mini" data-sellbait>Sell ${ bq.n }</button>` ) : '';
-	const rows = Object.entries( UPGRADES ).map( ( [ key, track ] ) => {
+	const rows = Object.entries( UPGRADES ).filter( ( [ , track ] ) => ! track.on || track.on === s.boat ).map( ( [ key, track ] ) => {
 
 		const cur = track.levels[ s.upgrades[ key ] | 0 ];
 		const next = nextLevel( s.upgrades, key );
@@ -1364,9 +1367,10 @@ GameHUD.prototype.renderShop = function () {
 	this.drawStand( v, `
 		<div class="gm-head"><h2>${ v.name }</h2>
 		<p class="gm-sub">${ greeting } · You have $${ s.money.toLocaleString() }</p></div>
-		<div class="gm-list">${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ this.findsBlock( 'marta', 'From the beach: she\'ll buy' ) }${ bucketRow }${ baitRows }${ haulRow }${ towRow }${ repairRow }${ fuelRow }${ rows }</div>
+		<div class="gm-list">${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ this.findsBlock( 'marta', 'From the beach: she\'ll buy' ) }${ bucketRow }${ baitRows }${ haulRow }${ towRow }${ repairRow }${ fuelRow }${ g.daysOut.shopRows() }${ rows }</div>
 		<div class="gm-foot"><span class="gm-sub">Upgrades take effect at once</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>` );
 	bindFuel();
+	g.daysOut.bindShop( this.stand, () => this.renderShop() );
 	const sb = this.stand.querySelector( '[data-sellbait]' );
 	if ( sb ) sb.onclick = () => this.game.sellBait();
 	const hl = this.stand.querySelector( '[data-haul]' );

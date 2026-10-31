@@ -14,6 +14,8 @@ import { farOff } from './Units.js';
 //   - Marta, on channel 16: her tow in, called for from wherever you are (Game.towJob( true )): what it'll
 //     cost and how long she'll be, her fee by the distance (Gear.towFee). Not in a blow: she won't come out in
 //     a gale (`NO_TOW`) or once a hurricane's warned of, until it's gone by.
+// (M16) Each boat's own set (Gear's vhfM): a handheld's reach is shorter than the distance home, far out; none, no rows
+// for it. And your flares and EPIRB (DaysOut.distress), for real trouble, whatever the set can reach.
 // Keys while its panel's open: ← → picks, Enter (RT, F) does it, R (X), E (B) or Esc closes it (E doesn't
 // leave the helm while it's open).
 //   const r = new Radio( ui, game );   r.update( dt, inp, lDown )   r.reading -> { channel, big, mark, freq, tag, on }
@@ -81,7 +83,7 @@ export class Radio {
 		( ui.hud || ui.root ).append( this.words );
 		this.open = false;
 		this.listening = false; // the broadcast's on
-		this.pick = 0; // the row picked (0: the weather, 1: Marta)
+		this.pick = 0; // the row picked (rows())
 		this.call = null; // the call to Marta: { job, say, can }
 		this.lines = [];
 		this.line = - 1;
@@ -100,7 +102,7 @@ export class Radio {
 	// what the set's display shows (Instruments.js)
 	get reading() {
 
-		const c = this.call || ! ( this.listening || ( this.open && this.pick === 0 ) ) ? CH16 : WX;
+		const c = this.call || ! ( this.listening || ( this.open && this.pick === 0 && this.game.state.stats.vhfM > 0 ) ) ? CH16 : WX;
 		return { ...c, on: this.listening || !! this.call };
 
 	}
@@ -158,7 +160,7 @@ export class Radio {
 		this.open = true;
 		this.game.app.player.helmHeld = true;
 		this.call = null;
-		this.pick = this.game.towJob( true ) && this.game.state.fuelL <= 0 ? 1 : 0;
+		this.pick = this.game.towJob( true ) && this.game.state.fuelL <= 0 && this.game.state.stats.vhfM > 0 ? 1 : 0;
 		this.draw();
 		this.panel.classList.add( 'is-open' );
 		try {
@@ -180,7 +182,7 @@ export class Radio {
 
 	step( by ) {
 
-		const n = this.call ? ( this.call.can ? 2 : 1 ) : 2;
+		const n = this.call ? ( this.call.can ? 2 : 1 ) : Math.max( 1, this.rows().length );
 		this.pick = ( this.pick + by + n ) % n;
 		this.draw();
 
@@ -193,12 +195,35 @@ export class Radio {
 			if ( this.call.can && this.pick === 0 ) this.takeTow();
 			else this.hangUp();
 
-		} else if ( this.pick === 0 ) {
+			return;
+
+		}
+
+		const row = this.rows()[ this.pick ];
+		if ( ! row ) return;
+		if ( row.id === 'wx' ) {
 
 			this.listen( ! this.listening );
 			this.close();
 
-		} else if ( this.game.towJob( true ) ) this.callMarta();
+		} else if ( row.id === 'marta' ) {
+
+			if ( this.game.towJob( true ) ) this.callMarta();
+
+		} else if ( row.can ) {
+
+			this.close();
+			this.listen( false );
+			this.game.daysOut.fire( row.id );
+
+		}
+
+	}
+
+	// what's on the panel: her set's, and your distress gear (DaysOut.distress)
+	rows() {
+
+		return [ ...( this.game.state.stats.vhfM > 0 ? [ { id: 'wx' }, { id: 'marta' } ] : [] ), ...this.game.daysOut.distress() ];
 
 	}
 
@@ -209,7 +234,8 @@ export class Radio {
 		if ( ! job ) return;
 		const blown = wx && wx.wind >= NO_TOW, warned = news && news.stage === 'warning';
 		let say, can = false;
-		if ( blown || warned ) say = `Marta here. Not in this: ${ warned ? 'there\'s a hurricane on its way' : 'it\'s blowing a gale' }, and I'd not get to you. Anchor if you can, ride it out, and call me when it's blown through.`;
+		if ( job.metres > g.state.stats.vhfM ) say = `Nothing but static. You're ${ farOff( job.metres ) } off her dock, past your set's reach.`;
+		else if ( blown || warned ) say = `Marta here. Not in this: ${ warned ? 'there\'s a hurricane on its way' : 'it\'s blowing a gale' }, and I'd not get to you. Anchor if you can, ride it out, and call me when it's blown through.`;
 		else {
 
 			const pays = Math.min( job.fee, g.state.money ), short = pays < job.fee, out = job.metres / TOW.out;
@@ -256,10 +282,16 @@ export class Radio {
 
 		} else {
 
-			const job = g.towJob( true );
-			list = `<div class="gm-shop-row rd-row${ this.pick === 0 ? ' is-sel' : '' }"><span>The weather, WX1<small>The forecast for the island's waters and beyond, read on a loop while you steer</small></span><button class="gm-btn" data-wx>${ this.listening ? 'Stop' : 'Listen' }</button></div>`;
-			list += `<div class="gm-shop-row rd-row${ this.pick === 1 ? ' is-sel' : '' }"><span>Marta, channel 16<small>${ job ? `A tow in, from ${ farOff( job.metres ) } off her dock` : 'You\'re at her dock' }</small></span>${ job ? '<button class="gm-btn" data-call>Call</button>' : '' }</div>`;
-			sub = 'The VHF at the helm';
+			const job = g.towJob( true ), rows = this.rows();
+			list = rows.map( ( row, i ) => {
+
+				const sel = this.pick === i ? ' is-sel' : '';
+				if ( row.id === 'wx' ) return `<div class="gm-shop-row rd-row${ sel }"><span>The weather, WX1<small>${ g.daysOut.saidHere() }. The forecast for the island's waters and beyond, read on a loop while you steer</small></span><button class="gm-btn" data-wx>${ this.listening ? 'Stop' : 'Listen' }</button></div>`;
+				if ( row.id === 'marta' ) return `<div class="gm-shop-row rd-row${ sel }"><span>Marta, channel 16<small>${ job ? `A tow in, from ${ farOff( job.metres ) } off her dock` : 'You\'re at her dock' }</small></span>${ job ? '<button class="gm-btn" data-call>Call</button>' : '' }</div>`;
+				return `<div class="gm-shop-row rd-row${ sel }"><span>${ row.name }<small>${ row.say }</small></span><button class="gm-btn" data-fire="${ row.id }" ${ row.can ? '' : 'disabled' }>${ row.can ? `$${ Math.min( row.fee, g.state.money ).toLocaleString() }` : 'Not now' }</button></div>`;
+
+			} ).join( '' ) || '<p class="rd-say">There\'s no radio aboard her. Marta sells them.</p>';
+			sub = g.state.stats.vhfM > 0 ? 'The VHF at the helm' : 'Nothing to call with but what you carry';
 
 		}
 
@@ -280,6 +312,12 @@ export class Radio {
 
 		} );
 		on( '[data-call]', () => this.callMarta() );
+		for ( const b of this.panel.querySelectorAll( '[data-fire]' ) ) b.onclick = () => {
+
+			this.pick = this.rows().findIndex( ( row ) => row.id === b.dataset.fire );
+			this.act();
+
+		};
 		on( '[data-go]', () => this.takeTow() );
 		on( '[data-back]', () => this.hangUp() );
 

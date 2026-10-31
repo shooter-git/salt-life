@@ -5,6 +5,7 @@ import { HARBOUR_LIGHTS } from '../world/HarbourLights.js';
 import { LIGHTHOUSE } from '../world/Lighthouse.js';
 import { CAVES } from '../world/terrain/SeaCaves.js';
 import { fuelBurn } from './Gear.js';
+import { ableOf } from './Seaworthy.js';
 
 // (M15) The chart you fill in: what you've seen of the island and the far grounds, the names you've come to,
 // your own marks and where the fish were. Kept in the save (GameState's chart). The minimap and the boat's
@@ -374,16 +375,16 @@ export function legTo( x, z, tx, tz ) {
 export const magnetic = ( rad ) => ( ( Math.round( ( rad - VARIATION ) * 180 / Math.PI ) % 360 ) + 360 ) % 360;
 
 // her cruise when she's not under way: the revs, and her speed at them on a calm sea (m/s), as measured
-// (BoatController, the tired diesel: 7.1 m/s at 0.7, 2.0 L a km; flat out 9.9 m/s, 2.7 L a km)
-export const CRUISE = { rpm: 0.7, speed: 7.1 };
+// (BoatController, the tired diesel: 7.1 m/s at 0.7, 2.0 L a km; flat out 9.9 m/s, 2.7 L a km). (M16) Each boat's: Seaworthy
+export const CRUISE = ableOf( 'lobster' ).cruise;
 
 // Fuel for the way home. `perM`: litres a metre as she's going (her burn over her speed, when she's making
 // way), else at her cruise; the mariner's rule of thirds: a third out, a third back, a third kept
 //   -> { litres (to get there), state: 'ok' | 'tight' (into the last third) | 'short' (not enough) }
-export function fuelFor( metres, fuelL, { rpm = 0, speed = 0, speedMul = 1 } = {} ) {
+export function fuelFor( metres, fuelL, { rpm = 0, speed = 0, speedMul = 1, boat = 'lobster' } = {} ) {
 
-	const under = speed > 2 && rpm > 0.1;
-	const perM = under ? fuelBurn( rpm ) / speed : fuelBurn( CRUISE.rpm ) / ( CRUISE.speed * speedMul );
+	const under = speed > 2 && rpm > 0.1, cruise = ableOf( boat ).cruise;
+	const perM = under ? fuelBurn( rpm, boat ) / speed : fuelBurn( cruise.rpm, boat ) / ( cruise.speed * speedMul );
 	const litres = metres * perM;
 	return { litres, perM, state: fuelL < litres ? 'short' : fuelL < litres * 1.5 ? 'tight' : 'ok' };
 

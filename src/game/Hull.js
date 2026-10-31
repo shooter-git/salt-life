@@ -206,7 +206,8 @@ export class Hull {
 		// the water: in by the leak and the rain, out by the bucket and the pump
 		const pump = this.bilge > 0.5 ? i.pumpLs || 0 : 0;
 		const bailing = !! i.bailing && this.bilge > 0;
-		const into = leakLs( this.wear ) + rainLs( i.rain || 0 );
+		// ((M16) and green water, in more sea than she can stand: i.awash, L/s, Seaworthy.awashLs)
+		const into = leakLs( this.wear ) + rainLs( i.rain || 0 ) + ( i.awash || 0 );
 		this.bilge = clamp( this.bilge + ( into - pump - ( bailing ? BAIL_LS : 0 ) ) * dt, 0, BILGE_MAX );
 		this.pumping = pump > 0;
 		if ( bailing ) {

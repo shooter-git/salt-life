@@ -8,6 +8,8 @@ import { LIGHTHOUSE } from '../world/Lighthouse.js';
 import { toWorld } from '../world/wreck/WreckPlan.js';
 import { SHEETS, NAMES, HOME, legTo, magnetic, fuelFor } from './Chart.js';
 import { SheetBake, drawSymbols, S52, rgb } from './ChartBake.js';
+import { BOATS } from '../world/boat/Boats.js';
+import { Vector3 } from '../engine/index.js';
 
 // Minimap, lower right: the island baked once from the terrain data into a 2D canvas, shown in a round window
 // that turns with the view (forward is up, a small N on the rim). Markers: the player (centre arrow), Joe's fish
@@ -25,6 +27,7 @@ import { SheetBake, drawSymbols, S52, rgb } from './ChartBake.js';
 //   const map = new Minimap( hudEl, game, { tier } );  map.update( dt );  map.highlight( [ 'joe', 'marta' ] )
 
 const ROWS_PER_FRAME = 32;
+const _fwd = new Vector3();
 // (M15) the island's sheet (px: 2 m a pixel; 3 on the low tier), its rows a frame
 const NEAR_N = { low: 768, mid: 1152, high: 1152 };
 // (M15) the island's waters' sheet and the far grounds' (px; half on the low tier), their rows a frame
@@ -566,9 +569,12 @@ export class Minimap {
 		this._toggle( this.label, 'is-on', on );
 		if ( ! on ) return;
 		const b = this.game.app.boatCtl, s = this.game.state;
-		// ((M15) riding in someone else's, it's their fuel, and you don't know it)
-		const f = p.riding ? null : fuelFor( leg.m, s.fuelL, { rpm: b.rpm, speed: b.speed, speedMul: s.stats.speedMul || 1 } );
-		const text = `<b>Home</b> ${ ( leg.m / 1852 ).toFixed( 1 ) } NM · ${ String( magnetic( leg.bearing ) ).padStart( 3, '0' ) }°${ f ? ` · <i class="is-${ f.state }">fuel ${ f.state === 'ok' ? 'ok' : f.state === 'tight' ? 'tight' : 'short' }</i>` : '' }`;
+		// ((M16) with no plotter aboard, only her compass: her heading, magnetic)
+		const fix = p.riding || s.stats.plotter, fwd = b.forward( _fwd );
+		// ((M15) riding in someone else's, it's their fuel, and you don't know it; (M16) a kayak has none to know)
+		const f = p.riding || ! fix || ! BOATS[ s.boat ].fuel ? null : fuelFor( leg.m, s.fuelL, { rpm: b.rpm, speed: b.speed, speedMul: s.stats.speedMul || 1, boat: s.boat } );
+		const text = fix ? `<b>Home</b> ${ ( leg.m / 1852 ).toFixed( 1 ) } NM · ${ String( magnetic( leg.bearing ) ).padStart( 3, '0' ) }°${ f ? ` · <i class="is-${ f.state }">fuel ${ f.state === 'ok' ? 'ok' : f.state === 'tight' ? 'tight' : 'short' }</i>` : '' }`
+			: `<b>Compass</b> ${ String( magnetic( Math.atan2( fwd.x, - fwd.z ) ) ).padStart( 3, '0' ) }°`;
 		if ( this.label.__text !== text ) this.label.innerHTML = this.label.__text = text;
 
 	}

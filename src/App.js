@@ -38,6 +38,7 @@ import { GameState } from './game/GameState.js';
 import { DAY_RATE, START_HOUR, advance } from './game/IslandClock.js';
 import { islandTime, isPick, NORTH, weatherAt, towardOf } from './game/Weather.js';
 import { BACK_MS, awayClock, awayOf, boatLeft, cleanBoats, leftOf, withRecord } from './game/Away.js';
+import { ableEnv } from './game/Seaworthy.js';
 import { WeatherDriver } from './world/WeatherDriver.js';
 import { lampsLit } from './game/Bites.js';
 import { FishStand, STAND } from './game/FishStand.js';
@@ -517,7 +518,7 @@ export class App {
 		this.boatCtl.onSlam = ( strength ) => {
 
 			this.audio.hullSlap( strength );
-			if ( this.game ) this.game.hull.slam( strength );
+			if ( this.game ) this.game.hull.slam( strength * this.game.daysOut.slamK );
 
 		};
 
@@ -1926,7 +1927,9 @@ export class App {
 	// names, and how far out the minimap shows (the plotter's range follows it)
 	chartReading( r, map ) {
 
-		r.chart = map && map._bake && map._bake.done ? map : null;
+		// ((M16) a boat with no plotter has only her sounder)
+		r.chart = map && map._bake && map._bake.done && ( this.player.riding || this.game.state.stats.plotter ) ? map : null;
+		r.boat = this.game.state.boat;
 		r.log = this.game.state.chart;
 		r.night = G.night.value; // ((M15) the compass's lamp)
 		r.names = NAMES;
@@ -2470,7 +2473,7 @@ export class App {
 		// (as stepping ashore makes her fast: Player.exitBoat)
 		const moored = b.moored || ( ! b.anchor && ! b.hauled && Math.hypot( b.position.x - dock.x, b.position.z - dock.z ) < 14 && b.speed < 1.5 );
 		const aboard = p.riding ? null : p.mode === 'deck' ? 'deck' : p.mode === 'boat' ? 'helm' : null;
-		this.store.setItem( BOAT_KEY, JSON.stringify( boatLeft( { x: b.position.x, z: b.position.z, heading: b.getYaw(), anchor: b.anchor, moored, aboard, T: islandTime( s.day, s.timeOfDay ), at: Date.now() } ) ) );
+		this.store.setItem( BOAT_KEY, JSON.stringify( boatLeft( { x: b.position.x, z: b.position.z, heading: b.getYaw(), anchor: b.anchor, sock: b.sock, moored, aboard, T: islandTime( s.day, s.timeOfDay ), at: Date.now() } ) ) );
 		if ( this.together ) this.together.mineBoat();
 
 	}
@@ -2490,7 +2493,7 @@ export class App {
 		const T = islandTime( s.day, s.timeOfDay ), dock = WORLD.boatDock.position, pick = this.weatherPick(), since = s.weatherSince;
 		const depth = ( x, z ) => Math.max( 0, G.seaLevel.value - this.terrainData.heightAt( x, z ) );
 		const away = ! ( Date.now() - left.at < BACK_MS );
-		const story = withRecord( awayOf( left, away ? T : left.T, { dock, pick, since, depth } ), away ? mine : null, dock );
+		const story = withRecord( awayOf( left, away ? T : left.T, { dock, pick, since, depth, ...ableEnv( st.boat ) } ), away ? mine : null, dock );
 		const paid = st.payTow( story.fee ), towed = story.tows.length > 0;
 		if ( story.wear > 0 ) {
 
@@ -2500,7 +2503,7 @@ export class App {
 
 		}
 
-		const fish = story.spoiled ? st.spoil() : 0;
+		const fish = g.daysOut.awayHours( story.hours );
 		const yaw = new THREE.Vector3( 0, 1, 0 );
 		if ( story.where === 'cradle' ) {
 
@@ -2524,6 +2527,7 @@ export class App {
 			}
 
 			b.anchor = story.anchor ? new THREE.Vector3( story.anchor.x, this.terrainData.heightAt( story.anchor.x, story.anchor.z ), story.anchor.z ) : null;
+			b.sock = !! story.sock;
 			b.hasWater = false;
 			b.apply();
 

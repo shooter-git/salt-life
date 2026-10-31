@@ -1,4 +1,5 @@
 import { BOATS } from '../world/boat/Boats.js';
+import { ableOf, BASE, DAYS_TRACKS } from './Seaworthy.js';
 
 // Gear and upgrade data, sold by Marta at the chandlery by the boathouse; everything the game reads
 // goes through gearStats( state.upgrades ), so buying a level is just state.upgrades[ key ]++ and the
@@ -106,6 +107,8 @@ export const UPGRADES = {
 		{ cost: 0, label: 'Your own, as you go', chart: false },
 		{ cost: 30, label: 'Waterproof chart of the island, to the drop-off', chart: true },
 	] },
+	// (M16) days out: navigation, the deep finder, the deep anchor and the sock on each boat, and your flares (Seaworthy.js)
+	...DAYS_TRACKS,
 };
 
 export const FUEL_PRICE = 1.5; // $ per litre of diesel at the chandlery
@@ -126,10 +129,11 @@ export const awayTowFee = ( metres ) => Math.min( AWAY_TOW_MAX, towFee( metres )
 export const towTime = ( metres ) => Math.max( 0, metres ) * ( 1 / TOW.out + 1 / TOW.back );
 // (M13) Marta's haul-out ahead of a hurricane ($: less than the repair a hurricane leaves to do)
 export const HAUL_FEE = 40;
-// litres per second at the helm: idle plus a lot more at full rpm (40 L lasts ~25 min flat out)
-export function fuelBurn( rpm ) {
+// litres per second at the helm: idle plus a lot more at full rpm (40 L lasts ~25 min flat out; (M16) each boat's: Seaworthy)
+export function fuelBurn( rpm, boat = 'lobster' ) {
 
-	return 0.0025 + 0.024 * rpm * rpm;
+	const [ idle, k ] = ableOf( boat ).burn;
+	return idle + k * rpm * rpm;
 
 }
 
@@ -153,7 +157,7 @@ export function defaultUpgrades() {
 // merged stats of the current levels: your own gear's and the boat's you're in, over what she is without them
 export function gearStats( upgrades, boat = 'lobster' ) {
 
-	const s = { ...BOATS[ boat ].stats };
+	const s = { ...BOATS[ boat ].stats, ...BASE[ boat ] };
 	for ( const k in UPGRADES ) {
 
 		if ( UPGRADES[ k ].on && UPGRADES[ k ].on !== boat ) continue;

@@ -17,6 +17,7 @@ import { tellOf } from './Away.js';
 import { GameHUD } from './GameHUD.js';
 import { TimeHUD } from './TimeHUD.js';
 import { Radio } from './Radio.js';
+import { DaysOut } from './DaysOut.js';
 import { timeText } from './IslandClock.js';
 import { HOURS, NIGHT_BOX, ordersFor, tradeDay, stallOpen, shutFor } from './Orders.js';
 import { WantedBoard } from './WantedBoard.js';
@@ -63,7 +64,7 @@ const RODE_SEGS = 16;
 const BAIL_FROM = 20;
 const WEAR_SAVE = 0.02;
 export { HAUL_FEE };
-const _a = new Vector3(), _b = new Vector3(), _h = new Vector3();
+const _a = new Vector3(), _b = new Vector3(), _h = new Vector3(), _sock = new Vector3();
 const _pose = { pos: new Vector3(), head: new Vector3(), roll: 0, thrash: 0 };
 const BAG_FROM = 0.85; // the brails drawn this far: the netting has closed round what's under it (it rides in the purse)
 // (Salt Life) the hand net's reach (m); how long a lobster in the net shows before it's gauged (s); a
@@ -227,6 +228,7 @@ export class Game {
 		// (M10) the hull (Hull.js): her wear (in the save: the state is its store), the water in her bilge
 		// (her mass, as it's aboard) and her engine; the bucket going; what's been said
 		this.hull = new Hull( { store: this.state } );
+		this.daysOut = new DaysOut( this ); // ((M16) ice, stores, bunks, flares: DaysOut.js)
 		this._massBase = b.mass;
 		this._wearSaved = this.state.hull;
 		this._bailing = false;
@@ -434,6 +436,7 @@ export class Game {
 			ui.onReplayGuide = () => this.guide.replay();
 			// ((M15) the VHF at the helm)
 			this.radio = new Radio( ui, this );
+			this.daysOut.gauges( this.hud.purse );
 
 		}
 
@@ -633,6 +636,7 @@ export class Game {
 
 		// (M10) the bucket on deck; the crank at the helm while she's stalled
 		this.updateBail( inp, p );
+		this.daysOut.update( dt, inp, p );
 		// prompts when the player has nothing to say
 		if ( ! p.prompt && ( can || canSpear ) ) p.prompt = this.prompt();
 
@@ -721,7 +725,7 @@ export class Game {
 	updateBoat( dt ) {
 
 		const app = this.app, b = app.boatCtl, p = app.player, s = this.state;
-		if ( b.driven && b.engineOn ) s.burn( fuelBurn( b.rpm ) * dt );
+		if ( b.driven && b.engineOn ) s.burn( fuelBurn( b.rpm, s.boat ) * dt );
 		else if ( this._wasDriven && ! b.driven ) s.save();
 		this.updateHull( dt );
 		this.updateAnchor( b.driven && ! this._wasDriven, ! b.driven && this._wasDriven );
@@ -738,7 +742,7 @@ export class Game {
 				const h = this.habitatAtPoint( x, z, depth );
 				let rich = 0;
 				for ( const k in h ) rich += h[ k ];
-				this._sonar = { depth, fish: Math.min( 1, rich / 1.4 ) };
+				this._sonar = this.daysOut.sonar( depth, rich );
 
 			}
 
@@ -765,7 +769,7 @@ export class Game {
 		hull.step( dt, {
 			driven: b.driven, throttle: b.driven ? Math.abs( b.throttleTarget || 0 ) : 0, fuel: s.fuelL > 0, rain: ashore ? 0 : G.rain.value,
 			storm: ashore || ! app.weather ? 0 : app.weather.windAt( b.position.x, b.position.z ),
-			bailing: this._bailing, pumpLs: s.stats.pumpLs, pile: c.pile, ground: c.ground, slide: c.slide, aground: c.aground,
+			awash: this.daysOut.awash, bailing: this._bailing, pumpLs: s.stats.pumpLs, pile: c.pile, ground: c.ground, slide: c.slide, aground: c.aground,
 		} );
 		c.pile = c.ground = c.slide = 0;
 		c.aground = false;
@@ -983,7 +987,15 @@ export class Game {
 
 			}
 
-		} else if ( left ) this._anchorDue = this.state.stats.anchorM > 0 && ! b.anchor;
+			// ((M16) and her drift sock in)
+			if ( b.sock ) {
+
+				b.sock = false;
+				this.toast( 'Drift sock in', 1600 );
+
+			}
+
+		} else if ( left ) this._anchorDue = ( this.state.stats.anchorM > 0 || this.state.stats.sock ) && ! b.anchor && ! b.sock;
 		if ( this._anchorDue && ! b.driven && b.speed < ANCHOR_SPEED ) {
 
 			this._anchorDue = false;
@@ -992,10 +1004,10 @@ export class Game {
 		}
 
 		const rode = this.rode;
-		rode.visible = !! b.anchor;
-		if ( ! b.anchor ) return;
+		rode.visible = !! b.anchor || !! b.sock;
+		if ( ! rode.visible ) return;
 		b.toWorld( b.stemHead, rode.material.uniforms.lineA.value );
-		this.layRode( rode, b.anchor );
+		this.layRode( rode, b.anchor || this.daysOut.sockPoint( _sock ) );
 
 	}
 
@@ -1032,7 +1044,13 @@ export class Game {
 		const depth = Math.max( 0, G.seaLevel.value - floor );
 		if ( depth > max ) {
 
-			this.toast( `Too deep to anchor · ${ feet( depth ) } of water, the rode holds in ${ feet( max ) }`, 3200 );
+			// ((M16) past its reach, her drift sock if she has one)
+			if ( this.state.stats.sock ) {
+
+				b.sock = true;
+				this.toast( max > 0 ? `Too deep to anchor · drift sock out, her head to the sea` : 'Drift sock out · her head to the sea', 2600 );
+
+			} else this.toast( `Too deep to anchor · ${ feet( depth ) } of water, the rode holds in ${ feet( max ) }`, 3200 );
 			return;
 
 		}
@@ -1561,7 +1579,7 @@ export class Game {
 		// (M10: in a blow, the wind gusting on the line)
 		// (the line out: no more than the rod casts and a fish could have taken, whatever's gone wrong)
 		const out = Math.min( Math.max( 3, this.rod.lineOut ), this.rod.castM * 1.5 + 10 );
-		this.fight = new CatchMinigame( { species: b.species, kg: b.kg, lineKg: g.lineKg, reelSpeed: g.reelSpeed, distance: Number.isFinite( out ) ? out : 3, wind: blowShare( G.windSpeed.value ) } );
+		this.fight = new CatchMinigame( { species: b.species, kg: b.kg, lineKg: g.lineKg, reelSpeed: g.reelSpeed * this.daysOut.strength, distance: Number.isFinite( out ) ? out : 3, wind: blowShare( G.windSpeed.value ) } );
 		this.fight.place = b.place;
 		this.fight.at = b.at;
 		this.bite = null;
