@@ -2,7 +2,7 @@ import { Vector3, Color, Mesh, BoxGeometry, MeshStandardMaterial, Group } from '
 import { G } from '../core/Globals.js';
 import { WORLD } from '../world/WorldLayout.js';
 import { FISH, CARAPACE, fishWeightKg, spearRule } from './FishTable.js';
-import { habitatAt, pickSpecies, rollWeight, biteDelay } from './Bites.js';
+import { habitatAt, rollWeight } from './Bites.js';
 import { CatchMinigame } from './CatchMinigame.js';
 import { GameState } from './GameState.js';
 import { FishingRod, buildLineGeometry } from './FishingRod.js';
@@ -45,7 +45,7 @@ import { PLACES, placeOf, placeName } from './Places.js';
 import { FINDS, lying, messageOf } from './Beachcomb.js';
 import { ordersOf, tagFor } from './Orders.js';
 import { Rigs } from './rigs/Rigs.js';
-import { atHook } from './rigs/Presentation.js';
+import { atHook, pickOnRig, waitOnRig } from './rigs/Presentation.js';
 
 // how long the catch card stays up unless dismissed (ms)
 const CATCH_CARD_MS = 9000;
@@ -1507,7 +1507,7 @@ export class Game {
 		}
 
 		// ((M16) on a lead, not till it's down: Rigs.update)
-		this.bite = this.rod.rig === 'bottom' ? null : { phase: 'wait', t: biteDelay( this.habitat(), this.hour, Math.random, this.hookBait ) };
+		this.bite = this.rod.rig === 'bottom' ? null : { phase: 'wait', t: waitOnRig( this.habitat(), this.hour, Math.random, this.hookBait ) };
 
 	}
 
@@ -1527,7 +1527,7 @@ export class Game {
 		if ( b.phase === 'wait' ) {
 
 			const h = this.habitat();
-			const species = pickSpecies( h, this.hour, Math.random, this.hookBait );
+			const species = pickOnRig( h, this.hour, Math.random, this.hookBait );
 			if ( ! species ) {
 
 				b.t = 8;
@@ -1554,7 +1554,7 @@ export class Game {
 
 				this.hookBait = null;
 				this.toast( 'Something picked the bait clean off the hook · shrimp until you cast again', 2400 );
-				this.bite = { phase: 'wait', t: biteDelay( this.habitat(), this.hour ) };
+				this.bite = { phase: 'wait', t: waitOnRig( this.habitat(), this.hour ) };
 				return;
 
 			}
@@ -1573,7 +1573,7 @@ export class Game {
 
 			this.toast( this.hookBait ? `It ran off with your ${ BAITS[ this.hookBait ].name.toLowerCase() }` : 'It took the bait and ran', 1800 );
 			this.hookBait = null;
-			this.bite = { phase: 'wait', t: biteDelay( this.habitat(), this.hour ) };
+			this.bite = { phase: 'wait', t: waitOnRig( this.habitat(), this.hour ) };
 
 		}
 

@@ -2,10 +2,10 @@ import { Vector3 } from '../../engine/index.js';
 import { G } from '../../core/Globals.js';
 import { BAITS, BAIT_IDS, onHand } from '../Bait.js';
 import { FISH } from '../FishTable.js';
-import { biteDelay, pickSpecies, rollWeight } from '../Bites.js';
+import { rollWeight } from '../Bites.js';
 import { placeOf } from '../Places.js';
 import { fishLength } from '../CatchDisplay.js';
-import { atHook, baitFits, KNOTS, leaderFor, leaderRisk, leapsOf, LEADERS, RIG_IDS, RIGS, towTaste } from './Presentation.js';
+import { atHook, baitFits, hookOf, KNOTS, leaderFor, leaderRisk, leapsOf, LEADERS, pickOnRig, RIG_IDS, RIGS, towTaste, waitOnRig } from './Presentation.js';
 import { RigMesh } from './RigMesh.js';
 import { Glasses } from './Glasses.js';
 
@@ -164,7 +164,7 @@ export class Rigs {
 	handRig() {
 
 		const rod = this.game.rod, lure = BAITS[ this.game.hookBait ]?.lure ? this.game.hookBait : null;
-		return { kind: rod.rig, hookM: rod.hookM, floorM: rod.depth, lure, knots: 0, lines: 1, leader: leaderFor( this.stats.leader, rod.rig, 0, lure ) };
+		return hookOf( rod.rig, rod.hookM, rod.depth, { lure, leader: leaderFor( this.stats.leader, rod.rig, 0, lure ) } );
 
 	}
 
@@ -349,7 +349,7 @@ export class Rigs {
 		if ( this._trollT === null ) {
 
 			const h = this._trollWater( this.lines[ 0 ], knots );
-			this._trollT = biteDelay( h, g.hour, Math.random, this.lines[ 0 ].bait );
+			this._trollT = waitOnRig( h, g.hour, Math.random, this.lines[ 0 ].bait );
 			if ( ! Number.isFinite( this._trollT ) ) this._trollT = 30;
 
 		}
@@ -359,7 +359,7 @@ export class Rigs {
 		this._trollT = null;
 		const live = this.lines.filter( ( L ) => L.bait && ! L.in && towTaste( BAITS[ L.bait ].tow, knots ) > 0 );
 		const L = live[ Math.floor( Math.random() * live.length ) ];
-		const h = this._trollWater( L, knots ), species = pickSpecies( h, g.hour, Math.random, L.bait );
+		const h = this._trollWater( L, knots ), species = pickOnRig( h, g.hour, Math.random, L.bait );
 		if ( ! species ) {
 
 			this._trollT = 12;
@@ -379,7 +379,7 @@ export class Rigs {
 
 		const g = this.game, x = L.p.x, z = L.p.z, T = this.app.terrainData, floorM = Math.max( 0, G.seaLevel.value - T.heightAt( x, z ) );
 		const lure = BAITS[ L.bait ]?.lure ? L.bait : null;
-		return atHook( g.habitatOf( x, z, floorM ), { kind: 'troll', hookM: 0.3, floorM, knots, lines: this.lines.length, lure, leader: leaderFor( this.stats.leader, 'troll', knots, lure ) } );
+		return atHook( g.habitatOf( x, z, floorM ), hookOf( 'troll', 0.3, floorM, { knots, lines: this.lines.length, lure, leader: leaderFor( this.stats.leader, 'troll', knots, lure ) } ) );
 
 	}
 
@@ -514,7 +514,7 @@ export class Rigs {
 		if ( ! K.down && this._waiting && K.up >= 1 ) {
 
 			this._waiting = false;
-			g.bite = { phase: 'wait', t: biteDelay( g.habitat(), g.hour, Math.random, g.hookBait ) };
+			g.bite = { phase: 'wait', t: waitOnRig( g.habitat(), g.hour, Math.random, g.hookBait ) };
 			g.toast( 'Bait\'s splashing on the surface · watch it', 2400 );
 
 		}
@@ -583,7 +583,7 @@ export class Rigs {
 		const g = this.game, rod = g.rod, s = this.stats, electric = rod.rig === 'drop' && s.electricReel;
 		const leader = leaderFor( s.leader, rod.rig, this.app.boatCtl.speed * KNOTS, BAITS[ g.hookBait ]?.lure ? g.hookBait : null );
 		const risk = leaderRisk( leader, b.species ), big = b.kg >= BIG_KG;
-		const chair = this.inChair && !! s.fightingChair;
+		const chair = this.inChair && !! s.chair;
 		return {
 			lineKg: s.lineKg,
 			reelSpeed: electric ? ELECTRIC.speed : s.reelSpeed,
@@ -657,7 +657,7 @@ export class Rigs {
 	updateChair( inp ) {
 
 		const g = this.game, p = this.app.player, f = g.fight, seat = this.app.boat.chair;
-		if ( ! seat || ! this.stats.fightingChair || p.mode !== 'deck' ) {
+		if ( ! seat || ! this.stats.chair || p.mode !== 'deck' ) {
 
 			if ( this.inChair ) this._sit( false );
 			return null;
@@ -734,7 +734,7 @@ export class Rigs {
 		if ( this._waiting && rod.state === 'floating' && rod.settled && ( rod.rig === 'bottom' || rod.rig === 'drop' ) ) {
 
 			this._waiting = false;
-			g.bite = { phase: 'wait', t: biteDelay( g.habitat(), g.hour, Math.random, g.hookBait ) };
+			g.bite = { phase: 'wait', t: waitOnRig( g.habitat(), g.hour, Math.random, g.hookBait ) };
 			const floor = rod.depth - 0.4;
 			g.toast( rod.hookM >= floor - 0.6 ? `On the bottom · ${ Math.round( rod.hookM ) } m down` : `${ Math.round( rod.hookM ) } m down, all the line you can work · the bottom's at ${ Math.round( rod.depth ) } m`, 3200 );
 
@@ -850,7 +850,8 @@ export class Rigs {
 
 		}
 
-		// the kite, a square with cross spars, its tail hanging down: a fishing kite is about a metre across
+		// the kite: as the real ones are (an SFE or a Bob Lewis), a pale square flown as a diamond about a metre across on two
+		// dark cross spars, bellied a little by the wind, and no tail. Grown with distance so it can be seen at all
 		const s = 0.55 * Math.max( 1, K.at.distanceTo( D.eye ) / 60 ), wd = G.windDir.value;
 		_a.set( - wd.y, 0, wd.x ).multiplyScalar( s ); // across the wind
 		_b.set( wd.x * 0.5, 1, wd.y * 0.5 ).normalize().multiplyScalar( s ); // up its face, tilted back
@@ -858,13 +859,15 @@ export class Rigs {
 		_c.copy( _a ).multiplyScalar( Math.cos( roll ) ).addScaledVector( _b, Math.sin( roll ) );
 		_d.copy( _b ).multiplyScalar( Math.cos( roll ) ).addScaledVector( _a, - Math.sin( roll ) );
 		const N = _e.crossVectors( _c, _d ).normalize().clone();
-		const P = ( u, v ) => K.at.clone().addScaledVector( _c, u ).addScaledVector( _d, v );
-		D.fan( [ P( 0, 1 ), P( - 1, 0 ), P( 0, 0 ), P( 1, 0 ) ], N, 0xf0f0ea, 0.7 );
-		D.fan( [ P( 0, - 1 ), P( 1, 0 ), P( 0, 0 ), P( - 1, 0 ) ], N, 0xd52b2b, 0.7 );
-		D.tube( [ P( - 1, 0 ), P( 1, 0 ) ], [ 0.012, 0.012 ], 0x1a1a1a, 0.5, 0, 4 );
-		D.tube( [ P( 0, - 1 ), P( 0, 1 ) ], [ 0.012, 0.012 ], 0x1a1a1a, 0.5, 0, 4 );
-		const t0 = P( 0, - 1 ), t1 = t0.clone().add( _a.set( 0.7 * Math.sin( K.sway * 2.1 ), - 1.8, 0.7 * Math.cos( K.sway * 1.7 ) ) );
-		D.line( t0, t0.clone().lerp( t1, 0.5 ), t1, 3, 0xd52b2b, 3 );
+		const belly = N.clone().multiplyScalar( s * 0.12 * ( wd.x * N.x + wd.y * N.z > 0 ? 1 : - 1 ) );
+		const P = ( u, v, w = 0 ) => K.at.clone().addScaledVector( _c, u ).addScaledVector( _d, v ).addScaledVector( belly, w );
+		const mid = P( 0, 0, 1 ), T = P( 0, 1 ), R = P( 1, 0 ), B = P( 0, - 1 ), Lf = P( - 1, 0 );
+		D.fan( [ mid, T, Lf ], N, 0xeeece2, 0.75 );
+		D.fan( [ mid, Lf, B ], N, 0xdedcd0, 0.75 );
+		D.fan( [ mid, B, R ], N, 0xeeece2, 0.75 );
+		D.fan( [ mid, R, T ], N, 0xdedcd0, 0.75 );
+		D.tube( [ Lf, R ], [ 0.012 * s * 1.8, 0.012 * s * 1.8 ], 0x1a1a1a, 0.5, 0, 4 );
+		D.tube( [ B, T ], [ 0.012 * s * 1.8, 0.012 * s * 1.8 ], 0x1a1a1a, 0.5, 0, 4 );
 
 	}
 

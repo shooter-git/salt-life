@@ -1,13 +1,17 @@
-import { FISH } from '../FishTable.js';
+import { FISH, FISH_IDS } from '../FishTable.js';
+import { biteDelay, pickSpecies } from '../Bites.js';
 
-// (M16) What's in the water on the end of your line, and what the fish make of it: data and arithmetic only, so the
-// bites and the tests read it freely (Bites.js takes habitat.rig: rigWeight, rigDelay; Game.habitat: atHook).
+// (M16) What's in the water on the end of your line, and what the fish make of it: no three.js, so the tests read it freely.
+// Bites.js has the fish's own say (habitat.hook, by the table's ways, at and eats: docs/m16/fish.md). Here's the
+// rest of it, round Bites: the water as the hook finds it (atHook), who strikes at what speed and looks at what leader
+// (rigWeight, in pickOnRig), and how long the wait is (rigDelay, in waitOnRig).
 //
-// A rig:
-//   kind     'float' (a hook under a float) | 'bottom' (a sinker to the seabed, by hand) | 'troll' (towed behind a
-//            running boat) | 'kite' (hung from a kite, splashing at the surface) | 'drop' (a heavy lead to the deep
-//            seabed on an electric reel)
-//   hookM    how far the hook is under the surface, m
+// The hook (habitat.hook, and the rig on your line):
+//   way      as the fish table knows it: 'float' | 'troll' | 'kite' | 'drop'
+//   kind     'float' (a hook under a float) | 'bottom' (a sinker to the seabed, by hand: the 'float' way, deeper) |
+//            'troll' (towed behind a running boat) | 'kite' (hung from a kite, splashing at the surface) | 'drop' (a
+//            heavy lead to the deep seabed on an electric reel)
+//   depth    how far the hook is under the surface, m
 //   floorM   the water under it, m
 //   knots    what it's towed at (troll)
 //   lines    how many are out (troll)
@@ -62,7 +66,11 @@ export function leaderFor( level, kind, knots = 0, lure = null ) {
 
 export const LEADERS = { mono: 'light mono', fluoro: 'fluorocarbon', wire: 'wire', heavy: '200 lb mono' };
 
-// ---- what the fish make of it. Each of these can be said on the fish's own entry (FishTable): its own wins
+// the hook for a rig
+export const hookOf = ( kind, depth, floorM, extra = {} ) => ( { way: kind === 'bottom' ? 'float' : kind, kind, depth, floorM, lure: null, knots: 0, lines: 1, leader: 'mono', ...extra } );
+
+// ---- what the fish make of it. The table's ways and at (Bites.hookWeight) say most of it; for a fish that has neither,
+// these. knots, shy, teeth, bill and leaps can be said on the fish's own entry: its own wins
 
 // its taste for a rig, past which any fish of open water takes a towed bait or one on a kite, and little else does
 const TASTE = {
@@ -101,23 +109,31 @@ export function columnOf( id, hour = 12 ) {
 
 	const f = FISH[ id ];
 	if ( ! f ) return null;
-	const night = hour < 6 || hour > 19;
-	if ( night && ( f.columnNight || COLUMN_NIGHT[ id ] ) ) return f.columnNight || COLUMN_NIGHT[ id ];
-	if ( f.column || COLUMN[ id ] ) return f.column || COLUMN[ id ];
+	if ( hour < 6 || hour > 19 ) {
+
+		if ( COLUMN_NIGHT[ id ] ) return COLUMN_NIGHT[ id ];
+
+	}
+
+	if ( COLUMN[ id ] ) return COLUMN[ id ];
 	const h = f.habitat || {};
 	return OPEN.some( ( k ) => h[ k ] ) && ! ROOTED.some( ( k ) => h[ k ] ) ? [ 0, 150 ] : null;
 
 }
 
-// a species' bite weight on this rig, times this (no rig: as it was)
+// a species' weight on this hook, times this, past what Bites made of it (no hook: as it was)
 export function rigWeight( rig, id, hour = 12 ) {
 
 	if ( ! rig ) return 1;
 	const f = FISH[ id ] || {};
-	let x = ( f.rigs && f.rigs[ rig.kind ] ) ?? ( TASTE[ rig.kind ] && TASTE[ rig.kind ][ id ] ) ?? TASTE_ELSE[ rig.kind ];
-	const c = columnOf( id, hour );
-	if ( c ) x *= inColumn( c, rig.hookM );
-	if ( f.floor != null ) x *= inColumn( [ 0, f.floor ], Math.max( 0, rig.floorM - rig.hookM ) );
+	let x = f.ways ? 1 : ( TASTE[ rig.kind ] && TASTE[ rig.kind ][ id ] ) ?? TASTE_ELSE[ rig.kind ];
+	if ( ! f.at ) {
+
+		const c = columnOf( id, hour );
+		if ( c ) x *= inColumn( c, rig.depth );
+
+	}
+
 	if ( rig.kind === 'troll' ) {
 
 		const k = f.knots || TOW_KNOTS[ id ] || TOW_KNOTS_ELSE, v = rig.knots || 0;
@@ -132,6 +148,29 @@ export function rigWeight( rig, id, hour = 12 ) {
 	return x;
 
 }
+
+// pickSpecies with rigWeight on it, by turning away what it offers in that proportion. h: atHook's
+export function pickOnRig( h, hour, rng = Math.random, bait = null ) {
+
+	const rig = h.hook;
+	if ( ! rig ) return pickSpecies( h, hour, rng, bait );
+	let top = 0;
+	for ( const id of FISH_IDS ) top = Math.max( top, rigWeight( rig, id, hour ) );
+	if ( top <= 0 ) return null;
+	for ( let i = 0; i < 40; i ++ ) {
+
+		const id = pickSpecies( h, hour, rng, bait );
+		if ( ! id ) return null;
+		if ( rng() * top < rigWeight( rig, id, hour ) ) return id;
+
+	}
+
+	return null;
+
+}
+
+// biteDelay on this rig
+export const waitOnRig = ( h, hour, rng = Math.random, bait = null ) => biteDelay( h, hour, rng, bait ) * rigDelay( h.hook );
 
 // how much longer a bite takes on this rig than on a float. A towed bait covers water but few come up to it: real
 // days offshore are hours between strikes, here minutes; the more lines the sooner. Deep down it's a long wait
@@ -156,11 +195,11 @@ const nearFloor = ( gap ) => 1 - smooth( 8, 30, gap );
 export function atHook( h, rig ) {
 
 	if ( ! rig ) return h;
-	const gap = Math.max( 0, rig.floorM - rig.hookM ), low = Math.max( 0.06, nearFloor( gap ) ), top = 1 - smooth( 20, 70, rig.hookM );
+	const gap = Math.max( 0, rig.floorM - rig.depth ), low = Math.max( 0.06, nearFloor( gap ) ), top = 1 - smooth( 20, 70, rig.depth );
 	for ( const k of [ 'deep', 'ledge' ] ) h[ k ] *= low;
 	h.reef *= Math.max( 0.1, 1 - smooth( 12, 35, gap ) );
 	for ( const k of [ 'weed', 'debris', 'birds' ] ) h[ k ] *= top;
-	h.rig = rig;
+	h.hook = rig;
 	return h;
 
 }

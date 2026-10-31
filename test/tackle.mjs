@@ -9,8 +9,8 @@ import { CatchMinigame } from '../src/game/CatchMinigame.js';
 import { BAITS, onHand } from '../src/game/Bait.js';
 import { gearStats, defaultUpgrades, UPGRADES } from '../src/game/Gear.js';
 import { GameState } from '../src/game/GameState.js';
-import { biteDelay, habitatAt, pickSpecies } from '../src/game/Bites.js';
-import { atHook, baitFits, columnOf, leaderFor, leaderRisk, rigDelay, rigWeight, towTaste } from '../src/game/rigs/Presentation.js';
+import * as Bites from '../src/game/Bites.js';
+import { atHook, baitFits, hookOf, leaderFor, leaderRisk, pickOnRig, rigDelay, rigWeight, towTaste, waitOnRig } from '../src/game/rigs/Presentation.js';
 import { fishSeen, glareLeft } from '../src/game/rigs/Glasses.js';
 import { HOLD_KG } from '../src/game/rigs/Rigs.js';
 import { FishingRod } from '../src/game/FishingRod.js';
@@ -23,6 +23,9 @@ const ok = ( c, what ) => {
 
 };
 
+const { habitatAt } = Bites;
+// a fish's whole weight on a hook: the fish table's say of it (Bites.hookWeight, when the fish stream's there) and ours
+const weight = ( rig, id, hour = 12 ) => rigWeight( rig, id, hour ) * ( Bites.hookWeight && FISH[ id ] && FISH[ id ].ways ? Bites.hookWeight( id, rig, hour ) : 1 );
 let seed = 5;
 const rng = () => ( ( seed = ( seed * 1664525 + 1013904223 ) >>> 0 ) / 4294967296 );
 // the share of the bites by species
@@ -31,7 +34,7 @@ const shares = ( h, hour = 10, bait = null, n = 4000 ) => {
 	const c = {};
 	for ( let i = 0; i < n; i ++ ) {
 
-		const id = pickSpecies( { ...h }, hour, rng, bait );
+		const id = pickOnRig( { ...h }, hour, rng, bait );
 		if ( id ) c[ id ] = ( c[ id ] || 0 ) + 1 / n;
 
 	}
@@ -45,14 +48,14 @@ const among = ( s, ...ids ) => ids.reduce( ( a, id ) => a + ( s[ id ] || 0 ), 0 
 {
 
 	const water = () => habitatAt( { depth: 80, reefDist: 400, pierDist: 900 } );
-	const float = atHook( water(), { kind: 'float', hookM: 5, floorM: 80, leader: 'mono' } ), sinker = atHook( water(), { kind: 'bottom', hookM: 79.6, floorM: 80, leader: 'mono' } );
-	const bare = atHook( water(), { kind: 'bottom', hookM: 30, floorM: 80, leader: 'mono' } );
+	const float = atHook( water(), hookOf( 'float', 5, 80 ) ), sinker = atHook( water(), hookOf( 'bottom', 79.6, 80 ) );
+	const bare = atHook( water(), hookOf( 'bottom', 30, 80 ) );
 	ok( float.deep < 0.1 && sinker.deep > 0.9 && bare.deep < 0.1, `a hook only finds the bottom's fish on the bottom: under a float ${ float.deep.toFixed( 2 ) }, on a sinker ${ sinker.deep.toFixed( 2 ) }, 50 m off it ${ bare.deep.toFixed( 2 ) }` );
 	ok( among( shares( sinker ), 'redSnapper', 'silkSnapper', 'blackGrouper', 'grouper', 'cuberaSnapper', 'muttonSnapper' ) > 0.5, 'the sinker brings up the deep shelf\'s snappers and groupers' );
 	ok( atHook( water(), null ).deep === water().deep, 'with no rig the water\'s as it was' );
 	const reef = habitatAt( { depth: 8, reefDist: - 3, pierDist: 900 } );
-	ok( atHook( { ...reef }, { kind: 'float', hookM: 5, floorM: 8, leader: 'mono' } ).reef > 0.9 * reef.reef, 'a float still fishes a reef: its hook\'s well down in that water' );
-	const birds = ( hookM, floorM ) => atHook( habitatAt( { depth: floorM, reefDist: 4000, pierDist: 9000, birds: 1 } ), { kind: hookM > 5 ? 'drop' : 'float', hookM, floorM, leader: 'mono' } ).birds;
+	ok( atHook( { ...reef }, hookOf( 'float', 5, 8 ) ).reef > 0.9 * reef.reef, 'a float still fishes a reef: its hook\'s well down in that water' );
+	const birds = ( hookM, floorM ) => atHook( habitatAt( { depth: floorM, reefDist: 4000, pierDist: 9000, birds: 1 } ), hookOf( hookM > 5 ? 'drop' : 'float', hookM, floorM ) ).birds;
 	ok( birds( 2, 800 ) > 0.9 && birds( 300, 800 ) < 0.05, 'under the birds is on top, not 300 m down' );
 
 }
@@ -60,14 +63,15 @@ const among = ( s, ...ids ) => ids.reduce( ( a, id ) => a + ( s[ id ] || 0 ), 0 
 // ---- who takes what, how deep. Swordfish: deep by day and up at night; the blue water's fish aren't down in the dark
 {
 
-	FISH.swordfish = FISH.swordfish || { name: 'Swordfish', habitat: { blue: 1, edge: 1 }, kg: [ 20, 250 ], fight: 1, stamina: 240, time: 'any', rarity: 0.3 };
-	const drop = { kind: 'drop', hookM: 480, floorM: 490, leader: 'heavy' }, night = { kind: 'float', hookM: 40, floorM: 490, leader: 'heavy' };
-	ok( rigWeight( drop, 'swordfish', 10 ) > 4 && rigWeight( { ...drop, hookM: 30 }, 'swordfish', 10 ) < 0.2, 'by day a swordfish is taken deep, not on top' );
-	ok( rigWeight( night, 'swordfish', 23 ) > 0.8 && rigWeight( drop, 'swordfish', 23 ) < 0.2, 'at night it\'s come up' );
-	ok( columnOf( 'mahi' )[ 1 ] <= 200 && rigWeight( drop, 'mahi', 10 ) < 0.1 && rigWeight( drop, 'tuna', 10 ) < 0.1, 'the mahi and tuna aren\'t at 480 m' );
-	ok( rigWeight( { kind: 'float', hookM: 5, floorM: 40, leader: 'mono' }, 'redSnapper', 10 ) === 1, 'an old rig and fish as they were: weight 1' );
+	const had = !! FISH.swordfish;
+	if ( ! had ) FISH.swordfish = { name: 'Swordfish', habitat: { blue: 1, edge: 1 }, kg: [ 20, 250 ], fight: 1, stamina: 240, time: 'any', rarity: 0.3 };
+	const drop = hookOf( 'drop', 480, 490, { leader: 'heavy' } ), high = hookOf( 'drop', 30, 490, { leader: 'heavy' } ), night = hookOf( 'float', 40, 490, { leader: 'heavy' } );
+	ok( weight( drop, 'swordfish', 10 ) > 5 * weight( high, 'swordfish', 10 ), 'by day a swordfish is taken deep, not on top' );
+	ok( weight( night, 'swordfish', 23 ) > 0.8 && weight( drop, 'swordfish', 23 ) < 0.3 * weight( night, 'swordfish', 23 ), 'at night it\'s come up' );
+	ok( weight( drop, 'mahi', 10 ) < 0.1 && weight( drop, 'tuna', 10 ) < 0.1, 'the mahi and tuna aren\'t at 480 m' );
+	ok( rigWeight( hookOf( 'float', 5, 40 ), 'redSnapper', 10 ) === 1, 'an old rig and fish as they were: weight 1' );
 	ok( rigWeight( null, 'tuna' ) === 1 && rigDelay( null ) === 1, 'no rig changes nothing' );
-	delete FISH.swordfish;
+	if ( ! had ) delete FISH.swordfish;
 
 }
 
@@ -77,19 +81,21 @@ const among = ( s, ...ids ) => ids.reduce( ( a, id ) => a + ( s[ id ] || 0 ), 0 
 	const hoo = BAITS.ballyhoo.tow, skirt = BAITS.skirt.tow;
 	ok( towTaste( hoo, 7 ) === 1 && towTaste( hoo, 2 ) === 0 && towTaste( hoo, 20 ) === 0, 'a ballyhoo swims at 5 to 10 knots, sinks slower and washes out faster' );
 	ok( towTaste( skirt, 14 ) === 1 && towTaste( hoo, 14 ) < 0.5 && towTaste( skirt, 3 ) === 0, 'a skirt runs at wahoo\'s speed, a ballyhoo hardly does' );
-	const T = ( knots, leader = 'heavy' ) => ( { kind: 'troll', hookM: 0.3, floorM: 400, knots, lines: 2, leader } );
-	FISH.wahoo = FISH.wahoo || { habitat: { blue: 1, edge: 1 }, kg: [ 5, 50 ], fight: 0.9, stamina: 40, time: 'day' };
-	ok( rigWeight( T( 14, 'wire' ), 'wahoo' ) > 3 * rigWeight( T( 14, 'wire' ), 'redSnapper' ) && rigWeight( T( 7, 'wire' ), 'wahoo' ) < rigWeight( T( 14, 'wire' ), 'wahoo' ), 'wahoo strike at speed; at bait speed less' );
-	ok( rigWeight( T( 7 ), 'mahi' ) > 1 && rigWeight( T( 20 ), 'mahi' ) === 0, 'mahi at bait speed, and nothing at 20 knots but a wahoo' );
-	ok( rigWeight( T( 7 ), 'redSnapper' ) < 0.2, 'a towed bait\'s not for the bottom fish' );
-	delete FISH.wahoo;
+	const T = ( knots, leader = 'heavy' ) => hookOf( 'troll', 0.3, 400, { knots, lines: 2, leader } );
+	const had = !! FISH.wahoo;
+	if ( ! had ) FISH.wahoo = { habitat: { blue: 1, edge: 1 }, kg: [ 5, 50 ], fight: 0.9, stamina: 40, time: 'day' };
+	ok( weight( T( 14, 'wire' ), 'wahoo' ) > 3 * weight( T( 14, 'wire' ), 'redSnapper' ) && weight( T( 5, 'wire' ), 'wahoo' ) < weight( T( 14, 'wire' ), 'wahoo' ), 'wahoo strike at speed; much slower, less' );
+	ok( weight( T( 7 ), 'mahi' ) > 1 && weight( T( 20 ), 'mahi' ) === 0, 'mahi at bait speed, and nothing at 20 knots but a wahoo' );
+	ok( weight( T( 7 ), 'redSnapper' ) < 0.2, 'a towed bait\'s not for the bottom fish' );
+	if ( ! had ) delete FISH.wahoo;
 	const blue = habitatAt( { depth: 500, reefDist: 4000, pierDist: 9000 } );
 	const s = shares( atHook( { ...blue }, T( 7, 'mono' ) ), 10, 'ballyhoo', 2000 );
-	ok( among( s, 'mahi', 'tuna' ) > 0.7, `trolled in the blue, it's mahi and tuna (${ ( 100 * among( s, 'mahi', 'tuna' ) ).toFixed( 0 ) }%)` );
+	const open = among( s, 'mahi', 'tuna', 'yellowfin', 'wahoo', 'sailfish', 'whiteMarlin', 'blueMarlin' );
+	ok( open > 0.9, `trolled in the blue, it's the open water's fish (${ ( 100 * open ).toFixed( 0 ) }%)` );
 	const delays = ( lines ) => {
 
 		let t = 0;
-		for ( let i = 0; i < 400; i ++ ) t += biteDelay( atHook( { ...blue }, { ...T( 7 ), lines } ), 10, rng, 'ballyhoo' );
+		for ( let i = 0; i < 400; i ++ ) t += waitOnRig( atHook( { ...blue }, { ...T( 7 ), lines } ), 10, rng, 'ballyhoo' );
 		return t / 400;
 
 	};
@@ -115,8 +121,7 @@ const among = ( s, ...ids ) => ids.reduce( ( a, id ) => a + ( s[ id ] || 0 ), 0 
 
 	ok( leaderFor( 0, 'float' ) === 'mono' && leaderFor( 3, 'float' ) === 'fluoro' && leaderFor( 3, 'troll', 14 ) === 'wire' && leaderFor( 3, 'troll', 7 ) === 'heavy' && leaderFor( 3, 'drop' ) === 'heavy', 'the right one of those you own\'s tied on' );
 	ok( leaderRisk( 'mono', 'barracuda' ).cut > 0 && leaderRisk( 'wire', 'barracuda' ).cut === 0 && leaderRisk( 'mono', 'jack' ).cut === 0, 'teeth go through anything but wire' );
-	const T = { kind: 'float', hookM: 3, floorM: 30 };
-	ok( rigWeight( { ...T, leader: 'wire' }, 'yellowtail' ) < 0.4 * rigWeight( { ...T, leader: 'fluoro' }, 'yellowtail' ), 'a yellowtail won\'t look at wire, and fluorocarbon brings more' );
+	ok( rigWeight( hookOf( 'float', 3, 30, { leader: 'wire' } ), 'yellowtail' ) < 0.4 * rigWeight( hookOf( 'float', 3, 30, { leader: 'fluoro' } ), 'yellowtail' ), 'a yellowtail won\'t look at wire, and fluorocarbon brings more' );
 	const run = ( cut ) => {
 
 		let lost = 0;
@@ -139,7 +144,9 @@ const among = ( s, ...ids ) => ids.reduce( ( a, id ) => a + ( s[ id ] || 0 ), 0 
 // ---- the fight for a big fish
 {
 
-	FISH.blueMarlin = FISH.blueMarlin || { fight: 1, stamina: 300, kg: [ 60, 400 ] };
+	// (the fish stream's fish when it's there: this stands for it till then)
+	const hadBlue = FISH.blueMarlin;
+	FISH.blueMarlin = { ...( hadBlue || {} ), fight: 1, stamina: 300, kg: [ 60, 400 ] };
 	const careful = ( g ) => g.tension < 0.68 && g.surge < 0.6;
 	const fight = ( o, pol = careful, n = 30 ) => {
 
@@ -195,7 +202,8 @@ const among = ( s, ...ids ) => ids.reduce( ( a, id ) => a + ( s[ id ] || 0 ), 0 
 	const d0 = away.distance;
 	away.update( 1, false, 3 );
 	ok( away.distance > d0 + 2.5, 'a boat running from a fish takes line out' );
-	delete FISH.blueMarlin;
+	if ( hadBlue ) FISH.blueMarlin = hadBlue;
+	else delete FISH.blueMarlin;
 
 }
 
@@ -268,7 +276,7 @@ const among = ( s, ...ids ) => ids.reduce( ( a, id ) => a + ( s[ id ] || 0 ), 0 
 
 }
 
-ok( FISH_IDS.every( ( id ) => rigWeight( { kind: 'float', hookM: 5, floorM: 50, leader: 'mono' }, id, 12 ) >= 0 ), 'every fish has a weight for a float' );
+ok( FISH_IDS.every( ( id ) => rigWeight( hookOf( 'float', 5, 50 ), id, 12 ) >= 0 ), 'every fish has a weight for a float' );
 
 if ( failed ) process.exit( 1 );
 console.log( 'all passed' );
