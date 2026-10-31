@@ -22,6 +22,7 @@ export const GRIP = {
 const STUN = 3; // s on the deck, getting your wind back, after a fall that lands you there
 const HIGH_FALL = 2; // m: a fall under this you just land from
 
+const NONE = new Vector3();
 const _up = new Vector3();
 const _fwd = new Vector3();
 const _side = new Vector3();
@@ -46,7 +47,8 @@ export function swayAt( boat, y, last, dt ) {
 	_fwd.set( 0, 0, 1 ).applyQuaternion( boat.quaternion );
 	_side.set( 1, 0, 0 ).applyQuaternion( boat.quaternion );
 	const heel = Math.asin( MathUtils.clamp( _side.y, - 1, 1 ) ), trim = Math.asin( MathUtils.clamp( _fwd.y, - 1, 1 ) );
-	const roll = boat.angular.dot( _fwd ), pitch = boat.angular.dot( _side );
+	// (someone else's boat, ridden along on, is a pose and no more: no rates)
+	const w = boat.angular || NONE, roll = w.dot( _fwd ), pitch = w.dot( _side );
 	const aR = dt > 0 && last.roll !== undefined ? ( roll - last.roll ) / dt : 0, aP = dt > 0 && last.pitch !== undefined ? ( pitch - last.pitch ) / dt : 0;
 	last.roll = roll;
 	last.pitch = pitch;
@@ -164,7 +166,7 @@ export class LadderClimb {
 		this.feet( player.deckPos );
 		const p = b.toWorld( player.deckPos, new Vector3() );
 		const side = new Vector3( 1, 0, 0 ).applyQuaternion( b.quaternion );
-		const v = b.velocity.clone().addScaledVector( side, - Math.sign( this._last.across || 1 ) * ( 1.2 + this.sway * 2.5 ) );
+		const v = ( b.velocity || NONE ).clone().addScaledVector( side, - Math.sign( this._last.across || 1 ) * ( 1.2 + this.sway * 2.5 ) );
 		this.falling = { p, v, from: p.y };
 		player.falls = ( player.falls || 0 ) + 1;
 
