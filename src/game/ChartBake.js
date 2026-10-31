@@ -2,6 +2,7 @@ import { WORLD } from '../world/WorldLayout.js';
 import { northReefMask } from '../world/TerrainData.js';
 import { mangroveAt } from '../world/terrain/Mangrove.js';
 import { FT } from './Units.js';
+import { WAY } from '../world/terrain/NorthTrail.js';
 
 // (M15) The chart's sheets drawn as a chart is (Chart.js has what they cover and what you've seen of them):
 // in the colours of IHO S-52, the standard every electronic chart (an ECDIS, a plotter's charts) is drawn
@@ -295,6 +296,26 @@ export class SheetBake {
 		return out;
 
 	}
+
+}
+
+// ---- (M16) the way over to the north beach pencilled on (a dashed line, your own chart's or Marta's): from the square
+// to the fish camp, there from the start, over what you haven't charted too, as the one thing the chart tells you
+// before you've been: it's how you find the way. ctx: the sheet's, its origin and scale ( x0, z0, ppm )
+export function drawWay( ctx, x0, z0, ppm ) {
+
+	ctx.save();
+	ctx.lineJoin = ctx.lineCap = 'round';
+	ctx.beginPath();
+	WAY.forEach( ( [ x, z ], n ) => ctx[ n ? 'lineTo' : 'moveTo' ]( ( x - x0 ) * ppm, ( z - z0 ) * ppm ) );
+	ctx.strokeStyle = 'rgba(255,250,235,0.75)';
+	ctx.lineWidth = Math.max( 3, 8 * ppm );
+	ctx.stroke();
+	ctx.strokeStyle = 'rgb(176,44,58)';
+	ctx.lineWidth = Math.max( 1.6, 4.5 * ppm );
+	ctx.setLineDash( [ Math.max( 4, 14 * ppm ), Math.max( 3, 10 * ppm ) ] );
+	ctx.stroke();
+	ctx.restore();
 
 }
 

@@ -622,6 +622,9 @@ export class Game {
 		this.updateVendors( inp, p );
 		// ((M15) what the sea's left on the beaches, to pick up)
 		this.updateBeachcomb( inp, p );
+		// ((M16) the fingerposts drawn only within reading range)
+		this.signpost.update( app.camera.position.x, app.camera.position.z );
+		for ( const t of this.trailPosts ) t.update( app.camera.position.x, app.camera.position.z );
 		// ((M15) the fish camp built as you first come near it, once the debris has been placed)
 		if ( app.debris && ! this.camp.built ) {
 

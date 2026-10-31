@@ -7,7 +7,7 @@ import { HARBOUR_LIGHTS } from '../world/HarbourLights.js';
 import { LIGHTHOUSE } from '../world/Lighthouse.js';
 import { toWorld } from '../world/wreck/WreckPlan.js';
 import { SHEETS, NAMES, HOME, legTo, magnetic, fuelFor } from './Chart.js';
-import { SheetBake, drawSymbols, S52, rgb } from './ChartBake.js';
+import { SheetBake, drawSymbols, drawWay, S52, rgb } from './ChartBake.js';
 
 // Minimap, lower right: the island baked once from the terrain data into a 2D canvas, shown in a round window
 // that turns with the view (forward is up, a small N on the rim). Markers: the player (centre arrow), Joe's fish
@@ -360,6 +360,8 @@ export class Minimap {
 		ctx.drawImage( s.base, 0, 0 );
 		ctx.imageSmoothingEnabled = true;
 		ctx.drawImage( s.mask, 0, 0, s.px, s.px );
+		// ((M16) the way over pencilled on, over what you haven't charted too)
+		if ( s === this.sheets.near ) drawWay( ctx, s.spec.x0, s.spec.z0, s.ppm );
 		s.drawn = key;
 		return true;
 
