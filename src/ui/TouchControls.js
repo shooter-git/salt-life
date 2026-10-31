@@ -215,6 +215,8 @@ export class TouchControls {
 		if ( helm ) setButton( this.buttons.torch, app && ( app.searchlight || G.night.value > 0.35 ) ? ( app.searchlight ? 'Searchlight off' : 'Searchlight' ) : null );
 		else setButton( this.buttons.torch, lights && ( torchOn || G.night.value > 0.35 ) ? ( torchOn ? 'Torch off' : 'Torch' ) : null );
 		setButton( this.buttons.horn, helm ? 'Horn' : null );
+		// ((M15) the rod's button is the radio's at the helm: R)
+		if ( helm && ! player.riding ) setButton( this.buttons.rod, 'Radio' );
 		const action = prompt && prompt.key === 'E' ? prompt.text.split( '   ·' )[ 0 ] : null;
 		setButton( this.buttons.action, action );
 		setButton( this.buttons.camera, player && player.mode === 'boat' ? 'Camera' : null );

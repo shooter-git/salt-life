@@ -618,6 +618,20 @@
 			"author": "Mrthenoronha, mwchristian95"
 		},
 		{
+			"path": "public/audio/sea_open.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/Sotiris_Laskaris/sounds/583205/",
+			"title": "Kimolos Mavrospilia Seawash From Cliff",
+			"author": "Sotiris_Laskaris"
+		},
+		{
+			"path": "public/audio/sea_open.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/Sotiris_Laskaris/sounds/583205/",
+			"title": "Kimolos Mavrospilia Seawash From Cliff",
+			"author": "Sotiris_Laskaris"
+		},
+		{
 			"path": "public/audio/sheet_land.m4a",
 			"license": "CC0-1.0",
 			"source": "https://freesound.org/people/kyles/sounds/453351/",
@@ -954,6 +968,20 @@
 			"author": "KEVOY"
 		},
 		{
+			"path": "public/audio/whitecap.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/LarsErikErtzgaardRingen/sounds/607261/",
+			"title": "Floating dock in plunging waves",
+			"author": "LarsErikErtzgaardRingen"
+		},
+		{
+			"path": "public/audio/whitecap.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/LarsErikErtzgaardRingen/sounds/607261/",
+			"title": "Floating dock in plunging waves",
+			"author": "LarsErikErtzgaardRingen"
+		},
+		{
 			"path": "public/audio/wind.m4a",
 			"license": "CC0-1.0",
 			"source": "https://freesound.org/people/bruno.auzet/sounds/706471/",
@@ -966,6 +994,20 @@
 			"source": "https://freesound.org/people/bruno.auzet/sounds/706471/",
 			"title": "strong wind on coastal path.wav",
 			"author": "bruno.auzet"
+		},
+		{
+			"path": "public/audio/wind_sea.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/pnwheeler/sounds/830338/",
+			"title": "Wind howling over Reservoir No 2",
+			"author": "pnwheeler"
+		},
+		{
+			"path": "public/audio/wind_sea.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/pnwheeler/sounds/830338/",
+			"title": "Wind howling over Reservoir No 2",
+			"author": "pnwheeler"
 		},
 		{
 			"path": "public/models/characters/joe-512.glb",
@@ -993,6 +1035,20 @@
 			"license": "MIT",
 			"source": "https://github.com/microsoft/Microsoft-Rocketbox",
 			"title": "Rocketbox avatar (marta.glb)",
+			"author": "Microsoft Corporation"
+		},
+		{
+			"path": "public/models/characters/pearl-512.glb",
+			"license": "MIT",
+			"source": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"title": "Rocketbox avatar (pearl-512.glb)",
+			"author": "Microsoft Corporation"
+		},
+		{
+			"path": "public/models/characters/pearl.glb",
+			"license": "MIT",
+			"source": "https://github.com/microsoft/Microsoft-Rocketbox",
+			"title": "Rocketbox avatar (pearl.glb)",
 			"author": "Microsoft Corporation"
 		},
 		{
@@ -1536,6 +1592,16 @@
 		},
 		{
 			"path": "public/world/island.bin",
+			"license": "own",
+			"title": "The island, baked by tools/bake-terrain.mjs"
+		},
+		{
+			"path": "public/world/offshore-512.bin",
+			"license": "own",
+			"title": "The island, baked by tools/bake-terrain.mjs"
+		},
+		{
+			"path": "public/world/offshore.bin",
 			"license": "own",
 			"title": "The island, baked by tools/bake-terrain.mjs"
 		},

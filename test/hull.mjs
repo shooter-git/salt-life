@@ -12,7 +12,7 @@ import { BoatModel } from '../src/world/BoatModel.js';
 import { BoatController } from '../src/player/BoatController.js';
 import { BoatSpray } from '../src/player/BoatSpray.js';
 import { weatherAt, SOUTHERLY } from '../src/game/Weather.js';
-import { Hull, slamWear, hitWear, thrustMul, leakLs, rainLs, repairFee, crankChance, stormWear, STORM_FROM, SLAM_FROM, FLOOD_L, RESTART, CRANK_S, BAIL_LS, REPAIR_FULL } from '../src/game/Hull.js';
+import { Hull, KNOCK_FROM, slamWear, hitWear, thrustMul, leakLs, rainLs, repairFee, crankChance, stormWear, STORM_FROM, SLAM_FROM, FLOOD_L, RESTART, CRANK_S, BAIL_LS, REPAIR_FULL } from '../src/game/Hull.js';
 import { weatherAt as weatherNow, hurricaneNews } from '../src/game/Weather.js';
 import { GameState } from '../src/game/GameState.js';
 import { gearStats, defaultUpgrades } from '../src/game/Gear.js';
@@ -66,7 +66,7 @@ function drive( { cond = 'fair', throttle = 1, yaw = 0, secs = 60, from = SEA, c
 	b.quaternion.setFromAxisAngle( new Vector3( 0, 1, 0 ), yaw );
 	const spray = new BoatSpray( { boat: b, spray: { nReq: 0, emit() {} } } );
 	const hull = new Hull( { random: () => 0.99 } );
-	let slams = 0, top = 0;
+	let slams = 0, top = 0, pile = 0;
 	b.onSlam = ( s ) => {
 
 		slams ++;
@@ -83,6 +83,7 @@ function drive( { cond = 'fair', throttle = 1, yaw = 0, secs = 60, from = SEA, c
 		b.update( dt );
 		spray.update( dt );
 		const c = b.contact;
+		pile = Math.max( pile, c.pile );
 		hull.step( dt, { driven: true, throttle, fuel: true, rain: 0, pile: c.pile, ground: c.ground, slide: c.slide, aground: c.aground } );
 		c.pile = c.ground = c.slide = 0;
 		c.aground = false;
@@ -92,7 +93,7 @@ function drive( { cond = 'fair', throttle = 1, yaw = 0, secs = 60, from = SEA, c
 	}
 
 	G.windSpeed.value = 7;
-	return { b, hull, slams, top };
+	return { b, hull, slams, top, pile };
 
 }
 
@@ -118,10 +119,12 @@ function drive( { cond = 'fair', throttle = 1, yaw = 0, secs = 60, from = SEA, c
 	const fast = drive( { throttle: 1, yaw: Math.PI, secs: 45, from: BEACH } ), slow = drive( { throttle: 0.3, yaw: Math.PI, secs: 90, from: BEACH } );
 	const hit = drive( { throttle: 1, yaw: Math.PI, secs: 14, from: { x: 65, z: 230 }, colliders: wall } );
 	const nudge = drive( { throttle: 0.15, yaw: Math.PI, secs: 120, from: { x: 65, z: 172 }, colliders: wall } );
-	console.log( `     run aground flat out: ${ pct( fast.hull.wear ) }; nosed on at 0.3 and held there: ${ pct( slow.hull.wear ) }; into the piles flat out: ${ pct( hit.hull.wear ) }, nudged: ${ pct( nudge.hull.wear ) }` );
+	console.log( `     run aground flat out: ${ pct( fast.hull.wear ) }; nosed on at 0.3 and held there: ${ pct( slow.hull.wear ) }; into the piles flat out: ${ pct( hit.hull.wear ) }, nudged: ${ pct( nudge.hull.wear ) } (at ${ nudge.pile.toFixed( 2 ) } m/s)` );
 	ok( fast.hull.wear > 0.06 && fast.hull.wear < 0.18, 'running aground flat out wears her, about a tenth' );
 	ok( slow.hull.wear < fast.hull.wear * 0.6, 'nosing onto the sand slowly, much less: pushing at it, stuck, does nothing' );
-	ok( hit.hull.wear > 0.06 && hit.hull.wear < 0.18 && nudge.hull.wear === 0, 'the piles at full speed: about a tenth; a nudge: nothing' );
+	// ((M15) a nudge never knocks: held at the piles two minutes, she may drift onto the sand beside them and
+	// scrape a hair's worth, as the sea's least differences go)
+	ok( hit.hull.wear > 0.06 && hit.hull.wear < 0.18 && nudge.pile < KNOCK_FROM && nudge.hull.wear < 0.001, 'the piles at full speed: about a tenth; a nudge: nothing' );
 
 }
 

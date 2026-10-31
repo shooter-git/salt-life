@@ -83,4 +83,8 @@ export const BANK = {
 	// and the sheet landing (a thin sheet's drops, its bounce and rattle)
 	sheet_tear: { file: 'sheet_tear.ogg', slices: [ [ 0.08, 1.6 ], [ 1.76, 1.6 ], [ 3.44, 1.1 ], [ 4.62, 2.2 ], [ 6.9, 0.95 ] ], lufs: [ -18.6, -16.6, -16.8, -18.9, -21.2 ] },
 	sheet_land: { file: 'sheet_land.ogg', slices: [ [ 0.08, 1.3 ], [ 1.46, 1.25 ], [ 2.79, 1.5 ], [ 4.37, 1.3 ] ], lufs: [ -20.8, -22.3, -15.9, -16.7 ] },
+	// (M15) the open sea's own: sea wash heard from a cliff, wind over open water, and a crest spilling near you
+	sea_open: { file: 'sea_open.ogg', loop: true, lufs: -23.1 },
+	wind_sea: { file: 'wind_sea.ogg', loop: true, lufs: -23.4 },
+	whitecap: { file: 'whitecap.ogg', slices: [ [ 0.08, 1.5 ], [ 1.66, 1.6 ], [ 3.34, 1.5 ], [ 4.92, 1.7907 ], [ 6.7907, 1.3 ] ], lufs: [ -19.3, -16.5, -21.1, -20.7, -23.8 ] },
 };

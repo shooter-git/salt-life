@@ -10,7 +10,7 @@ import { srgb as S, rot2 } from './TerrainShading.js';
 // Defines: TERRAIN_LITE (low-powered devices) skips the triplanar rock, the scarp and the
 // distant canopy, which are the costly parts.
 
-const R = WORLD.reef;
+const R = WORLD.reef, RN = WORLD.northReef;
 const sw = WORLD.swellDir;
 
 export const TERRAIN_SURFACE_GLSL = /* glsl */`
@@ -39,6 +39,7 @@ export const TERRAIN_SURFACE_GLSL = /* glsl */`
 	float grainF = min( dF.z, 0.62 );
 	vec2 swDir = vec2( ${ sw.x.toFixed( 5 ) }, ${ sw.y.toFixed( 5 ) } );
 	vec2 rc = vec2( ${ R.center.x.toFixed( 3 ) }, ${ R.center.z.toFixed( 3 ) } );
+	vec2 rcN = vec2( ${ RN.center.x.toFixed( 3 ) }, ${ RN.center.z.toFixed( 3 ) } );
 	// seabed ripple phases, differentiated in uniform control flow
 	float ph2 = dot( xz, swDir ) * ( 6.2832 / 0.75 ) + dM.w * 16.0 + macroB * 24.0;
 	float fade2 = 1.0 - ss( 0.5, 2.0, fwidth( ph2 ) );
@@ -156,6 +157,8 @@ export const TERRAIN_SURFACE_GLSL = /* glsl */`
 	if ( underW > 0.0 ) {
 		float reefD = length( xz - rc );
 		float reefW = 1.0 - ss( ${ ( R.radius * 0.5 ).toFixed( 2 ) }, ${ ( R.radius * 1.15 ).toFixed( 2 ) }, reefD + ( mcr - 0.5 ) * 30.0 );
+		// ((M15) and the windward reef's flat)
+		reefW = max( reefW, 1.0 - ss( ${ ( RN.radius * 0.6 ).toFixed( 2 ) }, ${ ( RN.radius * 1.3 ).toFixed( 2 ) }, length( xz - rcN ) + ( mcr - 0.5 ) * 30.0 ) );
 		under = mix( ${ S( 0.84, 0.78, 0.64 ) }, ${ S( 0.72, 0.7, 0.58 ) }, ss( 1.0, 9.0, depth ) );
 		under = under * ( ( dM.w - 0.5 ) * 0.14 + 1.0 ) * ( ( grain - 0.45 ) * 0.25 + 1.0 );
 		// megaripple fields (~0.75 m) across the swell

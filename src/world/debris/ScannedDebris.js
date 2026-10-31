@@ -202,7 +202,7 @@ export class ScannedDebris {
 
 		mat.name = 'DebrisScanned';
 		const U = this.ground.uniforms;
-		const uniforms = { terrainHeightMap: U.terrainHeightMap, terrainHeightInfo: U.terrainHeightInfo };
+		const uniforms = { terrainHeightMap: U.terrainHeightMap, terrainHeightInfo: U.terrainHeightInfo, offshoreHeightMap: U.offshoreHeightMap, offshoreHeightInfo: U.offshoreHeightInfo };
 		mat.onBeforeCompile = ( shader ) => {
 
 			Object.assign( shader.uniforms, uniforms );

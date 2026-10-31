@@ -235,7 +235,12 @@ ${ under ? '\tdiffuseColor.rgb = uwShade( diffuseColor.rgb, vGpWorld, normalize(
 
 // Fishing line: a thin ribbon laid along a sagging curve between two world points, built in the
 // vertex shader from ( t along the line, side ) so it costs one draw and no uploads per frame. The
-// mesh stays at the origin (its vertices are placed in world space).
+// mesh stays at the origin (its vertices are placed in world space). (M15) Drawn about a point by its first
+// end (to a metre): from its ends' world positions, in 32-bit floats on the GPU, tens of km out it jumped a
+// float's step at a time (4 mm at 40 km: pixels, by the rod's tip). Its ends about that point, the camera's,
+// and the view's matrix to it (in doubles, for each render's camera: onBeforeRender) are what's drawn with;
+// the uniforms the game sets (material.uniforms) stay the world's.
+const _at = new THREE.Matrix4();
 export function createLineMaterial( segments ) {
 
 	const m = new THREE.MeshStandardMaterial( { color: 0xd8dde0, roughness: 0.35, metalness: 0, side: THREE.DoubleSide } );
@@ -246,29 +251,55 @@ export function createLineMaterial( segments ) {
 		lineCtl: { value: new THREE.Vector3() }, // middle control point (sag / belly), quadratic Bezier
 		lineShow: { value: 0 },
 	};
+	const drawn = {
+		lineAL: { value: new THREE.Vector3() },
+		lineBL: { value: new THREE.Vector3() },
+		lineCtlL: { value: new THREE.Vector3() },
+		lineEye: { value: new THREE.Vector3() },
+		lineAt: { value: new THREE.Vector3() },
+		lineView: { value: new THREE.Matrix4() },
+		lineShow: uniforms.lineShow,
+	};
 	m.userData.segments = segments;
+	m.onBeforeRender = ( renderer, scene, camera, geometry, object ) => {
+
+		const A = uniforms.lineA.value, at = drawn.lineAt.value;
+		at.set( Math.round( A.x ), Math.round( A.y ), Math.round( A.z ) );
+		drawn.lineAL.value.subVectors( A, at );
+		drawn.lineBL.value.subVectors( uniforms.lineB.value, at );
+		drawn.lineCtlL.value.subVectors( uniforms.lineCtl.value, at );
+		drawn.lineEye.value.setFromMatrixPosition( camera.matrixWorld ).sub( at );
+		drawn.lineView.value.multiplyMatrices( camera.matrixWorldInverse, object.matrixWorld ).multiply( _at.makeTranslation( at ) );
+
+	};
 	m.onBeforeCompile = ( shader ) => {
 
-		Object.assign( shader.uniforms, uniforms );
+		Object.assign( shader.uniforms, drawn );
 		shader.vertexShader = shader.vertexShader
 			.replace( '#include <common>', `#include <common>
 attribute vec2 aLine;
-uniform vec3 lineA;
-uniform vec3 lineB;
-uniform vec3 lineCtl;
+uniform vec3 lineAL;
+uniform vec3 lineBL;
+uniform vec3 lineCtlL;
+uniform vec3 lineEye;
+uniform vec3 lineAt;
+uniform mat4 lineView;
 uniform float lineShow;` )
 			.replace( '#include <beginnormal_vertex>', `
 	float t = aLine.x;
 	float side = aLine.y;
-	vec3 lP = ( 1.0 - t ) * ( 1.0 - t ) * lineA + 2.0 * ( 1.0 - t ) * t * lineCtl + t * t * lineB;
-	vec3 lT = normalize( 2.0 * ( 1.0 - t ) * ( lineCtl - lineA ) + 2.0 * t * ( lineB - lineCtl ) + vec3( 1e-6, 0.0, 0.0 ) );
-	vec3 toCam = cameraPosition - lP;
+	vec3 lP = ( 1.0 - t ) * ( 1.0 - t ) * lineAL + 2.0 * ( 1.0 - t ) * t * lineCtlL + t * t * lineBL;
+	vec3 lT = normalize( 2.0 * ( 1.0 - t ) * ( lineCtlL - lineAL ) + 2.0 * t * ( lineBL - lineCtlL ) + vec3( 1e-6, 0.0, 0.0 ) );
+	vec3 toCam = lineEye - lP;
 	float dist = length( toCam );
 	vec3 lW = normalize( cross( lT, toCam ) + vec3( 0.0, 1e-6, 0.0 ) );
 	// a pixel or two wide at any distance (no temporal anti-aliasing here to resolve thinner)
 	float lw = max( 0.0008, dist * 0.0011 ) * lineShow;
 	vec3 objectNormal = normalize( toCam );` )
-			.replace( '#include <begin_vertex>', 'vec3 transformed = lP + lW * side * lw;' );
+			.replace( '#include <begin_vertex>', 'vec3 transformed = lP + lW * side * lw;' )
+			.replace( '#include <project_vertex>', `vec4 mvPosition = lineView * vec4( transformed, 1.0 );
+	gl_Position = projectionMatrix * mvPosition;` )
+			.replace( '#include <worldpos_vertex>', 'vec4 worldPosition = modelMatrix * vec4( transformed + lineAt, 1.0 );' );
 
 	};
 	return m;

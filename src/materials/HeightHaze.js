@@ -4,7 +4,8 @@ import * as THREE from 'three';
 // AirHaze.js: marine haze ~110 m thick, fine aerosol ~1.4 km), as the optical depth along each
 // view ray from the camera's height, on top of the distance fog that hides where the world ends
 // (Sky: near / far). Distant low ground and sea fade into the horizon's colour, the hilltops and the
-// sky above them stay clear; looking down from height there is less of it. Under water the fog is
+// sky above them stay clear; looking down from height there is less of it. ((M15) The distance fog's on
+// the sea and the low land only: what's over 30 m up has the haze alone, as far as it's drawn.) Under water the fog is
 // the water's (App: 0 to 28 m), the layers add nearly nothing over that.
 //
 // Done in three's fog chunks, for every material that takes the fog: the vertex stage passes the
@@ -65,7 +66,12 @@ THREE.ShaderChunk.fog_pars_fragment = /* glsl */`
 		float vy = ray.y / max( d, 1e-3 );
 		float hc = max( cameraPosition.y, 0.0 );
 		float tau = ( hazeLayerDepth( ${ f( MARINE.sigma ) }, ${ f( MARINE.H ) }, hc, vy, d ) + hazeLayerDepth( ${ f( AEROSOL.sigma ) }, ${ f( AEROSOL.H ) }, hc, vy, d ) ) * ${ f( DENSITY ) };
-		return 1.0 - ( 1.0 - smoothstep( fogNear, fogFar, vFogDepth ) ) * exp( - tau );
+		// ((M15) the distance fog hides where the world ends, at the sea: the island's hills over it needn't be
+		// hidden (they're drawn as far as they're seen: world/FarIsland.js), the haze is all there is on them,
+		// as there is on real land seen from the sea. Out of the water only)
+		float ends = smoothstep( fogNear, fogFar, vFogDepth );
+		if ( cameraPosition.y > 0.0 ) ends *= 1.0 - smoothstep( 4.0, 30.0, vFogWorld.y );
+		return 1.0 - ( 1.0 - ends ) * exp( - tau );
 	#endif
 	}
 #endif

@@ -2,6 +2,8 @@ import * as THREE from '../../engine/index.js';
 import { Noise2D, mulberry32, smoothstep, clamp } from '../../util/Noise.js';
 import { WORLD } from '../WorldLayout.js';
 import { getDetailTexture } from '../terrain/DetailTextures.js';
+import { MANGROVE, mangroveAt } from '../terrain/Mangrove.js';
+import { MANGROVE_TREE } from './PlantGeometry.js';
 
 // CPU-side vegetation placement: land cover, exclusion zones and per-type scattering.
 //
@@ -133,6 +135,15 @@ export class VegSite {
 		const i = Math.floor( fx ), j = Math.floor( fz );
 		const tx = fx - i, tz = fz - j;
 		const k = j * t.res + i;
+		// ((M15) as it was, where the turtle beach has been made since: TerrainData.uncut's masksBefore)
+		const was = t.masksBefore && t.masksBefore.get( arr );
+		if ( was && was.size ) {
+
+			const at = ( q ) => was.has( q ) ? was.get( q ) : arr[ q ];
+			return ( ( at( k ) * ( 1 - tx ) + at( k + 1 ) * tx ) * ( 1 - tz ) + ( at( k + t.res ) * ( 1 - tx ) + at( k + t.res + 1 ) * tx ) * tz ) * scale;
+
+		}
+
 		return ( ( arr[ k ] * ( 1 - tx ) + arr[ k + 1 ] * tx ) * ( 1 - tz ) + ( arr[ k + t.res ] * ( 1 - tx ) + arr[ k + t.res + 1 ] * tx ) * tz ) * scale;
 
 	}
@@ -652,6 +663,32 @@ export function* scatterSteps( site, seed = 99, { ferns = true } = {} ) {
 		if ( ! occ.free( x, z, 0.7 * sc, 1 ) ) return;
 		occ.add( x, z, 0.7 * sc, KIND.BROAD );
 		out.strelitzias.push( { x, y: c.h - 0.03, z, s: sc, yaw: rand() * TAU, la: rand() * TAU, l: rand() * 0.03, H: 0.02, seed: rand() } );
+
+	} );
+
+	// --- (M15) the mangroves on the west (terrain/Mangrove.js): red mangrove on their mud, in the water, each
+	// a canopy tree of the yellow-green kind (vegTreeSpecies 2) on its prop roots (out.mangroves, scaled from
+	// PlantGeometry's MANGROVE_TREE); younger and thinner toward their seaward edge; none in the creek, though
+	// their crowns lean out over it. Their trunks stand MANGROVE_TREE.lift over the water on the roots, as a red
+	// mangrove's do. Their own random numbers, last: nothing else on the island moves
+	const mr = mulberry32( seed * 7 + 3 ), mg = {}, [ mx0, mz0, mx1, mz1 ] = MANGROVE.window;
+	out.mangroves = [];
+	yield* scatter( mr, mx0, mz0, mx1, mz1, 3.2, ( x, z ) => {
+
+		mangroveAt( x, z, mg );
+		if ( mg.stand < 0.5 || mg.creek > 0.25 ) return;
+		const h = site.height( x, z );
+		if ( h > 0.25 ) return;
+		if ( mr() > 0.5 + 0.45 * mg.stand ) return;
+		const s = ( 0.46 + mr() * 0.16 ) * ( 0.7 + 0.3 * mg.stand ), sy = MANGROVE_TREE.sy * ( 0.9 + mr() * 0.22 );
+		const r = 2.3 * s / MANGROVE_TREE.s;
+		if ( ! occT.free( x, z, r, 1 ) ) return;
+		occT.add( x, z, r, KIND.TREE );
+		const yaw = mr() * TAU;
+		let sd;
+		do sd = mr(); while ( Math.floor( ( ( sd * 5.31 ) % 1 ) * 4 ) !== 2 );
+		out.trees.push( { x, y: MANGROVE_TREE.lift * s / MANGROVE_TREE.s, z, s, sy, yaw, la: yaw, l: sy, H: 12.5 * s * sy, seed: sd } );
+		out.mangroves.push( { x, y: h, z, s: s / MANGROVE_TREE.s, yaw: yaw + 0.7, la: 0, l: 0, H: 0.02, seed: sd } );
 
 	} );
 

@@ -1,6 +1,6 @@
 import { Mesh, PlaneGeometry, CanvasTexture, MeshStandardMaterial, SRGBColorSpace, Matrix4 } from '../engine/index.js';
 import { STAND } from './FishStand.js';
-import { WEATHER_NAMES, MURKY, NORTH, surfText, swellFrom } from './Weather.js';
+import { WEATHER_NAMES, MURKY, surfText, swellFrom, sideText } from './Weather.js';
 import { timeText } from './IslandClock.js';
 import { knots } from './Units.js';
 import { wxWind, wxRain } from './TimeHUD.js';
@@ -11,7 +11,9 @@ import { wxWind, wxRain } from './TimeHUD.js';
 // hard ahead of it (Weather's front), Joe says so at the bottom; (M10) or, after one, that the water's
 // still murky (Weather's murk: the spearfishing's poor); (M13) a hurricane on its way first (Weather's
 // hurricaneNews: on the outlook, watched for, warned of; and in its eye, that there's more to come);
-// (M14) or, last, a big surf on the north shore (Weather's north, past NORTH.big).
+// (M14) or, last, a big surf on the north shore (Weather's north, past NORTH.big); (M15) which side of the
+// island fishes (Weather.sideText: the bay in a big one, the north beach's surf, or the north side when it's
+// flat).
 // One plane, its frame painted into the
 // canvas; the same program as the records board's slate (together/RecordsBoard.js), as the wanted
 // list's. Drawn again only when what it says changes.
@@ -39,10 +41,12 @@ export function slateText( weather, next, locale = undefined, news = null ) {
 			[ 'Later', later ],
 		],
 		note: news ? hurricaneNote( news, weather ) : weather.front >= FEEDING ? 'Fish feeding: a blow\'s coming' : weather.murk >= MURKY ? 'The water\'s murky after the blow'
-			: weather.north >= NORTH.big ? `North shore ${ surfText( weather.north ) }` : '',
+			: upper( sideText( weather.north ) ),
 	};
 
 }
+
+const upper = ( t ) => t.charAt( 0 ).toUpperCase() + t.slice( 1 );
 
 // (M13) what Joe chalks of a hurricane on its way
 function hurricaneNote( news, weather ) {

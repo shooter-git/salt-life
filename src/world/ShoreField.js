@@ -1,4 +1,5 @@
 import { GRAVITY } from '../core/Globals.js';
+import { mangroveAt } from './terrain/Mangrove.js';
 
 // Offline wave-propagation field for shoreline waves.
 //
@@ -83,16 +84,16 @@ class MinHeap {
 // (shallower than `deep`). The solve alone carries a front on round an island's shoulders into its lee,
 // and the bay would have a trades gale's breakers on its eastern shore. In place
 export function shelter( field, dir, { near = 150, far = 1200, step = 16, fan = [ 0, 0.14, - 0.14, 0.28, - 0.28 ], deep = 30 } = {} ) {
-	const { data, depth, res, origin, size } = field, h = size / res, R = res >> 1, H = 2 * h;
+	const { data, depth, res, origin, size } = field, originZ = field.originZ ?? origin, h = size / res, R = res >> 1, H = 2 * h;
 	const rays = fan.map( ( a ) => [ - ( dir[ 0 ] * Math.cos( a ) - dir[ 1 ] * Math.sin( a ) ), - ( dir[ 0 ] * Math.sin( a ) + dir[ 1 ] * Math.cos( a ) ) ] );
 	const land = ( x, z ) => {
-		const i = Math.floor( ( x - origin ) / h ), j = Math.floor( ( z - origin ) / h );
+		const i = Math.floor( ( x - origin ) / h ), j = Math.floor( ( z - originZ ) / h );
 		return i >= 0 && j >= 0 && i < res && j < res && depth[ j * res + i ] <= 0;
 	};
 	// (the share clear at each coarse cell, at the corner of four of the field's)
 	const keep = new Float32Array( R * R ).fill( 1 );
 	for ( let J = 0; J < R; J ++ ) for ( let I = 0; I < R; I ++ ) {
-		const x = origin + ( I + 1 ) * H - h, z = origin + ( J + 1 ) * H - h;
+		const x = origin + ( I + 1 ) * H - h, z = originZ + ( J + 1 ) * H - h;
 		const d = depth[ Math.min( res - 1, 2 * J + 1 ) * res + Math.min( res - 1, 2 * I + 1 ) ];
 		if ( d <= - 4 || d > deep + 6 ) continue;
 		let clear = 0;
@@ -117,14 +118,14 @@ export function shelter( field, dir, { near = 150, far = 1200, step = 16, fan = 
 // (M12) the ground under a field already solved (its depths, at its cells' middles), as the solve reads
 // the terrain: so another swell's field can be solved from it (in a worker: shore/ShoreWorker) without
 // the terrain's arrays, at the same cells
-export function fieldGround( { depth, res, size, origin }, seaLevel = 0 ) {
+export function fieldGround( { depth, res, size, origin, originZ = origin }, seaLevel = 0 ) {
 
 	const h = size / res;
 	return {
-		size, origin,
+		size, origin, originZ,
 		heightAt: ( x, z ) => {
 
-			const i = Math.min( res - 1, Math.max( 0, Math.floor( ( x - origin ) / h ) ) ), j = Math.min( res - 1, Math.max( 0, Math.floor( ( z - origin ) / h ) ) );
+			const i = Math.min( res - 1, Math.max( 0, Math.floor( ( x - origin ) / h ) ) ), j = Math.min( res - 1, Math.max( 0, Math.floor( ( z - originZ ) / h ) ) );
 			return seaLevel - depth[ j * res + i ];
 
 		},
@@ -136,6 +137,7 @@ export function computeShoreField( terrain, { res = 512, swellDir = [ 0, - 1 ], 
 
 	const size = terrain.size;
 	const origin = terrain.origin;
+	const originZ = terrain.originZ ?? origin; // ((M15) a square of its own, off the island's: the bank's)
 	const h = size / res;
 	const N = res * res;
 
@@ -143,7 +145,7 @@ export function computeShoreField( terrain, { res = 512, swellDir = [ 0, - 1 ], 
 	const speed = new Float32Array( N );
 	for ( let j = 0; j < res; j ++ ) {
 
-		const z = origin + ( j + 0.5 ) * h;
+		const z = originZ + ( j + 0.5 ) * h;
 		for ( let i = 0; i < res; i ++ ) {
 
 			const x = origin + ( i + 0.5 ) * h;
@@ -167,7 +169,7 @@ export function computeShoreField( terrain, { res = 512, swellDir = [ 0, - 1 ], 
 		if ( i !== 0 && j !== 0 && i !== res - 1 && j !== res - 1 ) continue;
 		const k = j * res + i;
 		if ( speed[ k ] <= 0 ) continue;
-		const x = origin + ( i + 0.5 ) * h, z = origin + ( j + 0.5 ) * h;
+		const x = origin + ( i + 0.5 ) * h, z = originZ + ( j + 0.5 ) * h;
 		T[ k ] = ( x * sdx + z * sdz ) / c0 + size; // offset keeps T positive
 		state[ k ] = 1;
 		heap.push( T[ k ], k );
@@ -298,9 +300,10 @@ export function computeShoreField( terrain, { res = 512, swellDir = [ 0, - 1 ], 
 		if ( gz === 0 && isFinite( tu ) && isFinite( t ) ) gz = tu - t;
 		const len = Math.hypot( gx, gz ) || 1;
 		const dx = gx / len, dz = gz / len;
-		// exposure: how directly the local wave direction faces the incoming swell
+		// exposure: how directly the local wave direction faces the incoming swell; ((M15) none inside the
+		// west's mangroves: a forest of prop roots takes a wave out within tens of metres, their creek too)
 		const align = ( dx * sdx + dz * sdz ) / sl;
-		const exposure = Math.min( 1, Math.max( 0.02, align * 1.4 + 0.1 ) );
+		const exposure = Math.min( 1, Math.max( 0.02, align * 1.4 + 0.1 ) ) * ( 1 - 0.97 * mangroveAt( origin + ( i + 0.5 ) * h, originZ + ( j + 0.5 ) * h ).stand );
 		// direction scaled by exposure (length = exposure), alpha = shoreline arrival time
 		data[ k * 4 ] = isFinite( t ) ? t : 1e5;
 		data[ k * 4 + 1 ] = dx * exposure;
@@ -309,6 +312,7 @@ export function computeShoreField( terrain, { res = 512, swellDir = [ 0, - 1 ], 
 
 	}
 
-	return { data, res, cellSize: h, origin, size, depth };
+	// ((M15) and the way the swell came: the waves' own along-shore measure is taken across it)
+	return { data, res, cellSize: h, origin, originZ, size, depth, swellDir: [ sdx / sl, sdz / sl ] };
 
 }

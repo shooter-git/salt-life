@@ -11,21 +11,26 @@ import { FishStand, STAND } from './FishStand.js';
 import { Chandlery, CHANDLERY } from './Chandlery.js';
 import { CatchDisplay } from './CatchDisplay.js';
 import { FishPortrait } from './FishPortrait.js';
-import { UPGRADES, fuelBurn, TOW, towFee } from './Gear.js';
+import { UPGRADES, fuelBurn, TOW, towFee, towTime, HAUL_FEE } from './Gear.js';
 import { Hull, thrustMul, repairFee } from './Hull.js';
+import { tellOf } from './Away.js';
 import { GameHUD } from './GameHUD.js';
 import { TimeHUD } from './TimeHUD.js';
+import { Radio } from './Radio.js';
 import { timeText } from './IslandClock.js';
-import { NIGHT_BOX, ordersFor, tradeDay, stallOpen, shutFor } from './Orders.js';
+import { HOURS, NIGHT_BOX, ordersFor, tradeDay, stallOpen, shutFor } from './Orders.js';
 import { WantedBoard } from './WantedBoard.js';
 import { ForecastSlate } from './ForecastSlate.js';
-import { forecast, islandTime, blowShare } from './Weather.js';
+import { forecast, islandTime, blowShare, NORTH, edgeAt } from './Weather.js';
 import { wxNews } from './TimeHUD.js';
 import { CRADLE } from '../world/village/StormPlaces.js';
 import { StormChart, shelterSign } from './StormChart.js';
 import { ClosedSign } from './ClosedSign.js';
+import { Signpost, TRAIL_POSTS } from './Signpost.js';
+import { FishCamp, CAMP } from './FishCamp.js';
 import { delivered, filled, owed, weekEnds } from './WeekOrder.js';
 import { Minimap } from './Minimap.js';
+import { sightOf, MAX_MARKS } from './Chart.js';
 import { Guide } from './Guide.js';
 import { Speargun, groundHit } from './Speargun.js';
 import { CastNet, sweetWindow } from './CastNet.js';
@@ -33,20 +38,31 @@ import { BAITS, BAIT_IDS } from './Bait.js';
 import { LobsterTools } from './LobsterTools.js';
 import { lb, feet, gallons } from './Units.js';
 import { SPECIES } from '../world/fish/FishSpecies.js';
+import { SEABED } from '../world/terrain/SeabedModel.js';
+import { mangroveAt } from '../world/terrain/Mangrove.js';
+import { northReefMask } from '../world/TerrainData.js';
+import { PLACES, placeOf, placeName } from './Places.js';
+import { FINDS, lying, messageOf } from './Beachcomb.js';
+import { ordersOf, tagFor } from './Orders.js';
 
 // how long the catch card stays up unless dismissed (ms)
 const CATCH_CARD_MS = 9000;
+// (M15) the island's middle, and up the trades from it (Weather's NORTH.dir, the way they blow, turned
+// round): the windward side's (Game.windwardAt)
+const ISLE = { x: 30, z: - 320 };
+const UPWIND = { x: - NORTH.dir.x, z: - NORTH.dir.y };
 // (Salt Life) the anchor: within this of the berth the dock lines hold the boat instead (Player.exitBoat),
 // and it goes down once the boat is slower than this (m/s)
 const BERTH_M = 14;
 const ANCHOR_SPEED = 2.5;
+// (M15) the far places are looked for from this far from the middle of the world (m: Game.updateFound)
+const FOUND_FROM = 1000;
 const RODE_SEGS = 16;
 // (M10) the bucket's offered on deck from this much water in the bilge (litres), and the hull's wear
 // is saved whenever it's grown this much since it last was
 const BAIL_FROM = 20;
 const WEAR_SAVE = 0.02;
-// (M13) Marta's haul-out ahead of a hurricane ($: less than the repair a hurricane leaves to do)
-export const HAUL_FEE = 40;
+export { HAUL_FEE };
 const _a = new Vector3(), _b = new Vector3(), _h = new Vector3();
 const _pose = { pos: new Vector3(), head: new Vector3(), roll: 0, thrash: 0 };
 const BAG_FROM = 0.85; // the brails drawn this far: the netting has closed round what's under it (it rides in the purse)
@@ -119,7 +135,9 @@ export class Game {
 		this.portrait = new FishPortrait( this.display.material, { lite: app.tier === 'low' } );
 		this.landing = null; // { species, kg } while the caught fish swings in view
 		this.chandlery = app.chandlery || new Chandlery( { scene: app.scene, terrain: app.terrainData, colliders: app.colliders, material: this.stand.material } );
-		this.vendors = [ this.stand.vendor, this.chandlery.vendor ].filter( Boolean );
+		// ((M15) and Pearl at the fish camp on the north beach: game/FishCamp.js, built when you come near it)
+		this.camp = new FishCamp( { scene: app.scene, terrain: app.terrainData, colliders: app.colliders, village: app.village } );
+		this.vendors = [ this.stand.vendor, this.chandlery.vendor, this.camp.vendor ].filter( Boolean );
 		// (Salt Life) the day's wanted lists (Orders.js), chalked on a slate on Joe's counter. On a device
 		// that draws on its CPU it goes up after the start, with the records board (App.prepareLate)
 		this.orders = [];
@@ -171,6 +189,12 @@ export class Game {
 		// (M9) and the forecast on a smaller slate beside it: hung from the wanted slate (where it is: attach),
 		// it goes up with it
 		this.forecastSlate = new ForecastSlate( { terrain: app.terrainData } );
+		// ((M15) the fingerpost by the boardwalk: the way round the island, read from the start)
+		this.signpost = new Signpost( { terrain: app.terrainData, colliders: app.colliders } );
+		app.scene.add( this.signpost.group );
+		// ((M15) and the way over's, at its fork and at its foot by the camp)
+		this.trailPosts = TRAIL_POSTS.map( ( spec ) => new Signpost( { terrain: app.terrainData, colliders: app.colliders, spec } ) );
+		for ( const t of this.trailPosts ) app.scene.add( t.group );
 		this.wanted.mesh.attach( this.forecastSlate.mesh );
 		this._forecastT = 0;
 		app.lightUp( this.wanted.mesh );
@@ -186,6 +210,7 @@ export class Game {
 		const signs = [
 			[ this.stand.vendor, STAND, { x: 0.32, y: 1.045, z: 0.96, tilt: 0.24, roll: 0.03 }, 0.5, 'Fish in the night box' ],
 			[ this.chandlery.vendor, CHANDLERY, { x: 0.35, y: 0, z: 0.41, tilt: 0.33, roll: - 0.02 }, 0.6, 'Diesel: pay into the box' ], // (leaning on the table's front, z 0.29)
+			[ this.camp.vendor, CAMP.keeper, { x: - 0.6, y: 0, z: 1.3, tilt: 0.3, roll: 0.04 }, 0.6, 'Gone round to market' ], // ((M15) leaning on the counter's front)
 		];
 		this.signs = signs.filter( ( [ v ] ) => v && v.hours ).map( ( [ v, at, spot, width, left ] ) => {
 
@@ -214,13 +239,7 @@ export class Game {
 		if ( app.localLights ) this.addFloodlights( app.localLights, app.boat );
 		// (Salt Life) the anchor's rode while it's down, from the stem head to the bottom (the fishing
 		// line's ribbon, in rope's colour); and a leave of the helm still waiting for the boat to slow
-		this.rode = new Mesh( buildLineGeometry( RODE_SEGS ), createLineMaterial( RODE_SEGS ) );
-		this.rode.name = 'AnchorRode';
-		this.rode.material.color.set( 0xcfc6ad );
-		this.rode.material.uniforms.lineShow.value = 2; // twice the fishing line's width
-		this.rode.frustumCulled = false;
-		this.rode.castShadow = false;
-		this.rode.visible = false;
+		this.rode = this.rodeCopy( buildLineGeometry( RODE_SEGS ) );
 		app.scene.add( this.rode );
 		this._anchorDue = false;
 		this._fuelOut = false;
@@ -294,9 +313,10 @@ export class Game {
 
 	}
 
-	refuel() {
+	// (diesel at a litre's price: Marta's, or (M15) Pearl's at the camp)
+	refuel( price = undefined ) {
 
-		const l = this.state.refuel();
+		const l = this.state.refuel( price );
 		if ( l > 0 ) {
 
 			this._fuelOut = false;
@@ -309,25 +329,37 @@ export class Game {
 	}
 
 	// (Salt Life) Marta's tow: your boat, drifted off (or left) more than TOW.from from the dock with
-	// nobody at her helm, as { metres, fee }; null when there's nothing to tow
-	towJob() {
+	// nobody at her helm, as { metres, fee, time (s: hers, out and back) }; null when there's nothing to tow.
+	// (M15) aboard: called for over the radio (Radio.js), you with her: she comes for you wherever you are
+	towJob( aboard = false ) {
 
 		const b = this.app.boatCtl, dock = WORLD.boatDock.position;
-		if ( ! b || b.moored || b.driven || b.hauled ) return null;
+		if ( ! b || b.moored || b.hauled || ( b.driven && ! aboard ) ) return null;
 		const metres = Math.hypot( b.position.x - dock.x, b.position.z - dock.z );
-		return metres > TOW.from ? { metres, fee: towFee( metres ) } : null;
+		return metres > TOW.from ? { metres, fee: towFee( metres ), time: towTime( metres ) } : null;
 
 	}
 
-	// she brings her back to the dock (you're at her stall, so not aboard); returns what you paid
-	tow() {
+	// she brings her back to the dock (you're at her stall, so not aboard: (M15) or aboard, having called her
+	// on the radio: the world dims while she does, and you're on deck at the dock); returns what you paid
+	tow( aboard = false ) {
 
-		const job = this.towJob();
+		const job = this.towJob( aboard );
 		if ( ! job ) return 0;
 		const paid = this.state.payTow( job.fee );
 		this._anchorDue = false;
-		this.app.boatCtl.reset();
-		this.toast( paid < job.fee ? `Marta towed her in for the $${ paid } you had · she's at the dock` : `Marta towed her in · $${ paid } · she's at the dock` );
+		const p = this.app.player, b = this.app.boatCtl;
+		const go = () => {
+
+			// (off the helm first: moored at the dock, she'd be pulled back to it from wherever she went next)
+			if ( p.mode === 'boat' && p.boat === b ) p.leaveHelm();
+			b.reset();
+			if ( aboard && p.mode === 'deck' && p.boat === b ) p.deckToWorld();
+			this.toast( paid < job.fee ? `Marta towed her in for the $${ paid } you had · she's at the dock` : `Marta towed her in · $${ paid } · she's at the dock`, aboard ? 4200 : 2600 );
+
+		};
+		if ( aboard && this.time && this.time.dim() ) setTimeout( go, 230 );
+		else go();
 		return paid;
 
 	}
@@ -377,14 +409,18 @@ export class Game {
 			// (Salt Life) the island's clock, at the left of the purse (T: its menu)
 			this.time = new TimeHUD( this, this.hud.purse, ui.root );
 			// the minimap (lower right) and the first-play guide (intro, one-time tips; replay with H)
-			this.minimap = new Minimap( ui.hud || ui.root, this );
+			this.minimap = new Minimap( ui.hud || ui.root, this, { tier: app.tier } );
 			this.guide = new Guide( ui, this, this.minimap );
 			ui.onReplayGuide = () => this.guide.replay();
+			// ((M15) the VHF at the helm)
+			this.radio = new Radio( ui, this );
 
 		}
 
+		this.tellAway();
 		const can = this.canFish, canSpear = this.canSpear, gun = this.gun, net = this.net;
-		if ( inp.hit( 'KeyR' ) && can && ! this.fight && ! net.busy ) {
+		const room = this.makingRoom;
+		if ( inp.hit( 'KeyR' ) && can && ! this.fight && ! net.busy && ! room ) {
 
 			// (Salt Life) the cast net goes away for it
 			if ( net.equipped ) this.dropNet();
@@ -393,8 +429,8 @@ export class Game {
 			const cast = { touch: 'hold Cast and let go', gamepad: 'hold RT to cast' }[ app.input.lastDevice ] || 'hold left mouse or F to cast';
 			this.toast( rod.equipped ? `Rod out · ${ cast }` : 'Rod away', 1600 );
 
-		} else if ( inp.hit( 'KeyN' ) && can && ! this.fight && ! net.busy ) this.toggleNet();
-		else if ( inp.hit( 'KeyR' ) && canSpear && ! gun.shaftOut && ! this.tools.busy ) {
+		} else if ( inp.hit( 'KeyN' ) && can && ! this.fight && ! net.busy && ! room ) this.toggleNet();
+		else if ( inp.hit( 'KeyR' ) && canSpear && ! gun.shaftOut && ! this.tools.busy && ! room ) {
 
 			// (Salt Life) in the water R is the speargun's; then, with the gear, the lobster tools'
 			const tools = this.tools;
@@ -447,7 +483,7 @@ export class Game {
 
 		}
 
-		if ( this.hud && ( inp.hit( 'KeyI' ) || inp.hit( 'Tab' ) ) ) this.hud.toggleInventory();
+		if ( this.hud && ( inp.hit( 'KeyI' ) || inp.hit( 'Tab' ) ) && ! room ) this.hud.toggleInventory();
 		// the cooler's tabs: ← →, the d-pad
 		if ( this.hud && this.hud.invOpen && ( inp.hit( 'ArrowLeft' ) || inp.hit( 'ArrowRight' ) ) ) this.hud.cycleTab( inp.hit( 'ArrowRight' ) ? 1 : - 1 );
 		// (H at the helm is the horn)
@@ -463,6 +499,7 @@ export class Game {
 		// F and G do the same from the keyboard, for trackpads and All the Spaces' checks' scripts)
 		const lmb = ( inp.mouseDown || inp.down( 'KeyF' ) ) && inp.enabled, rmb = ( inp.rightDown || inp.down( 'KeyG' ) ) && inp.enabled;
 		const lDown = lmb && ! this._lmb, lUp = ! lmb && this._lmb, rDown = rmb && ! this._rmb;
+		if ( this.radio ) this.radio.update( dt, inp, lDown );
 		this._lmb = lmb;
 		this._rmb = rmb;
 		const panelOpen = this.hud && ( this.hud.invOpen || this.hud.standOpen );
@@ -527,7 +564,8 @@ export class Game {
 					// a slow turn so both flanks show
 					L.cardT += dt;
 					yaw += Math.sin( L.cardT * 0.7 ) * 0.55;
-					if ( lDown || inp.hit( 'KeyE' ) || inp.hit( 'Escape' ) || this.hud.takeCatchTap() || L.cardT > CATCH_CARD_MS / 1000 ) {
+					const end = this.cardEnd( L.card, L.cardT, lDown );
+					if ( end ) {
 
 						this._cardDismissed = true; // this frame's E / click belong to the card
 						this.endLanding();
@@ -554,6 +592,7 @@ export class Game {
 		p.busy = rod.lineInWater || rod.state === 'windup' || gun.shaftOut || net.busy || net.state === 'windup' || this.tools.busy;
 
 		this.updateBoat( dt );
+		this.updateFound( dt );
 		// (Salt Life) the floodlights' lenses glow when they're fitted, from dusk like their light
 		const mats = app.boat && app.boat.materials;
 		if ( mats && mats.floodOn ) mats.floodOn.value = this.floodsOn;
@@ -561,6 +600,16 @@ export class Game {
 		// the traders
 		for ( const v of this.vendors ) v.update( dt, p.mode === 'walk' ? p.position : null );
 		this.updateVendors( inp, p );
+		// ((M15) what the sea's left on the beaches, to pick up)
+		this.updateBeachcomb( inp, p );
+		// ((M15) the fish camp built as you first come near it, once the debris has been placed)
+		if ( app.debris && ! this.camp.built ) {
+
+			this.camp.update( app.camera );
+			// (and Pearl's character, now you've come near: App.loadVendorCharacter)
+			if ( this.camp.built && app.loadVendorCharacter ) app.loadVendorCharacter( this.camp.vendor );
+
+		}
 
 		// (M10) the bucket on deck; the crank at the helm while she's stalled
 		this.updateBail( inp, p );
@@ -589,6 +638,9 @@ export class Game {
 			breath: p.mode === 'swim' && ( p.under || p.breath < p.breathMax - 0.5 || p.blackout ) ? { s: p.breath, max: p.breathMax, blackout: p.blackout } : null,
 		} );
 		if ( this.time ) this.time.update( dt );
+		this.updateChart( dt, inp );
+		// ((M15) the checks' way offshore, in a driven browser alone: CheckSpots.js)
+		if ( inp && navigator.webdriver && inp.hit( 'F8' ) ) this.app.nextCheckSpot();
 		if ( this.minimap ) this.minimap.update( dt );
 		if ( this.guide ) this.guide.update( dt );
 
@@ -629,6 +681,19 @@ export class Game {
 			default: return null;
 
 		}
+
+	}
+
+	// (M15) the far places, noted as you first come to them (GameState.found: the log and the records name them
+	// from then on), wherever you are on or in the water, once a second
+	updateFound( dt ) {
+
+		if ( ( this._foundT = ( this._foundT || 0 ) - dt ) > 0 ) return;
+		this._foundT = 1;
+		const p = this.app.player, x = p.position.x, z = p.position.z;
+		if ( x * x + z * z < FOUND_FROM * FOUND_FROM ) return;
+		const place = this.placeAt( x, z );
+		if ( this.state.findPlace( place, this.tradeDay ) ) this.toast( `You've found ${ placeName( place ) }: ${ PLACES[ place ].what } · it's in your log`, 5200 );
 
 	}
 
@@ -718,7 +783,9 @@ export class Game {
 		const touch = this.app.input.lastDevice === 'touch';
 		if ( why === 'fuel' ) {
 
-			if ( ! this._fuelOut ) this.toast( 'Out of fuel · buy diesel at the chandlery by the boathouse', 4000 );
+			// ((M15) away from the dock, Marta's tow is a call on the radio)
+			const far = this.towJob( true ), radio = touch ? 'the Radio button' : this.keyName( 'R' );
+			if ( ! this._fuelOut ) this.toast( far ? `Out of fuel · call Marta on the radio for a tow (${ radio })` : 'Out of fuel · buy diesel at the chandlery by the boathouse', 4600 );
 			this._fuelOut = true;
 
 		} else if ( why === 'flooded' ) {
@@ -789,6 +856,29 @@ export class Game {
 
 	}
 
+	// (M15) whether Marta keeps her stall now, by her hours and the weather, whatever the stall's been told yet (it's
+	// open until the first frame's told it otherwise)
+	get martaIn() {
+
+		const wx = this.weatherNow;
+		return stallOpen( HOURS.marta, this.hour, wx && wx.id ) && ! ( wx && wx.boarded );
+
+	}
+
+	// (M15) what happened while you were away (App.pickUp), once you're here to read it, and once any room's clock has
+	// reached you: a hurricane's word is the one about now, in the room you've come to
+	tellAway() {
+
+		const app = this.app, away = this.awayTold;
+		if ( ! away || ! this.hud || ! app._started || ! app.together.roomKnown ) return;
+		this.awayTold = null;
+		const s = app.settings;
+		const told = tellOf( away.story, { ...away, T: islandTime( s.day, s.timeOfDay ), news: app.weather.news, open: this.martaIn, locale: app.portal && app.portal.locale } );
+		if ( told.note ) this.hud.showAwayNote( told.note );
+		if ( told.toast ) this.toast( told.toast, 5200 );
+
+	}
+
 	// (M13) what's said of a hurricane as it comes (a toast when it's watched for, warned of, and when its
 	// winds arrive), and Marta putting your boat back in once it's gone (when she's at her stall)
 	updateHurricane() {
@@ -812,7 +902,7 @@ export class Game {
 		}
 
 		const marta = this.chandlery && this.chandlery.vendor;
-		if ( this.state.hauled && ! n && marta && marta.open ) this.relaunch();
+		if ( this.state.hauled && ! n && marta && marta.open && this.martaIn ) this.relaunch();
 
 	}
 
@@ -884,11 +974,31 @@ export class Game {
 		const rode = this.rode;
 		rode.visible = !! b.anchor;
 		if ( ! b.anchor ) return;
-		// it comes down from the stem head and lies along the bottom to the anchor
-		const u = rode.material.uniforms, a = b.anchor;
-		b.toWorld( b.stemHead, u.lineA.value );
-		u.lineB.value.copy( a );
-		u.lineCtl.value.copy( u.lineA.value ).lerp( a, 0.8 ).y = a.y;
+		b.toWorld( b.stemHead, rode.material.uniforms.lineA.value );
+		this.layRode( rode, b.anchor );
+
+	}
+
+	// a rode's line, out of sight ((M15) the geometry shared with others': an away boat's, on your sea: Together)
+	rodeCopy( geometry = this.rode.geometry ) {
+
+		const rode = new Mesh( geometry, createLineMaterial( RODE_SEGS ) );
+		rode.name = 'AnchorRode';
+		rode.material.color.set( 0xcfc6ad );
+		rode.material.uniforms.lineShow.value = 2; // twice the fishing line's width
+		rode.frustumCulled = false;
+		rode.castShadow = false;
+		rode.visible = false;
+		return rode;
+
+	}
+
+	// it comes down from the stem head (lineA, set) and lies along the bottom to the anchor
+	layRode( rode, anchor ) {
+
+		const u = rode.material.uniforms;
+		u.lineB.value.copy( anchor );
+		u.lineCtl.value.copy( u.lineA.value ).lerp( anchor, 0.8 ).y = anchor.y;
 
 	}
 
@@ -950,6 +1060,69 @@ export class Game {
 
 	}
 
+	// (M15) beachcombing (Beachcomb.js): what's on the sand today (the last few days' finds you haven't picked
+	// up), drawn by the app's Beachcombing; walking by one, E picks it up
+	updateBeachcomb( inp, p ) {
+
+		const app = this.app, B = app.beachcomb, s = this.state, hud = this.hud;
+		if ( ! B ) return;
+		// (what you've picked up's pruned as you pick more: so its last, not its length)
+		const day = app.settings.day, key = `${ day }:${ s.picked.length }:${ s.picked[ s.picked.length - 1 ] || '' }`;
+		if ( key !== this._combKey ) {
+
+			this._combKey = key;
+			const picked = new Set( s.picked );
+			B.set( lying( day, ( d ) => app.beachDays( d ) ).filter( ( f ) => ! picked.has( f.id ) ) );
+
+		}
+
+		if ( hud && hud.noteOpen ) {
+
+			if ( inp.hit( 'KeyE' ) || inp.hit( 'Escape' ) ) hud.closeNote();
+			return;
+
+		}
+
+		if ( p.mode !== 'walk' || p.prompt || this.fight || ( hud && ( hud.standOpen || hud.invOpen || hud.catchOpen ) ) ) return;
+		const f = B.nearest( p.position.x, p.position.z, 1.4 );
+		if ( ! f ) return;
+		const name = FINDS[ f.kind ].name;
+		p.prompt = { key: 'E', text: `Pick up ${ /^[AEIOU]/.test( name ) ? 'an' : 'a' } ${ name.toLowerCase() }` };
+		if ( inp.hit( 'KeyE' ) ) this.pickFind( f );
+
+	}
+
+	pickFind( f ) {
+
+		if ( ! this.state.pickFind( f ) ) return false;
+		const F = FINDS[ f.kind ];
+		if ( f.kind === 'bottle' && this.hud ) this.hud.showNote( messageOf( f.seed ) );
+		else this.toast( `${ F.name }: ${ F.what }${ F.who ? ` · ${ F.who === 'joe' ? 'Joe' : 'Marta' } buys these` : '' }` );
+		return true;
+
+	}
+
+	// (M15) your finds sold to `who` ('marta' | 'joe'): these, or all they buy
+	sellFinds( who, ids = null ) {
+
+		const r = this.state.sellFinds( who, ids );
+		if ( r.count ) {
+
+			this.toast( `Sold ${ r.count === 1 ? 'it' : `${ r.count } finds` } for $${ r.total }` );
+			if ( this.app.audio && this.app.audio.coin ) this.app.audio.coin();
+
+		}
+
+		if ( this.hud && this.hud.standOpen ) {
+
+			this.hud.renderTrader();
+
+		}
+
+		return r;
+
+	}
+
 	// what E does at a stall: talk to them, or (they've gone home) what's left out
 	vendorPrompt( v ) {
 
@@ -957,6 +1130,7 @@ export class Game {
 		if ( v.open ) return `Talk to ${ name }`;
 		// (M9) or gone home for the weather
 		const back = v.boarded ? 'boarded up for the hurricane' : v.weatherShut ? 'shut for the weather' : `back at ${ timeText( v.hours[ 0 ], this.app.portal && this.app.portal.locale, 60 ) }`;
+		if ( v.kind === 'camp' ) return `${ name }'s ${ back }`;
 		return v.kind === 'shop' ? `Diesel on the honesty box   ·   ${ name }'s ${ back }` : `${ name }'s night box   ·   he's ${ back }`;
 
 	}
@@ -1050,7 +1224,9 @@ export class Game {
 	// his night box when he's gone home (less, but the orders in full); Marta: only the bait she's after
 	saleTerms( vendor ) {
 
-		const who = vendor && vendor.kind === 'shop' ? 'marta' : 'joe';
+		const who = vendor && vendor.kind === 'shop' ? 'marta' : vendor && vendor.kind === 'camp' ? 'camp' : 'joe';
+		// ((M15) Pearl: her price, Joe's less the trip to market; no list, no week's order)
+		if ( who === 'camp' ) return { who, orders: null, day: this.tradeDay, rate: CAMP.rate, week: null };
 		return { who, orders: this.orders, day: this.tradeDay, rate: who === 'joe' && vendor && ! vendor.open ? NIGHT_BOX : 1, week: who === 'joe' ? this.weekTerms() : null };
 
 	}
@@ -1087,9 +1263,118 @@ export class Game {
 		const h = this.habitatAtPoint( p.x, p.z, this.rod.depth );
 		// (Salt Life) in the deck floodlights' pool after dark (Bites: what gathers under lights)
 		h.flood = this.floodAt( p.x, p.z );
-		// (M9) and the weather (Bites.weatherMood: what the fish feel of it)
+		// (M9) and the weather (Bites.weatherMood: what the fish feel of it); ((M15) and which side of the
+		// island it's on, for which sea roughs its water)
 		h.weather = this.weatherNow;
+		h.side = this.windwardAt( p.x, p.z );
+		h.big = this.windReefAt( p.x, p.z );
+		// ((M15) and how far out past the far grounds: the blue's emptier there)
+		h.far = edgeAt( p.x, p.z );
 		return h;
+
+	}
+
+	// (M15) the place ( x, z ) is (Places.js), from its water
+	placeAt( x, z ) {
+
+		const T = this.app.terrainData, h = this.habitatAtPoint( x, z, Math.max( 0, G.seaLevel.value - T.heightAt( x, z ) ) );
+		h.side = this.windwardAt( x, z );
+		h.big = this.windReefAt( x, z );
+		return placeOf( h, x, z );
+
+	}
+
+	// (M15) the chart you fill in (Chart.js; the minimap and the plotter draw it): what you see about you charted,
+	// further from high ground and from the sea; the names you come to (near, or over their water: at sea, the
+	// place under you), each told; your own mark where you are (P); kept in the save now and then as it fills in
+	updateChart( dt, inp ) {
+
+		const chart = this.state.chart, p = this.app.player;
+		if ( inp && inp.hit( 'KeyP' ) && ! ( this.hud && this.hud.catchOpen ) ) this.addMark();
+		if ( ( this._chartT = ( this._chartT || 0 ) - dt ) > 0 ) return;
+		this._chartT = 0.4;
+		const c = this.app.camera.position, { x, z } = this.chartSpot;
+		const seen = chart.look( x, z, sightOf( p.mode, c.y - G.seaLevel.value ) );
+		const sea = p.mode === 'boat' || p.mode === 'deck' || p.mode === 'swim';
+		// (a far place's name comes with finding it: updateFound's toast has that, and a toast takes the last one's place)
+		const told = ( n ) => n.place && PLACES[ n.place ].far && ! ( this.state.found[ n.place ] < this.tradeDay );
+		for ( const n of chart.learn( x, z, sea ? this.placeAt( x, z ) : null ) ) if ( ! told( n ) ) this.toast( `On your chart: ${ n.peak ? 'the summit' : n.name }`, 2600 );
+		this._chartDirty = this._chartDirty || seen;
+		if ( this._chartDirty && ( this._chartSaved = ( this._chartSaved || 0 ) + 0.4 ) > 15 ) {
+
+			this._chartDirty = false;
+			this._chartSaved = 0;
+			this.state.save();
+
+		}
+
+	}
+
+	// (M15) a fish had at `place` ( at: { x, z } ): on the chart (the plotter's fish; the place marked at your first there)
+	charted( species, place, at ) {
+
+		if ( ! at || ! species ) return;
+		this.state.chart.caught( species, place, at.x, at.z, this.tradeDay );
+		this.state.save();
+
+	}
+
+	// (M15) where you are on the chart: your boat's spot aboard her; riding in someone else's, where you are
+	get chartSpot() {
+
+		const p = this.app.player, b = this.app.boatCtl;
+		return ( p.mode === 'boat' || p.mode === 'deck' ) && ! p.riding && b ? b.position : this.app.camera.position;
+
+	}
+
+	// (M15) your own mark on the chart, where you are (the boat's spot when you're aboard)
+	addMark() {
+
+		const { x, z } = this.chartSpot;
+		const m = this.state.chart.mark( x, z, this.tradeDay );
+		this.toast( m ? `Mark ${ m.id } on your chart` : `Your chart has ${ MAX_MARKS } marks: take one off first (I, Chart)`, 2200 );
+		if ( m ) this.state.save();
+		if ( this.hud && this.hud.invOpen ) this.hud.renderInventory();
+		return m;
+
+	}
+
+	// (M15) how much ( x, z ) is on the windward reef off the north-west point (0..1: its platform, TerrainData's)
+	windReefAt( x, z ) {
+
+		const m = northReefMask( x, z ), t = Math.min( 1, Math.max( 0, ( m - 0.15 ) / 0.35 ) );
+		return t * t * ( 3 - 2 * t );
+
+	}
+
+	// (M15) how much ( x, z ) is on the island's windward side, its north shore (0..1): out past its coast
+	// on the side facing up the trades from the island's middle (the north beach all of it, the bay none,
+	// the west and the east coasts little)
+	windwardAt( x, z ) {
+
+		const dx = x - ISLE.x, dz = z - ISLE.z, d = Math.max( Math.hypot( dx, dz ), 1 );
+		const k = ( a, b, v ) => {
+
+			const t = Math.min( 1, Math.max( 0, ( v - a ) / ( b - a ) ) );
+			return t * t * ( 3 - 2 * t );
+
+		};
+		return k( 0.05, 0.5, ( dx * UPWIND.x + dz * UPWIND.z ) / d ) * k( 150, 400, d );
+
+	}
+
+	// (M15) the sand under ( x, z ), 0..1 (the island's 1 m sand cover, less its rock: the beaches, the bay's
+	// floor, the flats; once those masks are let go, the 4 m one App keeps of them: T.beach); none past the
+	// island's map
+	sandAt( x, z ) {
+
+		const T = this.app.terrainData, B = T.sand ? null : T.beach;
+		if ( ! T.sand && ! B ) return 0;
+		const res = B ? B.res : T.res, texel = B ? B.texel : T.texel;
+		const i = Math.floor( ( x - T.origin ) / texel ), j = Math.floor( ( z - T.origin ) / texel );
+		if ( i < 0 || j < 0 || i >= res || j >= res ) return 0;
+		const k = j * res + i;
+		return B ? B.data[ k ] / 255 : T.sand[ k ] / 255 * ( 1 - T.rock[ k ] );
 
 	}
 
@@ -1102,7 +1387,46 @@ export class Game {
 		const rect = ( x0, x1, z0, z1 ) => Math.hypot( Math.max( x0 - b.x, 0, b.x - x1 ), Math.max( z0 - b.z, 0, b.z - z1 ) );
 		const walk = rect( P.x - P.width / 2, P.x + P.width / 2, P.zStart, P.zEnd );
 		const head = rect( P.x - P.headWidth / 2, P.x + P.headWidth / 2, P.zEnd - P.headDepth, P.zEnd );
-		return habitatAt( { depth, reefDist, pierDist: Math.min( walk, head ) } );
+		// ((M15) out past the island: how steeply the bottom falls away there, across the offshore map's 32 m
+		// texels; the bank's patch reefs, on its top, the only water that shallow that far out; and what's
+		// found out there)
+		const T = this.app.terrainData, e = 32;
+		const slope = depth > 30 ? Math.hypot( T.heightAt( x + e, z ) - T.heightAt( x - e, z ), T.heightAt( x, z + e ) - T.heightAt( x, z - e ) ) / ( 2 * e ) : 0;
+		const B = SEABED.bank;
+		const patch = depth < 34 && Math.hypot( x - B.x, z - B.z ) < B.a + 1500 ? 0.8 * Math.min( 1, ( 34 - depth ) / 10 ) : 0;
+		const f = this.findsNear( x, z );
+		// ((M15) and the wash's: the sand, on which side; and the mangroves' creek, their pool and their edge)
+		const beach = depth < 5 ? this.sandAt( x, z ) : 0, windward = beach > 0 ? this.windwardAt( x, z ) : 0;
+		const mg = depth < 6 ? mangroveAt( x, z ) : null, creek = mg ? Math.max( mg.creek, mg.fringe ) : 0;
+		return habitatAt( { depth, reefDist, pierDist: Math.min( walk, head ), slope, patch, weed: f.weed, debris: f.debris, birds: f.birds, beach, windward, creek, windReef: this.windReefAt( x, z ) } );
+
+	}
+
+	// (M15) how near ( x, z ) is to what's found out there (App.finds, game/Finds.js), each 0..1 by its life:
+	// a weedline (within a few m of its edge, fading by 45 m out), a piece of floating debris (the fish about
+	// it, by 60 m) and a school being worked (inside it, fading by 80 m out)
+	findsNear( x, z ) {
+
+		const out = this._near || ( this._near = { weed: 0, debris: 0, birds: 0 } ), f = this.app.finds;
+		out.weed = out.debris = out.birds = 0;
+		if ( ! f ) return out;
+		const fade = ( a, b, d ) => {
+
+			const t = Math.min( 1, Math.max( 0, ( d - a ) / ( b - a ) ) );
+			return 1 - t * t * ( 3 - 2 * t );
+
+		};
+		for ( const w of f.weed ) {
+
+			const ex = w.x1 - w.x0, ez = w.z1 - w.z0, t = Math.min( 1, Math.max( 0, ( ( x - w.x0 ) * ex + ( z - w.z0 ) * ez ) / Math.max( ex * ex + ez * ez, 1e-6 ) ) );
+			const d = Math.hypot( x - w.x0 - ex * t, z - w.z0 - ez * t ) - w.width / 2;
+			out.weed = Math.max( out.weed, w.life * fade( 3, 45, d ) );
+
+		}
+
+		for ( const q of f.debris ) out.debris = Math.max( out.debris, q.life * fade( 8, 60, Math.hypot( x - q.x, z - q.z ) - q.size / 2 ) );
+		for ( const q of f.bait ) out.birds = Math.max( out.birds, q.life * fade( 0, 80, Math.hypot( x - q.x, z - q.z ) - q.r ) );
+		return out;
 
 	}
 
@@ -1159,7 +1483,9 @@ export class Game {
 			}
 
 			b.species = species;
-			b.kg = rollWeight( species, Math.random, this.hookBait, h.weather );
+			b.kg = rollWeight( species, Math.random, this.hookBait, h.weather, h.big );
+			b.place = placeOf( h, this.rod.bobber.x, this.rod.bobber.z ); // ((M15) where it bit: Places.js)
+			b.at = { x: this.rod.bobber.x, z: this.rod.bobber.z }; // ((M15) and there, for the chart)
 			b.phase = 'nibble';
 			b.nibbles = 1 + Math.floor( Math.random() * 3 );
 			b.t = 0.7 + Math.random() * 0.8;
@@ -1216,6 +1542,8 @@ export class Game {
 		// (the line out: no more than the rod casts and a fish could have taken, whatever's gone wrong)
 		const out = Math.min( Math.max( 3, this.rod.lineOut ), this.rod.castM * 1.5 + 10 );
 		this.fight = new CatchMinigame( { species: b.species, kg: b.kg, lineKg: g.lineKg, reelSpeed: g.reelSpeed, distance: Number.isFinite( out ) ? out : 3, wind: blowShare( G.windSpeed.value ) } );
+		this.fight.place = b.place;
+		this.fight.at = b.at;
 		this.bite = null;
 		this.rod.hook();
 		this.toast( 'Fish on!', 1200 );
@@ -1253,16 +1581,21 @@ export class Game {
 		const name = FISH[ f.species ].name;
 		if ( st === 'caught' ) {
 
-			const entry = this.state.addFish( f.species, f.kg, this.hour );
+			const entry = this.state.addFish( f.species, f.kg, this.hour, { day: this.tradeDay, place: f.place } );
 			const info = this.state.lastCatch;
+			this.charted( f.species, f.place, f.at );
 			info.wanted = entry ? this.wantedFor( entry ) : null; // (Salt Life) on today's wanted list
+			// ((M15) let go where Marta's tag-and-release ask wants one: paid there and then)
+			const tag = info.released && tagFor( this.orders, f.species, f.place );
+			info.tagged = tag ? this.state.tag( tag, this.tradeDay ) : 0;
 			// (Salt Life) the others hear of it; the island's records (together/): the card says when
 			// it's the heaviest of its kind anyone here has landed
 			if ( this.app.together ) {
 
-				const isle = this.app.together.caught( f.species, f.kg, info.cm );
+				const isle = this.app.together.caught( f.species, f.kg, info.cm, 'rod', info.place );
 				info.islandRecord = isle.island;
 				info.islandHeld = isle.held || null;
+				info.placeRecord = isle.place ? info.place : null; // ((M15) the heaviest anyone's had there)
 
 			}
 			if ( au && au.fishSplash ) au.fishSplash( this.rod.bobber, 0.8 );
@@ -1295,6 +1628,40 @@ export class Game {
 
 	}
 
+	// the catch card up for `t` s (info: its GameState.lastCatch): whether it's done with ('go': in the cooler
+	// or let go, as it says; 'keep': kept after all), or null. (M15) One with no room for its fish waits, with
+	// no timer and no tap away, while you let fish go from the cooler to make room for it (the card's own
+	// buttons; ← → or the d-pad to pick one, R or X to let it go): kept once it fits (its button, Enter, RT
+	// or F), or let go (its button, E, B or Esc)
+	cardEnd( info, t, lDown ) {
+
+		const inp = this.app.input, hud = this.hud, R = hud.room;
+		if ( ! R ) return lDown || inp.hit( 'KeyE' ) || inp.hit( 'Escape' ) || hud.takeCatchTap() || t > CATCH_CARD_MS / 1000 ? 'go' : null;
+		if ( inp.hit( 'ArrowLeft' ) || inp.hit( 'ArrowRight' ) ) hud.roomStep( inp.hit( 'ArrowRight' ) ? 1 : - 1 );
+		if ( inp.hit( 'KeyR' ) ) hud.roomLetGo();
+		let act = hud.takeCatchAct();
+		if ( ! act && R.fits && ( lDown || inp.hit( 'Enter' ) || inp.hit( 'NumpadEnter' ) ) ) act = 'keep';
+		if ( ! act && ( inp.hit( 'KeyE' ) || inp.hit( 'Escape' ) ) ) act = 'go';
+		if ( act === 'keep' ) {
+
+			const entry = this.state.keepLast( info );
+			if ( ! entry ) return null;
+			info.wanted = this.wantedFor( entry );
+			this.toast( `${ FISH[ entry.species ].name } · ${ lb( entry.kg ) } · $${ entry.value } · in the ${ this.state.upgrades.hold > 0 ? 'hold' : 'cooler' }`, 2600 );
+
+		}
+
+		return act;
+
+	}
+
+	// whether the catch card is making room for its fish (it has the keys: Game.cardEnd)
+	get makingRoom() {
+
+		return !! ( this.hud && this.hud.room );
+
+	}
+
 	// the landed fish goes in the cooler: card, fish and line away
 	endLanding() {
 
@@ -1313,7 +1680,7 @@ export class Game {
 	quietKeys() {
 
 		const panelOpen = this.hud && ( this.hud.invOpen || this.hud.standOpen );
-		return ! panelOpen && ! ( this.time && this.time.open ) && ! ( this.guide && this.guide.open );
+		return ! panelOpen && ! this.makingRoom && ! ( this.time && this.time.open ) && ! ( this.guide && this.guide.open ) && ! ( this.radio && this.radio.open );
 
 	}
 
@@ -1434,7 +1801,10 @@ export class Game {
 			return { i, species: id, label: id ? FISH[ id ].name : sp.label, cm, kg: id ? fishWeightKg( id, cm ) : 0 };
 
 		} );
-		const r = this.state.addHaul( caught, this.hour );
+		const where = this.placeAt( net.footprint.x, net.footprint.z );
+		const r = this.state.addHaul( caught, this.hour, where, this.tradeDay );
+		const got = caught.find( ( f ) => f.species );
+		if ( got ) this.charted( got.species, where, net.footprint );
 		const to = net.lastThrow;
 		_b.set( to ? to.x - b.x : 0, 0, to ? to.z - b.z : 1 );
 		if ( _b.lengthSq() < 1e-6 ) _b.set( 0, 0, 1 );
@@ -1450,7 +1820,7 @@ export class Game {
 		if ( fish ) fish.netEnd();
 		this.netIn = 0;
 		// a mullet for the cooler counts toward the island's records, and the others hear of it
-		if ( this.app.together ) for ( const e of r.cooler ) this.app.together.caught( e.species, e.kg, e.cm, 'net' );
+		if ( this.app.together ) for ( const e of r.cooler ) this.app.together.caught( e.species, e.kg, e.cm, 'net', e.place );
 		if ( caught.length && au && au.fishFlop ) au.fishFlop();
 		this.lastHaul = { r, n: caught.length, out };
 		if ( this.hud ) this.hud.showHaul( r, caught.length, out );
@@ -1692,7 +2062,7 @@ export class Game {
 		if ( sp.card && gun.state === 'landing' ) {
 
 			sp.cardT += dt;
-			if ( lDown || inp.hit( 'KeyE' ) || inp.hit( 'Escape' ) || this.hud.takeCatchTap() || sp.cardT > CATCH_CARD_MS / 1000 ) {
+			if ( this.cardEnd( sp.card, sp.cardT, lDown ) ) {
 
 				this._cardDismissed = true;
 				this.finishSpeared();
@@ -1774,14 +2144,16 @@ export class Game {
 
 		const sp = this.speared, gun = this.gun;
 		this.calmThief( sp );
-		const entry = this.state.addFish( sp.id, sp.kg, this.hour, { method: 'spear', cm: sp.cm } );
+		const entry = this.state.addFish( sp.id, sp.kg, this.hour, { method: 'spear', cm: sp.cm, day: this.tradeDay, place: this.placeAt( this.app.camera.position.x, this.app.camera.position.z ) } );
 		const info = this.state.lastCatch;
+		this.charted( sp.id, info.place, this.app.camera.position );
 		info.wanted = entry ? this.wantedFor( entry ) : null;
 		if ( this.app.together ) {
 
-			const isle = this.app.together.caught( sp.id, info.kg, info.cm, 'spear' );
+			const isle = this.app.together.caught( sp.id, info.kg, info.cm, 'spear', info.place );
 			info.islandRecord = isle.island;
 			info.islandHeld = isle.held || null;
+			info.placeRecord = isle.place ? info.place : null;
 
 		}
 
@@ -1964,7 +2336,7 @@ export class Game {
 
 			n.cardT += dt;
 			app.player.breathPaused = true;
-			if ( lDown || inp.hit( 'KeyE' ) || inp.hit( 'Escape' ) || this.hud.takeCatchTap() || n.cardT > CATCH_CARD_MS / 1000 ) {
+			if ( this.cardEnd( n.card, n.cardT, lDown ) ) {
 
 				this._cardDismissed = true;
 				this.finishLobster();
@@ -1981,14 +2353,16 @@ export class Game {
 		const n = this.netted;
 		n.gauged = true;
 		const release = n.cm < FISH.lobster.minCm ? 'short' : n.berried ? 'berried' : null;
-		const entry = this.state.addFish( 'lobster', n.kg, this.hour, { method: 'hand', cm: n.cm, day: this.tradeDay, release } );
+		const entry = this.state.addFish( 'lobster', n.kg, this.hour, { method: 'hand', cm: n.cm, day: this.tradeDay, release, place: this.placeAt( this.app.camera.position.x, this.app.camera.position.z ) } );
 		const info = this.state.lastCatch;
+		this.charted( 'lobster', info.place, this.app.camera.position );
 		info.wanted = entry ? this.wantedFor( entry ) : null;
 		if ( this.app.together ) {
 
-			const isle = this.app.together.caught( 'lobster', info.kg, info.cm, 'hand' );
+			const isle = this.app.together.caught( 'lobster', info.kg, info.cm, 'hand', info.place );
 			info.islandRecord = isle.island;
 			info.islandHeld = isle.held || null;
+			info.placeRecord = isle.place ? info.place : null;
 
 		}
 
@@ -2105,8 +2479,9 @@ export class Game {
 	// card): { text } or null
 	wantedFor( fish ) {
 
-		const o = this.orders.find( ( x ) => x.species === fish.species );
-		if ( o && this.state.wantedIds( this.orders, this.tradeDay ).has( fish.id ) ) return { order: o, text: `${ o.who === 'marta' ? 'Marta' : 'Joe' } wants it` };
+		// ((M15) a place's ask first, for a fish from its place)
+		const o = ordersOf( this.orders, 'joe', fish.species, fish.place )[ 0 ] || ordersOf( this.orders, 'marta', fish.species, fish.place )[ 0 ];
+		if ( o && this.state.wantedIds( this.orders, this.tradeDay ).has( fish.id ) ) return { order: o, text: `${ o.who === 'marta' ? 'Marta' : 'Joe' } wants it${ o.place ? ` from ${ placeName( o.place ) }` : '' }` };
 		const w = this.weekTerms();
 		if ( w && this.state.wantedIds( null, null, w ).has( fish.id ) ) return { text: 'For the week\'s order' };
 		return null;

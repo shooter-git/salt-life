@@ -26,6 +26,9 @@ export const WORLD = {
 	village: { center: new THREE.Vector3( 40, 0, - 118 ), radius: 95 },
 
 	reef: { center: new THREE.Vector3( - 78, 0, 58 ), radius: 58 },
+	// (M15) the windward reef, off the north-west point: the island's most windward corner, facing the trades'
+	// sea from the north-north-west; its crest about 3 m down, its fore reef sloping away north-north-west
+	northReef: { center: new THREE.Vector3( - 452, 0, - 792 ), radius: 72 },
 
 	spawn: { position: new THREE.Vector3( 18, 0, - 60 ), yaw: Math.PI }, // kept clear of rocks, plants and debris
 	// where the player starts: on the boardwalk up from the pier foot, looking down it toward the pier

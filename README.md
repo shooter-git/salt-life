@@ -20,7 +20,7 @@ You can walk, swim and take the boat around the island. You can fish from the pi
 boat, or dive and spear a fish, sell your catch to Joe and buy better gear from Marta. It plays with a
 mouse and keyboard, a gamepad or a touch screen.
 
-Done, M0 to M14:
+Done, M0 to M15:
 - the sea and its shore, spray, gusts and slicks, and the haze;
 - the whole world: the village, the pier, the reef and its fish, the birds and crabs, the beach's
   debris, the whale and the lights at night;
@@ -154,6 +154,25 @@ Done, M0 to M14:
     and a crag standing in the shallows with a cave to wade into, its layers of lava catching the light;
     under one the rain's quieter, and under them and the pier the sea lies without its rings;
   - a snapped line leaves its float drifting off on the water, and you tie on a new hook;
+- the world (M15):
+  - the whole island's worth going round: the north beach's surf for pompano and permit, the mangrove
+    creek for snook at dawn and dusk, the windward reef with its bigger groupers, each place's orders
+    and records, and fingerposts to them;
+  - a lighthouse to steer home by and the bay's harbour lights, a coaster wrecked on the windward reef,
+    sea caves to take the boat into, and green turtles nesting on the north coast by night;
+  - beachcombing along the wrack line, its finds to sell; a trail over to the north beach, walked at
+    a pace the slope sets, and Pearl's fish camp at the foot of it, buying your catch and selling diesel;
+  - the sea past the island: its seabed down to the deep, the green water giving way to the blue, the
+    drop-off, the north ledge, the hump and a bank with its sandbar and surf; weedlines, debris and
+    birds working bait to look for, with mahi and tuna under them; its own weather, and the island a
+    far shape on the horizon, sinking behind the curve of the earth;
+  - a chart you fill in as you go, in a real chart's colours, with your own marks and where the fish
+    were; a compass and a plotter at the helm, how far home and whether the fuel will get you there;
+  - a VHF: the forecast read out on WX1, and Marta on channel 16 to tow you in, by the distance;
+  - no wall out there: past the far grounds the sea's only rougher and emptier;
+  - the open sea's own sound: the shore fading behind you, its wash, whitecaps and the wind off it;
+  - you come back to your boat where you left her, and to what's happened to her since; with others,
+    she lies on their sea at anchor or adrift, to step aboard and fish off if she's anchored;
 - playing together:
   - you see the others on the island, walking, swimming, fishing and out in their boats;
   - you pick your islander: two men and two women;
@@ -195,8 +214,8 @@ The island's day:
 | M12 | Storms from other directions: each blow its own track, fronts, thunderstorms on the horizon, the swell from the west crossing the island's own, rip currents and being tumbled, splashes on the rocks and the boat, the skipper's dash for riders |
 | M13 | The hurricane: its surge and surf, its wind and rain, the warnings, the haul-out and the shelter, the wildlife in the weather, the damage and its mending, the eye's sky |
 | M14 | Storm skies and the sea: cumulonimbus, the eye's stadium and its bands, the open sea breaking, the north shore's sea, being knocked over wading, shutters and litter in a blow, the radar, rain heard on tin, Category 2 and 3 hurricanes, more of the island torn and its roof sheets flying, shelter under the rocks ([what's left over](docs/M14.md)) |
-| M15 | The world, for consideration: the island worth going all the way round, the north side, and the sea past it ([docs/M15.md](docs/M15.md)) |
-| M16 | The boats, for consideration: the boats to work up to, once M15's bigger sea is there for them ([docs/M16.md](docs/M16.md)) |
+| M15 | The world: the island worth going all the way round (the north side's fishing, its landmarks and sea caves, beachcombing, the trail and the fish camp), the sea past it (the seabed out there, its weather and finds, the far island, the chart you fill in, the radio and the tow, the soft edge, its sound), and picking up where you left off |
+| M16 | The boats, for consideration: the boats to work up to, now M15's bigger sea is there for them ([docs/M16.md](docs/M16.md)) |
 
 ## How it fits All the Spaces
 

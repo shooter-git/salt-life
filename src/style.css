@@ -69,6 +69,8 @@ html, body {
    stays at the top, between the app's menu button and the purse */
 /* (the action button says it there: no key prompt behind the buttons, also when a keyboard is used) */
 html.is-touch .hud-prompt { display: none; }
+/* ((M15) finding a far place is a long one: all of it, on a phone's narrow screen) */
+html.is-touch .hud-toast { width: max-content; white-space: normal; text-wrap: balance; text-align: center; border-radius: 14px; }
 
 @media (orientation: portrait) {
 	html.is-touch .hud-toast { top: calc(var(--gm-top, 64px) + var(--gm-map, 0px) + 16px); }

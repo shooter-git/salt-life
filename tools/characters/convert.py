@@ -1,5 +1,5 @@
 # Blender (3.4+, tested with 3.4 and 5.2) batch converter (see README): Rocketbox avatar FBX + clip FBXs -> one GLB (skin + clips).
-# blender -b --python convert.py -- <avatar.fbx> <texdir (prepared jpg/png)> <prefix m106> <out.glb> <anim1.fbx[@first-last]> [anim2.fbx ...]
+# blender -b --python convert.py -- <avatar.fbx|.blend> <texdir (prepared jpg/png)> <prefix m106> <out.glb> <anim1.fbx[@first-last]> [anim2.fbx ...]
 import bpy, sys, os, re
 argv = sys.argv[sys.argv.index('--') + 1:]
 avatar, texdir, prefix, out = argv[:4]
@@ -13,7 +13,16 @@ def import_fbx(path):
     bpy.ops.import_scene.fbx(filepath=path, use_anim=True, automatic_bone_orientation=False, ignore_leaf_bones=False)
     return [o for o in bpy.data.objects if o not in before]
 
-objs = import_fbx(avatar)
+if avatar.endswith('.blend'):
+    # (one put together already: swap_head.py's, another's head on a body)
+    with bpy.data.libraries.load(avatar) as (src, dst):
+        dst.objects = list(src.objects)
+    objs = []
+    for o in dst.objects:
+        scene.collection.objects.link(o)
+        objs.append(o)
+else:
+    objs = import_fbx(avatar)
 arm = next(o for o in objs if o.type == 'ARMATURE')
 mesh = next(o for o in objs if o.type == 'MESH')
 for o in objs:

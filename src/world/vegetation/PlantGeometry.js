@@ -769,6 +769,50 @@ export function buildTreeNear( seed = 21, b = new GeoBuilder() ) {
 
 }
 
+// (M15) Red mangrove's prop roots: arching out and down from the lower trunk into the water all round it, some
+// branching on their way, and a few aerial roots dropping straight from the limbs. For the reference mangrove
+// (MANGROVE_TREE: a canopy tree at that scale and squash, its trunk held up `lift` over the water on them, its
+// fork about 1.4 m over that; Scatter scales them with each one; their own foot is the mud's); bark (part 0) in
+// the roots' material, still (no sway)
+export const MANGROVE_TREE = { s: 0.55, sy: 0.68, lift: 0.55 }; // (lift: its trunk's foot over the water, m)
+export function buildMangroveRoots( seed = 61, b = new GeoBuilder() ) {
+
+	const rand = mulberry32( seed ), V = THREE.Vector3, H = 4.5, still = () => 0, BARK = [ 0, 0, 0, 0 ];
+	const at = ( p0, c, p1, t ) => new V().copy( p0 ).multiplyScalar( ( 1 - t ) * ( 1 - t ) ).addScaledVector( c, 2 * ( 1 - t ) * t ).addScaledVector( p1, t * t );
+	const n = 11;
+	for ( let i = 0; i < n; i ++ ) {
+
+		const a = ( i / n ) * Math.PI * 2 + ( rand() - 0.5 ) * 0.4;
+		const y0 = 0.75 + rand() * 0.8, R = 1.1 + rand() * 1.5, r0 = 0.045 + rand() * 0.02;
+		const p0 = new V( Math.cos( a ) * 0.12, y0, Math.sin( a ) * 0.12 );
+		const p1 = new V( Math.cos( a ) * R, - 0.35, Math.sin( a ) * R );
+		// (out first, then down: an arch)
+		const ctrl = new V( Math.cos( a ) * R * 0.75, y0 + 0.35 + rand() * 0.3, Math.sin( a ) * R * 0.75 );
+		addLimb( b, p0, ctrl, p1, r0, r0 * 0.75, 6, 8, BARK, H, still );
+		if ( rand() < 0.5 ) {
+
+			// (a root branching off it, on further out)
+			const q = at( p0, ctrl, p1, 0.45 + rand() * 0.2 ), a2 = a + ( rand() - 0.5 ) * 0.9, R2 = 0.8 + rand() * 0.9;
+			const q1 = new V( q.x + Math.cos( a2 ) * R2, - 0.35, q.z + Math.sin( a2 ) * R2 );
+			const qc = new V( q.x + Math.cos( a2 ) * R2 * 0.6, q.y + 0.15, q.z + Math.sin( a2 ) * R2 * 0.6 );
+			addLimb( b, q, qc, q1, r0 * 0.7, r0 * 0.55, 5, 6, BARK, H, still );
+
+		}
+
+	}
+
+	// (aerial roots dropping from the limbs)
+	for ( let i = 0; i < 4; i ++ ) {
+
+		const a = rand() * Math.PI * 2, R = 0.8 + rand() * 1.4, y = 2.1 + rand() * 0.7;
+		addBranch( b, new V( Math.cos( a ) * R, y, Math.sin( a ) * R ), new V( Math.cos( a ) * R * 1.05, - 0.3, Math.sin( a ) * R * 1.05 ), 0.018, 0.014, 4, 3, BARK, H, still );
+
+	}
+
+	return { geometry: b.build( 4, new THREE.Vector3( 0, 0.8, 0 ) ), triangles: b.triangles };
+
+}
+
 // Shrub: a few leafy lobes on short stems (stems are part 5: bark of a shrub).
 export function buildShrubNear( seed = 31, b = new GeoBuilder() ) {
 

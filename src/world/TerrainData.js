@@ -2,6 +2,10 @@ import { Noise2D, smoothstep, clamp, lerp } from '../util/Noise.js';
 import { WORLD } from './WorldLayout.js';
 import { softRamp, erosionNoise, sampleGrid, upsample2, boxBlur } from './terrain/TerrainNoise.js';
 import { ridgeEnvelope, SEA_STACKS, PATHS, polylineDistance } from './terrain/IslandShape.js';
+import { MANGROVE, mangroveAt } from './terrain/Mangrove.js';
+import { CAVES, carveAt } from './terrain/SeaCaves.js';
+import { beachBerm } from './terrain/NorthBeach.js';
+import { trailCut } from './terrain/NorthTrail.js';
 
 const smin = ( a, b, k ) => {
 
@@ -16,6 +20,18 @@ const ellipseDist = ( x, z, cx, cz, rx, rz ) => {
 	return ( Math.sqrt( dx * dx + dz * dz ) - 1 ) * Math.min( rx, rz );
 
 };
+
+// (M15) the windward reef's platform (WORLD.northReef), 0..1: an ellipse in its frame (u seaward, up the
+// trades' sea, v along the shore), longer seaward than shoreward; its edge ragged
+const NR = WORLD.northReef, NR_UP = { x: - 0.35 / Math.hypot( 0.35, 0.94 ), z: - 0.94 / Math.hypot( 0.35, 0.94 ) };
+export function northReefMask( x, z, rag = 0 ) {
+
+	const dx = x - NR.center.x, dz = z - NR.center.z;
+	const u = dx * NR_UP.x + dz * NR_UP.z, v = dx * NR_UP.z - dz * NR_UP.x;
+	const ru = u > 0 ? u / NR.radius : - u / ( NR.radius * 0.6 ), rv = v / ( NR.radius * 1.25 );
+	return 1 - smoothstep( 0.35, 1, Math.hypot( ru, rv ) + rag );
+
+}
 
 // central bay: the beach and its underwater profile stay smooth (the surf is tuned for it)
 const beachZoneAt = ( x, z ) => ( 1 - smoothstep( 120, 205, Math.abs( x - 10 ) ) ) * ( 1 - smoothstep( 40, 140, z + 40 ) ) * smoothstep( - 260, - 120, z );
@@ -47,8 +63,10 @@ const VILLAGE = WORLD.village.center;
 export class TerrainData {
 
 	// `baked`: the fields generate() makes, read from public/world/island.bin (terrain/IslandBake.js)
-	// instead of generated, which takes seconds on a phone
-	constructor( seed = 7, baked = null ) {
+	// instead of generated, which takes seconds on a phone. (M15) `offshore`: the seabed past the square
+	// (terrain/Offshore.js, read from public/world/offshore.bin), read where the island's map ends, and the
+	// square's edge blended into it (without it, a flat 90 m past the square, as the bake makes it)
+	constructor( seed = 7, baked = null, { offshore = null } = {} ) {
 
 		this.size = WORLD.terrainSize;
 		this.res = baked ? baked.res : RES; // a bake may be coarser (2 m for low-powered devices)
@@ -75,7 +93,65 @@ export class TerrainData {
 		this._F = { wx: 0, wz: 0, f170: 0, und: 0, deep: 0, E: 0, gx: 0, gz: 0 };
 		this._out = { h: 0, rock: 0, d: 0, bz: 0, carve: 0 };
 		if ( ! baked ) this.generate();
+		// ((M15) the sea caves' floors cut in as a bake's loaded (the bake's the ground as it was): the rocks and the
+		// plants are placed from the ground as it was (this.uncut), each from one random stream, so the cut moved
+		// every one placed after it)
+		if ( baked ) {
+
+			this._seaCaves();
+			// ((M15) and the turtle beach on the north coast, its dry sand for the turtles' nests:
+			// terrain/NorthBeach.js; its masks' old values kept as its heights' are, for the placing)
+			const M = this._masksBefore, record = ( k, h ) => this._uncut.has( k ) || this._uncut.set( k, h );
+			const recordMask = ( a, k, v ) => {
+
+				const m = M.get( a ) || M.set( a, new Map() ).get( a );
+				if ( ! m.has( k ) ) m.set( k, v );
+
+			};
+			beachBerm( this, record, recordMask );
+			// ((M15) and the way over to it on foot, its trail cut into the slopes: terrain/NorthTrail.js)
+			trailCut( this, record, recordMask );
+
+		}
+		this.offshore = offshore;
+		if ( offshore ) this._blendEdge();
 		this.buildMinMax();
+
+	}
+
+	// (M15) the square's edge blended into the seabed past it. generate() fades the last 120 m to a flat
+	// 90 m (_fadeBorder: lerp( -90, h, t ) at each 1 m texel, kept in the bake); to the seabed out there
+	// instead, lerp( sea, h, t ), is that plus ( 1 - t ) * ( sea + 90 ), averaged over the 1 m texels in a
+	// coarser one
+	_blendEdge() {
+
+		const sea = this.offshore;
+		const res = this.res, f = RES / res, H = this.heights, o = this.origin, tx = this.texel;
+		const ring = Math.ceil( 122 / f ) + 1;
+		const blend = ( i, j ) => {
+
+			let lost = 0;
+			for ( let b = 0; b < f; b ++ ) for ( let a = 0; a < f; a ++ ) {
+
+				const i1 = i * f + a, j1 = j * f + b;
+				lost += 1 - smoothstep( 0, 120, Math.min( i1, j1, RES - 1 - i1, RES - 1 - j1 ) );
+
+			}
+
+			if ( lost > 0 ) H[ j * res + i ] += lost / ( f * f ) * ( sea.heightAt( o + ( i + 0.5 ) * tx, o + ( j + 0.5 ) * tx ) + 90 );
+
+		};
+
+		for ( let j = 0; j < res; j ++ ) {
+
+			if ( Math.min( j, res - 1 - j ) > ring ) {
+
+				for ( let i = 0; i <= ring; i ++ ) blend( i, j );
+				for ( let i = res - 1 - ring; i < res; i ++ ) blend( i, j );
+
+			} else for ( let i = 0; i < res; i ++ ) blend( i, j );
+
+		}
 
 	}
 
@@ -186,6 +262,17 @@ export class TerrainData {
 				const bumps = n2.ridged( x / 11, z / 11, 4 ) * 2.8 + n.fbm( x / 5, z / 5, 2 ) * 0.5;
 				h += reefMask * ( 1.2 + bumps );
 				h = Math.min( h, - 1.4 );
+
+			}
+
+			// ((M15) and the windward reef's, off the north-west point: along its shore, longer seaward
+			// than shoreward, raised to its crest)
+			const nm = northReefMask( x, z );
+			if ( nm > 0 ) {
+
+				const bumps = n2.ridged( x / 11 + 31, z / 11, 4 ) * 2.8 + n.fbm( x / 5, z / 5 + 17, 2 ) * 0.5;
+				h += nm * ( 1.6 + bumps );
+				h = Math.min( h, - 1.3 );
 
 			}
 
@@ -380,7 +467,14 @@ export class TerrainData {
 		this._seabed( H, R0 );
 		tick( 'seabed' );
 
+		// ((M15) the mangroves on the west: their floor and their creek)
+		this._mangrove( H );
+		tick( 'mangrove' );
+
+		// ((M15) the sea caves: their floors and their gullies, cut in)
+
 		this._masks( H, D, R0, BZ, CV );
+		this._mangroveMasks( H );
 		// soften the 1 m masks so material transitions never show the texel grid
 		this.rock = boxBlur( this.rock, RES, RES, 1 );
 		tick( 'masks' );
@@ -725,7 +819,7 @@ export class TerrainData {
 
 				// exclusions (with ragged edges): reef core, the sandy swim / boat channel along the pier
 				const rag = n2.noise( x / 9, z / 9 ) * 5 + n3.noise( x / 3.1, z / 3.1 ) * 1.5;
-				const reef = 1 - smoothstep( rr * 0.6, rr * 0.8, Math.hypot( x - rc.x, z - rc.z ) + rag * 2 );
+				const reef = Math.max( 1 - smoothstep( rr * 0.6, rr * 0.8, Math.hypot( x - rc.x, z - rc.z ) + rag * 2 ), smoothstep( 0.25, 0.45, northReefMask( x, z, rag * 0.02 ) ) );
 				const channel = ( 1 - smoothstep( 9, 13, Math.abs( x - px - 4 ) + rag ) ) * smoothstep( - 70, - 55, z ) * ( 1 - smoothstep( 45, 60, z + rag * 2 ) );
 				const keep = ( 1 - reef ) * ( 1 - channel );
 				if ( keep <= 0 ) continue;
@@ -771,6 +865,106 @@ export class TerrainData {
 	}
 
 	// rock / sand / gully masks from the final shape
+	// (M15) the mangroves on the west (terrain/Mangrove.js): the bight's flat raised to their mud, just awash,
+	// in to its waterline (never the land above it), and the creek cut through it to the pool; no loose rock
+	// out on it
+	_mangrove( H ) {
+
+		const res = RES, o = this.origin, [ x0, z0, x1, z1 ] = MANGROVE.window, m = {};
+		for ( let j = Math.max( 1, Math.floor( z0 - o ) ); j < Math.min( res - 1, Math.ceil( z1 - o ) ); j ++ ) {
+
+			const z = o + j + 0.5;
+			for ( let i = Math.max( 1, Math.floor( x0 - o ) ); i < Math.min( res - 1, Math.ceil( x1 - o ) ); i ++ ) {
+
+				const x = o + i + 0.5, k = j * res + i;
+				mangroveAt( x, z, m );
+				if ( m.stand <= 0 && m.creek <= 0 ) continue;
+				let h = H[ k ];
+				const stand = m.stand * ( 1 - smoothstep( 0.1, 0.7, h ) );
+				h = lerp( h, m.floor, stand );
+				h = lerp( h, Math.min( h, m.bed ), m.creek );
+				H[ k ] = h;
+
+			}
+
+		}
+
+		this.rockSites = this.rockSites.filter( ( r ) => {
+
+			mangroveAt( r.x, r.z, m );
+			return m.stand < 0.2 && m.creek < 0.2;
+
+		} );
+
+	}
+
+	// (M15) the sea caves (terrain/SeaCaves.js): each one's floor (its gully through the rock platform, its
+	// inlet, its cave, its beach) cut into the ground, at whatever its texels are; their rock's built over them
+	// (Overhangs' 'seacave'). What the cut ground was is kept (_uncut: texel -> height; _masksBefore: a mask's
+	// array -> texel -> value, the turtle beach's), and this.uncut is the ground as it was (heightAt, normalAt,
+	// masksBefore for the masks; the rest as this), for placing the rocks and the plants: each is
+	// placed from one random stream, so the cut, taken as the ground, moved every one placed after it (raisedAt:
+	// how far a thing so placed is to be moved up or down to be back on the ground). The rock sites on the floors
+	// are kept (Rocks takes its rocks off them after placing them all)
+	_seaCaves() {
+
+		const res = this.res, o = this.origin, t = this.texel, H = this.heights, U = this._uncut = new Map(), MB = this._masksBefore = new Map();
+		for ( const c of CAVES ) {
+
+			const r = Math.max( c.inset + c.depth, c.gully ) + 14;
+			const i0 = Math.max( 1, Math.floor( ( c.x - r - o ) / t ) ), i1 = Math.min( res - 2, Math.ceil( ( c.x + r - o ) / t ) );
+			const j0 = Math.max( 1, Math.floor( ( c.z - r - o ) / t ) ), j1 = Math.min( res - 2, Math.ceil( ( c.z + r - o ) / t ) );
+			for ( let j = j0; j <= j1; j ++ ) for ( let i = i0; i <= i1; i ++ ) {
+
+				const k = j * res + i, cut = carveAt( o + ( i + 0.5 ) * t, o + ( j + 0.5 ) * t );
+				if ( ! cut ) continue;
+				if ( ! U.has( k ) ) U.set( k, H[ k ] );
+				H[ k ] = lerp( H[ k ], Math.min( H[ k ], cut.h ), cut.k );
+
+			}
+
+		}
+
+		const T = this;
+		// (how much the ground at ( x, z ) is raised or cut from what it was: for setting the rocks and the plants
+		// placed on it back on it)
+		this.raisedAt = ( x, z ) => U.size ? T.heightAt( x, z ) - T.uncut.heightAt( x, z ) : 0;
+		this.uncut = Object.create( this, { masksBefore: { value: MB }, heightAt: { value( x, z ) {
+
+			const h = T.heightAt( x, z );
+			const fx = ( x - o ) / t - 0.5, fz = ( z - o ) / t - 0.5, i = Math.floor( fx ), j = Math.floor( fz ), k = j * res + i;
+			if ( ! ( U.has( k ) || U.has( k + 1 ) || U.has( k + res ) || U.has( k + res + 1 ) ) ) return h;
+			const at = ( q ) => U.has( q ) ? U.get( q ) : H[ q ], tx = fx - i, tz = fz - j;
+			return ( at( k ) * ( 1 - tx ) + at( k + 1 ) * tx ) * ( 1 - tz ) + ( at( k + res ) * ( 1 - tx ) + at( k + res + 1 ) * tx ) * tz;
+
+		} } } );
+
+	}
+
+	// (M15) and their mud: dark, no sand to speak of, no rock, rubble or seagrass on it
+	_mangroveMasks( H ) {
+
+		const res = RES, o = this.origin, [ x0, z0, x1, z1 ] = MANGROVE.window, m = {};
+		for ( let j = Math.max( 1, Math.floor( z0 - o ) ); j < Math.min( res - 1, Math.ceil( z1 - o ) ); j ++ ) {
+
+			const z = o + j + 0.5;
+			for ( let i = Math.max( 1, Math.floor( x0 - o ) ); i < Math.min( res - 1, Math.ceil( x1 - o ) ); i ++ ) {
+
+				const x = o + i + 0.5, k = j * res + i;
+				mangroveAt( x, z, m );
+				const mud = Math.max( m.stand, m.creek ) * ( 1 - smoothstep( 0.2, 0.8, H[ k ] ) );
+				if ( mud <= 0 ) continue;
+				this.sand[ k ] = Math.round( lerp( this.sand[ k ], 50, mud ) );
+				this.rock[ k ] *= 1 - mud;
+				this.rubble[ k ] = Math.round( this.rubble[ k ] * ( 1 - mud ) );
+				this.seagrass[ k ] = Math.round( this.seagrass[ k ] * ( 1 - mud ) );
+
+			}
+
+		}
+
+	}
+
 	_masks( H, D, R0, BZ, CV ) {
 
 		const res = RES, o = this.origin, n2 = this.noise2, n3 = this.noise3;
@@ -875,7 +1069,8 @@ export class TerrainData {
 
 		const { res, texel, origin, heights } = this;
 		const fx = ( x - origin ) / texel - 0.5, fz = ( z - origin ) / texel - 0.5;
-		if ( fx < 0 || fz < 0 || fx >= res - 1 || fz >= res - 1 ) return - 90;
+		// ((M15) past the square, the seabed out there)
+		if ( fx < 0 || fz < 0 || fx >= res - 1 || fz >= res - 1 ) return this.offshore ? this.offshore.heightAt( x, z ) : - 90;
 		const i = Math.floor( fx ), j = Math.floor( fz );
 		const tx = fx - i, tz = fz - j;
 		const k = j * res + i;
@@ -987,8 +1182,10 @@ export class TerrainData {
 
 		if ( outside ) {
 
-			mn = Math.min( mn, - 90 );
-			mx = Math.max( mx, - 90 );
+			// ((M15) the seabed out there, over the whole box)
+			const [ a, b ] = this.offshore ? this.offshore.boundsFor( x0, z0, x1, z1 ) : [ - 90, - 90 ];
+			mn = Math.min( mn, a );
+			mx = Math.max( mx, b );
 
 		}
 

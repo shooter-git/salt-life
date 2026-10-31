@@ -12,6 +12,7 @@ const KEYS = {
 	'tidewater.save.v1': 'progress', // money, cooler, fish log, upgrades, fuel (GameState)
 	'tidewater.guide': 'guide', // tips already shown (Guide)
 	'saltlife.clock': 'clock', // (Salt Life) the island's hour and day when you left (App.saveClock)
+	'saltlife.boat': 'boat', // (M15) where your boat was left, and whether you were aboard (App.saveBoat, game/Away.js)
 };
 const WRITE_AFTER_MS = 1200;
 

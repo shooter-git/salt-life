@@ -17,6 +17,9 @@ import { InstanceRecords, instancedMesh, KIT_GLSL, srgb } from './Kit.js';
 // filter here.)
 // Wing rotations are cumulative (shoulder, shoulder * elbow, shoulder * elbow * wrist) in the
 // body frame; the right wing mirrors them. Knees / feet are in the body frame.
+// (M15) Their positions are kept about an origin near the camera (begin( origin ): a 32-bit float's step is
+// 4 mm 40 km out, and birds working bait are out there), the meshes drawn there (three takes it the rest of
+// the way, in doubles).
 
 const REC = 11;
 const FAR_PX = 10; // (radius in pixels)
@@ -108,9 +111,22 @@ export class BirdBatch {
 
 	}
 
-	begin() {
+	begin( origin = null ) {
 
 		this.records.begin();
+		// ((M15) the origin they're drawn about)
+		const o = this.origin || ( this.origin = { x: 0, y: 0, z: 0 } );
+		if ( origin && ( origin.x !== o.x || origin.z !== o.z ) ) {
+
+			o.x = origin.x; o.z = origin.z;
+			for ( const m of [ this.mesh, this.farMesh ] ) {
+
+				m.position.set( o.x, 0, o.z );
+				m.updateMatrix();
+
+			}
+
+		}
 
 	}
 
@@ -131,7 +147,9 @@ export class BirdBatch {
 
 		};
 
-		v4( 0, b.pos, b.scale );
+		// ((M15) about the origin)
+		const O = this.origin || ( this.origin = { x: 0, y: 0, z: 0 } );
+		d[ o ] = b.pos[ 0 ] - O.x; d[ o + 1 ] = b.pos[ 1 ]; d[ o + 2 ] = b.pos[ 2 ] - O.z; d[ o + 3 ] = b.scale;
 		v4( 1, b.q );
 		v4( 2, b.QA );
 		v4( 3, b.QB );

@@ -1,5 +1,6 @@
 import * as THREE from './engine/index.js';
 import './materials/HeightHaze.js'; // (three's fog chunks: before anything is compiled)
+import { viewShadows } from './materials/ViewShadows.js'; // ((M15) and its shadows' chunk)
 import { createStage, gltfLoader } from '@allthespaces/portal/three';
 import { ResolutionGovernor } from '@allthespaces/portal/resolution';
 import { G } from './core/Globals.js';
@@ -7,6 +8,8 @@ import { Input } from './core/Input.js';
 import { SaveStore } from './core/SaveStore.js';
 import { TerrainData } from './world/TerrainData.js';
 import { decodeIsland } from './world/terrain/IslandDecode.js';
+import { NAMES } from './game/Chart.js';
+import { Offshore, decodeSeabed } from './world/terrain/Offshore.js';
 import { setDetailData } from './world/terrain/DetailTextures.js';
 import { WORLD } from './world/WorldLayout.js';
 import { Colliders } from './world/Colliders.js';
@@ -21,8 +24,12 @@ import { Sky } from './sky/Sky.js';
 import { Waves, SWELL_WEST } from './ocean/Waves.js';
 import { WaterQuery } from './ocean/WaterQuery.js';
 import { WaterSurface } from './ocean/WaterSurface.js';
-import { ShoreWaves } from './ocean/ShoreWaves.js';
-import { computeShoreField, fieldGround } from './world/ShoreField.js';
+import { ShoreWaves, FAIR_AMPLITUDE } from './ocean/ShoreWaves.js';
+import { SEABED } from './world/terrain/SeabedModel.js';
+import { findsAbout } from './game/Finds.js';
+import { CHECK_SPOTS, checkSpotAt } from './game/CheckSpots.js';
+import { Flotsam } from './world/Flotsam.js';
+import { computeShoreField, fieldGround, shelter } from './world/ShoreField.js';
 import ShoreWorker from './world/shore/ShoreWorker.js?worker&inline';
 import { classicWorker } from './core/ClassicWorker.js';
 import { Player } from './player/Player.js';
@@ -30,6 +37,7 @@ import { BoatController } from './player/BoatController.js';
 import { GameState } from './game/GameState.js';
 import { DAY_RATE, START_HOUR, advance } from './game/IslandClock.js';
 import { islandTime, isPick, NORTH, weatherAt, towardOf } from './game/Weather.js';
+import { BACK_MS, awayClock, awayOf, boatLeft, cleanBoats, leftOf, withRecord } from './game/Away.js';
 import { WeatherDriver } from './world/WeatherDriver.js';
 import { lampsLit } from './game/Bites.js';
 import { FishStand, STAND } from './game/FishStand.js';
@@ -37,14 +45,23 @@ import { Chandlery, CHANDLERY } from './game/Chandlery.js';
 import { LocalLights, addBoatLights, addVillageLights, useLocalLights, holdLocalLights } from './materials/LocalLights.js';
 import { cloudShadows, useCloudShadows } from './materials/CloudShadows.js';
 import { useWet, wetSurfaces } from './materials/Wet.js';
+import { useGroundBounce } from './materials/GroundBounce.js';
 import { Wildlife } from './world/wildlife/Wildlife.js';
 import { wildlifeMood, wildlifeNews } from './game/WildlifeWeather.js';
 import { damageAt } from './game/StormDamage.js';
 import { StormWrack } from './world/debris/StormWrack.js';
+import { Beachcombing } from './world/Beachcombing.js';
 import { FlyingSheets } from './world/debris/FlyingSheets.js';
 import { vegUniforms } from './world/vegetation/VegNodes.js';
 import { Debris } from './world/Debris.js';
 import { Reef } from './world/Reef.js';
+import { Lighthouse } from './world/Lighthouse.js';
+import { HarbourLights } from './world/HarbourLights.js';
+import { Wreck } from './world/Wreck.js';
+import { NestingTurtles } from './world/NestingTurtles.js';
+import { FarIsland } from './world/FarIsland.js';
+import { wreckSpots } from './world/wreck/WreckPlan.js';
+import { ReefLayout } from './world/reef/ReefLayout.js';
 import { FishSchools } from './world/Fish.js';
 import { fishModelsAsync } from './world/fish/FishModelsAsync.js';
 import { MarineSnow } from './fx/MarineSnow.js';
@@ -52,6 +69,7 @@ import { Whale } from './world/marine/Whale.js';
 import { Spray } from './fx/Spray.js';
 import { StormSpray } from './fx/StormSpray.js';
 import { WhitecapSpray } from './fx/WhitecapSpray.js';
+import { SurfLine } from './audio/OpenSea.js';
 import { FlyingDebris } from './fx/FlyingDebris.js';
 import { BlownLitter } from './fx/BlownLitter.js';
 import { insideRoom, roomMatrix } from './world/village/StormPlaces.js';
@@ -86,6 +104,50 @@ import { releaseGeometries, releaseTextures, uploadTextures, watchContext } from
 // a texel: the railings' shadows were stairs at mid's earlier 6 cm)
 const SHADOW = { mid: { size: 2048, box: 48, ahead: 14 }, high: { size: 2048, distance: 110 } };
 const ISLAND = { low: 'world/island-1024.bin', mid: 'world/island.bin', high: 'world/island.bin' };
+// (M15) the seabed past the island: 32 m, or 64 m on low-powered devices
+const SEABED_BIN = { low: 'world/offshore-512.bin', mid: 'world/offshore.bin', high: 'world/offshore.bin' };
+// (M15) the bank's waves: its shore field's square (m, about its middle) and cells a side (14 m; 28 on low),
+// solved once you're this near it (m)
+const BANK = { size: 7168, res: { low: 256, mid: 512, high: 512 }, near: 9000 };
+// (M15) how far about you what's found out there is looked for (m), and how near the bait the birds work has
+// to be
+const FIND_RANGE = 3000, FIND_BIRDS = 2500;
+// (M15) the sand that isn't rock, 0..255 at 4 m texels (the average of the island's 1 m or 2 m masks over each),
+// for the bites once the masks are let go: { data, res, texel, origin }
+function beachMask( T ) {
+
+	const k = Math.max( 1, Math.round( 4 / T.texel ) ), res = Math.floor( T.res / k ), data = new Uint8Array( res * res );
+	for ( let j = 0; j < res; j ++ ) for ( let i = 0; i < res; i ++ ) {
+
+		let a = 0;
+		for ( let b = 0; b < k; b ++ ) for ( let c = 0; c < k; c ++ ) {
+
+			const m = ( j * k + b ) * T.res + i * k + c;
+			a += T.sand[ m ] * ( 1 - T.rock[ m ] );
+
+		}
+
+		data[ j * res + i ] = Math.round( a / ( k * k ) );
+
+	}
+
+	return { data, res, texel: T.texel * k, origin: T.origin };
+
+}
+
+// (M15) a square window of one of the island's masks, `half` m about c: { i0, j0, w, h, data } (in its texels)
+function maskWindow( T, mask, c, half ) {
+
+	const i0 = Math.max( 0, Math.floor( ( c.x - half - T.origin ) / T.texel ) ), j0 = Math.max( 0, Math.floor( ( c.z - half - T.origin ) / T.texel ) );
+	const w = Math.min( T.res - i0, Math.ceil( 2 * half / T.texel ) ), h = Math.min( T.res - j0, Math.ceil( 2 * half / T.texel ) ), data = new Uint8Array( w * h );
+	for ( let j = 0; j < h; j ++ ) data.set( mask.subarray( ( j0 + j ) * T.res + i0, ( j0 + j ) * T.res + i0 + w ), j * w );
+	return { i0, j0, w, h, data };
+
+}
+
+// (M15) the windward reef (WORLD.northReef): laid out once you're within `near` m of it; on low, let go again
+// past `far` (its 13 MB: the low tier's memory)
+const NORTH_REEF = { near: 450, far: 800 };
 // WebGL drawn on the CPU draws at most a phone screen's pixels (a laptop's is three times as many)
 const CPU_PIXELS = 360_000;
 const LENS_REACH = 0.02; // m below the surface before the view counts as under water
@@ -151,21 +213,20 @@ export class App {
 		// ---------------------------------------------------------------- saves and the island
 		await progress( 0.05, 'Fetching the island' );
 		this.store = new SaveStore( portal, { onError: ( e ) => this.hud && this.hud.toast( saveErrorText( e ) ) } );
-		const [ bytes, detail ] = await Promise.all( [
+		const fetched = ( url ) => fetch( url ).then( ( r ) => {
+
+			if ( ! r.ok ) throw new Error( `${ r.url }: ${ r.status }` );
+			return r.arrayBuffer();
+
+		} );
+		const [ bytes, detail, seabed ] = await Promise.all( [
 			// low-powered devices get the island at 2 m (a quarter of the memory), as their ground is drawn
-			fetch( ISLAND[ tier ] ?? ISLAND.low ).then( ( r ) => {
-
-				if ( ! r.ok ) throw new Error( `${ r.url }: ${ r.status }` );
-				return r.arrayBuffer();
-
-			} ),
-			fetch( 'world/detail.bin' ).then( ( r ) => {
-
-				if ( ! r.ok ) throw new Error( `${ r.url }: ${ r.status }` );
-				return r.arrayBuffer();
-
-			} ),
+			fetched( ISLAND[ tier ] ?? ISLAND.low ),
+			fetched( 'world/detail.bin' ),
+			fetched( SEABED_BIN[ tier ] ?? SEABED_BIN.low ),
 			this.store.load(),
+			// ((M15) the group's anchored boats, yours among them: pickUp)
+			portal.save.shared.get( 'boats' ).catch( () => null ).then( ( boats ) => this._boatsRead = boats ),
 		] );
 		setDetailData( new Uint8Array( detail ) );
 		this.state = new GameState( this.store );
@@ -173,7 +234,7 @@ export class App {
 		this.loadClock();
 
 		await progress( 0.25, 'Shaping the island' );
-		this.terrainData = new TerrainData( 7, decodeIsland( new Uint8Array( bytes ) ) );
+		this.terrainData = new TerrainData( 7, decodeIsland( new Uint8Array( bytes ) ), { offshore: new Offshore( decodeSeabed( new Uint8Array( seabed ) ) ) } );
 
 		// ---------------------------------------------------------------- stage
 		// WebGL drawn on the CPU (no graphics card, or a blocklisted one): frames are paced (pacedFrame)
@@ -257,6 +318,8 @@ export class App {
 				if ( ! had ) camera.layers.disable( 1 );
 
 			};
+			// ((M15) and looked up about the camera: exact tens of km out, materials/ViewShadows)
+			viewShadows( renderer );
 
 		}
 
@@ -267,6 +330,20 @@ export class App {
 		// textures are made from the heights) and everything placed on it
 		// (WebGL drawn on the CPU: its textures baked after the start, lateReady)
 		this.village = new Village( { scene, terrain: this.terrainData, colliders: this.colliders, tier, smallBakes: this.cpuGL, bakeLater: this.cpuGL } );
+		// ((M15) the lighthouse on the north-west headland: it levels its pad as the village does, before the
+		// ground's drawn; the rocks and the plants keep off it as they do the village's buildings)
+		this.lighthouse = new Lighthouse( { scene, terrain: this.terrainData, colliders: this.colliders } );
+		this.village.footprints.push( ...this.lighthouse.footprints );
+		// ((M15) and the bay's harbour lights: red to starboard coming in, green to port, white on the pier head)
+		this.harbourLights = new HarbourLights( { scene, terrain: this.terrainData, colliders: this.colliders } );
+		this.village.footprints.push( ...this.harbourLights.footprints );
+		// ((M15) the wreck on the windward reef: a coaster broken in two on its crest)
+		// ((step 20) on a device that draws on its CPU, after the start: lifeAndDebris)
+		if ( ! this.cpuGL ) this.wreck = new Wreck( { scene, colliders: this.colliders } );
+		// ((M15) the green turtles nesting on the north coast's turtle beach: world/NestingTurtles.js)
+		this.turtles = new NestingTurtles( { scene, terrain: this.terrainData } );
+		// ((M15) the island seen from far off, where its own ground isn't drawn: world/FarIsland.js)
+		this.farIsland = new FarIsland( { scene, terrain: this.terrainData } );
 		await this.village.init( renderer );
 		// (M11) what covers the island from above (world/Cover.js): the pier, the boardwalks, the roofs, the
 		// stalls; drawn once after the start (buildCover), nothing covers anything until then. The rain
@@ -297,7 +374,7 @@ export class App {
 		this.terrain = new Terrain( { scene, terrainData: this.terrainData, tier } );
 		uploadTextures( renderer, [ this.terrain.heightTexture, this.terrain.normalTexture, this.terrain.splatTexture ] );
 		// boulders, blocks, talus and outcrops (shaded like the ground's rock)
-		this.rocks = new Rocks( { scene, terrain: this.terrain, colliders: this.colliders, village: this.village, castShadow: tier !== 'low', lite: tier === 'low' } );
+		this.rocks = new Rocks( { scene, terrain: this.terrain, colliders: this.colliders, village: this.village, castShadow: tier !== 'low', lite: tier === 'low', lazyCaves: tier === 'low', coarseCaves: this.cpuGL } );
 		this.vegetation = new Vegetation( { scene, terrain: this.terrainData, ground: this.terrain, renderer, tier, village: this.village, rocks: this.rocks, smallBakes: this.cpuGL, bakeSlot: () => this.frameSlot() } );
 		// (WebGL drawn on the CPU: the plants grow in once the game has started, in start(); their
 		// programs and bakes take seconds there, and a creation has 45 s to load)
@@ -310,7 +387,10 @@ export class App {
 		this.shoreField = computeShoreField( this.terrainData, { res: 512, swellDir: [ WORLD.swellDir.x, WORLD.swellDir.y ] } );
 		this.shore = new ShoreWaves( { field: this.shoreField } );
 		this.query = new WaterQuery( this.waves, this.terrainData, this.shore );
-		this.water = new WaterSurface( { scene, waves: this.waves, terrain: this.terrain, shore: this.shore, cover: this.cover, rocks: this.rockCover, tier } );
+		this.water = new WaterSurface( { scene, waves: this.waves, terrain: this.terrain, shore: this.shore, cover: this.cover, rocks: this.rockCover, tier, lean: this.cpuGL && ! new URLSearchParams( location.search ).has( 'fullsea' ) } );
+		// (M15) what's found out there: the debris floating (game/Finds.js; the weed and the bait's boils are the
+		// sea's own, the birds working it Wildlife's)
+		this.flotsam = new Flotsam( { scene, waves: this.waves } );
 		if ( this.cloudShadows ) useCloudShadows( this.water.material );
 
 		// ---------------------------------------------------------------- boat and player
@@ -385,6 +465,7 @@ export class App {
 		// laptops: bloom and SMAA (phones draw straight to the screen)
 		this.post = tier === 'high' ? new PostChain( renderer, scene, camera ) : null;
 		this.player = new Player( { camera, input: this.input, terrain: this.terrainData, colliders: this.colliders, query: this.query, boat: this.boatCtl } );
+		this.player.rocks = this.rocks; // ((M15) the sea caves' roofs to walk on)
 		// ((M13) the wind you stand in, in the gusts the sea shows: a hurricane's pushes you along)
 		this.player.windAt = ( x, z ) => this.weather.windAt( x, z );
 
@@ -418,6 +499,7 @@ export class App {
 		} );
 		this.surfHeard( 1 );
 		this.surfHeard( 2 );
+		this.audio.attachSea( this.water.whitecaps );
 		this.player.audio = this.audio;
 		// (and, M10, the hull: a slam's wear and the green water it ships, Game.hull)
 		this.boatCtl.onSlam = ( strength ) => {
@@ -458,6 +540,7 @@ export class App {
 		this.game = new Game( this );
 		// whoever else is on the island, and the time of day you share (together/)
 		this.together = new Together( this );
+		this.pickUp();
 		if ( ! this.cpuGL ) await this.lifeAndDebris();
 		if ( this.nearDetail ) {
 
@@ -537,6 +620,13 @@ export class App {
 			this._heldWeather = [ this.rain.mesh, this.rain.splash, this.drips.mesh, this.lightning.mesh, this.flying.mesh, this.litter.mesh ].map( ( m ) => [ m, m.parent ] );
 			for ( const [ m ] of this._heldWeather ) m.removeFromParent();
 
+			// ((M15) and what M15 added about the island, none of it where you start but the signposts: the lighthouse,
+			// the harbour lights, the wreck, the turtles, the island's far shape, the signs. Theirs were nine more
+			// programs, and the load back past what v1.10.0 failed All the Spaces' checks at: 5.4 s to 9 s)
+			const landmarks = /^(Lighthouse|LighthouseGlare|HarbourLights|HarbourGlare|Wreck|Turtles|FarIsland|Signpost|ShelterSign|StormChart|BoardedUp)/;
+			this._heldLandmarks = scene.children.filter( ( c ) => landmarks.test( c.name ) ).map( ( m ) => [ m, m.parent ] );
+			for ( const [ m ] of this._heldLandmarks ) m.removeFromParent();
+
 		}
 
 		this.frame( 0 ); // places the camera, the LOD grids and the sky for the compile
@@ -605,10 +695,10 @@ export class App {
 		// then, on every device, the whale)
 		const revealed = this._late ? new Promise( ( done ) => this._revealed = done ) : null;
 		this.lateReady();
-		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.buildCover() ).then( () => this.rocks.refineOverhangs() ).then( () => this.loadCharacters() )
-			.then( () => this.pause() ).then( () => this.cpuGL && this.lifeAndDebris() ).then( () => this.pause() ).then( () => this.scansArrive() )
+		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.buildCover() ).then( () => this.rocks.refineOverhangs() ).then( () => this.cpuGL && this.settle() ).then( () => this.loadCharacters() )
+			.then( () => this.cpuGL && this.settle() ).then( () => this.cpuGL && this.lifeAndDebris() ).then( () => this.cpuGL && this.settle() ).then( () => this.scansArrive() )
 			.then( () => this.cpuGL && this.settle() ).then( () => this.cpuGL && this.reefGrows() )
-			.then( () => this.pause() ).then( () => this.whaleArrives() ).then( () => this.airArrives() );
+			.then( () => this.cpuGL && this.settle() ).then( () => this.whaleArrives() ).then( () => this.airArrives() );
 		const begin = () => this.audio.resume().then( ( on ) => {
 
 			if ( on ) for ( const type of GESTURES ) removeEventListener( type, begin, true );
@@ -645,6 +735,8 @@ export class App {
 		if ( this.weather.target.west > 0 && ! this._westField && this._started ) this.solveWestField();
 		// ((M14) and the north shore's sea, once it has one: most days, a little after the start)
 		if ( this.weather.target.north > 0.02 && ! this._northField && this._started ) this.solveNorthField();
+		// ((M15) and the bank's, out at sea, once you're near it)
+		if ( this._started ) this.bankSea();
 		// ((M13) a hurricane's surge: its field solved before it comes, at its highest, dropped once it's gone)
 		if ( this._started ) {
 
@@ -701,8 +793,9 @@ export class App {
 		const wx = this.weather.live, cv = this.renderer.domElement;
 		this.lightning.setViewport( cv.width, cv.height );
 		// ((M12) from up the blow's track, from the clock: everyone's strikes in the same place, (and at the same
-		// moment: as the weather is, not as it's easing here, which isn't everyone's)
-		this.lightning.update( this.weather.target.thunder, this.camera, this.weather.track, this.sky.clouds.base, wx.visibility, Date.now(), this.weather.cells );
+		// moment: as the weather is, not as it's easing here, which isn't everyone's); (M15) the island's own
+		// storm's about the island, wherever you are, and the showers' about you
+		this.lightning.update( this.weather.island.thunder, this.camera, this.weather.track, this.sky.clouds.base, wx.visibility, Date.now(), this.weather.cells );
 		this.rain.flash.value = this.sky.flashFill; // ((M12) the light about you: none from a storm on the horizon)
 		this.spray.uniforms.sprayGrey.value = this.sky.overcast; // ((M14) the spray lit as the sky is)
 		if ( wx.thunder > 0 && this.audio ) this.audio.thunderReady();
@@ -796,11 +889,27 @@ export class App {
 		// ---- world
 		this.terrain.update( this.camera );
 		this.village.update( dt );
+		this.village.updateSight( dt, this.camera, this._groundAt || ( this._groundAt = ( x, z ) => this.terrainData.heightAt( x, z ) ) );
 		this.rocks.update( this.camera );
 		if ( this.debris ) this.debris.update( this.camera );
+		// ((M15) beachcombing's finds and the north beach's wrack line, once the beach's debris materials are made)
+		if ( ! this.beachcomb && this.debris ) this.beachcomb = new Beachcombing( { terrain: this.terrainData, materials: { nature: this.debris.materials.nature, wood: this.village.materials.wood, hard: this.village.materials.hard }, parent: this.scene, lite: this.tier === 'low' } );
+		if ( this.beachcomb ) this.beachcomb.update( this.camera );
 		if ( this.stormWrack ) this.stormWrack.update( this.camera ); // ((M13) a hurricane's line of wrack, near you)
 		this.flyingSheets.update( islandTime( s.day, s.timeOfDay ) ); // ((M14) the sheets it's torn off, flying and lying)
-		if ( this.reef ) this.reef.update( this.camera );
+		// ((M15) the lighthouse's light: lit from dusk, its flash as it's seen from here)
+		this.lighthouse.update( this.camera, this.sky.visibility, this.renderer.domElement.height );
+		this.harbourLights.update( this.camera, this.sky.visibility, this.renderer.domElement.height );
+		this.turtles.update( dt, this.camera, this.settings.timeOfDay, this.settings.day );
+		this.farIsland.update( this.camera );
+		// ((M15) the reefs: the bay's, and the windward one once you're near it)
+		if ( this.reefs ) {
+
+			this.northReefNear();
+			this.rocks.overhangsNear( this.camera.position.x, this.camera.position.z );
+			for ( const r of this.reefs.list ) r.update( this.camera );
+
+		}
 		if ( this.whale ) {
 
 			this.whale.update( dt, this.camera );
@@ -838,6 +947,7 @@ export class App {
 		this.water.detail.update( dt, this.camera );
 		this.shore.update( G.time.value ); // (Salt Life: the waves' clock, for the GPU)
 		this.water.update( this.camera );
+		this.findsHere();
 		this.boat.update( dt );
 		// (the boat you're aboard: yours, or riding along, the one you're on as it's drawn here)
 		const p = this.player, aboard = p.riding ? _ride.compose( p.boat.position, p.boat.quaternion, _one ) : this.boat.group.matrixWorld;
@@ -865,7 +975,17 @@ export class App {
 
 		// ---- render
 		if ( this.nearDetail ) this.updateNearDetail();
-		this.renderer.toneMappingExposure = s.exposure * this.sky.adaptation;
+		// ((M15) in a sea cave the eye adapts to its dark as to dusk's: as far as the light's less where you are and
+		// where you're looking (a few metres on: looking into it from its mouth, you're looking into its dark), up
+		// to 12 x, slower into the dark than back out)
+		const eye = this.camera.position, ahead = this.camera.getWorldDirection( this._caveDir || ( this._caveDir = new THREE.Vector3() ) );
+		const at = this._caveAt || ( this._caveAt = new THREE.Vector3() );
+		const caveHere = this.rocks.caveLevel( eye );
+		let caveSeen = caveHere;
+		for ( const d of [ 2, 5, 9 ] ) caveSeen = Math.min( caveSeen, this.rocks.caveLevel( at.copy( ahead ).multiplyScalar( d ).add( eye ) ) );
+		const caveT = Math.min( 12, Math.max( 1, 1 / Math.max( 0.3 * caveHere + 0.7 * caveSeen, 0.01 ) ) );
+		this.caveAdapt = this.caveAdapt === undefined ? caveT : this.caveAdapt + ( caveT - this.caveAdapt ) * ( 1 - Math.exp( - dt * ( caveT > this.caveAdapt ? 0.8 : 2 ) ) );
+		this.renderer.toneMappingExposure = s.exposure * this.sky.adaptation * this.caveAdapt;
 		// (while the catch card is up its fish portrait is drawn in place of the world: FishPortrait)
 		const portrait = this.game && this.game.portrait;
 		if ( portrait && portrait.active ) portrait.render( this.renderer, () => this.drawWorld() );
@@ -897,8 +1017,9 @@ export class App {
 
 	// (CPU WebGL) waits for the garbage of the loading so far to be collected before the next big
 	// stage: until the script heap falls back from its high point (where the browser reports it; a
-	// pause where it doesn't), at least 3 s, at most `ms`. All the Spaces' checks measure its peak
-	settle( ms = 15000 ) {
+	// pause where it doesn't), at least 3 s, at most `ms`. All the Spaces' checks measure its peak. ((M15) On the low
+	// tier until it's down to SETTLED: a quarter off was no longer enough to take the reef on top of)
+	settle( ms = 45000 ) {
 
 		performance.mark( 'world: settle' );
 		const mem = performance.memory;
@@ -912,7 +1033,7 @@ export class App {
 
 				const used = mem.usedJSHeapSize, t = performance.now() - t0;
 				high = Math.max( high, used );
-				if ( ( t > 3000 && used < high * 0.75 ) || t > ms ) resolve();
+				if ( ( t > 3000 && ( this.tier === 'low' ? used < SETTLED : used < high * 0.75 ) ) || t > ms ) resolve();
 				else setTimeout( tick, 250 );
 
 			};
@@ -1104,7 +1225,7 @@ export class App {
 
 		}
 
-		for ( const [ m, parent ] of [ ...( this._heldFish || [] ), ...( this._heldNet || [] ), ...( this._heldWeather || [] ) ] ) {
+		for ( const [ m, parent ] of [ ...( this._heldFish || [] ), ...( this._heldNet || [] ), ...( this._heldWeather || [] ), ...( this._heldLandmarks || [] ) ] ) {
 
 			roots.push( m );
 			show.push( () => parent.add( m ) );
@@ -1114,6 +1235,7 @@ export class App {
 		this._heldFish = null;
 		this._heldNet = null;
 		this._heldWeather = null;
+		this._heldLandmarks = null;
 		for ( const root of roots ) await r.compileAsync( root, this.camera, this.scene );
 		await this.useNewPrograms();
 		for ( const f of show ) f();
@@ -1169,37 +1291,48 @@ export class App {
 
 		if ( ! this.game ) return;
 		performance.mark( 'world: characters' );
-		const loader = gltfLoader(), r = this.renderer;
-		const load = async ( url, clips = null ) => {
+		// ((M15) those far off loaded when you first come near them: Pearl at the fish camp, Game)
+		for ( const v of this.game.vendors ) if ( ! v.lazy ) await this.loadVendorCharacter( v );
 
-			const c = new Character( await loader.loadAsync( this.tier === 'low' ? url.replace( /\.glb$/, '-512.glb' ) : url ), { clips } );
-			this.lightUp( c.group );
-			for ( const t of c.textures() ) r.initTexture( t );
-			await r.compileAsync( c.group, this.camera, this.scene );
-			await this.useNewPrograms();
-			return c;
+	}
 
-		};
+	// a trader's skinned character swapped in for their stand-in (Vendor.loadCharacter): the device's copy (low:
+	// 512² textures), its programs readied; on a low-powered device drawn only near the camera, like the stand-in
+	async loadVendorCharacter( v ) {
 
-		for ( const v of this.game.vendors ) {
+		if ( ! this._characterLoad ) {
 
-			try {
+			const loader = gltfLoader(), r = this.renderer;
+			this._characterLoad = async ( url, clips = null ) => {
 
-				const c = await v.loadCharacter( load );
-				// (low-powered devices: only near the camera, like the stand-in)
-				if ( c && this.nearDetail ) c.group.traverse( ( o ) => {
+				const c = new Character( await loader.loadAsync( this.tier === 'low' ? url.replace( /\.glb$/, '-512.glb' ) : url ), { clips } );
+				this.lightPerson( c.group );
+				for ( const t of c.textures() ) r.initTexture( t );
+				await r.compileAsync( c.group, this.camera, this.scene );
+				await this.useNewPrograms();
+				return c;
 
-					if ( ! o.isMesh ) return;
-					if ( ! o.geometry.boundingSphere ) o.geometry.computeBoundingSphere();
-					this.nearDetail.push( { o, dist: 60 } );
+			};
 
-				} );
+		}
 
-			} catch ( e ) {
+		try {
 
-				console.warn( `${ v.name }: the character didn't load; the stand-in stays`, e );
+			const c = await v.loadCharacter( this._characterLoad );
+			// ((M15) as much of the sand's light as reaches them where they stand: Pearl's sand's in the cliff's shadow)
+			const open = v.characterSpec && v.characterSpec.open;
+			if ( c && open !== undefined ) for ( const m of c.materials ) if ( m.userData.groundBounceOpen ) m.userData.groundBounceOpen.value = open;
+			if ( c && this.nearDetail ) c.group.traverse( ( o ) => {
 
-			}
+				if ( ! o.isMesh ) return;
+				if ( ! o.geometry.boundingSphere ) o.geometry.computeBoundingSphere();
+				this.nearDetail.push( { o, dist: 60 } );
+
+			} );
+
+		} catch ( e ) {
+
+			console.warn( `${ v.name }: the character didn't load; the stand-in stays`, e );
 
 		}
 
@@ -1238,6 +1371,19 @@ export class App {
 
 	}
 
+	// (M15) a person's materials under `root` lit as everything's (lightUp), and by the sunlit sand about them, as
+	// someone on a beach is (GroundBounce): the traders, the other players
+	lightPerson( root ) {
+
+		this.lightUp( root );
+		root.traverse( ( o ) => {
+
+			if ( o.isMesh ) for ( const m of [ o.material ].flat() ) if ( m ) useGroundBounce( m );
+
+		} );
+
+	}
+
 	// the island's animals (after the plants: hermit crabs live by the palms; the ghost crabs' burrows
 	// need the sand mask, freed afterwards): gulls, terns, pelicans, frigatebirds and sanderlings,
 	// ghost and hermit crabs (wildlife/). Their shaders are compiled and first used here, not mid-game
@@ -1251,6 +1397,7 @@ export class App {
 			// (mid: its triangles are mostly spent on the island already)
 			castShadow: this.tier === 'high',
 		} );
+		this.wildlife.birds.onSplash = ( x, y, z, k ) => this.audio.birdSplash( x, y, z, k );
 		// (birds and crabs smaller than this many pixels aren't drawn)
 		this.wildlife.minPx = this.tier === 'low' ? 1.5 : 0.75;
 		const meshes = [ this.wildlife.birdBatch.mesh, this.wildlife.birdBatch.farMesh, this.wildlife.critterBatch.mesh, this.wildlife.critterBatch.farMesh, this.wildlife.blobs.mesh ];
@@ -1304,9 +1451,50 @@ export class App {
 		} );
 		await this.firstDraws( [ reef.batches.hard, reef.batches.soft ].map( ( b ) => b.meshes.find( ( m ) => m.layers.isEnabled( 0 ) ) ) );
 		this.reef = reef;
-		this.player.reef = reef;
+		// ((M15) the reefs the swimmer and the fish stand on: the bay's now, the windward one once it's laid out)
+		const reefs = this.reefs = { list: [ reef ], floorHeightAt: ( x, z ) => {
+
+			let g = - Infinity;
+			for ( const r of reefs.list ) g = Math.max( g, r.floorHeightAt( x, z ) );
+			return g;
+
+		} };
+		this.player.reef = reefs;
 		await this.pause();
 		await this.fishSwim();
+
+	}
+
+	// (M15) the windward reef (world/Reef.js, its own layout: ReefLayout's REEF_SITES.north), laid out in a worker
+	// once you come within NORTH_REEF.near of it, and drawn as the bay's is (hidden until its culling picks
+	// it); on low, let go again past NORTH_REEF.far. Its fish are there from the start (fishSwim)
+	northReefNear() {
+
+		const c = this.camera.position, R = WORLD.northReef.center, d = Math.hypot( c.x - R.x, c.z - R.z );
+		if ( ! this.northReef && ! this._northReefP && d < NORTH_REEF.near ) {
+
+			this._northReefP = Reef.create( { scene: this.scene, terrain: this.terrainData, ground: this.terrain, tier: this.tier, site: 'north' } ).then( ( reef ) => {
+
+				this._northReefP = null;
+				reef.shadowsFrom( this.sky.sun );
+				this.northReef = reef;
+				this.reefs.list.push( reef );
+
+			}, ( e ) => {
+
+				console.warn( 'the windward reef', e );
+				this._northReefP = null;
+				this._northReefFailed = true;
+
+			} );
+
+		} else if ( this.northReef && this.tier === 'low' && d > NORTH_REEF.far ) {
+
+			this.reefs.list = this.reefs.list.filter( ( r ) => r !== this.northReef );
+			this.northReef.dispose();
+			this.northReef = null;
+
+		}
 
 	}
 
@@ -1319,8 +1507,10 @@ export class App {
 		const reef = this.reef;
 		const fish = new FishSchools( {
 			parent: this.scene, terrain: this.terrainData, ground: this.terrain, tier: this.tier,
-			floorAt: ( x, z ) => reef.floorHeightAt( x, z ), center: WORLD.reef.center, radius: WORLD.reef.radius + 10,
+			floorAt: ( x, z ) => this.reefs.floorHeightAt( x, z ), center: WORLD.reef.center, radius: WORLD.reef.radius + 10,
 			anchors: reef.anchors, shoreField: this.shoreField,
+			// ((M15) and the windward reef's: its coral heads from its habitat, before it's laid out)
+			north: { center: WORLD.northReef.center, radius: WORLD.northReef.radius, anchors: ReefLayout.heads( this.terrainData, 'north' ), wreck: wreckSpots() },
 		} );
 		// (their models are made in a worker: fish/FishModels.js)
 		fish.setModels( await fishModelsAsync( fish.modelNames ) );
@@ -1514,6 +1704,7 @@ export class App {
 	// the end of loading, on a device that draws on its CPU after the start (start())
 	async lifeAndDebris() {
 
+		if ( ! this.wreck ) this.wreck = new Wreck( { scene: this.scene, colliders: this.colliders } );
 		await this.lifeArrives();
 		await this.pause();
 		await this.debrisLands();
@@ -1530,9 +1721,25 @@ export class App {
 
 		const T = this.terrainData;
 		if ( ! this._plantsGrown || ! this.game || ! this.game.minimap || ! this.game.minimap._bake.done ) return;
-		if ( T.rock !== null ) for ( const k of [ 'rock', 'sand', 'path', 'gully', 'rubble', 'scarp' ] ) T[ k ] = null;
-		// (the seagrass meadows: once the reef is laid out on them)
-		if ( this._reefLaid ) T.seagrass = null;
+		if ( T.rock !== null ) {
+
+			// ((M15) what the bites keep of them: the sand that isn't rock, at 4 m (the beaches' wash: Game.sandAt))
+			T.beach = beachMask( T );
+			for ( const k of [ 'rock', 'sand', 'path', 'gully', 'rubble', 'scarp' ] ) T[ k ] = null;
+
+		}
+
+		// ((M15) what the turtle beach's cut changed in them, kept by the mask (TerrainData.uncut): it held them all)
+		if ( T.rock === null && T.seagrass === null && T._masksBefore ) T._masksBefore.clear();
+
+		// (the seagrass meadows: once the reef is laid out on them; (M15) the windward reef's window of them kept,
+		// for when it's laid out)
+		if ( this._reefLaid && T.seagrass ) {
+
+			T.seagrassWin = maskWindow( T, T.seagrass, WORLD.northReef.center, 140 );
+			T.seagrass = null;
+
+		}
 
 	}
 
@@ -1583,8 +1790,23 @@ export class App {
 
 		}
 
+		// (M15) out at sea (four times a second): the surf that's heard there, how grown the wind's sea is, how big
+		// the sea is against a fair day's open sea, and the bottom under you
+		this._seaHeardT = ( this._seaHeardT || 0 ) - dt;
+		if ( this._seaHeardT <= 0 ) {
+
+			this._seaHeardT = 0.25;
+			const B = SEABED.bank, line = this._surfLine || ( this._surfLine = new SurfLine( this.terrainData, { bank: { x: B.x, z: B.z, size: BANK.size } } ) );
+			const q = this._seaHeard = line.heard( p.x, p.z, this.shore.trains, this._seaHeard || {}, this.shore.params.gamma ), live = this.weather.live, w = this.waves;
+			q.grown = w.windGrownAt( p.x, p.z );
+			q.big = live ? w.reachOf( live.swell, live.windSea * q.grown ) / w.reachOf( 1, 1 ) : 1;
+			q.bottom = G.seaLevel.value - this.terrainData.heightAt( p.x, p.z );
+
+		}
+
 		a.update( dt, {
 			listener: { position: p, forward: _fwd, up: _up },
+			sea: this._seaHeard,
 			underwater: p.y < h ? 1 : 0,
 			depthBelowSurface: Math.max( 0, h - p.y ),
 			surfIntensity: amp / 0.6, // ((M13) past 1 in a hurricane's surf: SoundScape)
@@ -1637,8 +1859,13 @@ export class App {
 		r.fish = g._sonar ? g._sonar.fish : 0;
 		r.x = x;
 		r.z = z;
-		r.chart = map && map._bake && map._bake.done ? map.canvas : null;
+		this.chartReading( r, map );
+		r.fuelL = g.state.fuelL;
+		r.speedMul = g.state.stats.speedMul || 1;
 		r.alert = this.weatherAlert();
+		// ((M15) the VHF, overhead: Radio.js)
+		r.vhf = g.radio ? g.radio.reading : null;
+		r.night = G.night.value;
 		// ((M14) her radar, swept with her array; at the helm, ← → its range, as the panels aren't up)
 		if ( p.mode === 'boat' && g.quietKeys && g.quietKeys() && ( this.input.hit( 'ArrowLeft' ) || this.input.hit( 'ArrowRight' ) ) ) this.radar.step( this.input.hit( 'ArrowRight' ) ? 1 : - 1 );
 		r.radar = this.sweepRadar( dt, r, this.boat.radarBearing );
@@ -1673,12 +1900,25 @@ export class App {
 		r.fish = d ? d.fish : 0;
 		r.x = x;
 		r.z = z;
-		r.chart = map && map._bake && map._bake.done ? map.canvas : null;
+		this.chartReading( r, map );
+		r.fuelL = null; // (theirs: only how full, from their pose)
 		r.alert = this.weatherAlert();
 		// ((M14) and their radar, as their array turns)
 		const arr = ride.group && ride.group.userData.radar;
 		r.radar = this.sweepRadar( dt, r, arr ? ( ( - arr.rotation.y ) % ( Math.PI * 2 ) + Math.PI * 2 ) % ( Math.PI * 2 ) : 0 );
 		return r;
+
+	}
+
+	// (M15) the plotter's chart: the minimap's sheets (once the island's is baked), your chart (Chart.js) and its
+	// names, and how far out the minimap shows (the plotter's range follows it)
+	chartReading( r, map ) {
+
+		r.chart = map && map._bake && map._bake.done ? map : null;
+		r.log = this.game.state.chart;
+		r.night = G.night.value; // ((M15) the compass's lamp)
+		r.names = NAMES;
+		r.view = map ? map.radiusM : 0;
 
 	}
 
@@ -1812,6 +2052,15 @@ export class App {
 
 			s.timeOfDay = ( ( saved.hour % 24 ) + 24 ) % 24;
 			s.day = Number.isFinite( saved.day ) ? Math.max( 1, Math.floor( saved.day ) ) : 1;
+			// ((M15) it went on without you, an island hour a real hour, unless you'd held it. In company the room's
+			// is everyone's: Together)
+			if ( ! saved.held ) {
+
+				const t = awayClock( s.timeOfDay, s.day, saved.at );
+				s.timeOfDay = t.hour;
+				s.day = t.day;
+
+			}
 			s.timeSpeed = saved.held ? 0 : DAY_RATE;
 			s.weather = isPick( saved.weather ) ? saved.weather : null;
 			s.weatherSince = Number.isFinite( saved.since ) ? saved.since : islandTime( s.day, s.timeOfDay );
@@ -1833,11 +2082,16 @@ export class App {
 			s.weatherSince = islandTime( s.day, s.timeOfDay );
 
 		}
-		this.portal.on( 'pause', () => this.saveClock() );
+		this.portal.on( 'pause', () => {
+
+			this.saveClock();
+			if ( this.together ) this.together.mineBoat( true );
+
+		} );
 		this.portal.onExit( () => {
 
 			this.saveClock();
-			return this.store.flush();
+			return Promise.all( [ this.store.flush(), this.together && this.together.mineBoat( true ) ] );
 
 		} );
 
@@ -1903,13 +2157,119 @@ export class App {
 
 	}
 
+	// (M15) what's found out there about you (game/Finds.js, from the island's time: everyone's in the same
+	// place): the weedlines and the bait's boils drawn on the sea, the debris floating, the birds working the
+	// nearest bait
+	// (M15) the next of the checks' spots offshore (game/CheckSpots.js), at the helm; the last brings you back
+	nextCheckSpot() {
+
+		const k = this._checkSpot = ( ( this._checkSpot ?? - 1 ) + 1 ) % CHECK_SPOTS.length, spot = CHECK_SPOTS[ k ];
+		const p = this.player, b = this.boatCtl, s = this.settings;
+		if ( k === 0 && p.mode === 'walk' ) this._checkFrom = { out: { x: p.position.x, z: p.position.z }, g: p.position.y };
+		if ( spot.id === 'home' ) {
+
+			if ( this._checkFrom ) p.exitBoat( this._checkFrom );
+			b.reset();
+			return;
+
+		}
+
+		if ( p.mode !== 'boat' ) {
+
+			p.boardBoat();
+			p.takeHelm();
+
+		}
+
+		b.moored = false;
+		const at = checkSpotAt( spot, islandTime( s.day, s.timeOfDay ), ( x, z ) => - this.terrainData.heightAt( x, z ) );
+		// (the chase camera with her, or it spends the checks' few frames catching up)
+		p.camPos.x += at.x - b.position.x;
+		p.camPos.z += at.z - b.position.z;
+		b.position.set( at.x, b.position.y, at.z );
+		b.velocity.set( 0, 0, 0 );
+		b.angular.set( 0, 0, 0 );
+
+	}
+
+	findsHere() {
+
+		const s = this.settings, c = this.camera.position;
+		const depthAt = this._depthAt || ( this._depthAt = ( x, z ) => - this.terrainData.heightAt( x, z ) );
+		const f = this.finds = findsAbout( islandTime( s.day, s.timeOfDay ), c.x, c.z, FIND_RANGE, this.finds || { weed: [], debris: [], bait: [] }, depthAt );
+		this.water.setFinds( f, this.camera, this.sky.fogFar * 1.1 );
+		this.flotsam.update( f.debris, this.camera );
+		if ( this.wildlife ) {
+
+			let best = null, bd = Infinity;
+			for ( const b of f.bait ) {
+
+				const d = Math.hypot( b.x - c.x, b.z - c.z );
+				if ( d < bd && d < FIND_BIRDS ) {
+
+					bd = d;
+					best = b;
+
+				}
+
+			}
+
+			this.wildlife.birds.work( best );
+
+		}
+
+	}
+
+	// (M15) the bank's waves, out at sea (SEABED.bank: its rim and its sandbar break in a swell): its sea, the
+	// biggest out there (the south's swell, or the trades' sea from the north, by the power each carries, H^2
+	// T: the other takes over at a third more), and once you're within BANK.near of it, its shore field for
+	// that sea, solved as the westerly's is over a square of its own round it; solved again when the other
+	// takes over
+	bankSea() {
+
+		const shore = this.shore, live = this.weather.live, c = this.camera.position;
+		if ( ! shore || ! live ) return;
+		const south = FAIR_AMPLITUDE * ( live.swell ?? 1 ), north = live.north || 0;
+		const ps = live.period || 9, pn = live.northPeriod || 5;
+		const ratio = ( north * north * pn ) / Math.max( 1e-6, south * south * ps );
+		const fromNorth = this._bankKey === 'north' ? ratio > 0.75 : ratio > 1.33;
+		const key = fromNorth ? 'north' : 'south';
+		shore.setBankSea( fromNorth ? north : south, fromNorth ? pn : ps );
+		const B = SEABED.bank;
+		if ( this._bankKey === key || Math.hypot( c.x - B.x, c.z - B.z ) > BANK.near ) return;
+		this._bankKey = key;
+		const dir = fromNorth ? [ NORTH.dir.x, NORTH.dir.y ] : [ WORLD.swellDir.x, WORLD.swellDir.y ];
+		this.solveShoreField( dir, 0, false, this.bankGround() ).then( ( field ) => {
+
+			if ( this._bankKey !== key ) return;
+			shore.setBank( field, [ B.x, B.z ] );
+			shore.setBankSea( fromNorth ? north : south, fromNorth ? pn : ps );
+			this.surfHeard( 3 );
+
+		} ).catch( ( e ) => console.warn( 'Shore: the bank\'s field', e && e.message ) );
+
+	}
+
+	// (M15) the seabed's depths over the bank's square (BANK: its size, and its field's cells a side, fewer on
+	// low), for its shore field
+	bankGround() {
+
+		if ( this._bankGround ) return this._bankGround;
+		const B = SEABED.bank, res = BANK.res[ this.tier ] ?? BANK.res.low, size = BANK.size, h = size / res;
+		const origin = B.x - size / 2, originZ = B.z - size / 2, depth = new Float32Array( res * res );
+		for ( let j = 0; j < res; j ++ ) for ( let i = 0; i < res; i ++ ) depth[ j * res + i ] = - this.terrainData.heightAt( origin + ( i + 0.5 ) * h, originZ + ( j + 0.5 ) * h );
+		return ( this._bankGround = { depth, res, size, origin, originZ } );
+
+	}
+
 	// (M12) another shore field from the island's own field's depths (swellDir: where its swell travels;
 	// (M13) at the sea level seaLevel; (M14) a wind sea's, its lee taken out), in a worker where there is
-	// one, else on the page
-	solveShoreField( swellDir, seaLevel = 0, lee = false ) {
+	// one, else on the page; (M15) or over another square's depths, `over` ({ depth, res, size, origin,
+	// originZ }: the bank's)
+	solveShoreField( swellDir, seaLevel = 0, lee = false, over = null ) {
 
 		const home = this.shoreField;
-		const ground = { depth: home.depth, res: home.res, size: home.size, origin: home.origin };
+		const ground = over || { depth: home.depth, res: home.res, size: home.size, origin: home.origin };
 		return new Promise( ( resolve, reject ) => {
 
 			const worker = classicWorker( ShoreWorker );
@@ -1933,14 +2293,15 @@ export class App {
 		} ).catch( ( e ) => {
 
 			console.warn( 'Shore: a swell\'s field solved on the page (no worker)', e && e.message );
-			const field = computeShoreField( fieldGround( ground ), { res: home.res, swellDir, seaLevel } );
+			const field = computeShoreField( fieldGround( ground ), { res: ground.res, swellDir, seaLevel } );
 			return lee ? shelter( field, swellDir ) : field;
 
 		} );
 
 	}
 
-	// (M12) the west swell's waves to the surf's sound, once both are here; (M14) or the north shore's (slot 2)
+	// (M12) the west swell's waves to the surf's sound, once both are here; (M14) or the north shore's (slot 2);
+	// (M15) or the bank's (slot 3), whenever its field's given
 	surfHeard( slot ) {
 
 		const train = this.shore && this.shore.trains[ slot ], P = this.shore && this.shore.params;
@@ -1958,6 +2319,23 @@ export class App {
 
 	}
 
+	// (M15) what brought a day's finds in (game/Beachcomb.js): how big the north sea was the night before
+	// (0..1 of a breezy day's 1.5 m), and a hurricane's wrack that day
+	beachDays( d ) {
+
+		const c = this._beachDays || ( this._beachDays = new Map() ), s = this.settings, key = `${ d }:${ this.weatherPick() }:${ s.weatherSince }`;
+		if ( ! c.has( key ) ) {
+
+			if ( c.size > 32 ) c.clear();
+			const w = weatherAt( islandTime( d, 2 ), this.weatherPick(), s.weatherSince ), D = damageAt( islandTime( d, 7 ), this.weatherPick(), s.weatherSince );
+			c.set( key, { north: Math.min( 1, ( w.north || 0 ) / 1.5 ), storm: D.wrack > 0.3 } );
+
+		}
+
+		return c.get( key );
+
+	}
+
 	// (Salt Life) the weather you picked (null: the day's); in company, the one picked for everyone here
 	// (Together's shared 'weather', adopted into the settings)
 	weatherPick() {
@@ -1967,20 +2345,104 @@ export class App {
 	}
 
 	// the hour and day you're at, into your save (written a moment later, with the rest of it); and the
-	// weather you picked (none: the day's), (M13) and when, for a hurricane of your own
+	// weather you picked (none: the day's), (M13) and when, for a hurricane of your own; (M15) when (at: the clock
+	// goes on from there while you're away), and your boat
 	saveClock() {
 
 		this._clockSaveT = 30;
-		const s = this.settings;
-		const text = JSON.stringify( { hour: Math.round( s.timeOfDay * 1000 ) / 1000, day: s.day, held: s.timeSpeed === 0, ...( s.weather ? { weather: s.weather } : {} ), ...( s.weather === 'hurricane' ? { since: s.weatherSince } : {} ) } );
+		const s = this.settings, held = s.timeSpeed === 0;
+		const text = JSON.stringify( { hour: Math.round( s.timeOfDay * 1000 ) / 1000, day: s.day, held, ...( held ? {} : { at: Date.now() } ), ...( s.weather ? { weather: s.weather } : {} ), ...( s.weather === 'hurricane' ? { since: s.weatherSince } : {} ) } );
 		if ( this.store && text !== this._clockSaved ) this.store.setItem( CLOCK_KEY, text );
 		this._clockSaved = text;
+		this.saveBoat();
+
+	}
+
+	// (M15) where your boat lies, her heading, her anchor, and whether you're aboard, into your save
+	saveBoat() {
+
+		const b = this.boatCtl, p = this.player, s = this.settings;
+		if ( ! this._pickedUp || ! this.store ) return;
+		const dock = WORLD.boatDock.position;
+		// (as stepping ashore makes her fast: Player.exitBoat)
+		const moored = b.moored || ( ! b.anchor && ! b.hauled && Math.hypot( b.position.x - dock.x, b.position.z - dock.z ) < 14 && b.speed < 1.5 );
+		const aboard = p.riding ? null : p.mode === 'deck' ? 'deck' : p.mode === 'boat' ? 'helm' : null;
+		this.store.setItem( BOAT_KEY, JSON.stringify( boatLeft( { x: b.position.x, z: b.position.z, heading: b.getYaw(), anchor: b.anchor, moored, aboard, T: islandTime( s.day, s.timeOfDay ), at: Date.now() } ) ) );
+		if ( this.together ) this.together.mineBoat();
+
+	}
+
+	// (M15) Picking up where you left off (game/Away.js): your boat where you left her, as whatever's happened since
+	// has left her (your own reckoning from the island's weather, and the group's save if she was out on everyone's
+	// sea), its fee paid, and you aboard if you were and she's still where you left her. Told once you're here
+	pickUp() {
+
+		const s = this.settings, st = this.state, b = this.boatCtl, p = this.player, g = this.game;
+		this._pickedUp = true;
+		const boats = cleanBoats( this._boatsRead ), mine = boats[ this.portal.me.id ] || null;
+		this.together.setBoats( boats, !! mine );
+		const left = leftOf( this.store.getItem( BOAT_KEY ) );
+		if ( ! left ) return;
+		left.hauled = st.hauled;
+		const T = islandTime( s.day, s.timeOfDay ), dock = WORLD.boatDock.position, pick = this.weatherPick(), since = s.weatherSince;
+		const depth = ( x, z ) => Math.max( 0, G.seaLevel.value - this.terrainData.heightAt( x, z ) );
+		const away = ! ( Date.now() - left.at < BACK_MS );
+		const story = withRecord( awayOf( left, away ? T : left.T, { dock, pick, since, depth } ), away ? mine : null, dock );
+		const paid = st.payTow( story.fee ), towed = story.tows.length > 0;
+		if ( story.wear > 0 ) {
+
+			st.hull = Math.min( 1, st.hull + story.wear );
+			st.save();
+			g._wearSaved = st.hull;
+
+		}
+
+		const fish = story.spoiled ? st.spoil() : 0;
+		const yaw = new THREE.Vector3( 0, 1, 0 );
+		if ( story.where === 'cradle' ) {
+
+			st.hauled = true;
+			st.save();
+			b.setHauled( g.cradle );
+
+		} else if ( towed ) b.reset();
+		else if ( story.where !== 'dock' || Math.hypot( left.x - dock.x, left.z - dock.z ) > 0.5 ) {
+
+			b.position.set( story.x, G.seaLevel.value, story.z );
+			b.quaternion.setFromAxisAngle( yaw, story.heading );
+			b.velocity.set( 0, 0, 0 );
+			b.angular.set( 0, 0, 0 );
+			b.moored = story.where === 'dock';
+			if ( b.moored ) {
+
+				b.mooring.anchor.set( story.x, 0, story.z );
+				b.mooring.heading = story.heading;
+
+			}
+
+			b.anchor = story.anchor ? new THREE.Vector3( story.anchor.x, this.terrainData.heightAt( story.anchor.x, story.anchor.z ), story.anchor.z ) : null;
+			b.hasWater = false;
+			b.apply();
+
+		}
+
+		if ( left.aboard && ! towed && ! b.hauled ) {
+
+			p.boardBoat();
+			if ( left.aboard === 'helm' ) p.takeHelm();
+
+		}
+
+		if ( away ) g.awayTold = { story, paid, hull: st.hull, fish, from: left };
+		this.together.mineBoat( true );
 
 	}
 
 }
 
 const CLOCK_KEY = 'saltlife.clock';
+const SETTLED = 100 * 1048576; // (M15) bytes of script memory: settle
+const BOAT_KEY = 'saltlife.boat';
 const timeOf = ( t ) => ( { timeOfDay: t.hour, day: t.day } );
 
 // drawsOnCpu, asked of a throwaway context (let go of straight away)

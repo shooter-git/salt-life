@@ -1,8 +1,11 @@
+import { FINDS, LIES } from './Beachcomb.js';
 import { FISH, fishValue, fishLengthCm } from './FishTable.js';
 import { defaultUpgrades, gearStats, nextLevel, UPGRADES, FUEL_PRICE } from './Gear.js';
-import { orderFor, orderPrice } from './Orders.js';
+import { ordersOf, orderPrice } from './Orders.js';
 import { WEEK_MUL } from './WeekOrder.js';
 import { BAITS, KEEPER_KG, baitOf, chunksOf } from './Bait.js';
+import { PLACES } from './Places.js';
+import { ChartLog } from './Chart.js';
 
 const SAVE_KEY = 'tidewater.save.v1';
 
@@ -17,8 +20,11 @@ export class GameState {
 		this.money = 0;
 		this.inventory = []; // { id, species, kg, cm, value, caughtAt (game hours), record, method }
 		this.log = {}; // species -> { count, bestKg, bestCm }
+		this.places = {}; // ((M15) Places.js) place -> { n, day, first: species } (the first catch there: the log)
+		this.found = {}; // ((M15) Places.js' FAR_PLACES) place -> the day you first came to it (the log names it then)
 		// the last addFish: { species, kg, cm, value, newSpecies, record, prevBestKg, prevBestCm, kept,
-		// released, why, method, bag } (the catch card)
+		// released, why, method, bag, at, day, place, firstAt } (the catch card; (M15) firstAt: the place, when
+		// it's the first fish you've had there)
 		this.lastCatch = null;
 		this.bag = { day: null, n: {} }; // (Salt Life) how many of each bag-limited kind (FishTable bag) you've kept that day
 		this.upgrades = defaultUpgrades();
@@ -32,8 +38,14 @@ export class GameState {
 		// the frozen shrimp)
 		this.bait = {};
 		this.baitPick = null;
+		// ((M15) beachcombing (Beachcomb.js): what you've picked up off the sand, and which finds you've had (the
+		// last few days': they'd have gone by now anyway), so they're not there again)
+		this.finds = []; // { id, kind, day, seed }
+		this.picked = [];
+		this.chart = new ChartLog(); // ((M15) the chart you fill in: Chart.js)
 		this._nextId = 1;
 		this.listeners = new Set();
+		this._chartBought();
 
 	}
 
@@ -72,11 +84,13 @@ export class GameState {
 	// cm: its length when it was measured (a speared fish: the size it swam at), else from its weight;
 	// day: the island's day, for a kind with a bag limit (one over it is let go: lastCatch.bag); release:
 	// why one that may be kept is let go all the same ('short', 'berried': lastCatch.why)
-	addFish( species, kg, timeOfDay = 12, { method = 'rod', cm = null, day = null, release = null } = {} ) {
+	// (M15) place: where it was caught (Places.js), or null; the first fish there is noted (firstAt)
+	addFish( species, kg, timeOfDay = 12, { method = 'rod', cm = null, day = null, release = null, place = null } = {} ) {
 
 		kg = Math.round( kg * 100 ) / 100;
 		cm = Math.round( cm ?? fishLengthCm( species, kg ) );
 		const { newSpecies, record, prevBestKg, prevBestCm } = this.logFish( species, kg, cm );
+		const firstAt = this.logPlace( place, species, day );
 		const value = fishValue( species, kg );
 		const released = !! FISH[ species ].protected || !! release;
 		const max = day !== null ? FISH[ species ].bag || 0 : 0;
@@ -85,7 +99,7 @@ export class GameState {
 		if ( kept && max ) this.bagOne( species, day );
 		const bag = max ? { n: this.bagged( species, day ), max, full } : null;
 		const why = release || ( FISH[ species ].protected ? 'protected' : null );
-		this.lastCatch = { species, kg, cm, value, newSpecies, record, prevBestKg, prevBestCm, kept, released, why, method, bag };
+		this.lastCatch = { species, kg, cm, value, newSpecies, record, prevBestKg, prevBestCm, kept, released, why, method, bag, at: timeOfDay, day, place, firstAt };
 		if ( ! kept ) {
 
 			this.save();
@@ -95,6 +109,61 @@ export class GameState {
 		}
 
 		const f = { id: this._nextId ++, species, kg, cm, value, caughtAt: timeOfDay, record, method };
+		if ( place ) f.place = place;
+		this.inventory.push( f );
+		this.save();
+		this.emit();
+		return f;
+
+	}
+
+	// (M15) one more fish caught at a place (Places.js) -> the place, when it's the first there, else null
+	logPlace( place, species, day = null ) {
+
+		if ( ! place || ! PLACES[ place ] ) return null;
+		const first = ! this.places[ place ];
+		const p = this.places[ place ] || ( this.places[ place ] = { n: 0, day, first: species } );
+		p.n ++;
+		this.findPlace( place, day );
+		return first ? place : null;
+
+	}
+
+	// (M15) you've come to a far place (Places' FAR_PLACES): true the first time (saved, and the log names it)
+	findPlace( place, day = null ) {
+
+		if ( ! PLACES[ place ] || ! PLACES[ place ].far || this.found[ place ] !== undefined ) return false;
+		this.found[ place ] = day;
+		this.save();
+		this.emit();
+		return true;
+
+	}
+
+	// (M15) whether room could be made for a catch there was none for, by letting fish go from the cooler:
+	// one not let go for its own sake (protected, short, over the bag) and no heavier than the cooler holds
+	roomFor( info = this.lastCatch ) {
+
+		return !! info && ! info.kept && ! info.released && ! ( info.bag && info.bag.full ) && info.kg <= this.stats.holdKg + 1e-6;
+
+	}
+
+	// (M15) that catch kept after all, once there's room for it (it's in the log already: addFish) -> its
+	// entry, or null while it still doesn't fit
+	keepLast( info = this.lastCatch ) {
+
+		if ( ! this.roomFor( info ) || ! this.fits( info.kg ) ) return null;
+		const max = info.day !== null && info.day !== undefined ? FISH[ info.species ].bag || 0 : 0;
+		if ( max ) {
+
+			this.bagOne( info.species, info.day );
+			info.bag = { n: this.bagged( info.species, info.day ), max, full: false };
+
+		}
+
+		info.kept = true;
+		const f = { id: this._nextId ++, species: info.species, kg: info.kg, cm: info.cm, value: info.value, caughtAt: info.at, record: info.record, method: info.method };
+		if ( info.place ) f.place = info.place;
 		this.inventory.push( f );
 		this.save();
 		this.emit();
@@ -137,10 +206,11 @@ export class GameState {
 	// while there's room; the rest go back (why: 'protected', 'notNet': not a fish a net may take,
 	// 'full': no room in the cooler, 'bucket': the bucket's full). Each of `fish` is marked kept (true:
 	// in the cooler or the bucket) or not
-	// -> { cooler: [ entries ], bait: { kind: n }, back: [ { species, label, why } ], news: [ species ], records: [ species ] }
-	addHaul( fish, timeOfDay = 12 ) {
+	// (M15) place: where it was thrown (Places.js; the first catch there noted: firstAt)
+	// -> { cooler: [ entries ], bait: { kind: n }, back: [ { species, label, why } ], news: [ species ], records: [ species ], firstAt }
+	addHaul( fish, timeOfDay = 12, place = null, day = null ) {
 
-		const r = { cooler: [], bait: {}, back: [], news: [], records: [] };
+		const r = { cooler: [], bait: {}, back: [], news: [], records: [], firstAt: null };
 		const room = this.stats.baitMax;
 		for ( const f of fish ) {
 
@@ -155,6 +225,7 @@ export class GameState {
 
 			const kg = Math.round( f.kg * 100 ) / 100, cm = Math.round( f.cm ?? fishLengthCm( f.species, kg ) );
 			const log = this.logFish( f.species, kg, cm );
+			r.firstAt = this.logPlace( place, f.species, day ) || r.firstAt;
 			if ( log.newSpecies ) r.news.push( f.species );
 			else if ( log.record && ! r.records.includes( f.species ) ) r.records.push( f.species );
 			const back = ( why ) => r.back.push( { species: f.species, label: F.name, why } );
@@ -166,6 +237,7 @@ export class GameState {
 				else {
 
 					const e = { id: this._nextId ++, species: f.species, kg, cm, value: fishValue( f.species, kg ), caughtAt: timeOfDay, record: log.record, method: 'net' };
+					if ( place ) e.place = place;
 					this.inventory.push( e );
 					r.cooler.push( e );
 					f.kept = true;
@@ -291,10 +363,11 @@ export class GameState {
 		const pick = this.inventory.filter( ( f ) => ids === null || ids.includes( f.id ) ).sort( ( a, b ) => b.value - a.value );
 		for ( const f of pick ) {
 
-			const o = terms && orderFor( terms.orders, terms.who, f.species );
+			// (the first order it fills that still wants one: (M15) its place's first)
+			const o = terms ? ordersOf( terms.orders, terms.who, f.species, f.place ).find( ( q ) => ( filled[ q.id ] | 0 ) < q.max ) : null;
 			const toWeek = left > 0 && f.species === terms.week.species;
 			let price;
-			if ( o && ( filled[ o.id ] | 0 ) < o.max ) {
+			if ( o ) {
 
 				price = orderPrice( o, f.value );
 				filled[ o.id ] = ( filled[ o.id ] | 0 ) + 1;
@@ -344,6 +417,21 @@ export class GameState {
 
 	}
 
+	// (M15) a fish let go for Marta's tag-and-release ask (Orders.tagFor) on `day`: paid there and then, as many
+	// as it wants -> what it paid (0: it's had its fill)
+	tag( order, day ) {
+
+		if ( this.filledOf( order, day ) >= order.max ) return 0;
+		const filled = this.orders.day === day ? { ...this.orders.filled } : {};
+		filled[ order.id ] = ( filled[ order.id ] | 0 ) + 1;
+		this.orders = { day, filled };
+		this.money += order.each;
+		this.save();
+		this.emit();
+		return order.each;
+
+	}
+
 	// (Salt Life) how many of an order you've filled on `day`
 	filledOf( order, day ) {
 
@@ -359,8 +447,10 @@ export class GameState {
 		const biggest = ( species ) => this.inventory.filter( ( f ) => f.species === species ).sort( ( a, b ) => b.value - a.value );
 		for ( const o of list || [] ) {
 
+			// ((M15) a place's ask: only its place's fish; a tag-and-release one, none in the cooler)
+			if ( o.tag ) continue;
 			const left = o.max - this.filledOf( o, day );
-			for ( const f of biggest( o.species ).slice( 0, Math.max( 0, left ) ) ) ids.add( f.id );
+			for ( const f of biggest( o.species ).filter( ( q ) => ! o.place || q.place === o.place ).slice( 0, Math.max( 0, left ) ) ) ids.add( f.id );
 
 		}
 
@@ -401,6 +491,53 @@ export class GameState {
 	}
 
 	// spend money (upgrade shop); false when it can't be afforded
+	// (M15) a find picked up off the sand (Beachcomb.findsOf's): into your bag, and not on the sand again
+	pickFind( f ) {
+
+		if ( ! FINDS[ f.kind ] || this.picked.includes( f.id ) ) return false;
+		this.picked = this.picked.filter( ( id ) => parseInt( id, 10 ) > f.day - LIES - 1 );
+		this.picked.push( f.id );
+		this.finds.push( { id: f.id, kind: f.kind, day: f.day, seed: f.seed } );
+		this.save();
+		this.emit();
+		return true;
+
+	}
+
+	// (M15) what `who` ('marta' | 'joe') buys of your finds, and for how much: { items, total }
+	quoteFinds( who ) {
+
+		const items = this.finds.filter( ( f ) => FINDS[ f.kind ].who === who );
+		return { items, total: items.reduce( ( s, f ) => s + FINDS[ f.kind ].price, 0 ) };
+
+	}
+
+	// (M15) sold to `who`: the finds with these ids (all they buy, with none): { count, total }
+	sellFinds( who, ids = null ) {
+
+		const sold = this.finds.filter( ( f ) => FINDS[ f.kind ].who === who && ( ! ids || ids.includes( f.id ) ) );
+		if ( ! sold.length ) return { count: 0, total: 0 };
+		const total = sold.reduce( ( s, f ) => s + FINDS[ f.kind ].price, 0 );
+		this.finds = this.finds.filter( ( f ) => ! sold.includes( f ) );
+		this.money += total;
+		this.save();
+		this.emit();
+		return { count: sold.length, total };
+
+	}
+
+	// (M15) a find thrown back (or a read bottle kept: left on the sand)
+	dropFind( id ) {
+
+		const n = this.finds.length;
+		this.finds = this.finds.filter( ( f ) => f.id !== id );
+		if ( this.finds.length === n ) return false;
+		this.save();
+		this.emit();
+		return true;
+
+	}
+
 	spend( amount ) {
 
 		if ( amount > this.money ) return false;
@@ -420,6 +557,22 @@ export class GameState {
 		this.save();
 		this.emit();
 		return paid;
+
+	}
+
+	// (M15) the catch gone off while you were away (Away.js): over the side; returns how many
+	spoil() {
+
+		const n = this.inventory.length;
+		if ( n ) {
+
+			this.inventory = [];
+			this.save();
+			this.emit();
+
+		}
+
+		return n;
 
 	}
 
@@ -446,6 +599,7 @@ export class GameState {
 		this.money -= next.cost;
 		this.upgrades[ key ] = next.index;
 		if ( key === 'fuel' ) this.fuel = null; // a new tank comes full
+		this._chartBought();
 		this.save();
 		this.emit();
 		return next;
@@ -466,19 +620,19 @@ export class GameState {
 
 	}
 
-	refuelCost() {
+	refuelCost( price = FUEL_PRICE ) {
 
-		return Math.ceil( ( this.stats.fuelL - this.fuelL ) * FUEL_PRICE );
+		return Math.ceil( ( this.stats.fuelL - this.fuelL ) * price );
 
 	}
 
-	// fill up as far as the money goes; returns litres bought
-	refuel() {
+	// fill up as far as the money goes, at `price` a litre (Marta's; (M15) or Pearl's); returns litres bought
+	refuel( price = FUEL_PRICE ) {
 
 		const missing = this.stats.fuelL - this.fuelL;
-		const litres = Math.min( missing, Math.floor( this.money / FUEL_PRICE ) );
+		const litres = Math.min( missing, Math.floor( this.money / price ) );
 		if ( litres <= 0 ) return 0;
-		this.money -= Math.ceil( litres * FUEL_PRICE );
+		this.money -= Math.ceil( litres * price );
 		this.fuel = this.fuelL + litres;
 		if ( this.fuel >= this.stats.fuelL - 1e-3 ) this.fuel = null;
 		this.save();
@@ -511,7 +665,7 @@ export class GameState {
 
 	toJSON() {
 
-		return { v: 1, money: this.money, inventory: this.inventory, log: this.log, upgrades: this.upgrades, fuel: this.fuel, hull: this.hull, hauled: this.hauled, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, bag: this.bag, nextId: this._nextId };
+		return { v: 1, money: this.money, inventory: this.inventory, log: this.log, places: this.places, found: this.found, upgrades: this.upgrades, fuel: this.fuel, hull: this.hull, hauled: this.hauled, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, bag: this.bag, finds: this.finds, picked: this.picked, chart: this.chart.toJSON(), nextId: this._nextId };
 
 	}
 
@@ -524,6 +678,13 @@ export class GameState {
 		for ( const f of this.inventory ) if ( ! Number.isFinite( f.cm ) ) f.cm = Math.round( fishLengthCm( f.species, f.kg ) );
 		this.log = d.log && typeof d.log === 'object' ? d.log : {};
 		for ( const [ k, v ] of Object.entries( this.log ) ) if ( FISH[ k ] && v && v.bestKg > 0 && ! Number.isFinite( v.bestCm ) ) v.bestCm = Math.round( fishLengthCm( k, v.bestKg ) );
+		// ((M15) the places you've fished: saves from before had none)
+		this.places = {};
+		for ( const [ k, v ] of Object.entries( d.places && typeof d.places === 'object' ? d.places : {} ) ) if ( PLACES[ k ] && v && Number.isInteger( v.n ) && v.n > 0 ) this.places[ k ] = { n: v.n, day: Number.isFinite( v.day ) ? v.day : null, first: FISH[ v.first ] ? v.first : null };
+		// ((M15) the far places you've found: and any you'd fished before it was kept)
+		this.found = {};
+		for ( const [ k, v ] of Object.entries( d.found && typeof d.found === 'object' ? d.found : {} ) ) if ( PLACES[ k ] && PLACES[ k ].far ) this.found[ k ] = Number.isFinite( v ) ? v : null;
+		for ( const k of Object.keys( this.places ) ) if ( PLACES[ k ].far && this.found[ k ] === undefined ) this.found[ k ] = this.places[ k ].day;
 		this.upgrades = { ...defaultUpgrades(), ...( d.upgrades || {} ) };
 		this.fuel = Number.isFinite( d.fuel ) ? d.fuel : null;
 		this.hull = Number.isFinite( d.hull ) ? Math.min( 1, Math.max( 0, d.hull ) ) : 0;
@@ -537,6 +698,12 @@ export class GameState {
 		this.baitPick = BAITS[ d.baitPick ] ? d.baitPick : null;
 		const b = d.bag;
 		this.bag = b && Number.isFinite( b.day ) && b.n && typeof b.n === 'object' ? { day: b.day, n: { ...b.n } } : { day: null, n: {} };
+		// ((M15) beachcombing: saves from before had none)
+		this.finds = Array.isArray( d.finds ) ? d.finds.filter( ( f ) => f && FINDS[ f.kind ] && typeof f.id === 'string' ).map( ( f ) => ( { id: f.id, kind: f.kind, day: f.day | 0, seed: f.seed | 0 } ) ) : [];
+		this.picked = Array.isArray( d.picked ) ? d.picked.filter( ( id ) => typeof id === 'string' ).slice( - 200 ) : [];
+		// ((M15) the chart: saves from before had the bay alone)
+		this.chart.fromJSON( d.chart );
+		this._chartBought();
 		this._nextId = Math.max( d.nextId | 0, ...this.inventory.map( ( f ) => f.id + 1 ), 1 );
 		return true;
 
@@ -574,6 +741,8 @@ export class GameState {
 		this.money = 0;
 		this.inventory = [];
 		this.log = {};
+		this.places = {};
+		this.found = {};
 		this.upgrades = defaultUpgrades();
 		this.fuel = null;
 		this.hull = 0;
@@ -583,8 +752,22 @@ export class GameState {
 		this.bait = {};
 		this.baitPick = null;
 		this.bag = { day: null, n: {} };
+		this.finds = [];
+		this.picked = [];
+		this.chart.reset();
+		this._chartBought();
 		this.save();
 		this.emit();
+
+	}
+
+	// (M15) Marta's chart bought (Gear's chart): the chart has the island's sheet
+	_chartBought() {
+
+		const b = !! this.stats.chart;
+		if ( this.chart.bought === b ) return;
+		this.chart.bought = b;
+		this.chart.version ++;
 
 	}
 

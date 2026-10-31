@@ -42,7 +42,7 @@ export class Vendor {
 		this.character = null;
 		this.talking = false;
 		this._near = false;
-		this.characterSpec = character; // { url, idle, talk, greet }: loadCharacter
+		this.characterSpec = character; // { url, idle, talk, greet, (M15) open (App: GroundBounce) }: loadCharacter
 
 	}
 

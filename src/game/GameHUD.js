@@ -2,11 +2,15 @@ import { FISH, CARAPACE, fishLengthCm } from './FishTable.js';
 import { UPGRADES, nextLevel, FUEL_PRICE } from './Gear.js';
 import { BAITS, BAIT_IDS, chunksOf } from './Bait.js';
 import { LOOKS, LOOK_NAMES } from '../together/Avatar.js';
-import { NIGHT_BOX, biteHint, orderTerms } from './Orders.js';
+import { NIGHT_BOX, biteHint, orderTerms, orderPlace } from './Orders.js';
 import { WEEK_MUL, delivered, filled, mineOf, shareOf, weekEnds } from './WeekOrder.js';
 import { timeText } from './IslandClock.js';
-import { LB, IN, GAL, lb, pounds, inches, feet, gallons, lbOz, feetInches } from './Units.js';
+import { LB, IN, GAL, lb, pounds, inches, feet, farOff, gallons, lbOz, feetInches } from './Units.js';
 import { FLOOD_L } from './Hull.js';
+import { PLACES, FAR_PLACES, placeName, farName } from './Places.js';
+import { FINDS, messageOf } from './Beachcomb.js';
+import { CAMP } from './FishCamp.js';
+import { NAMES, MAX_MARKS, legTo, magnetic } from './Chart.js';
 
 // (other players' names, into HTML)
 const escape = ( t ) => String( t ).replace( /[&<>"']/g, ( c ) => ( { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } )[ c ] );
@@ -110,6 +114,7 @@ const CSS = /* css */`
 .gm-list { overflow: auto; min-height: 0; overscroll-behavior: contain; margin: 0 calc(-1 * var(--tw-2)); padding: 0 var(--tw-2); }
 .gm-panel > :not(.gm-list) { flex: none; }
 .gm-empty { color: var(--tw-ink-3); padding: var(--tw-4) 0; text-align: center; }
+.gm-note-text { margin: var(--tw-2) 0 var(--tw-3); font-style: italic; line-height: 1.5; color: var(--tw-ink); }
 .gm-foot { display: flex; justify-content: space-between; align-items: center; margin-top: var(--tw-3); gap: var(--tw-3); }
 .gm-btn { font: 600 var(--tw-fs-md) var(--tw-font); color: #0b1418; background: var(--tw-aqua); border: 0; border-radius: 999px; padding: var(--tw-2) var(--tw-4); cursor: pointer; }
 .gm-btn[disabled] { opacity: 0.4; cursor: default; }
@@ -257,6 +262,37 @@ html:has(.gm-panel.is-open) .hud-hint { visibility: hidden; }
 .gm-catch-timer > span { display: block; height: 100%; width: 100%; background: rgba(244, 234, 214, 0.55); transform-origin: 0 50%; }
 .gm-catch.is-on .gm-catch-timer > span { animation: gm-timer var(--gm-catch-ms, 9000ms) linear forwards; }
 @keyframes gm-timer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+/* (M15) no room for it: the cooler's fish, cheapest first, each to let go to make room, and the room it
+   needs; the card waits */
+.gm-room { width: min(94vw, 760px); margin-top: var(--tw-3); }
+.gm-room-head { display: flex; align-items: center; gap: var(--tw-3); font-size: var(--tw-fs-sm); color: rgba(244, 234, 214, 0.78); }
+.gm-room-head b { color: #ff9a8a; font-weight: 700; white-space: nowrap; }
+.gm-room-head b.is-ok { color: #6fd6c6; }
+.gm-room-meter { position: relative; flex: 1; height: calc(6 * var(--tw-u)); border-radius: 99px; background: rgba(244, 234, 214, 0.12); overflow: hidden; }
+.gm-room-meter > span { position: absolute; top: 0; bottom: 0; left: 0; border-radius: inherit; transition: width var(--tw-med) var(--tw-ease), left var(--tw-med) var(--tw-ease); }
+.gm-room-meter > .is-in { background: rgba(244, 234, 214, 0.55); }
+.gm-room-meter > .is-new { background: #ff9a8a; }
+.gm-room-meter > .is-new.is-ok { background: #6fd6c6; }
+.gm-room-list { display: flex; gap: var(--tw-2); margin-top: var(--tw-2); padding-bottom: var(--tw-1); overflow-x: auto; scroll-snap-type: x proximity; overscroll-behavior: contain; }
+.gm-room-fish { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: calc(128 * var(--tw-u)); padding: var(--tw-2) var(--tw-3);
+	border-radius: 6px; text-align: left; scroll-snap-align: start; background: rgba(232, 220, 192, 0.08); box-shadow: inset 0 0 0 1px rgba(214, 180, 110, 0.3); }
+.gm-room-fish.is-pick { box-shadow: inset 0 0 0 2px #f0c46a; background: rgba(240, 196, 106, 0.14); }
+.gm-room-fish b { font-weight: 600; color: #fbf1dc; white-space: nowrap; }
+.gm-room-fish span { font-family: var(--tw-mono); font-size: var(--tw-fs-sm); color: rgba(244, 234, 214, 0.6); white-space: nowrap; }
+.gm-room-fish .gm-mini { margin-top: var(--tw-1); color: #f4ead6; background: rgba(244, 234, 214, 0.1); border-color: rgba(244, 234, 214, 0.3); }
+.gm-room-acts { display: flex; justify-content: center; gap: var(--tw-3); margin-top: var(--tw-3); }
+.gm-room-keys { margin-top: var(--tw-2); font-size: var(--tw-fs-xs); color: rgba(244, 234, 214, 0.5); }
+/* (the fish's stage gives way to it: smaller, and gone on a short screen) */
+.gm-catch.has-room .gm-catch-stage, .gm-catch.has-room.is-gl .gm-catch-stage { width: min(94vw, 1400px, calc(max(0px, min(40vh, 100vh - 600px)) * 2.4)); }
+.gm-catch.has-room.is-flat .gm-catch-stage { width: 100%; }
+@media (max-height: 500px) {
+	.gm-catch.has-room .gm-catch-stats { margin-top: 0; }
+	.gm-catch.has-room .gm-stat { padding: 6px 10px; }
+	.gm-catch.has-room .gm-stat i { display: none; }
+	.gm-room { margin-top: var(--tw-1); }
+	.gm-room-fish { padding: var(--tw-1) var(--tw-2); }
+	.gm-room-acts { margin-top: var(--tw-2); }
+}
 @media (prefers-reduced-motion: reduce) {
 	.gm-catch.is-on .gm-catch-top, .gm-catch.is-on .gm-catch-bottom { animation: none; opacity: 1; }
 	.gm-catch.is-on .gm-badge, .gm-catch.is-on .gm-badge.is-record { animation: none; transform: rotate(-3deg); opacity: 1; }
@@ -362,9 +398,11 @@ export class GameHUD {
 		this._catchTap = false;
 		this.catchCard.addEventListener( 'pointerdown', () => {
 
-			if ( this.catchOpen ) this._catchTap = true;
+			if ( this.catchOpen && ! this.room ) this._catchTap = true;
 
 		} );
+		this.room = null; // (M15) { info, pick, ids, fits } while the card's making room for its fish
+		this._catchAct = null;
 		const hud = ui.hud || ui.root;
 		hud.append( this.veil, this.catchScrim, this.purse, this.fight, this.bite, this.cast, this.netWind, this.haul, this.dot, this.aimTag, this.catchCard );
 		// (Salt Life) on touch screens the minimap, the tips and the fight panel line up under the purse,
@@ -395,7 +433,10 @@ export class GameHUD {
 		// panels (interactive)
 		this.inv = h( 'div', 'gm-panel tw-glass tw-interactive' );
 		this.stand = h( 'div', 'gm-panel tw-glass tw-interactive' );
-		ui.root.append( this.inv, this.stand );
+		// ((M15) a message in a bottle's note: Beachcomb.js)
+		this.note = h( 'div', 'gm-panel tw-glass tw-interactive' );
+		this.noteOpen = false;
+		ui.root.append( this.inv, this.stand, this.note );
 		this.invOpen = false;
 		this.invTab = 'fish';
 		this.standOpen = false;
@@ -431,7 +472,8 @@ export class GameHUD {
 
 		this._last.money = s.money;
 		if ( this.invOpen ) this.renderInventory();
-		if ( this.standOpen ) this.vendor && this.vendor.kind === 'shop' ? this.renderShop() : this.renderStand();
+		if ( this.standOpen ) this.renderTrader();
+		if ( this.room ) this.renderRoom();
 
 	}
 
@@ -588,15 +630,21 @@ export class GameHUD {
 		// (Salt Life: a protected fish is measured and let go, as is a catch-and-release one and a short or
 		// berried lobster; one over the day's bag goes back; the lionfish's bounty)
 		const board = info.islandRecord ? '. It still goes on the board at the fish stand' : '';
+		// ((M15) no room for one that could be kept: the card waits while you make room for it)
+		const room = this.game.state.roomFor( info ), where = this.game.state.upgrades.hold > 0 ? 'hold' : 'cooler';
 		if ( info.why === 'short' ) note = `<div class="gm-catch-note is-warn">Short: under ${ ( f.minCm * CARAPACE / IN ).toFixed( 0 ) } in on the gauge · back it goes, to grow${ board }.</div>`;
 		else if ( info.why === 'berried' ) note = `<div class="gm-catch-note is-warn">Berried: she's carrying eggs under her tail · back she goes${ board }.</div>`;
+		else if ( info.tagged ) note = `<div class="gm-catch-note">Tagged and let go alive for Marta's tag-and-release log: <b>$${ info.tagged }</b>${ board }.</div>`;
 		else if ( info.released ) note = `<div class="gm-catch-note">${ f.cr ? 'Catch and release: everyone lets one go. Measured and' : 'Protected: measured and' } let go alive${ board }.</div>`;
 		else if ( info.bag && info.bag.full ) note = `<div class="gm-catch-note is-warn">That's your ${ info.bag.max } for today, the most anyone may keep · back it goes</div>`;
-		else if ( ! info.kept ) note = `<div class="gm-catch-note is-warn">No room in the ${ this.game.state.upgrades.hold > 0 ? 'hold' : 'cooler' } · you let it go</div>`;
+		else if ( room ) note = `<div class="gm-catch-note is-warn">No room in the ${ where } for it · let fish go to make room, or let this one go</div>`;
+		else if ( ! info.kept ) note = `<div class="gm-catch-note is-warn">${ info.kg > this.game.state.stats.holdKg ? `Too big for the ${ where }, even empty` : `No room in the ${ where }` } · you let it go</div>`;
 		else if ( f.bounty && ! info.islandRecord && ! info.record ) note = `<div class="gm-catch-note">An invader on the reef: Joe pays $${ f.bounty } a fish on top.</div>`;
 		else if ( info.islandRecord ) note = `<div class="gm-catch-note">The heaviest anyone here has landed${ isle ? `. It beats ${ escape( isle.who || 'someone' ) }'s <b>${ lb( isle.kg ) }</b>` : '' }. It goes on the board at the fish stand.</div>`;
 		else if ( info.record ) note = `<div class="gm-catch-note">Previous best <b>${ lb( info.prevBestKg ) }</b> · ${ sizeOf( info.species, info.prevBestCm ) }. Beaten by ${ lb( info.kg - info.prevBestKg ) }.</div>`;
-		else if ( info.newSpecies ) note = '<div class="gm-catch-note">First one in your fish log.</div>';
+		else if ( info.placeRecord ) note = `<div class="gm-catch-note">The heaviest fish anyone here has had from ${ placeName( info.placeRecord ) }. It's on the records, in your cooler.</div>`;
+		else if ( info.newSpecies ) note = `<div class="gm-catch-note">First one in your fish log${ info.firstAt ? `, and your first fish from ${ placeName( info.firstAt ) }` : '' }.</div>`;
+		else if ( info.firstAt ) note = `<div class="gm-catch-note">Your first fish from ${ placeName( info.firstAt ) }: it's in your log.</div>`;
 		else note = `<div class="gm-catch-note">Your best: ${ lb( info.prevBestKg ) } · ${ sizeOf( info.species, info.prevBestCm ) }</div>`;
 		// splash burst around the fish as it lands in view
 		let drops = '';
@@ -620,10 +668,10 @@ export class GameHUD {
 				<div class="gm-catch-stats">
 					${ info.species === 'lobster' ? `<div class="gm-stat"><span>Carapace</span><b>${ carapaceIn( info.cm ).toFixed( 2 ) }<small>in</small></b><i>${ inches( info.cm ) } long</i></div>` : `<div class="gm-stat"><span>Length</span><b>${ inch.toFixed( 1 ) }<small>in</small></b><i>${ feetInches( info.cm ) || '&nbsp;' }</i></div>` }
 					<div class="gm-stat"><span>Weight</span>${ lbs * 16 < 15.5 ? `<b>${ Math.max( 1, Math.round( lbs * 16 ) ) }<small>oz</small></b><i>&nbsp;</i>` : `<b>${ lbs.toFixed( 1 ) }<small>lb</small></b><i>${ lbOz( info.kg ) }</i>` }</div>
-					<div class="gm-stat is-value"><span>Value</span><b>${ info.released ? '—' : `$${ info.value }` }</b><i>${ info.released ? 'released' : ! info.kept ? 'let go' : info.wanted ? info.wanted.text : info.bag ? `${ info.bag.n } of ${ info.bag.max } today` : 'in the cooler' }</i></div>
+					<div class="gm-stat is-value"><span>Value</span><b>${ info.released ? '—' : `$${ info.value }` }</b><i>${ info.released ? 'released' : room ? 'no room yet' : ! info.kept ? 'let go' : info.wanted ? info.wanted.text : info.bag ? `${ info.bag.n } of ${ info.bag.max } today` : 'in the cooler' }</i></div>
 				</div>
 				${ note }
-				<div class="gm-catch-foot">${ { touch: 'Tap to continue', gamepad: '<kbd>RT</kbd> or <kbd>B</kbd> to continue' }[ this.device ] || '<kbd>Click</kbd> or <kbd>E</kbd> to continue' }<span class="gm-catch-timer"><span></span></span></div>
+				${ room ? '<div class="gm-room"></div>' : `<div class="gm-catch-foot">${ { touch: 'Tap to continue', gamepad: '<kbd>RT</kbd> or <kbd>B</kbd> to continue' }[ this.device ] || '<kbd>Click</kbd> or <kbd>E</kbd> to continue' }<span class="gm-catch-timer"><span></span></span></div>` }
 			</div>`;
 		// restart the entrance even when a card is already up
 		c.classList.remove( 'is-on' );
@@ -631,6 +679,15 @@ export class GameHUD {
 		c.classList.add( 'is-on' );
 		this.catchScrim.classList.add( 'is-on' );
 		this.catchOpen = true;
+		this._catchAct = null;
+		this.room = room ? { info, pick: 0, ids: [], fits: false } : null;
+		c.classList.toggle( 'has-room', !! room );
+		if ( room ) {
+
+			this.renderRoom();
+			releaseMouse(); // (the pointer, for its buttons)
+
+		}
 		// the fish itself: the real model in a studio, drawn live into the stage canvas
 		// (Salt Life: the game's FishPortrait, drawn in the game's canvas under the card: no blur above it)
 		let live = false;
@@ -721,6 +778,67 @@ export class GameHUD {
 
 	}
 
+	// (M15) what the card's own buttons said, once: 'keep' (room made: keep it), 'go' (let it go), or null
+	takeCatchAct() {
+
+		const a = this._catchAct;
+		this._catchAct = null;
+		return a;
+
+	}
+
+	// (M15) the card making room for its fish: the room it needs, the cooler's fish (cheapest first), each to
+	// let go, and keep it or let it go
+	renderRoom() {
+
+		const R = this.room, el = this.catchCard.querySelector( '.gm-room' );
+		if ( ! R || ! el ) return;
+		const s = this.game.state, info = R.info, cap = s.stats.holdKg, held = s.holdKg;
+		const need = held + info.kg - cap;
+		const fish = s.inventory.slice().sort( ( a, b ) => a.value - b.value || a.kg - b.kg );
+		R.ids = fish.map( ( f ) => f.id );
+		R.pick = Math.max( 0, Math.min( R.pick, fish.length - 1 ) );
+		R.fits = need <= 1e-6;
+		const d = this.device, where = s.upgrades.hold > 0 ? 'hold' : 'cooler';
+		const pct = ( kg ) => Math.max( 0, Math.min( 100, kg / cap * 100 ) ).toFixed( 1 );
+		const chips = fish.map( ( f, i ) => `<div class="gm-room-fish${ i === R.pick && d !== 'touch' ? ' is-pick' : '' }"><b>${ FISH[ f.species ].name }</b><span>${ lb( f.kg ) } · $${ f.value }</span><button class="gm-mini" data-let="${ f.id }">Let go</button></div>` ).join( '' );
+		const keys = { gamepad: '<kbd>←</kbd> <kbd>→</kbd> on the d-pad to pick one · <kbd>X</kbd> lets it go', keyboard: '<kbd>←</kbd> <kbd>→</kbd> to pick one · <kbd>R</kbd> lets it go' }[ d ];
+		el.innerHTML = `
+			<div class="gm-room-head"><span>${ upper( where ) } ${ pounds( held ) } of ${ pounds( cap ) } lb</span>
+				<span class="gm-room-meter"><span class="is-in" style="width:${ pct( held ) }%"></span><span class="is-new${ R.fits ? ' is-ok' : '' }" style="left:${ pct( held ) }%;width:${ pct( info.kg ) }%"></span></span>
+				<b class="${ R.fits ? 'is-ok' : '' }">${ R.fits ? 'Room for it' : `${ lb( need, 1 ) } short` }</b></div>
+			<div class="gm-room-list">${ chips }</div>
+			<div class="gm-room-acts"><button class="gm-btn is-ghost" data-go>${ this.keyed( 'Let it go', 'E', 'B' ) }</button><button class="gm-btn" data-keep ${ R.fits ? '' : 'disabled' }>${ this.keyed( 'Keep it', 'Enter', 'RT' ) }</button></div>
+			${ keys ? `<div class="gm-room-keys">${ keys }</div>` : '' }`;
+		for ( const b of el.querySelectorAll( '[data-let]' ) ) b.onclick = () => s.release( Number( b.dataset.let ) );
+		el.querySelector( '[data-go]' ).onclick = () => this._catchAct = 'go';
+		el.querySelector( '[data-keep]' ).onclick = () => {
+
+			if ( this.room && this.room.fits ) this._catchAct = 'keep';
+
+		};
+		const pick = el.querySelector( '.gm-room-fish.is-pick' );
+		if ( pick ) pick.scrollIntoView( { block: 'nearest', inline: 'nearest' } );
+
+	}
+
+	// (M15) the next or previous fish to let go (← →, the d-pad), and letting it go (R, X)
+	roomStep( step ) {
+
+		const R = this.room;
+		if ( ! R || ! R.ids.length ) return;
+		R.pick = ( R.pick + step + R.ids.length ) % R.ids.length;
+		this.renderRoom();
+
+	}
+
+	roomLetGo() {
+
+		const R = this.room;
+		if ( R && R.ids.length ) this.game.state.release( R.ids[ R.pick ] );
+
+	}
+
 	// the input in use ('keyboard' | 'touch' | 'gamepad'), for what the panels call the controls
 	get device() {
 
@@ -734,6 +852,8 @@ export class GameHUD {
 		this.catchScrim.classList.remove( 'is-on' );
 		this.catchOpen = false;
 		this._catchTap = false;
+		this._catchAct = null;
+		this.room = null;
 		if ( this.portrait ) this.portrait.detach();
 
 	}
@@ -762,7 +882,7 @@ export class GameHUD {
 		const logged = Object.entries( s.log ).filter( ( [ k ] ) => FISH[ k ] );
 		// (Salt Life) the island's records: the group's heaviest of each kind (together/)
 		const isle = together ? Object.entries( together.records ).filter( ( [ k ] ) => FISH[ k ] ).sort( ( a, b ) => b[ 1 ].kg - a[ 1 ].kg ) : [];
-		const tabs = [ [ 'fish', 'Fish', s.inventory.length ], [ 'bait', 'Bait', Object.values( s.bait ).reduce( ( a, n ) => a + n, 0 ) ], [ 'log', 'Log', logged.length ] ];
+		const tabs = [ [ 'fish', 'Fish', s.inventory.length ], [ 'bait', 'Bait', Object.values( s.bait ).reduce( ( a, n ) => a + n, 0 ) ], [ 'finds', 'Finds', s.finds.length ], [ 'log', 'Log', logged.length ], [ 'chart', 'Chart', s.chart.marks.length ] ];
 		if ( together ) tabs.push( [ 'records', 'Records', isle.length ], [ 'islander', 'Islander', 0 ] );
 		this._invTabs = tabs.map( ( t ) => t[ 0 ] );
 		const tab = this._invTabs.includes( this.invTab ) ? this.invTab : 'fish';
@@ -786,17 +906,56 @@ export class GameHUD {
 			if ( ! BAIT_IDS.some( ( k ) => s.bait[ k ] > 0 ) ) body += empty( 'Throw the cast net for live bait: silversides, sergeant majors, small grunts and mullet. The big fish come for it.' );
 			hint = `${ s.baitCount } / ${ s.stats.baitMax } in the bucket · ${ d === 'gamepad' ? 'D-pad ← →' : d === 'touch' ? 'the Bait button' : '<kbd>B</kbd>' } changes it with the rod out`;
 
+		} else if ( tab === 'finds' ) {
+
+			// ((M15) what you've picked up off the beaches: who buys it and for what; a bottle's note to read again)
+			body = s.finds.map( ( f ) => {
+
+				const F = FINDS[ f.kind ], buyer = F.who ? `${ F.who === 'joe' ? 'Joe' : 'Marta' } pays $${ F.price }` : 'a keepsake';
+				const btns = f.kind === 'bottle' ? `<button class="gm-mini" data-read="${ f.id }">Read</button>` : '';
+				return item( F.name, `${ F.what } · ${ buyer }`, `<span class="gm-btns">${ btns }<button class="gm-mini" data-toss="${ f.id }">Toss</button></span>` );
+
+			} ).join( '' ) || empty( 'The sea brings things in on the north beach, along the line of weed at the top of the tide: driftwood, floats, sea beans, now and then a bottle. Most after a blow from the north, and after a hurricane.' );
+			hint = 'Marta buys most of it; Joe knows a buyer for ambergris';
+
 		} else if ( tab === 'log' ) {
 
 			body = logged.map( ( [ k, v ] ) => item( FISH[ k ].name, `${ v.count } caught`, `<span class="gm-item-num">${ lb( v.bestKg ) } · ${ sizeOf( k, v.bestCm ?? fishLengthCm( k, v.bestKg ) ) }</span>` ) ).join( '' )
 				|| empty( 'Each kind you catch is logged here, with your best.' );
-			hint = 'Your best of each kind';
+			// ((M15) and the places you've fished: how many there, and the first)
+			const places = Object.entries( s.places || {} ).filter( ( [ k ] ) => PLACES[ k ] );
+			if ( places.length ) body += `<div class="gm-wanted"><span class="gm-wanted-h">Places you've fished</span>${ places.map( ( [ k, p ] ) => item( placeName( k, true ), `first ${ p.first && FISH[ p.first ] ? `a ${ FISH[ p.first ].name.toLowerCase() }` : 'a fish' }${ Number.isFinite( p.day ) ? `, day ${ p.day + 1 }` : '' }`, `<span class="gm-item-num">${ p.n } fish</span>` ) ).join( '' ) }</div>`;
+			// ((M15) the far places you've come to and not fished yet, and how many are still out there)
+			const seen = FAR_PLACES.filter( ( k ) => s.found[ k ] !== undefined && ! s.places[ k ] ), left = FAR_PLACES.filter( ( k ) => s.found[ k ] === undefined ).length;
+			if ( seen.length || left ) body += `<div class="gm-wanted"><span class="gm-wanted-h">Far places you've found</span>${ seen.map( ( k ) => item( placeName( k, true ), `${ PLACES[ k ].what }${ Number.isFinite( s.found[ k ] ) ? `, day ${ s.found[ k ] + 1 }` : '' }`, '<span class="gm-item-num">no fish yet</span>' ) ).join( '' ) }${ left ? `<div class="gm-item"><span class="gm-item-main"><span class="gm-item-meta">${ left } more out there, not found yet</span></span></div>` : '' }</div>`;
+			hint = 'Your best of each kind, and where you\'ve fished';
+
+		} else if ( tab === 'chart' ) {
+
+			// ((M15) your chart (Chart.js): your marks, how far and which way each is from you (magnetic, as the
+			// compass), the names you've come to)
+			const c = s.chart, a = this.game.app, aboard = a.player.mode === 'boat' || a.player.mode === 'deck';
+			const at = aboard && a.boatCtl ? a.boatCtl.position : a.camera.position;
+			const named = NAMES.filter( ( n ) => c.named( n.id ) && ! n.peak ).map( ( n ) => n.name );
+			body = `<div class="gm-shop-row"><span>Mark where you are<small>${ c.marks.length } of ${ MAX_MARKS } marks · on the map and the boat's plotter</small></span><button class="gm-btn" data-mark>Mark here</button></div>`
+				+ c.marks.map( ( m ) => {
+
+					const leg = legTo( at.x, at.z, m.x, m.z ), far = leg.m < 1852 * 0.2 ? feet( leg.m ) : `${ ( leg.m / 1852 ).toFixed( 1 ) } NM`;
+					return item( `Mark ${ m.id }`, `${ far } · ${ String( magnetic( leg.bearing ) ).padStart( 3, '0' ) }°${ Number.isFinite( m.day ) ? ` · day ${ m.day + 1 }` : '' }`, '<span class="gm-btns">' + `<button class="gm-mini" data-unmark="${ m.id }">Remove</button></span>` );
+
+				} ).join( '' );
+			if ( ! c.marks.length ) body += empty( 'Your chart\'s drawn in where you go: the coast as you see it, the far grounds\' depths as you run over them, each place\'s name as you come to it. Mark a good spot to find it again.' );
+			if ( named.length ) body += `<div class="gm-wanted"><span class="gm-wanted-h">Named on your chart</span><p class="gm-sub">${ named.join( ' · ' ) }</p></div>`;
+			hint = `${ d === 'touch' ? 'Mark here' : d === 'gamepad' ? 'Mark here' : '<kbd>P</kbd>' } marks where you are${ c.bought ? '' : ' · Marta sells a chart of the island' }`;
 
 		} else if ( tab === 'records' ) {
 
 			body = isle.map( ( [ k, r ] ) => item( FISH[ k ].name, ( r.id === me ? '<b>You</b>' : escape( r.who || '?' ) ) + ( { s: ' · speared', n: ' · netted', h: ' · by hand' }[ r.m ] || '' ), `<span class="gm-item-num">${ lb( r.kg ) }${ r.cm ? ` · ${ sizeOf( k, r.cm ) }` : '' }</span>` ) ).join( '' )
 				|| empty( 'None yet: the first of each kind anyone lands here sets one.' );
-			hint = 'The heaviest of each kind anyone here has landed';
+			// ((M15) and each place's: the heaviest fish anyone's had there; a far place named once you've found it)
+			const at = Object.entries( together.records ).filter( ( [ k, r ] ) => k[ 0 ] === '@' && PLACES[ k.slice( 1 ) ] && FISH[ r.s ] ).sort( ( a, b ) => b[ 1 ].kg - a[ 1 ].kg );
+			if ( at.length ) body += `<div class="gm-wanted"><span class="gm-wanted-h">The heaviest from each place</span>${ at.map( ( [ k, r ] ) => item( farName( k.slice( 1 ), s.found, true ), `${ FISH[ r.s ].name } · ${ r.id === me ? '<b>You</b>' : escape( r.who || '?' ) }`, `<span class="gm-item-num">${ lb( r.kg ) }</span>` ) ).join( '' ) }</div>`;
+			hint = 'The heaviest of each kind anyone here has landed, and from each place';
 
 		} else {
 
@@ -832,7 +991,23 @@ export class GameHUD {
 
 		};
 		for ( const b of this.inv.querySelectorAll( '[data-bait]' ) ) b.onclick = () => s.pickBait( b.dataset.bait || null );
+		for ( const b of this.inv.querySelectorAll( '[data-toss]' ) ) b.onclick = () => s.dropFind( b.dataset.toss );
+		for ( const b of this.inv.querySelectorAll( '[data-read]' ) ) b.onclick = () => {
+
+			const f = s.finds.find( ( q ) => q.id === b.dataset.read );
+			if ( f ) this.showNote( messageOf( f.seed ) );
+
+		};
 		for ( const b of this.inv.querySelectorAll( '[data-dump]' ) ) b.onclick = () => s.dumpBait( b.dataset.dump );
+		for ( const b of this.inv.querySelectorAll( '[data-unmark]' ) ) b.onclick = () => {
+
+			s.chart.unmark( Number( b.dataset.unmark ) );
+			s.save();
+			this.renderInventory();
+
+		};
+		const mk = this.inv.querySelector( '[data-mark]' );
+		if ( mk ) mk.onclick = () => this.game.addMark();
 		for ( const b of this.inv.querySelectorAll( '[data-look]' ) ) b.onclick = () => {
 
 			together.setLook( b.dataset.look );
@@ -876,9 +1051,8 @@ export class GameHUD {
 		this._standDrawn = null; // (opened again: its list from the top)
 		this.toggleInventory( false );
 		// (Salt Life) Joe pays your share of a filled week's order when he's in
-		if ( vendor.kind !== 'shop' && this.game.collectWeek ) this.game.collectWeek();
-		if ( vendor.kind === 'shop' ) this.renderShop();
-		else this.renderStand();
+		if ( vendor.kind === 'buyer' && this.game.collectWeek ) this.game.collectWeek();
+		this.renderTrader();
 		this.stand.classList.add( 'is-open' );
 		releaseMouse();
 
@@ -899,7 +1073,7 @@ export class GameHUD {
 		const g = this.game, s = g.state;
 		const rows = ( g.orders || [] ).filter( ( o ) => o.who === who ).map( ( o ) => {
 
-			const n = s.filledOf( o, g.tradeDay ), hint = who === 'marta' ? 'for her bait tank' : biteHint( o.species );
+			const n = s.filledOf( o, g.tradeDay ), hint = o.place ? orderPlace( o ) : who === 'marta' ? 'for her bait tank' : biteHint( o.species );
 			return item( FISH[ o.species ].name, `${ orderTerms( o ) }${ hint ? ` · ${ hint }` : '' }`, `<span class="gm-item-num">${ n } / ${ o.max }</span>` )
 				.replace( 'class="gm-item"', `class="gm-item${ n >= o.max ? ' is-done' : '' }"` );
 
@@ -963,7 +1137,7 @@ export class GameHUD {
 		// the wanted list and the week's order scroll with the fish, under the title and over the
 		// buttons: on a short screen they'd leave no room for either. On a phone on its side with
 		// room, they're beside the fish (gm-split, game-ui.css)
-		const orders = this.wantedBlock( 'joe', 'Wanted today' ) + this.weekBlock( box );
+		const orders = this.wantedBlock( 'joe', 'Wanted today' ) + this.weekBlock( box ) + ( box ? '' : this.findsBlock( 'joe', 'He\'ll take off your hands' ) );
 		this.drawStand( v, `
 			<div class="gm-head"><h2>${ box ? 'Joe\'s night box' : v.name }</h2>
 			<p class="gm-sub">${ sub }</p></div>
@@ -972,6 +1146,106 @@ export class GameHUD {
 		this.stand.querySelector( '[data-close]' ).onclick = () => this.closeStand();
 		this.stand.querySelector( '[data-all]' ).onclick = () => this.game.sellAll();
 		for ( const b of this.stand.querySelectorAll( '[data-sell]' ) ) b.onclick = () => this.game.sell( [ Number( b.dataset.sell ) ] );
+		this.bindFinds( 'joe' );
+
+	}
+
+	// the open trader's panel: Marta's shop, (M15) Pearl's camp, or Joe's stand
+	renderTrader() {
+
+		const k = this.vendor && this.vendor.kind;
+		if ( k === 'shop' ) this.renderShop();
+		else if ( k === 'camp' ) this.renderCamp();
+		else this.renderStand();
+
+	}
+
+	// (M15) Pearl at the fish camp on the north beach: your catch at her price (Joe's, less the trip round to
+	// market), diesel from her drums at hers; gone round to market, nothing
+	renderCamp() {
+
+		const g = this.game, s = g.state, v = this.vendor, name = v.name.split( ' ·' )[ 0 ];
+		if ( ! v.open ) {
+
+			this.drawStand( v, `
+				<div class="gm-head"><h2>${ v.name }</h2>
+				<p class="gm-sub">${ v.boarded ? `${ name }'s boarded up for the hurricane` : v.weatherShut ? `${ name }'s shut for the weather` : `${ name }'s gone round to market with the day's fish. She's back at ${ this.at( v.hours[ 0 ] ) }` }.</p></div>
+				<div class="gm-foot"><span class="gm-sub">Her drums are locked while she's away</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>` );
+			this.stand.querySelector( '[data-close]' ).onclick = () => this.closeStand();
+			return;
+
+		}
+
+		const terms = g.saleTerms( v ), all = s.quote( null, terms );
+		const rows = s.inventory.map( ( f ) => fishItem( f, `<button class="gm-mini" data-sell="${ f.id }">Sell</button>`, s.quote( [ f.id ], terms ).prices.get( f.id ), false ) ).join( '' );
+		const missing = s.stats.fuelL - s.fuelL;
+		const fuelRow = `<div class="gm-shop-row"><span>Diesel · $${ ( CAMP.fuel * GAL ).toFixed( 2 ) } / gal<small>From her drums by the jetty · tank: ${ gallons( s.fuelL ) } of ${ gallons( s.stats.fuelL ) } gal</small></span>${ missing > 0.5 ? `<button class="gm-btn" data-fuel ${ s.money < CAMP.fuel ? 'disabled' : '' }>Fill · $${ Math.min( s.refuelCost( CAMP.fuel ), Math.floor( s.money / CAMP.fuel ) * CAMP.fuel ) }</button>` : '<span class="gm-have">Full</span>' }</div>`;
+		const sub = this.closingSoon( v ) ? `I'm off round to market at ${ this.at( v.hours[ 1 ] ) }.` : s.inventory.length ? v.greeting : v.idle;
+		this.drawStand( v, `
+			<div class="gm-head"><h2>${ v.name }</h2>
+			<p class="gm-sub">${ sub } She pays ${ Math.round( CAMP.rate * 100 ) }% of Joe's price. You have $${ s.money.toLocaleString() }</p></div>
+			<div class="gm-list">${ fuelRow }<div class="gm-rows">${ rows || '<div class="gm-empty">Your cooler is empty.</div>' }</div></div>
+			<div class="gm-foot"><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button><button class="gm-btn" data-all ${ s.inventory.length ? '' : 'disabled' }>Sell all · $${ all.total }</button></div>` );
+		// (each drawn again by the state's change: refresh)
+		this.stand.querySelector( '[data-close]' ).onclick = () => this.closeStand();
+		this.stand.querySelector( '[data-all]' ).onclick = () => this.game.sellAll();
+		for ( const b of this.stand.querySelectorAll( '[data-sell]' ) ) b.onclick = () => this.game.sell( [ Number( b.dataset.sell ) ] );
+		const f = this.stand.querySelector( '[data-fuel]' );
+		if ( f ) f.onclick = () => this.game.refuel( CAMP.fuel );
+
+	}
+
+	// (M15) what a trader ('marta' | 'joe') buys of your finds: a block of them, each with its price, and all of
+	// them at once
+	findsBlock( who, title ) {
+
+		const s = this.game.state, q = s.quoteFinds( who );
+		if ( ! q.items.length ) return '';
+		const rows = q.items.map( ( f ) => item( FINDS[ f.kind ].name, FINDS[ f.kind ].what, `<span class="gm-item-val">$${ FINDS[ f.kind ].price }</span>`, `<button class="gm-mini" data-sellfind="${ f.id }">Sell</button>` ) ).join( '' );
+		return `<div class="gm-wanted"><span class="gm-wanted-h">${ title }</span>${ rows }${ q.items.length > 1 ? `<button class="gm-mini" data-sellfinds>Sell them all · $${ q.total }</button>` : '' }</div>`;
+
+	}
+
+	bindFinds( who ) {
+
+		for ( const b of this.stand.querySelectorAll( '[data-sellfind]' ) ) b.onclick = () => this.game.sellFinds( who, [ b.dataset.sellfind ] );
+		const all = this.stand.querySelector( '[data-sellfinds]' );
+		if ( all ) all.onclick = () => this.game.sellFinds( who );
+
+	}
+
+	// (M15) a message in a bottle's note, unrolled
+	showNote( m ) {
+
+		this.noteOpen = true;
+		this.note.innerHTML = `
+			<div class="gm-head"><h2>A message in a bottle</h2><p class="gm-sub">From ${ escape( m.from ) }</p></div>
+			<div class="gm-list"><p class="gm-note-text">“${ escape( m.text ) }”</p></div>
+			<div class="gm-foot"><span class="gm-sub">Kept in your finds</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Close', 'E', 'B' ) }</button></div>`;
+		this.note.querySelector( '[data-close]' ).onclick = () => this.closeNote();
+		this.note.classList.add( 'is-open' );
+		releaseMouse();
+
+	}
+
+	// (M15) Marta's note: what happened to your boat while you were away (Away.tellOf)
+	showAwayNote( paragraphs ) {
+
+		this.noteOpen = true;
+		this.note.innerHTML = `
+			<div class="gm-head"><h2>A note from Marta</h2><p class="gm-sub">While you were away</p></div>
+			<div class="gm-list">${ paragraphs.map( ( p ) => `<p class="gm-note-text">${ escape( p ) }</p>` ).join( '' ) }<p class="gm-note-text">— Marta</p></div>
+			<div class="gm-foot"><span></span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Close', 'E', 'B' ) }</button></div>`;
+		this.note.querySelector( '[data-close]' ).onclick = () => this.closeNote();
+		this.note.classList.add( 'is-open' );
+		releaseMouse();
+
+	}
+
+	closeNote() {
+
+		this.noteOpen = false;
+		this.note.classList.remove( 'is-open' );
 
 	}
 
@@ -997,7 +1271,7 @@ GameHUD.prototype.renderShop = function () {
 	const fuelRow = `<div class="gm-shop-row"><span>Diesel · $${ ( FUEL_PRICE * GAL ).toFixed( 2 ) } / gal<small>Tank: ${ gallons( s.fuelL ) } of ${ gallons( s.stats.fuelL ) } gal</small></span>${ missing > 0.5 ? `<button class="gm-btn" data-fuel ${ s.money < FUEL_PRICE ? 'disabled' : '' }>Fill · $${ s.refuelCost() }</button>` : '<span class="gm-have">Full</span>' }</div>`;
 	// (Salt Life) your boat drifted off: Marta tows her back to the dock (out of hours too: into the box)
 	const job = g.towJob ? g.towJob() : null;
-	const towRow = job ? `<div class="gm-shop-row"><span>Tow your boat in<small>She's drifted ${ feet( job.metres ) } off the dock</small></span><button class="gm-btn" data-tow>Tow · $${ Math.min( job.fee, s.money ) }</button></div>` : '';
+	const towRow = job ? `<div class="gm-shop-row"><span>Tow your boat in<small>She's drifted ${ farOff( job.metres ) } off the dock</small></span><button class="gm-btn" data-tow>Tow · $${ Math.min( job.fee, s.money ) }</button></div>` : '';
 	// (M10) her hull: Marta repairs it while she's open, with the boat at her dock (as far as your money goes)
 	const fix = g.repairJob ? g.repairJob() : null;
 	const pays = fix ? Math.min( fix.fee, s.money ) : 0;
@@ -1056,7 +1330,7 @@ GameHUD.prototype.renderShop = function () {
 	this.drawStand( v, `
 		<div class="gm-head"><h2>${ v.name }</h2>
 		<p class="gm-sub">${ greeting } · You have $${ s.money.toLocaleString() }</p></div>
-		<div class="gm-list">${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ bucketRow }${ baitRows }${ haulRow }${ towRow }${ repairRow }${ fuelRow }${ rows }</div>
+		<div class="gm-list">${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ this.findsBlock( 'marta', 'From the beach: she\'ll buy' ) }${ bucketRow }${ baitRows }${ haulRow }${ towRow }${ repairRow }${ fuelRow }${ rows }</div>
 		<div class="gm-foot"><span class="gm-sub">Upgrades take effect at once</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>` );
 	bindFuel();
 	const sb = this.stand.querySelector( '[data-sellbait]' );
@@ -1084,6 +1358,7 @@ GameHUD.prototype.renderShop = function () {
 	};
 	for ( const b of this.stand.querySelectorAll( '[data-buy]' ) ) b.onclick = () => this.game.buy( b.dataset.buy );
 	for ( const b of this.stand.querySelectorAll( '[data-sell]' ) ) b.onclick = () => this.game.sell( [ Number( b.dataset.sell ) ] );
+	this.bindFinds( 'marta' );
 
 };
 

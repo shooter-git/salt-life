@@ -10,7 +10,7 @@ const sstep = THREE.MathUtils.smoothstep;
 const clamp = THREE.MathUtils.clamp;
 // (Salt Life) the anchor rode: how far the bow swings from over the anchor before it comes taut (a
 // short scope, so the boat stays on the spot), and its stretch and damping (N/m, N s/m)
-const RODE_SLACK = 4;
+export const RODE_SLACK = 4;
 const RODE_K = 2500;
 const RODE_C = 2500;
 // (Salt Life) the wind on her: the area she shows it end-on and abeam (m^2: the hull's side and the
@@ -145,8 +145,8 @@ export class BoatController {
 		this.waterV = new Float32Array( n ); // vertical velocity of the water (m/s)
 		this.waterOff = new Float32Array( n ); // blends the step when a new read-back arrives
 		this.hEff = new Float32Array( n ); // water height used by the integrator (interpolated)
-		this.qx = new Float32Array( n ); // query point + slope of the last result
-		this.qz = new Float32Array( n );
+		this.qx = new Float64Array( n ); // query point + slope of the last result ((M15) where: in doubles)
+		this.qz = new Float64Array( n );
 		this.gx = new Float32Array( n );
 		this.gz = new Float32Array( n );
 		this.hasWater = false;

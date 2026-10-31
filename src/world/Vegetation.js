@@ -6,12 +6,13 @@ import { GrassField, GRASS_TIERS } from './vegetation/GrassField.js';
 import { vegUniforms, uCamPos, uGustOffset } from './vegetation/VegNodes.js';
 import {
 	buildPalmNear, buildPalmFar, buildYoungPalm, buildFern, buildTreeNear, buildShrubNear, buildBanana, buildElephantEar, buildHeliconia, buildStrelitzia,
-	lobeVariantGeometry, LOBE_TABLE, TREE_VARIANTS, SHRUB_VARIANTS, UNDERSTORY, BROADLEAF, buildMonsteraMesh, buildPlantKind,
+	lobeVariantGeometry, LOBE_TABLE, TREE_VARIANTS, SHRUB_VARIANTS, UNDERSTORY, BROADLEAF, buildMonsteraMesh, buildPlantKind, buildMangroveRoots,
 } from './vegetation/PlantGeometry.js';
-import { vegMaterial, PLANT_LEAF, canopyMaterialDef, createCanopyBakeMaterials, impostorColor, uCanopyNear } from './vegetation/VegMaterials.js';
+import { vegMaterial, PLANT_LEAF, canopyMaterialDef, rootMaterialDef, createCanopyBakeMaterials, impostorColor, uCanopyNear } from './vegetation/VegMaterials.js';
 import { ImpostorAtlas, buildImpostorQuad } from './vegetation/Impostors.js';
 import { LeafAtlas } from './vegetation/LeafTextures.js';
 import { getDetailTexture } from './terrain/DetailTextures.js';
+import { trailClears, trailTexels } from './terrain/NorthTrail.js';
 
 // GLSL variant index of an instance (VegNodes.vegVariantOf)
 const variantOf = ( seed, isShrub ) => `vegVariantOf( ${ seed }, ${ isShrub } )`;
@@ -100,15 +101,15 @@ function axisSphere( geometry ) {
 //   range + margin (refilled after the camera moved 60 % of it)
 const TIERS = {
 	low: {
-		palmNear: 35, treeNear: 14, shrubNear: 10, underFade: [ 40, 50 ], fernFade: null, broadFade: [ 12, 16 ], bananaFade: [ 22, 28 ], margin: 5,
+		palmNear: 35, treeNear: 14, shrubNear: 10, underFade: [ 40, 50 ], fernFade: null, broadFade: [ 12, 16 ], bananaFade: [ 22, 28 ], rootFade: [ 20, 28 ], margin: 5,
 		palmFar: [ 260, 320 ], canopyFar: [ 900, 1100 ], framePx: 96, blendDist: 40, grass: null, shadows: { plants: false, canopy: false },
 	},
 	mid: {
-		palmNear: 70, treeNear: 30, shrubNear: 22, underFade: [ 70, 85 ], fernFade: [ 26, 36 ], broadFade: [ 32, 42 ], bananaFade: [ 50, 62 ], margin: 8,
+		palmNear: 70, treeNear: 30, shrubNear: 22, underFade: [ 70, 85 ], fernFade: [ 26, 36 ], broadFade: [ 32, 42 ], bananaFade: [ 50, 62 ], rootFade: [ 55, 70 ], margin: 8,
 		palmFar: [ 1400, 1600 ], canopyFar: [ 2200, 2400 ], framePx: 128, blendDist: 70, grass: GRASS_TIERS.mid, shadows: { plants: true, canopy: false },
 	},
 	high: {
-		palmNear: 120, treeNear: 65, shrubNear: 45, underFade: [ 120, 140 ], fernFade: [ 42, 58 ], broadFade: [ 85, 105 ], bananaFade: [ 100, 120 ], margin: 10,
+		palmNear: 120, treeNear: 65, shrubNear: 45, underFade: [ 120, 140 ], fernFade: [ 42, 58 ], broadFade: [ 85, 105 ], bananaFade: [ 100, 120 ], rootFade: [ 110, 140 ], margin: 10,
 		palmFar: [ 2600, 2800 ], canopyFar: [ 2600, 2800 ], framePx: 128, blendDist: 100, grass: GRASS_TIERS.high, shadows: { plants: true, canopy: true },
 	},
 };
@@ -173,14 +174,26 @@ export class Vegetation {
 		};
 
 		vegUniforms.vegDetail.value = getDetailTexture();
-		const site = new VegSite( terrain, villageObstacles( this.village ) );
+		// ((M15) placed on the ground as it was before the sea caves' floors were cut, as the rocks are)
+		const site = new VegSite( terrain.uncut || terrain, villageObstacles( this.village ) );
 		this.site = site;
 		const recs = await run( scatterSteps( site, 99, { ferns: !! cfg.fernFade } ) );
 		// ((M14) none under the rocks' overhangs or in their mouths: taken out after, so the rest are as they were)
 		if ( this.rocks ) for ( const k of Object.keys( recs ) ) if ( Array.isArray( recs[ k ] ) ) recs[ k ] = recs[ k ].filter( ( p ) => ! this.rocks.clears( p.x, p.z ) );
+		// ((M15) nor on the way over to the north beach: terrain/NorthTrail.js, its trees' trunks back from it)
+		for ( const k of Object.keys( recs ) ) if ( Array.isArray( recs[ k ] ) ) recs[ k ] = recs[ k ].filter( ( p ) => p.x === undefined || ! trailClears( p.x, p.z, 0.3 * ( p.s || 1 ) ) );
+		// ((M15) and each back on the ground where it's been raised or cut since: the north beach's berm)
+		if ( terrain.raisedAt ) for ( const k of Object.keys( recs ) ) if ( Array.isArray( recs[ k ] ) ) for ( const p of recs[ k ] ) if ( p.y !== undefined ) p.y += terrain.raisedAt( p.x, p.z );
 		this.records = recs;
 		const t1 = performance.now();
 		const grassMask = cfg.grass ? await run( grassMaskSteps( site ) ) : null;
+		// ((M15) nor on the way over's tread: its worn path, as it's not in the ground the site reads)
+		if ( grassMask ) {
+
+			const { data, res } = grassMask, t = site.terrain, texel = t.size / res;
+			trailTexels( res, t.origin, texel, texel * 0.75, ( i, j ) => data.fill( 0, ( j * res + i ) * 4, ( j * res + i ) * 4 + 4 ) );
+
+		}
 		// ((M14) nor any grass there, a texel about it too, so the filtering doesn't bleed in)
 		if ( grassMask && this.rocks ) {
 
@@ -311,6 +324,17 @@ export class Vegetation {
 			fade: [ cfg.shrubNear, cfg.shrubNear + 0.01 ], ...near, sortNear: true,
 			near: [ { geometry: shrub.geometry, material: canopyMat, castShadow: cfg.shadows.canopy, name: 'veg-shrubs' } ],
 		} ) );
+		// ((M15) the mangroves' prop roots: their crowns are canopy trees (Scatter), the roots their own, out to
+		// rootFade, past the trees' near range: from a boat it's the roots you see)
+		if ( recs.mangroves && recs.mangroves.length ) {
+
+			const rootMat = ( lodRange ) => this._keep( vegMaterial( rootMaterialDef( this.leafAtlas ), lodRange ) );
+			this.mangroveRoots = add( new VegType( 'mangroveRoots', recs.mangroves.map( ( r ) => ( { ...r, qr: cfg.rootFade[ 1 ] + cfg.margin } ) ), {
+				fade: cfg.rootFade, ...near, sortNear: true,
+				near: [ { geometry: buildMangroveRoots().geometry, material: rootMat, castShadow: cfg.shadows.canopy, name: 'veg-mangrove-roots' } ],
+			} ) );
+
+		}
 
 		// alpha-tested foliage after the opaque ground (terrain, rocks, buildings) and the far crowns
 		// after the near ones, so the early depth test rejects what those already cover

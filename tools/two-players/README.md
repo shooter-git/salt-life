@@ -20,4 +20,6 @@ realtime room does.
 - **Options:** `?id=`, `?name=`, `?color=`, `?tier=low|mid|high`, `?locale=en-GB`, `?group=`, and `?src=` for the game (`/` by default).
 - **What it doesn't stand in for:** voice, connectors, the app's menu and toasts (they go to the console), the app's limits on shared values, and its frame being on another origin.
 
+Run through, headless: `node tools/two-players/away.mjs` (the away boats by the bay) and `far.mjs` (far out), each two real games, some minutes on the CPU.
+
 For the real thing, see All the Spaces' `docs/development.md`.

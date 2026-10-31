@@ -244,12 +244,15 @@ export class Drips {
 			dripSun: G.sunColor,
 			dripSky: G.skyIrradiance,
 			dripFlash: flash,
+			// ((M15) where they're drawn about: a point by the camera, to a metre (the mesh put there), as tens of
+			// km out a 32-bit float's step, 4 mm at 40 km, shook the boat's drips against her)
+			dripAt: { value: new THREE.Vector3() },
 		};
 
 		const vertexShader = /* glsl */`
 #include <common>
 #include <fog_pars_vertex>
-attribute vec4 aDrip; // x, the y it falls from, z, the y it lands on (world)
+attribute vec4 aDrip; // x, the y it falls from, z, the y it lands on (world; (M15) x and z about dripAt)
 attribute float aSeed;
 uniform float dripTime;
 uniform float dripFlow;
@@ -259,6 +262,7 @@ uniform vec3 dripSunDir;
 uniform vec3 dripSun;
 uniform vec3 dripSky;
 uniform float dripFlash;
+uniform vec3 dripAt;
 varying vec4 vDripCol; // radiance, opacity
 varying vec3 vDripUV; // quad corner, how far through its splash (-1: falling)
 ${ DRIP_RAND_GLSL }
@@ -276,7 +280,7 @@ void main() {
 	// (a splash where it lands, but on the sea)
 	float splash = ! falling && life < 1.0 && aDrip.w > dripSeaLevel + 0.03 ? 1.0 : 0.0;
 	vec3 p = vec3( aDrip.x, falling ? aDrip.y - 0.5 * ${ f( FALL ) } * tc * tc : aDrip.w, aDrip.z );
-	vec3 toCam = cameraPosition - p;
+	vec3 toCam = ( cameraPosition - dripAt ) - p;
 	float dist = max( length( toCam ), 0.05 );
 	vec3 Vd = toCam / dist;
 	float pixel = dist * 2.0 / ( projectionMatrix[ 1 ][ 1 ] * dripViewHeight );
@@ -307,7 +311,7 @@ void main() {
 	}
 	a *= keep * fade;
 	vDripCol.a = a;
-	vec4 mvPosition = viewMatrix * vec4( world, 1.0 );
+	vec4 mvPosition = modelViewMatrix * vec4( world, 1.0 );
 	gl_Position = projectionMatrix * mvPosition;
 	// nothing to draw: off the screen
 	if ( a < 2e-4 ) gl_Position = vec4( 0.0, 0.0, 2.0, 1.0 );
@@ -421,6 +425,9 @@ void main() {
 
 			this._since = 0;
 			this._at.copy( c );
+			U.dripAt.value.set( Math.round( c.x ), 0, Math.round( c.z ) );
+			this.mesh.position.copy( U.dripAt.value );
+			this.mesh.updateMatrix();
 			this._statics = this._select( c.x, c.z, this.count - this.boat.length / STRIDE );
 			dirty = true;
 
@@ -433,13 +440,13 @@ void main() {
 			const e = boat.elements;
 			if ( Math.hypot( e[ 12 ] - c.x, e[ 14 ] - c.z ) < RANGE + 6 ) {
 
-				const B = this.boat, D = this.drip.array, S = this.seed.array;
+				const B = this.boat, D = this.drip.array, S = this.seed.array, at = U.dripAt.value;
 				for ( let n = 0; n < B.length / STRIDE && used < this.count; n ++, used ++ ) {
 
 					const x = B[ n * STRIDE ], y = B[ n * STRIDE + 1 ], z = B[ n * STRIDE + 2 ], yb = B[ n * STRIDE + 3 ];
-					D[ used * 4 ] = e[ 0 ] * x + e[ 4 ] * y + e[ 8 ] * z + e[ 12 ];
+					D[ used * 4 ] = e[ 0 ] * x + e[ 4 ] * y + e[ 8 ] * z + e[ 12 ] - at.x;
 					D[ used * 4 + 1 ] = e[ 1 ] * x + e[ 5 ] * y + e[ 9 ] * z + e[ 13 ];
-					D[ used * 4 + 2 ] = e[ 2 ] * x + e[ 6 ] * y + e[ 10 ] * z + e[ 14 ];
+					D[ used * 4 + 2 ] = e[ 2 ] * x + e[ 6 ] * y + e[ 10 ] * z + e[ 14 ] - at.z;
 					D[ used * 4 + 3 ] = e[ 1 ] * x + e[ 5 ] * yb + e[ 9 ] * z + e[ 13 ];
 					S[ used ] = B[ n * STRIDE + 4 ];
 					this.lands[ used ] = B[ n * STRIDE + 5 ];
@@ -468,11 +475,11 @@ void main() {
 
 	_landings( t0, t1, flow, c, used ) {
 
-		const D = this.drip.array, S = this.seed.array;
+		const D = this.drip.array, S = this.seed.array, at = this.uniforms.dripAt.value;
 		for ( let s = 0; s < used; s ++ ) {
 
 			if ( this.lands[ s ] === LANDS.SOFT || D[ s * 4 + 3 ] <= G.seaLevel.value + 0.03 ) continue;
-			const x = D[ s * 4 ], z = D[ s * 4 + 2 ];
+			const x = D[ s * 4 ] + at.x, z = D[ s * 4 + 2 ] + at.z;
 			if ( Math.abs( x - c.x ) > HEAR || Math.abs( z - c.z ) > HEAR || Math.hypot( x - c.x, z - c.z ) > HEAR ) continue;
 			const cycle = landingIn( t0, t1, D[ s * 4 + 1 ], D[ s * 4 + 3 ], S[ s ] );
 			if ( cycle < 0 || dripRand( S[ s ], cycle + CHANCE ) >= flow ) continue;
@@ -509,11 +516,11 @@ void main() {
 
 		}
 
-		const D = this.drip.array, S = this.seed.array;
+		const D = this.drip.array, S = this.seed.array, at = this.uniforms.dripAt.value;
 		for ( let s = 0; s < near.length; s ++ ) {
 
 			const n = near[ s ];
-			for ( let q = 0; q < 4; q ++ ) D[ s * 4 + q ] = P[ n * STRIDE + q ];
+			for ( let q = 0; q < 4; q ++ ) D[ s * 4 + q ] = P[ n * STRIDE + q ] - ( q === 0 ? at.x : q === 2 ? at.z : 0 );
 			S[ s ] = P[ n * STRIDE + 4 ];
 			this.lands[ s ] = P[ n * STRIDE + 5 ];
 

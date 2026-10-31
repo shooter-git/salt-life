@@ -208,10 +208,12 @@ ok( biteDelay( habitatAt( spots.sand ), 12, rng ) === Infinity, 'no bite delay o
 	// each fish's own taste
 	const moods = Object.keys( weatherMood( storm ) );
 	ok( FISH_IDS.every( ( id ) => ! FISH[ id ].weather || Object.keys( FISH[ id ].weather ).every( ( k ) => moods.includes( k ) ) ), 'each fish\'s taste in weather is in what the fish feel of it' );
-	const mahi = [ share( deep, fair, [ 'mahi' ] ), share( deep, blustery, [ 'mahi' ] ) ], tuna = [ share( deep, fair, [ 'tuna' ], 7 ), share( deep, blustery, [ 'tuna' ], 7 ) ];
+	// ((M15) on the top of the drop-off, where they mix with the bottom fish: Bites.habitatAt's edge)
+	const drop = habitatAt( { depth: 150, reefDist: 3000, pierDist: 3000, slope: 0.4 } );
+	const mahi = [ share( drop, fair, [ 'mahi' ] ), share( drop, blustery, [ 'mahi' ] ) ], tuna = [ share( drop, fair, [ 'tuna' ], 7 ), share( drop, blustery, [ 'tuna' ], 7 ) ];
 	const bone = [ share( shallows, fair, [ 'bonefish' ] ), share( shallows, gale, [ 'bonefish' ] ) ], tarpon = [ share( pier, fair, [ 'tarpon' ], 22 ), share( pier, rain, [ 'tarpon' ], 22 ) ];
 	const pc = ( [ a, b ] ) => `${ ( 100 * a ).toFixed( 1 ) }% → ${ ( 100 * b ).toFixed( 1 ) }%`;
-	console.log( `     mahi offshore in a blow ${ pc( mahi ) }, tuna at dawn ${ pc( tuna ) }; bonefish on the flats in a gale ${ pc( bone ) }; tarpon at the pier at night in the rain ${ pc( tarpon ) }` );
+	console.log( `     on the drop-off: mahi in a blow ${ pc( mahi ) }, tuna at dawn ${ pc( tuna ) }; bonefish on the flats in a gale ${ pc( bone ) }; tarpon at the pier at night in the rain ${ pc( tarpon ) }` );
 	ok( mahi[ 1 ] > 1.4 * mahi[ 0 ] && tuna[ 1 ] > 1.3 * tuna[ 0 ], 'mahi and tuna up with the wind lines in a blow' );
 	ok( bone[ 1 ] < 0.25 * bone[ 0 ], 'the bonefish leave the flats in a gale' );
 	ok( tarpon[ 1 ] > 1.5 * tarpon[ 0 ], 'tarpon roll and feed in the rain' );
@@ -452,6 +454,16 @@ ok( s2.addFish( 'grunt', 0.5 ).id > b.id, 'ids keep counting after a load' );
 	ok( i3.record && i3.prevBestKg === 3.2 && i3.prevBestCm === i1.cm && st.log.jack.bestKg === 4.05 && st.log.jack.bestCm === i3.cm, 'a bigger one: new record, previous best reported, log updated' );
 	st.addFish( 'blackGrouper', 24 );
 	ok( st.lastCatch.kept === false && ! st.lastCatch.released && st.lastCatch.newSpecies, 'a fish that does not fit: logged, card says let go' );
+	// (M15) room made for it on the card: fish let go from the cooler, then it's kept after all (logged once)
+	const big = st.lastCatch, n0 = st.inventory.length;
+	ok( st.roomFor( big ) && st.keepLast( big ) === null && ! big.kept, 'no room: room could be made for it, but it isn\'t kept until there is' );
+	st.release( st.inventory.find( ( f ) => f.kg === 4.05 ).id );
+	const kept = st.keepLast( big );
+	ok( kept && kept.species === 'blackGrouper' && kept.kg === 24 && kept.cm === big.cm && big.kept && st.inventory.length === n0 && st.log.blackGrouper.count === 1 && st.holdKg <= st.stats.holdKg, 'a jack let go to make room: the grouper kept after all, logged once' );
+	ok( st.keepLast( big ) === null && st.inventory.length === n0, 'and only once' );
+	st.addFish( 'blackGrouper', 31 );
+	ok( ! st.roomFor( st.lastCatch ), 'no room is made for one heavier than the cooler holds' );
+	st.release( kept.id );
 	// protected species: measured, logged and released, never kept or sold
 	const tp = st.addFish( 'tarpon', 30, 22 ), it = st.lastCatch;
 	ok( tp === null && it.released && ! it.kept && it.value === 0 && st.log.tarpon.count === 1 && ! st.inventory.some( ( f ) => f.species === 'tarpon' ), 'a protected tarpon is logged and released, worth nothing' );
@@ -481,9 +493,9 @@ ok( Object.keys( defaultUpgrades() ).length === Object.keys( UPGRADES ).length &
 	ok( st.buy( 'fuel' ) && st.fuelL === 80, 'a new tank comes full' );
 	ok( st.buy( 'fishFinder' ) && st.stats.finder === true && st.buy( 'fishFinder' ) === null, 'fish finder: one level' );
 	ok( gearStats( defaultUpgrades() ).anchorM === 0 && st.buy( 'anchor' ) && st.stats.anchorM === 20 && st.buy( 'anchor' ) === null, 'anchor: one level, holds in 66 ft' );
-	// (Salt Life) Marta's tow: a call-out and a little a hundred metres, never past its cap, and never
-	// more than you have
-	ok( towFee( TOW.from ) === TOW.base + 2 && towFee( 1000 ) === TOW.base + 10 * TOW.per100m && towFee( 1e6 ) === TOW.max, 'the tow: more the further she\'s drifted, up to a cap' );
+	// (Salt Life) Marta's tow: a call-out and a little a hundred metres, ((M15) as far as it is: no cap),
+	// and never more than you have
+	ok( towFee( TOW.from ) === TOW.base + 2 && towFee( 1000 ) === TOW.base + 10 * TOW.per100m && towFee( 10000 ) === TOW.base + 100 * TOW.per100m, 'the tow: more the further she\'s drifted, as far as it is' );
 	st.money = 30;
 	const paid = st.payTow( towFee( 2000 ) );
 	ok( paid === 30 && st.money === 0 && st.payTow( 50 ) === 0 && st.money === 0, 'short of the fee, she tows you in for what you have' );
@@ -613,8 +625,15 @@ ok( Object.keys( defaultUpgrades() ).length === Object.keys( UPGRADES ).length &
 	ok( hand( 34, 4, 'berried' ) === null && st.lastCatch.why === 'berried' && st.lastCatch.value > 0 && st.lastCatch.bag.n === 1, 'a berried female goes back too' );
 	st.addFish( 'bonefish', 2.5, 12 );
 	ok( st.lastCatch.released && st.lastCatch.why === 'protected', 'a bonefish on the line: measured and let go' );
+	ok( ! st.roomFor( st.lastCatch ), 'nor for one let go for its own sake' );
 	const s3 = new GameState( { getItem: ( k ) => m.get( k ) ?? null, setItem: () => {} } );
 	ok( s3.load() && s3.bagged( 'lobster', 4 ) === 1 && s3.bagged( 'lobster', 3 ) === 0, 'the day\'s bag is saved' );
+	// (M15) one with no room: kept after all once there's room, and counted in that day's bag then
+	const filler = st.addFish( 'jack', st.stats.holdKg - st.holdKg - 0.5 );
+	ok( filler && hand( 30, 5 ) === null && st.roomFor( st.lastCatch ) && st.bagged( 'lobster', 5 ) === 0, 'a lobster with no room for it: not in the day\'s bag yet' );
+	const lob = st.lastCatch;
+	st.release( filler.id );
+	ok( st.keepLast( lob ) && lob.kept && lob.bag.n === 1 && st.bagged( 'lobster', 5 ) === 1, 'room made: kept, and in the day\'s bag' );
 
 }
 console.log( `value check ${ value }` );

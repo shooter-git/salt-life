@@ -39,6 +39,9 @@ import { FT } from './Units.js';
 //   surge, rainHaze, sprayHaze, boarded: (step 4) the island shut for it)
 //   hurricaneAt( T, pick, since ) -> { r, x, z, rmax, ... } | null   hurricaneNews( T, pick, since ) ->
 //   { stage: 'outlook' | 'watch' | 'warning', onset, ends, eye, over, from } | null   dayWeatherAt( T )
+//   (M15) weatherHere( T, pick, since, x, z, cells ): the weather where you are (HERE), and showers( ..., at )
+//   about you; withEdge( w, x, z ): past the far grounds, the open ocean's fresher trades (EDGE), and
+//   seaHeight( swell, windSea ) -> m (the seas, as a forecast gives them)
 
 // what a condition brings: wind (m/s at 10 m), cloud cover and how overcast it is (0..1), the open
 // sea's swell and wind sea (x today's), the surf (m, the shore waves' offshore amplitude H/2, and its
@@ -91,8 +94,10 @@ const TRADES = { x: 0.35 / Math.hypot( 0.35, 0.94 ), y: 0.94 / Math.hypot( 0.35,
 // trades), builds over hours as the wind comes on, and outlasts it, dying down over hours once it's dropped
 // or swung away: the wind's sea of the hours about (`hours`: game hours back, the first ahead, and each
 // one's share). Its waves travel along `dir`, the trades' (ShoreWaves' third train). Past `big` (4 to 7
-// ft), Joe's slate and the clock's menu tell of it
-export const NORTH = { fair: 0.28, max: 1.2, period: [ 5, 0.2 ], onto: [ 1.2, 0.5 ], hours: [ [ - 4, 0.1 ], [ - 2, 0.15 ], [ 0, 0.25 ], [ 1, 0.2 ], [ 2, 0.15 ], [ 4, 0.15 ] ], big: 0.75, dir: TRADES };
+// ft), Joe's slate and the clock's menu tell of it ((M15) and to fish the bay); (M15) from `day` (3 to 5
+// ft) it's a surf day on the north beach (the pompano in its wash: Bites), and under `flat` (calm, or the
+// wind round from the south or the west) the north side's open
+export const NORTH = { fair: 0.28, max: 1.2, period: [ 5, 0.2 ], onto: [ 1.2, 0.5 ], hours: [ [ - 4, 0.1 ], [ - 2, 0.15 ], [ 0, 0.25 ], [ 1, 0.2 ], [ 2, 0.15 ], [ 4, 0.15 ] ], big: 0.75, day: 0.45, flat: 0.12, dir: TRADES };
 // (M12) the way the weather goes, turned `angle` (rad: + veers, clockwise on the island's compass) from
 // the trades'
 export function towardOf( angle, out = { x: 0, y: 0 } ) {
@@ -188,6 +193,14 @@ export const MURKY = 0.35;
 //     more (`murk`).
 //   - All of it + - x / and sqrt (correctly rounded everywhere) on the clock, as the rest is; only the
 //     wind's direction takes atan2.
+// (M9) the gusts: how much the wind rises and falls in them (of its speed), in rain and in a squall besides; the
+// wind a squall's downdraught adds (m/s at full rain, at full thunder: at most a gale's). WeatherDriver's wind, and
+// (M15) what a boat left out feels of it (Away.js)
+export const GUSTS = [ 0.22, 0.18, 0.15 ];
+export const SQUALL = [ 1.5, 3 ];
+const GALE_WIND = 20;
+export const squallWind = ( w ) => Math.min( Math.max( GALE_WIND, w.wind ), w.wind + SQUALL[ 0 ] * w.rain + SQUALL[ 1 ] * w.thunder );
+export const gustShare = ( w ) => GUSTS[ 0 ] + GUSTS[ 1 ] * w.rain + GUSTS[ 2 ] * w.thunder;
 export const HURRICANE = {
 	oneIn: 16, fromDay: 15,
 	vmax: [ 32, 37 ], rmax: [ 20000, 32000 ], over: 0.3,
@@ -464,8 +477,107 @@ export function weatherAt( T, pick = null, since = 0 ) {
 
 }
 
-// the day's weather at island time T, as it would be with no hurricane about
-export function dayWeatherAt( T ) {
+// (M15) The weather where you are, ( x, z ) m from the island's middle (x east, z south). Within HERE.near[ 0 ]
+// of it, the island's exactly (weatherAt: everything tuned and tested there stays as it was); out past
+// HERE.near[ 1 ], the weather that's drifting over you, blended between:
+//   - the day's: the weather goes the way the wind blows, at FRONT_KMH (as the showers do), so what's over
+//     you is what the island has when it gets there, or had when it was there (the day's at T less how far
+//     down the wind you are, over its speed), its swell the open sea's (none kept out of the bay);
+//   - its rain and thunder the showers' about you (`cells`: showers( ..., at ), each raining as hard as its
+//     slot does, heaviest at its middle), so it rains on you under a shower and not between them, and a
+//     thunderstorm's a cloud you can run from; under a grey sky (overcast past HERE.deck), a rain's deck
+//     rains everywhere, as hard as the day's;
+//   - a hurricane's, where you are in its vortex (its eye passes over the far grounds before the island, or
+//     after);
+//   - but the island's own (ISLAND_KEYS: its surf and the north shore's sea, the sea's level, its boarding
+//     up) the island's, wherever you are.
+// A weather of your own (a held pick) is the same everywhere; a picked hurricane passes as the day's does.
+// -> { ...weatherAt's, island (the island's weather) }
+export const HERE = { near: [ 2500, 6000 ], deck: [ 0.55, 0.85 ] };
+const ISLAND_KEYS = [ 'surf', 'period', 'north', 'northPeriod', 'surge', 'boarded' ];
+export function weatherHere( T, pick = null, since = 0, x = 0, z = 0, cells = null ) {
+
+	const island = weatherAt( T, pick, since );
+	const k = sstep( HERE.near[ 0 ], HERE.near[ 1 ], Math.sqrt( x * x + z * z ) );
+	if ( k === 0 || ( pick && pick !== 'hurricane' ) ) return Object.assign( { ...island }, { island } );
+	// (the day's, as far down the wind from the island as you are, its swell the open sea's)
+	let w;
+	if ( pick ) w = row( 'fair' );
+	else {
+
+		const d = towardOf( dayWeatherAt( T ).windAngle, _here );
+		w = dayWeatherAt( T - k * ( x * d.x + z * d.y ) / ( FRONT_KMH * 1000 ), k );
+
+	}
+
+	// (its rain and thunder the showers' about you, or a grey sky's deck)
+	const c = cellsAt( cells, x, z, _cell ), deck = w.rain * sstep( HERE.deck[ 0 ], HERE.deck[ 1 ], w.overcast );
+	const rain = lerp( w.rain, Math.max( c.rain, deck ), k ), thunder = lerp( w.thunder, c.thunder, k );
+	w.visibility = Math.min( w.visibility, lerp( w.visibility, lerp( 1, CONDITIONS.rain.visibility, rain ) - 0.13 * thunder, k ) );
+	w.rain = rain;
+	w.thunder = thunder;
+	w.id = nameOf( w );
+	const h = pick ? pickedHurricane( since ) : hurricaneNear( T );
+	if ( h ) overHurricane( w, T, h, x, z );
+	for ( const key of ISLAND_KEYS ) w[ key ] = island[ key ];
+	w.island = island;
+	return w;
+
+}
+const _here = { x: 0, y: 0 }, _cell = { rain: 0, thunder: 0 };
+
+// (M15) The soft edge, no wall: past the far grounds (EDGE.from m from the island's middle, out past the bank
+// and the hump) the sea's the open ocean's, clear of the island's lee and its slowing of the wind. By
+// EDGE.full the trades are a force fresher (EDGE.wind m/s more: a fair day's 14 knots 19, as the open
+// Atlantic's 15 to 20 are to an island's), its wind sea grown in that wind, and the swell half again
+// (EDGE.swell): the National Weather Service's offshore waters, a few feet bigger than its coastal ones. As
+// rough as that however far you go. A place's, not a weather's: a held pick has it too. On top of
+// weatherHere's ( w: its values, changed in place; `edge`: how far out in it, 0..1 )
+export const EDGE = { from: 14000, full: 24000, wind: 2.5, swell: 0.5 };
+export const edgeAt = ( x, z ) => sstep( EDGE.from, EDGE.full, Math.sqrt( x * x + z * z ) );
+export function withEdge( w, x, z ) {
+
+	const k = edgeAt( x, z );
+	w.edge = k;
+	if ( k === 0 ) return w;
+	w.wind += EDGE.wind * k;
+	w.windSea = windSeaOf( w.wind );
+	w.swell *= 1 + EDGE.swell * k;
+	return w;
+
+}
+
+// (M15) the open sea's height, as a forecast gives it: the significant wave height (m: four times the
+// standard deviation of the surface, Hs = 4 sqrt( sum a^2 / 2 )) of the swell's and the wind sea's waves at
+// `swell` and `windSea` x today's, their amplitudes (m) the high tier's (ocean/Waves.js' SPECTRUM: a fair
+// day's 1.1 m, 3 to 4 ft)
+export const SEA_A = { swell: [ 0.32, 0.18, 0.12, 0.06 ], wind: [ 0.09, 0.045, 0.025, 0.012 ] };
+const SEA_SS = SEA_A.swell.reduce( ( s, a ) => s + a * a, 0 ), SEA_WW = SEA_A.wind.reduce( ( s, a ) => s + a * a, 0 );
+export const seaHeight = ( swell, windSea ) => 4 * Math.sqrt( ( swell * swell * SEA_SS + windSea * windSea * SEA_WW ) / 2 );
+
+// (M15) the showers' rain and thunder at ( x, z ) (0..1: cells, showers()'): each as hard as it rains at its
+// middle, nothing past its edge; its thunder out a little past it
+export function cellsAt( cells, x, z, out = { rain: 0, thunder: 0 } ) {
+
+	out.rain = 0;
+	out.thunder = 0;
+	if ( cells ) for ( const c of cells ) {
+
+		const dx = x - c.x, dz = z - c.z, R = c.r * 1.5;
+		if ( dx > R || dx < - R || dz > R || dz < - R ) continue;
+		const d = Math.sqrt( dx * dx + dz * dz );
+		if ( d < c.r ) out.rain = Math.max( out.rain, c.rain * sstep( c.r, c.r * 0.35, d ) );
+		if ( d < R && c.thunder > 0 ) out.thunder = Math.max( out.thunder, c.thunder * sstep( R, c.r * 0.5, d ) );
+
+	}
+
+	return out;
+
+}
+
+// the day's weather at island time T, as it would be with no hurricane about; ((M15) open: how far it's the
+// open sea's, out past the island (weatherHere): its swell all of it, none of it kept out of the bay)
+export function dayWeatherAt( T, open = 0 ) {
 
 	// day 1 is fair; the forecast comes in over the first hours of day 2
 	const k = clamp01( ( T - 24 ) / 6 );
@@ -486,7 +598,7 @@ export function dayWeatherAt( T ) {
 	let lately = 0;
 	for ( const h of WEST_PAST ) lately += bayInto( towardOf( trackAt( T - h ), _way ) );
 	const into = lerp( lately / WEST_PAST.length, bayInto( towardOf( trackAt( T + ( SWELL_LEAD[ 0 ] + SWELL_LEAD[ 1 ] ) * 0.5 ), _way ) ), far );
-	const reach = lerp( 1, into, sstep( ALONG[ 2 ][ 0 ], ALONG[ 3 ][ 0 ], sw ) ) * k;
+	const reach = lerp( lerp( 1, into, sstep( ALONG[ 2 ][ 0 ], ALONG[ 3 ][ 0 ], sw ) ), 1, open ) * k;
 	const swell = lerp( f.swell, along( sw, 'swell' ), reach );
 	const coverage = lerp( f.coverage, Math.max( along( s, 'coverage' ), lerp( along( s, 'coverage' ), CONDITIONS.cloudy.coverage, grey ) ), k );
 	const overcast = lerp( f.overcast, Math.max( along( s, 'overcast' ), CONDITIONS.cloudy.overcast * grey ), k );
@@ -679,7 +791,7 @@ function bandAt( pm, pn, r ) {
 
 }
 
-// what hurricane h brings the island's middle at T (out: filled and returned)
+// what hurricane h brings the island's middle at T (out: filled and returned); (M15) or ( x, z ), m from it
 //   r, pm, pn: where the island is from its eye (m: along its track, ahead +, and to its left)
 //   (step 2) waveX, waveZ: the way its waves travel at the island (unit: its wind's sea close in, its
 //   swell from the eye further off), and how confused its sea is (0..1: from all round, about its eye)
@@ -687,9 +799,9 @@ function bandAt( pm, pn, r ) {
 //   weather is its), eye (0..1: in its eye), rain, thunder, cover (0..1: how much of the cloud is its)
 //   and its coverage, grey (and its overcast), visibility, near (0..1: how much of the sea its swell's),
 //   swell, surf, period, murk
-function stormAt( h, T, out ) {
+function stormAt( h, T, out, x = 0, z = 0 ) {
 
-	const H = HURRICANE, pm = - ( T - h.tc ) * h.speed, pn = h.d;
+	const H = HURRICANE, pm = - ( T - h.tc ) * h.speed + x * h.track.x + z * h.track.y, pn = h.d + x * h.left.x + z * h.left.y;
 	const r = Math.max( 1, Math.sqrt( pm * pm + pn * pn ) );
 	out.r = r;
 	out.pm = pm;
@@ -738,7 +850,9 @@ function stormAt( h, T, out ) {
 
 }
 
-// the day's weather w with hurricane h over it at T (w: filled and returned)
+// the day's weather w with hurricane h over it at T (w: filled and returned); (M15) at ( x, z ), m from the
+// island's middle (its surge, the bay's surf and the north shore's sea still worked out there: weatherHere
+// takes the island's)
 const _now = {}, _ahead = {}, _lag = {}, _peak = {};
 
 // (step 2) the surge hurricane h brings the island at T (m), s its stormAt there: the sea drawn up under
@@ -774,11 +888,11 @@ function peakSurge( h ) {
 	return h.peak;
 
 }
-function overHurricane( w, T, h ) {
+function overHurricane( w, T, h, x = 0, z = 0 ) {
 
-	const s = stormAt( h, T, _now ), k = s.share;
+	const s = stormAt( h, T, _now, x, z ), k = s.share;
 	// (a blow on its way: its wind a few hours on, more than now; the fish feed hard ahead of it)
-	const on = stormAt( h, T + FRONT_LEAD[ 1 ] - 1, _ahead ), ahead = on.wind * on.share;
+	const on = stormAt( h, T + FRONT_LEAD[ 1 ] - 1, _ahead, x, z ), ahead = on.wind * on.share;
 	const front = clamp01( ( ahead - s.wind * k ) / 8 ) * sstep( 12, 18, ahead );
 	if ( k === 0 && s.cover === 0 && s.near === 0 && s.murk === 0 && front === 0 ) return w;
 	if ( k > 0 ) {
@@ -926,14 +1040,31 @@ export const FRONT_KMH = 8;
 //   - cache: a Map of each slot's weather (it's the slot's for good: keep one while the pick's the same)
 //   - out: the array filled (its objects are filled again on the next call: (M12) each frame's, out to
 //     60 km)
+//   - (M15) at: where you are ({ x, z }, m from the island's middle): the showers within `range` of you
+//     along the weather's way, and beside the island's row of slots more rows (SHOWER_ROWS: each another
+//     2 SHOWER_SIDE wide, its cells off to the side half the time, as the island's are), as many as reach
+//     within ROW_REACH of you: the showers aren't only where they pass the island. The same for everyone (a
+//     row's cells are its own for good: n past ROW_N for each row out)
 const SHOWER_GAP = 4000;
 const SHOWER_SIDE = 14000;
 const SHOWER_R = [ 1200, 3000 ];
-export function showers( T, pick = null, range = 26000, out = [], cache = null, since = 0 ) {
+const ROW_REACH = 30000, ROW_N = 1 << 21;
+export function showers( T, pick = null, range = 26000, out = [], cache = null, since = 0, at = null ) {
 
 	let count = 0;
 	const v = FRONT_KMH * 1000, drift = T * v; // (how far the weather's come since day 1 began, m)
-	const k0 = Math.ceil( ( - range - drift ) / SHOWER_GAP ), k1 = Math.floor( ( range - drift ) / SHOWER_GAP );
+	// ((M15) along the weather's way and across it from the island's middle, where you are)
+	let a = 0, side0 = 0;
+	if ( at ) {
+
+		const d = towardOf( weatherAt( T, pick, since ).windAngle, _rows );
+		a = at.x * d.x + at.z * d.y;
+		side0 = - at.x * d.y + at.z * d.x;
+
+	}
+
+	const W = 2 * SHOWER_SIDE, j0 = at ? Math.ceil( ( side0 - W / 2 - ROW_REACH ) / W ) : 0, j1 = at ? Math.floor( ( side0 + W / 2 + ROW_REACH ) / W ) : 0;
+	const k0 = Math.ceil( ( a - range - drift ) / SHOWER_GAP ), k1 = Math.floor( ( a + range - drift ) / SHOWER_GAP );
 	for ( let k = k0; k <= k1; k ++ ) {
 
 		// (over the island when its slot is: k * SHOWER_GAP + drift = 0)
@@ -951,12 +1082,12 @@ export function showers( T, pick = null, range = 26000, out = [], cache = null, 
 
 		const rain = slot.rain;
 		if ( rain < 0.02 ) continue;
-		for ( let j = 0; j < 2; j ++ ) {
+		for ( let row = j0; row <= j1; row ++ ) for ( let j = 0; j < 2; j ++ ) {
 
-			const n = k * 2 + j;
-			const side = ( hash( n, 0x51ee7 ) - 0.5 ) * 2 * SHOWER_SIDE;
+			const n = k * 2 + j + row * ROW_N;
+			const side = ( hash( n, 0x51ee7 ) - 0.5 ) * 2 * SHOWER_SIDE + row * W;
 			const r = SHOWER_R[ 0 ] + ( SHOWER_R[ 1 ] - SHOWER_R[ 0 ] ) * hash( n, 0x2ad1 );
-			const passes = Math.abs( side ) < r + 1000;
+			const passes = row === 0 && Math.abs( side ) < r + 1000;
 			if ( ! passes && hash( n, 0x7c3a ) > 0.5 + slot.line ) continue;
 			// (those off to the side a little ahead or behind their slot)
 			const along = k * SHOWER_GAP + drift + ( passes ? 0 : ( hash( n, 0x39b1 ) - 0.5 ) * SHOWER_GAP * 0.6 );
@@ -986,6 +1117,7 @@ export function showers( T, pick = null, range = 26000, out = [], cache = null, 
 // before the storm's here, and after it's gone. As strikeIn: in each real second, for each, a strike or
 // none, from the second and which it is (n) alone (everyone on one clock sees the same), at a cell's
 // share of a storm's rate (CELL_RATE), anywhere under it. out: this second's ({ ...strikeIn's, cell })
+const _rows = { x: 0, y: 0 };
 export const DISTANT_NEAR = 8000;
 export const STORM_RANGE = 60000;
 const CELL_RATE = 0.5;
@@ -1031,6 +1163,17 @@ export function surfText( amplitude ) {
 
 	const lo = Math.max( 1, Math.round( amplitude * 2 * 0.8 / FT ) ), hi = Math.max( lo + 1, Math.round( amplitude * 2 * 1.5 / FT ) );
 	return `${ lo }–${ hi } ft`;
+
+}
+
+// (M15) which side of the island fishes, from the north shore's sea (`north`): blown out past its big (fish
+// the bay, in its lee), a surf day on the north beach (its pompano), or flat (go round); '' on an ordinary day
+export function sideText( north ) {
+
+	if ( north >= NORTH.big ) return `north shore ${ surfText( north ) }: fish the bay`;
+	if ( north >= NORTH.day ) return `north shore ${ surfText( north ) }: pompano in its surf`;
+	if ( north < NORTH.flat ) return 'north shore flat: go round';
+	return '';
 
 }
 

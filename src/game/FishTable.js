@@ -5,7 +5,11 @@
 //   lw        [ a, b ] length-weight relation W (g) = a * L (cm, total length) ^ b (FishBase-style values)
 //   model     key in SPECIES (the swimming model / skin)
 //   habitat   weights per water type (see Bites.habitatAt): shallows (sand, < 3 m), reef (over the
-//             reef), pier (around the piles), bay (open water 3–20 m), deep (offshore, > 20 m)
+//             reef), pier (around the piles), bay (open water 3–20 m), deep (the shelf's, 20–150 m);
+//             (M15) out past it: edge (the drop-off and the steep walls), ledge (a flat bottom 150–300
+//             m down), blue (the open ocean), and by what's found out there: weed, debris, birds; and
+//             about the island: wash (a sandy beach's surf zone, the north beach's best), creek (the
+//             west's mangroves: their creek, their pool and their edge)
 //   kg        [ min, max ] weight; sizes follow a skewed distribution (most fish are small)
 //   price     $ per kg at the fish stand
 //   fight     0..1 how hard it pulls (surge strength and frequency in the catch mini-game)
@@ -48,31 +52,41 @@ export const FISH = {
 	// (they graze the algae off the coral: protected across much of the Caribbean)
 	parrot: { name: 'Stoplight parrotfish', sci: 'Sparisoma viride', lw: [ 0.0151, 3.06 ], model: 'parrot', habitat: { reef: 1 }, kg: [ 0.8, 4 ], price: 9, fight: 0.35, stamina: 6, time: 'day', rarity: 0.5, protected: true },
 	angel: { name: 'Queen angelfish', sci: 'Holacanthus ciliaris', lw: [ 0.0302, 2.94 ], model: 'angel', habitat: { reef: 1 }, kg: [ 0.4, 1.6 ], price: 14, fight: 0.25, stamina: 4, time: 'day', rarity: 0.3 },
-	jack: { name: 'Crevalle jack', sci: 'Caranx hippos', lw: [ 0.02, 2.93 ], model: 'jack', habitat: { shallows: 0.5, pier: 0.7, bay: 0.8 }, kg: [ 1, 9 ], price: 6, fight: 0.75, stamina: 12, time: 'dawnDusk', rarity: 0.5, spear: true, flood: 2 },
-	barracuda: { name: 'Great barracuda', sci: 'Sphyraena barracuda', lw: [ 0.0051, 3.08 ], model: 'barracuda', habitat: { reef: 0.5, bay: 0.8, deep: 0.5 }, kg: [ 2, 16 ], price: 5, fight: 0.7, stamina: 11, time: 'any', rarity: 0.45, spear: true },
+	jack: { name: 'Crevalle jack', sci: 'Caranx hippos', lw: [ 0.02, 2.93 ], model: 'jack', habitat: { shallows: 0.5, pier: 0.7, bay: 0.8, creek: 0.3 }, kg: [ 1, 9 ], price: 6, fight: 0.75, stamina: 12, time: 'dawnDusk', rarity: 0.5, spear: true, flood: 2 },
+	barracuda: { name: 'Great barracuda', sci: 'Sphyraena barracuda', lw: [ 0.0051, 3.08 ], model: 'barracuda', habitat: { reef: 0.5, bay: 0.8, deep: 0.5, debris: 0.5, weed: 0.2, creek: 0.3 }, kg: [ 2, 16 ], price: 5, fight: 0.7, stamina: 11, time: 'any', rarity: 0.45, spear: true },
 	// (critically endangered: no one may take one)
 	grouper: { name: 'Nassau grouper', sci: 'Epinephelus striatus', lw: [ 0.0107, 3.07 ], model: 'grouper', habitat: { reef: 0.6, deep: 0.6 }, kg: [ 3, 14 ], price: 15, fight: 0.6, stamina: 12, time: 'any', rarity: 0.3, protected: true },
 	// (a fish of the deep ledges offshore, never inshore)
-	redSnapper: { name: 'Red snapper', sci: 'Lutjanus campechanus', lw: [ 0.0137, 2.98 ], model: 'redSnapper', habitat: { deep: 1 }, kg: [ 1.5, 9 ], price: 18, fight: 0.5, stamina: 9, time: 'any', rarity: 0.7, spear: true, minCm: 41 },
-	// (M9: the blackfin and the mahi hunt along the wind lines and the weed they gather: up in a blow)
-	tuna: { name: 'Blackfin tuna', sci: 'Thunnus atlanticus', lw: [ 0.0145, 3.0 ], model: 'tuna', habitat: { deep: 1 }, kg: [ 3, 14 ], price: 16, fight: 0.85, stamina: 16, time: 'dawnDusk', rarity: 0.5, spear: true, weather: { wind: 0.8 } },
-	mahi: { name: 'Mahi-mahi', sci: 'Coryphaena hippurus', lw: [ 0.0079, 3.0 ], model: 'mahi', habitat: { deep: 0.8 }, kg: [ 4, 18 ], price: 14, fight: 0.8, stamina: 15, time: 'day', rarity: 0.4, spear: true, minCm: 51, weather: { wind: 1.5 } },
+	redSnapper: { name: 'Red snapper', sci: 'Lutjanus campechanus', lw: [ 0.0137, 2.98 ], model: 'redSnapper', habitat: { deep: 1, ledge: 0.3 }, kg: [ 1.5, 9 ], price: 18, fight: 0.5, stamina: 9, time: 'any', rarity: 0.7, spear: true, minCm: 41 },
+	// (M9: the blackfin and the mahi hunt along the wind lines and the weed they gather: up in a blow.
+	// (M15) Fish of the blue water: the blackfin on the drop-off and under the birds, busting the bait;
+	// the mahi under the weedlines and the floating debris)
+	tuna: { name: 'Blackfin tuna', sci: 'Thunnus atlanticus', lw: [ 0.0145, 3.0 ], model: 'tuna', habitat: { edge: 1, blue: 0.8, birds: 1.6, debris: 0.4, weed: 0.3 }, kg: [ 3, 14 ], price: 16, fight: 0.85, stamina: 16, time: 'dawnDusk', rarity: 0.5, spear: true, weather: { wind: 0.8 } },
+	mahi: { name: 'Mahi-mahi', sci: 'Coryphaena hippurus', lw: [ 0.0079, 3.0 ], model: 'mahi', habitat: { blue: 1, edge: 0.3, weed: 1.6, debris: 1.3, birds: 0.8 }, kg: [ 4, 18 ], price: 14, fight: 0.8, stamina: 15, time: 'day', rarity: 0.4, spear: true, minCm: 51, weather: { wind: 1.5 } },
 	// (catch and release only; M9: they roll and feed in the rain)
-	tarpon: { name: 'Tarpon', sci: 'Megalops atlanticus', lw: [ 0.0077, 3.02 ], model: 'tarpon', habitat: { pier: 0.35, bay: 0.5, shallows: 0.15 }, kg: [ 10, 45 ], price: 4, fight: 1, stamina: 24, time: 'night', rarity: 0.2, protected: true, cr: true, lights: 3, weather: { rain: 1.5 } },
+	tarpon: { name: 'Tarpon', sci: 'Megalops atlanticus', lw: [ 0.0077, 3.02 ], model: 'tarpon', habitat: { pier: 0.35, bay: 0.5, shallows: 0.15, creek: 0.8 }, kg: [ 10, 45 ], price: 4, fight: 1, stamina: 24, time: 'night', rarity: 0.2, protected: true, cr: true, lights: 3, weather: { rain: 1.5 } },
 	blackGrouper: { name: 'Black grouper', sci: 'Mycteroperca bonaci', lw: [ 0.0115, 3.03 ], model: 'blackGrouper', habitat: { reef: 0.4, deep: 0.7 }, kg: [ 3, 25 ], price: 16, fight: 0.75, stamina: 14, time: 'any', rarity: 0.35, spear: true, minCm: 61 },
 	muttonSnapper: { name: 'Mutton snapper', sci: 'Lutjanus analis', lw: [ 0.0157, 2.97 ], model: 'muttonSnapper', habitat: { reef: 0.6, bay: 0.4, deep: 0.3 }, kg: [ 1, 7 ], price: 14, fight: 0.55, stamina: 9, time: 'dawnDusk', rarity: 0.45, spear: true, minCm: 46 },
 	// (an invader from the Pacific with no predators here: every one taken helps the reef)
 	lionfish: { name: 'Red lionfish', sci: 'Pterois volitans', lw: [ 0.0119, 3.1 ], model: 'lionfish', habitat: { reef: 0.7, pier: 0.25, deep: 0.3 }, kg: [ 0.15, 1.1 ], price: 10, fight: 0.1, stamina: 2, time: 'any', rarity: 0.12, spear: true, bounty: 6 },
-	// (the snappers of the deep ledges: the silk offshore, the giant cubera on the drop-offs)
-	silkSnapper: { name: 'Silk snapper', sci: 'Lutjanus vivanus', lw: [ 0.0158, 2.95 ], model: 'silkSnapper', habitat: { deep: 1 }, kg: [ 0.5, 3.5 ], price: 15, fight: 0.45, stamina: 7, time: 'any', rarity: 0.5, spear: true, minCm: 30 },
+	// (the snappers of the deep ledges: the silk offshore, (M15) deepest on the ledge, 90 to 240 m down; the
+	// giant cubera on the drop-offs)
+	silkSnapper: { name: 'Silk snapper', sci: 'Lutjanus vivanus', lw: [ 0.0158, 2.95 ], model: 'silkSnapper', habitat: { deep: 0.6, ledge: 1.4 }, kg: [ 0.5, 3.5 ], price: 15, fight: 0.45, stamina: 7, time: 'any', rarity: 0.5, spear: true, minCm: 30 },
 	cuberaSnapper: { name: 'Cubera snapper', sci: 'Lutjanus cyanopterus', lw: [ 0.0135, 3.0 ], model: 'cuberaSnapper', habitat: { deep: 0.6, reef: 0.15 }, kg: [ 8, 45 ], price: 9, fight: 0.95, stamina: 22, time: 'dawnDusk', rarity: 0.12, spear: true },
 	// (under the pier and over the reef; after dark they gather under the pier's lamps)
-	graySnapper: { name: 'Mangrove snapper', sci: 'Lutjanus griseus', lw: [ 0.0148, 2.98 ], model: 'graySnapper', habitat: { pier: 1, reef: 0.6, bay: 0.4, shallows: 0.2 }, kg: [ 0.3, 3 ], price: 13, fight: 0.45, stamina: 6, time: 'dawnDusk', rarity: 0.6, spear: true, minCm: 25, lights: 1.5 },
+	graySnapper: { name: 'Mangrove snapper', sci: 'Lutjanus griseus', lw: [ 0.0148, 2.98 ], model: 'graySnapper', habitat: { pier: 1, reef: 0.6, bay: 0.4, shallows: 0.2, creek: 0.9 }, kg: [ 0.3, 3 ], price: 13, fight: 0.45, stamina: 6, time: 'dawnDusk', rarity: 0.6, spear: true, minCm: 25, lights: 1.5 },
 	// (the grey ghost of the flats: everyone lets one go; M9: off the flats into deeper water in a blow)
 	bonefish: { name: 'Bonefish', sci: 'Albula vulpes', lw: [ 0.0085, 3.1 ], model: 'bonefish', habitat: { shallows: 1 }, kg: [ 0.8, 5 ], price: 4, fight: 0.85, stamina: 14, time: 'day', rarity: 0.25, protected: true, cr: true, weather: { surf: - 0.9, wind: - 0.5 } },
 	// (protected in US waters since 1990: no one may take one)
 	goliathGrouper: { name: 'Goliath grouper', sci: 'Epinephelus itajara', lw: [ 0.0128, 3.05 ], model: 'goliathGrouper', habitat: { pier: 0.5, reef: 0.25, deep: 0.3 }, kg: [ 10, 100 ], price: 6, fight: 1, stamina: 30, time: 'any', rarity: 0.1, protected: true },
 	whiteMullet: { name: 'White mullet', sci: 'Mugil curema', lw: [ 0.0123, 2.95 ], model: 'whiteMullet', habitat: { shallows: 1, pier: 0.3 }, kg: [ 0.1, 0.8 ], price: 5, fight: 0.25, stamina: 3.5, time: 'day', rarity: 0.7, net: true },
+	// (M15) the surf's: the pompano and the permit feed in the troughs of a beach's surf on the mole crabs and
+	// the clams it turns up, best on the windward north beach on a surf day; the snook hunt the wash at dawn
+	// and dusk, and the mangroves' creek and edge most of all. The permit everyone lets go, as the bonefish;
+	// one snook a day
+	pompano: { name: 'Florida pompano', sci: 'Trachinotus carolinus', lw: [ 0.0174, 2.95 ], model: 'pompano', habitat: { wash: 1, shallows: 0.1 }, kg: [ 0.4, 2.8 ], price: 20, fight: 0.6, stamina: 7, time: 'any', rarity: 0.8 },
+	permit: { name: 'Permit', sci: 'Trachinotus falcatus', lw: [ 0.0216, 2.96 ], model: 'permit', habitat: { wash: 0.45, shallows: 0.2 }, kg: [ 3, 18 ], price: 8, fight: 0.9, stamina: 18, time: 'day', rarity: 0.12, protected: true, cr: true },
+	snook: { name: 'Common snook', sci: 'Centropomus undecimalis', lw: [ 0.0075, 3.04 ], model: 'snook', habitat: { creek: 1, wash: 0.6, shallows: 0.1 }, kg: [ 1.5, 12 ], price: 13, fight: 0.8, stamina: 13, time: 'dawnDusk', rarity: 0.35, bag: 1 },
 	// (it never takes a bait or a spear: tickled out of its den in the reef and netted, after dark)
 	lobster: { name: 'Spiny lobster', sci: 'Panulirus argus', lw: [ 0.0575, 2.9 ], model: 'lobster', habitat: {}, kg: [ 0.25, 3 ], price: 24, fight: 0, stamina: 1, time: 'night', rarity: 0, hand: true, minCm: 22.4, bag: 6 },
 };

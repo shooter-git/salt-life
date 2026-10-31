@@ -171,19 +171,41 @@ village.textures.bake = async () => {};
 await village.init( null );
 const rocks = new Rocks( { scene: new THREE.Scene(), terrain: T, colliders, village, lite: true } );
 const mine = rocks.instances.filter( ( r ) => r.overhang );
-ok( mine.length === 3 && rocks.overhangs.length === 3 && mine.every( ( r ) => rocks.buckets[ r.style ].members[ 0 ] === r ), `among the rocks: the three, each its own bucket (${ rocks.timings.place.toFixed( 0 ) } ms to place them all, the three coarse)` );
+// ((M15) and the two sea caves' rock, Overhangs' too)
+ok( mine.length === 5 && rocks.overhangs.length === 5 && mine.every( ( r ) => rocks.buckets[ r.style ].members[ 0 ] === r ), `among the rocks: the three and the two sea caves, each its own bucket (${ rocks.timings.place.toFixed( 0 ) } ms to place them all, coarse)` );
 const coarse = mine.map( ( r ) => rocks.buckets[ r.style ].nearTris );
 const t0 = performance.now();
 await rocks.refineOverhangs();
 const fine = mine.map( ( r ) => rocks.buckets[ r.style ].nearTris );
 ok( fine.every( ( n, k ) => n > coarse[ k ] * 2 ) && mine.every( ( r ) => rocks.buckets[ r.style ].near.geometry.attributes.iLod ), `after the start, their near shapes made finer (${ coarse.join( ', ' ) } to ${ fine.join( ', ' ) } triangles, ${ ( performance.now() - t0 ).toFixed( 0 ) } ms), faded as the rocks are` );
-const crowding = rocks.instances.filter( ( r ) => ! r.overhang && rocks.overhangs.some( ( o ) => Math.hypot( r.x - o.x, r.z - o.z ) < o.radius + r.size ) );
+const crowding = rocks.instances.filter( ( r ) => ! r.overhang && rocks.overhangs.some( ( o ) => rocks._crowds( o, r ) ) );
 ok( crowding.length === 0, 'no scattered rock where one stands' );
-ok( rocks.instances.length > 600, `the rest of the rocks as they were (${ rocks.instances.length })` );
+// ((M15) a few fewer: none out on the windward reef; the sea caves' cut ground leaves the rest where they were)
+ok( rocks.instances.length > 590, `the rest of the rocks as they were (${ rocks.instances.length })` );
 for ( const o of rocks.overhangs ) {
 
 	const around = rocks.around( o.x - 2, o.z - 2, o.x + 2, o.z + 2 );
 	ok( around.some( ( r ) => r.geometry === rocks.buckets[ mine.find( ( m ) => m.matrix === o.matrix ).style ].near.geometry ), `the rain's rock cover draws the ${ o.site.kind }` );
+
+}
+
+// ---- (M15 step 21) on the low tier their near shapes wait until you're near, the sea caves' light with them
+{
+
+	const lazy = new Rocks( { scene: new THREE.Scene(), terrain: T, colliders: new Colliders(), village, lite: true, lazyCaves: true } );
+	const caves = lazy.overhangs.filter( ( o ) => o.site.kind === 'seacave' );
+	ok( caves.length === 2 && caves.every( ( o ) => ! o.light && ! o.waterLight ), 'their light left until then' );
+	await lazy.refineOverhangs();
+	ok( lazy.overhangs.every( ( o ) => ! o.fine ), 'nothing made finer in the start\'s round of it' );
+	const k = caves[ 0 ], other = caves[ 1 ];
+	lazy.overhangsNear( k.x + 5000, k.z );
+	ok( ! lazy._shaping, 'nor from far off' );
+	lazy.overhangsNear( k.x + 100, k.z + 100 );
+	ok( lazy._shaping && k.wanted, 'near one, it\'s wanted' );
+	for ( let i = 0; i < 4000 && lazy._shaping; i ++ ) await new Promise( ( r ) => setTimeout( r, 5 ) );
+	ok( k.fine && k.light && k.waterLight && k.at === k.fine.at, 'and made, with its light, its finer field taking over' );
+	ok( ! other.fine && ! other.light, 'the other left as it was' );
+	ok( lazy.caveLevel( { x: k.site.x, y: k.y0 + 1, z: k.site.z } ) <= 1, 'the eye\'s level there read from its light' );
 
 }
 

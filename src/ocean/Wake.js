@@ -19,7 +19,11 @@ export class Wake {
 		this.max = tier === 'low' ? 80 : MAX;
 		const geo = new THREE.PlaneGeometry( 1, 1 ).rotateX( - Math.PI / 2 );
 		const inst = new THREE.InstancedBufferGeometry().copy( geo );
-		this.data = new Float32Array( this.max * 4 ); // x, z, age, seed
+		this.data = new Float32Array( this.max * 4 ); // x, z (about the mesh: at), age, seed
+		// ((M15) where they are, in doubles, and drawn about a point by the boat, to a metre (the mesh put
+		// there): in 32-bit floats tens of km out (4 mm a step at 40 km) the patches stuck as they spread)
+		this.xz = new Float64Array( this.max * 2 );
+		this.at = new THREE.Vector3();
 		this.attr = new THREE.InstancedBufferAttribute( this.data, 4 ).setUsage( THREE.DynamicDrawUsage );
 		inst.setAttribute( 'puff', this.attr );
 		this.size = new Float32Array( this.max * 2 ); // start size, spread rate
@@ -53,7 +57,7 @@ void main() {
 	vUv = uv;
 	vSeed = puff.w;
 	vFade = age < wakeLife ? ( 1.0 - age / wakeLife ) * min( age * 4.0, 1.0 ) : 0.0;
-	vec4 mvPosition = viewMatrix * vec4( p, 1.0 );
+	vec4 mvPosition = modelViewMatrix * vec4( p, 1.0 );
 	gl_Position = projectionMatrix * mvPosition;
 	#include <fog_vertex>
 }`,
@@ -108,8 +112,8 @@ void main() {
 
 		const i = this._next;
 		this._next = ( i + 1 ) % this.max;
-		this.data[ i * 4 ] = x;
-		this.data[ i * 4 + 1 ] = z;
+		this.xz[ i * 2 ] = x;
+		this.xz[ i * 2 + 1 ] = z;
 		this.data[ i * 4 + 2 ] = 0;
 		this.data[ i * 4 + 3 ] = Math.random();
 		this.size[ i * 2 ] = size;
@@ -140,16 +144,19 @@ void main() {
 
 		}
 
-		const t = G.time.value;
+		const t = G.time.value, at = this.at.set( Math.round( p.x ), 0, Math.round( p.z ) ), xz = this.xz;
+		this.mesh.position.copy( at );
 		for ( let i = 0; i < this.max; i ++ ) {
 
 			const age = this.data[ i * 4 + 2 ];
 			if ( age >= LIFE ) continue;
 			this.data[ i * 4 + 2 ] = age + dt;
 			const damp = Math.exp( - age * 0.4 );
-			this.data[ i * 4 ] += this.vel[ i * 2 ] * dt * damp;
-			this.data[ i * 4 + 1 ] += this.vel[ i * 2 + 1 ] * dt * damp;
-			this.heights[ i ] = this.waves.heightAt( this.data[ i * 4 ], this.data[ i * 4 + 1 ], t );
+			xz[ i * 2 ] += this.vel[ i * 2 ] * dt * damp;
+			xz[ i * 2 + 1 ] += this.vel[ i * 2 + 1 ] * dt * damp;
+			this.data[ i * 4 ] = xz[ i * 2 ] - at.x;
+			this.data[ i * 4 + 1 ] = xz[ i * 2 + 1 ] - at.z;
+			this.heights[ i ] = this.waves.heightAt( xz[ i * 2 ], xz[ i * 2 + 1 ], t );
 
 		}
 

@@ -118,7 +118,9 @@ ok( stallOpen( HOURS.joe, 12 ) && stallOpen( HOURS.joe, 12, 'fair' ) && stallOpe
 	ok( gale.rows[ 0 ][ 1 ] === 'Gale, rain' && slateText( weatherAt( 0, 'storm' ) ).rows[ 0 ][ 1 ] === 'Thunderstorm', 'its rain, and a thunderstorm by name' );
 	ok( blow.rows[ 3 ][ 1 ] === 'Gale from 3:00 PM' && /blow's coming/.test( blow.note ) && slateText( null ).rows.length === 0, 'what\'s coming, and the fish feeding ahead of it' );
 	ok( /murky/.test( slateText( { ...weatherAt( 0, 'fair' ), murk: 0.6 } ).note ) && /blow's coming/.test( slateText( { ...weatherAt( 0, 'fair' ), murk: 0.6, front: 0.9 } ).note ), '(M10) after a blow, the water\'s murky (a blow coming says so first)' );
-	ok( slateText( { ...weatherAt( 0, 'blustery' ), murk: 0 } ).note === 'North shore 5–9 ft' && slateText( weatherAt( 0, 'breezy' ) ).note === '' && /murky/.test( slateText( { ...weatherAt( 0, 'gale' ), murk: 0.6 } ).note ), '(M14) a big surf on the north shore, last' );
+	ok( slateText( { ...weatherAt( 0, 'blustery' ), murk: 0 } ).note === 'North shore 5–9 ft: fish the bay' && /murky/.test( slateText( { ...weatherAt( 0, 'gale' ), murk: 0.6 } ).note ), '(M14) a big surf on the north shore, last ((M15) and to fish the bay)' );
+	const breezy = slateText( weatherAt( 0, 'breezy' ) ).note, calm = slateText( weatherAt( 0, 'calm' ) ).note, fairNote = slateText( weatherAt( 0, 'fair' ) ).note;
+	ok( breezy === 'North shore 3–5 ft: pompano in its surf' && calm === 'North shore flat: go round' && fairNote === '', `(M15) which side fishes: breezy "${ breezy }", calm "${ calm }", fair nothing` );
 	// ((M13) a hurricane on its way, before anything else; in its eye, that there's more to come)
 	const since = 500, coming = hurricaneNews( since, 'hurricane', since ), eyeT = coming.eye;
 	const watch = { ...coming, stage: 'watch' }, outlook = { ...coming, stage: 'outlook' };
@@ -147,10 +149,10 @@ for ( let d = 0; d < 40; d ++ ) {
 }
 ok( differ >= 38, 'a new list (nearly) every day' );
 ok( tw === 40, 'Joe always wants one fish of the dusk, dawn or dark' );
-ok( a.length === 3 && a.every( ( o ) => FISH[ o.species ] && o.max > 0 ), 'Joe\'s two and Marta\'s one' );
+ok( a.length === 4 && a.every( ( o ) => FISH[ o.species ] && o.max > 0 ) && a.filter( ( o ) => o.place ).length === 1, 'Joe\'s two, Marta\'s one, and (M15) one for a place\'s fish' );
 let wantsProtected = 0;
-for ( let d = 0; d < 400; d ++ ) if ( ordersFor( d ).some( ( o ) => FISH[ o.species ].protected ) ) wantsProtected ++;
-ok( wantsProtected === 0, 'nobody wants a protected fish: it\'s let go' );
+for ( let d = 0; d < 400; d ++ ) if ( ordersFor( d ).some( ( o ) => FISH[ o.species ].protected && ! o.tag ) ) wantsProtected ++;
+ok( wantsProtected === 0, 'nobody wants a protected fish to keep: it\'s let go ((M15) Marta\'s tag-and-release log asks for one let go)' );
 console.log( `     day 12: ${ a.map( ( o ) => `${ o.who } ${ o.species } ${ orderTerms( o ) }` ).join( '; ' ) }` );
 
 // ---- selling on them

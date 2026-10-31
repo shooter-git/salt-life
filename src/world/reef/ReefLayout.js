@@ -4,6 +4,8 @@ import { mulberry32, Noise2D, smoothstep } from '../../util/Noise.js';
 import * as Geo from './ReefGeometry.js';
 import { SURFACE, packColor } from './ReefSurfaces.js';
 import { ROW } from './KindBatch.js';
+import { inWreck } from '../wreck/WreckPlan.js';
+import { wreckGeometries } from '../Wreck.js';
 
 // Caribbean fringing reef around WORLD.reef, 1.5 - 12 m deep.
 //
@@ -28,7 +30,15 @@ import { ROW } from './KindBatch.js';
 
 const TAU = Math.PI * 2;
 const MAX_TOP = - 0.6; // nothing rises above this (m)
-const SWELL = new THREE.Vector2( WORLD.swellDir.x, WORLD.swellDir.y ).normalize();
+// (M15) the reefs: the bay's (the island's swell from the south; its bay floor scattered too) and the windward
+// one off the north-west point (the trades' sea from the north-north-west: Weather's NORTH.dir), each its own
+// layout (its own seed and noise), drawn by a Reef of its own. The bay's is as it always was
+export const REEF_SITES = {
+	bay: { center: WORLD.reef.center, radius: WORLD.reef.radius, swell: [ WORLD.swellDir.x, WORLD.swellDir.y ], seed: 20260923, noise: [ 4242, 977 ], heads: 42, bay: true },
+	north: { center: WORLD.northReef.center, radius: WORLD.northReef.radius, swell: [ 0.35, 0.94 ], seed: 20261029, noise: [ 5151, 1303 ], heads: 60, bay: false,
+		// (nothing grows through the wreck's hull: wreck/WreckPlan.js)
+		clear: ( x, z, r ) => inWreck( x, z, r + 0.3 ), wreck: true },
+};
 export const CELL = 8; // culling cell (m)
 export const RANGE = 45; // underwater draw distance (m): beyond ~40 m the water leaves < 10% contrast
 export const RANGE_ABOVE = 35; // from above the water: farther away the surface mostly reflects
@@ -248,17 +258,27 @@ const _v = new THREE.Vector3(), _n = new THREE.Vector3(), _up = new THREE.Vector
 const _m = new THREE.Matrix4();
 export class ReefLayout {
 
-	// terrain: TerrainData (heightAt, normalAt, seagrass, res, origin, texel)
-	constructor( { terrain } ) {
+	// terrain: TerrainData (heightAt, normalAt, seagrass, res, origin, texel); (M15) site: REEF_SITES' name;
+	// fields: only the habitat (no models, no placing: the fish's coral heads before the reef's laid out)
+	constructor( { terrain, site = 'bay', fields = false } ) {
 
 		const t0 = performance.now();
+		const S = this.site = REEF_SITES[ site ];
 		this.terrain = terrain;
-		this.center = WORLD.reef.center.clone();
-		this.radius = WORLD.reef.radius;
-		this.rng = mulberry32( 20260923 );
-		this.noise = new Noise2D( 4242 );
-		this.noise2 = new Noise2D( 977 );
+		this.center = S.center.clone();
+		this.radius = S.radius;
+		this.swell = new THREE.Vector2( S.swell[ 0 ], S.swell[ 1 ] ).normalize();
+		this.rng = mulberry32( S.seed );
+		this.noise = new Noise2D( S.noise[ 0 ] );
+		this.noise2 = new Noise2D( S.noise[ 1 ] );
 		this.timings = {};
+
+		if ( fields ) {
+
+			this.initFields( false );
+			return;
+
+		}
 
 		this.buildKinds();
 		this.initFields();
@@ -319,18 +339,23 @@ export class ReefLayout {
 
 	// ------------------------------------------------------------------ layout
 
-	initFields() {
+	// (hf: the height field too: (M15) not for the habitat alone)
+	initFields( hf = true ) {
 
 		const c = this.center;
-		// region covered by the reef system
+		// region covered by the reef system (the most of it seaward: (M15) south for the bay's, north for one the
+		// swell comes onto from the north)
+		const south = this.swell.y < 0;
 		this.x0 = c.x - 120;
-		this.z0 = c.z - 70;
+		this.z0 = c.z - ( south ? 70 : 115 );
 		this.x1 = c.x + 120;
-		this.z1 = c.z + 115;
-		// height field of solid structures (max y), for settling, collisions and the fish
+		this.z1 = c.z + ( south ? 115 : 70 );
+		// height field of solid structures (max y), for settling, collisions and the fish (and the bay's floor)
+		const bay = this.site.bay;
+		if ( ! hf ) return;
 		this.hx0 = this.x0;
-		this.hz0 = Math.min( this.z0, BAY.z0 );
-		this.hfW = Math.ceil( ( Math.max( this.x1, BAY.x1 ) - this.hx0 ) / HF_CELL );
+		this.hz0 = bay ? Math.min( this.z0, BAY.z0 ) : this.z0;
+		this.hfW = Math.ceil( ( ( bay ? Math.max( this.x1, BAY.x1 ) : this.x1 ) - this.hx0 ) / HF_CELL );
 		this.hfH = Math.ceil( ( this.z1 - this.hz0 ) / HF_CELL );
 		this.hf = new Float32Array( this.hfW * this.hfH ).fill( - Infinity );
 		// occupancy hash per layer ( x, z, r )
@@ -346,8 +371,8 @@ export class ReefLayout {
 	// swell-aligned coordinates relative to the reef centre: u seaward (south), v alongshore
 	frameUV( x, z ) {
 
-		const dx = x - this.center.x, dz = z - this.center.z;
-		return [ - ( dx * SWELL.x + dz * SWELL.y ), - dx * SWELL.y + dz * SWELL.x ];
+		const dx = x - this.center.x, dz = z - this.center.z, W = this.swell;
+		return [ - ( dx * W.x + dz * W.y ), - dx * W.y + dz * W.x ];
 
 	}
 
@@ -547,6 +572,7 @@ export class ReefLayout {
 		let sy = t.sy[ 0 ] + ( t.sy[ 1 ] - t.sy[ 0 ] ) * rng();
 		let s = s0;
 		const foot = model.radius * s * 0.8;
+		if ( this.site.clear && ! this._onWreck && this.site.clear( x, z, foot ) ) return false;
 		if ( this.occupied( layer, x, z, foot, allow ) ) return false;
 
 		// settle on the seabed or on the structures below
@@ -567,7 +593,7 @@ export class ReefLayout {
 		_v.copy( _up ).lerp( _n, t.align ).normalize();
 		_q.setFromUnitVectors( _up, _v );
 		let yaw = rng() * TAU;
-		if ( t.fan ) yaw = Math.atan2( SWELL.x, SWELL.y ) + ( rng() - 0.5 ) * 0.7; // fans grow broadside to the surge
+		if ( t.fan ) yaw = Math.atan2( this.swell.x, this.swell.y ) + ( rng() - 0.5 ) * 0.7; // fans grow broadside to the surge
 		_q2.setFromAxisAngle( _up, yaw );
 		_q.multiply( _q2 );
 
@@ -710,8 +736,10 @@ export class ReefLayout {
 
 		} );
 
-		this.placeBay( rng, stats );
+		if ( this.site.bay ) this.placeBay( rng, stats );
 		lap( 'bay' );
+		if ( this.site.wreck ) this.placeWreck( rng, stats );
+		lap( 'wreck' );
 		this.placeMeadows( rng, stats );
 		lap( 'meadows' );
 		this.placeAnchors();
@@ -1024,14 +1052,22 @@ export class ReefLayout {
 	// texture carries the far field (patches thin out and shrink into it beyond ~25 m).
 	placeMeadows( rng, stats ) {
 
-		const T = this.terrain;
-		if ( ! T.seagrass ) return;
+		const T = this.terrain, W = T.seagrassWin;
+		if ( ! T.seagrass && ! W ) return;
 		const res = T.res, texel = T.texel || T.size / res;
 		const mask = ( x, z ) => {
 
 			// (Salt Life: in texels: Tidewater assumed 1 m ones, low-powered devices have 2 m)
 			const gi = Math.floor( ( x - T.origin ) / texel ), gj = Math.floor( ( z - T.origin ) / texel );
 			if ( gi < 0 || gj < 0 || gi >= res || gj >= res ) return 0;
+			// ((M15) the window of it the page kept, once the island's mask is let go)
+			if ( ! T.seagrass ) {
+
+				const i = gi - W.i0, j = gj - W.j0;
+				return i < 0 || j < 0 || i >= W.w || j >= W.h ? 0 : W.data[ j * W.w + i ] / 255;
+
+			}
+
 			return T.seagrass[ gj * res + gi ] / 255;
 
 		};
@@ -1039,7 +1075,9 @@ export class ReefLayout {
 		const hab = this._hab || ( this._hab = {} );
 		const step = 1.5;
 		let n = 0, algae = 0;
-		for ( let z = - 40; z < 210; z += step ) for ( let x = - 210; x < 130; x += step ) {
+		// (the bay's, out over its floor; (M15) another's about its own region)
+		const [ mx0, mx1, mz0, mz1 ] = this.site.bay ? [ - 210, 130, - 40, 210 ] : [ this.x0, this.x1, this.z0, this.z1 ];
+		for ( let z = mz0; z < mz1; z += step ) for ( let x = mx0; x < mx1; x += step ) {
 
 			const px = x + ( rng() - 0.5 ) * step, pz = z + ( rng() - 0.5 ) * step;
 			const r = rng(), r2 = rng();
@@ -1070,10 +1108,114 @@ export class ReefLayout {
 
 	}
 
+	// (M15) The wreck on the windward reef (world/Wreck.js): its faces that look up, under the sea, stamped into
+	// the height field (its decks and its holds' floors and its fallen plates: ground the swimmer and the fish
+	// stand on), and what's grown on it over the years settled on them, as on a wreck decades down: sponges
+	// (tube, rope, vase, barrel), sea fans, rods and whips, small coral heads and fire coral, urchins and
+	// anemones; thicker where it's deeper and out of the surge, none in the surf over its bow
+	placeWreck( rng, stats ) {
+
+		const geos = wreckGeometries(), hf = this.hf, W = this.hfW, H = this.hfH, c = HF_CELL, x0 = this.hx0, z0 = this.hz0;
+		for ( const g of Object.values( geos ) ) {
+
+			const P = g.attributes.position.array, idx = g.index.array, M = g.attributes.aMeta.array;
+			for ( let t = 0; t < idx.length; t += 3 ) {
+
+				const a = idx[ t ], b = idx[ t + 1 ], d = idx[ t + 2 ];
+				// (plating only, not its thin members: a beam or a rail isn't ground)
+				if ( M[ a * 2 ] > 2.5 ) continue;
+				const ax = P[ a * 3 ], ay = P[ a * 3 + 1 ], az = P[ a * 3 + 2 ], bx = P[ b * 3 ], by = P[ b * 3 + 1 ], bz = P[ b * 3 + 2 ], dx = P[ d * 3 ], dy = P[ d * 3 + 1 ], dz = P[ d * 3 + 2 ];
+				if ( Math.max( ay, by, dy ) > - 0.8 ) continue;
+				// (looking up: its normal's y, either way round: the plating's two-sided)
+				const ux = bx - ax, uy = by - ay, uz = bz - az, vx = dx - ax, vy = dy - ay, vz = dz - az;
+				const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+				if ( Math.abs( ny ) < 0.6 * Math.hypot( nx, ny, nz ) ) continue;
+				const i0 = Math.max( 0, Math.floor( ( Math.min( ax, bx, dx ) - x0 ) / c ) ), i1 = Math.min( W - 1, Math.floor( ( Math.max( ax, bx, dx ) - x0 ) / c ) );
+				const j0 = Math.max( 0, Math.floor( ( Math.min( az, bz, dz ) - z0 ) / c ) ), j1 = Math.min( H - 1, Math.floor( ( Math.max( az, bz, dz ) - z0 ) / c ) );
+				const det = ( bz - dz ) * ( ax - dx ) + ( dx - bx ) * ( az - dz );
+				if ( Math.abs( det ) < 1e-9 ) continue;
+				for ( let j = j0; j <= j1; j ++ ) for ( let i = i0; i <= i1; i ++ ) {
+
+					const px = x0 + ( i + 0.5 ) * c, pz = z0 + ( j + 0.5 ) * c;
+					const l1 = ( ( bz - dz ) * ( px - dx ) + ( dx - bx ) * ( pz - dz ) ) / det, l2 = ( ( dz - az ) * ( px - dx ) + ( ax - dx ) * ( pz - dz ) ) / det, l3 = 1 - l1 - l2;
+					if ( l1 < - 1e-4 || l2 < - 1e-4 || l3 < - 1e-4 ) continue;
+					const y = l1 * ay + l2 * by + l3 * dy, k = j * W + i;
+					if ( y > hf[ k ] ) hf[ k ] = y;
+
+				}
+
+			}
+
+			g.dispose();
+
+		}
+
+		// what grows on it: a pick by depth (the shallow, surged parts sparser, in tougher kinds)
+		const T = this.terrain, step = 0.5;
+		const deep = [ [ 'tube', 3 ], [ 'rope', 2.5 ], [ 'vase', 1.2 ], [ 'barrel', 0.5 ], [ 'fan', 2 ], [ 'rod', 1.6 ], [ 'whip', 1 ], [ 'starlet', 1.6 ], [ 'brain', 0.7 ], [ 'urchin', 1 ], [ 'anemone', 0.6 ], [ 'ear', 0.8 ] ];
+		const shallow = [ [ 'fire', 2.5 ], [ 'starlet', 2 ], [ 'urchin', 2 ], [ 'rope', 1 ], [ 'fan', 1 ], [ 'anemone', 0.8 ] ];
+		const pick = ( list ) => {
+
+			let tot = 0;
+			for ( const [ , w ] of list ) tot += w;
+			let r = rng() * tot;
+			for ( const [ n, w ] of list ) if ( ( r -= w ) <= 0 ) return n;
+			return list[ 0 ][ 0 ];
+
+		};
+		this._onWreck = true;
+		let n = 0;
+		for ( let z = this.z0; z < this.z1; z += step ) for ( let x = this.x0; x < this.x1; x += step ) {
+
+			const px = x + ( rng() - 0.5 ) * step, pz = z + ( rng() - 0.5 ) * step;
+			if ( ! inWreck( px, pz, 0 ) ) continue;
+			const top = this.structureAt( px, pz );
+			// (on the wreck: its stamped decks over the reef, under the sea, past the surge)
+			if ( ! ( top > T.heightAt( px, pz ) + 0.4 ) || top > - 1.6 ) continue;
+			const depth = - top, dens = 0.55 * smoothstep( 1.6, 4.5, depth ) + 0.15;
+			if ( rng() > dens ) continue;
+			const name = pick( depth > 3.5 ? deep : shallow );
+			if ( TYPES[ name ] && this.place( name, px, pz, rng, { layer: name === 'urchin' || name === 'anemone' ? 2 : 1, allow: 0.35 } ) ) n ++;
+
+		}
+
+		this._onWreck = false;
+		stats.wreck = n;
+
+	}
+
+	// (M15) A reef's coral heads for its fish found from its habitat alone, before it's laid out (the fish are
+	// there from the start; the windward reef's laid out once you come near it): where its framework's densest,
+	// 2 to 12 m down, within the site's `heads` of its middle, 7 m apart, as many as placeAnchors finds
+	static heads( terrain, site, max = 40 ) {
+
+		const L = new ReefLayout( { terrain, site, fields: true } ), c = L.center, hab = {}, pts = [];
+		for ( let z = L.z0 + 6; z < L.z1 - 6; z += 3 ) for ( let x = L.x0 + 6; x < L.x1 - 6; x += 3 ) {
+
+			if ( Math.hypot( x - c.x, z - c.z ) > L.site.heads ) continue;
+			L.habitat( x, z, hab );
+			if ( hab.f > 0.7 && hab.depth > 2 && hab.depth < 12 && ! ( L.site.clear && L.site.clear( x, z, 1 ) ) ) pts.push( [ x, z, hab.f + 0.2 * L.noise2.noise( x / 4, z / 4 ) ] );
+
+		}
+
+		pts.sort( ( a, b ) => b[ 2 ] - a[ 2 ] );
+		const out = [];
+		for ( const p of pts ) {
+
+			if ( out.length >= max ) break;
+			if ( out.some( ( a ) => Math.hypot( a[ 0 ] - p[ 0 ], a[ 1 ] - p[ 1 ] ) < 7 ) ) continue;
+			out.push( [ p[ 0 ], p[ 1 ] ] );
+
+		}
+
+		return out;
+
+	}
+
 	// Coral heads for reef-associated fish: the largest solid structures.
 	placeAnchors() {
 
-		const near = ( it ) => Math.hypot( it.x - this.center.x, it.z - this.center.z ) < 42;
+		const near = ( it ) => Math.hypot( it.x - this.center.x, it.z - this.center.z ) < this.site.heads;
 		const big = this.items.hard.filter( ( it ) => TYPES[ it.name ].solid && it.radius > 1.0 && near( it ) ).sort( ( a, b ) => b.radius - a.radius );
 		for ( const it of big ) {
 

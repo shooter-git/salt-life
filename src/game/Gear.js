@@ -95,14 +95,33 @@ export const UPGRADES = {
 		{ cost: 0, label: 'A bucket', pumpLs: 0 },
 		{ cost: 120, label: 'Electric bilge pump', pumpLs: 0.3 },
 	] },
+	// (M15) a chart of the island and its waters out to the drop-off, for those who'd rather not chart it
+	// themselves (Chart.js: the island's sheet and its names, the far sheet within SOLD.r); a waterproof one,
+	// as a chandlery sells them, at what one costs
+	chart: { name: 'Chart', levels: [
+		{ cost: 0, label: 'Your own, as you go', chart: false },
+		{ cost: 30, label: 'Waterproof chart of the island, to the drop-off', chart: true },
+	] },
 };
 
 export const FUEL_PRICE = 1.5; // $ per litre of diesel at the chandlery
 // (Salt Life) Marta's tow: she fetches your boat back to the dock when it's drifted off (the wind pushes
-// a boat left without its anchor). A call-out and a little for every 100 m, up to a cap; nothing to tow
-// within `from` metres of the dock (walk or swim to her)
-export const TOW = { base: 20, per100m: 5, max: 90, from: 30 };
-export const towFee = ( metres ) => Math.min( TOW.max, Math.round( TOW.base + TOW.per100m * Math.max( 0, metres ) / 100 ) );
+// a boat left without its anchor), and (M15) when you call her on the radio, out of fuel far out. A call-out
+// and a little for every 100 m, as far as it is (it had a cap of $90: 1.4 km). It's her time she's paid
+// for, as a towing firm bills it: out to you at `out` m/s (18 knots) and back with you in tow at `back` (6
+// knots), so a 10 km tow is an hour and ten minutes of it and $520, about $435 an hour (Sea Tow gives $250 to
+// $500 for those who aren't members, dock to dock). Nothing to tow within `from` metres of the dock (walk or
+// swim to her)
+export const TOW = { base: 20, per100m: 5, from: 30, out: 9.3, back: 3.1 };
+export const towFee = ( metres ) => Math.round( TOW.base + TOW.per100m * Math.max( 0, metres ) / 100 );
+// (M15) and for one that happens while you're away (Away.js), no more than from the far grounds' edge (24 km): a boat
+// left adrift can lie 200 km off in a week, and that's too hard on someone who wasn't there
+export const AWAY_TOW_MAX = towFee( 24000 );
+export const awayTowFee = ( metres ) => Math.min( AWAY_TOW_MAX, towFee( metres ) );
+// (M15) how long she's out on it (s: the real world's, as the boat runs)
+export const towTime = ( metres ) => Math.max( 0, metres ) * ( 1 / TOW.out + 1 / TOW.back );
+// (M13) Marta's haul-out ahead of a hurricane ($: less than the repair a hurricane leaves to do)
+export const HAUL_FEE = 40;
 // litres per second at the helm: idle plus a lot more at full rpm (40 L lasts ~25 min flat out)
 export function fuelBurn( rpm ) {
 

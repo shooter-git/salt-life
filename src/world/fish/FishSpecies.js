@@ -36,6 +36,8 @@ export const PATTERN = {
 	// (Salt Life) the flats, the piles and the deep ledges; the sharks; the spiny lobster
 	bonefish: 25, goliathGrouper: 26, cuberaSnapper: 27, silkSnapper: 28, graySnapper: 29, whiteMullet: 30,
 	reefShark: 31, blacktipShark: 32, nurseShark: 33, lobster: 34,
+	// (M15) the surf's and the creeks': pompano, permit, snook
+	pompano: 35, permit: 36, snook: 37,
 };
 
 const spiny = ( from, to, rays, h, rake, notch = 0.16 ) => ( { from, to, rays, spiny: true, h, rake, notch } );
@@ -583,6 +585,62 @@ export const SPECIES = {
 	stingray: { pattern: PATTERN.stingray, body: 1, eye: { u: 0.3, y: 0.05, r: 0.012 }, opercle: 0.4, mouth: { corner: 0.1, y: - 0.03, tip: - 0.03 }, lateral: 0, arch: 0, scales: 0, scaleVis: 0, iris: 0x606040, irid: 0, metal: 0 },
 	eagleRay: { pattern: PATTERN.eagleRay, body: 1, eye: { u: 0.2, y: 0.05, r: 0.014 }, opercle: 0.3, mouth: { corner: 0.1, y: - 0.03, tip: - 0.03 }, lateral: 0, arch: 0, scales: 0, scaleVis: 0, iris: 0x404040, irid: 0, metal: 0 },
 	turtle: { pattern: PATTERN.turtle, body: 1, eye: { u: 0.1, y: 0.04, r: 0.013 }, opercle: 0.2, mouth: { corner: 0.05, y: 0.0, tip: 0.0 }, lateral: 0, arch: 0, scales: 0, scaleVis: 0, iris: 0x302010, irid: 0, metal: 0 },
+	// (M15) Florida pompano: a small jack of the surf, deep and compressed, the head blunt and rounded over a
+	// small low mouth; short separate dorsal spines, the soft dorsal and the anal fin each with a high front
+	// lobe; a slender tail stalk and a deeply forked tail
+	pompano: {
+		pattern: PATTERN.pompano, body: 0.76, sec: 2.0,
+		top: [ [ 0, 0.006 ], [ 0.03, 0.045 ], [ 0.08, 0.092 ], [ 0.16, 0.138 ], [ 0.28, 0.168 ], [ 0.4, 0.175 ], [ 0.54, 0.152 ], [ 0.68, 0.106 ], [ 0.82, 0.052 ], [ 0.93, 0.023 ], [ 1, 0.018 ] ],
+		bot: [ [ 0, 0.006 ], [ 0.03, 0.032 ], [ 0.08, 0.07 ], [ 0.16, 0.112 ], [ 0.28, 0.145 ], [ 0.42, 0.155 ], [ 0.56, 0.132 ], [ 0.7, 0.088 ], [ 0.84, 0.044 ], [ 0.94, 0.02 ], [ 1, 0.017 ] ],
+		wid: [ [ 0, 0.004 ], [ 0.05, 0.022 ], [ 0.15, 0.04 ], [ 0.3, 0.047 ], [ 0.5, 0.043 ], [ 0.7, 0.031 ], [ 0.88, 0.017 ], [ 1, 0.014 ] ],
+		mouth: { corner: 0.06, y: - 0.012, tip: - 0.008, protrude: 0 },
+		eye: { u: 0.1, y: 0.042, r: 0.021 }, opercle: 0.24,
+		scales: 0.006, scaleVis: 0.15, lateral: 0.35, arch: 0.3,
+		dorsal: [ spiny( 0.32, 0.4, 6, [ [ 0, 0.028 ], [ 1, 0.02 ] ], [ 0.35, 0.6 ], 0.45 ), soft( 0.42, 0.82, 24, [ [ 0, 0.11 ], [ 0.12, 0.08 ], [ 0.35, 0.036 ], [ 1, 0.024 ] ], [ 0.55, 1.05 ] ) ],
+		anal: [ spiny( 0.5, 0.53, 2, [ [ 0, 0.018 ], [ 1, 0.024 ] ], [ 0.5, 0.6 ], 0.3 ), soft( 0.53, 0.82, 22, [ [ 0, 0.1 ], [ 0.12, 0.07 ], [ 0.35, 0.03 ], [ 1, 0.022 ] ], [ 0.55, 1.05 ] ) ],
+		pectoral: { u: 0.27, y: - 0.01, len: 0.15, base: 0.022, rays: 18, shape: 'pointed', spread: 0.35 },
+		pelvic: { u: 0.3, len: 0.05, rays: 6 },
+		caudal: { shape: 'forked', len: 0.24, span: 0.21, fork: 0.2, rays: 17 },
+		iris: 0xc8c4a8, irid: 0.6, metal: 0.6,
+	},
+
+	// (M15) permit: the pompano's big cousin, deeper still, its soft dorsal and anal fins drawn out in tall
+	// black sickles and its tail's long lobes dark
+	permit: {
+		pattern: PATTERN.permit, body: 0.74, sec: 2.0,
+		top: [ [ 0, 0.006 ], [ 0.03, 0.05 ], [ 0.08, 0.11 ], [ 0.16, 0.168 ], [ 0.28, 0.203 ], [ 0.4, 0.21 ], [ 0.54, 0.18 ], [ 0.68, 0.12 ], [ 0.82, 0.055 ], [ 0.94, 0.024 ], [ 1, 0.019 ] ],
+		bot: [ [ 0, 0.006 ], [ 0.03, 0.038 ], [ 0.08, 0.088 ], [ 0.16, 0.14 ], [ 0.28, 0.178 ], [ 0.42, 0.19 ], [ 0.56, 0.16 ], [ 0.7, 0.1 ], [ 0.84, 0.046 ], [ 0.94, 0.021 ], [ 1, 0.018 ] ],
+		wid: [ [ 0, 0.004 ], [ 0.05, 0.02 ], [ 0.15, 0.036 ], [ 0.3, 0.042 ], [ 0.5, 0.038 ], [ 0.7, 0.028 ], [ 0.88, 0.016 ], [ 1, 0.013 ] ],
+		mouth: { corner: 0.06, y: - 0.014, tip: - 0.009, protrude: 0 },
+		eye: { u: 0.1, y: 0.05, r: 0.02 }, opercle: 0.24,
+		scales: 0.006, scaleVis: 0.15, lateral: 0.35, arch: 0.35,
+		dorsal: [ spiny( 0.3, 0.38, 6, [ [ 0, 0.03 ], [ 1, 0.022 ] ], [ 0.35, 0.6 ], 0.45 ), soft( 0.4, 0.8, 20, [ [ 0, 0.17 ], [ 0.1, 0.125 ], [ 0.3, 0.04 ], [ 1, 0.025 ] ], [ 0.6, 1.1 ] ) ],
+		anal: [ spiny( 0.48, 0.51, 2, [ [ 0, 0.02 ], [ 1, 0.026 ] ], [ 0.5, 0.6 ], 0.3 ), soft( 0.51, 0.8, 18, [ [ 0, 0.155 ], [ 0.1, 0.11 ], [ 0.3, 0.035 ], [ 1, 0.022 ] ], [ 0.6, 1.1 ] ) ],
+		pectoral: { u: 0.27, y: - 0.008, len: 0.16, base: 0.024, rays: 19, shape: 'pointed', spread: 0.35 },
+		pelvic: { u: 0.3, len: 0.05, rays: 6 },
+		caudal: { shape: 'forked', len: 0.26, span: 0.27, fork: 0.15, rays: 17 },
+		iris: 0xb8b8a0, irid: 0.5, metal: 0.65,
+	},
+
+	// (M15) common snook: long and pike-like, the head's profile low and a little concave down to a long
+	// snout with the lower jaw jutting past the upper; two separate dorsal fins; the black lateral line
+	// running straight down the flank and on out through the tail
+	snook: {
+		pattern: PATTERN.snook, body: 0.8, sec: 2.05,
+		top: [ [ 0, 0.003 ], [ 0.03, 0.011 ], [ 0.08, 0.025 ], [ 0.16, 0.05 ], [ 0.28, 0.077 ], [ 0.42, 0.09 ], [ 0.56, 0.088 ], [ 0.7, 0.07 ], [ 0.84, 0.05 ], [ 0.94, 0.04 ], [ 1, 0.037 ] ],
+		bot: [ [ 0, 0.003 ], [ 0.03, 0.014 ], [ 0.08, 0.03 ], [ 0.16, 0.05 ], [ 0.28, 0.068 ], [ 0.42, 0.075 ], [ 0.56, 0.07 ], [ 0.7, 0.055 ], [ 0.84, 0.04 ], [ 0.94, 0.033 ], [ 1, 0.03 ] ],
+		wid: [ [ 0, 0.003 ], [ 0.04, 0.016 ], [ 0.12, 0.03 ], [ 0.25, 0.042 ], [ 0.45, 0.046 ], [ 0.65, 0.04 ], [ 0.85, 0.028 ], [ 1, 0.02 ] ],
+		mouth: { corner: 0.13, y: - 0.004, tip: 0.0, protrude: 0.012 },
+		eye: { u: 0.1, y: 0.022, r: 0.016 }, opercle: 0.27,
+		scales: 0.012, scaleVis: 0.45, lateral: 0.05, arch: 0.05,
+		dorsal: [ spiny( 0.36, 0.5, 8, [ [ 0, 0.05 ], [ 0.25, 0.075 ], [ 1, 0.03 ] ], [ 0.3, 0.6 ], 0.18 ), soft( 0.56, 0.74, 10, [ [ 0, 0.06 ], [ 0.4, 0.055 ], [ 1, 0.03 ] ], [ 0.55, 0.9 ] ) ],
+		anal: [ spiny( 0.66, 0.69, 3, [ [ 0, 0.025 ], [ 0.5, 0.05 ], [ 1, 0.04 ] ], [ 0.4, 0.5 ], 0.1 ), soft( 0.69, 0.78, 6, [ [ 0, 0.06 ], [ 1, 0.03 ] ], [ 0.55, 0.85 ] ) ],
+		pectoral: { u: 0.29, y: - 0.025, len: 0.1, base: 0.018, rays: 15, shape: 'pointed', spread: 0.4 },
+		pelvic: { u: 0.33, len: 0.08, rays: 6 },
+		caudal: { shape: 'forked', len: 0.19, span: 0.15, fork: 0.5, rays: 17 },
+		iris: 0xd0c070, irid: 0.3, metal: 0.45,
+	},
+
 	// (Salt Life) the spiny lobster (creature: its geometry is CreatureGeometry.lobsterGeometry)
 	lobster: { pattern: PATTERN.lobster, creature: 'lobster', body: 1, eye: { u: 0.03, y: 0.05, r: 0.012 }, opercle: 0.2, mouth: { corner: 0.05, y: 0.0, tip: 0.0 }, lateral: 0, arch: 0, scales: 0, scaleVis: - 1, iris: 0x101010, irid: 0, metal: 0 },
 
@@ -626,4 +684,7 @@ export const SKIN = {
 	blacktipShark: { back: 0x6e6c60, flank: 0x9c9a8c, belly: 0xeeece4, fin: 0x6a685c, edge: 0x101010, rough: 0.55 },
 	nurseShark: { back: 0x8a6a3a, flank: 0x9a7a48, belly: 0xc4a87a, fin: 0x86663a, edge: 0x6a5030, rough: 0.6 },
 	lobster: { back: 0x8a4a2a, flank: 0xb8784a, belly: 0xd8c09a, fin: 0x6a4a5a, edge: 0xe0c070, rough: 0.4 },
+	pompano: { back: 0x56707e, flank: 0xd2d6d4, belly: 0xe6d488, fin: 0xb8a04a, edge: 0x5e6458, rough: 0.27 },
+	permit: { back: 0x36424c, flank: 0xc6cac8, belly: 0xe2e0d6, fin: 0x2a2e32, edge: 0x101214, rough: 0.27 },
+	snook: { back: 0x6a6a48, flank: 0xc4c4b2, belly: 0xe8e8e0, fin: 0xcfb452, edge: 0x4c4a36, rough: 0.32 },
 };

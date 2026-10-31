@@ -833,6 +833,32 @@ export function canopyMaterialDef( leafAtlas ) {
 
 }
 
+// (M15) The mangroves' prop roots (PlantGeometry.buildMangroveRoots): the canopy's bark, drawn out past the
+// trees' near range (no cross-fade into their impostors: the roots shrink away instead, VegType's fade). Red
+// mangrove's: reddish brown, dark and wet low down, an olive tide line of algae and oysters at the water
+export function rootMaterialDef( leafAtlas ) {
+
+	return {
+		...canopyMaterialDef( leafAtlas ),
+		name: 'veg-roots',
+		surface: /* glsl */`
+	vec2 st = vegUv;
+	float n2 = vegNoise( vec2( st.x * 6.0, st.y * 0.7 ) );
+	vec3 bark = vegBarkColor( vegNoise( vec2( st.x * 30.0, st.y * 2.5 + vIDat.w * 40.0 ) ), n2 ) * vec3( 1.08, 0.94, 0.86 );
+	float wy = vegP.y - vIPos.y; // (m over the mud)
+	bark = mix( bark, bark * 0.45, ss( 0.5, 0.05, wy ) );
+	bark = mix( bark, mix( ${ C( 0x55563a ) }, ${ C( 0x8a8670 ) }, n2 ), ss( 0.1, 0.18, wy ) * ( 1.0 - ss( 0.3, 0.45, wy ) ) * 0.7 );
+	vegAlbedo = bark;
+	vegAO = ss( 0.0, 0.75, vHf ) * 0.45 + 0.4;
+	vegRough = 0.9;
+	vegSpec = 0.15;
+	vegNormalW = vegN;
+	vegTransN = normalize( vVegN );`,
+		shadow: null,
+	};
+
+}
+
 // Unlit bake materials for the impostor atlases (ShaderMaterials on InstancedMeshes):
 //   albedo: (leaf brightness / 1.4 | bark brightness, leaf flag, card colour random, 1)
 //   normal: (plant-local normal * 0.5 + 0.5, exposure)

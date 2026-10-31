@@ -58,6 +58,14 @@ class WaterHeights {
 
 	}
 
+	// (M15) the open sea's height at ( x, z ), out where there's no shore (the waves' own, on the CPU): for the
+	// birds working bait out there, so they take no slot
+	open( x, z ) {
+
+		return this.query && this.query.waves ? this.query.waves.heightAt( x, z ) : G.seaLevel.value;
+
+	}
+
 	endFrame() {
 
 		this.frame ++;
@@ -146,7 +154,11 @@ export class Wildlife {
 		const t0 = performance.now();
 		const viewer = this.updateViewer( dt, camera, player );
 		this.cull.set( camera, this.viewHeight, this.minPx );
-		this.birdBatch.begin();
+		// ((M15) the birds drawn about a point near you: 64 m steps)
+		const O = this._origin || ( this._origin = { x: 0, z: 0 } );
+		O.x = Math.round( camera.position.x / 64 ) * 64;
+		O.z = Math.round( camera.position.z / 64 ) * 64;
+		this.birdBatch.begin( O );
 		this.critterBatch.begin();
 		this.blobs.begin();
 		if ( this.test ) this.test( this.birdBatch, dt, this.critterBatch, this.blobs );

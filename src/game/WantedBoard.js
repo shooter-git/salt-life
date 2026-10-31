@@ -1,11 +1,12 @@
 import { Mesh, PlaneGeometry, CanvasTexture, MeshStandardMaterial, SRGBColorSpace, Matrix4 } from '../engine/index.js';
 import { STAND } from './FishStand.js';
 import { FISH } from './FishTable.js';
-import { orderTerms, biteHint } from './Orders.js';
+import { orderTerms, biteHint, orderPlace } from './Orders.js';
 import { pounds } from './Units.js';
 
 // (Salt Life) The day's wanted list, chalked on a slate hung on the front of Joe's counter: his two
-// fish, where and when they bite, what he pays, and Marta's bait; ticked off as you fill them (each
+// fish, where and when they bite, what he pays, and Marta's bait ((M15) and the day's ask for a place's
+// fish, where it has to come from); ticked off as you fill them (each
 // player sees their own ticks). Under it, the week's order (WeekOrder.js) and how far the group has
 // got with it. One plane, its frame painted into the canvas; the same program as the records board's
 // slate (together/RecordsBoard.js). Drawn again when the list, your progress or the group's changes.
@@ -83,13 +84,15 @@ export class WantedBoard {
 		g.font = `54px ${ font }`;
 		g.fillText( 'Wanted', W / 2, 74 );
 		g.fillRect( 150, 88, W - 300, 3 );
-		let y = 136;
+		// ((M15) four on the list: a place's ask too; a little closer, clear of the week's order)
+		const tight = orders.length > 3, step = tight ? 55 : 74, big = tight ? 32 : 36, small = tight ? 22 : 24;
+		let y = tight ? 124 : 136;
 		for ( const o of orders ) {
 
 			const done = ( filled[ o.id ] | 0 ) >= o.max;
 			const name = FISH[ o.species ].name, who = o.who === 'marta' ? 'Marta: ' : '';
 			g.textAlign = 'left';
-			g.font = `36px ${ font }`;
+			g.font = `${ big }px ${ font }`;
 			g.fillStyle = done ? 'rgba(242, 239, 228, 0.45)' : '#f2efe4';
 			g.fillText( `${ who }${ name }`, 40, y, 300 );
 			if ( done ) g.fillRect( 38, y - 12, Math.min( 300, g.measureText( `${ who }${ name }` ).width ) + 4, 3 );
@@ -97,10 +100,10 @@ export class WantedBoard {
 			g.fillStyle = done ? 'rgba(245, 217, 138, 0.45)' : '#f5d98a';
 			g.fillText( done ? '✓' : orderTerms( o ).replace( 'pays ', '' ), W - 40, y );
 			g.textAlign = 'left';
-			g.font = `24px ${ font }`;
+			g.font = `${ small }px ${ font }`;
 			g.fillStyle = 'rgba(242, 239, 228, 0.62)';
-			g.fillText( o.who === 'marta' ? 'bait, at the chandlery' : biteHint( o.species ), 56, y + 28, 400 );
-			y += 74;
+			g.fillText( o.place ? orderPlace( o ) : o.who === 'marta' ? 'bait, at the chandlery' : biteHint( o.species ), 56, y + ( tight ? 24 : 28 ), 400 );
+			y += step;
 
 		}
 

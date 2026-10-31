@@ -1,4 +1,4 @@
-import { BufferGeometry, Color, DoubleSide, Euler, Group, Matrix4, Mesh, Vector3 } from '../engine/index.js';
+import { Box3, BufferGeometry, Color, DoubleSide, Euler, Group, Matrix4, Mesh, Vector3 } from '../engine/index.js';
 import { mulberry32 } from '../util/Noise.js';
 import { Builder, Batch, setGeometryDetail } from './village/GeoBuilder.js';
 import { createVillageMaterials, ROOF_HOLES, THATCH_HOLES } from './village/VillageMaterials.js';
@@ -11,6 +11,7 @@ import { buildPier, PIER } from './Pier.js';
 import { pieceState, GONE, TARP, NEW } from '../game/StormDamage.js';
 import { G } from '../core/Globals.js';
 import { COVER } from './Cover.js';
+import { hiddenBox } from './SightLine.js';
 import {
 	InstancedProps, Rand, lin, C, WOOD, rowboat, netRack, fishRack, fence, laundryLine, oar, buoy,
 	bench, ropeCoil, pathLight, lampPost, bucket, wreck, castNetHeap, CAST_NYLON, CAST_MONO,
@@ -29,6 +30,7 @@ import {
 // Salt Life: `tier` ('low' | 'mid' | 'high') sizes the baked textures; init( renderer ) bakes them
 // while the game loads (call it before the first frame).
 
+const SIGHT_S = 0.5; // (M15) s between looks at what the mountain hides
 const PASTELS = {
 	turquoise: lin( 0x5dbcb0 ),
 	coral: lin( 0xec8b76 ),
@@ -84,6 +86,7 @@ export class Village {
 		this.buildings = [];
 		this.group = new Group();
 		this.group.name = 'Village';
+		this.parts = [];
 		this.bakeLater = bakeLater;
 
 		const rand = new Rand( mulberry32( 90210 ) );
@@ -788,6 +791,44 @@ export class Village {
 			this.meshes.push( mesh );
 
 		}
+
+		// ((M15) the part's meshes and the box about them, for what the mountain hides: updateSight)
+		const box = new Box3();
+		for ( const mesh of meshes ) {
+
+			mesh.geometry.computeBoundingBox();
+			box.union( mesh.geometry.boundingBox );
+
+		}
+
+		this.parts.push( { part, meshes, box, hidden: false } );
+
+	}
+
+	// (M15) What the mountain has between it and the camera isn't drawn, a part at a time (the harbour, the town, the
+	// fish camp): from the north shore the village was over half of what a phone drew, and past its budgets. A
+	// couple of times a second, the ground's heights alone. Each part's shutters go with the harbour and the town.
+	updateSight( dt, camera, heightAt ) {
+
+		if ( ( this._sightT = ( this._sightT || 0 ) - dt ) > 0 ) return;
+		this._sightT = SIGHT_S;
+		const c = camera.position;
+		let village = false;
+		for ( const p of this.parts ) {
+
+			const hidden = hiddenBox( heightAt, c.x, c.y, c.z, p.box );
+			if ( hidden !== p.hidden ) {
+
+				p.hidden = hidden;
+				for ( const m of p.meshes ) m.visible = ! hidden;
+
+			}
+
+			if ( p.part !== 'camp' && ! hidden ) village = true;
+
+		}
+
+		if ( this.shutters ) this.shutters.mesh.visible = village;
 
 	}
 
