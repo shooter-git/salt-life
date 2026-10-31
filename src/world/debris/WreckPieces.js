@@ -10,21 +10,29 @@ import { SHELL_KINDS, SHELLS } from '../../game/Shells.js';
 // their material and colours), the pier's boards (DebrisShapes' plank), a plank door and a board shutter as the houses
 // have them, the village's crate and fish pot (Props: on low, a stove-in few of their slats: they're 300 triangles whole),
 // a kitchen chair with its back broken.
-//   wreckAt( f, terrain, xRange, pierX ) -> [ x, z ]: on the line the hurricane's sea reached (as StormWrack finds it)
+//   wreckAt( f, terrain, xRange, pierX, keep ) -> [ x, z ]: up the beach as far as the hurricane's sea reached
 //   wreckPiece( B, ground, x, z, f, lite )   wallBoard: your finished shell set, in its tray (world/Beachcombing)
 
 const UP = new Vector3( 0, 1, 0 );
+const TOP = 2.2; // m
+const STALLS = [ { x: 85.5, z: - 60.5, r: 4 }, { x: 49.9, z: - 74.6, r: 4 } ]; // Marta's, Joe's
 const TINS = [ 0x8a5a40, 0xa06a48, 0x9aa0a0, 0x7f8588, 0x6e4a38 ];
 const PAINTS = [ 0x2d7f7a, 0x3f6a8a, 0xa5482f, 0xd8cdb4, 0x4f7a4a ];
 let props = null;
 
-export function wreckAt( f, T, [ x0, x1 ], pierX ) {
+// (the top of the beach at most: past it the sea reached the village's grass, and left the heavy things before that);
+// keep: where's built on: { x, z, r } (Village's footprints): moved down the beach off them
+export function wreckAt( f, T, [ x0, x1 ], pierX, keep = [] ) {
 
 	let x = x0 + ( x1 - x0 ) * f.u;
 	if ( Math.abs( x - pierX ) < 4 ) x += x < pierX ? - 4 : 4;
+	const H = Math.min( f.H, TOP ) - ( ( f.seed % 100 ) / 100 ) * 0.7;
 	let z = - 120;
-	for ( ; z < - 20; z += 0.25 ) if ( T.heightAt( x, z ) < f.H ) break;
-	return [ x, z + f.off ];
+	for ( ; z < - 20; z += 0.25 ) if ( T.heightAt( x, z ) < H ) break;
+	z += f.off;
+	const off = ( q ) => Math.hypot( q.x - x, q.z - z ) < q.r + 1;
+	for ( let k = 0; k < 40 && ( keep.some( off ) || STALLS.some( off ) ); k ++ ) z += 0.5;
+	return [ x, z ];
 
 }
 

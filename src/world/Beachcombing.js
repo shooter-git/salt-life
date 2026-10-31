@@ -43,9 +43,10 @@ const TAU = Math.PI * 2;
 
 export class Beachcombing {
 
-	constructor( { terrain, materials, parent, lite = false } ) {
+	constructor( { terrain, materials, parent, lite = false, keep = [] } ) {
 
 		this.terrain = terrain;
+		this.keep = keep; // (the village's footprints: the wreck kept off them)
 		this.ground = ( x, z ) => terrain.heightAt( x, z );
 		// (and the glass float's glass: sea-green, clear, the sand seen through it)
 		this.glass = new MeshStandardMaterial( { color: 0x6fae98, roughness: 0.04, metalness: 0, transparent: true, opacity: 0.5, depthWrite: false, side: DoubleSide, name: 'FloatGlass' } );
@@ -346,7 +347,7 @@ export class Beachcombing {
 
 	_placeWreck( f ) {
 
-		const [ x, z ] = wreckAt( f, this.terrain, WRECK.x, PIER_X );
+		const [ x, z ] = wreckAt( f, this.terrain, WRECK.x, PIER_X, this.keep );
 		return { f, x, z };
 
 	}
