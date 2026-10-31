@@ -4,7 +4,11 @@ import { Matrix4 } from '../engine/index.js';
 import { mulberry32 } from '../util/Noise.js';
 import { HARD, lin } from './Props.js';
 import { branch, shell, husk, coconut, bottle, floatBuoy } from './debris/DebrisShapes.js';
-import { BEACHES } from '../game/Beachcomb.js';
+import { releaseGeometry } from '../core/ReleaseAfterUpload.js';
+import { BEACHES, WRECK } from '../game/Beachcomb.js';
+import { SHELLS } from '../game/Shells.js';
+import { shellMesh, SHAPES } from './ShellShapes.js';
+import { wreckPiece, wreckAt, wallBoard } from './debris/WreckPieces.js';
 
 // (M15) Beachcombing's world (game/Beachcomb.js says what washes up, where along each beach, which day):
 //   - the north beach's wrack line: the sargassum the trades bring in every day (the Caribbean's windward
@@ -16,12 +20,21 @@ import { BEACHES } from '../game/Beachcomb.js';
 //     grey nickernut, a Mary's bean), a glass float in its rope net and a lump of ambergris, made here.
 // Each beach's line is where the ground first rises over its height (BEACHES' `line`), walking up it from the
 // water (from the land, a hollow behind the beach was taken for it; from the sea, a bar offshore).
-//   const b = new Beachcombing( { terrain, materials: { nature, wood, hard }, parent } )
+// (M16) What's on the sand's now drawn a stretch of a shore at a time, one mesh a material (a find a draw before: the
+// north beach's 40-odd finds were as many draws), made only near you and let go when you're far: a stretch's made the
+// frame after anything on it changes. And the other shores (game/Beachcomb's BEACHES' path: a shore's own line, walked up
+// from its sea side), the shells (ShellShapes), the new finds below; a hurricane's wreck in its wrack on the bay's beach
+// (setWreck: debris/WreckPieces), and your finished shell set on Marta's wall (setWall).
+//   const b = new Beachcombing( { terrain, materials: { nature, wood, hard, roofMetal }, parent } )
 //   b.set( finds )   (what's on the sand now: game/Beachcomb.lying less what you've picked up)
-//   b.at( f ) -> [ x, z ] where a find lies     b.nearest( x, z, r ) -> the nearest find within r, or null
-//   b.update( camera )
+//   b.at( f ) -> [ x, z ] where a find lies     b.nearest( x, z, r ) -> the nearest find or wreck within r, or null
+//   b.setWreck( pieces )   (game/Beachcomb.wreckageAt less what you've picked up)
+//   b.update( camera )     b.flush(): everything waiting made now (the tests)
 
 const RANGE = 140; // m: drawn within this
+const STRETCH = 70; // m: of a shore, drawn as one
+const LET_GO = 90; // m: past its range a stretch's let go
+const WALL_AT = { x: 83.6, z: - 62.2 }; // Marta's wall: behind her shelves (game/Chandlery.js's CHANDLERY)
 const WRACK = { seg: 12, past: 4 }; // the wrack line's stretches; m past the finds' beach at each end
 // (each beach's line walked up from the water: dir the way up the beach)
 const WALK = { north: { from: - 905, dir: 1 }, bay: { from: - 12, dir: - 1 } };
@@ -41,7 +54,13 @@ export class Beachcombing {
 		this.group.name = 'Beachcombing';
 		parent.add( this.group );
 		this.lite = lite;
-		this.finds = new Map(); // id -> { f, x, z, meshes }
+		this.finds = new Map(); // id -> { f, x, z, stretch }
+		this.stretches = new Map(); // shore:n -> { key, x, z, r, finds: Set, meshes, dirty }
+		this.wreck = []; // the wreck's pieces { f, x, z } (f.scrap: can be picked up as that)
+		this.wreckMeshes = [];
+		this._wreckDirty = false;
+		this.wall = null;
+		this._at = null; // where the camera is
 		this._lines = {};
 		this._walks = {};
 		this.wrack = []; // the wrack line's meshes, built a stretch at a time as you come near it (_wrack)
@@ -109,9 +128,65 @@ export class Beachcombing {
 
 	}
 
+	// (M16) a shore with its own line: u along it -> the point on it, and from there up from its sea side to the first
+	// ground over its height
+	_pathLen( beach ) {
+
+		const P = BEACHES[ beach ].path;
+		let L = 0;
+		for ( let i = 1; i < P.length; i ++ ) L += Math.hypot( P[ i ][ 0 ] - P[ i - 1 ][ 0 ], P[ i ][ 1 ] - P[ i - 1 ][ 1 ] );
+		return L;
+
+	}
+
+	_pathAt( beach, u ) {
+
+		const key = `${ beach }:${ Math.round( u * 2000 ) }`;
+		if ( this._lines[ key ] !== undefined ) return this._lines[ key ];
+		let q = this._walkIn( beach, u );
+		// (where it isn't reached here, as it runs on either side)
+		for ( let k = 1; k <= 40 && ! q; k ++ ) q = this._walkIn( beach, Math.max( 0, u - k * 0.01 ) ) || this._walkIn( beach, Math.min( 1, u + k * 0.01 ) );
+		return ( this._lines[ key ] = q || this._pointAt( beach, u ) );
+
+	}
+
+	_pointAt( beach, u ) {
+
+		const P = BEACHES[ beach ].path;
+		let d = u * this._pathLen( beach );
+		for ( let i = 1; i < P.length; i ++ ) {
+
+			const L = Math.hypot( P[ i ][ 0 ] - P[ i - 1 ][ 0 ], P[ i ][ 1 ] - P[ i - 1 ][ 1 ] );
+			if ( d <= L ) return [ P[ i - 1 ][ 0 ] + ( P[ i ][ 0 ] - P[ i - 1 ][ 0 ] ) * d / L, P[ i - 1 ][ 1 ] + ( P[ i ][ 1 ] - P[ i - 1 ][ 1 ] ) * d / L ];
+			d -= L;
+
+		}
+
+		return P[ P.length - 1 ];
+
+	}
+
+	// (from a little to seaward, in: past a skerry or two a good way out)
+	_walkIn( beach, u ) {
+
+		const B = BEACHES[ beach ], [ x, z ] = this._pointAt( beach, u ), [ sx, sz ] = B.sea;
+		for ( let q = 7; q > - ( B.inland ?? 16 ); q -= 0.25 ) if ( this.ground( x + sx * q, z + sz * q ) > B.line ) return [ x + sx * q, z + sz * q ];
+		return null;
+
+	}
+
 	at( f ) {
 
-		const B = BEACHES[ f.beach ], x = B.x[ 0 ] + ( B.x[ 1 ] - B.x[ 0 ] ) * f.u;
+		const B = BEACHES[ f.beach ];
+		if ( B.path ) {
+
+			const [ x, z ] = this._pathAt( f.beach, f.u ), up = [ x - B.sea[ 0 ] * Math.abs( f.off ), z - B.sea[ 1 ] * Math.abs( f.off ) ];
+			// (up the shore from its line, unless that's over a narrow rib of it, down the far side)
+			return this.ground( up[ 0 ], up[ 1 ] ) >= B.line * 0.7 ? up : [ x, z ];
+
+		}
+
+		const x = B.x[ 0 ] + ( B.x[ 1 ] - B.x[ 0 ] ) * f.u;
 		// (off: + up the beach, toward the land)
 		return [ x, this.lineAt( f.beach, x ) + WALK[ f.beach ].dir * f.off ];
 
@@ -132,6 +207,19 @@ export class Beachcombing {
 
 		}
 
+		// ((M16) and what's worth carrying off of the hurricane's wreck: a piece's its own size, so from its middle)
+		for ( const W of this.wreck ) if ( W.f.scrap ) {
+
+			const d = Math.hypot( W.x - x, W.z - z ) - 0.5;
+			if ( d < bd ) {
+
+				bd = d;
+				best = { ...W.f, kind: W.f.scrap };
+
+			}
+
+		}
+
 		return best;
 
 	}
@@ -141,13 +229,8 @@ export class Beachcombing {
 		const want = new Set( list.map( ( f ) => f.id ) );
 		for ( const [ id, F ] of this.finds ) if ( ! want.has( id ) ) {
 
-			for ( const m of F.meshes ) {
-
-				this.group.remove( m );
-				m.geometry.dispose();
-
-			}
-
+			F.stretch.finds.delete( F );
+			F.stretch.dirty = true;
 			this.finds.delete( id );
 
 		}
@@ -157,16 +240,159 @@ export class Beachcombing {
 		for ( const f of list ) if ( ! this.finds.has( f.id ) ) {
 
 			let [ x, z ] = this.at( f );
+			const B = BEACHES[ f.beach ];
 			// (not under the pier)
 			if ( f.beach === 'bay' && Math.abs( x - PIER_X ) < 3 ) x += x < PIER_X ? - 3 : 3;
 			for ( let k = 0; k < 8 && this.nearest( x, z, 0.5 ); k ++ ) {
 
-				x += 0.6;
-				z = this.lineAt( f.beach, x ) + WALK[ f.beach ].dir * f.off;
+				if ( B.path ) {
+
+					// (along the shore's line, as it runs here)
+					const q = this.at( { ...f, u: Math.min( 1, f.u + ( k + 1 ) * 0.7 / this._pathLen( f.beach ) ) } );
+					x = q[ 0 ];
+					z = q[ 1 ];
+
+				} else {
+
+					x += 0.6;
+					z = this.lineAt( f.beach, x ) + WALK[ f.beach ].dir * f.off;
+
+				}
 
 			}
 
-			this.finds.set( f.id, { f, x, z, meshes: this._make( f, x, z ) } );
+			const along = B.path ? f.u * this._pathLen( f.beach ) : x, S = this._stretch( `${ f.beach }:${ Math.floor( along / STRETCH ) }` );
+			const F = { f, x, z, stretch: S };
+			S.finds.add( F );
+			S.dirty = true;
+			this.finds.set( f.id, F );
+
+		}
+
+		for ( const S of this.stretches.values() ) if ( S.dirty ) this._bounds( S );
+
+	}
+
+	_stretch( key ) {
+
+		let S = this.stretches.get( key );
+		if ( ! S ) this.stretches.set( key, S = { key, x: 0, z: 0, r: 0, finds: new Set(), meshes: [], dirty: true } );
+		return S;
+
+	}
+
+	_bounds( S ) {
+
+		let x = 0, z = 0, r = 0;
+		for ( const F of S.finds ) {
+
+			x += F.x;
+			z += F.z;
+
+		}
+
+		const n = S.finds.size || 1;
+		x /= n;
+		z /= n;
+		for ( const F of S.finds ) r = Math.max( r, Math.hypot( F.x - x, F.z - z ) );
+		S.x = x;
+		S.z = z;
+		S.r = r + 3;
+
+	}
+
+	// a stretch's meshes, made again from what's on it
+	_build( S ) {
+
+		this._drop( S );
+		S.dirty = false;
+		if ( ! S.finds.size ) return;
+		const B = new Builder();
+		for ( const F of S.finds ) this._make( B, F.f, F.x, F.z );
+		S.meshes = this._meshes( B, `finds_${ S.key }`, S.x, S.z, true );
+		for ( const m of S.meshes ) {
+
+			m.userData.r = S.r;
+			releaseGeometry( m.geometry );
+
+		}
+
+	}
+
+	_drop( S ) {
+
+		for ( const m of S.meshes ) {
+
+			this.group.remove( m );
+			m.geometry.dispose();
+
+		}
+
+		S.meshes = [];
+
+	}
+
+	// ---- (M16) a hurricane's wreck: pieces, drawn as one (a piece a few dozen triangles, the lot well under the budget
+	// on low): the wood's and the tin's two draws, near the bay's beach only
+	setWreck( list ) {
+
+		const old = new Map( this.wreck.map( ( W ) => [ W.f.id, W ] ) );
+		const same = list.length === old.size && list.every( ( f ) => old.has( f.id ) );
+		if ( same ) return;
+		this.wreck = list.map( ( f ) => old.get( f.id ) || this._placeWreck( f ) );
+		this._wreckDirty = true;
+
+	}
+
+	_placeWreck( f ) {
+
+		const [ x, z ] = wreckAt( f, this.terrain, WRECK.x, PIER_X );
+		return { f, x, z };
+
+	}
+
+	_buildWreck() {
+
+		this._wreckDirty = false;
+		for ( const m of this.wreckMeshes ) {
+
+			this.group.remove( m );
+			m.geometry.dispose();
+
+		}
+
+		this.wreckMeshes = [];
+		if ( ! this.wreck.length ) return;
+		const B = new Builder();
+		for ( let i = 0; i < this.wreck.length; i ++ ) {
+
+			const W = this.wreck[ i ];
+			// (on low, what can't be picked up every other one)
+			if ( this.lite && ! W.f.scrap && i % 2 ) continue;
+			wreckPiece( B, this.ground, W.x, W.z, W.f, this.lite );
+
+		}
+
+		this.wreckMeshes = this._meshes( B, 'wreck', null, null, ! this.lite );
+		for ( const m of this.wreckMeshes ) releaseGeometry( m.geometry );
+
+	}
+
+	// ---- (M16) your finished shell set, framed on Marta's wall, seen near her: `on` (you've given it to her)
+	setWall( on ) {
+
+		if ( !! this.wall === !! on ) return;
+		if ( on ) this.wall = { meshes: null };
+		else {
+
+			for ( const m of this.wall.meshes || [] ) {
+
+				this.group.remove( m );
+				m.geometry.dispose();
+
+			}
+
+			this.wall = null;
 
 		}
 
@@ -175,7 +401,65 @@ export class Beachcombing {
 	update( camera ) {
 
 		const c = camera.position;
-		for ( const F of this.finds.values() ) for ( const m of F.meshes ) m.visible = Math.hypot( F.x - c.x, F.z - c.z ) < RANGE;
+		this._at = c;
+		const reach = this.lite ? 90 : RANGE;
+		// (a stretch that's changed, or come within reach, made: one a frame; one far past it let go)
+		let made = false;
+		for ( const S of this.stretches.values() ) {
+
+			const d = Math.hypot( S.x - c.x, S.z - c.z ) - S.r;
+			if ( d < reach ) {
+
+				if ( S.dirty && ! made ) {
+
+					this._build( S );
+					made = true;
+
+				}
+
+				for ( const m of S.meshes ) m.visible = true;
+
+			} else {
+
+				for ( const m of S.meshes ) m.visible = false;
+				if ( d > reach + LET_GO && S.meshes.length ) {
+
+					this._drop( S );
+					S.dirty = true;
+
+				}
+
+			}
+
+		}
+
+		// (its wreck: on the bay's beach, while you're anywhere near it)
+		const atBay = c.z > - 220 && c.z < 60 && c.x > - 260 && c.x < 280;
+		if ( this._wreckDirty && atBay && ! made ) {
+
+			this._buildWreck();
+			made = true;
+
+		}
+
+		for ( const m of this.wreckMeshes ) m.visible = atBay;
+		if ( this.wall ) {
+
+			const near = Math.hypot( WALL_AT.x - c.x, WALL_AT.z - c.z ) < 45;
+			if ( near && ! this.wall.meshes && ! made ) {
+
+				const B = new Builder();
+				wallBoard( B, this.ground, WALL_AT.x, WALL_AT.z, this.lite, shellOnBoard );
+				this.wall.meshes = this._meshes( B, 'shell_board', null, null, ! this.lite );
+				for ( const m of this.wall.meshes ) releaseGeometry( m.geometry );
+				made = true;
+
+			}
+
+			for ( const m of this.wall.meshes || [] ) m.visible = near;
+
+		}
+
 		// (the wrack line's next stretch within reach, one a frame)
 		const B = BEACHES.north, x0 = B.x[ 0 ] - WRACK.past, span = ( B.x[ 1 ] - B.x[ 0 ] + 2 * WRACK.past ) / WRACK.seg;
 		for ( let i = 0; i < WRACK.seg; i ++ ) if ( ! this._built[ i ] ) {
@@ -192,10 +476,19 @@ export class Beachcombing {
 
 	}
 
-	// a find's shape on the sand, its meshes
-	_make( f, x, z ) {
+	// everything waiting, made now (for the tests)
+	flush() {
 
-		const B = new Builder(), g = this.ground, rand = mulberry32( f.seed );
+		for ( const S of this.stretches.values() ) if ( S.dirty ) this._build( S );
+		if ( this._wreckDirty ) this._buildWreck();
+
+	}
+
+	// a find's shape on the sand, into B
+	_make( B, f, x, z ) {
+
+		const g = this.ground, rand = mulberry32( f.seed ), lite = this.lite;
+		if ( SHELLS[ f.kind ] ) return seaShell( B, g, x, z, f.kind, f.yaw, rand, lite );
 		switch ( f.kind ) {
 
 			case 'driftwood': branch( B, g, x, z, f.yaw, 0.7 + rand() * 0.7, 0.035 + rand() * 0.025, rand, { twigs: 1 + Math.floor( rand() * 2 ) } ); break;
@@ -210,11 +503,17 @@ export class Beachcombing {
 
 			case 'glassFloat': glassFloat( B, g, x, z, rand ); break;
 			case 'ambergris': ambergris( B, g, x, z, rand ); break;
+			case 'sandDollar': sandDollar( B, g, x, z, f.yaw, rand, lite ); break;
+			case 'urchinTest': urchinTest( B, g, x, z, f.yaw, rand, lite ); break;
+			case 'seaGlass': seaGlass( B, g, x, z, f.yaw, rand ); break;
+			case 'pipeStem': pipeStem( B, g, x, z, f.yaw, rand ); break;
+			case 'lostLure': lostLure( B, g, x, z, f.yaw, rand ); break;
+			case 'sponge': sponge( B, g, x, z, rand, lite ); break;
+			case 'seaFan': seaFan( B, g, x, z, f.yaw, rand, lite ); break;
+			case 'propagule': propagule( B, g, x, z, f.yaw, rand ); break;
 			default: seaBean( B, g, x, z, f.kind, f.yaw, rand );
 
 		}
-
-		return this._meshes( B, `find_${ f.kind }`, x, z, true );
 
 	}
 
@@ -301,6 +600,10 @@ export class Beachcombing {
 	dispose() {
 
 		this.set( [] );
+		for ( const S of this.stretches.values() ) this._drop( S );
+		this.setWreck( [] );
+		this._buildWreck();
+		this.setWall( false );
 		for ( const m of this.wrack ) {
 
 			this.group.remove( m );
@@ -607,5 +910,184 @@ function ambergris( B, ground, x, z, rand ) {
 	}
 
 	B.add( 'hard', new Part( p, n, uv, idx ), _I, ( vx, vy, vz, i ) => col[ i ], HARD( rand(), 0, 0, 0.55 ) );
+
+}
+
+// ---- (M16) the shells (ShellShapes), lying on the sand: a gastropod rolled on its side as it came to rest, a bivalve
+// back up (the sea leaves them that way) and a cowrie on its slit. How fine by how big it is: on low a nerite's two dozen
+// triangles
+function seaShell( B, ground, x, z, kind, yaw, rand, lite ) {
+
+	const S = SHELLS[ kind ], L = S.cm / 100 * ( 0.85 + rand() * 0.3 ), detail = lite ? ( S.cm > 15 ? 0.75 : 0.45 ) : ( S.cm > 15 ? 2.4 : 1.4 );
+	placeShell( B, shellMesh( kind, detail ), SHAPES[ kind ], L, x, ground( x, z ), z, yaw, SHAPES[ kind ].kind === 'spiral' ? rand() * TAU : 0, rand );
+
+}
+
+// (on the wall's board: flat to it)
+export function shellOnBoard( B, kind, x, y, z, yaw, L, rand ) {
+
+	placeShell( B, shellMesh( kind, 0.45 ), SHAPES[ kind ], L, x, y, z, yaw, 0, rand );
+
+}
+
+function placeShell( B, m, shape, L, x, gy, z, yaw, roll, rand ) {
+
+	const nv = m.p.length / 3, p = new Float32Array( nv * 3 ), n = new Float32Array( nv * 3 ), uv = new Float32Array( nv * 2 );
+	const cr = Math.cos( roll ), sr = Math.sin( roll ), cy = Math.cos( yaw ), sy = Math.sin( yaw );
+	let low = 1e9;
+	for ( let i = 0; i < nv; i ++ ) {
+
+		const k = i * 3, y = m.p[ k + 1 ] * cr - m.p[ k + 2 ] * sr;
+		low = Math.min( low, y );
+
+	}
+
+	// (a little sunk in)
+	const y0 = gy - ( low + 0.05 * Math.abs( low ) ) * L;
+	for ( let i = 0; i < nv; i ++ ) {
+
+		const k = i * 3, lx = m.p[ k ], ly = m.p[ k + 1 ] * cr - m.p[ k + 2 ] * sr, lz = m.p[ k + 1 ] * sr + m.p[ k + 2 ] * cr;
+		const nx = m.n[ k ], ny = m.n[ k + 1 ] * cr - m.n[ k + 2 ] * sr, nz = m.n[ k + 1 ] * sr + m.n[ k + 2 ] * cr;
+		p[ k ] = x + ( lx * cy + lz * sy ) * L;
+		p[ k + 1 ] = y0 + ly * L;
+		p[ k + 2 ] = z + ( - lx * sy + lz * cy ) * L;
+		n[ k ] = nx * cy + nz * sy;
+		n[ k + 1 ] = ny;
+		n[ k + 2 ] = - nx * sy + nz * cy;
+		uv[ i * 2 ] = p[ k ];
+		uv[ i * 2 + 1 ] = p[ k + 2 ];
+
+	}
+
+	const col = m.c;
+	B.add( 'hard', new Part( p, n, uv, m.idx ), _I, ( vx, vy, vz, i ) => [ col[ i * 3 ], col[ i * 3 + 1 ], col[ i * 3 + 2 ] ], HARD( rand(), 0, 0, 0.55 - 0.35 * ( shape.gloss ?? 0 ) ) );
+
+}
+
+// a dome over a round, each vertex coloured by colour( a, t ): what the lee's tests and the sponge are made from
+function dome( B, x, gy, z, rx, rz, h, na, nr, yaw, colour, rough, rand, lump = null ) {
+
+	const p = [], n = [], uv = [], idx = [], col = [], cy = Math.cos( yaw ), sy = Math.sin( yaw );
+	for ( let j = 0; j <= nr; j ++ ) for ( let i = 0; i < na; i ++ ) {
+
+		const t = j / nr, a = i / na * TAU, r = Math.sin( t * Math.PI / 2 ), k = lump ? lump( a, t ) : 1;
+		const lx = Math.cos( a ) * r * rx * k, lz = Math.sin( a ) * r * rz * k, ly = Math.cos( t * Math.PI / 2 ) * h * k;
+		p.push( x + lx * cy + lz * sy, gy + ly, z - lx * sy + lz * cy );
+		const nx = lx / ( rx * rx ), ny = ly / ( h * h ), nz = lz / ( rz * rz ), l = Math.hypot( nx, ny, nz ) || 1;
+		n.push( ( nx * cy + nz * sy ) / l, ny / l, ( - nx * sy + nz * cy ) / l );
+		uv.push( p[ p.length - 3 ], p[ p.length - 1 ] );
+		col.push( colour( a, t ) );
+
+	}
+
+	for ( let j = 0; j < nr; j ++ ) for ( let i = 0; i < na; i ++ ) {
+
+		const a = j * na + i, b = j * na + ( i + 1 ) % na, c = a + na, d = b + na;
+		idx.push( a, b, c, b, d, c );
+
+	}
+
+	B.add( 'hard', new Part( p, n, uv, idx ), _I, ( vx, vy, vz, i ) => col[ i ], HARD( rand(), 0, 0, rough ) );
+
+}
+
+// the six-keyhole sand dollar (Leodia sexiesperforata), 8-12 cm: a low disc, bleached; its five-petalled star, its six
+// slots, drawn (dark where the sand shows through)
+function sandDollar( B, ground, x, z, yaw, rand, lite ) {
+
+	const R = 0.04 + rand() * 0.018, bone = lin( 0xe6dfcd ), petal = lin( 0xbcb19a ), hole = lin( 0x8d7c5e );
+	dome( B, x, ground( x, z ) + 0.001, z, R, R * 0.96, R * 0.13, lite ? 10 : 30, lite ? 2 : 6, yaw, ( a, t ) => {
+
+		const f = a / TAU * 5, slot = Math.abs( f - Math.round( f ) );
+		if ( t > 0.55 && t < 0.8 && slot < 0.12 ) return hole;
+		const star = Math.abs( ( f + 0.5 ) - Math.round( f + 0.5 ) ) < 0.2 * ( 1 - t ) + 0.02 && t < 0.55;
+		return star ? petal : bone;
+
+	}, 0.8, rand );
+
+}
+
+// a sea egg's test (Tripneustes ventricosus), 8-12 cm: an empty dome, bleached, its rows of pores and knobs banding it
+// white and rose-grey, the mouth's hole broken a bit larger
+function urchinTest( B, ground, x, z, yaw, rand, lite ) {
+
+	const R = 0.04 + rand() * 0.02, a0 = lin( 0xe9e2d4 ), b0 = lin( 0xb9a59e ), top = lin( 0x6e6458 );
+	dome( B, x, ground( x, z ) + 0.003, z, R, R, R * 0.72, lite ? 10 : 30, lite ? 3 : 8, yaw, ( a, t ) => t < 0.1 ? top : Math.abs( Math.sin( a * 5 ) ) < 0.45 ? b0 : a0, 0.75, rand );
+
+}
+
+// sea glass, 2-4 cm: a flat tumbled pebble, frosted; bottle green or brown mostly, now and then a rare blue
+function seaGlass( B, ground, x, z, yaw, rand ) {
+
+	const k = rand(), c = lin( k < 0.5 ? 0x8fb79a : k < 0.85 ? 0xa97f52 : k < 0.97 ? 0xd9e6dc : 0x5c8fc4 ), R = 0.012 + rand() * 0.008, ph = rand() * 9;
+	dome( B, x, ground( x, z ) + 0.001, z, R * 1.2, R * 0.9, R * 0.45, 8, 2, yaw, () => c, 0.45, rand, ( a ) => 0.8 + 0.25 * Math.sin( a * 3 + ph ) );
+
+}
+
+// a stem of a white clay pipe (kaolin, as Port Royal's seabed is littered with), 5-9 cm, its bore a dark dot at the end
+function pipeStem( B, ground, x, z, yaw, rand ) {
+
+	const L = 0.05 + rand() * 0.04, c = lin( 0xe0d8c6 );
+	B.cyl( 'hard', x, ground( x, z ) + 0.004, z, 0.0042, 0.0046, L, { segs: 6, rz: Math.PI / 2, ry: yaw, tint: c, data: HARD( rand(), 0, 0, 0.8 ) } );
+
+}
+
+// a lost plug: a stubby wooden lure, its paint half gone, its treble hooks rust
+function lostLure( B, ground, x, z, yaw, rand ) {
+
+	const c = lin( rand() < 0.5 ? 0xc4b48c : 0xb56a48 ), rust = lin( 0x5e3a26 ), y = ground( x, z ) + 0.008;
+	B.cyl( 'hard', x, y, z, 0.007, 0.01, 0.075, { segs: 6, rz: Math.PI / 2, ry: yaw, tint: c, data: HARD( rand(), 0, 0, 0.6 ) } );
+	B.torus( 'hard', x + Math.sin( yaw ) * 0.01, y - 0.006, z + Math.cos( yaw ) * 0.01, 0.007, 0.0012, { radial: 3, tubular: 6, tint: rust, data: HARD( rand(), 0.9, 0.3, 0.8 ) } );
+
+}
+
+// a sheep's wool sponge (Hippospongia lachne), 12-25 cm: a rounded lump, tan, dried, its surface pitted
+function sponge( B, ground, x, z, rand, lite ) {
+
+	const R = 0.07 + rand() * 0.05, tan = lin( 0xb79a68 ), dark = lin( 0x7d6642 ), ph = [ rand() * 9, rand() * 9 ];
+	dome( B, x, ground( x, z ) - 0.002, z, R, R * ( 0.8 + rand() * 0.3 ), R * 0.75, lite ? 9 : 22, lite ? 3 : 8, rand() * TAU, ( a, t ) => Math.sin( a * 17 + t * 21 + ph[ 0 ] ) * Math.sin( t * 19 + a * 5 ) > 0.45 ? dark : tan, 0.95, rand, ( a, t ) => 0.86 + 0.12 * Math.sin( a * 4 + ph[ 0 ] ) * Math.sin( t * 5 + ph[ 1 ] ) + 0.04 * Math.sin( a * 13 + t * 11 ) );
+
+}
+
+// a sea fan torn off (Gorgonia ventalina), 25-45 cm, lying flat: a fan of branching ribs on its short stalk: strips, purple, pale
+// at the tips; no web drawn between but on high a second fine set
+function seaFan( B, ground, x, z, yaw, rand, lite ) {
+
+	const P = lin( 0x7c4a86 ), pale = lin( 0xb79ab8 ), p = [], n = [], uv = [], idx = [], col = [];
+	const size = 0.25 + rand() * 0.2, cy = Math.cos( yaw ), sy = Math.sin( yaw );
+	const strip = ( ax, az, bx, bz, w, t ) => {
+
+		const dx = bx - ax, dz = bz - az, l = Math.hypot( dx, dz ) || 1, ox = - dz / l * w, oz = dx / l * w, i0 = p.length / 3, c = [ P[ 0 ] + ( pale[ 0 ] - P[ 0 ] ) * t, P[ 1 ] + ( pale[ 1 ] - P[ 1 ] ) * t, P[ 2 ] + ( pale[ 2 ] - P[ 2 ] ) * t ];
+		for ( const [ lx, lz ] of [ [ ax - ox, az - oz ], [ ax + ox, az + oz ], [ bx + ox, bz + oz ], [ bx - ox, bz - oz ] ] ) {
+
+			const wx = x + lx * cy + lz * sy, wz = z - lx * sy + lz * cy;
+			p.push( wx, ground( wx, wz ) + 0.006 + rand() * 0.004, wz );
+			n.push( 0, 1, 0 );
+			uv.push( wx, wz );
+			col.push( c );
+
+		}
+
+		idx.push( i0, i0 + 2, i0 + 1, i0, i0 + 3, i0 + 2 );
+
+	};
+	const grow = ( ax, az, a, L, depth ) => {
+
+		const bx = ax + Math.cos( a ) * L, bz = az + Math.sin( a ) * L;
+		strip( ax, az, bx, bz, 0.0035 * ( 1 + depth * 0.45 ), 1 - depth / 4 );
+		if ( depth <= 0 ) return;
+		for ( const s of [ - 1, 1 ] ) grow( bx, bz, a + s * ( 0.3 + rand() * 0.35 ), L * ( 0.68 + rand() * 0.2 ), depth - 1 );
+
+	};
+	grow( 0, 0, - Math.PI / 2 + ( rand() - 0.5 ) * 0.3, size * 0.32, lite ? 2 : 4 );
+	B.add( 'hard', new Part( p, n, uv, idx ), _I, ( vx, vy, vz, i ) => col[ i ], HARD( rand(), 0, 0, 0.9 ) );
+
+}
+
+// a red mangrove's seedling (Rhizophora mangle), 15-30 cm: a long pencil, green going brown at its heavy end
+function propagule( B, ground, x, z, yaw, rand ) {
+
+	const L = 0.16 + rand() * 0.13, g = lin( 0x6e7a3c ), br = lin( 0x5a4326 ), y = ground( x, z ) + 0.008;
+	B.cyl( 'hard', x, y, z, 0.004, 0.008, L, { segs: 6, rz: Math.PI / 2, ry: yaw, tint: ( px ) => px > 0 ? g : br, data: HARD( rand(), 0, 0, 0.7 ) } );
 
 }

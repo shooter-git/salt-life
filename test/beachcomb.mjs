@@ -35,7 +35,7 @@ const read = ( f ) => new Uint8Array( readFileSync( new URL( `../public/world/${
 		if ( ids.size !== F.length ) unique = false;
 		for ( const b of [ 'north', 'bay' ] ) {
 
-			const n = F.filter( ( f ) => f.beach === b ).length;
+			const n = F.filter( ( f ) => f.beach === b && ! FINDS[ f.kind ].shell ).length; // ((M16) the shells: test/north-shores.mjs)
 			counts[ b ] = [ Math.min( counts[ b ][ 0 ], n ), Math.max( counts[ b ][ 1 ], n ) ];
 
 		}
@@ -50,10 +50,11 @@ const read = ( f ) => new Uint8Array( readFileSync( new URL( `../public/world/${
 	let calm = 0, rough = 0, storm = 0, bayStorm = 0;
 	for ( let d = 0; d < 400; d ++ ) {
 
-		calm += findsOf( d ).length;
-		rough += findsOf( d, { north: 1 } ).length;
+		const onNorth = ( F ) => F.filter( ( f ) => f.beach === 'north' );
+		calm += onNorth( findsOf( d ) ).length;
+		rough += onNorth( findsOf( d, { north: 1 } ) ).length;
 		const S = findsOf( d, { storm: true } );
-		storm += S.length;
+		storm += onNorth( S ).length;
 		bayStorm += S.filter( ( f ) => f.beach === 'bay' ).length;
 
 	}
@@ -81,7 +82,7 @@ const read = ( f ) => new Uint8Array( readFileSync( new URL( `../public/world/${
 	check( L.filter( ( f ) => f.day === 19 ).length === findsOf( 19, { north: 0.3 } ).length, 'each day\'s as that day\'s sea left it' );
 
 	// who buys what
-	check( FINDS.ambergris.who === 'joe' && FINDS.bottle.who === null && KINDS.filter( ( k ) => ! [ 'ambergris', 'bottle' ].includes( k ) ).every( ( k ) => FINDS[ k ].who === 'marta' ), 'Marta buys the beach\'s things, Joe the ambergris, nobody the bottle' );
+	check( FINDS.ambergris.who === 'joe' && FINDS.bottle.who === null && KINDS.filter( ( k ) => ! [ 'ambergris', 'bottle', 'queenConch', 'propagule' ].includes( k ) ).every( ( k ) => FINDS[ k ].who === 'marta' ), 'Marta buys the beach\'s things, Joe the ambergris, nobody the bottle' );
 	check( FINDS.ambergris.price > FINDS.glassFloat.price && FINDS.glassFloat.price > FINDS.marysBean.price && FINDS.marysBean.price > FINDS.driftwood.price, 'the rarer, the dearer' );
 	check( [ 0, 7, - 3, 123456789, 3.7 ].every( ( s ) => { const m = messageOf( s ); return m && m.from && m.text.length > 20; } ), 'every bottle has its note' );
 
@@ -100,16 +101,19 @@ for ( const [ file, tier ] of [ [ 'island.bin', 'high' ], [ 'island-1024.bin', '
 		all ++;
 		lowest = Math.min( lowest, h );
 		highest = Math.max( highest, h );
-		if ( h > 0.4 && h < 3 ) on ++;
+		// ((M16) the mangroves' back, just over the tide)
+		if ( h > ( f.beach === 'mangrove' ? 0.1 : 0.4 ) && h < 3 ) on ++;
 
 	}
 
 	check( on === all, `${ tier }: every find lies on the sand above the swash (${ lowest.toFixed( 2 ) } to ${ highest.toFixed( 2 ) } m up)` );
 	// two washed up together lie a step apart
 	W.set( [ { id: 'a', day: 0, beach: 'north', kind: 'seaHeart', u: 0.4, off: 0, yaw: 0, seed: 1 }, { id: 'b', day: 1, beach: 'north', kind: 'trawlFloat', u: 0.4, off: 0, yaw: 0, seed: 2 } ] );
+	W.flush();
 	const [ A, B ] = [ ...W.finds.values() ];
 	check( Math.hypot( A.x - B.x, A.z - B.z ) >= 0.5 && W.nearest( A.x, A.z, 0.3 ) === A.f, `${ tier }: two washed up on one spot lie a step apart, each to be picked up` );
 	W.set( [ { id: 'a', day: 0, beach: 'north', kind: 'seaHeart', u: 0.4, off: 0, yaw: 0, seed: 1 } ] );
+	W.flush();
 	check( W.finds.size === 1 && W.finds.has( 'a' ) && W.group.children.length > 0, `${ tier }: one picked up is gone from the sand` );
 
 	// the wrack line: along the north beach's line, on the sand, in its stretches

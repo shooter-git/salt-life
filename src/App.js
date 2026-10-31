@@ -905,7 +905,7 @@ export class App {
 		this.rocks.update( this.camera );
 		if ( this.debris ) this.debris.update( this.camera );
 		// ((M15) beachcombing's finds and the north beach's wrack line, once the beach's debris materials are made)
-		if ( ! this.beachcomb && this.debris ) this.beachcomb = new Beachcombing( { terrain: this.terrainData, materials: { nature: this.debris.materials.nature, wood: this.village.materials.wood, hard: this.village.materials.hard }, parent: this.scene, lite: this.tier === 'low' } );
+		if ( ! this.beachcomb && this.debris ) this.beachcomb = new Beachcombing( { terrain: this.terrainData, materials: { nature: this.debris.materials.nature, wood: this.village.materials.wood, hard: this.village.materials.hard, roofMetal: this.village.materials.roofMetal }, parent: this.scene, lite: this.tier === 'low' } );
 		if ( this.beachcomb ) this.beachcomb.update( this.camera );
 		if ( this.stormWrack ) this.stormWrack.update( this.camera ); // ((M13) a hurricane's line of wrack, near you)
 		this.flyingSheets.update( islandTime( s.day, s.timeOfDay ) ); // ((M14) the sheets it's torn off, flying and lying)
@@ -2360,7 +2360,8 @@ export class App {
 	}
 
 	// (M15) what brought a day's finds in (game/Beachcomb.js): how big the north sea was the night before
-	// (0..1 of a breezy day's 1.5 m), and a hurricane's wrack that day
+	// (0..1 of a breezy day's 1.5 m), (M16) how big the sea in the bay (0 to 1 from a fair day's surf up), and a hurricane's
+	// wrack that day
 	beachDays( d ) {
 
 		const c = this._beachDays || ( this._beachDays = new Map() ), s = this.settings, key = `${ d }:${ this.weatherPick() }:${ s.weatherSince }`;
@@ -2368,7 +2369,7 @@ export class App {
 
 			if ( c.size > 32 ) c.clear();
 			const w = weatherAt( islandTime( d, 2 ), this.weatherPick(), s.weatherSince ), D = damageAt( islandTime( d, 7 ), this.weatherPick(), s.weatherSince );
-			c.set( key, { north: Math.min( 1, ( w.north || 0 ) / 1.5 ), storm: D.wrack > 0.3 } );
+			c.set( key, { north: Math.min( 1, ( w.north || 0 ) / 1.5 ), lee: Math.min( 1, Math.max( 0, ( w.surf - 0.34 ) / 0.26 ) ), storm: D.wrack > 0.3 } );
 
 		}
 
