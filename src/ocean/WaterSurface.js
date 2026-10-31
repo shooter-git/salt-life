@@ -230,7 +230,7 @@ export class WaterSurface {
 
 			Object.assign( shader.uniforms, uniforms, seaCaveUniforms );
 			shader.vertexShader = shader.vertexShader
-				.replace( '#include <common>', '#include <common>\n' + this.lod.glsl + terrain.heightGlsl + waves.glsl + ( SH ? shore.glsl : '' ) + ( lean ? SEA_CAVE_LEAN : SEA_CAVE_CALM_GLSL ) + /* glsl */`
+				.replace( '#include <common>', '#include <common>\n' + this.lod.glsl + terrain.heightGlsl + waves.glsl + ( SH ? shore.glsl : '' ) + ( lean ? SEA_CAVE_LEAN : SEA_CAVE_GLSL + SEA_CAVE_CALM_GLSL ) + /* glsl */`
 uniform float waterSeaLevel;
 varying vec3 vWater;
 varying vec3 vWaterL; // (M15) about the sea's origin
@@ -238,6 +238,7 @@ varying float vWaterFade;
 varying float vWaterWind; // (M15) how grown the wind sea is here (the island's lee: Waves' waveWindGrown)
 varying vec4 vSurf; // whitewater, clear plunging face, roller relief, swash sheet (0..1)
 varying vec3 vWaterN;
+varying vec2 vCaveL; // ((step 21) a sea cave's light here, read in this stage: the fragment's 16 textures, many GPUs' limit, were full)
 varying vec2 vWaterX0; // (M14) the grid's point: the water's own (its foam rides it); (M15) about the sea's origin
 ` )
 				.replace( '#include <beginnormal_vertex>', /* glsl */`
@@ -300,6 +301,7 @@ ${ SH ? /* glsl */`
 	vec3 wPos = vec3( xL.x + total.x, y, xL.y + total.z );
 	vWaterL = wPos;
 	vWater = wPos + vec3( oceanLodAt.x, 0.0, oceanLodAt.y );
+	vCaveL = seaCaveLightAt( vWater.xz ).xy;
 	vWaterX0 = xL;
 	vWaterFade = fade;
 	vWaterWind = waveWindGrown;
@@ -307,7 +309,7 @@ ${ SH ? /* glsl */`
 				.replace( '#include <begin_vertex>', 'vec3 transformed = wPos;' );
 
 			shader.fragmentShader = shader.fragmentShader
-				.replace( '#include <common>', '#include <common>\n' + ( lean ? SEA_CAVE_LEAN : SEA_CAVE_GLSL + SEA_CAVE_CALM_GLSL ) + terrain.heightGlsl + ( SH ? shore.glsl : '' ) + waves.glsl + this.whitecaps.glsl + ( cover ? cover.glsl : '' ) + ( rocks ? rocks.glsl : '' ) + /* glsl */`
+				.replace( '#include <common>', '#include <common>\n' + ( lean ? SEA_CAVE_LEAN : SEA_CAVE_CALM_GLSL ) + terrain.heightGlsl + ( SH ? shore.glsl : '' ) + waves.glsl + this.whitecaps.glsl + ( cover ? cover.glsl : '' ) + ( rocks ? rocks.glsl : '' ) + /* glsl */`
 uniform float waterTime;
 uniform vec3 waterSunColor;
 uniform vec3 waterSunDir;
@@ -318,6 +320,7 @@ varying float vWaterWind; // (M15) how grown the wind sea is here (the island's 
 varying vec4 vSurf;
 varying vec3 vWaterN;
 varying vec2 vWaterX0;
+varying vec2 vCaveL;
 uniform sampler2D waterRipples;
 uniform float waterSpume;
 uniform vec4 waterWeed[ ${ 2 * ( WEED_MAX[ tier ] ?? WEED_MAX.low ) } ];
@@ -614,7 +617,7 @@ ${ lean ? '' : /* glsl */`
 	vec3 foamLight = waterSunColor * ( max( waterSunDir.y, 0.0 ) * cloudSh ) + waterSky * 1.2 + 0.02;
 	// ((M15) in a sea cave: lit as much as it sees of the sky over it, and by the sunlit sea's light coming in
 	// under the water from the mouth (its glow: the turquoise of a sea cave's water); the foam by the sky's)
-	vec2 caveL = seaCaveLightAt( vWater.xz ).xy;
+	vec2 caveL = vCaveL;
 	waterLight *= max( caveL.x, caveL.y * 0.55 );
 	foamLight *= max( caveL.x, caveL.y * 0.3 );
 	vec3 lampSum = vec3( 0.0 );

@@ -393,16 +393,18 @@ function noiseK( px, pz, key ) {
 // ---- (step 21) the checks' spots offshore
 {
 
-	const { CHECK_SPOTS, checkSpotAt } = await import( '../src/game/CheckSpots.js' );
+	const { CHECK_SPOTS, FAR_SPOTS, checkSpotAt } = await import( '../src/game/CheckSpots.js' );
 	const { findsAbout } = await import( '../src/game/Finds.js' );
-	ok( CHECK_SPOTS[ CHECK_SPOTS.length - 1 ].id === 'home' && CHECK_SPOTS.length >= 4, 'the checks\' spots end back where you were' );
+	ok( CHECK_SPOTS[ CHECK_SPOTS.length - 1 ].id === 'home' && CHECK_SPOTS.length >= 3, 'the checks\' spots end back where you were' );
 	const script = JSON.parse( readFileSync( new URL( '../qa/script.json', import.meta.url ), 'utf8' ) );
 	const presses = script.steps.filter( ( s ) => s.press === 'F8' ).length;
 	ok( presses === CHECK_SPOTS.length, `the script goes to all ${ presses } and comes back` );
 	ok( script.steps.length <= 200, `its ${ script.steps.length } steps within what the checks take (200)` );
+	const shots = script.steps.filter( ( s ) => s.screenshot ).length, waits = script.steps.reduce( ( t, s ) => t + ( s.wait || 0 ) + ( s.seconds || 0 ), 0 );
+	ok( shots <= 12 && waits <= 165, `${ shots } screenshots and ${ waits.toFixed( 0 ) } s of waits: no more than the script that fitted All the Spaces' 25 minutes` );
 	const game = readFileSync( new URL( '../src/game/Game.js', import.meta.url ), 'utf8' );
 	ok( /navigator\.webdriver && inp\.hit\( 'F8' \)/.test( game ), 'F8 does it in a driven browser alone' );
-	const spot = CHECK_SPOTS.find( ( s ) => s.find ), T = 5 * 24 + 10;
+	const spot = FAR_SPOTS.find( ( s ) => s.find ), T = 5 * 24 + 10;
 	const a = checkSpotAt( spot, T ), b = checkSpotAt( spot, T );
 	ok( a.x === b.x && a.z === b.z, 'the weedline\'s spot the same each time' );
 	const lines = findsAbout( T, spot.x, spot.z, 6000, { weed: [], debris: [], bait: [] }, null ).weed;

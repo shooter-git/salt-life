@@ -6,12 +6,16 @@ import { findsAbout } from './Finds.js';
 // budgets are read out there as they are in the bay. tools/far-sea.mjs goes to them by name too. No three.js.
 
 export const CHECK_SPOTS = [
-	{ id: 'dropoff', x: 64, z: 3500 }, // (where the shelf falls away, south of the bay)
-	{ id: 'weedline', x: 64, z: 6000, find: true }, // (the nearest weedline to there, by its middle)
 	{ id: 'bank', x: - 6200, z: 7400 }, // (a first place to make for: its reefs, its surf)
 	{ id: 'far', x: 0, z: 20000 }, // (the open ocean, past the far grounds)
-	{ id: 'edge', x: 0, z: 30000 }, // (and past the soft edge)
 	{ id: 'home' },
+];
+// (for tools/far-sea.mjs too: each stop in the script is time on all four screens, and the checks have 25 minutes)
+export const FAR_SPOTS = [
+	{ id: 'dropoff', x: 64, z: 3500 }, // (where the shelf falls away, south of the bay)
+	{ id: 'weedline', x: 64, z: 6000, find: true }, // (the nearest weedline to there, by its middle)
+	{ id: 'edge', x: 0, z: 30000 }, // (past the soft edge)
+	...CHECK_SPOTS.slice( 0, 2 ),
 ];
 
 // where a spot is at the island's time T: { x, z }

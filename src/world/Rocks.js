@@ -49,8 +49,8 @@ export class Rocks {
 	// lazyCaves: (M15) the low tier: the overhangs' and the sea caves' near shapes (and the caves' light) made only once
 	// you're near one (overhangsNear): the caves are on the far side of the island from where you start, some 20 MB of
 	// the 150 of script memory it's allowed, and more while they're made.
-	// coarseCaves: (M15) a device that draws on its CPU: their far shapes twice as coarse too, an eighth of the
-	// cells to make in the load.
+	// coarseCaves: (M15) a device that draws on its CPU: every overhang's far shape twice as coarse too, an eighth of
+	// the cells to make in the load.
 	constructor( { scene, terrain, village = null, colliders = null, seed = 4242, castShadow = true, lite = false, lazyCaves = false, coarseCaves = false } ) {
 
 		this.scene = scene;
@@ -76,7 +76,7 @@ export class Rocks {
 		// ((M14) and the overhangs to shelter under, placed by hand (terrain/Overhangs.js): made coarse now
 		// (their far shape, and from it what's in the way of standing under them), their near shape after the
 		// start (refineOverhangs); the scattered rocks where they stand taken away, the rest as they were)
-		this.overhangs = [ ...OVERHANGS, ...SEA_CAVE_SITES ].map( ( site ) => buildOverhang( site, this.terrainData, site.kind === 'seacave' ? { cell: OVERHANG_CELL.far * ( coarseCaves ? 2 : 1 ), lightLater: lazyCaves } : { cell: OVERHANG_CELL.far } ) );
+		this.overhangs = [ ...OVERHANGS, ...SEA_CAVE_SITES ].map( ( site ) => buildOverhang( site, this.terrainData, ( { cell: OVERHANG_CELL.far * ( coarseCaves ? 2 : 1 ), lightLater: lazyCaves && site.kind === 'seacave' } ) ) );
 		this.lazyCaves = lazyCaves;
 		this.instances = this.instances.filter( ( r ) => ! this.overhangs.some( ( o ) => this._crowds( o, r ) ) );
 		// ((M15) nor on the way over to the north beach: terrain/NorthTrail.js)
