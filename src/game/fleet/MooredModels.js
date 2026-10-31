@@ -64,11 +64,11 @@ class Shape {
 		const V = ( X, Y, Z ) => new Vector3( x + X, Y, Z );
 		const a = V( - hx0, y0, z0 ), b = V( hx0, y0, z0 ), c = V( hx0, y0, z1 ), d = V( - hx0, y0, z1 );
 		const e = V( - hx1, y1, zt0 ), f = V( hx1, y1, zt0 ), g = V( hx1, y1, zt1 ), h = V( - hx1, y1, zt1 );
-		this.quad( e, f, g, h, hex ); // top (seen from above)
-		this.quad( a, e, h, d, hex );
-		this.quad( b, c, g, f, hex );
-		this.quad( a, b, f, e, hex );
-		this.quad( d, h, g, c, hex );
+		this.quad( e, h, g, f, hex );
+		this.quad( a, d, h, e, hex );
+		this.quad( b, f, g, c, hex );
+		this.quad( a, e, f, b, hex );
+		this.quad( d, c, g, h, hex );
 
 	}
 
@@ -111,7 +111,7 @@ class Shape {
 
 			const a = row[ Math.min( STATIONS, i + 1 ) ][ j ].clone().sub( row[ Math.max( 0, i - 1 ) ][ j ] );
 			const b = r[ Math.min( 5, j + 1 ) ].clone().sub( r[ Math.max( 0, j - 1 ) ] );
-			return a.cross( b ).normalize();
+			return b.cross( a ).normalize();
 
 		} ) );
 		const push = ( p, n, c, s ) => {
@@ -245,7 +245,7 @@ const BUILD = {
 		}
 
 		if ( stats.outriggers ) for ( const s of [ - 1, 1 ] ) B.pole( [ s * 1.8, 3.4, 0.2 ], [ s * 6.2, 9.5, - 1.8 ], 0.025, STEEL );
-		if ( stats.chair ) {
+		if ( stats.fightingChair ) {
 
 			B.pole( [ 0, S.deckY, - 5 ], [ 0, S.deckY + 0.5, - 5 ], 0.06, STEEL );
 			B.prism( 0.28, 0.28, S.deckY + 0.5, S.deckY + 0.62, - 5.25, - 4.75, - 5.25, - 4.75, 0xc8bda6 );

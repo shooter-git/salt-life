@@ -802,7 +802,7 @@ export class BoatInstruments {
 		g.fillText( `HOME ${ leg.m < 0.2 * 1852 ? `${ Math.round( leg.m / FT ) } ft` : `${ ( leg.m / 1852 ).toFixed( 1 ) } NM` } ${ String( magnetic( leg.bearing ) ).padStart( 3, '0' ) }°M`, x + 10, y + h - 12 );
 		if ( Number.isFinite( reading.fuelL ) ) {
 
-			const f = fuelFor( leg.m, reading.fuelL, { rpm: reading.rpm, speed: reading.speed, speedMul: reading.speedMul || 1, stats: reading.stats } );
+			const f = fuelFor( leg.m, reading.fuelL, { rpm: reading.rpm, speed: reading.speed, speedMul: reading.speedMul || 1 } );
 			g.textAlign = 'right';
 			g.fillStyle = f.state === 'ok' ? '#8fdc8a' : f.state === 'tight' ? '#f2c14e' : '#ff7a6a';
 			g.fillText( `FUEL ${ gallons( reading.fuelL ) } gal · ${ gallons( f.litres ) } to get home${ f.state === 'short' ? ' · SHORT' : '' }`, x + w - 10, y + h - 12 );

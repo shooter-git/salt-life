@@ -3,10 +3,10 @@
 import { readFileSync } from 'node:fs';
 import { BOATS } from '../src/world/boat/Boats.js';
 import { GameState } from '../src/game/GameState.js';
-import { UPGRADES, UNLOCK, unlockProgress, gearStats, defaultUpgrades, fuelOf, fuelPrice, fuelBurn, FUEL_PRICE, HAUL_FEE } from '../src/game/Gear.js';
+import { UPGRADES, UNLOCK, unlockProgress, gearStats, defaultUpgrades, fuelOf, fuelPrice, FUEL_PRICE, HAUL_FEE } from '../src/game/Gear.js';
 import { Hull, HULLS, REPAIR_FULL, repairFee, stormWear, FLOOD_L } from '../src/game/Hull.js';
 import { FLEET, TRADE, SALE, MONTH, MOST_MONTHS, DUES_LEAVE, PAINTS, NAME_MAX, monthly, gearWorth } from '../src/game/fleet/Fleet.js';
-import { BERTHS, berthOf } from '../src/game/fleet/Berths.js';
+import { BERTHS, ashoreOf, berthOf } from '../src/game/fleet/Berths.js';
 import { SHAPES, mooredGeometry, standsGeometry } from '../src/game/fleet/MooredModels.js';
 import { YARD, CRADLE, yardPose } from '../src/world/village/StormPlaces.js';
 import { WORLD } from '../src/world/WorldLayout.js';
@@ -139,7 +139,7 @@ ok( FLEET.console.price === 2500 && FLEET.lobster.price === 6000 && FLEET.sportf
 	s.addBoat( 'console' );
 	s.selectBoat( 'console' );
 	ok( s.buy( 'consoleTop' ) && s.stats.tTop && ! gearStats( s.upgrades, 'lobster' ).tTop, 'bought for her: it\'s hers, and stays with her' );
-	ok( s.buy( 'consoleEngine' ) && s.stats.speedMul === 1.25 && s.stats.twin && s.stats.burnFull > BOATS.console.stats.burnFull, 'twin outboards: faster, and burning more' );
+	ok( s.buy( 'consoleEngine' ) && s.stats.speedMul === 1.25 && s.stats.twin, 'twin outboards: faster' );
 	s.buy( 'consoleWell' );
 	ok( s.stats.baitMax === 80, 'a livewell' );
 	ok( gearStats( defaultUpgrades(), 'kayak' ).holdKg === 12 && gearStats( { ...defaultUpgrades(), kayakCrate: 1 }, 'kayak' ).holdKg === 25, 'a kayak\'s bag, then her crate' );
@@ -161,10 +161,6 @@ ok( FLEET.console.price === 2500 && FLEET.lobster.price === 6000 && FLEET.sportf
 	ok( s.refuelCost() === Math.ceil( 100 * fuelPrice( 'console' ) ), 'she fills at her own fuel\'s price' );
 	const m = s.money, l = s.refuel();
 	ok( l === 100 && s.money === m - Math.ceil( 100 * fuelPrice( 'console' ) ), 'and pays it' );
-	ok( fuelBurn( 1 ) === 0.0025 + 0.024 && fuelBurn( 1, gearStats( defaultUpgrades(), 'lobster' ) ) === fuelBurn( 1 ), 'the lobster boat burns as she did' );
-	const sf = fuelBurn( 0.8, gearStats( defaultUpgrades(), 'sportfisher' ) ) * 3600 / 3.785;
-	ok( sf > 55 && sf < 70, `the sportfisher at cruise: ${ sf.toFixed( 0 ) } gal an hour` );
-	ok( fuelBurn( 1, gearStats( defaultUpgrades(), 'kayak' ) ) === 0, 'a kayak none' );
 
 }
 
@@ -249,6 +245,14 @@ ok( FLEET.console.price === 2500 && FLEET.lobster.price === 6000 && FLEET.sportf
 		for ( const id of ids ) {
 
 			const b = berthOf( id ), S = SHAPES[ id ], c = Math.cos( b.heading ), s = Math.sin( b.heading );
+			if ( b.ashore ) {
+
+				const r = ashoreOf( id, T );
+				ok( T.heightAt( r.position.x, r.position.z ) >= 0.45 && Math.abs( r.position.z - b.position.z ) < 25, `${ file }: ${ id } lies up the sand, clear of the wash, ${ Math.abs( r.position.z - b.position.z ).toFixed( 0 ) } m from the water` );
+				continue;
+
+			}
+
 			const deep = Math.min( ...[ - 0.5, 0, 0.5 ].map( ( k ) => - T.heightAt( b.position.x + s * k * S.length, b.position.z + c * k * S.length ) ) );
 			ok( deep > S.draft + 0.05, `${ file }: ${ id } floats there (${ deep.toFixed( 2 ) } m under her, her draft ${ S.draft })` );
 
@@ -279,7 +283,7 @@ ok( FLEET.console.price === 2500 && FLEET.lobster.price === 6000 && FLEET.sportf
 for ( const id of Object.keys( BOATS ) ) {
 
 	const plain = mooredGeometry( id, {} ).attributes.position.count / 3;
-	const full = mooredGeometry( id, { paint: 0x14283f, stats: { tTop: true, twin: true, tower: true, outriggers: true, chair: true, holdKg: 99 } } ), n = full.attributes.position.count / 3;
+	const full = mooredGeometry( id, { paint: 0x14283f, stats: { tTop: true, twin: true, tower: true, outriggers: true, fightingChair: true, holdKg: 99 } } ), n = full.attributes.position.count / 3;
 	ok( n < 900 && plain < 900, `${ id }: drawn lightly, ${ plain } triangles, ${ n } with everything fitted` );
 	const pos = full.attributes.position;
 	full.computeBoundingBox();

@@ -1876,7 +1876,6 @@ export class App {
 		this.chartReading( r, map );
 		r.fuelL = g.state.fuelL;
 		r.speedMul = g.state.stats.speedMul || 1;
-		r.stats = g.state.stats;
 		r.alert = this.weatherAlert();
 		// ((M15) the VHF, overhead: Radio.js)
 		r.vhf = g.radio ? g.radio.reading : null;

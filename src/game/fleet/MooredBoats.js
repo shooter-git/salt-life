@@ -1,7 +1,7 @@
 import { Mesh, MeshStandardMaterial, Quaternion, Vector3 } from '../../engine/index.js';
 import { gearStats } from '../Gear.js';
 import { paintOf } from './Fleet.js';
-import { berthOf } from './Berths.js';
+import { ashoreOf, berthOf } from './Berths.js';
 import { mooredGeometry, standsGeometry, SHAPES } from './MooredModels.js';
 import { BOATS } from '../../world/boat/Boats.js';
 
@@ -12,7 +12,7 @@ import { BOATS } from '../../world/boat/Boats.js';
 //   moored.sync( state, spotOf )     spotOf( id ) -> { position, heading }: where she sits hauled out
 //   moored.update( dt, camera )      moored.near( x, y, z ) -> the id of one you're beside, afloat, or null
 const SEEN = 700; // m (they're small things past this)
-const _up = new Vector3( 0, 1, 0 ), _n = new Vector3(), _q = new Quaternion(), _yaw = new Quaternion();
+const _up = new Vector3( 0, 1, 0 ), _side = new Vector3( 1, 0, 0 ), _n = new Vector3(), _q = new Quaternion(), _yaw = new Quaternion();
 
 export class MooredBoats {
 
@@ -41,11 +41,11 @@ export class MooredBoats {
 	_entry( id ) {
 
 		if ( this.boats[ id ] ) return this.boats[ id ];
-		const S = SHAPES[ id ], P = berthOf( id );
+		const S = SHAPES[ id ], P = berthOf( id ), rest = P.ashore ? ashoreOf( id, this.terrain, S.draft ) : null, at = rest ? rest.position : P.position;
 		const half = new Vector3( S.beam / 2, 1.4, S.length / 2 );
 		return this.boats[ id ] = {
-			id, mesh: null, sign: null, hauled: false, spot: null, stands: null, tilt: new Quaternion(),
-			box: this._box( 'mooredBoat', new Vector3( P.position.x, 0.4, P.position.z ), half, P.heading ),
+			id, mesh: null, sign: null, hauled: false, spot: null, stands: null, tilt: new Quaternion(), rest,
+			box: this._box( 'mooredBoat', new Vector3( at.x, at.y + 0.4, at.z ), half, P.heading ),
 			yard: null,
 		};
 
@@ -63,7 +63,7 @@ export class MooredBoats {
 			const shown = own && ! you;
 			// (what's fitted on her shows: rebuilt only as that changes)
 			const stats = gearStats( state.upgrades, id ), paint = own && rec.paint ? paintOf( rec.paint ).hex : null;
-			const sign = shown ? [ paint, stats.tTop, stats.twin, stats.tower, stats.outriggers, stats.chair, stats.holdKg ].join() : null;
+			const sign = shown ? [ paint, stats.tTop, stats.twin, stats.tower, stats.outriggers, stats.fightingChair, stats.holdKg ].join() : null;
 			if ( sign !== E.sign ) {
 
 				if ( E.mesh ) {
@@ -80,7 +80,7 @@ export class MooredBoats {
 					E.mesh = new Mesh( mooredGeometry( id, { paint, stats } ), this.material );
 					E.mesh.name = `moored-${ id }`;
 					E.mesh.castShadow = this.shadows;
-					E.mesh.receiveShadow = false;
+					E.mesh.receiveShadow = this.shadows;
 					this.scene.add( E.mesh );
 					this.light( E.mesh );
 
@@ -92,10 +92,16 @@ export class MooredBoats {
 			E.box.solid = shown && ! hauled;
 			const spot = hauled ? spotOf( id ) : null;
 			E.spot = spot;
+			// (on the blocks, or lying on the sand; afloat, update rides her)
 			if ( E.mesh && spot ) {
 
 				E.mesh.position.copy( spot.position );
 				E.mesh.quaternion.setFromAxisAngle( _up, spot.heading );
+
+			} else if ( E.mesh && E.rest ) {
+
+				E.mesh.position.copy( E.rest.position );
+				E.mesh.quaternion.setFromAxisAngle( _up, E.rest.heading ).multiply( _yaw.setFromAxisAngle( _side, E.rest.pitch ) );
 
 			}
 
@@ -135,7 +141,7 @@ export class MooredBoats {
 
 			const m = E.mesh;
 			if ( ! m ) continue;
-			if ( E.spot ) {
+			if ( E.spot || E.rest ) {
 
 				m.visible = true;
 				continue;
@@ -145,14 +151,12 @@ export class MooredBoats {
 			const P = berthOf( E.id ), S = SHAPES[ E.id ], x = P.position.x, z = P.position.z;
 			m.visible = Math.hypot( x - cam.x, z - cam.z ) < SEEN;
 			if ( ! m.visible ) continue;
-			// (riding them as a boat her size does: their height over her length and beam, her slope across it. A boat in
-			// the shallows less: they're the shore's there, and she's held)
+			// (riding them as a boat her size does: their height over her length and beam, her slope across it)
 			const c = Math.cos( P.heading ), s = Math.sin( P.heading ), lx = S.length * 0.4, bx = S.beam * 0.45;
 			const fore = waves.heightAt( x + s * lx, z + c * lx ), aft = waves.heightAt( x - s * lx, z - c * lx );
 			const port = waves.heightAt( x + c * bx, z - s * bx ), stbd = waves.heightAt( x - c * bx, z + s * bx );
-			const mean = ( fore + aft + port + stbd ) / 4, damp = Math.min( 1, Math.max( 0.3, - this.terrain.heightAt( x, z ) / 2 ) );
+			const mean = ( fore + aft + port + stbd ) / 4;
 			_n.set( ( aft - fore ) * s / ( 2 * lx ) + ( stbd - port ) * c / ( 2 * bx ), 1, ( aft - fore ) * c / ( 2 * lx ) - ( stbd - port ) * s / ( 2 * bx ) );
-			_n.y = 1 / Math.max( damp, 0.3 );
 			_q.setFromUnitVectors( _up, _n.normalize() );
 			E.tilt.slerp( _q, k );
 			_yaw.setFromAxisAngle( _up, P.heading );
@@ -163,7 +167,7 @@ export class MooredBoats {
 
 	}
 
-	// the one afloat you're standing beside (within reach of her side: from the pier's edge, or wading)
+	// the one you're standing beside (within reach of her side: from the pier's edge, or on the sand)
 	near( x, y, z, reach = 2.6 ) {
 
 		let best = null, bd = reach;

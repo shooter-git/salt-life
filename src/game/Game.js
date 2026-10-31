@@ -736,7 +736,7 @@ export class Game {
 	updateBoat( dt ) {
 
 		const app = this.app, b = app.boatCtl, p = app.player, s = this.state;
-		if ( b.driven && b.engineOn && s.stats.fuelL > 0 ) s.burn( fuelBurn( b.rpm, s.stats ) * dt );
+		if ( b.driven && b.engineOn ) s.burn( fuelBurn( b.rpm ) * dt );
 		else if ( this._wasDriven && ! b.driven ) s.save();
 		this.updateHull( dt );
 		this.updateAnchor( b.driven && ! this._wasDriven, ! b.driven && this._wasDriven );
@@ -867,7 +867,8 @@ export class Game {
 		const s = this.state, n = this.app.weather && this.app.weather.news;
 		if ( s.hauled ) return { back: ! n };
 		if ( ! n || n.stage === 'outlook' ) return null;
-		return { fee: FLEET[ s.boat ].haul, here: !! this.app.boatCtl.moored };
+		// ((M16) or, a kayak, on the sand)
+		return { fee: FLEET[ s.boat ].haul, here: !! ( this.app.boatCtl.moored || this.app.boatCtl.beached ) };
 
 	}
 
@@ -952,7 +953,7 @@ export class Game {
 		const fee = repairFee( this.hull.wear, this.hull.boat );
 		// ((M13) or on her cradle ashore: hauled out, the best place to work on her)
 		const b = this.app.boatCtl;
-		return fee ? { fee, wear: this.hull.wear, here: !! ( b.moored || b.hauled ) } : null;
+		return fee ? { fee, wear: this.hull.wear, here: !! ( b.moored || b.hauled || b.beached ) } : null;
 
 	}
 

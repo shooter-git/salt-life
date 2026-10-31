@@ -183,6 +183,8 @@ export class FleetDesk {
 	// the month's bill, as it comes
 	_dues() {
 
+		// (once any room's clock has reached you: Game.tellAway)
+		if ( this.app.together && ! this.app.together.roomKnown ) return;
 		const bill = this.state.chargeDues( this.app.settings.day );
 		if ( ! bill ) return;
 		this.toast( bill.owed > 0 ? `Marta's bill for your slips and upkeep · $${ bill.due }, you'd $${ bill.paid } to spare · $${ bill.owed } on her tab` : `Marta's bill for your slips and upkeep · $${ bill.paid }`, 5200 );

@@ -132,7 +132,7 @@ export const UPGRADES = {
 	// (M16) the center console's own
 	consoleEngine: { name: 'Outboards', on: 'console', levels: [
 		{ cost: 0, label: 'A single 150 outboard', speedMul: 1, twin: false },
-		{ cost: 900, label: 'Twin 150 outboards', speedMul: 1.25, twin: true, burnFull: 0.031 },
+		{ cost: 900, label: 'Twin 150 outboards', speedMul: 1.25, twin: true },
 	] },
 	consoleTop: { name: 'T-top', on: 'console', levels: [
 		{ cost: 0, label: 'Open to the sky', tTop: false },
@@ -169,15 +169,15 @@ export const UPGRADES = {
 	] },
 	sfIcemaker: { name: 'Icemaker', on: 'sportfisher', levels: [
 		{ cost: 0, label: 'None', icemaker: false },
-		{ cost: 1000, label: 'Icemaker', icemaker: true },
+		{ cost: 1000, label: 'Icemaker', icemaker: true, iceMakesKgH: 5 },
 	] },
 	sfGenerator: { name: 'Generator', on: 'sportfisher', levels: [
 		{ cost: 0, label: 'None', generator: false },
 		{ cost: 1500, label: 'Diesel generator', generator: true },
 	] },
 	sfChair: { name: 'Fighting chair', on: 'sportfisher', levels: [
-		{ cost: 0, label: 'None: stand up and take it', chair: false },
-		{ cost: 2000, label: 'Fighting chair in the cockpit', chair: true },
+		{ cost: 0, label: 'None: stand up and take it', fightingChair: false },
+		{ cost: 2000, label: 'Fighting chair in the cockpit', fightingChair: true },
 	] },
 	sfUnderwaterLights: { name: 'Underwater lights', on: 'sportfisher', levels: [
 		{ cost: 0, label: 'None', underwaterLights: false },
@@ -236,10 +236,9 @@ export const towTime = ( metres ) => Math.max( 0, metres ) * ( 1 / TOW.out + 1 /
 // (M16: each boat's by her length, game/fleet/Fleet.js)
 export const HAUL_FEE = 40;
 // litres per second at the helm: idle plus a lot more at full rpm (40 L lasts ~25 min flat out)
-// (M16) stats: the boat's (gearStats: burnIdle, burnFull, over Boats.js' figures); the lobster boat's without
-export function fuelBurn( rpm, stats = null ) {
+export function fuelBurn( rpm ) {
 
-	return ( stats && stats.burnIdle !== undefined ? stats.burnIdle : 0.0025 ) + ( stats && stats.burnFull !== undefined ? stats.burnFull : 0.024 ) * rpm * rpm;
+	return 0.0025 + 0.024 * rpm * rpm;
 
 }
 
