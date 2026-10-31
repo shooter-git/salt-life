@@ -36,7 +36,7 @@ import { Player } from './player/Player.js';
 import { BoatController } from './player/BoatController.js';
 import { GameState } from './game/GameState.js';
 import { DAY_RATE, START_HOUR, advance } from './game/IslandClock.js';
-import { islandTime, isPick, NORTH, weatherAt, towardOf } from './game/Weather.js';
+import { islandTime, isPick, NORTH, weatherAt, towardOf, seaSwell } from './game/Weather.js';
 import { BACK_MS, awayClock, awayOf, boatLeft, cleanBoats, leftOf, withRecord } from './game/Away.js';
 import { WeatherDriver } from './world/WeatherDriver.js';
 import { lampsLit } from './game/Bites.js';
@@ -912,7 +912,7 @@ export class App {
 		// ((M15) the lighthouse's light: lit from dusk, its flash as it's seen from here)
 		this.lighthouse.update( this.camera, this.sky.visibility, this.renderer.domElement.height );
 		this.harbourLights.update( this.camera, this.sky.visibility, this.renderer.domElement.height );
-		this.turtles.update( dt, this.camera, this.settings.timeOfDay, this.settings.day );
+		this.turtles.update( dt, this.camera, this.settings.timeOfDay, this.settings.day, this );
 		this.farIsland.update( this.camera );
 		// ((M15) the reefs: the bay's, and the windward one once you're near it)
 		if ( this.reefs ) {
@@ -1811,7 +1811,7 @@ export class App {
 			const B = SEABED.bank, line = this._surfLine || ( this._surfLine = new SurfLine( this.terrainData, { bank: { x: B.x, z: B.z, size: BANK.size } } ) );
 			const q = this._seaHeard = line.heard( p.x, p.z, this.shore.trains, this._seaHeard || {}, this.shore.params.gamma ), live = this.weather.live, w = this.waves;
 			q.grown = w.windGrownAt( p.x, p.z );
-			q.big = live ? w.reachOf( live.swell, live.windSea * q.grown ) / w.reachOf( 1, 1 ) : 1;
+			q.big = live ? w.reachOf( seaSwell( live.swell, live.blow ), live.windSea * q.grown ) / w.reachOf( 1, 1 ) : 1;
 			q.bottom = G.seaLevel.value - this.terrainData.heightAt( p.x, p.z );
 
 		}

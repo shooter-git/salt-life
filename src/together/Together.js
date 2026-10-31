@@ -1225,6 +1225,7 @@ export class Together {
 		body.B = [ r2( bp.x ), r2( bp.y ), r2( bp.z ), r3( q.x ), r3( q.y ), r3( q.z ), r3( q.w ), r2( app.waves.heightAt( bp.x, bp.z ) ) ];
 		if ( p.riding ) body.R = p.boat.owner;
 		if ( body.B && this.app.searchlight ) body.S = 1; // (your boat's searchlight is on)
+		if ( app.localLights && app.localLights.flashlight.on ) body.T = 1; // ((M16) your flashlight's on: the turtles mind it)
 		// ((M14) her deck floodlights' lenses, as lit as yours are: fitted, and as dark as it is)
 		const flood = app.game.floodsOn;
 		if ( flood > 0 ) body.L = r2( flood );
@@ -1532,6 +1533,7 @@ export class Together {
 		cur.rod = near.r || 0;
 		cur.ride = typeof near.R === 'string' ? near.R : null;
 		cur.spot = near.S === 1;
+		cur.torch = near.T === 1;
 		cur.anchored = near.A === 1;
 		cur.flood = MathUtils.clamp( Number( near.L ) || 0, 0, 1 ); // ((M14) her floodlights' lenses)
 		cur.rpm = ( Number( a.E ) || 0 ) + ( ( Number( b.E ) || 0 ) - ( Number( a.E ) || 0 ) ) * f;
