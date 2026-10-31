@@ -115,6 +115,8 @@ function spiral( S, detail ) {
 				const k = S.flare * end * end * out;
 				dr += k * ( S.flareOut ?? 1 );
 				dy += k * ( S.flareUp ?? 0.4 ) * Math.max( 0, sa + 0.15 );
+				// (a thin lip's edge, frilled)
+				if ( S.ruffle ) dr += S.ruffle * Math.sin( a * 9 + turn * 11 ) * end * end * out * 2;
 
 			}
 
@@ -328,16 +330,17 @@ export const SHAPES = {
 
 	// Queen conch: the heavy, flared adult (22 cm); short knobbed spire, chalky sand-coloured outside, the lip's inside
 	// pink going to rose, a fisherman's cut in the spire (how the meat's got out: a beach's empties nearly all have it)
-	queenConch: { kind: 'spiral', mouth: 0.42, mouthAt: 1.02, turns: 7, coarse: 2.2, per: 7, around: 7, W: 1.62, T: 1.75, q: 1, sx: 0.66, sy: 0.82, shoulder: 0.12, shoulderAt: 0.8, knobs: 0.28, knobN: 9 / 6.283, knobAt: 0.75, knobW: 0.34, flare: 1.15, flareOut: 0.72, flareUp: 1.25, lipFrom: 0.42, canal: 1.1, canalP: 2.2, canalIn: - 0.5, view: [ 0.1, - 0.12, Math.PI / 2 ], axis: 0.2,
+	queenConch: { kind: 'spiral', mouth: 0.42, mouthAt: 1.02, turns: 7, coarse: 2.2, per: 9, around: 8, W: 1.6, T: 1.95, q: 1, sx: 0.64, sy: 0.8, shoulder: 0.18, shoulderAt: 0.72, knobs: 0.62, knobN: 8.5 / 6.283, knobAt: 0.78, knobW: 0.26, flare: 1.2, flareOut: 0.74, flareUp: 1.2, ruffle: 0.055, lipFrom: 0.42, canal: 1.1, canalP: 2.2, canalIn: - 0.5, view: [ 0.1, - 0.12, Math.PI / 2 ], axis: 0.2,
 		colour: ( c ) => {
 
 			if ( c.inner ) return mix( C.pink, C.rose, 0.2 + 0.6 * c.into );
 			// (the lip's underside, polished pink; the rest chalk, faint banded)
 			const lip = c.end * ss( - 0.2, 0.5, Math.cos( c.a ) ) * ss( - 1.2, 0.3, Math.sin( c.a + 0.5 ) );
 			const band = 0.5 + 0.5 * Math.sin( c.a * 7 + c.turn * 10 + wob( c.turn * 14 ) );
-			let col = mix( C.sand, C.bone, 0.25 + 0.5 * band );
-			col = mix( col, C.tan, 0.3 * ( 0.5 + 0.5 * Math.sin( c.turn * 50 + wob( c.a * 4 ) * 2 ) ) );
-			col = mix( col, C.pink, Math.min( 1, lip * 1.3 ) );
+			let col = mix( mix( C.sand, C.salmon, 0.35 ), C.bone, 0.1 + 0.5 * band );
+			col = mix( col, C.tan, 0.35 * ( 0.5 + 0.5 * Math.sin( c.turn * 50 + wob( c.a * 4 ) * 2 ) ) );
+			// (the lip: peach to pink, paler at its frilled edge)
+			col = mix( col, mix( mix( C.peach, C.pink, 0.55 ), C.white, ss( 0.8, 1, c.end ) * 0.5 ), Math.min( 1, lip * 1.3 ) );
 			// (the fisherman's cut, a dark slit on the third whorl)
 			if ( c.turn > 1.2 && c.turn < 1.34 && Math.abs( c.a - 0.8 ) < 0.42 ) return C.choc;
 			return col;
@@ -346,7 +349,7 @@ export const SHAPES = {
 
 	// West Indian fighting conch (Strombus pugilis, 8 cm): salmon to orange, spines on the shoulder, a short lip, the
 	// foot of the mouth stained purple-brown
-	fightingConch: { kind: 'spiral', mouth: 0.36, mouthAt: 1.05, turns: 8, coarse: 2, per: 6, around: 6, W: 1.5, T: 2.05, q: 1, sx: 0.6, sy: 0.72, shoulder: 0.1, shoulderAt: 0.9, knobs: 0.3, knobN: 10 / 6.283, knobAt: 0.75, knobW: 0.25, flare: 0.42, flareOut: 0.6, flareUp: 1.1, lipFrom: 0.3, canal: 0.95, canalP: 2.4, canalIn: - 0.5, view: [ 0.1, - 0.12, Math.PI / 2 ], axis: 0.25,
+	fightingConch: { kind: 'spiral', mouth: 0.36, mouthAt: 1.05, turns: 8, coarse: 2, per: 8, around: 7, W: 1.5, T: 2.05, q: 1, sx: 0.6, sy: 0.72, shoulder: 0.1, shoulderAt: 0.9, knobs: 0.5, knobN: 10 / 6.283, knobAt: 0.75, knobW: 0.22, flare: 0.42, flareOut: 0.6, flareUp: 1.1, lipFrom: 0.3, canal: 0.95, canalP: 2.4, canalIn: - 0.5, view: [ 0.1, - 0.12, Math.PI / 2 ], axis: 0.25,
 		colour: ( c ) => {
 
 			if ( c.inner ) return mix( C.white, C.salmon, 0.25 );
@@ -361,18 +364,17 @@ export const SHAPES = {
 	kingHelmet: { kind: 'spiral', mouth: 0.16, mouthAt: 1.2, turns: 5.5, coarse: 1.8, per: 7, around: 7, W: 2.6, T: 0.72, q: 1, sx: 0.82, sy: 0.82, shoulder: 0.2, shoulderAt: 0.85, knobs: 0.3, knobN: 7 / 6.283, knobAt: 0.85, knobW: 0.3, flare: 0.42, flareOut: 0.8, flareUp: 0.5, lipFrom: 0.5, canal: 0.62, canalP: 3, canalIn: - 0.6, view: [ 0.16, - 0.12, Math.PI / 2 ], axis: 0.3,
 		colour: ( c ) => {
 
-			if ( c.inner ) return mix( mix( C.peach, C.bone, 0.3 ), Math.sin( c.a * 26 ) > 0 ? C.bone : C.choc, ss( 0.06, 0.2, c.into ) );
+			if ( c.inner ) return c.into < 0.19 ? mix( C.peach, C.bone, 0.35 ) : ( Math.sin( c.a * 34 ) > 0 ? C.bone : C.choc );
 			if ( c.end > 0.15 ) {
 
-				const teeth = 0.5 + 0.5 * Math.cos( c.a * 26 );
 				const shield = mix( C.peach, C.bone, 0.35 );
-				const edge = ss( 0.25, 0.75, c.end ) * ss( - 0.2, 0.6, Math.cos( c.a ) );
-				return mix( shield, teeth > 0.55 ? C.bone : C.brown, edge * 0.85 );
+				const edge = ss( 0.82, 1, c.end ) * ss( - 0.2, 0.6, Math.cos( c.a ) );
+				return mix( shield, Math.cos( c.a * 16 ) > 0.1 ? C.bone : C.brown, edge );
 
 			}
 
-			const m = wob( c.turn * 21, 2 ) + wob( c.a * 3 + c.turn * 5, 1 );
-			return mix( C.cream, C.brown, ss( 0.22, 0.65, m ) * 0.9 );
+			const z = Math.abs( fract( c.turn * 11 + 0.5 * Math.abs( fract( c.a * 1.3 ) - 0.5 ) ) - 0.5 ) * 2, band = 0.5 + 0.5 * Math.sin( c.a * 3.2 + 1 );
+			return mix( mix( C.cream, C.sand, 0.3 ), mix( C.brown, C.choc, 0.4 ), ss( 0.45, 0.62, z ) * ( 0.45 + 0.55 * band ) );
 
 		} },
 
@@ -381,16 +383,16 @@ export const SHAPES = {
 	triton: { kind: 'spiral', mouth: 0.6, turns: 8, coarse: 3, per: 6, around: 6, W: 1.42, T: 4, q: 1, sx: 0.72, sy: 0.84, cords: 0.035, cordN: 12, ribs: 0.05, knobN: 9 / 6.283, flare: 0.24, flareOut: 0.8, flareUp: 0.5, lipFrom: 0.22, canal: 0.72, canalP: 3, canalIn: - 0.6, view: [ - 0.1, - 0.1, Math.PI / 2 ], axis: 0.2,
 		colour: ( c ) => {
 
-			if ( c.inner ) return mix( C.orange, C.peach, 0.4 );
+			if ( c.inner ) return mix( C.pink, C.peach, 0.3 );
 			if ( c.lip || c.end > 0.85 ) return Math.sin( c.a * 20 ) > 0 ? C.bone : C.choc;
-			const k = fract( c.turn * 3.2 + 0.08 * wob( c.a * 3 ) ), crescent = bump( k - 0.5, 0.26 ) * ( 0.5 + 0.5 * Math.sin( c.a * 6 + c.turn * 11 ) );
-			return mix( mix( C.cream, C.sand, 0.4 ), C.brown, ss( 0.3, 0.6, crescent ) * 0.95 );
+			const k = fract( c.turn * 5.5 + 0.08 * wob( c.a * 3 ) ), crescent = bump( k - 0.5, 0.3 ) * ( 0.55 + 0.45 * Math.sin( c.a * 8 + c.turn * 17 ) );
+			return mix( mix( C.cream, C.sand, 0.3 ), mix( C.brown, C.rust, 0.3 ), ss( 0.18, 0.42, crescent ) * 0.95 );
 
 		} },
 
 	// Music volute (Voluta musica, 7 cm): solid, ribbed down the shoulder; the lines of a stave and its notes round a
 	// cream shell, rosy in places; four folds on the column of its mouth
-	musicVolute: { kind: 'spiral', mouth: 0.26, mouthAt: 1.2, turns: 6, coarse: 2, per: 7, around: 7, W: 1.9, T: 1.3, q: 1, sx: 0.64, sy: 0.98, shoulder: 0.08, shoulderAt: 0.85, knobs: 0.16, knobN: 11 / 6.283, knobAt: 0.9, knobW: 0.25, flare: 0.08, flareUp: 0.2, lipFrom: 0.14, canal: 0.5, canalP: 3, canalIn: - 0.6, view: [ - 0.1, - 0.1, Math.PI / 2 ], axis: 0.2,
+	musicVolute: { kind: 'spiral', mouth: 0.26, mouthAt: 1.2, turns: 6, coarse: 2, per: 7, around: 7, W: 1.85, T: 1.5, q: 1, sx: 0.56, sy: 1.02, shoulder: 0.08, shoulderAt: 0.85, knobs: 0.16, knobN: 11 / 6.283, knobAt: 0.9, knobW: 0.25, flare: 0.08, flareUp: 0.2, lipFrom: 0.14, canal: 0.5, canalP: 3, canalIn: - 0.6, view: [ - 0.1, - 0.1, Math.PI / 2 ], axis: 0.2,
 		colour: ( c ) => {
 
 			if ( c.inner ) return mix( C.cream, C.peach, 0.3 );
@@ -398,10 +400,10 @@ export const SHAPES = {
 			// (the stave: sets of fine lines round the whorl)
 			const s = fract( c.a * 1.6 + 0.05 * wob( c.turn * 9 ) ) * 4;
 			const line = Math.abs( fract( s * 2.5 ) - 0.5 ) < 0.11 && s < 2.2;
-			if ( line ) return mix( C.choc, C.brown, 0.3 );
+			if ( line ) return mix( C.brown, C.rust, 0.5 );
 			// (and the notes on it, dots along the lines)
 			const note = bump( fract( c.turn * 36 + hash( Math.floor( s ) ) ) - 0.5, 0.2 ) * ( s < 2.4 ? 1 : 0 ) * ( hash( Math.floor( c.turn * 36 ), Math.floor( s * 2.5 ) ) > 0.45 ? 1 : 0 );
-			return mix( ground, C.choc, ss( 0.5, 0.75, note ) );
+			return mix( ground, C.brown, ss( 0.5, 0.75, note ) );
 
 		} },
 
@@ -412,21 +414,20 @@ export const SHAPES = {
 
 			if ( c.inner ) return C.nacre;
 			if ( Math.sin( c.a ) < - 0.72 ) return C.nacre;
-			const k = wob( c.turn * 26 + c.a * 1.7 + 2 * Math.sin( c.a * 2 + c.turn * 4 ), 1 ) + 0.35 * wob( c.a * 5 + c.turn * 13 );
-			return mix( C.white, mix( C.black, C.purple, 0.3 ), ss( - 0.1, 0.18, k ) );
+			const k = wob( c.turn * 24 + c.a * 1.5 + 2 * Math.sin( c.a * 2 + c.turn * 4 ), 1 ) + 0.5 * wob( c.a * 7 + c.turn * 31, 2 );
+			return mix( C.white, mix( C.black, C.purple, 0.25 ), ss( - 0.42, - 0.2, k ) );
 
 		} },
 
-	// Bleeding tooth (Nerita peloronta, 3 cm): the low, thick round shell; zigzags of black and red on pale yellow; the
+	// Bleeding tooth (Nerita peloronta, 3 cm): the low, thick round shell; dark blotches and zigzags on pale yellow; the
 	// mouth a white slab with two teeth in an orange-red blotch: the "blood"
-	bleedingTooth: { kind: 'spiral', mouth: 0.52, mouthAt: 1.15, turns: 3.2, coarse: 1.6, per: 8, around: 6, W: 3.6, T: 0.42, q: 1, sx: 0.86, sy: 0.92, flare: 0.05, lipFrom: 0.1, view: [ - 0.05, 0.05, Math.PI / 2 ], axis: 0.1,
+	bleedingTooth: { kind: 'spiral', mouth: 0.46, mouthAt: 1.12, turns: 3.2, coarse: 1.6, per: 8, around: 6, W: 2.9, T: 0.44, q: 1, sx: 0.86, sy: 0.92, flare: 0.05, lipFrom: 0.1, view: [ - 0.4, 0.1, Math.PI / 2 ], axis: 0.1,
 		colour: ( c ) => {
 
-			if ( c.inner ) return c.into < 0.34 ? mix( C.white, C.red, ss( - 0.2, 0.5, - Math.cos( c.a ) + 0.3 * Math.sin( c.a * 9 ) - 0.2 ) ) : mix( C.white, C.yellow, 0.25 );
-			const lipIn = c.end > 0.55 && Math.cos( c.a ) < - 0.1;
-			if ( lipIn ) return mix( C.white, C.red, ss( 0.25, 0.7, Math.sin( c.a * 3 + 1 ) + 0.4 * Math.cos( c.a * 12 ) ) );
-			const zz = Math.abs( fract( c.turn * 14 + Math.abs( fract( c.a * 1.6 ) - 0.5 ) * 2.2 ) - 0.5 ) * 2;
-			return zz > 0.72 ? C.black : zz > 0.56 ? C.red : mix( C.yellow, C.cream, 0.4 );
+			if ( c.inner ) return c.into < 0.34 ? mix( C.white, mix( C.red, C.orange, 0.4 ), ss( 0.05, 0.6, - Math.cos( c.a ) + 0.25 * Math.sin( c.a * 10 ) ) * ss( 0.08, 0.3, c.into ) ) : mix( C.white, C.yellow, 0.25 );
+			const k = wob( c.turn * 13 + c.a * 1.4, 3 ) + 0.6 * wob( c.a * 5 - c.turn * 9, 1 );
+			if ( c.end > 0.7 && Math.cos( c.a ) < - 0.2 ) return mix( C.white, C.orange, ss( 0.2, 0.8, - Math.sin( c.a * 2 ) ) );
+			return mix( mix( C.yellow, C.cream, 0.5 ), mix( C.choc, C.rust, 0.25 ), ss( 0.2, 0.42, k ) );
 
 		} },
 
@@ -444,20 +445,14 @@ export const SHAPES = {
 	// Netted olive (Americoliva reticularis, 4 cm): a polished cylinder, a low sharp spire, a fine purple-brown net over
 	// cream, two darker bands; the long slit
 	nettedOlive: { kind: 'ovoid', nx: 7, around: 6, w: 0.21, hump: 1, under: 0.96, slit: 0.14, slitAt: 0.5, gloss: 0.8, view: [ 0.3, 0.1, 0.1 ],
-		r: ( x ) => {
-
-			const front = Math.pow( Math.max( 0, 1 - Math.pow( Math.max( 0, - x ), 3 ) ), 0.8 );
-			if ( x < 0.72 ) return front * ( 0.92 + 0.08 * ss( - 0.4, 0.5, x ) );
-			return 1 * Math.max( 0.02, ( 1 - ( x - 0.72 ) / 0.28 ) * 0.8 ) + 0.2 * ( 1 - ss( 0.72, 0.76, x ) );
-
-		},
+		r: ( x ) => x < 0.8 ? Math.pow( Math.max( 0, 1 - Math.pow( Math.abs( x / 1.02 ), 3 ) ), 0.62 ) : Math.max( 0.02, ( 1 - ( x - 0.8 ) / 0.2 ) * 0.42 ) + 0.1 * ( 1 - ss( 0.8, 0.84, x ) ),
 		colour: ( c ) => {
 
 			if ( c.slit > 0.45 ) return C.white;
 			const net = Math.max( Math.sin( ( c.x * 2.1 + c.a * 0.5 ) * 38 ), Math.sin( ( c.x * 2.1 - c.a * 0.5 ) * 38 ) );
 			const band = Math.max( bump( c.x - 0.4, 0.09 ), bump( c.x + 0.34, 0.09 ) );
-			const mark = mix( mix( C.brown, C.purple, 0.5 ), C.choc, band );
-			return mix( C.cream, mark, Math.min( 1, ss( 0.25, 0.9, net ) * 0.8 + band * 0.55 ) );
+			const mark = mix( mix( C.tan, C.purple, 0.25 ), C.brown, band );
+			return mix( mix( C.cream, C.white, 0.3 ), mark, Math.min( 1, ss( 0.5, 1, net ) * ( 0.32 + 0.35 * band ) ) );
 
 		} },
 
@@ -470,13 +465,12 @@ export const SHAPES = {
 			if ( c.slit > 0.4 ) return Math.sin( c.x * 80 ) > 0 ? C.choc : C.tan;
 			if ( c.low ) return mix( C.tan, C.sand, 0.5 );
 			const bands = Math.max( bump( c.x - 0.38, 0.1 ), bump( c.x, 0.1 ), bump( c.x + 0.38, 0.1 ) );
-			const ground = mix( mix( C.tan, C.brown, 0.55 ), C.choc, bands * 0.75 );
-			// (spots, each its own: white on the back; on the sides ringed, a dark eye in each)
-			const cellX = c.x * 14, cellA = c.a * 5.6, ix = Math.floor( cellX ), ia = Math.floor( cellA ), jx = hash( ix, ia ) * 0.5 + 0.25, ja = hash( ia, ix ) * 0.5 + 0.25;
-			const d = Math.hypot( fract( cellX ) - jx, fract( cellA ) - ja ), side = 1 - ss( 0.1, 0.45, c.y );
-			const r0 = 0.2 + 0.2 * hash( ix + 3, ia );
-			if ( d < r0 * ( 0.35 + 0.0 ) * side ) return C.choc;
-			return d < r0 ? mix( C.white, C.cream, 0.4 ) : ground;
+			const ground = mix( mix( C.rust, C.tan, 0.35 ), C.brown, bands * 0.55 + ( 1 - ss( - 0.1, 0.4, c.y ) ) * 0.25 );
+			// (spots, each its own: cream on the back; low on the sides ringed, a dark eye in each)
+			const cellX = c.x * 12, cellA = c.a * 5.2, ix = Math.floor( cellX ), ia = Math.floor( cellA ), jx = hash( ix, ia ) * 0.4 + 0.3, ja = hash( ia, ix ) * 0.4 + 0.3;
+			const d = Math.hypot( fract( cellX ) - jx, fract( cellA ) - ja ), side = 1 - ss( 0.05, 0.4, c.y ), r0 = 0.2 + 0.15 * hash( ix + 3, ia );
+			if ( d < r0 * 0.45 * side ) return C.choc;
+			return d < r0 ? mix( C.white, C.cream, 0.5 ) : ground;
 
 		} },
 
@@ -490,49 +484,49 @@ export const SHAPES = {
 			if ( c.low ) return C.bone;
 			const m = wob( c.x * 19 + c.a * 3, 1 ) * wob( c.a * 7 - c.x * 5, 2 );
 			const ground = mix( C.yellow, C.cream, ss( - 0.2, 0.3, m ) );
-			const side = 1 - ss( 0.05, 0.6, c.y ), fr = hash( Math.floor( c.x * 30 ), Math.floor( c.a * 11 ) );
-			return fr > 0.72 && side > 0.3 ? C.brown : ground;
+			const cx = c.x * 13, ca = c.a * 6, ix = Math.floor( cx ), ia = Math.floor( ca ), d = Math.hypot( fract( cx ) - 0.5 - 0.3 * ( hash( ix, ia ) - 0.5 ), fract( ca ) - 0.5 - 0.3 * ( hash( ia, ix ) - 0.5 ) );
+			return d < 0.2 * ( 1 - ss( 0.1, 0.5, c.y ) ) ? C.brown : ground;
 
 		} },
 
 	// Flamingo tongue (Cyphoma gibbosum, 3 cm): the shell itself is plain, the orange spots the live animal's mantle and
 	// gone with it: a smooth cream oval, peach on the back, one thick ridge across its middle
 	flamingoTongue: { kind: 'ovoid', nx: 7, around: 7, w: 0.31, hump: 1.1, under: 0.5, slit: 0.16, slitAt: 0.06, ridge: 0.075, ridgeAt: 0.04, gloss: 1, view: [ 0.95, 0.15, 0 ],
-		r: ( x ) => Math.pow( Math.max( 0, 1 - Math.pow( Math.abs( x ), 2.2 ) ), 0.62 ),
+		r: ( x ) => Math.pow( Math.max( 0, 1 - Math.pow( Math.abs( x ), 2.6 ) ), 0.5 ) * ( 0.93 + 0.09 * Math.abs( Math.sin( x * 3.1 ) ) ),
 		colour: ( c ) => {
 
 			if ( c.slit > 0.5 ) return C.tan;
 			if ( c.low ) return C.white;
-			return mix( C.cream, mix( C.peach, C.orange, 0.32 ), bump( c.x - 0.04, 0.5 ) * ss( 0.15, 0.8, c.y ) );
+			return mix( mix( C.cream, C.peach, 0.5 ), mix( C.peach, C.orange, 0.5 ), ss( 0.1, 0.8, c.y ) * ( 1 - 0.75 * bump( c.x - 0.04, 0.13 ) ) * ( 0.5 + 0.5 * ss( 0.2, 0.7, Math.abs( c.x ) ) ) );
 
 		} },
 
 	// Sunrise tellin (Tellina radiata, 6 cm): thin, long and glossy, cream with rose rays from its beak; red at the beak
-	sunriseTellin: { kind: 'valve', nr: 3, around: 7, H: 0.13, ring: 0.002, ringN: 90, gloss: 0.8, view: [ 1.05, 0, 0.15 ],
-		outline: ( a ) => [ Math.cos( a ) * ( Math.cos( a ) > 0 ? 0.58 : 0.42 ), Math.sin( a ) * 0.32 - 0.02 * Math.sin( 2 * a ) ],
+	sunriseTellin: { kind: 'valve', nr: 3, around: 7, H: 0.1, ring: 0.002, ringN: 90, gloss: 0.8, view: [ 1.1, 0, 0.02 ],
+		outline: ( a ) => [ Math.cos( a ) * ( Math.cos( a ) > 0 ? 0.62 : 0.44 ), Math.sin( a ) * ( Math.sin( a ) > 0 ? 0.4 : 0.08 ) ],
 		colour: ( c ) => {
 
 			if ( c.under ) return mix( C.white, C.rose, 0.3 );
-			const ray = 0.5 + 0.5 * Math.sin( c.a * 7 + 0.6 * Math.sin( c.a * 3 ) );
-			const beak = bump( c.t, 0.14 );
-			return mix( mix( C.cream, C.rose, ss( 0.4, 0.8, ray ) * ( 0.75 - 0.3 * c.t ) ), C.red, beak );
+			const ray = 0.5 + 0.5 * Math.sin( c.a * 7 + 0.6 * Math.sin( c.a * 3 ) ), band = 0.5 + 0.5 * Math.sin( c.t * 34 + 2 * Math.sin( c.t * 9 ) );
+			const beak = bump( c.t, 0.12 );
+			return mix( mix( C.bone, mix( C.rose, C.purple, 0.25 ), Math.min( 1, ss( 0.35, 0.8, ray ) * ( 0.7 - 0.2 * c.t ) + ss( 0.6, 1, band ) * 0.45 ) ), C.red, beak );
 
 		} },
 
 	// Turkey wing (Arca zebra, 7 cm): a long boxy ark with a long straight hinge, heavy ribs, zigzag stripes of red-brown
 	// on white like a turkey's wing
-	turkeyWing: { kind: 'valve', nr: 3, around: 9, H: 0.24, rib: 0.008, ribN: 34, view: [ 1.0, 0, 0.2 ],
+	turkeyWing: { kind: 'valve', nr: 3, around: 9, H: 0.2, rib: 0.008, ribN: 34, view: [ 1.15, 0, 0.1 ],
 		outline: ( a ) => {
 
 			// (a long straight hinge on one side, the rest a rounded box)
-			const c = Math.cos( a ), s = Math.sin( a ), k = Math.pow( Math.pow( Math.abs( c ) / 0.58, 3.5 ) + Math.pow( Math.abs( s ) / 0.3, 3.5 ), - 1 / 3.5 );
+			const c = Math.cos( a ), s = Math.sin( a ), k = Math.pow( Math.pow( Math.abs( c ) / 0.58, 3.5 ) + Math.pow( Math.abs( s ) / 0.34, 3.5 ), - 1 / 3.5 );
 			return [ c * k, Math.max( - 0.05, s ) * k + ( s < 0 ? s * 0.03 : 0 ) ];
 
 		},
 		colour: ( c ) => {
 
 			if ( c.under ) return mix( C.white, C.purple, 0.15 );
-			const z = Math.abs( fract( c.t * 3.4 + 0.5 * Math.abs( fract( c.a * 2.4 ) - 0.5 ) * 2 ) - 0.5 ) * 2;
+			const px = c.ox * c.t, pz = c.oz * c.t, z = Math.abs( fract( px * 9 + 1.4 * Math.abs( fract( pz * 5 ) - 0.5 ) ) - 0.5 ) * 2;
 			return mix( mix( C.bone, C.cream, 0.5 ), mix( C.rust, C.brown, 0.5 ), ss( 0.42, 0.58, z ) );
 
 		} },
@@ -629,7 +623,7 @@ export function pictureSize( kind, scale ) {
 // RGBA bytes of the shell drawn to fill W x H: lit from the top left, as a shell book's plate is
 export function shellPicture( kind, W, H, { silhouette = false, detail = 10 } = {} ) {
 
-	const S = SHAPES[ kind ], m = shellMesh( kind, Math.max( 3, detail ) ), V = S.view, nv = m.p.length / 3;
+	const S = SHAPES[ kind ], m = shellMesh( kind, Math.max( 3, S.kind === 'spiral' ? detail : detail * 3 ) ), V = S.view, nv = m.p.length / 3;
 	const px = new Float32Array( nv ), py = new Float32Array( nv ), pz = new Float32Array( nv ), nz = [ [], [], [] ];
 	let x0 = 1e9, x1 = - 1e9, y0 = 1e9, y1 = - 1e9;
 	for ( let i = 0; i < nv; i ++ ) {
