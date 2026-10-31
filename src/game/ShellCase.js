@@ -12,7 +12,10 @@ const CM = 5; // px a cm
 const BIG = 200; // px: the close look's long side
 const pics = new Map(); // `${ kind }:${ scale }:${ silhouette }` -> a data URL
 const queue = [];
+const BLANK = 'data:image/gif;base64,R0lGODlhAQABAAAAACH5BAEKAAEALAAAAAABAAEAAAICTAEAOw=='; // (until it's drawn)
 let timer = null, open = null;
+
+const upper = ( t ) => t[ 0 ].toUpperCase() + t.slice( 1 );
 
 function dataURL( kind, W, H, silhouette, detail ) {
 
@@ -36,7 +39,7 @@ function cell( kind, scale, silhouette ) {
 function imgTag( kind, scale, silhouette, label ) {
 
 	const { w, h, key } = cell( kind, scale, silhouette ), src = pics.get( key );
-	return `<img class="gm-shellpic${ silhouette ? ' is-empty' : '' }" data-pic="${ key }" width="${ w }" height="${ h }" style="width:${ w }px;height:${ h }px" alt="${ label }"${ src ? ` src="${ src }"` : '' }>`;
+	return `<img class="gm-shellpic${ silhouette ? ' is-empty' : '' }" data-pic="${ key }" width="${ w }" height="${ h }" style="width:${ w }px;height:${ h }px" alt="${ label }" src="${ src || BLANK }">`;
 
 }
 
@@ -71,7 +74,7 @@ export function shellTab( s ) {
 	if ( open ) {
 
 		const F = SHELLS[ open ], have = !! S.have[ open ];
-		look = `<div class="gm-shelllook"><span class="gm-shellimg">${ imgTag( open, BIG, ! have, F.name ) }</span><span class="gm-shelltext"><b>${ F.name }</b><i>${ F.sci }</i><small>${ F.cm } cm${ have ? '' : ' · not found yet' }. ${ have ? F.what : `${ F.what }` }. ${ F.note || '' } Where: ${ F.where.toLowerCase() }.</small></span></div>`;
+		look = `<div class="gm-shelllook"><span class="gm-shellimg">${ imgTag( open, BIG, ! have, F.name ) }</span><span class="gm-shelltext"><b>${ F.name }</b><i>${ F.sci }</i><small>${ F.cm } cm${ have ? '' : ' · not found yet' }. ${ upper( F.what ) }. ${ F.note || '' } ${ F.where }.</small></span></div>`;
 
 	}
 
@@ -91,7 +94,7 @@ export function bindShellTab( root, s, redraw ) {
 	};
 	// (what isn't drawn yet, one a frame: the close look first)
 	queue.length = 0;
-	for ( const im of root.querySelectorAll( 'img[data-pic]' ) ) if ( ! im.getAttribute( 'src' ) ) {
+	for ( const im of root.querySelectorAll( 'img[data-pic]' ) ) if ( im.getAttribute( 'src' ) === BLANK ) {
 
 		const [ kind, scale, sil ] = im.dataset.pic.split( ':' );
 		queue.push( [ kind, Number( scale ), sil === '1' ] );
@@ -121,7 +124,7 @@ export const SHELL_CSS = `
 .gm-shell small { font-size: var(--tw-fs-xs); line-height: 1.2; color: var(--tw-ink-3); }
 .gm-shellimg { display: flex; align-items: center; justify-content: center; flex: 1 1 auto; min-height: 30px; padding-bottom: 2px; }
 .gm-shellpic { display: block; object-fit: contain; }
-.gm-shellpic.is-empty { opacity: 0.14; }
+.gm-shellpic.is-empty { opacity: 0.2; }
 .gm-shellhead { display: flex; align-items: center; justify-content: space-between; margin: 0 0 var(--tw-2); color: var(--tw-ink-2); font-size: var(--tw-fs-sm); }
 .gm-shellscale { display: inline-block; border-top: 2px solid var(--tw-ink-3); font-size: var(--tw-fs-xs); color: var(--tw-ink-3); text-align: center; white-space: nowrap; }
 .gm-shelllook { display: flex; flex-wrap: wrap; gap: var(--tw-3); align-items: center; padding: var(--tw-2); margin: 0 0 var(--tw-2); border-radius: calc(10 * var(--tw-u)); background: var(--tw-fill); border: 1px solid var(--tw-aqua); }
