@@ -46,7 +46,8 @@ export class Stroke {
 		this.T = 1.15;
 		this.wet = false; // the blade's in the water
 		this.rest = 1; // 1: the paddle's across the lap
-		this.park = 1; // 1: laid along the gunwale: nobody's in her, or the rod's out (Seat)
+		this.park = 1; // 1: laid along the gunwale: nobody's in her, or the rod's out
+		this.held = false; // something else in your hands (Seat)
 		this.power = 1; // a better paddle (Fleet's kayakPaddle): speedMul
 		this.events = [];
 		this.thrust = 0;
@@ -55,6 +56,7 @@ export class Stroke {
 		this.tilt = 0;
 		this.hub = REST.hub;
 		this._from = { swing: 0, tilt: 0, hub: REST.hub };
+		this.tow = new Vector3(); // N (world): a fish on the line (KayakModel.play)
 		this._b = new Vector3();
 		this._prev = new Vector3();
 		this._hasPrev = false;
@@ -105,6 +107,8 @@ export class Stroke {
 	// one integrator step. Moves the paddle and returns its blade's depth of water (m, >0 in it), or leaves it alone
 	step( ctl ) {
 
+		// (taken up as you sit down, laid by when you've something else in your hands)
+		this.park = clamp( this.park + ( ctl.driven && ! this.held ? - H * 2.4 : H * 1.6 ), 0, 1 );
 		const asked = ctl.driven && ! this.park ? ctl.throttleTarget || 0 : 0, turn = ctl.driven && ! this.park ? ctl.steerTarget || 0 : 0;
 		this.phase += H / this.T;
 		if ( this.phase >= 1 ) {
@@ -196,6 +200,23 @@ export class Stroke {
 
 	}
 
+	// the stroke as it goes to the others, and taken up from them (together/): the shaft's swing, tilt, height, and how far
+	// it's laid by
+	get wire() {
+
+		return [ Math.round( this.swing * 100 ) / 100, Math.round( this.tilt * 100 ) / 100, Math.round( this.hub * 100 ) / 100, Math.round( this.park * 10 ) / 10 ];
+
+	}
+
+	set wire( w ) {
+
+		this.swing = w[ 0 ];
+		this.tilt = w[ 1 ];
+		this.hub = w[ 2 ];
+		this.park = w[ 3 ];
+
+	}
+
 	// where the hands are on the shaft, boat frame (the paddler's arms reach to these)
 	hands( right, left, mid, dir ) {
 
@@ -209,7 +230,7 @@ export class Stroke {
 
 const _park = new Vector3( - 0.385, 0.215, - 0.02 ), _parkDir = new Vector3( 0.05, - 0.02, 1 ).normalize();
 
-const _bw = new Vector3(), _f = new Vector3();
+const _bw = new Vector3(), _f = new Vector3(), _rod = new Vector3( 0, 0.5, 0.25 );
 const LEAN = 62; // N m: 80 kg moved 8 cm
 // her port direction's x and z in the world
 const side0 = ( q ) => 1 - 2 * ( q.y * q.y + q.z * q.z );
@@ -219,6 +240,8 @@ const side2 = ( q ) => 2 * ( q.x * q.z - q.w * q.y );
 export function paddling( ctl, q ) {
 
 	const st = ctl.model.stroke;
+	// (a fish on: it tows her round, by the rod in your hands)
+	if ( st.tow.lengthSq() > 0 ) q.addForceAt( st.tow, ctl.toWorld( _rod, _bw ) );
 	st.step( ctl );
 	st.bladeAt( st._b );
 	// (the blade's speed through the kayak's frame)

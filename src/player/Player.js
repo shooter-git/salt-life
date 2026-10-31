@@ -798,6 +798,7 @@ export class Player {
 		this.yaw = b.getYaw() + Math.PI;
 		this._camY = null;
 		if ( this.audio && wasDriving && b.handling.engine ) this.audio.engineStop();
+		if ( b.model.seated ) this.orbitDist = 13; // ((M16) the chase camera, as the other boats have it)
 		if ( this.riding ) this.unride();
 
 	}

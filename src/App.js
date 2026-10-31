@@ -979,7 +979,7 @@ export class App {
 		}
 		this.drips.update( dt, this.camera, this.cameraWaterHeight, this.renderer.domElement.height, aboard ); // (M11)
 		this.updateInstruments( dt );
-		this.boatLamps.set( { underway: this.boatCtl.driven || ! ( this.boatCtl.moored || this.boatCtl.anchor ), spot: this.searchlight } );
+		this.boatLamps.set( { underway: this.boatCtl.driven || ! ( this.boatCtl.moored || this.boatCtl.anchor || this.boatCtl.beached ), spot: this.searchlight } );
 		this.localLights.update( this.camera, dt );
 		cloudShadows.update( this.camera );
 		this.wake.update( dt );

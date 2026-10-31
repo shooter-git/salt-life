@@ -23,7 +23,7 @@ export function updateSeat( p, dt ) {
 
 	// the paddle laid by with the rod out, and taken up again
 	const full = p.handsFull || p.busy;
-	st.park = MathUtils.clamp( st.park + ( full ? dt * 1.6 : - dt * 2.4 ), 0, 1 );
+	st.held = full;
 
 	let throttle = 0, steer = 0;
 	if ( ! full && ! M.sliding ) {

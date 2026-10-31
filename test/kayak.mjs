@@ -29,7 +29,6 @@ const wind = ( U, x = 1, y = 0 ) => {
 const boat = ( ground = - 50 ) => {
 
 	const m = new KayakModel();
-	m.stroke.park = 0;
 	const ctl = new BoatController( { model: m, query, terrain: { heightAt: typeof ground === 'function' ? ground : () => ground }, colliders: null } );
 	ctl.position.set( 0, 0, 0 );
 	ctl.moored = false;
@@ -163,11 +162,10 @@ const yawTurned = ( ctl, seconds, th, st ) => {
 
 	ok( blades.includes( true ) && blades.includes( false ), 'the blade goes in and comes out' );
 	// laid by with the rod out, she stops being paddled
-	m.stroke.park = 1;
+	m.stroke.held = true;
 	run( ctl, 20, 0.7 );
 	ok( Math.abs( ctl.forwardSpeed ) < 0.8, `with the paddle laid by she runs on and slows (${ ctl.forwardSpeed.toFixed( 2 ) } m/s after 20 s)` );
 	ctl.driven = false;
-	m.stroke.park = 0;
 	m.dispose();
 
 }

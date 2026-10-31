@@ -7,11 +7,14 @@ import { KayakLines } from './KayakLines.js';
 import { kayakBody, paddleGeometry } from './KayakHull.js';
 import { KAYAK_HANDLING, Stroke } from './Paddle.js';
 import { dryFrom, layOn, waterFrom } from './Shore.js';
+import { Drops } from './Drops.js';
 import { TUMBLE_B, capsizeHeel, breakerCapsizes, spillShare, climbSeconds, soakStep, SOAKED } from './Capsize.js';
 
 const _mid = new Vector3(), _dir = new Vector3(), _up = new Vector3(), _z = new Vector3(), _m = new Matrix4();
 const _l = new Vector3(), _r = new Vector3(), _w = new Vector3(), _v = new Vector3(), _fwd = new Vector3();
 const _breaker = { n: 0, H: 0, b: - 9, dx: 0, dz: 1 };
+
+const app_ui = ( game ) => ( game.app.ui && game.app.ui.ui ? game.app.ui.ui.root : null );
 
 // where she's kept when she's brought home: on the sand just east of the pier's foot
 const HOME = { x: 62, z: - 24 }; // m
@@ -77,6 +80,7 @@ export class KayakModel extends Vessel {
 		this.perch = new Vector3( 0, deck.y( 0, deck.wellZ[ 1 ] - 0.1 ), deck.wellZ[ 1 ] - 0.1 ); // (a rider: together/)
 
 		this.euler = new Euler( 0, 0, 0, 'YXZ' ); // (Seat's)
+		this.drops = new Drops();
 		this.capsized = false;
 		this.righting = false;
 		this.sliding = null; // { x0, z0, h0, x1, z1, h1, t, T }: going down the sand into the water
@@ -96,7 +100,8 @@ export class KayakModel extends Vessel {
 
 	// ---- the paddle where the stroke has it
 
-	update( dt ) {
+	// a paddle mesh (hers, or a copy's: together/) posed where her stroke is
+	posePaddle( p ) {
 
 		const st = this.stroke;
 		st.pose( _mid, _dir );
@@ -107,9 +112,14 @@ export class KayakModel extends Vessel {
 		_up.copy( _z ).addScaledVector( _dir, - _z.dot( _dir ) ).normalize();
 		_z.crossVectors( _dir, _up );
 		_m.makeBasis( _dir, _up, _z ).setPosition( _mid );
-		const p = this.meshes.paddle;
 		p.matrix.copy( _m );
 		p.matrixWorldNeedsUpdate = true;
+
+	}
+
+	update( dt ) {
+
+		this.posePaddle( this.meshes.paddle );
 		// (turned over and back)
 		if ( this._roll !== this._rollTo ) {
 
@@ -225,6 +235,7 @@ export class KayakModel extends Vessel {
 		layOn( ctl.terrain, G.seaLevel.value, x, z, heading, ctl.position, ctl.quaternion );
 		ctl.velocity.set( 0, 0, 0 );
 		ctl.angular.set( 0, 0, 0 );
+		ctl.speed = 0;
 		ctl.beached = true;
 		ctl.moored = false;
 		ctl.anchor = null;
@@ -236,7 +247,7 @@ export class KayakModel extends Vessel {
 	// fleet's berths, once they're there)
 	atHome( ctl ) {
 
-		const b = ctl.berth && ctl.berth.position, spot = dryFrom( ctl.terrain, G.seaLevel.value, b ? b.x : HOME.x, b ? b.z : HOME.z );
+		const b = ctl.berth && ctl.berth.position, spot = dryFrom( ctl.terrain, G.seaLevel.value, b ? b.x : HOME.x, b ? b.z : HOME.z, 60 );
 		this.capsized = this.righting = false;
 		this._roll = this._rollTo = 0;
 		this.body.rotation.z = 0;
@@ -264,7 +275,6 @@ export class KayakModel extends Vessel {
 		const aboard = p.mode === 'boat' && p.boat === ctl;
 		this.climbTime = climbSeconds( !! stats.lifeJacket );
 		st.power = stats.speedMul || 1;
-		if ( ! aboard ) st.park = Math.min( 1, st.park + dt * 3 );
 
 		this.playStrokes( ctl, app, aboard );
 		this.playSlide( dt, ctl, app );
@@ -275,6 +285,14 @@ export class KayakModel extends Vessel {
 			ctl.hasWater = false;
 
 		}
+
+		// (a fish on tows her, as hard as it pulls: a 3 kg redfish turns her, a big one takes her for a ride)
+		if ( aboard && game.fight && game.rod && game.rod.bobber ) {
+
+			_w.copy( game.rod.bobber ).sub( ctl.position ).setY( 0 ).normalize();
+			st.tow.copy( _w ).multiplyScalar( ( game.fight.tension || 0 ) * Math.min( 110, 14 + 7 * ( game.fight.kg || 0 ) ) );
+
+		} else st.tow.set( 0, 0, 0 );
 
 		this.playFigure( dt, app, ctl, p, aboard );
 		if ( aboard && ! this.sliding && ! this.capsized ) this.playCapsize( dt, game, ctl, p );
@@ -410,11 +428,12 @@ export class KayakModel extends Vessel {
 
 		}
 
-		if ( over ) this.capsize( game, ctl, p, ( _v.set( 1, 0, 0 ).applyQuaternion( ctl.quaternion ).y >= 0 ) ? - 1 : 1 );
+		// (her high side comes up and over)
+		if ( over ) this.capsize( game, ctl, p, _v.set( 1, 0, 0 ).applyQuaternion( ctl.quaternion ).y >= 0 ? 1 : - 1 );
 
 	}
 
-	// over she goes, and you with her. side: + she rolls to port
+	// over she goes, and you with her, to leeward. side: + her port side coming up and over
 	capsize( game, ctl, p, side ) {
 
 		this.capsized = true;
@@ -425,8 +444,7 @@ export class KayakModel extends Vessel {
 		st.kind = null;
 		st.phase = 1;
 		st.park = 1;
-		game.stowForWater && game.stowForWater();
-		p.exitBoat( null, side );
+		p.exitBoat( null, - side );
 		p.soak = 1;
 		p.breath = Math.min( p.breath, p.breathMax * ( stats.lifeJacket ? 0.9 : 0.6 ) );
 		// (the lid pops, and what's in the cooler goes)
@@ -462,6 +480,7 @@ export class KayakModel extends Vessel {
 			game.toast( 'You\'re soaked through · she sits low, and it all comes aboard', 3200 );
 
 		} else if ( p.soak < 0.2 ) this._soakSaid = false;
+		this.drops.update( dt, aboard && ( p.camMode === 'first' || p.handsFull || p.busy ), G.rain.value, wash, app_ui( game ) );
 		// (a sea over her deck throws some about)
 		if ( aboard && wash > 0.17 && game.app.spray && Math.random() < dt * 6 ) {
 
@@ -483,6 +502,7 @@ export class KayakModel extends Vessel {
 
 		}
 
+		this.drops.dispose();
 		for ( const m of Object.values( this.meshes ) ) m.geometry.dispose();
 		this.materials.hull.dispose();
 		this.materials.paddle.dispose();
