@@ -41,7 +41,8 @@ import { FT } from './Units.js';
 //   { stage: 'outlook' | 'watch' | 'warning', onset, ends, eye, over, from } | null   dayWeatherAt( T )
 //   (M15) weatherHere( T, pick, since, x, z, cells ): the weather where you are (HERE), and showers( ..., at )
 //   about you; withEdge( w, x, z ): past the far grounds, the open ocean's fresher trades (EDGE), and
-//   seaHeight( swell, windSea ) -> m (the seas, as a forecast gives them)
+//   seaHeight( swell, windSea, blow ) -> m (the seas, as a forecast gives them)
+//   (M16) blowSeaOf( wind ) -> m: a blow's own sea; seaSwell, seaTurn, seaPeriodOf: what it does to the long waves
 
 // what a condition brings: wind (m/s at 10 m), cloud cover and how overcast it is (0..1), the open
 // sea's swell and wind sea (x today's), the surf (m, the shore waves' offshore amplitude H/2, and its
@@ -375,6 +376,16 @@ const windSeaOf = ( wind ) => {
 
 };
 
+// (M16) A blow's own sea (m: its significant height, on top of the swell and the short wind sea), which the waves'
+// sizes left out: a gale's was drawn 5 to 7 ft. A real gale's (39 kt) is 10 to 14 ft in these waters, 12 ft here:
+// NOAA's Beaufort has force 8 at 18 to 25 ft on the open ocean, Key West's own gale warning for 25 to 30 kt gives 6 to
+// 10 ft over the Straits (so about 12 at 39 kt), and the SMB curves over the 100 to 150 km of water the Keys have
+// upwind give 10.6 to 13.5 ft. Nothing at a breezy day's wind and under (their 4 to 6 ft is already the Weather
+// Service's for 20 kt); from there its energy (Hs^2) grows about as the wind past that. Past a gale it goes on
+// growing, so a hurricane's stays bigger than a gale's: a Category 1's wall about 25 ft, a 3's about 31.
+export const OWN_SEA = { from: 11, k: 0.96, p: 0.575 };
+export const blowSeaOf = ( wind ) => wind > OWN_SEA.from ? OWN_SEA.k * Math.pow( wind - OWN_SEA.from, OWN_SEA.p ) : 0;
+
 // (M14) the north shore's sea for a wind (m/s) turned `angle` (rad) from the trades (NORTH): its height
 // (m) and its period (s)
 const northOf = ( wind, angle ) => {
@@ -426,7 +437,7 @@ function row( id ) {
 	// ((M14) its wind's the trades', so of a blow's sea and swell only as much gets into the bay as from one
 	// down them (bayInto): a picked gale's breaks on the north shore, the bay in the island's lee)
 	const lee = c.swell > f.swell ? bayInto( TRADES ) : 1;
-	return { id, wind: c.wind, windAngle: 0, coverage: c.coverage, overcast: c.overcast, swell: lerp( f.swell, c.swell, lee ), windSea: windSeaOf( c.wind ), surf: lerp( FAIR_SURF, Math.min( SURF_MAX, c.surf ), lee ), period: lerp( f.period, c.period, lee ), west: 0, north: northOf( c.wind, 0 ), northPeriod: northPeriodOf( c.wind ), visibility: c.visibility, rain: c.rain, thunder: c.thunder, front: 0, murk: MURK_PICK[ id ] || 0, hurricane: 0, eye: 0, surge: 0, rainHaze: 0, sprayHaze: 0, boarded: 0 };
+	return { id, wind: c.wind, windAngle: 0, coverage: c.coverage, overcast: c.overcast, swell: lerp( f.swell, c.swell, lee ), windSea: windSeaOf( c.wind ), blow: blowSeaOf( c.wind ), surf: lerp( FAIR_SURF, Math.min( SURF_MAX, c.surf ), lee ), period: lerp( f.period, c.period, lee ), west: 0, north: northOf( c.wind, 0 ), northPeriod: northPeriodOf( c.wind ), visibility: c.visibility, rain: c.rain, thunder: c.thunder, front: 0, murk: MURK_PICK[ id ] || 0, hurricane: 0, eye: 0, surge: 0, rainHaze: 0, sprayHaze: 0, boarded: 0 };
 
 }
 
@@ -543,6 +554,8 @@ export function withEdge( w, x, z ) {
 	w.wind += EDGE.wind * k;
 	w.windSea = windSeaOf( w.wind );
 	w.swell *= 1 + EDGE.swell * k;
+	// ((M16) its own sea half again too: a gale's 12 ft 18, the Beaufort scale's force 8 on the open ocean)
+	w.blow *= 1 + EDGE.swell * k;
 	return w;
 
 }
@@ -553,7 +566,35 @@ export function withEdge( w, x, z ) {
 // day's 1.1 m, 3 to 4 ft)
 export const SEA_A = { swell: [ 0.32, 0.18, 0.12, 0.06 ], wind: [ 0.09, 0.045, 0.025, 0.012 ] };
 const SEA_SS = SEA_A.swell.reduce( ( s, a ) => s + a * a, 0 ), SEA_WW = SEA_A.wind.reduce( ( s, a ) => s + a * a, 0 );
-export const seaHeight = ( swell, windSea ) => 4 * Math.sqrt( ( swell * swell * SEA_SS + windSea * windSea * SEA_WW ) / 2 );
+export const seaHeight = ( swell, windSea, blow = 0 ) => 4 * Math.sqrt( ( seaSwell( swell, blow ) ** 2 * SEA_SS + windSea * windSea * SEA_WW ) / 2 );
+// (M16) A blow's own sea (blowSeaOf) is carried by the long waves, there being no others of its length. How high it
+// makes them, x today's (the swell and it adding as energy: on a fair day, the swell's exactly)
+const SEA_LONG = 4 * Math.sqrt( SEA_SS / 2 );
+export function seaSwell( swell, blow = 0 ) {
+
+	return blow > 0 ? Math.hypot( swell, blow / SEA_LONG ) : swell;
+
+}
+// How far the long waves have come round to run with the wind (0..1), as far as the blow's sea has outgrown the
+// swell: a gale's sea runs down its wind, and a south swell's left under it (the trades run nearly against it)
+export function seaTurn( swell, blow = 0 ) {
+
+	if ( blow <= 0 ) return 0;
+	const own = ( blow / SEA_LONG ) ** 2;
+	return sstep( 0.25, 0.75, own / ( own + swell * swell ) );
+
+}
+// And their period (s): a higher sea's a longer one. A fully developed sea's peak period, about 4.9 sqrt( Hs ) (from
+// Pierson-Moskowitz: a gale's 12 ft 9.4 s, as SMB's 9 s over that fetch; the far sea's 18 ft 11.4 s): they take it
+// as far as they've come round (seaTurn)
+export function seaPeriodOf( swell, windSea, blow = 0 ) {
+
+	return SEA_T * Math.sqrt( seaHeight( swell, windSea, blow ) );
+
+}
+const SEA_T = 4.9;
+// The long waves' period as drawn (s): the swell's, or as far as they've come round, the blow's own
+export const seaDominant = ( w ) => lerp( w.period, seaPeriodOf( w.swell, w.windSea, w.blow ), seaTurn( w.swell, w.blow ) );
 
 // (M15) the showers' rain and thunder at ( x, z ) (0..1: cells, showers()'): each as hard as it rains at its
 // middle, nothing past its edge; its thunder out a little past it
@@ -638,7 +679,7 @@ export function dayWeatherAt( T, open = 0 ) {
 
 	// a blow on its way (0..1): the storm a few hours on, more than now (the fish feed hard ahead of it)
 	const front = clamp01( ( Math.max( storminess( T + FRONT_LEAD[ 0 ] ), storminess( T + FRONT_LEAD[ 1 ] ) ) - s ) * 12 ) * sstep( 0.45, 0.75, Math.max( storminess( T + FRONT_LEAD[ 1 ] ), s ) ) * k;
-	const w = { id: 'fair', wind, windAngle, coverage: wet.coverage, overcast: wet.overcast, swell, windSea: windSeaOf( wind ), surf, period, west, north: 0, northPeriod: 0, visibility: wet.visibility, rain, thunder, front, murk: murkAt( T ), hurricane: 0, eye: 0, surge: 0, rainHaze: 0, sprayHaze: 0, boarded: 0 };
+	const w = { id: 'fair', wind, windAngle, coverage: wet.coverage, overcast: wet.overcast, swell, windSea: windSeaOf( wind ), blow: blowSeaOf( wind ), surf, period, west, north: 0, northPeriod: 0, visibility: wet.visibility, rain, thunder, front, murk: murkAt( T ), hurricane: 0, eye: 0, surge: 0, rainHaze: 0, sprayHaze: 0, boarded: 0 };
 	northAt( T, w );
 	w.id = nameOf( w );
 	return w;
@@ -903,6 +944,7 @@ function overHurricane( w, T, h, x = 0, z = 0 ) {
 		w.windAngle += Math.atan2( d.x * bz - d.y * bx, d.x * bx + d.y * bz );
 		w.wind = lerp( w.wind, s.wind, k );
 		w.windSea = windSeaOf( w.wind );
+		w.blow = blowSeaOf( w.wind );
 
 	}
 

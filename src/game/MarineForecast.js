@@ -1,4 +1,4 @@
-import { weatherAt, withEdge, seaHeight, towardOf, EDGE } from './Weather.js';
+import { weatherAt, withEdge, seaHeight, seaDominant, towardOf, EDGE } from './Weather.js';
 import { FT, KT } from './Units.js';
 
 // (M15) The coastal waters forecast, as the weather radio at the helm reads it (Radio.js): NOAA Weather
@@ -13,7 +13,8 @@ import { FT, KT } from './Units.js';
 //     hurricane's watch or warning), then each period (periodsFrom: today, tonight, tomorrow; this afternoon
 //     after noon, the rest of tonight before dawn): the wind's direction to eight points and its speed in a
 //     5-knot band ('Northwest winds 10 to 15 knots'), and how it changes through the period; the seas in feet
-//     (the significant wave height of the sea that's drawn: Weather.seaHeight) and their dominant period; the
+//     (the significant wave height of the sea that's drawn: Weather.seaHeight, (M16) a gale's 10 to 14 feet) and
+//     their dominant period (Weather.seaDominant: a higher sea's a longer one); the
 //     showers (isolated, scattered, likely) and the thunderstorms.
 //   broadcast( T, { pick, since, news } ) -> [ sentence, ... ]   (each a caption, read in turn)
 
@@ -34,6 +35,25 @@ const SHOWER = 0.15, THUNDER = 0.3;
 
 const POINTS8 = [ 'north', 'northeast', 'east', 'southeast', 'south', 'southwest', 'west', 'northwest' ];
 const upper = ( t ) => t.charAt( 0 ).toUpperCase() + t.slice( 1 );
+// (M16) the seas (feet, lowest and highest of a period) as they're read: a foot's band under SEAS_WIDE; over it, as
+// the Weather Service gives a big sea (Key West's '6 to 10 feet'), about 15% either side of it, to the even foot,
+// and past 15 ft to the five: a gale's 12 ft 'Seas 10 to 14 feet', out past the far grounds 'Seas 15 to 20 feet'
+const SEAS_WIDE = 7;
+export function seasWords( lo, hi ) {
+
+	if ( hi < 2.2 ) return 'Seas 2 feet or less.';
+	if ( hi < SEAS_WIDE ) {
+
+		const a = Math.max( 1, Math.round( lo - 0.4 ) );
+		return `Seas ${ a } to ${ Math.max( a + 1, Math.round( hi + 0.4 ) ) } feet.`;
+
+	}
+
+	const a = lo * 0.85, b = hi * 1.15;
+	const to = ( v ) => v < 10 ? Math.round( v ) : v < 15 ? 2 * Math.round( v / 2 ) : 5 * Math.round( v / 5 );
+	return `Seas ${ to( a ) } to ${ Math.max( to( a ) + 1, to( b ) ) } feet.`;
+
+}
 const hourOf = ( T ) => ( ( T % 24 ) + 24 ) % 24;
 
 // the hour as it's read ('9 a.m.', '12 noon', '12 midnight')
@@ -116,11 +136,10 @@ export function periodText( p, zone, pick = null, since = 0, first = false ) {
 	else if ( late[ 0 ] !== early[ 0 ] ) wind = `${ dir } winds ${ early[ 0 ] } to ${ early[ 1 ] } knots, ${ late[ 0 ] > early[ 0 ] ? 'increasing' : 'diminishing' } to ${ late[ 0 ] } to ${ late[ 1 ] } knots ${ later }.`;
 	else wind = `${ dir } winds ${ early[ 0 ] } to ${ early[ 1 ] } knots.`;
 	// (the seas: the sea that's drawn, its significant height, in a foot's band; its period on the first)
-	const ft = s.map( ( w ) => seaHeight( w.swell, w.windSea ) / FT );
+	const ft = s.map( ( w ) => seaHeight( w.swell, w.windSea, w.blow ) / FT );
 	const lo = Math.min( ...ft ), hi = Math.max( ...ft );
-	const a = Math.max( 1, Math.round( lo - 0.4 ) ), b = Math.max( a + 1, Math.round( hi + 0.4 ) );
-	const seas = hi < 2.2 ? 'Seas 2 feet or less.' : `Seas ${ a } to ${ b } feet.`;
-	const period = first ? ` Dominant period ${ Math.round( s[ 0 ].period ) } seconds.` : '';
+	const seas = seasWords( lo, hi );
+	const period = first ? ` Dominant period ${ Math.round( seaDominant( s[ 0 ] ) ) } seconds.` : '';
 	// (the showers: how many of its hours have one; a thunderstorm in any)
 	const wet = s.filter( ( w ) => w.rain >= SHOWER ).length / s.length, thunder = s.some( ( w ) => w.thunder >= THUNDER );
 	const what = thunder ? 'showers and thunderstorms' : 'showers';

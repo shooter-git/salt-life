@@ -22,6 +22,10 @@ import { WORLD } from '../world/WorldLayout.js';
 // directions about its own (the wind sea's broad, the swell's narrow) partly blocked by it, so the lee
 // fills in from either side further off, as it does at sea. Everywhere else the sea's the open ocean's.
 //
+// (M16) A blow's own sea rides the long waves (Weather's blowSeaOf, seaSwell): the higher they stand, the longer
+// their period and, as it outgrows the swell, the more they run down the wind (setSwell's own, ownPeriod) and
+// not up from the south, about the camera as all of it turns. Nothing on a fair day.
+//
 // A wave i at Lagrangian point x0 (the undisplaced grid point):
 //   theta = k (d . x0) - omega t + phase,  omega = sqrt( g k ) (deep water)
 //   x = x0 + qa d cos( theta ),  y = a sin( theta )
@@ -100,6 +104,9 @@ export class Waves {
 		// south's period and the westerly's (setSwell)
 		this.west = 0;
 		this.periods = [ SWELL_PERIOD, SWELL_PERIOD ];
+		this.own = 0; // (M16) how far they've come round to the wind's (setSwell)
+		this.ownPeriod = SWELL_PERIOD;
+		this._ownWind = wind;
 		const turn = Math.atan2( SWELL_WEST.y, SWELL_WEST.x ) - swell;
 		this._westTurn = Math.atan2( Math.sin( turn ), Math.cos( turn ) );
 		this.iterations = 2; // the CPU height's fixed-point steps (more on steep seas: setSea)
@@ -283,12 +290,15 @@ vec3 waveDisplacement( vec2 x0, float fade, out vec3 normal ) { return waveDispl
 	// the groundswell the south's (`south`), the rest between the south's and the westerly's (`westPeriod`)
 	// as far as they've turned, their lengths with it, about `at` at time t as well: a wave carries on
 	// where it is, only the crests' spacing and speed change, as the shore's clock does
-	setSwell( west, south = SWELL_PERIOD, westPeriod = south, at = { x: 0, z: 0 }, t = G.time.value ) {
+	setSwell( west, south = SWELL_PERIOD, westPeriod = south, at = { x: 0, z: 0 }, t = G.time.value, own = 0, ownPeriod = south ) {
 
-		if ( west === this.west && south === this.periods[ 0 ] && westPeriod === this.periods[ 1 ] ) return;
+		if ( west === this.west && south === this.periods[ 0 ] && westPeriod === this.periods[ 1 ] && own === this.own && ( own === 0 || ( ownPeriod === this.ownPeriod && this.windAngle === this._ownWind ) ) ) return;
 		this.west = west;
 		this.periods[ 0 ] = south;
 		this.periods[ 1 ] = westPeriod;
+		this.own = own;
+		this.ownPeriod = ownPeriod;
+		this._ownWind = this.windAngle;
 		const A = this.uniforms.waveA.value, B = this.uniforms.waveB.value, n = this.waves.length;
 		const swell = Math.atan2( WORLD.swellDir.y, WORLD.swellDir.x );
 		let first = true;
@@ -297,8 +307,18 @@ vec3 waveDisplacement( vec2 x0, float fade, out vec3 normal ) { return waveDispl
 			if ( w.from !== 's' ) return;
 			const turn = first ? 0 : west;
 			first = false;
-			const angle = swell + SPECTRUM[ i ].rot + turn * this._westTurn, dx = Math.cos( angle ), dz = Math.sin( angle );
-			const k = kOf( SPECTRUM[ i ].T * ( south + ( westPeriod - south ) * turn ) ), omega = Math.sqrt( GRAVITY * k );
+			let angle = swell + SPECTRUM[ i ].rot + turn * this._westTurn, period = south + ( westPeriod - south ) * turn;
+			// ((M16) and as far as a blow's own sea has outgrown it, down the wind, the shorter way round, at its period)
+			if ( own > 0 ) {
+
+				const to = this.windAngle + SPECTRUM[ i ].rot - angle;
+				angle += own * Math.atan2( Math.sin( to ), Math.cos( to ) );
+				period += ( ownPeriod - period ) * own;
+
+			}
+
+			const dx = Math.cos( angle ), dz = Math.sin( angle );
+			const k = kOf( SPECTRUM[ i ].T * period ), omega = Math.sqrt( GRAVITY * k );
 			// (k ( d . at ) - omega t + phase, the same before and after)
 			w.phase = ( w.phase + w.k * ( w.dx * at.x + w.dz * at.z ) - k * ( dx * at.x + dz * at.z ) - ( w.omega - omega ) * t ) % TAU;
 			w.dx = dx;

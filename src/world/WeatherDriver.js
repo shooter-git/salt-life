@@ -1,6 +1,6 @@
 import { Vector2 } from '../engine/index.js';
 import { G } from '../core/Globals.js';
-import { islandTime, weatherHere, withEdge, showers, towardOf, hurricaneAt, hurricaneNews, hash, squallWind, gustShare, FRONT_KMH, STORM_RANGE, SURF_MAX } from '../game/Weather.js';
+import { islandTime, weatherHere, withEdge, seaSwell, seaTurn, seaPeriodOf, showers, towardOf, hurricaneAt, hurricaneNews, hash, squallWind, gustShare, FRONT_KMH, STORM_RANGE, SURF_MAX } from '../game/Weather.js';
 import { FRONT_KM, eyeCover, bandCells } from '../sky/SkyProClouds.js';
 
 // (Salt Life) The island's weather, each frame: what the day brings (game/Weather.js), or what you picked
@@ -63,8 +63,10 @@ const FRONT_EVERY = 0.5;
 // rad a second at most: the wind comes round (the far sea turns with it), (M12) as fast as a front swings it
 // (about a quarter of the compass in two game hours)
 const TURN_RATE = 0.015;
+// (M16) a share a second at most: the long waves coming round to a blow (about a minute and a half all the way)
+const SEA_TURN_RATE = 0.012;
 const JUMP = 0.5; // game hours: more than this between frames, the clock jumped
-const KEYS = [ 'wind', 'swell', 'windSea', 'surf', 'west', 'north', 'visibility', 'murk', 'hurricane', 'surge', 'rainHaze', 'sprayHaze' ];
+const KEYS = [ 'wind', 'swell', 'windSea', 'blow', 'surf', 'west', 'north', 'visibility', 'murk', 'hurricane', 'surge', 'rainHaze', 'sprayHaze' ];
 const QUICK = [ 'rain', 'thunder', 'front', 'eye' ];
 // (M13) in a hurricane the wind comes round up to this many times quicker in light airs (its eye's), from
 // LIGHT[ 1 ] m/s down to LIGHT[ 0 ]
@@ -114,6 +116,9 @@ export class WeatherDriver {
 		this.cloud = null; // (M9) the cloud it's bringing (a little ahead: CLOUD_LEAD)
 		this._T = null;
 		this._at = { x: 0, z: 0 }; // where the sea turns about (the camera)
+		this._seaTurn = 0; // (M16) how far the long waves have come round to the wind's
+		this._seaJumped = true;
+		this._dtSea = 0;
 		this._frontT = 0;
 		this._pick = null;
 		this._showers = [];
@@ -202,6 +207,7 @@ export class WeatherDriver {
 		if ( ! this.live || jumped ) {
 
 			this.live = { ...target, ...cloud };
+			this._seaJumped = true; // ((M16) the long waves too)
 			G.wet.value = Math.min( 1, target.rain * 3 );
 			// (the sea under the boat stepped: she takes it as she finds it)
 			if ( jumped && this.boat ) this.boat.hasWater = false;
@@ -244,7 +250,9 @@ export class WeatherDriver {
 
 		}
 
+		this._dtSea = dt;
 		this.apply();
+		this._seaJumped = false;
 		// (M11) the showers about the island, for their curtains in the distance (a picked weather's are
 		// its own; each slot's rain is kept while the pick is): (M15) worked out first, about you
 		// ((M14) in a hurricane, its bands' curtains where they are, in place of the showers')
@@ -285,7 +293,7 @@ export class WeatherDriver {
 		G.seaLevel.value = w.surge;
 		if ( this.water.lod ) {
 
-			seaBox( w.surge, w.surf, this.waves.reachOf( w.swell, w.windSea ), _box );
+			seaBox( w.surge, w.surf, this.waves.reachOf( seaSwell( w.swell, w.blow ), w.windSea ), _box );
 			this.water.lod.minY = _box[ 0 ];
 			this.water.lod.maxY = _box[ 1 ];
 
@@ -295,7 +303,8 @@ export class WeatherDriver {
 		if ( w.windAngle === 0 ) G.windDir.value.copy( p );
 		else G.windDir.value.set( p.x * c - p.y * s, p.x * s + p.y * c );
 		this.waves.setWindDir( G.windDir.value, this._at );
-		this.waves.setSea( w.swell, w.windSea );
+		// ((M16) with a blow's own sea on the long waves)
+		this.waves.setSea( seaSwell( w.swell, w.blow ), w.windSea );
 		// ((M15) and the fetch its waves need to be grown, by the wind: the island's lee calmer)
 		this.waves.setWind( w.wind );
 		// ((M12) a westerly's swell from the west: on the shore once its field's solved, and offshore; (M14)
@@ -309,7 +318,11 @@ export class WeatherDriver {
 
 		}
 
-		this.waves.setSwell( w.west, shore ? shore.trains[ 0 ].period : w.period, w.period, this._at );
+		// ((M16) and as far as a blow's own sea has outgrown the swell, they come round to run down the wind, at its
+		// period: as slowly as the wind comes round, so a picked gale's doesn't spin the sea about you)
+		const turnTo = seaTurn( w.swell, w.blow ), turnBy = this._dtSea * SEA_TURN_RATE;
+		this._seaTurn = this._seaJumped ? turnTo : toward( this._seaTurn, turnTo, Math.max( - turnBy, Math.min( turnBy, turnTo - this._seaTurn ) ) );
+		this.waves.setSwell( w.west, shore ? shore.trains[ 0 ].period : w.period, w.period, this._at, undefined, this._seaTurn, seaPeriodOf( w.swell, w.windSea, w.blow ) );
 		sky.clouds.coverage.value = w.coverage;
 		sky.clouds.overcast.value = w.overcast;
 		sky.clouds.storm.value = w.storm;
