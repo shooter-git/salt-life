@@ -145,7 +145,36 @@ export const WASH = { day: 0.9, blown: 0.85, open: 0.5 };
 // north sea roughs its water as it does the north shore's (`blown`)
 export const BIG = { skew: 0.5, from: 4, more: 1.5, blown: 0.4 };
 // (not water types: what the game adds to a spot's habitat)
-const NOT_WATER = { flood: true, weather: true, side: true, big: true, far: true };
+const NOT_WATER = { flood: true, weather: true, side: true, big: true, far: true, hook: true, wake: true };
+
+// (M16) the hook: how the bait's fished, and how deep it is, on the spot's habitat (Game.habitat: habitat.hook; the
+// interface with the rigs: docs/m16/fish.md):
+//   { way: 'float' | 'troll' | 'kite' | 'drop', depth: m under the surface, lure: a lure's id, or null: bait }
+// None is today's rig, a float six metres down. What each fish takes, how, and at what depth (FishTable's ways, at,
+// eats); a lure none of its kind's eats name gets this much of a chance (only one that strikes at anything would)
+export const FLOAT = { way: 'float', depth: 6 };
+const LURE_OTHER = 0.3;
+// its weight fished a way
+const wayOf = ( f, way ) => ( f.ways && f.ways[ way ] !== undefined ? f.ways[ way ] : way === 'float' ? 1 : way === 'drop' && ( f.habitat.deep || f.habitat.ledge ) ? 1 : 0 );
+// how far a hook's in the depths it feeds at, by the hour (between its day's and its night's at dusk and dawn, as it
+// rises and goes down): 1 inside them, fading out over a third of their span past each end
+export function depthWeight( at, depth, hour ) {
+
+	const k = daylight( hour ), lo = at.night[ 0 ] + ( at.day[ 0 ] - at.night[ 0 ] ) * k, hi = at.night[ 1 ] + ( at.day[ 1 ] - at.night[ 1 ] ) * k;
+	const fade = Math.max( 10, ( hi - lo ) / 3 );
+	return depth < lo ? Math.max( 0, 1 - ( lo - depth ) / fade ) : depth > hi ? Math.max( 0, 1 - ( depth - hi ) / fade ) : 1;
+
+}
+// a species' bite weight on this hook (null: the float), times this
+export function hookWeight( id, hook, hour ) {
+
+	const f = FISH[ id ], h = hook || FLOAT;
+	let x = wayOf( f, h.way );
+	if ( x > 0 && f.at ) x *= depthWeight( f.at, h.depth ?? FLOAT.depth, hour );
+	if ( x > 0 && h.lure ) x *= f.eats && f.eats[ h.lure ] !== undefined ? f.eats[ h.lure ] : LURE_OTHER;
+	return x;
+
+}
 
 // the water types as the weather leaves them (m: weatherMood's)
 function roughed( habitat, m ) {
@@ -197,7 +226,9 @@ export function pickSpecies( habitat, hour, rng = Math.random, bait = null ) {
 		if ( grey > 0 ) act += Math.max( 0, activity( f.time, 18.5 ) - act ) * grey;
 		// ((M15) under the birds, what's busting the bait is feeding now, whatever the hour)
 		if ( habitat.birds && f.habitat.birds ) act += ( 1 - act ) * habitat.birds;
-		let x = hw * f.rarity * act * baitWeight( bait, id );
+		// ((M16) how it's fished: the way, the depth; a lure in place of bait. And under a hurricane's debris)
+		let x = hw * f.rarity * act * hookWeight( id, habitat.hook, hour ) * ( habitat.hook && habitat.hook.lure ? 1 : baitWeight( bait, id ) );
+		if ( f.wake && habitat.wake ) x *= 1 + f.wake * habitat.wake;
 		// ((M15) on the windward reef the big ones bite more)
 		if ( habitat.big && f.kg[ 1 ] >= BIG.from ) x *= 1 + BIG.more * habitat.big;
 		if ( m && f.weather ) x *= weatherWeight( f.weather, m );

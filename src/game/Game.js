@@ -44,6 +44,7 @@ import { northReefMask } from '../world/TerrainData.js';
 import { PLACES, placeOf, placeName } from './Places.js';
 import { FINDS, lying, messageOf } from './Beachcomb.js';
 import { ordersOf, tagFor } from './Orders.js';
+import { letGo, trophyCardOf } from './Trophies.js';
 
 // how long the catch card stays up unless dismissed (ms)
 const CATCH_CARD_MS = 9000;
@@ -565,6 +566,17 @@ export class Game {
 		// the landed fish hangs on the end of the line, turned to face you, then goes in the cooler. With
 		// the HUD the catch card comes up once the fish has swung in, and the fish stays (slowly turning)
 		// until the card is dismissed (click, E, Esc) or times out.
+		// ((M16) a trophy looked at again, from the log: the card, until it's dismissed; back to the log)
+		const seen = this.trophyCard;
+		if ( seen && ( seen.t = seen.t + dt ) > 0.25 && this.cardEnd( seen.card, seen.t, lDown ) ) {
+
+			this._cardDismissed = true;
+			this.trophyCard = null;
+			if ( this.hud.catchOpen ) this.hud.hideCatch();
+			this.hud.toggleInventory( true );
+
+		}
+
 		const L = this.landing;
 		if ( L && rod.state === 'landing' && can ) {
 
@@ -1290,6 +1302,9 @@ export class Game {
 		h.big = this.windReefAt( p.x, p.z );
 		// ((M15) and how far out past the far grounds: the blue's emptier there)
 		h.far = edgeAt( p.x, p.z );
+		// ((M16) under a hurricane's debris: the mahi; and the rig, how it's fished: Bites' hook, docs/m16/fish.md)
+		h.wake = this.findsNear( p.x, p.z ).wake;
+		h.hook = this.hook || null;
 		return h;
 
 	}
@@ -1427,8 +1442,8 @@ export class Game {
 	// it, by 60 m) and a school being worked (inside it, fading by 80 m out)
 	findsNear( x, z ) {
 
-		const out = this._near || ( this._near = { weed: 0, debris: 0, birds: 0 } ), f = this.app.finds;
-		out.weed = out.debris = out.birds = 0;
+		const out = this._near || ( this._near = { weed: 0, debris: 0, birds: 0, wake: 0 } ), f = this.app.finds;
+		out.weed = out.debris = out.birds = out.wake = 0;
 		if ( ! f ) return out;
 		const fade = ( a, b, d ) => {
 
@@ -1444,7 +1459,14 @@ export class Game {
 
 		}
 
-		for ( const q of f.debris ) out.debris = Math.max( out.debris, q.life * fade( 8, 60, Math.hypot( x - q.x, z - q.z ) - q.size / 2 ) );
+		for ( const q of f.debris ) {
+
+			const k = q.life * fade( 8, 60, Math.hypot( x - q.x, z - q.z ) - q.size / 2 );
+			out.debris = Math.max( out.debris, k );
+			if ( q.storm ) out.wake = Math.max( out.wake, k ); // ((M16) a hurricane's wreckage)
+
+		}
+
 		for ( const q of f.bait ) out.birds = Math.max( out.birds, q.life * fade( 0, 80, Math.hypot( x - q.x, z - q.z ) - q.r ) );
 		return out;
 
@@ -1608,6 +1630,8 @@ export class Game {
 			// ((M15) let go where Marta's tag-and-release ask wants one: paid there and then)
 			const tag = info.released && tagFor( this.orders, f.species, f.place );
 			info.tagged = tag ? this.state.tag( tag, this.tradeDay ) : 0;
+			// ((M16) a billfish let go: the fund pays for it, and it's a trophy in your log)
+			info.bonus = letGo( this.state, info );
 			// (Salt Life) the others hear of it; the island's records (together/): the card says when
 			// it's the heaviest of its kind anyone here has landed
 			if ( this.app.together ) {
@@ -1656,7 +1680,7 @@ export class Game {
 	cardEnd( info, t, lDown ) {
 
 		const inp = this.app.input, hud = this.hud, R = hud.room;
-		if ( ! R ) return lDown || inp.hit( 'KeyE' ) || inp.hit( 'Escape' ) || hud.takeCatchTap() || t > CATCH_CARD_MS / 1000 ? 'go' : null;
+		if ( ! R ) return lDown || inp.hit( 'KeyE' ) || inp.hit( 'Escape' ) || hud.takeCatchTap() || ( t > CATCH_CARD_MS / 1000 && ! info.trophyView ) ? 'go' : null;
 		if ( inp.hit( 'ArrowLeft' ) || inp.hit( 'ArrowRight' ) ) hud.roomStep( inp.hit( 'ArrowRight' ) ? 1 : - 1 );
 		if ( inp.hit( 'KeyR' ) ) hud.roomLetGo();
 		let act = hud.takeCatchAct();
@@ -1679,6 +1703,17 @@ export class Game {
 	get makingRoom() {
 
 		return !! ( this.hud && this.hud.room );
+
+	}
+
+	// (M16) look at a trophy again (the log's button): its card, from your best of the kind let go
+	showTrophy( species ) {
+
+		const card = trophyCardOf( this.state, species );
+		if ( ! card || ! this.hud || this.landing || this.fight ) return;
+		this.hud.toggleInventory( false );
+		this.trophyCard = { card, t: 0 };
+		this.hud.showCatch( card, 3600000 );
 
 	}
 

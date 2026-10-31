@@ -48,7 +48,7 @@ ok( biteDelay( habitatAt( spots.sand ), 12, rng ) === Infinity, 'no bite delay o
 {
 
 	let deepOnly = 0;
-	for ( let i = 0; i < 500; i ++ ) if ( [ 'tuna', 'mahi', 'redSnapper', 'grouper', 'barracuda', 'blackGrouper', 'muttonSnapper', 'lionfish', 'silkSnapper', 'cuberaSnapper', 'goliathGrouper' ].includes( pickSpecies( habitatAt( spots.deep ), 12, rng ) ) ) deepOnly ++;
+	for ( let i = 0; i < 500; i ++ ) if ( [ 'sailfish', 'tuna', 'mahi', 'redSnapper', 'grouper', 'barracuda', 'blackGrouper', 'muttonSnapper', 'lionfish', 'silkSnapper', 'cuberaSnapper', 'goliathGrouper' ].includes( pickSpecies( habitatAt( spots.deep ), 12, rng ) ) ) deepOnly ++;
 	ok( deepOnly === 500, 'deep water gives offshore species only' );
 	// (Salt Life) the red snapper is a fish of the deep ledges only; the mangrove snapper of the pier
 	let redInshore = 0, grayPier = 0;
@@ -437,11 +437,11 @@ ok( s2.addFish( 'grunt', 0.5 ).id > b.id, 'ids keep counting after a load' );
 
 		const f = FISH[ id ];
 		const lo = fishLengthCm( id, f.kg[ 0 ] ), hi = fishLengthCm( id, f.kg[ 1 ] );
-		if ( ! ( lo > 5 && hi < 200 && hi > lo && typeof f.sci === 'string' ) ) sane = false;
+		if ( ! ( lo > 5 && hi < ( f.release || id === 'swordfish' ? 520 : 210 ) && hi > lo && typeof f.sci === 'string' ) ) sane = false; // ((M16) a billfish's bill and tail: m16-fish.mjs has their sizes)
 
 	}
 
-	ok( sane, 'every species has a scientific name and a plausible, increasing length (5–200 cm)' );
+	ok( sane, 'every species has a scientific name and a plausible, increasing length (5–210 cm, to 5 m with a bill)' );
 	ok( Math.abs( fishLengthCm( 'mahi', 10 ) - 108 ) < 3 && Math.abs( fishLengthCm( 'grunt', 0.84 ) - 36 ) < 2, 'length-weight: a 10 kg mahi ~108 cm, a 0.84 kg grunt ~36 cm' );
 	const m = new Map();
 	const st = new GameState( { getItem: ( k ) => m.get( k ) ?? null, setItem: ( k, v ) => m.set( k, v ) } );

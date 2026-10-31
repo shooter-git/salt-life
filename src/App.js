@@ -26,7 +26,7 @@ import { WaterQuery } from './ocean/WaterQuery.js';
 import { WaterSurface } from './ocean/WaterSurface.js';
 import { ShoreWaves, FAIR_AMPLITUDE } from './ocean/ShoreWaves.js';
 import { SEABED } from './world/terrain/SeabedModel.js';
-import { findsAbout } from './game/Finds.js';
+import { findsAbout, hurricaneWake } from './game/Finds.js';
 import { CHECK_SPOTS, checkSpotAt } from './game/CheckSpots.js';
 import { Flotsam } from './world/Flotsam.js';
 import { computeShoreField, fieldGround, shelter } from './world/ShoreField.js';
@@ -2236,9 +2236,11 @@ export class App {
 
 		const s = this.settings, c = this.camera.position;
 		const depthAt = this._depthAt || ( this._depthAt = ( x, z ) => - this.terrainData.heightAt( x, z ) );
-		const f = this.finds = findsAbout( islandTime( s.day, s.timeOfDay ), c.x, c.z, FIND_RANGE, this.finds || { weed: [], debris: [], bait: [] }, depthAt );
+		const T = islandTime( s.day, s.timeOfDay );
+		const f = this.finds = findsAbout( T, c.x, c.z, FIND_RANGE, this.finds || { weed: [], debris: [], bait: [] }, depthAt, hurricaneWake( T, this.weatherPick(), s.weatherSince ) );
 		this.water.setFinds( f, this.camera, this.sky.fogFar * 1.1 );
 		this.flotsam.update( f.debris, this.camera );
+		if ( this.fish ) this.fish.setFinds( f, c, s.timeOfDay ); // ((M16) the far water's fish, about what's found there)
 		if ( this.wildlife ) {
 
 			let best = null, bd = Infinity;

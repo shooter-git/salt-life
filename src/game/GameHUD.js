@@ -3,6 +3,7 @@ import { UPGRADES, nextLevel, FUEL_PRICE } from './Gear.js';
 import { BAITS, BAIT_IDS, chunksOf } from './Bait.js';
 import { LOOKS, LOOK_NAMES } from '../together/Avatar.js';
 import { NIGHT_BOX, biteHint, orderTerms, orderPlace } from './Orders.js';
+import { trophyNote, trophyRows } from './Trophies.js';
 import { WEEK_MUL, delivered, filled, mineOf, shareOf, weekEnds } from './WeekOrder.js';
 import { timeText } from './IslandClock.js';
 import { LB, IN, GAL, lb, pounds, inches, feet, farOff, gallons, lbOz, feetInches } from './Units.js';
@@ -657,7 +658,7 @@ export class GameHUD {
 		const f = FISH[ info.species ];
 		const inch = info.cm / IN, lbs = info.kg * LB;
 		const isle = info.islandHeld;
-		const badge = info.islandRecord ? '<span class="gm-badge is-record">★ Island record</span>'
+		const badge = info.trophyView ? '<span class="gm-badge is-record">★ Trophy</span>' : info.islandRecord ? '<span class="gm-badge is-record">★ Island record</span>'
 			: info.record ? '<span class="gm-badge is-record">★ New record</span>'
 			: info.newSpecies ? '<span class="gm-badge is-new">New species</span>' : `<span class="gm-badge is-plain">${ { spear: 'Speared', hand: 'By hand' }[ info.method ] || 'Catch' }</span>`;
 		let note;
@@ -668,6 +669,7 @@ export class GameHUD {
 		const room = this.game.state.roomFor( info ), where = this.game.state.upgrades.hold > 0 ? 'hold' : 'cooler';
 		if ( info.why === 'short' ) note = `<div class="gm-catch-note is-warn">Short: under ${ ( f.minCm * CARAPACE / IN ).toFixed( 0 ) } in on the gauge · back it goes, to grow${ board }.</div>`;
 		else if ( info.why === 'berried' ) note = `<div class="gm-catch-note is-warn">Berried: she's carrying eggs under her tail · back she goes${ board }.</div>`;
+		else if ( info.trophyView || info.bonus ) note = `<div class="gm-catch-note">${ trophyNote( info ) }${ board }.</div>`;
 		else if ( info.tagged ) note = `<div class="gm-catch-note">Tagged and let go alive for Marta's tag-and-release log: <b>$${ info.tagged }</b>${ board }.</div>`;
 		else if ( info.released ) note = `<div class="gm-catch-note">${ f.cr ? 'Catch and release: everyone lets one go. Measured and' : 'Protected: measured and' } let go alive${ board }.</div>`;
 		else if ( info.bag && info.bag.full ) note = `<div class="gm-catch-note is-warn">That's your ${ info.bag.max } for today, the most anyone may keep · back it goes</div>`;
@@ -702,7 +704,7 @@ export class GameHUD {
 				<div class="gm-catch-stats">
 					${ info.species === 'lobster' ? `<div class="gm-stat"><span>Carapace</span><b>${ carapaceIn( info.cm ).toFixed( 2 ) }<small>in</small></b><i>${ inches( info.cm ) } long</i></div>` : `<div class="gm-stat"><span>Length</span><b>${ inch.toFixed( 1 ) }<small>in</small></b><i>${ feetInches( info.cm ) || '&nbsp;' }</i></div>` }
 					<div class="gm-stat"><span>Weight</span>${ lbs * 16 < 15.5 ? `<b>${ Math.max( 1, Math.round( lbs * 16 ) ) }<small>oz</small></b><i>&nbsp;</i>` : `<b>${ lbs.toFixed( 1 ) }<small>lb</small></b><i>${ lbOz( info.kg ) }</i>` }</div>
-					<div class="gm-stat is-value"><span>Value</span><b>${ info.released ? '—' : `$${ info.value }` }</b><i>${ info.released ? 'released' : room ? 'no room yet' : ! info.kept ? 'let go' : info.wanted ? info.wanted.text : info.bag ? `${ info.bag.n } of ${ info.bag.max } today` : 'in the cooler' }</i></div>
+					<div class="gm-stat is-value"><span>Value</span><b>${ info.bonus ? `+$${ info.bonus + ( info.tagged || 0 ) }` : info.released ? '—' : `$${ info.value }` }</b><i>${ info.released ? 'released' : room ? 'no room yet' : ! info.kept ? 'let go' : info.wanted ? info.wanted.text : info.bag ? `${ info.bag.n } of ${ info.bag.max } today` : 'in the cooler' }</i></div>
 				</div>
 				${ note }
 				${ room ? '<div class="gm-room"></div>' : `<div class="gm-catch-foot">${ { touch: 'Tap to continue', gamepad: '<kbd>RT</kbd> or <kbd>B</kbd> to continue' }[ this.device ] || '<kbd>Click</kbd> or <kbd>E</kbd> to continue' }<span class="gm-catch-timer"><span></span></span></div>` }
@@ -956,6 +958,9 @@ export class GameHUD {
 
 			body = logged.map( ( [ k, v ] ) => item( FISH[ k ].name, `${ v.count } caught`, `<span class="gm-item-num">${ lb( v.bestKg ) } · ${ sizeOf( k, v.bestCm ?? fishLengthCm( k, v.bestKg ) ) }</span>` ) ).join( '' )
 				|| empty( 'Each kind you catch is logged here, with your best.' );
+			// ((M16) and the billfish you've let go: the log's their trophy, and the button their picture)
+			const won = trophyRows( s );
+			if ( won.length ) body = `<div class="gm-wanted"><span class="gm-wanted-h">Trophies, let go alive</span>${ won.map( ( t ) => item( t.name, t.meta, `<span class="gm-btns"><span class="gm-item-num">${ lb( t.kg ) }</span><button class="gm-mini" data-trophy="${ t.species }">See it</button></span>` ) ).join( '' ) }</div>` + body;
 			// ((M15) and the places you've fished: how many there, and the first)
 			const places = Object.entries( s.places || {} ).filter( ( [ k ] ) => PLACES[ k ] );
 			if ( places.length ) body += `<div class="gm-wanted"><span class="gm-wanted-h">Places you've fished</span>${ places.map( ( [ k, p ] ) => item( placeName( k, true ), `first ${ p.first && FISH[ p.first ] ? `a ${ FISH[ p.first ].name.toLowerCase() }` : 'a fish' }${ Number.isFinite( p.day ) ? `, day ${ p.day + 1 }` : '' }`, `<span class="gm-item-num">${ p.n } fish</span>` ) ).join( '' ) }</div>`;
@@ -1018,6 +1023,7 @@ export class GameHUD {
 		this.inv.querySelector( '[data-close]' ).onclick = () => this.toggleInventory( false );
 		for ( const b of this.inv.querySelectorAll( '[data-tab]' ) ) b.onclick = () => this.showTab( b.dataset.tab );
 		for ( const b of this.inv.querySelectorAll( '[data-release]' ) ) b.onclick = () => s.release( Number( b.dataset.release ) );
+		for ( const b of this.inv.querySelectorAll( '[data-trophy]' ) ) b.onclick = () => this.game.showTrophy( b.dataset.trophy );
 		for ( const b of this.inv.querySelectorAll( '[data-cut]' ) ) b.onclick = () => {
 
 			const n = s.cutBait( Number( b.dataset.cut ) );

@@ -25,8 +25,8 @@ export const stallOpen = ( hours, hour, weatherId = null ) => isOpen( hours, hou
 // Joe's pick: one fish of the twilight (yellowtail, jacks and mutton and mangrove snapper at dusk and
 // dawn, tuna offshore at first light) at double, and one more at half as much again (a spiny lobster
 // among them). Never a protected fish: it's let go (FishTable.js)
-const TWILIGHT = [ 'yellowtail', 'jack', 'tuna', 'muttonSnapper', 'graySnapper' ];
-const MORE = [ 'sergeant', 'grunt', 'tang', 'wrasse', 'lionfish', 'angel', 'barracuda', 'blackGrouper', 'redSnapper', 'mahi', 'mullet', 'needlefish', 'silkSnapper', 'lobster' ];
+const TWILIGHT = [ 'yellowtail', 'jack', 'tuna', 'muttonSnapper', 'graySnapper', 'trout', 'redfish' ];
+const MORE = [ 'sergeant', 'grunt', 'tang', 'wrasse', 'lionfish', 'angel', 'barracuda', 'blackGrouper', 'redSnapper', 'mahi', 'mullet', 'needlefish', 'silkSnapper', 'lobster', 'wahoo', 'yellowfin' ];
 // Marta's bait tank: $ a fish
 const BAIT = { silverside: 6, sergeant: 8, grunt: 10, mullet: 12, needlefish: 12, whiteMullet: 10 };
 // (M15) and one ask a day for a place's fish (Places.js), paid as no other (PLACE_MUL): Joe's for the table
@@ -45,6 +45,17 @@ const PLACE_ASKS = [
 	{ who: 'joe', species: 'silkSnapper', place: 'ledge', max: 3 },
 	{ who: 'marta', species: 'tarpon', place: 'creek', max: 1, tag: 35 },
 	{ who: 'marta', species: 'permit', place: 'northBeach', max: 1, tag: 40 },
+	// ((M16) the far water's: a wahoo or a yellowfin off the drop-off, a swordfish from the blue, Joe's; a billfish
+	// let go there, for Marta's log, on top of what the fund pays for its release; the flats', a trout from the bay,
+	// a redfish from the creek)
+	{ who: 'joe', species: 'wahoo', place: 'dropoff', max: 2 },
+	{ who: 'joe', species: 'yellowfin', place: 'dropoff', max: 2 },
+	{ who: 'joe', species: 'swordfish', place: 'blue', max: 1 },
+	{ who: 'joe', species: 'trout', place: 'bay', max: 3 },
+	{ who: 'joe', species: 'redfish', place: 'creek', max: 1 },
+	{ who: 'marta', species: 'sailfish', place: 'dropoff', max: 1, tag: 60 },
+	{ who: 'marta', species: 'whiteMarlin', place: 'dropoff', max: 1, tag: 90 },
+	{ who: 'marta', species: 'blueMarlin', place: 'blue', max: 1, tag: 150 },
 ];
 export const PLACE_MUL = 2.5;
 
@@ -111,6 +122,7 @@ export function biteHint( species ) {
 	if ( f.hand ) return 'in the reef\'s ledges, by hand, after dark';
 	// (one that gathers under the pier's lamps after dark: there, then)
 	if ( f.lights ) return 'under the pier lights, after dark';
+	if ( f.hint ) return f.hint;
 	const best = Object.entries( f.habitat ).sort( ( a, b ) => b[ 1 ] - a[ 1 ] )[ 0 ];
 	return [ best && WHERE[ best[ 0 ] ], WHEN[ f.time ] ].filter( Boolean ).join( ', ' );
 
