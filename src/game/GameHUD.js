@@ -10,7 +10,7 @@ import { FLOOD_L } from './Hull.js';
 import { PLACES, FAR_PLACES, placeName, farName } from './Places.js';
 import { FINDS, messageOf } from './Beachcomb.js';
 import { CAMP } from './FishCamp.js';
-import { NAMES, MAX_MARKS, legTo, magnetic } from './Chart.js';
+import { NAMES, MAX_MARKS, legTo, magnetic, namedAs } from './Chart.js';
 
 // (other players' names, into HTML)
 const escape = ( t ) => String( t ).replace( /[&<>"']/g, ( c ) => ( { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } )[ c ] );
@@ -970,7 +970,7 @@ export class GameHUD {
 			// compass), the names you've come to)
 			const c = s.chart, a = this.game.app, aboard = a.player.mode === 'boat' || a.player.mode === 'deck';
 			const at = aboard && a.boatCtl ? a.boatCtl.position : a.camera.position;
-			const named = NAMES.filter( ( n ) => c.named( n.id ) && ! n.peak ).map( ( n ) => n.name );
+			const named = NAMES.filter( ( n ) => c.named( n.id ) && ! n.peak ).map( namedAs );
 			body = `<div class="gm-shop-row"><span>Mark where you are<small>${ c.marks.length } of ${ MAX_MARKS } marks · on the map and the boat's plotter</small></span><button class="gm-btn" data-mark>Mark here</button></div>`
 				+ c.marks.map( ( m ) => {
 

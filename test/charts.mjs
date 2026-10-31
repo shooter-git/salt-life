@@ -225,7 +225,7 @@ ok( HOME.x === 64.5 && HOME.z === 36.5, 'home is the boat\'s berth by the pier' 
 	const named = Object.fromEntries( NAMES.map( ( n ) => [ n.id, n ] ) );
 	const hgt = ( n ) => T.heightAt( n.x, n.z );
 	ok( hgt( named.sandbar ) < 0 && hgt( named.sandbar ) > - 3, `Sandbar on the bar (${ ( - hgt( named.sandbar ) ).toFixed( 1 ) } m of water under it)` );
-	ok( Math.abs( named.summit.name - 302.39 / FT ) < 1, 'the summit\'s height, in feet' );
+	ok( Math.abs( parseFloat( named.summit.name.match( /\d+$/ )[ 0 ] ) - 302.39 / FT ) < 1, 'the summit\'s height, in feet' );
 	ok( hgt( named.ledge ) < - 150 && hgt( named.ledge ) > - 300 && hgt( named.hump ) < - 100 && hgt( named.bank ) > - 30, 'North Ledge, the Hump and the Bank over their water' );
 	// (the island's north-west corner: as far along that way as its land goes)
 	let corner = null, most = - Infinity;
@@ -239,7 +239,7 @@ ok( HOME.x === 64.5 && HOME.z === 36.5, 'home is the boat\'s berth by the pier' 
 	ok( Math.hypot( named.northWest.x - corner[ 0 ], named.northWest.z - corner[ 1 ] ) < 60 && hgt( named.northWest ) > 0, `North-west Point just in from the island's corner (${ corner })` );
 	ok( Math.hypot( named.lighthouse.x - LIGHTHOUSE.x, named.lighthouse.z - LIGHTHOUSE.z ) < 60 && named.lighthouse.light === 'Fl 10s', 'the Lighthouse beside its light, its characteristic under it' );
 	// (each place's own name; the north ledge only in the north: the canyon's floor off the bay is as flat and as deep)
-	ok( NAMES.filter( ( n ) => PLACES[ n.id ] ).every( ( n ) => PLACES[ n.id ].name.toLowerCase().replace( /^the /, '' ) === n.name.toLowerCase().replace( /^the /, '' ) ), 'the chart\'s names are the places\' names' );
+	ok( NAMES.filter( ( n ) => PLACES[ n.id ] ).every( ( n ) => PLACES[ n.id ].name === n.plain ), 'each place\'s plain name beside the chart\'s is what the places call it' );
 	ok( placeOf( { ledge: 1 }, 0, - 2550 ) === 'ledge' && placeOf( { ledge: 1 }, 1100, - 2200 ) === 'ledge' && placeOf( { ledge: 1 }, 100, 1800 ) === 'shelf', 'the north ledge is the north\'s: the canyon\'s floor is the shelf' );
 
 }

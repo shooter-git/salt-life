@@ -30,7 +30,7 @@ import { Signpost, TRAIL_POSTS } from './Signpost.js';
 import { FishCamp, CAMP } from './FishCamp.js';
 import { delivered, filled, owed, weekEnds } from './WeekOrder.js';
 import { Minimap } from './Minimap.js';
-import { sightOf, MAX_MARKS } from './Chart.js';
+import { sightOf, MAX_MARKS, NAME, namedAs } from './Chart.js';
 import { Guide } from './Guide.js';
 import { Speargun, groundHit } from './Speargun.js';
 import { CastNet, sweetWindow } from './CastNet.js';
@@ -716,7 +716,7 @@ export class Game {
 		const p = this.app.player, x = p.position.x, z = p.position.z;
 		if ( x * x + z * z < FOUND_FROM * FOUND_FROM ) return;
 		const place = this.placeAt( x, z );
-		if ( this.state.findPlace( place, this.tradeDay ) ) this.toast( `You've found ${ placeName( place ) }: ${ PLACES[ place ].what } · it's in your log`, 5200 );
+		if ( this.state.findPlace( place, this.tradeDay ) ) this.toast( `You've found ${ placeName( place ) }: ${ PLACES[ place ].what } · ${ NAME[ place ] ? `${ NAME[ place ].name } on your chart` : 'it\'s in your log' }`, 5200 );
 
 	}
 
@@ -1321,7 +1321,7 @@ export class Game {
 		const sea = p.mode === 'boat' || p.mode === 'deck' || p.mode === 'swim';
 		// (a far place's name comes with finding it: updateFound's toast has that, and a toast takes the last one's place)
 		const told = ( n ) => n.place && PLACES[ n.place ].far && ! ( this.state.found[ n.place ] < this.tradeDay );
-		for ( const n of chart.learn( x, z, sea ? this.placeAt( x, z ) : null ) ) if ( ! told( n ) ) this.toast( `On your chart: ${ n.peak ? 'the summit' : n.name }`, 2600 );
+		for ( const n of chart.learn( x, z, sea ? this.placeAt( x, z ) : null ) ) if ( ! told( n ) ) this.toast( `On your chart: ${ namedAs( n ) }`, 2600 );
 		this._chartDirty = this._chartDirty || seen;
 		if ( this._chartDirty && ( this._chartSaved = ( this._chartSaved || 0 ) + 0.4 ) > 15 ) {
 
