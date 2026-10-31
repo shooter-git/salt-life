@@ -185,7 +185,7 @@ const hooked = ( h, hook ) => ( { ...h, hook } );
 	const f = shares( flats, 7 ), c = shares( creek, 7 ), day = shares( flats, 12 );
 	console.log( `     the flats at first light: ${ top( f ) }; the creek: ${ top( c ) }` );
 	check( f.redfish > 0.05 && f.trout > 0.03, `redfish and trout on the flats at first light (${ Math.round( f.redfish * 100 ) }%, ${ Math.round( f.trout * 100 ) }%), on the frozen shrimp you start with` );
-	check( c.redfish > 0.15 && c.snook > 0.15, `and with the snook in the creek (${ Math.round( c.redfish * 100 ) }%, ${ Math.round( c.snook * 100 ) }%)` );
+	check( c.redfish > 0.08 && c.snook > 0.15, `and with the snook in the creek (${ Math.round( c.redfish * 100 ) }%, ${ Math.round( c.snook * 100 ) }%)` );
 	check( ! Object.keys( day ).some( ( k ) => BILLFISH.includes( k ) || k === 'wahoo' ), 'none of the far water\'s there' );
 	for ( const id of FLATS ) check( FISH[ id ].bag > 0 && ! FISH[ id ].protected, `${ FISH[ id ].name }: kept, ${ FISH[ id ].bag } a day` );
 

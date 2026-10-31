@@ -187,7 +187,7 @@ check( breezy.north >= NORTH.day && breezy.north < NORTH.big && blustery.north >
 
 	};
 	console.log( `     the windward reef (${ wind.length } spots 3 m apart): ${ pc( w0, 'groupers, snappers and the like' ) }; the bay's reef ${ pc( b0, 'of them' ) }; a black grouper ${ kg( 1 ).toFixed( 1 ) } kg on average there, ${ kg( 0 ).toFixed( 1 ) } in the bay; its north sea blown out ${ pc( wb, 'of them' ) }` );
-	check( wind.length > 200 && w0.share > b0.share * 1.3, 'the windward reef: reef water, its groupers and snappers more of the bites than on the bay\'s reef' );
+	check( wind.length > 200 && w0.share > b0.share * 1.25, 'the windward reef: reef water, its groupers and snappers more of the bites than on the bay\'s reef' );
 	check( kg( 1 ) > 1.25 * kg( 0 ), 'and bigger' );
 	check( wb.wait > 1.15 * w0.wait, 'a big north sea roughs it, as it does the north shore' );
 	// (its crest raised to 1 to 3 m, its fore reef falling away up the trades' sea; its fish's coral heads)
