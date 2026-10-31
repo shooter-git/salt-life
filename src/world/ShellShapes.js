@@ -4,8 +4,8 @@
 // worked out at each vertex from where on the shell it is, so a fine mesh shows its markings (the panel's picture)
 // and a coarse one its tone (on the sand). No three.js: the same numbers go into the world (world/Beachcombing.js)
 // and, drawn here by a little z-buffer, into the panel (game/ShellCase.js); and they're tested under Node.
-//   shellMesh( kind, detail ) -> { p, n, c, idx } (detail: 1 the coarsest, for the sand on low; 2 on high; 6 for the
-//     panel; positions in units of the shell's length, its long axis x, its broad side down; colours linear)
+//   shellMesh( kind, detail ) -> { p, n, c, idx } (detail: under 1 for the sand on low; 2 on high; 10 for the
+//     panel; positions in units of the shell's longest measure, as the books give its size; colours linear)
 //   shellPicture( kind, W, H, { silhouette } ) -> RGBA bytes, the shell filling W x H, viewed as it's shown in a shell book
 
 const TAU = Math.PI * 2;
@@ -570,7 +570,7 @@ function layFlat( m, S ) {
 
 	}
 
-	const L = Math.max( x1 - x0, 1e-6 ), mx = ( x0 + x1 ) / 2, my = ( y0 + y1 ) / 2, mz = ( z0 + z1 ) / 2;
+	const L = Math.max( x1 - x0, y1 - y0, z1 - z0, 1e-6 ), mx = ( x0 + x1 ) / 2, my = ( y0 + y1 ) / 2, mz = ( z0 + z1 ) / 2;
 	for ( let i = 0; i < nv; i ++ ) {
 
 		p[ i * 3 ] = ( p[ i * 3 ] - mx ) / L;
@@ -579,7 +579,7 @@ function layFlat( m, S ) {
 
 	}
 
-	m.size = [ 1, ( y1 - y0 ) / L, ( z1 - z0 ) / L ];
+	m.size = [ ( x1 - x0 ) / L, ( y1 - y0 ) / L, ( z1 - z0 ) / L ];
 	return m;
 
 }
@@ -601,7 +601,7 @@ const rotate = ( v, [ rx, ry, rz ] ) => {
 };
 const srgb = ( v ) => 255 * ( v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow( v, 1 / 2.4 ) - 0.055 );
 
-// how big a shell's picture needs to be for `scale` (px a shell's length): [ w, h ] (its view's bounds)
+// how big a shell's picture needs to be for `scale` (px its longest measure): [ w, h ] (its view's bounds)
 export function pictureSize( kind, scale ) {
 
 	const m = shellMesh( kind, 1 ), V = SHAPES[ kind ].view;

@@ -108,7 +108,7 @@ const SHORES = Object.keys( BEACHES );
 		let bad = 0;
 		for ( const v of [ ...m.p, ...m.n, ...m.c ] ) if ( ! Number.isFinite( v ) ) bad ++;
 		for ( const i of m.idx ) if ( i >= m.p.length / 3 ) bad ++;
-		check( bad === 0 && Math.abs( m.size[ 0 ] - 1 ) < 1e-3 && big.idx.length > m.idx.length, `${ k }: a sound mesh, ${ m.idx.length / 3 } triangles on low, ${ big.idx.length / 3 } on high` );
+		check( bad === 0 && Math.abs( Math.max( ...m.size ) - 1 ) < 1e-3 && big.idx.length > m.idx.length, `${ k }: a sound mesh, ${ m.idx.length / 3 } triangles on low, ${ big.idx.length / 3 } on high` );
 
 	}
 

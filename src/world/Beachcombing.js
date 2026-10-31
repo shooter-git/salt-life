@@ -24,7 +24,7 @@ import { wreckPiece, wreckAt, wallBoard } from './debris/WreckPieces.js';
 // north beach's 40-odd finds were as many draws), made only near you and let go when you're far: a stretch's made the
 // frame after anything on it changes. And the other shores (game/Beachcomb's BEACHES' path: a shore's own line, walked up
 // from its sea side), the shells (ShellShapes), the new finds below; a hurricane's wreck in its wrack on the bay's beach
-// (setWreck: debris/WreckPieces), and your finished shell set on Marta's wall (setWall).
+// (setWreck: debris/WreckPieces), and your finished shell set in Marta's tray (setWall).
 //   const b = new Beachcombing( { terrain, materials: { nature, wood, hard, roofMetal }, parent } )
 //   b.set( finds )   (what's on the sand now: game/Beachcomb.lying less what you've picked up)
 //   b.at( f ) -> [ x, z ] where a find lies     b.nearest( x, z, r ) -> the nearest find or wreck within r, or null
@@ -34,7 +34,7 @@ import { wreckPiece, wreckAt, wallBoard } from './debris/WreckPieces.js';
 const RANGE = 140; // m: drawn within this
 const STRETCH = 70; // m: of a shore, drawn as one
 const LET_GO = 90; // m: past its range a stretch's let go
-const WALL_AT = { x: 83.6, z: - 62.2 }; // Marta's wall: behind her shelves (game/Chandlery.js's CHANDLERY)
+const WALL_AT = { x: 85.2, z: - 58.2 }; // Marta's tray: at the end of her table (game/Chandlery.js's CHANDLERY)
 const WRACK = { seg: 12, past: 4 }; // the wrack line's stretches; m past the finds' beach at each end
 // (each beach's line walked up from the water: dir the way up the beach)
 const WALK = { north: { from: - 905, dir: 1 }, bay: { from: - 12, dir: - 1 } };
@@ -364,11 +364,10 @@ export class Beachcombing {
 		this.wreckMeshes = [];
 		if ( ! this.wreck.length ) return;
 		const B = new Builder();
-		for ( let i = 0; i < this.wreck.length; i ++ ) {
+		for ( const W of this.wreck ) {
 
-			const W = this.wreck[ i ];
 			// (on low, what can't be picked up every other one)
-			if ( this.lite && ! W.f.scrap && i % 2 ) continue;
+			if ( this.lite && ! W.f.scrap && W.f.seed % 2 ) continue;
 			wreckPiece( B, this.ground, W.x, W.z, W.f, this.lite );
 
 		}
@@ -378,7 +377,7 @@ export class Beachcombing {
 
 	}
 
-	// ---- (M16) your finished shell set, framed on Marta's wall, seen near her: `on` (you've given it to her)
+	// ---- (M16) your finished shell set in Marta's tray, seen near her: `on` (you've given it to her)
 	setWall( on ) {
 
 		if ( !! this.wall === !! on ) return;

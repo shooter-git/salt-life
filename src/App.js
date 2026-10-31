@@ -905,7 +905,7 @@ export class App {
 		this.rocks.update( this.camera );
 		if ( this.debris ) this.debris.update( this.camera );
 		// ((M15) beachcombing's finds and the north beach's wrack line, once the beach's debris materials are made)
-		if ( ! this.beachcomb && this.debris ) this.beachcomb = new Beachcombing( { terrain: this.terrainData, materials: { nature: this.debris.materials.nature, wood: this.village.materials.wood, hard: this.village.materials.hard, roofMetal: this.village.materials.roofMetal }, parent: this.scene, lite: this.tier === 'low' } );
+		if ( ! this.beachcomb && this.debris ) this.beachcomb = new Beachcombing( { terrain: this.terrainData, materials: { nature: this.debris.materials.nature, wood: this.village.materials.wood, hard: this.village.materials.hard, roofMetal: this.village.materials.roofMetal, net: this.village.materials.net }, parent: this.scene, lite: this.tier === 'low' } );
 		if ( this.beachcomb ) this.beachcomb.update( this.camera );
 		if ( this.stormWrack ) this.stormWrack.update( this.camera ); // ((M13) a hurricane's line of wrack, near you)
 		this.flyingSheets.update( islandTime( s.day, s.timeOfDay ) ); // ((M14) the sheets it's torn off, flying and lying)
