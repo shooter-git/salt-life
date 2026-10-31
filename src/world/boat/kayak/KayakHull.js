@@ -131,7 +131,7 @@ export class DeckShape {
 		// (what's sunk below the gunwale's in its own shade: the wells' walls and floors darker, as much for the light
 		// that doesn't reach them as for the scuffing)
 		const L = this.L, t = L.tAtSheerZ( z ), deep = clamp( ( L.sheerY( t ) - y ) / 0.13, 0, 1 );
-		out.lerp( SOLE, 0.45 * sstep( 0.1, 0.5, deep ) ).multiplyScalar( 1 - 0.42 * sstep( 0.15, 1, deep ) );
+		out.lerp( SOLE, 0.55 * sstep( 0.04, 0.3, deep ) ).multiplyScalar( 1 - 0.5 * sstep( 0.05, 0.75, deep ) );
 		return out;
 
 	}
@@ -142,7 +142,7 @@ export class DeckShape {
 
 function shell( L ) {
 
-	const pick = [ 0, 2, 4, 6, 8, 9, 11, 13, 16, 20, 25, 32 ];
+	const pick = [ 0, 2, 4, 6, 8, 9, 11, 13, 16, 20, 25, 30, 32 ];
 	const stations = L.stationParams( 30 ), left = [], right = [];
 	for ( const t of stations ) {
 
@@ -151,13 +151,16 @@ function shell( L ) {
 		const f = sstep( 0.05, 0.2, t ) * ( 1 - sstep( 0.7, 0.9, t ) );
 		row[ 1 ].y += 0.012 * f;
 		row[ 2 ].y -= 0.003 * f;
+		// (the deck's lip, overhanging her side: the moulding's seam)
+		const top = row[ row.length - 1 ], lip = row[ row.length - 2 ];
+		lip.set( Math.max( 0.001, top.x - 0.012 ), top.y - 0.022, top.z );
 		left.push( row );
 		right.push( row.map( ( p ) => new Vector3( - p.x, p.y, p.z ) ) );
 
 	}
 
 	// (and her blunt stern closed)
-	return [ gridSurface( left, { flip: true } ), gridSurface( right, { flip: false } ), sternCap( left[ 0 ] ) ];
+	return [ gridSurface( left, { flip: false } ), gridSurface( right, { flip: true } ), sternCap( left[ 0 ] ) ];
 
 }
 
@@ -307,7 +310,7 @@ function fittings( L, D ) {
 
 	for ( const p of cord ) add( cylinder( 0.012, 0.014, 0.012, 6 ), RUBBER, 0.6, mat4( p.x, p.y, p.z ) );
 
-	// the small cooler, strapped in the tank well: a 16 quart hard cooler, 0.4 x 0.26 x 0.27 m, its lid and rope handles
+	// the small cooler, strapped in the tank well: a 12 quart hard cooler, 0.36 x 0.24 x 0.24 m, its lid and rope handles
 	cooler( add, y, D );
 
 	// the safety pole: a whip with its pennant and an all-round white at its head, stepped in the well's after end
@@ -381,7 +384,7 @@ function seat( add, seatY, sz ) {
 	add( gridSurface( backOff, { flip: true } ), new Color( 0x1c1d20 ), 0.8 );
 	// (its edge)
 	for ( const j of [ 0, 6 ] ) add( gridSurface( [ rows.map( ( r ) => r[ j ] ), backOff.map( ( r ) => r[ j ] ) ], { flip: j > 0 } ), new Color( 0x1c1d20 ), 0.8 );
-	add( gridSurface( [ rows[ 4 ], backOff[ 4 ] ], { flip: true } ), new Color( 0x1c1d20 ), 0.8 );
+	add( gridSurface( [ rows[ 4 ], backOff[ 4 ] ], { flip: false } ), new Color( 0x1c1d20 ), 0.8 );
 	for ( const s of [ 1, - 1 ] ) {
 
 		const top = rows[ 3 ][ s > 0 ? 6 : 0 ], low = new Vector3( s * 0.335, seatY + 0.135, z1 - 0.07 );
@@ -394,7 +397,7 @@ function seat( add, seatY, sz ) {
 function cooler( add, y, D ) {
 
 	const [ w0, w1 ] = D.wellZ, cz = ( w0 + w1 ) / 2 + 0.03, fy = y( 0, cz ) + 0.005;
-	const hw = 0.2, hd = 0.13, h = 0.225, lidH = 0.05;
+	const hw = 0.18, hd = 0.12, h = 0.2, lidH = 0.045;
 	add( roundedBox( hw * 2, h - lidH, hd * 2, 0.022, 2 ), LID, 0.5, mat4( 0, fy + ( h - lidH ) / 2, cz ) );
 	add( roundedBox( hw * 2 + 0.012, lidH, hd * 2 + 0.012, 0.022, 2 ), LID, 0.45, mat4( 0, fy + h - lidH / 2, cz ) );
 	add( box( hw * 2 - 0.02, 0.006, hd * 2 - 0.02 ), LID_DARK, 0.6, mat4( 0, fy + h - lidH - 0.002, cz ) );
@@ -433,6 +436,9 @@ export function kayakBody( L, tier = 'high' ) {
 
 		marble( out, x, y, z );
 		if ( y < - 0.03 ) out.multiplyScalar( 0.88 );
+		// (the shadow under the deck's lip)
+		const t = L.tAtSheerZ( z ), below = L.sheerY( t ) - y;
+		if ( below > 0.015 && below < 0.03 ) out.multiplyScalar( 0.5 );
 		return out;
 
 	};
@@ -463,7 +469,7 @@ export function paddleGeometry() {
 
 		}
 
-		return loft( rows, { closed: true, flip: s > 0 } );
+		return loft( rows, { closed: true, flip: s < 0 } );
 
 	};
 
