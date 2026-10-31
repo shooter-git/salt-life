@@ -177,6 +177,17 @@ function segments( g, text, x, y, h, colour ) {
 
 export class BoatInstruments {
 
+	// (M16) onto the dash of another boat of yours (App.setBoat)
+	fit( material ) {
+
+		if ( ! material ) return;
+		material.map = this.texture;
+		material.color.set( 0xffffff );
+		material.needsUpdate = true;
+		this.material = material;
+
+	}
+
 	// material: the dash's display (BoatMaterials.display); tier: the low one draws at half size
 	constructor( { material, tier = 'high' } ) {
 

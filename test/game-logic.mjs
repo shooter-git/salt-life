@@ -1,4 +1,5 @@
 // Plain-node tests of the fishing game logic (no GPU): bites, the catch fight, inventory, save.
+import { LOBSTER_HANDLING } from '../src/world/boat/Handling.js';
 import { FISH, FISH_IDS, CARAPACE, fishValue, fishLengthCm, fishWeightKg, spearRule, isTrophy } from '../src/game/FishTable.js';
 import { habitatAt, pickSpecies, rollWeight, biteDelay, lampsLit, weatherMood } from '../src/game/Bites.js';
 import { weatherAt, SOUTHERLY } from '../src/game/Weather.js';
@@ -512,7 +513,7 @@ ok( Object.keys( defaultUpgrades() ).length === Object.keys( UPGRADES ).length &
 
 		const n = 24, hullSamples = [];
 		for ( let i = 0; i < n; i ++ ) hullSamples.push( { position: new Vector3( ( i % 4 ) * 0.8 - 1.2, - 0.4, Math.floor( i / 4 ) * 1.3 - 3.3 ), area: 0.325 } );
-		const model = { hydro: {}, hullSamples, propeller: new Vector3( 0, - 0.6, - 3.3 ), rudder: new Vector3( 0, - 0.5, - 3.6 ), group: new Group(), setThrottle() {}, setSteering() {}, setPropellerRPM() {} };
+		const model = { hydro: { suggestedMass: 3200, centerOfMass: new Vector3( 0, 0.3, - 0.74 ), centerOfBuoyancy: new Vector3( 0, 0, - 0.74 ), inertia: new Vector3( 14600, 15700, 3500 ) }, handling: LOBSTER_HANDLING, lines: { sheerY: () => 1.2, sheerZ: () => 4.25 }, hullSamples, propeller: new Vector3( 0, - 0.6, - 3.3 ), rudder: new Vector3( 0, - 0.5, - 3.6 ), group: new Group(), setThrottle() {}, setSteering() {}, setPropellerRPM() {} };
 		const query = { allocate: () => 0, latency: 0, setPoint() {}, cpuValid: true, version: 1, resultTime: 0, cpu: new Float32Array( n * 4 ), resultInputs: new Float32Array( n * 4 ) };
 		const b = new BoatController( { model, query, terrain: { heightAt: () => - 10 }, colliders: null } );
 		b.moored = false;
