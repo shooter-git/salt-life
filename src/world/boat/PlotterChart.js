@@ -44,7 +44,7 @@ export function paletteFor( night, was = 'day' ) {
 export const RESOLVE = 1.6;
 export const sheetBlown = ( sheetPpm, pxPerM ) => pxPerM / sheetPpm > RESOLVE;
 // the screen's pixels: the grid's step, the margin about the screen (how far she goes before it's drawn again)
-const GRID = 4, MARGIN = 16;
+const GRID = 4, SEEN_GRID = 16, MARGIN = 16;
 // how much of the seabed's own grid the depths are smoothed over (as a chart's contours are generalised, its map's cells
 // not to show as facets close in): that many of its cells' worth, in two passes, at most this many nodes
 const SMOOTH_CELLS = 0.5, MOST_R = 4;
@@ -206,13 +206,14 @@ export function softSeen( log, sheet, x, z ) {
 	const s = sheet.spec, n = s.n, fx = ( x - s.x0 ) / s.cell - 0.5, fz = ( z - s.z0 ) / s.cell - 0.5;
 	if ( fx < - 0.5 || fz < - 0.5 || fx > n - 0.5 || fz > n - 0.5 ) return - 1;
 	const i = Math.floor( fx ), j = Math.floor( fz ), tx = fx - i, tz = fz - j;
-	const at = ( a, b ) => {
+	return ( cellSeen( log, sheet, i, j ) * ( 1 - tx ) + cellSeen( log, sheet, i + 1, j ) * tx ) * ( 1 - tz ) + ( cellSeen( log, sheet, i, j + 1 ) * ( 1 - tx ) + cellSeen( log, sheet, i + 1, j + 1 ) * tx ) * tz;
 
-		const p = a < 0 ? 0 : a >= n ? n - 1 : a, q = b < 0 ? 0 : b >= n ? n - 1 : b, k = q * n + p;
-		return sheet.cells[ k ] === 1 || ( log.bought && log.charted( sheet, k ) ) ? 1 : 0;
+}
 
-	};
-	return ( at( i, j ) * ( 1 - tx ) + at( i + 1, j ) * tx ) * ( 1 - tz ) + ( at( i, j + 1 ) * ( 1 - tx ) + at( i + 1, j + 1 ) * tx ) * tz;
+function cellSeen( log, sheet, a, b ) {
+
+	const n = sheet.spec.n, p = a < 0 ? 0 : a >= n ? n - 1 : a, q = b < 0 ? 0 : b >= n ? n - 1 : b, k = q * n + p;
+	return sheet.cells[ k ] === 1 || ( log.bought && log.charted( sheet, k ) ) ? 1 : 0;
 
 }
 
@@ -324,8 +325,10 @@ export class PlotterChart {
 			// (from the finest that covers the view: those whose pixels would show left to the vector chart)
 			const S = map.sheets, covers = ( sp ) => sp.x0 <= x0 && sp.z0 <= z0 && sp.x0 + sp.ext >= x1 && sp.z0 + sp.ext >= z1;
 			const from = covers( S.near.spec ) ? 2 : covers( S.mid.spec ) ? 1 : 0;
+			const reaches = ( sp ) => sp.x0 < x1 && sp.z0 < z1 && sp.x0 + sp.ext > x0 && sp.z0 + sp.ext > z0;
 			for ( const sh of [ S.far, S.mid, S.near ].slice( from ) ) {
 
+				if ( ! reaches( sh.spec ) ) continue;
 				if ( sh !== S.near && sheetBlown( sh.ppm, pxm ) ) vector = true;
 				else if ( sh.drawn >= 0 ) list.push( sh );
 
@@ -367,7 +370,8 @@ export class PlotterChart {
 		const g = this.ctx, W = this.W, H = this.H, m = GRID / pxm;
 		const cell = T.offshore ? T.offshore.texel : 32, r = Math.max( 1, Math.min( MOST_R, Math.round( cell * SMOOTH_CELLS / m ) ) ), pad = r * 2 + 1;
 		const nx = Math.ceil( W / GRID ) + 1 + pad * 2, ny = Math.ceil( H / GRID ) + 1 + pad * 2, N = nx * ny;
-		const G = this._grid && this._grid.h.length >= N ? this._grid : ( this._grid = { h: new Float32Array( N ), s: new Float32Array( N ), t: new Float32Array( N ), seen: new Float32Array( N ) } );
+		const sx = Math.ceil( W / SEEN_GRID ) + 3, sy = Math.ceil( H / SEEN_GRID ) + 3;
+		const G = this._grid && this._grid.h.length >= N ? this._grid : ( this._grid = { h: new Float32Array( N ), s: new Float32Array( N ), t: new Float32Array( N ), seen: new Float32Array( sx * sy ) } );
 		const { h: Hh, s: Hs, t: Ht, seen } = G;
 		const ox = x0 - pad * m, oz = z0 - pad * m;
 		for ( let j = 0; j < ny; j ++ ) for ( let i = 0; i < nx; i ++ ) Hh[ j * nx + i ] = T.heightAt( ox + i * m, oz + j * m );
@@ -414,18 +418,18 @@ export class PlotterChart {
 		for ( const c of CONTOURS ) line( c, rgb( c === SHADES[ 1 ] ? P.DEPSC : P.DEPCN ), c === SHADES[ 1 ] ? bold : thin );
 		line( 0, rgb( P.CSTLN ), bold );
 		// (blank: S-52's for no chart, past a clean edge)
-		const mid = log.mid, far = log.far;
-		for ( let j = 0; j < ny; j ++ ) for ( let i = 0; i < nx; i ++ ) {
+		const mid = log.mid, far = log.far, q = SEEN_GRID / pxm;
+		for ( let j = 0; j < sy; j ++ ) for ( let i = 0; i < sx; i ++ ) {
 
-			const x = ox + i * m, z = oz + j * m;
+			const x = x0 + ( i - 1 ) * q, z = z0 + ( j - 1 ) * q;
 			let v = softSeen( log, mid, x, z );
 			if ( v < 0 ) v = softSeen( log, far, x, z );
-			seen[ j * nx + i ] = v < 0 ? 0 : v;
+			seen[ j * sx + i ] = v < 0 ? 0 : v;
 
 		}
 
 		g.beginPath();
-		isoFill( g, seen, nx, ny, X0, Y0, GRID, 0.5 );
+		isoFill( g, seen, sx, sy, - SEEN_GRID, - SEEN_GRID, SEEN_GRID, 0.5 );
 		g.fillStyle = rgb( P.NODTA );
 		g.fill();
 		g.restore();

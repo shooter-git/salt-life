@@ -19,7 +19,7 @@ export const COMPASS = { period: 3, damping: 0.55 };
 // in the fluid, quick and well damped against a boat's slow roll; free of the bowl to this much (rad) fore and aft and
 // athwart, then touching (a Silva 102's published gimbal: 30° pitch, 45° roll; a Ritchie's is listed at more); the height of its
 // pivot under the card (m: at the middle of the dome, for the card to stay in it)
-export const GIMBAL = { period: 1.2, damping: 0.7, pitch: 30 * Math.PI / 180, roll: 45 * Math.PI / 180, under: 0.02 };
+export const GIMBAL = { period: 0.8, damping: 0.6, pitch: 30 * Math.PI / 180, roll: 45 * Math.PI / 180, under: 0.02 };
 const STATIC_BUCKETS = [ 'hull', 'gelcoat', 'wood', 'fittings', 'glow', 'display', 'glass' ];
 const WHEEL_TURNS = 0.75; // wheel turns from centre to hard over
 const THROTTLE_ANGLE = 0.6; // lever travel (rad) from neutral to full
