@@ -145,7 +145,7 @@ function spiral( S, detail ) {
 
 		const col = S.colour( c );
 		// (dark down the throat)
-		const d = S.mouth ? ss( 0.22, 0.34, c.into ) : ss( 0, 1, c.into );
+		const d = S.mouth ? ( detail >= 3 ? ss( 0.22, 0.34, c.into ) : ss( 0.4, 0.7, c.into ) ) : ss( 0, 1, c.into ) * ( detail >= 3 ? 1 : 0.6 );
 		return c.inner ? [ col[ 0 ] * ( 1 - 0.82 * d ), col[ 1 ] * ( 1 - 0.86 * d ), col[ 2 ] * ( 1 - 0.88 * d ) ] : col;
 
 	}, true );
@@ -330,7 +330,7 @@ export const SHAPES = {
 
 	// Queen conch: the heavy, flared adult (22 cm); short knobbed spire, chalky sand-coloured outside, the lip's inside
 	// pink going to rose, a fisherman's cut in the spire (how the meat's got out: a beach's empties nearly all have it)
-	queenConch: { kind: 'spiral', mouth: 0.42, mouthAt: 1.02, turns: 7, coarse: 2.2, per: 9, around: 8, W: 1.6, T: 1.95, q: 1, sx: 0.64, sy: 0.8, shoulder: 0.18, shoulderAt: 0.72, knobs: 0.62, knobN: 8.5 / 6.283, knobAt: 0.78, knobW: 0.26, flare: 1.2, flareOut: 0.74, flareUp: 1.2, ruffle: 0.055, lipFrom: 0.42, canal: 1.1, canalP: 2.2, canalIn: - 0.5, view: [ 0.1, - 0.12, Math.PI / 2 ], axis: 0.2,
+	queenConch: { kind: 'spiral', mouth: 0.42, mouthAt: 1.02, turns: 7, coarse: 2.2, per: 9, around: 8, W: 1.6, T: 2.1, q: 1, sx: 0.6, sy: 0.78, shoulder: 0.2, shoulderAt: 0.72, knobs: 0.85, knobN: 8.5 / 6.283, knobAt: 0.76, knobW: 0.22, flare: 1.05, flareOut: 0.72, flareUp: 1.25, ruffle: 0.055, lipFrom: 0.42, canal: 1.15, canalP: 2.2, canalIn: - 0.5, view: [ 0.1, - 0.12, Math.PI / 2 ], axis: 0.2,
 		colour: ( c ) => {
 
 			if ( c.inner ) return mix( C.pink, C.rose, 0.2 + 0.6 * c.into );
@@ -349,7 +349,7 @@ export const SHAPES = {
 
 	// West Indian fighting conch (Strombus pugilis, 8 cm): salmon to orange, spines on the shoulder, a short lip, the
 	// foot of the mouth stained purple-brown
-	fightingConch: { kind: 'spiral', mouth: 0.36, mouthAt: 1.05, turns: 8, coarse: 2, per: 8, around: 7, W: 1.5, T: 2.05, q: 1, sx: 0.6, sy: 0.72, shoulder: 0.1, shoulderAt: 0.9, knobs: 0.5, knobN: 10 / 6.283, knobAt: 0.75, knobW: 0.22, flare: 0.42, flareOut: 0.6, flareUp: 1.1, lipFrom: 0.3, canal: 0.95, canalP: 2.4, canalIn: - 0.5, view: [ 0.1, - 0.12, Math.PI / 2 ], axis: 0.25,
+	fightingConch: { kind: 'spiral', mouth: 0.36, mouthAt: 1.05, turns: 8, coarse: 2, per: 8, around: 7, W: 1.5, T: 2.15, q: 1, sx: 0.56, sy: 0.72, shoulder: 0.12, shoulderAt: 0.9, knobs: 0.72, knobN: 10 / 6.283, knobAt: 0.75, knobW: 0.2, flare: 0.36, flareOut: 0.6, flareUp: 1.2, lipFrom: 0.28, canal: 1, canalP: 2.4, canalIn: - 0.5, view: [ 0.1, - 0.12, Math.PI / 2 ], axis: 0.25,
 		colour: ( c ) => {
 
 			if ( c.inner ) return mix( C.white, C.salmon, 0.25 );
@@ -361,10 +361,10 @@ export const SHAPES = {
 
 	// King helmet (Cassis tuberosa, 20 cm): a heavy triangle: flat broad shield round the mouth, three big rows of knobs,
 	// cream mottled brown, the shield's teeth over a dark brown, as in photographs
-	kingHelmet: { kind: 'spiral', mouth: 0.16, mouthAt: 1.2, turns: 5.5, coarse: 1.8, per: 7, around: 7, W: 2.6, T: 0.72, q: 1, sx: 0.82, sy: 0.82, shoulder: 0.2, shoulderAt: 0.85, knobs: 0.3, knobN: 7 / 6.283, knobAt: 0.85, knobW: 0.3, flare: 0.42, flareOut: 0.8, flareUp: 0.5, lipFrom: 0.5, canal: 0.62, canalP: 3, canalIn: - 0.6, view: [ 0.16, - 0.12, Math.PI / 2 ], axis: 0.3,
+	kingHelmet: { kind: 'spiral', mouth: 0.14, mouthAt: 1.25, turns: 5.5, coarse: 1.8, per: 8, around: 8, W: 2.8, T: 0.7, q: 1, sx: 0.8, sy: 0.74, shoulder: 0.22, shoulderAt: 0.85, knobs: 0.5, knobN: 7 / 6.283, knobAt: 0.85, knobW: 0.24, flare: 0.36, flareOut: 0.8, flareUp: 0.5, lipFrom: 0.42, canal: 0.62, canalP: 3, canalIn: - 0.6, view: [ - 0.15, - 0.12, Math.PI / 2 ], axis: 0.3,
 		colour: ( c ) => {
 
-			if ( c.inner ) return c.into < 0.19 ? mix( C.peach, C.bone, 0.35 ) : ( Math.sin( c.a * 34 ) > 0 ? C.bone : C.choc );
+			if ( c.inner ) return c.into < 0.27 ? mix( C.peach, C.bone, 0.35 ) : ( Math.sin( c.a * 34 ) > 0 ? C.bone : C.choc );
 			if ( c.end > 0.15 ) {
 
 				const shield = mix( C.peach, C.bone, 0.35 );
@@ -392,7 +392,7 @@ export const SHAPES = {
 
 	// Music volute (Voluta musica, 7 cm): solid, ribbed down the shoulder; the lines of a stave and its notes round a
 	// cream shell, rosy in places; four folds on the column of its mouth
-	musicVolute: { kind: 'spiral', mouth: 0.26, mouthAt: 1.2, turns: 6, coarse: 2, per: 7, around: 7, W: 1.85, T: 1.5, q: 1, sx: 0.56, sy: 1.02, shoulder: 0.08, shoulderAt: 0.85, knobs: 0.16, knobN: 11 / 6.283, knobAt: 0.9, knobW: 0.25, flare: 0.08, flareUp: 0.2, lipFrom: 0.14, canal: 0.5, canalP: 3, canalIn: - 0.6, view: [ - 0.1, - 0.1, Math.PI / 2 ], axis: 0.2,
+	musicVolute: { kind: 'spiral', mouth: 0.26, mouthAt: 1.2, turns: 6, coarse: 2, per: 8, around: 7, W: 1.85, T: 1.6, q: 1, sx: 0.54, sy: 0.96, shoulder: 0.1, shoulderAt: 0.85, ribs: 0.13, knobs: 0.3, knobN: 10 / 6.283, knobAt: 0.85, knobW: 0.25, flare: 0.1, flareUp: 0.2, lipFrom: 0.1, canal: 0.5, canalP: 3, canalIn: - 0.6, view: [ - 0.25, - 0.1, Math.PI / 2 ], axis: 0.2,
 		colour: ( c ) => {
 
 			if ( c.inner ) return mix( C.cream, C.peach, 0.3 );
@@ -421,7 +421,7 @@ export const SHAPES = {
 
 	// Bleeding tooth (Nerita peloronta, 3 cm): the low, thick round shell; dark blotches and zigzags on pale yellow; the
 	// mouth a white slab with two teeth in an orange-red blotch: the "blood"
-	bleedingTooth: { kind: 'spiral', mouth: 0.46, mouthAt: 1.12, turns: 3.2, coarse: 1.6, per: 8, around: 6, W: 2.9, T: 0.44, q: 1, sx: 0.86, sy: 0.92, flare: 0.05, lipFrom: 0.1, view: [ - 0.4, 0.1, Math.PI / 2 ], axis: 0.1,
+	bleedingTooth: { kind: 'spiral', mouth: 0.5, mouthAt: 1.1, turns: 3.2, coarse: 1.6, per: 9, around: 7, W: 7, T: 0.3, q: 1, sx: 0.92, sy: 0.98, flare: 0.04, lipFrom: 0.1, view: [ - 1.05, 0.45, Math.PI / 2 ], axis: 0.1,
 		colour: ( c ) => {
 
 			if ( c.inner ) return c.into < 0.34 ? mix( C.white, mix( C.red, C.orange, 0.4 ), ss( 0.05, 0.6, - Math.cos( c.a ) + 0.25 * Math.sin( c.a * 10 ) ) * ss( 0.08, 0.3, c.into ) ) : mix( C.white, C.yellow, 0.25 );
@@ -433,7 +433,7 @@ export const SHAPES = {
 
 	// Mangrove periwinkle (Littoraria angulifera, 3 cm): thin and sharp-spired, off-white to reddish, dark flecks slanting
 	// across it and merging on the last whorl
-	periwinkle: { kind: 'spiral', turns: 6, coarse: 2, per: 6, around: 6, W: 1.6, T: 2.35, q: 1, sx: 0.7, sy: 0.8, view: [ - 0.1, - 0.1, Math.PI / 2 ], axis: 0.25,
+	periwinkle: { kind: 'spiral', turns: 6, coarse: 2, per: 6, around: 6, W: 1.58, T: 2.9, q: 1, sx: 0.66, sy: 0.84, view: [ - 0.3, - 0.1, Math.PI / 2 ], axis: 0.25,
 		colour: ( c ) => {
 
 			if ( c.inner ) return mix( C.white, C.purple, 0.15 );
@@ -444,7 +444,7 @@ export const SHAPES = {
 
 	// Netted olive (Americoliva reticularis, 4 cm): a polished cylinder, a low sharp spire, a fine purple-brown net over
 	// cream, two darker bands; the long slit
-	nettedOlive: { kind: 'ovoid', nx: 7, around: 6, w: 0.21, hump: 1, under: 0.96, slit: 0.14, slitAt: 0.5, gloss: 0.8, view: [ 0.3, 0.1, 0.1 ],
+	nettedOlive: { kind: 'ovoid', nx: 7, around: 6, w: 0.19, hump: 1, under: 0.96, slit: 0.14, slitAt: 0.5, gloss: 0.8, view: [ 0.3, 0.1, 0.1 ],
 		r: ( x ) => x < 0.8 ? Math.pow( Math.max( 0, 1 - Math.pow( Math.abs( x / 1.02 ), 3 ) ), 0.62 ) : Math.max( 0.02, ( 1 - ( x - 0.8 ) / 0.2 ) * 0.42 ) + 0.1 * ( 1 - ss( 0.8, 0.84, x ) ),
 		colour: ( c ) => {
 
@@ -452,7 +452,7 @@ export const SHAPES = {
 			const net = Math.max( Math.sin( ( c.x * 2.1 + c.a * 0.5 ) * 38 ), Math.sin( ( c.x * 2.1 - c.a * 0.5 ) * 38 ) );
 			const band = Math.max( bump( c.x - 0.4, 0.09 ), bump( c.x + 0.34, 0.09 ) );
 			const mark = mix( mix( C.tan, C.purple, 0.25 ), C.brown, band );
-			return mix( mix( C.cream, C.white, 0.3 ), mark, Math.min( 1, ss( 0.5, 1, net ) * ( 0.32 + 0.35 * band ) ) );
+			return mix( mix( C.cream, C.white, 0.3 ), mark, Math.min( 1, ss( 0.6, 1, net ) * ( 0.2 + 0.35 * band ) ) );
 
 		} },
 
@@ -491,7 +491,7 @@ export const SHAPES = {
 
 	// Flamingo tongue (Cyphoma gibbosum, 3 cm): the shell itself is plain, the orange spots the live animal's mantle and
 	// gone with it: a smooth cream oval, peach on the back, one thick ridge across its middle
-	flamingoTongue: { kind: 'ovoid', nx: 7, around: 7, w: 0.31, hump: 1.1, under: 0.5, slit: 0.16, slitAt: 0.06, ridge: 0.075, ridgeAt: 0.04, gloss: 1, view: [ 0.95, 0.15, 0 ],
+	flamingoTongue: { kind: 'ovoid', nx: 7, around: 7, w: 0.235, hump: 1.1, under: 0.55, slit: 0.16, slitAt: 0.06, ridge: 0.05, ridgeAt: 0.04, gloss: 1, view: [ 0.95, 0.15, 0 ],
 		r: ( x ) => Math.pow( Math.max( 0, 1 - Math.pow( Math.abs( x ), 2.6 ) ), 0.5 ) * ( 0.93 + 0.09 * Math.abs( Math.sin( x * 3.1 ) ) ),
 		colour: ( c ) => {
 
