@@ -394,7 +394,7 @@ export class Game {
 	get canFish() {
 
 		const app = this.app, p = app.player;
-		return ! app.freeCam && ( p.mode === 'walk' || p.mode === 'deck' ) && ! ( app.ui && app.ui.ui && app.ui.ui._photo );
+		return ! app.freeCam && ( p.mode === 'walk' || p.mode === 'deck' ) && ! p.climbing && ! ( app.ui && app.ui.ui && app.ui.ui._photo );
 
 	}
 
@@ -1964,6 +1964,14 @@ export class Game {
 		const app = this.app, p = app.player, gun = this.gun, fish = app.fish, inp = app.input;
 		p.stalk = gun.equipped || this.tools.equipped;
 		// blacked out: whatever was on the shaft is lost, and the line comes in
+		// ((M16) come off a ladder in a seaway: world/boat/sportfisher/LadderClimb)
+		if ( p.falls !== this._falls ) {
+
+			if ( this._falls !== undefined ) this.toast( 'She threw you off the ladder · climb in the lulls', 3200 );
+			this._falls = p.falls;
+
+		}
+
 		if ( p.blackouts !== this._blackouts ) {
 
 			this._blackouts = p.blackouts;

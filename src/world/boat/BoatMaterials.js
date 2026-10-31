@@ -9,7 +9,7 @@ const linear = ( hex ) => new THREE.Color().setHex( hex ).convertSRGBToLinear();
 const vec3 = ( c ) => `vec3( ${ c.r.toFixed( 5 ) }, ${ c.g.toFixed( 5 ) }, ${ c.b.toFixed( 5 ) } )`;
 
 // every boat material: aux to the fragment (roughness, metalness, pattern) and the model-space position
-function withAux( material, { fragment = '', uniforms = {}, roughness = true } = {} ) {
+export function withAux( material, { fragment = '', uniforms = {}, roughness = true } = {} ) {
 
 	material.vertexColors = true;
 	material.onBeforeCompile = ( shader ) => {
@@ -30,7 +30,7 @@ function withAux( material, { fragment = '', uniforms = {}, roughness = true } =
 }
 
 // chain another change onto a material's onBeforeCompile
-function extend( material, fn ) {
+export function extend( material, fn ) {
 
 	const build = material.onBeforeCompile;
 	material.onBeforeCompile = ( shader ) => {

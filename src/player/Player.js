@@ -174,6 +174,11 @@ export class Player {
 		this._ashoreT = 0;
 		// set by the fishing game: while a line is out the helm / step ashore prompts give way
 		this.busy = false;
+		// (M16) on a ladder (world/boat/sportfisher/LadderClimb: still 'deck' to the rest of the game), how many times you've come
+		// off one (the game notices), and how long you're winded from it (s)
+		this.climbing = null;
+		this.falls = 0;
+		this.stunned = 0;
 
 	}
 
@@ -239,7 +244,12 @@ export class Player {
 
 		if ( this.mode === 'deck' ) {
 
-			this.updateDeck( dt );
+			// ((M16) a ladder's its own mode: up it, or off it)
+			if ( this.climbing ) {
+
+				if ( ! this.climbing.update( this, dt ) ) this.climbing = null;
+
+			} else this.updateDeck( dt );
 			return;
 
 		}
@@ -729,7 +739,7 @@ export class Player {
 		b.driven = false;
 		b.throttle = 0;
 		this.mode = 'deck';
-		this.deckPos.set( b.model.helm.rise[ 0 ], b.model.lines.deckY, b.model.helm.rise[ 1 ] );
+		this.deckPos.set( b.model.helm.rise[ 0 ], b.model.helm.y ?? b.model.lines.deckY, b.model.helm.rise[ 1 ] );
 		this.deckVel.set( 0, 0, 0 );
 		this.deckYaw = this.helmYaw;
 		this.pitch = this.helmPitch;
@@ -836,6 +846,13 @@ export class Player {
 
 	}
 
+	// (M16) the look from the deck base (your pitch, and your heading in her frame)
+	deckLook() {
+
+		return _qa.setFromEuler( _e.set( this.pitch, this.deckYaw, 0 ) );
+
+	}
+
 	// world position / heading of the player from the deck state (feet)
 	deckToWorld() {
 
@@ -884,7 +901,9 @@ export class Player {
 		if ( inp.down( 'KeyA' ) ) _wish.sub( _right );
 		if ( inp.move ) _wish.addScaledVector( _fwd, inp.move.y ).addScaledVector( _right, inp.move.x );
 		if ( _wish.lengthSq() > 1 ) _wish.normalize();
-		const speed = ( inp.down( 'ShiftLeft' ) ? 2.6 : 1.6 );
+		// ((M16) winded from a fall, you go slowly a while)
+		if ( this.stunned > 0 ) this.stunned -= dt;
+		const speed = ( inp.down( 'ShiftLeft' ) ? 2.6 : 1.6 ) * ( this.stunned > 0 ? 0.3 : 1 );
 		const k = 1 - Math.exp( - 12 * dt );
 		const v = this.deckVel;
 		v.x += ( _wish.x * speed - v.x ) * k;
@@ -947,7 +966,9 @@ export class Player {
 
 		// prompts: take the helm, or step ashore
 		const hx = b.model.helm.x, hz = b.model.helm.z;
-		const nearHelm = Math.hypot( p.x - hx, p.z - hz ) < HELM_REACH && ! this.busy && ! this.riding;
+		// ((M16) on a boat of several decks, on the helm's deck)
+		const nearHelm = Math.hypot( p.x - hx, p.z - hz ) < HELM_REACH && Math.abs( p.y - ( b.model.helm.y ?? p.y ) ) < 1.2 && ! this.busy && ! this.riding;
+		const ladder = ! this.busy && ! nearHelm && b.model.ladderAt( p );
 		this._ashoreT -= dt;
 		if ( this._ashoreT <= 0 ) {
 
@@ -966,12 +987,22 @@ export class Player {
 
 			}
 
+		} else if ( ladder ) {
+
+			this.prompt = { key: 'E', text: ladder.top ? ladder.ladder.downText : ladder.ladder.text };
+			if ( inp.hit( 'KeyE' ) ) {
+
+				this.climbing = b.model.climb( ladder );
+				return;
+
+			}
+
 		} else if ( ! this.busy ) {
 
 			// at the rail: step ashore where there is ground on that side, else jump into the sea
 			const ep = this._ashore && this._ashore.ep;
-			const atRail = b.model.exitPoints.some( ( e ) => Math.hypot( p.x - e.x, p.z - e.z ) < 1.3 );
-			if ( ep && Math.hypot( p.x - ep.x, p.z - ep.z ) < 1.3 ) {
+			const atRail = b.model.exitPoints.some( ( e ) => Math.hypot( p.x - e.x, p.z - e.z ) < 1.3 && Math.abs( p.y - e.y ) < 1.4 );
+			if ( ep && Math.hypot( p.x - ep.x, p.z - ep.z ) < 1.3 && Math.abs( p.y - ep.y ) < 1.4 ) {
 
 				this.prompt = { key: 'E', text: 'Step ashore' };
 				if ( inp.hit( 'KeyE' ) ) {
@@ -996,7 +1027,7 @@ export class Player {
 		}
 
 		// camera: eye above the feet, following the boat's motion
-		const eyeL = _v.set( p.x, p.y + EYE + Math.sin( this.bob ) * 0.02, p.z );
+		const eyeL = _v.set( p.x, p.y + ( this.stunned > 0 ? EYE * ( 1 - 0.45 * Math.min( 1, this.stunned ) ) : EYE ) + Math.sin( this.bob ) * 0.02, p.z );
 		b.toWorld( eyeL, this.camera.position );
 		this._camY = this.camera.position.y;
 		this.deckBase( _q );
