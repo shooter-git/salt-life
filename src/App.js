@@ -1728,7 +1728,13 @@ export class App {
 
 			// ((M15) what the bites keep of them: the sand that isn't rock, at 4 m (the beaches' wash: Game.sandAt))
 			T.beach = beachMask( T );
-			for ( const k of [ 'rock', 'sand', 'path', 'gully', 'rubble', 'scarp' ] ) T[ k ] = null;
+			// ((M16) what the cuts changed in each with it: it's keyed by the mask, so it held them until the reef's laid)
+			for ( const k of [ 'rock', 'sand', 'path', 'gully', 'rubble', 'scarp' ] ) {
+
+				if ( T._masksBefore ) T._masksBefore.delete( T[ k ] );
+				T[ k ] = null;
+
+			}
 
 		}
 
@@ -2325,7 +2331,9 @@ export class App {
 
 			console.warn( 'Shore: a swell\'s field solved on the page (no worker)', e && e.message );
 			const field = computeShoreField( fieldGround( ground ), { res: ground.res, swellDir, seaLevel } );
-			return lee ? shelter( field, swellDir ) : field;
+			if ( lee ) shelter( field, swellDir );
+			delete field.depth; // ((M16) as the worker's: only the island's own are solved from)
+			return field;
 
 		} );
 
