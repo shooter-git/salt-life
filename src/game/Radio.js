@@ -115,7 +115,7 @@ export class Radio {
 	get _helm() {
 
 		const p = this.game.app.player;
-		return p.mode === 'boat' && ! p.riding;
+		return p.mode === 'boat' && ! p.riding && ! p.boat?.model?.seated;
 
 	}
 

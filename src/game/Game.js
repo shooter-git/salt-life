@@ -394,7 +394,8 @@ export class Game {
 	get canFish() {
 
 		const app = this.app, p = app.player;
-		return ! app.freeCam && ( p.mode === 'walk' || p.mode === 'deck' ) && ! ( app.ui && app.ui.ui && app.ui.ui._photo );
+		// ((M16) or sat in a kayak)
+		return ! app.freeCam && ( p.mode === 'walk' || p.mode === 'deck' || ( p.mode === 'boat' && p.boat?.model?.seated ) ) && ! ( app.ui && app.ui.ui && app.ui.ui._photo );
 
 	}
 
@@ -610,6 +611,7 @@ export class Game {
 		} else if ( this.landing || this.display.shown ) this.endLanding();
 
 		p.busy = rod.lineInWater || rod.state === 'windup' || gun.shaftOut || net.busy || net.state === 'windup' || this.tools.busy;
+		p.handsFull = rod.equipped || net.equipped; // ((M16) a kayak's paddle laid by)
 
 		this.updateBoat( dt );
 		this.updateFound( dt );
@@ -640,7 +642,7 @@ export class Game {
 		// the catch card's live fish portrait (or one queued thumbnail)
 		if ( this.hud && this.hud.portrait ) this.hud.portrait.update( dt );
 		if ( this.hud ) this.hud.update( {
-			fuel: aboard ? { litres: this.state.fuelL, tank: this.state.stats.fuelL } : null,
+			fuel: aboard && this.state.stats.fuelL > 0 ? { litres: this.state.fuelL, tank: this.state.stats.fuelL } : null,
 			// (M10) the hull once it's worn, and the bilge with water in it
 			hull: aboard && ! p.riding && this.hull.wear > 0.02 ? this.hull.wear : null,
 			bilge: aboard && ! p.riding && this.hull.bilge >= 1 ? this.hull.bilge : null,
@@ -677,7 +679,7 @@ export class Game {
 			// by the water (boat deck, pier, the wet beach, wading): suggest the rod (or the cast net); in
 			// it, the speargun
 			if ( p.mode === 'swim' ) return { key: 'R', text: 'Take out the speargun' };
-			const byWater = p.mode === 'deck' || ( p.mode === 'walk' && [ 'wood', 'wetsand', 'water' ].includes( p.surface ) );
+			const byWater = p.mode === 'deck' || p.mode === 'boat' || ( p.mode === 'walk' && [ 'wood', 'wetsand', 'water' ].includes( p.surface ) );
 			return byWater ? { key: 'R', text: `Take out the rod   ·   ${ this.keyName( 'N' ) }  the cast net` } : null;
 
 		}
@@ -721,8 +723,9 @@ export class Game {
 	updateBoat( dt ) {
 
 		const app = this.app, b = app.boatCtl, p = app.player, s = this.state;
-		if ( b.driven && b.engineOn ) s.burn( fuelBurn( b.rpm ) * dt );
+		if ( b.driven && b.engineOn && b.handling.engine ) s.burn( fuelBurn( b.rpm ) * dt );
 		else if ( this._wasDriven && ! b.driven ) s.save();
+		if ( app.boat.play ) app.boat.play( dt, this ); // ((M16) a kayak's own: kayak/KayakModel.js)
 		this.updateHull( dt );
 		this.updateAnchor( b.driven && ! this._wasDriven, ! b.driven && this._wasDriven );
 		this._wasDriven = b.driven;
@@ -762,10 +765,12 @@ export class Game {
 
 		// ((M13) hauled out, she's out of it: no storm, no rain in her; left in the water, the storm works her)
 		const ashore = !! b.hauled;
+		// ((M16) nothing to crank, and with nothing to burn or flood: a plastic hull that drains itself, and shrugs off the sand)
+		const E = !! b.handling.engine, tough = !! b.handling.plastic;
 		hull.step( dt, {
-			driven: b.driven, throttle: b.driven ? Math.abs( b.throttleTarget || 0 ) : 0, fuel: s.fuelL > 0, rain: ashore ? 0 : G.rain.value,
-			storm: ashore || ! app.weather ? 0 : app.weather.windAt( b.position.x, b.position.z ),
-			bailing: this._bailing, pumpLs: s.stats.pumpLs, pile: c.pile, ground: c.ground, slide: c.slide, aground: c.aground,
+			driven: b.driven && E, throttle: b.driven && E ? Math.abs( b.throttleTarget || 0 ) : 0, fuel: s.fuelL > 0, rain: ashore || tough ? 0 : G.rain.value,
+			storm: ashore || tough || ! app.weather ? 0 : app.weather.windAt( b.position.x, b.position.z ),
+			bailing: this._bailing, pumpLs: s.stats.pumpLs, pile: tough ? 0 : c.pile, ground: tough ? 0 : c.ground, slide: tough ? 0 : c.slide, aground: tough ? false : c.aground,
 		} );
 		c.pile = c.ground = c.slide = 0;
 		c.aground = false;

@@ -2,6 +2,7 @@ import * as THREE from '../engine/index.js';
 import { WORLD } from '../world/WorldLayout.js';
 import { TUMBLE_H } from '../ocean/ShoreWaves.js';
 import { G } from '../core/Globals.js';
+import { updateSeat, sitDown } from '../world/boat/kayak/Seat.js';
 
 // (M13) The wind on someone standing in it: what it drives them along at (m/s) against their footing, in
 // wind U (m/s). A person's drag (1/2 rho Cd A U^2, Cd A about 0.7 m^2, 75 kg) is a fifth of their weight in a
@@ -214,7 +215,7 @@ export class Player {
 		const bp = this.boat.toWorld( this.boat.model.boardPoint, _v );
 		const d = Math.hypot( bp.x - this.position.x, bp.z - this.position.z );
 		const dy = Math.abs( bp.y - this.position.y );
-		return d < 4.2 && dy < 3.2;
+		return d < ( this.boat.model.boardReach || 4.2 ) && dy < 3.2;
 
 	}
 
@@ -262,7 +263,7 @@ export class Player {
 
 		} else if ( this.nearBoat() && ! this.busy ) {
 
-			this.prompt = { key: 'E', text: 'Board boat' };
+			this.prompt = { key: 'E', text: this.boat.model.boardText || 'Board boat' };
 			if ( inp.hit( 'KeyE' ) ) {
 
 				this.boardBoat();
@@ -694,6 +695,14 @@ export class Player {
 	boardBoat() {
 
 		const b = this.boat;
+		// ((M16) sat in, not walked about: there's only the seat)
+		if ( b.model.seated ) {
+
+			if ( b.model.board( b, this ) ) this.takeHelm();
+			return;
+
+		}
+
 		this.mode = 'deck';
 		this.deckPos.copy( b.model.boardPoint );
 		this.deckVel.set( 0, 0, 0 );
@@ -711,6 +720,7 @@ export class Player {
 	// sit down at the helm and drive (the old "enter boat")
 	takeHelm() {
 
+		if ( this.boat.model.seated && this.mode !== 'boat' ) sitDown( this );
 		this.mode = 'boat';
 		this.boat.driven = true;
 		this.boat.moored = false;
@@ -718,7 +728,7 @@ export class Player {
 		this.helmPitch = - 0.05;
 		this.orbitYaw = this.boat.getYaw() + Math.PI;
 		this.camInit = false;
-		if ( this.audio ) this.audio.engineStart();
+		if ( this.audio && this.boat.handling.engine ) this.audio.engineStart();
 
 	}
 
@@ -775,7 +785,7 @@ export class Player {
 
 		} else {
 
-			const w = b.toWorld( new THREE.Vector3( 2.2 * ( side || 1 ), 0, 0 ), new THREE.Vector3() );
+			const w = b.toWorld( new THREE.Vector3( ( b.model.overSide || 2.2 ) * ( side || 1 ), 0, 0 ), new THREE.Vector3() );
 			// (the boat floats at the water line: the walker's water height is stale while aboard)
 			this.waterH = this.waterMean = b.position.y;
 			this.position.set( w.x, b.position.y - 0.2, w.z );
@@ -787,7 +797,7 @@ export class Player {
 		this.velocity.set( 0, 0, 0 );
 		this.yaw = b.getYaw() + Math.PI;
 		this._camY = null;
-		if ( this.audio && wasDriving ) this.audio.engineStop();
+		if ( this.audio && wasDriving && b.handling.engine ) this.audio.engineStop();
 		if ( this.riding ) this.unride();
 
 	}
@@ -1008,6 +1018,14 @@ export class Player {
 
 		const inp = this.input;
 		const b = this.boat;
+		// ((M16) a seat and a paddle, not a helm: kayak/Seat.js)
+		if ( b.model.seated ) {
+
+			updateSeat( this, dt );
+			return;
+
+		}
+
 		this.breathe( dt, false, false );
 		const look = inp.consumeLook();
 		const wheel = inp.consumeWheel();
