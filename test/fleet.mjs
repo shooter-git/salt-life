@@ -8,6 +8,7 @@ import { Hull, HULLS, REPAIR_FULL, repairFee, stormWear, FLOOD_L } from '../src/
 import { FLEET, TRADE, SALE, MONTH, MOST_MONTHS, DUES_LEAVE, PAINTS, NAME_MAX, monthly, gearWorth } from '../src/game/fleet/Fleet.js';
 import { BERTHS, ashoreOf, berthOf } from '../src/game/fleet/Berths.js';
 import { SHAPES, mooredGeometry, standsGeometry } from '../src/game/fleet/MooredModels.js';
+import { fleetRows } from '../src/game/fleet/FleetPanel.js';
 import { YARD, CRADLE, yardPose } from '../src/world/village/StormPlaces.js';
 import { WORLD } from '../src/world/WorldLayout.js';
 import { boatLeft, leftOf, othersAway, tellOthers, awayOf } from '../src/game/Away.js';
@@ -355,6 +356,37 @@ ok( standsGeometry( 'sportfisher', 5, () => 3 ).attributes.position.count > 0, '
 	s.fleet.console.hull = 0.5;
 	const paid = s.repairBoat( 'console' );
 	ok( paid === repairFee( 0.5, 'console' ) && s.fleet.console.hull === 0, 'and repaired where she lies' );
+
+}
+
+// ---- Marta's list, as it's drawn
+{
+
+	const s = fresh( 3000 );
+	s.addBoat( 'kayak' );
+	const hud = { game: { state: s, towJob: () => null, app: { weather: { news: null } } }, _fleetOpen: null };
+	const halfway = { hold: 2, fuel: 2, engine: 2, baitWell: 2, fishFinder: 1, lights: 1, anchor: 1, bilgePump: 0, rod: 0, reel: 0, line: 0 };
+	Object.assign( s.upgrades, halfway );
+	let h = fleetRows( hud );
+	ok( h.includes( 'Offshore sportfisher' ) && h.includes( 'Finish your upgrades to unlock it · 11 of 19' ) && h.includes( 'is-shadow' ), 'the sportfisher: a silhouette, her name, how far you are' );
+	ok( ! h.includes( 'data-buyboat="sportfisher"' ) && ! h.includes( '$25,000' ), 'no price and no way to buy her yet' );
+	ok( h.includes( 'data-buyboat="console"' ) && h.includes( 'Center console · $2,500' ), 'the center console, at her price' );
+	ok( h.includes( 'data-takeout="kayak"' ) && h.includes( 'data-sellboat="kayak"' ) && ! h.includes( 'data-takeout="lobster"' ), 'yours to take out or sell: not the one you\'re in' );
+	s.earned = true;
+	h = fleetRows( hud );
+	ok( ! h.includes( 'is-shadow' ) && h.includes( '$25,000' ) && h.includes( 'data-buyboat="sportfisher"' ), 'earned: her picture and her price' );
+	ok( h.includes( 'data-trade="lobster"' ), 'and the lobster boat can be traded in for her' );
+	hud.game.towJob = () => ( { fee: 77, metres: 1000 } );
+	ok( fleetRows( hud ).includes( '$77' ), 'a boat out at sea: what it\'d cost to fetch her' );
+	hud.game.towJob = () => null;
+	hud.game.app.weather.news = { stage: 'warning' };
+	ok( fleetRows( hud ).includes( `data-haulboat="kayak"` ), 'a hurricane coming: each can be hauled from her row' );
+	hud._fleetOpen = 'lobster';
+	s.nameBoat( 'lobster', 'Reel & Tackle' );
+	h = fleetRows( hud );
+	ok( h.includes( 'data-boatname="lobster"' ) && h.includes( 'data-paint="navy"' ), 'name and paint' );
+	s.dues.owed = 40;
+	ok( fleetRows( hud ).includes( 'You owe Marta $40' ), 'what\'s on her tab' );
 
 }
 
