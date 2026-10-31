@@ -728,7 +728,7 @@ export class BoatInstruments {
 				g.lineTo( px, py + 7 );
 				g.lineTo( px - 7, py );
 				g.closePath();
-				g.fillStyle = '#d6303a';
+				g.fillStyle = m.trap ? '#ff8a3c' : '#d6303a'; // ((M16) a lobster trap's: orange, as its buoy)
 				g.strokeStyle = '#ffffff';
 				g.lineWidth = 1.5;
 				g.fill();

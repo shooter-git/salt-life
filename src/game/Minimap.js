@@ -58,6 +58,7 @@ const CSS = /* css */`
 .gm-mk.is-marta > i { background: var(--tw-aqua); }
 .gm-mk.is-shut > i { filter: saturate(0.25) brightness(0.75); }
 .gm-mk.is-boat > i { background: #f2efe6; }
+.gm-mk.is-trap > i { background: #ff8a3c; }
 .gm-mk.is-shelter > i { background: #2f6fb0; color: #fff; }
 .gm-mk.is-camp > i { background: #d9825a; }
 .gm-mk.is-player > i { width: calc(16 * var(--tw-u)); height: calc(16 * var(--tw-u)); margin: calc(-8 * var(--tw-u)) 0 0 calc(-8 * var(--tw-u)); color: #fff;
@@ -540,7 +541,7 @@ export class Minimap {
 
 		for ( const m of chart.marks ) if ( ! this._marks.has( m.id ) ) {
 
-			const el = h( 'div', 'gm-mk is-mark', `<i><em>${ m.id }</em></i>` );
+			const el = h( 'div', `gm-mk is-mark${ m.trap ? ' is-trap' : '' }`, `<i><em>${ m.id }</em></i>` );
 			this.marks.prepend( el );
 			this._marks.set( m.id, el );
 

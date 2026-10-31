@@ -1,5 +1,6 @@
 import { FISH, CARAPACE, fishLengthCm } from './FishTable.js';
 import { UPGRADES, nextLevel, FUEL_PRICE } from './Gear.js';
+import { TRAP_PRICE } from './Traps.js';
 import { BAITS, BAIT_IDS, chunksOf } from './Bait.js';
 import { LOOKS, LOOK_NAMES } from '../together/Avatar.js';
 import { NIGHT_BOX, biteHint, orderTerms, orderPlace } from './Orders.js';
@@ -975,7 +976,7 @@ export class GameHUD {
 				+ c.marks.map( ( m ) => {
 
 					const leg = legTo( at.x, at.z, m.x, m.z ), far = leg.m < 1852 * 0.2 ? feet( leg.m ) : `${ ( leg.m / 1852 ).toFixed( 1 ) } NM`;
-					return item( `Mark ${ m.id }`, `${ far } · ${ String( magnetic( leg.bearing ) ).padStart( 3, '0' ) }°${ Number.isFinite( m.day ) ? ` · day ${ m.day + 1 }` : '' }`, '<span class="gm-btns">' + `<button class="gm-mini" data-unmark="${ m.id }">Remove</button></span>` );
+					return item( `${ m.trap ? 'Trap' : 'Mark' } ${ m.id }`, `${ far } · ${ String( magnetic( leg.bearing ) ).padStart( 3, '0' ) }°${ Number.isFinite( m.day ) ? ` · day ${ m.day + 1 }` : '' }`, '<span class="gm-btns">' + `<button class="gm-mini" data-unmark="${ m.id }">Remove</button></span>` );
 
 				} ).join( '' );
 			if ( ! c.marks.length ) body += empty( 'Your chart\'s drawn in where you go: the coast as you see it, the far grounds\' depths as you run over them, each place\'s name as you come to it. Mark a good spot to find it again.' );
@@ -1359,12 +1360,14 @@ GameHUD.prototype.renderShop = function () {
 		return `<div class="gm-shop-row"><span>${ track.name }: ${ next ? next.label : cur.label }<small>Now: ${ cur.label }</small></span>${ btn }</div>`;
 
 	} ).join( '' );
+	// ((M16) traps a hurricane's had: Traps.js)
+	const lostTraps = s.traps.lost, trapRow = lostTraps ? `<div class="gm-shop-row"><span>A new lobster trap<small>${ lostTraps } lost to the weather</small></span><button class="gm-btn" data-newtrap ${ TRAP_PRICE > s.money ? 'disabled' : '' }>$${ TRAP_PRICE }</button></div>` : '';
 	const greeting = this.closingSoon( v ) ? `I'm shutting at ${ this.at( v.hours[ 1 ] ) }` : v.greeting;
 	// (her wanted list scrolls with the rest, as Joe's does)
 	this.drawStand( v, `
 		<div class="gm-head"><h2>${ v.name }</h2>
 		<p class="gm-sub">${ greeting } · You have $${ s.money.toLocaleString() }</p></div>
-		<div class="gm-list">${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ this.findsBlock( 'marta', 'From the beach: she\'ll buy' ) }${ bucketRow }${ baitRows }${ haulRow }${ towRow }${ repairRow }${ fuelRow }${ rows }</div>
+		<div class="gm-list">${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ this.findsBlock( 'marta', 'From the beach: she\'ll buy' ) }${ bucketRow }${ baitRows }${ haulRow }${ towRow }${ repairRow }${ fuelRow }${ trapRow }${ rows }</div>
 		<div class="gm-foot"><span class="gm-sub">Upgrades take effect at once</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>` );
 	bindFuel();
 	const sb = this.stand.querySelector( '[data-sellbait]' );
@@ -1387,6 +1390,13 @@ GameHUD.prototype.renderShop = function () {
 	if ( rp ) rp.onclick = () => {
 
 		this.game.repair();
+		this.renderShop();
+
+	};
+	const nt = this.stand.querySelector( '[data-newtrap]' );
+	if ( nt ) nt.onclick = () => {
+
+		this.game.traps.buyNew();
 		this.renderShop();
 
 	};
