@@ -1,7 +1,7 @@
 import { STAND } from './FishStand.js';
 import { CHANDLERY } from './Chandlery.js';
 import { CAMP } from './FishCamp.js';
-import { NAMES } from './Chart.js';
+import { NAMES, NAME, namedAs } from './Chart.js';
 import { feet } from './Units.js';
 import { edgeAt } from './Weather.js';
 
@@ -158,7 +158,7 @@ const TIPS = {
 		boat: 'Your boat. <kbd>E</kbd> to board, <kbd>E</kbd> again at the wheel to drive (<kbd>W</kbd><kbd>S</kbd> throttle, <kbd>A</kbd><kbd>D</kbd> steer). Diesel is sold by Marta.',
 		joe: '<b>Joe</b> buys your fish. <kbd>E</kbd> to see what he will pay.',
 		marta: '<b>Marta</b> sells upgrades and diesel. <kbd>E</kbd> to see her stock.',
-		chart: 'Your <b>chart</b> fills in where you go: the coast as you see it, the depths as you run over them, each place\'s name as you come to it, on the map and the boat\'s plotter. <kbd>P</kbd> marks a good spot (<kbd>I</kbd>, Chart, lists them). Marta sells a chart of the island, if you\'d rather not.',
+		chart: 'Your <b>chart</b> fills in where you go: the coast as you see it, the depths as you run over them, each place\'s name as you come to it, on the map and the boat\'s plotter. It has them by their names on a chart: ' + namedAs( NAME.bank ) + ', and so on. <kbd>P</kbd> marks a good spot (<kbd>I</kbd>, Chart, lists them). Marta sells a chart of the island, if you\'d rather not.',
 		gunOut: 'Dive (look down and swim) and <b>fin slowly</b> up to a fish: rush it and it bolts. Put it in the sights and <b>click</b>. They tell you what it is, and whether you may take it.',
 		gunLoad: '<b>Hold the left mouse button</b> to draw the band back to its notch on the shaft.',
 		spearFight: 'A big one. <b>Hold the left mouse button</b> to pull it in, let go when it runs, until it tires.',
@@ -213,7 +213,7 @@ const TIPS = {
 	// (M15) once you've the hang of the bay, the rest of the island; and out on the far water, what to look for
 	goRound: 'You\'ve the hang of the bay. There\'s more of the island: the <b>north beach\'s surf</b> for pompano (best on a surf day: Joe\'s slate says), the <b>mangrove creek</b> on the west for snook at dawn and dusk, and the <b>windward reef</b> off the north-west point, its groupers bigger than the bay\'s. Take the boat round, or walk: the trail from the square goes round the east to the north beach, the red dashes on your map, with fingerposts at its turns, and <b>Pearl\'s fish camp</b> there buys fish and sells diesel.',
 	camp: '<b>Pearl\'s fish camp</b>: she buys your catch at ' + Math.round( CAMP.rate * 100 ) + '% of Joe\'s price (she takes it round to market herself) and sells <b>diesel</b> from her drums, so a trip round the island needn\'t end in the bay. Tie up at her jetty.',
-	chart: 'Your <b>chart</b> fills in where you go: the coast as you see it, the depths as you run over them, each place\'s name as you come to it, on the map and the boat\'s plotter. Mark a good spot from the cooler\'s <b>Chart</b> tab. Marta sells a chart of the island, if you\'d rather not.',
+	chart: 'Your <b>chart</b> fills in where you go: the coast as you see it, the depths as you run over them, each place\'s name as you come to it, on the map and the boat\'s plotter. It has them by their names on a chart: ' + namedAs( NAME.bank ) + ', and so on. Mark a good spot from the cooler\'s <b>Chart</b> tab. Marta sells a chart of the island, if you\'d rather not.',
 	edge: 'You\'re past the far grounds. The sea\'s the open ocean\'s out here: the <b>wind fresher</b>, the <b>seas bigger</b>, fewer birds and fewer fish. Nothing stops you going on, but <b>watch your fuel</b>: Marta\'s tow is by the distance.',
 	farWater: 'Out here the fish are <b>under things</b>: look for <b>weedlines</b> (mahi), <b>floating debris</b>, and <b>birds working bait</b> (tuna). On the <b>drop-off</b> the tuna come at first light.',
 	// (M13) a hurricane
