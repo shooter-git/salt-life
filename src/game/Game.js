@@ -13,6 +13,7 @@ import { CatchDisplay } from './CatchDisplay.js';
 import { FishPortrait } from './FishPortrait.js';
 import { UPGRADES, fuelBurn, TOW, towFee, towTime, HAUL_FEE } from './Gear.js';
 import { Hull, thrustMul, repairFee } from './Hull.js';
+import { BreakingSeas } from './BreakingSeas.js';
 import { tellOf } from './Away.js';
 import { GameHUD } from './GameHUD.js';
 import { TimeHUD } from './TimeHUD.js';
@@ -42,7 +43,8 @@ import { SEABED } from '../world/terrain/SeabedModel.js';
 import { mangroveAt } from '../world/terrain/Mangrove.js';
 import { northReefMask } from '../world/TerrainData.js';
 import { PLACES, placeOf, placeName } from './Places.js';
-import { FINDS, lying, messageOf } from './Beachcomb.js';
+import { FINDS, lying, messageOf, wreckageAt, wreckStamp } from './Beachcomb.js';
+import { SHELLS, SHELL_KINDS, shellsHave, WALL_PAY } from './Shells.js';
 import { ordersOf, tagFor } from './Orders.js';
 
 // how long the catch card stays up unless dismissed (ms)
@@ -766,6 +768,8 @@ export class Game {
 
 		}
 
+		// ((M16) a sea breaking on her, out in a gale)
+		if ( app.water ) ( this.breakingSeas || ( this.breakingSeas = new BreakingSeas( { waves: app.waves, caps: app.water.whitecaps, hull } ) ) ).update( dt, app );
 		// ((M13) hauled out, she's out of it: no storm, no rain in her; left in the water, the storm works her)
 		const ashore = !! b.hauled;
 		hull.step( dt, {
@@ -1093,12 +1097,15 @@ export class Game {
 		const app = this.app, B = app.beachcomb, s = this.state, hud = this.hud;
 		if ( ! B ) return;
 		// (what you've picked up's pruned as you pick more: so its last, not its length)
-		const day = app.settings.day, key = `${ day }:${ s.picked.length }:${ s.picked[ s.picked.length - 1 ] || '' }`;
+		const day = app.settings.day, stamp = wreckStamp( app.damage ), key = `${ day }:${ s.picked.length }:${ s.picked[ s.picked.length - 1 ] || '' }:${ stamp }`;
 		if ( key !== this._combKey ) {
 
 			this._combKey = key;
 			const picked = new Set( s.picked );
 			B.set( lying( day, ( d ) => app.beachDays( d ) ).filter( ( f ) => ! picked.has( f.id ) ) );
+			// ((M16) a hurricane's wreck in its wrack, as much of it as hasn't been cleared; your shell set at Marta's)
+			B.setWreck( wreckageAt( app.damage ).filter( ( f ) => ! picked.has( f.id ) ) );
+			B.setWall( s.shells.wall !== null );
 
 		}
 
@@ -1123,7 +1130,24 @@ export class Game {
 		if ( ! this.state.pickFind( f ) ) return false;
 		const F = FINDS[ f.kind ];
 		if ( f.kind === 'bottle' && this.hud ) this.hud.showNote( messageOf( f.seed ) );
+		else if ( SHELLS[ f.kind ] ) this.toast( this.state.shells.have[ f.kind ].id === f.id ? `${ F.name }, for your set: ${ shellsHave( this.state.shells ) } of ${ SHELL_KINDS.length }` : `A spare ${ F.name.toLowerCase() }${ F.who ? ` · Marta pays $${ F.price }` : `. ${ SHELLS[ f.kind ].note }` }` );
 		else this.toast( `${ F.name }: ${ F.what }${ F.who ? ` · ${ F.who === 'joe' ? 'Joe' : 'Marta' } buys these` : '' }` );
+		return true;
+
+	}
+
+	// (M16) your whole shell set to Marta, for the tray by her table
+	giveShells() {
+
+		const S = this.state.shells;
+		if ( S.wall !== null || SHELL_KINDS.some( ( k ) => ! S.have[ k ] ) ) return false;
+		S.wall = this.app.settings.day | 0;
+		this.state.money += WALL_PAY;
+		this.state.save();
+		this.state.emit();
+		this.toast( `The whole set, in Marta's tray: $${ WALL_PAY }` );
+		if ( this.app.audio && this.app.audio.coin ) this.app.audio.coin();
+		if ( this.hud && this.hud.standOpen ) this.hud.renderTrader();
 		return true;
 
 	}
