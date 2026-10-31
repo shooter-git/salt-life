@@ -380,7 +380,7 @@ const windSeaOf = ( wind ) => {
 // sizes left out: a gale's was drawn 5 to 7 ft. A real gale's (39 kt) is 10 to 14 ft in these waters, 12 ft here:
 // NOAA's Beaufort has force 8 at 18 to 25 ft on the open ocean, Key West's own gale warning for 25 to 30 kt gives 6 to
 // 10 ft over the Straits (so about 12 at 39 kt), and the SMB curves over the 100 to 150 km of water the Keys have
-// upwind give 10.6 to 13.5 ft. Nothing at a breezy day's wind and under (their 4 to 6 ft is already the Weather
+// upwind give 10.6 to 12.9 ft. Nothing at a breezy day's wind and under (their 4 to 6 ft is already the Weather
 // Service's for 20 kt); from there its energy (Hs^2) grows about as the wind past that. Past a gale it goes on
 // growing, so a hurricane's stays bigger than a gale's: a Category 1's wall about 25 ft, a 3's about 31.
 export const OWN_SEA = { from: 11, k: 0.96, p: 0.575 };

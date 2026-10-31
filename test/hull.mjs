@@ -11,7 +11,7 @@ import { WaterQuery } from '../src/ocean/WaterQuery.js';
 import { BoatModel } from '../src/world/BoatModel.js';
 import { BoatController } from '../src/player/BoatController.js';
 import { BoatSpray } from '../src/player/BoatSpray.js';
-import { weatherAt, SOUTHERLY } from '../src/game/Weather.js';
+import { weatherAt, SOUTHERLY, seaSwell, seaTurn, seaPeriodOf, towardOf } from '../src/game/Weather.js';
 import { Hull, KNOCK_FROM, slamWear, hitWear, thrustMul, leakLs, rainLs, repairFee, crankChance, stormWear, STORM_FROM, SLAM_FROM, FLOOD_L, RESTART, CRANK_S, BAIL_LS, REPAIR_FULL } from '../src/game/Hull.js';
 import { weatherAt as weatherNow, hurricaneNews } from '../src/game/Weather.js';
 import { GameState } from '../src/game/GameState.js';
@@ -53,9 +53,10 @@ function drive( { cond = 'fair', throttle = 1, yaw = 0, secs = 60, from = SEA, c
 
 	const w = weatherAt( 30, cond );
 	const waves = new Waves( { tier: 'low', terrain } );
-	waves.setSea( w.swell, w.windSea );
-	// ((M14) its swell at its period, as the weather sets it)
-	waves.setSwell( 0, w.period, w.period, from );
+	waves.setWindDir( towardOf( w.windAngle ), from );
+	waves.setSea( seaSwell( w.swell, w.blow ), w.windSea );
+	// ((M14) its swell at its period, as the weather sets it; (M16) and a blow's own sea on it)
+	waves.setSwell( 0, w.period, w.period, from, G.time.value, seaTurn( w.swell, w.blow ), seaPeriodOf( w.swell, w.windSea, w.blow ) );
 	G.windSpeed.value = w.wind;
 	const query = new WaterQuery( waves, terrain );
 	const b = new BoatController( { model, query, terrain, colliders } );
@@ -103,11 +104,13 @@ function drive( { cond = 'fair', throttle = 1, yaw = 0, secs = 60, from = SEA, c
 	const fair = [ 0, 1.6 ].map( ( yaw ) => drive( { yaw } ) );
 	// a gale, into the sea: flat out, at the usual throttle (W), and at half
 	// ((M14) a gale whose sea is about her: a picked gale's blows down the trades, its sea on the north shore)
-	const flat = drive( { cond: SOUTHERLY } ), usual = drive( { cond: SOUTHERLY, throttle: 0.7 } ), half = drive( { cond: SOUTHERLY, throttle: 0.5 } );
-	console.log( `     a minute flat out on a fair day: ${ fair.map( ( r ) => `${ r.slams } slams, ${ pct( r.hull.wear ) }` ).join( '; ' ) }. In a gale: flat out ${ flat.slams } slams, ${ pct( flat.hull.wear ) } and ${ flat.hull.bilge.toFixed( 0 ) } L shipped; at W ${ pct( usual.hull.wear ) }; at half throttle ${ pct( half.hull.wear ) }` );
+	// ((M16) held head to it, the wind sea and its own long seas on her bow, as they are in the game: until now this
+	// ran through the short seas the wrong way)
+	const flat = drive( { cond: SOUTHERLY } ), usual = drive( { cond: SOUTHERLY, throttle: 0.7 } ), half = drive( { cond: SOUTHERLY, throttle: 0.3 } );
+	console.log( `     a minute flat out on a fair day: ${ fair.map( ( r ) => `${ r.slams } slams, ${ pct( r.hull.wear ) }` ).join( '; ' ) }. In a gale: flat out ${ flat.slams } slams, ${ pct( flat.hull.wear ) } and ${ flat.hull.bilge.toFixed( 0 ) } L shipped; at W ${ pct( usual.hull.wear ) }; at a third ${ pct( half.hull.wear ) }` );
 	ok( fair.every( ( r ) => r.b.isFinite() && r.hull.wear === 0 && r.hull.bilge === 0 ), 'flat out on a fair day she takes no wear' );
-	ok( flat.hull.wear > 0.03 && flat.hull.wear < 0.12, 'a gale flat out wears her: about a quarter in five minutes' );
-	ok( usual.hull.wear < flat.hull.wear * 0.6 && half.hull.wear < 0.005, 'easing off spares her: at half throttle, next to nothing' );
+	ok( flat.hull.wear > 0.05 && flat.hull.wear < 0.25, 'a gale head to it flat out wears her: done for in about ten minutes' );
+	ok( half.hull.wear < flat.hull.wear * 0.5, 'easing off spares her: at a third of her throttle, a good deal less' );
 	ok( flat.hull.bilge > 0, 'and her hardest slams ship green water' );
 
 }

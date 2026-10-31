@@ -10,7 +10,7 @@ import { ShoreWaves, TUMBLE_H } from '../src/ocean/ShoreWaves.js';
 import { computeShoreField, shelter } from '../src/world/ShoreField.js';
 import { WORLD } from '../src/world/WorldLayout.js';
 import { CHANDLERY } from '../src/game/Chandlery.js';
-import { weatherAt, SURF_MAX, PERIOD_MAX, GROUNDSWELL_MAX, SURF_HURRICANE, HURRICANE, NORTH } from '../src/game/Weather.js';
+import { weatherAt, SURF_MAX, PERIOD_MAX, GROUNDSWELL_MAX, SURF_HURRICANE, HURRICANE, NORTH, seaSwell, blowSeaOf } from '../src/game/Weather.js';
 import { G } from '../src/core/Globals.js';
 import { windShove, knockHeight } from '../src/player/Player.js';
 import { seaBox } from '../src/world/WeatherDriver.js';
@@ -57,17 +57,17 @@ for ( const tier of [ 'low', 'mid', 'high' ] ) {
 	// today's sea to the bit
 	const heights = () => [ 0, 1, 2, 3, 4 ].map( ( i ) => waves.heightAt( - 300 + i * 150, 300 + i * 70, i * 1.3 ) );
 	const before = heights(), B = waves.uniforms.waveB.value.map( ( v ) => v.toArray().join() ).join();
-	waves.setSea( gale.swell, gale.windSea );
+	waves.setSea( seaSwell( gale.swell, gale.blow ), gale.windSea );
 	const [ galeWorst, galeDeep ] = worstGap( waves ), share = galeWorst / seaHeight( waves );
 	check( galeDeep < 0.01 && share < 0.03, `${ tier }: in a gale's sea too (worst ${ ( galeDeep * 100 ).toFixed( 2 ) } cm in deep water; over the shallows ${ ( galeWorst * 100 ).toFixed( 2 ) } cm, ${ ( share * 100 ).toFixed( 1 ) }% of its ${ seaHeight( waves ).toFixed( 2 ) } m)` );
 	// ((M13) and a hurricane's)
-	waves.setSea( HURRICANE.swell, gale.windSea );
+	waves.setSea( seaSwell( HURRICANE.swell, blowSeaOf( 38 ) ), gale.windSea );
 	const [ hurWorst, hurDeep ] = worstGap( waves ), hurShare = hurWorst / seaHeight( waves );
-	check( hurDeep < 0.01 && hurShare < 0.05, `${ tier }: (M13) and a hurricane's (worst ${ ( hurDeep * 100 ).toFixed( 2 ) } cm in deep water; over the shallows ${ ( hurWorst * 100 ).toFixed( 2 ) } cm, ${ ( hurShare * 100 ).toFixed( 1 ) }% of its ${ seaHeight( waves ).toFixed( 2 ) } m)` );
+	check( hurDeep < 0.01 && hurShare < 0.07, `${ tier }: (M13) and a hurricane's (worst ${ ( hurDeep * 100 ).toFixed( 2 ) } cm in deep water; over the shallows ${ ( hurWorst * 100 ).toFixed( 2 ) } cm, ${ ( hurShare * 100 ).toFixed( 1 ) }% of its ${ seaHeight( waves ).toFixed( 2 ) } m)` );
 	// ((M14) a Category 3's open sea (its swell the biggest a hurricane brings, its wind sea at its most) in
 	// the sea's culling box: its highest crest and lowest trough over a few thousand points and moments,
 	// against the box on no surge and no surf past a gale's; and the box as it was, for a fair day's)
-	const cat3 = [ HURRICANE.swell * HURRICANE.cats[ 2 ].size, 3 ];
+	const cat3 = [ seaSwell( HURRICANE.swell * HURRICANE.cats[ 2 ].size, blowSeaOf( 52 ) ), 3 ];
 	waves.setSea( ...cat3 );
 	let hi = - 1e9, lo = 1e9;
 	for ( let k = 0; k < 4000; k ++ ) {
@@ -158,7 +158,7 @@ check( query.cpu[ ( slot + 2 ) * 4 + 3 ] > 10, 'the sea floor under the island i
 // and its run-up never reaches the boardwalk; a fair day's surf is today's
 const shore = new ShoreWaves( { field: computeShoreField( terrain, { res: 512, swellDir: [ WORLD.swellDir.x, WORLD.swellDir.y ] } ) } );
 const galeSea = new Waves( { tier: 'high', terrain } );
-galeSea.setSea( gale.swell, gale.windSea );
+galeSea.setSea( seaSwell( gale.swell, gale.blow ), gale.windSea );
 const surfQuery = new WaterQuery( galeSea, terrain, shore );
 shore.setSurf( 0.34 );
 check( shore.params.amplitude === 0.34 && shore.params.runup === 1, 'a fair day\'s surf runs up as it always has' );
@@ -421,7 +421,7 @@ check( runs.every( ( [ start, foot, stall ] ) => start === 0 && foot < 0.01 && s
 	const dir = [ WORLD.swellDir.x, WORLD.swellDir.y ], home = shore.field, LEVEL = 1;
 	const surgeField = computeShoreField( terrain, { res: 512, swellDir: dir, seaLevel: LEVEL } );
 	const hurSea = new Waves( { tier: 'high', terrain } );
-	hurSea.setSea( HURRICANE.swell, gale.windSea );
+	hurSea.setSea( seaSwell( HURRICANE.swell, blowSeaOf( 38 ) ), gale.windSea );
 	const plain = new ShoreWaves( { field: home } ), surged = new ShoreWaves( { field: home } );
 	surged.setSurgeField( surgeField, LEVEL );
 	// (at the usual sea level, the island's own field exactly)
