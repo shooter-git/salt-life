@@ -31,6 +31,7 @@ const FAR_DIST = 700; // m (+ 60 x rock size): faded out beyond
 const BAND = 0.12; // cross-fade band, share of the switch distance (Bayer screen-door, see LODFade)
 const RAIN_REACHES = - 3; // m: (M14) the rocks topping out above this are those the rain may fall on (its tide at its lowest, and more)
 // ((M14) the overhangs' grids: near (the low tier's coarser) and far, m)
+const SHAPE_NEAR = 300; // (M15) m
 const OVERHANG_CELL = { near: 0.25, lite: 0.3, far: 0.5 };
 // ((M15) a sea cave's sheltered faces: the sky's light on them this many times the world's (as the wreck's FILL);
 // the sun's thrown in off the sea and the rock, with what its walls throw on again)
@@ -45,10 +46,12 @@ export class Rocks {
 	// terrain: the Terrain (its maps and detail texture shade the rocks like the ground's rock).
 	// castShadow: the near LOD (rocks within ~60-80 m) casts shadow-map shadows; far rocks never do.
 	// lite: the low tier's cheaper surface (no triplanar detail).
-	// coarseCaves: (M15) a device that draws on its CPU: the sea caves' far shapes twice as coarse, an eighth of the
-	// cells to make in the load, and their light worked out with their near shapes after the start: they're on the
-	// far side of the island from where you start.
-	constructor( { scene, terrain, village = null, colliders = null, seed = 4242, castShadow = true, lite = false, coarseCaves = false } ) {
+	// lazyCaves: (M15) the low tier: the overhangs' and the sea caves' near shapes (and the caves' light) made only once
+	// you're near one (overhangsNear): the caves are on the far side of the island from where you start, some 20 MB of
+	// the 150 of script memory it's allowed, and more while they're made.
+	// coarseCaves: (M15) a device that draws on its CPU: their far shapes twice as coarse too, an eighth of the
+	// cells to make in the load.
+	constructor( { scene, terrain, village = null, colliders = null, seed = 4242, castShadow = true, lite = false, lazyCaves = false, coarseCaves = false } ) {
 
 		this.scene = scene;
 		this.terrain = terrain;
@@ -73,7 +76,8 @@ export class Rocks {
 		// ((M14) and the overhangs to shelter under, placed by hand (terrain/Overhangs.js): made coarse now
 		// (their far shape, and from it what's in the way of standing under them), their near shape after the
 		// start (refineOverhangs); the scattered rocks where they stand taken away, the rest as they were)
-		this.overhangs = [ ...OVERHANGS, ...SEA_CAVE_SITES ].map( ( site ) => buildOverhang( site, this.terrainData, coarseCaves && site.kind === 'seacave' ? { cell: OVERHANG_CELL.far * 2, lightLater: true } : { cell: OVERHANG_CELL.far } ) );
+		this.overhangs = [ ...OVERHANGS, ...SEA_CAVE_SITES ].map( ( site ) => buildOverhang( site, this.terrainData, site.kind === 'seacave' ? { cell: OVERHANG_CELL.far * ( coarseCaves ? 2 : 1 ), lightLater: lazyCaves } : { cell: OVERHANG_CELL.far } ) );
+		this.lazyCaves = lazyCaves;
 		this.instances = this.instances.filter( ( r ) => ! this.overhangs.some( ( o ) => this._crowds( o, r ) ) );
 		// ((M15) nor on the way over to the north beach: terrain/NorthTrail.js)
 		this.instances = this.instances.filter( ( r ) => ! trailClears( r.x, r.z, r.size * 0.5 ) );
@@ -168,7 +172,7 @@ export class Rocks {
 		for ( let k = 0; k < this.overhangs.length; k ++ ) {
 
 			const o = this.overhangs[ k ];
-			if ( o.fine ) continue;
+			if ( o.fine || ( this.lazyCaves && ! o.wanted ) ) continue;
 			const build = overhangBuild( o.site, this.terrainData, { cell: this._nearCell, light: o.light } );
 			let r, t = - Infinity;
 			for ( ;; ) {
@@ -185,6 +189,8 @@ export class Rocks {
 			}
 
 			const fine = o.fine = r.value;
+			// ((M15) its field as the finer shape has it, the coarser's let go)
+			o.at = fine.at;
 			// ((M15) a sea cave's light, if it was left till now: coarseCaves)
 			if ( fine.light && ! o.light ) {
 
@@ -199,6 +205,21 @@ export class Rocks {
 			b.near.geometry = g;
 			b.nearTris = g.index.count / 3;
 			was.dispose();
+
+		}
+
+	}
+
+	// (M15) lazyCaves: an overhang's near shape wanted once you're within SHAPE_NEAR of it
+	overhangsNear( x, z ) {
+
+		if ( ! this.lazyCaves || this._shaping ) return;
+		for ( const o of this.overhangs ) if ( ! o.fine && Math.hypot( x - o.x, z - o.z ) < SHAPE_NEAR ) {
+
+			o.wanted = true;
+			this._shaping = true;
+			this.refineOverhangs().finally( () => this._shaping = false );
+			return;
 
 		}
 

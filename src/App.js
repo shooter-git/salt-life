@@ -374,7 +374,7 @@ export class App {
 		this.terrain = new Terrain( { scene, terrainData: this.terrainData, tier } );
 		uploadTextures( renderer, [ this.terrain.heightTexture, this.terrain.normalTexture, this.terrain.splatTexture ] );
 		// boulders, blocks, talus and outcrops (shaded like the ground's rock)
-		this.rocks = new Rocks( { scene, terrain: this.terrain, colliders: this.colliders, village: this.village, castShadow: tier !== 'low', lite: tier === 'low', coarseCaves: this.cpuGL } );
+		this.rocks = new Rocks( { scene, terrain: this.terrain, colliders: this.colliders, village: this.village, castShadow: tier !== 'low', lite: tier === 'low', lazyCaves: tier === 'low', coarseCaves: this.cpuGL } );
 		this.vegetation = new Vegetation( { scene, terrain: this.terrainData, ground: this.terrain, renderer, tier, village: this.village, rocks: this.rocks, smallBakes: this.cpuGL, bakeSlot: () => this.frameSlot() } );
 		// (WebGL drawn on the CPU: the plants grow in once the game has started, in start(); their
 		// programs and bakes take seconds there, and a creation has 45 s to load)
@@ -695,10 +695,10 @@ export class App {
 		// then, on every device, the whale)
 		const revealed = this._late ? new Promise( ( done ) => this._revealed = done ) : null;
 		this.lateReady();
-		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.buildCover() ).then( () => this.rocks.refineOverhangs() ).then( () => this.loadCharacters() )
-			.then( () => this.pause() ).then( () => this.cpuGL && this.lifeAndDebris() ).then( () => this.pause() ).then( () => this.scansArrive() )
+		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.buildCover() ).then( () => this.rocks.refineOverhangs() ).then( () => this.cpuGL && this.settle() ).then( () => this.loadCharacters() )
+			.then( () => this.cpuGL && this.settle() ).then( () => this.cpuGL && this.lifeAndDebris() ).then( () => this.cpuGL && this.settle() ).then( () => this.scansArrive() )
 			.then( () => this.cpuGL && this.settle() ).then( () => this.cpuGL && this.reefGrows() )
-			.then( () => this.pause() ).then( () => this.whaleArrives() ).then( () => this.airArrives() );
+			.then( () => this.cpuGL && this.settle() ).then( () => this.whaleArrives() ).then( () => this.airArrives() );
 		const begin = () => this.audio.resume().then( ( on ) => {
 
 			if ( on ) for ( const type of GESTURES ) removeEventListener( type, begin, true );
@@ -906,6 +906,7 @@ export class App {
 		if ( this.reefs ) {
 
 			this.northReefNear();
+			this.rocks.overhangsNear( this.camera.position.x, this.camera.position.z );
 			for ( const r of this.reefs.list ) r.update( this.camera );
 
 		}
@@ -1016,8 +1017,9 @@ export class App {
 
 	// (CPU WebGL) waits for the garbage of the loading so far to be collected before the next big
 	// stage: until the script heap falls back from its high point (where the browser reports it; a
-	// pause where it doesn't), at least 3 s, at most `ms`. All the Spaces' checks measure its peak
-	settle( ms = 15000 ) {
+	// pause where it doesn't), at least 3 s, at most `ms`. All the Spaces' checks measure its peak. ((M15) On the low
+	// tier until it's down to SETTLED: a quarter off was no longer enough to take the reef on top of)
+	settle( ms = 45000 ) {
 
 		performance.mark( 'world: settle' );
 		const mem = performance.memory;
@@ -1031,7 +1033,7 @@ export class App {
 
 				const used = mem.usedJSHeapSize, t = performance.now() - t0;
 				high = Math.max( high, used );
-				if ( ( t > 3000 && used < high * 0.75 ) || t > ms ) resolve();
+				if ( ( t > 3000 && ( this.tier === 'low' ? used < SETTLED : used < high * 0.75 ) ) || t > ms ) resolve();
 				else setTimeout( tick, 250 );
 
 			};
@@ -1726,6 +1728,9 @@ export class App {
 			for ( const k of [ 'rock', 'sand', 'path', 'gully', 'rubble', 'scarp' ] ) T[ k ] = null;
 
 		}
+
+		// ((M15) what the turtle beach's cut changed in them, kept by the mask (TerrainData.uncut): it held them all)
+		if ( T.rock === null && T.seagrass === null && T._masksBefore ) T._masksBefore.clear();
 
 		// (the seagrass meadows: once the reef is laid out on them; (M15) the windward reef's window of them kept,
 		// for when it's laid out)
@@ -2436,6 +2441,7 @@ export class App {
 }
 
 const CLOCK_KEY = 'saltlife.clock';
+const SETTLED = 100 * 1048576; // (M15) bytes of script memory: settle
 const BOAT_KEY = 'saltlife.boat';
 const timeOf = ( t ) => ( { timeOfDay: t.hour, day: t.day } );
 

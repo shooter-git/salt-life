@@ -290,10 +290,13 @@ export class Minimap {
 	// you've charted them
 	_bakeStep() {
 
-		const T = this.game.app.terrainData, S = this.sheets;
+		// ((step 21) on a device that draws on its CPU a frame's a second or more, and a few rows of a frame are nothing
+		// to it: done in a tenth of the frames. At a few rows each, the sheets' buffers and the island's masks, which wait
+		// for the first (App.releaseMasks), were held for minutes, past what its script memory's allowed)
+		const T = this.game.app.terrainData, S = this.sheets, k = this.game.app.cpuGL ? 10 : 1;
 		if ( ! this._bake.done ) {
 
-			if ( ! S.near.bake.step( T, ROWS_PER_FRAME ) ) return;
+			if ( ! S.near.bake.step( T, ROWS_PER_FRAME * k ) ) return;
 			this._finishSheet( S.near, true );
 			this._bake.done = true;
 			return;
@@ -302,14 +305,12 @@ export class Minimap {
 
 		for ( const s of [ S.mid, S.far ] ) if ( ! s.bake.done ) {
 
-			if ( s.bake.step( T, FAR_ROWS ) ) this._finishSheet( s, false );
+			if ( s.bake.step( T, FAR_ROWS * k ) ) this._finishSheet( s, false );
 			return;
 
 		}
 
-		if ( ! this.soundings ) this.soundings = { near: S.near.bake.soundings( 'near' ), mid: S.mid.bake.soundings( 'mid' ), far: S.far.bake.soundings( 'far' ) };
-		// (what they kept to bake by, let go)
-		for ( const s of Object.values( S ) ) s.bake.H = s.bake.S = null;
+		if ( ! this.soundings ) this.soundings = { near: S.near.sounded, mid: S.mid.sounded, far: S.far.sounded };
 
 	}
 
@@ -320,6 +321,9 @@ export class Minimap {
 		const ctx = s.base.getContext( '2d' ), b = s.bake;
 		ctx.putImageData( new ImageData( b.rgba, s.px, s.px ), 0, 0 );
 		b.rgba = null;
+		// (its soundings, and what it kept to bake by let go: one sheet's worth at a time)
+		s.sounded = b.soundings( Object.keys( this.sheets ).find( ( k ) => this.sheets[ k ] === s ) );
+		b.H = b.S = null;
 		if ( ! island ) return;
 		const P = ( x, z ) => [ ( x - s.spec.x0 ) * s.ppm, ( z - s.spec.z0 ) * s.ppm ];
 		const W = WORLD.pier, J = CAMP.jetty, wreck = toWorld( 'bow', 0, 0, 0 ), stern = toWorld( 'stern', 0, 0, 0 );

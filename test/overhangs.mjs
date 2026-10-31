@@ -189,5 +189,25 @@ for ( const o of rocks.overhangs ) {
 
 }
 
+// ---- (M15 step 21) on the low tier their near shapes wait until you're near, the sea caves' light with them
+{
+
+	const lazy = new Rocks( { scene: new THREE.Scene(), terrain: T, colliders: new Colliders(), village, lite: true, lazyCaves: true } );
+	const caves = lazy.overhangs.filter( ( o ) => o.site.kind === 'seacave' );
+	ok( caves.length === 2 && caves.every( ( o ) => ! o.light && ! o.waterLight ), 'their light left until then' );
+	await lazy.refineOverhangs();
+	ok( lazy.overhangs.every( ( o ) => ! o.fine ), 'nothing made finer in the start\'s round of it' );
+	const k = caves[ 0 ], other = caves[ 1 ];
+	lazy.overhangsNear( k.x + 5000, k.z );
+	ok( ! lazy._shaping, 'nor from far off' );
+	lazy.overhangsNear( k.x + 100, k.z + 100 );
+	ok( lazy._shaping && k.wanted, 'near one, it\'s wanted' );
+	for ( let i = 0; i < 4000 && lazy._shaping; i ++ ) await new Promise( ( r ) => setTimeout( r, 5 ) );
+	ok( k.fine && k.light && k.waterLight && k.at === k.fine.at, 'and made, with its light, its finer field taking over' );
+	ok( ! other.fine && ! other.light, 'the other left as it was' );
+	ok( lazy.caveLevel( { x: k.site.x, y: k.y0 + 1, z: k.site.z } ) <= 1, 'the eye\'s level there read from its light' );
+
+}
+
 console.log( fails ? `\n${ fails } FAILED` : '\nall ok' );
 process.exit( fails ? 1 : 0 );

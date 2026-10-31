@@ -97,6 +97,20 @@ const check = ( ok, what ) => {
 
 }
 
+// ---- script memory: the chart bakes a sheet at a time, and what's let go is let go
+{
+
+	const { SheetBake } = await import( '../src/game/ChartBake.js' );
+	const bake = new SheetBake( { x0: 0, z0: 0, ext: 2000, cell: 40, n: 50 }, 64, { island: false } );
+	check( bake.rgba === null && bake.H === null, 'a sheet holds nothing until its turn to bake comes' );
+	const App = readFileSync( new URL( '../src/App.js', import.meta.url ), 'utf8' );
+	check( /_masksBefore\.clear\(\)/.test( App ), 'what the cuts changed in the masks let go with them: it was holding them all' );
+	check( /const SETTLED = 100 \* 1048576/.test( App ) && ( App.match( /this\.cpuGL && this\.settle\(\)/g ) || [] ).length >= 4, 'the late stages wait for script memory to come down' );
+	const map = readFileSync( new URL( '../src/game/Minimap.js', import.meta.url ), 'utf8' );
+	check( /b\.H = b\.S = null/.test( map ) && /cpuGL \? 10 : 1/.test( map ), 'a sheet\'s buffers go as it\'s done, and quickly where frames are long' );
+
+}
+
 if ( failed ) {
 
 	console.log( `${ failed } failed` );

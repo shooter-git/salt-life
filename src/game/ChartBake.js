@@ -107,8 +107,9 @@ export class SheetBake {
 		this.N = px;
 		this.ppm = px / spec.ext;
 		this.island = island;
-		this.rgba = new Uint8ClampedArray( px * px * 4 );
-		this.H = new Float32Array( px * px );
+		// (made as its turn to bake comes: step. (Step 21) All three sheets' at once were more than the low tier can spare)
+		this.rgba = null;
+		this.H = null;
 		this.S = null; // (the depths smoothed, as a chart's contours are drawn: its shades and contours from them)
 		this._T = null; // (and the smoothing's other half)
 		this.phase = 0; // the heights, the smoothing (four passes), their colours, the lines
@@ -136,6 +137,13 @@ export class SheetBake {
 
 		if ( this.done ) return true;
 		const N = this.N, end = Math.min( N, this.row + rows ), P = this.phase;
+		if ( ! this.H ) {
+
+			this.rgba = new Uint8ClampedArray( N * N * 4 );
+			this.H = new Float32Array( N * N );
+
+		}
+
 		if ( P >= 1 && P <= 4 ) {
 
 			if ( ! this.S ) {
@@ -166,6 +174,7 @@ export class SheetBake {
 
 			this._reefs();
 			this.done = true;
+			this._T = null;
 
 		}
 
