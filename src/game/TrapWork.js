@@ -115,6 +115,9 @@ export class TrapWork {
 		const aboard = this.on ? aboardTraps( this.traps, game.state.upgrades ) : 0;
 		if ( aboard !== this._aboard ) this._stowed( aboard );
 		if ( this.job ) this._work( dt, lDown );
+		// (the rail's "Jump overboard" makes way, by the hauler)
+		const pl = app.player, A = this.at;
+		pl.trapWork = !! ( this.on && pl.mode === 'deck' && ! game.rod.equipped && ! game.net.equipped && ( this.job || ( ( aboard || this.traps.set.length ) && Math.hypot( pl.deckPos.x - A.stand.x, pl.deckPos.z - A.stand.z ) <= STAND_M ) ) );
 		if ( ! app.player.prompt && ! game.makingRoom ) this._offer( aboard );
 		this._draw( dt, aboard );
 
