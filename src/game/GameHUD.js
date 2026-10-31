@@ -1013,7 +1013,7 @@ export class GameHUD {
 		const keys = d === 'touch' ? '' : `<span class="gm-tabs-keys">${ d === 'gamepad' ? 'D-pad' : '<kbd>←</kbd><kbd>→</kbd>' }</span>`;
 		this.inv.innerHTML = `
 			<div class="gm-head"><h2>${ s.upgrades.hold > 0 ? 'Fish hold' : 'Cooler' }</h2>
-			<p class="gm-sub">${ s.inventory.length } fish · ${ pounds( s.holdKg ) } of ${ pounds( s.stats.holdKg ) } lb · worth $${ s.holdValue }</p></div>
+			<p class="gm-sub">${ s.inventory.length } fish · ${ pounds( s.holdKg ) } of ${ pounds( s.stats.holdKg ) } lb · worth $${ s.holdValue }${ this.game.daysOut.boxSaid() }</p></div>
 			<div class="gm-tabs" role="tablist">${ tabs.map( ( [ id, label, n ] ) => `<button class="gm-tab${ id === tab ? ' is-on' : '' }" role="tab" aria-selected="${ id === tab }" data-tab="${ id }">${ label }${ n ? `<small>${ n }</small>` : '' }</button>` ).join( '' ) }${ keys }</div>
 			<div class="gm-list" role="tabpanel">${ body }</div>
 			<div class="gm-foot"><span class="gm-sub">${ hint }</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Close', 'I', 'Back' ) }</button></div>`;

@@ -1,4 +1,4 @@
-import { AdditiveBlending, CanvasTexture, Sprite, SpriteMaterial } from '../engine/index.js';
+import { CanvasTexture, Sprite, SpriteMaterial } from '../engine/index.js';
 import { G } from '../core/Globals.js';
 import { BOATS } from '../world/boat/Boats.js';
 import { WORLD } from '../world/WorldLayout.js';
@@ -6,7 +6,7 @@ import { awayOf, tellOf, ISLE, FOUND_M } from './Away.js';
 import { awayTowFee, TOW } from './Gear.js';
 import { restTo, timeText, REST } from './IslandClock.js';
 import { islandTime, towardOf, weatherHere, hurricaneNews } from './Weather.js';
-import { FT, feet, pounds, knots } from './Units.js';
+import { FT, feet, farOff, pounds, knots } from './Units.js';
 import { ableOf, ableEnv, awashLs, seaHere, fetchAt, strainOf, windOn, slamK, keepCatch, feedOf, strengthOf, meltKgH, CHILL_KG, ICE_BAG_KG, ICE_BAG_PRICE, STORES_PRICE, LUNCH_H, DRY_H, FRESH_H, FLARES, FLARE_M, EPIRB_S, PASSING_H } from './Seaworthy.js';
 
 // (M16) Days out, and what each boat can stand: ice and the catch keeping, stores, sleeping aboard, flares and the EPIRB,
@@ -55,7 +55,7 @@ export function wakeOf( left, T0, T1, env ) {
 }
 
 const CSS = /* css */`
-.do-screen { position: absolute; right: var(--tw-edge); bottom: calc(var(--tw-edge) + 196 * var(--tw-u)); width: calc(184 * var(--tw-u)); height: calc(92 * var(--tw-u)); border-radius: var(--tw-r-sm, 6px); overflow: hidden; pointer-events: none; display: none;
+.do-screen { position: absolute; right: calc(var(--tw-edge) + 192 * var(--tw-u)); bottom: var(--tw-edge); width: calc(184 * var(--tw-u)); height: calc(92 * var(--tw-u)); border-radius: var(--tw-r-sm, 6px); overflow: hidden; pointer-events: none; display: none;
 	box-shadow: 0 1px 6px rgba(0,0,0,0.5), inset 0 0 0 1px rgba(255,255,255,0.1); background: #04122a; }
 .do-screen.is-on { display: block; }
 .do-screen canvas { width: 100%; height: 100%; display: block; image-rendering: pixelated; }
@@ -64,6 +64,9 @@ const CSS = /* css */`
 .tw-root[data-panel='open'] .do-screen { display: none; }
 .gm-ice-bar > span { background: #a8dcf0; }
 .gm-ice.is-low .gm-ice-bar > span { background: var(--tw-coral); }
+/* (a phone's purse has no room to spare: the toast goes beside it. Only when they want seeing to; the rest's in the cooler's tab) */
+html.is-touch .gm-ice:not(.is-low), html.is-touch .gm-stores:not(.is-low) { display: none; }
+html.is-touch .do-screen { right: auto; bottom: auto; left: var(--tw-edge); top: calc(var(--tw-edge) + 64px + 48 * var(--tw-u)); width: calc(132 * var(--tw-u)); height: calc(66 * var(--tw-u)); }
 `;
 
 export class DaysOut {
@@ -305,7 +308,7 @@ export class DaysOut {
 		const b = this.app.boatCtl, bunks = b.model.bunks;
 		if ( p.mode !== 'deck' || p.riding || p.busy || p.prompt || ! bunks || ! bunks.length ) return;
 		const q = p.deckPos;
-		if ( ! bunks.some( ( k ) => Math.hypot( q.x - k.x, q.z - k.z ) < BUNK_M && Math.abs( q.y - k.y ) < 1.5 ) ) return;
+		if ( ! bunks.some( ( k ) => Math.hypot( q.x - k.x, q.z - k.z ) < BUNK_M && Math.abs( q.y - k.y ) < 1 ) ) return;
 		const to = restOf( this.app.settings.timeOfDay );
 		p.prompt = { key: 'E', text: to === 'dawn' ? 'Sleep aboard until dawn' : 'Turn in until dusk' };
 		if ( inp.hit( 'KeyE' ) ) this.sleep();
@@ -448,6 +451,14 @@ export class DaysOut {
 
 	}
 
+	// the box and the lockers, as the cooler's tab says them
+	boxSaid() {
+
+		const box = this.box;
+		return `${ box.ice > 0 ? ` · ${ pounds( box.ice ) } lb of ice` : '' }${ box.stores >= 0.05 ? ` · ${ box.stores.toFixed( 1 ) } days' stores` : '' }`;
+
+	}
+
 	// ---- Marta's ice and stores
 	shopRows() {
 
@@ -527,6 +538,9 @@ export class DaysOut {
 		d.flares --;
 		st.save();
 		this._launch();
+		// (the others see it go up, wherever they are: one they could come out to)
+		const room = app.together;
+		if ( room && room.others && room.others.size ) room.session.send( 'flare', [ Math.round( b.position.x ), Math.round( b.position.z ) ] );
 		const night = G.night.value > 0.35, reach = ( night ? FLARE_M.night : FLARE_M.day ) * ( w ? Math.min( 1, w.visibility ) : 1 );
 		const t = app.together, near = t && t.others && t._inSight && t._inSight();
 		const seen = Math.hypot( b.position.x - ISLE.x, b.position.z - ISLE.z ) < reach || !! near;
@@ -607,21 +621,33 @@ export class DaysOut {
 
 	}
 
-	// ---- the flare: a red star, up and burning out over her
-	_launch() {
+	// someone else's flare, seen from here if it's within reach of the eye (name: theirs)
+	theirFlare( at, name ) {
 
-		const app = this.app, b = app.boatCtl;
+		const app = this.app, c = app.camera.position, w = app.weather && ( app.weather.live || app.weather.target );
+		if ( ! Array.isArray( at ) || ! at.every( Number.isFinite ) ) return;
+		const m = Math.hypot( at[ 0 ] - c.x, at[ 1 ] - c.z ), reach = ( G.night.value > 0.35 ? FLARE_M.night : FLARE_M.day ) * ( w ? Math.min( 1, w.visibility ) : 1 );
+		if ( m > reach ) return;
+		this._launch( at[ 0 ], at[ 1 ] );
+		this.game.toast( `${ name || 'Someone' } has fired a distress flare, ${ farOff( m ) } off`, 5200 );
+
+	}
+
+	// ---- the flare: a red star, up and burning out over her
+	_launch( x = this.app.boatCtl.position.x, z = this.app.boatCtl.position.z ) {
+
+		const app = this.app;
 		if ( ! this.flare ) {
 
 			const c = document.createElement( 'canvas' );
 			c.width = c.height = 32;
 			const g = c.getContext( '2d' ), r = g.createRadialGradient( 16, 16, 0, 16, 16, 16 );
-			r.addColorStop( 0, '#fff' );
-			r.addColorStop( 0.25, '#ff5a3a' );
-			r.addColorStop( 1, 'rgba(255,40,20,0)' );
+			r.addColorStop( 0, '#ffd8c8' );
+			r.addColorStop( 0.3, '#ff2c12' );
+			r.addColorStop( 1, 'rgba(255,30,10,0)' );
 			g.fillStyle = r;
 			g.fillRect( 0, 0, 32, 32 );
-			const s = new Sprite( new SpriteMaterial( { map: new CanvasTexture( c ), blending: AdditiveBlending, depthWrite: false, transparent: true, fog: false } ) );
+			const s = new Sprite( new SpriteMaterial( { map: new CanvasTexture( c ), depthWrite: false, transparent: true, fog: false } ) );
 			s.name = 'Flare';
 			s.visible = false;
 			app.scene.add( s );
@@ -630,7 +656,7 @@ export class DaysOut {
 		}
 
 		const f = this.flare;
-		f.sprite.position.set( b.position.x, G.seaLevel.value + 3, b.position.z );
+		f.sprite.position.set( x, G.seaLevel.value + 3, z );
 		f.t = FLARE.burn;
 		f.sprite.visible = true;
 
@@ -652,7 +678,7 @@ export class DaysOut {
 		s.position.y = Math.min( y, s.position.y + FLARE.rise * dt );
 		// (it hangs and falls a little; and a size it's seen by a long way off)
 		if ( s.position.y >= y ) s.position.y = y - ( FLARE.burn - f.t ) * 2;
-		s.scale.setScalar( ( 3 + 0.004 * s.position.distanceTo( this.app.camera.position ) ) * flick );
+		s.scale.setScalar( ( 4 + 0.004 * s.position.distanceTo( this.app.camera.position ) ) * flick );
 
 	}
 
@@ -730,7 +756,12 @@ export class DaysOut {
 
 		const showStores = aboard && ( box.stores > 0 || st.days.out > LUNCH_H );
 		this._stores.classList.toggle( 'is-on', showStores );
-		if ( showStores ) this._storesText.textContent = `${ box.stores.toFixed( 1 ) } d`;
+		if ( showStores ) {
+
+			this._stores.classList.toggle( 'is-low', box.stores <= 1 );
+			this._storesText.textContent = `${ box.stores.toFixed( 1 ) } d`;
+
+		}
 
 	}
 

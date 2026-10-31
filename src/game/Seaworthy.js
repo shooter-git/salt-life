@@ -52,8 +52,7 @@ export const ableEnv = ( boat ) => {
 
 };
 
-// the drift sock: of her drift without it (from BoatController with her `sockM2` out, measured by tools/boat-figures.mjs).
-// The Coast Guard's own leeway tables give about half for a raft's drogue
+// the drift sock: of her drift without it (from BoatController with her `sockM2` out, measured by tools/boat-figures.mjs)
 export const SOCK_DRIFT = 0.5;
 
 // ---- the seas where you are
@@ -141,9 +140,8 @@ export function keepCatch( fish, ice, hours, melt, makes = 0 ) {
 export const stateOf = ( f, iced ) => ( ( f.w || 0 ) > FRESH_H ? 'going' : iced ? 'iced' : 'fresh' );
 
 // ---- food and water
-// A day trip takes its lunch and a bottle: the first LUNCH_H out cost nothing. Then a day's stores a day (about 4 litres
-// of water, as the Coast Guard's survival advice has it); with none left you're parched after DRY_H, weaker all the way
-// to HALF_H more on. STORES_PRICE: a day's, as a shop has them
+// A day trip takes its lunch and a bottle: the first LUNCH_H out cost nothing. Then a day's stores a day; with none left
+// you're parched after DRY_H, weaker all the way to WEAK_H more on. STORES_PRICE: a day's, as a shop has them
 export const STORES_PRICE = 12, LUNCH_H = 12, DRY_H = 12, WEAK_H = 36;
 export function feedOf( { stores, out, dry }, hours ) {
 
@@ -167,8 +165,7 @@ export const cleanDays = ( d ) => {
 };
 
 // ---- the distress gear
-// VHF: a handheld's 5 watts at sea level, to about 5 miles; a fixed set's 25 on a mast, to about 20 (the Coast Guard's own
-// figures for what to expect of each). FLARE_M: a red meteor seen by day and on a clear night, m (× the day's visibility).
+// VHF: a handheld's 5 watts at sea level, to about 5 miles; a fixed set's 25 on a mast, to about 20. FLARE_M: a red meteor seen by day and on a clear night, m (× the day's visibility).
 // The EPIRB: a fix in about EPIRB_S (MEOSAR's 10 minutes, 5 km, 95%) then the boat out to you. PASSING_H: with nothing
 // to call with, how many island hours till someone happens by, near and far
 export const VHF_HAND_M = 9000, VHF_FIXED_M = 37000, FLARE_M = { day: 5000, night: 25000 }, FLARES = 3, EPIRB_S = 600;

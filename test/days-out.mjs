@@ -365,6 +365,20 @@ globalThis.setTimeout ??= ( f ) => f();
 
 }
 
+// and someone else's, seen as far as it would be
+{
+
+	const { d, toasts, app } = stand();
+	let up = null;
+	d._launch = ( x, z ) => up = [ x, z ];
+	app.camera.position.set( 0, 0, 0 );
+	d.theirFlare( [ 40000, 0 ], 'Sam' );
+	ok( ! up, 'too far off by day: not seen' );
+	d.theirFlare( [ 3000, 0 ], 'Sam' );
+	ok( up && up[ 0 ] === 3000 && /Sam has fired a distress flare/.test( toasts.at( - 1 ) ), 'near enough: seen, and said whose' );
+
+}
+
 // with nothing to call with, someone happens by in the end
 {
 

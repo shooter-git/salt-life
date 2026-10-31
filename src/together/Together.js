@@ -218,6 +218,8 @@ export class Together {
 		s.on( 'catch', ( body, from ) => this._theirCatch( body, from ) );
 		s.on( 'net', ( body, from ) => this._theirThrow( body, from ) );
 		s.on( 'horn', ( on, from ) => this._theirHorn( on, from ) );
+		// ((M16) a distress flare: game/DaysOut.js)
+		s.on( 'flare', ( at, from ) => this.app.game && this.app.game.daysOut.theirFlare( at, this.others.get( from )?.person.name ) );
 		s.on( 'week', ( tally ) => this._setWeek( tally ) );
 		s.on( 'world', ( body ) => this._theirWorld( body ) );
 		this._worldT = 0;
