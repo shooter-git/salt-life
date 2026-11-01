@@ -705,7 +705,7 @@ export class App {
 		// then, on every device, the whale)
 		const revealed = this._late ? new Promise( ( done ) => this._revealed = done ) : null;
 		this.lateReady();
-		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.checkShaderLimits() ).then( () => this.buildCover() ).then( () => this.rocks.refineOverhangs() ).then( () => this.cpuGL && this.settle() ).then( () => this.loadCharacters() )
+		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.checkShaderLimits() ).then( () => this.buildCover() ).then( () => this.rocks.refineOverhangs() ).then( () => this.cpuGL && this.settle( 45000, BEFORE_PEOPLE ) ).then( () => this.loadCharacters() )
 			.then( () => this.cpuGL && this.settle() ).then( () => this.cpuGL && this.lifeAndDebris() ).then( () => this.letGoOfTheBuild() ).then( () => this.cpuGL && this.settle() ).then( () => this.scansArrive() )
 			.then( () => this.cpuGL && this.settle() ).then( () => this.cpuGL && this.reefGrows() )
 			.then( () => this.cpuGL && this.settle() ).then( () => this.whaleArrives() ).then( () => this.airArrives() );
@@ -1029,7 +1029,7 @@ export class App {
 	// stage: until the script heap falls back from its high point (where the browser reports it; a
 	// pause where it doesn't), at least 3 s, at most `ms`. All the Spaces' checks measure its peak. ((M15) On the low
 	// tier until it's down to SETTLED: a quarter off was no longer enough to take the reef on top of)
-	settle( ms = 45000 ) {
+	settle( ms = 45000, mark = SETTLED ) {
 
 		performance.mark( 'world: settle' );
 		const mem = performance.memory;
@@ -1043,7 +1043,7 @@ export class App {
 
 				const used = mem.usedJSHeapSize, t = performance.now() - t0;
 				high = Math.max( high, used );
-				if ( ( t > 3000 && ( this.tier === 'low' ? used < SETTLED : used < high * 0.75 ) ) || t > ms ) resolve();
+				if ( ( t > 3000 && ( this.tier === 'low' ? used < mark : used < high * 0.75 ) ) || t > ms ) resolve();
 				else setTimeout( tick, 250 );
 
 			};
@@ -2505,7 +2505,8 @@ export class App {
 }
 
 const CLOCK_KEY = 'saltlife.clock';
-const SETTLED = 100 * 1048576; // (M15) bytes of script memory: settle
+const SETTLED = 75 * 1048576; // (M15) bytes of script memory: settle ((M16) a little over what's left once the load's garbage is gone, as 100 was)
+const BEFORE_PEOPLE = 90 * 1048576; // (M16) settle's, before Joe and Marta, who are little to take on: the load's garbage needn't have gone, and they come when they did
 const GPU_TEXTURES = 16; // (M15) a stage, in many GPUs: checkShaderLimits
 const SAMPLERS = ( gl ) => new Set( [ gl.SAMPLER_2D, gl.SAMPLER_3D, gl.SAMPLER_CUBE, gl.SAMPLER_2D_ARRAY, gl.SAMPLER_2D_SHADOW, gl.SAMPLER_CUBE_SHADOW, gl.SAMPLER_2D_ARRAY_SHADOW, gl.INT_SAMPLER_2D, gl.UNSIGNED_INT_SAMPLER_2D ] );
 const BOAT_KEY = 'saltlife.boat';
