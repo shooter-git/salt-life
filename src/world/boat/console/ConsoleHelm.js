@@ -291,10 +291,10 @@ function tTop( kit, parts ) {
 	const W = CONSOLE.halfW, u = T.under - 0.03;
 	for ( const s of [ 1, - 1 ] ) {
 
-		kit.add( 'fittings', tube( [ V( s * ( W - 0.05 ), CONSOLE.top - 0.03, 0.2 ), V( s * ( W - 0.03 ), S + 1.6, 0.2 ), V( s * ( W + 0.02 ), u - 0.2, 0.22 ), V( s * ( W + 0.1 ), u - 0.03, 0.24 ), V( s * ( W + 0.15 ), u + 0.04, 0.26 ) ], 0.034, 12, 8 ), WHITE_TUBE );
-		kit.add( 'fittings', tube( [ V( s * ( W - 0.012 ), S + 0.72, - 0.48 ), V( s * ( W + 0.015 ), S + 1.15, - 0.52 ), V( s * ( W + 0.03 ), S + 1.7, - 0.62 ), V( s * ( W + 0.1 ), u - 0.03, - 0.76 ), V( s * ( W + 0.16 ), u + 0.04, - 0.84 ) ], 0.036, 14, 8 ), WHITE_TUBE );
+		kit.add( 'hull', tube( [ V( s * ( W - 0.05 ), CONSOLE.top - 0.03, 0.2 ), V( s * ( W - 0.03 ), S + 1.6, 0.2 ), V( s * ( W + 0.02 ), u - 0.2, 0.22 ), V( s * ( W + 0.1 ), u - 0.03, 0.24 ), V( s * ( W + 0.15 ), u + 0.04, 0.26 ) ], 0.034, 12, 8 ), WHITE_TUBE );
+		kit.add( 'hull', tube( [ V( s * ( W - 0.012 ), S + 0.72, - 0.48 ), V( s * ( W + 0.015 ), S + 1.15, - 0.52 ), V( s * ( W + 0.03 ), S + 1.7, - 0.62 ), V( s * ( W + 0.1 ), u - 0.03, - 0.76 ), V( s * ( W + 0.16 ), u + 0.04, - 0.84 ) ], 0.036, 14, 8 ), WHITE_TUBE );
 		// the top's fairing about each leg's head
-		for ( const [ z, x ] of [ [ 0.26, W + 0.15 ], [ - 0.84, W + 0.16 ] ] ) kit.add( 'fittings', cylinder( 0.075, 0.045, 0.08, 10 ).translate( s * x, u + 0.015, z ), WHITE_TUBE );
+		for ( const [ z, x ] of [ [ 0.26, W + 0.15 ], [ - 0.84, W + 0.16 ] ] ) kit.add( 'hull', cylinder( 0.075, 0.045, 0.08, 10 ).translate( s * x, u + 0.015, z ), WHITE_TUBE );
 
 	}
 
@@ -319,6 +319,27 @@ function tTop( kit, parts ) {
 	// the spreaders under its edge and the dome lights
 	for ( const [ x, z ] of [ [ 0.55, - 1.42 ], [ - 0.55, - 1.42 ], [ 0.55, 0.66 ], [ - 0.55, 0.66 ] ] ) kit.add( 'glow', box( 0.15, 0.012, 0.04 ).translate( x, T.under - 0.012, z ), { color: 0xfff1d8, rough: 0.3, pattern: 4 } );
 	kit.add( 'glow', cylinder( 0.035, 0.035, 0.008, 10 ).translate( 0, T.under - 0.05, - 0.6 ), { color: 0x56a2ff, rough: 0.3, pattern: 5 } );
+
+	// ---- its rain cover: clear drop curtains on the sides and aft, zipped to the top's edge, rolled up under it on a fine day
+	const hem = T.under - 0.02, foot = S + 0.92, cloth = { color: 0x13243c, rough: 0.7 };
+	const side = [ [ 0.5, T.halfW - 0.05 ], [ - 1.3, T.halfW - 0.1 ] ];
+	const aftZ = T.z0 + 0.1, aftX = T.halfW - 0.22;
+	kit.fitting = 'coverUp';
+	for ( const s of [ 1, - 1 ] ) kit.add( 'fittings', rod( V( s * side[ 0 ][ 1 ], hem - 0.03, side[ 0 ][ 0 ] ), V( s * side[ 1 ][ 1 ], hem - 0.03, side[ 1 ][ 0 ] ), 0.032, 6 ), cloth );
+	kit.add( 'fittings', rod( V( - aftX, hem - 0.03, aftZ ), V( aftX, hem - 0.03, aftZ ), 0.032, 6 ), cloth );
+	kit.fitting = 'coverDown';
+	const curtain = ( a, b, yT, yB ) => {
+
+		kit.add( 'glass', gridSurface( [ [ V( a[ 0 ], yT, a[ 1 ] ), V( b[ 0 ], yT, b[ 1 ] ) ], [ V( a[ 0 ], yB, a[ 1 ] ), V( b[ 0 ], yB, b[ 1 ] ) ] ], {} ), {} );
+		kit.add( 'fittings', rod( V( a[ 0 ], yT, a[ 1 ] ), V( b[ 0 ], yT, b[ 1 ] ), 0.012, 4 ), cloth );
+		kit.add( 'fittings', rod( V( a[ 0 ], yB, a[ 1 ] ), V( b[ 0 ], yB, b[ 1 ] ), 0.009, 4 ), cloth );
+		for ( const e of [ a, b ] ) kit.add( 'fittings', rod( V( e[ 0 ], yT, e[ 1 ] ), V( e[ 0 ], yB, e[ 1 ] ), 0.008, 4 ), cloth );
+
+	};
+
+	for ( const s of [ 1, - 1 ] ) curtain( [ s * side[ 0 ][ 1 ], side[ 0 ][ 0 ] ], [ s * side[ 1 ][ 1 ], side[ 1 ][ 0 ] ], hem, foot + 0.3 );
+	curtain( [ - aftX, aftZ ], [ aftX, aftZ ], hem, foot + 0.55 );
+	kit.fitting = 'tTop';
 
 	// ---- the rocket launcher along its after edge: five white tubes raked out, a rod in each; and two whips
 	const zb = T.z0 + 0.16;

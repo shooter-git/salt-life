@@ -21,6 +21,7 @@ export const DECK = {
 	boxFront: - 2.5, // the box across the transom, its front
 	boxTop: 1.0,
 	door: [ - 1.02, - 0.46 ], // the door through it, on her starboard side
+	sill: - 2.72, // where its floor steps up to the mat
 	platform: { y: 0.5, zEnd: - 3.66, halfW: 0.84 }, // the bracket's mat
 	bench: { z0: 1.5, z1: 3.02, y: 0.67 },
 	riser: { z1: 3.3, y: 1.02 },
@@ -329,6 +330,14 @@ function aftBox( kit, L ) {
 
 	}
 
+	// the door's floor, a step up to the mat at its after end
+	const P = DECK.platform, sill = DECK.sill;
+	const floor = solid( rounded( D[ 0 ] - 0.01, z0 - 0.01, D[ 1 ] + 0.01, z1 + 0.01, 0.01 ), DECK.sole - 0.03, DECK.sole, 0.004, ( u, v, d ) => V( u, d, v ), { rings: 1 } );
+	auxVertices( floor, () => [ 0.7, 0, SURFACE.nonSkid, 0 ] );
+	kit.add( 'hull', floor, { color: 0xe2ddcf } );
+	const step = solid( rounded( D[ 0 ] - 0.01, z0 - 0.02, D[ 1 ] + 0.01, sill, 0.012 ), DECK.sole, P.y + 0.012, 0.01, ( u, v, d ) => V( u, d, v ), { rings: 1 } );
+	auxVertices( step, ( p ) => p.y > P.y ? [ 0.7, 0, SURFACE.nonSkid, 0 ] : [ 0.34, 0, SURFACE.plain, 0 ] );
+	kit.add( 'hull', step, { color: 0xe2ddcf } );
 	// over the door's top the transom's closed by nothing: the door's a gate, standing open against the box
 	const doorX = D[ 1 ] - 0.015;
 	kit.add( 'hull', box( 0.03, top - DECK.sole - 0.05, 0.5 ).translate( doorX, ( top + DECK.sole ) / 2 - 0.02, z1 + 0.25 ), GEL );

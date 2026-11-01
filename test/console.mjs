@@ -343,6 +343,11 @@ ok( TOP.under > DECK.sole + 2.05, `headroom under it ${ ( TOP.under - DECK.sole 
 ok( soakRate( 1, false, 0 ) > soakRate( 0.3, false, 0 ), 'a downpour soaks you faster than a drizzle' );
 ok( soakRate( 1, true, 0 ) < soakRate( 1, false, 0 ) * 0.25, 'under the top hardly at all' );
 ok( soakRate( 1, true, 15 ) > soakRate( 1, true, 0 ), 'running flat out the rain drives in under it' );
+ok( soakRate( 1, true, 15, true ) < soakRate( 1, true, 15 ) * 0.2, 'but not with its rain cover down' );
+const rolled = total();
+m.setCover( true );
+ok( total() !== rolled, 'the rain cover comes down' );
+m.setCover( false );
 const soak = new Soak();
 for ( let i = 0; i < 300; i ++ ) soak.step( 0.1, 1, false, 0 );
 ok( soak.wet > 0.8, `half a minute out in a squall: soaked (${ soak.wet.toFixed( 2 ) })` );
@@ -352,7 +357,7 @@ ok( soak.wet < w && soak.wet > 0.1, `and it takes a while to dry (${ soak.wet.to
 
 // lamps, as the rules want them
 ok( m.lamps.port && m.lamps.port[ 0 ] > 0, 'side lights: red to port (mirrored green)' );
-ok( m.lamps.masthead && ! m.lamps.stern, 'one all-round white, under 12 m' );
+ok( m.lamps.masthead && m.lamps.stern.join() === m.lamps.masthead.join(), 'one all-round white, as Rule 23 lets a boat under 12 m' );
 ok( CONSOLE_HANDLING.engine.shaftRpm > 0, 'an engine' );
 void Quaternion;
 m.dispose();

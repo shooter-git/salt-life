@@ -1,9 +1,9 @@
 import { G } from '../../../core/Globals.js';
 
 // (M16) Getting soaked: she's no cabin. Out in a squall on her open deck you're wet through in half a minute; under the T-top
-// you keep dry, unless you're running flat out and it's driving in under it. Pure, for the tests. Game feeds it each frame and
+// you keep dry, its rain cover down; without it, running fast, it drives in under the top. Pure, for the tests. Game feeds it each frame and
 // says what it comes to:
-//   const soak = new Soak();  soak.step( dt, rain 0..1, covered, speed m/s )  soak.wet 0..1, soak.drain() -> 'soaked' | 'dry' | null
+//   const soak = new Soak();  soak.step( dt, rain 0..1, covered, speed m/s, curtained )  soak.wet 0..1, soak.drain() -> 'soaked' | 'dry' | null
 // wet shows as drops running down your view (SoakView); and when you're wet through, you're told.
 
 // how fast you're wetted, of all the way, a second: in a full downpour, with nothing over you; and drying off in air
@@ -11,12 +11,12 @@ const IN_DOWNPOUR = 1 / 18, DRYING = 1 / 180;
 // past this speed under cover the rain's driven in (m/s: from 12 kn, all of it at 35)
 const DRIVEN = [ 6, 18 ];
 
-export function soakRate( rain, covered, speed ) {
+export function soakRate( rain, covered, speed, curtained = false ) {
 
 	const r = Math.max( 0, Math.min( 1, rain ) );
 	if ( r <= 0.01 ) return 0;
 	const t = Math.max( 0, Math.min( 1, ( speed - DRIVEN[ 0 ] ) / ( DRIVEN[ 1 ] - DRIVEN[ 0 ] ) ) );
-	const open = covered ? 0.06 + 0.5 * t : 1;
+	const open = covered ? ( curtained ? 0.02 : 0.06 + 0.5 * t ) : 1;
 	return IN_DOWNPOUR * Math.pow( r, 0.7 ) * open;
 
 }
@@ -31,9 +31,9 @@ export class Soak {
 
 	}
 
-	step( dt, rain, covered, speed ) {
+	step( dt, rain, covered, speed, curtained = false ) {
 
-		const up = soakRate( rain, covered, speed );
+		const up = soakRate( rain, covered, speed, curtained );
 		this.wet = up > 0 ? Math.min( 1, this.wet + up * dt ) : Math.max( 0, this.wet - DRYING * dt );
 		if ( ! this._told && this.wet >= 0.7 ) {
 
@@ -131,10 +131,21 @@ export function soakStep( game, dt ) {
 
 	}
 
+	// (her top's come or gone with Marta: its drips with it)
+	if ( game._soakTop !== m.fitted.tTop ) {
+
+		game._soakTop = m.fitted.tTop;
+		if ( app.drips ) app.drips.setBoat( m.dripPoints() );
+
+	}
+
+	// (the rain cover comes down when it comes on to rain, and is rolled up after)
+	if ( G.rain.value > 0.25 ) m.setCover( true );
+	else if ( G.rain.value < 0.08 ) m.setCover( false );
 	const soak = game.soak || ( game.soak = new Soak() ), rain = G.rain.value, aboard = ( p.mode === 'deck' || p.mode === 'boat' ) && ! p.riding;
 	const here = aboard ? ( p.mode === 'boat' ? m.helmEye : p.deckPos ) : null;
 	const covered = aboard ? m.underTop( here.x, p.mode === 'boat' ? here.y : here.y + 1.5, here.z ) : false;
-	soak.step( dt, aboard ? rain : 0, covered, aboard ? app.boatCtl.speed : 0 );
+	soak.step( dt, aboard ? rain : 0, covered, aboard ? app.boatCtl.speed : 0, m.covered );
 	const said = soak.drain();
 	if ( said === 'soaked' ) game.toast( m.fitted.tTop ? 'You\'re soaked through. Get in under the T-top.' : 'You\'re soaked through. She\'s got no cover: run for home.', 4200 );
 	if ( ! aboard && ! game._soakView ) return;

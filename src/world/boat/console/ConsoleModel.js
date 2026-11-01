@@ -4,6 +4,7 @@ import { compassCardGeometry } from '../Wheelhouse.js';
 import { mergePrepared, prepare } from '../GeoKit.js';
 import { sstep } from '../HullLines.js';
 import { VARIATION } from '../../../game/Chart.js';
+import { LANDS } from '../../../fx/Drips.js';
 import { ConsoleLines } from './ConsoleLines.js';
 import { ConsoleMaterials } from './ConsoleMaterials.js';
 import { FittingKit, moulded } from './Mould.js';
@@ -131,13 +132,14 @@ export class ConsoleModel extends Vessel {
 		// (her wake: a planing hull's, thrown from her chines at the transom and long behind her: patches further apart and bigger
 		// than a displacement boat's, the arms going out fast; a wash from each engine)
 		this.wake = { quarterX: 1.05, quarterZ: - 2.7, washZ: DECK.platform.zEnd - 0.9, shed: 0.5, armSize: 1.5, washSize: 2.4, armOut: 1.5, washX: 0 };
-		// the lamps: side lights on the bow's shoulders, one all-round white on the stern's pole (a boat under 12 m may)
-		this.lamps = { dome: [ 0, TOP.under - 0.12, - 0.6 ], instruments: [ 0, S + 1.1, - 0.5 ], port: [ lines.halfBreadth( lines.tAtSheerZ( 3 ), lines.sheerY( lines.tAtSheerZ( 3 ) ) - 0.06 ) + 0.01, lines.sheerY( lines.tAtSheerZ( 3 ) ) - 0.06, 3 ], masthead: [ - 1.1, 1.97, - 2.82 ], anchor: [ - 1.1, 1.99, - 2.82 ] };
+		// the lamps, as Rule 23 has a power boat under 12 m: side lights on the bow's shoulders, one all-round white on the stern's
+		// pole (BoatLamps' masthead and stern sectors at one point make all round), the same white alone at anchor
+		this.lamps = { dome: [ 0, TOP.under - 0.12, - 0.6 ], instruments: [ 0, S + 1.1, - 0.5 ], port: [ lines.halfBreadth( lines.tAtSheerZ( 3 ), lines.sheerY( lines.tAtSheerZ( 3 ) ) - 0.06 ) + 0.01, lines.sheerY( lines.tAtSheerZ( 3 ) ) - 0.06, 3 ], masthead: [ - 1.1, 1.97, - 2.82 ], stern: [ - 1.1, 1.97, - 2.82 ], anchor: [ - 1.1, 1.97, - 2.82 ] };
 		// her spreaders, aft along the top's edge, when she has floodlights
 		this.floods = [ - 0.55, 0.55 ].map( ( x ) => ( { at: [ x, TOP.under - 0.02, - 1.42 ], dir: [ x * 0.3, - 0.75, - 0.55 ] } ) );
 		this.hornAt = new Vector3( 0, TOP.under - 0.05, - 0.2 );
 		this.bowWalk = 3.95;
-		this.nearDetail = [ 'fittings', 'display', 'wheel', 'throttle', 'compass', 'outboard', 'outboard2' ];
+		this.nearDetail = [ 'fittings', 'display', 'wheel', 'throttle', 'compass' ];
 		this.transom = { x: 0.32, y: 0.76, z: lines.zAft - 0.01, w: 1.0 };
 		// (the dials: an outboard's revs and a planing hull's speed)
 		this.gauges = { maxRpm: 6000, tachMax: 70, knotsMax: 50, hot: 160 };
@@ -156,6 +158,7 @@ export class ConsoleModel extends Vessel {
 		this._trim = TRIM.up;
 		this.fitted = { twin: true, tTop: true, diveLadder: true, tankRack: true };
 		this._ladderDown = null;
+		this.covered = false;
 		this.fit( this.fitted );
 		this.setLadder( false );
 		this.setSteering( 0 );
@@ -186,6 +189,7 @@ export class ConsoleModel extends Vessel {
 
 		const on = {
 			tTop: this.fitted.tTop, tankRack: this.fitted.tankRack,
+			coverUp: this.fitted.tTop && ! this.covered, coverDown: this.fitted.tTop && this.covered,
 			ladderUp: this.fitted.diveLadder && ! this._ladderDown, ladderDown: this.fitted.diveLadder && !! this._ladderDown,
 		};
 		for ( const name of Object.keys( this._ranges ) ) {
@@ -212,6 +216,15 @@ export class ConsoleModel extends Vessel {
 			geo.index.needsUpdate = true;
 
 		}
+
+	}
+
+	// her rain cover down, or rolled up under the top
+	setCover( down ) {
+
+		if ( this.covered === down ) return;
+		this.covered = down;
+		this._applyFit();
 
 	}
 
@@ -271,17 +284,10 @@ export class ConsoleModel extends Vessel {
 
 	}
 
-	// the helm's where you'd take it: the walkway's clear of the post
+	// the sole, or through the transom's door the step up to the mat
 	soleY( x, z, y ) {
 
-		if ( z < DECK.boxFront ) return this._onPlatform( x, z ) ? DECK.platform.y + 0.012 : DECK.sole;
-		return DECK.sole;
-
-	}
-
-	_onPlatform( x, z ) {
-
-		return z < this.lines.zAft + 0.3 && Math.abs( x ) < DECK.platform.halfW + 0.2;
+		return z < DECK.sill ? DECK.platform.y + 0.012 : DECK.sole;
 
 	}
 
@@ -376,16 +382,17 @@ export class ConsoleModel extends Vessel {
 
 	}
 
-	// where rain gathers and runs off her: the T-top's edge, the low side of its crown (fx/Drips)
+	// where rain gathers and runs off her: the T-top's edge, onto her deck or the sea (fx/Drips' places)
 	dripPoints() {
 
 		if ( ! this.fitted.tTop ) return [];
-		const out = [], N = 22;
+		const out = [], N = 22, L = this.lines;
+		const cz = ( TOP.z0 + TOP.z1 ) / 2, hl = ( TOP.z1 - TOP.z0 ) / 2;
 		for ( let i = 0; i < N; i ++ ) {
 
 			const a = i / N * Math.PI * 2, s = Math.sin( a ), c = Math.cos( a );
-			const cz = ( TOP.z0 + TOP.z1 ) / 2, hl = ( TOP.z1 - TOP.z0 ) / 2;
-			out.push( new Vector3( Math.sign( s ) * Math.abs( s ) ** 0.55 * TOP.halfW * 0.98, TOP.y - 0.05, cz + Math.sign( c ) * Math.abs( c ) ** 0.55 * hl * 0.98 ) );
+			const x = Math.sign( s ) * Math.abs( s ) ** 0.55 * TOP.halfW * 0.98, z = cz + Math.sign( c ) * Math.abs( c ) ** 0.55 * hl * 0.98;
+			out.push( x, TOP.y - 0.05, z, Math.abs( x ) > 0.8 ? L.sheerY( L.tAtSheerZ( z ) ) : L.deckY, ( i * 0.618 ) % 1, LANDS.DULL );
 
 		}
 
