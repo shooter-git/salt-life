@@ -26,13 +26,13 @@ export const TRAP_PRICE = 70;
 // The bottoms: how well each fishes (q: of the best's), and how its lobsters run in length against the reef's (cm):
 // the grass and the mangroves are the nurseries, full of shorts (NOAA Fisheries' species page: nearshore nurseries)
 export const BOTTOMS = {
-	edge: { name: 'rubble and ledges off the reef\'s edge', say: 'the best of it', q: 1, sizeCm: 1.5 },
+	edge: { name: 'the reef\'s edge', say: 'the best of it', q: 1, sizeCm: 1.5 },
 	hard: { name: 'hard bottom', say: 'good ground', q: 0.8, sizeCm: 0.5 },
 	shelf: { name: 'sand and rubble', say: 'fair ground', q: 0.45, sizeCm: 2 },
-	grass: { name: 'seagrass', say: 'mostly shorts in the grass', q: 0.35, sizeCm: - 4 },
-	sand: { name: 'open sand', say: 'poor ground, nowhere for them to shelter', q: 0.12, sizeCm: 0 },
-	mud: { name: 'mangrove mud', say: 'poor ground, only the small ones here', q: 0.05, sizeCm: - 5 },
-	coral: { name: 'live coral', say: 'it\'d crush the coral', q: 0, sizeCm: 0 },
+	grass: { name: 'seagrass', say: 'mostly shorts', q: 0.35, sizeCm: - 4 },
+	sand: { name: 'open sand', say: 'poor ground', q: 0.12, sizeCm: 0 },
+	mud: { name: 'mangrove mud', say: 'poor ground', q: 0.05, sizeCm: - 5 },
+	coral: { name: 'live coral', say: 'it\'d crush it', q: 0, sizeCm: 0 },
 };
 
 // what the bottom under ( x, z ) is. reefDist: m from the bay's reef (< 0 over it); windReef, patch, sand, grass, creek:

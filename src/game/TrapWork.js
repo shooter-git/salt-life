@@ -232,7 +232,7 @@ export class TrapWork {
 
 		// (the bottom's seen in clear shallow water, and past that on the fish finder)
 		const known = depth < 12 || game.state.stats.finder, B = BOTTOMS[ id ];
-		p.prompt = { key: 'E', text: `Set a trap over the side   ·   ${ known ? `${ feet( depth ) }, ${ B.name }: ${ B.say }` : 'you can\'t see the bottom from here' }   ·   ${ aboard } aboard` };
+		p.prompt = { key: 'E', text: `Set a trap   ·   ${ known ? `${ feet( depth ) }, ${ B.name }: ${ B.say }` : 'can\'t see the bottom' }` };
 		if ( inp.hit( 'KeyE' ) ) this._startSet( _b.x, _b.z, depth, id, aboard );
 
 	}
