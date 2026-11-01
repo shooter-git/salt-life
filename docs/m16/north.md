@@ -212,3 +212,75 @@ Her pose runs from her own clock now, not a count of frames, so they match it.
 **Not checked.** The look on a real GPU or a phone: a CPU render. Two real players on a beach (`tools/two-players` not run for this): the test feeds two `Minding`s the others' figures. The moon: a real full moon lessens what a light does to hatchlings, and that's not modelled. Red light isn't a thing the game has. Nothing here's saved: if you turn her back, quit, and come back the next morning, her tracks are the clock's, not the ones she made.
 
 Sources: [DBCA flatback code of conduct](https://flatbacks.dbca.wa.gov.au/resources/code-of-conduct), [DBCA watching hatchlings](https://flatbacks.dbca.wa.gov.au/watching-hatchlings), [Christmas Island National Park](https://christmasislandnationalpark.gov.au/do/turtle-watching), [USGS hatchling tracks (Femmer)](https://www.usgs.gov/media/images/sea-turtle-hatchling-tracks-sand-2), [Conservation Evidence: low intensity lighting](https://www.conservationevidence.com/actions/3623), [FWC on artificial lighting](https://myfwc.com/research/wildlife/sea-turtles/threats/artificial-lighting/), [DBCA on light](https://flatbacks.dbca.wa.gov.au/what-we-do/research/threats/light), [NPS sea turtles](https://home.nps.gov/viis/learn/nature/upload/Seaturtles1acc.pdf).
+
+## A gale's seas, and the sea's draw
+
+M16's stream 10 (2026-11-01). `test/north-sea.mjs` tests what Node can. A gale's sea was drawn 5 to 7 ft, and its big waves ran up from the south, straight against the trades' wind.
+
+**What's real.**
+
+- NOAA's Beaufort scale has force 8 (34 to 40 kt; a gale here is 39) at 18 to 25 ft on the open ocean, force 7 at 13 to 19 ([SPC's table](https://www.spc.noaa.gov/faq/tornado/beaufort.html)).
+- These waters have less. Key West's own [gale warning of February 2021](https://mesonet.agron.iastate.edu/api/1/nwstext/202102011518-KKEY-WHUS72-MWWKEY) gives 6 to 10 ft over the Straits for 25 to 30 kt, gusts to 35, and scaled up that's about 12 ft at 39 kt. The 10 to 14 ft figure itself wasn't found in a Key West product: it's the brief's, and this agrees with it.
+- SMB's fetch-limited curve (Hs = 1.6e-3 sqrt( g X / U² ) U² / g, the Shore Protection Manual's) gives 10.6 ft over 100 km and 13.0 over 150 km, the water these waters have upwind (15 ft on its adjusted wind).
+- So **12 ft**, and past 14 km half again as the soft edge has it: about **18 ft**, the Beaufort scale's open ocean.
+- A higher sea's a longer one: a fully developed sea's peak period is about 4.9 sqrt( Hs ) (from memory of Pierson-Moskowitz, not found in a source here; SMB's 9 s over that fetch agrees): 9.4 s, 11.4 s past the far grounds. It was 7.5 s.
+
+**What was built.**
+
+| Weather | Wind | Was | Now | Past the far grounds | Period |
+|---|---|---|---|---|---|
+| Calm, fair, cloudy, rain, breezy | to 21 kt | 2.5 to 4.2 ft | the same, to the bit | half again, as it was | as it was |
+| Thunderstorm | 27 kt | 4.7 ft | 7.6 ft | 11 ft | 7.5 s |
+| Blustery | 29 kt | 4.9 ft | 8.3 ft | 12 ft | 7.8 s |
+| Gale | 39 kt | 5.0 ft | 12.1 ft | 17.7 ft | 9.4 s |
+| Southerly gale | 39 kt | 7.1 ft | 13 ft | 19.5 ft | 9.7 s |
+| Hurricane's wall | 74 to 100 kt | 13 to 18 ft | 25 to 32 ft | | |
+
+- **A blow's own sea** (`Weather.blowSeaOf`, `w.blow`) is added to the swell as energy, on the long waves, from a breezy day's wind up. As it outgrows the swell the long waves come round to run down the wind, about the camera and no faster than a minute and a half. So a gale down the trades leaves the bay in the island's lee by the lee already worked out, wave by wave, and a southerly's comes in.
+- **The wind sea's cap** went from 3 to 3.8 x a fair day's, and on low, which has two long waves, the second is 50 m and not 85 in a blow. Rippling goes further and rougher in a blow, and rain's neat rings go. A gale on low had looked like a smooth hill from the deck.
+- **The radio** says it: "Seas 10 to 14 feet. Dominant period 9 seconds." Past the far grounds, "Seas 14 to 20 feet". A big sea reads in a wide band, as the Weather Service gives one; a fair day's words are as they were.
+- **Whitecaps and spray**: in a blow they break on the long waves' crests, on the CPU's spray as on the GPU. Foam's blown in streaks from a near gale, as Beaufort 7 and 8 have it; it started at Beaufort 10.
+- **A sea breaking on her** (`game/BreakingSeas.js`). A 9 m boat rides a 12 ft, 9 s wave like a hill: her stem stays out of it. So the danger's a roller reaching her up on a crest: 60 L in her bilge, a hard slam and a knock about her keel, about one a minute, under way or at anchor, from 9.5 ft. Unbailed, her engine floods in about eight minutes. Marta won't come out in it.
+
+**What it does**, measured on the real boat under Node: at 240 s she heaves 3.9 m, tilts to 28 degrees; 549 L in her head to it, 382 L at anchor (one run each: it varies). Held head to it flat out she's worn 26% a minute, 9% at a third of her throttle, slams being the short seas' (`test/hull.mjs` had been running through them the wrong way, and is mended; `Hull.js` is untouched). Crests reach 0.62 m at the pier's tip in a trades gale and 1.47 m at its head in a southerly, under its 2.3 m deck. The surf and its run-up are the shore's own figures, unchanged, so they reach no further than they did; the north shore's 6 to 12 ft was already in proportion. On low what's drawn counts 10.8 ft, its highest wave 13 ft (four waves can't make a rogue); on high 11.3 and 15.
+
+**The sea's draw, on low.** The sea alone, 640 by 360, the CPU's GPU, by removal in one page (a phone's shader, `?fullsea`; CPU time of the browser's processes, against a busy machine; two rounds, so a figure under about 6% is noise):
+
+| Taken out | Fair, blue water | Gale | Fair, by the dock |
+|---|---|---|---|
+| Whitecaps, all | 21% | 19% | 26% |
+| of it, their marbling and froth | 14% | 20% | 26% |
+| their 23 m carrier | 7% | 2% | 13% |
+| The panorama's reflections | 5% | 18% | 15% |
+| Weedlines | 17% | 3% | 9% |
+| Front's slick | 4% | 4% | 11% |
+| Gusts and slicks, the ground's height, ripples, front's noise, sun, fog, boils, lamps | noise | noise | noise |
+
+So the whitecaps' cost is their marbling's noises, not their crests' hashes. The CPU's GPU runs both sides of a branch a pixel at a time, so these over-weight whatever's behind a branch. A phone's skips them, which is where most of the cuts below tell.
+
+Cut, nothing added to the textures:
+
+- Eight lace noises and four more for the surf and swash, on every pixel of open sea: now only where there's whitewater. Same to the bit (max 0/255, three scenes).
+- Marbling and froth seen from afar, ten noises: now only near by, the rollers kept. Same by the sums; this last form wasn't re-rendered.
+- A second panorama lookup for what comes to 1/255 at most.
+- Crests' hashes from 0.6 crest a pixel, not 0.9: at most 0.05% of channels past 2/255. Side by side, no difference seen.
+- Ripple reads past where they've faded, spume past where it's faded, weedlines wholly behind you.
+
+Tried and left: a lighter crest hash and one marbling noise fewer (each moved under about 6%, which is noise, and the hash moves every whitecap), and foam a period shorter (a look lost for no measured gain).
+
+| The sea's draw, CPU ms | Before (e4a32dc) | Now | |
+|---|---|---|---|
+| Calm, blue water | 1248 | 1140 | 8.7% off |
+| Fair, by the dock | 1774 | 1632 | 8.0% off |
+| Gale, blue water | 1522 | 1506 | 1.1% off, with more sea and foam in it |
+| First build (3 runs each, wall) | 6.5 s | 5.9 s | |
+
+Fair in blue water read 4414 against 1686 in the first scene of that run, with the page's late work still going, its calm and gale neighbours at the same spot as above. It's discarded, not measured again. Same-page, before the last cuts, it read within noise.
+
+**Not checked.**
+
+- The frame's calm day from before and after: the two pages' clocks differed, so that comparison says nothing. What holds: the waves' figures to the bit under Node, the shader's guards at 0/255 and 1/255 on fair and gale frames, and whitecaps absent below 3 m/s.
+- The shore in a gale, and the far sea in a gale, rendered: not done, to save rendering. Their figures are under Node.
+- The sky in the gale frames is still blue, the clouds being slow on the CPU, so the side-by-side's sky means nothing. Against Beaufort's photographs the foam's well short: fewer patches, thinner streaks. Near the boat the rougher ripples throw bright glints. Both want a look on a real GPU.
+- The hit's words: no toast is said when a sea comes aboard. Other boats take the same litres: the kayak's and the others' figures are their own streams' to set.
+- A real phone's frame rate.
