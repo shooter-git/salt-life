@@ -517,7 +517,7 @@ export class App {
 		this.boatCtl.onSlam = ( strength ) => {
 
 			this.audio.hullSlap( strength );
-			if ( this.game ) this.game.hull.slam( strength );
+			if ( this.game && ! this.boatCtl.handling.plastic ) this.game.hull.slam( strength );
 
 		};
 
@@ -818,7 +818,7 @@ export class App {
 		// L: the flashlight; at the helm, the boat's searchlight
 		if ( input.hit( 'KeyL' ) ) {
 
-			if ( this.player.mode === 'boat' ) {
+			if ( this.player.mode === 'boat' && this.boat.searchlight ) {
 
 				this.searchlight = ! this.searchlight;
 				this.hud.toast( this.searchlight ? 'Searchlight on' : 'Searchlight off' );
@@ -828,7 +828,7 @@ export class App {
 		}
 
 		// H at the helm: the horn, for as long as it's held (everyone hears it)
-		const horn = this.player.mode === 'boat' && ( input.down( 'KeyH' ) || input.down( 'Horn' ) );
+		const horn = this.player.mode === 'boat' && ! this.boat.seated && ( input.down( 'KeyH' ) || input.down( 'Horn' ) );
 		if ( horn !== !! this._horn ) {
 
 			if ( horn ) this._horn = this.audio.hornStart( this.boatCtl.toWorld( this.boat.hornAt || _hornAt, new THREE.Vector3() ) ) || true;
@@ -979,7 +979,7 @@ export class App {
 		}
 		this.drips.update( dt, this.camera, this.cameraWaterHeight, this.renderer.domElement.height, aboard ); // (M11)
 		this.updateInstruments( dt );
-		this.boatLamps.set( { underway: this.boatCtl.driven || ! ( this.boatCtl.moored || this.boatCtl.anchor ), spot: this.searchlight } );
+		this.boatLamps.set( { underway: this.boatCtl.driven || ! ( this.boatCtl.moored || this.boatCtl.anchor || this.boatCtl.beached ), spot: this.searchlight } );
 		this.localLights.update( this.camera, dt );
 		cloudShadows.update( this.camera );
 		this.wake.update( dt );
@@ -1838,8 +1838,8 @@ export class App {
 			daylight: 1 - G.night.value,
 			nearPier: Math.abs( p.x - pier.x ) < 12 && p.z > pier.zStart - 5 && p.z < pier.zEnd + 8,
 			boat: theirs ? { active: theirs.active, rpm: theirs.rpm, speed: theirs.speed, position: theirs.position, listenerInside: false } : {
-				active: boat.driven, rpm: boat.rpm, throttle: boat.throttle, speed: boat.velocity.length(),
-				position: this.boat.group.position, listenerInside: this.player.mode === 'boat' && this.player.camMode === 'first',
+				active: boat.driven && !! boat.handling.engine, rpm: boat.rpm, throttle: boat.throttle, speed: boat.velocity.length(),
+				position: this.boat.group.position, listenerInside: this.player.mode === 'boat' && this.player.camMode === 'first' && ! this.boat.seated,
 			},
 			// (M10) her hull: yours, or (M11) the one you ride in, as her skipper hears it (hullHeard)
 			hull: theirs ? theirs.hull || null : this.game ? this.hullHeard() : null,
@@ -1858,14 +1858,15 @@ export class App {
 		this.dashOn( ride ? ride.group : null );
 		// (on the low tier others' boats have no dash to show it on)
 		if ( ride && g && p.mode === 'deck' && this.tier !== 'low' ) return this.instruments.update( dt, this.riddenReading( ride, dt ) );
-		if ( ! g || p.riding || ( p.mode !== 'boat' && p.mode !== 'deck' ) ) return this.instruments.update( dt, null );
+		// ((M16) nor is there anything to read them on in a kayak)
+		if ( ! g || p.riding || ( p.mode !== 'boat' && p.mode !== 'deck' ) || ! this.boat.materials.display ) return this.instruments.update( dt, null );
 		const r = this._reading || ( this._reading = {} ), f = b.forward( _fwdB ), x = b.position.x, z = b.position.z;
 		const map = g.minimap;
 		r.engine = g.hull.engine;
 		r.rpm = b.rpm;
 		r.speed = b.speed;
 		r.heading = Math.atan2( f.x, - f.z );
-		r.fuel = g.state.fuelL / g.state.stats.fuelL;
+		r.fuel = g.state.stats.fuelL > 0 ? g.state.fuelL / g.state.stats.fuelL : 0;
 		r.depth = Math.max( 0, G.seaLevel.value - this.terrainData.heightAt( x, z ) );
 		r.finder = !! g.state.stats.finder;
 		r.fish = g._sonar ? g._sonar.fish : 0;
@@ -2193,7 +2194,7 @@ export class App {
 
 		}
 
-		b.moored = false;
+		b.moored = b.beached = false;
 		const at = checkSpotAt( spot, islandTime( s.day, s.timeOfDay ), ( x, z ) => - this.terrainData.heightAt( x, z ) );
 		// (the chase camera with her, or it spends the checks' few frames catching up)
 		p.camPos.x += at.x - b.position.x;
@@ -2419,6 +2420,7 @@ export class App {
 
 		this.boat = model;
 		parent.add( model.group );
+		this.lightUp( model.group );
 		model.group.traverse( ( o ) => {
 
 			if ( o.isMesh ) o.castShadow = o.castShadow && this.tier !== 'low';
@@ -2470,7 +2472,8 @@ export class App {
 		// (as stepping ashore makes her fast: Player.exitBoat)
 		const moored = b.moored || ( ! b.anchor && ! b.hauled && Math.hypot( b.position.x - dock.x, b.position.z - dock.z ) < 14 && b.speed < 1.5 );
 		const aboard = p.riding ? null : p.mode === 'deck' ? 'deck' : p.mode === 'boat' ? 'helm' : null;
-		this.store.setItem( BOAT_KEY, JSON.stringify( boatLeft( { x: b.position.x, z: b.position.z, heading: b.getYaw(), anchor: b.anchor, moored, aboard, T: islandTime( s.day, s.timeOfDay ), at: Date.now() } ) ) );
+		// ((M16) drawn up on the sand, she's as fast as at the dock)
+		this.store.setItem( BOAT_KEY, JSON.stringify( boatLeft( { x: b.position.x, z: b.position.z, heading: b.getYaw(), anchor: b.anchor, moored: moored || b.beached, aboard, T: islandTime( s.day, s.timeOfDay ), at: Date.now() } ) ) );
 		if ( this.together ) this.together.mineBoat();
 
 	}
@@ -2526,6 +2529,7 @@ export class App {
 			b.anchor = story.anchor ? new THREE.Vector3( story.anchor.x, this.terrainData.heightAt( story.anchor.x, story.anchor.z ), story.anchor.z ) : null;
 			b.hasWater = false;
 			b.apply();
+			if ( b.moored && b.model.rest ) b.model.rest( b, story.x, story.z );
 
 		}
 

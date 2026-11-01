@@ -295,7 +295,7 @@ export class Together {
 
 		const app = this.app, b = app.boatCtl, id = this.me.id, t = Date.now(), dock = WORLD.boatDock.position;
 		// ((M15) out on the water with no anchor down, she's adrift if you go: as stepping ashore makes her fast, Player.exitBoat)
-		const berthed = b.moored || b.hauled || ( Math.hypot( b.position.x - dock.x, b.position.z - dock.z ) < 14 && b.speed < 1.5 );
+		const berthed = b.moored || b.hauled || b.beached || ( Math.hypot( b.position.x - dock.x, b.position.z - dock.z ) < 14 && b.speed < 1.5 );
 		if ( ( b.anchor && b.driven ) || ( ! b.anchor && berthed ) ) {
 
 			if ( ! this._boatSaved ) return Promise.resolve();

@@ -2,6 +2,7 @@ import { Group, Vector3, Quaternion, MathUtils } from '../engine/index.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { Character } from '../game/Character.js';
 import { Figure } from './Figure.js';
+import { seatPose } from '../world/boat/kayak/SeatPose.js';
 
 // (Salt Life) Another player on the island: one of four islanders (Microsoft Rocketbox, as Joe and
 // Marta: tools/characters/players.sh), the one they chose (in the cooler; it comes with their poses),
@@ -168,7 +169,7 @@ export class Avatar {
 
 	// (Salt Life) gun: swimming with a speargun, held out ahead in the right hand; reach: { r, l } (world)
 	// where their hands hold something out (a cast net), or null
-	pose( { mode, speed = 0, rod = false, gun = false, reach = null }, dt ) {
+	pose( { mode, speed = 0, rod = false, gun = false, reach = null, seat = null }, dt ) {
 
 		// lying face down in the water (the chest at the float point), upright otherwise
 		this._swim += ( ( mode === 'swim' ? 1 : 0 ) - this._swim ) * ( 1 - Math.exp( - dt * 6 ) );
@@ -188,7 +189,8 @@ export class Avatar {
 		const c = this.character;
 		let clip = 'idle_neutral_01', scale = 1, loop = true;
 		this._still = mode !== 'swim' && mode !== 'helm' && speed < 0.25;
-		if ( mode === 'helm' ) {
+		// ((M16) seat: sat in a kayak, the arms to these, the clip's only breathing under it: SeatPose.js)
+		if ( mode === 'helm' && ! seat ) {
 
 			clip = 'trolley_idle';
 			loop = 'pingpong';
@@ -233,6 +235,13 @@ export class Avatar {
 		}
 
 		// both hands out to what they hold (eased in and out as they take it up and put it away)
+		if ( seat ) {
+
+			this.body.position.set( 0, 0, 0 );
+			seatPose( this, seat );
+
+		}
+
 		const B = this.bones, to = this._reachTo;
 		if ( this._reach > 0.01 && to && B.armR && B.hand ) {
 
