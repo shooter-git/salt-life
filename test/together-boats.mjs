@@ -16,7 +16,7 @@ const { SPARE_BERTHS, atDock, berthShare, laidAt, spareBerth } = await import( '
 const { clockFrom, footY, jobAt, perched, spotted } = await import( '../src/together/Crew.js' );
 const { seenHeight, speckAlpha, visualRange } = await import( '../src/together/Specks.js' );
 const { boatRecord, cleanBoats } = await import( '../src/game/Away.js' );
-const { Scene, Vector3 } = await import( '../src/engine/index.js' );
+const { DoubleSide, Scene, Vector3 } = await import( '../src/engine/index.js' );
 const { triangleCount } = await import( '../src/world/boat/GeoKit.js' );
 const { WORLD } = await import( '../src/world/WorldLayout.js' );
 const { Together } = await import( '../src/together/Together.js' );
@@ -249,6 +249,25 @@ ok( sizeOf( 'trawler' ) === SIZE.lobster, 'and a game that doesn\'t say is the l
 	ok( cleanBoats( { s: raw } ).s.b === 'console', 'an away boat\'s record says which she is' );
 	const old = boatRecord( { name: 'Sam', x: 1, z: 2, heading: 0, anchor: { x: 1, z: 2 }, at: Date.now(), T: 5 } );
 	ok( cleanBoats( { s: old } ).s.b === undefined, 'one from before doesn\'t: the lobster boat' );
+
+}
+
+// a plain boat's deck is seen from above, and you can see into her
+{
+
+	const m = await loadBoat( 'sportfisher', 'low' ), hull = m.group.getObjectByName( 'boat-hull' ), P = hull.geometry.attributes.position, y = m.lines.deckY;
+	let up = 0, down = 0;
+	for ( let i = 0; i < P.count; i += 3 ) {
+
+		if ( Math.abs( P.getY( i ) - y ) > 1e-6 || Math.abs( P.getY( i + 1 ) - y ) > 1e-6 || Math.abs( P.getY( i + 2 ) - y ) > 1e-6 ) continue;
+		const a = new Vector3().fromBufferAttribute( P, i ), n = new Vector3().fromBufferAttribute( P, i + 1 ).sub( a ).cross( new Vector3().fromBufferAttribute( P, i + 2 ).sub( a ) );
+		if ( n.y > 0 ) up ++; else if ( n.y < 0 ) down ++; // (at her stem one's nothing but a line)
+
+	}
+
+	ok( up > 0 && down === 0, `a plain boat's deck faces up (${ up } triangles)` );
+	ok( hull.material.side === DoubleSide, 'and her shell shows from inside' );
+	m.dispose();
 
 }
 

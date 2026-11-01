@@ -1,7 +1,7 @@
 // Two real games (tools/two-players), each in a different boat (M16): each sees the other's as she is, built on first
 // sight with a stand-in meanwhile; the low tier's copy; Marta's dock holding more than yours; riding along, at the helm of
 // someone else's boat; a crew's jobs on a big boat; a boat as a speck past the fog; her lamps at night; a boat that's sat in.
-//   tools/render-slot.sh node tools/two-players/boats.mjs [dir for screenshots] [port] [tier: low|mid|high]   (some minutes: two games on the CPU)
+//   tools/render-slot.sh node tools/two-players/boats.mjs [dir for screenshots] [port] [tier: low|mid|high]   (two games on the CPU, 25 minutes and more: BOATS_FROM=crew runs from the sportfisher's crew on)
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const ROOT = join( dirname( fileURLToPath( import.meta.url ) ), '../..' );
@@ -75,7 +75,7 @@ const drawn = async ( g, n = 2 ) => {
 	for ( let i = 0; i <= n; i ++ ) {
 
 		await g.evaluate( () => { window.__draws.peak = { calls: 0, tris: 0 }; } );
-		await g.waitForFunction( () => window.__draws.peak.calls > 20, null, { timeout: 400000, polling: 200 } );
+		await g.waitForFunction( () => window.__draws.peak.calls > 2, null, { timeout: 400000, polling: 200 } );
 
 	}
 
@@ -94,7 +94,7 @@ const reads = async ( g, what ) => {
 	await draws( g, true );
 	await drawn( g, 1 );
 	await g.evaluate( () => { window.__draws.peak = { calls: 0, tris: 0 }; } );
-	await g.waitForFunction( () => window.__draws.peak.calls > 20, null, { timeout: 400000, polling: 200 } );
+	await g.waitForFunction( () => window.__draws.peak.calls > 2, null, { timeout: 400000, polling: 200 } );
 	await drawn( g, 0 );
 	const r = await g.evaluate( () => { if ( window.gc ) window.gc(); const m = performance.memory; return { draws: window.__draws.peak.calls, triangles: window.__draws.peak.tris, heapMB: m ? +( m.usedJSHeapSize / 1048576 ).toFixed( 1 ) : null }; } );
 	await draws( g, false );
@@ -154,54 +154,60 @@ await frames( sam.game, 2 );
 await stand( robin.game, 56, 34, 0.08 );
 await reads( robin.game, `at the pier head, Sam's copy in sight (${ TIER })` );
 
-// ---- riding along: Sam boards Robin's console at her spare berth, deck in her frame
-await robin.game.evaluate( () => { const p = window.__app.player; p.boardBoat(); } );
-await until( sam.game, `${ other }.cur.mode === 'deck'` );
-const board = `( () => { const a = window.__app, o = ${ other }, c = o.cur, f = c.drawn || c.boat, M = o.boat.userData.model, bp = M.boardPoint.clone().applyQuaternion( f.quat ).add( f.pos ); a.player.position.set( bp.x, bp.y + 0.3, bp.z ); a.player.velocity.set( 0, 0, 0 ); } )()`;
-await posed( sam.game );
-await sam.game.evaluate( board );
-await until( sam.game, `( window.__app.player.rideOffer || ( ${ board }, false ) )` );
-const offer = await sam.game.evaluate( () => { const p = window.__app.player, b = p.rideOffer.boat; p.ride( b ); return { type: b.model.id, name: p.rideOffer.name }; } );
-say( offer.type === 'console', `Sam's offered ${ offer.name }'s boat, her own deck to walk: ${ offer.type }` );
-await frames( sam.game, 4 );
-await sam.game.evaluate( () => { const p = window.__app.player; p.deckPos.set( 0.4, p.boat.model.lines.deckY, - 2.0 ); } );
-await frames( sam.game, 3 );
-await until( robin.game, `${ other }.cur.ride === 'robin-1' && ${ other }.cur.deck` );
-await frames( robin.game, 4 );
-await until( robin.game, `${ other }.cur.ride === 'robin-1' && ${ other }.cur.deck` );
-const fig = await robin.game.evaluate( `( () => { const a = window.__app, o = ${ other }, c = o.cur, g = o.avatar.group, want = c.deck.clone().applyQuaternion( a.boatCtl.quaternion ).add( a.boatCtl.position ); return { shown: o.shown, d: +g.position.distanceTo( want ).toFixed( 3 ), deck: c.deck.toArray().map( ( v ) => +v.toFixed( 2 ) ) }; } )()` );
-say( fig.shown && fig.d < 0.01, `Robin sees Sam on her own deck, where he stands in her frame ${ JSON.stringify( fig.deck ) }` );
+// (BOATS_FROM=crew skips to the sportfisher's crew: the whole of it is more than 25 minutes on the CPU)
+if ( process.env.BOATS_FROM !== 'crew' ) {
 
-// ---- at the helm of someone else's boat: Sam drives Robin's, Robin's game runs her
-await sam.game.evaluate( () => { const p = window.__app.player; p.deckPos.set( p.boat.model.helm.x, p.boat.model.lines.deckY, p.boat.model.helm.z ); } );
-await frames( sam.game, 2 );
-say( await sam.game.evaluate( () => window.__app.player.boat.helmFree ), 'with Robin on deck, her helm\'s free for Sam' );
-const start = await robin.game.evaluate( () => window.__app.boatCtl.position.toArray() );
-await sam.game.evaluate( () => { const p = window.__app.player, i = window.__app.input; p.takeHelm(); i.down = ( k ) => k === 'KeyW' || Object.getPrototypeOf( i ).down.call( i, k ); } );
-// (her owner's game cranks her and spools her up, in frames, on the CPU)
-await until( robin.game, `( ( b, s ) => b.driven && b.rpm > 0.1 && Math.hypot( b.position.x - s[ 0 ], b.position.z - s[ 2 ] ) > 2 )( window.__app.boatCtl, ${ JSON.stringify( start ) } )` );
-const driven = await robin.game.evaluate( ( s ) => { const b = window.__app.boatCtl; return { speed: +b.speed.toFixed( 2 ), moved: +Math.hypot( b.position.x - s[ 0 ], b.position.z - s[ 2 ] ).toFixed( 1 ), rpm: +b.rpm.toFixed( 2 ), mode: window.__app.player.mode }; }, start );
-say( driven.mode === 'deck' && driven.moved > 2 && driven.rpm > 0.1, `Robin on deck, Sam at her helm, and she goes: ${ JSON.stringify( driven ) }` );
-await until( sam.game, `${ other }.cur.rpm > 0.05` );
-await frames( sam.game, 3 );
-await posed( sam.game );
-const rideS = await sam.game.evaluate( `( () => { const a = window.__app, b = a.player.boat, c = ${ other }.cur; return { mode: a.player.mode, rpm: +c.rpm.toFixed( 2 ), speed: +b.speed.toFixed( 2 ), riding: a.player.riding, sound: a.together.boatSound().active }; } )()` );
-say( rideS.mode === 'boat' && rideS.rpm > 0.05 && rideS.sound, `and Sam hears her engine: ${ JSON.stringify( rideS ) }` );
-await shot( sam, 'at-her-helm' );
-await until( robin.game, `${ other }.cur.mode === 'helm'` );
-await frames( robin.game, 3 );
-await until( robin.game, `${ other }.cur.mode === 'helm'` );
-const fromRobin = await robin.game.evaluate( `( () => { const a = window.__app, o = ${ other }, g = o.avatar.group, M = a.boat, h = M.helmEye.clone(); h.y = M.lines.deckY; const w = h.applyQuaternion( a.boatCtl.quaternion ).add( a.boatCtl.position ); return { mode: o.cur.mode, shown: o.shown, d: +Math.hypot( g.position.x - w.x, g.position.z - w.z ).toFixed( 2 ), job: o.job, tag: o.tagName && o.tagName.nodeValue }; } )()` );
-say( fromRobin.mode === 'helm' && fromRobin.d < 0.1, `Robin sees Sam at her helm: ${ JSON.stringify( fromRobin ) }` );
-// Robin takes her back: Sam's put off it
-await robin.game.evaluate( () => { const p = window.__app.player; p.deckPos.set( p.boat.model.helm.x, p.boat.model.lines.deckY, p.boat.model.helm.z ); p.takeHelm(); } );
-await until( sam.game, 'window.__app.player.mode === \'deck\'' );
-say( await robin.game.evaluate( () => window.__app.boatCtl.driven && window.__app.player.mode === 'boat' ), 'her owner takes the helm, and it\'s theirs' );
-await sam.game.evaluate( () => { delete window.__app.input.down; } );
+	// ---- riding along: Sam boards Robin's console at her spare berth, deck in her frame
+	await robin.game.evaluate( () => { const p = window.__app.player; p.boardBoat(); } );
+	await until( sam.game, `${ other }.cur.mode === 'deck'` );
+	const board = `( () => { const a = window.__app, o = ${ other }, c = o.cur, f = c.drawn || c.boat, M = o.boat.userData.model, bp = M.boardPoint.clone().applyQuaternion( f.quat ).add( f.pos ); a.player.position.set( bp.x, bp.y + 0.3, bp.z ); a.player.velocity.set( 0, 0, 0 ); } )()`;
+	await posed( sam.game );
+	await sam.game.evaluate( board );
+	await until( sam.game, `( window.__app.player.rideOffer || ( ${ board }, false ) )` );
+	const offer = await sam.game.evaluate( () => { const p = window.__app.player, b = p.rideOffer.boat; p.ride( b ); return { type: b.model.id, name: p.rideOffer.name }; } );
+	say( offer.type === 'console', `Sam's offered ${ offer.name }'s boat, her own deck to walk: ${ offer.type }` );
+	await frames( sam.game, 4 );
+	await sam.game.evaluate( () => { const p = window.__app.player; p.deckPos.set( 0.4, p.boat.model.lines.deckY, - 2.0 ); } );
+	await frames( sam.game, 3 );
+	await until( robin.game, `${ other }.cur.ride === 'robin-1' && ${ other }.cur.deck` );
+	await frames( robin.game, 4 );
+	await until( robin.game, `${ other }.cur.ride === 'robin-1' && ${ other }.cur.deck` );
+	const fig = await robin.game.evaluate( `( () => { const a = window.__app, o = ${ other }, c = o.cur, g = o.avatar.group, want = c.deck.clone().applyQuaternion( a.boatCtl.quaternion ).add( a.boatCtl.position ); return { shown: o.shown, d: +g.position.distanceTo( want ).toFixed( 3 ), deck: c.deck.toArray().map( ( v ) => +v.toFixed( 2 ) ) }; } )()` );
+	say( fig.shown && fig.d < 0.01, `Robin sees Sam on her own deck, where he stands in her frame ${ JSON.stringify( fig.deck ) }` );
 
-// ---- the sportfisher's crew: Robin aboard Sam's boat, Sam at the helm, out from the dock, a third job each way
-await sam.game.evaluate( () => { const p = window.__app.player; p.exitBoat( null, 1 ); } );
-await robin.game.evaluate( () => { const a = window.__app, p = a.player, b = a.boatCtl; p.leaveHelm(); p.exitBoat( null, 1 ); b.reset(); } );
+	// ---- at the helm of someone else's boat: Sam drives Robin's, Robin's game runs her
+	await sam.game.evaluate( () => { const p = window.__app.player; p.deckPos.set( p.boat.model.helm.x, p.boat.model.lines.deckY, p.boat.model.helm.z ); } );
+	await frames( sam.game, 2 );
+	say( await sam.game.evaluate( () => window.__app.player.boat.helmFree ), 'with Robin on deck, her helm\'s free for Sam' );
+	const start = await robin.game.evaluate( () => window.__app.boatCtl.position.toArray() );
+	await sam.game.evaluate( () => { const p = window.__app.player, i = window.__app.input; p.takeHelm(); i.down = ( k ) => k === 'KeyW' || Object.getPrototypeOf( i ).down.call( i, k ); } );
+	// (her owner's game cranks her and spools her up, in frames, on the CPU)
+	await until( robin.game, `( ( b, s ) => b.driven && b.rpm > 0.1 && Math.hypot( b.position.x - s[ 0 ], b.position.z - s[ 2 ] ) > 2 )( window.__app.boatCtl, ${ JSON.stringify( start ) } )` );
+	const driven = await robin.game.evaluate( ( s ) => { const b = window.__app.boatCtl; return { speed: +b.speed.toFixed( 2 ), moved: +Math.hypot( b.position.x - s[ 0 ], b.position.z - s[ 2 ] ).toFixed( 1 ), rpm: +b.rpm.toFixed( 2 ), mode: window.__app.player.mode }; }, start );
+	say( driven.mode === 'deck' && driven.moved > 2 && driven.rpm > 0.1, `Robin on deck, Sam at her helm, and she goes: ${ JSON.stringify( driven ) }` );
+	await until( sam.game, `${ other }.cur.rpm > 0.05` );
+	await frames( sam.game, 3 );
+	await posed( sam.game );
+	const rideS = await sam.game.evaluate( `( () => { const a = window.__app, b = a.player.boat, c = ${ other }.cur; return { mode: a.player.mode, rpm: +c.rpm.toFixed( 2 ), speed: +b.speed.toFixed( 2 ), riding: a.player.riding, sound: a.together.boatSound().active }; } )()` );
+	say( rideS.mode === 'boat' && rideS.rpm > 0.05 && rideS.sound, `and Sam hears her engine: ${ JSON.stringify( rideS ) }` );
+	await shot( sam, 'at-her-helm' );
+	await until( robin.game, `${ other }.cur.mode === 'helm'` );
+	await frames( robin.game, 3 );
+	await until( robin.game, `${ other }.cur.mode === 'helm'` );
+	const fromRobin = await robin.game.evaluate( `( () => { const a = window.__app, o = ${ other }, g = o.avatar.group, M = a.boat, h = M.helmEye.clone(); h.y = M.lines.deckY; const w = h.applyQuaternion( a.boatCtl.quaternion ).add( a.boatCtl.position ); return { mode: o.cur.mode, shown: o.shown, d: +Math.hypot( g.position.x - w.x, g.position.z - w.z ).toFixed( 2 ), job: o.job, tag: o.tagName && o.tagName.nodeValue }; } )()` );
+	say( fromRobin.mode === 'helm' && fromRobin.d < 0.1, `Robin sees Sam at her helm: ${ JSON.stringify( fromRobin ) }` );
+	// Robin takes her back: Sam's put off it
+	await robin.game.evaluate( () => { const p = window.__app.player; p.deckPos.set( p.boat.model.helm.x, p.boat.model.lines.deckY, p.boat.model.helm.z ); p.takeHelm(); } );
+	await until( sam.game, 'window.__app.player.mode === \'deck\'' );
+	say( await robin.game.evaluate( () => window.__app.boatCtl.driven && window.__app.player.mode === 'boat' ), 'her owner takes the helm, and it\'s theirs' );
+	await sam.game.evaluate( () => { delete window.__app.input.down; } );
+
+	// ---- the sportfisher's crew: Robin aboard Sam's boat, Sam at the helm, out from the dock, a third job each way
+	await sam.game.evaluate( () => { const p = window.__app.player; p.exitBoat( null, 1 ); } );
+	await robin.game.evaluate( () => { const a = window.__app, p = a.player, b = a.boatCtl; p.leaveHelm(); p.exitBoat( null, 1 ); b.reset(); } );
+
+}
+
 const FAR = { x: - 2600, z: 3000 };
 await sam.game.evaluate( ( F ) => { const a = window.__app, p = a.player, b = a.boatCtl; p.boardBoat(); p.takeHelm(); b.moored = false; b.position.set( F.x, b.position.y, F.z ); }, FAR );
 await until( robin.game, `( () => { const o = ${ other }; return o.cur && o.cur.boat && Math.hypot( o.cur.boat.pos.x - ${ FAR.x }, o.cur.boat.pos.z - ${ FAR.z } ) < 50; } )()` );

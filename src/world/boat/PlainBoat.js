@@ -1,4 +1,4 @@
-import { BufferGeometry, Float32BufferAttribute, Mesh, MeshStandardMaterial, Vector3 } from '../../engine/index.js';
+import { BufferGeometry, DoubleSide, Float32BufferAttribute, Mesh, MeshStandardMaterial, Vector3 } from '../../engine/index.js';
 import { HullLines } from './HullLines.js';
 import { Vessel } from './Vessel.js';
 import { LOBSTER_HANDLING } from './Handling.js';
@@ -62,7 +62,7 @@ export class PlainBoat extends Vessel {
 		super( id );
 		const sz = length / 8.2, sx = beam / 2.9, sy = depth, L = this.lines = stretchedLines( length, beam, depth );
 		this.handling = stretchedHandling( sx, sy, sz, engine );
-		const material = this.materials.hull = new MeshStandardMaterial( { color, roughness: 0.5, flatShading: true } );
+		const material = this.materials.hull = new MeshStandardMaterial( { color, roughness: 0.5, flatShading: true, side: DoubleSide } ); // (a single shell: its inside's seen from aboard)
 		const mesh = new Mesh( this._shell(), material );
 		mesh.name = 'boat-hull';
 		mesh.castShadow = mesh.receiveShadow = true;
@@ -132,7 +132,7 @@ export class PlainBoat extends Vessel {
 
 			const t0 = i / NT, t1 = ( i + 1 ) / NT, z0 = L.sheerZ( t0 ), z1 = L.sheerZ( t1 );
 			const w0 = L.halfBreadth( t0, y ), w1 = L.halfBreadth( t1, y );
-			tri( [ w0, y, z0 ], [ w1, y, z1 ], [ - w1, y, z1 ] ); tri( [ w0, y, z0 ], [ - w1, y, z1 ], [ - w0, y, z0 ] );
+			tri( [ w0, y, z0 ], [ - w1, y, z1 ], [ w1, y, z1 ] ); tri( [ w0, y, z0 ], [ - w0, y, z0 ], [ - w1, y, z1 ] );
 
 		}
 

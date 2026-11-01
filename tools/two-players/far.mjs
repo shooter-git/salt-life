@@ -49,7 +49,7 @@ const open = async ( name ) => {
 
 	}
 
-	await f().evaluate( () => { const g = window.__app.game; if ( g.guide ) { g.guide.seen.intro = true; if ( g.guide.open ) g.guide.close(); g.guide._wait = - 1; } } );
+	await f().evaluate( () => { const g = window.__app.game; if ( g.guide ) { g.guide.seen.intro = true; if ( g.guide.open ) g.guide.close(); g.guide._wait = - 1; } window.__app.together.stale = 120; /* (two games on the CPU, seconds between poses) */ } );
 	return { page, game: f() };
 
 };

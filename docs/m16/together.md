@@ -60,6 +60,20 @@ Leaving, a boat on the stem's berths can pass through the pier head on your scre
 - Two boats on the cradle (a hurricane's haul-out) still share one spot.
 - A rider at someone else's helm hears their own horn from their own boat, wherever she is. Everyone else hears it from the boat they're driving.
 
+## Readings, on the low tier
+
+CPU renders, on a machine shared with other sessions. No GPU or phone has run any of this.
+
+| | Draws (150) | Triangles (300,000) | Script memory (150 MB) | Download (80 MB) |
+|---|---|---|---|---|
+| The complete check: built, alone | 89 | 256,081 | 143.2 MB | 75.2 MB |
+| At the pier head, Sam's copy in sight: dev server, two games | 87 | 266,210 | 144.4 MB | |
+| Their lobster boat 300 m off: dev server, two games | 84 | 191,590 | 153.3 MB | |
+
+Her copy (four meshes) and Robin's figure together cost 7 draws and 23,889 triangles. Their memory was too small to read: with them let go the heap read 5.8 MB higher, not lower.
+
+**Script memory climbs the longer a game runs, alone as well as together.** On the dev server, collected before each reading: 120 MB by day alone at sea, 127 by night, 144 two minutes on. Two games read 144, 150, 153, 159 and 186 MB over a run of about 25 minutes. The check reads a build at the start, so it doesn't see this. I didn't find what's growing or compare it against the game before M16, so whether a long session on low passes 150 MB is open.
+
 ## Sources
 
 - Horizon with refraction: [Distance to the Horizon Assuming Refraction](https://www.mathscinotes.com/2013/08/distance-to-the-horizon-assuming-refraction/), [Dip of the Horizon](https://aty.sdsu.edu/explain/atmos_refr/dip.html).
