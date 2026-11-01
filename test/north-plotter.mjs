@@ -522,5 +522,23 @@ ok( placeOf( {}, NAME.hump.x, NAME.hump.z ) === 'hump' && placeOf( {}, NAME.bank
 
 }
 
+// ---- each boat with a card has it on its gimbal, as the lobster boat's
+{
+
+	const { loadBoat } = await import( '../src/world/boat/Boats.js' );
+	for ( const id of [ 'console', 'sportfisher' ] ) {
+
+		const b = await loadBoat( id ), q = new Quaternion().setFromAxisAngle( new Vector3( 1, 0, 0 ), 0.3 );
+		for ( let i = 0; i < 400; i ++ ) b.swingCompass( 1 / 60, q );
+		ok( Math.abs( Math.abs( b.compassMesh.rotation.x ) - 0.3 ) < 0.01 && b.compassMesh.rotation.order === 'XZY', `${ id }: pitched 0.3 rad, her card's still level (${ b.compassMesh.rotation.x.toFixed( 3 ) } from the bowl)` );
+		if ( b.towerCompass ) ok( b.towerCompass.rotation.x === b.compassMesh.rotation.x, `${ id }: and the tower's` );
+
+	}
+	const kayak = await loadBoat( 'kayak' );
+	kayak.swingCompass( 1 / 60, new Quaternion() );
+	ok( ! kayak._hung, 'a kayak has no card to hang' );
+
+}
+
 console.log( fails ? `${ fails } FAILED` : 'all passed' );
 process.exit( fails ? 1 : 0 );

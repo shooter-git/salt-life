@@ -191,11 +191,13 @@ export class SportfisherModel extends Vessel {
 		this.compassMesh = addPart( 'compass', compassCardGeometry(), m.display, parts.compassAt );
 		this.compassMesh.castShadow = false;
 		this.compassMesh.scale.setScalar( 1.3 );
+		this.hangCard( this.compassMesh );
 		if ( ! low ) {
 
 			this.towerCompass = addPart( 'towerCompass', this.compassMesh.geometry, m.display, TOWER_HELM.compassAt );
 			this.towerCompass.castShadow = false;
 			this.towerCompass.scale.setScalar( 1.1 );
+			this.hangCard( this.towerCompass );
 
 		}
 
@@ -628,6 +630,7 @@ export class SportfisherModel extends Vessel {
 
 		this.compassMesh.rotation.y = c.a - her;
 		if ( this.towerCompass ) this.towerCompass.rotation.y = c.a - her;
+		this._gimbal( dt, q );
 
 	}
 
