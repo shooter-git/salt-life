@@ -675,6 +675,7 @@ export class Game {
 		// (Salt Life) the floodlights' lenses glow when they're fitted, from dusk like their light
 		const mats = app.boat && app.boat.materials;
 		if ( mats && mats.floodOn ) mats.floodOn.value = this.floodsOn;
+		if ( app.boat && app.boat.setUnderLights ) app.boat.setUnderLights( this.underOn );
 
 		// the traders
 		for ( const v of this.vendors ) v.update( dt, p.mode === 'walk' ? p.position : null );
@@ -1038,6 +1039,26 @@ export class Game {
 		if ( ! this.state.stats.deckLights ) return 0;
 		const t = Math.min( 1, Math.max( 0, ( G.night.value - 0.15 ) / 0.6 ) );
 		return t * t * ( 3 - 2 * t );
+
+	}
+
+	// (M16) her underwater lights (Gear's sfUnderwaterLights), 0..1: lit from dusk too
+	get underOn() {
+
+		if ( ! this.state.stats.underwaterLights ) return 0;
+		const t = Math.min( 1, Math.max( 0, ( G.night.value - 0.15 ) / 0.6 ) );
+		return t * t * ( 3 - 2 * t );
+
+	}
+
+	// how far a spot is in their glow, 0..1: green light carries about 30 m in clear blue water, and the squid come up to
+	// it at a boat lying still, not one under way. Swordfishermen drift over deep water with them on all night
+	underAt( x, z ) {
+
+		const on = this.underOn, b = this.app.boatCtl;
+		if ( on <= 0 || ! b || b.speed > 1.5 ) return 0;
+		const t = Math.min( 1, Math.max( 0, ( Math.hypot( x - b.sternWorld.x, z - b.sternWorld.z ) - 8 ) / 22 ) );
+		return on * ( 1 - t * t * ( 3 - 2 * t ) );
 
 	}
 
@@ -1408,6 +1429,9 @@ export class Game {
 		const h = this.habitatAtPoint( p.x, p.z, depth );
 		// (Salt Life) in the deck floodlights' pool after dark (Bites: what gathers under lights); ((M16) or up a chum slick)
 		h.flood = Math.max( this.floodAt( p.x, p.z ), this.rigs.slickAt( p.x, p.z ) );
+		h.under = this.underAt( p.x, p.z );
+		// ((M16) your bait's from a pumped well, fishing from the boat that has one)
+		h.lively = !! this.state.stats.livewell && ( this.app.player.mode === 'deck' || this.app.player.mode === 'boat' );
 		// (M9) and the weather (Bites.weatherMood: what the fish feel of it); ((M15) and which side of the
 		// island it's on, for which sea roughs its water)
 		h.weather = this.weatherNow;

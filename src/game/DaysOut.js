@@ -8,7 +8,7 @@ import { islandTime, towardOf, weatherHere, hurricaneNews } from './Weather.js';
 import { FT, feet, farOff, pounds, knots } from './Units.js';
 import { FLEET } from './fleet/Fleet.js';
 import { berthOf } from './fleet/Berths.js';
-import { ableOf, ableEnv, awashLs, seaHere, fetchAt, strainOf, windOn, slamK, keepCatch, feedOf, strengthOf, meltKgH, CHILL_KG, ICE_BAG_KG, ICE_BAG_PRICE, STORES_PRICE, LUNCH_H, DRY_H, FRESH_H, FLARES, FLARE_M, EPIRB_S, PASSING_H } from './Seaworthy.js';
+import { ableOf, ableEnv, awashLs, seaHere, fetchAt, strainOf, windOn, slamK, keepCatch, feedOf, strengthOf, meltKgH, GENERATOR_LH, CHILL_KG, ICE_BAG_KG, ICE_BAG_PRICE, STORES_PRICE, LUNCH_H, DRY_H, FRESH_H, FLARES, FLARE_M, EPIRB_S, PASSING_H } from './Seaworthy.js';
 
 // (M16) Days out, and what each boat can stand: ice and the catch keeping, stores, sleeping aboard, flares and the EPIRB,
 // the drift sock, the deep finder's screen. The figures are Seaworthy.js'. Game makes one and calls update each frame; what
@@ -215,7 +215,10 @@ export class DaysOut {
 	pass( hours, away = false ) {
 
 		const st = this.state, box = this.box, s = st.stats, had = st.inventory.map( ( f ) => f.value );
-		const r = keepCatch( st.inventory, box.ice, hours, meltKgH( s.holdKg, s.insulated ), s.iceMakesKgH || 0 );
+		// ((M16) an icemaker wants AC: shore power at her berth or on the hard, the generator anywhere else, for as long as she's fuel)
+		const b = this.app.boatCtl, shore = ! b || b.moored || b.hauled, runs = s.icemaker && ! shore && s.generator && st.fuelL > 0;
+		if ( runs ) st.burn( GENERATOR_LH * hours );
+		const r = keepCatch( st.inventory, box.ice, hours, meltKgH( s.holdKg, s.insulated ), shore || runs ? s.iceMakesKgH || 0 : 0 );
 		box.ice = r.ice;
 		st.inventory = r.fish;
 		const changed = r.off.length > 0 || r.fish.some( ( f, i ) => f.value !== had[ i ] );

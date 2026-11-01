@@ -520,7 +520,7 @@ export class KayakModel extends Vessel {
 		p.soak = 1;
 		p.breath = Math.min( p.breath, p.breathMax * ( stats.lifeJacket ? 0.9 : 0.6 ) );
 		// (the lid pops, and what's in the cooler goes)
-		const n = s.inventory.length, lost = Math.ceil( n * spillShare( !! stats.lifeJacket ) - 1e-9 );
+		const n = s.inventory.length, lost = Math.ceil( n * spillShare( !! stats.lifeJacket, !! stats.dryHatch ) - 1e-9 );
 		if ( lost > 0 ) {
 
 			s.inventory.length = n - lost;

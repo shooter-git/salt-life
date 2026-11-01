@@ -3,7 +3,7 @@ import { UPGRADES } from '../Gear.js';
 
 // (M16) Your fleet and Marta's list, as figures: what each boat costs to buy, keep and haul, and what she'll give for one.
 // Pure, for the tests under Node. The save's side is GameState (buyBoat, sellBoat, chargeDues...), the game's FleetDesk,
-// and where each figure's from docs/m16/fleet.md. Prices are proposed: m16/opening tunes them against what the fish fetch.
+// and where each figure's from docs/m16/fleet.md. Prices are tuned against what the fish fetch: docs/m16/opening.md, tools/earnings.mjs.
 //
 //   price      Marta's list ($), new
 //   slip       a month at her dock: nothing for a kayak on the sand
@@ -12,7 +12,7 @@ import { UPGRADES } from '../Gear.js';
 //   paintJob   painting her
 export const FLEET = {
 	kayak: { price: 150, slip: 0, upkeep: 0, haul: 5, paintJob: 20, what: 'Paddled. No fuel, no cost to run. The flats and the sheltered shallows, and a squall\'s a real danger.' },
-	console: { price: 2500, slip: 35, upkeep: 21, haul: 35, paintJob: 120, what: 'Your first engine: gasoline outboards. Fast, out to the reef, the wrecks and the near offshore. No cabin: a squall soaks you.' },
+	console: { price: 1800, slip: 35, upkeep: 15, haul: 35, paintJob: 120, what: 'Your first engine: gasoline outboards. Fast, out to the reef, the wrecks and the near offshore. No cabin: a squall soaks you.' },
 	lobster: { price: 6000, slip: 40, upkeep: 50, haul: 40, paintJob: 200, what: 'Diesel and a wheelhouse: the first real shelter from the weather, a big hold, nearshore and the reef\'s edge.' },
 	sportfisher: { price: 25000, slip: 72, upkeep: 208, haul: 90, paintJob: 900, what: 'Twin diesels, bunks and a tower. Past the reef for the bluewater fish, days at a time.' },
 };

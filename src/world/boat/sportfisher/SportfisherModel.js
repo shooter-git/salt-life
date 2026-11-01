@@ -1,4 +1,4 @@
-import { BufferGeometry, Float32BufferAttribute, MathUtils, Matrix4, Mesh, Object3D, Quaternion, Vector3 } from '../../../engine/index.js';
+import { AdditiveBlending, BufferGeometry, Float32BufferAttribute, MathUtils, Matrix4, Mesh, MeshBasicMaterial, Object3D, Quaternion, Vector3 } from '../../../engine/index.js';
 import { GeoKit, rod, cylinder, box } from '../GeoKit.js';
 import { Vessel } from '../Vessel.js';
 import { propellerAndRudder } from '../Handling.js';
@@ -20,6 +20,7 @@ import { SEATS } from './seats.data.js';
 //   new SportfisherModel( tier ): 'low' is the phones' version, under half her triangles and with the fewest draws that
 //   still let her fittings be fitted, and her wheel and radar turn.
 //   fit( stats )          her upgrades, as they're bought: the tower, the outriggers, the fighting chair
+//   setUnderLights( on )  her underwater lights' green pool, 0..1
 //   setOutriggersOut( out ) the poles down for trolling, or up
 //   bunks, chair, rodHolders, outriggerTips, stations  what the days out, the tackle and the crew's jobs read
 //   ladders, ladderAt( p ) the two climbs (LadderClimb)
@@ -400,6 +401,52 @@ export class SportfisherModel extends Vessel {
 
 	}
 
+	// (M16) her underwater lights, 0..1 (Game.underOn): the green pool they make about her stern after dark, seen from above.
+	// Made the first time they're lit, so it costs nothing until then
+	setUnderLights( on ) {
+
+		if ( on <= 0 && ! this._glow ) return;
+		if ( ! this._glow ) {
+
+			const N = 28, pos = [], col = [], idx = [];
+			pos.push( 0, 0, 0 );
+			col.push( 0.1, 0.75, 0.42 );
+			for ( let r = 1; r <= 3; r ++ ) for ( let i = 0; i < N; i ++ ) {
+
+				const a = i / N * Math.PI * 2, R = 15 * r / 3, k = ( 1 - r / 3 ) ** 1.5;
+				pos.push( Math.cos( a ) * R, 0, Math.sin( a ) * R );
+				col.push( 0.1 * k, 0.75 * k, 0.42 * k );
+
+			}
+
+			for ( let i = 0; i < N; i ++ ) {
+
+				idx.push( 0, 1 + ( i + 1 ) % N, 1 + i );
+				for ( let r = 0; r < 2; r ++ ) {
+
+					const a = 1 + r * N + i, b = 1 + r * N + ( i + 1 ) % N;
+					idx.push( a, b, a + N, b, b + N, a + N );
+
+				}
+
+			}
+
+			const g = new BufferGeometry();
+			g.setAttribute( 'position', new Float32BufferAttribute( pos, 3 ) );
+			g.setAttribute( 'color', new Float32BufferAttribute( col, 3 ) );
+			g.setIndex( idx );
+			this._glow = new Mesh( g, new MeshBasicMaterial( { vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false, fog: false } ) );
+			this._glow.position.set( 0, 0.12, - this.lines.length / 2 - 2 );
+			this._glow.renderOrder = 6;
+			this.group.add( this._glow );
+
+		}
+
+		this._glow.visible = on > 0.01;
+		this._glow.material.opacity = on;
+
+	}
+
 	setPaint( hex ) {
 
 		this.materials.setTopsides( hex );
@@ -504,6 +551,13 @@ export class SportfisherModel extends Vessel {
 
 		for ( const m of Object.values( this.meshes ) ) m.geometry.dispose();
 		this.materials.dispose();
+		if ( this._glow ) {
+
+			this._glow.geometry.dispose();
+			this._glow.material.dispose();
+
+		}
+
 
 	}
 
