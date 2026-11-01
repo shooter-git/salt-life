@@ -9,7 +9,10 @@ import { BoatController, MAX_HULL_SAMPLES } from '../src/player/BoatController.j
 import { Quaternion, Vector3 } from '../src/engine/index.js';
 import { G } from '../src/core/Globals.js';
 import { BOATS } from '../src/world/boat/Boats.js';
+import { Waves } from '../src/ocean/Waves.js';
+import { weatherAt } from '../src/game/Weather.js';
 
+const limit = ( hands ) => capsizeHeel( false, hands );
 let bad = 0;
 const ok = ( c, what ) => {
 
@@ -227,6 +230,66 @@ const yawTurned = ( ctl, seconds, th, st ) => {
 
 	}
 
+	wind( 0 );
+
+}
+
+// each weather's real sea (ocean/Waves, on the CPU as the water query does it), out in the open: how often she goes past holding
+{
+
+	const heelsOver = async ( pick, hands, seconds = 45 ) => {
+
+		const w = weatherAt( 250, pick, 0 ), waves = new Waves( { tier: 'low', terrain: null } );
+		wind( w.wind, 0, 1 );
+		waves.setWindDir( G.windDir.value, { x: 0, z: 0 } );
+		waves.setSea( w.swell, w.windSea );
+		waves.setWind( w.wind );
+		const q2 = { ...query, cpu: new Float32Array( 4096 ), pts: new Float64Array( 4096 ), setPoint( i, x, z ) {
+
+			this.pts[ i * 4 ] = x;
+			this.pts[ i * 4 + 1 ] = z;
+
+		} };
+		q2.resultInputs = q2.pts;
+		const m = new KayakModel(), c = new BoatController( { model: m, query: q2, terrain: { heightAt: () => - 200 }, colliders: null } );
+		c.beached = c.moored = false;
+		c.position.set( 3000, 0, 3000 );
+		c.driven = true;
+		c.quaternion.setFromAxisAngle( new Vector3( 0, 1, 0 ), Math.PI / 2 );
+		m.stroke.held = hands;
+		const limit = capsizeHeel( false, hands ), now = new Vector3();
+		let most = 0, T = 100, over = 0;
+		for ( let f = 0; f < seconds * 30; f ++ ) {
+
+			T += 1 / 30;
+			G.time.value = T;
+			c.queueQueries();
+			for ( let i = 0; i < c.samples.length; i ++ ) q2.cpu[ i * 4 ] = waves.heightAt( q2.pts[ i * 4 ], q2.pts[ i * 4 + 1 ], T );
+			q2.version ++;
+			q2.resultTime = T;
+			c.setInput( 0, 0, 1 / 30 );
+			c.update( 1 / 30 );
+			now.set( 0, 1, 0 ).applyQuaternion( c.quaternion );
+			const h = Math.asin( Math.min( 1, Math.hypot( now.x, now.z ) ) );
+			most = Math.max( most, h );
+			if ( h > limit ) over ++;
+
+		}
+
+		m.dispose();
+		return { most, over };
+
+	};
+
+	for ( const pick of [ 'calm', 'fair', 'breezy' ] ) {
+
+		const r = await heelsOver( pick, true );
+		ok( r.over === 0, `${ pick }: you can sit and fish beam on all day (${ ( r.most * 57.3 ).toFixed( 0 ) } deg at most, ${ ( limit( true ) * 57.3 ).toFixed( 0 ) } puts her over)` );
+
+	}
+
+	const gale = await heelsOver( 'gale', false );
+	ok( gale.over > 0, `a gale's wind and sea on her beam puts her over (${ ( gale.most * 57.3 ).toFixed( 0 ) } deg)` );
 	wind( 0 );
 
 }

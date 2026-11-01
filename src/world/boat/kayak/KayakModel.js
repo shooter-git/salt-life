@@ -13,6 +13,7 @@ import { TUMBLE_B, capsizeHeel, breakerCapsizes, spillShare, climbSeconds, soakS
 const _mid = new Vector3(), _dir = new Vector3(), _up = new Vector3(), _z = new Vector3(), _m = new Matrix4();
 const _l = new Vector3(), _r = new Vector3(), _w = new Vector3(), _v = new Vector3(), _fwd = new Vector3();
 const _breaker = { n: 0, H: 0, b: - 9, dx: 0, dz: 1 };
+const GRACE = 6; // s
 
 const app_ui = ( game ) => ( game.app.ui && game.app.ui.ui ? game.app.ui.ui.root : null );
 
@@ -178,6 +179,7 @@ export class KayakModel extends Vessel {
 
 		}
 
+		this._settle = GRACE;
 		if ( ctl.beached && ! this.sliding ) {
 
 			const to = waterFrom( ctl.terrain, G.seaLevel.value, ctl.position.x, ctl.position.z );
@@ -416,6 +418,8 @@ export class KayakModel extends Vessel {
 	// hands, not much), or a breaker comes down on her beam (Capsize.js)
 	playCapsize( dt, game, ctl, p ) {
 
+		// (getting settled, you've a few seconds' grace: nobody's dumped again the moment they're back aboard)
+		if ( ( this._settle = ( this._settle || 0 ) - dt ) > 0 ) return;
 		_up.set( 0, 1, 0 ).applyQuaternion( ctl.quaternion );
 		const heel = Math.asin( Math.min( 1, Math.hypot( _up.x, _up.z ) ) );
 		const limit = capsizeHeel( !! this.stroke.kind && this.stroke.park === 0, p.handsFull || p.busy );
