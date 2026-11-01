@@ -58,7 +58,7 @@ const CSS = /* css */`
 .gm-mk.is-marta > i { background: var(--tw-aqua); }
 .gm-mk.is-shut > i { filter: saturate(0.25) brightness(0.75); }
 .gm-mk.is-boat > i { background: #f2efe6; }
-.gm-mk.is-trap > i { background: #ff8a3c; }
+.gm-mk.is-mark.is-trap > i { background: #ff8a3c; }
 .gm-mk.is-shelter > i { background: #2f6fb0; color: #fff; }
 .gm-mk.is-camp > i { background: #d9825a; }
 .gm-mk.is-player > i { width: calc(16 * var(--tw-u)); height: calc(16 * var(--tw-u)); margin: calc(-8 * var(--tw-u)) 0 0 calc(-8 * var(--tw-u)); color: #fff;
