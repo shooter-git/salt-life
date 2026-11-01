@@ -24,11 +24,12 @@ export const BOATS = {
 	sportfisher: {
 		name: 'Offshore sportfisher', feet: 48, fuel: 'diesel',
 		stats: { holdKg: 300, fuelL: 2200, speedMul: 1, baitMax: 120, finder: true, deckLights: true, anchorM: 0, pumpLs: 1 },
-		load: () => import( './sportfisher/SportfisherModel.js' ).then( ( m ) => new m.SportfisherModel() ),
+		load: ( tier ) => import( './sportfisher/SportfisherModel.js' ).then( ( m ) => new m.SportfisherModel( tier ) ),
 	},
 };
 
 // what a new game starts in
 export const START_BOAT = 'lobster';
 
-export const loadBoat = ( id ) => BOATS[ id ].load();
+// (tier: the device's: a boat may have a lighter version for phones)
+export const loadBoat = ( id, tier ) => BOATS[ id ].load( tier );

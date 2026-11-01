@@ -35,7 +35,9 @@ export const KNOWN = [ - 340, - 260, 340, 340 ];
 export const SOLD = { r: 2600 };
 // how far you see to chart it (m): on foot, more from high ground (a metre more for each metre up, to the most);
 // at sea; swimming
-export const SIGHT = { foot: 140, perM: 1, footMax: 650, sea: 320, swim: 70 };
+// (sea: from an eye at seaEye m over the water or under; (M16) higher up, it goes out as the horizon does, with the root of
+// your height: a sportfisher's tower's about half as far again as her bridge)
+export const SIGHT = { foot: 140, perM: 1, footMax: 650, sea: 320, seaEye: 2.5, swim: 70 };
 // where home is (the boat's berth by the pier) and the compass's variation there: 6.3° W (NOAA's World
 // Magnetic Model for the island's spot, October 2026; 0.09° more west a year)
 export const HOME = { x: WORLD.boatDock.position.x, z: WORLD.boatDock.position.z };
@@ -357,7 +359,7 @@ export class ChartLog {
 // how far you see to chart it from ( mode: the player's ), your eye `up` metres over the sea
 export function sightOf( mode, up = 0 ) {
 
-	if ( mode === 'boat' || mode === 'deck' ) return SIGHT.sea;
+	if ( mode === 'boat' || mode === 'deck' ) return SIGHT.sea * Math.sqrt( Math.max( 1, up / SIGHT.seaEye ) );
 	if ( mode === 'swim' ) return SIGHT.swim;
 	return Math.min( SIGHT.footMax, SIGHT.foot + Math.max( 0, up ) * SIGHT.perM );
 

@@ -194,6 +194,20 @@ export class Vessel {
 
 	}
 
+	// (M16) what she has to climb near p (boat frame), or null: a boat with ladders says (world/boat/sportfisher/LadderClimb)
+	ladderAt( p ) {
+
+		return null;
+
+	}
+
+	// (M16) which box of rain's over someone standing at p: a boat with more than one cover says which
+	shelterAt( p ) {
+
+		return this.shelter;
+
+	}
+
 	// where rain gathers and drips off her, as fx/Drips' setBoat takes them
 	dripPoints() {
 

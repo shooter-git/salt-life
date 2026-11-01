@@ -415,7 +415,7 @@ export class App {
 
 		}
 
-		this.boat = await loadBoat( this.state.boat );
+		this.boat = await loadBoat( this.state.boat, tier );
 		// (M11) her instruments as they read (world/boat/Instruments.js): made now, so the dash's program is
 		// made with the rest
 		this.instruments = new BoatInstruments( { material: this.boat.materials.display || new THREE.MeshBasicMaterial(), tier, gauges: this.boat.gauges } );
@@ -976,7 +976,7 @@ export class App {
 		// (the boat you're aboard: yours, or riding along, the one you're on as it's drawn here)
 		const p = this.player, aboard = p.riding ? _ride.compose( p.boat.position, p.boat.quaternion, _one ) : this.boat.group.matrixWorld;
 		// (M9) no rain under the wheelhouse roof
-		this.rain.setShelter( _shelter.multiplyMatrices( this.boat.shelter, _c4.copy( aboard ).invert() ) );
+		this.rain.setShelter( _shelter.multiplyMatrices( this.boat.shelterAt( p.deckPos ), _c4.copy( aboard ).invert() ) );
 		wetSurfaces.update( this.camera, _shelter ); // (M11: nor is anything wet under it, or under a cover)
 		this.rain.setDeck( aboard, this.boat.rainTops ); // (M10: the splashes on her cockpit's sole; (M12) her roof, foredeck and gear)
 		// ((M12) and on the rocks about you; (M14) none under a rock's overhang or in its lee, nor anything wet
@@ -2436,7 +2436,7 @@ export class App {
 		const old = this.boat, p = this.player, st = this.state;
 		if ( old.id === id ) return true;
 		if ( ! st.owns( id ) || p.mode === 'deck' || p.mode === 'boat' || p.riding ) return false;
-		const model = await loadBoat( id );
+		const model = await loadBoat( id, this.tier );
 		if ( this.boat !== old || p.mode === 'deck' || p.mode === 'boat' || p.riding ) {
 
 			model.dispose();
