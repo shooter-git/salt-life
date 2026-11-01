@@ -328,7 +328,7 @@ const terrains = [ 'island-1024.bin', 'island.bin' ].map( ( f ) => [ f, new Terr
 	};
 	const player = { mode: 'boat', boat: b, leaveHelm() { player.mode = 'deck'; b.driven = false; }, deckToWorld() { player.placed = true; } };
 	const app = { boatCtl: b, player, settings: { day: 3, timeOfDay: 10, weatherSince: 0 }, weather: { news: null }, weatherPick: () => 'fair', terrainData: terrains[ 0 ][ 1 ] };
-	const game = { app, state, weatherNow: { wind: 7 }, time: null, windwardAt: () => 0.9, toast: ( t ) => toast.push( t ), towJob: () => ( { metres: 1000, fee: towFee( 1000 ), time: towTime( 1000 ) } ), _fuelOut: true };
+	const game = { app, state, daysOut: { distress: () => [], saidHere: () => '' }, weatherNow: { wind: 7 }, time: null, windwardAt: () => 0.9, toast: ( t ) => toast.push( t ), towJob: () => ( { metres: 1000, fee: towFee( 1000 ), time: towTime( 1000 ) } ), _fuelOut: true };
 
 	// the can
 	const job0 = canJob( game );
@@ -400,9 +400,9 @@ const terrains = [ 'island-1024.bin', 'island.bin' ].map( ( f ) => [ f, new Terr
 	player.leaveHelm = () => { player.mode = 'deck'; };
 	player.deckToWorld = () => {};
 	const app = { player, boatCtl: b, audio: { muted: false, volume: 0.8 }, settings: { day: 3, timeOfDay: 10, weatherSince: 0 }, weather: { news: null }, input: { lastDevice: 'keyboard' }, weatherPick: () => 'fair', terrainData: terrains[ 0 ][ 1 ] };
-	const state = { boat: 'lobster', stats: { fuelL: 40 }, fuel: 0, get fuelL() { return this.fuel; }, money: 2000, payTow( f ) { const p = Math.min( f, this.money ); this.money -= p; return p; }, save() {}, emit() {} };
+	const state = { boat: 'lobster', stats: { fuelL: 40, vhfM: 40000 }, fuel: 0, get fuelL() { return this.fuel; }, money: 2000, payTow( f ) { const p = Math.min( f, this.money ); this.money -= p; return p; }, save() {}, emit() {} };
 	let towed = 0;
-	const game = { app, state, weatherNow: { wind: 7 }, hud: null, makingRoom: false, windwardAt: () => 0.9, toast() {}, towJob: () => ( { metres: 9700, fee: towFee( 9700 ), time: towTime( 9700 ) } ), tow: () => { towed ++; } };
+	const game = { app, state, daysOut: { distress: () => [], saidHere: () => '' }, weatherNow: { wind: 7 }, hud: null, makingRoom: false, windwardAt: () => 0.9, toast() {}, towJob: () => ( { metres: 9700, fee: towFee( 9700 ), time: towTime( 9700 ) } ), tow: () => { towed ++; } };
 	const r = new Radio( { root: el(), hud: el() }, game );
 	const keys = ( ...down ) => ( { hit: ( k ) => down.includes( k ), lastDevice: 'keyboard' } );
 	r.update( 0.1, keys( 'KeyR' ), false );

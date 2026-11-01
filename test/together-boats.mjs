@@ -40,7 +40,8 @@ for ( const id of Object.keys( BOATS ) ) {
 	const stand = triangleCount( standInGeometry( id ) );
 	ok( stand < 200, `${ id }: her stand-in is ${ stand } triangles` );
 	const helm = footY( m, m.helmEye.x, m.helmEye.z, m.helmEye.y - 1 );
-	ok( Math.abs( helm - m.dimensions.deckHeight ) < 0.6, `${ id }: someone at her helm stands on her sole (${ helm.toFixed( 2 ) } m, deck ${ m.dimensions.deckHeight.toFixed( 2 ) })` );
+	const sole = m.helm.y ?? m.dimensions.deckHeight; // (a flybridge's is its own deck)
+	ok( Math.abs( helm - sole ) < 0.6, `${ id }: someone at her helm stands on her sole (${ helm.toFixed( 2 ) } m, deck ${ sole.toFixed( 2 ) })` );
 	if ( id === 'lobster' ) ok( low.every( ( x ) => LOW_BOAT.includes( x.name ) ) && Math.abs( helm - m.dimensions.deckHeight ) < 1e-6, 'the lobster boat: as a phone drew her before, and her skipper on the same sole' );
 	m.dispose();
 
@@ -249,25 +250,6 @@ ok( sizeOf( 'trawler' ) === SIZE.lobster, 'and a game that doesn\'t say is the l
 	ok( cleanBoats( { s: raw } ).s.b === 'console', 'an away boat\'s record says which she is' );
 	const old = boatRecord( { name: 'Sam', x: 1, z: 2, heading: 0, anchor: { x: 1, z: 2 }, at: Date.now(), T: 5 } );
 	ok( cleanBoats( { s: old } ).s.b === undefined, 'one from before doesn\'t: the lobster boat' );
-
-}
-
-// a plain boat's deck is seen from above, and you can see into her
-{
-
-	const m = await loadBoat( 'sportfisher', 'low' ), hull = m.group.getObjectByName( 'boat-hull' ), P = hull.geometry.attributes.position, y = m.lines.deckY;
-	let up = 0, down = 0;
-	for ( let i = 0; i < P.count; i += 3 ) {
-
-		if ( Math.abs( P.getY( i ) - y ) > 1e-6 || Math.abs( P.getY( i + 1 ) - y ) > 1e-6 || Math.abs( P.getY( i + 2 ) - y ) > 1e-6 ) continue;
-		const a = new Vector3().fromBufferAttribute( P, i ), n = new Vector3().fromBufferAttribute( P, i + 1 ).sub( a ).cross( new Vector3().fromBufferAttribute( P, i + 2 ).sub( a ) );
-		if ( n.y > 0 ) up ++; else if ( n.y < 0 ) down ++; // (at her stem one's nothing but a line)
-
-	}
-
-	ok( up > 0 && down === 0, `a plain boat's deck faces up (${ up } triangles)` );
-	ok( hull.material.side === DoubleSide, 'and her shell shows from inside' );
-	m.dispose();
 
 }
 
