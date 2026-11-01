@@ -159,15 +159,17 @@ export class RigMesh {
 
 	}
 
-	// a flat polygon, a fan about its first point, seen from both sides; lit by the normal n
-	fan( pts, n, hex, rough = 0.6 ) {
+	// a flat polygon, a fan about its first point, seen from both sides; lit by the normal n (`through`: thin cloth, the
+	// day coming through it, so its far side's lit the same)
+	fan( pts, n, hex, rough = 0.6, through = false ) {
 
 		const m = pts.length;
 		if ( ! this._room( m * 2, ( m - 2 ) * 6 ) ) return;
 		_c.set( hex );
 		const a = this.n;
 		for ( const p of pts ) this._vert( p, n, _c.r, _c.g, _c.b, rough, 0 );
-		_n.copy( n ).negate();
+		_n.copy( n );
+		if ( ! through ) _n.negate();
 		for ( const p of pts ) this._vert( p, _n, _c.r, _c.g, _c.b, rough, 0 );
 		for ( let i = 1; i < m - 1; i ++ ) {
 

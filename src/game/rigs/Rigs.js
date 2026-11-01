@@ -919,10 +919,10 @@ export class Rigs {
 		const belly = N.clone().multiplyScalar( s * 0.12 * ( wd.x * N.x + wd.y * N.z > 0 ? 1 : - 1 ) );
 		const P = ( u, v, w = 0 ) => K.at.clone().addScaledVector( _c, u ).addScaledVector( _d, v ).addScaledVector( belly, w );
 		const mid = P( 0, 0, 1 ), T = P( 0, 1 ), R = P( 1, 0 ), B = P( 0, - 1 ), Lf = P( - 1, 0 );
-		D.fan( [ mid, T, Lf ], N, 0xeeece2, 0.75 );
-		D.fan( [ mid, Lf, B ], N, 0xdedcd0, 0.75 );
-		D.fan( [ mid, B, R ], N, 0xeeece2, 0.75 );
-		D.fan( [ mid, R, T ], N, 0xdedcd0, 0.75 );
+		D.fan( [ mid, T, Lf ], _up, 0xeeece2, 0.75, true );
+		D.fan( [ mid, Lf, B ], _up, 0xdedcd0, 0.75, true );
+		D.fan( [ mid, B, R ], _up, 0xeeece2, 0.75, true );
+		D.fan( [ mid, R, T ], _up, 0xdedcd0, 0.75, true );
 		D.tube( [ Lf, R ], [ 0.012 * s * 1.8, 0.012 * s * 1.8 ], 0x1a1a1a, 0.5, 0, 4 );
 		D.tube( [ B, T ], [ 0.012 * s * 1.8, 0.012 * s * 1.8 ], 0x1a1a1a, 0.5, 0, 4 );
 
