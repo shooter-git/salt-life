@@ -125,9 +125,9 @@ export class ConsoleModel extends Vessel {
 		this._noShelter = this.shelterBox( 0.001, - 100, - 99, 0, 1 );
 
 		// ---- what the rest of the game asks of a boat
-		// (her wake: a planing hull's, thrown from her chines at the transom and long behind her: patches further apart and bigger
-		// than a displacement boat's, the arms going out fast; a wash from each engine)
-		this.wake = { quarterX: 1.05, quarterZ: - 2.7, washZ: DECK.platform.zEnd - 0.9, shed: 0.5, armSize: 1.5, washSize: 2.4, armOut: 1.5, washX: 0 };
+		// (her wake: a planing hull's, thrown from her chines at the transom and long behind her: patches a little bigger than a
+		// displacement boat's and close enough to run together, the arms going out fast; a wash from each engine)
+		this.wake = { quarterX: 1.05, quarterZ: - 2.7, washZ: DECK.platform.zEnd - 0.9, shed: 0.85, armSize: 1.25, washSize: 2, armOut: 1.5, washX: 0 };
 		// the lamps, as Rule 23 has a power boat under 12 m: side lights on the bow's shoulders, one all-round white on the stern's
 		// pole (BoatLamps' masthead and stern sectors at one point make all round), the same white alone at anchor
 		this.lamps = { dome: [ 0, TOP.under - 0.12, - 0.6 ], instruments: [ 0, S + 1.1, - 0.5 ], port: [ lines.halfBreadth( lines.tAtSheerZ( 3 ), lines.sheerY( lines.tAtSheerZ( 3 ) ) - 0.06 ) + 0.01, lines.sheerY( lines.tAtSheerZ( 3 ) ) - 0.06, 3 ], masthead: [ - 1.1, 1.97, - 2.82 ], stern: [ - 1.1, 1.97, - 2.82 ], anchor: [ - 1.1, 1.97, - 2.82 ] };
