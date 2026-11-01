@@ -106,6 +106,8 @@ export class Player {
 		// (M10) there's water to bail on your own boat's deck (Game.updateBail): the rail's "Jump overboard"
 		// makes way for the bucket
 		this.bailable = false;
+		// ((M16) and for the lobster traps, working at the hauler: game/TrapWork.js)
+		this.trapWork = false;
 		this.rideOffer = null; // { name, boat }: someone's boat you're next to, aboard it (together/Together.js)
 		this.reef = reef;
 		this.audio = audio;
@@ -1055,7 +1057,7 @@ export class Player {
 
 				}
 
-			} else if ( atRail && ! this.bailable ) {
+			} else if ( atRail && ! this.bailable && ! this.trapWork ) {
 
 				const over = b.model.overboard && b.model.overboard( p, Math.sign( p.x ) || 1 );
 				this.prompt = { key: 'E', text: over && over.text ? over.text : 'Jump overboard' };

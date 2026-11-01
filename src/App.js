@@ -36,6 +36,7 @@ import { Player } from './player/Player.js';
 import { BoatController } from './player/BoatController.js';
 import { GameState } from './game/GameState.js';
 import { DAY_RATE, START_HOUR, advance } from './game/IslandClock.js';
+import { grassMask } from './game/TrapWork.js';
 import { islandTime, isPick, NORTH, weatherAt, towardOf, seaSwell } from './game/Weather.js';
 import { BACK_MS, awayClock, awayOf, boatLeft, cleanBoats, leftOf, othersAway, tellOthers, withRecord } from './game/Away.js';
 import { ableEnv } from './game/Seaworthy.js';
@@ -1785,6 +1786,7 @@ export class App {
 		if ( this._reefLaid && T.seagrass ) {
 
 			T.seagrassWin = maskWindow( T, T.seagrass, WORLD.northReef.center, 140 );
+			T.grass = grassMask( T ); // ((M16) what a lobster trap's set on: TrapWork.bottom)
 			T.seagrass = null;
 
 		}

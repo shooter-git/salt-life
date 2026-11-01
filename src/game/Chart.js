@@ -302,10 +302,11 @@ export class ChartLog {
 	}
 
 	// a mark of your own at ( x, z ): -> it, or null with as many as are kept
-	mark( x, z, day = null ) {
+	// ((M16) trap: it's where you set a lobster trap, and comes off when you haul it: Traps.js)
+	mark( x, z, day = null, trap = false ) {
 
 		if ( this.marks.length >= MAX_MARKS ) return null;
-		const m = { id: this._nextMark ++, x: Math.round( x ), z: Math.round( z ), day };
+		const m = { id: this._nextMark ++, x: Math.round( x ), z: Math.round( z ), day, ...( trap ? { trap: true } : {} ) };
 		this.marks.push( m );
 		this.version ++;
 		return m;
@@ -350,7 +351,7 @@ export class ChartLog {
 		this.far.decode( d.far );
 		for ( const id of Array.isArray( d.names ) ? d.names : [] ) if ( NAME[ id ] ) this.names.add( id );
 		const num = ( v ) => Number.isFinite( v ) ? v : null;
-		this.marks = ( Array.isArray( d.marks ) ? d.marks : [] ).filter( ( m ) => m && Number.isInteger( m.id ) && Number.isFinite( m.x ) && Number.isFinite( m.z ) ).slice( - MAX_MARKS ).map( ( m ) => ( { id: m.id, x: m.x, z: m.z, day: num( m.day ) } ) );
+		this.marks = ( Array.isArray( d.marks ) ? d.marks : [] ).filter( ( m ) => m && Number.isInteger( m.id ) && Number.isFinite( m.x ) && Number.isFinite( m.z ) ).slice( - MAX_MARKS ).map( ( m ) => ( { id: m.id, x: m.x, z: m.z, day: num( m.day ), ...( m.trap === true ? { trap: true } : {} ) } ) );
 		this._nextMark = Math.max( 1, ...this.marks.map( ( m ) => m.id + 1 ) );
 		this.spots = ( Array.isArray( d.spots ) ? d.spots : [] ).filter( ( s ) => s && Number.isFinite( s.x ) && Number.isFinite( s.z ) && typeof s.s === 'string' ).slice( - MAX_SPOTS ).map( ( s ) => ( { x: s.x, z: s.z, s: s.s, p: typeof s.p === 'string' ? s.p : null, d: num( s.d ) } ) );
 		for ( const [ k, v ] of Object.entries( d.firsts && typeof d.firsts === 'object' ? d.firsts : {} ) ) if ( v && Number.isFinite( v.x ) && Number.isFinite( v.z ) ) this.firsts[ k ] = { x: v.x, z: v.z };
