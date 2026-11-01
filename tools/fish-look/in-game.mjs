@@ -1,9 +1,9 @@
 // (M16) The new fish in the game itself, on the CPU: the catch card and the log's trophies, then a hurricane's wreckage
 // offshore two days after it's passed, from the deck and under the water, with the mahi under it, and a far fish or two
-// beside the boat. node tools/fish-look/in-game.mjs <out dir> [tier]   with the dev server on PORT (5206).
+// beside the boat. node tools/fish-look/in-game.mjs <out dir> [tier] [wreck]   with the dev server on PORT (5206).
 import { chromium } from '/home/shooter/Documents/VS Code/all-the-spaces/node_modules/playwright/index.mjs';
 
-const [ OUT, TIER = 'high' ] = process.argv.slice( 2 ), PORT = process.env.PORT || 5206;
+const [ OUT, TIER = 'high', ONLY ] = process.argv.slice( 2 ), PORT = process.env.PORT || 5206;
 const b = await chromium.launch( { args: [ '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist' ] } );
 const page = await b.newPage( { viewport: { width: 960, height: 540 } } );
 const T0 = Date.now(), log = ( ...a ) => console.log( `[${ ( ( Date.now() - T0 ) / 1000 ).toFixed( 0 ) } s]`, ...a );
@@ -32,7 +32,9 @@ await page.waitForFunction( () => window.__app.fish, null, { timeout: 600000 } )
 log( 'the fish swim' );
 await page.evaluate( () => window.__app.game.time.hold( true ) );
 
-// ---- the catch cards and the log
+// ---- the catch cards and the log (not with a third argument, 'wreck')
+if ( ONLY !== 'wreck' ) {
+
 for ( const [ id, kg, place ] of [ [ 'blueMarlin', 240, 'blue' ], [ 'sailfish', 32, 'dropoff' ], [ 'whiteMarlin', 30, 'dropoff' ], [ 'swordfish', 110, 'blue' ], [ 'wahoo', 20, 'dropoff' ], [ 'yellowfin', 50, 'dropoff' ], [ 'redfish', 5, 'creek' ], [ 'trout', 1.8, 'bay' ] ] ) {
 
 	await page.evaluate( ( [ id, kg, place ] ) => {
@@ -65,6 +67,8 @@ await page.evaluate( () => window.__app.game.showTrophy( 'blueMarlin' ) );
 await settled();
 await shot( 'trophy-again' );
 await page.evaluate( () => { const g = window.__app.game; g.hud.hideCatch(); g.trophyCard = null; } );
+
+}
 
 // ---- the wreckage: put the clock two days past a hurricane's end, the boat beside its nearest piece
 const at = await page.evaluate( async () => {
@@ -112,35 +116,35 @@ log( 'wreckage', JSON.stringify( piece ) );
 if ( piece ) {
 
 	await move( piece.x + 25, piece.z + 8 );
-	await wait( 45 ); // (the finds again, the far groups sent there)
+	// (a swimmer beside it: at the surface, then under it looking up, as you'd see it)
+	const swim = ( y ) => page.evaluate( ( [ q, y ] ) => {
+
+		const a = window.__app, p = a.player, dx = q.x - ( q.x + 7 ), dz = q.z - ( q.z + 9 );
+		p.mode = 'swim';
+		p.floating = false;
+		p.breath = 1e3;
+		p.position.set( q.x + 7, y, q.z + 9 );
+		p.velocity.set( 0, 0, 0 );
+		p.yaw = Math.atan2( - dx, - dz );
+		p.pitch = Math.atan2( - 0.5 - y, Math.hypot( dx, dz ) );
+
+	}, [ piece, y ] );
+	const frames = ( n ) => page.evaluate( ( n ) => new Promise( ( done ) => { const go = () => n -- > 0 ? requestAnimationFrame( go ) : done(); go(); } ), n );
+	await swim( 0 );
+	await frames( 3 );
+	// (the far groups go every thirty frames: many seconds each here)
+	await page.evaluate( () => { window.__app.fish._farT = 0; } );
+	await frames( 3 );
 	const seen = await page.evaluate( () => {
 
-		const a = window.__app, F = a.fish, c = a.boatCtl.position;
-		return F.farGroups.map( ( g ) => `${ g.sp.name } ${ g.count } at ${ Math.hypot( g.home.x - c.x, g.home.z - c.z ).toFixed( 0 ) } m, ${ g.active ? 'active' : 'idle' }` );
+		const a = window.__app, c = a.camera.position;
+		return a.fish.farGroups.map( ( g ) => `${ g.sp.name } ${ g.count } at ${ Math.hypot( g.home.x - c.x, g.home.z - c.z ).toFixed( 0 ) } m` );
 
 	} );
 	log( seen.join( '; ' ) );
-	await page.evaluate( ( q ) => { const p = window.__app.player, c = window.__app.boatCtl.position; p.yaw = Math.atan2( - ( q.x - c.x ), - ( q.z - c.z ) ); p.pitch = - 0.28; }, piece );
-	await wait( 8 );
-	await shot( 'wreckage-deck' );
-	// under the water, the world held still, looking back up at the piece and what's under it
-	await page.evaluate( ( q ) => {
-
-		const a = window.__app;
-		a.player.position.set( q.x + 7, - 5, q.z + 9 );
-		const f = a.frame;
-		a._frameKept = f;
-		a.frame = function () {
-
-			this.camera.position.set( q.x + 7, - 5, q.z + 9 );
-			this.camera.lookAt( q.x, - 1.5, q.z );
-			this.camera.updateMatrixWorld();
-			this.drawWorld();
-
-		};
-
-	}, piece );
-	await wait( 8 );
+	await shot( 'wreckage-surface' );
+	await swim( - 6 );
+	await frames( 3 );
 	await shot( 'wreckage-under' );
 
 }

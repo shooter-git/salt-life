@@ -79,6 +79,10 @@ A billfish is never kept. `addFish` lets it go, `Game.updateFight` pays `release
 - **Under the surface:** mahi, tuna and the far fish swim at `under: [ m, m ]` beneath it however deep the water is.
 - **After a hurricane:** `Finds.hurricaneWake` scatters three to five pieces of its wreckage over the offshore water for six to eleven days, with `storm: 1`; `Game.findsNear` reads them into `h.wake`, and a fish with `wake` in the table (the mahi, at 3) bites `1 + wake * h.wake` times as well there. The far mahi's second group (`mahiWake`) gathers under them.
 
+## Budgets
+
+The complete check on a clean copy, on the CPU, 2026-11-01: draw calls 93 of 150, triangles 258,787 of 300,000 (254,107 before M16), script memory 136.2 of 150 MB, whole download 75.2 of 80 MB (75.1 before), texture memory 78.6 of 128 MB, graphics memory 115.2 of 256 MB, 14 of 16 sounds. `tools/gpu-limits.mjs` passes: 16 of 16 fragment textures on high and low, 14 of 16 on mid. Ready, phone upright, 4 CPUs, three alternating rounds at a load of about 28: 19.0 to 23.6 s on `m16-boats`, 15.6 to 26.4 s with the fish, no difference the noise lets through. The new models build 1.75 MB at load on top of the swimmers' 6.40 MB, freed once uploaded.
+
 ## Tools
 
 `tools/fish-look/` draws one fish as the card's studio does: `index.html?fish=&lod=&w=&h=&lite=&fill=&seed=&curl=&yaw=&bg=`. `compare.mjs <out dir> [fish...]` puts the high and low tiers' renders beside photographs from Commons. `in-game.mjs <out dir> [tier]` shows the cards, the log, a trophy again and the wreckage from the deck and under the water, in the running game. All are CPU renders: run them in `tools/render-slot.sh`.
