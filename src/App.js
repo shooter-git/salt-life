@@ -36,6 +36,7 @@ import { Player } from './player/Player.js';
 import { BoatController } from './player/BoatController.js';
 import { GameState } from './game/GameState.js';
 import { DAY_RATE, START_HOUR, advance } from './game/IslandClock.js';
+import { grassMask } from './game/TrapWork.js';
 import { islandTime, isPick, NORTH, weatherAt, towardOf, seaSwell } from './game/Weather.js';
 import { BACK_MS, awayClock, awayOf, boatLeft, cleanBoats, leftOf, othersAway, tellOthers, withRecord } from './game/Away.js';
 import { ableEnv } from './game/Seaworthy.js';
@@ -1786,6 +1787,7 @@ export class App {
 		if ( this._reefLaid && T.seagrass ) {
 
 			T.seagrassWin = maskWindow( T, T.seagrass, WORLD.northReef.center, 140 );
+			T.grass = grassMask( T ); // ((M16) what a lobster trap's set on: TrapWork.bottom)
 			T.seagrass = null;
 
 		}
@@ -1877,7 +1879,7 @@ export class App {
 			boat: theirs ? { active: theirs.active, rpm: theirs.rpm, speed: theirs.speed, position: theirs.position, listenerInside: false, sound: theirs.id } : {
 				sound: engineOf( this.boat.id, this.boat.fitted && this.boat.fitted.twin ), // ((M16) her own engine)
 				active: boat.driven && !! boat.handling.engine, rpm: boat.rpm, throttle: boat.throttle, speed: boat.velocity.length(),
-				position: this.boat.group.position, listenerInside: this.player.mode === 'boat' && this.player.camMode === 'first' && ! this.boat.seated,
+				position: this.boat.group.position, listenerInside: this.player.mode === 'boat' && this.player.camMode === 'first' && ! this.boat.seated && ! this.player.atHelm?.upper,
 			},
 			// (M10) her hull: yours, or (M11) the one you ride in, as her skipper hears it (hullHeard)
 			hull: theirs ? theirs.hull || null : this.game ? this.hullHeard() : null,

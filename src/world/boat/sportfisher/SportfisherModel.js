@@ -1,4 +1,4 @@
-import { BufferGeometry, Float32BufferAttribute, MathUtils, Matrix4, Mesh, Object3D, Quaternion, Vector3 } from '../../../engine/index.js';
+import { BufferGeometry, DynamicDrawUsage, Float32BufferAttribute, InstancedMesh, MathUtils, Matrix4, Mesh, Quaternion, Vector3 } from '../../../engine/index.js';
 import { GeoKit, rod, cylinder, box } from '../GeoKit.js';
 import { Vessel } from '../Vessel.js';
 import { propellerAndRudder } from '../Handling.js';
@@ -10,7 +10,7 @@ import { SportfisherLines, SF } from './SportfisherLines.js';
 import { SportfisherMaterials } from './SportfisherMaterials.js';
 import { buildHull, skegVolume, V, STEEL, CHAIR_Z, deckY } from './SportfisherHull.js';
 import { buildHouse, buildCabin } from './SportfisherHouse.js';
-import { buildBridge, buildTower, riggerGeometry, riggerTip, wheelOf, HELM, TOWER, RIGGER, bridgeX } from './SportfisherBridge.js';
+import { buildBridge, buildTower, riggerGeometry, riggerTip, wheelOf, HELM, TOWER, TOWER_HELM, RIGGER, bridgeX } from './SportfisherBridge.js';
 import { buildFloors, buildColliders, buildLadders, soleAt, keepOnDeck } from './SportfisherDecks.js';
 import { LadderClimb } from './LadderClimb.js';
 import { SEATS } from './seats.data.js';
@@ -23,6 +23,7 @@ import { SEATS } from './seats.data.js';
 //   setOutriggersOut( out ) the poles down for trolling, or up
 //   bunks, chair, rodHolders, outriggerTips, stations  what the days out, the tackle and the crew's jobs read
 //   ladders, ladderAt( p ) the two climbs (LadderClimb)
+//   towerHelm, helmAt( p, reach ) her second helm, on the tower's platform, if she has the tower
 //   shelterAt( p )        the box of rain that's over you: the house, the hardtop or the tower's roof
 
 const DEG = Math.PI / 180;
@@ -163,13 +164,26 @@ export class SportfisherModel extends Vessel {
 		};
 
 		const m = this.materials;
-		this.wheelPivot = new Object3D();
-		this.wheelPivot.name = 'boat-wheel-pivot';
-		this.wheelPivot.position.copy( parts.wheelCenter );
-		this.wheelPivot.quaternion.setFromUnitVectors( new Vector3( 0, 0, 1 ), parts.wheelAxis );
-		this.group.add( this.wheelPivot );
-		this.wheelMesh = addPart( 'wheel', wheelOf( q ), m.fittings, new Vector3(), this.wheelPivot );
-		if ( ! low ) this.throttleMesh = addPart( 'throttle', throttleGeometry(), m.fittings, parts.throttlePivot );
+		// her two wheels, the bridge's and the tower's: one draw, each with its own place and its own turn
+		this.wheelMesh = new InstancedMesh( wheelOf( q ), m.fittings, 2 );
+		this.wheelMesh.name = 'boat-wheel';
+		this.wheelMesh.castShadow = true;
+		this.wheelMesh.instanceMatrix.setUsage( DynamicDrawUsage );
+		this.group.add( this.wheelMesh );
+		this.meshes.wheel = this.wheelMesh;
+		const wheelBase = ( center, axis, scale ) => new Matrix4().compose( center, new Quaternion().setFromUnitVectors( new Vector3( 0, 0, 1 ), axis ), new Vector3( scale, scale, scale ) );
+		this._wheels = [ wheelBase( parts.wheelCenter, parts.wheelAxis, 1 ), wheelBase( TOWER_HELM.wheelCenter, TOWER_HELM.wheelAxis, TOWER_HELM.wheelScale ) ];
+		this._wheelTurn = [ NaN, NaN ];
+		this._turnWheel( 0, 0 );
+		this._turnWheel( 1, 0 );
+		this.wheelMesh.computeBoundingSphere(); // (both of them, so it holds with the tower's off)
+		if ( ! low ) {
+
+			this.throttleMesh = addPart( 'throttle', throttleGeometry(), m.fittings, parts.throttlePivot );
+			this.towerThrottle = addPart( 'towerThrottle', this.throttleMesh.geometry, m.fittings, TOWER_HELM.throttlePivot );
+
+		}
+
 		this.radarMesh = addPart( 'radar', radarArrayGeometry(), m.fittings, parts.radarPivot );
 		this.radarMesh.scale.setScalar( 1.1 );
 		this.compassMesh = addPart( 'compass', compassCardGeometry(), m.display, parts.compassAt );
@@ -204,6 +218,8 @@ export class SportfisherModel extends Vessel {
 		this.ladders = buildLadders();
 		this.helm = { x: 0, z: HELM.z, y: SF.bridge, eye: HELM.eye, rise: [ 0.5, HELM.z - 0.45 ] };
 		this.helmEye = HELM.eye;
+		this.towerHelm = { x: 0, z: TOWER_HELM.z, y: SF.tower, eye: TOWER_HELM.eye, rise: TOWER_HELM.rise, reach: TOWER_HELM.reach, upper: true };
+		this.helmInUse = this.helm; // (whose wheel and lever move: Player.takeHelm)
 		this.boardPoint = V( 0, SF.cockpit, - 4.1 );
 		this.exitPoints = this.railPoints( [ - 5.4, - 4.5, - 3.6 ] );
 		this.bowWalk = 8.05;
@@ -338,6 +354,15 @@ export class SportfisherModel extends Vessel {
 
 	}
 
+	// on the tower's platform, its helm, if she has one; nearer the ladder's head than that, the ladder's
+	helmAt( p, reach ) {
+
+		const H = this.towerHelm;
+		if ( this.fitted.tower && Math.abs( p.y - H.y ) < 0.5 && Math.hypot( p.x - H.x, p.z - H.z ) < H.reach ) return H;
+		return super.helmAt( p, reach );
+
+	}
+
 	// the foot or head of a climb you're near, on the deck you're on, or null. { ladder, top }
 	ladderAt( p ) {
 
@@ -393,6 +418,8 @@ export class SportfisherModel extends Vessel {
 		this.fitted = { tower: has( 'tower' ), outriggers: has( 'outriggers' ), chair: has( 'chair', 'chair' ) };
 		const M = this.meshes;
 		if ( M.tower ) M.tower.visible = this.fitted.tower;
+		if ( M.wheel ) M.wheel.count = this.fitted.tower ? 2 : 1;
+		if ( M.towerThrottle ) M.towerThrottle.visible = this.fitted.tower;
 		if ( M.outriggers ) M.outriggers.visible = this.fitted.outriggers;
 		if ( M.chair ) M.chair.visible = this.fitted.chair;
 		for ( const c of this.colliders ) if ( c.tag === 'chair' ) c.solid = this.fitted.chair;
@@ -416,7 +443,8 @@ export class SportfisherModel extends Vessel {
 
 		const a = MathUtils.clamp( angle, - 1, 1 );
 		this._steer = a;
-		this.wheelMesh.rotation.z = - a * WHEEL_TURNS * Math.PI * 2;
+		// (hydraulic steering: only the wheel in your hands turns)
+		this._turnWheel( this.helmInUse === this.towerHelm ? 1 : 0, a );
 		for ( const r of this.rudders ) r.rotation.y = - a * RUDDER.maxAngle;
 
 	}
@@ -424,7 +452,17 @@ export class SportfisherModel extends Vessel {
 	setThrottle( t ) {
 
 		this._throttle = MathUtils.clamp( t, - 1, 1 );
-		if ( this.throttleMesh ) this.throttleMesh.rotation.x = this._throttle * 0.6;
+		const lever = this.helmInUse === this.towerHelm ? this.towerThrottle : this.throttleMesh;
+		if ( lever ) lever.rotation.x = this._throttle * 0.6;
+
+	}
+
+	_turnWheel( i, a ) {
+
+		if ( this._wheelTurn[ i ] === a ) return;
+		this._wheelTurn[ i ] = a;
+		this.wheelMesh.setMatrixAt( i, _m.multiplyMatrices( this._wheels[ i ], _rz.makeRotationZ( - a * WHEEL_TURNS * Math.PI * 2 ) ) );
+		this.wheelMesh.instanceMatrix.needsUpdate = true;
 
 	}
 
@@ -503,10 +541,12 @@ export class SportfisherModel extends Vessel {
 	dispose() {
 
 		for ( const m of Object.values( this.meshes ) ) m.geometry.dispose();
+		if ( this.wheelMesh ) this.wheelMesh.dispose();
 		this.materials.dispose();
 
 	}
 
 }
 
+const _m = new Matrix4(), _rz = new Matrix4();
 const _pos = new Vector3(), _scale = new Vector3(), _q = new Quaternion(), _v = new Vector3(), _a = new Vector3(), _c = new Vector3(), _d = new Vector3();
