@@ -15,6 +15,7 @@ import { fishSeen, glareLeft } from '../src/game/rigs/Glasses.js';
 import { HOLD_KG } from '../src/game/rigs/Rigs.js';
 import { FishingRod } from '../src/game/FishingRod.js';
 import { Player, BREATH } from '../src/player/Player.js';
+import { tankFill } from '../src/game/Tanks.js';
 
 let failed = 0;
 const ok = ( c, what ) => {
@@ -302,7 +303,20 @@ const among = ( s, ...ids ) => ids.reduce( ( a, id ) => a + ( s[ id ] || 0 ), 0 
 	ok( t.breath === left, 'and it doesn\'t fill at the surface' );
 	t.mode = 'deck';
 	hold( t, 10, false );
-	ok( t.breath === shallow, 'but it\'s a fresh one from the rack back aboard' );
+	ok( t.breath === left, 'nor on a deck, by itself' );
+	t.mode = 'walk';
+	hold( t, 10, false );
+	ok( t.breath === left, 'nor ashore' );
+	const out = { atBerth: false, toBerth: 900, toStall: 900 };
+	ok( tankFill( { ...out, mode: 'deck', tankRack: true } ) === 'rack', 'a rack aboard: a fresh tank back on deck' );
+	ok( tankFill( { ...out, mode: 'boat', tankRack: true } ) === 'rack', 'and at her helm' );
+	ok( tankFill( { ...out, mode: 'swim', tankRack: true } ) === null, 'not in the water beside her' );
+	ok( tankFill( { ...out, mode: 'deck', tankRack: false } ) === null, 'no rack: what\'s left is all you have, out there' );
+	ok( tankFill( { ...out, mode: 'deck', tankRack: true, riding: true } ) === null, 'and someone else\'s boat isn\'t your rack' );
+	ok( tankFill( { ...out, mode: 'walk' } ) === null, 'nor a beach far from anywhere' );
+	ok( tankFill( { ...out, mode: 'deck', atBerth: true } ) === 'dock', 'but at her dock, it\'s filled' );
+	ok( tankFill( { ...out, mode: 'walk', toBerth: 20 } ) === 'dock' && tankFill( { ...out, mode: 'walk', toStall: 8 } ) === 'dock', 'and walking on the dock, or at Marta\'s' );
+	ok( ! gearStats( { ...defaultUpgrades(), consoleTanks: 1 }, 'lobster' ).tankRack && gearStats( { ...defaultUpgrades(), consoleTanks: 1 }, 'console' ).tankRack, 'the rack\'s the console\'s' );
 
 }
 

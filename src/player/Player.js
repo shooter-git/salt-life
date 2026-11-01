@@ -696,9 +696,8 @@ export class Player {
 
 		} else {
 
-			// ((M16) a tank doesn't fill up at the surface: a fresh one's from the rack, off the water)
-			if ( this.airS > 0 && this.mode === 'swim' ) { /* what's left is left */ }
-			else this.breath = Math.min( this.breathMax, this.breath + dt * this.breathMax / BREATH_BACK );
+			// ((M16) a tank doesn't fill up by itself: game/Tanks.js)
+			if ( ! ( this.airS > 0 ) ) this.breath = Math.min( this.breathMax, this.breath + dt * this.breathMax / BREATH_BACK );
 			if ( this.blackout === 1 ) this.blackout = 1 + GASP;
 			else if ( this.blackout > 1 ) this.blackout = Math.max( 0, this.blackout - dt ) || 0;
 			if ( this.blackout > 0 && this.blackout <= 1 ) this.blackout = 0;

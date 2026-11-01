@@ -33,7 +33,7 @@ Billfish and mahi jump in the fight (`leaps`): the fish's own model comes out of
 - **Lures:** jigs on a sinker, plugs cast with no float or trolled slowly, skirts towed. Never used up.
 - **Landing:** by hand you lift 12 kg for sure, and past that more and more shake off at the boat. A gaff lifts anything. The dehooker and tag kit are `stats.dehooker` and `stats.tagKit`, for the fish stream's release bonus. A fish that's let go only needs holding by the leader, so it never shakes off.
 - **Polarized glasses:** cut the sea's reflection, most at Brewster's angle and about half along the surface (`glareLeft`), and show dark shapes of fish under the weed, debris and birds (`fishSeen`). They show by the angle you're looking down at, so from a deck's 3 m only about 40 m off, from a tower's 14 m past 100 m.
-- **Dive kit:** swims 1.45 then 1.65 times as fast; a breath of 80 s against 50; a tank of 6800 s at the surface's rate, which runs down one atmosphere faster every 10 m, so about 45 minutes at 15 m. It's fresh each time you're out of the water.
+- **Dive kit:** swims 1.45 then 1.65 times as fast; a breath of 80 s against 50; a tank of 6800 s at the surface's rate, which runs down one atmosphere faster every 10 m, so about 45 minutes at 15 m. It doesn't fill up by itself: a tank rack aboard gives you a fresh one, otherwise you fill it at the dock or at Marta's (`game/Tanks.js`). It's fresh each time you're out of the water.
 - **Safety:** `stats.lifeJacket` for the kayak's capsize, `stats.flares` and `stats.epirb` for `DaysOut`.
 
 New bait from Marta by the trip: frozen ballyhoo ($20 a dozen), frozen squid ($12 for six), chum ($15 a block).
