@@ -96,9 +96,11 @@ export function buildBigRodGeometry() {
 	// its foot on the seat, and the clamp's two lugs
 	add( roundedBox( 0.026, 0.11, 0.006, 0.002, 2 ), { ...GOLD, matrix: M( 0, BODY_Y, - 0.0185 ) } );
 	for ( const y of [ - 0.036, 0.036 ] ) add( roundedBox( 0.016, 0.014, 0.05, 0.003, 2 ), { ...GOLD, matrix: M( 0, BODY_Y + y, - 0.043 ) } );
-	// the two round side plates (the drag side's deeper), the pillars between them
-	add( lathe( [ [ 0, W + 0.014 ], [ R * 0.5, W + 0.0135 ], [ R * 0.95, W + 0.008 ], [ R + 0.002, W + 0.002 ], [ R + 0.002, W - 0.005 ] ], 36 ), { ...GOLD, matrix: AX( 0, - Math.PI / 2 ) } );
-	add( lathe( [ [ 0, W + 0.024 ], [ R * 0.42, W + 0.024 ], [ R * 0.8, W + 0.014 ], [ R + 0.002, W + 0.004 ], [ R + 0.002, W - 0.005 ] ], 36 ), { ...GOLD, matrix: AX( 0, Math.PI / 2 ) } );
+	// the two round side plates (the drag side's deeper), the pillars between them (anodized: all mirror, they'd only
+	// show the dark of the water and go black)
+	const PLATE = { ...GOLD, color: 0xc9a24a, metal: 0.4, rough: 0.38 };
+	add( lathe( [ [ R + 0.002, W - 0.005 ], [ R + 0.002, W + 0.002 ], [ R * 0.95, W + 0.008 ], [ R * 0.5, W + 0.0135 ], [ 0, W + 0.014 ] ], 36 ), { ...PLATE, matrix: AX( 0, - Math.PI / 2 ) } );
+	add( lathe( [ [ R + 0.002, W - 0.005 ], [ R + 0.002, W + 0.004 ], [ R * 0.8, W + 0.014 ], [ R * 0.42, W + 0.024 ], [ 0, W + 0.024 ] ], 36 ), { ...PLATE, matrix: AX( 0, Math.PI / 2 ) } );
 	for ( const a of [ 1.1, 2.6, 4.2, 5.2 ] ) add( cylinder( 0.0035, 0.0035, 2 * W, 8 ), { ...STEEL, matrix: M( 0, BODY_Y + Math.cos( a ) * ( R - 0.004 ), REEL_Z + Math.sin( a ) * ( R - 0.004 ), 0, 0, Math.PI / 2 ) } );
 	// the spool, turning with the handle: its flanges, and the line on it
 	add( cylinder( R - 0.006, R - 0.006, 2 * W - 0.012, 30 ), { ...LINE, anim: 3, matrix: AX( 0 ) } );

@@ -13,6 +13,8 @@ The rod used to do one thing: one float, tethered where it landed, biting only w
 - **Deep drop.** With the sportfisher's electric reel (`stats.electricReel`), a heavy lead straight down to 900 m at 2.5 m/s, a long wait, and a long way back at 4.5 m/s. The motor stalls at its drag, so it can't break the line on a run. By day it's the swordfish's way.
 - **Chum.** Pick it with `B` and press: it goes over the side, and a slick drifts downwind for 5 minutes. Fish up the slick bite sooner, as they do under a boat's floodlights.
 
+At the helm with lines out, holding the throttle holds her at the speed the slowest bait swims (a trolling valve), the prompt says the speed and whether the baits are swimming, and Shift runs her flat out. A line let out goes back even with her stopped, so it's never left under the hull.
+
 ## The fight
 
 With a real drag (the conventional reel and up, `dragKg`) a fish pulling past what the drag holds strips line from the reel instead of breaking it, so a fish far over the line can be fought. What it beats you with is your spool (`spoolM`), and running out is "Spooled". Lean into a run on the reel and the line can still go. A fish within the drag fights exactly as it did; the spinning reels have no drag to speak of, and their fights are unchanged.
@@ -59,3 +61,10 @@ Compressed for play, and said so: a real strike offshore can be hours apart, her
 
 - Others don't see a spread or a kite: `Together` still sends one rod and its line's end. Theirs shows as a float on the line where a rig has none. It's the together stream's to add.
 - The electric reel's own sound, for the sound stream: a rod going off and the drag use today's reel sound.
+
+## For the merge
+
+- `Bites.js`: take stream 6's. All this stream adds is `hook: true` in `NOT_WATER`.
+- `Game.habitat`: `atHook` sets `h.hook` after stream 6's line, so keep both.
+- `docs/m16/fish.md` is stream 6's.
+- `test/cast-net.mjs`: "every bait can be stolen" now leaves out lures and chum, which can't be.
