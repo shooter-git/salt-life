@@ -189,7 +189,7 @@ export class ConsoleModel extends Vessel {
 
 		const on = {
 			tTop: this.fitted.tTop, tankRack: this.fitted.tankRack,
-			coverUp: this.fitted.tTop && ! this.covered, coverDown: this.fitted.tTop && this.covered,
+			coverDown: this.fitted.tTop && this.covered,
 			ladderUp: this.fitted.diveLadder && ! this._ladderDown, ladderDown: this.fitted.diveLadder && !! this._ladderDown,
 		};
 		for ( const name of Object.keys( this._ranges ) ) {
@@ -219,7 +219,7 @@ export class ConsoleModel extends Vessel {
 
 	}
 
-	// her rain cover down, or rolled up under the top
+	// her rain cover zipped on, or stowed
 	setCover( down ) {
 
 		if ( this.covered === down ) return;

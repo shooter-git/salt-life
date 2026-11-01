@@ -94,32 +94,34 @@ class Builder:
 
 def cowl_ring( h, n ):
 
-	# height through the cowl, 0 at its seat on the chaps .. 1 at its crown: half-width, front and rear
-	b = table( [ ( 0, 0.225 ), ( 0.2, 0.25 ), ( 0.5, 0.262 ), ( 0.75, 0.255 ), ( 0.88, 0.215 ), ( 0.95, 0.15 ), ( 0.99, 0.06 ), ( 1, 0.01 ) ], h )
-	f = table( [ ( 0, 0.2 ), ( 0.35, 0.22 ), ( 0.7, 0.19 ), ( 0.88, 0.1 ), ( 0.96, 0.0 ), ( 1, - 0.18 ) ], h )
-	r = table( [ ( 0, - 0.48 ), ( 0.35, - 0.63 ), ( 0.65, - 0.68 ), ( 0.88, - 0.62 ), ( 0.96, - 0.5 ), ( 1, - 0.25 ) ], h )
+	# height through the cowl, 0 at its seat on the chaps .. 1 at its crown: half-width, front and rear. Over 0.72 a round dome,
+	# the whole outline drawn in about its middle, so the crown's one smooth shell
+	H0 = 0.72
+	u = min( h, H0 )
+	b = table( [ ( 0, 0.225 ), ( 0.2, 0.25 ), ( 0.5, 0.262 ), ( H0, 0.258 ) ], u )
+	f = table( [ ( 0, 0.2 ), ( 0.35, 0.22 ), ( H0, 0.19 ) ], u )
+	r = table( [ ( 0, - 0.48 ), ( 0.35, - 0.63 ), ( 0.6, - 0.69 ), ( H0, - 0.7 ) ], u )
+	mid = ( f + r ) / 2; a = ( f - r ) / 2
+	k = 1.0
+	if h > H0: k = max( 0, 1 - ( ( h - H0 ) / ( 1 - H0 ) ) ** 2.3 ) ** ( 1 / 2.3 )
 	y = h * 0.72
 	out = []
-	mid = ( f + r ) / 2; a = ( f - r ) / 2
 	for j in range( n ):
 
 		th = 2 * math.pi * j / n
 		cz = math.cos( th ); sx = math.sin( th )
 		# drawn in to the front, round at the rear
 		ex = 0.95 if cz > 0 else 0.72
-		px = math.copysign( abs( sx ) ** ex, sx ) * b
-		pz = mid + math.copysign( abs( cz ) ** 0.9, cz ) * a
+		px = math.copysign( abs( sx ) ** ex, sx ) * b * k
+		pz = math.copysign( abs( cz ) ** 0.9, cz ) * a * k
 		# the scalloped ribs over the back of the crown, fanning from the scoop
-		rear = smooth( - cz, - 0.1, 0.5 ) * smooth( h, 0.4, 0.62 ) * ( 1 - smooth( h, 0.96, 1 ) )
-		rib = math.cos( th * 11 ) * 0.009 * rear
-		k = 1 + rib / max( 0.1, math.hypot( px, pz - mid ) ) * 2
-		px *= k; pz = mid + ( pz - mid ) * k
+		rear = smooth( - cz, - 0.1, 0.5 ) * smooth( h, 0.42, 0.62 ) * k
+		rib = 1 + math.cos( th * 11 ) * 0.03 * rear
 		# the split line between top and bottom cowl: a groove
 		g = 1 - 0.012 * math.exp( - ( ( h - 0.34 ) / 0.012 ) ** 2 )
-		px *= g; pz = mid + ( pz - mid ) * g
-		# the crown's a shade lower ahead (the scoop's rise)
-		dy = 0.02 * smooth( - cz, 0, 1 ) * smooth( h, 0.55, 0.9 )
-		out.append( ( px, y + dy, pz ) )
+		# the shell's a shade higher at its back, falling to the nose
+		dy = 0.035 * ( - cz ) * k * smooth( h, 0.5, 0.8 )
+		out.append( ( px * rib * g, y + dy, mid + pz * rib * g ) )
 
 	return out
 
@@ -142,12 +144,12 @@ def outboard():
 
 	B = Builder()
 	NC = 28
-	hs = [ i / 14 for i in range( 13 ) ] + [ 0.9, 0.93, 0.96, 0.985, 1 ]
+	hs = [ i / 14 for i in range( 11 ) ] + [ 0.8, 0.85, 0.89, 0.93, 0.96, 0.98, 0.995 ]
 	# (extra rings about the split line)
 	hs = sorted( set( hs + [ 0.31, 0.33, 0.34, 0.35, 0.37 ] ) )
 	rows = [ cowl_ring( h, NC ) for h in hs ]
 	first = B.grid( rows, PART[ 'cowl' ], closed = True, flip = True )
-	B.cap( first + ( len( rows ) - 1 ) * NC, NC, ( 0, 0.722, - 0.215 ), PART[ 'cowl' ], flip = True )
+	B.cap( first + ( len( rows ) - 1 ) * NC, NC, ( 0, 0.72, - 0.25 ), PART[ 'cowl' ], flip = True )
 
 	# the chaps under the cowl, dark: from the cowl's seat in to the leg's head
 	rows = []

@@ -291,10 +291,11 @@ function tTop( kit, parts ) {
 	const W = CONSOLE.halfW, u = T.under - 0.03;
 	for ( const s of [ 1, - 1 ] ) {
 
-		kit.add( 'hull', tube( [ V( s * ( W - 0.05 ), CONSOLE.top - 0.03, 0.2 ), V( s * ( W - 0.03 ), S + 1.6, 0.2 ), V( s * ( W + 0.02 ), u - 0.2, 0.22 ), V( s * ( W + 0.1 ), u - 0.03, 0.24 ), V( s * ( W + 0.15 ), u + 0.04, 0.26 ) ], 0.034, 12, 8 ), WHITE_TUBE );
-		kit.add( 'hull', tube( [ V( s * ( W - 0.012 ), S + 0.72, - 0.48 ), V( s * ( W + 0.015 ), S + 1.15, - 0.52 ), V( s * ( W + 0.03 ), S + 1.7, - 0.62 ), V( s * ( W + 0.1 ), u - 0.03, - 0.76 ), V( s * ( W + 0.16 ), u + 0.04, - 0.84 ) ], 0.036, 14, 8 ), WHITE_TUBE );
+		// (as hers: near upright, heavy, turning out only at the shoulder)
+		kit.add( 'hull', tube( [ V( s * ( W - 0.05 ), CONSOLE.top - 0.03, 0.2 ), V( s * ( W - 0.04 ), S + 1.7, 0.2 ), V( s * ( W - 0.03 ), u - 0.22, 0.2 ), V( s * ( W + 0.01 ), u - 0.07, 0.21 ), V( s * ( W + 0.08 ), u + 0.04, 0.23 ) ], 0.038, 12, 8 ), WHITE_TUBE );
+		kit.add( 'hull', tube( [ V( s * ( W - 0.012 ), S + 0.72, - 0.48 ), V( s * ( W - 0.005 ), S + 1.15, - 0.52 ), V( s * ( W + 0.0 ), S + 1.7, - 0.6 ), V( s * ( W + 0.03 ), u - 0.1, - 0.68 ), V( s * ( W + 0.09 ), u + 0.04, - 0.74 ) ], 0.04, 14, 8 ), WHITE_TUBE );
 		// the top's fairing about each leg's head
-		for ( const [ z, x ] of [ [ 0.26, W + 0.15 ], [ - 0.84, W + 0.16 ] ] ) kit.add( 'hull', cylinder( 0.075, 0.045, 0.08, 10 ).translate( s * x, u + 0.015, z ), WHITE_TUBE );
+		for ( const [ z, x ] of [ [ 0.23, W + 0.08 ], [ - 0.74, W + 0.09 ] ] ) kit.add( 'hull', cylinder( 0.085, 0.05, 0.09, 10 ).translate( s * x, u + 0.012, z ), WHITE_TUBE );
 
 	}
 
@@ -320,13 +321,10 @@ function tTop( kit, parts ) {
 	for ( const [ x, z ] of [ [ 0.55, - 1.42 ], [ - 0.55, - 1.42 ], [ 0.55, 0.66 ], [ - 0.55, 0.66 ] ] ) kit.add( 'glow', box( 0.15, 0.012, 0.04 ).translate( x, T.under - 0.012, z ), { color: 0xfff1d8, rough: 0.3, pattern: 4 } );
 	kit.add( 'glow', cylinder( 0.035, 0.035, 0.008, 10 ).translate( 0, T.under - 0.05, - 0.6 ), { color: 0x56a2ff, rough: 0.3, pattern: 5 } );
 
-	// ---- its rain cover: clear drop curtains on the sides and aft, zipped to the top's edge, rolled up under it on a fine day
+	// ---- its rain cover: clear drop curtains on the sides and aft, zipped to the top's edge when it rains, stowed on a fine day
 	const hem = T.under - 0.03, foot = S + 0.92, cloth = { color: 0xe4dfd0, rough: 0.7 };
 	const side = [ [ 0.25, T.halfW - 0.1 ], [ - 1.05, T.halfW - 0.1 ] ];
 	const aftZ = T.z0 + 0.22, aftX = T.halfW - 0.36;
-	kit.fitting = 'coverUp';
-	for ( const s of [ 1, - 1 ] ) kit.add( 'fittings', rod( V( s * side[ 0 ][ 1 ], hem - 0.02, side[ 0 ][ 0 ] ), V( s * side[ 1 ][ 1 ], hem - 0.02, side[ 1 ][ 0 ] ), 0.024, 6 ), cloth );
-	kit.add( 'fittings', rod( V( - aftX, hem - 0.02, aftZ ), V( aftX, hem - 0.02, aftZ ), 0.024, 6 ), cloth );
 	kit.fitting = 'coverDown';
 	const curtain = ( a, b, yT, yB ) => {
 

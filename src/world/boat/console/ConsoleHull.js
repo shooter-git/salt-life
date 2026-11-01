@@ -82,7 +82,8 @@ function transom( kit, L ) {
 	g.setAttribute( 'position', new Float32BufferAttribute( pos, 3 ) );
 	g.setIndex( idx );
 	g.computeVertexNormals();
-	auxVertices( g, () => [ 0.3, 0, SURFACE.bottom, 0 ] );
+	// (painted as her sides are, down to the chine)
+	auxVertices( g, ( p ) => p.y > 0.1 ? [ 0.2, 0, SURFACE.topsides, 0.6 ] : [ 0.3, 0, SURFACE.bottom, 0 ] );
 	kit.add( 'hull', g );
 
 }
@@ -152,7 +153,8 @@ function gunwales( kit, L ) {
 				[ m( xo, xi, 0.5 ), yo + 0.024 ], [ xi + 0.022, yo + 0.018 ], [ xi + 0.002, yo + 0.002 ], [ xi - 0.006, yo - 0.03 ], [ xi - 0.008, yo - 0.07 ],
 				[ m( xi, xb, 0.55 ), m( yo, yb, 0.55 ) ], [ xb, yb + 0.13 ], [ xb + 0.004, yb + 0.1 ], [ xb + 0.05, yb + 0.085 ], [ xb + 0.052, yb - 0.02 ],
 			];
-			profiles.push( pts.map( ( p ) => V( s * p[ 0 ], p[ 1 ], z ) ) );
+			// (her stations lean at the bow: at this z the hull's narrower low down than at the sheer, so nothing's let through it)
+			profiles.push( pts.map( ( p, j ) => V( s * ( j < 4 ? p[ 0 ] : Math.min( p[ 0 ], hullAt( L, z, Math.min( p[ 1 ], yo - 0.02 ) ) - 0.012 ) ), p[ 1 ], z ) ) );
 
 		}
 

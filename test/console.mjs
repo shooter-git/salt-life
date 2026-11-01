@@ -346,7 +346,7 @@ ok( soakRate( 1, true, 15 ) > soakRate( 1, true, 0 ), 'running flat out the rain
 ok( soakRate( 1, true, 15, true ) < soakRate( 1, true, 15 ) * 0.2, 'but not with its rain cover down' );
 const rolled = total();
 m.setCover( true );
-ok( total() !== rolled, 'the rain cover comes down' );
+ok( total() !== rolled, 'the rain cover goes on' );
 m.setCover( false );
 const soak = new Soak();
 for ( let i = 0; i < 300; i ++ ) soak.step( 0.1, 1, false, 0 );
