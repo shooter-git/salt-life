@@ -53,3 +53,61 @@ For the turtles: `LAMPS` and `lightsAt( hour, day, pick, since )` in `game/Pearl
 **Checked** headless on the CPU (SwiftShader, 720p, low): the boat at her berth and coming in, the camp at night, the roof after a hurricane, side by side with the San Fernando photograph. `test/north-pearl.mjs`: her day, the way she goes (at least 1 m of water all along, on both islands, clear of the jetty), the weather, her colliders, the lights by the hour, a light that's out costing nothing, the tin's fates, the sums, the radio's rows.
 
 **Not checked:** how any of it looks on a real GPU or a phone. Two players seeing her together (she's from the clock, so they should). The Glare's strength against a real night sky. **Not done:** anyone in her; other players' boats in her berth.
+
+## Other shores, shells and the hurricane's wrack
+
+M15 left the north beach with all the finds, and the bay's beach with the odd one off the same list. `test/north-shores.mjs` tests what follows.
+
+**What the island really has.** Reading the bake (sand over 0.55, little rock, gentle, 0.15 to 3 m up): two beaches, the bay's (15,000 m²) and the north beach (3,300 m²), and nothing else over 200 m². The rest of its shore is rock with a strip or a pocket of sand: the bay's east side (a narrow foreshore, x 182-186, z 5-85), the rock down each arm of the bay, one pocket on the north coast 100 m west of the north beach, and the mangroves on the west. So those are the shores. No beach was invented.
+
+**Each shore, by what brings things to it** (`game/Beachcomb.js`, `BEACHES`; each day's from the day alone, the same for everyone, and the north beach's M15 days are unchanged to the digit):
+
+| Shore | Why | What it gets |
+|---|---|---|
+| North beach | windward; the trades and the North Equatorial Current bring the Atlantic's drift | as M15; now and then a big shell after a sea |
+| The bay's beach | the lee: nothing's come far | what its own bottom gives up (six-keyhole sand dollars, sea egg tests, tellins, fighting conchs, olives, an emptied queen conch), what the village has lost (sea glass, a lure off the pier, once in a long while a stem of an old clay pipe, as Port Royal's seabed is littered with) |
+| The bay's east side | the trades blow across the bay toward it, so what floats ends up here | floats, driftwood, a sponge, a sea fan torn off in a blow, the sand flats' shells |
+| The rocks down each arm | no drift to speak of | the splash zone's top shells and bleeding teeth, cowries from under the stones |
+| The pocket west of the north beach | windward, and it holds what's jammed in it | drift, the reef's big shells, a glass float may lodge unbroken |
+| The mangroves' back | prop roots comb out what floats: studies in Honduras and Florida find them holding more litter than the beaches | red mangrove seedlings, floats, a bottle once in a long while, mangrove periwinkles |
+
+A sea in the bay (`App.beachDays`' `lee`, from the bay's surf) turns more out on the lee's shores, as a north sea does on the windward's. Seed-pods and glass floats don't reach the lee.
+
+**No wrack line on the other shores.** The north beach's costs 66,000 triangles on low; this piece has 3,000. It wouldn't be right either: a lee beach has no sargassum bank, and the bay's beach already has its scatter of weed, shells, coral and coconuts from the debris. So only the finds are added.
+
+**The shell collection** (`game/Shells.js`): fourteen, each checked to live in these islands.
+
+| Shell | Drawn | Where | How rare |
+|---|---|---|---|
+| Queen conch, *Aliger gigas* | 22 cm | bay, east side, north beach | uncommon |
+| Fighting conch, *Strombus pugilis* | 8 cm | bay, east side | common |
+| Sunrise tellin, *Tellina radiata* | 6 cm | bay, east side | common |
+| Turkey wing, *Arca zebra* | 7 cm | east side, rocks | common |
+| Netted olive, *Americoliva reticularis* | 4 cm | bay | fairly common |
+| West Indian top shell, *Cittarium pica* | 8 cm | rocks | common |
+| Bleeding tooth, *Nerita peloronta* | 3 cm | rocks | common |
+| Atlantic yellow cowrie, *Naria acicularis* | 2 cm | rocks | fairly common |
+| Measled cowrie, *Macrocypraea zebra* | 7 cm | rocks, pocket | uncommon |
+| Mangrove periwinkle, *Littoraria angulifera* | 3 cm | mangroves' back | common, there only |
+| Flamingo tongue, *Cyphoma gibbosum* | 3 cm | north shore, rocks, after a blow | rare |
+| King helmet, *Cassis tuberosa* | 20 cm | north shore, east side, after a sea | rare |
+| Atlantic triton, *Charonia variegata* | 25 cm | north shore, after a sea | rare |
+| Music volute, *Voluta musica* | 7 cm | bay, east side | rarest, about once in 25 days |
+
+- **Left out, though the brief named them:** the junonia (North Carolina to Texas and Mexico, the Gulf's), the lightning whelk (the Carolinas to the Gulf; a source says "Caribbean Sea" but none names an island) and the sunray venus (North Carolina to Texas). In their places the sunrise tellin, the king helmet and the music volute, the last recorded from St Lucia, Barbados, St Vincent, Grenada, Trinidad and Tobago.
+- **The queen conch is a keepsake.** It's on CITES Appendix II, so trade in the shell needs a permit; a person may carry up to three as personal effects; some islands limit it further (Turks and Caicos: three mature shells a person); Florida bans taking them. So one of yours is in your set and a spare is yours to keep: nobody buys it, and the game says why. An empty one on a beach has the fisherman's cut in its spire, as real ones do: that's how the meat's got out, and it's what's in the great middens.
+- **The flamingo tongue is drawn plain.** The orange spots everyone knows are the living animal's mantle and aren't in the shell.
+- **Kept**: the first of each goes to your set, a spare with your finds (Marta pays a dollar to $35). The Shells tab in the Fish Hold shows the set as a drawer, all to one scale (5 px a cm, a scale bar over it), so a queen conch is eleven times a yellow cowrie, as it is; an outline at its size with its name and where for each you haven't got; tap one for a close look and all it says. Its pictures are drawn from the same numbers as the shells on the sand (`world/ShellShapes.js`, a little z-buffer), one at a time and only when you open the page.
+- **What completing it gives**: Marta wants a whole set for a tray by her table: $200, your shells laid out there at their true sizes for anyone to see, built only when you're near. Plain, as asked. It's one field in the save, `shells`, with its default in `Shells.readShells`; saves from before load with none, and the save's version is unchanged.
+- **How long**: walking every shore every third day, about 27 game days for a whole set (12 to 57). Most players will take longer.
+- **The shapes**: a gastropod is the curve of its mouth swept round a logarithmic spiral (Raup 1966), with its shoulder knobs, canal, flared lip and narrowed mouth on that; a cowrie or an olive a rolled ovoid with its slit; a bivalve one valve, its beak at the hinge. Each marking's worked out at each vertex, compared side by side with photographs of each from Wikimedia Commons.
+
+**The hurricane's wreck in its wrack** (`Beachcomb.wreckageAt`, `world/debris/WreckPieces.js`): 16 to 30 pieces on the bay's beach, more the higher its sea came, from the storm alone so the same for everyone. Sheets of roofing tin (the roofs' own material, colours and bend), the pier's planks (the debris's), a board shutter, a plank door, the village's crate and fish pot (Props' on high; on low a stove-in few of their slats, since they're 300 triangles whole), a kitchen chair on its side. Each lies with one end or edge under the sand, a mat or two of weed heaped against it from the storm's own wrack, not laid on top. They stop at the top of the beach (2.2 m up): the storm's wrack line can reach the village's grass, and heavy things are dropped first. They're moved off the buildings' footprints and Marta's and Joe's stalls. Each is cleared on its own day, from 30 hours to ten days after, as the sheets on the ground are, so the beach thins: 25, 17, 9, 3, 0 pieces at 6, 60, 120, 200 and 239 hours in one storm.
+
+About half is sound enough to carry to Marta as scrap: a sheet of tin $4, a plank $2, a shutter $5, a door $9, a fish pot $8. A sound sheet really does go on someone's lean-to after a storm. What's picked up stays gone as long as it could have lain there. Nothing of this comes before the storm leaves its wrack, and no rock, plant or debris moved: nothing here reads or writes their random streams.
+
+**A saving along the way.** Each find was its own draw: 40-odd on the north beach on a good day. Now a shore's finds are drawn a stretch of 70 m at a time, one mesh a material, made the frame after anything on it changes, and let go when you're far.
+
+**What it costs**, on low, worst case (the bay's beach, the morning after a hurricane, three days of finds): see the readings below.
+
+**Sources:** queen conch: [Wikipedia](https://en.wikipedia.org/wiki/Aliger_gigas), [CITES Res. Conf. 13.7](https://cites.unia.es/file.php/1/handbook/eng/res/all/E-Res-13-07R16.pdf), [50 CFR 23.15](https://www.law.cornell.edu/cfr/text/50/23.15), [Turks and Caicos](https://www.visittci.com/travel-info/buying-collecting-exporting-conchs-shells-corals). Others: Wikipedia's [fighting conch](https://en.wikipedia.org/wiki/Strombus_pugilis), [sunrise tellin](https://en.wikipedia.org/wiki/Tellina_radiata), [top shell](https://en.wikipedia.org/wiki/Cittarium_pica), [bleeding tooth](https://en.wikipedia.org/wiki/Nerita_peloronta), [measled cowrie](https://en.wikipedia.org/wiki/Macrocypraea_zebra), [yellow cowrie](https://en.wikipedia.org/wiki/Naria_acicularis), [periwinkle](https://en.wikipedia.org/wiki/Littoraria_angulifera), [flamingo tongue](https://en.wikipedia.org/wiki/Cyphoma_gibbosum), [king helmet](https://en.wikipedia.org/wiki/Cassis_tuberosa), [triton](https://en.wikipedia.org/wiki/Charonia_variegata), [music volute](https://en.wikipedia.org/wiki/Voluta_musica), [six-keyhole sand dollar](https://en.wikipedia.org/wiki/Leodia_sexiesperforata), [sea egg](https://en.wikipedia.org/wiki/Tripneustes_ventricosus), [sea fan](https://en.wikipedia.org/wiki/Gorgonia_ventalina); left out: [junonia](https://en.wikipedia.org/wiki/Scaphella_junonia), [lightning whelk](https://en.wikipedia.org/wiki/Sinistrofulgur_sinistrum), [sunray venus](https://en.wikipedia.org/wiki/Macrocallista_nimbosa). Mangroves holding litter: [Honduras and elsewhere](https://www.boa.unimib.it/retrieve/ad84b5f3-35d5-4f17-a270-6a0c965881b9/Cerri-2025-Marine%20Pollution%20Bulletin-VoR.pdf), [Florida](https://www.fau.edu/science/documents/espinosa-cristal2022.pdf). Not found in a source I could check: the turkey wing's range beyond general guides, and what a lee beach's scatter is; Warmke and Abbott's *Caribbean Seashells* (1961) is the book to check them in.
