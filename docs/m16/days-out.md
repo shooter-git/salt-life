@@ -41,7 +41,7 @@ Any clock jump now counts for her, aboard or ashore (`passed`). Resting ashore, 
 
 ## The anchor and the sock
 
-`deepAnchor_<boat>`: at 3 to 1, 600 ft of rode holds in 200 ft (the shelf's edge), 1,200 ft in 400 ft (the hump's top), 2,400 ft in 800 ft (the north ledge). Past that it's 1,800 m, and there's the sock. `driftSock_<boat>` goes out by itself when you leave the helm past the anchor's reach, and comes in when you take it. In `BoatController` it's a cone's drag at the stem head (Cd 1.4, mouth `sockM2`) with a yaw term for its long rode: measured, about half her drift and head to wind. `Away.awayOf` has it too (`left.sock`). Its line is the anchor rode's mesh. About half is what I recall a raft's drogue doing to its leeway; the search didn't turn up a figure for a boat's sock, so that half is measured from her physics, not sourced.
+`deepAnchor_<boat>`: at 3 to 1, 600 ft of rode holds in 200 ft (the shelf's edge), 1,200 ft in 400 ft (the hump's top), 2,400 ft in 800 ft (the north ledge). Past that it's 1,800 m, and there's the sock. `driftSock_<boat>` goes out by itself when you leave the helm past the anchor's reach, and comes in when you take it. In `BoatController` it's a cone's drag at the stem head (Cd 1.4, mouth `sockM2`) with a yaw term for its long rode: measured, about half her drift and head to wind. `Away.awayOf` has it too (`left.sock`). Its line is the anchor rode's mesh, out to a small orange trip float riding the waves 26 m upwind, all you see of it. About half is what I recall a raft's drogue doing to its leeway; the search didn't turn up a figure for a boat's sock, so that half is measured from her physics, not sourced.
 
 ## Navigation and the finders
 
@@ -54,7 +54,7 @@ The dash set's finder finds the bottom to 1,200 ft (`Instruments.SOUNDER_REACH`)
 `trouble()` is real trouble: out of fuel, water over the engine, her hull badly worn, too much sea, parched, aground. The tackle stream's `safety` track's second level brings flares and an EPIRB. They show on the radio panel only for real trouble, and they work in a gale, when Marta won't answer a call.
 
 - **EPIRB:** MEOSAR's fix is 5 km within 10 minutes; found and towed in, at the away fee's cap. On your own, the time it took goes by.
-- **Flares:** three, restocked when you land. Seen by day within 3 miles of the island, 15 on a clear night, or by someone else near you.
+- **Flares:** three, restocked when you land. Seen by day within 3 miles of the island, 15 on a clear night, or by someone else near you. Others in the room see it go up and are told whose it is, if it's within that reach of them.
 - **Nothing to call with:** someone happens by after 4 island hours inside 14 km, 18 past it, so nobody's stuck for good.
 
 ## Sources
