@@ -15,29 +15,28 @@ import { seaHeight, squallWind } from './Weather.js';
 //     burn            [ idle, k ]: litres a second at rpm: idle + k rpm^2 (Gear.fuelBurn)
 //     drift           of the wind's speed, left to it, beam-on (Away.awayOf)
 //     draught         m of water she touches in (Away.awayOf)
-//     storm           what a storm takes of her left out in it, against the lobster boat's (Away.awayOf)
 //     storesDays      days of food and water she has room for
 //     sockM2          the mouth of her drift sock, m^2: its drag holds her head to the sea (BoatController)
 //     waters          what Marta says she's for
 export const ABLE = {
 	kayak: {
 		seas: [ 0.5, 1 ], wind: [ 7.7, 10.3 ],
-		cruise: { rpm: 0.7, speed: 1.5 }, burn: [ 0, 0 ], drift: 0.03, draught: 0.15, storm: 2, storesDays: 1, sockM2: 0.2,
+		cruise: { rpm: 0.7, speed: 1.5 }, burn: [ 0, 0 ], drift: 0.03, draught: 0.15, storesDays: 1, sockM2: 0.2,
 		waters: 'The flats and the sheltered shallows, in up to 3 ft of sea and 20 knots of wind. A squall\'s a real danger',
 	},
 	console: {
 		seas: [ 1.2, 2.2 ], wind: [ 10.3, 14.4 ],
-		cruise: { rpm: 0.7, speed: 11 }, burn: [ 0.002, 0.03 ], drift: 0.05, draught: 0.5, storm: 1.3, storesDays: 3, sockM2: 1.1,
+		cruise: { rpm: 0.7, speed: 11 }, burn: [ 0.002, 0.03 ], drift: 0.05, draught: 0.5, storesDays: 3, sockM2: 1.1,
 		waters: 'The reef, the wrecks and the near offshore, in up to 7 ft of sea and 28 knots of wind. A blow sends you running in',
 	},
 	lobster: {
 		seas: [ 2, 3.5 ], wind: [ 15.4, 20.6 ],
-		cruise: { rpm: 0.7, speed: 7.1 }, burn: [ 0.0025, 0.024 ], drift: 0.05, draught: 1, storm: 1, storesDays: 5, sockM2: 2.5,
+		cruise: { rpm: 0.7, speed: 7.1 }, burn: [ 0.0025, 0.024 ], drift: 0.05, draught: 1, storesDays: 5, sockM2: 2.5,
 		waters: 'Nearshore and the reef\'s edge, in up to 11 ft of sea and 40 knots of wind',
 	},
 	sportfisher: {
 		seas: [ 3, 5 ], wind: [ 18, 26 ],
-		cruise: { rpm: 0.7, speed: 13 }, burn: [ 0.004, 0.21 ], drift: 0.06, draught: 1.4, storm: 0.7, storesDays: 14, sockM2: 7,
+		cruise: { rpm: 0.7, speed: 13 }, burn: [ 0.004, 0.21 ], drift: 0.06, draught: 1.4, storesDays: 14, sockM2: 7,
 		waters: 'The far grounds and the deep, for days at a time, in up to 16 ft of sea and 50 knots of wind',
 	},
 };
@@ -48,7 +47,7 @@ export const ableOf = ( boat ) => ABLE[ boat ] || ABLE.lobster;
 export const ableEnv = ( boat ) => {
 
 	const A = ableOf( boat );
-	return { drift: A.drift, draught: A.draught, wearMul: A.storm };
+	return { drift: A.drift, draught: A.draught, boat };
 
 };
 

@@ -1,12 +1,13 @@
 import { CanvasTexture, Mesh, MeshStandardMaterial, SphereGeometry, Sprite, SpriteMaterial } from '../engine/index.js';
 import { G } from '../core/Globals.js';
 import { BOATS } from '../world/boat/Boats.js';
-import { WORLD } from '../world/WorldLayout.js';
 import { awayOf, tellOf, ISLE, FOUND_M } from './Away.js';
 import { awayTowFee, TOW } from './Gear.js';
 import { restTo, timeText, REST } from './IslandClock.js';
 import { islandTime, towardOf, weatherHere, hurricaneNews } from './Weather.js';
 import { FT, feet, farOff, pounds, knots } from './Units.js';
+import { FLEET } from './fleet/Fleet.js';
+import { berthOf } from './fleet/Berths.js';
 import { ableOf, ableEnv, awashLs, seaHere, fetchAt, strainOf, windOn, slamK, keepCatch, feedOf, strengthOf, meltKgH, CHILL_KG, ICE_BAG_KG, ICE_BAG_PRICE, STORES_PRICE, LUNCH_H, DRY_H, FRESH_H, FLARES, FLARE_M, EPIRB_S, PASSING_H } from './Seaworthy.js';
 
 // (M16) Days out, and what each boat can stand: ice and the catch keeping, stores, sleeping aboard, flares and the EPIRB,
@@ -329,7 +330,7 @@ export class DaysOut {
 	_env( aboard ) {
 
 		const app = this.app, s = app.settings, T = app.terrainData;
-		return { dock: WORLD.boatDock.position, pick: app.weatherPick(), since: s.weatherSince, depth: ( x, z ) => Math.max( 0, G.seaLevel.value - T.heightAt( x, z ) ), aboard, ...ableEnv( this.state.boat ) };
+		return { dock: berthOf( this.state.boat ).position, pick: app.weatherPick(), since: s.weatherSince, depth: ( x, z ) => Math.max( 0, G.seaLevel.value - T.heightAt( x, z ) ), aboard, haul: FLEET[ this.state.boat ].haul, ...ableEnv( this.state.boat ) };
 
 	}
 
@@ -523,7 +524,7 @@ export class DaysOut {
 	// the radio panel's rows for them: [ { id, name, say, can, fee } ]
 	distress() {
 
-		const st = this.state, s = st.stats, b = this.app.boatCtl, dock = WORLD.boatDock.position, why = this.trouble();
+		const st = this.state, s = st.stats, b = this.app.boatCtl, dock = berthOf( this.state.boat ).position, why = this.trouble();
 		const metres = Math.hypot( b.position.x - dock.x, b.position.z - dock.z ), rows = [];
 		if ( s.flares ) rows.push( { id: 'flare', name: `Fire a flare · ${ st.days.flares } left`, say: why ? `You're ${ why }. Red meteors: someone within sight may see one` : 'Keep them for real trouble', can: !! why && st.days.flares > 0, fee: awayTowFee( metres ) } );
 		if ( s.epirb ) rows.push( { id: 'epirb', name: 'Set off the EPIRB', say: why ? `You're ${ why }. The Coast Guard has a fix in minutes, in any weather, and sees you towed in` : 'It\'s for real trouble: nothing else brings them out', can: !! why, fee: awayTowFee( metres ) } );
@@ -534,7 +535,7 @@ export class DaysOut {
 	// a distress call answered, or tried: flare | epirb
 	fire( kind ) {
 
-		const g = this.game, st = this.state, d = st.days, b = this.app.boatCtl, app = this.app, dock = WORLD.boatDock.position;
+		const g = this.game, st = this.state, d = st.days, b = this.app.boatCtl, app = this.app, dock = berthOf( this.state.boat ).position;
 		const metres = Math.hypot( b.position.x - dock.x, b.position.z - dock.z ), w = app.weather && ( app.weather.live || app.weather.target );
 		if ( kind === 'epirb' ) return this.rescue( metres, `The Coast Guard fixed your beacon and stood by till Marta got to you, ${ ( metres / 1852 ).toFixed( metres < 18520 ? 1 : 0 ) } miles out`, EPIRB_S );
 		if ( d.flares <= 0 ) return false;
@@ -590,7 +591,7 @@ export class DaysOut {
 	_rescueNet( hours ) {
 
 		const b = this.app.boatCtl, st = this.state, s = st.stats, why = this.aboard ? this.trouble() : null;
-		const dock = WORLD.boatDock.position, metres = Math.hypot( b.position.x - dock.x, b.position.z - dock.z );
+		const dock = berthOf( this.state.boat ).position, metres = Math.hypot( b.position.x - dock.x, b.position.z - dock.z );
 		const canCall = ( s.vhfM >= metres ) || s.epirb || ( s.flares && st.days.flares > 0 );
 		if ( ! why || canCall ) {
 

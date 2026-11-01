@@ -71,20 +71,22 @@ export function awayClock( hour, day, at, now = Date.now() ) {
 
 // what a storm takes off her a second, unattended, as Hull.stormWear in the gusts the wind's blowing in (between a
 // lull and a gust, WeatherDriver.windAt: w, the weather where she lies). A squall's gusts take a little
-export function wearRate( w ) {
+// (M16) boat: whose hull it is (Hull.HULLS)
+export function wearRate( w, boat = 'lobster' ) {
 
 	const U = squallWind( w ), g = gustShare( w );
 	if ( U * ( 1 + g ) <= STORM_FROM ) return 0;
 	let s = 0;
-	for ( let i = 0; i < GUST_N; i ++ ) s += stormWear( U * ( 1 + g * ( ( i + 0.5 ) / GUST_N * 2 - 1 ) ) );
+	for ( let i = 0; i < GUST_N; i ++ ) s += stormWear( U * ( 1 + g * ( ( i + 0.5 ) / GUST_N * 2 - 1 ) ), boat );
 	return s / GUST_N;
 
 }
 
 // a personal save's boat ({ x, z, h: heading, anchor: [ x, z ] | null, moored, aboard: 'deck' | 'helm' | null,
-// T: the island's time, at: ms since 1970 })
-export const boatLeft = ( { x, z, heading, anchor, sock, moored, aboard, T, at } ) => ( {
-	v: 1, ...( sock ? { sock: true } : {} ), x: round( x ), z: round( z ), h: Math.round( heading * 1000 ) / 1000, anchor: anchor ? [ round( anchor.x ), round( anchor.z ) ] : null, moored: !! moored, aboard: aboard === 'deck' || aboard === 'helm' ? aboard : null, T: Math.round( T * 1000 ) / 1000, at,
+// T: the island's time, at: ms since 1970, (M16) boat: which she is. The others you own are at their berths (or on
+// their cradles) since that T: one out at sea comes home when you get into another: othersAway)
+export const boatLeft = ( { x, z, heading, anchor, sock, moored, aboard, T, at, boat = 'lobster' } ) => ( {
+	v: 1, boat, ...( sock ? { sock: true } : {} ), x: round( x ), z: round( z ), h: Math.round( heading * 1000 ) / 1000, anchor: anchor ? [ round( anchor.x ), round( anchor.z ) ] : null, moored: !! moored, aboard: aboard === 'deck' || aboard === 'helm' ? aboard : null, T: Math.round( T * 1000 ) / 1000, at,
 } );
 const round = ( v ) => Math.round( v * 10 ) / 10;
 
@@ -100,21 +102,22 @@ export function leftOf( text ) {
 
 	if ( ! d || d.v !== 1 || ! Number.isFinite( d.x ) || ! Number.isFinite( d.z ) || ! Number.isFinite( d.T ) ) return null;
 	const A = Array.isArray( d.anchor ) && d.anchor.length === 2 && d.anchor.every( Number.isFinite ) ? { x: d.anchor[ 0 ], z: d.anchor[ 1 ] } : null;
-	return { x: d.x, z: d.z, heading: Number.isFinite( d.h ) ? d.h : 0, anchor: A, sock: d.sock === true, moored: d.moored === true, aboard: d.aboard === 'deck' || d.aboard === 'helm' ? d.aboard : null, T: d.T, at: Number.isFinite( d.at ) ? d.at : null };
+	return { x: d.x, z: d.z, heading: Number.isFinite( d.h ) ? d.h : 0, anchor: A, sock: d.sock === true, moored: d.moored === true, aboard: d.aboard === 'deck' || d.aboard === 'helm' ? d.aboard : null, T: d.T, at: Number.isFinite( d.at ) ? d.at : null, boat: typeof d.boat === 'string' ? d.boat : 'lobster' };
 
 }
 
 // What happened to her between the island's time she was left (left.T) and T. left: leftOf's, and hauled (on
 // Marta's cradle). env: dock { x, z } (required), and the weather picked ( pick, since ), the water's depth ( depth(
 // x, z ) -> m ), and for the tests weather( T, x, z ), news( T ), fee( m ), haul. (M16) And hers (Seaworthy.ableEnv):
-// drift, draught, wearMul; left.sock: her drift sock's out, so she goes slower and head to the wind; aboard: you're with
+// drift, draught, boat; left.sock: her drift sock's out, so she goes slower and head to the wind; aboard: you're with
 // her, asleep (no tow comes for her). story.groundT: when she touched, if she did
 // -> { hours, spoiled, wear, kind (the worst weather she rode out, its id), tows: [ { why: 'adrift' | 'aground' |
 // 'week' | 'hurricane', x, z (where she was), metres (from the dock), fee, where: 'dock' | 'cradle', out (she
 // had to be fetched) } ], fee, where: 'dock' | 'cradle' | 'anchor' | 'adrift' | 'aground', x, z, heading, anchor }
+// (M16) env.boat: whose hull the weather's working (and env.dock her own berth, env.haul her own haul-out)
 export function awayOf( left, T, env ) {
 
-	const { dock, pick = null, since = 0, depth = () => Infinity, fee = awayTowFee, haul = HAUL_FEE, drift = DRIFT, draught = AGROUND, wearMul = 1, aboard = false } = env;
+	const { dock, pick = null, since = 0, depth = () => Infinity, fee = awayTowFee, haul = HAUL_FEE, drift = DRIFT, draught = AGROUND, aboard = false, boat = 'lobster' } = env;
 	const weather = env.weather || ( ( t, x, z ) => weatherHere( t, pick, since, x, z ) );
 	const newsAt = env.news || ( ( t ) => hurricaneNews( t, pick, since ) );
 	const hours = Math.max( 0, T - left.T );
@@ -160,7 +163,7 @@ export function awayOf( left, T, env ) {
 
 		}
 
-		const w = weather( t, story.x, story.z ), s = playSeconds( t, t + dt ), rate = wearRate( w ) * wearMul;
+		const w = weather( t, story.x, story.z ), s = playSeconds( t, t + dt ), rate = wearRate( w, boat );
 		story.wear = Math.min( 1, story.wear + rate * s );
 		if ( rate > worst ) {
 
@@ -200,6 +203,39 @@ export function awayOf( left, T, env ) {
 	}
 
 	return story;
+
+}
+
+// (M16) The boats you weren't in, while you were away: each lay at her berth (or on her cradle) from the T you left.
+// fleet: GameState's, those to reckon; berth( id ) -> { position, heading }; haul( id ) -> her fee; env: awayOf's
+// -> { [ id ]: story }
+export function othersAway( fleet, T0, T, { berth, haul, ...env } ) {
+
+	const out = {};
+	for ( const [ id, b ] of Object.entries( fleet ) ) {
+
+		const { position: P, heading } = berth( id );
+		out[ id ] = awayOf( { x: P.x, z: P.z, heading, anchor: null, moored: true, hauled: b.hauled, T: T0 }, T, { ...env, dock: P, haul: haul( id ), boat: id } );
+
+	}
+
+	return out;
+
+}
+
+// (M16) What Marta's note says of them, each by what you call her: stories { id: story }, names { id: 'the console' }
+export function tellOthers( stories, names ) {
+
+	const note = [];
+	for ( const [ id, s ] of Object.entries( stories ) ) {
+
+		const name = names[ id ] || 'your other boat';
+		if ( s.tows.length ) note.push( `Hauled ${ name } out ahead of the hurricane as well: $${ s.fee }. She's on blocks in my yard.` );
+		if ( s.wear >= WORN_SAID ) note.push( `${ name[ 0 ].toUpperCase() }${ name.slice( 1 ) } took a beating at her berth while you were gone. See me about the hull.` );
+
+	}
+
+	return note;
 
 }
 

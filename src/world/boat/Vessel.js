@@ -31,8 +31,10 @@ import { triangleCount } from './GeoKit.js';
 //   seated                 she's sat in, not walked about: there's no deck mode, boarding takes the helm
 //   nearDetail             mesh names a phone may leave out far off (App.nearDetail)
 //   bunks                  [ { x, y, z } ] where you stand to turn in, for a boat that has them (game/DaysOut.js)
+//   transom                optional { x, y, z, w }: where her painted name goes (game/fleet/BoatName.js)
 //
-// And these, which do nothing until a boat needs them: setSteering, setThrottle, setPropellerRPM, setNavLights, update.
+// And these, which do nothing until a boat needs them: setSteering, setThrottle, setPropellerRPM, setNavLights, update,
+// fit( stats ): what's fitted on her now (Gear.gearStats: called as it changes, and as she's built), setPaint( hex | null ).
 export class Vessel {
 
 	constructor( id ) {
@@ -212,6 +214,19 @@ export class Vessel {
 	setNavLights( on ) {
 
 		if ( this.materials.setNavLights ) this.materials.setNavLights( on );
+
+	}
+
+	fit( stats ) {}
+
+	// her topsides (state.fleet[ id ].paint's colour, or null as she came)
+	setPaint( hex ) {
+
+		const c = this.materials.hull && this.materials.hull.color;
+		if ( ! c ) return;
+		if ( ! this._asShe ) this._asShe = c.clone();
+		if ( hex === null ) c.copy( this._asShe );
+		else c.set( hex );
 
 	}
 

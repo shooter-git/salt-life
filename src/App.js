@@ -37,8 +37,10 @@ import { BoatController } from './player/BoatController.js';
 import { GameState } from './game/GameState.js';
 import { DAY_RATE, START_HOUR, advance } from './game/IslandClock.js';
 import { islandTime, isPick, NORTH, weatherAt, towardOf } from './game/Weather.js';
-import { BACK_MS, awayClock, awayOf, boatLeft, cleanBoats, leftOf, withRecord } from './game/Away.js';
+import { BACK_MS, awayClock, awayOf, boatLeft, cleanBoats, leftOf, othersAway, tellOthers, withRecord } from './game/Away.js';
 import { ableEnv } from './game/Seaworthy.js';
+import { berthOf } from './game/fleet/Berths.js';
+import { FLEET } from './game/fleet/Fleet.js';
 import { WeatherDriver } from './world/WeatherDriver.js';
 import { lampsLit } from './game/Bites.js';
 import { FishStand, STAND } from './game/FishStand.js';
@@ -416,8 +418,8 @@ export class App {
 		this.radar = new BoatRadar( { terrain: this.terrainData, seaLevel: () => G.seaLevel.value, size: tier === 'low' ? 150 : 300 } );
 		this._radarBoats = [];
 		scene.add( this.boat.group );
-		this.boat.group.position.copy( WORLD.boatDock.position );
-		this.boat.group.rotation.y = WORLD.boatDock.heading;
+		this.boat.group.position.copy( berthOf( this.boat.id ).position );
+		this.boat.group.rotation.y = berthOf( this.boat.id ).heading;
 		this.boat.group.traverse( ( o ) => {
 
 			if ( o.isMesh ) o.castShadow = o.castShadow && tier !== 'low';
@@ -741,7 +743,7 @@ export class App {
 		// ((M13) in the shelter's room you're out of the weather; your boat on her cradle is in your way)
 		const pp = this.player.position;
 		this.player.sheltered = insideRoom( this.village.shelter && this.village.shelter.inside, pp.x, pp.y + 0.9, pp.z );
-		if ( this.village.cradleHull ) this.village.cradleHull.solid = !! this.boatCtl.hauled;
+		if ( this.village.cradleHull ) this.village.cradleHull.solid = !! this.boatCtl.hauled && this.boat.id === 'lobster' || this.state.fleet.lobster?.hauled === true;
 		// ((M14) the village's loose shutters swinging in the wind, all shut for a hurricane)
 		if ( this.village.shutters ) this.village.shutters.update( dt, this.player.windAt, G.windDir.value, !! this.weather.target.boarded );
 		// (M12) a westerly's swell on its way: its shore field, solved off the page
@@ -1965,7 +1967,7 @@ export class App {
 	hullHeard() {
 
 		const h = this.game.hull, out = this._hullHeard || ( this._hullHeard = {} );
-		out.flood = h.bilge / FLOOD_L;
+		out.flood = h.bilge / h.floodL;
 		out.pump = h.pumping;
 		out.scrape = h.scrape || 0;
 		out.wear = h.wear;
@@ -2413,7 +2415,7 @@ export class App {
 		this.boatLamps.removeLight( lights );
 		this.boatLamps.group.removeFromParent();
 		this.boatLamps.dispose();
-		parent.remove( old.group );
+		if ( parent ) parent.remove( old.group );
 		if ( this.nearDetail ) {
 
 			const gone = new Set( Object.values( old.meshes ) );
@@ -2422,13 +2424,23 @@ export class App {
 		}
 
 		this.boat = model;
-		parent.add( model.group );
+		// (on a CPU's WebGL she may still be held out of the scene, just after the start: the new boat waits in her place)
+		const held = this._lateHeld && this._lateHeld.find( ( h ) => h[ 0 ] === old.group );
+		for ( const group of this._late || [] ) if ( group.includes( old.group ) ) group[ group.indexOf( old.group ) ] = model.group;
+		if ( held ) {
+
+			held[ 0 ] = model.group;
+			model.group.visible = false;
+
+		} else ( parent || this.scene ).add( model.group );
+
 		this.lightUp( model.group );
 		model.group.traverse( ( o ) => {
 
 			if ( o.isMesh ) o.castShadow = o.castShadow && this.tier !== 'low';
 
 		} );
+		this.lightUp( model.group );
 		this.boatCtl.setModel( model );
 		this.boatCtl.reset();
 		this.boatCtl.apply();
@@ -2471,12 +2483,12 @@ export class App {
 
 		const b = this.boatCtl, p = this.player, s = this.settings;
 		if ( ! this._pickedUp || ! this.store ) return;
-		const dock = WORLD.boatDock.position;
+		const dock = b.berth.position;
 		// (as stepping ashore makes her fast: Player.exitBoat)
 		const moored = b.moored || ( ! b.anchor && ! b.hauled && Math.hypot( b.position.x - dock.x, b.position.z - dock.z ) < 14 && b.speed < 1.5 );
 		const aboard = p.riding ? null : p.mode === 'deck' ? 'deck' : p.mode === 'boat' ? 'helm' : null;
 		// ((M16) drawn up on the sand, she's as fast as at the dock)
-		this.store.setItem( BOAT_KEY, JSON.stringify( boatLeft( { x: b.position.x, z: b.position.z, heading: b.getYaw(), anchor: b.anchor, sock: b.sock, moored: moored || b.beached, aboard, T: islandTime( s.day, s.timeOfDay ), at: Date.now() } ) ) );
+		this.store.setItem( BOAT_KEY, JSON.stringify( boatLeft( { x: b.position.x, z: b.position.z, heading: b.getYaw(), anchor: b.anchor, sock: b.sock, moored: moored || b.beached, aboard, T: islandTime( s.day, s.timeOfDay ), at: Date.now(), boat: this.boat.id } ) ) );
 		if ( this.together ) this.together.mineBoat();
 
 	}
@@ -2493,10 +2505,12 @@ export class App {
 		const left = leftOf( this.store.getItem( BOAT_KEY ) );
 		if ( ! left ) return;
 		left.hauled = st.hauled;
-		const T = islandTime( s.day, s.timeOfDay ), dock = WORLD.boatDock.position, pick = this.weatherPick(), since = s.weatherSince;
+		const T = islandTime( s.day, s.timeOfDay ), dock = b.berth.position, pick = this.weatherPick(), since = s.weatherSince;
 		const depth = ( x, z ) => Math.max( 0, G.seaLevel.value - this.terrainData.heightAt( x, z ) );
 		const away = ! ( Date.now() - left.at < BACK_MS );
-		const story = withRecord( awayOf( left, away ? T : left.T, { dock, pick, since, depth, ...ableEnv( st.boat ) } ), away ? mine : null, dock );
+		// ((M16) a record of another boat than the one you're in: you'd got into this one, so she's at her berth)
+		if ( left.boat !== st.boat ) Object.assign( left, { x: dock.x, z: dock.z, heading: b.berth.heading, anchor: null, sock: false, moored: true, aboard: null } );
+		const story = withRecord( awayOf( left, away ? T : left.T, { dock, pick, since, depth, haul: FLEET[ st.boat ].haul, ...ableEnv( st.boat ) } ), away ? mine : null, dock );
 		const paid = st.payTow( story.fee ), towed = story.tows.length > 0;
 		if ( story.wear > 0 ) {
 
@@ -2544,7 +2558,27 @@ export class App {
 
 		}
 
-		if ( away ) g.awayTold = { story, paid, hull: st.hull, fish, from: left };
+		// ((M16) and the boats you weren't in, each at her own berth: game/Away.js)
+		let others = [];
+		if ( away ) {
+
+			const fleet = Object.fromEntries( Object.entries( st.fleet ).filter( ( [ id ] ) => id !== st.boat ) );
+			const stories = othersAway( fleet, left.T, T, { berth: berthOf, haul: ( id ) => FLEET[ id ].haul, pick, since } ), names = {};
+			for ( const [ id, o ] of Object.entries( stories ) ) {
+
+				const r = st.fleet[ id ];
+				names[ id ] = st.boatName( id );
+				st.payTow( o.fee );
+				r.hull = Math.min( 1, r.hull + o.wear );
+				if ( o.where === 'cradle' ) r.hauled = true;
+
+			}
+
+			others = tellOthers( stories, names );
+			st.save();
+			g.awayTold = { story, paid, hull: st.hull, fish, from: left, others };
+
+		}
 		this.together.mineBoat( true );
 
 	}
