@@ -326,7 +326,7 @@ export class DaysOut {
 	_left( T ) {
 
 		const b = this.app.boatCtl;
-		return { x: b.position.x, z: b.position.z, heading: b.getYaw(), anchor: b.anchor ? { x: b.anchor.x, z: b.anchor.z } : null, moored: b.moored, hauled: !! b.hauled, sock: b.sock, T };
+		return { x: b.position.x, z: b.position.z, heading: b.getYaw(), anchor: b.anchor ? { x: b.anchor.x, z: b.anchor.z } : null, moored: b.moored || !! b.beached, hauled: !! b.hauled, sock: b.sock, T }; // ((M16) drawn up on the sand, she's as fast as at the dock: App.saveBoat)
 
 	}
 
@@ -392,7 +392,7 @@ export class DaysOut {
 		if ( p.mode === 'boat' && aboard ) {
 
 			if ( b.speed < 2 && ! b.anchor && ! b.moored ) g.dropAnchor();
-			p.leaveHelm();
+			if ( ! b.model.seated ) p.leaveHelm(); // ((M16) a kayak has no deck to stand on: you're still in her seat)
 
 		}
 

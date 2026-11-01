@@ -27,6 +27,8 @@ const HOME = { x: 62, z: - 24 }; // m
 //
 // What she does beyond the rest of the fleet is here: play( dt, game ), each frame (Game.updateBoat): the paddle's
 // splashes, you in her, a capsize and righting her, launching and landing, getting soaked.
+const LEFT_TURNED = 0.7;
+
 export class KayakModel extends Vessel {
 
 	constructor() {
@@ -300,7 +302,8 @@ export class KayakModel extends Vessel {
 		this.body.rotation.z = 0;
 		this.body.position.y = 0;
 		this.sliding = null;
-		if ( spot ) this.lie( ctl, spot.x, spot.z, spot.heading );
+		// ((M16) left at an angle to the water, as people leave them, and so her side shows from up the beach)
+		if ( spot ) this.lie( ctl, spot.x, spot.z, spot.heading + LEFT_TURNED );
 		else ctl.beached = false;
 
 	}

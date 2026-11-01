@@ -11,6 +11,7 @@ import { spillShare } from '../src/world/boat/kayak/Capsize.js';
 import { HULLS, slamWear } from '../src/game/Hull.js';
 import { breakingLitres } from '../src/game/BreakingSeas.js';
 import { ABLE } from '../src/game/Seaworthy.js';
+import { DaysOut } from '../src/game/DaysOut.js';
 
 let bad = 0;
 const ok = ( c, msg ) => {
@@ -34,6 +35,14 @@ ok( fresh.stats.fuelL === 0 && fresh.money === 0, 'no fuel to buy, nothing in yo
 const v1 = new GameState( mem() );
 ok( v1.fromJSON( { v: 1, money: 900, upgrades: { hold: 2, engine: 1 }, fuel: 30 } ) && v1.boat === 'lobster' && v1.owns( 'kayak' ) && v1.stats.holdKg === 160 && v1.fuel === 30 && v1.money === 900, 'a v1 save keeps the lobster boat, with her gear and her tank, and gets the kayak' );
 ok( ! v1.fleet.lobster.paid && ! v1.owns( 'console' ), 'nothing paid for her, and the console still to buy' );
+
+// ---- a clock jump (a rest, or a tab left a minute): a kayak on the sand hasn't drifted, and one you're in still has you in her seat
+{
+
+	const left = DaysOut.prototype._left.call( { app: { boatCtl: { position: { x: 1, z: 2 }, getYaw: () => 0, anchor: null, moored: false, beached: true, hauled: null, sock: false } } }, 5 );
+	ok( left.moored === true, 'drawn up on the sand she counts as made fast, not as drifting ashore' );
+
+}
 
 // ---- the Guide's words, in a kayak: no helm, no fuel; on any device
 const helm = /helm|diesel|gasoline|bilge|wheel|throttle/i;

@@ -169,7 +169,7 @@ function cards( device, kayak ) {
 				<div class="is-joe"><i></i><span><b>Joe</b> · fish stand by the pier</span><em data-where="joe"></em></div>
 				<div class="is-marta"><i></i><span><b>Marta</b> · chandlery by the boathouse</span><em data-where="marta"></em></div>
 			</div>
-			<p style="margin:0;color:var(--tw-ink-3);font-size:var(--tw-fs-sm)">Both are marked on the map ${ document.documentElement.classList.contains( 'is-touch' ) ? 'at the top right' : 'in the lower right' }.</p>`,
+			<p style="margin:0;color:var(--tw-ink-3);font-size:var(--tw-fs-sm)">${ kayak ? 'All three are' : 'Both are' } marked on the map ${ document.documentElement.classList.contains( 'is-touch' ) ? 'at the top right' : 'in the lower right' }.</p>`,
 		},
 	];
 
@@ -481,7 +481,8 @@ export class Guide {
 		if ( this.minimap ) this.minimap.highlight( [] );
 		this.seen.intro = true;
 		this._save();
-		if ( this._kayak && this.game.app.player.mode === 'walk' && this.game.app.boatCtl.beached ) this.tip( 'shoveOff' );
+		const b = this.game.app.boatCtl;
+		if ( this._kayak && this.game.app.player.mode === 'walk' && Math.hypot( b.position.x - b.berth.position.x, b.position.z - b.berth.position.z ) < 30 ) this.tip( 'shoveOff' );
 
 	}
 
