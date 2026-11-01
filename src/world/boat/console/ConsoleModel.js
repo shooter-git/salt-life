@@ -2,7 +2,6 @@ import { MathUtils, Mesh, Object3D, Quaternion, Vector3 } from '../../../engine/
 import { Vessel } from '../Vessel.js';
 import { compassCardGeometry } from '../Wheelhouse.js';
 import { mergePrepared, prepare } from '../GeoKit.js';
-import { sstep } from '../HullLines.js';
 import { VARIATION } from '../../../game/Chart.js';
 import { LANDS } from '../../../fx/Drips.js';
 import { ConsoleLines } from './ConsoleLines.js';
@@ -15,7 +14,6 @@ import { buildLadder, LADDER } from './ConsoleStern.js';
 import { CONSOLE_HANDLING } from './ConsoleHandling.js';
 import { STEER_MAX, TRIM } from './Outboards.js';
 
-const DEG = Math.PI / 180;
 const WHEEL_TURNS = 0.75;
 const THROTTLE_ANGLE = 0.6;
 // the compass's card, as the lobster boat's (BoatModel: COMPASS)
@@ -108,8 +106,6 @@ export class ConsoleModel extends Vessel {
 
 		// ---- how she floats, from her lines
 		this.floatBody( { keelBottom: - 0.53, roofHeight: TOP.y, comY: 0.3, gyration: [ 0.38, 0.27, 0.27 ] } );
-		// (the engines' weight, 3 t in all, sits aft of her buoyancy as hers do: her lines carry it)
-		this.hydro.centerOfMass.z = lines.centerOfBuoyancy.z;
 
 		// ---- anchor points
 		const S = DECK.sole, eyeY = S + 1.62;
@@ -464,4 +460,3 @@ export class ConsoleModel extends Vessel {
 
 }
 
-void [ sstep, DEG ];

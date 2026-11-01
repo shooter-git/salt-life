@@ -1,6 +1,6 @@
 import { CircleGeometry, Matrix4, PlaneGeometry, Vector3 } from '../../../engine/index.js';
-import { box, rod, tube, torus, cylinder, sphere, roundedBox, lathe, gridSurface, mat4, auxVertices } from '../GeoKit.js';
-import { sstep, lerp } from '../HullLines.js';
+import { box, rod, tube, torus, cylinder, sphere, roundedBox, lathe, gridSurface } from '../GeoKit.js';
+import { sstep } from '../HullLines.js';
 import { atlasUV } from '../Instruments.js';
 import { solid, rounded, softCorners, moulded } from './Mould.js';
 import { SEAT } from './Moulded.js';
@@ -59,10 +59,10 @@ function toAtlas( geo, name ) {
 export function buildHelm( kit, L, parts ) {
 
 	consoleBody( kit, parts );
-	leaningPost( kit, parts );
+	leaningPost( kit );
 
 	kit.fitting = 'tTop';
-	tTop( kit, parts );
+	tTop( kit );
 	kit.fitting = 'tankRack';
 	tanks( kit );
 	kit.fitting = null;
@@ -181,7 +181,6 @@ function consoleBody( kit, parts ) {
 	kit.add( 'fittings', solid( rounded( - W + 0.05, S + 0.46, W - 0.05, S + 0.86, 0.05 ), F0 - 0.005, F0 + 0.075, 0.03, ( u, v, d ) => V( u, v, d ), { rings: 2 } ), { color: 0xe9e3d3, rough: 0.6 } );
 	// a latch each side of the box
 	for ( const s of [ 1, - 1 ] ) kit.add( 'fittings', box( 0.05, 0.05, 0.01 ).translate( s * 0.3, S + 0.26, F1 + 0.003 ), STAINLESS );
-	// the instruments' low light; the VHF goes up in the T-top's pod, or here if she's without one (no room: she just has it there)
 
 }
 
@@ -221,7 +220,7 @@ function leaningPost( kit ) {
 
 // ---- the T-top: a white moulded hardtop, oval, a navy lip under its edge, on four legs that lean out to it
 
-function tTop( kit, parts ) {
+function tTop( kit ) {
 
 	const T = TOP, N = 40, cz = ( T.z0 + T.z1 ) / 2, hl = ( T.z1 - T.z0 ) / 2;
 	const oval = ( f, a ) => {
@@ -356,7 +355,6 @@ function tTop( kit, parts ) {
 	}
 
 	for ( const s of [ 1, - 1 ] ) kit.add( 'fittings', rod( V( s * 0.62, T.y, - 1.2 ), V( s * 0.64, T.y + 2.3, - 1.28 ), 0.009, 5, 0.0025 ), { color: 0xeeeeea, rough: 0.5 } );
-	void parts;
 
 }
 
@@ -410,4 +408,3 @@ export function throttleGeometry() {
 
 }
 
-void [ mat4, auxVertices, lerp ];

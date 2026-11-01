@@ -1,5 +1,5 @@
 import { Vector3, Float32BufferAttribute, BufferGeometry } from '../../../engine/index.js';
-import { gridSurface, loft, fanCap, box, rod, tube, torus, cylinder, lathe, auxVertices } from '../GeoKit.js';
+import { gridSurface, loft, fanCap, box, rod, tube, torus, cylinder, auxVertices } from '../GeoKit.js';
 import { sstep, lerp } from '../HullLines.js';
 import { solid, rounded, softCorners } from './Mould.js';
 import { SURFACE } from './ConsoleMaterials.js';
@@ -507,7 +507,5 @@ function hardware( kit, L ) {
 
 	nav( 1, 0xff1a0a );
 	nav( - 1, 0x10ff50 );
-	void lathe;
-	void fanCap;
 
 }

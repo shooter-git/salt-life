@@ -7,7 +7,7 @@ import { TOP, CONSOLE, POST } from '../src/world/boat/console/ConsoleHelm.js';
 import { TRIM, trimFor } from '../src/world/boat/console/Outboards.js';
 import { soakRate, Soak } from '../src/world/boat/console/Soak.js';
 import { BoatController } from '../src/player/BoatController.js';
-import { Vector3, Quaternion } from '../src/engine/index.js';
+import { Vector3 } from '../src/engine/index.js';
 
 let bad = 0;
 const ok = ( c, what ) => {
@@ -104,17 +104,14 @@ ok( m._trim < TRIM.run, `at the helm: down in the water (${ ( m._trim * 57.3 ).t
 const table = [];
 speedMul( 1.25 );
 let toPlane = null, plowing = 0;
-let t0 = 0;
 run( 20, 1, 0, ( s ) => {
 
-	t0 = s;
 	if ( toPlane === null && pitch() > 3 && ctl.forwardSpeed > 7.5 ) toPlane = s;
 	plowing = Math.max( plowing, pitch() );
 
 } );
 const full = ctl.forwardSpeed, fullPitch = pitch(), fullY = ctl.position.y;
 table.push( `1.0: ${ ( full / KT ).toFixed( 1 ) } kn, ${ fullPitch.toFixed( 1 ) }°, rise ${ fullY.toFixed( 2 ) } m` );
-void t0;
 ok( full / KT > 38 && full / KT < 46, `twin 150s, full throttle ${ ( full / KT ).toFixed( 1 ) } kn (the real boat: 42 kn, 48 mph)` );
 ok( toPlane !== null && toPlane < 7, `on the plane in ${ toPlane?.toFixed( 1 ) } s` );
 ok( plowing > 4 && plowing < 12, `her bow up over the hump ${ plowing.toFixed( 1 ) }°` );
@@ -186,7 +183,6 @@ ctl.driven = true;
 run( 18, 0.7 );
 const v0 = ctl.forwardSpeed;
 let minRoll = 0, maxRoll = 0;
-const yaw0 = ctl.getYaw();
 let yawRate = 0;
 run( 12, 0.7, 1, () => {
 
@@ -196,7 +192,6 @@ run( 12, 0.7, 1, () => {
 
 } );
 const radius = ctl.speed / Math.max( Math.abs( ctl.angular.y ), 1e-3 );
-void yaw0;
 console.log( `     ω ${ ctl.angular.y.toFixed( 2 ) } rad/s, peak ${ yawRate.toFixed( 2 ) }, roll ${ minRoll.toFixed( 1 ) } .. ${ maxRoll.toFixed( 1 ) }` );
 ok( radius > 12 && radius < 60, `hard over at cruise: a ${ radius.toFixed( 0 ) } m turning radius (${ ( ctl.speed / KT ).toFixed( 0 ) } kn from ${ ( v0 / KT ).toFixed( 0 ) } kn)` );
 const lean = roll();
@@ -359,7 +354,6 @@ ok( soak.wet < w && soak.wet > 0.1, `and it takes a while to dry (${ soak.wet.to
 ok( m.lamps.port && m.lamps.port[ 0 ] > 0, 'side lights: red to port (mirrored green)' );
 ok( m.lamps.masthead && m.lamps.stern.join() === m.lamps.masthead.join(), 'one all-round white, as Rule 23 lets a boat under 12 m' );
 ok( CONSOLE_HANDLING.engine.shaftRpm > 0, 'an engine' );
-void Quaternion;
 m.dispose();
 console.log( bad ? `${ bad } failed` : 'console: all ok' );
 if ( bad ) process.exit( 1 );
