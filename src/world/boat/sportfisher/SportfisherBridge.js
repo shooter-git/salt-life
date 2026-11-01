@@ -27,7 +27,7 @@ const coamingY = ( z ) => lerp( SF.bridge + 0.34, SF.bridge + 0.86, sstep( - 2.6
 // the hatch the cockpit's ladder comes up through (starboard side, over the mezzanine)
 export const BRIDGE_HATCH = { x0: - 1.45, x1: - 0.72, z0: - 3.12, z1: - 2.42 };
 
-export const HELM = { x: 0, z: - 0.05, seatZ: - 0.25, eye: V( 0, SF.bridge + 1.46, - 0.08 ), consoleZ0: 0.42, consoleZ1: 1.12, halfW: 0.74 };
+export const HELM = { x: 0, z: - 0.2, seatZ: - 0.42, eye: V( 0, SF.bridge + 1.5, - 0.22 ), consoleZ0: 0.42, consoleZ1: 1.12, halfW: 0.74 };
 
 function plan( N ) {
 
@@ -159,7 +159,7 @@ function console_( kit, L, q, parts ) {
 	}
 
 	// the wheel, on its shaft, low on the slope; twin levers to starboard, a compass ahead of the wheel
-	const hub = at( 0, 0.32 ), center = hub.clone().addScaledVector( normal, 0.14 );
+	const hub = at( 0, 0.42 ), center = hub.clone().addScaledVector( normal, 0.14 );
 	kit.add( 'fittings', rod( hub, center.clone().addScaledVector( normal, - 0.03 ), 0.02, 8 ), STEEL );
 	parts.wheelCenter = center;
 	parts.wheelAxis = normal.clone().negate();

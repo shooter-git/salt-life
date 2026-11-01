@@ -13,7 +13,8 @@ const vec3 = ( c ) => `vec3( ${ c.r.toFixed( 5 ) }, ${ c.g.toFixed( 5 ) }, ${ c.
 // how much white gelcoat in deep shade is lifted by the sea's bounce: the world's sky fill is kept low for the sand, and
 // the underside of her overhang and the faces away from the sun otherwise come out black
 const OUTSIDE_FILL = 0.1;
-const CABIN_FILL = 0.62; // her downlights
+const CABIN_FILL = 0.8; // her downlights
+const CABIN_SUN = 0.04; // what daylight gets in: the sun's shadows aren't drawn on a phone, and without this it lights her soles through the deck
 
 export class SportfisherMaterials extends BoatMaterials {
 
@@ -81,7 +82,7 @@ export class SportfisherMaterials extends BoatMaterials {
 		float seam = smoothstep( 0.05, 0.05 + aaP, f ) * ( 1.0 - smoothstep( 0.95 - aaP, 0.95, f ) );
 		float tone = fract( sin( id * 12.9898 ) * 43758.5453 );
 		float grain = sin( vLocal.z * 7.0 + tone * 40.0 + sin( vLocal.z * 31.0 + id ) * 0.6 );
-		vec3 teak = ${ vec3( linear( 0xb8783f ) ) } * ( 0.88 + 0.2 * tone + 0.04 * grain );
+		vec3 teak = ${ vec3( linear( 0xc69562 ) ) } * ( 0.88 + 0.2 * tone + 0.04 * grain );
 		diffuseColor.rgb = mix( ${ vec3( linear( 0xe8dcc6 ) ) }, teak, seam );
 
 	}
@@ -107,7 +108,9 @@ export class SportfisherMaterials extends BoatMaterials {
 		return extend( m, ( shader ) => {
 
 			// the light's from overhead: the ceiling's own glow, what's under it a little less
-			shader.fragmentShader = shader.fragmentShader.replace( '#include <emissivemap_fragment>', `#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * ${ CABIN_FILL.toFixed( 3 ) };` );
+			shader.fragmentShader = shader.fragmentShader
+				.replace( '#include <emissivemap_fragment>', `#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * ${ CABIN_FILL.toFixed( 3 ) };` )
+				.replace( '#include <lights_fragment_end>', `#include <lights_fragment_end>\n\treflectedLight.directDiffuse *= ${ CABIN_SUN.toFixed( 3 ) };\n\treflectedLight.directSpecular *= ${ CABIN_SUN.toFixed( 3 ) };` );
 
 		} );
 

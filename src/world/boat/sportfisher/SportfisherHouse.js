@@ -9,10 +9,10 @@ import { V, bx, rbx, wallZ, plate, deckY, houseWallX, HOUSE_CORNER, WHITE, LININ
 // of settee to port, the galley with its island to starboard, the dinette, and a companionway down and forward to the
 // cabins: a bunk room to port, the head to starboard, the stateroom in the bow.
 
-const CHERRY = { color: 0x8c4a1e, rough: 0.28, pattern: 3 };
+const CHERRY = { color: 0x9a5f30, rough: 0.28, pattern: 3 };
 const CREAM = { color: 0xe9e1cc, rough: 0.75 };
 const COUNTER = { color: 0xd8cdb6, rough: 0.2 };
-const SOLE = { color: 0xb9a78a, rough: 0.45 };
+const SOLE = { color: 0xc9b89c, rough: 0.45 };
 const LINER = { color: 0xeee8da, rough: 0.6 };
 const SHEET = { color: 0xe6e8ea, rough: 0.9 };
 
@@ -88,6 +88,8 @@ function sides( kit, L, q ) {
 		orientTowards( pane, V( s, 0, 0 ) );
 		pane.computeVertexNormals();
 		kit.add( 'glass', pane );
+		// its lining, inside
+		kit.add( 'cabin', slab( out, [ win ], ( u, v ) => V( s * ( houseWallX( L, u, v ) - 0.052 ), v, u ), { back: false, edges: false } ), LINER );
 		// its mullion
 		if ( ! q.low ) kit.add( 'fittings', rod( V( s * ( houseWallX( L, - 0.45, 2.1 ) + 0.002 ), 2.08, - 0.45 ), V( s * ( houseWallX( L, - 0.45, 2.7 ) + 0.002 ), 2.82, - 0.45 ), 0.018, 5 ), { color: 0x0a0c0e, rough: 0.3 } );
 
@@ -112,6 +114,7 @@ function aftBulkhead( kit, L, q ) {
 
 	}
 
+	kit.add( 'cabin', slab( outline, [ winL, winR ], ( u, v ) => V( u, v, z + 0.062 ), { back: false, edges: false } ), LINER );
 	// the door stands open against the bulkhead: its frame, its sill
 	for ( const x of door ) kit.add( 'fittings', bx( x - 0.025, m, z - 0.012, x + 0.025, 2.84, z + 0.012 ), { color: 0x24262a, rough: 0.4 } );
 	kit.add( 'fittings', bx( door[ 0 ] - 0.025, 2.82, z - 0.012, door[ 1 ] + 0.025, 2.86, z + 0.012 ), { color: 0x24262a, rough: 0.4 } );
@@ -182,7 +185,8 @@ function salon( kit, L, q ) {
 	const stair = [ [ - 0.42, 0.72 ], [ 0.48, 0.72 ], [ 0.48, zF ], [ - 0.42, zF ] ];
 	const fullPlan = [ [ wA, zA ], [ wF, zF ], [ 0.48, zF ], [ 0.48, stair[ 0 ][ 1 ] ], [ - 0.42, stair[ 0 ][ 1 ] ], [ - 0.42, zF ], [ - wF, zF ], [ - wA, zA ] ];
 	kit.add( 'cabin', plate( fullPlan, [], y, 0.02 ), SOLE );
-	kit.add( 'cabin', plate( plan, [], SF.roofY - 0.02, 0.02 ), { color: 0xf1ecdf, rough: 0.8 } );
+	const over = [ [ wA - 0.06, zA ], [ wA - 0.06, ROOF_CORNER ], [ wF - 0.32, zF ], [ - wF + 0.32, zF ], [ - wA + 0.06, ROOF_CORNER ], [ - wA + 0.06, zA ] ];
+	kit.add( 'cabin', plate( over, [], SF.roofY - 0.02, 0.02 ), { color: 0xf1ecdf, rough: 0.8 } );
 	// the wall below the windows and between them, in cherry; the valance above
 	for ( const s of [ 1, - 1 ] ) {
 
@@ -199,7 +203,7 @@ function salon( kit, L, q ) {
 		orientTowards( g, V( - s, 0, 0 ) );
 		g.computeVertexNormals();
 		kit.add( 'cabin', g, CHERRY );
-		kit.add( 'cabin', bx( s > 0 ? wA - 0.1 : - wA, 2.78, zA, s > 0 ? wA : - wA + 0.1, SF.roofY - 0.02, zF ), CHERRY );
+		kit.add( 'cabin', bx( s > 0 ? wA - 0.16 : - wA + 0.06, 2.8, zA, s > 0 ? wA - 0.06 : - wA + 0.16, SF.roofY - 0.02, ROOF_CORNER ), CHERRY );
 
 	}
 
@@ -209,7 +213,7 @@ function salon( kit, L, q ) {
 	if ( ! q.low ) for ( const [ x, z ] of [ [ 0.9, - 1.5 ], [ - 0.9, - 1.5 ], [ 0.9, 0.2 ], [ - 0.9, 0.2 ], [ 0, - 0.65 ] ] ) kit.add( 'glow', cylinder( 0.04, 0.04, 0.006, 10 ).translate( x, SF.roofY - 0.024, z ), { color: 0xfff1d8, pattern: 5 } );
 	// the forward bulkhead, its door over the stairs
 	const zw = zF - 0.05, top = SF.roofY;
-	kit.add( 'cabin', wallZ( [ [ - wF, y ], [ - 0.42, y ], [ - 0.42, PASSAGE_TOP ], [ 0.48, PASSAGE_TOP ], [ 0.48, y ], [ wF, y ], [ wF, top ], [ - wF, top ] ], [], zw, 0.05 ), CHERRY );
+	kit.add( 'cabin', wallZ( [ [ - wF, y ], [ - 0.42, y ], [ - 0.42, PASSAGE_TOP ], [ 0.48, PASSAGE_TOP ], [ 0.48, y ], [ wF, y ], [ wF, 2.35 ], [ wF - 0.32, top ], [ - wF + 0.32, top ], [ - wF, 2.35 ] ], [], zw, 0.05 ), CHERRY );
 
 }
 
@@ -426,14 +430,17 @@ function lowerCabins( kit, L, q ) {
 	};
 
 	// the passage: its walls, carried up over the stairs to its own higher ceiling; the bunk room to port and the head to starboard, doors at their forward ends
-	wallS( 0.48, zA, 3.45, [ 2.45, 3.1 ], PASSAGE_TOP );
-	wallS( - 0.46, zA, 3.45, [ 2.45, 3.1 ], PASSAGE_TOP );
-	kit.add( 'cabin', plate( [ [ - 0.46, zA ], [ 0.48, zA ], [ 0.48, 3.45 ], [ - 0.46, 3.45 ] ], [], PASSAGE_TOP, 0.02 ), { color: 0xf1ecdf, rough: 0.8 } );
-	// and across its forward end, up to that ceiling, over the stateroom's door
-	kit.add( 'cabin', wallZ( [ [ - 0.46, 1.92 ], [ 0.48, 1.92 ], [ 0.48, PASSAGE_TOP ], [ - 0.46, PASSAGE_TOP ] ], [], 3.45, 0.04 ), CHERRY );
+	const zHi = 2.9;
+	wallS( 0.48, zA, 3.45, [ 2.45, 2.85 ] );
+	wallS( - 0.46, zA, 3.45, [ 2.45, 2.85 ] );
+	for ( const x of [ 0.48, - 0.46 ] ) kit.add( 'cabin', slab( [ [ zA, 2.0 ], [ zHi, 2.0 ], [ zHi, PASSAGE_TOP ], [ zA, PASSAGE_TOP ] ], [], ( u, v, side ) => V( x + ( side ? 0.04 : 0 ), v, u ) ), CHERRY );
+	kit.add( 'cabin', plate( [ [ - 0.46, zA ], [ 0.52, zA ], [ 0.52, zHi ], [ - 0.46, zHi ] ], [], PASSAGE_TOP, 0.02 ), { color: 0xf1ecdf, rough: 0.8 } );
+	// and across at the end of the higher part, down to the lower ceiling forward of it
+	kit.add( 'cabin', wallZ( [ [ - 0.46, 1.96 ], [ 0.52, 1.96 ], [ 0.52, PASSAGE_TOP ], [ - 0.46, PASSAGE_TOP ] ], [], zHi, 0.03 ), CHERRY );
 	bulkhead( zA + 0.01, [ - 0.42, 0.48 ] );
-	// the stateroom's bulkhead, its door
+	// the stateroom's bulkhead, its door; and the bow's, at the head of the berth
 	bulkhead( 3.45, [ - 0.36, 0.42 ] );
+	bulkhead( zF - 0.02 );
 
 	// the bunk room: one over the other along her side, as in the photographs, cherry fiddles, a pillow at each head
 	const bx0 = 0.56, bzA = 1.68, bzF = 3.38;
