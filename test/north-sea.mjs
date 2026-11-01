@@ -249,5 +249,56 @@ function aboard( { cond = 'gale', throttle = 0.7, rel = Math.PI, secs = 120, anc
 }
 
 G.windDir.value.copy( G.windPrevailing.value );
+// ---- the height as you'd judge it by eye, and a long sea's own crests breaking (it read flat)
+{
+
+	const g = pick( 'gale' ), fair = pick( 'fair' ), P = { x: 4000, z: 4000 };
+	for ( const tier of [ 'low', 'high' ] ) {
+
+		const waves = sea( g, tier, P ), d = [ 0, 0, 0 ], lee = new Float64Array( waves.waves.length ).fill( 1 ), H = [];
+		let last = 0, hi = - 9, lo = 9, began = false;
+		for ( let t = 0; t < 3600; t += 0.1 ) {
+
+			const y = waves.displacement( P.x, P.z, t, d, 1, lee )[ 1 ];
+			hi = Math.max( hi, y );
+			lo = Math.min( lo, y );
+			if ( last < 0 && y >= 0 ) {
+
+				if ( began ) H.push( hi - lo );
+				began = true;
+				hi = - 9;
+				lo = 9;
+
+			}
+
+			last = y;
+
+		}
+
+		H.sort( ( a, b ) => b - a );
+		const third = H.slice( 0, Math.ceil( H.length / 3 ) ), h13 = third.reduce( ( a, b ) => a + b ) / third.length / FT;
+		ok( h13 > 11 && h13 < 14, `${ tier }: the highest third of its waves ${ h13.toFixed( 1 ) } ft, in the radio's 10 to 14` );
+
+	}
+
+	ok( Math.abs( hs( g ) / FT - 12 ) < 1, `and the radio's figure itself ${ ( hs( g ) / FT ).toFixed( 1 ) } ft, as it was` );
+	for ( const tier of [ 'low', 'high' ] ) {
+
+		G.windSpeed.value = g.wind;
+		const waves = sea( g, tier, P ), caps = new Whitecaps( { waves, tier } );
+		caps.set( g.wind );
+		const big = caps.carriers[ 2 ], w = waves.waves[ big.wave ], L = 2 * Math.PI / w.k;
+		ok( w.from === 's' && L > 40 && L < 90, `${ tier }: a gale's heads on its ${ L.toFixed( 0 ) } m wave` );
+		let heads = 0, others = 0;
+		for ( let t = 300; t < 400; t += 3 ) caps.rollers( P.x, P.z, 300, t, ( x, z, a, h, on, wave ) => { if ( wave === w ) heads ++; else others ++; } );
+		ok( heads > 0 && others > 0, `${ tier }: they break, ${ heads } heads among ${ others } of the short seas' whitecaps in 100 s, 300 m about` );
+		const f = new Whitecaps( { waves: sea( fair, tier, P ), tier } );
+		f.set( fair.wind );
+		ok( f.chance[ 2 ] === 0 && f.uniforms.whitecapBig.value.x === 0 && f.uniforms.whitecapBig.value.y === 0, `${ tier }: none on a fair day, and nothing of them added to its white` );
+
+	}
+
+}
+
 console.log( fails ? `${ fails } FAILED` : 'all passed' );
 if ( fails ) process.exit( 1 );

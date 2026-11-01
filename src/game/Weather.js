@@ -570,13 +570,17 @@ export function withEdge( w, x, z ) {
 // day's 1.1 m, 3 to 4 ft)
 export const SEA_A = { swell: [ 0.32, 0.18, 0.12, 0.06 ], wind: [ 0.09, 0.045, 0.025, 0.012 ] };
 const SEA_SS = SEA_A.swell.reduce( ( s, a ) => s + a * a, 0 ), SEA_WW = SEA_A.wind.reduce( ( s, a ) => s + a * a, 0 );
-export const seaHeight = ( swell, windSea, blow = 0 ) => 4 * Math.sqrt( ( seaSwell( swell, blow ) ** 2 * SEA_SS + windSea * windSea * SEA_WW ) / 2 );
+export const seaHeight = ( swell, windSea, blow = 0 ) => 4 * Math.sqrt( ( seaLong( swell, blow ) ** 2 * SEA_SS + windSea * windSea * SEA_WW ) / 2 );
 // (M16) A blow's own sea (blowSeaOf) is carried by the long waves, there being no others of its length. How high it
 // makes them, x today's (the swell and it adding as energy: on a fair day, the swell's exactly)
 const SEA_LONG = 4 * Math.sqrt( SEA_SS / 2 );
+const seaLong = ( swell, blow ) => blow > 0 ? Math.hypot( swell, blow / SEA_LONG ) : swell;
+// (As drawn, the blow's a share higher. A forecast's height is the highest third of the waves, as you'd judge them by eye: on
+// four to eight waves' sum, 4 standard deviations come to fewer big ones than a real sea's, a gale's 12 ft to 10 ft by eye.)
+const SEA_DRAWN = 1.2;
 export function seaSwell( swell, blow = 0 ) {
 
-	return blow > 0 ? Math.hypot( swell, blow / SEA_LONG ) : swell;
+	return blow > 0 ? Math.hypot( swell, SEA_DRAWN * blow / SEA_LONG ) : swell;
 
 }
 // How far the long waves have come round to run with the wind (0..1), as far as the blow's sea has outgrown the

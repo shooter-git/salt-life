@@ -70,7 +70,10 @@ export function rippleTexture( res = 256 ) {
 
 	}
 
-	return texture( data, res );
+	const tex = texture( data, res );
+	// ((M16) a blow's rough water reads it far out at a low angle: blurred flat by the mips, a sea past a few hundred metres was smooth)
+	tex.anisotropy = 8;
+	return tex;
 
 }
 
