@@ -1,3 +1,4 @@
+import { LEFT, RIGHT } from '../../core/Glyphs.js';
 // (M14) The boat's radar: her open array turns on the wheelhouse roof (BoatModel: clockwise from above, as
 // a radar's does, RADAR_RPM), and its screen on the dash (Instruments' third, to port of the plotter) shows
 // what it sees, as a small boat's colour radar does (a Furuno 1815's, photographed at 2 NM): heading up,
@@ -309,7 +310,7 @@ export class BoatRadar {
 		g.fillText( `${ hdg.toFixed( 1 ) }°`, x + w - 10, y + 28 );
 		g.font = '600 13px ui-monospace, monospace';
 		g.textBaseline = 'bottom';
-		g.fillText( '← → RANGE', x + w - 10, y + h - 8 );
+		g.fillText( `${ LEFT } ${ RIGHT } RANGE`, x + w - 10, y + h - 8 );
 		g.textAlign = 'left';
 		g.fillText( 'GAIN AUTO', x + 10, y + h - 8 );
 		g.restore();

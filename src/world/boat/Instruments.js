@@ -2,6 +2,7 @@ import * as THREE from '../../engine/index.js';
 import { FT, KT, gallons } from '../../game/Units.js';
 import { SHEETS, HOME, legTo, magnetic, fuelFor } from '../../game/Chart.js';
 import { S52, rgb, SHADES } from '../../game/ChartBake.js';
+import { UP, PEAK, PRIME } from '../../core/Glyphs.js';
 
 // (M11) The boat's instruments as they read: five gauges about the helm and two screens on the dash,
 // drawn into one canvas that the dash's display meshes take their uvs from (RECTS, atlasUV: built in
@@ -120,7 +121,7 @@ export function position( x, z ) {
 	const dm = ( v ) => {
 
 		const a = Math.abs( v ), d = Math.floor( a );
-		return `${ d }°${ ( ( a - d ) * 60 ).toFixed( 3 ).padStart( 6, '0' ) }′`;
+		return `${ d }°${ ( ( a - d ) * 60 ).toFixed( 3 ).padStart( 6, '0' ) }${ PRIME }`;
 
 	};
 	return [ `${ dm( lat ) }${ lat >= 0 ? 'N' : 'S' }`, `${ dm( lon ) }${ lon >= 0 ? 'E' : 'W' }` ];
@@ -663,12 +664,12 @@ export class BoatInstruments {
 				g.textAlign = 'center';
 				g.textBaseline = 'middle';
 				g.font = `${ n.water ? 'italic 500' : '600' } ${ n.small ? 12 : 14 }px system-ui, sans-serif`;
-				const half = g.measureText( n.peak ? `▲ ${ n.name }` : n.name ).width / 2 + 3, tall = n.light ? 22 : 10;
+				const half = g.measureText( n.peak ? `${ PEAK } ${ n.name }` : n.name ).width / 2 + 3, tall = n.light ? 22 : 10;
 				if ( boxes.some( ( b ) => Math.abs( b.x - px ) < b.half + half && py - 9 < b.y + b.tall && py + tall > b.y - 9 ) ) continue;
 				boxes.push( { x: px, y: py, half, tall } );
 				g.lineWidth = 3;
 				g.strokeStyle = 'rgba(255,255,255,0.75)';
-				const text = n.peak ? `▲ ${ n.name }` : n.name;
+				const text = n.peak ? `${ PEAK } ${ n.name }` : n.name;
 				g.strokeText( text, px, py );
 				g.fillStyle = rgb( S52.CHBLK );
 				g.fillText( text, px, py );
@@ -801,7 +802,7 @@ export class BoatInstruments {
 		g.fillStyle = 'rgba(16,20,22,0.85)';
 		g.textAlign = 'left';
 		g.font = '700 12px system-ui, sans-serif';
-		g.fillText( 'N ↑', x + 10, y + h - 38 );
+		g.fillText( `N ${ UP }`, x + 10, y + h - 38 );
 		// (a scale bar a round length, about a fifth of the screen)
 		const bar = niceLength( across / 5 ), bw = bar * s;
 		g.fillRect( x + w - 10 - bw, y + h - 34, bw, 2 );
