@@ -93,6 +93,7 @@ import { createGameUI } from './ui/GameUI.js';
 import { PostChain } from './post/PostChain.js';
 import { FLOOD_L } from './game/Hull.js';
 import { releaseGeometries, releaseTextures, uploadTextures, watchContext } from './core/ReleaseAfterUpload.js';
+import { decodeInWorker } from './core/MeshoptWorker.js';
 import { releaseParts } from './world/village/GeoBuilder.js';
 
 // Salt Life: the island, the sea and the boat, drawn with three.js inside All the Spaces. It follows
@@ -230,6 +231,7 @@ export class App {
 			portal.save.shared.get( 'boats' ).catch( () => null ).then( ( boats ) => this._boatsRead = boats ),
 		] );
 		setDetailData( new Uint8Array( detail ) );
+		decodeInWorker();
 		this.state = new GameState( this.store );
 		this.state.load(); // (the save was read above: money, the cooler, the log, upgrades, fuel)
 		this.loadClock();
