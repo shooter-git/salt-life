@@ -3,6 +3,7 @@ import { BoatLamps } from '../world/boat/BoatLamps.js';
 import { BOATS, loadBoat } from '../world/boat/Boats.js';
 import { mat4, mergePrepared, prepare, triangleCount } from '../world/boat/GeoKit.js';
 import { createPropMaterial } from '../game/GameMaterials.js';
+import { releaseGeometries } from '../core/ReleaseAfterUpload.js';
 
 // (M16) The others' boats, each the boat it is. A boat's meshes are made once per type (her Vessel, the template) and
 // each boat of that type drawn is a clone of it: its meshes and materials shared, no new shaders. Yours is the template
@@ -153,6 +154,7 @@ export class BoatCopies {
 
 			model = await loadBoat( e.id, app.tier );
 			if ( app.tier === 'low' ) this._trim( model );
+			releaseGeometries( model.group ); // (once she's on the GPU, her arrays go from script memory)
 			model.group.traverse( ( o ) => {
 
 				if ( o.isMesh ) o.castShadow = o.castShadow && app.tier === 'high';

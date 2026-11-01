@@ -69,10 +69,21 @@ const until = ( g, what, timeout = 400000 ) => g.waitForFunction( `( () => { try
 const posed = ( g ) => until( g, `${ other } && ${ other }.cur && ${ other }.cur.boat` );
 // (a look about, from the player: put where the camera can see)
 const stand = ( g, x, z, yaw, y = null ) => g.evaluate( ( [ x, z, yaw, y ] ) => { const a = window.__app, p = a.player; p.position.set( x, y ?? Math.max( a.terrainData.heightAt( x, z ), a.colliders.groundHeightAt( x, z, 50 ) ), z ); p.yaw = yaw; p.pitch = - 0.05; p.velocity.set( 0, 0, 0 ); }, [ x, z, yaw, y ] );
+// (a frame really drawn, and n more: with the drawing just back on the page's ticks run ahead of them)
+const drawn = async ( g, n = 2 ) => {
+
+	for ( let i = 0; i <= n; i ++ ) {
+
+		await g.evaluate( () => { window.__draws.peak = { calls: 0, tris: 0 }; } );
+		await g.waitForFunction( () => window.__draws.peak.calls > 20, null, { timeout: 400000, polling: 200 } );
+
+	}
+
+};
 const shot = async ( who, name ) => {
 
 	await draws( who.game, true );
-	await frames( who.game, 3 );
+	await drawn( who.game );
 	await who.page.screenshot( { path: `${ out }/boats-${ name }.png` } );
 	await draws( who.game, false );
 
@@ -81,9 +92,10 @@ const shot = async ( who, name ) => {
 const reads = async ( g, what ) => {
 
 	await draws( g, true );
-	await frames( g, 2 );
+	await drawn( g, 1 );
 	await g.evaluate( () => { window.__draws.peak = { calls: 0, tris: 0 }; } );
-	await frames( g, 6 );
+	await g.waitForFunction( () => window.__draws.peak.calls > 20, null, { timeout: 400000, polling: 200 } );
+	await drawn( g, 0 );
 	const r = await g.evaluate( () => { if ( window.gc ) window.gc(); const m = performance.memory; return { draws: window.__draws.peak.calls, triangles: window.__draws.peak.tris, heapMB: m ? +( m.usedJSHeapSize / 1048576 ).toFixed( 1 ) : null }; } );
 	await draws( g, false );
 	console.log( `     readings, ${ what }:`, JSON.stringify( r ) );
@@ -201,8 +213,8 @@ await robin.game.evaluate( () => { const p = window.__app.player; p.ride( p.ride
 await frames( robin.game, 3 );
 // up the tower: looking at a find, she calls it down
 await robin.game.evaluate( () => { const p = window.__app.player, s = p.boat.model.stations.tower; p.deckPos.set( s.x, s.y, s.z ); p.deckVel.set( 0, 0, 0 ); } );
-await frames( robin.game, 3 );
-say( await robin.game.evaluate( () => window.__app.together.crew.job ) === 'tower', 'Robin goes up the tower: she\'s the spotter' );
+await until( robin.game, 'window.__app.together.crew.job === \'tower\'' );
+say( true, 'Robin goes up the tower: she\'s the spotter' );
 await until( sam.game, `${ other }.job === 'tower'` );
 const call = await robin.game.evaluate( async () => {
 
@@ -241,7 +253,7 @@ say( chair.d < 0.02 && chair.aft < - 0.8 && chair.sit > 0.3, `Sam sees her sat i
 const crewAid = await robin.game.evaluate( () => { const t = window.__app.together, f = { distance: 30, landAt: 1.2 }; t.backDown( f, 1 ); return { d: f.distance, helm: t.crew.backing() }; } );
 say( crewAid.d < 30, `and with Sam at the helm she's backed down on a fish: ${ JSON.stringify( crewAid ) }` );
 await sam.game.evaluate( () => { const a = window.__app; a.player.camMode = 'third'; a.player.orbitDist = 12; a.player.orbitYaw = a.boatCtl.getYaw() + 2.4; a.player.orbitPitch = 0.3; } );
-await frames( sam.game, 4 );
+await until( sam.game, `${ other }.avatar._sit > 0.95` );
 await shot( sam, 'crew' );
 await reads( sam.game, 'Sam at his helm, Robin aboard' );
 
