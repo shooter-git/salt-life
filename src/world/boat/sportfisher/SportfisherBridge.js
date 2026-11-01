@@ -22,7 +22,7 @@ export function bridgeX( z ) {
 }
 
 // the coaming's top: waist-high round the helm, falling away aft to a low lip
-const coamingY = ( z ) => lerp( SF.bridge + 0.34, SF.bridge + 0.86, sstep( - 2.6, - 0.9, z ) );
+const coamingY = ( z ) => lerp( SF.bridge + 0.3, SF.bridge + 0.68, sstep( - 2.6, - 0.9, z ) );
 
 // the hatch the cockpit's ladder comes up through (starboard side, over the mezzanine)
 export const BRIDGE_HATCH = { x0: - 1.45, x1: - 0.72, z0: - 3.12, z1: - 2.42 };
@@ -383,8 +383,7 @@ export function buildTower( kit, L, q ) {
 	const fs = [ 0, ...levels, 1 ];
 	for ( let k = 0; k < fs.length - 1; k ++ ) for ( const [ l0, l1 ] of [ [ 0, 2 ], [ 1, 3 ] ] ) {
 
-		kit.add( B, rod( bandAt( l0, fs[ k ] ), bandAt( l1, fs[ k + 1 ] ), 0.012, thin ), TUBE );
-		if ( ! q.low ) kit.add( B, rod( bandAt( l1, fs[ k ] ), bandAt( l0, fs[ k + 1 ] ), 0.012, thin ), TUBE );
+		kit.add( B, k % 2 ? rod( bandAt( l1, fs[ k ] ), bandAt( l0, fs[ k + 1 ] ), 0.012, thin ) : rod( bandAt( l0, fs[ k ] ), bandAt( l1, fs[ k + 1 ] ), 0.012, thin ), TUBE );
 
 	}
 

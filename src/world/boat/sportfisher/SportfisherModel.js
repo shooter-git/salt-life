@@ -207,7 +207,7 @@ export class SportfisherModel extends Vessel {
 		this.boardPoint = V( 0, SF.cockpit, - 4.1 );
 		this.exitPoints = this.railPoints( [ - 5.4, - 4.5, - 3.6 ] );
 		this.bowWalk = 8.05;
-		this.bunks = [ { x: 0.25, y: SF.lower, z: 2.6 }, { x: 0, y: SF.lower, z: 3.7 } ];
+		this.bunks = [ { x: 0.82, y: SF.lower, z: 2.65 }, { x: 0, y: SF.lower, z: 3.72 } ];
 		const chairY = SF.cockpit + 0.55;
 		this.chair = { at: V( 0, chairY, CHAIR_Z ), eye: V( 0, SF.cockpit + 1.25, CHAIR_Z + 0.05 ), yaw: Math.PI };
 		this.rodHolders = [ - 5.5, - 4.5, - 3.6 ].flatMap( ( z ) => [ 1, - 1 ].map( ( s ) => V( s * ( L.sheerX( L.tAtSheerZ( z ) ) - 0.12 ), L.sheerY( L.tAtSheerZ( z ) ) + 0.005, z ) ) );

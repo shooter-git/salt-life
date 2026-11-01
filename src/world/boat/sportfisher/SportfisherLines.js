@@ -22,7 +22,7 @@ export const SF = {
 	roofY: 3.0, // the salon's ceiling
 	bridgeAft: - 3.25, // the flybridge's overhang over the mezzanine
 	bridgeFront: 2.45,
-	hardtopAft: - 1.6, hardtopFront: 1.75, hardtopY: 5.3, hardtopX: 1.55,
+	hardtopAft: - 1.6, hardtopFront: 1.75, hardtopY: 5.15, hardtopX: 1.55,
 	gunwale: 0.26, // the width of her covering boards, the cockpit's sides
 	sideDeck: 0.46, // the house stands in from her sheer by this
 	lowerForward: 5.35, // the forward stateroom's bulkhead in the bow
@@ -33,14 +33,14 @@ export class SportfisherLines extends HullLines {
 
 	constructor() {
 
-		super( { zAft: SF.zAft, zBow: SF.zBow, deckY: SF.cockpit, shell: 0.07, houseBack: SF.houseAft, houseFront: SF.houseFront, stemRake: 0.74, forefootR: 1.5, widest: 2.55 } );
+		super( { zAft: SF.zAft, zBow: SF.zBow, deckY: SF.cockpit, shell: 0.07, houseBack: SF.houseAft, houseFront: SF.houseFront, stemRake: 0.86, forefootR: 1.5, widest: 2.55 } );
 
 	}
 
-	// a long, hollow sweep: nearly level aft, rising hard into the bow
+	// a long rise, straightening aft, the stem head about 1.75 times the stern's freeboard (measured off her side photograph)
 	sheerY( t ) {
 
-		return 1.24 + 0.12 * t + 1.28 * Math.pow( t, 2.6 );
+		return 1.22 + 0.28 * t + 0.75 * Math.pow( t, 2.6 );
 
 	}
 

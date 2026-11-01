@@ -1,6 +1,7 @@
 import { Vector3 } from '../../../engine/index.js';
 import { SF } from './SportfisherLines.js';
 import { V, deckY, houseFootX, houseWallX, HOUSE_CORNER, CHAIR_Z } from './SportfisherHull.js';
+import { CABIN } from './SportfisherHouse.js';
 import { bridgeX, BRIDGE_HATCH, BRIDGE_LADDER, HELM, TOWER } from './SportfisherBridge.js';
 
 // (M16) Where you can stand on her. A lobster boat has a sole and some boxes; she has five levels over one another: the
@@ -167,7 +168,7 @@ export function buildColliders( L ) {
 
 	add( 'cabinWall', - 2.2, lower, 3.45, - 0.36, 2.0, 3.49 );
 	add( 'cabinWall', 0.42, lower, 3.45, 2.2, 2.0, 3.49 );
-	add( 'bunk', 0.56, lower, 1.68, 2.4, 1.5, 2.45 );
+	add( 'bunk', CABIN.bunkX, lower, 1.68, 2.4, 1.5, 3.38 );
 	add( 'head', - 1.28, lower, 1.63, - 0.5, lower + 0.84, 2.27 );
 	add( 'berth', - 0.82, lower, 3.95, 0.82, lower + 0.72, 5.15 );
 

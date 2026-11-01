@@ -24,11 +24,12 @@ export class SportfisherMaterials extends BoatMaterials {
 		this.topsides = { value: linear( 0xf4f2ec ) }; // (setPaint)
 		this.hull.onBeforeCompile = this._hullCompile();
 		this._fillGelcoat();
+		this._fillFittings();
 		this.cabin = this._createCabin();
 		this._oneWayGlass();
 		// (three shares a program between materials whose onBeforeCompile reads the same, and BoatMaterials' extend reads the same
 		// for every one: her cabin came out as her gelcoat, unlit and the sun on it)
-		for ( const k of [ 'hull', 'gelcoat', 'cabin', 'glass', 'glow' ] ) this[ k ].customProgramCacheKey = () => 'sportfisher-' + k;
+		for ( const k of [ 'hull', 'gelcoat', 'fittings', 'cabin', 'glass', 'glow' ] ) this[ k ].customProgramCacheKey = () => 'sportfisher-' + k;
 
 	}
 
@@ -80,13 +81,13 @@ export class SportfisherMaterials extends BoatMaterials {
 	if ( vAux.z > 1.5 && vAux.z < 2.5 ) {
 
 		// teak-look: planks fore and aft, each its own shade, pale seams between
-		float px = vLocal.x / 0.095, id = floor( px ), f = fract( px );
+		float px = vLocal.x / 0.085, id = floor( px ), f = fract( px );
 		float aaP = fwidth( px ) + 1e-4;
-		float seam = smoothstep( 0.05, 0.05 + aaP, f ) * ( 1.0 - smoothstep( 0.95 - aaP, 0.95, f ) );
+		float seam = smoothstep( 0.02, 0.02 + aaP, f ) * ( 1.0 - smoothstep( 0.98 - aaP, 0.98, f ) );
 		float tone = fract( sin( id * 12.9898 ) * 43758.5453 );
 		float grain = sin( vLocal.z * 7.0 + tone * 40.0 + sin( vLocal.z * 31.0 + id ) * 0.6 );
-		vec3 teak = ${ vec3( linear( 0xc69562 ) ) } * ( 0.88 + 0.2 * tone + 0.04 * grain );
-		diffuseColor.rgb = mix( ${ vec3( linear( 0xe8dcc6 ) ) }, teak, seam );
+		vec3 teak = ${ vec3( linear( 0xc48a52 ) ) } * ( 0.88 + 0.2 * tone + 0.04 * grain );
+		diffuseColor.rgb = mix( ${ vec3( linear( 0xd9c7aa ) ) }, teak, seam );
 
 	}
 ` )
@@ -101,19 +102,53 @@ export class SportfisherMaterials extends BoatMaterials {
 		const m = withAux( new THREE.MeshStandardMaterial( { side: THREE.DoubleSide } ), { fragment: /* glsl */`
 	if ( vAux.z > 2.5 && vAux.z < 3.5 ) {
 
-		// cherry: its grain up the panels, a slow wave through it
-		float g = sin( ( vLocal.x + vLocal.z ) * 90.0 + sin( vLocal.y * 7.0 + vLocal.x ) * 3.0 ) * 0.5 + 0.5;
-		diffuseColor.rgb *= 0.86 + 0.2 * g * g;
+		// cherry: a slow, quiet grain up the panels
+		float across = vLocal.x + vLocal.z;
+		float gr = sin( across * 34.0 + sin( vLocal.y * 2.1 + across * 3.0 ) * 1.6 ) * 0.6 + sin( across * 97.0 + sin( vLocal.y * 5.0 ) ) * 0.4;
+		diffuseColor.rgb *= 1.0 + 0.07 * gr;
+
+	} else if ( vAux.z > 3.5 && vAux.z < 4.5 ) {
+
+		// the sole: pale planks fore and aft
+		float px = vLocal.x / 0.14, id = floor( px ), f = fract( px ), aaP = fwidth( px ) + 1e-4;
+		float seam = smoothstep( 0.0, 0.02 + aaP, f ) * ( 1.0 - smoothstep( 0.98 - aaP, 1.0, f ) );
+		float tone = fract( sin( id * 12.9898 ) * 43758.5453 );
+		diffuseColor.rgb *= ( 0.92 + 0.14 * tone + 0.03 * sin( vLocal.z * 19.0 + tone * 30.0 ) ) * mix( 0.72, 1.0, seam );
 
 	}
 ` } );
 		m.name = 'boatCabin';
 		return extend( m, ( shader ) => {
 
-			// the light's from overhead: the ceiling's own glow, what's under it a little less
+			shader.vertexShader = shader.vertexShader
+				.replace( '#include <common>', '#include <common>\nvarying vec3 vSfN;\nvarying vec3 vSfEye;' )
+				.replace( '#include <begin_vertex>', '#include <begin_vertex>\n\tvSfN = normal;\n\tvSfEye = ( inverse( modelMatrix ) * vec4( cameraPosition, 1.0 ) ).xyz;' );
+			// lit by her downlights: what faces up takes the most, walls less, each way a little differently so that corners show;
+			// lower walls less again; and the gloss of her varnish and counters takes them as highlights
 			shader.fragmentShader = shader.fragmentShader
-				.replace( '#include <emissivemap_fragment>', `#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * ${ CABIN_FILL.toFixed( 3 ) };` )
+				.replace( '#include <common>', '#include <common>\nvarying vec3 vSfN;\nvarying vec3 vSfEye;' )
+				.replace( '#include <emissivemap_fragment>', /* glsl */`#include <emissivemap_fragment>
+	vec3 sfN = normalize( vSfN ) * ( gl_FrontFacing ? 1.0 : - 1.0 );
+	float sfUp = sfN.y * 0.5 + 0.5;
+	float sfLit = mix( 0.42, 1.0, sfUp * sfUp ) * ( 0.9 + 0.1 * abs( sfN.z ) );
+	vec3 sfV = normalize( vSfEye - vLocal ), sfR = reflect( - sfV, sfN );
+	float sfGloss = pow( max( sfR.y, 0.0 ), 18.0 ) * ( 1.0 - clamp( vAux.x * 1.6, 0.0, 1.0 ) );
+	totalEmissiveRadiance += diffuseColor.rgb * ${ CABIN_FILL.toFixed( 3 ) } * sfLit + vec3( 1.0, 0.93, 0.82 ) * sfGloss * 0.5;` )
 				.replace( '#include <lights_fragment_end>', `#include <lights_fragment_end>\n\treflectedLight.directDiffuse *= ${ CABIN_SUN.toFixed( 3 ) };\n\treflectedLight.directSpecular *= ${ CABIN_SUN.toFixed( 3 ) };` );
+
+		} );
+
+	}
+
+	// what isn't metal among her fittings takes the same lift as her gelcoat (her tower's roof, seen from under it)
+	_fillFittings() {
+
+		extend( this.fittings, ( shader ) => {
+
+			shader.uniforms.sfNight = G.night;
+			shader.fragmentShader = shader.fragmentShader
+				.replace( '#include <common>', '#include <common>\nuniform float sfNight;' )
+				.replace( '#include <emissivemap_fragment>', `#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * ${ OUTSIDE_FILL.toFixed( 3 ) } * ( 1.0 - 0.9 * sfNight ) * ( 1.0 - vAux.y );` );
 
 		} );
 
