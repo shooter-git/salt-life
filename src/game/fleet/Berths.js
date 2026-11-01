@@ -10,7 +10,7 @@ import { WORLD } from '../../world/WorldLayout.js';
 //   there, clear of the wash (ashore: world/boat/kayak/Shore.js, from this point; ashoreOf below, what's drawn of her).
 // Each a { position, heading }, her origin at the waterline.
 export const BERTHS = {
-	kayak: { position: new Vector3( 59.5, 0, - 38 ), heading: 0, ashore: true },
+	kayak: { position: new Vector3( 44, 0, - 38 ), heading: 0, ashore: true }, // ((M16) on the open sand, in plain sight from where a new game starts)
 	console: { position: new Vector3( 46.1, 0, 36.5 ), heading: 0 },
 	lobster: { position: WORLD.boatDock.position, heading: WORLD.boatDock.heading },
 	sportfisher: { position: new Vector3( 55, 0, 43.2 ), heading: Math.PI / 2 },

@@ -18,8 +18,9 @@ export const capsizeHeel = ( bracing, hands ) => ( hands ? HEEL.fishing : bracin
 // a breaker of height H (m) comes down on her; face: 0 on her beam, 1 her bow or stern to it
 export const breakerCapsizes = ( H, face ) => H > BEAM_H + ( BOW_H - BEAM_H ) * face * face;
 
-// the share of the cooler's fish lost when she goes over (a strapped cooler keeps a good deal)
-export const spillShare = ( jacket ) => ( jacket ? 0.25 : 0.5 );
+// the share of the cooler's fish lost when she goes over (a strapped cooler keeps a good deal; half as much again with the
+// dry hatch and its bungees, Gear's kayakHatch)
+export const spillShare = ( jacket, hatch = false ) => ( jacket ? 0.25 : 0.5 ) * ( hatch ? 0.5 : 1 );
 
 // s to climb back over her side from the water
 export const climbSeconds = ( jacket ) => ( jacket ? 1.4 : 2.3 );

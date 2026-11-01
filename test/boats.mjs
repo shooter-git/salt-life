@@ -4,6 +4,14 @@ import { BoatController, MAX_HULL_SAMPLES } from '../src/player/BoatController.j
 import { Vector3 } from '../src/engine/index.js';
 import { gearStats, defaultUpgrades, UPGRADES } from '../src/game/Gear.js';
 import { GameState } from '../src/game/GameState.js';
+// (M16: a new game starts in the kayak; what's tested here is a game in the lobster boat)
+const lobsterStart = ( st ) => {
+
+	st.fleet = { lobster: st.fleet.kayak };
+	st.boat = 'lobster';
+	return st;
+
+};
 
 let bad = 0;
 const ok = ( c, what ) => {
@@ -64,9 +72,11 @@ ok( kayak.holdKg === BOATS.kayak.stats.holdKg, 'the lobster boat\'s upgrades don
 ok( kayak.lineKg === low.lineKg, 'your own gear goes with you' );
 
 // the fleet in the save
-const s = new GameState();
+const s = lobsterStart( new GameState() );
 s.save = () => {};
-ok( s.boat === START_BOAT && s.owns( START_BOAT ), 'a new game has the boat it starts in' );
+const first = new GameState();
+first.save = () => {};
+ok( START_BOAT === 'kayak' && first.boat === 'kayak' && first.owns( 'kayak' ) && ! first.owns( 'lobster' ) && first.stats.fuelL === 0, 'a new game has the boat it starts in, the kayak and no other, with no fuel' );
 s.fuel = 12;
 s.hull = 0.25;
 s.addBoat( 'console' );
@@ -88,6 +98,8 @@ old.save = () => {};
 ok( old.fromJSON( { v: 1, money: 10, upgrades: { hold: 2 }, fuel: 9, hull: 0.5, hauled: true } ), 'a save from before loads' );
 ok( old.boat === 'lobster' && old.fuel === 9 && old.hull === 0.5 && old.hauled === true && old.stats.holdKg === UPGRADES.hold.levels[ 2 ].holdKg, 'with the lobster boat as it was' );
 ok( old.owns( 'kayak' ), 'and the kayak\'s theirs as well' );
+old.reset();
+ok( old.boat === 'kayak' && Object.keys( old.fleet ).join() === 'kayak', 'starting over is starting in the kayak' );
 ok( ! old.owns( 'console' ) && ! old.owns( 'sportfisher' ), 'the others to buy' );
 
 console.log( bad ? `\n${ bad } failed` : '\nboats: all passed' );

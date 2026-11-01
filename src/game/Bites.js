@@ -38,6 +38,7 @@ import { NORTH } from './Weather.js';
 // windward reef, whose fish run bigger and whose big fish bite more (BIG: pickSpecies, rollWeight).
 // (M15) And far, 0..1: how far the spot is out in the soft edge past the far grounds (Weather.edgeAt), where
 // the open blue's emptier (FAR_SLOWER: biteDelay). Not a water type.
+// (M16) And under, 0..1: how far the spot is in a boat's underwater lights after dark, drifting (FishTable's under).
 // (Salt Life) The game adds flood, 0..1: how far the spot is in a boat's deck floodlights after dark (not
 // a water type: it draws in the fish that gather under lights, and the bait, so they bite sooner), and
 // (M9) weather: the weather now (Weather.weatherAt's; none, or a fair day's, changes nothing: weatherMood).
@@ -45,6 +46,7 @@ import { NORTH } from './Weather.js';
 // them), thinning out within tens of km (Doty and Oguri, 1956); past the far grounds the blue's bites come
 // this much slower again at full (twice as slow: far, Weather.edgeAt), the weed's and the debris' as they were
 export const FAR_SLOWER = 1;
+export const LIVELY = 0.85;
 export const BLUE = 0.35; // (the open ocean's fish, sparse: its weight; a spot's floor is the same: biteDelay)
 export function habitatAt( { depth, reefDist, pierDist, slope = 0, patch = 0, weed = 0, debris = 0, birds = 0, windward = 0, beach = 0, creek = 0, windReef = 0 } ) {
 
@@ -145,7 +147,7 @@ export const WASH = { day: 0.9, blown: 0.85, open: 0.5 };
 // north sea roughs its water as it does the north shore's (`blown`)
 export const BIG = { skew: 0.5, from: 4, more: 1.5, blown: 0.4 };
 // (not water types: what the game adds to a spot's habitat)
-const NOT_WATER = { flood: true, weather: true, side: true, big: true, far: true, hook: true, wake: true };
+const NOT_WATER = { flood: true, under: true, lively: true, weather: true, side: true, big: true, far: true, hook: true, wake: true };
 
 // (M16) the hook: how the bait's fished, and how deep it is, on the spot's habitat (Game.habitat: habitat.hook; the
 // interface with the rigs: docs/m16/fish.md):
@@ -222,6 +224,8 @@ export function pickSpecies( habitat, hour, rng = Math.random, bait = null ) {
 		if ( f.lights && f.habitat.pier ) hw += f.lights * f.habitat.pier * water.pier * lit;
 		// and under a boat's deck floodlights
 		if ( f.flood && habitat.flood ) hw *= 1 + f.flood * habitat.flood;
+		// ((M16) and under a boat's underwater lights: the bait and the squid come to them, and what eats squid)
+		if ( f.under && habitat.under ) hw *= 1 + f.under * habitat.under;
 		let act = activity( f.time, hour );
 		if ( grey > 0 ) act += Math.max( 0, activity( f.time, 18.5 ) - act ) * grey;
 		// ((M15) under the birds, what's busting the bait is feeding now, whatever the hour)
@@ -275,9 +279,11 @@ export function biteDelay( habitat, hour, rng = Math.random, bait = null ) {
 	// open water between the named habitats still has fish: never much slower than a poor spot; (Salt
 	// Life) a boat's floodlights draw the bait in, and what feeds on it
 	const all = rich;
-	rich = Math.max( rich, 0.35 ) + ( habitat.flood || 0 );
+	rich = Math.max( rich, 0.35 ) + ( habitat.flood || 0 ) + 0.5 * ( habitat.under || 0 );
 	const light = hour > 6 && hour < 19 ? 1 : 0.8;
 	let mean = 8 / ( Math.min( rich, 1.6 ) * light ) * ( BAITS[ bait ] ? BAITS[ bait ].speed : 1 );
+	// ((M16) live bait from a pumped well's still lively on the hook: habitat.lively, the game's)
+	if ( habitat.lively && BAITS[ bait ] && BAITS[ bait ].live ) mean *= LIVELY;
 	// ((M15) past the far grounds the open blue's emptier still (FAR): for its share of the spot's water)
 	if ( habitat.far > 0 ) mean *= 1 + FAR_SLOWER * habitat.far * ( habitat.blue || 0 ) / all;
 	// (M9) the weather: sooner ahead of a blow, slower in a downpour, and slower for the share of the

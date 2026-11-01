@@ -15,6 +15,14 @@ import { WORLD } from '../src/world/WorldLayout.js';
 import { boatLeft, leftOf, othersAway, tellOthers, awayOf } from '../src/game/Away.js';
 import { TerrainData } from '../src/world/TerrainData.js';
 import { decodeIsland } from '../src/world/terrain/IslandDecode.js';
+// (M16: a new game starts in the kayak; what's tested here is a game in the lobster boat)
+const lobsterStart = ( st ) => {
+
+	st.fleet = { lobster: st.fleet.kayak };
+	st.boat = 'lobster';
+	return st;
+
+};
 
 let bad = 0;
 const ok = ( c, what ) => {
@@ -26,7 +34,7 @@ const ok = ( c, what ) => {
 
 const fresh = ( money = 0, boat = 'lobster' ) => {
 
-	const s = new GameState( null );
+	const s = lobsterStart( new GameState( null ) );
 	s.money = money;
 	s.boat = boat;
 	s.fleet = { [ boat ]: s.fleet[ Object.keys( s.fleet )[ 0 ] ] };
@@ -36,7 +44,7 @@ const fresh = ( money = 0, boat = 'lobster' ) => {
 
 // ---- her list
 for ( const id of Object.keys( BOATS ) ) ok( FLEET[ id ] && FLEET[ id ].price > 0, `${ id }: on Marta's list at $${ FLEET[ id ].price }` );
-ok( FLEET.console.price === 2500 && FLEET.lobster.price === 6000 && FLEET.sportfisher.price === 25000, 'the doc\'s prices' );
+ok( FLEET.console.price === 1800 && FLEET.lobster.price === 6000 && FLEET.sportfisher.price === 25000, 'the tuned prices' );
 
 // ---- the sportfisher's unlock: 12 on the lobster boat, 7 of rod and reel, at the doc's prices
 {
@@ -97,15 +105,15 @@ ok( FLEET.console.price === 2500 && FLEET.lobster.price === 6000 && FLEET.sportf
 	const worth = Math.round( FLEET.lobster.price * TRADE.boat + 520 * TRADE.gear );
 	ok( gearWorth( s.upgrades, 'lobster' ) === 520, 'what\'s on her: the hold, $520' );
 	ok( s.boatWorth( 'lobster' ) === worth, `a kept lobster boat: part of her list price and of her upgrades, $${ worth }` );
-	ok( s.quoteBoat( 'console' ).can && s.quoteBoat( 'console' ).net === 2500, 'the center console, $2,500' );
+	ok( s.quoteBoat( 'console' ).can && s.quoteBoat( 'console' ).net === 1800, 'the center console, $1,800' );
 	const r = s.buyBoat( 'console' );
-	ok( r && s.owns( 'console' ) && s.money === 500 && s.boat === 'lobster' && s.fleet.console.paid === 2500, 'bought: she\'s yours, paid for, and you\'re still in the one you were' );
+	ok( r && s.owns( 'console' ) && s.money === 1200 && s.boat === 'lobster' && s.fleet.console.paid === 1800, 'bought: she\'s yours, paid for, and you\'re still in the one you were' );
 	ok( s.buyBoat( 'console' ) === null, 'you can\'t buy her twice' );
 	s.money = 0;
 	ok( s.quoteBoat( 'kayak' ).why === 'money', 'nor one you can\'t pay for' );
 	s.upgrades.consoleTop = 1;
 	const cw = s.boatWorth( 'console', SALE );
-	ok( cw === Math.round( 2500 * SALE.boat + 350 * SALE.gear ), `selling: less than a trade-in, $${ cw } against $${ s.boatWorth( 'console' ) }` );
+	ok( cw === Math.round( 1800 * SALE.boat + 350 * SALE.gear ), `selling: less than a trade-in, $${ cw } against $${ s.boatWorth( 'console' ) }` );
 	s.fleet.console.hull = 0.5;
 	ok( s.boatWorth( 'console', SALE ) === cw - repairFee( 0.5, 'console' ), 'less what she\'d cost to repair' );
 	ok( s.sellBoat( 'lobster' ) === null, 'you can\'t sell the one you\'re in' );
@@ -371,7 +379,7 @@ ok( standsGeometry( 'sportfisher', 5, () => 3 ).attributes.position.count > 0, '
 	let h = fleetRows( hud );
 	ok( h.includes( 'Offshore sportfisher' ) && h.includes( 'Finish your upgrades to unlock it · 11 of 19' ) && h.includes( 'is-shadow' ), 'the sportfisher: a silhouette, her name, how far you are' );
 	ok( ! h.includes( 'data-buyboat="sportfisher"' ) && ! h.includes( '$25,000' ), 'no price and no way to buy her yet' );
-	ok( h.includes( 'data-buyboat="console"' ) && h.includes( 'Center console · $2,500' ), 'the center console, at her price' );
+	ok( h.includes( 'data-buyboat="console"' ) && h.includes( 'Center console · $1,800' ), 'the center console, at her price' );
 	ok( h.includes( 'data-takeout="kayak"' ) && h.includes( 'data-sellboat="kayak"' ) && ! h.includes( 'data-takeout="lobster"' ), 'yours to take out or sell: not the one you\'re in' );
 	s.earned = true;
 	h = fleetRows( hud );
@@ -459,7 +467,7 @@ ok( standsGeometry( 'sportfisher', 5, () => 3 ).attributes.position.count > 0, '
 // ---- an old save comes across
 {
 
-	const s = new GameState( null );
+	const s = lobsterStart( new GameState( null ) );
 	ok( s.fromJSON( { v: 1, money: 10, upgrades: { hold: 2 }, fuel: 9, hull: 0.5, hauled: true } ) && s.boat === 'lobster' && s.owns( 'kayak' ) && ! s.owns( 'console' ), 'v1: the lobster boat as it was, the kayak, the rest to buy' );
 	ok( s.boatWorth( 'lobster' ) > 0 && s.boatWorth( 'kayak' ) === 0, 'a kept lobster boat\'s worth something, a free kayak nothing' );
 	ok( s.dues.day === null && s.dues.owed === 0 && ! s.earned, 'no bill waiting' );

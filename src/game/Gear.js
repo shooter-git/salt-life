@@ -91,7 +91,7 @@ export const UPGRADES = {
 	baitWell: { name: 'Bait well', on: 'lobster', levels: [
 		{ cost: 0, label: '5-gallon bait bucket', baitMax: 24 },
 		{ cost: 90, label: 'Aerated bait bucket', baitMax: 50 },
-		{ cost: 300, label: 'Livewell with a pump', baitMax: 120 },
+		{ cost: 300, label: 'Livewell with a pump (live bait stays lively: bites come sooner)', baitMax: 120, livewell: true },
 	] },
 	// (Salt Life) for the spiny lobster, by hand on a dive: a tickle stick to coax it out of its den
 	// (tickleM: how far it reaches; coaxS: seconds of tickling a lobster takes to walk out) and a hand
@@ -176,10 +176,10 @@ export const UPGRADES = {
 		{ cost: 0, label: 'None', finder: false },
 		{ cost: 150, label: 'Castable fish finder puck (depth and fish on the HUD)', finder: true },
 	] },
-	// (a life jacket's worth of room: where the safety gear's life jacket goes, so it's on you and not in the way)
+	// (kept under a lid and bungees, half as much goes when she turns over: kayak/Capsize.js)
 	kayakHatch: { name: 'Dry hatch', on: 'kayak', levels: [
-		{ cost: 0, label: 'Nothing stays dry', jacketRoom: false },
-		{ cost: 30, label: 'Dry hatch and deck bungees: a life jacket\'s worth of room', jacketRoom: true },
+		{ cost: 0, label: 'Nothing strapped down', dryHatch: false },
+		{ cost: 30, label: 'Dry hatch and deck bungees: less of your catch goes if she turns over', dryHatch: true },
 	] },
 	// (M16) the center console's own
 	consoleEngine: { name: 'Outboards', on: 'console', levels: [
@@ -192,7 +192,7 @@ export const UPGRADES = {
 	] },
 	consoleWell: { name: 'Livewell', on: 'console', levels: [
 		{ cost: 0, label: 'A bait bucket', livewell: false },
-		{ cost: 200, label: 'Livewell with a pump', baitMax: 80, livewell: true },
+		{ cost: 200, label: 'Livewell with a pump (live bait stays lively: bites come sooner)', baitMax: 80, livewell: true },
 	] },
 	consoleLadder: { name: 'Dive ladder', on: 'console', levels: [
 		{ cost: 0, label: 'Over the side and hope', diveLadder: false },
@@ -221,11 +221,11 @@ export const UPGRADES = {
 	] },
 	sfIcemaker: { name: 'Icemaker', on: 'sportfisher', levels: [
 		{ cost: 0, label: 'None', icemaker: false },
-		{ cost: 1000, label: 'Icemaker', icemaker: true, iceMakesKgH: 5 },
+		{ cost: 1000, label: 'Icemaker (shore power at her berth: at sea it runs off the generator)', icemaker: true, iceMakesKgH: 5 },
 	] },
 	sfGenerator: { name: 'Generator', on: 'sportfisher', levels: [
 		{ cost: 0, label: 'None', generator: false },
-		{ cost: 1500, label: 'Diesel generator', generator: true },
+		{ cost: 1500, label: 'Diesel generator: runs the icemaker at sea, about a gallon an hour from her tank', generator: true },
 	] },
 	sfChair: { name: 'Fighting chair', on: 'sportfisher', levels: [
 		{ cost: 0, label: 'None: stand up and take it', chair: false },

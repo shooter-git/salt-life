@@ -22,9 +22,10 @@ const clamp = ( x, a, b ) => ( x < a ? a : x > b ? b : x );
 const clamp01 = ( x ) => clamp( x, 0, 1 );
 
 // a slam wears her past this strength (a fair day's hardest, flat out, are under it), as the square of
-// how far past it (a gale flat out: about a quarter in five minutes; at half throttle, a little)
+// how far past it (a gale flat out, head to it: about a quarter in five minutes; at a third of her throttle, a little;
+// (M16) tools/gale-figures.mjs measures each boat)
 export const SLAM_FROM = 0.5;
-const SLAM_K = 0.04;
+const SLAM_K = 0.01;
 // a knock on a pile, or a drop onto the ground: heard from this closing speed (m/s), and wearing her from
 // this one (a pile at full speed: about a tenth)
 export const KNOCK_FROM = 0.6;
@@ -75,13 +76,13 @@ const STORM_SPAN = 15, STORM_K = 0.002;
 // (M16) each boat's figures, the lobster boat's as above: engine (false: nothing to crank, stall or run dry), bilge
 // (false: self-bailing with nowhere for it to gather), floodL and bilgeMax (litres to her engine, and all she holds),
 // rain (L/s in a full downpour: the cockpit that drains into her), green (litres a slam past greenFrom ships), leak
-// (fully worn, L/s), slam, hit and storm (how she takes each, as SLAM_K, HIT_K and STORM_K), repair (Marta's full repair,
-// $). docs/m16/fleet.md says where they're from
+// (fully worn, L/s), slam, hit and storm (how she takes each, as SLAM_K, HIT_K and STORM_K), sea and knock (a sea breaking
+// on her: BreakingSeas), repair (Marta's full repair, $). docs/m16/fleet.md and opening.md say where they're from
 export const HULLS = {
-	kayak: { engine: false, bilge: false, floodL: Infinity, bilgeMax: 0, rain: 0, green: 0, greenFrom: 1, leak: 0, slam: 0.01, hit: 0.002, storm: 0.003, repair: 25 },
-	console: { engine: true, bilge: true, floodL: 200, bilgeMax: 500, rain: 0.02, green: 12, greenFrom: 0.75, leak: 0.3, slam: 0.05, hit: 0.005, storm: 0.0025, repair: 90 },
-	lobster: { engine: true, bilge: true, floodL: FLOOD_L, bilgeMax: BILGE_MAX, rain: RAIN_LS, green: GREEN_L, greenFrom: GREEN_FROM, leak: WORN_LEAK, slam: SLAM_K, hit: HIT_K, storm: STORM_K, repair: REPAIR_FULL },
-	sportfisher: { engine: true, bilge: true, floodL: 1500, bilgeMax: 3500, rain: 0.05, green: 40, greenFrom: 0.95, leak: 1, slam: 0.02, hit: 0.003, storm: 0.0012, repair: 900 },
+	kayak: { engine: false, bilge: false, floodL: Infinity, bilgeMax: 0, rain: 0, green: 0, greenFrom: 1, leak: 0, slam: 0.01, hit: 0.002, storm: 0.003, sea: 0, knock: 1, repair: 25 },
+	console: { engine: true, bilge: true, floodL: 200, bilgeMax: 500, rain: 0.02, green: 6, greenFrom: 0.75, leak: 0.3, slam: 0.012, hit: 0.005, storm: 0.0025, sea: 15, knock: 0.7, repair: 90 },
+	lobster: { engine: true, bilge: true, floodL: FLOOD_L, bilgeMax: BILGE_MAX, rain: RAIN_LS, green: GREEN_L, greenFrom: GREEN_FROM, leak: WORN_LEAK, slam: SLAM_K, hit: HIT_K, storm: STORM_K, sea: 60, knock: 0.5, repair: REPAIR_FULL },
+	sportfisher: { engine: true, bilge: true, floodL: 1500, bilgeMax: 3500, rain: 0.05, green: 40, greenFrom: 0.95, leak: 1, slam: 0.005, hit: 0.003, storm: 0.0012, sea: 30, knock: 0.25, repair: 900 },
 };
 const figures = ( boat ) => HULLS[ boat ] || HULLS.lobster;
 
