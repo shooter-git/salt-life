@@ -8,8 +8,23 @@ const ROOT = join( dirname( fileURLToPath( import.meta.url ) ), '../..' );
 const SPACES = process.env.ALL_THE_SPACES || join( ROOT, '../all-the-spaces' );
 const { chromium } = await import( join( SPACES, 'node_modules/playwright/index.mjs' ) );
 const [ out = 'qa-output', PORT = '5189', TIER = 'low' ] = process.argv.slice( 2 );
-const browser = await chromium.launch( { args: [ '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required' ] } );
+const browser = await chromium.launch( { args: [ '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', '--enable-precise-memory-info', '--js-flags=--expose-gc' ] } );
 const ctx = await browser.newContext( { viewport: { width: 960, height: 540 } } );
+// (what's drawn, every pass of a frame counted, as the checks do it)
+await ctx.addInitScript( () => {
+
+	const R = window.__draws = { calls: 0, tris: 0, peak: { calls: 0, tris: 0 } }, P = WebGL2RenderingContext.prototype;
+	const tri = ( m, c, n = 1 ) => ( m === 4 ? Math.floor( c / 3 ) : m === 5 || m === 6 ? Math.max( 0, c - 2 ) : 0 ) * n;
+	const wrap = ( k, count ) => { const f = P[ k ]; P[ k ] = function ( ...a ) { const [ c, n ] = count( a ); R.calls ++; R.tris += tri( a[ 0 ], c, n ); return f.apply( this, a ); }; };
+	wrap( 'drawArrays', ( a ) => [ a[ 2 ] ] );
+	wrap( 'drawElements', ( a ) => [ a[ 1 ] ] );
+	wrap( 'drawArraysInstanced', ( a ) => [ a[ 2 ], a[ 3 ] ] );
+	wrap( 'drawElementsInstanced', ( a ) => [ a[ 1 ], a[ 4 ] ] );
+	wrap( 'drawRangeElements', ( a ) => [ a[ 3 ] ] );
+	const tick = () => { if ( R.calls ) { R.peak.calls = Math.max( R.peak.calls, R.calls ); R.peak.tris = Math.max( R.peak.tris, R.tris ); R.calls = R.tris = 0; } requestAnimationFrame( tick ); };
+	requestAnimationFrame( tick );
+
+} );
 let problems = 0;
 const say = ( ok, what ) => { console.log( ( ok ? 'ok   ' : 'FAIL ' ) + what ); if ( ! ok ) problems ++; };
 const open = async ( name, boat, tier = TIER ) => {
@@ -41,7 +56,7 @@ const open = async ( name, boat, tier = TIER ) => {
 
 	}
 
-	await f().evaluate( () => { const g = window.__app.game; if ( g.guide ) { g.guide.seen.intro = true; if ( g.guide.open ) g.guide.close(); g.guide._wait = - 1; } } );
+	await f().evaluate( () => { const g = window.__app.game; if ( g.guide ) { g.guide.seen.intro = true; if ( g.guide.open ) g.guide.close(); g.guide._wait = - 1; } window.__app.together.stale = 120; /* (two games on the CPU, seconds between poses) */ } );
 	return { page, game: f() };
 
 };
@@ -53,13 +68,28 @@ const posed = ( g ) => until( g, `${ other } && ${ other }.cur && ${ other }.cur
 // (a look about, from the player: put where the camera can see)
 const stand = ( g, x, z, yaw, y = null ) => g.evaluate( ( [ x, z, yaw, y ] ) => { const a = window.__app, p = a.player; p.position.set( x, y ?? Math.max( a.terrainData.heightAt( x, z ), a.colliders.groundHeightAt( x, z, 50 ) ), z ); p.yaw = yaw; p.pitch = - 0.05; p.velocity.set( 0, 0, 0 ); }, [ x, z, yaw, y ] );
 const shot = ( who, name ) => who.page.screenshot( { path: `${ out }/boats-${ name }.png` } );
+// the readings over a few frames, and the script memory once it's collected
+const reads = async ( g, what ) => {
+
+	await g.evaluate( () => { window.__draws.peak = { calls: 0, tris: 0 }; } );
+	await frames( g, 6 );
+	const r = await g.evaluate( () => { if ( window.gc ) window.gc(); const m = performance.memory; return { draws: window.__draws.peak.calls, triangles: window.__draws.peak.tris, heapMB: m ? +( m.usedJSHeapSize / 1048576 ).toFixed( 1 ) : null }; } );
+	console.log( `     readings, ${ what }:`, JSON.stringify( r ) );
+	return r;
+
+};
+// (the clock kept to the morning and the air clear: it's on wall time, and this takes a while on the CPU)
+const morning = ( g, hour = 10 ) => g.evaluate( ( hour ) => { const t = window.__app.together, s = window.__app.settings; t.setWeather( 'calm', 0 ); t.setClock( hour, s.day, 0.0001 ); }, hour );
 
 // ---- two boats: Robin in the center console, Sam in the sportfisher, at the dock
 const robin = await open( 'Robin', 'console' );
+await stand( robin.game, 56, 34, 0.08 );
+const alone = await reads( robin.game, 'Robin alone at the pier head, no one else about' );
 const sam = await open( 'Sam', 'sportfisher' );
 await until( sam.game, `${ other } && ${ other }.cur` );
 await until( robin.game, `${ other } && ${ other }.cur` );
 console.log( 'both in' );
+await morning( robin.game );
 const type = async ( g ) => { await posed( g ); return g.evaluate( `${ other }.cur.boatId` ); };
 say( await type( sam.game ) === 'console' && await type( robin.game ) === 'sportfisher', 'each pose says which boat she is' );
 
@@ -96,6 +126,9 @@ await frames( sam.game, 3 );
 await shot( sam, 'dock-above' );
 await sam.game.evaluate( () => { delete window.__app.frame; } );
 await frames( sam.game, 2 );
+await stand( robin.game, 56, 34, 0.08 );
+const company = await reads( robin.game, `the same spot, Sam's ${ TIER } copy in sight` );
+console.log( `     that's ${ company.draws - alone.draws } draws, ${ company.triangles - alone.triangles } triangles, ${ ( company.heapMB - alone.heapMB ).toFixed( 1 ) } MB more than alone (with Sam's figure, tackle and all)` );
 
 // ---- riding along: Sam boards Robin's console at her spare berth, deck in her frame
 await robin.game.evaluate( () => { const p = window.__app.player; p.boardBoat(); } );
@@ -120,11 +153,13 @@ await sam.game.evaluate( () => { const p = window.__app.player; p.deckPos.set( p
 await frames( sam.game, 2 );
 say( await sam.game.evaluate( () => window.__app.player.boat.helmFree ), 'with Robin on deck, her helm\'s free for Sam' );
 const start = await robin.game.evaluate( () => window.__app.boatCtl.position.toArray() );
-await sam.game.evaluate( () => { const p = window.__app.player; p.takeHelm(); window.__holdThrottle = setInterval( () => { p.boat.setInput( 0.8, 0.1 ); }, 30 ); window.__app.input.down = ( ( d ) => function ( k ) { return k === 'KeyW' ? true : d.call( this, k ); } )( window.__app.input.down ); } );
-await until( robin.game, 'window.__app.boatCtl.driven && window.__app.boatCtl.speed > 1' );
+await sam.game.evaluate( () => { const p = window.__app.player, i = window.__app.input; p.takeHelm(); i.down = ( k ) => k === 'KeyW' || Object.getPrototypeOf( i ).down.call( i, k ); } );
+// (her owner's game cranks her and spools her up, in frames, on the CPU)
+await until( robin.game, `( ( b, s ) => b.driven && b.rpm > 0.1 && Math.hypot( b.position.x - s[ 0 ], b.position.z - s[ 2 ] ) > 2 )( window.__app.boatCtl, ${ JSON.stringify( start ) } )` );
 const driven = await robin.game.evaluate( ( s ) => { const b = window.__app.boatCtl; return { speed: +b.speed.toFixed( 2 ), moved: +Math.hypot( b.position.x - s[ 0 ], b.position.z - s[ 2 ] ).toFixed( 1 ), rpm: +b.rpm.toFixed( 2 ), mode: window.__app.player.mode }; }, start );
-say( driven.mode === 'deck' && driven.speed > 1, `Robin on deck, Sam at her helm, and she goes: ${ JSON.stringify( driven ) }` );
-await frames( sam.game, 6 );
+say( driven.mode === 'deck' && driven.moved > 2 && driven.rpm > 0.1, `Robin on deck, Sam at her helm, and she goes: ${ JSON.stringify( driven ) }` );
+await until( sam.game, `${ other }.cur.rpm > 0.05` );
+await frames( sam.game, 3 );
 await posed( sam.game );
 const rideS = await sam.game.evaluate( `( () => { const a = window.__app, b = a.player.boat, c = ${ other }.cur; return { mode: a.player.mode, rpm: +c.rpm.toFixed( 2 ), speed: +b.speed.toFixed( 2 ), riding: a.player.riding, sound: a.together.boatSound().active }; } )()` );
 say( rideS.mode === 'boat' && rideS.rpm > 0.05 && rideS.sound, `and Sam hears her engine: ${ JSON.stringify( rideS ) }` );
@@ -138,7 +173,7 @@ say( fromRobin.mode === 'helm' && fromRobin.d < 0.1, `Robin sees Sam at her helm
 await robin.game.evaluate( () => { const p = window.__app.player; p.deckPos.set( p.boat.model.helm.x, p.boat.model.lines.deckY, p.boat.model.helm.z ); p.takeHelm(); } );
 await until( sam.game, 'window.__app.player.mode === \'deck\'' );
 say( await robin.game.evaluate( () => window.__app.boatCtl.driven && window.__app.player.mode === 'boat' ), 'her owner takes the helm, and it\'s theirs' );
-await sam.game.evaluate( () => { clearInterval( window.__holdThrottle ); } );
+await sam.game.evaluate( () => { delete window.__app.input.down; } );
 
 // ---- the sportfisher's crew: Robin aboard Sam's boat, Sam at the helm, out from the dock, a third job each way
 await sam.game.evaluate( () => { const p = window.__app.player; p.exitBoat( null, 1 ); } );
@@ -157,8 +192,6 @@ await robin.game.evaluate( () => { const p = window.__app.player, s = p.boat.mod
 await frames( robin.game, 3 );
 say( await robin.game.evaluate( () => window.__app.together.crew.job ) === 'tower', 'Robin goes up the tower: she\'s the spotter' );
 await until( sam.game, `${ other }.job === 'tower'` );
-const toasts = [];
-sam.game.page().on( 'console', ( m ) => toasts.push( m.text() ) );
 const call = await robin.game.evaluate( async () => {
 
 	const a = window.__app, c = a.camera.position;
@@ -195,15 +228,27 @@ const chair = await sam.game.evaluate( `( () => { const a = window.__app, o = ${
 say( chair.d < 0.02 && chair.aft < - 0.8 && chair.sit > 0.3, `Sam sees her sat in the chair, facing aft: ${ JSON.stringify( chair ) }` );
 const crewAid = await robin.game.evaluate( () => { const t = window.__app.together, f = { distance: 30, landAt: 1.2 }; t.backDown( f, 1 ); return { d: f.distance, helm: t.crew.backing() }; } );
 say( crewAid.d < 30, `and with Sam at the helm she's backed down on a fish: ${ JSON.stringify( crewAid ) }` );
-await sam.game.evaluate( () => { const a = window.__app; a.player.camMode = 'third'; a.player.orbitDist = 26; a.player.orbitYaw = a.boatCtl.getYaw() + 2.6; a.player.orbitPitch = 0.3; } );
+await sam.game.evaluate( () => { const a = window.__app; a.player.camMode = 'third'; a.player.orbitDist = 12; a.player.orbitYaw = a.boatCtl.getYaw() + 2.4; a.player.orbitPitch = 0.3; } );
 await frames( sam.game, 4 );
 await shot( sam, 'crew' );
-const reads = async ( g ) => g.evaluate( () => { const a = window.__app, i = a.renderer.info; return { draws: i.render.calls, tris: i.render.triangles, heapMB: performance.memory ? +( performance.memory.usedJSHeapSize / 1048576 ).toFixed( 1 ) : null }; } );
-console.log( '     readings, Sam with her in sight', JSON.stringify( await reads( sam.game ) ) );
+await reads( sam.game, 'Sam at his helm, Robin aboard' );
+
+// ---- Robin goes home and changes boats: everyone's copy of her changes, and what's in memory with it
+await robin.game.evaluate( () => { const p = window.__app.player; p.exitBoat( null, 1 ); } );
+const swapped = await robin.game.evaluate( async () => { const a = window.__app; a.state.addBoat( 'lobster' ); return { ok: await a.setBoat( 'lobster' ), own: a.boat.id }; } );
+say( swapped.ok && swapped.own === 'lobster', 'Robin gets into the lobster boat' );
+await robin.game.evaluate( () => { const a = window.__app, p = a.player, b = a.boatCtl; p.boardBoat(); p.takeHelm(); b.moored = false; b.position.set( - 2600 + 300, b.position.y, 3000 ); } );
+await until( sam.game, `( () => { const o = ${ other }; return o.boat && o.boat.visible && o.boat.userData.type === 'lobster'; } )()` );
+const types = await sam.game.evaluate( `( () => { const t = window.__app.together, o = ${ other }; let n = 0; o.boat.traverse( ( m ) => { if ( m.isMesh && m.name.startsWith( 'boat-' ) ) n ++; } ); t.copies.tidy( 61 ); return { meshes: n, types: [ ...t.copies.types.keys() ], lobster: t.copies.types.get( 'lobster' ).model.id }; } )()` );
+say( types.lobster === 'lobster' && ! types.types.includes( 'console' ), `Sam's copy's the lobster boat now, and the console's let go: ${ JSON.stringify( types ) }` );
+if ( TIER === 'low' ) say( types.meshes === 4, 'on low, the four meshes a phone draws of her' );
+await sam.game.evaluate( () => { const a = window.__app; a.player.camMode = 'third'; a.player.orbitDist = 30; a.player.orbitPitch = 0.12; a.player.orbitYaw = - Math.PI / 2; } );
+await frames( sam.game, 4 );
+await shot( sam, 'lobster' );
 
 // ---- far apart: a speck past the fog
-await robin.game.evaluate( () => { const p = window.__app.player; p.exitBoat( null, 1 ); } );
 const R = { x: - 2600, z: 3000 };
+await morning( sam.game );
 for ( const d of [ 2500, 6000, 9000, 12500, 15500 ] ) {
 
 	await robin.game.evaluate( ( [ R, d ] ) => { const a = window.__app, p = a.player, b = a.boatCtl; if ( p.mode !== 'boat' ) { p.boardBoat(); p.takeHelm(); } b.moored = false; b.position.set( R.x + d, b.position.y, R.z ); }, [ R, d ] );
@@ -213,14 +258,28 @@ for ( const d of [ 2500, 6000, 9000, 12500, 15500 ] ) {
 	await posed( sam.game );
 	const sp = await sam.game.evaluate( `( () => { const a = window.__app, t = a.together, o = ${ other }, s = t.specks; const A = s && s.geometry.attributes; return { fog: Math.round( a.sky.fogFar ), mesh: !! ( o.boat && o.boat.visible ), stand: !! ( o.stand && o.stand.visible ), n: s ? s.count : 0, alpha: s && s.count ? +A.speckColor.array[ 3 ].toFixed( 3 ) : 0, w: s && s.count ? +A.speckSize.array[ 0 ].toFixed( 2 ) : 0, h: s && s.count ? +A.speckSize.array[ 1 ].toFixed( 2 ) : 0, radar: t.boatsAbout().length }; } )()` );
 	console.log( `     Robin's ${ d } m from Sam:`, JSON.stringify( sp ) );
-	if ( d > 2000 && d < 13000 ) say( sp.n === 1 && sp.alpha > 0.1, `at ${ d / 1000 } km she's a speck` );
-	if ( d === 15500 ) say( sp.n === 0, 'and at 15.5 km the lobster boat\'s under the horizon' );
+	if ( d < 10000 ) say( sp.n === 1 && sp.alpha > 0.05, `at ${ d / 1000 } km she's a speck` );
+	if ( d === 15500 ) {
+
+		say( sp.n === 0, 'and at 15.5 km the lobster boat\'s under the horizon' );
+		await posed( robin.game );
+		const tower = await robin.game.evaluate( () => { const s = window.__app.together.specks; return { n: s ? s.count : 0, alpha: s && s.count ? +s.geometry.attributes.speckColor.array[ 3 ].toFixed( 3 ) : 0 }; } );
+		say( tower.n === 1, `but Robin can still pick out his tower: ${ JSON.stringify( tower ) }` );
+
+	}
+
 	if ( d === 9000 ) {
 
 		// looking at her: Sam's bow toward her, from his helm
 		await sam.game.evaluate( ( yaw ) => { const a = window.__app, p = a.player, b = a.boatCtl; p.camMode = 'first'; p.helmYaw = 0; p.helmPitch = 0; b.quaternion.setFromAxisAngle( a.camera.up.clone().set( 0, 1, 0 ), yaw ); b.angular.set( 0, 0, 0 ); }, Math.PI / 2 );
 		await frames( sam.game, 4 );
 		await shot( sam, 'speck-9km' );
+		await morning( sam.game, 22 );
+		await frames( sam.game, 6 );
+		const lit = await sam.game.evaluate( () => { const s = window.__app.together.specks; return { n: s.count, alpha: +s.geometry.attributes.speckColor.array[ 3 ].toFixed( 3 ) }; } );
+		console.log( '     by night, at 9 km her light:', JSON.stringify( lit ) );
+		await shot( sam, 'speck-9km-night' );
+		await morning( sam.game );
 
 	}
 
@@ -229,6 +288,10 @@ for ( const d of [ 2500, 6000, 9000, 12500, 15500 ] ) {
 // ---- her lamps at night, from the sportfisher's lamps' own figures
 await robin.game.evaluate( ( R ) => { const a = window.__app, b = a.boatCtl; b.position.set( R.x + 400, b.position.y, R.z ); }, R );
 await until( sam.game, `( () => { const o = ${ other }; return o.boat && o.boat.visible; } )()` );
+await morning( sam.game, 22 );
+await frames( sam.game, 6 );
+await shot( sam, 'lamps-night' );
+await reads( sam.game, 'Sam at his helm by night, Robin\'s boat 400 m off' );
 const lamps = await sam.game.evaluate( `( () => { const o = ${ other }, M = o.boat.userData.model, y = o.boat.userData.lamps.points.geometry.attributes.position; let top = 0; for ( let i = 0; i < y.count; i ++ ) top = Math.max( top, y.getY( i ) ); return { model: M.id, top: +top.toFixed( 2 ), want: +M.lamps.anchor[ 1 ].toFixed( 2 ) }; } )()` );
 say( lamps.top === lamps.want, `the lamps on Robin's boat are at her own lamp heights: ${ JSON.stringify( lamps ) }` );
 

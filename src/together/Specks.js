@@ -6,8 +6,8 @@ import { sizeOf } from './BoatCopies.js';
 // How far: over the earth's curve (standard refraction's 7/6 of its radius: a boat's masthead 4 m up shows from a deck
 // to about 13 km, a tuna tower's to 18, a good deal further from up one), her hull going down first; through the air
 // (Koschmieder's law: contrast falls by e^(-3.912 d / V), V the visual range, about 30 km on a clear day in the
-// trades, 5 in rain); and only if she's big enough to make out (the eye's about an arcminute, half that against a bright
-// horizon): a kayak's gone by about 6 km however clear it is. Dark looking up-sun, pale with the sun behind you. By
+// trades, 5 in rain); and only if what's left of her is big enough to make out (a dark speck on a bright horizon, down to
+// about a third of an arcminute): the last of a lobster boat's masthead goes at about 12 km, a kayak by about 7. Dark looking up-sun, pale with the sun behind you. By
 // night it's her light, by the range lights are made to be seen at.
 // One draw for all of them, nothing until someone's out there.
 //   seenHeight( d, eye, air ) -> m of her above your horizon (0: below it)
@@ -61,7 +61,7 @@ export function speckAlpha( { d, eye, air, range } ) {
 
 	const h = seenHeight( d, eye, air );
 	if ( h <= 0 ) return 0;
-	return Math.exp( - 3.912 * d / range ) * MathUtils.smoothstep( h / d, 0.00015, 0.0003 );
+	return Math.exp( - 3.912 * d / range ) * MathUtils.smoothstep( h / d, 0.0001, 0.0002 );
 
 }
 

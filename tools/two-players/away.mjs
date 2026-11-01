@@ -4,7 +4,7 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const ROOT = join( dirname( fileURLToPath( import.meta.url ) ), '../..' );
-const { chromium } = await import( join( ROOT, '../all-the-spaces/node_modules/playwright/index.mjs' ) );
+const { chromium } = await import( join( process.env.ALL_THE_SPACES || join( ROOT, '../all-the-spaces' ), 'node_modules/playwright/index.mjs' ) );
 const [ out = 'qa-output', PORT = '5189' ] = process.argv.slice( 2 );
 const browser = await chromium.launch( { args: [ '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required' ] } );
 const ctx = await browser.newContext( { viewport: { width: 560, height: 315 } } );

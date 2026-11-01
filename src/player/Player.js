@@ -1036,7 +1036,7 @@ export class Player {
 		}
 
 		b.setInput( throttle, steer, dt );
-		this.prompt = { key: 'E', text: this.helmHeld ? 'Close the radio' : 'Leave helm   ·   V  camera   ·   R  radio' };
+		this.prompt = { key: 'E', text: this.helmHeld ? 'Close the radio' : this.riding ? 'Leave helm   ·   V  camera' : 'Leave helm   ·   V  camera   ·   R  radio' };
 
 		// keep the player attached (for audio / queries)
 		b.toWorld( b.model.helmEye, this.position );

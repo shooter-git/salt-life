@@ -640,7 +640,7 @@ export class Game {
 		// the catch card's live fish portrait (or one queued thumbnail)
 		if ( this.hud && this.hud.portrait ) this.hud.portrait.update( dt );
 		if ( this.hud ) this.hud.update( {
-			fuel: aboard ? { litres: this.state.fuelL, tank: this.state.stats.fuelL } : null,
+			fuel: aboard && ! p.riding ? { litres: this.state.fuelL, tank: this.state.stats.fuelL } : null, // ((M16) yours, not hers)
 			// (M10) the hull once it's worn, and the bilge with water in it
 			hull: aboard && ! p.riding && this.hull.wear > 0.02 ? this.hull.wear : null,
 			bilge: aboard && ! p.riding && this.hull.bilge >= 1 ? this.hull.bilge : null,
@@ -830,7 +830,7 @@ export class Game {
 			this._bailing = inp.down( 'KeyE' );
 
 		} else this._bailing = false;
-		if ( p.mode === 'boat' && hull.engine === 'stalled' && p.prompt ) p.prompt = { key: p.prompt.key, text: `${ p.prompt.text }   ·   ${ this.keyName( 'W' ) }  crank her` };
+		if ( p.mode === 'boat' && ! p.riding && hull.engine === 'stalled' && p.prompt ) p.prompt = { key: p.prompt.key, text: `${ p.prompt.text }   ·   ${ this.keyName( 'W' ) }  crank her` };
 
 	}
 

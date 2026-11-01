@@ -141,7 +141,7 @@ ok( sizeOf( 'trawler' ) === SIZE.lobster, 'and a game that doesn\'t say is the l
 	ok( clear === 30000 && rain > 4000 && rain < 6000 && storm < 3000, `what the air lets you see: ${ Math.round( clear / 1000 ) } km clear, ${ ( rain / 1000 ).toFixed( 1 ) } in rain, ${ ( storm / 1000 ).toFixed( 1 ) } in a storm` );
 	const at = ( id, d, range = clear ) => speckAlpha( { d, eye, air: SIZE[ id ].air, range } );
 	ok( at( 'lobster', 6000 ) > 0.3 && at( 'lobster', 10000 ) > 0.1 && at( 'lobster', 16000 ) === 0, `the lobster boat's speck: ${ at( 'lobster', 6000 ).toFixed( 2 ) } at 6 km, ${ at( 'lobster', 10000 ).toFixed( 2 ) } at 10, none at 16` );
-	ok( at( 'kayak', 2500 ) > 0.3 && at( 'kayak', 7000 ) === 0, `a kayak's too small to make out far off: ${ at( 'kayak', 2500 ).toFixed( 2 ) } at 2.5 km, none at 7` );
+	ok( at( 'kayak', 2500 ) > 0.3 && at( 'kayak', 7000 ) < 0.03, `a kayak's too small to make out far off: ${ at( 'kayak', 2500 ).toFixed( 2 ) } at 2.5 km, ${ at( 'kayak', 7000 ).toFixed( 3 ) } at 7` );
 	ok( at( 'lobster', 6000, rain ) < 0.02, 'nothing past the rain' );
 
 }
