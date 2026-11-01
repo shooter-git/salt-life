@@ -6,6 +6,7 @@ const { chromium } = await import( '/home/shooter/Documents/VS Code/all-the-spac
 const [ , , out = '.', tier = 'low' ] = process.argv, PORT = process.env.PORT || 5203;
 const b = await chromium.launch( { args: [ '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist' ] } );
 const page = await b.newPage( { viewport: { width: 1280, height: 720 } } );
+page.setDefaultTimeout( 300000 );
 const errs = [];
 page.on( 'pageerror', ( e ) => errs.push( 'pageerror ' + e.message ) );
 page.on( 'console', ( m ) => {
@@ -14,7 +15,13 @@ page.on( 'console', ( m ) => {
 
 } );
 await page.goto( `http://127.0.0.1:${ PORT }/?boat=sportfisher&tier=${ tier }&readout`, { waitUntil: 'domcontentloaded' } );
-await page.waitForFunction( () => window.__app && window.__app._started && window.__app.game, null, { timeout: 300000 } );
+await page.waitForFunction( () => window.__app && window.__app._started && window.__app.game, null, { timeout: 15 * 60000 } ).catch( async ( e ) => {
+
+	console.log( 'never started', e.message, errs.slice( 0, 20 ).join( '\n' ) );
+	await b.close();
+	process.exit( 1 );
+
+} );
 const sleep = ( ms ) => new Promise( ( r ) => setTimeout( r, ms ) );
 const shot = async ( name ) => {
 
