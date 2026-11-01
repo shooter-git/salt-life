@@ -19,7 +19,7 @@ import { LOBSTER_HINGE } from './CreatureGeometry.js';
 // sculling (rays undulate or flap, the turtle strokes; the spiny lobster walks, curls its tail and
 // sways its feelers).
 //
-// Port notes: the species table (35 species x 8 vec4) is a float texture (280 vec4 uniforms would
+// Port notes: the species table (46 species x 8 vec4) is a float texture (280 vec4 uniforms would
 // pass WebGL's guaranteed limit); no motion vectors; the underwater shading is the shared one
 // (materials/Underwater.js); translucency goes to the emissive term in the sun's colour; lite
 // (low-powered devices): no scale rows, relief or sheen.
@@ -255,14 +255,17 @@ const COMMON = /* glsl */`
 		float hh = D.w;
 		float zE = fishOpercleEdge( eyeOp.w, hh );
 		float onOpR = fishOpercleMask( hh );
-		float op = fishSs( -0.004, 0.004, Lp.z - zE ) * onOpR * ( 1.0 - noOp );
+		// ((M16) the big pelagics are smooth-skinned: hardly a step at the gill cover, the fins' rays flush: at their
+		// spacing a ridge turned the fin to stripes of glare)
+		float smoothK = ( pattern >= ${ PT( 'wahoo' ) } && pattern <= ${ PT( 'yellowfin' ) } ) ? 0.2 : 1.0;
+		float op = fishSs( -0.004, 0.004, Lp.z - zE ) * onOpR * ( 1.0 - noOp ) * smoothK;
 		float grainFade = 1.0 - fishSs( 0.15, 0.45, px / ( 0.004 * I.z ) );
-		float grain = ( fishVnoise( vec2( Lp.z, D.z ) * 420.0 ) - 0.5 ) * 0.00022 * grainFade;
+		float grain = ( fishVnoise( vec2( Lp.z, D.z ) * 420.0 ) - 0.5 ) * 0.00022 * grainFade * ( pattern == ${ PT( 'swordfish' ) } ? 0.35 : 1.0 );
 		float bodyH = sc * 0.0016 + op * 0.0025 + grain;
 		// fin rays: ridges
 		bool isFinR = part > 0.5 && part < 7.5;
 		float rd = abs( fract( D.w + 0.5 ) - 0.5 );
-		float ray = ( 1.0 - fishSs( 0.0, 0.25, rd ) ) * 0.0004;
+		float ray = ( 1.0 - fishSs( 0.0, 0.25, rd ) ) * 0.0004 * smoothK * smoothK;
 		bumpH = ( isBodyR ? bodyH : ( isFinR ? ray : 0.0 ) ) * L;
 	}
 #endif
@@ -639,6 +642,90 @@ const SURFACE = /* glsl */`
 		c = P == ${ PA( 'CAUDAL' ) } ? mix( c, vec3( 0.04, 0.04, 0.035 ), ( 1.0 - fishSs( 0.5, 1.2, abs( w - 8.0 ) ) ) * 0.85 ) : c;
 		c = ( P == ${ PA( 'ANAL' ) } || P == ${ PA( 'PELVIC' ) } ) ? mix( c, vec3( 0.82, 0.66, 0.16 ), 0.6 ) : c;
 		c = ( P == ${ PA( 'DORSAL1' ) } || P == ${ PA( 'DORSAL2' ) } ) ? mix( c, back * 0.7, 0.5 ) : c;
+	} else if ( pat == ${ PT( 'wahoo' ) } ) {
+		// (M16) wahoo: a steel-blue back over silver, 24 to 30 cobalt bars down the flank, wavering, thinning out
+		// past the belly's edge (ICCAT's manual; photographs)
+		float xL = 0.5 - z;
+		float wob = sin( y * 150.0 + seed * 9.0 ) * 0.0035 + sin( y * 310.0 + xL * 40.0 ) * 0.0016 + ( n2 - 0.5 ) * 0.008;
+		float bars = fishSs( 0.2, 0.62, sin( ( xL + wob ) * 240.0 ) ) * fishSs( - 0.55, - 0.1, h + ( n1 - 0.5 ) * 0.35 + sin( xL * 77.0 + seed * 5.0 ) * 0.14 ) * fishSs( 0.17, 0.22, xL ) * bodyK;
+		bars *= 1.0 - fishSs( 0.5, 1.2, fwidth( xL ) * 240.0 );
+		c = mix( c, back, fishSs( 0.36, 0.56, h + ( n2 - 0.5 ) * 0.1 ) * bodyK );
+		c = mix( c, vec3( 0.025, 0.05, 0.1 ), bars * 0.85 );
+		c = P == ${ PA( 'FINLET' ) } ? back * 1.3 : c;
+	} else if ( pat >= ${ PT( 'sailfish' ) } && pat <= ${ PT( 'blueMarlin' ) } ) {
+		// (M16) the sailfish and the marlins: a near-black cobalt back cut hard along the flank over silver, a
+		// bronze line along the cut, pale cobalt bars from the gills to the tail's stalk (strongest on the blue,
+		// rows of spots on the sailfish, faint on the white). Their fins: the sail and the white's low dorsal
+		// spotted black, the anal silver at its root and the bill dark over a pale lower jaw
+		float xL = 0.5 - z;
+		float rows = sin( ( xL + ( n1 - 0.5 ) * 0.005 ) * 150.0 ), barF = 1.0 - fishSs( 0.5, 1.2, fwidth( xL ) * 150.0 );
+		float cut = fishSs( 0.0, 0.1, h - 0.1 + ( n2 - 0.5 ) * 0.09 + rows * 0.035 );
+		c = mix( c, mix( mix( flank, belly, fishSs( 0.05, - 0.45, h ) ), back, cut ), bodyK );
+		float blueK = pat == ${ PT( 'blueMarlin' ) } ? 1.0 : 0.0, sailK = pat == ${ PT( 'sailfish' ) } ? 1.0 : 0.0;
+		float line = fishBand( h, 0.07, 0.05, fwH + 0.04 ) * fishSs( 0.26, 0.32, xL ) * fishSs( 0.84, 0.76, xL ) * bodyK;
+		c = mix( c, vec3( 0.3, 0.17, 0.05 ), line * mix( 0.4, 0.8, max( blueK, sailK ) ) );
+		float bars = fishSs( 0.8, 0.98, rows ) * fishSs( 0.28, 0.32, xL ) * fishSs( 0.87, 0.8, xL ) * ( 1.0 - fishSs( 0.5, 0.82, h ) ) * fishSs( - 0.72, - 0.35, h ) * bodyK * barF;
+		// (the sailfish's: columns of small pale spots, in place of bars)
+		float dots = 1.0 - fishSs( 0.0015, 0.0028, length( vec2( ( fract( xL * 23.87 ) - 0.5 ) * 0.042, ( fract( y * 62.0 ) - 0.5 ) * 0.016 ) ) );
+		float wash = mix( bars, dots * fishSs( 0.28, 0.32, xL ) * fishSs( 0.87, 0.8, xL ) * ( 1.0 - fishSs( 0.5, 0.82, h ) ) * fishSs( - 0.72, - 0.35, h ) * bodyK * barF, sailK );
+		c = mix( c, mix( vec3( 0.13, 0.24, 0.48 ), vec3( 0.4, 0.54, 0.76 ), fishSs( 0.3, - 0.1, h ) ), wash * ( 0.22 + 0.38 * blueK + 0.4 * sailK ) );
+		c = mix( c, back * 0.85, fishSs( 0.2, 0.17, xL ) * fishSs( - 0.75, - 0.2, h ) * bodyK );
+		float gF = P == ${ PA( 'DORSAL2' ) } ? 1.0 : 0.0;
+		vec2 sq = vec2( z + y * 0.3, y ) * 95.0;
+		vec2 sc = floor( sq );
+		float fr = mix( 0.1, 0.26, fishHash( sc + 8.9 ) );
+		float fspot = ( 1.0 - fishSs( fr, fr + 0.1, length( fract( sq ) - 0.5 - ( vec2( fishHash( sc + 2.3 ), fishHash( sc + 6.1 ) ) - 0.5 ) * 0.5 ) ) ) * step( 0.4, fishHash( sc + 4.7 ) ) * gF * ( 1.0 - blueK );
+		c = mix( c, vec3( 0.006, 0.008, 0.016 ), fspot * 0.9 );
+		c = P == ${ PA( 'ANAL' ) } ? mix( mix( flank, belly, 0.5 ), edgeC, fishSs( 0.25, 0.8, t ) ) : c;
+		c = P == ${ PA( 'PECTORAL' ) } ? mix( mix( back, flank, 0.55 ), back * 1.3, t ) : c;
+		c = P == ${ PA( 'CAUDAL' ) } ? mix( mix( back, flank, 0.4 ), back * 1.2, t ) : c;
+		transl *= ( gF > 0.5 || P == ${ PA( 'CAUDAL' ) } ) ? 0.5 : 1.0;
+	} else if ( pat == ${ PT( 'swordfish' ) } ) {
+		// (M16) swordfish: no scales, no bars: a dark bronze-black back fading through a dusky flank to a dirty
+		// white belly, the sword dark over a paler underside, the fins near black and hardly lit through
+		float xL = 0.5 - z;
+		c = mix( c, mix( mix( flank, belly, fishSs( 0.02, - 0.3, h ) ), back, fishSs( 0.0, 0.28, h + ( n2 - 0.5 ) * 0.1 ) ), bodyK );
+		c = mix( c, c * vec3( 1.25, 1.08, 0.85 ), fishBand( h, 0.12, 0.2, 0.2 ) * bodyK * 0.6 );
+		c *= mix( 1.0, 0.86 + 0.26 * fishVnoise( vec2( z, sd ) * 340.0 + seed * 11.0 ), bodyK );
+		rough = mix( rough, 0.8 + ( n1 - 0.5 ) * 0.2, bodyK );
+		c = isFin ? finC * mix( 1.15, 0.8, t ) : c;
+		c = mix( c, back * 1.2, fishSs( 0.34, 0.3, xL ) * fishSs( - 0.5, 0.1, h ) * bodyK );
+		transl *= 0.35;
+	} else if ( pat == ${ PT( 'yellowfin' ) } ) {
+		// (M16) yellowfin: a blue-black back cut hard over a gold band from the eye to the tail, silver below with
+		// pale broken rows; the second dorsal, the anal and the finlets bright yellow, the finlets edged black
+		float xL = 0.5 - z;
+		float cut = fishSs( 0.34, 0.42, h + ( n2 - 0.5 ) * 0.04 );
+		float gold = fishBand( h, 0.24, 0.05, 0.08 ) * fishSs( 0.08, 0.16, xL ) * bodyK;
+		c = mix( c, vec3( 0.36, 0.3, 0.07 ), gold * 0.85 );
+		c = mix( c, back, cut * bodyK );
+		float rows = fishSs( 0.75, 0.97, sin( xL * 190.0 + n1 * 2.0 ) ) * fishSs( 0.1, 0.7, sin( y * 420.0 + xL * 60.0 ) ) * fishSs( 0.0, - 0.3, h ) * fishSs( 0.24, 0.3, xL ) * ( 1.0 - fishSs( 0.5, 1.2, fwidth( xL ) * 190.0 ) ) * bodyK;
+		c = mix( c, vec3( 0.86, 0.88, 0.9 ), rows * 0.22 );
+		c = P == ${ PA( 'FINLET' ) } ? mix( vec3( 0.86, 0.66, 0.08 ), vec3( 0.03 ), fishSs( 0.65, 0.95, t ) ) : c;
+		c = P == ${ PA( 'DORSAL1' ) } ? mix( finC, back, 0.45 ) : c;
+		c = P == ${ PA( 'CAUDAL' ) } ? mix( back * 2.0, finC * 0.45, 0.14 ) : c;
+		c = P == ${ PA( 'PECTORAL' ) } ? mix( back * 1.6, finC * 0.4, t ) : c;
+	} else if ( pat == ${ PT( 'redfish' ) } ) {
+		// (M16) redfish: new-penny bronze over a pale belly; the black spot at the tail's root, ringed pale, and
+		// on one in three a second ahead of it; peach paired and anal fins, the tail copper with a dark margin
+		float xL = 0.5 - z;
+		float s1 = length( vec2( xL - 0.8, y - 0.018 ) );
+		float s2 = length( vec2( xL - 0.745, y - 0.026 ) ) + step( 0.35, fract( seed * 5.3 ) );
+		float ocell = ( 1.0 - fishSs( 0.012, 0.015, min( s1, s2 ) ) ) * bodyK;
+		c = mix( c, mix( flank, belly, 0.7 ), ( 1.0 - fishSs( 0.015, 0.018, min( s1, s2 ) ) ) * bodyK * 0.25 );
+		c = mix( c, vec3( 0.012, 0.01, 0.01 ), ocell );
+		c = ( P == ${ PA( 'ANAL' ) } || P == ${ PA( 'PELVIC' ) } || P == ${ PA( 'PECTORAL' ) } ) ? mix( c, vec3( 0.88, 0.5, 0.28 ), 0.7 ) : c;
+		c = P == ${ PA( 'CAUDAL' ) } ? mix( vec3( 0.62, 0.32, 0.12 ), edgeC, fishSs( 0.7, 1.0, t ) ) : c;
+	} else if ( pat == ${ PT( 'trout' ) } ) {
+		// (M16) spotted seatrout: an olive-grey back over silver, round black spots scattered over the back, the
+		// second dorsal and the tail; the fins a pale yellow
+		float xL = 0.5 - z;
+		vec2 tq = vec2( z, y ) * 68.0;
+		vec2 tc = floor( tq );
+		float rr = mix( 0.12, 0.28, fishHash( tc + 1.3 ) );
+		float tspot = ( 1.0 - fishSs( rr, rr + 0.1, length( fract( tq ) - 0.5 - ( vec2( fishHash( tc + 3.1 ), fishHash( tc + 7.7 ) ) - 0.5 ) * 0.5 ) ) ) * step( 0.3, fishHash( tc + seed * 7.0 ) );
+		float where = bodyK * fishSs( - 0.15, 0.1, h ) * fishSs( 0.2, 0.28, xL ) + ( ( P == ${ PA( 'DORSAL2' ) } || P == ${ PA( 'CAUDAL' ) } ) ? 1.0 : 0.0 );
+		c = mix( c, vec3( 0.025, 0.025, 0.03 ), tspot * min( where, 1.0 ) * 0.9 );
 	} else if ( pat >= ${ PT( 'reefShark' ) } && pat <= ${ PT( 'nurseShark' ) } ) {
 		// sharks: smooth skin; the fins solid, the body's colour (no rays, hardly lit through); five
 		// gill slits ahead of the pectoral fin. Blacktip: black tips on the first dorsal, the paired
@@ -893,6 +980,10 @@ const PROP_SURFACE = /* glsl */`
 	float finRay = ( 1.0 - fishSs( 0.07, fwW + 0.15, finRd ) ) * ( 1.0 - fishSs( 0.25, 0.6, fwW ) );
 	float finThick = P == ${ PA( 'CAUDAL' ) } ? 0.18 : ( ( P == ${ PA( 'PECTORAL' ) } || P == ${ PA( 'PELVIC' ) } ) ? - 0.16 : 0.0 );
 	float fishAlpha = mix( 1.0, clamp( mix( 0.94, 0.4, fishSs( 0.05, 0.95, t ) ) + finRay * 0.18 + finThick, 0.22, 1.0 ), finK );
+	// ((M16) the big pelagics' fins are stiff, thick things: only a yellowfin's scythes and a wahoo's tips let any through)
+	bool stiffFin = pat >= ${ PT( 'wahoo' ) } && pat <= ${ PT( 'yellowfin' ) };
+	fishAlpha = stiffFin ? mix( fishAlpha, 1.0, 0.82 ) : fishAlpha;
+	fishRough = stiffFin ? mix( fishRough, 0.75, finK ) : fishRough;
 	// the fins a little less vivid than the paint (thin, they take the colours behind them)
 	float fishLum = dot( fishAlbedo, vec3( 0.2126, 0.7152, 0.0722 ) );
 	fishAlbedo = mix( fishAlbedo, vec3( fishLum ), finK * 0.25 );

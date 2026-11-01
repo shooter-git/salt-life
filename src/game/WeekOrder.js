@@ -12,7 +12,7 @@ import { FISH } from './FishTable.js';
 // kept for whoever hasn't collected their share yet)
 
 export const WEEK_MUL = 1.5;
-const MENU = [ 'redSnapper', 'blackGrouper', 'mahi', 'tuna', 'yellowtail', 'wrasse' ]; // what a restaurant would order (never a protected fish)
+const MENU = [ 'redSnapper', 'blackGrouper', 'mahi', 'tuna', 'yellowtail', 'wrasse', 'wahoo', 'yellowfin', 'swordfish' ]; // what a restaurant would order (never a protected fish)
 const FISH_N = 12; // the order is about this many fish of the kind
 const SHARE = 0.5; // the bonus: half of what the order would fetch at Joe's price
 const DAY = 864e5, WEEK = 7 * DAY, MONDAY = 4 * DAY; // (1 January 1970 was a Thursday)

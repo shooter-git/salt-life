@@ -94,6 +94,8 @@ const [ hx, hz ] = SEABED.hump[ 0 ];
 const humpEdge = kinds.edge.filter( ( [ x, z ] ) => Math.hypot( x - hx, z - hz ) < 1500 ).length;
 check( humpEdge > 3, `the hump's flanks are the drop-off's water too (${ humpEdge } within 1.5 km of its top)` );
 
+// ((M16) the far water's other fish, all wanderers too: test/m16-fish.mjs has them)
+const WANDERERS = [ 'mahi', 'tuna', 'yellowfin', 'wahoo', 'sailfish', 'whiteMarlin', 'blueMarlin', 'swordfish' ];
 const shelf = over( kinds.shelf ), edge = over( kinds.edge, 6.5 ), ledge = over( kinds.ledge ), blue = over( kinds.blue ), bank = over( kinds.bank );
 console.log( `     the shelf: ${ top( shelf ) }; a bite every ${ shelf.wait.toFixed( 1 ) } s` );
 console.log( `     the drop-off, at first light: ${ top( edge ) }; ${ edge.wait.toFixed( 1 ) } s` );
@@ -101,9 +103,9 @@ console.log( `     the deep ledges: ${ top( ledge ) }; ${ ledge.wait.toFixed( 1 
 console.log( `     the open ocean: ${ top( blue ) }; ${ blue.wait.toFixed( 1 ) } s` );
 console.log( `     the bank's top: ${ top( bank ) }; ${ bank.wait.toFixed( 1 ) } s` );
 check( shelf.share( 'mahi', 'tuna' ) === 0, 'no mahi or tuna on the shelf: they\'re out in the blue water' );
-check( edge.share( 'tuna' ) > 0.5 && edge.share( 'mahi', 'tuna' ) > 0.999, `the blackfin tuna the drop-off's fish at first light (${ Math.round( edge.share( 'tuna' ) * 100 ) }%), and no bottom fish over it: a bait won't reach them` );
+check( edge.share( 'tuna' ) > 0.5 && edge.share( ...WANDERERS ) > 0.999, `the blackfin tuna the drop-off's fish at first light (${ Math.round( edge.share( 'tuna' ) * 100 ) }%), and no bottom fish over it: a bait won't reach them` );
 check( ledge.share( 'silkSnapper' ) > 0.55, `the silk snapper the deep ledges' (${ Math.round( ledge.share( 'silkSnapper' ) * 100 ) }%)` );
-check( blue.share( 'mahi', 'tuna' ) > 0.999, 'nothing but the wanderers in the open ocean: mahi and tuna' );
+check( blue.share( ...WANDERERS ) > 0.999 && blue.share( 'mahi', 'tuna' ) > 0.8, 'nothing but the wanderers in the open ocean: mahi and tuna above all' );
 check( blue.wait > 2 * shelf.wait, `and few of them: a bite every ${ blue.wait.toFixed( 0 ) } s there, ${ shelf.wait.toFixed( 0 ) } on the shelf` );
 const reefy = Object.entries( bank.c ).filter( ( [ k ] ) => [ 'yellowtail', 'grunt', 'sergeant', 'tang', 'angel', 'chromis', 'parrot', 'wrasse', 'muttonSnapper', 'graySnapper', 'lionfish', 'grouper', 'blackGrouper' ].includes( k ) ).reduce( ( a, [ , v ] ) => a + v, 0 );
 check( reefy > 0.4, `the bank's top a reef: its fish ${ Math.round( reefy * 100 ) }% of the bites` );

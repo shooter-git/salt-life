@@ -3,6 +3,7 @@ import { FISH, fishValue, fishLengthCm } from './FishTable.js';
 import { defaultUpgrades, gearStats, nextLevel, UPGRADES, fuelPrice, unlockProgress } from './Gear.js';
 import { repairFee } from './Hull.js';
 import { FLEET, TRADE, SALE, MONTH, MOST_MONTHS, DUES_LEAVE, gearWorth, monthly, cleanName, paintOf, kindOf } from './fleet/Fleet.js';
+import { cleanTrophies } from './Trophies.js';
 import { ordersOf, orderPrice } from './Orders.js';
 import { WEEK_MUL } from './WeekOrder.js';
 import { BAITS, KEEPER_KG, baitOf, chunksOf } from './Bait.js';
@@ -36,6 +37,7 @@ export class GameState {
 		this.inventory = []; // { id, species, kg, cm, value, caughtAt (game hours), record, method }
 		this.log = {}; // species -> { count, bestKg, bestCm }
 		this.places = {}; // ((M15) Places.js) place -> { n, day, first: species } (the first catch there: the log)
+		this.trophies = {}; // ((M16) Trophies.js) a billfish let go: species -> { n, kg, cm, day, place, tagged } (your best)
 		this.found = {}; // ((M15) Places.js' FAR_PLACES) place -> the day you first came to it (the log names it then)
 		// the last addFish: { species, kg, cm, value, newSpecies, record, prevBestKg, prevBestCm, kept,
 		// released, why, method, bag, at, day, place, firstAt } (the catch card; (M15) firstAt: the place, when
@@ -907,7 +909,7 @@ export class GameState {
 	toJSON() {
 
 		this._boatAway();
-		return { v: 2, boat: this.boat, fleet: this.fleet, earned: this.earned, dues: this.dues, money: this.money, inventory: this.inventory, log: this.log, places: this.places, found: this.found, upgrades: this.upgrades, fuel: this.fuel, hull: this.hull, hauled: this.hauled, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, bag: this.bag, finds: this.finds, picked: this.picked, chart: this.chart.toJSON(), days: this.days, nextId: this._nextId };
+		return { v: 2, boat: this.boat, fleet: this.fleet, earned: this.earned, dues: this.dues, money: this.money, inventory: this.inventory, log: this.log, places: this.places, trophies: this.trophies, found: this.found, upgrades: this.upgrades, fuel: this.fuel, hull: this.hull, hauled: this.hauled, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, bag: this.bag, finds: this.finds, picked: this.picked, chart: this.chart.toJSON(), days: this.days, nextId: this._nextId };
 
 	}
 
@@ -923,6 +925,7 @@ export class GameState {
 		// ((M15) the places you've fished: saves from before had none)
 		this.places = {};
 		for ( const [ k, v ] of Object.entries( d.places && typeof d.places === 'object' ? d.places : {} ) ) if ( PLACES[ k ] && v && Number.isInteger( v.n ) && v.n > 0 ) this.places[ k ] = { n: v.n, day: Number.isFinite( v.day ) ? v.day : null, first: FISH[ v.first ] ? v.first : null };
+		this.trophies = cleanTrophies( d.trophies ); // ((M16) saves from before had none)
 		// ((M15) the far places you've found: and any you'd fished before it was kept)
 		this.found = {};
 		for ( const [ k, v ] of Object.entries( d.found && typeof d.found === 'object' ? d.found : {} ) ) if ( PLACES[ k ] && PLACES[ k ].far ) this.found[ k ] = Number.isFinite( v ) ? v : null;
@@ -992,6 +995,7 @@ export class GameState {
 		this.money = 0;
 		this.inventory = [];
 		this.log = {};
+		this.trophies = {};
 		this.places = {};
 		this.found = {};
 		this.upgrades = defaultUpgrades();

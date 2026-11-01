@@ -41,6 +41,9 @@ export const chunksOf = ( kg ) => Math.max( 2, Math.min( 8, Math.round( kg / CUT
 // a species' bite weight on this bait (null: shrimp), times this
 export function baitWeight( bait, id ) {
 
+	// ((M16) a fish's own taste, ahead of the bait's: FishTable's eats)
+	const e = FISH[ id ].eats, own = e && e[ bait || 'shrimp' ];
+	if ( own !== undefined ) return own;
 	const b = BAITS[ bait ];
 	if ( ! b ) return 1;
 	if ( b.likes[ id ] ) return b.likes[ id ];
