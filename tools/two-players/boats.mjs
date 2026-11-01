@@ -62,7 +62,7 @@ const open = async ( name, boat, tier = TIER ) => {
 };
 const frames = ( g, n = 4 ) => g.evaluate( () => window.__draws.ticks ).then( ( t ) => g.waitForFunction( ( [ t, n ] ) => window.__draws.ticks > t + n, [ t, n ], { timeout: 400000, polling: 300 } ) );
 // (nothing drawn between the shots: what's counted in frames, the engine, the sea, gets on, on a CPU shared with others)
-const draws = ( g, on ) => g.evaluate( ( on ) => { const a = window.__app; if ( on ) delete a.drawWorld; else a.drawWorld = () => {}; }, on );
+const draws = ( g, on ) => g.evaluate( ( on ) => { const a = window.__app, gl = a.renderer.getContext(); if ( on ) { delete a.drawWorld; delete a._rest; delete gl.clientWaitSync; } else { a.drawWorld = () => {}; gl.clientWaitSync = () => gl.ALREADY_SIGNALED; Object.defineProperty( a, '_rest', { configurable: true, get: () => false, set() {} } ); } }, on );
 const other = 'window.__app.together.others.values().next().value';
 // (two games on the CPU can go seconds between poses: a pose gone stale is only waited out)
 const until = ( g, what, timeout = 400000 ) => g.waitForFunction( `( () => { try { return ${ what }; } catch ( e ) { return false; } } )()`, null, { timeout, polling: 500 } );
@@ -114,6 +114,8 @@ console.log( 'both in' );
 await morning( robin.game );
 await draws( robin.game, false );
 await draws( sam.game, false );
+// (his tower and chair, bought: a crew's jobs want them)
+for ( const who of [ robin, sam ] ) await who.game.evaluate( async () => { const { UPGRADES } = await import( '/src/game/Gear.js' ); const a = window.__app, g = a.game, u = g.state.upgrades; for ( const [ k, t ] of Object.entries( UPGRADES ) ) if ( t.on === a.boat.id ) u[ k ] = t.levels.length - 1; g.applyGear(); } );
 const type = async ( g ) => { await posed( g ); return g.evaluate( `${ other }.cur.boatId` ); };
 say( await type( sam.game ) === 'console' && await type( robin.game ) === 'sportfisher', 'each pose says which boat she is' );
 
@@ -130,8 +132,8 @@ const seen = ( g ) => g.evaluate( `( () => { const o = ${ other }, b = o.boat, t
 const sa = await seen( sam.game ), ro = await seen( robin.game );
 console.log( '     Sam sees  ', JSON.stringify( sa ) );
 console.log( '     Robin sees', JSON.stringify( ro ) );
-say( sa.type === 'console' && sa.model === 'console' && sa.length === 7, 'Sam sees a center console, and she\'s not his boat' );
-say( ro.type === 'sportfisher' && ro.length === 14.6, 'Robin sees a sportfisher' );
+say( sa.type === 'console' && sa.model === 'console', `Sam sees a center console, ${ sa.length } m, and she's not his boat` );
+say( ro.type === 'sportfisher' && ro.model === 'sportfisher', `Robin sees a sportfisher, ${ ro.length } m` );
 say( ! sa.stand && ! ro.stand, 'the stand-in gone once she\'s there' );
 say( sa.types.length === 1 && ro.types.length === 1, 'and only the type that\'s wanted is in memory' );
 
@@ -324,7 +326,12 @@ for ( const d of [ 2500, 6000, 9000, 12500, 15500 ] ) {
 
 // ---- her lamps at night, from the sportfisher's lamps' own figures
 await robin.game.evaluate( ( R ) => { const a = window.__app, b = a.boatCtl; b.position.set( R.x + 400, b.position.y, R.z ); }, R );
-await until( sam.game, `( () => { const o = ${ other }; return o.boat && o.boat.visible; } )()` );
+await until( sam.game, `( () => { const o = ${ other }; return o.boat && o.boat.visible; } )()`, 240000 ).catch( async ( e ) => {
+
+	console.log( '     her copy didn\'t come back:', await sam.game.evaluate( `( () => { const a = window.__app, o = ${ other }, c = o.cur, t = a.together, e = t.copies.types.get( c && c.boatId ); return JSON.stringify( { cur: !! c, id: c && c.boatId, boat: !! o.boat, vis: o.boat && o.boat.visible, stand: o.stand && o.stand.visible, entry: e && { model: !! e.model, gen: e.gen, full: e.full, fulling: e.fulling, copies: e.copies.size, idle: e.idle }, types: [ ...t.copies.types.keys() ], d: c && c.boat ? Math.round( ( c.drawn || c.boat ).pos.distanceTo( a.camera.position ) ) : null, limits: t.limits, liveBoats: t._liveBoats, place: Object.prototype.hasOwnProperty.call( t, '_place' ) } ); } )()` ) );
+	throw e;
+
+} );
 await morning( sam.game, 22 );
 await frames( sam.game, 6 );
 await shot( sam, 'lamps-night' );

@@ -193,7 +193,7 @@ if ( ! seated ) {
 
 }
 
-await owner.game.evaluate( ( F ) => { const a = window.__app, b = a.boatCtl; b.moored = false; b.beached = false; b.anchor = null; b.position.set( F.x, b.position.y, F.z ); b.velocity.set( 0, 0, 0 ); b.angular.set( 0, 0, 0 ); a.together.setClock( 10, a.settings.day, 0.0001 ); }, SEA );
+await owner.game.evaluate( ( F ) => { const a = window.__app, b = a.boatCtl; b.moored = false; b.beached = false; b.anchor = null; a.boat.sliding = null; b.position.set( F.x, b.position.y, F.z ); b.velocity.set( 0, 0, 0 ); b.angular.set( 0, 0, 0 ); a.together.setClock( 10, a.settings.day, 0.0001 ); }, SEA );
 await until( guest.game, `( () => { const b = window.__app.player.boat.position; return Math.hypot( b.x - ${ SEA.x }, b.z - ${ SEA.z } ) < 300 && window.__app.player.riding; } )()` );
 say( await guest.game.evaluate( () => window.__app.player.riding ), 'with her moved out to open water, he\'s still aboard' );
 
@@ -239,9 +239,10 @@ const headingOf = () => owner.game.evaluate( () => window.__app.boatCtl.getYaw()
 // astern till she's slowing, and let her come to rest
 const stop = async () => {
 
-	await owner.page.keyboard.down( 'KeyS' );
+	// (a paddle just stops; held astern she'd go on astern)
+	if ( ! seated ) await owner.page.keyboard.down( 'KeyS' );
 	await until( owner.game, `Math.abs( window.__app.boatCtl.speed ) < ${ TOP * 0.2 }`, 150000 ).catch( () => console.log( '     (not stopped in time)' ) );
-	await owner.page.keyboard.up( 'KeyS' );
+	if ( ! seated ) await owner.page.keyboard.up( 'KeyS' );
 	return +Math.abs( await speed() ).toFixed( 1 );
 
 };
