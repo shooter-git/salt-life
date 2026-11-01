@@ -198,6 +198,34 @@
 			"author": "hdfreema"
 		},
 		{
+			"path": "public/audio/diesels_idle.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/blaukreuz/sounds/195743/",
+			"title": "130725_YachtIdleStart_F_4824",
+			"author": "blaukreuz"
+		},
+		{
+			"path": "public/audio/diesels_idle.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/blaukreuz/sounds/195743/",
+			"title": "130725_YachtIdleStart_F_4824",
+			"author": "blaukreuz"
+		},
+		{
+			"path": "public/audio/diesels_run.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/blaukreuz/sounds/195743/",
+			"title": "130725_YachtIdleStart_F_4824",
+			"author": "blaukreuz"
+		},
+		{
+			"path": "public/audio/diesels_run.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/blaukreuz/sounds/195743/",
+			"title": "130725_YachtIdleStart_F_4824",
+			"author": "blaukreuz"
+		},
+		{
 			"path": "public/audio/drips.m4a",
 			"license": "CC0-1.0",
 			"source": "https://freesound.org/people/Elements-Library/sounds/683778/",
@@ -266,6 +294,20 @@
 			"source": "https://freesound.org/people/squashy555/sounds/353416/",
 			"title": "Seagull on beach; Seagulls / gaviotas clean wildtrack.WAV",
 			"author": "squashy555, Soojay"
+		},
+		{
+			"path": "public/audio/hauler.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/BeroundSound/sounds/696035/",
+			"title": "pump",
+			"author": "BeroundSound"
+		},
+		{
+			"path": "public/audio/hauler.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/BeroundSound/sounds/696035/",
+			"title": "pump",
+			"author": "BeroundSound"
 		},
 		{
 			"path": "public/audio/hull_bump.m4a",
@@ -366,6 +408,48 @@
 			"author": "kyles"
 		},
 		{
+			"path": "public/audio/outboard_idle.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/kyles/sounds/637202/",
+			"title": "boat outboard motor real modern throaty start false starts take off ride various speeds accelerate decelerate slow and stop engine shut off",
+			"author": "kyles"
+		},
+		{
+			"path": "public/audio/outboard_idle.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/kyles/sounds/637202/",
+			"title": "boat outboard motor real modern throaty start false starts take off ride various speeds accelerate decelerate slow and stop engine shut off",
+			"author": "kyles"
+		},
+		{
+			"path": "public/audio/outboard_run.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/kyles/sounds/637202/",
+			"title": "boat outboard motor real modern throaty start false starts take off ride various speeds accelerate decelerate slow and stop engine shut off",
+			"author": "kyles"
+		},
+		{
+			"path": "public/audio/outboard_run.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/kyles/sounds/637202/",
+			"title": "boat outboard motor real modern throaty start false starts take off ride various speeds accelerate decelerate slow and stop engine shut off",
+			"author": "kyles"
+		},
+		{
+			"path": "public/audio/paddle.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/AugustSandberg/sounds/509323/",
+			"title": "Kayaking in calm weather",
+			"author": "AugustSandberg"
+		},
+		{
+			"path": "public/audio/paddle.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/AugustSandberg/sounds/509323/",
+			"title": "Kayaking in calm weather",
+			"author": "AugustSandberg"
+		},
+		{
 			"path": "public/audio/palms.m4a",
 			"license": "CC0-1.0",
 			"source": "https://freesound.org/people/felix.blume/sounds/384550/",
@@ -406,6 +490,34 @@
 			"source": "https://freesound.org/people/JoelMcDaniel/sounds/849752/",
 			"title": "Fishing Lure-Sinker Hitting water; fishingreel_throw.wav",
 			"author": "JoelMcDaniel, BranndyBottle"
+		},
+		{
+			"path": "public/audio/radio_hiss.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/lartti/sounds/636210/",
+			"title": "static noise2",
+			"author": "lartti"
+		},
+		{
+			"path": "public/audio/radio_hiss.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/lartti/sounds/636210/",
+			"title": "static noise2",
+			"author": "lartti"
+		},
+		{
+			"path": "public/audio/radio_squelch.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/JovianSounds/sounds/524205/",
+			"title": "Radio Sign Off / Squelch",
+			"author": "JovianSounds"
+		},
+		{
+			"path": "public/audio/radio_squelch.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/JovianSounds/sounds/524205/",
+			"title": "Radio Sign Off / Squelch",
+			"author": "JovianSounds"
 		},
 		{
 			"path": "public/audio/rain_boat.m4a",
@@ -588,6 +700,20 @@
 			"source": "https://freesound.org/people/paulprit/sounds/507070/",
 			"title": "Angel Fly Fish Reel Fast Pull_1.wav",
 			"author": "paulprit"
+		},
+		{
+			"path": "public/audio/reel_electric.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/mpuffenbarger/sounds/683806/",
+			"title": "SFX Electric ACtuator Under Load 1",
+			"author": "mpuffenbarger"
+		},
+		{
+			"path": "public/audio/reel_electric.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/mpuffenbarger/sounds/683806/",
+			"title": "SFX Electric ACtuator Under Load 1",
+			"author": "mpuffenbarger"
 		},
 		{
 			"path": "public/audio/reel_wind.m4a",
@@ -910,6 +1036,90 @@
 			"source": "https://freesound.org/people/TRP/sounds/717909/",
 			"title": "230724 Thunder, close crack light rain, mixpreroof, Toronto 5pm; Thunder strike; peal of thunder - distant; Rolling_Distant_Thunder_In_Heavy_Rain_06",
 			"author": "TRP, AyaDrevis, bastipictures, BlondPanda"
+		},
+		{
+			"path": "public/audio/turtle_breath.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/_stubb/sounds/389631/",
+			"title": "Huff 2",
+			"author": "_stubb"
+		},
+		{
+			"path": "public/audio/turtle_breath.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/_stubb/sounds/389631/",
+			"title": "Huff 2",
+			"author": "_stubb"
+		},
+		{
+			"path": "public/audio/turtle_crawl.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/IENBA/sounds/851733/",
+			"title": "Thick Sand Movements",
+			"author": "IENBA"
+		},
+		{
+			"path": "public/audio/turtle_crawl.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/IENBA/sounds/851733/",
+			"title": "Thick Sand Movements",
+			"author": "IENBA"
+		},
+		{
+			"path": "public/audio/turtle_hatch.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/mariethompson/sounds/516923/",
+			"title": "scrabble and soft sand pour",
+			"author": "mariethompson"
+		},
+		{
+			"path": "public/audio/turtle_hatch.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/mariethompson/sounds/516923/",
+			"title": "scrabble and soft sand pour",
+			"author": "mariethompson"
+		},
+		{
+			"path": "public/audio/turtle_sand.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/schneidi67/sounds/662864/",
+			"title": "digging sand with hands",
+			"author": "schneidi67"
+		},
+		{
+			"path": "public/audio/turtle_sand.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/schneidi67/sounds/662864/",
+			"title": "digging sand with hands",
+			"author": "schneidi67"
+		},
+		{
+			"path": "public/audio/twin_idle.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/paulprit/sounds/593024/",
+			"title": "2x250HP Suzuki",
+			"author": "paulprit"
+		},
+		{
+			"path": "public/audio/twin_idle.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/paulprit/sounds/593024/",
+			"title": "2x250HP Suzuki",
+			"author": "paulprit"
+		},
+		{
+			"path": "public/audio/twin_run.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/paulprit/sounds/593024/",
+			"title": "2x250HP Suzuki",
+			"author": "paulprit"
+		},
+		{
+			"path": "public/audio/twin_run.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/paulprit/sounds/593024/",
+			"title": "2x250HP Suzuki",
+			"author": "paulprit"
 		},
 		{
 			"path": "public/audio/under_reef.m4a",
