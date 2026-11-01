@@ -49,8 +49,7 @@ const open = async ( name, boat, fps ) => {
 	page.on( 'pageerror', ( e ) => {
 
 		if ( /Failed to fetch dynamically imported module/.test( e.message ) ) { unfetched = true; return; }
-		problems ++;
-		console.log( name, 'PAGEERROR', e.message.slice( 0, 300 ), ( e.stack || '' ).split( '\n' ).slice( 1, 4 ).join( ' | ' ).slice( 0, 300 ) );
+		if ( ++ problems < 4 ) console.log( name, 'PAGEERROR', e.message.slice( 0, 300 ), ( e.stack || '' ).split( '\n' ).slice( 1, 4 ).join( ' | ' ).slice( 0, 300 ) );
 
 	} );
 	page.on( 'console', ( m ) => { if ( m.type() === 'error' && ! /ERR_NETWORK|Failed to load resource|dynamically imported/.test( m.text() ) ) { problems ++; console.log( name, 'CONSOLE', m.text().slice( 0, 300 ) ); } } );
@@ -356,8 +355,8 @@ if ( ! seated ) {
 
 	const sp = await owner.game.evaluate( async () => {
 
-		const { FISH_IDS } = await import( '/src/game/FishTable.js' ), { BAIT_IDS } = await import( '/src/game/Bait.js' );
-		const a = window.__app, r = a.game.rigs, spots = r.spots(), V = a.camera.position.constructor, bait = BAIT_IDS[ 0 ];
+		const { FISH_IDS } = await import( '/src/game/FishTable.js' ), { BAIT_IDS, BAITS } = await import( '/src/game/Bait.js' );
+		const a = window.__app, r = a.game.rigs, spots = r.spots(), V = a.camera.position.constructor, bait = BAIT_IDS.find( ( k ) => BAITS[ k ].tow );
 		const mk = ( spot, on ) => ( { spot, bait, len: 30, p: new V(), tip: new V(), clip: null, butt: new V(), on, in: false, torn: 0, bend: 0 } );
 		r.lines.length = 0;
 		for ( const s of spots ) { const L = mk( s, null ); r._place( L ); L.p.copy( L.tip ); r.lines.push( L ); }
@@ -370,8 +369,8 @@ if ( ! seated ) {
 	} );
 	await until( guest.game, `${ other }.cur.spread && ${ other }.cur.spread.length === ${ sp.lines }`, 90000 ).catch( () => {} );
 	await frames( guest.game, 4 );
-	const seenL = await guest.game.evaluate( `( () => { const o = ${ other }, D = window.__app.together.spread.draw; return { spread: o.cur.spread, drawn: !! ( D && D.mesh !== undefined ? D.mesh.visible !== false : D ) }; } )()` );
-	say( seenL.spread && seenL.spread.length === sp.lines && seenL.drawn, `her spread on his game: ${ sp.lines } lines, one on` );
+	const seenL = await guest.game.evaluate( `( () => { const o = ${ other }, D = window.__app.together.spread.draw; return { n: o.cur.spread ? o.cur.spread.length : null, on: o.cur.spread ? o.cur.spread.filter( ( x ) => x.on ).length : 0, copy: !! ( o.boat && o.boat.visible ), mesh: !! D, shown: !! ( D && D.mesh.visible ) }; } )()` );
+	say( seenL.n === sp.lines && seenL.on === 1 && seenL.shown, `her spread on his game: ${ sp.lines } lines out: ${ JSON.stringify( seenL ) }` );
 	const butt = await guest.game.evaluate( `( async () => { const { rodOf } = await import( '/src/together/Spread.js' ); const p = window.__app.player, V = p.deckPos.constructor, at = { butt: new V(), tip: new V(), clip: new V() }, L = ${ other }.cur.spread.find( ( x ) => x.on ); rodOf( p.boat.model, L, at ); const y = p.deckGroundAt( at.butt.x * 0.8, at.butt.z + 0.5, at.butt.y ); p.deckPos.set( at.butt.x * 0.8, y, at.butt.z + 0.5 ); p.deckVel.set( 0, 0, 0 ); return at.butt.toArray(); } )()` );
 	await frames( guest.game, 3 );
 	const asked = await guest.game.evaluate( () => { const r = window.__app.game.rigs; return r.alert ? r.alert.text : null; } );
