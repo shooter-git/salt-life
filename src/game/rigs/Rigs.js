@@ -776,6 +776,14 @@ export class Rigs {
 
 		}
 
+		// (once, for those used to catching snappers on a float: it doesn't reach them any more)
+		if ( ! this._toldSinker && rod.state === 'floating' && rod.rig === 'float' && ! rod.floatOff && rod.depth > 30 && rod.t > 2 ) {
+
+			this._toldSinker = true;
+			g.toast( `The float's hook is only ${ RIGS.float.stop } m down, and it's ${ Math.round( rod.depth ) } m to the bottom · ${ g.keyName( 'C' ) } for a sinker`, 5200 );
+
+		}
+
 		// the right button, with the spread out and nothing in your hands to reel: they come in
 		if ( rDown && this.lines.length && ! g.fight && rod.equipped && rod.state === 'idle' ) this.bringIn();
 		if ( rDown && this.kite && ! this.kite.down && rod.state === 'floating' ) this._kiteDown();

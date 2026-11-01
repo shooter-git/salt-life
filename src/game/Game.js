@@ -702,6 +702,7 @@ export class Game {
 			// it, the speargun
 			if ( p.mode === 'swim' ) return { key: 'R', text: 'Take out the speargun' };
 			const byWater = p.mode === 'deck' || ( p.mode === 'walk' && [ 'wood', 'wetsand', 'water' ].includes( p.surface ) );
+			if ( this.rigs.linesOut ) return { key: 'R', text: 'Take out the rod, to bring the lines in' };
 			return byWater ? { key: 'R', text: `Take out the rod   ·   ${ this.keyName( 'N' ) }  the cast net` } : null;
 
 		}
