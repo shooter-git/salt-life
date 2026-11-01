@@ -67,7 +67,7 @@ export function shellTab( s ) {
 	const cells = SHELL_KINDS.map( ( k ) => {
 
 		const F = SHELLS[ k ], have = !! S.have[ k ], scale = F.cm * CM;
-		return `<button class="gm-shell${ have ? ' is-found' : '' }${ open === k ? ' is-open' : '' }" data-shell="${ k }" aria-pressed="${ open === k }"><span class="gm-shellimg">${ imgTag( k, scale, ! have, F.name ) }</span><b>${ F.name }</b><small>${ have ? `${ F.cm } cm · day ${ S.have[ k ].day + 1 }` : F.where }</small></button>`;
+		return `<button class="gm-shell${ have ? ' is-found' : '' }${ open === k ? ' is-open' : '' }" data-shell="${ k }" aria-pressed="${ open === k }"><span class="gm-shellimg">${ imgTag( k, scale, ! have, F.name ) }</span><b>${ F.name }</b><small>${ have ? `${ F.cm } cm · day ${ S.have[ k ].day + 1 }` : F.at }</small></button>`;
 
 	} ).join( '' );
 	let look = '';
