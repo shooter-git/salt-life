@@ -92,6 +92,14 @@ function cached( key, fn ) {
 
 }
 
+// (M16) the shapes made so far let go, once the island's built: some 3 MB nothing reads again; a later
+// build (a storm's wrack) makes what it needs, the same
+export function releaseParts() {
+
+	partCache.clear();
+
+}
+
 // Axis aligned box centered at the origin.
 // grain: 0 = x, 1 = y, 2 = z, -1 = longest axis. u runs along the grain axis on faces containing it.
 // skip: bitmask of faces to omit (1:+x 2:-x 4:+y 8:-y 16:+z 32:-z)

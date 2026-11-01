@@ -484,7 +484,16 @@ export class Vegetation {
 
 		}
 
-		return { types, triangles: tris, drawCalls: draws, villagePalms: this.records.villagePalms, rules: RULES, timings: this.timings };
+		return { types, triangles: tris, drawCalls: draws, villagePalms: this.villagePalms ?? this.records.villagePalms, rules: RULES, timings: this.timings };
+
+	}
+
+	// (M16) every plant's record, as it was scattered: their instances have what they draw from, and the drips,
+	// the crabs and the debris have read them (App.letGoOfTheBuild)
+	releaseRecords() {
+
+		if ( this.records ) this.villagePalms = this.records.villagePalms;
+		this.records = this.site = null;
 
 	}
 

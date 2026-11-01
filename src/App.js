@@ -93,6 +93,7 @@ import { createGameUI } from './ui/GameUI.js';
 import { PostChain } from './post/PostChain.js';
 import { FLOOD_L } from './game/Hull.js';
 import { releaseGeometries, releaseTextures, uploadTextures, watchContext } from './core/ReleaseAfterUpload.js';
+import { releaseParts } from './world/village/GeoBuilder.js';
 
 // Salt Life: the island, the sea and the boat, drawn with three.js inside All the Spaces. It follows
 // Tidewater's App (same systems, same order each frame); what isn't ported yet is simply not here.
@@ -699,7 +700,7 @@ export class App {
 		const revealed = this._late ? new Promise( ( done ) => this._revealed = done ) : null;
 		this.lateReady();
 		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.checkShaderLimits() ).then( () => this.buildCover() ).then( () => this.rocks.refineOverhangs() ).then( () => this.cpuGL && this.settle() ).then( () => this.loadCharacters() )
-			.then( () => this.cpuGL && this.settle() ).then( () => this.cpuGL && this.lifeAndDebris() ).then( () => this.cpuGL && this.settle() ).then( () => this.scansArrive() )
+			.then( () => this.cpuGL && this.settle() ).then( () => this.cpuGL && this.lifeAndDebris() ).then( () => this.letGoOfTheBuild() ).then( () => this.cpuGL && this.settle() ).then( () => this.scansArrive() )
 			.then( () => this.cpuGL && this.settle() ).then( () => this.cpuGL && this.reefGrows() )
 			.then( () => this.cpuGL && this.settle() ).then( () => this.whaleArrives() ).then( () => this.airArrives() );
 		const begin = () => this.audio.resume().then( ( on ) => {
@@ -1715,6 +1716,15 @@ export class App {
 		if ( ! this.cpuGL ) await this.reefGrows();
 		this._plantsGrown = true;
 		this.releaseMasks();
+
+	}
+
+	// (M16) what only the building read, once the plants, the drips, the animals and the debris are done with it:
+	// every plant's record and the village's shapes, some 7 MB of script memory
+	letGoOfTheBuild() {
+
+		this.vegetation.releaseRecords();
+		releaseParts();
 
 	}
 
