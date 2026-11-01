@@ -198,6 +198,14 @@ export class Vessel {
 
 	}
 
+	// (M16) the helm you can take from p (boat frame), or null: on the helm's own deck, on a boat of several. A boat with two says which
+	helmAt( p, reach ) {
+
+		const h = this.helm;
+		return Math.hypot( p.x - h.x, p.z - h.z ) < reach && Math.abs( p.y - ( h.y ?? p.y ) ) < 1.2 ? h : null;
+
+	}
+
 	// (M16) what she has to climb near p (boat frame), or null: a boat with ladders says (world/boat/sportfisher/LadderClimb)
 	ladderAt( p ) {
 

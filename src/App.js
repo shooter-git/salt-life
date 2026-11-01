@@ -1877,7 +1877,7 @@ export class App {
 			nearPier: Math.abs( p.x - pier.x ) < 12 && p.z > pier.zStart - 5 && p.z < pier.zEnd + 8,
 			boat: theirs ? { active: theirs.active, rpm: theirs.rpm, speed: theirs.speed, position: theirs.position, listenerInside: false } : {
 				active: boat.driven && !! boat.handling.engine, rpm: boat.rpm, throttle: boat.throttle, speed: boat.velocity.length(),
-				position: this.boat.group.position, listenerInside: this.player.mode === 'boat' && this.player.camMode === 'first' && ! this.boat.seated,
+				position: this.boat.group.position, listenerInside: this.player.mode === 'boat' && this.player.camMode === 'first' && ! this.boat.seated && ! this.player.atHelm?.upper,
 			},
 			// (M10) her hull: yours, or (M11) the one you ride in, as her skipper hears it (hullHeard)
 			hull: theirs ? theirs.hull || null : this.game ? this.hullHeard() : null,

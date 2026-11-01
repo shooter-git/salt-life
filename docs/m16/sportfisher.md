@@ -31,13 +31,15 @@ Shape: the 2008 Viking 48's walk-round photographs ([Off the Hook Yachts](https:
 - `SportfisherDecks`: where you can stand. Her levels, as floors with a height at each point (`soleY`), what keeps you on the one you're on (`clampToDeck`) and the solid boxes.
 - `LadderClimb`: the climb, below.
 - `tools/sportfisher/seats.py`, `build-seats.mjs`: the fighting chair and the helm seat, modelled by script in Blender, packed into `seats.data.js`. The packed file ships with her chunk, so Node's tests build her as the game does. To change a seat: `blender -b --factory-startup -P tools/sportfisher/seats.py -- /tmp/seats.json`, then `node tools/sportfisher/build-seats.mjs /tmp/seats.json`.
-- `tools/sportfisher/view.html`, `shots.mjs`: her alone on flat water, for comparing with the photographs. `drive.mjs`: her in the real game, every deck, the ladder by its keys, and her budgets from the readout.
+- `tools/sportfisher/view.html`, `shots.mjs`: her alone on flat water, for comparing with the photographs. `drive.mjs`: her in the real game, every deck, the ladder by its keys, and her budgets from the readout. `walk.mjs`: the stairs, the side deck, the ladder and both helms, by the real keys.
 
 ## Going about her
 
 Cockpit to mezzanine by a step; through the door to the salon; down the companionway to the cabins; up onto the boxes either side of the mezzanine and along the side decks to the bow. Up to the bridge and the tower by ladder.
 
 **The climb** (`LadderClimb`, `player.climbing`; the player's mode stays `'deck'`, so all that asks "are you aboard" still says yes). W and S on the rungs, or the stick. A boat that rolls swings a tower through the air: at the head of the ladder, 7 m up, a 15 degree roll every 4 seconds throws you sideways at 0.67 of your weight (`swayAt`: her heel's share of gravity and her roll's acceleration times your height, measured in the test). You hold 0.72 of your weight still, 0.42 moving, with a hand off. Past that your grip drains at 2.4 a second per g over, and comes back at 0.6 a second when she eases. "Hold on" comes up before you're gone: stop, and let her come back. Come off and you go the way she threw you, at her speed: onto a deck, winded three seconds, or into the sea, to swim for it.
+
+**The tower's helm.** With the tower fitted, E at its pod takes her second helm (`towerHelm`, `helmAt( p, reach )`): you drive standing on the platform with your eye at 8.62 m, and rise onto the platform when you leave. Her two wheels are one instanced draw, so phones stay at 13; steering's hydraulic, so only the wheel in your hands turns (`helmInUse`, set by `Player.takeHelm`). Everything else about a helm holds: a rider takes it only when `helmFree` says so, and to the crew it's the helm (`jobAt`). The pose says where: `J: 1` with mode `'h'` is someone at the tower's helm, and `Together` draws them up there. They don't call what they see, as `Crew._spot` is for job `'tower'`.
 
 **What you can see.** The eye's real: the camera stands at 8.62 m, so the sea's horizon goes out to 10.5 km and `FarIsland`, `Glare` and the rest set things down under it by that eye. What you chart goes as the root of your height over the deck's (`Chart.sightOf`: 320 m from a deck, 590 m from the tower).
 
@@ -49,7 +51,7 @@ Cockpit to mezzanine by a step; through the door to the salon; down the companio
 
 ## What others read
 
-`bunks`, `chair`, `rodHolders`, `outriggerTips`, `stations`, `lowCopy`, `towerEye`, `fit( stats )`, `setPaint( hex )`, `setOutriggersOut( out )`. `fit` takes `tower`, `outriggers` and `chair` or `chair`; a stat that's undefined is shown, so she's whole until the fleet's tracks come.
+`bunks`, `chair`, `rodHolders`, `outriggerTips`, `stations`, `lowCopy`, `towerEye`, `towerHelm`, `fit( stats )`, `setPaint( hex )`, `setOutriggersOut( out )`. `fit` takes `tower`, `outriggers` and `chair` or `chair`; a stat that's undefined is shown, so she's whole until the fleet's tracks come.
 
 ## Phones
 
