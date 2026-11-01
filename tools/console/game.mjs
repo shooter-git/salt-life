@@ -23,7 +23,13 @@ p.on( 'console', ( m ) => {
 
 } );
 await p.goto( `http://127.0.0.1:5202/?boat=console&hour=${ process.env.HOUR || 11 }${ query ? '&' + query : '' }` );
-await p.waitForFunction( () => window.__app && window.__app._started, null, { timeout: 280000 } );
+// (a load the machine's network changing cut off, ERR_NETWORK_CHANGED, gets one more go)
+await p.waitForFunction( () => window.__app && window.__app._started, null, { timeout: 150000 } ).catch( async () => {
+
+	await p.reload();
+	await p.waitForFunction( () => window.__app && window.__app._started, null, { timeout: 280000 } );
+
+} );
 console.log( 'started' );
 const closeGuide = () => p.evaluate( () => {
 
@@ -31,10 +37,19 @@ const closeGuide = () => p.evaluate( () => {
 	if ( g && g.open ) g.close();
 
 } );
+// (frames drawn, the wait for the view to catch up: frames come slowly here, more so with other renders running)
+const frames = async ( n ) => {
+
+	const from = await p.evaluate( () => window.__frames );
+	await p.waitForFunction( ( to ) => window.__frames >= to, from + n, { timeout: 120000 } );
+
+};
+
 const shot = async ( name ) => {
 
+	await frames( 2 );
 	await closeGuide();
-	await p.waitForTimeout( 500 );
+	await p.waitForTimeout( 400 );
 	await p.screenshot( { path: path.join( out, name + '.png' ) } );
 	console.log( 'shot', name );
 
@@ -51,25 +66,37 @@ const wait = async ( ms ) => {
 const look = ( eye, at ) => p.evaluate( ( [ eye, at ] ) => {
 
 	const a = window.__app, c = a.boatCtl, cam = a.camera;
-	window.__look = { eye, at };
+	window.__look = eye && { eye, at };
 	if ( ! window.__lookOn ) {
 
 		window.__lookOn = true;
-		const draw = a.drawWorld.bind( a );
-		a.drawWorld = function () {
+		const place = () => {
 
 			const L = window.__look;
-			if ( L ) {
+			if ( ! L ) return;
+			a.player.position.copy( c.position );
+			cam.position.set( ...L.eye ).applyQuaternion( c.quaternion ).add( c.position );
+			const t = cam.position.clone().set( ...L.at ).applyQuaternion( c.quaternion ).add( c.position );
+			cam.up.set( 0, 1, 0 );
+			cam.lookAt( t );
+			cam.updateMatrixWorld();
 
-				a.player.position.copy( c.position );
-				cam.position.set( ...L.eye ).applyQuaternion( c.quaternion ).add( c.position );
-				const t = cam.position.clone().set( ...L.at ).applyQuaternion( c.quaternion ).add( c.position );
-				cam.up.set( 0, 1, 0 );
-				cam.lookAt( t );
+		};
 
-			}
+		// (before the sea's laid out as well, which is for the view it's given: drawn from another, it leaves black wedges)
+		const draw = a.drawWorld.bind( a ), up = a.water.update.bind( a.water );
+		a.water.update = function ( camera ) {
 
+			place();
+			up( camera );
+
+		};
+
+		a.drawWorld = function () {
+
+			place();
 			draw();
+			window.__frames = ( window.__frames || 0 ) + 1;
 
 		};
 
@@ -77,6 +104,8 @@ const look = ( eye, at ) => p.evaluate( ( [ eye, at ] ) => {
 
 }, [ eye, at ] );
 
+await look( null );
+await p.evaluate( () => { window.__frames = 0; } );
 await wait( 2000 );
 for ( const s of scenes.length ? scenes : [ 'dock', 'run', 'deck', 'helm' ] ) {
 
@@ -112,7 +141,7 @@ for ( const s of scenes.length ? scenes : [ 'dock', 'run', 'deck', 'helm' ] ) {
 	if ( s === 'dock' ) {
 
 		await wait( 4000 );
-		await look( [ 9, 3.2, 7 ], [ 0, 1, 0 ] );
+		await look( [ - 9, 3.2, 7 ], [ 0, 1, 0 ] );
 		await wait( 2500 );
 		await shot( 'dock-bow' );
 		await look( [ - 5, 3.2, - 9.5 ], [ 0, 0.8, - 2 ] );
@@ -310,11 +339,42 @@ for ( const s of scenes.length ? scenes : [ 'dock', 'run', 'deck', 'helm' ] ) {
 	// (planing, her wake: the frames come too slowly here to get her there, so run her ahead, with her wake)
 	if ( s === 'plane' ) {
 
+		await p.evaluate( () => {
+
+			const a = window.__app, c = a.boatCtl, P = a.player, T = a.terrainData;
+			// (already running, from the scene before: carry on)
+			if ( c.speed > 5 ) return;
+			// (at the helm, her engines down, and out on a clear run)
+			let best = null;
+			for ( let k = 0; k < 400 && ! best; k ++ ) {
+
+				const x = ( k * 733 ) % 6000 - 3000, z = ( k * 461 ) % 6000 - 3000, yaw = k * 1.1;
+				let clear = true;
+				for ( let d = 0; d <= 1500; d += 50 ) if ( T.heightAt( x + Math.sin( yaw ) * d, z + Math.cos( yaw ) * d ) > - 12 ) clear = false;
+				if ( clear ) best = { x, z, yaw };
+
+			}
+
+			c.position.set( best.x, c.position.y, best.z );
+			c.quaternion.setFromAxisAngle( new c.position.constructor( 0, 1, 0 ), best.yaw );
+			c.velocity.set( 0, 0, 0 );
+			c.angular.set( 0, 0, 0 );
+			c.hasWater = false;
+			if ( P.mode !== 'deck' ) P.boardBoat();
+			P.takeHelm();
+			c.driven = true;
+			c.moored = false;
+
+		} );
+		// (the sea's height's read back over frames: the engines want the water where she is now)
+		await frames( 6 );
 		const st = await p.evaluate( () => {
 
 			const a = window.__app, c = a.boatCtl;
-			c.driven = true;
-			c.moored = false;
+			// (slow frames here can read as the clock jumping, which takes you off the helm: DaysOut.passed)
+			if ( a.player.mode !== 'boat' ) a.player.takeHelm();
+			// (and the crank's counted in the frames this runs ahead of)
+			c.engineOn = true;
 			for ( let i = 0; i < 1400; i ++ ) {
 
 				c.setInput( 1, 0, 1 / 30 );
@@ -329,7 +389,7 @@ for ( const s of scenes.length ? scenes : [ 'dock', 'run', 'deck', 'helm' ] ) {
 		} );
 		console.log( JSON.stringify( st ) );
 		await look( [ - 8, 4, - 17 ], [ 0, 0.8, - 3 ] );
-		await p.waitForTimeout( 2500 );
+		await frames( 3 );
 		await p.evaluate( () => {
 
 			const a = window.__app, c = a.boatCtl;
@@ -342,6 +402,8 @@ for ( const s of scenes.length ? scenes : [ 'dock', 'run', 'deck', 'helm' ] ) {
 			}
 
 		} );
+		// (the camera's sea height's read back over frames too: run ahead, it's stale, and the view's all under water)
+		await frames( 6 );
 		await shot( 'plane-astern' );
 		await look( [ 13, 2.6, 7 ], [ 0, 1, 0 ] );
 		await p.waitForTimeout( 2500 );
