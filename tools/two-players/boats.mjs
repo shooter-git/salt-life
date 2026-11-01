@@ -21,7 +21,7 @@ await ctx.addInitScript( () => {
 	wrap( 'drawArraysInstanced', ( a ) => [ a[ 2 ], a[ 3 ] ] );
 	wrap( 'drawElementsInstanced', ( a ) => [ a[ 1 ], a[ 4 ] ] );
 	wrap( 'drawRangeElements', ( a ) => [ a[ 3 ] ] );
-	const tick = () => { if ( R.calls ) { R.peak.calls = Math.max( R.peak.calls, R.calls ); R.peak.tris = Math.max( R.peak.tris, R.tris ); R.calls = R.tris = 0; } requestAnimationFrame( tick ); };
+	const tick = () => { R.ticks = ( R.ticks || 0 ) + 1; if ( R.calls ) { R.peak.calls = Math.max( R.peak.calls, R.calls ); R.peak.tris = Math.max( R.peak.tris, R.tris ); R.calls = R.tris = 0; } requestAnimationFrame( tick ); };
 	requestAnimationFrame( tick );
 
 } );
@@ -60,20 +60,32 @@ const open = async ( name, boat, tier = TIER ) => {
 	return { page, game: f() };
 
 };
-const frames = ( g, n = 4 ) => g.evaluate( () => window.__app.renderer.info.render.frame ).then( ( t ) => g.waitForFunction( ( [ t, n ] ) => window.__app.renderer.info.render.frame > t + n, [ t, n ], { timeout: 200000, polling: 300 } ) );
+const frames = ( g, n = 4 ) => g.evaluate( () => window.__draws.ticks ).then( ( t ) => g.waitForFunction( ( [ t, n ] ) => window.__draws.ticks > t + n, [ t, n ], { timeout: 400000, polling: 300 } ) );
+// (nothing drawn between the shots: what's counted in frames, the engine, the sea, gets on, on a CPU shared with others)
+const draws = ( g, on ) => g.evaluate( ( on ) => { const a = window.__app; if ( on ) delete a.drawWorld; else a.drawWorld = () => {}; }, on );
 const other = 'window.__app.together.others.values().next().value';
 // (two games on the CPU can go seconds between poses: a pose gone stale is only waited out)
-const until = ( g, what, timeout = 200000 ) => g.waitForFunction( `( () => { try { return ${ what }; } catch ( e ) { return false; } } )()`, null, { timeout, polling: 500 } );
+const until = ( g, what, timeout = 400000 ) => g.waitForFunction( `( () => { try { return ${ what }; } catch ( e ) { return false; } } )()`, null, { timeout, polling: 500 } );
 const posed = ( g ) => until( g, `${ other } && ${ other }.cur && ${ other }.cur.boat` );
 // (a look about, from the player: put where the camera can see)
 const stand = ( g, x, z, yaw, y = null ) => g.evaluate( ( [ x, z, yaw, y ] ) => { const a = window.__app, p = a.player; p.position.set( x, y ?? Math.max( a.terrainData.heightAt( x, z ), a.colliders.groundHeightAt( x, z, 50 ) ), z ); p.yaw = yaw; p.pitch = - 0.05; p.velocity.set( 0, 0, 0 ); }, [ x, z, yaw, y ] );
-const shot = ( who, name ) => who.page.screenshot( { path: `${ out }/boats-${ name }.png` } );
+const shot = async ( who, name ) => {
+
+	await draws( who.game, true );
+	await frames( who.game, 3 );
+	await who.page.screenshot( { path: `${ out }/boats-${ name }.png` } );
+	await draws( who.game, false );
+
+};
 // the readings over a few frames, and the script memory once it's collected
 const reads = async ( g, what ) => {
 
+	await draws( g, true );
+	await frames( g, 2 );
 	await g.evaluate( () => { window.__draws.peak = { calls: 0, tris: 0 }; } );
 	await frames( g, 6 );
 	const r = await g.evaluate( () => { if ( window.gc ) window.gc(); const m = performance.memory; return { draws: window.__draws.peak.calls, triangles: window.__draws.peak.tris, heapMB: m ? +( m.usedJSHeapSize / 1048576 ).toFixed( 1 ) : null }; } );
+	await draws( g, false );
 	console.log( `     readings, ${ what }:`, JSON.stringify( r ) );
 	return r;
 
@@ -83,13 +95,13 @@ const morning = ( g, hour = 10 ) => g.evaluate( ( hour ) => { const t = window._
 
 // ---- two boats: Robin in the center console, Sam in the sportfisher, at the dock
 const robin = await open( 'Robin', 'console' );
-await stand( robin.game, 56, 34, 0.08 );
-const alone = await reads( robin.game, 'Robin alone at the pier head, no one else about' );
 const sam = await open( 'Sam', 'sportfisher' );
 await until( sam.game, `${ other } && ${ other }.cur` );
 await until( robin.game, `${ other } && ${ other }.cur` );
 console.log( 'both in' );
 await morning( robin.game );
+await draws( robin.game, false );
+await draws( sam.game, false );
 const type = async ( g ) => { await posed( g ); return g.evaluate( `${ other }.cur.boatId` ); };
 say( await type( sam.game ) === 'console' && await type( robin.game ) === 'sportfisher', 'each pose says which boat she is' );
 
@@ -121,14 +133,14 @@ console.log( '     the spare berths [ x, z, depth ]', JSON.stringify( depth ) );
 await stand( sam.game, 56, 34, 0.08 );
 await frames( sam.game, 6 );
 await shot( sam, 'dock' );
+await draws( sam.game, true );
 await sam.game.evaluate( () => { const a = window.__app; a.frame = function () { this.camera.position.set( 86, 22, 2 ); this.camera.lookAt( 60, 0, 26 ); this.camera.updateMatrixWorld(); this.drawWorld(); }; } );
 await frames( sam.game, 3 );
 await shot( sam, 'dock-above' );
 await sam.game.evaluate( () => { delete window.__app.frame; } );
 await frames( sam.game, 2 );
 await stand( robin.game, 56, 34, 0.08 );
-const company = await reads( robin.game, `the same spot, Sam's ${ TIER } copy in sight` );
-console.log( `     that's ${ company.draws - alone.draws } draws, ${ company.triangles - alone.triangles } triangles, ${ ( company.heapMB - alone.heapMB ).toFixed( 1 ) } MB more than alone (with Sam's figure, tackle and all)` );
+await reads( robin.game, `at the pier head, Sam's copy in sight (${ TIER })` );
 
 // ---- riding along: Sam boards Robin's console at her spare berth, deck in her frame
 await robin.game.evaluate( () => { const p = window.__app.player; p.boardBoat(); } );
@@ -245,6 +257,13 @@ if ( TIER === 'low' ) say( types.meshes === 4, 'on low, the four meshes a phone 
 await sam.game.evaluate( () => { const a = window.__app; a.player.camMode = 'third'; a.player.orbitDist = 30; a.player.orbitPitch = 0.12; a.player.orbitYaw = - Math.PI / 2; } );
 await frames( sam.game, 4 );
 await shot( sam, 'lobster' );
+// what she costs on this device: with her, then with her let go, the frame otherwise the same
+const withHer = await reads( sam.game, 'Robin\'s lobster boat in sight, 300 m off' );
+await sam.game.evaluate( `( () => { const t = window.__app.together, o = ${ other }, e = t.copies.types.get( 'lobster' ); t._place = () => {}; if ( o.boat ) { t.copies.drop( o.boat ); o.boat = null; } if ( o.stand ) o.stand.visible = false; o.avatar.group.visible = false; t.copies.types.delete( 'lobster' ); if ( e && e.model && ! e.own ) e.model.dispose(); } )()` );
+const without = await reads( sam.game, 'the same, her boat and figure gone' );
+console.log( `     so her boat (and Robin's figure, not shown from here): ${ withHer.draws - without.draws } draws, ${ withHer.triangles - without.triangles } triangles, ${ ( withHer.heapMB - without.heapMB ).toFixed( 1 ) } MB` );
+await sam.game.evaluate( () => { delete window.__app.together._place; } );
+await until( sam.game, `( () => { const o = ${ other }; return o.boat && o.boat.visible; } )()` );
 
 // ---- far apart: a speck past the fog
 const R = { x: - 2600, z: 3000 };

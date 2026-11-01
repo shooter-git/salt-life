@@ -7,7 +7,7 @@ import { sizeOf } from './BoatCopies.js';
 // to about 13 km, a tuna tower's to 18, a good deal further from up one), her hull going down first; through the air
 // (Koschmieder's law: contrast falls by e^(-3.912 d / V), V the visual range, about 30 km on a clear day in the
 // trades, 5 in rain); and only if what's left of her is big enough to make out (a dark speck on a bright horizon, down to
-// about a third of an arcminute): the last of a lobster boat's masthead goes at about 12 km, a kayak by about 7. Dark looking up-sun, pale with the sun behind you. By
+// about a third of an arcminute): the sea itself hides her lowest half metre. So the last of a lobster boat's masthead goes at about 11 km, a kayak by about 4. Dark looking up-sun, pale with the sun behind you. By
 // night it's her light, by the range lights are made to be seen at.
 // One draw for all of them, nothing until someone's out there.
 //   seenHeight( d, eye, air ) -> m of her above your horizon (0: below it)
@@ -19,6 +19,7 @@ const CLEAR = 30000; // m: the visual range on a clear day (the weather's visibi
 const LIGHT_RANGE = 11000; // m: as far as a boat's white light is picked out on a clear night (rated 2 to 3 nm, seen further)
 const NEAREST = 11500; // m: drawn at most this far along its line of sight (the far plane's 12 km)
 const MAX = 24;
+const SEAWAY = 0.5; // m of her the waves between you hide
 const SIGHT_S = 0.6; // s between looks at whether the island's in the way
 
 const VS = /* glsl */`
@@ -61,7 +62,7 @@ export function speckAlpha( { d, eye, air, range } ) {
 
 	const h = seenHeight( d, eye, air );
 	if ( h <= 0 ) return 0;
-	return Math.exp( - 3.912 * d / range ) * MathUtils.smoothstep( h / d, 0.0001, 0.0002 );
+	return Math.exp( - 3.912 * d / range ) * MathUtils.smoothstep( ( h - SEAWAY ) / d, 0.0001, 0.0002 );
 
 }
 

@@ -19,6 +19,8 @@ const { boatRecord, cleanBoats } = await import( '../src/game/Away.js' );
 const { Scene, Vector3 } = await import( '../src/engine/index.js' );
 const { triangleCount } = await import( '../src/world/boat/GeoKit.js' );
 const { WORLD } = await import( '../src/world/WorldLayout.js' );
+const { Together } = await import( '../src/together/Together.js' );
+const { BoatController } = await import( '../src/player/BoatController.js' );
 
 let bad = 0;
 const ok = ( c, what ) => {
@@ -169,6 +171,74 @@ ok( sizeOf( 'trawler' ) === SIZE.lobster, 'and a game that doesn\'t say is the l
 	r.clampToDeck( p, 0.25 );
 	ok( ! r.seated && r.id === 'kayak' && r.colliders === k.colliders && Math.abs( p.z - r.boardPoint.z ) < 0.2 && p.x < 0.2, 'a rider on a boat that\'s sat in: held on her tank well' );
 	ok( perched( m ) === m, 'and on one that\'s walked, free of her deck' );
+
+}
+
+// ---- at someone else's helm: her owner's game runs her on the rider's lever and wheel
+{
+
+	const query = { latency: 0.05, allocate: () => 0, setPoint() {}, cpuValid: true, version: 0, resultTime: 0, cpu: new Float32Array( 4096 ), resultInputs: new Float64Array( 4096 ) };
+	const model = await loadBoat( 'console' ), b = new BoatController( { model, query, terrain: { heightAt: () => - 50 }, colliders: null } );
+	const toasts = [], t = Object.create( Together.prototype ), rider = { person: { id: 'sam', name: 'Sam' }, cur: { ride: 'robin', mode: 'helm', helm: [ 0.7, 0.2 ] } };
+	t.me = { id: 'robin' };
+	t.others = new Map( [ [ 'sam', rider ] ] );
+	t._handed = null;
+	t.app = { boatCtl: b, player: { mode: 'deck', riding: false }, game: { toast: ( x ) => toasts.push( x ) } };
+	b.position.set( 0, 0, 0 );
+	b.moored = true;
+	b.engineOn = true;
+	let n = 0;
+	const run = ( seconds ) => {
+
+		for ( let f = 0; f < seconds * 60; f ++ ) {
+
+			n += 1 / 60;
+			query.version ++;
+			query.resultTime = n;
+			t._crewHelm( 1 / 60 );
+			b.update( 1 / 60 );
+
+		}
+
+	};
+
+	run( 20 );
+	ok( b.driven && ! b.moored && toasts.length === 1, `a rider at her helm with you on deck: she's cast off and theirs ("${ toasts[ 0 ] }")` );
+	ok( b.rpm > 0.5 && b.forwardSpeed > 1 && b.steer > 0.1, `and she goes on their lever and wheel: ${ b.rpm.toFixed( 2 ) } revs, ${ b.forwardSpeed.toFixed( 1 ) } m/s` );
+	rider.cur.helm = [ - 0.5, 0 ];
+	run( 1 );
+	ok( b.throttleTarget === - 0.5, 'astern when they pull it back' );
+	t.app.player.mode = 'boat';
+	t._crewHelm( 1 / 60 );
+	ok( b.driven && t._handed === null, 'you take the helm: she\'s yours, and still driven' );
+	t.app.player.mode = 'deck';
+	t._crewHelm( 1 / 60 );
+	rider.cur = { ride: null, mode: 'walk' };
+	t._crewHelm( 1 / 60 );
+	ok( ! b.driven && b.throttle === 0, 'they leave her helm: stopped' );
+	rider.cur = { ride: 'robin', mode: 'helm', helm: [ 0.7, 0 ] };
+	t.app.player.mode = 'walk';
+	t._crewHelm( 1 / 60 );
+	ok( ! b.driven, 'with you gone ashore, nobody takes her' );
+
+	const boat = { owner: 'robin', helmFree: false };
+	const sam = Object.create( Together.prototype );
+	sam.me = { id: 'sam' };
+	const robin = { person: { id: 'robin' }, cur: { mode: 'deck', ride: null } };
+	sam.others = new Map( [ [ 'robin', robin ] ] );
+	sam._helmFree( boat, robin );
+	ok( boat.helmFree, 'her owner on deck: her helm\'s free' );
+	robin.cur.mode = 'helm';
+	sam._helmFree( boat, robin );
+	ok( ! boat.helmFree, 'at it: not' );
+	robin.cur.mode = 'walk';
+	sam._helmFree( boat, robin );
+	ok( ! boat.helmFree, 'ashore: not' );
+	robin.cur.mode = 'deck';
+	sam.others.set( 'alex', { person: { id: 'alex' }, cur: { ride: 'robin', mode: 'helm' } } );
+	sam._helmFree( boat, robin );
+	ok( ! boat.helmFree, 'someone before you at it: not' );
+	model.dispose();
 
 }
 

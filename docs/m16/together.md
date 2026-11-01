@@ -38,7 +38,7 @@ A dash on the horizon, one draw for all of them, nothing until someone's out the
 
 - **Over the earth's curve**, refracted: 3.86 km x (root of eye height + root of her height), in metres. A lobster boat's masthead (4.05 m) from a deck eye 2.3 m up: 13.6 km. A sportfisher's tower: 18.6 km. Her hull goes first, so the dash gets lower before it goes.
 - **Through the air** (Koschmieder): contrast falls by e^(-3.912 d / V), V about 30 km clear, 5 in rain, 2 in a storm, a hurricane's as its haze says. V is a judgement from the game's `visibility`: I found no source for the trades' figure.
-- **Big enough to make out**: what's left of her height fades out from two-thirds of an arcminute to a third. So the last of a lobster boat's masthead goes at about 12 km, a little inside her 13.6 km horizon, and a kayak's gone by about 7 km however clear it is.
+- **Big enough to make out**: the waves hide her lowest half metre, and what's left fades out from two-thirds of an arcminute to a third. So the last of a lobster boat's masthead goes at about 11 km, a little inside her 13.6 km horizon, and a kayak's gone by about 4 km however clear it is. That half metre and those arcminutes are my judgement, not from a source.
 - **Colour:** dark up-sun, pale with the sun behind you.
 - **At night** it's her white light, rated 2 to 3 nautical miles by the rules, picked out further on a clear night.
 - **The island** hides her (a line of sight against the terrain, every 0.6 s).
