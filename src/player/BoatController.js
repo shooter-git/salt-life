@@ -1,6 +1,7 @@
 import * as THREE from '../engine/index.js';
 import { WORLD } from '../world/WorldLayout.js';
 import { G } from '../core/Globals.js';
+import { ableOf } from '../game/Seaworthy.js';
 
 const RHO = 1025; // sea water density
 const GRAV = 9.81;
@@ -81,6 +82,7 @@ export class BoatController {
 		// (Salt Life) where the anchor lies on the bottom while it's down (Game sets it), else null; its
 		// rode is made fast at the stem head
 		this.anchor = null;
+		this.sock = false; // ((M16) her drift sock's out: game/DaysOut.js)
 		this.hasWater = false;
 		this.wetFraction = 0;
 		this.speed = 0;
@@ -483,6 +485,18 @@ export class BoatController {
 
 			}
 
+		} else if ( this.sock ) {
+
+			// ---- (M16) the drift sock, streamed from the stem head: a cone's drag on the water going past it, so her head
+			// comes round to the wind and she goes down it slower (Cd 1.4, its mouth: Seaworthy's ABLE)
+			const bow = this.toWorld( this.stemHead, _p );
+			_vp.copy( this.angular ).cross( _r.copy( bow ).sub( comW ) ).add( this.velocity );
+			const v = Math.hypot( _vp.x, _vp.z ), drag = 0.5 * RHO * 1.4 * ableOf( this.model.id ).sockM2 * v;
+			addForceAt( _f.set( - _vp.x * drag, 0, - _vp.z * drag ), bow );
+			// (its long rode holds her stem up to the wind's push, where a point at her bow would let her lie well off it)
+			const up = Math.atan2( - G.windDir.value.x, - G.windDir.value.y ) - this.getYaw(), U = this.windAt ? this.windAt( this.position.x, this.position.z ) : G.windSpeed.value;
+			T.y += Math.sin( up ) * 0.5 * AIR * this.handling.windCd * this.handling.windArea[ 1 ] * U * U * this.model.dimensions.length;
+
 		}
 
 		// ---- grounding on terrain + contact with pier piles
@@ -559,6 +573,7 @@ export class BoatController {
 		this.mooring.anchor.copy( WORLD.boatDock.position );
 		this.mooring.heading = WORLD.boatDock.heading;
 		this.anchor = null;
+		this.sock = false;
 		this.hasWater = false; // (Salt Life: the water where she was is no use here)
 		this.beached = false;
 		if ( this.model.atHome ) this.model.atHome( this ); // ((M16) kept on the sand, not at the dock)

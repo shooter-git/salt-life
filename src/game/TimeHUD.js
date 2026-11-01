@@ -309,7 +309,9 @@ export class TimeHUD {
 			: st.alone || ! wx ? ( next ? `Later: ${ WEATHER_NAMES[ next.id ].toLowerCase() }, from ${ at( next.at % 24 ) }` : 'Settled for now' )
 				: `The weather follows the island's day${ next ? ` · later ${ WEATHER_NAMES[ next.id ].toLowerCase() }` : '' }`;
 		const wxSaid = pick ? '' : news, warned = this.app.weather && this.app.weather.news && this.app.weather.news.stage === 'warning';
-		const sig = [ timeText( st.hour, loc ), st.day, st.held, st.alone, st.mine, asks, st.here.length, this.app.input.lastDevice, wxLine, wxNext, wxSaid, chosen ].join( '|' );
+		// ((M16) too far out to rest, with no bunks aboard)
+		const barred = !! ( this.game.daysOut && this.game.daysOut.noRest );
+		const sig = [ barred, timeText( st.hour, loc ), st.day, st.held, st.alone, st.mine, asks, st.here.length, this.app.input.lastDevice, wxLine, wxNext, wxSaid, chosen ].join( '|' );
 		if ( sig === this._sig ) return;
 		this._sig = sig;
 		const focused = this.menu.contains( document.activeElement ) ? [ ...this.menu.querySelectorAll( 'button' ) ].indexOf( document.activeElement ) : - 1;
@@ -331,7 +333,7 @@ export class TimeHUD {
 		if ( st.alone ) {
 
 			body = `<button type="button" class="gm-time-hold" data-hold>${ st.held ? ICON.play : ICON.held }<span>${ st.held ? 'Let the day run' : 'Hold the clock' }</span><small>${ st.held ? 'held' : 'running' }</small></button>
-				<div class="gm-time-label">Rest until</div><div class="gm-time-rest">${ rest }</div>
+				${ barred ? '<div class="gm-time-label">Rest until</div><p class="gm-time-note">No bunks aboard, this far out: run for port, or sit up the night.</p>' : `<div class="gm-time-label">Rest until</div><div class="gm-time-rest">${ rest }</div>` }
 				<div class="gm-time-label">Weather</div><div class="gm-time-rest is-wx">${ weather }</div>`;
 
 		} else {

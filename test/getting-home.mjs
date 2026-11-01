@@ -236,7 +236,7 @@ const check = ( ok, what ) => {
 	const player = { mode: 'boat', riding: false, helmHeld: false };
 	const app = { player, audio: { muted: false, volume: 0.8 }, settings: { day: 5, timeOfDay: 10, weatherSince: 0 }, weather: { news: null }, input: { lastDevice: 'keyboard' }, weatherPick: () => 'fair' };
 	const job = { metres: 9700, fee: 505, time: towTime( 9700 ) };
-	const game = { app, state: { money: 900, fuelL: 0 }, weatherNow: { wind: 7 }, hud: null, makingRoom: false, towJob: () => game.job, job, tow: ( aboard ) => { towed += aboard ? 1 : 100; } };
+	const game = { app, state: { money: 900, fuelL: 0, stats: { vhfM: 37000 } }, daysOut: { distress: () => [], saidHere: () => '' }, weatherNow: { wind: 7 }, hud: null, makingRoom: false, towJob: () => game.job, job, tow: ( aboard ) => { towed += aboard ? 1 : 100; } };
 	const r = new Radio( { root: el(), hud: el() }, game );
 	const keys = ( ...down ) => ( { hit: ( k ) => down.includes( k ), lastDevice: 'keyboard' } );
 	r.update( 0.1, keys( 'KeyR' ), false );

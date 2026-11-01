@@ -7,6 +7,7 @@ import { BAITS, KEEPER_KG, baitOf, chunksOf } from './Bait.js';
 import { PLACES } from './Places.js';
 import { ChartLog } from './Chart.js';
 import { BOATS, START_BOAT } from '../world/boat/Boats.js';
+import { cleanDays } from './Seaworthy.js';
 
 const SAVE_KEY = 'tidewater.save.v1';
 
@@ -57,6 +58,7 @@ export class GameState {
 		this.finds = []; // { id, kind, day, seed }
 		this.picked = [];
 		this.chart = new ChartLog(); // ((M15) the chart you fill in: Chart.js)
+		this.days = cleanDays(); // ((M16) ice, stores, how long you've been out: DaysOut.js)
 		this._nextId = 1;
 		this.listeners = new Set();
 		this._chartBought();
@@ -720,7 +722,7 @@ export class GameState {
 	toJSON() {
 
 		this._boatAway();
-		return { v: 2, boat: this.boat, fleet: this.fleet, money: this.money, inventory: this.inventory, log: this.log, places: this.places, found: this.found, upgrades: this.upgrades, fuel: this.fuel, hull: this.hull, hauled: this.hauled, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, bag: this.bag, finds: this.finds, picked: this.picked, chart: this.chart.toJSON(), nextId: this._nextId };
+		return { v: 2, boat: this.boat, fleet: this.fleet, money: this.money, inventory: this.inventory, log: this.log, places: this.places, found: this.found, upgrades: this.upgrades, fuel: this.fuel, hull: this.hull, hauled: this.hauled, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, bag: this.bag, finds: this.finds, picked: this.picked, chart: this.chart.toJSON(), days: this.days, nextId: this._nextId };
 
 	}
 
@@ -764,6 +766,7 @@ export class GameState {
 		// ((M15) the chart: saves from before had the bay alone)
 		this.chart.fromJSON( d.chart );
 		this._chartBought();
+		this.days = cleanDays( d.days );
 		this._nextId = Math.max( d.nextId | 0, ...this.inventory.map( ( f ) => f.id + 1 ), 1 );
 		return true;
 
@@ -816,6 +819,7 @@ export class GameState {
 		this.picked = [];
 		this.chart.reset();
 		this._chartBought();
+		this.days = cleanDays();
 		this.save();
 		this.emit();
 

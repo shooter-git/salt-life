@@ -4,6 +4,7 @@ import { stormWear, STORM_FROM } from './Hull.js';
 import { awayTowFee, HAUL_FEE } from './Gear.js';
 import { HOURS } from './Orders.js';
 import { feet } from './Units.js';
+import { SOCK_DRIFT } from './Seaworthy.js';
 
 // (M15) Picking up where you left off: what happened to your boat while you were away, worked out when you're
 // back, from where she was left and the island's weather since (the same for everyone, and it goes on without
@@ -82,8 +83,8 @@ export function wearRate( w ) {
 
 // a personal save's boat ({ x, z, h: heading, anchor: [ x, z ] | null, moored, aboard: 'deck' | 'helm' | null,
 // T: the island's time, at: ms since 1970 })
-export const boatLeft = ( { x, z, heading, anchor, moored, aboard, T, at } ) => ( {
-	v: 1, x: round( x ), z: round( z ), h: Math.round( heading * 1000 ) / 1000, anchor: anchor ? [ round( anchor.x ), round( anchor.z ) ] : null, moored: !! moored, aboard: aboard === 'deck' || aboard === 'helm' ? aboard : null, T: Math.round( T * 1000 ) / 1000, at,
+export const boatLeft = ( { x, z, heading, anchor, sock, moored, aboard, T, at } ) => ( {
+	v: 1, ...( sock ? { sock: true } : {} ), x: round( x ), z: round( z ), h: Math.round( heading * 1000 ) / 1000, anchor: anchor ? [ round( anchor.x ), round( anchor.z ) ] : null, moored: !! moored, aboard: aboard === 'deck' || aboard === 'helm' ? aboard : null, T: Math.round( T * 1000 ) / 1000, at,
 } );
 const round = ( v ) => Math.round( v * 10 ) / 10;
 
@@ -99,24 +100,26 @@ export function leftOf( text ) {
 
 	if ( ! d || d.v !== 1 || ! Number.isFinite( d.x ) || ! Number.isFinite( d.z ) || ! Number.isFinite( d.T ) ) return null;
 	const A = Array.isArray( d.anchor ) && d.anchor.length === 2 && d.anchor.every( Number.isFinite ) ? { x: d.anchor[ 0 ], z: d.anchor[ 1 ] } : null;
-	return { x: d.x, z: d.z, heading: Number.isFinite( d.h ) ? d.h : 0, anchor: A, moored: d.moored === true, aboard: d.aboard === 'deck' || d.aboard === 'helm' ? d.aboard : null, T: d.T, at: Number.isFinite( d.at ) ? d.at : null };
+	return { x: d.x, z: d.z, heading: Number.isFinite( d.h ) ? d.h : 0, anchor: A, sock: d.sock === true, moored: d.moored === true, aboard: d.aboard === 'deck' || d.aboard === 'helm' ? d.aboard : null, T: d.T, at: Number.isFinite( d.at ) ? d.at : null };
 
 }
 
 // What happened to her between the island's time she was left (left.T) and T. left: leftOf's, and hauled (on
 // Marta's cradle). env: dock { x, z } (required), and the weather picked ( pick, since ), the water's depth ( depth(
-// x, z ) -> m ), and for the tests weather( T, x, z ), news( T ), fee( m ), haul.
+// x, z ) -> m ), and for the tests weather( T, x, z ), news( T ), fee( m ), haul. (M16) And hers (Seaworthy.ableEnv):
+// drift, draught, wearMul; left.sock: her drift sock's out, so she goes slower and head to the wind; aboard: you're with
+// her, asleep (no tow comes for her). story.groundT: when she touched, if she did
 // -> { hours, spoiled, wear, kind (the worst weather she rode out, its id), tows: [ { why: 'adrift' | 'aground' |
 // 'week' | 'hurricane', x, z (where she was), metres (from the dock), fee, where: 'dock' | 'cradle', out (she
 // had to be fetched) } ], fee, where: 'dock' | 'cradle' | 'anchor' | 'adrift' | 'aground', x, z, heading, anchor }
 export function awayOf( left, T, env ) {
 
-	const { dock, pick = null, since = 0, depth = () => Infinity, fee = awayTowFee, haul = HAUL_FEE } = env;
+	const { dock, pick = null, since = 0, depth = () => Infinity, fee = awayTowFee, haul = HAUL_FEE, drift = DRIFT, draught = AGROUND, wearMul = 1, aboard = false } = env;
 	const weather = env.weather || ( ( t, x, z ) => weatherHere( t, pick, since, x, z ) );
 	const newsAt = env.news || ( ( t ) => hurricaneNews( t, pick, since ) );
 	const hours = Math.max( 0, T - left.T );
-	const story = { hours, spoiled: hours >= KEEP_H, wear: 0, kind: null, tows: [], fee: 0, where: left.hauled ? 'cradle' : left.moored ? 'dock' : left.anchor ? 'anchor' : 'adrift', x: left.x, z: left.z, heading: left.heading, anchor: left.anchor };
-	if ( story.where === 'adrift' && depth( left.x, left.z ) < AGROUND ) story.where = 'aground';
+	const story = { hours, spoiled: hours >= KEEP_H, wear: 0, kind: null, tows: [], fee: 0, where: left.hauled ? 'cradle' : left.moored ? 'dock' : left.anchor ? 'anchor' : 'adrift', x: left.x, z: left.z, heading: left.heading, anchor: left.anchor, sock: !! left.sock };
+	if ( story.where === 'adrift' && depth( left.x, left.z ) < draught ) story.where = 'aground';
 	const span = Math.min( hours, LONGEST_H ), n = Math.ceil( span / STEP_H );
 	if ( ! n ) return story;
 	const dt = span / n;
@@ -142,7 +145,7 @@ export function awayOf( left, T, env ) {
 		if ( w0 === 'cradle' ) break; // (out of it: Marta puts her back once it's gone by, with you here: Game.updateHurricane)
 		// a hurricane's warning, or one here: Marta brings her in and hauls her out, for her fee
 		const news = newsAt( t );
-		if ( news && ( news.stage === 'warning' || t >= news.onset ) ) {
+		if ( ! aboard && news && ( news.stage === 'warning' || t >= news.onset ) ) {
 
 			tow( 'hurricane', 'cradle', haul );
 			break;
@@ -150,14 +153,14 @@ export function awayOf( left, T, env ) {
 		}
 
 		// gone a week
-		if ( w0 !== 'dock' && t - left.T >= WEEK_H ) {
+		if ( ! aboard && w0 !== 'dock' && t - left.T >= WEEK_H ) {
 
 			tow( 'week', 'dock', 0 );
 			continue;
 
 		}
 
-		const w = weather( t, story.x, story.z ), s = playSeconds( t, t + dt ), rate = wearRate( w );
+		const w = weather( t, story.x, story.z ), s = playSeconds( t, t + dt ), rate = wearRate( w ) * wearMul;
 		story.wear = Math.min( 1, story.wear + rate * s );
 		if ( rate > worst ) {
 
@@ -170,16 +173,23 @@ export function awayOf( left, T, env ) {
 
 			// she lies beam-on, and goes with the wind
 			towardOf( w.windAngle || 0, toward );
-			const d = DRIFT * squallWind( w ) * s;
+			// ((M16) you asleep aboard, the night's true hours: a sea anchor or a watch is why people keep one)
+			const d = drift * ( story.sock ? SOCK_DRIFT : 1 ) * squallWind( w ) * ( aboard ? dt * 3600 : s );
 			story.x += toward.x * d;
 			story.z += toward.y * d;
-			story.heading = Math.atan2( toward.x, toward.y ) - Math.PI / 2;
-			if ( depth( story.x, story.z ) < AGROUND ) story.where = 'aground';
+			// (or head to it, on her sock)
+			story.heading = story.sock ? Math.atan2( - toward.x, - toward.y ) : Math.atan2( toward.x, toward.y ) - Math.PI / 2;
+			if ( depth( story.x, story.z ) < draught ) {
+
+				story.where = 'aground';
+				story.groundT = t + dt;
+
+			}
 
 		}
 
 		// seen, in Marta's working hours, from the shore
-		if ( story.where === 'adrift' || story.where === 'aground' ) {
+		if ( ! aboard && ( story.where === 'adrift' || story.where === 'aground' ) ) {
 
 			const h = dayHour( t ).hour;
 			if ( h >= HOURS.marta[ 0 ] && h < HOURS.marta[ 1 ] && Math.hypot( story.x - ISLE.x, story.z - ISLE.z ) < FOUND_M ) seen += dt;
@@ -295,7 +305,7 @@ function milesOf( m ) {
 // leave) and the host in their absence (her wear and her tow, never her pose). Each device draws her from it, on its
 // own sea, lying to its own wind from where her anchor is.
 
-export const boatRecord = ( { name, x, z, heading, anchor, at, T } ) => ( { v: 1, n: String( name || '' ).slice( 0, 40 ), x: round( x ), z: round( z ), h: Math.round( heading * 1000 ) / 1000, a: anchor ? [ round( anchor.x ), round( anchor.z ) ] : null, ...( anchor ? {} : { T } ), at, wear: 0, tow: null } );
+export const boatRecord = ( { name, x, z, heading, anchor, at, T, drift } ) => ( { v: 1, n: String( name || '' ).slice( 0, 40 ), x: round( x ), z: round( z ), h: Math.round( heading * 1000 ) / 1000, a: anchor ? [ round( anchor.x ), round( anchor.z ) ] : null, ...( anchor ? {} : { T, ...( drift ? { d: drift } : {} ) } ), at, wear: 0, tow: null } );
 
 // How she lies at anchor in a steady wind blowing toward ( wx, wz ) at U m/s: head to it, her bow downwind of the
 // anchor by the rode's slack and its stretch. off: her origin's distance from the anchor with no stretch (the slack,
@@ -342,7 +352,7 @@ export function cleanBoats( raw, now = Date.now() ) {
 		const t = r.tow && typeof r.tow === 'object' && Number.isFinite( r.tow.fee ) && ( r.tow.where === 'dock' || r.tow.where === 'cradle' ) ? r.tow : null;
 		// (long towed, and they've not been back: let go)
 		if ( t && Number.isFinite( t.at ) && now - t.at > TOW_KEPT_MS ) continue;
-		out[ id ] = { v: 1, n: typeof r.n === 'string' ? r.n : '', x: r.x, z: r.z, h: Number.isFinite( r.h ) ? r.h : 0, a: A, ...( A ? {} : { T: r.T } ), at: r.at, wear: Number.isFinite( r.wear ) ? Math.min( 1, Math.max( 0, r.wear ) ) : 0, tow: t };
+		out[ id ] = { v: 1, n: typeof r.n === 'string' ? r.n : '', x: r.x, z: r.z, h: Number.isFinite( r.h ) ? r.h : 0, a: A, ...( A ? {} : { T: r.T, ...( Number.isFinite( r.d ) ? { d: r.d } : {} ) } ), at: r.at, wear: Number.isFinite( r.wear ) ? Math.min( 1, Math.max( 0, r.wear ) ) : 0, tow: t };
 
 	}
 
@@ -353,7 +363,7 @@ export function cleanBoats( raw, now = Date.now() ) {
 // An away boat with no anchor out: what's become of her by the island's time T, as her owner's own reckoning has it when
 // they're back (awayOf). The same on every device in a room, whose clock and weather are one; a room on another day
 // has her elsewhere, as it has the rest of its day. r: a record with T. env: awayOf's.
-export const driftOf = ( r, T, env ) => awayOf( { x: r.x, z: r.z, heading: r.h, anchor: null, moored: false, hauled: false, T: r.T }, T, env );
+export const driftOf = ( r, T, env ) => awayOf( { x: r.x, z: r.z, heading: r.h, anchor: null, moored: false, hauled: false, T: r.T }, T, r.d ? { ...env, drift: r.d } : env );
 
 // The host's look at an away boat: its record, or a new one if something's happened. warned: a hurricane's warning
 // is out in this room (Marta tows her in, for her fee and the haul-out); gone a week by the real clock (she

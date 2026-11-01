@@ -18,6 +18,7 @@ import { weekOrder, weekNumber, tallyFor, deliver, delivered } from '../game/Wee
 import { lb } from '../game/Units.js';
 import { WORLD } from '../world/WorldLayout.js';
 import { islandTime, weatherHere } from '../game/Weather.js';
+import { ableOf, SOCK_DRIFT } from '../game/Seaworthy.js';
 import { anchorLie, boatRecord, cleanBoats, driftOf, keepBoat, sheerAt, swingRate, wearRate } from '../game/Away.js';
 import { RODE_SLACK } from '../player/BoatController.js';
 
@@ -217,6 +218,8 @@ export class Together {
 		s.on( 'catch', ( body, from ) => this._theirCatch( body, from ) );
 		s.on( 'net', ( body, from ) => this._theirThrow( body, from ) );
 		s.on( 'horn', ( on, from ) => this._theirHorn( on, from ) );
+		// ((M16) a distress flare: game/DaysOut.js)
+		s.on( 'flare', ( at, from ) => this.app.game && this.app.game.daysOut.theirFlare( at, this.others.get( from )?.person.name ) );
 		s.on( 'week', ( tally ) => this._setWeek( tally ) );
 		s.on( 'world', ( body ) => this._theirWorld( body ) );
 		this._worldT = 0;
@@ -314,7 +317,7 @@ export class Together {
 		this._boatSavedAt = t;
 		this._boatAnchored = !! b.anchor;
 		const s = app.settings;
-		const r = boatRecord( { name: this.me.name, x: b.position.x, z: b.position.z, heading: b.getYaw(), anchor: b.anchor, at: t, T: islandTime( s.day, s.timeOfDay ) } );
+		const r = boatRecord( { name: this.me.name, x: b.position.x, z: b.position.z, heading: b.getYaw(), anchor: b.anchor, at: t, T: islandTime( s.day, s.timeOfDay ), drift: ableOf( b.model && b.model.id ).drift * ( b.sock ? SOCK_DRIFT : 1 ) } );
 		return this._saveBoats( ( cur ) => {
 
 			cur[ id ] = r;
