@@ -246,7 +246,7 @@ M16's stream 10 (2026-11-01). `test/north-sea.mjs` tests what Node can. A gale's
 - **Whitecaps and spray**: in a blow they break on the long waves' crests, on the CPU's spray as on the GPU. Foam's blown in streaks from a near gale, as Beaufort 7 and 8 have it; it started at Beaufort 10.
 - **A sea breaking on her** (`game/BreakingSeas.js`). A 9 m boat rides a 12 ft, 9 s wave like a hill: her stem stays out of it. So the danger's a roller reaching her up on a crest: 60 L in her bilge, a hard slam and a knock about her keel, about one a minute, under way or at anchor, from 9.5 ft. Unbailed, her engine floods in about eight minutes. Marta won't come out in it.
 
-**What it does**, measured on the real boat under Node: at 240 s she heaves 3.9 m, tilts to 28 degrees; 549 L in her head to it, 382 L at anchor (one run each: it varies). Held head to it flat out she's worn 26% a minute, 9% at a third of her throttle, slams being the short seas' (`test/hull.mjs` had been running through them the wrong way, and is mended; `Hull.js` is untouched). Crests reach 0.62 m at the pier's tip in a trades gale and 1.47 m at its head in a southerly, under its 2.3 m deck. The surf and its run-up are the shore's own figures, unchanged, so they reach no further than they did; the north shore's 6 to 12 ft was already in proportion. On low what's drawn counts 10.8 ft, its highest wave 13 ft (four waves can't make a rogue); on high 11.4 and 16.
+**What it does**, measured on the real boat under Node: at 240 s she heaves 3.9 m, tilts to 28 degrees; 549 L in her head to it, 382 L at anchor (one run each: it varies). Held head to it flat out she's worn 26% a minute, 9% at a third of her throttle, slams being the short seas' (`test/hull.mjs` had been running through them the wrong way, and is mended; `Hull.js` is untouched). Crests reach 0.62 m at the pier's tip in a trades gale and 1.47 m at its head in a southerly, under its 2.3 m deck. The surf and its run-up are the shore's own figures, unchanged, so they reach no further than they did; the north shore's 6 to 12 ft was already in proportion. On low what's drawn counts 12.6 ft by 4 standard deviations, its highest wave 14.6 ft (four waves can't make a rogue); on high 13.3 and 18.1. (Its figures before them here are from before the long waves were raised a fifth, below.)
 
 **The sea's draw, on low.** The sea alone, 640 by 360, the CPU's GPU, by removal in one page (a phone's shader, `?fullsea`; CPU time of the browser's processes, against a busy machine; two rounds, so a figure under about 6% is noise):
 
@@ -276,7 +276,7 @@ Tried and left: a lighter crest hash and one marbling noise fewer (each moved un
 |---|---|---|---|
 | Calm, blue water | 1248 | 1140 | 8.7% off |
 | Fair, by the dock | 1774 | 1632 | 8.0% off |
-| Gale, blue water | 1522 | 1506 | 1.1% off, with more sea and foam in it |
+| Gale, blue water | 1522 | 1506 | 1.1% off, before it was made rougher, below |
 | First build (3 runs each, wall) | 6.5 s | 5.9 s | |
 
 Fair in blue water read 4414 against 1686 in the first scene of that run, with the page's late work still going, its calm and gale neighbours at the same spot as above. It's discarded, not measured again. Same-page, before the last cuts, it read within noise.
@@ -296,12 +296,17 @@ Fair in blue water read 4414 against 1686 in the first scene of that run, with t
 - **The long waves a fifth higher as drawn** (`seaSwell`'s `SEA_DRAWN`, `seaHeight` unchanged): the highest third 11.5 ft on low and 13.3 on high, in the radio's 10 to 14 feet, which is still 12.1. A deck's eye now loses the horizon behind a crest.
 - **No sun off a blow's water** (90% of it gone): the sky's a sheet of cloud, and the rough water threw a glare patch off a whole wave's face. Rougher reflections, 1.6 times.
 
-The boat in it: `tools/gale-figures.mjs` for the lobster boat reads 5.4% worn a minute flat out, 2.3% at a third, 8 seas aboard in four minutes, 7 at anchor. `BreakingSeas` still counts only the short seas' rollers, its figures having been set on them, so a long sea's head can go through her without coming aboard.
+The boats in it, `tools/gale-figures.mjs` (one run each, and it varies): worn a minute flat out and at a third, the console 8.4% and 1.8%, the lobster boat 4.5% and 2.7%, the sportfisher 2.6% and 0.7%. `BreakingSeas` still counts only the short seas' rollers, its figures having been set on them, so a long sea's head can go through her without coming aboard.
+
+What it costs, the sea alone at 640 by 360 on the CPU, a phone's shader, against v1.11.1 by turns (a machine that's busy, so 6% is noise): calm 1298 to 1306 ms, a gale 1686 to 1922 ms, 14% more, with all this on it. No new texture: fragment 16 of 16 on high and low (the sea's on high), `tools/gpu-limits.mjs` from a clean copy passing on both. First build, three each on the busy machine, 5.8, 6.3, 4.4 s to 6.5, 6.6, 6.0 s: not a fair reading, for the ready time's A/B to settle. In one page by removal, a gale's 2093 ms: all its foam 266 of it, the anisotropy about 120, the short seas' whitecaps 143, a long sea's heads and the blown foam each under the noise.
+
+A first reading of 4254 ms against 1886 was the gale being the first scene in its page, the page's late work still going: the same thing as the fair day's discarded 4414 below.
 
 **Not checked.**
 
 - The frame's calm day from before and after: the two pages' clocks differed, so that comparison says nothing. What holds: the waves' figures to the bit under Node, the shader's guards at 0/255 and 1/255 on fair and gale frames, and whitecaps absent below 3 m/s.
-- The shore in a gale, and the far sea in a gale, rendered: not done, to save rendering. Their figures are under Node.
+- The far sea in a gale, rendered: not done, to save rendering. Its figures are under Node. The north beach in a gale is rendered on low and high; the bay's lee isn't.
+- The overcast and all of this on a real GPU; how a long sea's head moves, frame to frame.
 - The hit's words: no toast is said when a sea comes aboard. Other boats take the same litres: the kayak's and the others' figures are their own streams' to set.
 - A real phone's frame rate.
 
