@@ -111,3 +111,64 @@ About half is sound enough to carry to Marta as scrap: a sheet of tin $4, a plan
 **What it costs**, on low, worst case (the bay's beach, the morning after a hurricane, three days of finds): see the readings below.
 
 **Sources:** queen conch: [Wikipedia](https://en.wikipedia.org/wiki/Aliger_gigas), [CITES Res. Conf. 13.7](https://cites.unia.es/file.php/1/handbook/eng/res/all/E-Res-13-07R16.pdf), [50 CFR 23.15](https://www.law.cornell.edu/cfr/text/50/23.15), [Turks and Caicos](https://www.visittci.com/travel-info/buying-collecting-exporting-conchs-shells-corals). Others: Wikipedia's [fighting conch](https://en.wikipedia.org/wiki/Strombus_pugilis), [sunrise tellin](https://en.wikipedia.org/wiki/Tellina_radiata), [top shell](https://en.wikipedia.org/wiki/Cittarium_pica), [bleeding tooth](https://en.wikipedia.org/wiki/Nerita_peloronta), [measled cowrie](https://en.wikipedia.org/wiki/Macrocypraea_zebra), [yellow cowrie](https://en.wikipedia.org/wiki/Naria_acicularis), [periwinkle](https://en.wikipedia.org/wiki/Littoraria_angulifera), [flamingo tongue](https://en.wikipedia.org/wiki/Cyphoma_gibbosum), [king helmet](https://en.wikipedia.org/wiki/Cassis_tuberosa), [triton](https://en.wikipedia.org/wiki/Charonia_variegata), [music volute](https://en.wikipedia.org/wiki/Voluta_musica), [six-keyhole sand dollar](https://en.wikipedia.org/wiki/Leodia_sexiesperforata), [sea egg](https://en.wikipedia.org/wiki/Tripneustes_ventricosus), [sea fan](https://en.wikipedia.org/wiki/Gorgonia_ventalina); left out: [junonia](https://en.wikipedia.org/wiki/Scaphella_junonia), [lightning whelk](https://en.wikipedia.org/wiki/Sinistrofulgur_sinistrum), [sunray venus](https://en.wikipedia.org/wiki/Macrocallista_nimbosa). Mangroves holding litter: [Honduras and elsewhere](https://www.boa.unimib.it/retrieve/ad84b5f3-35d5-4f17-a270-6a0c965881b9/Cerri-2025-Marine%20Pollution%20Bulletin-VoR.pdf), [Florida](https://www.fau.edu/science/documents/espinosa-cristal2022.pdf). Not found in a source I could check: the turkey wing's range beyond general guides, and what a lee beach's scatter is; Warmke and Abbott's *Caribbean Seashells* (1961) is the book to check them in.
+
+## The plotter and the compass
+
+M16's stream 10. `test/north-plotter.mjs` tests it; `world/boat/PlotterChart.js` is new. What M15's "Charts and finding your way" left: the far sheet's blur close in, the night colours, the Hump's label, proper names, the gimbal, and the radar's true heading.
+
+**Close in, a vector chart.** A real plotter's chart is vector data, drawn for the screen at each range: sharp lines and flat depth areas at any zoom. Ours blew up the far sheet, 32 m a pixel (64 on low), into a blur.
+
+- The plotter now has one small canvas of its own: its screen and 16 pixels round it. Where a sheet's pixel would be more than 1.6 of the screen's, it reads the seabed for just that view (`TerrainData.heightAt`, the ground the sounder reads) on a grid every 4 pixels, smooths it over half the seabed map's cell, and draws it: the four depth areas filled, the contours and the coast as lines at the screen's own pixel (marching squares), the 60 ft safety contour bolder, as S-52 has it. That's the far sheet up to 3 NM across, the waters' sheet up to 0.75 NM. Further out, and over the island's own sheet, with its reefs, buildings and lights, it's the sheets as before.
+- Drawn again only when the view's changed: its range, its palette, the chart (once a second at most), or when she's gone 14 pixels. The atlas copies it at each of its redraws, as it stands, a pixel at a time. That's fewer sheet draws than before, when each one was scaled into the atlas 4 to 7 times a second.
+- Its own soundings at those ranges, from the same ground, on a lattice fixed to the sea, jittered as a surveyor's lines wander. At the closest range over the bank M15 had one far-sheet sounding, 700 m apart; there are some 40 now.
+- Blank where you haven't been still holds, from the same cells, its edge now a clean line (the far sheet's cells are 128 m, a soft smear 100 pixels wide when blown up).
+- The seabed's own map is 32 m (64 on low), so the lines close in are as true as that map: smooth and sharp, not more detailed than the ground. The bar's crest and the bank's rim read shallow, as the sheets do, by taking the shallower of the smoothed depth and half the real one.
+
+**Ranging in when she's stopped.** M15's rule ranges out with the distance from the island, so over the bank the plotter was at 12 NM across and over the Hump at 6: you never saw its closest range out there, and the sandbar was 30 pixels long. There's no key for it, as ← → are the radar's. So now, under 3 knots for 4 seconds (drifting, anchored, fishing), it ranges right in to its closest, 0.35 NM, and goes back out when she's under way. My decision, the plain way to have this seen on every device: a range key could be added beside it.
+
+**Its night colours.** S-52's own DUSK and NIGHT tables as OpenCPN gives them (`data/s57data/chartsymbols.xml`; `S52_DUSK`, `S52_NIGHT` in `ChartBake.js`): deep water 7,7,7, shallows 3,4,19, land 13,10,8, contours 31,34,35, names and soundings a dim grey that's lighter than the water, as the ink turns over after dark. The bars, her mark, your marks and the fish take S-52's user-interface colours. A black background, not a dimmed white one, because a dimmed white chart still lights the wheelhouse (the reasoning in the IHO's papers on the palettes).
+
+- It changes as the VHF's amber comes on: dusk from `G.night` 0.2, night from 0.7, 0.03 either way before turning back, so it doesn't flicker.
+- Only the plotter's screen. The sounder, the radar, the dials and the minimap are as they were.
+- A change of palette is one redraw, not a copy of a sheet. A vector view's simply drawn in the palette. A view with a sheet in it (by the island) is drawn by day, and its pixels looked up in one table of 12 KB, 16 steps a channel, the only pixels read back.
+- One departure: S-52's night makes no-chart the same 7,7,7 as deep water, and tells them apart by a pattern over it (NODATA03). Here it's a flat 17,19,19, for blank to still read as blank.
+
+**The Hump's label.** It was 500 m north of its top, over 266 m. Now at (5140, -3320), the middle of all that's shallower than 110 m on both the seabed's maps, over 102 m (its top's 99). Checked at the same time, all fine and now tested: the ledge's over 213 m on the terrace, the bank's over 19 m, the bar's over 0.4 m (0.7 on low), the canyon's in it at 179 m, 130 m deeper than 300 m either side.
+
+**The chart's names.** Named as a real chart of these islands has them: a shape, a colour, a family, a ship, a saint, a surveyor. The kind of thing stays in the name wherever a chart would have it, so nobody wonders where Joe's "the bank" is. Change any in `NAMES` in `Chart.js`; ids and saves don't use them.
+
+| Chart | Plain | Why it's that |
+|---|---|---|
+| Pelican Bay | the bay | the birds that work it |
+| Battery Head | the bay's east head | an old gun battery, as Fort Point and Gun Point are |
+| Goat Head | the bay's west head | the Windwards' Goat Point and such |
+| Govt Pier | the pier | a chart's abbreviation, as for a Government Wharf |
+| Mt St Anne 992 | the summit | a saint, with its height in feet, as Grenada's Mt St Catherine |
+| Snook Creek | the mangrove creek | the fish that hunt it |
+| Smugglers Cave | the sea cave (west) | as the Grenadines' tales go |
+| Cathedral Cave | the sea cave (north-west) | its shape |
+| Gallows Point | the north-west point | as Port Royal's |
+| Gallows Pt Lt | the lighthouse | how a chart writes a light (Alligator Reef Lt) |
+| Worlds End Reef | the windward reef | the Tobago Cays' real one, the last before the Atlantic |
+| Mary Joseph Wk | the wreck | a coaster's family name, "Wk" as a chart has it |
+| Turtle Beach | the north beach | what nests there; Tobago's has it |
+| Pearl's Landing | the fish camp | whose it is |
+| Pelican Canyon | the canyon | named off the bay it heads for, as Hudson Canyon is |
+| Sigsbee Ledge | the north ledge | a surveyor, as Pourtales Terrace off the Keys (Sigsbee commanded the *Blake*) |
+| Sisters Hump | the hump | its three peaks, and the Keys' Marathon Hump, Islamorada Hump |
+| Thunder Bank | the bank | a ship, as Thunder Knoll (HMS Thunder), and its surf |
+| Silver Bar | the sandbar | its colour, awash |
+
+- The chart's name where the chart's drawn: the minimap, the plotter. Both where it's told: "On your chart: Thunder Bank (the bank)", "You've found the bank: … · Thunder Bank on your chart", the Chart tab's list, the Guide's chart tip. Plain everywhere else: Joe, Marta, the log, the Records and the forecast. `Places`' ids and names and saves are untouched (`namedAs`).
+
+**The compass card on its gimbal.** A real card rides level on its pivot by its own weight while the bowl pitches and rolls round it. `BoatModel.swingCompass` now also keeps its tilt (`_gimbal`, `GIMBAL`): the world's up in her frame says the tilt that would have it level, about the bowl's two axes, with a pendulum of 0.8 s, damped 0.6, the fluid dragging it with the bowl. In a seaway of 15° roll at 4 s and 6° pitch at 3 s the card's about 4° off level with the bowl 16°; a lurch of 20° in a third of a second has it 9° behind. It touches at 30° of pitch and 45° of roll, then goes with her: Silva's 102 and 125 publish those figures for their internal gimbal; a retailer gives a Ritchie's as 45° and 90°, and Ritchie's own sheet gives none, so I took the published pair. It tilts about the dome's middle, 20 mm under it, so its rim stays inside the dome at every tilt (51 of 52 mm). Its low side goes under the bowl's top past about 25°, as into a deep bowl. No new triangles: a real gimbal's inside the bowl, unseen. It doesn't lean to her acceleration in a turn, as a real one does a little. Its heading reads as before.
+
+**The radar's heading.** It reads magnetic, and says so: `HDG 096.3°M`. A boat this size has no gyro: one heading sensor, a fluxgate compass, feeds the radar and the plotter over NMEA (Furuno's 1815 takes HDG, HDM or HDT), so both show the same magnetic figure. Furuno's own users complain on its forum when a display shows them true beside a magnetic compass, 8° out, which is what ours did. Its bearing scale goes with it: its 000 at magnetic north, heading up, as before. To the degree, it's the plotter's figure all round.
+
+**What it costs**, on low: script memory about 0.08 MB kept (the grid 66 KB, the look-up 12 KB, its few soundings) against a share of 0.2, plus 0.2 MB of garbage a redraw at night by the island only (the pixels read back; its canvas, 278 x 199, 0.2 MB, is off the script's heap); 0 draw calls, 0 triangles, nothing before ready (the canvas and its grid are made the first time the plotter's drawn, aboard, and the chart's bake is untouched). A redraw on this machine, busy, headless, on low: 0.6 to 1.6 ms typically out at sea, 6.6 ms with the look-up, 20 ms at worst; on high 2 to 13 ms and 34 at worst. Every few seconds at most under way. The first redraw with a sheet in it at night is slower once (see Not checked).
+
+**Checked:** in Node, the lines against known fields and the real seabed on both maps, the palette's every colour, what's redrawn when, the labels, the names, the gimbal; the instruments' whole screen at night (none of its colours brighter than 70 of 255) and the sounder unchanged. Headless on the CPU (SwiftShader) at a true 720p, low and high, by day, dusk and night, over the bank and the Hump at the closest range, beside M15's blur and beside a real ECDIS's screens (the session's side-by-sides).
+
+**Not checked:** the GPU and phone look and cost of it; a real phone's time for a redraw; the first night redraw with a sheet in the view, which took 1 s on low and 7 s on high on SwiftShader, on a CPU that was busy, as the canvas reads the sheet back from its "GPU" (a real GPU should take milliseconds, not measured); a photograph of a plotter's S-52 night mode (Commons has none: the side-by-side's real one is the DEV Aratere's ECDIS by night and an oil tanker's by day). The fluid-damped pendulum's figures are chosen, not measured on a real card. Hurricane-force heels on a real compass.
+
+Sources: [OpenCPN's chartsymbols.xml](https://github.com/OpenCPN/OpenCPN/blob/master/data/s57data/chartsymbols.xml); [Silva 102B/H's gimbal](https://shop.foghmarine.com/silva-102b-h-compass.html); [Furuno 1815's brochure](https://cdn.shopify.com/s/files/1/1406/4308/files/model1815w.pdf); [Furuno's forum on true and magnetic](https://furunousaforum.com/threads/heading-line-on-radar-display-true-vs-magnetic.4683); [DEV Aratere's ECDIS, TAIC](https://commons.wikimedia.org/wiki/File:DEV_Aratere_ECDIS_21_June_2024.png); [an oil tanker's electronic chart, Hervé Cozanet](https://commons.wikimedia.org/wiki/File:Navigation_system_on_a_merchant_ship.jpg).
