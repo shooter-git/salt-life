@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 // (M16) Her from the views she's compared by, or from any named here: node tools/sportfisher/shots.mjs <out dir> [tier] [view ...]
 // Wrap it: tools/render-slot.sh node tools/sportfisher/shots.mjs out. A CPU render (SwiftShader), not a phone's or a card's.
+import { writeFileSync } from 'node:fs';
+
 const PW = '/home/shooter/Documents/VS Code/all-the-spaces/node_modules/playwright/index.mjs';
 const { chromium } = await import( PW );
 const [ , , out = '.', tier = 'high', ...want ] = process.argv;
@@ -39,18 +41,20 @@ function SFY( h ) { return 3.1 + h; }
 const b = await chromium.launch( { args: [ '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist' ] } );
 const p = await b.newPage( { viewport: { width: 1280, height: 720 } } );
 p.on( 'console', ( m ) => { if ( m.type() === 'error' || m.type() === 'warning' ) console.log( m.type(), m.text().slice( 0, 400 ) ); } );
+p.setDefaultTimeout( 600000 );
 p.on( 'pageerror', ( e ) => console.log( 'pageerror', e.message ) );
 await p.goto( `http://127.0.0.1:${ PORT }/tools/sportfisher/view.html?tier=${ tier }` );
 await p.waitForFunction( 'window.ready', null, { timeout: 180000 } );
 for ( const name of want.length ? want : Object.keys( VIEWS ) ) {
 
+	// (straight off the canvas: on a busy machine the browser's own screenshot times out)
 	const info = await p.evaluate( ( v ) => {
 
 		const r = window.view( ...v );
-		return { calls: r.calls, triangles: r.triangles };
+		return { calls: r.calls, triangles: r.triangles, png: document.querySelector( 'canvas' ).toDataURL( 'image/png' ) };
 
 	}, VIEWS[ name ] );
-	await p.screenshot( { path: `${ out }/${ tier }-${ name }.png` } );
+	writeFileSync( `${ out }/${ tier }-${ name }.png`, Buffer.from( info.png.split( ',' )[ 1 ], 'base64' ) );
 	console.log( name, info.calls, info.triangles );
 
 }

@@ -31,11 +31,21 @@ export const HELM = { x: 0, z: - 0.05, seatZ: - 0.25, eye: V( 0, SF.bridge + 1.4
 
 function plan( N ) {
 
-	// from the aft end round to the middle of her front, port side: [ x, z ], a little denser at the rounding
-	const pts = [];
+	// from the gap for the ladder on her aft edge, out and round the corner, along her side and round to the middle of her front,
+	// port side: [ x, z ]
+	const pts = [], R = 0.55, w = bridgeX( SF.bridgeAft + R ), NA = Math.max( 4, N >> 2 ), NC = Math.max( 3, N >> 3 );
+	for ( let i = 0; i < NA; i ++ ) pts.push( [ lerp( 0.42, w - R, i / NA ), SF.bridgeAft ] );
+	for ( let i = 0; i < NC; i ++ ) {
+
+		const a = i / NC * Math.PI / 2;
+		pts.push( [ w - R + R * Math.sin( a ), SF.bridgeAft + R - R * Math.cos( a ) ] );
+
+	}
+
+	const z0 = SF.bridgeAft + R;
 	for ( let i = 0; i <= N; i ++ ) {
 
-		const f = i / N, z = f < 0.65 ? lerp( SF.bridgeAft, 0.5, f / 0.65 ) : 0.5 + ( SF.bridgeFront - 0.5 ) * Math.sin( ( f - 0.65 ) / 0.35 * Math.PI / 2 );
+		const f = i / N, z = f < 0.6 ? lerp( z0, 0.5, f / 0.6 ) : 0.5 + ( SF.bridgeFront - 0.5 ) * Math.sin( ( f - 0.6 ) / 0.4 * Math.PI / 2 );
 		pts.push( [ bridgeX( z ), z ] );
 
 	}
@@ -51,22 +61,25 @@ export function buildBridge( kit, L, q, parts ) {
 	// the sole: teak-look over her deck, a hatch for the ladder. Its underside's the overhang over the mezzanine
 	const outline = [ ...P.map( ( [ x, z ] ) => [ x, z ] ), ...P.slice( 0, - 1 ).reverse().map( ( [ x, z ] ) => [ - x, z ] ) ];
 	const H = BRIDGE_HATCH, hole = [ [ H.x0, H.z0 ], [ H.x1, H.z0 ], [ H.x1, H.z1 ], [ H.x0, H.z1 ] ];
-	const sole = slab( outline, [ hole ], ( u, v, side ) => V( u, side ? SF.roofY : SF.bridge, v ) );
-	auxVertices( sole, ( p ) => p.y > SF.bridge - 0.01 ? [ 0.7, 0, 2, 0 ] : [ 0.35, 0, 0, 0 ] );
-	kit.add( 'gelcoat', sole, { color: 0xf0ede4 } );
+	const top = slab( outline, [ hole ], ( u, v, side ) => V( u, side ? SF.bridge - 0.05 : SF.bridge, v ), { back: false, edges: false } );
+	orientTowards( top, V( 0, 1, 0 ) );
+	top.computeVertexNormals();
+	kit.add( 'gelcoat', top, { color: 0xf0ede4, rough: 0.7, pattern: 2 } );
+	const under = slab( outline, [ hole ], ( u, v, side ) => V( u, side ? SF.roofY : SF.bridge - 0.01, v ), { front: false } );
+	kit.add( 'gelcoat', under, { color: 0xf0ede4, rough: 0.35 } );
 
 	// the coaming, inside and out: from the brow up over a rolled top and down to the sole
 	for ( const s of [ 1, - 1 ] ) {
 
 		const rows = P.map( ( [ x, z ], i ) => {
 
-			const front = sstep( 0.5, SF.bridgeFront, z ), lean = 0.08 + 0.42 * front, top = coamingY( z ), w = Math.max( x, 1e-3 ), nx = 1;
+			const front = sstep( 0.5, SF.bridgeFront, z ), lean = 0.08 + 0.42 * front, top = coamingY( z ), back = sstep( SF.bridgeAft + 0.55, SF.bridgeAft, z );
 			// the top's set back from the brow, more so at the front (it rakes on from the windshield)
-			const xt = Math.max( 0, x - lean * ( x / 2.02 ) ), zt = z - lean * front * 1.3;
+			const xt = Math.max( 0, x - lean * ( x / 2.02 ) ), zt = z - lean * front * 1.3 + 0.08 * back;
 			return [
 				V( s * Math.max( 0, x + 0.015 ), SF.roofY - 0.03, z + 0.05 * front ), V( s * x, SF.bridge + 0.06, z ), V( s * ( xt + 0.018 ), top - 0.03, zt ),
-				V( s * xt, top, zt ), V( s * Math.max( 0, xt - 0.12 ), top + 0.012, zt - 0.05 * front ), V( s * Math.max( 0, xt - 0.2 ), top - 0.03, zt - 0.1 * front ),
-				V( s * Math.max( 0, xt - 0.22 ), lerp( SF.bridge, top, 0.5 ), zt - 0.12 * front ), V( s * Math.max( 0, xt - 0.17 ), SF.bridge, zt - 0.15 * front ),
+				V( s * xt, top, zt ), V( s * Math.max( 0, xt - 0.12 + 0.11 * back ), top + 0.012, zt - 0.05 * front + 0.08 * back ), V( s * Math.max( 0, xt - 0.2 + 0.18 * back ), top - 0.03, zt - 0.1 * front + 0.12 * back ),
+				V( s * Math.max( 0, xt - 0.22 + 0.2 * back ), lerp( SF.bridge, top, 0.5 ), zt - 0.12 * front + 0.14 * back ), V( s * Math.max( 0, xt - 0.17 + 0.15 * back ), SF.bridge, zt - 0.15 * front + 0.16 * back ),
 			];
 
 		} );
@@ -77,9 +90,6 @@ export function buildBridge( kit, L, q, parts ) {
 		kit.add( 'gelcoat', g, { color: WHITE, rough: 0.28 } );
 
 	}
-
-	// the aft edge's lip, with the gap for the tower's ladder
-	for ( const s of [ 1, - 1 ] ) kit.add( 'gelcoat', rbx( Math.min( s * 0.42, s * ( bridgeX( SF.bridgeAft ) ) ), SF.bridge - 0.02, SF.bridgeAft, Math.max( s * 0.42, s * ( bridgeX( SF.bridgeAft ) ) ), SF.bridge + 0.32, SF.bridgeAft + 0.09, 0.03 ), { color: WHITE, rough: 0.28 } );
 
 	console_( kit, L, q, parts );
 	seating( kit, L, q );
@@ -252,7 +262,7 @@ function hardtop( kit, L, q, parts ) {
 	const scr = [];
 	for ( let i = 0; i <= 8; i ++ ) {
 
-		const f = i / 8, a = lerp( 1, - 1, f ), x = 1.44 * a, zb = 1.55 - 0.42 * a * a;
+		const f = i / 8, a = lerp( 1, - 1, f ), x = 1.44 * a, zb = 1.72 - 0.42 * a * a;
 		scr.push( [ V( x, coamingY( 1 ) - 0.02, zb ), V( x * 0.97, coamingY( 1 ) + 0.42, zb - 0.1 ) ] );
 
 	}

@@ -93,7 +93,7 @@ export function keepOnDeck( L, p, r ) {
 	if ( p.y > 1.2 && p.z > SF.houseAft ) {
 
 		const foot = houseFootX( L, p.z );
-		if ( p.z > 1.3 && p.z < SF.houseFront + r * 0.4 && Math.abs( p.x ) < foot + r * 0.4 ) {
+		if ( p.z > HOUSE_CORNER && p.z < SF.houseFront + r * 0.4 && Math.abs( p.x ) < foot + r * 0.4 ) {
 
 			const w0 = houseFootX( L, HOUSE_CORNER ), f = Math.min( 1, Math.abs( p.x ) / w0 ), zOut = HOUSE_CORNER + ( SF.houseFront - HOUSE_CORNER ) * Math.sqrt( 1 - f * f ) + r * 0.4;
 			if ( zOut - p.z < foot + r * 0.4 - Math.abs( p.x ) ) p.z = zOut;

@@ -46,8 +46,8 @@ export class SportfisherMaterials extends BoatMaterials {
 	float boot = vLocal.y - smoothstep( 2.0, 7.0, vLocal.z ) * 0.1;
 	float aa = fwidth( boot ) + 1e-4;
 	float overBottom = smoothstep( - aa, aa, boot - 0.04 );
-	float overStripe = smoothstep( - aa, aa, boot - 0.16 );
-	vec3 c = mix( ${ vec3( linear( 0x141d2c ) ) }, ${ vec3( linear( 0x123a78 ) ) }, overBottom );
+	float overStripe = smoothstep( - aa, aa, boot - 0.13 );
+	vec3 c = mix( ${ vec3( linear( 0x141d2c ) ) }, ${ vec3( linear( 0x1a56a0 ) ) }, overBottom );
 	c = mix( c, sfTopsides, overStripe );
 	diffuseColor.rgb = c;
 	float hullRough = mix( 0.7, 0.16, overBottom );

@@ -17,11 +17,11 @@ export const SF = {
 	tower: 7.0, // the tower's platform: a standing eye about 28 ft up (real towers on a 43 to 50 put you 25 to 30 ft up)
 	mezzZ: - 3.35, // the mezzanine's aft edge
 	houseAft: - 2.4, // the salon's aft bulkhead
-	salonFront: 1.55, // the salon's forward bulkhead: the companionway goes down through it
+	salonFront: 1.55, // the salon's forward bulkhead: the companionway goes down through it (a false windshield's ahead of it, as hers is)
 	houseFront: 3.55, // the windshield's foot on the foredeck
 	roofY: 3.0, // the salon's ceiling
 	bridgeAft: - 3.25, // the flybridge's overhang over the mezzanine
-	bridgeFront: 2.1,
+	bridgeFront: 2.45,
 	hardtopAft: - 1.6, hardtopFront: 1.75, hardtopY: 5.3, hardtopX: 1.55,
 	gunwale: 0.26, // the width of her covering boards, the cockpit's sides
 	sideDeck: 0.46, // the house stands in from her sheer by this

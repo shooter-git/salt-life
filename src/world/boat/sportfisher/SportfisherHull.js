@@ -55,7 +55,7 @@ export function plate( outline, holes, y, thick = 0.04 ) {
 export function deckY( L, x, z ) {
 
 	const t = L.tAtSheerZ( z ), xe = Math.max( 0.02, L.sheerX( t ) - L.shell ), f = Math.min( 1, Math.abs( x ) / xe );
-	const crown = 0.3 * sstep( 1, 3.6, z ) * ( 1 - 0.75 * sstep( 3.6, 8.5, z ) );
+	const crown = 0.3 * sstep( 2, 3.6, z ) * ( 1 - 0.75 * sstep( 3.6, 8.5, z ) );
 	return L.sheerY( t ) + crown * ( 1 - f * f );
 
 }
@@ -71,7 +71,7 @@ export function houseFootX( L, z ) {
 
 }
 
-export const HOUSE_CORNER = 1.2; // where the house's sides round into its front, at the foot
+export const HOUSE_CORNER = 2.0; // where the house's sides round into its front, at the foot
 
 // the outside of the house's side at ( z, y ): stood in from her sheer, a touch of tumblehome
 export function houseWallX( L, z, y ) {
@@ -86,6 +86,7 @@ export function buildHull( kit, L, q ) {
 	skeg( kit, L, q );
 	strakes( kit, L, q );
 	rubrail( kit, L, q );
+	vents( kit, L, q );
 	cockpit( kit, L, q );
 	foredeck( kit, L, q );
 	bowRail( kit, L, q );
@@ -208,6 +209,20 @@ function rubrail( kit, L, q ) {
 		orientTowards( g, V( s, 0, 0 ) );
 		kit.add( 'gelcoat', g, { color: WHITE, rough: 0.25 } );
 		if ( ! q.low ) kit.add( 'fittings', tube( strip, 0.007, 80, 3 ), STEEL );
+
+	}
+
+}
+
+// the engine room's vents, let into her sides aft of the bridge: a row of dark slats
+function vents( kit, L, q ) {
+
+	const n = q.low ? 4 : 7, z0 = - 1.9, z1 = - 0.5;
+	for ( const s of [ 1, - 1 ] ) for ( let i = 0; i < n; i ++ ) {
+
+		const y = 0.86 + i * 0.038, f = i / n, zA = z0 + 0.1 * f, zF = z1 - 0.1 * f;
+		const a = L.hullXAt( zA, y ) + 0.002, c = L.hullXAt( zF, y ) + 0.002;
+		kit.add( 'fittings', rod( V( s * a, y, zA ), V( s * c, y, zF ), 0.009, 3 ), { color: 0x24272a, rough: 0.6 } );
 
 	}
 
@@ -387,8 +402,8 @@ function foredeck( kit, L, q ) {
 function bowRail( kit, L, q ) {
 
 	const zs = [], N = q.low ? 6 : 10;
-	for ( let i = 0; i <= N; i ++ ) zs.push( lerp( 1.4, 8.1, i / N ) );
-	const H = 0.72, r = 0.0125, rad = q.low ? 4 : 7;
+	for ( let i = 0; i <= N; i ++ ) zs.push( lerp( 2.2, 8.1, i / N ) );
+	const H = 0.66, r = 0.0125, rad = q.low ? 4 : 7;
 	const railAt = ( z, s, h ) => {
 
 		const t = L.tAtSheerZ( z ), x = L.sheerX( t ) - 0.09;
@@ -407,6 +422,6 @@ function bowRail( kit, L, q ) {
 	}
 
 	// (and back along the sides from the house's corner to the cockpit: her grab rail)
-	for ( const s of [ 1, - 1 ] ) kit.add( 'fittings', rod( railAt( 1.4, s, H ), railAt( - 1.8, s, 0.42 ), r, rad ), STEEL );
+	for ( const s of [ 1, - 1 ] ) kit.add( 'fittings', rod( railAt( 2.2, s, H ), railAt( - 1.2, s, 0.5 ), r, rad ), STEEL );
 
 }

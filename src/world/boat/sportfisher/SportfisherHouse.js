@@ -17,8 +17,8 @@ const LINER = { color: 0xeee8da, rough: 0.6 };
 const SHEET = { color: 0xe6e8ea, rough: 0.9 };
 
 // the corner of the house's roof, where its side rounds into the windshield
-const ROOF_CORNER = 0.2;
-const ROOF_TIP = 1.95;
+const ROOF_CORNER = 1.0;
+const ROOF_TIP = 2.3;
 // the windshield's band on the front, of the way up from its foot to the roof
 const SHIELD_LO = 0.3, SHIELD_HI = 0.86;
 
@@ -209,7 +209,7 @@ function salon( kit, L, q ) {
 	if ( ! q.low ) for ( const [ x, z ] of [ [ 0.9, - 1.5 ], [ - 0.9, - 1.5 ], [ 0.9, 0.2 ], [ - 0.9, 0.2 ], [ 0, - 0.65 ] ] ) kit.add( 'glow', cylinder( 0.04, 0.04, 0.006, 10 ).translate( x, SF.roofY - 0.024, z ), { color: 0xfff1d8, pattern: 5 } );
 	// the forward bulkhead, its door over the stairs
 	const zw = zF - 0.05, top = SF.roofY;
-	kit.add( 'cabin', wallZ( [ [ - wF, y ], [ - 0.42, y ], [ - 0.42, 2.72 ], [ 0.48, 2.72 ], [ 0.48, y ], [ wF, y ], [ wF, top ], [ - wF, top ] ], [], zw, 0.05 ), CHERRY );
+	kit.add( 'cabin', wallZ( [ [ - wF, y ], [ - 0.42, y ], [ - 0.42, PASSAGE_TOP ], [ 0.48, PASSAGE_TOP ], [ 0.48, y ], [ wF, y ], [ wF, top ], [ - wF, top ] ], [], zw, 0.05 ), CHERRY );
 
 }
 
@@ -294,6 +294,7 @@ function settees( kit, L, q ) {
 }
 
 const zF_ = SF.salonFront - 0.1;
+const PASSAGE_TOP = 2.4; // the ceiling over the stairs and the passage: head room coming down them
 
 // the stairs down, its treads
 function companionway( kit, L, q ) {
@@ -309,7 +310,7 @@ function companionway( kit, L, q ) {
 
 	for ( const x of [ x0, x1 ] ) {
 
-		const out = [ [ zTop, yT - 0.02 ], [ zBot, yB ], [ zBot, 2.72 ], [ zTop, 2.72 ] ];
+		const out = [ [ zTop, yT - 0.02 ], [ zBot, yB ], [ zBot, PASSAGE_TOP ], [ zTop, PASSAGE_TOP ] ];
 		const th = x < 0 ? - 0.04 : 0.04;
 		kit.add( 'cabin', slab( out, [], ( u, v, side ) => V( x + ( side ? th : 0 ), v, u ) ), CHERRY );
 
@@ -374,61 +375,119 @@ function lowerCabins( kit, L, q ) {
 
 	}
 
-	const wall = ( z, x0, x1, door = null ) => {
+	// a bulkhead across her at z, cut to her liner and her overhead; a door in it from door[ 0 ] to door[ 1 ]
+	const bulkhead = ( z, door = null ) => {
 
-		const out = door ? [ [ x0, y ], [ door[ 0 ], y ], [ door[ 0 ], 1.98 ], [ door[ 1 ], 1.98 ], [ door[ 1 ], y ], [ x1, y ], [ x1, 2.0 ], [ x0, 2.0 ] ] : [ [ x0, y ], [ x1, y ], [ x1, 2.0 ], [ x0, 2.0 ] ];
-		kit.add( 'cabin', wallZ( out, [], z, 0.04 ), CHERRY );
+		const NH = q.low ? 3 : 6;
+		const edge = ( s ) => {
+
+			const pts = [];
+			for ( let k = 0; k <= NH; k ++ ) {
+
+				const h = lerp( y, 2.0, k / NH ), x = linerX( L, z, h );
+				pts.push( [ s * x, Math.min( h, ceilingY( L, x, z ) ) ] );
+
+			}
+
+			return pts;
+
+		};
+
+		const port = edge( 1 ), star = edge( - 1 ).reverse();
+		// (round from the door's foot, by port, over the top and down by starboard: the door a notch up from the sole)
+		const outline = door
+			? [ [ door[ 1 ], y ], ...port, ...[ [ 0, ceilingY( L, 0, z ) ] ], ...star, [ door[ 0 ], y ], [ door[ 0 ], 1.92 ], [ door[ 1 ], 1.92 ] ]
+			: [ ...port, [ 0, ceilingY( L, 0, z ) ], ...star ];
+		kit.add( 'cabin', wallZ( outline, [], z, 0.04 ), CHERRY );
 
 	};
 
-	const wallS = ( x, z0, z1, door = null ) => {
+	const wallS = ( x, z0, z1, door = null, top = 2.0 ) => {
 
-		const out = door ? [ [ z0, y ], [ door[ 0 ], y ], [ door[ 0 ], 1.98 ], [ door[ 1 ], 1.98 ], [ door[ 1 ], y ], [ z1, y ], [ z1, 2.0 ], [ z0, 2.0 ] ] : [ [ z0, y ], [ z1, y ], [ z1, 2.0 ], [ z0, 2.0 ] ];
+		const out = door ? [ [ z0, y ], [ door[ 0 ], y ], [ door[ 0 ], 1.92 ], [ door[ 1 ], 1.92 ], [ door[ 1 ], y ], [ z1, y ], [ z1, top ], [ z0, top ] ] : [ [ z0, y ], [ z1, y ], [ z1, top ], [ z0, top ] ];
 		kit.add( 'cabin', slab( out, [], ( u, v, side ) => V( x + ( side ? 0.04 : 0 ), v, u ) ), CHERRY );
 
 	};
 
-	// the passage: either side of it the bunk room (port) and the head (starboard), doors at their forward ends
-	wallS( 0.48, zA, 3.45, [ 2.45, 3.1 ] );
-	wallS( - 0.46, zA, 3.45, [ 2.45, 3.1 ] );
-	wall( zA + 0.01, - 2.2, - 0.42 );
-	wall( zA + 0.01, 0.48, 2.2 );
+	// a plate following her side: x0 out to her liner (less margin) at height h, z0 to z1. What's built against her sides
+	const toSide = ( x0, h, z0, z1, thick = 0.06, margin = 0.01 ) => {
+
+		const out = [], n = q.low ? 3 : 7;
+		for ( let i = 0; i <= n; i ++ ) {
+
+			const z = lerp( z0, z1, i / n );
+			out.push( [ Math.max( x0 + 0.02, linerX( L, z, h ) - margin ), z ] );
+
+		}
+
+		out.push( [ x0, z1 ], [ x0, z0 ] );
+		return plate( out, [], h, thick );
+
+	};
+
+	// the passage: its walls, carried up over the stairs to its own higher ceiling; the bunk room to port and the head to starboard, doors at their forward ends
+	wallS( 0.48, zA, 3.45, [ 2.45, 3.1 ], PASSAGE_TOP );
+	wallS( - 0.46, zA, 3.45, [ 2.45, 3.1 ], PASSAGE_TOP );
+	kit.add( 'cabin', plate( [ [ - 0.46, zA ], [ 0.48, zA ], [ 0.48, 3.45 ], [ - 0.46, 3.45 ] ], [], PASSAGE_TOP, 0.02 ), { color: 0xf1ecdf, rough: 0.8 } );
+	// and across its forward end, up to that ceiling, over the stateroom's door
+	kit.add( 'cabin', wallZ( [ [ - 0.46, 1.92 ], [ 0.48, 1.92 ], [ 0.48, PASSAGE_TOP ], [ - 0.46, PASSAGE_TOP ] ], [], 3.45, 0.04 ), CHERRY );
+	bulkhead( zA + 0.01, [ - 0.42, 0.48 ] );
 	// the stateroom's bulkhead, its door
-	wall( 3.45, - 2.0, 2.0, [ - 0.36, 0.42 ] );
+	bulkhead( 3.45, [ - 0.36, 0.42 ] );
 
 	// the bunk room: one over the other along her side, as in the photographs, cherry fiddles, a pillow at each head
 	const bx0 = 0.56, bzA = 1.68, bzF = 3.38;
 	for ( const [ h, fid ] of [ [ y + 0.48, 0.13 ], [ y + 1.22, 0.14 ] ] ) {
 
-		const xo = linerX( L, 2.5, h ) + 0.01;
-		kit.add( 'cabin', bx( bx0, h - 0.06, bzA, xo, h, bzF ), CHERRY );
-		kit.add( 'cabin', cushion( bx0 + 0.02, h, bzA + 0.02, xo - 0.02, h + 0.13, bzF - 0.02, 0.05 ), SHEET );
+		kit.add( 'cabin', toSide( bx0, h, bzA, bzF ), CHERRY );
+		kit.add( 'cabin', toSide( bx0 + 0.02, h + 0.13, bzA + 0.02, bzF - 0.02, 0.13, 0.03 ), SHEET );
 		kit.add( 'cabin', bx( bx0 - 0.02, h - 0.06, bzA, bx0 + 0.02, h + fid + 0.05, bzF ), CHERRY );
-		kit.add( 'cabin', cushion( bx0 + 0.1, h + 0.12, bzA + 0.05, xo - 0.08, h + 0.24, bzA + 0.45, 0.05 ), { color: 0xcbb596, rough: 0.9 } );
+		kit.add( 'cabin', cushion( bx0 + 0.1, h + 0.12, bzA + 0.05, bx0 + 1.05, h + 0.24, bzA + 0.45, 0.05 ), { color: 0xcbb596, rough: 0.9 } );
 
 	}
 
-	kit.add( 'cabin', bx( bx0, y, bzA, linerX( L, 2.5, y ) + 0.01, y + 0.42, bzF ), CHERRY );
+	// (the drawers under the lower one)
+	kit.add( 'cabin', bx( bx0, y, bzA, bx0 + 0.02, y + 0.42, bzF ), CHERRY );
 
 	// the head to starboard: the vanity, the sink, the mirror, the shower's glass
-	const xHw = - linerX( L, 2.5, 1 );
 	kit.add( 'cabin', bx( - 1.25, y, 1.65, - 0.5, y + 0.8, 2.25 ), CHERRY );
 	kit.add( 'cabin', bx( - 1.28, y + 0.8, 1.63, - 0.5, y + 0.84, 2.27 ), COUNTER );
 	kit.add( 'cabin', sphere( 0.16, q.low ? 8 : 16, q.low ? 3 : 6, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2 ).translate( - 0.88, y + 0.83, 1.95 ), { color: 0xf3f1ea, rough: 0.2 } );
 	kit.add( 'cabin', bx( - 1.25, y + 1.05, 1.59, - 0.52, y + 1.72, 1.6 ), { color: 0x9db2b8, rough: 0.05, metal: 0.9 } );
-	kit.add( 'cabin', bx( xHw + 0.02, y, 2.55, - 0.5, y + 0.05, 3.4 ), COUNTER );
+	const xHw = Math.min( linerX( L, 3.4, y ), linerX( L, 2.55, y ) ) - 0.02;
+	kit.add( 'cabin', bx( - xHw, y, 2.55, - 0.5, y + 0.05, 3.4 ), COUNTER );
 	kit.add( 'cabin', bx( - 1.1, y, 2.45, - 0.5, y + 0.42, 2.48 ), COUNTER );
 	kit.add( 'cabin', rbx( - 0.92, y, 3.0, - 0.55, y + 0.44, 3.4, 0.08 ), { color: 0xf3f1ea, rough: 0.25 } );
 
-	// the stateroom: the island berth with its pedestal, a headboard, lockers either side
-	const xB = 0.82, zB0 = 3.95, zB1 = 5.1;
-	kit.add( 'cabin', bx( - xB, y, zB0, xB, y + 0.42, zB1 ), CHERRY );
-	kit.add( 'cabin', cushion( - xB - 0.02, y + 0.42, zB0 - 0.04, xB + 0.02, y + 0.64, zB1, 0.08 ), { color: 0xd9dadc, rough: 0.95 } );
+	// the stateroom: the island berth, its foot shaped to the bow, a headboard, lockers either side of the door
+	const xB = 0.82, zB0 = 3.95, zB1 = 5.1, N2 = q.low ? 4 : 8;
+	const berth = ( h, thick, m ) => {
+
+		const out = [];
+		for ( let i = 0; i <= N2; i ++ ) {
+
+			const z = lerp( zB0, zB1, i / N2 );
+			out.push( [ Math.min( xB + m, linerX( L, z, h ) - 0.01 ), z ] );
+
+		}
+
+		for ( let i = N2; i >= 0; i -- ) {
+
+			const z = lerp( zB0, zB1, i / N2 );
+			out.push( [ - Math.min( xB + m, linerX( L, z, h ) - 0.01 ), z ] );
+
+		}
+
+		return plate( out, [], h, thick );
+
+	};
+
+	kit.add( 'cabin', berth( y + 0.42, 0.42, 0 ), CHERRY );
+	kit.add( 'cabin', berth( y + 0.64, 0.22, 0.02 ), { color: 0xd9dadc, rough: 0.95 } );
 	for ( const s of [ 1, - 1 ] ) {
 
-		kit.add( 'cabin', cushion( s * 0.42 - 0.3, y + 0.62, zB1 - 0.42, s * 0.42 + 0.3, y + 0.78, zB1 - 0.08, 0.06 ), { color: 0xf2f1ee, rough: 0.9 } );
-		const lock = bx( Math.min( s * 1.3, s * 1.62 ), y, 3.5, Math.max( s * 1.3, s * 1.62 ), 1.96, 3.86 );
-		kit.add( 'cabin', lock, CHERRY );
+		kit.add( 'cabin', cushion( s * 0.42 - 0.3, y + 0.62, zB1 - 0.46, s * 0.42 + 0.3, y + 0.78, zB1 - 0.12, 0.06 ), { color: 0xf2f1ee, rough: 0.9 } );
+		kit.add( 'cabin', bx( Math.min( s * 0.95, s * 1.34 ), y, 3.5, Math.max( s * 0.95, s * 1.34 ), ceilingY( L, 1.34, 3.86 ) - 0.02, 3.86 ), CHERRY );
 
 	}
 
