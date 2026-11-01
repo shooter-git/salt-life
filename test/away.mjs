@@ -341,7 +341,10 @@ const group = () => {
 
 };
 const seaAt = ( h ) => ( { heightAt: ( x, z ) => h( x, z ) } );
-const copy = () => ( { visible: true, position: new Vector3(), quaternion: new Quaternion(), userData: { lamps: { set() {}, removeLight() {}, dispose() {} } } } );
+// ((M16) a boat as the copies have her: a stem head 4 m forward)
+const hers = { boardPoint: new Vector3( 0, 1, - 2 ), lines: { sheerY: () => 1.2, sheerZ: () => 4.15 } };
+const copy = () => ( { visible: true, position: new Vector3(), quaternion: new Quaternion(), userData: { type: 'lobster', gen: 0, model: hers, lamps: { set() {}, removeLight() {}, dispose() {} } } } );
+const copies = () => ( { types: new Map( [ [ 'lobster', { model: hers } ] ] ), gen: () => 0, make: copy, drop() {}, standIn: copy, model: () => hers, want: () => ( { model: hers } ) } );
 const rodeCopy = () => ( { visible: false, material: { dispose() {}, uniforms: { lineA: { value: new Vector3() }, lineB: { value: new Vector3() }, lineCtl: { value: new Vector3() } } } } );
 const REACH = RODE_SLACK + 4; // (a stem head 4 m forward)
 const player = ( g, id, { host = false, tier = 'high', waves = seaAt( () => 0.5 ) } = {} ) => {
@@ -360,7 +363,7 @@ const player = ( g, id, { host = false, tier = 'high', waves = seaAt( () => 0.5 
 	t._boatSavedAt = 0;
 	t._keepT = 0;
 	t._owed = {};
-	t._boatCopy = copy;
+	t.copies = copies();
 	t.app = {
 		_started: true, waves, scene: { add() {}, remove() {} }, localLights: null, terrainData: { heightAt: () => - 9 },
 		settings: { day: 30, timeOfDay: 10, weather: null, weatherSince: 0 }, weather: { news: null },

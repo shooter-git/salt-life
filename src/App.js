@@ -1893,7 +1893,7 @@ export class App {
 		const ride = p.riding && this.together ? this.together.ridden() : null;
 		this.dashOn( ride ? ride.group : null );
 		// (on the low tier others' boats have no dash to show it on)
-		if ( ride && g && p.mode === 'deck' && this.tier !== 'low' ) return this.instruments.update( dt, this.riddenReading( ride, dt ) );
+		if ( ride && g && ( p.mode === 'deck' || p.mode === 'boat' ) && this.tier !== 'low' ) return this.instruments.update( dt, this.riddenReading( ride, dt ) );
 		// ((M16) nor is there anything to read them on in a kayak)
 		if ( ! g || p.riding || ( p.mode !== 'boat' && p.mode !== 'deck' ) || ! this.boat.materials.display ) return this.instruments.update( dt, null );
 		const r = this._reading || ( this._reading = {} ), f = b.forward( _fwdB ), x = b.position.x, z = b.position.z;
@@ -1939,7 +1939,7 @@ export class App {
 
 		const p = this.player, c = ride.cur, d = c.dash, r = this._ridden || ( this._ridden = {} );
 		const f = p.boat.forward( _fwdB ), x = p.boat.position.x, z = p.boat.position.z, map = this.game.minimap;
-		r.engine = c.crank ? 'cranking' : c.mode === 'helm' && c.rpm > 0.02 ? 'running' : 'off';
+		r.engine = c.crank ? 'cranking' : c.rpm > 0.02 ? 'running' : 'off';
 		r.rpm = c.rpm;
 		r.speed = ride.speed;
 		r.heading = Math.atan2( f.x, - f.z );
@@ -2497,9 +2497,9 @@ export class App {
 		}
 
 		if ( this.wildlife && this.wildlife.birds ) this.wildlife.birds.boatModel = model;
-		if ( this.together ) this.together.boatChanged();
+		const kept = this.together && this.together.boatChanged( old );
 		this.game.boatChanged();
-		old.dispose();
+		if ( ! kept ) old.dispose();
 		return true;
 
 	}

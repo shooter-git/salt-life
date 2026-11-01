@@ -4,7 +4,7 @@
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const ROOT = join( dirname( fileURLToPath( import.meta.url ) ), '../..' );
-const { chromium } = await import( join( ROOT, '../all-the-spaces/node_modules/playwright/index.mjs' ) );
+const { chromium } = await import( join( process.env.ALL_THE_SPACES || join( ROOT, '../all-the-spaces' ), 'node_modules/playwright/index.mjs' ) );
 const [ out = 'qa-output', PORT = '5189' ] = process.argv.slice( 2 );
 const browser = await chromium.launch( { args: [ '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required' ] } );
 const ctx = await browser.newContext( { viewport: { width: 640, height: 360 } } );
@@ -49,7 +49,7 @@ const open = async ( name ) => {
 
 	}
 
-	await f().evaluate( () => { const g = window.__app.game; if ( g.guide ) { g.guide.seen.intro = true; if ( g.guide.open ) g.guide.close(); g.guide._wait = - 1; } } );
+	await f().evaluate( () => { const g = window.__app.game; if ( g.guide ) { g.guide.seen.intro = true; if ( g.guide.open ) g.guide.close(); g.guide._wait = - 1; } window.__app.together.stale = 120; /* (two games on the CPU, seconds between poses) */ } );
 	return { page, game: f() };
 
 };

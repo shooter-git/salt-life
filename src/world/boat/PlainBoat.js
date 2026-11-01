@@ -1,4 +1,4 @@
-import { BufferGeometry, Float32BufferAttribute, Mesh, MeshStandardMaterial, Vector3 } from '../../engine/index.js';
+import { BufferGeometry, DoubleSide, Float32BufferAttribute, Mesh, MeshStandardMaterial, Vector3 } from '../../engine/index.js';
 import { HullLines } from './HullLines.js';
 import { Vessel } from './Vessel.js';
 import { LOBSTER_HANDLING } from './Handling.js';
@@ -62,7 +62,7 @@ export class PlainBoat extends Vessel {
 		super( id );
 		const sz = length / 8.2, sx = beam / 2.9, sy = depth, L = this.lines = stretchedLines( length, beam, depth );
 		this.handling = stretchedHandling( sx, sy, sz, engine );
-		const material = this.materials.hull = new MeshStandardMaterial( { color, roughness: 0.5, flatShading: true } );
+		const material = this.materials.hull = new MeshStandardMaterial( { color, roughness: 0.5, flatShading: true, side: DoubleSide } ); // (a single shell: its inside's seen from aboard)
 		const mesh = new Mesh( this._shell(), material );
 		mesh.name = 'boat-hull';
 		mesh.castShadow = mesh.receiveShadow = true;
@@ -84,6 +84,14 @@ export class PlainBoat extends Vessel {
 		this.wake = { quarterX: 0.5 * beam, quarterZ: - 0.24 * length, washZ: L.zAft - 0.3 };
 		this.lamps = { port: [ 0.3, L.sheerY( 0.5 ) + 1, 0 ], masthead: [ 0, L.sheerY( 0.5 ) + 1.5, 0 ], anchor: [ 0, L.sheerY( 0.5 ) + 1.55, 0 ], stern: [ 0, L.sheerY( 0 ) + 0.1, L.zAft - 0.05 ] };
 		this.bowWalk = L.zBow - 0.3;
+		// (a big boat's crew: where they'd be, a platform up where her tower's top would be and the chair aft)
+		if ( id === 'sportfisher' ) {
+
+			const top = L.deckY + 8, z = 0.05 * length;
+			this.colliders.push( { tag: 'tower', center: new Vector3( 0, top - 0.05, z ), half: new Vector3( 0.8, 0.05, 0.8 ), walkable: true, solid: false } );
+			this.stations = { tower: { x: 0, y: top, z, r: 1.2 }, chair: { x: 0, y, z: - 0.3 * length, r: 0.8, facing: Math.PI } };
+
+		}
 
 	}
 
@@ -124,7 +132,7 @@ export class PlainBoat extends Vessel {
 
 			const t0 = i / NT, t1 = ( i + 1 ) / NT, z0 = L.sheerZ( t0 ), z1 = L.sheerZ( t1 );
 			const w0 = L.halfBreadth( t0, y ), w1 = L.halfBreadth( t1, y );
-			tri( [ w0, y, z0 ], [ w1, y, z1 ], [ - w1, y, z1 ] ); tri( [ w0, y, z0 ], [ - w1, y, z1 ], [ - w0, y, z0 ] );
+			tri( [ w0, y, z0 ], [ - w1, y, z1 ], [ w1, y, z1 ] ); tri( [ w0, y, z0 ], [ - w0, y, z0 ], [ - w1, y, z1 ] );
 
 		}
 

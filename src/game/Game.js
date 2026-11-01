@@ -703,7 +703,7 @@ export class Game {
 		// the catch card's live fish portrait (or one queued thumbnail)
 		if ( this.hud && this.hud.portrait ) this.hud.portrait.update( dt );
 		if ( this.hud ) this.hud.update( {
-			fuel: aboard && this.state.stats.fuelL > 0 ? { litres: this.state.fuelL, tank: this.state.stats.fuelL } : null,
+			fuel: aboard && ! p.riding && this.state.stats.fuelL > 0 ? { litres: this.state.fuelL, tank: this.state.stats.fuelL } : null, // ((M16) yours, not hers)
 			// (M10) the hull once it's worn, and the bilge with water in it
 			hull: aboard && ! p.riding && this.hull.wear > 0.02 ? this.hull.wear : null,
 			bilge: aboard && ! p.riding && this.hull.bilge >= 1 ? this.hull.bilge : null,
@@ -897,7 +897,7 @@ export class Game {
 			this._bailing = inp.down( 'KeyE' );
 
 		} else this._bailing = false;
-		if ( p.mode === 'boat' && hull.engine === 'stalled' && p.prompt ) p.prompt = { key: p.prompt.key, text: `${ p.prompt.text }   ·   ${ this.keyName( 'W' ) }  crank her` };
+		if ( p.mode === 'boat' && ! p.riding && hull.engine === 'stalled' && p.prompt ) p.prompt = { key: p.prompt.key, text: `${ p.prompt.text }   ·   ${ this.keyName( 'W' ) }  crank her` };
 
 	}
 
@@ -1687,6 +1687,7 @@ export class Game {
 		this.rigs.leap( f, dt );
 		// ((M16) at the boat: lifted aboard, or shaken off)
 		if ( st === 'caught' && ! this.rigs.landedAtBoat( f ) ) st = 'shook';
+		if ( this.app.together ) this.app.together.backDown( f, dt ); // ((M16) someone else at the helm)
 		// the fish thrashes at the surface as each run starts
 		const au = this.app.audio;
 		if ( f.surge > 0.6 && ! f._splashed && au && au.fishSplash ) au.fishSplash( this.rod.bobber, 0.3 + 0.5 * Math.min( 1, f.kg / 8 ) );

@@ -17,9 +17,9 @@ realtime room does.
   - Each player's own save is kept in memory, one per window. A window opened again starts with a fresh save, like a new player.
   - The group's save (the `shared` scope: the island's records, the week's order) is the browser's (IndexedDB), so every window sees the same and it lasts. A save made on a stale read is refused, as the app's server does, so `update` retries; each check and write is one transaction, so two windows saving at once can't both win. `?group=` names the group (`island` by default); a new name starts afresh.
 - **Leaving:** closing a window leaves the room. From the console, `__host.leave()` leaves without closing the window.
-- **Options:** `?id=`, `?name=`, `?color=`, `?tier=low|mid|high`, `?locale=en-GB`, `?group=`, and `?src=` for the game (`/` by default).
+- **Options:** `?id=`, `?name=`, `?color=`, `?tier=low|mid|high`, `?locale=en-GB`, `?group=`, and `?src=` for the game (`/` by default). To start someone in another boat: `&src=/%3Fboat%3Dconsole`.
 - **What it doesn't stand in for:** voice, connectors, the app's menu and toasts (they go to the console), the app's limits on shared values, and its frame being on another origin.
 
-Run through, headless: `node tools/two-players/away.mjs` (the away boats by the bay) and `far.mjs` (far out), each two real games, some minutes on the CPU.
+Run through, headless: `node tools/two-players/away.mjs` (the away boats by the bay), `far.mjs` (far out) and `boats.mjs` (each in a different boat: her copy and stand-in, the dock's spare berths, riding along and at someone else's helm, a crew's jobs, specks past the fog), each two real games, some minutes on the CPU. `boats.mjs` takes `[dir] [port] [tier]`; from a worktree, set `ALL_THE_SPACES` to that checkout.
 
 For the real thing, see All the Spaces' `docs/development.md`.

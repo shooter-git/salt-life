@@ -98,7 +98,7 @@ export class Figure {
 	}
 
 	// limbs and body for this frame: mode, speed (m/s over the ground or through the water), rod
-	pose( { mode, speed = 0, rod = false }, dt ) {
+	pose( { mode, speed = 0, rod = false, sit = 0 }, dt ) {
 
 		this._t += dt;
 		const swimming = mode === 'swim';
@@ -124,6 +124,14 @@ export class Figure {
 			const s = Math.sin( this._phase ) * 0.5 * Math.min( k, 1.2 );
 			const breathe = Math.sin( this._t * 1.7 ) * 0.02;
 			L.set( s, - s, - s * 0.7 + 0.05 + breathe, rod ? 0.85 : s * 0.7 + 0.05 + breathe );
+
+		}
+
+		// ((M16) sitting: both legs forward, as far as a stiff one goes)
+		if ( sit > 0 ) {
+
+			L.x = Math.max( L.x, sit * 1.45 );
+			L.y = Math.max( L.y, sit * 1.45 );
 
 		}
 

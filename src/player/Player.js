@@ -707,7 +707,7 @@ export class Player {
 	// ------------------------------------------------------------------ boat
 
 	// (Salt Life) aboard someone else's boat (together/Together.js: a stand-in with the boat's shape and
-	// their boat's pose): on its deck while they drive; you can't take their helm
+	// their boat's pose): on its deck while they drive; (M16) their helm yours if they're aboard and away from it
 	ride( boat ) {
 
 		this.boat = boat;
@@ -1010,7 +1010,7 @@ export class Player {
 		// prompts: take the helm, or step ashore
 		const hx = b.model.helm.x, hz = b.model.helm.z;
 		// ((M16) on a boat of several decks, on the helm's deck)
-		const nearHelm = Math.hypot( p.x - hx, p.z - hz ) < HELM_REACH && Math.abs( p.y - ( b.model.helm.y ?? p.y ) ) < 1.2 && ! this.busy && ! this.riding;
+		const nearHelm = Math.hypot( p.x - hx, p.z - hz ) < HELM_REACH && Math.abs( p.y - ( b.model.helm.y ?? p.y ) ) < 1.2 && ! this.busy && ( ! this.riding || b.helmFree ); // ((M16) a crew's)
 		const ladder = ! this.busy && ! nearHelm && b.model.ladderAt( p );
 		this._ashoreT -= dt;
 		if ( this._ashoreT <= 0 ) {
@@ -1121,7 +1121,7 @@ export class Player {
 		// ((M16) lines out: forward's held at the baits' speed unless you're running: Rigs' trollAt, knots)
 		if ( this.trollAt > 0 && throttle > 0 && ! inp.down( 'ShiftLeft' ) ) throttle = Math.min( throttle, THREE.MathUtils.clamp( 0.3 + ( this.trollAt - b.speed * 1.944 ) * 0.2, 0, 1 ) );
 		b.setInput( throttle, steer, dt );
-		this.prompt = { key: 'E', text: this.helmHeld ? 'Close the radio' : 'Leave helm   ·   V  camera   ·   R  radio' };
+		this.prompt = { key: 'E', text: this.helmHeld ? 'Close the radio' : this.riding ? 'Leave helm   ·   V  camera' : 'Leave helm   ·   V  camera   ·   R  radio' };
 
 		// keep the player attached (for audio / queries)
 		b.toWorld( b.model.helmEye, this.position );
