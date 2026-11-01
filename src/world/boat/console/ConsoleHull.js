@@ -264,12 +264,14 @@ function bow( kit, L ) {
 	}
 
 	// the riser across the bow, its speakers facing aft; the foredeck, cambered, from its top to the stem
-	const R = DECK.riser, wr = hullAt( L, B.z1, under ) - 0.03, wf = hullAt( L, R.z1, under ) - 0.03;
-	const riser = solid( softCorners( [ [ - wr, B.z1 - 0.005 ], [ wr, B.z1 - 0.005 ], [ wf, R.z1 ], [ - wf, R.z1 ] ], 0.03 ), under, R.y, 0.02, ( u, v, d ) => V( u, d, v ) );
-	kit.add( 'hull', riser, GEL );
+	// (its sides inside her at its foot: forward of about z 3.3 the stem's gone from under y 0.5)
+	const R = DECK.riser, yr = B.y - 0.07, yb = 0.8, face = hullAt( L, B.z1 + 0.06, yr ) - 0.03;
+	kit.add( 'hull', solid( rounded( - face, yr, face, R.y, 0.02 ), B.z1, B.z1 + 0.06, 0.012, ( u, v, d ) => V( u, v, d ) ), GEL );
+	const wr = hullAt( L, B.z1, yb ) - 0.03, wf = hullAt( L, R.z1, yb ) - 0.03;
+	kit.add( 'hull', solid( [ [ - wr, B.z1 + 0.02 ], [ wr, B.z1 + 0.02 ], [ wf, R.z1 ], [ - wf, R.z1 ] ], yb, R.y, 0.015, ( u, v, d ) => V( u, d, v ), { rings: 1 } ), GEL );
 	for ( const s of [ 1, - 1 ] ) {
 
-		kit.add( 'fittings', cylinder( 0.058, 0.066, 0.012, 16 ).rotateX( Math.PI / 2 ).translate( s * 0.21, ( under + R.y ) / 2 + 0.02, B.z1 - 0.008 ), { color: 0x8d9095, rough: 0.5 } );
+		kit.add( 'fittings', cylinder( 0.058, 0.066, 0.012, 16 ).rotateX( Math.PI / 2 ).translate( s * 0.21, ( yr + R.y ) / 2 + 0.02, B.z1 - 0.008 ), { color: 0x8d9095, rough: 0.5 } );
 
 	}
 
@@ -300,8 +302,16 @@ function bow( kit, L ) {
 
 	kit.add( 'hull', g, GEL );
 	// the wall from the riser's top up to the foredeck, and the riser's top as a step
-	const yF = L.sheerY( tF ) + 0.03, zw = R.z1 + 0.14, wt = hullAt( L, zw, R.y - 0.05 ) - 0.03, wu = hullAt( L, zw, yF - 0.04 ) - 0.03;
-	const wall = solid( softCorners( [ [ - wt, R.y - 0.05 ], [ wt, R.y - 0.05 ], [ wu, yF ], [ - wu, yF ] ], 0.02 ), R.z1 - 0.02, zw, 0.012, ( u, v, d ) => V( u, v, d ) );
+	const yF = L.sheerY( tF ) + 0.03, zw = R.z1 + 0.14, side = [];
+	// (following her flare, as a straight side would come through it)
+	for ( let i = 0; i <= 5; i ++ ) {
+
+		const y = lerp( R.y - 0.05, yF, i / 5 );
+		side.push( [ hullAt( L, zw, y ) - 0.03, y ] );
+
+	}
+
+	const wall = solid( [ ...side.map( ( p ) => [ - p[ 0 ], p[ 1 ] ] ), ...side.slice().reverse() ], R.z1 - 0.02, zw, 0.008, ( u, v, d ) => V( u, v, d ), { rings: 1 } );
 	kit.add( 'hull', wall, GEL );
 	// the anchor locker's lid, the stem's roller and anchor
 	const zh = 3.72, yh = L.sheerY( L.tAtSheerZ( zh ) ) + 0.05;

@@ -16,6 +16,7 @@ OUT = os.path.join( HERE, '..', '..', 'src', 'world', 'boat', 'console', 'Moulde
 PARTS = [
 	( 'cowl', 0xe8ebec, 0.28, 0 ),
 	( 'chaps', 0xc9cdcf, 0.4, 0 ),
+	( 'seam', 0x3a3e42, 0.5, 0 ),
 	( 'leg', 0xdfe2e3, 0.38, 0 ),
 	( 'metal', 0xc4c8cc, 0.25, 1 ),
 	( 'vinyl', 0xece6d6, 0.62, 0 ),
@@ -147,9 +148,14 @@ def outboard():
 	hs = [ i / 14 for i in range( 11 ) ] + [ 0.8, 0.85, 0.89, 0.93, 0.96, 0.98, 0.995 ]
 	# (extra rings about the split line)
 	hs = sorted( set( hs + [ 0.31, 0.33, 0.34, 0.35, 0.37 ] ) )
-	rows = [ cowl_ring( h, NC ) for h in hs ]
-	first = B.grid( rows, PART[ 'cowl' ], closed = True, flip = True )
-	B.cap( first + ( len( rows ) - 1 ) * NC, NC, ( 0, 0.72, - 0.25 ), PART[ 'cowl' ], flip = True )
+	# (the cowl in three: under the split line, the line itself dark, over it)
+	lower = [ cowl_ring( h, NC ) for h in hs if h <= 0.33 ]
+	band = [ cowl_ring( h, NC ) for h in hs if 0.33 <= h <= 0.35 ]
+	upper = [ cowl_ring( h, NC ) for h in hs if h >= 0.35 ]
+	B.grid( lower, PART[ 'cowl' ], closed = True, flip = True )
+	B.grid( band, PART[ 'seam' ], closed = True, flip = True )
+	first = B.grid( upper, PART[ 'cowl' ], closed = True, flip = True )
+	B.cap( first + ( len( upper ) - 1 ) * NC, NC, ( 0, 0.72, - 0.25 ), PART[ 'cowl' ], flip = True )
 
 	# the chaps under the cowl, dark: from the cowl's seat in to the leg's head
 	rows = []
