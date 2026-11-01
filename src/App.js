@@ -2411,7 +2411,7 @@ export class App {
 		this.boatLamps.removeLight( lights );
 		this.boatLamps.group.removeFromParent();
 		this.boatLamps.dispose();
-		parent.remove( old.group );
+		if ( parent ) parent.remove( old.group );
 		if ( this.nearDetail ) {
 
 			const gone = new Set( Object.values( old.meshes ) );
@@ -2420,7 +2420,16 @@ export class App {
 		}
 
 		this.boat = model;
-		parent.add( model.group );
+		// (on a CPU's WebGL she may still be held out of the scene, just after the start: the new boat waits in her place)
+		const held = this._lateHeld && this._lateHeld.find( ( h ) => h[ 0 ] === old.group );
+		for ( const group of this._late || [] ) if ( group.includes( old.group ) ) group[ group.indexOf( old.group ) ] = model.group;
+		if ( held ) {
+
+			held[ 0 ] = model.group;
+			model.group.visible = false;
+
+		} else ( parent || this.scene ).add( model.group );
+
 		model.group.traverse( ( o ) => {
 
 			if ( o.isMesh ) o.castShadow = o.castShadow && this.tier !== 'low';
