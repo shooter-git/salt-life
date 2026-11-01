@@ -51,6 +51,9 @@ export const SPECTRUM = [
 export const SWELL_PERIOD = 9;
 const kOf = ( T ) => ( 2 * Math.PI / T ) ** 2 / GRAVITY;
 const COUNT = { low: 4, mid: 6, high: 8 };
+// (M16) a blow's long waves on the low tier, which has but two: the second shorter, and further off the first's way, so a
+// gale's sea on a phone is a sea and not one long hill and another (its period's share, its turn, rad)
+const LOW_BLOW = { T: 0.6, rot: 0.55 };
 const TAU = Math.PI * 2;
 const STEEPNESS = 0.55; // sum of the waves' crest sharpening (< 1: no loops)
 // a wave's crest sharpening (its horizontal travel), at most its share of STEEPNESS
@@ -307,18 +310,20 @@ vec3 waveDisplacement( vec2 x0, float fade, out vec3 normal ) { return waveDispl
 			if ( w.from !== 's' ) return;
 			const turn = first ? 0 : west;
 			first = false;
-			let angle = swell + SPECTRUM[ i ].rot + turn * this._westTurn, period = south + ( westPeriod - south ) * turn;
+			let angle = swell + SPECTRUM[ i ].rot + turn * this._westTurn, period = south + ( westPeriod - south ) * turn, share = SPECTRUM[ i ].T;
 			// ((M16) and as far as a blow's own sea has outgrown it, down the wind, the shorter way round, at its period)
 			if ( own > 0 ) {
 
-				const to = this.windAngle + SPECTRUM[ i ].rot - angle;
+				const second = n === COUNT.low && i === 1;
+				const to = this.windAngle + ( second ? LOW_BLOW.rot : SPECTRUM[ i ].rot ) - angle;
 				angle += own * Math.atan2( Math.sin( to ), Math.cos( to ) );
 				period += ( ownPeriod - period ) * own;
+				if ( second ) share += ( LOW_BLOW.T - share ) * own;
 
 			}
 
 			const dx = Math.cos( angle ), dz = Math.sin( angle );
-			const k = kOf( SPECTRUM[ i ].T * period ), omega = Math.sqrt( GRAVITY * k );
+			const k = kOf( share * period ), omega = Math.sqrt( GRAVITY * k );
 			// (k ( d . at ) - omega t + phase, the same before and after)
 			w.phase = ( w.phase + w.k * ( w.dx * at.x + w.dz * at.z ) - k * ( dx * at.x + dz * at.z ) - ( w.omega - omega ) * t ) % TAU;
 			w.dx = dx;
