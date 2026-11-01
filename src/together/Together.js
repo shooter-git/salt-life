@@ -1887,6 +1887,7 @@ export class Together {
 		// their boat, the boat she is
 		const has = !! c && !! c.boat, drawn = has ? c.drawn || c.boat : null;
 		const boat = this._showBoat( o, has ? c.boatId : o.boat ? o.boat.userData.type : 'lobster', drawn, has && ( boatShown || boatSeen ), boatShown );
+		if ( boat && has ) this.copies.fit( boat, { twin: c.twin } );
 		if ( boat ) {
 
 			boat.userData.lamps.set( { underway: c.mode === 'helm' || ! c.anchored, spot: c.spot } );
