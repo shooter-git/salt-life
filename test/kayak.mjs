@@ -312,8 +312,8 @@ const yawTurned = ( ctl, seconds, th, st ) => {
 {
 
 	ok( capsizeHeel( true, false ) > capsizeHeel( false, false ) && capsizeHeel( false, false ) > capsizeHeel( false, true ), 'a blade in the water holds her longest, a rod in your hands least' );
-	ok( ! breakerCapsizes( 0.6, 0 ) && breakerCapsizes( 1.1, 0 ), 'a metre of broken water on the beam rolls her' );
-	ok( ! breakerCapsizes( 1.1, 1 ) && breakerCapsizes( 1.8, 1 ), 'she takes more on the bow' );
+	ok( ! breakerCapsizes( 2.8, 0 ) && breakerCapsizes( 3.2, 0 ), 'the biggest of a fair day\'s breakers doesn\'t roll her, on the beam; one past it does' );
+	ok( ! breakerCapsizes( 3.2, 1 ) && breakerCapsizes( 4.4, 1 ), 'she takes more on the bow' );
 	ok( spillShare( true ) < spillShare( false ) && climbSeconds( true ) < climbSeconds( false ), 'a life jacket costs you less of it' );
 	let s = 0;
 	for ( let i = 0; i < 90; i ++ ) s = soakStep( s, 1, { rain: 1 } );

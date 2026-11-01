@@ -44,7 +44,9 @@ You're drawn in her: a Rocketbox islander, your chosen look, posed by `SeatPose.
 
 **Soaked.** `Capsize.js` `soakStep`, `player.soak` 0..1. A downpour soaks you in about a minute and a half, a sea over her deck in moments, spray once the wind's over 12 m/s; it dries in about a quarter of an hour. From your own eyes it shows as drops on the view (`Drops.js`, an element over the canvas, nothing drawn). She's self-bailing: rain and seas leave by her scuppers, so she has no bilge to bail (`handling.plastic`).
 
-**Over.** Her gunwale's 27 degrees off the water, and past it she's over all at once. What puts her there is her own rigid body: the wind on someone sitting up on the water, heeling her, and the sea rolling her. A steady beam wind holds her at 3 degrees at 12 m/s and 6 at 16; about 20 m/s, a squall's gust, she's past holding. Bow to it, the same wind's 7 degrees. So in a squall you turn her into it, as you're told to in a real one.
+**Over.** Her gunwale's 27 degrees off the water, and past it she's over all at once. What puts her there is her own rigid body: the wind on someone sitting up on the water, heeling her, and the sea rolling her. Sat up in her, leaning against it, a steady beam wind holds her at 3 degrees at 12 m/s and 6 at 16; at 20 m/s, a squall's gust, she's past holding. Bow to it, the same wind's 7 degrees. So in a squall you turn her into it, as you're told to in a real one.
+
+The game's own waves (`ocean/Waves.js`, fed to her in `test/kayak.mjs`), in the open: calm, fair and breezy days never put her over, even sat fishing beam-on (17 degrees at most in a breeze, 11 m/s). A blustery day's 15 m/s does, now and then. In a gale or a thunderstorm's squall she goes over within the minute beam-on, and head to it you can't make way against 20 m/s. Close in the swell fades over the shallows, so running for the flats is what saves you. Back aboard, you've six seconds' grace.
 
 | | Heel she goes over at |
 |---|---|
@@ -52,7 +54,7 @@ You're drawn in her: a Rocketbox islander, your chosen look, posed by `SeatPose.
 | Sat there | 33 |
 | Rod or net in your hands | 28 |
 
-A breaking wave of about a metre on the beam rolls her, 1.6 m on the bow.
+A breaker rolls her at about the height that tumbles a swimmer: 2.9 m on the beam, 4.2 m on the bow, by the game's trough-to-crest figure over the bar (a fair day's typically 1.6 m, at most 2.8 m). Punching out through a fair day's surf bow on is fine; a blow's surf isn't.
 
 Over, she's turned keel up (the `body` group: the rigid body under it stays upright) and you're in the water. Some of the cooler goes (half, with a life jacket a quarter), and you lose some breath. Swim to her: E rights her, E again climbs back on (2.3 s; 1.4 s with a life jacket). She drifts downwind at about 1 m/s meanwhile, so don't dawdle: you swim 1.5, 2.5 flat out.
 
@@ -68,6 +70,10 @@ She's kept on the sand, not at the dock: `BoatController` asks her `atHome` at t
 - **No engine:** `handling.engine` is null. `Game` doesn't burn fuel or crank; `Hull` gets `driven: false`, and with `handling.plastic` no rain, wear or storm. No horn, searchlight or radio on her; the rod's touch button stays the rod's.
 - **Together:** `model.stroke.wire` is the paddle's pose to send, and setting it poses a copy; `seated` and `perch` as stream 5 asks.
 
+## Gear
+
+`fit( stats )`: what Marta sells for her shows, in her one mesh (its vertices folded to a point when it's not there, so no new draw): the crate in place of the small cooler when `holdKg` is over her 12, the finder's puck with `finder`, the anchor trolley with `anchorM` or `trolley`. `speedMul` shortens the stroke and widens the blade (the better paddle). `stats.lifeJacket` (the safety track) costs you less of a capsize.
+
 ## Budget
 
-Her own mesh and paddle: see the report on the merge. The figure in her is one more islander, as anyone else on the island is, and only while you're in her.
+Her own mesh and paddle: about 6,100 triangles and 2 draw calls, no assets. You in her, while you're in her and only then, are one more islander as anyone else on the island is: 7,400 to 10,300 triangles and 2 or 3 draw calls. So 13,500 to 16,400 in all against the stream's 12,000, and 4 or 5 draw calls; the lobster boat she replaces is 37,000 and 12. Her figure's look is the same file Together loads.

@@ -485,6 +485,7 @@ export class KayakModel extends Vessel {
 		const limit = capsizeHeel( !! this.stroke.kind && this.stroke.park === 0, p.handsFull || p.busy );
 		this._over = heel > limit ? this._over + dt : Math.max( 0, this._over - dt * 2 );
 		let over = this._over > 0.18;
+		if ( over ) this.overWhy = { heel, limit };
 		const q = ctl.query, x = ctl.position.x, z = ctl.position.z;
 		if ( ! over && q.breakerAt ) {
 
@@ -494,7 +495,12 @@ export class KayakModel extends Vessel {
 				const passed = this._crest !== null && br.n === this._crest + 1;
 				this._crest = br.n;
 				ctl.forward( _v );
-				if ( passed && br.b > TUMBLE_B && breakerCapsizes( br.H, Math.abs( _v.x * br.dx + _v.z * br.dz ) ) ) over = true;
+				if ( passed && br.b > TUMBLE_B && breakerCapsizes( br.H, Math.abs( _v.x * br.dx + _v.z * br.dz ) ) ) {
+
+					over = true;
+					this.overWhy = { H: br.H, b: br.b, face: Math.abs( _v.x * br.dx + _v.z * br.dz ) };
+
+				}
 
 			}
 

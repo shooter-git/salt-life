@@ -2,14 +2,15 @@
 //
 // A sit-on-top's a stable thing to sit on until her gunwale goes under, and then she's over all at once: her deck edge
 // is 27 degrees off the water at her waterline. A paddler in the water with a blade can hold her past that (a low
-// brace); someone sat with a rod in their hands can't quite reach it. A broken wave of about a metre on the beam rolls her
-// (surf-landing guides put the limit for a recreational sit-on-top about there), a little more than half as much again
-// with her bow to it. A life jacket doesn't stop any of it: you're quicker back aboard and lose less.
+// brace); someone sat with a rod in their hands can't quite reach it. A breaker rolls her at about the height that tumbles a
+// swimmer (ocean/ShoreWaves' TUMBLE_H: trough to crest as it stands up over the bar, a fair day's at most 2.8 m there and
+// 1.6 m typically): so almost never on a fair day, and half as much again with her bow to it. Punching out through a fair
+// day's surf bow on is what everyone does. A life jacket doesn't stop any of it: you're quicker back aboard and lose less.
 
 const DEG = Math.PI / 180;
 export const HEEL = { brace: 41 * DEG, idle: 33 * DEG, fishing: 28 * DEG };
 export const TUMBLE_B = 0.85; // how broken a breaker is, to count (Player's)
-const BEAM_H = 0.95, BOW_H = 1.6;
+const BEAM_H = 2.9, BOW_H = 4.2;
 
 // rad she can be heeled before she's over
 export const capsizeHeel = ( bracing, hands ) => ( hands ? HEEL.fishing : bracing ? HEEL.brace : HEEL.idle );
