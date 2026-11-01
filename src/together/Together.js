@@ -1993,8 +1993,8 @@ export class Together {
 		} else if ( deck && c.mode === 'helm' ) {
 
 			// (on the sole under her helm: its camera's eye is lower than a figure standing there)
-			const helm = M.helmEye;
-			_bp.set( helm.x, footY( M, helm.x, helm.z, helm.y - 1 ), helm.z ).applyQuaternion( deck.quat ).add( deck.pos );
+			const helm = M.helmEye, at = M.helm && M.helm.stand, hx = at ? at[ 0 ] : helm.x, hz = at ? at[ 1 ] : helm.z;
+			_bp.set( hx, footY( M, hx, hz, helm.y - 1 ), hz ).applyQuaternion( deck.quat ).add( deck.pos );
 			g.position.copy( _bp );
 			_bq.setFromAxisAngle( _up, c.yaw + Math.PI );
 			g.quaternion.copy( _bq );

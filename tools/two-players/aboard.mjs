@@ -127,6 +127,9 @@ await until( guest.game, `${ other } && ${ other }.cur` );
 await until( owner.game, `${ other } && ${ other }.cur` );
 console.log( `${ BOAT }: Robin's at ${ OWNER_FPS } fps, Sam (his own boat the ${ OWN }) at ${ GUEST_FPS }. Both in after ${ Math.round( ( Date.now() - t0 ) / 1000 ) } s` );
 const seated = await owner.game.evaluate( () => window.__app.boat.seated );
+// (all that can be bought for her: every area she has. Later, some of it not, for what's fitted)
+const OWNED = `async ( most ) => { const { UPGRADES } = await import( '/src/game/Gear.js' ); const a = window.__app, g = a.game, u = g.state.upgrades; for ( const [ k, t ] of Object.entries( UPGRADES ) ) if ( t.on === a.boat.id ) u[ k ] = most ? t.levels.length - 1 : 0; g.applyGear(); }`;
+await owner.game.evaluate( `( ${ OWNED } )( true )` );
 
 // ---- her owner aboard, at her berth
 await owner.game.evaluate( () => { const p = window.__app.player; if ( window.__app.boat.seated ) p.enterBoat(); else p.boardBoat(); } );
@@ -134,7 +137,7 @@ await until( guest.game, `${ other }.cur.mode === '${ seated ? 'helm' : 'deck' }
 await until( guest.game, `( () => { const o = ${ other }; return ( o.boat && o.boat.visible ) || ( o.stand && o.stand.visible ); } )()` );
 
 // the guest beside her boarding point, offered her, and E
-const beside = `( () => { const a = window.__app, o = ${ other }, c = o.cur, f = c.drawn || c.boat, t = a.together, b = o.theirBoat; if ( ! b ) { a.player.position.set( f.pos.x, Math.max( f.pos.y + 0.4, a.player.position.y ), f.pos.z + 2 ); return false; } const bp = b.model.boardPoint.clone().applyQuaternion( f.quat ).add( f.pos ); a.player.position.set( bp.x, bp.y + 0.2, bp.z ); a.player.velocity.set( 0, 0, 0 ); return !! a.player.rideOffer; } )()`;
+const beside = `( () => { const a = window.__app, o = ${ other }, c = o.cur, f = c.drawn || c.boat, M = a.together.copies.model( c.boatId ); if ( ! M ) return false; const bp = M.boardPoint.clone().applyQuaternion( f.quat ).add( f.pos ); a.player.position.set( bp.x, bp.y + 0.2, bp.z ); a.player.velocity.set( 0, 0, 0 ); return !! a.player.rideOffer; } )()`;
 await until( guest.game, beside );
 const offered = await guest.game.evaluate( () => { const p = window.__app.player; return { name: p.rideOffer.name, type: p.rideOffer.boat.model.id, prompt: p.prompt && p.prompt.text }; } );
 console.log( '     offered:', JSON.stringify( offered ) );
@@ -237,9 +240,9 @@ const headingOf = () => owner.game.evaluate( () => window.__app.boatCtl.getYaw()
 const stop = async () => {
 
 	await owner.page.keyboard.down( 'KeyS' );
-	await until( owner.game, `Math.abs( window.__app.boatCtl.speed ) < ${ TOP * 0.6 }`, 90000 ).catch( () => {} );
+	await until( owner.game, `Math.abs( window.__app.boatCtl.speed ) < ${ TOP * 0.2 }`, 150000 ).catch( () => console.log( '     (not stopped in time)' ) );
 	await owner.page.keyboard.up( 'KeyS' );
-	await until( owner.game, `Math.abs( window.__app.boatCtl.speed ) < ${ TOP * 0.25 }`, 120000 ).catch( () => console.log( '     (not stopped in time)' ) );
+	return +Math.abs( await speed() ).toFixed( 1 );
 
 };
 
@@ -254,8 +257,7 @@ const run = async () => {
 	await owner.page.keyboard.up( 'KeyA' );
 	const turned = Math.abs( Math.atan2( Math.sin( await headingOf() - h0 ), Math.cos( await headingOf() - h0 ) ) ) * 180 / Math.PI;
 	await owner.page.keyboard.up( 'KeyW' );
-	await stop();
-	return { fast: +fast.toFixed( 1 ), turned: Math.round( turned ) };
+	return { fast: +fast.toFixed( 1 ), turned: Math.round( turned ), rest: await stop() };
 
 };
 const placed = ( name ) => list.find( ( a ) => a.name === name );
@@ -271,9 +273,27 @@ for ( const name of way ) {
 	await until( owner.game, `( () => { const d = ${ other }.cur.deck; return d && Math.hypot( d.x - ${ st.x }, d.z - ${ st.z } ) < 0.05; } )()`, 60000 ).catch( () => {} );
 	const o = await owner.game.evaluate( ownerSees );
 	const ok = s.frames > 0 && s.off === 0 && s.gap < 0.01 && s.cam < 2.6 && s.drift < 0.15 && s.sunk < 0.03 && o.mode === 'deck' && Math.hypot( o.x - st.x, o.z - st.z ) < 0.25 && Math.abs( o.y - st.y ) < 0.25;
-	say( ok, `under way on the ${ name }: ${ r.fast } m/s, turned ${ r.turned } deg, stopped; his ${ s.frames } frames: ${ s.off } off her, feet ${ s.gap } m from her deck, ${ s.drift } m from where he stood, ${ s.sunk } m under her floor, camera within ${ s.cam } m. Robin sees him ${ Math.hypot( o.x - st.x, o.z - st.z ).toFixed( 3 ) } m off, y ${ o.y } against ${ st.y }` );
+	say( ok, `under way on the ${ name }: ${ r.fast } m/s, turned ${ r.turned } deg, down to ${ r.rest } m/s; his ${ s.frames } frames: ${ s.off } off her, feet ${ s.gap } m from her deck, ${ s.drift } m from where he stood, ${ s.sunk } m under her floor, camera within ${ s.cam } m. Robin sees him ${ Math.hypot( o.x - st.x, o.z - st.z ).toFixed( 3 ) } m off, y ${ o.y } against ${ st.y }` );
 	under.push( { area: name, ok } );
 	await frames( owner.game, 4 );
+
+}
+
+// ---- a kayak's paddle, on the copy of her: her stroke, and the figure sat at it
+if ( seated ) {
+
+	await owner.page.keyboard.down( 'KeyW' );
+	await frames( owner.game, 12 );
+	await until( guest.game, `${ other }.cur.kw && ${ other }.cur.kw[ 3 ] < 0.5`, 60000 ).catch( () => {} );
+	const pose = `( () => { const o = ${ other }, b = o.boat, m = b.getObjectByName( 'boat-paddle' ), s = b.userData.model.seat.clone().applyQuaternion( b.quaternion ).add( b.position ); return { kw: o.cur.kw, paddle: m ? m.matrix.elements.slice( 0, 3 ).concat( m.matrix.elements.slice( 12, 15 ) ).map( ( v ) => +v.toFixed( 3 ) ) : null, seat: +o.avatar.group.position.distanceTo( s ).toFixed( 3 ), shown: o.shown }; } )()`;
+	await frames( guest.game, 2 );
+	const p0 = await guest.game.evaluate( pose );
+	await frames( guest.game, 8 );
+	await frames( owner.game, 8 );
+	const p1 = await guest.game.evaluate( pose );
+	await owner.page.keyboard.up( 'KeyW' );
+	say( p0.kw && p1.paddle && p1.paddle.join() !== p0.paddle.join() && p1.seat < 0.25, `her stroke on his copy: the paddle moves, ${ JSON.stringify( p0.paddle ) } to ${ JSON.stringify( p1.paddle ) }; Robin's figure ${ p1.seat } m from her seat` );
+	await stop();
 
 }
 
@@ -331,8 +351,6 @@ if ( ! seated ) {
 const FITS = { console: { upgrades: { tTop: 0 }, key: 'tTop' }, sportfisher: { upgrades: { tower: 0 }, key: 'tower' } }[ BOAT ];
 if ( FITS || BOAT === 'lobster' || BOAT === 'kayak' ) {
 
-	const key = await owner.game.evaluate( () => { const u = window.__app.game.state.upgrades, out = {}; for ( const k of Object.keys( u ) ) if ( /tower|tTop|top|Top/.test( k ) ) out[ k ] = u[ k ]; return out; } );
-	console.log( '     her upgrades that matter:', JSON.stringify( key ) );
 	await owner.game.evaluate( () => { const a = window.__app, s = a.game.state, r = s.fleet[ a.boat.id ]; if ( r ) r.paint = 'red'; } );
 	await until( guest.game, `( ( ${ other }.cur.fit >> 4 ) === 8 )`, 60000 ).catch( () => {} );
 	await frames( guest.game, 4 );
@@ -340,11 +358,11 @@ if ( FITS || BOAT === 'lobster' || BOAT === 'kayak' ) {
 	say( paint.painted > 0 && paint.plain === 0, `her paint on his copy: ${ JSON.stringify( paint ) }` );
 	if ( FITS ) {
 
-		await owner.game.evaluate( () => { const a = window.__app, s = a.game.state, F = s.stats; Object.defineProperty( s, 'stats', { configurable: true, get: () => ( { ...F, tower: false, tTop: false } ) } ); } );
+		await owner.game.evaluate( `( ${ OWNED } )( false )` );
 		const was = await guest.game.evaluate( `${ other }.cur.fit` );
 		await until( guest.game, `${ other }.cur.fit !== ${ was }`, 60000 ).catch( () => {} );
 		await frames( guest.game, 4 );
-		const f = await guest.game.evaluate( `( () => { const a = window.__app, p = a.player, M = p.boat.model, o = ${ other }, up = M.ladders ? M.ladders.filter( ( l ) => l.needs === 'tower' ) : []; const tower = o.boat.getObjectByName( 'boat-tower' ); return { fitted: M.fitted, ladder: up.length ? !! M.ladderAt( new p.deckPos.constructor( up[ 0 ].on.x, up[ 0 ].on.y, up[ 0 ].on.z ) ) : null, tower: tower ? tower.visible : null, stations: Object.keys( M.stations || {} ), own: a.boat.fitted || null }; } )()` );
+		const f = await guest.game.evaluate( `( () => { const a = window.__app, p = a.player, M = p.boat.model, o = ${ other }, up = M.ladders ? M.ladders.filter( ( l ) => l.needs === 'tower' ) : []; if ( o.boat ) a.together.copies.near( o.boat, true ); const tower = o.boat.getObjectByName( 'boat-tower' ); return { fitted: M.fitted, ladder: up.length ? !! M.ladderAt( new p.deckPos.constructor( up[ 0 ].on.x, up[ 0 ].on.y, up[ 0 ].on.z ) ) : null, tower: tower ? tower.visible : null, stations: Object.keys( M.stations || {} ), own: a.boat.fitted || null }; } )()` );
 		console.log( '     with what she\'s fitted changed:', JSON.stringify( f ) );
 		if ( BOAT === 'sportfisher' ) say( f.fitted.tower === false && f.ladder === false && f.tower === false && ! f.stations.includes( 'tower' ), 'no tower on hers: none for him to see or climb' );
 		else say( f.fitted.tTop === false, 'no T-top on hers: none on his' );

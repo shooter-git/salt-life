@@ -31,7 +31,7 @@ export const AREAS = {
 
 		const L = M.lines, side = L.sheerX( L.tAtSheerZ( 0 ) ) - 0.25, T = M.stations.tower;
 		return [
-			{ name: 'cockpit', x: 0, y: 0.5, z: - 4.1 },
+			{ name: 'cockpit', x: 0, y: 0.5, z: - 3.75 },
 			{ name: 'cockpit, starboard quarter', x: 1.5, y: 0.5, z: - 5.2 },
 			{ name: 'cockpit, port quarter', x: - 1.5, y: 0.5, z: - 5.2 },
 			{ name: 'mezzanine', x: 0, y: 0.9, z: - 2.9 },

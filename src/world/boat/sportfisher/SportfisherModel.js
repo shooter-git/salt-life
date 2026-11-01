@@ -210,9 +210,9 @@ export class SportfisherModel extends Vessel {
 		this.floors = buildFloors( L );
 		this.colliders = buildColliders( L );
 		this.ladders = buildLadders();
-		this.helm = { x: 0, z: HELM.z, y: SF.bridge, eye: HELM.eye, rise: [ 0.5, HELM.z - 0.45 ] };
+		this.helm = { x: 0, z: HELM.z, y: SF.bridge, eye: HELM.eye, rise: [ 0.5, HELM.z - 0.45 ], stand: [ 0, 0.02 ] }; // (stand: where a figure's seen at it, clear of her seat)
 		this.helmEye = HELM.eye;
-		this.boardPoint = V( 0, SF.cockpit, - 4.1 );
+		this.boardPoint = V( 0, SF.cockpit, - 3.75 ); // (clear of the chair, which is someone's job: stations)
 		this.exitPoints = this.railPoints( [ - 5.4, - 4.5, - 3.6 ] );
 		this.bowWalk = 8.05;
 		this.bunks = [ { x: 0.82, y: SF.lower, z: 2.65 }, { x: 0, y: SF.lower, z: 3.72 } ];
@@ -222,7 +222,7 @@ export class SportfisherModel extends Vessel {
 		this.outriggerTips = [ riggerTip( 1, true ), riggerTip( - 1, true ) ];
 		this.stations = {
 			tower: { x: 0, y: SF.tower, z: ( TOWER.z0 + TOWER.z1 ) / 2, r: 1 },
-			chair: { x: 0, y: SF.cockpit, z: CHAIR_Z, r: 0.6, facing: Math.PI },
+			chair: { x: 0, y: SF.cockpit, z: CHAIR_Z, r: 0.56, facing: Math.PI }, // (just as far as you get into it: its collider)
 		};
 		this.lowCopy = [ 'boat-hull', 'boat-gelcoat', 'boat-glass' ];
 		this.towerEye = SF.tower + 1.62;
