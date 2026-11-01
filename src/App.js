@@ -96,6 +96,9 @@ import { createGameUI } from './ui/GameUI.js';
 import { PostChain } from './post/PostChain.js';
 import { FLOOD_L } from './game/Hull.js';
 import { releaseGeometries, releaseTextures, uploadTextures, watchContext } from './core/ReleaseAfterUpload.js';
+import { decodeInWorker } from './core/MeshoptWorker.js';
+import { freeNow } from './core/FreeNow.js';
+import { releaseParts } from './world/village/GeoBuilder.js';
 
 // Salt Life: the island, the sea and the boat, drawn with three.js inside All the Spaces. It follows
 // Tidewater's App (same systems, same order each frame); what isn't ported yet is simply not here.
@@ -232,12 +235,14 @@ export class App {
 			portal.save.shared.get( 'boats' ).catch( () => null ).then( ( boats ) => this._boatsRead = boats ),
 		] );
 		setDetailData( new Uint8Array( detail ) );
+		decodeInWorker();
 		this.state = new GameState( this.store );
 		this.state.load(); // (the save was read above: money, the cooler, the log, upgrades, fuel)
 		this.loadClock();
 
 		await progress( 0.25, 'Shaping the island' );
 		this.terrainData = new TerrainData( 7, decodeIsland( new Uint8Array( bytes ) ), { offshore: new Offshore( decodeSeabed( new Uint8Array( seabed ) ) ) } );
+		freeNow( new Uint8Array( bytes ), new Uint8Array( seabed ), new Uint8Array( detail ) ); // ((M16) the files as they came, their memory back at once)
 
 		// ---------------------------------------------------------------- stage
 		// WebGL drawn on the CPU (no graphics card, or a blocklisted one): frames are paced (pacedFrame)
@@ -571,6 +576,10 @@ export class App {
 		this.lightUp( scene );
 		// the CPU copies of the big static data go once it's on the GPU (phones' script memory)
 		releaseGeometries( this.village.group );
+		// ((M16) and of what else is only drawn: not the boat's, nor what moves)
+		for ( const root of [ this.lighthouse.group, this.harbourLights.group, this.farIsland.mesh, this.game.rod.rodMesh, ...this.game.vendors.map( ( v ) => v.group ) ] ) releaseGeometries( root );
+		releaseGeometries( this.rocks.group, { instanced: true } );
+		this.rocks.releaseShapes();
 		// (but the detail texture: the plants read its data as they're placed, and its bake keeps the data
 		// anyway, so letting go of the texture's reference would free nothing)
 		releaseTextures( this.terrain.mesh, { keep: [ this.terrain.detailTexture ] } );
@@ -710,8 +719,8 @@ export class App {
 		// then, on every device, the whale)
 		const revealed = this._late ? new Promise( ( done ) => this._revealed = done ) : null;
 		this.lateReady();
-		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.checkShaderLimits() ).then( () => this.buildCover() ).then( () => this.rocks.refineOverhangs() ).then( () => this.cpuGL && this.settle() ).then( () => this.loadCharacters() )
-			.then( () => this.cpuGL && this.settle() ).then( () => this.cpuGL && this.lifeAndDebris() ).then( () => this.cpuGL && this.settle() ).then( () => this.scansArrive() )
+		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.checkShaderLimits() ).then( () => this.buildCover() ).then( () => this.rocks.refineOverhangs() ).then( () => this.cpuGL && this.settle( 45000, BEFORE_PEOPLE ) ).then( () => this.loadCharacters() )
+			.then( () => this.cpuGL && this.settle() ).then( () => this.cpuGL && this.lifeAndDebris() ).then( () => this.letGoOfTheBuild() ).then( () => this.cpuGL && this.settle() ).then( () => this.scansArrive() )
 			.then( () => this.cpuGL && this.settle() ).then( () => this.cpuGL && this.reefGrows() )
 			.then( () => this.cpuGL && this.settle() ).then( () => this.whaleArrives() ).then( () => this.airArrives() );
 		const begin = () => this.audio.resume().then( ( on ) => {
@@ -1034,7 +1043,7 @@ export class App {
 	// stage: until the script heap falls back from its high point (where the browser reports it; a
 	// pause where it doesn't), at least 3 s, at most `ms`. All the Spaces' checks measure its peak. ((M15) On the low
 	// tier until it's down to SETTLED: a quarter off was no longer enough to take the reef on top of)
-	settle( ms = 45000 ) {
+	settle( ms = 45000, mark = SETTLED ) {
 
 		performance.mark( 'world: settle' );
 		const mem = performance.memory;
@@ -1048,7 +1057,7 @@ export class App {
 
 				const used = mem.usedJSHeapSize, t = performance.now() - t0;
 				high = Math.max( high, used );
-				if ( ( t > 3000 && ( this.tier === 'low' ? used < SETTLED : used < high * 0.75 ) ) || t > ms ) resolve();
+				if ( ( t > 3000 && ( this.tier === 'low' ? used < mark : used < high * 0.75 ) ) || t > ms ) resolve();
 				else setTimeout( tick, 250 );
 
 			};
@@ -1344,6 +1353,13 @@ export class App {
 				this.nearDetail.push( { o, dist: 60 } );
 
 			} );
+			// ((M16) a person's shape on the GPU alone, as the village's: and one that comes after letGoOfTheBuild)
+			if ( c ) {
+
+				c.group.traverse( ( o ) => o.isSkinnedMesh && ! o.boundingSphere && o.computeBoundingSphere() );
+				releaseGeometries( c.group );
+
+			}
 
 		} catch ( e ) {
 
@@ -1709,6 +1725,7 @@ export class App {
 	async plantsGrow() {
 
 		await this.vegetation.init();
+		releaseGeometries( this.vegetation.group, { instanced: true } ); // ((M16) their shapes on the GPU alone)
 		if ( this._started ) await this.readyOffstage( this.vegetation.group );
 		else this.lightUp( this.vegetation.group );
 
@@ -1720,6 +1737,7 @@ export class App {
 	async lifeAndDebris() {
 
 		if ( ! this.wreck ) this.wreck = new Wreck( { scene: this.scene, colliders: this.colliders } );
+		releaseGeometries( this.wreck.group ); // ((M16) as the village's)
 		await this.lifeArrives();
 		await this.pause();
 		await this.debrisLands();
@@ -1727,6 +1745,15 @@ export class App {
 		if ( ! this.cpuGL ) await this.reefGrows();
 		this._plantsGrown = true;
 		this.releaseMasks();
+
+	}
+
+	// (M16) what only the building read, once the plants, the drips, the animals and the debris are done with it:
+	// every plant's record and the village's shapes, some 7 MB of script memory
+	letGoOfTheBuild() {
+
+		this.vegetation.releaseRecords();
+		releaseParts();
 
 	}
 
@@ -1740,7 +1767,13 @@ export class App {
 
 			// ((M15) what the bites keep of them: the sand that isn't rock, at 4 m (the beaches' wash: Game.sandAt))
 			T.beach = beachMask( T );
-			for ( const k of [ 'rock', 'sand', 'path', 'gully', 'rubble', 'scarp' ] ) T[ k ] = null;
+			// ((M16) what the cuts changed in each with it: it's keyed by the mask, so it held them until the reef's laid)
+			for ( const k of [ 'rock', 'sand', 'path', 'gully', 'rubble', 'scarp' ] ) {
+
+				if ( T._masksBefore ) T._masksBefore.delete( T[ k ] );
+				T[ k ] = null;
+
+			}
 
 		}
 
@@ -2340,7 +2373,9 @@ export class App {
 
 			console.warn( 'Shore: a swell\'s field solved on the page (no worker)', e && e.message );
 			const field = computeShoreField( fieldGround( ground ), { res: ground.res, swellDir, seaLevel } );
-			return lee ? shelter( field, swellDir ) : field;
+			if ( lee ) shelter( field, swellDir );
+			delete field.depth; // ((M16) as the worker's: only the island's own are solved from)
+			return field;
 
 		} );
 
@@ -2586,7 +2621,8 @@ export class App {
 }
 
 const CLOCK_KEY = 'saltlife.clock';
-const SETTLED = 100 * 1048576; // (M15) bytes of script memory: settle
+const SETTLED = 75 * 1048576; // (M15) bytes of script memory: settle ((M16) a little over what's left once the load's garbage is gone, as 100 was)
+const BEFORE_PEOPLE = 90 * 1048576; // (M16) settle's, before Joe and Marta, who are little to take on: the load's garbage needn't have gone, and they come when they did
 const GPU_TEXTURES = 16; // (M15) a stage, in many GPUs: checkShaderLimits
 const SAMPLERS = ( gl ) => new Set( [ gl.SAMPLER_2D, gl.SAMPLER_3D, gl.SAMPLER_CUBE, gl.SAMPLER_2D_ARRAY, gl.SAMPLER_2D_SHADOW, gl.SAMPLER_CUBE_SHADOW, gl.SAMPLER_2D_ARRAY_SHADOW, gl.INT_SAMPLER_2D, gl.UNSIGNED_INT_SAMPLER_2D ] );
 const BOAT_KEY = 'saltlife.boat';

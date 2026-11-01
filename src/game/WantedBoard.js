@@ -3,6 +3,7 @@ import { STAND } from './FishStand.js';
 import { FISH } from './FishTable.js';
 import { orderTerms, biteHint, orderPlace } from './Orders.js';
 import { pounds } from './Units.js';
+import { CHECK } from '../core/Glyphs.js';
 
 // (Salt Life) The day's wanted list, chalked on a slate hung on the front of Joe's counter: his two
 // fish, where and when they bite, what he pays, and Marta's bait ((M15) and the day's ask for a place's
@@ -98,7 +99,7 @@ export class WantedBoard {
 			if ( done ) g.fillRect( 38, y - 12, Math.min( 300, g.measureText( `${ who }${ name }` ).width ) + 4, 3 );
 			g.textAlign = 'right';
 			g.fillStyle = done ? 'rgba(245, 217, 138, 0.45)' : '#f5d98a';
-			g.fillText( done ? '✓' : orderTerms( o ).replace( 'pays ', '' ), W - 40, y );
+			g.fillText( done ? CHECK : orderTerms( o ).replace( 'pays ', '' ), W - 40, y );
 			g.textAlign = 'left';
 			g.font = `${ small }px ${ font }`;
 			g.fillStyle = 'rgba(242, 239, 228, 0.62)';

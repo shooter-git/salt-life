@@ -38,7 +38,8 @@ export class VegInstances {
 		this.px = new Float32Array( n );
 		this.py = new Float32Array( n );
 		this.pz = new Float32Array( n );
-		this.matrices = new Float32Array( n * 16 );
+		// ((M16) of an instance's matrix, what isn't where it is or none: a turn about the vertical and a scale, 5 of its 16)
+		this.turns = new Float32Array( n * 5 );
 		this.qr2 = new Float32Array( n ); // per-instance near query radius^2 (0: use the type's)
 		this.iPos = new Float32Array( n * 4 );
 		this.iDat = new Float32Array( n * 4 );
@@ -54,7 +55,12 @@ export class VegInstances {
 			// optional explicit matrix scale (impostor cards sized per species)
 			if ( r.msx !== undefined ) _s.set( r.msx, r.msy, r.msz );
 			else _s.set( r.s, r.s * Math.abs( r.sy || 1 ), r.s );
-			_m.compose( _p, _q, _s ).toArray( this.matrices, i * 16 );
+			const e = _m.compose( _p, _q, _s ).elements, t5 = i * 5;
+			this.turns[ t5 ] = e[ 0 ];
+			this.turns[ t5 + 1 ] = e[ 2 ];
+			this.turns[ t5 + 2 ] = e[ 5 ];
+			this.turns[ t5 + 3 ] = e[ 8 ];
+			this.turns[ t5 + 4 ] = e[ 10 ];
 			this.iPos.set( [ r.x, r.y, r.z, r.s ], i * 4 );
 			this.iDat.set( [ r.la || 0, r.l || 0, r.H || 1, r.seed ], i * 4 );
 			this.qr2[ i ] = r.qr ? r.qr * r.qr : 0;
@@ -175,14 +181,17 @@ export class LodLevel {
 
 		n = Math.min( n, this.capacity );
 		const M = this.instanceMatrix.array, B = this.iBuffer.array;
-		const im = inst.matrices, ip = inst.iPos, id = inst.iDat;
+		const it = inst.turns, ip = inst.iPos, id = inst.iDat, { px, py, pz } = inst;
 		for ( let k = 0; k < n; k ++ ) {
 
 			const i = list === null ? k : list[ k ];
 			if ( matrices ) {
 
-				const o16 = i * 16, d16 = k * 16;
-				for ( let e = 0; e < 16; e ++ ) M[ d16 + e ] = im[ o16 + e ];
+				const o5 = i * 5, d16 = k * 16;
+				M[ d16 ] = it[ o5 ]; M[ d16 + 1 ] = 0; M[ d16 + 2 ] = it[ o5 + 1 ]; M[ d16 + 3 ] = 0;
+				M[ d16 + 4 ] = 0; M[ d16 + 5 ] = it[ o5 + 2 ]; M[ d16 + 6 ] = 0; M[ d16 + 7 ] = 0;
+				M[ d16 + 8 ] = it[ o5 + 3 ]; M[ d16 + 9 ] = 0; M[ d16 + 10 ] = it[ o5 + 4 ]; M[ d16 + 11 ] = 0;
+				M[ d16 + 12 ] = px[ i ]; M[ d16 + 13 ] = py[ i ]; M[ d16 + 14 ] = pz[ i ]; M[ d16 + 15 ] = 1;
 
 			}
 
@@ -268,6 +277,14 @@ export class VegType {
 
 				this.far.setDynamic();
 				this.farIds = new Int32Array( Math.max( 1, this.inst.count ) );
+				// ((M16) its material doesn't read them, and it's never filled with them again: their copy here goes,
+				// its bounds worked out first (three sorts by them))
+				for ( const m of this.far.meshes ) m.computeBoundingSphere();
+				this.far.instanceMatrix.onUpload( function () {
+
+					this.array = null;
+
+				} );
 
 			}
 			// optionally keep instances that are certainly near out of the far buffer

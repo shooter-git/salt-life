@@ -1,5 +1,6 @@
 import { unzlibSync } from 'fflate';
 import { MAGIC } from './IslandBake.js';
+import { freeNow } from '../../core/FreeNow.js';
 
 // Reads the island bake (IslandBake.js writes it; the format is described there).
 
@@ -41,12 +42,14 @@ export function decodeIsland( bytes ) {
 			}
 
 			out[ f.name ] = h;
+			freeNow( raw ); // ((M16) its memory back at once)
 
 		} else if ( f.encoding === 'u8-unit' ) {
 
 			const r = new Float32Array( n );
 			for ( let k = 0; k < n; k ++ ) r[ k ] = raw[ k ] / 255;
 			out[ f.name ] = r;
+			freeNow( raw );
 
 		} else out[ f.name ] = raw;
 

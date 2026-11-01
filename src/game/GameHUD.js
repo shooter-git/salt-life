@@ -12,6 +12,7 @@ import { PLACES, FAR_PLACES, placeName, farName } from './Places.js';
 import { FINDS, messageOf } from './Beachcomb.js';
 import { CAMP } from './FishCamp.js';
 import { NAMES, MAX_MARKS, legTo, magnetic } from './Chart.js';
+import { LEFT, RIGHT, CHECK, STAR, EM_DASH, OPEN_QUOTE, CLOSE_QUOTE, DOT, RING } from '../core/Glyphs.js';
 
 // (other players' names, into HTML)
 const escape = ( t ) => String( t ).replace( /[&<>"']/g, ( c ) => ( { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } )[ c ] );
@@ -147,7 +148,7 @@ const CSS = /* css */`
 	font: 500 var(--tw-fs-sm) var(--tw-font); color: var(--tw-ink-2); background: var(--tw-fill); border: 1px solid var(--tw-line-2); border-radius: var(--tw-r-md); }
 .gm-look b { font-size: var(--tw-fs-md); font-weight: 600; color: var(--tw-ink); }
 .gm-look.is-on { background: rgba(var(--tw-aqua-rgb), 0.14); border-color: var(--tw-aqua); box-shadow: inset 0 0 0 1px var(--tw-aqua); }
-.gm-look.is-on b::after { content: ' ✓'; color: var(--tw-aqua); }
+.gm-look.is-on b::after { content: ' \\2713'; color: var(--tw-aqua); }
 /* short screens (phones on their side): a panel's title and what's under it on one line, less padding */
 @media (max-height: 500px) {
 	.gm-panel { padding: var(--tw-3) var(--tw-4); }
@@ -583,7 +584,7 @@ export class GameHUD {
 
 			this.sonarD.textContent = sonar.depth === null ? 'no bottom' : feet( sonar.depth );
 			const n = Math.round( sonar.fish * 4 );
-			this.sonarDots.textContent = '●'.repeat( n ) + '○'.repeat( 4 - n );
+			this.sonarDots.textContent = DOT.repeat( n ) + RING.repeat( 4 - n );
 
 		}
 
@@ -660,8 +661,8 @@ export class GameHUD {
 		const f = FISH[ info.species ];
 		const inch = info.cm / IN, lbs = info.kg * LB;
 		const isle = info.islandHeld;
-		const badge = info.islandRecord ? '<span class="gm-badge is-record">★ Island record</span>'
-			: info.record ? '<span class="gm-badge is-record">★ New record</span>'
+		const badge = info.islandRecord ? `<span class="gm-badge is-record">${ STAR } Island record</span>`
+			: info.record ? `<span class="gm-badge is-record">${ STAR } New record</span>`
 			: info.newSpecies ? '<span class="gm-badge is-new">New species</span>' : `<span class="gm-badge is-plain">${ { spear: 'Speared', hand: 'By hand' }[ info.method ] || 'Catch' }</span>`;
 		let note;
 		// (Salt Life: a protected fish is measured and let go, as is a catch-and-release one and a short or
@@ -705,7 +706,7 @@ export class GameHUD {
 				<div class="gm-catch-stats">
 					${ info.species === 'lobster' ? `<div class="gm-stat"><span>Carapace</span><b>${ carapaceIn( info.cm ).toFixed( 2 ) }<small>in</small></b><i>${ inches( info.cm ) } long</i></div>` : `<div class="gm-stat"><span>Length</span><b>${ inch.toFixed( 1 ) }<small>in</small></b><i>${ feetInches( info.cm ) || '&nbsp;' }</i></div>` }
 					<div class="gm-stat"><span>Weight</span>${ lbs * 16 < 15.5 ? `<b>${ Math.max( 1, Math.round( lbs * 16 ) ) }<small>oz</small></b><i>&nbsp;</i>` : `<b>${ lbs.toFixed( 1 ) }<small>lb</small></b><i>${ lbOz( info.kg ) }</i>` }</div>
-					<div class="gm-stat is-value"><span>Value</span><b>${ info.released ? '—' : `$${ info.value }` }</b><i>${ info.released ? 'released' : room ? 'no room yet' : ! info.kept ? 'let go' : info.wanted ? info.wanted.text : info.bag ? `${ info.bag.n } of ${ info.bag.max } today` : 'in the cooler' }</i></div>
+					<div class="gm-stat is-value"><span>Value</span><b>${ info.released ? EM_DASH : `$${ info.value }` }</b><i>${ info.released ? 'released' : room ? 'no room yet' : ! info.kept ? 'let go' : info.wanted ? info.wanted.text : info.bag ? `${ info.bag.n } of ${ info.bag.max } today` : 'in the cooler' }</i></div>
 				</div>
 				${ note }
 				${ room ? '<div class="gm-room"></div>' : `<div class="gm-catch-foot">${ { touch: 'Tap to continue', gamepad: '<kbd>RT</kbd> or <kbd>B</kbd> to continue' }[ this.device ] || '<kbd>Click</kbd> or <kbd>E</kbd> to continue' }<span class="gm-catch-timer"><span></span></span></div>` }
@@ -839,7 +840,7 @@ export class GameHUD {
 		const d = this.device, where = s.upgrades.hold > 0 ? 'hold' : 'cooler';
 		const pct = ( kg ) => Math.max( 0, Math.min( 100, kg / cap * 100 ) ).toFixed( 1 );
 		const chips = fish.map( ( f, i ) => `<div class="gm-room-fish${ i === R.pick && d !== 'touch' ? ' is-pick' : '' }"><b>${ FISH[ f.species ].name }</b><span>${ lb( f.kg ) } · $${ f.value }</span><button class="gm-mini" data-let="${ f.id }">Let go</button></div>` ).join( '' );
-		const keys = { gamepad: '<kbd>←</kbd> <kbd>→</kbd> on the d-pad to pick one · <kbd>X</kbd> lets it go', keyboard: '<kbd>←</kbd> <kbd>→</kbd> to pick one · <kbd>R</kbd> lets it go' }[ d ];
+		const keys = { gamepad: `<kbd>${ LEFT }</kbd> <kbd>${ RIGHT }</kbd> on the d-pad to pick one · <kbd>X</kbd> lets it go`, keyboard: `<kbd>${ LEFT }</kbd> <kbd>${ RIGHT }</kbd> to pick one · <kbd>R</kbd> lets it go` }[ d ];
 		el.innerHTML = `
 			<div class="gm-room-head"><span>${ upper( where ) } ${ pounds( held ) } of ${ pounds( cap ) } lb</span>
 				<span class="gm-room-meter"><span class="is-in" style="width:${ pct( held ) }%"></span><span class="is-new${ R.fits ? ' is-ok' : '' }" style="left:${ pct( held ) }%;width:${ pct( info.kg ) }%"></span></span>
@@ -941,7 +942,7 @@ export class GameHUD {
 			body = item( 'Frozen shrimp', 'never runs out · the little fish take it', on( null ) )
 				+ BAIT_IDS.filter( ( k ) => s.bait[ k ] > 0 ).map( ( k ) => item( BAITS[ k ].name, `${ s.bait[ k ] } in the ${ BAITS[ k ].live ? well : 'cooler' }`, `<span class="gm-btns">${ on( k ) }<button class="gm-mini" data-dump="${ k }">${ BAITS[ k ].live ? 'Let go' : 'Toss' }</button></span>` ) ).join( '' );
 			if ( ! BAIT_IDS.some( ( k ) => s.bait[ k ] > 0 ) ) body += empty( 'Throw the cast net for live bait: silversides, sergeant majors, small grunts and mullet. The big fish come for it.' );
-			hint = `${ s.baitCount } / ${ s.stats.baitMax } in the bucket · ${ d === 'gamepad' ? 'D-pad ← →' : d === 'touch' ? 'the Bait button' : '<kbd>B</kbd>' } changes it with the rod out`;
+			hint = `${ s.baitCount } / ${ s.stats.baitMax } in the bucket · ${ d === 'gamepad' ? `D-pad ${ LEFT } ${ RIGHT }` : d === 'touch' ? 'the Bait button' : '<kbd>B</kbd>' } changes it with the rod out`;
 
 		} else if ( tab === 'finds' ) {
 
@@ -1010,7 +1011,7 @@ export class GameHUD {
 		const old = this.inv.querySelector( '.gm-list' );
 		const scroll = old && this._invDrawn === tab ? old.scrollTop : 0;
 		this._invDrawn = tab;
-		const keys = d === 'touch' ? '' : `<span class="gm-tabs-keys">${ d === 'gamepad' ? 'D-pad' : '<kbd>←</kbd><kbd>→</kbd>' }</span>`;
+		const keys = d === 'touch' ? '' : `<span class="gm-tabs-keys">${ d === 'gamepad' ? 'D-pad' : `<kbd>${ LEFT }</kbd><kbd>${ RIGHT }</kbd>` }</span>`;
 		this.inv.innerHTML = `
 			<div class="gm-head"><h2>${ s.upgrades.hold > 0 ? 'Fish hold' : 'Cooler' }</h2>
 			<p class="gm-sub">${ s.inventory.length } fish · ${ pounds( s.holdKg ) } of ${ pounds( s.stats.holdKg ) } lb · worth $${ s.holdValue }${ this.game.daysOut.boxSaid() }</p></div>
@@ -1132,7 +1133,7 @@ export class GameHUD {
 		const meta = done ? `filled by ${ helped === 1 ? ( mine ? 'you' : 'one islander' ) : `${ helped } of you` }` : `for a restaurant on the mainland · pays ×${ WEEK_MUL }`;
 		const note = done ? ( share ? `Your share of the $${ t.bonus } bonus: $${ share }${ g.state.weekPaid !== null && g.state.weekPaid >= t.week ? ', paid' : box ? '. Joe pays it when he\'s in' : '' }.` : 'A new order next week.' )
 			: `$${ t.bonus } bonus when it's filled, shared by what each of you brings.${ mine ? ` You've brought ${ pounds( mine ) } lb.` : '' }`;
-		const row = item( FISH[ t.species ].name, meta, `<span class="gm-item-num">${ done ? '✓ ' : '' }${ pounds( Math.min( got, t.kg ) ) } / ${ pounds( t.kg ) } lb</span>` );
+		const row = item( FISH[ t.species ].name, meta, `<span class="gm-item-num">${ done ? `${ CHECK } ` : '' }${ pounds( Math.min( got, t.kg ) ) } / ${ pounds( t.kg ) } lb</span>` );
 		return `<div class="gm-wanted"><span class="gm-wanted-h">The week's order${ done ? '' : ` · ${ when }` }</span>${ row }<div class="gm-week-bar"><span style="width:${ Math.min( 100, got / t.kg * 100 ).toFixed( 1 ) }%"></span></div><span class="gm-week-note">${ note }</span></div>`;
 
 	}
@@ -1258,7 +1259,7 @@ export class GameHUD {
 		this.noteOpen = true;
 		this.note.innerHTML = `
 			<div class="gm-head"><h2>A message in a bottle</h2><p class="gm-sub">From ${ escape( m.from ) }</p></div>
-			<div class="gm-list"><p class="gm-note-text">“${ escape( m.text ) }”</p></div>
+			<div class="gm-list"><p class="gm-note-text">${ OPEN_QUOTE }${ escape( m.text ) }${ CLOSE_QUOTE }</p></div>
 			<div class="gm-foot"><span class="gm-sub">Kept in your finds</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Close', 'E', 'B' ) }</button></div>`;
 		this.note.querySelector( '[data-close]' ).onclick = () => this.closeNote();
 		this.note.classList.add( 'is-open' );
@@ -1272,7 +1273,7 @@ export class GameHUD {
 		this.noteOpen = true;
 		this.note.innerHTML = `
 			<div class="gm-head"><h2>A note from Marta</h2><p class="gm-sub">While you were away</p></div>
-			<div class="gm-list">${ paragraphs.map( ( p ) => `<p class="gm-note-text">${ escape( p ) }</p>` ).join( '' ) }<p class="gm-note-text">— Marta</p></div>
+			<div class="gm-list">${ paragraphs.map( ( p ) => `<p class="gm-note-text">${ escape( p ) }</p>` ).join( '' ) }<p class="gm-note-text">${ EM_DASH } Marta</p></div>
 			<div class="gm-foot"><span></span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Close', 'E', 'B' ) }</button></div>`;
 		this.note.querySelector( '[data-close]' ).onclick = () => this.closeNote();
 		this.note.classList.add( 'is-open' );

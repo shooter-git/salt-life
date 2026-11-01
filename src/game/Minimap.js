@@ -10,6 +10,7 @@ import { SHEETS, NAMES, HOME, legTo, magnetic, fuelFor } from './Chart.js';
 import { SheetBake, drawSymbols, S52, rgb } from './ChartBake.js';
 import { BOATS } from '../world/boat/Boats.js';
 import { Vector3 } from '../engine/index.js';
+import { freeNow } from '../core/FreeNow.js';
 
 // Minimap, lower right: the island baked once from the terrain data into a 2D canvas, shown in a round window
 // that turns with the view (forward is up, a small N on the rim). Markers: the player (centre arrow), Joe's fish
@@ -102,9 +103,9 @@ html.is-touch .gm-map-label.is-home { left: auto; right: calc(100% + 6 * var(--t
 	text-shadow: 0 0 2px rgba(255,255,255,0.95), 0 0 3px rgba(255,255,255,0.8); }
 .gm-map-name.is-water > span { font-style: italic; font-weight: 500; }
 .gm-map-name.is-small > span { font-size: calc(8 * var(--tw-u)); }
-.gm-map-name.is-peak > span::before { content: '▲ '; font-size: 0.8em; }
+.gm-map-name.is-peak > span::before { content: '\\25B2  '; font-size: 0.8em; }
 .gm-map-name small { display: block; font: 600 calc(7.5 * var(--tw-u)) var(--tw-font); font-style: normal; color: rgb(197,69,195); }
-.gm-map-name.is-fished > span::after { content: ' ⟡'; color: #1d5b8f; }
+.gm-map-name.is-fished > span::after { content: ' \\27E1'; color: #1d5b8f; }
 .gm-mk.is-mark > i { width: calc(12 * var(--tw-u)); height: calc(12 * var(--tw-u)); margin: calc(-6 * var(--tw-u)) 0 0 calc(-6 * var(--tw-u)); border-radius: 2px;
 	transform: rotate(45deg); background: #d6303a; box-shadow: 0 0 0 1.5px #fff, 0 1px 3px rgba(0,0,0,0.5); }
 .gm-mk.is-mark > i > em { transform: rotate(-45deg); font: 700 calc(7 * var(--tw-u)) var(--tw-font); font-style: normal; color: #fff; }
@@ -323,9 +324,11 @@ export class Minimap {
 
 		const ctx = s.base.getContext( '2d' ), b = s.bake;
 		ctx.putImageData( new ImageData( b.rgba, s.px, s.px ), 0, 0 );
+		freeNow( b.rgba ); // ((M16) a sheet's working arrays' memory back at once)
 		b.rgba = null;
 		// (its soundings, and what it kept to bake by let go: one sheet's worth at a time)
 		s.sounded = b.soundings( Object.keys( this.sheets ).find( ( k ) => this.sheets[ k ] === s ) );
+		freeNow( b.H, b.S );
 		b.H = b.S = null;
 		if ( ! island ) return;
 		const P = ( x, z ) => [ ( x - s.spec.x0 ) * s.ppm, ( z - s.spec.z0 ) * s.ppm ];

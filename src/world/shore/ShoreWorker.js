@@ -12,7 +12,9 @@ self.onmessage = ( e ) => {
 		const field = computeShoreField( fieldGround( ground ), { res: ground.res, swellDir, seaLevel } );
 		// ((M14) a wind sea's: its lee taken out)
 		if ( lee ) shelter( field, swellDir );
-		self.postMessage( { field }, [ field.data.buffer, field.depth.buffer ] );
+		// ((M16) its depths stay here: nothing's solved from them, only from the island's own)
+		delete field.depth;
+		self.postMessage( { field }, [ field.data.buffer ] );
 
 	} catch ( error ) {
 

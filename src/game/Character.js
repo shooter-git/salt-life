@@ -12,6 +12,20 @@ export class Character {
 		this.group = gltf.scene;
 		this.mixer = new AnimationMixer( this.group );
 		this.clips = new Map( gltf.animations.filter( ( c ) => ! clips || clips.includes( c.name ) ).map( ( c ) => [ c.name, c ] ) );
+		// ((M16) the ones kept in arrays of their own: a glTF's clips are views of one buffer, so the keyframes of
+		// those left out weren't let go)
+		if ( clips ) {
+
+			const own = new Map(), copy = ( a ) => own.get( a ) || own.set( a, a.slice() ).get( a );
+			for ( const c of this.clips.values() ) for ( const t of c.tracks ) {
+
+				t.times = copy( t.times );
+				t.values = copy( t.values );
+
+			}
+
+		}
+
 		this.current = null;
 		this.onClipEnd = null;
 		this._action = null;

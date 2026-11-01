@@ -1,4 +1,5 @@
 import { DataUtils } from '../../engine/index.js';
+import { freeNow } from '../../core/FreeNow.js';
 
 // CPU bakes of the terrain maps sampled by the terrain material (and the water):
 //   normal RGBA8: nx * 0.5 + 0.5, nz * 0.5 + 0.5, rock mask, ambient occlusion
@@ -151,6 +152,7 @@ export function bakeTerrainMaps( terrain ) {
 
 	}
 
+	freeNow( hc, ao ); // ((M16) at the load: their memory back at once)
 	return { normal, splat, ms: { ao: t1 - t0, maps: performance.now() - t1 } };
 
 }

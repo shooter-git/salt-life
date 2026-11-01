@@ -233,7 +233,14 @@ export class SheetBake {
 
 			const a = - Math.min( - 0.01, S[ k1 ] ), b = - Math.min( - 0.01, S[ k2 ] );
 			if ( a === b ) return;
-			for ( const c of CONTOURS ) if ( ( a - c ) * ( b - c ) < 0 ) this._ink( i1, j1, i2, j2, S52.DEPCN, 0.9, ( c - a ) / ( b - a ) );
+			// ((M16) by index: an iterator an edge, all over a sheet, was garbage piling up as the island's made)
+			for ( let n = 0; n < CONTOURS.length; n ++ ) {
+
+				const c = CONTOURS[ n ];
+				if ( ( a - c ) * ( b - c ) < 0 ) this._ink( i1, j1, i2, j2, S52.DEPCN, 0.9, ( c - a ) / ( b - a ) );
+
+			}
+
 			return;
 
 		}

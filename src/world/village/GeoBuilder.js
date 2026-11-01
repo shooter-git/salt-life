@@ -1,4 +1,5 @@
 import { BufferAttribute, BufferGeometry, Euler, Matrix3, Matrix4, Quaternion, Vector3 } from '../../engine/index.js';
+import { freeNow } from '../../core/FreeNow.js';
 
 // Procedural geometry toolkit for the village.
 //
@@ -89,6 +90,14 @@ function cached( key, fn ) {
 	}
 
 	return p;
+
+}
+
+// (M16) the shapes made so far let go, once the island's built: some 3 MB nothing reads again; a later
+// build (a storm's wrack) makes what it needs, the same
+export function releaseParts() {
+
+	partCache.clear();
 
 }
 
@@ -579,6 +588,7 @@ export class Batch {
 		this.idx = new Uint32Array( 0 );
 		this.vcount = 0;
 		this.icount = 0;
+		this.handedOver = false; // ((M16) build() has given its arrays to a geometry)
 
 	}
 
@@ -607,6 +617,8 @@ export class Batch {
 
 				const b = new Float32Array( cap * k );
 				b.set( a.subarray( 0, this.vcount * k ) );
+				// ((M16) the old one's memory back at once, but what build() has handed to a geometry)
+				if ( ! this.handedOver ) freeNow( a );
 				return b;
 
 			};
@@ -626,6 +638,7 @@ export class Batch {
 			const icap = exact ? ineed : Math.max( ineed, this.icap * 2, 512 );
 			const b = new Uint32Array( icap );
 			b.set( this.idx.subarray( 0, this.icount ) );
+			if ( ! this.handedOver ) freeNow( this.idx );
 			this.idx = b;
 			this.icap = icap;
 
@@ -757,12 +770,20 @@ export class Batch {
 
 	}
 
+	// (M16) this batch's arrays given back, once it's been appended to another and nothing's built from it
+	free() {
+
+		if ( ! this.handedOver ) freeNow( this.pos, this.nrm, this.uv, this.tint, this.data, this.idx );
+
+	}
+
 	// (arrays filled exactly are handed over as they are, the rest trimmed: a full batch can't write
 	// into them again without growing into new ones first)
 	build() {
 
 		const g = new BufferGeometry();
 		const n = this.vcount;
+		this.handedOver = true;
 		const fit = ( a, length ) => a.length === length ? a : a.slice( 0, length );
 		g.setAttribute( 'position', new BufferAttribute( fit( this.pos, n * 3 ), 3 ) );
 		g.setAttribute( 'normal', new BufferAttribute( fit( this.nrm, n * 3 ), 3 ) );
