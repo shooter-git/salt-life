@@ -76,4 +76,4 @@ She's kept on the sand, not at the dock: `BoatController` asks her `atHome` at t
 
 ## Budget
 
-Her own mesh and paddle: about 6,100 triangles and 2 draw calls, no assets. You in her, while you're in her and only then, are one more islander as anyone else on the island is: 7,400 to 10,300 triangles and 2 or 3 draw calls. So 13,500 to 16,400 in all against the stream's 12,000, and 4 or 5 draw calls; the lobster boat she replaces is 37,000 and 12. Her figure's look is the same file Together loads.
+Her own mesh and paddle: about 6,100 triangles and 2 draw calls, no assets. You in her, while you're in her and only then, are one more islander as anyone else on the island is: 7,400 to 10,300 triangles and 2 or 3 draw calls. So 13,500 to 16,400 in all against the stream's 12,000, and 4 or 5 draw calls; the lobster boat she replaces is 37,000 and 12. Her figure's look is the same file Together loads. Her geometry's 0.46 MB of memory against the lobster boat's 2.89 MB (47,053 triangles, 13 meshes), before the figure's own.
