@@ -18,8 +18,8 @@ const _seat = { left: null, right: null, twist: 0, lean: 0 };
 
 const app_ui = ( game ) => ( game.app.ui && game.app.ui.ui ? game.app.ui.ui.root : null );
 
-// where she's kept when she's brought home: on the sand just east of the pier's foot
-const HOME = { x: 62, z: - 24 }; // m
+// where she's kept when she's brought home, with no berth to go by: on the sand beside the pier's foot (fleet/Berths.js)
+const HOME = { x: 44, z: - 24 }; // m
 
 // (M16) The fishing kayak: 12 ft, paddled, sat in. What she's made of is in KayakHull.js, how she's driven in Paddle.js,
 // how she's sat in in Seat.js. Everything's in `body`, which is what turns over when she capsizes (the rigid body under
