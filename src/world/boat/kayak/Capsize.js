@@ -31,8 +31,8 @@ export function soakStep( s, dt, { rain = 0, wash = 0, wind = 0, sheltered = fal
 
 	let rate = - 0.0011 * ( 1 + Math.max( 0, wind ) / 10 );
 	if ( ! sheltered ) rate += 0.011 * rain;
-	// (her gunwale's about 0.17 m above the waterline)
-	if ( wash > 0.1 ) rate += ( wash - 0.1 ) * 1.8;
+	// (her gunwale's about 0.17 m above the waterline: a sea past that's aboard)
+	if ( wash > 0.17 ) rate += ( wash - 0.17 ) * 4;
 	if ( wind > 12 ) rate += ( wind - 12 ) * 0.0016;
 	return Math.min( 1, Math.max( 0, s + rate * dt ) );
 
