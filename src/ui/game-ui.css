@@ -196,7 +196,10 @@ html.is-touch .tw-root:has(.gm-panel.is-open) :is(.gm-map, .gm-coach) { visibili
 @media (orientation: portrait) {
 	/* (M16) upright, the purse runs the screen's width under the corner menu, its bars shorter */
 	html.is-touch .gm-purse { top: calc(var(--tw-edge) + 56px + var(--tw-1) + env(safe-area-inset-top)); left: var(--gm-l); max-width: none; }
-	html.is-touch .gm-purse :is(.gm-cooler-bar) { width: calc(38 * var(--tw-u)); }
+	html.is-touch .gm-purse { padding-inline: var(--tw-3); }
+	html.is-touch .gm-purse :is(.gm-cooler-bar) { width: calc(30 * var(--tw-u)); }
+	html.is-touch .gm-purse :is(.gm-cooler, .gm-gauge) { font-size: var(--tw-fs-sm); gap: var(--tw-1); }
+	html.is-touch .gm-purse-top, html.is-touch .gm-purse-boat { column-gap: var(--tw-2); }
 	html.is-touch .gm-purse-top, html.is-touch .gm-purse-boat { justify-content: space-between; max-width: none; }
 	/* a panel hangs under the purse (its top stays put as its tabs change) */
 	html.is-touch .gm-panel { top: var(--gm-top); max-height: calc(100% - var(--gm-top) - var(--tw-edge) - env(safe-area-inset-bottom)); transform: translate(-50%, 2%); }
