@@ -217,6 +217,28 @@ for ( const [ sound, idle, run_ ] of [ [ 'lobster', 'boat_engine', 'boat_engine'
 ok( engineOf( 'console', true ) === 'twin' && engineOf( 'console', false ) === 'console', 'the console, with her two and with one' );
 ok( engineOf( 'sportfisher', true ) === 'sportfisher' && engineOf( 'lobster' ) === 'lobster', 'no other boat is a twin console' );
 
+// ---- each one's own starter: slice 1 catches at the end of the game's crank
+for ( const [ sound, bank ] of [ [ 'lobster', 'starter' ], [ 'console', 'outboard_start' ], [ 'twin', 'outboard_start' ], [ 'sportfisher', 'diesels_start' ] ] ) {
+
+	const S = await scape();
+	await run( S, 0.2, state( sound, 0 ) );
+	S.s.boatReady();
+	await settle();
+	const used = [];
+	const shot = S.s._shot;
+	S.s._shot = function ( b, cat, dest, lufs, rate, at, pick ) {
+
+		used.push( [ b, pick ] );
+		return shot.call( this, b, cat, dest, lufs, rate, at, pick );
+
+	};
+	S.s.crank( true );
+	S.s.crank( false );
+	ok( used[ 0 ][ 0 ] === bank && used[ 0 ][ 1 ] === 1 && used[ 1 ][ 0 ] === bank && used[ 1 ][ 1 ] !== 1, `${ sound }: ${ bank }, a crank that catches and one that doesn't` );
+	ok( BANK[ bank ].slices[ 1 ][ 1 ] > 1.1, `and it runs on past her crank (${ BANK[ bank ].slices[ 1 ][ 1 ] } s)` );
+
+}
+
 // ---- the paddle: its own recording, never the swim's
 {
 
@@ -321,7 +343,7 @@ ok( engineOf( 'sportfisher', true ) === 'sportfisher' && engineOf( 'lobster' ) =
 
 	const credits = readFileSync( new URL( '../credits/audio.md', import.meta.url ), 'utf8' );
 	let bytes = 0;
-	for ( const n of [ 'outboard_idle', 'outboard_run', 'twin_idle', 'twin_run', 'diesels_idle', 'diesels_run', 'paddle', 'reel_electric', 'radio_hiss', 'radio_squelch', 'turtle_breath', 'turtle_sand', 'turtle_crawl', 'turtle_hatch', 'hauler' ] ) {
+	for ( const n of [ 'outboard_idle', 'outboard_run', 'twin_idle', 'twin_run', 'diesels_idle', 'diesels_run', 'paddle', 'reel_electric', 'radio_hiss', 'radio_squelch', 'turtle_breath', 'turtle_sand', 'turtle_crawl', 'turtle_hatch', 'hauler', 'outboard_start', 'diesels_start' ] ) {
 
 		if ( ! BANK[ n ] || ! existsSync( new URL( `../public/audio/${ n }.ogg`, import.meta.url ) ) ) ok( false, `${ n }: no file` );
 		if ( ! credits.includes( `\`${ n }.ogg\`` ) ) ok( false, `${ n }: no credit` );

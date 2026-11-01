@@ -201,15 +201,15 @@ const NET_SET = [ 'splash', 'swim', 'emerge', 'step_water', 'step_wetsand' ];
 // at the helm); the shutters in a blow from this wind (m/s: (M14) a fresh breeze's, the loose ones begin)
 const HULL_SET = [ 'hull_slap', 'starter', 'hull_bump', 'shutter', 'keel_scrape', 'bucket', 'bilge_pump', 'bilge_slosh', 'hull_creak' ];
 const SHUTTER_WIND = 9;
-// (M16) each boat's own engine (none on the kayak: nothing but her paddle). idle and run: its beds, crossfaded with rpm
+// (M16) each boat's own engine (none on the kayak: nothing but her paddle). starter: her own (the lobster boat's is 'starter'); idle and run: its beds, crossfaded with rpm
 // from fade[ 0 ] to fade[ 1 ] (the lobster boat has the one recording, opened up); db: at the helm at idle, at full rpm;
 // rate: of the running bed at rpm 0, and what full rpm adds (the recordings are of a cruise); lp: the top of what's
 // heard at rpm 0, and what full rpm adds: a diesel's below deck and dark, an outboard's out in the open behind you
 const ENGINES = {
 	lobster: { run: 'boat_engine', db: [ MIX.engineIdle, MIX.engineRun ], rate: [ 0.8, 0.85 ], lp: [ 900, 6500 ] },
-	console: { idle: 'outboard_idle', run: 'outboard_run', fade: [ 0.18, 0.4 ], db: [ - 28, - 21 ], rate: [ 0.76, 0.48 ], lp: [ 1800, 8000 ] },
-	twin: { idle: 'twin_idle', run: 'twin_run', fade: [ 0.18, 0.4 ], db: [ - 27, - 20 ], rate: [ 0.74, 0.46 ], lp: [ 1800, 8000 ] },
-	sportfisher: { idle: 'diesels_idle', run: 'diesels_run', fade: [ 0.18, 0.42 ], db: [ - 32, - 23 ], rate: [ 0.74, 0.5 ], lp: [ 600, 4200 ] },
+	console: { starter: 'outboard_start', idle: 'outboard_idle', run: 'outboard_run', fade: [ 0.18, 0.4 ], db: [ - 28, - 21 ], rate: [ 0.76, 0.48 ], lp: [ 1800, 8000 ] },
+	twin: { starter: 'outboard_start', idle: 'twin_idle', run: 'twin_run', fade: [ 0.18, 0.4 ], db: [ - 27, - 20 ], rate: [ 0.74, 0.46 ], lp: [ 1800, 8000 ] },
+	sportfisher: { starter: 'diesels_start', idle: 'diesels_idle', run: 'diesels_run', fade: [ 0.18, 0.42 ], db: [ - 32, - 23 ], rate: [ 0.74, 0.5 ], lp: [ 600, 4200 ] },
 	kayak: null,
 };
 // which of them a boat has: the console's two outboards are her own sound
@@ -637,6 +637,7 @@ export class SoundScape {
 		const E = ENGINES[ this.env.boat.sound ];
 		if ( ! E ) return;
 		this._want( E.run );
+		if ( E.starter ) this._want( E.starter );
 		if ( E.idle ) this._want( E.idle );
 
 	}
@@ -645,7 +646,9 @@ export class SoundScape {
 	// and runs on into her idle as the engine's bed comes up (at its own speed, to keep that time)
 	crank( catches ) {
 
-		this._shot( 'starter', 'start', this.boatSum, MIX.starter, 1, 0, catches ? 1 : 0 );
+		// ((M16) hers; slice 0 and any others are cranks that don't catch, slice 1 the one that does)
+		const E = ENGINES[ this.env.boat.sound ], bank = E && E.starter || 'starter', n = BANK[ bank ].slices.length;
+		this._shot( bank, 'start', this.boatSum, MIX.starter, 1, 0, catches ? 1 : n > 2 && Math.random() < 0.5 ? 2 : 0 );
 
 	}
 

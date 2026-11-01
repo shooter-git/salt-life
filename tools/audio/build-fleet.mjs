@@ -1,8 +1,10 @@
 // (M16) Builds the fleet's sounds from CC0 Freesound previews (see README.md):
 //   node dl.mjs 637202:kyles 593024:paulprit 195743:blaukreuz 509323:AugustSandberg 683806:mpuffenbarger 636210:lartti
-//     524205:JovianSounds 389631:_stubb 662864:schneidi67 851733:IENBA 516923:mariethompson 696035:BeroundSound
+//     524205:JovianSounds 389631:_stubb 662864:schneidi67 623692:launchsite 516923:mariethompson 696035:BeroundSound
+//     435656:YellowJacketStudios
 //   node build-fleet.mjs            -> out/*.ogg + fleet-bank.json (the bank entries for soundBank.js)
 //   node build-fleet.mjs --try      -> each loop and each slice on its own in ../sounds/try/, for the listening page
+//   node build-fleet.mjs paddle …   -> only those, kept alongside the rest in fleet-bank.json
 // The recordings were chosen by ear on the listening page. The cuts are from a map of each one (level, its steadiest
 // stretch, voiced pitch), so hear them before trusting them:
 //   outboard_idle, outboard_run: the console's one outboard, at idle after it's caught and at its steady, brighter speed
@@ -15,7 +17,10 @@
 //   radio_squelch: a walkie-talkie's sign-off squelch
 //   turtle_breath: a heavy huff (no CC0 recording of a sea turtle was to be had)
 //   turtle_sand: hands digging sand, six throws
-//   turtle_crawl: thick sand moved about, four strokes
+//   turtle_crawl: a heavy sandbag dragged over sand, four strokes of her body hauled up the beach
+//   outboard_start: the console's starter, from the same take as her running: a false start, one that catches (at 1.1 s,
+//     as Hull.CRANK_S ends), and another false start, each as loud against the others as recorded
+//   diesels_start: the sportfisher's: a big truck's diesel (no CC0 recording of a big boat's was to be had), laid out the same way
 //   turtle_hatch: a scrabble in soft sand, five stretches
 //   hauler: a hydraulic pump, steady
 // Loops as build-sea.mjs's are; the sprites too.
@@ -23,11 +28,12 @@ import { decode, writeWav, peak, gain, lufsOf, makeLoop, encode, momentary, fade
 import fs from 'node:fs';
 
 const OUT = 'out', W = 'work', TRY = '../sounds/try', GAP = 0.08, TRYING = process.argv.includes( '--try' );
+const ONLY = process.argv.slice( 2 ).filter( ( a ) => ! a.startsWith( '--' ) ), wanted = ( name ) => ! ONLY.length || ONLY.includes( name );
 fs.mkdirSync( OUT, { recursive: true } );
 fs.mkdirSync( W, { recursive: true } );
 if ( TRYING ) fs.mkdirSync( TRY, { recursive: true } );
 const hp = ( f ) => `highpass=f=${ f }:p=2`, sec = ( s ) => Math.round( s * SR );
-const bank = {};
+const bank = fs.existsSync( 'fleet-bank.json' ) ? JSON.parse( fs.readFileSync( 'fleet-bank.json', 'utf8' ) ) : {};
 
 // the recording and itself a touch sharper and a moment on: two engines out of step
 function pair( [ x ], rate = 1.006, on = 0.37 ) {
@@ -57,6 +63,7 @@ const LOOPS = {
 };
 for ( const [ name, L ] of Object.entries( LOOPS ) ) {
 
+	if ( ! wanted( name ) ) continue;
 	let seg = decode( `raw/${ L.src }.ogg`, 1, L.from, L.len + L.xf + 0.6, L.af );
 	if ( L.pair ) seg = pair( seg );
 	const loop = makeLoop( seg, sec( L.len ), sec( L.xf ) );
@@ -80,18 +87,22 @@ const SPRITES = {
 	radio_squelch: { src: 524205, af: hp( 200 ), fades: [ 0.002, 0.04 ], cuts: [ [ 0, 0.48 ] ] },
 	turtle_breath: { src: 389631, af: hp( 50 ), fades: [ 0.02, 0.2 ], cuts: [ [ 0.2, 1.4 ] ] },
 	turtle_sand: { src: 662864, af: hp( 200 ), fades: [ 0.01, 0.12 ], cuts: [ [ 14.77, 0.62 ], [ 15.66, 0.58 ], [ 20.18, 0.92 ], [ 36.19, 1 ], [ 60.51, 0.62 ], [ 62.89, 0.78 ] ] },
-	turtle_crawl: { src: 851733, af: hp( 150 ), fades: [ 0.01, 0.15 ], cuts: [ [ 11.2, 0.82 ], [ 37.85, 1.15 ], [ 47.15, 0.92 ], [ 49.65, 0.95 ] ] },
+	turtle_crawl: { src: 623692, af: hp( 120 ), fades: [ 0.08, 0.3 ], cuts: [ [ 0.95, 1.25 ], [ 1.9, 1.25 ], [ 2.7, 1.25 ], [ 4.05, 1.3 ] ] },
+	outboard_start: { src: 637202, af: hp( 40 ), fades: [ 0.005, 0.15 ], shared: true, cuts: [ [ 127.15, 1.15 ], [ 131.4, 3.1, 0.4 ], [ 128.82, 1.15 ] ] },
+	diesels_start: { src: 435656, af: hp( 30 ), fades: [ 0.005, 0.15 ], shared: true, cuts: [ [ 0.12, 1.1 ], [ 0.95, 3.4, 0.5 ], [ 0.8, 1.1 ] ] },
 	turtle_hatch: { src: 516923, af: hp( 300 ), fades: [ 0.08, 0.15 ], cuts: [ [ 30.5, 0.8 ], [ 31.5, 0.8 ], [ 32.5, 0.8 ], [ 33.5, 0.8 ], [ 34.6, 0.8 ] ] },
 };
 for ( const [ name, S ] of Object.entries( SPRITES ) ) {
 
-	const parts = S.cuts.map( ( [ t, d ] ) => {
+	if ( ! wanted( name ) ) continue;
+	const parts = S.cuts.map( ( [ t, d, out ] ) => {
 
 		const [ x ] = decode( `raw/${ S.src }.ogg`, 1, t, d, S.af );
-		fade( [ x ], sec( S.fades[ 0 ] ), sec( S.fades[ 1 ] ) );
-		return gain( [ x ], 0.89 / Math.max( peak( [ x ] ), 1e-6 ) )[ 0 ];
+		fade( [ x ], sec( S.fades[ 0 ] ), sec( out ?? S.fades[ 1 ] ) );
+		return S.shared ? x : gain( [ x ], 0.89 / Math.max( peak( [ x ] ), 1e-6 ) )[ 0 ];
 
 	} );
+	if ( S.shared ) gain( parts, 0.89 / Math.max( peak( parts ), 1e-6 ) );
 	const table = [];
 	let t = GAP;
 	for ( const x of parts ) {
@@ -113,7 +124,8 @@ for ( const [ name, S ] of Object.entries( SPRITES ) ) {
 	writeWav( `${ W }/${ name }.wav`, [ buf ] );
 	encode( `${ W }/${ name }.wav`, `${ OUT }/${ name }.ogg`, 64, 1 );
 	const y = decode( `${ OUT }/${ name }.ogg`, 1 );
-	const lufs = table.map( ( [ ts, d ] ) => + Math.max( ...momentary( [ y[ 0 ].slice( Math.floor( ts * SR ), Math.floor( ( ts + d ) * SR ) ) ] ) ).toFixed( 1 ) );
+	let lufs = table.map( ( [ ts, d ] ) => + Math.max( ...momentary( [ y[ 0 ].slice( Math.floor( ts * SR ), Math.floor( ( ts + d ) * SR ) ) ] ) ).toFixed( 1 ) );
+	if ( S.shared ) lufs = lufs.map( () => Math.max( ...lufs ) ); // (one loudness, the loudest's: they play as loud as each other sounds in the recording)
 	bank[ name ] = { file: `${ name }.ogg`, slices: table, lufs, src: [ S.src ] };
 	if ( TRYING ) fs.copyFileSync( `${ OUT }/${ name }.ogg`, `${ TRY }/${ name }.ogg` );
 	console.log( `sprite ${ name.padEnd( 14 ) } ${ table.length } slices  lufs ${ lufs.join( ' ' ) }` );

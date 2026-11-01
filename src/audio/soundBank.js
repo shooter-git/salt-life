@@ -102,6 +102,9 @@ export const BANK = {
 	radio_squelch: { file: 'radio_squelch.ogg', slices: [ [ 0.08, 0.48 ] ], lufs: [ -19.6 ] },
 	turtle_breath: { file: 'turtle_breath.ogg', slices: [ [ 0.08, 1.4 ] ], lufs: [ -18.4 ] },
 	turtle_sand: { file: 'turtle_sand.ogg', slices: [ [ 0.08, 0.62 ], [ 0.78, 0.58 ], [ 1.44, 0.92 ], [ 2.44, 1 ], [ 3.52, 0.62 ], [ 4.22, 0.78 ] ], lufs: [ -17.5, -19.5, -17.7, -21.6, -20.5, -28.2 ] },
-	turtle_crawl: { file: 'turtle_crawl.ogg', slices: [ [ 0.08, 0.82 ], [ 0.98, 1.15 ], [ 2.21, 0.92 ], [ 3.21, 0.95 ] ], lufs: [ -27.1, -18.8, -23.8, -23.1 ] },
+	turtle_crawl: { file: 'turtle_crawl.ogg', slices: [ [ 0.08, 1.25 ], [ 1.41, 1.25 ], [ 2.74, 1.25 ], [ 4.07, 1.3 ] ], lufs: [ -19.2, -15.8, -16.9, -13.9 ] },
+	// (a false start, one that catches at 1.1 s, another false start)
+	outboard_start: { file: 'outboard_start.ogg', slices: [ [ 0.08, 1.15 ], [ 1.31, 3.1 ], [ 4.49, 1.15 ] ], lufs: [ -21.8, -21.8, -21.8 ] },
+	diesels_start: { file: 'diesels_start.ogg', slices: [ [ 0.08, 1.1 ], [ 1.26, 3.4 ], [ 4.74, 1.08 ] ], lufs: [ -14.5, -14.5, -14.5 ] },
 	turtle_hatch: { file: 'turtle_hatch.ogg', slices: [ [ 0.08, 0.8 ], [ 0.96, 0.8 ], [ 1.84, 0.8 ], [ 2.72, 0.8 ], [ 3.6, 0.8 ] ], lufs: [ -15.3, -18.7, -12.8, -13.3, -17.9 ] },
 };

@@ -226,6 +226,20 @@
 			"author": "blaukreuz"
 		},
 		{
+			"path": "public/audio/diesels_start.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/YellowJacketStudios/sounds/435656/",
+			"title": "FORD LTL 9000_engine start and idle",
+			"author": "YellowJacketStudios"
+		},
+		{
+			"path": "public/audio/diesels_start.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/YellowJacketStudios/sounds/435656/",
+			"title": "FORD LTL 9000_engine start and idle",
+			"author": "YellowJacketStudios"
+		},
+		{
 			"path": "public/audio/drips.m4a",
 			"license": "CC0-1.0",
 			"source": "https://freesound.org/people/Elements-Library/sounds/683778/",
@@ -430,6 +444,20 @@
 		},
 		{
 			"path": "public/audio/outboard_run.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/kyles/sounds/637202/",
+			"title": "boat outboard motor real modern throaty start false starts take off ride various speeds accelerate decelerate slow and stop engine shut off",
+			"author": "kyles"
+		},
+		{
+			"path": "public/audio/outboard_start.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/kyles/sounds/637202/",
+			"title": "boat outboard motor real modern throaty start false starts take off ride various speeds accelerate decelerate slow and stop engine shut off",
+			"author": "kyles"
+		},
+		{
+			"path": "public/audio/outboard_start.ogg",
 			"license": "CC0-1.0",
 			"source": "https://freesound.org/people/kyles/sounds/637202/",
 			"title": "boat outboard motor real modern throaty start false starts take off ride various speeds accelerate decelerate slow and stop engine shut off",
@@ -1054,16 +1082,16 @@
 		{
 			"path": "public/audio/turtle_crawl.m4a",
 			"license": "CC0-1.0",
-			"source": "https://freesound.org/people/IENBA/sounds/851733/",
-			"title": "Thick Sand Movements",
-			"author": "IENBA"
+			"source": "https://freesound.org/people/launchsite/sounds/623692/",
+			"title": "sandbag drag.wav",
+			"author": "launchsite"
 		},
 		{
 			"path": "public/audio/turtle_crawl.ogg",
 			"license": "CC0-1.0",
-			"source": "https://freesound.org/people/IENBA/sounds/851733/",
-			"title": "Thick Sand Movements",
-			"author": "IENBA"
+			"source": "https://freesound.org/people/launchsite/sounds/623692/",
+			"title": "sandbag drag.wav",
+			"author": "launchsite"
 		},
 		{
 			"path": "public/audio/turtle_hatch.m4a",

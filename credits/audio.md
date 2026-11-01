@@ -96,7 +96,9 @@ slice table is in `src/audio/soundBank.js`.
 | `radio_squelch.ogg` | the VHF's squelch breaking | [Radio Sign Off / Squelch](https://freesound.org/people/JovianSounds/sounds/524205/) | JovianSounds | CC0 1.0 |
 | `turtle_breath.ogg` | a nesting turtle's breath: a heavy huff, slowed in play (no CC0 recording of a sea turtle was to be had) | [Huff 2](https://freesound.org/people/_stubb/sounds/389631/) | _stubb | CC0 1.0 |
 | `turtle_sand.ogg` | 6 throws of her flippers: hands digging sand (high-passed 200 Hz) | [digging sand with hands](https://freesound.org/people/schneidi67/sounds/662864/) | schneidi67 | CC0 1.0 |
-| `turtle_crawl.ogg` | 4 strokes of her crawl: thick sand moved about (high-passed 150 Hz) | [Thick Sand Movements](https://freesound.org/people/IENBA/sounds/851733/) | IENBA | CC0 1.0 |
+| `turtle_crawl.ogg` | 4 strokes of her crawl: a heavy sandbag dragged over sand (high-passed 120 Hz) | [sandbag drag.wav](https://freesound.org/people/launchsite/sounds/623692/) | launchsite | CC0 1.0 |
+| `outboard_start.ogg` | the console's starter: two false starts and the start that catches, as recorded | [boat outboard motor real modern throaty start false starts take off ride various speeds accelerate decelerate slow and stop engine shut off](https://freesound.org/people/kyles/sounds/637202/) | kyles | CC0 1.0 |
+| `diesels_start.ogg` | the sportfisher's starter: a big truck's diesel cranking, two that don't catch and one that does | [FORD LTL 9000_engine start and idle](https://freesound.org/people/YellowJacketStudios/sounds/435656/) | YellowJacketStudios | CC0 1.0 |
 | `turtle_hatch.ogg` | 5 stretches of a nest's hatchlings: a scrabble in soft sand (high-passed 300 Hz) | [scrabble and soft sand pour](https://freesound.org/people/mariethompson/sounds/516923/) | mariethompson | CC0 1.0 |
 | `hauler.ogg` | the lobster boat's trap hauler: a hydraulic pump, steady (5 s) — loop | [pump](https://freesound.org/people/BeroundSound/sounds/696035/) | BeroundSound | CC0 1.0 |
 
