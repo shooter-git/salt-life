@@ -69,6 +69,19 @@ ok( sizeOf( 'trawler' ) === SIZE.lobster, 'and a game that doesn\'t say is the l
 	const b1 = c.make( 'console' ), b2 = c.make( 'console' );
 	ok( b1.getObjectByName( 'boat-hull' ).geometry === b2.getObjectByName( 'boat-hull' ).geometry && e.copies.size === 2, 'two of her, one set of meshes' );
 	ok( b1.userData.lamps !== b2.userData.lamps && b1.userData.lamps.points.geometry.attributes.position.count > 0, 'their lamps their own, from her figures' );
+	// (M16) each with the engines her owner has
+	const engines = ( b ) => [ b.getObjectByName( 'boat-outboard-tilt' ).position.x, b.getObjectByName( 'boat-outboard2-tilt' ).visible ];
+	c.fit( b1, { twin: true } );
+	c.fit( b2, { twin: false } );
+	ok( engines( b1 )[ 0 ] > 0 && engines( b1 )[ 1 ] && engines( b2 )[ 0 ] === 0 && ! engines( b2 )[ 1 ], 'a console\'s copies: two outboards for a twin, one on the centreline for a single' );
+	c.fit( b1, { twin: false } );
+	ok( engines( b1 )[ 0 ] === 0 && ! engines( b1 )[ 1 ], 'and a copy follows her owner when she changes' );
+	const noGear = new Scene();
+	e.model.fitCopy( noGear, { twin: true } );
+	ok( true, 'a low tier\'s copy, with no engines to show, is left as it is' );
+	const lob = c.make( 'lobster' );
+	c.fit( lob, { twin: true } );
+	c.drop( lob );
 	c.tidy( 120 );
 	ok( c.types.has( 'console' ), 'kept while any of her is about' );
 	c.drop( b1 ); c.drop( b2 );

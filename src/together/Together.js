@@ -1,10 +1,11 @@
+import { engineOf } from '../audio/SoundScape.js';
 import { berthOf } from '../game/fleet/Berths.js';
 import { Vector3, Quaternion, Matrix4, MathUtils } from '../engine/index.js';
 import { gltfLoader } from '@allthespaces/portal/three';
 import { Avatar, LOOKS, lookOf } from './Avatar.js';
 import { figureStandIn } from './Figure.js';
 import { RecordsBoard } from './RecordsBoard.js';
-import { BoatCopies, isBoat, sizeOf, fitWire } from './BoatCopies.js';
+import { BoatCopies, isBoat, sizeOf, fitWire, fitStats } from './BoatCopies.js';
 import { SPARE_BERTHS, atDock, berthShare, laidAt, spareBerth } from './Berths.js';
 import { Crew, footY, perched } from './Crew.js';
 import { Specks } from './Specks.js';
@@ -1268,7 +1269,7 @@ export class Together {
 		if ( app.boat.seated && m === 'h' && ! p.riding ) body.kw = app.boat.sent; // (a kayak: her stroke)
 		if ( p.riding ) body.R = p.boat.owner;
 		// (M16) your job aboard (Crew.js), and at someone else's helm, the lever and the wheel
-		if ( this.crew.job === 'tower' ) body.J = 1;
+		if ( this.crew.job === 'tower' || ( m === 'h' && p.atHelm?.upper ) ) body.J = 1; // (at the tower's helm: their job's still the helm, Crew's)
 		else if ( this.crew.job === 'chair' ) body.J = 2;
 		if ( p.riding && m === 'h' ) body.c = [ r2( p.boat.throttle ), r2( p.boat.steer ) ];
 		if ( body.B && this.app.searchlight ) body.S = 1; // (your boat's searchlight is on)
@@ -1851,6 +1852,7 @@ export class Together {
 		cur.boatId = isBoat( near.Y ) ? near.Y : 'lobster';
 		cur.fit = Number.isInteger( near.f ) ? near.f : null;
 		cur.kw = Array.isArray( near.kw ) && near.kw.length === 5 && near.kw.every( Number.isFinite ) ? near.kw : null;
+		cur.twin = cur.fit !== null && !! fitStats( cur.boatId, cur.fit ).twin; // (her two outboards, for the sound)
 		cur.job = near.J === 1 ? 'tower' : near.J === 2 ? 'chair' : null;
 		cur.helm = Array.isArray( near.c ) && near.c.length === 2 && near.c.every( Number.isFinite ) ? [ MathUtils.clamp( near.c[ 0 ], - 1, 1 ), MathUtils.clamp( near.c[ 1 ], - 1, 1 ) ] : null;
 		cur.spot = near.S === 1;
@@ -1993,7 +1995,7 @@ export class Together {
 		} else if ( deck && c.mode === 'helm' ) {
 
 			// (on the sole under her helm: its camera's eye is lower than a figure standing there)
-			const helm = M.helmEye, at = M.helm && M.helm.stand, hx = at ? at[ 0 ] : helm.x, hz = at ? at[ 1 ] : helm.z;
+			const up = c.job === 'tower' && M.towerHelm, helm = up ? M.towerHelm.eye : M.helmEye, at = ! up && M.helm && M.helm.stand, hx = at ? at[ 0 ] : helm.x, hz = at ? at[ 1 ] : helm.z;
 			_bp.set( hx, footY( M, hx, hz, helm.y - 1 ), hz ).applyQuaternion( deck.quat ).add( deck.pos );
 			g.position.copy( _bp );
 			_bq.setFromAxisAngle( _up, c.yaw + Math.PI );
@@ -2248,7 +2250,7 @@ export class Together {
 		if ( p.riding ) {
 
 			const o = this.others.get( p.boat.owner ), c = o && o.cur;
-			return { active: !! ( c && c.rpm > 0.05 ), rpm: c ? c.rpm : 0, crank: c ? c.crank : 0, speed: p.boat.speed, position: p.boat.position, hull: c ? c.hull : null };
+			return { active: !! ( c && c.rpm > 0.05 ), rpm: c ? c.rpm : 0, crank: c ? c.crank : 0, speed: p.boat.speed, position: p.boat.position, hull: c ? c.hull : null, id: c ? engineOf( c.boatId, c.twin ) : 'lobster' };
 
 		}
 
@@ -2269,7 +2271,7 @@ export class Together {
 
 		}
 
-		return best ? { active: best.cur.rpm > 0.05, rpm: best.cur.rpm, crank: best.cur.crank, speed: best.boatSpeed, position: ( best.cur.drawn || best.cur.boat ).pos, hull: best.cur.hull } : null;
+		return best ? { active: best.cur.rpm > 0.05, rpm: best.cur.rpm, crank: best.cur.crank, speed: best.boatSpeed, position: ( best.cur.drawn || best.cur.boat ).pos, hull: best.cur.hull, id: engineOf( best.cur.boatId, best.cur.twin ) } : null;
 
 	}
 

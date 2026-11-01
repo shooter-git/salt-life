@@ -89,7 +89,7 @@ import { Character } from './game/Character.js';
 import { TouchControls } from './ui/TouchControls.js';
 import { Hud } from './ui/Hud.js';
 import { Wake } from './ocean/Wake.js';
-import { SoundScape } from './audio/SoundScape.js';
+import { SoundScape, engineOf } from './audio/SoundScape.js';
 import { Game } from './game/Game.js';
 import { Together } from './together/Together.js';
 import { BoatLamps } from './world/boat/BoatLamps.js';
@@ -504,6 +504,7 @@ export class App {
 		};
 
 		this.audio = new SoundScape( { context: () => portal.audio.context, output, tier } );
+		if ( this.turtles ) Object.assign( this.turtles.sounds, this.audio.turtleHooks() );
 		// (M10) the village's shutters, banging in a blow: (M14) each loose one as it hits the wall or its frame
 		if ( this.village.shutters ) this.village.shutters.onBang = ( x, y, z, k ) => this.audio.shutterBang( x, y, z, k );
 		// (the surf follows the shore waves: Tidewater's are { value } uniforms, these plain params)
@@ -1875,9 +1876,10 @@ export class App {
 			aboard: this.player.mode === 'boat' || this.player.mode === 'deck',
 			daylight: 1 - G.night.value,
 			nearPier: Math.abs( p.x - pier.x ) < 12 && p.z > pier.zStart - 5 && p.z < pier.zEnd + 8,
-			boat: theirs ? { active: theirs.active, rpm: theirs.rpm, speed: theirs.speed, position: theirs.position, listenerInside: false } : {
+			boat: theirs ? { active: theirs.active, rpm: theirs.rpm, speed: theirs.speed, position: theirs.position, listenerInside: false, sound: theirs.id } : {
+				sound: engineOf( this.boat.id, this.boat.fitted && this.boat.fitted.twin ), // ((M16) her own engine)
 				active: boat.driven && !! boat.handling.engine, rpm: boat.rpm, throttle: boat.throttle, speed: boat.velocity.length(),
-				position: this.boat.group.position, listenerInside: this.player.mode === 'boat' && this.player.camMode === 'first' && ! this.boat.seated,
+				position: this.boat.group.position, listenerInside: this.player.mode === 'boat' && this.player.camMode === 'first' && ! this.boat.seated && ! this.player.atHelm?.open,
 			},
 			// (M10) her hull: yours, or (M11) the one you ride in, as her skipper hears it (hullHeard)
 			hull: theirs ? theirs.hull || null : this.game ? this.hullHeard() : null,

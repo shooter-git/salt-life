@@ -183,7 +183,8 @@ export class Crew {
 
 		}
 
-		if ( this.job === 'tower' && crew.length ) this._spot( dt );
+		// (at the tower's helm you're as high, and it's what you're up there to do)
+		if ( ( this.job === 'tower' || ( p.mode === 'boat' && p.atHelm?.upper ) ) && crew.length ) this._spot( dt );
 		else this._looking = null;
 		const now = performance.now() / 1000;
 		for ( let i = this._marks.length - 1; i >= 0; i -- ) if ( now > this._marks[ i ].until ) {

@@ -56,6 +56,12 @@ The open sea's own (M15: its wash, the wind off open water, and a crest spilling
 dl.mjs 583205:Sotiris_Laskaris 830338:pnwheeler 607261:LarsErikErtzgaardRingen`, then `node build-sea.mjs` (its bank
 entries in `sea-bank.json`), then `tame.mjs`.
 
+The fleet's own (M16: the console's outboards, the sportfisher's diesels, the paddle, the electric reel, the VHF's hiss and
+squelch, a nesting turtle's night, the trap hauler) are built the same way: `node dl.mjs 637202:kyles 593024:paulprit
+195743:blaukreuz 509323:AugustSandberg 683806:mpuffenbarger 636210:lartti 524205:JovianSounds 389631:_stubb
+662864:schneidi67 623692:launchsite 516923:mariethompson 696035:BeroundSound 435656:YellowJacketStudios`, then `node build-fleet.mjs` (its bank entries in
+`fleet-bank.json`), then `tame.mjs`. `node build-fleet.mjs --try` also copies each to `tools/sounds/try/`.
+
 ## All the Spaces' loudness rule, and the AAC copies
 
 All the Spaces' build turns a sound down when it's louder than -14 LUFS integrated or peaks above -1 dBFS.

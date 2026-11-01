@@ -13,7 +13,7 @@ import { triangleCount } from './GeoKit.js';
 //   lines                  her HullLines: floating, spray, walking and the lamps read them
 //   handling               how she handles (world/boat/Handling.js)
 //   dimensions, hydro, hullSamples   from floatBody() below
-//   helm                   { x, z, eye, rise } where you take the wheel; eye: Vector3 of your eye there; rise: [ x, z ] where you stand up to
+//   helm                   { x, z, eye, rise } where you take the wheel; eye: Vector3 of your eye there; rise: [ x, z ] where you stand up to; open: it's in the open air, not a wheelhouse (what you hear)
 //   helmEye                helm.eye, by the older name
 //   boardPoint, exitPoints where you step aboard, where you can step off
 //   propeller, rudder      Vector3s: her wash and Handling.propellerAndRudder
@@ -217,6 +217,14 @@ export class Vessel {
 	soleY( x, z, y ) {
 
 		return this.lines.deckY;
+
+	}
+
+	// (M16) the helm you can take from p (boat frame), or null: on the helm's own deck, on a boat of several. A boat with two says which
+	helmAt( p, reach ) {
+
+		const h = this.helm;
+		return Math.hypot( p.x - h.x, p.z - h.z ) < reach && Math.abs( p.y - ( h.y ?? p.y ) ) < 1.2 ? h : null;
 
 	}
 

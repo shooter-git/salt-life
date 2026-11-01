@@ -7,6 +7,7 @@ import { BoatController } from '../src/player/BoatController.js';
 import { sightOf, SIGHT } from '../src/game/Chart.js';
 import { PerspectiveCamera, Quaternion, Vector3 } from '../src/engine/index.js';
 import { Player } from '../src/player/Player.js';
+import { jobAt, footY, Crew } from '../src/together/Crew.js';
 
 let bad = 0;
 const ok = ( c, what ) => {
@@ -17,6 +18,7 @@ const ok = ( c, what ) => {
 };
 
 const m = new SportfisherModel( 'high' ), low = new SportfisherModel( 'low' );
+const TOWER_Z = - 0.6;
 
 // she's a 48
 const ft = m.dimensions.length / 0.3048;
@@ -260,6 +262,148 @@ ok( swayAt( calm, SF.tower, {}, 1 / 60 ) < 0.01, 'flat water throws you nowhere'
 	hits.add( 'KeyE' );
 	frames( 2 );
 	ok( player.mode === 'deck' && Math.abs( player.deckPos.y - SF.bridge ) < 0.05, 'and you stand up on the bridge' );
+
+	// the tower's helm: E at its pod, the eye up there, a wheel and lever of its own, and back on the platform after
+	const TH = boatM.towerHelm, turned = ( i ) => {
+
+		const a = new Float32Array( 16 ), b = new Float32Array( 16 );
+		boatM.wheelMesh.instanceMatrix.array.slice( i * 16, i * 16 + 16 ).forEach( ( v, k ) => a[ k ] = v );
+		boatM._wheels[ i ].toArray( b );
+		return a.some( ( v, k ) => Math.abs( v - b[ k ] ) > 1e-3 );
+
+	};
+
+	const standAt = ( x, z, y = SF.tower ) => {
+
+		player.deckPos.set( x, y, z );
+		player.deckVel.set( 0, 0, 0 );
+		frames( 3 );
+		return player.prompt?.text;
+
+	};
+
+	frames( 60 * 2 ); // (her wheel come back to the middle)
+	player.camMode = 'first';
+	ok( standAt( 0, tower.off.z ) === tower.downText, 'at the ladder\'s head it\'s the ladder' );
+	ok( standAt( 0, - 0.65 ) === 'Take the helm', 'at the pod, the helm' );
+	const standing = player.deckPos.clone();
+	hits.add( 'KeyE' );
+	frames( 2 );
+	ok( player.mode === 'boat' && player.atHelm === TH && c2.driven, 'E takes the tower\'s helm' );
+	const eyeWant = c2.toWorld( TH.eye, new Vector3() );
+	ok( cam.position.distanceTo( eyeWant ) < 0.05 && cam.position.y - c2.position.y > SF.tower + 1, `the eye's on the platform: ${ ( ( cam.position.y - c2.position.y ) / 0.3048 ).toFixed( 1 ) } ft up` );
+	ok( jobAt( boatM, player.mode, player.deckPos ) === 'helm', 'to the crew, you\'ve the helm' );
+	held.add( 'KeyA' ).add( 'KeyW' );
+	frames( 30 );
+	boatM.setSteering( c2.steer ); // (what BoatController.update does)
+	boatM.setThrottle( c2.throttle );
+	held.clear();
+	ok( c2.throttle > 0 && c2.steer > 0.2 && turned( 1 ) && ! turned( 0 ), 'she answers it, and only its wheel turns' );
+	m.setThrottle( 0 );
+	m.helmInUse = m.towerHelm;
+	m.setThrottle( 0.5 );
+	ok( m.towerThrottle.rotation.x > 0 && m.throttleMesh.rotation.x === 0, 'and only its lever' );
+	m.setThrottle( 0 );
+	m.helmInUse = m.helm;
+	frames( 60 * 3 );
+	hits.add( 'KeyE' );
+	frames( 2 );
+	ok( player.mode === 'deck' && ! c2.driven && Math.abs( player.deckPos.y - SF.tower ) < 0.05 && Math.abs( player.deckPos.z - TH.rise[ 1 ] ) < 0.1, 'leaving it, you\'re on the platform' );
+	ok( jobAt( boatM, player.mode, player.deckPos ) === 'tower', 'and up the tower, to the crew' );
+	ok( Math.abs( footY( boatM, TH.eye.x, TH.eye.z, TH.eye.y - 1 ) - SF.tower ) < 0.01, 'someone at it is drawn on the platform' );
+	standAt( 0, - 0.42 );
+	ok( player.deckPos.z < - 0.5, 'and the pod\'s solid' );
+
+	// the bridge's is as it was
+	standAt( boatM.helm.rise[ 0 ], boatM.helm.rise[ 1 ], SF.bridge );
+	hits.add( 'KeyE' );
+	frames( 2 );
+	ok( player.atHelm === boatM.helm && cam.position.distanceTo( c2.toWorld( boatM.helmEye, new Vector3() ) ) < 0.05, 'the bridge\'s helm is still the bridge\'s' );
+	hits.add( 'KeyE' );
+	frames( 2 );
+	ok( Math.abs( player.deckPos.y - SF.bridge ) < 0.05, 'and you rise from it on the bridge' );
+	ok( boatM.helmAt( new Vector3( TH.x, SF.bridge, TH.z ), 0.75 ) === boatM.helm, 'and under the tower\'s, it\'s the bridge\'s you take' );
+
+	// someone riding: as any helm, only when it's free
+	player.riding = true;
+	c2.helmFree = false;
+	ok( standAt( 0, - 0.65 ) !== 'Take the helm', 'riding, not while her owner has it' );
+	c2.helmFree = true;
+	ok( standAt( 0, - 0.65 ) === 'Take the helm', 'riding, with her owner aboard and away from it, yes' );
+	player.riding = false;
+
+	// stepping off someone else's: it has no berth here
+	{
+
+		const own = player.boat, theirs = Object.create( c2 );
+		Object.defineProperty( theirs, 'berth', { value: undefined } );
+		player.boardBoat();
+		player.boat = theirs;
+		player.riding = true;
+		let threw = null;
+		try {
+
+			player.exitBoat( null, 1 );
+
+		} catch ( e ) {
+
+			threw = e;
+
+		}
+
+		ok( ! threw && ! player.riding, `a rider goes over the side of someone else's (${ threw ? threw.message : 'and they\'re off her' })` );
+		player.boat = own;
+		player.riding = false;
+		player.boardBoat();
+
+	}
+
+	// no tower, no helm up there, and the one wheel
+	boatM.fit( { tower: false } );
+	ok( standAt( 0, - 0.65 ) !== 'Take the helm' && boatM.wheelMesh.count === 1, 'no tower, no second helm' );
+	ok( boatM.helmAt( new Vector3( boatM.helm.x, SF.bridge, boatM.helm.z ), 0.75 ) === boatM.helm, 'and the bridge\'s is still there' );
+	boatM.fit( { tower: true } );
+	ok( boatM.wheelMesh.count === 2, 'bought, it\'s there' );
+
+	// the walks about her, by the keys: W and the rest held, as far as they take you
+	const walk = ( keys, until, yaw = 0 ) => {
+
+		player.deckYaw = yaw;
+		for ( const k of keys ) held.add( k );
+		let n = 0;
+		while ( n < 60 * 25 && ! until( player.deckPos ) ) {
+
+			player.update( 1 / 60 );
+			n ++;
+
+		}
+
+		held.clear();
+		return until( player.deckPos );
+
+	};
+
+	const log = () => `x ${ player.deckPos.x.toFixed( 2 ) }, y ${ player.deckPos.y.toFixed( 2 ) }, z ${ player.deckPos.z.toFixed( 2 ) }`;
+	standAt( 0.03, - 1.9, SF.salon );
+	ok( walk( [ 'KeyW' ], ( p ) => p.y < SF.lower + 0.05 && p.z > 2.2 ), `W from the salon, down the stairs to the cabins: ${ log() }` );
+	ok( walk( [ 'KeyS' ], ( p ) => p.y > SF.salon - 0.05 && p.z < 0.7 ), `S back up them: ${ log() }` );
+	standAt( 1.5, - 5, SF.cockpit );
+	walk( [ 'KeyW' ], ( p ) => p.z > - 2 );
+	ok( player.deckPos.z < SF.mezzZ - 0.26 && player.deckPos.y < SF.cockpit + 0.05, `from the cockpit the box beside the mezzanine's a wall: ${ log() }` );
+	standAt( 0.9, ( SF.mezzZ + SF.houseAft ) / 2, SF.mezz );
+	ok( walk( [ 'KeyA' ], ( p ) => p.x > 1.6 && p.y > 1.2 ), `A up onto it from the mezzanine: ${ log() }` );
+	standAt( 0.9, ( SF.mezzZ + SF.houseAft ) / 2, SF.mezz );
+	player.deckYaw = 0;
+	held.add( 'KeyA' );
+	for ( let i = 0; i < 40; i ++ ) player.update( 1 / 10 );
+	held.clear();
+	ok( player.deckPos.x > 1.6 && player.deckPos.y > 1.2, `and at 10 frames a second: ${ log() }` );
+	standAt( 1.5, ( SF.mezzZ + SF.houseAft ) / 2, 1.25 );
+	walk( [ 'KeyA' ], ( p ) => p.x > 2.5 );
+	const outboard = player.deckPos.x;
+	ok( walk( [ 'KeyW' ], ( p ) => p.z > 6.5 && p.y > 1.2 ), `W from its outboard edge (x ${ outboard.toFixed( 2 ) }) along the side deck to the foredeck: ${ log() }` );
+	const copy = boatM.group.clone( true ).getObjectByName( 'boat-wheel' );
+	ok( copy && copy.count === 2 && copy.instanceMatrix.count === 2, 'someone else\'s copy of her has both wheels' );
 	boatM.dispose();
 
 }
@@ -277,6 +421,53 @@ ok( inBox( m.shelterAt( new Vector3( 0, SF.salon, 0 ) ), 0, SF.salon + 1, 0 ), '
 ok( inBox( m.shelterAt( new Vector3( 0, SF.bridge, 0 ) ), 0, SF.bridge + 1, 0 ), 'none at the helm under the hardtop' );
 ok( ! inBox( m.shelterAt( new Vector3( 0, SF.bridge, - 2.5 ) ), 0, SF.bridge + 1, - 2.5 ), 'rain on the bridge aft of it' );
 ok( ! inBox( m.shelterAt( new Vector3( 0, SF.cockpit, - 5 ) ), 0, SF.cockpit + 1, - 5 ), 'and in the cockpit' );
+
+// what's on the tower's pod, with the tower
+ok( m.towerCompass && m.meshes.towerDisplay && ! low.towerCompass && ! low.meshes.towerDisplay, 'a compass and gauges on the pod, but for a phone\'s' );
+m.fit( { tower: false } );
+ok( ! m.towerCompass.visible && ! m.meshes.towerDisplay.visible && ! m.towerThrottle.visible, 'and none of it without the tower' );
+m.fit( { tower: true } );
+ok( m.towerCompass.visible && m.meshes.towerDisplay.visible, 'and bought, there' );
+ok( m.helm.open && m.towerHelm.open, 'both her helms are in the open air: wind and rain and engines as they are outside' );
+
+// someone else's: as their pose says, whatever's on yours
+{
+
+	const yours = new SportfisherModel( 'high' );
+	yours.fit( { tower: false, outriggers: false, chair: false } );
+	ok( yours.gearBits() === 0, 'none fitted, it says so' );
+	const theirs = yours.group.clone( true );
+	const named = ( n ) => theirs.getObjectByName( n );
+	yours.dressCopy( theirs, 1 | 4 );
+	ok( named( 'boat-tower' ).visible && named( 'boat-towerCompass' ).visible && named( 'boat-chair' ).visible && ! named( 'boat-outriggers' ).visible, 'their copy has their tower and chair, and no outriggers' );
+	ok( named( 'boat-wheel' ).count === 2 && yours.wheelMesh.count === 1 && ! yours.meshes.tower.visible, 'with its second wheel, and yours is as it was' );
+	const walked = yours.withGear( 1 ), tower = yours.ladders.find( ( l ) => l.id === 'tower' );
+	ok( walked.ladderAt( tower.on.clone() ) && ! yours.ladderAt( tower.on.clone() ), 'riding, their tower to climb, not having one yourself' );
+	ok( walked.helmAt( new Vector3( 0, SF.tower, walked.towerHelm.z ), 0.75 ) === walked.towerHelm, 'and its helm' );
+	ok( yours.withGear( 0 ).ladderAt( tower.on.clone() ) === null && yours.withGear( 1 ) === walked, 'nor one they haven\'t; and the same one each time' );
+	ok( yours.withGear( null ) === yours, 'a game that doesn\'t say: as she is' );
+	yours.dispose();
+
+}
+
+// the tower's helm, spotting: you call what you look at from it, as you do standing up there
+{
+
+	const sent = [], me = { id: 'robin' }, boat = { model: m, getYaw: () => 0 };
+	const camera = { position: new Vector3( 0, 9, 0 ), getWorldDirection: ( v ) => v.set( 1, 0, 0 ) };
+	const player = { mode: 'boat', atHelm: m.towerHelm, deckPos: new Vector3( 0, SF.tower, TOWER_Z ), boat, position: new Vector3(), riding: false };
+	const app = { player, camera, finds: { bait: [ { x: 1000, z: 0 } ] }, game: { toast: () => {}, minimap: null } };
+	const t = { app, me, session: { send: ( k, b ) => sent.push( [ k, b ] ) }, others: new Map( [ [ 'sam', { person: { id: 'sam', name: 'Sam' }, cur: { mode: 'deck', ride: 'robin' } } ] ] ) };
+	const crew = new Crew( t );
+	for ( let i = 0; i < 4; i ++ ) crew.update( 0.5 );
+	ok( crew.job === 'helm' && sent.length === 1 && sent[ 0 ][ 0 ] === 'call' && sent[ 0 ][ 1 ].k === 'bait', 'at the tower\'s helm you\'ve the helm, and call the birds you look at' );
+	sent.length = 0;
+	player.atHelm = m.helm;
+	const bridge = new Crew( t );
+	for ( let i = 0; i < 4; i ++ ) bridge.update( 0.5 );
+	ok( sent.length === 0, 'at the bridge\'s, you don\'t' );
+
+}
 
 // what you see from up there
 ok( Math.abs( m.towerEye / 0.3048 - 28 ) < 3, `an eye ${ ( m.towerEye / 0.3048 ).toFixed( 0 ) } ft up` );
