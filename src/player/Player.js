@@ -806,8 +806,8 @@ export class Player {
 		// the exit point closest to something walkable (pier deck / sand)
 		let best = side ? null : this.ashoreTarget();
 
-		const dock = b.berth.position;
-		if ( ! this.riding && b.position.distanceTo( dock ) < 14 && b.speed < 1.5 ) {
+		// (someone else's that you're riding has no berth here)
+		if ( ! this.riding && b.position.distanceTo( b.berth.position ) < 14 && b.speed < 1.5 ) {
 
 			b.moored = true;
 			b.mooring.anchor.set( b.position.x, 0, b.position.z );

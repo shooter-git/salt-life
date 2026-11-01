@@ -24,6 +24,7 @@ import { SEATS } from './seats.data.js';
 //   bunks, chair, rodHolders, outriggerTips, stations  what the days out, the tackle and the crew's jobs read
 //   ladders, ladderAt( p ) the two climbs (LadderClimb)
 //   towerHelm, helmAt( p, reach ) her second helm, on the tower's platform, if she has the tower
+//   gearBits(), dressCopy( group, bits ), withGear( bits )  what's fitted on someone else's (Vessel's)
 //   shelterAt( p )        the box of rain that's over you: the house, the hardtop or the tower's roof
 
 const DEG = Math.PI / 180;
@@ -137,13 +138,13 @@ export class SportfisherModel extends Vessel {
 		}
 
 		// ((M16) the cabin's on its own, so a phone needn't draw it from the shore: nearDetail)
-		for ( const name of [ 'hull', 'gelcoat', 'fittings', 'cabin', 'tower', 'outriggers', 'chair', 'chairs', 'glow', 'display', 'glass' ] ) {
+		for ( const name of [ 'hull', 'gelcoat', 'fittings', 'cabin', 'tower', 'outriggers', 'chair', 'chairs', 'glow', 'display', 'towerDisplay', 'glass' ] ) {
 
 			const geo = kit.merged( name );
 			if ( ! geo ) continue;
 			const mesh = new Mesh( geo, this._materialOf( name ) );
 			mesh.name = 'boat-' + name;
-			mesh.castShadow = name !== 'glass' && name !== 'cabin' && name !== 'glow' && name !== 'display';
+			mesh.castShadow = name !== 'glass' && name !== 'cabin' && name !== 'glow' && name !== 'display' && name !== 'towerDisplay';
 			mesh.receiveShadow = name !== 'cabin';
 			if ( name === 'glass' ) mesh.renderOrder = 1;
 			this.group.add( mesh );
@@ -189,6 +190,14 @@ export class SportfisherModel extends Vessel {
 		this.compassMesh = addPart( 'compass', compassCardGeometry(), m.display, parts.compassAt );
 		this.compassMesh.castShadow = false;
 		this.compassMesh.scale.setScalar( 1.3 );
+		if ( ! low ) {
+
+			this.towerCompass = addPart( 'towerCompass', this.compassMesh.geometry, m.display, TOWER_HELM.compassAt );
+			this.towerCompass.castShadow = false;
+			this.towerCompass.scale.setScalar( 1.1 );
+
+		}
+
 		this._card = null;
 
 		// the screws: each its own, turning opposite ways; the phones' are in the fittings, under water, still
@@ -216,9 +225,9 @@ export class SportfisherModel extends Vessel {
 		this.floors = buildFloors( L );
 		this.colliders = buildColliders( L );
 		this.ladders = buildLadders();
-		this.helm = { x: 0, z: HELM.z, y: SF.bridge, eye: HELM.eye, rise: [ 0.5, HELM.z - 0.45 ] };
+		this.helm = { x: 0, z: HELM.z, y: SF.bridge, eye: HELM.eye, rise: [ 0.5, HELM.z - 0.45 ], open: true };
 		this.helmEye = HELM.eye;
-		this.towerHelm = { x: 0, z: TOWER_HELM.z, y: SF.tower, eye: TOWER_HELM.eye, rise: TOWER_HELM.rise, reach: TOWER_HELM.reach, upper: true };
+		this.towerHelm = { x: 0, z: TOWER_HELM.z, y: SF.tower, eye: TOWER_HELM.eye, rise: TOWER_HELM.rise, reach: TOWER_HELM.reach, upper: true, open: true };
 		this.helmInUse = this.helm; // (whose wheel and lever move: Player.takeHelm)
 		this.boardPoint = V( 0, SF.cockpit, - 4.1 );
 		this.exitPoints = this.railPoints( [ - 5.4, - 4.5, - 3.6 ] );
@@ -274,7 +283,7 @@ export class SportfisherModel extends Vessel {
 	_materialOf( name ) {
 
 		const m = this.materials;
-		return { hull: m.hull, gelcoat: m.gelcoat, fittings: m.fittings, cabin: m.cabin, tower: m.fittings, outriggers: m.fittings, chair: m.fittings, chairs: m.cabin, glow: m.glow, display: m.display, glass: m.glass }[ name ];
+		return { hull: m.hull, gelcoat: m.gelcoat, fittings: m.fittings, cabin: m.cabin, tower: m.fittings, outriggers: m.fittings, chair: m.fittings, chairs: m.cabin, glow: m.glow, display: m.display, towerDisplay: m.display, glass: m.glass }[ name ];
 
 	}
 
@@ -419,11 +428,52 @@ export class SportfisherModel extends Vessel {
 		const M = this.meshes;
 		if ( M.tower ) M.tower.visible = this.fitted.tower;
 		if ( M.wheel ) M.wheel.count = this.fitted.tower ? 2 : 1;
-		if ( M.towerThrottle ) M.towerThrottle.visible = this.fitted.tower;
+		for ( const k of [ 'towerThrottle', 'towerDisplay', 'towerCompass' ] ) if ( M[ k ] ) M[ k ].visible = this.fitted.tower;
 		if ( M.outriggers ) M.outriggers.visible = this.fitted.outriggers;
 		if ( M.chair ) M.chair.visible = this.fitted.chair;
 		for ( const c of this.colliders ) if ( c.tag === 'chair' ) c.solid = this.fitted.chair;
 		this.chair = this.fitted.chair ? this.chair || this._chairWas : ( this._chairWas = this.chair, null );
+
+	}
+
+	// ---- what's fitted on someone else's: told in their pose (a bit each: the tower, the outriggers, the chair)
+	gearBits() {
+
+		const F = this.fitted;
+		return ( F.tower ? 1 : 0 ) | ( F.outriggers ? 2 : 0 ) | ( F.chair ? 4 : 0 );
+
+	}
+
+	dressCopy( group, bits ) {
+
+		const tower = !! ( bits & 1 ), shown = { 'boat-tower': tower, 'boat-towerThrottle': tower, 'boat-towerDisplay': tower, 'boat-towerCompass': tower, 'boat-outriggers': !! ( bits & 2 ), 'boat-chair': !! ( bits & 4 ) };
+		group.traverse( ( o ) => {
+
+			if ( shown[ o.name ] !== undefined ) o.visible = shown[ o.name ];
+			if ( o.name === 'boat-wheel' ) o.count = tower ? 2 : 1;
+
+		} );
+
+	}
+
+	// her, to walk about on with that fitted: their tower to climb, or none, whatever's fitted on yours (null: as she is)
+	withGear( bits ) {
+
+		if ( bits === null || bits === undefined ) return this;
+		const kept = this._withGear || ( this._withGear = new Map() );
+		let v = kept.get( bits );
+		if ( ! v ) {
+
+			const chair = !! ( bits & 4 );
+			v = Object.create( this );
+			v.fitted = { tower: !! ( bits & 1 ), outriggers: !! ( bits & 2 ), chair };
+			v.chair = chair ? this.chair || this._chairWas : null;
+			v.colliders = this.colliders.map( ( c ) => c.tag === 'chair' ? { ...c, solid: chair } : c );
+			kept.set( bits, v );
+
+		}
+
+		return v;
 
 	}
 
@@ -528,6 +578,7 @@ export class SportfisherModel extends Vessel {
 		}
 
 		this.compassMesh.rotation.y = c.a - her;
+		if ( this.towerCompass ) this.towerCompass.rotation.y = c.a - her;
 
 	}
 

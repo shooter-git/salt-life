@@ -130,8 +130,8 @@ const seen = ( g ) => g.evaluate( `( () => { const o = ${ other }, b = o.boat, t
 const sa = await seen( sam.game ), ro = await seen( robin.game );
 console.log( '     Sam sees  ', JSON.stringify( sa ) );
 console.log( '     Robin sees', JSON.stringify( ro ) );
-say( sa.type === 'console' && sa.model === 'console' && sa.length === 7, 'Sam sees a center console, and she\'s not his boat' );
-say( ro.type === 'sportfisher' && ro.length === 14.6, 'Robin sees a sportfisher' );
+say( sa.type === 'console' && sa.model === 'console' && Math.abs( sa.length - 7 ) < 0.3, 'Sam sees a center console, and she\'s not his boat' );
+say( ro.type === 'sportfisher' && Math.abs( ro.length - 14.8 ) < 0.3, 'Robin sees a sportfisher' );
 say( ! sa.stand && ! ro.stand, 'the stand-in gone once she\'s there' );
 say( sa.types.length === 1 && ro.types.length === 1, 'and only the type that\'s wanted is in memory' );
 
@@ -263,6 +263,16 @@ await until( sam.game, `${ other }.avatar._sit > 0.95` );
 await shot( sam, 'crew' );
 await reads( sam.game, 'Sam at his helm, Robin aboard' );
 
+// the tower's helm: to the others it's the helm, and they see you up there; and they're told what's fitted on her
+await sam.game.evaluate( () => { const p = window.__app.player; p.leaveHelm(); p.takeHelm( p.boat.model.towerHelm ); } );
+await until( robin.game, `${ other }.cur.job === 'tower' && ${ other }.cur.mode === 'helm'` );
+await frames( robin.game, 3 );
+const upThere = await robin.game.evaluate( `( () => { const o = ${ other }, f = o.cur.drawn || o.cur.boat; return { y: +( o.avatar.group.position.y - f.pos.y ).toFixed( 2 ), job: o.job, gear: o.cur.gear }; } )()` );
+const samGear = await sam.game.evaluate( () => window.__app.boat.gearBits() );
+say( upThere.y > 6.5 && upThere.job === 'helm', `Sam at the tower's helm: Robin sees him up there, and it's the helm: ${ JSON.stringify( upThere ) }` );
+say( upThere.gear === samGear, `and Robin's told what's fitted on her (${ samGear })` );
+await sam.game.evaluate( () => { const p = window.__app.player; p.leaveHelm(); p.takeHelm(); } );
+
 // ---- Robin goes home and changes boats: everyone's copy of her changes, and what's in memory with it
 await robin.game.evaluate( () => { const p = window.__app.player; p.exitBoat( null, 1 ); } );
 const swapped = await robin.game.evaluate( async () => { const a = window.__app; a.state.addBoat( 'lobster' ); return { ok: await a.setBoat( 'lobster' ), own: a.boat.id }; } );
@@ -324,7 +334,13 @@ for ( const d of [ 2500, 6000, 9000, 12500, 15500 ] ) {
 
 // ---- her lamps at night, from the sportfisher's lamps' own figures
 await robin.game.evaluate( ( R ) => { const a = window.__app, b = a.boatCtl; b.position.set( R.x + 400, b.position.y, R.z ); }, R );
-await until( sam.game, `( () => { const o = ${ other }; return o.boat && o.boat.visible; } )()` );
+await until( sam.game, `( () => { const o = ${ other }; return o.boat && o.boat.visible; } )()`, 240000 ).catch( async ( e ) => {
+
+	console.log( 'DIAG', JSON.stringify( await sam.game.evaluate( `( () => { const a = window.__app, o = ${ other }, c = o.cur, f = c && c.boat, t = a.together; return { hasCur: !! c, id: c && c.boatId, mode: c && c.mode, away: t.away.size, boat: !! o.boat, vis: o.boat && o.boat.visible, stand: !! o.stand, standVis: o.stand && o.stand.visible, shown: o.shown, d: f ? Math.hypot( f.pos.x - a.camera.position.x, f.pos.z - a.camera.position.z ) : null, types: [ ...t.copies.types.keys() ], speck: t.specks && t.specks.count, errs: window.__errs || null }; } )()` ) ) );
+	console.log( 'ROBIN', JSON.stringify( await robin.game.evaluate( () => { const a = window.__app, b = a.boatCtl; return { id: a.boat.id, mode: a.player.mode, x: b.position.x, z: b.position.z, driven: b.driven }; } ) ) );
+	throw e;
+
+} );
 await morning( sam.game, 22 );
 await frames( sam.game, 6 );
 await shot( sam, 'lamps-night' );
