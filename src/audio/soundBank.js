@@ -87,4 +87,21 @@ export const BANK = {
 	sea_open: { file: 'sea_open.ogg', loop: true, lufs: -23.1 },
 	wind_sea: { file: 'wind_sea.ogg', loop: true, lufs: -23.4 },
 	whitecap: { file: 'whitecap.ogg', slices: [ [ 0.08, 1.5 ], [ 1.66, 1.6 ], [ 3.34, 1.5 ], [ 4.92, 1.7907 ], [ 6.7907, 1.3 ] ], lufs: [ -19.3, -16.5, -21.1, -20.7, -23.8 ] },
+	// (M16) the fleet: the console's outboard and her two, the sportfisher's diesels, each at idle and under way; a
+	// kayak's paddle; the electric reel; the VHF's hiss and squelch; a nesting turtle's night; the lobster boat's hauler
+	outboard_idle: { file: 'outboard_idle.ogg', loop: true, lufs: -23 },
+	outboard_run: { file: 'outboard_run.ogg', loop: true, lufs: -23 },
+	twin_idle: { file: 'twin_idle.ogg', loop: true, lufs: -23 },
+	twin_run: { file: 'twin_run.ogg', loop: true, lufs: -22.9 },
+	diesels_idle: { file: 'diesels_idle.ogg', loop: true, lufs: -23.1 },
+	diesels_run: { file: 'diesels_run.ogg', loop: true, lufs: -23.2 },
+	reel_electric: { file: 'reel_electric.ogg', loop: true, lufs: -22.9 },
+	radio_hiss: { file: 'radio_hiss.ogg', loop: true, lufs: -22.9 },
+	hauler: { file: 'hauler.ogg', loop: true, lufs: -22.8 },
+	paddle: { file: 'paddle.ogg', slices: [ [ 0.08, 0.9933 ], [ 1.1533, 1 ], [ 2.2333, 1 ], [ 3.3133, 1 ], [ 4.3933, 1 ], [ 5.4733, 1 ] ], lufs: [ -23.9, -18.6, -18.7, -22.9, -24.4, -22.6 ] },
+	radio_squelch: { file: 'radio_squelch.ogg', slices: [ [ 0.08, 0.48 ] ], lufs: [ -19.6 ] },
+	turtle_breath: { file: 'turtle_breath.ogg', slices: [ [ 0.08, 1.4 ] ], lufs: [ -18.4 ] },
+	turtle_sand: { file: 'turtle_sand.ogg', slices: [ [ 0.08, 0.62 ], [ 0.78, 0.58 ], [ 1.44, 0.92 ], [ 2.44, 1 ], [ 3.52, 0.62 ], [ 4.22, 0.78 ] ], lufs: [ -17.5, -19.5, -17.7, -21.6, -20.5, -28.2 ] },
+	turtle_crawl: { file: 'turtle_crawl.ogg', slices: [ [ 0.08, 0.82 ], [ 0.98, 1.15 ], [ 2.21, 0.92 ], [ 3.21, 0.95 ] ], lufs: [ -27.1, -18.8, -23.8, -23.1 ] },
+	turtle_hatch: { file: 'turtle_hatch.ogg', slices: [ [ 0.08, 0.8 ], [ 0.96, 0.8 ], [ 1.84, 0.8 ], [ 2.72, 0.8 ], [ 3.6, 0.8 ] ], lufs: [ -15.3, -18.7, -12.8, -13.3, -17.9 ] },
 };

@@ -1,0 +1,249 @@
+{
+ "outboard_idle": {
+  "file": "outboard_idle.ogg",
+  "loop": true,
+  "lufs": -23,
+  "src": [
+   637202
+  ]
+ },
+ "outboard_run": {
+  "file": "outboard_run.ogg",
+  "loop": true,
+  "lufs": -23,
+  "src": [
+   637202
+  ]
+ },
+ "twin_idle": {
+  "file": "twin_idle.ogg",
+  "loop": true,
+  "lufs": -23,
+  "src": [
+   593024
+  ]
+ },
+ "twin_run": {
+  "file": "twin_run.ogg",
+  "loop": true,
+  "lufs": -22.9,
+  "src": [
+   593024
+  ]
+ },
+ "diesels_idle": {
+  "file": "diesels_idle.ogg",
+  "loop": true,
+  "lufs": -23.1,
+  "src": [
+   195743
+  ]
+ },
+ "diesels_run": {
+  "file": "diesels_run.ogg",
+  "loop": true,
+  "lufs": -23.2,
+  "src": [
+   195743
+  ]
+ },
+ "reel_electric": {
+  "file": "reel_electric.ogg",
+  "loop": true,
+  "lufs": -22.9,
+  "src": [
+   683806
+  ]
+ },
+ "radio_hiss": {
+  "file": "radio_hiss.ogg",
+  "loop": true,
+  "lufs": -22.9,
+  "src": [
+   636210
+  ]
+ },
+ "hauler": {
+  "file": "hauler.ogg",
+  "loop": true,
+  "lufs": -22.8,
+  "src": [
+   696035
+  ]
+ },
+ "paddle": {
+  "file": "paddle.ogg",
+  "slices": [
+   [
+    0.08,
+    0.9933
+   ],
+   [
+    1.1533,
+    1
+   ],
+   [
+    2.2333,
+    1
+   ],
+   [
+    3.3133,
+    1
+   ],
+   [
+    4.3933,
+    1
+   ],
+   [
+    5.4733,
+    1
+   ]
+  ],
+  "lufs": [
+   -22.9,
+   -17.6,
+   -17.7,
+   -21.9,
+   -23.4,
+   -21.6
+  ],
+  "src": [
+   509323
+  ]
+ },
+ "radio_squelch": {
+  "file": "radio_squelch.ogg",
+  "slices": [
+   [
+    0.08,
+    0.48
+   ]
+  ],
+  "lufs": [
+   -18.7
+  ],
+  "src": [
+   524205
+  ]
+ },
+ "turtle_breath": {
+  "file": "turtle_breath.ogg",
+  "slices": [
+   [
+    0.08,
+    1.4
+   ]
+  ],
+  "lufs": [
+   -17.5
+  ],
+  "src": [
+   389631
+  ]
+ },
+ "turtle_sand": {
+  "file": "turtle_sand.ogg",
+  "slices": [
+   [
+    0.08,
+    0.62
+   ],
+   [
+    0.78,
+    0.58
+   ],
+   [
+    1.44,
+    0.92
+   ],
+   [
+    2.44,
+    1
+   ],
+   [
+    3.52,
+    0.62
+   ],
+   [
+    4.22,
+    0.78
+   ]
+  ],
+  "lufs": [
+   -15.2,
+   -17.2,
+   -15.4,
+   -19.3,
+   -18.2,
+   -25.9
+  ],
+  "src": [
+   662864
+  ]
+ },
+ "turtle_crawl": {
+  "file": "turtle_crawl.ogg",
+  "slices": [
+   [
+    0.08,
+    0.82
+   ],
+   [
+    0.98,
+    1.15
+   ],
+   [
+    2.21,
+    0.92
+   ],
+   [
+    3.21,
+    0.95
+   ]
+  ],
+  "lufs": [
+   -25.7,
+   -17.4,
+   -22.4,
+   -21.7
+  ],
+  "src": [
+   851733
+  ]
+ },
+ "turtle_hatch": {
+  "file": "turtle_hatch.ogg",
+  "slices": [
+   [
+    0.08,
+    0.8
+   ],
+   [
+    0.96,
+    0.8
+   ],
+   [
+    1.84,
+    0.8
+   ],
+   [
+    2.72,
+    0.8
+   ],
+   [
+    3.6,
+    0.8
+   ]
+  ],
+  "lufs": [
+   -12.8,
+   -16.2,
+   -10.3,
+   -10.8,
+   -15.4
+  ],
+  "src": [
+   516923
+  ]
+ }
+}
