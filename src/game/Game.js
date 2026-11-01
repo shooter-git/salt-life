@@ -523,7 +523,7 @@ export class Game {
 		if ( this.radio ) this.radio.update( dt, inp, lDown );
 		this._lmb = lmb;
 		this._rmb = rmb;
-		const panelOpen = this.hud && ( this.hud.invOpen || this.hud.standOpen );
+		const panelOpen = this.hud && ( this.hud.invOpen || this.hud.standOpen || !! this.trophyCard );
 		// (a gamepad's RT on the cooler's Islander tab: the next islander)
 		if ( panelOpen && lDown && this.hud.invOpen && this.hud.invTab === 'islander' && this.hud.device === 'gamepad' ) this.hud.nextLook();
 

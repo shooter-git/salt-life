@@ -255,14 +255,17 @@ const COMMON = /* glsl */`
 		float hh = D.w;
 		float zE = fishOpercleEdge( eyeOp.w, hh );
 		float onOpR = fishOpercleMask( hh );
-		float op = fishSs( -0.004, 0.004, Lp.z - zE ) * onOpR * ( 1.0 - noOp );
+		// ((M16) the big pelagics are smooth-skinned: hardly a step at the gill cover, the fins' rays flush: at their
+		// spacing a ridge turned the fin to stripes of glare)
+		float smoothK = ( pattern >= ${ PT( 'wahoo' ) } && pattern <= ${ PT( 'yellowfin' ) } ) ? 0.2 : 1.0;
+		float op = fishSs( -0.004, 0.004, Lp.z - zE ) * onOpR * ( 1.0 - noOp ) * smoothK;
 		float grainFade = 1.0 - fishSs( 0.15, 0.45, px / ( 0.004 * I.z ) );
-		float grain = ( fishVnoise( vec2( Lp.z, D.z ) * 420.0 ) - 0.5 ) * 0.00022 * grainFade;
+		float grain = ( fishVnoise( vec2( Lp.z, D.z ) * 420.0 ) - 0.5 ) * 0.00022 * grainFade * ( pattern == ${ PT( 'swordfish' ) } ? 0.35 : 1.0 );
 		float bodyH = sc * 0.0016 + op * 0.0025 + grain;
 		// fin rays: ridges
 		bool isFinR = part > 0.5 && part < 7.5;
 		float rd = abs( fract( D.w + 0.5 ) - 0.5 );
-		float ray = ( 1.0 - fishSs( 0.0, 0.25, rd ) ) * 0.0004;
+		float ray = ( 1.0 - fishSs( 0.0, 0.25, rd ) ) * 0.0004 * smoothK * smoothK;
 		bumpH = ( isBodyR ? bodyH : ( isFinR ? ray : 0.0 ) ) * L;
 	}
 #endif
@@ -660,7 +663,7 @@ const SURFACE = /* glsl */`
 		c = mix( c, mix( mix( flank, belly, fishSs( 0.05, - 0.45, h ) ), back, cut ), bodyK );
 		float blueK = pat == ${ PT( 'blueMarlin' ) } ? 1.0 : 0.0, sailK = pat == ${ PT( 'sailfish' ) } ? 1.0 : 0.0;
 		float line = fishBand( h, 0.07, 0.05, fwH + 0.04 ) * fishSs( 0.26, 0.32, xL ) * fishSs( 0.84, 0.76, xL ) * bodyK;
-		c = mix( c, vec3( 0.55, 0.38, 0.15 ), line * mix( 0.45, 0.8, max( blueK, sailK ) ) );
+		c = mix( c, vec3( 0.3, 0.17, 0.05 ), line * mix( 0.4, 0.8, max( blueK, sailK ) ) );
 		float bars = fishSs( 0.8, 0.98, rows ) * fishSs( 0.28, 0.32, xL ) * fishSs( 0.87, 0.8, xL ) * ( 1.0 - fishSs( 0.5, 0.82, h ) ) * fishSs( - 0.72, - 0.35, h ) * bodyK * barF;
 		// (the sailfish's: columns of small pale spots, in place of bars)
 		float dots = 1.0 - fishSs( 0.0015, 0.0028, length( vec2( ( fract( xL * 23.87 ) - 0.5 ) * 0.042, ( fract( y * 62.0 ) - 0.5 ) * 0.016 ) ) );
@@ -668,9 +671,10 @@ const SURFACE = /* glsl */`
 		c = mix( c, mix( vec3( 0.13, 0.24, 0.48 ), vec3( 0.4, 0.54, 0.76 ), fishSs( 0.3, - 0.1, h ) ), wash * ( 0.22 + 0.38 * blueK + 0.4 * sailK ) );
 		c = mix( c, back * 0.85, fishSs( 0.2, 0.17, xL ) * fishSs( - 0.75, - 0.2, h ) * bodyK );
 		float gF = P == ${ PA( 'DORSAL2' ) } ? 1.0 : 0.0;
-		vec2 sq = vec2( z, y ) * 62.0;
+		vec2 sq = vec2( z + y * 0.3, y ) * 95.0;
 		vec2 sc = floor( sq );
-		float fspot = ( 1.0 - fishSs( 0.2, 0.34, length( fract( sq ) - 0.5 - ( vec2( fishHash( sc + 2.3 ), fishHash( sc + 6.1 ) ) - 0.5 ) * 0.4 ) ) ) * step( 0.42, fishHash( sc + 4.7 ) ) * gF * ( 1.0 - blueK );
+		float fr = mix( 0.1, 0.26, fishHash( sc + 8.9 ) );
+		float fspot = ( 1.0 - fishSs( fr, fr + 0.1, length( fract( sq ) - 0.5 - ( vec2( fishHash( sc + 2.3 ), fishHash( sc + 6.1 ) ) - 0.5 ) * 0.5 ) ) ) * step( 0.4, fishHash( sc + 4.7 ) ) * gF * ( 1.0 - blueK );
 		c = mix( c, vec3( 0.006, 0.008, 0.016 ), fspot * 0.9 );
 		c = P == ${ PA( 'ANAL' ) } ? mix( mix( flank, belly, 0.5 ), edgeC, fishSs( 0.25, 0.8, t ) ) : c;
 		c = P == ${ PA( 'PECTORAL' ) } ? mix( mix( back, flank, 0.55 ), back * 1.3, t ) : c;
@@ -683,7 +687,7 @@ const SURFACE = /* glsl */`
 		c = mix( c, mix( mix( flank, belly, fishSs( 0.02, - 0.3, h ) ), back, fishSs( 0.0, 0.28, h + ( n2 - 0.5 ) * 0.1 ) ), bodyK );
 		c = mix( c, c * vec3( 1.25, 1.08, 0.85 ), fishBand( h, 0.12, 0.2, 0.2 ) * bodyK * 0.6 );
 		c *= mix( 1.0, 0.86 + 0.26 * fishVnoise( vec2( z, sd ) * 340.0 + seed * 11.0 ), bodyK );
-		rough += ( n1 - 0.5 ) * 0.2 * bodyK;
+		rough = mix( rough, 0.8 + ( n1 - 0.5 ) * 0.2, bodyK );
 		c = isFin ? finC * mix( 1.15, 0.8, t ) : c;
 		c = mix( c, back * 1.2, fishSs( 0.34, 0.3, xL ) * fishSs( - 0.5, 0.1, h ) * bodyK );
 		transl *= 0.35;
@@ -977,7 +981,9 @@ const PROP_SURFACE = /* glsl */`
 	float finThick = P == ${ PA( 'CAUDAL' ) } ? 0.18 : ( ( P == ${ PA( 'PECTORAL' ) } || P == ${ PA( 'PELVIC' ) } ) ? - 0.16 : 0.0 );
 	float fishAlpha = mix( 1.0, clamp( mix( 0.94, 0.4, fishSs( 0.05, 0.95, t ) ) + finRay * 0.18 + finThick, 0.22, 1.0 ), finK );
 	// ((M16) the big pelagics' fins are stiff, thick things: only a yellowfin's scythes and a wahoo's tips let any through)
-	fishAlpha = ( pat >= ${ PT( 'wahoo' ) } && pat <= ${ PT( 'yellowfin' ) } ) ? mix( fishAlpha, 1.0, 0.82 ) : fishAlpha;
+	bool stiffFin = pat >= ${ PT( 'wahoo' ) } && pat <= ${ PT( 'yellowfin' ) };
+	fishAlpha = stiffFin ? mix( fishAlpha, 1.0, 0.82 ) : fishAlpha;
+	fishRough = stiffFin ? mix( fishRough, 0.75, finK ) : fishRough;
 	// the fins a little less vivid than the paint (thin, they take the colours behind them)
 	float fishLum = dot( fishAlbedo, vec3( 0.2126, 0.7152, 0.0722 ) );
 	fishAlbedo = mix( fishAlbedo, vec3( fishLum ), finK * 0.25 );
