@@ -70,7 +70,7 @@ const open = async ( name ) => {
 };
 
 const SPOT = [ { x: - 78, z: 145 }, { x: - 40, z: 150 } ];
-// a trap set from Robin's boat at this spot, as her hauler's prompt does it (the keys are test by the play alone: test/traps.mjs, docs/m16/traps.md)
+// a trap set from Robin's boat at this spot, as her hauler's prompt does it (the keys were played through separately)
 const setOne = ( g, at ) => g.evaluate( ( at ) => {
 
 	const a = window.__app, w = a.game.traps, st = a.game.state;

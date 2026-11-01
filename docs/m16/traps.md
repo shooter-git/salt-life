@@ -34,6 +34,7 @@ Sources: [Fishery Bulletin (Austin)](https://fisherybulletin.nmfs.noaa.gov/sites
 
 ## Left as it is
 
-- The trap's the old model, coated square wire as in Maine or Florida. The Caribbean ones photographed in Barbados are hexagonal chicken wire on a pole frame, unpainted, rusting. Yours to call.
+- The trap's the old model, coated square wire as in Maine or Florida. The Caribbean ones photographed in Barbados are hexagonal chicken wire on a pole frame, unpainted, rusting. Kept as asked; the user's to call.
 - Your deck's traps don't show on the copy of your boat the others see; only the buoys do.
+- The wire casts no shadow: a shadow map can't resolve it, and a solid box's shadow blacked out what's in the trap.
 - Trap bait isn't bought or used up, and there's no closed season: the island's clock has no months.
