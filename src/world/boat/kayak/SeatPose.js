@@ -69,19 +69,23 @@ function reach( upper, lower, end, to, pole ) {
 
 export function bonesOf( root ) {
 
-	const B = {};
+	const B = { fingersL: [], fingersR: [] };
 	const want = { pelvis: /Pelvis$/, spine: /Spine$/, spine1: /Spine1$/, spine2: /Spine2$/, neck: /Neck$/, head: /Head$/, armL: /L_?UpperArm$/, armR: /R_?UpperArm$/, foreL: /L_?Forearm$/, foreR: /R_?Forearm$/, handL: /L_?Hand$/, handR: /R_?Hand$/, thighL: /L_?Thigh$/, thighR: /R_?Thigh$/, calfL: /L_?Calf$/, calfR: /R_?Calf$/, footL: /L_?Foot$/, footR: /R_?Foot$/ };
 	root.traverse( ( o ) => {
 
 		if ( ! o.isBone ) return;
-		for ( const k in want ) if ( ! B[ k ] && want[ k ].test( o.name.replace( /[ .]/g, '' ) ) ) B[ k ] = o;
+		const name = o.name.replace( /[ .]/g, '' );
+		for ( const k in want ) if ( ! B[ k ] && want[ k ].test( name ) ) B[ k ] = o;
+		// (the four fingers' joints, and the thumb's last two)
+		if ( /Bip01LFinger[1-4]\d?$|Bip01LFinger0[1-2]$/.test( name ) ) B.fingersL.push( o );
+		if ( /Bip01RFinger[1-4]\d?$|Bip01RFinger0[1-2]$/.test( name ) ) B.fingersR.push( o );
 
 	} );
 	return B;
 
 }
 
-export function seatPose( avatar, { hips = 0.13, left = null, right = null, twist = 0, lean = 0.06 } ) {
+export function seatPose( avatar, { hips = 0.1, left = null, right = null, twist = 0, lean = 0.06 } ) {
 
 	const B = avatar.seatBones || ( avatar.seatBones = bonesOf( avatar.character.group ) );
 	if ( ! B.pelvis || ! B.thighL || ! B.calfL ) return;
@@ -129,15 +133,28 @@ export function seatPose( avatar, { hips = 0.13, left = null, right = null, twis
 
 		if ( ! arm || ! fore || ! hand ) continue;
 		const target = to || _c.copy( B.pelvis.getWorldPosition( _c ) ).addScaledVector( _x, s * 0.15 ).addScaledVector( _z, 0.36 ).addScaledVector( _y, 0.14 );
-		// (held apart from the clip's copy)
-		_t.copy( target );
-		const T = _hand[ s > 0 ? 0 : 1 ].copy( _t );
+		// (the wrist's a hand's breadth short of what the hand holds)
+		_s.copy( arm.getWorldPosition( _s ) );
+		const T = _hand[ s > 0 ? 0 : 1 ].copy( target );
+		_t.subVectors( T, _s ).normalize();
+		T.addScaledVector( _t, - WRIST );
 		_p.copy( _y ).multiplyScalar( - 1 ).addScaledVector( _x, s * 0.7 ).addScaledVector( _z, - 0.25 );
 		const pole = _pole[ s > 0 ? 0 : 1 ].copy( _p );
 		reach( arm, fore, hand, T, pole );
+
+		// (the fingers round the shaft)
+		if ( to ) {
+
+			const fingers = B[ s > 0 ? 'fingersL' : 'fingersR' ];
+			_q.setFromAxisAngle( _curlAxis, GRIP_CURL );
+			for ( const f of fingers ) f.quaternion.multiply( _q );
+			for ( const f of fingers ) f.updateMatrixWorld( true );
+
+		}
 
 	}
 
 }
 
 const _hand = [ new Vector3(), new Vector3() ], _pole = [ new Vector3(), new Vector3() ];
+const WRIST = 0.075, GRIP_CURL = - 0.95, _curlAxis = new Vector3( 0, 0, 1 );

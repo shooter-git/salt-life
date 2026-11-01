@@ -19,7 +19,7 @@ const MOST = 190; // N: as hard as anyone pulls a blade
 const H = 1 / 120; // the integrator's step (player/BoatController)
 const IN_WATER = 0.62; // of a stroke: the rest is lifting and reaching for the next
 const REACH = 1.23; // m from the shaft's middle to the blade's middle
-const GRIP = 0.36; // m from the middle to each hand
+const GRIP = 0.34; // m from the middle to each hand
 const clamp = MathUtils.clamp;
 const smooth = ( x ) => x * x * ( 3 - 2 * x );
 const lerp = MathUtils.lerp;
@@ -39,7 +39,7 @@ export class Stroke {
 	// seat: the middle of the paddler's hands' reach, boat frame: { y, z }
 	constructor( z ) {
 
-		this.z = z + 0.34;
+		this.z = z + 0.29;
 		this.side = 1;
 		this.kind = null;
 		this.phase = 1;

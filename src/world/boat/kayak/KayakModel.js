@@ -61,7 +61,7 @@ export class KayakModel extends Vessel {
 
 		const sz = deck.seatZ, seatZ = ( sz[ 0 ] + sz[ 1 ] ) / 2 - 0.04, seatY = deck.y( 0, seatZ ) + 0.045;
 		this.seat = new Vector3( 0, seatY, seatZ );
-		this.helmEye = new Vector3( 0, seatY + 0.74, seatZ - 0.04 );
+		this.helmEye = new Vector3( 0, seatY + 0.87, seatZ + 0.08 ); // (as a person's sat up on her seat)
 		this.helm = { x: 0, z: seatZ, eye: this.helmEye, rise: [ 0.5, seatZ ] };
 		this.stroke = new Stroke( seatZ );
 		this.boardPoint = new Vector3( 0, seatY, seatZ );
@@ -408,7 +408,7 @@ export class KayakModel extends Vessel {
 
 		}
 
-		F.pose( { mode: 'helm', speed: 0, seat: { left: held ? _l : null, right: held ? _r : null, twist: held ? - st.swing * 0.55 : 0, lean: 0.06 + 0.1 * ( held ? 1 - st.rest : 0 ) } }, dt );
+		F.pose( { mode: 'helm', speed: 0, seat: { left: held ? _l : null, right: held ? _r : null, twist: held ? - st.swing * 0.55 : 0, lean: 0.06 + 0.16 * ( held ? 1 - st.rest : 0 ) } }, dt );
 		const head = F.seatBones && F.seatBones.head;
 		if ( head ) head.scale.setScalar( own ? 0.001 : 1 );
 
