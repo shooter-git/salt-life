@@ -280,7 +280,8 @@ export class TrapMeshes {
 
 		};
 
-		this.traps = add( trapGeometry(), MAX.trap, 'LobsterTraps', true );
+		// (no shadow from the wire: a box of it would black out what's in the trap, and the mesh is far finer than the shadow map)
+		this.traps = add( trapGeometry(), MAX.trap, 'LobsterTraps', false );
 		this.buoys = add( buoyGeometry(), MAX.buoy, 'TrapBuoys', true );
 		this.lobsters = add( lobsterInTrap(), MAX.lobster, 'TrappedLobsters', false );
 

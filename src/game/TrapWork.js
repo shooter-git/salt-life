@@ -27,6 +27,8 @@ const BOB_N = 8; // the nearest this many ride the waves
 const SETTLE_S = 15; // how often the weather's reckoned
 
 const _m = new Matrix4(), _n = new Matrix4(), _p = new Vector3(), _q = new Quaternion(), _s = new Vector3( 1, 1, 1 ), _a = new Vector3(), _b = new Vector3(), _c = new Vector3(), _y = new Vector3( 0, 1, 0 ), _qi = new Quaternion(), _e = new Vector3();
+// a trap's wire, the same on the bottom, on the hauler and for everyone: from where it was set
+const colourAt = ( x, z ) => stowColour( Math.abs( Math.floor( x * 10 + z * 10 ) ) );
 const ease = ( t ) => t * t * ( 3 - 2 * t );
 const clamp01 = ( t ) => Math.min( 1, Math.max( 0, t ) );
 const mix = ( a, b, t ) => a + ( b - a ) * t;
@@ -655,7 +657,7 @@ export class TrapWork {
 			const t = n.trap;
 			if ( j && t && j.trap === t && ( j.kind === 'set' || j.phase !== 'gaff' ) ) continue;
 			const onDeck = j && t && j.trap === t && j.kind === 'haul' && j.phase === 'gaff';
-			if ( n.d < farTrap ) M.trap( _m.compose( _p.set( n.x, n.bottom + 0.02, n.z ), _q.setFromAxisAngle( _y, n.yaw ), _s ), stowColour( Math.abs( Math.floor( n.x + n.z ) ) ) );
+			if ( n.d < farTrap ) M.trap( _m.compose( _p.set( n.x, n.bottom + 0.02, n.z ), _q.setFromAxisAngle( _y, n.yaw ), _s ), colourAt( n.x, n.z ) );
 			if ( ! n.hasBuoy || onDeck ) continue;
 			this._drawBuoy( M, n.bx, n.bz, n.x, n.bottom + TRAP.H, n.z, n.colours, n.yaw, bobbing ++ < BOB_N, time, q, tq, sea );
 
@@ -681,7 +683,7 @@ export class TrapWork {
 
 	_drawJob( M, W, j, sea, time, q, tq ) {
 
-		const a = this.at, boat = this._boat, myC = buoyColours( this.app.together && this.app.together.me ? this.app.together.me.id : null ), colour = stowColour( j.trap.seed % 8 );
+		const a = this.at, boat = this._boat, myC = buoyColours( this.app.together && this.app.together.me ? this.app.together.me.id : null ), colour = colourAt( j.trap.x, j.trap.z );
 		if ( j.kind === 'set' ) {
 
 			const toRail = 0.7, over = 0.5, t = j.t, sinkAt = toRail + over;

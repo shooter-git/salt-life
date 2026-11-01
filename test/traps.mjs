@@ -176,6 +176,20 @@ ok( boxes.length === 8 && boxes.every( ( b ) => b.tag === 'trap' && b.walkable &
 const boat = new BoatModel();
 ok( ! boat.colliders.some( ( c ) => c.tag === 'trap' ) && ! Object.keys( boat.meshes ).includes( 'trap' ), 'none on her until they\'re aboard: the deck\'s as M14 left it' );
 
+// ---- a diver at a trap whose buoy's gone ties on another (TrapWork), and only at their own, only there
+const { TrapWork } = await import( '../src/game/TrapWork.js' );
+const lostBuoy = { x: 10, z: 20, buoy: false };
+const diver = new TrapWork( { app: {}, state: { traps: { set: [ lostBuoy, { x: 40, z: 20, buoy: true } ], lost: 0 }, save() {} }, toast() {} } );
+diver.app = { camera: { position: { x: 60, y: - 9, z: 20 } }, terrainData: { heightAt: () => - 10 } };
+const person = { prompt: null };
+diver._offerDiver( person, { hit: () => false } );
+ok( person.prompt === null, 'nothing to tie on away from it, nor at one with its buoy' );
+diver.app.camera.position.x = 11;
+diver._offerDiver( person, { hit: () => false } );
+ok( /new buoy/.test( person.prompt.text ) && lostBuoy.buoy === false, 'at the trap it\'s offered' );
+diver._offerDiver( person, { hit: () => true } );
+ok( lostBuoy.buoy === true && diver._dirty, 'and tied on, for everyone to see' );
+
 // ---- no reserved words in the shaders (GLSL): TrapModel's is its own, and nothing's added to a shared one
 const src = readFileSync( new URL( '../src/world/boat/TrapModel.js', import.meta.url ), 'utf8' );
 const glsl = src.slice( src.indexOf( 'createTrapMaterial' ), src.indexOf( 'what\'s drawn', src.indexOf( 'createTrapMaterial' ) ) );
