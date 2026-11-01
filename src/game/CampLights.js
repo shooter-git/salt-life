@@ -13,8 +13,8 @@ import { LAMPS, lightsAt } from './PearlsDay.js';
 
 const CLOSE = 90; // m
 const FAR_SEEN = 2600; // m: how far a clear night lets a hurricane lantern be seen (a dim point, past that lost in the air)
-// colours: over 1, as the lit glass in the village's materials is, for the sea's exposure at night
-const FLAME = [ 7, 4.2, 1.5 ], GLASS = [ 2.6, 1.45, 0.5 ], ROOM = [ 2.2, 1.15, 0.42 ], GAP = [ 1.5, 0.78, 0.28 ], EMBER = [ 3.2, 0.9, 0.15 ], FIRE = [ 6, 2.5, 0.55 ];
+// colours: a flame's a little over 1, the rest under, or they go to white
+const FLAME = [ 2.6, 1.5, 0.5 ], GLASS = [ 1.15, 0.62, 0.2 ], ROOM = [ 0.95, 0.5, 0.17 ], GAP = [ 0.7, 0.36, 0.12 ], EMBER = [ 1.3, 0.34, 0.05 ], FIRE = [ 2.1, 0.85, 0.17 ];
 
 export class CampLights {
 
@@ -128,9 +128,9 @@ export class CampLights {
 		const warm = new Color( 1.0, 0.66, 0.34 );
 		if ( lights ) {
 
-			this.sources.lantern = lights.add( { position: new Vector3( ...lp ), color: warm, intensity: 3, range: 9, kind: 'campLantern', flicker: 0.1, scale: 0 } );
+			this.sources.lantern = lights.add( { position: new Vector3( ...lp ), color: warm, intensity: 4, range: 9, kind: 'campLantern', flicker: 0.1, scale: 0 } );
 			this.sources.window = lights.add( { position: new Vector3( W.x, W.y, W.z - 0.35 ), color: new Color( 1.0, 0.6, 0.3 ), intensity: 1.1, range: 5, kind: 'campWindow', dir: new Vector3( 0, - 0.1, - 1 ).normalize(), cosInner: 0.35, cosOuter: - 0.15, scale: 0 } );
-			this.sources.fire = lights.add( { position: new Vector3( fp[ 0 ], fp[ 1 ] + 0.5, fp[ 2 ] ), color: new Color( 1.0, 0.5, 0.2 ), intensity: 4.5, range: 10, kind: 'campFire', flicker: 0.22, scale: 0 } );
+			this.sources.fire = lights.add( { position: new Vector3( fp[ 0 ], fp[ 1 ] + 0.5, fp[ 2 ] ), color: new Color( 1.0, 0.5, 0.2 ), intensity: 8, range: 11, kind: 'campFire', flicker: 0.22, scale: 0 } );
 
 		}
 

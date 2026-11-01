@@ -20,6 +20,7 @@ const TILT = 1.3; // rad: her outboard up
 const SEEN = 260; // m: within this, and looked at, she isn't moved up the beach or back in front of you
 const FAR = 2600; // m: past this she isn't drawn
 const STEP = 1.2; // m/s: lying off, and coming in from there
+const FILL = 5; // her sides out of the sun: the scene's environment light, this many times over (the world's kept low for the sand)
 const _d = new Vector3();
 
 export class PearlsBoat {
@@ -32,7 +33,30 @@ export class PearlsBoat {
 		this.query = query;
 		this.tier = tier;
 		this.pirogue = buildPirogue( { lite: tier === 'low' } );
-		const m = this.mesh = new Mesh( this.pirogue.geometry, material );
+		// (the wood's own program, with a fill of her own: her shaded side, white paint and all, came out black)
+		const fill = material.clone ? material.clone() : material;
+		if ( fill !== material ) {
+
+			fill.onBeforeCompile = material.onBeforeCompile;
+			fill.customProgramCacheKey = material.customProgramCacheKey;
+			fill.defines = { ...material.defines };
+			if ( material.uniformsGroups ) fill.uniformsGroups = material.uniformsGroups;
+
+		}
+
+		const m = this.mesh = new Mesh( this.pirogue.geometry, fill );
+		m.onBeforeRender = ( renderer, sc ) => {
+
+			if ( fill.envMap !== sc.environment ) {
+
+				if ( ! fill.envMap !== ! sc.environment ) fill.needsUpdate = true;
+				fill.envMap = sc.environment;
+
+			}
+
+			fill.envMapIntensity = sc.environmentIntensity * FILL;
+
+		};
 		m.name = 'PearlsBoat';
 		m.rotation.order = 'YXZ';
 		m.receiveShadow = true;
