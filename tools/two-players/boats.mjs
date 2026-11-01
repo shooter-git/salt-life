@@ -103,7 +103,8 @@ const reads = async ( g, what ) => {
 
 };
 // (the clock kept to the morning and the air clear: it's on wall time, and this takes a while on the CPU)
-const morning = ( g, hour = 10 ) => g.evaluate( ( hour ) => { const t = window.__app.together, s = window.__app.settings; t.setWeather( 'calm', 0 ); t.setClock( hour, s.day, 0.0001 ); }, hour );
+// (a clock set for a look isn't a rest: DaysOut would have her drift the hours it jumps)
+const morning = ( g, hour = 10 ) => g.evaluate( ( hour ) => { const a = window.__app, t = a.together, s = a.settings; t.setWeather( 'calm', 0 ); t.setClock( hour, s.day, 0.0001 ); a.game.daysOut._T = null; }, hour );
 
 // ---- two boats: Robin in the center console, Sam in the sportfisher, at the dock
 const robin = await open( 'Robin', 'console' );
@@ -334,13 +335,7 @@ for ( const d of [ 2500, 6000, 9000, 12500, 15500 ] ) {
 
 // ---- her lamps at night, from the sportfisher's lamps' own figures
 await robin.game.evaluate( ( R ) => { const a = window.__app, b = a.boatCtl; b.position.set( R.x + 400, b.position.y, R.z ); }, R );
-await until( sam.game, `( () => { const o = ${ other }; return o.boat && o.boat.visible; } )()`, 240000 ).catch( async ( e ) => {
-
-	console.log( 'DIAG', JSON.stringify( await sam.game.evaluate( `( () => { const a = window.__app, o = ${ other }, c = o.cur, f = c && c.boat, t = a.together; return { hasCur: !! c, id: c && c.boatId, mode: c && c.mode, away: t.away.size, boat: !! o.boat, vis: o.boat && o.boat.visible, stand: !! o.stand, standVis: o.stand && o.stand.visible, shown: o.shown, d: f ? Math.hypot( f.pos.x - a.camera.position.x, f.pos.z - a.camera.position.z ) : null, types: [ ...t.copies.types.keys() ], speck: t.specks && t.specks.count, errs: window.__errs || null }; } )()` ) ) );
-	console.log( 'ROBIN', JSON.stringify( await robin.game.evaluate( () => { const a = window.__app, b = a.boatCtl; return { id: a.boat.id, mode: a.player.mode, x: b.position.x, z: b.position.z, driven: b.driven }; } ) ) );
-	throw e;
-
-} );
+await until( sam.game, `( () => { const o = ${ other }; return o.boat && o.boat.visible; } )()` );
 await morning( sam.game, 22 );
 await frames( sam.game, 6 );
 await shot( sam, 'lamps-night' );
