@@ -444,21 +444,23 @@ export class SportfisherModel extends Vessel {
 		if ( on <= 0 && ! this._glow ) return;
 		if ( ! this._glow ) {
 
-			const N = 28, pos = [], col = [], idx = [];
+			// (a dim pool, fading out smoothly: the sea's lit from under, not painted. A little above the water, so the swell
+			// doesn't cut it)
+			const N = 28, RINGS = 7, RADIUS = 13, pos = [], col = [], idx = [];
 			pos.push( 0, 0, 0 );
-			col.push( 0.1, 0.75, 0.42 );
-			for ( let r = 1; r <= 3; r ++ ) for ( let i = 0; i < N; i ++ ) {
+			col.push( 0.012, 0.1, 0.06 );
+			for ( let r = 1; r <= RINGS; r ++ ) for ( let i = 0; i < N; i ++ ) {
 
-				const a = i / N * Math.PI * 2, R = 15 * r / 3, k = ( 1 - r / 3 ) ** 1.5;
-				pos.push( Math.cos( a ) * R, 0, Math.sin( a ) * R );
-				col.push( 0.1 * k, 0.75 * k, 0.42 * k );
+				const a = i / N * Math.PI * 2, t = r / RINGS, k = Math.exp( - 4 * t * t ) * ( 1 - t );
+				pos.push( Math.cos( a ) * RADIUS * t, 0, Math.sin( a ) * RADIUS * t );
+				col.push( 0.012 * k, 0.1 * k, 0.06 * k );
 
 			}
 
 			for ( let i = 0; i < N; i ++ ) {
 
 				idx.push( 0, 1 + ( i + 1 ) % N, 1 + i );
-				for ( let r = 0; r < 2; r ++ ) {
+				for ( let r = 0; r < RINGS - 1; r ++ ) {
 
 					const a = 1 + r * N + i, b = 1 + r * N + ( i + 1 ) % N;
 					idx.push( a, b, a + N, b, b + N, a + N );
@@ -472,7 +474,7 @@ export class SportfisherModel extends Vessel {
 			g.setAttribute( 'color', new Float32BufferAttribute( col, 3 ) );
 			g.setIndex( idx );
 			this._glow = new Mesh( g, new MeshBasicMaterial( { vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false, fog: false } ) );
-			this._glow.position.set( 0, 0.12, - this.lines.length / 2 - 2 );
+			this._glow.position.set( 0, 0.6, - this.lines.length / 2 - 1 );
 			this._glow.renderOrder = 6;
 			this.group.add( this._glow );
 
