@@ -222,6 +222,25 @@ for ( const [ tier, k ] of [ [ 'high', 1 ], [ 'low', 0.5 ] ] ) {
 	ok( P.redraws === before + 2 && g.gets === 0, 'a change of palette: one redraw, no pixels read back' );
 	const nightLog = g.log.slice( - 40 ).filter( ( l ) => l.fill );
 	ok( nightLog.some( ( l ) => l.fill === colour( S52_NIGHT.DEPVS ) || l.fill === colour( S52_NIGHT.DEPMS ) ), 'in its own colours' );
+	// (a sheet's picture comes a moment after the chart's changed: drawn again for that too, a second apart at most)
+	{
+
+		const V = plotter( k ), d = fakeContext(), real = performance.now;
+		let now = 1e6;
+		performance.now = () => now;
+		V.draw( d, view( map, log, 65, 300, across0 ) );
+		const was = V.redraws;
+		S.near.drawn ++;
+		V.draw( d, view( map, log, 65, 300, across0 ) );
+		const soon = V.redraws;
+		now += 1500;
+		V.draw( d, view( map, log, 65, 300, across0 ) );
+		performance.now = real;
+		S.near.drawn --;
+		ok( soon === was && V.redraws === was + 1, 'a sheet drawn again shows on the plotter, a second apart at most' );
+
+	}
+
 	// by the island, a sheet in the view: looked up
 	const Q = plotter( k ), near0 = fakeContext();
 	Q.draw( near0, view( map, log, 65, 300, across0, 'night' ) );

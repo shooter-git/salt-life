@@ -292,6 +292,13 @@ export class PlotterChart {
 
 	}
 
+	_versionOf( map, log ) {
+
+		const S = map && map.sheets;
+		return ( log ? log.version : 0 ) + ( S ? S.far.drawn + S.mid.drawn + S.near.drawn : 0 );
+
+	}
+
 	_stale( map, log, across, vx, vz, pxm, palette ) {
 
 		const S = map && map.sheets;
@@ -304,7 +311,8 @@ export class PlotterChart {
 		}
 
 		if ( Math.abs( vx - this._cx ) * pxm > MARGIN - 2 || Math.abs( vz - this._cz ) * pxm > MARGIN - 2 ) return true;
-		if ( log && log.version !== this._version && performance.now() - this._at > 1000 ) return true;
+		// (the chart filled in: once a second at most; a sheet's own picture comes a moment after it's changed, so its too)
+		if ( this._versionOf( map, log ) !== this._version && performance.now() - this._at > 1000 ) return true;
 		return false;
 
 	}
@@ -314,7 +322,7 @@ export class PlotterChart {
 		const g = this.ctx, W = this.W, H = this.H;
 		this._cx = vx;
 		this._cz = vz;
-		this._version = log ? log.version : - 1;
+		this._version = this._versionOf( map, log );
 		this._at = performance.now();
 		this.redraws ++;
 		const x0 = vx - W / ( 2 * pxm ), z0 = vz - H / ( 2 * pxm ), x1 = vx + W / ( 2 * pxm ), z1 = vz + H / ( 2 * pxm );
