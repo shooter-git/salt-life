@@ -689,7 +689,7 @@ export class Rigs {
 		if ( this.leaping ) {
 
 			_a.set( rod.bobber.x, y, rod.bobber.z );
-			g.display.show( f.species, f.kg, _a, Math.atan2( _a.x - this.app.camera.position.x, _a.z - this.app.camera.position.z ) + Math.PI / 2, dt );
+			g.display.show( f.species, f.kg, _a, Math.atan2( this.app.camera.position.x - _a.x, this.app.camera.position.z - _a.z ), dt );
 
 		} else if ( was ) g.display.hide();
 		if ( this.leaping !== was && this.app.audio && this.app.audio.fishSplash ) this.app.audio.fishSplash( rod.bobber, Math.min( 1, 0.4 + f.kg / 60 ) );

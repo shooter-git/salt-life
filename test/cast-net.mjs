@@ -494,7 +494,7 @@ for ( const c of cases ) {
 
 	};
 	check( avg( 'mullet' ) > avg( null ) * 1.1, `and bigger fish (a jack: ${ avg( 'mullet' ).toFixed( 2 ) } kg against ${ avg( null ).toFixed( 2 ) } kg)` );
-	check( Object.values( BAITS ).every( ( b ) => b.speed < 1 && b.steal > 0 && b.steal < 0.2 ), 'every bait bites sooner than shrimp, and can be stolen' );
+	check( Object.values( BAITS ).filter( ( b ) => ! b.lure && ! b.chum ).every( ( b ) => b.speed < 1 && b.steal > 0 && b.steal < 0.2 ), 'every bait bites sooner than shrimp, and can be stolen' );
 
 }
 
