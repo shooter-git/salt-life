@@ -2,7 +2,7 @@
 
 Lobstering from the lobster boat, with the traps taken off her deck in M14 for fishing room back, riding only when you've got them aboard. Marta sells them, 2, then 4, then 8.
 
-- **The model.** Restored from git at `290b51b^` (`DeckGear.buildTraps`, `BoatMaterials.createTrap`), now in `world/boat/TrapModel.js`: the count changes as you set and haul them, which a merged bucket can't do, so they're instanced. One material; three draw calls at most (traps, buoys and warps, the lobsters in a trap on the rail). Nothing's built until there's a trap to draw.
+- **The model.** The Caribbean trap as photographed in Barbados, the user's choice: rusty chicken wire on a frame of bleached poles tied at the joints, in `world/boat/TrapModel.js`. The count changes as you set and haul them, which a merged bucket can't do, so they're instanced: one material; three draw calls at most (traps, buoys and warps, the lobsters in a trap on the rail). Nothing's built until there's a trap to draw. One mesh keeps it to its draw call, so each one's its own in the shader, from a `wear` kept by where it was set or where it stows: the same bend of the whole frame racks it differently, its wire's rusted and eaten through in other places. The wire's cut from its UVs and thins to a screen door where its strands are under a pixel.
 - **Stowed** two and three high on her quarters (`STOW`), the first where the old stack was, with colliders only for those aboard.
 - **Setting** (`game/TrapWork.js`). By the hauler, starboard side, E sets one over: off the stack, on to the rail, over the side, the warp paying out and the buoy thrown after it. A mark goes on your chart (orange on the map and the plotter, "Trap n" in the Chart tab) and comes off when you haul it. Not past the warp's 120 ft, in under 5 ft, on live coral, under way or in the fairway. The bottom's named as you set: seen by eye to about 40 ft, past that only with the fish finder.
 - **Soaking** (`game/Traps.js`) goes by the island's clock, which on your own runs on at an island hour a real hour while you're away, so a real day away is a day's soak. Lobsters forage at night, so nights count: a trap set at noon and hauled at dusk is empty.
@@ -22,7 +22,7 @@ Lobstering from the lobster boat, with the traps taken off her deck in M14 for f
 | Time constant, and fade after 14 days | 3 nights; to 40% | **Chosen to fit that shape**, no measured figure found |
 | Traps with bycatch | 33% | GCFI survey: 6,972 of 21,309 traps |
 | What the bycatch is | stone crabs, grunts, spider crabs, urchins, then others | GCFI: those four are 65% |
-| Trap size | 37 x 22 x 15 in | The old model's. Inside Florida's 36 x 24 x 24 in for slat traps, near enough |
+| Trap size | 37 x 22 x 15 in | The old model's, kept for the stow on her deck and the rail. Real ones in the photographs look longer and deeper; not measured |
 | Buoy | 6 in across | Florida's minimum, Fla. Admin. Code 68B-24.006; each owner's own marking, as there |
 | Hurricane | up to about 45% lost, the shallowest worst | Irma, Category 4: about 43% of the Keys' traps lost, some men up to 90% |
 | How far dragged | a few hundred m to about 2 km | **Far less than real, on purpose.** Irma's went 3.5 to 8 miles, some 18, which would take any trap here off the shelf |
@@ -34,7 +34,7 @@ Sources: [Fishery Bulletin (Austin)](https://fisherybulletin.nmfs.noaa.gov/sites
 
 ## Left as it is
 
-- The trap's the old model, coated square wire as in Maine or Florida. The Caribbean ones photographed in Barbados are hexagonal chicken wire on a pole frame, unpainted, rusting. Kept as asked; the user's to call.
+- The old model's bait bag and bricks are gone, for the budget: one stone holds it down. The funnel doesn't cut a hole in the wire it passes.
 - Your deck's traps don't show on the copy of your boat the others see; only the buoys do.
 - The wire casts no shadow: a shadow map can't resolve it, and a solid box's shadow blacked out what's in the trap.
 - Trap bait isn't bought or used up, and there's no closed season: the island's clock has no months.

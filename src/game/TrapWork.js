@@ -6,7 +6,7 @@ import { islandTime } from './Weather.js';
 import { WORLD } from '../world/WorldLayout.js';
 import { SEABED } from '../world/terrain/SeabedModel.js';
 import { SPRAY } from '../fx/Spray.js';
-import { TrapMeshes, TRAP, stowMatrix, stowColour, trapColliders } from '../world/boat/TrapModel.js';
+import { TrapMeshes, TRAP, stowMatrix, stowWear, trapColliders } from '../world/boat/TrapModel.js';
 import { BOTTOMS, HAULER_MS, HAUL_SPEED, TRAP_PRICE, WARP_M, aboardTraps, bottomAt, buoyColours, buoyOffset, buoyRecord, cleanBuoys, haulOf, ownedTraps, settle, soakOf, trapsTold, whyNot } from './Traps.js';
 
 // (M16) Lobster traps, at the rail of the boat that has the hauler and davit, and out on the sea (the rules: Traps.js; what's
@@ -28,7 +28,7 @@ const SETTLE_S = 15; // how often the weather's reckoned
 
 const _m = new Matrix4(), _n = new Matrix4(), _p = new Vector3(), _q = new Quaternion(), _s = new Vector3( 1, 1, 1 ), _a = new Vector3(), _b = new Vector3(), _c = new Vector3(), _y = new Vector3( 0, 1, 0 ), _qi = new Quaternion(), _e = new Vector3();
 // a trap's wire, the same on the bottom, on the hauler and for everyone: from where it was set
-const colourAt = ( x, z ) => stowColour( Math.abs( Math.floor( x * 10 + z * 10 ) ) );
+const wearAt = ( x, z ) => Math.abs( x * 12.9898 + z * 78.233 ) % 1;
 const ease = ( t ) => t * t * ( 3 - 2 * t );
 const clamp01 = ( t ) => Math.min( 1, Math.max( 0, t ) );
 const mix = ( a, b, t ) => a + ( b - a ) * t;
@@ -648,7 +648,7 @@ export class TrapWork {
 		if ( by ) boat.group.updateWorldMatrix( true, false );
 		const W = boat.group.matrixWorld;
 		// on her deck
-		if ( by ) for ( let i = 0; i < stacked; i ++ ) M.trap( _m.multiplyMatrices( W, stowMatrix( boat.lines, i, _n ) ), stowColour( i ) );
+		if ( by ) for ( let i = 0; i < stacked; i ++ ) M.trap( _m.multiplyMatrices( W, stowMatrix( boat.lines, i, _n ) ), stowWear( i ) );
 		// on the sea
 		let bobbing = 0;
 		const time = G.time.value, q = app.query, tq = q ? q.resultTime : 0;
@@ -657,7 +657,7 @@ export class TrapWork {
 			const t = n.trap;
 			if ( j && t && j.trap === t && ( j.kind === 'set' || j.phase !== 'gaff' ) ) continue;
 			const onDeck = j && t && j.trap === t && j.kind === 'haul' && j.phase === 'gaff';
-			if ( n.d < farTrap ) M.trap( _m.compose( _p.set( n.x, n.bottom + 0.02, n.z ), _q.setFromAxisAngle( _y, n.yaw ), _s ), colourAt( n.x, n.z ) );
+			if ( n.d < farTrap ) M.trap( _m.compose( _p.set( n.x, n.bottom + 0.02, n.z ), _q.setFromAxisAngle( _y, n.yaw ), _s ), wearAt( n.x, n.z ) );
 			if ( ! n.hasBuoy || onDeck ) continue;
 			this._drawBuoy( M, n.bx, n.bz, n.x, n.bottom + TRAP.H, n.z, n.colours, n.yaw, bobbing ++ < BOB_N, time, q, tq, sea );
 
@@ -683,7 +683,7 @@ export class TrapWork {
 
 	_drawJob( M, W, j, sea, time, q, tq ) {
 
-		const a = this.at, boat = this._boat, myC = buoyColours( this.app.together && this.app.together.me ? this.app.together.me.id : null ), colour = colourAt( j.trap.x, j.trap.z );
+		const a = this.at, boat = this._boat, myC = buoyColours( this.app.together && this.app.together.me ? this.app.together.me.id : null ), wear = wearAt( j.trap.x, j.trap.z );
 		if ( j.kind === 'set' ) {
 
 			const toRail = 0.7, over = 0.5, t = j.t, sinkAt = toRail + over;
@@ -696,7 +696,7 @@ export class TrapWork {
 				_p.lerp( a.rail, u );
 				_p.y += Math.sin( u * Math.PI ) * 0.35;
 				_q.slerp( _qi.setFromAxisAngle( _y, Math.PI / 2 ), u );
-				M.trap( _m.multiplyMatrices( W, _n.compose( _p, _q, _s ) ), colour );
+				M.trap( _m.multiplyMatrices( W, _n.compose( _p, _q, _s ) ), wear );
 
 			} else if ( t < sinkAt ) {
 
@@ -705,12 +705,12 @@ export class TrapWork {
 				_p.copy( a.rail ).lerp( a.over, ease( u ) );
 				_p.y = a.rail.y - u * u * ( a.rail.y - sea );
 				_q.setFromAxisAngle( _y, Math.PI / 2 );
-				M.trap( _m.multiplyMatrices( W, _n.compose( _p, _q, _s ) ), colour );
+				M.trap( _m.multiplyMatrices( W, _n.compose( _p, _q, _s ) ), wear );
 
 			} else {
 
 				const y = Math.max( j.bottom + 0.02, sea - TRAP.H - ( t - sinkAt ) * 1.0 );
-				M.trap( _m.compose( _p.set( j.trap.x, y, j.trap.z ), _q.setFromAxisAngle( _y, j.yaw ), _s ), colour );
+				M.trap( _m.compose( _p.set( j.trap.x, y, j.trap.z ), _q.setFromAxisAngle( _y, j.yaw ), _s ), wear );
 				// the warp to it, and the buoy after it
 				const d = Math.max( 0.5, sea - j.bottom ), o = buoyOffset( j.trap.x, j.trap.z, d ), bx = j.trap.x + o.x, bz = j.trap.z + o.z, u = clamp01( ( t - sinkAt - 0.1 ) / 0.8 );
 				if ( u < 1 ) {
@@ -734,7 +734,7 @@ export class TrapWork {
 
 			const u = ease( clamp01( j.t / 0.7 ) ), sx = j.trap.x + j.o.x, sz = j.trap.z + j.o.z;
 			M.buoy( _m.compose( _p.set( mix( sx, gaffX, u ), mix( sea, gaffY, u ) + Math.sin( u * Math.PI ) * 0.5, mix( sz, gaffZ, u ) ), _q.identity(), _s ), myC, _e.set( j.trap.x - _p.x, j.bottom + TRAP.H - _p.y, j.trap.z - _p.z ) );
-			M.trap( _m.compose( _p.set( j.trap.x, j.bottom + 0.02, j.trap.z ), _q.setFromAxisAngle( _y, j.yaw ), _s ), colour );
+			M.trap( _m.compose( _p.set( j.trap.x, j.bottom + 0.02, j.trap.z ), _q.setFromAxisAngle( _y, j.yaw ), _s ), wear );
 			return;
 
 		}
@@ -748,7 +748,7 @@ export class TrapWork {
 			const tip = clamp01( ( u - 0.02 ) * 12 ) * 0.5, swing = Math.sin( time * 2.1 ) * 0.1 * clamp01( ( y - wave ) * 2 );
 			_p.set( mix( j.trap.x, block.x, side ), y, mix( j.trap.z, block.z, side ) );
 			_q.setFromAxisAngle( _y, j.yaw + ( 1 - side ) * 0.6 ).multiply( _qi.setFromAxisAngle( _a.set( 1, 0, swing ).normalize(), tip ) );
-			M.trap( _m.compose( _p, _q, _s ), colour );
+			M.trap( _m.compose( _p, _q, _s ), wear );
 			if ( ! j.surfaced && y + TRAP.H > wave ) {
 
 				j.surfaced = true;
@@ -775,7 +775,7 @@ export class TrapWork {
 			_p.lerpVectors( _a, a.rail, u );
 			_p.y += Math.sin( u * Math.PI ) * 0.12;
 			_q.setFromAxisAngle( _y, Math.PI / 2 * u );
-			M.trap( _m.multiplyMatrices( W, _n.compose( _p, _q, _s ) ), colour );
+			M.trap( _m.multiplyMatrices( W, _n.compose( _p, _q, _s ) ), wear );
 			M.buoy( _m.compose( _c.copy( a.block ).applyMatrix4( W ), _qi.identity(), _s ), myC, _e.copy( _p ).applyMatrix4( W ).sub( _c ).add( _b.set( 0, TRAP.H, 0 ) ), true );
 			return;
 
@@ -785,7 +785,7 @@ export class TrapWork {
 		if ( j.phase === 'rail' ) {
 
 			_q.setFromAxisAngle( _y, Math.PI / 2 );
-			M.trap( _m.multiplyMatrices( W, _n.compose( _p.copy( a.rail ), _q, _s ) ), colour );
+			M.trap( _m.multiplyMatrices( W, _n.compose( _p.copy( a.rail ), _q, _s ) ), wear );
 			if ( j.queue ) {
 
 				let i = 0;
@@ -811,7 +811,7 @@ export class TrapWork {
 			_p.lerpVectors( a.rail, _p, u );
 			_p.y += Math.sin( u * Math.PI ) * 0.35;
 			_qi.setFromAxisAngle( _y, Math.PI / 2 ).slerp( _q, u );
-			M.trap( _m.multiplyMatrices( W, _n.compose( _p, _qi, _s ) ), colour );
+			M.trap( _m.multiplyMatrices( W, _n.compose( _p, _qi, _s ) ), wear );
 
 		}
 
