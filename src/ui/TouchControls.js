@@ -34,6 +34,7 @@ export class TouchControls {
 				<button type="button" class="touch-btn touch-rod" data-key="KeyR" hidden>Rod</button>
 				<button type="button" class="touch-btn touch-net" data-key="KeyN" hidden>Cast net</button>
 				<button type="button" class="touch-btn touch-bait" data-key="KeyB" hidden>Bait</button>
+				<button type="button" class="touch-btn touch-rig" data-key="KeyC" hidden>Rig</button>
 				<button type="button" class="touch-btn touch-cooler" data-key="KeyI" hidden>Cooler</button>
 				<button type="button" class="touch-btn touch-torch" data-key="KeyL" hidden>Torch</button>
 				<button type="button" class="touch-btn touch-horn" data-key="Horn" hidden>Horn</button>
@@ -52,6 +53,7 @@ export class TouchControls {
 			rod: el.querySelector( '.touch-rod' ),
 			net: el.querySelector( '.touch-net' ),
 			bait: el.querySelector( '.touch-bait' ),
+			rig: el.querySelector( '.touch-rig' ),
 			cooler: el.querySelector( '.touch-cooler' ),
 			torch: el.querySelector( '.touch-torch' ),
 			horn: el.querySelector( '.touch-horn' ),
@@ -204,8 +206,11 @@ export class TouchControls {
 		const offerNet = ! swim && ! lobstering && game && game.canFish && ! game.fight && ( ( prompt && prompt.key === 'R' ) || ( fishing && rod.state === 'idle' ) );
 		setButton( this.buttons.net, netFree ? 'Put away' : ! netting && offerNet ? 'Cast net' : null );
 		setButton( this.buttons.bait, fishing && rod.state === 'idle' ? 'Bait' : null );
+		setButton( this.buttons.rig, fishing && rod.state === 'idle' ? 'Rig' : null );
+		// ((M16) a rod gone off in its holder)
+		if ( prompt && prompt.key === 'R' && game && game.rigs && game.rigs.rodOn ) setButton( this.buttons.rod, 'Take the rod' );
 		setButton( this.buttons.cast, fishing ? castLabel( game ) : spearing ? spearLabel( game ) : lobstering ? lobsterLabel( game ) : netting ? netLabel( game ) : null );
-		setButton( this.buttons.reel, fishing && ! game.fight && ( rod.state === 'floating' || rod.state === 'flying' ) ? 'Reel in' : null );
+		setButton( this.buttons.reel, fishing && ! game.fight && ( rod.state === 'floating' || rod.state === 'flying' ) ? 'Reel in' : fishing && ! game.fight && rod.state === 'idle' && game.rigs && game.rigs.linesOut ? 'Lines in' : null );
 		setButton( this.buttons.cooler, game && game.hud && ! fishing && ! spearing && ! lobstering && ! netting ? 'Cooler' : null );
 		// the flashlight: offered after dusk (or while it's on)
 		const lights = game && game.app && game.app.localLights;
@@ -238,7 +243,7 @@ function castLabel( game ) {
 	if ( game.fight ) return 'Reel';
 	if ( rod.state === 'windup' ) return 'Let go';
 	if ( rod.state === 'floating' ) return game.bite && game.bite.phase === 'take' ? 'Strike!' : 'Strike';
-	if ( rod.state === 'idle' ) return 'Cast';
+	if ( rod.state === 'idle' ) return game.rigs ? game.rigs.castLabel() : 'Cast';
 	return 'Wait';
 
 }

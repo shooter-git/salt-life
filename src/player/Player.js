@@ -133,6 +133,11 @@ export class Player {
 		this.under = false; // (Salt Life) the head under water
 		this.breath = BREATH; // s of breath left
 		this.breathMax = BREATH;
+		// ((M16) your dive kit (Gear.js, setDive), and the fighting chair you're strapped in: Rigs)
+		this.swimMul = 1;
+		this.airS = 0;
+		this.chair = null;
+		this.trollAt = 0;
 		this.breathPaused = false; // (the game: while a catch card is up, the world waits)
 		this.blackout = 0; // 1 while blacked out and floating up, then the gasp at the surface (s)
 		this.blackouts = 0; // how many times (the game notices a new one)
@@ -539,7 +544,7 @@ export class Player {
 		// sooner: world/Fish.js), still brisk going down or coming up
 		const stalking = this.stalk && ! this.floating;
 		const level = wish.lengthSq() > 1e-4 ? Math.abs( wish.y ) / wish.length() : 0;
-		const speed = this.blackout === 1 ? 0.9 : sprint ? 2.5 : stalking ? 0.7 + 0.8 * Math.min( 1, level * 1.5 ) : 1.5;
+		const speed = this.blackout === 1 ? 0.9 : ( sprint ? 2.5 : stalking ? 0.7 + 0.8 * Math.min( 1, level * 1.5 ) : 1.5 ) * this.swimMul;
 		const k = 1 - Math.exp( - dt * 3.0 );
 		this.velocity.lerp( wish.multiplyScalar( speed ), k );
 
@@ -654,6 +659,17 @@ export class Player {
 
 	}
 
+	// (M16) what your dive kit does: faster through the water, a longer breath, a tank's air
+	setDive( { swimMul = 1, breathS = BREATH, airS = 0 } ) {
+
+		const was = this.breathMax;
+		this.swimMul = swimMul;
+		this.airS = airS;
+		this.breathMax = airS > 0 ? airS : breathS;
+		if ( this.breathMax !== was ) this.breath = this.breathMax;
+
+	}
+
 	// (Salt Life) the held breath: it runs down with the head under water (faster kicking hard, slower
 	// keeping still) and comes back at the surface. Out of it: a blackout (the swimmer floats up), then
 	// a few breaths at the surface before the next dive
@@ -664,7 +680,9 @@ export class Player {
 
 			if ( this.breathPaused ) return;
 			const rate = sprint ? 1.8 : this.velocity.lengthSq() < 0.09 ? 0.7 : 1;
-			this.breath = Math.max( 0, this.breath - dt * rate );
+			// ((M16) on a tank you breathe air at the pressure you're at, one atmosphere more each 10 m)
+			const air = this.airS > 0 ? 1 + Math.max( 0, ( this.waterMean ?? this.waterH ?? 0 ) - this.position.y ) / 10 : 1;
+			this.breath = Math.max( 0, this.breath - dt * rate * air );
 			if ( this.breath === 0 && this.blackout === 0 ) {
 
 				this.blackout = 1;
@@ -675,7 +693,9 @@ export class Player {
 
 		} else {
 
-			this.breath = Math.min( BREATH, this.breath + dt * BREATH / BREATH_BACK );
+			// ((M16) a tank doesn't fill up at the surface: a fresh one's from the rack, off the water)
+			if ( this.airS > 0 && this.mode === 'swim' ) { /* what's left is left */ }
+			else this.breath = Math.min( this.breathMax, this.breath + dt * this.breathMax / BREATH_BACK );
 			if ( this.blackout === 1 ) this.blackout = 1 + GASP;
 			else if ( this.blackout > 1 ) this.blackout = Math.max( 0, this.blackout - dt ) || 0;
 			if ( this.blackout > 0 && this.blackout <= 1 ) this.blackout = 0;
@@ -953,8 +973,15 @@ export class Player {
 
 		// stay inside the hull (the bulwarks, plus a margin fore and aft)
 		b.model.clampToDeck( p, DECK_RADIUS );
+		// ((M16) strapped in the fighting chair: you turn your head, and that's all)
+		if ( this.chair ) {
 
-		const g = this.deckGroundAt( p.x, p.z, p.y + DECK_STEP );
+			p.set( this.chair.eye.x, this.chair.eye.y - EYE, this.chair.eye.z );
+			v.set( 0, 0, 0 );
+
+		}
+
+		const g = this.chair ? p.y : this.deckGroundAt( p.x, p.z, p.y + DECK_STEP );
 		if ( p.y <= g ) {
 
 			p.y = g;
@@ -1091,6 +1118,8 @@ export class Player {
 
 		}
 
+		// ((M16) lines out: forward's held at the baits' speed unless you're running: Rigs' trollAt, knots)
+		if ( this.trollAt > 0 && throttle > 0 && ! inp.down( 'ShiftLeft' ) ) throttle = Math.min( throttle, THREE.MathUtils.clamp( 0.3 + ( this.trollAt - b.speed * 1.944 ) * 0.2, 0, 1 ) );
 		b.setInput( throttle, steer, dt );
 		this.prompt = { key: 'E', text: this.helmHeld ? 'Close the radio' : 'Leave helm   ·   V  camera   ·   R  radio' };
 

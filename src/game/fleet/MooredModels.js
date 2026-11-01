@@ -245,7 +245,7 @@ const BUILD = {
 		}
 
 		if ( stats.outriggers ) for ( const s of [ - 1, 1 ] ) B.pole( [ s * 1.8, 3.4, 0.2 ], [ s * 6.2, 9.5, - 1.8 ], 0.025, STEEL );
-		if ( stats.fightingChair ) {
+		if ( stats.chair ) {
 
 			B.pole( [ 0, S.deckY, - 5 ], [ 0, S.deckY + 0.5, - 5 ], 0.06, STEEL );
 			B.prism( 0.28, 0.28, S.deckY + 0.5, S.deckY + 0.62, - 5.25, - 4.75, - 5.25, - 4.75, 0xc8bda6 );

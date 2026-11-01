@@ -49,7 +49,7 @@ Cockpit to mezzanine by a step; through the door to the salon; down the companio
 
 ## What others read
 
-`bunks`, `chair`, `rodHolders`, `outriggerTips`, `stations`, `lowCopy`, `towerEye`, `fit( stats )`, `setPaint( hex )`, `setOutriggersOut( out )`. `fit` takes `tower`, `outriggers` and `chair` or `fightingChair`; a stat that's undefined is shown, so she's whole until the fleet's tracks come.
+`bunks`, `chair`, `rodHolders`, `outriggerTips`, `stations`, `lowCopy`, `towerEye`, `fit( stats )`, `setPaint( hex )`, `setOutriggersOut( out )`. `fit` takes `tower`, `outriggers` and `chair` or `chair`; a stat that's undefined is shown, so she's whole until the fleet's tracks come.
 
 ## Phones
 

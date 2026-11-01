@@ -16,15 +16,55 @@ export const UPGRADES = {
 		{ cost: 180, label: '30 lb braid', lineKg: 26 },
 		{ cost: 450, label: '60 lb braid', lineKg: 50 },
 	] },
+	// ((M16) spoolM: the line it holds; dragKg: the most its drag holds (CatchMinigame), none to speak of on a spinning
+	// reel, whose fight's as it always was; twoSpeed: a low gear)
 	reel: { name: 'Reel', levels: [
-		{ cost: 0, label: 'Old spinning reel', reelSpeed: 1.1 },
-		{ cost: 90, label: 'Smooth spinning reel', reelSpeed: 1.6 },
-		{ cost: 320, label: 'Conventional reel', reelSpeed: 2.2 },
+		{ cost: 0, label: 'Old spinning reel', reelSpeed: 1.1, spoolM: 180, dragKg: null },
+		{ cost: 90, label: 'Smooth spinning reel', reelSpeed: 1.6, spoolM: 220, dragKg: null },
+		{ cost: 320, label: 'Conventional reel', reelSpeed: 2.2, spoolM: 350, dragKg: 12 },
+		{ cost: 900, label: 'Two-speed lever drag reel', reelSpeed: 2.6, spoolM: 600, dragKg: 24, twoSpeed: true },
 	] },
 	rod: { name: 'Rod', levels: [
 		{ cost: 0, label: 'Hand-me-down rod', castM: 22 },
 		{ cost: 75, label: '7 ft graphite rod', castM: 32 },
 		{ cost: 260, label: '9 ft surf rod', castM: 45 },
+		{ cost: 600, label: 'Stand-up trolling rod, roller guides and a gimbal butt', castM: 30, standUp: true },
+	] },
+	// (M16) your own gear for the big fish (game/rigs/Presentation.js, docs/m16/tackle.md). The leader: the sensible one of
+	// those you've bought is tied on for what you're doing (leaderFor). landKg: the heaviest you lift aboard for sure
+	// (past it, more and more shake off at the boat); polarized: fish seen under the water; swimMul, breathS, airS
+	// (Player.setDive); lifeJacket, flares and epirb are read by the kayak and DaysOut
+	leader: { name: 'Leader', levels: [
+		{ cost: 0, label: 'Light mono leader', leader: 0 },
+		{ cost: 40, label: 'Fluorocarbon leader', leader: 1 },
+		{ cost: 60, label: 'Wire leader, for wahoo and kings', leader: 2 },
+		{ cost: 90, label: '200 lb mono leader, for billfish', leader: 3 },
+	] },
+	lures: { name: 'Lures', levels: [
+		{ cost: 0, label: 'None', lures: 0 },
+		{ cost: 50, label: 'Jigs', lures: 1 },
+		{ cost: 90, label: 'Plugs', lures: 2 },
+		{ cost: 180, label: 'Trolling skirts', lures: 3 },
+	] },
+	landing: { name: 'Landing', levels: [
+		{ cost: 0, label: 'Your hands', landKg: 12, gaff: false, dehooker: false, tagKit: false },
+		{ cost: 60, label: 'A gaff', landKg: 250, gaff: true, dehooker: false, tagKit: false },
+		{ cost: 80, label: 'Release dehooker and billfish tag kit', landKg: 250, gaff: true, dehooker: true, tagKit: true },
+	] },
+	glasses: { name: 'Polarized glasses', levels: [
+		{ cost: 0, label: 'None', polarized: false },
+		{ cost: 120, label: 'Polarized glasses (fish seen under the water, from the tower above all)', polarized: true },
+	] },
+	diveKit: { name: 'Dive kit', levels: [
+		{ cost: 0, label: 'None', swimMul: 1, breathS: 50, airS: 0 },
+		{ cost: 80, label: 'Mask and fins (faster swimming)', swimMul: 1.45, breathS: 50, airS: 0 },
+		{ cost: 220, label: 'Long fins and a wetsuit (a longer breath)', swimMul: 1.65, breathS: 80, airS: 0 },
+		{ cost: 600, label: 'Scuba tanks (fresh from the rack on every dive)', swimMul: 1.65, breathS: 80, airS: 6800 },
+	] },
+	safety: { name: 'Safety', levels: [
+		{ cost: 0, label: 'None', lifeJacket: false, flares: false, epirb: false },
+		{ cost: 40, label: 'Life jacket (a capsized kayak costs less)', lifeJacket: true, flares: false, epirb: false },
+		{ cost: 200, label: 'Flares and an EPIRB (found and towed in when you\'re in trouble far out)', lifeJacket: true, flares: true, epirb: true },
 	] },
 	// (Salt Life) the speargun, for a fish you've swum down to: a band gun (gunStyle: an aluminium tube,
 	// a teak stock, a railgun), its barrel from the grip to the muzzle (gunCm) and rubber bands
@@ -179,8 +219,8 @@ export const UPGRADES = {
 		{ cost: 1500, label: 'Diesel generator', generator: true },
 	] },
 	sfChair: { name: 'Fighting chair', on: 'sportfisher', levels: [
-		{ cost: 0, label: 'None: stand up and take it', fightingChair: false },
-		{ cost: 2000, label: 'Fighting chair in the cockpit', fightingChair: true },
+		{ cost: 0, label: 'None: stand up and take it', chair: false },
+		{ cost: 2000, label: 'Fighting chair in the cockpit', chair: true },
 	] },
 	sfUnderwaterLights: { name: 'Underwater lights', on: 'sportfisher', levels: [
 		{ cost: 0, label: 'None', underwaterLights: false },

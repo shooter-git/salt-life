@@ -79,7 +79,7 @@ export class MooredBoats {
 			const shown = own && ! you;
 			// (what's fitted on her shows: rebuilt only as that changes)
 			const stats = gearStats( state.upgrades, id ), paint = own && rec.paint ? paintOf( rec.paint ).hex : null;
-			const sign = shown ? [ paint, stats.tTop, stats.twin, stats.tower, stats.outriggers, stats.fightingChair, stats.holdKg ].join() : null;
+			const sign = shown ? [ paint, stats.tTop, stats.twin, stats.tower, stats.outriggers, stats.chair, stats.holdKg ].join() : null;
 			if ( sign !== E.sign ) {
 
 				if ( E.mesh ) {

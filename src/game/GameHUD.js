@@ -605,6 +605,8 @@ export class GameHUD {
 			if ( fight.tension > 0.88 ) { call = 'Ease off!'; cls = 'is-warn'; }
 			else if ( fight.surge > 0.55 ) { call = 'It\'s running!'; cls = 'is-warn'; }
 			else if ( fight.tension < 0.15 ) { call = 'Slack line!'; cls = 'is-warn'; }
+			else if ( fight.lineSpooled && fight.distance > fight.maxDistance * 0.85 ) { call = 'Nearly spooled!'; cls = 'is-warn'; }
+			else if ( fight.drag && fight.arms < 0.25 ) { call = 'Your arms are going'; cls = 'is-warn'; }
 			else if ( fight.tension >= fight.band[ 0 ] && fight.tension <= fight.band[ 1 ] ) { call = 'Good pressure'; cls = 'is-good'; }
 			this.fCall.textContent = call;
 			this.fCall.className = 'gm-fight-call ' + cls;
@@ -1385,7 +1387,7 @@ GameHUD.prototype.renderShop = function () {
 		<div class="gm-head"><h2>${ v.name }</h2>
 		<p class="gm-sub">${ greeting } · You have $${ s.money.toLocaleString() }</p></div>
 		${ tabs }
-		<div class="gm-list">${ boats ? fleetRows( this ) : `${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ this.findsBlock( 'marta', 'From the beach: she\'ll buy' ) }${ bucketRow }${ baitRows }${ haulRow }${ towRow }${ repairRow }${ fuelRow }${ g.daysOut.shopRows() }${ rows }` }</div>
+		<div class="gm-list">${ boats ? fleetRows( this ) : `${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ this.findsBlock( 'marta', 'From the beach: she\'ll buy' ) }${ bucketRow }${ baitRows }${ haulRow }${ towRow }${ repairRow }${ fuelRow }${ frozen }${ g.daysOut.shopRows() }${ rows }` }</div>
 		<div class="gm-foot"><span class="gm-sub">${ boats ? 'Boats stay at their berths till you take one out' : 'Upgrades take effect at once' }</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>` );
 	bindFuel();
 	g.daysOut.bindShop( this.stand, () => this.renderShop() );

@@ -285,7 +285,7 @@ ok( FLEET.console.price === 2500 && FLEET.lobster.price === 6000 && FLEET.sportf
 for ( const id of Object.keys( BOATS ) ) {
 
 	const plain = mooredGeometry( id, {} ).attributes.position.count / 3;
-	const full = mooredGeometry( id, { paint: 0x14283f, stats: { tTop: true, twin: true, tower: true, outriggers: true, fightingChair: true, holdKg: 99 } } ), n = full.attributes.position.count / 3;
+	const full = mooredGeometry( id, { paint: 0x14283f, stats: { tTop: true, twin: true, tower: true, outriggers: true, chair: true, holdKg: 99 } } ), n = full.attributes.position.count / 3;
 	ok( n < 900 && plain < 900, `${ id }: drawn lightly, ${ plain } triangles, ${ n } with everything fitted` );
 	const pos = full.attributes.position;
 	full.computeBoundingBox();

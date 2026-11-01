@@ -34,7 +34,7 @@ From the doc's table, in `Gear.js` with `on`:
 | Kayak | `kayakCrate`, `kayakPaddle`, `kayakAnchor`, `kayakFinder`, `kayakHatch` | `holdKg`, `speedMul`, `anchorM`, `trolley`, `finder`, `jacketRoom` |
 | Center console | `consoleEngine`, `consoleTop`, `consoleWell`, `consoleLadder`, `consoleTanks` | `speedMul`, `twin`, `tTop`, `baitMax`, `livewell`, `diveLadder`, `tankRack` |
 | Lobster boat | today's eight (lobster traps: stream 9) | as they were |
-| Sportfisher | `sfOutriggers`, `sfTower`, `sfElectricReel`, `sfFishBox`, `sfIcemaker`, `sfGenerator`, `sfChair`, `sfUnderwaterLights` | `outriggers`, `tower`, `electricReel`, `holdKg`, `icemaker`, `iceMakesKgH`, `generator`, `fightingChair`, `underwaterLights` |
+| Sportfisher | `sfOutriggers`, `sfTower`, `sfElectricReel`, `sfFishBox`, `sfIcemaker`, `sfGenerator`, `sfChair`, `sfUnderwaterLights` | `outriggers`, `tower`, `electricReel`, `holdKg`, `icemaker`, `iceMakesKgH`, `generator`, `chair`, `underwaterLights` |
 
 The models read these through `Vessel.fit( stats )`, which `Game.applyGear` calls whenever gear changes. It does nothing until a boat overrides it. The prices are proposed; `m16/opening` tunes them.
 

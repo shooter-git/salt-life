@@ -390,7 +390,7 @@ export class SportfisherModel extends Vessel {
 	fit( stats = {} ) {
 
 		const has = ( ...keys ) => keys.every( ( k ) => stats[ k ] === undefined ) ? true : keys.some( ( k ) => !! stats[ k ] );
-		this.fitted = { tower: has( 'tower' ), outriggers: has( 'outriggers' ), chair: has( 'chair', 'fightingChair' ) };
+		this.fitted = { tower: has( 'tower' ), outriggers: has( 'outriggers' ), chair: has( 'chair', 'chair' ) };
 		const M = this.meshes;
 		if ( M.tower ) M.tower.visible = this.fitted.tower;
 		if ( M.outriggers ) M.outriggers.visible = this.fitted.outriggers;
