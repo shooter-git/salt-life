@@ -7,6 +7,7 @@ import { rot2, srgb, TERRAIN_SHADING_GLSL } from './terrain/TerrainShading.js';
 import { caveLightTexture, caveOpenness, seaCaveUniforms } from './terrain/CaveLight.js';
 import { carveAt } from './terrain/SeaCaves.js';
 import { trailClears } from './terrain/NorthTrail.js';
+import { releaseGeometry } from '../core/ReleaseAfterUpload.js';
 
 // Fade factor across a distance band [start, end] (0 before, 1 after), for the level that takes over
 // at `end` (as materials/LODFade.js bandFade)
@@ -157,6 +158,14 @@ export class Rocks {
 
 	}
 
+	// (M16) each overhang's first shape as it was made: its near and far buckets have copies of their own
+	// (App.letGoOfTheBuild)
+	releaseShapes() {
+
+		for ( const o of this.overhangs ) o.geometry = null;
+
+	}
+
 	// (M15) a cave's place on the map's strip is its own, whether its light's been worked out yet or not
 	_caveLight() {
 
@@ -205,6 +214,7 @@ export class Rocks {
 			b.near.geometry = g;
 			b.nearTris = g.index.count / 3;
 			was.dispose();
+			releaseGeometry( g ); // ((M16) as the others', App.letGoOfTheBuild)
 
 		}
 

@@ -5,7 +5,17 @@
 // Without those copies a lost context can't be restored in place, so the page reloads instead (the
 // game state lives in the person's saves): watchContext( renderer ).
 
+import { BufferAttribute, StaticDrawUsage } from '../engine/index.js';
+
 const MIN_BYTES = 256 * 1024;
+
+// ((M16) whether an attribute's on the GPU already, as three says as it uploads it: what's been drawn before it's
+// let go goes at once, where an onUpload would wait for ever)
+BufferAttribute.prototype.onUploadCallback = function () {
+
+	this.uploaded = true;
+
+};
 
 // textures: data textures (and array / 3D ones) bigger than MIN_BYTES, after their first upload
 export function releaseTexture( texture ) {
@@ -50,8 +60,15 @@ export function releaseGeometry( geometry ) {
 		this.array = null;
 
 	};
-	for ( const a of Object.values( geometry.attributes ) ) if ( a.array && a.array.byteLength >= 4096 && ! a.isInterleavedBufferAttribute ) a.onUpload( free );
-	if ( geometry.index && geometry.index.array.byteLength >= 4096 ) geometry.index.onUpload( free );
+	const release = ( a ) => {
+
+		if ( a.uploaded ) free.call( a );
+		else a.onUpload( free );
+
+	};
+	// ((M16) but what's filled again: an instance's attributes, say; a geometry the instanced draw from is the same)
+	for ( const a of Object.values( geometry.attributes ) ) if ( a.array && a.array.byteLength >= 4096 && ! a.isInterleavedBufferAttribute && ! a.isInstancedBufferAttribute && a.usage === StaticDrawUsage ) release( a );
+	if ( geometry.index && geometry.index.array && geometry.index.array.byteLength >= 4096 ) release( geometry.index );
 
 }
 
@@ -74,12 +91,13 @@ export function releaseTextures( root, { keep = [] } = {} ) {
 
 }
 
-export function releaseGeometries( root ) {
+// ((M16) `instanced`: the shapes instanced meshes draw too, their instances' attributes kept)
+export function releaseGeometries( root, { instanced = false } = {} ) {
 
 	root.traverse( ( o ) => {
 
 		// ((M14) but those whose vertices move: userData.keepArrays, the village's shutters)
-		if ( o.isMesh && ! o.isInstancedMesh && ! o.userData.keepArrays && o.geometry && ! o.geometry.isInstancedBufferGeometry ) releaseGeometry( o.geometry );
+		if ( o.isMesh && ( instanced || ! o.isInstancedMesh ) && ! o.userData.keepArrays && o.geometry && ! o.geometry.isInstancedBufferGeometry ) releaseGeometry( o.geometry );
 
 	} );
 

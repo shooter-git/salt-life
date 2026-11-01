@@ -562,6 +562,10 @@ export class App {
 		this.lightUp( scene );
 		// the CPU copies of the big static data go once it's on the GPU (phones' script memory)
 		releaseGeometries( this.village.group );
+		// ((M16) and of what else is only drawn: not the boat's, nor what moves)
+		for ( const root of [ this.lighthouse.group, this.harbourLights.group, this.farIsland.mesh, this.game.rod.rodMesh, ...this.game.vendors.map( ( v ) => v.group ) ] ) releaseGeometries( root );
+		releaseGeometries( this.rocks.group, { instanced: true } );
+		this.rocks.releaseShapes();
 		// (but the detail texture: the plants read its data as they're placed, and its bake keeps the data
 		// anyway, so letting go of the texture's reference would free nothing)
 		releaseTextures( this.terrain.mesh, { keep: [ this.terrain.detailTexture ] } );
@@ -1335,6 +1339,13 @@ export class App {
 				this.nearDetail.push( { o, dist: 60 } );
 
 			} );
+			// ((M16) a person's shape on the GPU alone, as the village's: and one that comes after letGoOfTheBuild)
+			if ( c ) {
+
+				c.group.traverse( ( o ) => o.isSkinnedMesh && ! o.boundingSphere && o.computeBoundingSphere() );
+				releaseGeometries( c.group );
+
+			}
 
 		} catch ( e ) {
 
@@ -1700,6 +1711,7 @@ export class App {
 	async plantsGrow() {
 
 		await this.vegetation.init();
+		releaseGeometries( this.vegetation.group, { instanced: true } ); // ((M16) their shapes on the GPU alone)
 		if ( this._started ) await this.readyOffstage( this.vegetation.group );
 		else this.lightUp( this.vegetation.group );
 
@@ -1711,6 +1723,7 @@ export class App {
 	async lifeAndDebris() {
 
 		if ( ! this.wreck ) this.wreck = new Wreck( { scene: this.scene, colliders: this.colliders } );
+		releaseGeometries( this.wreck.group ); // ((M16) as the village's)
 		await this.lifeArrives();
 		await this.pause();
 		await this.debrisLands();
