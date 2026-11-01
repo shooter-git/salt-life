@@ -1,6 +1,5 @@
 import * as THREE from '../engine/index.js';
 import { WORLD } from '../world/WorldLayout.js';
-import { HOUSE } from '../world/boat/Wheelhouse.js';
 import { TUMBLE_H } from '../ocean/ShoreWaves.js';
 import { G } from '../core/Globals.js';
 
@@ -26,7 +25,6 @@ export function windShove( U ) {
 export const SCRAMBLE = 0.06, SLOPE_BASE = 0.8;
 export const slopePace = ( grade ) => Math.max( SCRAMBLE, Math.exp( - 3.5 * ( Math.abs( grade + 0.05 ) - 0.05 ) ) );
 
-const HOUSE_HELM = { x: HOUSE.helmX, z: HOUSE.seatZ };
 
 const EYE = 1.62;
 const SWIM_EYE = EYE * 0.1; // eyes above the body's float point while swimming
@@ -731,7 +729,7 @@ export class Player {
 		b.driven = false;
 		b.throttle = 0;
 		this.mode = 'deck';
-		this.deckPos.set( HOUSE_HELM.x + 0.45, b.model.lines.deckY, HOUSE_HELM.z - 0.1 );
+		this.deckPos.set( b.model.helm.rise[ 0 ], b.model.lines.deckY, b.model.helm.rise[ 1 ] );
 		this.deckVel.set( 0, 0, 0 );
 		this.deckYaw = this.helmYaw;
 		this.pitch = this.helmPitch;
@@ -850,9 +848,9 @@ export class Player {
 	// highest walkable box top under the point (boat frame), not above maxY; the sole otherwise
 	deckGroundAt( x, z, maxY ) {
 
-		const L = this.boat.model.lines;
-		let g = L.deckY;
-		for ( const c of this.boat.model.colliders ) {
+		const M = this.boat.model;
+		let g = M.soleY( x, z, maxY );
+		for ( const c of M.colliders ) {
 
 			if ( ! c.walkable ) continue;
 			if ( Math.abs( x - c.center.x ) > c.half.x || Math.abs( z - c.center.z ) > c.half.z ) continue;
@@ -919,9 +917,7 @@ export class Player {
 		}
 
 		// stay inside the hull (the bulwarks, plus a margin fore and aft)
-		p.z = THREE.MathUtils.clamp( p.z, L.zAft + L.shell + DECK_RADIUS, 4.0 );
-		const halfIn = Math.max( 0.15, L.halfBreadth( L.tAtSheerZ( p.z ), Math.max( p.y, L.deckY ) ) - L.shell - DECK_RADIUS );
-		p.x = THREE.MathUtils.clamp( p.x, - halfIn, halfIn );
+		b.model.clampToDeck( p, DECK_RADIUS );
 
 		const g = this.deckGroundAt( p.x, p.z, p.y + DECK_STEP );
 		if ( p.y <= g ) {
@@ -941,7 +937,7 @@ export class Player {
 			if ( this.stepDist > 0.6 ) {
 
 				this.stepDist = 0;
-				if ( this.audio ) this.audio.footstep( 'wood' );
+				if ( this.audio ) this.audio.footstep( b.model.footstep );
 
 			}
 
@@ -950,7 +946,7 @@ export class Player {
 		this.deckToWorld();
 
 		// prompts: take the helm, or step ashore
-		const hx = HOUSE_HELM.x, hz = HOUSE_HELM.z;
+		const hx = b.model.helm.x, hz = b.model.helm.z;
 		const nearHelm = Math.hypot( p.x - hx, p.z - hz ) < HELM_REACH && ! this.busy && ! this.riding;
 		this._ashoreT -= dt;
 		if ( this._ashoreT <= 0 ) {

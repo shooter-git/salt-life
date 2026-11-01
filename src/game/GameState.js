@@ -6,8 +6,18 @@ import { WEEK_MUL } from './WeekOrder.js';
 import { BAITS, KEEPER_KG, baitOf, chunksOf } from './Bait.js';
 import { PLACES } from './Places.js';
 import { ChartLog } from './Chart.js';
+import { BOATS, START_BOAT } from '../world/boat/Boats.js';
 
 const SAVE_KEY = 'tidewater.save.v1';
+
+// (M16) a boat you own, as the save keeps her while you're in another
+const newBoat = ( b = {} ) => ( {
+	fuel: Number.isFinite( b.fuel ) ? b.fuel : null,
+	hull: Number.isFinite( b.hull ) ? Math.min( 1, Math.max( 0, b.hull ) ) : 0,
+	hauled: b.hauled === true,
+	name: typeof b.name === 'string' ? b.name : null,
+	paint: typeof b.paint === 'string' ? b.paint : null,
+} );
 
 // Everything the player owns: wallet, the fish in the cooler / hold, the fish log and the gear
 // levels. Saved to localStorage (per browser) after every change; storage can be missing or throw
@@ -27,7 +37,11 @@ export class GameState {
 		// it's the first fish you've had there)
 		this.lastCatch = null;
 		this.bag = { day: null, n: {} }; // (Salt Life) how many of each bag-limited kind (FishTable bag) you've kept that day
-		this.upgrades = defaultUpgrades();
+		this.upgrades = defaultUpgrades(); // ((M16) your own gear's and all your boats': Gear.js, each track says whose)
+		// (M16) the boat you're in (world/boat/Boats.js), and the others you own: { fuel, hull, hauled, name, paint } of each
+		// (fuel, hull and hauled below are hers, the one you're in)
+		this.boat = START_BOAT;
+		this.fleet = { [ START_BOAT ]: newBoat() };
 		this.fuel = null; // litres left (null = full tank)
 		this.hull = 0; // (M10) the boat's wear, 0..1 (game/Hull.js), until Marta repairs it
 		this.hauled = false; // (M13) Marta's hauled her out ahead of a hurricane (on her cradle ashore)
@@ -51,7 +65,47 @@ export class GameState {
 
 	get stats() {
 
-		return gearStats( this.upgrades );
+		return gearStats( this.upgrades, this.boat );
+
+	}
+
+	// (M16) your boats: whether she's yours, making her yours, and getting into another of them (App.setBoat does the rest)
+	owns( id ) {
+
+		return !! this.fleet[ id ];
+
+	}
+
+	addBoat( id ) {
+
+		if ( ! BOATS[ id ] ) return false;
+		if ( ! this.fleet[ id ] ) this.fleet[ id ] = newBoat();
+		this.save();
+		return true;
+
+	}
+
+	selectBoat( id ) {
+
+		if ( ! this.fleet[ id ] ) return false;
+		this._boatAway();
+		this.boat = id;
+		const b = this.fleet[ id ];
+		this.fuel = b.fuel;
+		this.hull = b.hull;
+		this.hauled = b.hauled;
+		this.save();
+		return true;
+
+	}
+
+	// what's on the boat you're in, into the fleet's record of her
+	_boatAway() {
+
+		const b = this.fleet[ this.boat ] || ( this.fleet[ this.boat ] = newBoat() );
+		b.fuel = this.fuel;
+		b.hull = this.hull;
+		b.hauled = this.hauled;
 
 	}
 
@@ -665,13 +719,14 @@ export class GameState {
 
 	toJSON() {
 
-		return { v: 1, money: this.money, inventory: this.inventory, log: this.log, places: this.places, found: this.found, upgrades: this.upgrades, fuel: this.fuel, hull: this.hull, hauled: this.hauled, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, bag: this.bag, finds: this.finds, picked: this.picked, chart: this.chart.toJSON(), nextId: this._nextId };
+		this._boatAway();
+		return { v: 2, boat: this.boat, fleet: this.fleet, money: this.money, inventory: this.inventory, log: this.log, places: this.places, found: this.found, upgrades: this.upgrades, fuel: this.fuel, hull: this.hull, hauled: this.hauled, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, bag: this.bag, finds: this.finds, picked: this.picked, chart: this.chart.toJSON(), nextId: this._nextId };
 
 	}
 
 	fromJSON( d ) {
 
-		if ( ! d || d.v !== 1 ) return false;
+		if ( ! d || ( d.v !== 1 && d.v !== 2 ) ) return false;
 		this.money = Number.isFinite( d.money ) ? d.money : 0;
 		this.inventory = Array.isArray( d.inventory ) ? d.inventory.filter( ( f ) => f && FISH[ f.species ] && Number.isFinite( f.kg ) ) : [];
 		// saves from before lengths were recorded
@@ -689,6 +744,11 @@ export class GameState {
 		this.fuel = Number.isFinite( d.fuel ) ? d.fuel : null;
 		this.hull = Number.isFinite( d.hull ) ? Math.min( 1, Math.max( 0, d.hull ) ) : 0;
 		this.hauled = d.hauled === true;
+		// ((M16) a save from before the fleet: the lobster boat you had, and the kayak's yours as well)
+		this.fleet = {};
+		for ( const [ k, b ] of Object.entries( d.v === 2 && d.fleet && typeof d.fleet === 'object' ? d.fleet : { lobster: {}, kayak: {} } ) ) if ( BOATS[ k ] ) this.fleet[ k ] = newBoat( b );
+		this.boat = BOATS[ d.boat ] && this.fleet[ d.boat ] ? d.boat : d.v === 1 ? 'lobster' : Object.keys( this.fleet )[ 0 ] || START_BOAT;
+		if ( ! this.fleet[ this.boat ] ) this.fleet[ this.boat ] = newBoat();
 		this.look = typeof d.look === 'string' ? d.look : null;
 		const o = d.orders;
 		this.orders = o && Number.isFinite( o.day ) && o.filled && typeof o.filled === 'object' ? { day: o.day, filled: { ...o.filled } } : { day: null, filled: {} };

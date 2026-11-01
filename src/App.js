@@ -19,7 +19,7 @@ import { RockCover } from './world/RockCover.js';
 import { Terrain } from './world/Terrain.js';
 import { Rocks } from './world/Rocks.js';
 import { Vegetation } from './world/Vegetation.js';
-import { BoatModel } from './world/BoatModel.js';
+import { BOATS, loadBoat } from './world/boat/Boats.js';
 import { Sky } from './sky/Sky.js';
 import { Waves, SWELL_WEST } from './ocean/Waves.js';
 import { WaterQuery } from './ocean/WaterQuery.js';
@@ -75,7 +75,7 @@ import { BlownLitter } from './fx/BlownLitter.js';
 import { insideRoom, roomMatrix } from './world/village/StormPlaces.js';
 import { AirMotes } from './fx/AirMotes.js';
 import { Rain } from './fx/Rain.js';
-import { Drips, eavePoints, palmPoints, wheelhousePoints } from './fx/Drips.js';
+import { Drips, eavePoints, palmPoints } from './fx/Drips.js';
 import { BoatInstruments } from './world/boat/Instruments.js';
 import { BoatRadar } from './world/boat/Radar.js';
 import { Lightning } from './sky/Lightning.js';
@@ -403,10 +403,19 @@ export class App {
 
 		// ---------------------------------------------------------------- boat and player
 		await progress( 0.7, 'Mooring the boat' );
-		this.boat = new BoatModel();
+		// ((M16) the boat you're in: only she's built. ?boat= another, in a dev server or a driven browser, for looking at her)
+		const lookAt = new URLSearchParams( location.search ).get( 'boat' );
+		if ( BOATS[ lookAt ] && ( import.meta.env.DEV || navigator.webdriver ) ) {
+
+			this.state.addBoat( lookAt );
+			this.state.selectBoat( lookAt );
+
+		}
+
+		this.boat = await loadBoat( this.state.boat );
 		// (M11) her instruments as they read (world/boat/Instruments.js): made now, so the dash's program is
 		// made with the rest
-		this.instruments = new BoatInstruments( { material: this.boat.materials.display, tier } );
+		this.instruments = new BoatInstruments( { material: this.boat.materials.display || new THREE.MeshBasicMaterial(), tier } );
 		// ((M14) and her radar, on the dash's third screen: Radar.js)
 		this.radar = new BoatRadar( { terrain: this.terrainData, seaLevel: () => G.seaLevel.value, size: tier === 'low' ? 150 : 300 } );
 		this._radarBoats = [];
@@ -441,7 +450,7 @@ export class App {
 		// (M11) the drips (fx/Drips.js): off the wheelhouse roof from the start, the eaves and the palms once
 		// the cover map's built (buildCover)
 		this.drips = new Drips( { tier, flash: this.rain.flash } );
-		this.drips.setBoat( wheelhousePoints( this.boat.lines ) );
+		this.drips.setBoat( this.boat.dripPoints() );
 		scene.add( this.drips.mesh );
 		this.lightning = new Lightning( { scene, sky: this.sky } );
 		// (its thunder, heard as it gets here)
@@ -465,7 +474,7 @@ export class App {
 			// (the village's display fish, one mesh spanning the village, aren't built on these devices)
 			this.stand.group?.traverse( ( o ) => o.isMesh && this.nearDetail.push( { o, dist: 60 } ) );
 			this.chandlery.group?.traverse( ( o ) => o.isMesh && this.nearDetail.push( { o, dist: 60 } ) );
-			for ( const k of [ 'fittings', 'wood', 'display', 'wheel', 'throttle', 'radar', 'propeller', 'rudder' ] ) if ( this.boat.meshes[ k ] ) this.nearDetail.push( { o: this.boat.meshes[ k ], dist: 70 } );
+			for ( const k of this.boat.nearDetail ) if ( this.boat.meshes[ k ] ) this.nearDetail.push( { o: this.boat.meshes[ k ], dist: 70 } );
 			for ( const d of this.nearDetail ) if ( ! d.o.geometry.boundingSphere ) d.o.geometry.computeBoundingSphere();
 
 		}
@@ -526,7 +535,7 @@ export class App {
 		// floodlights
 		this.localLights = new LocalLights( { max: tier === 'low' ? 4 : 8 } );
 		addVillageLights( this.localLights, this.village );
-		addBoatLights( this.localLights, this.boat );
+		this._boatLights = addBoatLights( this.localLights, this.boat );
 		// (Salt Life) the boat's lamps as others see them at night, and its searchlight (on its group:
 		// on a device that draws on the CPU, after the start, with the shaders for later)
 		this.boatLamps = new BoatLamps( this.boat );
@@ -2413,6 +2422,69 @@ export class App {
 	// the hour and day you're at, into your save (written a moment later, with the rest of it); and the
 	// weather you picked (none: the day's), (M13) and when, for a hurricane of your own; (M15) when (at: the clock
 	// goes on from there while you're away), and your boat
+	// (M16) Into another of your boats, while you're ashore: she's built and the one you were in is let go, so only the
+	// boat you're in is ever in memory. Everything that holds something of the boat takes the new one here; what asks
+	// app.boat, boatCtl.model or boatCtl.handling each time needs nothing. False when you're aboard or she isn't yours
+	async setBoat( id ) {
+
+		const old = this.boat, p = this.player, st = this.state;
+		if ( old.id === id ) return true;
+		if ( ! st.owns( id ) || p.mode === 'deck' || p.mode === 'boat' || p.riding ) return false;
+		const model = await loadBoat( id );
+		if ( this.boat !== old || p.mode === 'deck' || p.mode === 'boat' || p.riding ) {
+
+			model.dispose();
+			return false;
+
+		}
+
+		st.selectBoat( id );
+		const lights = this.localLights, parent = old.group.parent;
+		for ( const l of this._boatLights ) lights.remove( l );
+		this.boatLamps.removeLight( lights );
+		this.boatLamps.group.removeFromParent();
+		this.boatLamps.dispose();
+		parent.remove( old.group );
+		if ( this.nearDetail ) {
+
+			const gone = new Set( Object.values( old.meshes ) );
+			this.nearDetail = this.nearDetail.filter( ( d ) => ! gone.has( d.o ) );
+
+		}
+
+		this.boat = model;
+		parent.add( model.group );
+		model.group.traverse( ( o ) => {
+
+			if ( o.isMesh ) o.castShadow = o.castShadow && this.tier !== 'low';
+
+		} );
+		this.boatCtl.setModel( model );
+		this.boatCtl.reset();
+		this.boatCtl.apply();
+		this.instruments.fit( model.materials.display );
+		this._dashOn = null;
+		this.drips.setBoat( model.dripPoints() );
+		this.boatSpray.setModel( model );
+		this._boatLights = addBoatLights( lights, model );
+		this.boatLamps = new BoatLamps( model );
+		this.boatLamps.addLight( lights );
+		model.group.add( this.boatLamps.group );
+		if ( this.nearDetail ) for ( const k of model.nearDetail ) if ( model.meshes[ k ] ) {
+
+			model.meshes[ k ].geometry.computeBoundingSphere();
+			this.nearDetail.push( { o: model.meshes[ k ], dist: 70 } );
+
+		}
+
+		if ( this.wildlife && this.wildlife.birds ) this.wildlife.birds.boatModel = model;
+		if ( this.together ) this.together.boatChanged();
+		this.game.boatChanged();
+		old.dispose();
+		return true;
+
+	}
+
 	saveClock() {
 
 		this._clockSaveT = 30;

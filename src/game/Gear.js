@@ -1,8 +1,12 @@
+import { BOATS } from '../world/boat/Boats.js';
+
 // Gear and upgrade data, sold by Marta at the chandlery by the boathouse; everything the game reads
 // goes through gearStats( state.upgrades ), so buying a level is just state.upgrades[ key ]++ and the
 // stats follow.
 //
 // Each track: levels[ 0 ] is what you start with; cost is the price of that level (0 for the first).
+// (M16) on: the boat it belongs to (world/boat/Boats.js: it counts only while she's the boat you're in, and stays with her
+// when you're in another); without it, it's your own gear, and goes with you onto any boat.
 export const UPGRADES = {
 	// rod and reel
 	line: { name: 'Fishing line', levels: [
@@ -43,7 +47,7 @@ export const UPGRADES = {
 		{ cost: 520, label: '10 ft pro net, 1½ lb a foot', netM: 3.05, meshCm: 1.27, leadKgM: 2.2, sinkMs: 1.95, throwM: 9, spreadWin: 0.18, holdCm: 62, netTwine: 'mono' },
 	] },
 	// (Salt Life) where the bait you net is kept alive (Bait.js): how many it holds
-	baitWell: { name: 'Bait well', levels: [
+	baitWell: { name: 'Bait well', on: 'lobster', levels: [
 		{ cost: 0, label: '5-gallon bait bucket', baitMax: 24 },
 		{ cost: 90, label: 'Aerated bait bucket', baitMax: 50 },
 		{ cost: 300, label: 'Livewell with a pump', baitMax: 120 },
@@ -57,41 +61,41 @@ export const UPGRADES = {
 		{ cost: 160, label: 'Long aluminium tickle stick and a wide net', lobster: 2, tickleM: 1.3, coaxS: 1.6 },
 	] },
 	// boat
-	hold: { name: 'Fish hold', levels: [
+	hold: { name: 'Fish hold', on: 'lobster', levels: [
 		{ cost: 0, label: 'Cooler', holdKg: 30 },
 		{ cost: 120, label: 'Ice chest', holdKg: 70 },
 		{ cost: 400, label: 'Insulated fish hold', holdKg: 160 },
 	] },
-	fuel: { name: 'Fuel tank', levels: [
+	fuel: { name: 'Fuel tank', on: 'lobster', levels: [
 		{ cost: 0, label: '11-gallon tank', fuelL: 40 },
 		{ cost: 150, label: '21-gallon tank', fuelL: 80 },
 		{ cost: 380, label: '40-gallon tank', fuelL: 150 },
 	] },
-	engine: { name: 'Engine', levels: [
+	engine: { name: 'Engine', on: 'lobster', levels: [
 		{ cost: 0, label: 'Tired diesel', speedMul: 1 },
 		{ cost: 300, label: 'Rebuilt diesel', speedMul: 1.15 },
 		{ cost: 700, label: 'Turbo diesel', speedMul: 1.3 },
 	] },
-	fishFinder: { name: 'Fish finder', levels: [
+	fishFinder: { name: 'Fish finder', on: 'lobster', levels: [
 		{ cost: 0, label: 'None', finder: false },
 		{ cost: 250, label: 'Fish finder (depth and fish on the HUD)', finder: true },
 	] },
 	// (Salt Life) the deck floodlights: after dark yellowtail, jacks and houndfish gather in their pool
 	// astern (FishTable flood, Game.floodAt)
-	lights: { name: 'Boat lights', levels: [
+	lights: { name: 'Boat lights', on: 'lobster', levels: [
 		{ cost: 0, label: 'Nav lights only', deckLights: false },
 		{ cost: 140, label: 'Deck floodlights (fish gather under them after dark)', deckLights: true },
 	] },
 	// (Salt Life) the anchor: it goes down when you leave the helm out on the water and comes up when
 	// you take it again (Game.updateAnchor); anchorM: the deepest water its rode holds in (at three
 	// times the depth, as rode is let out: 200 ft holds in 66)
-	anchor: { name: 'Anchor', levels: [
+	anchor: { name: 'Anchor', on: 'lobster', levels: [
 		{ cost: 0, label: 'None', anchorM: 0 },
 		{ cost: 100, label: 'Danforth anchor, 200 ft of rode', anchorM: 20 },
 	] },
 	// (M10) what takes the water out of her bilge (Hull.js) besides you with the bucket: an electric pump
 	// that clears it slowly by itself (pumpLs, litres a second: more than the rain brings in)
-	bilgePump: { name: 'Bilge pump', levels: [
+	bilgePump: { name: 'Bilge pump', on: 'lobster', levels: [
 		{ cost: 0, label: 'A bucket', pumpLs: 0 },
 		{ cost: 120, label: 'Electric bilge pump', pumpLs: 0.3 },
 	] },
@@ -146,12 +150,13 @@ export function defaultUpgrades() {
 
 }
 
-// merged stats of the current levels
-export function gearStats( upgrades ) {
+// merged stats of the current levels: your own gear's and the boat's you're in, over what she is without them
+export function gearStats( upgrades, boat = 'lobster' ) {
 
-	const s = {};
+	const s = { ...BOATS[ boat ].stats };
 	for ( const k in UPGRADES ) {
 
+		if ( UPGRADES[ k ].on && UPGRADES[ k ].on !== boat ) continue;
 		const lv = UPGRADES[ k ].levels;
 		const i = Math.max( 0, Math.min( lv.length - 1, upgrades[ k ] | 0 ) );
 		for ( const [ key, v ] of Object.entries( lv[ i ] ) ) if ( key !== 'cost' && key !== 'label' ) s[ key ] = v;

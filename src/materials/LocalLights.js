@@ -285,17 +285,15 @@ export class LocalLights {
 // green starboard, white masthead and stern). Positions follow the boat's world matrix.
 export function addBoatLights( lights, boat ) {
 
-	const L = boat.lines;
-	const obj = boat.group;
-	const sternY = L.sheerY( 0 ) + 0.1;
+	const obj = boat.group, K = boat.lamps;
 	const defs = [
-		{ p: [ 0, 2.24, 0.42 ], color: [ 1.0, 0.84, 0.62 ], intensity: 0.9, range: 5.5, kind: 'boatDome' },
-		{ p: [ - 0.45, 1.5, 1.12 ], color: [ 0.45, 0.75, 1.0 ], intensity: 0.12, range: 2.2, kind: 'boatInstruments' },
-		{ p: [ 0.47, 3.45, - 0.47 ], color: [ 1.0, 0.06, 0.03 ], intensity: 1.4, range: 8, kind: 'boatNav', side: [ 1, 0, 0 ] },
-		{ p: [ - 0.47, 3.45, - 0.47 ], color: [ 0.05, 1.0, 0.3 ], intensity: 1.4, range: 8, kind: 'boatNav', side: [ - 1, 0, 0 ] },
-		{ p: [ 0, 3.97, - 0.5 ], color: [ 1.0, 0.95, 0.85 ], intensity: 1.2, range: 8, kind: 'boatNav' },
-		{ p: [ 0, sternY, L.zAft - 0.05 ], color: [ 1.0, 0.95, 0.85 ], intensity: 0.8, range: 7, kind: 'boatNav' },
-	];
+		K.dome && { p: K.dome, color: [ 1.0, 0.84, 0.62 ], intensity: 0.9, range: 5.5, kind: 'boatDome' },
+		K.instruments && { p: K.instruments, color: [ 0.45, 0.75, 1.0 ], intensity: 0.12, range: 2.2, kind: 'boatInstruments' },
+		K.port && { p: K.port, color: [ 1.0, 0.06, 0.03 ], intensity: 1.4, range: 8, kind: 'boatNav', side: [ 1, 0, 0 ] },
+		K.port && { p: [ - K.port[ 0 ], K.port[ 1 ], K.port[ 2 ] ], color: [ 0.05, 1.0, 0.3 ], intensity: 1.4, range: 8, kind: 'boatNav', side: [ - 1, 0, 0 ] },
+		K.masthead && { p: K.masthead, color: [ 1.0, 0.95, 0.85 ], intensity: 1.2, range: 8, kind: 'boatNav' },
+		K.stern && { p: K.stern, color: [ 1.0, 0.95, 0.85 ], intensity: 0.8, range: 7, kind: 'boatNav' },
+	].filter( Boolean );
 	const out = [];
 	for ( const d of defs ) {
 

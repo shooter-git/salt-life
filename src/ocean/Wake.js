@@ -138,9 +138,10 @@ void main() {
 			this._t -= 1;
 			const jitter = ( Math.random() - 0.5 ) * 0.6;
 			// the arms of the wake at the quarters, spreading out sideways
-			for ( const side of [ - 1, 1 ] ) this._spawn( p.x - fx * 2.0 + rx * side * 1.5, p.z - fz * 2.0 + rz * side * 1.5, rx * side * 0.9, rz * side * 0.9, 1.0 + jitter * 0.3, 0.45 );
+			const W = b.model.wake;
+			for ( const side of [ - 1, 1 ] ) this._spawn( p.x + fx * W.quarterZ + rx * side * W.quarterX, p.z + fz * W.quarterZ + rz * side * W.quarterX, rx * side * 0.9, rz * side * 0.9, 1.0 + jitter * 0.3, 0.45 );
 			// the propeller wash astern
-			this._spawn( p.x - fx * 4.2 + rx * jitter, p.z - fz * 4.2 + rz * jitter, - fx * 0.4, - fz * 0.4, 1.6, 0.35 );
+			this._spawn( p.x + fx * W.washZ + rx * jitter, p.z + fz * W.washZ + rz * jitter, - fx * 0.4, - fz * 0.4, 1.6, 0.35 );
 
 		}
 

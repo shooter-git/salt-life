@@ -278,15 +278,35 @@ export class Game {
 
 	}
 
+	// (M16) she's another boat now (App.setBoat): what's taken from her afresh
+	boatChanged() {
+
+		const app = this.app, b = app.boatCtl;
+		this._engineBase = { maxThrust: b.maxThrust, pitchSpeed: b.pitchSpeed };
+		this._massBase = b.mass;
+		this._wearSaved = this.state.hull;
+		if ( this.state.hauled ) b.setHauled( this.cradle );
+		if ( app.localLights ) {
+
+			for ( const f of this.floods ) app.localLights.remove( f );
+			this.floods = [];
+			this.addFloodlights( app.localLights, app.boat );
+
+		}
+
+		this.applyGear();
+
+	}
+
 	// two floodlights under the back of the wheelhouse roof, lighting the cockpit and the water
 	// astern (night only, like every local light; switched by the lights upgrade)
 	addFloodlights( lights, boat ) {
 
 		const obj = boat.group;
-		for ( const x of [ - 0.8, 0.8 ] ) {
+		for ( const F of boat.floods ) {
 
-			const local = new Vector3( x, 2.25, - 1.0 );
-			const localDir = new Vector3( x * 0.25, - 0.75, - 0.62 ).normalize();
+			const local = new Vector3( ...F.at );
+			const localDir = new Vector3( ...F.dir ).normalize();
 			const src = {
 				position: new Vector3(), color: new Color( 1.0, 0.93, 0.8 ), intensity: 3.2, range: 14, kind: 'boatFlood',
 				dir: new Vector3(), cosInner: 0.8, cosOuter: 0.45, scale: 0,

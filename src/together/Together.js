@@ -1772,6 +1772,13 @@ export class Together {
 	}
 
 	// a copy of the boat (its meshes and materials: no new shaders), without its gear on low
+	// (M16) you're in another boat (App.setBoat): those made from the one you were in are out of date
+	boatChanged() {
+
+		this._boatTemplate = null;
+
+	}
+
 	_boatCopy() {
 
 		const app = this.app;
