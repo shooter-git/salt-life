@@ -5,6 +5,8 @@ import { NAMES, NAME, namedAs } from './Chart.js';
 import { feet } from './Units.js';
 import { edgeAt } from './Weather.js';
 import { LEFT, RIGHT, UP, DOWN } from '../core/Glyphs.js';
+import { fuelOf } from './Gear.js';
+import { FLEET } from './fleet/Fleet.js';
 
 // First-play guide:
 //  - an intro (3 cards) the first time the game starts, after the start overlay: the goal, the fishing
@@ -15,6 +17,9 @@ import { LEFT, RIGHT, UP, DOWN } from '../core/Glyphs.js';
 //    full cooler, next to the boat, at Joe's, at Marta's; Salt Life: the speargun out, its band to
 //    load, a big fish on the shaft, the breath running low, the cast net out, in the water, the first
 //    bait in the bucket; M10: water in the boat's bilge, her hull worn), in a card above the minimap.
+//  - (M16) you start in a kayak, with no engine: the intro and the tips are worded for the boat you're in (tipFor), and
+//    what's only true of a helm, fuel or a radio shows only once you've one. Marta's list comes up in play: her boats when
+//    you've sold a few fish, the console when you could buy her, the sportfisher's silhouette as your gear comes on.
 // Seen state under 'tidewater.guide' (in the person's saves: core/SaveStore), wrapped in try/catch.
 //   const guide = new Guide( ui, game, minimap );  guide.update( dt );  guide.replay()
 
@@ -48,6 +53,7 @@ const CSS = /* css */`
 .gm-guide-where i { width: calc(12 * var(--tw-u)); height: calc(12 * var(--tw-u)); border-radius: 50%; flex: none; box-shadow: 0 0 0 1.5px rgba(255,255,255,0.8); }
 .gm-guide-where .is-joe i { background: var(--tw-sun); }
 .gm-guide-where .is-marta i { background: var(--tw-aqua); }
+.gm-guide-where .is-boat i { background: #f2efe6; }
 .gm-guide-where span { flex: 1; }
 .gm-guide-where em { font-style: normal; font-family: var(--tw-mono); font-size: var(--tw-fs-sm); color: var(--tw-ink-2); white-space: nowrap; }
 .gm-guide-foot { display: flex; align-items: center; justify-content: space-between; gap: var(--tw-3); margin-top: var(--tw-4); }
@@ -89,12 +95,21 @@ const row = ( keys, text ) => `<div class="gm-guide-row"><span class="k">${ keys
 
 // the intro's cards and the tips, worded for the input in use (Input.lastDevice: 'keyboard' | 'touch' |
 // 'gamepad'; on touch screens the controls are TouchControls' buttons)
+const HOURS = '<p>They keep island hours. Each morning Joe chalks the fish he\'s after on his counter, and pays over the odds for them. Under it is the week\'s order for a restaurant on the mainland, which everyone on the island fills together.</p>';
 const WELCOME = {
 	eyebrow: 'Welcome to Salt Life',
 	title: 'Fish the island, sell your catch',
 	body: `<p>Catch fish from the <b>beach</b>, the <b>pier</b> or your <b>boat</b>, throw a <b>cast net</b> over mullet and bait fish, or dive for them with a <b>speargun</b>. Different fish bite in the shallows, around the pier, over the reef and out in deep water, and they change with the time of day.</p>
 		<p>Sell your catch to <b>Joe</b> at the fish stand by the pier, then spend the money on upgrades from <b>Marta</b> at the chandlery by the boathouse: stronger line, a faster reel, a bigger cast net and a bait bucket, a better speargun, a bigger hold, a fish finder and lights for fishing at night.</p>
-		<p>They keep island hours. Each morning Joe chalks the fish he's after on his counter, and pays over the odds for them. Under it is the week's order for a restaurant on the mainland, which everyone on the island fills together.</p>`,
+		${ HOURS }`,
+};
+// (M16) as it is at the start: a kayak on the sand and a hand-me-down rod
+const WELCOME_KAYAK = {
+	eyebrow: 'Welcome to Salt Life',
+	title: 'A kayak, a rod and the island',
+	body: `<p>You've a <b>12 ft fishing kayak</b> on the sand by the pier, and a hand-me-down rod. No engine and no fuel to buy: she goes where you paddle her. Fish from the <b>beach</b>, the <b>pier</b> or her seat. The flats and the sheltered shallows by the village are her water, for redfish, trout, snook and snapper, and they change with the time of day.</p>
+		<p>Sell your catch to <b>Joe</b> at the fish stand by the pier, then spend the money with <b>Marta</b> at the chandlery by the boathouse: stronger line, a faster reel, a cooler, and one day a boat with an engine, for the reef and the deep water past it.</p>
+		${ HOURS }`,
 };
 
 const FISHING = {
@@ -126,18 +141,31 @@ const AROUND = {
 		[ k( 'L3' ), 'At the helm, press and hold the left stick for the horn' ], [ k( 'R3' ), 'The clock: hold it or rest until later' ] ],
 };
 
-function cards( device ) {
+// (M16) in a kayak: no helm, no radar, no horn, and the seat's own keys (kayak/Seat.js)
+const AROUND_KAYAK = {
+	keyboard: [ [ k( 'W', 'A', 'S', 'D' ), 'Move, mouse to look, <kbd>Shift</kbd> to run' ], [ k( 'E' ), 'Get in the kayak and out of her, talk to Joe and Marta' ],
+		[ k( 'W', 'S' ), 'In her seat, paddle and stop, <kbd>Shift</kbd> harder. <kbd>A</kbd><kbd>D</kbd> turn her' ], [ k( 'R' ), 'In her seat too: the rod' ],
+		[ k( 'L' ), 'Flashlight (at night)' ], [ k( 'H' ), 'This guide again, ashore' ], [ k( 'P' ), 'A mark of your own on your chart, where you are' ],
+		[ k( 'T' ), 'The clock: hold it or rest until later (with others, once everyone agrees)' ] ],
+	touch: [ [ k( 'Left side' ), 'Drag to walk or paddle, from wherever your thumb lands. Further is harder' ], [ k( 'Right side' ), 'Drag to look around' ],
+		[ k( 'Gold button' ), 'Get in the kayak and out of her, talk to Joe and Marta' ], [ k( 'Torch' ), 'Flashlight, after dusk' ], [ k( 'Time' ), 'Tap the time at the top right to hold the clock or rest until later' ] ],
+	gamepad: [ [ k( 'Left stick' ), 'Move or paddle, further is harder. Right stick to look' ], [ k( 'B' ), 'Get in the kayak and out of her, talk to Joe and Marta' ], [ k( `D-pad ${ DOWN }` ), 'Flashlight' ],
+		[ k( 'R3' ), 'The clock: hold it or rest until later' ] ],
+};
+
+function cards( device, kayak ) {
 
 	const d = FISHING[ device ] ? device : 'keyboard';
 	const rows = ( list ) => `<div class="gm-guide-list">${ list.map( ( [ keys, text ] ) => row( keys, text ) ).join( '' ) }</div>`;
 	return [
-		WELCOME,
+		kayak ? WELCOME_KAYAK : WELCOME,
 		{ eyebrow: 'Fishing', title: 'Cast, strike, reel', body: rows( FISHING[ d ] ) },
 		{
 			eyebrow: 'Getting around',
-			title: 'Joe and Marta',
-			body: `${ rows( AROUND[ d ] ) }
+			title: kayak ? 'Your kayak, Joe and Marta' : 'Joe and Marta',
+			body: `${ rows( ( kayak ? AROUND_KAYAK : AROUND )[ d ] ) }
 			<div class="gm-guide-where">
+				${ kayak ? '<div class="is-boat"><i></i><span><b>Your kayak</b> · on the sand by the pier</span><em data-where="boat"></em></div>' : '' }
 				<div class="is-joe"><i></i><span><b>Joe</b> · fish stand by the pier</span><em data-where="joe"></em></div>
 				<div class="is-marta"><i></i><span><b>Marta</b> · chandlery by the boathouse</span><em data-where="marta"></em></div>
 			</div>
@@ -149,6 +177,33 @@ function cards( device ) {
 
 const CARD_COUNT = 3;
 
+// (M16) a tip that isn't the same in a kayak (no helm, no fuel, no bilge), or is hers alone; by the device where it's a key
+const IN_KAYAK = {
+	keyboard: {
+		kayak: 'Your <b>kayak</b>. <kbd>E</kbd> to shove her off and sit in her. <kbd>W</kbd> paddles, <kbd>Shift</kbd> harder, <kbd>A</kbd><kbd>D</kbd> turn her, <kbd>S</kbd> stops her. <kbd>R</kbd> in the seat takes out the rod.',
+		caught: 'Into the cooler (<kbd>I</kbd>). She holds about 25 lb, so sell to <b>Joe</b> at the fish stand by the pier: he is on the map. Run her up on the sand and step out with <kbd>E</kbd>.',
+	},
+	touch: {
+		kayak: 'Your <b>kayak</b>. The gold button shoves her off and sits you in her. Drag on the left to paddle, further for harder, and the <b>Rod</b> button fishes from the seat.',
+		caught: 'Into the cooler (the <b>Cooler</b> button). She holds about 25 lb, so sell to <b>Joe</b> at the fish stand by the pier: he is on the map. Run her up on the sand and step out with the gold button.',
+	},
+	gamepad: {
+		kayak: 'Your <b>kayak</b>. <kbd>B</kbd> to shove her off and sit in her. The left stick paddles, further for harder. <kbd>X</kbd> in the seat takes out the rod.',
+		caught: 'Into the cooler (<kbd>Back</kbd>). She holds about 25 lb, so sell to <b>Joe</b> at the fish stand by the pier: he is on the map. Run her up on the sand and step out with <kbd>B</kbd>.',
+	},
+	full: 'Your cooler is <b>full</b>. Sell to Joe, and Marta sells a <b>crate cooler</b> that holds twice as much.',
+	stand: 'A kayak\'s <b>low to the water</b>. A breeze she can take, but past 3 ft of sea or 20 knots of wind she goes over. Paddle for the lee of the island or the nearest beach. If she does go, swim to her: <b>the same key that gets you in rights her</b>, then climbs you back on.',
+	camp: '<b>Pearl\'s fish camp</b>: she buys your catch at ' + Math.round( CAMP.rate * 100 ) + '% of Joe\'s price (she takes it round to market herself). Run the kayak up on her beach.',
+	chart: 'Your <b>chart</b> fills in where you go: the coast as you see it, the depths as you paddle over them, each place\'s name as you come to it, on the map. It has them by their names on a chart: ' + namedAs( NAME.bank ) + ', and so on. Mark a good spot from the cooler\'s <b>Chart</b> tab. Marta sells a chart of the island, if you\'d rather not.',
+	edge: 'You\'re past the far grounds, in a <b>kayak</b>. The sea\'s the open ocean\'s out here, the wind fresher and the seas bigger, and it\'s a long paddle home.',
+	goRound: 'You\'ve the hang of the bay. There\'s more of the island: the <b>north beach\'s surf</b> for pompano (best on a surf day: Joe\'s slate says) and the <b>mangrove creek</b> on the west for snook and redfish at dawn and dusk. Paddle round on a calm day, or walk: the trail from the square goes round the east to the north beach, the red dashes on your map, with fingerposts at its turns, and <b>Pearl\'s fish camp</b> there buys fish.',
+	hurricane: 'A <b>hurricane</b> is coming. Get your kayak off the beach: Marta can <b>haul her up</b> into her yard before she boards up. In it, the <b>shelter</b> (on your map) keeps you safe from the wind, the rain and the sea. You can always step out to watch.',
+};
+
+// (M16) what's sold where the boat you're in burns something: her fuel's own word; and what Marta's list says, from what's on it
+const fuelWord = ( s ) => fuelOf( s.boat ).name.toLowerCase();
+const toBoatRoom = ( s ) => ( fuelOf( s.boat ) ? `upgrades and ${ fuelWord( s ) }` : 'gear, and boats when you\'ve saved for one' );
+
 const TIPS = {
 	keyboard: {
 		radio: 'The <b>radio</b> at the helm (<kbd>R</kbd>): the <b>weather</b> for these waters, read out on WX1 while you steer, and <b>Marta</b> on channel 16, who\'ll come and tow you in if you run dry, her fee by the distance.',
@@ -156,9 +211,9 @@ const TIPS = {
 		nibble: 'The bobber is dipping: something is <b>nibbling</b>. Wait until it is <b>pulled under</b>, then click to strike.',
 		fishOn: '<b>Hold the left mouse button</b> to reel. When the tension needle nears the <b>red</b>, let go until it settles, then reel again.',
 		caught: 'Into the cooler (<kbd>I</kbd>). Sell your catch to <b>Joe</b> at the fish stand by the pier: he is on the map.',
-		boat: 'Your boat. <kbd>E</kbd> to board, <kbd>E</kbd> again at the wheel to drive (<kbd>W</kbd><kbd>S</kbd> throttle, <kbd>A</kbd><kbd>D</kbd> steer). Diesel is sold by Marta.',
+		boat: ( s ) => `Your boat. <kbd>E</kbd> to board, <kbd>E</kbd> again at the wheel to drive (<kbd>W</kbd><kbd>S</kbd> throttle, <kbd>A</kbd><kbd>D</kbd> steer). ${ fuelOf( s.boat ).name } is sold by Marta.`,
 		joe: '<b>Joe</b> buys your fish. <kbd>E</kbd> to see what he will pay.',
-		marta: '<b>Marta</b> sells upgrades and diesel. <kbd>E</kbd> to see her stock.',
+		marta: ( s ) => `<b>Marta</b> sells ${ toBoatRoom( s ) }. <kbd>E</kbd> to see her stock.`,
 		chart: 'Your <b>chart</b> fills in where you go: the coast as you see it, the depths as you run over them, each place\'s name as you come to it, on the map and the boat\'s plotter. It has them by their names on a chart: ' + namedAs( NAME.bank ) + ', and so on. <kbd>P</kbd> marks a good spot (<kbd>I</kbd>, Chart, lists them). Marta sells a chart of the island, if you\'d rather not.',
 		gunOut: 'Dive (look down and swim) and <b>fin slowly</b> up to a fish: rush it and it bolts. Put it in the sights and <b>click</b>. They tell you what it is, and whether you may take it.',
 		gunLoad: '<b>Hold the left mouse button</b> to draw the band back to its notch on the shaft.',
@@ -175,9 +230,9 @@ const TIPS = {
 		nibble: 'The bobber is dipping: something is <b>nibbling</b>. Wait until it is <b>pulled under</b>, then tap <b>Strike</b>.',
 		fishOn: '<b>Hold Reel</b> to reel in. When the tension needle nears the <b>red</b>, let go until it settles, then reel again.',
 		caught: 'Into the cooler (the <b>Cooler</b> button). Sell your catch to <b>Joe</b> at the fish stand by the pier: he is on the map.',
-		boat: 'Your boat. Tap <b>Board boat</b>, then <b>Take the helm</b> at the wheel and drive with the left side. Diesel is sold by Marta.',
+		boat: ( s ) => `Your boat. Tap <b>Board boat</b>, then <b>Take the helm</b> at the wheel and drive with the left side. ${ fuelOf( s.boat ).name } is sold by Marta.`,
 		joe: '<b>Joe</b> buys your fish. Tap <b>Talk to Joe</b> to see what he will pay.',
-		marta: '<b>Marta</b> sells upgrades and diesel. Tap <b>Talk to Marta</b> to see her stock.',
+		marta: ( s ) => `<b>Marta</b> sells ${ toBoatRoom( s ) }. Tap <b>Talk to Marta</b> to see her stock.`,
 		gunOut: 'Tap <b>Dive</b> and <b>fin slowly</b> up to a fish: rush it and it bolts. Put it in the sights and tap <b>Shoot</b>. They tell you what it is, and whether you may take it.',
 		gunLoad: '<b>Hold Load</b> to draw the band back to its notch on the shaft.',
 		spearFight: 'A big one. <b>Hold Pull</b> to pull it in, let go when it runs, until it tires.',
@@ -193,9 +248,9 @@ const TIPS = {
 		nibble: 'The bobber is dipping: something is <b>nibbling</b>. Wait until it is <b>pulled under</b>, then <kbd>RT</kbd> to strike.',
 		fishOn: '<b>Hold <kbd>RT</kbd></b> to reel. When the tension needle nears the <b>red</b>, let go until it settles, then reel again.',
 		caught: 'Into the cooler (<kbd>Back</kbd>). Sell your catch to <b>Joe</b> at the fish stand by the pier: he is on the map.',
-		boat: 'Your boat. <kbd>B</kbd> to board, <kbd>B</kbd> again at the wheel to drive with the left stick. Diesel is sold by Marta.',
+		boat: ( s ) => `Your boat. <kbd>B</kbd> to board, <kbd>B</kbd> again at the wheel to drive with the left stick. ${ fuelOf( s.boat ).name } is sold by Marta.`,
 		joe: '<b>Joe</b> buys your fish. <kbd>B</kbd> to see what he will pay.',
-		marta: '<b>Marta</b> sells upgrades and diesel. <kbd>B</kbd> to see her stock.',
+		marta: ( s ) => `<b>Marta</b> sells ${ toBoatRoom( s ) }. <kbd>B</kbd> to see her stock.`,
 		gunOut: 'Dive (look down and swim) and <b>fin slowly</b> up to a fish: rush it and it bolts. Put it in the sights and <kbd>RT</kbd>. They tell you what it is, and whether you may take it.',
 		gunLoad: '<b>Hold <kbd>RT</kbd></b> to draw the band back to its notch on the shaft.',
 		spearFight: 'A big one. <b>Hold <kbd>RT</kbd></b> to pull it in, let go when it runs, until it tires.',
@@ -205,6 +260,15 @@ const TIPS = {
 		bait: `Live bait goes in your <b>bucket</b>. With the rod out, <kbd>D-pad ${ LEFT } ${ RIGHT }</kbd> puts it on the hook: bigger fish take it, and sooner. A mullet can be cut up for bait in the cooler (<kbd>Back</kbd>).`,
 		bilge: 'There\'s <b>water in the bilge</b> (the gauge by your money). On deck, <b>hold <kbd>B</kbd></b> to bail it out before it reaches the engine. Marta sells a <b>bilge pump</b>.',
 	},
+	// (M16) when the intro's gone, in the kayak; and Marta's list, as it comes up
+	shoveOff: 'Your <b>kayak\'s on the sand</b> at the foot of the boardwalk, by the pier, and her marker\'s on your map. Or take out the rod and try the beach or the pier first.',
+	list: () => `There's more on Marta's list than gear: her <b>Boats</b> tab. A <b>center console</b> at $${ FLEET.console.price.toLocaleString() }, your first engine, reaches the reef and the wrecks. Under her is a shape with no picture, a <b>sportfisher</b>. She won't sell you that one until your gear's right.`,
+	consoleReady: () => `You've the $${ FLEET.console.price.toLocaleString() } for the <b>center console</b>: Marta's <b>Boats</b> tab. An engine and fuel to think about, and the reef, the wrecks and the near offshore water to go with them. The kayak stays yours.`,
+	engine: ( s ) => `Your first <b>engine</b>. She burns <b>${ fuelWord( s ) }</b> (the gauge by your money, Marta's sells it) and the wind'll take her if you leave her without an anchor. Marta tows her in, for a fee. <b>Keep an eye on the sky</b>: a blow sends you running in.`,
+	sportfisher: ( s ) => `That silhouette on Marta's list: the <b>offshore sportfisher</b>, for the far grounds and the blue water. She'll show her when you've every upgrade on the lobster boat, and your rod, reel and line. You're <b>${ s.unlock.done } of ${ s.unlock.of }</b>.`,
+	earned: () => `You've earned her. Marta's <b>Boats</b> tab shows the <b>offshore sportfisher</b> now, $${ FLEET.sportfisher.price.toLocaleString() }: twin diesels, bunks and the bluewater fish, days at a time.`,
+	// (and to those who were playing before all this: their old boat, and what's new)
+	fleetNews: () => `Marta's got more for you. The <b>kayak</b> on the sand by the pier is yours, for the flats, and her <b>Boats</b> tab lists a <b>center console</b> at $${ FLEET.console.price.toLocaleString() } and a shape with no picture: a <b>sportfisher</b>, once your gear's right.`,
 	full: 'Your cooler is <b>full</b>. Sell to Joe, or buy a bigger hold from Marta at the chandlery.',
 	worn: 'Your boat\'s <b>hull is worn</b> (the gauge by your money): she\'s slower, and she leaks. Marta <b>repairs</b> it at the chandlery, with the boat at her dock.',
 	// (M12) the surf
@@ -224,7 +288,13 @@ const TIPS = {
 	hurricane: 'A <b>hurricane</b> is coming. Ahead of it Marta can <b>haul your boat out</b>, before she boards up; left in the water the storm batters her. In it, the <b>shelter</b> (on your map) keeps you safe from the wind, the rain and the sea. You can always step out to watch.',
 };
 
-const tipText = ( id, device ) => ( TIPS[ device ] || TIPS.keyboard )[ id ] || TIPS[ id ];
+// the words for a tip, for the input in use and the boat you're in (a function: from the state, as it is then)
+export function tipFor( id, device, state ) {
+
+	const K = state.stats.fuelL > 0 ? {} : IN_KAYAK, t = ( K[ device ] || K.keyboard || {} )[ id ] || K[ id ] || ( TIPS[ device ] || TIPS.keyboard )[ id ] || TIPS[ id ];
+	return typeof t === 'function' ? t( state ) : t;
+
+}
 
 const h = ( tag, cls, html ) => {
 
@@ -232,6 +302,14 @@ const h = ( tag, cls, html ) => {
 	if ( cls ) e.className = cls;
 	if ( html !== undefined ) e.innerHTML = html;
 	return e;
+
+};
+
+const logged0 = ( s ) => {
+
+	let n = 0;
+	for ( const k in s.log ) n += s.log[ k ].count | 0;
+	return n;
 
 };
 
@@ -327,6 +405,13 @@ export class Guide {
 
 	}
 
+	// (M16) the boat you're in has no engine: what's said is hers
+	get _kayak() {
+
+		return ! fuelOf( this.game.state.boat );
+
+	}
+
 	// (Salt Life: the app's save store, All the Spaces' personal save: a creation's frame has no
 	// localStorage of its own)
 	get _storage() {
@@ -363,13 +448,13 @@ export class Guide {
 	show( i ) {
 
 		this.step = i;
-		const c = cards( this.device )[ i ];
+		const c = cards( this.device, this._kayak )[ i ];
 		this.eyebrow.textContent = c.eyebrow;
 		this.title.textContent = c.title;
 		this.body.innerHTML = c.body;
 		this.dots.forEach( ( d, j ) => d.classList.toggle( 'is-on', j === i ) );
 		this.nextBtn.textContent = i === CARD_COUNT - 1 ? 'Let\'s fish' : 'Next';
-		if ( this.minimap ) this.minimap.highlight( i === CARD_COUNT - 1 ? [ 'joe', 'marta' ] : [] );
+		if ( this.minimap ) this.minimap.highlight( i === CARD_COUNT - 1 ? ( this._kayak ? [ 'boat', 'joe', 'marta' ] : [ 'joe', 'marta' ] ) : [] );
 		this.hint.hidden = this.device === 'touch';
 		this._whereT = 0;
 		if ( ! this.open ) {
@@ -396,6 +481,7 @@ export class Guide {
 		if ( this.minimap ) this.minimap.highlight( [] );
 		this.seen.intro = true;
 		this._save();
+		if ( this._kayak && this.game.app.player.mode === 'walk' && this.game.app.boatCtl.beached ) this.tip( 'shoveOff' );
 
 	}
 
@@ -445,7 +531,8 @@ export class Guide {
 
 				this._whereT = 0.25;
 				const x = p.position.x, z = p.position.z;
-				for ( const [ id, t ] of [ [ 'joe', STAND ], [ 'marta', CHANDLERY ] ] ) {
+				const b = g.app.boatCtl;
+				for ( const [ id, t ] of [ [ 'boat', b ? { x: b.position.x, z: b.position.z } : STAND ], [ 'joe', STAND ], [ 'marta', CHANDLERY ] ] ) {
 
 					const el = this.body.querySelector( `[data-where="${ id }"]` );
 					if ( el ) el.textContent = `${ feet( Math.hypot( t.x - x, t.z - z ) ) } ${ compassWord( x, z, t.x, t.z ) }`;
@@ -500,16 +587,24 @@ export class Guide {
 		prev.baitN = baitN;
 
 		if ( s.holdKg >= s.stats.holdKg * 0.92 ) this.tip( 'full' );
+		// ((M16) what you could have next: Marta's list as your money and your gear come on. Those who started before it get it all at once)
+		// (a lobster boat with no price paid came with the game: someone who was playing before there was a list)
+		const mine = s.owns( 'console' ) || s.owns( 'lobster' ) || s.owns( 'sportfisher' ), kept = s.owns( 'lobster' ) && ! s.fleet.lobster.paid;
+		if ( kept && ! s.owns( 'console' ) && this.seen.intro ) this.tip( 'fleetNews' );
+		if ( ! mine && logged0( s ) >= 5 && p.mode === 'walk' ) this.tip( 'list' );
+		if ( ! mine && s.money >= FLEET.console.price ) this.tip( 'consoleReady' );
+		if ( s.stats.fuelL > 0 && ! kept && ( p.mode === 'deck' || p.mode === 'boat' ) && ! p.riding ) this.tip( 'engine' );
+		if ( s.owns( 'lobster' ) && ! s.unlocked( 'sportfisher' ) && s.unlock.done >= 4 ) this.tip( 'sportfisher' );
+		if ( s.unlocked( 'sportfisher' ) && ! s.owns( 'sportfisher' ) ) this.tip( 'earned' );
 		// ((M15) the hang of the bay: a dozen fish in your log; the far water: 3 km out from the island's middle)
-		let logged = 0;
-		for ( const k in s.log ) logged += s.log[ k ].count | 0;
-		if ( logged >= 12 ) this.tip( 'goRound' );
+		if ( logged0( s ) >= 12 ) this.tip( 'goRound' );
 		const cam = app.camera.position;
 		if ( Math.hypot( cam.x, cam.z + 320 ) > 3000 ) this.tip( 'farWater' );
 		// ((M15) the first name you come to past the bay's)
 		if ( s.chart.names.size > NAMES.filter( ( n ) => n.known ).length ) this.tip( 'chart' );
 		// ((M15) the radio, the first time you're well out at the helm; and past the far grounds, the soft edge)
-		if ( p.mode === 'boat' && ! p.riding && Math.hypot( cam.x, cam.z + 320 ) > 2000 ) this.tip( 'radio' );
+		// ((M16) on a boat with a set to hear it on, and at a helm: R is a kayak's rod)
+		if ( p.mode === 'boat' && ! p.riding && s.stats.vhfM > 0 && ! app.boatCtl.model.seated && Math.hypot( cam.x, cam.z + 320 ) > 2000 ) this.tip( 'radio' );
 		if ( edgeAt( cam.x, cam.z ) > 0.15 ) this.tip( 'edge' );
 		// ((M16) days out: the sea more than she likes; the catch going soft; bunks to sleep in)
 		if ( g.daysOut.aboard && g.daysOut.strain >= 0.6 ) this.tip( 'stand' );
@@ -520,11 +615,11 @@ export class Guide {
 		// (M10) the boat's hull: the first water in the bilge, aboard; the first real wear
 		const hull = g.hull;
 		if ( hull && hull.bilge >= 20 && ( p.mode === 'deck' || p.mode === 'boat' ) && ! p.riding ) this.tip( 'bilge' );
-		if ( hull && hull.wear >= 0.1 ) this.tip( 'worn' );
+		if ( hull && hull.wear >= 0.1 && hull.figures.engine ) this.tip( 'worn' ); // ((M16) a kayak's plastic doesn't leak, nor slow)
 		if ( p.mode === 'walk' ) {
 
 			const bt = app.boatCtl;
-			if ( bt && Math.hypot( bt.position.x - p.position.x, bt.position.z - p.position.z ) < 9 ) this.tip( 'boat' );
+			if ( bt && Math.hypot( bt.position.x - p.position.x, bt.position.z - p.position.z ) < 9 ) this.tip( bt.model.seated ? 'kayak' : 'boat' );
 			for ( const v of g.vendors ) if ( v.inRange( p.position ) ) this.tip( v.kind === 'buyer' ? 'joe' : 'marta' );
 
 		}
@@ -546,7 +641,7 @@ export class Guide {
 			this._current = id;
 			this.seen[ id ] = true;
 			this._save();
-			this.coachText.innerHTML = tipText( id, this.device );
+			this.coachText.innerHTML = tipFor( id, this.device, this.game.state );
 			this.coach.classList.add( 'is-on' );
 			this._coachT = Math.max( 7.5, this.coachText.textContent.length / 22 ); // ((M15) longer to read a longer one)
 

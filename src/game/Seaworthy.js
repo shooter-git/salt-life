@@ -96,8 +96,8 @@ export const awashLs = ( strain ) => ( strain > 1 ? Math.min( 8, 6 * ( strain - 
 export const slamK = ( strain ) => 1 + 0.5 * Math.min( 1, strain );
 
 // ---- the box and the catch
-// (a marine diesel generator of a boat this size, at about half load: a gallon an hour, from her tank, while it runs the
-// icemaker away from her berth's shore power)
+// (a marine diesel generator of a boat this size, about 20 kW, at half load: a gallon an hour (docs/m16/opening.md), from
+// her tank, while it runs the icemaker away from her berth's shore power)
 export const GENERATOR_LH = 3.8;
 // A bag of ice is 10 lb. How fast the box melts it (kg an hour, in the tropics): a cheap 48-quart cooler goes through a
 // bag in about 15 hours, and a bigger one leaks as its surface does (volume^(2/3)); an insulated hold, 60% of that.

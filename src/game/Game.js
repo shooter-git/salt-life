@@ -1289,7 +1289,7 @@ export class Game {
 		// (M9) or gone home for the weather
 		const back = v.boarded ? 'boarded up for the hurricane' : v.weatherShut ? 'shut for the weather' : `back at ${ timeText( v.hours[ 0 ], this.app.portal && this.app.portal.locale, 60 ) }`;
 		if ( v.kind === 'camp' ) return `${ name }'s ${ back }`;
-		return v.kind === 'shop' ? `Diesel on the honesty box   ·   ${ name }'s ${ back }` : `${ name }'s night box   ·   he's ${ back }`;
+		return v.kind === 'shop' ? `${ fuelOf( this.state.boat ) ? `${ fuelOf( this.state.boat ).name } on the honesty box` : 'The chandlery\'s shut' }   ·   ${ name }'s ${ back }` : `${ name }'s night box   ·   he's ${ back }`;
 
 	}
 

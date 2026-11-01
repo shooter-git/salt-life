@@ -1,7 +1,7 @@
 import { FISH, CARAPACE, fishLengthCm } from './FishTable.js';
 import { UPGRADES, nextLevel, fuelOf, fuelPrice } from './Gear.js';
 import { FRESH_H } from './Seaworthy.js';
-import { FLEET_CSS, fleetRows, bindFleet } from './fleet/FleetPanel.js';
+import { FLEET_CSS, fleetRows, bindFleet, martaSays } from './fleet/FleetPanel.js';
 import { BAITS, BAIT_IDS, chunksOf } from './Bait.js';
 import { LOOKS, LOOK_NAMES } from '../together/Avatar.js';
 import { NIGHT_BOX, biteHint, orderTerms, orderPlace } from './Orders.js';
@@ -1278,7 +1278,7 @@ export class GameHUD {
 		// ((M16) what your boat burns, at what she charges over Marta)
 		const missing = s.stats.fuelL - s.fuelL, F = fuelOf( s.boat ), litre = fuelPrice( s.boat, CAMP.fuel );
 		const fuelRow = ! F ? '' : `<div class="gm-shop-row"><span>${ F.name } · $${ ( litre * GAL ).toFixed( 2 ) } / gal<small>From her drums by the jetty · tank: ${ gallons( s.fuelL ) } of ${ gallons( s.stats.fuelL ) } gal</small></span>${ missing > 0.5 ? `<button class="gm-btn" data-fuel ${ s.money < litre ? 'disabled' : '' }>Fill · $${ Math.min( s.refuelCost( litre ), Math.floor( s.money / litre ) * litre ) }</button>` : '<span class="gm-have">Full</span>' }</div>`;
-		const sub = this.closingSoon( v ) ? `I'm off round to market at ${ this.at( v.hours[ 1 ] ) }.` : s.inventory.length ? v.greeting : v.idle;
+		const sub = this.closingSoon( v ) ? `I'm off round to market at ${ this.at( v.hours[ 1 ] ) }.` : F ? ( s.inventory.length ? v.greeting : v.idle ) : s.inventory.length ? 'Paddled round from the bay? I\'ll take what you caught.' : 'Nothing today? Come back when you\'ve got fish.';
 		this.drawStand( v, `
 			<div class="gm-head"><h2>${ v.name }</h2>
 			<p class="gm-sub">${ sub } She pays ${ Math.round( CAMP.rate * 100 ) }% of Joe's price. You have $${ s.money.toLocaleString() }</p></div>
@@ -1429,7 +1429,7 @@ GameHUD.prototype.renderShop = function () {
 
 	const tracks = Object.entries( UPGRADES ), mine = tracks.filter( ( [ , t ] ) => ! t.on ), hers = tracks.filter( ( [ , t ] ) => t.on === s.boat );
 	const rows = `<span class="gm-boat-section">Your gear</span>${ mine.map( track ).join( '' ) }${ hers.length ? `<span class="gm-boat-section">For ${ escape( s.boatName() ) }</span>${ hers.map( track ).join( '' ) }` : '' }`;
-	const greeting = this.closingSoon( v ) ? `I'm shutting at ${ this.at( v.hours[ 1 ] ) }` : v.greeting;
+	const greeting = this.closingSoon( v ) ? `I'm shutting at ${ this.at( v.hours[ 1 ] ) }` : martaSays( s ) || v.greeting;
 	const boats = this._shopTab === 'boats';
 	const tabs = `<div class="gm-tabs" role="tablist">${ [ [ 'gear', 'Gear' ], [ 'boats', 'Boats' ] ].map( ( [ id, label ] ) => `<button class="gm-tab${ boats === ( id === 'boats' ) ? ' is-on' : '' }" role="tab" aria-selected="${ boats === ( id === 'boats' ) }" data-shoptab="${ id }">${ label }</button>` ).join( '' ) }</div>`;
 	// (her wanted list scrolls with the rest, as Joe's does)
