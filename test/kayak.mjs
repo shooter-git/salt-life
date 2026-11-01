@@ -81,13 +81,27 @@ const yawTurned = ( ctl, seconds, th, st ) => {
 	ok( D.freeboard > 0.12 && D.freeboard < 0.26, `low to the water: ${ ( D.freeboard * 100 ).toFixed( 0 ) } cm of side` );
 	ok( m.hullSamples.length <= MAX_HULL_SAMPLES, `${ m.hullSamples.length } buoyancy samples` );
 	ok( m.seated && m.helm && m.helmEye.y < 1, `sat in, her eye ${ m.helmEye.y.toFixed( 2 ) } m off the water` );
-	ok( m.triangleCount < 7500, `${ m.triangleCount } triangles` );
+	ok( m.triangleCount < 7000, `${ m.triangleCount } triangles` );
 	ok( Object.keys( m.meshes ).length <= 2, `${ Object.keys( m.meshes ).length } meshes of her own` );
 	ok( m.handling.engine === null && BOATS.kayak.fuel === null, 'no engine, nothing to burn' );
 	ok( m.handling.propulsion === paddling, 'driven by a paddle' );
 	// the deck's wells are below her gunwale, and her deck's above the water
 	const deck = m.deck, seat = deck.y( 0, m.seat.z ), rim = L.sheerY( L.tAtSheerZ( m.seat.z ) );
 	ok( seat > 0 && seat < rim - 0.08, `the seat's well: ${ ( seat * 100 ).toFixed( 0 ) } cm above the water, ${ ( ( rim - seat ) * 100 ).toFixed( 0 ) } cm below her gunwale` );
+	// what's bought shows, with no new draw
+	const pos = m.meshes.hull.geometry.attributes.position, seen = ( k ) => {
+
+		const { start, count } = m._fitted[ k ];
+		const x0 = pos.getX( start );
+		let spread = 0;
+		for ( let i = start; i < start + count; i ++ ) spread = Math.max( spread, Math.abs( pos.getX( i ) - x0 ) );
+		return spread > 0;
+
+	};
+
+	ok( seen( 'cooler' ) && ! seen( 'crate' ) && ! seen( 'puck' ) && ! seen( 'trolley' ), 'she starts with the small cooler and nothing else' );
+	m.fit( { holdKg: 40, finder: true, trolley: true } );
+	ok( ! seen( 'cooler' ) && seen( 'crate' ) && seen( 'puck' ) && seen( 'trolley' ), 'Marta\'s crate takes its place, and the puck and trolley show' );
 	m.dispose();
 
 }

@@ -40,8 +40,10 @@ export class KayakModel extends Vessel {
 		this.body.name = 'kayak-body';
 		this.group.add( this.body );
 
-		const { geometry, deck } = kayakBody( L );
+		const { geometry, deck, fitted } = kayakBody( L );
 		this.deck = deck;
+		this._fitted = fitted;
+		this._fullPositions = geometry.attributes.position.array.slice();
 		const hull = this.materials.hull = new MeshStandardMaterial( { vertexColors: true, roughness: 0.42, metalness: 0 } );
 		hull.name = 'kayakHull';
 		const mesh = new Mesh( geometry, hull );
@@ -83,6 +85,7 @@ export class KayakModel extends Vessel {
 		this.lamps = { masthead: [ - 0.14, 1.14, L.zAft + L.length * 0.1 - 0.02 ] };
 		this.perch = new Vector3( 0, deck.y( 0, deck.wellZ[ 1 ] - 0.1 ), deck.wellZ[ 1 ] - 0.1 ); // (a rider: together/)
 
+		this.fit( {} );
 		this.euler = new Euler( 0, 0, 0, 'YXZ' ); // (Seat's)
 		this.drops = new Drops();
 		this.capsized = false;
@@ -172,6 +175,26 @@ export class KayakModel extends Vessel {
 	fwdOf( ctl ) {
 
 		return ctl.forward( _fwd );
+
+	}
+
+	// ---- what's fitted to her: the small cooler, or Marta's crate in its place; the finder's puck; the anchor trolley. Each
+	// is in her one mesh, its vertices folded to a point while it's not there (no new draw, and they're in her count)
+	fit( stats ) {
+
+		const show = { cooler: ! ( stats.holdKg > 12 ), crate: stats.holdKg > 12, puck: !! stats.finder, trolley: stats.anchorM > 0 || !! stats.trolley };
+		const key = Object.values( show ).join();
+		if ( key === this._fitKey ) return;
+		this._fitKey = key;
+		const pos = this.meshes.hull.geometry.attributes.position, full = this._fullPositions;
+		for ( const k in show ) {
+
+			const { start, count } = this._fitted[ k ];
+			for ( let i = start * 3, n = ( start + count ) * 3; i < n; i ++ ) pos.array[ i ] = show[ k ] ? full[ i ] : full[ start * 3 + i % 3 ];
+
+		}
+
+		pos.needsUpdate = true;
 
 	}
 
@@ -299,6 +322,7 @@ export class KayakModel extends Vessel {
 		const aboard = p.mode === 'boat' && p.boat === ctl;
 		this.climbTime = climbSeconds( !! stats.lifeJacket );
 		st.power = stats.speedMul || 1;
+		this.fit( stats );
 
 		// (the controller's not running while she's on the sand)
 		if ( ctl.beached && ! aboard ) {

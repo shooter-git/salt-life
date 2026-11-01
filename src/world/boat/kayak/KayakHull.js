@@ -310,9 +310,6 @@ function fittings( L, D ) {
 
 	for ( const p of cord ) add( cylinder( 0.012, 0.014, 0.012, 6 ), RUBBER, 0.6, mat4( p.x, p.y, p.z ) );
 
-	// the small cooler, strapped in the tank well: a 12 quart hard cooler, 0.36 x 0.24 x 0.24 m, its lid and rope handles
-	cooler( add, y, D );
-
 	// the safety pole: a whip with its pennant and an all-round white at its head, stepped in the well's after end
 	const pz = Z( 0.1 ), px = - 0.14, pole = new Vector3( px, y( px, pz ), pz ), head = new Vector3( px, 1.12, pz - 0.02 );
 	add( rod( pole, head, 0.007, 4, 0.004 ), new Color( 0x2a2c2f ), 0.45 );
@@ -411,7 +408,75 @@ function cooler( add, y, D ) {
 
 }
 
-export function kayakBody( L, tier = 'high' ) {
+// What's hers or not by what's been bought: the small cooler she starts with (a 12 quart hard cooler, 0.36 x 0.24 x 0.24 m,
+// its lid and rope handles) or Marta's crate in its place (a milk crate with an insulated bag in it and two rod tubes
+// zip-tied on, as kayak anglers rig them); a fish finder puck on the console; an anchor trolley down her port side
+function gear( L, D ) {
+
+	const y = ( x, z ) => D.y( x, z ), Z = D.Z;
+	const collect = () => {
+
+		const list = [];
+		return [ list, ( g, color, rough = 0.5, m = null ) => {
+
+			if ( m ) g.applyMatrix4( m );
+			list.push( tint( g, color, rough ) );
+
+		} ];
+
+	};
+
+	const [ small, addCooler ] = collect();
+	cooler( addCooler, y, D );
+
+	const [ crate, addCrate ] = collect();
+	{
+
+		const [ w0, w1 ] = D.wellZ, cz = ( w0 + w1 ) / 2 + 0.03, fy = y( 0, cz ) + 0.005, hw = 0.17, hd = 0.17, h = 0.28;
+		const black = new Color( 0x1a1b1e ), bag = new Color( 0x35404a );
+		for ( const v of [ 0.1, 0.5, 0.95 ] ) {
+
+			addCrate( box( hw * 2, 0.04, 0.012 ), black, 0.7, mat4( 0, fy + h * v, cz + hd ) );
+			addCrate( box( hw * 2, 0.04, 0.012 ), black, 0.7, mat4( 0, fy + h * v, cz - hd ) );
+			addCrate( box( 0.012, 0.04, hd * 2 ), black, 0.7, mat4( hw, fy + h * v, cz ) );
+			addCrate( box( 0.012, 0.04, hd * 2 ), black, 0.7, mat4( - hw, fy + h * v, cz ) );
+
+		}
+
+		for ( const [ sx, sz ] of [ [ 1, 1 ], [ 1, - 1 ], [ - 1, 1 ], [ - 1, - 1 ] ] ) addCrate( box( 0.02, h, 0.02 ), black, 0.7, mat4( sx * hw, fy + h / 2, cz + sz * hd ) );
+		addCrate( roundedBox( hw * 1.8, h * 0.8, hd * 1.8, 0.03, 1 ), bag, 0.85, mat4( 0, fy + h * 0.42, cz ) );
+		addCrate( rod( new Vector3( hw + 0.03, fy + 0.08, cz - hd - 0.015 ), new Vector3( hw + 0.05, fy + 0.5, cz - hd - 0.1 ), 0.022, 6 ), black, 0.45 );
+		addCrate( rod( new Vector3( - hw - 0.03, fy + 0.08, cz - hd - 0.015 ), new Vector3( - hw - 0.05, fy + 0.5, cz - hd - 0.1 ), 0.022, 6 ), black, 0.45 );
+
+	}
+
+	const [ puck, addPuck ] = collect();
+	{
+
+		const z = D.consoleZ + 0.2, top = y( 0, z );
+		const dark = new Color( 0x141518 );
+		addPuck( cylinder( 0.012, 0.016, 0.1, 6 ), dark, 0.5, mat4( 0, top + 0.05, z ) );
+		addPuck( roundedBox( 0.12, 0.09, 0.03, 0.008, 1 ), dark, 0.4, mat4( 0, top + 0.13, z, - 0.45 ) );
+		addPuck( box( 0.1, 0.07, 0.002 ), new Color( 0x2a4a58 ), 0.15, mat4( 0, top + 0.13, z - 0.017, - 0.45 ) );
+
+	}
+
+	const [ trolley, addTrolley ] = collect();
+	{
+
+		const a = Z( 0.9 ), b = Z( 0.12 ), s = 1, rail = ( z ) => new Vector3( s * ( L.sheerX( L.tAtSheerZ( z ) ) + 0.012 ), L.sheerY( L.tAtSheerZ( z ) ) - 0.02, z );
+		const line = new Color( 0xc8c0a8 ), P = rail( a ), Q = rail( b );
+		addTrolley( rod( P, Q, 0.0035, 3 ), line, 0.8 );
+		addTrolley( rod( P.clone().add( new Vector3( 0.016, - 0.03, 0 ) ), Q.clone().add( new Vector3( 0.016, - 0.03, 0 ) ), 0.0035, 3 ), line, 0.8 );
+		for ( const e of [ P, Q ] ) addTrolley( sphere( 0.018, 6, 4 ), new Color( 0x2c2d30 ), 0.5, mat4( e.x, e.y - 0.012, e.z ) );
+
+	}
+
+	return { cooler: small, crate, puck, trolley };
+
+}
+
+export function kayakBody( L ) {
 
 	const D = new DeckShape( L );
 	const [ a, b, c ] = shell( L ), up = deck( L, D );
@@ -444,9 +509,21 @@ export function kayakBody( L, tier = 'high' ) {
 	};
 
 	const parts = [ paint( a, side ), paint( b, side ), paint( c, side ), paint( up, ( o, x, y, z ) => D.color( o, x, y, z ) ), ...fittings( L, D ) ];
-	const geo = mergeGeometries( parts.map( ( g ) => g.index ? g : prepare( g ) ), false );
+	// (what can be swapped or fitted comes last, each with the range of vertices it is: Marta's upgrades)
+	const fitted = {};
+	let at = parts.reduce( ( n, g ) => n + g.attributes.position.count, 0 );
+	for ( const [ k, list ] of Object.entries( gear( L, D ) ) ) {
+
+		const n = list.reduce( ( t, g ) => t + g.attributes.position.count, 0 );
+		fitted[ k ] = { start: at, count: n };
+		at += n;
+		parts.push( ...list );
+
+	}
+
+	const geo = mergeGeometries( parts, false );
 	for ( const p of parts ) p.dispose();
-	return { geometry: geo, deck: D };
+	return { geometry: geo, deck: D, fitted };
 
 }
 
