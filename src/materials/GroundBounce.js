@@ -11,7 +11,7 @@ import { G } from '../core/Globals.js';
 // much as `open` says the ground about them is in the sun. The sun's own, so the moon's faint one at night and
 // less under cloud. And the sky's light on them as much again as the world's fill (Sky's hemisphere light,
 // kept at about half a real sky's for the sand's sake): a face sees the sky out of a stall's open sides.
-//   useGroundBounce( material, { open } )   (after the app's own patches: App.lightUp)
+//   useGroundBounce( material, { open, sand } )   (after the app's own patches: App.lightUp; (M16) sand: what's bouncing it, a colour)
 
 export const SAND = new THREE.Color( 0.5, 0.42, 0.3 ); // linear: coral sand's colour, its luminance 0.43
 
@@ -29,13 +29,13 @@ const GLSL = /* glsl */`
 	}
 `;
 
-export function useGroundBounce( material, { open = 1 } = {} ) {
+export function useGroundBounce( material, { open = 1, sand = SAND } = {} ) {
 
 	if ( _done.has( material ) || ! material.isMeshStandardMaterial ) return material;
 	_done.add( material );
 	const before = material.onBeforeCompile, own = material.customProgramCacheKey !== _proto ? material.customProgramCacheKey : null;
 	const key = own ? null : before.toString();
-	const uniforms = { groundBounceSun: G.sunColor, groundBounceDir: G.sunDir, groundBounceSand: { value: SAND }, groundBounceSky: G.skyIrradiance, groundBounceOpen: { value: open } };
+	const uniforms = { groundBounceSun: G.sunColor, groundBounceDir: G.sunDir, groundBounceSand: { value: sand }, groundBounceSky: G.skyIrradiance, groundBounceOpen: { value: open } };
 	material.onBeforeCompile = function groundBounceOnBeforeCompile( shader, renderer ) {
 
 		before.call( this, shader, renderer );

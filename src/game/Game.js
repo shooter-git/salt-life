@@ -27,6 +27,7 @@ import { ForecastSlate } from './ForecastSlate.js';
 import { forecast, islandTime, blowShare, NORTH, edgeAt } from './Weather.js';
 import { wxNews } from './TimeHUD.js';
 import { CRADLE } from '../world/village/StormPlaces.js';
+import { soakStep } from '../world/boat/console/Soak.js';
 import { StormChart, shelterSign } from './StormChart.js';
 import { ClosedSign } from './ClosedSign.js';
 import { Signpost, TRAIL_POSTS } from './Signpost.js';
@@ -657,6 +658,8 @@ export class Game {
 		this.daysOut.update( dt, inp, p );
 		// ((M16) beside a boat of yours you're not in: get into her)
 		this.fleet.updatePrompt( inp, p );
+		// ((M16) out on her open deck in a squall: world/boat/console/Soak.js)
+		soakStep( this, dt );
 		// prompts when the player has nothing to say
 		if ( ! p.prompt && ( can || canSpear ) ) p.prompt = this.prompt();
 

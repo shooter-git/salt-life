@@ -418,7 +418,7 @@ export class App {
 		this.boat = await loadBoat( this.state.boat );
 		// (M11) her instruments as they read (world/boat/Instruments.js): made now, so the dash's program is
 		// made with the rest
-		this.instruments = new BoatInstruments( { material: this.boat.materials.display || new THREE.MeshBasicMaterial(), tier } );
+		this.instruments = new BoatInstruments( { material: this.boat.materials.display || new THREE.MeshBasicMaterial(), tier, gauges: this.boat.gauges } );
 		// ((M14) and her radar, on the dash's third screen: Radar.js)
 		this.radar = new BoatRadar( { terrain: this.terrainData, seaLevel: () => G.seaLevel.value, size: tier === 'low' ? 150 : 300 } );
 		this._radarBoats = [];
@@ -2479,7 +2479,7 @@ export class App {
 		this.boatCtl.setModel( model );
 		this.boatCtl.reset();
 		this.boatCtl.apply();
-		this.instruments.fit( model.materials.display );
+		this.instruments.fit( model.materials.display, model.gauges );
 		this._dashOn = null;
 		this.drips.setBoat( model.dripPoints() );
 		this.boatSpray.setModel( model );
