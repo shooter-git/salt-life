@@ -8,6 +8,7 @@ import { Whitecaps, WHITECAP_CREST } from './Whitecaps.js';
 import { LEE } from './Waves.js';
 import { useLocalLights, LOCAL_LIGHTS_MAX } from '../materials/LocalLights.js';
 import { SEA_CAVE_GLSL, SEA_CAVE_CALM_GLSL, seaCaveUniforms } from '../world/terrain/CaveLight.js';
+import { SEEN } from '../materials/SeenInWater.js';
 
 // The sea: one instanced CDLOD grid that follows the camera out to the horizon. Its surface is the
 // open sea's Gerstner waves (Waves), fading out over the outer surf zone, plus Tidewater's breaking
@@ -60,6 +61,8 @@ const KEY = { froth: 0, rows: 4, marble: 8, spume: 16, count: 23 };
 // (step 20) a device that draws on its CPU's sea has no caves in it (lean)
 const SEA_CAVE_LEAN = 'float seaCaveCalm( vec2 xz ) { return 0.0; }\nvec3 seaCaveLightAt( vec2 xz ) { return vec3( 1.0, 0.0, 0.0 ); }\n';
 const WEED_MAX = { low: 6, mid: 12, high: 12 }, BOIL_MAX = 4;
+// ((M16) how fast the water's own light comes in over a boat seen through it, per m of the sight line)
+const WATER_SCATTER = 0.22;
 const WEED = { dark: [ 0.21, 0.17, 0.07 ], gold: [ 0.55, 0.44, 0.19 ], mats: 14, edge: 2.5, front: [ 3, 0.8 ] };
 // (M15) the water's colour (sRGB, as the light it sends back up: the body's below). Its own: the island's
 // coastal water over its shelf, the green water (its run-off and the life over the shelf: teal, its blue less
@@ -728,7 +731,23 @@ ${ lean ? '' : /* glsl */`
 		// what's under the surface seen through it where the water's own colour leaves it visible,
 		// bent by the waves and ripples (more where it's deeper)
 		vec2 bend = ( viewMatrix * vec4( nP - vec3( 0.0, 1.0, 0.0 ), 0.0 ) ).xy * ( 0.08 * clamp( depth * 0.5, 0.0, 1.0 ) );
-		vec3 behind = texture2D( waterRefract, gl_FragCoord.xy / waterRefractSize + bend ).rgb;
+		vec4 seen = texture2D( waterRefract, gl_FragCoord.xy / waterRefractSize + bend );
+		// ((M16) a boat, by its height in the frame's alpha (SeenInWater): as much water as is in the way along the sight line, bent
+		// down at the surface, not the seabed's depth under her. The bend's less too, so she meets the surface at her waterline)
+		float seenDown = seen.a < ${ g( SEEN.plain ) } ? vWater.y - ( seen.a * ${ g( SEEN.span ) } - ${ g( SEEN.base ) } ) : - 1.0;
+		// (not what's over the water: past her bow, the ripples' bend catching her above it)
+		if ( seenDown > - 0.02 ) {
+			seenDown = max( seenDown, 0.0 );
+			vec3 seenEye = normalize( vWaterL - oceanLodView );
+			float seenPath = seenDown / sqrt( max( 1.0 - ( 1.0 - seenEye.y * seenEye.y ) * 0.5625, 0.04 ) );
+			vec4 seenNear = texture2D( waterRefract, gl_FragCoord.xy / waterRefractSize + bend * clamp( seenPath * 0.7, 0.0, 1.0 ) );
+			if ( seenNear.a < ${ g( SEEN.plain ) } ) seen = seenNear;
+			seen.rgb *= exp( - ( vec3( ${ WATER.k.map( ( v ) => g( + v.toFixed( 4 ) ) ).join( ', ' ) } ) + coastal * vec3( ${ WATER.murk.map( g ).join( ', ' ) } ) ) * seenPath );
+			diffuseColor.a = clamp( max( max( 1.0 - exp( - ${ g( WATER_SCATTER ) } * seenPath ), glow * 0.6 ), foam ), 0.0, 1.0 ) * sheetEdge;
+			waterBody = mix( body * waterLight, ${ rgb( 0.93, 0.96, 0.96 ) } * foamLight, foam * 0.92 ) + lampSum * 0.06 * ( 1.0 - foam );
+			waterBody = mix( waterBody, weedC * foamLight * 0.8, weed * 0.95 );
+		}
+		vec3 behind = seen.rgb;
 		gl_FragColor = vec4( waterBody * diffuseColor.a + totalSpecular * ( 1.0 - foam * 0.8 ) * sheetEdge + behind * ( 1.0 - diffuseColor.a ), 1.0 );
 	} else
 #endif

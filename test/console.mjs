@@ -8,6 +8,7 @@ import { TRIM, trimFor } from '../src/world/boat/console/Outboards.js';
 import { soakRate, Soak } from '../src/world/boat/console/Soak.js';
 import { BoatController } from '../src/player/BoatController.js';
 import { Vector3 } from '../src/engine/index.js';
+import { seenInWater, SEEN } from '../src/materials/SeenInWater.js';
 
 let bad = 0;
 const ok = ( c, what ) => {
@@ -34,6 +35,17 @@ ok( L.panels( 1 )[ L.panels( 1 ).length - 1 ].to === L.sectionCount( 1 ) - 1, 'h
 let rising = true;
 for ( let i = 1; i <= 40; i ++ ) if ( L.sheerZ( i / 40 ) <= L.sheerZ( ( i - 1 ) / 40 ) || L.station( i / 40, 1 )[ 0 ].z < L.station( ( i - 1 ) / 40, 1 )[ 0 ].z - 0.001 ) rising = false;
 ok( rising, 'her keel runs forward all the way to the stem' );
+
+// ---- what the sea can see down to: her materials leave their height in the frame's alpha (materials/SeenInWater.js)
+{
+
+	const shader = { uniforms: {}, vertexShader: '#include <common>\n#include <begin_vertex>', fragmentShader: '#include <common>\n#include <opaque_fragment>' };
+	seenInWater( shader );
+	ok( shader.fragmentShader.includes( 'gl_FragColor.a' ) && shader.vertexShader.includes( 'vSeenY' ), 'a boat\'s height goes to the frame\'s alpha' );
+	const at = ( y ) => Math.min( ( y + SEEN.base ) / SEEN.span, 1 );
+	ok( at( 0 ) < SEEN.plain && at( - 1.4 ) >= 0 && at( 5.8 ) >= SEEN.plain, 'all under the water and her lower topsides read as hers, above that as nothing' );
+
+}
 
 // ---- budgets
 const tris = m.triangleCount;

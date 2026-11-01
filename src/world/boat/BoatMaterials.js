@@ -1,4 +1,5 @@
 import * as THREE from '../../engine/index.js';
+import { seenInWater } from '../../materials/SeenInWater.js';
 
 // The lobster boat's materials, for WebGL 2. Its geometry carries the look: GeoKit's `color` is the
 // linear albedo and `aux` = ( roughness, metalness, pattern, animation weight ). Tidewater's WGSL
@@ -23,6 +24,7 @@ export function withAux( material, { fragment = '', uniforms = {}, roughness = t
 			.replace( '#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\n\tmetalnessFactor = vAux.y;' )
 			.replace( '#include <color_fragment>', '#include <color_fragment>\n' + fragment );
 		if ( roughness ) shader.fragmentShader = shader.fragmentShader.replace( '#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = max( vAux.x, 0.04 );' );
+		seenInWater( shader );
 
 	};
 	return material;
