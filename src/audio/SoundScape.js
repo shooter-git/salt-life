@@ -212,6 +212,8 @@ const ENGINES = {
 	sportfisher: { idle: 'diesels_idle', run: 'diesels_run', fade: [ 0.18, 0.42 ], db: [ - 32, - 23 ], rate: [ 0.74, 0.5 ], lp: [ 600, 4200 ] },
 	kayak: null,
 };
+// which of them a boat has: the console's two outboards are her own sound
+export const engineOf = ( id, twin ) => id === 'console' && twin ? 'twin' : id;
 const ENGINE_BEDS = [ 'boat_engine', 'outboard_idle', 'outboard_run', 'twin_idle', 'twin_run', 'diesels_idle', 'diesels_run' ];
 // ((M14) the roofs' sheets torn off and landing: loaded once the wind's near what tears them off (m/s: Marta's
 // sign goes from 27); a landing on the sand or the grass this much quieter (dB), slowed and its

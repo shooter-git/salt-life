@@ -2,7 +2,7 @@
 // each boat sounds only as herself, the kayak has no engine, the electric reel takes over from the hand's, the VHF's
 // hiss and squelch, a turtle's hooks, the hauler, and never more sounds than the low tier's cap.
 import { readFileSync, existsSync } from 'node:fs';
-import { SoundScape, MIX } from '../src/audio/SoundScape.js';
+import { SoundScape, MIX, engineOf } from '../src/audio/SoundScape.js';
 import { BANK } from '../src/audio/soundBank.js';
 import { soundBeats } from '../src/game/Turtles.js';
 
@@ -212,6 +212,10 @@ for ( const [ sound, idle, run_ ] of [ [ 'lobster', 'boat_engine', 'boat_engine'
 	ok( heard( S.s ).join() === 'boat_engine', 'a boat nobody names (an older copy of the game\'s): the lobster boat\'s' );
 
 }
+
+// ---- what she's heard as, here or on another's game (Together's pose says if she has her two)
+ok( engineOf( 'console', true ) === 'twin' && engineOf( 'console', false ) === 'console', 'the console, with her two and with one' );
+ok( engineOf( 'sportfisher', true ) === 'sportfisher' && engineOf( 'lobster' ) === 'lobster', 'no other boat is a twin console' );
 
 // ---- the paddle: its own recording, never the swim's
 {

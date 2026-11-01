@@ -1,3 +1,4 @@
+import { engineOf } from '../audio/SoundScape.js';
 import { berthOf } from '../game/fleet/Berths.js';
 import { Vector3, Quaternion, Matrix4, MathUtils } from '../engine/index.js';
 import { gltfLoader } from '@allthespaces/portal/three';
@@ -1261,6 +1262,7 @@ export class Together {
 		const q = boat.quaternion, bp = boat.position;
 		body.B = [ r2( bp.x ), r2( bp.y ), r2( bp.z ), r3( q.x ), r3( q.y ), r3( q.z ), r3( q.w ), r2( app.waves.heightAt( bp.x, bp.z ) ) ];
 		body.Y = app.boat.id; // (M16) which boat she is
+		if ( app.boat.fitted && app.boat.fitted.twin ) body.W = 1; // (her two outboards, for the sound)
 		if ( p.riding ) body.R = p.boat.owner;
 		// (M16) your job aboard (Crew.js), and at someone else's helm, the lever and the wheel
 		if ( this.crew.job === 'tower' ) body.J = 1;
@@ -1816,6 +1818,7 @@ export class Together {
 		cur.ride = typeof near.R === 'string' ? near.R : null;
 		// ((M16) which boat she is (a game that doesn't say: the lobster boat), their job aboard, the lever and wheel at another's helm)
 		cur.boatId = isBoat( near.Y ) ? near.Y : 'lobster';
+		cur.twin = near.W === 1;
 		cur.job = near.J === 1 ? 'tower' : near.J === 2 ? 'chair' : null;
 		cur.helm = Array.isArray( near.c ) && near.c.length === 2 && near.c.every( Number.isFinite ) ? [ MathUtils.clamp( near.c[ 0 ], - 1, 1 ), MathUtils.clamp( near.c[ 1 ], - 1, 1 ) ] : null;
 		cur.spot = near.S === 1;
@@ -2197,7 +2200,7 @@ export class Together {
 		if ( p.riding ) {
 
 			const o = this.others.get( p.boat.owner ), c = o && o.cur;
-			return { active: !! ( c && c.rpm > 0.05 ), rpm: c ? c.rpm : 0, crank: c ? c.crank : 0, speed: p.boat.speed, position: p.boat.position, hull: c ? c.hull : null, id: c ? c.boatId : 'lobster' };
+			return { active: !! ( c && c.rpm > 0.05 ), rpm: c ? c.rpm : 0, crank: c ? c.crank : 0, speed: p.boat.speed, position: p.boat.position, hull: c ? c.hull : null, id: c ? engineOf( c.boatId, c.twin ) : 'lobster' };
 
 		}
 
@@ -2218,7 +2221,7 @@ export class Together {
 
 		}
 
-		return best ? { active: best.cur.rpm > 0.05, rpm: best.cur.rpm, crank: best.cur.crank, speed: best.boatSpeed, position: ( best.cur.drawn || best.cur.boat ).pos, hull: best.cur.hull, id: best.cur.boatId } : null;
+		return best ? { active: best.cur.rpm > 0.05, rpm: best.cur.rpm, crank: best.cur.crank, speed: best.boatSpeed, position: ( best.cur.drawn || best.cur.boat ).pos, hull: best.cur.hull, id: engineOf( best.cur.boatId, best.cur.twin ) } : null;
 
 	}
 
