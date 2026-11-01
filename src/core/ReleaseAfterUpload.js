@@ -6,6 +6,7 @@
 // game state lives in the person's saves): watchContext( renderer ).
 
 import { BufferAttribute, StaticDrawUsage } from '../engine/index.js';
+import { freeNow } from './FreeNow.js';
 
 const MIN_BYTES = 256 * 1024;
 
@@ -40,8 +41,11 @@ export function uploadTextures( renderer, textures ) {
 
 	for ( const t of textures ) {
 
+		const data = t.image.data;
 		releaseTexture( t );
 		renderer.initTexture( t );
+		// ((M16) their memory back at once: made for these textures alone, 12 MB at the load)
+		if ( ! t.image.data ) freeNow( data );
 
 	}
 

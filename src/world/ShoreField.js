@@ -1,5 +1,6 @@
 import { GRAVITY } from '../core/Globals.js';
 import { mangroveAt } from './terrain/Mangrove.js';
+import { freeNow } from '../core/FreeNow.js';
 
 // Offline wave-propagation field for shoreline waves.
 //
@@ -246,6 +247,8 @@ export function computeShoreField( terrain, { res = 512, swellDir = [ 0, - 1 ], 
 
 		}
 
+		freeNow( prev );
+
 	};
 
 	// arrival time at the nearest shoreline, extended unchanged onto land (swash timing)
@@ -312,6 +315,8 @@ export function computeShoreField( terrain, { res = 512, swellDir = [ 0, - 1 ], 
 
 	}
 
+	// ((M16) the working arrays' memory back at once, at the load: 7 MB)
+	freeNow( speed, T, state, Tshore, Ts, spare );
 	// ((M15) and the way the swell came: the waves' own along-shore measure is taken across it)
 	return { data, res, cellSize: h, origin, originZ, size, depth, swellDir: [ sdx / sl, sdz / sl ] };
 

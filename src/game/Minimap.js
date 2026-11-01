@@ -8,6 +8,7 @@ import { LIGHTHOUSE } from '../world/Lighthouse.js';
 import { toWorld } from '../world/wreck/WreckPlan.js';
 import { SHEETS, NAMES, HOME, legTo, magnetic, fuelFor } from './Chart.js';
 import { SheetBake, drawSymbols, S52, rgb } from './ChartBake.js';
+import { freeNow } from '../core/FreeNow.js';
 
 // Minimap, lower right: the island baked once from the terrain data into a 2D canvas, shown in a round window
 // that turns with the view (forward is up, a small N on the rim). Markers: the player (centre arrow), Joe's fish
@@ -320,9 +321,11 @@ export class Minimap {
 
 		const ctx = s.base.getContext( '2d' ), b = s.bake;
 		ctx.putImageData( new ImageData( b.rgba, s.px, s.px ), 0, 0 );
+		freeNow( b.rgba ); // ((M16) a sheet's working arrays' memory back at once)
 		b.rgba = null;
 		// (its soundings, and what it kept to bake by let go: one sheet's worth at a time)
 		s.sounded = b.soundings( Object.keys( this.sheets ).find( ( k ) => this.sheets[ k ] === s ) );
+		freeNow( b.H, b.S );
 		b.H = b.S = null;
 		if ( ! island ) return;
 		const P = ( x, z ) => [ ( x - s.spec.x0 ) * s.ppm, ( z - s.spec.z0 ) * s.ppm ];

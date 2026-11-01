@@ -94,6 +94,7 @@ import { PostChain } from './post/PostChain.js';
 import { FLOOD_L } from './game/Hull.js';
 import { releaseGeometries, releaseTextures, uploadTextures, watchContext } from './core/ReleaseAfterUpload.js';
 import { decodeInWorker } from './core/MeshoptWorker.js';
+import { freeNow } from './core/FreeNow.js';
 import { releaseParts } from './world/village/GeoBuilder.js';
 
 // Salt Life: the island, the sea and the boat, drawn with three.js inside All the Spaces. It follows
@@ -238,6 +239,7 @@ export class App {
 
 		await progress( 0.25, 'Shaping the island' );
 		this.terrainData = new TerrainData( 7, decodeIsland( new Uint8Array( bytes ) ), { offshore: new Offshore( decodeSeabed( new Uint8Array( seabed ) ) ) } );
+		freeNow( new Uint8Array( bytes ), new Uint8Array( seabed ), new Uint8Array( detail ) ); // ((M16) the files as they came, their memory back at once)
 
 		// ---------------------------------------------------------------- stage
 		// WebGL drawn on the CPU (no graphics card, or a blocklisted one): frames are paced (pacedFrame)

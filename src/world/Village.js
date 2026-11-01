@@ -673,6 +673,8 @@ export class Village {
 		const nets = new Batch();
 		if ( net ) nets.append( net, ( d ) => [ d[ 0 ], d[ 1 ], Math.max( 0.02, d[ 2 ] ), 0 ] );
 		if ( flag ) fabric.append( flag, ( d ) => [ d[ 0 ], d[ 1 ], d[ 2 ] + 10000, d[ 3 ] ] );
+		// ((M16) each one's memory back as it's folded in)
+		for ( const b of [ glass, rope, cloth, net, flag ] ) if ( b ) b.free();
 
 		// All opaque geometry lives in ONE set of vertex / index buffers. Each opaque material
 		// draws its own index range; the wood mesh is the only shadow caster and widens its
@@ -684,8 +686,9 @@ export class Village {
 		const ranges = {};
 		for ( const key of keys ) {
 
-			const start = opaque.icount;
-			opaque.append( take( key ) );
+			const start = opaque.icount, b = take( key );
+			opaque.append( b );
+			b.free();
 			ranges[ key ] = { start, count: opaque.icount - start };
 
 		}
