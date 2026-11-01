@@ -58,7 +58,7 @@ Over, she's turned keel up (the `body` group: the rigid body under it stays upri
 
 ## On the sand
 
-`Shore.js`. Run her up on a beach and step out (E): she's pulled up the sand clear of the wash (`ctl.beached`: physics off, lying on her keel on the slope), and you're beside her. E beside her: you're in her and she's shoved down the sand till she floats, 2.4 m/s, bow first, and away. A surge up the sand floats her off. Off a beach too steep for it (a grade past 0.45), she's just left where she is. Over the side, out of your depth, she drifts.
+`Shore.js`. Run her up on a beach and step out (E): she's pulled up the sand clear of the wash (`ctl.beached`: physics off, lying on her keel on the slope), and you're beside her. E beside her: you're in her and she's shoved down the sand till she floats, about 3 m/s at most, bow first, and away. A surge up the sand floats her off. Off a beach too steep for it (a grade past 0.45), she's just left where she is. Over the side, out of your depth, she drifts.
 
 She's kept on the sand, not at the dock: `BoatController` asks her `atHome` at the start, after a tow, and on the safety net's reset. With the fleet's berths in, `ctl.berth` is where she looks from, up the sand to the first dry place. `App.saveBoat` counts her as fast when she's on the sand, and `rest` lays her back on it when you return.
 

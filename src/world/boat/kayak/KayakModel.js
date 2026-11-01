@@ -181,7 +181,7 @@ export class KayakModel extends Vessel {
 		if ( ctl.beached && ! this.sliding ) {
 
 			const to = waterFrom( ctl.terrain, G.seaLevel.value, ctl.position.x, ctl.position.z );
-			if ( to ) this.sliding = { x0: ctl.position.x, z0: ctl.position.z, h0: ctl.getYaw(), x1: to.x, z1: to.z, h1: to.heading, t: 0, T: MathUtils.clamp( to.metres / 2.4, 0.7, 4.5 ) };
+			if ( to ) this.sliding = { x0: ctl.position.x, z0: ctl.position.z, h0: ctl.getYaw(), x1: to.x, z1: to.z, h1: to.heading, t: 0, T: MathUtils.clamp( to.metres / 2, 0.7, 5.5 ) };
 
 		}
 
@@ -276,6 +276,14 @@ export class KayakModel extends Vessel {
 		this.climbTime = climbSeconds( !! stats.lifeJacket );
 		st.power = stats.speedMul || 1;
 
+		// (the controller's not running while she's on the sand)
+		if ( ctl.beached && ! aboard ) {
+
+			st.park = 1;
+			st.kind = null;
+
+		}
+
 		this.playStrokes( ctl, app, aboard );
 		this.playSlide( dt, ctl, app );
 		if ( ctl.beached && ! this.sliding && G.seaLevel.value > ctl.position.y - 0.02 ) {
@@ -330,7 +338,7 @@ export class KayakModel extends Vessel {
 		const S = this.sliding;
 		if ( ! S ) return;
 		S.t += dt;
-		const k = MathUtils.smootherstep( Math.min( 1, S.t / S.T ), 0, 1 ), a = S.h1 - S.h0, turn = Math.atan2( Math.sin( a ), Math.cos( a ) );
+		const k = MathUtils.smoothstep( S.t, 0, S.T ), a = S.h1 - S.h0, turn = Math.atan2( Math.sin( a ), Math.cos( a ) );
 		layOn( ctl.terrain, G.seaLevel.value, MathUtils.lerp( S.x0, S.x1, k ), MathUtils.lerp( S.z0, S.z1, k ), S.h0 + turn * Math.min( 1, k * 1.6 ), ctl.position, ctl.quaternion );
 		ctl.apply();
 		if ( S.t >= S.T ) {
