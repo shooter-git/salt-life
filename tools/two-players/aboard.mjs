@@ -197,6 +197,9 @@ await owner.game.evaluate( ( F ) => { const a = window.__app, b = a.boatCtl; b.m
 await until( guest.game, `( () => { const b = window.__app.player.boat.position; return Math.hypot( b.x - ${ SEA.x }, b.z - ${ SEA.z } ) < 300 && window.__app.player.riding; } )()` );
 say( await guest.game.evaluate( () => window.__app.player.riding ), 'with her moved out to open water, he\'s still aboard' );
 
+// (and her owner at her helm, under throttle: every frame of theirs, whether they're still at it)
+await owner.game.evaluate( () => { const a = window.__app, S = window.__helm = { n: 0, off: 0, first: null }; window.__draws.after.push( () => { S.n ++; if ( a.player.mode !== 'boat' ) { S.off ++; if ( ! S.first ) S.first = { mode: a.player.mode, speed: +a.boatCtl.speed.toFixed( 1 ), lever: +a.boatCtl.throttle.toFixed( 2 ) }; } } ); } );
+
 // watches him, every frame of his, against where he was: whether he stayed aboard, on her deck, with the camera with her
 await guest.game.evaluate( () => {
 
@@ -347,6 +350,9 @@ if ( ! seated ) {
 	await stop();
 
 }
+
+const helm = await owner.game.evaluate( () => window.__helm );
+say( helm.n > 0 && helm.off === 0, `Robin stayed at her helm throughout: ${ helm.off } of ${ helm.n } of her frames off it${ helm.first ? ' ' + JSON.stringify( helm.first ) : '' }` );
 
 // ---- what's fitted, and her paint: as hers is, on his game
 const FITS = { console: { upgrades: { tTop: 0 }, key: 'tTop' }, sportfisher: { upgrades: { tower: 0 }, key: 'tower' } }[ BOAT ];

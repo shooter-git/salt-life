@@ -183,7 +183,6 @@ export class ConsoleModel extends Vessel {
 
 	}
 
-	// (M16) a copy of her on someone else's game, with the engines her owner has. A low tier's copy has no gear. Her rigging
 
 	_applyFit() {
 

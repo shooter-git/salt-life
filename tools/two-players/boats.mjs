@@ -270,8 +270,8 @@ await reads( sam.game, 'Sam at his helm, Robin aboard' );
 await sam.game.evaluate( () => { const p = window.__app.player; p.leaveHelm(); p.takeHelm( p.boat.model.towerHelm ); } );
 await until( robin.game, `${ other }.cur.job === 'tower' && ${ other }.cur.mode === 'helm'` );
 await frames( robin.game, 3 );
-const upThere = await robin.game.evaluate( `( () => { const o = ${ other }, f = o.cur.drawn || o.cur.boat; return { y: +( o.avatar.group.position.y - f.pos.y ).toFixed( 2 ), job: o.job, gear: o.cur.gear }; } )()` );
-const samGear = await sam.game.evaluate( () => window.__app.boat.gearBits() );
+const upThere = await robin.game.evaluate( `( () => { const o = ${ other }, f = o.cur.drawn || o.cur.boat; return { y: +( o.avatar.group.position.y - f.pos.y ).toFixed( 2 ), job: o.job, gear: o.cur.fit }; } )()` );
+const samGear = await sam.game.evaluate( () => window.__app.together._fitted() );
 say( upThere.y > 6.5 && upThere.job === 'helm', `Sam at the tower's helm: Robin sees him up there, and it's the helm: ${ JSON.stringify( upThere ) }` );
 say( upThere.gear === samGear, `and Robin's told what's fitted on her (${ samGear })` );
 await sam.game.evaluate( () => { const p = window.__app.player; p.leaveHelm(); p.takeHelm(); } );
@@ -297,10 +297,14 @@ await sam.game.evaluate( () => { delete window.__app.together._place; } );
 await until( sam.game, `( () => { const o = ${ other }; return o.boat && o.boat.visible; } )()` );
 
 // ---- far apart: a speck past the fog
-const R = { x: - 2600, z: 3000 };
+let R = { x: - 2600, z: 3000 };
 await morning( sam.game );
 for ( const d of [ 2500, 6000, 9000, 12500, 15500 ] ) {
 
+	// (from where Sam is now: she can have moved)
+	const his = await sam.game.evaluate( () => { const a = window.__app, b = a.boatCtl; return { x: b.position.x, z: b.position.z, speed: +b.speed.toFixed( 2 ), lever: +b.throttle.toFixed( 2 ), rpm: +( b.rpm || 0 ).toFixed( 2 ), mode: a.player.mode }; } );
+	R = { x: his.x, z: his.z };
+	console.log( '     Sam:', JSON.stringify( his ) );
 	await robin.game.evaluate( ( [ R, d ] ) => { const a = window.__app, p = a.player, b = a.boatCtl; if ( p.mode !== 'boat' ) { p.boardBoat(); p.takeHelm(); } b.moored = false; b.position.set( R.x + d, b.position.y, R.z ); }, [ R, d ] );
 	await until( sam.game, `( () => { const o = ${ other }; return o.cur && o.cur.boat && Math.abs( o.cur.boat.pos.x - ${ R.x + d } ) < 60; } )()` );
 	await sam.game.evaluate( ( [ R, d ] ) => { const a = window.__app, p = a.player; p.camMode = 'first'; p.helmYaw = 0; p.helmPitch = 0; }, [ R, d ] );
@@ -336,6 +340,7 @@ for ( const d of [ 2500, 6000, 9000, 12500, 15500 ] ) {
 }
 
 // ---- her lamps at night, from the sportfisher's lamps' own figures
+R = await sam.game.evaluate( () => { const b = window.__app.boatCtl; return { x: b.position.x, z: b.position.z }; } );
 await robin.game.evaluate( ( R ) => { const a = window.__app, b = a.boatCtl; b.position.set( R.x + 400, b.position.y, R.z ); }, R );
 await until( sam.game, `( () => { const o = ${ other }; return o.boat && o.boat.visible; } )()`, 240000 ).catch( async ( e ) => {
 
