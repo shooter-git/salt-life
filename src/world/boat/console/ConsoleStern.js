@@ -48,13 +48,16 @@ export function buildLadder( kit ) {
 
 	kit.fitting = null;
 
-	// the engines' rigging hoses, a black loop from a well in the mat to each (a single engine's goes to the middle)
-	for ( const x of [ - 0.38, 0.38 ] ) {
+	// the engines' rigging hoses, a black loop from a well in the mat to each
+	for ( const x of [ - 0.38, 0, 0.38 ] ) {
 
+		kit.fitting = x ? 'twin' : 'single';
 		kit.add( 'fittings', tube( [ V( x, P.y + 0.012, P.zEnd + 0.26 ), V( x, P.y + 0.2, P.zEnd + 0.2 ), V( x, P.y + 0.26, P.zEnd + 0.04 ), V( x, P.y + 0.14, P.zEnd - 0.1 ) ], 0.022, 10, 6 ), TREAD );
 		kit.add( 'fittings', cylinder( 0.045, 0.045, 0.008, 12 ).translate( x, P.y + 0.016, P.zEnd + 0.26 ), { color: 0xe6e1d3, rough: 0.4 } );
 
 	}
+
+	kit.fitting = null;
 
 	// the bracket's stainless plate on its after face (the engines' tilt tubes go through it)
 	for ( const x of [ - 0.38, 0, 0.38 ] ) {

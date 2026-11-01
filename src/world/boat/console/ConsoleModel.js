@@ -188,7 +188,7 @@ export class ConsoleModel extends Vessel {
 	_applyFit() {
 
 		const on = {
-			tTop: this.fitted.tTop, tankRack: this.fitted.tankRack,
+			tTop: this.fitted.tTop, tankRack: this.fitted.tankRack, twin: this.fitted.twin, single: ! this.fitted.twin,
 			coverDown: this.fitted.tTop && this.covered,
 			ladderUp: this.fitted.diveLadder && ! this._ladderDown, ladderDown: this.fitted.diveLadder && !! this._ladderDown,
 		};
