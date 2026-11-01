@@ -627,6 +627,7 @@ export class SoundScape {
 	boatReady() {
 
 		for ( const n of HULL_SET ) this._want( n );
+		this._boatWanted = true;
 		this._wantEngine();
 
 	}
@@ -1620,7 +1621,15 @@ export class SoundScape {
 		eb.y = num( bp.y, eb.y );
 		eb.z = num( bp.z, eb.z );
 		eb.inside = !! b.listenerInside;
-		eb.sound = ENGINES[ b.sound ] !== undefined ? b.sound : 'lobster';
+		const sound = ENGINES[ b.sound ] !== undefined ? b.sound : 'lobster';
+		// (into another boat: hers ready before her first crank)
+		if ( sound !== eb.sound ) {
+
+			eb.sound = sound;
+			if ( this._boatWanted ) this._wantEngine();
+
+		}
+
 		// (M10) the hull you're aboard: the water in her bilge (a share of what reaches the engine), her pump
 		// at work, the keel sliding along the bottom (m/s), her wear and how hard she's working in a sea
 		const hb = s.hull || EMPTY, eh = e.hull;

@@ -217,6 +217,19 @@ for ( const [ sound, idle, run_ ] of [ [ 'lobster', 'boat_engine', 'boat_engine'
 ok( engineOf( 'console', true ) === 'twin' && engineOf( 'console', false ) === 'console', 'the console, with her two and with one' );
 ok( engineOf( 'sportfisher', true ) === 'sportfisher' && engineOf( 'lobster' ) === 'lobster', 'no other boat is a twin console' );
 
+// ---- into another boat once you're aboard: her starter's ready before her first crank
+{
+
+	const S = await scape();
+	S.s.boatReady();
+	await run( S, 0.2, state( 'lobster', 0 ) );
+	ok( ! S.s._buffers.has( 'diesels_start' ), 'the lobster boat doesn\'t load the sportfisher\'s starter' );
+	await run( S, 0.2, state( 'sportfisher', 0 ) );
+	await settle();
+	ok( S.s._buffers.has( 'diesels_start' ) && S.s._buffers.has( 'diesels_idle' ), 'into the sportfisher: hers are loaded' );
+
+}
+
 // ---- each one's own starter: slice 1 catches at the end of the game's crank
 for ( const [ sound, bank ] of [ [ 'lobster', 'starter' ], [ 'console', 'outboard_start' ], [ 'twin', 'outboard_start' ], [ 'sportfisher', 'diesels_start' ] ] ) {
 
@@ -320,6 +333,7 @@ for ( const [ sound, bank ] of [ [ 'lobster', 'starter' ], [ 'console', 'outboar
 	ok( ! S.s._beds.has( 'hauler' ), 'and stopped' );
 	const work = readFileSync( new URL( '../src/game/TrapWork.js', import.meta.url ), 'utf8' );
 	ok( work.includes( 'haulerRun( true )' ) && work.includes( 'haulerRun( false )' ) && ! work.includes( 'netPull(' ), 'and the traps call for it, not the net\'s pull' );
+	ok( /netLift\( _c\.set\(/.test( work ), 'and the trap breaking the surface sounds where it is' );
 
 }
 

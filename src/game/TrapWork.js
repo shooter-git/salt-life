@@ -750,7 +750,7 @@ export class TrapWork {
 
 				j.surfaced = true;
 				const A = this.app.audio;
-				if ( A && A.netLift ) A.netLift( 0.6, true );
+				if ( A && A.netLift ) A.netLift( _c.set( _p.x, wave, _p.z ) );
 				if ( A && A.netSplash ) A.netSplash( _c.set( _p.x, wave, _p.z ), 0.5 );
 
 			}
