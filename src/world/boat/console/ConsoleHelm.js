@@ -321,12 +321,12 @@ function tTop( kit, parts ) {
 	kit.add( 'glow', cylinder( 0.035, 0.035, 0.008, 10 ).translate( 0, T.under - 0.05, - 0.6 ), { color: 0x56a2ff, rough: 0.3, pattern: 5 } );
 
 	// ---- its rain cover: clear drop curtains on the sides and aft, zipped to the top's edge, rolled up under it on a fine day
-	const hem = T.under - 0.02, foot = S + 0.92, cloth = { color: 0x13243c, rough: 0.7 };
-	const side = [ [ 0.5, T.halfW - 0.05 ], [ - 1.3, T.halfW - 0.1 ] ];
-	const aftZ = T.z0 + 0.1, aftX = T.halfW - 0.22;
+	const hem = T.under - 0.03, foot = S + 0.92, cloth = { color: 0xe4dfd0, rough: 0.7 };
+	const side = [ [ 0.25, T.halfW - 0.1 ], [ - 1.05, T.halfW - 0.1 ] ];
+	const aftZ = T.z0 + 0.22, aftX = T.halfW - 0.36;
 	kit.fitting = 'coverUp';
-	for ( const s of [ 1, - 1 ] ) kit.add( 'fittings', rod( V( s * side[ 0 ][ 1 ], hem - 0.03, side[ 0 ][ 0 ] ), V( s * side[ 1 ][ 1 ], hem - 0.03, side[ 1 ][ 0 ] ), 0.032, 6 ), cloth );
-	kit.add( 'fittings', rod( V( - aftX, hem - 0.03, aftZ ), V( aftX, hem - 0.03, aftZ ), 0.032, 6 ), cloth );
+	for ( const s of [ 1, - 1 ] ) kit.add( 'fittings', rod( V( s * side[ 0 ][ 1 ], hem - 0.02, side[ 0 ][ 0 ] ), V( s * side[ 1 ][ 1 ], hem - 0.02, side[ 1 ][ 0 ] ), 0.024, 6 ), cloth );
+	kit.add( 'fittings', rod( V( - aftX, hem - 0.02, aftZ ), V( aftX, hem - 0.02, aftZ ), 0.024, 6 ), cloth );
 	kit.fitting = 'coverDown';
 	const curtain = ( a, b, yT, yB ) => {
 

@@ -212,43 +212,57 @@ function bow( kit, L ) {
 	const edge = ( z ) => Math.max( 0.04, hullAt( L, z, under ) - 0.03 );
 	// the walkway's half-width between them, on the plan: 0.42 m at their after ends, closing at z 2.56
 	const inner = ( z ) => 0.42 * Math.max( 0, 1 - ( z - B.z0 ) / ( 2.56 - B.z0 ) );
+	// the seats' U in one piece, round the sunk sole from one after end to the other
+	const N = 12, outline = [], cushion = [];
+	const zAt = ( i ) => lerp( B.z0, B.z1, i / N );
+	for ( let i = 0; i <= N; i ++ ) {
+
+		outline.push( [ edge( zAt( i ) ), zAt( i ) ] );
+		cushion.push( [ Math.max( Math.min( edge( zAt( i ) ), soleEdge( L, zAt( i ), B.y ) + 0.03 ), 0.04 ), zAt( i ) - ( i === N ? 0.015 : 0 ) ] );
+
+	}
+
+	for ( let i = N; i >= 0; i -- ) {
+
+		outline.push( [ - edge( zAt( i ) ), zAt( i ) ] );
+		cushion.push( [ - Math.max( Math.min( edge( zAt( i ) ), soleEdge( L, zAt( i ), B.y ) + 0.03 ), 0.04 ), zAt( i ) - ( i === N ? 0.015 : 0 ) ] );
+
+	}
+
+	// (back along the walkway's two sides to its head)
+	const WALK = 6;
+	for ( let i = 0; i <= WALK; i ++ ) {
+
+		const z = lerp( B.z0, 2.56, i / WALK );
+		outline.push( [ - inner( z ), z ] );
+		cushion.push( [ - inner( z ) - 0.025, z + 0.03 ] );
+
+	}
+
+	for ( let i = WALK - 1; i >= 0; i -- ) {
+
+		const z = lerp( B.z0, 2.56, i / WALK );
+		outline.push( [ inner( z ), z ] );
+		cushion.push( [ inner( z ) + 0.025, z + 0.03 ] );
+
+	}
+
+	kit.add( 'hull', solid( outline, under, B.y - 0.05, 0.012, ( u, v, d ) => V( u, d, v ), { rings: 1 } ), GEL );
+	kit.add( 'fittings', solid( cushion, B.y - 0.055, B.y, 0.018, ( u, v, d ) => V( u, d, v ) ), { color: 0xe9e3d3, rough: 0.6 } );
+	// the seats' faces down to the sole, along the walkway and at their after ends
 	for ( const s of [ 1, - 1 ] ) {
 
-		const outline = [], cushion = [], foot = [];
-		const N = 9;
-		for ( let i = 0; i <= N; i ++ ) {
-
-			const z = lerp( B.z0, B.z1, i / N );
-			outline.push( [ s * edge( z ), z ] );
-			cushion.push( [ s * Math.max( Math.min( edge( z ), soleEdge( L, z, B.y ) + 0.03 ), 0.04 ), z - 0.012 ] );
-
-		}
-
-		for ( let i = N; i >= 0; i -- ) {
-
-			const z = lerp( B.z0, B.z1, i / N );
-			outline.push( [ s * ( inner( z ) + 0.002 ), z ] );
-			if ( i < N && inner( z ) > 0.0 ) cushion.push( [ s * ( inner( z ) + 0.03 ), z + 0.035 ] );
-			else if ( i < N ) cushion.push( [ s * 0.03, z ] );
-
-		}
-
-		// the seat's face down to the sole, along the walkway
-		for ( let i = 0; i <= 6; i ++ ) foot.push( [ s * ( inner( lerp( B.z0, 2.56, i / 6 ) ) + 0.002 ), lerp( B.z0, 2.56, i / 6 ) ] );
-		for ( let i = 6; i >= 0; i -- ) foot.push( [ s * ( inner( lerp( B.z0, 2.56, i / 6 ) ) + 0.05 ), lerp( B.z0, 2.56, i / 6 ) ] );
-		// (round its after end to the coaming)
-		kit.add( 'hull', solid( foot, S, under + 0.02, 0.008, ( u, v, d ) => V( u, d, v ), { rings: 1 } ), GEL );
-		const e0 = soleEdge( L, B.z0, S ) + 0.06, i0 = inner( B.z0 ) + 0.002;
-		kit.add( 'hull', solid( [ [ s * i0, B.z0 ], [ s * e0, B.z0 ], [ s * e0, B.z0 + 0.05 ], [ s * i0, B.z0 + 0.05 ] ], S, under + 0.02, 0.008, ( u, v, d ) => V( u, d, v ), { rings: 1 } ), GEL );
-		kit.add( 'hull', solid( softCorners( outline, 0.05 ), under, B.y - 0.05, 0.018, ( u, v, d ) => V( u, d, v ) ), GEL );
-		// the seat pad over it, soft edged
-		const pad = solid( softCorners( cushion, 0.05 ), B.y - 0.055, B.y, 0.022, ( u, v, d ) => V( u, d, v ) );
-		kit.add( 'fittings', pad, { color: 0xe9e3d3, rough: 0.6 } );
+		const foot = [];
+		for ( let i = 0; i <= WALK; i ++ ) foot.push( [ s * inner( lerp( B.z0, 2.56, i / WALK ) ), lerp( B.z0, 2.56, i / WALK ) ] );
+		for ( let i = WALK; i >= 0; i -- ) foot.push( [ s * ( inner( lerp( B.z0, 2.56, i / WALK ) ) + 0.05 ), lerp( B.z0, 2.56, i / WALK ) ] );
+		kit.add( 'hull', solid( foot, S, under + 0.02, 0.006, ( u, v, d ) => V( u, d, v ), { rings: 1 } ), GEL );
+		const e0 = soleEdge( L, B.z0, S ) + 0.06, i0 = inner( B.z0 );
+		kit.add( 'hull', solid( [ [ s * i0, B.z0 ], [ s * e0, B.z0 ], [ s * e0, B.z0 + 0.05 ], [ s * i0, B.z0 + 0.05 ] ], S, under + 0.02, 0.006, ( u, v, d ) => V( u, d, v ), { rings: 1 } ), GEL );
 
 	}
 
 	// the riser across the bow, its speakers facing aft; the foredeck, cambered, from its top to the stem
-	const R = DECK.riser, wr = hullAt( L, B.z1, under ) - 0.03, wf = hullAt( L, R.z1, under + 0.1 ) - 0.03;
+	const R = DECK.riser, wr = hullAt( L, B.z1, under ) - 0.03, wf = hullAt( L, R.z1, under ) - 0.03;
 	const riser = solid( softCorners( [ [ - wr, B.z1 - 0.005 ], [ wr, B.z1 - 0.005 ], [ wf, R.z1 ], [ - wf, R.z1 ] ], 0.03 ), under, R.y, 0.02, ( u, v, d ) => V( u, d, v ) );
 	kit.add( 'hull', riser, GEL );
 	for ( const s of [ 1, - 1 ] ) {
@@ -257,10 +271,10 @@ function bow( kit, L ) {
 
 	}
 
-	const tF = L.tAtSheerZ( R.z1 - 0.02 ), rows = [], N = 16, NX = 8;
-	for ( let i = 0; i <= N; i ++ ) {
+	const tF = L.tAtSheerZ( R.z1 - 0.02 ), rows = [], NF = 16, NX = 8;
+	for ( let i = 0; i <= NF; i ++ ) {
 
-		const t = lerp( tF, 0.985, 1 - Math.pow( 1 - i / N, 1.2 ) ), z = L.sheerZ( t ), e = Math.max( 0.008, L.sheerX( t ) - 0.03 ), row = [];
+		const t = lerp( tF, 0.985, 1 - Math.pow( 1 - i / NF, 1.2 ) ), z = L.sheerZ( t ), e = Math.max( 0.008, L.sheerX( t ) - 0.03 ), row = [];
 		for ( let k = 0; k <= NX; k ++ ) {
 
 			const x = lerp( e, - e, k / NX ), f = x / e;
@@ -284,8 +298,8 @@ function bow( kit, L ) {
 
 	kit.add( 'hull', g, GEL );
 	// the wall from the riser's top up to the foredeck, and the riser's top as a step
-	const yF = L.sheerY( tF ) + 0.03, wt = Math.min( wf + 0.02, hullAt( L, R.z1, R.y ) - 0.03 );
-	const wall = solid( softCorners( [ [ - wt, R.y - 0.05 ], [ wt, R.y - 0.05 ], [ wt + 0.04, yF ], [ - wt - 0.04, yF ] ], 0.02 ), R.z1 - 0.02, R.z1 + 0.14, 0.012, ( u, v, d ) => V( u, v, d ) );
+	const yF = L.sheerY( tF ) + 0.03, zw = R.z1 + 0.14, wt = hullAt( L, zw, R.y - 0.05 ) - 0.03, wu = hullAt( L, zw, yF - 0.04 ) - 0.03;
+	const wall = solid( softCorners( [ [ - wt, R.y - 0.05 ], [ wt, R.y - 0.05 ], [ wu, yF ], [ - wu, yF ] ], 0.02 ), R.z1 - 0.02, zw, 0.012, ( u, v, d ) => V( u, v, d ) );
 	kit.add( 'hull', wall, GEL );
 	// the anchor locker's lid, the stem's roller and anchor
 	const zh = 3.72, yh = L.sheerY( L.tAtSheerZ( zh ) ) + 0.05;
@@ -320,7 +334,7 @@ function stemFitting( kit, L ) {
 
 function aftBox( kit, L ) {
 
-	const z0 = L.zAft - 0.005, z1 = DECK.boxFront, top = DECK.boxTop, D = DECK.door, inX = 1.17;
+	const z0 = L.zAft + 0.02, z1 = DECK.boxFront, top = DECK.boxTop, D = DECK.door, inX = 1.17;
 	const parts = [ [ D[ 1 ], inX ], [ - inX, D[ 0 ] ] ];
 	for ( const [ x0, x1 ] of parts ) {
 

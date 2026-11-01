@@ -15,7 +15,7 @@ OUT = os.path.join( HERE, '..', '..', 'src', 'world', 'boat', 'console', 'Moulde
 # colours as named in the mesh's vertex groups (index into PARTS, each a material in GeoKit's terms)
 PARTS = [
 	( 'cowl', 0xe8ebec, 0.28, 0 ),
-	( 'chaps', 0x2a2d30, 0.55, 0 ),
+	( 'chaps', 0xc9cdcf, 0.4, 0 ),
 	( 'leg', 0xdfe2e3, 0.38, 0 ),
 	( 'metal', 0xc4c8cc, 0.25, 1 ),
 	( 'vinyl', 0xece6d6, 0.62, 0 ),
@@ -111,7 +111,7 @@ def cowl_ring( h, n ):
 		pz = mid + math.copysign( abs( cz ) ** 0.9, cz ) * a
 		# the scalloped ribs over the back of the crown, fanning from the scoop
 		rear = smooth( - cz, - 0.1, 0.5 ) * smooth( h, 0.4, 0.62 ) * ( 1 - smooth( h, 0.96, 1 ) )
-		rib = math.cos( th * 11 ) * 0.005 * rear
+		rib = math.cos( th * 11 ) * 0.009 * rear
 		k = 1 + rib / max( 0.1, math.hypot( px, pz - mid ) ) * 2
 		px *= k; pz = mid + ( pz - mid ) * k
 		# the split line between top and bottom cowl: a groove
