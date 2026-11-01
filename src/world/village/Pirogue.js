@@ -1,6 +1,6 @@
 import { Matrix4, Vector3 } from '../../engine/index.js';
 import { Builder, gridPart } from './GeoBuilder.js';
-import { WOOD, lin } from '../Props.js';
+import { WOOD as VILLAGE_WOOD, lin } from '../Props.js';
 import { mulberry32 } from '../../util/Noise.js';
 
 // (M16) A pirogue, the working boat of the Caribbean's windward landing beaches, shaped after photographs of them at
@@ -14,6 +14,8 @@ import { mulberry32 } from '../../util/Noise.js';
 
 export const PIROGUE = { length: 7.3, beam: 1.9, depth: 0.7, draft: 0.3, name: 'STILL TRYING', quarterX: 0.8, quarterZ: - 3, washZ: - 3.9 };
 
+// (the village's wood, afloat: no tide's belt on her, VillageMaterials)
+const WOOD = ( seed, weather, paint, pattern ) => VILLAGE_WOOD( seed, 2 + weather, paint, pattern );
 const L = PIROGUE.length, HB = PIROGUE.beam / 2;
 const clamp = ( x, a = 0, b = 1 ) => Math.min( b, Math.max( a, x ) );
 const ss = ( a, b, x ) => {
@@ -132,9 +134,9 @@ export function buildPirogue( { lite = false, seed = 0.37 } = {} ) {
 		};
 
 		const sBoot = ( t ) => t > 0.85 ? 0 : sAtY( t, boot( t ) ), sTop = ( t ) => sAtY( t, top( t ) );
-		band( () => 0, sBoot, lite ? 3 : 4, paint( BOTTOM, 0.55, 6 ) );
-		band( sBoot, sTop, lite ? 2 : 3, paint( WHITE, 0.7, 6 ) );
-		band( sTop, () => 1, lite ? 1 : 2, paint( TOP, 0.62, 6 ) );
+		band( () => 0, sBoot, lite ? 3 : 4, paint( BOTTOM, 0.72, 6 ) );
+		band( sBoot, sTop, lite ? 2 : 3, paint( WHITE, 0.82, 6 ) );
+		band( sTop, () => 1, lite ? 1 : 2, paint( TOP, 0.78, 6 ) );
 
 		// ---- scraped and patched: what the beach and the jetty have done to her paint (her own, each side)
 		const patch = ( t0, y0, w, h, col ) => {
