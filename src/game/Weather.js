@@ -369,7 +369,7 @@ function along( s, key ) {
 }
 
 // the short wind sea grows with the wind (x today's at 7 m/s: its height goes about as wind^1.5)
-const WIND_SEA_MAX = 4.5;
+const WIND_SEA_MAX = 3.8;
 const windSeaOf = ( wind ) => {
 
 	const r = wind / CONDITIONS.fair.wind;
@@ -386,7 +386,7 @@ const windSeaOf = ( wind ) => {
 // upwind give 10.6 to 12.9 ft. Nothing at a breezy day's wind and under (their 4 to 6 ft is already the Weather
 // Service's for 20 kt); from there its energy (Hs^2) grows about as the wind past that. Past a gale it goes on
 // growing, so a hurricane's stays bigger than a gale's: a Category 1's wall about 25 ft, a 3's about 31.
-export const OWN_SEA = { from: 11, k: 0.9, p: 0.575 };
+export const OWN_SEA = { from: 11, k: 0.93, p: 0.575 };
 export const blowSeaOf = ( wind ) => wind > OWN_SEA.from ? OWN_SEA.k * Math.pow( wind - OWN_SEA.from, OWN_SEA.p ) : 0;
 
 // (M14) the north shore's sea for a wind (m/s) turned `angle` (rad) from the trades (NORTH): its height
