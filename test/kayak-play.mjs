@@ -106,7 +106,7 @@ ok( ctl.beached, 'she\'s on the sand from the start' );
 const home = ctl.position.clone();
 ok( terrain.heightAt( home.x, home.z ) > 0.45, `clear of the wash (${ terrain.heightAt( home.x, home.z ).toFixed( 2 ) } m up the sand, ${ ( - 40 - home.z ).toFixed( 1 ) } m from the water)` );
 const fwd = ctl.forward( new Vector3() );
-ok( fwd.z > 0.9, 'her bow to the sea' );
+ok( fwd.z > 0.6, 'her bow to the sea, at an angle as she\'s left' );
 
 // getting in, and off the sand
 at( home.x + 1, home.z );

@@ -18,8 +18,8 @@ const _seat = { left: null, right: null, twist: 0, lean: 0 };
 
 const app_ui = ( game ) => ( game.app.ui && game.app.ui.ui ? game.app.ui.ui.root : null );
 
-// where she's kept when she's brought home: on the sand just east of the pier's foot
-const HOME = { x: 62, z: - 24 }; // m
+// where she's kept when she's brought home, with no berth to go by: on the sand beside the pier's foot (fleet/Berths.js)
+const HOME = { x: 44, z: - 24 }; // m
 
 // (M16) The fishing kayak: 12 ft, paddled, sat in. What she's made of is in KayakHull.js, how she's driven in Paddle.js,
 // how she's sat in in Seat.js. Everything's in `body`, which is what turns over when she capsizes (the rigid body under
@@ -27,6 +27,8 @@ const HOME = { x: 62, z: - 24 }; // m
 //
 // What she does beyond the rest of the fleet is here: play( dt, game ), each frame (Game.updateBoat): the paddle's
 // splashes, you in her, a capsize and righting her, launching and landing, getting soaked.
+const LEFT_TURNED = 0.7;
+
 export class KayakModel extends Vessel {
 
 	constructor() {
@@ -300,7 +302,8 @@ export class KayakModel extends Vessel {
 		this.body.rotation.z = 0;
 		this.body.position.y = 0;
 		this.sliding = null;
-		if ( spot ) this.lie( ctl, spot.x, spot.z, spot.heading );
+		// ((M16) left at an angle to the water, as people leave them, and so her side shows from up the beach)
+		if ( spot ) this.lie( ctl, spot.x, spot.z, spot.heading + LEFT_TURNED );
 		else ctl.beached = false;
 
 	}
@@ -520,7 +523,7 @@ export class KayakModel extends Vessel {
 		p.soak = 1;
 		p.breath = Math.min( p.breath, p.breathMax * ( stats.lifeJacket ? 0.9 : 0.6 ) );
 		// (the lid pops, and what's in the cooler goes)
-		const n = s.inventory.length, lost = Math.ceil( n * spillShare( !! stats.lifeJacket ) - 1e-9 );
+		const n = s.inventory.length, lost = Math.ceil( n * spillShare( !! stats.lifeJacket, !! stats.dryHatch ) - 1e-9 );
 		if ( lost > 0 ) {
 
 			s.inventory.length = n - lost;

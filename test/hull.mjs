@@ -18,6 +18,14 @@ import { GameState } from '../src/game/GameState.js';
 import { gearStats, defaultUpgrades } from '../src/game/Gear.js';
 import { Game, HAUL_FEE } from '../src/game/Game.js';
 import { CRADLE } from '../src/world/village/StormPlaces.js';
+// (M16: a new game starts in the kayak; what's tested here is a game in the lobster boat)
+const lobsterStart = ( st ) => {
+
+	st.fleet = { lobster: st.fleet.kayak };
+	st.boat = 'lobster';
+	return st;
+
+};
 
 let fails = 0;
 const ok = ( c, msg ) => {
@@ -204,7 +212,7 @@ function drive( { cond = 'fair', throttle = 1, yaw = 0, secs = 60, from = SEA, c
 // ---- Marta's repair, and the save
 {
 
-	const s = new GameState( null );
+	const s = lobsterStart( new GameState( null ) );
 	s.hull = 0.4;
 	s.money = 1000;
 	const fee = repairFee( s.hull );
@@ -214,7 +222,7 @@ function drive( { cond = 'fair', throttle = 1, yaw = 0, secs = 60, from = SEA, c
 	const paid = s.payRepair( repairFee( 0.6 ) );
 	ok( paid === 30 && s.money === 0 && Math.abs( s.hull - 0.6 * ( 1 - 30 / repairFee( 0.6 ) ) ) < 1e-9, 'short of it, she does what your money pays for' );
 	ok( s.payRepair( 50 ) === 0 && Math.abs( s.hull - 0.6 * ( 1 - 30 / repairFee( 0.6 ) ) ) < 1e-9, 'and nothing for nothing' );
-	const t = new GameState( null );
+	const t = lobsterStart( new GameState( null ) );
 	ok( t.fromJSON( JSON.parse( JSON.stringify( s.toJSON() ) ) ) && t.hull === s.hull, 'the wear is saved with the game' );
 	const old = s.toJSON();
 	delete old.hull;
@@ -252,7 +260,7 @@ function drive( { cond = 'fair', throttle = 1, yaw = 0, secs = 60, from = SEA, c
 	ok( h.wear === 0, '(at her helm, it\'s the slams that wear her, not this)' );
 
 	// Marta's row: once it's watched for, with the boat at her dock; hauled, she puts her back in after
-	const st = new GameState( null );
+	const st = lobsterStart( new GameState( null ) );
 	st.money = 100;
 	const news = hurricaneNews( since, 'hurricane', since );
 	const boat = { moored: true, hauled: null, setHauled( c ) { this.hauled = c || null; this.moored = ! c; } };
@@ -265,7 +273,7 @@ function drive( { cond = 'fair', throttle = 1, yaw = 0, secs = 60, from = SEA, c
 	Game.prototype.relaunch.call( g );
 	ok( ! st.hauled && ! boat.hauled && boat.moored, 'and she does, at the dock' );
 	ok( Game.prototype.haulJob.call( { ...g, state: new GameState( null ) } ) === null, 'no haul-out with no hurricane coming' );
-	const t2 = new GameState( null );
+	const t2 = lobsterStart( new GameState( null ) );
 	st.hauled = true;
 	ok( t2.fromJSON( JSON.parse( JSON.stringify( st.toJSON() ) ) ) && t2.hauled === true, 'hauled out, she\'s saved so' );
 

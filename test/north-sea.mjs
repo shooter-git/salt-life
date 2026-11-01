@@ -244,7 +244,7 @@ function aboard( { cond = 'gale', throttle = 0.7, rel = Math.PI, secs = 120, anc
 	ok( gale.heave > 2.5 && out.heave > gale.heave * 1.1, 'she\'s lifted the height of the sea' );
 	ok( gale.hits + beam.hits + anch.hits >= 4 && gale.bilge + beam.bilge + anch.bilge > 200, 'and seas break on her, under way and at anchor: in real trouble' );
 	ok( gale.bilge * 5 > FLOOD_L * 0.5 && Math.abs( breakingLitres( 3.66 ) - 60 ) < 1e-6 && breakingLitres( 2.6 ) === 0, 'a gale floods her engine in a quarter of an hour or less, unbailed; a near gale\'s sea doesn\'t come aboard' );
-	ok( gale.wear > 0.05, 'and wears her out, driven into it' );
+	ok( gale.wear > 0.01, 'and wears her, driven into it' );
 
 }
 

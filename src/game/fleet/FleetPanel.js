@@ -41,7 +41,9 @@ const row = ( id, title, sub, shadow, more = '' ) => `<div class="gm-boat${ shad
 function lockedRow( s ) {
 
 	const u = s.unlock, id = 'sportfisher', left = u.left.slice( 0, 3 ).join( ', ' ) + ( u.left.length > 3 ? `, and ${ u.left.length - 3 } more` : '' );
-	return row( id, BOATS[ id ].name, `<small>Finish your upgrades to unlock it · ${ u.done } of ${ u.of }</small><div class="gm-boat-progress"><span style="width:${ u.done / u.of * 100 }%"></span></div><small>Still to get: ${ esc( left ) }</small>`, true );
+	// ((M16) most of it's the lobster boat's, and sold only with her: so someone who's not bought her is told that first)
+	const first = s.owns( 'lobster' ) ? '' : 'The lobster boat first, for her gear. ';
+	return row( id, BOATS[ id ].name, `<small>Finish your upgrades to unlock it · ${ u.done } of ${ u.of }</small><div class="gm-boat-progress"><span style="width:${ u.done / u.of * 100 }%"></span></div><small>${ first }Still to get: ${ esc( left ) }</small>`, true );
 
 }
 
@@ -94,6 +96,16 @@ function ownRow( hud, id ) {
 	const looks = open ? `<div class="gm-boat-looks"><label>Her name, on her transom<input data-boatname="${ id }" maxlength="${ NAME_MAX }" value="${ esc( b.name || '' ) }" placeholder="${ esc( kindOf( id ) ) }" autocomplete="off" spellcheck="false"></label><label>Her paint · ${ money( F.paintJob ) } at the yard${ b.paint ? ` · now ${ paintOf( b.paint ).name.toLowerCase() }` : '' }</label><div class="gm-boat-swatches">${ swatches }</div></div>` : '';
 	const gear = gearWorth( s.upgrades, id );
 	return row( id, b.name ? `${ esc( b.name ) } <small style="display:inline">${ BOATS[ id ].name.toLowerCase() }</small>` : BOATS[ id ].name, `<small>${ bits.join( ' · ' ) }</small><small>${ keep ? `${ money( F.slip ) } slip, ${ money( F.upkeep ) } upkeep a month` : 'Nothing to keep' }${ gear ? ` · ${ money( gear ) } of gear on her` : '' }</small>`, false, `<div class="gm-boat-acts">${ acts.join( '' ) }</div>${ looks }` );
+
+}
+
+// (M16) what Marta says at her counter, as your boats and your money stand: she brings up what's next; otherwise null, and
+// she says what she always does. Those in a kayak hear about the console, then those with the gear about the sportfisher
+export function martaSays( s ) {
+
+	if ( s.unlocked( 'sportfisher' ) && ! s.owns( 'sportfisher' ) ) return 'You\'ve earned her. The sportfisher\'s on my list, if you\'ve the money';
+	if ( s.owns( 'console' ) || s.owns( 'lobster' ) || s.owns( 'sportfisher' ) ) return null;
+	return s.money >= FLEET.console.price ? 'You could have the console now. She\'s on my list' : 'That kayak\'ll do for the flats. When you\'ve saved for an engine, the console\'s on my list';
 
 }
 

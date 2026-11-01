@@ -36,7 +36,7 @@ export const FOUND_M = 3000;
 export const ISLE = { x: 30, z: - 320 };
 // how fast she drifts with nobody at her helm, of the wind's speed, and how she lies: measured from her own physics
 // (BoatController, in the CPU's sea: 4.9 to 5.5% from a fair day to a gale, beam-on to it). As real small boats do
-export const DRIFT = 0.05;
+export const DRIFT = 0.066;
 export const AGROUND = 1; // m of water: she's touching (her draught)
 // gone less than this (real ms), you've not been away: a reload, a dropped connection
 export const BACK_MS = 5 * 60e3;

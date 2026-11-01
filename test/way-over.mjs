@@ -21,6 +21,14 @@ import { FishCamp, CAMP } from '../src/game/FishCamp.js';
 import { GameState } from '../src/game/GameState.js';
 import { Game } from '../src/game/Game.js';
 import { useGroundBounce, SAND } from '../src/materials/GroundBounce.js';
+// (M16: a new game starts in the kayak; what's tested here is a game in the lobster boat)
+const lobsterStart = ( st ) => {
+
+	st.fleet = { lobster: st.fleet.kayak };
+	st.boat = 'lobster';
+	return st;
+
+};
 
 let failed = 0;
 const check = ( ok, what ) => {
@@ -135,7 +143,7 @@ for ( const file of [ 'island.bin', 'island-1024.bin' ] ) {
 	const vendor = { kind: 'camp', open: true };
 	const terms = Game.prototype.saleTerms.call( { orders: [ { id: 1, who: 'joe', species: 'snapper', max: 9 } ], tradeDay: 4, weekTerms: () => ( { species: 'snapper', left: 50 } ) }, vendor );
 	check( terms.who === 'camp' && terms.rate === CAMP.rate && ! terms.week && ! terms.orders, `Pearl buys at ${ Math.round( CAMP.rate * 100 ) }% of Joe's price, no list, no week's order` );
-	const st = new GameState( null );
+	const st = lobsterStart( new GameState( null ) );
 	st.inventory = [ { id: 1, species: 'snapper', value: 40, kg: 2 }, { id: 2, species: 'jack', value: 15, kg: 1 } ];
 	const q = st.quote( null, terms );
 	check( q.total === Math.round( 40 * CAMP.rate ) + Math.round( 15 * CAMP.rate ) && q.count === 2, `two fish Joe would give $55 for: $${ q.total } at the camp` );
