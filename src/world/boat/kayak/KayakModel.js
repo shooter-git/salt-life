@@ -14,6 +14,7 @@ const _mid = new Vector3(), _dir = new Vector3(), _up = new Vector3(), _z = new 
 const _l = new Vector3(), _r = new Vector3(), _w = new Vector3(), _v = new Vector3(), _fwd = new Vector3();
 const _breaker = { n: 0, H: 0, b: - 9, dx: 0, dz: 1 };
 const GRACE = 6; // s
+const _seat = { left: null, right: null, twist: 0, lean: 0 };
 
 const app_ui = ( game ) => ( game.app.ui && game.app.ui.ui ? game.app.ui.ui.root : null );
 
@@ -34,7 +35,9 @@ export class KayakModel extends Vessel {
 		const L = this.lines = new KayakLines();
 		this.handling = KAYAK_HANDLING;
 		this.seated = true;
+		this.lowCopy = [ 'boat-hull', 'boat-paddle' ];
 		this.body = new Group();
+		this.body.name = 'kayak-body';
 		this.group.add( this.body );
 
 		const { geometry, deck } = kayakBody( L );
@@ -131,6 +134,25 @@ export class KayakModel extends Vessel {
 			if ( this.righting && this._roll === 0 ) this.righting = this.capsized = false;
 
 		}
+
+	}
+
+	// (together/) what the others are told of her: the stroke, and whether she's over
+	get sent() {
+
+		return [ ...this.stroke.wire, this.capsized ? 1 : 0 ];
+
+	}
+
+	// (together/) a copy of her posed from that: its paddle and its turn over. Returns the seat for whoever's in it (null:
+	// nobody's sitting in her, she's over)
+	poseCopy( copy, w ) {
+
+		this.stroke.wire = w;
+		const paddle = copy.getObjectByName( 'boat-paddle' ), body = copy.getObjectByName( 'kayak-body' );
+		if ( paddle ) this.posePaddle( paddle );
+		if ( body ) body.rotation.z += ( ( w[ 4 ] ? Math.PI : 0 ) - body.rotation.z ) * 0.1;
+		return w[ 4 ] ? null : this.seatFor( copy );
 
 	}
 
@@ -379,9 +401,10 @@ export class KayakModel extends Vessel {
 				if ( ! gltf || this._gone ) return;
 				if ( ! this.figure ) {
 
+					// (in the scene, not in her group: the others' copies of her are clones of that: together/BoatCopies)
 					this.figure = new Avatar( { id: 'me', name: '' } );
-					this.figure.group.position.copy( this.seat );
-					this.body.add( this.figure.group );
+					this._scene = app.scene;
+					app.scene.add( this.figure.group );
 
 				}
 
@@ -397,20 +420,33 @@ export class KayakModel extends Vessel {
 		if ( ! F ) return;
 		F.group.visible = true;
 		const st = this.stroke, own = p.camMode === 'first' || p.handsFull || p.busy;
-		st.pose( _mid, _dir );
-		const held = st.park < 0.5;
+		ctl.toWorld( this.seat, F.group.position );
+		F.group.quaternion.copy( ctl.quaternion );
+		F.pose( { mode: 'helm', speed: 0, seat: this.seatFor( this.group ) }, dt );
+		const head = F.seatBones && F.seatBones.head;
+		if ( head ) head.scale.setScalar( own ? 0.001 : 1 );
+
+	}
+
+	// where someone sat in her holds the paddle, for Avatar.pose's seat. boat: her group, or a copy's
+	seatFor( boat ) {
+
+		const st = this.stroke, held = st.park < 0.5;
 		if ( held ) {
 
+			st.pose( _mid, _dir );
 			st.hands( _r, _l, _mid, _dir );
-			this.group.updateMatrixWorld( true );
-			this.body.localToWorld( _r );
-			this.body.localToWorld( _l );
+			boat.updateMatrixWorld( true );
+			boat.localToWorld( _r );
+			boat.localToWorld( _l );
 
 		}
 
-		F.pose( { mode: 'helm', speed: 0, seat: { left: held ? _l : null, right: held ? _r : null, twist: held ? - st.swing * 0.55 : 0, lean: 0.06 + 0.16 * ( held ? 1 - st.rest : 0 ) } }, dt );
-		const head = F.seatBones && F.seatBones.head;
-		if ( head ) head.scale.setScalar( own ? 0.001 : 1 );
+		_seat.left = held ? _l : null;
+		_seat.right = held ? _r : null;
+		_seat.twist = held ? - st.swing * 0.55 : 0;
+		_seat.lean = 0.06 + 0.16 * ( held ? 1 - st.rest : 0 );
+		return _seat;
 
 	}
 
@@ -508,7 +544,7 @@ export class KayakModel extends Vessel {
 		this._gone = true;
 		if ( this.figure ) {
 
-			this.body.remove( this.figure.group );
+			this.figure.group.removeFromParent();
 			this.figure.dispose();
 			this.figure = null;
 
