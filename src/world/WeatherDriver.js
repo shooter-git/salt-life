@@ -90,8 +90,9 @@ export function seaBox( surge, surf, reach, out = [ 0, 0 ] ) {
 	return out;
 
 }
-// (M13) m/s: the sea streaked with blown foam from a storm's wind (Beaufort 10), all of it in a hurricane's
-const SPUME = [ 24.5, 34 ];
+// (M13) m/s: the sea streaked with blown foam, all of it in a hurricane's wind; (M16) from a near gale's (the Beaufort
+// scale's force 7: "white foam from breaking waves begins to be blown in streaks", force 8: "well marked streaks")
+const SPUME = [ 14, 34 ];
 const smoothstep = ( a, b, x ) => {
 
 	const t = Math.min( 1, Math.max( 0, ( x - a ) / ( b - a ) ) );
