@@ -181,6 +181,18 @@ export class ConsoleModel extends Vessel {
 
 	}
 
+	// (M16) a copy of her on someone else's game, with the engines her owner has. A low tier's copy has no gear. Her rigging
+	// hoses stay as the copy's were: they share one geometry among all her copies
+	fitCopy( group, { twin } ) {
+
+		const a = group.getObjectByName( 'boat-outboard-tilt' ), b = group.getObjectByName( 'boat-outboard2-tilt' );
+		if ( ! a || ! b ) return;
+		a.position.x = twin ? MOUNT.twinX : 0;
+		b.position.x = - MOUNT.twinX;
+		b.visible = twin;
+
+	}
+
 	_applyFit() {
 
 		const on = {
