@@ -1,5 +1,5 @@
 import { CircleGeometry, Matrix4, PlaneGeometry, Vector3 } from '../../../engine/index.js';
-import { gridSurface, loft, orientTowards, slab, rod, tube, cylinder, sphere, lathe, torus, mat4, alignY, auxVertices, fanCap } from '../GeoKit.js';
+import { gridSurface, orientTowards, slab, rod, tube, cylinder, sphere, lathe, torus, mat4, prepare, mergePrepared } from '../GeoKit.js';
 import { lerp, sstep } from '../HullLines.js';
 import { atlasUV } from '../Instruments.js';
 import { COMPASS_CARD } from '../Wheelhouse.js';
@@ -183,6 +183,24 @@ function toAtlas( geo, name ) {
 	const [ u0, v0, u1, v1 ] = atlasUV( name ), uv = geo.attributes.uv;
 	for ( let i = 0; i < uv.count; i ++ ) uv.setXY( i, u0 + ( u1 - u0 ) * uv.getX( i ), v0 + ( v1 - v0 ) * uv.getY( i ) );
 	return geo;
+
+}
+
+// her wheel, a destroyer wheel: a black rim on three steel spokes. It turns about its own +Z
+export function wheelOf( q ) {
+
+	const rad = q.low ? 6 : 10, rim = prepare( torus( 0.2, 0.012, q.low ? 5 : 7, q.low ? 18 : 36 ), BLACK ), list = [ rim ];
+	for ( let k = 0; k < 3; k ++ ) {
+
+		const a = k * Math.PI * 2 / 3 + Math.PI / 2;
+		list.push( prepare( rod( V( 0, 0, 0 ), V( Math.cos( a ) * 0.2, Math.sin( a ) * 0.2, 0.02 ), 0.009, 5 ), STEEL ) );
+
+	}
+
+	const hub = cylinder( 0.035, 0.04, 0.05, rad );
+	hub.rotateX( Math.PI / 2 );
+	list.push( prepare( hub, STEEL ) );
+	return mergePrepared( list );
 
 }
 

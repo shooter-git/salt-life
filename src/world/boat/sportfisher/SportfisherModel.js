@@ -1,16 +1,16 @@
 import { BufferGeometry, Float32BufferAttribute, MathUtils, Matrix4, Mesh, Object3D, Quaternion, Vector3 } from '../../../engine/index.js';
-import { GeoKit, prepare, rod, cylinder, box } from '../GeoKit.js';
+import { GeoKit, rod, cylinder, box } from '../GeoKit.js';
 import { Vessel } from '../Vessel.js';
 import { propellerAndRudder } from '../Handling.js';
 import { propellerGeometry, rudderGeometry, RUDDER } from '../Running.js';
-import { wheelGeometry, throttleGeometry, radarArrayGeometry, compassCardGeometry } from '../Wheelhouse.js';
+import { throttleGeometry, radarArrayGeometry, compassCardGeometry } from '../Wheelhouse.js';
 import { LANDS } from '../../../fx/Drips.js';
 import { VARIATION } from '../../../game/Chart.js';
 import { SportfisherLines, SF } from './SportfisherLines.js';
 import { SportfisherMaterials } from './SportfisherMaterials.js';
 import { buildHull, skegVolume, V, STEEL, CHAIR_Z, deckY } from './SportfisherHull.js';
 import { buildHouse, buildCabin } from './SportfisherHouse.js';
-import { buildBridge, buildTower, riggerGeometry, riggerTip, HELM, TOWER, RIGGER, bridgeX } from './SportfisherBridge.js';
+import { buildBridge, buildTower, riggerGeometry, riggerTip, wheelOf, HELM, TOWER, RIGGER, bridgeX } from './SportfisherBridge.js';
 import { buildFloors, buildColliders, buildLadders, soleAt, keepOnDeck } from './SportfisherDecks.js';
 import { LadderClimb } from './LadderClimb.js';
 import { SEATS } from './seats.data.js';
@@ -168,7 +168,7 @@ export class SportfisherModel extends Vessel {
 		this.wheelPivot.position.copy( parts.wheelCenter );
 		this.wheelPivot.quaternion.setFromUnitVectors( new Vector3( 0, 0, 1 ), parts.wheelAxis );
 		this.group.add( this.wheelPivot );
-		this.wheelMesh = addPart( 'wheel', wheelGeometry(), m.fittings, new Vector3(), this.wheelPivot );
+		this.wheelMesh = addPart( 'wheel', wheelOf( q ), m.fittings, new Vector3(), this.wheelPivot );
 		if ( ! low ) this.throttleMesh = addPart( 'throttle', throttleGeometry(), m.fittings, parts.throttlePivot );
 		this.radarMesh = addPart( 'radar', radarArrayGeometry(), m.fittings, parts.radarPivot );
 		this.radarMesh.scale.setScalar( 1.1 );

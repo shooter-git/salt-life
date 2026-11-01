@@ -26,6 +26,9 @@ export class SportfisherMaterials extends BoatMaterials {
 		this._fillGelcoat();
 		this.cabin = this._createCabin();
 		this._oneWayGlass();
+		// (three shares a program between materials whose onBeforeCompile reads the same, and BoatMaterials' extend reads the same
+		// for every one: her cabin came out as her gelcoat, unlit and the sun on it)
+		for ( const k of [ 'hull', 'gelcoat', 'cabin', 'glass', 'glow' ] ) this[ k ].customProgramCacheKey = () => 'sportfisher-' + k;
 
 	}
 
