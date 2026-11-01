@@ -212,6 +212,9 @@ const ENGINES = {
 	sportfisher: { starter: 'diesels_start', idle: 'diesels_idle', run: 'diesels_run', fade: [ 0.18, 0.42 ], db: [ - 32, - 23 ], rate: [ 0.74, 0.5 ], lp: [ 600, 4200 ] },
 	kayak: null,
 };
+// (M16) an outboard going by (passingOutboard): her recording, m she's heard to, m where she's at its level, its level (LUFS) at idle (a
+// flat-out one's 6 dB more), its rate at no throttle and what full adds
+const PASSING = { bank: 'outboard_run', range: 700, ref: 12, db: - 27, rate: [ 0.7, 0.45 ] };
 // which of them a boat has: the console's two outboards are her own sound
 export const engineOf = ( id, twin ) => id === 'console' && twin ? 'twin' : id;
 const ENGINE_BEDS = [ 'boat_engine', 'outboard_idle', 'outboard_run', 'twin_idle', 'twin_run', 'diesels_idle', 'diesels_run' ];
@@ -620,6 +623,57 @@ export class SoundScape {
 	engineStop() {
 
 		this._engineOn = false;
+
+	}
+
+	// (M16) an outboard going by that isn't the boat you hear (Pearl's: game/PearlsBoat.sound -> { x, y, z, speed, throttle }, or
+	// null): the console's recording, at her, one voice, loaded and sounding only within PASSING.range
+	passingOutboard( o ) {
+
+		if ( ! this.enabled || ! this.ctx ) return;
+		const e = this.env, now = this.ctx.currentTime, near = !! o && Math.hypot( o.x - e.lx, o.y - e.ly, o.z - e.lz ) < PASSING.range;
+		let v = this._passing;
+		if ( ! v ) {
+
+			if ( ! near || this._playing() >= this.maxVoices ) return;
+			const buf = this._want( PASSING.bank );
+			if ( ! buf ) return;
+			const c = this.ctx, src = c.createBufferSource(), gain = c.createGain(), air = c.createBiquadFilter(), pan = this._panner( this.above, PASSING.ref, 1 );
+			src.buffer = buf;
+			src.loop = true;
+			gain.gain.value = 0;
+			air.type = 'lowpass';
+			src.connect( gain ).connect( air ).connect( pan );
+			src.start( now + 0.02, Math.random() * buf.duration );
+			v = this._passing = { src, gain, air, pan };
+
+		}
+
+		if ( ! near ) {
+
+			// (she's gone out of hearing: at nothing by then)
+			try {
+
+				v.src.stop();
+
+			} catch ( err ) { /* already stopped */ }
+
+			v.gain.disconnect();
+			v.air.disconnect();
+			v.pan.disconnect();
+			this._passing = null;
+			return;
+
+		}
+
+		const d = Math.hypot( o.x - e.lx, o.y - e.ly, o.z - e.lz );
+		v.pan.positionX.value = o.x;
+		v.pan.positionY.value = o.y + 0.8;
+		v.pan.positionZ.value = o.z;
+		v.air.frequency.value = clamp( 18000 / ( 1 + d / 45 ), 1500, 18000 );
+		v.src.playbackRate.value = PASSING.rate[ 0 ] + PASSING.rate[ 1 ] * o.throttle;
+		// (dying away at the edge of hearing, so it stops at nothing)
+		this._ramp( v.gain.gain, dB( PASSING.db + 6 * o.throttle ) / dB( BANK[ PASSING.bank ].lufs ) * ( 1 - smooth( PASSING.range * 0.75, PASSING.range, d ) ), 0.4 );
 
 	}
 
@@ -2330,7 +2384,7 @@ export class SoundScape {
 
 	_playing() {
 
-		let n = this._beds.size + this._fading;
+		let n = this._beds.size + this._fading + ( this._passing ? 1 : 0 );
 		for ( const k in this._voices ) n += this._voices[ k ].length;
 		return n;
 

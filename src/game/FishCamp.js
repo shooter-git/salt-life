@@ -6,7 +6,7 @@ import { stonePart } from '../world/debris/DebrisShapes.js';
 import { mulberry32 } from '../util/Noise.js';
 import { Vendor } from './Vendor.js';
 import { paintedBoard } from './Signpost.js';
-import { PearlsBoat } from './PearlsBoat.js';
+import { PearlsBoat, HAND } from './PearlsBoat.js';
 import { CampLights } from './CampLights.js';
 import { BOAT, lightsAt, lightsOn } from './PearlsDay.js';
 
@@ -91,6 +91,7 @@ export class FishCamp {
 		// (your boat, in the berth she'd come in to: stopped there, not passing)
 		const yours = b && ! ( b.driven && b.speed > 1.5 ) ? b.position : null;
 		this.boat.update( dt, app.camera, s.timeOfDay, s.day, pick, since, yours, hidden );
+		if ( app.loadPerson ) this.boat.crew( dt, app.camera, ( url ) => app.loadPerson( url, HAND.clips ) );
 		this.lights.update( dt, app.camera, s.timeOfDay, s.day, pick, since, app.sky ? app.sky.visibility : 1, app.renderer ? app.renderer.domElement.height : 720, hidden );
 
 	}

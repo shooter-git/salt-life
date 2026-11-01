@@ -6,7 +6,7 @@
 //
 //   node test/north-pearl.mjs
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import * as THREE from '../src/engine/index.js';
 import { TerrainData } from '../src/world/TerrainData.js';
 import { decodeIsland } from '../src/world/terrain/IslandDecode.js';
@@ -21,8 +21,8 @@ import { G } from '../src/core/Globals.js';
 import { damageAt, pieceState, WHOLE, GONE, TARP, NEW } from '../src/game/StormDamage.js';
 import { ROOF_HOLES } from '../src/world/village/VillageMaterials.js';
 import { hurricaneNews, islandTime, lastHurricane } from '../src/game/Weather.js';
-import { CAN, CAN_PAYS, NO_PEARL, PEARL_TOW, canFee, canJob, deliverCan, fuelOf, northSide, pearlCall, pearlFee, pearlJob, towToPearl } from '../src/game/Help.js';
-import { FUEL_PRICE, TOW, towFee, towTime } from '../src/game/Gear.js';
+import { CAN, CAN_PAYS, NO_PEARL, PEARL_TOW, canFee, canJob, canPays, deliverCan, fuelOf, northSide, pearlCall, pearlFee, pearlJob, towToPearl } from '../src/game/Help.js';
+import { FUEL_PRICE, TOW, towFee, towTime, fuelPrice as gasPrice } from '../src/game/Gear.js';
 
 let failed = 0;
 const check = ( ok, what ) => {
@@ -308,6 +308,9 @@ const terrains = [ 'island-1024.bin', 'island.bin' ].map( ( f ) => [ f, new Terr
 	check( CAN_PAYS > 1500 && CAN_PAYS < 2500 && Math.abs( canFee( CAN_PAYS ) - towFee( CAN_PAYS ) ) < 1.5, `they cross ${ ( CAN_PAYS / 1000 ).toFixed( 1 ) } km off` );
 	// (half the boat hours: out and back at speed against out at speed and back in tow)
 	check( Math.abs( 2 / TOW.out / ( towTime( 1 ) ) - 0.5 ) < 1e-6 && CAN.per100m === TOW.per100m / 2, 'the can at her tow\'s rate by the hour: half the boat\'s time' );
+	// (a gasoline boat's can at gasoline's price, at her own crossing)
+	check( canFee( 1000, 'console' ) > canFee( 1000, 'lobster' ) && canFee( 1000, 'console' ) === Math.round( CAN.callOut + CAN.per100m * 10 + CAN.litres * gasPrice( 'console' ) ), `a console's can at gasoline's price: $${ canFee( 1000, 'console' ) } against diesel's $${ canFee( 1000, 'lobster' ) }` );
+	check( canPays( 'console' ) > canPays( 'lobster' ) && canPays( 'lobster' ) === CAN_PAYS, `and it pays a little further off: ${ ( canPays( 'console' ) / 1000 ).toFixed( 2 ) } km` );
 	check( fuelOf( 'kayak' ) === null && fuelOf( 'console' ) === 'gasoline' && fuelOf( 'lobster' ) === 'diesel' && fuelOf( 'sportfisher' ) === 'diesel', 'each boat what she burns: a kayak none, the console gasoline' );
 
 }
@@ -421,6 +424,17 @@ const terrains = [ 'island-1024.bin', 'island.bin' ].map( ( f ) => [ f, new Terr
 	r.pick = 2;
 	r.act();
 	check( r.call && r.call.who === 'pearl' && /To her jetty/.test( r.panel.innerHTML ), 'Pearl answers on her row' );
+	{
+
+		// (past the set's reach: static, as Marta's)
+		const reach = state.stats.vhfM;
+		state.stats.vhfM = 500;
+		const out = pearlCall( game );
+		check( ! out.can && /static/.test( out.say ) && /past your set's reach/.test( out.say ), `past her set's reach Pearl's no answer: "${ out.say }"` );
+		state.stats.vhfM = reach;
+
+	}
+
 	r.hangUp();
 	check( ! r.call && r.pick === 2, 'and hanging up you\'re back on it' );
 	r.pick = 2;
@@ -440,6 +454,38 @@ const terrains = [ 'island-1024.bin', 'island.bin' ].map( ( f ) => [ f, new Terr
 	r.callMarta();
 	check( r.call.can && ! r.call.drop && ! /Bring a can/.test( r.panel.innerHTML ), 'in a kayak, no can' );
 	r.close();
+
+}
+
+// ---- her man at the tiller: a Rocketbox man who's on the island already, under way and near, and no one else
+{
+
+	const { PearlsBoat: P, HAND } = await import( '../src/game/PearlsBoat.js' );
+	check( HAND.url.includes( 'player-m2' ) && existsSync( new URL( '../public/' + HAND.url, import.meta.url ) ), 'one of the islanders\' own models: nothing new to download' );
+	let asked = 0;
+	const updates = [], hand = { group: new THREE.Group(), play( n ) { this.playing = n; }, update( dt ) { updates.push( dt ); } };
+	const load = async () => { asked ++; return hand; };
+	const b = Object.create( P.prototype );
+	b.mesh = new THREE.Group();
+	b.mesh.visible = true;
+	b.kind = 'alongside';
+	const cam = { position: new THREE.Vector3( 10, 0, 0 ) };
+	b.crew( 0.1, cam, load );
+	check( asked === 0, 'alongside there\'s no one aboard, and nothing\'s loaded' );
+	b.kind = 'going';
+	cam.position.set( 9999, 0, 0 );
+	b.crew( 0.1, cam, load );
+	check( asked === 0, 'nor while she\'s too far off to see him' );
+	cam.position.set( 10, 0, 0 );
+	b.crew( 0.1, cam, load );
+	b.crew( 0.1, cam, load );
+	await new Promise( ( r ) => setTimeout( r, 0 ) );
+	check( asked === 1 && b.hand === hand && hand.group.parent === b.mesh && hand.playing === HAND.clip, 'seen under way he\'s loaded, once, at her tiller' );
+	b.crew( 0.1, cam, load );
+	check( hand.group.visible && updates.length === 1, 'and moves' );
+	b.kind = 'alongside';
+	b.crew( 0.1, cam, load );
+	check( ! hand.group.visible && updates.length === 1, 'and she\'s in: he\'s ashore' );
 
 }
 
