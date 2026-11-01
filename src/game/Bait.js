@@ -37,7 +37,7 @@ export const BAITS = {
 	chum: { name: 'Chum', short: 'chum', live: false, speed: 1, small: 1, skew: 1, steal: 0, chum: true, price: 15, per: 1, likes: {} },
 	jig: { name: 'Jig', short: 'jigs', live: false, speed: 0.85, small: 0.5, skew: 0.8, steal: 0, lure: true, level: 1, sinks: true,
 		likes: { jack: 2.2, tuna: 2, yellowfin: 2, cuberaSnapper: 1.8, blackGrouper: 1.6, muttonSnapper: 1.6, barracuda: 1.4 } },
-	plug: { name: 'Plug', short: 'plugs', live: false, speed: 0.9, small: 0.3, skew: 0.75, steal: 0, lure: true, level: 2, surface: true, tow: [ 2.5, 4, 8, 11 ],
+	plug: { name: 'Plug', short: 'plugs', live: false, speed: 0.9, small: 0.3, skew: 0.75, steal: 0, lure: true, level: 2, surface: true, tow: [ 1.5, 2.5, 8, 11 ],
 		likes: { barracuda: 2.6, jack: 2.4, tarpon: 2, snook: 2.2, mahi: 1.6, wahoo: 1.4, blackGrouper: 1.2 } },
 	skirt: { name: 'Trolling skirt', short: 'skirts', live: false, speed: 0.8, small: 0.1, skew: 0.65, steal: 0, lure: true, level: 3, towed: true, tow: [ 5, 7, 16, 24 ],
 		likes: { wahoo: 2.8, mahi: 2, tuna: 2, yellowfin: 2, blueMarlin: 3, whiteMarlin: 1.6, sailfish: 1.2, barracuda: 1.4 } },

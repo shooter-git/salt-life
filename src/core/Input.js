@@ -9,7 +9,7 @@ const PAD_KEYS = {
 	0: 'Space', // A: jump / swim up
 	1: 'KeyE', // B: interact (board, helm, trade)
 	2: 'KeyR', // X: the rod (in the water: the speargun)
-	3: 'KeyV', // Y: boat camera
+	3: 'KeyV', // Y: boat camera; (M16) with the rod out, the leader
 	4: 'KeyC', // LB: crouch / dive; (M16) with the rod out, the rig
 	5: 'ShiftLeft', // RB: sprint / boost
 	8: 'KeyI', // back / view: cooler and fish log

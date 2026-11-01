@@ -695,7 +695,7 @@ export class GameHUD {
 		const room = this.game.state.roomFor( info ), where = this.game.state.upgrades.hold > 0 ? 'hold' : 'cooler';
 		if ( info.why === 'short' ) note = `<div class="gm-catch-note is-warn">Short: under ${ ( f.minCm * CARAPACE / IN ).toFixed( 0 ) } in on the gauge · back it goes, to grow${ board }.</div>`;
 		else if ( info.why === 'berried' ) note = `<div class="gm-catch-note is-warn">Berried: she's carrying eggs under her tail · back she goes${ board }.</div>`;
-		else if ( info.trophyView || info.bonus ) note = `<div class="gm-catch-note">${ trophyNote( info ) }${ board }.</div>`;
+		else if ( info.trophyView || info.bonus || info.hurt ) note = `<div class="gm-catch-note">${ trophyNote( info ) }${ board }.</div>`;
 		else if ( info.tagged ) note = `<div class="gm-catch-note">Tagged and let go alive for Marta's tag-and-release log: <b>$${ info.tagged }</b>${ board }.</div>`;
 		else if ( info.released ) note = `<div class="gm-catch-note">${ f.cr ? 'Catch and release: everyone lets one go. Measured and' : 'Protected: measured and' } let go alive${ board }.</div>`;
 		else if ( info.bag && info.bag.full ) note = `<div class="gm-catch-note is-warn">That's your ${ info.bag.max } for today, the most anyone may keep · back it goes</div>`;

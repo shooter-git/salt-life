@@ -3,10 +3,10 @@ import { Vector3 } from '../../engine/index.js';
 import { G } from '../../core/Globals.js';
 import { BAITS, BAIT_IDS, onHand } from '../Bait.js';
 import { FISH } from '../FishTable.js';
-import { rollWeight } from '../Bites.js';
+import { pickSpecies, rollWeight } from '../Bites.js';
 import { placeOf } from '../Places.js';
 import { fishLength } from '../CatchDisplay.js';
-import { atHook, baitFits, hookOf, KNOTS, leaderFor, leaderRisk, leapsOf, LEADERS, pickOnRig, RIG_IDS, RIGS, towTaste, waitOnRig } from './Presentation.js';
+import { atHook, baitFits, hookOf, KNOTS, LEADER_IDS, leaderOn, leaderRisk, leapsOf, LEADERS, pickOnRig, RIG_IDS, RIGS, towTaste, waitOnRig } from './Presentation.js';
 import { RigMesh } from './RigMesh.js';
 import { Glasses } from './Glasses.js';
 
@@ -14,8 +14,8 @@ import { Glasses } from './Glasses.js';
 // the rig that's on, and hands it the frame; what's drawn is rigs/RigMesh.
 //
 //   float, bottom   your rod in your hands, FishingRod's: the hook under a float, or on a sinker to the bottom
-//   drop            down straight on the sportfisher's electric reel, as far as 900 m of line reaches; a long wait and a
-//                   long wind back
+//   drop            down straight on the sportfisher's electric reel, as far as 900 m of line reaches or wherever you stop
+//                   it, the open blue being deeper than that: a long wait and a long wind back
 //   troll           lines let out to rods in their holders, one press each: two flat lines off the stern on any boat with
 //                   an engine, and with her outriggers two more off their tips and a shotgun up the middle. You go to the
 //                   helm and run at what the baits swim at; a strike takes the rod off in the holder, the reel screaming,
@@ -40,6 +40,11 @@ const SLICK_S = 300, SLICK_R = 45, SLICK_DRIFT = 0.03;
 export const HOLD_KG = { hand: 10, harness: 18, chair: 40 };
 const ELECTRIC = { speed: 4.5, drag: 24, spool: 900 };
 const BIG_KG = 30; // from here it's brought to the boat tired, and gaffed or wired at arm's length
+// let go with a dehooker it's over at the leader, in the water and sooner; by hand, out of the water, this share don't
+// live (a billfish: 29% against under 2% left in it, VIMS by way of Mercury: docs/m16/tackle.md)
+const DEHOOK = { landBig: 6, landSmall: 2.5, tiredBig: 0.5 }, BY_HAND_HURT = 0.29;
+const LEADER_CHIP = { mono: 'mono', fluoro: 'fluoro', wire: 'wire', heavy: '200 lb' };
+const LEADER_WORD = { mono: 'fine, and teeth go through it', fluoro: 'shy fish can\'t see it, and teeth go through it', wire: 'nothing bites through it, and shy fish keep off', heavy: 'it holds a bill and most teeth, and some shy fish keep off' };
 
 const _a = new Vector3(), _b = new Vector3(), _c = new Vector3(), _d = new Vector3(), _e = new Vector3(), _up = new Vector3( 0, 1, 0 );
 const _bend = [ new Vector3(), new Vector3(), new Vector3(), new Vector3(), new Vector3(), new Vector3() ];
@@ -165,7 +170,25 @@ export class Rigs {
 	handRig() {
 
 		const rod = this.game.rod, lure = BAITS[ this.game.hookBait ]?.lure ? this.game.hookBait : null;
-		return hookOf( rod.rig, rod.hookM, rod.depth, { lure, leader: leaderFor( this.stats.leader, rod.rig, 0, lure ) } );
+		return hookOf( rod.rig, rod.hookM, rod.depth, { lure, leader: leaderOn( this.state.leaderPick, this.stats.leader, rod.rig, 0, lure ) } );
+
+	}
+
+	// the next leader you own, on any rig, and back to the sensible one
+	cycleLeader() {
+
+		const g = this.game, s = this.state, own = this.stats.leader | 0;
+		if ( ! own ) {
+
+			g.say( 'Light mono is all you have · Marta sells fluorocarbon, wire and 200 lb mono' );
+			return;
+
+		}
+
+		const picks = [ null, ...LEADER_IDS.slice( 0, own + 1 ) ], next = picks[ ( picks.indexOf( s.leaderPick ) + 1 ) % picks.length ];
+		s.pickLeader( next );
+		const rig = this.pick, now = leaderOn( next, own, rig, this.app.boatCtl.speed * KNOTS, BAITS[ s.baitPick ]?.lure ? s.baitPick : null );
+		g.toast( next ? `Leader: ${ LEADERS[ next ] } · ${ LEADER_WORD[ next ] }` : `Leader: whichever suits the rig · ${ LEADERS[ now ] } on this one`, 3000 );
 
 	}
 
@@ -212,7 +235,7 @@ export class Rigs {
 			rod.dropLine();
 			this._waiting = true;
 			g.bite = null;
-			g.toast( 'Lead away · it\'s a long way down', 2600 );
+			g.toast( 'Lead away · it\'s a long way down · stop it at the depth you want', 3000 );
 			return true;
 
 		}
@@ -247,7 +270,7 @@ export class Rigs {
 
 		}
 
-		const L = { spot: free, bait, len: 2, p: new Vector3(), tip: new Vector3(), clip: null, butt: new Vector3(), on: null, in: false, torn: 0, bend: 0 };
+		const L = { spot: free, bait, leader: s.leaderPick, len: 2, p: new Vector3(), tip: new Vector3(), clip: null, butt: new Vector3(), on: null, in: false, torn: 0, bend: 0 };
 		this._place( L );
 		L.p.copy( L.tip );
 		L.p.y = this.app.waves.heightAt( L.p.x, L.p.z );
@@ -387,7 +410,7 @@ export class Rigs {
 		}
 
 		const kg = rollWeight( species, Math.random, L.bait, h.weather, h.big );
-		L.on = { species, kg, t: 0, place: placeOf( h, L.p.x, L.p.z ), at: { x: L.p.x, z: L.p.z } };
+		L.on = { species, kg, t: 0, place: placeOf( h, L.p.x, L.p.z ), at: { x: L.p.x, z: L.p.z }, leader: h.hook.leader };
 		L.clip = null;
 		if ( this.app.audio && this.app.audio.fishSplash ) this.app.audio.fishSplash( L.p, 0.9 );
 		g.toast( `${ L.spot.name[ 0 ].toUpperCase() + L.spot.name.slice( 1 ) }! Fish on: get to the rod!`, 4200 );
@@ -398,7 +421,8 @@ export class Rigs {
 
 		const g = this.game, x = L.p.x, z = L.p.z, T = this.app.terrainData, floorM = Math.max( 0, G.seaLevel.value - T.heightAt( x, z ) );
 		const lure = BAITS[ L.bait ]?.lure ? L.bait : null;
-		return atHook( g.habitatOf( x, z, floorM ), hookOf( 'troll', 0.3, floorM, { knots, lines: this.lines.length, lure, leader: leaderFor( this.stats.leader, 'troll', knots, lure ) } ) );
+		// (a plug swims a couple of metres down; the rest skip on top)
+		return atHook( g.habitatOf( x, z, floorM ), hookOf( 'troll', lure === 'plug' ? 2 : 0.3, floorM, { knots, lines: this.lines.length, lure, leader: leaderOn( L.leader, this.stats.leader, 'troll', knots, lure ) } ) );
 
 	}
 
@@ -462,6 +486,7 @@ export class Rigs {
 		this.lines.splice( this.lines.indexOf( L ), 1 );
 		rod.lineOut = L.len;
 		this._fightOut = L.len;
+		this._fightLeader = L.on.leader;
 		g.strike();
 		this.alert = null;
 		return true;
@@ -627,8 +652,10 @@ export class Rigs {
 	fightTerms( b ) {
 
 		const g = this.game, rod = g.rod, s = this.stats, electric = rod.rig === 'drop' && s.electricReel;
-		const leader = leaderFor( s.leader, rod.rig, this.app.boatCtl.speed * KNOTS, BAITS[ g.hookBait ]?.lure ? g.hookBait : null );
-		const risk = leaderRisk( leader, b.species ), big = b.kg >= BIG_KG;
+		// (what was struck on a rod in its holder has what that line had on it)
+		const leader = this._fightLeader || leaderOn( this.state.leaderPick, s.leader, rod.rig, this.app.boatCtl.speed * KNOTS, BAITS[ g.hookBait ]?.lure ? g.hookBait : null );
+		this._fightLeader = null;
+		const risk = leaderRisk( leader, b.species ), big = b.kg >= BIG_KG, off = s.dehooker && FISH[ b.species ].protected;
 		const chair = this.inChair && !! s.chair;
 		return {
 			lineKg: s.lineKg,
@@ -643,8 +670,8 @@ export class Rigs {
 			cut: risk.cut,
 			wear: risk.wear,
 			leaps: leapsOf( b.species ),
-			landAt: big ? 3 : 1.2,
-			tired: big ? 0.3 : 1,
+			landAt: big ? ( off ? DEHOOK.landBig : 3 ) : off ? DEHOOK.landSmall : 1.2,
+			tired: big ? ( off ? DEHOOK.tiredBig : 0.3 ) : 1,
 			leader,
 		};
 
@@ -671,10 +698,25 @@ export class Rigs {
 
 	}
 
+	// one let go by hand: did it live? (A billfish, the fund's: the fund pays for one that swims off)
+	releaseHurt( id, rng = Math.random ) {
+
+		return !! FISH[ id ].release && ! this.stats.dehooker && rng() < BY_HAND_HURT;
+
+	}
+
 	why( st, f ) {
 
-		const n = LEADERS[ f.leader ] || 'leader';
-		if ( st === 'cut' ) return `Cut off! It went through the ${ n } · ${ this.stats.leader >= 2 ? 'a wire or heavy leader for that one' : 'Marta has leaders that hold' }`;
+		const n = LEADERS[ f.leader ] || 'leader', own = this.stats.leader | 0, key = this.game.keyName( 'X' );
+		if ( st === 'cut' ) {
+
+			// (teeth want the wire, and a bill wears through all but that and 200 lb mono)
+			const teeth = leaderRisk( f.leader, f.species ).cut > 0;
+			const fix = teeth ? ( own >= 2 ? `${ key } ties on the wire, on any rig` : 'Marta sells wire' ) : own >= 3 ? `${ key } ties on the 200 lb mono, on any rig` : own >= 2 ? `${ key } ties on the wire, on any rig` : 'Marta sells wire and 200 lb mono';
+			return `Cut off! It went through the ${ n } · ${ fix }`;
+
+		}
+
 		if ( st === 'spooled' ) return 'Spooled: it took every metre of your line · more line on a bigger reel, and more drag';
 		return null;
 
@@ -695,6 +737,46 @@ export class Rigs {
 		} else if ( was ) g.display.hide();
 		if ( this.leaping !== was && this.app.audio && this.app.audio.fishSplash ) this.app.audio.fishSplash( rod.bobber, Math.min( 1, 0.4 + f.kg / 60 ) );
 		if ( this.leaping !== was && this.app.spray && this.app.spray.burst ) this.app.spray.burst( rod.bobber, L );
+
+	}
+
+	// ---- a lead in the water column
+
+	// a lead on its way down: stop it here, the way it's stopped wherever the fish are. Stopped, on down again. -> it's dealt
+	// with (the press isn't a strike)
+	holdLead() {
+
+		const g = this.game, rod = g.rod;
+		if ( ( rod.rig !== 'drop' && rod.rig !== 'bottom' ) || rod.state !== 'floating' ) return false;
+		if ( this._waiting && ! rod.settled ) {
+
+			rod.stopM = rod.hookM;
+			return true;
+
+		}
+
+		if ( rod.stopM !== null && ( ! g.bite || g.bite.phase === 'wait' ) ) {
+
+			rod.stopM = null;
+			rod.settled = false;
+			this._waiting = true;
+			g.bite = null;
+			g.toast( 'On down', 1200 );
+			return true;
+
+		}
+
+		return false;
+
+	}
+
+	// the big button's word for that, on touch
+	leadLabel() {
+
+		const g = this.game, rod = g.rod;
+		if ( ( rod.rig !== 'drop' && rod.rig !== 'bottom' ) || rod.state !== 'floating' ) return null;
+		if ( this._waiting && ! rod.settled ) return 'Stop here';
+		return rod.stopM !== null && ( ! g.bite || g.bite.phase === 'wait' ) ? 'Deeper' : null;
 
 	}
 
@@ -783,8 +865,10 @@ export class Rigs {
 
 			this._waiting = false;
 			g.bite = { phase: 'wait', t: waitOnRig( g.habitat(), g.hour, Math.random, g.hookBait ) };
-			const floor = rod.depth - 0.4;
-			g.toast( rod.hookM >= floor - 0.6 ? `On the bottom · ${ Math.round( rod.hookM ) } m down` : `${ Math.round( rod.hookM ) } m down, all the line you can work · the bottom's at ${ Math.round( rod.depth ) } m`, 3200 );
+			const floor = rod.depth - 0.4, m = Math.round( rod.hookM ), h = g.habitat();
+			// (nothing that takes a bait feeds there at this hour: better said than waited for)
+			const none = pickSpecies( h, g.hour, Math.random, g.hookBait ) ? '' : ' · nothing\'s feeding at this depth now';
+			g.toast( ( rod.hookM >= floor - 0.6 ? `On the bottom · ${ m } m down` : rod.stopM !== null ? `Stopped ${ m } m down · the bottom's at ${ Math.round( rod.depth ) } m` : `${ m } m down, all the line you can work · the bottom's at ${ Math.round( rod.depth ) } m` ) + none, none ? 4600 : 3200 );
 
 		}
 
@@ -811,7 +895,7 @@ export class Rigs {
 			if ( helm ) this.alert = { key: 'E', text: `Leave the helm · fish on the ${ on.spot.name }! · ${ left } s` };
 			else this.alert = this._nearRod( on ) ? { key: 'R', text: `Take the rod · ${ on.spot.name } · ${ left } s` } : { key: ELLIPSIS, text: `Fish on the ${ on.spot.name }! Get to the rod · ${ left } s` };
 
-		} else if ( helm && this.lines.length ) this.alert = { key: 'E', text: `Leave helm   ·   ${ this._speedWord() }   ·   hold Shift to run` };
+		} else if ( helm && this.lines.length ) this.alert = { key: 'E', text: `Leave helm   ·   ${ this._speedWord() }   ·   hold ${ { touch: 'Run', gamepad: 'RB' }[ app.input.lastDevice ] || 'Shift' } to run` };
 
 		const chair = this.updateChair( inp );
 		if ( chair ) this.alert = chair;
@@ -957,7 +1041,7 @@ export class Rigs {
 		const k = ( c ) => g.keyName( c );
 		if ( rod.state === 'idle' ) {
 
-			const tail = `${ k( 'B' ) }  bait   ·   ${ k( 'C' ) }  rig   ·   R  put the rod away`;
+			const tail = `${ k( 'B' ) }  bait   ·   ${ k( 'C' ) }  rig   ·   ${ this.stats.leader > 0 ? `${ k( 'X' ) }  leader   ·   ` : '' }${ k( 'R' ) }  put the rod away`;
 			if ( BAITS[ s.baitPick ]?.chum ) return { key: 'LMB', text: `Throw the chum over the side   ·   ${ tail }` };
 			if ( this.lines.length ) {
 
@@ -976,9 +1060,9 @@ export class Rigs {
 		if ( rod.state === 'floating' && rod.rig !== 'float' && ! ( g.bite && g.bite.phase === 'take' ) ) {
 
 			if ( this.kite && ! this.kite.down && ( ! g.bite ) ) return { key: 'RMB', text: 'Kite going up · bring it in' };
-			if ( this._waiting ) return { key: 'RMB', text: `Going down · ${ Math.round( rod.hookM ) } m · reel it up` };
+			if ( this._waiting && ! rod.settled ) return { key: 'LMB', text: `Stop it here · ${ Math.round( rod.hookM ) } m down   ·   RMB  reel it up` };
 			if ( g.bite && g.bite.phase === 'nibble' ) return { key: ELLIPSIS, text: rod.rig === 'kite' ? 'The bait\'s gone nervous · wait for it' : 'The tip\'s nodding · wait for it to pull down' };
-			return { key: 'RMB', text: rod.rig === 'kite' ? 'Watching the bait · bring the kite in' : `${ Math.round( rod.hookM ) } m down · waiting for a bite · reel it up` };
+			return { key: 'RMB', text: rod.rig === 'kite' ? 'Watching the bait · bring the kite in' : `${ Math.round( rod.hookM ) } m down · waiting for a bite · reel it up${ rod.stopM !== null ? '   ·   LMB  deeper' : '' }` };
 
 		}
 
@@ -991,6 +1075,8 @@ export class Rigs {
 
 		const g = this.game, s = this.state, k = s.baitPick, rod = g.rod, b = BAITS[ k ];
 		let text = b ? ( b.lure ? b.name : `${ b.name } ×${ ( s.bait[ k ] | 0 ) + ( g.hookBait === k ? 1 : 0 ) }` ) : baitFits( this.pick, null ) ? 'Shrimp' : 'No bait for it';
+		// (the leader, once you've more than the one)
+		if ( this.stats.leader > 0 ) text += ` · ${ LEADER_CHIP[ leaderOn( s.leaderPick, this.stats.leader, this.pick, this.app.boatCtl.speed * KNOTS, b && b.lure ? k : null ) ] }`;
 		if ( rod.state === 'floating' && rod.rig !== 'float' && rod.hookM > 1 ) text += ` · ${ Math.round( rod.hookM ) } m down`;
 		if ( this.lines.length ) text += ` · ${ this.lines.length } out`;
 		return { label: RIGS[ this.pick ].name, text };
