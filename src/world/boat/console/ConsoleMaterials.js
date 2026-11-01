@@ -10,6 +10,8 @@ export const SURFACE = { plain: 0, nonSkid: 1, topsides: 2, bottom: 3, mat: 4 };
 
 const BOTTOM = new Color( 0x1c2c44 ).convertSRGBToLinear(); // (her antifouling, blue as a boat kept in clear water's is)
 
+const DECK_BOUNCE = new Color( 0.44, 0.44, 0.43 ); // (white gelcoat throwing it back: no sand's colour in it)
+
 export class ConsoleMaterials extends BoatMaterials {
 
 	constructor( lines ) {
@@ -22,7 +24,7 @@ export class ConsoleMaterials extends BoatMaterials {
 		// leaves them near black: the bounce people have, diffuse only so it puts no sheen on her)
 		for ( const m of [ this.hull, this.fittings ] ) {
 
-			useGroundBounce( m );
+			useGroundBounce( m, { sand: DECK_BOUNCE } );
 			m.userData.groundBounceOpen.value = 0.8;
 
 		}

@@ -82,10 +82,27 @@ for ( const s of scenes.length ? scenes : [ 'dock', 'run', 'deck', 'helm' ] ) {
 
 	if ( s === 'budget' ) {
 
+		// (what she adds to a frame: drawn with her and without, shadows and all)
 		const info = await p.evaluate( () => {
 
-			const a = window.__app, r = a.renderer.info;
-			return { tier: a.tier, boat: a.boat.id, boatTris: a.boat.triangleCount, meshes: Object.keys( a.boat.meshes ).length, frameCalls: r.render.calls, frameTris: r.render.triangles, programs: r.programs.length, heapMB: performance.memory ? performance.memory.usedJSHeapSize / 1048576 : null };
+			const a = window.__app, I = a.renderer.info, was = I.autoReset, near = a.nearDetail;
+			I.autoReset = false;
+			const count = () => {
+
+				I.reset();
+				a.drawWorld();
+				return [ I.render.calls, I.render.triangles ];
+
+			};
+
+			a.player.position.copy( a.boatCtl.position );
+			const on = count();
+			a.boat.group.visible = false;
+			const off = count();
+			a.boat.group.visible = true;
+			I.autoReset = was;
+			void near;
+			return { tier: a.tier, boat: a.boat.id, boatTris: a.boat.triangleCount, meshes: Object.keys( a.boat.meshes ).length, addsCalls: on[ 0 ] - off[ 0 ], addsTris: on[ 1 ] - off[ 1 ], frameCalls: on[ 0 ], frameTris: on[ 1 ], programs: I.programs.length, heapMB: performance.memory ? performance.memory.usedJSHeapSize / 1048576 : null };
 
 		} );
 		console.log( JSON.stringify( info ) );
@@ -146,10 +163,26 @@ for ( const s of scenes.length ? scenes : [ 'dock', 'run', 'deck', 'helm' ] ) {
 
 	if ( s === 'run' ) {
 
-		// off the dock and under way, flat out then at the helm's cruise
+		// out in open water (a long clear run to the east or west, away from her berth), under way at the helm's cruise
 		await p.evaluate( () => {
 
-			const a = window.__app, c = a.boatCtl, P = a.player;
+			const a = window.__app, c = a.boatCtl, P = a.player, T = a.terrainData;
+			let best = null;
+			for ( let k = 0; k < 400 && ! best; k ++ ) {
+
+				const x = ( k * 733 ) % 6000 - 3000, z = ( k * 461 ) % 6000 - 3000, yaw = k * 1.1;
+				let clear = true;
+				for ( let d = 0; d <= 1500; d += 50 ) if ( T.heightAt( x + Math.sin( yaw ) * d, z + Math.cos( yaw ) * d ) > - 12 ) clear = false;
+				if ( clear ) best = { x, z, yaw };
+
+			}
+
+			c.position.set( best.x, c.position.y, best.z );
+			c.quaternion.setFromAxisAngle( new c.position.constructor( 0, 1, 0 ), best.yaw );
+			c.velocity.set( 0, 0, 0 );
+			c.angular.set( 0, 0, 0 );
+			c.hasWater = false;
+			console.warn( 'run from ' + JSON.stringify( best ) );
 			P.boardBoat();
 			P.takeHelm();
 			c.moored = false;
@@ -205,17 +238,31 @@ for ( const s of scenes.length ? scenes : [ 'dock', 'run', 'deck', 'helm' ] ) {
 			a.player.pitch = - 0.1;
 
 		} );
-		await wait( 90000 );
+		await wait( 60000 );
+		await p.evaluate( () => {
+
+			const g = window.__app.game;
+			if ( g.soak ) g.soak.wet = 1;
+
+		} );
+		await wait( 8000 );
 		await shot( 'rain-out' );
 		console.log( JSON.stringify( await p.evaluate( () => ( { rain: 0 + ( window.__app.game.soak ? window.__app.game.soak.wet : - 1 ), level: window.__app.game._soakView?.level } ) ) ) );
 		await p.evaluate( () => {
 
 			const a = window.__app;
-			a.player.deckPos.set( 0.75, a.boat.lines.deckY, - 0.4 );
-			a.player.deckYaw = 0;
+			a.player.deckPos.set( 0.72, a.boat.lines.deckY, - 0.9 );
+			a.player.deckYaw = 0.5;
+			a.player.pitch = 0.1;
 
 		} );
-		await wait( 20000 );
+		await wait( 8000 );
+		console.log( JSON.stringify( await p.evaluate( () => {
+
+			const a = window.__app, cam = a.camera.position;
+			return { eyeY: cam.y, boatY: a.boatCtl.position.y, water: a.cameraWaterHeight, mode: a.player.mode, deck: a.player.deckPos.toArray(), cover: a.boat.covered };
+
+		} ) ) );
 		await shot( 'rain-under' );
 
 	}
