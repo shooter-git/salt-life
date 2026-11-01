@@ -90,7 +90,7 @@ ok( stallOpen( HOURS.joe, 12 ) && stallOpen( HOURS.joe, 12, 'fair' ) && stallOpe
 	const marta = new Vendor( { name: 'Marta · chandlery', kind: 'shop', position: new Vector3( 50, 0, 0 ), hours: HOURS.marta } );
 	const painted = [];
 	const g = { vendors: [ joe, marta ], signs: [ { forWeather: ( shut ) => painted.push( shut ) } ], hour: 12, weatherNow: weatherAt( 0, 'gale' ), hud: null,
-		app: { portal: null }, orders: [], tradeDay: 1, weekTerms: () => null, vendorPrompt: Game.prototype.vendorPrompt };
+		app: { portal: null }, state: { boat: 'lobster' }, orders: [], tradeDay: 1, weekTerms: () => null, vendorPrompt: Game.prototype.vendorPrompt };
 	const frame = () => Game.prototype.updateVendors.call( g, { hit: () => false }, { mode: 'boat', position: new Vector3() } );
 	const rate = ( v ) => Game.prototype.saleTerms.call( g, v ).rate;
 	frame();
