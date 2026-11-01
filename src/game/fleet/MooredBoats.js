@@ -12,6 +12,7 @@ import { BOATS } from '../../world/boat/Boats.js';
 //   moored.sync( state, spotOf )     spotOf( id ) -> { position, heading }: where she sits hauled out
 //   moored.update( dt, camera )      moored.near( x, y, z ) -> the id of one you're beside, afloat, or null
 const SEEN = 700; // m (they're small things past this)
+const FILL = 8;
 const _up = new Vector3( 0, 1, 0 ), _side = new Vector3( 1, 0, 0 ), _n = new Vector3(), _q = new Quaternion(), _yaw = new Quaternion();
 
 export class MooredBoats {
@@ -26,6 +27,21 @@ export class MooredBoats {
 		this.light = light;
 		this.material = new MeshStandardMaterial( { vertexColors: true, roughness: 0.42, metalness: 0 } );
 		this.material.name = 'mooredBoat';
+		// (their faces out of the sun: the world's shade is near black, and white paint isn't. The scene's environment, FILL
+		// times over, as the wreck and the signposts have it)
+		this._fill = ( renderer, scene ) => {
+
+			const m = this.material;
+			if ( m.envMap !== scene.environment ) {
+
+				if ( ! m.envMap !== ! scene.environment ) m.needsUpdate = true;
+				m.envMap = scene.environment;
+
+			}
+
+			m.envMapIntensity = scene.environmentIntensity * FILL;
+
+		};
 		this.boats = {}; // id -> { mesh, sign, hauled, box, stands, standsSign }
 
 	}
@@ -79,6 +95,7 @@ export class MooredBoats {
 
 					E.mesh = new Mesh( mooredGeometry( id, { paint, stats } ), this.material );
 					E.mesh.name = `moored-${ id }`;
+					E.mesh.onBeforeRender = this._fill;
 					E.mesh.castShadow = this.shadows;
 					E.mesh.receiveShadow = this.shadows;
 					this.scene.add( E.mesh );
@@ -113,6 +130,7 @@ export class MooredBoats {
 				const g = standsGeometry( id, y, ( lx, lz ) => this.terrain.heightAt( spot.position.x + lx * c + lz * s, spot.position.z - lx * s + lz * c ) );
 				E.stands = new Mesh( g, this.material );
 				E.stands.name = `stands-${ id }`;
+				E.stands.onBeforeRender = this._fill;
 				E.stands.position.copy( spot.position );
 				E.stands.quaternion.setFromAxisAngle( _up, spot.heading );
 				this.scene.add( E.stands );

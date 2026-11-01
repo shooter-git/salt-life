@@ -1010,6 +1010,26 @@
 			"author": "pnwheeler"
 		},
 		{
+			"path": "public/boats/console.webp",
+			"license": "own",
+			"title": "Boat pictures, rendered by tools/boat-pictures.mjs"
+		},
+		{
+			"path": "public/boats/kayak.webp",
+			"license": "own",
+			"title": "Boat pictures, rendered by tools/boat-pictures.mjs"
+		},
+		{
+			"path": "public/boats/lobster.webp",
+			"license": "own",
+			"title": "Boat pictures, rendered by tools/boat-pictures.mjs"
+		},
+		{
+			"path": "public/boats/sportfisher.webp",
+			"license": "own",
+			"title": "Boat pictures, rendered by tools/boat-pictures.mjs"
+		},
+		{
 			"path": "public/models/characters/joe-512.glb",
 			"license": "MIT",
 			"source": "https://github.com/microsoft/Microsoft-Rocketbox",
