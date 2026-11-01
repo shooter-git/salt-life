@@ -3,6 +3,7 @@ import { CONDITIONS, islandTime } from './Weather.js';
 import { broadcast } from './MarineForecast.js';
 import { TOW } from './Gear.js';
 import { farOff } from './Units.js';
+import { LEFT, RIGHT, OPEN_QUOTE, CLOSE_QUOTE } from '../core/Glyphs.js';
 
 // (M15) The VHF at the helm (R, the pad's X, the Radio button; on the boat's dash its set: world/boat/Wheelhouse.js,
 // its display drawn by Instruments.js from Radio.reading). Its panel has two things on it:
@@ -249,7 +250,7 @@ export class Radio {
 		if ( this.call ) {
 
 			const c = this.call;
-			list = `<p class="rd-say">“${ c.say }”</p>`;
+			list = `<p class="rd-say">${ OPEN_QUOTE }${ c.say }${ CLOSE_QUOTE }</p>`;
 			if ( c.can ) list += `<div class="gm-shop-row rd-row${ this.pick === 0 ? ' is-sel' : '' }"><span>Tow me in<small>Back at her dock, on deck</small></span><button class="gm-btn" data-go>$${ Math.min( c.job.fee, g.state.money ).toLocaleString() }</button></div>`;
 			list += `<div class="gm-shop-row rd-row${ this.pick === ( c.can ? 1 : 0 ) ? ' is-sel' : '' }"><span>${ c.can ? 'Never mind' : 'Thanks, out' }</span><button class="gm-btn is-ghost" data-back>Back</button></div>`;
 			sub = 'Channel 16';
@@ -264,7 +265,7 @@ export class Radio {
 		}
 
 		this.panel.innerHTML = `<div class="gm-head"><h2>Radio</h2><p class="gm-sub">${ sub }</p></div>${ lcd }<div class="gm-list">${ list }</div>
-			<div class="gm-foot"><span class="gm-sub">${ g.app.input.lastDevice === 'touch' ? '' : 'Pick ← →, then Enter' }</span><button class="gm-btn is-ghost" data-close>${ key( 'Close', 'R', 'X' ) }</button></div>`;
+			<div class="gm-foot"><span class="gm-sub">${ g.app.input.lastDevice === 'touch' ? '' : `Pick ${ LEFT } ${ RIGHT }, then Enter` }</span><button class="gm-btn is-ghost" data-close>${ key( 'Close', 'R', 'X' ) }</button></div>`;
 		const on = ( sel, fn ) => {
 
 			const b = this.panel.querySelector( sel );

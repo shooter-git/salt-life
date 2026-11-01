@@ -44,6 +44,7 @@ import { northReefMask } from '../world/TerrainData.js';
 import { PLACES, placeOf, placeName } from './Places.js';
 import { FINDS, lying, messageOf } from './Beachcomb.js';
 import { ordersOf, tagFor } from './Orders.js';
+import { ELLIPSIS, LEFT, RIGHT, UP } from '../core/Glyphs.js';
 
 // how long the catch card stays up unless dismissed (ms)
 const CATCH_CARD_MS = 9000;
@@ -670,14 +671,14 @@ export class Game {
 			case 'flying': return null;
 			case 'floating':
 				if ( b && b.phase === 'take' ) return { key: 'LMB', text: 'Strike now!' };
-				if ( b && b.phase === 'nibble' ) return { key: '…', text: 'Something\'s nibbling · wait until the bobber is pulled under' };
+				if ( b && b.phase === 'nibble' ) return { key: ELLIPSIS, text: 'Something\'s nibbling · wait until the bobber is pulled under' };
 				return { key: 'RMB', text: 'Waiting for a bite · reel the line in' };
 			case 'retrieving': return { key: 'RMB', text: 'Reeling in' };
 			case 'fighting': return this.fight && this.fight.tension > this.fight.band[ 1 ]
 				? { key: 'LMB', text: 'Too much tension · let go!' }
 				: { key: 'LMB', text: 'Hold to reel · let go when the tension goes red' };
 			case 'landing': return null;
-			case 'rigging': return { key: '…', text: 'Tying on a new hook and float' };
+			case 'rigging': return { key: ELLIPSIS, text: 'Tying on a new hook and float' };
 			default: return null;
 
 		}
@@ -1840,7 +1841,7 @@ export class Game {
 			case 'windup': {
 
 				const [ lo, hi ] = sweetWindow( net.gear.spreadWin );
-				if ( net.charge < lo ) return { key: 'LMB', text: 'Swing it back… let go as the ring brightens' };
+				if ( net.charge < lo ) return { key: 'LMB', text: `Swing it back${ ELLIPSIS } let go as the ring brightens` };
 				if ( net.charge <= hi ) return { key: 'LMB', text: 'Now! Let go' };
 				return { key: 'LMB', text: net.over > 0.6 ? 'Your arms are tiring · let go' : 'Past the moment · let go' };
 
@@ -1850,7 +1851,7 @@ export class Game {
 				if ( ! fp.wet ) return { key: 'LMB', text: 'Hold to draw it back in' };
 				if ( net.draw >= 1 ) return { key: 'LMB', text: this.netIn ? 'Hold to haul in · something\'s kicking in it' : 'Hold to haul it in' };
 				if ( net.pulling ) return { key: 'LMB', text: 'Drawing the brails · the lead line closes under it' };
-				if ( ! net.bottomed ) return { key: 'LMB', text: this.netIn ? 'Fish under it! Let it sink, then hold to close it' : 'Let it sink…  hold to draw it in' };
+				if ( ! net.bottomed ) return { key: 'LMB', text: this.netIn ? 'Fish under it! Let it sink, then hold to close it' : `Let it sink${ ELLIPSIS }  hold to draw it in` };
 				return { key: 'LMB', text: this.netIn ? 'Fish under it! Hold to close it and haul in' : 'On the bottom · hold to close it and haul in' };
 			default: return null;
 
@@ -1861,7 +1862,7 @@ export class Game {
 	// a key as the device in use calls it, in the prompts' text
 	keyName( k ) {
 
-		return this.app.input.lastDevice === 'gamepad' ? { N: 'D-pad ↑', B: 'D-pad ← →', R: 'X', E: 'B', W: 'Stick ↑' }[ k ] || k : k;
+		return this.app.input.lastDevice === 'gamepad' ? { N: `D-pad ${ UP }`, B: `D-pad ${ LEFT } ${ RIGHT }`, R: 'X', E: 'B', W: `Stick ${ UP }` }[ k ] || k : k;
 
 	}
 
@@ -2135,7 +2136,7 @@ export class Game {
 		this.speared = { i: hit.i, id, kg, cm, kill, tail, big: ! kill && kg > gun.gear.spearHold * 0.3, card: null, cardT: 0 };
 		const au = this.app.audio;
 		if ( au && au.spearHit ) au.spearHit( 'fish', gun.tip );
-		this.toast( kill ? 'A clean shot!' : tail ? 'Only through the tail…' : 'Fish on the shaft!', 1400 );
+		this.toast( kill ? 'A clean shot!' : tail ? `Only through the tail${ ELLIPSIS }` : 'Fish on the shaft!', 1400 );
 
 	}
 
@@ -2432,12 +2433,12 @@ export class Game {
 	lobsterPrompt() {
 
 		const p = this.app.player, a = this.lobsterAim, n = this.netted;
-		if ( n ) return n.card ? null : { key: '…', text: 'Gauging the carapace' };
-		if ( this.tools.busy ) return { key: '…', text: 'Sweeping the net' };
-		if ( ! this.submerged ) return p.blackout ? { key: '…', text: 'Catch your breath' } : { key: 'W', text: 'Look down and swim to dive   ·   R  put the lobster gear away' };
-		if ( ! a ) return { key: '…', text: 'Look under ledges and coral heads for antennae · they walk out after dark' };
-		if ( a.state === 'flip' ) return { key: '…', text: 'It shot off · let it settle, then creep up slowly' };
-		if ( a.dist > a.reach ) return { key: '…', text: a.state === 'den' ? 'Closer: reach into the den with the stick' : 'Closer: within arm\'s reach, slowly' };
+		if ( n ) return n.card ? null : { key: ELLIPSIS, text: 'Gauging the carapace' };
+		if ( this.tools.busy ) return { key: ELLIPSIS, text: 'Sweeping the net' };
+		if ( ! this.submerged ) return p.blackout ? { key: ELLIPSIS, text: 'Catch your breath' } : { key: 'W', text: 'Look down and swim to dive   ·   R  put the lobster gear away' };
+		if ( ! a ) return { key: ELLIPSIS, text: 'Look under ledges and coral heads for antennae · they walk out after dark' };
+		if ( a.state === 'flip' ) return { key: ELLIPSIS, text: 'It shot off · let it settle, then creep up slowly' };
+		if ( a.dist > a.reach ) return { key: ELLIPSIS, text: a.state === 'den' ? 'Closer: reach into the den with the stick' : 'Closer: within arm\'s reach, slowly' };
 		if ( a.state === 'den' ) return { key: 'LMB', text: 'Hold to tickle it out of its den' };
 		return { key: 'LMB', text: 'Net it!' };
 
@@ -2460,15 +2461,15 @@ export class Game {
 		switch ( gun.state ) {
 
 			case 'loaded':
-				if ( ! this.submerged ) return p.blackout ? { key: '…', text: 'Catch your breath' } : { key: 'W', text: 'Look down and swim to dive   ·   R  put the speargun away' };
-				if ( a && a.rule === 'ok' ) return a.far ? { key: '…', text: `Closer: ${ feet( a.dist ) } off, your gun reaches ${ feet( g.spearM ) }` } : { key: 'LMB', text: 'Shoot!' };
-				if ( a ) return { key: '…', text: { protected: 'Protected: let it be', notTarget: 'Not a fish anyone spears', small: 'Too small: let it grow', byHand: this.tools.owned ? 'By hand only: R for the tickle stick and net' : 'By hand only: Marta sells a tickle stick and net', shark: 'A shark: let it be' }[ a.rule ] };
+				if ( ! this.submerged ) return p.blackout ? { key: ELLIPSIS, text: 'Catch your breath' } : { key: 'W', text: 'Look down and swim to dive   ·   R  put the speargun away' };
+				if ( a && a.rule === 'ok' ) return a.far ? { key: ELLIPSIS, text: `Closer: ${ feet( a.dist ) } off, your gun reaches ${ feet( g.spearM ) }` } : { key: 'LMB', text: 'Shoot!' };
+				if ( a ) return { key: ELLIPSIS, text: { protected: 'Protected: let it be', notTarget: 'Not a fish anyone spears', small: 'Too small: let it grow', byHand: this.tools.owned ? 'By hand only: R for the tickle stick and net' : 'By hand only: Marta sells a tickle stick and net', shark: 'A shark: let it be' }[ a.rule ] };
 				return { key: 'LMB', text: 'Stalk slowly, aim at a fish and shoot   ·   Shift  kick hard' };
 			case 'empty': return { key: 'LMB', text: `Hold to load the band${ gun.bands > 1 ? 's' : '' }` };
 			case 'loading': return { key: 'LMB', text: gun.bands > 1 ? `Drawing back band ${ gun.loading + 1 } of ${ gun.bands }` : 'Drawing back the band' };
 			case 'fighting': return this.spearFight && this.spearFight.tension > this.spearFight.band[ 1 ] ? { key: 'LMB', text: 'Too much pull · let go!' } : { key: 'LMB', text: 'Hold to pull it in · let go when it runs' };
 			case 'spent':
-			case 'pulling': return { key: '…', text: this.speared ? 'Hauling it in' : 'Hauling the shaft in' };
+			case 'pulling': return { key: ELLIPSIS, text: this.speared ? 'Hauling it in' : 'Hauling the shaft in' };
 			default: return null;
 
 		}

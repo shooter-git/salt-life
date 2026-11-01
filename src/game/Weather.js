@@ -1,4 +1,5 @@
 import { FT } from './Units.js';
+import { EN_DASH } from '../core/Glyphs.js';
 
 // (Salt Life) The island's weather: what the day brings, from the island's time alone, so everyone on
 // one clock (game/IslandClock.js) has the same weather and nothing is sent. Like the wanted lists
@@ -1162,7 +1163,7 @@ export function forecast( T, ahead = 12, pick = null, since = 0 ) {
 export function surfText( amplitude ) {
 
 	const lo = Math.max( 1, Math.round( amplitude * 2 * 0.8 / FT ) ), hi = Math.max( lo + 1, Math.round( amplitude * 2 * 1.5 / FT ) );
-	return `${ lo }–${ hi } ft`;
+	return `${ lo }${ EN_DASH }${ hi } ft`;
 
 }
 

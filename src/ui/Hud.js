@@ -1,8 +1,9 @@
+import { LEFT, RIGHT, UP, DOWN } from '../core/Glyphs.js';
 // The heads-up display, for now: what you can do here (the player's prompt) and a first hint about
 // the controls. On touch screens the prompt is the action button itself (TouchControls).
 
 const KEY_NAMES = { E: 'E', Space: 'Space', V: 'V', R: 'R', N: 'N', B: 'B', I: 'I', L: 'L', LMB: 'Left mouse · F', RMB: 'Right mouse · G' };
-const PAD_NAMES = { E: 'B', Space: 'A', V: 'Y', R: 'X', N: 'D-pad ↑', B: 'D-pad ← →', I: 'Back', L: 'D-pad ↓', LMB: 'RT', RMB: 'LT' };
+const PAD_NAMES = { E: 'B', Space: 'A', V: 'Y', R: 'X', N: `D-pad ${ UP }`, B: `D-pad ${ LEFT } ${ RIGHT }`, I: 'Back', L: `D-pad ${ DOWN }`, LMB: 'RT', RMB: 'LT' };
 
 export class Hud {
 

@@ -4,6 +4,7 @@ import { CAMP } from './FishCamp.js';
 import { NAMES } from './Chart.js';
 import { feet } from './Units.js';
 import { edgeAt } from './Weather.js';
+import { LEFT, RIGHT, UP, DOWN } from '../core/Glyphs.js';
 
 // First-play guide:
 //  - an intro (3 cards) the first time the game starts, after the start overlay: the goal, the fishing
@@ -107,21 +108,21 @@ const FISHING = {
 		[ k( 'Cooler' ), 'Your cooler, fish log, island records and islander' ] ],
 	gamepad: [ [ k( 'X' ), 'Take out the rod (by the water or on the boat)' ], [ k( 'Hold', 'RT' ), 'Wind up, release to cast. Hold longer to cast farther' ],
 		[ k( 'RT' ), 'Strike when the bobber is <b>pulled under</b> (dips are only nibbles)' ], [ k( 'Hold', 'RT' ), 'Reel in. <b>Let go when the tension turns red</b>, or the line snaps' ],
-		[ k( 'LT' ), 'Reel an empty line back in' ], [ k( 'D-pad ↑' ), 'The cast net, for mullet and bait. <kbd>D-pad ← →</kbd> picks the bait for the hook' ],
+		[ k( 'LT' ), 'Reel an empty line back in' ], [ k( `D-pad ${ UP }` ), `The cast net, for mullet and bait. <kbd>D-pad ${ LEFT } ${ RIGHT }</kbd> picks the bait for the hook` ],
 		[ k( 'Back' ), 'Your cooler, fish log, island records and islander' ] ],
 };
 
 const AROUND = {
 	keyboard: [ [ k( 'W', 'A', 'S', 'D' ), 'Move, mouse to look, <kbd>Shift</kbd> to run' ], [ k( 'E' ), 'Board the boat, take the helm, talk to Joe and Marta' ],
 		[ k( 'L' ), 'Flashlight (at night). At the helm, the searchlight' ], [ k( 'H' ), 'This guide again. At the helm, hold for the horn' ],
-		[ k( '←', '→' ), 'At the helm, the radar\'s range' ], [ k( 'R' ), 'At the helm, the radio: the forecast, and Marta\'s tow' ],
+		[ k( LEFT, RIGHT ), 'At the helm, the radar\'s range' ], [ k( 'R' ), 'At the helm, the radio: the forecast, and Marta\'s tow' ],
 		[ k( 'P' ), 'A mark of your own on your chart, where you are' ],
 		[ k( 'T' ), 'The clock: hold it or rest until later (with others, once everyone agrees)' ] ],
 	touch: [ [ k( 'Left side' ), 'Drag to walk, from wherever your thumb lands' ], [ k( 'Right side' ), 'Drag to look around' ],
 		[ k( 'Gold button' ), 'Board the boat, take the helm, talk to Joe and Marta' ], [ k( 'Torch' ), 'Flashlight, after dusk. At the helm: the searchlight' ],
 		[ k( 'Horn' ), 'At the helm, hold it to sound the horn' ], [ k( 'Radio' ), 'At the helm, the forecast, and Marta\'s tow' ], [ k( 'Time' ), 'Tap the time at the top right to hold the clock or rest until later' ] ],
-	gamepad: [ [ k( 'Left stick' ), 'Move, right stick to look' ], [ k( 'B' ), 'Board the boat, take the helm, talk to Joe and Marta' ], [ k( 'D-pad ↓' ), 'Flashlight. At the helm, the searchlight' ],
-		[ k( 'D-pad ← →' ), 'At the helm, the radar\'s range' ], [ k( 'X' ), 'At the helm, the radio: the forecast, and Marta\'s tow' ],
+	gamepad: [ [ k( 'Left stick' ), 'Move, right stick to look' ], [ k( 'B' ), 'Board the boat, take the helm, talk to Joe and Marta' ], [ k( `D-pad ${ DOWN }` ), 'Flashlight. At the helm, the searchlight' ],
+		[ k( `D-pad ${ LEFT } ${ RIGHT }` ), 'At the helm, the radar\'s range' ], [ k( 'X' ), 'At the helm, the radio: the forecast, and Marta\'s tow' ],
 		[ k( 'L3' ), 'At the helm, press and hold the left stick for the horn' ], [ k( 'R3' ), 'The clock: hold it or rest until later' ] ],
 };
 
@@ -201,7 +202,7 @@ const TIPS = {
 		breath: 'Your <b>breath</b> is running out (the gauge by your money). Swim up (<kbd>A</kbd>) before you black out.',
 		netOut: 'Look at the water where you want it and <b>hold <kbd>RT</kbd></b> to swing it back. Let go <b>as the ring brightens</b> and it spins fully open. Mullet and bait fish school in the shallows, by the pier and round the boat.',
 		netSink: 'Let it <b>sink</b>: the lead line traps what\'s under it as it reaches the bottom. Then <b>hold <kbd>RT</kbd></b> to draw it closed and haul it in.',
-		bait: 'Live bait goes in your <b>bucket</b>. With the rod out, <kbd>D-pad ← →</kbd> puts it on the hook: bigger fish take it, and sooner. A mullet can be cut up for bait in the cooler (<kbd>Back</kbd>).',
+		bait: `Live bait goes in your <b>bucket</b>. With the rod out, <kbd>D-pad ${ LEFT } ${ RIGHT }</kbd> puts it on the hook: bigger fish take it, and sooner. A mullet can be cut up for bait in the cooler (<kbd>Back</kbd>).`,
 		bilge: 'There\'s <b>water in the bilge</b> (the gauge by your money). On deck, <b>hold <kbd>B</kbd></b> to bail it out before it reaches the engine. Marta sells a <b>bilge pump</b>.',
 	},
 	full: 'Your cooler is <b>full</b>. Sell to Joe, or buy a bigger hold from Marta at the chandlery.',
