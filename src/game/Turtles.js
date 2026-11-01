@@ -378,7 +378,7 @@ export function hatchingsOf( day ) {
 
 // ---- (M16) each hatchling's way: a route of k + 1 points ( x, z, t: s after the nest began to hatch ) from the nest
 // to the sea, made first at a step and thinned to the points it bends at, so that its track's a thin ribbon of k
-// lengths and it's on that track. Toward the sea's bright horizon (from the nest to where she came out), each in its
+// lengths and it's on that track. Toward the sea's bright horizon (the nearest of the water), each in its
 // own direction in a fan, wandering; none straight. The same in every game until a light draws one off (lure)
 const ROUTE_STEP = 0.35; // m
 const GAIT = 0.5; // s: its crawl's bouts and pauses, as how far ahead of or behind its route's time it runs
@@ -458,6 +458,36 @@ export function lightAt( l, x, y, z ) {
 
 }
 
+// the way to the sea's bright, low horizon from a nest: toward the nearest of the water, however she came up
+function seaFrom( x, z, ground ) {
+
+	const far = [];
+	for ( let k = - 9; k <= 9; k ++ ) {
+
+		const a = Math.PI + k * Math.PI / 18;
+		let d = 2;
+		while ( d < 60 && ground( x + Math.sin( a ) * d, z + Math.cos( a ) * d ) > 0 ) d += 0.5;
+		far.push( d );
+
+	}
+
+	let best = 1e9, at = 0;
+	for ( let k = 1; k < far.length - 1; k ++ ) {
+
+		const q = far[ k - 1 ] + far[ k ] + far[ k + 1 ];
+		if ( q < best ) {
+
+			best = q;
+			at = k - 9;
+
+		}
+
+	}
+
+	return Math.PI + at * Math.PI / 18;
+
+}
+
 export class Clutch {
 
 	// h: of hatchingsOf; plan: of its female; k: the lengths in each one's route
@@ -468,8 +498,8 @@ export class Clutch {
 		this.k = k;
 		this.count = h.count;
 		this.nest = plan.nest;
-		const [ nx, nz ] = plan.nest, [ sx, sz ] = plan.up[ 0 ];
-		this.sea = Math.atan2( sx - nx, sz - nz );
+		const [ nx, nz ] = plan.nest;
+		this.sea = seaFrom( nx, nz, ground );
 		this.start = new Float32Array( h.count );
 		this.routes = new Array( h.count );
 		this.lured = new Uint8Array( h.count );

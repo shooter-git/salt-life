@@ -190,7 +190,7 @@ const offAt = ( st, d, ang ) => [ st.x + Math.sin( st.heading + ang ) * d, st.z 
 	for ( let d = 1; d < 40 && ! h; d ++ ) h = hatchingsOf( d )[ 0 ];
 	const p = planCrawl( h.female, g );
 	const C = new Clutch( h, p, g, 11 ), D = new Clutch( h, p, g, 11 );
-	const [ nx, nz ] = p.nest, sea = Math.atan2( p.up[ 0 ][ 0 ] - nx, p.up[ 0 ][ 1 ] - nz );
+	const [ nx, nz ] = p.nest, sea = C.sea;
 	let ends = 0, bent = 0, same = 0, startsAtNest = 0, min = 9, max = - 9;
 	for ( let i = 0; i < C.count; i ++ ) {
 

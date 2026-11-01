@@ -615,7 +615,8 @@ void main() {
 		// (too small to tell apart: the band of them, darker)
 		float foot = max( fwidth( s ), fwidth( a ) );
 		float band = - 0.055 * smoothstep( 0.055, 0.03, abs( a ) );
-		shade += mix( marks, band, smoothstep( 0.01, 0.03, foot ) );
+		// (they lie over one another by the nest, a fan's closeness there: all together about as dark as a few)
+		shade += mix( marks, band, smoothstep( 0.01, 0.03, foot ) ) * clamp( s / 7.0, 0.14, 1.0 );
 	}
 	float keep = tFade * mix( 1.0, smoothstep( 0.6, 1.2, vY ), tWash ) * smoothstep( 0.02, 0.2, vY ) * ( 1.0 - smoothstep( 45.0, 80.0, vD ) );
 	gl_FragColor = vec4( vec3( mix( 0.5, shade, keep ) ), 1.0 );
