@@ -640,6 +640,8 @@ void main() {
 		let v = 0, i = 0;
 		for ( const c of clutches ) {
 
+			// (never past the buffers: a nest laid out finer on a night it had to itself)
+			if ( v + c.count * ( c.k + 1 ) * 2 + 4 > TRACK_VERTS || i + ( c.count * c.k + 1 ) * 6 > ix.length ) break;
 			c.base = v;
 			c.offset = secondsBetween( 0, epoch, c.h.hour, c.h.day );
 			for ( let n = 0; n < c.count; n ++ ) {
