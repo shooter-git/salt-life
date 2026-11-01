@@ -1,3 +1,6 @@
+import { Spread, kiteWire, lineCode, readSpread, spreadWire } from './Spread.js';
+import { cleanName } from '../game/fleet/Fleet.js';
+import { BAITS } from '../game/Bait.js';
 import { engineOf } from '../audio/SoundScape.js';
 import { berthOf } from '../game/fleet/Berths.js';
 import { Vector3, Quaternion, Matrix4, MathUtils } from '../engine/index.js';
@@ -186,6 +189,7 @@ class TheirBoat {
 }
 
 const _fw = new Vector3(), _stem = new Vector3();
+const NAME_EVERY = 50, NAME_NEAR = 40; // poses between tellings of her name; m: near enough to read it
 const NEAR_ALL = 12; // m: on a phone, how near you are before all of a copy that's here whole is drawn (aboard, or about to board)
 
 // (M16) where her rode leaves her (as BoatController's stem head)
@@ -215,6 +219,7 @@ export class Together {
 		this.session = app.portal.session;
 		this.me = app.portal.me;
 		this.limits = LIMITS[ app.tier ] || LIMITS.low;
+		this.spread = new Spread( app, this );
 		this.others = new Map(); // id -> Remote
 		this._since = Date.now(); // (when the game joined: the first lists may not have everyone)
 		this.ready = ! app.cpuGL; // (devices that draw on the CPU: once prepareLate has the shaders)
@@ -251,6 +256,8 @@ export class Together {
 		} );
 		s.on( 'catch', ( body, from ) => this._theirCatch( body, from ) );
 		s.on( 'net', ( body, from ) => this._theirThrow( body, from ) );
+		s.on( 'rod', ( body, from ) => this._rodAsked( body, from ) );
+		s.on( 'rodIs', ( body, from ) => this._rodGiven( body, from ) );
 		s.on( 'horn', ( on, from ) => this._theirHorn( on, from ) );
 		// ((M16) a distress flare: game/DaysOut.js)
 		s.on( 'flare', ( at, from ) => this.app.game && this.app.game.daysOut.theirFlare( at, this.others.get( from )?.person.name ) );
@@ -352,7 +359,7 @@ export class Together {
 		this._boatSavedAt = t;
 		this._boatAnchored = !! b.anchor;
 		const s = app.settings;
-		const r = boatRecord( { boat: app.boat.id, fit: this._fitted(), name: this.me.name, x: b.position.x, z: b.position.z, heading: b.getYaw(), anchor: b.anchor, at: t, T: islandTime( s.day, s.timeOfDay ), drift: ableOf( b.model && b.model.id ).drift * ( b.sock ? SOCK_DRIFT : 1 ) } );
+		const r = boatRecord( { boat: app.boat.id, fit: this._fitted(), boatName: app.game.state && app.game.state.fleet && app.game.state.fleet[ app.boat.id ] ? app.game.state.fleet[ app.boat.id ].name : '', name: this.me.name, x: b.position.x, z: b.position.z, heading: b.getYaw(), anchor: b.anchor, at: t, T: islandTime( s.day, s.timeOfDay ), drift: ableOf( b.model && b.model.id ).drift * ( b.sock ? SOCK_DRIFT : 1 ) } );
 		return this._saveBoats( ( cur ) => {
 
 			cur[ id ] = r;
@@ -372,11 +379,12 @@ export class Together {
 		this._keepT = 0;
 		if ( ! this.session.isHost ) return;
 		const app = this.app, s = app.settings, T = islandTime( s.day, s.timeOfDay ), n = app.weather && app.weather.news;
-		const warned = !! n && ( n.stage === 'warning' || T >= n.onset ), dock = WORLD.boatDock.position, pick = app.weatherPick(), now = Date.now();
+		const warned = !! n && ( n.stage === 'warning' || T >= n.onset ), pick = app.weatherPick(), now = Date.now();
 		const due = {};
 		for ( const [ id, r ] of Object.entries( this.boats ) ) {
 
 			if ( id === this.me.id || this.others.has( id ) || r.tow ) continue;
+			const dock = berthOf( r.b ).position; // ((M16) each boat's own)
 			// (adrift: from where she's got to)
 			const drift = r.a ? null : this._driftSpot( Object.assign( this.away.get( id ) || this._awayEntry( id ), { r } ) );
 			const next = keepBoat( r, { now, warned, rate: wearRate( weatherHere( T, pick, s.weatherSince, drift ? drift.x : r.x, drift ? drift.z : r.z ) ), seconds, dock, drift } );
@@ -451,7 +459,13 @@ export class Together {
 			const on = show.has( id ), type = isBoat( a.r && a.r.b ) ? a.r.b : 'lobster';
 			// (past what the device draws in full, her stand-in)
 			const boat = this._showBoat( a, type, a.frame, on || !! a.seen, on );
-			if ( boat ) this.copies.dress( boat, a.r && a.r.f );
+			if ( boat ) {
+
+				this.copies.dress( boat, a.r && a.r.f );
+				this.copies.named( boat, a.r && a.r.m, boat.position.distanceToSquared( app.camera.position ) < NAME_NEAR * NAME_NEAR );
+
+			}
+
 			if ( boat && boat.userData.lamps ) boat.userData.lamps.set( { underway: false, spot: false } ); // (her anchor light)
 			if ( boat && ! a.rode ) {
 
@@ -565,7 +579,7 @@ export class Together {
 		a.storyOf = a.r;
 		a.storyAt = now;
 		const depth = ( x, z ) => Math.max( 0, G.seaLevel.value - app.terrainData.heightAt( x, z ) );
-		return a.story = driftOf( a.r, T, { dock: WORLD.boatDock.position, pick: app.weatherPick(), since: s.weatherSince, depth } );
+		return a.story = driftOf( a.r, T, { dock: berthOf( a.r.b ).position, pick: app.weatherPick(), since: s.weatherSince, depth } );
 
 	}
 
@@ -1200,6 +1214,7 @@ export class Together {
 		// the islander they chose (or, from a game that doesn't say, the one from their id)
 		// (worn once they're near enough to see: update)
 		o.look = LOOKS[ b.l ] || lookOf( o.person );
+		if ( typeof b.Nm === 'string' ) o.boatName = cleanName( b.Nm );
 		const now = performance.now() / 1000;
 		o.samples.push( { time: now, body: b } );
 		if ( o.samples.length > 12 ) o.samples.shift();
@@ -1267,6 +1282,21 @@ export class Together {
 		body.Y = app.boat.id; // (M16) which boat she is
 		body.f = this._fitted(); // (and what's fitted on her, her paint)
 		if ( app.boat.seated && m === 'h' && ! p.riding ) body.kw = app.boat.sent; // (a kayak: her stroke)
+		// (M16) what's out of her: the spread, the kite, her pool of light; her name every so often
+		const rigs = app.game.rigs;
+		if ( rigs ) {
+
+			const rl = spreadWire( rigs.lines ), kt = kiteWire( rigs.kite );
+			if ( rl ) body.rl = rl;
+			if ( kt ) body.kt = kt;
+
+		}
+
+		const under = app.game.underOn;
+		if ( under > 0.01 ) body.U = r2( under );
+		this._nameN = ( ( this._nameN || 0 ) + 1 ) % NAME_EVERY;
+		const named = this._nameN === 0 && app.game.state && app.game.state.fleet && app.game.state.fleet[ app.boat.id ];
+		if ( named && named.name ) body.Nm = named.name;
 		if ( p.riding ) body.R = p.boat.owner;
 		// (M16) your job aboard (Crew.js), and at someone else's helm, the lever and the wheel
 		if ( this.crew.job === 'tower' || ( m === 'h' && p.atHelm?.upper ) ) body.J = 1; // (at the tower's helm: their job's still the helm, Crew's)
@@ -1484,6 +1514,29 @@ export class Together {
 		}
 
 		this._names();
+		this.spread.update( this.others.values() );
+
+	}
+
+	// ---- (M16) someone riding with you asks for a rod that's gone off in your holder: it's theirs, with the fish on it, while it's on
+	_rodAsked( b, from ) {
+
+		const o = this.others.get( from ), rigs = this.app.game.rigs;
+		if ( ! o || ! b || b.to !== this.me.id || ! o.cur || o.cur.ride !== this.me.id ) return;
+		const L = rigs.lines.find( ( x ) => x.on && lineCode( x.spot ) === b.c );
+		if ( ! L || this.app.game.fight ) return;
+		rigs.lines.splice( rigs.lines.indexOf( L ), 1 );
+		this.session.send( 'rodIs', { to: from, s: L.on.species, k: r2( L.on.kg ), b: L.bait, l: r2( L.len ), p: [ r2( L.p.x ), r2( L.p.y ), r2( L.p.z ) ], w: L.on.place, a: [ r2( L.on.at.x ), r2( L.on.at.z ) ], m: rigs.stats.spoolM } );
+		this.app.game.toast( `${ o.person.name } has the rod`, 2600 );
+
+	}
+
+	_rodGiven( b, from ) {
+
+		const app = this.app, p = app.player, g = app.game;
+		if ( ! b || b.to !== this.me.id || ! p.riding || p.boat.owner !== from || p.mode !== 'deck' || g.fight || ! FISH[ b.s ] ) return;
+		if ( ! Number.isFinite( b.k ) || ! Number.isFinite( b.l ) || ! Array.isArray( b.p ) || ! b.p.every( Number.isFinite ) || ! Array.isArray( b.a ) || ! b.a.every( Number.isFinite ) ) return;
+		g.rigs.takeLine( { p: new Vector3( b.p[ 0 ], b.p[ 1 ], b.p[ 2 ] ), len: b.l, bait: BAITS[ b.b ] ? b.b : null, on: { species: b.s, kg: b.k, place: b.w, at: { x: b.a[ 0 ], z: b.a[ 1 ] } } }, Number.isFinite( b.m ) ? b.m : g.rigs.stats.spoolM );
 
 	}
 
@@ -1852,6 +1905,9 @@ export class Together {
 		cur.boatId = isBoat( near.Y ) ? near.Y : 'lobster';
 		cur.fit = Number.isInteger( near.f ) ? near.f : null;
 		cur.kw = Array.isArray( near.kw ) && near.kw.length === 5 && near.kw.every( Number.isFinite ) ? near.kw : null;
+		cur.spread = readSpread( near.rl );
+		cur.kite = Array.isArray( near.kt ) && near.kt.length === 3 && near.kt.every( Number.isFinite ) ? near.kt : null;
+		cur.under = MathUtils.clamp( Number( near.U ) || 0, 0, 1 );
 		cur.twin = cur.fit !== null && !! fitStats( cur.boatId, cur.fit ).twin; // (her two outboards, for the sound)
 		cur.job = near.J === 1 ? 'tower' : near.J === 2 ? 'chair' : null;
 		cur.helm = Array.isArray( near.c ) && near.c.length === 2 && near.c.every( Number.isFinite ) ? [ MathUtils.clamp( near.c[ 0 ], - 1, 1 ), MathUtils.clamp( near.c[ 1 ], - 1, 1 ) ] : null;
@@ -1924,6 +1980,8 @@ export class Together {
 		if ( boat ) {
 
 			this.copies.dress( boat, c.fit );
+			this.copies.named( boat, o.boatName, boat.position.distanceToSquared( app.camera.position ) < NAME_NEAR * NAME_NEAR );
+			if ( boat.userData.model.copyUnderLights ) boat.userData.model.copyUnderLights( boat, c.under );
 			boat.userData.lamps.set( { underway: c.mode === 'helm' || ! c.anchored, spot: c.spot } );
 			boat.userData.floodOn.value = c.flood;
 			this._spin( boat, c.rpm, dt );

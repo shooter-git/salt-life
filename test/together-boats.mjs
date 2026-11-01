@@ -13,6 +13,8 @@ globalThis.window = globalThis.window || { devicePixelRatio: 1 };
 const { BOATS, loadBoat } = await import( '../src/world/boat/Boats.js' );
 const { BoatCopies, LOW_BOAT, SIZE, fitPaint, fitStats, fitWire, isBoat, lowMeshes, sizeOf, standInGeometry } = await import( '../src/together/BoatCopies.js' );
 const { dropView } = await import( '../src/world/boat/Vessel.js' );
+const { kiteWire, readSpread, rodOf, spreadWire } = await import( '../src/together/Spread.js' );
+const { berthOf } = await import( '../src/game/fleet/Berths.js' );
 const { AREAS } = await import( '../tools/two-players/areas.mjs' );
 const { SPARE_BERTHS, atDock, berthShare, laidAt, spareBerth } = await import( '../src/together/Berths.js' );
 const { clockFrom, footY, jobAt, perched, spotted } = await import( '../src/together/Crew.js' );
@@ -325,6 +327,27 @@ ok( fitPaint( fitWire( 'console', {}, null ) ) === null, 'no paint: as she came'
 	K.dispose();
 
 }
+
+// ---- what's out of her, on the wire: a few numbers a line, and read back
+{
+
+	const lines = [ { spot: { kind: 'flat', side: - 1 }, len: 24.4, on: null }, { spot: { kind: 'rigger', side: 1 }, len: 61.7, on: { species: 'x' } }, { spot: { kind: 'shotgun', side: 0 }, len: 90, on: null, in: true } ];
+	const rl = spreadWire( lines ), read = readSpread( rl );
+	ok( rl.length === 6 && read.length === 2 && read[ 0 ].kind === 'flat' && read[ 0 ].side === - 1 && read[ 1 ].kind === 'rigger' && read[ 1 ].side === 1 && read[ 1 ].on && ! read[ 0 ].on, `the spread: ${ JSON.stringify( rl ).length } bytes for two lines, read back, the one coming in left out` );
+	ok( readSpread( [ 1, 2 ] ) === null && readSpread( 'x' ) === null && readSpread( [ 99, 3, 0 ] ).length === 0, 'and what doesn\'t read isn\'t drawn' );
+	ok( spreadWire( [] ) === undefined && kiteWire( null ) === undefined && kiteWire( { down: true, at: new Vector3() } ) === undefined, 'nothing out: nothing sent' );
+	const sf = await loadBoat( 'sportfisher', 'low' ), at = { butt: new Vector3(), tip: new Vector3(), clip: new Vector3() };
+	rodOf( sf, { kind: 'rigger', side: 1, on: false }, at );
+	ok( at.hasClip && at.tip.y > at.butt.y, 'a rigger\'s line goes by her outrigger' );
+	rodOf( sf.walkedAs( { tower: true, outriggers: false, chair: true } ), { kind: 'rigger', side: 1, on: false }, at );
+	ok( ! at.hasClip, 'not on hers without them' );
+	ok( sf.walkedAs( { chair: true, tower: true, outriggers: true } ).chair && ! sf.walkedAs( { chair: false, tower: true, outriggers: true } ).chair, 'her chair to sit in, if she has it' );
+	sf.dispose();
+
+}
+
+// ---- each boat's own berth, for keeping and tow
+ok( berthOf( 'kayak' ).position.distanceTo( berthOf( 'lobster' ).position ) > 40 && berthOf( undefined ) === berthOf( 'lobster' ), `each boat's own berth (the kayak's ${ Math.round( berthOf( 'kayak' ).position.distanceTo( berthOf( 'lobster' ).position ) ) } m from the lobster boat's), and one that doesn't say, the lobster boat's` );
 
 // ---- every area she has has something drawn under the feet of whoever stands there, all of her on a phone as she's built for it
 {

@@ -355,6 +355,12 @@ await reads( sam.game, 'Sam at his helm by night, Robin\'s boat 400 m off' );
 const lamps = await sam.game.evaluate( `( () => { const o = ${ other }, M = o.boat.userData.model, y = o.boat.userData.lamps.points.geometry.attributes.position; let top = 0; for ( let i = 0; i < y.count; i ++ ) top = Math.max( top, y.getY( i ) ); return { model: M.id, top: +top.toFixed( 2 ), want: +M.lamps.anchor[ 1 ].toFixed( 2 ) }; } )()` );
 say( lamps.top === lamps.want, `the lamps on Robin's boat are at her own lamp heights: ${ JSON.stringify( lamps ) }` );
 
+// ---- Marta's yard: two boats hauled on the one cradle
+for ( const who of [ robin, sam ] ) await who.game.evaluate( async () => { const a = window.__app, p = a.player, b = a.boatCtl, { WORLD } = await import( '/src/world/WorldLayout.js' ); if ( p.mode === 'boat' ) p.leaveHelm(); if ( p.mode === 'deck' ) p.exitBoat( null, 1 ); b.setHauled( WORLD.boatCradle || WORLD.cradle || a.game.cradle ); } ).catch( ( e ) => console.log( '     (hauling:', e.message.slice( 0, 120 ), ')' ) );
+await frames( sam.game, 8 );
+const yard = await sam.game.evaluate( `( () => { const a = window.__app, o = ${ other }, b = o.boat; return { hauled: a.boatCtl.hauled, theirs: !! ( b && b.visible ), off: b ? +b.position.distanceTo( a.boatCtl.position ).toFixed( 2 ) : null, pose: o.cur && o.cur.boat ? +o.cur.boat.pos.distanceTo( a.boatCtl.position ).toFixed( 2 ) : null }; } )()` ).catch( ( e ) => ( { error: e.message.slice( 0, 160 ) } ) );
+console.log( '     two boats on the cradle:', JSON.stringify( yard ) );
+
 console.log( problems ? `${ problems } PROBLEM(S)` : 'no problems' );
 await browser.close();
 process.exit( problems ? 1 : 0 );

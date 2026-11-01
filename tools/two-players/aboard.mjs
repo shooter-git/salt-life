@@ -351,6 +351,73 @@ if ( ! seated ) {
 
 }
 
+// ---- what's out of her, on his game; and the rod that goes off, his to take, into her chair
+if ( ! seated ) {
+
+	const sp = await owner.game.evaluate( async () => {
+
+		const { FISH_IDS } = await import( '/src/game/FishTable.js' ), { BAIT_IDS } = await import( '/src/game/Bait.js' );
+		const a = window.__app, r = a.game.rigs, spots = r.spots(), V = a.camera.position.constructor, bait = BAIT_IDS[ 0 ];
+		const mk = ( spot, on ) => ( { spot, bait, len: 30, p: new V(), tip: new V(), clip: null, butt: new V(), on, in: false, torn: 0, bend: 0 } );
+		r.lines.length = 0;
+		for ( const s of spots ) { const L = mk( s, null ); r._place( L ); L.p.copy( L.tip ); r.lines.push( L ); }
+		// (a fish on the first, and long enough on it for two slow games)
+		const f = FISH_IDS.find( ( k ) => k === 'mahi' ) || FISH_IDS[ 0 ];
+		r.lines[ 0 ].on = { species: f, kg: 6, t: - 600, place: null, at: { x: a.boatCtl.position.x, z: a.boatCtl.position.z } };
+		r._trollT = 1e9;
+		return { lines: r.lines.length, code: spots[ 0 ].name, species: f };
+
+	} );
+	await until( guest.game, `${ other }.cur.spread && ${ other }.cur.spread.length === ${ sp.lines }`, 90000 ).catch( () => {} );
+	await frames( guest.game, 4 );
+	const seenL = await guest.game.evaluate( `( () => { const o = ${ other }, D = window.__app.together.spread.draw; return { spread: o.cur.spread, drawn: !! ( D && D.mesh !== undefined ? D.mesh.visible !== false : D ) }; } )()` );
+	say( seenL.spread && seenL.spread.length === sp.lines && seenL.drawn, `her spread on his game: ${ sp.lines } lines, one on` );
+	const butt = await guest.game.evaluate( `( async () => { const { rodOf } = await import( '/src/together/Spread.js' ); const p = window.__app.player, V = p.deckPos.constructor, at = { butt: new V(), tip: new V(), clip: new V() }, L = ${ other }.cur.spread.find( ( x ) => x.on ); rodOf( p.boat.model, L, at ); const y = p.deckGroundAt( at.butt.x * 0.8, at.butt.z + 0.5, at.butt.y ); p.deckPos.set( at.butt.x * 0.8, y, at.butt.z + 0.5 ); p.deckVel.set( 0, 0, 0 ); return at.butt.toArray(); } )()` );
+	await frames( guest.game, 3 );
+	const asked = await guest.game.evaluate( () => { const r = window.__app.game.rigs; return r.alert ? r.alert.text : null; } );
+	await press( guest, 'KeyR', 3 );
+	await until( guest.game, '!! window.__app.game.fight', 60000 ).catch( () => {} );
+	const fight = await guest.game.evaluate( () => { const a = window.__app, g = a.game, f = g.fight; return { fight: !! f, species: f && f.species, line: g.rod.lineOut, chairNear: g.rigs._seat() ? 1 : 0 }; } );
+	const left = await owner.game.evaluate( () => window.__app.game.rigs.lines.filter( ( L ) => L.on ).length );
+	say( fight.fight && left === 0, `the rod's his (R): told "${ asked }"; fighting ${ fight.species }, the owner's holder empty` );
+	if ( BOAT === 'sportfisher' && fight.fight ) {
+
+		await guest.game.evaluate( () => { const p = window.__app.player, s = p.boat.model.chair; p.deckPos.set( s.eye.x + 0.6, 0.5, s.eye.z + 0.6 ); p.deckVel.set( 0, 0, 0 ); } );
+		await frames( guest.game, 3 );
+		await press( guest, 'KeyE', 3 );
+		await frames( guest.game, 3 );
+		const c = await guest.game.evaluate( async () => { const { HOLD_KG } = await import( '/src/game/rigs/Rigs.js' ); const a = window.__app, g = a.game, f = g.fight, r = g.rigs; return { inChair: r.inChair, hold: f && f.holdKg, want: HOLD_KG.chair, terms: f ? r.fightTerms( f ).holdKg ?? null : null, y: +a.player.deckPos.y.toFixed( 2 ) }; } );
+		say( c.inChair && c.hold === c.want, `and into her chair: it holds ${ c.hold } kg, as the owner's would (${ JSON.stringify( c ) })` );
+		await until( owner.game, `${ other }.job === 'chair'`, 60000 ).catch( () => {} );
+		say( await owner.game.evaluate( `${ other }.job === 'chair'` ), 'Robin sees him in it' );
+		await guest.game.evaluate( () => { const g = window.__app.game; if ( g.rigs.inChair ) g.rigs._sit( false ); } );
+
+	}
+
+	await guest.game.evaluate( () => { const g = window.__app.game; g.cancelLine( true ); g.fight = null; } );
+	const drop = await guest.game.evaluate( () => ( { drop: window.__app.game.rigs.available( 'drop' ), troll: window.__app.game.rigs.available( 'troll' ), kite: window.__app.game.rigs.available( 'kite' ) } ) );
+	console.log( '     what\'s open to a rider:', JSON.stringify( drop ) );
+	await owner.game.evaluate( () => { const r = window.__app.game.rigs; r.clearLines(); r._trollT = null; } );
+
+	// her name on her transom, and a sportfisher's pool of light
+	await owner.game.evaluate( () => { const a = window.__app, r = a.game.state.fleet[ a.boat.id ]; if ( r ) r.name = 'Salty Dog'; } );
+	const named = await until( guest.game, `${ other }.boatName === 'Salty Dog'`, 90000 ).then( () => true, () => false );
+	await frames( guest.game, 4 );
+	const plate = await guest.game.evaluate( `( () => { const o = ${ other }, u = o.boat.userData; return { name: o.boatName, plate: !! u.plate, shown: !! ( u.plate && u.plate.visible ), transom: !! u.model.transom }; } )()` );
+	say( named && ( plate.plate || ! plate.transom ), `her name: ${ JSON.stringify( plate ) }` );
+	if ( BOAT === 'sportfisher' ) {
+
+		await owner.game.evaluate( () => { const g = window.__app.game; Object.defineProperty( g, 'underOn', { configurable: true, get: () => 0.8 } ); } );
+		await until( guest.game, `${ other }.cur.under > 0.5`, 60000 ).catch( () => {} );
+		await frames( guest.game, 3 );
+		const u = await guest.game.evaluate( `( () => { const m = ${ other }.boat.getObjectByName( 'boat-underGlow' ); return { glow: !! m, shown: !! m && m.visible, opacity: m ? m.material.opacity : 0 }; } )()` );
+		say( u.shown && u.opacity > 0.5, `her pool of light on his copy: ${ JSON.stringify( u ) }` );
+		await owner.game.evaluate( () => { delete window.__app.game.underOn; } );
+
+	}
+
+}
+
 const helm = await owner.game.evaluate( () => window.__helm );
 say( helm.n > 0 && helm.off === 0, `Robin stayed at her helm throughout: ${ helm.off } of ${ helm.n } of her frames off it${ helm.first ? ' ' + JSON.stringify( helm.first ) : '' }` );
 

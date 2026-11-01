@@ -6,6 +6,7 @@ import { createPropMaterial } from '../game/GameMaterials.js';
 import { releaseGeometries, releaseGeometry } from '../core/ReleaseAfterUpload.js';
 import { PAINTS, paintOf } from '../game/fleet/Fleet.js';
 import { dropView } from '../world/boat/Vessel.js';
+import { namePlate } from '../game/fleet/BoatName.js';
 
 // (M16) The others' boats, each the boat it is. A boat's meshes are made once per type (her Vessel, the template) and
 // each boat of that type drawn is a clone of it: its meshes and materials shared, no new shaders. Yours is the template
@@ -353,8 +354,14 @@ export class BoatCopies {
 		const app = this.app;
 		if ( e.template ) return e.template;
 		const t = e.template = e.model.group.clone( true );
-		const own = t.getObjectByName( 'BoatLamps' );
-		if ( own ) own.removeFromParent();
+		// (what's yours or hers alone: her lamps, her name on her transom, her pool of light)
+		for ( const name of [ 'BoatLamps', 'boat-name', 'boat-underGlowOwn' ] ) {
+
+			const own = t.getObjectByName( name );
+			if ( own ) own.removeFromParent();
+
+		}
+
 		// (on a phone, what's seen of her from a way off; all of her if she's here whole, for someone to walk on)
 		if ( app.tier === 'low' && ! e.own && ! e.full ) {
 
@@ -445,10 +452,51 @@ export class BoatCopies {
 
 	}
 
+	// her name on her transom, near enough to read
+	named( b, name, near ) {
+
+		const u = b.userData, hex = fitPaint( u.dressed | 0 );
+		const sign = name ? `${ name }|${ hex }` : '';
+		if ( near && sign !== u.plateSign ) {
+
+			u.plateSign = sign;
+			this._plateGone( u, b );
+			if ( name && u.model.transom && typeof document !== 'undefined' ) {
+
+				u.plate = namePlate( name, u.model, hex );
+				if ( u.plate ) {
+
+					b.add( u.plate );
+					if ( this.app.lightUp ) this.app.lightUp( u.plate );
+
+				}
+
+			}
+
+		}
+
+		if ( u.plate ) u.plate.visible = near;
+
+	}
+
+	_plateGone( u, b ) {
+
+		if ( ! u.plate ) return;
+		b.remove( u.plate );
+		u.plate.geometry.dispose();
+		u.plate.material.map.dispose();
+		u.plate.material.dispose();
+		u.plate = null;
+
+	}
+
 	drop( b ) {
 
 		const app = this.app, u = b.userData, e = this.types.get( u.type );
 		app.scene.remove( b );
+		this._plateGone( u, b );
+		const glow = b.getObjectByName( 'boat-underGlow' );
+		if ( glow ) glow.material.dispose();
 		u.lamps.removeLight( app.localLights );
 		u.lamps.dispose();
 		if ( u.glow ) u.glow.dispose();

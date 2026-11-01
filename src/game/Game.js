@@ -484,6 +484,10 @@ export class Game {
 
 			// ((M16) a rod's gone off in its holder, and you've taken it)
 
+		} else if ( inp.hit( 'KeyR' ) && this.app.together && this.app.together.spread.take() ) {
+
+			// ((M16) riding along: a rod that's gone off in hers, asked for)
+
 		} else if ( inp.hit( 'KeyR' ) && can && ! this.fight && ! net.busy && ! room ) {
 
 			// (Salt Life) the cast net goes away for it

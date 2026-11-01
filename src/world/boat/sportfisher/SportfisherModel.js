@@ -451,6 +451,38 @@ export class SportfisherModel extends Vessel {
 		if ( on <= 0 && ! this._glow ) return;
 		if ( ! this._glow ) {
 
+			this._glow = this._makeGlow( 'boat-underGlowOwn' );
+			this.group.add( this._glow );
+
+		}
+
+		this._glow.visible = on > 0.01;
+		this._glow.material.opacity = on;
+
+	}
+
+	// (together/) the same on a copy of her: its own mesh, her shape
+	copyUnderLights( copy, on ) {
+
+		let m = copy.getObjectByName( 'boat-underGlow' );
+		if ( on <= 0 && ! m ) return;
+		if ( ! m ) {
+
+			m = this._makeGlow( 'boat-underGlow' );
+			m.userData.ownMaterial = true;
+			copy.add( m );
+
+		}
+
+		m.visible = on > 0.01;
+		m.material.opacity = on;
+
+	}
+
+	_makeGlow( name ) {
+
+		if ( ! this._glowShape ) {
+
 			// (a dim pool, fading out smoothly: the sea's lit from under, not painted. A little above the water, so the swell
 			// doesn't cut it)
 			const N = 28, RINGS = 7, RADIUS = 13, pos = [], col = [], idx = [];
@@ -476,19 +508,18 @@ export class SportfisherModel extends Vessel {
 
 			}
 
-			const g = new BufferGeometry();
+			const g = this._glowShape = new BufferGeometry();
 			g.setAttribute( 'position', new Float32BufferAttribute( pos, 3 ) );
 			g.setAttribute( 'color', new Float32BufferAttribute( col, 3 ) );
 			g.setIndex( idx );
-			this._glow = new Mesh( g, new MeshBasicMaterial( { vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false, fog: false } ) );
-			this._glow.position.set( 0, 0.4, - this.lines.length / 2 - 1 ); // (under her cockpit's sole)
-			this._glow.renderOrder = 6;
-			this.group.add( this._glow );
 
 		}
 
-		this._glow.visible = on > 0.01;
-		this._glow.material.opacity = on;
+		const m = new Mesh( this._glowShape, new MeshBasicMaterial( { vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false, fog: false } ) );
+		m.name = name;
+		m.position.set( 0, 0.4, - this.lines.length / 2 - 1 ); // (under her cockpit's sole)
+		m.renderOrder = 6;
+		return m;
 
 	}
 
