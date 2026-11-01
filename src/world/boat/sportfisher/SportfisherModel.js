@@ -474,7 +474,7 @@ export class SportfisherModel extends Vessel {
 			g.setAttribute( 'color', new Float32BufferAttribute( col, 3 ) );
 			g.setIndex( idx );
 			this._glow = new Mesh( g, new MeshBasicMaterial( { vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false, fog: false } ) );
-			this._glow.position.set( 0, 0.6, - this.lines.length / 2 - 1 );
+			this._glow.position.set( 0, 0.4, - this.lines.length / 2 - 1 ); // (under her cockpit's sole)
 			this._glow.renderOrder = 6;
 			this.group.add( this._glow );
 

@@ -116,9 +116,24 @@ M10 meant "about a quarter in five minutes" flat out, and the true seas took tha
 
 The console's deck and the sportfisher's cockpit clear by their scuppers, so little of a breaking sea reaches the bilge, where the lobster boat's open cockpit lets it down round her engine box: her 60 L stays. The console's green water also came down, from 12 to 6 L a slam, for the same reason. The kayak has no bilge: a breaking sea knocks her, 1 rad/s, and that's a capsize. The points a sea can come aboard follow her length. Four minutes at 0.7 head to it, one run each: the console 4 seas and 208 L, the lobster boat 9 and 911 L, the sportfisher 3 and 211 L. It varies, so the seas aboard aren't a ranking.
 
+## Checked in the game
+
+A driven browser on the merged branch, low tier, the draw switched off between pictures because a frame takes seconds on this CPU:
+
+- A new game, from the cards to the kayak on foot, paddling out to 3 m of water and a first fish: a pompano in one run, a hogfish in another, kept and in the cooler, each tip as it should come. She didn't go over on the way out past the surf. One earlier run, paddled straight into the pier's piles, did.
+- A v1 save through the real store and a reload: the lobster boat with her gear, tank and wear, the kayak beside her, one tip of what's new.
+- Marta's Gear tab on all four boats, every stream's rows there, and buying from it.
+- The dry hatch: 4 fish and a capsize leave 2, or 3 with it.
+- The generator: an hour off her berth with the icemaker, 1.2 kg of ice and no fuel burned without it, 6.2 kg and 3.8 L with it; at her berth, 6.2 kg on shore power.
+- The livewell: the bite's `lively` aboard. The underwater lights: full within 8 m of her stern at night, none 60 m off, and the pool drawn.
+
 ## What isn't verified
 
-See the stream's report for this round's readings. Prices and the half-a-steady-hand figure want a real player. The GPU and phone look of the green pool are unverified.
+The prices and the half-a-steady-hand figure want a real player. The look of the green pool on a GPU or a phone: it's a CPU render, and it's at 0.6 m in the last picture and 0.4 m now, to keep it off her cockpit sole. The fish portrait on the catch card came out cut off and blocky in the low-tier run with draws skipped, which may only be the skipping. All the Spaces' complete check is the integrating session's: this stream's readings are from a dev server, which reads high.
+
+## Budget
+
+Nothing built before ready. Marta's pictures went from 15 KB to 26 KB. The pool is 364 triangles and one draw call, made the first time the lights come on, on the sportfisher only. Script memory on low in a dev server read 140 to 167 MB in driven runs, unminified, with the draw off part of the time, so it isn't comparable with the 150 MB budget: the complete check is what counts.
 
 ## Sources
 
