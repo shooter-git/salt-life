@@ -318,6 +318,8 @@ for ( const [ sound, bank ] of [ [ 'lobster', 'starter' ], [ 'console', 'outboar
 	S.s.haulerRun( false );
 	await run( S, 6, state( 'lobster', 0 ) );
 	ok( ! S.s._beds.has( 'hauler' ), 'and stopped' );
+	const work = readFileSync( new URL( '../src/game/TrapWork.js', import.meta.url ), 'utf8' );
+	ok( work.includes( 'haulerRun( true )' ) && work.includes( 'haulerRun( false )' ) && ! work.includes( 'netPull(' ), 'and the traps call for it, not the net\'s pull' );
 
 }
 
