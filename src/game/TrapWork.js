@@ -638,7 +638,7 @@ export class TrapWork {
 
 		const atRail = j && j.kind === 'haul' && ( j.phase === 'rail' || j.phase === 'stack' );
 		const stacked = aboard - ( atRail ? 1 : 0 );
-		const cam = app.camera.position, by = this.on && boat.group.position.distanceTo( cam ) < ABOARD_M;
+		const cam = app.camera.position, by = this.on && boat.group.parent && boat.group.position.distanceTo( cam ) < ABOARD_M;
 		if ( ! this.meshes && ! this._near.length && ! ( this.on && aboard ) && ! j ) return;
 		this._build();
 		const M = this.meshes, sea = G.seaLevel.value, [ , farTrap ] = REACH[ app.tier ] || REACH.high;
