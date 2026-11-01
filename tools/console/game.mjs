@@ -267,6 +267,93 @@ for ( const s of scenes.length ? scenes : [ 'dock', 'run', 'deck', 'helm' ] ) {
 
 	}
 
+	// (under the top in the rain: what paints the middle of the view, hiding each thing in turn)
+	if ( s === 'probe' ) {
+
+		const r = await p.evaluate( () => {
+
+			const a = window.__app, gl = a.renderer.getContext(), out = [];
+			a.player.deckPos.set( 0.72, a.boat.lines.deckY, - 0.9 );
+			a.player.deckYaw = 0.5;
+			const px = () => {
+
+				a.drawWorld();
+				const b = new Uint8Array( 4 );
+				gl.bindFramebuffer( gl.FRAMEBUFFER, null );
+				gl.readPixels( gl.drawingBufferWidth >> 1, gl.drawingBufferHeight >> 1, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, b );
+				return [ ...b ].slice( 0, 3 );
+
+			};
+
+			const base = px();
+			out.push( { base, cam: a.camera.position.toArray(), look: a.camera.getWorldDirection( a.camera.position.clone() ).toArray() } );
+			const tryHide = ( o, name ) => {
+
+				if ( ! o.visible ) return;
+				o.visible = false;
+				const c = px();
+				o.visible = true;
+				if ( Math.abs( c[ 0 ] - base[ 0 ] ) + Math.abs( c[ 1 ] - base[ 1 ] ) + Math.abs( c[ 2 ] - base[ 2 ] ) > 12 ) out.push( { name, c } );
+
+			};
+
+			a.scene.children.forEach( ( o, i ) => tryHide( o, o.name || o.type + i ) );
+			a.boat.group.children.forEach( ( o, i ) => tryHide( o, 'boat:' + ( o.name || o.type + i ) ) );
+			return out;
+
+		} );
+		console.log( JSON.stringify( r ) );
+		await shot( 'probe' );
+
+	}
+
+	// (planing, her wake: the frames come too slowly here to get her there, so run her ahead, with her wake)
+	if ( s === 'plane' ) {
+
+		const st = await p.evaluate( () => {
+
+			const a = window.__app, c = a.boatCtl;
+			c.driven = true;
+			c.moored = false;
+			for ( let i = 0; i < 1400; i ++ ) {
+
+				c.setInput( 1, 0, 1 / 30 );
+				c.update( 1 / 30 );
+				a.wake.update( 1 / 30 );
+
+			}
+
+			const f = c.forward( c.position.clone() );
+			return { kn: c.speed / 0.5144, rpm: c.rpm, pitch: Math.asin( f.y ) * 57.3, trim: c.outboardTrim * 57.3 };
+
+		} );
+		console.log( JSON.stringify( st ) );
+		await look( [ - 8, 4, - 17 ], [ 0, 0.8, - 3 ] );
+		await p.waitForTimeout( 2500 );
+		await p.evaluate( () => {
+
+			const a = window.__app, c = a.boatCtl;
+			for ( let i = 0; i < 120; i ++ ) {
+
+				c.setInput( 1, 0, 1 / 30 );
+				c.update( 1 / 30 );
+				a.wake.update( 1 / 30 );
+
+			}
+
+		} );
+		await shot( 'plane-astern' );
+		await look( [ 13, 2.6, 7 ], [ 0, 1, 0 ] );
+		await p.waitForTimeout( 2500 );
+		await shot( 'plane-bow' );
+		await p.evaluate( () => {
+
+			window.__look = null;
+
+		} );
+
+	}
+
 	if ( s === 'night' ) {
 
 		await p.evaluate( () => {
