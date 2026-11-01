@@ -1,3 +1,4 @@
+import { ELLIPSIS } from '../core/Glyphs.js';
 import { Matrix4, Quaternion, Vector3 } from '../engine/index.js';
 import { G } from '../core/Globals.js';
 import { FISH, CARAPACE } from './FishTable.js';
@@ -178,7 +179,7 @@ export class TrapWork {
 		if ( j ) {
 
 			if ( j.kind === 'haul' && j.phase === 'rail' ) this._offerRail( j, p, inp );
-			else if ( j.kind === 'haul' && j.phase === 'up' ) p.prompt = { key: '…', text: 'The hauler\'s bringing it up' };
+			else if ( j.kind === 'haul' && j.phase === 'up' ) p.prompt = { key: ELLIPSIS, text: 'The hauler\'s bringing it up' };
 			return;
 
 		}
@@ -203,7 +204,7 @@ export class TrapWork {
 
 		if ( best && near < GAFF_M ) {
 
-			if ( c.speed > HAUL_SPEED ) p.prompt = { key: '…', text: 'Your buoy · slow her down to gaff it' };
+			if ( c.speed > HAUL_SPEED ) p.prompt = { key: ELLIPSIS, text: 'Your buoy · slow her down to gaff it' };
 			else {
 
 				p.prompt = { key: 'E', text: `Gaff the buoy   ·   ${ NIGHT_SAID( soakOf( best, this._T() ).nights ) }` };
@@ -217,7 +218,7 @@ export class TrapWork {
 
 		if ( ! aboard ) {
 
-			if ( best && near < 40 ) p.prompt = { key: '…', text: `Your buoy's ${ feet( near ) } off · bring her alongside it, starboard side to` };
+			if ( best && near < 40 ) p.prompt = { key: ELLIPSIS, text: `Your buoy's ${ feet( near ) } off · bring her alongside it, starboard side to` };
 			return;
 
 		}
@@ -227,7 +228,7 @@ export class TrapWork {
 		const why = c.moored || c.hauled ? 'Not at the dock: take her out' : whyNot( { depth, bottom: id, speed: c.speed, dock: Math.hypot( _b.x - dock.x, _b.z - dock.z ) } );
 		if ( why ) {
 
-			p.prompt = { key: '…', text: why };
+			p.prompt = { key: ELLIPSIS, text: why };
 			return;
 
 		}
