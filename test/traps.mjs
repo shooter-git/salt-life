@@ -2,7 +2,7 @@
 // set, the soak by the nights, what comes up against real catch rates, the gauge, what a hurricane does, the save per
 // player, the buoys everyone sees, and what's drawn against its budget.
 import { readFileSync } from 'node:fs';
-import { UPGRADES, gearStats, defaultUpgrades } from '../src/game/Gear.js';
+import { UPGRADES, gearStats, defaultUpgrades, UNLOCK, unlockProgress } from '../src/game/Gear.js';
 import { GameState } from '../src/game/GameState.js';
 import { FISH } from '../src/game/FishTable.js';
 import { BOTTOMS, SOAK, WARP_M, aboardTraps, bottomAt, buoyColours, buoyOffset, buoyRecord, cleanBuoys, cleanTraps, haulOf, meanCatch, newTraps, nightsIn, ownedTraps, settle, soakOf, touchedBy, trapsTold, whyNot } from '../src/game/Traps.js';
@@ -27,8 +27,8 @@ const u = defaultUpgrades();
 u.traps = 2;
 ok( gearStats( u, 'lobster' ).traps === 4 && gearStats( u, 'console' ).traps === undefined, 'they count only aboard her' );
 ok( ownedTraps( u ) === 4, 'but they\'re yours whichever boat you\'re in' );
-const others = Object.entries( UPGRADES ).filter( ( [ , t ] ) => t.on === 'lobster' && t.unlock !== false );
-ok( others.length === 8 && others.reduce( ( n, [ , t ] ) => n + t.levels.length - 1, 0 ) === 12, 'the unlock\'s 12 of hers are still 12' );
+const hers = [ 'hold', 'fuel', 'engine', 'baitWell', 'fishFinder', 'lights', 'anchor', 'bilgePump' ].reduce( ( n, k ) => n + UNLOCK[ k ], 0 );
+ok( hers === 12 && UNLOCK.traps === undefined && unlockProgress( u ).done === unlockProgress( defaultUpgrades() ).done, 'the unlock\'s 12 of hers are still 12, traps or no traps' );
 
 // ---- the bottom, and where one may be set
 ok( bottomAt( { reefDist: 10 } ) === 'edge' && bottomAt( { reefDist: - 20 } ) === 'coral', 'off the reef\'s edge; on live coral' );
