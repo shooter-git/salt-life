@@ -6,7 +6,8 @@ import { CAMP } from './FishCamp.js';
 import { HARBOUR_LIGHTS } from '../world/HarbourLights.js';
 import { LIGHTHOUSE } from '../world/Lighthouse.js';
 import { toWorld } from '../world/wreck/WreckPlan.js';
-import { SHEETS, NAMES, HOME, legTo, magnetic, fuelFor } from './Chart.js';
+import { SHEETS, NAMES } from './Chart.js';
+import { homeReadout } from './HomeReadout.js';
 import { SheetBake, drawSymbols, drawWay, S52, rgb } from './ChartBake.js';
 
 // Minimap, lower right: the island baked once from the terrain data into a 2D canvas, shown in a round window
@@ -81,16 +82,6 @@ const CSS = /* css */`
 	border-radius: 50%; border: 1.5px solid rgba(var(--tw-aqua-rgb), 0.9); animation: gm-map-ring 2.2s var(--tw-ease-io) infinite; }
 .gm-map-fish > i + i { animation-delay: -1.1s; }
 @keyframes gm-map-ring { 0% { transform: scale(0.45); } 100% { transform: scale(1.15); border-color: rgba(var(--tw-aqua-rgb), 0); } }
-.gm-map-label { position: absolute; left: 50%; bottom: calc(-2 * var(--tw-u)); transform: translate(-50%, 100%); padding-top: calc(4 * var(--tw-u));
-	font: 500 var(--tw-fs-xs) var(--tw-mono); color: var(--tw-ink-3); white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,0.7); display: none; }
-.gm-map-label.is-on { display: block; }
-/* ((M15) over the map, not under it: it sits at the screen's foot) */
-.gm-map-label.is-home { top: calc(-2 * var(--tw-u)); bottom: auto; transform: translate(-50%, -100%); padding: 0 0 calc(4 * var(--tw-u)); }
-/* (on a touch screen the map's under the purse, the tips under it: to its left) */
-html.is-touch .gm-map-label.is-home { left: auto; right: calc(100% + 6 * var(--tw-u)); top: 50%; transform: translateY(-50%); padding: 0; }
-.gm-map-label b { font-weight: 600; color: var(--tw-ink-2); }
-.gm-map-label i { font-style: normal; }
-.gm-map-label i.is-ok { color: #8fdc8a; } .gm-map-label i.is-tight { color: #f2c14e; } .gm-map-label i.is-short { color: #ff7a6a; }
 /* (M15) the chart's names: upright over it, black with a pale halo as on a chart; the water's in italics */
 .gm-map-name { position: absolute; left: 0; top: 0; width: 0; height: 0; display: none; }
 .gm-map-name.is-on { display: block; }
@@ -141,13 +132,11 @@ export class Minimap {
 		const nearN = NEAR_N[ tier ] || NEAR_N.high;
 		this.el = h( 'div', 'gm-map tw-glass', `<div class="gm-map-view"><canvas class="gm-map-far" width="${ outN }" height="${ outN }"></canvas><canvas class="gm-map-mid" width="${ outN }" height="${ outN }"></canvas><canvas class="gm-map-near" width="${ nearN }" height="${ nearN }"></canvas><div class="gm-map-vig"></div>
 			<div class="gm-map-marks"></div>
-			<div class="gm-map-me"><svg viewBox="0 0 24 24"><path d="M12 2 20 21 12 16.5 4 21Z" fill="#fff" stroke="#0b1418" stroke-width="1.4" stroke-linejoin="round"/></svg></div></div>
-			<div class="gm-map-label is-home"></div>` );
+			<div class="gm-map-me"><svg viewBox="0 0 24 24"><path d="M12 2 20 21 12 16.5 4 21Z" fill="#fff" stroke="#0b1418" stroke-width="1.4" stroke-linejoin="round"/></svg></div></div>` );
 		this.el.setAttribute( 'aria-hidden', 'true' );
 		this.view = this.el.querySelector( '.gm-map-view' );
 		this.canvas = this.el.querySelector( '.gm-map-near' );
 		this.marks = this.el.querySelector( '.gm-map-marks' );
-		this.label = this.el.querySelector( '.gm-map-label' );
 		parent.append( this.el );
 
 		const mk = ( kind, icon ) => {
@@ -560,18 +549,11 @@ export class Minimap {
 
 	}
 
-	// (M15) under the map at sea: home's distance and bearing (magnetic, as the compass gives it), and the fuel
+	// (M15) home's distance and bearing, and the fuel: (M16) in the HUD's panel (HomeReadout)
 	_homeLabel( x, z, p ) {
 
-		const aboard = p.mode === 'boat' || p.mode === 'deck', leg = legTo( x, z, HOME.x, HOME.z );
-		const on = aboard && leg.m > 600;
-		this._toggle( this.label, 'is-on', on );
-		if ( ! on ) return;
-		const b = this.game.app.boatCtl, s = this.game.state;
-		// ((M15) riding in someone else's, it's their fuel, and you don't know it)
-		const f = p.riding ? null : fuelFor( leg.m, s.fuelL, { rpm: b.rpm, speed: b.speed, speedMul: s.stats.speedMul || 1 } );
-		const text = `<b>Home</b> ${ ( leg.m / 1852 ).toFixed( 1 ) } NM · ${ String( magnetic( leg.bearing ) ).padStart( 3, '0' ) }°${ f ? ` · <i class="is-${ f.state }">fuel ${ f.state === 'ok' ? 'ok' : f.state === 'tight' ? 'tight' : 'short' }</i>` : '' }`;
-		if ( this.label.__text !== text ) this.label.innerHTML = this.label.__text = text;
+		const hud = this.game.hud, b = this.game.app.boatCtl, s = this.game.state;
+		if ( hud ) hud.setHome( homeReadout( { x, z, aboard: p.mode === 'boat' || p.mode === 'deck', riding: p.riding, fuelL: s.fuelL, tank: s.stats.fuelL, rpm: b && b.rpm, speed: b && b.speed, speedMul: s.stats.speedMul || 1 } ) );
 
 	}
 

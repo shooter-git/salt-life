@@ -89,7 +89,7 @@ export const TRAIL_POSTS = [
 		ON( 'Fish camp', 'Pearl\'s', 2.45 ),
 		BACK( 'The village', 'by the trail · 1.8 km', - 2.05 ),
 	] },
-].map( ( p ) => ( { height: 2.45, see: 110, blaze: 0xf2ead2, fill: 12, arm: { length: 1.35, height: 0.3, thick: 0.03, tip: 0.16 }, ...p } ) );
+].map( ( p ) => ( { height: 2.45, see: 110, blaze: 0xf2ead2, fill: 12, glow: 0.3, arm: { length: 1.35, height: 0.3, thick: 0.03, tip: 0.16 }, ...p } ) );
 
 const PX = 512; // a plank's canvas, pixels along it (and in proportion across)
 
@@ -172,7 +172,17 @@ export class Signpost {
 
 			}
 
+			// (deep shade under the trees: a glow of its own, with the daylight, or they come out near black)
+			if ( S.glow ) wood.emissiveIntensity = mat.emissiveIntensity = scene.environmentIntensity * S.glow;
+
 		};
+		if ( S.glow ) {
+
+			wood.emissive.set( S.paint );
+			mat.emissive.set( S.letters );
+
+		}
+
 		const solid = new Mesh( mergeGeometries( parts ), wood ), letters = new Mesh( mergeGeometries( faces ), mat );
 		letters.renderOrder = 2;
 		solid.onBeforeRender = letters.onBeforeRender = sync;

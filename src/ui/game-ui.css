@@ -176,8 +176,8 @@ html.is-touch {
 	--gm-top: calc(var(--gm-band, 56px) + var(--tw-2));
 }
 
-html.is-touch .gm-purse { top: calc(var(--tw-edge) + env(safe-area-inset-top)); right: var(--gm-r); flex-wrap: wrap; justify-content: flex-end;
-	row-gap: var(--tw-1); max-width: calc(100vw - 56px - 2 * var(--tw-edge) - env(safe-area-inset-right)); }
+html.is-touch .gm-purse { top: calc(var(--tw-edge) + env(safe-area-inset-top)); right: var(--gm-r);
+	max-width: calc(100vw - 56px - 2 * var(--tw-edge) - env(safe-area-inset-right)); }
 html.is-touch .gm-map { top: var(--gm-top); bottom: auto; right: var(--gm-r); width: var(--gm-map); height: var(--gm-map); }
 html.is-touch .gm-panel { width: min(calc(420 * var(--tw-u)), calc(100vw - 2 * var(--tw-edge) - env(safe-area-inset-left) - env(safe-area-inset-right))); }
 html.is-touch .gm-btn,
@@ -194,6 +194,10 @@ html.is-touch:has(.gm-panel.is-open, .gm-catch.is-on, .gm-guide.is-on) .touch-bu
 html.is-touch .tw-root:has(.gm-panel.is-open) :is(.gm-map, .gm-coach) { visibility: hidden; }
 
 @media (orientation: portrait) {
+	/* (M16) upright, the purse runs the screen's width under the corner menu, its bars shorter */
+	html.is-touch .gm-purse { top: calc(var(--tw-edge) + 56px + var(--tw-1) + env(safe-area-inset-top)); left: var(--gm-l); max-width: none; }
+	html.is-touch .gm-purse :is(.gm-cooler-bar) { width: calc(38 * var(--tw-u)); }
+	html.is-touch .gm-purse-top, html.is-touch .gm-purse-boat { justify-content: space-between; max-width: none; }
 	/* a panel hangs under the purse (its top stays put as its tabs change) */
 	html.is-touch .gm-panel { top: var(--gm-top); max-height: calc(100% - var(--gm-top) - var(--tw-edge) - env(safe-area-inset-bottom)); transform: translate(-50%, 2%); }
 	html.is-touch .gm-panel.is-open { transform: translate(-50%, 0); }
@@ -219,7 +223,7 @@ html.is-touch .tw-root:has(.gm-panel.is-open) :is(.gm-map, .gm-coach) { visibili
 	html.is-touch .gm-panel.is-open { transform: translate(-50%, 0); }
 	/* with a panel up, the purse is only your money (the cooler's load is in the panel), so a phone
 	   on its side has room for both */
-	html.is-touch .tw-root:has(.gm-panel.is-open) .gm-purse > :not(.gm-money) { display: none; }
+	html.is-touch .tw-root:has(.gm-panel.is-open) :is(.gm-purse-top > :not(.gm-money), .gm-purse-boat) { display: none; }
 }
 
 /* a phone on its side with room for it: Joe's wanted list and the week's order beside your fish, each

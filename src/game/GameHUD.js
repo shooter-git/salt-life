@@ -38,9 +38,19 @@ const sizeOf = ( species, cm ) => species === 'lobster' ? `${ carapaceIn( cm ).t
 //   catch card    full screen: the world dims and blurs, the fish lies side-on in its own studio light
 //                 (FishPortrait) with the species above and length, weight, value, record below
 const CSS = /* css */`
-.gm-purse { position: absolute; top: var(--tw-edge); right: var(--tw-edge); display: flex; gap: var(--tw-3); align-items: center;
+.gm-purse { position: absolute; top: var(--tw-edge); right: var(--tw-edge); display: flex; flex-direction: column; align-items: stretch;
 	padding: var(--tw-2) var(--tw-4); border-radius: 999px; font: 500 var(--tw-fs-lg) var(--tw-font); color: var(--tw-ink); pointer-events: none;
 	transition: transform var(--tw-med) var(--tw-ease), right var(--tw-slow) var(--tw-ease); }
+/* (M16) one panel: the time, your money and the cooler; under them aboard, the boat's: fuel, hull, bilge, finder and the way home */
+.gm-purse-top, .gm-purse-boat { display: flex; flex-wrap: wrap; gap: var(--tw-1) var(--tw-3); align-items: center; justify-content: flex-end; }
+.gm-purse-boat { max-width: calc(620 * var(--tw-u)); margin-top: var(--tw-2); padding-top: var(--tw-2); border-top: 1px solid var(--tw-line); }
+.gm-purse-boat:not(:has(.is-on)) { display: none; }
+.gm-purse:has(.gm-purse-boat .is-on) { border-radius: var(--tw-r-lg); }
+.gm-fuel-bar { position: relative; overflow: visible; }
+.gm-fuel-tick { display: none; position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 2px rgba(0,0,0,0.7); }
+.gm-fuel-tick.is-on { display: block; }
+.gm-fuel-state { font-style: normal; font-weight: 700; }
+.gm-fuel-state.is-ok { color: #8fdc8a; } .gm-fuel-state.is-tight { color: #f2c14e; } .gm-fuel-state.is-short { color: #ff7a6a; }
 .tw-root[data-panel='open'] .gm-purse { right: calc(var(--tw-panel-w) + 2 * var(--tw-3)); }
 .tw-root.is-photo .gm-panel { display: none; }
 .gm-purse.is-bump { animation: gm-bump 420ms var(--tw-ease); }
@@ -384,7 +394,12 @@ export class GameHUD {
 		style.textContent = CSS + SHELL_CSS + CHART_MAP_CSS;
 		document.head.append( style );
 
-		this.purse = h( 'div', 'gm-purse tw-glass', `<span class="gm-money">$0</span><span class="gm-cooler"><span class="gm-cooler-label">Cooler</span><span class="gm-cooler-bar"><span></span></span><span class="gm-cooler-kg">0 / 66 lb</span></span><span class="gm-gauge gm-fuel"><span>Fuel</span><span class="gm-cooler-bar gm-fuel-bar"><span></span></span><b class="gm-fuel-l">11 gal</b></span><span class="gm-gauge gm-hull"><span>Hull</span><span class="gm-cooler-bar gm-hull-bar"><span></span></span><b class="gm-hull-p">100%</b></span><span class="gm-gauge gm-bilge"><span>Bilge</span><span class="gm-cooler-bar gm-bilge-bar"><span></span></span><b class="gm-bilge-l">0 gal</b></span><span class="gm-gauge gm-sonar"><span>Sonar</span><b class="gm-sonar-d">0 ft</b><span class="gm-sonar-dots"></span></span><span class="gm-gauge gm-breath"><span>Breath</span><span class="gm-cooler-bar gm-breath-bar"><span></span></span></span><span class="gm-gauge gm-bait"><span class="gm-bait-l">Bait</span><b class="gm-bait-t">Shrimp</b></span>` );
+		this.purse = h( 'div', 'gm-purse tw-glass', `<div class="gm-purse-top"><span class="gm-money">$0</span><span class="gm-cooler"><span class="gm-cooler-label">Cooler</span><span class="gm-cooler-bar"><span></span></span><span class="gm-cooler-kg">0 / 66 lb</span></span><span class="gm-gauge gm-breath"><span>Breath</span><span class="gm-cooler-bar gm-breath-bar"><span></span></span></span><span class="gm-gauge gm-bait"><span class="gm-bait-l">Bait</span><b class="gm-bait-t">Shrimp</b></span></div><div class="gm-purse-boat"><span class="gm-gauge gm-fuel"><span>Fuel</span><span class="gm-cooler-bar gm-fuel-bar"><span></span><i class="gm-fuel-tick"></i></span><b class="gm-fuel-l">11 gal</b><i class="gm-fuel-state"></i></span><span class="gm-gauge gm-hull"><span>Hull</span><span class="gm-cooler-bar gm-hull-bar"><span></span></span><b class="gm-hull-p">100%</b></span><span class="gm-gauge gm-bilge"><span>Bilge</span><span class="gm-cooler-bar gm-bilge-bar"><span></span></span><b class="gm-bilge-l">0 gal</b></span><span class="gm-gauge gm-sonar"><span>Sonar</span><b class="gm-sonar-d">0 ft</b><span class="gm-sonar-dots"></span></span><span class="gm-gauge gm-home"><span>Home</span><b class="gm-home-t"></b></span></div>` );
+		this.purseTop = this.purse.firstElementChild;
+		this.fuelTick = this.purse.querySelector( '.gm-fuel-tick' );
+		this.fuelState = this.purse.querySelector( '.gm-fuel-state' );
+		this.homeEl = this.purse.querySelector( '.gm-home' );
+		this.homeT = this.purse.querySelector( '.gm-home-t' );
 		this.baitEl = this.purse.querySelector( '.gm-bait' );
 		this.baitL = this.purse.querySelector( '.gm-bait-l' );
 		this.baitT = this.purse.querySelector( '.gm-bait-t' );
@@ -908,6 +923,29 @@ export class GameHUD {
 		}
 
 		this.inv.classList.toggle( 'is-open', this.invOpen );
+
+	}
+
+	// (M16) the way home, past sight of the dock (HomeReadout, twice a second): where getting there takes the fuel to, a
+	// tick on the bar, and whether it will. Its mark's a different shape for each as well as its colour: a red tick would
+	// read as all's well
+	setHome( h ) {
+
+		this.homeEl.classList.toggle( 'is-on', !! h );
+		const need = h && h.need !== null ? h.need : null;
+		this.fuelTick.classList.toggle( 'is-on', need !== null );
+		if ( need !== null ) this.fuelTick.style.left = `${ need * 100 }%`;
+		const state = h && h.state || '';
+		if ( this._homeState !== state ) {
+
+			this._homeState = state;
+			this.fuelState.className = `gm-fuel-state${ state ? ` is-${ state }` : '' }`;
+			this.fuelState.textContent = { ok: '✓', tight: '!', short: '✕' }[ state ] || '';
+			this.fuelState.title = state ? `Fuel to get home: ${ state }` : '';
+
+		}
+
+		if ( h && this.homeT.textContent !== h.text ) this.homeT.textContent = h.text;
 
 	}
 

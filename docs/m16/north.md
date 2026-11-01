@@ -284,3 +284,13 @@ Fair in blue water read 4414 against 1686 in the first scene of that run, with t
 - The sky in the gale frames is still blue, the clouds being slow on the CPU, so the side-by-side's sky means nothing. Against Beaufort's photographs the foam's well short: fewer patches, thinner streaks. Near the boat the rougher ripples throw bright glints. Both want a look on a real GPU.
 - The hit's words: no toast is said when a sea comes aboard. Other boats take the same litres: the kayak's and the others' figures are their own streams' to set.
 - A real phone's frame rate.
+
+## The way home in the HUD's panel
+
+Asked for by the user after M15, through another session (2026-11-01), from a mock-up: the way home was a label by the map, and its fuel a word in it.
+
+- **One panel at the top right** (`GameHUD`'s `.gm-purse`). Its first row is always the time, your money and the cooler, with the breath and the bait when they're up. Its second, aboard, is the boat's: fuel, then the hull once it's worn, the bilge with water in it, the finder if fitted, and past 600 m from the dock, Home's distance and magnetic bearing. They wrap to a third row when they're all up.
+- **On the fuel bar**, a small white tick at what it takes to get home (`game/HomeReadout.js`, `Chart.fuelFor` as before), and beside the gallons a mark in green, amber or red, as the mariner's rule of thirds has it. It's ✓, ! or ✕, not a tick in three colours as the mock-up had: a red tick reads as all's well, and someone who can't tell red from green still gets it.
+- **Riding in someone else's** there's no fuel, no tick and no mark, and Home stays; today's bar showed your own fuel there, which was wrong. **A boat with no engine** has no fuel row, and Home still shows.
+- **Upright on a phone** the panel runs the width of the screen, under the corner menu rather than beside it, with shorter bars, as the menu's a real control the mock-up didn't have. **On its side** and on a computer it's compact in the corner. The map and the tips follow where it ends, as they did.
+- `test/north-home.mjs` tests the readout's sums. **Checked** headless on the CPU at 1366, 1024, 844, 667, 390, 360, 320 and 768 wide, with every gauge up: nothing off the screen, nothing over the map, nothing out of the panel. **Not checked**: a real phone; riding with another real player (its panel was set by hand).

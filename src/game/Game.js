@@ -429,7 +429,7 @@ export class Game {
 			const ui = app.ui.ui;
 			this.hud = new GameHUD( ui, this );
 			// (Salt Life) the island's clock, at the left of the purse (T: its menu)
-			this.time = new TimeHUD( this, this.hud.purse, ui.root );
+			this.time = new TimeHUD( this, this.hud.purseTop, ui.root );
 			// the minimap (lower right) and the first-play guide (intro, one-time tips; replay with H)
 			this.minimap = new Minimap( ui.hud || ui.root, this, { tier: app.tier } );
 			this.guide = new Guide( ui, this, this.minimap );
@@ -648,7 +648,8 @@ export class Game {
 		// the catch card's live fish portrait (or one queued thumbnail)
 		if ( this.hud && this.hud.portrait ) this.hud.portrait.update( dt );
 		if ( this.hud ) this.hud.update( {
-			fuel: aboard ? { litres: this.state.fuelL, tank: this.state.stats.fuelL } : null,
+			// ((M16) a boat with no engine has no fuel to show, and riding in another's isn't yours to know)
+			fuel: aboard && ! p.riding && this.state.stats.fuelL > 0 ? { litres: this.state.fuelL, tank: this.state.stats.fuelL } : null,
 			// (M10) the hull once it's worn, and the bilge with water in it
 			hull: aboard && ! p.riding && this.hull.wear > 0.02 ? this.hull.wear : null,
 			bilge: aboard && ! p.riding && this.hull.bilge >= 1 ? this.hull.bilge : null,
