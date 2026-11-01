@@ -144,6 +144,7 @@ export function towToPearl( game ) {
 		if ( p.mode === 'boat' && p.boat === b ) p.leaveHelm();
 		lieAtFace( b, game.app.terrainData );
 		if ( p.mode === 'deck' && p.boat === b ) p.deckToWorld();
+		if ( game.app.saveBoat ) game.app.saveBoat();
 		game.toast( `Winston towed her in · ${ paid < job.fee ? `Pearl took the $${ paid } you had` : `$${ paid }` } · she's on the camp's mooring, diesel's in the drums`, 5200 );
 
 	} );
