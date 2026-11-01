@@ -136,6 +136,7 @@ export class Player {
 		this.swimMul = 1;
 		this.airS = 0;
 		this.chair = null;
+		this.trollAt = 0;
 		this.breathPaused = false; // (the game: while a catch card is up, the world waits)
 		this.blackout = 0; // 1 while blacked out and floating up, then the gasp at the surface (s)
 		this.blackouts = 0; // how many times (the game notices a new one)
@@ -1061,6 +1062,8 @@ export class Player {
 
 		}
 
+		// ((M16) lines out: forward's held at the baits' speed unless you're running: Rigs' trollAt, knots)
+		if ( this.trollAt > 0 && throttle > 0 && ! inp.down( 'ShiftLeft' ) ) throttle = Math.min( throttle, THREE.MathUtils.clamp( 0.3 + ( this.trollAt - b.speed * 1.944 ) * 0.2, 0, 1 ) );
 		b.setInput( throttle, steer, dt );
 		this.prompt = { key: 'E', text: this.helmHeld ? 'Close the radio' : 'Leave helm   ·   V  camera   ·   R  radio' };
 

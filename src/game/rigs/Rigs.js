@@ -392,6 +392,32 @@ export class Rigs {
 
 	}
 
+	// the speed that swims what's out, knots: the middle of the slowest's best, and past a bait, a skirt's own
+	_trollKnots() {
+
+		let k = Infinity;
+		for ( const L of this.lines ) if ( L.bait && ! L.in ) {
+
+			const t = BAITS[ L.bait ].tow;
+			k = Math.min( k, t[ 2 ] > 12 ? 12 : ( t[ 1 ] + t[ 2 ] ) / 2 );
+
+		}
+
+		return Number.isFinite( k ) ? k : 0;
+
+	}
+
+	// what you're told at the helm
+	_speedWord() {
+
+		const v = this.app.boatCtl.speed * KNOTS, live = this.lines.filter( ( L ) => L.bait && ! L.in );
+		if ( ! live.length ) return `${ v.toFixed( 0 ) } knots · nothing left on the hooks`;
+		const best = live.reduce( ( m, L ) => Math.max( m, towTaste( BAITS[ L.bait ].tow, v ) ), 0 );
+		const tow = BAITS[ live[ 0 ].bait ].tow;
+		return `${ v.toFixed( 0 ) } knots · ${ best > 0.6 ? 'the baits are swimming' : v < tow[ 1 ] ? 'too slow for the baits' : 'too fast for the baits' }`;
+
+	}
+
 	// a fish taking line off a rod in its holder: you've a while to get to it
 	_onRod( L, dt ) {
 
@@ -621,7 +647,7 @@ export class Rigs {
 		if ( rod.rig === 'float' && ! this._fightOut ) return out;
 		const m = this._fightOut || Math.max( out, rod.lineOut );
 		this._fightOut = 0;
-		return Math.min( m, this.stats.spoolM );
+		return Math.min( m, rod.rig === 'drop' && this.stats.electricReel ? ELECTRIC.spool : this.stats.spoolM );
 
 	}
 
@@ -755,14 +781,17 @@ export class Rigs {
 		if ( rDown && this.kite && ! this.kite.down && rod.state === 'floating' ) this._kiteDown();
 
 		// the word on a rod that's gone off
-		const on = this.rodOn;
+		const on = this.rodOn, helm = p.mode === 'boat' && ! app.boat.seated;
 		this.alert = null;
+		// (with the lines out, she's held at what the baits swim at while you only hold the throttle: a trolling valve)
+		p.trollAt = helm && this.lines.length ? this._trollKnots() : 0;
 		if ( on ) {
 
 			const left = Math.ceil( HOOK_S - on.on.t );
-			this.alert = this._nearRod( on ) ? { key: 'R', text: `Take the rod · ${ on.spot.name } · ${ left } s` } : { key: '…', text: `Fish on the ${ on.spot.name }! Get to the rod · ${ left } s` };
+			if ( helm ) this.alert = { key: 'E', text: `Leave the helm · fish on the ${ on.spot.name }! · ${ left } s` };
+			else this.alert = this._nearRod( on ) ? { key: 'R', text: `Take the rod · ${ on.spot.name } · ${ left } s` } : { key: '…', text: `Fish on the ${ on.spot.name }! Get to the rod · ${ left } s` };
 
-		}
+		} else if ( helm && this.lines.length ) this.alert = { key: 'E', text: `Leave helm   ·   ${ this._speedWord() }   ·   hold Shift to run` };
 
 		const chair = this.updateChair( inp );
 		if ( chair ) this.alert = chair;
@@ -834,12 +863,13 @@ export class Rigs {
 		_e.copy( L.p ).addScaledVector( _a, - 0.16 * toEye );
 		const bb = BAITS[ L.bait ];
 		D.tube( [ _d.clone(), _e.clone() ], [ 0.018 * toEye, 0.03 * toEye ], bb.lure ? 0xd8365a : 0x8a97a6, 0.3, 0.2, 5 );
+		// (and a sliver of white behind it, under way)
+		if ( this.app.boatCtl.speed * KNOTS < 3 ) return;
 		_c.crossVectors( _a, _up );
-		_d.copy( _e ).addScaledVector( _c, 0.05 * toEye ).setY( L.p.y + 0.015 );
-		const w0 = _d.clone();
-		_d.copy( _e ).addScaledVector( _c, - 0.05 * toEye ).setY( L.p.y + 0.015 );
-		const w1 = _d.clone(), w2 = _e.clone().addScaledVector( _a, - 0.45 * toEye ).setY( L.p.y + 0.015 );
-		D.fan( [ w0, w1, w2 ], _up, 0xf2f6f6, 0.8 );
+		const w0 = _e.clone().addScaledVector( _c, 0.022 * toEye ).setY( L.p.y + 0.012 );
+		const w1 = _e.clone().addScaledVector( _c, - 0.022 * toEye ).setY( L.p.y + 0.012 );
+		const w2 = _e.clone().addScaledVector( _a, - 0.34 * toEye ).setY( L.p.y + 0.012 );
+		D.fan( [ w0, w1, w2 ], _up, 0xe6ecec, 0.8 );
 
 	}
 

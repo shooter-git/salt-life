@@ -14,6 +14,7 @@ import { atHook, baitFits, hookOf, leaderFor, leaderRisk, pickOnRig, rigDelay, r
 import { fishSeen, glareLeft } from '../src/game/rigs/Glasses.js';
 import { HOLD_KG } from '../src/game/rigs/Rigs.js';
 import { FishingRod } from '../src/game/FishingRod.js';
+import { Player, BREATH } from '../src/player/Player.js';
 
 let failed = 0;
 const ok = ( c, what ) => {
@@ -263,6 +264,45 @@ const among = ( s, ...ids ) => ids.reduce( ( a, id ) => a + ( s[ id ] || 0 ), 0 
 	ok( ! onHand( 'skirt', S ) && ( S.upgrades.lures = 3, onHand( 'skirt', S ) ) && onHand( 'jig', S ), 'lures come with the track' );
 	const J = JSON.parse( JSON.stringify( S.toJSON ? S.toJSON() : {} ) );
 	ok( J.bait && J.bait.ballyhoo === 11, 'it saves' );
+
+}
+
+// ---- the dive kit: the swimmer's breath
+{
+
+	const P = () => Object.assign( Object.create( Player.prototype ), { breath: BREATH, breathMax: BREATH, blackout: 0, blackouts: 0, swimMul: 1, airS: 0, velocity: { lengthSq: () => 1 }, mode: 'swim', position: { y: 0 }, waterMean: 0, floating: false } );
+	const gear = ( level ) => gearStats( { ...defaultUpgrades(), diveKit: level } );
+	const hold = ( p, s, under = true ) => {
+
+		for ( let i = 0; i < s * 10; i ++ ) p.breathe( 0.1, under, false );
+		return p;
+
+	};
+	const a = P(), b = P();
+	a.setDive( gear( 0 ) );
+	b.setDive( gear( 2 ) );
+	ok( a.breathMax === BREATH && a.swimMul === 1, 'with nothing, as it was' );
+	ok( b.breathMax > BREATH * 1.4 && b.breath === b.breathMax && b.swimMul > 1.4, 'long fins and a wetsuit: faster and a longer breath' );
+	ok( hold( a, 60 ).blackout > 0 && hold( b, 60 ).blackout === 0, 'a minute under: out of breath without them, not with' );
+	const back = hold( P(), 20 );
+	hold( back, 12, false );
+	ok( back.breath === BREATH, 'a breath comes back at the surface' );
+	const t = P();
+	t.setDive( gear( 3 ) );
+	const shallow = t.breathMax;
+	t.position.y = - 15;
+	hold( t, 600 );
+	const used = shallow - t.breath;
+	ok( Math.abs( used - 600 * 2.5 ) < 1, 'a tank goes two and a half times as fast at 15 m' );
+	const lasts = shallow / 2.5 / 60;
+	console.log( `     a tank lasts ${ lasts.toFixed( 0 ) } minutes at 15 m` );
+	ok( lasts > 35 && lasts < 55, 'about what a real one does' );
+	const left = t.breath;
+	hold( t, 10, false );
+	ok( t.breath === left, 'and it doesn\'t fill at the surface' );
+	t.mode = 'deck';
+	hold( t, 10, false );
+	ok( t.breath === shallow, 'but it\'s a fresh one from the rack back aboard' );
 
 }
 
