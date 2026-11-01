@@ -142,8 +142,8 @@ export class DeckShape {
 
 function shell( L ) {
 
-	const pick = [ 0, 2, 4, 6, 8, 9, 11, 13, 16, 20, 25, 30, 32 ];
-	const stations = L.stationParams( 30 ), left = [], right = [];
+	const pick = [ 0, 3, 6, 8, 9, 11, 13, 16, 22, 30, 32 ];
+	const stations = L.stationParams( 26 ), left = [], right = [];
 	for ( const t of stations ) {
 
 		const pts = L.station( t, 1 ), row = pick.map( ( j ) => pts[ j ].clone() );
@@ -167,7 +167,7 @@ function shell( L ) {
 function sternCap( row ) {
 
 	const a = row.map( ( p ) => p.clone() ), b = row.map( ( p ) => new Vector3( - p.x, p.y, p.z ) );
-	return gridSurface( [ a, b ], { flip: false } );
+	return gridSurface( [ a, b ], { flip: true } );
 
 }
 
@@ -175,9 +175,9 @@ function sternCap( row ) {
 
 function deck( L, D ) {
 
-	const rows = [], cols = [ 0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.58, 0.66, 0.72, 0.78, 0.84, 0.9, 0.95, 0.985, 1 ];
+	const rows = [], cols = [ 0, 0.13, 0.27, 0.4, 0.5, 0.58, 0.66, 0.72, 0.78, 0.84, 0.9, 0.96, 1 ];
 	const across = [ ...cols.slice( 1 ).reverse().map( ( u ) => - u ), ...cols ];
-	const NR = 48;
+	const NR = 46;
 	for ( let i = 0; i <= NR; i ++ ) {
 
 		// (closer together at her ends)
