@@ -356,6 +356,8 @@ export class Game {
 		const b = this.app.boatCtl, dock = WORLD.boatDock.position;
 		if ( ! b || b.moored || b.hauled || ( b.driven && ! aboard ) ) return null;
 		const metres = Math.hypot( b.position.x - dock.x, b.position.z - dock.z );
+		// ((M16) a kayak on the sand by the village isn't in anyone's way)
+		if ( b.beached && metres < 250 ) return null;
 		return metres > TOW.from ? { metres, fee: towFee( metres ), time: towTime( metres ) } : null;
 
 	}

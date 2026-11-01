@@ -1858,7 +1858,8 @@ export class App {
 		this.dashOn( ride ? ride.group : null );
 		// (on the low tier others' boats have no dash to show it on)
 		if ( ride && g && p.mode === 'deck' && this.tier !== 'low' ) return this.instruments.update( dt, this.riddenReading( ride, dt ) );
-		if ( ! g || p.riding || ( p.mode !== 'boat' && p.mode !== 'deck' ) ) return this.instruments.update( dt, null );
+		// ((M16) nor is there anything to read them on in a kayak)
+		if ( ! g || p.riding || ( p.mode !== 'boat' && p.mode !== 'deck' ) || ! this.boat.materials.display ) return this.instruments.update( dt, null );
 		const r = this._reading || ( this._reading = {} ), f = b.forward( _fwdB ), x = b.position.x, z = b.position.z;
 		const map = g.minimap;
 		r.engine = g.hull.engine;
@@ -2193,7 +2194,7 @@ export class App {
 
 		}
 
-		b.moored = false;
+		b.moored = b.beached = false;
 		const at = checkSpotAt( spot, islandTime( s.day, s.timeOfDay ), ( x, z ) => - this.terrainData.heightAt( x, z ) );
 		// (the chase camera with her, or it spends the checks' few frames catching up)
 		p.camPos.x += at.x - b.position.x;

@@ -728,7 +728,7 @@ export class Player {
 		this.helmPitch = - 0.05;
 		this.orbitYaw = this.boat.getYaw() + Math.PI;
 		this.camInit = false;
-		if ( this.audio && this.boat.handling.engine ) this.audio.engineStart();
+		if ( this.audio && ! this.boat.model.seated ) this.audio.engineStart();
 
 	}
 
@@ -797,7 +797,7 @@ export class Player {
 		this.velocity.set( 0, 0, 0 );
 		this.yaw = b.getYaw() + Math.PI;
 		this._camY = null;
-		if ( this.audio && wasDriving && b.handling.engine ) this.audio.engineStop();
+		if ( this.audio && wasDriving && ! b.model.seated ) this.audio.engineStop();
 		if ( b.model.seated ) this.orbitDist = 13; // ((M16) the chase camera, as the other boats have it)
 		if ( this.riding ) this.unride();
 
