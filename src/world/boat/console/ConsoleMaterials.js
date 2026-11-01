@@ -1,5 +1,6 @@
 import { Color, MeshStandardMaterial } from '../../../engine/index.js';
 import { BoatMaterials, withAux, extend } from '../BoatMaterials.js';
+import { useGroundBounce } from '../../../materials/GroundBounce.js';
 
 // (M16) Her materials: the boat's, with one body for her hull and all her gelcoat (a draw and a program the fewer). Its
 // aux pattern says what a surface is:
@@ -17,12 +18,21 @@ export class ConsoleMaterials extends BoatMaterials {
 		this.gelcoat.dispose();
 		this.wood.dispose();
 		this.gelcoat = this.wood = this.hull;
+		// (her white decks throw the light about her, under the top and behind the console, where the world's low fill alone
+		// leaves them near black: the bounce people have, diffuse only so it puts no sheen on her)
+		for ( const m of [ this.hull, this.fittings ] ) {
+
+			useGroundBounce( m );
+			m.userData.groundBounceOpen.value = 0.8;
+
+		}
+
 
 	}
 
 	createHull() {
 
-		this.paint = { value: new Color( 0x1a3557 ).convertSRGBToLinear() }; // (navy, as the Regulator's in the running shots)
+		this.paint = { value: new Color( 0x234a75 ).convertSRGBToLinear() }; // (navy, as the Regulator's in the running shots)
 		const m = withAux( new MeshStandardMaterial( { roughness: 0.3, metalness: 0, side: 2 } ), { fragment: /* glsl */`
 	float pat = vAux.z;
 	float surfRough = -1.0;

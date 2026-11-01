@@ -117,7 +117,7 @@ def cowl_ring( h, n ):
 		pz = math.copysign( abs( cz ) ** 0.9, cz ) * a * k
 		# the scalloped ribs over the back of the crown, fanning from the scoop
 		rear = smooth( - cz, - 0.1, 0.5 ) * smooth( h, 0.42, 0.62 ) * k
-		rib = 1 + math.cos( th * 11 ) * 0.03 * rear
+		rib = 1 + math.cos( th * 7 ) * 0.03 * rear
 		# the split line between top and bottom cowl: a groove
 		g = 1 - 0.012 * math.exp( - ( ( h - 0.34 ) / 0.012 ) ** 2 )
 		# the shell's a shade higher at its back, falling to the nose
@@ -144,7 +144,7 @@ def foil_ring( y, chord, thick, zc, n, tail = 0.0 ):
 def outboard():
 
 	B = Builder()
-	NC = 28
+	NC = 36
 	hs = [ i / 14 for i in range( 11 ) ] + [ 0.8, 0.85, 0.89, 0.93, 0.96, 0.98, 0.995 ]
 	# (extra rings about the split line)
 	hs = sorted( set( hs + [ 0.31, 0.33, 0.34, 0.35, 0.37 ] ) )
@@ -165,6 +165,26 @@ def outboard():
 		rows.append( [ ( p[ 0 ] * k, y, ( p[ 2 ] + 0.15 ) * k - 0.15 + d ) for p in r0 ] )
 
 	B.grid( rows, PART[ 'chaps' ], closed = True, flip = True )
+
+	# the clamp bracket on her forward side, down the mounting, and its tilt tube across
+	for sx in ( 1, - 1 ):
+
+		rows = []
+		for y, z0, z1, w in [ ( 0.02, 0.32, 0.12, 0.05 ), ( - 0.22, 0.3, 0.1, 0.06 ), ( - 0.4, 0.28, 0.1, 0.055 ) ]:
+
+			x = sx * 0.1
+			rows.append( [ ( x - w, y, z1 ), ( x + w, y, z1 ), ( x + w, y, z0 ), ( x - w, y, z0 ) ] )
+
+		B.grid( rows, PART[ 'metal' ], closed = True, flip = sx > 0 )
+
+	# a round badge each side of the cowl
+	for sx in ( 1, - 1 ):
+
+		first = B.add( sx * 0.268, 0.42, - 0.22 )
+		rim = [ B.add( sx * 0.262, 0.42 + 0.045 * math.cos( 2 * math.pi * j / 10 ), - 0.22 + 0.045 * math.sin( 2 * math.pi * j / 10 ) ) for j in range( 10 ) ]
+		for j in range( 10 ):
+
+			B.f.append( ( ( first, rim[ j ], rim[ ( j + 1 ) % 10 ] ), PART[ 'seam' ] ) )
 
 	# the leg: a foil from the chaps to the plate; the exhaust relief at its back
 	NL = 14

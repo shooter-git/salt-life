@@ -126,7 +126,7 @@ for ( const s of scenes.length ? scenes : [ 'dock', 'run', 'deck', 'helm' ] ) {
 
 	if ( s === 'deck' ) {
 
-		for ( const [ name, x, z, yaw, pitch ] of [ [ 'deck-bow', 0, 2.2, 0, - 0.35 ], [ 'deck-side', 0.78, - 1.2, 0.1, - 0.2 ], [ 'deck-aft', - 0.4, - 2.1, 3.14, - 0.3 ], [ 'deck-post', 0.2, - 2.15, 0.1, - 0.25 ], [ 'deck-platform', - 0.3, - 3.45, 3.14, - 0.55 ] ] ) {
+		for ( const [ name, x, z, yaw, pitch ] of [ [ 'deck-bow', 0, 1.3, 0, - 0.35 ], [ 'deck-post', 0.2, - 2.2, 0.1, - 0.25 ], [ 'deck-platform', - 0.3, - 3.45, 3.14, - 0.55 ] ] ) {
 
 			await p.evaluate( ( [ x, z, yaw, pitch ] ) => {
 
@@ -161,11 +161,12 @@ for ( const s of scenes.length ? scenes : [ 'dock', 'run', 'deck', 'helm' ] ) {
 			} )( P.input.down );
 
 		} );
-		for ( let i = 0; i < 30; i ++ ) {
+		// (counted in frames, which come slowly here: wait for her speed, not the clock)
+		for ( let i = 0; i < 90; i ++ ) {
 
-			await wait( 2000 );
-			const v = await p.evaluate( () => [ window.__app.boatCtl.speed, window.__app.boatCtl.rpm ] );
-			if ( v[ 0 ] > 9 || i === 29 ) break;
+			await wait( 4000 );
+			const v = await p.evaluate( () => window.__app.boatCtl.speed );
+			if ( v > 13 ) break;
 
 		}
 

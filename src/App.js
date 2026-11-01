@@ -2418,6 +2418,7 @@ export class App {
 		}
 
 		this.boat = model;
+		this.lightUp( model.group );
 		parent.add( model.group );
 		model.group.traverse( ( o ) => {
 
