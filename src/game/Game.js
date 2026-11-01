@@ -20,6 +20,7 @@ import { tellOf } from './Away.js';
 import { GameHUD } from './GameHUD.js';
 import { TimeHUD } from './TimeHUD.js';
 import { Radio } from './Radio.js';
+import { Compass } from '../world/boat/kayak/Compass.js';
 import { DaysOut } from './DaysOut.js';
 import { timeText } from './IslandClock.js';
 import { HOURS, NIGHT_BOX, ordersFor, tradeDay, stallOpen, shutFor } from './Orders.js';
@@ -57,6 +58,7 @@ import { Rigs } from './rigs/Rigs.js';
 import { atHook, pickOnRig, waitOnRig } from './rigs/Presentation.js';
 
 // how long the catch card stays up unless dismissed (ms)
+const _compassFwd = new Vector3();
 const CATCH_CARD_MS = 9000;
 // (M15) the island's middle, and up the trades from it (Weather's NORTH.dir, the way they blow, turned
 // round): the windward side's (Game.windwardAt)
@@ -412,7 +414,8 @@ export class Game {
 			if ( p.mode === 'boat' && p.boat === b ) p.leaveHelm();
 			b.reset();
 			if ( aboard && p.mode === 'deck' && p.boat === b ) p.deckToWorld();
-			this.toast( paid < job.fee ? `Marta towed her in for the $${ paid } you had · she's at the dock` : `Marta towed her in · $${ paid } · she's at the dock`, aboard ? 4200 : 2600 );
+			const where = b.beached ? 'she\'s on the sand' : 'she\'s at the dock';
+			this.toast( paid < job.fee ? `Marta towed her in for the $${ paid } you had · ${ where }` : `Marta towed her in · $${ paid } · ${ where }`, aboard ? 4200 : 2600 );
 
 		};
 		if ( aboard && this.time && this.time.dim() ) setTimeout( go, 230 );
@@ -431,8 +434,18 @@ export class Game {
 	get canFish() {
 
 		const app = this.app, p = app.player;
-		// ((M16) or sat in a kayak)
-		return ! app.freeCam && ( p.mode === 'walk' || p.mode === 'deck' || ( p.mode === 'boat' && p.boat?.model?.seated ) ) && ! p.climbing && ! ( app.ui && app.ui.ui && app.ui.ui._photo );
+		// ((M16) or sat in a kayak, with no radio in your hand)
+		return ! app.freeCam && ! ( this.radio && this.radio.open ) && ( p.mode === 'walk' || p.mode === 'deck' || ( p.mode === 'boat' && p.boat?.model?.seated ) ) && ! p.climbing && ! ( app.ui && app.ui.ui && app.ui.ui._photo );
+
+	}
+
+	// (M16) rad, true: where a kayak's small compass reads, sat in her; null, off her or in another boat (hers are on the dash)
+	get compassHeading() {
+
+		const p = this.app.player, b = this.app.boatCtl;
+		if ( p.mode !== 'boat' || p.riding || ! p.boat?.model?.seated || ! this.state.stats.compass || ! b ) return null;
+		const f = b.forward( _compassFwd );
+		return Math.atan2( f.x, - f.z );
 
 	}
 
@@ -473,6 +486,7 @@ export class Game {
 			ui.onReplayGuide = () => this.guide.replay();
 			// ((M15) the VHF at the helm)
 			this.radio = new Radio( ui, this );
+			this.compass = new Compass( ui.hud || ui.root );
 			this.daysOut.gauges( this.hud.purse );
 
 		}
@@ -564,6 +578,7 @@ export class Game {
 		const lmb = ( inp.mouseDown || inp.down( 'KeyF' ) ) && inp.enabled, rmb = ( inp.rightDown || inp.down( 'KeyG' ) ) && inp.enabled;
 		const lDown = lmb && ! this._lmb, lUp = ! lmb && this._lmb, rDown = rmb && ! this._rmb;
 		if ( this.radio ) this.radio.update( dt, inp, lDown );
+		if ( this.compass ) this.compass.update( dt, this.compassHeading );
 		this._lmb = lmb;
 		this._rmb = rmb;
 		const panelOpen = this.hud && ( this.hud.invOpen || this.hud.standOpen || !! this.trophyCard );
@@ -2081,7 +2096,7 @@ export class Game {
 	// a key as the device in use calls it, in the prompts' text
 	keyName( k ) {
 
-		return this.app.input.lastDevice === 'gamepad' ? { N: `D-pad ${ UP }`, B: `D-pad ${ LEFT } ${ RIGHT }`, R: 'X', E: 'B', W: `Stick ${ UP }` }[ k ] || k : k;
+		return this.app.input.lastDevice === 'gamepad' ? { N: `D-pad ${ UP }`, B: `D-pad ${ LEFT } ${ RIGHT }`, R: 'X', E: 'B', C: 'LB', W: `Stick ${ UP }` }[ k ] || k : k;
 
 	}
 

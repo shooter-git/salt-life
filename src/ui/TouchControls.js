@@ -216,10 +216,11 @@ export class TouchControls {
 		const lights = game && game.app && game.app.localLights;
 		const torchOn = !! ( lights && lights.flashlight.on );
 		// at the helm: the boat's searchlight, after dusk (or while it's on), and the horn
-		// ((M16) a kayak's neither, nor a radio: the rod's button is the rod's)
+		// ((M16) a kayak's neither: the rod's button is the rod's, and her radio or flares are the rig's, the same key)
 		const seat = player && player.mode === 'boat' && player.boat?.model?.seated;
 		const helm = player && player.mode === 'boat' && ! seat, app = game && game.app;
 		if ( seat && ! fishing && ! netting ) setButton( this.buttons.rod, 'Rod' );
+		if ( seat && game.radio && game.radio.offer ) setButton( this.buttons.rig, game.radio.offer === 'radio' ? 'Radio' : 'Flares' );
 		if ( helm ) setButton( this.buttons.torch, app && ( app.searchlight || G.night.value > 0.35 ) ? ( app.searchlight ? 'Searchlight off' : 'Searchlight' ) : null );
 		else setButton( this.buttons.torch, lights && ( torchOn || G.night.value > 0.35 ) ? ( torchOn ? 'Torch off' : 'Torch' ) : null );
 		setButton( this.buttons.horn, helm ? 'Horn' : null );
