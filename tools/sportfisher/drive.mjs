@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // (M16) Her in the real game, driven: boards her, goes about every deck by the same calls the keys make, climbs the tower,
 // shakes it till you come off, and reads what she costs. A CPU render (SwiftShader): the GPU and phone look aren't shown here.
-//   tools/render-slot.sh node tools/sportfisher/drive.mjs <out dir> [low|mid|high]
+//   tools/render-slot.sh node tools/sportfisher/drive.mjs <out dir> [low|mid|high] [boat]
+//   Another boat just reads what she costs, to compare.
 const { chromium } = await import( '/home/shooter/Documents/VS Code/all-the-spaces/node_modules/playwright/index.mjs' );
-const [ , , out = '.', tier = 'low' ] = process.argv, PORT = process.env.PORT || 5203;
-const b = await chromium.launch( { args: [ '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist' ] } );
+const [ , , out = '.', tier = 'low', boat = 'sportfisher' ] = process.argv, PORT = process.env.PORT || 5203;
+const b = await chromium.launch( { args: [ '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-precise-memory-info' ] } );
 const page = await b.newPage( { viewport: { width: 1280, height: 720 } } );
 page.setDefaultTimeout( 300000 );
 const errs = [];
@@ -14,7 +15,7 @@ page.on( 'console', ( m ) => {
 	if ( [ 'error', 'warning' ].includes( m.type() ) && ! /GL Driver|GPU stall|WebGL: |swiftshader|Automatic fallback/i.test( m.text() ) ) errs.push( m.type() + ' ' + m.text().slice( 0, 300 ) );
 
 } );
-await page.goto( `http://127.0.0.1:${ PORT }/?boat=sportfisher&tier=${ tier }&readout`, { waitUntil: 'domcontentloaded' } );
+await page.goto( `http://127.0.0.1:${ PORT }/?boat=${ boat }&tier=${ tier }&readout`, { waitUntil: 'domcontentloaded' } );
 await page.waitForFunction( () => window.__app && window.__app._started && window.__app.game, null, { timeout: 15 * 60000 } ).catch( async ( e ) => {
 
 	console.log( 'never started', e.message, errs.slice( 0, 20 ).join( '\n' ) );
@@ -70,28 +71,55 @@ console.log( await page.evaluate( () => {
 
 } ) );
 await sleep( 8000 );
-await stand( 'cockpit', 0, 0.5, - 5.2, 0 );
-await stand( 'cockpit-aft', 0, 0.9, - 2.9, Math.PI );
-await stand( 'salon', 0, 1.02, - 1.9, 0 );
-await stand( 'lower', 0, 0.15, 2.3, 0 );
-await stand( 'bunks', 0.2, 0.15, 2.75, Math.PI / 2 );
-await stand( 'foredeck', 0, 2.3, 5.2, Math.PI );
-await stand( 'helm-standing', 0.55, 3.1, - 0.6, 0 );
-await stand( 'tower', 0, 7, - 0.5, 0, - 0.2 );
-await stand( 'tower-aft', 0, 7, - 0.5, Math.PI, - 0.6 );
-await stand( 'tower-foot', 0, 3.1, - 2.98, 0 );
+if ( boat === 'sportfisher' ) {
 
-// up the ladder, by the keys
-console.log( 'climb', await page.evaluate( async () => {
+	await stand( 'cockpit', 0, 0.5, - 5.2, 0 );
+	await stand( 'salon', 0, 1.02, - 1.9, 0 );
+	await stand( 'bunks', 0.8, 0.15, 2.65, Math.PI / 2 );
+	await stand( 'helm-standing', 0.55, 3.1, - 0.75, 0 );
+	await stand( 'tower', 0, 7, - 0.5, 0, - 0.2 );
+	await stand( 'tower-foot', 0, 3.1, - 2.98, 0 );
 
-	const a = window.__app, p = a.player, keys = a.input;
-	const at = a.boat.ladderAt( p.deckPos );
-	p.climbing = a.boat.climb( at );
-	return { ladder: at.ladder.id };
+	// up the tower's ladder by the keys: E at its foot, W to the top
+	const state = () => page.evaluate( () => {
 
-} ) );
-await sleep( 3000 );
-await shot( 'on-ladder' );
+		const p = window.__app.player;
+		return { climbing: !! p.climbing, y: + p.deckPos.y.toFixed( 2 ), z: + p.deckPos.z.toFixed( 2 ), mode: p.mode, falls: p.falls, stunned: + p.stunned.toFixed( 1 ), prompt: p.prompt && p.prompt.text };
+
+	} );
+	console.log( 'at the foot', await state() );
+	await page.keyboard.press( 'KeyE', { delay: 400 } );
+	await sleep( 2000 );
+	console.log( 'on it', await state() );
+	await page.keyboard.down( 'KeyW' );
+	await sleep( 5000 );
+	console.log( 'climbing', await state() );
+	await shot( 'on-ladder' );
+	for ( let i = 0; i < 30 && ( await state() ).climbing; i ++ ) await sleep( 3000 );
+	await page.keyboard.up( 'KeyW' );
+	console.log( 'at the top', await state() );
+
+	// come off it half way up: onto the deck, then out over the side
+	const off = ( out ) => page.evaluate( ( out ) => {
+
+		const a = window.__app, p = a.player, l = a.boat.ladders.find( ( l ) => l.id === 'tower' );
+		p.mode = 'deck';
+		p.climbing = a.boat.climb( { ladder: l, top: false } );
+		p.climbing.s = p.climbing.len * 0.7;
+		p.climbing._letGo( p );
+		if ( out ) p.climbing.falling.v.setX( 9 ).setZ( 0 );
+		else p.climbing.falling.v.set( 0, 0, 0 );
+
+	}, out );
+	await off( false );
+	for ( let i = 0; i < 20 && ( await state() ).climbing; i ++ ) await sleep( 1000 );
+	console.log( 'fell on the deck', await state() );
+	await shot( 'winded' );
+	await off( true );
+	for ( let i = 0; i < 20 && ( await state() ).climbing; i ++ ) await sleep( 1000 );
+	console.log( 'fell in the sea', await state() );
+
+}
 
 // what she costs, as the readout has it
 console.log( 'readout', await page.evaluate( () => {

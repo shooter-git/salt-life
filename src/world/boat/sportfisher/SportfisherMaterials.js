@@ -130,7 +130,7 @@ export class SportfisherMaterials extends BoatMaterials {
 				.replace( '#include <emissivemap_fragment>', /* glsl */`#include <emissivemap_fragment>
 	vec3 sfN = normalize( vSfN ) * ( gl_FrontFacing ? 1.0 : - 1.0 );
 	float sfUp = sfN.y * 0.5 + 0.5;
-	float sfLit = mix( 0.42, 1.0, sfUp * sfUp ) * ( 0.9 + 0.1 * abs( sfN.z ) );
+	float sfLit = mix( 0.72, 1.0, sfUp * sfUp ) * ( 0.9 + 0.1 * abs( sfN.z ) );
 	vec3 sfV = normalize( vSfEye - vLocal ), sfR = reflect( - sfV, sfN );
 	float sfGloss = pow( max( sfR.y, 0.0 ), 18.0 ) * ( 1.0 - clamp( vAux.x * 1.6, 0.0, 1.0 ) );
 	totalEmissiveRadiance += diffuseColor.rgb * ${ CABIN_FILL.toFixed( 3 ) } * sfLit + vec3( 1.0, 0.93, 0.82 ) * sfGloss * 0.5;` )
