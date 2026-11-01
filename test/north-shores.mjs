@@ -260,5 +260,16 @@ for ( const [ file, tier ] of [ [ 'island.bin', 'high' ], [ 'island-1024.bin', '
 
 }
 
+{
+
+	// the close look, without a pointer: RT or F goes through them, LT or G back, past the last to none
+	const { stepShell, shellTab } = await import( '../src/game/ShellCase.js' );
+	check( stepShell( 1 ) === SHELL_KINDS[ 0 ] && stepShell( 1 ) === SHELL_KINDS[ 1 ] && stepShell( - 1 ) === SHELL_KINDS[ 0 ] && stepShell( - 1 ) === null && stepShell( - 1 ) === SHELL_KINDS[ SHELL_KINDS.length - 1 ], 'through the shells and back' );
+	const game = readFileSync( new URL( '../src/game/Game.js', import.meta.url ), 'utf8' );
+	check( game.includes( "invTab === 'shells'" ) && game.includes( 'nextShell( 1 )' ) && game.includes( 'nextShell( - 1 )' ), 'the game gives it the pad and the keys, on its tab' );
+	stepShell( 1 );
+
+}
+
 console.log( failed ? `\n${ failed } failed` : '\nall ok' );
 process.exit( failed ? 1 : 0 );

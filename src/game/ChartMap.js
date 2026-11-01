@@ -68,14 +68,29 @@ export function scaleOf( metres ) {
 
 }
 
+// moved by a stick or the keys: x, y the stick (right, up), each -1..1; zoom in (+) or out (-), -1..1. It crosses its own
+// half-width in about a second and halves in about half a second, whatever the zoom. Whether it moved
+export function driveView( v, dt, x, y, zoom ) {
+
+	if ( ! x && ! y && ! zoom ) return false;
+	v.x += x * v.r * 1.1 * dt;
+	v.z -= y * v.r * 1.1 * dt;
+	v.r *= Math.exp( - zoom * 1.4 * dt );
+	clampView( v );
+	return true;
+
+}
+
 export const CHART_MAP_CSS = /* css */`
 .gm-chartmap { position: relative; height: clamp(150px, 40vh, 520px); margin: var(--tw-2) 0; border-radius: var(--tw-r-md, 10px); overflow: hidden; border: 1px solid var(--tw-line); background: rgb(${ S52.NODTA.join( ',' ) }); }
 .gm-chartmap canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; display: block; }
 .gm-chartmap canvas:active { cursor: grabbing; }
 .gm-chartmap-btns { position: absolute; right: 6px; top: 6px; display: flex; flex-direction: column; gap: 4px; }
-.gm-chartmap-btns button { width: 34px; height: 34px; padding: 0; border-radius: 8px; border: 1px solid rgba(0,0,0,0.35); background: rgba(250,248,240,0.92); color: #101416; font: 700 18px/1 var(--tw-font); cursor: pointer; }
-.gm-chartmap-btns button.is-me { font-size: 11px; }
+.gm-chartmap-btns button { display: flex; align-items: center; justify-content: center; width: 34px; height: 34px; padding: 0; border-radius: 8px; border: 1px solid rgba(0,0,0,0.35); background: rgba(250,248,240,0.92); color: #101416; font: 700 11px/1 var(--tw-font); cursor: pointer; }
+.gm-chartmap-btns svg { display: block; width: 16px; height: 16px; }
 `;
+// (drawn, as a font's + and minus sit wherever its metrics put them, not in the middle of a button)
+const GLYPH = ( d ) => `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="${ d }" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>`;
 
 export class ChartMap {
 
@@ -84,7 +99,7 @@ export class ChartMap {
 		this.game = game;
 		const el = this.el = document.createElement( 'div' );
 		el.className = 'gm-chartmap';
-		el.innerHTML = '<canvas aria-label="Your chart"></canvas><div class="gm-chartmap-btns"><button data-z="2" aria-label="Zoom in">+</button><button data-z="0.5" aria-label="Zoom out">&minus;</button><button class="is-me" data-me aria-label="Where you are">You</button></div>';
+		el.innerHTML = '<canvas aria-label="Your chart"></canvas><div class="gm-chartmap-btns"><button data-z="2" aria-label="Zoom in">' + GLYPH( 'M8 2.5v11M2.5 8h11' ) + '</button><button data-z="0.5" aria-label="Zoom out">' + GLYPH( 'M2.5 8h11' ) + '</button><button class="is-me" data-me aria-label="Where you are">You</button></div>';
 		this.canvas = el.querySelector( 'canvas' );
 		this.view = null;
 		this._pts = new Map();
@@ -162,6 +177,24 @@ export class ChartMap {
 		const C = this.canvas;
 		zoomAbout( this.view, k, C.clientWidth / 2, C.clientHeight / 2, C.clientWidth, C.clientHeight );
 		this.ask();
+
+	}
+
+	// (each frame on the tab: Game) without a pointer: the left stick or WASD moves it, RB and LB or + and - zoom, RT or F
+	// puts you in the middle
+	drive( dt, inp, rt ) {
+
+		if ( ! this.view ) return;
+		const k = ( ...c ) => c.some( ( q ) => inp.held( q ) ) ? 1 : 0;
+		const x = inp.stick.x + k( 'KeyD' ) - k( 'KeyA' ), y = inp.stick.y + k( 'KeyW' ) - k( 'KeyS' );
+		const zoom = k( 'Equal', 'NumpadAdd', 'ShiftLeft' ) - k( 'Minus', 'NumpadSubtract', 'KeyC' );
+		if ( driveView( this.view, dt, Math.max( - 1, Math.min( 1, x ) ), Math.max( - 1, Math.min( 1, y ) ), zoom ) ) this.ask();
+		if ( rt ) {
+
+			this._centre();
+			this.ask();
+
+		}
 
 	}
 

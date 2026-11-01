@@ -569,6 +569,16 @@ export class Game {
 		const panelOpen = this.hud && ( this.hud.invOpen || this.hud.standOpen || !! this.trophyCard );
 		// (a gamepad's RT on the cooler's Islander tab: the next islander)
 		if ( panelOpen && lDown && this.hud.invOpen && this.hud.invTab === 'islander' && this.hud.device === 'gamepad' ) this.hud.nextLook();
+		// ((M16) and with no pointer, the whole chart and the shells' close look: a mouse's button isn't either's)
+		const onChart = !! ( this.hud && this.hud.invOpen && this.hud.invTab === 'chart' && this.hud._chartMap ), noMouse = this.hud && this.hud.device === 'gamepad';
+		inp.noWalk = onChart;
+		if ( onChart ) this.hud._chartMap.drive( dt, inp, inp.hit( 'KeyF' ) || ( noMouse && lDown ) );
+		if ( panelOpen && this.hud.invOpen && this.hud.invTab === 'shells' ) {
+
+			if ( inp.hit( 'KeyF' ) || ( noMouse && lDown ) ) this.hud.nextShell( 1 );
+			else if ( inp.hit( 'KeyG' ) || ( noMouse && rDown ) ) this.hud.nextShell( - 1 );
+
+		}
 
 		// (Salt Life) the bait for the hook: B, or the d-pad's ← → with the rod out
 		const quiet = this.quietKeys();
