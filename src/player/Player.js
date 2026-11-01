@@ -803,8 +803,8 @@ export class Player {
 		// the exit point closest to something walkable (pier deck / sand)
 		let best = side ? null : this.ashoreTarget();
 
-		const dock = b.berth.position;
-		if ( ! this.riding && b.position.distanceTo( dock ) < 14 && b.speed < 1.5 ) {
+		// ((M16) someone else's has no berth of yours: she's theirs to make fast)
+		if ( ! this.riding && b.position.distanceTo( b.berth.position ) < 14 && b.speed < 1.5 ) {
 
 			b.moored = true;
 			b.mooring.anchor.set( b.position.x, 0, b.position.z );
@@ -955,7 +955,7 @@ export class Player {
 
 		v.y -= 9.81 * dt;
 		const p = this.deckPos;
-		const oldX = p.x, oldZ = p.z;
+		const oldX = p.x, oldY = p.y, oldZ = p.z;
 		p.addScaledVector( v, dt );
 
 		// walls: push out of the solid boxes you can't step onto (boat frame, axis aligned)
@@ -974,7 +974,11 @@ export class Player {
 		}
 
 		// stay inside the hull (the bulwarks, plus a margin fore and aft)
+		// ((M16) by the height of the deck you're on: a slow device's frame of falling isn't the level below, and its narrower walls
+		// would put you off the edge of where you stand)
+		const fell = p.y, stood = p.y = Math.max( fell, oldY );
 		b.model.clampToDeck( p, DECK_RADIUS );
+		if ( p.y === stood ) p.y = fell;
 		// ((M16) strapped in the fighting chair: you turn your head, and that's all)
 		if ( this.chair ) {
 

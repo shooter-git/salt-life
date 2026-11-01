@@ -104,6 +104,14 @@ function seatPart( d, x, y, z, yaw ) {
 
 const PARTS = { pad: { color: 0xc99a5e, rough: 0.55 }, helmPad: { color: 0xeee8d8, rough: 0.5 }, teak: { color: 0x8a5a2c, rough: 0.35 }, helmTrim: { color: 0x6a4322, rough: 0.5 }, steel: { color: 0xd8dbde, rough: 0.3, metal: 0.35 } };
 
+// what's on her (a stat left undefined isn't one she has a track for yet, so she's shown with it)
+const fittedOf = ( stats ) => {
+
+	const has = ( k ) => stats[ k ] === undefined || !! stats[ k ];
+	return { tower: has( 'tower' ), outriggers: has( 'outriggers' ), chair: has( 'chair' ) };
+
+};
+
 export class SportfisherModel extends Vessel {
 
 	constructor( tier = 'high' ) {
@@ -389,14 +397,42 @@ export class SportfisherModel extends Vessel {
 	// she has a track for yet, so she's shown with it)
 	fit( stats = {} ) {
 
-		const has = ( ...keys ) => keys.every( ( k ) => stats[ k ] === undefined ) ? true : keys.some( ( k ) => !! stats[ k ] );
-		this.fitted = { tower: has( 'tower' ), outriggers: has( 'outriggers' ), chair: has( 'chair', 'chair' ) };
+		this.fitted = fittedOf( stats );
 		const M = this.meshes;
 		if ( M.tower ) M.tower.visible = this.fitted.tower;
 		if ( M.outriggers ) M.outriggers.visible = this.fitted.outriggers;
 		if ( M.chair ) M.chair.visible = this.fitted.chair;
 		for ( const c of this.colliders ) if ( c.tag === 'chair' ) c.solid = this.fitted.chair;
 		this.chair = this.fitted.chair ? this.chair || this._chairWas : ( this._chairWas = this.chair, null );
+
+	}
+
+	// (together/) someone else's her: whether there's a tower to climb, a chair in the way, as hers has
+	walkedAs( stats = {} ) {
+
+		const v = Object.create( this ), F = v.fitted = fittedOf( stats ), S = this.stations;
+		v.colliders = this.colliders.map( ( c ) => c.tag === 'chair' ? { ...c, solid: F.chair } : c );
+		v.chair = F.chair ? this.chair || this._chairWas : null;
+		v.stations = { ...( F.tower ? { tower: S.tower } : {} ), ...( F.chair ? { chair: S.chair } : {} ) };
+		return v;
+
+	}
+
+	dressCopy( copy, stats ) {
+
+		const F = fittedOf( stats );
+		for ( const k of [ 'tower', 'outriggers', 'chair' ] ) {
+
+			const m = copy.getObjectByName( 'boat-' + k );
+			if ( m ) m.visible = m.userData.fits = F[ k ];
+
+		}
+
+	}
+
+	get paintSlot() {
+
+		return { name: 'sfTopsides', uniform: this.materials.topsides };
 
 	}
 

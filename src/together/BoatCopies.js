@@ -3,7 +3,9 @@ import { BoatLamps } from '../world/boat/BoatLamps.js';
 import { BOATS, loadBoat } from '../world/boat/Boats.js';
 import { mat4, mergePrepared, prepare, triangleCount } from '../world/boat/GeoKit.js';
 import { createPropMaterial } from '../game/GameMaterials.js';
-import { releaseGeometries } from '../core/ReleaseAfterUpload.js';
+import { releaseGeometries, releaseGeometry } from '../core/ReleaseAfterUpload.js';
+import { PAINTS, paintOf } from '../game/fleet/Fleet.js';
+import { dropView } from '../world/boat/Vessel.js';
 
 // (M16) The others' boats, each the boat it is. A boat's meshes are made once per type (her Vessel, the template) and
 // each boat of that type drawn is a clone of it: its meshes and materials shared, no new shaders. Yours is the template
@@ -15,6 +17,8 @@ import { releaseGeometries } from '../core/ReleaseAfterUpload.js';
 //   c.standIn( id ) -> a mesh of her size and shape, near enough from a way off   (not in the scene; drop with scene.remove)
 //   c.tidy( dt )   (each second or so: lets go of those nobody's wanted)
 //   c.boatChanged( old ) -> kept: you've got into another boat   (old: the Vessel you were in; true if copies still use it)
+//   c.walked( model, id, f ) -> her, as she's fitted, for whoever's aboard   c.dress( copy, f )  how the copy shows it (f: fitWire's)
+//   c.aboard( id ) -> whether all of her's here to walk on: on a phone she's built whole when someone's about to board   c.near( copy, on )
 
 const TYPE_KEEP = 60; // s: a type nobody's wanted is let go after this
 // the low tier's copy: without her gear. Or `lowCopy` on a Vessel; or with neither's meshes, her largest up to LOW_TRIS
@@ -31,6 +35,35 @@ export const SIZE = {
 	sportfisher: { length: 14.6, beam: 4.8, air: 11, free: 1.9, draft: 1.1, color: 0xeef0ee },
 };
 export const sizeOf = ( id ) => SIZE[ id ] || SIZE.lobster;
+
+// What's fitted on her and her paint, in a number for the pose: the bits as each boat's fit reads them, the paint above them
+// (PAINTS' place and one; 0: as she came). The lobster boat has nothing that comes and goes
+const FITS = {
+	kayak: { send: ( s ) => [ s.holdKg > 12, s.finder, s.anchorM > 0 || s.trolley ], stats: ( [ crate, finder, trolley ] ) => ( { holdKg: crate ? 13 : 12, finder, trolley } ) },
+	console: { send: ( s ) => [ s.twin, s.tTop, s.diveLadder, s.tankRack ], stats: ( [ twin, tTop, diveLadder, tankRack ] ) => ( { twin, tTop, diveLadder, tankRack } ) },
+	sportfisher: { send: ( s ) => [ s.tower ?? true, s.outriggers ?? true, s.chair ?? true ], stats: ( [ tower, outriggers, chair ] ) => ( { tower, outriggers, chair } ) },
+};
+const PAINT_SHIFT = 4;
+
+export function fitWire( id, stats, paint ) {
+
+	const bits = FITS[ id ] ? FITS[ id ].send( stats ).reduce( ( n, on, i ) => n | ( on ? 1 << i : 0 ), 0 ) : 0;
+	return bits | ( ( paintOf( paint ) ? PAINTS.indexOf( paintOf( paint ) ) + 1 : 0 ) << PAINT_SHIFT );
+
+}
+
+export function fitStats( id, f ) {
+
+	return FITS[ id ] ? FITS[ id ].stats( [ 0, 1, 2, 3 ].map( ( i ) => !! ( f & 1 << i ) ) ) : {};
+
+}
+
+export function fitPaint( f ) {
+
+	const p = PAINTS[ ( f >> PAINT_SHIFT ) - 1 ];
+	return p ? p.hex : null;
+
+}
 
 // the meshes (Mesh[]) of a boat a phone draws of someone else's
 export function lowMeshes( model ) {
@@ -111,7 +144,7 @@ export class BoatCopies {
 	constructor( app ) {
 
 		this.app = app;
-		this.types = new Map(); // id -> { id, model, template, own, gen, copies, idle }
+		this.types = new Map(); // id -> { id, model, template, own, gen, copies, idle, full, walks, views, paints }
 		this._stands = new Map(); // id -> geometry
 		this._standMaterial = null;
 
@@ -123,7 +156,7 @@ export class BoatCopies {
 		let e = this.types.get( id );
 		if ( ! e ) {
 
-			e = { id, model: null, template: null, own: false, gen: 0, copies: new Set(), idle: 0 };
+			e = { id, model: null, template: null, own: false, gen: 0, copies: new Set(), idle: 0, full: false, walks: new Map(), views: new Map(), paints: new Map() };
 			this.types.set( id, e );
 			if ( this.app.boat.id === id ) {
 
@@ -146,14 +179,119 @@ export class BoatCopies {
 
 	}
 
-	async _build( e ) {
+	// All of her, for someone about to walk on her. On a phone a copy's only what's seen of her from a way off, so she's built again
+	// whole (false till she's here: nobody's put on a deck that's not drawn). Her copies are made again from it, with
+	// what isn't seen from a way off shown only near her (near)
+	aboard( id ) {
+
+		const e = this.want( id );
+		if ( this.app.tier !== 'low' || e.own || e.full ) return !! e.model;
+		if ( ! e.fulling ) {
+
+			e.fulling = true;
+			this._build( e, true );
+
+		}
+
+		return false;
+
+	}
+
+	near( b, on ) {
+
+		const u = b.userData;
+		if ( ! u.extras || u.nearOn === on ) return;
+		u.nearOn = on;
+		for ( const m of u.extras ) m.visible = on && m.userData.fits !== false;
+
+	}
+
+	// her, as she's fitted (f null: as she came)
+	walked( model, id, f ) {
+
+		const e = this.types.get( id );
+		if ( ! Number.isInteger( f ) || ! e || e.model !== model ) return model;
+		let w = e.walks.get( f );
+		if ( ! w ) e.walks.set( f, w = model.walkedAs( fitStats( id, f ) ) );
+		return w;
+
+	}
+
+	dress( b, f ) {
+
+		const u = b.userData, e = this.types.get( u.type );
+		if ( ! Number.isInteger( f ) || u.dressed === f || ! e ) return;
+		u.dressed = f;
+		u.model.dressCopy( b, fitStats( u.type, f ), ( key, make ) => {
+
+			let v = e.views.get( key );
+			if ( ! v ) {
+
+				e.views.set( key, v = make() );
+				releaseGeometry( v );
+
+			}
+
+			return v;
+
+		} );
+		const hex = fitPaint( f );
+		let p = hex === null ? null : e.paints.get( hex );
+		if ( hex !== null && ! p ) {
+
+			p = u.model.paintedHull( hex );
+			if ( p ) {
+
+				e.paints.set( hex, p );
+				if ( this.app._lit ) this.app._lit.add( p.material ); // (its shader's hers, lit as she is)
+
+			}
+
+		}
+
+		const hull = u.model.materials && u.model.materials.hull, want = p ? p.material : hull;
+		if ( hull ) b.traverse( ( m ) => {
+
+			if ( ! m.isMesh ) return;
+			if ( m.material === hull || m.userData.painted ) {
+
+				m.userData.painted = !! p;
+				m.material = want;
+
+			}
+
+		} );
+		this._nearAgain( b );
+
+	}
+
+	_nearAgain( b ) {
+
+		const u = b.userData, on = u.nearOn;
+		u.nearOn = undefined;
+		if ( u.extras ) this.near( b, !! on );
+
+	}
+
+	// what was made for how they're fitted
+	_letGo( e ) {
+
+		for ( const v of e.views.values() ) dropView( v );
+		for ( const p of e.paints.values() ) p.material.dispose();
+		e.views.clear();
+		e.paints.clear();
+		e.walks.clear();
+
+	}
+
+	async _build( e, full = false ) {
 
 		const app = this.app;
 		let model = null;
 		try {
 
 			model = await loadBoat( e.id, app.tier );
-			if ( app.tier === 'low' ) this._trim( model );
+			if ( app.tier === 'low' && ! full ) this._trim( model );
 			releaseGeometries( model.group ); // (once she's on the GPU, her arrays go from script memory)
 			model.group.traverse( ( o ) => {
 
@@ -172,13 +310,25 @@ export class BoatCopies {
 		} catch ( err ) {
 
 			console.warn( `${ e.id }: not built; her stand-in stays`, err );
+			if ( full ) e.full = true; // (what there is of her: better than never being let aboard)
 			return;
 
 		}
 
 		// (not wanted any more, or by now she's the boat you're in)
 		if ( this.types.get( e.id ) !== e || e.own ) model.dispose();
-		else e.model = model;
+		else if ( full ) {
+
+			const old = e.model;
+			this._letGo( e );
+			e.model = model;
+			e.template = null;
+			e.full = true;
+			e.gen ++; // (their copies are made again: Together._showBoat)
+			if ( old ) setTimeout( () => old.dispose(), 5000 ); // (once they have been)
+
+		} else if ( ! e.full ) e.model = model;
+		else model.dispose();
 
 	}
 
@@ -205,7 +355,8 @@ export class BoatCopies {
 		const t = e.template = e.model.group.clone( true );
 		const own = t.getObjectByName( 'BoatLamps' );
 		if ( own ) own.removeFromParent();
-		if ( app.tier === 'low' ) {
+		// (on a phone, what's seen of her from a way off; all of her if she's here whole, for someone to walk on)
+		if ( app.tier === 'low' && ! e.own && ! e.full ) {
 
 			const keep = [];
 			const named = new Set( lowMeshes( e.model ).map( ( m ) => m.name ) );
@@ -244,6 +395,24 @@ export class BoatCopies {
 		b.name = 'PlayerBoat';
 		b.visible = false;
 		const u = b.userData;
+		if ( app.tier === 'low' && ( e.own || e.full ) ) {
+
+			const named = new Set( lowMeshes( model ).map( ( m ) => m.name ) );
+			u.extras = [];
+			b.traverse( ( m ) => {
+
+				if ( m.isMesh && ! named.has( m.name ) ) {
+
+					u.extras.push( m );
+					m.visible = false;
+
+				}
+
+			} );
+			u.nearOn = false;
+
+		}
+
 		u.type = id;
 		u.gen = e.gen;
 		u.model = model;
@@ -328,6 +497,7 @@ export class BoatCopies {
 			e.idle += dt;
 			if ( e.idle < TYPE_KEEP ) continue;
 			this.types.delete( id );
+			this._letGo( e );
 			if ( e.model && ! e.own ) e.model.dispose();
 
 		}
@@ -349,12 +519,18 @@ export class BoatCopies {
 				was.own = false;
 				kept = true;
 
-			} else this.types.delete( old.id );
+			} else {
+
+				this._letGo( was );
+				this.types.delete( old.id );
+
+			}
 
 		}
 
 		if ( now && ! now.own ) {
 
+			this._letGo( now );
 			if ( now.model ) now.model.dispose();
 			now.model = this.app.boat;
 			now.own = true;

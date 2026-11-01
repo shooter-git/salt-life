@@ -11,12 +11,14 @@ export async function resolve( specifier, context, next ) {
 }` ) );
 globalThis.window = globalThis.window || { devicePixelRatio: 1 };
 const { BOATS, loadBoat } = await import( '../src/world/boat/Boats.js' );
-const { BoatCopies, LOW_BOAT, SIZE, isBoat, lowMeshes, sizeOf, standInGeometry } = await import( '../src/together/BoatCopies.js' );
+const { BoatCopies, LOW_BOAT, SIZE, fitPaint, fitStats, fitWire, isBoat, lowMeshes, sizeOf, standInGeometry } = await import( '../src/together/BoatCopies.js' );
+const { dropView } = await import( '../src/world/boat/Vessel.js' );
+const { AREAS } = await import( '../tools/two-players/areas.mjs' );
 const { SPARE_BERTHS, atDock, berthShare, laidAt, spareBerth } = await import( '../src/together/Berths.js' );
 const { clockFrom, footY, jobAt, perched, spotted } = await import( '../src/together/Crew.js' );
 const { seenHeight, speckAlpha, visualRange } = await import( '../src/together/Specks.js' );
 const { boatRecord, cleanBoats } = await import( '../src/game/Away.js' );
-const { DoubleSide, Scene, Vector3 } = await import( '../src/engine/index.js' );
+const { Raycaster, Scene, Vector3 } = await import( '../src/engine/index.js' );
 const { triangleCount } = await import( '../src/world/boat/GeoKit.js' );
 const { WORLD } = await import( '../src/world/WorldLayout.js' );
 const { Together } = await import( '../src/together/Together.js' );
@@ -250,6 +252,89 @@ ok( sizeOf( 'trawler' ) === SIZE.lobster, 'and a game that doesn\'t say is the l
 	ok( cleanBoats( { s: raw } ).s.b === 'console', 'an away boat\'s record says which she is' );
 	const old = boatRecord( { name: 'Sam', x: 1, z: 2, heading: 0, anchor: { x: 1, z: 2 }, at: Date.now(), T: 5 } );
 	ok( cleanBoats( { s: old } ).s.b === undefined, 'one from before doesn\'t: the lobster boat' );
+
+}
+
+// ---- what's fitted, in the pose: it comes out as it went in, and her paint
+for ( const [ id, stats, want ] of [
+	[ 'sportfisher', { tower: false, outriggers: true, chair: false }, { tower: false, outriggers: true, chair: false } ],
+	[ 'sportfisher', {}, { tower: true, outriggers: true, chair: true } ],
+	[ 'console', { twin: true, tTop: false, diveLadder: true, tankRack: false }, { twin: true, tTop: false, diveLadder: true, tankRack: false } ],
+	[ 'kayak', { holdKg: 40, finder: true, anchorM: 0 }, { holdKg: 13, finder: true, trolley: false } ],
+	[ 'lobster', { holdKg: 40 }, {} ],
+] ) {
+
+	const f = fitWire( id, stats, 'navy' );
+	ok( JSON.stringify( fitStats( id, f ) ) === JSON.stringify( want ) && fitPaint( f ) === 0x14283f && f < 256, `what's fitted on the ${ id } goes in a number (${ f }), and her paint` );
+
+}
+
+ok( fitPaint( fitWire( 'console', {}, null ) ) === null, 'no paint: as she came' );
+
+// ---- someone else's boat of your type: fitted as hers, and yours as it was
+{
+
+	const own = await loadBoat( 'sportfisher', 'low' );
+	own.fit( { tower: true, outriggers: true, chair: true } );
+	const v = own.walkedAs( { tower: false, outriggers: true, chair: false } ), up = own.ladders.find( ( l ) => l.needs === 'tower' ), at = new Vector3( up.on.x, up.on.y, up.on.z );
+	ok( ! v.ladderAt( at ) && own.ladderAt( at ), 'her tower, not bought: none to climb on hers, yours still there' );
+	ok( ! v.colliders.find( ( c ) => c.tag === 'chair' ).solid && own.colliders.find( ( c ) => c.tag === 'chair' ).solid, 'her chair, not bought: not in the way on hers, yours still there' );
+	ok( ! v.stations.tower && ! v.stations.chair && own.stations.tower, 'no job up a tower she hasn\'t got' );
+	const copy = own.group.clone( true );
+	own.dressCopy( copy, { tower: false, outriggers: false, chair: true } );
+	ok( ! copy.getObjectByName( 'boat-tower' ).visible && own.meshes.tower.visible, 'a copy without her tower, yours still showing' );
+	own.dispose();
+
+	const con = await loadBoat( 'console', 'low' );
+	con.fit( { twin: true, tTop: true, diveLadder: true, tankRack: true } );
+	const views = new Map(), cc = con.group.clone( true ), full = con.meshes.fittings.geometry.drawRange.count;
+	con.dressCopy( cc, { twin: false, tTop: false, diveLadder: false, tankRack: false }, ( k, make ) => views.get( k ) || views.set( k, make() ).get( k ) );
+	const cf = cc.getObjectByName( con.meshes.fittings.name ).geometry;
+	ok( cf.drawRange.count < full && con.meshes.fittings.geometry.drawRange.count === full, `a console copy without her T-top: ${ cf.drawRange.count } indices against ${ full }, yours as it was` );
+	ok( cf.attributes.position === con.meshes.fittings.geometry.attributes.position, 'the same vertices' );
+	ok( ! cc.getObjectByName( 'boat-outboard2-tilt' ).visible && con.group.getObjectByName( 'boat-outboard2-tilt' ).visible, 'one engine on hers, two on yours' );
+	for ( const view of views.values() ) dropView( view );
+	const painted = con.paintedHull( 0x7c2a22 );
+	ok( painted.material !== con.materials.hull && painted.material.customProgramCacheKey() === con.materials.hull.customProgramCacheKey(), 'her paint: a material of her own, the same shader' );
+	const shader = { uniforms: {}, vertexShader: 'varying vec4 vAux;\n#include <common>', fragmentShader: 'varying vec4 vAux;\n#include <common>' };
+	painted.material.onBeforeCompile( shader, null );
+	ok( shader.uniforms.hullPaint && shader.uniforms.hullPaint !== con.materials.paint, 'and her colour its own' );
+	con.dispose();
+
+	const K = await loadBoat( 'kayak', 'low' ), kc = K.group.clone( true ), kv = new Map();
+	K.dressCopy( kc, { holdKg: 13, finder: true, trolley: true }, ( k, make ) => kv.get( k ) || kv.set( k, make() ).get( k ) );
+	ok( kc.getObjectByName( 'boat-hull' ).geometry.attributes.position !== K.meshes.hull.geometry.attributes.position && kv.size === 1, 'a kayak copy with her crate: vertices of its own, yours as it was' );
+	ok( perched( K ).soleY() === K.perch.y, 'a rider sits at the height of her tank well' );
+	const was = K.stroke.wire;
+	K.poseCopy( kc, [ 0.5, 0.1, 0.2, 0, 0 ] );
+	K.stroke.wire = was;
+	ok( K.stroke.wire.join() === was.join(), 'a copy posed, your stroke put back' );
+	K.dispose();
+
+}
+
+// ---- every area she has has something drawn under the feet of whoever stands there, all of her on a phone as she's built for it
+{
+
+	const down = new Vector3( 0, - 1, 0 ), ray = new Raycaster();
+	for ( const id of Object.keys( AREAS ) ) {
+
+		const M = await loadBoat( id, 'low' );
+		M.group.updateMatrixWorld( true );
+		const meshes = [];
+		M.group.traverse( ( m ) => { if ( m.isMesh && m.visible ) meshes.push( m ); } );
+		for ( const A of AREAS[ id ]( M ) ) {
+
+			ray.set( new Vector3( A.x, A.y + 0.45, A.z ), down );
+			ray.far = 1.2;
+			const hit = ray.intersectObjects( meshes, false ).find( ( h ) => h.point.y <= A.y + 0.3 );
+			ok( hit && Math.abs( hit.point.y - A.y ) < 0.25, `${ id }, ${ A.name }: a drawn floor under the feet (${ hit ? hit.object.name + ' at ' + hit.point.y.toFixed( 2 ) : 'nothing' }, standing at ${ A.y })` );
+
+		}
+
+		M.dispose();
+
+	}
 
 }
 
