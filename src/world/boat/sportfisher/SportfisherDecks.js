@@ -2,7 +2,7 @@ import { Vector3 } from '../../../engine/index.js';
 import { SF } from './SportfisherLines.js';
 import { V, deckY, houseFootX, houseWallX, HOUSE_CORNER, CHAIR_Z } from './SportfisherHull.js';
 import { CABIN } from './SportfisherHouse.js';
-import { bridgeX, BRIDGE_HATCH, BRIDGE_LADDER, HELM, TOWER } from './SportfisherBridge.js';
+import { bridgeX, BRIDGE_HATCH, BRIDGE_LADDER, HELM, TOWER, TOWER_HELM } from './SportfisherBridge.js';
 
 // (M16) Where you can stand on her. A lobster boat has a sole and some boxes; she has five levels over one another: the
 // cockpit and mezzanine, the salon, the cabins below it, the deck round the house, the flybridge, and the tower's platform.
@@ -12,6 +12,7 @@ import { bridgeX, BRIDGE_HATCH, BRIDGE_LADDER, HELM, TOWER } from './Sportfisher
 //   levelOf( y )  which deck someone standing at y is on
 
 const flat = ( y ) => () => y;
+const BOX_TOP = 1.25; // (the mezzanine's boxes: a step up from it, a wall from the cockpit)
 
 export function buildFloors( L ) {
 
@@ -23,8 +24,8 @@ export function buildFloors( L ) {
 	add( - 1.12, 1.12, SF.mezzZ - 0.26, SF.mezzZ, ( SF.cockpit + SF.mezz ) / 2 ); // (the step)
 	add( - 1.12, 1.12, SF.mezzZ, SF.houseAft + 0.06, SF.mezz );
 	// the boxes either side of the mezzanine, a step up to the side decks (and over the side into the cockpit, as you can)
-	add( - W, - 1.12, SF.mezzZ - 0.26, SF.houseAft + 0.02, 1.26 );
-	add( 1.12, W, SF.mezzZ - 0.26, SF.houseAft + 0.02, 1.26 );
+	add( - W, - 1.12, SF.mezzZ - 0.26, SF.houseAft + 0.02, BOX_TOP );
+	add( 1.12, W, SF.mezzZ - 0.26, SF.houseAft + 0.02, BOX_TOP );
 
 	// the salon, a sill up from the mezzanine; the stairs down its middle at the forward end
 	add( - W, W, SF.houseAft + 0.02, 0.72, SF.salon );
@@ -141,11 +142,14 @@ export function buildColliders( L ) {
 	add( 'bulkhead', 0.24, SF.mezz, SF.houseAft - 0.02, w0, roof, SF.houseAft + 0.08 );
 	add( 'bulkhead', - 0.5, 2.92, SF.houseAft - 0.02, 0.24, roof, SF.houseAft + 0.08 );
 	// the salon's forward bulkhead, either side of the stairs; and the stairs' sides
-	const zF = SF.salonFront - 0.05;
-	add( 'bulkhead', - 2.2, salon, zF, - 0.42, roof, zF + 0.05 );
-	add( 'bulkhead', 0.48, salon, zF, 2.2, roof, zF + 0.05 );
+	const zF = SF.salonFront - 0.05, wF = houseFootX( L, zF ) - 0.1; // (to the house's side: the side deck runs on past it)
+	add( 'bulkhead', - wF, salon, zF, - 0.42, roof, zF + 0.05 );
+	add( 'bulkhead', 0.48, salon, zF, wF, roof, zF + 0.05 );
 	add( 'stairSide', - 0.5, salon + 0.1, 0.72, - 0.42, 2.7, 2.2 );
 	add( 'stairSide', 0.48, salon + 0.1, 0.72, 0.56, 2.7, 2.2 );
+
+	// the boxes either side of the mezzanine: from the cockpit they're a wall you can only hop
+	for ( const s of [ 1, - 1 ] ) add( 'box', s * 1.12, SF.cockpit, SF.mezzZ - 0.26, s * 3, BOX_TOP, SF.houseAft + 0.02 );
 
 	// what's on the salon's sole: the settee, the galley and its island, the dinette
 	const xW = houseWallX( L, - 1, 1.6 ) - 0.06, xG = houseWallX( L, 0.6, 1.6 ) - 0.06, xD = houseWallX( L, 0.7, 1.6 ) - 0.06;
@@ -178,6 +182,10 @@ export function buildColliders( L ) {
 	const H = BRIDGE_HATCH;
 	add( 'hatchRail', H.x0, b, H.z0, H.x1, b + 0.92, H.z1 );
 
+	// the tower's helm pod
+	const P = TOWER_HELM.pod;
+	add( 'towerPod', - P.hx, P.y0, P.z0, P.hx, P.y1, P.z1 );
+
 	// the fighting chair
 	add( 'chair', - 0.3, SF.cockpit, CHAIR_Z - 0.3, 0.3, SF.cockpit + 1.05, CHAIR_Z + 0.3 );
 
@@ -192,7 +200,7 @@ export function buildLadders() {
 	const B = BRIDGE_LADDER, T = TOWER;
 	return [
 		{ id: 'bridge', text: 'Climb up to the bridge', downText: 'Climb down to the cockpit', foot: B.foot.clone(), head: B.head.clone(), on: new Vector3( B.x, SF.cockpit, - 3.85 ), off: new Vector3( B.x, SF.bridge, - 2.2 ), speed: 0.8 },
-		{ id: 'tower', text: 'Climb the tower', downText: 'Climb down to the bridge', foot: T.foot.clone(), head: T.head.clone(), on: new Vector3( 0, SF.bridge, - 2.9 ), off: new Vector3( 0, SF.tower, - 0.85 ), speed: 0.55, needs: 'tower' },
+		{ id: 'tower', text: 'Climb the tower', downText: 'Climb down to the bridge', foot: T.foot.clone(), head: T.head.clone(), on: new Vector3( 0, SF.bridge, - 2.9 ), off: new Vector3( 0, SF.tower, - 1.0 ), speed: 0.55, needs: 'tower' },
 	];
 
 }

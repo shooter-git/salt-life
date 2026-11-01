@@ -375,7 +375,7 @@ export class KayakModel extends Vessel {
 
 			}
 
-			if ( e.kind === 'catch' && aboard && app.audio && app.audio.swimStroke ) app.audio.swimStroke();
+			if ( e.kind === 'catch' && aboard && app.audio && app.audio.paddleStroke ) app.audio.paddleStroke( Math.min( 1, e.f / 2 ) );
 
 		}
 

@@ -760,6 +760,8 @@ export class Rigs {
 
 	update( dt, { rDown, inp } ) {
 
+		if ( this.game.rod ) this.game.rod.electric = this.game.rod.rig === 'drop' && !! this.stats.electricReel;
+
 		const g = this.game, rod = g.rod, p = this.app.player, app = this.app;
 		// she's left, or berthed, or you're ashore: what's out of her comes in
 		if ( this.lines.length && ( ! ( p.mode === 'deck' || p.mode === 'boat' ) || p.riding || app.boatCtl.moored ) ) this.clearLines();

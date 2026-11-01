@@ -41,6 +41,7 @@ import { Speargun, groundHit } from './Speargun.js';
 import { CastNet, sweetWindow } from './CastNet.js';
 import { BAITS, BAIT_IDS } from './Bait.js';
 import { LobsterTools } from './LobsterTools.js';
+import { TrapWork } from './TrapWork.js';
 import { lb, feet, gallons } from './Units.js';
 import { SPECIES } from '../world/fish/FishSpecies.js';
 import { SEABED } from '../world/terrain/SeabedModel.js';
@@ -139,6 +140,8 @@ export class Game {
 		this._scoop = null;
 		this.netted = null;
 		this.lobsterAim = null;
+		// ((M16) lobster traps, at the hauler and out on the sea)
+		this.traps = new TrapWork( this );
 		// (Salt Life: the stalls are the app's, built with the village)
 		this.stand = app.stand || new FishStand( { scene: app.scene, terrain: app.terrainData, colliders: app.colliders } );
 		this.display = new CatchDisplay( { scene: app.scene, stall: this.stand.iceFish(), lite: app.tier === 'low' } );
@@ -306,6 +309,7 @@ export class Game {
 		this._floodSaid = this._fuelOut = this._anchorDue = this._bailing = false;
 		this._sonar = null;
 		this.fleet.boatChanged();
+		this.traps.boatChanged();
 		if ( this.state.hauled ) b.setHauled( this.cradle );
 		if ( app.localLights ) {
 
@@ -704,6 +708,8 @@ export class Game {
 		this.fleet.updatePrompt( inp, p );
 		// ((M16) out on her open deck in a squall: world/boat/console/Soak.js)
 		soakStep( this, dt );
+		// ((M16) lobster traps: set, hauled and on the sea)
+		this.traps.update( dt, lDown && ! panelOpen );
 		// prompts when the player has nothing to say
 		if ( ! p.prompt && ( can || canSpear ) ) p.prompt = this.prompt();
 		if ( this.rigs.alert ) p.prompt = this.rigs.alert;

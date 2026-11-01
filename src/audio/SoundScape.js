@@ -80,8 +80,6 @@ export const MIX = {
 	crickets: - 33, // inland at night
 	pierLap: - 32, // water lapping the piles, 3 m away
 	reef: - 43, // underwater: snapping-shrimp crackle and low rumble (hydrophone), kept well in the background
-	engineIdle: - 30, // at the helm
-	engineRun: - 22, // at the helm, full rpm
 	boatRush: - 27, // water past the hull at ~9 m/s
 	boatLap: - 34, // lapping on the hull, boat at rest
 	hullSlap: - 24, // hard slam at the helm (chop slaps while running are 6-14 dB quieter)
@@ -155,6 +153,18 @@ export const MIX = {
 	thunderNear: - 16, // a crack 1 km off (louder nearer, as the root of its nearness)
 	thunderFar: - 25, // a rumble 8 km off (falling to -35 at 20 km)
 	// (M10) the weather's cost to the boat, at the helm or on deck, and the shutters in a blow
+	engineIdle: - 30, // at the helm
+	engineRun: - 22, // at the helm, full rpm
+	// (M16) the fleet: each boat's engine is in ENGINES, these are the rest of what's new
+	paddle: - 36, // a stroke of the kayak's blade, right by you
+	reelElectric: - 34, // the sportfisher's electric reel winding
+	radioHiss: - 44, // the VHF's speaker, under what it says
+	radioSquelch: - 34, // its squelch breaking
+	turtleBreath: - 28, // a nesting turtle's sigh, a few metres off (they're heard across a quiet beach)
+	turtleSand: - 30, // a throw of her flippers
+	turtleCrawl: - 33, // a flipper biting in
+	turtleHatch: - 42, // a nest's hatchlings scrabbling, all of them out
+	hauler: - 30, // the lobster boat's trap hauler, at the rail
 	starter: - 22, // the engine catching (its starter cranking some 12 dB under it, as recorded)
 	hullBump: - 26, // the hull knocking a pile at 6 m/s (gentler knocks quieter, down to 10 dB)
 	hullKnock: - 19, // and the heavy wooden bang under a hard one
@@ -191,6 +201,20 @@ const NET_SET = [ 'splash', 'swim', 'emerge', 'step_water', 'step_wetsand' ];
 // at the helm); the shutters in a blow from this wind (m/s: (M14) a fresh breeze's, the loose ones begin)
 const HULL_SET = [ 'hull_slap', 'starter', 'hull_bump', 'shutter', 'keel_scrape', 'bucket', 'bilge_pump', 'bilge_slosh', 'hull_creak' ];
 const SHUTTER_WIND = 9;
+// (M16) each boat's own engine (none on the kayak: nothing but her paddle). starter: her own (the lobster boat's is 'starter'); idle and run: its beds, crossfaded with rpm
+// from fade[ 0 ] to fade[ 1 ] (the lobster boat has the one recording, opened up); db: at the helm at idle, at full rpm;
+// rate: of the running bed at rpm 0, and what full rpm adds (the recordings are of a cruise); lp: the top of what's
+// heard at rpm 0, and what full rpm adds: a diesel's below deck and dark, an outboard's out in the open behind you
+const ENGINES = {
+	lobster: { run: 'boat_engine', db: [ MIX.engineIdle, MIX.engineRun ], rate: [ 0.8, 0.85 ], lp: [ 900, 6500 ] },
+	console: { starter: 'outboard_start', idle: 'outboard_idle', run: 'outboard_run', fade: [ 0.18, 0.4 ], db: [ - 28, - 21 ], rate: [ 0.76, 0.48 ], lp: [ 1800, 8000 ] },
+	twin: { starter: 'outboard_start', idle: 'twin_idle', run: 'twin_run', fade: [ 0.18, 0.4 ], db: [ - 27, - 20 ], rate: [ 0.74, 0.46 ], lp: [ 1800, 8000 ] },
+	sportfisher: { starter: 'diesels_start', idle: 'diesels_idle', run: 'diesels_run', fade: [ 0.18, 0.42 ], db: [ - 32, - 23 ], rate: [ 0.74, 0.5 ], lp: [ 600, 4200 ] },
+	kayak: null,
+};
+// which of them a boat has: the console's two outboards are her own sound
+export const engineOf = ( id, twin ) => id === 'console' && twin ? 'twin' : id;
+const ENGINE_BEDS = [ 'boat_engine', 'outboard_idle', 'outboard_run', 'twin_idle', 'twin_run', 'diesels_idle', 'diesels_run' ];
 // ((M14) the roofs' sheets torn off and landing: loaded once the wind's near what tears them off (m/s: Marta's
 // sign goes from 27); a landing on the sand or the grass this much quieter (dB), slowed and its
 // top cut)
@@ -233,12 +257,12 @@ const STEP = {
 };
 
 // max simultaneous one-shot voices per category (oldest is faded out beyond this)
-const LIMITS = { step: 3, swim: 2, splash: 3, trans: 2, hull: 3, gull: 2, crash: 7, wash: 5, back: 5, bird: 4, tern: 2, whale: 4, rod: 4, fish: 3, coin: 1, net: 6, thunder: 2, start: 1, bucket: 2, creak: 2, shutter: 2, drip: 2, sheet: 3, whitecap: 4, plunge: 3 };
+const LIMITS = { turtle: 3, hatch: 2, radio: 1, step: 3, swim: 2, splash: 3, trans: 2, hull: 3, gull: 2, crash: 7, wash: 5, back: 5, bird: 4, tern: 2, whale: 4, rod: 4, fish: 3, coin: 1, net: 6, thunder: 2, start: 1, bucket: 2, creak: 2, shutter: 2, drip: 2, sheet: 3, whitecap: 4, plunge: 3 };
 // Salt Life: All the Spaces allows 16 / 32 / 64 sounds at once by device tier. Beds and one-shots
 // together stay under it (a new one-shot is left out when it's full), and the low tier keeps fewer of
 // each kind so the surf can't crowd out the footsteps.
 const VOICES = { low: 14, mid: 30, high: 62 };
-const LOW_LIMITS = { ...LIMITS, step: 2, splash: 2, hull: 2, gull: 1, crash: 3, wash: 2, back: 2, bird: 2, tern: 1, whale: 2, rod: 3, fish: 2, net: 3, thunder: 1, creak: 1, shutter: 1, drip: 1, sheet: 2, whitecap: 1, plunge: 1 };
+const LOW_LIMITS = { ...LIMITS, turtle: 2, hatch: 1, step: 2, splash: 2, hull: 2, gull: 1, crash: 3, wash: 2, back: 2, bird: 2, tern: 1, whale: 2, rod: 3, fish: 2, net: 3, thunder: 1, creak: 1, shutter: 1, drip: 1, sheet: 2, whitecap: 1, plunge: 1 };
 // a bed that has been silent this long (s) stops, freeing its voice (it starts again when wanted)
 const BED_IDLE = 4;
 
@@ -512,6 +536,60 @@ export class SoundScape {
 
 	}
 
+	// (M16) the kayak's blade going in (f: how hard it's pulled, 0..1)
+	paddleStroke( f = 0.6 ) {
+
+		const s = clamp( num( f, 0.6 ), 0, 1 );
+		this._shot( 'paddle', 'swim', this.above, MIX.paddle - ( 1 - s ) * 6 + ( Math.random() - 0.5 ) * 2, 0.94 + Math.random() * 0.12 );
+
+	}
+
+	// (M16) the VHF's speaker on (Radio: while it's reading or you're on a call), and its squelch breaking
+	radioOn( on ) {
+
+		this._radioOn = !! on;
+
+	}
+
+	radioSquelch() {
+
+		this._shot( 'radio_squelch', 'radio', this.above, MIX.radioSquelch + ( Math.random() - 0.5 ) * 2, 0.96 + Math.random() * 0.08 );
+
+	}
+
+	// (M16) the lobster boat's trap hauler turning, at the rail (TrapWork, while a trap comes up)
+	haulerRun( on ) {
+
+		this._hauling = !! on;
+
+	}
+
+	// (M16) a nesting turtle's night (world/NestingTurtles.js's `sounds`): App hands it these. x, y, z: where; s: 0..1
+	turtleHooks() {
+
+		const at = ( bank, cat, mix, rate, spread, ref ) => ( x, y, z, s ) => {
+
+			if ( s <= 0 ) return; // (the last hatchling gone)
+			try {
+
+				this._shotAt( bank, cat, x, y, z, MIX[ mix ] - ( 1 - clamp( num( s, 1 ), 0, 1 ) ) * 10, rate + Math.random() * spread, 0, ref, 1 );
+
+			} catch ( e ) {
+
+				this._warn( e );
+
+			}
+
+		};
+		return {
+			breath: at( 'turtle_breath', 'turtle', 'turtleBreath', 0.7, 0.12, 5 ), // (slowed: she's a big animal, and it's a slow sigh)
+			sandThrown: at( 'turtle_sand', 'turtle', 'turtleSand', 0.82, 0.2, 4 ),
+			crawlStroke: at( 'turtle_crawl', 'turtle', 'turtleCrawl', 0.72, 0.14, 4 ),
+			scramble: at( 'turtle_hatch', 'hatch', 'turtleHatch', 1.3, 0.25, 2.5 ),
+		};
+
+	}
+
 	swimStroke() {
 
 		if ( this.env.u > 0.5 ) this._shot( 'uw_swim', 'swim', this.under, MIX.uwSwim + ( Math.random() - 0.5 ) * 3, 0.9 + Math.random() * 0.2 );
@@ -534,7 +612,8 @@ export class SoundScape {
 	engineStart() {
 
 		this._engineOn = true;
-		for ( const n of [ 'boat_engine', 'boat_rush', 'boat_lap', 'hull_slap' ] ) this._want( n );
+		this._wantEngine();
+		for ( const n of [ 'boat_rush', 'boat_lap', 'hull_slap' ] ) this._want( n );
 
 	}
 
@@ -548,6 +627,19 @@ export class SoundScape {
 	boatReady() {
 
 		for ( const n of HULL_SET ) this._want( n );
+		this._boatWanted = true;
+		this._wantEngine();
+
+	}
+
+	// (M16) her engine's beds, whichever she is
+	_wantEngine() {
+
+		const E = ENGINES[ this.env.boat.sound ];
+		if ( ! E ) return;
+		this._want( E.run );
+		if ( E.starter ) this._want( E.starter );
+		if ( E.idle ) this._want( E.idle );
 
 	}
 
@@ -555,7 +647,9 @@ export class SoundScape {
 	// and runs on into her idle as the engine's bed comes up (at its own speed, to keep that time)
 	crank( catches ) {
 
-		this._shot( 'starter', 'start', this.boatSum, MIX.starter, 1, 0, catches ? 1 : 0 );
+		// ((M16) hers; slice 0 and any others are cranks that don't catch, slice 1 the one that does)
+		const E = ENGINES[ this.env.boat.sound ], bank = E && E.starter || 'starter', n = BANK[ bank ].slices.length;
+		this._shot( bank, 'start', this.boatSum, MIX.starter, 1, 0, catches ? 1 : n > 2 && Math.random() < 0.5 ? 2 : 0 );
 
 	}
 
@@ -815,9 +909,11 @@ export class SoundScape {
 
 	// continuous reel sounds, every frame: crankRate (crank turns / s: the gear ticking follows it),
 	// dragSpeed (m/s of line a fish takes against the drag), tension (0..1+, the line creaks near 1)
-	rodLoop( crankRate, dragSpeed, tension ) {
+	// (M16) electric: it's the sportfisher's electric reel on the line, not a hand on a crank
+	rodLoop( crankRate, dragSpeed, tension, electric = false ) {
 
-		const r = this._rod || ( this._rod = { crank: 0, drag: 0, tension: 0 } );
+		const r = this._rod || ( this._rod = { crank: 0, drag: 0, tension: 0, electric: false } );
+		r.electric = !! electric;
 		r.crank = clamp( num( crankRate, 0 ), 0, 3 );
 		r.drag = clamp( num( dragSpeed, 0 ), 0, 5 );
 		r.tension = clamp( num( tension, 0 ), 0, 2 );
@@ -830,7 +926,10 @@ export class SoundScape {
 		if ( ! r ) return;
 		// the recorded crank ticks ~16 times a second: about 1.4 crank turns a second
 		const wind = smooth( 0.05, 0.35, r.crank );
-		if ( wind > 0 || this._beds.has( 'reel_wind' ) ) this._bed( 'reel_wind', dB( MIX.reelWind ) * wind * ( 0.8 + 0.2 * Math.min( 1, r.crank ) ) / dB( BANK.reel_wind.lufs ), now, 0.08, clamp( r.crank / 1.4, 0.45, 1.3 ) );
+		const hand = r.electric ? 0 : wind, motor = r.electric ? wind : 0;
+		if ( hand > 0 || this._beds.has( 'reel_wind' ) ) this._bed( 'reel_wind', dB( MIX.reelWind ) * hand * ( 0.8 + 0.2 * Math.min( 1, r.crank ) ) / dB( BANK.reel_wind.lufs ), now, 0.08, clamp( r.crank / 1.4, 0.45, 1.3 ) );
+		// (M16) its motor up to speed with the winding, and labouring against what's on the line
+		if ( motor > 0 || this._beds.has( 'reel_electric' ) ) this._bed( 'reel_electric', dB( MIX.reelElectric ) * motor / dB( BANK.reel_electric.lufs ), now, 0.1, clamp( 0.75 + 0.25 * r.crank / 1.4 - 0.16 * Math.min( 1, r.tension ), 0.6, 1.2 ) );
 		const drag = smooth( 0.05, 0.7, r.drag );
 		if ( drag > 0 || this._beds.has( 'reel_drag' ) ) this._bed( 'reel_drag', dB( MIX.reelDrag ) * drag / dB( BANK.reel_drag.lufs ), now, 0.06, clamp( 0.7 + r.drag * 0.25, 0.7, 1.25 ) );
 		const strain = smooth( 0.7, 1.0, r.tension );
@@ -960,7 +1059,9 @@ export class SoundScape {
 		this._dest = {
 			surf_far: this.surfFar, wind: this.windLP, wind_sea: this.windLP, sea_open: this.above, palms: this.above, crickets: this.above, pier_lap: this.pierPan,
 			under_reef: this.under, birds_dawn: this.above, whale_song: this.songPan,
-			boat_engine: this.engineLP, boat_rush: this.boatSum, boat_lap: this.boatSum,
+			boat_engine: this.engineLP, outboard_idle: this.engineLP, outboard_run: this.engineLP, twin_idle: this.engineLP, twin_run: this.engineLP, diesels_idle: this.engineLP, diesels_run: this.engineLP,
+			reel_electric: this.rod, radio_hiss: this.above, hauler: this.boatSum,
+			boat_rush: this.boatSum, boat_lap: this.boatSum,
 			reel_wind: this.rod, reel_drag: this.rod, line_strain: this.rod,
 			rain_light: this.rainLP, rain_heavy: this.rainLP, rain_boat: this.above,
 			// (M11) on what it falls on
@@ -1520,6 +1621,15 @@ export class SoundScape {
 		eb.y = num( bp.y, eb.y );
 		eb.z = num( bp.z, eb.z );
 		eb.inside = !! b.listenerInside;
+		const sound = ENGINES[ b.sound ] !== undefined ? b.sound : 'lobster';
+		// (into another boat: hers ready before her first crank)
+		if ( sound !== eb.sound ) {
+
+			eb.sound = sound;
+			if ( this._boatWanted ) this._wantEngine();
+
+		}
+
 		// (M10) the hull you're aboard: the water in her bilge (a share of what reaches the engine), her pump
 		// at work, the keel sliding along the bottom (m/s), her wear and how hard she's working in a sea
 		const hb = s.hull || EMPTY, eh = e.hull;
@@ -1733,10 +1843,32 @@ export class SoundScape {
 		this._engine += ( ( this._engineOn ? 1 : 0 ) - this._engine ) * ( 1 - Math.exp( - dt * ( this._engineOn ? 3 : 1.2 ) ) );
 		const bd = Math.hypot( eb.x - e.lx, eb.z - e.lz );
 		const nearBoat = eb.active || bd < 60;
-		const eng = this._engine, rpm = eb.rpm;
-		this._bed( 'boat_engine', dB( lerp( MIX.engineIdle, MIX.engineRun, Math.pow( rpm, 0.8 ) ) ) * eng / dB( BANK.boat_engine.lufs ), now, 0.12,
-			( 0.8 + 0.85 * rpm ) * lerp( 0.75, 1, eng ) );
-		this._ramp( this.engineLP.frequency, 900 + 6500 * Math.pow( rpm, 1.3 ), 0.12 );
+		const eng = this._engine, rpm = eb.rpm, E = ENGINES[ eb.sound ];
+		// ((M16) the one that's hers: another boat's fades out, and the kayak has none)
+		for ( const n of ENGINE_BEDS ) if ( this._beds.has( n ) && ! ( E && ( n === E.run || n === E.idle ) ) ) this._bed( n, 0, now, 0.4 );
+		if ( E ) {
+
+			const level = dB( lerp( E.db[ 0 ], E.db[ 1 ], Math.pow( rpm, 0.8 ) ) ) * eng, rate = ( E.rate[ 0 ] + E.rate[ 1 ] * rpm ) * lerp( 0.75, 1, eng );
+			// (one bed and then the other, as it opens up: each holds on till the other's sounding, not yet loaded or left
+			// out when the voices are full, so she's never silent)
+			let w = E.idle ? smooth( E.fade[ 0 ], E.fade[ 1 ], rpm ) : 1;
+			if ( E.idle ) {
+
+				if ( w > 0 ) this._bed( E.run, level * Math.sin( w * Math.PI / 2 ) / dB( BANK[ E.run ].lufs ), now, 0.12, rate );
+				if ( ! this._beds.has( E.run ) ) w = 0;
+				if ( w < 1 ) this._bed( E.idle, level * Math.cos( w * Math.PI / 2 ) / dB( BANK[ E.idle ].lufs ), now, 0.12, ( 0.97 + 0.2 * rpm ) * lerp( 0.75, 1, eng ) );
+				if ( w === 0 && this._beds.has( E.run ) ) this._bed( E.run, 0, now, 0.12, rate );
+				else if ( w === 1 && this._beds.has( E.idle ) ) this._bed( E.idle, 0, now, 0.12 );
+
+			} else this._bed( E.run, level / dB( BANK[ E.run ].lufs ), now, 0.12, rate );
+
+			this._ramp( this.engineLP.frequency, E.lp[ 0 ] + E.lp[ 1 ] * Math.pow( rpm, 1.3 ), 0.12 );
+
+		}
+
+		// (M16) the VHF's speaker, and the trap hauler
+		this._bed( 'radio_hiss', this._radioOn ? dB( MIX.radioHiss ) / dB( BANK.radio_hiss.lufs ) : 0, now, 0.1 );
+		this._bed( 'hauler', this._hauling && nearBoat ? dB( MIX.hauler ) / dB( BANK.hauler.lufs ) : 0, now, 0.25 );
 		const sp = eb.speed;
 		this._bed( 'boat_rush', nearBoat ? dB( MIX.boatRush ) * smooth( 0.4, 9, sp ) / dB( BANK.boat_rush.lufs ) : 0, now, 0.3, 0.85 + 0.02 * Math.min( sp, 12 ) );
 		// ((M15) the lapping and the slaps as big as the sea she's in: seaBig, 1 a fair day's open sea)

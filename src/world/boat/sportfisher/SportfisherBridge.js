@@ -355,6 +355,17 @@ export const TOWER = {
 	rungs: 13, ladderW: 0.44,
 };
 
+// its helm, as a tower's is: a small pod at the forward rail with its own wheel and levers. You stand to it; eye, rise as Vessel's
+// helm, reach how near you need to be (the platform's only 1.25 m long, and the ladder's head is on it)
+const POD = { z: TOWER.z1 - 0.26, top: Y + 1.0 };
+export const TOWER_HELM = {
+	z: - 0.58, reach: 0.3, rise: [ 0, - 0.62 ], eye: V( 0, Y + 1.62, - 0.58 ),
+	wheelCenter: V( 0, POD.top - 0.14, POD.z - 0.2 ), wheelAxis: V( 0, - Math.sin( 0.2 ), Math.cos( 0.2 ) ), wheelScale: 0.75,
+	throttlePivot: V( 0.16, POD.top + 0.05, POD.z ),
+	compassAt: V( - 0.04, POD.top + 0.08, POD.z ),
+	pod: { hx: 0.28, y0: Y + 0.68, y1: POD.top, z0: POD.z - 0.14, z1: POD.z + 0.14 },
+};
+
 // and where its legs stand
 const LEG = [
 	[ V( 1.72, SF.bridge + 0.12, - 3.0 ), V( TOWER.hx, Y, TOWER.z0 ) ],
@@ -422,14 +433,26 @@ export function buildTower( kit, L, q ) {
 	const roofG = rbx( - hx - 0.04, roof, rz0 - 0.1, hx + 0.04, roof + 0.07, rz1 + 0.1, 0.03, q.low ? 1 : 2 );
 	kit.add( B, roofG, { color: WHITE, rough: 0.3 } );
 
-	// the upper station: a small pod with a wheel and levers, as the tower's helm is
-	const pz = z1 - 0.26, py = Y + 1.0;
-	kit.add( B, rbx( - 0.28, Y + 0.68, pz - 0.14, 0.28, py, pz + 0.14, 0.02 ), { color: WHITE, rough: 0.3 } );
-	kit.add( B, rod( V( 0, py - 0.14, pz ), V( 0, py - 0.14, pz - 0.2 ), 0.012, thin ), STEEL );
-	const w = torus( 0.15, 0.012, 5, q.low ? 12 : 22 );
-	w.applyMatrix4( mat4( 0, py - 0.14, pz - 0.2, 0.2, 0, 0 ) );
-	kit.add( B, w, BLACK );
-	kit.add( B, bx( 0.15, py, pz - 0.05, 0.25, py + 0.05, pz + 0.05 ), BLACK );
+	// the upper station: its pod, stayed to the forward rail; the wheel on its shaft (the wheel itself: Model.wheelMesh) and the levers' box
+	const P = TOWER_HELM.pod, pz = POD.z, py = POD.top, wc = TOWER_HELM.wheelCenter;
+	kit.add( B, rbx( - P.hx, P.y0, P.z0, P.hx, P.y1, P.z1, 0.02 ), { color: WHITE, rough: 0.3 } );
+	for ( const s of [ 1, - 1 ] ) kit.add( B, rod( V( s * 0.2, py - 0.08, P.z1 ), V( s * 0.2, ring, z1 ), 0.012, thin ), TUBE );
+	kit.add( B, rod( V( 0, wc.y, pz ), wc, 0.012, thin ), STEEL );
+	kit.add( B, bx( 0.06, py, pz - 0.08, 0.26, py + 0.05, pz + 0.08 ), BLACK );
+
+	// a compass and her revs and speed on the pod's top (not on a phone: a draw for each's more than she has)
+	if ( ! q.low ) {
+
+		const c = TOWER_HELM.compassAt, facingUp = ( x, z ) => new Matrix4().makeBasis( V( - 1, 0, 0 ), V( 0, 0, 1 ), V( 0, 1, 0 ) ).setPosition( x, py + 0.002, z );
+		kit.add( B, lathe( [ [ 0, 0 ], [ 0.05, 0 ], [ 0.064, 0.012 ], [ 0.07, 0.05 ], [ 0.07, 0.07 ], [ 0, 0.07 ] ], 16 ).translate( c.x, py, c.z ), BLACK );
+		for ( const [ z, name ] of [ [ pz - 0.07, 'tach' ], [ pz + 0.07, 'speed' ] ] ) {
+
+			kit.add( B, torus( 0.043, 0.006, 4, 16 ).applyMatrix4( facingUp( - 0.2, z ) ), STEEL );
+			kit.add( 'towerDisplay', toAtlas( new CircleGeometry( 0.042, 20 ), name ).applyMatrix4( facingUp( - 0.2, z ) ), {} );
+
+		}
+
+	}
 
 	// a dome on the roof, the masthead's
 	kit.add( B, sphere( 0.2, q.low ? 8 : 14, 6, 0, Math.PI * 2, 0, Math.PI / 2 ).translate( 0, roof + 0.1, ( rz0 + rz1 ) / 2 ), { color: 0xeeece4, rough: 0.5 } );

@@ -12,6 +12,7 @@ import { PLACES } from './Places.js';
 import { ChartLog } from './Chart.js';
 import { BOATS, START_BOAT } from '../world/boat/Boats.js';
 import { cleanDays } from './Seaworthy.js';
+import { newTraps, cleanTraps } from './Traps.js';
 
 const SAVE_KEY = 'tidewater.save.v1';
 
@@ -69,6 +70,7 @@ export class GameState {
 		this.shells = readShells(); // ((M16) the shell collection: Shells.js)
 		this.chart = new ChartLog(); // ((M15) the chart you fill in: Chart.js)
 		this.days = cleanDays(); // ((M16) ice, stores, how long you've been out: DaysOut.js)
+		this.traps = newTraps(); // ((M16) your lobster traps out on the sea: Traps.js)
 		this._nextId = 1;
 		this.listeners = new Set();
 		this._chartBought();
@@ -926,7 +928,7 @@ export class GameState {
 	toJSON() {
 
 		this._boatAway();
-		return { v: 2, boat: this.boat, fleet: this.fleet, earned: this.earned, dues: this.dues, money: this.money, inventory: this.inventory, log: this.log, places: this.places, trophies: this.trophies, found: this.found, upgrades: this.upgrades, fuel: this.fuel, hull: this.hull, hauled: this.hauled, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, bag: this.bag, finds: this.finds, picked: this.picked, shells: this.shells, chart: this.chart.toJSON(), days: this.days, nextId: this._nextId };
+		return { v: 2, boat: this.boat, fleet: this.fleet, earned: this.earned, dues: this.dues, money: this.money, inventory: this.inventory, log: this.log, places: this.places, trophies: this.trophies, found: this.found, upgrades: this.upgrades, fuel: this.fuel, hull: this.hull, hauled: this.hauled, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, bag: this.bag, finds: this.finds, picked: this.picked, shells: this.shells, chart: this.chart.toJSON(), days: this.days, traps: this.traps, nextId: this._nextId };
 
 	}
 
@@ -976,6 +978,7 @@ export class GameState {
 		this.chart.fromJSON( d.chart );
 		this._chartBought();
 		this.days = cleanDays( d.days );
+		this.traps = cleanTraps( d.traps );
 		this._nextId = Math.max( d.nextId | 0, ...this.inventory.map( ( f ) => f.id + 1 ), 1 );
 		return true;
 
@@ -1035,6 +1038,7 @@ export class GameState {
 		this.chart.reset();
 		this._chartBought();
 		this.days = cleanDays();
+		this.traps = newTraps();
 		this.save();
 		this.emit();
 

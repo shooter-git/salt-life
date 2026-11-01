@@ -134,6 +134,8 @@ export class Radio {
 	// per frame: R at the helm, its keys while it's open, and the broadcast's words
 	update( dt, inp, lDown ) {
 
+		const au = this.game.app.audio;
+		if ( au && au.radioOn ) au.radioOn( this.listening || !! this.call );
 		const hit = inp.hit( 'KeyR' );
 		if ( this.open ) {
 
@@ -256,6 +258,7 @@ export class Radio {
 		}
 
 		this.call = { job, say, can, drop };
+		this._squelch();
 		this.pick = 0;
 		this.draw();
 
@@ -283,6 +286,7 @@ export class Radio {
 
 		if ( ! this._pearl() ) return;
 		this.call = pearlCall( this.game );
+		this._squelch();
 		this.pick = 0;
 		this.draw();
 
@@ -300,6 +304,7 @@ export class Radio {
 
 		this.pick = this.call && this.call.who === 'pearl' ? 2 : 1;
 		this.call = null;
+		this._squelch();
 		this.draw();
 
 	}
@@ -378,6 +383,7 @@ export class Radio {
 
 		if ( on === this.listening ) return;
 		this.listening = on;
+		this._squelch();
 		this.line = - 1;
 		this._wait = 0;
 		this._round = false;
@@ -385,6 +391,14 @@ export class Radio {
 		this.words.classList.toggle( 'is-on', on );
 		if ( on ) this._next();
 		else this.wordsText.textContent = '';
+
+	}
+
+	// (M16) the squelch breaking, as it comes on or goes off
+	_squelch() {
+
+		const a = this.game.app.audio;
+		if ( a && a.radioSquelch ) a.radioSquelch();
 
 	}
 

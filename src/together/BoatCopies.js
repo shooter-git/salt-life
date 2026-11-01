@@ -276,6 +276,16 @@ export class BoatCopies {
 
 	}
 
+	// (M16) what her skipper's pose says she has fitted, on a copy that can show it
+	fit( b, gear ) {
+
+		const u = b.userData;
+		if ( u.twin === gear.twin || ! u.model.fitCopy ) return;
+		u.twin = gear.twin;
+		u.model.fitCopy( b, gear );
+
+	}
+
 	drop( b ) {
 
 		const app = this.app, u = b.userData, e = this.types.get( u.type );

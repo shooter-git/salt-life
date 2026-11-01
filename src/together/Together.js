@@ -1,3 +1,4 @@
+import { engineOf } from '../audio/SoundScape.js';
 import { berthOf } from '../game/fleet/Berths.js';
 import { Vector3, Quaternion, Matrix4, MathUtils } from '../engine/index.js';
 import { gltfLoader } from '@allthespaces/portal/three';
@@ -1261,9 +1262,12 @@ export class Together {
 		const q = boat.quaternion, bp = boat.position;
 		body.B = [ r2( bp.x ), r2( bp.y ), r2( bp.z ), r3( q.x ), r3( q.y ), r3( q.z ), r3( q.w ), r2( app.waves.heightAt( bp.x, bp.z ) ) ];
 		body.Y = app.boat.id; // (M16) which boat she is
+		const gear = app.boat.gearBits?.(); // (and what's fitted on her, on a boat whose copies can show it)
+		if ( gear !== null && gear !== undefined ) body.G = gear;
+		if ( app.boat.fitted && app.boat.fitted.twin ) body.W = 1; // (her two outboards, for the sound)
 		if ( p.riding ) body.R = p.boat.owner;
 		// (M16) your job aboard (Crew.js), and at someone else's helm, the lever and the wheel
-		if ( this.crew.job === 'tower' ) body.J = 1;
+		if ( this.crew.job === 'tower' || ( m === 'h' && p.atHelm?.upper ) ) body.J = 1; // (at the tower's helm: their job's still the helm, Crew's)
 		else if ( this.crew.job === 'chair' ) body.J = 2;
 		if ( p.riding && m === 'h' ) body.c = [ r2( p.boat.throttle ), r2( p.boat.steer ) ];
 		if ( body.B && this.app.searchlight ) body.S = 1; // (your boat's searchlight is on)
@@ -1377,12 +1381,12 @@ export class Together {
 				if ( Math.hypot( frame.pos.x - p.position.x, frame.pos.z - p.position.z ) > sizeOf( c.boatId ).length + 8 ) continue;
 				const model = this._nearModel( o, c.boatId );
 				if ( ! model ) continue;
-				const M = perched( model );
+				const worn = model.withGear( c.gear ), M = perched( worn );
 				_bp.copy( M.boardPoint ).applyQuaternion( frame.quat ).add( frame.pos );
 				const d = Math.hypot( _bp.x - p.position.x, _bp.z - p.position.z );
 				if ( d > 4.2 || Math.abs( _bp.y - p.position.y ) > 3.2 || d > best ) continue;
 				best = d;
-				if ( ! o.theirBoat || o.theirBoat.base !== model ) ( o.theirBoat = new TheirBoat( o.person.id, M ) ).base = model;
+				if ( ! o.theirBoat || o.theirBoat.base !== worn ) ( o.theirBoat = new TheirBoat( o.person.id, M ) ).base = worn;
 				o.theirBoat.follow( frame, 0 );
 				p.rideOffer = { name: o.person.name, boat: o.theirBoat };
 
@@ -1497,6 +1501,14 @@ export class Together {
 			if ( show ) {
 
 				h.boatIdle = 0;
+				const gear = h.cur && h.cur.gear;
+				if ( gear !== null && gear !== undefined && gear !== boat.userData.gear ) {
+
+					boat.userData.gear = gear;
+					boat.userData.model.dressCopy( boat, gear );
+
+				}
+
 				boat.position.copy( frame.pos );
 				boat.quaternion.copy( frame.quat );
 
@@ -1816,6 +1828,8 @@ export class Together {
 		cur.ride = typeof near.R === 'string' ? near.R : null;
 		// ((M16) which boat she is (a game that doesn't say: the lobster boat), their job aboard, the lever and wheel at another's helm)
 		cur.boatId = isBoat( near.Y ) ? near.Y : 'lobster';
+		cur.gear = Number.isInteger( near.G ) ? near.G : null;
+		cur.twin = near.W === 1;
 		cur.job = near.J === 1 ? 'tower' : near.J === 2 ? 'chair' : null;
 		cur.helm = Array.isArray( near.c ) && near.c.length === 2 && near.c.every( Number.isFinite ) ? [ MathUtils.clamp( near.c[ 0 ], - 1, 1 ), MathUtils.clamp( near.c[ 1 ], - 1, 1 ) ] : null;
 		cur.spot = near.S === 1;
@@ -1884,6 +1898,7 @@ export class Together {
 		// their boat, the boat she is
 		const has = !! c && !! c.boat, drawn = has ? c.drawn || c.boat : null;
 		const boat = this._showBoat( o, has ? c.boatId : o.boat ? o.boat.userData.type : 'lobster', drawn, has && ( boatShown || boatSeen ), boatShown );
+		if ( boat && has ) this.copies.fit( boat, { twin: c.twin } );
 		if ( boat ) {
 
 			boat.userData.lamps.set( { underway: c.mode === 'helm' || ! c.anchored, spot: c.spot } );
@@ -1942,7 +1957,7 @@ export class Together {
 		if ( deck && c.mode === 'helm' ) {
 
 			// (on the sole under her helm: its camera's eye is lower than a figure standing there)
-			const helm = M.helmEye;
+			const helm = c.job === 'tower' && M.towerHelm ? M.towerHelm.eye : M.helmEye;
 			_bp.set( helm.x, footY( M, helm.x, helm.z, helm.y - 1 ), helm.z ).applyQuaternion( deck.quat ).add( deck.pos );
 			g.position.copy( _bp );
 			_bq.setFromAxisAngle( _up, c.yaw + Math.PI );
@@ -2197,7 +2212,7 @@ export class Together {
 		if ( p.riding ) {
 
 			const o = this.others.get( p.boat.owner ), c = o && o.cur;
-			return { active: !! ( c && c.rpm > 0.05 ), rpm: c ? c.rpm : 0, crank: c ? c.crank : 0, speed: p.boat.speed, position: p.boat.position, hull: c ? c.hull : null };
+			return { active: !! ( c && c.rpm > 0.05 ), rpm: c ? c.rpm : 0, crank: c ? c.crank : 0, speed: p.boat.speed, position: p.boat.position, hull: c ? c.hull : null, id: c ? engineOf( c.boatId, c.twin ) : 'lobster' };
 
 		}
 
@@ -2218,7 +2233,7 @@ export class Together {
 
 		}
 
-		return best ? { active: best.cur.rpm > 0.05, rpm: best.cur.rpm, crank: best.cur.crank, speed: best.boatSpeed, position: ( best.cur.drawn || best.cur.boat ).pos, hull: best.cur.hull } : null;
+		return best ? { active: best.cur.rpm > 0.05, rpm: best.cur.rpm, crank: best.cur.crank, speed: best.boatSpeed, position: ( best.cur.drawn || best.cur.boat ).pos, hull: best.cur.hull, id: engineOf( best.cur.boatId, best.cur.twin ) } : null;
 
 	}
 

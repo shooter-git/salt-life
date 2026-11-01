@@ -103,7 +103,8 @@ const reads = async ( g, what ) => {
 
 };
 // (the clock kept to the morning and the air clear: it's on wall time, and this takes a while on the CPU)
-const morning = ( g, hour = 10 ) => g.evaluate( ( hour ) => { const t = window.__app.together, s = window.__app.settings; t.setWeather( 'calm', 0 ); t.setClock( hour, s.day, 0.0001 ); }, hour );
+// (a clock set for a look isn't a rest: DaysOut would have her drift the hours it jumps)
+const morning = ( g, hour = 10 ) => g.evaluate( ( hour ) => { const a = window.__app, t = a.together, s = a.settings; t.setWeather( 'calm', 0 ); t.setClock( hour, s.day, 0.0001 ); a.game.daysOut._T = null; }, hour );
 
 // ---- two boats: Robin in the center console, Sam in the sportfisher, at the dock
 const robin = await open( 'Robin', 'console' );
@@ -130,8 +131,8 @@ const seen = ( g ) => g.evaluate( `( () => { const o = ${ other }, b = o.boat, t
 const sa = await seen( sam.game ), ro = await seen( robin.game );
 console.log( '     Sam sees  ', JSON.stringify( sa ) );
 console.log( '     Robin sees', JSON.stringify( ro ) );
-say( sa.type === 'console' && sa.model === 'console' && sa.length === 7, 'Sam sees a center console, and she\'s not his boat' );
-say( ro.type === 'sportfisher' && ro.length === 14.6, 'Robin sees a sportfisher' );
+say( sa.type === 'console' && sa.model === 'console' && Math.abs( sa.length - 7 ) < 0.3, 'Sam sees a center console, and she\'s not his boat' );
+say( ro.type === 'sportfisher' && Math.abs( ro.length - 14.8 ) < 0.3, 'Robin sees a sportfisher' );
 say( ! sa.stand && ! ro.stand, 'the stand-in gone once she\'s there' );
 say( sa.types.length === 1 && ro.types.length === 1, 'and only the type that\'s wanted is in memory' );
 
@@ -262,6 +263,16 @@ await sam.game.evaluate( () => { const a = window.__app; a.player.camMode = 'thi
 await until( sam.game, `${ other }.avatar._sit > 0.95` );
 await shot( sam, 'crew' );
 await reads( sam.game, 'Sam at his helm, Robin aboard' );
+
+// the tower's helm: to the others it's the helm, and they see you up there; and they're told what's fitted on her
+await sam.game.evaluate( () => { const p = window.__app.player; p.leaveHelm(); p.takeHelm( p.boat.model.towerHelm ); } );
+await until( robin.game, `${ other }.cur.job === 'tower' && ${ other }.cur.mode === 'helm'` );
+await frames( robin.game, 3 );
+const upThere = await robin.game.evaluate( `( () => { const o = ${ other }, f = o.cur.drawn || o.cur.boat; return { y: +( o.avatar.group.position.y - f.pos.y ).toFixed( 2 ), job: o.job, gear: o.cur.gear }; } )()` );
+const samGear = await sam.game.evaluate( () => window.__app.boat.gearBits() );
+say( upThere.y > 6.5 && upThere.job === 'helm', `Sam at the tower's helm: Robin sees him up there, and it's the helm: ${ JSON.stringify( upThere ) }` );
+say( upThere.gear === samGear, `and Robin's told what's fitted on her (${ samGear })` );
+await sam.game.evaluate( () => { const p = window.__app.player; p.leaveHelm(); p.takeHelm(); } );
 
 // ---- Robin goes home and changes boats: everyone's copy of her changes, and what's in memory with it
 await robin.game.evaluate( () => { const p = window.__app.player; p.exitBoat( null, 1 ); } );

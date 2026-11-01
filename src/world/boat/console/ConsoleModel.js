@@ -110,7 +110,7 @@ export class ConsoleModel extends Vessel {
 		// ---- anchor points
 		const S = DECK.sole, eyeY = S + 1.62;
 		this.helmEye = new Vector3( WHEEL.x, eyeY, CONSOLE.back - 0.32 );
-		this.helm = { x: WHEEL.x, z: CONSOLE.back - 0.2, eye: this.helmEye, rise: [ 0.72, CONSOLE.back - 0.15 ] };
+		this.helm = { x: WHEEL.x, z: CONSOLE.back - 0.2, eye: this.helmEye, rise: [ 0.72, CONSOLE.back - 0.15 ], open: true };
 		this.boardPoint = new Vector3( 0.5, S, - 2.1 );
 		// (at the rail anywhere along her, from the box aft to the seats, to jump or step off)
 		// (and on the platform, by the ladder)
@@ -178,6 +178,18 @@ export class ConsoleModel extends Vessel {
 		this.rainTops = this.colliders.filter( ( c ) => [ 'foredeck', 'aftBox', 'post' ].includes( c.tag ) || ( c.tag === 'roof' && F.tTop ) )
 			.map( ( c ) => ( { x0: c.center.x - c.half.x, x1: c.center.x + c.half.x, z0: c.center.z - c.half.z, z1: c.center.z + c.half.z, y: c.center.y + c.half.y } ) );
 		for ( const c of this.colliders ) if ( c.tag === 'rack' ) c.solid = F.tankRack;
+
+	}
+
+	// (M16) a copy of her on someone else's game, with the engines her owner has. A low tier's copy has no gear. Her rigging
+	// hoses stay as the copy's were: they share one geometry among all her copies
+	fitCopy( group, { twin } ) {
+
+		const a = group.getObjectByName( 'boat-outboard-tilt' ), b = group.getObjectByName( 'boat-outboard2-tilt' );
+		if ( ! a || ! b ) return;
+		a.position.x = twin ? MOUNT.twinX : 0;
+		b.position.x = - MOUNT.twinX;
+		b.visible = twin;
 
 	}
 

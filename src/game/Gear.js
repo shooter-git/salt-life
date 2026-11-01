@@ -140,6 +140,15 @@ export const UPGRADES = {
 		{ cost: 0, label: 'A bucket', pumpLs: 0 },
 		{ cost: 120, label: 'Electric bilge pump', pumpLs: 0.3 },
 	] },
+	// (M16) lobster traps, each with its warp and buoy (Traps.js): for the hauler and davit only she has, so they're hers.
+	// About $70 each, as a wire trap, 120 ft of warp and a buoy cost. unlock: false, what the sportfisher's unlock doesn't
+	// ask for
+	traps: { name: 'Lobster traps', on: 'lobster', unlock: false, levels: [
+		{ cost: 0, label: 'None', traps: 0 },
+		{ cost: 140, label: '2 wire traps, warp and buoys', traps: 2 },
+		{ cost: 140, label: '4 wire traps, warp and buoys', traps: 4 },
+		{ cost: 280, label: '8 wire traps, warp and buoys', traps: 8 },
+	] },
 	// (M15) a chart of the island and its waters out to the drop-off, for those who'd rather not chart it
 	// themselves (Chart.js: the island's sheet and its names, the far sheet within SOLD.r); a waterproof one,
 	// as a chandlery sells them, at what one costs
