@@ -1261,6 +1261,8 @@ export class Together {
 		const q = boat.quaternion, bp = boat.position;
 		body.B = [ r2( bp.x ), r2( bp.y ), r2( bp.z ), r3( q.x ), r3( q.y ), r3( q.z ), r3( q.w ), r2( app.waves.heightAt( bp.x, bp.z ) ) ];
 		body.Y = app.boat.id; // (M16) which boat she is
+		const gear = app.boat.gearBits?.(); // (and what's fitted on her, on a boat whose copies can show it)
+		if ( gear !== null && gear !== undefined ) body.G = gear;
 		if ( p.riding ) body.R = p.boat.owner;
 		// (M16) your job aboard (Crew.js), and at someone else's helm, the lever and the wheel
 		if ( this.crew.job === 'tower' || ( m === 'h' && p.atHelm?.upper ) ) body.J = 1; // (at the tower's helm: their job's still the helm, Crew's)
@@ -1377,12 +1379,12 @@ export class Together {
 				if ( Math.hypot( frame.pos.x - p.position.x, frame.pos.z - p.position.z ) > sizeOf( c.boatId ).length + 8 ) continue;
 				const model = this._nearModel( o, c.boatId );
 				if ( ! model ) continue;
-				const M = perched( model );
+				const worn = model.withGear( c.gear ), M = perched( worn );
 				_bp.copy( M.boardPoint ).applyQuaternion( frame.quat ).add( frame.pos );
 				const d = Math.hypot( _bp.x - p.position.x, _bp.z - p.position.z );
 				if ( d > 4.2 || Math.abs( _bp.y - p.position.y ) > 3.2 || d > best ) continue;
 				best = d;
-				if ( ! o.theirBoat || o.theirBoat.base !== model ) ( o.theirBoat = new TheirBoat( o.person.id, M ) ).base = model;
+				if ( ! o.theirBoat || o.theirBoat.base !== worn ) ( o.theirBoat = new TheirBoat( o.person.id, M ) ).base = worn;
 				o.theirBoat.follow( frame, 0 );
 				p.rideOffer = { name: o.person.name, boat: o.theirBoat };
 
@@ -1497,6 +1499,14 @@ export class Together {
 			if ( show ) {
 
 				h.boatIdle = 0;
+				const gear = h.cur && h.cur.gear;
+				if ( gear !== null && gear !== undefined && gear !== boat.userData.gear ) {
+
+					boat.userData.gear = gear;
+					boat.userData.model.dressCopy( boat, gear );
+
+				}
+
 				boat.position.copy( frame.pos );
 				boat.quaternion.copy( frame.quat );
 
@@ -1816,6 +1826,7 @@ export class Together {
 		cur.ride = typeof near.R === 'string' ? near.R : null;
 		// ((M16) which boat she is (a game that doesn't say: the lobster boat), their job aboard, the lever and wheel at another's helm)
 		cur.boatId = isBoat( near.Y ) ? near.Y : 'lobster';
+		cur.gear = Number.isInteger( near.G ) ? near.G : null;
 		cur.job = near.J === 1 ? 'tower' : near.J === 2 ? 'chair' : null;
 		cur.helm = Array.isArray( near.c ) && near.c.length === 2 && near.c.every( Number.isFinite ) ? [ MathUtils.clamp( near.c[ 0 ], - 1, 1 ), MathUtils.clamp( near.c[ 1 ], - 1, 1 ) ] : null;
 		cur.spot = near.S === 1;

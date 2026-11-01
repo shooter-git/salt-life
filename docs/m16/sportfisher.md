@@ -39,7 +39,7 @@ Cockpit to mezzanine by a step; through the door to the salon; down the companio
 
 **The climb** (`LadderClimb`, `player.climbing`; the player's mode stays `'deck'`, so all that asks "are you aboard" still says yes). W and S on the rungs, or the stick. A boat that rolls swings a tower through the air: at the head of the ladder, 7 m up, a 15 degree roll every 4 seconds throws you sideways at 0.67 of your weight (`swayAt`: her heel's share of gravity and her roll's acceleration times your height, measured in the test). You hold 0.72 of your weight still, 0.42 moving, with a hand off. Past that your grip drains at 2.4 a second per g over, and comes back at 0.6 a second when she eases. "Hold on" comes up before you're gone: stop, and let her come back. Come off and you go the way she threw you, at her speed: onto a deck, winded three seconds, or into the sea, to swim for it.
 
-**The tower's helm.** With the tower fitted, E at its pod takes her second helm (`towerHelm`, `helmAt( p, reach )`): you drive standing on the platform with your eye at 8.62 m, and rise onto the platform when you leave. Her two wheels are one instanced draw, so phones stay at 13; steering's hydraulic, so only the wheel in your hands turns (`helmInUse`, set by `Player.takeHelm`). Everything else about a helm holds: a rider takes it only when `helmFree` says so, and to the crew it's the helm (`jobAt`). The pose says where: `J: 1` with mode `'h'` is someone at the tower's helm, and `Together` draws them up there. They don't call what they see, as `Crew._spot` is for job `'tower'`.
+**The tower's helm.** With the tower fitted, E at its pod takes her second helm (`towerHelm`, `helmAt( p, reach )`): you drive standing on the platform with your eye at 8.62 m, and rise onto the platform when you leave. Her two wheels are one instanced draw, so phones stay at 13; steering's hydraulic, so only the wheel in your hands turns (`helmInUse`, set by `Player.takeHelm`). Everything else about a helm holds: a rider takes it only when `helmFree` says so, and to the crew it's the helm (`jobAt`). The pose says where: `J: 1` with mode `'h'` is someone at the tower's helm, and `Together` draws them up there. From it you still call what you look at (`Crew`), and its pod has a compass and her revs and speed, but for a phone's.
 
 **What you can see.** The eye's real: the camera stands at 8.62 m, so the sea's horizon goes out to 10.5 km and `FarIsland`, `Glare` and the rest set things down under it by that eye. What you chart goes as the root of your height over the deck's (`Chart.sightOf`: 320 m from a deck, 590 m from the tower).
 
@@ -52,6 +52,8 @@ Cockpit to mezzanine by a step; through the door to the salon; down the companio
 ## What others read
 
 `bunks`, `chair`, `rodHolders`, `outriggerTips`, `stations`, `lowCopy`, `towerEye`, `towerHelm`, `fit( stats )`, `setPaint( hex )`, `setOutriggersOut( out )`. `fit` takes `tower`, `outriggers` and `chair` or `chair`; a stat that's undefined is shown, so she's whole until the fleet's tracks come.
+
+**On someone else's.** A pose says what's fitted (`gearBits`, `G`): their copy's dressed as that (`dressCopy`) and you walk about on her as that (`withGear`), so their tower's there to climb whether or not you've one. An anchored boat with nobody home goes as she is. The console's and the kayak's fittings are cut from one shared geometry, so their copies can't yet.
 
 ## Phones
 
