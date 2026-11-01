@@ -10,7 +10,7 @@ import { V, bx, rbx, plate, WHITE, LINING, TEAK, STEEL, BLACK } from './Sportfis
 // the tuna tower on four raked legs, its long ladder and its top station, and the outriggers. Shaped after the Viking 48's
 // bridge and the towers in Marlin's survey (docs/m16/sportfisher.md).
 
-const TUBE = { color: 0xdfe2e4, rough: 0.22, metal: 1 };
+const TUBE = { color: 0xe4e6e8, rough: 0.3, metal: 0.35 };
 
 // the bridge's half-width at z: straight sides, a rounded taper into her bow-ward point
 export function bridgeX( z ) {
@@ -397,7 +397,7 @@ export function buildTower( kit, L, q ) {
 	for ( let i = 1; i <= rungs; i ++ ) {
 
 		const p = foot.clone().lerp( head, i / ( rungs + 1 ) );
-		kit.add( B, rod( V( - lw / 2, p.y, p.z ), V( lw / 2, p.y, p.z ), 0.012, thin ), { color: 0xc9ccd0, rough: 0.5, metal: 0.8 } );
+		kit.add( B, rod( V( - lw / 2, p.y, p.z ), V( lw / 2, p.y, p.z ), 0.012, thin ), { color: 0xc9ccd0, rough: 0.5, metal: 0.35 } );
 
 	}
 

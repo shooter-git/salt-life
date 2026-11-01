@@ -12,7 +12,7 @@ const vec3 = ( c ) => `vec3( ${ c.r.toFixed( 5 ) }, ${ c.g.toFixed( 5 ) }, ${ c.
 
 // how much white gelcoat in deep shade is lifted by the sea's bounce: the world's sky fill is kept low for the sand, and
 // the underside of her overhang and the faces away from the sun otherwise come out black
-const OUTSIDE_FILL = 0.1;
+const OUTSIDE_FILL = 0.3;
 const CABIN_FILL = 0.8; // her downlights
 const CABIN_SUN = 0.04; // what daylight gets in: the sun's shadows aren't drawn on a phone, and without this it lights her soles through the deck
 

@@ -30,8 +30,8 @@ Shape: the 2008 Viking 48's walk-round photographs ([Off the Hook Yachts](https:
 - `SportfisherBridge`: the flybridge and its centre helm (the instruments' atlas, as the lobster boat's), the hardtop on its frame, the cockpit's ladder, the tower and its long ladder, the outriggers.
 - `SportfisherDecks`: where you can stand. Her levels, as floors with a height at each point (`soleY`), what keeps you on the one you're on (`clampToDeck`) and the solid boxes.
 - `LadderClimb`: the climb, below.
-- `tools/sportfisher/seats.py`, `build-seats.mjs`: the fighting chair and the helm seat, modelled by script in Blender, packed into `seats.data.js`. The packed file ships with her chunk, so Node's tests build her as the game does.
-- `tools/sportfisher/view.html`, `shots.mjs`: her alone on flat water, for comparing with the photographs.
+- `tools/sportfisher/seats.py`, `build-seats.mjs`: the fighting chair and the helm seat, modelled by script in Blender, packed into `seats.data.js`. The packed file ships with her chunk, so Node's tests build her as the game does. To change a seat: `blender -b --factory-startup -P tools/sportfisher/seats.py -- /tmp/seats.json`, then `node tools/sportfisher/build-seats.mjs /tmp/seats.json`.
+- `tools/sportfisher/view.html`, `shots.mjs`: her alone on flat water, for comparing with the photographs. `drive.mjs`: her in the real game, every deck, the ladder by its keys, and her budgets from the readout.
 
 ## Going about her
 
@@ -53,4 +53,8 @@ Cockpit to mezzanine by a step; through the door to the salon; down the companio
 
 ## Phones
 
-`new SportfisherModel( 'low' )`: 13 draws (the cushions in with the cabin, props and rudders static in the fittings, a single lever). The cabin, wheel, radar, chair and displays are `nearDetail`, not drawn from past 70 m.
+`new SportfisherModel( 'low' )`: 13 draws (the cushions in with the cabin, props and rudders static in the fittings, a single lever). The cabin, wheel, radar, chair and displays are `nearDetail`, not drawn from past 70 m. Every deck, the cabins and both ladders are all still there: the phones lose only detail.
+
+## A trap, for anything built on BoatMaterials
+
+three shares a program between materials whose `onBeforeCompile` reads the same, and `BoatMaterials`' `extend()` reads the same for every one. Hers each have their own `customProgramCacheKey`. Without it her cabin silently came out as her gelcoat.

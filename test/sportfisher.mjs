@@ -5,7 +5,8 @@ import { SF } from '../src/world/boat/sportfisher/SportfisherLines.js';
 import { gripStep, swayAt, GRIP, LadderClimb } from '../src/world/boat/sportfisher/LadderClimb.js';
 import { BoatController } from '../src/player/BoatController.js';
 import { sightOf, SIGHT } from '../src/game/Chart.js';
-import { Quaternion, Vector3 } from '../src/engine/index.js';
+import { PerspectiveCamera, Quaternion, Vector3 } from '../src/engine/index.js';
+import { Player } from '../src/player/Player.js';
 
 let bad = 0;
 const ok = ( c, what ) => {
@@ -139,6 +140,129 @@ for ( let f = 0; f < 480; f ++ ) {
 ok( peak > 0.5 && peak < 1.2, `a 15 degree, 4 s roll at the tower's head throws you at ${ peak.toFixed( 2 ) } of your weight` );
 const calm = { quaternion: new Quaternion(), angular: new Vector3() };
 ok( swayAt( calm, SF.tower, {}, 1 / 60 ) < 0.01, 'flat water throws you nowhere' );
+
+// the real Player on her: E at the foot, W up the rungs, off at the top; and in a seaway, off the ladder
+{
+
+	const held = new Set(), hits = new Set();
+	const input = { down: ( k ) => held.has( k ), hit: ( k ) => hits.delete( k ), consumeLook: () => ( { x: 0, y: 0 } ), consumeWheel: () => 0, move: null };
+	const cam = new PerspectiveCamera(), boatM = new SportfisherModel( 'low' );
+	const q2 = { latency: 0.05, allocate: () => 0, setPoint() {}, cpuValid: true, version: 0, resultTime: 0, cpu: new Float32Array( 4096 ), resultInputs: new Float64Array( 4096 ) };
+	const c2 = new BoatController( { model: boatM, query: q2, terrain: { heightAt: () => - 50 }, colliders: null } );
+	c2.position.set( 3000, 0, 3000 );
+	const player = new Player( { camera: cam, input, terrain: { heightAt: () => - 50 }, colliders: { groundHeightAt: () => - Infinity, resolveCapsule() {} }, query: q2, boat: c2 } );
+	player.boardBoat();
+	const frames = ( n, each ) => {
+
+		for ( let i = 0; i < n; i ++ ) {
+
+			each?.( i / 60 );
+			player.update( 1 / 60 );
+
+		}
+
+	};
+
+	const tower = boatM.ladders.find( ( l ) => l.id === 'tower' );
+	player.deckPos.copy( tower.on );
+	frames( 2 );
+	ok( player.prompt?.text === 'Climb the tower', `at the tower's foot it says so (${ player.prompt?.text })` );
+	hits.add( 'KeyE' );
+	frames( 2 );
+	ok( player.climbing && player.mode === 'deck', 'E takes you onto the ladder, and you\'re still aboard to the game' );
+	held.add( 'KeyW' );
+	let at = 0;
+	for ( ; at < 60 * 30 && player.climbing; at ++ ) player.update( 1 / 60 );
+	held.clear();
+	ok( ! player.climbing && Math.abs( player.deckPos.y - SF.tower ) < 0.05, `W takes you to the platform, in ${ ( at / 60 ).toFixed( 1 ) } s` );
+	ok( at / 60 > 5 && at / 60 < 12, 'and it takes its time' );
+	frames( 10 );
+	const eyeUp = cam.position.y - c2.position.y;
+	ok( Math.abs( eyeUp / 0.3048 - 28 ) < 3, `the camera's up there: ${ ( eyeUp / 0.3048 ).toFixed( 1 ) } ft` );
+	ok( player.prompt?.text === tower.downText || player.deckPos.distanceTo( tower.off ) > 0.45, 'and you can come down' );
+
+	// the bridge's ladder too, and she's a deck that holds you at each end
+	player.deckPos.copy( tower.off );
+	frames( 2 );
+	hits.add( 'KeyE' );
+	frames( 2 );
+	held.add( 'KeyS' );
+	for ( at = 0; at < 60 * 30 && player.climbing; at ++ ) player.update( 1 / 60 );
+	held.clear();
+	ok( ! player.climbing && Math.abs( player.deckPos.y - SF.bridge ) < 0.05, 'S brings you back down to the bridge' );
+
+	// a seaway: she rolls 22 degrees every 4 s; climbing through it you come off, stopped you hold through what you'd have lost
+	const roll = ( amp ) => ( t ) => {
+
+		const w = Math.PI * 2 / 4;
+		c2.quaternion.setFromAxisAngle( new Vector3( 0, 0, 1 ), amp * Math.sin( w * t ) );
+		c2.angular.set( 0, 0, amp * w * Math.cos( w * t ) );
+		c2.velocity.set( 0, 0, 0 );
+
+	};
+
+	const onLadder = ( f ) => {
+
+		player.mode = 'deck';
+		player.climbing = boatM.climb( { ladder: tower, top: false } );
+		player.climbing.s = player.climbing.len * f;
+
+	};
+
+	const seaway = roll( 22 * Math.PI / 180 ), calm = roll( 0 );
+	const was = player.falls;
+	onLadder( 0.6 );
+	frames( 60 * 20, ( t ) => {
+
+		seaway( t );
+		held.add( 'KeyW' );
+		held.delete( 'KeyS' );
+		if ( player.climbing && player.climbing.s > player.climbing.len * 0.9 ) held.delete( 'KeyW' ), held.add( 'KeyS' );
+		if ( player.climbing && player.climbing.s < player.climbing.len * 0.5 ) held.delete( 'KeyS' );
+
+	} );
+	held.clear();
+	ok( player.falls > was, 'climbing on through a big roll, she throws you off' );
+
+	const before = player.falls;
+	calm( 0 );
+	onLadder( 0.5 );
+	const gentle = roll( 8 * Math.PI / 180 );
+	frames( 60 * 20, ( t ) => gentle( t ) );
+	ok( player.falls === before && player.climbing, 'holding on through a moderate roll, you stay on' );
+	calm( 0 );
+
+	// off it, straight down over her: you land on a deck, winded, still aboard. Flung wide: the sea
+	frames( 30 );
+	onLadder( 0.7 );
+	player.climbing._letGo( player );
+	player.climbing.falling.v.set( 0, 0, 0 );
+	frames( 60 * 3, calm );
+	ok( ! player.climbing && player.mode === 'deck' && player.stunned > 0, `a fall onto the deck: at y ${ player.deckPos.y.toFixed( 2 ) }, winded ${ player.stunned.toFixed( 1 ) } s` );
+	ok( Math.abs( player.deckPos.y - SF.bridge ) < 0.1, 'caught by the bridge under the ladder' );
+	onLadder( 0.7 );
+	player.climbing._letGo( player );
+	player.climbing.falling.v.set( 9, 0, 0 );
+	frames( 60 * 3, calm );
+	ok( ! player.climbing && player.mode === 'swim', `flung off the side: in the sea (${ player.mode })` );
+
+	// the helm's on the bridge: no taking it from the salon under it, nor overboard from the bridge
+	player.boardBoat();
+	player.deckPos.set( boatM.helm.x, SF.salon, boatM.helm.z );
+	frames( 3 );
+	ok( player.prompt?.text !== 'Take the helm', 'no taking the helm from the salon under it' );
+	player.deckPos.set( boatM.helm.rise[ 0 ], SF.bridge, boatM.helm.rise[ 1 ] );
+	frames( 3 );
+	ok( player.prompt?.text === 'Take the helm', 'where you rise from it, you can take it again' );
+	hits.add( 'KeyE' );
+	frames( 2 );
+	ok( player.mode === 'boat', 'and take it' );
+	hits.add( 'KeyE' );
+	frames( 2 );
+	ok( player.mode === 'deck' && Math.abs( player.deckPos.y - SF.bridge ) < 0.05, 'and you stand up on the bridge' );
+	boatM.dispose();
+
+}
 
 // her rain cover: a box for each roof, chosen by where you are
 ok( m.shelterAt( new Vector3( 0, SF.salon, 0 ) ) !== m.shelterAt( new Vector3( 0, SF.bridge, 0 ) ) && m.shelterAt( new Vector3( 0, SF.tower, 0 ) ) !== m.shelterAt( new Vector3( 0, SF.bridge, 0 ) ), 'a roof for each deck' );

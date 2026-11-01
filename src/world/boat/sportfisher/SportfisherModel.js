@@ -102,7 +102,7 @@ function seatPart( d, x, y, z, yaw ) {
 
 }
 
-const PARTS = { pad: { color: 0xc99a5e, rough: 0.55 }, helmPad: { color: 0xeee8d8, rough: 0.5 }, teak: { color: 0x8a5a2c, rough: 0.35 }, helmTrim: { color: 0x6a4322, rough: 0.5 }, steel: { color: 0xd8dbde, rough: 0.2, metal: 1 } };
+const PARTS = { pad: { color: 0xc99a5e, rough: 0.55 }, helmPad: { color: 0xeee8d8, rough: 0.5 }, teak: { color: 0x8a5a2c, rough: 0.35 }, helmTrim: { color: 0x6a4322, rough: 0.5 }, steel: { color: 0xd8dbde, rough: 0.3, metal: 0.35 } };
 
 export class SportfisherModel extends Vessel {
 
@@ -202,7 +202,7 @@ export class SportfisherModel extends Vessel {
 		this.floors = buildFloors( L );
 		this.colliders = buildColliders( L );
 		this.ladders = buildLadders();
-		this.helm = { x: 0, z: HELM.z, y: SF.bridge, eye: HELM.eye, rise: [ 0.55, HELM.z - 0.55 ] };
+		this.helm = { x: 0, z: HELM.z, y: SF.bridge, eye: HELM.eye, rise: [ 0.5, HELM.z - 0.45 ] };
 		this.helmEye = HELM.eye;
 		this.boardPoint = V( 0, SF.cockpit, - 4.1 );
 		this.exitPoints = this.railPoints( [ - 5.4, - 4.5, - 3.6 ] );

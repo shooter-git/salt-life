@@ -10,7 +10,8 @@ export const V = ( x, y, z ) => new Vector3( x, y, z );
 export const WHITE = 0xf4f2ec;
 export const LINING = 0xefece4;
 export const TEAK = { color: 0xb8783f, rough: 0.7, pattern: 2 };
-export const STEEL = { color: 0xd8dbde, rough: 0.2, metal: 1 };
+// (not all metal: the world's sky fill is kept low for the sand, and a full mirror of it comes out black)
+export const STEEL = { color: 0xd8dbde, rough: 0.3, metal: 0.35 };
 export const BLACK = { color: 0x101214, rough: 0.5 };
 
 // a box by its extents

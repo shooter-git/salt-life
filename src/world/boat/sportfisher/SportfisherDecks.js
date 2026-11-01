@@ -192,7 +192,7 @@ export function buildLadders() {
 	const B = BRIDGE_LADDER, T = TOWER;
 	return [
 		{ id: 'bridge', text: 'Climb up to the bridge', downText: 'Climb down to the cockpit', foot: B.foot.clone(), head: B.head.clone(), on: new Vector3( B.x, SF.cockpit, - 3.85 ), off: new Vector3( B.x, SF.bridge, - 2.2 ), speed: 0.8 },
-		{ id: 'tower', text: 'Climb the tower', downText: 'Climb down to the bridge', foot: T.foot.clone(), head: T.head.clone(), on: new Vector3( 0, SF.bridge, - 2.98 ), off: new Vector3( 0, SF.tower, - 0.85 ), speed: 0.55, needs: 'tower' },
+		{ id: 'tower', text: 'Climb the tower', downText: 'Climb down to the bridge', foot: T.foot.clone(), head: T.head.clone(), on: new Vector3( 0, SF.bridge, - 2.9 ), off: new Vector3( 0, SF.tower, - 0.85 ), speed: 0.55, needs: 'tower' },
 	];
 
 }

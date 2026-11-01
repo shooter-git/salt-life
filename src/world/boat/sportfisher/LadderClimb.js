@@ -183,7 +183,9 @@ export class LadderClimb {
 		_q.copy( b.quaternion ).invert();
 		_v.copy( F.p ).sub( b.position ).applyQuaternion( _q );
 		const M = b.model, onBoard = Math.abs( _v.x ) < M.lines.halfBreadth( M.lines.tAtSheerZ( _v.z ), Math.max( _v.y, M.lines.deckY ) ) && _v.z > M.lines.zAft && _v.z < M.lines.zBow;
-		const g = onBoard ? player.deckGroundAt( _v.x, _v.z, _v.y + 0.05 ) : - Infinity;
+		// (from where you were last frame: fast as you're falling, you'd go through a deck between frames)
+		const g = onBoard ? player.deckGroundAt( _v.x, _v.z, ( F.was ?? _v.y ) + 0.02 ) : - Infinity;
+		F.was = _v.y;
 
 		// the view goes with you, turning over a little
 		player.camera.position.copy( F.p ).add( _b.set( 0, 1.5, 0 ) );

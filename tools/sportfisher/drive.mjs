@@ -2,7 +2,7 @@
 // (M16) Her in the real game, driven: boards her, goes about every deck by the same calls the keys make, climbs the tower,
 // shakes it till you come off, and reads what she costs. A CPU render (SwiftShader): the GPU and phone look aren't shown here.
 //   tools/render-slot.sh node tools/sportfisher/drive.mjs <out dir> [low|mid|high] [boat]
-//   Another boat just reads what she costs, to compare.
+//   Another boat just reads what she costs; QUICK=1 reads it and takes one look.
 const { chromium } = await import( '/home/shooter/Documents/VS Code/all-the-spaces/node_modules/playwright/index.mjs' );
 const [ , , out = '.', tier = 'low', boat = 'sportfisher' ] = process.argv, PORT = process.env.PORT || 5203;
 const b = await chromium.launch( { args: [ '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--enable-precise-memory-info' ] } );
@@ -16,9 +16,16 @@ page.on( 'console', ( m ) => {
 
 } );
 await page.goto( `http://127.0.0.1:${ PORT }/?boat=${ boat }&tier=${ tier }&readout`, { waitUntil: 'domcontentloaded' } );
+// (a loaded machine's Chromium sometimes drops a module with ERR_NETWORK_CHANGED, and the game never starts: try it again)
+let tries = 0;
+page.on( 'pageerror', ( e ) => {
+
+	if ( /Failed to fetch dynamically imported module/.test( e.message ) && tries ++ < 6 ) setTimeout( () => page.reload( { waitUntil: 'domcontentloaded' } ).catch( () => {} ), 3000 );
+
+} );
 await page.waitForFunction( () => window.__app && window.__app._started && window.__app.game, null, { timeout: 15 * 60000 } ).catch( async ( e ) => {
 
-	console.log( 'never started', e.message, errs.slice( 0, 20 ).join( '\n' ) );
+	console.log( 'never started', e.message, errs.slice( - 5 ).join( '\n' ) );
 	await b.close();
 	process.exit( 1 );
 
@@ -71,7 +78,7 @@ console.log( await page.evaluate( () => {
 
 } ) );
 await sleep( 8000 );
-if ( boat === 'sportfisher' ) {
+if ( boat === 'sportfisher' && ! process.env.QUICK ) {
 
 	await stand( 'cockpit', 0, 0.5, - 5.2, 0 );
 	await stand( 'salon', 0, 1.02, - 1.9, 0 );
@@ -99,27 +106,11 @@ if ( boat === 'sportfisher' ) {
 	await page.keyboard.up( 'KeyW' );
 	console.log( 'at the top', await state() );
 
-	// come off it half way up: onto the deck, then out over the side
-	const off = ( out ) => page.evaluate( ( out ) => {
-
-		const a = window.__app, p = a.player, l = a.boat.ladders.find( ( l ) => l.id === 'tower' );
-		p.mode = 'deck';
-		p.climbing = a.boat.climb( { ladder: l, top: false } );
-		p.climbing.s = p.climbing.len * 0.7;
-		p.climbing._letGo( p );
-		if ( out ) p.climbing.falling.v.setX( 9 ).setZ( 0 );
-		else p.climbing.falling.v.set( 0, 0, 0 );
-
-	}, out );
-	await off( false );
-	for ( let i = 0; i < 20 && ( await state() ).climbing; i ++ ) await sleep( 1000 );
-	console.log( 'fell on the deck', await state() );
-	await shot( 'winded' );
-	await off( true );
-	for ( let i = 0; i < 20 && ( await state() ).climbing; i ++ ) await sleep( 1000 );
-	console.log( 'fell in the sea', await state() );
+	// (the falls themselves are in test/sportfisher.mjs: at a loaded machine's frame rate they don't finish here)
 
 }
+
+if ( process.env.QUICK ) await stand( 'look', 0.9, 0.5, - 5.4, 0, 0.12 );
 
 // what she costs, as the readout has it
 console.log( 'readout', await page.evaluate( () => {
@@ -128,5 +119,5 @@ console.log( 'readout', await page.evaluate( () => {
 	return { calls: i && i.render.calls, triangles: i && i.render.triangles, memory: performance.memory ? ( performance.memory.usedJSHeapSize / 1048576 ).toFixed( 1 ) : null, text: ( document.querySelector( '[data-readout], .readout, #readout' ) || {} ).innerText || null };
 
 } ) );
-console.log( 'errors:', errs.length ? errs.slice( 0, 20 ).join( '\n' ) : 'none' );
+console.log( 'errors:', errs.filter( ( e ) => ! /ERR_NETWORK_CHANGED|Failed to fetch dynamically|KHR_parallel/.test( e ) ).slice( 0, 20 ).join( '\n' ) || 'none' );
 await b.close();
