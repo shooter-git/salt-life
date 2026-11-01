@@ -9,6 +9,7 @@ import { FLEET, TRADE, SALE, MONTH, MOST_MONTHS, DUES_LEAVE, PAINTS, NAME_MAX, m
 import { BERTHS, ashoreOf, berthOf } from '../src/game/fleet/Berths.js';
 import { SHAPES, mooredGeometry, standsGeometry } from '../src/game/fleet/MooredModels.js';
 import { fleetRows } from '../src/game/fleet/FleetPanel.js';
+import { FleetDesk } from '../src/game/fleet/FleetDesk.js';
 import { YARD, CRADLE, yardPose } from '../src/world/village/StormPlaces.js';
 import { WORLD } from '../src/world/WorldLayout.js';
 import { boatLeft, leftOf, othersAway, tellOthers, awayOf } from '../src/game/Away.js';
@@ -387,6 +388,71 @@ ok( standsGeometry( 'sportfisher', 5, () => 3 ).attributes.position.count > 0, '
 	ok( h.includes( 'data-boatname="lobster"' ) && h.includes( 'data-paint="navy"' ), 'name and paint' );
 	s.dues.owed = 40;
 	ok( fleetRows( hud ).includes( 'You owe Marta $40' ), 'what\'s on her tab' );
+
+}
+
+// ---- the desk, as the game runs it
+{
+
+	const s = fresh( 5000 );
+	s.addBoat( 'console' );
+	s.addBoat( 'kayak' );
+	const said = [];
+	let wind = 5;
+	const app = {
+		_started: true, settings: { day: 4 }, together: { roomKnown: true }, player: { mode: 'walk', riding: false },
+		boat: { id: 'lobster', setPaint() {} }, weather: { news: null, windAt: () => wind }, saved: 0, saveBoat() { this.saved ++; },
+		setBoat: async ( id ) => {
+
+			s.selectBoat( id );
+			app.boat = { id, setPaint() {} };
+			return true;
+
+		},
+	};
+	const game = { app, state: s, toast: ( t ) => said.push( t ), towJob: () => null, chandlery: { vendor: { open: true } }, martaIn: true };
+	const F = new FleetDesk( game );
+	F.moored = { sync() {}, update() {} };
+	F.update( 1.1 );
+	ok( s.dues.day === 4, 'the month starts running on the first look' );
+	app.together.roomKnown = false;
+	app.settings.day = 4 + MONTH;
+	F.update( 1.1 );
+	ok( s.dues.day === 4 && s.money === 5000, 'not while a room\'s clock may yet arrive' );
+	app.together.roomKnown = true;
+	F.update( 1.1 );
+	ok( s.money === 5000 - monthly( s.fleet ) && said.some( ( t ) => t.includes( 'slips and upkeep' ) ), 'then the bill comes, and she says so' );
+
+	wind = 40;
+	for ( let i = 0; i < 60; i ++ ) F.update( 1.1 );
+	ok( s.fleet.console.hull > 0 && s.fleet.kayak.hull > 0 && s.hull === 0, 'a storm works the boats you\'re not in, at their berths' );
+	s.fleet.console.hauled = true;
+	const wearing = s.fleet.console.hull;
+	for ( let i = 0; i < 30; i ++ ) F.update( 1.1 );
+	ok( s.fleet.console.hull === wearing || ! s.fleet.console.hauled, 'hauled out, none of it' );
+	wind = 5;
+	s.fleet.console.hauled = true;
+	F.update( 1.1 );
+	ok( ! s.fleet.console.hauled && said.some( ( t ) => t.includes( 'back in at their berths' ) ), 'and back in once it\'s gone by and Marta\'s open' );
+
+	// into another: one out at sea comes home for her tow fee
+	const m = s.money;
+	game.towJob = () => ( { fee: 120, metres: 2000 } );
+	ok( await F.takeOut( 'console' ) && s.boat === 'console' && s.money === m - 120 && app.saved === 1, 'one out at sea comes home for Marta\'s tow fee as you get into another' );
+	game.towJob = () => null;
+	const m2 = s.money;
+	ok( await F.takeOut( 'kayak' ) && s.money === m2, 'one at her berth costs nothing' );
+	app.player.mode = 'deck';
+	ok( ! await F.takeOut( 'lobster' ) && s.boat === 'kayak', 'not while you\'re aboard' );
+	app.player.mode = 'walk';
+	ok( ! await F.takeOut( 'sportfisher' ), 'nor into one you don\'t own' );
+	// a trade-in of the one you're in: she goes once you're in the new one
+	s.money = 30000;
+	s.selectBoat( 'lobster' );
+	app.boat = { id: 'lobster', setPaint() {} };
+	ok( await F.buy( 'sportfisher', 'lobster' ) === false, 'the sportfisher\'s still locked' );
+	s.earned = true;
+	ok( await F.buy( 'sportfisher', 'lobster' ) && s.boat === 'sportfisher' && ! s.owns( 'lobster' ) && s.owns( 'sportfisher' ), 'traded in the one you\'re in: you\'re in the new one, the old one gone' );
 
 }
 

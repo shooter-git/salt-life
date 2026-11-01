@@ -109,6 +109,10 @@ Her name goes on her transom (`fleet/BoatName.js`), gold on dark paint and black
 
 Others don't see your name or paint yet: `together/` would need them in the pose.
 
+## What it costs
+
+Worst case on low, three boats drawn at once (you own all four and you're in the kayak): 1,518 triangles and about 160 KB of geometry, three draw calls, one more once she's named, one each for those on blocks during a hurricane. The pictures are 15 KB on disk. Nothing's built before ready: the moored boats wait for the start, so they're not in the first compile.
+
 ## Other streams
 
 - **For the merge (stream 8):** `Away.wearRate( w, boat )` and `awayOf`'s `env.boat` already use each hull's own storm figure (`Hull.HULLS`). `Seaworthy.ABLE`'s `storm` through `env.wearMul` would count it twice: keep one. `HULLS` is the one to keep, because it also covers a storm while you're playing.
