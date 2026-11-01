@@ -2197,7 +2197,7 @@ export class Together {
 		if ( p.riding ) {
 
 			const o = this.others.get( p.boat.owner ), c = o && o.cur;
-			return { active: !! ( c && c.rpm > 0.05 ), rpm: c ? c.rpm : 0, crank: c ? c.crank : 0, speed: p.boat.speed, position: p.boat.position, hull: c ? c.hull : null };
+			return { active: !! ( c && c.rpm > 0.05 ), rpm: c ? c.rpm : 0, crank: c ? c.crank : 0, speed: p.boat.speed, position: p.boat.position, hull: c ? c.hull : null, id: c ? c.boatId : 'lobster' };
 
 		}
 
@@ -2218,7 +2218,7 @@ export class Together {
 
 		}
 
-		return best ? { active: best.cur.rpm > 0.05, rpm: best.cur.rpm, crank: best.cur.crank, speed: best.boatSpeed, position: ( best.cur.drawn || best.cur.boat ).pos, hull: best.cur.hull } : null;
+		return best ? { active: best.cur.rpm > 0.05, rpm: best.cur.rpm, crank: best.cur.crank, speed: best.boatSpeed, position: ( best.cur.drawn || best.cur.boat ).pos, hull: best.cur.hull, id: best.cur.boatId } : null;
 
 	}
 

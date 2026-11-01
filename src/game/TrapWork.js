@@ -82,6 +82,7 @@ export class TrapWork {
 	boatChanged() {
 
 		this.job = null;
+		if ( this.app.audio && this.app.audio.haulerRun ) this.app.audio.haulerRun( false );
 		this._boat = null;
 		this._aboard = - 1;
 
@@ -306,7 +307,7 @@ export class TrapWork {
 		const a = this.app.audio;
 		if ( a && a.netReady ) a.netReady();
 		const d = this.depthAt( trap.x, trap.z ), o = buoyOffset( trap.x, trap.z, d );
-		this.job = { kind: 'haul', phase: 'gaff', t: 0, trap, o, bottom: this.app.terrainData.heightAt( trap.x, trap.z ), yaw: trap.seed % 6.28, pull: 0, y: 0, surfaced: false, queue: null, card: null };
+		this.job = { kind: 'haul', phase: 'gaff', t: 0, trap, o, bottom: this.app.terrainData.heightAt( trap.x, trap.z ), yaw: trap.seed % 6.28, y: 0, surfaced: false, queue: null, card: null };
 		if ( a && a.netThrow ) a.netThrow( 0.4 );
 
 	}
@@ -336,6 +337,7 @@ export class TrapWork {
 		if ( j.phase !== 'rail' && j.phase !== 'stack' && ( p.mode !== 'deck' || c.speed > HAUL_SPEED ) ) {
 
 			this.job = null;
+			if ( A && A.haulerRun ) A.haulerRun( false );
 			game.toast( 'The warp came off the hauler · the trap\'s gone back down', 3000 );
 			return;
 
@@ -347,6 +349,7 @@ export class TrapWork {
 
 				j.phase = 'up';
 				j.t = 0;
+				if ( A && A.haulerRun ) A.haulerRun( true );
 				this._boat.group.updateWorldMatrix( true, false );
 				j.total = Math.max( 1, ( _a.copy( this.at.block ).applyMatrix4( this._boat.group.matrixWorld ).y - TRAP.H - 0.3 - j.bottom ) / HAULER_MS );
 
@@ -354,18 +357,11 @@ export class TrapWork {
 
 		} else if ( j.phase === 'up' ) {
 
-			j.pull -= dt;
-			if ( j.pull <= 0 && A && A.netPull ) {
-
-				j.pull = 0.75;
-				A.netPull( false );
-
-			}
-
 			if ( j.t >= j.total ) {
 
 				j.phase = 'swing';
 				j.t = 0;
+				if ( A && A.haulerRun ) A.haulerRun( false );
 
 			}
 

@@ -227,6 +227,7 @@ export class FishingRod {
 		this._rig = 0; // ((M14) s left tying on a new hook and float)
 		this.lost = null; // ((M14) a snapped line's float: { pos, back (unit: the way it broke), t, waterY, ashore })
 		this.rig = 'float'; // ((M16) what's on the line)
+		this.electric = false; // ((M16) the sportfisher's electric reel winding it, for the deep drop: Rigs)
 		this.hookM = 0; // how far down the hook is
 		this.floatOff = false; // no float on it (a plug's cast with none)
 		this.settled = false; // it's gone as far down as it's going
@@ -583,7 +584,7 @@ export class FishingRod {
 		this.spoolOsc = Math.sin( this.crank * 0.5 ) * 0.0035;
 		this.lineFill = 1 - Math.min( 1, this.lineOut / this.spoolM ) * 0.5;
 		this.rodMat.uniforms.reelAnim.value.set( this.rotor, this.bail, this.crank, this.spoolAng );
-		if ( this.audio && this.audio.rodLoop ) this.audio.rodLoop( this.crankRate, this.state === 'fighting' && dOut > 0 && dt > 0 ? dOut / dt : this.scream || 0, this.state === 'fighting' && fight ? fight.tension : 0 );
+		if ( this.audio && this.audio.rodLoop ) this.audio.rodLoop( this.crankRate, this.state === 'fighting' && dOut > 0 && dt > 0 ? dOut / dt : this.scream || 0, this.state === 'fighting' && fight ? fight.tension : 0, this.electric );
 		this.rodMat.uniforms.reelAnim2.value.set( this.spoolOsc, this.lineFill, 0, 0 );
 
 		// ---- flick: the bobber leaves the tip half way through
