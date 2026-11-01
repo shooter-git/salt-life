@@ -288,7 +288,7 @@ export class Radio {
 				const sel = this.pick === i ? ' is-sel' : '';
 				if ( row.id === 'wx' ) return `<div class="gm-shop-row rd-row${ sel }"><span>The weather, WX1<small>${ g.daysOut.saidHere() }. The forecast for the island's waters and beyond, read on a loop while you steer</small></span><button class="gm-btn" data-wx>${ this.listening ? 'Stop' : 'Listen' }</button></div>`;
 				if ( row.id === 'marta' ) return `<div class="gm-shop-row rd-row${ sel }"><span>Marta, channel 16<small>${ job ? `A tow in, from ${ farOff( job.metres ) } off her dock` : 'You\'re at her dock' }</small></span>${ job ? '<button class="gm-btn" data-call>Call</button>' : '' }</div>`;
-				return `<div class="gm-shop-row rd-row${ sel }"><span>${ row.name }<small>${ row.say }</small></span><button class="gm-btn" data-fire="${ row.id }" ${ row.can ? '' : 'disabled' }>${ row.can ? `$${ Math.min( row.fee, g.state.money ).toLocaleString() }` : 'Not now' }</button></div>`;
+				return `<div class="gm-shop-row rd-row${ sel }"><span>${ row.name }<small>${ row.say }</small></span><button class="gm-btn" data-fire="${ row.id }" ${ row.can ? '' : 'disabled' }>${ ! row.can ? 'Not now' : row.id === 'flare' ? 'Fire' : `$${ Math.min( row.fee, g.state.money ).toLocaleString() }` }</button></div>`;
 
 			} ).join( '' ) || '<p class="rd-say">There\'s no radio aboard her. Marta sells them.</p>';
 			sub = g.state.stats.vhfM > 0 ? 'The VHF at the helm' : 'Nothing to call with but what you carry';

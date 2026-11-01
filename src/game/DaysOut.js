@@ -1,4 +1,4 @@
-import { CanvasTexture, Sprite, SpriteMaterial } from '../engine/index.js';
+import { CanvasTexture, Mesh, MeshStandardMaterial, SphereGeometry, Sprite, SpriteMaterial } from '../engine/index.js';
 import { G } from '../core/Globals.js';
 import { BOATS } from '../world/boat/Boats.js';
 import { WORLD } from '../world/WorldLayout.js';
@@ -25,8 +25,8 @@ import { ableOf, ableEnv, awashLs, seaHere, fetchAt, strainOf, windOn, slamK, ke
 const JUMP = 0.5, JUMP_MAX = 30;
 // how far you can reach a bunk (m), how much sea wakes you; how many frames apart it all looks (s)
 const BUNK_M = 1.6, LOOK_S = 1;
-// the sock's rode: streamed this far upwind of her, this far under (m)
-const SOCK_OUT = 26, SOCK_DOWN = 2.5;
+// the sock's rode: streamed this far upwind of her (m), its trip line's float on the water over it
+const SOCK_OUT = 26;
 // a flare's climb (m/s, m) and burn (s)
 const FLARE = { rise: 28, up: 120, burn: 8 };
 // the deep finder's screen: columns kept and a look every (s)
@@ -67,6 +67,8 @@ const CSS = /* css */`
 /* (a phone's purse has no room to spare: the toast goes beside it. Only when they want seeing to; the rest's in the cooler's tab) */
 html.is-touch .gm-ice:not(.is-low), html.is-touch .gm-stores:not(.is-low) { display: none; }
 html.is-touch .do-screen { right: auto; bottom: auto; left: var(--tw-edge); top: calc(var(--tw-edge) + 64px + 48 * var(--tw-u)); width: calc(132 * var(--tw-u)); height: calc(66 * var(--tw-u)); }
+@media (orientation: portrait) { html.is-touch .do-screen { top: auto; bottom: 30vh; } }
+html.is-touch .tw-root:has(.gm-panel.is-open, .gm-coach.is-on) .do-screen { display: none; }
 `;
 
 export class DaysOut {
@@ -156,6 +158,7 @@ export class DaysOut {
 		this._bunkPrompt( inp, p );
 		this._updateFlare( dt );
 		this._screen( dt );
+		if ( this.float && this.float.visible && ! this.app.boatCtl.sock ) this.sockIn();
 
 	}
 
@@ -608,8 +611,35 @@ export class DaysOut {
 		b.toWorld( b.stemHead, out );
 		out.x -= w.x * SOCK_OUT;
 		out.z -= w.y * SOCK_OUT;
-		out.y = G.seaLevel.value - SOCK_DOWN;
+		// (on the water, as the waves have it there)
+		const waves = this.app.waves;
+		out.y = G.seaLevel.value + ( waves ? waves.heightAt( out.x, out.z ) : 0 );
+		this._floatAt( out );
 		return out;
+
+	}
+
+	// the float on its trip line, all you see of a sock (made the first time one's out)
+	_floatAt( at ) {
+
+		if ( ! this.float ) {
+
+			this.float = new Mesh( new SphereGeometry( 0.22, 10, 7 ), new MeshStandardMaterial( { color: 0xe8601c, roughness: 0.55 } ) );
+			this.float.name = 'SockFloat';
+			this.float.castShadow = false;
+			this.app.scene.add( this.float );
+
+		}
+
+		this.float.visible = true;
+		this.float.position.set( at.x, at.y + 0.08, at.z );
+
+	}
+
+	// (the sock's in)
+	sockIn() {
+
+		if ( this.float ) this.float.visible = false;
 
 	}
 
