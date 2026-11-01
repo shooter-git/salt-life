@@ -8,11 +8,13 @@ import { G } from '../../core/Globals.js';
 //
 //   worn  (Gear.js' polarized) above the water, by day
 //   the sea's reflection down by that much (WaterSurface's envMapIntensity: no new shader on it)
-//   fish shown under what's found out there: dark shapes holding under the weed and debris (mahi), under the birds (tuna)
+//   fish shown under what's found out there, holding under the weed and debris (mahi), under the birds (tuna): pale
+//   blue-green on the deep water, as a fish near the surface looks from a drone or a tower, not a shadow: it's brighter
+//   than the dark water below it, and looks a third bigger than it is through the surface
 //
 // The shapes are one instanced mesh with a little program of its own, made when you're first out there with the glasses on,
-// so nobody without them pays for it. It's drawn after the sea, its fade worked out here.
-const MAX = 36;
+// so nobody without them pays for it. It's drawn after the sea, just on top of it, so your boat still hides what's behind her.
+const MAX = 36, REFRACT = 1.33;
 const BREWSTER = 37 * Math.PI / 180;
 const SEE = { from: 4 * Math.PI / 180, to: 13 * Math.PI / 180, far: [ 150, 260 ] }; // the angle under which fish show; m
 const _m = new Matrix4(), _q = new Quaternion(), _p = new Vector3(), _s = new Vector3(), _d = new Vector3(), _y = new Vector3( 0, 1, 0 );
@@ -111,7 +113,7 @@ export class Glasses {
 
 		const geo = fishShape();
 		const mat = new ShaderMaterial( {
-			transparent: true, depthWrite: false, depthTest: false, side: DoubleSide,
+			transparent: true, depthWrite: false, side: DoubleSide,
 			vertexShader: /* glsl */`
 attribute float aFade;
 varying float vFade;
@@ -122,7 +124,7 @@ void main() {
 			fragmentShader: /* glsl */`
 varying float vFade;
 void main() {
-	gl_FragColor = vec4( 0.015, 0.05, 0.075, 0.62 * vFade );
+	gl_FragColor = vec4( 0.16, 0.43, 0.4, 0.7 * vFade );
 }`,
 		} );
 		mat.name = 'polarizedFish';
@@ -176,10 +178,10 @@ void main() {
 			const x = S.x + Math.cos( ang ) * r, z = S.z + Math.sin( ang ) * r;
 			const seen = fishSeen( h, Math.hypot( x - c.x, z - c.z ) ) * by;
 			if ( seen <= 0.01 ) continue;
-			const len = S.len * ( 0.8 + 0.4 * Math.abs( Math.sin( a * 5.3 ) ) );
+			const len = S.len * REFRACT * ( 0.8 + 0.4 * Math.abs( Math.sin( a * 5.3 ) ) );
 			// (along the way it's swimming, with a slow beat)
 			const yaw = - ang + Math.sin( t * 2.2 + a ) * 0.09;
-			_m.compose( _p.set( x - c.x, G.seaLevel.value - 0.3 - c.y, z - c.z ), _q.setFromAxisAngle( _y, yaw ), _s.set( len, 1, len ) );
+			_m.compose( _p.set( x - c.x, this.app.waves.heightAt( x, z ) + 0.1 - c.y, z - c.z ), _q.setFromAxisAngle( _y, yaw ), _s.set( len, 1, len ) );
 			m.setMatrixAt( n, _m );
 			this.fade.setX( n, seen );
 			n ++;

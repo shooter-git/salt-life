@@ -309,7 +309,16 @@ export class Rigs {
 			this._place( L );
 			if ( L.in ) L.len -= PULL_IN * dt;
 			else if ( L.on ) L.len += RUN_OUT * dt;
-			else L.len = Math.min( L.spot.back, L.len + PAY_OUT * dt );
+			else if ( L.len < L.spot.back ) {
+
+				// (let out, it goes back whether she's moving or not: never left under her)
+				L.len = Math.min( L.spot.back, L.len + PAY_OUT * dt );
+				const y = b.getYaw(), s = ( L.spot.side || 0 ) * 0.2, ox = s * Math.cos( y ) - Math.sin( y ), oz = - s * Math.sin( y ) - Math.cos( y ), n = Math.hypot( ox, oz );
+				L.p.x += ox / n * PAY_OUT * dt;
+				L.p.z += oz / n * PAY_OUT * dt;
+
+			}
+
 			const a = L.clip || L.tip;
 			_a.subVectors( L.p, a ).setY( 0 );
 			const d = _a.length();
@@ -947,7 +956,13 @@ export class Rigs {
 
 			const tail = `${ k( 'B' ) }  bait   ·   ${ k( 'C' ) }  rig   ·   R  put the rod away`;
 			if ( BAITS[ s.baitPick ]?.chum ) return { key: 'LMB', text: `Throw the chum over the side   ·   ${ tail }` };
-			if ( this.lines.length ) return { key: 'LMB', text: `${ pick === 'troll' ? 'Let another line out   ·   ' : '' }RMB  bring the lines in   ·   ${ tail }` };
+			if ( this.lines.length ) {
+
+				const more = pick === 'troll' && this.lines.length < this.spots().length;
+				return { key: more ? 'LMB' : 'RMB', text: `${ more ? 'Let another line out   ·   RMB  ' : '' }bring the lines in   ·   ${ tail }` };
+
+			}
+
 			if ( pick === 'troll' ) return { key: 'LMB', text: `Let a line out   ·   ${ tail }` };
 			if ( pick === 'kite' ) return { key: 'LMB', text: `Fly the kite   ·   ${ tail }` };
 			if ( pick === 'drop' ) return { key: 'LMB', text: `Drop the lead   ·   ${ tail }` };
