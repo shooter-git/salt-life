@@ -181,15 +181,15 @@ const CARD_COUNT = 3;
 const IN_KAYAK = {
 	keyboard: {
 		kayak: 'Your <b>kayak</b>. <kbd>E</kbd> to shove her off and sit in her. <kbd>W</kbd> paddles, <kbd>Shift</kbd> harder, <kbd>A</kbd><kbd>D</kbd> turn her, <kbd>S</kbd> stops her. <kbd>R</kbd> in the seat takes out the rod.',
-		caught: 'Into the cooler (<kbd>I</kbd>). She holds about 25 lb, so sell to <b>Joe</b> at the fish stand by the pier: he is on the map. Run her up on the sand and step out with <kbd>E</kbd>.',
+		caught: 'Into the cooler (<kbd>I</kbd>). Her cooler\'s small, so sell to <b>Joe</b> at the fish stand by the pier: he is on the map. Run her up on the sand and step out with <kbd>E</kbd>.',
 	},
 	touch: {
 		kayak: 'Your <b>kayak</b>. The gold button shoves her off and sits you in her. Drag on the left to paddle, further for harder, and the <b>Rod</b> button fishes from the seat.',
-		caught: 'Into the cooler (the <b>Cooler</b> button). She holds about 25 lb, so sell to <b>Joe</b> at the fish stand by the pier: he is on the map. Run her up on the sand and step out with the gold button.',
+		caught: 'Into the cooler (the <b>Cooler</b> button). Her cooler\'s small, so sell to <b>Joe</b> at the fish stand by the pier: he is on the map. Run her up on the sand and step out with the gold button.',
 	},
 	gamepad: {
 		kayak: 'Your <b>kayak</b>. <kbd>B</kbd> to shove her off and sit in her. The left stick paddles, further for harder. <kbd>X</kbd> in the seat takes out the rod.',
-		caught: 'Into the cooler (<kbd>Back</kbd>). She holds about 25 lb, so sell to <b>Joe</b> at the fish stand by the pier: he is on the map. Run her up on the sand and step out with <kbd>B</kbd>.',
+		caught: 'Into the cooler (<kbd>Back</kbd>). Her cooler\'s small, so sell to <b>Joe</b> at the fish stand by the pier: he is on the map. Run her up on the sand and step out with <kbd>B</kbd>.',
 	},
 	full: 'Your cooler is <b>full</b>. Sell to Joe, and Marta sells a <b>crate cooler</b> that holds twice as much.',
 	stand: 'A kayak\'s <b>low to the water</b>. A breeze she can take, but past 3 ft of sea or 20 knots of wind she goes over. Paddle for the lee of the island or the nearest beach. If she does go, swim to her: <b>the same key that gets you in rights her</b>, then climbs you back on.',
