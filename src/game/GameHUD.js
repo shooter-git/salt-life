@@ -195,6 +195,7 @@ html:has(.gm-panel.is-open) .hud-hint { visibility: hidden; }
 .gm-wanted { margin: 0 0 var(--tw-2); padding: var(--tw-1) var(--tw-3); border-radius: var(--tw-r-md); background: rgba(var(--tw-sun-rgb), 0.07); border: 1px solid rgba(var(--tw-sun-rgb), 0.22); }
 .gm-wanted-h { display: block; margin: var(--tw-1) 0 0; color: var(--tw-sun); font-size: var(--tw-fs-xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 .gm-wanted .gm-item { padding: var(--tw-1) 0; border-color: rgba(var(--tw-sun-rgb), 0.14); }
+.gm-wanted .gm-item-meta { white-space: normal; }
 .gm-wanted .gm-item.is-done .gm-item-name { color: var(--tw-ink-3); text-decoration: line-through; }
 /* (Salt Life) the week's order: the group's progress under it */
 .gm-week-bar { height: calc(4 * var(--tw-u)); margin: var(--tw-1) 0 0; border-radius: 99px; background: rgba(var(--tw-sun-rgb), 0.14); overflow: hidden; }

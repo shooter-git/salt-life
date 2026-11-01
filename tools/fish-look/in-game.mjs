@@ -17,9 +17,19 @@ const shot = async ( name ) => {
 	log( name );
 
 };
-await page.goto( `http://127.0.0.1:${ PORT }/?tier=${ TIER }&weather=fair&hour=10&fullsea` );
+// (a card's clock runs on the frames', and on the CPU they're many seconds each: past its opening, and drawn so)
+const settled = async () => {
+
+	await page.waitForFunction( () => { const p = window.__app.game.portrait; return p.live && ! p._capture; }, null, { timeout: 300000 } );
+	await page.evaluate( () => { const a = window.__app, g = a.game.guide; if ( g && g.open ) g.close(); a.game.portrait.t = 2.5; } );
+	await page.waitForFunction( () => window.__app.game.portrait.t > 2.6, null, { timeout: 300000 } );
+
+};
+await page.goto( `http://127.0.0.1:${ PORT }/?tier=${ TIER }&weather=fair&hour=10&fullsea&gpupath` );
 await page.waitForFunction( () => window.__app && window.__app._started, null, { timeout: 600000 } );
 log( 'started' );
+await page.waitForFunction( () => window.__app.fish, null, { timeout: 600000 } );
+log( 'the fish swim' );
 await page.evaluate( () => window.__app.game.time.hold( true ) );
 
 // ---- the catch cards and the log
@@ -42,7 +52,7 @@ for ( const [ id, kg, place ] of [ [ 'blueMarlin', 240, 'blue' ], [ 'sailfish', 
 		g.hud.showCatch( info, 3600000 );
 
 	}, [ id, kg, place ] );
-	await wait( 14 );
+	await settled();
 	await shot( `card-${ id }` );
 	await page.evaluate( () => window.__app.game.hud.hideCatch() );
 
@@ -52,7 +62,7 @@ await page.evaluate( () => { const h = window.__app.game.hud; h.toggleInventory(
 await wait( 3 );
 await shot( 'log' );
 await page.evaluate( () => window.__app.game.showTrophy( 'blueMarlin' ) );
-await wait( 12 );
+await settled();
 await shot( 'trophy-again' );
 await page.evaluate( () => { const g = window.__app.game; g.hud.hideCatch(); g.trophyCard = null; } );
 
@@ -64,6 +74,7 @@ const at = await page.evaluate( async () => {
 	for ( let T = 24 * 40; T < 24 * 4000 && ! h; T += 24 * 10 ) h = lastHurricane( T, 0 );
 	const T1 = h.ends + 48, c = a.game.time.clock || ( a.together && a.together._clock );
 	if ( a.together ) a.together._clock = { ...a.together._clock, at: Date.now(), hour: T1 % 24, day: Math.floor( T1 / 24 ), speed: 0 };
+	a.settings.weather = null; // (a picked sky has no hurricane behind it)
 	a.settings.day = Math.floor( T1 / 24 );
 	a.settings.timeOfDay = T1 % 24;
 	a.player.boardBoat();

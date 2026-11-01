@@ -29,10 +29,10 @@ for ( const f of fish ) {
 	for ( const q of [ '', '&lite=1' ] ) {
 
 		await page.setViewportSize( { width: 1000, height: 430 } );
-		await page.goto( `http://127.0.0.1:${ PORT }/tools/fish-look/index.html?fish=${ f }${ q }` );
-		await page.waitForFunction( 'window.ready === true', null, { timeout: 120000 } );
+		await page.goto( `http://127.0.0.1:${ PORT }/tools/fish-look/index.html?fish=${ f }${ q }`, { timeout: 600000 } );
+		await page.waitForFunction( 'window.ready === true', null, { timeout: 600000 } );
 		await page.waitForTimeout( 300 );
-		views.push( ( await page.screenshot( { type: 'jpeg', quality: 88 } ) ).toString( 'base64' ) );
+		views.push( await page.evaluate( () => document.querySelector( 'canvas' ).toDataURL( 'image/jpeg', 0.88 ).split( ',' )[ 1 ] ) );
 
 	}
 
@@ -41,9 +41,9 @@ for ( const f of fish ) {
 	await page.setViewportSize( { width: 1500, height: 880 } );
 	const refs = ( REFS[ f ] || [] ).map( ( t ) => `<figure><img src="${ thumb( t ) }"><figcaption>${ t.slice( 5 ) }</figcaption></figure>` ).join( '' );
 	await page.setContent( `<body style="margin:0;background:#222;color:#ddd;font:13px sans-serif;display:grid;grid-template-columns:1fr 1fr;gap:6px"><figure><img src="data:image/jpeg;base64,${ views[ 0 ] }"><figcaption>${ f }: render (CPU, high tier)</figcaption></figure><figure><img src="data:image/jpeg;base64,${ views[ 1 ] }"><figcaption>${ f }: render, low tier</figcaption></figure>${ refs }<style>figure{margin:0}img{width:100%;height:400px;object-fit:contain;background:#555}</style>` );
-	await page.waitForLoadState( 'networkidle' );
+	await page.waitForLoadState( 'networkidle', { timeout: 120000 } ).catch( () => {} );
 	await page.waitForTimeout( 2500 );
-	await page.screenshot( { path: `${ dir }/compare-${ f }.jpg`, type: 'jpeg', quality: 86 } );
+	await page.screenshot( { path: `${ dir }/compare-${ f }.jpg`, type: 'jpeg', quality: 86, timeout: 300000 } );
 
 }
 

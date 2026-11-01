@@ -51,7 +51,7 @@ h.hook = {
 | Field | What it says | Missing |
 |---|---|---|
 | `ways` | `{ float, troll, kite, drop }`: its bite weight fished each way | float 1; drop 1 for a bottom fish of the deep or the ledge (`habitat.deep`, `habitat.ledge`), else 0; troll and kite 0 |
-| `at` | `{ day: [ m, m ], night: [ m, m ] }`: the depths under the surface it feeds at. A hook outside them gets nothing from it (`hookWeight`: fading over 30% past each end) | anywhere the hook is: bottom fish, whose water already says a bait reaches them |
+| `at` | `{ day: [ m, m ], night: [ m, m ] }`: the depths under the surface it feeds at. A hook outside them gets nothing from it (`hookWeight`: fading over a third of the span past each end, at least 10 m) | anywhere the hook is: bottom fish, whose water already says a bait reaches them |
 | `eats` | bait or lure id -> its bite weight on that, ahead of `Bait.js`' `likes` (`baitWeight`). Names baits and lures that don't exist yet: `ballyhoo`, `squid`, `skirt`, `plug`, `jig` | `Bait.js`' `likes`, and 1 |
 | `teeth` | it cuts mono: a rig's chance of a bite-off without the wire leader is stream 7's to set | no |
 
@@ -68,3 +68,17 @@ Every new fish goes through the same `fishGeometry`, with these additions:
 - `dorsal` is listed with the fin to keep last: the farthest level of detail draws only the last. `tools/fish-look/` draws one fish as the card's studio does, and `compare.mjs` puts it beside the photographs.
 
 Skins are in `FishMaterial.js`, on the same table of colours. The far water's fins are nearly opaque (the card's see-through membranes read as a mesh on dark, stiff fins).
+
+## Let go alive
+
+A billfish is never kept. `addFish` lets it go, `Game.updateFight` pays `releaseBonus` through `Trophies.letGo`, and the picture and the log are the trophy: the card shows the fish with its bonus, and the log's "Trophies, let go alive" tab lists each kind with its biggest, the day and the place, with a button that shows the card again (`Game.showTrophy`). Marta's tags ask for a billfish let go. The trophies are saved with the game (`GameState.trophies`, `cleanTrophies`).
+
+## In the far water
+
+- **Far groups** (`Fish.js`, `FAR`): each far kind has its group, placed by `setFinds` around whatever the water holds near the boat (`farSpot`) and left where it is until the finds change. They draw through the same batches as today's fish, so no new draws.
+- **Under the surface:** mahi, tuna and the far fish swim at `under: [ m, m ]` beneath it however deep the water is.
+- **After a hurricane:** `Finds.hurricaneWake` scatters three to five pieces of its wreckage over the offshore water for six to eleven days, with `storm: 1`; `Game.findsNear` reads them into `h.wake`, and a fish with `wake` in the table (the mahi, at 3) bites `1 + wake * h.wake` times as well there. The far mahi's second group (`mahiWake`) gathers under them.
+
+## Tools
+
+`tools/fish-look/` draws one fish as the card's studio does: `index.html?fish=&lod=&w=&h=&lite=&fill=&seed=&curl=&yaw=&bg=`. `compare.mjs <out dir> [fish...]` puts the high and low tiers' renders beside photographs from Commons. `in-game.mjs <out dir> [tier]` shows the cards, the log, a trophy again and the wreckage from the deck and under the water, in the running game. All are CPU renders: run them in `tools/render-slot.sh`.

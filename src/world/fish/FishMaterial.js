@@ -712,7 +712,7 @@ const SURFACE = /* glsl */`
 		float s1 = length( vec2( xL - 0.8, y - 0.018 ) );
 		float s2 = length( vec2( xL - 0.745, y - 0.026 ) ) + step( 0.35, fract( seed * 5.3 ) );
 		float ocell = ( 1.0 - fishSs( 0.012, 0.015, min( s1, s2 ) ) ) * bodyK;
-		c = mix( c, mix( flank, belly, 0.7 ), ( 1.0 - fishSs( 0.015, 0.02, min( s1, s2 ) ) ) * bodyK * 0.6 );
+		c = mix( c, mix( flank, belly, 0.7 ), ( 1.0 - fishSs( 0.015, 0.018, min( s1, s2 ) ) ) * bodyK * 0.25 );
 		c = mix( c, vec3( 0.012, 0.01, 0.01 ), ocell );
 		c = ( P == ${ PA( 'ANAL' ) } || P == ${ PA( 'PELVIC' ) } || P == ${ PA( 'PECTORAL' ) } ) ? mix( c, vec3( 0.88, 0.5, 0.28 ), 0.7 ) : c;
 		c = P == ${ PA( 'CAUDAL' ) } ? mix( vec3( 0.62, 0.32, 0.12 ), edgeC, fishSs( 0.7, 1.0, t ) ) : c;
@@ -720,9 +720,9 @@ const SURFACE = /* glsl */`
 		// (M16) spotted seatrout: an olive-grey back over silver, round black spots scattered over the back, the
 		// second dorsal and the tail; the fins a pale yellow
 		float xL = 0.5 - z;
-		vec2 tq = vec2( z, y ) * 52.0;
+		vec2 tq = vec2( z, y ) * 68.0;
 		vec2 tc = floor( tq );
-		float rr = mix( 0.16, 0.3, fishHash( tc + 1.3 ) );
+		float rr = mix( 0.12, 0.28, fishHash( tc + 1.3 ) );
 		float tspot = ( 1.0 - fishSs( rr, rr + 0.1, length( fract( tq ) - 0.5 - ( vec2( fishHash( tc + 3.1 ), fishHash( tc + 7.7 ) ) - 0.5 ) * 0.5 ) ) ) * step( 0.3, fishHash( tc + seed * 7.0 ) );
 		float where = bodyK * fishSs( - 0.15, 0.1, h ) * fishSs( 0.2, 0.28, xL ) + ( ( P == ${ PA( 'DORSAL2' ) } || P == ${ PA( 'CAUDAL' ) } ) ? 1.0 : 0.0 );
 		c = mix( c, vec3( 0.025, 0.025, 0.03 ), tspot * min( where, 1.0 ) * 0.9 );
