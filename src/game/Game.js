@@ -15,6 +15,7 @@ import { UPGRADES, fuelBurn, fuelOf, TOW, towFee, towTime, HAUL_FEE } from './Ge
 import { FLEET } from './fleet/Fleet.js';
 import { FleetDesk } from './fleet/FleetDesk.js';
 import { Hull, thrustMul, repairFee } from './Hull.js';
+import { BreakingSeas } from './BreakingSeas.js';
 import { tellOf } from './Away.js';
 import { GameHUD } from './GameHUD.js';
 import { TimeHUD } from './TimeHUD.js';
@@ -34,7 +35,7 @@ import { Signpost, TRAIL_POSTS } from './Signpost.js';
 import { FishCamp, CAMP } from './FishCamp.js';
 import { delivered, filled, owed, weekEnds } from './WeekOrder.js';
 import { Minimap } from './Minimap.js';
-import { sightOf, MAX_MARKS } from './Chart.js';
+import { sightOf, MAX_MARKS, NAME, namedAs } from './Chart.js';
 import { Guide } from './Guide.js';
 import { Speargun, groundHit } from './Speargun.js';
 import { CastNet, sweetWindow } from './CastNet.js';
@@ -46,7 +47,8 @@ import { SEABED } from '../world/terrain/SeabedModel.js';
 import { mangroveAt } from '../world/terrain/Mangrove.js';
 import { northReefMask } from '../world/TerrainData.js';
 import { PLACES, placeOf, placeName } from './Places.js';
-import { FINDS, lying, messageOf } from './Beachcomb.js';
+import { FINDS, lying, messageOf, wreckageAt, wreckStamp } from './Beachcomb.js';
+import { SHELLS, SHELL_KINDS, shellsHave, WALL_PAY } from './Shells.js';
 import { ordersOf, tagFor } from './Orders.js';
 import { ELLIPSIS, LEFT, RIGHT, UP } from '../core/Glyphs.js';
 import { letGo, trophyCardOf } from './Trophies.js';
@@ -145,7 +147,7 @@ export class Game {
 		this.landing = null; // { species, kg } while the caught fish swings in view
 		this.chandlery = app.chandlery || new Chandlery( { scene: app.scene, terrain: app.terrainData, colliders: app.colliders, material: this.stand.material } );
 		// ((M15) and Pearl at the fish camp on the north beach: game/FishCamp.js, built when you come near it)
-		this.camp = new FishCamp( { scene: app.scene, terrain: app.terrainData, colliders: app.colliders, village: app.village } );
+		this.camp = new FishCamp( { scene: app.scene, terrain: app.terrainData, colliders: app.colliders, village: app.village, app } );
 		this.vendors = [ this.stand.vendor, this.chandlery.vendor, this.camp.vendor ].filter( Boolean );
 		// (Salt Life) the day's wanted lists (Orders.js), chalked on a slate on Joe's counter. On a device
 		// that draws on its CPU it goes up after the start, with the records board (App.prepareLate)
@@ -460,7 +462,7 @@ export class Game {
 			const ui = app.ui.ui;
 			this.hud = new GameHUD( ui, this );
 			// (Salt Life) the island's clock, at the left of the purse (T: its menu)
-			this.time = new TimeHUD( this, this.hud.purse, ui.root );
+			this.time = new TimeHUD( this, this.hud.purseTop, ui.root );
 			// the minimap (lower right) and the first-play guide (intro, one-time tips; replay with H)
 			this.minimap = new Minimap( ui.hud || ui.root, this, { tier: app.tier } );
 			this.guide = new Guide( ui, this, this.minimap );
@@ -679,6 +681,9 @@ export class Game {
 		this.updateVendors( inp, p );
 		// ((M15) what the sea's left on the beaches, to pick up)
 		this.updateBeachcomb( inp, p );
+		// ((M16) the fingerposts drawn only within reading range)
+		this.signpost.update( app.camera.position.x, app.camera.position.z );
+		for ( const t of this.trailPosts ) t.update( app.camera.position.x, app.camera.position.z );
 		// ((M15) the fish camp built as you first come near it, once the debris has been placed)
 		if ( app.debris && ! this.camp.built ) {
 
@@ -687,6 +692,9 @@ export class Game {
 			if ( this.camp.built && app.loadVendorCharacter ) app.loadVendorCharacter( this.camp.vendor );
 
 		}
+
+		// ((M16) and its day: her boat, its lights)
+		this.camp.live( dt );
 
 		// (M10) the bucket on deck; the crank at the helm while she's stalled
 		this.updateBail( inp, p );
@@ -703,7 +711,8 @@ export class Game {
 		// the catch card's live fish portrait (or one queued thumbnail)
 		if ( this.hud && this.hud.portrait ) this.hud.portrait.update( dt );
 		if ( this.hud ) this.hud.update( {
-			fuel: aboard && ! p.riding && this.state.stats.fuelL > 0 ? { litres: this.state.fuelL, tank: this.state.stats.fuelL } : null, // ((M16) yours, not hers)
+			// ((M16) a boat with no engine has no fuel to show, and riding in another's isn't yours to know)
+			fuel: aboard && ! p.riding && this.state.stats.fuelL > 0 ? { litres: this.state.fuelL, tank: this.state.stats.fuelL } : null,
 			// (M10) the hull once it's worn, and the bilge with water in it
 			hull: aboard && ! p.riding && this.hull.wear > 0.02 ? this.hull.wear : null,
 			bilge: aboard && ! p.riding && this.hull.bilge >= 1 ? this.hull.bilge : null,
@@ -777,7 +786,7 @@ export class Game {
 		const p = this.app.player, x = p.position.x, z = p.position.z;
 		if ( x * x + z * z < FOUND_FROM * FOUND_FROM ) return;
 		const place = this.placeAt( x, z );
-		if ( this.state.findPlace( place, this.tradeDay ) ) this.toast( `You've found ${ placeName( place ) }: ${ PLACES[ place ].what } · it's in your log`, 5200 );
+		if ( this.state.findPlace( place, this.tradeDay ) ) this.toast( `You've found ${ placeName( place ) }: ${ PLACES[ place ].what } · ${ NAME[ place ] ? `${ NAME[ place ].name } on your chart` : 'it\'s in your log' }`, 5200 );
 
 	}
 
@@ -825,6 +834,8 @@ export class Game {
 
 		}
 
+		// ((M16) a sea breaking on her, out in a gale)
+		if ( app.water ) ( this.breakingSeas || ( this.breakingSeas = new BreakingSeas( { waves: app.waves, caps: app.water.whitecaps, hull } ) ) ).update( dt, app );
 		// ((M13) hauled out, she's out of it: no storm, no rain in her; left in the water, the storm works her)
 		const ashore = !! b.hauled;
 		// ((M16) nothing to crank, and with nothing to burn or flood: a plastic hull that drains itself, and shrugs off the sand)
@@ -1173,12 +1184,15 @@ export class Game {
 		const app = this.app, B = app.beachcomb, s = this.state, hud = this.hud;
 		if ( ! B ) return;
 		// (what you've picked up's pruned as you pick more: so its last, not its length)
-		const day = app.settings.day, key = `${ day }:${ s.picked.length }:${ s.picked[ s.picked.length - 1 ] || '' }`;
+		const day = app.settings.day, stamp = wreckStamp( app.damage ), key = `${ day }:${ s.picked.length }:${ s.picked[ s.picked.length - 1 ] || '' }:${ stamp }`;
 		if ( key !== this._combKey ) {
 
 			this._combKey = key;
 			const picked = new Set( s.picked );
 			B.set( lying( day, ( d ) => app.beachDays( d ) ).filter( ( f ) => ! picked.has( f.id ) ) );
+			// ((M16) a hurricane's wreck in its wrack, as much of it as hasn't been cleared; your shell set at Marta's)
+			B.setWreck( wreckageAt( app.damage ).filter( ( f ) => ! picked.has( f.id ) ) );
+			B.setWall( s.shells.wall !== null );
 
 		}
 
@@ -1203,7 +1217,24 @@ export class Game {
 		if ( ! this.state.pickFind( f ) ) return false;
 		const F = FINDS[ f.kind ];
 		if ( f.kind === 'bottle' && this.hud ) this.hud.showNote( messageOf( f.seed ) );
+		else if ( SHELLS[ f.kind ] ) this.toast( this.state.shells.have[ f.kind ].id === f.id ? `${ F.name }, for your set: ${ shellsHave( this.state.shells ) } of ${ SHELL_KINDS.length }` : `A spare ${ F.name.toLowerCase() }${ F.who ? ` · Marta pays $${ F.price }` : `. ${ SHELLS[ f.kind ].note }` }` );
 		else this.toast( `${ F.name }: ${ F.what }${ F.who ? ` · ${ F.who === 'joe' ? 'Joe' : 'Marta' } buys these` : '' }` );
+		return true;
+
+	}
+
+	// (M16) your whole shell set to Marta, for the tray by her table
+	giveShells() {
+
+		const S = this.state.shells;
+		if ( S.wall !== null || SHELL_KINDS.some( ( k ) => ! S.have[ k ] ) ) return false;
+		S.wall = this.app.settings.day | 0;
+		this.state.money += WALL_PAY;
+		this.state.save();
+		this.state.emit();
+		this.toast( `The whole set, in Marta's tray: $${ WALL_PAY }` );
+		if ( this.app.audio && this.app.audio.coin ) this.app.audio.coin();
+		if ( this.hud && this.hud.standOpen ) this.hud.renderTrader();
 		return true;
 
 	}
@@ -1415,7 +1446,7 @@ export class Game {
 		const sea = p.mode === 'boat' || p.mode === 'deck' || p.mode === 'swim';
 		// (a far place's name comes with finding it: updateFound's toast has that, and a toast takes the last one's place)
 		const told = ( n ) => n.place && PLACES[ n.place ].far && ! ( this.state.found[ n.place ] < this.tradeDay );
-		for ( const n of chart.learn( x, z, sea ? this.placeAt( x, z ) : null ) ) if ( ! told( n ) ) this.toast( `On your chart: ${ n.peak ? 'the summit' : n.name }`, 2600 );
+		for ( const n of chart.learn( x, z, sea ? this.placeAt( x, z ) : null ) ) if ( ! told( n ) ) this.toast( `On your chart: ${ namedAs( n ) }`, 2600 );
 		this._chartDirty = this._chartDirty || seen;
 		if ( this._chartDirty && ( this._chartSaved = ( this._chartSaved || 0 ) + 0.4 ) > 15 ) {
 

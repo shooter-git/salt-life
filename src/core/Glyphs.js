@@ -8,5 +8,5 @@
 const c = ( hex ) => String.fromCodePoint( parseInt( hex, 16 ) );
 
 export const ELLIPSIS = c( '2026' ), LEFT = c( '2190' ), UP = c( '2191' ), RIGHT = c( '2192' ), DOWN = c( '2193' );
-export const CHECK = c( '2713' ), STAR = c( '2605' ), DOT = c( '25CF' ), RING = c( '25CB' ), PEAK = c( '25B2' ), PRIME = c( '2032' );
+export const CHECK = c( '2713' ), STAR = c( '2605' ), DOT = c( '25CF' ), RING = c( '25CB' ), PEAK = c( '25B2' ), PRIME = c( '2032' ), CROSS = c( '2715' ), MINUS = c( '2212' );
 export const EM_DASH = c( '2014' ), EN_DASH = c( '2013' ), OPEN_QUOTE = c( '201C' ), CLOSE_QUOTE = c( '201D' );

@@ -15,6 +15,11 @@ import { propellerGeometry, rudderGeometry, PROP, RUDDER } from './boat/Running.
 // (M15) the compass's card: its natural period (s) and damping (of critical), a small boat's dash compass's (a
 // liquid-filled card settles in a few seconds, with a little overshoot)
 export const COMPASS = { period: 3, damping: 0.55 };
+// (M16) its card on its gimbal, held level by its own weight as she pitches and rolls: a pendulum's period (s) and damping
+// in the fluid, quick and well damped against a boat's slow roll; free of the bowl to this much (rad) fore and aft and
+// athwart, then touching (a Silva 102's published gimbal: 30° pitch, 45° roll; a Ritchie's is listed at more); the height of its
+// pivot under the card (m: at the middle of the dome, for the card to stay in it)
+export const GIMBAL = { period: 0.8, damping: 0.6, pitch: 30 * Math.PI / 180, roll: 45 * Math.PI / 180, under: 0.02 };
 const STATIC_BUCKETS = [ 'hull', 'gelcoat', 'wood', 'fittings', 'glow', 'display', 'glass' ];
 const WHEEL_TURNS = 0.75; // wheel turns from centre to hard over
 const THROTTLE_ANGLE = 0.6; // lever travel (rad) from neutral to full
@@ -25,6 +30,28 @@ const _v = new Vector3();
 const _pos = new Vector3();
 const _scale = new Vector3();
 const _q = new Quaternion();
+const _qi = new Quaternion();
+
+// (M16) one of the card's tilts a moment on: a, w how far it is from level in the world and how fast, `now` the tilt from the
+// bowl that would have it level. The fluid drags it with the bowl; past `limit` it's touching, carried with it. -> the tilt from the bowl
+function swingAxis( t, now, limit, dt ) {
+
+	const k = Math.PI * 2 / GIMBAL.period, n = Math.max( 1, Math.ceil( dt / 0.02 ) ), h = dt / n, bowl = - ( now - t.was ) / dt;
+	t.was = now;
+	for ( let i = 0; i < n; i ++ ) {
+
+		t.w += ( - k * k * t.a - 2 * GIMBAL.damping * k * ( t.w - bowl ) ) * h;
+		t.a += t.w * h;
+
+	}
+
+	const rel = t.a + now;
+	if ( Math.abs( rel ) <= limit ) return rel;
+	t.a = Math.sign( rel ) * limit - now;
+	t.w = bowl;
+	return Math.sign( rel ) * limit;
+
+}
 
 // ~8.2 m Downeast lobster boat, built procedurally (37k triangles, 12 draw calls).
 //
@@ -100,7 +127,10 @@ export class BoatModel extends Vessel {
 		// ((M15) the compass's card, its face the instruments' (lit as the dash is): turned to the magnetic north)
 		this.compassMesh = addPart( 'compass', compassCardGeometry(), materials.display, parts.compassAt );
 		this.compassMesh.castShadow = false;
+		this.compassMesh.rotation.order = 'XZY'; // ((M16) spun on its pivot, tilted about the bowl's two axes)
+		this._cardAt = this.compassMesh.position.clone();
 		this._card = null;
+		this._tilt = null;
 		this.searchlight = parts.searchlight; // (boat frame: the searchlight's lens, the horn's mouth)
 		this.hornAt = parts.horn;
 		this.propMesh = addPart( 'propeller', propellerGeometry(), materials.fittings, PROP.position );
@@ -285,6 +315,23 @@ export class BoatModel extends Vessel {
 		}
 
 		this.compassMesh.rotation.y = c.a - her;
+		this._gimbal( dt, q );
+
+	}
+
+	// (M16) the card level in its bowl: where the world's up is in her frame, the card's tilt from the bowl to lie square to it.
+	// Itself a damped pendulum, the fluid dragging it with the bowl, so it lags a quick lurch; stopped where it touches
+	_gimbal( dt, q ) {
+
+		if ( ! ( dt > 0 ) ) return;
+		_v.set( 0, 1, 0 ).applyQuaternion( _qi.copy( q ).invert() );
+		const X = Math.atan2( _v.z, _v.y ), Z = Math.asin( MathUtils.clamp( - _v.x, - 1, 1 ) ), m = this.compassMesh;
+		const t = this._tilt || ( this._tilt = { x: { a: 0, w: 0, was: X }, z: { a: 0, w: 0, was: Z } } );
+		const rx = swingAxis( t.x, X, GIMBAL.pitch, dt ), rz = swingAxis( t.z, Z, GIMBAL.roll, dt ), u = GIMBAL.under;
+		m.rotation.x = rx;
+		m.rotation.z = rz;
+		// (about its pivot, under it)
+		m.position.set( this._cardAt.x - u * Math.sin( rz ), this._cardAt.y - u + u * Math.cos( rz ) * Math.cos( rx ), this._cardAt.z + u * Math.cos( rz ) * Math.sin( rx ) );
 
 	}
 

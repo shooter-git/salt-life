@@ -1267,6 +1267,7 @@ export class Together {
 		else if ( this.crew.job === 'chair' ) body.J = 2;
 		if ( p.riding && m === 'h' ) body.c = [ r2( p.boat.throttle ), r2( p.boat.steer ) ];
 		if ( body.B && this.app.searchlight ) body.S = 1; // (your boat's searchlight is on)
+		if ( app.localLights && app.localLights.flashlight.on ) body.T = 1; // ((M16) your flashlight's on: the turtles mind it)
 		// ((M14) her deck floodlights' lenses, as lit as yours are: fitted, and as dark as it is)
 		const flood = app.game.floodsOn;
 		if ( flood > 0 ) body.L = r2( flood );
@@ -1818,6 +1819,7 @@ export class Together {
 		cur.job = near.J === 1 ? 'tower' : near.J === 2 ? 'chair' : null;
 		cur.helm = Array.isArray( near.c ) && near.c.length === 2 && near.c.every( Number.isFinite ) ? [ MathUtils.clamp( near.c[ 0 ], - 1, 1 ), MathUtils.clamp( near.c[ 1 ], - 1, 1 ) ] : null;
 		cur.spot = near.S === 1;
+		cur.torch = near.T === 1;
 		cur.anchored = near.A === 1;
 		cur.flood = MathUtils.clamp( Number( near.L ) || 0, 0, 1 ); // ((M14) her floodlights' lenses)
 		cur.rpm = ( Number( a.E ) || 0 ) + ( ( Number( b.E ) || 0 ) - ( Number( a.E ) || 0 ) ) * f;

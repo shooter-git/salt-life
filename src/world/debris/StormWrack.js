@@ -2,6 +2,8 @@ import { Mesh } from '../../engine/index.js';
 import { Builder } from '../village/GeoBuilder.js';
 import { mulberry32 } from '../../util/Noise.js';
 import { weedMat, seagrassWrack, frond, branch, plank, coconut } from './DebrisShapes.js';
+import { wreckageAt, WRECK } from '../../game/Beachcomb.js';
+import { wreckAt } from './WreckPieces.js';
 
 // (M13) A hurricane's line of wrack up the beach: where its sea reached (the surge and its surf: game/
 // StormDamage's wrackH), a heavy line of what it threw up, heaped in banks with gaps between: mats of
@@ -22,9 +24,10 @@ const PIER_X = 55;
 export class StormWrack {
 
 	// terrain: TerrainData; nature, wood: the debris's materials
-	constructor( { terrain, nature, wood, parent, lite = false } ) {
+	constructor( { terrain, nature, wood, parent, lite = false, keep = [] } ) {
 
 		this.terrain = terrain;
+		this.keep = keep;
 		// (on the beach's gentle sand: its slope, its sand map while there is one, 0..1, as the debris's
 		// placement reads it: the page lets it go once the island's made)
 		this.sandAt = ( x, z ) => {
@@ -53,7 +56,7 @@ export class StormWrack {
 		if ( has ) {
 
 			const key = `${ D.storm.key }:${ D.wrackH.toFixed( 2 ) }`;
-			if ( key !== this.key ) this.build( key, D.wrackH );
+			if ( key !== this.key ) this.build( key, D.wrackH, wreckageAt( { ...D, after: - 1 } ) );
 
 		}
 
@@ -69,7 +72,8 @@ export class StormWrack {
 
 	}
 
-	build( key, H ) {
+	// ((M16) wreck: game/Beachcomb's wreckageAt, all of it: its pieces half under the weed, a mat or two heaped against each)
+	build( key, H, wreck = [] ) {
 
 		this.dispose();
 		this.key = key;
@@ -103,6 +107,20 @@ export class StormWrack {
 				else if ( r < 0.96 ) branch( B, ground, wx, wz, rand() * Math.PI * 2, 0.8 + rand() * 1.4, 0.03 + rand() * 0.03, rand );
 				else if ( r < 0.98 ) plank( B, ground, wx, wz, Math.PI / 2 + ( rand() - 0.5 ) * 0.8, 1.4 + rand() * 1.4, 0.2, 0.05, rand, { weather: 0.9 } );
 				else coconut( B, ground, wx, wz, rand );
+
+			}
+
+		}
+
+		for ( const f of wreck ) {
+
+			const [ wx, wz ] = wreckAt( f, T, WRECK.x, PIER_X, this.keep ), n = 1 + Math.floor( rand() * 2 );
+			for ( let q = 0; q < n; q ++ ) {
+
+				const a = f.yaw + rand() * Math.PI * 2, d = 0.3 + rand() * 0.5, mx = wx + Math.cos( a ) * d, mz = wz + Math.sin( a ) * d;
+				const seg = Math.max( 0, Math.min( SEGMENTS - 1, Math.floor( ( mx - BEACH[ 0 ] ) / span ) ) );
+				// ((the last group: there until the wrack's nearly gone, as the wreck is))
+				weedMat( Bs[ ( GROUPS - 1 ) * SEGMENTS + seg ], ground, mx, mz, 0.16 + rand() * 0.2, 0.05 + rand() * 0.07, rand, { dry: rand() * 0.3, aspect: 1.2 + rand() * 0.7, rot: rand() * 0.6 - 0.3, strands: 0, fringe: ! this.lite } );
 
 			}
 

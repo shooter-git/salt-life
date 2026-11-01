@@ -36,7 +36,7 @@ import { Player } from './player/Player.js';
 import { BoatController } from './player/BoatController.js';
 import { GameState } from './game/GameState.js';
 import { DAY_RATE, START_HOUR, advance } from './game/IslandClock.js';
-import { islandTime, isPick, NORTH, weatherAt, towardOf } from './game/Weather.js';
+import { islandTime, isPick, NORTH, weatherAt, towardOf, seaSwell } from './game/Weather.js';
 import { BACK_MS, awayClock, awayOf, boatLeft, cleanBoats, leftOf, othersAway, tellOthers, withRecord } from './game/Away.js';
 import { ableEnv } from './game/Seaworthy.js';
 import { berthOf } from './game/fleet/Berths.js';
@@ -802,7 +802,7 @@ export class App {
 			this.terrain.setStorm( D );
 			vegUniforms.vegStrip.value = D.strip;
 			// (its line of wrack, made once it's left one, with the debris's materials)
-			if ( ! this.stormWrack && this.debris && D.wrack > 0 ) this.stormWrack = new StormWrack( { terrain: this.terrainData, nature: this.debris.materials.nature, wood: this.village.materials.wood, parent: this.scene, lite: this.tier !== 'high' } );
+			if ( ! this.stormWrack && this.debris && D.wrack > 0 ) this.stormWrack = new StormWrack( { terrain: this.terrainData, nature: this.debris.materials.nature, wood: this.village.materials.wood, parent: this.scene, lite: this.tier !== 'high', keep: this.village.footprints } );
 			if ( this.stormWrack ) this.stormWrack.set( D );
 			if ( this.wildlife ) {
 
@@ -917,14 +917,14 @@ export class App {
 		this.rocks.update( this.camera );
 		if ( this.debris ) this.debris.update( this.camera );
 		// ((M15) beachcombing's finds and the north beach's wrack line, once the beach's debris materials are made)
-		if ( ! this.beachcomb && this.debris ) this.beachcomb = new Beachcombing( { terrain: this.terrainData, materials: { nature: this.debris.materials.nature, wood: this.village.materials.wood, hard: this.village.materials.hard }, parent: this.scene, lite: this.tier === 'low' } );
+		if ( ! this.beachcomb && this.debris ) this.beachcomb = new Beachcombing( { terrain: this.terrainData, materials: { nature: this.debris.materials.nature, wood: this.village.materials.wood, hard: this.village.materials.hard, roofMetal: this.village.materials.roofMetal, net: this.village.materials.net }, parent: this.scene, lite: this.tier === 'low', keep: this.village.footprints } );
 		if ( this.beachcomb ) this.beachcomb.update( this.camera );
 		if ( this.stormWrack ) this.stormWrack.update( this.camera ); // ((M13) a hurricane's line of wrack, near you)
 		this.flyingSheets.update( islandTime( s.day, s.timeOfDay ) ); // ((M14) the sheets it's torn off, flying and lying)
 		// ((M15) the lighthouse's light: lit from dusk, its flash as it's seen from here)
 		this.lighthouse.update( this.camera, this.sky.visibility, this.renderer.domElement.height );
 		this.harbourLights.update( this.camera, this.sky.visibility, this.renderer.domElement.height );
-		this.turtles.update( dt, this.camera, this.settings.timeOfDay, this.settings.day );
+		this.turtles.update( dt, this.camera, this.settings.timeOfDay, this.settings.day, this );
 		this.farIsland.update( this.camera );
 		// ((M15) the reefs: the bay's, and the windward one once you're near it)
 		if ( this.reefs ) {
@@ -1847,7 +1847,7 @@ export class App {
 			const B = SEABED.bank, line = this._surfLine || ( this._surfLine = new SurfLine( this.terrainData, { bank: { x: B.x, z: B.z, size: BANK.size } } ) );
 			const q = this._seaHeard = line.heard( p.x, p.z, this.shore.trains, this._seaHeard || {}, this.shore.params.gamma ), live = this.weather.live, w = this.waves;
 			q.grown = w.windGrownAt( p.x, p.z );
-			q.big = live ? w.reachOf( live.swell, live.windSea * q.grown ) / w.reachOf( 1, 1 ) : 1;
+			q.big = live ? w.reachOf( seaSwell( live.swell, live.blow ), live.windSea * q.grown ) / w.reachOf( 1, 1 ) : 1;
 			q.bottom = G.seaLevel.value - this.terrainData.heightAt( p.x, p.z );
 
 		}
@@ -2403,7 +2403,8 @@ export class App {
 	}
 
 	// (M15) what brought a day's finds in (game/Beachcomb.js): how big the north sea was the night before
-	// (0..1 of a breezy day's 1.5 m), and a hurricane's wrack that day
+	// (0..1 of a breezy day's 1.5 m), (M16) how big the sea in the bay (0 to 1 from a fair day's surf up), and a hurricane's
+	// wrack that day
 	beachDays( d ) {
 
 		const c = this._beachDays || ( this._beachDays = new Map() ), s = this.settings, key = `${ d }:${ this.weatherPick() }:${ s.weatherSince }`;
@@ -2411,7 +2412,7 @@ export class App {
 
 			if ( c.size > 32 ) c.clear();
 			const w = weatherAt( islandTime( d, 2 ), this.weatherPick(), s.weatherSince ), D = damageAt( islandTime( d, 7 ), this.weatherPick(), s.weatherSince );
-			c.set( key, { north: Math.min( 1, ( w.north || 0 ) / 1.5 ), storm: D.wrack > 0.3 } );
+			c.set( key, { north: Math.min( 1, ( w.north || 0 ) / 1.5 ), lee: Math.min( 1, Math.max( 0, ( w.surf - 0.34 ) / 0.26 ) ), storm: D.wrack > 0.3 } );
 
 		}
 

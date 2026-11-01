@@ -11,9 +11,12 @@ import { timeText } from './IslandClock.js';
 import { LB, IN, GAL, lb, pounds, inches, feet, farOff, gallons, lbOz, feetInches } from './Units.js';
 import { PLACES, FAR_PLACES, placeName, farName } from './Places.js';
 import { FINDS, messageOf } from './Beachcomb.js';
+import { shellTab, bindShellTab, shellShopRow, SHELL_CSS } from './ShellCase.js';
+import { shellsHave } from './Shells.js';
 import { CAMP } from './FishCamp.js';
-import { NAMES, MAX_MARKS, legTo, magnetic } from './Chart.js';
-import { LEFT, RIGHT, CHECK, STAR, EM_DASH, OPEN_QUOTE, CLOSE_QUOTE, DOT, RING } from '../core/Glyphs.js';
+import { NAMES, MAX_MARKS, legTo, magnetic, namedAs } from './Chart.js';
+import { LEFT, RIGHT, CHECK, CROSS, STAR, EM_DASH, OPEN_QUOTE, CLOSE_QUOTE, DOT, RING } from '../core/Glyphs.js';
+import { ChartMap, CHART_MAP_CSS } from './ChartMap.js';
 
 // (other players' names, into HTML)
 const escape = ( t ) => String( t ).replace( /[&<>"']/g, ( c ) => ( { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } )[ c ] );
@@ -38,9 +41,19 @@ const sizeOf = ( species, cm ) => species === 'lobster' ? `${ carapaceIn( cm ).t
 //   catch card    full screen: the world dims and blurs, the fish lies side-on in its own studio light
 //                 (FishPortrait) with the species above and length, weight, value, record below
 const CSS = /* css */`
-.gm-purse { position: absolute; top: var(--tw-edge); right: var(--tw-edge); display: flex; gap: var(--tw-3); align-items: center;
+.gm-purse { position: absolute; top: var(--tw-edge); right: var(--tw-edge); display: flex; flex-direction: column; align-items: stretch;
 	padding: var(--tw-2) var(--tw-4); border-radius: 999px; font: 500 var(--tw-fs-lg) var(--tw-font); color: var(--tw-ink); pointer-events: none;
 	transition: transform var(--tw-med) var(--tw-ease), right var(--tw-slow) var(--tw-ease); }
+/* (M16) one panel: the time, your money and the cooler; under them aboard, the boat's: fuel, hull, bilge, finder and the way home */
+.gm-purse-top, .gm-purse-boat { display: flex; flex-wrap: wrap; gap: var(--tw-1) var(--tw-3); align-items: center; justify-content: flex-end; }
+.gm-purse-boat { max-width: calc(620 * var(--tw-u)); margin-top: var(--tw-2); padding-top: var(--tw-2); border-top: 1px solid var(--tw-line); }
+.gm-purse-boat:not(:has(.is-on)) { display: none; }
+.gm-purse:has(.gm-purse-boat .is-on) { border-radius: var(--tw-r-lg); }
+.gm-fuel-bar { position: relative; overflow: visible; }
+.gm-fuel-tick { display: none; position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 2px rgba(0,0,0,0.7); }
+.gm-fuel-tick.is-on { display: block; }
+.gm-fuel-state { font-style: normal; font-weight: 700; }
+.gm-fuel-state.is-ok { color: #8fdc8a; } .gm-fuel-state.is-tight { color: #f2c14e; } .gm-fuel-state.is-short { color: #ff7a6a; }
 .tw-root[data-panel='open'] .gm-purse { right: calc(var(--tw-panel-w) + 2 * var(--tw-3)); }
 .tw-root.is-photo .gm-panel { display: none; }
 .gm-purse.is-bump { animation: gm-bump 420ms var(--tw-ease); }
@@ -383,10 +396,15 @@ export class GameHUD {
 		this.ui = ui;
 		this.game = game;
 		const style = h( 'style' );
-		style.textContent = CSS + FLEET_CSS;
+		style.textContent = CSS + FLEET_CSS + SHELL_CSS + CHART_MAP_CSS;
 		document.head.append( style );
 
-		this.purse = h( 'div', 'gm-purse tw-glass', `<span class="gm-money">$0</span><span class="gm-cooler"><span class="gm-cooler-label">Cooler</span><span class="gm-cooler-bar"><span></span></span><span class="gm-cooler-kg">0 / 66 lb</span></span><span class="gm-gauge gm-fuel"><span>Fuel</span><span class="gm-cooler-bar gm-fuel-bar"><span></span></span><b class="gm-fuel-l">11 gal</b></span><span class="gm-gauge gm-hull"><span>Hull</span><span class="gm-cooler-bar gm-hull-bar"><span></span></span><b class="gm-hull-p">100%</b></span><span class="gm-gauge gm-bilge"><span>Bilge</span><span class="gm-cooler-bar gm-bilge-bar"><span></span></span><b class="gm-bilge-l">0 gal</b></span><span class="gm-gauge gm-sonar"><span>Sonar</span><b class="gm-sonar-d">0 ft</b><span class="gm-sonar-dots"></span></span><span class="gm-gauge gm-breath"><span>Breath</span><span class="gm-cooler-bar gm-breath-bar"><span></span></span></span><span class="gm-gauge gm-bait"><span class="gm-bait-l">Bait</span><b class="gm-bait-t">Shrimp</b></span>` );
+		this.purse = h( 'div', 'gm-purse tw-glass', `<div class="gm-purse-top"><span class="gm-money">$0</span><span class="gm-cooler"><span class="gm-cooler-label">Cooler</span><span class="gm-cooler-bar"><span></span></span><span class="gm-cooler-kg">0 / 66 lb</span></span><span class="gm-gauge gm-breath"><span>Breath</span><span class="gm-cooler-bar gm-breath-bar"><span></span></span></span><span class="gm-gauge gm-bait"><span class="gm-bait-l">Bait</span><b class="gm-bait-t">Shrimp</b></span></div><div class="gm-purse-boat"><span class="gm-gauge gm-fuel"><span>Fuel</span><span class="gm-cooler-bar gm-fuel-bar"><span></span><i class="gm-fuel-tick"></i></span><b class="gm-fuel-l">11 gal</b><i class="gm-fuel-state"></i></span><span class="gm-gauge gm-hull"><span>Hull</span><span class="gm-cooler-bar gm-hull-bar"><span></span></span><b class="gm-hull-p">100%</b></span><span class="gm-gauge gm-bilge"><span>Bilge</span><span class="gm-cooler-bar gm-bilge-bar"><span></span></span><b class="gm-bilge-l">0 gal</b></span><span class="gm-gauge gm-sonar"><span>Sonar</span><b class="gm-sonar-d">0 ft</b><span class="gm-sonar-dots"></span></span><span class="gm-gauge gm-home"><span>Home</span><b class="gm-home-t"></b></span></div>` );
+		this.purseTop = this.purse.firstElementChild;
+		this.fuelTick = this.purse.querySelector( '.gm-fuel-tick' );
+		this.fuelState = this.purse.querySelector( '.gm-fuel-state' );
+		this.homeEl = this.purse.querySelector( '.gm-home' );
+		this.homeT = this.purse.querySelector( '.gm-home-t' );
 		this.baitEl = this.purse.querySelector( '.gm-bait' );
 		this.baitL = this.purse.querySelector( '.gm-bait-l' );
 		this.baitT = this.purse.querySelector( '.gm-bait-t' );
@@ -917,6 +935,30 @@ export class GameHUD {
 
 	}
 
+	// (M16) the way home, past sight of the dock (HomeReadout, twice a second): where getting there takes the fuel to, a
+	// tick on the bar, and whether it will. Its mark's a different shape for each as well as its colour: a red tick would
+	// read as all's well
+	setHome( h ) {
+
+		this.homeEl.classList.toggle( 'is-on', !! h );
+		const need = h && h.need !== null ? h.need : null;
+		this.fuelTick.classList.toggle( 'is-on', need !== null );
+		if ( need !== null ) this.fuelTick.style.left = `${ need * 100 }%`;
+		const state = h && h.state || '';
+		if ( this._homeState !== state ) {
+
+			this._homeState = state;
+			this.fuelState.className = `gm-fuel-state${ state ? ` is-${ state }` : '' }`;
+			this.fuelState.textContent = { ok: CHECK, tight: '!', short: CROSS }[ state ] || '';
+			this.fuelState.title = state ? `Fuel to get home: ${ state }` : '';
+
+		}
+
+		if ( h && this.homeT.textContent !== h.text ) this.homeT.textContent = h.text;
+		if ( h && this.homeEl.firstElementChild.textContent !== h.label ) this.homeEl.firstElementChild.textContent = h.label;
+
+	}
+
 	// the cooler, in tabs: the fish in it, your log, the island's records, and how the others see you
 	renderInventory() {
 
@@ -925,7 +967,7 @@ export class GameHUD {
 		const logged = Object.entries( s.log ).filter( ( [ k ] ) => FISH[ k ] );
 		// (Salt Life) the island's records: the group's heaviest of each kind (together/)
 		const isle = together ? Object.entries( together.records ).filter( ( [ k ] ) => FISH[ k ] ).sort( ( a, b ) => b[ 1 ].kg - a[ 1 ].kg ) : [];
-		const tabs = [ [ 'fish', 'Fish', s.inventory.length ], [ 'bait', 'Bait', Object.values( s.bait ).reduce( ( a, n ) => a + n, 0 ) ], [ 'finds', 'Finds', s.finds.length ], [ 'log', 'Log', logged.length ], [ 'chart', 'Chart', s.chart.marks.length ] ];
+		const tabs = [ [ 'fish', 'Fish', s.inventory.length ], [ 'bait', 'Bait', Object.values( s.bait ).reduce( ( a, n ) => a + n, 0 ) ], [ 'finds', 'Finds', s.finds.length ], [ 'shells', 'Shells', shellsHave( s.shells ) ], [ 'log', 'Log', logged.length ], [ 'chart', 'Chart', s.chart.marks.length ] ];
 		if ( together ) tabs.push( [ 'records', 'Records', isle.length ], [ 'islander', 'Islander', 0 ] );
 		this._invTabs = tabs.map( ( t ) => t[ 0 ] );
 		const tab = this._invTabs.includes( this.invTab ) ? this.invTab : 'fish';
@@ -958,8 +1000,13 @@ export class GameHUD {
 				const btns = f.kind === 'bottle' ? `<button class="gm-mini" data-read="${ f.id }">Read</button>` : '';
 				return item( F.name, `${ F.what } · ${ buyer }`, `<span class="gm-btns">${ btns }<button class="gm-mini" data-toss="${ f.id }">Toss</button></span>` );
 
-			} ).join( '' ) || empty( 'The sea brings things in on the north beach, along the line of weed at the top of the tide: driftwood, floats, sea beans, now and then a bottle. Most after a blow from the north, and after a hurricane.' );
+			} ).join( '' ) || empty( 'The sea brings things in on the north beach, along the line of weed at the top of the tide: driftwood, floats, sea beans, now and then a bottle. Most after a blow from the north, and after a hurricane. The bay\'s beach has its own: sand dollars, sea glass, what the village has lost. Every shore has something.' );
 			hint = 'Marta buys most of it; Joe knows a buyer for ambergris';
+
+		} else if ( tab === 'shells' ) {
+
+			// ((M16) the shell collection: ShellCase.js)
+			( { body, hint } = shellTab( s ) );
 
 		} else if ( tab === 'log' ) {
 
@@ -982,8 +1029,9 @@ export class GameHUD {
 			// compass), the names you've come to)
 			const c = s.chart, a = this.game.app, aboard = a.player.mode === 'boat' || a.player.mode === 'deck';
 			const at = aboard && a.boatCtl ? a.boatCtl.position : a.camera.position;
-			const named = NAMES.filter( ( n ) => c.named( n.id ) && ! n.peak ).map( ( n ) => n.name );
-			body = `<div class="gm-shop-row"><span>Mark where you are<small>${ c.marks.length } of ${ MAX_MARKS } marks · on the map and the boat's plotter</small></span><button class="gm-btn" data-mark>Mark here</button></div>`
+			const named = NAMES.filter( ( n ) => c.named( n.id ) && ! n.peak ).map( namedAs );
+			// ((M16) and the whole chart to look at: ChartMap)
+			body = `<div class="gm-chartmap-slot"></div><div class="gm-shop-row"><span>Mark where you are<small>${ c.marks.length } of ${ MAX_MARKS } marks · on the map and the boat's plotter</small></span><button class="gm-btn" data-mark>Mark here</button></div>`
 				+ c.marks.map( ( m ) => {
 
 					const leg = legTo( at.x, at.z, m.x, m.z ), far = leg.m < 1852 * 0.2 ? feet( leg.m ) : `${ ( leg.m / 1852 ).toFixed( 1 ) } NM`;
@@ -1029,6 +1077,8 @@ export class GameHUD {
 		this.inv.querySelector( '.gm-list' ).scrollTop = scroll;
 		this.inv.querySelector( '[data-close]' ).onclick = () => this.toggleInventory( false );
 		for ( const b of this.inv.querySelectorAll( '[data-tab]' ) ) b.onclick = () => this.showTab( b.dataset.tab );
+		if ( tab === 'shells' ) bindShellTab( this.inv, s, () => this.renderInventory() );
+		if ( tab === 'chart' ) ( this._chartMap ||= new ChartMap( this.game ) ).mount( this.inv.querySelector( '.gm-chartmap-slot' ) );
 		for ( const b of this.inv.querySelectorAll( '[data-release]' ) ) b.onclick = () => s.release( Number( b.dataset.release ) );
 		for ( const b of this.inv.querySelectorAll( '[data-trophy]' ) ) b.onclick = () => this.game.showTrophy( b.dataset.trophy );
 		for ( const b of this.inv.querySelectorAll( '[data-cut]' ) ) b.onclick = () => {
@@ -1387,7 +1437,7 @@ GameHUD.prototype.renderShop = function () {
 		<div class="gm-head"><h2>${ v.name }</h2>
 		<p class="gm-sub">${ greeting } · You have $${ s.money.toLocaleString() }</p></div>
 		${ tabs }
-		<div class="gm-list">${ boats ? fleetRows( this ) : `${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ this.findsBlock( 'marta', 'From the beach: she\'ll buy' ) }${ bucketRow }${ baitRows }${ haulRow }${ towRow }${ repairRow }${ fuelRow }${ frozen }${ g.daysOut.shopRows() }${ rows }` }</div>
+		<div class="gm-list">${ boats ? fleetRows( this ) : `${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ this.findsBlock( 'marta', 'From the beach: she\'ll buy' ) }${ shellShopRow( s ) }${ bucketRow }${ baitRows }${ haulRow }${ towRow }${ repairRow }${ fuelRow }${ frozen }${ g.daysOut.shopRows() }${ rows }` }</div>
 		<div class="gm-foot"><span class="gm-sub">${ boats ? 'Boats stay at their berths till you take one out' : 'Upgrades take effect at once' }</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>` );
 	bindFuel();
 	g.daysOut.bindShop( this.stand, () => this.renderShop() );
@@ -1424,6 +1474,8 @@ GameHUD.prototype.renderShop = function () {
 	for ( const b of this.stand.querySelectorAll( '[data-buy]' ) ) b.onclick = () => this.game.buy( b.dataset.buy );
 	for ( const b of this.stand.querySelectorAll( '[data-sell]' ) ) b.onclick = () => this.game.sell( [ Number( b.dataset.sell ) ] );
 	this.bindFinds( 'marta' );
+	const sw = this.stand.querySelector( '[data-shellwall]' );
+	if ( sw ) sw.onclick = () => this.game.giveShells();
 
 };
 

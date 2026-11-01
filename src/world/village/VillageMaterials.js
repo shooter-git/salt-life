@@ -256,7 +256,9 @@ void vlmSurface( inout VlmSurf s, vec3 Ng ) {
 	float seed = aData.x;
 	float paint = aData.y;
 	float pattern = aData.z;
-	float weather = aData.w;
+	// ((M16) a boat afloat, her weathering over 2: no tide's belt on her, she goes up and down with it)
+	float afloat = step( 1.5, aData.w );
+	float weather = aData.w - 2.0 * afloat;
 	vec2 uv0 = vUv0;
 	vec3 P = vWP;
 	float isCap = step( 1500.0, uv0.x );
@@ -448,7 +450,7 @@ void vlmSurface( inout VlmSurf s, vec3 Ng ) {
 	float roughRaw = Nt.b + wW * 0.03;
 	float roughPaint = mix( 0.4, 0.7, Pn.b ) + fade * 0.12;
 	float rough = mix( roughRaw, roughPaint, painted ) + Gm.r * 0.06 + Gm.g * 0.08 - nail * 0.3 - walkK * 0.1 + streak * 0.05 - dropCore * 0.2;
-	VlmTidal res = vlmTidal( P, col, rough );
+	VlmTidal res = vlmTidal( P + vec3( 0.0, afloat * 8.0, 0.0 ), col, rough );
 
 	// ---- glass mode (windows and lanterns share this material to save a draw call)
 	float isGlass = step( 8.5, pattern );

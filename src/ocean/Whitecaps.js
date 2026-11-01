@@ -46,6 +46,9 @@ const LEFT = 0.7; // how white the foam it leaves is, at first (the roller's 1: 
 // cells a period: the foam left spreading and thinning at its edges as it ages (its edge softened by so
 // much more: a gale's big ones were white blocks, their sides as straight as when they were laid)
 const SPREAD = 0.08;
+// (M16) crests a pixel: from afar, their share of white spread, from the first to all of it at the second (they were
+// 0.45 and 0.9, and every pixel between read its crests' hashes three times for what's 10/255 at most in a dozen pixels)
+const AWAY = [ 0.3, 0.6 ];
 const AGES = 3; // crests behind looked at: the foam's gone by then (the low tier's GPU looks at two)
 // the share of the sea a wave's whitecaps whiten, a unit of chance at size 1 (test/whitecaps.mjs measures
 // it), and as their size goes (bigger, and breaking longer: as size^SIZE_COVER, measured)
@@ -55,6 +58,10 @@ const SIZE_COVER = 1.25;
 // with blown foam, WaterSurface's spume); and their size, from a light breeze's to a gale's
 const WIND = [ 3, 19 ];
 const SIZE = [ 0.7, 1.6 ];
+// (M16) m/s: from a near gale to a gale they come to break on the long seas' crests; from how far under its height to
+// how far over it (of the long waves' height) a crest's break shows
+const CREST_WIND = [ 13, 19 ], CREST_ON = [ - 0.35, 0.45 ];
+export const WHITECAP_CREST = CREST_ON;
 const monahan = ( u ) => 3.84e-6 * Math.pow( Math.max( 0, u ), 3.41 );
 const smooth = ( a, b, x ) => {
 
@@ -86,6 +93,7 @@ export function pcg3d( x, y, z, out = [ 0, 0, 0 ] ) {
 const u32 = ( f ) => ( f | 0 ) >>> 0; // (a float holding an integer, as uint( int( f ) ))
 const fract = ( x ) => x - Math.floor( x );
 const _h = [ 0, 0, 0 ], _h2 = [ 0, 0, 0 ];
+const _d = [ 0, 0, 0 ];
 const _ev = { on: 0, lip: 0, ph: 0, c: 0, reach: 0, open: 0, f: 0, m: 0, prof: 0 };
 
 // a crest's break: crest n, s along it (cells), at time tau, a wave of period T; how strong it is there
@@ -164,6 +172,8 @@ export class Whitecaps {
 			// set the crests' edges flickering, so whitecapsAt takes x0 about the origin and adds these)
 			whitecapAt: { value: [ new Vector4( 0, 0, 0, 0 ), new Vector4( 0, 0, 0, 0 ) ] },
 			whitecapRag: { value: new Vector4( 0, 0, 0, 0 ) },
+			// ((M16) a blow's: how much of them is up on the long waves' crests, and those waves' height, m)
+			whitecapCrest: { value: new Vector4( 0, 1, 0, 0 ) },
 		};
 		const f = ( x ) => x.toFixed( 6 );
 		this.glsl = /* glsl */`
@@ -172,6 +182,7 @@ uniform vec4 whitecapChance;
 uniform float whitecapSize;
 uniform vec4 whitecapAt[ 2 ];
 uniform vec4 whitecapRag;
+uniform vec4 whitecapCrest;
 uvec3 wcHash( uvec3 v ) {
 	v = v * 1664525u + 1013904223u;
 	v.x += v.y * v.z; v.y += v.z * v.x; v.z += v.x * v.y;
@@ -219,7 +230,7 @@ float wcAlong( vec2 x0, vec4 A ) { return dot( vec2( - A.y, A.x ), x0 ) * A.z * 
 vec2 wcCarrier( vec4 A, float u, float s, float du, float ds, float chance, float far, uint salt, vec4 at, vec2 rag ) {
 	float T = 6.2831853 / A.w;
 	// (seen from afar, a crest or more a pixel: its share of white, spread)
-	float away = smoothstep( 0.45, 0.9, du );
+	float away = smoothstep( ${ f( AWAY[ 0 ] ) }, ${ f( AWAY[ 1 ] ) }, du );
 	if ( away >= 1.0 || chance <= 0.0 ) return vec2( 0.0, far );
 	float fu = floor( u ), a = u - fu;
 	// the roller: ahead of the crest coming, breaking now, (step 5) thinning to its ends, its front ragged;
@@ -300,6 +311,19 @@ vec2 whitecapsAt( vec2 x0 ) {
 
 		} );
 		this.uniforms.whitecapSize.value = this.size;
+		// ((M16) from a near gale to a gale, they break on the crests of its long seas, as you see them do: scattered
+		// on the short seas alone, a 12 ft sea had its foam lying in its troughs as on its crests)
+		const crest = this.uniforms.whitecapCrest.value, long = this.waves.waves.filter( ( w ) => w.from === 's' );
+		crest.x = smooth( CREST_WIND[ 0 ], CREST_WIND[ 1 ], windSpeed );
+		crest.y = long.reduce( ( h, w ) => h + w.a, 0 );
+
+	}
+
+	// (M16) how much of a crest's break shows where the sea stands y (m) over its level (as the GPU's)
+	crestShare( y ) {
+
+		const c = this.uniforms.whitecapCrest.value;
+		return c.x > 0 ? 1 + ( smooth( CREST_ON[ 0 ], CREST_ON[ 1 ], y / c.y ) - 1 ) * c.x : 1;
 
 	}
 
@@ -386,7 +410,9 @@ vec2 whitecapsAt( vec2 x0 ) {
 					const ds = ( sc - s ) * L * CELL;
 					const px = x + w.dx * along - w.dz * ds, pz = z + w.dz * along + w.dx * ds;
 					if ( ( px - x ) ** 2 + ( pz - z ) ** 2 > R * R ) continue;
-					const on = event( n, sc, t, T, chance, c.salt, this.size ).on * this.waves.windGrownAt( px, pz );
+					let on = event( n, sc, t, T, chance, c.salt, this.size ).on * this.waves.windGrownAt( px, pz );
+					// ((M16) in a blow, up on the long seas' crests)
+					if ( this.uniforms.whitecapCrest.value.x > 0 ) on *= this.crestShare( this.waves.displacement( px, pz, t, _d )[ 1 ] );
 					// (one only beginning to spill throws no spray)
 					if ( on <= 0.2 ) continue;
 					cb( px, pz, [ - w.dz, w.dx ], half, on, w, ( ( n * 65536 + m ) * 1024 + ( ev.e & 1023 ) ) * 2 + i );

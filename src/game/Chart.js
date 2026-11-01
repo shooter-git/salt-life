@@ -49,29 +49,34 @@ export const MAX_MARKS = 40, MAX_SPOTS = 80;
 // the sea, SIGHT) or over `place`'s water;
 // `water`: written in italics, as a chart names water; `island`: on Marta's chart; `known`: from the start;
 // `light`: a light's characteristic under it (as a chart gives it). (The names are on what they name: test/charts.mjs)
+// (M16) `name` is the chart's, as a real chart of these islands has them (a shape, a colour, a family, a wreck, a saint,
+// the surveyor's); `plain` is what people call it, Joe, the Guide and the log (for a place, Places.js's name). Change any here.
 const lh = LIGHTHOUSE, east = HARBOUR_LIGHTS[ 0 ], west = HARBOUR_LIGHTS[ 1 ], pier = HARBOUR_LIGHTS[ 2 ];
 export const NAMES = [
-	{ id: 'bay', name: 'The Bay', x: 10, z: 110, water: true, island: true, known: true },
-	{ id: 'eastHead', name: 'Bay\'s East Head', x: east.x - 35, z: east.z + 30, island: true, known: true, light: 'Fl R 4s' },
-	{ id: 'westHead', name: 'Bay\'s West Head', x: west.x + 30, z: west.z + 30, island: true, known: true, light: 'Fl G 4s' },
-	{ id: 'pier', name: 'Pier', x: pier.x - 34, z: pier.z + 14, island: true, known: true, light: 'Iso 4s', small: true },
-	{ id: 'summit', name: '992', x: - 24, z: - 492, island: true, known: true, peak: true }, // (302 m: in feet, as the chart's heights)
-	{ id: 'creek', name: 'Mangrove Creek', x: - 470, z: - 150, r: 280, water: true, island: true },
-	{ id: 'westCave', name: 'Sea Cave', x: CAVES[ 0 ].x - 50, z: CAVES[ 0 ].z, r: 220, island: true, small: true },
-	{ id: 'nwCave', name: 'Sea Cave', x: CAVES[ 1 ].x - 20, z: CAVES[ 1 ].z - 50, r: 220, island: true, small: true },
-	{ id: 'northWest', name: 'North-west Point', x: - 385, z: - 715, r: 340, island: true }, // (the island's corner, as the Guide calls it, written on the land just in from it)
-	{ id: 'lighthouse', name: 'Lighthouse', x: lh.x + 34, z: lh.z + 34, r: 340, island: true, small: true, light: 'Fl 10s' },
-	{ id: 'windReef', name: 'Windward Reef', x: - 455, z: - 900, r: 340, water: true, island: true },
-	{ id: 'wreck', name: 'Wreck', x: - 520, z: - 845, r: 240, island: true, small: true },
-	{ id: 'northBeach', name: 'North Beach', x: 195, z: - 790, r: 340, island: true },
-	{ id: 'camp', name: 'Fish Camp', x: CAMP.jetty.x - 75, z: CAMP.jetty.z1 + 5, r: 300, island: true, small: true },
-	{ id: 'canyon', name: 'Canyon', x: 90, z: 1800, r: 700, water: true, island: true },
-	{ id: 'ledge', name: 'North Ledge', x: 0, z: - 2550, place: 'ledge', water: true },
-	{ id: 'hump', name: 'The Hump', x: SEABED.hump[ 0 ][ 0 ], z: SEABED.hump[ 0 ][ 1 ] - 500, place: 'hump', water: true },
-	{ id: 'bank', name: 'The Bank', x: SEABED.bank.x, z: SEABED.bank.z, place: 'bank', water: true },
+	{ id: 'bay', name: 'Pelican Bay', plain: 'the bay', x: 10, z: 110, water: true, island: true, known: true },
+	{ id: 'eastHead', name: 'Battery Head', plain: 'the bay\'s east head', x: east.x - 35, z: east.z + 30, island: true, known: true, light: 'Fl R 4s' },
+	{ id: 'westHead', name: 'Goat Head', plain: 'the bay\'s west head', x: west.x + 30, z: west.z + 30, island: true, known: true, light: 'Fl G 4s' },
+	{ id: 'pier', name: 'Govt Pier', plain: 'the pier', x: pier.x - 34, z: pier.z + 14, island: true, known: true, light: 'Iso 4s', small: true },
+	{ id: 'summit', name: 'Mt St Anne 992', plain: 'the summit', x: - 24, z: - 492, island: true, known: true, peak: true }, // (302 m: in feet, as the chart's heights)
+	{ id: 'creek', name: 'Snook Creek', plain: 'the mangrove creek', x: - 470, z: - 150, r: 280, water: true, island: true },
+	{ id: 'westCave', name: 'Smugglers Cave', plain: 'the sea cave', x: CAVES[ 0 ].x - 50, z: CAVES[ 0 ].z, r: 220, island: true, small: true },
+	{ id: 'nwCave', name: 'Cathedral Cave', plain: 'the sea cave', x: CAVES[ 1 ].x - 20, z: CAVES[ 1 ].z - 50, r: 220, island: true, small: true },
+	{ id: 'northWest', name: 'Gallows Point', plain: 'the north-west point', x: - 385, z: - 715, r: 340, island: true }, // (the island's corner, as the Guide calls it, written on the land just in from it)
+	{ id: 'lighthouse', name: 'Gallows Pt Lt', plain: 'the lighthouse', x: lh.x + 34, z: lh.z + 34, r: 340, island: true, small: true, light: 'Fl 10s' },
+	{ id: 'windReef', name: 'Worlds End Reef', plain: 'the windward reef', x: - 455, z: - 900, r: 340, water: true, island: true },
+	{ id: 'wreck', name: 'Mary Joseph Wk', plain: 'the wreck', x: - 520, z: - 845, r: 240, island: true, small: true },
+	{ id: 'northBeach', name: 'Turtle Beach', plain: 'the north beach', x: 195, z: - 790, r: 340, island: true },
+	{ id: 'camp', name: 'Pearl\'s Landing', plain: 'the fish camp', x: CAMP.jetty.x - 75, z: CAMP.jetty.z1 + 5, r: 300, island: true, small: true },
+	{ id: 'canyon', name: 'Pelican Canyon', plain: 'the canyon', x: 90, z: 1800, r: 700, water: true, island: true },
+	{ id: 'ledge', name: 'Sigsbee Ledge', plain: 'the north ledge', x: 0, z: - 2550, place: 'ledge', water: true },
+	// ((M16) on its top, the middle of all that's shallower than 110 m, on both the seabed's maps: it was 500 m off, over 266 m)
+	{ id: 'hump', name: 'Sisters Hump', plain: 'the hump', x: 5140, z: - 3320, place: 'hump', water: true },
+	{ id: 'bank', name: 'Thunder Bank', plain: 'the bank', x: SEABED.bank.x, z: SEABED.bank.z, place: 'bank', water: true },
 	// (on the bar's middle; its surf's seen from a long way, so named from a long way)
-	{ id: 'sandbar', name: 'Sandbar', x: SEABED.bank.x + SEABED.sandbar.lee * 0.349, z: SEABED.bank.z + SEABED.sandbar.lee * 0.937, r: 900, water: true, small: true },
+	{ id: 'sandbar', name: 'Silver Bar', plain: 'the sandbar', x: SEABED.bank.x + SEABED.sandbar.lee * 0.349, z: SEABED.bank.z + SEABED.sandbar.lee * 0.937, r: 900, water: true, small: true },
 ];
+// (M16) a name as it's told, chart's and people's both: 'Turtle Beach (the north beach)'
+export const namedAs = ( n ) => `${ n.peak ? n.name.replace( / \d+$/, '' ) : n.name } (${ n.plain })`;
 export const NAME = Object.fromEntries( NAMES.map( ( n ) => [ n.id, n ] ) );
 
 // ---- a sheet's cells: seen (1) or not (0), row by row from its (x0, z0)

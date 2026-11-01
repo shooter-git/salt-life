@@ -1,4 +1,5 @@
 import { FINDS, LIES } from './Beachcomb.js';
+import { readShells, keepShell } from './Shells.js';
 import { FISH, fishValue, fishLengthCm } from './FishTable.js';
 import { defaultUpgrades, gearStats, nextLevel, UPGRADES, fuelPrice, unlockProgress } from './Gear.js';
 import { repairFee } from './Hull.js';
@@ -65,6 +66,7 @@ export class GameState {
 		// last few days': they'd have gone by now anyway), so they're not there again)
 		this.finds = []; // { id, kind, day, seed }
 		this.picked = [];
+		this.shells = readShells(); // ((M16) the shell collection: Shells.js)
 		this.chart = new ChartLog(); // ((M15) the chart you fill in: Chart.js)
 		this.days = cleanDays(); // ((M16) ice, stores, how long you've been out: DaysOut.js)
 		this._nextId = 1;
@@ -751,7 +753,8 @@ export class GameState {
 		if ( ! FINDS[ f.kind ] || this.picked.includes( f.id ) ) return false;
 		this.picked = this.picked.filter( ( id ) => parseInt( id, 10 ) > f.day - LIES - 1 );
 		this.picked.push( f.id );
-		this.finds.push( { id: f.id, kind: f.kind, day: f.day, seed: f.seed } );
+		// ((M16) the first of a shell into your set; a spare with your finds)
+		if ( ! keepShell( this.shells, f ) ) this.finds.push( { id: f.id, kind: f.kind, day: f.day, seed: f.seed } );
 		this.save();
 		this.emit();
 		return true;
@@ -923,7 +926,7 @@ export class GameState {
 	toJSON() {
 
 		this._boatAway();
-		return { v: 2, boat: this.boat, fleet: this.fleet, earned: this.earned, dues: this.dues, money: this.money, inventory: this.inventory, log: this.log, places: this.places, trophies: this.trophies, found: this.found, upgrades: this.upgrades, fuel: this.fuel, hull: this.hull, hauled: this.hauled, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, bag: this.bag, finds: this.finds, picked: this.picked, chart: this.chart.toJSON(), days: this.days, nextId: this._nextId };
+		return { v: 2, boat: this.boat, fleet: this.fleet, earned: this.earned, dues: this.dues, money: this.money, inventory: this.inventory, log: this.log, places: this.places, trophies: this.trophies, found: this.found, upgrades: this.upgrades, fuel: this.fuel, hull: this.hull, hauled: this.hauled, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, bag: this.bag, finds: this.finds, picked: this.picked, shells: this.shells, chart: this.chart.toJSON(), days: this.days, nextId: this._nextId };
 
 	}
 
@@ -968,6 +971,7 @@ export class GameState {
 		// ((M15) beachcombing: saves from before had none)
 		this.finds = Array.isArray( d.finds ) ? d.finds.filter( ( f ) => f && FINDS[ f.kind ] && typeof f.id === 'string' ).map( ( f ) => ( { id: f.id, kind: f.kind, day: f.day | 0, seed: f.seed | 0 } ) ) : [];
 		this.picked = Array.isArray( d.picked ) ? d.picked.filter( ( id ) => typeof id === 'string' ).slice( - 200 ) : [];
+		this.shells = readShells( d.shells ); // ((M16) saves from before had none)
 		// ((M15) the chart: saves from before had the bay alone)
 		this.chart.fromJSON( d.chart );
 		this._chartBought();
@@ -1027,6 +1031,7 @@ export class GameState {
 		this.bag = { day: null, n: {} };
 		this.finds = [];
 		this.picked = [];
+		this.shells = readShells();
 		this.chart.reset();
 		this._chartBought();
 		this.days = cleanDays();

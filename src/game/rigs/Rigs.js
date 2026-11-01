@@ -1,3 +1,4 @@
+import { ELLIPSIS } from '../../core/Glyphs.js';
 import { Vector3 } from '../../engine/index.js';
 import { G } from '../../core/Globals.js';
 import { BAITS, BAIT_IDS, onHand } from '../Bait.js';
@@ -717,7 +718,7 @@ export class Rigs {
 		}
 
 		if ( ! f ) return null;
-		if ( Math.hypot( p.deckPos.x - seat.eye.x, p.deckPos.z - seat.eye.z ) > 2.6 ) return { key: '…', text: 'Get to the fighting chair!' };
+		if ( Math.hypot( p.deckPos.x - seat.eye.x, p.deckPos.z - seat.eye.z ) > 2.6 ) return { key: ELLIPSIS, text: 'Get to the fighting chair!' };
 		if ( inp.hit( 'KeyE' ) ) {
 
 			this._sit( true );
@@ -806,7 +807,7 @@ export class Rigs {
 
 			const left = Math.ceil( HOOK_S - on.on.t );
 			if ( helm ) this.alert = { key: 'E', text: `Leave the helm · fish on the ${ on.spot.name }! · ${ left } s` };
-			else this.alert = this._nearRod( on ) ? { key: 'R', text: `Take the rod · ${ on.spot.name } · ${ left } s` } : { key: '…', text: `Fish on the ${ on.spot.name }! Get to the rod · ${ left } s` };
+			else this.alert = this._nearRod( on ) ? { key: 'R', text: `Take the rod · ${ on.spot.name } · ${ left } s` } : { key: ELLIPSIS, text: `Fish on the ${ on.spot.name }! Get to the rod · ${ left } s` };
 
 		} else if ( helm && this.lines.length ) this.alert = { key: 'E', text: `Leave helm   ·   ${ this._speedWord() }   ·   hold Shift to run` };
 
@@ -974,7 +975,7 @@ export class Rigs {
 
 			if ( this.kite && ! this.kite.down && ( ! g.bite ) ) return { key: 'RMB', text: 'Kite going up · bring it in' };
 			if ( this._waiting ) return { key: 'RMB', text: `Going down · ${ Math.round( rod.hookM ) } m · reel it up` };
-			if ( g.bite && g.bite.phase === 'nibble' ) return { key: '…', text: rod.rig === 'kite' ? 'The bait\'s gone nervous · wait for it' : 'The tip\'s nodding · wait for it to pull down' };
+			if ( g.bite && g.bite.phase === 'nibble' ) return { key: ELLIPSIS, text: rod.rig === 'kite' ? 'The bait\'s gone nervous · wait for it' : 'The tip\'s nodding · wait for it to pull down' };
 			return { key: 'RMB', text: rod.rig === 'kite' ? 'Watching the bait · bring the kite in' : `${ Math.round( rod.hookM ) } m down · waiting for a bite · reel it up` };
 
 		}

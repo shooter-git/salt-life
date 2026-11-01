@@ -2,7 +2,8 @@ import * as THREE from '../engine/index.js';
 import { G } from '../core/Globals.js';
 import { turtleGeometry } from './fish/CreatureGeometry.js';
 import { PART } from './fish/FishGeometry.js';
-import { femalesOf, planCrawl, timeline, femaleAt, hatchingsOf, hatchlingsAt, tracksOf, CRAWL } from '../game/Turtles.js';
+import { femalesOf, planCrawl, timeline, femaleAt, hatchingsOf, tracksOf, hatchTrackFade, soundBeats, Clutch, Minding, CRAWL, HATCHLING, LURE, TRACK_LAG } from '../game/Turtles.js';
+import { secondsBetween } from '../game/IslandClock.js';
 import { NORTH_BEACH } from './terrain/NorthBeach.js';
 
 // (M15) The green turtles on the turtle beach (game/Turtles.js: who, when, where, what each is doing; the beach:
@@ -20,8 +21,20 @@ import { NORTH_BEACH } from './terrain/NorthBeach.js';
 //     nest's patch of thrown sand where she hid it. They stay through the next day, washed off below the waves'
 //     reach first.
 //   - Hatchlings: dark, five centimetres, scrambling in an alternating gait down to the sea.
+//   - (M16) Each hatchling's own track, drawn as it goes (HatchlingTracks), and the turtles minding whoever's about
+//     and any light (game/Turtles.js Minding, Clutch.lure; _watch says who and what they are).
 // Drawn while you're within NEAR of the beach.
-//   const t = new NestingTurtles( { scene, terrain } ); t.update( dt, camera, hour, day )
+//   const t = new NestingTurtles( { scene, terrain } ); t.update( dt, camera, hour, day, app )
+//
+// (M16) Its sounds: nothing's attached yet, and nothing's heard. The sound stream sets any of these on `sounds`,
+// each called ( x, y, z, strength ), strength 0..1, world metres, as it happens; nothing fires unless you're near:
+//   sounds.breath       her breath, at the top of each lift of her head (a gasp out and in): when she's resting on
+//                       the crawl, and all the while she digs, lays (quieter, 0.6) and covers (hardest, 1)
+//   sounds.sandThrown   a throw of her flippers: both front ones together digging (0.8) and hiding it (1); a rear
+//                       one's scoop or pull (0.45 to 0.5). At where the sand comes from, behind her
+//   sounds.crawlStroke  her front flippers biting into the sand, each stroke of the crawl (0.75 up, 0.6 down)
+//   sounds.scramble     a nest's hatchlings, about every half second while any are on the sand: at the middle of
+//                       them, strength how many of the clutch are out (0..1); once at 0 when the last has gone
 
 const NEAR = 380;
 const ADULT = 1.35; // the model's length 1 to hers (her shell ~1 m)
@@ -523,7 +536,234 @@ function pose( st, t ) {
 
 }
 
+// ---- (M16) the hatchlings' tracks: one mesh, one draw, whichever nests are hatching, each hatchling's a thin strip
+// along its route (Clutch) with the marks in its shader. After photographs of them (USGS, Femmer): two rows of little
+// scooped dimples, alternating, each with its lip, 8 to 10 cm across the pair, a faint drag down the middle in places;
+// wandering, crossing. It only darkens and lightens what's under it (blended twice the shade times what's there, 0.5
+// leaving it as it was), so it's lit as the sand is by the moon, the flashlight or the sun, for no light's sum here.
+const QUADS = 994, NEST_SLOTS = 2, MOST_K = 14, TRACK_VERTS = 2320, TRACK_WIDE = 0.085, TRACK_LIFT = 0.03;
+class HatchlingTracks {
+
+	constructor( group, ground ) {
+
+		this.ground = ground;
+		this.pos = new Float32Array( TRACK_VERTS * 3 );
+		this.t = new Float32Array( TRACK_VERTS * 4 );
+		this.head = new Float32Array( TRACK_VERTS );
+		const g = this.geometry = new THREE.BufferGeometry();
+		g.setAttribute( 'position', new THREE.BufferAttribute( this.pos, 3 ).setUsage( THREE.DynamicDrawUsage ) );
+		g.setAttribute( 'aT', new THREE.BufferAttribute( this.t, 4 ).setUsage( THREE.DynamicDrawUsage ) );
+		g.setAttribute( 'aH', new THREE.BufferAttribute( this.head, 1 ).setUsage( THREE.DynamicDrawUsage ) );
+		g.setIndex( new THREE.BufferAttribute( new Uint16Array( QUADS * 6 + 12 ), 1 ).setUsage( THREE.DynamicDrawUsage ) );
+		this.u = { tNow: { value: 0 }, tFade: { value: 1 }, tWash: { value: 0 }, tLight: { value: new THREE.Vector2( 1, 0 ) } };
+		const m = new THREE.ShaderMaterial( {
+			name: 'HatchlingTracks', uniforms: this.u, transparent: true, depthWrite: false, toneMapped: false, fog: false,
+			polygonOffset: true, polygonOffsetFactor: - 2, polygonOffsetUnits: - 2,
+			blending: THREE.CustomBlending, blendEquation: THREE.AddEquation, blendSrc: THREE.DstColorFactor, blendDst: THREE.SrcColorFactor, blendSrcAlpha: THREE.ZeroFactor, blendDstAlpha: THREE.OneFactor,
+			vertexShader: /* glsl */`
+attribute vec4 aT;
+attribute float aH;
+varying vec4 vT;
+varying float vH;
+varying float vY;
+varying float vD;
+void main() {
+	vT = aT;
+	vH = aH;
+	vY = position.y;
+	vec4 mv = modelViewMatrix * vec4( position, 1.0 );
+	vD = - mv.z;
+	gl_Position = projectionMatrix * mv;
+}`,
+			fragmentShader: /* glsl */`
+uniform float tNow;
+uniform float tFade;
+uniform float tWash;
+uniform vec2 tLight;
+varying vec4 vT;
+varying float vH;
+varying float vY;
+varying float vD;
+float thHash( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }
+void main() {
+	if ( vT.z > tNow ) discard;
+	float shade = 0.5;
+	if ( vT.w < 0.0 ) {
+		// the nest's mouth: a little crater, scuffed
+		float r = length( vT.xy ) * ( 1.0 + 0.25 * sin( atan( vT.y, vT.x ) * 3.0 + 1.0 ) );
+		float n = thHash( floor( vT.xy * 60.0 ) );
+		shade += - 0.2 * smoothstep( 0.17, 0.05, r ) + 0.05 * smoothstep( 0.1, 0.18, r ) * smoothstep( 0.32, 0.18, r ) + ( n - 0.5 ) * 0.05 * smoothstep( 0.34, 0.2, r );
+	} else {
+		float s = vT.x, id = vT.w;
+		float a = vT.y - 0.016 * sin( s * 4.3 + id * 1.7 ) - 0.008 * sin( s * 11.0 + id * 2.9 );
+		float row = 0.03 + 0.008 * fract( id * 0.618 );
+		float pitch = 0.044 + 0.012 * fract( id * 0.37 );
+		float sd = a < 0.0 ? - 1.0 : 1.0;
+		float q = s / pitch + ( sd > 0.0 ? 0.0 : 0.5 );
+		float n = floor( q );
+		float j1 = thHash( vec2( n, id + sd ) ), j2 = thHash( vec2( n + 7.0, id - sd ) );
+		// a dimple in its cell, swept back at its ends, each its own
+		vec2 p = vec2( ( q - n - 0.5 ) * pitch + ( j1 - 0.5 ) * 0.008, abs( a ) - row - ( j2 - 0.5 ) * 0.008 );
+		p.x += p.y * p.y * 10.0;
+		vec2 e = p / vec2( 0.0105, 0.0135 + 0.003 * j2 );
+		float r2 = dot( e, e ), deep = 0.6 + 0.8 * j1;
+		float ch = cos( vH ), sh = sin( vH );
+		vec2 lt = vec2( dot( tLight, vec2( sh, ch ) ), dot( tLight, vec2( ch, - sh ) ) * sd );
+		float wall = dot( e, lt ) / sqrt( r2 + 0.05 ) * smoothstep( 1.5, 0.3, r2 );
+		float lip = smoothstep( 1.0, 1.6, r2 ) * smoothstep( 2.7, 1.6, r2 );
+		float marks = - 0.13 * deep * smoothstep( 1.3, 0.2, r2 ) + 0.11 * wall * deep + 0.045 * lip - 0.03 * smoothstep( 0.007, 0.002, abs( a ) ) * smoothstep( 0.4, 0.8, thHash( vec2( floor( s * 3.0 ), id ) ) );
+		// (too small to tell apart: the band of them, darker)
+		float foot = max( fwidth( s ), fwidth( a ) );
+		float band = - 0.055 * smoothstep( 0.055, 0.03, abs( a ) );
+		// (they lie over one another by the nest, a fan's closeness there: all together about as dark as a few)
+		shade += mix( marks, band, smoothstep( 0.01, 0.03, foot ) ) * clamp( s / 7.0, 0.14, 1.0 );
+	}
+	float keep = tFade * mix( 1.0, smoothstep( 0.6, 1.2, vY ), tWash ) * smoothstep( 0.02, 0.2, vY ) * ( 1.0 - smoothstep( 45.0, 80.0, vD ) );
+	gl_FragColor = vec4( vec3( mix( 0.5, shade, keep ) ), 1.0 );
+}`,
+		} );
+		this.mesh = new THREE.Mesh( g, m );
+		this.mesh.name = 'HatchlingTracks';
+		this.mesh.frustumCulled = false;
+		this.mesh.renderOrder = 3;
+		this.mesh.visible = false;
+		group.add( this.mesh );
+		this.nests = [];
+
+	}
+
+	// which clutches are drawn: the buffers laid out for them and written. epoch: the day their times count from
+	lay( clutches, epoch ) {
+
+		this.nests = clutches;
+		this.epoch = epoch;
+		const ix = this.geometry.index.array;
+		let v = 0, i = 0;
+		for ( const c of clutches ) {
+
+			// (never past the buffers: a nest laid out finer on a night it had to itself)
+			if ( v + c.count * ( c.k + 1 ) * 2 + 4 > TRACK_VERTS || i + ( c.count * c.k + 1 ) * 6 > ix.length ) break;
+			c.base = v;
+			c.offset = secondsBetween( 0, epoch, c.h.hour, c.h.day );
+			for ( let n = 0; n < c.count; n ++ ) {
+
+				for ( let q = 0; q < c.k; q ++ ) {
+
+					const a = v + q * 2;
+					ix[ i ++ ] = a;
+					ix[ i ++ ] = a + 2;
+					ix[ i ++ ] = a + 1;
+					ix[ i ++ ] = a + 1;
+					ix[ i ++ ] = a + 2;
+					ix[ i ++ ] = a + 3;
+
+				}
+
+				v += ( c.k + 1 ) * 2;
+
+			}
+
+			// the nest's mouth
+			c.mouth = v;
+			for ( const a of [ v, v + 2, v + 1, v + 1, v + 2, v + 3 ] ) ix[ i ++ ] = a;
+			v += 4;
+			this.write( c, false );
+
+		}
+
+		this.geometry.setDrawRange( 0, i );
+		this.geometry.index.needsUpdate = true;
+		this._touch();
+		this.mesh.visible = i > 0;
+
+	}
+
+	_touch() {
+
+		const a = this.geometry.attributes;
+		a.position.needsUpdate = a.aT.needsUpdate = a.aH.needsUpdate = true;
+
+	}
+
+	// one clutch's strips from its routes as they are now
+	write( c, touch = true ) {
+
+		const g = this.ground, P = this.pos, T = this.t, H = this.head, k = c.k;
+		let v = c.base;
+		for ( let n = 0; n < c.count; n ++ ) {
+
+			const r = c.routes[ n ];
+			let s = 0;
+			for ( let j = 0; j <= k; j ++ ) {
+
+				const a = Math.max( 0, j - 1 ), b = Math.min( k, j + 1 );
+				const dx = r[ b * 3 ] - r[ a * 3 ], dz = r[ b * 3 + 1 ] - r[ a * 3 + 1 ];
+				const h = dx || dz ? Math.atan2( dx, dz ) : ( j ? H[ v - 1 ] : 0 );
+				if ( j ) s += Math.hypot( r[ j * 3 ] - r[ j * 3 - 3 ], r[ j * 3 + 1 ] - r[ j * 3 - 2 ] );
+				const x = r[ j * 3 ], z = r[ j * 3 + 1 ], cx = Math.cos( h ) * TRACK_WIDE, cz = - Math.sin( h ) * TRACK_WIDE, t = r[ j * 3 + 2 ] + c.offset;
+				for ( const side of [ - 1, 1 ] ) {
+
+					const px = x + cx * side, pz = z + cz * side;
+					P[ v * 3 ] = px;
+					P[ v * 3 + 1 ] = g( px, pz ) + TRACK_LIFT;
+					P[ v * 3 + 2 ] = pz;
+					T[ v * 4 ] = s;
+					T[ v * 4 + 1 ] = side * TRACK_WIDE;
+					T[ v * 4 + 2 ] = t;
+					T[ v * 4 + 3 ] = n;
+					H[ v ] = h;
+					v ++;
+
+				}
+
+			}
+
+		}
+
+		// the mouth
+		const [ nx, nz ] = c.nest, R = 0.36;
+		let m = c.mouth;
+		for ( const [ ax, az ] of [ [ - 1, - 1 ], [ 1, - 1 ], [ - 1, 1 ], [ 1, 1 ] ] ) {
+
+			const px = nx + ax * R, pz = nz + az * R;
+			P[ m * 3 ] = px;
+			P[ m * 3 + 1 ] = g( px, pz ) + TRACK_LIFT;
+			P[ m * 3 + 2 ] = pz;
+			T[ m * 4 ] = ax * R;
+			T[ m * 4 + 1 ] = az * R;
+			T[ m * 4 + 2 ] = c.offset + Math.min( ...c.start );
+			T[ m * 4 + 3 ] = - 1;
+			H[ m ] = 0;
+			m ++;
+
+		}
+
+		if ( touch ) this._touch();
+
+	}
+
+	update( hour, day, fade, wash ) {
+
+		const u = this.u;
+		u.tNow.value = secondsBetween( 0, this.epoch, hour, day ) - TRACK_LAG;
+		u.tFade.value = 1 - fade;
+		u.tWash.value = wash;
+		const L = G.sunDir.value, l = Math.hypot( L.x, L.z ) || 1;
+		u.tLight.value.set( L.x / l, L.z / l );
+
+	}
+
+}
+
 // ---- the turtles
+const smooth01 = ( x ) => {
+
+	const t = Math.min( 1, Math.max( 0, x ) );
+	return t * t * ( 3 - 2 * t );
+
+};
+const FORWARD = new THREE.Vector3(), SPOT_FORWARD = [ 0, - Math.sin( 0.15 ), Math.cos( 0.15 ) ];
+
 export class NestingTurtles {
 
 	constructor( { scene, terrain } ) {
@@ -541,6 +781,86 @@ export class NestingTurtles {
 		this.spray = new SandSpray( this.group );
 		this.plans = new Map();
 		this._o = new THREE.Object3D();
+		// (M16)
+		this.minding = new Minding();
+		this.clutches = new Map();
+		this.people = [];
+		this.lights = [];
+		this.sounds = { breath: null, sandThrown: null, crawlStroke: null, scramble: null };
+		this._me = { x: 0, z: 0, speed: 0 };
+
+	}
+
+	_sound( name, x, y, z, strength ) {
+
+		const fn = this.sounds[ name ];
+		if ( fn ) fn( x, y, z, strength );
+
+	}
+
+	// (M16) who's about and what's lit on the beach, as this game knows it: you, the others (Together's, as they
+	// reach you), the flashlight and whatever lamps are lit (LocalLights: a boat's and the camp's are among them)
+	_watch( app, seconds ) {
+
+		const people = this.people, lights = this.lights;
+		people.length = 0;
+		lights.length = 0;
+		if ( ! app || ! app.player ) return;
+		const by = ( x, z, r = 260 ) => Math.hypot( x - MIDDLE.x, z - MIDDLE.y ) < r;
+		// you
+		const p = app.player.position, me = this._me;
+		const v = seconds > 0 ? Math.min( 8, Math.hypot( p.x - me.x, p.z - me.z ) / seconds ) : me.speed;
+		me.speed += ( v - me.speed ) * Math.min( 1, seconds * 6 );
+		me.x = p.x;
+		me.z = p.z;
+		if ( by( p.x, p.z ) ) people.push( me );
+		// lamps
+		const LL = app.localLights;
+		const lit = smooth01( ( G.night.value - 0.15 ) / 0.6 );
+		if ( LL ) {
+
+			const fl = LL.flashlight;
+			if ( fl.on && by( fl.position.x, fl.position.z ) ) lights.push( { x: fl.position.x, y: fl.position.y, z: fl.position.z, intensity: fl.intensity, range: fl.range, dir: [ fl.dir.x, fl.dir.y, fl.dir.z ], cosInner: fl.cosInner, cosOuter: fl.cosOuter } );
+			if ( lit > 0.05 ) for ( const s of LL.sources ) {
+
+				if ( s.enabled === false || ( s.scale ?? 1 ) <= 0 || ! by( s.position.x, s.position.z, 300 ) ) continue;
+				const scale = ( s.scale ?? 1 ) * lit;
+				if ( s.kind === 'boatFlood' ) lights.push( this._flood( s.position.x, s.position.y, s.position.z, scale ) );
+				else if ( s.intensity * scale > 0.4 ) lights.push( { x: s.position.x, y: s.position.y, z: s.position.z, intensity: s.intensity * scale, range: s.range * 2, dir: s.dir ? [ s.dir.x, s.dir.y, s.dir.z ] : null, cosInner: s.cosInner, cosOuter: s.cosOuter } );
+
+			}
+
+		}
+
+		// the others: where they are, and what they've lit (only what reaches you: their pose)
+		const others = app.together && app.together.others;
+		if ( others ) for ( const o of others.values() ) {
+
+			const c = o.cur;
+			if ( ! c || ! by( c.pos.x, c.pos.z ) ) continue;
+			people.push( { x: c.pos.x, z: c.pos.z, speed: c.speed || 0 } );
+			if ( c.torch ) lights.push( { x: c.pos.x, y: c.pos.y + 1.4, z: c.pos.z, intensity: 55, range: 30, dir: [ - Math.sin( c.yaw ), - 0.15, - Math.cos( c.yaw ) ], cosInner: 0.988, cosOuter: 0.819 } );
+			if ( c.boat ) {
+
+				if ( c.flood > 0 ) lights.push( this._flood( c.boat.pos.x, c.boat.pos.y + 2.5, c.boat.pos.z, c.flood ) );
+				if ( c.spot ) {
+
+					FORWARD.fromArray( SPOT_FORWARD ).applyQuaternion( c.boat.quat );
+					lights.push( { x: c.boat.pos.x, y: c.boat.pos.y + 3, z: c.boat.pos.z, intensity: 150, range: 60, dir: FORWARD.toArray(), cosInner: Math.cos( 0.096 ), cosOuter: Math.cos( 0.208 ) } );
+
+				}
+
+			}
+
+		}
+
+	}
+
+	// a boat's deck floodlights, close in: aimed at her cockpit, but a turtle sees the glare from the beach (a white
+	// light in the open, plain from 30 m or so)
+	_flood( x, y, z, scale ) {
+
+		return { x, y, z, intensity: 50 * scale, range: 45, dir: null };
 
 	}
 
@@ -559,16 +879,31 @@ export class NestingTurtles {
 
 	}
 
-	update( dt, camera, hour, day ) {
+	update( dt, camera, hour, day, app ) {
 
 		const near = Math.hypot( camera.position.x - MIDDLE.x, camera.position.z - MIDDLE.y ) < NEAR;
 		this.group.visible = near;
-		if ( ! near ) return;
+		if ( ! near ) {
+
+			this._last = null;
+			return;
+
+		}
+
+		// (M16) how long since last time, in her time (it's her clock: a slow frame's still that much of her night)
+		const seconds = this._last ? Math.min( 0.5, Math.max( 0, secondsBetween( this._last[ 0 ], this._last[ 1 ], hour, day ) ) ) : 0;
+		this._last = [ hour, day ];
+		this._cam = camera.position;
+		this._watch( app, seconds );
 		const seen = new Set();
 		// tonight's females (and last night's, if one's still ashore past midnight)
 		for ( const d of [ day - 1, day ] ) for ( const f of femalesOf( d ) ) {
 
-			const p = this.plan( f ), st = femaleAt( f, p, hour, day, p.line );
+			const p = this.plan( f );
+			let st = femaleAt( f, p, hour, day, p.line, this.minding.turned.get( f.id ) );
+			if ( ! st ) continue;
+			// (M16) what she makes of who's about; if it's too much, she turns back from here
+			if ( ! st.turned && this.minding.tick( f, st, secondsBetween( f.arrive, f.day, hour, day ), seconds, this.people, this.lights, this.ground ) ) st = femaleAt( f, p, hour, day, p.line, this.minding.turned.get( f.id ) );
 			if ( ! st ) continue;
 			seen.add( f.id );
 			this._female( f, p, st, dt );
@@ -583,24 +918,7 @@ export class NestingTurtles {
 
 		}
 
-		// the nests hatching
-		const hseen = new Set();
-		for ( const d of [ day - 1, day ] ) for ( const h of hatchingsOf( d ) ) {
-
-			const p = this.plan( h.female ), pts = hatchlingsAt( h, p, hour, day, this.ground );
-			if ( ! pts.some( Boolean ) ) continue;
-			hseen.add( h.id );
-			this._hatching( h, p, pts );
-
-		}
-
-		for ( const [ id, H ] of this.hatchings ) if ( ! hseen.has( id ) ) {
-
-			this.group.remove( H.mesh );
-			this.hatchings.delete( id );
-
-		}
-
+		this._nests( hour, day, seconds );
 		this._tracks( hour, day );
 		this.spray.update( dt );
 
@@ -621,12 +939,12 @@ export class NestingTurtles {
 			bank.receiveShadow = true;
 			bank.visible = false;
 			this.group.add( bank );
-			F = this.females.set( f.id, { mesh, bank, t: 0, sand: 0, wet: 1 } ).get( f.id );
+			F = this.females.set( f.id, { mesh, bank, sand: 0, wet: 1, prev: null } ).get( f.id );
 
 		}
 
-		F.t += dt;
-		const u = F.mesh.material.userData.u, o = pose( st, F.t ), g = this.ground;
+		// (M16: her pose from her own clock, as the sounds are, not a count of frames)
+		const u = F.mesh.material.userData.u, o = pose( st, st.t ), g = this.ground;
 		u.tFront.value.fromArray( o.front );
 		u.tRear.value.fromArray( o.rear );
 		u.tHead.value = o.head;
@@ -645,7 +963,7 @@ export class NestingTurtles {
 		const pit = st.dig * 0.1;
 		const m = F.mesh;
 		// (the bank she's thrown up about her pit: growing as she digs, left as she covers and goes)
-		const bankK = { pit: st.u, chamber: 1, lay: 1, cover: 1 - st.u * 0.5 }[ st.phase ] ?? 0;
+		const bankK = st.turned ? ( st.phase === 'abort' ? st.dig : 0 ) : { pit: st.u, chamber: 1, lay: 1, cover: 1 - st.u * 0.5 }[ st.phase ] ?? 0;
 		F.bank.visible = bankK > 0.02;
 		if ( F.bank.visible ) {
 
@@ -669,10 +987,130 @@ export class NestingTurtles {
 
 		F.threw = o.throwFront;
 		if ( o.throwRear && Math.random() < dt * 8 ) this.spray.fling( 6, st.x - cx * 0.45 * s, g( st.x, st.z ) + 0.03 - pit, st.z - cz * 0.45 * s, - cx, - cz, g );
+		// (M16) the moments of it that sound (the file's head: `sounds`)
+		for ( const [ name, strength ] of soundBeats( F.prev, st ) ) {
+
+			const back = name === 'sandThrown' ? 0.5 * s : name === 'breath' ? - 0.5 * s : 0, x = st.x - cx * back, z = st.z - cz * back;
+			this._sound( name, x, g( x, z ) + 0.2, z, strength );
+
+		}
+
+		F.prev = st;
 
 	}
 
-	_hatching( h, p, pts ) {
+	// (M16) the nests hatching tonight, and those that did and whose tracks are still there. Each one's route is its
+	// clutch's; the tracks drawn for the nearest two
+	_nests( hour, day, seconds ) {
+
+		if ( this._hatchDay !== day ) {
+
+			this._hatchDay = day;
+			this._hatch = [ ...hatchingsOf( day - 1 ), ...hatchingsOf( day ) ];
+
+		}
+
+		const live = this._live || ( this._live = [] ), hseen = this._hseen || ( this._hseen = new Set() );
+		live.length = 0;
+		hseen.clear();
+		let fade = 0, wash = 0;
+		for ( const h of this._hatch ) if ( hatchTrackFade( h, hour, day ) < 1 ) live.push( h );
+		for ( const h of live ) {
+
+			const t = secondsBetween( h.hour, h.day, hour, day );
+			if ( t < 0 ) continue;
+			let C = this.clutches.get( h.id );
+			if ( ! C ) {
+
+				// (each one's ribbon as long as the budget lets it: thinner on a night two nests hatch)
+				const share = live.length > 1 ? QUADS / NEST_SLOTS : QUADS;
+				C = new Clutch( h, this.plan( h.female ), this.ground, Math.max( 3, Math.min( MOST_K, Math.floor( share / h.count ) ) ) );
+				this.clutches.set( h.id, C );
+				this._layOut = true;
+
+			}
+
+			fade = Math.max( fade, hatchTrackFade( h, hour, day ) );
+			wash = Math.max( wash, smooth01( ( t / secondsBetween( 0, 0, 0, 1 ) - 0.05 ) / 0.25 ) );
+			if ( t <= HATCHLING.limit ) {
+
+				const pts = C.at( t );
+				const out = C.scramble( pts );
+				C.heard = ( C.heard || 0 ) + seconds;
+				if ( out && C.heard > 0.5 ) {
+
+					C.heard = 0;
+					C.wasOut = true;
+					this._sound( 'scramble', out[ 0 ], this.ground( out[ 0 ], out[ 1 ] ) + 0.05, out[ 1 ], out[ 2 ] );
+
+				} else if ( ! out && C.wasOut ) {
+
+					C.wasOut = false;
+					const [ nx, nz ] = C.nest;
+					this._sound( 'scramble', nx, this.ground( nx, nz ) + 0.05, nz, 0 );
+
+				}
+
+				if ( out ) {
+
+					hseen.add( h.id );
+					this._hatching( h, pts );
+
+				}
+
+				// (a light on them, this game's knowledge of it: its tick's its own, a route's cost)
+				C.lureT = ( C.lureT || 0 ) + seconds;
+				if ( C.lureT >= LURE.tick ) {
+
+					C.lureT = 0;
+					if ( C.lure( t, this.lights ) ) C.dirty = true;
+
+				}
+
+			}
+
+		}
+
+		for ( const [ id, H ] of this.hatchings ) if ( ! hseen.has( id ) ) {
+
+			this.group.remove( H.mesh );
+			H.mesh.geometry.dispose();
+			H.mesh.dispose();
+			this.hatchings.delete( id );
+
+		}
+
+		for ( const [ id ] of this.clutches ) if ( ! live.some( ( h ) => h.id === id ) ) {
+
+			this.clutches.delete( id );
+			this._layOut = true;
+
+		}
+
+		// the tracks
+		if ( ! this.clutches.size ) {
+
+			if ( this.hatchTracks ) this.hatchTracks.mesh.visible = false;
+			return;
+
+		}
+
+		const tr = this.hatchTracks || ( this.hatchTracks = new HatchlingTracks( this.group, this.ground ) );
+		const cam = this._cam;
+		const by = [ ...this.clutches.values() ].sort( ( a, b ) => Math.hypot( a.nest[ 0 ] - cam.x, a.nest[ 1 ] - cam.z ) - Math.hypot( b.nest[ 0 ] - cam.x, b.nest[ 1 ] - cam.z ) ).slice( 0, NEST_SLOTS );
+		if ( this._layOut || by.some( ( c, i ) => tr.nests[ i ] !== c ) ) {
+
+			this._layOut = false;
+			tr.lay( by, day - 1 );
+
+		} else for ( const c of by ) if ( c.dirty ) tr.write( c );
+
+		for ( const c of this.clutches.values() ) c.dirty = false;
+		tr.update( hour, day, fade, wash );
+
+	}
+
+	_hatching( h, pts ) {
 
 		let H = this.hatchings.get( h.id );
 		if ( ! H ) {
@@ -712,6 +1150,7 @@ export class NestingTurtles {
 
 		const want = new Map();
 		for ( const { female: f, age } of tracksOf( day, hour ) ) want.set( f.id, { f, age } );
+		this.minding.forget( want );
 		for ( const [ id, T ] of this.tracks ) if ( ! want.has( id ) ) {
 
 			for ( const m of T.meshes ) {
@@ -747,8 +1186,18 @@ export class NestingTurtles {
 
 			}
 
+			// (M16) if she turned back: her way down's the one she took
+			const tu = this.minding.turned.get( id );
+			if ( tu && ! T.turned ) {
+
+				T.turned = true;
+				T.down.geometry.dispose();
+				T.down.geometry = ribbon( tu.down, this.ground );
+
+			}
+
 			// how far she's made them yet tonight (all of them once she's back in the sea)
-			const st = femaleAt( f, p, hour, day, p.line );
+			const st = femaleAt( f, p, hour, day, p.line, tu );
 			const phase = st ? st.phase : 'gone';
 			const before = [ 'emerge', 'up' ].includes( phase );
 			let sUp = 1e4, sDown = 1e4;
@@ -759,9 +1208,10 @@ export class NestingTurtles {
 
 			} else if ( st && phase !== 'down' && phase !== 'enter' ) sDown = - 1;
 			else if ( st && phase === 'down' ) sDown = st.s;
+			if ( tu && tu.s !== null ) sUp = tu.s;
 			T.up.material.userData.u.tDrawn.value = sUp;
 			T.down.material.userData.u.tDrawn.value = sDown;
-			if ( T.nest ) T.nest.visible = ! st || [ 'cover', 'down', 'enter' ].includes( phase );
+			if ( T.nest ) T.nest.visible = tu ? tu.dig > 0.2 : ! st || [ 'cover', 'down', 'enter' ].includes( phase );
 			// (fresh all night, the backshore's fading over the next day; washed off below the waves' reach by morning)
 			const fade = 1 - ss( 0.35, 1.4, age ), wash = ss( 0.05, 0.3, age );
 			for ( const m of T.meshes ) {

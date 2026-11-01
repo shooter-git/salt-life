@@ -1,4 +1,6 @@
 import { LEFT, RIGHT } from '../../core/Glyphs.js';
+import { VARIATION } from '../../game/Chart.js';
+
 // (M14) The boat's radar: her open array turns on the wheelhouse roof (BoatModel: clockwise from above, as
 // a radar's does, RADAR_RPM), and its screen on the dash (Instruments' third, to port of the plotter) shows
 // what it sees, as a small boat's colour radar does (a Furuno 1815's, photographed at 2 NM): heading up,
@@ -19,6 +21,8 @@ import { LEFT, RIGHT } from '../../core/Glyphs.js';
 //   r.update( dt, { x, z, heading, beam, sea, rainAt, boats } )   (heading: hers, rad clockwise from north;
 //   beam: the array's, clockwise from her bow; boats: [ { x, z } ])
 //   r.draw( ctx, [ x, y, w, h ], { heading } )   (into the instruments' atlas)
+// (M16) Its heading and bearing scale read magnetic, marked M, as the plotter's and the compass do: a boat this size has one
+// heading sensor, a fluxgate compass, feeding both, so a true figure here would be 6° off the plotter's for no reason.
 
 export const NM = 1852;
 // the ranges (NM) and their rings' interval
@@ -64,6 +68,14 @@ export function echoColour( k, out = [ 0, 0, 0 ] ) {
 	out[ 1 ] = g0 + ( g1 - g0 ) * t;
 	out[ 2 ] = b0 + ( b1 - b0 ) * t;
 	return out;
+
+}
+
+// (M16) her heading (rad, true) as the radar writes it: degrees magnetic, a tenth's, with its M ( '096.3°M' )
+export function radarHeading( heading ) {
+
+	const deg = ( ( ( heading - VARIATION ) * 180 / Math.PI ) % 360 + 360 ) % 360;
+	return `${ deg.toFixed( 1 ).padStart( 5, '0' ) }°M`;
 
 }
 
@@ -266,7 +278,8 @@ export class BoatRadar {
 
 		for ( let deg = 0; deg < 360; deg += 5 ) {
 
-			const a = ( deg * Math.PI / 180 ) - heading - Math.PI / 2, long = deg % 30 === 0 ? 7 : deg % 10 === 0 ? 4 : 2;
+			// (the scale magnetic: a bearing's mark where that magnetic bearing lies, from her heading up)
+			const a = ( deg * Math.PI / 180 ) + VARIATION - heading - Math.PI / 2, long = deg % 30 === 0 ? 7 : deg % 10 === 0 ? 4 : 2;
 			g.beginPath();
 			g.moveTo( cx + Math.cos( a ) * ( R + 1 ), cy + Math.sin( a ) * ( R + 1 ) );
 			g.lineTo( cx + Math.cos( a ) * ( R + 1 + long ), cy + Math.sin( a ) * ( R + 1 + long ) );
@@ -304,10 +317,9 @@ export class BoatRadar {
 		g.fillText( `${ ring }`, x + 10, y + 34 );
 		g.fillText( 'H UP', x + 10, y + 52 );
 		g.textAlign = 'right';
-		const hdg = ( ( heading * 180 / Math.PI ) % 360 + 360 ) % 360;
 		g.fillText( 'HDG', x + w - 10, y + 10 );
 		g.font = '700 18px ui-monospace, monospace';
-		g.fillText( `${ hdg.toFixed( 1 ) }°`, x + w - 10, y + 28 );
+		g.fillText( radarHeading( heading ), x + w - 10, y + 28 );
 		g.font = '600 13px ui-monospace, monospace';
 		g.textBaseline = 'bottom';
 		g.fillText( `${ LEFT } ${ RIGHT } RANGE`, x + w - 10, y + h - 8 );
