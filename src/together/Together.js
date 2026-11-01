@@ -1263,7 +1263,7 @@ export class Together {
 		body.Y = app.boat.id; // (M16) which boat she is
 		if ( p.riding ) body.R = p.boat.owner;
 		// (M16) your job aboard (Crew.js), and at someone else's helm, the lever and the wheel
-		if ( this.crew.job === 'tower' ) body.J = 1;
+		if ( this.crew.job === 'tower' || ( m === 'h' && p.atHelm?.upper ) ) body.J = 1; // (at the tower's helm: their job's still the helm, Crew's)
 		else if ( this.crew.job === 'chair' ) body.J = 2;
 		if ( p.riding && m === 'h' ) body.c = [ r2( p.boat.throttle ), r2( p.boat.steer ) ];
 		if ( body.B && this.app.searchlight ) body.S = 1; // (your boat's searchlight is on)
@@ -1942,7 +1942,7 @@ export class Together {
 		if ( deck && c.mode === 'helm' ) {
 
 			// (on the sole under her helm: its camera's eye is lower than a figure standing there)
-			const helm = M.helmEye;
+			const helm = c.job === 'tower' && M.towerHelm ? M.towerHelm.eye : M.helmEye;
 			_bp.set( helm.x, footY( M, helm.x, helm.z, helm.y - 1 ), helm.z ).applyQuaternion( deck.quat ).add( deck.pos );
 			g.position.copy( _bp );
 			_bq.setFromAxisAngle( _up, c.yaw + Math.PI );
