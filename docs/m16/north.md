@@ -230,11 +230,11 @@ M16's stream 10 (2026-11-01). `test/north-sea.mjs` tests what Node can. A gale's
 | Weather | Wind | Was | Now | Past the far grounds | Period |
 |---|---|---|---|---|---|
 | Calm, fair, cloudy, rain, breezy | to 21 kt | 2.5 to 4.2 ft | the same, to the bit | half again, as it was | as it was |
-| Thunderstorm | 27 kt | 4.7 ft | 7.6 ft | 11 ft | 7.5 s |
-| Blustery | 29 kt | 4.9 ft | 8.3 ft | 12 ft | 7.8 s |
+| Thunderstorm | 27 kt | 4.7 ft | 7.4 ft | 10.9 ft | 7.4 s |
+| Blustery | 29 kt | 4.9 ft | 8.4 ft | 12.3 ft | 7.8 s |
 | Gale | 39 kt | 5.0 ft | 12.1 ft | 17.7 ft | 9.4 s |
-| Southerly gale | 39 kt | 7.1 ft | 13 ft | 19.5 ft | 9.7 s |
-| Hurricane's wall | 74 to 100 kt | 13 to 18 ft | 25 to 32 ft | | |
+| Southerly gale | 39 kt | 7.1 ft | 13.1 ft | 19.3 ft | 9.8 s |
+| Hurricane's wall | 74 to 100 kt | 13 to 18 ft | 24 to 31 ft | | |
 
 - **A blow's own sea** (`Weather.blowSeaOf`, `w.blow`) is added to the swell as energy, on the long waves, from a breezy day's wind up. As it outgrows the swell the long waves come round to run down the wind, about the camera and no faster than a minute and a half. So a gale down the trades leaves the bay in the island's lee by the lee already worked out, wave by wave, and a southerly's comes in.
 - **The wind sea's cap** went from 3 to 3.8 x a fair day's, and on low, which has two long waves, the second is 50 m and not 85 in a blow. Rippling goes further and rougher in a blow, and rain's neat rings go. A gale on low had looked like a smooth hill from the deck.
@@ -242,7 +242,7 @@ M16's stream 10 (2026-11-01). `test/north-sea.mjs` tests what Node can. A gale's
 - **Whitecaps and spray**: in a blow they break on the long waves' crests, on the CPU's spray as on the GPU. Foam's blown in streaks from a near gale, as Beaufort 7 and 8 have it; it started at Beaufort 10.
 - **A sea breaking on her** (`game/BreakingSeas.js`). A 9 m boat rides a 12 ft, 9 s wave like a hill: her stem stays out of it. So the danger's a roller reaching her up on a crest: 60 L in her bilge, a hard slam and a knock about her keel, about one a minute, under way or at anchor, from 9.5 ft. Unbailed, her engine floods in about eight minutes. Marta won't come out in it.
 
-**What it does**, measured on the real boat under Node: at 240 s she heaves 3.9 m, tilts to 28 degrees; 549 L in her head to it, 382 L at anchor (one run each: it varies). Held head to it flat out she's worn 26% a minute, 9% at a third of her throttle, slams being the short seas' (`test/hull.mjs` had been running through them the wrong way, and is mended; `Hull.js` is untouched). Crests reach 0.62 m at the pier's tip in a trades gale and 1.47 m at its head in a southerly, under its 2.3 m deck. The surf and its run-up are the shore's own figures, unchanged, so they reach no further than they did; the north shore's 6 to 12 ft was already in proportion. On low what's drawn counts 10.8 ft, its highest wave 13 ft (four waves can't make a rogue); on high 11.3 and 15.
+**What it does**, measured on the real boat under Node: at 240 s she heaves 3.9 m, tilts to 28 degrees; 549 L in her head to it, 382 L at anchor (one run each: it varies). Held head to it flat out she's worn 26% a minute, 9% at a third of her throttle, slams being the short seas' (`test/hull.mjs` had been running through them the wrong way, and is mended; `Hull.js` is untouched). Crests reach 0.62 m at the pier's tip in a trades gale and 1.47 m at its head in a southerly, under its 2.3 m deck. The surf and its run-up are the shore's own figures, unchanged, so they reach no further than they did; the north shore's 6 to 12 ft was already in proportion. On low what's drawn counts 10.8 ft, its highest wave 13 ft (four waves can't make a rogue); on high 11.4 and 16.
 
 **The sea's draw, on low.** The sea alone, 640 by 360, the CPU's GPU, by removal in one page (a phone's shader, `?fullsea`; CPU time of the browser's processes, against a busy machine; two rounds, so a figure under about 6% is noise):
 

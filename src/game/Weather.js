@@ -385,7 +385,7 @@ const windSeaOf = ( wind ) => {
 // 10 ft over the Straits (so about 12 at 39 kt), and the SMB curves over the 100 to 150 km of water the Keys have
 // upwind give 10.6 to 12.9 ft. Nothing at a breezy day's wind and under (their 4 to 6 ft is already the Weather
 // Service's for 20 kt); from there its energy (Hs^2) grows about as the wind past that. Past a gale it goes on
-// growing, so a hurricane's stays bigger than a gale's: a Category 1's wall about 25 ft, a 3's about 31.
+// growing, so a hurricane's stays bigger than a gale's: a Category 1's wall about 24 ft, a 3's about 31.
 export const OWN_SEA = { from: 11, k: 0.93, p: 0.575 };
 export const blowSeaOf = ( wind ) => wind > OWN_SEA.from ? OWN_SEA.k * Math.pow( wind - OWN_SEA.from, OWN_SEA.p ) : 0;
 
