@@ -18,7 +18,7 @@ export const CRADLE = { x: 100, z: - 100, yaw: 0, position: new Vector3( 100, 4.
 export const YARD = {
 	lobster: CRADLE,
 	kayak: { x: 92.5, z: - 96, yaw: 0 },
-	console: { x: 92, z: - 110, yaw: 0 },
+	console: { x: 88.5, z: - 98, yaw: 0 },
 	sportfisher: { x: 112, z: - 113, yaw: 0 },
 };
 // a boat's keel blocks hold her this far off the highest ground under her

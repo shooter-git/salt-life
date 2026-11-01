@@ -28,6 +28,7 @@ export const FLEET_CSS = /* css */`
 .gm-boat-swatch:disabled { opacity: 0.4; cursor: default; }
 .gm-boat-section { display: block; margin: var(--tw-3) 0 var(--tw-1); color: var(--tw-ink-3); font-size: var(--tw-fs-xs); font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
 .gm-boat-section:first-child { margin-top: 0; }
+@media (max-height: 480px) { .gm-boat-pic { flex-basis: calc(104 * var(--tw-u)); height: calc(46 * var(--tw-u)); } }
 `;
 
 const money = ( n ) => `$${ Math.abs( n ).toLocaleString() }`;

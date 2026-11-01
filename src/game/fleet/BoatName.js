@@ -4,6 +4,7 @@ import { CanvasTexture, Mesh, MeshStandardMaterial, PlaneGeometry, SRGBColorSpac
 // boat you're in (made only once she's named). Vessel.transom says where: { y, z, w }, her centre and how wide
 // it may be; or from her lines.
 const W = 512, H = 96;
+const FILL = 14;
 
 export function namePlate( name, boat, paint ) {
 
@@ -34,6 +35,20 @@ export function namePlate( name, boat, paint ) {
 	const w = T.w ?? Math.min( 1.8, L.sheerX( 0 ) * 1.15 ), h = w * H / W;
 	const mesh = new Mesh( new PlaneGeometry( w, h ), new MeshStandardMaterial( { map, transparent: true, depthWrite: false, roughness: 0.4, polygonOffset: true, polygonOffsetFactor: - 2, polygonOffsetUnits: - 2 } ) );
 	mesh.name = 'boat-name';
+	// (a transom's nearly always out of the sun: lit as the moored boats are, or it can't be read)
+	mesh.onBeforeRender = ( renderer, scene ) => {
+
+		const m = mesh.material;
+		if ( m.envMap !== scene.environment ) {
+
+			if ( ! m.envMap !== ! scene.environment ) m.needsUpdate = true;
+			m.envMap = scene.environment;
+
+		}
+
+		m.envMapIntensity = scene.environmentIntensity * FILL;
+
+	};
 	mesh.rotation.y = Math.PI;
 	mesh.position.set( T.x ?? 0, T.y ?? ( L.deckY + L.sheerY( 0 ) ) / 2 + 0.1, T.z ?? L.zAft - 0.02 );
 	return mesh;
