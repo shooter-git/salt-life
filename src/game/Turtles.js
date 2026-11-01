@@ -47,7 +47,7 @@ export const CRAWL = { stroke: 1.0, reach: 0.42, bout: [ 6, 10 ], rest: [ 1.2, 2
 // hatchlings: their crawl (an alternating gait, quick) and how they set off
 // (spread: M16, a fan about 66 degrees across: 62 to 76 measured of green turtle hatchlings in low light, Malaysia)
 export const HATCHLING = {
-	speed: [ 0.14, 0.26 ], burst: [ 6, 28 ], spread: 0.58, length: 0.055,
+	speed: [ 0.14, 0.26 ], burst: [ 6, 28 ], spread: 0.68, length: 0.055,
 	trackFade: [ 32, 36 ], // h after the midday before they hatched: into the next morning, gone by noon
 	limit: 600, // s: however it's been led, none's still on the sand after this
 };
