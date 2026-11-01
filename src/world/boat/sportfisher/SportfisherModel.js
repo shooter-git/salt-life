@@ -10,7 +10,7 @@ import { SportfisherLines, SF } from './SportfisherLines.js';
 import { SportfisherMaterials } from './SportfisherMaterials.js';
 import { buildHull, skegVolume, V, STEEL, CHAIR_Z, deckY } from './SportfisherHull.js';
 import { buildHouse, buildCabin } from './SportfisherHouse.js';
-import { buildBridge, buildTower, riggerGeometry, riggerTip, wheelOf, HELM, TOWER, TOWER_HELM, RIGGER, bridgeX } from './SportfisherBridge.js';
+import { buildBridge, buildTower, riggerGeometry, riggerTip, wheelOf, HELM, TOWER, TOWER_HELM, RIGGER, COURTESY_Z, STERN_LAMP, bridgeX } from './SportfisherBridge.js';
 import { buildFloors, buildColliders, buildLadders, soleAt, keepOnDeck } from './SportfisherDecks.js';
 import { LadderClimb } from './LadderClimb.js';
 import { SEATS } from './seats.data.js';
@@ -130,16 +130,12 @@ export class SportfisherModel extends Vessel {
 		this._seats( kit, q );
 		this._running( kit, q );
 
-		// (on phones the cushions go in with the cabin: a draw saved)
-		if ( low ) {
-
-			kit.buckets.get( 'cabin' ).push( ...kit.buckets.get( 'chairs' ) );
-			kit.buckets.delete( 'chairs' );
-
-		}
+		// (the bridge's cushions are out of doors, lit as her gelcoat is: in the cabin's own light they glowed white all night)
+		kit.buckets.get( 'gelcoat' ).push( ...kit.buckets.get( 'chairs' ) );
+		kit.buckets.delete( 'chairs' );
 
 		// ((M16) the cabin's on its own, so a phone needn't draw it from the shore: nearDetail)
-		for ( const name of [ 'hull', 'gelcoat', 'fittings', 'cabin', 'tower', 'outriggers', 'chair', 'chairs', 'glow', 'display', 'towerDisplay', 'glass' ] ) {
+		for ( const name of [ 'hull', 'gelcoat', 'fittings', 'cabin', 'tower', 'outriggers', 'chair', 'glow', 'display', 'towerDisplay', 'glass' ] ) {
 
 			const geo = kit.merged( name );
 			if ( ! geo ) continue;
@@ -250,7 +246,7 @@ export class SportfisherModel extends Vessel {
 		this.rudder = V( 0, - 0.78, - 5.72 );
 		this.bowSprayPoints = this.waterlinePoints( [ 2.5, 3.6, 4.7, 5.8 ] );
 		this.wake = { quarterX: 2.1, quarterZ: - 3.6, washZ: - 6.8 };
-		this.lamps = { dome: [ 0, SF.roofY - 0.1, - 0.6 ], instruments: [ 0, SF.bridge + 1.2, HELM.consoleZ0 + 0.1 ], port: [ bridgeX( 0 ) - 0.15, SF.bridge + 0.5, 0.6 ], masthead: [ 0, TOWER.roof + 0.34, - 0.4 ], anchor: [ 0, TOWER.roof + 0.4, - 0.4 ], stern: [ 0, L.sheerY( 0 ) + 0.1, L.zAft - 0.05 ], spot: parts.searchlight.toArray() };
+		this.lamps = { dome: [ 0, SF.roofY - 0.1, - 0.6 ], instruments: [ 0, SF.bridge + 1.2, HELM.consoleZ0 + 0.1 ], port: [ bridgeX( 0 ) - 0.15, SF.bridge + 0.5, 0.6 ], masthead: [ 0, TOWER.roof + 0.34, - 0.4 ], anchor: [ 0, TOWER.roof + 0.4, - 0.4 ], stern: [ ...STERN_LAMP( L ) ], sternFacing: [ 0, 0, - 1 ], cockpit: [ 0, SF.roofY - 0.06, COURTESY_Z ], spot: parts.searchlight.toArray() };
 		this.floods = [ - 0.8, 0.8 ].map( ( x ) => ( { at: [ x, SF.roofY - 0.05, SF.bridgeAft + 0.1 ], dir: [ x * 0.25, - 0.75, - 0.62 ] } ) );
 		this.nearDetail = low ? [ 'cabin', 'wheel', 'radar', 'chair', 'display' ] : [];
 		// what takes the rain from above
@@ -284,7 +280,7 @@ export class SportfisherModel extends Vessel {
 	_materialOf( name ) {
 
 		const m = this.materials;
-		return { hull: m.hull, gelcoat: m.gelcoat, fittings: m.fittings, cabin: m.cabin, tower: m.fittings, outriggers: m.fittings, chair: m.fittings, chairs: m.cabin, glow: m.glow, display: m.display, towerDisplay: m.display, glass: m.glass }[ name ];
+		return { hull: m.hull, gelcoat: m.gelcoat, fittings: m.fittings, cabin: m.cabin, tower: m.fittings, outriggers: m.fittings, chair: m.fittings, glow: m.glow, display: m.display, towerDisplay: m.display, glass: m.glass }[ name ];
 
 	}
 
@@ -379,7 +375,7 @@ export class SportfisherModel extends Vessel {
 		for ( const l of this.ladders ) {
 
 			if ( l.needs && ! this.fitted[ l.needs ] ) continue;
-			if ( Math.hypot( p.x - l.on.x, p.z - l.on.z ) < 0.5 && Math.abs( p.y - l.on.y ) < 0.5 ) return { ladder: l, top: false };
+			if ( Math.hypot( p.x - l.on.x, p.z - l.on.z ) < 0.5 && Math.abs( p.y - l.on.y ) < 0.35 ) return { ladder: l, top: false };
 			if ( Math.hypot( p.x - l.off.x, p.z - l.off.z ) < 0.45 && Math.abs( p.y - l.off.y ) < 0.5 ) return { ladder: l, top: true };
 
 		}
@@ -441,18 +437,23 @@ export class SportfisherModel extends Vessel {
 	// Made the first time they're lit, so it costs nothing until then
 	setUnderLights( on ) {
 
+		this.materials.under.value = on;
 		if ( on <= 0 && ! this._glow ) return;
 		if ( ! this._glow ) {
 
 			// (a dim pool, fading out smoothly: the sea's lit from under, not painted. A little above the water, so the swell
 			// doesn't cut it)
-			const N = 28, RINGS = 7, RADIUS = 13, pos = [], col = [], idx = [];
-			pos.push( 0, 0, 0 );
+			// (and down to the water against her, or the part of her transom seen through it lights up as a hard band)
+			const N = 28, RINGS = 10, RADIUS = 13, pos = [], col = [], idx = [];
+			const CZ = - this.lines.length / 2 - 1, overSea = 0.4, atHull = 0.06;
+			const heightAt = ( x, z ) => atHull + ( overSea - atHull ) * sstep( Math.hypot( Math.max( 0, Math.abs( x ) - 2.4 ), Math.max( 0, this.lines.zAft - ( z + CZ ) ) ), 0.6, 4 );
+			pos.push( 0, heightAt( 0, 0 ) - overSea, 0 );
 			col.push( 0.012, 0.1, 0.06 );
 			for ( let r = 1; r <= RINGS; r ++ ) for ( let i = 0; i < N; i ++ ) {
 
 				const a = i / N * Math.PI * 2, t = r / RINGS, k = Math.exp( - 4 * t * t ) * ( 1 - t );
-				pos.push( Math.cos( a ) * RADIUS * t, 0, Math.sin( a ) * RADIUS * t );
+				const x = Math.cos( a ) * RADIUS * t, z = Math.sin( a ) * RADIUS * t;
+				pos.push( x, heightAt( x, z ) - overSea, z );
 				col.push( 0.012 * k, 0.1 * k, 0.06 * k );
 
 			}

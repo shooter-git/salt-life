@@ -20,6 +20,8 @@ export const VIEWS = {
 	// aboard
 	cockpit: [ 0, 2.3, - 6.1, 0, 1.4, - 2, 70 ],
 	cockpitFwd: [ 1.2, 1.9, - 5.4, - 0.3, 2.0, - 2.2, 75 ],
+	// (as the photograph of her ladder's taken)
+	cockpitLadder: [ 1.75, 1.75, - 5.5, - 0.95, 1.7, - 2.75, 62 ],
 	mezz: [ - 1, 2.0, - 2.9, 0.8, 1.0, - 6, 70 ],
 	helm: [ 0, SFY( 1.5 ), - 0.1, 0, SFY( 1 ), 1.6, 70 ],
 	bridgeAft: [ 0.3, SFY( 1.55 ), - 2.8, 0, SFY( 0.9 ), 1, 75 ],

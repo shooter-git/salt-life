@@ -182,6 +182,10 @@ export function buildColliders( L ) {
 	const H = BRIDGE_HATCH;
 	add( 'hatchRail', H.x0, b, H.z0, H.x1, b + 0.92, H.z1 );
 
+	// the ladder's foot, standing on the mezzanine: you go round it
+	const LB = BRIDGE_LADDER;
+	add( 'ladderFoot', LB.x - LB.width / 2, SF.mezz, LB.foot.z - 0.03, LB.x + LB.width / 2, SF.mezz + 1, LB.foot.z + 0.2 );
+
 	// the tower's helm pod
 	const P = TOWER_HELM.pod;
 	add( 'towerPod', - P.hx, P.y0, P.z0, P.hx, P.y1, P.z1 );
@@ -199,7 +203,7 @@ export function buildLadders() {
 
 	const B = BRIDGE_LADDER, T = TOWER;
 	return [
-		{ id: 'bridge', text: 'Climb up to the bridge', downText: 'Climb down to the cockpit', foot: B.foot.clone(), head: B.head.clone(), on: new Vector3( B.x, SF.cockpit, - 3.85 ), off: new Vector3( B.x, SF.bridge, - 2.2 ), speed: 0.8 },
+		{ id: 'bridge', text: 'Climb up to the bridge', downText: 'Climb down to the mezzanine', foot: B.foot.clone(), head: B.head.clone(), on: new Vector3( B.x, SF.mezz, - 3.3 ), off: new Vector3( B.x, SF.bridge, - 2.2 ), speed: 0.8 },
 		{ id: 'tower', text: 'Climb the tower', downText: 'Climb down to the bridge', foot: T.foot.clone(), head: T.head.clone(), on: new Vector3( 0, SF.bridge, - 2.9 ), off: new Vector3( 0, SF.tower, - 1.0 ), speed: 0.55, needs: 'tower' },
 	];
 

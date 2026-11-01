@@ -2,10 +2,10 @@
 // (M16) Going about her in the real game by the real keys: the stairs to the cabins, the side deck to the foredeck, up the
 // tower's ladder to its helm, and down. Set only at the start of each walk; after that it's W, A, S, D and E. Small and on low:
 // a CPU render on a loaded machine gets few frames, and the walks need them; two looks at the helms, larger.
-//   [WALKS=stairs,side,up,down,bridge] tools/render-slot.sh node tools/sportfisher/walk.mjs <out dir>
+//   [WALKS=stairs,ladder,side,up,down,bridge] tools/render-slot.sh node tools/sportfisher/walk.mjs <out dir>
 const { chromium } = await import( '/home/shooter/Documents/VS Code/all-the-spaces/node_modules/playwright/index.mjs' );
 const [ , , out = '.' ] = process.argv, PORT = process.env.PORT || 5203;
-const walks = ( process.env.WALKS || 'stairs,side,up,down,bridge' ).split( ',' );
+const walks = ( process.env.WALKS || 'stairs,ladder,side,up,down,bridge' ).split( ',' );
 const b = await chromium.launch( { args: [ '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist' ] } );
 const page = await b.newPage( { viewport: { width: 320, height: 180 } } );
 page.setDefaultTimeout( 300000 );
@@ -135,6 +135,21 @@ if ( walks.includes( 'stairs' ) ) {
 	await set( 0.03, 1.02, - 1.9 );
 	await hold( 'W, salon down the stairs to the cabins', [ 'KeyW' ], ( r ) => r.y < 0.2 && r.z > 2.2 );
 	await hold( 'S, back up them', [ 'KeyS' ], ( r ) => r.y > 1.0 && r.z < 0.7 );
+
+}
+
+// the bridge's ladder: from the cockpit up the steps to its foot on the mezzanine, up it, and down
+if ( walks.includes( 'ladder' ) ) {
+
+	await set( - 0.84, 0.5, - 5 );
+	await hold( 'W, cockpit up the steps to the ladder\'s foot', [ 'KeyW' ], ( r ) => /Climb up to the bridge/.test( r.prompt || '' ) );
+	say( 'at its foot', await read() );
+	say( 'E', await press( 'KeyE', ( r ) => r.climbing ) );
+	await hold( 'W, up it to the bridge', [ 'KeyW' ], ( r ) => ! r.climbing && r.y > 3.05, 300 );
+	say( 'at its head', await read() );
+	say( 'E', await press( 'KeyE', ( r ) => r.climbing ) );
+	await hold( 'S, down it to the mezzanine', [ 'KeyS' ], ( r ) => ! r.climbing && r.y < 1, 300 );
+	say( 'at its foot', await read() );
 
 }
 
