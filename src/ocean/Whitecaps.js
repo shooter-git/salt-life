@@ -46,6 +46,9 @@ const LEFT = 0.7; // how white the foam it leaves is, at first (the roller's 1: 
 // cells a period: the foam left spreading and thinning at its edges as it ages (its edge softened by so
 // much more: a gale's big ones were white blocks, their sides as straight as when they were laid)
 const SPREAD = 0.08;
+// (M16) crests a pixel: from afar, their share of white spread, from the first to all of it at the second (they were
+// 0.45 and 0.9, and every pixel between read its crests' hashes three times for what's 10/255 at most in a dozen pixels)
+const AWAY = [ 0.3, 0.6 ];
 const AGES = 3; // crests behind looked at: the foam's gone by then (the low tier's GPU looks at two)
 // the share of the sea a wave's whitecaps whiten, a unit of chance at size 1 (test/whitecaps.mjs measures
 // it), and as their size goes (bigger, and breaking longer: as size^SIZE_COVER, measured)
@@ -227,7 +230,7 @@ float wcAlong( vec2 x0, vec4 A ) { return dot( vec2( - A.y, A.x ), x0 ) * A.z * 
 vec2 wcCarrier( vec4 A, float u, float s, float du, float ds, float chance, float far, uint salt, vec4 at, vec2 rag ) {
 	float T = 6.2831853 / A.w;
 	// (seen from afar, a crest or more a pixel: its share of white, spread)
-	float away = smoothstep( 0.45, 0.9, du );
+	float away = smoothstep( ${ f( AWAY[ 0 ] ) }, ${ f( AWAY[ 1 ] ) }, du );
 	if ( away >= 1.0 || chance <= 0.0 ) return vec2( 0.0, far );
 	float fu = floor( u ), a = u - fu;
 	// the roller: ahead of the crest coming, breaking now, (step 5) thinning to its ends, its front ragged;

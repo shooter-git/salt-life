@@ -80,6 +80,7 @@ const WATER = {
 	k: G.waterAbsorption.value.toArray().map( ( a ) => a * 1.6 ), murk: [ 0, 0.025, 0.05 ], coast: [ 3500, 6000 ],
 };
 const g = ( v ) => Number.isInteger( v ) ? v.toFixed( 1 ) : String( v ); // (a GLSL float)
+const _look = new THREE.Vector3();
 // (M15) the foam's noises' keys (waterKey's) at the sea's origin O: the lace's on the water, the marbling's
 // on its frame M ( x, z, along, across, wind ), moved to the camera cam first if the wind w has turned
 // (WaterSurface's update; test/sea-origin.mjs)
@@ -122,6 +123,12 @@ const marble = ( i, arg ) => `waterNoiseK( ${ arg } * ${ g( MARBLE_NOISE[ i ][ 0
 // (M11) the sky's reflection off the surface: the environment as it is (1, a mirror's: the sky drawn as
 // you see it); and where three turns a reflected ray into the world (a ray pointing down is turned up)
 const REFLECT = 1;
+// (M16) the sky's light on the surface for its Fresnel's multiple scattering: its colour, worked out already, for what little
+// that comes to on a surface with no diffuse colour of its own (1/255 at most, side by side): the panorama's looked at once,
+// for what it mirrors, not again for that (two more lookups a pixel, in a bilinear of its own)
+const IBL_FROM = 'iblIrradiance += getIBLIrradiance( geometryNormal );';
+if ( ! THREE.ShaderChunk.lights_fragment_maps.includes( IBL_FROM ) ) throw new Error( 'WaterSurface: three\'s lights_fragment_maps changed (' + IBL_FROM + ')' );
+const LIGHTS_MAPS = THREE.ShaderChunk.lights_fragment_maps.replace( IBL_FROM, 'iblIrradiance = waterSky * 0.5;' );
 const REFLECT_RAY = 'reflectVec = transformDirectionByInverseViewMatrix( reflectVec, viewMatrix );';
 if ( ! THREE.ShaderChunk.envmap_physical_pars_fragment.includes( REFLECT_RAY ) ) throw new Error( 'WaterSurface: three\'s envmap_physical_pars_fragment changed (' + REFLECT_RAY + ')' );
 // an sRGB colour as a linear GLSL vec3 (shading is linear)
@@ -491,17 +498,24 @@ ${ lean ? '' : /* glsl */`
 		vec2 wcD = seaDetailWindDir, wcQ = vec2( dot( vWaterX0, wcD ), dot( vWaterX0, vec2( - wcD.y, wcD.x ) ) ) * vec2( ${ g( MARBLE[ 0 ] ) }, ${ g( MARBLE[ 1 ] ) } );
 		float wcFw = length( fwidth( wcQ ) );
 		if ( wc.y > 0.002 ) {
-			vec2 q = wcQ + 1.1 * vec2( ${ marble( 0, 'wcQ' ) }, ${ marble( 1, 'wcQ' ) } );
-			float fine = 1.0 - smoothstep( 0.25, 0.7, wcFw );
-			float n = ${ marble( 2, 'q' ) } * 0.5 + ${ marble( 3, 'q' ) } * 0.3 + ${ marble( 4, 'q' ) } * 0.2 * fine;
-			float net = mix( n + 0.1 * ( 1.0 - fine ), 1.0 - abs( ${ marble( 5, 'q' ) } - 0.5 ) * 2.0, 0.45 );
+			float far = smoothstep( 1.2, 3.5, wcFw );
 			float cover = min( wc.y * ( 0.5 + ${ marble( 6, 'wcQ' ) } ), 0.8 ); // (never a solid sheet)
-			float w = 0.14 + wcFw * 0.5, far = smoothstep( 1.2, 3.5, wcFw );
-			float left = mix( smoothstep( 1.0 - cover - w * 0.5, 1.0 - cover + w * 0.5, net ), cover, far );
-			// (froth: its bubbles, near by)
-			left *= mix( 1.0, 0.35 + 0.65 * waterLaceK( vWaterX0 * ${ g( FROTH ) }, ${ KEY.froth }, 0.7 ), fine );
+			float left = cover, net = 0.5;
+			// ((M16) seen from afar it's only as much white spread, and none of its noises or its froth's four are read:
+			// that's most of the sea's pixels, at a low angle from a deck)
+			if ( far < 1.0 ) {
+				vec2 q = wcQ + 1.1 * vec2( ${ marble( 0, 'wcQ' ) }, ${ marble( 1, 'wcQ' ) } );
+				float fine = 1.0 - smoothstep( 0.25, 0.7, wcFw );
+				float n = ${ marble( 2, 'q' ) } * 0.5 + ${ marble( 3, 'q' ) } * 0.3 + ${ marble( 4, 'q' ) } * 0.2 * fine;
+				net = mix( n + 0.1 * ( 1.0 - fine ), 1.0 - abs( ${ marble( 5, 'q' ) } - 0.5 ) * 2.0, 0.45 );
+				float w = 0.14 + wcFw * 0.5;
+				left = mix( smoothstep( 1.0 - cover - w * 0.5, 1.0 - cover + w * 0.5, net ), cover, far );
+				// (froth: its bubbles, near by)
+				if ( fine > 0.0 ) left *= mix( 1.0, 0.35 + 0.65 * waterLaceK( vWaterX0 * ${ g( FROTH ) }, ${ KEY.froth }, 0.7 ), fine );
+			}
 			// (the roller's whitest in a head or two along the crest)
-			float roll = smoothstep( 0.2, 0.6, wc.x * ( 0.6 + 0.8 * mix( net, 0.5, far ) ) * ( 0.45 + 0.9 * ${ marble( 7, 'wcQ' ) } ) );
+			float roll = 0.0;
+			if ( wc.x > 0.0 ) roll = smoothstep( 0.2, 0.6, wc.x * ( 0.6 + 0.8 * mix( net, 0.5, far ) ) * ( 0.45 + 0.9 * ${ marble( 7, 'wcQ' ) } ) );
 			foam = max( foam, max( left * 0.78, roll ) );
 		}
 	}
@@ -665,10 +679,13 @@ ${ lean ? '' : /* glsl */`
 	// calmed by the foam
 	vec3 wN = normalize( vWaterN );
 	float rippleDist = length( oceanLodView - vWaterL );
-	float rippleK = ( 1.0 - smoothstep( 25.0, 140.0, rippleDist ) ) * ( 1.0 - foam ) * ( 1.0 - whaleMk.y ) * seaD.x;
+	// ((M16) a blow's: rougher and seen further, for what the grid's too coarse to draw of a gale's short seas. Nothing
+	// on a breezy day or under)
+	float rippleBlow = smoothstep( 11.0, 20.0, seaDetailWindSpeed );
+	float rippleK = ( 1.0 - smoothstep( 25.0, 140.0 + 360.0 * rippleBlow, rippleDist ) ) * ( 1.0 - foam ) * ( 1.0 - whaleMk.y ) * seaD.x * ( 1.0 + 1.5 * rippleBlow );
 	vec2 rs = vec2( 0.0 );
 	// ((M16) not read past where they've faded out, nearly all the sea's pixels at a low angle)
-	if ( rippleDist < 140.0 ) {
+	if ( rippleDist < 140.0 + 360.0 * rippleBlow ) {
 		vec2 r1 = texture2D( waterRipples, vWaterL.xz * ${ RIPPLE[ 0 ] } + waterRippleAt.xy + waterTime * vec2( 0.012, 0.03 ) ).xy * 2.0 - 1.0;
 		vec2 r2 = texture2D( waterRipples, vWaterL.xz * ${ RIPPLE[ 1 ] } + waterRippleAt.zw + 0.3 - waterTime * vec2( 0.02, 0.008 ) ).xy * 2.0 - 1.0;
 		rs = ( r1 * 0.6 + r2 * 0.4 ) * 0.32 * rippleK;
@@ -677,13 +694,14 @@ ${ lean ? '' : /* glsl */`
 	// ((M10) all over the sea: a downpour flattens them as far as you see; (M14) not under the pier, the
 	// boathouse or a rock's overhang)
 	if ( waterRain > 0.0 ) {
-		float rainN = clamp( waterRain * 1.5, 0.0, 1.0 );
+		// ((M16) and in a blow its rings are torn away as they start: no neat circles on a gale's sea)
+		float rainN = clamp( waterRain * 1.5, 0.0, 1.0 ) * ( 1.0 - rippleBlow );
 		float rainOver = ${ cover ? 'coverHeightAt( vWater.xz )' : '-1e4' };
 		${ rocks ? 'rainOver = max( rainOver, rockUndersideAt( vWater.xz ) );' : '' }
 		rainN *= step( rainOver, vWater.y + 0.1 );
 		rs *= 1.0 - 0.35 * rainN;
 		float rainD = length( oceanLodView - vWaterL );
-		if ( rainD < 45.0 ) {
+		if ( rainD < 45.0 && rainN > 0.0 ) {
 			float rainK = ( 1.0 - smoothstep( 12.0, 45.0, rainD ) ) * ( 1.0 - foam );
 			rs = rs * ( 1.0 - 0.4 * rainN * rainK ) + ( waterRainRing( vWaterL.xz, waterRingAt.xy, waterRingCells.xy, ${ RING_CELL[ 0 ] }, 1.4, 0.0, rainN ) + waterRainRing( vWaterL.xz + 0.27, waterRingAt.zw, waterRingCells.zw, ${ RING_CELL[ 1 ] }, 1.1, 3.7, rainN ) * 0.8 ) * 0.5 * rainK;
 		}
@@ -697,6 +715,7 @@ ${ lean ? '' : /* glsl */`
 				// real sea it meets the sky in the next wave's face, not the dark under the horizon (as the
 				// flash's lobe takes it, below)
 				.replace( '#include <envmap_physical_pars_fragment>', THREE.ShaderChunk.envmap_physical_pars_fragment.replace( REFLECT_RAY, REFLECT_RAY + '\n\t\t\treflectVec.y = abs( reflectVec.y );' ) )
+				.replace( '#include <lights_fragment_maps>', LIGHTS_MAPS )
 				.replace( '#include <lights_fragment_end>', /* glsl */`#include <lights_fragment_end>
 	// (M11) from under water, the underside's faint fill, not the sky's mirror
 	if ( ! gl_FrontFacing ) reflectedLight.indirectSpecular *= waterEnvUnder;
@@ -772,8 +791,12 @@ ${ lean ? '' : /* glsl */`
 
 		const F = this._finds, O = this.lod.origin, c = camera.position, near = F.near;
 		near.length = 0;
+		// ((M16) nor any wholly behind you: every pixel looks at each it's given)
+		const f = camera.getWorldDirection ? camera.getWorldDirection( _look ) : _look.set( 0, 0, 0 ), down = - c.y * f.y;
 		for ( const w of finds.weed ) {
 
+			const reach = w.width * 2.5 + WEED.edge * 2;
+			if ( ( w.x0 - c.x ) * f.x + ( w.z0 - c.z ) * f.z + down < - reach && ( w.x1 - c.x ) * f.x + ( w.z1 - c.z ) * f.z + down < - reach ) continue;
 			const ex = w.x1 - w.x0, ez = w.z1 - w.z0, L2 = ex * ex + ez * ez || 1;
 			const t = Math.min( 1, Math.max( 0, ( ( c.x - w.x0 ) * ex + ( c.z - w.z0 ) * ez ) / L2 ) );
 			const d = Math.hypot( c.x - w.x0 - ex * t, c.z - w.z0 - ez * t );
