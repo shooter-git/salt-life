@@ -449,13 +449,15 @@ if ( PART === 'flares' ) {
 		if ( m < 20000 ) {
 
 			say( seen.shown && seen.toasts.some( ( t ) => /flare/.test( t ) ), `her flare on his game, ${ name }: ${ JSON.stringify( seen ) }` );
-			await guest.game.evaluate( ( [ m ] ) => { const a = window.__app, b = a.boatCtl; }, [ m ] );
-			await guest.game.evaluate( () => { const a = window.__app, f = a.game.daysOut.flare; window.__fl = f.sprite.position.clone(); const c = a.camera, was = a.frame; window.__frame = was; a.frame = function () { was.apply( this, arguments ); }; } );
-			await guest.game.evaluate( ( [ ] ) => { const a = window.__app, s = a.game.daysOut.flare.sprite, p = a.player, c = a.camera; p.camMode = 'first'; }, [] );
-			// (looking up at where it is)
-			await guest.game.evaluate( () => { const a = window.__app, s = a.game.daysOut.flare.sprite; window.__look = setInterval( () => { const f = a.game.daysOut.flare; if ( f && f.sprite.visible ) { a.camera.lookAt( f.sprite.position ); a.camera.updateMatrixWorld(); } }, 16 ); } );
-			await G.shot( guest, `seen-flare-${ name }` );
-			await guest.game.evaluate( () => { clearInterval( window.__look ); delete window.__app.frame; } );
+			// (looking at it, the camera put after the player's had it; another flare if that one's burnt out by the time it's drawn)
+			await guest.game.evaluate( () => { const a = window.__app, R = window.__draws; window.__camHook = () => { const f = a.game.daysOut.flare; if ( f ) { a.camera.lookAt( f.sprite.position.x, f.sprite.position.y + 8, f.sprite.position.z ); a.camera.updateMatrixWorld(); } }; R.after.push( window.__camHook ); R.end.push( window.__camHook ); window.__go(); } );
+			await until( guest.game, 'window.__draws.peak.calls > 2', 120000 ).catch( () => {} );
+			await owner.game.evaluate( () => { const a = window.__app; a.game.state.days.flares = 3; a.game.daysOut.fire( 'flare' ); } );
+			await until( guest.game, 'window.__app.game.daysOut.flare.sprite.visible && window.__app.game.daysOut.flare.t < 6.5', 120000 ).catch( () => {} );
+			await guest.page.screenshot( { path: `${ out }/seen-flare-${ name }.png` } );
+			const at = await guest.game.evaluate( () => { const a = window.__app, s = a.game.daysOut.flare.sprite; return { shown: s.visible, y: +s.position.y.toFixed( 0 ), size: +s.scale.x.toFixed( 1 ), d: +s.position.distanceTo( a.camera.position ).toFixed( 0 ), left: +a.game.daysOut.flare.t.toFixed( 1 ) }; } );
+			note( `the flare on his screen, ${ name }:`, JSON.stringify( at ) );
+			await guest.game.evaluate( () => { const R = window.__draws; R.after.splice( R.after.indexOf( window.__camHook ), 1 ); R.end.splice( R.end.indexOf( window.__camHook ), 1 ); window.__stop(); } );
 
 		} else say( ! seen.shown || seen.toasts.length === 0, `past the reach of the eye, 26 km: nothing told: ${ JSON.stringify( seen ) }` );
 		await owner.page.waitForTimeout( 8000 );
