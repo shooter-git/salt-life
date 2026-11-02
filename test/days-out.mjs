@@ -177,7 +177,7 @@ function stand( { boat = 'lobster', x = 9000, z = 9000, depth = 300 } = {} ) {
 	st.money = 1000;
 	const b = {
 		position: new Vector3( x, 0, z ), quaternion: { setFromAxisAngle() {} }, velocity: new Vector3(), angular: new Vector3(), stemHead: new Vector3( 0, 1, 4 ), speed: 0, moored: false, anchor: null, sock: false, hauled: null, driven: false,
-		model: { bunks: [], id: boat }, getYaw: () => 0, apply() {}, reset() { this.moored = true; this.position.set( dock.x, 0, dock.z ); this.sock = false; }, toWorld: ( v, o ) => o.copy( v ), setHauled() {},
+		model: { bunks: [], id: boat }, getYaw: () => 0, apply() {}, liftClear() {}, reset() { this.moored = true; this.position.set( dock.x, 0, dock.z ); this.sock = false; }, toWorld: ( v, o ) => o.copy( v ), setHauled() {},
 	};
 	const dock = WORLD.boatDock.position;
 	const p = { mode: 'deck', riding: false, boat: b, deckPos: new Vector3( 0, 0, 0 ), prompt: null, busy: false, leaveHelm() { this.mode = 'deck'; }, deckToWorld() {} };

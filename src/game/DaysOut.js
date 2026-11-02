@@ -3,7 +3,7 @@ import { G } from '../core/Globals.js';
 import { BOATS } from '../world/boat/Boats.js';
 import { awayOf, tellOf, ISLE, FOUND_M } from './Away.js';
 import { awayTowFee, TOW } from './Gear.js';
-import { restTo, timeText, REST } from './IslandClock.js';
+import { restTo, timeText, REST, NIGHT_X } from './IslandClock.js';
 import { islandTime, towardOf, weatherHere, hurricaneNews } from './Weather.js';
 import { FT, feet, farOff, pounds, knots } from './Units.js';
 import { FLEET } from './fleet/Fleet.js';
@@ -82,6 +82,7 @@ export class DaysOut {
 		this.sea = 0; // m, the seas where she is
 		this.wind = 0; // m/s, on her
 		this._T = null;
+		this._at = 0; // (ms since 1970: when _T was looked at)
 		this._t = 0;
 		this._lookT = 0;
 		this._said = 0; // (how hard the sea's been said to be working her: 1 rough, 2 too much)
@@ -166,26 +167,36 @@ export class DaysOut {
 	// the island's time going by, a second at a time; a rest all at once
 	_clock( dt ) {
 
-		const app = this.app, t = app.together, s = app.settings, T = islandTime( s.day, s.timeOfDay );
+		const app = this.app, t = app.together, s = app.settings, T = islandTime( s.day, s.timeOfDay ), now = Date.now();
 		if ( ! app._pickedUp || ( t && ! t.roomKnown ) || this._T === null ) {
 
 			this._T = T;
+			this._at = now;
 			return;
 
 		}
 
-		const h = T - this._T;
+		const h = T - this._T, was = this._at;
+		// (the clock's the wall's, frames or none: all it could have run since the last look, at night's pace, isn't a rest. A
+		// page hidden a minute, or frames seconds apart, are no reason to pull you off her helm and reckon her drift)
+		const ran = ( now - was ) / 1000 * NIGHT_X * s.timeSpeed * 1.01;
 		this._stamp();
-		if ( h < - JUMP || h > JUMP_MAX ) this._T = T;
-		else if ( h > JUMP ) {
+		if ( h < - JUMP || h > JUMP_MAX ) {
 
 			this._T = T;
+			this._at = now;
+
+		} else if ( h > JUMP && h > ran ) {
+
+			this._T = T;
+			this._at = now;
 			this.passed( T - h, T );
 
-		} else if ( ( this._t += dt ) >= LOOK_S && h > 0 ) {
+		} else if ( h > JUMP || ( ( this._t += dt ) >= LOOK_S && h > 0 ) ) {
 
 			this._t = 0;
 			this._T = T;
+			this._at = now;
 			this.pass( h );
 
 		}
@@ -417,6 +428,7 @@ export class DaysOut {
 
 			b.position.set( story.x, G.seaLevel.value, story.z );
 			b.quaternion.setFromAxisAngle( _Y, story.heading );
+			b.liftClear();
 			b.velocity.set( 0, 0, 0 );
 			b.angular.set( 0, 0, 0 );
 			b.hasWater = false;

@@ -2612,6 +2612,7 @@ export class App {
 
 			b.position.set( story.x, G.seaLevel.value, story.z );
 			b.quaternion.setFromAxisAngle( yaw, story.heading );
+			b.liftClear();
 			b.velocity.set( 0, 0, 0 );
 			b.angular.set( 0, 0, 0 );
 			b.moored = story.where === 'dock';

@@ -612,6 +612,22 @@ export class BoatController {
 
 	}
 
+	// (M16) set down by a reckoning (Away.awayOf has her ashore), up clear of the ground under her: left in it, its spring would throw
+	// her metres into the air
+	liftClear() {
+
+		let lift = 0;
+		for ( const lp of this.contactPoints ) {
+
+			this.toWorld( lp, _c1 );
+			lift = Math.max( lift, this.terrain.heightAt( _c1.x, _c1.z ) - _c1.y );
+
+		}
+
+		this.position.y += lift;
+
+	}
+
 	contacts( F, T, comW ) {
 
 		const pts = this.contactPoints;

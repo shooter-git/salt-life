@@ -1,11 +1,12 @@
-// Two real games (tools/two-players), by the bay: Robin anchors and goes; Sam sees her boat, boards it; a hurricane's warning tows her in; Robin comes back.
-//   pnpm dev, then   node tools/two-players/away.mjs [dir for screenshots] [port]   (some minutes: two games on the CPU)
+// Two real games (tools/two-players), by the bay, each in the same boat (M16: lobster unless you say): Robin anchors and goes; Sam sees her boat, boards it; a hurricane's warning tows her in; Robin comes back.
+//   pnpm dev, then   node tools/two-players/away.mjs [dir for screenshots] [port] [boat]   (some minutes: two games on the CPU)
 // The stand-in's own save is kept in the browser here (host.js patched as it's fetched), so a player can really come back.
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const ROOT = join( dirname( fileURLToPath( import.meta.url ) ), '../..' );
 const { chromium } = await import( join( process.env.ALL_THE_SPACES || join( ROOT, '../all-the-spaces' ), 'node_modules/playwright/index.mjs' ) );
-const [ out = 'qa-output', PORT = '5189' ] = process.argv.slice( 2 );
+const [ out = 'qa-output', PORT = '5189', BOAT = 'lobster' ] = process.argv.slice( 2 );
+const ANCHOR = { kayak: 'kayakAnchor', console: 'deepAnchor_console', lobster: 'deepAnchor_lobster', sportfisher: 'deepAnchor_sportfisher' }[ BOAT ];
 const browser = await chromium.launch( { args: [ '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required' ] } );
 const ctx = await browser.newContext( { viewport: { width: 560, height: 315 } } );
 await ctx.route( '**/tools/two-players/host.js*', async ( route ) => {
@@ -19,7 +20,7 @@ await ctx.route( '**/tools/two-players/host.js*', async ( route ) => {
 } );
 let problems = 0;
 const say = ( ok, what ) => { console.log( ( ok ? 'ok   ' : 'FAIL ' ) + what ); if ( ! ok ) problems ++; };
-const open = async ( name ) => {
+const open = async ( name, boat = null ) => {
 
 	const page = await ctx.newPage();
 	// (the dev server's hundreds of modules, with the other game holding the CPU: one can fail to come. Tried again)
@@ -32,7 +33,7 @@ const open = async ( name ) => {
 
 	} );
 	page.on( 'console', ( m ) => { if ( m.type() === 'error' && ! /ERR_NETWORK|Failed to load resource|dynamically imported/.test( m.text() ) ) { problems ++; console.log( name, 'CONSOLE', m.text().slice( 0, 300 ) ); } } );
-	await page.goto( `http://127.0.0.1:${ PORT }/tools/two-players/?name=${ name }&id=${ name.toLowerCase() }-1&tier=low` );
+	await page.goto( `http://127.0.0.1:${ PORT }/tools/two-players/?name=${ name }&id=${ name.toLowerCase() }-1&tier=low${ boat ? `&src=${ encodeURIComponent( `/?boat=${ boat }` ) }` : "" }` );
 	const f = () => page.frames().find( ( x ) => x !== page.mainFrame() );
 	for ( let i = 0; i < 500; i ++ ) {
 
@@ -55,9 +56,9 @@ const open = async ( name ) => {
 };
 const frames = ( g, n = 4 ) => g.evaluate( () => window.__app.renderer.info.render.frame ).then( ( t ) => g.waitForFunction( ( [ t, n ] ) => window.__app.renderer.info.render.frame > t + n, [ t, n ], { timeout: 180000, polling: 300 } ) );
 
-let robin = await open( 'Robin' );
+let robin = await open( 'Robin', BOAT );
 console.log( 'Robin in' );
-const sam = await open( 'Sam' );
+const sam = await open( 'Sam', BOAT );
 console.log( 'Sam in' );
 await sam.game.waitForFunction( () => window.__app.together.others.size > 0, null, { timeout: 200000, polling: 1000 } );
 await robin.game.waitForFunction( () => window.__app.together.others.size > 0, null, { timeout: 200000, polling: 1000 } );
@@ -69,20 +70,21 @@ const anchored = await robin.game.evaluate( async () => {
 
 	const app = window.__app, g = app.game, b = app.boatCtl;
 	g.state.money = 500;
-	g.state.upgrades.anchor = 1;
+	for ( const k of Object.keys( g.state.upgrades ) ) if ( /^deepAnchor_|^kayakAnchor$|^anchor$/.test( k ) ) g.state.upgrades[ k ] = 1;
 	app.player.boardBoat();
 	app.player.takeHelm();
-	b.moored = false;
+	b.moored = b.beached = false; // (a kayak: off the sand, not sliding down it)
+	if ( b.model.sliding !== undefined ) b.model.sliding = null;
 	// (the first spot out from the dock with some water under her)
 	let spot = null;
-	for ( let z = 80; z < 600 && ! spot; z += 10 ) { const d = - app.terrainData.heightAt( 64, z ); if ( d > 7 && d < 30 ) spot = z; }
+	for ( let z = 80; z < 600 && ! spot; z += 10 ) { const d = - app.terrainData.heightAt( 64, z ); if ( d > 6 && d < 9.5 ) spot = z; }
 	b.position.set( 64, b.position.y, spot );
 	b.speed = 0;
 	return { spot };
 
 } );
 await frames( robin.game, 3 );
-await robin.game.evaluate( () => window.__app.player.leaveHelm() );
+await robin.game.evaluate( () => { const a = window.__app; if ( a.boat.seated ) a.player.exitBoat( null, 1 ); else a.player.leaveHelm(); } );
 await robin.game.waitForFunction( () => !! window.__app.boatCtl.anchor, null, { timeout: 120000, polling: 300 } ).catch( () => console.log( 'no anchor' ) );
 Object.assign( anchored, await robin.game.evaluate( () => { const b = window.__app.boatCtl; return { anchor: !! b.anchor, depth: b.anchor && +( 0 - b.anchor.y ).toFixed( 1 ), mode: window.__app.player.mode }; } ) );
 say( anchored.anchor, `Robin left the helm off the bay (mode ${ anchored.mode }), her anchor down in ${ anchored.depth } m` );
@@ -211,7 +213,9 @@ const back = await robin.game.evaluate( () => {
 
 } );
 console.log( '     Robin back', JSON.stringify( back ) );
-say( back.money === 500 - tow.fee, `she paid: $500 - $${ tow.fee } = $${ back.money }` );
+// (and the kayak that comes with ?boat=, hauled at her berth: Hauled ... as well: $5)
+const also = [ ...( back.note || '' ).matchAll( /as well: \$(\d+)/g ) ].reduce( ( n, m ) => n + Number( m[ 1 ] ), 0 );
+say( back.money === 500 - tow.fee - also, `she paid: $500 - $${ tow.fee } - $${ also } = $${ back.money }` );
 say( back.hauled && ! back.anchor, 'her boat on the cradle, no anchor out' );
 say( !! back.note, `Marta's note: "${ back.note }"` );
 await frames( robin.game, 6 ).catch( () => {} );
