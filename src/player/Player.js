@@ -925,6 +925,8 @@ export class Player {
 
 		const inp = this.input;
 		const b = this.boat;
+		// ((M16) a kayak has no deck: a tow or a rescue has got you up out of her seat)
+		if ( b.model.seated ) return b.model.setDown( b, this );
 		this.breathe( dt, false, false );
 		const L = b.model.lines;
 		const look = inp.consumeLook();

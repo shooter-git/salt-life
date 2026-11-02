@@ -60,15 +60,27 @@ Over, she's turned keel up (the `body` group: the rigid body under it stays upri
 
 ## On the sand
 
-`Shore.js`. Run her up on a beach and step out (E): she's pulled up the sand clear of the wash (`ctl.beached`: physics off, lying on her keel on the slope), and you're beside her. E beside her: you're in her and she's shoved down the sand till she floats, about 3 m/s at most, bow first, and away. A surge up the sand floats her off. Off a beach too steep for it (a grade past 0.45), she's just left where she is. Over the side, out of your depth, she drifts.
+`Shore.js`. Run her up on a beach and step out (E): she's pulled up the sand clear of the wash (`ctl.beached`: physics off, lying on her keel on the slope), and you're beside her. E beside her: you're in her and she's shoved down the sand till she floats, about 3 m/s at most, bow first, and away. A surge up the sand floats her off. Off a beach too steep for it (a grade past 0.45), or onto a jetty, she's left where she is on her painter. Over the side, out of your depth, she drifts.
 
 She's kept on the sand, not at the dock: `BoatController` asks her `atHome` at the start, after a tow, and on the safety net's reset. With the fleet's berths in, `ctl.berth` is where she looks from, up the sand to the first dry place. `App.saveBoat` counts her as fast when she's on the sand, and `rest` lays her back on it when you return.
 
 ## What she needs of the others
 
 - **Light:** `handling.contact` and `handling.mooring` scale the controller's grounding and mooring, which are made for tons. `handling.wetDepth` says how little water she needs to be fully wet (0.06 m, against 0.3): her hydrodynamic forces were a third of what they should be without it.
-- **No engine:** `handling.engine` is null. `Game` doesn't burn fuel or crank; `Hull` gets `driven: false`, and with `handling.plastic` no rain, wear or storm. No horn, searchlight or radio on her; the rod's touch button stays the rod's.
+- **No engine:** `handling.engine` is null. `Game` doesn't burn fuel or crank; `Hull` gets `driven: false`, and with `handling.plastic` no rain, wear or storm. No horn or searchlight on her; the rod's touch button stays the rod's.
 - **Together:** `model.stroke.wire` is the paddle's pose to send, and setting it poses a copy; `seated` and `perch` as stream 5 asks.
+
+## Radio and flares
+
+R is the rod here, so C (LB, or the touch button that's the rig's with the rod out) gets out what you carry: `Radio.offer` is `'radio'` with the handheld VHF, `'flares'` with only the flares and EPIRB, and with neither there's no prompt, no button and the key does nothing. It's the same panel as at a helm. You need your hands: with the rod or the net out it isn't offered, and while it's up the paddle's laid by and she drifts. C, R, E or Esc puts it away, and the weather broadcast plays on while you paddle. Not from the water: over, you right her first.
+
+Sat in her, being in the shallows isn't trouble (`DaysOut.trouble`), so the flares and EPIRB stay for what is: too much sea for her, or you're parched.
+
+What you carry decides who comes (`DaysOut._rescueNet`). With nothing that can reach anyone, a passing boat finds you in the end (4 hours near in, 18 past 14 km). A handheld only counts within its 5 miles of her dock, and flares only while you've some left; out of range or out of flares and you're back to the passing boat. An EPIRB always counts: it works anywhere. A tow or a rescue leaves you on the sand beside her (`KayakModel.setDown`), or still sat in her on Pearl's mooring.
+
+## Her compass
+
+A kayak angler's is a small liquid-filled one on a wrist strap or a deck mount. Hers is `Compass.js`: a dial on the HUD beside the map, sat in her, in either view and anywhere on the water (the big boats' cards are on their dashes), north on the card, the lubber's mark at the top, degrees magnetic and the point under it, and the card lags 0.35 s as one in its liquid does. It reads `stats.compass`. A card turning on her deck would be a sixth draw and too small to read on a phone, so it's not on her deck. With no plotter it takes the place of the row the other boats get past 600 m (`HomeReadout`); with the handheld GPS that row's the way home, as it is on them.
 
 ## Gear
 
@@ -76,4 +88,4 @@ She's kept on the sand, not at the dock: `BoatController` asks her `atHome` at t
 
 ## Budget
 
-Her own mesh and paddle: about 6,100 triangles and 2 draw calls, no assets. You in her, while you're in her and only then, are one more islander as anyone else on the island is: 7,400 to 10,300 triangles and 2 or 3 draw calls. So 13,500 to 16,400 in all against the stream's 12,000, and 4 or 5 draw calls; the lobster boat she replaces is 37,000 and 12. Her figure's look is the same file Together loads. Her geometry's 0.46 MB of memory against the lobster boat's 2.89 MB (47,053 triangles, 13 meshes), before the figure's own.
+Her own mesh and paddle: about 6,100 triangles and 2 draw calls, no assets. You in her, while you're in her and only then, are one more islander as anyone else on the island is: 7,400 to 10,300 triangles and 2 or 3 draw calls. So 13,500 to 16,400 in all against the stream's 12,000, and 4 or 5 draw calls; the lobster boat she replaces is 37,000 and 12. That overage is accepted as long as the complete check passes (see `tools/` and the release's check): it's the figure's, and only while you're in her. The compass and the radio's panel are the page's, not the scene's: no triangles, no draws. Her figure's look is the same file Together loads. Her geometry's 0.46 MB of memory against the lobster boat's 2.89 MB (47,053 triangles, 13 meshes), before the figure's own.

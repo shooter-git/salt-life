@@ -11,6 +11,7 @@ import { G } from '../src/core/Globals.js';
 import { BOATS } from '../src/world/boat/Boats.js';
 import { Waves } from '../src/ocean/Waves.js';
 import { weatherAt } from '../src/game/Weather.js';
+import { pointOf } from '../src/world/boat/kayak/Compass.js';
 
 const limit = ( hands ) => capsizeHeel( false, hands );
 let bad = 0;
@@ -377,6 +378,9 @@ const yawTurned = ( ctl, seconds, th, st ) => {
 }
 
 ok( KAYAK_HANDLING.rudder === null, 'nothing reads a rudder of hers' );
+
+// her compass's words
+ok( pointOf( 0 ) === 'N' && pointOf( 359 ) === 'N' && pointOf( 90 ) === 'E' && pointOf( 200 ) === 'SSW' && pointOf( 315 ) === 'NW', 'her compass says its points' );
 
 if ( bad ) {
 
