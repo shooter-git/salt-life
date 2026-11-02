@@ -428,6 +428,7 @@ export class DaysOut {
 
 			b.position.set( story.x, G.seaLevel.value, story.z );
 			b.quaternion.setFromAxisAngle( _Y, story.heading );
+			b.liftClear();
 			b.velocity.set( 0, 0, 0 );
 			b.angular.set( 0, 0, 0 );
 			b.hasWater = false;
