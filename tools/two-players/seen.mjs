@@ -1,6 +1,6 @@
 // (M16) What had never been run with two games: what's seen of someone's boat and what they do with her, read and shot from the other's game.
 //   tools/render-slot.sh node tools/two-players/seen.mjs [dir] [port] <part>
-//   parts: fights  kite  kayak  looks  flares  glasses  stern  north  orange
+//   parts: fights  kite  kayak  looks  flares  glasses  stern  north  orange  kayakname  ladder  decks  sternfish  kitefish  drop  ashore
 import { OTHER as other, start } from './lib.mjs';
 const [ out = 'qa-output', PORT = '5221', PART = 'fights' ] = process.argv.slice( 2 );
 const G = await start( { out, port: PORT, drawing: PART === 'north' } ); // (the north side's built only after what the game does in its rests)
@@ -84,6 +84,46 @@ const fightIt = async ( guest, label, ms = 600000 ) => {
 };
 
 const hold = ( who ) => who.game.evaluate( () => { const g = window.__app.game, s = g.state; return { fish: ( s.hold || s.catch || s.fish || [] ).length, last: s.lastCatch ? { species: s.lastCatch.species, kg: s.lastCatch.kg, released: s.lastCatch.released } : null, money: s.money, log: Object.keys( s.log || {} ).length }; } );
+
+// by keys to a place on her
+const walkTo = async ( who, x, z, ms = 20000 ) => {
+
+	await who.game.evaluate( ( A ) => { window.__aim = A; if ( ! window.__aimOn ) { window.__aimOn = true; window.__draws.after.push( () => { const A = window.__aim, p = window.__app.player; if ( A && p.mode === 'deck' ) p.deckYaw = Math.atan2( A.x - p.deckPos.x, A.z - p.deckPos.z ); } ); } }, { x, z } );
+	await who.page.keyboard.down( 'KeyW' );
+	const t0 = Date.now();
+	let s;
+	do {
+
+		s = await who.game.evaluate( () => { const p = window.__app.player, d = p.deckPos; return { x: +d.x.toFixed( 2 ), y: +d.y.toFixed( 2 ), z: +d.z.toFixed( 2 ), mode: p.mode, floor: +p.deckGroundAt( d.x, d.z, d.y + 0.36 ).toFixed( 2 ) }; } );
+		await who.page.waitForTimeout( 60 );
+
+	} while ( Math.hypot( s.x - x, s.z - z ) > 0.3 && Date.now() - t0 < ms );
+	await who.page.keyboard.up( 'KeyW' );
+	await who.game.evaluate( () => { window.__aim = null; } );
+	await frames( who.game, 3 );
+	return { ...s, got: Math.hypot( s.x - x, s.z - z ) <= 0.35 };
+
+};
+
+// R, and F held and let go, looking astern
+const castFrom = async ( who ) => {
+
+	await who.game.evaluate( ( ) => { const p = window.__app.player; p.deckYaw = Math.PI; p.pitch = 0; } );
+	await press( who, 'KeyR', 2 );
+	await frames( who.game, 6 );
+	const eq = await who.game.evaluate( () => { const g = window.__app.game; return { equipped: g.rod.equipped, can: g.canFish, state: g.rod.state, why: window.__app.player.prompt && window.__app.player.prompt.text }; } );
+	// (held for frames of theirs, not the clock: at a frame or two a second the clock can let go before it's been seen)
+	await who.page.keyboard.down( 'KeyF' );
+	await who.game.waitForFunction( () => window.__app.game.rod.state === 'windup', null, { timeout: 120000, polling: 100 } ).catch( () => {} );
+	await frames( who.game, 10 );
+	await who.page.keyboard.up( 'KeyF' );
+	await who.game.waitForFunction( () => window.__app.game.rod.state !== 'windup', null, { timeout: 120000, polling: 100 } ).catch( () => {} );
+	await who.game.waitForFunction( () => { const r = window.__app.game.rod; return r.state === 'floating' || r.state === 'idle'; }, null, { timeout: 120000, polling: 300 } ).catch( () => {} );
+	const c = await who.game.evaluate( () => { const g = window.__app.game, r = g.rod; return { state: r.state, line: +( r.lineOut || 0 ).toFixed( 1 ), inWater: !! r.lineInWater, bobber: r.bobber ? r.bobber.toArray().map( ( v ) => +v.toFixed( 1 ) ) : null, boat: window.__app.player.boat.position.toArray().map( ( v ) => +v.toFixed( 1 ) ), told: g.hud && g.hud._toast ? g.hud._toast.textContent : null }; } );
+	return { eq, c };
+
+};
+
 
 // ---- a guest fights a fish from her chair through to the catch; a rider takes a rod off her spread and fights it through
 if ( PART === 'fights' ) {
@@ -454,7 +494,7 @@ if ( PART === 'flares' ) {
 			await until( guest.game, 'window.__draws.peak.calls > 2', 120000 ).catch( () => {} );
 			await owner.game.evaluate( () => { const a = window.__app; a.game.state.days.flares = 3; a.game.daysOut.fire( 'flare' ); } );
 			await until( guest.game, 'window.__app.game.daysOut.flare.sprite.visible && window.__app.game.daysOut.flare.t < 6.5', 120000 ).catch( () => {} );
-			await guest.page.screenshot( { path: `${ out }/seen-flare-${ name }.png` } );
+			await guest.page.screenshot( { path: `${ out }/seen-flare-${ name }.png`, timeout: 300000 } );
 			const at = await guest.game.evaluate( () => { const a = window.__app, s = a.game.daysOut.flare.sprite; return { shown: s.visible, y: +s.position.y.toFixed( 0 ), size: +s.scale.x.toFixed( 1 ), d: +s.position.distanceTo( a.camera.position ).toFixed( 0 ), left: +a.game.daysOut.flare.t.toFixed( 1 ) }; } );
 			note( `the flare on his screen, ${ name }:`, JSON.stringify( at ) );
 			await guest.game.evaluate( () => { const R = window.__draws; R.after.splice( R.after.indexOf( window.__camHook ), 1 ); R.end.splice( R.end.indexOf( window.__camHook ), 1 ); window.__stop(); } );
@@ -520,40 +560,6 @@ if ( PART === 'stern' ) {
 	note( 'her traps:', JSON.stringify( stowed ) );
 	await G.frames( owner.game, 6 );
 	const aim = async ( who, x, z ) => who.game.evaluate( ( A ) => { const p = window.__app.player; p.deckYaw = Math.atan2( A.x - p.deckPos.x, A.z - p.deckPos.z ); }, { x, z } );
-	const walkTo = async ( who, x, z, ms = 20000 ) => {
-
-		await who.game.evaluate( ( A ) => { window.__aim = A; if ( ! window.__aimOn ) { window.__aimOn = true; window.__draws.after.push( () => { const A = window.__aim, p = window.__app.player; if ( A && p.mode === 'deck' ) p.deckYaw = Math.atan2( A.x - p.deckPos.x, A.z - p.deckPos.z ); } ); } }, { x, z } );
-		await who.page.keyboard.down( 'KeyW' );
-		const t0 = Date.now();
-		let s;
-		do {
-
-			s = await who.game.evaluate( () => { const p = window.__app.player, d = p.deckPos; return { x: +d.x.toFixed( 2 ), y: +d.y.toFixed( 2 ), z: +d.z.toFixed( 2 ), mode: p.mode, floor: +p.deckGroundAt( d.x, d.z, d.y + 0.36 ).toFixed( 2 ) }; } );
-			await who.page.waitForTimeout( 60 );
-
-		} while ( Math.hypot( s.x - x, s.z - z ) > 0.3 && Date.now() - t0 < ms );
-		await who.page.keyboard.up( 'KeyW' );
-		await who.game.evaluate( () => { window.__aim = null; } );
-		await frames( who.game, 3 );
-		return { ...s, got: Math.hypot( s.x - x, s.z - z ) <= 0.35 };
-
-	};
-
-	const castFrom = async ( who ) => {
-
-		await who.game.evaluate( ( ) => { const p = window.__app.player; p.deckYaw = Math.PI; p.pitch = 0; } );
-		await press( who, 'KeyR', 2 );
-		await frames( who.game, 6 );
-		const eq = await who.game.evaluate( () => { const g = window.__app.game; return { equipped: g.rod.equipped, can: g.canFish, state: g.rod.state, why: window.__app.player.prompt && window.__app.player.prompt.text }; } );
-		await who.page.keyboard.down( 'KeyF' );
-		await who.page.waitForTimeout( 1500 );
-		await who.page.keyboard.up( 'KeyF' );
-		await who.game.waitForFunction( () => { const r = window.__app.game.rod; return r.state === 'floating' || r.state === 'idle'; }, null, { timeout: 120000, polling: 300 } ).catch( () => {} );
-		const c = await who.game.evaluate( () => { const g = window.__app.game, r = g.rod; return { state: r.state, line: +( r.lineOut || 0 ).toFixed( 1 ), inWater: !! r.lineInWater, bobber: r.bobber ? r.bobber.toArray().map( ( v ) => +v.toFixed( 1 ) ) : null, boat: window.__app.player.boat.position.toArray().map( ( v ) => +v.toFixed( 1 ) ), told: g.hud && g.hud._toast ? g.hud._toast.textContent : null }; } );
-		return { eq, c };
-
-	};
-
 	// alone, her own: from her cockpit to her stern, down the aisle between the stacks
 	const spots = [ [ 'cockpit', 0, - 1.75 ], [ 'the aisle', 0, - 2.6 ], [ 'the stern, on her centreline', 0, - 3.5 ], [ 'starboard quarter (where her traps are)', 0.95, - 2.8 ], [ 'port quarter (where her traps are)', - 0.95, - 2.8 ], [ 'the stern again', 0, - 3.5 ] ];
 	const alone = [];
@@ -714,6 +720,467 @@ if ( PART === 'orange' ) {
 	await frames( guest.game, 6 );
 	await shot( guest, 'seen-orange-pier' );
 	await still( guest, 'seen-orange-above', [ 30, 25, - 25 ], [ 0, 0, 0 ] );
+
+}
+
+// a fish at the hook of the rod in your hands, and F to strike it: the bite's placed, the strike and the fight are keys
+const hookIt = async ( who, species, kg ) => {
+
+	await who.game.evaluate( ( [ species, kg ] ) => { const g = window.__app.game, r = g.rod; g.bite = { phase: 'take', t: 3000, species, kg, place: null, at: { x: r.bobber.x, z: r.bobber.z } }; }, [ species, kg ] );
+	await frames( who.game, 2 );
+	await press( who, 'KeyF', 2 );
+	return who.game.evaluate( () => { const g = window.__app.game, f = g.fight; return f ? { on: true, species: f.species, kg: f.kg, line: +f.distance.toFixed( 1 ), spool: f.maxDistance, hookM: f.hookM ?? null, rod: g.rod.state } : { on: false, rod: g.rod.state, rig: g.rod.rig, bite: g.bite && g.bite.phase }; } );
+
+};
+
+// where they are through a fight, every frame of theirs, on the boat they're on
+const holdStill = ( who ) => who.game.evaluate( () => {
+
+	const a = window.__app, p = a.player, S = window.__still = { n: 0, off: 0, moved: 0, sunk: 0, from: p.deckPos.clone(), run: true, modes: {} };
+	window.__draws.after.push( () => { if ( ! S.run ) return; S.n ++; S.modes[ p.mode ] = ( S.modes[ p.mode ] || 0 ) + 1; if ( p.mode !== 'deck' ) { S.off ++; return; } S.moved = Math.max( S.moved, Math.hypot( p.deckPos.x - S.from.x, p.deckPos.z - S.from.z ) ); S.sunk = Math.max( S.sunk, p.deckGroundAt( p.deckPos.x, p.deckPos.z, p.deckPos.y + 0.36 ) - p.deckPos.y ); } );
+
+} );
+const stillRead = ( who ) => who.game.evaluate( () => { const S = window.__still; S.run = false; return { frames: S.n, off: S.off, moved: +S.moved.toFixed( 3 ), sunk: +S.sunk.toFixed( 3 ), modes: S.modes }; } );
+const rateOf = async ( ...who ) => note( `frames a second, really: ${ ( await Promise.all( who.map( async ( w ) => `${ w.name } ${ await G.rate( w.game ) }` ) ) ).join( ', ' ) }` );
+const toasts = ( who ) => who.game.evaluate( () => { const g = window.__app.game, was = g.toast; window.__toasts = []; g.toast = function ( t, ms ) { window.__toasts.push( t ); return was.call( this, t, ms ); }; } );
+const told = ( who ) => who.game.evaluate( () => window.__toasts.splice( 0 ) );
+const myTackle = ( who ) => who.game.evaluate( async () => { const { UPGRADES } = await import( '/src/game/Gear.js' ); const g = window.__app.game, u = g.state.upgrades; for ( const [ k, t ] of Object.entries( UPGRADES ) ) if ( ! t.on ) u[ k ] = t.levels.length - 1; g.applyGear(); } );
+
+// ---- a kayak's name on someone else's copy of her
+if ( PART === 'kayakname' ) {
+
+	const owner = await G.open( 'Robin', 'kayak', 30 ), guest = await G.open( 'Sam', 'lobster', 30 );
+	await ready( owner, guest );
+	await owner.game.evaluate( () => { window.__app.player.enterBoat(); } );
+	await G.toSea( owner );
+	await atSea( guest, { x: SEA.x + 12, z: SEA.z - 12 }, 0 );
+	await until( guest.game, `( () => { const o = ${ other }; return o.boat && o.boat.visible && o.boat.userData.type === 'kayak'; } )()`, 240000 );
+	const own = await owner.game.evaluate( () => { const a = window.__app, g = a.game, r = g.state.fleet[ a.boat.id ]; if ( ! r ) return null; r.paint = 'red'; r.name = 'Salty Dog'; g.fleet._dirty = true; g.fleet.plateSign = null; return { id: a.boat.id, record: true, mode: a.player.mode }; } );
+	note( 'her own game:', JSON.stringify( own ) );
+	await frames( owner.game, 8 );
+	const hers = await owner.game.evaluate( () => { const a = window.__app, n = a.boat.group.getObjectByName( 'boat-name' ); return { plate: !! n, shown: !! ( n && n.visible ), at: n ? n.position.toArray().map( ( v ) => +v.toFixed( 2 ) ) : null }; } );
+	const came = await until( guest.game, `( () => { const o = ${ other }; return o.boatName === 'Salty Dog' && o.boat.getObjectByName( 'boat-name' ); } )()`, 300000 ).then( () => true, () => false );
+	const r = await guest.game.evaluate( `( () => { const o = ${ other }, n = o.boat.getObjectByName( 'boat-name' ); return { id: o.boat.userData.type, name: o.boatName, plate: !! n, shown: !! ( n && n.visible ), at: n ? n.position.toArray().map( ( v ) => +v.toFixed( 2 ) ) : null, d: +o.boat.position.distanceTo( window.__app.camera.position ).toFixed( 1 ), poseAge: +( performance.now() / 1000 - o.last ).toFixed( 1 ) }; } )()` );
+	say( came && r.plate && r.shown && hers.plate && JSON.stringify( r.at ) === JSON.stringify( hers.at ), `her name on his copy of the kayak, where it is on hers: his ${ JSON.stringify( r ) }, hers ${ JSON.stringify( hers ) }` );
+	await still( guest, 'seen-kayakname-guest', [ 0.8, 1.1, - 3.4 ], [ 0, 0.3, - 1.6 ] );
+	await still( guest, 'seen-kayakname-close', [ 0.25, 0.75, - 3.0 ], [ 0, 0.22, - 1.9 ] );
+	await owner.game.evaluate( () => { const a = window.__app, p = a.player; p.camMode = 'third'; p.orbitDist = 2.2; p.orbitPitch = 0.3; p.orbitYaw = a.boatCtl.getYaw() + Math.PI; } );
+	await frames( owner.game, 4 );
+	await shot( owner, 'seen-kayakname-her-own' );
+	// past 40 m, not drawn
+	await atSea( guest, { x: SEA.x + 45, z: SEA.z - 45 }, 0 );
+	await until( guest.game, `( () => { const o = ${ other }, n = o.boat.getObjectByName( 'boat-name' ); return n && ! n.visible; } )()`, 120000 ).catch( () => {} );
+	const far = await guest.game.evaluate( `( () => { const o = ${ other }, n = o.boat.getObjectByName( 'boat-name' ); return { plate: !! n, shown: !! ( n && n.visible ), d: +o.boat.position.distanceTo( window.__app.camera.position ).toFixed( 1 ) }; } )()` );
+	say( ! far.shown, `and from ${ far.d } m it's not drawn: ${ JSON.stringify( far ) }` );
+	await rateOf( owner, guest );
+
+}
+
+// ---- the console's dive ladder, for a guest: in the water, up it by E, down it by E, and with her fitted without one
+if ( PART === 'ladder' ) {
+
+	const owner = await G.open( 'Robin', 'console', 30 ), guest = await G.open( 'Sam', 'lobster', 30 );
+	await ready( owner, guest );
+	await G.buy( owner );
+	await owner.game.evaluate( () => window.__app.player.boardBoat() );
+	await G.toSea( owner );
+	await until( guest.game, `( () => { const o = ${ other }; return o.boat && o.boat.visible && o.cur.boat && Math.hypot( o.cur.boat.pos.x + 2600, o.cur.boat.pos.z - 3000 ) < 30; } )()`, 240000 ).catch( () => {} );
+	// (the fit said, and her deck all there on his phone: as before an offer)
+	const ladderOf = `( async () => { const { LADDER } = await import( '/src/world/boat/console/ConsoleStern.js' ); return { x: LADDER.x, z: LADDER.z, top: LADDER.top }; } )()`;
+	const L = await guest.game.evaluate( ladderOf );
+	const offWater = `( () => { const a = window.__app, o = ${ other }, c = o.cur, f = c.drawn || c.boat, P = a.camera.position.constructor, q = new P( ${ L.x }, 0, ${ L.z } - 1.0 ).applyQuaternion( f.quat ).add( f.pos ), p = a.player; if ( p.mode === 'deck' ) return true; p.mode = 'swim'; p.position.set( q.x, f.pos.y - 0.2, q.z ); p.velocity.set( 0, 0, 0 ); return !! p.rideOffer; } )()`;
+	await stand( guest, SEA.x, SEA.z - 6 );
+	await until( guest.game, offWater, 240000 );
+	const swim = await guest.game.evaluate( () => { const p = window.__app.player; return { mode: p.mode, prompt: p.prompt && p.prompt.text, offer: p.rideOffer && p.rideOffer.name, from: ( ( f ) => f && { text: f.text, at: f.at.toArray(), reach: f.reach } )( p.rideOffer.boat.model.boardFrom( 'swim' ) ), fitted: p.rideOffer.boat.model.fitted }; } );
+	note( 'in the water by her ladder:', JSON.stringify( swim ) );
+	const holdHere = await guest.game.evaluate( ( q ) => { window.__hold = true; return true; }, null );
+	await press( guest, 'KeyE', 3 );
+	const up = await guest.game.evaluate( () => { const p = window.__app.player, d = p.deckPos; return { mode: p.mode, riding: p.riding, at: d.toArray().map( ( v ) => +v.toFixed( 3 ) ), floor: +p.deckGroundAt( d.x, d.z, d.y + 0.36 ).toFixed( 3 ), inRailZone: p.prompt && p.prompt.text, own: p.boat === window.__app.boatCtl }; } );
+	say( up.mode === 'deck' && up.riding && Math.abs( up.at[ 0 ] - L.x ) < 0.5 && Math.abs( up.at[ 1 ] - up.floor ) < 0.05, `up her ladder by E, from the water: ${ JSON.stringify( up ) }; offered as "${ swim.prompt }"` );
+	await frames( guest.game, 6 );
+	const up2 = await guest.game.evaluate( () => { const p = window.__app.player, d = p.deckPos; return { at: d.toArray().map( ( v ) => +v.toFixed( 3 ) ), floor: +p.deckGroundAt( d.x, d.z, d.y + 0.36 ).toFixed( 3 ), prompt: p.prompt && p.prompt.text }; } );
+	say( Math.abs( up2.at[ 1 ] - up2.floor ) < 0.05, `and he stands on her platform: ${ JSON.stringify( up2 ) }` );
+	await until( owner.game, `${ other }.cur.mode === 'deck' && ${ other }.cur.ride`, 60000 ).catch( () => {} );
+	note( 'Robin sees:', JSON.stringify( await owner.game.evaluate( `( () => { const o = ${ other }, c = o.cur; return { mode: c.mode, ride: c.ride, deck: c.deck && c.deck.toArray().map( ( v ) => +v.toFixed( 2 ) ), shown: o.shown }; } )()` ) ) );
+	// the ladder as each has it, stopped with nobody at her helm
+	const looks = await owner.game.evaluate( () => { const a = window.__app; return { hers: a.boat._ladderDown, driven: a.boatCtl.driven }; } );
+	note( 'her ladder on her game (down?):', JSON.stringify( looks ), '(his copy is dressed ladderUp whenever fitted: BoatCopies dressCopy)' );
+	await still( guest, 'seen-ladder-guest-from-water', [ 0.9, 1.0, - 6.2 ], [ 0.6, 0.3, - 3.4 ] );
+	await owner.game.evaluate( () => { const a = window.__app, p = a.player; p.camMode = 'third'; p.orbitDist = 5; p.orbitPitch = 0.1; p.orbitYaw = a.boatCtl.getYaw(); } );
+	await frames( owner.game, 4 );
+	await shot( owner, 'seen-ladder-owner-sees' );
+	await owner.game.evaluate( () => { window.__app.player.camMode = 'first'; } );
+	// through her door by keys and back to the ladder
+	const inTo = await walkTo( guest, - 0.74, - 2.6 );
+	const inTo2 = await walkTo( guest, 0.85, - 1.4 );
+	const back1 = await walkTo( guest, - 0.74, - 2.6 );
+	const back2 = await walkTo( guest, L.x, L.z + 0.3 );
+	say( inTo.got && inTo2.got && back1.got && back2.got, `by keys through her door to the cockpit and back to the ladder: ${ JSON.stringify( back2 ) }` );
+	await frames( guest.game, 6 );
+	const atL = await guest.game.evaluate( () => { const p = window.__app.player; return { prompt: p.prompt && p.prompt.text, at: p.deckPos.toArray().map( ( v ) => +v.toFixed( 2 ) ) }; } );
+	note( 'at the ladder:', JSON.stringify( atL ) );
+	await press( guest, 'KeyE', 3 );
+	const down = await guest.game.evaluate( ( L ) => { const a = window.__app, p = a.player, o = a.together.others.values().next().value, c = o.cur, f = c.drawn || c.boat, P = a.camera.position.constructor, q = new P( L.x, 0, L.z - 0.45 ).applyQuaternion( f.quat ).add( f.pos ); return { mode: p.mode, riding: p.riding, y: +p.position.y.toFixed( 2 ), fromFoot: +Math.hypot( p.position.x - q.x, p.position.z - q.z ).toFixed( 2 ), own: p.boat === a.boatCtl }; }, L );
+	say( /ladder/i.test( atL.prompt || '' ) && down.mode === 'swim' && ! down.riding && down.fromFoot < 1 && down.own, `down her ladder by E: told "${ atL.prompt }", ${ JSON.stringify( down ) }` );
+	await until( owner.game, `${ other }.cur.mode === 'swim'`, 60000 ).catch( () => {} );
+	note( 'Robin sees:', JSON.stringify( await owner.game.evaluate( `( () => { const o = ${ other }, c = o.cur; return { mode: c.mode, ride: c.ride, shown: o.shown }; } )()` ) ) );
+	// and up again, as she lies: E
+	await until( guest.game, offWater, 120000 ).catch( () => {} );
+	await press( guest, 'KeyE', 3 );
+	say( await guest.game.evaluate( () => window.__app.player.riding && window.__app.player.mode === 'deck' ), 'and up again by E' );
+	// her fitted without one
+	const was = await guest.game.evaluate( `${ other }.cur.fit` );
+	await owner.game.evaluate( async () => { const { UPGRADES } = await import( '/src/game/Gear.js' ); const a = window.__app, g = a.game, u = g.state.upgrades; for ( const [ k, t ] of Object.entries( UPGRADES ) ) if ( t.on === a.boat.id && t.levels.some( ( l ) => l.diveLadder ) ) u[ k ] = 0; g.applyGear(); } );
+	await until( guest.game, `${ other }.cur.fit !== ${ was }`, 60000 ).catch( () => {} );
+	await frames( guest.game, 4 );
+	await walkTo( guest, L.x, L.z + 0.3 );
+	await frames( guest.game, 6 );
+	const bare = await guest.game.evaluate( () => { const p = window.__app.player, M = p.boat.model; return { fitted: M.fitted.diveLadder, prompt: p.prompt && p.prompt.text, from: M.boardFrom( 'swim' ).text, over: M.overboard( p.deckPos, 1 ).text }; } );
+	say( bare.fitted === false && bare.over === 'Jump overboard' && bare.from === 'Haul yourself aboard', `no ladder on hers: none for him: ${ JSON.stringify( bare ) }` );
+	await rateOf( owner, guest );
+
+}
+
+// ---- the lobster boat's bench, foredeck and roof, by keys: W, and Space where it wants a hop. As a guest, on her copy, stopped
+if ( PART === 'decks' ) {
+
+	const owner = await G.open( 'Robin', 'lobster', 30 ), guest = await G.open( 'Sam', 'console', 30 );
+	await ready( owner, guest );
+	await owner.game.evaluate( () => window.__app.player.boardBoat() );
+	await G.toSea( owner );
+	await stand( guest, SEA.x + 8, SEA.z );
+	say( await G.aboard( owner, guest ), 'Sam\'s aboard her' );
+	await G.helm( owner );
+	await guest.game.evaluate( () => {
+
+		const a = window.__app, p = a.player, S = window.__decks = { n: 0, off: 0, sunk: 0, top: 0, run: true };
+		window.__draws.after.push( () => { if ( ! S.run ) return; S.n ++; if ( p.mode !== 'deck' || ! p.riding ) { S.off ++; return; } if ( p.deckGrounded ) S.sunk = Math.max( S.sunk, p.deckGroundAt( p.deckPos.x, p.deckPos.z, p.deckPos.y + 0.36 ) - p.deckPos.y ); S.top = Math.max( S.top, p.deckPos.y ); } );
+
+	} );
+	// holding W toward a point, with a hop every so often, till he's near it at the height asked; up to tries hops
+	const hopTo = async ( name, x, z, y, tries = 8 ) => {
+
+		await guest.game.evaluate( ( A ) => { window.__aim = A; if ( ! window.__aimOn ) { window.__aimOn = true; window.__draws.after.push( () => { const A = window.__aim, p = window.__app.player; if ( A && p.mode === 'deck' ) p.deckYaw = Math.atan2( A.x - p.deckPos.x, A.z - p.deckPos.z ); } ); } }, { x, z } );
+		await guest.page.keyboard.down( 'KeyW' );
+		let s, hops = 0;
+		const f0 = await guest.game.evaluate( () => window.__draws.frames );
+		for ( ;; ) {
+
+			s = await guest.game.evaluate( () => { const p = window.__app.player, d = p.deckPos; return { f: window.__draws.frames, x: +d.x.toFixed( 2 ), y: +d.y.toFixed( 2 ), z: +d.z.toFixed( 2 ), grounded: p.deckGrounded, mode: p.mode, riding: p.riding }; } );
+			if ( s.mode !== 'deck' || ! s.riding ) break;
+			const here = Math.hypot( s.x - x, s.z - z ) < 0.35 && Math.abs( s.y - y ) < 0.12;
+			if ( here && s.grounded ) break;
+			if ( s.grounded && hops < tries && s.f - f0 > ( hops + 1 ) * 14 ) { hops ++; await press( guest, 'Space', 1 ); }
+			if ( s.f - f0 > ( tries + 1 ) * 26 ) break;
+			await guest.page.waitForTimeout( 50 );
+
+		}
+
+		await guest.page.keyboard.up( 'KeyW' );
+		await guest.game.evaluate( () => { window.__aim = null; } );
+		await frames( guest.game, 4 );
+		const at = await guest.game.evaluate( () => { const p = window.__app.player, d = p.deckPos; return { x: +d.x.toFixed( 2 ), y: +d.y.toFixed( 2 ), z: +d.z.toFixed( 2 ), floor: +p.deckGroundAt( d.x, d.z, d.y + 0.36 ).toFixed( 2 ), mode: p.mode, riding: p.riding, fell: p.mode !== 'deck' }; } );
+		const got = Math.hypot( at.x - x, at.z - z ) < 0.45 && Math.abs( at.y - y ) < 0.15;
+		note( `${ name }: asked ${ x }, ${ y }, ${ z }; at ${ at.x }, ${ at.y }, ${ at.z }, floor ${ at.floor }, ${ hops } hops, ${ s.f - f0 } frames` );
+		return { ...at, got, hops };
+
+	};
+
+	await guest.game.evaluate( () => { const p = window.__app.player; p.deckPos.set( 0, 0.35, - 1.75 ); p.deckVel.set( 0, 0, 0 ); } );
+	await frames( guest.game, 3 );
+	// into the house, and onto her bench
+	await hopTo( 'in the house', 0.1, 0.0, 0.35, 0 );
+	const bench = await hopTo( 'the bench', 0.86, 0.45, 0.82 );
+	say( bench.got, `the house's bench, by keys: ${ JSON.stringify( bench ) }` );
+	await shot( guest, 'seen-decks-bench' );
+	// off the bench, over her dash: the only way forward there is
+	const fore = await hopTo( 'foredeck, aft', 0.5, 1.9, 1.33 );
+	say( fore.got, `her foredeck, by keys, from the bench: ${ JSON.stringify( fore ) }` );
+	const fore2 = await hopTo( 'foredeck', 0, 2.8, 1.45 );
+	const bow = await hopTo( 'the bow', 0, 3.7, 1.57 );
+	say( fore2.got && bow.got, `on up her foredeck to the bow, by keys: ${ JSON.stringify( bow ) }` );
+	await shot( guest, 'seen-decks-bow' );
+	await until( owner.game, `( () => { const d = ${ other }.cur.deck; return d && d.y > 1.4; } )()`, 60000 ).catch( () => {} );
+	note( 'Robin sees him:', JSON.stringify( await owner.game.evaluate( `( () => { const c = ${ other }.cur, o = ${ other }; return { deck: c.deck && c.deck.toArray().map( ( v ) => +v.toFixed( 2 ) ), shown: o.shown, mode: c.mode }; } )()` ) ) );
+	// the roof: from the top of her foredeck, hop aft at it
+	const edge = await hopTo( 'foredeck, by the windshield', 0.3, 1.6, 1.33, 2 );
+	const roof = await hopTo( 'the roof', 0, 0.2, 2.41, 8 );
+	say( roof.got, `her roof, by keys, from the foredeck: ${ JSON.stringify( roof ) } (from ${ JSON.stringify( edge ) })` );
+	const offerUp = await guest.game.evaluate( () => { const p = window.__app.player, d = p.deckPos, M = p.boat.model; return { prompt: p.prompt && p.prompt.text, at: d.toArray().map( ( v ) => +v.toFixed( 2 ) ), rails: M.exitPoints.map( ( e ) => +Math.hypot( d.x - e.x, d.z - e.z ).toFixed( 2 ) ) }; } );
+	note( 'what\'s offered on her foredeck:', JSON.stringify( offerUp ) );
+	const S = await guest.game.evaluate( () => { const S = window.__decks; S.run = false; return { frames: S.n, off: S.off, sunk: +S.sunk.toFixed( 3 ), highest: +S.top.toFixed( 2 ) }; } );
+	say( S.off === 0 && S.sunk < 0.03, `all of it: ${ S.off } of ${ S.frames } frames off her, ${ S.sunk } m under her floor, highest ${ S.highest } m` );
+	// back to her cockpit, by keys
+	const home = await hopTo( 'back in her cockpit', 0, - 1.75, 0.35, 4 );
+	say( home.got, `back to her cockpit from there, by keys: ${ JSON.stringify( home ) }` );
+	if ( ! home.got ) {
+
+		// the way off, from about the middle of her foredeck
+		await hopTo( 'the middle of her foredeck', 0.9, 2.6, 1.45, 0 );
+		const off = await guest.game.evaluate( () => { const p = window.__app.player; return p.prompt && p.prompt.text; } );
+		await press( guest, 'KeyE', 3 );
+		const went = await guest.game.evaluate( () => { const p = window.__app.player; return { mode: p.mode, riding: p.riding }; } );
+		say( off && went.mode === 'swim', `over her side from her foredeck by E: offered "${ off }", ${ JSON.stringify( went ) }` );
+
+	}
+
+	await rateOf( owner, guest );
+
+}
+
+// ---- the lobster boat's stern, her traps stowed: a fish cast for, struck and played to the boat from there, her owner and a guest
+if ( PART === 'sternfish' ) {
+
+	const owner = await G.open( 'Robin', 'lobster', 30 ), guest = await G.open( 'Sam', 'console', 30 );
+	await ready( owner, guest );
+	await owner.game.evaluate( () => { const a = window.__app, g = a.game; g.state.upgrades.traps = 3; g.applyGear(); a.player.boardBoat(); } );
+	await myTackle( owner );
+	await myTackle( guest );
+	await G.toSea( owner );
+	await owner.page.waitForTimeout( 2000 );
+	await frames( owner.game, 6 );
+	note( 'her traps:', JSON.stringify( await owner.game.evaluate( () => { const a = window.__app, w = a.game.traps; return { drawn: w.meshes ? w.meshes.traps.count : null, solid: a.boat.colliders.filter( ( c ) => c.tag === 'trap' ).length }; } ) ) );
+	await toasts( owner );
+	await toasts( guest );
+	const play = async ( who, label, shots ) => {
+
+		await walkTo( who, 0, - 1.75 );
+		await walkTo( who, 0, - 2.6 );
+		const at = await walkTo( who, 0, - 3.5 );
+		say( at.got, `${ label }: to her stern by keys, down the aisle between her stacks: ${ JSON.stringify( at ) }` );
+		const c = await castFrom( who );
+		say( c.c.state === 'floating' && c.c.inWater, `${ label }: a cast from it: rod ${ c.c.state }, line ${ c.c.line } m` );
+		await holdStill( who );
+		const hooked = await hookIt( who, 'mahi', 4 );
+		say( hooked.on, `${ label }: struck by F: ${ JSON.stringify( hooked ) }` );
+		if ( hooked.on && shots ) { await frames( who.game, 6 ); await shot( who, `seen-sternfish-${ shots }-fighting` ); }
+		const end = hooked.on ? await fightIt( who, `${ label }, the mahi` ) : null;
+		await frames( who.game, 6 );
+		const l = await hold( who ), s = await stillRead( who );
+		note( `${ label }: told:`, JSON.stringify( await told( who ) ) );
+		say( l.last && l.last.species === 'mahi' && s.off === 0 && s.moved < 0.3 && s.sunk < 0.03, `${ label }: played to the boat from her stern and landed: ${ JSON.stringify( l.last ) }, ${ JSON.stringify( s ) }, ended ${ JSON.stringify( end ) }` );
+		await who.game.evaluate( () => { const h = window.__app.game.hud; if ( h && h.catchOpen && h.closeCatch ) h.closeCatch(); } );
+		await frames( who.game, 3 );
+		await who.game.evaluate( () => { const g = window.__app.game; g.cancelLine( true ); if ( g.rod.equipped ) g.rod.equip( false ); } );
+
+	};
+
+	await owner.game.evaluate( () => { const p = window.__app.player; p.deckPos.set( 0, 0.35, - 1.2 ); p.deckVel.set( 0, 0, 0 ); } );
+	await frames( owner.game, 3 );
+	await play( owner, 'Robin, her own', 'owner' );
+	await stand( guest, SEA.x + 8, SEA.z );
+	say( await G.aboard( owner, guest ), 'Sam\'s aboard her' );
+	await guest.game.evaluate( () => { const p = window.__app.player; p.deckPos.set( 0, 0.35, - 1.75 ); p.deckVel.set( 0, 0, 0 ); } );
+	await frames( guest.game, 3 );
+	await play( guest, 'Sam, a guest', 'guest' );
+	say( await guest.game.evaluate( () => window.__app.player.riding ), 'and he\'s still riding' );
+	await rateOf( owner, guest );
+
+}
+
+// ---- a fish on her kite, seen on a guest's game: the real flight, by keys; the bite placed; the strike and the fight keys
+if ( PART === 'kitefish' ) {
+
+	const owner = await G.open( 'Robin', 'sportfisher', 30 ), guest = await G.open( 'Sam', 'lobster', 30 );
+	await ready( owner, guest );
+	await G.buy( owner );
+	await myTackle( owner );
+	await owner.game.evaluate( () => { const a = window.__app; a.together.setWeather( 'breezy', 0 ); a.weather.live = null; a.player.boardBoat(); } );
+	await G.toSea( owner );
+	await guest.game.waitForFunction( () => window.__app.weatherPick() === 'breezy', null, { timeout: 60000, polling: 500 } ).catch( () => note( '(the breeze didn\'t reach Sam)' ) );
+	await stand( guest, SEA.x + 8, SEA.z );
+	say( await G.aboard( owner, guest ), 'Sam\'s aboard her' );
+	await guest.game.evaluate( () => { const p = window.__app.player; p.deckPos.set( 0, 0.5, - 3.75 ); p.deckVel.set( 0, 0, 0 ); } );
+	await toasts( owner );
+	// her rod, her rig, her bait, by keys
+	await until( owner.game, `( () => { const a = window.__app; return a.weather.live && a.weather.live.wind > 3; } )()`, 180000 ).catch( () => {} );
+	await owner.game.evaluate( async () => { const { G: GL } = await import( '/src/core/Globals.js' ); const a = window.__app, g = a.game, p = a.player; g.state.bait.mullet = 6; p.deckPos.set( 0, 0.5, - 4.8 ); p.deckVel.set( 0, 0, 0 ); window.__wind = () => +GL.windSpeed.value.toFixed( 1 ); } );
+	await frames( owner.game, 3 );
+	await press( owner, 'KeyR', 2 );
+	await frames( owner.game, 3 );
+	for ( let i = 0; i < 8 && await owner.game.evaluate( () => window.__app.game.rigs.pick !== 'kite' ); i ++ ) await press( owner, 'KeyC', 2 );
+	const rig = await owner.game.evaluate( () => { const g = window.__app.game; return { pick: g.rigs.pick, bait: g.state.baitPick, equipped: g.rod.equipped, wind: window.__wind(), standUp: g.state.stats.standUp, avail: g.rigs.available( 'kite' ) }; } );
+	note( 'her rig by keys:', JSON.stringify( rig ) );
+	await press( owner, 'KeyF', 2 );
+	await frames( owner.game, 3 );
+	let k = await owner.game.evaluate( () => { const r = window.__app.game.rigs; return { kite: !! r.kite, told: window.__toasts.slice( - 3 ) }; } );
+	say( k.kite, `her kite up by F: ${ JSON.stringify( k ) }` );
+	await until( owner.game, 'window.__app.game.rigs.kite && window.__app.game.rigs.kite.up >= 1', 400000 ).catch( () => note( '(her kite\'s not all the way up in time)' ) );
+	await until( guest.game, `${ other }.cur.kite`, 90000 ).catch( () => {} );
+	await frames( guest.game, 3 );
+	// up there: his game against hers
+	const kiteAt = ( who, what ) => who.game.evaluate( what );
+	const herK = await owner.game.evaluate( () => { const a = window.__app, r = a.game.rigs, K = r.kite; return K ? { at: K.at.toArray().map( ( v ) => +v.toFixed( 1 ) ), up: K.up, rod: a.game.rod.state, bobber: a.game.rod.bobber.toArray().map( ( v ) => +v.toFixed( 1 ) ) } : null; } );
+	const hisK = await guest.game.evaluate( `( () => { const o = ${ other }, c = o.cur, D = window.__app.together.spread.draw, T = o.tackle; return { kite: c.kite, rod: c.rod, bobber: c.bobber && c.bobber.toArray().map( ( v ) => +v.toFixed( 1 ) ), mesh: !! D && D.mesh.visible, line: T.line.visible, float: T.bobber.visible }; } )()` );
+	const gap = hisK.kite && herK ? Math.hypot( hisK.kite[ 0 ] - herK.at[ 0 ], hisK.kite[ 1 ] - herK.at[ 1 ], hisK.kite[ 2 ] - herK.at[ 2 ] ) : null;
+	say( hisK.kite && hisK.mesh, `her kite up, on his game: ${ JSON.stringify( hisK ) }; on hers ${ JSON.stringify( herK ) }; ${ gap === null ? '?' : gap.toFixed( 1 ) } m apart` );
+	await guest.game.evaluate( `( () => { const a = window.__app, p = a.player, k = ${ other }.cur.kite, b = p.boat; p.deckYaw = Math.atan2( k[ 0 ] - b.position.x, k[ 2 ] - b.position.z ) - b.getYaw(); p.pitch = 0.3; } )()` );
+	await frames( guest.game, 3 );
+	await shot( guest, 'seen-kitefish-up-guest' );
+	// a fish on it
+	const hooked = await hookIt( owner, 'mahi', 7 );
+	say( hooked.on, `a fish on her kite, struck by F: ${ JSON.stringify( hooked ) }` );
+	const herF = await owner.game.evaluate( () => { const a = window.__app, r = a.game.rigs, K = r.kite; return { kiteDown: K ? K.down : null, up: K ? +K.up.toFixed( 2 ) : null, hung: !! a.game.rod.hung, rod: a.game.rod.state, bobber: a.game.rod.bobber.toArray().map( ( v ) => +v.toFixed( 1 ) ) }; } );
+	note( 'on her game, the fish on:', JSON.stringify( herF ) );
+	await until( guest.game, `${ other }.cur.rod === 5`, 120000 ).catch( () => note( '(the fish on not said to his game in time)' ) );
+	await frames( guest.game, 3 );
+	const seen = await guest.game.evaluate( `( () => { const o = ${ other }, c = o.cur, T = o.tackle; return { rod: c.rod, tension: c.tension, kite: c.kite, bobber: c.bobber && c.bobber.toArray().map( ( v ) => +v.toFixed( 1 ) ), rodShown: T.rod.visible, line: T.line.visible, float: T.bobber.visible, job: o.job }; } )()` );
+	const hers2 = await owner.game.evaluate( () => { const a = window.__app, r = a.game.rigs, K = r.kite; return { kiteLeft: K ? +K.up.toFixed( 2 ) : null, bobber: a.game.rod.bobber.toArray().map( ( v ) => +v.toFixed( 1 ) ) }; } );
+	const off = seen.bobber ? Math.hypot( seen.bobber[ 0 ] - hers2.bobber[ 0 ], seen.bobber[ 2 ] - hers2.bobber[ 2 ] ) : null;
+	say( seen.rod === 5 && seen.line && seen.rodShown && off !== null && off < 25, `on his game: she's a fish on: ${ JSON.stringify( seen ) }; where it's fighting ${ off === null ? '?' : off.toFixed( 1 ) } m from where it is on hers ${ JSON.stringify( hers2 ) }` );
+	note( seen.kite ? 'his kite\'s still up with the fish on' : `his kite's gone the moment the fish is on; hers has ${ hers2.kiteLeft } of its way to come down` );
+	await guest.game.evaluate( `( () => { const a = window.__app, p = a.player, k = ${ other }.cur.bobber, b = p.boat; if ( k ) { p.deckYaw = Math.atan2( k.x - b.position.x, k.z - b.position.z ) - b.getYaw(); p.pitch = - 0.05; } } )()` );
+	await frames( guest.game, 3 );
+	await shot( guest, 'seen-kitefish-on-guest' );
+	await owner.game.evaluate( ( ) => { const a = window.__app, p = a.player; p.camMode = 'first'; } );
+	await shot( owner, 'seen-kitefish-on-owner' );
+	// fought through, and his game told
+	const end = await fightIt( owner, 'the mahi on the kite' );
+	await frames( owner.game, 6 );
+	const l = await hold( owner );
+	await until( guest.game, `${ other }.cur.rod !== 5`, 90000 ).catch( () => {} );
+	await frames( guest.game, 3 );
+	const after = await guest.game.evaluate( `( () => { const o = ${ other }, c = o.cur; return { rod: c.rod, fish: o.fish && o.fish.visible, kite: c.kite, cheer: o.cheer || null }; } )()` );
+	note( 'her toasts:', JSON.stringify( await told( owner ) ) );
+	const gone = await owner.game.evaluate( () => { const r = window.__app.game.rigs; return { kite: !! r.kite, inChair: r.inChair }; } );
+	say( l.last && l.last.species === 'mahi', `fought through on hers: ${ JSON.stringify( l.last ) }, ended ${ JSON.stringify( end ) }; his game ${ JSON.stringify( after ) }; her kite after: ${ JSON.stringify( gone ) }` );
+	await rateOf( owner, guest );
+
+}
+
+// ---- a rider's own lead, over the side of her: rod and rig by keys, F to drop it, F to stop it, a fish struck by F and played
+if ( PART === 'drop' ) {
+
+	const DEEP = 'redSnapper';
+
+	const owner = await G.open( 'Robin', 'sportfisher', 30 ), guest = await G.open( 'Sam', 'lobster', 30 );
+	await ready( owner, guest );
+	await G.buy( owner );
+	await owner.game.evaluate( () => window.__app.player.boardBoat() );
+	await G.toSea( owner, { x: - 2600, z: 3000 } );
+	if ( process.env.DROP_TACKLE ) await myTackle( guest ); // (as he comes, he has the stock reel)
+	await stand( guest, SEA.x + 8, SEA.z );
+	say( await G.aboard( owner, guest ), 'Sam\'s aboard her' );
+	await G.helm( owner );
+	await guest.game.evaluate( () => { const a = window.__app, p = a.player, g = a.game; p.deckPos.set( 1.5, 0.5, - 5.0 ); p.deckVel.set( 0, 0, 0 ); p.deckYaw = Math.PI / 2; g.state.bait.squid = 6; } );
+	await toasts( guest );
+	await frames( guest.game, 3 );
+	const before = await guest.game.evaluate( () => { const a = window.__app, g = a.game, s = g.state.stats; return { own: a.boat.id, electric: !! s.electricReel, spool: s.spoolM, avail: g.rigs.available( 'drop' ), aboard: g.rigs.aboard, depth: +( - a.terrainData.heightAt( a.player.position.x, a.player.position.z ) ).toFixed( 0 ) }; } );
+	note( 'before:', JSON.stringify( before ) );
+	await press( guest, 'KeyR', 2 );
+	await frames( guest.game, 3 );
+	for ( let i = 0; i < 8 && await guest.game.evaluate( () => window.__app.game.rigs.pick !== 'drop' ); i ++ ) await press( guest, 'KeyC', 2 );
+	const rig = await guest.game.evaluate( () => { const g = window.__app.game; return { pick: g.rigs.pick, bait: g.state.baitPick, equipped: g.rod.equipped, state: g.rod.state }; } );
+	say( rig.pick === 'drop', `C comes round to the deep drop, riding: ${ JSON.stringify( rig ) }` );
+	await press( guest, 'KeyF', 2 );
+	await frames( guest.game, 6 );
+	const going = await guest.game.evaluate( () => { const g = window.__app.game, r = g.rod; return { rig: r.rig, state: r.state, hookM: +r.hookM.toFixed( 1 ), reach: r.dropReach, spool: r.spoolM, depth: +r.depth.toFixed( 0 ), waiting: g.rigs._waiting, bait: g.hookBait, inWater: !! r.lineInWater, tip: r.tip.toArray().map( ( v ) => +v.toFixed( 1 ) ), bobber: r.bobber.toArray().map( ( v ) => +v.toFixed( 1 ) ) }; } );
+	say( going.rig === 'drop' && going.state === 'floating' && going.waiting && going.bait, `his lead away by F: ${ JSON.stringify( going ) }` );
+	// down a way, as far as his own line and past it
+	const deep = Math.min( going.depth - 2, before.spool + 40 );
+	note( `letting it go to ${ deep } m (his own spool's ${ before.spool } m, the bottom ${ going.depth } m)` );
+	await until( guest.game, `window.__app.game.rod.hookM >= ${ Math.min( deep, 60 ) } || window.__app.game.rod.settled`, 400000 ).catch( () => note( '(not that far down in time)' ) );
+	const firstStop = await guest.game.evaluate( () => { const r = window.__app.game.rod; return { hookM: +r.hookM.toFixed( 1 ), settled: r.settled, line: +r.lineOut.toFixed( 1 ) }; } );
+	await until( owner.game, `${ other }.cur.rod >= 3`, 60000 ).catch( () => {} );
+	const seenO = await owner.game.evaluate( `( () => { const o = ${ other }, c = o.cur, T = o.tackle; return { rod: c.rod, bobber: c.bobber && c.bobber.toArray().map( ( v ) => +v.toFixed( 1 ) ), line: T.line.visible, rodShown: T.rod.visible, mode: c.mode }; } )()` );
+	note( 'at', JSON.stringify( firstStop ), '; Robin sees:', JSON.stringify( seenO ) );
+	await press( guest, 'KeyF', 2 );
+	await frames( guest.game, 6 );
+	await until( guest.game, 'window.__app.game.rod.settled && ! window.__app.game.rigs._waiting', 120000 ).catch( () => {} );
+	const stopped = await guest.game.evaluate( () => { const g = window.__app.game, r = g.rod; return { hookM: +r.hookM.toFixed( 1 ), stopM: r.stopM, settled: r.settled, waiting: g.rigs._waiting, bite: g.bite && g.bite.phase, told: window.__toasts.slice( - 2 ) }; } );
+	say( stopped.settled && stopped.stopM !== null && stopped.bite === 'wait', `F stops it there: ${ JSON.stringify( stopped ) }` );
+	await shot( guest, 'seen-drop-guest' );
+	await owner.game.evaluate( () => { const a = window.__app, p = a.player; p.camMode = 'third'; p.orbitDist = 14; p.orbitYaw = a.boatCtl.getYaw() + 2.4; p.orbitPitch = 0.3; } );
+	await frames( owner.game, 4 );
+	await shot( owner, 'seen-drop-owner-sees' );
+	await owner.game.evaluate( () => { window.__app.player.camMode = 'first'; } );
+	await holdStill( guest );
+	const hooked = await hookIt( guest, DEEP, 3 );
+	say( hooked.on, `a fish on his lead, struck by F: ${ JSON.stringify( hooked ) }` );
+	const hisMoney = await hold( guest ), herHold = await hold( owner );
+	const end = hooked.on ? await fightIt( guest, 'on his lead' ) : null;
+	await frames( guest.game, 6 );
+	const after = await hold( guest ), herAfter = await hold( owner ), s = await stillRead( guest );
+	note( 'his toasts:', JSON.stringify( await told( guest ) ) );
+	say( after.last && after.last.species === DEEP && end && end.riding && ( ! herAfter.last || herAfter.last.species !== DEEP ), `played up by keys and in his own hold: ${ JSON.stringify( after.last ) }, ended ${ JSON.stringify( end ) }; frames ${ JSON.stringify( s ) }` );
+	// now past his own spool: what a rider without the electric reel is let do
+	await guest.game.evaluate( () => { const h = window.__app.game.hud; if ( h && h.catchOpen && h.closeCatch ) h.closeCatch(); const g = window.__app.game; g.state.bait.squid = 6; } );
+	await frames( guest.game, 6 );
+	await until( guest.game, `window.__app.game.rod.state === 'idle'`, 120000 ).catch( () => note( '(his rod not idle in time: its line in)' ) );
+	await guest.game.evaluate( () => { const g = window.__app.game; if ( g.rod.state !== 'idle' ) g.cancelLine( true ); if ( ! g.rod.equipped ) g.rod.equip( true ); g.rigs.pick = 'drop'; g.rigs.fitBait(); } );
+	await frames( guest.game, 4 );
+	const ready2 = await guest.game.evaluate( () => { const g = window.__app.game, r = g.rod; return { state: r.state, equipped: r.equipped, pick: g.rigs.pick, spool: g.state.stats.spoolM }; } );
+	note( 'ready again:', JSON.stringify( ready2 ) );
+	if ( ready2.state === 'idle' ) {
+
+		await press( guest, 'KeyF', 2 );
+		await frames( guest.game, 4 );
+		const d0 = await guest.game.evaluate( () => { const g = window.__app.game, r = g.rod; return { reach: r.dropReach, spoolOnRod: r.spoolM, depth: +r.depth.toFixed( 0 ) }; } );
+		// (the sink's slow to wait for: told how far it'd go)
+		await guest.game.evaluate( ( m ) => { const r = window.__app.game.rod; r.hookM = m; }, Math.min( d0.depth - 3, before.spool + 20 ) );
+		await frames( guest.game, 8 );
+		const d1 = await guest.game.evaluate( () => { const g = window.__app.game, r = g.rod; return { hookM: +r.hookM.toFixed( 1 ), line: +r.lineOut.toFixed( 1 ), fill: +r.lineFill.toFixed( 2 ) }; } );
+		const d2 = await guest.game.evaluate( () => { const g = window.__app.game, r = g.rod; return { hookM: +r.hookM.toFixed( 1 ), settled: r.settled, waiting: g.rigs._waiting, told: window.__toasts.slice( - 1 ) }; } );
+		note( 'left to itself:', JSON.stringify( d2 ) );
+		await guest.game.evaluate( () => { const g = window.__app.game; g.rigs._waiting = false; } );
+		const h2 = await hookIt( guest, DEEP, 3 );
+		await frames( guest.game, 12 );
+		const f2 = await guest.game.evaluate( () => { const g = window.__app.game, f = g.fight; return f ? { line: +f.distance.toFixed( 1 ), max: f.maxDistance, st: f.state, hookM: f.hookM } : { none: true, last: window.__toasts.slice( - 2 ) }; } );
+		say( f2.none ? ! /Spooled/.test( f2.last.join() ) : f2.st !== 'spooled', `a fish on his lead down there isn't spooled at once: ${ JSON.stringify( f2 ) }` );
+		note( `past his own spool, ${ before.electric ? 'with' : 'without' } the electric reel: ${ JSON.stringify( d0 ) }, ${ JSON.stringify( d1 ) }, struck ${ JSON.stringify( h2 ) }, then ${ JSON.stringify( f2 ) }` );
+		await guest.game.evaluate( () => { const g = window.__app.game; g.cancelLine( true ); g.fight = null; } );
+
+	}
+
+	await rateOf( owner, guest );
+
+}
+
+// ---- a guest stepping ashore at her berth, as each boat lies on his game: what's beside each rail
+if ( PART === 'ashore' ) {
+
+	const BOAT = process.env.ASHORE_BOAT || 'sportfisher';
+	const owner = await G.open( 'Robin', BOAT, 30 ), guest = await G.open( 'Sam', BOAT === 'lobster' ? 'console' : 'lobster', 30 );
+	await ready( owner, guest );
+	await G.buy( owner );
+	say( await G.aboard( owner, guest ), 'Sam\'s aboard her' );
+	await G.helm( owner );
+	await G.toSea( owner );
+	await until( guest.game, `Math.hypot( window.__app.player.boat.position.x + 2600, window.__app.player.boat.position.z - 3000 ) < 300`, 240000 ).catch( () => note( '(not out in time)' ) );
+	await owner.game.evaluate( () => { const a = window.__app, p = a.player, b = a.boatCtl; b.reset(); if ( ! a.boat.seated && p.mode === 'boat' ) { p.leaveHelm(); b.moored = true; } } );
+	await until( guest.game, `( () => { const p = window.__app.player, o = ${ other }, b = p.boat.position; return o.berth > 0 && p.boat.speed < 0.4 && Math.hypot( b.x - 55, b.z - 15 ) < 45; } )()`, 240000 ).catch( () => note( '(her copy not settled at a berth in time)' ) );
+	await frames( guest.game, 20 );
+	const read = () => guest.game.evaluate( async () => {
+
+		const { spareBerth } = await import( '/src/together/Berths.js' );
+		const { sizeOf } = await import( '/src/together/BoatCopies.js' );
+		const a = window.__app, p = a.player, o = a.together.others.values().next().value, b = p.boat, M = b.model, P = a.camera.position.constructor, r = ( v ) => +v.toFixed( 2 );
+		const sx = new P( 1, 0, 0 ).applyQuaternion( b.quaternion ).setY( 0 ).normalize();
+		const water = p.query.cpuValid ? p.query.cpu[ 0 ] : 0;
+		const rails = M.exitPoints.map( ( ep ) => { const w = b.toWorld( ep, new P() ), s = Math.sign( ep.x ) || 1; return { ep: [ r( ep.x ), r( ep.y ), r( ep.z ) ], w: [ r( w.x ), r( w.y ), r( w.z ) ], out: [ 0.9, 1.4, 2 ].map( ( d ) => { const x = w.x + sx.x * s * d, z = w.z + sx.z * s * d, g = p.groundAt( x, z, w.y + 2.5 ); return [ r( x ), r( z ), r( g ), r( g - w.y ) ]; } ) }; } );
+		return { boat: b.position.toArray().map( r ), yaw: r( b.getYaw() ), berth: o.berth, truePose: o.cur.boat.pos.toArray().map( r ), spare: o.berth ? spareBerth( o.berth - 1, sizeOf( o.cur.boatId ).beam ) : null, size: sizeOf( o.cur.boatId ), speed: r( b.speed ), water: r( water ), rails, target: ( ( t ) => t && { ep: [ r( t.ep.x ), r( t.ep.y ), r( t.ep.z ) ], g: r( t.g ), out: t.out.toArray().map( r ) } )( p.ashoreTarget() ) };
+
+	} );
+	const s = await read();
+	note( 'lying:', JSON.stringify( { ...s, rails: undefined } ) );
+	for ( const R of s.rails ) note( 'rail', JSON.stringify( R ) );
+	await until( guest.game, `( () => window.__app.player.ashoreTarget() )()`, 60000 ).then( () => note( '(a rail with ground by it)' ), () => note( '(no rail with ground by it in 60 s)' ) );
+	const again = await read();
+	note( 'and now:', JSON.stringify( { ...again, rails: undefined } ) );
+	const t = again.target;
+	if ( t ) {
+
+		await guest.game.evaluate( ( ep ) => { const p = window.__app.player; p.deckPos.set( ep[ 0 ] * 0.82, Math.max( ep[ 1 ] - 0.8, 0 ), ep[ 2 ] ); p.deckVel.set( 0, 0, 0 ); p._ashoreT = 0; }, t.ep );
+		await frames( guest.game, 6 );
+		const prompt = await guest.game.evaluate( () => { const p = window.__app.player; return { text: p.prompt && p.prompt.text, at: p.deckPos.toArray().map( ( v ) => +v.toFixed( 2 ) ), ashore: !! p._ashore, near: p._ashore && p._ashore.ep.toArray().map( ( v ) => +v.toFixed( 2 ) ) }; } );
+		note( 'at that rail:', JSON.stringify( prompt ) );
+		await press( guest, 'KeyE', 3 );
+
+	}
+
+	const off = await guest.game.evaluate( () => { const p = window.__app.player; return { mode: p.mode, riding: p.riding, at: p.position.toArray().map( ( v ) => +v.toFixed( 2 ) ) }; } );
+	say( off.mode === 'walk' && ! off.riding, `he steps ashore from her at his game's berth: ${ JSON.stringify( off ) }` );
+	await rateOf( owner, guest );
 
 }
 

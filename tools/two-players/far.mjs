@@ -49,7 +49,7 @@ const open = async ( name ) => {
 
 	}
 
-	await f().evaluate( () => { const g = window.__app.game; if ( g.guide ) { g.guide.seen.intro = true; if ( g.guide.open ) g.guide.close(); g.guide._wait = - 1; } window.__app.together.stale = 120; /* (two games on the CPU, seconds between poses) */ /* (and on a CPU this loaded, a second of the game can be a minute of the clock's, which DaysOut takes for a rest: boats.mjs's morning) */ const d = g.daysOut; if ( ! window.__noRest ) window.__noRest = setInterval( () => { if ( ! window.__clockJumps ) d._T = null; }, 200 ); } );
+	await f().evaluate( () => { const g = window.__app.game; if ( g.guide ) { g.guide.seen.intro = true; if ( g.guide.open ) g.guide.close(); g.guide._wait = - 1; } const pl = window.__app.player, up = pl.update; window.__real = { n: 0, since: performance.now() }; pl.update = function ( dt ) { up.call( this, dt ); window.__real.n ++; }; window.__app.together.stale = 120; /* (two games on the CPU, seconds between poses) */ /* (and on a CPU this loaded, a second of the game can be a minute of the clock's, which DaysOut takes for a rest: boats.mjs's morning) */ const d = g.daysOut; if ( ! window.__noRest ) window.__noRest = setInterval( () => { if ( ! window.__clockJumps ) d._T = null; }, 200 ); } );
 	return { page, game: f() };
 
 };
@@ -159,7 +159,7 @@ await sam.game.evaluate( () => { const p = window.__app.player; p.ride( p.rideOf
 await frames( sam.game, 6 );
 const rode = await sam.game.evaluate( () => { const a = window.__app, p = a.player, c = a.camera.position, s = a.game.chartSpot; return { riding: !! p.riding, mode: p.mode, cam: [ Math.round( c.x ), Math.round( c.z ) ], spot: [ Math.round( s.x ), Math.round( s.z ) ], bank: a.game.state.chart.named( 'bank' ), found: a.game.state.found }; } );
 say( rode.riding && Math.hypot( rode.cam[ 0 ] - FAR.x, rode.cam[ 1 ] - FAR.z ) < 100, `Sam rides with her out here: ${ JSON.stringify( rode ) }` );
-await sam.page.screenshot( { path: `${ out }/far-sam-riding.png` } );
+await sam.page.screenshot( { path: `${ out }/far-sam-riding.png`, timeout: 300000 } );
 
 // ---- Sam off; Robin leaves her boat adrift, 20 km out, and goes
 await sam.game.evaluate( () => { const p = window.__app.player; if ( p.riding ) p.unride ? p.unride() : p.exitBoat(); } );
@@ -190,7 +190,7 @@ await frames( sam.game, 12 );
 const d1 = await sam.game.evaluate( () => { const a = window.__app.together.away.get( 'robin-1' ); return { x: a.boat.position.x, z: a.boat.position.z, sx: a.story && a.story.x, sz: a.story && a.story.z, where: a.story && a.story.where }; } );
 const moved = Math.hypot( d1.sx - 0, d1.sz - 20000 );
 say( moved > 20, `three hours on she's drifted ${ moved.toFixed( 0 ) } m (${ d1.where }), her boat easing after it (${ Math.hypot( d1.x - d0.x, d1.z - d0.z ).toFixed( 1 ) } m so far)` );
-await sam.page.screenshot( { path: `${ out }/far-sam-adrift.png` } );
+await sam.page.screenshot( { path: `${ out }/far-sam-adrift.png`, timeout: 300000 } );
 
 // ---- a hurricane's warning, then Robin's back
 await sam.game.evaluate( async () => {
@@ -218,5 +218,6 @@ const back = await robin.game.evaluate( () => { const a = window.__app; return {
 console.log( '     Robin back', JSON.stringify( back ) );
 say( tow && back.money === Math.max( 0, 500 - tow.fee ), `she paid what she had of $${ tow && tow.fee }: $${ back.money } left` );
 say( back.hauled && ! back.rec && !! back.note, 'her boat on the cradle, her record gone, the note there' );
+for ( const [ n, g ] of [ [ 'Robin', robin ], [ 'Sam', sam ] ] ) console.log( `     frames a second, really, ${ n }:`, await g.game.evaluate( () => +( window.__real.n / ( performance.now() - window.__real.since ) * 1000 ).toFixed( 1 ) ).catch( () => '?' ) );
 console.log( problems ? `${ problems } PROBLEM(S)` : 'no problems' );
 await browser.close();

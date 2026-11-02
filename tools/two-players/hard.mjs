@@ -2,6 +2,7 @@
 // ways, walking by keys between her areas and climbing her ladders as she goes, and all of it again in a gale. Every frame of his is read
 // against her deck and against the copy he sees drawn. Legs are real keys; only where he's looking is steered.
 //   tools/render-slot.sh node tools/two-players/hard.mjs [dir] [port] [boat] [owner's fps] [guest's fps]   HARD_STALE=6 keeps the game's own stale pose time
+//   Parts, as all of it is hours at 1 to 3 fps: HARD_FROM=gale, HARD_UNTIL=calm (stops before the gale), HARD_ONLY=takeoff, HARD_ONLY=turning (a guest walking through a hard turn, calm, nothing else), HARD_DRY=1 (her engine kept running)
 import { OTHER as other, start } from './lib.mjs';
 const [ out = 'qa-output', PORT = '5221', BOAT = 'sportfisher', OWNER_FPS = '30', GUEST_FPS = '12' ] = process.argv.slice( 2 );
 const G = await start( { out, port: PORT, stale: + ( process.env.HARD_STALE || 120 ) } );
@@ -102,6 +103,8 @@ await owner.game.evaluate( () => {
 	R.after.push( () => { const m = window.__m; m.n ++; m.top = Math.max( m.top, b.speed ); u.set( 1, 0, 0 ).applyQuaternion( b.quaternion ); m.heel = Math.max( m.heel, Math.abs( Math.asin( u.y ) ) * 57.3 ); u.set( 0, 0, 1 ).applyQuaternion( b.quaternion ); m.trim = Math.max( m.trim, Math.abs( Math.asin( u.y ) ) * 57.3 ); if ( a.player.mode !== 'boat' ) m.off ++; } );
 
 } );
+// (HARD_DRY=1: her bilge kept dry and her engine running: flat out in a gale she floods or stalls in a minute or two, which is the game's, and there's no speed left to ride through)
+if ( process.env.HARD_DRY ) await owner.game.evaluate( () => { const h = window.__app.game.hull; window.__draws.after.push( () => { h.bilge = 0; h.cough = 1; if ( h.engine === 'stalled' ) h.engine = 'running'; } ); } );
 const her = () => owner.game.evaluate( () => { const m = window.__m, r = { top: +m.top.toFixed( 1 ), heel: +m.heel.toFixed( 1 ), trim: +m.trim.toFixed( 1 ), off: m.off, n: m.n }; window.__m = { top: 0, heel: 0, trim: 0, off: 0, n: 0 }; return r; } );
 const watch = ( walking ) => guest.game.evaluate( ( w ) => window.__watch( w ), walking );
 const watched = () => guest.game.evaluate( () => window.__watched() );
@@ -259,13 +262,35 @@ if ( FROM === 'takeoff' ) {
 	await until( owner.game, `Math.hypot( window.__app.boatCtl.position.x - ${ berth.x }, window.__app.boatCtl.position.z - ${ berth.z } ) > 90`, 90000 ).catch( () => note( '(not 90 m off in time)' ) );
 	await lever( false );
 	const went = await owner.game.evaluate( ( B ) => { const b = window.__app.boatCtl; return { m: +Math.hypot( b.position.x - B.x, b.position.z - B.z ).toFixed( 1 ), speed: +b.speed.toFixed( 1 ), moored: b.moored }; }, berth );
-	const s = await watched();
-	say( steady( s ) && went.m > 10, `taking off from her berth on the keys (moored ${ berth.moored }), ${ went.m } m at ${ went.speed } m/s: ${ line( s ) }` );
+	const s = await watched(), m = await her();
+	say( steady( s ) && went.m > 10, `taking off from her berth on the keys (moored ${ berth.moored }), ${ went.m } m at ${ went.speed } m/s: she heeled ${ m.heel } deg, trimmed ${ m.trim }; ${ line( s ) }` );
 	await G.shot( guest, `hard-${ BOAT }-takeoff-guest` );
 
 }
 
 if ( process.env.HARD_ONLY === 'takeoff' ) await G.end( `hard ${ BOAT }, her take-off` );
+
+// ---- only a guest walking through a hard turn: up to her speed, then on the keys, both ways
+if ( process.env.HARD_ONLY === 'turning' ) {
+
+	if ( FROM !== 'takeoff' ) await G.helm( owner );
+	await offshore();
+	await put( route[ 0 ][ 1 ], route[ 0 ][ 2 ] );
+	await frames( guest.game, 4 );
+	const top = await upToSpeed();
+	note( `up to ${ top } m/s` );
+	await watch( true );
+	await her();
+	const walking = walk( route.slice( 0, 6 ), 'calm, turning' );
+	const t = await turns();
+	const w = await walking;
+	const m = await her(), s = await watched();
+	say( steady( s ) && w.lost === null && m.off === 0, `calm: walking by keys as she goes hard over (${ t }): ${ w.legs.length } legs, ${ s.path } m; she heeled ${ m.heel } deg, trimmed ${ m.trim }, top ${ m.top } m/s; ${ line( s ) }` );
+	await lever( false );
+	note( `frames a second, really: Robin ${ await G.rate( owner.game ) }, Sam ${ await G.rate( guest.game ) }` );
+	await G.end( `hard ${ BOAT }, walking through her turn` );
+
+}
 
 // ---- open water, stopped: by keys between her areas
 if ( FROM !== 'takeoff' ) await G.helm( owner );
@@ -302,9 +327,10 @@ const pushed = async ( label ) => {
 			await put( x, z, y );
 			await frames( guest.game, 4 );
 			await watch( false );
+			await her();
 			const tt = await turns();
-			const ss = await watched();
-			say( steady( ss ) && ss.drift < 0.15, `${ label }: on her ${ name }, flat out and hard over: ${ tt }; ${ line( ss ) }, ${ ss.drift } m from where he stood` );
+			const ss = await watched(), mm = await her();
+			say( steady( ss ) && ss.drift < 0.15, `${ label }: on her ${ name }, flat out and hard over: ${ tt }; she heeled ${ mm.heel } deg, trimmed ${ mm.trim }; ${ line( ss ) }, ${ ss.drift } m from where he stood` );
 
 		}
 
@@ -316,20 +342,22 @@ const pushed = async ( label ) => {
 	await offshore();
 	await lever( true );
 	await watch( true );
+	await her();
 	const w = await walk( route, label );
-	const s2 = await watched();
+	const s2 = await watched(), m2 = await her();
 	const sp = await owner.game.evaluate( () => +window.__app.boatCtl.speed.toFixed( 1 ) );
-	say( steady( s2 ) && ! w.stuck.length && w.lost === null, `${ label }: walking between her areas by keys, lever right up (${ sp } m/s at the end): ${ w.legs.length } of ${ route.length } legs, ${ s2.path } m; ${ line( s2 ) }` );
+	say( steady( s2 ) && ! w.stuck.length && w.lost === null, `${ label }: walking between her areas by keys, lever right up (${ sp } m/s at the end, top ${ m2.top }): ${ w.legs.length } of ${ route.length } legs, ${ s2.path } m; she heeled ${ m2.heel } deg, trimmed ${ m2.trim }; ${ line( s2 ) }` );
 	await climb( label );
 	// and walking through a hard turn
 	await put( route[ 0 ][ 1 ], route[ 0 ][ 2 ] );
 	await frames( guest.game, 4 );
 	await watch( true );
+	await her();
 	const walking = walk( route.slice( 0, 6 ), `${ label }, turning` );
 	const t3 = await turns();
 	const w3 = await walking;
-	const s3 = await watched();
-	say( steady( s3 ) && w3.lost === null, `${ label }: walking by keys as she goes hard over (${ t3 }): ${ w3.legs.length } legs; ${ line( s3 ) }` );
+	const s3 = await watched(), m3 = await her();
+	say( steady( s3 ) && w3.lost === null, `${ label }: walking by keys as she goes hard over (${ t3 }): ${ w3.legs.length } legs; she heeled ${ m3.heel } deg, trimmed ${ m3.trim }; ${ line( s3 ) }` );
 	await stop();
 
 };
@@ -338,6 +366,12 @@ const pushed = async ( label ) => {
 if ( FROM !== 'gale' ) await pushed( 'calm' );
 await G.memory( owner, 'after calm' );
 await G.memory( guest, 'after calm' );
+if ( process.env.HARD_UNTIL === 'calm' ) {
+
+	note( `frames a second, really: Robin ${ await G.rate( owner.game ) }, Sam ${ await G.rate( guest.game ) }` );
+	await G.end( `hard ${ BOAT }, up to the gale` );
+
+}
 
 // ---- a gale
 await owner.game.evaluate( () => { const a = window.__app; a.together.setWeather( 'gale', 0 ); } );

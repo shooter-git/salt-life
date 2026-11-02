@@ -118,7 +118,7 @@ const shot = async ( who, name ) => {
 
 	}
 
-	await who.page.screenshot( { path: `${ out }/aboard-${ name }.png` } );
+	await who.page.screenshot( { path: `${ out }/aboard-${ name }.png`, timeout: 300000 } );
 	const r = await who.game.evaluate( () => { window.gc(); return { draws: window.__draws.peak.calls, triangles: window.__draws.peak.tris, heapMB: +( performance.memory.usedJSHeapSize / 1048576 ).toFixed( 1 ) }; } );
 	await who.game.evaluate( () => { const a = window.__app, gl = a.renderer.getContext(); a.drawWorld = () => {}; gl.clientWaitSync = () => gl.ALREADY_SIGNALED; Object.defineProperty( a, '_rest', { configurable: true, get: () => false, set() {} } ); } );
 	console.log( `     readings, ${ name } (${ who.name }):`, JSON.stringify( r ) );
@@ -456,6 +456,9 @@ if ( FITS || BOAT === 'lobster' || BOAT === 'kayak' ) {
 await owner.game.evaluate( () => { const a = window.__app, p = a.player, b = a.boatCtl; b.reset(); if ( ! a.boat.seated && p.mode === 'boat' ) { p.leaveHelm(); b.moored = true; } } );
 // (her copy home, and lying still: it comes over from where she was as her pose does)
 await until( guest.game, `( () => { const p = window.__app.player, o = ${ other }, b = p.boat.position, s = o.berth ? o.berth : 0; return s > 0 && p.boat.speed < 0.4 && Math.hypot( b.x - 55, b.z - 15 ) < 45; } )()`, 240000 ).catch( () => console.log( '     (her copy not settled at a berth in time)' ) );
+// (and done easing over: a sportfisher's a long way to come, and at the rail too soon there's nothing beside her yet)
+await guest.game.evaluate( async () => { const { spareBerth } = await import( '/src/together/Berths.js' ); const { sizeOf } = await import( '/src/together/BoatCopies.js' ); const o = window.__app.together.others.values().next().value; window.__spare = spareBerth( o.berth - 1, sizeOf( o.cur.boatId ).beam ); } );
+await until( guest.game, `( () => { const b = window.__app.player.boat.position, s = window.__spare; return Math.hypot( b.x - s.x, b.z - s.z ) < 1.5; } )()`, 240000 ).catch( () => console.log( '     (her copy not at her spare berth in time)' ) );
 await frames( guest.game, 6 );
 const ashore = await guest.game.evaluate( () => new Promise( ( done ) => {
 

@@ -217,6 +217,6 @@ say( !! back.note, `Marta's note: "${ back.note }"` );
 await frames( robin.game, 6 ).catch( () => {} );
 const gone = await sam.game.evaluate( () => { const a = window.__app.together; return { rec: a.boats[ 'robin-1' ] || null, drawn: a.away.get( 'robin-1' )?.boat?.visible || false, others: a.others.size }; } );
 say( ! gone.rec && ! gone.drawn, `her record gone, on Sam's sea too: ${ JSON.stringify( gone ) }` );
-await robin.page.screenshot( { path: `${ out }/two-robin-back.png` } );
+await robin.page.screenshot( { path: `${ out }/two-robin-back.png`, timeout: 300000 } );
 console.log( problems ? `${ problems } PROBLEM(S)` : 'no problems' );
 await browser.close();
