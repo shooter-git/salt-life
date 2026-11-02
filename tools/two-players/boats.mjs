@@ -83,8 +83,7 @@ const drawn = async ( g, n = 2 ) => {
 const shot = async ( who, name ) => {
 
 	await draws( who.game, true );
-	await drawn( who.game );
-	await who.page.screenshot( { path: `${ out }/boats-${ name }.png` } );
+	await drawn( who.game ).then( () => who.page.screenshot( { path: `${ out }/boats-${ name }.png` } ), async () => console.log( `     no frame drawn for ${ name }:`, await who.game.evaluate( () => { const a = window.__app; return JSON.stringify( { calls: a.renderer.info.render.calls, frame: a.renderer.info.render.frame, drawn: !! a._drawn, uses: a._uses.length, rest: a._rest, ticks: window.__draws.ticks, frames: a.player.mode, peak: window.__draws.peak, ownDraw: Object.prototype.hasOwnProperty.call( a, 'drawWorld' ) } ); } ) ) );
 	await draws( who.game, false );
 
 };

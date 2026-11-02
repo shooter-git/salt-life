@@ -447,7 +447,8 @@ if ( FITS || BOAT === 'lobster' || BOAT === 'kayak' ) {
 
 // ---- home, and ashore
 await owner.game.evaluate( () => { const a = window.__app, p = a.player, b = a.boatCtl; b.reset(); if ( ! a.boat.seated && p.mode === 'boat' ) { p.leaveHelm(); b.moored = true; } } );
-await until( guest.game, `( () => { const b = window.__app.player.boat.position, c = window.__app.boatCtl.position; return Math.hypot( b.x - c.x, b.z - c.z ) < 120; } )()`, 120000 ).catch( () => {} );
+// (her copy home, and lying still: it comes over from where she was as her pose does)
+await until( guest.game, `( () => { const p = window.__app.player, o = ${ other }, b = p.boat.position, s = o.berth ? o.berth : 0; return s > 0 && p.boat.speed < 0.4 && Math.hypot( b.x - 55, b.z - 15 ) < 45; } )()`, 240000 ).catch( () => console.log( '     (her copy not settled at a berth in time)' ) );
 await frames( guest.game, 6 );
 const ashore = await guest.game.evaluate( () => new Promise( ( done ) => {
 

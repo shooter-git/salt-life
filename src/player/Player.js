@@ -846,7 +846,9 @@ export class Player {
 	// best walkable spot next to the boat (pier deck / sand / shallows), or null. Looks straight out
 	// from the rail at each exit point (square to the hull, a few reaches: the boat swings on its
 	// mooring) for ground from a little below the rail up to a pier deck a climb above it.
-	ashoreTarget() {
+	// ((M16) near: from the rail you're at, feet in her frame. She bobs, and which rail's best with it: what's on offer where
+	// you stand mustn't flip to over the side as she does)
+	ashoreTarget( near = null ) {
 
 		const b = this.boat;
 		const water = this.query.cpuValid ? this.query.cpu[ 0 ] : G.seaLevel.value;
@@ -856,6 +858,7 @@ export class Player {
 		let best = null, bestScore = Infinity;
 		for ( const ep of b.model.exitPoints ) {
 
+			if ( near && ( Math.hypot( near.x - ep.x, near.z - ep.z ) >= 1.3 || Math.abs( near.y - ep.y ) >= 1.4 ) ) continue;
 			const w = b.toWorld( ep, new THREE.Vector3() );
 			const sgn = Math.sign( ep.x ) || 1;
 			for ( const reach of [ 0.9, 1.4, 2.0 ] ) {
@@ -1026,7 +1029,7 @@ export class Player {
 		if ( this._ashoreT <= 0 ) {
 
 			this._ashoreT = 0.25;
-			this._ashore = b.speed < 2.5 ? this.ashoreTarget() : null;
+			this._ashore = b.speed < 2.5 ? this.ashoreTarget( p ) : null;
 
 		}
 
