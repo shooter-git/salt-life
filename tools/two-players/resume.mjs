@@ -745,68 +745,70 @@ const SC = {
 	async buy( S ) {
 
 		const { boat, g, page } = S, F = `${ out }/${ boat }-buy`;
-		const others = BOAT_IDS.filter( ( b ) => b !== boat );
 		await S.load( `${ plain }&boat=${ boat }`, 'goto', 'first, ?boat' );
 		await S.set( { money: 60000, earned: true } );
+		const owned = ( v ) => v.fleet.split( ',' ), start = owned( await view( g ) );
+		// (the new one, and the one traded for: those she doesn't own; ?boat= comes with the kayak)
+		const [ X, Y ] = BOAT_IDS.filter( ( b ) => b !== boat && ! start.includes( b ) );
 		// ---- bought outright, stay in yours
-		const q = await g.evaluate( ( id ) => window.__app.game.state.quoteBoat( id, null ), others[ 0 ] );
+		const q = await g.evaluate( ( id ) => window.__app.game.state.quoteBoat( id, null ), X );
 		note( `quote ${ JSON.stringify( q ) }` );
-		const did = await g.evaluate( ( id ) => window.__app.game.fleet.buy( id ), others[ 0 ] );
+		const did = await g.evaluate( ( id ) => window.__app.game.fleet.buy( id ), X );
 		await frames( g, 4 );
 		const v0 = await view( g );
-		say( did && v0.fleet.includes( others[ 0 ] ) && v0.boat === boat && v0.money === 60000 - q.net, `buy: the ${ others[ 0 ] } for $${ q.net }, still in the ${ boat }, $${ v0.money } ${ JSON.stringify( v0.toasts.slice( - 1 ) ) }` );
+		say( did && owned( v0 ).includes( X ) && v0.boat === boat && v0.money === 60000 - q.net, `buy: the ${ X } for $${ q.net }, still in the ${ boat }, $${ v0.money } ${ JSON.stringify( v0.toasts.slice( - 1 ) ) }` );
 		await saveNow( g );
 		let v = await S.reload( 'bought one' );
 		note( brief( v ) );
 		sameBoat( v, boat, 'buy, reloaded' );
-		say( v.fleet.includes( others[ 0 ] ) && v.money === v0.money && !! v.mooredBoats[ others[ 0 ] ], `buy, reloaded: she's yours and at her berth ${ JSON.stringify( v.mooredBoats[ others[ 0 ] ] ) }, $${ v.money }` );
+		say( owned( v ).includes( X ) && v.money === v0.money && !! v.mooredBoats[ X ], `buy, reloaded: she's yours and at her berth ${ JSON.stringify( v.mooredBoats[ X ] ) }, $${ v.money }` );
 		// ---- the one you're in, traded in for another
-		const q2 = await g.evaluate( ( [ id, t ] ) => window.__app.game.state.quoteBoat( id, t ), [ others[ 1 ], boat ] );
+		const q2 = await g.evaluate( ( [ id, t ] ) => window.__app.game.state.quoteBoat( id, t ), [ Y, boat ] );
 		note( `trade-in quote ${ JSON.stringify( q2 ) }` );
-		const did2 = await g.evaluate( ( [ id, t ] ) => window.__app.game.fleet.buy( id, t ), [ others[ 1 ], boat ] );
+		const did2 = await g.evaluate( ( [ id, t ] ) => window.__app.game.fleet.buy( id, t ), [ Y, boat ] );
 		await frames( g, 4 );
 		const v1 = await view( g );
 		note( brief( v1 ) );
-		say( did2 && v1.boat === others[ 1 ] && v1.model === others[ 1 ] && ! v1.fleet.split( ',' ).includes( boat ), `trade in: in the ${ others[ 1 ] }, the ${ boat } gone (${ v1.fleet }), $${ v.money } -> $${ v1.money }` );
+		say( did2 && v1.boat === Y && v1.model === Y && ! owned( v1 ).includes( boat ), `trade in: in the ${ Y }, the ${ boat } gone (${ v1.fleet }), $${ v.money } -> $${ v1.money }` );
 		say( v1.money === v.money - q2.net, `trade in: paid the difference $${ q2.net }` );
 		await saveNow( g );
 		v = await S.reload( 'traded in the one you were in' );
 		note( brief( v ) );
-		sameBoat( v, others[ 1 ], 'trade in, reloaded' );
+		sameBoat( v, Y, 'trade in, reloaded' );
 		good( v, 'trade in, reloaded' );
-		say( ! v.fleet.split( ',' ).includes( boat ) && v.money === v1.money && ( v.moored || v.beached ) && ! v.note, `trade in, reloaded: at her berth, the old one gone, $${ v.money }` );
+		say( ! owned( v ).includes( boat ) && v.money === v1.money && ( v.moored || v.beached ) && ! v.note, `trade in, reloaded: at her berth, the old one gone, $${ v.money }` );
 		await shots( page, g, `${ F }-traded`, { from: [ 16, 9, - 18 ] } );
 		// ---- trade in one you're not in
-		const q3 = await g.evaluate( ( [ id, t ] ) => window.__app.game.state.quoteBoat( id, t ), [ others[ 2 ], others[ 0 ] ] );
-		const did3 = await g.evaluate( ( [ id, t ] ) => window.__app.game.fleet.buy( id, t ), [ others[ 2 ], others[ 0 ] ] );
+		const q3 = await g.evaluate( ( [ id, t ] ) => window.__app.game.state.quoteBoat( id, t ), [ boat, X ] );
+		const did3 = await g.evaluate( ( [ id, t ] ) => window.__app.game.fleet.buy( id, t ), [ boat, X ] );
 		await frames( g, 4 );
 		const v2 = await view( g );
-		say( did3 && v2.boat === others[ 1 ] && v2.fleet.split( ',' ).includes( others[ 2 ] ) && ! v2.fleet.split( ',' ).includes( others[ 0 ] ), `trade in another: the ${ others[ 0 ] } for the ${ others[ 2 ] }, net $${ q3.net }, you're in the ${ v2.boat } (${ v2.fleet })` );
+		say( did3 && v2.boat === Y && owned( v2 ).includes( boat ) && ! owned( v2 ).includes( X ), `trade in another: the ${ X } for the ${ boat }, net $${ q3.net }, you're in the ${ v2.boat } (${ v2.fleet })` );
 		await saveNow( g );
 		v = await S.reload( 'traded in another' );
 		note( brief( v ) );
-		sameBoat( v, others[ 1 ], 'trade in another, reloaded' );
-		say( v.fleet === v2.fleet && v.mooredBoats[ others[ 0 ] ] === undefined && !! v.mooredBoats[ others[ 2 ] ], `trade in another, reloaded: fleet ${ v.fleet }; drawn ${ JSON.stringify( v.mooredBoats ) }` );
+		sameBoat( v, Y, 'trade in another, reloaded' );
+		say( v.fleet === v2.fleet && ! v.mooredBoats[ X ] && !! v.mooredBoats[ boat ], `trade in another, reloaded: fleet ${ v.fleet }; drawn ${ JSON.stringify( v.mooredBoats ) }` );
 		// ---- selling the one you're in: she won't; selling the other: she does
 		const before = v.money;
-		const refused = await g.evaluate( ( id ) => window.__app.game.fleet.sell( id ), others[ 1 ] );
+		const refused = await g.evaluate( ( id ) => window.__app.game.fleet.sell( id ), Y );
 		await frames( g, 2 );
 		v = await view( g );
-		say( refused === false && v.money === before && v.fleet.split( ',' ).includes( others[ 1 ] ), `sell the one you're in: refused, $${ v.money }, still in her` );
+		say( refused === false && v.money === before && owned( v ).includes( Y ), `sell the one you're in: refused, $${ v.money }, still in her` );
 		await saveNow( g );
 		v = await S.reload( 'tried to sell the one you are in' );
-		sameBoat( v, others[ 1 ], 'sell refused, reloaded' );
-		const sold = await g.evaluate( ( id ) => window.__app.game.fleet.sell( id ), others[ 2 ] );
+		sameBoat( v, Y, 'sell refused, reloaded' );
+		const sold = await g.evaluate( ( id ) => window.__app.game.fleet.sell( id ), boat );
 		await frames( g, 3 );
 		const v3 = await view( g );
-		say( sold && v3.money > before && v3.fleet === others[ 1 ], `sell the other: $${ before } -> $${ v3.money }, fleet ${ v3.fleet } ${ JSON.stringify( v3.toasts.slice( - 1 ) ) }` );
+		say( sold && v3.money > before && ! owned( v3 ).includes( boat ), `sell the other: $${ before } -> $${ v3.money }, fleet ${ v3.fleet } ${ JSON.stringify( v3.toasts.slice( - 1 ) ) }` );
 		await saveNow( g );
 		v = await S.reload( 'sold the other' );
 		note( brief( v ) );
-		sameBoat( v, others[ 1 ], 'sold, reloaded' );
-		say( v.fleet === others[ 1 ] && v.money === v3.money && ! v.mooredBoats[ others[ 2 ] ], `sold, reloaded: fleet ${ v.fleet }, $${ v.money }, she's gone from the dock` );
-		const last = await g.evaluate( ( id ) => window.__app.game.fleet.sell( id ), others[ 1 ] );
-		say( last === false, 'sell your only boat: refused' );
+		sameBoat( v, Y, 'sold, reloaded' );
+		say( v.fleet === v3.fleet && v.money === v3.money && ! v.mooredBoats[ boat ], `sold, reloaded: fleet ${ v.fleet }, $${ v.money }, she's gone from the dock` );
+		if ( owned( v ).length === 1 ) say( await g.evaluate( ( id ) => window.__app.game.fleet.sell( id ), Y ) === false, 'sell your only boat: refused' );
+
 
 	},
 
