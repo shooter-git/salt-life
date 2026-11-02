@@ -28,7 +28,7 @@ Lobstering from the lobster boat, with the traps taken off her deck in M14 for f
 | How far dragged | a few hundred m to about 2 km | **Far less than real, on purpose.** Irma's went 3.5 to 8 miles, some 18, which would take any trap here off the shelf |
 | Depth lobsters live | to about 295 ft | NOAA Fisheries. The warp stops you at 120 ft |
 | Hauler speed | 240 ft a minute | **From memory**, no source found |
-| Prices | $70 a trap | **Proposed**, to be tuned with the rest |
+| Prices | $70 a trap: $140 for the first 2, $140 more to make 4, $280 more to make 8 (`Gear.js`' `traps`) | **A start.** [opening.md](opening.md) tuned the boats' prices against the fish and left this one |
 
 Sources: [Fishery Bulletin (Austin)](https://fisherybulletin.nmfs.noaa.gov/sites/default/files/pdf-content/fish-bull/austin_0.pdf), [Fishery Bulletin (Ehrhardt and Deleveaux)](https://fisherybulletin.nmfs.noaa.gov/sites/default/files/pdf-content/2009/1072/ehrhardt.pdf), [GCFI bycatch survey](https://proceedings.gcfi.org/proceedings/bycatch-in-floridas-spiny-lobster-trap-fishery/), [FWC trap design](https://myfwc.com/fishing/saltwater/commercial/traps), [Fla. Admin. Code 68B-24.006](https://www.law.cornell.edu/regulations/florida/Fla-Admin-Code-Ann-R-68B-24-006), [NOAA Fisheries](https://www.fisheries.noaa.gov/species/caribbean-spiny-lobster), [Florida Sea Grant on Irma](https://blogs.ifas.ufl.edu/news/2018/04/12/florida-sea-grant-helped-save-keys-lobster-industry-nearly-4-million-after-hurricane-irma), [Lobster trap in Barbados](https://commons.wikimedia.org/wiki/File:Lobster_trap_in_Barbados_1.jpg).
 

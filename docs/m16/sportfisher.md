@@ -1,6 +1,6 @@
 # The sportfisher
 
-The offshore sportfisher (`src/world/boat/sportfisher/`): a 48 ft convertible, the boat the game saves up for and the heaviest model in it. Stream 3 of [M16](../M16-streams.md).
+The offshore sportfisher (`src/world/boat/sportfisher/`): a 48 ft convertible, the boat the game saves up for and the heaviest model in it. Stream 3 of [M16](../M16.md).
 
 ## What she's built after
 
@@ -55,9 +55,9 @@ Cockpit to mezzanine by two steps; through the door to the salon; down the compa
 
 ## What others read
 
-`bunks`, `chair`, `rodHolders`, `outriggerTips`, `stations`, `lowCopy`, `towerEye`, `towerHelm`, `fit( stats )`, `setPaint( hex )`, `setOutriggersOut( out )`. `fit` takes `tower`, `outriggers` and `chair` or `chair`; a stat that's undefined is shown, so she's whole until the fleet's tracks come.
+`bunks`, `chair`, `rodHolders`, `outriggerTips`, `stations`, `lowCopy`, `towerEye`, `towerHelm`, `fit( stats )`, `setPaint( hex )`, `setOutriggersOut( out )`. `fit` takes `tower`, `outriggers` and `chair`; a stat that's undefined is shown, so she's whole until the fleet's tracks come.
 
-**On someone else's.** A pose says what's fitted (`gearBits`, `G`): their copy's dressed as that (`dressCopy`) and you walk about on her as that (`withGear`), so their tower's there to climb whether or not you've one. An anchored boat with nobody home goes as she is. The console's and the kayak's fittings are cut from one shared geometry, so their copies can't yet.
+**On someone else's.** A pose says what's fitted and her paint in one number (`f`, `BoatCopies.fitWire`): their copy is dressed as that (`dressCopy`, on the copy's own meshes) and you walk about on her as that (`walkedAs`), so their tower's there to climb whether or not you've one. An anchored boat with nobody home goes as she is. The console's and the kayak's copies do the same now ([together.md](together.md), What's on her, for everyone).
 
 ## Phones
 

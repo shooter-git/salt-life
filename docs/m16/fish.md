@@ -28,7 +28,7 @@ Where and when, from the sources:
 - **Redfish:** sand and sandy mud, coastal water and estuaries, the surf zone too (FishBase), south to southern Florida: this island's as far south as they come. **Spotted seatrout:** shallow water over sand, near seagrass (FishBase). Both are at the edge of their ranges here, as the design asks for them.
 - **Bag limits** as the US rules have them: one swordfish, two wahoo, three yellowfin, ten mahi, one redfish, four trout. Billfish aren't kept at all, as the design's rules say (real rules let a big one be landed).
 
-Not checked against a source, and worth knowing: the sailfish and marlin depths (`at`) are from general knowledge of them as surface-layer fish; the search that would have sourced them came back empty. Sizes at capture and `rarity` are judgement. Prices are a start: the second wave tunes them against what the boats cost.
+Not checked against a source, and worth knowing: the sailfish and marlin depths (`at`) are from general knowledge of them as surface-layer fish; the search that would have sourced them came back empty. Sizes at capture and `rarity` are judgement. Prices are a start. The opening stream tuned the boats' prices against what these fish fetch ([opening.md](opening.md), The prices) and left the fish's own prices where they were.
 
 ## What bites, and how it's fished: the interface with `m16/tackle`
 
@@ -44,7 +44,7 @@ h.hook = {
 };
 ```
 
-`h.hook` missing is today's rig: a float, six metres down (`Bites.FLOAT`). Stream 7 sets `game.hook` (a getter or a plain object) and adds one line to `Game.habitat()`: `h.hook = this.hook || null`. Until then everything bites on the float.
+`h.hook` missing is today's rig: a float, six metres down (`Bites.FLOAT`). Stream 7 did both halves: `Game.habitatOf` sets `h.hook = this.hook || null`, and `Game.habitat()` hands Bites the habitat as the hook finds it (`atHook`, from `rigs/Presentation.js`; [tackle.md](tackle.md), The fish's side).
 
 **The table** (`FishTable.js`):
 

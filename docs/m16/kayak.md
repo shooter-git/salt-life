@@ -56,7 +56,7 @@ The game's own waves (`ocean/Waves.js`, fed to her in `test/kayak.mjs`), in the 
 
 A breaker rolls her at about the height that tumbles a swimmer: 2.9 m on the beam, 4.2 m on the bow, by the game's trough-to-crest figure over the bar (a fair day's typically 1.6 m, at most 2.8 m). Punching out through a fair day's surf bow on is fine; a blow's surf isn't.
 
-Over, she's turned keel up (the `body` group: the rigid body under it stays upright) and you're in the water. Some of the cooler goes (half, with a life jacket a quarter), and you lose some breath. Swim to her: E rights her, E again climbs back on (2.3 s; 1.4 s with a life jacket). She drifts downwind at about 1 m/s meanwhile, so don't dawdle: you swim 1.5, 2.5 flat out.
+Over, she's turned keel up (the `body` group: the rigid body under it stays upright) and you're in the water. Some of the cooler goes (half, with a life jacket a quarter, and with the dry hatch half as much again: `spillShare`), and you lose some breath. Swim to her: E rights her, E again climbs back on (2.3 s; 1.4 s with a life jacket). She drifts downwind at about 1 m/s meanwhile, so don't dawdle: you swim 1.5, 2.5 flat out.
 
 ## On the sand
 
@@ -84,7 +84,7 @@ A kayak angler's is a small liquid-filled one on a wrist strap or a deck mount. 
 
 ## Gear
 
-`fit( stats )`: what Marta sells for her shows, in her one mesh (its vertices folded to a point when it's not there, so no new draw): the crate in place of the small cooler when `holdKg` is over her 12, the finder's puck with `finder`, the anchor trolley with `anchorM` or `trolley`. `speedMul` shortens the stroke and widens the blade (the better paddle). `stats.lifeJacket` (the safety track) costs you less of a capsize.
+`fit( stats )`: what Marta sells for her shows, in her one mesh (its vertices folded to a point when it's not there, so no new draw): the crate in place of the small cooler when `holdKg` is over her 12, the finder's puck with `finder`, the anchor trolley with `anchorM` or `trolley`. `speedMul` shortens the stroke and widens the blade (the better paddle). `stats.lifeJacket` (the safety track) and `stats.dryHatch` (the dry hatch track) cost you less of a capsize.
 
 ## Budget
 

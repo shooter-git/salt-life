@@ -1,6 +1,6 @@
 # Days out
 
-Stream 8 of M16 ([M16-streams.md](../M16-streams.md)). The figures are in `src/game/Seaworthy.js`, the game side in `src/game/DaysOut.js`, and the small hooks in `Game`, `App`, `Hull`, `Away`, `Radio`, `Chart`, `Minimap`, `TimeHUD`, `GameHUD`, `Guide`, `BoatController` and `Together`.
+Stream 8 of [M16](../M16.md). The figures are in `src/game/Seaworthy.js`, the game side in `src/game/DaysOut.js`, and the small hooks in `Game`, `App`, `Hull`, `Away`, `Radio`, `Chart`, `Minimap`, `TimeHUD`, `GameHUD`, `Guide`, `BoatController` and `Together`.
 
 ## What each boat can stand
 
@@ -19,7 +19,7 @@ The sea is worked out for where she is (`seaHere`), about once a second. The ope
 
 The limits are judgement, not a standard: nobody publishes a sea limit for a given length of boat. The 7 ft is the Weather Service's small craft advisory, already in `MarineForecast`. The kayak's 15 to 20 knots is the top of what kayak fishing guides give for abort limits.
 
-**Each boat's figures** (`ABLE`): her cruise and burn (`Chart.fuelFor`, `Gear.fuelBurn( rpm, boat )`), her drift and draught (`Away.awayOf`'s `env`, by `ableEnv`), and what a storm takes off her left out in it. `tools/boat-figures.mjs` measures her cruise, drift and sock from `BoatController`. Rerun it when a model lands: figures from a stand-in aren't hers. The lobster boat's 5% was measured in M15 in the CPU's sea (9% in the tool's flat water, so it's for comparing boats and for the sock's share).
+**Each boat's figures** (`ABLE`): her cruise and burn (`Chart.fuelFor`, `Gear.fuelBurn( rpm, boat )`), her drift and draught (`Away.awayOf`'s `env`, by `ableEnv`), and what a storm takes off her left out in it. `tools/boat-figures.mjs` measures her cruise, drift and sock from `BoatController`. It was first run on stand-ins; the cruise, drift and draught figures in `ABLE` are from the real models, measured again in the opening stream ([opening.md](opening.md), The real boats): rerun it after a change to a boat's hull or handling. The lobster boat's 5% was measured in M15 in the CPU's sea (9% in the tool's flat water, so it's for comparing boats and for the sock's share); it is 6.6% now, in the game's own fair-day sea.
 
 Leeway: a 19 ft center console 4.9% of the wind (Coast Guard trials); boats under 30 ft about 6% at 20 to 30 knots.
 

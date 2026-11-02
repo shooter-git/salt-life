@@ -66,14 +66,17 @@ Compressed for play, and said so: a real strike offshore can be hours apart, her
 ## Not done
 
 - The reel's low gear stays automatic, on purpose. There's no gear key.
-- Riders' rigs are the together stream's.
-- Others don't see a spread or a kite: `Together` still sends one rod and its line's end. Theirs shows as a float on the line where a rig has none. It's the together stream's to add.
-- The electric reel's own sound, for the sound stream: a rod going off and the drag use today's reel sound.
+- A rider on someone else's boat can't let out her spread or fly her kite: those are her owner's, on her holders ([together.md](together.md), What a rider can do on her). A rider's own lead can be dropped (it's offered), but the drop itself hasn't been run in two games. The chum's slick isn't sent to the others.
 
-## For the merge
+Done since this was first written, by the other streams:
 
-- `Bites.js`: take stream 6's. All this stream adds is `hook: true` in `NOT_WATER`.
-- `Game.habitat`: `atHook` sets `h.hook` after stream 6's line, so keep both.
-- `docs/m16/fish.md` is stream 6's.
-- `test/cast-net.mjs`: "every bait can be stolen" now leaves out lures and chum, which can't be.
+- **Riders' rigs.** A rider takes a rod that goes off in her spread, with their own line, reel and leader, and the catch goes in their hold (`src/together/Spread.js`, [together.md](together.md)).
+- **Others see a spread and a kite.** `Together` sends a few numbers a line (`spreadWire`) and the kite's place (`kiteWire`); `Spread.js` draws them with her copy, in one draw call.
+- **The electric reel's own sound.** While the deep drop is out and the reel is winding, `SoundScape.rodLoop` plays the `reel_electric` recording, its pitch following the winding and dropping as the line comes under load, in place of the hand reel's. A fish stripping line against the drag, and a rod going off in the spread, still use the usual `reel_drag`.
+
+## Where it reaches into other files
+
+- `Bites.js`: stream 6's (the fish's side, [fish.md](fish.md)). All this stream adds is `hook: true` in `NOT_WATER`.
+- `Game.habitat`: `atHook` sets `h.hook` after stream 6's line.
+- `test/cast-net.mjs`: "every bait can be stolen" leaves out lures and chum, which can't be.
 - Changed in others' files for the audit: `FishTable.js` (`ways`, the swordfish's hint), `Bait.js` (the plug's `tow`), `Bites.js` (a lure's `likes`), `Trophies.js` (reads `stats.tagKit`, `info.hurt`), `GameHUD.js` (the note for a hurt one), `GameState.js` (`leaderPick`), `Seat.js` (a gamepad's Y with the rod out), `Input.js`, `TouchControls.js`, `Guide.js`.

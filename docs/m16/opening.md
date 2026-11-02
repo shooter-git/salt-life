@@ -1,12 +1,12 @@
 # M16: the opening
 
-New players start in the kayak; those already playing keep the lobster boat and get the kayak. The Guide speaks to the boat you're in, Marta's list comes up in play, the prices are tuned against what the fish fetch, the real boats are re-measured, the gear that did nothing does something, and a gale's two figures follow each boat. To be folded into `docs/M16.md` at the end.
+New players start in the kayak; those already playing keep the lobster boat and get the kayak. The Guide speaks to the boat you're in, Marta's list comes up in play, the prices are tuned against what the fish fetch, the real boats are re-measured, the gear that did nothing does something, and a gale's two figures follow each boat. [M16.md](../M16.md) has the totals.
 
 ## The start
 
 `Boats.START_BOAT` is `kayak`. A brand-new save has her and nothing else, no money and no fuel. A v1 save loads as it did: the lobster boat with her gear and tank, the kayak beside her, nothing paid for either. `reset()` starts in the kayak too. `test/opening.mjs` and `test/boats.mjs` check both.
 
-She lies on the open sand beside the pier's foot, at an angle to the water (`Berths.js`, moved from x 59.5 to 44; `KayakModel.LEFT_TURNED`), where the view down the boardwalk that a new game opens on shows her. At 59.5 she was hidden behind the barrels at the pier's foot, and at 62 only a sliver showed.
+She lies on the open sand 11 m west of the pier, at an angle to the water (`Berths.js`, moved from x 59.5 to 44; `KayakModel.LEFT_TURNED`), where the view down the boardwalk that a new game opens on shows her. At 59.5 she was hidden behind the barrels at the pier's foot, and at 62 only a sliver showed.
 
 Playing a new game also found three things no test had caught, all fixed. Marta's panel threw as it opened, because the tackle stream's row of frozen bait was used and never written. A jump of the clock (a rest, or a tab left a minute) counted a kayak on the sand as adrift, so a new player was told "Your boat drifted ashore while you were away". And the same jump stood you up on a kayak's deck she hasn't got, with a "Take the helm" prompt.
 

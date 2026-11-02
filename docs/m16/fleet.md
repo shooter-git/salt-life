@@ -1,6 +1,6 @@
 # M16: your fleet and Marta
 
-Stream 4. To be folded into `docs/M16.md` and `docs/ARCHITECTURE.md` at the end.
+Stream 4 of [M16](../M16.md): what the fleet is and what it costs. [ARCHITECTURE.md](../ARCHITECTURE.md) (Your fleet) says where it sits in the code.
 
 ## Marta's list
 
@@ -12,7 +12,7 @@ Boats lists yours and those for sale. Each of yours says where she is, her tank,
 
 The unlock counts levels: the lobster boat's twelve ($3,050) and rod, reel and line's seven ($1,435), both as the doc gives them. A level past those (the new big-game rod) doesn't count, nor do the speargun, cast net, tickle stick or lobster traps.
 
-The pictures are `public/boats/<id>.webp`, drawn from each model by `tools/boat-pictures.mjs`. **Run it again when the kayak, console and sportfisher models land**; until then three of the four are the stand-ins.
+The pictures are `public/boats/<id>.webp`, drawn from each model by `tools/boat-pictures.mjs`. They were drawn again from the real models once those landed ([opening.md](opening.md), The real boats); run the tool again after any change to a boat's look.
 
 ## Buying, trading in, selling
 
@@ -31,20 +31,22 @@ From the doc's table, in `Gear.js` with `on`:
 
 | Boat | Tracks | Stats they give (`state.stats`) |
 |---|---|---|
-| Kayak | `kayakCrate`, `kayakPaddle`, `kayakAnchor`, `kayakFinder`, `kayakHatch` | `holdKg`, `speedMul`, `anchorM`, `trolley`, `finder`, `jacketRoom` |
+| Kayak | `kayakCrate`, `kayakPaddle`, `kayakAnchor`, `kayakFinder`, `kayakHatch` | `holdKg`, `speedMul`, `anchorM`, `trolley`, `finder`, `dryHatch` |
 | Center console | `consoleEngine`, `consoleTop`, `consoleWell`, `consoleLadder`, `consoleTanks` | `speedMul`, `twin`, `tTop`, `baitMax`, `livewell`, `diveLadder`, `tankRack` |
 | Lobster boat | today's eight (lobster traps: stream 9) | as they were |
 | Sportfisher | `sfOutriggers`, `sfTower`, `sfElectricReel`, `sfFishBox`, `sfIcemaker`, `sfGenerator`, `sfChair`, `sfUnderwaterLights` | `outriggers`, `tower`, `electricReel`, `holdKg`, `icemaker`, `iceMakesKgH`, `generator`, `chair`, `underwaterLights` |
 
-The models read these through `Vessel.fit( stats )`, which `Game.applyGear` calls whenever gear changes. It does nothing until a boat overrides it. The prices are proposed; `m16/opening` tunes them.
+The kayak's last track gives `dryHatch`. The fleet's first cut called it `jacketRoom`, after M16.md's "a life jacket's worth of room"; the opening stream renamed it when the idea turned out not to make sense ([opening.md](opening.md), The gear that did nothing). The models read these through `Vessel.fit( stats )`, which `Game.applyGear` calls whenever gear changes; each boat's model overrides it for what she has fitted.
 
-Navigation, the second finder and the deep-water anchor are stream 8's tracks. `on` names one boat, so a thing sold for each boat is a track per boat.
+The prices are the ones in `Gear.js`, tuned in [opening.md](opening.md) (The prices): the first guesses stand but for the console's boat, which went from about $2,500 to $1,800.
+
+Navigation, the second finder, the deep-water anchor and the drift sock are days out's tracks (`Seaworthy.DAYS_TRACKS`, [days-out.md](days-out.md)). `on` names one boat, so a thing sold for each boat is a track per boat.
 
 ## Fuel
 
 `Gear.FUELS`: diesel $1.50 a litre as it was, gasoline $1.60 (fuel-dock quotes in the Keys and pump prices in the Bahamas put gasoline about 6% over diesel). `fuelOf( boat )` is her fuel or null, `fuelPrice( boat, dieselAt )` her price, also at Pearl's dearer drums. A kayak has no fuel: no row at Marta's or Pearl's, no gauge, nothing burned.
 
-Her burn is stream 8's (`Seaworthy.ABLE`, `fuelBurn( rpm, boat )`). On this branch alone, every engine burns as the lobster boat's. A kayak burns none. Twin outboards are in the console's stats (`twin`), for `ABLE` to take up if a twin's to burn more than a single.
+Her burn is her own figure in `Seaworthy.ABLE` (`burn`: litres a second at idle and at full revs), read by `Gear.fuelBurn( rpm, boat )`. A kayak burns none. The console's twin outboards (`twin` in her stats) don't burn more than a single: `ABLE` has one figure for the console.
 
 ## Her hull
 
@@ -66,11 +68,11 @@ She takes slams, knocks and storms by her own figure too. A big boat is worked l
 | | Slip | Upkeep | A month |
 |---|---|---|---|
 | Kayak | nothing, on the sand | nothing | $0 |
-| Center console | $35 | $21 | $56 |
+| Center console | $35 | $15 | $50 |
 | Lobster boat | $40 | $50 | $90 |
 | Sportfisher | $72 | $208 | $280 |
 
-Upkeep is 10% of her price a year, the owners' rule of thumb. Real slips run $25 to $40 a foot a month in the Keys and South Florida. The game's boats are priced at about a fortieth of real ones, and its slips are scaled about as far: $1.50 a foot.
+Upkeep is 10% of her price a year, the owners' rule of thumb: $15 a month on the console's $1,800, $50 on the lobster boat's $6,000, $208 on the sportfisher's $25,000. Real slips run $25 to $40 a foot a month in the Keys and South Florida. The game's boats are priced at about a fortieth of real ones, and its slips are scaled about as far: $1.50 a foot.
 
 She bills every 30th day from the day you first play, at most 3 months at once (a long absence, or a room days ahead). She takes what you have down to your last $20, and the rest goes on her tab. You can't buy another boat until it's settled, and she never takes a boat for it. A clock behind yours, in a room on an earlier day, owes nothing.
 
@@ -81,7 +83,7 @@ She bills every 30th day from the day you first play, at most 3 months at once (
 - **Lobster boat:** east of the pier head, as ever.
 - **Center console:** west of it, the same way round.
 - **Sportfisher:** alongside the pier head's seaward face, bow east. It's the only 15 m of edge the pier has, with 4.5 m of water.
-- **Kayak:** on the sand. Her berth is the water's edge beside the pier's foot, and she lies up the sand from there (the kayak stream's `atHome`; `ashoreOf` for what's drawn of her). Nobody ties a kayak to a pier.
+- **Kayak:** on the sand. Her berth is the water's edge on the open sand 11 m west of the pier, at x 44, z -38, and she lies up the sand from there, at an angle to the water (the kayak stream's `atHome`; `ashoreOf` for what's drawn of her). It was x 59.5, beside the pier, until a new game's view down the boardwalk turned out not to show her (barrels hid her: [opening.md](opening.md), The start). Nobody ties a kayak to a pier.
 
 Only the boat you're in is built. Each other you own is drawn by `fleet/MooredBoats.js` from `fleet/MooredModels.js`: a few hundred triangles at her real size and shape, her paint in its vertices, showing what's fitted (T-top, twins, tower, outriggers, chair), riding the waves. Made after the start, so never in the loading frame. A box keeps you and the boat you're in off each.
 
@@ -107,19 +109,18 @@ A storm works the boats you're not in, at their berths, by their own figures, wh
 
 Her name goes on her transom (`fleet/BoatName.js`), gold on dark paint and black on pale, placed from `Vessel.transom` or her lines. It's made only once she's named, and adds one draw call.
 
-Others don't see your name or paint yet: `together/` would need them in the pose.
+Others see both: her paint goes in the pose with what's fitted on her (`f`), and her name every 50 poses ([together.md](together.md), What's on her, for everyone).
 
 ## What it costs
 
-Worst case on low, three boats drawn at once (you own all four and you're in the kayak): 1,518 triangles and about 160 KB of geometry, three draw calls, one more once she's named, one each for those on blocks during a hurricane. The pictures are 15 KB on disk. Nothing's built before ready: the moored boats wait for the start, so they're not in the first compile.
+Worst case on low, three boats drawn at once (you own all four and you're in the kayak): 1,518 triangles and about 160 KB of geometry, three draw calls, one more once she's named, one each for those on blocks during a hurricane. The pictures are 26 KB on disk, from the real models ([opening.md](opening.md), Budget). Nothing's built before ready: the moored boats wait for the start, so they're not in the first compile.
 
-## Other streams
+## Where it joins the rest
 
-- **For the merge (stream 8):** `Away.wearRate( w, boat )` and `awayOf`'s `env.boat` already use each hull's own storm figure (`Hull.HULLS`). `Seaworthy.ABLE`'s `storm` through `env.wearMul` would count it twice: keep one. `HULLS` is the one to keep, because it also covers a storm while you're playing.
-- `.gm-list`'s line in `renderShop` is one that streams 7, 8 and 9 all add to. Theirs go in the Gear half of the `boats ?` choice.
-- `Gear.js`' `UPGRADES`: rows filter themselves, so `DAYS_TRACKS` and the traps track show under the boat's own heading.
-- `Together.mineBoat`'s berth is `berthOf`. The rest of `Together.js` still means the lobster boat's berth by `WORLD.boatDock`: stream 5's "Marta's dock holding more than yours".
-- `App.setBoat` now also calls `lightUp( model.group )`, without which a boat you changed into had none of the world's local lights, wet or cloud shadows.
+- A hull's storm wear is `Hull.HULLS`' own figure: `Away.wearRate( w, boat )` and `awayOf`'s `env.boat` read it, and so does a storm while you play. `Seaworthy.ABLE` has no storm figure, so it is counted once.
+- `GameHUD.renderShop`'s list is the `boats ?` choice: the Boats tab (`fleetRows`), or the Gear tab, where days out's rows, the traps' row and the track rows are. `Gear.js`' `UPGRADES` rows filter themselves by `on`, so `DAYS_TRACKS` and the traps track show under the boat's own heading.
+- `together/Together.js` takes every boat's berth from `berthOf` (`mineBoat` and the away boats: [together.md](together.md), Every boat's berth), and `Away.awayOf` is given the dock as `env.dock`. `WORLD.boatDock` is still the pier head where `Chart.HOME` (the way home in the HUD's panel) and `Help.js` measure from.
+- `App.setBoat` calls `lightUp( model.group )`, without which a boat you changed into had none of the world's local lights, wet or cloud shadows.
 
 ## Sources
 

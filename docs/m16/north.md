@@ -56,7 +56,7 @@ For the turtles: `LAMPS` and `lightsAt( hour, day, pick, since )` in `game/Pearl
 
 **Checked** headless on the CPU (SwiftShader, 720p, low): the boat at her berth and coming in, the camp at night, the roof after a hurricane, side by side with the San Fernando photograph. `test/north-pearl.mjs`: her day, the way she goes (at least 1 m of water all along, on both islands, clear of the jetty), the weather, her colliders, the lights by the hour, a light that's out costing nothing, the tin's fates, the sums, the radio's rows.
 
-**Not checked:** how any of it looks on a real GPU or a phone. Two players seeing her together (she's from the clock, so they should). The Glare's strength against a real night sky. Her outboard's level, by ear. **Not done:** other players' boats in her berth.
+**Not checked:** how any of it looks on a real GPU or a phone. Two real devices seeing her together (she's from the clock, so they should; `seen.mjs north` puts her on two games on one machine and compares them). The Glare's strength against a real night sky. Her outboard's level, by ear (`PASSING` in `SoundScape.js`). **Not done:** other players' boats in her berth.
 
 ## Other shores, shells and the hurricane's wrack
 
@@ -198,11 +198,11 @@ Sources: [OpenCPN's chartsymbols.xml](https://github.com/OpenCPN/OpenCPN/blob/ma
 
 So you can walk along the beach below her, or past at 12 m, and she goes on. Stand still at 15 m with your light off and you see the whole thing; once she's laying you can go up behind her.
 
-**Two players.** Nothing's sent about her. Each game reacts to everyone it knows: you, and the others' positions and speeds from `Together`, their flashlight (a new one-letter flag in the pose, `T`), their boat's floods and searchlight, which the pose had. Both games get the same people and lights, so she turns at about the same moment and spot in both (tested). Someone who walks up later sees her as the clock has her until their own game has cause to turn her.
+**Two players.** Nothing's sent about her. Each game reacts to everyone it knows: you, and the others' positions and speeds from `Together`, their flashlight (a new one-letter flag in the pose, `T`), their boat's floods and searchlight, which the pose had. Both games get the same people and lights, so she turns at about the same moment and spot in both (tested). Someone who walks up later sees her as the clock has her until their own game has cause to turn her. `tools/two-players/seen.mjs north` puts two real games on the beach at her night and compares where she is, her tracks and the hatchings on each (then Pearl's boat, with Winston at her tiller, on both).
 
 **Hatchlings and lights.** Every 0.4 s, each hatchling on the sand: is any light on it past a third of what draws it as much as the sea's horizon does? (0.02: the flashlight's whole 30 m if it's in the beam, 18 m from the camp's lantern.) If so its route ahead is rewritten toward the light from where it is, the more it's outshining the sea the straighter; at the light, round and round under it. When the light's gone it goes back to the sea from where it is. The way it's come stays: its track shows it. After 10 minutes they all go regardless. Nothing about this is sent either: a local departure, and without a light it's the same in every game.
 
-**Sound hooks.** Nothing's attached and not one thing is heard. `app.turtles.sounds.<name> = ( x, y, z, strength ) => …`, strength 0..1, world metres, fired only while you're near the beach:
+**Sound hooks, and what's attached to them.** `app.turtles.sounds.<name> = ( x, y, z, strength ) => …`, strength 0..1, world metres, fired only while you're near the beach. The hooks were written first with nothing on them; the sound stream has since attached all four (`App` assigns `SoundScape.turtleHooks()` to `app.turtles.sounds`), and all four are heard. Each is a one-shot at the place, quieter for a lower strength, and they share the soundscape's `turtle` and `hatch` voices (3 and 2 at once, 2 and 1 on low). The recordings are `turtle_breath` (a huff, slowed), `turtle_sand`, `turtle_crawl` and `turtle_hatch`, all CC0, listed in `credits/audio.md`. (The comment at the top of `world/NestingTurtles.js` still says nothing is attached.)
 - `breath`: at the top of each lift of her head, a gasp out and in: resting on the crawl (0.8), digging (0.9), at the chamber (0.7), laying, quietest (0.6), covering, hardest (1), startled (1).
 - `sandThrown`: a throw, from where the sand comes from, behind her: both front flippers digging (0.8), hiding it (1), a rear flipper's scoop or pull (0.45 to 0.5).
 - `crawlStroke`: her front flippers biting into the sand, each stroke: up (0.75), down (0.6).
@@ -213,7 +213,7 @@ Her pose runs from her own clock now, not a count of frames, so they match it.
 
 **Checked.** `test/north-turtles.mjs` (42 checks, under Node, on the low tier's island). Rendered on low, CPU: a turtle coming up at night, a nest hatching at night with and without the flashlight, the tracks close to and from a walker's eye the next morning, one nest's drawn to a lamp; beside USGS's photographs. The shader compiled with no errors.
 
-**Not checked.** The look on a real GPU or a phone: a CPU render. Two real players on a beach (`tools/two-players` not run for this): the test feeds two `Minding`s the others' figures. The moon: a real full moon lessens what a light does to hatchlings, and that's not modelled. Red light isn't a thing the game has. Nothing here's saved: if you turn her back, quit, and come back the next morning, her tracks are the clock's, not the ones she made.
+**Not checked.** The look on a real GPU or a phone: a CPU render. Two real devices on a beach: `test/north-turtles.mjs` feeds two `Minding`s the others' figures, and `seen.mjs north` runs two games on one machine. The moon: a real full moon lessens what a light does to hatchlings, and that's not modelled. Red light isn't a thing the game has. Nothing here's saved: if you turn her back, quit, and come back the next morning, her tracks are the clock's, not the ones she made.
 
 Sources: [DBCA flatback code of conduct](https://flatbacks.dbca.wa.gov.au/resources/code-of-conduct), [DBCA watching hatchlings](https://flatbacks.dbca.wa.gov.au/watching-hatchlings), [Christmas Island National Park](https://christmasislandnationalpark.gov.au/do/turtle-watching), [USGS hatchling tracks (Femmer)](https://www.usgs.gov/media/images/sea-turtle-hatchling-tracks-sand-2), [Conservation Evidence: low intensity lighting](https://www.conservationevidence.com/actions/3623), [FWC on artificial lighting](https://myfwc.com/research/wildlife/sea-turtles/threats/artificial-lighting/), [DBCA on light](https://flatbacks.dbca.wa.gov.au/what-we-do/research/threats/light), [NPS sea turtles](https://home.nps.gov/viis/learn/nature/upload/Seaturtles1acc.pdf).
 
@@ -307,7 +307,7 @@ A first reading of 4254 ms against 1886 was the gale being the first scene in it
 - The frame's calm day from before and after: the two pages' clocks differed, so that comparison says nothing. What holds: the waves' figures to the bit under Node, the shader's guards at 0/255 and 1/255 on fair and gale frames, and whitecaps absent below 3 m/s.
 - The far sea in a gale, rendered: not done, to save rendering. Its figures are under Node. The north beach in a gale is rendered on low and high; the bay's lee isn't.
 - The overcast and all of this on a real GPU; how a long sea's head moves, frame to frame.
-- The hit's words: no toast is said when a sea comes aboard. Other boats take the same litres: the kayak's and the others' figures are their own streams' to set.
+- The hit's words: no toast is said when a sea comes aboard. (The litres are each boat's own now: `Hull.HULLS`' `sea` and `knock`, set in [opening.md](opening.md), A gale, boat by boat. A kayak has no bilge: a sea knocks her instead.)
 - A real phone's frame rate.
 
 ## The way home in the HUD's panel
