@@ -5,7 +5,7 @@
 //   node test/north-chartmap.mjs
 
 import { readFileSync } from 'node:fs';
-import { clampView, zoomAbout, nameFits, scaleOf, RANGE } from '../src/game/ChartMap.js';
+import { clampView, zoomAbout, nameFits, scaleOf, driveView, RANGE } from '../src/game/ChartMap.js';
 import { NAMES, SHEETS } from '../src/game/Chart.js';
 
 let failed = 0;
@@ -52,6 +52,25 @@ for ( const [ m, label ] of [ [ 90, '200 ft' ], [ 300, '500 ft' ], [ 400, '0.2 N
 	check( src.includes( 'g.drawImage( sh.view' ) && ! /new (Uint8|Float32|ImageData|OffscreenCanvas)/.test( src ) && ( src.match( /createElement\( 'div' \)/g ) || [] ).length === 1, 'it draws the minimap\'s own sheets, holding no copy of them' );
 	const hud = readFileSync( new URL( '../src/game/GameHUD.js', import.meta.url ), 'utf8' );
 	check( hud.indexOf( 'gm-chartmap-slot' ) < hud.indexOf( 'Mark where you are' ) && hud.includes( '||= new ChartMap' ), 'above the marks on the Chart tab, made the first time it\'s opened' );
+
+}
+
+{
+
+	// without a pointer (ChartMap.drive): the stick or the keys move it by what's shown, and zoom it
+	const v = { x: 0, z: 0, r: 1000 };
+	check( ! driveView( v, 0.1, 0, 0, 0 ) && v.x === 0, 'nothing held, nothing moved' );
+	check( driveView( v, 1, 1, 0, 0 ) && Math.abs( v.x - 1100 ) < 1e-6 && v.z === 0, 'the stick right, east, about its half-width in a second' );
+	const w = { x: 0, z: 0, r: 1000 };
+	driveView( w, 1, 0, 1, 0 );
+	check( w.z < 0 && w.x === 0, 'the stick up, north' );
+	const z = { x: 0, z: 0, r: 1000 };
+	driveView( z, 0.5, 0, 0, 1 );
+	check( z.r < 1000 && Math.abs( z.r - 1000 * Math.exp( - 0.7 ) ) < 1e-6, 'zoomed in, about half in half a second' );
+	driveView( z, 100, 1, 1, - 1 );
+	check( z.r === RANGE.max && z.x === clampView( { ...z } ).x, 'and kept on the far sheet' );
+	const src = readFileSync( new URL( '../src/game/Game.js', import.meta.url ), 'utf8' ), inp = readFileSync( new URL( '../src/core/Input.js', import.meta.url ), 'utf8' );
+	check( src.includes( '_chartMap.drive(' ) && src.includes( 'inp.noWalk = onChart' ) && inp.includes( "WALK.has( code )" ), 'the game drives it on its tab, the player not walking off meanwhile' );
 
 }
 

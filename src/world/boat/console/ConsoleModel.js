@@ -88,6 +88,7 @@ export class ConsoleModel extends Vessel {
 		this.compassMesh = addPart( 'compass', prepare( compassCardGeometry(), {} ), materials.display );
 		this.compassMesh.position.copy( parts.compassAt );
 		this.compassMesh.castShadow = false;
+		this.hangCard( this.compassMesh );
 		this._card = null;
 
 		// the engines: tilted about the mounting, swung on the swivel; each a draw, both the one geometry
@@ -460,6 +461,7 @@ export class ConsoleModel extends Vessel {
 		}
 
 		this.compassMesh.rotation.y = c.a - her;
+		this._gimbal( dt, q );
 
 	}
 

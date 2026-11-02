@@ -61,7 +61,16 @@ function drawNext( root ) {
 
 }
 
-export function shellTab( s ) {
+// (M16) the next one's close look, or the last's, without a pointer (GameHUD.nextShell): from the end, none. Which's open
+export function stepShell( step ) {
+
+	const list = [ null, ...SHELL_KINDS ];
+	open = list[ ( list.indexOf( open ) + step + list.length ) % list.length ];
+	return open;
+
+}
+
+export function shellTab( s, device = 'keyboard' ) {
 
 	const S = s.shells, n = shellsHave( S ), total = SHELL_KINDS.length;
 	const cells = SHELL_KINDS.map( ( k ) => {
@@ -80,7 +89,8 @@ export function shellTab( s ) {
 
 	const wall = S.wall !== null ? `The set's in Marta's tray by her table since day ${ S.wall + 1 }, for all to see.` : setComplete( S ) ? `The set's whole. Marta wants it for a tray by her table: $${ WALL_PAY }.` : 'Marta wants a whole set for a tray by her table, and will pay for it.';
 	const body = `<div class="gm-shellhead"><span>${ n } of ${ total } found</span><span class="gm-shellscale" style="width:${ 5 * CM }px">5 cm</span></div>${ look }<div class="gm-shells">${ cells }</div><p class="gm-sub gm-shellwall">${ wall }</p>`;
-	return { body, hint: 'The first of each is kept for the set; a spare goes with your finds' };
+	const how = { gamepad: '<kbd>RT</kbd> <kbd>LT</kbd> for a close look', keyboard: '<kbd>F</kbd> <kbd>G</kbd> or a click for a close look' }[ device ];
+	return { body, hint: `${ how ? how + ' · ' : '' }The first of each is kept for the set; a spare goes with your finds` };
 
 }
 

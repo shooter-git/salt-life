@@ -331,6 +331,7 @@ function noiseK( px, pz, key ) {
 		w.lod = { update() {}, origin: new Vector3() };
 		w.mesh = { position: new Vector3() };
 		w.rippleAt = { value: new Vector4() };
+		w.roughAt = { value: new Vector4() };
 		w.ringAt = { value: new Vector4() };
 		w.ringCells = { value: new Vector4() };
 		w.marble = { x: 0, z: 0, u: 0, v: 0, wind: new Vector2( 0, 1 ), spume: 0 };
