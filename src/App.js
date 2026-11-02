@@ -2235,12 +2235,29 @@ export class App {
 	// (M15) the next of the checks' spots offshore (game/CheckSpots.js), at the helm; the last brings you back
 	nextCheckSpot() {
 
+		// (one at a time: getting into another boat takes a while on a CPU, and the script's keys don't wait)
+		this._checkGoing = ( this._checkGoing || Promise.resolve() ).then( () => this._toCheckSpot() ).catch( ( e ) => console.error( e ) );
+		return this._checkGoing;
+
+	}
+
+	async _toCheckSpot() {
+
 		const k = this._checkSpot = ( ( this._checkSpot ?? - 1 ) + 1 ) % CHECK_SPOTS.length, spot = CHECK_SPOTS[ k ];
 		const p = this.player, b = this.boatCtl, s = this.settings;
 		if ( k === 0 && p.mode === 'walk' ) this._checkFrom = { out: { x: p.position.x, z: p.position.z }, g: p.position.y };
+		// ((M16) in the boat this stop's for, ashore to get into her)
+		if ( spot.boat && spot.boat !== this.boat.id ) {
+
+			if ( p.mode === 'boat' || p.mode === 'deck' ) p.exitBoat( this._checkFrom );
+			if ( ! this.state.owns( spot.boat ) ) this.state.addBoat( spot.boat );
+			await this.setBoat( spot.boat );
+
+		}
+
 		if ( spot.id === 'home' ) {
 
-			if ( this._checkFrom ) p.exitBoat( this._checkFrom );
+			if ( this._checkFrom && ( p.mode === 'boat' || p.mode === 'deck' ) ) p.exitBoat( this._checkFrom );
 			b.reset();
 			return;
 
