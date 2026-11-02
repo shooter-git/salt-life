@@ -58,7 +58,7 @@ function swingAxis( t, now, limit, dt ) {
 //   footstep               the sound of walking on her deck (audio.footstep)
 //   hornAt, searchlight    Vector3s, or null when she hasn't one
 //   seated                 she's sat in, not walked about: there's no deck mode, boarding takes the helm
-//   nearDetail             mesh names a phone may leave out far off (App.nearDetail)
+//   nearDetail             mesh names a phone may leave out far off (App.nearDetail); nearDist: from how far, m (70)
 //   bunks                  [ { x, y, z } ] where you stand to turn in, for a boat that has them (game/DaysOut.js)
 //   transom                optional { x, y, z, w }: where her painted name goes (game/fleet/BoatName.js)
 //   stations               where a crew's jobs are done: { tower: { x, y, z, r }, chair: { x, y, z, r, facing } } (feet; r: how near is

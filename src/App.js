@@ -478,7 +478,7 @@ export class App {
 			// (the village's display fish, one mesh spanning the village, aren't built on these devices)
 			this.stand.group?.traverse( ( o ) => o.isMesh && this.nearDetail.push( { o, dist: 60 } ) );
 			this.chandlery.group?.traverse( ( o ) => o.isMesh && this.nearDetail.push( { o, dist: 60 } ) );
-			for ( const k of this.boat.nearDetail ) if ( this.boat.meshes[ k ] ) this.nearDetail.push( { o: this.boat.meshes[ k ], dist: 70 } );
+			for ( const k of this.boat.nearDetail ) if ( this.boat.meshes[ k ] ) this.nearDetail.push( { o: this.boat.meshes[ k ], dist: this.boat.nearDist ?? 70 } );
 			for ( const d of this.nearDetail ) if ( ! d.o.geometry.boundingSphere ) d.o.geometry.computeBoundingSphere();
 
 		}
@@ -2531,7 +2531,7 @@ export class App {
 		if ( this.nearDetail ) for ( const k of model.nearDetail ) if ( model.meshes[ k ] ) {
 
 			model.meshes[ k ].geometry.computeBoundingSphere();
-			this.nearDetail.push( { o: model.meshes[ k ], dist: 70 } );
+			this.nearDetail.push( { o: model.meshes[ k ], dist: model.nearDist ?? 70 } );
 
 		}
 
