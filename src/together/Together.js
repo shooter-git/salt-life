@@ -87,6 +87,7 @@ const WORLD_S = 1; // (M14) s between the host's clouds and whale ('world')
 const SETTLE_MS = 8000; // (Salt Life) after this long with nobody else in the lists, you're on your own
 const DELAY = 0.15; // s behind the newest pose: room to ease between two
 const STALE = 6; // s without a pose: not shown
+const STALE_ABOARD = 90; // (M16) and the boat you're aboard, in the open sea: a quiet spell isn't her gone. When they leave the room, she is
 const TAG_FAR = 70; // m: names fade out toward here
 const DRIFT_MS = 3000; // (M15) ms between workings-out of where an away boat adrift has got to
 const KEEP_S = 10; // (M15) s between the host's looks at the boats whose owners are away
@@ -1281,7 +1282,7 @@ export class Together {
 		body.B = [ r2( bp.x ), r2( bp.y ), r2( bp.z ), r3( q.x ), r3( q.y ), r3( q.z ), r3( q.w ), r2( app.waves.heightAt( bp.x, bp.z ) ) ];
 		body.Y = app.boat.id; // (M16) which boat she is
 		body.f = this._fitted(); // (and what's fitted on her, her paint)
-		if ( app.boat.seated && m === 'h' && ! p.riding ) body.kw = app.boat.sent; // (a kayak: her stroke)
+		if ( app.boat.seated && ! p.riding ) body.kw = app.boat.sent; // (a kayak: her stroke, and whether she's over, with you in the water beside her)
 		// (M16) what's out of her: the spread, the kite, her pool of light; her name every so often
 		const rigs = app.game.rigs;
 		if ( rigs ) {
@@ -1346,7 +1347,7 @@ export class Together {
 		const now = performance.now() / 1000;
 		for ( const o of this.others.values() ) {
 
-			o.cur = now - o.last < this.stale ? this._at( o, now - DELAY ) : null;
+			o.cur = now - o.last < ( p.riding && p.boat.owner === o.person.id ? Math.max( this.stale, STALE_ABOARD ) : this.stale ) ? this._at( o, now - DELAY ) : null;
 			// (their boat on your sea, and everyone aboard her with it; a swimmer and a bobber too)
 			const c = o.cur;
 			if ( c && app.waves ) {
@@ -1376,7 +1377,13 @@ export class Together {
 			// ((M16) if she's still the boat you got on)
 			const same = ! o || ! o.cur || ! o.cur.boat || o.cur.boatId === p.boat.model.id;
 			const frame = same ? ( o && o.cur && ( o.cur.drawn || o.cur.boat ) ) || this._awayFrame( p.boat.owner ) : null;
-			if ( frame ) {
+			// ((M16) a kayak gone over has nowhere to ride: in the water with her owner)
+			if ( frame && o && o.cur && o.cur.kw && o.cur.kw[ 4 ] && p.mode === 'deck' ) {
+
+				p.exitBoat( null, 1 );
+				app.game.toast( `${ o.person.name }'s kayak's gone over`, 2600 );
+
+			} else if ( frame ) {
 
 				p.boat.follow( frame, dt );
 				// ((M16) as she's fitted, and all of her if she's only now here whole)
@@ -1990,6 +1997,19 @@ export class Together {
 
 		}
 
+		// ((M16) in a kayak, her stroke: her paddle, and the seat for whoever's sat at it. Whoever's in her or not: she can be over,
+		// with them in the water. Her stroke's put back: she may be the boat you're in)
+		let seat = null;
+		const K = boat && c.kw && boat.userData.model.poseCopy ? boat.userData.model : null;
+		if ( K ) {
+
+			const was = K.stroke.wire;
+			seat = K.poseCopy( boat, c.kw );
+			K.stroke.wire = was;
+			if ( c.mode !== 'helm' || c.ride ) seat = null;
+
+		}
+
 		// the boat they're aboard, and what she's built with: their own, or riding along, yours, or her owner's as drawn here
 		const on = !! c && ( c.mode === 'helm' || c.mode === 'deck' );
 		let deck = on && boat ? drawn : null, M = on && boat ? this.copies.walked( boat.userData.model, c.boatId, c.fit ) : null;
@@ -2037,16 +2057,6 @@ export class Together {
 		// the figure: aboard, it stands where they stand on her deck or at her helm (M16: hers, and sitting where she's sat in, or in her chair)
 		const chair = c.mode === 'deck' && c.job === 'chair' && M && M.stations && M.stations.chair;
 		let sit = !! M && !! M.seated;
-		// ((M16) in a kayak, her stroke: her paddle, and them sat at it. Her stroke's put back: she may be the boat you're in)
-		let seat = null;
-		if ( boat && deck && c.mode === 'helm' && ! c.ride && M && M.seated && c.kw && M.poseCopy ) {
-
-			const was = M.stroke.wire;
-			seat = M.poseCopy( boat, c.kw );
-			M.stroke.wire = was;
-
-		}
-
 		if ( seat ) {
 
 			g.position.copy( M.seat ).applyQuaternion( deck.quat ).add( deck.pos );

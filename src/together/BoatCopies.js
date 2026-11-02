@@ -461,7 +461,7 @@ export class BoatCopies {
 
 			u.plateSign = sign;
 			this._plateGone( u, b );
-			if ( name && u.model.transom && typeof document !== 'undefined' ) {
+			if ( name && u.model.lines && typeof document !== 'undefined' ) {
 
 				u.plate = namePlate( name, u.model, hex );
 				if ( u.plate ) {

@@ -57,8 +57,8 @@ Leaving, a boat on the stem's berths can pass through the pier head on your scre
 
 - **Fitted and painted.** One number in the pose (`f`): a bit for each thing that comes and goes on her, her paint's place above them. A copy shows it on its own meshes, geometry and hull material, with no new shader, and your own boat of that type is never touched. Someone aboard walks a view of her as it's fitted (`walkedAs`): no tower to climb if she hasn't got one, and hers to climb if you haven't. The twin's sound reads the same number.
 - **All of her, to walk on.** On a phone a copy is only what's seen from a way off, which leaves out the sportfisher's cabin and the console's helm. So she's built again whole before you're offered her, and her extra meshes show only within 12 m. A low-tier deck that isn't drawn is never boarded.
-- **Her spread and kite**, a few numbers a line. **Her pool of light** (`U`). **Her name** every 50 poses, drawn within 40 m, on a boat with a transom. The sportfisher hasn't got one, for anyone.
-- **A kayak's stroke** (`kw`): her paddle, and the figure sat at it.
+- **Her spread and kite**, a few numbers a line. **Her pool of light** (`U`). **Her name** every 50 poses, drawn within 40 m, on her stern as her owner sees it on their own game.
+- **A kayak's stroke** (`kw`): her paddle, and the figure sat at it. And whether she's over, sent with her owner in the water too: everyone sees her keel up, and someone on her tank well goes in with her.
 
 ## What a rider can do on her
 
@@ -77,8 +77,12 @@ An away boat keeps, drifts and is towed by her own `berthOf`, not the lobster bo
 - **A slow device's frame of falling was read as the level below.** Under about 22 fps a walker on a raised deck was squeezed to that lower level's narrower walls and off the edge. This is what a slow guest "falling through" looks like (`Player.updateDeck`).
 - At a rail, "Step ashore" could flip to "Jump overboard" as she bobbed, and E put you in the sea. What's on offer now comes from the rail you're at.
 - Boarding the sportfisher put you in her fighting chair, and a figure at her helm stood in her seat.
+- **A guest was put in the sea whenever her owner's poses stopped for 6 s** ("Robin's boat has gone"), as a screen turned off or a poor connection would do. The scripts set that time to 120 s for the CPU, so none of them saw it. The boat you're aboard now holds her last pose for 90 s, and she's gone when her owner leaves the room (`gap.mjs`).
+- Her capsize was never sent: on everyone else's game her kayak stayed upright with nobody in her, and a rider stayed on her.
+- Her name only showed on a console, on anyone else's game. Her owner sees it on every boat.
+- A guest with their own lobster boat, traps stowed, walked into those traps' invisible colliders on hers (`BoatModel.walkedAs`).
 
-`tools/two-players/aboard.mjs` checks all this: every area in `areas.mjs`, under way, at a slow guest and a slow owner.
+`tools/two-players/aboard.mjs` checks all this: every area in `areas.mjs`, under way, at a slow guest and a slow owner. `hard.mjs` is a guest pushed: taking off from her berth, her lever right up, hard over both ways, by keys between her areas and up her ladders, then all of it in a gale. `seen.mjs` is what's seen and done on another's game, part by part: the fights, kite, kayak, looks, flares, glasses, stern, north. `gap.mjs` is her poses going quiet, `mem.mjs` is script memory over a long run, and `heel.mjs` and `heel-flat.mjs` are how far each boat heels when she's flat out and hard over.
 
 ## Not done
 
@@ -100,7 +104,7 @@ CPU renders, on a machine shared with other sessions. No GPU or phone has run an
 
 A lobster copy and her owner's figure cost 7 draws and about 24,000 triangles. Their memory was too small to read against the noise.
 
-**Script memory on the dev server sits above the 150 MB budget with company, and climbs the longer a game runs.** The complete check reads a build at the start, so it doesn't see this. I didn't find what's growing or compare it against the game before M16: whether a long session on low passes 150 MB on a build is open.
+**Script memory on the dev server sits above the 150 MB budget with company; a build doesn't.** After a forced GC, on low, on the sportfisher's bridge with a guest aboard: dev server 160 MB, built 98 to 100 MB, and a built game alone 89 MB. It rose as she met new things, and then held: built, drawing nothing, 99.2 to 98.3 MB and 96.6 to 99.9 MB over 16 minutes and about 1,700 frames each. At those frame rates that's about a minute of a phone's frames: a very slow leak isn't ruled out.
 
 ## Sources
 

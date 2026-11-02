@@ -306,6 +306,28 @@ export class BoatModel extends Vessel {
 
 	}
 
+	// (together/) someone else's lobster boat: her deck, without the room your own traps take on yours (TrapWork puts them in this model's
+	// colliders when she's the boat you're in; nobody's stowed traps are drawn on someone else's deck)
+	walkedAs() {
+
+		const own = this, view = Object.create( this );
+		let from = null, kept = null;
+		Object.defineProperty( view, 'colliders', { get() {
+
+			if ( own.colliders !== from ) {
+
+				from = own.colliders;
+				kept = from.filter( ( c ) => c.tag !== 'trap' );
+
+			}
+
+			return kept;
+
+		} } );
+		return view;
+
+	}
+
 	// Rough boat-frame colliders (axis-aligned in the boat frame) for a character controller.
 	_buildColliders() {
 
