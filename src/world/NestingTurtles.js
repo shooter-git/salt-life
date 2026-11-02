@@ -26,7 +26,7 @@ import { NORTH_BEACH } from './terrain/NorthBeach.js';
 // Drawn while you're within NEAR of the beach.
 //   const t = new NestingTurtles( { scene, terrain } ); t.update( dt, camera, hour, day, app )
 //
-// (M16) Its sounds: nothing's attached yet, and nothing's heard. The sound stream sets any of these on `sounds`,
+// (M16) Its sounds: App sets SoundScape.turtleHooks() on `sounds`, any of these,
 // each called ( x, y, z, strength ), strength 0..1, world metres, as it happens; nothing fires unless you're near:
 //   sounds.breath       her breath, at the top of each lift of her head (a gasp out and in): when she's resting on
 //                       the crawl, and all the while she digs, lays (quieter, 0.6) and covers (hardest, 1)
