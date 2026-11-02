@@ -29,7 +29,7 @@ for ( const id of Object.keys( BOATS ) ) {
 	ok( m.hullSamples.length > 0 && m.hullSamples.length <= MAX_HULL_SAMPLES, `${ id }: ${ m.hullSamples.length } buoyancy samples fit the water query` );
 	const feet = m.dimensions.length / 0.3048;
 	ok( Math.abs( feet - BOATS[ id ].feet ) < 2.5, `${ id }: ${ feet.toFixed( 1 ) } ft against the list's ${ BOATS[ id ].feet }` );
-	// (no deck of hers you can get to on foot and not off: from anywhere on the lobster boat's foredeck, a rail)
+	// (from anywhere on the lobster boat's foredeck, a rail: there's no walking aft from it)
 	if ( id === 'lobster' ) for ( const [ x, y, z ] of [ [ 0, 1.33, 1.58 ], [ 0, 1.33, 2.2 ], [ 0, 1.45, 2.8 ], [ 0, 1.57, 3.7 ], [ 0.7, 1.45, 2.8 ] ] ) ok( m.exitPoints.some( ( e ) => Math.hypot( x - e.x, z - e.z ) < 1.3 && Math.abs( y - e.y ) < 1.4 ), `lobster: over the side from her foredeck at ${ x }, ${ z }` );
 	for ( const k of [ 'helm', 'helmEye', 'boardPoint', 'exitPoints', 'propeller', 'rudder', 'bowSprayPoints', 'colliders', 'rainTops', 'shelter', 'wake', 'lamps', 'handling' ] ) if ( m[ k ] == null ) ok( false, `${ id }: has no ${ k }` );
 

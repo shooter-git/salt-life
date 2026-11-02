@@ -35,7 +35,7 @@ export function trimFor( driven, u ) {
 // and the power goes with the thrust
 export function outboards( ctl, q ) {
 
-	const { addForceAt, fwd, side, u, vs, aLoc, comZ } = q, model = ctl.model, E = ctl.handling.engine, F = ctl.handling.fin;
+	const { addForceAt, fwd, side, u, vs, aLoc, comZ, wetD } = q, model = ctl.model, E = ctl.handling.engine, F = ctl.handling.fin;
 	const run = ctl.driven && ctl.engineOn;
 	// the trim's motor
 	const want = trimFor( ctl.driven, Math.abs( u ) ), h = 1 / 120;
@@ -93,7 +93,8 @@ export function outboards( ctl, q ) {
 	// up on the plane her V carries her on its wetted middle, and it's her lift that keeps her upright where the buoyancy's
 	// gone from her sides; and on the plane she leans into her turn, pressing on her inner chine, with her speed and how fast she's turning
 	// (the wind on her beam doesn't do it, as drift would)
-	const lean = F.lean * Math.abs( u ) * MathUtils.smoothstep( Math.abs( u ), 4, 9 ) * clamp( aLoc.y, - 0.8, 0.8 ) + F.upright * MathUtils.smoothstep( Math.abs( u ), 4, 13 ) * side.y;
+	// (only with water to press on: off a wave's top, she doesn't)
+	const lean = ( F.lean * Math.abs( u ) * MathUtils.smoothstep( Math.abs( u ), 4, 9 ) * clamp( aLoc.y, - 0.45, 0.45 ) + F.upright * MathUtils.smoothstep( Math.abs( u ), 4, 13 ) * side.y ) * ( wetD ?? 1 );
 	if ( lean ) {
 
 		addForceAt( _f.set( 0, - lean, 0 ).applyQuaternion( ctl.quaternion ), ctl.toWorld( _p.set( 1, ctl.com.y, comZ ), _p ) );

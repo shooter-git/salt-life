@@ -25,7 +25,7 @@ import { MathUtils, Vector3 } from '../../engine/index.js';
 //   bowZ, sternZ    where the rest of the game takes her ends to be
 //   engine          { maxThrust N, pitchSpeed m/s, reverseFactor, shaftRpm }, or null with nothing to burn
 //   propulsion( ctl, q ) puts on what drives and turns her (below): prop and rudder, outboards, a paddle
-//   rudder          what propellerAndRudder reads: { area, race, lift }
+//   rudder          what propellerAndRudder reads: { area, race, lift, stall }: stall [ from, to, what's left ], m/s
 
 const sstep = MathUtils.smoothstep;
 const clamp = MathUtils.clamp;
@@ -64,7 +64,9 @@ export function propellerAndRudder( ctl, q ) {
 	const Ur2 = u * Math.abs( u ) + 0.9 * race;
 	const Ur = Math.sqrt( Math.abs( Ur2 ) ) * Math.sign( Ur2 );
 	const vRud = vs + aLoc.y * ( model.rudder.z - comZ );
-	const delta = ctl.steer * 0.6 + ( Math.abs( Ur ) > 0.3 ? Math.atan2( vRud, Math.abs( Ur ) ) * Math.sign( Ur ) : 0 );
+	// (R.stall [ from, to, what's left ], m/s: past what her hull's built for, the rudder lets go a little, hard over)
+	const stall = R.stall ? 1 - ( 1 - R.stall[ 2 ] ) * sstep( Math.abs( u ), R.stall[ 0 ], R.stall[ 1 ] ) : 1;
+	const delta = ctl.steer * 0.6 * stall + ( Math.abs( Ur ) > 0.3 ? Math.atan2( vRud, Math.abs( Ur ) ) * Math.sign( Ur ) : 0 );
 	const d = clamp( delta, - 0.7, 0.7 );
 	const lift = 0.5 * RHO * R.area * Math.abs( Ur2 ) * R.lift * Math.sin( d ) * Math.cos( d ) * propWet * Math.sign( Ur2 || 1 );
 	addForceAt( _f.copy( side ).multiplyScalar( - lift ), rudW );
@@ -82,7 +84,7 @@ export const LOBSTER_HANDLING = {
 	windY: 1.2,
 	windLead: 3,
 	rightFrom: 14 * DEG, // (past what she leans as she's sold; with a turbo diesel she went over in a hard turn)
-	rightK: 45000,
+	rightK: 90000,
 	rollInertia: 1.24,
 	addedMass: [ 0.6, 0.7, 0.05 ],
 	addedInertia: [ 1.0, 0.4, 0.2 ],
@@ -104,5 +106,5 @@ export const LOBSTER_HANDLING = {
 	sternZ: - 3.8,
 	engine: { maxThrust: 26000, pitchSpeed: 16, reverseFactor: 0.45, shaftRpm: 2400 },
 	propulsion: propellerAndRudder,
-	rudder: { area: 0.12, race: 0.14, lift: 2.8 },
+	rudder: { area: 0.12, race: 0.14, lift: 2.8, stall: [ 10.5, 13, 0.5 ] },
 };

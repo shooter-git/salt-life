@@ -123,7 +123,7 @@ export class BoatModel extends Vessel {
 		this.helm = { x: HOUSE.helmX, z: HOUSE.seatZ, eye: this.helmEye, rise: [ HOUSE.helmX + 0.45, HOUSE.seatZ - 0.1 ] };
 		this.boardPoint = new Vector3( 0, lines.deckY, - 1.75 );
 
-		// ((M16) and on her foredeck, where a hop off the bench can put you: there's no walking back under the roof)
+		// ((M16) and on her foredeck: there's no walking aft from it, should you be put there)
 		this.exitPoints = this.railPoints( [ - 3.0, - 2.0, - 1.2, 2.1, 3.0, 3.7 ] );
 
 		this.propeller = PROP.position.clone();
@@ -366,6 +366,8 @@ export class BoatModel extends Vessel {
 
 		const d = HOUSE.dash;
 		add( 'console', V( - d.halfW, L.deckY, d.zFace ), V( d.halfW, d.yTop, L.houseFront ) );
+		// ((M16) her windshield: a hop off the bench went over the dash and out through the glass)
+		add( 'windshield', V( - 1.25, d.yTop, 1.3 ), V( 1.25, HOUSE.roofUnderY, L.houseFront ) );
 		add( 'helmSeat', V( HOUSE.helmX - 0.23, L.deckY, HOUSE.seatZ - 0.24 ), V( HOUSE.helmX + 0.23, 1.05, HOUSE.seatZ + 0.21 ) );
 		add( 'bench', V( 0.65, L.deckY, 0.075 ), V( 1.07, L.deckY + 0.47, 0.825 ), true );
 		add( 'roof', V( - 1.25, HOUSE.roofUnderY, HOUSE.roofZ0 ), V( 1.25, roofTopY( 0 ), HOUSE.roofZ1 ), true );

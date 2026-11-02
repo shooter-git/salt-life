@@ -893,9 +893,10 @@ if ( PART === 'decks' ) {
 	const bench = await hopTo( 'the bench', 0.86, 0.45, 0.82 );
 	say( bench.got, `the house's bench, by keys: ${ JSON.stringify( bench ) }` );
 	await shot( guest, 'seen-decks-bench' );
-	// off the bench, over her dash: the only way forward there is
+	// off the bench at her dash: her windshield stops you
 	const fore = await hopTo( 'foredeck, aft', 0.5, 1.9, 1.33 );
-	say( fore.got, `her foredeck, by keys, from the bench: ${ JSON.stringify( fore ) }` );
+	say( ! fore.got, `her windshield stops a hop off the bench: ${ JSON.stringify( fore ) }` );
+	if ( ! fore.got ) { await rateOf( owner, guest ); await G.end( 'seen' ); process.exit( 0 ); }
 	const fore2 = await hopTo( 'foredeck', 0, 2.8, 1.45 );
 	const bow = await hopTo( 'the bow', 0, 3.7, 1.57 );
 	say( fore2.got && bow.got, `on up her foredeck to the bow, by keys: ${ JSON.stringify( bow ) }` );

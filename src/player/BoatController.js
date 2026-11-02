@@ -433,6 +433,7 @@ export class BoatController {
 		_q.vs = vs;
 		_q.aLoc = aLoc;
 		_q.comZ = this.com.z;
+		_q.wetD = wetD;
 		_q.torque = T;
 		H.propulsion( this, _q );
 
