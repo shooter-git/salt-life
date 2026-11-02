@@ -116,6 +116,8 @@ const SEABED_BIN = { low: 'world/offshore-512.bin', mid: 'world/offshore.bin', h
 // (M15) the bank's waves: its shore field's square (m, about its middle) and cells a side (14 m; 28 on low),
 // solved once you're this near it (m)
 const BANK = { size: 7168, res: { low: 256, mid: 512, high: 512 }, near: 9000 };
+// ((M16) the island's shore fields' cells a side: four and more can be held at once, and each is about 5 MB of a phone's script memory at 512)
+const SHORE_RES = { low: 384, mid: 512, high: 512 };
 // (M15) how far about you what's found out there is looked for (m), and how near the bait the birds work has
 // to be
 const FIND_RANGE = 3000, FIND_BIRDS = 2500;
@@ -397,7 +399,7 @@ export class App {
 		await progress( 0.6, 'Rolling in the swell' );
 		this.waves = new Waves( { tier, terrain: this.terrainData } );
 		// the breaking shore waves: their phase from the wave travel-time field around the island
-		this.shoreField = computeShoreField( this.terrainData, { res: 512, swellDir: [ WORLD.swellDir.x, WORLD.swellDir.y ] } );
+		this.shoreField = computeShoreField( this.terrainData, { res: SHORE_RES[ tier ] ?? SHORE_RES.low, swellDir: [ WORLD.swellDir.x, WORLD.swellDir.y ] } );
 		this.shore = new ShoreWaves( { field: this.shoreField } );
 		this.query = new WaterQuery( this.waves, this.terrainData, this.shore );
 		this.water = new WaterSurface( { scene, waves: this.waves, terrain: this.terrain, shore: this.shore, cover: this.cover, rocks: this.rockCover, tier, lean: this.cpuGL && ! new URLSearchParams( location.search ).has( 'fullsea' ) } );
