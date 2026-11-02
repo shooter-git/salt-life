@@ -129,7 +129,7 @@ say( !! colours.theirs && colours.name === 'Robin', `in her own colours (${ colo
 await sam.page.waitForTimeout( 6000 );
 const offered = await sam.game.evaluate( () => window.__app.player.prompt && window.__app.player.prompt.text );
 say( ! /Gaff/.test( offered || '' ), `no gaffing someone else's buoy (the prompt there: ${ offered })` );
-await sam.page.screenshot( { path: join( out, 'buoys-sam.png' ) } );
+await sam.page.screenshot( { path: join( out, 'buoys-sam.png' ), timeout: 300000 } );
 // Robin hauls one: it's gone from Sam's sea
 await robin.game.evaluate( () => {
 

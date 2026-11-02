@@ -56,7 +56,7 @@ const open = async ( name, boat, tier = TIER ) => {
 
 	}
 
-	await f().evaluate( () => { const g = window.__app.game; if ( g.guide ) { g.guide.seen.intro = true; if ( g.guide.open ) g.guide.close(); g.guide._wait = - 1; } window.__app.together.stale = 120; /* (two games on the CPU, seconds between poses) */ } );
+	await f().evaluate( () => { const g = window.__app.game; if ( g.guide ) { g.guide.seen.intro = true; if ( g.guide.open ) g.guide.close(); g.guide._wait = - 1; } window.__app.together.stale = 120; /* (two games on the CPU, seconds between poses) */ const pl = window.__app.player, up = pl.update; window.__real = { n: 0, since: performance.now() }; pl.update = function ( dt ) { up.call( this, dt ); window.__real.n ++; }; } );
 	return { page, game: f() };
 
 };
@@ -83,7 +83,7 @@ const drawn = async ( g, n = 2 ) => {
 const shot = async ( who, name ) => {
 
 	await draws( who.game, true );
-	await drawn( who.game ).then( () => who.page.screenshot( { path: `${ out }/boats-${ name }.png` } ), async () => console.log( `     no frame drawn for ${ name }:`, await who.game.evaluate( () => { const a = window.__app; return JSON.stringify( { calls: a.renderer.info.render.calls, frame: a.renderer.info.render.frame, drawn: !! a._drawn, uses: a._uses.length, rest: a._rest, ticks: window.__draws.ticks, frames: a.player.mode, peak: window.__draws.peak, ownDraw: Object.prototype.hasOwnProperty.call( a, 'drawWorld' ) } ); } ) ) );
+	await drawn( who.game ).then( () => who.page.screenshot( { path: `${ out }/boats-${ name }.png`, timeout: 300000 } ), async () => console.log( `     no frame drawn for ${ name }:`, await who.game.evaluate( () => { const a = window.__app; return JSON.stringify( { calls: a.renderer.info.render.calls, frame: a.renderer.info.render.frame, drawn: !! a._drawn, uses: a._uses.length, rest: a._rest, ticks: window.__draws.ticks, frames: a.player.mode, peak: window.__draws.peak, ownDraw: Object.prototype.hasOwnProperty.call( a, 'drawWorld' ) } ); } ) ) );
 	await draws( who.game, false );
 
 };
@@ -362,6 +362,7 @@ await frames( sam.game, 8 );
 const yard = await sam.game.evaluate( `( () => { const a = window.__app, o = ${ other }, b = o.boat; return { hauled: a.boatCtl.hauled, theirs: !! ( b && b.visible ), off: b ? +b.position.distanceTo( a.boatCtl.position ).toFixed( 2 ) : null, pose: o.cur && o.cur.boat ? +o.cur.boat.pos.distanceTo( a.boatCtl.position ).toFixed( 2 ) : null }; } )()` ).catch( ( e ) => ( { error: e.message.slice( 0, 160 ) } ) );
 console.log( '     two boats on the cradle:', JSON.stringify( yard ) );
 
+for ( const [ n, g ] of [ [ 'Robin', robin ], [ 'Sam', sam ] ] ) console.log( `     frames a second, really, ${ n }:`, await g.game.evaluate( () => +( window.__real.n / ( performance.now() - window.__real.since ) * 1000 ).toFixed( 1 ) ) );
 console.log( problems ? `${ problems } PROBLEM(S)` : 'no problems' );
 await browser.close();
 process.exit( problems ? 1 : 0 );

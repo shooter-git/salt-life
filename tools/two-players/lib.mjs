@@ -122,7 +122,7 @@ export async function start( { out, port, tier = 'low', stale = 120, viewport = 
 		}
 
 		const path = `${ out }/${ name }.png`;
-		await who.page.screenshot( { path } );
+		await who.page.screenshot( { path, timeout: 300000 } );
 		const r = await who.game.evaluate( () => { window.gc(); const R = { draws: window.__draws.peak.calls, triangles: window.__draws.peak.tris, heapMB: +( performance.memory.usedJSHeapSize / 1048576 ).toFixed( 1 ) }; if ( ! window.__keepDrawing ) window.__stop(); return R; } );
 		console.log( `     shot ${ name } (${ who.name }):`, JSON.stringify( r ) );
 		return r;

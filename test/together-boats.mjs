@@ -335,7 +335,8 @@ ok( fitPaint( fitWire( 'console', {}, null ) ) === null, 'no paint: as she came'
 	const rl = spreadWire( lines ), read = readSpread( rl );
 	ok( rl.length === 6 && read.length === 2 && read[ 0 ].kind === 'flat' && read[ 0 ].side === - 1 && read[ 1 ].kind === 'rigger' && read[ 1 ].side === 1 && read[ 1 ].on && ! read[ 0 ].on, `the spread: ${ JSON.stringify( rl ).length } bytes for two lines, read back, the one coming in left out` );
 	ok( readSpread( [ 1, 2 ] ) === null && readSpread( 'x' ) === null && readSpread( [ 99, 3, 0 ] ).length === 0, 'and what doesn\'t read isn\'t drawn' );
-	ok( spreadWire( [] ) === undefined && kiteWire( null ) === undefined && kiteWire( { down: true, at: new Vector3() } ) === undefined, 'nothing out: nothing sent' );
+	ok( spreadWire( [] ) === undefined && kiteWire( null ) === undefined && kiteWire( { down: true, up: 0, at: new Vector3() } ) === undefined, 'nothing out: nothing sent' );
+	ok( kiteWire( { down: true, up: 0.5, at: new Vector3( 1, 20, 3 ) } )?.[ 1 ] === 20, 'a kite on its way down is still sent, till it\'s in' );
 	const sf = await loadBoat( 'sportfisher', 'low' ), at = { butt: new Vector3(), tip: new Vector3(), clip: new Vector3() };
 	rodOf( sf, { kind: 'rigger', side: 1, on: false }, at );
 	ok( at.hasClip && at.tip.y > at.butt.y, 'a rigger\'s line goes by her outrigger' );

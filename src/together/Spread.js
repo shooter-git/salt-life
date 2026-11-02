@@ -12,7 +12,8 @@ const KINDS = [ 'flat', 'rigger', 'shotgun' ], ROD_LONG = 2.2, REACH = 3.6, MOST
 
 export const lineCode = ( spot ) => KINDS.indexOf( spot.kind ) * 3 + ( spot.side || 0 ) + 1;
 export const spreadWire = ( lines ) => lines.length ? lines.filter( ( L ) => ! L.in ).slice( 0, MOST ).flatMap( ( L ) => [ lineCode( L.spot ), Math.round( L.len ), L.on ? 1 : 0 ] ) : undefined;
-export const kiteWire = ( K ) => K && ! K.down ? [ K.at.x, K.at.y, K.at.z ].map( ( v ) => Math.round( v * 10 ) / 10 ) : undefined;
+// (and coming down, a fish on or the wind gone, till it's in: it doesn't vanish on everyone else's as it starts)
+export const kiteWire = ( K ) => K && ( ! K.down || K.up > 0 ) ? [ K.at.x, K.at.y, K.at.z ].map( ( v ) => Math.round( v * 10 ) / 10 ) : undefined;
 export function readSpread( rl ) {
 
 	if ( ! Array.isArray( rl ) || rl.length % 3 || rl.length > MOST * 3 || ! rl.every( Number.isFinite ) ) return null;

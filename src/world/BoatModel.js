@@ -123,7 +123,8 @@ export class BoatModel extends Vessel {
 		this.helm = { x: HOUSE.helmX, z: HOUSE.seatZ, eye: this.helmEye, rise: [ HOUSE.helmX + 0.45, HOUSE.seatZ - 0.1 ] };
 		this.boardPoint = new Vector3( 0, lines.deckY, - 1.75 );
 
-		this.exitPoints = this.railPoints( [ - 3.0, - 2.0, - 1.2 ] );
+		// ((M16) and on her foredeck, where a hop off the bench can put you: there's no walking back under the roof)
+		this.exitPoints = this.railPoints( [ - 3.0, - 2.0, - 1.2, 2.1, 3.0, 3.7 ] );
 
 		this.propeller = PROP.position.clone();
 		this.rudder = RUDDER.pivot.clone();
