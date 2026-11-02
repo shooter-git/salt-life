@@ -366,11 +366,12 @@ export class BoatModel extends Vessel {
 
 		const d = HOUSE.dash;
 		add( 'console', V( - d.halfW, L.deckY, d.zFace ), V( d.halfW, d.yTop, L.houseFront ) );
-		// ((M16) her windshield: a hop off the bench went over the dash and out through the glass)
-		add( 'windshield', V( - 1.25, d.yTop, 1.3 ), V( 1.25, HOUSE.roofUnderY, L.houseFront ) );
+		// ((M16) her windshield, and the dash no place to stand under the roof)
+		add( 'windshield', V( - 1.25, d.yTop, d.zFace ), V( 1.25, HOUSE.roofUnderY, L.houseFront ) );
 		add( 'helmSeat', V( HOUSE.helmX - 0.23, L.deckY, HOUSE.seatZ - 0.24 ), V( HOUSE.helmX + 0.23, 1.05, HOUSE.seatZ + 0.21 ) );
 		add( 'bench', V( 0.65, L.deckY, 0.075 ), V( 1.07, L.deckY + 0.47, 0.825 ), true );
-		add( 'roof', V( - 1.25, HOUSE.roofUnderY, HOUSE.roofZ0 ), V( 1.25, roofTopY( 0 ), HOUSE.roofZ1 ), true );
+		// ((M16) something to stand on, not a wall: with your head at it, a hop in the house threw you out from under it)
+		add( 'roof', V( - 1.25, HOUSE.roofUnderY, HOUSE.roofZ0 ), V( 1.25, roofTopY( 0 ), HOUSE.roofZ1 ), true, false );
 		add( 'hauler', V( HAULER.x - 0.2, L.deckY, HAULER.z - 0.08 ), V( HAULER.x + 0.2, HAULER.y + 0.2, HAULER.z + 0.25 ) );
 		add( 'baitBarrel', V( 0.6, L.deckY, - 1.06 ), V( 1.12, L.deckY + 0.8, - 0.54 ) );
 		// foredeck steps (walkable) from the house front to the stem head
