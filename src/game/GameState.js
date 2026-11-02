@@ -8,6 +8,7 @@ import { cleanTrophies } from './Trophies.js';
 import { ordersOf, orderPrice } from './Orders.js';
 import { WEEK_MUL } from './WeekOrder.js';
 import { BAITS, KEEPER_KG, baitOf, chunksOf } from './Bait.js';
+import { LEADERS } from './rigs/Presentation.js';
 import { PLACES } from './Places.js';
 import { ChartLog } from './Chart.js';
 import { BOATS, START_BOAT } from '../world/boat/Boats.js';
@@ -63,6 +64,7 @@ export class GameState {
 		// the frozen shrimp)
 		this.bait = {};
 		this.baitPick = null;
+		this.leaderPick = null; // ((M16) the leader you've tied on, any rig: Presentation.leaderOn; null: the sensible one)
 		// ((M15) beachcombing (Beachcomb.js): what you've picked up off the sand, and which finds you've had (the
 		// last few days': they'd have gone by now anyway), so they're not there again)
 		this.finds = []; // { id, kind, day, seed }
@@ -565,6 +567,15 @@ export class GameState {
 
 	}
 
+	// (M16) the leader on the line from now on (null: the sensible one for the rig)
+	pickLeader( id ) {
+
+		this.leaderPick = id;
+		this.save();
+		this.emit();
+
+	}
+
 	// a mullet from the cooler cut into chunks of bait -> how many (0: no such fish)
 	cutBait( id ) {
 
@@ -928,7 +939,7 @@ export class GameState {
 	toJSON() {
 
 		this._boatAway();
-		return { v: 2, boat: this.boat, fleet: this.fleet, earned: this.earned, dues: this.dues, money: this.money, inventory: this.inventory, log: this.log, places: this.places, trophies: this.trophies, found: this.found, upgrades: this.upgrades, fuel: this.fuel, hull: this.hull, hauled: this.hauled, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, bag: this.bag, finds: this.finds, picked: this.picked, shells: this.shells, chart: this.chart.toJSON(), days: this.days, traps: this.traps, nextId: this._nextId };
+		return { v: 2, boat: this.boat, fleet: this.fleet, earned: this.earned, dues: this.dues, money: this.money, inventory: this.inventory, log: this.log, places: this.places, trophies: this.trophies, found: this.found, upgrades: this.upgrades, fuel: this.fuel, hull: this.hull, hauled: this.hauled, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, leaderPick: this.leaderPick, bag: this.bag, finds: this.finds, picked: this.picked, shells: this.shells, chart: this.chart.toJSON(), days: this.days, traps: this.traps, nextId: this._nextId };
 
 	}
 
@@ -968,6 +979,7 @@ export class GameState {
 		this.bait = {};
 		for ( const [ k, n ] of Object.entries( d.bait && typeof d.bait === 'object' ? d.bait : {} ) ) if ( BAITS[ k ] && Number.isInteger( n ) && n > 0 ) this.bait[ k ] = n;
 		this.baitPick = BAITS[ d.baitPick ] ? d.baitPick : null;
+		this.leaderPick = LEADERS[ d.leaderPick ] ? d.leaderPick : null;
 		const b = d.bag;
 		this.bag = b && Number.isFinite( b.day ) && b.n && typeof b.n === 'object' ? { day: b.day, n: { ...b.n } } : { day: null, n: {} };
 		// ((M15) beachcombing: saves from before had none)
@@ -1031,6 +1043,7 @@ export class GameState {
 		this.weekPaid = null;
 		this.bait = {};
 		this.baitPick = null;
+		this.leaderPick = null;
 		this.bag = { day: null, n: {} };
 		this.finds = [];
 		this.picked = [];

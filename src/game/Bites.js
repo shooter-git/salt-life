@@ -153,7 +153,8 @@ const NOT_WATER = { flood: true, under: true, lively: true, weather: true, side:
 // interface with the rigs: docs/m16/fish.md):
 //   { way: 'float' | 'troll' | 'kite' | 'drop', depth: m under the surface, lure: a lure's id, or null: bait }
 // None is today's rig, a float six metres down. What each fish takes, how, and at what depth (FishTable's ways, at,
-// eats); a lure none of its kind's eats name gets this much of a chance (only one that strikes at anything would)
+// eats), then what the lure's own likes say (Bait.js); a lure neither names gets this much of a chance (only one that
+// strikes at anything would)
 export const FLOAT = { way: 'float', depth: 6 };
 const LURE_OTHER = 0.3;
 // its weight fished a way
@@ -173,7 +174,7 @@ export function hookWeight( id, hook, hour ) {
 	const f = FISH[ id ], h = hook || FLOAT;
 	let x = wayOf( f, h.way );
 	if ( x > 0 && f.at ) x *= depthWeight( f.at, h.depth ?? FLOAT.depth, hour );
-	if ( x > 0 && h.lure ) x *= f.eats && f.eats[ h.lure ] !== undefined ? f.eats[ h.lure ] : LURE_OTHER;
+	if ( x > 0 && h.lure ) x *= f.eats?.[ h.lure ] ?? BAITS[ h.lure ]?.likes[ id ] ?? LURE_OTHER;
 	return x;
 
 }

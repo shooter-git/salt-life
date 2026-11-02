@@ -591,6 +591,8 @@ export class Game {
 		else if ( net.equipped && quiet && inp.hit( 'KeyB' ) ) this.toast( this.bucketText(), 2400 );
 		// ((M16) the rig on the line: C, or LB)
 		if ( rod.equipped && quiet && rod.state === 'idle' && inp.hit( 'KeyC' ) ) this.rigs.cycle();
+		// ((M16) and the leader: X, or Y on a gamepad, whose camera is the helm's)
+		if ( rod.equipped && quiet && rod.state === 'idle' && ( inp.hit( 'KeyX' ) || ( inp.lastDevice === 'gamepad' && inp.hit( 'KeyV' ) ) ) ) this.rigs.cycleLeader();
 
 		if ( rod.equipped && ! panelOpen ) {
 
@@ -605,8 +607,12 @@ export class Game {
 
 			} else if ( rod.state === 'floating' ) {
 
-				if ( lDown ) this.strike();
-				else if ( rDown ) {
+				// ((M16) a lead on its way down's stopped: Rigs.holdLead)
+				if ( lDown ) {
+
+					if ( ! this.rigs.holdLead() ) this.strike();
+
+				} else if ( rDown ) {
 
 					rod.retrieve();
 					this.bite = null;
@@ -1799,6 +1805,7 @@ export class Game {
 			const tag = info.released && tagFor( this.orders, f.species, f.place );
 			info.tagged = tag ? this.state.tag( tag, this.tradeDay ) : 0;
 			// ((M16) a billfish let go: the fund pays for it, and it's a trophy in your log)
+			info.hurt = info.released && this.rigs.releaseHurt( f.species );
 			info.bonus = letGo( this.state, info );
 			// (Salt Life) the others hear of it; the island's records (together/): the card says when
 			// it's the heaviest of its kind anyone here has landed
@@ -2096,7 +2103,7 @@ export class Game {
 	// a key as the device in use calls it, in the prompts' text
 	keyName( k ) {
 
-		return this.app.input.lastDevice === 'gamepad' ? { N: `D-pad ${ UP }`, B: `D-pad ${ LEFT } ${ RIGHT }`, R: 'X', E: 'B', C: 'LB', W: `Stick ${ UP }` }[ k ] || k : k;
+		return this.app.input.lastDevice === 'gamepad' ? { N: `D-pad ${ UP }`, B: `D-pad ${ LEFT } ${ RIGHT }`, C: 'LB', X: 'Y', R: 'X', E: 'B', W: `Stick ${ UP }` }[ k ] || k : k;
 
 	}
 

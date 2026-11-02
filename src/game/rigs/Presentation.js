@@ -18,6 +18,8 @@ import { biteDelay, pickSpecies } from '../Bites.js';
 //   lure     'jig' | 'plug' | 'skirt', or null: a bait's on
 //   leader   'mono' | 'fluoro' | 'wire' | 'heavy'
 //
+// Who takes a towed bait, a kite's or a deep drop is the fish table's: its ways.
+//
 // Sources for the figures are in docs/m16/tackle.md.
 export const RIGS = {
 	float: { name: 'Float', stop: 5, needs: null },
@@ -51,8 +53,8 @@ export function towTaste( tow, knots ) {
 
 }
 
-// the leader a sensible angler ties on, of those they own (Gear.js' leader track: 0 light mono, 1 fluorocarbon, 2 wire,
-// 3 200 lb mono)
+// the leader a sensible angler ties on for the rig, of those they own (Gear.js' leader track: 0 light mono, 1 fluorocarbon,
+// 2 wire, 3 200 lb mono), if you haven't tied on one of your own (leaderOn)
 export function leaderFor( level, kind, knots = 0, lure = null ) {
 
 	const has = ( n ) => level >= n;
@@ -65,28 +67,24 @@ export function leaderFor( level, kind, knots = 0, lure = null ) {
 }
 
 export const LEADERS = { mono: 'light mono', fluoro: 'fluorocarbon', wire: 'wire', heavy: '200 lb mono' };
+export const LEADER_IDS = Object.keys( LEADERS ); // (in the track's order)
+// what's on the line: the one you tied on (GameState.leaderPick) on any rig, while it's one you own; else the sensible one
+export function leaderOn( pick, level, kind, knots = 0, lure = null ) {
+
+	const i = LEADER_IDS.indexOf( pick );
+	return i >= 0 && i <= level ? pick : leaderFor( level, kind, knots, lure );
+
+}
 
 // the hook for a rig
 export const hookOf = ( kind, depth, floorM, extra = {} ) => ( { way: kind === 'bottom' ? 'float' : kind, kind, depth, floorM, lure: null, knots: 0, lines: 1, leader: 'mono', ...extra } );
 
-// ---- what the fish make of it. The table's ways and at (Bites.hookWeight) say most of it; for a fish that has neither,
-// these. knots, shy, teeth, bill and leaps can be said on the fish's own entry: its own wins
+// ---- what the fish make of it, past the table's ways and at (Bites.hookWeight). knots, shy, teeth, bill and leaps can be
+// said on the fish's own entry: its own wins
 
-// its taste for a rig, past which any fish of open water takes a towed bait or one on a kite, and little else does
-const TASTE = {
-	troll: { wahoo: 5, mahi: 3, tuna: 3, yellowfin: 3, sailfish: 2, whiteMarlin: 2, blueMarlin: 2, barracuda: 2.5, jack: 1.2, tarpon: 0.5, blackGrouper: 0.3, cuberaSnapper: 0.3 },
-	kite: { sailfish: 9, whiteMarlin: 2, blueMarlin: 1, tuna: 3, yellowfin: 3, mahi: 2.5, wahoo: 2, barracuda: 1.5, tarpon: 1 },
-	drop: { swordfish: 8, silkSnapper: 1.4 },
-};
-const TASTE_ELSE = { float: 1, bottom: 1, troll: 0.1, kite: 0.08, drop: 1 };
-
-// where it feeds, m under the surface. Swordfish rise at night and lie deep by day
-const COLUMN = { swordfish: [ 250, 750 ], blueMarlin: [ 0, 200 ], whiteMarlin: [ 0, 150 ], sailfish: [ 0, 100 ], wahoo: [ 0, 80 ], yellowfin: [ 0, 250 ] };
-const COLUMN_NIGHT = { swordfish: [ 5, 150 ] };
-const OPEN = [ 'blue', 'edge', 'weed', 'debris', 'birds' ], ROOTED = [ 'deep', 'ledge', 'reef', 'bay', 'pier', 'shallows', 'creek', 'wash' ];
-
-// the speed it strikes a towed bait at, knots: most anything at what a bait swims at; a wahoo faster than that
-const TOW_KNOTS = { wahoo: [ 9, 17 ], mahi: [ 4.5, 11 ], tuna: [ 5, 12 ], yellowfin: [ 5, 12 ] };
+// the speed it strikes a towed bait at, knots: most anything at what a bait swims at; a wahoo faster than that, and those
+// of the bays, the creeks and the reef only to a plug towed slowly, a kayak's speed among them
+const TOW_KNOTS = { wahoo: [ 9, 17 ], mahi: [ 4.5, 11 ], tuna: [ 5, 12 ], yellowfin: [ 5, 12 ], barracuda: [ 2.5, 12 ], jack: [ 2, 9 ], needlefish: [ 2, 8 ], tarpon: [ 2, 6 ], snook: [ 2, 5.5 ], redfish: [ 1.5, 4.5 ], trout: [ 1.5, 4.5 ], blackGrouper: [ 3, 7 ], cuberaSnapper: [ 3, 7 ], muttonSnapper: [ 3, 7 ], grouper: [ 3, 7 ] };
 const TOW_KNOTS_ELSE = [ 3, 10 ];
 
 // how shy of a leader it can see: wire keeps this share away, 200 lb mono a little over half of that, and
@@ -97,43 +95,12 @@ const BILL = { sailfish: true, whiteMarlin: true, blueMarlin: true, swordfish: t
 // what jumps in the fight
 const LEAPS = { sailfish: true, whiteMarlin: true, blueMarlin: true, mahi: true, tarpon: true };
 
-const inColumn = ( c, m ) => {
-
-	const off = m < c[ 0 ] ? c[ 0 ] - m : m > c[ 1 ] ? m - c[ 1 ] : 0;
-	return off <= 0 ? 1 : Math.max( 0.02, 1 - off / ( 20 + 0.25 * ( c[ 1 ] - c[ 0 ] ) ) );
-
-};
-
-// the column a fish feeds in, or null: anywhere (those tied to a bottom are read from the water: atHook)
-export function columnOf( id, hour = 12 ) {
-
-	const f = FISH[ id ];
-	if ( ! f ) return null;
-	if ( hour < 6 || hour > 19 ) {
-
-		if ( COLUMN_NIGHT[ id ] ) return COLUMN_NIGHT[ id ];
-
-	}
-
-	if ( COLUMN[ id ] ) return COLUMN[ id ];
-	const h = f.habitat || {};
-	return OPEN.some( ( k ) => h[ k ] ) && ! ROOTED.some( ( k ) => h[ k ] ) ? [ 0, 150 ] : null;
-
-}
-
 // a species' weight on this hook, times this, past what Bites made of it (no hook: as it was)
-export function rigWeight( rig, id, hour = 12 ) {
+export function rigWeight( rig, id ) {
 
 	if ( ! rig ) return 1;
 	const f = FISH[ id ] || {};
-	let x = f.ways ? 1 : ( TASTE[ rig.kind ] && TASTE[ rig.kind ][ id ] ) ?? TASTE_ELSE[ rig.kind ];
-	if ( ! f.at ) {
-
-		const c = columnOf( id, hour );
-		if ( c ) x *= inColumn( c, rig.depth );
-
-	}
-
+	let x = rig.kind === 'drop' && id === 'silkSnapper' ? 1.4 : 1; // (the deep drop's snapper above all)
 	if ( rig.kind === 'troll' ) {
 
 		const k = f.knots || TOW_KNOTS[ id ] || TOW_KNOTS_ELSE, v = rig.knots || 0;
@@ -155,13 +122,13 @@ export function pickOnRig( h, hour, rng = Math.random, bait = null ) {
 	const rig = h.hook;
 	if ( ! rig ) return pickSpecies( h, hour, rng, bait );
 	let top = 0;
-	for ( const id of FISH_IDS ) top = Math.max( top, rigWeight( rig, id, hour ) );
+	for ( const id of FISH_IDS ) top = Math.max( top, rigWeight( rig, id ) );
 	if ( top <= 0 ) return null;
 	for ( let i = 0; i < 40; i ++ ) {
 
 		const id = pickSpecies( h, hour, rng, bait );
 		if ( ! id ) return null;
-		if ( rng() * top < rigWeight( rig, id, hour ) ) return id;
+		if ( rng() * top < rigWeight( rig, id ) ) return id;
 
 	}
 

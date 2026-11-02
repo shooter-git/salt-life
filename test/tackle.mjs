@@ -3,6 +3,7 @@
 //
 //   node test/tackle.mjs
 
+import { readFileSync } from 'node:fs';
 import { PerspectiveCamera } from '../src/engine/index.js';
 import { FISH, FISH_IDS } from '../src/game/FishTable.js';
 import { CatchMinigame } from '../src/game/CatchMinigame.js';
@@ -10,9 +11,11 @@ import { BAITS, onHand } from '../src/game/Bait.js';
 import { gearStats, defaultUpgrades, UPGRADES } from '../src/game/Gear.js';
 import { GameState } from '../src/game/GameState.js';
 import * as Bites from '../src/game/Bites.js';
-import { atHook, baitFits, hookOf, leaderFor, leaderRisk, pickOnRig, rigDelay, rigWeight, towTaste, waitOnRig } from '../src/game/rigs/Presentation.js';
+import { atHook, baitFits, hookOf, LEADER_IDS, leaderFor, leaderOn, leaderRisk, pickOnRig, rigDelay, rigWeight, towTaste, waitOnRig } from '../src/game/rigs/Presentation.js';
 import { fishSeen, glareLeft } from '../src/game/rigs/Glasses.js';
-import { HOLD_KG } from '../src/game/rigs/Rigs.js';
+import { HOLD_KG, Rigs } from '../src/game/rigs/Rigs.js';
+import { DAYS_TRACKS } from '../src/game/Seaworthy.js';
+import { letGo } from '../src/game/Trophies.js';
 import { FishingRod } from '../src/game/FishingRod.js';
 import { Player, BREATH } from '../src/player/Player.js';
 
@@ -25,8 +28,8 @@ const ok = ( c, what ) => {
 };
 
 const { habitatAt } = Bites;
-// a fish's whole weight on a hook: the fish table's say of it (Bites.hookWeight, when the fish stream's there) and ours
-const weight = ( rig, id, hour = 12 ) => rigWeight( rig, id, hour ) * ( Bites.hookWeight && FISH[ id ] && FISH[ id ].ways ? Bites.hookWeight( id, rig, hour ) : 1 );
+// a fish's whole weight on a hook: the fish table's say of it (Bites.hookWeight) and ours
+const weight = ( rig, id, hour = 12 ) => rigWeight( rig, id ) * ( FISH[ id ] ? Bites.hookWeight( id, rig, hour ) : 1 );
 let seed = 5;
 const rng = () => ( ( seed = ( seed * 1664525 + 1013904223 ) >>> 0 ) / 4294967296 );
 // the share of the bites by species
@@ -239,6 +242,22 @@ const among = ( s, ...ids ) => ids.reduce( ( a, id ) => a + ( s[ id ] || 0 ), 0 
 	rod.dropLine();
 	for ( let i = 0; i < 30; i ++ ) frame();
 	ok( rod.hookM === 5 && rod.bobberMesh.visible, 'under a float it hangs at the stop' );
+	rod.retrieve();
+	for ( t = 0; t < 60 && rod.state !== 'idle'; t += 1 / 30 ) frame();
+	rod.setRig( 'drop' );
+	rod.dropReach = 900;
+	rod.dropLine();
+	for ( let i = 0; i < 900; i ++ ) frame();
+	const at = rod.hookM;
+	rod.stopM = at;
+	for ( let i = 0; i < 300; i ++ ) frame();
+	ok( rod.hookM === at && rod.settled && at > 50 && at < 100, `stopped in the water column, it stays there: ${ at.toFixed( 0 ) } m` );
+	rod.stopM = null;
+	rod.settled = false;
+	for ( let i = 0; i < 300; i ++ ) frame();
+	ok( rod.hookM > at + 20 && ! rod.settled, 'let go again, on down' );
+	rod.setRig( 'drop' );
+	ok( rod.stopM === null, 'a new drop starts with no stop' );
 
 }
 
@@ -248,7 +267,7 @@ const among = ( s, ...ids ) => ids.reduce( ( a, id ) => a + ( s[ id ] || 0 ), 0 
 	const u = defaultUpgrades(), base = gearStats( u );
 	ok( base.dragKg === null && base.spoolM > 100 && base.landKg > 0 && base.swimMul === 1 && base.breathS === 50 && ! base.polarized && ! base.lifeJacket, 'what you start with' );
 	const top = gearStats( { ...u, rod: 3, reel: 3, leader: 3, lures: 3, landing: 2, glasses: 1, diveKit: 3, safety: 2 } );
-	ok( top.standUp && top.twoSpeed && top.dragKg >= 20 && top.spoolM >= 500 && top.leader === 3 && top.lures === 3 && top.gaff && top.tagKit && top.polarized && top.airS > 0 && top.flares && top.epirb && top.lifeJacket, 'the top of each' );
+	ok( top.standUp && top.twoSpeed && top.dragKg >= 20 && top.spoolM >= 500 && top.leader === 3 && top.lures === 3 && top.landKg >= 200 && top.dehooker && top.tagKit && top.polarized && top.airS > 0 && top.flares && top.epirb && top.lifeJacket, 'the top of each' );
 	for ( const k of [ 'leader', 'lures', 'landing', 'glasses', 'diveKit', 'safety' ] ) ok( UPGRADES[ k ] && ! UPGRADES[ k ].on, `${ k } is your own gear, with you on any boat` );
 	ok( UPGRADES.rod.levels.length === 4 && UPGRADES.reel.levels.length === 4 && UPGRADES.rod.levels[ 3 ].cost === 600 && UPGRADES.reel.levels[ 3 ].cost === 900, 'the rod and the reel have their fourth level, at the doc\'s prices' );
 	ok( UPGRADES.leader.levels.map( ( l ) => l.cost ).join() === '0,40,60,90' && UPGRADES.lures.levels.map( ( l ) => l.cost ).join() === '0,50,90,180' && UPGRADES.landing.levels.map( ( l ) => l.cost ).join() === '0,60,80' && UPGRADES.diveKit.levels.map( ( l ) => l.cost ).join() === '0,80,220,600', 'the rest at the doc\'s prices' );
@@ -316,7 +335,119 @@ const among = ( s, ...ids ) => ids.reduce( ( a, id ) => a + ( s[ id ] || 0 ), 0 
 
 }
 
-ok( FISH_IDS.every( ( id ) => rigWeight( hookOf( 'float', 5, 50 ), id, 12 ) >= 0 ), 'every fish has a weight for a float' );
+ok( FISH_IDS.every( ( id ) => rigWeight( hookOf( 'float', 5, 50 ), id ) >= 0 ), 'every fish has a weight for a float' );
+
+const water = ( o ) => habitatAt( { reefDist: 4000, pierDist: 9000, ...o } );
+
+// ---- the deep drop: the hook where the swordfish are, whatever's under it
+{
+
+	const blue = ( hookM, floorM = 1500 ) => atHook( water( { depth: floorM } ), hookOf( 'drop', hookM, floorM, { leader: 'heavy' } ) );
+	const s = shares( blue( 500 ), 12, 'squid' );
+	ok( s.swordfish > 0.95, `by day, 500 m down over 1,500 m of open blue: swordfish (${ ( 100 * s.swordfish ).toFixed( 0 ) }%)` );
+	ok( Bites.pickSpecies( blue( 900 ), 12, rng, 'squid' ) === null, 'at the end of the line, 900 m down: below them, nothing' );
+	ok( Bites.pickSpecies( blue( 100 ), 12, rng, 'squid' ) === null, 'stopped at 100 m by day: above them, nothing' );
+	ok( shares( blue( 80 ), 23, 'squid' ).swordfish > 0.95, 'and 80 m down at night, where they\'ve come up to' );
+	for ( const [ m, floor ] of [ [ 370, 1000 ], [ 550, 1800 ], [ 750, 1800 ] ] ) ok( shares( blue( m, floor ), 12, 'squid', 400 ).swordfish > 0.9, `by day at ${ m } m over ${ floor } m` );
+	ok( /stopped 350 to 750 m down/.test( FISH.swordfish.hint ), 'Joe\'s hint says how' );
+	const ledge = atHook( water( { depth: 200 } ), hookOf( 'drop', 199, 200, { leader: 'heavy' } ) );
+	ok( shares( ledge, 12, 'squid' ).silkSnapper > 0.6, 'on the ledge\'s bottom it\'s still the silk snapper' );
+
+}
+
+// ---- the leader: yours, on any rig
+{
+
+	ok( LEADER_IDS.join() === 'mono,fluoro,wire,heavy' && UPGRADES.leader.levels.length === LEADER_IDS.length, 'one for each level of the track' );
+	for ( const kind of [ 'float', 'bottom', 'kite', 'troll', 'drop' ] ) ok( leaderOn( 'wire', 3, kind ) === 'wire' && leaderOn( 'fluoro', 1, kind ) === 'fluoro', `tied on, it's on a ${ kind }` );
+	ok( leaderOn( 'wire', 1, 'float' ) === 'fluoro' && leaderOn( null, 3, 'float' ) === 'fluoro' && leaderOn( null, 3, 'troll', 14 ) === 'wire', 'one you don\'t own, or none: the sensible one' );
+	ok( leaderRisk( leaderOn( 'wire', 2, 'float' ), 'barracuda' ).cut === 0 && leaderRisk( leaderOn( 'wire', 2, 'kite' ), 'wahoo' ).cut === 0, 'wire on a float or a kite holds their teeth' );
+	ok( ! /king/i.test( UPGRADES.leader.levels.map( ( l ) => l.label ).join() ) && ! FISH.king && ! FISH.kingMackerel, 'no kings named: there are none here' );
+	const S = new GameState( { load: () => null, save() {} } );
+	ok( S.leaderPick === null, 'none tied on to begin with' );
+	S.pickLeader( 'wire' );
+	const J = JSON.parse( JSON.stringify( S.toJSON() ) );
+	ok( J.leaderPick === 'wire', 'it saves' );
+	ok( ! /lever/i.test( UPGRADES.reel.levels[ 3 ].label ), 'the reel\'s label promises no lever: its low gear\'s automatic' );
+
+}
+
+// ---- who takes a towed plug inshore, and a kite's bait
+{
+
+	const towed = ( h, floorM, knots, lure = 'plug', leader = 'mono' ) => atHook( h, hookOf( 'troll', 2, floorM, { knots, lure, leader } ) );
+	const bay = shares( towed( water( { depth: 8 } ), 8, 3 ), 8, 'plug' ), creek = shares( towed( water( { depth: 2, creek: 1 } ), 2, 3 ), 7, 'plug' );
+	console.log( `     a plug at a kayak's 3 knots: bay ${ JSON.stringify( bay ) }; creek ${ JSON.stringify( creek ) }` );
+	ok( among( bay, 'barracuda', 'jack' ) > 0.7, 'trolled through the bay it\'s barracuda and jacks' );
+	ok( creek.snook > 0.15 && creek.jack > 0.1, 'along the mangroves, snook and jacks' );
+	ok( towTaste( BAITS.plug.tow, 3 ) > 0.9, 'a plug swims at a kayak\'s 3 knots' );
+	ok( rigWeight( hookOf( 'troll', 2, 8, { knots: 3, lure: 'plug' } ), 'snook' ) === 1 && rigWeight( hookOf( 'troll', 2, 8, { knots: 3, lure: 'plug' } ), 'tuna' ) < 1, 'at that speed a snook strikes, and a tuna wants it faster' );
+	for ( const id of [ 'barracuda', 'jack', 'tarpon', 'snook' ] ) ok( FISH[ id ].ways.troll > 0, `${ id } takes a towed lure` );
+	for ( const id of [ 'bonefish', 'permit', 'pompano', 'lionfish', 'parrot' ] ) ok( Bites.hookWeight( id, { way: 'troll', depth: 2 }, 12 ) === 0, `${ id } doesn't` );
+	ok( FISH.barracuda.ways.float === undefined && Bites.hookWeight( 'barracuda', { way: 'float', depth: 3 }, 12 ) === 1 && Bites.hookWeight( 'redSnapper', { way: 'drop', depth: 100 }, 12 ) === 1, 'on a float, or dropped, as they were' );
+	ok( Bites.hookWeight( 'jack', { way: 'float', depth: 2, lure: 'plug' }, 12 ) === BAITS.plug.likes.jack, 'a lure\'s own likes are read' );
+	const kite = ( h, floorM, hour, bait ) => shares( atHook( h, hookOf( 'kite', 0.3, floorM, { leader: 'fluoro' } ) ), hour, bait );
+	for ( const hour of [ 10, 14 ] ) for ( const bait of [ 'mullet', 'silverside' ] ) {
+
+		const s = kite( water( { depth: 300, slope: 0.5 } ), 300, hour, bait );
+		ok( s.sailfish > 0.5 && s.sailfish > 2 * ( s.tuna || 0 ), `the kite on the drop-off at ${ hour }, ${ bait }: mostly sailfish (${ ( 100 * s.sailfish ).toFixed( 0 ) }%, tuna ${ ( 100 * ( s.tuna || 0 ) ).toFixed( 0 ) }%)` );
+
+	}
+
+	ok( kite( water( { depth: 300, slope: 0.5, birds: 1 } ), 300, 10, 'mullet' ).sailfish > 0.4, 'and under the birds' );
+
+}
+
+// ---- landing: the dehooker and the tag kit
+{
+
+	const u = defaultUpgrades(), hands = gearStats( u ), kit = gearStats( { ...u, landing: 2 } );
+	ok( UPGRADES.landing.levels.every( ( l ) => l.gaff === undefined ), 'a gaff\'s its landKg, nothing more to read' );
+	const stub = ( stats ) => Object.assign( Object.create( Rigs.prototype ), { game: { state: { stats, leaderPick: null }, rod: { rig: 'float', hookM: 0 }, hookBait: null }, app: { boatCtl: { speed: 0 } }, inChair: false } );
+	const fightOf = ( stats, species, kg ) => {
+
+		const T = stub( stats ).fightTerms( { species, kg } );
+		let r = 11;
+		const f = new CatchMinigame( { species, kg, ...T, lineKg: 50, reelSpeed: 2.6, dragKg: 24, holdKg: 40, chair: true, spoolM: 600, twoSpeed: true, distance: 60, rng: () => ( ( r = ( r * 1664525 + 1013904223 ) >>> 0 ) / 4294967296 ) } );
+		let st = 'fighting';
+		// (reeling except on the runs)
+		while ( st === 'fighting' && f.time < 3000 ) st = f.update( 1 / 30, f.surge < 0.5 );
+		return { st, t: f.time, T };
+
+	};
+	const by = fightOf( hands, 'sailfish', 40 ), off = fightOf( kit, 'sailfish', 40 );
+	console.log( `     a 40 kg sailfish to release: by hand ${ by.t.toFixed( 0 ) } s (${ by.st }), with the dehooker ${ off.t.toFixed( 0 ) } s (${ off.st })` );
+	ok( off.st === 'caught' && by.st === 'caught' && off.t < by.t * 0.8, 'with the dehooker it\'s over sooner' );
+	ok( stub( kit ).fightTerms( { species: 'tuna', kg: 40 } ).landAt === stub( hands ).fightTerms( { species: 'tuna', kg: 40 } ).landAt, 'one you keep is gaffed as ever' );
+	let hurt = 0;
+	const r = stub( hands );
+	for ( let i = 0; i < 4000; i ++ ) if ( r.releaseHurt( 'sailfish', rng ) ) hurt ++;
+	ok( hurt / 4000 > 0.25 && hurt / 4000 < 0.33, `taken off by hand, out of the water: ${ ( hurt / 40 ).toFixed( 0 ) }% don't live` );
+	ok( ! stub( kit ).releaseHurt( 'sailfish', () => 0 ), 'with the dehooker, in the water, all of them do' );
+	ok( ! r.releaseHurt( 'tarpon', () => 0 ) && ! r.releaseHurt( 'tuna', () => 0 ), 'it\'s the fund\'s billfish that it\'s about' );
+	const S = new GameState( { load: () => null, save() {} } );
+	const paid = ( info ) => letGo( S, { species: 'sailfish', kg: 30, cm: 200, released: true, ...info } );
+	const money = S.money, plain = paid( {} );
+	ok( plain > 0 && paid( { hurt: true } ) === 0, 'the fund pays for one that swims off, and not one that doesn\'t' );
+	ok( S.money === money + plain && S.trophies.sailfish.n === 2, 'either way it\'s in your log' );
+	S.upgrades.landing = 2;
+	const tagged = { species: 'sailfish', kg: 30, cm: 200, released: true };
+	ok( letGo( S, tagged ) === Math.round( plain * 1.5 / 5 ) * 5 && tagged.fundTag, 'the tag kit: half as much again, from its stat' );
+
+}
+
+// ---- touch and the Guide, and the track behind the days out's
+{
+
+	const src = ( f ) => readFileSync( new URL( f, import.meta.url ), 'utf8' );
+	const touch = src( '../src/ui/TouchControls.js' ), guide = src( '../src/game/Guide.js' );
+	ok( /touch-run" data-key="ShiftLeft"/.test( touch ) && /buttons\.run, helm/.test( touch ), 'a Run button at the helm, with the lines out, that\'s Shift' );
+	ok( /touch-leader" data-key="KeyX"/.test( touch ), 'and a Leader button' );
+	ok( /k\( 'C' \), 'The rig/.test( guide ) && /k\( 'Rig' \)/.test( guide ) && /k\( 'LB' \), 'The rig/.test( guide ), 'the Guide\'s cards say the rig, for each device' );
+	ok( UPGRADES.safety === DAYS_TRACKS.safety && /Flares/.test( UPGRADES.safety.levels[ 2 ].label ), 'one safety track, the days out\'s' );
+	ok( Object.keys( UPGRADES ).indexOf( 'safety' ) === Object.keys( UPGRADES ).indexOf( 'diveKit' ) + 1, 'still shown with your gear, after the dive kit' );
+
+}
 
 if ( failed ) process.exit( 1 );
 console.log( 'all passed' );

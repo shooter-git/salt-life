@@ -19,7 +19,8 @@ export function updateSeat( p, dt ) {
 	const inp = p.input, b = p.boat, M = b.model, st = M.stroke;
 	p.breathe( dt, false, false );
 	const look = inp.consumeLook(), wheel = inp.consumeWheel();
-	if ( inp.hit( 'KeyV' ) ) p.camMode = p.camMode === 'first' ? 'third' : 'first';
+	// ((M16) a gamepad's Y, with the rod out: the leader, Game's)
+	if ( inp.hit( 'KeyV' ) && ! ( inp.lastDevice === 'gamepad' && p.handsFull ) ) p.camMode = p.camMode === 'first' ? 'third' : 'first';
 
 	// the paddle laid by with the rod out, and taken up again
 	const full = p.handsFull || p.busy;
