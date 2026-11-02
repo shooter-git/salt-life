@@ -23,3 +23,5 @@ realtime room does.
 Run through, headless: `node tools/two-players/away.mjs` (the away boats by the bay), `far.mjs` (far out) and `boats.mjs` (each in a different boat: her copy and stand-in, the dock's spare berths, riding along and at someone else's helm, a crew's jobs, specks past the fog), each two real games, some minutes on the CPU. `boats.mjs` takes `[dir] [port] [tier]`; from a worktree, set `ALL_THE_SPACES` to that checkout.
 
 For the real thing, see All the Spaces' `docs/development.md`.
+
+`aboard.mjs [dir] [port] [boat] [owner's fps] [guest's fps] [guest's own boat]`: a guest on the owner's real boat, every area she has (`areas.mjs`), under way, walking, climbing, stepping ashore, what's fitted, her spread, her chair. A run's frames a second are printed: the fps asked for is only a ceiling on a CPU.

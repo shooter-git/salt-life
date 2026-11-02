@@ -1,6 +1,6 @@
 # Playing together: each boat as the boat she is
 
-What stream 5 built, in `src/together/`. Tried with two real games on one machine (`tools/two-players/boats.mjs`). **All the Spaces itself, two real devices through its room, is untried.** The user can't run two devices and the tools only stand in for it.
+What stream 5 built, in `src/together/`. Tried with two real games on one machine (`tools/two-players/boats.mjs`, `aboard.mjs`). **All the Spaces itself, two real devices through its room, is untried.** The user can't run two devices and the tools only stand in for it.
 
 ## Her type in the pose
 
@@ -14,13 +14,13 @@ Each pose says which boat she is (`Y`, a `world/boat/Boats.js` key). A game that
 - A copy nobody's seen for a minute goes, and a type with no copies a minute after that.
 - If you change boats, copies of the one you left keep her (`App.setBoat` asks `boatChanged`). If a built one of your new type exists, her copies go over to your boat and the built one's let go.
 - Until she's there, or past the device's few (1, 2 and 6 on low, mid and high), a stand-in: one mesh of her size and rough shape, up to about 100 triangles, in the props' existing program.
-- Low keeps only `lowCopy`, or `LOW_BOAT`'s meshes where she has them, or her largest meshes up to 9,000 triangles. What it won't draw is freed, not just hidden. Everything needed to walk her stays.
+- Low keeps only `lowCopy`, or `LOW_BOAT`'s meshes where she has them, or her largest meshes up to 9,000 triangles, until someone's about to board. What it won't draw is freed, not just hidden.
 
 ## Riding along on any boat
 
 Boarding, the deck, walls and stepping off all read her own `Vessel`. Deck positions are sent in her frame, so everyone sees you where you stand on her, whichever berth or sea she's on here.
 
-A boat that's sat in (`seated`, the kayak) has room for one rider on her tank well, held there and sitting. The figure at her helm sits too.
+A boat that's sat in (`seated`, the kayak) has room for one rider on her tank well, held there and sitting. The figure at her helm sits at her paddle.
 
 ## A crew's jobs (`Crew.js`)
 
@@ -53,26 +53,53 @@ Past four spares a boat stays at her true pose, and may overlap another.
 
 Leaving, a boat on the stem's berths can pass through the pier head on your screen for a few seconds, as her offset closes. It only happens with three or more others at the dock on mid and high, and I've left it.
 
+## What's on her, for everyone (`BoatCopies.js`, `Spread.js`)
+
+- **Fitted and painted.** One number in the pose (`f`): a bit for each thing that comes and goes on her, her paint's place above them. A copy shows it on its own meshes, geometry and hull material, with no new shader, and your own boat of that type is never touched. Someone aboard walks a view of her as it's fitted (`walkedAs`): no tower to climb if she hasn't got one, and hers to climb if you haven't. The twin's sound reads the same number.
+- **All of her, to walk on.** On a phone a copy is only what's seen from a way off, which leaves out the sportfisher's cabin and the console's helm. So she's built again whole before you're offered her, and her extra meshes show only within 12 m. A low-tier deck that isn't drawn is never boarded.
+- **Her spread and kite**, a few numbers a line. **Her pool of light** (`U`). **Her name** every 50 poses, drawn within 40 m, on a boat with a transom. The sportfisher hasn't got one, for anyone.
+- **A kayak's stroke** (`kw`): her paddle, and the figure sat at it.
+
+## What a rider can do on her
+
+- **Take a rod that goes off** in her spread (R, within reach of its holder). The fish, its bait and how much line is out come over from her owner's game. Her spool's yours for that fight; your own line, reel and leader fight it. The catch goes in your hold.
+- **Sit in her chair** with a fish on, if she has one, with the chair's 40 kg hold.
+- **Drop your own lead** (offered; the drop itself hasn't been run).
+- **Not** let out her spread or fly her kite: those are her owner's gear, on her holders. Chum's slick and deck traps aren't sent.
+
+## Every boat's berth
+
+An away boat keeps, drifts and is towed by her own `berthOf`, not the lobster boat's dock.
+
+## Fixed by running it on real boats
+
+- A guest stepping off crashed (`b.berth`: fixed here and by the sportfisher stream).
+- **A slow device's frame of falling was read as the level below.** Under about 22 fps a walker on a raised deck was squeezed to that lower level's narrower walls and off the edge. This is what a slow guest "falling through" looks like (`Player.updateDeck`).
+- At a rail, "Step ashore" could flip to "Jump overboard" as she bobbed, and E put you in the sea. What's on offer now comes from the rail you're at.
+- Boarding the sportfisher put you in her fighting chair, and a figure at her helm stood in her seat.
+
+`tools/two-players/aboard.mjs` checks all this: every area in `areas.mjs`, under way, at a slow guest and a slow owner.
+
 ## Not done
 
-- A copy shows her as built: `Vessel.fit` (her gear) and `setPaint` aren't sent, so others see default paint and no bought T-top or tower.
-- No paddle or stroke on someone paddling a kayak: the figure sits with hands forward.
-- Two boats on the cradle (a hurricane's haul-out) still share one spot.
-- A rider at someone else's helm hears their own horn from their own boat, wherever she is. Everyone else hears it from the boat they're driving.
+- A boat with her own on Marta's one cradle: yours is what's on it on your game. Theirs isn't drawn while yours is there. A second cradle would be better.
+- A speck's height is her type's, whatever's fitted: a sportfisher with no tower still shows as if she had one.
+- A rider at someone else's helm hears their own horn from their own boat. Everyone else hears it from the boat they're driving.
 
 ## Readings, on the low tier
 
 CPU renders, on a machine shared with other sessions. No GPU or phone has run any of this.
 
-| | Draws (150) | Triangles (300,000) | Script memory (150 MB) | Download (80 MB) |
-|---|---|---|---|---|
-| The complete check: built, alone | 89 | 256,081 | 143.2 MB | 75.2 MB |
-| At the pier head, Sam's copy in sight: dev server, two games | 87 | 266,210 | 144.4 MB | |
-| Their lobster boat 300 m off: dev server, two games | 84 | 191,590 | 153.3 MB | |
+| | Draws (150) | Triangles (300,000) | Script memory (150 MB) |
+|---|---|---|---|
+| At the pier head, Sam's copy in sight: dev server, two games | 56 | 267,541 | 155 MB |
+| Sam on the sportfisher's bridge under way | 25 | 48,858 | 163 MB |
+| Their lobster boat 300 m off | 67 | 207,238 | 162 MB |
+| Sam at his helm by night, her boat 400 m off | 67 | 183,812 | 171 MB |
 
-Her copy (four meshes) and Robin's figure together cost 7 draws and 23,889 triangles. Their memory was too small to read: with them let go the heap read 5.8 MB higher, not lower.
+A lobster copy and her owner's figure cost 7 draws and about 24,000 triangles. Their memory was too small to read against the noise.
 
-**Script memory climbs the longer a game runs, alone as well as together.** On the dev server, collected before each reading: 120 MB by day alone at sea, 127 by night, 144 two minutes on. Two games read 144, 150, 153, 159 and 186 MB over a run of about 25 minutes. The check reads a build at the start, so it doesn't see this. I didn't find what's growing or compare it against the game before M16, so whether a long session on low passes 150 MB is open.
+**Script memory on the dev server sits above the 150 MB budget with company, and climbs the longer a game runs.** The complete check reads a build at the start, so it doesn't see this. I didn't find what's growing or compare it against the game before M16: whether a long session on low passes 150 MB on a build is open.
 
 ## Sources
 
