@@ -107,7 +107,14 @@ const shot = async ( who, name ) => {
 	for ( let i = 0; i < 3; i ++ ) {
 
 		await who.game.evaluate( () => { window.__draws.peak = { calls: 0, tris: 0 }; } );
-		await who.game.waitForFunction( () => window.__draws.peak.calls > 2, null, { timeout: 400000, polling: 200 } );
+		// (a shot not drawn is said, and the run goes on to its summary)
+		const drawn = await who.game.waitForFunction( () => window.__draws.peak.calls > 2, null, { timeout: 400000, polling: 200 } ).then( () => true, () => false );
+		if ( ! drawn ) {
+
+			console.log( `     no frame drawn for ${ name }:`, await who.game.evaluate( () => { const a = window.__app, gl = a.renderer.getContext(); return JSON.stringify( { frame: a.renderer.info.render.frame, calls: a.renderer.info.render.calls, drawn: !! a._drawn, uses: a._uses.length, rest: a._rest, owed: a._owed, ticks: window.__draws.ticks, frames: window.__draws.frames, peak: window.__draws.peak, ownDraw: Object.prototype.hasOwnProperty.call( a, 'drawWorld' ), wait: Object.prototype.hasOwnProperty.call( gl, 'clientWaitSync' ), mode: a.player.mode } ); } ) );
+			break;
+
+		}
 
 	}
 

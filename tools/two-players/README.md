@@ -24,4 +24,6 @@ Run through, headless: `node tools/two-players/away.mjs` (the away boats by the 
 
 For the real thing, see All the Spaces' `docs/development.md`.
 
+`hard.mjs [dir] [port] [boat] [owner's fps] [guest's fps]` (`HARD_FROM=gale`, as a run's cut at 25 minutes), `seen.mjs [dir] [port] <part>`, `gap.mjs [dir] [port] [boat]`, `mem.mjs [dir] [port] [boat] [minutes] [every]` and `heel.mjs`: `docs/m16/together.md` says what each checks. `lib.mjs` is what they share. The fps asked for is only a ceiling: three runs at once here gets about 2.
+
 `aboard.mjs [dir] [port] [boat] [owner's fps] [guest's fps] [guest's own boat]`: a guest on the owner's real boat, every area she has (`areas.mjs`), under way, walking, climbing, stepping ashore, what's fitted, her spread, her chair. A run's frames a second are printed: the fps asked for is only a ceiling on a CPU.

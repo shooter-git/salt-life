@@ -32,7 +32,7 @@ const open = async ( name ) => {
 
 	} );
 	page.on( 'console', ( m ) => { if ( m.type() === 'error' && ! /ERR_NETWORK|Failed to load resource|dynamically imported/.test( m.text() ) ) { problems ++; console.log( name, 'CONSOLE', m.text().slice( 0, 300 ) ); } } );
-	await page.goto( `http://127.0.0.1:${ PORT }/tools/two-players/?name=${ name }&id=${ name.toLowerCase() }-1&tier=low` );
+	await page.goto( `http://127.0.0.1:${ PORT }/tools/two-players/?name=${ name }&id=${ name.toLowerCase() }-1&tier=low&src=${ encodeURIComponent( '/?boat=lobster' ) }` ); // (a new player starts in the kayak: these are at a helm)
 	const f = () => page.frames().find( ( x ) => x !== page.mainFrame() );
 	for ( let i = 0; i < 500; i ++ ) {
 
@@ -49,7 +49,7 @@ const open = async ( name ) => {
 
 	}
 
-	await f().evaluate( () => { const g = window.__app.game; if ( g.guide ) { g.guide.seen.intro = true; if ( g.guide.open ) g.guide.close(); g.guide._wait = - 1; } window.__app.together.stale = 120; /* (two games on the CPU, seconds between poses) */ } );
+	await f().evaluate( () => { const g = window.__app.game; if ( g.guide ) { g.guide.seen.intro = true; if ( g.guide.open ) g.guide.close(); g.guide._wait = - 1; } window.__app.together.stale = 120; /* (two games on the CPU, seconds between poses) */ /* (and on a CPU this loaded, a second of the game can be a minute of the clock's, which DaysOut takes for a rest: boats.mjs's morning) */ const d = g.daysOut; if ( ! window.__noRest ) window.__noRest = setInterval( () => { if ( ! window.__clockJumps ) d._T = null; }, 200 ); } );
 	return { page, game: f() };
 
 };
@@ -68,11 +68,20 @@ await robin.game.evaluate( ( F ) => {
 	b.position.set( F.x, b.position.y, F.z );
 
 }, FAR );
+// (where she is as Sam comes, should she not be where she was put)
+await robin.game.evaluate( () => { const a = window.__app, b = a.boatCtl, p = a.player, T = window.__trace = []; const mark = ( what ) => T.push( [ Math.round( performance.now() / 1000 ), what, a.settings.day, +a.settings.timeOfDay.toFixed( 2 ), p.mode, Math.round( b.position.x ), Math.round( b.position.z ) ] ); setInterval( () => mark( 'tick' ), 15000 ); const lh = p.leaveHelm; p.leaveHelm = function ( ...x ) { mark( 'leaveHelm ' + new Error().stack.split( '\n' ).slice( 2, 5 ).map( ( l ) => l.trim().replace( /https?:[^ ]*\/src\//, '' ).slice( 0, 60 ) ).join( ' < ' ) ); return lh.apply( this, x ); }; const pd = a.game.daysOut.passed; a.game.daysOut.passed = function ( f, t ) { mark( `passed ${ f } ${ t }` ); return pd.call( this, f, t ); }; } );
 const sam = await open( 'Sam' );
 await sam.game.waitForFunction( () => window.__app.together.others.size > 0 && [ ...window.__app.together.others.values() ][ 0 ].cur, null, { timeout: 200000, polling: 1000 } );
 await robin.game.waitForFunction( () => window.__app.together.others.size > 0 && [ ...window.__app.together.others.values() ][ 0 ].cur, null, { timeout: 200000, polling: 1000 } );
 console.log( 'both in' );
-await sam.game.waitForFunction( ( F ) => { const o = [ ...window.__app.together.others.values() ][ 0 ]; return o.cur && o.cur.boat && Math.hypot( o.cur.boat.pos.x - F.x, o.cur.boat.pos.z - F.z ) < 200; }, FAR, { timeout: 200000, polling: 500 } );
+await sam.game.waitForFunction( ( F ) => { const o = [ ...window.__app.together.others.values() ][ 0 ]; return o.cur && o.cur.boat && Math.hypot( o.cur.boat.pos.x - F.x, o.cur.boat.pos.z - F.z ) < 200; }, FAR, { timeout: 200000, polling: 500 } ).catch( async ( e ) => {
+
+	console.log( '     Robin\'s trace:', await robin.game.evaluate( () => JSON.stringify( window.__trace ) ) );
+	console.log( '     Robin:', await robin.game.evaluate( () => { const a = window.__app, b = a.boatCtl; return JSON.stringify( { boat: a.boat.id, mode: a.player.mode, at: b.position.toArray().map( ( v ) => Math.round( v ) ), moored: b.moored, hauled: !! b.hauled, boatAt: a.state && a.state.boat } ); } ) );
+	console.log( '     Sam sees:', await sam.game.evaluate( () => { const o = [ ...window.__app.together.others.values() ][ 0 ], c = o.cur; return JSON.stringify( { cur: !! c, boat: !! ( c && c.boat ), id: c && c.boatId, at: c && c.boat ? c.boat.pos.toArray().map( ( v ) => Math.round( v ) ) : null, age: performance.now() / 1000 - o.last } ); } ) );
+	throw e;
+
+} );
 await frames( sam.game, 3 );
 const apart = await sam.game.evaluate( () => {
 

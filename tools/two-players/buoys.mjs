@@ -43,7 +43,7 @@ const open = async ( name ) => {
 		}
 
 	} );
-	await page.goto( `http://127.0.0.1:${ PORT }/tools/two-players/?name=${ name }&id=${ name.toLowerCase() }-1&tier=low&group=${ group }` );
+	await page.goto( `http://127.0.0.1:${ PORT }/tools/two-players/?name=${ name }&id=${ name.toLowerCase() }-1&tier=low&group=${ group }&src=${ encodeURIComponent( '/?boat=lobster' ) }` ); // (a new player starts in the kayak: only the lobster boat has the hauler)
 	const f = () => page.frames().find( ( x ) => x !== page.mainFrame() );
 	await page.waitForFunction( () => true );
 	for ( let i = 0; i < 500; i ++ ) {
