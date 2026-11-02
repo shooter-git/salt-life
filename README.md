@@ -20,7 +20,7 @@ You can walk, swim and take the boat around the island. You can fish from the pi
 boat, or dive and spear a fish, sell your catch to Joe and buy better gear from Marta. It plays with a
 mouse and keyboard, a gamepad or a touch screen.
 
-Done, M0 to M15:
+Done, M0 to M16:
 - the sea and its shore, spray, gusts and slicks, and the haze;
 - the whole world: the village, the pier, the reef and its fish, the birds and crabs, the beach's
   debris, the whale and the lights at night;
@@ -173,10 +173,32 @@ Done, M0 to M15:
   - the open sea's own sound: the shore fading behind you, its wash, whitecaps and the wind off it;
   - you come back to your boat where you left her, and to what's happened to her since; with others,
     she lies on their sea at anchor or adrift, to step aboard and fish off if she's anchored;
+- the boats (M16):
+  - a new game starts in a fishing kayak, paddled and sat in, which goes over in a squall; those already
+    playing keep their lobster boat and are given the kayak;
+  - Marta's list has the center console (outboards, a T-top, a walkway all round the helm), the lobster
+    boat, and an offshore sportfisher you earn by finishing the lobster boat's upgrades and your rod,
+    reel and line; each boat has her own upgrades, fuel, hull and berth, a name and a coat of paint, and
+    a month's slip and upkeep, and you can trade one in or sell her;
+  - every deck is walked: the console's all round, the sportfisher's cabin, galley and bunks, her
+    flybridge and her tuna tower, climbed by a ladder that a rolling boat can throw you off;
+  - each boat has the sea she can stand, and days out: ice for the catch, stores, bunks to sleep in,
+    flares and an EPIRB, a deep-water anchor and a drift sock;
+  - new ways to fish: trolling a spread off the outriggers, a kite, deep-dropping on an electric reel, a
+    sinker, chum, a drag and a spool to fight a big fish on, and new gear (leaders, lures, a gaff, a
+    dehooker, polarized glasses, a dive kit);
+  - the far water's fish: wahoo, sailfish, white and blue marlin, swordfish, bigger tuna and the mahi,
+    the billfish let go for a bonus; redfish and trout on the flats;
+  - lobster traps on the lobster boat, set, soaked and hauled, with their buoys on everyone's sea;
+  - on the north side: the way over made easy to find, Pearl's boat going out and coming in, her tow and
+    Marta's can of diesel, turtles that mind lights and people and the hatchlings' tracks, fourteen
+    shells to collect, and a gale's sea at its true height;
 - playing together:
-  - you see the others on the island, walking, swimming, fishing and out in their boats;
+  - you see the others on the island, walking, swimming, fishing and out in their boats, each the boat
+    she is, with her paint and what's fitted on her; far off a boat is a speck on the horizon;
   - you pick your islander: two men and two women;
-  - you can ride along in someone else's boat, and hear it;
+  - you can ride along in someone else's boat, and hear it: any of the four, and on a big one you take a
+    job at the helm, up the tower or in the chair;
   - at night their boats show their lamps and searchlights, and you hear their horns;
   - you see their catches, and hear about the records and the big ones;
   - the group keeps a board of the island's records at the fish stand;
@@ -215,7 +237,8 @@ The island's day:
 | M13 | The hurricane: its surge and surf, its wind and rain, the warnings, the haul-out and the shelter, the wildlife in the weather, the damage and its mending, the eye's sky |
 | M14 | Storm skies and the sea: cumulonimbus, the eye's stadium and its bands, the open sea breaking, the north shore's sea, being knocked over wading, shutters and litter in a blow, the radar, rain heard on tin, Category 2 and 3 hurricanes, more of the island torn and its roof sheets flying, shelter under the rocks ([what's left over](docs/M14.md)) |
 | M15 | The world: the island worth going all the way round (the north side's fishing, its landmarks and sea caves, beachcombing, the trail and the fish camp), the sea past it (the seabed out there, its weather and finds, the far island, the chart you fill in, the radio and the tow, the soft edge, its sound), and picking up where you left off |
-| M16 | The boats, for consideration: the boats to work up to, now M15's bigger sea is there for them ([docs/M16.md](docs/M16.md)) |
+| M16 | The boats: a fishing kayak to start in, a center console, the lobster boat and an offshore sportfisher to earn, each with her own upgrades, berth and sea she can stand; days out (ice, stores, bunks, flares, a deep-water anchor), trolling, kites and deep-dropping for the far water's fish, lobster traps, each boat as herself when playing together, Pearl's day and the rest of the north side ([docs/M16.md](docs/M16.md)) |
+| M17 | What M16 leaves, for consideration: the flats' sight-fishing, a few things for guests aboard, and the figures only a real device can settle ([docs/M17.md](docs/M17.md)) |
 
 ## How it fits All the Spaces
 
