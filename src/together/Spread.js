@@ -75,7 +75,7 @@ export class Spread {
 	update( others ) {
 
 		let any = false;
-		for ( const o of others ) if ( o.cur && o.boat && o.boat.visible && ( o.cur.spread || o.cur.kite ) ) any = true;
+		for ( const o of others.values() ) if ( o.cur && o.boat && o.boat.visible && ( o.cur.spread || o.cur.kite ) ) any = true;
 		if ( ! any ) {
 
 			if ( this.draw ) this.draw.hide();
@@ -85,7 +85,7 @@ export class Spread {
 
 		const D = this.draw = this.draw || new RigMesh( this.app.scene ), waves = this.app.waves;
 		D.begin( this.app.camera );
-		for ( const o of others ) {
+		for ( const o of others.values() ) {
 
 			const c = o.cur;
 			if ( ! c || ! o.boat || ! o.boat.visible ) continue;

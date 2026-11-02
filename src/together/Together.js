@@ -1502,7 +1502,9 @@ export class Together {
 		const show = new Set( list.filter( ( o ) => o === riding || o.cur.pos.distanceToSquared( cam ) < person ).slice( 0, this.limits.avatars ) );
 		for ( const o of show ) if ( o.look && o.wearing !== o.look ) this._wear( o, o.look );
 		// ((M16) those past the device's few, in sight: a stand-in)
-		const seen = list.filter( ( o ) => o.cur.boat && ( o.cur.drawn || o.cur.boat ).pos.distanceToSquared( cam ) < see );
+		// ((M16) there's the one cradle in Marta's yard: with yours on it, yours is what's on it here, as your berth's yours at her dock)
+		const cradle = app.boatCtl.hauled ? app.boatCtl.position : null;
+		const seen = list.filter( ( o ) => o.cur.boat && ( o.cur.drawn || o.cur.boat ).pos.distanceToSquared( cam ) < see && ! ( cradle && o.cur.boat.pos.distanceToSquared( cradle ) < 9 ) );
 		const boats = new Set( seen.slice( 0, this.limits.boats ) );
 		if ( riding && riding.cur && riding.cur.boat ) boats.add( riding );
 		this._liveBoats = boats.size;
@@ -1514,7 +1516,7 @@ export class Together {
 		}
 
 		this._names();
-		this.spread.update( this.others.values() );
+		this.spread.update( this.others );
 
 	}
 

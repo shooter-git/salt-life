@@ -311,6 +311,7 @@ if ( ! seated ) {
 	await press( guest, 'KeyW', 12 );
 	await press( guest, 'KeyA', 8 );
 	await press( guest, 'KeyS', 12 );
+	await frames( guest.game, 10 ); // (he may have walked off a step: down, before he's read)
 	const to = await guest.game.evaluate( stateOf );
 	const walk = await watched();
 	say( walk.off === 0 && walk.gap < 0.01 && walk.sunk < 0.03 && walk.path > 0.3 && Math.abs( to.y - to.floor ) < 0.03, `walking as she goes, ${ walk.top } m/s: walked ${ walk.path } m on her deck (keys), ${ walk.off } of ${ walk.frames } frames off her, ${ walk.sunk } m under her floor` );
@@ -466,7 +467,7 @@ const ashore = await guest.game.evaluate( () => new Promise( ( done ) => {
 				// (the rail with ground beside it: where the prompt is)
 				const ep = p._ashore.ep;
 				p.deckPos.set( ep.x * 0.82, Math.max( ep.y - 0.8, 0 ), ep.z );
-				return setTimeout( () => done( { rail: i, x: ep.x, z: ep.z, prompt: p.prompt && p.prompt.text } ), 2000 );
+				return setTimeout( () => done( { rail: i, x: ep.x, z: ep.z, prompt: p.prompt && p.prompt.text, out: p._ashore.out.toArray().map( ( v ) => +v.toFixed( 2 ) ), g: +p._ashore.g.toFixed( 2 ), boat: p.boat.position.toArray().map( ( v ) => +v.toFixed( 2 ) ) } ), 2000 );
 
 			}
 
@@ -492,7 +493,7 @@ if ( await guest.game.evaluate( () => window.__app.player.riding ) ) {
 }
 
 await frames( guest.game, 4 );
-const off = await guest.game.evaluate( () => { const p = window.__app.player; return { mode: p.mode, riding: p.riding, y: +p.position.y.toFixed( 2 ), boat: p.boat === window.__app.boatCtl }; } );
+const off = await guest.game.evaluate( () => { const p = window.__app.player; return { mode: p.mode, riding: p.riding, y: +p.position.y.toFixed( 2 ), x: +p.position.x.toFixed( 2 ), z: +p.position.z.toFixed( 2 ), ground: +p.groundAt( p.position.x, p.position.z, p.position.y + 2 ).toFixed( 2 ), boat: p.boat === window.__app.boatCtl }; } );
 say( ! off.riding && off.boat && ashore.rail !== null && off.mode === 'walk', `he steps ashore: ${ JSON.stringify( off ) }` );
 
 console.log( `     frames a second, really: Robin ${ await rate( owner.game ) }, Sam ${ await rate( guest.game ) }` );
