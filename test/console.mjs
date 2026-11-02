@@ -9,6 +9,7 @@ import { soakRate, Soak } from '../src/world/boat/console/Soak.js';
 import { BoatController } from '../src/player/BoatController.js';
 import { Vector3 } from '../src/engine/index.js';
 import { seenInWater, SEEN } from '../src/materials/SeenInWater.js';
+import { Wake, wakeTan } from '../src/ocean/Wake.js';
 
 let bad = 0;
 const ok = ( c, what ) => {
@@ -44,6 +45,50 @@ ok( rising, 'her keel runs forward all the way to the stem' );
 	ok( shader.fragmentShader.includes( 'gl_FragColor.a' ) && shader.vertexShader.includes( 'vSeenY' ), 'a boat\'s height goes to the frame\'s alpha' );
 	const at = ( y ) => Math.min( ( y + SEEN.base ) / SEEN.span, 1 );
 	ok( at( 0 ) < SEEN.plain && at( - 1.4 ) >= 0 && at( 5.8 ) >= SEEN.plain, 'all under the water and her lower topsides read as hers, above that as nothing' );
+
+}
+
+// ---- her wake (ocean/Wake.js): as long as it's meant to be, at any frame rate, opening at a real wake's angle
+{
+
+	const waves = { heightAt: () => 0 }, U = 18.5;
+	const run = ( tier, frame ) => {
+
+		const boat = { velocity: new Vector3( 0, 0, U ), rpm: 1, getYaw: () => 0, model: { group: { position: new Vector3() }, wake: m.wake, dimensions: m.dimensions } };
+		const w = new Wake( { scene: { add() {} }, boat, waves, tier } );
+		for ( let t = 0; t < 20; t += frame ) {
+
+			boat.model.group.position.z += U * frame;
+			w.update( frame );
+
+		}
+
+		const live = [];
+		for ( let i = 0; i < w.max; i ++ ) if ( w.data[ i * 4 + 2 ] < w.life ) live.push( { z: w.xz[ i * 2 + 1 ], x: w.xz[ i * 2 ], age: w.data[ i * 4 + 2 ], arm: w.size[ i * 3 + 2 ] > 2 } );
+		return { w, live, z: boat.model.group.position.z };
+
+	};
+
+	for ( const [ tier, reach ] of [ [ 'high', 130 ], [ 'low', 90 ] ] ) {
+
+		const { live, z } = run( tier, 1 / 60 );
+		const far = z - Math.min( ...live.map( ( q ) => q.z ) );
+		ok( far > reach, `flat out, her wake reaches ${ far.toFixed( 0 ) } m behind her on ${ tier }` );
+
+	}
+
+	const steps = ( frame ) => {
+
+		const zs = run( 'high', frame ).live.filter( ( q ) => ! q.arm ).map( ( q ) => q.z ).sort( ( a, b ) => a - b );
+		return zs.slice( 1 ).map( ( v, i ) => v - zs[ i ] );
+
+	};
+
+	const worst = Math.max( ...steps( 0.1 ) ), usual = Math.max( ...steps( 1 / 60 ) );
+	ok( worst < usual * 1.5, `slow frames don't heap them: ${ worst.toFixed( 1 ) } m apart at most at 10 fps, ${ usual.toFixed( 1 ) } at 60` );
+	ok( Math.abs( wakeTan( 3, 100 ) - 0.3536 ) < 1e-3, 'a slow ship\'s wake opens at Kelvin\'s 19.47 degrees' );
+	const deg = Math.atan( wakeTan( U, m.dimensions.waterlineLength ) ) * 57.3;
+	ok( deg > 4 && deg < 7, `flat out, hers opens at ${ deg.toFixed( 1 ) } degrees, as fast boats' do` );
 
 }
 

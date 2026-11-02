@@ -21,7 +21,15 @@ A 23 ft deep-V with an open deck all round the helm, a T-top, and outboards on a
 - **Turning:** hard over at cruise she leans about 18° into the turn, not out as the lobster boat does, and turns on a radius of about 22 m. She holds up to about 22 kn from 28.
 - **In a seaway:** with the prop out of the water the thrust goes. On the plane a couple keeps her upright, standing in for the planing lift the buoyancy samples can't give once her sides are dry. Without it she rolled over at 25 kn in flat water.
 
-**Her wake.** `wake` in the model sets her own: thrown from the chines at the transom, patches close enough to run together, the arms going out fast, a wash from each engine (`ocean/Wake.js` reads the optional figures).
+**Her wake** (`ocean/Wake.js`, shared by every boat; each boat's `wake` gives its own sizes). Set against the maker's running photographs: a broad band of fine white streaks from the transom, feathering off.
+
+- **How long:** a patch is long along her track, and they're spaced so the same count lasts its whole life: about 170 m behind her at 36 kn on high, about 120 m on low (fewer at a time on the screen: they live 6 s, not 9).
+- **How wide:** the arms open at a real wake's angle, 19.47 degrees up to a hull Froude number of about 0.5, then narrowing as 1 / Fr ([Rabaud & Moisy 2013](https://arxiv.org/abs/1304.2653)). That's 4.6 degrees for her at 36 kn.
+- **The lace:** it lies on the water, so patches overlapping share their gaps and it stays broken up, where each with its own noise filled in solid.
+- **Slow frames:** patches are spread along the way she came since the last frame, not dropped in a heap.
+- **On the waves:** each is flat between two heights, and the depth test takes it as a little nearer you, or the waves in front hid it. There's still only one draw.
+
+The arms are foam only: a real wake's far arms are smooth wave crests, which would take the sea's surface moving.
 
 **Her light.** White gelcoat in the shade came out near black, so her body and fittings take `GroundBounce` with a white bounce of their own in place of the sand's colour.
 

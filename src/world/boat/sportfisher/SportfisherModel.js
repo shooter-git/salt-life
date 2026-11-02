@@ -249,7 +249,7 @@ export class SportfisherModel extends Vessel {
 		this.propeller = V( 0, - 0.84, - 5.05 );
 		this.rudder = V( 0, - 0.78, - 5.72 );
 		this.bowSprayPoints = this.waterlinePoints( [ 2.5, 3.6, 4.7, 5.8 ] );
-		this.wake = { quarterX: 2.1, quarterZ: - 3.6, washZ: - 6.8 };
+		this.wake = { quarterX: 2.1, quarterZ: - 3.6, washZ: - 6.8, armSize: 2.4, washSize: 6, washSpread: 0.9, washX: 1.2 };
 		this.lamps = { dome: [ 0, SF.roofY - 0.1, - 0.6 ], instruments: [ 0, SF.bridge + 1.2, HELM.consoleZ0 + 0.1 ], port: [ bridgeX( 0 ) - 0.15, SF.bridge + 0.5, 0.6 ], masthead: [ 0, TOWER.roof + 0.34, - 0.4 ], anchor: [ 0, TOWER.roof + 0.4, - 0.4 ], stern: [ 0, L.sheerY( 0 ) + 0.1, L.zAft - 0.05 ], spot: parts.searchlight.toArray() };
 		this.floods = [ - 0.8, 0.8 ].map( ( x ) => ( { at: [ x, SF.roofY - 0.05, SF.bridgeAft + 0.1 ], dir: [ x * 0.25, - 0.75, - 0.62 ] } ) );
 		this.nearDetail = low ? [ 'cabin', 'wheel', 'radar', 'chair', 'display' ] : [];

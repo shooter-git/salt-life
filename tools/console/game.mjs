@@ -2,7 +2,7 @@
 //   tools/render-slot.sh node tools/console/game.mjs out-dir [ scene ... ]
 // Scenes: dock (where she lies, from the pier), helm (her dash from the wheel, lit), run (under power, from astern and abeam, her
 // wake), deck (walked round: bow, stern, platform), rain (a downpour: outside the top and under it), night (her lamps), tier=low
-// in the url's query with QUERY=... for the phone's budgets.
+// in the url's query with QUERY=... for the phone's budgets. BOAT=lobster for another boat in the same shots.
 import { chromium } from '/home/shooter/Documents/VS Code/all-the-spaces/node_modules/playwright/index.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -22,7 +22,7 @@ p.on( 'console', ( m ) => {
 	console.log( m.type(), t.slice( 0, 500 ) );
 
 } );
-await p.goto( `http://127.0.0.1:5202/?boat=console&hour=${ process.env.HOUR || 11 }${ query ? '&' + query : '' }` );
+await p.goto( `http://127.0.0.1:5202/?boat=${ process.env.BOAT || 'console' }&hour=${ process.env.HOUR || 11 }${ query ? '&' + query : '' }` );
 // (a load the machine's network changing cut off, ERR_NETWORK_CHANGED, gets one more go)
 await p.waitForFunction( () => window.__app && window.__app._started, null, { timeout: 150000 } ).catch( async () => {
 
@@ -235,7 +235,7 @@ for ( const s of scenes.length ? scenes : [ 'dock', 'run', 'deck', 'helm' ] ) {
 		const st = await p.evaluate( () => {
 
 			const c = window.__app.boatCtl, f = c.forward( c.position.clone() );
-			return { kn: c.speed / 0.5144, rpm: c.rpm, pitch: Math.asin( f.y ) * 57.3, y: c.position.y, trim: c.outboardTrim * 57.3 };
+			return { kn: c.speed / 0.5144, rpm: c.rpm, pitch: Math.asin( f.y ) * 57.3, y: c.position.y, trim: ( c.outboardTrim || 0 ) * 57.3 };
 
 		} );
 		console.log( JSON.stringify( st ) );
@@ -336,14 +336,13 @@ for ( const s of scenes.length ? scenes : [ 'dock', 'run', 'deck', 'helm' ] ) {
 
 	}
 
-	// (planing, her wake: the frames come too slowly here to get her there, so run her ahead, with her wake)
+	// (planing, her wake: the frames come too slowly here to get her there, so run her ahead, with her wake, then hold the world still
+	// and only draw: under load the frames can read as the clock jumping, which takes you off the helm and her wake with it)
 	if ( s === 'plane' ) {
 
 		await p.evaluate( () => {
 
 			const a = window.__app, c = a.boatCtl, P = a.player, T = a.terrainData;
-			// (already running, from the scene before: carry on)
-			if ( c.speed > 5 ) return;
 			// (at the helm, her engines down, and out on a clear run)
 			let best = null;
 			for ( let k = 0; k < 400 && ! best; k ++ ) {
@@ -362,57 +361,52 @@ for ( const s of scenes.length ? scenes : [ 'dock', 'run', 'deck', 'helm' ] ) {
 			c.hasWater = false;
 			if ( P.mode !== 'deck' ) P.boardBoat();
 			P.takeHelm();
-			c.driven = true;
-			c.moored = false;
 
 		} );
 		// (the sea's height's read back over frames: the engines want the water where she is now)
 		await frames( 6 );
-		const st = await p.evaluate( () => {
+		const ahead = ( steps, steer ) => p.evaluate( async ( [ steps, steer ] ) => {
 
-			const a = window.__app, c = a.boatCtl;
-			// (slow frames here can read as the clock jumping, which takes you off the helm: DaysOut.passed)
+			const a = window.__app, c = a.boatCtl, { G } = await import( '/src/core/Globals.js' );
 			if ( a.player.mode !== 'boat' ) a.player.takeHelm();
 			// (and the crank's counted in the frames this runs ahead of)
-			c.engineOn = true;
-			for ( let i = 0; i < 1400; i ++ ) {
+			c.driven = c.engineOn = true;
+			c.moored = false;
+			for ( let i = 0; i < steps; i ++ ) {
 
-				c.setInput( 1, 0, 1 / 30 );
-				c.update( 1 / 30 );
-				a.wake.update( 1 / 30 );
+				c.setInput( 1, steer, 1 / 60 );
+				c.update( 1 / 60 );
+				a.wake.update( 1 / 60 );
+
+			}
+
+			if ( ! window.__still ) {
+
+				window.__still = true;
+				a.frame = function () {
+
+					// (the camera's sea height's stale, run ahead: it isn't under water)
+					G.cameraUnderwater.value = 0;
+					a.water.update( a.camera );
+					a.drawWorld();
+
+				};
 
 			}
 
 			const f = c.forward( c.position.clone() );
-			return { kn: c.speed / 0.5144, rpm: c.rpm, pitch: Math.asin( f.y ) * 57.3, trim: c.outboardTrim * 57.3 };
+			return { kn: c.speed / 0.5144, rpm: c.rpm, pitch: Math.asin( f.y ) * 57.3, trim: ( c.outboardTrim || 0 ) * 57.3 };
 
-		} );
-		console.log( JSON.stringify( st ) );
+		}, [ steps, steer ] );
+		console.log( JSON.stringify( await ahead( 2800, 0 ) ) );
+		await p.addStyleTag( { content: 'body *:not(canvas) { visibility: hidden !important; } canvas { visibility: visible !important; }' } );
 		await look( [ - 8, 4, - 17 ], [ 0, 0.8, - 3 ] );
-		await frames( 3 );
-		await p.evaluate( () => {
-
-			const a = window.__app, c = a.boatCtl;
-			for ( let i = 0; i < 120; i ++ ) {
-
-				c.setInput( 1, 0, 1 / 30 );
-				c.update( 1 / 30 );
-				a.wake.update( 1 / 30 );
-
-			}
-
-		} );
-		// (the camera's sea height's read back over frames too: run ahead, it's stale, and the view's all under water)
-		await frames( 6 );
 		await shot( 'plane-astern' );
-		await look( [ 13, 2.6, 7 ], [ 0, 1, 0 ] );
-		await p.waitForTimeout( 2500 );
-		await shot( 'plane-bow' );
-		await p.evaluate( () => {
-
-			window.__look = null;
-
-		} );
+		// (as the maker's running photographs: from ahead and above her quarter, along her wake; then in a turn, as they are)
+		await look( [ - 9, 6.5, 8 ], [ 0, 0.2, - 9 ] );
+		await shot( 'plane-ahead' );
+		console.log( JSON.stringify( await ahead( 360, 0.45 ) ) );
+		await shot( 'plane-turn' );
 
 	}
 

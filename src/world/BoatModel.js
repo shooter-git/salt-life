@@ -166,7 +166,7 @@ export class BoatModel extends Vessel {
 		// ---- (M16) what the rest of the game asks of a boat (world/boat/Vessel)
 
 		const sternY = lines.sheerY( 0 ) + 0.1;
-		this.wake = { quarterX: 1.5, quarterZ: - 2.0, washZ: - 4.2 };
+		this.wake = { quarterX: 1.5, quarterZ: - 2.0, washZ: - 4.2, armSize: 1.8, washSize: 4, washSpread: 0.7 };
 		this.lamps = { dome: [ 0, 2.24, 0.42 ], instruments: [ - 0.45, 1.5, 1.12 ], port: [ 0.47, 3.45, - 0.47 ], masthead: [ 0, 3.97, - 0.5 ], anchor: [ 0, 4.05, - 0.5 ], stern: [ 0, sternY, lines.zAft - 0.05 ], spot: parts.searchlight.toArray() };
 		this.floods = [ - 0.8, 0.8 ].map( ( x ) => ( { at: [ x, 2.25, - 1.0 ], dir: [ x * 0.25, - 0.75, - 0.62 ] } ) );
 		this.bowWalk = 4.0;
