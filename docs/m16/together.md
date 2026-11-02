@@ -92,10 +92,11 @@ CPU renders, on a machine shared with other sessions. No GPU or phone has run an
 
 | | Draws (150) | Triangles (300,000) | Script memory (150 MB) |
 |---|---|---|---|
-| At the pier head, Sam's copy in sight: dev server, two games | 56 | 267,541 | 155 MB |
-| Sam on the sportfisher's bridge under way | 25 | 48,858 | 163 MB |
-| Their lobster boat 300 m off | 67 | 207,238 | 162 MB |
-| Sam at his helm by night, her boat 400 m off | 67 | 183,812 | 171 MB |
+| The complete check: built, alone | 75 | 240,012 | 129 MB |
+| At the pier head, Sam's copy in sight: dev server, two games | 55 | 268,596 | 162 MB |
+| Sam on the sportfisher's bridge under way | 24 | 49,501 | 160 MB |
+| Their lobster boat 300 m off | 67 | 207,864 | 154 MB |
+| Sam at his helm by night, her boat 400 m off | 66 | 183,496 | 163 MB |
 
 A lobster copy and her owner's figure cost 7 draws and about 24,000 triangles. Their memory was too small to read against the noise.
 

@@ -497,6 +497,12 @@ await frames( guest.game, 4 );
 const off = await guest.game.evaluate( () => { const p = window.__app.player; return { mode: p.mode, riding: p.riding, y: +p.position.y.toFixed( 2 ), x: +p.position.x.toFixed( 2 ), z: +p.position.z.toFixed( 2 ), ground: +p.groundAt( p.position.x, p.position.z, p.position.y + 2 ).toFixed( 2 ), boat: p.boat === window.__app.boatCtl }; } );
 say( ! off.riding && off.boat && ashore.rail !== null && off.mode === 'walk', `he steps ashore: ${ JSON.stringify( off ) }` );
 
+// (her paint and what's fitted, really drawn: his game, from where he stepped ashore, looking at her)
+await until( guest.game, `( () => { const o = ${ other }; return o.boat && o.boat.visible; } )()`, 60000 ).catch( () => {} );
+await guest.game.evaluate( `( () => { const a = window.__app, p = a.player, b = ${ other }.boat.position, dx = b.x - p.position.x, dz = b.z - p.position.z; p.yaw = Math.atan2( - dx, - dz ); p.pitch = - 0.25; } )()` );
+await frames( guest.game, 3 );
+await shot( guest, `painted-${ BOAT }` );
+
 console.log( `     frames a second, really: Robin ${ await rate( owner.game ) }, Sam ${ await rate( guest.game ) }` );
 console.log( 'SUMMARY', JSON.stringify( { boat: BOAT, owner: OWNER_FPS, guest: GUEST_FPS, own: OWN, areas: results, under, failed, problems, minutes: +( ( Date.now() - t0 ) / 60000 ).toFixed( 1 ) } ) );
 console.log( failed || problems ? `${ failed } failed, ${ problems } problem(s)` : 'all passed' );
