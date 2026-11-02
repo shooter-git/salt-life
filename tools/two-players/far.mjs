@@ -1,11 +1,12 @@
-// Two real games (tools/two-players), far out (M15 step 18): apart; the same sea alongside at the bank; riding out there; a boat left adrift; her owner back.
-//   pnpm dev, then   node tools/two-players/far.mjs [dir for screenshots] [port]   (some minutes: two games on the CPU)
+// Two real games (tools/two-players), far out, each in the same boat (M16: lobster unless you say) (M15 step 18): apart; the same sea alongside at the bank; riding out there; a boat left adrift; her owner back.
+//   pnpm dev, then   node tools/two-players/far.mjs [dir for screenshots] [port] [boat]   (some minutes: two games on the CPU)
 // The stand-in's own save is kept in the browser here (host.js patched as it's fetched), so a player can really come back.
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const ROOT = join( dirname( fileURLToPath( import.meta.url ) ), '../..' );
 const { chromium } = await import( join( process.env.ALL_THE_SPACES || join( ROOT, '../all-the-spaces' ), 'node_modules/playwright/index.mjs' ) );
-const [ out = 'qa-output', PORT = '5189' ] = process.argv.slice( 2 );
+const [ out = 'qa-output', PORT = '5189', BOAT = 'lobster' ] = process.argv.slice( 2 );
+const ANCHOR = { kayak: 'kayakAnchor', console: 'deepAnchor_console', lobster: 'deepAnchor_lobster', sportfisher: 'deepAnchor_sportfisher' }[ BOAT ];
 const browser = await chromium.launch( { args: [ '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required' ] } );
 const ctx = await browser.newContext( { viewport: { width: 640, height: 360 } } );
 await ctx.route( '**/tools/two-players/host.js*', async ( route ) => {
@@ -19,7 +20,7 @@ await ctx.route( '**/tools/two-players/host.js*', async ( route ) => {
 } );
 let problems = 0;
 const say = ( ok, what ) => { console.log( ( ok ? 'ok   ' : 'FAIL ' ) + what ); if ( ! ok ) problems ++; };
-const open = async ( name ) => {
+const open = async ( name, boat = null ) => {
 
 	const page = await ctx.newPage();
 	// (the dev server's hundreds of modules, with the other game holding the CPU: one can fail to come. Tried again)
@@ -32,7 +33,7 @@ const open = async ( name ) => {
 
 	} );
 	page.on( 'console', ( m ) => { if ( m.type() === 'error' && ! /ERR_NETWORK|Failed to load resource|dynamically imported/.test( m.text() ) ) { problems ++; console.log( name, 'CONSOLE', m.text().slice( 0, 300 ) ); } } );
-	await page.goto( `http://127.0.0.1:${ PORT }/tools/two-players/?name=${ name }&id=${ name.toLowerCase() }-1&tier=low` );
+	await page.goto( `http://127.0.0.1:${ PORT }/tools/two-players/?name=${ name }&id=${ name.toLowerCase() }-1&tier=low${ boat ? `&src=${ encodeURIComponent( `/?boat=${ boat }` ) }` : "" }` );
 	const f = () => page.frames().find( ( x ) => x !== page.mainFrame() );
 	for ( let i = 0; i < 500; i ++ ) {
 
@@ -55,7 +56,7 @@ const open = async ( name ) => {
 };
 const frames = ( g, n = 4 ) => g.evaluate( () => window.__app.renderer.info.render.frame ).then( ( t ) => g.waitForFunction( ( [ t, n ] ) => window.__app.renderer.info.render.frame > t + n, [ t, n ], { timeout: 200000, polling: 300 } ) );
 
-let robin = await open( 'Robin' );
+let robin = await open( 'Robin', BOAT );
 // ---- Robin out at the bank at her helm before Sam comes, so he's never been near her
 const FAR = { x: - 6200, z: 7400 }; // the bank
 await robin.game.evaluate( ( F ) => {
@@ -68,7 +69,7 @@ await robin.game.evaluate( ( F ) => {
 	b.position.set( F.x, b.position.y, F.z );
 
 }, FAR );
-const sam = await open( 'Sam' );
+const sam = await open( 'Sam', BOAT );
 await sam.game.waitForFunction( () => window.__app.together.others.size > 0 && [ ...window.__app.together.others.values() ][ 0 ].cur, null, { timeout: 200000, polling: 1000 } );
 await robin.game.waitForFunction( () => window.__app.together.others.size > 0 && [ ...window.__app.together.others.values() ][ 0 ].cur, null, { timeout: 200000, polling: 1000 } );
 console.log( 'both in' );
