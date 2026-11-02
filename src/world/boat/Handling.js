@@ -7,7 +7,8 @@ import { MathUtils, Vector3 } from '../../engine/index.js';
 //   windArea        m^2 she shows the wind [ end-on, abeam ]
 //   windCd, windY   its drag coefficient; how high its centre of effort is (boat frame)
 //   windLead        m toward the windward end its push moves as it comes round from abeam to end-on
-//   rightFrom, rightK  past this heel or trim (rad) her ballast and flare right her harder (N m per radian past it)
+//   rightFrom, rightK  past this heel or trim (rad) her flare and chines right her harder (N m per radian past it). The
+//                   hull's samples hold her only so far (a GZ of 0.05 to 0.1 m), so from about there, or she flops over to it
 //   rollInertia     her roll inertia against the bare hull's (gear high on deck)
 //   addedMass       when fully wet, of her mass: [ sway, heave, surge ]
 //   addedInertia    of her inertia: [ pitch, yaw, roll ]
@@ -80,7 +81,7 @@ export const LOBSTER_HANDLING = {
 	windCd: 0.92,
 	windY: 1.2,
 	windLead: 3,
-	rightFrom: 25 * DEG,
+	rightFrom: 14 * DEG, // (past what she leans as she's sold; with a turbo diesel she went over in a hard turn)
 	rightK: 45000,
 	rollInertia: 1.24,
 	addedMass: [ 0.6, 0.7, 0.05 ],

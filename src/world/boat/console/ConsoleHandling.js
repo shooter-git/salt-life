@@ -28,7 +28,7 @@ export const CONSOLE_HANDLING = {
 	windCd: 0.9,
 	windY: 1.05,
 	windLead: 2.6,
-	rightFrom: 28 * DEG,
+	rightFrom: 10 * DEG,
 	rightK: 52000,
 	rollInertia: 1.15,
 	addedMass: [ 0.5, 0.55, 0.04 ],

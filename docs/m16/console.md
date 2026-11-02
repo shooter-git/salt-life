@@ -18,7 +18,7 @@ A 23 ft deep-V with an open deck all round the helm, a T-top, and outboards on a
 - **Pace:** the helm's 0.7 of the lever is her cruise, all of it her best. Sold with a single 150 (speedMul 1) she does 23 kn at cruise and 36 flat out. Twin 150s (`consoleEngine`, speedMul 1.25) give 32 and 43, which matches the real boat's test figures.
 - **On the plane:** the bow rises about 9° over the hump, and she runs at about 4° at 43 kn, a little less at cruise.
 - **Trim and tilt:** the engines trim down to get her up and out at speed, at the rate of a real trim motor. With nobody at the helm they tilt right up out of the water.
-- **Turning:** hard over at cruise she leans about 18° into the turn, not out as the lobster boat does, and turns on a radius of about 22 m. She holds up to about 22 kn from 28.
+- **Turning:** on the plane she leans into the turn, not out as the lobster boat does: about 13° hard over at cruise, on a radius of about 28 m, holding 24 kn from 31. Off the plane there's no chine to press on, and she stays within about 10°.
 - **In a seaway:** with the prop out of the water the thrust goes. On the plane a couple keeps her upright, standing in for the planing lift the buoyancy samples can't give once her sides are dry. Without it she rolled over at 25 kn in flat water.
 
 **Her wake** (`ocean/Wake.js`, shared by every boat; each boat's `wake` gives its own sizes). Set against the maker's running photographs: a broad band of fine white streaks from the transom, feathering off.

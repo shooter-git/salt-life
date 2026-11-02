@@ -91,9 +91,9 @@ export function outboards( ctl, q ) {
 	addForceAt( _f.set( 0, - Math.sin( ctl.outboardTrim ) * Math.max( thrust, 0 ), 0 ).applyQuaternion( ctl.quaternion ), propW );
 
 	// up on the plane her V carries her on its wetted middle, and it's her lift that keeps her upright where the buoyancy's
-	// gone from her sides; and she leans into her turn, pressing on her inner chine, with her speed and how fast she's turning
+	// gone from her sides; and on the plane she leans into her turn, pressing on her inner chine, with her speed and how fast she's turning
 	// (the wind on her beam doesn't do it, as drift would)
-	const lean = F.lean * Math.abs( u ) * clamp( aLoc.y, - 0.8, 0.8 ) + F.upright * MathUtils.smoothstep( Math.abs( u ), 4, 13 ) * side.y;
+	const lean = F.lean * Math.abs( u ) * MathUtils.smoothstep( Math.abs( u ), 4, 9 ) * clamp( aLoc.y, - 0.8, 0.8 ) + F.upright * MathUtils.smoothstep( Math.abs( u ), 4, 13 ) * side.y;
 	if ( lean ) {
 
 		addForceAt( _f.set( 0, - lean, 0 ).applyQuaternion( ctl.quaternion ), ctl.toWorld( _p.set( 1, ctl.com.y, comZ ), _p ) );

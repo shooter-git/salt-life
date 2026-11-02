@@ -62,7 +62,7 @@ export const SPORTFISHER_HANDLING = {
 	windCd: 0.95,
 	windY: 2.6,
 	windLead: 4.5,
-	rightFrom: 28 * DEG,
+	rightFrom: 8 * DEG,
 	rightK: 420000,
 	rollInertia: 1.5,
 	addedMass: [ 0.6, 0.75, 0.05 ],
@@ -71,7 +71,7 @@ export const SPORTFISHER_HANDLING = {
 	stations: STATIONS,
 	lateralY: - 0.2,
 	hullLift: 0.42,
-	bank: 240,
+	bank: 2000, // (on the plane she leans in; hard over, she's about upright)
 	heave: [ 11000, 7000 ],
 	damping: [ 320000, 42000, 58000, 12000 ],
 	resistance: ( au ) => 60 * au + 60 * au * au + 28000 * sstep( au, 4.5, 9 ) - 9000 * sstep( au, 9, 13.5 ) + 58000 * sstep( au, 14, 19 ),

@@ -269,6 +269,7 @@ export class App {
 		camera.updateProjectionMatrix();
 		this.renderer = renderer;
 		this._drawn = null; // the last frame's fence
+		this._drawnAt = 0; // (ms: when it was set)
 		this._owed = 0; // s not yet played while waiting for it
 		this._slots = []; // bakes waiting for a frame of their own (frameSlot)
 		this._firsts = []; // programs waiting for their first draw (firstDraws)
@@ -1085,7 +1086,8 @@ export class App {
 		const gl = this.renderer.getContext();
 		if ( this._drawn ) {
 
-			if ( this._rest || gl.clientWaitSync( this._drawn, 0, 0 ) === gl.TIMEOUT_EXPIRED ) {
+			// (not for ever: a fence that never comes shouldn't leave the game standing still)
+			if ( this._rest || ( gl.clientWaitSync( this._drawn, 0, 0 ) === gl.TIMEOUT_EXPIRED && performance.now() - this._drawnAt < 2000 ) ) {
 
 				this._rest = false;
 				this._owed += dt;
@@ -1115,6 +1117,7 @@ export class App {
 		this.frame( Math.min( 0.1, dt + this._owed ) );
 		this._owed = 0;
 		this._drawn = gl.fenceSync( gl.SYNC_GPU_COMMANDS_COMPLETE, 0 );
+		this._drawnAt = performance.now();
 		this._rest = true;
 		gl.flush();
 

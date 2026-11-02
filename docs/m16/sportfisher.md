@@ -51,7 +51,7 @@ Cockpit to mezzanine by two steps; through the door to the salon; down the compa
 
 ## Handling
 
-`SPORTFISHER_HANDLING`: 18.5 t, roll about 4.6 s. Her resistance has a hump about 8.5 m/s (16.5 knots), over which a cruising lever (0.7) just carries her: half throttle won't get her on the plane, 0.7 settles at 26 knots, and flat out is 32.7. Twin screws: at the dock with the wheel over one engine goes ahead and the other astern, and she turns on the spot at about 14 degrees a second (`twinScrews`).
+`SPORTFISHER_HANDLING`: 18.5 t, roll about 4.6 s. Her resistance has a hump about 8.5 m/s (16.5 knots), over which a cruising lever (0.7) just carries her: half throttle won't get her on the plane, 0.7 settles at 26 knots, and flat out is 32.7. Twin screws: at the dock with the wheel over one engine goes ahead and the other astern, and she turns on the spot at about 14 degrees a second (`twinScrews`). On the plane she leans into a turn, about 10 degrees at half wheel flat out and 7 hard over, on radii of about 70 and 28 m; below it she's about upright. `test/turns.mjs` holds each boat to this.
 
 ## What others read
 
