@@ -130,6 +130,9 @@ function shell( kit, L, q ) {
 	orientTowards( g, V( 0, 0, - 1 ) );
 	g.computeVertexNormals();
 	kit.add( 'hull', g );
+	// (its stern light, let into it)
+	const sy = L.sheerY( 0 ) - 0.24;
+	kit.add( 'fittings', bx( - 0.05, sy - 0.022, L.zAft - 0.018, 0.05, sy + 0.022, L.zAft ), { color: 0xeeeeea, rough: 0.25 } );
 
 }
 
