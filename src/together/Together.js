@@ -342,7 +342,8 @@ export class Together {
 		const app = this.app, b = app.boatCtl, id = this.me.id, t = Date.now(), dock = berthOf( b.model && b.model.id ).position;
 		// ((M15) out on the water with no anchor down, she's adrift if you go: as stepping ashore makes her fast, Player.exitBoat)
 		const berthed = b.moored || b.hauled || b.beached || ( Math.hypot( b.position.x - dock.x, b.position.z - dock.z ) < 14 && b.speed < 1.5 );
-		if ( ( b.anchor && b.driven ) || ( ! b.anchor && berthed ) ) {
+		// ((M16) sat in a kayak with her anchor down, after a rest in her, you're not about to take it up)
+		if ( ( b.anchor && b.driven && ! ( b.model && b.model.seated ) ) || ( ! b.anchor && berthed ) ) {
 
 			if ( ! this._boatSaved ) return Promise.resolve();
 			this._boatSaved = false;

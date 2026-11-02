@@ -15,10 +15,11 @@ const KEYS = {
 	'saltlife.boat': 'boat', // (M15) where your boat was left, and whether you were aboard (App.saveBoat, game/Away.js)
 };
 const WRITE_AFTER_MS = 1200;
+const RETRY_MS = 15000; // (a write that failed)
 
 export class SaveStore {
 
-	constructor( portal, { onError = () => {}, writeAfterMs = WRITE_AFTER_MS } = {} ) {
+	constructor( portal, { onError = () => {}, writeAfterMs = WRITE_AFTER_MS, retryMs = RETRY_MS } = {} ) {
 
 		this.portal = portal;
 		this.onError = onError;
@@ -27,6 +28,7 @@ export class SaveStore {
 		this.dirty = new Set();
 		this.stopped = false; // saved from elsewhere (another device): stop overwriting it
 		this.writeAfterMs = writeAfterMs;
+		this.retryMs = retryMs;
 		this._timer = 0;
 		// (the write out now, if any: the next waits for it. Two out at once, the second made on the
 		// version the first was, were turned down as saved from elsewhere, and saving stopped for the
@@ -134,6 +136,15 @@ export class SaveStore {
 
 				// a newer save from another device or version: keep it, don't overwrite it again
 				if ( e instanceof StaleSaveError ) this.stopped = true;
+				// (anything else, it's tried again in a while: nothing else may change this key for hours)
+				else {
+
+					this.dirty.add( key );
+					clearTimeout( this._timer );
+					this._timer = setTimeout( () => this.flush(), this.retryMs );
+
+				}
+
 				this.onError( e );
 
 			}

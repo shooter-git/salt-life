@@ -2648,7 +2648,7 @@ export class App {
 
 				const r = st.fleet[ id ];
 				names[ id ] = st.boatName( id );
-				st.payTow( o.fee );
+				o.paid = st.payTow( o.fee );
 				r.hull = Math.min( 1, r.hull + o.wear );
 				if ( o.where === 'cradle' ) r.hauled = true;
 

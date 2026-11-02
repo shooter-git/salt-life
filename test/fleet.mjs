@@ -320,6 +320,9 @@ ok( standsGeometry( 'sportfisher', 5, () => 3 ).attributes.position.count > 0, '
 	ok( H.console.where === 'cradle' && H.console.fee === 0, 'one already hauled costs nothing more' );
 	const said = tellOthers( H, { sportfisher: 'Reel Therapy', kayak: 'the fishing kayak', console: 'the center console' } );
 	ok( said.length === 2 && said[ 0 ].includes( 'Reel Therapy' ) && said[ 0 ].includes( `$${ FLEET.sportfisher.haul }` ), 'and says so, by what you call her' );
+	H.kayak.paid = 0;
+	const broke = tellOthers( { kayak: H.kayak }, { kayak: 'the fishing kayak' } );
+	ok( ! broke[ 0 ].includes( '$' ) && broke[ 0 ].includes( 'nothing to take it from' ), 'with no money, she doesn\'t say you paid' );
 	const storm = () => ( { wind: 35, rain: 0, thunder: 0, windAngle: 0, id: 'gale' } );
 	const big = awayOf( { x: 0, z: 0, heading: 0, anchor: null, moored: true, T: 0 }, 2, { dock: { x: 0, z: 0 }, weather: storm, news: () => null, boat: 'sportfisher' } );
 	const lob = awayOf( { x: 0, z: 0, heading: 0, anchor: null, moored: true, T: 0 }, 2, { dock: { x: 0, z: 0 }, weather: storm, news: () => null } );

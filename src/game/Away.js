@@ -230,7 +230,8 @@ export function tellOthers( stories, names ) {
 	for ( const [ id, s ] of Object.entries( stories ) ) {
 
 		const name = names[ id ] || 'your other boat';
-		if ( s.tows.length ) note.push( `Hauled ${ name } out ahead of the hurricane as well: $${ s.fee }. She's on blocks in my yard.` );
+		const paid = s.paid ?? s.fee; // (what it took of what you had: App's)
+		if ( s.tows.length ) note.push( `Hauled ${ name } out ahead of the hurricane as well${ paid >= s.fee ? `: $${ s.fee }` : paid > 0 ? `: $${ paid } of her $${ s.fee }, all you had` : `, and you'd nothing to take it from` }. She's on blocks in my yard.` );
 		if ( s.wear >= WORN_SAID ) note.push( `${ name[ 0 ].toUpperCase() }${ name.slice( 1 ) } took a beating at her berth while you were gone. See me about the hull.` );
 
 	}

@@ -250,7 +250,7 @@ export class Game {
 		this._massBase = b.mass;
 		this._wearSaved = this.state.hull;
 		this._bailing = false;
-		this._wornSaid = 0;
+		this._wornSaid = this.state.hull >= 0.5 ? 2 : this.state.hull >= 0.1 ? 1 : 0;
 		this._floodSaid = false; // (said the water's over the engine, until she next runs)
 		// ((M13) hauled out ahead of a hurricane when you left: she's on her cradle still)
 		if ( this.state.hauled ) b.setHauled( this.cradle );
