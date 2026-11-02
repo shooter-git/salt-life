@@ -9,6 +9,7 @@ import { KAYAK_HANDLING, Stroke } from './Paddle.js';
 import { dryFrom, layOn, waterFrom } from './Shore.js';
 import { Drops } from './Drops.js';
 import { TUMBLE_B, capsizeHeel, breakerCapsizes, spillShare, climbSeconds, soakStep, SOAKED } from './Capsize.js';
+import { seenInWater } from '../../../materials/SeenInWater.js';
 
 const _mid = new Vector3(), _dir = new Vector3(), _up = new Vector3(), _z = new Vector3(), _m = new Matrix4();
 const _l = new Vector3(), _r = new Vector3(), _w = new Vector3(), _v = new Vector3(), _fwd = new Vector3();
@@ -48,6 +49,7 @@ export class KayakModel extends Vessel {
 		this._fullPositions = geometry.attributes.position.array.slice();
 		const hull = this.materials.hull = new MeshStandardMaterial( { vertexColors: true, roughness: 0.42, metalness: 0 } );
 		hull.name = 'kayakHull';
+		hull.onBeforeCompile = seenInWater;
 		const mesh = new Mesh( geometry, hull );
 		mesh.name = 'boat-hull';
 		mesh.castShadow = mesh.receiveShadow = true;

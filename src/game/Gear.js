@@ -60,7 +60,7 @@ export const UPGRADES = {
 		{ cost: 0, label: 'None', swimMul: 1, breathS: 50, airS: 0 },
 		{ cost: 80, label: 'Mask and fins (faster swimming)', swimMul: 1.45, breathS: 50, airS: 0 },
 		{ cost: 220, label: 'Long fins and a wetsuit (a longer breath)', swimMul: 1.65, breathS: 80, airS: 0 },
-		{ cost: 600, label: 'Scuba tanks (fresh from the rack on every dive)', swimMul: 1.65, breathS: 80, airS: 6800 },
+		{ cost: 600, label: 'Scuba tanks (one dive\'s air, filled at the dock or at Marta\'s)', swimMul: 1.65, breathS: 80, airS: 6800 },
 	] },
 	// (the life jacket for the kayak's capsize, the flares and EPIRB for DaysOut: Seaworthy's, shown here with your gear)
 	safety: DAYS_TRACKS.safety,
@@ -198,7 +198,7 @@ export const UPGRADES = {
 	] },
 	consoleTanks: { name: 'Tank rack', on: 'console', levels: [
 		{ cost: 0, label: 'None', tankRack: false },
-		{ cost: 150, label: 'Tanks racked behind the leaning post', tankRack: true },
+		{ cost: 150, label: 'Tanks racked behind the leaning post (a fresh one each time you\'re back aboard)', tankRack: true },
 	] },
 	// (M16) the sportfisher's own
 	sfOutriggers: { name: 'Outriggers', on: 'sportfisher', levels: [

@@ -2,7 +2,7 @@
 //   tools/render-slot.sh node tools/console/game.mjs out-dir [ scene ... ]
 // Scenes: dock (where she lies, from the pier), helm (her dash from the wheel, lit), run (under power, from astern and abeam, her
 // wake), deck (walked round: bow, stern, platform), rain (a downpour: outside the top and under it), night (her lamps), tier=low
-// in the url's query with QUERY=... for the phone's budgets.
+// in the url's query with QUERY=... for the phone's budgets. BOAT=lobster for another boat in the same shots.
 import { chromium } from '/home/shooter/Documents/VS Code/all-the-spaces/node_modules/playwright/index.mjs';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -22,8 +22,14 @@ p.on( 'console', ( m ) => {
 	console.log( m.type(), t.slice( 0, 500 ) );
 
 } );
-await p.goto( `http://127.0.0.1:5202/?boat=console&hour=${ process.env.HOUR || 11 }${ query ? '&' + query : '' }` );
-await p.waitForFunction( () => window.__app && window.__app._started, null, { timeout: 280000 } );
+await p.goto( `http://127.0.0.1:5202/?boat=${ process.env.BOAT || 'console' }&hour=${ process.env.HOUR || 11 }${ query ? '&' + query : '' }` );
+// (a load the machine's network changing cut off, ERR_NETWORK_CHANGED, gets one more go)
+await p.waitForFunction( () => window.__app && window.__app._started, null, { timeout: 150000 } ).catch( async () => {
+
+	await p.reload();
+	await p.waitForFunction( () => window.__app && window.__app._started, null, { timeout: 280000 } );
+
+} );
 console.log( 'started' );
 const closeGuide = () => p.evaluate( () => {
 
@@ -31,10 +37,19 @@ const closeGuide = () => p.evaluate( () => {
 	if ( g && g.open ) g.close();
 
 } );
+// (frames drawn, the wait for the view to catch up: frames come slowly here, more so with other renders running)
+const frames = async ( n ) => {
+
+	const from = await p.evaluate( () => window.__frames );
+	await p.waitForFunction( ( to ) => window.__frames >= to, from + n, { timeout: 120000 } );
+
+};
+
 const shot = async ( name ) => {
 
+	await frames( 2 );
 	await closeGuide();
-	await p.waitForTimeout( 500 );
+	await p.waitForTimeout( 400 );
 	await p.screenshot( { path: path.join( out, name + '.png' ) } );
 	console.log( 'shot', name );
 
@@ -51,25 +66,37 @@ const wait = async ( ms ) => {
 const look = ( eye, at ) => p.evaluate( ( [ eye, at ] ) => {
 
 	const a = window.__app, c = a.boatCtl, cam = a.camera;
-	window.__look = { eye, at };
+	window.__look = eye && { eye, at };
 	if ( ! window.__lookOn ) {
 
 		window.__lookOn = true;
-		const draw = a.drawWorld.bind( a );
-		a.drawWorld = function () {
+		const place = () => {
 
 			const L = window.__look;
-			if ( L ) {
+			if ( ! L ) return;
+			a.player.position.copy( c.position );
+			cam.position.set( ...L.eye ).applyQuaternion( c.quaternion ).add( c.position );
+			const t = cam.position.clone().set( ...L.at ).applyQuaternion( c.quaternion ).add( c.position );
+			cam.up.set( 0, 1, 0 );
+			cam.lookAt( t );
+			cam.updateMatrixWorld();
 
-				a.player.position.copy( c.position );
-				cam.position.set( ...L.eye ).applyQuaternion( c.quaternion ).add( c.position );
-				const t = cam.position.clone().set( ...L.at ).applyQuaternion( c.quaternion ).add( c.position );
-				cam.up.set( 0, 1, 0 );
-				cam.lookAt( t );
+		};
 
-			}
+		// (before the sea's laid out as well, which is for the view it's given: drawn from another, it leaves black wedges)
+		const draw = a.drawWorld.bind( a ), up = a.water.update.bind( a.water );
+		a.water.update = function ( camera ) {
 
+			place();
+			up( camera );
+
+		};
+
+		a.drawWorld = function () {
+
+			place();
 			draw();
+			window.__frames = ( window.__frames || 0 ) + 1;
 
 		};
 
@@ -77,6 +104,8 @@ const look = ( eye, at ) => p.evaluate( ( [ eye, at ] ) => {
 
 }, [ eye, at ] );
 
+await look( null );
+await p.evaluate( () => { window.__frames = 0; } );
 await wait( 2000 );
 for ( const s of scenes.length ? scenes : [ 'dock', 'run', 'deck', 'helm' ] ) {
 
@@ -112,7 +141,7 @@ for ( const s of scenes.length ? scenes : [ 'dock', 'run', 'deck', 'helm' ] ) {
 	if ( s === 'dock' ) {
 
 		await wait( 4000 );
-		await look( [ 9, 3.2, 7 ], [ 0, 1, 0 ] );
+		await look( [ - 9, 3.2, 7 ], [ 0, 1, 0 ] );
 		await wait( 2500 );
 		await shot( 'dock-bow' );
 		await look( [ - 5, 3.2, - 9.5 ], [ 0, 0.8, - 2 ] );
@@ -206,7 +235,7 @@ for ( const s of scenes.length ? scenes : [ 'dock', 'run', 'deck', 'helm' ] ) {
 		const st = await p.evaluate( () => {
 
 			const c = window.__app.boatCtl, f = c.forward( c.position.clone() );
-			return { kn: c.speed / 0.5144, rpm: c.rpm, pitch: Math.asin( f.y ) * 57.3, y: c.position.y, trim: c.outboardTrim * 57.3 };
+			return { kn: c.speed / 0.5144, rpm: c.rpm, pitch: Math.asin( f.y ) * 57.3, y: c.position.y, trim: ( c.outboardTrim || 0 ) * 57.3 };
 
 		} );
 		console.log( JSON.stringify( st ) );
@@ -307,50 +336,77 @@ for ( const s of scenes.length ? scenes : [ 'dock', 'run', 'deck', 'helm' ] ) {
 
 	}
 
-	// (planing, her wake: the frames come too slowly here to get her there, so run her ahead, with her wake)
+	// (planing, her wake: the frames come too slowly here to get her there, so run her ahead, with her wake, then hold the world still
+	// and only draw: under load the frames can read as the clock jumping, which takes you off the helm and her wake with it)
 	if ( s === 'plane' ) {
 
-		const st = await p.evaluate( () => {
+		await p.evaluate( () => {
 
-			const a = window.__app, c = a.boatCtl;
-			c.driven = true;
+			const a = window.__app, c = a.boatCtl, P = a.player, T = a.terrainData;
+			// (at the helm, her engines down, and out on a clear run)
+			let best = null;
+			for ( let k = 0; k < 400 && ! best; k ++ ) {
+
+				const x = ( k * 733 ) % 6000 - 3000, z = ( k * 461 ) % 6000 - 3000, yaw = k * 1.1;
+				let clear = true;
+				for ( let d = 0; d <= 1500; d += 50 ) if ( T.heightAt( x + Math.sin( yaw ) * d, z + Math.cos( yaw ) * d ) > - 12 ) clear = false;
+				if ( clear ) best = { x, z, yaw };
+
+			}
+
+			c.position.set( best.x, c.position.y, best.z );
+			c.quaternion.setFromAxisAngle( new c.position.constructor( 0, 1, 0 ), best.yaw );
+			c.velocity.set( 0, 0, 0 );
+			c.angular.set( 0, 0, 0 );
+			c.hasWater = false;
+			if ( P.mode !== 'deck' ) P.boardBoat();
+			P.takeHelm();
+
+		} );
+		// (the sea's height's read back over frames: the engines want the water where she is now)
+		await frames( 6 );
+		const ahead = ( steps, steer ) => p.evaluate( async ( [ steps, steer ] ) => {
+
+			const a = window.__app, c = a.boatCtl, { G } = await import( '/src/core/Globals.js' );
+			if ( a.player.mode !== 'boat' ) a.player.takeHelm();
+			// (and the crank's counted in the frames this runs ahead of)
+			c.driven = c.engineOn = true;
 			c.moored = false;
-			for ( let i = 0; i < 1400; i ++ ) {
+			for ( let i = 0; i < steps; i ++ ) {
 
-				c.setInput( 1, 0, 1 / 30 );
-				c.update( 1 / 30 );
-				a.wake.update( 1 / 30 );
+				c.setInput( 1, steer, 1 / 60 );
+				c.update( 1 / 60 );
+				a.wake.update( 1 / 60 );
+
+			}
+
+			if ( ! window.__still ) {
+
+				window.__still = true;
+				a.frame = function () {
+
+					// (the camera's sea height's stale, run ahead: it isn't under water)
+					G.cameraUnderwater.value = 0;
+					a.water.update( a.camera );
+					a.drawWorld();
+
+				};
 
 			}
 
 			const f = c.forward( c.position.clone() );
-			return { kn: c.speed / 0.5144, rpm: c.rpm, pitch: Math.asin( f.y ) * 57.3, trim: c.outboardTrim * 57.3 };
+			return { kn: c.speed / 0.5144, rpm: c.rpm, pitch: Math.asin( f.y ) * 57.3, trim: ( c.outboardTrim || 0 ) * 57.3 };
 
-		} );
-		console.log( JSON.stringify( st ) );
+		}, [ steps, steer ] );
+		console.log( JSON.stringify( await ahead( 2800, 0 ) ) );
+		await p.addStyleTag( { content: 'body *:not(canvas) { visibility: hidden !important; } canvas { visibility: visible !important; }' } );
 		await look( [ - 8, 4, - 17 ], [ 0, 0.8, - 3 ] );
-		await p.waitForTimeout( 2500 );
-		await p.evaluate( () => {
-
-			const a = window.__app, c = a.boatCtl;
-			for ( let i = 0; i < 120; i ++ ) {
-
-				c.setInput( 1, 0, 1 / 30 );
-				c.update( 1 / 30 );
-				a.wake.update( 1 / 30 );
-
-			}
-
-		} );
 		await shot( 'plane-astern' );
-		await look( [ 13, 2.6, 7 ], [ 0, 1, 0 ] );
-		await p.waitForTimeout( 2500 );
-		await shot( 'plane-bow' );
-		await p.evaluate( () => {
-
-			window.__look = null;
-
-		} );
+		// (as the maker's running photographs: from ahead and above her quarter, along her wake; then in a turn, as they are)
+		await look( [ - 9, 6.5, 8 ], [ 0, 0.2, - 9 ] );
+		await shot( 'plane-ahead' );
+		console.log( JSON.stringify( await ahead( 360, 0.45 ) ) );
+		await shot( 'plane-turn' );
 
 	}
 
