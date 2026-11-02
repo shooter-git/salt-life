@@ -805,7 +805,7 @@ export class Player {
 		// the exit point closest to something walkable (pier deck / sand)
 		let best = side ? null : this.ashoreTarget();
 
-		// (someone else's that you're riding has no berth here)
+		// ((M16) someone else's has no berth of yours: she's theirs to make fast)
 		if ( ! this.riding && b.position.distanceTo( b.berth.position ) < 14 && b.speed < 1.5 ) {
 
 			b.moored = true;
@@ -845,7 +845,9 @@ export class Player {
 	// best walkable spot next to the boat (pier deck / sand / shallows), or null. Looks straight out
 	// from the rail at each exit point (square to the hull, a few reaches: the boat swings on its
 	// mooring) for ground from a little below the rail up to a pier deck a climb above it.
-	ashoreTarget() {
+	// ((M16) near: from the rail you're at, feet in her frame. She bobs, and which rail's best with it: what's on offer where
+	// you stand mustn't flip to over the side as she does)
+	ashoreTarget( near = null ) {
 
 		const b = this.boat;
 		const water = this.query.cpuValid ? this.query.cpu[ 0 ] : G.seaLevel.value;
@@ -855,6 +857,7 @@ export class Player {
 		let best = null, bestScore = Infinity;
 		for ( const ep of b.model.exitPoints ) {
 
+			if ( near && ( Math.hypot( near.x - ep.x, near.z - ep.z ) >= 1.3 || Math.abs( near.y - ep.y ) >= 1.4 ) ) continue;
 			const w = b.toWorld( ep, new THREE.Vector3() );
 			const sgn = Math.sign( ep.x ) || 1;
 			for ( const reach of [ 0.9, 1.4, 2.0 ] ) {
@@ -959,7 +962,7 @@ export class Player {
 
 		v.y -= 9.81 * dt;
 		const p = this.deckPos;
-		const oldX = p.x, oldZ = p.z;
+		const oldX = p.x, oldY = p.y, oldZ = p.z;
 		// ((M16) a step's measured from where your feet were: a frame's fall mustn't take it out of reach, more of it the slower the frame)
 		const stepFrom = Math.max( p.y, p.y + v.y * dt ) + DECK_STEP;
 		p.addScaledVector( v, dt );
@@ -980,7 +983,11 @@ export class Player {
 		}
 
 		// stay inside the hull (the bulwarks, plus a margin fore and aft)
+		// ((M16) by the height of the deck you're on: a slow device's frame of falling isn't the level below, and its narrower walls
+		// would put you off the edge of where you stand)
+		const fell = p.y, stood = p.y = Math.max( fell, oldY );
 		b.model.clampToDeck( p, DECK_RADIUS );
+		if ( p.y === stood ) p.y = fell;
 		// ((M16) strapped in the fighting chair: you turn your head, and that's all)
 		if ( this.chair ) {
 
@@ -1023,7 +1030,7 @@ export class Player {
 		if ( this._ashoreT <= 0 ) {
 
 			this._ashoreT = 0.25;
-			this._ashore = b.speed < 2.5 ? this.ashoreTarget() : null;
+			this._ashore = b.speed < 2.5 ? this.ashoreTarget( p ) : null;
 
 		}
 

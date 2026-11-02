@@ -1,6 +1,6 @@
-import { Euler, Group, MathUtils, Matrix4, Mesh, MeshStandardMaterial, Vector3 } from '../../../engine/index.js';
+import { BufferAttribute, Euler, Group, MathUtils, Matrix4, Mesh, MeshStandardMaterial, Vector3 } from '../../../engine/index.js';
 import { G } from '../../../core/Globals.js';
-import { Vessel } from '../Vessel.js';
+import { Vessel, geometryView } from '../Vessel.js';
 import { Avatar } from '../../../together/Avatar.js';
 import { SPRAY } from '../../../fx/Spray.js';
 import { KayakLines } from './KayakLines.js';
@@ -28,6 +28,7 @@ const HOME = { x: 44, z: - 24 }; // m
 //
 // What she does beyond the rest of the fleet is here: play( dt, game ), each frame (Game.updateBoat): the paddle's
 // splashes, you in her, a capsize and righting her, launching and landing, getting soaked.
+const showOf = ( s ) => ( { cooler: ! ( s.holdKg > 12 ), crate: s.holdKg > 12, puck: !! s.finder, trolley: s.anchorM > 0 || !! s.trolley } );
 const LEFT_TURNED = 0.7;
 
 export class KayakModel extends Vessel {
@@ -186,19 +187,39 @@ export class KayakModel extends Vessel {
 	// is in her one mesh, its vertices folded to a point while it's not there (no new draw, and they're in her count)
 	fit( stats ) {
 
-		const show = { cooler: ! ( stats.holdKg > 12 ), crate: stats.holdKg > 12, puck: !! stats.finder, trolley: stats.anchorM > 0 || !! stats.trolley };
-		const key = Object.values( show ).join();
+		const show = showOf( stats ), key = Object.values( show ).join();
 		if ( key === this._fitKey ) return;
 		this._fitKey = key;
-		const pos = this.meshes.hull.geometry.attributes.position, full = this._fullPositions;
+		const pos = this.meshes.hull.geometry.attributes.position;
+		this._foldInto( pos.array, show );
+		pos.needsUpdate = true;
+
+	}
+
+	_foldInto( a, show ) {
+
+		const full = this._fullPositions;
 		for ( const k in show ) {
 
 			const { start, count } = this._fitted[ k ];
-			for ( let i = start * 3, n = ( start + count ) * 3; i < n; i ++ ) pos.array[ i ] = show[ k ] ? full[ i ] : full[ start * 3 + i % 3 ];
+			for ( let i = start * 3, n = ( start + count ) * 3; i < n; i ++ ) a[ i ] = show[ k ] ? full[ i ] : full[ start * 3 + i % 3 ];
 
 		}
 
-		pos.needsUpdate = true;
+	}
+
+	// (together/) a copy of her shows it in vertices of its own, one set for each way she's fitted
+	dressCopy( copy, stats, shared ) {
+
+		const mesh = copy.getObjectByName( 'boat-hull' ), show = showOf( stats );
+		if ( mesh ) mesh.geometry = shared( Object.values( show ).join(), () => {
+
+			const v = geometryView( this.meshes.hull.geometry ), a = this._fullPositions.slice();
+			this._foldInto( a, show );
+			v.setAttribute( 'position', new BufferAttribute( a, 3 ) );
+			return v;
+
+		} );
 
 	}
 

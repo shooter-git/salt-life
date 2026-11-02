@@ -116,6 +116,8 @@ export class Rigs {
 	available( id ) {
 
 		const n = RIGS[ id ].needs;
+		// ((M16) riding along: the spread and the kite are her owner's, but your own lead goes over her side as off any boat)
+		if ( id === 'drop' && this.app.player.riding && this.app.player.mode === 'deck' ) return true;
 		if ( n === 'boat' ) return this.aboard && ( id !== 'kite' || ! this.app.boat.seated );
 		return ! n || ( this.aboard && this.stats[ n ] );
 
@@ -471,25 +473,32 @@ export class Rigs {
 
 		const L = this.rodOn;
 		if ( ! L || ! this._nearRod( L ) || this.game.fight ) return false;
+		this.takeLine( L, this.stats.spoolM );
+		this.lines.splice( this.lines.indexOf( L ), 1 );
+		return true;
+
+	}
+
+	// the rod in your hands with that fish on it ((M16) off your holder, or off someone's you're riding with: Together)
+	takeLine( L, spoolM ) {
+
 		const g = this.game, rod = g.rod, s = this.state;
 		if ( g.net.equipped ) g.dropNet();
 		g.cancelLine( true );
 		if ( g.hookBait ) s.returnBait( g.hookBait );
 		rod.equip( true );
 		rod.setRig( 'troll', true );
-		rod.spoolM = this.stats.spoolM;
+		rod.spoolM = spoolM;
 		rod.bobber.copy( L.p );
 		rod.landedAt.copy( L.p );
 		rod.setState( 'floating' );
 		g.hookBait = L.bait;
 		g.bite = { phase: 'take', t: 3, species: L.on.species, kg: L.on.kg, place: L.on.place, at: L.on.at };
-		this.lines.splice( this.lines.indexOf( L ), 1 );
 		rod.lineOut = L.len;
 		this._fightOut = L.len;
 		this._fightLeader = L.on.leader;
 		g.strike();
 		this.alert = null;
-		return true;
 
 	}
 
@@ -656,7 +665,7 @@ export class Rigs {
 		const leader = this._fightLeader || leaderOn( this.state.leaderPick, s.leader, rod.rig, this.app.boatCtl.speed * KNOTS, BAITS[ g.hookBait ]?.lure ? g.hookBait : null );
 		this._fightLeader = null;
 		const risk = leaderRisk( leader, b.species ), big = b.kg >= BIG_KG, off = s.dehooker && FISH[ b.species ].protected;
-		const chair = this.inChair && !! s.chair;
+		const chair = this.inChair && !! this._seat();
 		return {
 			lineKg: s.lineKg,
 			reelSpeed: electric ? ELECTRIC.speed : s.reelSpeed,
@@ -782,10 +791,18 @@ export class Rigs {
 
 	// ---- the chair (a boat that has one, fitted: Vessel.chair; the player's own hook)
 
+	// ((M16) yours; riding along, the one on the boat you're on, as she's fitted)
+	_seat() {
+
+		const p = this.app.player;
+		return p.riding ? p.boat.model.chair || null : this.stats.chair ? this.app.boat.chair : null;
+
+	}
+
 	updateChair( inp ) {
 
-		const g = this.game, p = this.app.player, f = g.fight, seat = this.app.boat.chair;
-		if ( ! seat || ! this.stats.chair || p.mode !== 'deck' ) {
+		const g = this.game, p = this.app.player, f = g.fight, seat = this._seat();
+		if ( ! seat || p.mode !== 'deck' ) {
 
 			if ( this.inChair ) this._sit( false );
 			return null;
@@ -816,7 +833,7 @@ export class Rigs {
 
 		const g = this.game, p = this.app.player, f = g.fight;
 		this.inChair = on;
-		p.chair = on ? this.app.boat.chair : null;
+		p.chair = on ? this._seat() : null;
 		if ( f ) {
 
 			f.chair = on;
@@ -897,6 +914,9 @@ export class Rigs {
 
 		} else if ( helm && this.lines.length ) this.alert = { key: 'E', text: `Leave helm   ·   ${ this._speedWord() }   ·   hold ${ { touch: 'Run', gamepad: 'RB' }[ app.input.lastDevice ] || 'Shift' } to run` };
 
+		// ((M16) riding along, a rod that's gone off in her holder)
+		const theirs = p.riding && app.together && app.together.spread.alert( ELLIPSIS );
+		if ( theirs ) this.alert = theirs;
 		const chair = this.updateChair( inp );
 		if ( chair ) this.alert = chair;
 		this.glasses.update( dt );

@@ -1,5 +1,5 @@
-import { MathUtils, Mesh, Object3D, Quaternion, Vector3 } from '../../../engine/index.js';
-import { Vessel } from '../Vessel.js';
+import { BufferAttribute, MathUtils, Mesh, Object3D, Quaternion, Vector3 } from '../../../engine/index.js';
+import { Vessel, geometryView } from '../Vessel.js';
 import { compassCardGeometry } from '../Wheelhouse.js';
 import { mergePrepared, prepare } from '../GeoKit.js';
 import { VARIATION } from '../../../game/Chart.js';
@@ -30,6 +30,8 @@ const _p = new Vector3();
 
 // (M16) The center console: a 23 ft deep-V with an open deck all round the helm, a T-top, outboards on a bracket, a door in
 // the transom to the platform and a dive ladder over its side. Modelled after the Regulator 23: docs/m16/console.md.
+const fittedOf = ( s ) => ( { twin: !! s.twin, tTop: !! s.tTop, diveLadder: !! s.diveLadder, tankRack: !! s.tankRack } );
+
 export class ConsoleModel extends Vessel {
 
 	constructor() {
@@ -168,7 +170,7 @@ export class ConsoleModel extends Vessel {
 	// tanks' rack and the second engine come and go; a single engine hangs on her centreline
 	fit( stats = {} ) {
 
-		const F = this.fitted = { twin: !! stats.twin, tTop: !! stats.tTop, diveLadder: !! stats.diveLadder, tankRack: !! stats.tankRack };
+		const F = this.fitted = fittedOf( stats );
 		this._applyFit();
 		const [ a, b ] = this.engines;
 		a.tilt.position.x = F.twin ? MOUNT.twinX : 0;
@@ -182,17 +184,6 @@ export class ConsoleModel extends Vessel {
 
 	}
 
-	// (M16) a copy of her on someone else's game, with the engines her owner has. A low tier's copy has no gear. Her rigging
-	// hoses stay as the copy's were: they share one geometry among all her copies
-	fitCopy( group, { twin } ) {
-
-		const a = group.getObjectByName( 'boat-outboard-tilt' ), b = group.getObjectByName( 'boat-outboard2-tilt' );
-		if ( ! a || ! b ) return;
-		a.position.x = twin ? MOUNT.twinX : 0;
-		b.position.x = - MOUNT.twinX;
-		b.visible = twin;
-
-	}
 
 	_applyFit() {
 
@@ -203,28 +194,73 @@ export class ConsoleModel extends Vessel {
 		};
 		for ( const name of Object.keys( this._ranges ) ) {
 
-			const geo = this.meshes[ name ].geometry, all = this._index[ name ];
-			const kept = [];
-			let n = 0;
-			for ( const [ fitting, from, count ] of this._ranges[ name ] ) if ( ! fitting || on[ fitting ] ) {
-
-				kept.push( [ from, count ] );
-				n += count;
-
-			}
-
-			const a = geo.index.array;
-			for ( let i = 0, w = 0; i < kept.length; i ++ ) {
-
-				a.set( all.subarray( kept[ i ][ 0 ], kept[ i ][ 0 ] + kept[ i ][ 1 ] ), w );
-				w += kept[ i ][ 1 ];
-
-			}
-
-			geo.setDrawRange( 0, n );
+			const geo = this.meshes[ name ].geometry;
+			geo.setDrawRange( 0, this._keptInto( name, on, geo.index.array ) );
 			geo.index.needsUpdate = true;
 
 		}
+
+	}
+
+	// the triangles of that mesh that are on her, into a: how many indices
+	_keptInto( name, on, a ) {
+
+		const all = this._index[ name ];
+		let w = 0;
+		for ( const [ fitting, from, count ] of this._ranges[ name ] ) if ( ! fitting || on[ fitting ] ) {
+
+			a.set( all.subarray( from, from + count ), w );
+			w += count;
+
+		}
+
+		return w;
+
+	}
+
+	// (together/) someone else's her, as hers is fitted: the rack in your way or not, the cover over you, the ladder she boards by
+	walkedAs( stats = {} ) {
+
+		const v = Object.create( this ), F = v.fitted = fittedOf( stats );
+		v.colliders = this.colliders.map( ( c ) => c.tag === 'rack' ? { ...c, solid: F.tankRack } : c );
+		v.shelter = F.tTop ? this._topShelter : this._noShelter;
+		return v;
+
+	}
+
+	// a copy of her shows it in geometry of its own (one for each way she's fitted: the same vertices, its own index)
+	dressCopy( copy, stats, shared ) {
+
+		const F = fittedOf( stats ), on = { tTop: F.tTop, tankRack: F.tankRack, twin: F.twin, single: ! F.twin, coverDown: false, ladderUp: F.diveLadder, ladderDown: false };
+		for ( const name of Object.keys( this._ranges ) ) {
+
+			const was = this.meshes[ name ], mesh = was && copy.getObjectByName( was.name );
+			if ( ! mesh ) continue;
+			mesh.geometry = shared( `${ name } ${ Object.values( on ).join() }`, () => {
+
+				const v = geometryView( was.geometry ), a = this._index[ name ].slice();
+				v.setIndex( new BufferAttribute( a, 1 ) );
+				v.setDrawRange( 0, this._keptInto( name, on, a ) );
+				return v;
+
+			} );
+
+		}
+
+		const tilt = ( n ) => copy.getObjectByName( `boat-${ n }-tilt` ), a = tilt( 'outboard' ), b = tilt( 'outboard2' );
+		if ( a ) a.position.x = F.twin ? MOUNT.twinX : 0;
+		if ( b ) {
+
+			b.position.x = - MOUNT.twinX;
+			b.visible = F.twin;
+
+		}
+
+	}
+
+	get paintSlot() {
+
+		return { name: 'hullPaint', uniform: this.materials.paint };
 
 	}
 

@@ -483,17 +483,15 @@ ok( m.helm.open && m.towerHelm.open, 'both her helms are in the open air: wind a
 
 	const yours = new SportfisherModel( 'high' );
 	yours.fit( { tower: false, outriggers: false, chair: false } );
-	ok( yours.gearBits() === 0, 'none fitted, it says so' );
 	const theirs = yours.group.clone( true );
 	const named = ( n ) => theirs.getObjectByName( n );
-	yours.dressCopy( theirs, 1 | 4 );
+	yours.dressCopy( theirs, { tower: true, outriggers: false, chair: true } );
 	ok( named( 'boat-tower' ).visible && named( 'boat-towerCompass' ).visible && named( 'boat-chair' ).visible && ! named( 'boat-outriggers' ).visible, 'their copy has their tower and chair, and no outriggers' );
 	ok( named( 'boat-wheel' ).count === 2 && yours.wheelMesh.count === 1 && ! yours.meshes.tower.visible, 'with its second wheel, and yours is as it was' );
-	const walked = yours.withGear( 1 ), tower = yours.ladders.find( ( l ) => l.id === 'tower' );
+	const walked = yours.walkedAs( { tower: true, outriggers: false, chair: false } ), tower = yours.ladders.find( ( l ) => l.id === 'tower' );
 	ok( walked.ladderAt( tower.on.clone() ) && ! yours.ladderAt( tower.on.clone() ), 'riding, their tower to climb, not having one yourself' );
 	ok( walked.helmAt( new Vector3( 0, SF.tower, walked.towerHelm.z ), 0.75 ) === walked.towerHelm, 'and its helm' );
-	ok( yours.withGear( 0 ).ladderAt( tower.on.clone() ) === null && yours.withGear( 1 ) === walked, 'nor one they haven\'t; and the same one each time' );
-	ok( yours.withGear( null ) === yours, 'a game that doesn\'t say: as she is' );
+	ok( yours.walkedAs( { tower: false, outriggers: false, chair: false } ).ladderAt( tower.on.clone() ) === null, 'nor one they haven\'t' );
 	yours.dispose();
 
 }

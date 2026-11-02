@@ -83,6 +83,7 @@ export function perched( model ) {
 	v.seated = false;
 	v.boardPoint = at;
 	v.helmEye = model.helmEye;
+	v.soleY = () => at.y;
 	v.clampToDeck = ( p ) => {
 
 		p.x = MathUtils.clamp( p.x, at.x - 0.1, at.x + 0.1 );

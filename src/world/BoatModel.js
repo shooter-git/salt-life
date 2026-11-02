@@ -163,6 +163,12 @@ export class BoatModel extends Vessel {
 
 	}
 
+	get paintSlot() {
+
+		return { name: 'hullPaint', uniform: this.materials.hullPaint };
+
+	}
+
 	// (M16) her topsides, in her hull's shader
 	setPaint( hex ) {
 

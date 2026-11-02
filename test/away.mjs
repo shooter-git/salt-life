@@ -344,7 +344,7 @@ const seaAt = ( h ) => ( { heightAt: ( x, z ) => h( x, z ) } );
 // ((M16) a boat as the copies have her: a stem head 4 m forward)
 const hers = { boardPoint: new Vector3( 0, 1, - 2 ), lines: { sheerY: () => 1.2, sheerZ: () => 4.15 } };
 const copy = () => ( { visible: true, position: new Vector3(), quaternion: new Quaternion(), userData: { type: 'lobster', gen: 0, model: hers, lamps: { set() {}, removeLight() {}, dispose() {} } } } );
-const copies = () => ( { types: new Map( [ [ 'lobster', { model: hers } ] ] ), gen: () => 0, make: copy, drop() {}, standIn: copy, model: () => hers, want: () => ( { model: hers } ) } );
+const copies = () => ( { walked: ( m ) => m, dress() {}, named() {}, near() {}, aboard: () => true, types: new Map( [ [ 'lobster', { model: hers } ] ] ), gen: () => 0, make: copy, drop() {}, standIn: copy, model: () => hers, want: () => ( { model: hers } ) } );
 const rodeCopy = () => ( { visible: false, material: { dispose() {}, uniforms: { lineA: { value: new Vector3() }, lineB: { value: new Vector3() }, lineCtl: { value: new Vector3() } } } } );
 const REACH = RODE_SLACK + 4; // (a stem head 4 m forward)
 const player = ( g, id, { host = false, tier = 'high', waves = seaAt( () => 0.5 ) } = {} ) => {

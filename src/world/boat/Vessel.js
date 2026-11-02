@@ -1,4 +1,4 @@
-import { Group, MathUtils, Matrix4, Quaternion, Vector3 } from '../../engine/index.js';
+import { BufferGeometry, Group, MathUtils, Matrix4, Quaternion, Vector3 } from '../../engine/index.js';
 import { RHO_SEAWATER } from './HullLines.js';
 import { triangleCount } from './GeoKit.js';
 
@@ -67,6 +67,28 @@ function swingAxis( t, now, limit, dt ) {
 //
 // And these, which do nothing until a boat needs them: setSteering, setThrottle, setPropellerRPM, setNavLights, update,
 // fit( stats ): what's fitted on her now (Gear.gearStats: called as it changes, and as she's built), setPaint( hex | null ).
+// (together/) a geometry for one copy: g's attributes and index, until it's given its own (let go with dropView)
+export function geometryView( g ) {
+
+	const v = new BufferGeometry();
+	v.attributes = { ...g.attributes };
+	v.index = g.index;
+	v.boundingSphere = g.boundingSphere;
+	v.boundingBox = g.boundingBox;
+	v.userData.from = g;
+	return v;
+
+}
+
+export function dropView( v ) {
+
+	const g = v.userData.from;
+	for ( const k of Object.keys( v.attributes ) ) if ( v.attributes[ k ] === g.attributes[ k ] ) delete v.attributes[ k ];
+	if ( v.index === g.index ) v.index = null;
+	v.dispose();
+
+}
+
 export class Vessel {
 
 	constructor( id ) {
@@ -235,22 +257,6 @@ export class Vessel {
 
 	}
 
-	// (M16) what's fitted on her, for the others' games: a number, or null for a boat whose copies are all alike;
-	// a copy of her dressed as that says; and the model to walk about on, as that says
-	gearBits() {
-
-		return null;
-
-	}
-
-	dressCopy( group, bits ) {}
-
-	withGear( bits ) {
-
-		return this;
-
-	}
-
 	// (M16) what she has to climb near p (boat frame), or null: a boat with ladders says (world/boat/sportfisher/LadderClimb)
 	ladderAt( p ) {
 
@@ -289,6 +295,52 @@ export class Vessel {
 	}
 
 	fit( stats ) {}
+
+	// (together/) someone else's her, as she's fitted there. walkedAs( stats ): for whoever's aboard, what's walked and climbed:
+	// a view of this model, never this model's own fit (she may be the boat you're in). dressCopy( copy, stats, shared ): how a
+	// copy of her shows it, the copy's own meshes (shared( key, make ): a geometry a copy needs of its own, one for each key)
+	walkedAs( stats ) {
+
+		return this;
+
+	}
+
+	dressCopy( copy, stats, shared ) {}
+
+	// (together/) her hull's material in another paint, for a copy: the same shader, its own colour. paintSlot: where that's held in
+	// a shader, { name, uniform }; without one it's the material's colour
+	get paintSlot() {
+
+		return null;
+
+	}
+
+	paintedHull( hex ) {
+
+		const from = this.materials.hull;
+		if ( ! from ) return null;
+		const S = this.paintSlot, material = from.clone(), compile = from.onBeforeCompile;
+		let own = null;
+		if ( S ) {
+
+			const was = S.uniform.value.clone();
+			this.setPaint( hex );
+			own = { value: S.uniform.value.clone() };
+			S.uniform.value.copy( was );
+
+		} else material.color.set( hex );
+
+		material.customProgramCacheKey = () => from.customProgramCacheKey();
+		material.onBeforeCompile = ( shader, renderer ) => {
+
+			compile.call( from, shader, renderer );
+			if ( S ) shader.uniforms[ S.name ] = own;
+
+		};
+
+		return { from, material };
+
+	}
 
 	// her topsides (state.fleet[ id ].paint's colour, or null as she came)
 	setPaint( hex ) {

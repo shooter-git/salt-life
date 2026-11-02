@@ -25,7 +25,7 @@ import { SEATS } from './seats.data.js';
 //   bunks, chair, rodHolders, outriggerTips, stations  what the days out, the tackle and the crew's jobs read
 //   ladders, ladderAt( p ) the two climbs (LadderClimb)
 //   towerHelm, helmAt( p, reach ) her second helm, on the tower's platform, if she has the tower
-//   gearBits(), dressCopy( group, bits ), withGear( bits )  what's fitted on someone else's (Vessel's)
+//   walkedAs( stats ), dressCopy( copy, stats )  what's fitted on someone else's (Vessel's)
 //   shelterAt( p )        the box of rain that's over you: the house, the hardtop or the tower's roof
 
 const DEG = Math.PI / 180;
@@ -106,6 +106,14 @@ function seatPart( d, x, y, z, yaw ) {
 }
 
 const PARTS = { pad: { color: 0xc99a5e, rough: 0.55 }, helmPad: { color: 0xeee8d8, rough: 0.5 }, teak: { color: 0x8a5a2c, rough: 0.35 }, helmTrim: { color: 0x6a4322, rough: 0.5 }, steel: { color: 0xd8dbde, rough: 0.3, metal: 0.35 } };
+
+// what's on her (a stat left undefined isn't one she has a track for yet, so she's shown with it)
+const fittedOf = ( stats ) => {
+
+	const has = ( k ) => stats[ k ] === undefined || !! stats[ k ];
+	return { tower: has( 'tower' ), outriggers: has( 'outriggers' ), chair: has( 'chair' ) };
+
+};
 
 export class SportfisherModel extends Vessel {
 
@@ -224,11 +232,11 @@ export class SportfisherModel extends Vessel {
 		this.floors = buildFloors( L );
 		this.colliders = buildColliders( L );
 		this.ladders = buildLadders();
-		this.helm = { x: 0, z: HELM.z, y: SF.bridge, eye: HELM.eye, rise: [ 0.5, HELM.z - 0.45 ], open: true };
+		this.helm = { x: 0, z: HELM.z, y: SF.bridge, eye: HELM.eye, rise: [ 0.5, HELM.z - 0.45 ], open: true, stand: [ 0, 0.02 ] }; // (stand: where a figure's seen at it, clear of her seat)
 		this.helmEye = HELM.eye;
 		this.towerHelm = { x: 0, z: TOWER_HELM.z, y: SF.tower, eye: TOWER_HELM.eye, rise: TOWER_HELM.rise, reach: TOWER_HELM.reach, upper: true, open: true };
 		this.helmInUse = this.helm; // (whose wheel and lever move: Player.takeHelm)
-		this.boardPoint = V( 0, SF.cockpit, - 4.1 );
+		this.boardPoint = V( 0, SF.cockpit, - 3.75 ); // (clear of the chair, which is someone's job: stations)
 		this.exitPoints = this.railPoints( [ - 5.4, - 4.5, - 3.6 ] );
 		this.bowWalk = 8.05;
 		this.bunks = [ { x: 0.82, y: SF.lower, z: 2.65 }, { x: 0, y: SF.lower, z: 3.72 } ];
@@ -238,7 +246,7 @@ export class SportfisherModel extends Vessel {
 		this.outriggerTips = [ riggerTip( 1, true ), riggerTip( - 1, true ) ];
 		this.stations = {
 			tower: { x: 0, y: SF.tower, z: ( TOWER.z0 + TOWER.z1 ) / 2, r: 1 },
-			chair: { x: 0, y: SF.cockpit, z: CHAIR_Z, r: 0.6, facing: Math.PI },
+			chair: { x: 0, y: SF.cockpit, z: CHAIR_Z, r: 0.56, facing: Math.PI }, // (just as far as you get into it: its collider)
 		};
 		this.lowCopy = [ 'boat-hull', 'boat-gelcoat', 'boat-glass' ];
 		this.towerEye = SF.tower + 1.62;
@@ -422,8 +430,7 @@ export class SportfisherModel extends Vessel {
 	// she has a track for yet, so she's shown with it)
 	fit( stats = {} ) {
 
-		const has = ( ...keys ) => keys.every( ( k ) => stats[ k ] === undefined ) ? true : keys.some( ( k ) => !! stats[ k ] );
-		this.fitted = { tower: has( 'tower' ), outriggers: has( 'outriggers' ), chair: has( 'chair', 'chair' ) };
+		this.fitted = fittedOf( stats );
 		const M = this.meshes;
 		if ( M.tower ) M.tower.visible = this.fitted.tower;
 		if ( M.wheel ) M.wheel.count = this.fitted.tower ? 2 : 1;
@@ -442,6 +449,38 @@ export class SportfisherModel extends Vessel {
 		this.materials.under.value = on;
 		if ( on <= 0 && ! this._glow ) return;
 		if ( ! this._glow ) {
+
+			this._glow = this._makeGlow( 'boat-underGlowOwn' );
+			this.group.add( this._glow );
+
+		}
+
+		this._glow.visible = on > 0.01;
+		this._glow.material.opacity = on;
+
+	}
+
+	// (together/) the same on a copy of her: its own mesh, her shape
+	copyUnderLights( copy, on ) {
+
+		let m = copy.getObjectByName( 'boat-underGlow' );
+		if ( on <= 0 && ! m ) return;
+		if ( ! m ) {
+
+			m = this._makeGlow( 'boat-underGlow' );
+			m.userData.ownMaterial = true;
+			copy.add( m );
+
+		}
+
+		m.visible = on > 0.01;
+		m.material.opacity = on;
+
+	}
+
+	_makeGlow( name ) {
+
+		if ( ! this._glowShape ) {
 
 			// (a dim pool, fading out smoothly: the sea's lit from under, not painted. A little above the water, so the swell
 			// doesn't cut it)
@@ -472,60 +511,47 @@ export class SportfisherModel extends Vessel {
 
 			}
 
-			const g = new BufferGeometry();
+			const g = this._glowShape = new BufferGeometry();
 			g.setAttribute( 'position', new Float32BufferAttribute( pos, 3 ) );
 			g.setAttribute( 'color', new Float32BufferAttribute( col, 3 ) );
 			g.setIndex( idx );
-			this._glow = new Mesh( g, new MeshBasicMaterial( { vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false, fog: false } ) );
-			this._glow.position.set( 0, 0.4, - this.lines.length / 2 - 1 ); // (under her cockpit's sole)
-			this._glow.renderOrder = 6;
-			this.group.add( this._glow );
 
 		}
 
-		this._glow.visible = on > 0.01;
-		this._glow.material.opacity = on;
+		const m = new Mesh( this._glowShape, new MeshBasicMaterial( { vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false, fog: false } ) );
+		m.name = name;
+		m.position.set( 0, 0.4, - this.lines.length / 2 - 1 ); // (under her cockpit's sole)
+		m.renderOrder = 6;
+		return m;
 
 	}
 
-	// ---- what's fitted on someone else's: told in their pose (a bit each: the tower, the outriggers, the chair)
-	gearBits() {
+	// (together/) someone else's her: whether there's a tower to climb, a chair in the way, as hers has
+	walkedAs( stats = {} ) {
 
-		const F = this.fitted;
-		return ( F.tower ? 1 : 0 ) | ( F.outriggers ? 2 : 0 ) | ( F.chair ? 4 : 0 );
+		const v = Object.create( this ), F = v.fitted = fittedOf( stats ), S = this.stations;
+		v.colliders = this.colliders.map( ( c ) => c.tag === 'chair' ? { ...c, solid: F.chair } : c );
+		v.chair = F.chair ? this.chair || this._chairWas : null;
+		v.stations = { ...( F.tower ? { tower: S.tower } : {} ), ...( F.chair ? { chair: S.chair } : {} ) };
+		return v;
 
 	}
 
-	dressCopy( group, bits ) {
+	dressCopy( copy, stats ) {
 
-		const tower = !! ( bits & 1 ), shown = { 'boat-tower': tower, 'boat-towerThrottle': tower, 'boat-towerDisplay': tower, 'boat-towerCompass': tower, 'boat-outriggers': !! ( bits & 2 ), 'boat-chair': !! ( bits & 4 ) };
-		group.traverse( ( o ) => {
+		const F = fittedOf( stats ), shown = { 'boat-tower': F.tower, 'boat-towerThrottle': F.tower, 'boat-towerDisplay': F.tower, 'boat-towerCompass': F.tower, 'boat-outriggers': F.outriggers, 'boat-chair': F.chair };
+		copy.traverse( ( o ) => {
 
-			if ( shown[ o.name ] !== undefined ) o.visible = shown[ o.name ];
-			if ( o.name === 'boat-wheel' ) o.count = tower ? 2 : 1;
+			if ( shown[ o.name ] !== undefined ) o.visible = o.userData.fits = shown[ o.name ];
+			if ( o.name === 'boat-wheel' ) o.count = F.tower ? 2 : 1;
 
 		} );
 
 	}
 
-	// her, to walk about on with that fitted: their tower to climb, or none, whatever's fitted on yours (null: as she is)
-	withGear( bits ) {
+	get paintSlot() {
 
-		if ( bits === null || bits === undefined ) return this;
-		const kept = this._withGear || ( this._withGear = new Map() );
-		let v = kept.get( bits );
-		if ( ! v ) {
-
-			const chair = !! ( bits & 4 );
-			v = Object.create( this );
-			v.fitted = { tower: !! ( bits & 1 ), outriggers: !! ( bits & 2 ), chair };
-			v.chair = chair ? this.chair || this._chairWas : null;
-			v.colliders = this.colliders.map( ( c ) => c.tag === 'chair' ? { ...c, solid: chair } : c );
-			kept.set( bits, v );
-
-		}
-
-		return v;
+		return { name: 'sfTopsides', uniform: this.materials.topsides };
 
 	}
 
