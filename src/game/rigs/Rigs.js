@@ -232,8 +232,8 @@ export class Rigs {
 
 			g.baitHook();
 			rod.setRig( 'drop' );
-			rod.dropReach = ELECTRIC.spool;
-			rod.spoolM = ELECTRIC.spool;
+			// ((M16) a rider has no electric reel of hers: only what's on their own rod to let down, or the first run spools it)
+			rod.dropReach = rod.spoolM = this.stats.electricReel ? ELECTRIC.spool : this.stats.spoolM;
 			rod.dropLine();
 			this._waiting = true;
 			g.bite = null;

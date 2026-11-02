@@ -64,7 +64,7 @@ Leaving, a boat on the stem's berths can pass through the pier head on your scre
 
 - **Take a rod that goes off** in her spread (R, within reach of its holder). The fish, its bait and how much line is out come over from her owner's game. Her spool's yours for that fight; your own line, reel and leader fight it. The catch goes in your hold.
 - **Sit in her chair** with a fish on, if she has one, with the chair's 40 kg hold.
-- **Drop your own lead** (offered; the drop itself hasn't been run).
+- **Drop your own lead**, as far as the line on your own rod reaches (all 900 m only with the electric reel of your own). Rod and rig by keys, stopped and fished up by keys, the fish in your hold (`seen.mjs drop`).
 - **Not** let out her spread or fly her kite: those are her owner's gear, on her holders. Chum's slick and deck traps aren't sent.
 
 ## Every boat's berth
@@ -81,8 +81,11 @@ An away boat keeps, drifts and is towed by her own `berthOf`, not the lobster bo
 - Her capsize was never sent: on everyone else's game her kayak stayed upright with nobody in her, and a rider stayed on her.
 - Her name only showed on a console, on anyone else's game. Her owner sees it on every boat.
 - A guest with their own lobster boat, traps stowed, walked into those traps' invisible colliders on hers (`BoatModel.walkedAs`).
+- A rider's lead went down 900 m on a 180 m reel, with the fish then on the last half metre of it.
+- Someone on a lobster boat's foredeck couldn't get off it. A hop off the bench takes you over the dash, and there's no walking back under the roof: it now has rails to go over the side from. Walking up there through the windscreen is still how you get there, and nothing gets you onto her roof by keys.
+- Her kite vanished on everyone else's game the moment a fish took it; now it comes down, as on hers.
 
-`tools/two-players/aboard.mjs` checks all this: every area in `areas.mjs`, under way, at a slow guest and a slow owner. `hard.mjs` is a guest pushed: taking off from her berth, her lever right up, hard over both ways, by keys between her areas and up her ladders, then all of it in a gale. `seen.mjs` is what's seen and done on another's game, part by part: the fights, kite, kayak, looks, flares, glasses, stern, north. `gap.mjs` is her poses going quiet, `mem.mjs` is script memory over a long run, and `heel.mjs` and `heel-flat.mjs` are how far each boat heels when she's flat out and hard over.
+`tools/two-players/aboard.mjs` checks all this: every area in `areas.mjs`, under way, at a slow guest and a slow owner. `hard.mjs` is a guest pushed: taking off from her berth, her lever right up, hard over both ways, by keys between her areas and up her ladders, then all of it in a gale. `seen.mjs` is what's seen and done on another's game, part by part: the fights, kite, kayak, looks, flares, glasses, stern, north, kayakname, ladder, decks, sternfish, kitefish, drop, ashore. `heel-fps.mjs` is how far she really heels at a device's frame rate: the scripts' owners, at 1 to 3 fps, read more, as a shared game's waves keep the wall clock while the boat's frames stop at 0.1 s. `gap.mjs` is her poses going quiet, `mem.mjs` is script memory over a long run, and `heel.mjs` and `heel-flat.mjs` are how far each boat heels when she's flat out and hard over.
 
 ## Not done
 

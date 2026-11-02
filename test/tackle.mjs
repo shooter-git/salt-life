@@ -438,6 +438,20 @@ const water = ( o ) => habitatAt( { reefDist: 4000, pierDist: 9000, ...o } );
 	for ( let i = 0; i < 4000; i ++ ) if ( r.releaseHurt( 'sailfish', rng ) ) hurt ++;
 	ok( hurt / 4000 > 0.25 && hurt / 4000 < 0.33, `taken off by hand, out of the water: ${ ( hurt / 40 ).toFixed( 0 ) }% don't live` );
 	ok( ! stub( kit ).releaseHurt( 'sailfish', () => 0 ), 'with the dehooker, in the water, all of them do' );
+	// (a rider's lead, on a boat that isn't theirs: as far as their own line, unless they've the electric reel)
+	const lead = ( stats ) => {
+
+		const rod = { setRig() {}, dropLine() {} }, q = stub( stats );
+		Object.assign( q.game, { rod, baitHook() {}, toast() {} } );
+		q.game.state.baitPick = 'squid';
+		q.pick = 'drop';
+		q.press();
+		return rod;
+
+	};
+
+	ok( lead( { spoolM: 180 } ).dropReach === 180 && lead( { spoolM: 180 } ).spoolM === 180, 'a lead without the electric reel: only the line on your own rod' );
+	ok( lead( { spoolM: 180, electricReel: true } ).dropReach === 900, 'with it, all 900 m' );
 	ok( ! r.releaseHurt( 'tarpon', () => 0 ) && ! r.releaseHurt( 'tuna', () => 0 ), 'it\'s the fund\'s billfish that it\'s about' );
 	const S = new GameState( { load: () => null, save() {} } );
 	const paid = ( info ) => letGo( S, { species: 'sailfish', kg: 30, cm: 200, released: true, ...info } );
