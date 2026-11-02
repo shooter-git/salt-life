@@ -646,6 +646,42 @@ const SC = {
 
 	},
 
+	// the same from her berth, for no money: hauled (nothing to tow); and the hurricane gone by, you back: she's put back in
+	async hurberth( S ) {
+
+		const { boat, g, page } = S, F = `${ out }/${ boat }-hurberth`;
+		await S.load( `${ plain }&boat=${ boat }`, 'goto', 'first, ?boat' );
+		await S.set( { money: 0 } );
+		await frames( g, 2 );
+		await saveNow( g );
+		const home = await view( g );
+		const T = ( home.day - 1 ) * 24 + home.hour;
+		let v = await S.gone( 4, `clock.weather = 'hurricane'; clock.since = ${ T + 1 };`, 'at her berth, a hurricane, no money' );
+		note( brief( v ) );
+		note( `note: ${ v.note }` );
+		sameBoat( v, boat, 'hurricane at her berth' );
+		say( v.hauled && v.stHauled, `hurricane at her berth: on her cradle (${ v.x }, ${ v.y }, ${ v.z })` );
+		say( v.money === 0 && /you'd nothing to take it from/.test( v.note || '' ) && /Hauled your boat out/.test( v.note || '' ), 'hurricane at her berth: "Hauled your boat out" for nothing: "you\'d nothing to take it from"' );
+		good( v, 'hurricane at her berth' );
+		await g.evaluate( () => { const h = window.__app.game.hud; if ( h.noteOpen ) h.closeNote(); } );
+		await shots( page, g, `${ F }`, { from: [ 7, 5, - 9 ] } );
+		// (it's gone by, long since; the middle of the day, Marta's in)
+		await saveNow( g );
+		v = await S.gone( 0, `clock.weather = null; delete clock.since; clock.hour = 11; clock.day = ${ home.day + 8 }; boat.T = 11 + ${ home.day + 7 } * 24;`, 'it gone by' );
+		note( brief( v ) );
+		note( `note: ${ v.note } toasts: ${ JSON.stringify( v.toasts ) }` );
+		await page.waitForTimeout( 3000 );
+		await frames( g, 4 );
+		v = await view( g );
+		note( brief( v ) );
+		say( ! v.hauled && ! v.stHauled && ( v.moored || v.beached ), `hurricane gone by: she's back in at her berth (${ v.x }, ${ v.z }) ${ JSON.stringify( v.toasts ) }` );
+		await saveNow( g );
+		v = await S.reload( 'back in, reloaded' );
+		note( brief( v ) );
+		say( ! v.hauled && ( v.moored || v.beached ) && v.boat === boat, `hurricane gone by, reloaded: at her berth` );
+
+	},
+
 	// a gale blowing as you come back
 	async gale( S ) {
 

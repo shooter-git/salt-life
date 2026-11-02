@@ -73,7 +73,8 @@ const anchored = await robin.game.evaluate( async () => {
 	for ( const k of Object.keys( g.state.upgrades ) ) if ( /^deepAnchor_|^kayakAnchor$|^anchor$/.test( k ) ) g.state.upgrades[ k ] = 1;
 	app.player.boardBoat();
 	app.player.takeHelm();
-	b.moored = false;
+	b.moored = b.beached = false; // (a kayak: off the sand, not sliding down it)
+	if ( b.model.sliding !== undefined ) b.model.sliding = null;
 	// (the first spot out from the dock with some water under her)
 	let spot = null;
 	for ( let z = 80; z < 600 && ! spot; z += 10 ) { const d = - app.terrainData.heightAt( 64, z ); if ( d > 6 && d < 9.5 ) spot = z; }
@@ -83,7 +84,7 @@ const anchored = await robin.game.evaluate( async () => {
 
 } );
 await frames( robin.game, 3 );
-await robin.game.evaluate( () => { const a = window.__app; if ( a.boat.seated ) a.game.dropAnchor(); else a.player.leaveHelm(); } );
+await robin.game.evaluate( () => { const a = window.__app; if ( a.boat.seated ) a.player.exitBoat( null, 1 ); else a.player.leaveHelm(); } );
 await robin.game.waitForFunction( () => !! window.__app.boatCtl.anchor, null, { timeout: 120000, polling: 300 } ).catch( () => console.log( 'no anchor' ) );
 Object.assign( anchored, await robin.game.evaluate( () => { const b = window.__app.boatCtl; return { anchor: !! b.anchor, depth: b.anchor && +( 0 - b.anchor.y ).toFixed( 1 ), mode: window.__app.player.mode }; } ) );
 say( anchored.anchor, `Robin left the helm off the bay (mode ${ anchored.mode }), her anchor down in ${ anchored.depth } m` );
@@ -212,7 +213,9 @@ const back = await robin.game.evaluate( () => {
 
 } );
 console.log( '     Robin back', JSON.stringify( back ) );
-say( back.money === 500 - tow.fee, `she paid: $500 - $${ tow.fee } = $${ back.money }` );
+// (and the kayak that comes with ?boat=, hauled at her berth: Hauled ... as well: $5)
+const also = [ ...( back.note || '' ).matchAll( /as well: \$(\d+)/g ) ].reduce( ( n, m ) => n + Number( m[ 1 ] ), 0 );
+say( back.money === 500 - tow.fee - also, `she paid: $500 - $${ tow.fee } - $${ also } = $${ back.money }` );
 say( back.hauled && ! back.anchor, 'her boat on the cradle, no anchor out' );
 say( !! back.note, `Marta's note: "${ back.note }"` );
 await frames( robin.game, 6 ).catch( () => {} );

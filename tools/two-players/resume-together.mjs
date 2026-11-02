@@ -535,6 +535,47 @@ const SC = {
 
 	},
 
+	// a room days on from your own clock: she left her boat adrift on day 1, the host's on day 5 (or one on, inside what's taken for a rest)
+	async clocks( boat ) {
+
+		for ( const days of [ 4, 1 ] ) {
+
+			const R = await room( `clocks-${ boat }-${ days }` );
+			const robin = await R.open( 'Robin', boat );
+			await robin.game.evaluate( () => { const st = window.__app.game.state; st.money = 900; st.save(); st.emit(); } );
+			const spot = await farSpot( robin.game, { max: 18 } );
+			await atSea( robin.game, spot );
+			await frames( robin.game, 3 );
+			const left = await view( robin.game );
+			note( `Robin, adrift at the helm, day ${ left.day } ${ left.hour }: ${ left.x }, ${ left.z }` );
+			await R.leave( robin );
+			const sam = await R.open( 'Sam', 'lobster' );
+			await sam.game.evaluate( ( days ) => { const a = window.__app, s = a.settings; a.together.setClock( s.timeOfDay, s.day + days, s.timeSpeed ); }, days );
+			await sam.game.waitForFunction( () => window.__app.together.boats[ 'robin-1' ], null, { timeout: 60000, polling: 500 } ).catch( () => note( 'no record' ) );
+			await sam.page.waitForTimeout( 4000 );
+			await frames( sam.game, 6 );
+			let a = await awayOf( sam.game, 'robin-1' );
+			note( `Sam's view, the room ${ days } days on ${ JSON.stringify( a ) }` );
+			const robin2 = await R.open( 'Robin' );
+			await robin2.game.waitForFunction( () => window.__app.together.others.size > 0, null, { timeout: 200000, polling: 1000 } );
+			await robin2.page.waitForTimeout( 12000 );
+			await frames( robin2.game, 4 );
+			await sam.game.waitForFunction( () => { const o = [ ...window.__app.together.others.values() ][ 0 ]; return o && o.cur && o.cur.boat; }, null, { timeout: 200000, polling: 1000 } ).catch( () => note( 'no pose' ) );
+			const v = await view( robin2.game ), t = await them( sam.game ), v2 = await view( sam.game );
+			note( `Robin back ${ brief( v ) } toasts ${ JSON.stringify( v.toasts ) } note ${ v.note }` );
+			note( `Sam sees ${ JSON.stringify( t ) } (day ${ v2.day } ${ v2.hour })` );
+			say( v.day === v2.day && Math.abs( v.hour - v2.hour ) < 0.5, `clocks ${ days } d (${ boat }): one clock in the room: day ${ v.day } ${ v.hour }, day ${ v2.day } ${ v2.hour }` );
+			say( v.boat === boat && ! v.veil && v.inScene, `clocks ${ days } d (${ boat }): Robin's back in her ${ boat }, no veil` );
+			say( Math.hypot( v.x - left.x, v.z - left.z ) < 30, `clocks ${ days } d (${ boat }): a reload's not being away: she's ${ Math.hypot( v.x - left.x, v.z - left.z ).toFixed( 0 ) } m from where she left her` );
+			say( v.mode === left.mode, `clocks ${ days } d (${ boat }): at her helm as she was (${ left.mode } -> ${ v.mode })` );
+			const o = t.list[ 0 ];
+			say( o && o.at && Math.hypot( o.at[ 0 ] - v.x, o.at[ 1 ] - v.z ) < 25, `clocks ${ days } d (${ boat }): both have her in one place: ${ o && o.at && Math.hypot( o.at[ 0 ] - v.x, o.at[ 1 ] - v.z ).toFixed( 1 ) } m apart` );
+			await R.close();
+
+		}
+
+	},
+
 	// the host leaving, a guest rides on, hosts on; the host's own boat
 	async host( boat ) {
 
@@ -549,8 +590,8 @@ const SC = {
 		const clock0 = await view( sam.game );
 		// (the save's every 30 s of the game's time, on a CPU's few frames some minutes: its turn brought on, a moment for it to go)
 		await robin.game.evaluate( () => window.__app._clockSaveT = 0.01 );
-		await robin.page.waitForTimeout( 4000 );
-		await frames( robin.game, 2 );
+		await robin.game.waitForFunction( () => window.__app._clockSaveT > 1, null, { timeout: 120000, polling: 200 } );
+		await robin.page.waitForTimeout( 5000 );
 		// at a stroke: no pause, the page gone
 		await R.leave( robin, { abrupt: true } );
 		await sam.game.waitForFunction( () => window.__app.together.others.size === 0 && window.__app.together.session.isHost, null, { timeout: 200000, polling: 500 } ).catch( () => note( 'Sam did not take over' ) );

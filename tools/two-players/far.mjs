@@ -65,7 +65,8 @@ await robin.game.evaluate( ( F ) => {
 	app.game.state.money = 500;
 	app.player.boardBoat();
 	app.player.takeHelm();
-	b.moored = false;
+	b.moored = b.beached = false; // (a kayak: off the sand, not sliding down it)
+	if ( b.model.sliding !== undefined ) b.model.sliding = null;
 	b.position.set( F.x, b.position.y, F.z );
 
 }, FAR );
@@ -92,7 +93,8 @@ await sam.game.evaluate( ( F ) => {
 	const app = window.__app, b = app.boatCtl;
 	app.player.boardBoat();
 	app.player.takeHelm();
-	b.moored = false;
+	b.moored = b.beached = false; // (a kayak: off the sand, not sliding down it)
+	if ( b.model.sliding !== undefined ) b.model.sliding = null;
 	b.position.set( F.x + 40, b.position.y, F.z + 20 );
 
 }, FAR );
@@ -164,7 +166,7 @@ await robin.page.close();
 await sam.game.waitForFunction( () => window.__app.together.others.size === 0 && window.__app.together.session.isHost && window.__app.together.boats[ 'robin-1' ], null, { timeout: 200000, polling: 500 } );
 const rec = await sam.game.evaluate( () => window.__app.together.boats[ 'robin-1' ] );
 say( rec.a === null && Number.isFinite( rec.T ) && rec.z === 20000, `her record: adrift ${ JSON.stringify( { x: rec.x, z: rec.z, T: rec.T } ) }` );
-await sam.game.evaluate( ( A ) => { const app = window.__app, b = app.boatCtl, p = app.player; if ( p.mode !== 'boat' ) { p.boardBoat(); p.takeHelm(); } b.moored = false; b.position.set( A.x + 40, b.position.y, A.z + 40 ); }, A );
+await sam.game.evaluate( ( A ) => { const app = window.__app, b = app.boatCtl, p = app.player; if ( p.mode !== 'boat' ) { p.boardBoat(); p.takeHelm(); } b.moored = b.beached = false; if ( b.model.sliding !== undefined ) b.model.sliding = null; b.position.set( A.x + 40, b.position.y, A.z + 40 ); }, A );
 await frames( sam.game, 3 );
 console.log( '     Sam', JSON.stringify( await sam.game.evaluate( () => { const a = window.__app, c = a.camera.position; return { mode: a.player.mode, cam: [ Math.round( c.x ), Math.round( c.z ) ], entry: !! a.together.away.get( 'robin-1' ) }; } ) ) );
 await sam.game.waitForFunction( () => { const a = window.__app.together.away.get( 'robin-1' ); return a && a.boat && a.boat.visible; }, null, { timeout: 200000, polling: 500 } );

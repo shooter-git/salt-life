@@ -25,3 +25,5 @@ Run through, headless: `node tools/two-players/away.mjs` (the away boats by the 
 For the real thing, see All the Spaces' `docs/development.md`.
 
 `aboard.mjs [dir] [port] [boat] [owner's fps] [guest's fps] [guest's own boat]`: a guest on the owner's real boat, every area she has (`areas.mjs`), under way, walking, climbing, stepping ashore, what's fitted, her spread, her chair. A run's frames a second are printed: the fps asked for is only a ceiling on a CPU.
+
+`resume.mjs [dir] [port] [boats] [scenarios]` (alone: berth, anchor, aboard, long, hurricane, hurberth, gale, takeout, buy, v1, natural, fresh), `resume-together.mjs [dir] [port] [boats] [scenarios]` (dock, far, away, guest, vanish, clocks, host), `resume-load.mjs [url] [rounds] [boats]`: picking up where you left off by real loads of the page, in each boat, its saved times faked between visits. `away.mjs` and `far.mjs` take a boat as their third argument (the lobster boat otherwise).

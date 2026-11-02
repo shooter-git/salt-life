@@ -84,7 +84,15 @@ export async function started( game, { reveal = true, page = null, reload = null
 		const f = typeof game === 'function' ? game() : game;
 		if ( f && await f.evaluate( () => !! ( window.__app && window.__app._started ) ).catch( () => false ) ) break;
 		await new Promise( ( r ) => setTimeout( r, 1000 ) );
-		if ( i === seconds - 1 ) throw new Error( 'the game did not start' );
+		if ( i === seconds - 1 ) {
+
+			// (what it was doing: the veil's word, how far it got)
+			const g = typeof game === 'function' ? game() : game;
+			const said = g ? await g.evaluate( () => ( { veil: document.querySelector( '.slv' )?.textContent?.replace( /\s+/g, ' ' ).slice( 0, 120 ), app: !! window.__app, started: !! window.__app?._started, marks: performance.getEntriesByType( 'mark' ).map( ( m ) => `${ m.name } ${ Math.round( m.startTime ) }` ).slice( - 4 ), now: Math.round( performance.now() ) } ) ).catch( ( e ) => `no answer: ${ e.message.slice( 0, 120 ) }` ) : 'no frame';
+			note( `didn't start: ${ JSON.stringify( said ) }` );
+			throw new Error( 'the game did not start' );
+
+		}
 
 	}
 
