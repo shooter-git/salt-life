@@ -1,6 +1,7 @@
 import * as THREE from '../../../engine/index.js';
 import { G } from '../../../core/Globals.js';
 import { BoatMaterials, withAux, extend } from '../BoatMaterials.js';
+import { SF } from './SportfisherLines.js';
 
 // (M16) Her materials: the lobster boat's, with what a convertible's look needs. Her paint's by height (white topsides, a
 // blue boot stripe, dark antifouling); her cockpit and bridge soles are teak-look planks (aux.z = 2 on the gelcoat); her
@@ -14,6 +15,8 @@ const vec3 = ( c ) => `vec3( ${ c.r.toFixed( 5 ) }, ${ c.g.toFixed( 5 ) }, ${ c.
 // the underside of her overhang and the faces away from the sun otherwise come out black
 const OUTSIDE_FILL = 0.3;
 const CABIN_FILL = 0.8; // her downlights
+const TOPSIDES = 0xf4f2ec;
+const UNDER_GLOW = { r: 0.03, g: 0.2, b: 0.12 }; // (the pool's own hue; on white paint at the waterline about as bright as the water lighting it)
 const CABIN_SUN = 0.04; // what daylight gets in: the sun's shadows aren't drawn on a phone, and without this it lights her soles through the deck
 
 export class SportfisherMaterials extends BoatMaterials {
@@ -21,7 +24,8 @@ export class SportfisherMaterials extends BoatMaterials {
 	constructor( lines ) {
 
 		super( lines );
-		this.topsides = { value: linear( 0xf4f2ec ) }; // (setPaint)
+		this.topsides = { value: linear( TOPSIDES ) }; // (setPaint)
+		this.under = { value: 0 }; // her underwater lights, 0..1 (Model.setUnderLights)
 		this.hull.onBeforeCompile = this._hullCompile();
 		this._fillGelcoat();
 		this._fillFittings();
@@ -45,7 +49,7 @@ export class SportfisherMaterials extends BoatMaterials {
 
 	_hullCompile() {
 
-		const m = this.hull, topsides = this.topsides;
+		const m = this.hull, topsides = this.topsides, under = this.under;
 		m.onBeforeCompile = () => {};
 		withAux( m, { roughness: false, fragment: /* glsl */`
 	float boot = vLocal.y - smoothstep( 2.0, 7.0, vLocal.z ) * 0.1;
@@ -61,10 +65,11 @@ export class SportfisherMaterials extends BoatMaterials {
 
 			shader.uniforms.sfTopsides = topsides;
 			shader.uniforms.sfNight = G.night;
+			shader.uniforms.sfUnder = under;
 			shader.fragmentShader = shader.fragmentShader
-				.replace( '#include <common>', '#include <common>\nuniform vec3 sfTopsides;\nuniform float sfNight;' )
+				.replace( '#include <common>', '#include <common>\nuniform vec3 sfTopsides;\nuniform float sfNight;\nuniform float sfUnder;' )
 				.replace( '#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = hullRough;' )
-				.replace( '#include <emissivemap_fragment>', `#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * ${ OUTSIDE_FILL.toFixed( 3 ) } * ( 1.0 - 0.9 * sfNight );` );
+				.replace( '#include <emissivemap_fragment>', `#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * ${ OUTSIDE_FILL.toFixed( 3 ) } * ( 1.0 - 0.9 * sfNight );\n\t// the green water under her stern lights it from below: most at the waterline and the transom, going off up her and along her\n\ttotalEmissiveRadiance += diffuseColor.rgb * ${ vec3( UNDER_GLOW ) } * sfUnder * exp( - max( vLocal.y, 0.0 ) * 1.1 ) * exp( - max( vLocal.z - ( ${ SF.zAft.toFixed( 2 ) } ), 0.0 ) / 6.0 );` );
 
 		} ).onBeforeCompile;
 
@@ -169,10 +174,10 @@ export class SportfisherMaterials extends BoatMaterials {
 
 	}
 
-	// her topsides' colour (Vessel.setPaint: the paint's in the shader)
+	// her topsides' colour (Vessel.setPaint: the paint's in the shader). null: as she came
 	setTopsides( hex ) {
 
-		this.topsides.value.copy( linear( hex ) );
+		this.topsides.value.copy( linear( hex ?? TOPSIDES ) );
 
 	}
 

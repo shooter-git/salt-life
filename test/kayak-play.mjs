@@ -150,6 +150,55 @@ run( 1 );
 ok( model.stroke.park < 0.1, 'the rod away, the paddle\'s back' );
 player.camMode = 'third';
 
+// A takes her to port: her compass comes down through the numbers (Game.compassHeading), D back up
+{
+
+	const compass = () => { const f = ctl.forward( new Vector3() ); return Math.atan2( f.x, - f.z ); };
+	const turned = ( k ) => {
+
+		const h = compass();
+		input.keys.add( k );
+		run( 1 );
+		input.keys.delete( k );
+		const d = compass() - h;
+		run( 1 );
+		return Math.atan2( Math.sin( d ), Math.cos( d ) );
+
+	};
+	ok( turned( 'KeyA' ) < - 0.05, 'A to port: the compass reads less' );
+	ok( turned( 'KeyD' ) > 0.05, 'D to starboard: it reads more' );
+
+}
+
+// the radio's panel up (game/Radio.js): the paddle's laid by, she drifts, and E is the panel's
+player.helmHeld = true;
+input.keys.add( 'KeyW' );
+run( 2 );
+ok( model.stroke.park > 0.9 && player.prompt && player.prompt.text === 'Put it away', 'the radio up, the paddle\'s laid by' );
+input.keys.delete( 'KeyW' );
+press( 'KeyE' );
+ok( player.mode === 'boat', 'E doesn\'t get you out with the radio up' );
+player.helmHeld = false;
+run( 1 );
+ok( model.stroke.park < 0.1, 'and it put away, the paddle\'s back' );
+
+// a tow or a rescue gets you up out of her seat: there's no deck to be left on
+const afloat = ctl.position.clone(), facing = ctl.quaternion.clone();
+player.leaveHelm();
+frame();
+ok( player.mode === 'boat' && ! ctl.beached, 'left afloat (on Pearl\'s mooring), you\'re still sat in her' );
+player.leaveHelm();
+ctl.reset();
+frame();
+ok( player.mode === 'walk' && ctl.beached && ! ctl.moored && player.position.distanceTo( ctl.position ) < 1.6, `towed in, you're on the sand beside her (${ player.mode })` );
+press( 'KeyE' );
+ok( player.mode === 'boat', 'and E gets you back in' );
+run( 6 );
+ctl.position.copy( afloat );
+ctl.quaternion.copy( facing );
+ctl.velocity.set( 0, 0, 0 );
+ctl.angular.set( 0, 0, 0 );
+
 // over the side and back on
 run( 8 );
 press( 'KeyE' );

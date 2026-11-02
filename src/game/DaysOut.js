@@ -520,7 +520,8 @@ export class DaysOut {
 		if ( this.strain >= 1 ) return 'too much sea for her';
 		if ( strengthOf( st.days.dry ) < 0.8 ) return 'you\'re parched';
 		const depth = G.seaLevel.value - this.app.terrainData.heightAt( b.position.x, b.position.z );
-		return depth < ableOf( st.boat ).draught ? 'she\'s aground' : null;
+		// ((M16) a kayak in the shallows is just there: you step out)
+		return depth < ableOf( st.boat ).draught && ! this.app.boat?.seated ? 'she\'s aground' : null;
 
 	}
 
@@ -529,8 +530,8 @@ export class DaysOut {
 
 		const st = this.state, s = st.stats, b = this.app.boatCtl, dock = berthOf( this.state.boat ).position, why = this.trouble();
 		const metres = Math.hypot( b.position.x - dock.x, b.position.z - dock.z ), rows = [];
-		if ( s.flares ) rows.push( { id: 'flare', name: `Fire a flare · ${ st.days.flares } left`, say: why ? `You're ${ why }. Red meteors: someone within sight may see one` : 'Keep them for real trouble', can: !! why && st.days.flares > 0, fee: awayTowFee( metres ) } );
-		if ( s.epirb ) rows.push( { id: 'epirb', name: 'Set off the EPIRB', say: why ? `You're ${ why }. The Coast Guard has a fix in minutes, in any weather, and sees you towed in` : 'It\'s for real trouble: nothing else brings them out', can: !! why, fee: awayTowFee( metres ) } );
+		if ( s.flares ) rows.push( { id: 'flare', name: `Fire a flare · ${ st.days.flares } left`, say: why ? `Trouble: ${ why }. Red meteors: someone within sight may see one` : 'Keep them for real trouble', can: !! why && st.days.flares > 0, fee: awayTowFee( metres ) } );
+		if ( s.epirb ) rows.push( { id: 'epirb', name: 'Set off the EPIRB', say: why ? `Trouble: ${ why }. The Coast Guard has a fix in minutes, in any weather, and sees you towed in` : 'It\'s for real trouble: nothing else brings them out', can: !! why, fee: awayTowFee( metres ) } );
 		return rows;
 
 	}

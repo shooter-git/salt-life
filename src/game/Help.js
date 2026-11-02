@@ -28,12 +28,12 @@ export const pearlTime = ( metres ) => Math.max( 0, metres ) * ( 1 / PEARL_TOW.o
 // where she lies at the jetty: its head's east face, bow to the sea, on the camp's mooring
 const FACE = { x: CAMP.jetty.x + CAMP.jetty.headWidth - CAMP.jetty.width / 2, z: CAMP.jetty.z1 + 3 };
 
-// (for the fleet stream: the boats' `fuel` is the one place; a gasoline price, when Gear has one, is taken from it)
+// (the boats' `fuel` is the one place; her litre at the chandlery's price, Gear's)
 export const fuelOf = ( boat ) => ( BOATS[ boat ] ? BOATS[ boat ].fuel : null ) || null;
-export const fuelPrice = ( fuel ) => fuel === 'gasoline' ? ( Gear.GAS_PRICE ?? Gear.FUEL_PRICE ) : Gear.FUEL_PRICE;
-export const canFee = ( metres, fuel = 'diesel', litres = CAN.litres ) => Math.round( CAN.callOut + CAN.per100m * Math.max( 0, metres ) / 100 + litres * fuelPrice( fuel ) );
-// how far off the can's cheaper than the tow (m)
-export const CAN_PAYS = ( CAN.callOut + CAN.litres * Gear.FUEL_PRICE - Gear.TOW.base ) / ( Gear.TOW.per100m - CAN.per100m ) * 100;
+export const canFee = ( metres, boat = 'lobster', litres = CAN.litres ) => Math.round( CAN.callOut + CAN.per100m * Math.max( 0, metres ) / 100 + litres * Gear.fuelPrice( boat ) );
+// how far off the can's cheaper than the tow (m), for what she burns
+export const canPays = ( boat = 'lobster' ) => ( CAN.callOut + CAN.litres * Gear.fuelPrice( boat ) - Gear.TOW.base ) / ( Gear.TOW.per100m - CAN.per100m ) * 100;
+export const CAN_PAYS = canPays();
 
 // on the north side, as her own jetty and the island's windward measure have it
 export function northSide( x, z, windward = 0 ) {
@@ -52,7 +52,7 @@ export function canJob( game ) {
 	if ( ! job || ! fuel ) return null;
 	const room = game.state.stats.fuelL - game.state.fuelL, litres = Math.min( CAN.litres, Math.floor( room ) );
 	if ( litres <= 0 ) return null;
-	return { metres: job.metres, fee: canFee( job.metres, fuel, litres ), litres, fuel };
+	return { metres: job.metres, fee: canFee( job.metres, game.state.boat, litres ), litres, fuel };
 
 }
 
@@ -76,7 +76,9 @@ export function pearlCall( game ) {
 	const app = game.app, s = app.settings, wx = game.weatherNow, news = app.weather && app.weather.news, pick = app.weatherPick ? app.weatherPick() : null;
 	const blown = wx && wx.wind >= NO_PEARL, warned = news && news.stage !== 'outlook', up = hauledAt( islandTime( s.day, s.timeOfDay ), pick, s.weatherSince );
 	let say, can = false;
-	if ( blown || warned || up ) say = `Pearl. The boat's not going out in this: ${ warned ? 'there\'s a hurricane on its way, and she\'s up the beach' : up ? 'she\'s up the beach till it\'s blown through' : 'she\'s too small for it' }. Try Marta, or sit tight and call me when it's dropped.`;
+	// (as Marta's: a set reaches so far)
+	if ( job.metres > game.state.stats.vhfM ) say = `Nothing but static. You're ${ farOff( job.metres ) } off her jetty, past your set's reach.`;
+	else if ( blown || warned || up ) say = `Pearl. The boat's not going out in this: ${ warned ? 'there\'s a hurricane on its way, and she\'s up the beach' : up ? 'she\'s up the beach till it\'s blown through' : 'she\'s too small for it' }. Try Marta, or sit tight and call me when it's dropped.`;
 	else {
 
 		const pays = Math.min( job.fee, game.state.money ), out = job.metres / PEARL_TOW.out, kind = boatAt( s.timeOfDay, s.day, pick, s.weatherSince ).kind;

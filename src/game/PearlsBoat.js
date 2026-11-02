@@ -23,6 +23,11 @@ const STEP = 1.2; // m/s: lying off, and coming in from there
 const FILL = 5; // her sides out of the sun: the scene's environment light, this many times over (the world's kept low for the sand)
 const _d = new Vector3();
 
+// (M16) her man at the tiller while she's under way: Winston, the islanders' own Rocketbox man in a vest and shorts (tools/characters/
+// players.sh), nothing new to download. Loaded the first time she's seen under way within `near` m, drawn no further off. Where
+// he stands in her frame, a pace forward of her tiller on her floor, and what he does
+export const HAND = { url: 'models/characters/player-m2.glb', near: 220, at: [ 0.28, 0.2, - 2.72 ], clip: 'idle_neutral_01', clips: [ 'idle_neutral_01' ] };
+
 export class PearlsBoat {
 
 	constructor( { scene, terrain, colliders, material, tier = 'low', waves = null, query = null } ) {
@@ -85,6 +90,27 @@ export class PearlsBoat {
 		this.model = { group: m, wake: { quarterX: PIROGUE.quarterX, quarterZ: PIROGUE.quarterZ, washZ: PIROGUE.washZ } };
 		this.wake = null;
 		this._wakeT = 0;
+
+	}
+
+	// (each frame, once the camp's built) load( url ) -> a promise of a Character
+	crew( dt, camera, load ) {
+
+		const under = this.mesh.visible && ( this.kind === 'coming' || this.kind === 'going' );
+		const near = under && camera.position.distanceTo( this.mesh.position ) < HAND.near;
+		if ( this.hand ) {
+
+			this.hand.group.visible = near;
+			if ( near ) this.hand.update( dt );
+
+		} else if ( near && ! this._handLoad ) this._handLoad = load( HAND.url ).then( ( c ) => {
+
+			c.group.position.set( ...HAND.at );
+			c.play( HAND.clip );
+			this.mesh.add( c.group );
+			this.hand = c;
+
+		} ).catch( ( e ) => console.warn( 'Pearl\'s man didn\'t load', e ) );
 
 	}
 

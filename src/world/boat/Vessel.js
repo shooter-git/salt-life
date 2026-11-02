@@ -1,6 +1,35 @@
-import { BufferGeometry, Group, Matrix4, Vector3 } from '../../engine/index.js';
+import { BufferGeometry, Group, MathUtils, Matrix4, Quaternion, Vector3 } from '../../engine/index.js';
 import { RHO_SEAWATER } from './HullLines.js';
 import { triangleCount } from './GeoKit.js';
+
+// (M16) a compass's card on its gimbal, held level by its own weight as she pitches and rolls: a pendulum's period (s) and damping
+// in the fluid, quick and well damped against a boat's slow roll; free of the bowl to this much (rad) fore and aft and
+// athwart, then touching (a Silva 102's published gimbal: 30° pitch, 45° roll; a Ritchie's is listed at more); the height of its
+// pivot under the card (m: at the middle of the dome, for the card to stay in it)
+export const GIMBAL = { period: 0.8, damping: 0.6, pitch: 30 * Math.PI / 180, roll: 45 * Math.PI / 180, under: 0.02 };
+const _up = new Vector3();
+const _inv = new Quaternion();
+
+// one of the card's tilts a moment on: a, w how far it is from level in the world and how fast, `now` the tilt from the
+// bowl that would have it level. The fluid drags it with the bowl; past `limit` it's touching, carried with it. -> the tilt from the bowl
+function swingAxis( t, now, limit, dt ) {
+
+	const k = Math.PI * 2 / GIMBAL.period, n = Math.max( 1, Math.ceil( dt / 0.02 ) ), h = dt / n, bowl = - ( now - t.was ) / dt;
+	t.was = now;
+	for ( let i = 0; i < n; i ++ ) {
+
+		t.w += ( - k * k * t.a - 2 * GIMBAL.damping * k * ( t.w - bowl ) ) * h;
+		t.a += t.w * h;
+
+	}
+
+	const rel = t.a + now;
+	if ( Math.abs( rel ) <= limit ) return rel;
+	t.a = Math.sign( rel ) * limit - now;
+	t.w = bowl;
+	return Math.sign( rel ) * limit;
+
+}
 
 // (M16) What every boat is to the rest of the game. BoatModel (the lobster boat) and the others extend this: the game
 // reads a boat only through these, and each boat sets its own in its constructor.
@@ -337,6 +366,37 @@ export class Vessel {
 	}
 
 	swingCompass( dt, q ) {}
+
+	// (a boat with a compass, once it's placed and scaled, and each card she has) spun on its pivot, tilted about the bowl's two axes
+	hangCard( mesh ) {
+
+		mesh.rotation.order = 'XZY';
+		const at = mesh.position.clone();
+		( this._hung ||= [] ).push( { mesh, at, under: GIMBAL.under * mesh.scale.y } );
+		this._cardAt ||= at;
+
+	}
+
+	// (from her swingCompass; q: her world rotation) the card level in its bowl: where the world's up is in her frame, the
+	// card's tilt from the bowl to lie square to it. Itself a damped pendulum, the fluid dragging it with the bowl, so it
+	// lags a quick lurch; stopped where it touches
+	_gimbal( dt, q ) {
+
+		if ( ! ( dt > 0 ) ) return;
+		_up.set( 0, 1, 0 ).applyQuaternion( _inv.copy( q ).invert() );
+		const X = Math.atan2( _up.z, _up.y ), Z = Math.asin( MathUtils.clamp( - _up.x, - 1, 1 ) );
+		const t = this._tilt || ( this._tilt = { x: { a: 0, w: 0, was: X }, z: { a: 0, w: 0, was: Z } } );
+		const rx = swingAxis( t.x, X, GIMBAL.pitch, dt ), rz = swingAxis( t.z, Z, GIMBAL.roll, dt );
+		for ( const { mesh, at, under: u } of this._hung ) {
+
+			mesh.rotation.x = rx;
+			mesh.rotation.z = rz;
+			// (about its pivot, under it)
+			mesh.position.set( at.x - u * Math.sin( rz ), at.y - u + u * Math.cos( rz ) * Math.cos( rx ), at.z + u * Math.cos( rz ) * Math.sin( rx ) );
+
+		}
+
+	}
 
 	update( dt ) {}
 

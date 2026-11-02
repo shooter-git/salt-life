@@ -24,8 +24,8 @@ export function bridgeX( z ) {
 // the coaming's top: waist-high round the helm, falling away aft to a low lip
 const coamingY = ( z ) => lerp( SF.bridge + 0.3, SF.bridge + 0.68, sstep( - 2.6, - 0.9, z ) );
 
-// the hatch the cockpit's ladder comes up through (starboard side, over the mezzanine)
-export const BRIDGE_HATCH = { x0: - 1.45, x1: - 0.72, z0: - 3.12, z1: - 2.42 };
+// the hatch the ladder comes up through (starboard side, over the mezzanine)
+export const BRIDGE_HATCH = { x0: - 1.17, x1: - 0.48, z0: - 3.0, z1: - 2.42 };
 
 export const HELM = { x: 0, z: - 0.2, seatZ: - 0.42, eye: V( 0, SF.bridge + 1.5, - 0.22 ), consoleZ0: 0.42, consoleZ1: 1.12, halfW: 0.74 };
 
@@ -298,23 +298,37 @@ function hardtop( kit, L, q, parts ) {
 	parts.searchlight = V( 0.9, y + 0.17, 1.27 );
 	parts.horn = V( - 0.9, y + 0.1, 1.2 );
 	kit.add( 'fittings', rod( V( - 0.9, y + 0.08, 0.95 ), V( - 0.9, y + 0.1, 1.25 ), 0.045, q.low ? 6 : 12, 0.09 ), STEEL );
+	// the courtesy lights let into the brow, always on after dark (the cockpit's light: Model's lamps.cockpit), as in the photograph
+	for ( const x of [ - 0.4, 0.4 ] ) kit.add( 'glow', rbx( x - 0.05, SF.roofY - 0.012, COURTESY_Z - 0.05, x + 0.05, SF.roofY - 0.004, COURTESY_Z + 0.05, 0.004 ), { color: 0xfff2dc, pattern: 0 } );
 	// flood lights under the brow, over the cockpit
 	for ( const x of [ - 0.8, 0.8 ] ) kit.add( 'glow', rbx( x - 0.09, SF.roofY - 0.03, SF.bridgeAft + 0.05, x + 0.09, SF.roofY - 0.005, SF.bridgeAft + 0.14, 0.008 ), { color: 0xffffff, pattern: 4 } );
 
 }
 
-// the ladder from the cockpit to the bridge: real treads, tube rails either side, going up through its hatch
-export const BRIDGE_LADDER = { x: - 1.08, foot: V( - 1.08, SF.cockpit, - 3.72 ), head: V( - 1.08, SF.bridge + 0.02, - 2.78 ), width: 0.56 };
+// (under the brow, clear of the ladder's hatch)
+export const COURTESY_Z = - 3.1;
+
+// her stern light, on the transom's face under the cap: it shows astern, as the rules ask, and not into her cockpit
+export const STERN_LAMP = ( L ) => [ 0, L.sheerY( 0 ) - 0.24, L.zAft - 0.03 ];
+
+// the ladder to the bridge: as on the 48, its foot on the mezzanine's sole just inboard of the tall box and clear of the door,
+// steep, up through its hatch. Real treads, tube rails carried on up past the sole, and a handrail curving in on the door's side
+export const BRIDGE_LADDER = { x: - 0.84, foot: V( - 0.84, SF.mezz, - 3.16 ), head: V( - 0.84, SF.bridge + 0.02, - 2.62 ), width: 0.46 };
 
 function cockpitLadder( kit, q ) {
 
-	const { foot, head, x, width } = BRIDGE_LADDER, n = 8, rad = q.low ? 5 : 8, w = width / 2;
+	const { foot, head, x, width } = BRIDGE_LADDER, n = 8, rad = q.low ? 5 : 8, w = width / 2, segs = q.low ? 10 : 24;
+	const along = ( f, xAt ) => foot.clone().lerp( head, f ).setX( xAt );
 	for ( const s of [ 1, - 1 ] ) {
 
-		const a = foot.clone().setX( x + s * w ), c = head.clone().setX( x + s * w );
-		kit.add( 'fittings', rod( a, c.clone().add( V( 0, 0.95, 0.35 ) ), 0.02, rad ), TUBE );
+		const X = x + s * w;
+		kit.add( 'fittings', tube( [ along( 0, X ), along( 0.5, X ), along( 1, X ), head.clone().setX( X ).add( V( 0, 0.55, 0.1 ) ), head.clone().setX( X ).add( V( 0, 0.95, 0.17 ) ) ], 0.02, segs, rad, false, 0.1 ), TUBE );
+		kit.add( 'fittings', bx( X - 0.04, foot.y, foot.z - 0.05, X + 0.04, foot.y + 0.012, foot.z + 0.05 ), { color: 0xc9ccd0, rough: 0.5, metal: 0.35 } );
 
 	}
+
+	const inX = x + w + 0.1;
+	kit.add( 'fittings', tube( [ along( 0.38, x + w ), along( 0.62, inX ), along( 1, inX ), head.clone().setX( inX ).add( V( 0, 0.7, 0.14 ) ) ], 0.016, segs, rad, false, 0.3 ), TUBE );
 
 	for ( let i = 1; i <= n; i ++ ) {
 
@@ -338,10 +352,14 @@ function aftRail( kit, q ) {
 
 	}
 
-	// and round the hatch
+	// and either side of the hatch: open forward, where you step off the ladder
 	const H = BRIDGE_HATCH;
-	rail( [ V( H.x0 - 0.02, y, H.z0 ), V( H.x0 - 0.02, y, H.z1 + 0.02 ), V( H.x1 + 0.02, y, H.z1 + 0.02 ), V( H.x1 + 0.02, y, H.z0 ) ] );
-	for ( const [ x, z ] of [ [ H.x0 - 0.02, H.z1 ], [ H.x1 + 0.02, H.z1 ] ] ) kit.add( 'fittings', rod( V( x, b, z ), V( x, y, z ), 0.013, rad ), TUBE );
+	for ( const x of [ H.x0 - 0.02, H.x1 + 0.02 ] ) {
+
+		rail( [ V( x, y, H.z0 ), V( x, y, H.z1 ) ] );
+		for ( const z of [ H.z0, H.z1 ] ) kit.add( 'fittings', rod( V( x, b, z ), V( x, y, z ), 0.013, rad ), TUBE );
+
+	}
 
 }
 

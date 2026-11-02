@@ -21,15 +21,25 @@ A 23 ft deep-V with an open deck all round the helm, a T-top, and outboards on a
 - **Turning:** hard over at cruise she leans about 18° into the turn, not out as the lobster boat does, and turns on a radius of about 22 m. She holds up to about 22 kn from 28.
 - **In a seaway:** with the prop out of the water the thrust goes. On the plane a couple keeps her upright, standing in for the planing lift the buoyancy samples can't give once her sides are dry. Without it she rolled over at 25 kn in flat water.
 
-**Her wake.** `wake` in the model sets her own: thrown from the chines at the transom, patches close enough to run together, the arms going out fast, a wash from each engine (`ocean/Wake.js` reads the optional figures).
+**Her wake** (`ocean/Wake.js`, shared by every boat; each boat's `wake` gives its own sizes). Set against the maker's running photographs: a broad band of fine white streaks from the transom, feathering off.
+
+- **How long:** a patch is long along her track, and they're spaced so the same count lasts its whole life: about 170 m behind her at 36 kn on high, about 120 m on low (fewer at a time on the screen: they live 6 s, not 9).
+- **How wide:** the arms open at a real wake's angle, 19.47 degrees up to a hull Froude number of about 0.5, then narrowing as 1 / Fr ([Rabaud & Moisy 2013](https://arxiv.org/abs/1304.2653)). That's 4.6 degrees for her at 36 kn.
+- **The lace:** it lies on the water, so patches overlapping share their gaps and it stays broken up, where each with its own noise filled in solid.
+- **Slow frames:** patches are spread along the way she came since the last frame, not dropped in a heap.
+- **On the waves:** each is flat between two heights, and the depth test takes it as a little nearer you, or the waves in front hid it. There's still only one draw.
+
+The arms are foam only: a real wake's far arms are smooth wave crests, which would take the sea's surface moving.
 
 **Her light.** White gelcoat in the shade came out near black, so her body and fittings take `GroundBounce` with a white bounce of their own in place of the sand's colour.
+
+**Seen through the water.** She floats on her design waterline, and the sea went by the depth to the seabed, so in more than a few metres it hid all of her that's under the surface, and she looked set on top of it. It's so for every boat. Now their materials leave their height in the frame's alpha (`materials/SeenInWater.js`), and on high the sea reads it from its copy of the frame and goes by the water really in the way. No other texture or draw. Mid and low have no copy to read, and stay as they were.
 
 **Her deck.** The sole runs from the transom's box to the bow, with a walkway about 0.57 m wide each side of the console, so you fish from either end. Forward there's a sunk sole between two raised seats, then a riser you can step up to, and a hop onto the foredeck. Aft, a door through the transom's box on her starboard side leads to the bracket's mat. `clampToDeck` lets you through only there, and `soleY` gives the mat's height.
 
 **T-top and its rain cover.** The top is a moulded oval on four legs. Its underside holds a pod with the VHF face (the instruments' atlas), spreaders and a dome light, with a rocket launcher along its after edge. `shelter` is the rain's box under it. Clear drop curtains (`setCover`), stowed on a fine day, are zipped on when it rains. `Soak.js` is how wet you are: out in a downpour you're soaked in about 18 s, told so, and drops run down your view (a CSS layer, nothing for the frame to draw). Under the top you stay nearly dry. If she runs fast with no curtains the rain would drive in, but the curtains come down by themselves in rain, so that only matters as it comes on. Her fittings come and go by `fit( stats )` without another draw: each mesh's index is rewritten to leave out what isn't fitted.
 
-**Diving.** She has a folding stainless ladder over the platform's edge on her port side, down when nobody's at the helm and the boat's stopped, up otherwise. In the water the ladder's where you come aboard (`boardFrom`: "Climb the ladder"); without one you haul yourself up at the platform. By the ladder on the platform, E goes down it quietly (`overboard`); from the rail you jump in where you stand. Four tanks are racked on the back of the leaning post (`tankRack`). The scuba air itself is the dive kit's (`airS`, stream 7).
+**Diving.** She has a folding stainless ladder over the platform's edge on her port side, down when nobody's at the helm and the boat's stopped, up otherwise. In the water the ladder's where you come aboard (`boardFrom`: "Climb the ladder"); without one you haul yourself up at the platform. By the ladder on the platform, E goes down it quietly (`overboard`); from the rail you jump in where you stand. Four tanks are racked on the back of the leaning post (`tankRack`). The scuba tank itself is your own, from the dive kit (`airS`), and it's one dive's air: the rack is what gets you a fresh one each time you're back aboard. Without it, what's left is all you have until you fill it at the dock or at Marta's (`game/Tanks.js`).
 
 **The dash.** Everything's drawn by the instruments in `model.materials.display`: two screens (chart, sounder) on the upright panel, five dials in the black band on the slope, the compass on top, the VHF overhead. There's no radar. `model.gauges` gives her dials an outboard's scale (6000 rpm, 50 kn), read by `BoatInstruments.gauges`.
 

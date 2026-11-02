@@ -9,8 +9,8 @@ const PAD_KEYS = {
 	0: 'Space', // A: jump / swim up
 	1: 'KeyE', // B: interact (board, helm, trade)
 	2: 'KeyR', // X: the rod (in the water: the speargun)
-	3: 'KeyV', // Y: boat camera
-	4: 'KeyC', // LB: crouch / dive; (M16) with the rod out, the rig
+	3: 'KeyV', // Y: boat camera; (M16) with the rod out, the leader
+	4: 'KeyC', // LB: crouch / dive; (M16) with the rod out, the rig; sat in a kayak, the radio
 	5: 'ShiftLeft', // RB: sprint / boost
 	8: 'KeyI', // back / view: cooler and fish log
 	12: 'KeyN', // d-pad up: the cast net
@@ -20,6 +20,7 @@ const PAD_KEYS = {
 	10: 'Horn', // left stick pressed: the horn, at the helm (its own code: H off the helm is the guide)
 	11: 'KeyT', // right stick pressed: the clock
 };
+const WALK = new Set( [ 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyC', 'ShiftLeft' ] );
 const PAD_LOOK = 700; // px per second at full right-stick deflection
 const DEADZONE = 0.15;
 const MAX_STEP = 300; // px: a mouse event moving further is spurious (see the mousemove handler)
@@ -37,6 +38,8 @@ export class Input {
 		this.presses = [];
 		this.look = { x: 0, y: 0 };
 		this.move = { x: 0, y: 0 };
+		this.stick = { x: 0, y: 0 }; // ((M16) move's, before noWalk)
+		this.noWalk = false; // (M16) a panel has the walking keys and the stick (ChartMap): none of them reach the player
 		this.touchMove = { x: 0, y: 0 }; // written by the touch joystick
 		this.wheel = 0;
 		this.mouseDown = false;
@@ -219,14 +222,24 @@ export class Input {
 
 		this._pad = held;
 		const len = Math.hypot( mx, my );
-		this.move.x = len > 1 ? mx / len : mx;
-		this.move.y = len > 1 ? my / len : my;
+		this.stick.x = len > 1 ? mx / len : mx;
+		this.stick.y = len > 1 ? my / len : my;
+		this.move.x = this.noWalk ? 0 : this.stick.x;
+		this.move.y = this.noWalk ? 0 : this.stick.y;
 
 	}
 
 	// (a key pressed since the last frame counts as held for this one, even if it's already up again:
 	// a quick tap still does something, also when frames are slow)
 	down( code ) {
+
+		if ( this.noWalk && WALK.has( code ) ) return false;
+		return this.held( code );
+
+	}
+
+	// (M16) the same whoever has them
+	held( code ) {
 
 		return this.enabled && ( this.keys.has( code ) || this.pressed.has( code ) );
 

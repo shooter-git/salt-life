@@ -292,7 +292,8 @@ export function addBoatLights( lights, boat ) {
 		K.port && { p: K.port, color: [ 1.0, 0.06, 0.03 ], intensity: 1.4, range: 8, kind: 'boatNav', side: [ 1, 0, 0 ] },
 		K.port && { p: [ - K.port[ 0 ], K.port[ 1 ], K.port[ 2 ] ], color: [ 0.05, 1.0, 0.3 ], intensity: 1.4, range: 8, kind: 'boatNav', side: [ - 1, 0, 0 ] },
 		K.masthead && { p: K.masthead, color: [ 1.0, 0.95, 0.85 ], intensity: 1.2, range: 8, kind: 'boatNav' },
-		K.stern && { p: K.stern, color: [ 1.0, 0.95, 0.85 ], intensity: 0.8, range: 7, kind: 'boatNav' },
+		K.stern && { p: K.stern, color: [ 1.0, 0.95, 0.85 ], intensity: 0.8, range: 7, kind: 'boatNav', side: K.sternFacing },
+		K.cockpit && { p: K.cockpit, color: [ 1.0, 0.93, 0.8 ], intensity: 1.2, range: 9, kind: 'boatDome' }, // ((M16) lights let into a brow over her cockpit)
 	].filter( Boolean );
 	const out = [];
 	for ( const d of defs ) {

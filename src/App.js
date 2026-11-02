@@ -1322,6 +1322,21 @@ export class App {
 
 	}
 
+	// (M16) someone built as the traders are, from a model of one size (the islanders', tools/characters/players.sh): readied as
+	// they are, its shape on the GPU alone (PearlsBoat's man)
+	async loadPerson( url, clips = null ) {
+
+		const c = new Character( await gltfLoader().loadAsync( url ), { clips } ), r = this.renderer;
+		this.lightPerson( c.group );
+		for ( const t of c.textures() ) r.initTexture( t );
+		await r.compileAsync( c.group, this.camera, this.scene );
+		await this.useNewPrograms();
+		c.group.traverse( ( o ) => o.isSkinnedMesh && ! o.boundingSphere && o.computeBoundingSphere() );
+		releaseGeometries( c.group );
+		return c;
+
+	}
+
 	// a trader's skinned character swapped in for their stand-in (Vendor.loadCharacter): the device's copy (low:
 	// 512² textures), its programs readied; on a low-powered device drawn only near the camera, like the stand-in
 	async loadVendorCharacter( v ) {
@@ -1818,6 +1833,8 @@ export class App {
 
 		}
 
+		// ((M16) Pearl's boat going by)
+		a.passingOutboard( this.game && this.game.camp && this.game.camp.boat ? this.game.camp.boat.sound : null );
 		// (M10) aboard someone else's boat, the skipper's starter as it turns her over (yours: Game.updateHull)
 		const crank = theirs ? theirs.crank | 0 : 0;
 		if ( crank && ! this._crankHeard ) a.crank( crank === 2 );

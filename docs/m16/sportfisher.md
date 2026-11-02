@@ -35,7 +35,7 @@ Shape: the 2008 Viking 48's walk-round photographs ([Off the Hook Yachts](https:
 
 ## Going about her
 
-Cockpit to mezzanine by a step; through the door to the salon; down the companionway to the cabins; up onto the boxes either side of the mezzanine and along the side decks to the bow. Up to the bridge and the tower by ladder.
+Cockpit to mezzanine by two steps; through the door to the salon; down the companionway to the cabins; up onto the boxes either side of the mezzanine and along the side decks to the bow. Up to the bridge by the ladder from the mezzanine (its foot on the sole, inboard of the starboard box, clear of the door, as the 48's), and on up the tower by its own.
 
 **The climb** (`LadderClimb`, `player.climbing`; the player's mode stays `'deck'`, so all that asks "are you aboard" still says yes). W and S on the rungs, or the stick. A boat that rolls swings a tower through the air: at the head of the ladder, 7 m up, a 15 degree roll every 4 seconds throws you sideways at 0.67 of your weight (`swayAt`: her heel's share of gravity and her roll's acceleration times your height, measured in the test). You hold 0.72 of your weight still, 0.42 moving, with a hand off. Past that your grip drains at 2.4 a second per g over, and comes back at 0.6 a second when she eases. "Hold on" comes up before you're gone: stop, and let her come back. Come off and you go the way she threw you, at her speed: onto a deck, winded three seconds, or into the sea, to swim for it.
 
@@ -44,6 +44,10 @@ Cockpit to mezzanine by a step; through the door to the salon; down the companio
 **What you can see.** The eye's real: the camera stands at 8.62 m, so the sea's horizon goes out to 10.5 km and `FarIsland`, `Glare` and the rest set things down under it by that eye. What you chart goes as the root of your height over the deck's (`Chart.sightOf`: 320 m from a deck, 590 m from the tower).
 
 **Rain.** `Rain.setShelter` takes one box; three would mean a change to its shader. She has one for the house, one for the bridge under the hardtop, one for the tower's roof, and `shelterAt( p )` gives the one for where you are. What you see from there is what counts: rain falling on the salon's roof from the bridge is outside your box, and rain under the hardtop from the cockpit is far off and among the frame.
+
+**After dark.** Her stern light's on the transom's face and shows aft (`lamps.sternFacing`). Up on the transom's cap, with no cone, it put a white-hot spot on the sole under it, and was all that lit her cockpit. The cockpit's light is now the courtesy lights in the brow (`lamps.cockpit`), as in the photograph. The floods (deck lights) are an upgrade on top. With her underwater lights on, the green water lights her paint from below (`materials.under`): most at the waterline and the transom. No photograph of one to compare: that's how the light must fall.
+
+`setPaint( null )` is how the fleet says "as she came": white, in `SportfisherMaterials`. `tools/sportfisher/view.html` never calls it, so it won't show you what the fleet does to her paint: look in the game as well (`night.mjs`, `walk.mjs`).
 
 ## Handling
 

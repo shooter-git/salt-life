@@ -397,6 +397,35 @@ globalThis.setTimeout ??= ( f ) => f();
 
 }
 
+// (M16) what you carry decides who comes: in a kayak, which can now reach her radio and flares from the seat
+{
+
+	const { d, st, b } = stand( { x: 2000, z: 2000, boat: 'kayak' } );
+	let rescued = 0;
+	d.rescue = () => rescued ++;
+	d.trouble = () => 'too much sea for her';
+	const after = ( hours, stats, flares = 3, x = 2000 ) => {
+
+		rescued = 0;
+		d._stranded = 0;
+		b.position.x = x;
+		st.days.flares = flares;
+		Object.defineProperty( st, 'stats', { configurable: true, get: () => stats } );
+		for ( let i = 0; i < hours; i ++ ) d._rescueNet( 1 );
+		return rescued > 0;
+
+	};
+
+	ok( after( 4, { vhfM: 0 } ), 'nothing to call with: a passing boat, within 4 hours near in' );
+	ok( ! after( 40, { vhfM: 9260 } ), 'a handheld in range: you call for yourself' );
+	ok( after( 18, { vhfM: 9260 }, 3, 20000 ) && ! after( 17, { vhfM: 9260 }, 3, 20000 ), 'a handheld out of range doesn\'t count: a passing boat, within 18 hours far out' );
+	ok( ! after( 40, { vhfM: 0, flares: true } ), 'flares left: you fire them' );
+	ok( after( 4, { vhfM: 0, flares: true }, 0 ), 'the flares gone: a passing boat' );
+	ok( ! after( 40, { vhfM: 0, flares: true, epirb: true }, 0 ), 'an EPIRB always reaches someone' );
+	delete st.stats;
+
+}
+
 // ---- the sonar and the shop
 {
 

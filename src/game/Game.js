@@ -20,6 +20,7 @@ import { tellOf } from './Away.js';
 import { GameHUD } from './GameHUD.js';
 import { TimeHUD } from './TimeHUD.js';
 import { Radio } from './Radio.js';
+import { Compass } from '../world/boat/kayak/Compass.js';
 import { DaysOut } from './DaysOut.js';
 import { timeText } from './IslandClock.js';
 import { HOURS, NIGHT_BOX, ordersFor, tradeDay, stallOpen, shutFor } from './Orders.js';
@@ -29,6 +30,7 @@ import { forecast, islandTime, blowShare, NORTH, edgeAt } from './Weather.js';
 import { wxNews } from './TimeHUD.js';
 import { CRADLE } from '../world/village/StormPlaces.js';
 import { soakStep } from '../world/boat/console/Soak.js';
+import { tankStep } from './Tanks.js';
 import { StormChart, shelterSign } from './StormChart.js';
 import { ClosedSign } from './ClosedSign.js';
 import { Signpost, TRAIL_POSTS } from './Signpost.js';
@@ -57,6 +59,7 @@ import { Rigs } from './rigs/Rigs.js';
 import { atHook, pickOnRig, waitOnRig } from './rigs/Presentation.js';
 
 // how long the catch card stays up unless dismissed (ms)
+const _compassFwd = new Vector3();
 const CATCH_CARD_MS = 9000;
 // (M15) the island's middle, and up the trades from it (Weather's NORTH.dir, the way they blow, turned
 // round): the windward side's (Game.windwardAt)
@@ -412,7 +415,8 @@ export class Game {
 			if ( p.mode === 'boat' && p.boat === b ) p.leaveHelm();
 			b.reset();
 			if ( aboard && p.mode === 'deck' && p.boat === b ) p.deckToWorld();
-			this.toast( paid < job.fee ? `Marta towed her in for the $${ paid } you had · she's at the dock` : `Marta towed her in · $${ paid } · she's at the dock`, aboard ? 4200 : 2600 );
+			const where = b.beached ? 'she\'s on the sand' : 'she\'s at the dock';
+			this.toast( paid < job.fee ? `Marta towed her in for the $${ paid } you had · ${ where }` : `Marta towed her in · $${ paid } · ${ where }`, aboard ? 4200 : 2600 );
 
 		};
 		if ( aboard && this.time && this.time.dim() ) setTimeout( go, 230 );
@@ -431,8 +435,18 @@ export class Game {
 	get canFish() {
 
 		const app = this.app, p = app.player;
-		// ((M16) or sat in a kayak)
-		return ! app.freeCam && ( p.mode === 'walk' || p.mode === 'deck' || ( p.mode === 'boat' && p.boat?.model?.seated ) ) && ! p.climbing && ! ( app.ui && app.ui.ui && app.ui.ui._photo );
+		// ((M16) or sat in a kayak, with no radio in your hand)
+		return ! app.freeCam && ! ( this.radio && this.radio.open ) && ( p.mode === 'walk' || p.mode === 'deck' || ( p.mode === 'boat' && p.boat?.model?.seated ) ) && ! p.climbing && ! ( app.ui && app.ui.ui && app.ui.ui._photo );
+
+	}
+
+	// (M16) rad, true: where a kayak's small compass reads, sat in her; null, off her or in another boat (hers are on the dash)
+	get compassHeading() {
+
+		const p = this.app.player, b = this.app.boatCtl;
+		if ( p.mode !== 'boat' || p.riding || ! p.boat?.model?.seated || ! this.state.stats.compass || ! b ) return null;
+		const f = b.forward( _compassFwd );
+		return Math.atan2( f.x, - f.z );
 
 	}
 
@@ -473,6 +487,7 @@ export class Game {
 			ui.onReplayGuide = () => this.guide.replay();
 			// ((M15) the VHF at the helm)
 			this.radio = new Radio( ui, this );
+			this.compass = new Compass( ui.hud || ui.root );
 			this.daysOut.gauges( this.hud.purse );
 
 		}
@@ -568,11 +583,22 @@ export class Game {
 		const lmb = ( inp.mouseDown || inp.down( 'KeyF' ) ) && inp.enabled, rmb = ( inp.rightDown || inp.down( 'KeyG' ) ) && inp.enabled;
 		const lDown = lmb && ! this._lmb, lUp = ! lmb && this._lmb, rDown = rmb && ! this._rmb;
 		if ( this.radio ) this.radio.update( dt, inp, lDown );
+		if ( this.compass ) this.compass.update( dt, this.compassHeading );
 		this._lmb = lmb;
 		this._rmb = rmb;
 		const panelOpen = this.hud && ( this.hud.invOpen || this.hud.standOpen || !! this.trophyCard );
 		// (a gamepad's RT on the cooler's Islander tab: the next islander)
 		if ( panelOpen && lDown && this.hud.invOpen && this.hud.invTab === 'islander' && this.hud.device === 'gamepad' ) this.hud.nextLook();
+		// ((M16) and with no pointer, the whole chart and the shells' close look: a mouse's button isn't either's)
+		const onChart = !! ( this.hud && this.hud.invOpen && this.hud.invTab === 'chart' && this.hud._chartMap ), noMouse = this.hud && this.hud.device === 'gamepad';
+		inp.noWalk = onChart;
+		if ( onChart ) this.hud._chartMap.drive( dt, inp, inp.hit( 'KeyF' ) || ( noMouse && lDown ) );
+		if ( panelOpen && this.hud.invOpen && this.hud.invTab === 'shells' ) {
+
+			if ( inp.hit( 'KeyF' ) || ( noMouse && lDown ) ) this.hud.nextShell( 1 );
+			else if ( inp.hit( 'KeyG' ) || ( noMouse && rDown ) ) this.hud.nextShell( - 1 );
+
+		}
 
 		// (Salt Life) the bait for the hook: B, or the d-pad's ← → with the rod out
 		const quiet = this.quietKeys();
@@ -580,6 +606,8 @@ export class Game {
 		else if ( net.equipped && quiet && inp.hit( 'KeyB' ) ) this.toast( this.bucketText(), 2400 );
 		// ((M16) the rig on the line: C, or LB)
 		if ( rod.equipped && quiet && rod.state === 'idle' && inp.hit( 'KeyC' ) ) this.rigs.cycle();
+		// ((M16) and the leader: X, or Y on a gamepad, whose camera is the helm's)
+		if ( rod.equipped && quiet && rod.state === 'idle' && ( inp.hit( 'KeyX' ) || ( inp.lastDevice === 'gamepad' && inp.hit( 'KeyV' ) ) ) ) this.rigs.cycleLeader();
 
 		if ( rod.equipped && ! panelOpen ) {
 
@@ -594,8 +622,12 @@ export class Game {
 
 			} else if ( rod.state === 'floating' ) {
 
-				if ( lDown ) this.strike();
-				else if ( rDown ) {
+				// ((M16) a lead on its way down's stopped: Rigs.holdLead)
+				if ( lDown ) {
+
+					if ( ! this.rigs.holdLead() ) this.strike();
+
+				} else if ( rDown ) {
 
 					rod.retrieve();
 					this.bite = null;
@@ -712,6 +744,8 @@ export class Game {
 		this.fleet.updatePrompt( inp, p );
 		// ((M16) out on her open deck in a squall: world/boat/console/Soak.js)
 		soakStep( this, dt );
+		// ((M16) a scuba tank's one dive's air, but for a rack aboard)
+		tankStep( this );
 		// ((M16) lobster traps: set, hauled and on the sea)
 		this.traps.update( dt, lDown && ! panelOpen );
 		// prompts when the player has nothing to say
@@ -1788,6 +1822,7 @@ export class Game {
 			const tag = info.released && tagFor( this.orders, f.species, f.place );
 			info.tagged = tag ? this.state.tag( tag, this.tradeDay ) : 0;
 			// ((M16) a billfish let go: the fund pays for it, and it's a trophy in your log)
+			info.hurt = info.released && this.rigs.releaseHurt( f.species );
 			info.bonus = letGo( this.state, info );
 			// (Salt Life) the others hear of it; the island's records (together/): the card says when
 			// it's the heaviest of its kind anyone here has landed
@@ -2085,7 +2120,7 @@ export class Game {
 	// a key as the device in use calls it, in the prompts' text
 	keyName( k ) {
 
-		return this.app.input.lastDevice === 'gamepad' ? { N: `D-pad ${ UP }`, B: `D-pad ${ LEFT } ${ RIGHT }`, R: 'X', E: 'B', W: `Stick ${ UP }` }[ k ] || k : k;
+		return this.app.input.lastDevice === 'gamepad' ? { N: `D-pad ${ UP }`, B: `D-pad ${ LEFT } ${ RIGHT }`, C: 'LB', X: 'Y', R: 'X', E: 'B', W: `Stick ${ UP }` }[ k ] || k : k;
 
 	}
 

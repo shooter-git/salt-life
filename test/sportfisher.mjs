@@ -8,6 +8,7 @@ import { sightOf, SIGHT } from '../src/game/Chart.js';
 import { PerspectiveCamera, Quaternion, Vector3 } from '../src/engine/index.js';
 import { Player } from '../src/player/Player.js';
 import { jobAt, footY, Crew } from '../src/together/Crew.js';
+import { BRIDGE_LADDER, BRIDGE_HATCH } from '../src/world/boat/sportfisher/SportfisherBridge.js';
 
 let bad = 0;
 const ok = ( c, what ) => {
@@ -112,6 +113,28 @@ for ( const l of m.ladders ) {
 
 ok( m.ladderAt( new Vector3( 0, SF.salon, - 1 ) ) === null, 'no ladder from the salon, under the tower' );
 
+// the bridge's ladder, as it's drawn: its foot on the mezzanine, clear of the step, the boxes and the door, and up through its hatch
+{
+
+	const l = m.ladders.find( ( k ) => k.id === 'bridge' ), w = BRIDGE_LADDER.width / 2, H = BRIDGE_HATCH;
+	ok( Math.abs( g( m, l.foot.x - w, l.foot.z, l.foot.y ) - SF.mezz ) < 0.01 && Math.abs( g( m, l.foot.x + w, l.foot.z, l.foot.y ) - SF.mezz ) < 0.01 && l.foot.z >= SF.mezzZ, 'both its feet stand on the mezzanine\'s sole' );
+	let hit = null;
+	for ( let f = 0; f <= 1 && ! hit; f += 0.02 ) for ( const s of [ 1, - 1 ] ) {
+
+		const p = l.foot.clone().lerp( l.head, f ).setX( l.foot.x + s * w );
+		for ( const c of m.colliders ) if ( c.tag !== 'ladderFoot' && c.tag !== 'hatchRail' && Math.abs( p.x - c.center.x ) < c.half.x && Math.abs( p.y - c.center.y ) < c.half.y && Math.abs( p.z - c.center.z ) < c.half.z ) hit = c.tag;
+
+	}
+
+	ok( ! hit, `it runs clear from its foot to its head${ hit ? ': it goes through the ' + hit : '' }` );
+	const atRoof = l.foot.clone().lerp( l.head, ( SF.roofY - l.foot.y ) / ( l.head.y - l.foot.y ) );
+	ok( atRoof.z > H.z0 && l.head.z < H.z1 && l.foot.x - w > H.x0 && l.foot.x + w < H.x1, 'and through the hatch, not the overhang' );
+	ok( m.ladderAt( new Vector3( l.foot.x, SF.cockpit, SF.mezzZ - 0.27 ) ) === null, 'from down in the cockpit it isn\'t to hand' );
+	const door = m.colliders.filter( ( c ) => c.tag === 'bulkhead' && Math.abs( c.center.z - SF.houseAft ) < 0.1 && c.half.y > 0.8 ).map( ( c ) => c.center.x + Math.sign( - c.center.x ) * c.half.x );
+	ok( Math.min( ...door ) > l.foot.x + w, 'and it stands clear of the door' );
+
+}
+
 // the hands: holding still they hold more than moving, past both you come off, and easy water gives it back
 ok( gripStep( 1, 0.3, true, 1 ) === 1, 'in a calm you climb all you like' );
 ok( gripStep( 1, 0.55, true, 0.2 ) < 1 && gripStep( 1, 0.55, false, 0.2 ) === 1, 'a roll that takes your grip climbing doesn\'t, holding on' );
@@ -192,6 +215,31 @@ ok( swayAt( calm, SF.tower, {}, 1 / 60 ) < 0.01, 'flat water throws you nowhere'
 	for ( at = 0; at < 60 * 30 && player.climbing; at ++ ) player.update( 1 / 60 );
 	held.clear();
 	ok( ! player.climbing && Math.abs( player.deckPos.y - SF.bridge ) < 0.05, 'S brings you back down to the bridge' );
+
+	// up the bridge's own by the keys, from the cockpit's steps to its foot, and back to the mezzanine
+	const bl = boatM.ladders.find( ( l ) => l.id === 'bridge' );
+	player.deckPos.set( bl.foot.x, SF.cockpit, - 4.5 );
+	player.deckVel.set( 0, 0, 0 );
+	player.deckYaw = 0;
+	held.add( 'KeyW' );
+	for ( at = 0; at < 60 * 10 && player.prompt?.text !== bl.text; at ++ ) player.update( 1 / 60 );
+	held.clear();
+	ok( player.prompt?.text === bl.text && player.deckPos.y > SF.cockpit + 0.1, `W up the steps brings you to its foot (y ${ player.deckPos.y.toFixed( 2 ) }, z ${ player.deckPos.z.toFixed( 2 ) })` );
+	hits.add( 'KeyE' );
+	frames( 2 );
+	held.add( 'KeyW' );
+	for ( at = 0; at < 60 * 12 && player.climbing; at ++ ) player.update( 1 / 60 );
+	held.clear();
+	ok( ! player.climbing && Math.abs( player.deckPos.y - SF.bridge ) < 0.05, `and W up it to the bridge, in ${ ( at / 60 ).toFixed( 1 ) } s` );
+	frames( 3 );
+	ok( player.prompt?.text === bl.downText, 'where it says you can go back down' );
+	hits.add( 'KeyE' );
+	frames( 2 );
+	held.add( 'KeyS' );
+	for ( at = 0; at < 60 * 12 && player.climbing; at ++ ) player.update( 1 / 60 );
+	held.clear();
+	frames( 30 );
+	ok( ! player.climbing && player.deckPos.y > SF.cockpit + 0.1 && player.deckPos.y < SF.mezz + 0.05, `and S to the foot of it (y ${ player.deckPos.y.toFixed( 2 ) })` );
 
 	// a seaway: she rolls 22 degrees every 4 s; climbing through it you come off, stopped you hold through what you'd have lost
 	const roll = ( amp ) => ( t ) => {
@@ -447,6 +495,25 @@ ok( m.helm.open && m.towerHelm.open, 'both her helms are in the open air: wind a
 	yours.dispose();
 
 }
+
+// her paint: what the fleet sets, and null's as she came (white), not black
+{
+
+	const as = m.materials.topsides.value.clone();
+	m.setPaint( 0x223344 );
+	ok( m.materials.topsides.value.r < 0.1, 'painted, she\'s that colour' );
+	m.setPaint( null );
+	ok( m.materials.topsides.value.equals( as ) && as.r > 0.6 && as.g > 0.6 && as.b > 0.6, 'and null\'s as she came: white' );
+
+}
+
+// after dark: her stern light shows astern and not into her cockpit; her cockpit has its own, overhead; the green water lights her from below
+ok( m.lamps.stern[ 2 ] < m.lines.zAft && m.lamps.stern[ 1 ] < m.lines.sheerY( 0 ) && m.lamps.sternFacing[ 2 ] === - 1, 'her stern light\'s on the transom\'s face, looking aft' );
+ok( m.lamps.cockpit[ 1 ] > SF.cockpit + 2, `her cockpit's light is ${ ( m.lamps.cockpit[ 1 ] - SF.cockpit ).toFixed( 1 ) } m over the sole: no hot spot on it` );
+m.setUnderLights( 0.5 );
+ok( m.materials.under.value === 0.5, 'her underwater lights reach her paint' );
+m.setUnderLights( 0 );
+ok( m.materials.under.value === 0, 'and go off it' );
 
 // the tower's helm, spotting: you call what you look at from it, as you do standing up there
 {

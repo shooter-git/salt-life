@@ -233,6 +233,7 @@ export class FishingRod {
 		this.settled = false; // it's gone as far down as it's going
 		this.spoolM = 180;
 		this.dropReach = Infinity; // the most line you can work there (m)
+		this.stopM = null; // ((M16) where you've stopped a lead on its way down, m: null, it goes on: Rigs.holdLead)
 		this.hung = null; // (Vector3: where a kite's clip holds the line up: Kite.js)
 		this.big = false;
 		this.scream = 0; // (a rod in its holder taking line, m/s: its reel's the sound you hear)
@@ -336,6 +337,7 @@ export class FishingRod {
 		this.floatOff = floatOff;
 		this.hookM = 0;
 		this.settled = false;
+		this.stopM = null;
 
 	}
 
@@ -754,8 +756,8 @@ export class FishingRod {
 
 	}
 
-	// (M16) how far down the hook goes: under a float, only to its stop or the bottom; on a lead, sinking until it's on
-	// the bottom or there's no more line you can work
+	// (M16) how far down the hook goes: under a float, only to its stop or the bottom; on a lead, sinking until you stop
+	// it, it's on the bottom or there's no more line you can work
 	_sinkHook( dt ) {
 
 		const R = RIGS[ this.rig ], floor = Math.max( 0, this.depth - 0.4 );
@@ -767,7 +769,7 @@ export class FishingRod {
 
 		}
 
-		const to = Math.min( floor, R.reach, this.dropReach );
+		const to = Math.min( floor, R.reach, this.dropReach, this.stopM ?? Infinity );
 		this.hookM = Math.min( to, this.hookM + R.sink * dt );
 		this.settled = this.hookM >= to - 1e-3;
 

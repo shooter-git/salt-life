@@ -12,7 +12,7 @@ import { timeText } from './IslandClock.js';
 import { LB, IN, GAL, lb, pounds, inches, feet, farOff, gallons, lbOz, feetInches } from './Units.js';
 import { PLACES, FAR_PLACES, placeName, farName } from './Places.js';
 import { FINDS, messageOf } from './Beachcomb.js';
-import { shellTab, bindShellTab, shellShopRow, SHELL_CSS } from './ShellCase.js';
+import { shellTab, bindShellTab, shellShopRow, stepShell, SHELL_CSS } from './ShellCase.js';
 import { shellsHave } from './Shells.js';
 import { CAMP } from './FishCamp.js';
 import { NAMES, MAX_MARKS, legTo, magnetic, namedAs } from './Chart.js';
@@ -695,7 +695,7 @@ export class GameHUD {
 		const room = this.game.state.roomFor( info ), where = this.game.state.upgrades.hold > 0 ? 'hold' : 'cooler';
 		if ( info.why === 'short' ) note = `<div class="gm-catch-note is-warn">Short: under ${ ( f.minCm * CARAPACE / IN ).toFixed( 0 ) } in on the gauge · back it goes, to grow${ board }.</div>`;
 		else if ( info.why === 'berried' ) note = `<div class="gm-catch-note is-warn">Berried: she's carrying eggs under her tail · back she goes${ board }.</div>`;
-		else if ( info.trophyView || info.bonus ) note = `<div class="gm-catch-note">${ trophyNote( info ) }${ board }.</div>`;
+		else if ( info.trophyView || info.bonus || info.hurt ) note = `<div class="gm-catch-note">${ trophyNote( info ) }${ board }.</div>`;
 		else if ( info.tagged ) note = `<div class="gm-catch-note">Tagged and let go alive for Marta's tag-and-release log: <b>$${ info.tagged }</b>${ board }.</div>`;
 		else if ( info.released ) note = `<div class="gm-catch-note">${ f.cr ? 'Catch and release: everyone lets one go. Measured and' : 'Protected: measured and' } let go alive${ board }.</div>`;
 		else if ( info.bag && info.bag.full ) note = `<div class="gm-catch-note is-warn">That's your ${ info.bag.max } for today, the most anyone may keep · back it goes</div>`;
@@ -1007,7 +1007,7 @@ export class GameHUD {
 		} else if ( tab === 'shells' ) {
 
 			// ((M16) the shell collection: ShellCase.js)
-			( { body, hint } = shellTab( s ) );
+			( { body, hint } = shellTab( s, d ) );
 
 		} else if ( tab === 'log' ) {
 
@@ -1041,7 +1041,7 @@ export class GameHUD {
 				} ).join( '' );
 			if ( ! c.marks.length ) body += empty( 'Your chart\'s drawn in where you go: the coast as you see it, the far grounds\' depths as you run over them, each place\'s name as you come to it. Mark a good spot to find it again.' );
 			if ( named.length ) body += `<div class="gm-wanted"><span class="gm-wanted-h">Named on your chart</span><p class="gm-sub">${ named.join( ' · ' ) }</p></div>`;
-			hint = `${ d === 'touch' ? 'Mark here' : d === 'gamepad' ? 'Mark here' : '<kbd>P</kbd>' } marks where you are${ c.bought ? '' : ' · Marta sells a chart of the island' }`;
+			hint = `${ d === 'touch' ? 'Mark here' : d === 'gamepad' ? 'Mark here' : '<kbd>P</kbd>' } marks where you are${ c.bought ? '' : ' · Marta sells a chart of the island' }${ { gamepad: ' · Stick moves the map, <kbd>RB</kbd> <kbd>LB</kbd> zoom, <kbd>RT</kbd> where you are', keyboard: ' · <kbd>WASD</kbd> moves the map, <kbd>+</kbd> <kbd>-</kbd> zoom, <kbd>F</kbd> where you are' }[ d ] || '' }`;
 
 		} else if ( tab === 'records' ) {
 
@@ -1138,6 +1138,16 @@ export class GameHUD {
 		if ( ! together ) return;
 		together.setLook( LOOKS[ ( LOOKS.indexOf( together.myLook ) + 1 ) % LOOKS.length ] );
 		this.renderInventory();
+
+	}
+
+	// ((M16) no pointer on the Shells tab) the next shell's close look, or the last's; it's at the top of the page
+	nextShell( step ) {
+
+		stepShell( step );
+		this.renderInventory();
+		const body = this.inv.querySelector( '.gm-shelllook' );
+		if ( body && body.scrollIntoView ) body.scrollIntoView( { block: 'nearest' } );
 
 	}
 

@@ -236,7 +236,7 @@ const check = ( ok, what ) => {
 	const player = { mode: 'boat', riding: false, helmHeld: false };
 	const app = { player, audio: { muted: false, volume: 0.8 }, settings: { day: 5, timeOfDay: 10, weatherSince: 0 }, weather: { news: null }, input: { lastDevice: 'keyboard' }, weatherPick: () => 'fair' };
 	const job = { metres: 9700, fee: 505, time: towTime( 9700 ) };
-	const game = { app, state: { money: 900, fuelL: 0, stats: { vhfM: 37000 } }, daysOut: { distress: () => [], saidHere: () => '' }, weatherNow: { wind: 7 }, hud: null, makingRoom: false, towJob: () => game.job, job, tow: ( aboard ) => { towed += aboard ? 1 : 100; } };
+	const game = { app, state: { boat: 'lobster', money: 900, fuelL: 0, stats: { vhfM: 37000 } }, daysOut: { distress: () => [], saidHere: () => '' }, weatherNow: { wind: 7 }, hud: null, makingRoom: false, towJob: () => game.job, job, tow: ( aboard ) => { towed += aboard ? 1 : 100; } };
 	const r = new Radio( { root: el(), hud: el() }, game );
 	const keys = ( ...down ) => ( { hit: ( k ) => down.includes( k ), lastDevice: 'keyboard' } );
 	r.update( 0.1, keys( 'KeyR' ), false );
@@ -316,6 +316,47 @@ const check = ( ok, what ) => {
 	for ( let i = 0; i < 1000 && ! r._noVoice; i ++ ) r.update( 0.1, keys(), false );
 	check( r._noVoice, 'a voice that never ends gives way to the words alone' );
 	check( hang && ( r.listen( false ), ! r.listening ), 'and it can be turned off' );
+
+	// (M16) sat in a kayak R's the rod: C gets out what you carry, if you carry anything and have a hand free
+	r.close();
+	game.towJob = () => job;
+	game.keyName = ( k ) => k;
+	game.state.boat = 'kayak';
+	game.state.stats = { vhfM: 0 };
+	player.boat = { model: { seated: true } };
+	player.prompt = { key: 'E', text: 'Over the side' };
+	r.update( 0.1, keys( 'KeyC' ), false );
+	check( ! r.open && r.offer === null && player.prompt.text === 'Over the side', 'nothing to get out: no panel, nothing offered' );
+	game.state.stats = { vhfM: 0, flares: true, epirb: true };
+	game.daysOut.distress = () => [ { id: 'flare', name: 'Fire a flare', say: '', can: true, fee: 100 }, { id: 'epirb', name: 'Set off the EPIRB', say: '', can: true, fee: 100 } ];
+	r.update( 0.1, keys(), false );
+	check( r.offer === 'flares' && / {3}C {2}flares$/.test( player.prompt.text ), 'flares and no set: offered as flares' );
+	r.update( 0.1, keys( 'KeyR' ), false );
+	check( ! r.open, 'and R stays the rod\'s' );
+	player.handsFull = true;
+	r.update( 0.1, keys( 'KeyC' ), false );
+	check( ! r.open && r.offer === null, 'the rod out, C\'s the rig\'s: not offered' );
+	player.handsFull = false;
+	r.update( 0.1, keys( 'KeyC' ), false );
+	check( r.open && player.helmHeld && r.pick === 0 && r.rows().length === 2 && r.offer === null, 'C opens it with no set in her, on the flares' );
+	const fired = [];
+	game.daysOut.fire = ( id ) => fired.push( id );
+	r.update( 0.1, keys( 'ArrowRight' ), false );
+	r.update( 0.1, keys( 'Enter' ), false );
+	check( fired[ 0 ] === 'epirb' && ! r.open && ! player.helmHeld, 'and fires what\'s picked' );
+	game.state.stats = { vhfM: 9260 };
+	game.daysOut.distress = () => [];
+	game.state.fuelL = 0;
+	r.update( 0.1, keys(), false );
+	check( r.offer === 'radio', 'a handheld: offered as the radio' );
+	r.update( 0.1, keys( 'KeyC' ), false );
+	check( r.open && r.pick === 0 && r.rows()[ 0 ].id === 'wx', 'with no tank to run dry it opens on the weather, not on a call for help' );
+	r.update( 0.1, keys( 'KeyC' ), false );
+	check( ! r.open, 'and C puts it away' );
+	r.update( 0.1, keys( 'KeyC' ), false );
+	player.mode = 'swim';
+	r.update( 0.1, keys(), false );
+	check( ! r.open && ! player.helmHeld, 'over the side, it goes with you' );
 	delete globalThis.document;
 	delete globalThis.SpeechSynthesisUtterance;
 

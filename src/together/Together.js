@@ -1528,7 +1528,7 @@ export class Together {
 		const L = rigs.lines.find( ( x ) => x.on && lineCode( x.spot ) === b.c );
 		if ( ! L || this.app.game.fight ) return;
 		rigs.lines.splice( rigs.lines.indexOf( L ), 1 );
-		this.session.send( 'rodIs', { to: from, s: L.on.species, k: r2( L.on.kg ), b: L.bait, l: r2( L.len ), p: [ r2( L.p.x ), r2( L.p.y ), r2( L.p.z ) ], w: L.on.place, a: [ r2( L.on.at.x ), r2( L.on.at.z ) ], m: rigs.stats.spoolM } );
+		this.session.send( 'rodIs', { to: from, s: L.on.species, k: r2( L.on.kg ), b: L.bait, l: r2( L.len ), p: [ r2( L.p.x ), r2( L.p.y ), r2( L.p.z ) ], w: L.on.place, a: [ r2( L.on.at.x ), r2( L.on.at.z ) ], m: rigs.stats.spoolM, e: L.on.leader } );
 		this.app.game.toast( `${ o.person.name } has the rod`, 2600 );
 
 	}
@@ -1538,7 +1538,7 @@ export class Together {
 		const app = this.app, p = app.player, g = app.game;
 		if ( ! b || b.to !== this.me.id || ! p.riding || p.boat.owner !== from || p.mode !== 'deck' || g.fight || ! FISH[ b.s ] ) return;
 		if ( ! Number.isFinite( b.k ) || ! Number.isFinite( b.l ) || ! Array.isArray( b.p ) || ! b.p.every( Number.isFinite ) || ! Array.isArray( b.a ) || ! b.a.every( Number.isFinite ) ) return;
-		g.rigs.takeLine( { p: new Vector3( b.p[ 0 ], b.p[ 1 ], b.p[ 2 ] ), len: b.l, bait: BAITS[ b.b ] ? b.b : null, on: { species: b.s, kg: b.k, place: b.w, at: { x: b.a[ 0 ], z: b.a[ 1 ] } } }, Number.isFinite( b.m ) ? b.m : g.rigs.stats.spoolM );
+		g.rigs.takeLine( { p: new Vector3( b.p[ 0 ], b.p[ 1 ], b.p[ 2 ] ), len: b.l, bait: BAITS[ b.b ] ? b.b : null, on: { species: b.s, kg: b.k, place: b.w, at: { x: b.a[ 0 ], z: b.a[ 1 ] }, leader: typeof b.e === 'string' ? b.e : undefined } }, Number.isFinite( b.m ) ? b.m : g.rigs.stats.spoolM );
 
 	}
 

@@ -22,7 +22,7 @@ export const UPGRADES = {
 		{ cost: 0, label: 'Old spinning reel', reelSpeed: 1.1, spoolM: 180, dragKg: null },
 		{ cost: 90, label: 'Smooth spinning reel', reelSpeed: 1.6, spoolM: 220, dragKg: null },
 		{ cost: 320, label: 'Conventional reel', reelSpeed: 2.2, spoolM: 350, dragKg: 12 },
-		{ cost: 900, label: 'Two-speed lever drag reel', reelSpeed: 2.6, spoolM: 600, dragKg: 24, twoSpeed: true },
+		{ cost: 900, label: 'Two-speed big-game reel (its low gear comes in by itself on a heavy fish)', reelSpeed: 2.6, spoolM: 600, dragKg: 24, twoSpeed: true },
 	] },
 	rod: { name: 'Rod', levels: [
 		{ cost: 0, label: 'Hand-me-down rod', castM: 22 },
@@ -30,14 +30,15 @@ export const UPGRADES = {
 		{ cost: 260, label: '9 ft surf rod', castM: 45 },
 		{ cost: 600, label: 'Stand-up trolling rod, roller guides and a gimbal butt', castM: 30, standUp: true },
 	] },
-	// (M16) your own gear for the big fish (game/rigs/Presentation.js, docs/m16/tackle.md). The leader: the sensible one of
-	// those you've bought is tied on for what you're doing (leaderFor). landKg: the heaviest you lift aboard for sure
-	// (past it, more and more shake off at the boat); polarized: fish seen under the water; swimMul, breathS, airS
-	// (Player.setDive); lifeJacket, flares and epirb are read by the kayak and DaysOut
+	// (M16) your own gear for the big fish (game/rigs/Presentation.js, docs/m16/tackle.md). The leader: of those you've
+	// bought, the one you tie on, or the sensible one for what you're doing (Presentation.leaderOn). landKg: the heaviest
+	// you lift aboard for sure (past it, more and more shake off at the boat); dehooker: one that's let go comes off in the
+	// water, sooner and unhurt (Rigs.fightTerms, releaseHurt); tagKit: the billfish fund's half as much again (Trophies);
+	// polarized: fish seen under the water; swimMul, breathS, airS (Player.setDive)
 	leader: { name: 'Leader', levels: [
 		{ cost: 0, label: 'Light mono leader', leader: 0 },
 		{ cost: 40, label: 'Fluorocarbon leader', leader: 1 },
-		{ cost: 60, label: 'Wire leader, for wahoo and kings', leader: 2 },
+		{ cost: 60, label: 'Wire leader, for wahoo and barracuda', leader: 2 },
 		{ cost: 90, label: '200 lb mono leader, for billfish', leader: 3 },
 	] },
 	lures: { name: 'Lures', levels: [
@@ -47,9 +48,9 @@ export const UPGRADES = {
 		{ cost: 180, label: 'Trolling skirts', lures: 3 },
 	] },
 	landing: { name: 'Landing', levels: [
-		{ cost: 0, label: 'Your hands', landKg: 12, gaff: false, dehooker: false, tagKit: false },
-		{ cost: 60, label: 'A gaff', landKg: 250, gaff: true, dehooker: false, tagKit: false },
-		{ cost: 80, label: 'Release dehooker and billfish tag kit', landKg: 250, gaff: true, dehooker: true, tagKit: true },
+		{ cost: 0, label: 'Your hands', landKg: 12 },
+		{ cost: 60, label: 'A gaff', landKg: 250 },
+		{ cost: 80, label: 'Release dehooker and billfish tag kit', landKg: 250, dehooker: true, tagKit: true },
 	] },
 	glasses: { name: 'Polarized glasses', levels: [
 		{ cost: 0, label: 'None', polarized: false },
@@ -59,13 +60,10 @@ export const UPGRADES = {
 		{ cost: 0, label: 'None', swimMul: 1, breathS: 50, airS: 0 },
 		{ cost: 80, label: 'Mask and fins (faster swimming)', swimMul: 1.45, breathS: 50, airS: 0 },
 		{ cost: 220, label: 'Long fins and a wetsuit (a longer breath)', swimMul: 1.65, breathS: 80, airS: 0 },
-		{ cost: 600, label: 'Scuba tanks (fresh from the rack on every dive)', swimMul: 1.65, breathS: 80, airS: 6800 },
+		{ cost: 600, label: 'Scuba tanks (one dive\'s air, filled at the dock or at Marta\'s)', swimMul: 1.65, breathS: 80, airS: 6800 },
 	] },
-	safety: { name: 'Safety', levels: [
-		{ cost: 0, label: 'None', lifeJacket: false, flares: false, epirb: false },
-		{ cost: 40, label: 'Life jacket (a capsized kayak costs less)', lifeJacket: true, flares: false, epirb: false },
-		{ cost: 200, label: 'Flares and an EPIRB (found and towed in when you\'re in trouble far out)', lifeJacket: true, flares: true, epirb: true },
-	] },
+	// (the life jacket for the kayak's capsize, the flares and EPIRB for DaysOut: Seaworthy's, shown here with your gear)
+	safety: DAYS_TRACKS.safety,
 	// (Salt Life) the speargun, for a fish you've swum down to: a band gun (gunStyle: an aluminium tube,
 	// a teak stock, a railgun), its barrel from the grip to the muzzle (gunCm) and rubber bands
 	// (bands), the steel shaft it fires (shaftM long, at spearV m/s), the reach it kills at (spearM),
@@ -200,7 +198,7 @@ export const UPGRADES = {
 	] },
 	consoleTanks: { name: 'Tank rack', on: 'console', levels: [
 		{ cost: 0, label: 'None', tankRack: false },
-		{ cost: 150, label: 'Tanks racked behind the leaning post', tankRack: true },
+		{ cost: 150, label: 'Tanks racked behind the leaning post (a fresh one each time you\'re back aboard)', tankRack: true },
 	] },
 	// (M16) the sportfisher's own
 	sfOutriggers: { name: 'Outriggers', on: 'sportfisher', levels: [

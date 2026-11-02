@@ -4,18 +4,18 @@ import { placeName, PLACES } from './Places.js';
 // (M16) The billfish are let go, as the rules say, as everyone does: a sailfish, a white marlin or a blue marlin is
 // measured alongside and sent off alive. The island's billfish fund pays for it (FishTable.releaseBonus), and your log
 // keeps it: its best of each kind, with its picture (the catch card's studio portrait, looked at again from the log:
-// Game.showTrophy). The tag kit (the `landing` track: the rigs') pays half as much again.
+// Game.showTrophy). The tag kit (the `landing` track's stats.tagKit: the rigs') pays half as much again. The fund pays for
+// one that swam off: one taken off by hand and out of the water (info.hurt: Rigs.releaseHurt) may not, and it's nothing.
 //   letGo( state, info ) -> the bonus (0: not a billfish)       info: GameState.lastCatch
 //   trophyRows( state )   the log's list, biggest first         trophyCardOf( state, species )   the card's info
 //   trophyNote( info )    what the catch card says of it        cleanTrophies( saved )
 
-const TAG_KIT = 2; // (the landing track's level with the dehooker and the tag kit)
-
 export function letGo( state, info ) {
 
 	if ( ! info.released || ! FISH[ info.species ].release ) return 0;
-	const tagged = ( state.upgrades.landing | 0 ) >= TAG_KIT;
-	const bonus = releaseBonus( info.species, info.kg, tagged );
+	const tagged = !! state.stats.tagKit;
+	const bonus = info.hurt ? 0 : releaseBonus( info.species, info.kg, tagged );
+	info.fundTag = tagged && bonus > 0;
 	const t = state.trophies[ info.species ] || ( state.trophies[ info.species ] = { n: 0, kg: 0, cm: 0, day: null, place: null, tagged: false } );
 	t.n ++;
 	if ( info.kg > t.kg ) Object.assign( t, { kg: info.kg, cm: info.cm, day: info.day, place: info.place, tagged } );
@@ -43,7 +43,8 @@ export function trophyCardOf( state, species ) {
 export function trophyNote( info ) {
 
 	if ( info.trophyView ) return `${ info.n > 1 ? `Your best of the ${ info.n } you've` : 'The one you\'ve' } let go, ${ whereOf( info ) }${ info.wasTagged ? ', tagged' : '' }`;
-	return `Let go alive, as everyone does. The billfish fund pays <b>$${ info.bonus }</b> for it${ info.tagged ? `, Marta's log <b>$${ info.tagged }</b>` : '' }, and it's a trophy in your log`;
+	if ( info.hurt ) return 'Unhooked by hand, out of the water, it went off slowly on its side. The billfish fund only pays for one that swims off: Marta\'s dehooker takes the hook out with it still in the water. It\'s in your log';
+	return `${ info.fundTag ? 'Tagged and let go' : 'Let go' } alive, as everyone does. The billfish fund pays <b>$${ info.bonus }</b> for it${ info.tagged ? `, Marta's log <b>$${ info.tagged }</b>` : '' }, and it's a trophy in your log`;
 
 }
 

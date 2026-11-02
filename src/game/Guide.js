@@ -116,14 +116,17 @@ const FISHING = {
 	keyboard: [ [ k( 'R' ), 'Take out the rod (by the water or on the boat)' ], [ k( 'Hold', 'LMB' ), 'Wind up, release to cast. Hold longer to cast farther' ],
 		[ k( 'LMB' ), 'Strike when the bobber is <b>pulled under</b> (dips are only nibbles)' ], [ k( 'Hold', 'LMB' ), 'Reel in. <b>Let go when the tension turns red</b>, or the line snaps' ],
 		[ k( 'RMB' ), 'Reel an empty line back in' ], [ k( 'N' ), 'The cast net, for mullet and bait. <kbd>B</kbd> picks the bait for the hook' ],
+		[ k( 'C' ), 'The rig, with the rod out: a float or a sinker, and aboard a trolled line, a kite, a deep drop. <kbd>X</kbd> ties on a leader you own' ],
 		[ k( 'F', 'G' ), 'The left and right mouse buttons, from the keyboard' ], [ k( 'I' ), 'Your cooler, fish log, island records and islander' ] ],
 	touch: [ [ k( 'Rod' ), 'Take out the rod (by the water or on the boat)' ], [ k( 'Hold', 'Cast' ), 'Wind up, let go to cast. Hold longer to cast farther' ],
 		[ k( 'Strike' ), 'When the bobber is <b>pulled under</b> (dips are only nibbles)' ], [ k( 'Hold', 'Reel' ), 'Reel in. <b>Let go when the tension turns red</b>, or the line snaps' ],
 		[ k( 'Reel in' ), 'Reel an empty line back in' ], [ k( 'Cast net' ), 'For mullet and bait fish. <b>Bait</b> picks what goes on the hook' ],
+		[ k( 'Rig' ), 'With the rod out: a float or a sinker, and aboard a trolled line, a kite, a deep drop. <b>Leader</b> ties on one you own' ],
 		[ k( 'Cooler' ), 'Your cooler, fish log, island records and islander' ] ],
 	gamepad: [ [ k( 'X' ), 'Take out the rod (by the water or on the boat)' ], [ k( 'Hold', 'RT' ), 'Wind up, release to cast. Hold longer to cast farther' ],
 		[ k( 'RT' ), 'Strike when the bobber is <b>pulled under</b> (dips are only nibbles)' ], [ k( 'Hold', 'RT' ), 'Reel in. <b>Let go when the tension turns red</b>, or the line snaps' ],
 		[ k( 'LT' ), 'Reel an empty line back in' ], [ k( `D-pad ${ UP }` ), `The cast net, for mullet and bait. <kbd>D-pad ${ LEFT } ${ RIGHT }</kbd> picks the bait for the hook` ],
+		[ k( 'LB' ), 'The rig, with the rod out: a float or a sinker, and aboard a trolled line, a kite, a deep drop. <kbd>Y</kbd> ties on a leader you own' ],
 		[ k( 'Back' ), 'Your cooler, fish log, island records and islander' ] ],
 };
 
@@ -263,6 +266,7 @@ const TIPS = {
 	// (M16) when the intro's gone, in the kayak; and Marta's list, as it comes up
 	shoveOff: 'Your <b>kayak\'s on the sand</b> at the foot of the boardwalk, by the pier, and her marker\'s on your map. Or take out the rod and try the beach or the pier first.',
 	list: () => `There's more on Marta's list than gear: her <b>Boats</b> tab. A <b>center console</b> at $${ FLEET.console.price.toLocaleString() }, your first engine, reaches the reef and the wrecks. Under her is a shape with no picture, a <b>sportfisher</b>. She won't sell you that one until your gear's right.`,
+	tankLeft: 'Your <b>scuba tank</b> is one dive\'s air: what\'s left is all you have until you fill it at the <b>dock</b> or at <b>Marta\'s</b>. A <b>tank rack</b> on the center console gives you a fresh one each time you\'re back aboard.',
 	consoleReady: () => `You've the $${ FLEET.console.price.toLocaleString() } for the <b>center console</b>: Marta's <b>Boats</b> tab. An engine and fuel to think about, and the reef, the wrecks and the near offshore water to go with them. The kayak stays yours.`,
 	engine: ( s ) => `Your first <b>engine</b>. She burns <b>${ fuelWord( s ) }</b> (the gauge by your money: Marta sells it) and the wind'll take her if you leave her without an anchor. Marta tows her in, for a fee. <b>Keep an eye on the sky</b>: a blow sends you running in.`,
 	sportfisher: ( s ) => `That silhouette on Marta's list: the <b>offshore sportfisher</b>, for the far grounds and the blue water. She'll show her when you've every upgrade on the lobster boat, and your rod, reel and line. You're <b>${ s.unlock.done } of ${ s.unlock.of }</b>.`,

@@ -9,6 +9,7 @@ import { KAYAK_HANDLING, Stroke } from './Paddle.js';
 import { dryFrom, layOn, waterFrom } from './Shore.js';
 import { Drops } from './Drops.js';
 import { TUMBLE_B, capsizeHeel, breakerCapsizes, spillShare, climbSeconds, soakStep, SOAKED } from './Capsize.js';
+import { seenInWater } from '../../../materials/SeenInWater.js';
 
 const _mid = new Vector3(), _dir = new Vector3(), _up = new Vector3(), _z = new Vector3(), _m = new Matrix4();
 const _l = new Vector3(), _r = new Vector3(), _w = new Vector3(), _v = new Vector3(), _fwd = new Vector3();
@@ -49,6 +50,7 @@ export class KayakModel extends Vessel {
 		this._fullPositions = geometry.attributes.position.array.slice();
 		const hull = this.materials.hull = new MeshStandardMaterial( { vertexColors: true, roughness: 0.42, metalness: 0 } );
 		hull.name = 'kayakHull';
+		hull.onBeforeCompile = seenInWater;
 		const mesh = new Mesh( geometry, hull );
 		mesh.name = 'boat-hull';
 		mesh.castShadow = mesh.receiveShadow = true;
@@ -279,16 +281,25 @@ export class KayakModel extends Vessel {
 
 		const dry = target ? dryFrom( ctl.terrain, G.seaLevel.value, ctl.position.x, ctl.position.z ) : null;
 		p.exitBoat( target, target ? 0 : 1 );
-		if ( ! dry ) return;
+		if ( ! dry ) {
+
+			// (stepped out onto a jetty or a rock, you take her painter)
+			if ( target ) {
+
+				ctl.moored = true;
+				ctl.mooring.anchor.set( ctl.position.x, 0, ctl.position.z );
+				ctl.mooring.heading = ctl.getYaw();
+
+			}
+
+			return;
+
+		}
+
 		const go = () => {
 
 			this.lie( ctl, dry.x, dry.z, dry.heading );
-			// (you beside her, having done it, looking at her)
-			const c = Math.cos( dry.heading ), s = Math.sin( dry.heading ), x = dry.x + c * 1.1 + s * 0.4, z = dry.z - s * 1.1 + c * 0.4;
-			p.position.set( x, p.groundAt( x, z, 40 ), z );
-			p.yaw = Math.atan2( x - dry.x, z - dry.z );
-			p.velocity.set( 0, 0, 0 );
-			p._camY = null;
+			this._standBy( ctl, p, dry.heading );
 			if ( this._game ) this._game.state.save();
 
 		};
@@ -296,6 +307,28 @@ export class KayakModel extends Vessel {
 		const time = this._game && this._game.time;
 		if ( time && time.dim() ) setTimeout( go, 230 );
 		else go();
+
+	}
+
+	// you beside her on the sand, having done it, looking at her
+	_standBy( ctl, p, heading ) {
+
+		const c = Math.cos( heading ), s = Math.sin( heading ), x = ctl.position.x + c * 1.1 + s * 0.4, z = ctl.position.z - s * 1.1 + c * 0.4;
+		p.position.set( x, p.groundAt( x, z, 40 ), z );
+		p.yaw = Math.atan2( x - ctl.position.x, z - ctl.position.z );
+		p.velocity.set( 0, 0, 0 );
+		p._camY = null;
+
+	}
+
+	// a tow or a rescue has left her somewhere, and got you up out of the seat (Player.updateDeck): beside her if she's on
+	// the sand, otherwise still sat in her (on Pearl's mooring); someone else's you were riding, into the water
+	setDown( ctl, p ) {
+
+		if ( ! ctl.beached ) return p.riding || ctl.helmFree === false ? p.exitBoat( null, 1 ) : p.takeHelm();
+		p.exitBoat( { out: ctl.position, g: ctl.position.y } );
+		ctl.moored = false;
+		this._standBy( ctl, p, ctl.getYaw() );
 
 	}
 

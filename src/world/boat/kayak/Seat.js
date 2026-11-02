@@ -5,7 +5,7 @@ import { G } from '../../../core/Globals.js';
 // up onto and no wheel: W and S (or the stick, by how far it's pushed) paddle ahead and astern, A and D sweep her round,
 // Shift digs in. With the rod or the net out the paddle's laid along the gunwale, she drifts, and you look through your
 // own eyes. E gets you out: onto the sand or the shallows if they're by you (and she's pulled up after you), otherwise
-// over the side.
+// over the side. With the radio's panel up (game/Radio.js) the paddle's laid by too, and E puts it away.
 //   updateSeat( player, dt )   each frame in her
 
 const _eye = new Vector3(), _target = new Vector3(), _off = new Vector3(), _up = new Vector3( 0, 1, 0 );
@@ -19,14 +19,16 @@ export function updateSeat( p, dt ) {
 	const inp = p.input, b = p.boat, M = b.model, st = M.stroke;
 	p.breathe( dt, false, false );
 	const look = inp.consumeLook(), wheel = inp.consumeWheel();
-	if ( inp.hit( 'KeyV' ) ) p.camMode = p.camMode === 'first' ? 'third' : 'first';
+	// ((M16) a gamepad's Y, with the rod out: the leader, Game's)
+	if ( inp.hit( 'KeyV' ) && ! ( inp.lastDevice === 'gamepad' && p.handsFull ) ) p.camMode = p.camMode === 'first' ? 'third' : 'first';
 
 	// the paddle laid by with the rod out, and taken up again
 	const full = p.handsFull || p.busy;
-	st.held = full;
+	const free = ! full && ! p.helmHeld && ! M.sliding;
+	st.held = full || p.helmHeld;
 
 	let throttle = 0, steer = 0;
-	if ( ! full && ! M.sliding ) {
+	if ( free ) {
 
 		const hard = inp.down( 'ShiftLeft' ) || inp.down( 'ShiftRight' );
 		if ( inp.down( 'KeyW' ) ) throttle = hard ? 1 : 0.7;
@@ -54,7 +56,8 @@ export function updateSeat( p, dt ) {
 
 	}
 
-	if ( ! full && ! M.sliding ) {
+	if ( p.helmHeld ) p.prompt = { key: 'E', text: 'Put it away' };
+	else if ( free ) {
 
 		const off = p._ashore ? ( M.canPullUp( b ) ? 'Step out and pull her up' : 'Step out' ) : 'Over the side';
 		p.prompt = { key: 'E', text: `${ off }   ·   V  camera   ·   R  the rod` };
