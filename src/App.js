@@ -2076,13 +2076,19 @@ export class App {
 	updateNearDetail() {
 
 		const cam = this.camera.position;
-		for ( const d of this.nearDetail ) {
+		const near = ( o, dist ) => {
 
-			const s = d.o.geometry.boundingSphere;
-			_c3.copy( s.center ).applyMatrix4( d.o.matrixWorld );
-			d.o.visible = d.o.userData.shown !== false && _c3.distanceTo( cam ) - s.radius * d.o.matrixWorld.getMaxScaleOnAxis() < d.dist;
+			const s = o.geometry.boundingSphere || ( o.geometry.computeBoundingSphere(), o.geometry.boundingSphere );
+			_c3.copy( s.center ).applyMatrix4( o.matrixWorld );
+			o.visible = o.userData.shown !== false && _c3.distanceTo( cam ) - s.radius * o.matrixWorld.getMaxScaleOnAxis() < dist;
 
-		}
+		};
+
+		for ( const d of this.nearDetail ) near( d.o, d.dist );
+		// ((v2.1.2) and the boat you're in, from her own list each frame: kept in nearDetail as she's taken out, a swap at the
+		// wrong moment on a CPU's WebGL left a lobster boat's fittings drawn at any distance, over low's triangles)
+		const M = this.boat;
+		if ( M && M.nearDetail ) for ( const k of M.nearDetail ) if ( M.meshes[ k ] ) near( M.meshes[ k ], M.nearDist ?? 70 );
 
 	}
 
