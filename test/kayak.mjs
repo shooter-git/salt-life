@@ -224,7 +224,8 @@ const yawTurned = ( ctl, seconds, th, st ) => {
 
 	const breezy = beam( 9 ), squall = beam( 24 );
 	ok( breezy < HEEL.fishing * 0.4, `a fresh breeze on the beam is nothing to her (${ ( breezy * 57.3 ).toFixed( 0 ) } deg)` );
-	ok( squall > HEEL.idle, `a squall's gust on the beam puts her past holding (${ ( squall * 57.3 ).toFixed( 0 ) } deg)` );
+	// ((v2.0.1) a sit-on-top's hard to roll with the wind alone: a breaker does it, breakerCapsizes)
+	ok( squall > 8 / 57.3 && squall < HEEL.idle, `a squall's gust on the beam heels her hard, and she holds it (${ ( squall * 57.3 ).toFixed( 0 ) } deg)` );
 	// and bow to it she's fine: that's how you ride one out
 	wind( 24, 0, - 1 );
 	{
@@ -304,7 +305,7 @@ const yawTurned = ( ctl, seconds, th, st ) => {
 	}
 
 	const gale = await heelsOver( 'gale', false );
-	ok( gale.over > 0, `a gale's wind and sea on her beam puts her over (${ ( gale.most * 57.3 ).toFixed( 0 ) } deg)` );
+	ok( gale.most > 12 / 57.3, `a gale's wind and sea on her beam work her hard (${ ( gale.most * 57.3 ).toFixed( 0 ) } deg); a breaker's what puts her over` );
 	wind( 0 );
 
 }
@@ -381,6 +382,28 @@ ok( KAYAK_HANDLING.rudder === null, 'nothing reads a rudder of hers' );
 
 // her compass's words
 ok( pointOf( 0 ) === 'N' && pointOf( 359 ) === 'N' && pointOf( 90 ) === 'E' && pointOf( 200 ) === 'SSW' && pointOf( 315 ) === 'NW', 'her compass says its points' );
+
+// ((v2.0.1) her own stiffness: a steady roll on her of a wave's or a gust's size holds her at a few degrees. Her samples
+// alone held her only to a GZ of about 0.03 m, and from there she flopped over to 52 degrees, past holding)
+{
+
+	const { m, ctl } = boat(), I = ctl.inertia.z, W = ctl.mass * 9.8, f = new Vector3();
+	ctl.quaternion.identity();
+	let most = 0;
+	for ( let i = 0; i < 60 * 10; i ++ ) {
+
+		run( ctl, 1 / 60 );
+		f.set( 0, 0, 1 ).applyQuaternion( ctl.quaternion );
+		ctl.angular.addScaledVector( f, W * 0.08 / I / 60 );
+		const u = new Vector3( 0, 1, 0 ).applyQuaternion( ctl.quaternion );
+		if ( i > 300 ) most = Math.max( most, Math.asin( Math.min( 1, Math.hypot( u.x, u.z ) ) ) );
+
+	}
+
+	ok( most < 15 / 57.3, `a steady push of 0.08 m of her weight on her beam holds her at ${ ( most * 57.3 ).toFixed( 0 ) } deg, not over` );
+	m.dispose();
+
+}
 
 if ( bad ) {
 

@@ -547,7 +547,9 @@ export function buildPier( { B, terrain, colliders, rand, lights, inst, signB = 
 
 	} else addBox( X, DK - 0.04, ( zH + z1 ) / 2, ( hx1 - hx0 ) / 2, 0.04, ( z1 - zH ) / 2, { walkable: true, solid: true, tag: 'pierDeck' } );
 
-	// head railings: south edge, west edge, north edge (both sides of the walkway)
+	// head railings: south edge, west edge, north edge (both sides of the walkway). ((v2.0.1) Open where you step aboard: the
+	// south edge's west bay over the sportfisher's cockpit, the west edge's north half over the console's. A rail there, and
+	// what stood in front of it, had you hop the bench to reach her)
 	const railRun = ( ax, az, bx, bz ) => {
 
 		const len = Math.hypot( bx - ax, bz - az );
@@ -559,8 +561,7 @@ export function buildPier( { B, terrain, colliders, rand, lights, inst, signB = 
 
 	};
 
-	for ( let k = 0; k < 4; k ++ ) railRun( colsX[ k ], rowsZ[ 2 ], colsX[ k + 1 ], rowsZ[ 2 ] );
-	railRun( colsX[ 0 ], rowsZ[ 0 ], colsX[ 0 ], rowsZ[ 1 ] );
+	for ( let k = 1; k < 4; k ++ ) railRun( colsX[ k ], rowsZ[ 2 ], colsX[ k + 1 ], rowsZ[ 2 ] );
 	railRun( colsX[ 0 ], rowsZ[ 1 ], colsX[ 0 ], rowsZ[ 2 ] );
 	railRun( colsX[ 0 ], rowsZ[ 0 ], colsX[ 1 ], rowsZ[ 0 ] );
 	railRun( colsX[ 1 ], rowsZ[ 0 ], X - PIER.pileOff, rowsZ[ 0 ] );
@@ -638,8 +639,8 @@ export function buildPier( { B, terrain, colliders, rand, lights, inst, signB = 
 	}
 
 	// south edge: bench facing the sea, life ring, fish cleaning table, fishing rods
-	bench( B, 52.4, DK, z1 - 0.95, 0, 1.7, rand.next() );
-	addBox( 52.4, DK + 0.45, z1 - 1.0, 0.85, 0.45, 0.3, { tag: 'bench' } );
+	bench( B, 54.3, DK, z1 - 0.95, 0, 1.7, rand.next() );
+	addBox( 54.3, DK + 0.45, z1 - 1.0, 0.85, 0.45, 0.3, { tag: 'bench' } );
 	lifeRing( B, 55.8, DK + 0.58, rowsZ[ 2 ] + 0.12, 0, rand.next() );
 	cleaningTable( B, 58.3, DK, z1 - 0.9, 0, rand.next() );
 	addBox( 58.3, DK + 0.45, z1 - 0.9, 0.7, 0.45, 0.35, { tag: 'table' } );
@@ -655,27 +656,26 @@ export function buildPier( { B, terrain, colliders, rand, lights, inst, signB = 
 
 	// deck clutter (instanced crates / traps / barrels)
 	const crate = ( x, y, z, ry ) => inst.add( 'crate', x, y, z, ry, [ rand.range( 0.85, 1.1 ), rand.range( 0.85, 1.05 ), rand.range( 0.82, 1.0 ) ] );
-	crate( 49.25, DK, 34.35, 0.05 );
-	crate( 49.25, DK, 34.8, - 0.04 );
-	crate( 49.95, DK, 34.55, 1.57 );
-	crate( 49.3, DK + 0.4, 34.55, 0.2 );
-	addBox( 49.55, DK + 0.4, 34.6, 0.55, 0.4, 0.45, { tag: 'crates' } );
+	crate( 51.25, DK, 36.85, 0.05 );
+	crate( 51.25, DK, 37.3, - 0.04 );
+	crate( 51.95, DK, 37.05, 1.57 );
+	crate( 51.3, DK + 0.4, 37.05, 0.2 );
+	addBox( 51.55, DK + 0.4, 37.1, 0.55, 0.4, 0.45, { tag: 'crates' } );
 
 	const trap = ( x, y, z, ry ) => inst.add( 'trap', x, y, z, ry, [ rand.range( 0.85, 1.05 ), rand.range( 0.85, 1.0 ), rand.range( 0.8, 0.95 ) ] );
-	trap( 50.1, DK, 38.55, 0.02 );
-	trap( 50.1, DK, 39.1, - 0.03 );
-	trap( 51.05, DK, 38.6, 0.05 );
-	trap( 50.3, DK + 0.31, 38.8, 0.12 );
-	trap( 50.5, DK + 0.31, 38.75, 1.2 );
-	addBox( 50.55, DK + 0.35, 38.8, 0.75, 0.35, 0.5, { tag: 'traps' } );
+	trap( 58.1, DK, 33.65, 0.02 );
+	trap( 58.1, DK, 34.2, - 0.03 );
+	trap( 59.05, DK, 33.7, 0.05 );
+	trap( 58.3, DK + 0.31, 33.9, 0.12 );
+	trap( 58.5, DK + 0.31, 33.85, 1.2 );
+	addBox( 58.55, DK + 0.35, 33.9, 0.75, 0.35, 0.5, { tag: 'traps' } );
 
-	inst.add( 'barrel', 48.75, DK, 36.1, 0.3, [ 0.9, 0.85, 0.8 ] );
-	inst.add( 'barrel', 49.4, DK, 36.75, 1.1, [ 1.05, 1.0, 0.95 ] );
-	colliders.addCylinder( 48.75, 36.1, 0.32, DK, DK + 0.9, { tag: 'barrel' } );
-	colliders.addCylinder( 49.4, 36.75, 0.32, DK, DK + 0.9, { tag: 'barrel' } );
+	inst.add( 'barrel', 48.75, DK, 37.2, 0.3, [ 0.9, 0.85, 0.8 ] );
+	inst.add( 'barrel', 49.4, DK, 37.85, 1.1, [ 1.05, 1.0, 0.95 ] );
+	colliders.addCylinder( 48.75, 37.2, 0.32, DK, DK + 0.9, { tag: 'barrel' } );
+	colliders.addCylinder( 49.4, 37.85, 0.32, DK, DK + 0.9, { tag: 'barrel' } );
 
 	// floats hanging on the west rail
-	buoyString( B, [ hx0 + 0.12, railTop + 0.02, 34.0 ], [ hx0 + 0.12, railTop + 0.02, 35.9 ], 4, rand, 0.22 );
 	buoyString( B, [ hx0 + 0.12, railTop + 0.02, 37.1 ], [ hx0 + 0.12, railTop + 0.02, 38.9 ], 3, rand, 0.18 );
 
 	// head lamps

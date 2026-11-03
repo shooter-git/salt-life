@@ -1,67 +1,51 @@
-import { G } from '../core/Globals.js';
+import { ACTIONS, offers } from './Actions.js';
+import { iconSvg, iconFor, promptIcon } from './ActionIcons.js';
 
-// On-screen controls for touch screens: a joystick wherever the left thumb lands, drag anywhere on
-// the right to look, and buttons that follow what you're doing: the action of the moment (the
-// player's prompt: "Board boat", "Take the helm"...), jump / swim up, dive, the boat camera, and
-// the fishing: the rod, cast / strike / reel (the left mouse button's part), reel in (the right's),
-// the bait for the hook, the cast net (throw / close / haul on the same big button), and the
-// flashlight after dusk.
-// They feed core/Input.js like a keyboard and mouse would. Shown once a touch screen is in use;
-// mouse and keyboard players never see them.
+// On-screen controls for touch screens: a joystick wherever the left thumb lands, drag anywhere on the right to look,
+// and under the right thumb what's used every few seconds, as pictures (ActionIcons.js): the big button is the left
+// mouse button's part (cast / strike / reel, shoot, throw the net...) with its word under the picture, or jump when
+// there's none; round it jump / swim up, dive, reel in, run at the helm; and the actions wheel's button
+// (ActionWheel.js: the rod, the cast net, bait, rig, leader, cooler, torch, horn, camera). Over them, the gold button:
+// what the player's prompt says ("Board boat", "Take the helm", "Take out the rod"...), its picture and its words.
+// (Actions.js says what's offered.) They feed core/Input.js like a keyboard and mouse would. Shown once a touch screen
+// is in use; mouse and keyboard players never see them.
 
 const STICK = 56; // joystick travel (px)
 const LOOK_SPEED = 1.3; // look pixels per dragged pixel
+// the thumb's buttons, and the slots round the big one they can take: p0 the big one in the corner, p1 left of it,
+// p2 up and left, p3 above (style.css)
+const THUMB = [ 'use', 'jump', 'dive', 'reel', 'run' ];
 
 export class TouchControls {
 
-	constructor( input, { root = document.body } = {} ) {
+	constructor( input, { root = document.body, wheel = null } = {} ) {
 
 		this.input = input;
+		this.wheel = wheel; // (ActionWheel, set by the app)
 		this.active = false;
 		const el = this.el = document.createElement( 'div' );
 		el.className = 'touch';
+		const btn = ( id, cls = '' ) => `<button type="button" class="touch-btn touch-${ id }${ cls }" data-key="${ ACTIONS[ id ].key }" tabindex="-1" hidden><span class="touch-ico"></span></button>`;
 		el.innerHTML = /* html */`
 			<div class="touch-zone touch-move"></div>
 			<div class="touch-zone touch-look"></div>
 			<div class="touch-stick" hidden><div class="touch-knob"></div></div>
 			<div class="touch-buttons">
-				<button type="button" class="touch-btn touch-action" data-key="KeyE" hidden></button>
-				<button type="button" class="touch-btn touch-camera" data-key="KeyV" hidden aria-label="Boat camera">Camera</button>
-				<button type="button" class="touch-btn touch-dive" data-key="KeyC" hidden aria-label="Dive">Dive</button>
-				<button type="button" class="touch-btn touch-jump" data-key="Space" aria-label="Jump">Jump</button>
-				<button type="button" class="touch-btn touch-reel" data-key="mouse2" hidden>Reel in</button>
-				<button type="button" class="touch-btn touch-cast" data-key="mouse0" hidden>Cast</button>
-				<button type="button" class="touch-btn touch-rod" data-key="KeyR" hidden>Rod</button>
-				<button type="button" class="touch-btn touch-net" data-key="KeyN" hidden>Cast net</button>
-				<button type="button" class="touch-btn touch-bait" data-key="KeyB" hidden>Bait</button>
-				<button type="button" class="touch-btn touch-rig" data-key="KeyC" hidden>Rig</button>
-				<button type="button" class="touch-btn touch-leader" data-key="KeyX" hidden>Leader</button>
-				<button type="button" class="touch-btn touch-run" data-key="ShiftLeft" hidden>Run</button>
-				<button type="button" class="touch-btn touch-cooler" data-key="KeyI" hidden>Cooler</button>
-				<button type="button" class="touch-btn touch-torch" data-key="KeyL" hidden>Torch</button>
-				<button type="button" class="touch-btn touch-horn" data-key="Horn" hidden>Horn</button>
+				<button type="button" class="touch-btn touch-action" data-key="KeyE" tabindex="-1" hidden><span class="touch-ico"></span><span class="touch-label"></span></button>
+				<button type="button" class="touch-btn touch-use" data-key="mouse0" tabindex="-1" hidden><span class="touch-ico"></span><span class="touch-cap"></span></button>
+				${ btn( 'jump' ) }${ btn( 'dive' ) }${ btn( 'reel' ) }${ btn( 'run' ) }
+				<button type="button" class="touch-btn touch-wheel" tabindex="-1" aria-label="Actions" aria-haspopup="menu"><span class="touch-ico">${ iconSvg( 'wheel' ) }</span></button>
 			</div>`;
 		root.append( el );
 
 		this.stick = el.querySelector( '.touch-stick' );
 		this.knob = el.querySelector( '.touch-knob' );
-		this.buttons = {
-			action: el.querySelector( '.touch-action' ),
-			camera: el.querySelector( '.touch-camera' ),
-			dive: el.querySelector( '.touch-dive' ),
-			jump: el.querySelector( '.touch-jump' ),
-			reel: el.querySelector( '.touch-reel' ),
-			cast: el.querySelector( '.touch-cast' ),
-			rod: el.querySelector( '.touch-rod' ),
-			net: el.querySelector( '.touch-net' ),
-			bait: el.querySelector( '.touch-bait' ),
-			rig: el.querySelector( '.touch-rig' ),
-			leader: el.querySelector( '.touch-leader' ),
-			run: el.querySelector( '.touch-run' ),
-			cooler: el.querySelector( '.touch-cooler' ),
-			torch: el.querySelector( '.touch-torch' ),
-			horn: el.querySelector( '.touch-horn' ),
-		};
+		this.cluster = el.querySelector( '.touch-buttons' );
+		this.buttons = { action: el.querySelector( '.touch-action' ) };
+		for ( const id of THUMB ) this.buttons[ id ] = el.querySelector( `.touch-${ id }` );
+		this.wheelBtn = el.querySelector( '.touch-wheel' );
+		this.offer = {};
+		this._layout = '';
 
 		// the joystick
 		let movePointer = null, cx = 0, cy = 0;
@@ -132,16 +116,16 @@ export class TouchControls {
 		lookZone.addEventListener( 'pointerup', endLook );
 		lookZone.addEventListener( 'pointercancel', endLook );
 
-		// buttons hold their key while pressed
+		// buttons hold their key while pressed (the gold one's key is the prompt's: data-key)
 		for ( const b of Object.values( this.buttons ) ) {
 
-			const key = b.dataset.key;
-			let held = null;
+			let held = null, key = null;
 			b.addEventListener( 'pointerdown', ( e ) => {
 
 				e.preventDefault();
 				if ( held !== null ) return;
 				held = e.pointerId;
+				key = b.dataset.key;
 				b.setPointerCapture( e.pointerId );
 				b.classList.add( 'is-down' );
 				this.input.press( key );
@@ -158,8 +142,28 @@ export class TouchControls {
 			};
 			b.addEventListener( 'pointerup', up );
 			b.addEventListener( 'pointercancel', up );
+			// (a button hidden under a held thumb loses it, and never hears it lifted)
+			b.addEventListener( 'lostpointercapture', up );
 
 		}
+
+		// the actions wheel: tap to open it and tap a picture, or press here and slide to one and let go
+		this.wheelBtn.addEventListener( 'pointerdown', ( e ) => {
+
+			e.preventDefault();
+			this.input.lastDevice = 'touch';
+			if ( ! this.wheel ) return;
+			if ( this.wheel.open ) {
+
+				this.wheel.toggle( false );
+				return;
+
+			}
+
+			this.wheel.toggle( true );
+			this.wheel.slideFrom( this.wheelBtn, e );
+
+		} );
 
 		// (iOS: quick taps on a button are a double-tap to zoom, and a held one brings up the text
 		// magnifier, whatever touch-action says; cancelling the touches stops both, and the pointer
@@ -190,108 +194,73 @@ export class TouchControls {
 
 	}
 
-	// what the buttons offer this frame: the player's prompt ({ key, text }) and mode, and the fishing
-	// game's rod (game: Game, optional)
+	// what the buttons offer this frame (Actions.js): the player's prompt and mode, and the fishing game's
+	// (game: Game, optional)
 	update( player, game = null ) {
 
 		if ( ! this.active ) return;
-		const prompt = player && player.prompt;
-		const rod = game && game.rod;
-		const fishing = !! ( rod && rod.equipped );
-		// (Salt Life) in the water the same buttons are the speargun's, then the lobster gear's; with the
-		// cast net out, its
-		const spearing = !! ( game && game.gun && game.gun.equipped );
-		const lobstering = !! ( game && game.tools && game.tools.equipped );
-		const net = game && game.net, netting = !! ( net && net.equipped );
-		const swim = player && player.mode === 'swim';
-		const netFree = netting && ! net.busy;
-		const away = spearing ? ( game.gun.shaftOut ? null : game.tools && game.tools.owned ? 'Lobster gear' : 'Put away' ) : lobstering ? ( game.tools.busy ? null : 'Put away' ) : null;
-		setButton( this.buttons.rod, fishing ? 'Put away' : away || ( ( prompt && prompt.key === 'R' ) || netFree ? ( swim ? 'Speargun' : 'Rod' ) : null ) );
-		const offerNet = ! swim && ! lobstering && game && game.canFish && ! game.fight && ( ( prompt && prompt.key === 'R' ) || ( fishing && rod.state === 'idle' ) );
-		setButton( this.buttons.net, netFree ? 'Put away' : ! netting && offerNet ? 'Cast net' : null );
-		setButton( this.buttons.bait, fishing && rod.state === 'idle' ? 'Bait' : null );
-		setButton( this.buttons.rig, fishing && rod.state === 'idle' ? 'Rig' : null );
-		setButton( this.buttons.leader, fishing && rod.state === 'idle' && game.state?.stats?.leader > 0 ? 'Leader' : null );
-		// ((M16) a rod gone off in its holder)
-		if ( prompt && prompt.key === 'R' && game && game.rigs && game.rigs.rodOn ) setButton( this.buttons.rod, 'Take the rod' );
-		setButton( this.buttons.cast, fishing ? castLabel( game ) : spearing ? spearLabel( game ) : lobstering ? lobsterLabel( game ) : netting ? netLabel( game ) : null );
-		setButton( this.buttons.reel, fishing && ! game.fight && ( rod.state === 'floating' || rod.state === 'flying' ) ? 'Reel in' : fishing && ! game.fight && rod.state === 'idle' && game.rigs && game.rigs.linesOut ? 'Lines in' : null );
-		setButton( this.buttons.cooler, game && game.hud && ! fishing && ! spearing && ! lobstering && ! netting ? 'Cooler' : null );
-		// the flashlight: offered after dusk (or while it's on)
-		const lights = game && game.app && game.app.localLights;
-		const torchOn = !! ( lights && lights.flashlight.on );
-		// at the helm: the boat's searchlight, after dusk (or while it's on), and the horn
-		// ((M16) a kayak's neither: the rod's button is the rod's, and her radio or flares are the rig's, the same key)
-		const seat = player && player.mode === 'boat' && player.boat?.model?.seated;
-		const helm = player && player.mode === 'boat' && ! seat, app = game && game.app;
-		if ( seat && ! fishing && ! netting ) setButton( this.buttons.rod, 'Rod' );
-		if ( seat && game.radio && game.radio.offer ) setButton( this.buttons.rig, game.radio.offer === 'radio' ? 'Radio' : 'Flares' );
-		if ( helm ) setButton( this.buttons.torch, app && ( app.searchlight || G.night.value > 0.35 ) ? ( app.searchlight ? 'Searchlight off' : 'Searchlight' ) : null );
-		else setButton( this.buttons.torch, lights && ( torchOn || G.night.value > 0.35 ) ? ( torchOn ? 'Torch off' : 'Torch' ) : null );
-		setButton( this.buttons.horn, helm ? 'Horn' : null );
-		// ((M16) with lines out she's held at the baits' speed: this runs her flat out, as Shift does)
-		setButton( this.buttons.run, helm && ! player.riding && game?.rigs?.linesOut ? 'Run' : null );
-		// ((M15) the rod's button is the radio's at the helm: R)
-		if ( helm && ! player.riding ) setButton( this.buttons.rod, 'Radio' );
-		const action = prompt && prompt.key === 'E' ? prompt.text.split( '   ·' )[ 0 ] : null;
-		setButton( this.buttons.action, action );
-		setButton( this.buttons.camera, player && player.mode === 'boat' ? 'Camera' : null );
-		setButton( this.buttons.dive, player && player.mode === 'swim' ? 'Dive' : null );
-		setButton( this.buttons.jump, prompt && prompt.key === 'Space' ? prompt.text : player && player.mode === 'swim' ? 'Swim up' : player && player.mode === 'boat' ? null : 'Jump' );
+		const o = offers( player, game, this.offer );
+		const B = this.buttons;
+		// the big button: the left mouse button's part, its word under its picture ('Strike!' lit)
+		const use = B.use;
+		setButton( use, o.use, iconFor( o.use ) );
+		if ( o.use ) {
+
+			const cap = use.lastChild;
+			if ( cap.textContent !== o.use ) cap.textContent = o.use;
+			use.classList.toggle( 'is-hot', o.use === 'Strike!' );
+
+		}
+
+		setButton( B.jump, o.jump, iconFor( o.jump ) );
+		setButton( B.dive, o.dive, 'dive' );
+		setButton( B.reel, o.reel, 'reelin' );
+		setButton( B.run, o.run, 'run' );
+		// the gold button: the prompt, its picture and its words, and its key (E, or R for the rod)
+		const a = B.action;
+		setButton( a, o.action, o.action && promptIcon( o.action ) );
+		if ( o.action ) {
+
+			const label = a.lastChild;
+			if ( label.textContent !== o.action ) label.textContent = o.action;
+			// (not while it's held: it lets go of the key it pressed)
+			if ( a.dataset.key !== o.actionKey && ! a.classList.contains( 'is-down' ) ) a.dataset.key = o.actionKey;
+
+		}
+
+		// the slots: the big one's the left mouse button's part, or jump; the rest in turn round it, the wheel's button
+		// above (or in the corner when there's nothing there)
+		const shown = THUMB.filter( ( id ) => o[ id ] );
+		const big = o.use ? 'use' : o.jump ? 'jump' : null;
+		const rest = shown.filter( ( id ) => id !== big );
+		let layout = '';
+		if ( big ) layout += `${ big }:0 `;
+		rest.forEach( ( id, i ) => layout += `${ id }:${ Math.min( i + 1, 2 ) } ` );
+		layout += big ? 'wheel:3' : 'wheel:0';
+		if ( layout !== this._layout ) {
+
+			this._layout = layout;
+			for ( const b of [ ...Object.values( B ), this.wheelBtn ] ) b.classList.remove( 'is-p0', 'is-p1', 'is-p2', 'is-p3' );
+			for ( const part of layout.split( ' ' ) ) {
+
+				const [ id, slot ] = part.split( ':' );
+				( id === 'wheel' ? this.wheelBtn : B[ id ] ).classList.add( `is-p${ slot }` );
+
+			}
+
+			// (the gold button over the highest of them upright, beside the lowest row on its side: style.css)
+			this.cluster.dataset.top = big ? 'p3' : rest.length > 1 ? 'p2' : 'p0';
+			this.cluster.dataset.side = rest.length ? 'p1' : 'p0';
+
+		}
+
+		this.wheelBtn.classList.toggle( 'is-open', !! ( this.wheel && this.wheel.open ) );
 
 	}
 
 }
 
-// the big fishing button: hold to wind up, let go to cast; strike when a fish takes the bobber; hold to
-// reel in the fight
-function castLabel( game ) {
-
-	const rod = game.rod;
-	if ( game.fight ) return 'Reel';
-	if ( rod.state === 'windup' ) return 'Let go';
-	if ( rod.state === 'floating' ) return game.bite && game.bite.phase === 'take' ? 'Strike!' : game.rigs?.leadLabel() || 'Strike';
-	if ( rod.state === 'idle' ) return game.rigs ? game.rigs.castLabel() : 'Cast';
-	return 'Wait';
-
-}
-
-// (Salt Life) the speargun's: shoot once you've dived, hold to load, hold to pull in a big fish
-function spearLabel( game ) {
-
-	const gun = game.gun;
-	if ( game.spearFight ) return 'Pull';
-	if ( gun.state === 'loaded' ) return ! game.submerged ? 'Dive' : gun.safety ? 'Hold fire' : 'Shoot';
-	if ( gun.state === 'empty' ) return 'Load';
-	if ( gun.state === 'loading' ) return 'Loading';
-	return 'Wait';
-
-}
-
-// (Salt Life) the cast net's: hold to wind up, let go as the ring brightens; hold to draw the brails
-// and haul it in. (Never hidden while it's out: a button hidden under a held thumb is never let go)
-function netLabel( game ) {
-
-	const net = game.net;
-	if ( net.state === 'held' ) return 'Throw';
-	if ( net.state === 'windup' ) return 'Let go';
-	if ( net.state === 'sinking' ) return ! net.footprint.wet ? 'Draw in' : net.draw >= 1 ? 'Haul' : net.pulling ? 'Closing' : 'Close';
-	return 'Wait';
-
-}
-
-// (Salt Life) the lobster gear's: hold to tickle one out of its den, tap to net it in the open
-function lobsterLabel( game ) {
-
-	const a = game.lobsterAim;
-	if ( game.tools.busy ) return 'Wait';
-	if ( ! game.submerged ) return 'Dive';
-	if ( ! a || a.state === 'flip' || a.dist > a.reach ) return 'Wait';
-	return a.state === 'den' ? 'Tickle' : 'Net';
-
-}
-
-function setButton( b, text ) {
+function setButton( b, text, icon ) {
 
 	if ( ! text ) {
 
@@ -301,6 +270,13 @@ function setButton( b, text ) {
 	}
 
 	if ( b.hidden ) b.hidden = false;
-	if ( b.textContent !== text ) b.textContent = text;
+	if ( b.dataset.icon !== icon ) {
+
+		b.dataset.icon = icon;
+		b.firstChild.innerHTML = iconSvg( icon );
+
+	}
+
+	if ( b.getAttribute( 'aria-label' ) !== text ) b.setAttribute( 'aria-label', text );
 
 }

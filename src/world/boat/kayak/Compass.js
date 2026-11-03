@@ -14,6 +14,18 @@ const CSS = /* css */`
 .kw-compass b { display: block; margin-top: 2px; font-size: var(--tw-fs-sm); font-weight: 700; letter-spacing: 0.02em; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8); }
 .tw-root[data-panel='open'] .kw-compass, .tw-root:has(.gm-panel.is-open) .kw-compass { display: none; }
 html.is-touch .kw-compass { bottom: auto; top: var(--gm-top); right: calc(var(--gm-r) + var(--gm-map) + 8px); width: calc(56 * var(--tw-u)); }
+/* (upright, under the map, so a tip beside the map has its room; out of the way of the fight's panel, which takes the
+   map's place, and the toasts under it) */
+@media (orientation: portrait) {
+	html.is-touch .kw-compass { top: calc(var(--gm-top) + var(--gm-map) + 6px); right: calc(var(--gm-r) + (var(--gm-map) - 56 * var(--tw-u)) / 2); }
+	html.is-touch .tw-root:has(.gm-fight.is-on) .kw-compass { opacity: 0; }
+	html.is-touch:has(.kw-compass.is-on) .hud-toast { top: calc(var(--gm-top) + var(--gm-map) + 104px); }
+	html.is-touch:has(.kw-compass.is-on) .hud-hint { top: calc(var(--gm-top) + var(--gm-map) + 152px); }
+}
+/* (on its side, the first hint stops short of it: style.css) */
+@media (orientation: landscape) {
+	html.is-touch:has(.kw-compass.is-on) .hud .hud-hint { max-width: calc(100vw - var(--gm-l) - min(calc(300 * var(--tw-u)), 42vw) - 36px - var(--gm-r) - var(--gm-map) - 56 * var(--tw-u)); }
+}
 `;
 
 const POINTS = [ 'N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW' ];

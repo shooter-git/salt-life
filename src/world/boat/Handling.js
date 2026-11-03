@@ -9,6 +9,8 @@ import { MathUtils, Vector3 } from '../../engine/index.js';
 //   windLead        m toward the windward end its push moves as it comes round from abeam to end-on
 //   rightFrom, rightK  past this heel or trim (rad) her flare and chines right her harder (N m per radian past it). The
 //                   hull's samples hold her only so far (a GZ of 0.05 to 0.1 m), so from about there, or she flops over to it
+//   early           (a small hull) { from, k, fade: [ from, to ] } rad and N m per radian: her own stiffness from a few
+//                   degrees, given way as her rail goes under
 //   rollInertia     her roll inertia against the bare hull's (gear high on deck)
 //   addedMass       when fully wet, of her mass: [ sway, heave, surge ]
 //   addedInertia    of her inertia: [ pitch, yaw, roll ]

@@ -108,6 +108,8 @@ function creditFor( path, audio ) {
 	if ( path.startsWith( 'src/ui/fonts/' ) ) return HUD_FONTS[ name.replace( /-latin.*$/, '' ) ];
 	// made for Salt Life (the baked island: tools/bake-terrain.mjs)
 	if ( path.startsWith( 'public/world/' ) ) return { license: 'own', title: 'The island, baked by tools/bake-terrain.mjs' };
+	// ((M16) the boats you own and aren't in, as they look: tools/moored-bake.mjs, from their models)
+	if ( path.startsWith( 'public/boats/moored/' ) ) return { license: 'own', title: 'Moored boats, baked by tools/moored-bake.mjs from their models' };
 	// (and Marta's pictures of the boats: tools/boat-pictures.mjs, from their models)
 	if ( path.startsWith( 'public/boats/' ) ) return { license: 'own', title: 'Boat pictures, rendered by tools/boat-pictures.mjs' };
 
