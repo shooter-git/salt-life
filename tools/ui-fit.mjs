@@ -2,6 +2,7 @@
 // (M15) The Fish Hold's every tab and the catch card, at every screen size: what doesn't fit, measured, and a picture of
 // each. Its lists scrolling is fine; what it reports is what's cut off, out of its panel or squashed. Some of that's by
 // design: the room list scrolls sideways, the room meter's new part runs past a full hold, the badge is rotated.
+// (After v2) and last, the HUD in play: the purse clear of All the Spaces' corner menu, nothing over anything else.
 //
 //   pnpm dev, then   node tools/ui-fit.mjs <dir for the pictures> [port, 5189] [screens, comma separated]
 //   CARDS=plain node tools/ui-fit.mjs ...     (the plain card alone: the others are record and noroom)
@@ -51,6 +52,38 @@ const MEASURE = ( rootSel ) => {
 	if ( list ) { const L = list.getBoundingClientRect(); facts.list = Math.round( L.height ); if ( L.height < 90 ) bad.push( `its list only ${ Math.round( L.height ) } px tall` ); }
 	if ( foot ) { const fr = foot.getBoundingClientRect(); if ( fr.bottom > H + 1 ) bad.push( 'its foot off the screen' ); }
 	return { facts, bad: [ ...new Set( bad ) ].slice( 0, 12 ) };
+
+};
+// (after v2) the HUD in play: the purse at the top beside All the Spaces' corner menu (its 56 px kept clear), the map and
+// the compass, a tip, the touch buttons under the thumb and the gold one; none off the screen or over another
+const HUD = () => {
+
+	const box = ( e ) => {
+
+		if ( ! e ) return null;
+		const cs = getComputedStyle( e );
+		if ( cs.display === 'none' || cs.visibility === 'hidden' || Number( cs.opacity ) === 0 ) return null;
+		const r = e.getBoundingClientRect();
+		return r.width && r.height ? [ r.left, r.top, r.right, r.bottom ].map( Math.round ) : null;
+
+	};
+	const q = ( s ) => box( document.querySelector( s ) );
+	const parts = { purse: q( '.gm-purse' ), map: q( '.gm-map' ), compass: q( '.kw-compass.is-on' ), tip: q( '.gm-coach.is-on' ), hint: q( '.hud-hint:not([hidden])' ), gold: q( '.touch.is-on .touch-action:not([hidden])' ) };
+	const thumb = [ ...document.querySelectorAll( '.touch.is-on .touch-btn:not([hidden]):not(.touch-action)' ) ].map( box ).filter( Boolean );
+	if ( thumb.length ) parts.thumb = thumb.reduce( ( a, r ) => [ Math.min( a[ 0 ], r[ 0 ] ), Math.min( a[ 1 ], r[ 1 ] ), Math.max( a[ 2 ], r[ 2 ] ), Math.max( a[ 3 ], r[ 3 ] ) ] );
+	const W = innerWidth, H = innerHeight, bad = [];
+	const over = ( a, b ) => a && b && a[ 0 ] < b[ 2 ] - 1 && b[ 0 ] < a[ 2 ] - 1 && a[ 1 ] < b[ 3 ] - 1 && b[ 1 ] < a[ 3 ] - 1;
+	for ( const [ k, v ] of Object.entries( parts ) ) {
+
+		if ( over( v, [ 0, 0, 56, 56 ] ) ) bad.push( `${ k } in the corner menu's 56 px` );
+		if ( v && ( v[ 0 ] < 0 || v[ 1 ] < 0 || v[ 2 ] > W || v[ 3 ] > H ) ) bad.push( `${ k } off the screen: ${ v }` );
+
+	}
+
+	const keys = Object.keys( parts );
+	for ( let i = 0; i < keys.length; i ++ ) for ( let j = i + 1; j < keys.length; j ++ ) if ( over( parts[ keys[ i ] ], parts[ keys[ j ] ] ) ) bad.push( `${ keys[ i ] } over ${ keys[ j ] }` );
+	const p = parts.purse;
+	return { facts: { purse: p && { top: p[ 1 ], left: p[ 0 ], w: p[ 2 ] - p[ 0 ], h: p[ 3 ] - p[ 1 ] }, buttons: thumb.length + ( parts.gold ? 1 : 0 ) }, bad };
 
 };
 for ( const [ name, w, h, touch ] of SCREENS ) {
@@ -114,6 +147,25 @@ for ( const [ name, w, h, touch ] of SCREENS ) {
 
 	}
 
+	// the HUD in play: sat in the kayak (her compass), the rod out (the bait in the purse), a tip up, the first hint, and
+	// the purse's money a long number
+	await page.evaluate( () => {
+
+		const a = window.__app, g = a.game, H = g.hud;
+		if ( H.catchOpen ) H.hideCatch();
+		a.player.boardBoat();
+		g.rod.equip( true );
+		g.guide.seen.rodOut = false;
+		g.guide._queue.length = 0;
+		g.guide.tip( 'rodOut' );
+		a.hud.showHint( a.input.lastDevice );
+
+	} ).catch( ( e ) => console.log( 'hud', e.message.slice( 0, 220 ) ) );
+	await page.waitForFunction( () => document.querySelector( '.gm-coach.is-on' ) && ! document.querySelector( '.gm-catch.is-on' ), null, { timeout: 90000 } ).catch( () => console.log( 'no tip came up' ) );
+	await page.waitForTimeout( 3000 );
+	const hud = await page.evaluate( HUD );
+	console.log( `  hud      ${ JSON.stringify( hud.facts ) } ${ hud.bad.length ? '\n      ' + hud.bad.join( '\n      ' ) : '' }` );
+	await page.screenshot( { path: `${ out }/${ name }-hud.png`, timeout: 90000 } ).catch( () => console.log( 'shot failed', name, 'hud' ) );
 	await ctx.close();
 
 }

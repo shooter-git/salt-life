@@ -19,6 +19,7 @@ const PAD_KEYS = {
 	15: 'ArrowRight',
 	10: 'Horn', // left stick pressed: the horn, at the helm (its own code: H off the helm is the guide)
 	11: 'KeyT', // right stick pressed: the clock
+	9: 'KeyQ', // start / menu: the actions wheel (ui/ActionWheel.js)
 };
 const WALK = new Set( [ 'KeyW', 'KeyA', 'KeyS', 'KeyD', 'KeyC', 'ShiftLeft' ] );
 const PAD_LOOK = 700; // px per second at full right-stick deflection
@@ -49,6 +50,10 @@ export class Input {
 		this.lastDevice = 'keyboard'; // 'keyboard' | 'touch' | 'gamepad': hints and prompts follow it
 		this._virtual = new Map(); // key code -> how many virtual sources hold it (touch, pad)
 		this._pad = new Set();
+		// (a gamepad button something else takes for itself while it's up, as the actions wheel takes A and B: trap( code )
+		// says so (true) and it's pressed no further, nor let go)
+		this.trap = null;
+		this._trapped = new Set();
 
 		window.addEventListener( 'keydown', ( e ) => {
 
@@ -206,7 +211,8 @@ export class Input {
 		for ( const code of held ) if ( ! this._pad.has( code ) ) {
 
 			this.lastDevice = 'gamepad';
-			if ( code === 'mouse0' ) this.mouseDown = true;
+			if ( this.trap && this.trap( code ) ) this._trapped.add( code );
+			else if ( code === 'mouse0' ) this.mouseDown = true;
 			else if ( code === 'mouse2' ) this.rightDown = true;
 			else this.press( code );
 
@@ -214,6 +220,7 @@ export class Input {
 
 		for ( const code of this._pad ) if ( ! held.has( code ) ) {
 
+			if ( this._trapped.delete( code ) ) continue;
 			if ( code === 'mouse0' ) this.mouseDown = false;
 			else if ( code === 'mouse2' ) this.rightDown = false;
 			else this.release( code );

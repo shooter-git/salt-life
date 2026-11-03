@@ -14,11 +14,19 @@ html, body {
 
 /* ---- heads-up display */
 
+/* (over the touch controls' zones: a tap on a hint or a toast is for it, and puts it away: Hud) */
 .hud {
 	position: fixed;
 	inset: 0;
 	pointer-events: none;
-	z-index: 10;
+	z-index: 25;
+}
+
+.hud-hint,
+.hud-toast {
+	pointer-events: auto;
+	cursor: pointer;
+	touch-action: manipulation;
 }
 
 .hud-prompt,
@@ -41,9 +49,10 @@ html, body {
 .hud-prompt { bottom: calc(28px + env(safe-area-inset-bottom)); }
 .hud-toast { top: calc(16px + env(safe-area-inset-top)); }
 
-/* the first hint about the controls: at the top (clear of the app's menu button), wrapping on phones */
+/* the first hint about the controls: at the top (clear of the app's menu button), wrapping on phones; under the purse
+   where it would run under it (a boat's gauges make it taller) */
 .hud-hint {
-	top: calc(64px + env(safe-area-inset-top));
+	top: max(calc(64px + env(safe-area-inset-top)), calc(var(--gm-band, 56px) + 8px));
 	opacity: 0.9;
 	white-space: normal;
 	text-align: center;
@@ -75,10 +84,20 @@ html.is-touch .hud-toast { width: max-content; white-space: normal; text-wrap: b
 @media (orientation: portrait) {
 	html.is-touch .hud-toast { top: calc(var(--gm-top, 64px) + var(--gm-map, 0px) + 16px); }
 	html.is-touch .hud-hint { top: calc(var(--gm-top, 64px) + var(--gm-map, 0px) + 64px); }
+	/* (the first hint from the left, stopping short of the thumb's buttons: on a short phone it comes down to them) */
+	html.is-touch .hud-hint { left: var(--gm-l); transform: none; text-align: left; max-width: calc(100vw - var(--gm-l) - var(--gm-r) - 100px); }
+	/* (and under a tip where it reaches lower, Guide's --gm-coach-b; under the kayak's compass too, Compass.js) */
+	html.is-touch:has(.gm-coach.is-on) .hud .hud-toast { top: max(calc(var(--gm-top, 64px) + var(--gm-map, 0px) + 16px), calc(var(--gm-coach-b, 0px) + 8px)); }
+	html.is-touch:has(.gm-coach.is-on) .hud .hud-hint { top: max(calc(var(--gm-top, 64px) + var(--gm-map, 0px) + 64px), calc(var(--gm-coach-b, 0px) + 56px)); }
+	html.is-touch:has(.gm-coach.is-on):has(.kw-compass.is-on) .hud .hud-toast { top: max(calc(var(--gm-top, 64px) + var(--gm-map, 0px) + 104px), calc(var(--gm-coach-b, 0px) + 8px)); }
+	html.is-touch:has(.gm-coach.is-on):has(.kw-compass.is-on) .hud .hud-hint { top: max(calc(var(--gm-top, 64px) + var(--gm-map, 0px) + 152px), calc(var(--gm-coach-b, 0px) + 56px)); }
 }
 
 @media (orientation: landscape) {
 	html.is-touch .hud-toast { left: calc((72px + var(--gm-purse-l, 100vw)) / 2 - 6px); max-width: calc(var(--gm-purse-l, 100vw) - 84px); }
+	/* (the first hint right of where a tip comes, at the left under the corner menu: game-ui.css) */
+	html.is-touch .hud-hint { left: calc(var(--gm-l) + min(calc(300 * var(--tw-u)), 42vw) + 12px); transform: none;
+		max-width: calc(100vw - var(--gm-l) - min(calc(300 * var(--tw-u)), 42vw) - 28px - var(--gm-r) - var(--gm-map)); }
 }
 
 /* elsewhere the purse is at the top right too, with the clock in it: the toast stays centred unless
@@ -134,49 +153,91 @@ html:not(.is-touch) .hud:has(.hud-toast.is-low:not([hidden])) .hud-hint { top: c
 	background: rgba(244, 241, 234, 0.75);
 }
 
+/* under the right thumb (TouchControls): round buttons with pictures, about the big one in the corner. p0 is the big
+   one (76 px), p1 left of it, p2 up and to the left, p3 above it (56 px each, 92 px from its middle); the wheel's
+   button is p3, or p0 when there's nothing big. The gold button, the prompt's, with its words: over the highest of
+   them upright (data-top), beside the lowest row on its side (data-side) */
 .touch-buttons {
+	--big: 76px;
+	--small: 56px;
 	position: absolute;
 	right: calc(16px + env(safe-area-inset-right));
 	bottom: calc(20px + env(safe-area-inset-bottom));
-	display: flex;
-	flex-direction: column-reverse;
-	align-items: flex-end;
-	gap: 12px;
+	width: var(--big);
+	height: var(--big);
 	pointer-events: none;
 }
 
 .touch-btn {
+	position: absolute;
+	right: 10px;
+	bottom: 10px;
+	width: var(--small);
+	height: var(--small);
+	padding: 0;
+	display: grid;
+	place-items: center;
 	pointer-events: auto;
 	touch-action: none;
-	min-width: 64px;
-	min-height: 64px;
-	padding: 0 18px;
 	border: 2px solid rgba(244, 241, 234, 0.55);
-	border-radius: 32px;
-	background: rgba(8, 20, 28, 0.45);
+	border-radius: 50%;
+	background: rgba(8, 20, 28, 0.5);
 	color: #f4f1ea;
 	font: 600 15px / 1 system-ui, sans-serif;
 	-webkit-user-select: none;
 	user-select: none;
 	-webkit-touch-callout: none;
+	box-shadow: 0 4px 14px -6px rgba(0, 0, 0, 0.5);
 }
 
-.touch-btn[hidden] { display: none; }
+.touch .touch-btn[hidden] { display: none; }
 .touch-btn.is-down { background: rgba(244, 241, 234, 0.35); }
+.touch-ico { display: grid; place-items: center; pointer-events: none; }
+.touch-ico .ai { width: 26px; height: 26px; }
+.touch-btn .ai-badge { fill: rgba(8, 20, 28, 0.9); }
 
-.touch-action {
-	min-height: 72px;
-	background: rgba(214, 160, 70, 0.8);
-	border-color: rgba(255, 236, 200, 0.8);
+.touch-btn.is-p0 { right: 10px; bottom: 10px; }
+.touch-btn.is-p1 { right: 102px; bottom: 10px; }
+.touch-btn.is-p2 { right: 75px; bottom: 75px; }
+.touch-btn.is-p3 { right: 10px; bottom: 102px; }
+
+/* the big one: its picture, and its word under it (it changes as you go: cast, let go, strike, reel) */
+.touch-use.is-p0,
+.touch-jump.is-p0 { right: 0; bottom: 0; width: var(--big); height: var(--big); }
+.touch-use { grid-template-rows: auto auto; align-content: center; gap: 2px; border-color: rgba(244, 241, 234, 0.75); background: rgba(8, 20, 28, 0.58); }
+.touch-use .ai, .touch-jump.is-p0 .ai { width: 30px; height: 30px; }
+.touch-cap { max-width: 68px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; letter-spacing: 0.02em; pointer-events: none; }
+.touch-use.is-hot { background: rgba(255, 184, 107, 0.92); border-color: #fff; color: #1d150a; }
+
+.touch-wheel.is-open { background: rgba(95, 227, 212, 0.9); color: #0b1418; border-color: #fff; }
+
+/* the gold button: the prompt's picture and words */
+.touch-btn.touch-action {
+	right: 0;
+	bottom: calc(102px + var(--small) + 12px);
+	width: auto;
+	height: 52px;
+	max-width: min(52vw, 320px);
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 0 18px 0 12px;
+	border-radius: 26px;
+	background: rgba(214, 160, 70, 0.88);
+	border-color: rgba(255, 236, 200, 0.85);
 	color: #1d150a;
-	max-width: 46vw;
 	white-space: nowrap;
-	overflow: hidden;
-	text-overflow: ellipsis;
 }
 
-/* phone on its side: the buttons in a row, out of the way of the view */
+.touch-action .ai { width: 24px; height: 24px; }
+.touch-action .ai-badge { fill: rgba(214, 160, 70, 0.95); }
+.touch-label { overflow: hidden; text-overflow: ellipsis; pointer-events: none; }
+.touch-buttons[data-top="p2"] .touch-btn.touch-action { bottom: calc(75px + var(--small) + 12px); }
+.touch-buttons[data-top="p0"] .touch-btn.touch-action { bottom: calc(var(--big) + 12px); }
+
+/* phone on its side: the gold button beside them, not over them, out of the way of the view */
 @media (orientation: landscape) and (max-height: 500px) {
-	.touch-buttons { flex-direction: row-reverse; align-items: flex-end; }
 	.touch-zone { top: 48px; }
+	.touch-buttons[data-top] .touch-btn.touch-action { bottom: 12px; right: calc(var(--big) + 12px); max-width: min(40vw, 320px); }
+	.touch-buttons[data-top][data-side="p1"] .touch-btn.touch-action { right: calc(102px + var(--small) + 12px); }
 }

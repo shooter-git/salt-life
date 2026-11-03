@@ -87,6 +87,7 @@ import { BoatSpray } from './player/BoatSpray.js';
 import { WhaleWater } from './ocean/WhaleWater.js';
 import { Character } from './game/Character.js';
 import { TouchControls } from './ui/TouchControls.js';
+import { ActionWheel } from './ui/ActionWheel.js';
 import { Hud } from './ui/Hud.js';
 import { Wake } from './ocean/Wake.js';
 import { SoundScape, engineOf } from './audio/SoundScape.js';
@@ -290,7 +291,9 @@ export class App {
 		const scene = this.scene = new THREE.Scene();
 
 		this.input = new Input( renderer.domElement, { portal } );
-		this.touch = new TouchControls( this.input );
+		// (the actions wheel: everything that isn't under the thumb on a touch screen, Q / Start elsewhere)
+		this.wheel = new ActionWheel( this.input );
+		this.touch = new TouchControls( this.input, { wheel: this.wheel } );
 		if ( portal.viewport.touch ) this.touch.show( true );
 		this.hud = new Hud();
 		renderer.domElement.addEventListener( 'click', () => this.input.requestLock() );
@@ -831,6 +834,8 @@ export class App {
 		// ---- player / boat (boat physics first so the cameras follow this frame's pose)
 		const input = this.input;
 		input.update( dt );
+		// (the wheel before anyone else reads the keys: Q, and while it's open the view's turns are its)
+		this.wheel.update( dt, this.player, this.game );
 		// L: the flashlight; at the helm, the boat's searchlight
 		if ( input.hit( 'KeyL' ) ) {
 

@@ -50,8 +50,9 @@ for ( const d of [ 'keyboard', 'touch', 'gamepad' ] ) {
 
 	for ( const id of [ 'kayak', 'marta', 'caught', 'full', 'stand', 'camp', 'chart', 'edge', 'goRound', 'hurricane', 'shoveOff', 'list' ] ) {
 
+		// ((after v2) the touch screen's actions wheel is the controls', not a helm's)
 		const t = tipFor( id, d, fresh );
-		ok( typeof t === 'string' && t.length > 20 && ! helm.test( t ), `${ d }, ${ id }: nothing of a helm or fuel in a kayak` );
+		ok( typeof t === 'string' && t.length > 20 && ! helm.test( t.replace( /actions wheel/g, '' ) ), `${ d }, ${ id }: nothing of a helm or fuel in a kayak` );
 
 	}
 
