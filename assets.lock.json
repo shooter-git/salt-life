@@ -1263,6 +1263,26 @@
 			"title": "Boat pictures, rendered by tools/boat-pictures.mjs"
 		},
 		{
+			"path": "public/boats/moored/console.bin",
+			"license": "own",
+			"title": "Moored boats, baked by tools/moored-bake.mjs from their models"
+		},
+		{
+			"path": "public/boats/moored/kayak.bin",
+			"license": "own",
+			"title": "Moored boats, baked by tools/moored-bake.mjs from their models"
+		},
+		{
+			"path": "public/boats/moored/lobster.bin",
+			"license": "own",
+			"title": "Moored boats, baked by tools/moored-bake.mjs from their models"
+		},
+		{
+			"path": "public/boats/moored/sportfisher.bin",
+			"license": "own",
+			"title": "Moored boats, baked by tools/moored-bake.mjs from their models"
+		},
+		{
 			"path": "public/boats/sportfisher.webp",
 			"license": "own",
 			"title": "Boat pictures, rendered by tools/boat-pictures.mjs"

@@ -9,6 +9,7 @@ import { useGroundBounce } from '../../../materials/GroundBounce.js';
 export const SURFACE = { plain: 0, nonSkid: 1, topsides: 2, bottom: 3, mat: 4 };
 
 const BOTTOM = new Color( 0x1c2c44 ).convertSRGBToLinear(); // (her antifouling, blue as a boat kept in clear water's is)
+const NAVY = 0x234a75; // (her topsides as she comes, as the Regulator's in the running shots)
 
 const DECK_BOUNCE = new Color( 0.44, 0.44, 0.43 ); // (white gelcoat throwing it back: no sand's colour in it)
 
@@ -34,7 +35,7 @@ export class ConsoleMaterials extends BoatMaterials {
 
 	createHull() {
 
-		this.paint = { value: new Color( 0x234a75 ).convertSRGBToLinear() }; // (navy, as the Regulator's in the running shots)
+		this.paint = { value: new Color( NAVY ).convertSRGBToLinear() };
 		const m = withAux( new MeshStandardMaterial( { roughness: 0.3, metalness: 0, side: 2 } ), { fragment: /* glsl */`
 	float pat = vAux.z;
 	float surfRough = -1.0;
@@ -89,9 +90,10 @@ export class ConsoleMaterials extends BoatMaterials {
 
 	}
 
+	// (null: as she came. ((M16) it was black: setHex( null ))
 	setPaint( hex ) {
 
-		this.paint.value.setHex( hex ).convertSRGBToLinear();
+		this.paint.value.setHex( hex ?? NAVY ).convertSRGBToLinear();
 
 	}
 

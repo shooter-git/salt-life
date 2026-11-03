@@ -85,7 +85,9 @@ She bills every 30th day from the day you first play, at most 3 months at once (
 - **Sportfisher:** alongside the pier head's seaward face, bow east. It's the only 15 m of edge the pier has, with 4.5 m of water.
 - **Kayak:** on the sand. Her berth is the water's edge on the open sand 11 m west of the pier, at x 44, z -38, and she lies up the sand from there, at an angle to the water (the kayak stream's `atHome`; `ashoreOf` for what's drawn of her). It was x 59.5, beside the pier, until a new game's view down the boardwalk turned out not to show her (barrels hid her: [opening.md](opening.md), The start). Nobody ties a kayak to a pier.
 
-Only the boat you're in is built. Each other you own is drawn by `fleet/MooredBoats.js` from `fleet/MooredModels.js`: a few hundred triangles at her real size and shape, her paint in its vertices, showing what's fitted (T-top, twins, tower, outriggers, chair), riding the waves. Made after the start, so never in the loading frame. A box keeps you and the boat you're in off each.
+Only the boat you're in is built. Each other you own is drawn by `fleet/MooredBoats.js`: near, as she looks, her own model baked to a few thousand triangles by `tools/moored-bake.mjs` (`fleet/MooredLooks.js` reads `public/boats/moored/<id>.bin`, fetched once she's yours and shown); further off, a stand-in from `fleet/MooredModels.js`, a few hundred triangles at her real size and shape. Both show her paint and what's fitted (T-top, twins, ladder, tank rack, tower, outriggers, chair, the kayak's crate, puck and trolley), riding the water as it's drawn, the shore's swell and all. Made after the start, so never in the loading frame. A box keeps you and the boat you're in off each.
+
+The stand-ins looked like generic models beside the real boat they turned into when taken out (2026-11-03), so the bake. Holding a real model costs 4.5 to 7 MB of script memory each on low, and 15 to 20 MB of garbage to build; a baked one is its file (35 to 134 KB) and its geometry, let go once it's on the GPU.
 
 Beside one at her berth, E takes her out, saying what it'd cost to fetch the other. `FleetDesk.takeOut` calls `App.setBoat` and charges the tow if the one you were in was out.
 
@@ -114,6 +116,8 @@ Others see both: her paint goes in the pose with what's fitted on her (`f`), and
 ## What it costs
 
 Worst case on low, three boats drawn at once (you own all four and you're in the kayak): 1,518 triangles and about 160 KB of geometry, three draw calls, one more once she's named, one each for those on blocks during a hurricane. The pictures are 26 KB on disk, from the real models ([opening.md](opening.md), Budget). Nothing's built before ready: the moored boats wait for the start, so they're not in the first compile.
+
+As they look (2026-11-03): a boat's look in place of her stand-in, in a low frame from the pier, as she comes: the kayak 720 triangles more, the console 1,753, the lobster boat 3,102, the sportfisher 3,173; on high about three times that, with her shadows. Still one draw each. On low they're stand-ins past 45 m (`MooredBoats.NEAR`), as the lobster boat's fittings are on her cradle, so the village after a hurricane, the yard's boats in sight from the path, is as it was. The four files are 379 KB of the download, each fetched only once she's yours and shown. The complete check on a clean copy, twice on the CPU at a load of 20 to 35 (the second with them riding the shore's swell): ready both times; draw calls 65 and 75 of 150, triangles 241,871 and 286,859 of 300,000 (282k to 298k before), script memory 146.1 and 148.8 of 150 MB (136.8 to 149.1 before), texture memory 70.1 and 72.1 of 128 MB, graphics memory 98.3 and 107.8 of 256 MB, 14 of 16 sounds, 6.9 of 10 MB before ready, whole download 78.1 of 80 MB. By the end the checks own the kayak and the sportfisher (`CheckSpots`), the kayak on the sand of the beach they play on.
 
 ## Where it joins the rest
 
