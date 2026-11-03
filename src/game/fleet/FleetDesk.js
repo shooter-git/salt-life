@@ -2,7 +2,7 @@ import { stormWear, STORM_FROM } from '../Hull.js';
 import { YARD, yardPose } from '../../world/village/StormPlaces.js';
 import { FLEET, paintOf } from './Fleet.js';
 import { berthOf } from './Berths.js';
-import { MooredBoats } from './MooredBoats.js';
+import { MooredBoats, NEAR } from './MooredBoats.js';
 import { SHAPES } from './MooredModels.js';
 import { namePlate } from './BoatName.js';
 
@@ -157,7 +157,7 @@ export class FleetDesk {
 		if ( ! app._started ) return;
 		if ( ! this.moored ) {
 
-			this.moored = new MooredBoats( { scene: app.scene, waves: app.waves, colliders: app.colliders, terrain: app.terrainData, shadows: app.tier !== 'low', light: ( o ) => app.lightUp( o ) } );
+			this.moored = new MooredBoats( { scene: app.scene, waves: app.waves, colliders: app.colliders, terrain: app.terrainData, shadows: app.tier !== 'low', near: NEAR[ app.tier ] ?? NEAR.high, light: ( o ) => app.lightUp( o ) } );
 			this._dirty = true;
 
 		}

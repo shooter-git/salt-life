@@ -1,23 +1,32 @@
-import { Mesh, MeshStandardMaterial, Quaternion, Vector3 } from '../../engine/index.js';
+import { DoubleSide, Group, Mesh, MeshStandardMaterial, Quaternion, Vector3 } from '../../engine/index.js';
 import { gearStats } from '../Gear.js';
 import { paintOf } from './Fleet.js';
 import { ashoreOf, berthOf } from './Berths.js';
 import { mooredGeometry, standsGeometry, SHAPES } from './MooredModels.js';
+import { LIFT, lookGeometry, lookSign, readLook } from './MooredLooks.js';
 import { BOATS } from '../../world/boat/Boats.js';
+import { releaseGeometry } from '../../core/ReleaseAfterUpload.js';
+import { G } from '../../core/Globals.js';
 
-// (M16) The boats you own and aren't in, lying at their berths or on their blocks in Marta's yard, drawn lightly
-// (MooredModels.js): a mesh each, one material, riding the waves. And what keeps you and the boat you're in off them
-// (a box each, solid while she's there). Made after the start, only what you own, and kept up by sync( state ).
+// (M16) The boats you own and aren't in, lying at their berths or on their blocks in Marta's yard, drawn lightly: near,
+// as she looks (her own model baked small, MooredLooks.js, loaded once she's yours and there); further off, and until
+// that's come, a stand-in of her size and colours (MooredModels.js). A mesh each, one program, riding the waves. And
+// what keeps you and the boat you're in off them (a box each, solid while she's there). Made after the start, only what
+// you own, and kept up by sync( state ).
 //
 //   moored.sync( state, spotOf )     spotOf( id ) -> { position, heading }: where she sits hauled out
 //   moored.update( dt, camera )      moored.near( x, y, z ) -> the id of one you're beside, afloat, or null
 const SEEN = 700; // m (they're small things past this)
+// m: how near she's drawn as she looks, by the device's tier. On a phone the village after a hurricane, the yard's boats
+// in sight from the path, is a frame's most triangles: there it's her stand-in
+export const NEAR = { low: 45, mid: 160, high: SEEN };
 const FILL = 8;
+const LOOKS = ( ( import.meta.env && import.meta.env.BASE_URL ) || '/' ) + 'boats/moored/';
 const _up = new Vector3( 0, 1, 0 ), _side = new Vector3( 1, 0, 0 ), _n = new Vector3(), _q = new Quaternion(), _yaw = new Quaternion();
 
 export class MooredBoats {
 
-	constructor( { scene, waves, colliders, terrain, shadows = false, light = () => {} } ) {
+	constructor( { scene, waves, colliders, terrain, shadows = false, light = () => {}, near = NEAR.high } ) {
 
 		this.scene = scene;
 		this.waves = waves;
@@ -25,13 +34,36 @@ export class MooredBoats {
 		this.terrain = terrain;
 		this.shadows = shadows;
 		this.light = light;
-		this.material = new MeshStandardMaterial( { vertexColors: true, roughness: 0.42, metalness: 0 } );
-		this.material.name = 'mooredBoat';
+		this.nearBy = near;
+		// (two-sided: what's seen of a surface of hers from either side is baked once. And a look whose model lifts her shade by
+		// day has her own, the same program: MooredLooks' LIFT)
+		const material = ( lift ) => {
+
+			const m = new MeshStandardMaterial( { vertexColors: true, roughness: 0.42, metalness: 0, side: DoubleSide } );
+			m.name = 'mooredBoat';
+			const u = { value: lift };
+			m.onBeforeCompile = ( shader ) => {
+
+				shader.uniforms.mooredLift = u;
+				shader.uniforms.mooredNight = G.night;
+				shader.fragmentShader = shader.fragmentShader
+					.replace( '#include <common>', '#include <common>\nuniform float mooredLift;\nuniform float mooredNight;' )
+					.replace( '#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * mooredLift * ( 1.0 - 0.9 * mooredNight );' );
+
+			};
+
+			m.customProgramCacheKey = () => 'mooredBoat';
+			return m;
+
+		};
+
+		this.material = material( 0 );
+		this.lifted = {};
+		for ( const [ id, lift ] of Object.entries( LIFT ) ) this.lifted[ id ] = material( lift );
 		// (their faces out of the sun: the world's shade is near black, and white paint isn't. The scene's environment, FILL
 		// times over, as the wreck and the signposts have it)
-		this._fill = ( renderer, scene ) => {
+		this._fill = ( renderer, scene, camera, geometry, m ) => {
 
-			const m = this.material;
 			if ( m.envMap !== scene.environment ) {
 
 				if ( ! m.envMap !== ! scene.environment ) m.needsUpdate = true;
@@ -42,7 +74,65 @@ export class MooredBoats {
 			m.envMapIntensity = scene.environmentIntensity * FILL;
 
 		};
-		this.boats = {}; // id -> { mesh, sign, hauled, box, stands, standsSign }
+		this.boats = {}; // id -> { mesh: her group, far: the stand-in, near: as she looks, sign, hauled, box, stands }
+		this.looks = {}; // id -> the file, read (or a promise of it, or null: it didn't come)
+
+	}
+
+	// her look's file: fetched once she's shown, and kept (it's small) for her paint and her fittings to change
+	_look( id ) {
+
+		if ( id in this.looks ) return;
+		this.looks[ id ] = fetch( `${ LOOKS }${ id }.bin` ).then( ( r ) => {
+
+			if ( ! r.ok ) throw new Error( `${ r.status }` );
+			return r.arrayBuffer();
+
+		} ).then( ( b ) => {
+
+			this.looks[ id ] = readLook( b );
+			const E = this.boats[ id ];
+			if ( E ) this._dress( E );
+
+		} ).catch( ( e ) => {
+
+			this.looks[ id ] = null; // (her stand-in, then)
+			console.warn( `Moored ${ id }: ${ e.message }` );
+
+		} );
+
+	}
+
+	// a mesh of hers in her group
+	_part( E, geometry, name, material = this.material ) {
+
+		const m = new Mesh( geometry, material );
+		m.name = name;
+		m.onBeforeRender = this._fill;
+		m.castShadow = this.shadows;
+		m.receiveShadow = this.shadows;
+		releaseGeometry( geometry );
+		E.mesh.add( m );
+		return m;
+
+	}
+
+	// her look, as she's painted and fitted, once it's here
+	_dress( E ) {
+
+		const look = this.looks[ E.id ];
+		if ( ! E.mesh || ! look || look instanceof Promise || E.dressed === E.sign ) return;
+		if ( E.near ) {
+
+			E.near.removeFromParent();
+			E.near.geometry.dispose();
+
+		}
+
+		E.dressed = E.sign;
+		E.near = this._part( E, lookGeometry( look, { paint: E.paint, stats: E.stats } ), `moored-${ E.id }-look`, this.lifted[ E.id ] );
+		this.light( E.mesh );
+		E.close = null;
 
 	}
 
@@ -60,7 +150,7 @@ export class MooredBoats {
 		const S = SHAPES[ id ], P = berthOf( id ), rest = P.ashore ? ashoreOf( id, this.terrain, S.draft ) : null, at = rest ? rest.position : P.position;
 		const half = new Vector3( S.beam / 2, 1.4, S.length / 2 );
 		return this.boats[ id ] = {
-			id, mesh: null, sign: null, hauled: false, spot: null, stands: null, tilt: new Quaternion(), rest,
+			id, mesh: null, far: null, near: null, sign: null, dressed: null, close: null, paint: null, stats: null, hauled: false, spot: null, stands: null, tilt: new Quaternion(), rest,
 			box: this._box( 'mooredBoat', new Vector3( at.x, at.y + 0.4, at.z ), half, P.heading ),
 			yard: null,
 		};
@@ -79,27 +169,43 @@ export class MooredBoats {
 			const shown = own && ! you;
 			// (what's fitted on her shows: rebuilt only as that changes)
 			const stats = gearStats( state.upgrades, id ), paint = own && rec.paint ? paintOf( rec.paint ).hex : null;
-			const sign = shown ? [ paint, stats.tTop, stats.twin, stats.tower, stats.outriggers, stats.chair, stats.holdKg ].join() : null;
+			const sign = shown ? [ paint, stats.tTop, stats.twin, stats.tower, stats.outriggers, stats.chair, stats.holdKg, lookSign( id, stats ) ].join() : null;
 			if ( sign !== E.sign ) {
 
-				if ( E.mesh ) {
+				if ( E.far ) {
 
+					E.far.removeFromParent();
+					E.far.geometry.dispose();
+					E.far = null;
+
+				}
+
+				if ( ! shown && E.mesh ) {
+
+					if ( E.near ) E.near.geometry.dispose();
 					this.scene.remove( E.mesh );
-					E.mesh.geometry.dispose();
-					E.mesh = null;
+					E.mesh = E.near = E.dressed = null;
 
 				}
 
 				E.sign = sign;
+				E.paint = paint;
+				E.stats = stats;
 				if ( shown ) {
 
-					E.mesh = new Mesh( mooredGeometry( id, { paint, stats } ), this.material );
-					E.mesh.name = `moored-${ id }`;
-					E.mesh.onBeforeRender = this._fill;
-					E.mesh.castShadow = this.shadows;
-					E.mesh.receiveShadow = this.shadows;
-					this.scene.add( E.mesh );
+					if ( ! E.mesh ) {
+
+						E.mesh = new Group();
+						E.mesh.name = `moored-${ id }`;
+						this.scene.add( E.mesh );
+
+					}
+
+					E.far = this._part( E, mooredGeometry( id, { paint, stats } ), `moored-${ id }-standIn` );
+					E.close = null;
 					this.light( E.mesh );
+					this._look( id );
+					this._dress( E );
 
 				}
 
@@ -159,6 +265,16 @@ export class MooredBoats {
 
 			const m = E.mesh;
 			if ( ! m ) continue;
+			// (near, as she looks; a little further before she's the stand-in again, so she doesn't flicker at the edge)
+			const d = Math.hypot( m.position.x - cam.x, m.position.z - cam.z ), close = !! E.near && d < this.nearBy * ( E.close ? 1.1 : 1 );
+			if ( close !== E.close ) {
+
+				E.close = close;
+				E.far.visible = ! close;
+				if ( E.near ) E.near.visible = close;
+
+			}
+
 			if ( E.spot || E.rest ) {
 
 				m.visible = true;

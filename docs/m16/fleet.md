@@ -85,7 +85,9 @@ She bills every 30th day from the day you first play, at most 3 months at once (
 - **Sportfisher:** alongside the pier head's seaward face, bow east. It's the only 15 m of edge the pier has, with 4.5 m of water.
 - **Kayak:** on the sand. Her berth is the water's edge on the open sand 11 m west of the pier, at x 44, z -38, and she lies up the sand from there, at an angle to the water (the kayak stream's `atHome`; `ashoreOf` for what's drawn of her). It was x 59.5, beside the pier, until a new game's view down the boardwalk turned out not to show her (barrels hid her: [opening.md](opening.md), The start). Nobody ties a kayak to a pier.
 
-Only the boat you're in is built. Each other you own is drawn by `fleet/MooredBoats.js` from `fleet/MooredModels.js`: a few hundred triangles at her real size and shape, her paint in its vertices, showing what's fitted (T-top, twins, tower, outriggers, chair), riding the waves. Made after the start, so never in the loading frame. A box keeps you and the boat you're in off each.
+Only the boat you're in is built. Each other you own is drawn by `fleet/MooredBoats.js`: near, as she looks, her own model baked to a few thousand triangles by `tools/moored-bake.mjs` (`fleet/MooredLooks.js` reads `public/boats/moored/<id>.bin`, fetched once she's yours and shown); further off, a stand-in from `fleet/MooredModels.js`, a few hundred triangles at her real size and shape. Both show her paint and what's fitted (T-top, twins, ladder, tank rack, tower, outriggers, chair, the kayak's crate, puck and trolley), riding the waves. Made after the start, so never in the loading frame. A box keeps you and the boat you're in off each.
+
+The stand-ins looked like generic models beside the real boat they turned into when taken out (2026-11-03), so the bake. Holding a real model costs 4.5 to 7 MB of script memory each on low, and 15 to 20 MB of garbage to build; a baked one is its file (35 to 134 KB) and its geometry, let go once it's on the GPU.
 
 Beside one at her berth, E takes her out, saying what it'd cost to fetch the other. `FleetDesk.takeOut` calls `App.setBoat` and charges the tow if the one you were in was out.
 
