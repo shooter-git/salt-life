@@ -7,6 +7,7 @@ import { edgeAt } from './Weather.js';
 import { LEFT, RIGHT, UP, DOWN } from '../core/Glyphs.js';
 import { fuelOf } from './Gear.js';
 import { FLEET } from './fleet/Fleet.js';
+import { iconSvg } from '../ui/ActionIcons.js';
 
 // First-play guide:
 //  - an intro (3 cards) the first time the game starts, after the start overlay: the goal, the fishing
@@ -68,9 +69,20 @@ const CSS = /* css */`
 	transition: opacity 360ms var(--tw-ease), transform 480ms var(--tw-ease), visibility 0s linear 480ms, right var(--tw-slow) var(--tw-ease); }
 .tw-root[data-panel='open'] .gm-coach { right: calc(var(--tw-panel-w) + 2 * var(--tw-3)); }
 .gm-coach.is-on { opacity: 1; transform: none; visibility: visible; transition: opacity 360ms var(--tw-ease), transform 480ms var(--tw-ease), visibility 0s, right var(--tw-slow) var(--tw-ease); }
+/* (a tap or a click on it puts it away: its cross says so) */
+.gm-coach.is-on { pointer-events: auto; cursor: pointer; touch-action: manipulation; }
+.gm-coach-x { position: absolute; top: calc(8 * var(--tw-u)); right: calc(10 * var(--tw-u)); display: grid; place-items: center; color: var(--tw-ink-3); }
+.gm-coach-x svg { width: calc(14 * var(--tw-u)); height: calc(14 * var(--tw-u)); }
+.gm-coach:hover .gm-coach-x { color: var(--tw-ink); }
 .gm-coach-eyebrow { display: block; margin-bottom: 3px; font-size: var(--tw-fs-xs); font-weight: 600; letter-spacing: 0.2em; text-transform: uppercase; color: var(--tw-aqua); }
 .gm-coach b { color: var(--tw-ink); font-weight: 600; }
 .gm-coach kbd { font: 600 var(--tw-fs-xs) var(--tw-mono); color: var(--tw-ink); padding: 0 calc(5 * var(--tw-u)); border-radius: calc(4 * var(--tw-u)); border: 1px solid var(--tw-line-2); background: var(--tw-fill); }
+/* (touch: a button's picture for its key, and in the words) */
+.gm-guide-row kbd.gm-kico { padding: 1px calc(4 * var(--tw-u)); }
+.gm-kico svg { display: block; width: calc(16 * var(--tw-u)); height: calc(16 * var(--tw-u)); }
+.gm-pic { display: inline-flex; align-items: center; gap: 2px; vertical-align: -0.22em; white-space: nowrap; }
+.gm-pic svg { width: 1.2em; height: 1.2em; }
+.gm-guide .ai-badge, .gm-coach .ai-badge { fill: #18232c; }
 
 .tw-help-guide { display: flex; align-items: center; gap: var(--tw-4); margin-top: var(--tw-4); padding-top: var(--tw-4); border-top: 1px solid var(--tw-line);
 	color: var(--tw-ink-2); font-size: var(--tw-fs-sm); line-height: 1.5; }
@@ -91,6 +103,10 @@ const CSS = /* css */`
 `;
 
 const k = ( ...keys ) => keys.map( ( x ) => `<kbd>${ x }</kbd>` ).join( '' );
+// (touch: the buttons' pictures, ui/ActionIcons.js, as a key and in the words)
+const ico = ( ...ids ) => ids.map( ( id ) => `<kbd class="gm-kico">${ iconSvg( id ) }</kbd>` ).join( '' );
+const pic = ( id, word = '' ) => `<b class="gm-pic">${ iconSvg( id ) }${ word }</b>`;
+const WHEEL = `the actions wheel (${ pic( 'wheel' ) })`;
 const row = ( keys, text ) => `<div class="gm-guide-row"><span class="k">${ keys }</span><span>${ text }</span></div>`;
 
 // the intro's cards and the tips, worded for the input in use (Input.lastDevice: 'keyboard' | 'touch' |
@@ -118,11 +134,11 @@ const FISHING = {
 		[ k( 'RMB' ), 'Reel an empty line back in' ], [ k( 'N' ), 'The cast net, for mullet and bait. <kbd>B</kbd> picks the bait for the hook' ],
 		[ k( 'C' ), 'The rig, with the rod out: a float or a sinker, and aboard a trolled line, a kite, a deep drop. <kbd>X</kbd> ties on a leader you own' ],
 		[ k( 'F', 'G' ), 'The left and right mouse buttons, from the keyboard' ], [ k( 'I' ), 'Your cooler, fish log, island records and islander' ] ],
-	touch: [ [ k( 'Rod' ), 'Take out the rod (by the water or on the boat)' ], [ k( 'Hold', 'Cast' ), 'Wind up, let go to cast. Hold longer to cast farther' ],
-		[ k( 'Strike' ), 'When the bobber is <b>pulled under</b> (dips are only nibbles)' ], [ k( 'Hold', 'Reel' ), 'Reel in. <b>Let go when the tension turns red</b>, or the line snaps' ],
-		[ k( 'Reel in' ), 'Reel an empty line back in' ], [ k( 'Cast net' ), 'For mullet and bait fish. <b>Bait</b> picks what goes on the hook' ],
-		[ k( 'Rig' ), 'With the rod out: a float or a sinker, and aboard a trolled line, a kite, a deep drop. <b>Leader</b> ties on one you own' ],
-		[ k( 'Cooler' ), 'Your cooler, fish log, island records and islander' ] ],
+	touch: [ [ ico( 'rod' ), 'Take out the rod: the gold button by the water, or the actions wheel' ], [ k( 'Hold' ) + ico( 'cast' ), 'The big button, <b>Cast</b>: wind up, let go to cast. Hold longer to cast farther' ],
+		[ ico( 'strike' ), '<b>Strike</b> when the bobber is <b>pulled under</b> (dips are only nibbles)' ], [ k( 'Hold' ) + ico( 'reel' ), '<b>Reel</b>. <b>Let go when the tension turns red</b>, or the line snaps' ],
+		[ ico( 'reelin' ), 'Reel an empty line back in' ], [ ico( 'net' ), `The cast net, for mullet and bait fish. ${ pic( 'bait' ) } picks what goes on the hook` ],
+		[ ico( 'rig' ), `With the rod out: a float or a sinker, and aboard a trolled line, a kite, a deep drop. ${ pic( 'leader' ) } ties on one you own` ],
+		[ ico( 'wheel' ), `The actions wheel: tap it for these and the rest, your ${ pic( 'cooler' ) } cooler, fish log, records and islander` ] ],
 	gamepad: [ [ k( 'X' ), 'Take out the rod (by the water or on the boat)' ], [ k( 'Hold', 'RT' ), 'Wind up, release to cast. Hold longer to cast farther' ],
 		[ k( 'RT' ), 'Strike when the bobber is <b>pulled under</b> (dips are only nibbles)' ], [ k( 'Hold', 'RT' ), 'Reel in. <b>Let go when the tension turns red</b>, or the line snaps' ],
 		[ k( 'LT' ), 'Reel an empty line back in' ], [ k( `D-pad ${ UP }` ), `The cast net, for mullet and bait. <kbd>D-pad ${ LEFT } ${ RIGHT }</kbd> picks the bait for the hook` ],
@@ -135,13 +151,15 @@ const AROUND = {
 		[ k( 'L' ), 'Flashlight (at night). At the helm, the searchlight' ], [ k( 'H' ), 'This guide again. At the helm, hold for the horn' ],
 		[ k( LEFT, RIGHT ), 'At the helm, the radar\'s range' ], [ k( 'R' ), 'At the helm, the radio: the forecast, and Marta\'s tow' ],
 		[ k( 'P' ), 'A mark of your own on your chart, where you are' ],
-		[ k( 'T' ), 'The clock: hold it or rest until later (with others, once everyone agrees)' ] ],
+		[ k( 'T' ), 'The clock: hold it or rest until later (with others, once everyone agrees)' ], [ k( 'Q' ), 'The actions wheel: what you can do here, and the key for each' ] ],
 	touch: [ [ k( 'Left side' ), 'Drag to walk, from wherever your thumb lands' ], [ k( 'Right side' ), 'Drag to look around' ],
-		[ k( 'Gold button' ), 'Board the boat, take the helm, talk to Joe and Marta' ], [ k( 'Torch' ), 'Flashlight, after dusk. At the helm: the searchlight' ],
-		[ k( 'Horn' ), 'At the helm, hold it to sound the horn' ], [ k( 'Radio' ), 'At the helm, the forecast, and Marta\'s tow' ], [ k( 'Time' ), 'Tap the time at the top right to hold the clock or rest until later' ] ],
+		[ k( 'Gold button' ), 'Board the boat, take the helm, talk to Joe and Marta' ], [ ico( 'wheel' ), 'The actions wheel: tap it, then a picture. Or press it, slide to one and let go' ],
+		[ ico( 'torch' ), 'Flashlight, after dusk. At the helm: the searchlight' ],
+		[ ico( 'horn' ), 'At the helm, hold it to sound the horn' ], [ ico( 'radio' ), 'At the helm, the forecast, and Marta\'s tow' ], [ k( 'Time' ), 'Tap the time at the top to hold the clock or rest until later' ] ],
 	gamepad: [ [ k( 'Left stick' ), 'Move, right stick to look' ], [ k( 'B' ), 'Board the boat, take the helm, talk to Joe and Marta' ], [ k( `D-pad ${ DOWN }` ), 'Flashlight. At the helm, the searchlight' ],
 		[ k( `D-pad ${ LEFT } ${ RIGHT }` ), 'At the helm, the radar\'s range' ], [ k( 'X' ), 'At the helm, the radio: the forecast, and Marta\'s tow' ],
-		[ k( 'L3' ), 'At the helm, press and hold the left stick for the horn' ], [ k( 'R3' ), 'The clock: hold it or rest until later' ] ],
+		[ k( 'L3' ), 'At the helm, press and hold the left stick for the horn' ], [ k( 'R3' ), 'The clock: hold it or rest until later' ],
+		[ k( 'Start' ), 'The actions wheel: the right stick to one, <kbd>A</kbd> to do it' ] ],
 };
 
 // (M16) in a kayak: no helm, no radar, no horn, and the seat's own keys (kayak/Seat.js)
@@ -149,11 +167,12 @@ const AROUND_KAYAK = {
 	keyboard: [ [ k( 'W', 'A', 'S', 'D' ), 'Move, mouse to look, <kbd>Shift</kbd> to run' ], [ k( 'E' ), 'Get in the kayak and out of her, talk to Joe and Marta' ],
 		[ k( 'W', 'S' ), 'In her seat, paddle and stop, <kbd>Shift</kbd> harder. <kbd>A</kbd><kbd>D</kbd> turn her' ], [ k( 'R' ), 'In her seat too: the rod' ],
 		[ k( 'L' ), 'Flashlight (at night)' ], [ k( 'H' ), 'This guide again, ashore' ], [ k( 'P' ), 'A mark of your own on your chart, where you are' ],
-		[ k( 'T' ), 'The clock: hold it or rest until later (with others, once everyone agrees)' ] ],
+		[ k( 'T' ), 'The clock: hold it or rest until later (with others, once everyone agrees)' ], [ k( 'Q' ), 'The actions wheel: what you can do here, and the key for each' ] ],
 	touch: [ [ k( 'Left side' ), 'Drag to walk or paddle, from wherever your thumb lands. Further is harder' ], [ k( 'Right side' ), 'Drag to look around' ],
-		[ k( 'Gold button' ), 'Get in the kayak and out of her, talk to Joe and Marta' ], [ k( 'Torch' ), 'Flashlight, after dusk' ], [ k( 'Time' ), 'Tap the time at the top right to hold the clock or rest until later' ] ],
+		[ k( 'Gold button' ), 'Get in the kayak and out of her, talk to Joe and Marta' ], [ ico( 'wheel' ), 'The actions wheel: tap it, then a picture. The rod from her seat, your cooler, the camera' ],
+		[ ico( 'torch' ), 'Flashlight, after dusk' ], [ k( 'Time' ), 'Tap the time at the top to hold the clock or rest until later' ] ],
 	gamepad: [ [ k( 'Left stick' ), 'Move or paddle, further is harder. Right stick to look' ], [ k( 'B' ), 'Get in the kayak and out of her, talk to Joe and Marta' ], [ k( `D-pad ${ DOWN }` ), 'Flashlight' ],
-		[ k( 'R3' ), 'The clock: hold it or rest until later' ] ],
+		[ k( 'R3' ), 'The clock: hold it or rest until later' ], [ k( 'Start' ), 'The actions wheel: the right stick to one, <kbd>A</kbd> to do it' ] ],
 };
 
 function cards( device, kayak ) {
@@ -187,8 +206,8 @@ const IN_KAYAK = {
 		caught: 'Into the cooler (<kbd>I</kbd>). Her cooler\'s small, so sell to <b>Joe</b> at the fish stand by the pier: he is on the map. Run her up on the sand and step out with <kbd>E</kbd>.',
 	},
 	touch: {
-		kayak: 'Your <b>kayak</b>. The gold button shoves her off and sits you in her. Drag on the left to paddle, further for harder, and the <b>Rod</b> button fishes from the seat.',
-		caught: 'Into the cooler (the <b>Cooler</b> button). Her cooler\'s small, so sell to <b>Joe</b> at the fish stand by the pier: he is on the map. Run her up on the sand and step out with the gold button.',
+		kayak: `Your <b>kayak</b>. The gold button shoves her off and sits you in her. Drag on the left to paddle, further for harder, and the ${ pic( 'rod', 'rod' ) } in ${ WHEEL } fishes from the seat.`,
+		caught: `Into the cooler (${ pic( 'cooler' ) } in ${ WHEEL }). Her cooler's small, so sell to <b>Joe</b> at the fish stand by the pier: he is on the map. Run her up on the sand and step out with the gold button.`,
 	},
 	gamepad: {
 		kayak: 'Your <b>kayak</b>. <kbd>B</kbd> to shove her off and sit in her. The left stick paddles, further for harder. <kbd>X</kbd> in the seat takes out the rod.',
@@ -228,21 +247,21 @@ const TIPS = {
 		bilge: 'There\'s <b>water in the bilge</b> (the gauge by your money). On deck, <b>hold <kbd>E</kbd></b> to bail it out before it reaches the engine. Marta sells a <b>bilge pump</b>.',
 	},
 	touch: {
-		radio: 'The <b>radio</b> at the helm (the <b>Radio</b> button): the <b>weather</b> for these waters, read out on WX1 while you steer, and <b>Marta</b> on channel 16, who\'ll come and tow you in if you run dry, her fee by the distance.',
-		rodOut: 'Hold <b>Cast</b> to wind up and let go to cast. Try deeper water, around the pier or over the reef.',
+		radio: `The <b>radio</b> at the helm (${ pic( 'radio' ) } in ${ WHEEL }): the <b>weather</b> for these waters, read out on WX1 while you steer, and <b>Marta</b> on channel 16, who'll come and tow you in if you run dry, her fee by the distance.`,
+		rodOut: `Hold ${ pic( 'cast', 'Cast' ) } to wind up and let go to cast. Try deeper water, around the pier or over the reef.`,
 		nibble: 'The bobber is dipping: something is <b>nibbling</b>. Wait until it is <b>pulled under</b>, then tap <b>Strike</b>.',
 		fishOn: '<b>Hold Reel</b> to reel in. When the tension needle nears the <b>red</b>, let go until it settles, then reel again.',
-		caught: 'Into the cooler (the <b>Cooler</b> button). Sell your catch to <b>Joe</b> at the fish stand by the pier: he is on the map.',
+		caught: `Into the cooler (${ pic( 'cooler' ) } in ${ WHEEL }). Sell your catch to <b>Joe</b> at the fish stand by the pier: he is on the map.`,
 		boat: ( s ) => `Your boat. Tap <b>Board boat</b>, then <b>Take the helm</b> at the wheel and drive with the left side. ${ fuelOf( s.boat ).name } is sold by Marta.`,
 		joe: '<b>Joe</b> buys your fish. Tap <b>Talk to Joe</b> to see what he will pay.',
 		marta: ( s ) => `<b>Marta</b> sells ${ toBoatRoom( s ) }. Tap <b>Talk to Marta</b> to see her stock.`,
 		gunOut: 'Tap <b>Dive</b> and <b>fin slowly</b> up to a fish: rush it and it bolts. Put it in the sights and tap <b>Shoot</b>. They tell you what it is, and whether you may take it.',
 		gunLoad: '<b>Hold Load</b> to draw the band back to its notch on the shaft.',
 		spearFight: 'A big one. <b>Hold Pull</b> to pull it in, let go when it runs, until it tires.',
-		breath: 'Your <b>breath</b> is running out (the gauge by your money). <b>Swim up</b> before you black out.',
+		breath: `Your <b>breath</b> is running out (the gauge by your money). Swim up (${ pic( 'swimup' ) }) before you black out.`,
 		netOut: 'Look at the water where you want it and <b>hold Throw</b> to swing it back. Let go <b>as the ring brightens</b> and it spins fully open. Mullet and bait fish school in the shallows, by the pier and round the boat.',
 		netSink: 'Let it <b>sink</b>: the lead line traps what\'s under it as it reaches the bottom. Then <b>hold Close</b> to draw it shut and haul it in.',
-		bait: 'Live bait goes in your <b>bucket</b>. With the rod out, <b>Bait</b> puts it on the hook: bigger fish take it, and sooner. A mullet can be cut up for bait in the <b>Cooler</b>.',
+		bait: `Live bait goes in your <b>bucket</b>. With the rod out, ${ pic( 'bait' ) } in ${ WHEEL } puts it on the hook: bigger fish take it, and sooner. A mullet can be cut up for bait in the cooler (${ pic( 'cooler' ) }).`,
 		bilge: 'There\'s <b>water in the bilge</b> (the gauge by your money). On deck, <b>hold Bail</b> to bail it out before it reaches the engine. Marta sells a <b>bilge pump</b>.',
 	},
 	gamepad: {
@@ -363,9 +382,23 @@ export class Guide {
 		} );
 		ui.root.append( this.el );
 
-		this.coach = h( 'div', 'gm-coach tw-glass', '<span class="gm-coach-eyebrow">Tip</span><span class="gm-coach-text"></span>' );
+		this.coach = h( 'div', 'gm-coach tw-glass', `<span class="gm-coach-x" aria-hidden="true">${ iconSvg( 'close' ) }</span><span class="gm-coach-eyebrow">Tip</span><span class="gm-coach-text"></span>` );
 		this.coachText = this.coach.lastChild;
 		( ui.hud || ui.root ).append( this.coach );
+		// a tap or a click on the tip puts it away (and the next waits a moment, so it isn't taken for the same one)
+		this.coach.addEventListener( 'pointerdown', ( e ) => {
+
+			if ( ! this._current ) return;
+			e.preventDefault();
+			e.stopPropagation();
+			this._hideCoach();
+			this._gap = 1.5;
+
+		} );
+		this._gap = 0;
+		// (where the tip ends: on a touch screen a toast or the first hint goes under it, style.css)
+		this._markCoach = () => document.documentElement.style.setProperty( '--gm-coach-b', `${ Math.ceil( this.coach.offsetTop + this.coach.offsetHeight ) }px` );
+		if ( typeof ResizeObserver !== 'undefined' ) new ResizeObserver( this._markCoach ).observe( this.coach );
 
 		this.open = false;
 		this.step = 0;
@@ -635,12 +668,13 @@ export class Guide {
 
 		// the coach card: one tip at a time, ~7 s each (not over the catch card or a panel)
 		const busy = g.hud && ( g.hud.catchOpen || g.hud.invOpen || g.hud.standOpen );
+		if ( this._gap > 0 ) this._gap -= dt;
 		if ( this._current ) {
 
 			this._coachT -= dt;
 			if ( this._coachT <= 0 || busy ) this._hideCoach();
 
-		} else if ( this._queue.length && ! busy ) {
+		} else if ( this._queue.length && ! busy && this._gap <= 0 ) {
 
 			const id = this._queue.shift();
 			this._current = id;
@@ -648,6 +682,7 @@ export class Guide {
 			this._save();
 			this.coachText.innerHTML = tipFor( id, this.device, this.game.state );
 			this.coach.classList.add( 'is-on' );
+			this._markCoach();
 			this._coachT = Math.max( 7.5, this.coachText.textContent.length / 22 ); // ((M15) longer to read a longer one)
 
 		}

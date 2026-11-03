@@ -468,10 +468,11 @@ const water = ( o ) => habitatAt( { reefDist: 4000, pierDist: 9000, ...o } );
 {
 
 	const src = ( f ) => readFileSync( new URL( f, import.meta.url ), 'utf8' );
-	const touch = src( '../src/ui/TouchControls.js' ), guide = src( '../src/game/Guide.js' );
-	ok( /touch-run" data-key="ShiftLeft"/.test( touch ) && /buttons\.run, helm/.test( touch ), 'a Run button at the helm, with the lines out, that\'s Shift' );
-	ok( /touch-leader" data-key="KeyX"/.test( touch ), 'and a Leader button' );
-	ok( /k\( 'C' \), 'The rig/.test( guide ) && /k\( 'Rig' \)/.test( guide ) && /k\( 'LB' \), 'The rig/.test( guide ), 'the Guide\'s cards say the rig, for each device' );
+	// ((after v2) what the touch buttons and the actions wheel offer is ui/Actions.js's)
+	const actions = src( '../src/ui/Actions.js' ), guide = src( '../src/game/Guide.js' );
+	ok( /run: \{ key: 'ShiftLeft', hold: true \}/.test( actions ) && /o\.run = helm && ! player\.riding && game\?\.rigs\?\.linesOut/.test( actions ), 'a Run button at the helm, with the lines out, that\'s Shift' );
+	ok( /leader: \{ key: 'KeyX' \}/.test( actions ), 'and a Leader button' );
+	ok( /k\( 'C' \), 'The rig/.test( guide ) && /ico\( 'rig' \)/.test( guide ) && /k\( 'LB' \), 'The rig/.test( guide ), 'the Guide\'s cards say the rig, for each device' );
 	ok( UPGRADES.safety === DAYS_TRACKS.safety && /Flares/.test( UPGRADES.safety.levels[ 2 ].label ), 'one safety track, the days out\'s' );
 	ok( Object.keys( UPGRADES ).indexOf( 'safety' ) === Object.keys( UPGRADES ).indexOf( 'diveKit' ) + 1, 'still shown with your gear, after the dive kit' );
 

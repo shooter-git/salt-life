@@ -21,6 +21,15 @@ export class Hud {
 		this.toastEl = el.querySelector( '.hud-toast' );
 		this._hintTime = 0;
 		this._toastTime = 0;
+		// a tap or a click on the hint or a toast puts it away (the tap goes no further: it isn't a look or a step)
+		for ( const [ e, time ] of [ [ this.hint, '_hintTime' ], [ this.toastEl, '_toastTime' ] ] ) e.addEventListener( 'pointerdown', ( ev ) => {
+
+			ev.preventDefault();
+			ev.stopPropagation();
+			e.hidden = true;
+			this[ time ] = 0;
+
+		} );
 
 	}
 
@@ -30,8 +39,8 @@ export class Hud {
 		this.hint.textContent = device === 'touch'
 			? 'Left side to walk · right side to look'
 			: device === 'gamepad'
-				? 'Left stick to walk, right stick to look, A to jump'
-				: 'W A S D to walk, click and move the mouse to look, Space to jump';
+				? 'Left stick to walk, right stick to look, A to jump, Start for actions'
+				: 'W A S D to walk, click and move the mouse to look, Space to jump, Q for actions';
 		this.hint.hidden = false;
 		this._hintTime = 9;
 

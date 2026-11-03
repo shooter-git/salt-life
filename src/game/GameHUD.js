@@ -990,7 +990,7 @@ export class GameHUD {
 			body = item( 'Frozen shrimp', 'never runs out · the little fish take it', on( null ) )
 				+ BAIT_IDS.filter( ( k ) => s.bait[ k ] > 0 ).map( ( k ) => item( BAITS[ k ].name, `${ s.bait[ k ] } in the ${ BAITS[ k ].live ? well : 'cooler' }`, `<span class="gm-btns">${ on( k ) }<button class="gm-mini" data-dump="${ k }">${ BAITS[ k ].live ? 'Let go' : 'Toss' }</button></span>` ) ).join( '' );
 			if ( ! BAIT_IDS.some( ( k ) => s.bait[ k ] > 0 ) ) body += empty( 'Throw the cast net for live bait: silversides, sergeant majors, small grunts and mullet. The big fish come for it.' );
-			hint = `${ s.baitCount } / ${ s.stats.baitMax } in the bucket · ${ d === 'gamepad' ? `D-pad ${ LEFT } ${ RIGHT }` : d === 'touch' ? 'the Bait button' : '<kbd>B</kbd>' } changes it with the rod out`;
+			hint = `${ s.baitCount } / ${ s.stats.baitMax } in the bucket · ${ d === 'gamepad' ? `D-pad ${ LEFT } ${ RIGHT }` : d === 'touch' ? 'Bait, in the actions wheel,' : '<kbd>B</kbd>' } changes it with the rod out`;
 
 		} else if ( tab === 'finds' ) {
 
