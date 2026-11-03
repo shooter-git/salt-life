@@ -217,9 +217,10 @@ html.is-touch .tw-root:has(.gm-panel.is-open) :is(.gm-map, .gm-coach) { visibili
 
 @media (orientation: landscape) {
 	html.is-touch { --gm-map: calc(96 * var(--tw-u)); }
-	/* a tip under the corner menu, at the left (under the map it covered the thumb's buttons); in a fight, under its panel */
-	html.is-touch .gm-coach { top: calc(64px + env(safe-area-inset-top)); bottom: auto; left: var(--gm-l); right: auto;
-		width: min(calc(300 * var(--tw-u)), 42vw, calc(var(--gm-purse-l, 100vw) - var(--gm-l) - var(--tw-3))); }
+	/* a tip under the corner menu, at the left (under the map it covered the thumb's buttons), and under the purse when
+	   that reaches lower (a boat's gauges); in a fight, under its panel */
+	html.is-touch .gm-coach { top: max(calc(64px + env(safe-area-inset-top)), calc(var(--gm-band, 56px) + var(--tw-2))); bottom: auto; left: var(--gm-l); right: auto;
+		width: min(calc(300 * var(--tw-u)), 42vw); }
 	html.is-touch .tw-root:has(.gm-fight.is-on) .gm-coach { top: calc(64px + var(--gm-fight-h, 100px) + var(--tw-2) + env(safe-area-inset-top)); }
 	html.is-touch .gm-fight { top: calc(64px + env(safe-area-inset-top)); bottom: auto; left: var(--gm-l); transform: none; width: min(calc(340 * var(--tw-u)), 46vw); }
 	/* a panel sits between the corner menu (top left, 56 px) and the purse, full height, instead of

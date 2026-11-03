@@ -84,6 +84,8 @@ html.is-touch .hud-toast { width: max-content; white-space: normal; text-wrap: b
 @media (orientation: portrait) {
 	html.is-touch .hud-toast { top: calc(var(--gm-top, 64px) + var(--gm-map, 0px) + 16px); }
 	html.is-touch .hud-hint { top: calc(var(--gm-top, 64px) + var(--gm-map, 0px) + 64px); }
+	/* (the first hint from the left, stopping short of the thumb's buttons: on a short phone it comes down to them) */
+	html.is-touch .hud-hint { left: var(--gm-l); transform: none; text-align: left; max-width: calc(100vw - var(--gm-l) - var(--gm-r) - 100px); }
 	/* (and under a tip where it reaches lower, Guide's --gm-coach-b; under the kayak's compass too, Compass.js) */
 	html.is-touch:has(.gm-coach.is-on) .hud .hud-toast { top: max(calc(var(--gm-top, 64px) + var(--gm-map, 0px) + 16px), calc(var(--gm-coach-b, 0px) + 8px)); }
 	html.is-touch:has(.gm-coach.is-on) .hud .hud-hint { top: max(calc(var(--gm-top, 64px) + var(--gm-map, 0px) + 64px), calc(var(--gm-coach-b, 0px) + 56px)); }
