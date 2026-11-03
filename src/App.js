@@ -626,7 +626,9 @@ export class App {
 		if ( this.cpuGL ) {
 
 			const named = ( ...names ) => scene.children.filter( ( c ) => names.some( ( n ) => c.name === n || c.name.startsWith( n + ':' ) ) );
-			this._late = [ named( 'Rocks' ), named( 'Village' ), named( 'FishStand', 'Chandlery', 'StallFish', 'Vendor' ), named( 'LobsterBoat' ) ];
+			// ((v2.1.2) the boat you start in, whichever: only the lobster boat was held, by her name, and since M16 a new game
+			// starts in the kayak, whose shaders came into the loading frame)
+			this._late = [ named( 'Rocks' ), named( 'Village' ), named( 'FishStand', 'Chandlery', 'StallFish', 'Vendor' ), scene.children.filter( ( c ) => c === this.boat.group ) ];
 			for ( const group of this._late ) for ( const o of group ) o.visible = false;
 			// the rod, the speargun and the lobster gear wait out of the scene, not just out of sight: three's
 			// compile() makes the shaders of what's hidden too, and theirs are six of the island's biggest
