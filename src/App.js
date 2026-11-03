@@ -626,9 +626,12 @@ export class App {
 		if ( this.cpuGL ) {
 
 			const named = ( ...names ) => scene.children.filter( ( c ) => names.some( ( n ) => c.name === n || c.name.startsWith( n + ':' ) ) );
-			// ((v2.1.2) the boat you start in, whichever: only the lobster boat was held, by her name, and since M16 a new game
-			// starts in the kayak, whose shaders came into the loading frame)
-			this._late = [ named( 'Rocks' ), named( 'Village' ), named( 'FishStand', 'Chandlery', 'StallFish', 'Vendor' ), scene.children.filter( ( c ) => c === this.boat.group ) ];
+			this._late = [ named( 'Rocks' ), named( 'Village' ), named( 'FishStand', 'Chandlery', 'StallFish', 'Vendor' ) ];
+			// ((v2.1.2) the boat you start in waits out of the scene as the rod does, her shaders made after the start
+			// (prepareLate), whichever she is. Only the lobster boat was held, by her name, with the island's parts, and since
+			// M16 a new game starts in the kayak, whose shaders came into the loading frame: past All the Spaces' 45 s)
+			this._heldBoat = [ [ this.boat.group, this.boat.group.parent ] ];
+			this.boat.group.removeFromParent();
 			for ( const group of this._late ) for ( const o of group ) o.visible = false;
 			// the rod, the speargun and the lobster gear wait out of the scene, not just out of sight: three's
 			// compile() makes the shaders of what's hidden too, and theirs are six of the island's biggest
@@ -1260,7 +1263,10 @@ export class App {
 
 		}
 
-		for ( const [ m, parent ] of [ ...( this._heldFish || [] ), ...( this._heldNet || [] ), ...( this._heldWeather || [] ), ...( this._heldLandmarks || [] ) ] ) {
+		// ((v2.1.2) the boat you started in, if she's still the one you're in: one taken out meanwhile is in the scene already)
+		const boat = ( this._heldBoat || [] ).filter( ( [ m ] ) => m === this.boat.group );
+		this._heldBoat = null;
+		for ( const [ m, parent ] of [ ...boat, ...( this._heldFish || [] ), ...( this._heldNet || [] ), ...( this._heldWeather || [] ), ...( this._heldLandmarks || [] ) ] ) {
 
 			roots.push( m );
 			show.push( () => parent.add( m ) );
