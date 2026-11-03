@@ -157,7 +157,7 @@ export class FleetDesk {
 		if ( ! app._started ) return;
 		if ( ! this.moored ) {
 
-			this.moored = new MooredBoats( { scene: app.scene, waves: app.waves, colliders: app.colliders, terrain: app.terrainData, shadows: app.tier !== 'low', near: NEAR[ app.tier ] ?? NEAR.high, light: ( o ) => app.lightUp( o ) } );
+			this.moored = new MooredBoats( { scene: app.scene, waves: app.waves, water: app.query, colliders: app.colliders, terrain: app.terrainData, shadows: app.tier !== 'low', near: NEAR[ app.tier ] ?? NEAR.high, light: ( o ) => app.lightUp( o ) } );
 			this._dirty = true;
 
 		}

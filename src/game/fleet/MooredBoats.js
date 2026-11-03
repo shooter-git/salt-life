@@ -26,10 +26,11 @@ const _up = new Vector3( 0, 1, 0 ), _side = new Vector3( 1, 0, 0 ), _n = new Vec
 
 export class MooredBoats {
 
-	constructor( { scene, waves, colliders, terrain, shadows = false, light = () => {}, near = NEAR.high } ) {
+	constructor( { scene, waves, water = null, colliders, terrain, shadows = false, light = () => {}, near = NEAR.high } ) {
 
 		this.scene = scene;
-		this.waves = waves;
+		// (the water as it's drawn, WaterQuery's: the open sea's waves and the shore's swell on them, as the boat you're in rides)
+		this.waves = water || waves;
 		this.colliders = colliders;
 		this.terrain = terrain;
 		this.shadows = shadows;
@@ -260,7 +261,7 @@ export class MooredBoats {
 
 	update( dt, camera ) {
 
-		const waves = this.waves, cam = camera.position, k = 1 - Math.exp( - dt * 2.5 );
+		const waves = this.waves, t = G.time.value, cam = camera.position, k = 1 - Math.exp( - dt * 2.5 );
 		for ( const E of Object.values( this.boats ) ) {
 
 			const m = E.mesh;
@@ -287,8 +288,8 @@ export class MooredBoats {
 			if ( ! m.visible ) continue;
 			// (riding them as a boat her size does: their height over her length and beam, her slope across it)
 			const c = Math.cos( P.heading ), s = Math.sin( P.heading ), lx = S.length * 0.4, bx = S.beam * 0.45;
-			const fore = waves.heightAt( x + s * lx, z + c * lx ), aft = waves.heightAt( x - s * lx, z - c * lx );
-			const port = waves.heightAt( x + c * bx, z - s * bx ), stbd = waves.heightAt( x - c * bx, z + s * bx );
+			const fore = waves.heightAt( x + s * lx, z + c * lx, t ), aft = waves.heightAt( x - s * lx, z - c * lx, t );
+			const port = waves.heightAt( x + c * bx, z - s * bx, t ), stbd = waves.heightAt( x - c * bx, z + s * bx, t );
 			const mean = ( fore + aft + port + stbd ) / 4;
 			_n.set( ( aft - fore ) * s / ( 2 * lx ) + ( stbd - port ) * c / ( 2 * bx ), 1, ( aft - fore ) * c / ( 2 * lx ) - ( stbd - port ) * s / ( 2 * bx ) );
 			_q.setFromUnitVectors( _up, _n.normalize() );
