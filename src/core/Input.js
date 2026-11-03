@@ -42,6 +42,7 @@ export class Input {
 		this.stick = { x: 0, y: 0 }; // ((M16) move's, before noWalk)
 		this.noWalk = false; // (M16) a panel has the walking keys and the stick (ChartMap): none of them reach the player
 		this.touchMove = { x: 0, y: 0 }; // written by the touch joystick
+		this.touchRun = false; // ((v2.1.1) and pushed out past its ring: running, as Shift is)
 		this.wheel = 0;
 		this.mouseDown = false;
 		this.rightDown = false;
@@ -241,7 +242,7 @@ export class Input {
 	down( code ) {
 
 		if ( this.noWalk && WALK.has( code ) ) return false;
-		return this.held( code );
+		return this.held( code ) || ( code === 'ShiftLeft' && this.touchRun );
 
 	}
 

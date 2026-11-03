@@ -151,6 +151,24 @@ html:not(.is-touch) .hud:has(.hud-toast.is-low:not([hidden])) .hud-hint { top: c
 	height: 52px;
 	border-radius: 50%;
 	background: rgba(244, 241, 234, 0.75);
+	transition: background-color 0.12s, box-shadow 0.12s;
+}
+
+/* (v2.1.1) pushed out past its ring: running */
+.touch-stick.is-run { border-color: rgba(242, 198, 109, 0.8); }
+.touch-stick.is-run .touch-knob { background: rgba(242, 198, 109, 0.95); box-shadow: 0 0 14px rgba(242, 198, 109, 0.6); }
+
+/* (v2.1.1) the strip under an iPhone's status bar, solid as Safari's own dark bar was: with the purse at the top, Safari took
+   its frost for the bar. As tall as the bar, so nothing where there isn't one */
+.status-band {
+	position: fixed;
+	top: 0;
+	left: 0;
+	right: 0;
+	height: env(safe-area-inset-top, 0px);
+	background: #1d1c22;
+	pointer-events: none;
+	z-index: 2147483000;
 }
 
 /* under the right thumb (TouchControls): round buttons with pictures, about the big one in the corner. p0 is the big
