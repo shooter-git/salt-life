@@ -117,6 +117,8 @@ Others see both: her paint goes in the pose with what's fitted on her (`f`), and
 
 Worst case on low, three boats drawn at once (you own all four and you're in the kayak): 1,518 triangles and about 160 KB of geometry, three draw calls, one more once she's named, one each for those on blocks during a hurricane. The pictures are 26 KB on disk, from the real models ([opening.md](opening.md), Budget). Nothing's built before ready: the moored boats wait for the start, so they're not in the first compile.
 
+As they look (2026-11-03): a boat's look in place of her stand-in, in a low frame from the pier, as she comes: the kayak 720 triangles more, the console 1,753, the lobster boat 3,102, the sportfisher 3,173; on high about three times that, with her shadows. Still one draw each. On low they're stand-ins past 45 m (`MooredBoats.NEAR`), as the lobster boat's fittings are on her cradle, so the village after a hurricane, the yard's boats in sight from the path, is as it was. The four files are 379 KB of the download, each fetched only once she's yours and shown. The complete check on a clean copy, on the CPU at a load of about 30: ready; draw calls 65 of 150, triangles 241,871 of 300,000, script memory 146.1 of 150 MB, texture memory 70.1 of 128 MB, graphics memory 98.3 of 256 MB, 14 of 16 sounds, 6.9 of 10 MB before ready, whole download 78.1 of 80 MB. By the end the checks own the kayak and the sportfisher (`CheckSpots`), the kayak on the sand of the beach they play on.
+
 ## Where it joins the rest
 
 - A hull's storm wear is `Hull.HULLS`' own figure: `Away.wearRate( w, boat )` and `awayOf`'s `env.boat` read it, and so does a storm while you play. `Seaworthy.ABLE` has no storm figure, so it is counted once.
