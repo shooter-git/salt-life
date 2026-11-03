@@ -727,6 +727,7 @@ export class App {
 		// last, once that loading's garbage is collected (settle), the reef, its fish and the specks;
 		// then, on every device, the whale)
 		const revealed = this._late ? new Promise( ( done ) => this._revealed = done ) : null;
+		this._lateDone = revealed; // ((v2.1.2) a boat taken out meanwhile waits for it: setBoat)
 		this.lateReady();
 		Promise.resolve( revealed ).then( () => this.cpuGL && this.plantsGrow() ).then( () => this.prepareLate() ).then( () => this.checkShaderLimits() ).then( () => this.buildCover() ).then( () => this.rocks.refineOverhangs() ).then( () => this.cpuGL && this.settle( 45000, BEFORE_PEOPLE ) ).then( () => this.loadCharacters() )
 			.then( () => this.cpuGL && this.settle() ).then( () => this.cpuGL && this.lifeAndDebris() ).then( () => this.letGoOfTheBuild() ).then( () => this.cpuGL && this.settle() ).then( () => this.scansArrive() )
@@ -2483,6 +2484,9 @@ export class App {
 	// app.boat, boatCtl.model or boatCtl.handling each time needs nothing. False when you're aboard or she isn't yours
 	async setBoat( id ) {
 
+		// ((v2.1.2) on a CPU's WebGL, not while the boat you started in is still held out of the scene and coming back:
+		// one taken out in her place then, a time in two, kept her fittings drawn at any distance, over low's triangles)
+		if ( this._lateDone ) await this._lateDone;
 		const old = this.boat, p = this.player, st = this.state;
 		if ( old.id === id ) return true;
 		if ( ! st.owns( id ) || p.mode === 'deck' || p.mode === 'boat' || p.riding ) return false;

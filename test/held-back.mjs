@@ -19,5 +19,7 @@ ok( late && /this\.boat\.group/.test( late[ 1 ] ), 'the boat you start in is hel
 ok( late && ! /named\( 'LobsterBoat' \)/.test( late[ 1 ] ), 'not the lobster boat by her name' );
 ok( /for \( const group of this\._late \|\| \[\] \) if \( group\.includes\( old\.group \) \)/.test( app ), 'and a boat taken out in her place takes her place there (setBoat)' );
 
+ok( /if \( this\._lateDone \) await this\._lateDone;/.test( app ) && /this\._lateDone = revealed/.test( app ), 'a boat taken out waits for the held-back parts to be back in the scene' );
+
 console.log( failed ? `${ failed } failed` : 'all passed' );
 process.exit( failed ? 1 : 0 );
