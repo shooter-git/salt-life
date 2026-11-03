@@ -152,7 +152,7 @@ const AROUND = {
 		[ k( LEFT, RIGHT ), 'At the helm, the radar\'s range' ], [ k( 'R' ), 'At the helm, the radio: the forecast, and Marta\'s tow' ],
 		[ k( 'P' ), 'A mark of your own on your chart, where you are' ],
 		[ k( 'T' ), 'The clock: hold it or rest until later (with others, once everyone agrees)' ], [ k( 'Q' ), 'The actions wheel: what you can do here, and the key for each' ] ],
-	touch: [ [ k( 'Left side' ), 'Drag to walk, from wherever your thumb lands' ], [ k( 'Right side' ), 'Drag to look around' ],
+	touch: [ [ k( 'Left side' ), 'Drag to walk, from wherever your thumb lands; push out past the ring to run' ], [ k( 'Right side' ), 'Drag to look around' ],
 		[ k( 'Gold button' ), 'Board the boat, take the helm, talk to Joe and Marta' ], [ ico( 'wheel' ), 'The actions wheel: tap it, then a picture. Or press it, slide to one and let go' ],
 		[ ico( 'torch' ), 'Flashlight, after dusk. At the helm: the searchlight' ],
 		[ ico( 'horn' ), 'At the helm, hold it to sound the horn' ], [ ico( 'radio' ), 'At the helm, the forecast, and Marta\'s tow' ], [ k( 'Time' ), 'Tap the time at the top to hold the clock or rest until later' ] ],

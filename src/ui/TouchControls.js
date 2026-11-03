@@ -11,6 +11,7 @@ import { iconSvg, iconFor, promptIcon } from './ActionIcons.js';
 // is in use; mouse and keyboard players never see them.
 
 const STICK = 56; // joystick travel (px)
+const RUN_PAST = 1.35; // ((v2.1.1) of it: a thumb pushed out past the ring runs, as Shift does)
 const LOOK_SPEED = 1.3; // look pixels per dragged pixel
 // the thumb's buttons, and the slots round the big one they can take: p0 the big one in the corner, p1 left of it,
 // p2 up and left, p3 above (style.css)
@@ -68,7 +69,9 @@ export class TouchControls {
 
 			if ( e.pointerId !== movePointer ) return;
 			let dx = e.clientX - cx, dy = e.clientY - cy;
-			const d = Math.hypot( dx, dy );
+			const d = Math.hypot( dx, dy ), run = d > STICK * RUN_PAST;
+			if ( run !== this.input.touchRun ) this.stick.classList.toggle( 'is-run', run );
+			this.input.touchRun = run;
 			if ( d > STICK ) {
 
 				dx *= STICK / d;
@@ -86,6 +89,8 @@ export class TouchControls {
 			if ( e.pointerId !== movePointer ) return;
 			movePointer = null;
 			this.stick.hidden = true;
+			this.stick.classList.remove( 'is-run' );
+			this.input.touchRun = false;
 			this.input.touchMove.x = this.input.touchMove.y = 0;
 
 		};
