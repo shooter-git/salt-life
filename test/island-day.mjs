@@ -12,6 +12,14 @@ import { Vector3 } from '../src/engine/index.js';
 import { FISH } from '../src/game/FishTable.js';
 import { GameState } from '../src/game/GameState.js';
 import { WEEK_MUL, weekOrder, weekNumber, weekEnds, tallyFor, deliver, delivered, filled, mineOf, shareOf, owed } from '../src/game/WeekOrder.js';
+// (M16: a new game starts in the kayak; what's tested here is a game in the lobster boat)
+const lobsterStart = ( st ) => {
+
+	st.fleet = { lobster: st.fleet.kayak };
+	st.boat = 'lobster';
+	return st;
+
+};
 
 let fails = 0;
 const ok = ( c, msg ) => {
@@ -82,7 +90,7 @@ ok( stallOpen( HOURS.joe, 12 ) && stallOpen( HOURS.joe, 12, 'fair' ) && stallOpe
 	const marta = new Vendor( { name: 'Marta · chandlery', kind: 'shop', position: new Vector3( 50, 0, 0 ), hours: HOURS.marta } );
 	const painted = [];
 	const g = { vendors: [ joe, marta ], signs: [ { forWeather: ( shut ) => painted.push( shut ) } ], hour: 12, weatherNow: weatherAt( 0, 'gale' ), hud: null,
-		app: { portal: null }, orders: [], tradeDay: 1, weekTerms: () => null, vendorPrompt: Game.prototype.vendorPrompt };
+		app: { portal: null }, state: { boat: 'lobster' }, orders: [], tradeDay: 1, weekTerms: () => null, vendorPrompt: Game.prototype.vendorPrompt };
 	const frame = () => Game.prototype.updateVendors.call( g, { hit: () => false }, { mode: 'boat', position: new Vector3() } );
 	const rate = ( v ) => Game.prototype.saleTerms.call( g, v ).rate;
 	frame();
@@ -157,7 +165,7 @@ console.log( `     day 12: ${ a.map( ( o ) => `${ o.who } ${ o.species } ${ orde
 
 // ---- selling on them
 const m = new Map();
-const st = new GameState( { getItem: ( k ) => m.get( k ) ?? null, setItem: ( k, v ) => m.set( k, v ) } );
+const st = lobsterStart( new GameState( { getItem: ( k ) => m.get( k ) ?? null, setItem: ( k, v ) => m.set( k, v ) } ) );
 const list = [ { id: 'joe-a', who: 'joe', species: 'jack', mul: 2, max: 2 }, { id: 'marta', who: 'marta', species: 'mullet', each: 12, max: 4 } ];
 const terms = { who: 'joe', orders: list, day: 7 };
 const j1 = st.addFish( 'jack', 4 ), j2 = st.addFish( 'jack', 2 ), j3 = st.addFish( 'jack', 1.5 ), g = st.addFish( 'grunt', 0.5 ), mu = st.addFish( 'mullet', 1 );
@@ -224,7 +232,7 @@ const swapped = tallyFor( nassau, w0 ), paid = tallyFor( { ...nassau, kg: 15 }, 
 ok( swapped.species === w0.species && delivered( swapped ) === 0 && paid.species === 'grouper' && filled( paid ), 'a tally for a fish since protected gives way to the week\'s order (a filled one is still paid)' );
 
 // selling toward it
-const sw = new GameState( { getItem: ( k ) => m.get( 'w' + k ) ?? null, setItem: ( k, v ) => m.set( 'w' + k, v ) } );
+const sw = lobsterStart( new GameState( { getItem: ( k ) => m.get( 'w' + k ) ?? null, setItem: ( k, v ) => m.set( 'w' + k, v ) } ) );
 const g1 = sw.addFish( 'blackGrouper', 8 ), g2 = sw.addFish( 'blackGrouper', 5 ), g3 = sw.addFish( 'blackGrouper', 4 ), gr = sw.addFish( 'grunt', 0.5 );
 const wk = { species: 'blackGrouper', left: 10 };
 const wq = sw.quote( null, { who: 'joe', orders: [], day: 3, week: wk } );

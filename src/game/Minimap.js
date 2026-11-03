@@ -6,8 +6,12 @@ import { CAMP } from './FishCamp.js';
 import { HARBOUR_LIGHTS } from '../world/HarbourLights.js';
 import { LIGHTHOUSE } from '../world/Lighthouse.js';
 import { toWorld } from '../world/wreck/WreckPlan.js';
-import { SHEETS, NAMES, HOME, legTo, magnetic, fuelFor } from './Chart.js';
-import { SheetBake, drawSymbols, S52, rgb } from './ChartBake.js';
+import { SHEETS, NAMES } from './Chart.js';
+import { homeReadout } from './HomeReadout.js';
+import { SheetBake, drawSymbols, drawWay, S52, rgb } from './ChartBake.js';
+import { BOATS } from '../world/boat/Boats.js';
+import { Vector3 } from '../engine/index.js';
+import { freeNow } from '../core/FreeNow.js';
 
 // Minimap, lower right: the island baked once from the terrain data into a 2D canvas, shown in a round window
 // that turns with the view (forward is up, a small N on the rim). Markers: the player (centre arrow), Joe's fish
@@ -25,6 +29,7 @@ import { SheetBake, drawSymbols, S52, rgb } from './ChartBake.js';
 //   const map = new Minimap( hudEl, game, { tier } );  map.update( dt );  map.highlight( [ 'joe', 'marta' ] )
 
 const ROWS_PER_FRAME = 32;
+const _fwd = new Vector3();
 // (M15) the island's sheet (px: 2 m a pixel; 3 on the low tier), its rows a frame
 const NEAR_N = { low: 768, mid: 1152, high: 1152 };
 // (M15) the island's waters' sheet and the far grounds' (px; half on the low tier), their rows a frame
@@ -58,6 +63,7 @@ const CSS = /* css */`
 .gm-mk.is-marta > i { background: var(--tw-aqua); }
 .gm-mk.is-shut > i { filter: saturate(0.25) brightness(0.75); }
 .gm-mk.is-boat > i { background: #f2efe6; }
+.gm-mk.is-mark.is-trap > i { background: #ff8a3c; }
 .gm-mk.is-shelter > i { background: #2f6fb0; color: #fff; }
 .gm-mk.is-camp > i { background: #d9825a; }
 .gm-mk.is-player > i { width: calc(16 * var(--tw-u)); height: calc(16 * var(--tw-u)); margin: calc(-8 * var(--tw-u)) 0 0 calc(-8 * var(--tw-u)); color: #fff;
@@ -81,16 +87,6 @@ const CSS = /* css */`
 	border-radius: 50%; border: 1.5px solid rgba(var(--tw-aqua-rgb), 0.9); animation: gm-map-ring 2.2s var(--tw-ease-io) infinite; }
 .gm-map-fish > i + i { animation-delay: -1.1s; }
 @keyframes gm-map-ring { 0% { transform: scale(0.45); } 100% { transform: scale(1.15); border-color: rgba(var(--tw-aqua-rgb), 0); } }
-.gm-map-label { position: absolute; left: 50%; bottom: calc(-2 * var(--tw-u)); transform: translate(-50%, 100%); padding-top: calc(4 * var(--tw-u));
-	font: 500 var(--tw-fs-xs) var(--tw-mono); color: var(--tw-ink-3); white-space: nowrap; text-shadow: 0 1px 2px rgba(0,0,0,0.7); display: none; }
-.gm-map-label.is-on { display: block; }
-/* ((M15) over the map, not under it: it sits at the screen's foot) */
-.gm-map-label.is-home { top: calc(-2 * var(--tw-u)); bottom: auto; transform: translate(-50%, -100%); padding: 0 0 calc(4 * var(--tw-u)); }
-/* (on a touch screen the map's under the purse, the tips under it: to its left) */
-html.is-touch .gm-map-label.is-home { left: auto; right: calc(100% + 6 * var(--tw-u)); top: 50%; transform: translateY(-50%); padding: 0; }
-.gm-map-label b { font-weight: 600; color: var(--tw-ink-2); }
-.gm-map-label i { font-style: normal; }
-.gm-map-label i.is-ok { color: #8fdc8a; } .gm-map-label i.is-tight { color: #f2c14e; } .gm-map-label i.is-short { color: #ff7a6a; }
 /* (M15) the chart's names: upright over it, black with a pale halo as on a chart; the water's in italics */
 .gm-map-name { position: absolute; left: 0; top: 0; width: 0; height: 0; display: none; }
 .gm-map-name.is-on { display: block; }
@@ -99,9 +95,9 @@ html.is-touch .gm-map-label.is-home { left: auto; right: calc(100% + 6 * var(--t
 	text-shadow: 0 0 2px rgba(255,255,255,0.95), 0 0 3px rgba(255,255,255,0.8); }
 .gm-map-name.is-water > span { font-style: italic; font-weight: 500; }
 .gm-map-name.is-small > span { font-size: calc(8 * var(--tw-u)); }
-.gm-map-name.is-peak > span::before { content: '▲ '; font-size: 0.8em; }
+.gm-map-name.is-peak > span::before { content: '\\25B2  '; font-size: 0.8em; }
 .gm-map-name small { display: block; font: 600 calc(7.5 * var(--tw-u)) var(--tw-font); font-style: normal; color: rgb(197,69,195); }
-.gm-map-name.is-fished > span::after { content: ' ⟡'; color: #1d5b8f; }
+.gm-map-name.is-fished > span::after { content: ' \\27E1'; color: #1d5b8f; }
 .gm-mk.is-mark > i { width: calc(12 * var(--tw-u)); height: calc(12 * var(--tw-u)); margin: calc(-6 * var(--tw-u)) 0 0 calc(-6 * var(--tw-u)); border-radius: 2px;
 	transform: rotate(45deg); background: #d6303a; box-shadow: 0 0 0 1.5px #fff, 0 1px 3px rgba(0,0,0,0.5); }
 .gm-mk.is-mark > i > em { transform: rotate(-45deg); font: 700 calc(7 * var(--tw-u)) var(--tw-font); font-style: normal; color: #fff; }
@@ -141,13 +137,11 @@ export class Minimap {
 		const nearN = NEAR_N[ tier ] || NEAR_N.high;
 		this.el = h( 'div', 'gm-map tw-glass', `<div class="gm-map-view"><canvas class="gm-map-far" width="${ outN }" height="${ outN }"></canvas><canvas class="gm-map-mid" width="${ outN }" height="${ outN }"></canvas><canvas class="gm-map-near" width="${ nearN }" height="${ nearN }"></canvas><div class="gm-map-vig"></div>
 			<div class="gm-map-marks"></div>
-			<div class="gm-map-me"><svg viewBox="0 0 24 24"><path d="M12 2 20 21 12 16.5 4 21Z" fill="#fff" stroke="#0b1418" stroke-width="1.4" stroke-linejoin="round"/></svg></div></div>
-			<div class="gm-map-label is-home"></div>` );
+			<div class="gm-map-me"><svg viewBox="0 0 24 24"><path d="M12 2 20 21 12 16.5 4 21Z" fill="#fff" stroke="#0b1418" stroke-width="1.4" stroke-linejoin="round"/></svg></div></div>` );
 		this.el.setAttribute( 'aria-hidden', 'true' );
 		this.view = this.el.querySelector( '.gm-map-view' );
 		this.canvas = this.el.querySelector( '.gm-map-near' );
 		this.marks = this.el.querySelector( '.gm-map-marks' );
-		this.label = this.el.querySelector( '.gm-map-label' );
 		parent.append( this.el );
 
 		const mk = ( kind, icon ) => {
@@ -320,9 +314,11 @@ export class Minimap {
 
 		const ctx = s.base.getContext( '2d' ), b = s.bake;
 		ctx.putImageData( new ImageData( b.rgba, s.px, s.px ), 0, 0 );
+		freeNow( b.rgba ); // ((M16) a sheet's working arrays' memory back at once)
 		b.rgba = null;
 		// (its soundings, and what it kept to bake by let go: one sheet's worth at a time)
 		s.sounded = b.soundings( Object.keys( this.sheets ).find( ( k ) => this.sheets[ k ] === s ) );
+		freeNow( b.H, b.S );
 		b.H = b.S = null;
 		if ( ! island ) return;
 		const P = ( x, z ) => [ ( x - s.spec.x0 ) * s.ppm, ( z - s.spec.z0 ) * s.ppm ];
@@ -360,6 +356,8 @@ export class Minimap {
 		ctx.drawImage( s.base, 0, 0 );
 		ctx.imageSmoothingEnabled = true;
 		ctx.drawImage( s.mask, 0, 0, s.px, s.px );
+		// ((M16) the way over pencilled on, over what you haven't charted too)
+		if ( s === this.sheets.near ) drawWay( ctx, s.spec.x0, s.spec.z0, s.ppm );
 		s.drawn = key;
 		return true;
 
@@ -540,7 +538,7 @@ export class Minimap {
 
 		for ( const m of chart.marks ) if ( ! this._marks.has( m.id ) ) {
 
-			const el = h( 'div', 'gm-mk is-mark', `<i><em>${ m.id }</em></i>` );
+			const el = h( 'div', `gm-mk is-mark${ m.trap ? ' is-trap' : '' }`, `<i><em>${ m.id }</em></i>` );
 			this.marks.prepend( el );
 			this._marks.set( m.id, el );
 
@@ -558,18 +556,12 @@ export class Minimap {
 
 	}
 
-	// (M15) under the map at sea: home's distance and bearing (magnetic, as the compass gives it), and the fuel
+	// (M15) home's distance and bearing, and the fuel: (M16) in the HUD's panel (HomeReadout)
 	_homeLabel( x, z, p ) {
 
-		const aboard = p.mode === 'boat' || p.mode === 'deck', leg = legTo( x, z, HOME.x, HOME.z );
-		const on = aboard && leg.m > 600;
-		this._toggle( this.label, 'is-on', on );
-		if ( ! on ) return;
-		const b = this.game.app.boatCtl, s = this.game.state;
-		// ((M15) riding in someone else's, it's their fuel, and you don't know it)
-		const f = p.riding ? null : fuelFor( leg.m, s.fuelL, { rpm: b.rpm, speed: b.speed, speedMul: s.stats.speedMul || 1 } );
-		const text = `<b>Home</b> ${ ( leg.m / 1852 ).toFixed( 1 ) } NM · ${ String( magnetic( leg.bearing ) ).padStart( 3, '0' ) }°${ f ? ` · <i class="is-${ f.state }">fuel ${ f.state === 'ok' ? 'ok' : f.state === 'tight' ? 'tight' : 'short' }</i>` : '' }`;
-		if ( this.label.__text !== text ) this.label.innerHTML = this.label.__text = text;
+		const hud = this.game.hud, b = this.game.app.boatCtl, s = this.game.state, fwd = b && b.forward( _fwd );
+		// ((M16) with no plotter aboard, only her compass: her heading, magnetic; a kayak has no fuel to know)
+		if ( hud ) hud.setHome( homeReadout( { x, z, aboard: ( p.mode === 'boat' && ( p.riding || s.stats.plotter || ! p.boat?.model?.seated ) ) || p.mode === 'deck', riding: p.riding, fuelL: s.fuelL, tank: s.stats.fuelL, rpm: b && b.rpm, speed: b && b.speed, speedMul: s.stats.speedMul || 1, boat: s.boat, fix: !! ( p.riding || s.stats.plotter ), heading: fwd ? Math.atan2( fwd.x, - fwd.z ) : 0 } ) );
 
 	}
 

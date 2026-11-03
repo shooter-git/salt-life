@@ -3,6 +3,8 @@ import { prepare, mergePrepared, cylinder, torus, sphere, rod, mat4, lathe, roun
 import { createPropMaterial, createLineMaterial, PAT } from './GameMaterials.js';
 import { G } from '../core/Globals.js';
 import { windBeyondFair } from './Weather.js';
+import { RIGS } from './rigs/Presentation.js';
+import { buildBigRodGeometry } from './rigs/BigRod.js';
 
 // The fishing rod in the player's hands, its line and the bobber.
 //
@@ -28,6 +30,11 @@ import { windBeyondFair } from './Weather.js';
 // air) -> 'floating' (on the water; bites come here) -> 'fighting' (fish on) -> back to 'idle';
 // 'retrieving' reels an empty line in; ((M14) 'rigging': a new hook and float tied on after the line's
 // snapped, the lost one drifting off: snap()).
+//
+// (M16) rig ('float', 'bottom', 'drop', 'kite', 'troll': rigs/Presentation.js) says what's on the line, hookM how far down
+// the hook is: under a float a little way, or sinking on a lead from where it went in until it's on the bottom or
+// you've no more line you can work. Past 'float' there's no float to draw. big: the stand-up rod (rigs/BigRod.js), its
+// reel on top of it, so it's the same frame turned over.
 export const ROD_L = 2.13; // 7 ft
 
 // The blank's bend: a damped spring toward its load (~2.5 Hz, lightly damped), stepped in substeps of at
@@ -219,6 +226,17 @@ export class FishingRod {
 		this.tip = new Vector3();
 		this._rig = 0; // ((M14) s left tying on a new hook and float)
 		this.lost = null; // ((M14) a snapped line's float: { pos, back (unit: the way it broke), t, waterY, ashore })
+		this.rig = 'float'; // ((M16) what's on the line)
+		this.electric = false; // ((M16) the sportfisher's electric reel winding it, for the deep drop: Rigs)
+		this.hookM = 0; // how far down the hook is
+		this.floatOff = false; // no float on it (a plug's cast with none)
+		this.settled = false; // it's gone as far down as it's going
+		this.spoolM = 180;
+		this.dropReach = Infinity; // the most line you can work there (m)
+		this.stopM = null; // ((M16) where you've stopped a lead on its way down, m: null, it goes on: Rigs.holdLead)
+		this.hung = null; // (Vector3: where a kite's clip holds the line up: Kite.js)
+		this.big = false;
+		this.scream = 0; // (a rod in its holder taking line, m/s: its reel's the sound you hear)
 
 		// reel / bend animation state
 		this.bendVel = 0;
@@ -293,15 +311,53 @@ export class FishingRod {
 
 	}
 
-	setGear( { castM, reelSpeed } ) {
+	setGear( { castM, reelSpeed, spoolM = 180, standUp = false } ) {
 
 		this.castM = castM;
 		this.reelSpeed = reelSpeed;
+		this.spoolM = spoolM;
+		this.standUp = standUp;
+		// ((M16) the stand-up rod's built as it's first bought or taken out: most never get there)
+		if ( standUp !== this.big && ( ! standUp || this.equipped ) ) this._fitRod( standUp );
+
+	}
+
+	_fitRod( big ) {
+
+		this.big = big;
+		this._smallRod = this._smallRod || this.rodMesh.geometry;
+		this.rodMesh.geometry = big ? ( this._bigRod = this._bigRod || buildBigRodGeometry() ) : this._smallRod;
+
+	}
+
+	// (M16) what's on the line for the next cast
+	setRig( rig, floatOff = false ) {
+
+		this.rig = rig;
+		this.floatOff = floatOff;
+		this.hookM = 0;
+		this.settled = false;
+		this.stopM = null;
+
+	}
+
+	// (M16) straight down from where you're standing (a deep drop: a lead's too heavy to cast), or hung from a kite
+	dropLine() {
+
+		if ( this.state !== 'idle' ) return false;
+		const d = this.camera.getWorldDirection( _v ).setY( 0 ).normalize();
+		this.bobber.set( this.tip.x + d.x * 1.2, this.waterY, this.tip.z + d.z * 1.2 );
+		this.landedAt.copy( this.bobber );
+		this.bobberVel.set( 0, 0, 0 );
+		this.setState( 'floating' );
+		if ( this.audio && this.audio.plop ) this.audio.plop( this.bobber );
+		return true;
 
 	}
 
 	equip( on ) {
 
+		if ( on && this.standUp !== this.big ) this._fitRod( !! this.standUp );
 		this.equipped = on;
 		if ( on && this.state === 'stowed' ) this.setState( 'idle' );
 		if ( on && this.audio && this.audio.rodReady ) this.audio.rodReady();
@@ -359,6 +415,7 @@ export class FishingRod {
 	land() {
 
 		this.setState( 'landing' );
+		this.setRig( this.rig, this.floatOff );
 		this._landFrom = this.bobber.clone();
 
 	}
@@ -367,7 +424,7 @@ export class FishingRod {
 	// drift off; a new hook and float to tie on before the next cast
 	snap() {
 
-		if ( this.lineInWater ) {
+		if ( this.lineInWater && this.rig === 'float' && ! this.floatOff ) {
 
 			const back = new Vector3( this.tip.x - this.bobber.x, 0, this.tip.z - this.bobber.z );
 			if ( back.lengthSq() < 1e-6 ) back.set( 0, 0, 1 );
@@ -377,6 +434,7 @@ export class FishingRod {
 
 		this._rig = RIG_S;
 		this.setState( 'rigging' );
+		this.setRig( this.rig, this.floatOff );
 
 	}
 
@@ -384,6 +442,7 @@ export class FishingRod {
 	endFight() {
 
 		this.setState( this.lineOut > 3 ? 'retrieving' : 'idle' );
+		if ( this.state === 'idle' ) this.setRig( this.rig, this.floatOff );
 
 	}
 
@@ -436,6 +495,14 @@ export class FishingRod {
 		_y.set( 0, 0, - 1 ).applyAxisAngle( _x.set( 1, 0, 0 ), elev ).applyAxisAngle( _up, side ).normalize();
 		_z.set( 0, 1, 0 ).addScaledVector( _y, - _y.y ).normalize();
 		_x.crossVectors( _y, _z ).normalize();
+		// ((M16) a conventional rod's reel and guides ride on top of it)
+		if ( this.big ) {
+
+			_x.negate();
+			_z.negate();
+
+		}
+
 		_m.makeBasis( _x, _y, _z ).setPosition( _h.copy( p.hand ).addScaledVector( _y, - SEAT_Y ) );
 		cam.updateMatrixWorld();
 		this.rodMesh.matrix.multiplyMatrices( cam.matrixWorld, _m );
@@ -478,7 +545,7 @@ export class FishingRod {
 			_v.copy( this.bobber ).applyMatrix4( _m.copy( this.rodMesh.matrix ).invert() ).setY( 0 );
 			if ( _v.lengthSq() > 1e-6 ) this.bendDir.lerp( _v.normalize(), 1 - Math.exp( - dt * 10 ) ).normalize();
 
-		} else this.bendDir.lerp( _w.set( 0, 0, - 1 ), 1 - Math.exp( - dt * 10 ) ).normalize();
+		} else this.bendDir.lerp( _w.set( 0, 0, this.big ? 1 : - 1 ), 1 - Math.exp( - dt * 10 ) ).normalize();
 		const P = BEND_P( this.load );
 		this.rodMat.uniforms.rodBend.value.set( this.bendDir.x, 0, this.bendDir.z, this.bend );
 		this.rodMat.uniforms.rodShape.value.set( P, 0, 0, 0 );
@@ -517,9 +584,9 @@ export class FishingRod {
 		// the rotor turns GEAR times faster; shown at most ~3 turns a second (it would strobe)
 		this.rotor += Math.min( dCrank * GEAR, 3.1 * Math.PI * 2 * dt );
 		this.spoolOsc = Math.sin( this.crank * 0.5 ) * 0.0035;
-		this.lineFill = 1 - Math.min( 1, this.lineOut / 220 ) * 0.5;
+		this.lineFill = 1 - Math.min( 1, this.lineOut / this.spoolM ) * 0.5;
 		this.rodMat.uniforms.reelAnim.value.set( this.rotor, this.bail, this.crank, this.spoolAng );
-		if ( this.audio && this.audio.rodLoop ) this.audio.rodLoop( this.crankRate, this.state === 'fighting' && dOut > 0 && dt > 0 ? dOut / dt : 0, this.state === 'fighting' && fight ? fight.tension : 0 );
+		if ( this.audio && this.audio.rodLoop ) this.audio.rodLoop( this.crankRate, this.state === 'fighting' && dOut > 0 && dt > 0 ? dOut / dt : this.scream || 0, this.state === 'fighting' && fight ? fight.tension : 0, this.electric );
 		this.rodMat.uniforms.reelAnim2.value.set( this.spoolOsc, this.lineFill, 0, 0 );
 
 		// ---- flick: the bobber leaves the tip half way through
@@ -591,7 +658,7 @@ export class FishingRod {
 			// riding the waves; dips with the bite cues. (M10) In a blow it drifts downwind, a few hundredths
 			// of the wind past a fair day's, up to DRIFT_M from where it came down, and no further into the
 			// shallows than a float rides (the bites follow it: Game.habitat reads where it is)
-			const drift = DRIFT_K * windBeyondFair( G.windSpeed.value );
+			const drift = this.rig === 'float' ? DRIFT_K * windBeyondFair( G.windSpeed.value ) : 0;
 			if ( drift > 0 && this.depth > DRIFT_DEPTH ) {
 
 				const wd = G.windDir.value, x = this.bobber.x + wd.x * drift * dt, z = this.bobber.z + wd.y * drift * dt;
@@ -607,6 +674,17 @@ export class FishingRod {
 			const bob = Math.sin( this.t * 2.1 ) * 0.008;
 			const yT = this.waterY + 0.012 + bob - this.dip * 0.09;
 			this.bobber.y += ( yT - this.bobber.y ) * ( 1 - Math.exp( - dt * 12 ) );
+			this._sinkHook( dt );
+			// ((M16) the line down to a lead stays under you as she drifts; one hung from a kite goes where its clip does)
+			if ( this.rig === 'bottom' || this.rig === 'drop' ) {
+
+				const k = 1 - Math.exp( - dt * 0.35 );
+				this.bobber.x += ( this.tip.x - this.bobber.x ) * k;
+				this.bobber.z += ( this.tip.z - this.bobber.z ) * k;
+
+			}
+
+			if ( this.hung ) this.bobber.copy( this.hung );
 
 		} else if ( this.state === 'fighting' && fight ) {
 
@@ -616,11 +694,13 @@ export class FishingRod {
 			const d0 = _v.length() || 1;
 			_v.multiplyScalar( 1 / d0 );
 			const sideways = _x.set( - _v.z, 0, _v.x ).multiplyScalar( Math.sin( this._wander ) * 0.9 * dt * ( 1 + fight.surge ) );
-			const dist = Math.max( 1, fight.distance );
+			// ((M16) the line goes down to a deep fish, and it comes up as it comes in)
+			const down = fight.hookM || 0, dist = Math.sqrt( Math.max( 1, fight.distance * fight.distance - down * down ) );
+			this.hookM = down;
 			this.fishPos.set( this.tip.x + _v.x * dist, 0, this.tip.z + _v.z * dist ).add( sideways );
 			this.bobber.x += ( this.fishPos.x - this.bobber.x ) * ( 1 - Math.exp( - dt * 6 ) );
 			this.bobber.z += ( this.fishPos.z - this.bobber.z ) * ( 1 - Math.exp( - dt * 6 ) );
-			this.bobber.y += ( this.waterY - 0.05 - 0.2 * fight.surge - this.bobber.y ) * ( 1 - Math.exp( - dt * 8 ) );
+			this.bobber.y += ( this.waterY - down - 0.05 - 0.2 * fight.surge - this.bobber.y ) * ( 1 - Math.exp( - dt * 8 ) );
 
 		} else if ( this.state === 'landing' ) {
 
@@ -639,15 +719,22 @@ export class FishingRod {
 			_v.copy( this.tip ).sub( this.bobber ).setY( 0 );
 			const d = _v.length();
 			const step = Math.min( d, ( 3 + this.reelSpeed * 3 ) * dt );
+			// ((M16) up from the deep first: it's a long way)
+			if ( this.hookM > 0 ) this.hookM = Math.max( 0, this.hookM - ( 3 + this.reelSpeed * 3 ) * dt );
 			if ( d > 1e-3 ) this.bobber.addScaledVector( _v.multiplyScalar( 1 / d ), step );
 			this.bobber.y += ( Math.max( this.waterY + 0.02, ground ) - this.bobber.y ) * ( 1 - Math.exp( - dt * 10 ) );
-			if ( d < 2.2 ) this.setState( 'idle' );
+			if ( d < 2.2 && this.hookM <= 0 ) {
+
+				this.setState( 'idle' );
+				this.setRig( this.rig, this.floatOff );
+
+			}
 
 		}
 
 		// ---- line
 		const out = this.lineInWater;
-		this.lineOut = out ? this.tip.distanceTo( this.bobber ) : 0;
+		this.lineOut = out ? this.tip.distanceTo( this.bobber ) + ( this.state === 'fighting' ? 0 : this.hookM ) : 0;
 		const lm = this.lineMat.uniforms;
 		lm.lineA.value.copy( this.tip );
 		lm.lineB.value.copy( this.bobber );
@@ -658,7 +745,7 @@ export class FishingRod {
 		if ( this.state === 'flying' ) lm.lineCtl.value.addScaledVector( _v.copy( this.tip ).sub( tipOld ), - 2 );
 		lm.lineShow.value = 1;
 		this.lineMesh.visible = visible && out;
-		this.bobberMesh.visible = visible && out && this.state !== 'landing';
+		this.bobberMesh.visible = visible && out && this.state !== 'landing' && this.rig === 'float' && ! this.floatOff;
 		this.bobberMesh.position.copy( this.bobber );
 		// a real float is a few pixels at casting range: grow it with distance so it stays readable
 		const camD = this.bobber.distanceTo( cam.position );
@@ -666,6 +753,25 @@ export class FishingRod {
 		// bobber tilts toward the pull
 		this.bobberMesh.rotation.set( this.dip * 0.4, 0, 0 );
 		this._drift( dt, visible );
+
+	}
+
+	// (M16) how far down the hook goes: under a float, only to its stop or the bottom; on a lead, sinking until you stop
+	// it, it's on the bottom or there's no more line you can work
+	_sinkHook( dt ) {
+
+		const R = RIGS[ this.rig ], floor = Math.max( 0, this.depth - 0.4 );
+		if ( this.rig === 'float' || this.rig === 'troll' || this.rig === 'kite' ) {
+
+			this.hookM = this.floatOff || this.rig !== 'float' ? 0.3 : Math.min( floor, R.stop );
+			this.settled = true;
+			return;
+
+		}
+
+		const to = Math.min( floor, R.reach, this.dropReach, this.stopM ?? Infinity );
+		this.hookM = Math.min( to, this.hookM + R.sink * dt );
+		this.settled = this.hookM >= to - 1e-3;
 
 	}
 

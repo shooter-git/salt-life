@@ -1,5 +1,5 @@
 import { smoothstep } from '../../util/Noise.js';
-import { polylineDistance } from './IslandShape.js';
+import { polylineDistance, PATHS } from './IslandShape.js';
 
 // (M15) The way over to the north beach on foot: the valley's hiking trail (IslandShape's PATHS[ 1 ]) carried on,
 // from where it leaves it at ( 26, -236 ), round the island's east side and across the north's plateau, and down
@@ -19,6 +19,12 @@ import { polylineDistance } from './IslandShape.js';
 //   trailAt( x, z ) -> [ distance from it (m), how far along it ]
 //   trailClears( x, z, r = 0 ) -> whether a thing r m about ( x, z ) is in its way
 //   trailTexels( res, origin, texel, r, fn ): fn( i, j ) for a grid's texels within r m of its tread
+// (M16) The whole way over, from the square: VALLEY, the valley's trail up to the fork. Worn into the ground's map
+// so it reads as one path (wearWay): the masks' own paths are thinner than the 2 m map can hold, and came out as
+// separate patches, 30% of the valley and 49% of the rest on high. Nothing's cut or placed by it: the masks the
+// rocks, the plants and the debris read aren't touched. Nothing grows on the valley's stretch either (trailClears).
+//   WAY: VALLEY then TRAIL's points, the way as the map draws it
+//   wearWay( splat, res, origin, texel, heights ): worn into a baked splat map's path channel
 
 export const TRAIL = {
 	w: 0.75,
@@ -40,6 +46,20 @@ const SEGS = TRAIL.pts.slice( 1 ).map( ( b, n ) => {
 } );
 const BOX = SEGS.reduce( ( o, s ) => [ Math.min( o[ 0 ], s.x0 ), Math.min( o[ 1 ], s.z0 ), Math.max( o[ 2 ], s.x1 ), Math.max( o[ 3 ], s.z1 ) ], [ Infinity, Infinity, - Infinity, - Infinity ] );
 
+// the valley's trail from the square up to the fork, from where the plaza's path comes in
+export const VALLEY = [ [ 35.5, - 108.5 ], ...PATHS[ 1 ].pts.slice( 0, PATHS[ 1 ].pts.findIndex( ( p ) => p[ 0 ] === TRAIL.pts[ 0 ][ 0 ] && p[ 1 ] === TRAIL.pts[ 0 ][ 1 ] ) + 1 ) ];
+export const WAY = [ ...VALLEY, ...TRAIL.pts.slice( 1 ) ];
+// where the fingerposts along it stand (game/Signpost.js' TRAIL_POSTS): nothing grows on those few metres, so they're seen
+export const POST_SPOTS = [ [ 45.2, - 118.2 ], [ 51.6, - 163.5 ], [ 24.5, - 235 ], [ 252.7, - 147.5 ], [ 398.6, - 410 ], [ 354, - 542 ], [ 380.6, - 527.3 ], [ 182, - 798.8 ], [ 122.7, - 775.5 ] ];
+const POST_CLEAR = 2.2; // m about one
+const WORN = 1.05; // m either side: full down the middle, gone by twice that, its edge broken by the ground's own detail
+const VALLEY_SEGS = VALLEY.slice( 1 ).map( ( b, n ) => {
+
+	const a = VALLEY[ n ];
+	return { a, b, x0: Math.min( a[ 0 ], b[ 0 ] ), x1: Math.max( a[ 0 ], b[ 0 ] ), z0: Math.min( a[ 1 ], b[ 1 ] ), z1: Math.max( a[ 1 ], b[ 1 ] ) };
+
+} );
+
 export function trailAt( x, z, reach = 12 ) {
 
 	if ( x < BOX[ 0 ] - reach || x > BOX[ 2 ] + reach || z < BOX[ 1 ] - reach || z > BOX[ 3 ] + reach ) return [ Infinity, 0 ];
@@ -50,7 +70,8 @@ export function trailAt( x, z, reach = 12 ) {
 
 export function trailClears( x, z, r = 0 ) {
 
-	return trailAt( x, z )[ 0 ] < TRAIL.w + CLEAR + r;
+	return trailAt( x, z )[ 0 ] < TRAIL.w + CLEAR + r || polylineDistance( VALLEY, x, z )[ 0 ] < TRAIL.w + CLEAR + r
+		|| POST_SPOTS.some( ( p ) => Math.hypot( x - p[ 0 ], z - p[ 1 ] ) < POST_CLEAR + r );
 
 }
 
@@ -59,7 +80,7 @@ export function trailClears( x, z, r = 0 ) {
 export function trailTexels( res, origin, texel, r, fn ) {
 
 	const R = TRAIL.w + r;
-	for ( const s of SEGS ) {
+	for ( const s of [ ...VALLEY_SEGS, ...SEGS ] ) {
 
 		const i0 = Math.max( 0, Math.floor( ( s.x0 - R - origin ) / texel ) ), i1 = Math.min( res - 1, Math.ceil( ( s.x1 + R - origin ) / texel ) );
 		const j0 = Math.max( 0, Math.floor( ( s.z0 - R - origin ) / texel ) ), j1 = Math.min( res - 1, Math.ceil( ( s.z1 + R - origin ) / texel ) );
@@ -217,6 +238,34 @@ export function trailCut( T, record, recordMask ) {
 			}
 
 		}
+
+	}
+
+}
+
+export function wearWay( splat, res, origin, texel, heights ) {
+
+	const R = WORN * 2;
+	let along = 0;
+	for ( const s of [ ...VALLEY_SEGS, ...SEGS ] ) {
+
+		const [ ax, az ] = s.a, [ bx, bz ] = s.b, L = Math.hypot( bx - ax, bz - az );
+		const i0 = Math.max( 0, Math.floor( ( s.x0 - R - origin ) / texel ) ), i1 = Math.min( res - 1, Math.ceil( ( s.x1 + R - origin ) / texel ) );
+		const j0 = Math.max( 0, Math.floor( ( s.z0 - R - origin ) / texel ) ), j1 = Math.min( res - 1, Math.ceil( ( s.z1 + R - origin ) / texel ) );
+		for ( let j = j0; j <= j1; j ++ ) for ( let i = i0; i <= i1; i ++ ) {
+
+			const x = origin + ( i + 0.5 ) * texel, z = origin + ( j + 0.5 ) * texel, k = j * res + i;
+			let f = ( ( x - ax ) * ( bx - ax ) + ( z - az ) * ( bz - az ) ) / ( L * L );
+			f = f < 0 ? 0 : f > 1 ? 1 : f;
+			const d = Math.hypot( x - ax - ( bx - ax ) * f, z - az - ( bz - az ) * f ), at = along + f * L;
+			// (its width wandering a little, as the tread's does; and none on the beach's sand at its foot)
+			const w = WORN * ( 1 + 0.15 * Math.sin( at * 0.37 ) * Math.sin( at * 0.13 + 1 ) );
+			const v = Math.round( ( 1 - smoothstep( w * 0.55, w * 1.9, d ) ) * 255 * smoothstep( SAND, SAND + 1.2, heights[ k ] ) );
+			if ( v > splat[ k * 4 + 1 ] ) splat[ k * 4 + 1 ] = v;
+
+		}
+
+		along += L;
 
 	}
 

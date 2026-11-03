@@ -4,11 +4,13 @@ import { findsAbout } from './Finds.js';
 // GPU: sailing 20 km takes the boat most of an hour. So F8, in a browser being driven (navigator.webdriver) and
 // nowhere else, jumps her to the next of these, the last bringing you back as you were, and the checks' frames and
 // budgets are read out there as they are in the bay. tools/far-sea.mjs goes to them by name too. No three.js.
+// (M16) boat: who she is there. A new game starts in the kayak, the lightest of them, so the checks go on in the others:
+// the sportfisher far out, and the lobster boat, the heaviest on a phone, for the rest of the script.
 
 export const CHECK_SPOTS = [
-	{ id: 'bank', x: - 6200, z: 7400 }, // (a first place to make for: its reefs, its surf)
-	{ id: 'far', x: 0, z: 20000 }, // (the open ocean, past the far grounds)
-	{ id: 'home' },
+	{ id: 'bank', x: - 6200, z: 7400, boat: 'lobster' }, // (a first place to make for: its reefs, its surf)
+	{ id: 'far', x: 0, z: 20000, boat: 'sportfisher' }, // (the open ocean, past the far grounds)
+	{ id: 'home', boat: 'lobster' },
 ];
 // (for tools/far-sea.mjs too: each stop in the script is time on all four screens, and the checks have 25 minutes)
 export const FAR_SPOTS = [

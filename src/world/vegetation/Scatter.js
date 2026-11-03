@@ -106,9 +106,12 @@ export class VegSite {
 		const pad = 25;
 		if ( x < b.x0 - pad || x > b.x1 + pad || z < b.z0 - pad || z > b.z1 + pad ) return 1e9;
 		let d = 1e9;
-		for ( const f of this.footprints ) d = Math.min( d, Math.hypot( x - f.x, z - f.z ) - f.r );
-		for ( const [ x0, z0, x1, z1, hw ] of this.segments ) {
+		// ((M16) by index: the iterators and the unpacking came to some 400 MB of garbage as the plants were placed)
+		const F = this.footprints, G = this.segments;
+		for ( let k = 0; k < F.length; k ++ ) d = Math.min( d, Math.hypot( x - F[ k ].x, z - F[ k ].z ) - F[ k ].r );
+		for ( let k = 0; k < G.length; k ++ ) {
 
+			const g = G[ k ], x0 = g[ 0 ], z0 = g[ 1 ], x1 = g[ 2 ], z1 = g[ 3 ], hw = g[ 4 ];
 			const dx = x1 - x0, dz = z1 - z0;
 			const l2 = dx * dx + dz * dz || 1;
 			const t = clamp( ( ( x - x0 ) * dx + ( z - z0 ) * dz ) / l2, 0, 1 );

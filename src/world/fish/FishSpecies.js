@@ -7,7 +7,8 @@
 //    1 base of the tail fin), [ u, value ] pairs
 //  sec: cross-section exponent (2 ellipse, > 2 boxier, < 2 more pointed at back and belly)
 //  mouth: { corner: u of the mouth corner, y: its height, tip: height of the lips at the snout,
-//    protrude: how far the lower jaw reaches beyond the upper one }
+//    protrude: how far the lower jaw reaches beyond the upper one, from: (M16) u of the lower jaw's tip on a
+//    billfish, the upper jaw running on ahead of it as the bill: tip is then the lips' height there }
 //  eye: { u, y, r }; opercle: u of the edge of the gill cover at mid-height
 //  scales: scale size (0: none visible), scaleVis: how strongly they show
 //  lateral: height fraction of the lateral line (0 mid-flank .. 1 back), arch: its rise at the front
@@ -18,7 +19,10 @@
 //    from the flank, rad; [ first, last ] ray: a fan), notch (membrane dip between the ray tips; default
 //    0.035) }. (Salt Life) 'shark': a stiff fin on a long base along the flank (base: its length in u),
 //    the leading edge longest, swept back to a short trailing edge (round: a broad, rounded one)
-//  pelvic: { u, len, rays }
+//  pelvic: { u, len, rays; (M16) alpha: [ first, last ] ray's angle down from the body, taper, base: the
+//    length of its root along the belly, in u, spread: long ribbons, a billfish's }
+//  (M16) pectoral droop: held this far down from the flank (rad); a fin segment's fold: how far it's lowered
+//    on a dead fish
 //  caudal: { shape: 'forked' | 'lunate' | 'rounded' | 'truncate' | 'heterocercal', len, span, fork
 //    (length of the middle rays relative to the lobes), rays }. (Salt Life) 'heterocercal': a shark's,
 //    the long upper lobe swept up and back over a shorter lower one (lower: its height and lowerLen
@@ -38,6 +42,8 @@ export const PATTERN = {
 	reefShark: 31, blacktipShark: 32, nurseShark: 33, lobster: 34,
 	// (M15) the surf's and the creeks': pompano, permit, snook
 	pompano: 35, permit: 36, snook: 37,
+	// (M16) the far water's and the flats': the wahoo, the billfish, the yellowfin, the redfish and the trout
+	wahoo: 38, sailfish: 39, whiteMarlin: 40, blueMarlin: 41, swordfish: 42, yellowfin: 43, redfish: 44, trout: 45,
 };
 
 const spiny = ( from, to, rays, h, rake, notch = 0.16 ) => ( { from, to, rays, spiny: true, h, rake, notch } );
@@ -641,6 +647,155 @@ export const SPECIES = {
 		iris: 0xd0c070, irid: 0.3, metal: 0.45,
 	},
 
+	// (M16) The far water's fish, each shaped after photographs side by side (docs/m16/fish.md). Their tables' u
+	// are of the body up to the tail's root, the fractions read off the photographs as fractions of the whole
+	// fish's length.
+
+	// wahoo: a long steel-blue spindle with a beak of a snout, a low first dorsal running a third of its length
+	// from over the pectoral, a small second one, finlets to a narrow keeled tail stalk
+	wahoo: {
+		pattern: PATTERN.wahoo, body: 0.92, sec: 2.0,
+		top: [ [ 0, 0.002 ], [ 0.033, 0.006 ], [ 0.1, 0.018 ], [ 0.185, 0.036 ], [ 0.27, 0.045 ], [ 0.41, 0.05 ], [ 0.54, 0.048 ], [ 0.71, 0.04 ], [ 0.87, 0.028 ], [ 0.98, 0.014 ], [ 1, 0.012 ] ],
+		bot: [ [ 0, 0.002 ], [ 0.033, 0.007 ], [ 0.1, 0.02 ], [ 0.185, 0.04 ], [ 0.27, 0.05 ], [ 0.41, 0.054 ], [ 0.54, 0.05 ], [ 0.71, 0.04 ], [ 0.87, 0.026 ], [ 0.98, 0.012 ], [ 1, 0.01 ] ],
+		wid: [ [ 0, 0.002 ], [ 0.055, 0.008 ], [ 0.13, 0.022 ], [ 0.27, 0.035 ], [ 0.43, 0.038 ], [ 0.65, 0.032 ], [ 0.87, 0.02 ], [ 0.96, 0.012 ], [ 0.985, 0.02 ], [ 1, 0.012 ] ],
+		mouth: { corner: 0.08, y: - 0.006, tip: - 0.001, protrude: 0.004 },
+		eye: { u: 0.103, y: 0.008, r: 0.0098 }, opercle: 0.185,
+		scales: 0.004, scaleVis: 0.05, lateral: 0.3, arch: 0.3,
+		dorsal: [ soft( 0.587, 0.652, 13, [ [ 0, 0.045 ], [ 0.4, 0.03 ], [ 1, 0.014 ] ], [ 0.7, 1.0 ] ), spiny( 0.255, 0.576, 25, [ [ 0, 0.034 ], [ 0.2, 0.034 ], [ 1, 0.02 ] ], [ 0.6, 0.85 ], 0.06 ) ],
+		anal: [ soft( 0.614, 0.685, 13, [ [ 0, 0.04 ], [ 0.4, 0.026 ], [ 1, 0.012 ] ], [ 0.7, 1.0 ] ) ],
+		pectoral: { u: 0.207, y: - 0.012, len: 0.06, base: 0.012, rays: 20, shape: 'pointed', spread: 0.3, fan: 0.5, droop: 0.1 },
+		pelvic: { u: 0.27, len: 0.03, rays: 6 },
+		caudal: { shape: 'lunate', len: 0.1, span: 0.125, fork: 0.25, sweep: 2.8, notch: 0.006, rays: 19 },
+		finlets: { from: 0.67, to: 0.985, dorsal: 9, ventral: 9 },
+		iris: 0x9a9a88, irid: 0.5, metal: 0.4,
+	},
+
+	// sailfish: the slenderest of them, the bill long and thin, its great dorsal fin the sail, dark and spotted,
+	// highest behind its middle and falling away sharply; the belly fins two long ribbons
+	sailfish: {
+		pattern: PATTERN.sailfish, body: 0.865, sec: 2.0,
+		top: [ [ 0, 0.0012 ], [ 0.08, 0.003 ], [ 0.162, 0.0055 ], [ 0.2, 0.0095 ], [ 0.237, 0.021 ], [ 0.27, 0.036 ], [ 0.312, 0.047 ], [ 0.382, 0.053 ], [ 0.486, 0.052 ], [ 0.636, 0.045 ], [ 0.786, 0.032 ], [ 0.9, 0.02 ], [ 0.983, 0.011 ], [ 1, 0.01 ] ],
+		bot: [ [ 0, 0.0012 ], [ 0.08, 0.003 ], [ 0.162, 0.0055 ], [ 0.2, 0.014 ], [ 0.237, 0.03 ], [ 0.27, 0.045 ], [ 0.312, 0.056 ], [ 0.382, 0.061 ], [ 0.486, 0.06 ], [ 0.636, 0.048 ], [ 0.786, 0.033 ], [ 0.9, 0.019 ], [ 0.983, 0.011 ], [ 1, 0.01 ] ],
+		wid: [ [ 0, 0.001 ], [ 0.162, 0.0055 ], [ 0.237, 0.02 ], [ 0.312, 0.036 ], [ 0.42, 0.042 ], [ 0.6, 0.036 ], [ 0.8, 0.024 ], [ 0.95, 0.012 ], [ 0.985, 0.017 ], [ 1, 0.011 ] ],
+		mouth: { from: 0.162, corner: 0.217, y: - 0.011, tip: - 0.005, protrude: 0 },
+		eye: { u: 0.237, y: 0.009, r: 0.0098 }, opercle: 0.298,
+		scales: 0.005, scaleVis: 0.06, lateral: 0.15, arch: 0.1,
+		dorsal: [ soft( 0.873, 0.925, 7, [ [ 0, 0.026 ], [ 1, 0.01 ] ], [ 0.7, 1.05 ] ), { ...soft( 0.318, 0.832, 44, [ [ 0, 0.09 ], [ 0.06, 0.15 ], [ 0.2, 0.165 ], [ 0.45, 0.185 ], [ 0.62, 0.205 ], [ 0.78, 0.175 ], [ 0.88, 0.1 ], [ 0.95, 0.04 ], [ 1, 0.02 ] ], [ 0.5, 0.18 ], 0.03 ), fold: 0.06, jag: 0.07 } ],
+		anal: [ soft( 0.694, 0.752, 13, [ [ 0, 0.042 ], [ 0.25, 0.046 ], [ 1, 0.012 ] ], [ 0.65, 1.05 ] ), soft( 0.867, 0.925, 7, [ [ 0, 0.024 ], [ 1, 0.01 ] ], [ 0.7, 1.05 ] ) ],
+		pectoral: { u: 0.3, y: - 0.03, len: 0.13, base: 0.016, rays: 19, shape: 'falcate', spread: 0.2, droop: 0.12, fan: 0.4 },
+		pelvic: { u: 0.335, len: 0.19, rays: 2, alpha: [ - 0.5, - 0.535 ], taper: 0.1, base: 0.004, spread: 0.08 },
+		caudal: { shape: 'lunate', len: 0.135, span: 0.145, fork: 0.17, sweep: 5, notch: 0.006, rays: 23 },
+		iris: 0xa8a890, irid: 0.25, metal: 0.28,
+	},
+
+	// white marlin: slight, the tips of its dorsal, pectoral and anal fins rounded where the blue's are pointed,
+	// the low dorsal spotted
+	whiteMarlin: {
+		pattern: PATTERN.whiteMarlin, body: 0.865, sec: 2.0,
+		top: [ [ 0, 0.0014 ], [ 0.07, 0.0034 ], [ 0.142, 0.006 ], [ 0.175, 0.01 ], [ 0.22, 0.022 ], [ 0.266, 0.043 ], [ 0.312, 0.055 ], [ 0.382, 0.061 ], [ 0.486, 0.06 ], [ 0.636, 0.05 ], [ 0.786, 0.034 ], [ 0.9, 0.02 ], [ 0.983, 0.011 ], [ 1, 0.01 ] ],
+		bot: [ [ 0, 0.0014 ], [ 0.07, 0.0034 ], [ 0.142, 0.006 ], [ 0.175, 0.015 ], [ 0.22, 0.032 ], [ 0.266, 0.05 ], [ 0.312, 0.062 ], [ 0.382, 0.069 ], [ 0.486, 0.068 ], [ 0.636, 0.054 ], [ 0.786, 0.035 ], [ 0.9, 0.019 ], [ 0.983, 0.011 ], [ 1, 0.01 ] ],
+		wid: [ [ 0, 0.0012 ], [ 0.142, 0.006 ], [ 0.22, 0.02 ], [ 0.3, 0.038 ], [ 0.42, 0.045 ], [ 0.6, 0.04 ], [ 0.8, 0.026 ], [ 0.95, 0.013 ], [ 0.985, 0.018 ], [ 1, 0.012 ] ],
+		mouth: { from: 0.142, corner: 0.2, y: - 0.012, tip: - 0.0055, protrude: 0 },
+		eye: { u: 0.226, y: 0.01, r: 0.0098 }, opercle: 0.296,
+		scales: 0.005, scaleVis: 0.06, lateral: 0.15, arch: 0.1,
+		dorsal: [ soft( 0.84, 0.895, 8, [ [ 0, 0.028 ], [ 1, 0.012 ] ], [ 0.7, 1.05 ] ), soft( 0.385, 0.805, 30, [ [ 0, 0.034 ], [ 0.5, 0.027 ], [ 1, 0.016 ] ], [ 0.72, 0.95 ], 0.03 ), { ...soft( 0.318, 0.39, 14, [ [ 0, 0.09 ], [ 0.2, 0.122 ], [ 0.45, 0.112 ], [ 0.8, 0.06 ], [ 1, 0.04 ] ], [ 0.55, 0.7 ], 0.02 ), fold: 0.08 } ],
+		anal: [ soft( 0.684, 0.75, 13, [ [ 0, 0.05 ], [ 0.3, 0.056 ], [ 0.6, 0.042 ], [ 1, 0.012 ] ], [ 0.6, 0.95 ] ), soft( 0.84, 0.895, 8, [ [ 0, 0.026 ], [ 1, 0.012 ] ], [ 0.7, 1.05 ] ) ],
+		pectoral: { u: 0.298, y: - 0.033, len: 0.125, base: 0.018, rays: 19, shape: 'pointed', spread: 0.2, droop: 0.1, fan: 0.3 },
+		pelvic: { u: 0.335, len: 0.135, rays: 2, alpha: [ - 0.52, - 0.56 ], taper: 0.1, base: 0.004, spread: 0.08 },
+		caudal: { shape: 'lunate', len: 0.135, span: 0.14, fork: 0.18, sweep: 5, notch: 0.006, rays: 23 },
+		iris: 0xa8a890, irid: 0.25, metal: 0.28,
+	},
+
+	// blue marlin: the great one: deep through the shoulders with a hump at the nape, its bill stout, the dorsal's
+	// peak pointed and swept back and falling sharply to a low fin, the tail stalk slim and double-keeled
+	blueMarlin: {
+		pattern: PATTERN.blueMarlin, body: 0.865, sec: 2.05,
+		top: [ [ 0, 0.0015 ], [ 0.069, 0.0038 ], [ 0.145, 0.0068 ], [ 0.173, 0.011 ], [ 0.22, 0.027 ], [ 0.266, 0.05 ], [ 0.312, 0.066 ], [ 0.382, 0.076 ], [ 0.486, 0.074 ], [ 0.636, 0.062 ], [ 0.786, 0.044 ], [ 0.9, 0.027 ], [ 0.983, 0.013 ], [ 1, 0.012 ] ],
+		bot: [ [ 0, 0.0015 ], [ 0.069, 0.0038 ], [ 0.145, 0.0068 ], [ 0.173, 0.017 ], [ 0.22, 0.036 ], [ 0.266, 0.057 ], [ 0.312, 0.073 ], [ 0.382, 0.084 ], [ 0.486, 0.086 ], [ 0.636, 0.078 ], [ 0.786, 0.054 ], [ 0.9, 0.031 ], [ 0.983, 0.014 ], [ 1, 0.012 ] ],
+		wid: [ [ 0, 0.0014 ], [ 0.145, 0.0075 ], [ 0.22, 0.024 ], [ 0.3, 0.045 ], [ 0.4, 0.056 ], [ 0.55, 0.054 ], [ 0.7, 0.042 ], [ 0.85, 0.026 ], [ 0.95, 0.016 ], [ 0.985, 0.022 ], [ 1, 0.014 ] ],
+		mouth: { from: 0.145, corner: 0.214, y: - 0.014, tip: - 0.006, protrude: 0 },
+		eye: { u: 0.237, y: 0.012, r: 0.0095 }, opercle: 0.3,
+		scales: 0.005, scaleVis: 0.06, lateral: 0.15, arch: 0.1,
+		dorsal: [ soft( 0.84, 0.89, 8, [ [ 0, 0.03 ], [ 1, 0.012 ] ], [ 0.7, 1.05 ] ), soft( 0.385, 0.775, 28, [ [ 0, 0.022 ], [ 0.5, 0.015 ], [ 1, 0.01 ] ], [ 0.72, 0.95 ], 0.03 ), { ...soft( 0.312, 0.39, 14, [ [ 0, 0.105 ], [ 0.14, 0.14 ], [ 0.42, 0.075 ], [ 1, 0.026 ] ], [ 0.5, 0.95 ], 0.02 ), fold: 0.08 } ],
+		anal: [ soft( 0.676, 0.746, 13, [ [ 0, 0.055 ], [ 0.22, 0.062 ], [ 0.6, 0.03 ], [ 1, 0.012 ] ], [ 0.62, 1.05 ] ), soft( 0.834, 0.89, 8, [ [ 0, 0.028 ], [ 1, 0.012 ] ], [ 0.7, 1.05 ] ) ],
+		pectoral: { u: 0.302, y: - 0.04, len: 0.15, base: 0.02, rays: 19, shape: 'falcate', spread: 0.22, droop: 0.1, fan: 0.4 },
+		pelvic: { u: 0.335, len: 0.1, rays: 2, alpha: [ - 0.55, - 0.6 ], taper: 0.1, base: 0.004, spread: 0.08 },
+		caudal: { shape: 'lunate', len: 0.135, span: 0.15, fork: 0.18, sweep: 5, notch: 0.006, rays: 23 },
+		iris: 0xa8a890, irid: 0.25, metal: 0.28,
+	},
+
+	// swordfish: a third of it the sword, broad and flat where a marlin's bill is round; a huge eye; no scales and
+	// no belly fins; a tall stiff crescent of a dorsal, the pectorals held down, the tail stalk with one great keel
+	swordfish: {
+		pattern: PATTERN.swordfish, body: 0.855, sec: 2.0,
+		top: [ [ 0, 0.0012 ], [ 0.117, 0.002 ], [ 0.234, 0.0035 ], [ 0.316, 0.0055 ], [ 0.363, 0.014 ], [ 0.404, 0.032 ], [ 0.456, 0.056 ], [ 0.515, 0.072 ], [ 0.585, 0.078 ], [ 0.678, 0.072 ], [ 0.795, 0.05 ], [ 0.912, 0.028 ], [ 1, 0.012 ] ],
+		bot: [ [ 0, 0.0012 ], [ 0.117, 0.002 ], [ 0.234, 0.0035 ], [ 0.316, 0.006 ], [ 0.34, 0.011 ], [ 0.386, 0.026 ], [ 0.456, 0.055 ], [ 0.515, 0.073 ], [ 0.585, 0.078 ], [ 0.678, 0.072 ], [ 0.795, 0.05 ], [ 0.912, 0.028 ], [ 1, 0.012 ] ],
+		wid: [ [ 0, 0.002 ], [ 0.117, 0.006 ], [ 0.234, 0.01 ], [ 0.316, 0.016 ], [ 0.386, 0.026 ], [ 0.456, 0.046 ], [ 0.585, 0.062 ], [ 0.795, 0.04 ], [ 0.93, 0.02 ], [ 0.985, 0.032 ], [ 1, 0.016 ] ],
+		mouth: { from: 0.316, corner: 0.39, y: - 0.014, tip: - 0.0055, protrude: 0 },
+		eye: { u: 0.404, y: 0.012, r: 0.0165 }, opercle: 0.474,
+		scales: 0.0, scaleVis: 0.0, lateral: 0.1, arch: 0.05,
+		dorsal: [ soft( 0.915, 0.935, 4, [ [ 0, 0.014 ], [ 1, 0.006 ] ], [ 0.7, 1.05 ] ), { ...soft( 0.5, 0.6, 14, [ [ 0, 0.15 ], [ 0.1, 0.135 ], [ 0.25, 0.085 ], [ 0.5, 0.04 ], [ 1, 0.01 ] ], [ 0.72, 1.15 ], 0.012 ), fold: 0.05 } ],
+		anal: [ soft( 0.76, 0.83, 12, [ [ 0, 0.1 ], [ 0.12, 0.085 ], [ 0.35, 0.04 ], [ 1, 0.008 ] ], [ 0.72, 1.15 ], 0.012 ), soft( 0.915, 0.935, 4, [ [ 0, 0.012 ], [ 1, 0.005 ] ], [ 0.7, 1.05 ] ) ],
+		pectoral: { u: 0.48, y: - 0.055, len: 0.17, base: 0.03, rays: 18, shape: 'falcate', spread: 0.3, droop: 0.75, fan: 0.55 },
+		caudal: { shape: 'lunate', len: 0.145, span: 0.115, fork: 0.25, sweep: 2.6, notch: 0.006, rays: 21 },
+		iris: 0x3c5478, irid: 0.1, metal: 0.12,
+	},
+
+	// yellowfin tuna: deep and clean-lined, its second dorsal and anal fins long yellow scythes, a gold band along
+	// the flank, yellow finlets edged black
+	yellowfin: {
+		pattern: PATTERN.yellowfin, body: 0.855, sec: 2.0,
+		top: [ [ 0, 0.003 ], [ 0.023, 0.016 ], [ 0.07, 0.04 ], [ 0.14, 0.068 ], [ 0.234, 0.094 ], [ 0.35, 0.108 ], [ 0.444, 0.112 ], [ 0.585, 0.1 ], [ 0.725, 0.07 ], [ 0.865, 0.038 ], [ 0.96, 0.018 ], [ 1, 0.012 ] ],
+		bot: [ [ 0, 0.003 ], [ 0.023, 0.014 ], [ 0.07, 0.034 ], [ 0.14, 0.062 ], [ 0.234, 0.09 ], [ 0.35, 0.108 ], [ 0.444, 0.115 ], [ 0.585, 0.1 ], [ 0.725, 0.068 ], [ 0.865, 0.035 ], [ 0.96, 0.017 ], [ 1, 0.011 ] ],
+		wid: [ [ 0, 0.003 ], [ 0.058, 0.03 ], [ 0.14, 0.056 ], [ 0.29, 0.08 ], [ 0.444, 0.088 ], [ 0.64, 0.072 ], [ 0.82, 0.042 ], [ 0.95, 0.024 ], [ 0.98, 0.032 ], [ 1, 0.016 ] ],
+		mouth: { corner: 0.075, y: - 0.009, tip: - 0.003, protrude: 0.003 },
+		eye: { u: 0.08, y: 0.026, r: 0.0165 }, opercle: 0.22,
+		scales: 0.0, scaleVis: 0.0, lateral: 0.3, arch: 0.2,
+		dorsal: [ spiny( 0.327, 0.515, 13, [ [ 0, 0.07 ], [ 0.3, 0.06 ], [ 1, 0.015 ] ], [ 0.45, 0.8 ], 0.1 ), { ...soft( 0.538, 0.63, 14, [ [ 0, 0.17 ], [ 0.12, 0.115 ], [ 0.4, 0.04 ], [ 1, 0.015 ] ], [ 0.85, 1.15 ] ), fold: 0.08 } ],
+		anal: [ { ...soft( 0.585, 0.665, 13, [ [ 0, 0.16 ], [ 0.12, 0.105 ], [ 0.4, 0.035 ], [ 1, 0.012 ] ], [ 0.85, 1.15 ] ), fold: 0.08 } ],
+		pectoral: { u: 0.234, y: 0.0, len: 0.17, base: 0.024, rays: 12, shape: 'falcate', spread: 0.3, fan: 0.5, droop: 0.05 },
+		pelvic: { u: 0.26, len: 0.055, rays: 5 },
+		caudal: { shape: 'lunate', len: 0.145, span: 0.155, fork: 0.2, sweep: 3.2, notch: 0.006, rays: 19 },
+		finlets: { from: 0.68, to: 0.96, dorsal: 8, ventral: 8 },
+		iris: 0x8a8460, irid: 0.4, metal: 0.4,
+	},
+
+	// redfish (red drum): heavy-shouldered, its mouth set low under a blunt snout for rooting on the bottom, a
+	// squared tail with the black spot at its root; big scales the colour of a new penny
+	redfish: {
+		pattern: PATTERN.redfish, body: 0.84, sec: 2.15,
+		top: [ [ 0, 0.01 ], [ 0.02, 0.03 ], [ 0.06, 0.055 ], [ 0.12, 0.085 ], [ 0.2, 0.105 ], [ 0.3, 0.118 ], [ 0.42, 0.116 ], [ 0.56, 0.094 ], [ 0.7, 0.066 ], [ 0.84, 0.04 ], [ 0.94, 0.029 ], [ 1, 0.027 ] ],
+		bot: [ [ 0, 0.008 ], [ 0.02, 0.03 ], [ 0.06, 0.055 ], [ 0.12, 0.085 ], [ 0.2, 0.105 ], [ 0.3, 0.116 ], [ 0.42, 0.112 ], [ 0.56, 0.094 ], [ 0.7, 0.066 ], [ 0.84, 0.038 ], [ 0.94, 0.027 ], [ 1, 0.025 ] ],
+		wid: [ [ 0, 0.008 ], [ 0.05, 0.035 ], [ 0.15, 0.06 ], [ 0.3, 0.07 ], [ 0.5, 0.064 ], [ 0.7, 0.044 ], [ 0.9, 0.024 ], [ 1, 0.018 ] ],
+		mouth: { corner: 0.1, y: - 0.028, tip: - 0.018, protrude: 0 },
+		eye: { u: 0.085, y: 0.028, r: 0.016 }, opercle: 0.29,
+		scales: 0.015, scaleVis: 0.55, lateral: 0.4, arch: 0.12,
+		dorsal: [ spiny( 0.31, 0.52, 10, [ [ 0, 0.075 ], [ 0.25, 0.11 ], [ 1, 0.03 ] ], [ 0.3, 0.55 ], 0.16 ), soft( 0.53, 0.9, 24, [ [ 0, 0.06 ], [ 0.5, 0.065 ], [ 1, 0.03 ] ], [ 0.6, 0.95 ] ) ],
+		anal: [ spiny( 0.7, 0.73, 2, [ [ 0, 0.025 ], [ 1, 0.04 ] ], [ 0.4, 0.5 ], 0.1 ), soft( 0.73, 0.84, 8, [ [ 0, 0.06 ], [ 0.4, 0.065 ], [ 1, 0.03 ] ], [ 0.55, 0.9 ] ) ],
+		pectoral: { u: 0.31, y: - 0.03, len: 0.12, base: 0.03, rays: 17, shape: 'pointed', spread: 0.4 },
+		pelvic: { u: 0.36, len: 0.1, rays: 6 },
+		caudal: { shape: 'truncate', len: 0.16, span: 0.095, fork: 0.9, rays: 17 },
+		iris: 0xc0a050, irid: 0.25, metal: 0.18,
+	},
+
+	// spotted seatrout: long and soft-bodied, the lower jaw jutting, round black spots over the back and on out
+	// through the second dorsal and the tail
+	trout: {
+		pattern: PATTERN.trout, body: 0.83, sec: 2.05,
+		top: [ [ 0, 0.006 ], [ 0.03, 0.024 ], [ 0.08, 0.05 ], [ 0.16, 0.072 ], [ 0.28, 0.09 ], [ 0.42, 0.096 ], [ 0.56, 0.088 ], [ 0.7, 0.066 ], [ 0.84, 0.042 ], [ 0.94, 0.031 ], [ 1, 0.029 ] ],
+		bot: [ [ 0, 0.006 ], [ 0.03, 0.026 ], [ 0.08, 0.05 ], [ 0.16, 0.07 ], [ 0.28, 0.086 ], [ 0.42, 0.09 ], [ 0.56, 0.08 ], [ 0.7, 0.06 ], [ 0.84, 0.038 ], [ 0.94, 0.028 ], [ 1, 0.026 ] ],
+		wid: [ [ 0, 0.004 ], [ 0.05, 0.022 ], [ 0.15, 0.038 ], [ 0.3, 0.046 ], [ 0.5, 0.043 ], [ 0.7, 0.034 ], [ 0.88, 0.022 ], [ 1, 0.018 ] ],
+		mouth: { corner: 0.13, y: - 0.008, tip: 0.0, protrude: 0.008 },
+		eye: { u: 0.11, y: 0.022, r: 0.016 }, opercle: 0.29,
+		scales: 0.014, scaleVis: 0.45, lateral: 0.42, arch: 0.15,
+		dorsal: [ spiny( 0.345, 0.5, 10, [ [ 0, 0.07 ], [ 0.2, 0.1 ], [ 1, 0.02 ] ], [ 0.3, 0.6 ], 0.16 ), soft( 0.53, 0.9, 26, [ [ 0, 0.055 ], [ 0.5, 0.055 ], [ 1, 0.03 ] ], [ 0.6, 0.95 ] ) ],
+		anal: [ spiny( 0.74, 0.76, 2, [ [ 0, 0.02 ], [ 1, 0.03 ] ], [ 0.4, 0.5 ], 0.1 ), soft( 0.76, 0.85, 10, [ [ 0, 0.05 ], [ 1, 0.025 ] ], [ 0.55, 0.9 ] ) ],
+		pectoral: { u: 0.3, y: - 0.022, len: 0.11, base: 0.024, rays: 16, shape: 'rounded', spread: 0.4 },
+		pelvic: { u: 0.35, len: 0.1, rays: 6 },
+		caudal: { shape: 'truncate', len: 0.17, span: 0.09, fork: 0.84, rays: 17 },
+		iris: 0xd8a040, irid: 0.5, metal: 0.45,
+	},
+
 	// (Salt Life) the spiny lobster (creature: its geometry is CreatureGeometry.lobsterGeometry)
 	lobster: { pattern: PATTERN.lobster, creature: 'lobster', body: 1, eye: { u: 0.03, y: 0.05, r: 0.012 }, opercle: 0.2, mouth: { corner: 0.05, y: 0.0, tip: 0.0 }, lateral: 0, arch: 0, scales: 0, scaleVis: - 1, iris: 0x101010, irid: 0, metal: 0 },
 
@@ -687,4 +842,12 @@ export const SKIN = {
 	pompano: { back: 0x56707e, flank: 0xd2d6d4, belly: 0xe6d488, fin: 0xb8a04a, edge: 0x5e6458, rough: 0.27 },
 	permit: { back: 0x36424c, flank: 0xc6cac8, belly: 0xe2e0d6, fin: 0x2a2e32, edge: 0x101214, rough: 0.27 },
 	snook: { back: 0x6a6a48, flank: 0xc4c4b2, belly: 0xe8e8e0, fin: 0xcfb452, edge: 0x4c4a36, rough: 0.32 },
+	wahoo: { back: 0x12283e, flank: 0xa8b4bc, belly: 0xdce0e2, fin: 0x2a3e50, edge: 0x141c24, rough: 0.27 },
+	sailfish: { back: 0x14264e, flank: 0xd0d6dc, belly: 0xf2f4f6, fin: 0x1e3a72, edge: 0x101c3c, rough: 0.3 },
+	whiteMarlin: { back: 0x254c68, flank: 0xd0d8da, belly: 0xf4f6f6, fin: 0x2e506c, edge: 0x182a38, rough: 0.3 },
+	blueMarlin: { back: 0x13264e, flank: 0xc8d0d8, belly: 0xf0f2f4, fin: 0x1e3058, edge: 0x101a34, rough: 0.3 },
+	swordfish: { back: 0x1a2029, flank: 0x50586a, belly: 0xd0d0cc, fin: 0x30343e, edge: 0x101014, rough: 0.6 },
+	yellowfin: { back: 0x0c1428, flank: 0x808c9c, belly: 0xe0e4e8, fin: 0xd8b028, edge: 0x7a6a20, rough: 0.27 },
+	redfish: { back: 0x6e4420, flank: 0xb4803c, belly: 0xece2d0, fin: 0x9a5420, edge: 0x4a2c18, rough: 0.36 },
+	trout: { back: 0x5e5e50, flank: 0xb4b4ac, belly: 0xece8e0, fin: 0xc0aa60, edge: 0x6a6040, rough: 0.32 },
 };

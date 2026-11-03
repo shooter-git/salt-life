@@ -215,6 +215,9 @@ function ringUs( S, lod, u0, u1 ) {
 	};
 
 	if ( lod < 2 ) snap( S.mouth.corner );
+	// ((M16) a billfish's: the lower jaw's tip, and the bill's root at the eye, where the head rises)
+	if ( S.mouth.from && lod < 3 ) snap( S.mouth.from );
+	if ( S.mouth.from && lod < 2 ) snap( S.eye.u );
 	const out = us.filter( ( u ) => u >= u0 - 1e-6 && u <= u1 + 1e-6 );
 	if ( out[ 0 ] > u0 + 1e-4 && u0 > 0 ) out.unshift( u0 );
 	if ( out[ out.length - 1 ] < u1 - 1e-4 ) out.push( u1 );
@@ -234,12 +237,15 @@ function buildBody( M, S, o ) {
 	const mouth = o.mouth && u0 === 0;
 	const Mo = S.mouth;
 	const corner = Mo.corner;
-	const mouthY = ( u ) => lerp( Mo.tip, Mo.y, Math.min( 1, u / corner ) );
+	// ((M16) a billfish: its upper jaw runs on past the lower one as its bill: ahead of the lower jaw's tip
+	// (Mo.from, u) it's shut, and the mouth opens from there back)
+	const from = Mo.from ?? 0;
+	const mouthY = ( u ) => lerp( Mo.tip, Mo.y, clamp( ( u - from ) / ( corner - from ), 0, 1 ) );
 	// angle of the upper / lower split: the mouth line up to the corner, then kept
 	const cCorner = section( S, corner );
 	const phiCorner = angleAt( cCorner, Mo.y );
 	const nu = clamp( Math.round( NQ * phiCorner / Math.PI ), 3, NQ - 3 ), nl = NQ - nu;
-	const jawW = ( u ) => mouth ? 1 - smooth( corner * 0.8, corner * 1.3, u ) : 0;
+	const jawW = ( u ) => mouth && u >= from ? 1 - smooth( corner * 0.8, corner * 1.3, u ) : 0;
 	const rings = [];
 	const p = [ 0, 0 ];
 
@@ -303,10 +309,11 @@ function buildBody( M, S, o ) {
 		const yt = mouthY( 0 );
 		const gap = Math.min( first.c.T, first.c.B ) * 0.3;
 		const upTip = M.v( 0, yt + gap * 0.5, zt, 0, PART.BODY, 0, 0 );
-		const loTip = M.v( 0, yt - gap * 0.5, zt + ( mouth ? Mo.protrude : 0 ), 0, PART.BODY + 0.9 * ( mouth ? 1 : 0 ), 0, 0 );
+		const jawed = mouth && ! from;
+		const loTip = M.v( 0, yt - gap * 0.5, zt + ( jawed ? Mo.protrude : 0 ), 0, PART.BODY + 0.9 * ( jawed ? 1 : 0 ), 0, 0 );
 		for ( let j = 0; j < nu; j ++ ) M.tri( upTip, first.upper[ j + 1 ], first.upper[ j ] );
 		for ( let j = 0; j < nl; j ++ ) M.tri( loTip, first.lower[ j + 1 ], first.lower[ j ] );
-		if ( ! mouth ) {
+		if ( ! jawed ) {
 
 			// closed lips at the tip
 			M.tri( upTip, first.upper[ 0 ], loTip );
@@ -319,8 +326,8 @@ function buildBody( M, S, o ) {
 			// cavity: roof under the upper jaw and floor over the lower jaw, meeting in the
 			// throat at the corner of the mouth
 			const roof = [], floor = [];
-			const ringsM = rings.filter( ( r ) => r.u <= corner + 1e-6 );
-			const dep = ( u ) => Math.min( 1, u / corner );
+			const ringsM = rings.filter( ( r ) => r.u <= corner + 1e-6 && r.u >= from - 1e-6 );
+			const dep = ( u ) => clamp( ( u - from ) / ( corner - from ), 0, 1 );
 			for ( const r of ringsM ) {
 
 				const k = 0.45 * ( 1 - dep( r.u ) );
@@ -357,12 +364,13 @@ function buildBody( M, S, o ) {
 
 			}
 
-			// front of the cavity closed to the lip tips
-			const r0 = roof[ 0 ], f0 = floor[ 0 ];
-			M.tri( upTip, r0[ 1 ], r0[ 0 ] );
-			M.tri( upTip, r0[ 2 ], r0[ 1 ] );
-			M.tri( loTip, f0[ 0 ], f0[ 1 ] );
-			M.tri( loTip, f0[ 1 ], f0[ 2 ] );
+			// front of the cavity closed to the lip tips ((M16) a billfish's: to the lower jaw's tip, under the bill)
+			const r0 = roof[ 0 ], f0 = floor[ 0 ], z0 = ringsM[ 0 ].z, y0 = mouthY( from );
+			const upF = from ? M.v( 0, y0, z0, from * L, PART.BODY, 0, 0 ) : upTip, loF = from ? M.v( 0, y0, z0, from * L, PART.BODY + 0.9, 0, 0 ) : loTip;
+			M.tri( upF, r0[ 1 ], r0[ 0 ] );
+			M.tri( upF, r0[ 2 ], r0[ 1 ] );
+			M.tri( loF, f0[ 0 ], f0[ 1 ] );
+			M.tri( loF, f0[ 1 ], f0[ 2 ] );
 
 		}
 
@@ -490,7 +498,9 @@ function midlineFins( M, S, segs, sign, o ) {
 
 		const part = sign > 0 ? ( seg.spiny ? PART.DORSAL1 : PART.DORSAL2 ) : PART.ANAL;
 		const ids = pickRays( seg.rays, [ 40, 7, 3, 2 ][ o.lod ] );
-		const fold = dead ? ( seg.spiny ? 0.42 : 0.22 ) : 0;
+		// ((M16) fold: how far it's lowered on a dead fish, where that isn't its kind's usual: a sailfish's sail,
+		// shown up, as in the photographs held up for one)
+		const fold = dead ? seg.fold ?? ( seg.spiny ? 0.42 : 0.22 ) : 0;
 		const rays = ids.map( ( k ) => {
 
 			const t = seg.rays > 1 ? k / ( seg.rays - 1 ) : 0;
@@ -498,6 +508,8 @@ function midlineFins( M, S, segs, sign, o ) {
 			const c = section( S, u );
 			const y0 = sign > 0 ? c.T * 0.9 : - c.B * 0.9;
 			let h = prof( seg.h, t ) + ( sign > 0 ? c.T : c.B ) * 0.1;
+			// ((M16) jag: its top edge torn and uneven, a sail's)
+			if ( seg.jag ) h *= 1 + seg.jag * Math.sin( k * 2.1 ) * Math.sin( k * 0.73 + 1 );
 			let rake = lerp( seg.rake[ 0 ], seg.rake[ 1 ], t );
 			rake = lerp( rake, 1.45, fold );
 			h *= dead ? ( seg.rays > 30 ? 0.85 : 0.95 ) : 1;
@@ -540,7 +552,8 @@ function caudalFin( M, S, o ) {
 		} else if ( C.shape === 'lunate' ) {
 
 			y = span * s * ( 0.75 + 0.25 * a );
-			len = C.len * ( C.fork + ( 1 - C.fork ) * Math.pow( a, 1.8 ) );
+			// ((M16) sweep: how hard the rays' length runs to the lobes' tips: past 1.8, broad sickles)
+			len = C.len * ( C.fork + ( 1 - C.fork ) * Math.pow( a, C.sweep ?? 1.8 ) );
 
 		} else if ( C.shape === 'heterocercal' ) {
 
@@ -567,7 +580,7 @@ function caudalFin( M, S, o ) {
 		return { b: [ 0, hp * s, zb ], t: [ 0, y, zb - 0.014 - len ], ub: L - 0.014, ut: L + len };
 
 	} );
-	membrane( M, PART.CAUDAL, rays, o.lod >= 2 ? 0 : 0.05, [ 3, 1, 1, 1 ][ o.lod ], ids, false );
+	membrane( M, PART.CAUDAL, rays, o.lod >= 2 ? 0 : C.notch ?? 0.05, [ 3, 1, 1, 1 ][ o.lod ], ids, false );
 
 }
 
@@ -606,9 +619,10 @@ function pairedFins( M, S, F, part, o ) {
 
 				yb = - c.B * 0.88;
 				xb = side * ( c.W * 0.22 + t * c.W * 0.12 );
-				alpha = lerp( - 0.35, - 0.75, t );
-				len = F.len * ( 1 - 0.45 * t );
-				spread = dead ? 0.14 : 0.35;
+				// ((M16) alpha, taper, base: a billfish's are a couple of long ribbons, back along the belly)
+				alpha = F.alpha ? lerp( F.alpha[ 0 ], F.alpha[ 1 ], t ) : lerp( - 0.35, - 0.75, t );
+				len = F.len * ( 1 - ( F.taper ?? 0.45 ) * t );
+				spread = dead ? 0.14 : F.spread ?? 0.35;
 
 			} else {
 
@@ -621,12 +635,15 @@ function pairedFins( M, S, F, part, o ) {
 				// along the flank: the lionfish's fans, open like wings)
 				spread = dead ? 0.16 : Array.isArray( F.spread ) ? lerp( F.spread[ 0 ], F.spread[ 1 ], t ) : F.spread;
 				if ( dead ) alpha = alpha * 0.6 - 0.08; // relaxed: rays closer together, pointing back
+				// ((M16) fan: how far the rays open, a marlin's narrow as a scythe; droop: held down from the flank)
+				alpha = alpha * ( F.fan ?? 1 ) - ( F.droop ?? 0 );
 
 			}
 
 			const dir = [ side * Math.sin( spread ) * Math.cos( alpha ), Math.sin( alpha ), - Math.cos( spread ) * Math.cos( alpha ) ];
-			const zb = zOf( F.u );
-			return { b: [ xb, yb, zb ], t: [ xb + dir[ 0 ] * len, yb + dir[ 1 ] * len, zb + dir[ 2 ] * len ], ub: F.u * L, ut: F.u * L - dir[ 2 ] * len };
+			const ub = pelvic && F.base ? F.u + F.base * t : F.u;
+			const zb = zOf( ub );
+			return { b: [ xb, yb, zb ], t: [ xb + dir[ 0 ] * len, yb + dir[ 1 ] * len, zb + dir[ 2 ] * len ], ub: ub * L, ut: ub * L - dir[ 2 ] * len };
 
 		} );
 		const first = M.pos.length / 3;

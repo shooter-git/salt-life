@@ -1,11 +1,14 @@
 import { Vector3 } from '../engine/index.js';
 import { Builder } from '../world/village/GeoBuilder.js';
-import { buildShed } from '../world/village/Buildings.js';
+import { buildShed, roofHoles } from '../world/village/Buildings.js';
 import { InstancedProps, Rand, WOOD, HARD, C, lin, cleat, tireFender, ropeCoil, bucket, cleaningTable, buoyString, oar, rowboat, netRack, fishRack, waterTank, woodpile, lantern, bench } from '../world/Props.js';
 import { stonePart } from '../world/debris/DebrisShapes.js';
 import { mulberry32 } from '../util/Noise.js';
 import { Vendor } from './Vendor.js';
 import { paintedBoard } from './Signpost.js';
+import { PearlsBoat, HAND } from './PearlsBoat.js';
+import { CampLights } from './CampLights.js';
+import { BOAT, lightsAt, lightsOn } from './PearlsDay.js';
 
 // (M15) The fish camp on the north beach, at the foot of the way over (world/terrain/NorthTrail.js), after the
 // landing beaches of the Caribbean's windward coasts (Tobago's Charlotteville, Grenada's Gouyave, St Lucia's
@@ -19,7 +22,11 @@ import { paintedBoard } from './Signpost.js';
 // Joe's price (she takes it round to the market herself, as the island's fish vendors do: at the Caribbean's
 // landing beaches it's mostly women who buy the catch off the boats and sell it on) and sells diesel at CAMP.fuel
 // a litre (it comes over in drums), from CAMP.hours[ 0 ] to CAMP.hours[ 1 ].
-//   const camp = new FishCamp( { scene, terrain, colliders, village } ); camp.update( camera ); camp.vendor
+// (M16) And her day: the pirogue coming and going (game/PearlsBoat.js), the camp's lights at night (game/CampLights.js),
+// both from the clock (game/PearlsDay.js); the shed's and the lean-to's tin in a hurricane, as the village's roofs (their
+// holes added to Village.roofHoles, its setDamage and the flying sheets take them from there). All built with the camp.
+//   const camp = new FishCamp( { scene, terrain, colliders, village, app } ); camp.update( camera ); camp.vendor
+//   camp.live( dt )   (each frame once it's built)   camp.lightsAt( hour, day ) -> LAMPS with their `on`; camp.lightsOn( hour, day )
 
 export const CAMP = {
 	shed: { x: 99, z: - 832.6, yaw: Math.PI, w: 3.6, d: 2.8 }, // its front (and door) to the sea, north
@@ -35,8 +42,9 @@ const _v = new Vector3(), _h = new Vector3();
 
 export class FishCamp {
 
-	constructor( { scene, terrain, colliders, village } ) {
+	constructor( { scene, terrain, colliders, village, app = null } ) {
 
+		this.app = app;
 		this.scene = scene;
 		this.terrain = terrain;
 		this.colliders = colliders;
@@ -73,6 +81,36 @@ export class FishCamp {
 
 	}
 
+	// (M16) a frame of her day
+	live( dt ) {
+
+		const app = this.app;
+		if ( ! app || ! this.built ) return;
+		const s = app.settings, pick = app.weatherPick ? app.weatherPick() : null, since = s.weatherSince;
+		const part = this.village.parts.find( ( p ) => p.part === 'camp' ), hidden = !! part && part.hidden, b = app.boatCtl;
+		// (your boat, in the berth she'd come in to: stopped there, not passing)
+		const yours = b && ! ( b.driven && b.speed > 1.5 ) ? b.position : null;
+		this.boat.update( dt, app.camera, s.timeOfDay, s.day, pick, since, yours, hidden );
+		if ( app.loadPerson ) this.boat.crew( dt, app.camera, ( url ) => app.loadPerson( url, HAND.clips ) );
+		this.lights.update( dt, app.camera, s.timeOfDay, s.day, pick, since, app.sky ? app.sky.visibility : 1, app.renderer ? app.renderer.domElement.height : 720, hidden );
+
+	}
+
+	// (for the turtles: a light on the beach turns a turtle back) where they are, and how lit each is (0..1)
+	lightsAt( hour, day = this.app ? this.app.settings.day : 1 ) {
+
+		const app = this.app;
+		return lightsAt( hour, day, app && app.weatherPick ? app.weatherPick() : null, app ? app.settings.weatherSince : 0 );
+
+	}
+
+	lightsOn( hour, day = this.app ? this.app.settings.day : 1 ) {
+
+		const app = this.app;
+		return lightsOn( hour, day, app && app.weatherPick ? app.weatherPick() : null, app ? app.settings.weatherSince : 0 );
+
+	}
+
 	_build() {
 
 		const T = this.terrain, g = ( x, z ) => T.heightAt( x, z ), colliders = this.colliders;
@@ -85,6 +123,35 @@ export class FishCamp {
 		const S = CAMP.shed;
 		const shed = buildShed( ctx, { ...S, wall: lin( 0x6f9c95 ), paint: 0.62, door: lin( 0xa8432f ), roof: lin( 0x7a4a34 ), name: 'campShed' } );
 		const floor = shed.floorY;
+		// (M16) a small window in its front, by the door: a frame, four dark panes, lit from inside some nights
+		const glow = { window: { x: S.x - 1.0, y: floor + 1.22, z: S.z - S.d / 2 - 0.022, w: 0.5, h: 0.56 }, gaps: [] };
+		{
+
+			const W = glow.window, fr = WOOD( rand.next(), 0.9, 0.5, 0 ), tint = lin( 0x56786f );
+			B.box( 'glass', W.x, W.y, W.z + 0.012, W.w, W.h, 0.012, { tint: lin( 0x8a7a5e ), data: [ rand.next(), 0, 0, 0 ] } );
+			for ( const sy of [ - 1, 1 ] ) B.box( 'wood', W.x, W.y + sy * ( W.h / 2 + 0.02 ), W.z - 0.006, W.w + 0.11, 0.045, 0.03, { grain: 1, tint, data: fr } );
+			for ( const sx of [ - 1, 1 ] ) B.box( 'wood', W.x + sx * ( W.w / 2 + 0.03 ), W.y, W.z - 0.006, 0.04, W.h + 0.08, 0.03, { grain: 1, tint, data: fr } );
+			B.box( 'wood', W.x, W.y, W.z - 0.012, 0.022, W.h, 0.016, { grain: 1, tint, data: fr } );
+			B.box( 'wood', W.x, W.y, W.z - 0.012, W.w, 0.022, 0.016, { grain: 1, tint, data: fr } );
+			// (the gaps between its boards the lamp shows through at night, each its own: front, and a few on the west side)
+			const z = S.z - S.d / 2 - 0.009;
+			for ( let k = 0; k < 9; k ++ ) {
+
+				const x = S.x + 1.72 - k * 0.415 + ( rand.next() - 0.5 ) * 0.05, y0 = floor + 0.1 + rand.next() * 0.7;
+				if ( Math.abs( x - ( S.x - 1 ) ) < 0.35 || Math.abs( x - ( S.x - 0.15 ) ) < 0.45 ) continue;
+				glow.gaps.push( { x, z, y0, y1: y0 + 0.5 + rand.next() * 1.0, w: 0.005 + rand.next() * 0.008, b: 0.55 + rand.next() * 0.6 } );
+
+			}
+
+			for ( let k = 0; k < 4; k ++ ) {
+
+				const y0 = floor + 0.2 + rand.next() * 0.6;
+				glow.gaps.push( { side: true, x: S.x - S.w / 2 - 0.009, z: S.z - 1.05 + k * 0.72 + ( rand.next() - 0.5 ) * 0.08, y0, y1: y0 + 0.45 + rand.next() * 0.7, w: 0.005 + rand.next() * 0.006, b: 0.5 + rand.next() * 0.5 } );
+
+			}
+
+		}
+
 		// its lean-to over the counter: two posts out front, the tin sloping down to them from the shed's eave
 		{
 
@@ -106,7 +173,10 @@ export class FishCamp {
 			this.scene.add( board );
 			this.board = board;
 			const rf = [ new Vector3( S.x - 2.0, top + 0.03, front ), new Vector3( S.x + 2.0, top + 0.03, front ), new Vector3( S.x + 2.0, low + 0.02, out - 0.2 ), new Vector3( S.x - 2.0, low + 0.02, out - 0.2 ) ];
-			B.slab( 'roofMetal', rf, 0.035, { up: new Vector3( 0, 1, 0 ), uDir: new Vector3( 0, low - top, out - front ).normalize(), tint: lin( 0x8a5a40 ), data: [ rand.next(), 0.85, 0, 0 ] } );
+			// ((M16) its u up from the eave, as the roof material's holes reckon it: a sheet goes from there, and it's open beneath)
+			const rfUp = new Vector3( 0, top - low, front - out ).normalize(), rfTint = lin( 0x8a5a40 ), rfData = [ rand.next(), 0.85, 0, 0 ];
+			B.slab( 'roofMetal', rf, 0.035, { up: new Vector3( 0, 1, 0 ), uDir: rfUp, tint: rfTint, data: rfData } );
+			roofHoles( ctx, [ { pts: rf, uDir: rfUp, seed: rfData[ 0 ], T: 0.035, tint: rfTint, data: rfData } ], 'campLeanTo', null );
 			// the counter: planks on two trestles, between Pearl and whoever's selling
 			const cz = out + 0.55, cy = g( S.x, cz ) + 0.92;
 			for ( let i = 0; i < 4; i ++ ) B.box( 'wood', S.x + 0.4, cy, cz - 0.2 + i * 0.135, 2.0, 0.045, 0.125, { grain: 0, data: WOOD( rand.next(), 0.8 ) } );
@@ -125,7 +195,9 @@ export class FishCamp {
 			B.rod( 'hard', [ S.x + 0.1, low - 0.12, out + 0.1 ], [ S.x + 0.1, low - 0.45, out + 0.1 ], 0.006, 0.006, { data: HARD( rand.next(), 0.3, 0.8, 0.4 ) } );
 			B.cyl( 'hard', S.x + 0.1, low - 0.75, out + 0.1, 0.04, 0.04, 0.3, { tint: lin( 0xc9b04a ), data: HARD( rand.next(), 0.1, 0.6, 0.35 ) } );
 			B.torus( 'hard', S.x + 0.1, low - 0.8, out + 0.1, 0.05, 0.006, { rx: Math.PI / 2, data: HARD( rand.next(), 0.3, 0.8, 0.4 ) } );
-			lantern( B, S.x - 1.4, low - 0.35, out + 0.12, rand.next() );
+			// ((M16) its glass unlit: it's lit when it's lit, CampLights)
+			const seedL = rand.next();
+			glow.lantern = lantern( B, S.x - 1.4, low - 0.35, out + 0.12, seedL, 1, [ seedL, 0, 0, 0 ] );
 			// floats strung along the shed's front, under its eave
 			buoyString( B, [ S.x - 1.6, floor + 2.0, front - 0.06 ], [ S.x - 0.4, floor + 2.0, front - 0.06 ], 4, rand, 0.18 );
 			// a bench along its west wall
@@ -169,6 +241,10 @@ export class FishCamp {
 			const ex = J.x + J.headWidth - J.width / 2;
 			for ( const z of [ J.z1 + 0.6, J.z1 + J.head - 0.5 ] ) cleat( B, ex - 0.18, y, z, Math.PI / 2, rand.next() );
 			for ( const z of [ J.z1 + 1.4, J.z1 + 3.0 ] ) tireFender( B, ex + 0.1, y - 0.1, z, Math.PI / 2, 0.75, rand.next() );
+			// (M16) its west face, for the camp's own boat: she lies along it, bow to the sea (PearlsDay's BOAT), leaving the head's east face to you
+			const wx = J.x - J.width / 2;
+			for ( const z of [ BOAT.berth.z - 2.4, BOAT.berth.z + 2.6 ] ) cleat( B, wx + 0.18, y, z, Math.PI / 2, rand.next() );
+			for ( const z of [ BOAT.berth.z - 1.5, BOAT.berth.z + 1.1 ] ) tireFender( B, wx - 0.1, y - 0.1, z, - Math.PI / 2, 0.8, rand.next() );
 			for ( const sz of [ - 0.25, 0.25 ] ) B.rod( 'wood', [ ex + 0.12, y + 0.4, J.z1 + 2.2 + sz ], [ ex + 0.12, y - 2.2, J.z1 + 2.2 + sz ], 0.03, 0.03, { data: wd() } );
 			for ( let r = 0; r < 7; r ++ ) B.rod( 'wood', [ ex + 0.12, y - 0.3 - r * 0.3, J.z1 + 1.95 ], [ ex + 0.12, y - 0.3 - r * 0.3, J.z1 + 2.45 ], 0.022, 0.022, { data: wd() } );
 			ropeCoil( B, J.x - 0.35, y, J.z1 + 1.2, 0.08, 0.28, 5, rand.next() );
@@ -225,6 +301,20 @@ export class FishCamp {
 			oar( B, [ 119.8, g( 119.8, - 836.2 ) + 0.06, - 836.2 ], [ 120.6, g( 120.6, - 838.6 ) + 0.05, - 838.6 ], rand.next() );
 			// the fire pit: a ring of stones, its charred wood, a log to sit on
 			const fx = S.x + 6.2, fz = S.z - 6.0, fy = g( fx, fz );
+			glow.fire = [ fx, fy, fz ];
+			// (M16) the pirogue's rollers, lying where she's hauled up the beach: lengths of coconut trunk
+			{
+
+				const H = BOAT.haul;
+				for ( const [ dz, dx ] of [ [ - 2.6, 0.1 ], [ - 0.4, - 0.08 ], [ 1.7, 0.05 ] ] ) {
+
+					const hz = H.z + dz, hx = H.x + dx;
+					B.rod( 'wood', [ hx - 1, g( hx - 1, hz ) + 0.05, hz + 0.05 ], [ hx + 1, g( hx + 1, hz ) + 0.05, hz - 0.04 ], 0.1, 0.09, { segs: 6, tint: lin( 0x6f6252 ), data: WOOD( rand.next(), 1 ) } );
+
+				}
+
+			}
+
 			for ( let k = 0; k < 9; k ++ ) {
 
 				const a = k / 9 * Math.PI * 2 + rand.next() * 0.3, s = 0.11 + rand.next() * 0.06;
@@ -250,6 +340,17 @@ export class FishCamp {
 
 		this.triangles = Object.values( B.batches ).reduce( ( n, b ) => n + ( b ? b.icount / 3 : 0 ), 0 );
 		this.village._assembleBuilder( B, 'camp' );
+		// (M16) its roofs, as the village's take a hurricane (their fates by ids of their own: the same on any tier)
+		ctx.holes.forEach( ( h, k ) => {
+
+			h.id = 900 + k;
+
+		} );
+		const from = this.village.addRoofHoles( ctx.holes ), app = this.app;
+		if ( app && app.flyingSheets ) app.flyingSheets.add( this.village.sheetFlyers( from ) );
+		// (M16) her boat and her lights
+		this.boat = new PearlsBoat( { scene: this.scene, terrain: T, colliders, material: this.village.materials.wood, tier: this.village.tier, waves: app && app.waves, query: app && app.query } );
+		this.lights = new CampLights( { scene: this.scene, lights: app && app.localLights, at: glow } );
 
 	}
 

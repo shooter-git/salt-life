@@ -15,14 +15,17 @@
 //   hull.engine: 'off' | 'cranking' | 'running' | 'stalled'   hull.drain() -> [ { kind, ... } ]: crank
 //   ( catches ), caught, failed ( why ), stall ( why ), knock ( speed, ground ), scoop
 //   slamWear( 0.8 )  hitWear( m/s )  thrustMul( wear )  leakLs( wear )  rainLs( rain )  repairFee( wear )
+// (M16) Each boat's own figures (HULLS, the tests' and the lobster boat's by default): new Hull( { store, boat } ),
+// hull.setBoat( id ) as you get into another. A kayak has no engine or bilge to go wrong
 
 const clamp = ( x, a, b ) => ( x < a ? a : x > b ? b : x );
 const clamp01 = ( x ) => clamp( x, 0, 1 );
 
 // a slam wears her past this strength (a fair day's hardest, flat out, are under it), as the square of
-// how far past it (a gale flat out: about a quarter in five minutes; at half throttle, a little)
+// how far past it (a gale flat out, head to it: about a quarter in five minutes; at a third of her throttle, a little;
+// (M16) tools/gale-figures.mjs measures each boat)
 export const SLAM_FROM = 0.5;
-const SLAM_K = 0.04;
+const SLAM_K = 0.01;
 // a knock on a pile, or a drop onto the ground: heard from this closing speed (m/s), and wearing her from
 // this one (a pile at full speed: about a tenth)
 export const KNOCK_FROM = 0.6;
@@ -69,25 +72,41 @@ export const REPAIR_FULL = 150;
 // leaves her about half worn, its weak side less. Hauled out (Marta's, before it comes), none of it
 export const STORM_FROM = 20;
 const STORM_SPAN = 15, STORM_K = 0.002;
-export const stormWear = ( U ) => ( U > STORM_FROM ? STORM_K * ( ( U - STORM_FROM ) / STORM_SPAN ) ** 2 : 0 );
 
-export const slamWear = ( s ) => ( s > SLAM_FROM ? SLAM_K * ( s - SLAM_FROM ) * ( s - SLAM_FROM ) : 0 );
-export const hitWear = ( v ) => ( v > HIT_FROM ? HIT_K * Math.pow( v - HIT_FROM, 1.5 ) : 0 );
+// (M16) each boat's figures, the lobster boat's as above: engine (false: nothing to crank, stall or run dry), bilge
+// (false: self-bailing with nowhere for it to gather), floodL and bilgeMax (litres to her engine, and all she holds),
+// rain (L/s in a full downpour: the cockpit that drains into her), green (litres a slam past greenFrom ships), leak
+// (fully worn, L/s), slam, hit and storm (how she takes each, as SLAM_K, HIT_K and STORM_K), sea and knock (a sea breaking
+// on her: BreakingSeas), repair (Marta's full repair, $). docs/m16/fleet.md and opening.md say where they're from
+export const HULLS = {
+	kayak: { engine: false, bilge: false, floodL: Infinity, bilgeMax: 0, rain: 0, green: 0, greenFrom: 1, leak: 0, slam: 0.01, hit: 0.002, storm: 0.003, sea: 0, knock: 1, repair: 25 },
+	console: { engine: true, bilge: true, floodL: 200, bilgeMax: 500, rain: 0.02, green: 6, greenFrom: 0.75, leak: 0.3, slam: 0.012, hit: 0.005, storm: 0.0025, sea: 15, knock: 0.7, repair: 90 },
+	lobster: { engine: true, bilge: true, floodL: FLOOD_L, bilgeMax: BILGE_MAX, rain: RAIN_LS, green: GREEN_L, greenFrom: GREEN_FROM, leak: WORN_LEAK, slam: SLAM_K, hit: HIT_K, storm: STORM_K, sea: 60, knock: 0.5, repair: REPAIR_FULL },
+	sportfisher: { engine: true, bilge: true, floodL: 1500, bilgeMax: 3500, rain: 0.05, green: 40, greenFrom: 0.95, leak: 1, slam: 0.005, hit: 0.003, storm: 0.0012, sea: 30, knock: 0.25, repair: 900 },
+};
+const figures = ( boat ) => HULLS[ boat ] || HULLS.lobster;
+
+export const stormWear = ( U, boat = 'lobster' ) => ( U > STORM_FROM ? figures( boat ).storm * ( ( U - STORM_FROM ) / STORM_SPAN ) ** 2 : 0 );
+
+export const slamWear = ( s, boat = 'lobster' ) => ( s > SLAM_FROM ? figures( boat ).slam * ( s - SLAM_FROM ) * ( s - SLAM_FROM ) : 0 );
+export const hitWear = ( v, boat = 'lobster' ) => ( v > HIT_FROM ? figures( boat ).hit * Math.pow( v - HIT_FROM, 1.5 ) : 0 );
 export const scrapeWear = ( v, dt ) => ( v > SCRAPE_FROM ? SCRAPE_K * ( v - SCRAPE_FROM ) * ( v - SCRAPE_FROM ) * dt : 0 );
 export const thrustMul = ( wear ) => 1 - ( 1 - WORN_THRUST ) * clamp01( wear );
-export const leakLs = ( wear ) => WORN_LEAK * clamp01( wear );
-export const rainLs = ( rain ) => RAIN_LS * clamp01( rain );
-export const greenWaterL = ( s ) => ( s > GREEN_FROM ? GREEN_L * ( s - GREEN_FROM ) : 0 );
-export const repairFee = ( wear ) => ( wear > 0.005 ? Math.max( 5, Math.round( REPAIR_FULL * clamp01( wear ) ) ) : 0 );
+export const leakLs = ( wear, boat = 'lobster' ) => figures( boat ).leak * clamp01( wear );
+export const rainLs = ( rain, boat = 'lobster' ) => figures( boat ).rain * clamp01( rain );
+export const greenWaterL = ( s, boat = 'lobster' ) => ( s > figures( boat ).greenFrom ? figures( boat ).green * ( s - figures( boat ).greenFrom ) : 0 );
+export const repairFee = ( wear, boat = 'lobster' ) => ( wear > 0.005 ? Math.max( 5, Math.round( figures( boat ).repair * clamp01( wear ) ) ) : 0 );
 // the chance a crank catches: a sound engine first time; after a stall a try or two, more in a worn boat
 export const crankChance = ( wear, troubled ) => clamp( ( troubled ? 0.55 : 1 ) - 0.4 * clamp01( wear ), 0.15, 1 );
 
 export class Hull {
 
-	constructor( { store = { hull: 0 }, random = Math.random } = {} ) {
+	constructor( { store = { hull: 0 }, random = Math.random, boat = 'lobster' } = {} ) {
 
 		this.store = store;
 		this.random = random;
+		this.boat = boat;
+		this.figures = figures( boat );
 		this.bilge = 0;
 		this.engine = 'off';
 		this.why = null; // why she last stalled: 'flooded', 'slam' or 'fuel'
@@ -102,6 +121,28 @@ export class Hull {
 		this._hitV = 0;
 		this._scoop = 0;
 		this._aground = false;
+
+	}
+
+	// (M16) she's another boat now: her figures, and what was in the last one's bilge stays there
+	setBoat( boat ) {
+
+		this.boat = boat;
+		this.figures = figures( boat );
+		this.bilge = 0;
+		this.engine = 'off';
+		this.why = null;
+		this.troubled = false;
+		this.cough = 1;
+		this.pumping = false;
+		this.events = [];
+
+	}
+
+	// (M16) the water that reaches her engine (litres)
+	get floodL() {
+
+		return this.figures.floodL;
 
 	}
 
@@ -127,7 +168,7 @@ export class Hull {
 	// the water's near the engine (it coughs), or over it (it won't start)
 	get flooded() {
 
-		return this.bilge >= FLOOD_L * RESTART;
+		return this.bilge >= this.figures.floodL * RESTART;
 
 	}
 
@@ -142,8 +183,8 @@ export class Hull {
 	// a slam into a sea (BoatSpray's onSlam: strength 0..1, at most every 0.4 s, only with way on)
 	slam( s ) {
 
-		this.wear += slamWear( s );
-		this.bilge = Math.min( BILGE_MAX, this.bilge + greenWaterL( s ) );
+		this.wear += slamWear( s, this.boat );
+		this.bilge = Math.min( this.figures.bilgeMax, this.bilge + greenWaterL( s, this.boat ) );
 		if ( this.engine === 'running' && s >= STALL_SLAM && this.wear >= STALL_WEAR && this.random() < STALL_CHANCE ) this._stall( 'slam' );
 
 	}
@@ -153,7 +194,7 @@ export class Hull {
 
 		if ( v < KNOCK_FROM ) return;
 		if ( this._hitT > 0 && v <= this._hitV ) return;
-		this.wear += Math.max( 0, hitWear( v ) - ( this._hitT > 0 ? hitWear( this._hitV ) : 0 ) );
+		this.wear += Math.max( 0, hitWear( v, this.boat ) - ( this._hitT > 0 ? hitWear( this._hitV, this.boat ) : 0 ) );
 		this._hitT = 0.4;
 		this._hitV = v;
 		this.events.push( { kind: 'knock', speed: v, ground } );
@@ -187,7 +228,7 @@ export class Hull {
 
 		this._hitT = Math.max( 0, this._hitT - dt );
 		// ((M13) battered at her lines in a storm, while nobody's at her helm: i.storm, the wind at her)
-		if ( ! i.driven && i.storm > STORM_FROM ) this.wear = Math.min( 1, this.wear + stormWear( i.storm ) * dt );
+		if ( ! i.driven && i.storm > STORM_FROM ) this.wear = Math.min( 1, this.wear + stormWear( i.storm, this.boat ) * dt );
 		this._knock( i.pile || 0, false );
 		this._knock( i.ground || 0, true );
 		// on the bottom: scraped by the sliding, ground away under power; a beaching's first touch knocks
@@ -206,8 +247,9 @@ export class Hull {
 		// the water: in by the leak and the rain, out by the bucket and the pump
 		const pump = this.bilge > 0.5 ? i.pumpLs || 0 : 0;
 		const bailing = !! i.bailing && this.bilge > 0;
-		const into = leakLs( this.wear ) + rainLs( i.rain || 0 );
-		this.bilge = clamp( this.bilge + ( into - pump - ( bailing ? BAIL_LS : 0 ) ) * dt, 0, BILGE_MAX );
+		// ((M16) and green water, in more sea than she can stand: i.awash, L/s, Seaworthy.awashLs)
+		const into = leakLs( this.wear, this.boat ) + rainLs( i.rain || 0, this.boat ) + ( i.awash || 0 );
+		this.bilge = clamp( this.bilge + ( into - pump - ( bailing ? BAIL_LS : 0 ) ) * dt, 0, this.figures.bilgeMax );
 		this.pumping = pump > 0;
 		if ( bailing ) {
 
@@ -222,7 +264,9 @@ export class Hull {
 		} else this._scoop = 0;
 
 		// the engine: taking the helm cranks her, leaving it stops her; stalled, the throttle cranks her again
-		if ( ! i.driven ) {
+		// ((M16) no engine: under way as soon as she's paddled)
+		if ( ! this.figures.engine ) this.engine = i.driven ? 'running' : 'off';
+		else if ( ! i.driven ) {
 
 			this.engine = 'off';
 			this._t = 0;
@@ -258,11 +302,11 @@ export class Hull {
 			if ( this._t === 0 && ( i.throttle || 0 ) > 0.3 ) this._crank();
 
 		} else if ( ! i.fuel ) this._stall( 'fuel' );
-		else if ( this.bilge >= FLOOD_L ) this._stall( 'flooded' );
+		else if ( this.bilge >= this.figures.floodL ) this._stall( 'flooded' );
 
 		// she coughs as the water nears the engine: a dip in her revs every second or few
 		this.cough = 1;
-		if ( this.engine === 'running' && this.bilge >= FLOOD_L * COUGH ) {
+		if ( this.engine === 'running' && this.bilge >= this.figures.floodL * COUGH ) {
 
 			this._cough -= dt;
 			if ( this._cough <= 0 ) this._cough = 1.2 + this.random() * 2.5;

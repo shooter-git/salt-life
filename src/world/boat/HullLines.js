@@ -27,19 +27,23 @@ export const RHO_SEAWATER = 1025;
 
 export class HullLines {
 
-	constructor() {
+	// (M16) Another boat's lines: extend this, overriding the design curves below (sheerY, sheerX, keelY, chineX, chineY,
+	// bilgeTangent, bottomConvexity, flare) as her own, and passing her figures here. Everything that floats her, her
+	// colliders and her spray come from these (BoatModel, world/boat/Vessel).
+	constructor( { zAft = - 3.9, zBow = 4.3, deckY = 0.35, shell = 0.07, houseBack = - 0.35, houseFront = 1.45, stemRake = 0.2, forefootR = 0.45, widest = 1.5 } = {} ) {
 
-		this.zAft = - 3.9;
-		this.zBow = 4.3;
+		this.zAft = zAft;
+		this.zBow = zBow;
 		this.length = this.zBow - this.zAft;
 
-		this.deckY = 0.35; // cockpit sole
-		this.shell = 0.07; // outer skin to inner lining at the sheer
-		this.houseBack = - 0.35; // aft end of the wheelhouse side walls
-		this.houseFront = 1.45; // wheelhouse front (base of the windshield)
+		this.deckY = deckY; // cockpit sole
+		this.shell = shell; // outer skin to inner lining at the sheer
+		this.houseBack = houseBack; // aft end of the wheelhouse side walls
+		this.houseFront = houseFront; // wheelhouse front (base of the windshield)
+		this.widest = widest; // (M16) m: no half-breadth of her below the waterline's wider
 
 		// Stem: straight rake above the forefoot, circular forefoot below.
-		const k = 0.2, R = 0.45;
+		const k = stemRake, R = forefootR;
 		const yF = this.keelY( 1 ), yTip = this.sheerY( 1 );
 		const zW = this.zBow - k * yTip;
 		const q = Math.sqrt( 1 + k * k );
@@ -411,7 +415,7 @@ export class HullLines {
 		// Rasterize the immersed canoe body (port half) into a bottom height field.
 		const cell = 0.02;
 		const x0 = 0, z0 = this.zAft - 0.02;
-		const nx = Math.ceil( 1.5 / cell ), nz = Math.ceil( ( this.wlEnd + 0.05 - z0 ) / cell );
+		const nx = Math.ceil( this.widest / cell ), nz = Math.ceil( ( this.wlEnd + 0.05 - z0 ) / cell );
 		const bottom = new Float32Array( nx * nz ).fill( Infinity );
 		const grid = [];
 		for ( let i = 0; i <= NT; i ++ ) {

@@ -91,6 +91,10 @@ const LOB_NIGHT = [ 5.8, 19.2 ];
 const FLIP_S = 0.9; // s a lobster's tail flip lasts
 const BONE_TILT = 0.9; // a rooting bonefish's nose-down tilt (rad)
 const RAID_OFF = 5; // s a thief keeps going once it has the fish
+// (M16) the far water's fish (BEHAVIOUR's far; setFinds). Only ever about you: each group's sent to something near you
+// once you're off from where it was (keep, m), when one's within reach (near, m; open water: a fish in `open` of the
+// lattice's cells, this size, for so many seconds, wherever it's deep; `night`: the swordfish, the same, after dark)
+const FAR = { groups: [ [ 'mahiFar', 8 ], [ 'mahiFar', 6 ], [ 'mahiWake', 9 ], [ 'mahiWake', 7 ], [ 'tunaFar', 8 ], [ 'yellowfin', 5 ], [ 'sailfish', 2 ], [ 'wahoo', 2 ], [ 'whiteMarlin', 1 ], [ 'blueMarlin', 1 ], [ 'swordfish', 1 ] ], keep: 90, near: { debris: 220, wake: 260, bait: 260 }, cell: 500, open: 0.22, night: 0.4, every: 300, deep: 60 };
 
 // Behaviour per kind of swimmer. model: anatomy (FishSpecies.js) or 'stingray' / 'eagleRay' /
 // 'turtle'; length range (m); mode (see stepGroup); speeds in body lengths / s (cruise, max,
@@ -145,8 +149,8 @@ const BEHAVIOUR = {
 	lionfish: { model: 'lionfish', fish: 'lionfish', length: [ 0.18, 0.38 ], mode: 'hover', cruise: 0.2, max: 0.8, burst: 2, accel: 2, sep: 3, nbr: 4, wAli: 0.2, wCoh: 0.2, flee: 0.9, depth: [ 0.04, 0.2 ], homeRadius: 1.2, amp: 0.03, freq: [ 0.8, 0.5 ], band: [ 3, 22 ] },
 	muttonSnapper: { model: 'muttonSnapper', fish: 'muttonSnapper', length: [ 0.38, 0.72 ], mode: 'forage', cruise: 0.6, max: 1.8, burst: 9, accel: 2.5, sep: 2.2, nbr: 6, wAli: 0.8, wCoh: 0.6, wGoal: 1, flee: 5.5, depth: [ 0.04, 0.2 ], homeRadius: 16, amp: 0.06, freq: [ 1.2, 0.8 ], band: [ 4, 20 ] },
 	redSnapper: { model: 'redSnapper', fish: 'redSnapper', length: [ 0.4, 0.78 ], mode: 'mill', cruise: 0.5, max: 1.8, burst: 9, accel: 2.5, sep: 1.8, nbr: 5, wAli: 1.2, wCoh: 0.9, wGoal: 0.9, flee: 5, depth: [ 0.05, 0.3 ], homeRadius: 4, amp: 0.06, freq: [ 1.2, 0.8 ], band: [ 15, 32 ] },
-	mahi: { model: 'mahi', fish: 'mahi', length: [ 0.7, 1.25 ], mode: 'cruise', curious: 4, cruise: 1.0, max: 3, burst: 8, accel: 3, sep: 2.5, nbr: 5, wSep: 3, wAli: 1.2, wCoh: 0.6, wGoal: 0.8, flee: 6, depth: [ 0.75, 0.95 ], homeRadius: 45, amp: 0.06, freq: [ 1.2, 0.7 ], ceiling: - 0.5, band: [ 16, 1e9 ] },
-	tuna: { model: 'tuna', fish: 'tuna', length: [ 0.5, 0.85 ], mode: 'cruise', cruise: 1.4, max: 3.5, burst: 9, accel: 4, sep: 2, nbr: 6, wAli: 2, wCoh: 1.2, wGoal: 0.8, flee: 7, depth: [ 0.45, 0.85 ], homeRadius: 45, amp: 0.05, freq: [ 1.6, 0.8 ], band: [ 16, 1e9 ] },
+	mahi: { model: 'mahi', fish: 'mahi', length: [ 0.7, 1.25 ], mode: 'cruise', curious: 4, cruise: 1.0, max: 3, burst: 8, accel: 3, sep: 2.5, nbr: 5, wSep: 3, wAli: 1.2, wCoh: 0.6, wGoal: 0.8, flee: 6, under: [ 0.8, 4 ], homeRadius: 45, amp: 0.06, freq: [ 1.2, 0.7 ], ceiling: - 0.5, band: [ 16, 1e9 ] },
+	tuna: { model: 'tuna', fish: 'tuna', length: [ 0.5, 0.85 ], mode: 'cruise', cruise: 1.4, max: 3.5, burst: 9, accel: 4, sep: 2, nbr: 6, wAli: 2, wCoh: 1.2, wGoal: 0.8, flee: 7, under: [ 1.5, 8 ], homeRadius: 45, amp: 0.05, freq: [ 1.6, 0.8 ], band: [ 16, 1e9 ] },
 	// (Salt Life) inside the breakers (surf: the surf zone is theirs), running the trough along the beach
 	// at wading depth: pods of finger mullet (now and then one leaps) and of silverside fry, for the cast
 	// net from the beach (game/CastNet.js)
@@ -174,6 +178,22 @@ const BEHAVIOUR = {
 	nurseShark: { model: 'nurseShark', label: 'Nurse shark', rule: 'shark', length: [ 1.6, 2.6 ], mode: 'glide', cruise: 0.18, max: 0.6, burst: 1.5, accel: 0.8, sep: 1, nbr: 2, wSep: 1, wAli: 0, wCoh: 0, wGoal: 0.8, flee: 2, depth: [ 0, 0 ], homeRadius: 10, amp: 0.08, freq: [ 0.45, 0.4 ], hug: 0.07, rests: [ 0.06, 40, 80 ], band: [ 3, 14 ] },
 	// spiny lobsters (stepLobster): by hand, not with the speargun
 	lobster: { model: 'lobster', fish: 'lobster', length: [ 0.17, 0.42 ], mode: 'lobster', cruise: 0.3, max: 0.6, burst: 8, accel: 3, flee: 1.1, depth: [ 0, 0 ], homeRadius: 3, amp: 0, freq: [ 1.5, 2 ], band: [ 2.5, 12 ] },
+	// (M16) the flats': redfish rooting along the bottom with their tails up, as the bonefish do, heavier and less
+	// nervous; trout in small loose schools over the grass
+	redfish: { model: 'redfish', fish: 'redfish', length: [ 0.45, 0.95 ], mode: 'flats', cruise: 0.4, max: 1.8, burst: 8, accel: 4, sep: 2.5, nbr: 5, wAli: 0.8, wCoh: 0.6, wGoal: 0.8, flee: 6, depth: [ 0, 0.15 ], homeRadius: 12, amp: 0.07, freq: [ 1.2, 0.7 ], ceiling: - 0.18, minDepth: 0.18, band: [ 0.4, 1.5 ] },
+	trout: { model: 'trout', fish: 'trout', length: [ 0.3, 0.6 ], mode: 'school', cruise: 0.6, max: 2, burst: 8, accel: 3, sep: 2, nbr: 5, wAli: 1.2, wCoh: 0.8, wGoal: 0.8, flee: 4.5, depth: [ 0.25, 0.7 ], homeRadius: 14, amp: 0.07, freq: [ 1.4, 0.8 ], minDepth: 0.8, band: [ 1.5, 6 ] },
+	// (M16) The far water's, seen only about you out there (FAR; setFinds): mahi under the debris and along the
+	// weedlines, a raft of a hurricane's wreckage with the most of them; tuna and sailfish about the bait; a wahoo,
+	// a marlin now and then in the open water, a swordfish after dark. under: how far under the surface they swim
+	mahiFar: { model: 'mahi', fish: 'mahi', far: 'debris', length: [ 0.7, 1.3 ], mode: 'cruise', curious: 5, cruise: 0.9, max: 3, burst: 8, accel: 3, sep: 2.5, nbr: 5, wSep: 3, wAli: 1.2, wCoh: 0.7, wGoal: 1, flee: 6, under: [ 0.6, 3.5 ], homeRadius: 12, amp: 0.06, freq: [ 1.2, 0.7 ], ceiling: - 0.3, band: [ 8, 1e9 ] },
+	mahiWake: { model: 'mahi', fish: 'mahi', far: 'wake', length: [ 0.7, 1.45 ], mode: 'cruise', curious: 5, cruise: 0.9, max: 3, burst: 8, accel: 3, sep: 2.5, nbr: 5, wSep: 3, wAli: 1.2, wCoh: 0.7, wGoal: 1, flee: 6, under: [ 0.6, 4 ], homeRadius: 14, amp: 0.06, freq: [ 1.2, 0.7 ], ceiling: - 0.3, band: [ 8, 1e9 ] },
+	tunaFar: { model: 'tuna', fish: 'tuna', far: 'bait', length: [ 0.55, 1.05 ], mode: 'cruise', cruise: 1.4, max: 3.5, burst: 9, accel: 4, sep: 2, nbr: 6, wAli: 2, wCoh: 1.2, wGoal: 1, flee: 7, under: [ 1, 7 ], homeRadius: 26, amp: 0.05, freq: [ 1.6, 0.8 ], ceiling: - 0.3, band: [ 8, 1e9 ] },
+	yellowfin: { model: 'yellowfin', fish: 'yellowfin', far: 'bait', length: [ 0.95, 1.8 ], mode: 'cruise', cruise: 1.1, max: 3.2, burst: 8, accel: 3.5, sep: 2, nbr: 6, wAli: 2, wCoh: 1.2, wGoal: 1, flee: 8, under: [ 1.5, 9 ], homeRadius: 28, amp: 0.05, freq: [ 1.4, 0.8 ], ceiling: - 0.3, band: [ 8, 1e9 ] },
+	wahoo: { model: 'wahoo', fish: 'wahoo', far: 'open', length: [ 1.1, 1.8 ], mode: 'cruise', cruise: 1.2, max: 5, burst: 12, accel: 5, sep: 3, nbr: 4, wSep: 2, wAli: 0.4, wCoh: 0.3, wGoal: 0.9, flee: 8, under: [ 1, 8 ], homeRadius: 30, amp: 0.05, freq: [ 1.6, 0.8 ], ceiling: - 0.3, band: [ 8, 1e9 ] },
+	sailfish: { model: 'sailfish', fish: 'sailfish', far: 'bait', length: [ 1.9, 2.9 ], mode: 'cruise', curious: 7, cruise: 0.5, max: 2.2, burst: 7, accel: 1.8, sep: 4, nbr: 5, wSep: 2, wAli: 1, wCoh: 0.6, wGoal: 0.9, flee: 7, under: [ 0.5, 4 ], homeRadius: 24, amp: 0.05, freq: [ 0.8, 0.6 ], ceiling: - 0.25, band: [ 8, 1e9 ] },
+	whiteMarlin: { model: 'whiteMarlin', fish: 'whiteMarlin', far: 'open', length: [ 2, 2.8 ], mode: 'cruise', curious: 6, cruise: 0.45, max: 2, burst: 6, accel: 1.6, sep: 4, nbr: 4, wSep: 2, wAli: 0, wCoh: 0, wGoal: 0.8, flee: 7, under: [ 1, 7 ], homeRadius: 30, amp: 0.05, freq: [ 0.7, 0.55 ], ceiling: - 0.25, band: [ 8, 1e9 ] },
+	blueMarlin: { model: 'blueMarlin', fish: 'blueMarlin', far: 'open', length: [ 2.6, 4.2 ], mode: 'cruise', curious: 8, cruise: 0.35, max: 1.6, burst: 5, accel: 1.2, sep: 5, nbr: 4, wSep: 2, wAli: 0, wCoh: 0, wGoal: 0.8, flee: 8, under: [ 1.5, 9 ], homeRadius: 34, amp: 0.045, freq: [ 0.55, 0.45 ], ceiling: - 0.3, band: [ 8, 1e9 ] },
+	swordfish: { model: 'swordfish', fish: 'swordfish', far: 'night', length: [ 1.6, 3.2 ], mode: 'cruise', curious: 6, cruise: 0.4, max: 2, burst: 6, accel: 1.4, sep: 5, nbr: 4, wSep: 2, wAli: 0, wCoh: 0, wGoal: 0.8, flee: 6, under: [ 2, 12 ], homeRadius: 30, amp: 0.05, freq: [ 0.6, 0.5 ], ceiling: - 0.4, band: [ 8, 1e9 ] },
 };
 for ( const k in BEHAVIOUR ) BEHAVIOUR[ k ] = { name: k, ...base, ...BEHAVIOUR[ k ] };
 
@@ -508,6 +528,9 @@ export class FishSchools {
 		for ( let i = 0; i < 8; i ++ ) place( 'lionfish', i % 3 ? 1 : 2, reef, true );
 		for ( const c of [ 3, 2, 2 ] ) place( 'muttonSnapper', c, { ...reef, r: this.radius } );
 
+		// ---- (M16) the far water's: parked well off until you're out there (setFinds)
+		this.farGroups = bay ? FAR.groups.map( ( [ name, count ], i ) => this.addGroup( name, count, { x: 0, z: 4000 + i * 200, r: BEHAVIOUR[ name ].homeRadius, band: BEHAVIOUR[ name ].band } ) ) : [];
+
 		// ---- the drop-off: the reef's deep seaward slope
 		const drop = this.dropOff();
 		this.dropPath = drop;
@@ -551,7 +574,8 @@ export class FishSchools {
 		// the blue water off it (by boat)
 		for ( const c of [ 6, 5 ] ) place( 'redSnapper', c, { x: 5, z: 165, r: 40 } );
 		place( 'redSnapper', 6, { x: 0, z: 330, r: 80 } );
-		for ( const c of [ 5, 4 ] ) place( 'mahi', c, { x: 0, z: 420, r: 90 } );
+		// ((M16) only a few mahi this close in: the most of them are out about the finds: FAR)
+		place( 'mahi', 3, { x: 0, z: 420, r: 90 } );
 		place( 'tuna', 10, { x: - 40, z: 440, r: 90 } );
 
 		// fry along the beach, just outside the breakers (or inside sheltered water)
@@ -599,6 +623,10 @@ export class FishSchools {
 		for ( const c of [ 10, 8 ] ) place( 'whiteMullet', c, { x: 60, z: 10, r: 80 } );
 		place( 'bonefish', 6, { x: 172, z: 136, r: 10 } );
 		place( 'bonefish', 5, { x: - 374, z: 52, r: 16 } );
+		// ((M16) the kayak's: redfish rooting on the same flats, a few, tails up; trout over the bay's shallow grass)
+		place( 'redfish', 3, { x: 176, z: 128, r: 14 } );
+		place( 'redfish', 2, { x: - 366, z: 46, r: 18 } );
+		for ( const c of [ 5, 4 ] ) place( 'trout', c, { x: 50, z: 30, r: 60 } );
 		// the sharks: reef sharks along the drop-off, blacktips off the bay's mouth and beyond, nurse
 		// sharks on the reef's sand and under the pier's head
 		for ( const c of [ 1, 2 ] ) {
@@ -846,6 +874,9 @@ export class FishSchools {
 
 		const floor = Math.max( this.terrain.heightAt( x, z ), this.floorAt( x, z ) );
 		const ceil = sp.ceiling + G.seaLevel.value; // ((M13) under the sea as it is: a surge's, a drawdown's)
+		// ((M16) the open water's: so far under the surface (m), however deep it is; a fraction of a thousand metres
+		// would have them out of sight of anyone)
+		if ( sp.under ) return Math.max( floor + 2, G.seaLevel.value - sp.under[ 0 ] - ( sp.under[ 1 ] - sp.under[ 0 ] ) * k );
 		if ( sp.mode === 'surface' ) return ceil - 0.08;
 		if ( sp.mode === 'glide' ) return floor + FLOOR_CLEARANCE + 0.15;
 		const f = sp.depth[ 0 ] + ( sp.depth[ 1 ] - sp.depth[ 0 ] ) * k;
@@ -857,6 +888,83 @@ export class FishSchools {
 
 		const h = Math.max( this.terrain.heightAt( x, z ), this.floorAt( x, z ) );
 		return Math.min( sp.ceiling + G.seaLevel.value - 0.02, Math.max( h + FLOOR_CLEARANCE + 0.02, y ) );
+
+	}
+
+	// (M16) what's found about you out there (game/Finds.js' findsAbout) and where you are ( x, z ): each far group that's
+	// not about you goes to something near you of what it's after, if there is one
+	setFinds( finds, at, hour ) {
+
+		if ( ( this._farT = ( this._farT || 0 ) - 1 ) > 0 ) return;
+		this._farT = 30; // (every so many of findsHere's)
+		for ( const g of this.farGroups || [] ) {
+
+			if ( Math.hypot( g.center.x - at.x, g.center.z - at.z ) < FAR.keep ) continue;
+			const s = this.farSpot( g.sp.far, finds, at, hour, g );
+			if ( ! s || s.key === g.farKey ) continue;
+			g.farKey = s.key;
+			g.zone.x = s.x;
+			g.zone.z = s.z;
+			g.home.set( s.x, 0, s.z );
+			this.initGroup( g );
+
+		}
+
+	}
+
+	// where a far group of this kind goes: { x, z }, or null
+	farSpot( far, finds, at, hour, g ) {
+
+		const offset = ( q, r ) => {
+
+			const a = g.rng() * TAU, d = r * g.rng();
+			return { x: q.x + Math.cos( a ) * d, z: q.z + Math.sin( a ) * d, key: q.n };
+
+		};
+		let best = null, bd = Infinity;
+		const look = ( q, x, z, max ) => {
+
+			const d = Math.hypot( x - at.x, z - at.z );
+			if ( d < max && d < bd ) {
+
+				bd = d;
+				best = q;
+
+			}
+
+		};
+		if ( far === 'debris' || far === 'wake' ) {
+
+			const wake = far === 'wake';
+			for ( const q of finds.debris ) if ( q.life > 0.4 && ( ! wake || q.storm ) ) look( q, q.x, q.z, wake ? FAR.near.wake : FAR.near.debris );
+			if ( ! wake && ! best ) for ( const w of finds.weed ) if ( w.life > 0.4 ) {
+
+				// (the nearest of a weedline)
+				const ex = w.x1 - w.x0, ez = w.z1 - w.z0, t = Math.min( 1, Math.max( 0, ( ( at.x - w.x0 ) * ex + ( at.z - w.z0 ) * ez ) / Math.max( ex * ex + ez * ez, 1e-6 ) ) );
+				const x = w.x0 + ex * t, z = w.z0 + ez * t;
+				look( { x, z, n: w.n }, x, z, FAR.near.debris );
+
+			}
+
+			return best && offset( best, 10 );
+
+		}
+
+		if ( far === 'bait' ) {
+
+			for ( const q of finds.bait ) if ( q.life > 0.3 ) look( q, q.x, q.z, FAR.near.bait );
+			return best && offset( best, best.r || 20 );
+
+		}
+
+		// the open water's: a cell of a lattice about you, for so long, holds one or doesn't
+		const dark = hour < 5.5 || hour > 19.5;
+		if ( far === 'night' && ! dark ) return null;
+		const i = Math.floor( at.x / FAR.cell ), j = Math.floor( at.z / FAR.cell ), e = Math.floor( this.time / FAR.every );
+		const salt = ( Math.imul( i, 73856093 ) ^ Math.imul( j, 19349663 ) ^ Math.imul( e, 83492791 ) ^ g.offset ) >>> 0;
+		if ( ( Math.imul( salt, 2654435761 ) >>> 0 ) / 4294967296 > ( far === 'night' ? FAR.night : FAR.open ) ) return null;
+		const x = ( i + 0.5 ) * FAR.cell, z = ( j + 0.5 ) * FAR.cell;
+		return this.depthAt( x, z ) > FAR.deep ? offset( { x, z, n: salt }, 120 ) : null;
 
 	}
 

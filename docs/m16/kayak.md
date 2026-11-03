@@ -1,0 +1,91 @@
+# The kayak
+
+What every new player starts in: a 12 ft sit-on-top fishing kayak, paddled, sat in, and low enough to the water for the weather to matter. Her files are in `src/world/boat/kayak/`; the hooks elsewhere are small (`Player.js`, `Game.js`, `App.js`, `BoatController.js`, `Avatar.js`, `Radio.js`, `TouchControls.js`).
+
+## After the real thing
+
+Shaped after a Perception Pescador 12.0 (12 ft 0, 32.5 in, 375 lb capacity, about 64 lb), and the same general layout as most 12 ft fishing sit-on-tops:
+
+- Her outline was read pixel by pixel off the maker's plan and profile photographs ([confluenceoutdoor.com](https://www.confluenceoutdoor.com/products/perception-pescador-120-fishing-kayak-9350178031), plan and profile), at 40 stations: half-breadth, keel rocker and gunwale height are the tables in `KayakLines.js`. Her hull fits the profile's keel to within a few millimetres, up to the raked stem.
+- [A Commons photograph of one on the grass](https://commons.wikimedia.org/wiki/File:Kayak-MarChiquita-Bsas-feb2024.jpg) gave the three-quarter view: how the wells sit in the deck, how the marbled colour goes.
+- What's on the deck, going aft from the bow: a carry handle, a big oval hatch, the cockpit with a low console between the foot wells, the seat, the bridge with two flush rod holders and scuppers, the long tank well with its criss-cross bungee, and the stern's carry handle.
+- She's rotomoulded, one piece of swirled colour: one mesh with its colours in the vertices. The deck's a height field with its wells cut by distance functions, so the edges are soft as moulded plastic's are.
+
+Her small cooler is a 16 quart hard cooler strapped in the tank well, the 12 kg `holdKg` of `Boats.js`. The safety whip with its orange pennant and all-round white is what kayak anglers run at dawn and dusk.
+
+## Paddling
+
+`Paddle.js`: a `propulsion` of its own. There's no thrust figure. The stroke moves the blade (a low-angle stroke, the shaft swinging about a point in front of the chest), and the water pushes back on the blade at the speed it goes past it (1/2 rho Cd A v², Cd 1.9, 0.075 m² of blade), with the kayak's own motion counted. So the paddle's speed sets the boat's:
+
+| | Stroke | Speed |
+|---|---|---|
+| Stick a little forward | 1.7 s | 2.3 knots |
+| W, or the stick most of the way | 1.1 s | 3.1 knots |
+| Shift, or the stick all the way | 0.74 s | 4.0 knots (hull speed 4.4) |
+| S | | stops her in about 3 m |
+| A or D on the spot | sweep ahead on the far side, sweep astern on the near | about 30 deg/s |
+| A or D under way | sweeps on the far side, her hull edged | about 12 deg/s |
+
+Each stroke pulls her bow a little to its side, about 3 degrees either way, as a real one does; the view from the seat doesn't follow it. Her resistance is friction and form (Cf 0.0037 over 2.6 m² wetted, form factor 1.2) with wave-making past Froude 0.3. A paddler's a little under 30 W net at 3 knots, which is a pace people hold all day: paddling tires nothing. Left alone she drifts at about 6% of the wind, against the 5% the away reckoning uses.
+
+A stick is analog: how far it's pushed is how hard you paddle.
+
+## Sat in
+
+`Vessel.seated`. There's no deck mode; E beside her gets you straight into the seat. Seat.js is `Player`'s mode `'boat'` for her: W S A D paddle, V changes between your own eyes and the chase camera (closer in than the big boats'), E gets out. The eye's 0.81 m off the water.
+
+You're drawn in her: a Rocketbox islander, your chosen look, posed by `SeatPose.js` after the clip (hips down on the seat, legs out to the foot braces, back turning with the stroke, arms by two-bone IK to where the hands hold the shaft). From your own eyes the same figure's there with its head folded away, so you can look down at your legs and see your hands on the paddle. Others get the same pose through `Avatar.pose( { seat } )`.
+
+## Fishing from the seat
+
+`Game.canFish` takes a seated boat. Take out the rod (or the cast net) and the paddle's laid along the gunwale, the view's your own, and she drifts. A fish on tows her, by the rod, as hard as it's pulling (tension × up to 110 N): it swings her round to it, and a big one takes her for a ride.
+
+## The weather
+
+**Soaked.** `Capsize.js` `soakStep`, `player.soak` 0..1. A downpour soaks you in about a minute and a half, a sea over her deck in moments, spray once the wind's over 12 m/s; it dries in about a quarter of an hour. From your own eyes it shows as drops on the view (`Drops.js`, an element over the canvas, nothing drawn). She's self-bailing: rain and seas leave by her scuppers, so she has no bilge to bail (`handling.plastic`).
+
+**Over.** Her gunwale's 27 degrees off the water, and past it she's over all at once. What puts her there is her own rigid body: the wind on someone sitting up on the water, heeling her, and the sea rolling her. Sat up in her, leaning against it, a steady beam wind holds her at 3 degrees at 12 m/s and 6 at 16; at 20 m/s, a squall's gust, she's past holding. Bow to it, the same wind's 7 degrees. So in a squall you turn her into it, as you're told to in a real one.
+
+The game's own waves (`ocean/Waves.js`, fed to her in `test/kayak.mjs`), in the open: calm, fair and breezy days never put her over, even sat fishing beam-on (17 degrees at most in a breeze, 11 m/s). A blustery day's 15 m/s does, now and then. In a gale or a thunderstorm's squall she goes over within the minute beam-on, and head to it you can't make way against 20 m/s. Close in the swell fades over the shallows, so running for the flats is what saves you. Back aboard, you've six seconds' grace.
+
+| | Heel she goes over at |
+|---|---|
+| Paddling (a blade in the water: a low brace) | 41 degrees |
+| Sat there | 33 |
+| Rod or net in your hands | 28 |
+
+A breaker rolls her at about the height that tumbles a swimmer: 2.9 m on the beam, 4.2 m on the bow, by the game's trough-to-crest figure over the bar (a fair day's typically 1.6 m, at most 2.8 m). Punching out through a fair day's surf bow on is fine; a blow's surf isn't.
+
+Over, she's turned keel up (the `body` group: the rigid body under it stays upright) and you're in the water. Some of the cooler goes (half, with a life jacket a quarter, and with the dry hatch half as much again: `spillShare`), and you lose some breath. Swim to her: E rights her, E again climbs back on (2.3 s; 1.4 s with a life jacket). She drifts downwind at about 1 m/s meanwhile, so don't dawdle: you swim 1.5, 2.5 flat out.
+
+## On the sand
+
+`Shore.js`. Run her up on a beach and step out (E): she's pulled up the sand clear of the wash (`ctl.beached`: physics off, lying on her keel on the slope), and you're beside her. E beside her: you're in her and she's shoved down the sand till she floats, about 3 m/s at most, bow first, and away. A surge up the sand floats her off. Off a beach too steep for it (a grade past 0.45), or onto a jetty, she's left where she is on her painter. Over the side, out of your depth, she drifts.
+
+She's kept on the sand, not at the dock: `BoatController` asks her `atHome` at the start, after a tow, and on the safety net's reset. With the fleet's berths in, `ctl.berth` is where she looks from, up the sand to the first dry place. `App.saveBoat` counts her as fast when she's on the sand, and `rest` lays her back on it when you return.
+
+## What she needs of the others
+
+- **Light:** `handling.contact` and `handling.mooring` scale the controller's grounding and mooring, which are made for tons. `handling.wetDepth` says how little water she needs to be fully wet (0.06 m, against 0.3): her hydrodynamic forces were a third of what they should be without it.
+- **No engine:** `handling.engine` is null. `Game` doesn't burn fuel or crank; `Hull` gets `driven: false`, and with `handling.plastic` no rain, wear or storm. No horn or searchlight on her; the rod's touch button stays the rod's.
+- **Together:** `model.stroke.wire` is the paddle's pose to send, and setting it poses a copy; `seated` and `perch` as stream 5 asks.
+
+## Radio and flares
+
+R is the rod here, so C (LB, or the touch button that's the rig's with the rod out) gets out what you carry: `Radio.offer` is `'radio'` with the handheld VHF, `'flares'` with only the flares and EPIRB, and with neither there's no prompt, no button and the key does nothing. It's the same panel as at a helm. You need your hands: with the rod or the net out it isn't offered, and while it's up the paddle's laid by and she drifts. C, R, E or Esc puts it away, and the weather broadcast plays on while you paddle. Not from the water: over, you right her first.
+
+Sat in her, being in the shallows isn't trouble (`DaysOut.trouble`), so the flares and EPIRB stay for what is: too much sea for her, or you're parched.
+
+What you carry decides who comes (`DaysOut._rescueNet`). With nothing that can reach anyone, a passing boat finds you in the end (4 hours near in, 18 past 14 km). A handheld only counts within its 5 miles of her dock, and flares only while you've some left; out of range or out of flares and you're back to the passing boat. An EPIRB always counts: it works anywhere. A tow or a rescue leaves you on the sand beside her (`KayakModel.setDown`), or still sat in her on Pearl's mooring.
+
+## Her compass
+
+A kayak angler's is a small liquid-filled one on a wrist strap or a deck mount. Hers is `Compass.js`: a dial on the HUD beside the map, sat in her, in either view and anywhere on the water (the big boats' cards are on their dashes), north on the card, the lubber's mark at the top, degrees magnetic and the point under it, and the card lags 0.35 s as one in its liquid does. It reads `stats.compass`. A card turning on her deck would be a sixth draw and too small to read on a phone, so it's not on her deck. With no plotter it takes the place of the row the other boats get past 600 m (`HomeReadout`); with the handheld GPS that row's the way home, as it is on them.
+
+## Gear
+
+`fit( stats )`: what Marta sells for her shows, in her one mesh (its vertices folded to a point when it's not there, so no new draw): the crate in place of the small cooler when `holdKg` is over her 12, the finder's puck with `finder`, the anchor trolley with `anchorM` or `trolley`. `speedMul` shortens the stroke and widens the blade (the better paddle). `stats.lifeJacket` (the safety track) and `stats.dryHatch` (the dry hatch track) cost you less of a capsize.
+
+## Budget
+
+Her own mesh and paddle: about 6,100 triangles and 2 draw calls, no assets. You in her, while you're in her and only then, are one more islander as anyone else on the island is: 7,400 to 10,300 triangles and 2 or 3 draw calls. So 13,500 to 16,400 in all against the stream's 12,000, and 4 or 5 draw calls; the lobster boat she replaces is 37,000 and 12. That overage is accepted as long as the complete check passes (see `tools/` and the release's check): it's the figure's, and only while you're in her. The compass and the radio's panel are the page's, not the scene's: no triangles, no draws. Her figure's look is the same file Together loads. Her geometry's 0.46 MB of memory against the lobster boat's 2.89 MB (47,053 triangles, 13 meshes), before the figure's own.

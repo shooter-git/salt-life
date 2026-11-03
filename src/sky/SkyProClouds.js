@@ -1902,6 +1902,9 @@ export class SkyProClouds {
 		const cur = { position: [ cp.x, cp.y, cp.z, tanY ], right: [ ...R, aspect ], up: [ ...Up, 0 ], forward: [ ...Fw, 0 ] };
 		const prev = this._prevCam;
 		// camera cuts: teleports, big turns, zoom
+		// ((M16) a jump, a tow home or the checks': a panorama part made where you were is a mosaic of two skies, which
+		// stays: a whole new one from here)
+		if ( prev && this.ready && Math.hypot( cp.x - prev.position[ 0 ], cp.y - prev.position[ 1 ], cp.z - prev.position[ 2 ] ) > 1000 ) this.panoWarm = this.warmFrames;
 		if ( ! prev
 			|| Math.hypot( cp.x - prev.position[ 0 ], cp.y - prev.position[ 1 ], cp.z - prev.position[ 2 ] ) > 1000
 			|| Fw[ 0 ] * prev.forward[ 0 ] + Fw[ 1 ] * prev.forward[ 1 ] + Fw[ 2 ] * prev.forward[ 2 ] < 0.7

@@ -1,16 +1,23 @@
 import { FISH, CARAPACE, fishLengthCm } from './FishTable.js';
-import { UPGRADES, nextLevel, FUEL_PRICE } from './Gear.js';
+import { UPGRADES, nextLevel, fuelOf, fuelPrice } from './Gear.js';
+import { FRESH_H } from './Seaworthy.js';
+import { FLEET_CSS, fleetRows, bindFleet, martaSays } from './fleet/FleetPanel.js';
+import { TRAP_PRICE } from './Traps.js';
 import { BAITS, BAIT_IDS, chunksOf } from './Bait.js';
 import { LOOKS, LOOK_NAMES } from '../together/Avatar.js';
 import { NIGHT_BOX, biteHint, orderTerms, orderPlace } from './Orders.js';
+import { trophyNote, trophyRows } from './Trophies.js';
 import { WEEK_MUL, delivered, filled, mineOf, shareOf, weekEnds } from './WeekOrder.js';
 import { timeText } from './IslandClock.js';
 import { LB, IN, GAL, lb, pounds, inches, feet, farOff, gallons, lbOz, feetInches } from './Units.js';
-import { FLOOD_L } from './Hull.js';
 import { PLACES, FAR_PLACES, placeName, farName } from './Places.js';
 import { FINDS, messageOf } from './Beachcomb.js';
+import { shellTab, bindShellTab, shellShopRow, stepShell, SHELL_CSS } from './ShellCase.js';
+import { shellsHave } from './Shells.js';
 import { CAMP } from './FishCamp.js';
-import { NAMES, MAX_MARKS, legTo, magnetic } from './Chart.js';
+import { NAMES, MAX_MARKS, legTo, magnetic, namedAs } from './Chart.js';
+import { LEFT, RIGHT, CHECK, CROSS, STAR, EM_DASH, OPEN_QUOTE, CLOSE_QUOTE, DOT, RING } from '../core/Glyphs.js';
+import { ChartMap, CHART_MAP_CSS } from './ChartMap.js';
 
 // (other players' names, into HTML)
 const escape = ( t ) => String( t ).replace( /[&<>"']/g, ( c ) => ( { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } )[ c ] );
@@ -18,7 +25,7 @@ const escape = ( t ) => String( t ).replace( /[&<>"']/g, ( c ) => ( { '&': '&amp
 const item = ( name, meta, ...right ) => `<div class="gm-item"><span class="gm-item-main"><span class="gm-item-name">${ name }</span><span class="gm-item-meta">${ meta }</span></span>${ right.join( '' ) }</div>`;
 // (Salt Life) price: what it fetches here (a wanted fish: the order's price); wanted: on today's list
 const fishItem = ( f, button, price = f.value, wanted = false ) => item( `${ FISH[ f.species ].name }${ f.record ? '<small>record</small>' : '' }${ wanted ? '<small class="is-wanted">wanted</small>' : '' }`,
-	`${ sizeOf( f.species, f.cm ?? fishLengthCm( f.species, f.kg ) ) } · ${ lb( f.kg ) }${ { spear: ' · speared', net: ' · netted', hand: ' · by hand' }[ f.method ] || '' }`, `<span class="gm-item-val">$${ price }</span>`, button );
+	`${ sizeOf( f.species, f.cm ?? fishLengthCm( f.species, f.kg ) ) } · ${ lb( f.kg ) }${ { spear: ' · speared', net: ' · netted', hand: ' · by hand' }[ f.method ] || '' }${ f.w > FRESH_H ? ' · <span class="is-going">going soft</span>' : '' }`, `<span class="gm-item-val">$${ price }</span>`, button );
 // (Salt Life) why the net's catch went back (GameState.addHaul)
 const BACK = { protected: 'protected', notNet: 'not bait', full: 'no room in the cooler', bucket: 'the bucket\'s full' };
 const upper = ( t ) => t.charAt( 0 ).toUpperCase() + t.slice( 1 );
@@ -35,9 +42,19 @@ const sizeOf = ( species, cm ) => species === 'lobster' ? `${ carapaceIn( cm ).t
 //   catch card    full screen: the world dims and blurs, the fish lies side-on in its own studio light
 //                 (FishPortrait) with the species above and length, weight, value, record below
 const CSS = /* css */`
-.gm-purse { position: absolute; top: var(--tw-edge); right: var(--tw-edge); display: flex; gap: var(--tw-3); align-items: center;
+.gm-purse { position: absolute; top: var(--tw-edge); right: var(--tw-edge); display: flex; flex-direction: column; align-items: stretch;
 	padding: var(--tw-2) var(--tw-4); border-radius: 999px; font: 500 var(--tw-fs-lg) var(--tw-font); color: var(--tw-ink); pointer-events: none;
 	transition: transform var(--tw-med) var(--tw-ease), right var(--tw-slow) var(--tw-ease); }
+/* (M16) one panel: the time, your money and the cooler; under them aboard, the boat's: fuel, hull, bilge, finder and the way home */
+.gm-purse-top, .gm-purse-boat { display: flex; flex-wrap: wrap; gap: var(--tw-1) var(--tw-3); align-items: center; justify-content: flex-end; }
+.gm-purse-boat { max-width: calc(620 * var(--tw-u)); margin-top: var(--tw-2); padding-top: var(--tw-2); border-top: 1px solid var(--tw-line); }
+.gm-purse-boat:not(:has(.is-on)) { display: none; }
+.gm-purse:has(.gm-purse-boat .is-on) { border-radius: var(--tw-r-lg); }
+.gm-fuel-bar { position: relative; overflow: visible; }
+.gm-fuel-tick { display: none; position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 2px rgba(0,0,0,0.7); }
+.gm-fuel-tick.is-on { display: block; }
+.gm-fuel-state { font-style: normal; font-weight: 700; }
+.gm-fuel-state.is-ok { color: #8fdc8a; } .gm-fuel-state.is-tight { color: #f2c14e; } .gm-fuel-state.is-short { color: #ff7a6a; }
 .tw-root[data-panel='open'] .gm-purse { right: calc(var(--tw-panel-w) + 2 * var(--tw-3)); }
 .tw-root.is-photo .gm-panel { display: none; }
 .gm-purse.is-bump { animation: gm-bump 420ms var(--tw-ease); }
@@ -146,7 +163,7 @@ const CSS = /* css */`
 	font: 500 var(--tw-fs-sm) var(--tw-font); color: var(--tw-ink-2); background: var(--tw-fill); border: 1px solid var(--tw-line-2); border-radius: var(--tw-r-md); }
 .gm-look b { font-size: var(--tw-fs-md); font-weight: 600; color: var(--tw-ink); }
 .gm-look.is-on { background: rgba(var(--tw-aqua-rgb), 0.14); border-color: var(--tw-aqua); box-shadow: inset 0 0 0 1px var(--tw-aqua); }
-.gm-look.is-on b::after { content: ' ✓'; color: var(--tw-aqua); }
+.gm-look.is-on b::after { content: ' \\2713'; color: var(--tw-aqua); }
 /* short screens (phones on their side): a panel's title and what's under it on one line, less padding */
 @media (max-height: 500px) {
 	.gm-panel { padding: var(--tw-3) var(--tw-4); }
@@ -169,6 +186,7 @@ html:has(.gm-panel.is-open) .hud-hint { visibility: hidden; }
 .gm-bilge.is-low .gm-bilge-bar > span { background: var(--tw-coral); }
 .gm-bilge.is-low { animation: gm-breath-pulse 0.9s ease-in-out infinite; }
 .gm-sonar-dots { letter-spacing: 1px; color: var(--tw-aqua); }
+.is-going { color: var(--tw-coral); }
 /* (Salt Life) the held breath under water; what's under the speargun's sights; the edges of sight
    closing in as the breath runs out (dark when you black out) */
 .gm-breath-bar > span { background: var(--tw-aqua); }
@@ -194,6 +212,7 @@ html:has(.gm-panel.is-open) .hud-hint { visibility: hidden; }
 .gm-wanted { margin: 0 0 var(--tw-2); padding: var(--tw-1) var(--tw-3); border-radius: var(--tw-r-md); background: rgba(var(--tw-sun-rgb), 0.07); border: 1px solid rgba(var(--tw-sun-rgb), 0.22); }
 .gm-wanted-h { display: block; margin: var(--tw-1) 0 0; color: var(--tw-sun); font-size: var(--tw-fs-xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
 .gm-wanted .gm-item { padding: var(--tw-1) 0; border-color: rgba(var(--tw-sun-rgb), 0.14); }
+.gm-wanted .gm-item-meta { white-space: normal; }
 .gm-wanted .gm-item.is-done .gm-item-name { color: var(--tw-ink-3); text-decoration: line-through; }
 /* (Salt Life) the week's order: the group's progress under it */
 .gm-week-bar { height: calc(4 * var(--tw-u)); margin: var(--tw-1) 0 0; border-radius: 99px; background: rgba(var(--tw-sun-rgb), 0.14); overflow: hidden; }
@@ -378,10 +397,15 @@ export class GameHUD {
 		this.ui = ui;
 		this.game = game;
 		const style = h( 'style' );
-		style.textContent = CSS;
+		style.textContent = CSS + FLEET_CSS + SHELL_CSS + CHART_MAP_CSS;
 		document.head.append( style );
 
-		this.purse = h( 'div', 'gm-purse tw-glass', `<span class="gm-money">$0</span><span class="gm-cooler"><span class="gm-cooler-label">Cooler</span><span class="gm-cooler-bar"><span></span></span><span class="gm-cooler-kg">0 / 66 lb</span></span><span class="gm-gauge gm-fuel"><span>Fuel</span><span class="gm-cooler-bar gm-fuel-bar"><span></span></span><b class="gm-fuel-l">11 gal</b></span><span class="gm-gauge gm-hull"><span>Hull</span><span class="gm-cooler-bar gm-hull-bar"><span></span></span><b class="gm-hull-p">100%</b></span><span class="gm-gauge gm-bilge"><span>Bilge</span><span class="gm-cooler-bar gm-bilge-bar"><span></span></span><b class="gm-bilge-l">0 gal</b></span><span class="gm-gauge gm-sonar"><span>Sonar</span><b class="gm-sonar-d">0 ft</b><span class="gm-sonar-dots"></span></span><span class="gm-gauge gm-breath"><span>Breath</span><span class="gm-cooler-bar gm-breath-bar"><span></span></span></span><span class="gm-gauge gm-bait"><span class="gm-bait-l">Bait</span><b class="gm-bait-t">Shrimp</b></span>` );
+		this.purse = h( 'div', 'gm-purse tw-glass', `<div class="gm-purse-top"><span class="gm-money">$0</span><span class="gm-cooler"><span class="gm-cooler-label">Cooler</span><span class="gm-cooler-bar"><span></span></span><span class="gm-cooler-kg">0 / 66 lb</span></span><span class="gm-gauge gm-breath"><span>Breath</span><span class="gm-cooler-bar gm-breath-bar"><span></span></span></span><span class="gm-gauge gm-bait"><span class="gm-bait-l">Bait</span><b class="gm-bait-t">Shrimp</b></span></div><div class="gm-purse-boat"><span class="gm-gauge gm-fuel"><span>Fuel</span><span class="gm-cooler-bar gm-fuel-bar"><span></span><i class="gm-fuel-tick"></i></span><b class="gm-fuel-l">11 gal</b><i class="gm-fuel-state"></i></span><span class="gm-gauge gm-hull"><span>Hull</span><span class="gm-cooler-bar gm-hull-bar"><span></span></span><b class="gm-hull-p">100%</b></span><span class="gm-gauge gm-bilge"><span>Bilge</span><span class="gm-cooler-bar gm-bilge-bar"><span></span></span><b class="gm-bilge-l">0 gal</b></span><span class="gm-gauge gm-sonar"><span>Sonar</span><b class="gm-sonar-d">0 ft</b><span class="gm-sonar-dots"></span></span><span class="gm-gauge gm-home"><span>Home</span><b class="gm-home-t"></b></span></div>` );
+		this.purseTop = this.purse.firstElementChild;
+		this.fuelTick = this.purse.querySelector( '.gm-fuel-tick' );
+		this.fuelState = this.purse.querySelector( '.gm-fuel-state' );
+		this.homeEl = this.purse.querySelector( '.gm-home' );
+		this.homeT = this.purse.querySelector( '.gm-home-t' );
 		this.baitEl = this.purse.querySelector( '.gm-bait' );
 		this.baitL = this.purse.querySelector( '.gm-bait-l' );
 		this.baitT = this.purse.querySelector( '.gm-bait-t' );
@@ -491,7 +515,8 @@ export class GameHUD {
 		const s = this.game.state;
 		const st = s.stats;
 		this.moneyEl.textContent = `$${ s.money.toLocaleString() }`;
-		const kg = s.holdKg;
+		// ((M16) the ice takes room in it too: DaysOut)
+		const kg = s.holdKg + ( this.game.daysOut ? this.game.daysOut.box.ice : 0 );
 		this.coolerLabel.textContent = s.upgrades.hold > 0 ? 'Hold' : 'Cooler';
 		this.coolerKg.textContent = `${ pounds( kg ) } / ${ pounds( st.holdKg ) } lb`;
 		this.coolerBar.style.width = `${ Math.min( 100, kg / st.holdKg * 100 ) }%`;
@@ -568,19 +593,19 @@ export class GameHUD {
 		this.bilgeEl.classList.toggle( 'is-on', bilge !== null );
 		if ( bilge !== null ) {
 
-			this.bilgeBar.style.width = `${ Math.min( 1, bilge / FLOOD_L ) * 100 }%`;
+			this.bilgeBar.style.width = `${ Math.min( 1, bilge / this.game.hull.floodL ) * 100 }%`;
 			const t = `${ gallons( bilge ) } gal`;
 			if ( this.bilgeL.textContent !== t ) this.bilgeL.textContent = t;
-			this.bilgeEl.classList.toggle( 'is-low', bilge >= FLOOD_L * 0.7 );
+			this.bilgeEl.classList.toggle( 'is-low', bilge >= this.game.hull.floodL * 0.7 );
 
 		}
 
 		this.sonarEl.classList.toggle( 'is-on', !! sonar );
 		if ( sonar ) {
 
-			this.sonarD.textContent = feet( sonar.depth );
+			this.sonarD.textContent = sonar.depth === null ? 'no bottom' : feet( sonar.depth );
 			const n = Math.round( sonar.fish * 4 );
-			this.sonarDots.textContent = '●'.repeat( n ) + '○'.repeat( 4 - n );
+			this.sonarDots.textContent = DOT.repeat( n ) + RING.repeat( 4 - n );
 
 		}
 
@@ -599,6 +624,8 @@ export class GameHUD {
 			if ( fight.tension > 0.88 ) { call = 'Ease off!'; cls = 'is-warn'; }
 			else if ( fight.surge > 0.55 ) { call = 'It\'s running!'; cls = 'is-warn'; }
 			else if ( fight.tension < 0.15 ) { call = 'Slack line!'; cls = 'is-warn'; }
+			else if ( fight.lineSpooled && fight.distance > fight.maxDistance * 0.85 ) { call = 'Nearly spooled!'; cls = 'is-warn'; }
+			else if ( fight.drag && fight.arms < 0.25 ) { call = 'Your arms are going'; cls = 'is-warn'; }
 			else if ( fight.tension >= fight.band[ 0 ] && fight.tension <= fight.band[ 1 ] ) { call = 'Good pressure'; cls = 'is-good'; }
 			this.fCall.textContent = call;
 			this.fCall.className = 'gm-fight-call ' + cls;
@@ -657,8 +684,8 @@ export class GameHUD {
 		const f = FISH[ info.species ];
 		const inch = info.cm / IN, lbs = info.kg * LB;
 		const isle = info.islandHeld;
-		const badge = info.islandRecord ? '<span class="gm-badge is-record">★ Island record</span>'
-			: info.record ? '<span class="gm-badge is-record">★ New record</span>'
+		const badge = info.trophyView ? `<span class="gm-badge is-record">${ STAR } Trophy</span>` : info.islandRecord ? `<span class="gm-badge is-record">${ STAR } Island record</span>`
+			: info.record ? `<span class="gm-badge is-record">${ STAR } New record</span>`
 			: info.newSpecies ? '<span class="gm-badge is-new">New species</span>' : `<span class="gm-badge is-plain">${ { spear: 'Speared', hand: 'By hand' }[ info.method ] || 'Catch' }</span>`;
 		let note;
 		// (Salt Life: a protected fish is measured and let go, as is a catch-and-release one and a short or
@@ -668,6 +695,7 @@ export class GameHUD {
 		const room = this.game.state.roomFor( info ), where = this.game.state.upgrades.hold > 0 ? 'hold' : 'cooler';
 		if ( info.why === 'short' ) note = `<div class="gm-catch-note is-warn">Short: under ${ ( f.minCm * CARAPACE / IN ).toFixed( 0 ) } in on the gauge · back it goes, to grow${ board }.</div>`;
 		else if ( info.why === 'berried' ) note = `<div class="gm-catch-note is-warn">Berried: she's carrying eggs under her tail · back she goes${ board }.</div>`;
+		else if ( info.trophyView || info.bonus || info.hurt ) note = `<div class="gm-catch-note">${ trophyNote( info ) }${ board }.</div>`;
 		else if ( info.tagged ) note = `<div class="gm-catch-note">Tagged and let go alive for Marta's tag-and-release log: <b>$${ info.tagged }</b>${ board }.</div>`;
 		else if ( info.released ) note = `<div class="gm-catch-note">${ f.cr ? 'Catch and release: everyone lets one go. Measured and' : 'Protected: measured and' } let go alive${ board }.</div>`;
 		else if ( info.bag && info.bag.full ) note = `<div class="gm-catch-note is-warn">That's your ${ info.bag.max } for today, the most anyone may keep · back it goes</div>`;
@@ -702,7 +730,7 @@ export class GameHUD {
 				<div class="gm-catch-stats">
 					${ info.species === 'lobster' ? `<div class="gm-stat"><span>Carapace</span><b>${ carapaceIn( info.cm ).toFixed( 2 ) }<small>in</small></b><i>${ inches( info.cm ) } long</i></div>` : `<div class="gm-stat"><span>Length</span><b>${ inch.toFixed( 1 ) }<small>in</small></b><i>${ feetInches( info.cm ) || '&nbsp;' }</i></div>` }
 					<div class="gm-stat"><span>Weight</span>${ lbs * 16 < 15.5 ? `<b>${ Math.max( 1, Math.round( lbs * 16 ) ) }<small>oz</small></b><i>&nbsp;</i>` : `<b>${ lbs.toFixed( 1 ) }<small>lb</small></b><i>${ lbOz( info.kg ) }</i>` }</div>
-					<div class="gm-stat is-value"><span>Value</span><b>${ info.released ? '—' : `$${ info.value }` }</b><i>${ info.released ? 'released' : room ? 'no room yet' : ! info.kept ? 'let go' : info.wanted ? info.wanted.text : info.bag ? `${ info.bag.n } of ${ info.bag.max } today` : 'in the cooler' }</i></div>
+					<div class="gm-stat is-value"><span>Value</span><b>${ info.bonus ? `+$${ info.bonus + ( info.tagged || 0 ) }` : info.released ? EM_DASH : `$${ info.value }` }</b><i>${ info.released ? 'released' : room ? 'no room yet' : ! info.kept ? 'let go' : info.wanted ? info.wanted.text : info.bag ? `${ info.bag.n } of ${ info.bag.max } today` : 'in the cooler' }</i></div>
 				</div>
 				${ note }
 				${ room ? '<div class="gm-room"></div>' : `<div class="gm-catch-foot">${ { touch: 'Tap to continue', gamepad: '<kbd>RT</kbd> or <kbd>B</kbd> to continue' }[ this.device ] || '<kbd>Click</kbd> or <kbd>E</kbd> to continue' }<span class="gm-catch-timer"><span></span></span></div>` }
@@ -836,7 +864,7 @@ export class GameHUD {
 		const d = this.device, where = s.upgrades.hold > 0 ? 'hold' : 'cooler';
 		const pct = ( kg ) => Math.max( 0, Math.min( 100, kg / cap * 100 ) ).toFixed( 1 );
 		const chips = fish.map( ( f, i ) => `<div class="gm-room-fish${ i === R.pick && d !== 'touch' ? ' is-pick' : '' }"><b>${ FISH[ f.species ].name }</b><span>${ lb( f.kg ) } · $${ f.value }</span><button class="gm-mini" data-let="${ f.id }">Let go</button></div>` ).join( '' );
-		const keys = { gamepad: '<kbd>←</kbd> <kbd>→</kbd> on the d-pad to pick one · <kbd>X</kbd> lets it go', keyboard: '<kbd>←</kbd> <kbd>→</kbd> to pick one · <kbd>R</kbd> lets it go' }[ d ];
+		const keys = { gamepad: `<kbd>${ LEFT }</kbd> <kbd>${ RIGHT }</kbd> on the d-pad to pick one · <kbd>X</kbd> lets it go`, keyboard: `<kbd>${ LEFT }</kbd> <kbd>${ RIGHT }</kbd> to pick one · <kbd>R</kbd> lets it go` }[ d ];
 		el.innerHTML = `
 			<div class="gm-room-head"><span>${ upper( where ) } ${ pounds( held ) } of ${ pounds( cap ) } lb</span>
 				<span class="gm-room-meter"><span class="is-in" style="width:${ pct( held ) }%"></span><span class="is-new${ R.fits ? ' is-ok' : '' }" style="left:${ pct( held ) }%;width:${ pct( info.kg ) }%"></span></span>
@@ -908,6 +936,30 @@ export class GameHUD {
 
 	}
 
+	// (M16) the way home, past sight of the dock (HomeReadout, twice a second): where getting there takes the fuel to, a
+	// tick on the bar, and whether it will. Its mark's a different shape for each as well as its colour: a red tick would
+	// read as all's well
+	setHome( h ) {
+
+		this.homeEl.classList.toggle( 'is-on', !! h );
+		const need = h && h.need !== null ? h.need : null;
+		this.fuelTick.classList.toggle( 'is-on', need !== null );
+		if ( need !== null ) this.fuelTick.style.left = `${ need * 100 }%`;
+		const state = h && h.state || '';
+		if ( this._homeState !== state ) {
+
+			this._homeState = state;
+			this.fuelState.className = `gm-fuel-state${ state ? ` is-${ state }` : '' }`;
+			this.fuelState.textContent = { ok: CHECK, tight: '!', short: CROSS }[ state ] || '';
+			this.fuelState.title = state ? `Fuel to get home: ${ state }` : '';
+
+		}
+
+		if ( h && this.homeT.textContent !== h.text ) this.homeT.textContent = h.text;
+		if ( h && this.homeEl.firstElementChild.textContent !== h.label ) this.homeEl.firstElementChild.textContent = h.label;
+
+	}
+
 	// the cooler, in tabs: the fish in it, your log, the island's records, and how the others see you
 	renderInventory() {
 
@@ -916,7 +968,7 @@ export class GameHUD {
 		const logged = Object.entries( s.log ).filter( ( [ k ] ) => FISH[ k ] );
 		// (Salt Life) the island's records: the group's heaviest of each kind (together/)
 		const isle = together ? Object.entries( together.records ).filter( ( [ k ] ) => FISH[ k ] ).sort( ( a, b ) => b[ 1 ].kg - a[ 1 ].kg ) : [];
-		const tabs = [ [ 'fish', 'Fish', s.inventory.length ], [ 'bait', 'Bait', Object.values( s.bait ).reduce( ( a, n ) => a + n, 0 ) ], [ 'finds', 'Finds', s.finds.length ], [ 'log', 'Log', logged.length ], [ 'chart', 'Chart', s.chart.marks.length ] ];
+		const tabs = [ [ 'fish', 'Fish', s.inventory.length ], [ 'bait', 'Bait', Object.values( s.bait ).reduce( ( a, n ) => a + n, 0 ) ], [ 'finds', 'Finds', s.finds.length ], [ 'shells', 'Shells', shellsHave( s.shells ) ], [ 'log', 'Log', logged.length ], [ 'chart', 'Chart', s.chart.marks.length ] ];
 		if ( together ) tabs.push( [ 'records', 'Records', isle.length ], [ 'islander', 'Islander', 0 ] );
 		this._invTabs = tabs.map( ( t ) => t[ 0 ] );
 		const tab = this._invTabs.includes( this.invTab ) ? this.invTab : 'fish';
@@ -938,7 +990,7 @@ export class GameHUD {
 			body = item( 'Frozen shrimp', 'never runs out · the little fish take it', on( null ) )
 				+ BAIT_IDS.filter( ( k ) => s.bait[ k ] > 0 ).map( ( k ) => item( BAITS[ k ].name, `${ s.bait[ k ] } in the ${ BAITS[ k ].live ? well : 'cooler' }`, `<span class="gm-btns">${ on( k ) }<button class="gm-mini" data-dump="${ k }">${ BAITS[ k ].live ? 'Let go' : 'Toss' }</button></span>` ) ).join( '' );
 			if ( ! BAIT_IDS.some( ( k ) => s.bait[ k ] > 0 ) ) body += empty( 'Throw the cast net for live bait: silversides, sergeant majors, small grunts and mullet. The big fish come for it.' );
-			hint = `${ s.baitCount } / ${ s.stats.baitMax } in the bucket · ${ d === 'gamepad' ? 'D-pad ← →' : d === 'touch' ? 'the Bait button' : '<kbd>B</kbd>' } changes it with the rod out`;
+			hint = `${ s.baitCount } / ${ s.stats.baitMax } in the bucket · ${ d === 'gamepad' ? `D-pad ${ LEFT } ${ RIGHT }` : d === 'touch' ? 'the Bait button' : '<kbd>B</kbd>' } changes it with the rod out`;
 
 		} else if ( tab === 'finds' ) {
 
@@ -949,13 +1001,21 @@ export class GameHUD {
 				const btns = f.kind === 'bottle' ? `<button class="gm-mini" data-read="${ f.id }">Read</button>` : '';
 				return item( F.name, `${ F.what } · ${ buyer }`, `<span class="gm-btns">${ btns }<button class="gm-mini" data-toss="${ f.id }">Toss</button></span>` );
 
-			} ).join( '' ) || empty( 'The sea brings things in on the north beach, along the line of weed at the top of the tide: driftwood, floats, sea beans, now and then a bottle. Most after a blow from the north, and after a hurricane.' );
+			} ).join( '' ) || empty( 'The sea brings things in on the north beach, along the line of weed at the top of the tide: driftwood, floats, sea beans, now and then a bottle. Most after a blow from the north, and after a hurricane. The bay\'s beach has its own: sand dollars, sea glass, what the village has lost. Every shore has something.' );
 			hint = 'Marta buys most of it; Joe knows a buyer for ambergris';
+
+		} else if ( tab === 'shells' ) {
+
+			// ((M16) the shell collection: ShellCase.js)
+			( { body, hint } = shellTab( s, d ) );
 
 		} else if ( tab === 'log' ) {
 
 			body = logged.map( ( [ k, v ] ) => item( FISH[ k ].name, `${ v.count } caught`, `<span class="gm-item-num">${ lb( v.bestKg ) } · ${ sizeOf( k, v.bestCm ?? fishLengthCm( k, v.bestKg ) ) }</span>` ) ).join( '' )
 				|| empty( 'Each kind you catch is logged here, with your best.' );
+			// ((M16) and the billfish you've let go: the log's their trophy, and the button their picture)
+			const won = trophyRows( s );
+			if ( won.length ) body = `<div class="gm-wanted"><span class="gm-wanted-h">Trophies, let go alive</span>${ won.map( ( t ) => item( t.name, t.meta, `<span class="gm-btns"><span class="gm-item-num">${ lb( t.kg ) }</span><button class="gm-mini" data-trophy="${ t.species }">See it</button></span>` ) ).join( '' ) }</div>` + body;
 			// ((M15) and the places you've fished: how many there, and the first)
 			const places = Object.entries( s.places || {} ).filter( ( [ k ] ) => PLACES[ k ] );
 			if ( places.length ) body += `<div class="gm-wanted"><span class="gm-wanted-h">Places you've fished</span>${ places.map( ( [ k, p ] ) => item( placeName( k, true ), `first ${ p.first && FISH[ p.first ] ? `a ${ FISH[ p.first ].name.toLowerCase() }` : 'a fish' }${ Number.isFinite( p.day ) ? `, day ${ p.day + 1 }` : '' }`, `<span class="gm-item-num">${ p.n } fish</span>` ) ).join( '' ) }</div>`;
@@ -970,17 +1030,18 @@ export class GameHUD {
 			// compass), the names you've come to)
 			const c = s.chart, a = this.game.app, aboard = a.player.mode === 'boat' || a.player.mode === 'deck';
 			const at = aboard && a.boatCtl ? a.boatCtl.position : a.camera.position;
-			const named = NAMES.filter( ( n ) => c.named( n.id ) && ! n.peak ).map( ( n ) => n.name );
-			body = `<div class="gm-shop-row"><span>Mark where you are<small>${ c.marks.length } of ${ MAX_MARKS } marks · on the map and the boat's plotter</small></span><button class="gm-btn" data-mark>Mark here</button></div>`
+			const named = NAMES.filter( ( n ) => c.named( n.id ) && ! n.peak ).map( namedAs );
+			// ((M16) and the whole chart to look at: ChartMap)
+			body = `<div class="gm-chartmap-slot"></div><div class="gm-shop-row"><span>Mark where you are<small>${ c.marks.length } of ${ MAX_MARKS } marks · on the map and the boat's plotter</small></span><button class="gm-btn" data-mark>Mark here</button></div>`
 				+ c.marks.map( ( m ) => {
 
 					const leg = legTo( at.x, at.z, m.x, m.z ), far = leg.m < 1852 * 0.2 ? feet( leg.m ) : `${ ( leg.m / 1852 ).toFixed( 1 ) } NM`;
-					return item( `Mark ${ m.id }`, `${ far } · ${ String( magnetic( leg.bearing ) ).padStart( 3, '0' ) }°${ Number.isFinite( m.day ) ? ` · day ${ m.day + 1 }` : '' }`, '<span class="gm-btns">' + `<button class="gm-mini" data-unmark="${ m.id }">Remove</button></span>` );
+					return item( `${ m.trap ? 'Trap' : 'Mark' } ${ m.id }`, `${ far } · ${ String( magnetic( leg.bearing ) ).padStart( 3, '0' ) }°${ Number.isFinite( m.day ) ? ` · day ${ m.day + 1 }` : '' }`, '<span class="gm-btns">' + `<button class="gm-mini" data-unmark="${ m.id }">Remove</button></span>` );
 
 				} ).join( '' );
 			if ( ! c.marks.length ) body += empty( 'Your chart\'s drawn in where you go: the coast as you see it, the far grounds\' depths as you run over them, each place\'s name as you come to it. Mark a good spot to find it again.' );
 			if ( named.length ) body += `<div class="gm-wanted"><span class="gm-wanted-h">Named on your chart</span><p class="gm-sub">${ named.join( ' · ' ) }</p></div>`;
-			hint = `${ d === 'touch' ? 'Mark here' : d === 'gamepad' ? 'Mark here' : '<kbd>P</kbd>' } marks where you are${ c.bought ? '' : ' · Marta sells a chart of the island' }`;
+			hint = `${ d === 'touch' ? 'Mark here' : d === 'gamepad' ? 'Mark here' : '<kbd>P</kbd>' } marks where you are${ c.bought ? '' : ' · Marta sells a chart of the island' }${ { gamepad: ' · Stick moves the map, <kbd>RB</kbd> <kbd>LB</kbd> zoom, <kbd>RT</kbd> where you are', keyboard: ' · <kbd>WASD</kbd> moves the map, <kbd>+</kbd> <kbd>-</kbd> zoom, <kbd>F</kbd> where you are' }[ d ] || '' }`;
 
 		} else if ( tab === 'records' ) {
 
@@ -1007,17 +1068,20 @@ export class GameHUD {
 		const old = this.inv.querySelector( '.gm-list' );
 		const scroll = old && this._invDrawn === tab ? old.scrollTop : 0;
 		this._invDrawn = tab;
-		const keys = d === 'touch' ? '' : `<span class="gm-tabs-keys">${ d === 'gamepad' ? 'D-pad' : '<kbd>←</kbd><kbd>→</kbd>' }</span>`;
+		const keys = d === 'touch' ? '' : `<span class="gm-tabs-keys">${ d === 'gamepad' ? 'D-pad' : `<kbd>${ LEFT }</kbd><kbd>${ RIGHT }</kbd>` }</span>`;
 		this.inv.innerHTML = `
 			<div class="gm-head"><h2>${ s.upgrades.hold > 0 ? 'Fish hold' : 'Cooler' }</h2>
-			<p class="gm-sub">${ s.inventory.length } fish · ${ pounds( s.holdKg ) } of ${ pounds( s.stats.holdKg ) } lb · worth $${ s.holdValue }</p></div>
+			<p class="gm-sub">${ s.inventory.length } fish · ${ pounds( s.holdKg ) } of ${ pounds( s.stats.holdKg ) } lb · worth $${ s.holdValue }${ this.game.daysOut.boxSaid() }</p></div>
 			<div class="gm-tabs" role="tablist">${ tabs.map( ( [ id, label, n ] ) => `<button class="gm-tab${ id === tab ? ' is-on' : '' }" role="tab" aria-selected="${ id === tab }" data-tab="${ id }">${ label }${ n ? `<small>${ n }</small>` : '' }</button>` ).join( '' ) }${ keys }</div>
 			<div class="gm-list" role="tabpanel">${ body }</div>
 			<div class="gm-foot"><span class="gm-sub">${ hint }</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Close', 'I', 'Back' ) }</button></div>`;
 		this.inv.querySelector( '.gm-list' ).scrollTop = scroll;
 		this.inv.querySelector( '[data-close]' ).onclick = () => this.toggleInventory( false );
 		for ( const b of this.inv.querySelectorAll( '[data-tab]' ) ) b.onclick = () => this.showTab( b.dataset.tab );
+		if ( tab === 'shells' ) bindShellTab( this.inv, s, () => this.renderInventory() );
+		if ( tab === 'chart' ) ( this._chartMap ||= new ChartMap( this.game ) ).mount( this.inv.querySelector( '.gm-chartmap-slot' ) );
 		for ( const b of this.inv.querySelectorAll( '[data-release]' ) ) b.onclick = () => s.release( Number( b.dataset.release ) );
+		for ( const b of this.inv.querySelectorAll( '[data-trophy]' ) ) b.onclick = () => this.game.showTrophy( b.dataset.trophy );
 		for ( const b of this.inv.querySelectorAll( '[data-cut]' ) ) b.onclick = () => {
 
 			const n = s.cutBait( Number( b.dataset.cut ) );
@@ -1077,6 +1141,16 @@ export class GameHUD {
 
 	}
 
+	// ((M16) no pointer on the Shells tab) the next shell's close look, or the last's; it's at the top of the page
+	nextShell( step ) {
+
+		stepShell( step );
+		this.renderInventory();
+		const body = this.inv.querySelector( '.gm-shelllook' );
+		if ( body && body.scrollIntoView ) body.scrollIntoView( { block: 'nearest' } );
+
+	}
+
 	// ---- fish stand
 	openStand( vendor ) {
 
@@ -1129,7 +1203,7 @@ export class GameHUD {
 		const meta = done ? `filled by ${ helped === 1 ? ( mine ? 'you' : 'one islander' ) : `${ helped } of you` }` : `for a restaurant on the mainland · pays ×${ WEEK_MUL }`;
 		const note = done ? ( share ? `Your share of the $${ t.bonus } bonus: $${ share }${ g.state.weekPaid !== null && g.state.weekPaid >= t.week ? ', paid' : box ? '. Joe pays it when he\'s in' : '' }.` : 'A new order next week.' )
 			: `$${ t.bonus } bonus when it's filled, shared by what each of you brings.${ mine ? ` You've brought ${ pounds( mine ) } lb.` : '' }`;
-		const row = item( FISH[ t.species ].name, meta, `<span class="gm-item-num">${ done ? '✓ ' : '' }${ pounds( Math.min( got, t.kg ) ) } / ${ pounds( t.kg ) } lb</span>` );
+		const row = item( FISH[ t.species ].name, meta, `<span class="gm-item-num">${ done ? `${ CHECK } ` : '' }${ pounds( Math.min( got, t.kg ) ) } / ${ pounds( t.kg ) } lb</span>` );
 		return `<div class="gm-wanted"><span class="gm-wanted-h">The week's order${ done ? '' : ` · ${ when }` }</span>${ row }<div class="gm-week-bar"><span style="width:${ Math.min( 100, got / t.kg * 100 ).toFixed( 1 ) }%"></span></div><span class="gm-week-note">${ note }</span></div>`;
 
 	}
@@ -1212,9 +1286,10 @@ export class GameHUD {
 
 		const terms = g.saleTerms( v ), all = s.quote( null, terms );
 		const rows = s.inventory.map( ( f ) => fishItem( f, `<button class="gm-mini" data-sell="${ f.id }">Sell</button>`, s.quote( [ f.id ], terms ).prices.get( f.id ), false ) ).join( '' );
-		const missing = s.stats.fuelL - s.fuelL;
-		const fuelRow = `<div class="gm-shop-row"><span>Diesel · $${ ( CAMP.fuel * GAL ).toFixed( 2 ) } / gal<small>From her drums by the jetty · tank: ${ gallons( s.fuelL ) } of ${ gallons( s.stats.fuelL ) } gal</small></span>${ missing > 0.5 ? `<button class="gm-btn" data-fuel ${ s.money < CAMP.fuel ? 'disabled' : '' }>Fill · $${ Math.min( s.refuelCost( CAMP.fuel ), Math.floor( s.money / CAMP.fuel ) * CAMP.fuel ) }</button>` : '<span class="gm-have">Full</span>' }</div>`;
-		const sub = this.closingSoon( v ) ? `I'm off round to market at ${ this.at( v.hours[ 1 ] ) }.` : s.inventory.length ? v.greeting : v.idle;
+		// ((M16) what your boat burns, at what she charges over Marta)
+		const missing = s.stats.fuelL - s.fuelL, F = fuelOf( s.boat ), litre = fuelPrice( s.boat, CAMP.fuel );
+		const fuelRow = ! F ? '' : `<div class="gm-shop-row"><span>${ F.name } · $${ ( litre * GAL ).toFixed( 2 ) } / gal<small>From her drums by the jetty · tank: ${ gallons( s.fuelL ) } of ${ gallons( s.stats.fuelL ) } gal</small></span>${ missing > 0.5 ? `<button class="gm-btn" data-fuel ${ s.money < litre ? 'disabled' : '' }>Fill · $${ Math.min( s.refuelCost( litre ), Math.floor( s.money / litre ) * litre ) }</button>` : '<span class="gm-have">Full</span>' }</div>`;
+		const sub = this.closingSoon( v ) ? `I'm off round to market at ${ this.at( v.hours[ 1 ] ) }.` : F ? ( s.inventory.length ? v.greeting : v.idle ) : s.inventory.length ? 'Paddled round from the bay? I\'ll take what you caught.' : 'Nothing today? Come back when you\'ve got fish.';
 		this.drawStand( v, `
 			<div class="gm-head"><h2>${ v.name }</h2>
 			<p class="gm-sub">${ sub } She pays ${ Math.round( CAMP.rate * 100 ) }% of Joe's price. You have $${ s.money.toLocaleString() }</p></div>
@@ -1225,7 +1300,7 @@ export class GameHUD {
 		this.stand.querySelector( '[data-all]' ).onclick = () => this.game.sellAll();
 		for ( const b of this.stand.querySelectorAll( '[data-sell]' ) ) b.onclick = () => this.game.sell( [ Number( b.dataset.sell ) ] );
 		const f = this.stand.querySelector( '[data-fuel]' );
-		if ( f ) f.onclick = () => this.game.refuel( CAMP.fuel );
+		if ( f ) f.onclick = () => this.game.refuel( litre );
 
 	}
 
@@ -1254,7 +1329,7 @@ export class GameHUD {
 		this.noteOpen = true;
 		this.note.innerHTML = `
 			<div class="gm-head"><h2>A message in a bottle</h2><p class="gm-sub">From ${ escape( m.from ) }</p></div>
-			<div class="gm-list"><p class="gm-note-text">“${ escape( m.text ) }”</p></div>
+			<div class="gm-list"><p class="gm-note-text">${ OPEN_QUOTE }${ escape( m.text ) }${ CLOSE_QUOTE }</p></div>
 			<div class="gm-foot"><span class="gm-sub">Kept in your finds</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Close', 'E', 'B' ) }</button></div>`;
 		this.note.querySelector( '[data-close]' ).onclick = () => this.closeNote();
 		this.note.classList.add( 'is-open' );
@@ -1268,7 +1343,7 @@ export class GameHUD {
 		this.noteOpen = true;
 		this.note.innerHTML = `
 			<div class="gm-head"><h2>A note from Marta</h2><p class="gm-sub">While you were away</p></div>
-			<div class="gm-list">${ paragraphs.map( ( p ) => `<p class="gm-note-text">${ escape( p ) }</p>` ).join( '' ) }<p class="gm-note-text">— Marta</p></div>
+			<div class="gm-list">${ paragraphs.map( ( p ) => `<p class="gm-note-text">${ escape( p ) }</p>` ).join( '' ) }<p class="gm-note-text">${ EM_DASH } Marta</p></div>
 			<div class="gm-foot"><span></span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Close', 'E', 'B' ) }</button></div>`;
 		this.note.querySelector( '[data-close]' ).onclick = () => this.closeNote();
 		this.note.classList.add( 'is-open' );
@@ -1299,10 +1374,12 @@ export class GameHUD {
 
 GameHUD.prototype.renderShop = function () {
 
+	// ((M16) typing her name: not drawn again under you)
+	if ( this._fleetTyping ) return;
 	const g = this.game, s = g.state;
 	const v = this.vendor;
-	const missing = s.stats.fuelL - s.fuelL;
-	const fuelRow = `<div class="gm-shop-row"><span>Diesel · $${ ( FUEL_PRICE * GAL ).toFixed( 2 ) } / gal<small>Tank: ${ gallons( s.fuelL ) } of ${ gallons( s.stats.fuelL ) } gal</small></span>${ missing > 0.5 ? `<button class="gm-btn" data-fuel ${ s.money < FUEL_PRICE ? 'disabled' : '' }>Fill · $${ s.refuelCost() }</button>` : '<span class="gm-have">Full</span>' }</div>`;
+	const missing = s.stats.fuelL - s.fuelL, F = fuelOf( s.boat ), litre = fuelPrice( s.boat );
+	const fuelRow = ! F ? '' : `<div class="gm-shop-row"><span>${ F.name } · $${ ( litre * GAL ).toFixed( 2 ) } / gal<small>Tank: ${ gallons( s.fuelL ) } of ${ gallons( s.stats.fuelL ) } gal</small></span>${ missing > 0.5 ? `<button class="gm-btn" data-fuel ${ s.money < litre ? 'disabled' : '' }>Fill · $${ s.refuelCost() }</button>` : '<span class="gm-have">Full</span>' }</div>`;
 	// (Salt Life) your boat drifted off: Marta tows her back to the dock (out of hours too: into the box)
 	const job = g.towJob ? g.towJob() : null;
 	const towRow = job ? `<div class="gm-shop-row"><span>Tow your boat in<small>She's drifted ${ farOff( job.metres ) } off the dock</small></span><button class="gm-btn" data-tow>Tow · $${ Math.min( job.fee, s.money ) }</button></div>` : '';
@@ -1334,7 +1411,7 @@ GameHUD.prototype.renderShop = function () {
 
 		this.drawStand( v, `
 			<div class="gm-head"><h2>Marta's honesty box</h2>
-			<p class="gm-sub">${ v.boarded ? 'Marta\'s boarded up for the hurricane' : v.weatherShut ? 'Marta\'s shut for the weather' : `Marta's back at ${ this.at( v.hours[ 0 ] ) }` }. The diesel's left out: pay into the box. You have $${ s.money.toLocaleString() }</p></div>
+			<p class="gm-sub">${ v.boarded ? 'Marta\'s boarded up for the hurricane' : v.weatherShut ? 'Marta\'s shut for the weather' : `Marta's back at ${ this.at( v.hours[ 0 ] ) }` }. ${ F ? `The ${ F.name.toLowerCase() }'s left out: pay into the box.` : 'Everything\'s locked up.' } You have $${ s.money.toLocaleString() }</p></div>
 			<div class="gm-list">${ towRow }${ fuelRow }</div>
 			<div class="gm-foot"><span class="gm-sub">Gear when she's back</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>` );
 		bindFuel();
@@ -1349,7 +1426,8 @@ GameHUD.prototype.renderShop = function () {
 	// (Salt Life) and from the bait bucket, alive
 	const bq = terms ? s.quoteBait( terms ) : null;
 	const bucketRow = bq && bq.n ? item( `${ FISH[ bq.species ].name }<small class="is-wanted">wanted</small>`, `${ bq.n } live from your bait bucket · $${ bq.each } each`, `<span class="gm-item-val">$${ bq.total }</span>`, `<button class="gm-mini" data-sellbait>Sell ${ bq.n }</button>` ) : '';
-	const rows = Object.entries( UPGRADES ).map( ( [ key, track ] ) => {
+	// ((M16) your own gear, then the boat's you're in: the others' wait till you are)
+	const track = ( [ key, track ] ) => {
 
 		const cur = track.levels[ s.upgrades[ key ] | 0 ];
 		const next = nextLevel( s.upgrades, key );
@@ -1358,15 +1436,39 @@ GameHUD.prototype.renderShop = function () {
 			: '<span class="gm-have">Top of the line</span>';
 		return `<div class="gm-shop-row"><span>${ track.name }: ${ next ? next.label : cur.label }<small>Now: ${ cur.label }</small></span>${ btn }</div>`;
 
-	} ).join( '' );
-	const greeting = this.closingSoon( v ) ? `I'm shutting at ${ this.at( v.hours[ 1 ] ) }` : v.greeting;
+	};
+
+	const tracks = Object.entries( UPGRADES ), mine = tracks.filter( ( [ , t ] ) => ! t.on ), hers = tracks.filter( ( [ , t ] ) => t.on === s.boat );
+	const rows = `<span class="gm-boat-section">Your gear</span>${ mine.map( track ).join( '' ) }${ hers.length ? `<span class="gm-boat-section">For ${ escape( s.boatName() ) }</span>${ hers.map( track ).join( '' ) }` : '' }`;
+	// ((M16) bait by the trip's lot: what the net can't bring up; lures are the Lures track)
+	const frozen = BAIT_IDS.filter( ( k ) => BAITS[ k ].price && ! BAITS[ k ].lure ).map( ( k ) => `<div class="gm-shop-row"><span>${ BAITS[ k ].name }<small>${ BAITS[ k ].per > 1 ? `${ BAITS[ k ].per } at a time` : 'A block' } · you have ${ s.bait[ k ] | 0 }</small></span><button class="gm-btn" data-lot="${ k }" ${ BAITS[ k ].price > s.money ? 'disabled' : '' }>$${ BAITS[ k ].price }</button></div>` ).join( '' );
+	// ((M16) traps a hurricane's had: Traps.js)
+	const lostTraps = s.traps.lost, trapRow = lostTraps ? `<div class="gm-shop-row"><span>A new lobster trap<small>${ lostTraps } lost to the weather</small></span><button class="gm-btn" data-newtrap ${ TRAP_PRICE > s.money ? 'disabled' : '' }>$${ TRAP_PRICE }</button></div>` : '';
+	const greeting = this.closingSoon( v ) ? `I'm shutting at ${ this.at( v.hours[ 1 ] ) }` : martaSays( s ) || v.greeting;
+	const boats = this._shopTab === 'boats';
+	const tabs = `<div class="gm-tabs" role="tablist">${ [ [ 'gear', 'Gear' ], [ 'boats', 'Boats' ] ].map( ( [ id, label ] ) => `<button class="gm-tab${ boats === ( id === 'boats' ) ? ' is-on' : '' }" role="tab" aria-selected="${ boats === ( id === 'boats' ) }" data-shoptab="${ id }">${ label }</button>` ).join( '' ) }</div>`;
 	// (her wanted list scrolls with the rest, as Joe's does)
 	this.drawStand( v, `
 		<div class="gm-head"><h2>${ v.name }</h2>
 		<p class="gm-sub">${ greeting } · You have $${ s.money.toLocaleString() }</p></div>
-		<div class="gm-list">${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ this.findsBlock( 'marta', 'From the beach: she\'ll buy' ) }${ bucketRow }${ baitRows }${ haulRow }${ towRow }${ repairRow }${ fuelRow }${ rows }</div>
-		<div class="gm-foot"><span class="gm-sub">Upgrades take effect at once</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>` );
+		${ tabs }
+		<div class="gm-list">${ boats ? fleetRows( this ) : `${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ this.findsBlock( 'marta', 'From the beach: she\'ll buy' ) }${ shellShopRow( s ) }${ bucketRow }${ baitRows }${ haulRow }${ towRow }${ repairRow }${ fuelRow }${ frozen }${ trapRow }${ g.daysOut.shopRows() }${ rows }` }</div>
+		<div class="gm-foot"><span class="gm-sub">${ boats ? 'Boats stay at their berths till you take one out' : 'Upgrades take effect at once' }</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>` );
 	bindFuel();
+	g.daysOut.bindShop( this.stand, () => this.renderShop() );
+	for ( const b of this.stand.querySelectorAll( '[data-lot]' ) ) b.onclick = () => {
+
+		g.buyBait( b.dataset.lot );
+		this.renderShop();
+
+	};
+	for ( const b of this.stand.querySelectorAll( '[data-shoptab]' ) ) b.onclick = () => {
+
+		this._shopTab = b.dataset.shoptab;
+		this.renderShop();
+
+	};
+	bindFleet( this );
 	const sb = this.stand.querySelector( '[data-sellbait]' );
 	if ( sb ) sb.onclick = () => this.game.sellBait();
 	const hl = this.stand.querySelector( '[data-haul]' );
@@ -1390,9 +1492,18 @@ GameHUD.prototype.renderShop = function () {
 		this.renderShop();
 
 	};
+	const nt = this.stand.querySelector( '[data-newtrap]' );
+	if ( nt ) nt.onclick = () => {
+
+		this.game.traps.buyNew();
+		this.renderShop();
+
+	};
 	for ( const b of this.stand.querySelectorAll( '[data-buy]' ) ) b.onclick = () => this.game.buy( b.dataset.buy );
 	for ( const b of this.stand.querySelectorAll( '[data-sell]' ) ) b.onclick = () => this.game.sell( [ Number( b.dataset.sell ) ] );
 	this.bindFinds( 'marta' );
+	const sw = this.stand.querySelector( '[data-shellwall]' );
+	if ( sw ) sw.onclick = () => this.game.giveShells();
 
 };
 

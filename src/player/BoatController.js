@@ -1,32 +1,20 @@
 import * as THREE from '../engine/index.js';
-import { WORLD } from '../world/WorldLayout.js';
+import { berthOf } from '../game/fleet/Berths.js';
 import { G } from '../core/Globals.js';
+import { ableOf } from '../game/Seaworthy.js';
 
 const RHO = 1025; // sea water density
 const GRAV = 9.81;
-const DEG = Math.PI / 180;
 
-const sstep = THREE.MathUtils.smoothstep;
 const clamp = THREE.MathUtils.clamp;
 // (Salt Life) the anchor rode: how far the bow swings from over the anchor before it comes taut (a
 // short scope, so the boat stays on the spot), and its stretch and damping (N/m, N s/m)
 export const RODE_SLACK = 4;
 const RODE_K = 2500;
 const RODE_C = 2500;
-// (Salt Life) the wind on her: the area she shows it end-on and abeam (m^2: the hull's side and the
-// wheelhouse), the drag coefficient, and how high its centre of effort is (boat frame: the house)
-const WIND_AREA = [ 6, 11 ];
-const WIND_CD = 0.92;
-const WIND_Y = 1.2;
-// how far toward the end the wind comes from its push moves as it comes round from abeam to end-on
-// (m: as on a flat plate, toward the windward edge): beam-on is how she lies, not a balance on a knife edge
-const WIND_LEAD = 3;
 const AIR = 1.2; // kg/m^3
-// her range of stability: past RIGHT_FROM of heel (or trim) her full keel's ballast and the flare of
-// her topsides, burying as she heels, right her harder (N m per radian past it); the waterplane
-// samples alone lose their grip on her there, and in a gale's wind and seas she'd go over
-const RIGHT_FROM = 25 * Math.PI / 180;
-const RIGHT_K = 45000;
+// (M16) the most buoyancy samples any boat has: the water query's slots are taken once
+export const MAX_HULL_SAMPLES = 32;
 
 // scratch (the integrator runs at 120 Hz: no allocations in the loop)
 const _F = new THREE.Vector3();
@@ -42,7 +30,6 @@ const _fwd = new THREE.Vector3();
 const _side = new THREE.Vector3();
 const _up = new THREE.Vector3();
 const _v = new THREE.Vector3();
-const _rud = new THREE.Vector3();
 const _g = new THREE.Vector3();
 const _t = new THREE.Vector3();
 const _c1 = new THREE.Vector3();
@@ -52,6 +39,8 @@ const _c4 = new THREE.Vector3();
 const _c5 = new THREE.Vector3();
 const _invQ = new THREE.Quaternion();
 const _dq = new THREE.Quaternion();
+const _q = {}; // what a boat's propulsion's told (world/boat/Handling.js)
+const CONTACT = { k: 400000, c: 30000, slide: 6000, pileK: 260000, pileC: 8000 }; // N/m and N s/m, on a pile and on the ground
 
 // Rigid-body model of an 8.2 m, 3.2 t Downeast lobster boat (semi-displacement hull, full keel).
 //
@@ -76,79 +65,25 @@ export class BoatController {
 		this.terrain = terrain;
 		this.colliders = colliders;
 
-		const hydro = model.hydro || {};
-		this.mass = hydro.suggestedMass || 3200;
-		this.com = hydro.centerOfMass ? new THREE.Vector3().copy( hydro.centerOfMass ) : new THREE.Vector3( 0, 0.3, - 0.74 );
-		// principal inertia in the boat frame (+Z forward, +X port): x = pitch, y = yaw, z = roll. Gear
-		// high on deck (hauler, wheelhouse) gives a larger roll radius than the bare hull.
-		this.inertia = hydro.inertia ? hydro.inertia.clone() : new THREE.Vector3( 14600, 15700, 3500 );
-		this.inertia.z *= 1.24;
-		// added mass / inertia when fully wet (fraction of the rigid-body value): surge, sway, heave;
-		// pitch, yaw, roll
-		this.addedMass = new THREE.Vector3( 0.6, 0.7, 0.05 ); // x (sway), y (heave), z (surge)
-		this.addedInertia = new THREE.Vector3( 1.0, 0.4, 0.2 ); // x (pitch), y (yaw), z (roll)
-
-		// effective waterplane: lateral / longitudinal lever arms of the buoyancy samples
-		const cbz = hydro.centerOfBuoyancy ? hydro.centerOfBuoyancy.z : this.com.z;
-		const sx = 0.79, sz = 0.9;
-		this.samples = model.hullSamples.map( ( s ) => ( {
-			p: new THREE.Vector3( s.position.x * sx, s.position.y, cbz + ( s.position.z - cbz ) * sz ),
-			area: s.area, bottom: s.bottomY ?? s.position.y,
-		} ) );
-		let pitchK = 0;
-		for ( const s of this.samples ) pitchK += s.area * ( s.p.z - cbz ) ** 2;
-		this.pitchStiffness = RHO * GRAV * pitchK; // N m / rad (for the running-trim moment)
-		this.slot = query.allocate( 'boatHull', this.samples.length );
-
-		// lateral stations along the keel: (z, lateral area m^2) for hull lift and cross-flow drag
-		this.stations = [ [ - 3.4, 0.73 ], [ - 2.3, 0.78 ], [ - 1.2, 0.8 ], [ - 0.1, 0.77 ], [ 1.0, 0.62 ], [ 2.1, 0.33 ], [ 3.2, 0.14 ] ];
-		this.lateralY = 0.06; // height of the centre of lateral resistance (boat frame)
-		// (Salt Life) where the wind pushes: above the keel's centre of lateral resistance (its stations'
-		// area-weighted middle), up on the house. Beam-on, wind and water then balance without turning
-		// her: she lies across the wind and drifts; at anchor the rode at the bow brings her head to it
-		let za = 0, a = 0;
-		for ( const [ z, A ] of this.stations ) {
-
-			za += z * A;
-			a += A;
-
-		}
-
-		this.windage = new THREE.Vector3( 0, WIND_Y, za / a );
-		this.bank = 0; // roll moment per (u * drift velocity): hull bottom lift banking into turns
-		this.hullLift = 0.5; // lift coefficient of the hull + keel per radian of drift
-		this.rudderLift = 2.8; // rudder lift slope (x area 0.12 m^2), includes the hull's flap effect
+		this.slot = query.allocate( 'boatHull', MAX_HULL_SAMPLES );
 
 		// state (position = model origin at the design waterline)
-		this.position = new THREE.Vector3().copy( WORLD.boatDock.position );
-		this.quaternion = new THREE.Quaternion().setFromAxisAngle( new THREE.Vector3( 0, 1, 0 ), WORLD.boatDock.heading );
+		const berth = berthOf( model.id );
+		this.position = new THREE.Vector3().copy( berth.position );
+		this.quaternion = new THREE.Quaternion().setFromAxisAngle( new THREE.Vector3( 0, 1, 0 ), berth.heading );
 		this.velocity = new THREE.Vector3();
 		this.angular = new THREE.Vector3();
 
 		this.throttle = 0; // lever -1..1 (moves with some inertia)
 		this.steer = 0; // wheel -1..1
 		this.rpm = 0; // engine 0..1 (spools after the lever)
-		this.maxThrust = 26000; // N, bollard pull at full rpm
-		this.pitchSpeed = 16; // m/s, propeller pitch speed at full rpm (thrust -> 0 there)
-		this.reverseFactor = 0.45; // astern thrust relative to ahead
 		this.driven = false;
 		this.moored = true;
-		this.mooring = { anchor: WORLD.boatDock.position.clone(), heading: WORLD.boatDock.heading };
+		this.mooring = { anchor: berth.position.clone(), heading: berth.heading };
 		// (Salt Life) where the anchor lies on the bottom while it's down (Game sets it), else null; its
 		// rode is made fast at the stem head
 		this.anchor = null;
-		const L = model.lines;
-		this.stemHead = L ? new THREE.Vector3( 0, L.sheerY( 1 ), L.sheerZ( 1 ) - 0.15 ) : new THREE.Vector3( 0, 1.2, 4.1 );
-
-		const n = this.samples.length;
-		this.waterH = new Float32Array( n ); // latest read-back
-		this.waterV = new Float32Array( n ); // vertical velocity of the water (m/s)
-		this.waterOff = new Float32Array( n ); // blends the step when a new read-back arrives
-		this.hEff = new Float32Array( n ); // water height used by the integrator (interpolated)
-		this.qx = new Float64Array( n ); // query point + slope of the last result ((M15) where: in doubles)
-		this.qz = new Float64Array( n );
-		this.gx = new Float32Array( n );
-		this.gz = new Float32Array( n );
+		this.sock = false; // ((M16) her drift sock's out: game/DaysOut.js)
 		this.hasWater = false;
 		this.wetFraction = 0;
 		this.speed = 0;
@@ -168,12 +103,84 @@ export class BoatController {
 		this.thrustMul = 1;
 		this.contact = { pile: 0, ground: 0, slide: 0, aground: false };
 		this.hauled = null; // (M13) on her cradle ashore (Marta's haul-out: { position, heading }), or null
+		this.beached = false; // ((M16) drawn up on the sand, where she lies out of the water: kayak/Shore.js)
 		this._acc = 0;
 		this._age = 0; // s since the latest read-back was issued
 
 		this.bowWorld = new THREE.Vector3();
 		this.sternWorld = new THREE.Vector3();
 
+		this.setModel( model );
+		if ( model.atHome ) model.atHome( this );
+
+	}
+
+	// (M16) the boat she is (BoatModel, or any world/boat/Vessel): her body and how she handles (world/boat/Handling.js).
+	// Where she lies and what she's doing stay as they are; see App.setBoat
+	setModel( model ) {
+
+		this.model = model;
+		const hydro = model.hydro, H = this.handling = model.handling, E = H.engine;
+		this.mass = hydro.suggestedMass;
+		this.com = new THREE.Vector3().copy( hydro.centerOfMass );
+		// principal inertia in the boat frame (+Z forward, +X port): x = pitch, y = yaw, z = roll. Gear
+		// high on deck (hauler, wheelhouse) gives a larger roll radius than the bare hull.
+		this.inertia = hydro.inertia.clone();
+		this.inertia.z *= H.rollInertia;
+		// added mass / inertia when fully wet (fraction of the rigid-body value): surge, sway, heave;
+		// pitch, yaw, roll
+		this.addedMass = new THREE.Vector3( ...H.addedMass ); // x (sway), y (heave), z (surge)
+		this.addedInertia = new THREE.Vector3( ...H.addedInertia ); // x (pitch), y (yaw), z (roll)
+
+		// effective waterplane: lateral / longitudinal lever arms of the buoyancy samples
+		const cbz = hydro.centerOfBuoyancy.z;
+		const [ sx, sz ] = H.waterplane;
+		if ( model.hullSamples.length > MAX_HULL_SAMPLES ) throw new Error( 'BoatController: more samples than MAX_HULL_SAMPLES' );
+		this.samples = model.hullSamples.map( ( s ) => ( {
+			p: new THREE.Vector3( s.position.x * sx, s.position.y, cbz + ( s.position.z - cbz ) * sz ),
+			area: s.area, bottom: s.bottomY ?? s.position.y,
+		} ) );
+		let pitchK = 0;
+		for ( const s of this.samples ) pitchK += s.area * ( s.p.z - cbz ) ** 2;
+		this.pitchStiffness = RHO * GRAV * pitchK; // N m / rad (for the running-trim moment)
+
+		// lateral stations along the keel: (z, lateral area m^2) for hull lift and cross-flow drag
+		this.stations = H.stations;
+		this.lateralY = H.lateralY; // height of the centre of lateral resistance (boat frame)
+		// (Salt Life) where the wind pushes: above the keel's centre of lateral resistance (its stations'
+		// area-weighted middle), up on the house. Beam-on, wind and water then balance without turning
+		// her: she lies across the wind and drifts; at anchor the rode at the bow brings her head to it
+		let za = 0, a = 0;
+		for ( const [ z, A ] of this.stations ) {
+
+			za += z * A;
+			a += A;
+
+		}
+
+		this.windage = new THREE.Vector3( 0, H.windY, za / a );
+		this.bank = H.bank; // roll moment per (u * drift velocity): hull bottom lift banking into turns
+		this.hullLift = H.hullLift; // lift coefficient of the hull + keel per radian of drift
+
+		this.maxThrust = E ? E.maxThrust : 0; // N, bollard pull at full rpm
+		this.pitchSpeed = E ? E.pitchSpeed : 0; // m/s, propeller pitch speed at full rpm (thrust -> 0 there)
+		this.reverseFactor = E ? E.reverseFactor : 0; // astern thrust relative to ahead
+		this.contactPoints = H.contacts.map( ( p ) => new THREE.Vector3( ...p ) );
+		this.outline = H.outline.map( ( p ) => new THREE.Vector3( ...p ) );
+
+		const L = model.lines;
+		this.stemHead = new THREE.Vector3( 0, L.sheerY( 1 ), L.sheerZ( 1 ) - 0.15 );
+
+		const n = this.samples.length;
+		this.waterH = new Float32Array( n ); // latest read-back
+		this.waterV = new Float32Array( n ); // vertical velocity of the water (m/s)
+		this.waterOff = new Float32Array( n ); // blends the step when a new read-back arrives
+		this.hEff = new Float32Array( n ); // water height used by the integrator (interpolated)
+		this.qx = new Float64Array( n ); // query point + slope of the last result ((M15) where: in doubles)
+		this.qz = new Float64Array( n );
+		this.gx = new Float32Array( n );
+		this.gz = new Float32Array( n );
+		this.hasWater = false;
 		this.apply();
 
 	}
@@ -196,6 +203,7 @@ export class BoatController {
 		// the throttle lever moves with some inertia (the engine then spools after it); the rudder
 		// follows the wheel
 		this.throttleTarget = throttle;
+		this.steerTarget = steer; // ((M16) a paddle answers what's asked of it: Handling's propulsion)
 		this.throttle += ( throttle - this.throttle ) * ( 1 - Math.exp( - dt * 2.2 ) );
 		this.steer += ( steer - this.steer ) * ( 1 - Math.exp( - dt * 1.2 ) );
 
@@ -268,8 +276,8 @@ export class BoatController {
 	update( dt ) {
 
 		this.readQueries();
-		// ((M13) hauled out, she sits on her cradle)
-		if ( this.hauled ) {
+		// ((M13) hauled out, she sits on her cradle; (M16) or she's on the sand)
+		if ( this.hauled || this.beached ) {
 
 			this.rpm = 0;
 			this.apply();
@@ -307,14 +315,14 @@ export class BoatController {
 
 		this.model.setThrottle( this.throttle );
 		this.model.setSteering( this.steer );
-		this.model.setPropellerRPM( this.rpm * 2400 * Math.sign( this.throttle || 1 ) );
+		this.model.setPropellerRPM( this.rpm * ( this.handling.engine ? this.handling.engine.shaftRpm : 0 ) * Math.sign( this.throttle || 1 ) );
 		this.apply();
 
 	}
 
 	step( h ) {
 
-		const m = this.mass;
+		const m = this.mass, H = this.handling;
 		const F = _F.set( 0, - m * GRAV, 0 );
 		const T = _T.set( 0, 0, 0 ); // torque about COM (world)
 		const comW = this.toWorld( this.com, _com );
@@ -333,6 +341,8 @@ export class BoatController {
 		const blend = Math.exp( - h / 0.06 );
 
 		// ---- buoyancy + vertical damping per hull sample
+		// ((M16) wetFull: m of water under a sample that's her fully wet: a kayak draws a good deal less than a lobster boat)
+		const wetFull = H.wetDepth || 0.3;
 		let wetArea = 0, totalArea = 0, immersion = 0;
 		for ( let i = 0; i < this.samples.length; i ++ ) {
 
@@ -345,15 +355,15 @@ export class BoatController {
 			totalArea += s.area;
 			if ( depth <= 0 ) continue;
 			const sub = Math.min( depth, 1.6 );
-			const wet = Math.min( 1, depth / 0.3 );
+			const wet = Math.min( 1, depth / wetFull );
 			wetArea += s.area * wet;
 			immersion += s.area * Math.min( sub / Math.max( - s.p.y, 0.05 ), 1.5 );
 			// buoyancy + heave damping against the water's own vertical motion, along world up (in the
 			// boat frame a trimmed hull would turn forward speed into an upward push)
 			_vp.copy( this.angular ).cross( _r.copy( pw ).sub( comW ) ).add( this.velocity );
 			const vy = _vp.y - this.waterV[ i ] * 0.6;
-			const wetK = Math.min( 1, sub / 0.25 ) * s.area;
-			_f.set( 0, RHO * GRAV * s.area * sub - ( 1800 * vy + 900 * vy * Math.abs( vy ) ) * wetK, 0 );
+			const wetK = Math.min( 1, sub / ( wetFull * 0.83 ) ) * s.area;
+			_f.set( 0, RHO * GRAV * s.area * sub - ( H.heave[ 0 ] * vy + H.heave[ 1 ] * vy * Math.abs( vy ) ) * wetK, 0 );
 			addForceAt( _f, pw );
 
 		}
@@ -373,7 +383,7 @@ export class BoatController {
 
 		// ---- calm-water resistance (friction + the wave-making hump past hull speed + planing)
 		const au = Math.abs( u );
-		const R = ( 40 * au + 22 * au * au + 3000 * sstep( au, 2.8, 5.4 ) + 55 * au * au * sstep( au, 7, 11 ) ) * wetD;
+		const R = H.resistance( au ) * wetD;
 		_p.set( 0, - 0.2, this.com.z );
 		this.toWorld( _p, _p );
 		addForceAt( _f.copy( fwd ).multiplyScalar( - R * Math.sign( u ) ), _p );
@@ -386,10 +396,10 @@ export class BoatController {
 		if ( aw > 1e-4 ) {
 
 			const c = clamp( _g.dot( fwd ) / aw, - 1, 1 ); // the cosine of the wind's angle to her keel (+: from astern)
-			const area = WIND_AREA[ 0 ] * Math.abs( c ) + WIND_AREA[ 1 ] * Math.sqrt( 1 - c * c );
+			const area = H.windArea[ 0 ] * Math.abs( c ) + H.windArea[ 1 ] * Math.sqrt( 1 - c * c );
 			_p.copy( this.windage );
-			_p.z -= WIND_LEAD * c;
-			addForceAt( _g.multiplyScalar( 0.5 * AIR * WIND_CD * area * aw ), this.toWorld( _p, _p ) );
+			_p.z -= H.windLead * c;
+			addForceAt( _g.multiplyScalar( 0.5 * AIR * H.windCd * area * aw ), this.toWorld( _p, _p ) );
 
 		}
 
@@ -415,54 +425,33 @@ export class BoatController {
 		// leaving only a slight outward heel
 		T.addScaledVector( fwd, this.bank * au * vs * wetD );
 
-		// ---- propeller: thrust from the engine rpm, falling off towards the pitch speed; prop walk
-		// astern (stern to port)
-		const propW = this.toWorld( this.model.propeller, _p );
-		const propSub = this.sampleWaterAt( propW ) - propW.y;
-		const propWet = clamp( propSub / 0.3 + 0.5, 0, 1 );
-		const run = this.driven && this.engineOn;
-		const dir = run ? Math.sign( this.throttle ) : 0;
-		const n = this.rpm * ( run && Math.abs( this.throttle ) > 0.02 ? 1 : 0 );
-		let thrust = 0;
-		if ( dir > 0 ) thrust = this.maxThrust * n * n * Math.max( 0, 1 - Math.max( u, 0 ) / ( this.pitchSpeed * Math.max( n, 0.2 ) ) );
-		else if ( dir < 0 ) thrust = - this.reverseFactor * this.maxThrust * n * n * Math.max( 0, 1 - Math.max( - u, 0 ) / ( this.pitchSpeed * 0.6 * Math.max( n, 0.2 ) ) );
-		thrust *= propWet * this.thrustMul;
-		this.thrust = thrust;
-		addForceAt( _f.copy( fwd ).multiplyScalar( thrust ), propW );
-		if ( thrust < 0 ) addForceAt( _f.copy( side ).multiplyScalar( - thrust * 0.08 ), propW );
-
-		// ---- rudder: lifting surface in the propeller race (actuator-disc slipstream); the local
-		// flow angle at the stern (drift + yaw) reduces its angle of attack
-		// the rudder's side force is partly carried by the aft hull (flap effect), so it acts higher
-		// than the blade's centre: less heel kick when the wheel goes over
-		const rudW = this.toWorld( _rud.set( 0, - 0.15, this.model.rudder.z ), _rud );
-		const race = Math.max( thrust, 0 ) * 2 / ( RHO * 0.14 ); // slipstream dynamic pressure term (m^2/s^2)
-		const Ur2 = u * Math.abs( u ) + 0.9 * race;
-		const Ur = Math.sqrt( Math.abs( Ur2 ) ) * Math.sign( Ur2 );
-		const vRud = vs + aLoc.y * ( this.model.rudder.z - this.com.z );
-		const delta = this.steer * 0.6 + ( Math.abs( Ur ) > 0.3 ? Math.atan2( vRud, Math.abs( Ur ) ) * Math.sign( Ur ) : 0 );
-		const d = clamp( delta, - 0.7, 0.7 );
-		const lift = 0.5 * RHO * 0.12 * Math.abs( Ur2 ) * this.rudderLift * Math.sin( d ) * Math.cos( d ) * propWet * Math.sign( Ur2 || 1 );
-		addForceAt( _f.copy( side ).multiplyScalar( - lift ), rudW );
-		// rudder drag (induced + form) slows the boat in a turn
-		addForceAt( _f.copy( fwd ).multiplyScalar( - Math.abs( lift * Math.sin( d ) ) * 0.8 * Math.sign( u || 1 ) ), rudW );
+		// ---- what drives and turns her (world/boat/Handling.js): for this boat, a propeller and a rudder
+		_q.addForceAt = addForceAt;
+		_q.fwd = fwd;
+		_q.side = side;
+		_q.u = u;
+		_q.vs = vs;
+		_q.aLoc = aLoc;
+		_q.comZ = this.com.z;
+		_q.wetD = wetD;
+		_q.torque = T;
+		H.propulsion( this, _q );
 
 		// ---- running trim and rise: the bow lifts over the hump, then the hull runs at a few degrees
 		// with some dynamic lift (only while the hull is in the water)
-		const trim = ( 2.8 * sstep( u, 2.5, 4.8 ) - 0.8 * sstep( u, 4.8, 7.5 ) - 0.4 * sstep( u, 7.5, 10.5 ) ) * DEG;
-		T.addScaledVector( side, this.pitchStiffness * trim * imm * - 1 );
-		F.addScaledVector( up, m * GRAV * 0.15 * sstep( u, 3.5, 9 ) * imm );
+		T.addScaledVector( side, this.pitchStiffness * H.trim( u ) * imm * - 1 );
+		F.addScaledVector( up, m * GRAV * H.rise( u ) * imm );
 
 		// ---- small extra angular damping (appendages, bilge), scaled by wetness
 		const wd = 0.2 + wetD;
 		// the keel's lift resists roll in proportion to speed (a boat underway rolls much less)
-		_v.set( - aLoc.x * 25000, - aLoc.y * 2000, - aLoc.z * ( 4500 + 900 * au ) ).multiplyScalar( wd ).applyQuaternion( this.quaternion );
+		_v.set( - aLoc.x * H.damping[ 0 ], - aLoc.y * H.damping[ 1 ], - aLoc.z * ( H.damping[ 2 ] + H.damping[ 3 ] * au ) ).multiplyScalar( wd ).applyQuaternion( this.quaternion );
 		T.add( _v );
 		// ---- (Salt Life) righting past RIGHT_FROM: a torque turning her up toward upright
 		const tilt = Math.asin( Math.min( 1, Math.hypot( up.x, up.z ) ) );
-		if ( tilt > RIGHT_FROM && up.y > 0 ) {
+		if ( tilt > H.rightFrom && up.y > 0 ) {
 
-			const k = RIGHT_K * ( tilt - RIGHT_FROM ) * wetD / Math.max( Math.hypot( up.x, up.z ), 1e-6 );
+			const k = H.rightK * ( tilt - H.rightFrom ) * wetD / Math.max( Math.hypot( up.x, up.z ), 1e-6 );
 			T.x -= up.z * k;
 			T.z += up.x * k;
 
@@ -471,14 +460,14 @@ export class BoatController {
 		// ---- mooring lines when docked and not driven
 		if ( this.moored && ! this.driven ) {
 
-			const a = this.mooring.anchor;
-			const k = 5500, c = 4200;
+			const a = this.mooring.anchor, M = H.mooring;
+			const k = M ? M.k : 5500, c = M ? M.c : 4200;
 			const dx = a.x - this.position.x, dz = a.z - this.position.z;
 			F.x += dx * k - this.velocity.x * c;
 			F.z += dz * k - this.velocity.z * c;
 			let dy = this.mooring.heading - this.getYaw();
 			dy = Math.atan2( Math.sin( dy ), Math.cos( dy ) );
-			T.y += dy * 60000 - this.angular.y * 30000;
+			T.y += dy * ( M ? M.yawK : 60000 ) - this.angular.y * ( M ? M.yawC : 30000 );
 
 		} else if ( this.anchor ) {
 
@@ -497,6 +486,18 @@ export class BoatController {
 				addForceAt( _f.set( nx * pull, 0, nz * pull ), bow );
 
 			}
+
+		} else if ( this.sock ) {
+
+			// ---- (M16) the drift sock, streamed from the stem head: a cone's drag on the water going past it, so her head
+			// comes round to the wind and she goes down it slower (Cd 1.4, its mouth: Seaworthy's ABLE)
+			const bow = this.toWorld( this.stemHead, _p );
+			_vp.copy( this.angular ).cross( _r.copy( bow ).sub( comW ) ).add( this.velocity );
+			const v = Math.hypot( _vp.x, _vp.z ), drag = 0.5 * RHO * 1.4 * ableOf( this.model.id ).sockM2 * v;
+			addForceAt( _f.set( - _vp.x * drag, 0, - _vp.z * drag ), bow );
+			// (its long rode holds her stem up to the wind's push, where a point at her bow would let her lie well off it)
+			const up = Math.atan2( - G.windDir.value.x, - G.windDir.value.y ) - this.getYaw(), U = this.windAt ? this.windAt( this.position.x, this.position.z ) : G.windSpeed.value;
+			T.y += Math.sin( up ) * 0.5 * AIR * this.handling.windCd * this.handling.windArea[ 1 ] * U * U * this.model.dimensions.length;
 
 		}
 
@@ -559,22 +560,33 @@ export class BoatController {
 
 	}
 
+	// (M16) where she's kept (game/fleet/Berths.js)
+	get berth() {
+
+		return berthOf( this.model.id );
+
+	}
+
 	reset() {
 
+		const berth = this.berth;
 		this.hauled = null;
-		this.position.copy( WORLD.boatDock.position );
+		this.position.copy( berth.position );
 		this.position.y = G.seaLevel.value; // ((M13) afloat at the dock, whatever the surge's made of the sea)
-		this.quaternion.setFromAxisAngle( new THREE.Vector3( 0, 1, 0 ), WORLD.boatDock.heading );
+		this.quaternion.setFromAxisAngle( new THREE.Vector3( 0, 1, 0 ), berth.heading );
 		this.velocity.set( 0, 0, 0 );
 		this.angular.set( 0, 0, 0 );
 		this.throttle = 0;
 		this.steer = 0;
 		this.rpm = 0;
 		this.moored = true;
-		this.mooring.anchor.copy( WORLD.boatDock.position );
-		this.mooring.heading = WORLD.boatDock.heading;
+		this.mooring.anchor.copy( berth.position );
+		this.mooring.heading = berth.heading;
 		this.anchor = null;
+		this.sock = false;
 		this.hasWater = false; // (Salt Life: the water where she was is no use here)
+		this.beached = false;
+		if ( this.model.atHome ) this.model.atHome( this ); // ((M16) kept on the sand, not at the dock)
 
 	}
 
@@ -601,14 +613,27 @@ export class BoatController {
 
 	}
 
+	// (M16) set down by a reckoning (Away.awayOf has her ashore), up clear of the ground under her: left in it, its spring would throw
+	// her metres into the air
+	liftClear() {
+
+		let lift = 0;
+		for ( const lp of this.contactPoints ) {
+
+			this.toWorld( lp, _c1 );
+			lift = Math.max( lift, this.terrain.heightAt( _c1.x, _c1.z ) - _c1.y );
+
+		}
+
+		this.position.y += lift;
+
+	}
+
 	contacts( F, T, comW ) {
 
-		const pts = this.contactPoints || ( this.contactPoints = [
-			new THREE.Vector3( 0, - 0.7, 3.2 ), new THREE.Vector3( 0, - 0.75, 0 ), new THREE.Vector3( 0, - 0.72, - 3.4 ),
-			new THREE.Vector3( 1.1, - 0.4, 1.5 ), new THREE.Vector3( - 1.1, - 0.4, 1.5 ), new THREE.Vector3( 1.2, - 0.35, - 2.5 ), new THREE.Vector3( - 1.2, - 0.35, - 2.5 ),
-			new THREE.Vector3( 0, 0.2, 4.2 ),
-		] );
-		const pw = _c1, vp = _c2, f = _c3, r = _c4, c = this.contact;
+		const pts = this.contactPoints;
+		// (M16: a light boat's are her own, or they'd throw her about)
+		const pw = _c1, vp = _c2, f = _c3, r = _c4, c = this.contact, K = this.handling.contact || CONTACT;
 		for ( const lp of pts ) {
 
 			this.toWorld( lp, pw );
@@ -617,8 +642,8 @@ export class BoatController {
 			if ( pen > 0 ) {
 
 				vp.copy( this.angular ).cross( r.copy( pw ).sub( comW ) ).add( this.velocity );
-				const fn = pen * 400000 - Math.min( vp.y, 0 ) * 30000;
-				f.set( - vp.x * 6000, Math.max( fn, 0 ), - vp.z * 6000 );
+				const fn = pen * K.k - Math.min( vp.y, 0 ) * K.c;
+				f.set( - vp.x * K.slide, Math.max( fn, 0 ), - vp.z * K.slide );
 				F.add( f );
 				T.add( r.copy( pw ).sub( comW ).cross( f ) );
 				// (M10) what it does to her: a drop onto it, and sliding along it
@@ -633,10 +658,7 @@ export class BoatController {
 		// pier piles: keep the hull outline out of vertical cylinders / solid boxes near the waterline
 		if ( this.colliders ) {
 
-			const outline = this.outline || ( this.outline = [
-				new THREE.Vector3( 0, 0.3, 4.1 ), new THREE.Vector3( 1.2, 0.3, 2.0 ), new THREE.Vector3( - 1.2, 0.3, 2.0 ),
-				new THREE.Vector3( 1.4, 0.3, - 1.0 ), new THREE.Vector3( - 1.4, 0.3, - 1.0 ), new THREE.Vector3( 1.2, 0.3, - 3.8 ), new THREE.Vector3( - 1.2, 0.3, - 3.8 ),
-			] );
+			const outline = this.outline;
 			const tmp = _c5;
 			for ( const lp of outline ) {
 
@@ -647,7 +669,7 @@ export class BoatController {
 
 					vp.copy( this.angular ).cross( r.copy( pw ).sub( comW ) ).add( this.velocity );
 					const px = tmp.x - pw.x, pz = tmp.z - pw.z;
-					f.set( px * 260000 - vp.x * 8000, 0, pz * 260000 - vp.z * 8000 );
+					f.set( px * K.pileK - vp.x * K.pileC, 0, pz * K.pileK - vp.z * K.pileC );
 					F.add( f );
 					T.add( r.copy( pw ).sub( comW ).cross( f ) );
 					// (M10) how fast she closed with it (against the way it pushes her out)
@@ -668,8 +690,8 @@ export class BoatController {
 		g.position.copy( this.position );
 		g.quaternion.copy( this.quaternion );
 		g.updateMatrixWorld( true );
-		this.toWorld( _v.set( 0, 0, 3.9 ), this.bowWorld );
-		this.toWorld( _v.set( 0, 0, - 3.8 ), this.sternWorld );
+		this.toWorld( _v.set( 0, 0, this.handling.bowZ ), this.bowWorld );
+		this.toWorld( _v.set( 0, 0, this.handling.sternZ ), this.sternWorld );
 
 	}
 

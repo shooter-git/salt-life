@@ -14,6 +14,11 @@ import { FISH } from './FishTable.js';
 //   likes    species -> its bite weight, times this
 //   skew     how far toward the big end the weights go (Bites.rollWeight's exponent, times this)
 //   steal    the chance each nibble takes it off the hook
+// (M16) and frozen from Marta by the trip (price, per): ballyhoo for trolling, squid for anything and the deep. Lures
+// (lure: your own gear, Gear.js' lures track, never used up; level: the track's level it comes with) go on the rig that
+// works them: a jig (sinks) on a sinker, a plug (surface) cast on its own, a skirt towed. tow: a towed bait's speeds,
+// knots (Presentation.towTaste): [ too slow, best from, best to, washed out ]. towed: it's only for that. Chum isn't for
+// the hook: it goes over the side, and the fish come up the slick
 export const BAITS = {
 	silverside: { name: 'Live silverside', short: 'silversides', live: true, speed: 0.7, small: 0.7, skew: 0.9, steal: 0.06,
 		likes: { needlefish: 2.4, jack: 2.2, yellowtail: 2, barracuda: 1.8, tarpon: 1.8, mahi: 1.8, tuna: 2.2, muttonSnapper: 1.4 } },
@@ -25,12 +30,27 @@ export const BAITS = {
 		likes: { tarpon: 4, jack: 2.6, barracuda: 3, blackGrouper: 2.4, grouper: 2.4, redSnapper: 1.8, mahi: 2.2, tuna: 1.6, muttonSnapper: 1.6 } },
 	cutMullet: { name: 'Cut mullet', short: 'cut mullet', live: false, speed: 0.55, small: 0.9, skew: 0.9, steal: 0.14,
 		likes: { redSnapper: 2.2, muttonSnapper: 2.2, yellowtail: 1.6, grunt: 1.4, jack: 1.5, blackGrouper: 1.6, barracuda: 1.3 } },
+	ballyhoo: { name: 'Frozen ballyhoo', short: 'ballyhoo', live: false, speed: 0.7, small: 0.2, skew: 0.7, steal: 0.02, towed: true, tow: [ 3, 5, 10, 15 ], price: 20, per: 12,
+		likes: { mahi: 2.2, tuna: 1.8, yellowfin: 1.8, sailfish: 3, whiteMarlin: 3, blueMarlin: 2.4, wahoo: 1.6, barracuda: 1.6 } },
+	squid: { name: 'Frozen squid', short: 'squid', live: false, speed: 0.8, small: 0.8, skew: 0.8, steal: 0.12, tow: [ 2.5, 4, 8, 12 ], price: 12, per: 6,
+		likes: { swordfish: 4, mahi: 1.4, tuna: 1.8, yellowfin: 1.8, redSnapper: 2, silkSnapper: 2.4, muttonSnapper: 1.8, blackGrouper: 1.6, cuberaSnapper: 1.6 } },
+	chum: { name: 'Chum', short: 'chum', live: false, speed: 1, small: 1, skew: 1, steal: 0, chum: true, price: 15, per: 1, likes: {} },
+	jig: { name: 'Jig', short: 'jigs', live: false, speed: 0.85, small: 0.5, skew: 0.8, steal: 0, lure: true, level: 1, sinks: true,
+		likes: { jack: 2.2, tuna: 2, yellowfin: 2, cuberaSnapper: 1.8, blackGrouper: 1.6, muttonSnapper: 1.6, barracuda: 1.4 } },
+	plug: { name: 'Plug', short: 'plugs', live: false, speed: 0.9, small: 0.3, skew: 0.75, steal: 0, lure: true, level: 2, surface: true, tow: [ 1.5, 2.5, 8, 11 ],
+		likes: { barracuda: 2.6, jack: 2.4, tarpon: 2, snook: 2.2, mahi: 1.6, wahoo: 1.4, blackGrouper: 1.2 } },
+	skirt: { name: 'Trolling skirt', short: 'skirts', live: false, speed: 0.8, small: 0.1, skew: 0.65, steal: 0, lure: true, level: 3, towed: true, tow: [ 5, 7, 16, 24 ],
+		likes: { wahoo: 2.8, mahi: 2, tuna: 2, yellowfin: 2, blueMarlin: 3, whiteMarlin: 1.6, sailfish: 1.2, barracuda: 1.4 } },
 };
 export const BAIT_IDS = Object.keys( BAITS );
 
 export const SMALL_KG = 0.7;
 export const KEEPER_KG = 0.45; // a netted mullet this heavy goes in the cooler; a smaller one is bait
 export const CUT_KG = 0.2; // a chunk of cut bait
+
+// what can be put on the hook now, of these kinds (state: GameState): any of the bucket's or the freezer's, and the
+// lures you've bought
+export const onHand = ( k, state ) => ( BAITS[ k ].lure ? ( state.upgrades.lures | 0 ) >= BAITS[ k ].level : state.bait[ k ] > 0 );
 
 // the bait a netted fish of this species makes (live, in the bucket), or null
 export const baitOf = ( species ) => ( BAITS[ species ] && BAITS[ species ].live ? species : null );
@@ -41,6 +61,9 @@ export const chunksOf = ( kg ) => Math.max( 2, Math.min( 8, Math.round( kg / CUT
 // a species' bite weight on this bait (null: shrimp), times this
 export function baitWeight( bait, id ) {
 
+	// ((M16) a fish's own taste, ahead of the bait's: FishTable's eats)
+	const e = FISH[ id ].eats, own = e && e[ bait || 'shrimp' ];
+	if ( own !== undefined ) return own;
 	const b = BAITS[ bait ];
 	if ( ! b ) return 1;
 	if ( b.likes[ id ] ) return b.likes[ id ];

@@ -7,10 +7,10 @@ import './loading-veil.css';
 
 const TIPS = [
 	'Joe chalks the fish he’s after on his counter each morning, and pays over the odds for them.',
-	'Marta’s chandlery has better rods, reels and spearguns, and diesel for the boat.',
+	'Marta’s chandlery has better rods, reels and spearguns, and a boat with an engine when you’ve saved for one.',
 	'With a speargun, stalk slowly: the fish notice you.',
 	'After dark the tarpon gather under the pier lights.',
-	'Drop the anchor, or the wind will take your boat. Marta tows her home if she gets away.',
+	'A kayak needs no fuel. A squall’s another matter: make for the beach.',
 	'Every day brings its own weather: calm, breezy, blustery, now and then a gale.',
 	'A cast net from the beach or the pier brings in mullet and bait.',
 	'Protected fish are let go, and nobody spears the reef’s aquarium fish.',

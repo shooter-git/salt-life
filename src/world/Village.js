@@ -673,6 +673,8 @@ export class Village {
 		const nets = new Batch();
 		if ( net ) nets.append( net, ( d ) => [ d[ 0 ], d[ 1 ], Math.max( 0.02, d[ 2 ] ), 0 ] );
 		if ( flag ) fabric.append( flag, ( d ) => [ d[ 0 ], d[ 1 ], d[ 2 ] + 10000, d[ 3 ] ] );
+		// ((M16) each one's memory back as it's folded in)
+		for ( const b of [ glass, rope, cloth, net, flag ] ) if ( b ) b.free();
 
 		// All opaque geometry lives in ONE set of vertex / index buffers. Each opaque material
 		// draws its own index range; the wood mesh is the only shadow caster and widens its
@@ -684,8 +686,9 @@ export class Village {
 		const ranges = {};
 		for ( const key of keys ) {
 
-			const start = opaque.icount;
-			opaque.append( take( key ) );
+			const start = opaque.icount, b = take( key );
+			opaque.append( b );
+			b.free();
 			ranges[ key ] = { start, count: opaque.icount - start };
 
 		}
@@ -963,15 +966,33 @@ export class Village {
 
 	}
 
+	// (M16) more roof holes, from a part built later (the fish camp), as long as the roof's shader has room for them; each
+	// with an id of its own for its fate. Returns where they start in roofHoles
+	addRoofHoles( holes ) {
+
+		const H = this.materials.roofMetal.userData.vlm.uniforms, from = this.roofHoles.length;
+		for ( const h of holes ) {
+
+			const k = this.roofHoles.length;
+			if ( k >= ROOF_HOLES ) break;
+			this.roofHoles.push( h );
+			H.vlmHoles.value[ k ].set( h.seed, h.v0, h.v1, h.uTop );
+
+		}
+
+		return from;
+
+	}
+
 	// ((M14) the sheets off the metal roofs, as they fly (world/debris/FlyingSheets): each hole's, by its
 	// place in them ('tin', k) and the sheet's in the run (sub); where it lay (its centre, and its frame:
 	// x along the eave, y out of the roof, z up the slope), its size, and a mesh of it at the origin in that
 	// frame, in its roof's colour, bent where it buckled)
-	sheetFlyers() {
+	sheetFlyers( from = 0 ) {
 
 		const out = [];
-		this.roofHoles.forEach( ( h, k ) => h.sheets.forEach( ( q, sub ) => out.push( {
-			kind: 'tin', id: k, sub, w: q.w, len: q.len, kgm2: 4.2,
+		this.roofHoles.forEach( ( h, k ) => k >= from && h.sheets.forEach( ( q, sub ) => out.push( {
+			kind: 'tin', id: h.id ?? k, sub, w: q.w, len: q.len, kgm2: 4.2,
 			frame: new Matrix4().makeBasis( q.v, q.n, q.u ).setPosition( q.c ),
 			mesh: () => {
 
@@ -1007,7 +1028,7 @@ export class Village {
 		const S = this.materials.roofMetal.userData.vlm.uniforms.vlmHoleS.value, st = this._ps || ( this._ps = {} );
 		for ( let k = 0; k < this.roofHoles.length; k ++ ) {
 
-			pieceState( D, 'tin', k, st );
+			pieceState( D, 'tin', this.roofHoles[ k ].id ?? k, st );
 			S[ k ] = st.state === NEW ? NEW + Math.min( 0.99, st.age / ( 30 * 24 ) ) : st.state;
 
 		}

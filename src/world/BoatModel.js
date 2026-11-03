@@ -1,7 +1,10 @@
-import { Group, MathUtils, Matrix4, Mesh, Object3D, Quaternion, Vector3 } from '../engine/index.js';
+import { MathUtils, Mesh, Object3D, Quaternion, Vector3 } from '../engine/index.js';
 import { G } from '../core/Globals.js';
-import { HullLines, RHO_SEAWATER } from './boat/HullLines.js';
-import { GeoKit, triangleCount } from './boat/GeoKit.js';
+import { HullLines } from './boat/HullLines.js';
+import { GeoKit } from './boat/GeoKit.js';
+import { Vessel, GIMBAL } from './boat/Vessel.js';
+import { LOBSTER_HANDLING } from './boat/Handling.js';
+import { wheelhousePoints } from '../fx/Drips.js';
 import { BoatMaterials } from './boat/BoatMaterials.js';
 import { buildHull, buildHullVolume, keelVolume, houseHalfWidth, KEEL } from './boat/HullBuilder.js';
 import { buildWheelhouse, wheelGeometry, throttleGeometry, radarArrayGeometry, compassCardGeometry, HOUSE, roofTopY } from './boat/Wheelhouse.js';
@@ -12,6 +15,7 @@ import { propellerGeometry, rudderGeometry, PROP, RUDDER } from './boat/Running.
 // (M15) the compass's card: its natural period (s) and damping (of critical), a small boat's dash compass's (a
 // liquid-filled card settles in a few seconds, with a little overshoot)
 export const COMPASS = { period: 3, damping: 0.55 };
+export { GIMBAL };
 const STATIC_BUCKETS = [ 'hull', 'gelcoat', 'wood', 'fittings', 'glow', 'display', 'glass' ];
 const WHEEL_TURNS = 0.75; // wheel turns from centre to hard over
 const THROTTLE_ANGLE = 0.6; // lever travel (rad) from neutral to full
@@ -22,15 +26,6 @@ const _v = new Vector3();
 const _pos = new Vector3();
 const _scale = new Vector3();
 const _q = new Quaternion();
-
-function transverseInertia( lines ) {
-
-	let I = 0;
-	const n = 800, z0 = lines.wlStart, dz = ( lines.wlEnd - lines.wlStart ) / n;
-	for ( let i = 0; i < n; i ++ ) I += ( 2 / 3 ) * Math.pow( lines.halfBeamAt( z0 + ( i + 0.5 ) * dz ), 3 ) * dz;
-	return I;
-
-}
 
 // ~8.2 m Downeast lobster boat, built procedurally (37k triangles, 12 draw calls).
 //
@@ -47,22 +42,22 @@ function transverseInertia( lines ) {
 // - Put the centre of mass at hydro.centerOfMass (over the centre of buoyancy) for level trim.
 // - setSteering( +1 ) turns to port (left): positive yaw rate about +Y.
 // - Shaders animate with G.time (radar sweep, antenna sway, ensign) and brighten with G.night.
-export class BoatModel {
+export class BoatModel extends Vessel {
 
 	constructor() {
 
+		super( 'lobster' );
 		const lines = this.lines = new HullLines();
 		const materials = this.materials = new BoatMaterials( lines );
 		const kit = new GeoKit();
 		const parts = {};
+		this.handling = LOBSTER_HANDLING;
 
 		buildHull( kit, lines );
 		buildWheelhouse( kit, lines, parts );
 		buildDeckGear( kit, lines, parts );
 
-		this.group = new Group();
 		this.group.name = 'LobsterBoat';
-		this.meshes = {};
 
 		for ( const name of STATIC_BUCKETS ) {
 
@@ -106,6 +101,7 @@ export class BoatModel {
 		// ((M15) the compass's card, its face the instruments' (lit as the dash is): turned to the magnetic north)
 		this.compassMesh = addPart( 'compass', compassCardGeometry(), materials.display, parts.compassAt );
 		this.compassMesh.castShadow = false;
+		this.hangCard( this.compassMesh );
 		this._card = null;
 		this.searchlight = parts.searchlight; // (boat frame: the searchlight's lens, the horn's mouth)
 		this.hornAt = parts.horn;
@@ -116,83 +112,39 @@ export class BoatModel {
 
 		// ---- dimensions and hydrostatics
 
-		const kv = keelVolume( lines );
-		const displaced = lines.canoeVolume + kv;
-		let maxBeam = 0;
-		for ( let i = 0; i <= 200; i ++ ) maxBeam = Math.max( maxBeam, lines.sheerX( i / 200 ) );
-		let minSheer = Infinity;
-		for ( let i = 0; i <= 200; i ++ ) minSheer = Math.min( minSheer, lines.sheerY( i / 200 ) );
-
-		this.dimensions = {
-			length: lines.length, // hull LOA (stem head to transom), m
-			beam: maxBeam * 2, // max beam at the sheer (rubrail adds ~0.08)
-			draft: - KEEL.bottom, // keel shoe below the waterline
-			freeboard: minSheer, // lowest sheer height (aft)
-			freeboardBow: lines.sheerY( 1 ),
-			deckHeight: lines.deckY,
-			hullDepth: lines.draftAt( lines.centerOfFlotationZ ), // canoe body depth
-			waterlineLength: lines.wlEnd - lines.wlStart,
-			waterlineBeam: 2 * this._maxHalfBeam(),
-			houseRoofHeight: roofTopY( 0 ),
-		};
+		this.floatBody( { keelVolume: keelVolume( lines ), keelBottom: KEEL.bottom, roofHeight: roofTopY( 0 ) } );
 		// (M9) under the wheelhouse roof (the boat's frame -> the box under it, -1..1): no rain falls there
 		const yLo = lines.deckY - 0.5, yHi = HOUSE.roofUnderY, zLo = HOUSE.roofZ0, zHi = HOUSE.roofZ1;
-		this.shelter = new Matrix4().makeScale( 1 / 1.25, 2 / ( yHi - yLo ), 2 / ( zHi - zLo ) )
-			.multiply( new Matrix4().makeTranslation( 0, - ( yLo + yHi ) / 2, - ( zLo + zHi ) / 2 ) );
-
-		this.hydro = {
-			waterplaneArea: lines.waterplaneArea, // m^2
-			canoeVolume: lines.canoeVolume, // m^3, hull below y = 0 (what hullSamples integrate)
-			keelVolume: kv, // m^3, keel/skeg appendage
-			displacedVolume: displaced, // m^3
-			suggestedMass: Math.round( RHO_SEAWATER * lines.canoeVolume ), // kg, floats exactly on the design WL with hullSamples
-			massWithKeel: Math.round( RHO_SEAWATER * displaced ),
-			centerOfBuoyancy: lines.centerOfBuoyancy.clone(), // put the centre of mass at this z for level trim
-			centerOfFlotationZ: lines.centerOfFlotationZ,
-			waterlineStart: lines.wlStart,
-			waterlineEnd: lines.wlEnd,
-			seawaterDensity: RHO_SEAWATER,
-		};
-
-		// Suggested rigid-body properties (boat frame). Centre of mass over the centre of
-		// buoyancy for level trim, ~0.3 m above the waterline (engine low, wheelhouse high).
-		// Inertia from radii of gyration: roll ~0.36 B, pitch/yaw ~0.26 L.
-		const mass = this.hydro.suggestedMass;
-		const kRoll = 0.36 * this.dimensions.beam, kPitch = 0.26 * lines.length, kYaw = 0.27 * lines.length;
-		this.hydro.centerOfMass = new Vector3( 0, 0.3, lines.centerOfBuoyancy.z );
-		this.hydro.inertia = new Vector3( mass * kPitch * kPitch, mass * kYaw * kYaw, mass * kRoll * kRoll ); // about x (pitch), y (yaw), z (roll)
-		this.hydro.metacentricRadius = transverseInertia( lines ) / lines.canoeVolume; // BM (m)
+		this.shelter = this.shelterBox( 1.25, yLo, yHi, zLo, zHi );
 
 		// ---- anchor points (boat frame)
 
 		this.helmEye = new Vector3( HOUSE.helmX, 1.85, 0.3 );
+		this.helm = { x: HOUSE.helmX, z: HOUSE.seatZ, eye: this.helmEye, rise: [ HOUSE.helmX + 0.45, HOUSE.seatZ - 0.1 ] };
 		this.boardPoint = new Vector3( 0, lines.deckY, - 1.75 );
 
-		this.exitPoints = [];
-		for ( const z of [ - 3.0, - 2.0, - 1.2 ] ) {
-
-			const t = lines.tAtSheerZ( z );
-			for ( const s of [ 1, - 1 ] ) this.exitPoints.push( new Vector3( s * ( lines.sheerX( t ) - 0.035 ), lines.sheerY( t ) + 0.05, z ) );
-
-		}
+		// ((M16) and on her foredeck: there's no walking aft from it, should you be put there)
+		this.exitPoints = this.railPoints( [ - 3.0, - 2.0, - 1.2, 2.1, 3.0, 3.7 ] );
 
 		this.propeller = PROP.position.clone();
 		this.rudder = RUDDER.pivot.clone();
 
-		this.bowSprayPoints = [];
-		for ( const z of [ 2.0, 2.6, 3.2, 3.8 ] ) {
-
-			const hb = lines.halfBeamAt( z );
-			for ( const s of [ 1, - 1 ] ) this.bowSprayPoints.push( new Vector3( s * ( hb + 0.01 ), 0.05, z ) );
-
-		}
-
-		this.hullSamples = lines.buildHullSamples( 8 );
+		this.bowSprayPoints = this.waterlinePoints( [ 2.0, 2.6, 3.2, 3.8 ] );
 		this.colliders = this._buildColliders();
 		// (M12) what of her takes the rain from above (Rain.setDeck: the splashes): the wheelhouse roof, the
 		// foredeck, the bait barrel and the hauler (her frame: x0, x1, z0, z1, and the top's y)
 		this.rainTops = this.colliders.filter( ( b ) => [ 'roof', 'foredeck', 'baitBarrel', 'hauler' ].includes( b.tag ) )
 			.map( ( b ) => ( { x0: b.center.x - b.half.x, x1: b.center.x + b.half.x, z0: b.center.z - b.half.z, z1: b.center.z + b.half.z, y: b.center.y + b.half.y } ) );
+
+		// ---- (M16) what the rest of the game asks of a boat (world/boat/Vessel)
+
+		const sternY = lines.sheerY( 0 ) + 0.1;
+		this.wake = { quarterX: 1.5, quarterZ: - 2.0, washZ: - 4.2, armSize: 1.8, washSize: 4, washSpread: 0.7 };
+		this.lamps = { dome: [ 0, 2.24, 0.42 ], instruments: [ - 0.45, 1.5, 1.12 ], port: [ 0.47, 3.45, - 0.47 ], masthead: [ 0, 3.97, - 0.5 ], anchor: [ 0, 4.05, - 0.5 ], stern: [ 0, sternY, lines.zAft - 0.05 ], spot: parts.searchlight.toArray() };
+		this.floods = [ - 0.8, 0.8 ].map( ( x ) => ( { at: [ x, 2.25, - 1.0 ], dir: [ x * 0.25, - 0.75, - 0.62 ] } ) );
+		this.bowWalk = 4.0;
+		this.nearDetail = [ 'fittings', 'wood', 'display', 'wheel', 'throttle', 'radar', 'propeller', 'rudder' ];
+		this.nearDist = 45; // ((M16) m: on Marta's cradle, seen from the path after a hurricane, her fittings alone took a phone past its 300,000 triangles)
 
 		// ---- state
 
@@ -213,6 +165,19 @@ export class BoatModel {
 
 	}
 
+	get paintSlot() {
+
+		return { name: 'hullPaint', uniform: this.materials.hullPaint };
+
+	}
+
+	// (M16) her topsides, in her hull's shader
+	setPaint( hex ) {
+
+		this.materials.hullPaint.value.set( hex ?? 0xf2efe6 );
+
+	}
+
 	// Closed, low-poly hull volume (shell + transom + lid at the sheer) in the boat frame.
 	// Not added to the group: useful as a water-exclusion mask (e.g. depth/stencil pre-pass
 	// so the ocean surface is not drawn inside the cockpit), occlusion or physics proxies.
@@ -222,25 +187,9 @@ export class BoatModel {
 
 	}
 
-	_maxHalfBeam() {
+	dripPoints() {
 
-		let m = 0;
-		for ( let z = this.lines.wlStart; z <= this.lines.wlEnd; z += 0.02 ) m = Math.max( m, this.lines.halfBeamAt( z ) );
-		return m;
-
-	}
-
-	// Waterplane half-beam at longitudinal position z (0 outside the waterline length).
-	halfBeamAt( z ) {
-
-		return this.lines.halfBeamAt( z );
-
-	}
-
-	// Canoe-body depth below the design waterline at z (0 outside); the keel adds up to ~0.3 m more.
-	draftAt( z ) {
-
-		return this.lines.draftAt( z );
+		return wheelhousePoints( this.lines );
 
 	}
 
@@ -267,12 +216,6 @@ export class BoatModel {
 	setPropellerRPM( rpm ) {
 
 		this._rpm = rpm;
-
-	}
-
-	setNavLights( on ) {
-
-		this.materials.setNavLights( on );
 
 	}
 
@@ -352,6 +295,7 @@ export class BoatModel {
 		}
 
 		this.compassMesh.rotation.y = c.a - her;
+		this._gimbal( dt, q );
 
 	}
 
@@ -363,18 +307,25 @@ export class BoatModel {
 
 	}
 
-	dispose() {
+	// (together/) someone else's lobster boat: her deck, without the room your own traps take on yours (TrapWork puts them in this model's
+	// colliders when she's the boat you're in; nobody's stowed traps are drawn on someone else's deck)
+	walkedAs() {
 
-		for ( const m of Object.values( this.meshes ) ) m.geometry.dispose();
-		this.materials.dispose();
+		const own = this, view = Object.create( this );
+		let from = null, kept = null;
+		Object.defineProperty( view, 'colliders', { get() {
 
-	}
+			if ( own.colliders !== from ) {
 
-	get triangleCount() {
+				from = own.colliders;
+				kept = from.filter( ( c ) => c.tag !== 'trap' );
 
-		let n = 0;
-		for ( const m of Object.values( this.meshes ) ) n += triangleCount( m.geometry );
-		return n;
+			}
+
+			return kept;
+
+		} } );
+		return view;
 
 	}
 
@@ -415,9 +366,12 @@ export class BoatModel {
 
 		const d = HOUSE.dash;
 		add( 'console', V( - d.halfW, L.deckY, d.zFace ), V( d.halfW, d.yTop, L.houseFront ) );
+		// ((M16) her windshield, and the dash no place to stand under the roof)
+		add( 'windshield', V( - 1.25, d.yTop, d.zFace ), V( 1.25, HOUSE.roofUnderY, L.houseFront ) );
 		add( 'helmSeat', V( HOUSE.helmX - 0.23, L.deckY, HOUSE.seatZ - 0.24 ), V( HOUSE.helmX + 0.23, 1.05, HOUSE.seatZ + 0.21 ) );
 		add( 'bench', V( 0.65, L.deckY, 0.075 ), V( 1.07, L.deckY + 0.47, 0.825 ), true );
-		add( 'roof', V( - 1.25, HOUSE.roofUnderY, HOUSE.roofZ0 ), V( 1.25, roofTopY( 0 ), HOUSE.roofZ1 ), true );
+		// ((M16) something to stand on, not a wall: with your head at it, a hop in the house threw you out from under it)
+		add( 'roof', V( - 1.25, HOUSE.roofUnderY, HOUSE.roofZ0 ), V( 1.25, roofTopY( 0 ), HOUSE.roofZ1 ), true, false );
 		add( 'hauler', V( HAULER.x - 0.2, L.deckY, HAULER.z - 0.08 ), V( HAULER.x + 0.2, HAULER.y + 0.2, HAULER.z + 0.25 ) );
 		add( 'baitBarrel', V( 0.6, L.deckY, - 1.06 ), V( 1.12, L.deckY + 0.8, - 0.54 ) );
 		// foredeck steps (walkable) from the house front to the stem head

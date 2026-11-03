@@ -137,5 +137,19 @@ const SAVE = 'tidewater.save.v1', saved = ( p ) => p.server.get( 'progress' )?.v
 
 }
 
+// ---- a write that fails (the bridge timing out): tried again, with nothing else changing that key
+{
+
+	const p = new Portal( 10 ), errors = [];
+	const s = new SaveStore( p, { onError: ( e ) => errors.push( e ), writeAfterMs: 10, retryMs: 30 } );
+	await s.load();
+	const set = p.save.personal.set;
+	p.save.personal.set = () => { p.save.personal.set = set; return Promise.reject( new Error( 'timed out' ) ); };
+	s.setItem( SAVE, JSON.stringify( { cooler: 7 } ) );
+	await sleep( 200 );
+	check( errors.length === 1 && ! s.stopped && saved( p )?.cooler === 7, `a failed write's tried again (${ JSON.stringify( saved( p ) ) })` );
+
+}
+
 console.log( failed ? `${ failed } failed` : 'all passed' );
 process.exit( failed ? 1 : 0 );

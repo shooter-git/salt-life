@@ -3,6 +3,8 @@ import { CONDITIONS, islandTime } from './Weather.js';
 import { broadcast } from './MarineForecast.js';
 import { TOW } from './Gear.js';
 import { farOff } from './Units.js';
+import { LEFT, RIGHT, OPEN_QUOTE, CLOSE_QUOTE } from '../core/Glyphs.js';
+import { canJob, canWords, deliverCan, fuelOf, pearlCall, pearlJob, towToPearl } from './Help.js';
 
 // (M15) The VHF at the helm (R, the pad's X, the Radio button; on the boat's dash its set: world/boat/Wheelhouse.js,
 // its display drawn by Instruments.js from Radio.reading). Its panel has two things on it:
@@ -14,8 +16,13 @@ import { farOff } from './Units.js';
 //   - Marta, on channel 16: her tow in, called for from wherever you are (Game.towJob( true )): what it'll
 //     cost and how long she'll be, her fee by the distance (Gear.towFee). Not in a blow: she won't come out in
 //     a gale (`NO_TOW`) or once a hurricane's warned of, until it's gone by.
+// (M16) Each boat's own set (Gear's vhfM): a handheld's reach is shorter than the distance home, far out; none, no rows
+// for it. And your flares and EPIRB (DaysOut.distress), for real trouble, whatever the set can reach.
+//   - (M16) her can of diesel, on the same call, and Pearl on the north side: game/Help.js.
 // Keys while its panel's open: ← → picks, Enter (RT, F) does it, R (X), E (B) or Esc closes it (E doesn't
 // leave the helm while it's open).
+// (M16) Sat in a kayak R (X) is the rod, so C (LB) gets out your handheld, or your flares with no set: there, and only with
+// something to get out and your hands free of the rod (`offer`). The paddle's laid by while it's up, and she drifts.
 //   const r = new Radio( ui, game );   r.update( dt, inp, lDown )   r.reading -> { channel, big, mark, freq, tag, on }
 
 const CSS = /* css */`
@@ -81,7 +88,7 @@ export class Radio {
 		( ui.hud || ui.root ).append( this.words );
 		this.open = false;
 		this.listening = false; // the broadcast's on
-		this.pick = 0; // the row picked (0: the weather, 1: Marta)
+		this.pick = 0; // the row picked (rows())
 		this.call = null; // the call to Marta: { job, say, can }
 		this.lines = [];
 		this.line = - 1;
@@ -100,7 +107,7 @@ export class Radio {
 	// what the set's display shows (Instruments.js)
 	get reading() {
 
-		const c = this.call || ! ( this.listening || ( this.open && this.pick === 0 ) ) ? CH16 : WX;
+		const c = this.call || ! ( this.listening || ( this.open && this.pick === 0 && this.game.state.stats.vhfM > 0 ) ) ? CH16 : WX;
 		return { ...c, on: this.listening || !! this.call };
 
 	}
@@ -112,10 +119,28 @@ export class Radio {
 
 	}
 
+	get _seat() {
+
+		const p = this.game.app.player;
+		return p.mode === 'boat' && ! p.riding && !! p.boat?.model?.seated;
+
+	}
+
 	get _helm() {
 
 		const p = this.game.app.player;
-		return p.mode === 'boat' && ! p.riding;
+		return p.mode === 'boat' && ! p.riding && ( ! p.boat?.model?.seated || ! p.boat.model.sliding );
+
+	}
+
+	// what C gets out, sat in a kayak: 'radio', 'flares', or null (nothing to get out, or no hand free for it)
+	get offer() {
+
+		if ( this.open || ! this._seat ) return null;
+		const p = this.game.app.player;
+		if ( p.handsFull || p.busy || p.boat.model.sliding ) return null;
+		const s = this.game.state.stats;
+		return s.vhfM > 0 ? 'radio' : s.flares || s.epirb ? 'flares' : null;
 
 	}
 
@@ -126,13 +151,15 @@ export class Radio {
 
 	}
 
-	// per frame: R at the helm, its keys while it's open, and the broadcast's words
+	// per frame: R at the helm (C sat in a kayak), its keys while it's open, and the broadcast's words
 	update( dt, inp, lDown ) {
 
+		const au = this.game.app.audio;
+		if ( au && au.radioOn ) au.radioOn( this.listening || !! this.call );
 		const hit = inp.hit( 'KeyR' );
 		if ( this.open ) {
 
-			if ( ! this._helm || hit || inp.hit( 'KeyE' ) || inp.hit( 'Escape' ) || ( this.game.hud && this.game.hud.invOpen ) ) this.close();
+			if ( ! this._helm || hit || ( this._seat && inp.hit( 'KeyC' ) ) || inp.hit( 'KeyE' ) || inp.hit( 'Escape' ) || ( this.game.hud && this.game.hud.invOpen ) ) this.close();
 			else {
 
 				if ( inp.hit( 'ArrowLeft' ) || inp.hit( 'ArrowRight' ) ) this.step( inp.hit( 'ArrowRight' ) ? 1 : - 1 );
@@ -140,6 +167,12 @@ export class Radio {
 				if ( ( lDown && inp.lastDevice === 'gamepad' ) || inp.hit( 'KeyF' ) || inp.hit( 'Enter' ) || inp.hit( 'NumpadEnter' ) ) this.act();
 
 			}
+
+		} else if ( this._seat ) {
+
+			const offer = this.offer, p = this.game.app.player;
+			if ( offer && inp.hit( 'KeyC' ) && ! this.game.makingRoom ) this.show();
+			else if ( offer && p.prompt && p.prompt.key === 'E' ) p.prompt = { key: 'E', text: `${ p.prompt.text }   ·   ${ this.game.keyName( 'C' ) }  ${ offer }` };
 
 		} else if ( hit && this._helm && ! this.game.makingRoom ) this.show();
 
@@ -158,7 +191,7 @@ export class Radio {
 		this.open = true;
 		this.game.app.player.helmHeld = true;
 		this.call = null;
-		this.pick = this.game.towJob( true ) && this.game.state.fuelL <= 0 ? 1 : 0;
+		this.pick = this.game.towJob( true ) && fuelOf( this.game.state.boat ) && this.game.state.fuelL <= 0 && this.game.state.stats.vhfM > 0 ? ( this._pearl() ? 2 : 1 ) : 0;
 		this.draw();
 		this.panel.classList.add( 'is-open' );
 		try {
@@ -180,7 +213,7 @@ export class Radio {
 
 	step( by ) {
 
-		const n = this.call ? ( this.call.can ? 2 : 1 ) : 2;
+		const n = this.call ? ( this.call.can ? ( this.call.drop ? 3 : 2 ) : 1 ) : Math.max( 1, this.rows().length );
 		this.pick = ( this.pick + by + n ) % n;
 		this.draw();
 
@@ -191,14 +224,42 @@ export class Radio {
 		if ( this.call ) {
 
 			if ( this.call.can && this.pick === 0 ) this.takeTow();
+			else if ( this.call.drop && this.pick === 1 ) this.takeCan();
 			else this.hangUp();
 
-		} else if ( this.pick === 0 ) {
+			return;
+
+		}
+
+		const row = this.rows()[ this.pick ];
+		if ( ! row ) return;
+		if ( row.id === 'wx' ) {
 
 			this.listen( ! this.listening );
 			this.close();
 
-		} else if ( this.game.towJob( true ) ) this.callMarta();
+		} else if ( row.id === 'marta' ) {
+
+			if ( this.game.towJob( true ) ) this.callMarta();
+
+		} else if ( row.id === 'pearl' ) {
+
+			this.callPearl();
+
+		} else if ( row.can ) {
+
+			this.close();
+			this.listen( false );
+			this.game.daysOut.fire( row.id );
+
+		}
+
+	}
+
+	// what's on the panel: her set's, and your distress gear (DaysOut.distress)
+	rows() {
+
+		return [ ...( this.game.state.stats.vhfM > 0 ? [ { id: 'wx' }, { id: 'marta' }, ...( pearlJob( this.game ) ? [ { id: 'pearl' } ] : [] ) ] : [] ), ...this.game.daysOut.distress() ];
 
 	}
 
@@ -208,17 +269,22 @@ export class Radio {
 		const g = this.game, job = g.towJob( true ), wx = g.weatherNow, news = g.app.weather && g.app.weather.news;
 		if ( ! job ) return;
 		const blown = wx && wx.wind >= NO_TOW, warned = news && news.stage === 'warning';
-		let say, can = false;
-		if ( blown || warned ) say = `Marta here. Not in this: ${ warned ? 'there\'s a hurricane on its way' : 'it\'s blowing a gale' }, and I'd not get to you. Anchor if you can, ride it out, and call me when it's blown through.`;
+		let say, can = false, drop = null;
+		if ( job.metres > g.state.stats.vhfM ) say = `Nothing but static. You're ${ farOff( job.metres ) } off her dock, past your set's reach.`;
+		else if ( blown || warned ) say = `Marta here. Not in this: ${ warned ? 'there\'s a hurricane on its way' : 'it\'s blowing a gale' }, and I'd not get to you. Anchor if you can, ride it out, and call me when it's blown through.`;
 		else {
 
 			const pays = Math.min( job.fee, g.state.money ), short = pays < job.fee, out = job.metres / TOW.out;
 			say = `Marta here. I have you, ${ farOff( job.metres ) } off my dock. Give me ${ towWords( out ) } to get out to you, and it's ${ towWords( job.time - out ) } back in tow. That's $${ job.fee.toLocaleString() }.${ short ? ` You've only $${ pays.toLocaleString() }? I'll take that.` : '' }`;
 			can = true;
+			// ((M16) or a can of diesel: Help.js)
+			drop = canJob( g );
+			if ( drop ) say += canWords( g, drop );
 
 		}
 
-		this.call = { job, say, can };
+		this.call = { job, say, can, drop };
+		this._squelch();
 		this.pick = 0;
 		this.draw();
 
@@ -226,16 +292,45 @@ export class Radio {
 
 	takeTow() {
 
+		const pearl = this.call && this.call.who === 'pearl';
 		this.close();
 		this.listen( false );
-		this.game.tow( true );
+		if ( pearl ) towToPearl( this.game );
+		else this.game.tow( true );
+
+	}
+
+	// (M16) Help.js: Pearl, on the north side, through her hours; Marta's can
+	_pearl() {
+
+		const j = pearlJob( this.game );
+		return !! j && j.open && ! j.here;
+
+	}
+
+	callPearl() {
+
+		if ( ! this._pearl() ) return;
+		this.call = pearlCall( this.game );
+		this._squelch();
+		this.pick = 0;
+		this.draw();
+
+	}
+
+	takeCan() {
+
+		this.close();
+		this.listen( false );
+		deliverCan( this.game );
 
 	}
 
 	hangUp() {
 
+		this.pick = this.call && this.call.who === 'pearl' ? 2 : 1;
 		this.call = null;
-		this.pick = 1;
+		this._squelch();
 		this.draw();
 
 	}
@@ -249,22 +344,38 @@ export class Radio {
 		if ( this.call ) {
 
 			const c = this.call;
-			list = `<p class="rd-say">“${ c.say }”</p>`;
-			if ( c.can ) list += `<div class="gm-shop-row rd-row${ this.pick === 0 ? ' is-sel' : '' }"><span>Tow me in<small>Back at her dock, on deck</small></span><button class="gm-btn" data-go>$${ Math.min( c.job.fee, g.state.money ).toLocaleString() }</button></div>`;
-			list += `<div class="gm-shop-row rd-row${ this.pick === ( c.can ? 1 : 0 ) ? ' is-sel' : '' }"><span>${ c.can ? 'Never mind' : 'Thanks, out' }</span><button class="gm-btn is-ghost" data-back>Back</button></div>`;
+			list = `<p class="rd-say">${ OPEN_QUOTE }${ c.say }${ CLOSE_QUOTE }</p>`;
+			if ( c.can ) list += `<div class="gm-shop-row rd-row${ this.pick === 0 ? ' is-sel' : '' }"><span>Tow me in<small>${ this._seat ? ( c.who === 'pearl' ? 'To her jetty' : 'Back on the sand by the pier' ) : c.who === 'pearl' ? 'To her jetty, on deck' : 'Back at her dock, on deck' }</small></span><button class="gm-btn" data-go>$${ Math.min( c.job.fee, g.state.money ).toLocaleString() }</button></div>`;
+			if ( c.drop ) list += `<div class="gm-shop-row rd-row${ this.pick === 1 ? ' is-sel' : '' }"><span>Bring a can<small>${ c.drop.litres } L in the tank, and you're where you were</small></span><button class="gm-btn" data-can>$${ Math.min( c.drop.fee, g.state.money ).toLocaleString() }</button></div>`;
+			const last = c.can ? ( c.drop ? 2 : 1 ) : 0;
+			list += `<div class="gm-shop-row rd-row${ this.pick === last ? ' is-sel' : '' }"><span>${ c.can ? 'Never mind' : 'Thanks, out' }</span><button class="gm-btn is-ghost" data-back>Back</button></div>`;
 			sub = 'Channel 16';
 
 		} else {
 
-			const job = g.towJob( true );
-			list = `<div class="gm-shop-row rd-row${ this.pick === 0 ? ' is-sel' : '' }"><span>The weather, WX1<small>The forecast for the island's waters and beyond, read on a loop while you steer</small></span><button class="gm-btn" data-wx>${ this.listening ? 'Stop' : 'Listen' }</button></div>`;
-			list += `<div class="gm-shop-row rd-row${ this.pick === 1 ? ' is-sel' : '' }"><span>Marta, channel 16<small>${ job ? `A tow in, from ${ farOff( job.metres ) } off her dock` : 'You\'re at her dock' }</small></span>${ job ? '<button class="gm-btn" data-call>Call</button>' : '' }</div>`;
-			sub = 'The VHF at the helm';
+			const job = g.towJob( true ), rows = this.rows();
+			list = rows.map( ( row, i ) => {
+
+				const sel = this.pick === i ? ' is-sel' : '';
+				if ( row.id === 'wx' ) return `<div class="gm-shop-row rd-row${ sel }"><span>The weather, WX1<small>${ g.daysOut.saidHere() }. The forecast for the island's waters and beyond, read on a loop while you ${ this._seat ? 'paddle' : 'steer' }</small></span><button class="gm-btn" data-wx>${ this.listening ? 'Stop' : 'Listen' }</button></div>`;
+				if ( row.id === 'marta' ) return `<div class="gm-shop-row rd-row${ sel }"><span>Marta, channel 16<small>${ job ? `A tow in, from ${ farOff( job.metres ) } off her dock` : 'You\'re at her dock' }</small></span>${ job ? '<button class="gm-btn" data-call>Call</button>' : '' }</div>`;
+				if ( row.id === 'pearl' ) {
+
+					// ((M16) Pearl, on the north side: Help.js)
+					const pearl = pearlJob( g );
+					return `<div class="gm-shop-row rd-row${ sel }"><span>Pearl, channel 16<small>${ pearl.here ? 'You\'re at her jetty' : ! pearl.open ? 'No answer: the camp\'s shut till morning' : `A tow in to her jetty, from ${ farOff( pearl.metres ) } off it` }</small></span>${ pearl.open && ! pearl.here ? '<button class="gm-btn" data-pearl>Call</button>' : '' }</div>`;
+
+				}
+
+				return `<div class="gm-shop-row rd-row${ sel }"><span>${ row.name }<small>${ row.say }</small></span><button class="gm-btn" data-fire="${ row.id }" ${ row.can ? '' : 'disabled' }>${ ! row.can ? 'Not now' : row.id === 'flare' ? 'Fire' : `$${ Math.min( row.fee, g.state.money ).toLocaleString() }` }</button></div>`;
+
+			} ).join( '' ) || '<p class="rd-say">There\'s no radio aboard her. Marta sells them.</p>';
+			sub = g.state.stats.vhfM > 0 ? ( this._seat ? 'Your handheld VHF' : 'The VHF at the helm' ) : 'Nothing to call with but what you carry';
 
 		}
 
-		this.panel.innerHTML = `<div class="gm-head"><h2>Radio</h2><p class="gm-sub">${ sub }</p></div>${ lcd }<div class="gm-list">${ list }</div>
-			<div class="gm-foot"><span class="gm-sub">${ g.app.input.lastDevice === 'touch' ? '' : 'Pick ← →, then Enter' }</span><button class="gm-btn is-ghost" data-close>${ key( 'Close', 'R', 'X' ) }</button></div>`;
+		this.panel.innerHTML = `<div class="gm-head"><h2>${ g.state.stats.vhfM > 0 || ! this._seat ? 'Radio' : 'Flares' }</h2><p class="gm-sub">${ sub }</p></div>${ lcd }<div class="gm-list">${ list }</div>
+			<div class="gm-foot"><span class="gm-sub">${ g.app.input.lastDevice === 'touch' ? '' : `Pick ${ LEFT } ${ RIGHT }, then Enter` }</span><button class="gm-btn is-ghost" data-close>${ this._seat ? key( 'Close', 'C', 'LB' ) : key( 'Close', 'R', 'X' ) }</button></div>`;
 		const on = ( sel, fn ) => {
 
 			const b = this.panel.querySelector( sel );
@@ -280,7 +391,15 @@ export class Radio {
 
 		} );
 		on( '[data-call]', () => this.callMarta() );
+		for ( const b of this.panel.querySelectorAll( '[data-fire]' ) ) b.onclick = () => {
+
+			this.pick = this.rows().findIndex( ( row ) => row.id === b.dataset.fire );
+			this.act();
+
+		};
 		on( '[data-go]', () => this.takeTow() );
+		on( '[data-can]', () => this.takeCan() );
+		on( '[data-pearl]', () => this.callPearl() );
 		on( '[data-back]', () => this.hangUp() );
 
 	}
@@ -290,6 +409,7 @@ export class Radio {
 
 		if ( on === this.listening ) return;
 		this.listening = on;
+		this._squelch();
 		this.line = - 1;
 		this._wait = 0;
 		this._round = false;
@@ -297,6 +417,14 @@ export class Radio {
 		this.words.classList.toggle( 'is-on', on );
 		if ( on ) this._next();
 		else this.wordsText.textContent = '';
+
+	}
+
+	// (M16) the squelch breaking, as it comes on or goes off
+	_squelch() {
+
+		const a = this.game.app.audio;
+		if ( a && a.radioSquelch ) a.radioSquelch();
 
 	}
 

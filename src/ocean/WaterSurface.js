@@ -4,10 +4,11 @@ import { G } from '../core/Globals.js';
 import { rippleTexture } from './SeaTextures.js';
 import { WHALE_WATER_GLSL, whaleMarkUniforms } from './WhaleWater.js';
 import { SeaDetail } from './SeaDetail.js';
-import { Whitecaps } from './Whitecaps.js';
+import { Whitecaps, WHITECAP_CREST } from './Whitecaps.js';
 import { LEE } from './Waves.js';
 import { useLocalLights, LOCAL_LIGHTS_MAX } from '../materials/LocalLights.js';
 import { SEA_CAVE_GLSL, SEA_CAVE_CALM_GLSL, seaCaveUniforms } from '../world/terrain/CaveLight.js';
+import { SEEN } from '../materials/SeenInWater.js';
 
 // The sea: one instanced CDLOD grid that follows the camera out to the horizon. Its surface is the
 // open sea's Gerstner waves (Waves), fading out over the outer surf zone, plus Tidewater's breaking
@@ -37,6 +38,13 @@ const SHORE_DEEP = 26; // m: the shore waves' envelope is 0 beyond this depth
 const ORIGIN_STEP = 512;
 // the ripples' two textures' scales (/m), and so their offsets for the origin (update)
 const RIPPLE = [ 0.11, 0.043 ];
+// (M16) a blow's rough water on the same texture, for the seas the grid's too coarse to draw (past a few hundred metres on
+// low, only its longest): two layers of it in the wind's frame, a tile's m along and across the wind, as the texture has a
+// feature every sixteenth of a tile; how fast each runs, as waves of its length do (m/s); each one's way across the wind (rad,
+// so their grids don't line up); how steep they're drawn
+const ROUGH = [ { along: 120, across: 210, speed: 4.8, turn: 0.35 }, { along: 340, across: 560, speed: 7.9, turn: - 0.5 } ];
+const ROUGH_SLOPE = 0.36;
+const roughDir = ( i ) => { const c = Math.cos( ROUGH[ i ].turn ), s = Math.sin( ROUGH[ i ].turn ), k = ( v ) => v.toFixed( 5 ); return `vec2( ${ k( c ) } * seaDetailWindDir.x - ${ k( s ) } * seaDetailWindDir.y, ${ k( s ) } * seaDetailWindDir.x + ${ k( c ) } * seaDetailWindDir.y )`; };
 // (M9) the rain's rings' two cells (m), (M15) and so their offsets for the origin: drawn near you, about it
 const RING_CELL = [ 0.55, 0.8 ];
 // (M15) the foam's finer patterns, each a noise of where the water is, keyed about the sea's origin (a 32-bit
@@ -51,7 +59,7 @@ const MARBLE_NOISE = [ [ 0.3, 0 ], [ 0.3, 3.7 ], [ 1, 0 ], [ 2.3, 7.1 ], [ 5.3, 
 const MARBLE = [ 2.2, 3.6 ];
 // (M15) a hurricane's spume's: its streaks' two noises and its broad one (along and across the wind: scale,
 // offset), and its lace's scale on the water (its four noises LACE_NOISE's), on the marbling's frame
-const SPUME_NOISE = [ [ 0.025, 0.45, 0 ], [ 0.0575, 0.27, 5.3 ], [ 0.08, 0.08, 0 ] ], SPUME_LACE = 0.5;
+const SPUME_NOISE = [ [ 0.025, 0.45, 0 ], [ 0.0575, 0.27, 5.3 ], [ 0.08, 0.08, 0 ] ], SPUME_LACE = 1.2;
 const KEY = { froth: 0, rows: 4, marble: 8, spume: 16, count: 23 };
 // (M15) what's found out there (game/Finds.js, setFinds): the weedlines drawn (the nearest, by tier) and the
 // bait boils; the weed's colour (sRGB, wet Sargassum: an olive-brown and its golden tips), how it's broken
@@ -60,6 +68,8 @@ const KEY = { froth: 0, rows: 4, marble: 8, spume: 16, count: 23 };
 // (step 20) a device that draws on its CPU's sea has no caves in it (lean)
 const SEA_CAVE_LEAN = 'float seaCaveCalm( vec2 xz ) { return 0.0; }\nvec3 seaCaveLightAt( vec2 xz ) { return vec3( 1.0, 0.0, 0.0 ); }\n';
 const WEED_MAX = { low: 6, mid: 12, high: 12 }, BOIL_MAX = 4;
+// ((M16) how fast the water's own light comes in over a boat seen through it, per m of the sight line)
+const WATER_SCATTER = 0.22;
 const WEED = { dark: [ 0.21, 0.17, 0.07 ], gold: [ 0.55, 0.44, 0.19 ], mats: 14, edge: 2.5, front: [ 3, 0.8 ] };
 // (M15) the water's colour (sRGB, as the light it sends back up: the body's below). Its own: the island's
 // coastal water over its shelf, the green water (its run-off and the life over the shelf: teal, its blue less
@@ -80,6 +90,7 @@ const WATER = {
 	k: G.waterAbsorption.value.toArray().map( ( a ) => a * 1.6 ), murk: [ 0, 0.025, 0.05 ], coast: [ 3500, 6000 ],
 };
 const g = ( v ) => Number.isInteger( v ) ? v.toFixed( 1 ) : String( v ); // (a GLSL float)
+const _look = new THREE.Vector3();
 // (M15) the foam's noises' keys (waterKey's) at the sea's origin O: the lace's on the water, the marbling's
 // on its frame M ( x, z, along, across, wind ), moved to the camera cam first if the wind w has turned
 // (WaterSurface's update; test/sea-origin.mjs)
@@ -122,6 +133,12 @@ const marble = ( i, arg ) => `waterNoiseK( ${ arg } * ${ g( MARBLE_NOISE[ i ][ 0
 // (M11) the sky's reflection off the surface: the environment as it is (1, a mirror's: the sky drawn as
 // you see it); and where three turns a reflected ray into the world (a ray pointing down is turned up)
 const REFLECT = 1;
+// (M16) the sky's light on the surface for its Fresnel's multiple scattering: its colour, worked out already, for what little
+// that comes to on a surface with no diffuse colour of its own (1/255 at most, side by side): the panorama's looked at once,
+// for what it mirrors, not again for that (two more lookups a pixel, in a bilinear of its own)
+const IBL_FROM = 'iblIrradiance += getIBLIrradiance( geometryNormal );';
+if ( ! THREE.ShaderChunk.lights_fragment_maps.includes( IBL_FROM ) ) throw new Error( 'WaterSurface: three\'s lights_fragment_maps changed (' + IBL_FROM + ')' );
+const LIGHTS_MAPS = THREE.ShaderChunk.lights_fragment_maps.replace( IBL_FROM, 'iblIrradiance = waterSky * 0.5;' );
 const REFLECT_RAY = 'reflectVec = transformDirectionByInverseViewMatrix( reflectVec, viewMatrix );';
 if ( ! THREE.ShaderChunk.envmap_physical_pars_fragment.includes( REFLECT_RAY ) ) throw new Error( 'WaterSurface: three\'s envmap_physical_pars_fragment changed (' + REFLECT_RAY + ')' );
 // an sRGB colour as a linear GLSL vec3 (shading is linear)
@@ -176,6 +193,7 @@ export class WaterSurface {
 			waterRain: G.rain, // (M9: the rings where the drops land)
 			// ((M15) the ripple textures' offsets for the sea's origin: each's own scale, fract'd in doubles)
 			waterRippleAt: { value: new THREE.Vector4() },
+			waterRoughAt: { value: new THREE.Vector4() },
 			// (and the rain's rings': how far the origin is into a cell of each size (m), and how many cells in)
 			waterRingAt: { value: new THREE.Vector4() },
 			waterRingCells: { value: new THREE.Vector4() },
@@ -193,6 +211,7 @@ export class WaterSurface {
 		};
 		this.envUnder = uniforms.waterEnvUnder;
 		this.rippleAt = uniforms.waterRippleAt;
+		this.roughAt = uniforms.waterRoughAt;
 		this.ringAt = uniforms.waterRingAt;
 		this.ringCells = uniforms.waterRingCells;
 		this.keys = uniforms.waterKey.value;
@@ -333,6 +352,7 @@ uniform vec4 waterFlashShape;
 uniform float waterSkyExposure;
 uniform vec3 oceanLodView; // (M15) the camera about the sea's origin
 uniform vec4 waterRippleAt;
+uniform vec4 waterRoughAt;
 uniform vec4 waterRingAt;
 uniform vec4 waterRingCells;
 uniform vec4 waterKey[ ${ KEY.count } ];
@@ -398,6 +418,13 @@ float waterLace( vec2 p, float cover ) {
 	return waterLaceOf( m, cover );
 }
 // ((M15) p about the sea's origin, its noises' keys from waterKey[ k ] on)
+// (M16) a layer of a blow's rough water: its way across the water d, a tile's size along and across it, where the origin is in
+// it, how far it's run: its slope
+vec2 waterRough( vec2 d, vec2 tile, vec2 at, float run ) {
+	vec2 w = vec2( - d.y, d.x );
+	vec2 g = texture2D( waterRipples, vec2( dot( vWaterL.xz, d ), dot( vWaterL.xz, w ) ) / tile + at - vec2( run, 0.0 ) ).xy * 2.0 - 1.0;
+	return d * g.x + w * g.y;
+}
 float waterLaceK( vec2 p, int k, float cover ) {
 	const float N[ 4 ] = float[ 4 ]( ${ LACE_NOISE.map( ( [ a ] ) => g( a ) ).join( ', ' ) } );
 	vec4 m;
@@ -411,23 +438,26 @@ float waterLaceK( vec2 p, int k, float cover ) {
 	float meanDepth = max( waterSeaLevel_ - floorH, 0.0 );
 	// see-through only over the shallows: deeper, the water's own colour is all there is
 	float cover = smoothstep( 0.0, 4.5, depth ) * 0.85 + 0.15;
-	float turbid = ${ SH ? 'shoreSurfTurbidity( vWater.xz, meanDepth ) * ( 1.0 - 0.8 * seaCaveCalm( vWater.xz ) )' : '0.0' };
+	float turbid = ${ SH ? 'shoreSurfTurbidity( vWater.xz, meanDepth )' : '0.0' };
+	if ( turbid > 0.0 ) turbid *= 1.0 - 0.8 * seaCaveCalm( vWater.xz );
 	// whitewater: the breakers' foam as lace, denser at the roller; a soft line where the swash
 	// runs out on the sand
 	vec2 drift = vec2( 0.0, waterTime * 0.12 );
 	float ww = clamp( vSurf.x, 0.0, 1.0 );
 	// two scales of lace: clumps of bubbles (~0.5 m) torn into a fine net; solid only at the very top
-	// of the roller
-	float lace = waterLace( vWater.xz * 2.1 + drift, ww * 0.9 ) * 0.65 + waterLace( vWater.xz * 5.3 + drift * 1.7 + 3.1, ww * 0.8 ) * 0.35;
-	float foam = lace * ww;
-	foam = max( foam, smoothstep( 0.75, 1.0, ww ) * 0.75 );
+	// of the roller ((M16) only where there's whitewater: eight noises on every pixel of the open sea, for nothing)
+	float foam = 0.0;
+	if ( ww > 0.0 ) {
+		float lace = waterLace( vWater.xz * 2.1 + drift, ww * 0.9 ) * 0.65 + waterLace( vWater.xz * 5.3 + drift * 1.7 + 3.1, ww * 0.8 ) * 0.35;
+		foam = max( lace * ww, smoothstep( 0.75, 1.0, ww ) * 0.75 );
+	}
 	float film = depth;
 ${ SH ? /* glsl */`
 	vec4 se = shoreSwashEdge( vWater.xz, film );
 	float frontD = se.y;
 	float uprush = smoothstep( 0.46, 0.32, se.z );
-	float frontFoam = smoothstep( 0.9, 0.0, frontD ) * smoothstep( -0.05, 0.08, frontD ) * uprush * ( 1.0 - 0.9 * seaCaveCalm( vWater.xz ) );
-	foam = max( foam, waterLace( vWater.xz * 4.5 + 3.7, 0.65 ) * frontFoam * 0.85 );
+	float frontFoam = smoothstep( 0.9, 0.0, frontD ) * smoothstep( -0.05, 0.08, frontD ) * uprush;
+	if ( frontFoam > 0.0 ) foam = max( foam, waterLace( vWater.xz * 4.5 + 3.7, 0.65 ) * frontFoam * ( 1.0 - 0.9 * seaCaveCalm( vWater.xz ) ) * 0.85 );
 	// the swash sheet ends on its analytic front, not on the mesh triangles
 	float sheetEdge = smoothstep( 0.0, 0.012, se.x );` : `
 	float sheetEdge = smoothstep( 0.0, 0.03, film );
@@ -479,6 +509,12 @@ ${ lean ? '' : /* glsl */`
 	// gusts; out over the open sea only (the shore waves have their own)
 	if ( whitecapCover > 0.0 ) {
 		vec2 wc = min( whitecapsAt( vWaterX0 ) * vWaterFade * vWaterWind * ( 0.55 + 0.9 * seaD.y ), 1.0 ) * ( 1.0 - waterFrontSlick );
+		// ((M16) in a blow, up on its long seas' crests)
+		// (the crests breaking, that is: what they've left lies where it fell, as much in the troughs as anywhere)
+		if ( whitecapCrest.x > 0.0 ) {
+			float wcOn = mix( 1.0, smoothstep( ${ g( WHITECAP_CREST[ 0 ] ) }, ${ g( WHITECAP_CREST[ 1 ] ) }, ( vWater.y - waterSeaLevel_ ) / whitecapCrest.y ), whitecapCrest.x );
+			wc *= vec2( wcOn, mix( 1.0, wcOn, 0.3 ) );
+		}
 		// the foam left marbled (white with dark veins, swirled and drawn out along the wind), thinning
 		// unevenly and tearing into lace, froth at its edges, less white than the roller; the roller solid,
 		// its edge torn. (Seen from afar, as much white spread.) ((M15) Its frame along and across the wind about
@@ -486,17 +522,24 @@ ${ lean ? '' : /* glsl */`
 		vec2 wcD = seaDetailWindDir, wcQ = vec2( dot( vWaterX0, wcD ), dot( vWaterX0, vec2( - wcD.y, wcD.x ) ) ) * vec2( ${ g( MARBLE[ 0 ] ) }, ${ g( MARBLE[ 1 ] ) } );
 		float wcFw = length( fwidth( wcQ ) );
 		if ( wc.y > 0.002 ) {
-			vec2 q = wcQ + 1.1 * vec2( ${ marble( 0, 'wcQ' ) }, ${ marble( 1, 'wcQ' ) } );
-			float fine = 1.0 - smoothstep( 0.25, 0.7, wcFw );
-			float n = ${ marble( 2, 'q' ) } * 0.5 + ${ marble( 3, 'q' ) } * 0.3 + ${ marble( 4, 'q' ) } * 0.2 * fine;
-			float net = mix( n + 0.1 * ( 1.0 - fine ), 1.0 - abs( ${ marble( 5, 'q' ) } - 0.5 ) * 2.0, 0.45 );
-			float cover = min( wc.y * ( 0.5 + ${ marble( 6, 'wcQ' ) } ), 0.8 ); // (never a solid sheet)
-			float w = 0.14 + wcFw * 0.5, far = smoothstep( 1.2, 3.5, wcFw );
-			float left = mix( smoothstep( 1.0 - cover - w * 0.5, 1.0 - cover + w * 0.5, net ), cover, far );
-			// (froth: its bubbles, near by)
-			left *= mix( 1.0, 0.35 + 0.65 * waterLaceK( vWaterX0 * ${ g( FROTH ) }, ${ KEY.froth }, 0.7 ), fine );
+			float far = smoothstep( 1.2, 3.5, wcFw );
+			float cover = min( wc.y * ( 0.5 + ${ marble( 6, 'wcQ' ) } ), 0.8 - 0.2 * whitecapCrest.x ); // (never a solid sheet: ((M16) a long sea's head's foam's wide)
+			float left = cover, net = 0.5;
+			// ((M16) seen from afar it's only as much white spread, and none of its noises or its froth's four are read:
+			// that's most of the sea's pixels, at a low angle from a deck)
+			if ( far < 1.0 ) {
+				vec2 q = wcQ + 1.1 * vec2( ${ marble( 0, 'wcQ' ) }, ${ marble( 1, 'wcQ' ) } );
+				float fine = 1.0 - smoothstep( 0.25, 0.7, wcFw );
+				float n = ${ marble( 2, 'q' ) } * 0.5 + ${ marble( 3, 'q' ) } * 0.3 + ${ marble( 4, 'q' ) } * 0.2 * fine;
+				net = mix( n + 0.1 * ( 1.0 - fine ), 1.0 - abs( ${ marble( 5, 'q' ) } - 0.5 ) * 2.0, 0.45 );
+				float w = 0.14 + wcFw * 0.5;
+				left = mix( smoothstep( 1.0 - cover - w * 0.5, 1.0 - cover + w * 0.5, net ), cover, far );
+				// (froth: its bubbles, near by)
+				if ( fine > 0.0 ) left *= mix( 1.0, 0.35 + 0.65 * waterLaceK( vWaterX0 * ${ g( FROTH ) }, ${ KEY.froth }, 0.7 ), fine );
+			}
 			// (the roller's whitest in a head or two along the crest)
-			float roll = smoothstep( 0.2, 0.6, wc.x * ( 0.6 + 0.8 * mix( net, 0.5, far ) ) * ( 0.45 + 0.9 * ${ marble( 7, 'wcQ' ) } ) );
+			float roll = 0.0;
+			if ( wc.x > 0.0 ) roll = smoothstep( 0.2, 0.6, wc.x * ( 0.6 + 0.8 * mix( net, 0.5, far ) ) * ( 0.45 + 0.9 * ${ marble( 7, 'wcQ' ) } ) );
 			foam = max( foam, max( left * 0.78, roll ) );
 		}
 	}
@@ -507,12 +550,15 @@ ${ lean ? '' : /* glsl */`
 		// ((M15) along and across the wind about the sea's origin, on the marbling's frame, its noises keyed
 		// (foamKeys: the origin's place on it, drifted down the wind): its lace held tens of km out, and turning
 		// about you as the wind turns)
-		vec2 wd = seaDetailWindDir, wp = vec2( - wd.y, wd.x ), sq = vec2( dot( vWaterX0, wd ), dot( vWaterX0, wp ) );
-		float streak = smoothstep( 0.45, 0.8, waterNoiseK( sq * vec2( ${ g( SPUME_NOISE[ 0 ][ 0 ] ) }, ${ g( SPUME_NOISE[ 0 ][ 1 ] ) } ), waterKey[ ${ KEY.spume } ] ) )
-			* smoothstep( 0.25, 0.65, waterNoiseK( sq * vec2( ${ g( SPUME_NOISE[ 1 ][ 0 ] ) }, ${ g( SPUME_NOISE[ 1 ][ 1 ] ) } ), waterKey[ ${ KEY.spume + 1 } ] ) );
+		// ((M16) nothing's read past where it's faded out, and no lace where it has no cover to speak of)
 		float spDist = length( oceanLodView - vWaterL );
-		float spCover = waterSpume * ( 0.75 * streak + 0.2 * waterNoiseK( sq * ${ g( SPUME_NOISE[ 2 ][ 0 ] ) }, waterKey[ ${ KEY.spume + 2 } ] ) ) * smoothstep( 0.15, 0.8, depth ) * ( 1.0 - smoothstep( 600.0, 2000.0, spDist ) );
-		foam = max( foam, waterLaceK( sq * ${ g( SPUME_LACE ) }, ${ KEY.spume + 3 }, min( spCover, 0.75 ) ) * 0.85 );
+		if ( spDist < 2000.0 ) {
+			vec2 wd = seaDetailWindDir, wp = vec2( - wd.y, wd.x ), sq = vec2( dot( vWaterX0, wd ), dot( vWaterX0, wp ) );
+			float streak = smoothstep( 0.45, 0.8, waterNoiseK( sq * vec2( ${ g( SPUME_NOISE[ 0 ][ 0 ] ) }, ${ g( SPUME_NOISE[ 0 ][ 1 ] ) } ), waterKey[ ${ KEY.spume } ] ) )
+				* smoothstep( 0.25, 0.65, waterNoiseK( sq * vec2( ${ g( SPUME_NOISE[ 1 ][ 0 ] ) }, ${ g( SPUME_NOISE[ 1 ][ 1 ] ) } ), waterKey[ ${ KEY.spume + 1 } ] ) );
+			float spCover = waterSpume * ( 0.75 * streak + 0.2 * waterNoiseK( sq * ${ g( SPUME_NOISE[ 2 ][ 0 ] ) }, waterKey[ ${ KEY.spume + 2 } ] ) ) * smoothstep( 0.15, 0.8, depth ) * ( 1.0 - smoothstep( 600.0, 2000.0, spDist ) );
+			if ( spCover > 0.01 ) foam = max( foam, waterLaceK( sq * ${ g( SPUME_LACE ) }, ${ KEY.spume + 3 }, min( spCover, 0.75 ) ) * 0.85 );
+		}
 	}
 ${ lean ? '' : /* glsl */`
 	if ( frontAcross < 30.0 ) {
@@ -651,26 +697,44 @@ ${ lean ? '' : /* glsl */`
 	diffuseColor.rgb = vec3( 0.0 );
 	diffuseColor.a = clamp( max( max( cover, glow * 0.6 ), foam ), 0.0, 1.0 ) * sheetEdge;
 ` )
-				.replace( '#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = mix( roughnessFactor * mix( 1.0, 0.35, seaD.z ) * mix( 1.0, 1.6, seaD.y ) * ( 1.0 - 0.6 * waterFrontSlick ), 0.85, foam );' )
+				.replace( '#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = mix( roughnessFactor * mix( 1.0, 0.35, seaD.z ) * mix( 1.0, 1.6, seaD.y ) * ( 1.0 - 0.6 * waterFrontSlick ) * ( 1.0 + 0.6 * smoothstep( 11.0, 20.0, seaDetailWindSpeed ) ), 0.85, foam );' )
 				.replace( '#include <normal_fragment_maps>', /* glsl */`
 	// short wind ripples and capillary waves on the waves near the camera (two drifting samples),
 	// calmed by the foam
 	vec3 wN = normalize( vWaterN );
-	float rippleK = ( 1.0 - smoothstep( 25.0, 140.0, length( oceanLodView - vWaterL ) ) ) * ( 1.0 - foam ) * ( 1.0 - whaleMk.y ) * seaD.x;
-	vec2 r1 = texture2D( waterRipples, vWaterL.xz * ${ RIPPLE[ 0 ] } + waterRippleAt.xy + waterTime * vec2( 0.012, 0.03 ) ).xy * 2.0 - 1.0;
-	vec2 r2 = texture2D( waterRipples, vWaterL.xz * ${ RIPPLE[ 1 ] } + waterRippleAt.zw + 0.3 - waterTime * vec2( 0.02, 0.008 ) ).xy * 2.0 - 1.0;
-	vec2 rs = ( r1 * 0.6 + r2 * 0.4 ) * 0.32 * rippleK;
+	float rippleDist = length( oceanLodView - vWaterL );
+	// ((M16) a blow's: rougher and seen further, for what the grid's too coarse to draw of a gale's short seas. Nothing
+	// on a breezy day or under)
+	float rippleBlow = smoothstep( 11.0, 20.0, seaDetailWindSpeed );
+	float rippleK = ( 1.0 - smoothstep( 25.0, 140.0 + 360.0 * rippleBlow, rippleDist ) ) * ( 1.0 - foam ) * ( 1.0 - whaleMk.y ) * seaD.x * ( 1.0 + 0.8 * rippleBlow );
+	vec2 rs = vec2( 0.0 );
+	// ((M16) not read past where they've faded out, nearly all the sea's pixels at a low angle)
+	if ( rippleDist < 140.0 + 360.0 * rippleBlow ) {
+		vec2 r1 = texture2D( waterRipples, vWaterL.xz * ${ RIPPLE[ 0 ] } + waterRippleAt.xy + waterTime * vec2( 0.012, 0.03 ) ).xy * 2.0 - 1.0;
+		vec2 r2 = texture2D( waterRipples, vWaterL.xz * ${ RIPPLE[ 1 ] } + waterRippleAt.zw + 0.3 - waterTime * vec2( 0.02, 0.008 ) ).xy * 2.0 - 1.0;
+		rs = ( r1 * 0.6 + r2 * 0.4 ) * 0.32 * rippleK;
+	}
+	// ((M16) and the sea's rough all the way out, on the waves the grid does draw: nothing on a breezy day or under)
+	if ( rippleBlow > 0.0 ) {
+		vec2 gs = ( waterRough( ${ roughDir( 0 ) }, vec2( ${ g( ROUGH[ 0 ].along ) }, ${ g( ROUGH[ 0 ].across ) } ), waterRoughAt.xy, waterTime * ${ g( ROUGH[ 0 ].speed / ROUGH[ 0 ].along ) } ) * ${ g( ROUGH_SLOPE ) }
+			+ waterRough( ${ roughDir( 1 ) }, vec2( ${ g( ROUGH[ 1 ].along ) }, ${ g( ROUGH[ 1 ].across ) } ), waterRoughAt.zw, waterTime * ${ g( ROUGH[ 1 ].speed / ROUGH[ 1 ].along ) } ) * ${ g( ROUGH_SLOPE ) } )
+			* rippleBlow * vWaterFade * vWaterWind * ( 1.0 - foam ) * ( 1.0 - whaleMk.y ) * seaD.x * smoothstep( 30.0, 250.0, rippleDist );
+		// (steep where it's steep: a sea's crests are sharp and its troughs broad, a noise's slopes all of a size, an oily swell)
+		gs *= 1.0 + 2.5 * dot( gs, gs ) / ( 0.02 + length( gs ) );
+		rs += gs;
+	}
 	// (M9) the rings where the rain lands, near the camera; and the drops beat the wind's ripples down
 	// ((M10) all over the sea: a downpour flattens them as far as you see; (M14) not under the pier, the
 	// boathouse or a rock's overhang)
 	if ( waterRain > 0.0 ) {
-		float rainN = clamp( waterRain * 1.5, 0.0, 1.0 );
+		// ((M16) and in a blow its rings are torn away as they start: no neat circles on a gale's sea)
+		float rainN = clamp( waterRain * 1.5, 0.0, 1.0 ) * ( 1.0 - rippleBlow );
 		float rainOver = ${ cover ? 'coverHeightAt( vWater.xz )' : '-1e4' };
 		${ rocks ? 'rainOver = max( rainOver, rockUndersideAt( vWater.xz ) );' : '' }
 		rainN *= step( rainOver, vWater.y + 0.1 );
 		rs *= 1.0 - 0.35 * rainN;
 		float rainD = length( oceanLodView - vWaterL );
-		if ( rainD < 45.0 ) {
+		if ( rainD < 45.0 && rainN > 0.0 ) {
 			float rainK = ( 1.0 - smoothstep( 12.0, 45.0, rainD ) ) * ( 1.0 - foam );
 			rs = rs * ( 1.0 - 0.4 * rainN * rainK ) + ( waterRainRing( vWaterL.xz, waterRingAt.xy, waterRingCells.xy, ${ RING_CELL[ 0 ] }, 1.4, 0.0, rainN ) + waterRainRing( vWaterL.xz + 0.27, waterRingAt.zw, waterRingCells.zw, ${ RING_CELL[ 1 ] }, 1.1, 3.7, rainN ) * 0.8 ) * 0.5 * rainK;
 		}
@@ -684,19 +748,38 @@ ${ lean ? '' : /* glsl */`
 				// real sea it meets the sky in the next wave's face, not the dark under the horizon (as the
 				// flash's lobe takes it, below)
 				.replace( '#include <envmap_physical_pars_fragment>', THREE.ShaderChunk.envmap_physical_pars_fragment.replace( REFLECT_RAY, REFLECT_RAY + '\n\t\t\treflectVec.y = abs( reflectVec.y );' ) )
+				.replace( '#include <lights_fragment_maps>', LIGHTS_MAPS )
 				.replace( '#include <lights_fragment_end>', /* glsl */`#include <lights_fragment_end>
 	// (M11) from under water, the underside's faint fill, not the sky's mirror
 	if ( ! gl_FrontFacing ) reflectedLight.indirectSpecular *= waterEnvUnder;
 	// ((M15) in a sea cave: the sky in it as much as there's sky over it, the sun's glint where the sun gets in)
 	reflectedLight.indirectSpecular *= sqrt( caveL.x );
-	reflectedLight.directSpecular *= smoothstep( 0.05, 0.4, caveL.x );` )
+	reflectedLight.directSpecular *= smoothstep( 0.05, 0.4, caveL.x );
+	// ((M16) a blow's sky is a sheet of cloud: no sun on its rough water to throw a glare off a whole wave's face)
+	reflectedLight.directSpecular *= 1.0 - 0.9 * smoothstep( 11.0, 20.0, seaDetailWindSpeed );` )
 				.replace( '#include <opaque_fragment>', /* glsl */`
 #ifdef WATER_REFRACT
 	if ( gl_FrontFacing ) {
 		// what's under the surface seen through it where the water's own colour leaves it visible,
 		// bent by the waves and ripples (more where it's deeper)
 		vec2 bend = ( viewMatrix * vec4( nP - vec3( 0.0, 1.0, 0.0 ), 0.0 ) ).xy * ( 0.08 * clamp( depth * 0.5, 0.0, 1.0 ) );
-		vec3 behind = texture2D( waterRefract, gl_FragCoord.xy / waterRefractSize + bend ).rgb;
+		vec4 seen = texture2D( waterRefract, gl_FragCoord.xy / waterRefractSize + bend );
+		// ((M16) a boat, by its height in the frame's alpha (SeenInWater): as much water as is in the way along the sight line, bent
+		// down at the surface, not the seabed's depth under her. The bend's less too, so she meets the surface at her waterline)
+		float seenDown = seen.a < ${ g( SEEN.plain ) } ? vWater.y - ( seen.a * ${ g( SEEN.span ) } - ${ g( SEEN.base ) } ) : - 1.0;
+		// (not what's over the water: past her bow, the ripples' bend catching her above it)
+		if ( seenDown > - 0.02 ) {
+			seenDown = max( seenDown, 0.0 );
+			vec3 seenEye = normalize( vWaterL - oceanLodView );
+			float seenPath = seenDown / sqrt( max( 1.0 - ( 1.0 - seenEye.y * seenEye.y ) * 0.5625, 0.04 ) );
+			vec4 seenNear = texture2D( waterRefract, gl_FragCoord.xy / waterRefractSize + bend * clamp( seenPath * 0.7, 0.0, 1.0 ) );
+			if ( seenNear.a < ${ g( SEEN.plain ) } ) seen = seenNear;
+			seen.rgb *= exp( - ( vec3( ${ WATER.k.map( ( v ) => g( + v.toFixed( 4 ) ) ).join( ', ' ) } ) + coastal * vec3( ${ WATER.murk.map( g ).join( ', ' ) } ) ) * seenPath );
+			diffuseColor.a = clamp( max( max( 1.0 - exp( - ${ g( WATER_SCATTER ) } * seenPath ), glow * 0.6 ), foam ), 0.0, 1.0 ) * sheetEdge;
+			waterBody = mix( body * waterLight, ${ rgb( 0.93, 0.96, 0.96 ) } * foamLight, foam * 0.92 ) + lampSum * 0.06 * ( 1.0 - foam );
+			waterBody = mix( waterBody, weedC * foamLight * 0.8, weed * 0.95 );
+		}
+		vec3 behind = seen.rgb;
 		gl_FragColor = vec4( waterBody * diffuseColor.a + totalSpecular * ( 1.0 - foam * 0.8 ) * sheetEdge + behind * ( 1.0 - diffuseColor.a ), 1.0 );
 	} else
 #endif
@@ -759,8 +842,12 @@ ${ lean ? '' : /* glsl */`
 
 		const F = this._finds, O = this.lod.origin, c = camera.position, near = F.near;
 		near.length = 0;
+		// ((M16) nor any wholly behind you: every pixel looks at each it's given)
+		const f = camera.getWorldDirection ? camera.getWorldDirection( _look ) : _look.set( 0, 0, 0 ), down = - c.y * f.y;
 		for ( const w of finds.weed ) {
 
+			const reach = w.width * 2.5 + WEED.edge * 2;
+			if ( ( w.x0 - c.x ) * f.x + ( w.z0 - c.z ) * f.z + down < - reach && ( w.x1 - c.x ) * f.x + ( w.z1 - c.z ) * f.z + down < - reach ) continue;
 			const ex = w.x1 - w.x0, ez = w.z1 - w.z0, L2 = ex * ex + ez * ez || 1;
 			const t = Math.min( 1, Math.max( 0, ( ( c.x - w.x0 ) * ex + ( c.z - w.z0 ) * ez ) / L2 ) );
 			const d = Math.hypot( c.x - w.x0 - ex * t, c.z - w.z0 - ez * t );
@@ -796,6 +883,15 @@ ${ lean ? '' : /* glsl */`
 		this.mesh.position.copy( O );
 		const fr = ( v ) => v - Math.floor( v );
 		this.rippleAt.value.set( fr( O.x * RIPPLE[ 0 ] ), fr( O.z * RIPPLE[ 0 ] ), fr( O.x * RIPPLE[ 1 ] ), fr( O.z * RIPPLE[ 1 ] ) );
+		// ((M16) a blow's rough water, the same in the wind's frame)
+		const rwd = G.windDir.value;
+		ROUGH.forEach( ( R, i ) => {
+
+			const c = Math.cos( R.turn ), n = Math.sin( R.turn ), dx = c * rwd.x - n * rwd.y, dz = n * rwd.x + c * rwd.y;
+			this.roughAt.value.setComponent( i * 2, fr( ( O.x * dx + O.z * dz ) / R.along ) );
+			this.roughAt.value.setComponent( i * 2 + 1, fr( ( - O.x * dz + O.z * dx ) / R.across ) );
+
+		} );
 		const [ a, b ] = RING_CELL;
 		this.ringAt.value.set( fr( O.x / a ) * a, fr( O.z / a ) * a, fr( O.x / b ) * b, fr( O.z / b ) * b );
 		this.ringCells.value.set( Math.floor( O.x / a ), Math.floor( O.z / a ), Math.floor( O.x / b ), Math.floor( O.z / b ) );

@@ -1,8 +1,8 @@
 import * as THREE from '../engine/index.js';
 import { WORLD } from '../world/WorldLayout.js';
-import { HOUSE } from '../world/boat/Wheelhouse.js';
 import { TUMBLE_H } from '../ocean/ShoreWaves.js';
 import { G } from '../core/Globals.js';
+import { updateSeat, sitDown } from '../world/boat/kayak/Seat.js';
 
 // (M13) The wind on someone standing in it: what it drives them along at (m/s) against their footing, in
 // wind U (m/s). A person's drag (1/2 rho Cd A U^2, Cd A about 0.7 m^2, 75 kg) is a fifth of their weight in a
@@ -26,7 +26,6 @@ export function windShove( U ) {
 export const SCRAMBLE = 0.06, SLOPE_BASE = 0.8;
 export const slopePace = ( grade ) => Math.max( SCRAMBLE, Math.exp( - 3.5 * ( Math.abs( grade + 0.05 ) - 0.05 ) ) );
 
-const HOUSE_HELM = { x: HOUSE.helmX, z: HOUSE.seatZ };
 
 const EYE = 1.62;
 const SWIM_EYE = EYE * 0.1; // eyes above the body's float point while swimming
@@ -107,6 +106,8 @@ export class Player {
 		// (M10) there's water to bail on your own boat's deck (Game.updateBail): the rail's "Jump overboard"
 		// makes way for the bucket
 		this.bailable = false;
+		// ((M16) and for the lobster traps, working at the hauler: game/TrapWork.js)
+		this.trapWork = false;
 		this.rideOffer = null; // { name, boat }: someone's boat you're next to, aboard it (together/Together.js)
 		this.reef = reef;
 		this.audio = audio;
@@ -134,6 +135,11 @@ export class Player {
 		this.under = false; // (Salt Life) the head under water
 		this.breath = BREATH; // s of breath left
 		this.breathMax = BREATH;
+		// ((M16) your dive kit (Gear.js, setDive), and the fighting chair you're strapped in: Rigs)
+		this.swimMul = 1;
+		this.airS = 0;
+		this.chair = null;
+		this.trollAt = 0;
 		this.breathPaused = false; // (the game: while a catch card is up, the world waits)
 		this.blackout = 0; // 1 while blacked out and floating up, then the gasp at the surface (s)
 		this.blackouts = 0; // how many times (the game notices a new one)
@@ -160,6 +166,7 @@ export class Player {
 		this.orbitYaw = 0;
 		this.orbitPitch = 0.22;
 		this.orbitDist = 13;
+		this.atHelm = null; // ((M16) which helm you've got: her tower's, on a boat with one)
 		this.helmHeld = false; // ((M15) the radio's panel is up at the helm, and has the E key: Radio.js)
 		this.helmYaw = 0;
 		this.helmPitch = - 0.05;
@@ -176,6 +183,11 @@ export class Player {
 		this._ashoreT = 0;
 		// set by the fishing game: while a line is out the helm / step ashore prompts give way
 		this.busy = false;
+		// (M16) on a ladder (world/boat/sportfisher/LadderClimb: still 'deck' to the rest of the game), how many times you've come
+		// off one (the game notices), and how long you're winded from it (s)
+		this.climbing = null;
+		this.falls = 0;
+		this.stunned = 0;
 
 	}
 
@@ -213,10 +225,12 @@ export class Player {
 
 		// ((M13) not on her cradle ashore)
 		if ( ! this.boat || this.boat.hauled ) return false;
-		const bp = this.boat.toWorld( this.boat.model.boardPoint, _v );
+		// ((M16) a boat can have you board from the water at one place: her ladder (Vessel.boardFrom))
+		const M = this.boat.model, from = M.boardFrom && M.boardFrom( this.mode );
+		const bp = this.boat.toWorld( from ? from.at : M.boardPoint, _v );
 		const d = Math.hypot( bp.x - this.position.x, bp.z - this.position.z );
 		const dy = Math.abs( bp.y - this.position.y );
-		return d < 4.2 && dy < 3.2;
+		return d < ( from ? from.reach : M.boardReach || 4.2 ) && dy < 3.2;
 
 	}
 
@@ -241,7 +255,12 @@ export class Player {
 
 		if ( this.mode === 'deck' ) {
 
-			this.updateDeck( dt );
+			// ((M16) a ladder's its own mode: up it, or off it)
+			if ( this.climbing ) {
+
+				if ( ! this.climbing.update( this, dt ) ) this.climbing = null;
+
+			} else this.updateDeck( dt );
 			return;
 
 		}
@@ -264,7 +283,8 @@ export class Player {
 
 		} else if ( this.nearBoat() && ! this.busy ) {
 
-			this.prompt = { key: 'E', text: 'Board boat' };
+			const M = this.boat.model, from = M.boardFrom && M.boardFrom( this.mode );
+			this.prompt = { key: 'E', text: from ? from.text : M.boardText || 'Board boat' };
 			if ( inp.hit( 'KeyE' ) ) {
 
 				this.boardBoat();
@@ -527,7 +547,7 @@ export class Player {
 		// sooner: world/Fish.js), still brisk going down or coming up
 		const stalking = this.stalk && ! this.floating;
 		const level = wish.lengthSq() > 1e-4 ? Math.abs( wish.y ) / wish.length() : 0;
-		const speed = this.blackout === 1 ? 0.9 : sprint ? 2.5 : stalking ? 0.7 + 0.8 * Math.min( 1, level * 1.5 ) : 1.5;
+		const speed = this.blackout === 1 ? 0.9 : ( sprint ? 2.5 : stalking ? 0.7 + 0.8 * Math.min( 1, level * 1.5 ) : 1.5 ) * this.swimMul;
 		const k = 1 - Math.exp( - dt * 3.0 );
 		this.velocity.lerp( wish.multiplyScalar( speed ), k );
 
@@ -642,6 +662,17 @@ export class Player {
 
 	}
 
+	// (M16) what your dive kit does: faster through the water, a longer breath, a tank's air
+	setDive( { swimMul = 1, breathS = BREATH, airS = 0 } ) {
+
+		const was = this.breathMax;
+		this.swimMul = swimMul;
+		this.airS = airS;
+		this.breathMax = airS > 0 ? airS : breathS;
+		if ( this.breathMax !== was ) this.breath = this.breathMax;
+
+	}
+
 	// (Salt Life) the held breath: it runs down with the head under water (faster kicking hard, slower
 	// keeping still) and comes back at the surface. Out of it: a blackout (the swimmer floats up), then
 	// a few breaths at the surface before the next dive
@@ -652,7 +683,9 @@ export class Player {
 
 			if ( this.breathPaused ) return;
 			const rate = sprint ? 1.8 : this.velocity.lengthSq() < 0.09 ? 0.7 : 1;
-			this.breath = Math.max( 0, this.breath - dt * rate );
+			// ((M16) on a tank you breathe air at the pressure you're at, one atmosphere more each 10 m)
+			const air = this.airS > 0 ? 1 + Math.max( 0, ( this.waterMean ?? this.waterH ?? 0 ) - this.position.y ) / 10 : 1;
+			this.breath = Math.max( 0, this.breath - dt * rate * air );
 			if ( this.breath === 0 && this.blackout === 0 ) {
 
 				this.blackout = 1;
@@ -663,7 +696,8 @@ export class Player {
 
 		} else {
 
-			this.breath = Math.min( BREATH, this.breath + dt * BREATH / BREATH_BACK );
+			// ((M16) a tank doesn't fill up by itself: game/Tanks.js)
+			if ( ! ( this.airS > 0 ) ) this.breath = Math.min( this.breathMax, this.breath + dt * this.breathMax / BREATH_BACK );
 			if ( this.blackout === 1 ) this.blackout = 1 + GASP;
 			else if ( this.blackout > 1 ) this.blackout = Math.max( 0, this.blackout - dt ) || 0;
 			if ( this.blackout > 0 && this.blackout <= 1 ) this.blackout = 0;
@@ -675,7 +709,7 @@ export class Player {
 	// ------------------------------------------------------------------ boat
 
 	// (Salt Life) aboard someone else's boat (together/Together.js: a stand-in with the boat's shape and
-	// their boat's pose): on its deck while they drive; you can't take their helm
+	// their boat's pose): on its deck while they drive; (M16) their helm yours if they're aboard and away from it
 	ride( boat ) {
 
 		this.boat = boat;
@@ -695,9 +729,17 @@ export class Player {
 	// step aboard from the pier / beach / water: onto the cockpit sole at the boarding point
 	boardBoat() {
 
-		const b = this.boat;
+		const b = this.boat, from = b.model.boardFrom && b.model.boardFrom( this.mode );
+		// ((M16) sat in, not walked about: there's only the seat)
+		if ( b.model.seated ) {
+
+			if ( b.model.board( b, this ) ) this.takeHelm();
+			return;
+
+		}
+
 		this.mode = 'deck';
-		this.deckPos.copy( b.model.boardPoint );
+		this.deckPos.copy( from ? from.at : b.model.boardPoint );
 		this.deckVel.set( 0, 0, 0 );
 		// keep looking where you looked (relative to the boat)
 		this.deckYaw = this.yaw - ( b.getYaw() + Math.PI );
@@ -710,9 +752,11 @@ export class Player {
 
 	}
 
-	// sit down at the helm and drive (the old "enter boat")
-	takeHelm() {
+	// sit down at the helm and drive (the old "enter boat"). ((M16) helm: which, on a boat of two: Vessel.helmAt)
+	takeHelm( helm = this.boat.model.helm ) {
 
+		if ( this.boat.model.seated && this.mode !== 'boat' ) sitDown( this );
+		this.atHelm = this.boat.model.helmInUse = helm;
 		this.mode = 'boat';
 		this.boat.driven = true;
 		this.boat.moored = false;
@@ -720,7 +764,7 @@ export class Player {
 		this.helmPitch = - 0.05;
 		this.orbitYaw = this.boat.getYaw() + Math.PI;
 		this.camInit = false;
-		if ( this.audio ) this.audio.engineStart();
+		if ( this.audio && ! this.boat.model.seated ) this.audio.engineStart();
 
 	}
 
@@ -731,7 +775,8 @@ export class Player {
 		b.driven = false;
 		b.throttle = 0;
 		this.mode = 'deck';
-		this.deckPos.set( HOUSE_HELM.x + 0.45, b.model.lines.deckY, HOUSE_HELM.z - 0.1 );
+		const helm = this.atHelm || b.model.helm;
+		this.deckPos.set( helm.rise[ 0 ], helm.y ?? b.model.lines.deckY, helm.rise[ 1 ] );
 		this.deckVel.set( 0, 0, 0 );
 		this.deckYaw = this.helmYaw;
 		this.pitch = this.helmPitch;
@@ -760,8 +805,8 @@ export class Player {
 		// the exit point closest to something walkable (pier deck / sand)
 		let best = side ? null : this.ashoreTarget();
 
-		const dock = WORLD.boatDock.position;
-		if ( ! this.riding && b.position.distanceTo( dock ) < 14 && b.speed < 1.5 ) {
+		// ((M16) someone else's has no berth of yours: she's theirs to make fast)
+		if ( ! this.riding && b.position.distanceTo( b.berth.position ) < 14 && b.speed < 1.5 ) {
 
 			b.moored = true;
 			b.mooring.anchor.set( b.position.x, 0, b.position.z );
@@ -777,19 +822,22 @@ export class Player {
 
 		} else {
 
-			const w = b.toWorld( new THREE.Vector3( 2.2 * ( side || 1 ), 0, 0 ), new THREE.Vector3() );
+			// ((M16) a boat can say where you go in from where you stand: Vessel.overboard)
+			const over = b.model.overboard && b.model.overboard( this.deckPos, side || 1 );
+			const w = b.toWorld( over ? over.at : new THREE.Vector3( ( b.model.overSide || 2.2 ) * ( side || 1 ), 0, 0 ), new THREE.Vector3() );
 			// (the boat floats at the water line: the walker's water height is stale while aboard)
 			this.waterH = this.waterMean = b.position.y;
 			this.position.set( w.x, b.position.y - 0.2, w.z );
 			this.mode = 'swim';
-			if ( this.audio ) this.audio.splash( 0.8, this.position );
+			if ( this.audio && ! ( over && over.quiet ) ) this.audio.splash( 0.8, this.position );
 
 		}
 
 		this.velocity.set( 0, 0, 0 );
 		this.yaw = b.getYaw() + Math.PI;
 		this._camY = null;
-		if ( this.audio && wasDriving ) this.audio.engineStop();
+		if ( this.audio && wasDriving && ! b.model.seated ) this.audio.engineStop();
+		if ( b.model.seated ) this.orbitDist = 13; // ((M16) the chase camera, as the other boats have it)
 		if ( this.riding ) this.unride();
 
 	}
@@ -797,7 +845,9 @@ export class Player {
 	// best walkable spot next to the boat (pier deck / sand / shallows), or null. Looks straight out
 	// from the rail at each exit point (square to the hull, a few reaches: the boat swings on its
 	// mooring) for ground from a little below the rail up to a pier deck a climb above it.
-	ashoreTarget() {
+	// ((M16) near: from the rail you're at, feet in her frame. She bobs, and which rail's best with it: what's on offer where
+	// you stand mustn't flip to over the side as she does)
+	ashoreTarget( near = null ) {
 
 		const b = this.boat;
 		const water = this.query.cpuValid ? this.query.cpu[ 0 ] : G.seaLevel.value;
@@ -807,6 +857,7 @@ export class Player {
 		let best = null, bestScore = Infinity;
 		for ( const ep of b.model.exitPoints ) {
 
+			if ( near && ( Math.hypot( near.x - ep.x, near.z - ep.z ) >= 1.3 || Math.abs( near.y - ep.y ) >= 1.4 ) ) continue;
 			const w = b.toWorld( ep, new THREE.Vector3() );
 			const sgn = Math.sign( ep.x ) || 1;
 			for ( const reach of [ 0.9, 1.4, 2.0 ] ) {
@@ -838,6 +889,13 @@ export class Player {
 
 	}
 
+	// (M16) the look from the deck base (your pitch, and your heading in her frame)
+	deckLook() {
+
+		return _qa.setFromEuler( _e.set( this.pitch, this.deckYaw, 0 ) );
+
+	}
+
 	// world position / heading of the player from the deck state (feet)
 	deckToWorld() {
 
@@ -850,9 +908,9 @@ export class Player {
 	// highest walkable box top under the point (boat frame), not above maxY; the sole otherwise
 	deckGroundAt( x, z, maxY ) {
 
-		const L = this.boat.model.lines;
-		let g = L.deckY;
-		for ( const c of this.boat.model.colliders ) {
+		const M = this.boat.model;
+		let g = M.soleY( x, z, maxY );
+		for ( const c of M.colliders ) {
 
 			if ( ! c.walkable ) continue;
 			if ( Math.abs( x - c.center.x ) > c.half.x || Math.abs( z - c.center.z ) > c.half.z ) continue;
@@ -869,6 +927,8 @@ export class Player {
 
 		const inp = this.input;
 		const b = this.boat;
+		// ((M16) a kayak has no deck: a tow or a rescue has got you up out of her seat)
+		if ( b.model.seated ) return b.model.setDown( b, this );
 		this.breathe( dt, false, false );
 		const L = b.model.lines;
 		const look = inp.consumeLook();
@@ -886,7 +946,9 @@ export class Player {
 		if ( inp.down( 'KeyA' ) ) _wish.sub( _right );
 		if ( inp.move ) _wish.addScaledVector( _fwd, inp.move.y ).addScaledVector( _right, inp.move.x );
 		if ( _wish.lengthSq() > 1 ) _wish.normalize();
-		const speed = ( inp.down( 'ShiftLeft' ) ? 2.6 : 1.6 );
+		// ((M16) winded from a fall, you go slowly a while)
+		if ( this.stunned > 0 ) this.stunned -= dt;
+		const speed = ( inp.down( 'ShiftLeft' ) ? 2.6 : 1.6 ) * ( this.stunned > 0 ? 0.3 : 1 );
 		const k = 1 - Math.exp( - 12 * dt );
 		const v = this.deckVel;
 		v.x += ( _wish.x * speed - v.x ) * k;
@@ -900,7 +962,9 @@ export class Player {
 
 		v.y -= 9.81 * dt;
 		const p = this.deckPos;
-		const oldX = p.x, oldZ = p.z;
+		const oldX = p.x, oldY = p.y, oldZ = p.z;
+		// ((M16) a step's measured from where your feet were: a frame's fall mustn't take it out of reach, more of it the slower the frame)
+		const stepFrom = Math.max( p.y, p.y + v.y * dt ) + DECK_STEP;
 		p.addScaledVector( v, dt );
 
 		// walls: push out of the solid boxes you can't step onto (boat frame, axis aligned)
@@ -908,7 +972,7 @@ export class Player {
 
 			if ( ! c.solid ) continue;
 			const top = c.center.y + c.half.y, bot = c.center.y - c.half.y;
-			if ( top <= p.y + DECK_STEP || bot >= p.y + HEIGHT ) continue;
+			if ( top <= stepFrom || bot >= p.y + HEIGHT ) continue;
 			const ex = c.half.x + DECK_RADIUS, ez = c.half.z + DECK_RADIUS;
 			const dx = p.x - c.center.x, dz = p.z - c.center.z;
 			if ( Math.abs( dx ) >= ex || Math.abs( dz ) >= ez ) continue;
@@ -919,11 +983,20 @@ export class Player {
 		}
 
 		// stay inside the hull (the bulwarks, plus a margin fore and aft)
-		p.z = THREE.MathUtils.clamp( p.z, L.zAft + L.shell + DECK_RADIUS, 4.0 );
-		const halfIn = Math.max( 0.15, L.halfBreadth( L.tAtSheerZ( p.z ), Math.max( p.y, L.deckY ) ) - L.shell - DECK_RADIUS );
-		p.x = THREE.MathUtils.clamp( p.x, - halfIn, halfIn );
+		// ((M16) by the height of the deck you're on: a slow device's frame of falling isn't the level below, and its narrower walls
+		// would put you off the edge of where you stand)
+		const fell = p.y, stood = p.y = Math.max( fell, oldY );
+		b.model.clampToDeck( p, DECK_RADIUS );
+		if ( p.y === stood ) p.y = fell;
+		// ((M16) strapped in the fighting chair: you turn your head, and that's all)
+		if ( this.chair ) {
 
-		const g = this.deckGroundAt( p.x, p.z, p.y + DECK_STEP );
+			p.set( this.chair.eye.x, this.chair.eye.y - EYE, this.chair.eye.z );
+			v.set( 0, 0, 0 );
+
+		}
+
+		const g = this.chair ? p.y : this.deckGroundAt( p.x, p.z, stepFrom );
 		if ( p.y <= g ) {
 
 			p.y = g;
@@ -941,7 +1014,7 @@ export class Player {
 			if ( this.stepDist > 0.6 ) {
 
 				this.stepDist = 0;
-				if ( this.audio ) this.audio.footstep( 'wood' );
+				if ( this.audio ) this.audio.footstep( b.model.footstep );
 
 			}
 
@@ -950,13 +1023,14 @@ export class Player {
 		this.deckToWorld();
 
 		// prompts: take the helm, or step ashore
-		const hx = HOUSE_HELM.x, hz = HOUSE_HELM.z;
-		const nearHelm = Math.hypot( p.x - hx, p.z - hz ) < HELM_REACH && ! this.busy && ! this.riding;
+		// ((M16) on a boat of several decks, on the helm's deck, and on one of two helms, the one you're at)
+		const nearHelm = ! this.busy && ( ! this.riding || b.helmFree ) && b.model.helmAt( p, HELM_REACH ); // ((M16) a crew's)
+		const ladder = ! this.busy && ! nearHelm && b.model.ladderAt( p );
 		this._ashoreT -= dt;
 		if ( this._ashoreT <= 0 ) {
 
 			this._ashoreT = 0.25;
-			this._ashore = b.speed < 2.5 ? this.ashoreTarget() : null;
+			this._ashore = b.speed < 2.5 ? this.ashoreTarget( p ) : null;
 
 		}
 
@@ -965,7 +1039,17 @@ export class Player {
 			this.prompt = { key: 'E', text: 'Take the helm' };
 			if ( inp.hit( 'KeyE' ) ) {
 
-				this.takeHelm();
+				this.takeHelm( nearHelm );
+				return;
+
+			}
+
+		} else if ( ladder ) {
+
+			this.prompt = { key: 'E', text: ladder.top ? ladder.ladder.downText : ladder.ladder.text };
+			if ( inp.hit( 'KeyE' ) ) {
+
+				this.climbing = b.model.climb( ladder );
 				return;
 
 			}
@@ -974,8 +1058,8 @@ export class Player {
 
 			// at the rail: step ashore where there is ground on that side, else jump into the sea
 			const ep = this._ashore && this._ashore.ep;
-			const atRail = b.model.exitPoints.some( ( e ) => Math.hypot( p.x - e.x, p.z - e.z ) < 1.3 );
-			if ( ep && Math.hypot( p.x - ep.x, p.z - ep.z ) < 1.3 ) {
+			const atRail = b.model.exitPoints.some( ( e ) => Math.hypot( p.x - e.x, p.z - e.z ) < 1.3 && Math.abs( p.y - e.y ) < 1.4 );
+			if ( ep && Math.hypot( p.x - ep.x, p.z - ep.z ) < 1.3 && Math.abs( p.y - ep.y ) < 1.4 ) {
 
 				this.prompt = { key: 'E', text: 'Step ashore' };
 				if ( inp.hit( 'KeyE' ) ) {
@@ -985,9 +1069,10 @@ export class Player {
 
 				}
 
-			} else if ( atRail && ! this.bailable ) {
+			} else if ( atRail && ! this.bailable && ! this.trapWork ) {
 
-				this.prompt = { key: 'E', text: 'Jump overboard' };
+				const over = b.model.overboard && b.model.overboard( p, Math.sign( p.x ) || 1 );
+				this.prompt = { key: 'E', text: over && over.text ? over.text : 'Jump overboard' };
 				if ( inp.hit( 'KeyE' ) ) {
 
 					this.exitBoat( null, Math.sign( p.x ) || 1 );
@@ -1000,7 +1085,7 @@ export class Player {
 		}
 
 		// camera: eye above the feet, following the boat's motion
-		const eyeL = _v.set( p.x, p.y + EYE + Math.sin( this.bob ) * 0.02, p.z );
+		const eyeL = _v.set( p.x, p.y + ( this.stunned > 0 ? EYE * ( 1 - 0.45 * Math.min( 1, this.stunned ) ) : EYE ) + Math.sin( this.bob ) * 0.02, p.z );
 		b.toWorld( eyeL, this.camera.position );
 		this._camY = this.camera.position.y;
 		this.deckBase( _q );
@@ -1012,6 +1097,14 @@ export class Player {
 
 		const inp = this.input;
 		const b = this.boat;
+		// ((M16) a seat and a paddle, not a helm: kayak/Seat.js)
+		if ( b.model.seated ) {
+
+			updateSeat( this, dt );
+			return;
+
+		}
+
 		this.breathe( dt, false, false );
 		const look = inp.consumeLook();
 		const wheel = inp.consumeWheel();
@@ -1039,18 +1132,21 @@ export class Player {
 
 		}
 
+		// ((M16) lines out: forward's held at the baits' speed unless you're running: Rigs' trollAt, knots)
+		if ( this.trollAt > 0 && throttle > 0 && ! inp.down( 'ShiftLeft' ) ) throttle = Math.min( throttle, THREE.MathUtils.clamp( 0.3 + ( this.trollAt - b.speed * 1.944 ) * 0.2, 0, 1 ) );
 		b.setInput( throttle, steer, dt );
-		this.prompt = { key: 'E', text: this.helmHeld ? 'Close the radio' : 'Leave helm   ·   V  camera   ·   R  radio' };
+		this.prompt = { key: 'E', text: this.helmHeld ? 'Close the radio' : this.riding ? 'Leave helm   ·   V  camera' : 'Leave helm   ·   V  camera   ·   R  radio' };
 
 		// keep the player attached (for audio / queries)
-		b.toWorld( b.model.helmEye, this.position );
+		const helmEye = this.atHelm?.eye || b.model.helmEye;
+		b.toWorld( helmEye, this.position );
 		this.position.y -= EYE;
 
 		if ( this.camMode === 'first' ) {
 
 			this.helmYaw = THREE.MathUtils.clamp( this.helmYaw - look.x * 0.0022, - 2.2, 2.2 );
 			this.helmPitch = THREE.MathUtils.clamp( this.helmPitch - look.y * 0.0022, - 1.2, 1.0 );
-			const eye = b.toWorld( b.model.helmEye, new THREE.Vector3() );
+			const eye = b.toWorld( helmEye, new THREE.Vector3() );
 			this.camera.position.copy( eye );
 			// head partially stabilises against roll and pitch (feels natural, less nausea)
 			const boatQ = b.quaternion;

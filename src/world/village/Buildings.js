@@ -43,7 +43,7 @@ function frameFns( terrain, x, z, yaw ) {
 // (ctx.thatchHoles: 'thatch'): a ragged patch of it, any width, stripped from an eave up, its battens and
 // rafters beneath.)
 const SHEET = 0.84;
-function roofHoles( ctx, slabs, name, inside = 0.5, thatch = false ) {
+export function roofHoles( ctx, slabs, name, inside = 0.5, thatch = false ) {
 
 	const list = thatch ? ctx.thatchHoles : ctx.holes;
 	if ( ! list || ! slabs.length ) return;

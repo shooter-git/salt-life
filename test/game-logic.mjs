@@ -1,4 +1,5 @@
 // Plain-node tests of the fishing game logic (no GPU): bites, the catch fight, inventory, save.
+import { LOBSTER_HANDLING } from '../src/world/boat/Handling.js';
 import { FISH, FISH_IDS, CARAPACE, fishValue, fishLengthCm, fishWeightKg, spearRule, isTrophy } from '../src/game/FishTable.js';
 import { habitatAt, pickSpecies, rollWeight, biteDelay, lampsLit, weatherMood } from '../src/game/Bites.js';
 import { weatherAt, SOUTHERLY } from '../src/game/Weather.js';
@@ -9,6 +10,14 @@ import { gearStats, defaultUpgrades, UPGRADES, TOW, towFee } from '../src/game/G
 import { BoatController } from '../src/player/BoatController.js';
 import { G } from '../src/core/Globals.js';
 import { Vector3, Group, Scene, PerspectiveCamera } from '../src/engine/index.js';
+// (M16: a new game starts in the kayak; what's tested here is a game in the lobster boat)
+const lobsterStart = ( st ) => {
+
+	st.fleet = { lobster: st.fleet.kayak };
+	st.boat = 'lobster';
+	return st;
+
+};
 
 let fails = 0;
 const ok = ( c, msg ) => {
@@ -47,7 +56,7 @@ ok( biteDelay( habitatAt( spots.sand ), 12, rng ) === Infinity, 'no bite delay o
 {
 
 	let deepOnly = 0;
-	for ( let i = 0; i < 500; i ++ ) if ( [ 'tuna', 'mahi', 'redSnapper', 'grouper', 'barracuda', 'blackGrouper', 'muttonSnapper', 'lionfish', 'silkSnapper', 'cuberaSnapper', 'goliathGrouper' ].includes( pickSpecies( habitatAt( spots.deep ), 12, rng ) ) ) deepOnly ++;
+	for ( let i = 0; i < 500; i ++ ) if ( [ 'sailfish', 'tuna', 'mahi', 'redSnapper', 'grouper', 'barracuda', 'blackGrouper', 'muttonSnapper', 'lionfish', 'silkSnapper', 'cuberaSnapper', 'goliathGrouper' ].includes( pickSpecies( habitatAt( spots.deep ), 12, rng ) ) ) deepOnly ++;
 	ok( deepOnly === 500, 'deep water gives offshore species only' );
 	// (Salt Life) the red snapper is a fish of the deep ledges only; the mangrove snapper of the pier
 	let redInshore = 0, grayPier = 0;
@@ -414,7 +423,7 @@ ok( fight( 'tarpon', 35, policies.careful, 50, 2.2 ).st === 'caught', 'the top l
 // ---- inventory, wallet, save round trip
 const mem = new Map();
 const storage = { getItem: ( k ) => mem.get( k ) ?? null, setItem: ( k, v ) => mem.set( k, v ) };
-const s = new GameState( storage );
+const s = lobsterStart( new GameState( storage ) );
 ok( s.stats.holdKg === 30, 'cooler holds 30 kg' );
 const a = s.addFish( 'grunt', 0.84, 9.5 );
 const b = s.addFish( 'yellowtail', 1.31, 10 );
@@ -436,14 +445,14 @@ ok( s2.addFish( 'grunt', 0.5 ).id > b.id, 'ids keep counting after a load' );
 
 		const f = FISH[ id ];
 		const lo = fishLengthCm( id, f.kg[ 0 ] ), hi = fishLengthCm( id, f.kg[ 1 ] );
-		if ( ! ( lo > 5 && hi < 200 && hi > lo && typeof f.sci === 'string' ) ) sane = false;
+		if ( ! ( lo > 5 && hi < ( f.release || id === 'swordfish' ? 520 : 210 ) && hi > lo && typeof f.sci === 'string' ) ) sane = false; // ((M16) a billfish's bill and tail: m16-fish.mjs has their sizes)
 
 	}
 
-	ok( sane, 'every species has a scientific name and a plausible, increasing length (5–200 cm)' );
+	ok( sane, 'every species has a scientific name and a plausible, increasing length (5–210 cm, to 5 m with a bill)' );
 	ok( Math.abs( fishLengthCm( 'mahi', 10 ) - 108 ) < 3 && Math.abs( fishLengthCm( 'grunt', 0.84 ) - 36 ) < 2, 'length-weight: a 10 kg mahi ~108 cm, a 0.84 kg grunt ~36 cm' );
 	const m = new Map();
-	const st = new GameState( { getItem: ( k ) => m.get( k ) ?? null, setItem: ( k, v ) => m.set( k, v ) } );
+	const st = lobsterStart( new GameState( { getItem: ( k ) => m.get( k ) ?? null, setItem: ( k, v ) => m.set( k, v ) } ) );
 	const c1 = st.addFish( 'jack', 3.2 ), i1 = st.lastCatch;
 	ok( c1 && i1.newSpecies && ! i1.record && c1.cm === i1.cm && i1.cm > 50, 'first of a species: new species, not a record, length stored' );
 	st.addFish( 'jack', 2.1 );
@@ -482,7 +491,7 @@ ok( Object.keys( defaultUpgrades() ).length === Object.keys( UPGRADES ).length &
 {
 
 	const m = new Map();
-	const st = new GameState( { getItem: ( k ) => m.get( k ) ?? null, setItem: ( k, v ) => m.set( k, v ) } );
+	const st = lobsterStart( new GameState( { getItem: ( k ) => m.get( k ) ?? null, setItem: ( k, v ) => m.set( k, v ) } ) );
 	st.money = 100;
 	ok( st.buy( 'reel' ) && st.upgrades.reel === 1 && st.money === 10 && st.stats.reelSpeed === 1.6, 'buying the reel upgrade' );
 	ok( st.buy( 'reel' ) === null && st.upgrades.reel === 1, 'cannot buy what you cannot afford' );
@@ -512,7 +521,7 @@ ok( Object.keys( defaultUpgrades() ).length === Object.keys( UPGRADES ).length &
 
 		const n = 24, hullSamples = [];
 		for ( let i = 0; i < n; i ++ ) hullSamples.push( { position: new Vector3( ( i % 4 ) * 0.8 - 1.2, - 0.4, Math.floor( i / 4 ) * 1.3 - 3.3 ), area: 0.325 } );
-		const model = { hydro: {}, hullSamples, propeller: new Vector3( 0, - 0.6, - 3.3 ), rudder: new Vector3( 0, - 0.5, - 3.6 ), group: new Group(), setThrottle() {}, setSteering() {}, setPropellerRPM() {} };
+		const model = { hydro: { suggestedMass: 3200, centerOfMass: new Vector3( 0, 0.3, - 0.74 ), centerOfBuoyancy: new Vector3( 0, 0, - 0.74 ), inertia: new Vector3( 14600, 15700, 3500 ) }, handling: LOBSTER_HANDLING, lines: { sheerY: () => 1.2, sheerZ: () => 4.25 }, hullSamples, propeller: new Vector3( 0, - 0.6, - 3.3 ), rudder: new Vector3( 0, - 0.5, - 3.6 ), group: new Group(), setThrottle() {}, setSteering() {}, setPropellerRPM() {} };
 		const query = { allocate: () => 0, latency: 0, setPoint() {}, cpuValid: true, version: 1, resultTime: 0, cpu: new Float32Array( n * 4 ), resultInputs: new Float32Array( n * 4 ) };
 		const b = new BoatController( { model, query, terrain: { heightAt: () => - 10 }, colliders: null } );
 		b.moored = false;
@@ -612,7 +621,7 @@ ok( Object.keys( defaultUpgrades() ).length === Object.keys( UPGRADES ).length &
 	const lv = UPGRADES.lobster.levels, g0 = gearStats( defaultUpgrades() );
 	ok( g0.lobster === 0 && lv[ 1 ].cost > 0 && lv[ 2 ].cost > lv[ 1 ].cost && lv[ 2 ].tickleM > lv[ 1 ].tickleM && lv[ 2 ].coaxS < lv[ 1 ].coaxS, 'lobster gear at Marta\'s: none to start; a tickle stick and net; a longer stick that coaxes them out quicker' );
 	const m = new Map();
-	const st = new GameState( { getItem: ( k ) => m.get( k ) ?? null, setItem: ( k, v ) => m.set( k, v ) } );
+	const st = lobsterStart( new GameState( { getItem: ( k ) => m.get( k ) ?? null, setItem: ( k, v ) => m.set( k, v ) } ) );
 	st.money = 500;
 	ok( st.buy( 'lobster' ) && st.stats.lobster === 1 && st.stats.tickleM === lv[ 1 ].tickleM && st.stats.coaxS === lv[ 1 ].coaxS, 'buying the lobster gear' );
 	const kg = fishWeightKg( 'lobster', 30 );

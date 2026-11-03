@@ -1,4 +1,4 @@
-import { hash, towardOf, weatherAt, edgeAt } from './Weather.js';
+import { hash, towardOf, weatherAt, edgeAt, lastHurricane } from './Weather.js';
 
 // (M15) Something to find out there: weedlines, floating debris and birds working bait, placed about you
 // as you go and drifting, from where they are and the island's time alone (as the weather is), so everyone
@@ -24,6 +24,10 @@ import { hash, towardOf, weatherAt, edgeAt } from './Weather.js';
 //   findsAbout( T, x, z, range, out ) -> { weed: [ { x0, z0, x1, z1, width, life, n } ],
 //     debris: [ { x, z, kind, size, yaw, life, n } ], bait: [ { x, z, r, life, n } ] }   (world m; life 0..1)
 //   (depthAt( x, z ): the sea's depth there (m), for the bait over the drop-off; optional)
+// (M16) And in a hurricane's wake (hurricaneWake( T, pick, since ): optional, the last argument): what it tore off the
+// islands and the coasts adrift offshore, for some days after it's passed (a storm's wreckage goes on drifting long
+// after, and the mahi gather under anything floating): in `wake.chance` of the cells, a raft of a few pieces lying
+// close together, each with storm: 1 (the others 0), and their life by the days since (`wake.in`, `wake.out`).
 
 export const FINDS = {
 	cell: 2000,
@@ -38,6 +42,7 @@ export const FINDS = {
 	// the terns working it keep within reach of where they nest; the drift's fewer for less of the island's
 	// own wood; the weed's the ocean's, as much out there as anywhere
 	far: { weed: 1, debris: 0.6, bait: 0.3 },
+	wake: { chance: 0.55, pieces: [ 3, 5 ], spread: 45, kinds: [ 'log', 'log', 'plank', 'pallet', 'crate', 'plank' ], size: 1.5, in: 8, out: [ 6 * 24, 11 * 24 ] },
 };
 export const DEBRIS_SIZE = { log: [ 3, 6 ], plank: [ 1.6, 2.6 ], pallet: [ 1.2, 1.2 ], crate: [ 0.6, 0.9 ], float: [ 0.3, 0.5 ] };
 
@@ -108,8 +113,17 @@ function weedField( T, id, i, j, W, C ) {
 
 }
 
+// (M16) the wake of the last hurricane at island time T, or null: { start: when it's passed the far grounds, id }
+// (as the weather goes: pick, since: Weather's)
+export function hurricaneWake( T, pick = null, since = 0 ) {
+
+	const h = lastHurricane( T, FINDS.wake.out[ 1 ], pick, since );
+	return h && h.ends < T ? { start: h.ends, id: h.tc | 0 } : null;
+
+}
+
 const OUT = { weed: [], debris: [], bait: [] };
-export function findsAbout( T, x, z, range = 3000, out = OUT, depthAt = null ) {
+export function findsAbout( T, x, z, range = 3000, out = OUT, depthAt = null, wake = null ) {
 
 	const C = FINDS, W = C.weed, D = C.debris, B = C.bait;
 	let nw = 0, nd = 0, nb = 0;
@@ -155,7 +169,33 @@ export function findsAbout( T, x, z, range = 3000, out = OUT, depthAt = null ) {
 					const kind = D.kinds[ Math.floor( h( 3 ) * D.kinds.length ) ], S = DEBRIS_SIZE[ kind ];
 					const q = out.debris[ nd ] || ( out.debris[ nd ] = {} );
 					nd ++;
-					q.x = px; q.z = pz; q.kind = kind; q.size = lerp( S[ 0 ], S[ 1 ], h( 4 ) ); q.yaw = h( 5 ) * Math.PI * 2; q.life = life; q.n = n | 0;
+					q.x = px; q.z = pz; q.kind = kind; q.size = lerp( S[ 0 ], S[ 1 ], h( 4 ) ); q.yaw = h( 5 ) * Math.PI * 2; q.life = life; q.n = n | 0; q.storm = 0;
+
+				}
+
+			}
+
+		}
+
+		// ---- (M16) a hurricane's wreckage: a raft of pieces in this cell, for the days after it's passed
+		if ( wake ) {
+
+			const K = C.wake, age = T - wake.start, n = Math.imul( id, 43 ) + wake.id;
+			const h = ( k ) => hash( n, 0x8200 + k );
+			const worn = sstep( 0, K.in, age ) * ( 1 - sstep( K.out[ 0 ], K.out[ 1 ], age ) );
+			if ( worn > 0 && h( 0 ) < K.chance ) {
+
+				const mx = cx + ( h( 1 ) - 0.5 ) * C.cell * 0.8, mz = cz + ( h( 2 ) - 0.5 ) * C.cell * 0.8;
+				const count = K.pieces[ 0 ] + Math.floor( h( 3 ) * ( K.pieces[ 1 ] - K.pieces[ 0 ] + 1 ) );
+				for ( let k = 0; k < count; k ++ ) {
+
+					const g = ( j ) => h( 10 + k * 7 + j );
+					const px = mx + ( g( 0 ) - 0.5 ) * K.spread * 2, pz = mz + ( g( 1 ) - 0.5 ) * K.spread * 2, life = worn * away( px, pz );
+					if ( life <= 0 ) continue;
+					const kind = K.kinds[ Math.floor( g( 2 ) * K.kinds.length ) ], S = DEBRIS_SIZE[ kind ];
+					const q = out.debris[ nd ] || ( out.debris[ nd ] = {} );
+					nd ++;
+					q.x = px; q.z = pz; q.kind = kind; q.size = lerp( S[ 0 ], S[ 1 ], g( 3 ) ) * ( kind === 'log' ? K.size : 1 ); q.yaw = g( 4 ) * Math.PI * 2; q.life = life; q.n = ( n * 8 + k + 1 ) | 0; q.storm = 1;
 
 				}
 

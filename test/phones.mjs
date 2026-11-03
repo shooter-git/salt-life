@@ -3,7 +3,7 @@
 //
 //   node test/phones.mjs
 
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { G } from '../src/core/Globals.js';
 import { TerrainData } from '../src/world/TerrainData.js';
 import { decodeIsland } from '../src/world/terrain/IslandDecode.js';
@@ -105,9 +105,30 @@ const check = ( ok, what ) => {
 	check( bake.rgba === null && bake.H === null, 'a sheet holds nothing until its turn to bake comes' );
 	const App = readFileSync( new URL( '../src/App.js', import.meta.url ), 'utf8' );
 	check( /_masksBefore\.clear\(\)/.test( App ), 'what the cuts changed in the masks let go with them: it was holding them all' );
-	check( /const SETTLED = 100 \* 1048576/.test( App ) && ( App.match( /this\.cpuGL && this\.settle\(\)/g ) || [] ).length >= 4, 'the late stages wait for script memory to come down' );
+	check( /const SETTLED = 75 \* 1048576/.test( App ) && ( App.match( /this\.cpuGL && this\.settle\(\)/g ) || [] ).length >= 4, 'the late stages wait for script memory to come down' );
 	const map = readFileSync( new URL( '../src/game/Minimap.js', import.meta.url ), 'utf8' );
 	check( /b\.H = b\.S = null/.test( map ) && /cpuGL \? 10 : 1/.test( map ), 'a sheet\'s buffers go as it\'s done, and quickly where frames are long' );
+	// (M16) one character past Latin-1 in the script's text and the browser holds all of it in two bytes a character:
+	// 3.4 MB (core/Glyphs.js has them; the veil's and the readout's are scripts of their own)
+	const past = [];
+	const walk = ( dir ) => {
+
+		for ( const f of readdirSync( dir, { withFileTypes: true } ) ) {
+
+			if ( f.isDirectory() ) walk( new URL( f.name + '/', dir ) );
+			else if ( f.name.endsWith( '.js' ) && f.name !== 'LoadingVeil.js' && f.name !== 'Readout.js' ) {
+
+				const code = readFileSync( new URL( f.name, dir ), 'utf8' ).replace( /\/\*[^]*?\*\//g, '' ).replace( /(^|[\s;{}(),])\/\/.*$/gm, '$1' );
+				const m = code.match( /[^\x00-\xff]/ );
+				if ( m ) past.push( `${ f.name }: ${ m[ 0 ] }` );
+
+			}
+
+		}
+
+	};
+	walk( new URL( '../src/', import.meta.url ) );
+	check( past.length === 0, `no character past Latin-1 in the script's text${ past.length ? ` (${ past.join( ', ' ) })` : '' }` );
 
 }
 

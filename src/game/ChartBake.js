@@ -2,6 +2,7 @@ import { WORLD } from '../world/WorldLayout.js';
 import { northReefMask } from '../world/TerrainData.js';
 import { mangroveAt } from '../world/terrain/Mangrove.js';
 import { FT } from './Units.js';
+import { WAY } from '../world/terrain/NorthTrail.js';
 
 // (M15) The chart's sheets drawn as a chart is (Chart.js has what they cover and what you've seen of them):
 // in the colours of IHO S-52, the standard every electronic chart (an ECDIS, a plotter's charts) is drawn
@@ -22,7 +23,27 @@ export const S52 = {
 	DEPVS: [ 115, 182, 239 ], DEPMS: [ 152, 197, 242 ], DEPMD: [ 186, 213, 225 ], DEPDW: [ 212, 234, 238 ],
 	DEPCN: [ 125, 137, 140 ], CSTLN: [ 82, 90, 92 ], CHBLK: [ 7, 7, 7 ], CHGRD: [ 125, 137, 140 ],
 	CHMGD: [ 197, 69, 195 ], NODTA: [ 163, 180, 183 ], LITRD: [ 241, 84, 105 ], LITGN: [ 104, 228, 86 ], LITYW: [ 244, 218, 72 ],
-	SNDG1: [ 125, 137, 140 ], SNDG2: [ 7, 7, 7 ],
+	SNDG1: [ 125, 137, 140 ], SNDG2: [ 7, 7, 7 ], DEPSC: [ 82, 90, 92 ], CHWHT: [ 212, 234, 238 ], CHRED: [ 241, 84, 105 ], CHGRN: [ 104, 228, 86 ],
+	UINFD: [ 7, 7, 7 ], UINFF: [ 125, 137, 140 ], UIBCK: [ 212, 234, 238 ], UINFB: [ 58, 120, 240 ], UINFO: [ 235, 125, 54 ],
+};
+// (M16) and its dusk and night colours, as OpenCPN gives them (its chartsymbols.xml), for a chart read in a dark wheelhouse: the
+// plotter's (world/boat/PlotterChart.js). The deep water's black and the lines dim. One change: S-52's night has no
+// chart the same black as deep water and tells them by a pattern over it (NODATA03); here it's a flat grey, a little lighter
+export const S52_DUSK = {
+	LANDA: [ 44, 41, 27 ], LANDF: [ 76, 56, 17 ], DEPIT: [ 21, 37, 31 ],
+	DEPVS: [ 22, 35, 47 ], DEPMS: [ 21, 27, 33 ], DEPMD: [ 12, 14, 15 ], DEPDW: [ 7, 7, 7 ],
+	DEPCN: [ 41, 46, 46 ], CSTLN: [ 54, 60, 61 ], CHBLK: [ 54, 60, 61 ], CHGRD: [ 54, 60, 61 ],
+	CHMGD: [ 74, 58, 81 ], NODTA: [ 41, 46, 46 ], LITRD: [ 80, 28, 35 ], LITGN: [ 35, 76, 29 ], LITYW: [ 81, 73, 24 ],
+	SNDG1: [ 41, 46, 46 ], SNDG2: [ 71, 78, 79 ], DEPSC: [ 54, 60, 61 ], CHWHT: [ 71, 78, 79 ], CHRED: [ 80, 28, 35 ], CHGRN: [ 35, 76, 29 ],
+	UINFD: [ 71, 78, 79 ], UINFF: [ 41, 46, 46 ], UIBCK: [ 7, 7, 7 ], UINFB: [ 19, 40, 80 ], UINFO: [ 75, 38, 19 ],
+};
+export const S52_NIGHT = {
+	LANDA: [ 13, 10, 8 ], LANDF: [ 23, 17, 5 ], DEPIT: [ 8, 11, 9 ],
+	DEPVS: [ 3, 4, 19 ], DEPMS: [ 3, 4, 19 ], DEPMD: [ 7, 7, 7 ], DEPDW: [ 7, 7, 7 ],
+	DEPCN: [ 31, 34, 35 ], CSTLN: [ 37, 41, 41 ], CHBLK: [ 31, 34, 35 ], CHGRD: [ 31, 34, 35 ],
+	CHMGD: [ 52, 18, 52 ], NODTA: [ 17, 19, 19 ], LITRD: [ 59, 17, 10 ], LITGN: [ 22, 34, 7 ], LITYW: [ 41, 33, 10 ],
+	SNDG1: [ 31, 34, 35 ], SNDG2: [ 43, 48, 48 ], DEPSC: [ 37, 41, 41 ], CHWHT: [ 37, 41, 41 ], CHRED: [ 59, 17, 10 ], CHGRN: [ 22, 34, 7 ],
+	UINFD: [ 43, 48, 48 ], UINFF: [ 31, 34, 35 ], UIBCK: [ 7, 7, 7 ], UINFB: [ 21, 29, 69 ], UINFO: [ 52, 28, 12 ],
 };
 export const rgb = ( c, a = 1 ) => a === 1 ? `rgb(${ c.join( ',' ) })` : `rgba(${ c.join( ',' ) },${ a })`;
 // where the water's shades change (m): 18 ft, 60 ft, 300 ft; the depth contours (m); land contours every 200 ft
@@ -233,7 +254,14 @@ export class SheetBake {
 
 			const a = - Math.min( - 0.01, S[ k1 ] ), b = - Math.min( - 0.01, S[ k2 ] );
 			if ( a === b ) return;
-			for ( const c of CONTOURS ) if ( ( a - c ) * ( b - c ) < 0 ) this._ink( i1, j1, i2, j2, S52.DEPCN, 0.9, ( c - a ) / ( b - a ) );
+			// ((M16) by index: an iterator an edge, all over a sheet, was garbage piling up as the island's made)
+			for ( let n = 0; n < CONTOURS.length; n ++ ) {
+
+				const c = CONTOURS[ n ];
+				if ( ( a - c ) * ( b - c ) < 0 ) this._ink( i1, j1, i2, j2, S52.DEPCN, 0.9, ( c - a ) / ( b - a ) );
+
+			}
+
 			return;
 
 		}
@@ -295,6 +323,26 @@ export class SheetBake {
 		return out;
 
 	}
+
+}
+
+// ---- (M16) the way over to the north beach pencilled on (a dashed line, your own chart's or Marta's): from the square
+// to the fish camp, there from the start, over what you haven't charted too, as the one thing the chart tells you
+// before you've been: it's how you find the way. ctx: the sheet's, its origin and scale ( x0, z0, ppm )
+export function drawWay( ctx, x0, z0, ppm ) {
+
+	ctx.save();
+	ctx.lineJoin = ctx.lineCap = 'round';
+	ctx.beginPath();
+	WAY.forEach( ( [ x, z ], n ) => ctx[ n ? 'lineTo' : 'moveTo' ]( ( x - x0 ) * ppm, ( z - z0 ) * ppm ) );
+	ctx.strokeStyle = 'rgba(255,250,235,0.75)';
+	ctx.lineWidth = Math.max( 3, 8 * ppm );
+	ctx.stroke();
+	ctx.strokeStyle = 'rgb(176,44,58)';
+	ctx.lineWidth = Math.max( 1.6, 4.5 * ppm );
+	ctx.setLineDash( [ Math.max( 4, 14 * ppm ), Math.max( 3, 10 * ppm ) ] );
+	ctx.stroke();
+	ctx.restore();
 
 }
 

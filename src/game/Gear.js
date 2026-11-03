@@ -1,8 +1,13 @@
+import { BOATS } from '../world/boat/Boats.js';
+import { ableOf, BASE, DAYS_TRACKS } from './Seaworthy.js';
+
 // Gear and upgrade data, sold by Marta at the chandlery by the boathouse; everything the game reads
 // goes through gearStats( state.upgrades ), so buying a level is just state.upgrades[ key ]++ and the
 // stats follow.
 //
 // Each track: levels[ 0 ] is what you start with; cost is the price of that level (0 for the first).
+// (M16) on: the boat it belongs to (world/boat/Boats.js: it counts only while she's the boat you're in, and stays with her
+// when you're in another); without it, it's your own gear, and goes with you onto any boat.
 export const UPGRADES = {
 	// rod and reel
 	line: { name: 'Fishing line', levels: [
@@ -11,16 +16,54 @@ export const UPGRADES = {
 		{ cost: 180, label: '30 lb braid', lineKg: 26 },
 		{ cost: 450, label: '60 lb braid', lineKg: 50 },
 	] },
+	// ((M16) spoolM: the line it holds; dragKg: the most its drag holds (CatchMinigame), none to speak of on a spinning
+	// reel, whose fight's as it always was; twoSpeed: a low gear)
 	reel: { name: 'Reel', levels: [
-		{ cost: 0, label: 'Old spinning reel', reelSpeed: 1.1 },
-		{ cost: 90, label: 'Smooth spinning reel', reelSpeed: 1.6 },
-		{ cost: 320, label: 'Conventional reel', reelSpeed: 2.2 },
+		{ cost: 0, label: 'Old spinning reel', reelSpeed: 1.1, spoolM: 180, dragKg: null },
+		{ cost: 90, label: 'Smooth spinning reel', reelSpeed: 1.6, spoolM: 220, dragKg: null },
+		{ cost: 320, label: 'Conventional reel', reelSpeed: 2.2, spoolM: 350, dragKg: 12 },
+		{ cost: 900, label: 'Two-speed big-game reel (its low gear comes in by itself on a heavy fish)', reelSpeed: 2.6, spoolM: 600, dragKg: 24, twoSpeed: true },
 	] },
 	rod: { name: 'Rod', levels: [
 		{ cost: 0, label: 'Hand-me-down rod', castM: 22 },
 		{ cost: 75, label: '7 ft graphite rod', castM: 32 },
 		{ cost: 260, label: '9 ft surf rod', castM: 45 },
+		{ cost: 600, label: 'Stand-up trolling rod, roller guides and a gimbal butt', castM: 30, standUp: true },
 	] },
+	// (M16) your own gear for the big fish (game/rigs/Presentation.js, docs/m16/tackle.md). The leader: of those you've
+	// bought, the one you tie on, or the sensible one for what you're doing (Presentation.leaderOn). landKg: the heaviest
+	// you lift aboard for sure (past it, more and more shake off at the boat); dehooker: one that's let go comes off in the
+	// water, sooner and unhurt (Rigs.fightTerms, releaseHurt); tagKit: the billfish fund's half as much again (Trophies);
+	// polarized: fish seen under the water; swimMul, breathS, airS (Player.setDive)
+	leader: { name: 'Leader', levels: [
+		{ cost: 0, label: 'Light mono leader', leader: 0 },
+		{ cost: 40, label: 'Fluorocarbon leader', leader: 1 },
+		{ cost: 60, label: 'Wire leader, for wahoo and barracuda', leader: 2 },
+		{ cost: 90, label: '200 lb mono leader, for billfish', leader: 3 },
+	] },
+	lures: { name: 'Lures', levels: [
+		{ cost: 0, label: 'None', lures: 0 },
+		{ cost: 50, label: 'Jigs', lures: 1 },
+		{ cost: 90, label: 'Plugs', lures: 2 },
+		{ cost: 180, label: 'Trolling skirts', lures: 3 },
+	] },
+	landing: { name: 'Landing', levels: [
+		{ cost: 0, label: 'Your hands', landKg: 12 },
+		{ cost: 60, label: 'A gaff', landKg: 250 },
+		{ cost: 80, label: 'Release dehooker and billfish tag kit', landKg: 250, dehooker: true, tagKit: true },
+	] },
+	glasses: { name: 'Polarized glasses', levels: [
+		{ cost: 0, label: 'None', polarized: false },
+		{ cost: 120, label: 'Polarized glasses (fish seen under the water, from the tower above all)', polarized: true },
+	] },
+	diveKit: { name: 'Dive kit', levels: [
+		{ cost: 0, label: 'None', swimMul: 1, breathS: 50, airS: 0 },
+		{ cost: 80, label: 'Mask and fins (faster swimming)', swimMul: 1.45, breathS: 50, airS: 0 },
+		{ cost: 220, label: 'Long fins and a wetsuit (a longer breath)', swimMul: 1.65, breathS: 80, airS: 0 },
+		{ cost: 600, label: 'Scuba tanks (one dive\'s air, filled at the dock or at Marta\'s)', swimMul: 1.65, breathS: 80, airS: 6800 },
+	] },
+	// (the life jacket for the kayak's capsize, the flares and EPIRB for DaysOut: Seaworthy's, shown here with your gear)
+	safety: DAYS_TRACKS.safety,
 	// (Salt Life) the speargun, for a fish you've swum down to: a band gun (gunStyle: an aluminium tube,
 	// a teak stock, a railgun), its barrel from the grip to the muzzle (gunCm) and rubber bands
 	// (bands), the steel shaft it fires (shaftM long, at spearV m/s), the reach it kills at (spearM),
@@ -43,10 +86,10 @@ export const UPGRADES = {
 		{ cost: 520, label: '10 ft pro net, 1½ lb a foot', netM: 3.05, meshCm: 1.27, leadKgM: 2.2, sinkMs: 1.95, throwM: 9, spreadWin: 0.18, holdCm: 62, netTwine: 'mono' },
 	] },
 	// (Salt Life) where the bait you net is kept alive (Bait.js): how many it holds
-	baitWell: { name: 'Bait well', levels: [
+	baitWell: { name: 'Bait well', on: 'lobster', levels: [
 		{ cost: 0, label: '5-gallon bait bucket', baitMax: 24 },
 		{ cost: 90, label: 'Aerated bait bucket', baitMax: 50 },
-		{ cost: 300, label: 'Livewell with a pump', baitMax: 120 },
+		{ cost: 300, label: 'Livewell with a pump (live bait stays lively: bites come sooner)', baitMax: 120, livewell: true },
 	] },
 	// (Salt Life) for the spiny lobster, by hand on a dive: a tickle stick to coax it out of its den
 	// (tickleM: how far it reaches; coaxS: seconds of tickling a lobster takes to walk out) and a hand
@@ -57,43 +100,52 @@ export const UPGRADES = {
 		{ cost: 160, label: 'Long aluminium tickle stick and a wide net', lobster: 2, tickleM: 1.3, coaxS: 1.6 },
 	] },
 	// boat
-	hold: { name: 'Fish hold', levels: [
+	hold: { name: 'Fish hold', on: 'lobster', levels: [
 		{ cost: 0, label: 'Cooler', holdKg: 30 },
 		{ cost: 120, label: 'Ice chest', holdKg: 70 },
 		{ cost: 400, label: 'Insulated fish hold', holdKg: 160 },
 	] },
-	fuel: { name: 'Fuel tank', levels: [
+	fuel: { name: 'Fuel tank', on: 'lobster', levels: [
 		{ cost: 0, label: '11-gallon tank', fuelL: 40 },
 		{ cost: 150, label: '21-gallon tank', fuelL: 80 },
 		{ cost: 380, label: '40-gallon tank', fuelL: 150 },
 	] },
-	engine: { name: 'Engine', levels: [
+	engine: { name: 'Engine', on: 'lobster', levels: [
 		{ cost: 0, label: 'Tired diesel', speedMul: 1 },
 		{ cost: 300, label: 'Rebuilt diesel', speedMul: 1.15 },
 		{ cost: 700, label: 'Turbo diesel', speedMul: 1.3 },
 	] },
-	fishFinder: { name: 'Fish finder', levels: [
+	fishFinder: { name: 'Fish finder', on: 'lobster', levels: [
 		{ cost: 0, label: 'None', finder: false },
 		{ cost: 250, label: 'Fish finder (depth and fish on the HUD)', finder: true },
 	] },
 	// (Salt Life) the deck floodlights: after dark yellowtail, jacks and houndfish gather in their pool
 	// astern (FishTable flood, Game.floodAt)
-	lights: { name: 'Boat lights', levels: [
+	lights: { name: 'Boat lights', on: 'lobster', levels: [
 		{ cost: 0, label: 'Nav lights only', deckLights: false },
 		{ cost: 140, label: 'Deck floodlights (fish gather under them after dark)', deckLights: true },
 	] },
 	// (Salt Life) the anchor: it goes down when you leave the helm out on the water and comes up when
 	// you take it again (Game.updateAnchor); anchorM: the deepest water its rode holds in (at three
 	// times the depth, as rode is let out: 200 ft holds in 66)
-	anchor: { name: 'Anchor', levels: [
+	anchor: { name: 'Anchor', on: 'lobster', levels: [
 		{ cost: 0, label: 'None', anchorM: 0 },
 		{ cost: 100, label: 'Danforth anchor, 200 ft of rode', anchorM: 20 },
 	] },
 	// (M10) what takes the water out of her bilge (Hull.js) besides you with the bucket: an electric pump
 	// that clears it slowly by itself (pumpLs, litres a second: more than the rain brings in)
-	bilgePump: { name: 'Bilge pump', levels: [
+	bilgePump: { name: 'Bilge pump', on: 'lobster', levels: [
 		{ cost: 0, label: 'A bucket', pumpLs: 0 },
 		{ cost: 120, label: 'Electric bilge pump', pumpLs: 0.3 },
+	] },
+	// (M16) lobster traps, each with its warp and buoy (Traps.js): for the hauler and davit only she has, so they're hers.
+	// About $70 each, as a wire trap, 120 ft of warp and a buoy cost. unlock: false, what the sportfisher's unlock doesn't
+	// ask for
+	traps: { name: 'Lobster traps', on: 'lobster', unlock: false, levels: [
+		{ cost: 0, label: 'None', traps: 0 },
+		{ cost: 140, label: '2 wire traps, warp and buoys', traps: 2 },
+		{ cost: 140, label: '4 wire traps, warp and buoys', traps: 4 },
+		{ cost: 280, label: '8 wire traps, warp and buoys', traps: 8 },
 	] },
 	// (M15) a chart of the island and its waters out to the drop-off, for those who'd rather not chart it
 	// themselves (Chart.js: the island's sheet and its names, the far sheet within SOLD.r); a waterproof one,
@@ -102,9 +154,119 @@ export const UPGRADES = {
 		{ cost: 0, label: 'Your own, as you go', chart: false },
 		{ cost: 30, label: 'Waterproof chart of the island, to the drop-off', chart: true },
 	] },
+	// (M16) days out: navigation, the deep finder, the deep anchor and the sock on each boat, and your flares (Seaworthy.js)
+	...DAYS_TRACKS,
+	// (M16) the kayak's own (Boats.js' stats: what she is before them; game/fleet/Fleet.js: what's bought and sold)
+	kayakCrate: { name: 'Crate cooler', on: 'kayak', levels: [
+		{ cost: 0, label: 'A soft bag behind the seat' },
+		{ cost: 40, label: 'Milk crate and a small cooler, strapped in the tankwell', holdKg: 25 },
+	] },
+	kayakPaddle: { name: 'Paddle', on: 'kayak', levels: [
+		{ cost: 0, label: 'Plastic-bladed paddle', speedMul: 1 },
+		{ cost: 90, label: 'Carbon-shaft paddle', speedMul: 1.12 },
+	] },
+	// (a line along her side that lets the anchor hold her bow, stern or beam to the sea, as a kayak has to)
+	kayakAnchor: { name: 'Anchor trolley', on: 'kayak', levels: [
+		{ cost: 0, label: 'None', anchorM: 0, trolley: false },
+		{ cost: 50, label: 'Anchor trolley and a 3 lb grapnel', anchorM: 10, trolley: true },
+	] },
+	kayakFinder: { name: 'Fish finder puck', on: 'kayak', levels: [
+		{ cost: 0, label: 'None', finder: false },
+		{ cost: 150, label: 'Castable fish finder puck (depth and fish on the HUD)', finder: true },
+	] },
+	// (kept under a lid and bungees, half as much goes when she turns over: kayak/Capsize.js)
+	kayakHatch: { name: 'Dry hatch', on: 'kayak', levels: [
+		{ cost: 0, label: 'Nothing strapped down', dryHatch: false },
+		{ cost: 30, label: 'Dry hatch and deck bungees: less of your catch goes if she turns over', dryHatch: true },
+	] },
+	// (M16) the center console's own
+	consoleEngine: { name: 'Outboards', on: 'console', levels: [
+		{ cost: 0, label: 'A single 150 outboard', speedMul: 1, twin: false },
+		{ cost: 900, label: 'Twin 150 outboards', speedMul: 1.25, twin: true },
+	] },
+	consoleTop: { name: 'T-top', on: 'console', levels: [
+		{ cost: 0, label: 'Open to the sky', tTop: false },
+		{ cost: 350, label: 'T-top and its rain cover', tTop: true },
+	] },
+	consoleWell: { name: 'Livewell', on: 'console', levels: [
+		{ cost: 0, label: 'A bait bucket', livewell: false },
+		{ cost: 200, label: 'Livewell with a pump (live bait stays lively: bites come sooner)', baitMax: 80, livewell: true },
+	] },
+	consoleLadder: { name: 'Dive ladder', on: 'console', levels: [
+		{ cost: 0, label: 'Over the side and hope', diveLadder: false },
+		{ cost: 120, label: 'Dive ladder at the stern', diveLadder: true },
+	] },
+	consoleTanks: { name: 'Tank rack', on: 'console', levels: [
+		{ cost: 0, label: 'None', tankRack: false },
+		{ cost: 150, label: 'Tanks racked behind the leaning post (a fresh one each time you\'re back aboard)', tankRack: true },
+	] },
+	// (M16) the sportfisher's own
+	sfOutriggers: { name: 'Outriggers', on: 'sportfisher', levels: [
+		{ cost: 0, label: 'None', outriggers: false },
+		{ cost: 1200, label: 'Outriggers, for a spread of baits', outriggers: true },
+	] },
+	sfTower: { name: 'Tuna tower', on: 'sportfisher', levels: [
+		{ cost: 0, label: 'None: the flybridge is as high as she goes', tower: false },
+		{ cost: 4000, label: 'Tuna tower with a second helm', tower: true },
+	] },
+	sfElectricReel: { name: 'Electric reel', on: 'sportfisher', levels: [
+		{ cost: 0, label: 'None', electricReel: false },
+		{ cost: 900, label: 'Electric reel, for deep-dropping', electricReel: true },
+	] },
+	sfFishBox: { name: 'Fish box', on: 'sportfisher', levels: [
+		{ cost: 0, label: 'Her cockpit box' },
+		{ cost: 800, label: 'Big insulated fish box', holdKg: 600 },
+	] },
+	sfIcemaker: { name: 'Icemaker', on: 'sportfisher', levels: [
+		{ cost: 0, label: 'None', icemaker: false },
+		{ cost: 1000, label: 'Icemaker (shore power at her berth: at sea it runs off the generator)', icemaker: true, iceMakesKgH: 5 },
+	] },
+	sfGenerator: { name: 'Generator', on: 'sportfisher', levels: [
+		{ cost: 0, label: 'None', generator: false },
+		{ cost: 1500, label: 'Diesel generator: runs the icemaker at sea, about a gallon an hour from her tank', generator: true },
+	] },
+	sfChair: { name: 'Fighting chair', on: 'sportfisher', levels: [
+		{ cost: 0, label: 'None: stand up and take it', chair: false },
+		{ cost: 2000, label: 'Fighting chair in the cockpit', chair: true },
+	] },
+	sfUnderwaterLights: { name: 'Underwater lights', on: 'sportfisher', levels: [
+		{ cost: 0, label: 'None', underwaterLights: false },
+		{ cost: 600, label: 'Underwater lights, for swordfish at night', underwaterLights: true },
+	] },
 };
 
-export const FUEL_PRICE = 1.5; // $ per litre of diesel at the chandlery
+// (M16) what the sportfisher asks before she's shown: each of these tracks to this level (docs/M16.md: every upgrade on
+// the lobster boat, and the rod, reel and line as they were before M16's big-game levels). A track added later, or a
+// level above these, doesn't count
+export const UNLOCK = { hold: 2, fuel: 2, engine: 2, baitWell: 2, fishFinder: 1, lights: 1, anchor: 1, bilgePump: 1, rod: 2, reel: 2, line: 3 };
+
+// -> { done, of, met, left: [ what's next on each track that isn't there yet, by its label ] }
+export function unlockProgress( upgrades ) {
+
+	let done = 0, of = 0;
+	const left = [];
+	for ( const [ k, n ] of Object.entries( UNLOCK ) ) {
+
+		const at = Math.min( n, upgrades[ k ] | 0 );
+		done += at;
+		of += n;
+		if ( at < n ) left.push( UPGRADES[ k ].levels[ at + 1 ].label );
+
+	}
+
+	return { done, of, met: done >= of, left };
+
+}
+
+// (M16) what a boat's engine burns, at the chandlery ($ a litre: a fuel dock's, gasoline about 6% over diesel: docs/m16/fleet.md)
+export const FUELS = {
+	diesel: { name: 'Diesel', price: 1.5 },
+	gasoline: { name: 'Gasoline', price: 1.6 },
+};
+export const FUEL_PRICE = FUELS.diesel.price; // $ per litre of diesel at the chandlery
+// (M16) her fuel, { name, price }, or null with no engine; and at another's price, a seller who charges more for diesel
+export const fuelOf = ( boat ) => FUELS[ BOATS[ boat ] && BOATS[ boat ].fuel ] || null;
+export const fuelPrice = ( boat, dieselAt = FUEL_PRICE ) => ( fuelOf( boat ) ? fuelOf( boat ).price * dieselAt / FUEL_PRICE : dieselAt );
 // (Salt Life) Marta's tow: she fetches your boat back to the dock when it's drifted off (the wind pushes
 // a boat left without its anchor), and (M15) when you call her on the radio, out of fuel far out. A call-out
 // and a little for every 100 m, as far as it is (it had a cap of $90: 1.4 km). It's her time she's paid
@@ -120,12 +282,14 @@ export const AWAY_TOW_MAX = towFee( 24000 );
 export const awayTowFee = ( metres ) => Math.min( AWAY_TOW_MAX, towFee( metres ) );
 // (M15) how long she's out on it (s: the real world's, as the boat runs)
 export const towTime = ( metres ) => Math.max( 0, metres ) * ( 1 / TOW.out + 1 / TOW.back );
-// (M13) Marta's haul-out ahead of a hurricane ($: less than the repair a hurricane leaves to do)
+// (M13) Marta's haul-out ahead of a hurricane ($: less than the repair a hurricane leaves to do); the lobster boat's
+// (M16: each boat's by her length, game/fleet/Fleet.js)
 export const HAUL_FEE = 40;
-// litres per second at the helm: idle plus a lot more at full rpm (40 L lasts ~25 min flat out)
-export function fuelBurn( rpm ) {
+// litres per second at the helm: idle plus a lot more at full rpm (40 L lasts ~25 min flat out; (M16) each boat's: Seaworthy)
+export function fuelBurn( rpm, boat = 'lobster' ) {
 
-	return 0.0025 + 0.024 * rpm * rpm;
+	const [ idle, k ] = ableOf( boat ).burn;
+	return idle + k * rpm * rpm;
 
 }
 
@@ -146,12 +310,13 @@ export function defaultUpgrades() {
 
 }
 
-// merged stats of the current levels
-export function gearStats( upgrades ) {
+// merged stats of the current levels: your own gear's and the boat's you're in, over what she is without them
+export function gearStats( upgrades, boat = 'lobster' ) {
 
-	const s = {};
+	const s = { ...BOATS[ boat ].stats, ...BASE[ boat ] };
 	for ( const k in UPGRADES ) {
 
+		if ( UPGRADES[ k ].on && UPGRADES[ k ].on !== boat ) continue;
 		const lv = UPGRADES[ k ].levels;
 		const i = Math.max( 0, Math.min( lv.length - 1, upgrades[ k ] | 0 ) );
 		for ( const [ key, v ] of Object.entries( lv[ i ] ) ) if ( key !== 'cost' && key !== 'label' ) s[ key ] = v;

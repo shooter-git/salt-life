@@ -1,0 +1,82 @@
+# Ways to fish, and your own gear (stream 7)
+
+The rod used to do one thing: one float, tethered where it landed, biting only while it floated, with no depth to its hook. Now what's on the line is a rig (`game/rigs/`), the hook is as deep as it really is, and there are three new ways to fish past the float.
+
+## How it plays
+
+`C` (LB on a gamepad, the Rig button on touch) changes the rig with the rod out, `B` the bait, as before, and `X` (Y on a gamepad, the Leader button on touch) the leader. The chip by the purse says which, and how far down the hook is.
+
+- **Float.** As it was, the hook hanging at most 5 m under it. It fishes everything near the top and the reefs, and no longer the bottom of deep water: a float in 80 m of water doesn't reach the snappers.
+- **Sinker.** Cast, and a lead takes the hook down at 1.5 m/s until it's on the bottom, or 250 m, as much line as you can work by hand, or your spool's end, or you stop it. No float: you watch the rod's tip nod. It's free, and it's how you fish the deep shelf and the ledges now.
+- **Troll.** One press of the cast button lets a line out to a rod in its holder: two flat lines off the stern on any boat with an engine, and with the sportfisher's outriggers (`stats.outriggers`) two more off their tips and a shotgun up the middle, five in all. A paddled or seated boat has one, and a plug swims at her 3 knots. Then you go to the helm and run. Strikes come by speed. When a rod goes off its reel screams and you've 40 s to get to it (`R`, within 3.6 m of its holder) before the fish throws the hook. The right button brings the rest in. Leaving the helm with lines out doesn't drop the anchor.
+- **Kite.** Off the stern in 5 to 25 knots of wind, needing the stand-up rod and a live bait. The kite flies downwind with the fishing line through a clip on its line, so the bait splashes on the surface about 60 m off with no line in the water to be seen. The bait goes nervous, then it's taken: strike as on a float. Where sailfish are, it's mostly sailfish: 61 to 67% on the drop-off from mid-morning to mid-afternoon, with tuna at 7 to 13%. At first light the tuna are feeding too. Inshore it's barracuda, jacks and tarpon.
+- **Deep drop.** With the sportfisher's electric reel (`stats.electricReel`), a heavy lead straight down at 2.5 m/s, a long wait, and a long way back at 4.5 m/s. The motor stalls at its drag, so it can't break the line on a run. It goes down to the bottom or the 900 m the reel holds, unless you stop it: the cast button stops it where it is, and pressed again lets it go on down. The chip gives the depth. By day it's the swordfish's way: they hold 320 to 750 m down, whatever's under them, so over the open blue's 1,000 to 1,800 m you stop it there, and at the end of the line, below them, nothing comes. After dark they're up in the top 110 m, and a lead stopped there finds them too. If nothing feeds at the depth you've stopped at, the word when it stops says so.
+- **Chum.** Pick it with `B` and press: it goes over the side, and a slick drifts downwind for 5 minutes. Fish up the slick bite sooner, as they do under a boat's floodlights.
+
+At the helm with lines out, holding the throttle holds her at the speed the slowest bait swims (a trolling valve), the prompt says the speed and whether the baits are swimming, and Shift (RB on a gamepad, the Run button on touch) runs her flat out. A line let out goes back even with her stopped, so it's never left under the hull.
+
+## The fight
+
+With a real drag (the conventional reel and up, `dragKg`) a fish pulling past what the drag holds strips line from the reel instead of breaking it, so a fish far over the line can be fought. What it beats you with is your spool (`spoolM`), and running out is "Spooled". Lean into a run on the reel and the line can still go. A fish within the drag fights exactly as it did; the spinning reels have no drag to speak of, and their fights are unchanged.
+
+What you can lean back against is the other limit (`HOLD_KG`): 10 kg by hand, 18 in the stand-up rod's harness, 40 in the fighting chair (`Vessel.chair`, `stats.chair`; `E` near it during a fight). Your arms tire against the load, hardly at all in the chair, and when they go you hold less and reel slower. A boat running from the fish takes line out; a helm backing down on it gets it back.
+
+A careful player lands a 200 kg blue marlin from the chair on 60 lb braid and the two-speed reel 29 times in 30 (`test/tackle.mjs`), in about ten minutes, having been up to 600 m out. Standing on the same tackle it spools them every time, and so it does on 30 lb and the conventional reel.
+
+Billfish and mahi jump in the fight (`leaps`): the fish's own model comes out of the water at the end of the line.
+
+## Your gear (`Gear.js`, no `on`)
+
+- **Rod 4, stand-up trolling rod** ($600): modelled on its own (`rigs/BigRod.js`), its reel on top, roller guides, a gimbal butt. Shorter cast, and the harness's hold.
+- **Reel 4, two-speed** ($900): 24 kg of drag, 600 m of line, and low gear gets line back from a fish that's over the drag. The low gear comes in by itself: there's no lever or key for it, and the label doesn't promise one.
+- **Leader:** a leader you own can go on any rig. `X` steps through them and back to "whichever suits the rig", which is fluorocarbon on a float, sinker, jig or kite, wire on a plug or at a wahoo's speed, and 200 lb mono on a troll or a drop (`leaderFor`, `leaderOn`, kept in the save). It's tied on with the rod idle, and each trolled line keeps what it was let out with. Teeth (`teeth`) go through anything but wire, a bill (`bill`) wears through all but wire and 200 lb mono, and shy fish (`shy`) keep away from wire, less so 200 lb, and come more to fluorocarbon. So wire on a float stops the barracuda cutting you off, and costs you the yellowtail.
+- **Lures:** jigs on a sinker, plugs cast with no float or trolled slowly, skirts towed. Never used up. A lure's own `likes` (`Bait.js`) count now, where a fish's `eats` don't name it.
+- **Landing:** by hand you lift 12 kg for sure, and past that more and more shake off at the boat. A gaff lifts anything (`landKg`; it has no flag of its own). A fish that's let go only needs holding by the leader, so it never shakes off.
+- **Dehooker** (`stats.dehooker`): a fish you must let go comes off at the leader, in the water. A big one's over 6 m off and half tired against 3 m and nearly spent, a small one at 2.5 m against 1.2, about a quarter sooner on a 40 kg sailfish. Without it, a billfish is unhooked by hand out of the water and 29% of them don't live. The fund pays nothing for those; they stay in your log, and the card says why.
+- **Tag kit** (`stats.tagKit`): the fund's half as much again, and the card says tagged. This is `Trophies.letGo`, and Marta's tag-and-release order is separate.
+- **Polarized glasses:** cut the sea's reflection, most at Brewster's angle and about half along the surface (`glareLeft`), and show dark shapes of fish under the weed, debris and birds (`fishSeen`). They show by the angle you're looking down at, so from a deck's 3 m only about 40 m off, from a tower's 14 m past 100 m.
+- **Dive kit:** swims 1.45 then 1.65 times as fast; a breath of 80 s against 50; a tank of 6800 s at the surface's rate, which runs down one atmosphere faster every 10 m, so about 45 minutes at 15 m. It doesn't fill up by itself: a tank rack aboard gives you a fresh one, otherwise you fill it at the dock or at Marta's (`game/Tanks.js`). It's fresh each time you're out of the water.
+- **Safety:** `stats.lifeJacket` for the kayak's capsize, `stats.flares` and `stats.epirb` for `DaysOut`. The track is `Seaworthy.js`' (`DAYS_TRACKS.safety`), shown with your gear.
+
+New bait from Marta by the trip: frozen ballyhoo ($20 a dozen), frozen squid ($12 for six), chum ($15 a block).
+
+## The fish's side
+
+As agreed with the fish stream (`docs/m16/fish.md`): `Game.habitat()` hands Bites a habitat scaled to where the hook is (`atHook`), with `habitat.hook` on it (`way`, `depth`, `lure`, and for this side `kind`, `floorM`, `knots`, `lines`, `leader`). The fish table's `ways`, `at` and `eats` say who takes what, and only they do: a fish with no `troll` or `kite` in its `ways` never takes one. Barracuda, jacks, tarpon, snook, houndfish, redfish, seatrout and, on a deep plug, black grouper, cubera, mutton snapper and Nassau grouper now have them. Round Bites, `pickOnRig` adds what speed and which leader do by turning away that share of what it offers, and `waitOnRig` the rig's wait. A fish's entry can also say `knots`, `teeth`, `bill`, `shy` and `leaps`; `Presentation.js` has them otherwise. With no hook, as in every older test, nothing changes.
+
+## From real ones
+
+| What | Real | Here | Source |
+|---|---|---|---|
+| Rigged ballyhoo | 8 to 10 knots usual, washes out at 16 to 18 | swims best 5 to 10, torn off past 15 | [The Tackle Room](https://thetackleroom.com/blogs/news/wahoo-fishing-at-high-speed-the-14-knot-spread) |
+| Wahoo at speed | 12 to 16 knots, 14 the sweet spot, on weighted lures; 2 to 4 lines | strikes best at 9 to 17 on skirts, which run to 24 | [The Tackle Room](https://thetackleroom.com/blogs/news/how-to-set-up-a-wahoo-trolling-spread-lures-speed-and-positions), [Marlin](https://www.marlinmag.com/high-speed-wahoo-trolling-spread-how-to/) |
+| Wahoo cut mono | wire or a shock leader | teeth go through all but wire | [The Tackle Room](https://thetackleroom.com/blogs/news/how-to-catch-wahoo-on-the-troll-the-complete-system) |
+| Kite's wind | 10 to 18 knots ideal; light kites in 5, heavy to 25 | 5 to 25 knots | [The Tackle Room](https://thetackleroom.com/blogs/news/kite-fishing-guide), [Marlin](https://www.marlinmag.com/selecting-a-kite-fishing-sailfish-how-to/) |
+| Kite's bait | live, splashing at the surface, leader out of the water | live only, at the surface about 60 m off | [Florida Sportsman](https://floridasportsman.com/editorial/beginner-guide-kite-fishing/494546) |
+| Daytime swordfish | 1,200 to 2,500 ft down, on 8 to 16 lb of lead | 320 to 750 m by day, the top 110 m by night | [The Tackle Room](https://thetackleroom.com/blogs/news/swordfish-fishing-guide-deep-drop-tactics-gear-rigging), [Salt Water Sportsman](https://www.saltwatersportsman.com/species/fish-species/top-five-swordfish-tips) |
+| Where the bait's stopped | they often hold off the bottom, a hundred feet and more up; line out's stopped short of it, and you need to know where the bait is | the lead stopped anywhere in the water column, the chip giving its depth | [In The Spread](https://inthespread.com/blog/swordfishing-the-fine-art-of-deep-dropping), [Fish Talk](https://fishtalkmag.com/blog/daytime-swordfish-deep-dropping) |
+| Slow-trolled plugs | snook 2 to 5 knots; barracuda and jacks 2 or 3; a lipped plug works from about that | a plug swims from 2.5 knots, 1.5 at the least; barracuda, jacks, tarpon and snook take it, each at its speed | [Florida Sportsman](https://www.floridasportsman.com/editorial/trolling-for-snook/452516), [Sport Fishing](https://www.sportfishingmag.com/species/fish-species/plugging-tarpon/) |
+| Who the kite catches | sailfish the prime target; blackfin tuna, mahi, kingfish and wahoo alongside. No source gives shares | sailfish 61 to 67% where they are; the share's my judgment | [Florida Sportsman](https://www.floridasportsman.com/editorial/expert-kite-fishing-tips-south-florida-kite-fishing/468810), [Sport Fishing](https://www.sportfishingmag.com/howto/winter-kite-fishing-off-miami/) |
+| Billfish out of the water | release in the water is the federal rule for Atlantic marlin and sailfish; 29% die taken out of it against under 2% left in (Virginia Institute of Marine Science, as Mercury reports it); a dehooker's the recommended tool | by hand and out of the water 29% don't live, with a dehooker none do | [Mercury Marine](https://www.mercurymarine.com/an/en/lifestyle/dockline/how-to-properly-handle-a-billfish), [Bycatch review](https://bycatch.org/articles/challenges-estimating-post-release-mortality-istiophorid-billfishes-caught-recreational) |
+| Electric reel | hand-cranking from 1,500 ft isn't on; about 300 ft/min down; over 10 min back from 1,800 ft | a lead down at 2.5 m/s and 4.5 m/s back: real time would be a 5 and a 10 minute wait, each cut to about 2 for play | [Florida Sportsman](https://www.floridasportsman.com/editorial/features_0710_florida_swordfish_daytime/397335), [Salt Water Sportsman](https://www.saltwatersportsman.com/species/fish-species/top-five-swordfish-tips) |
+| Drag | 25 to 30% of the line's strength; 20 to 25% on braid | the 60 lb braid's 50 kg holds 24 kg in the chair, 18 in the harness | [Sport Fishing](https://www.sportfishingmag.com/?p=48677), [The Fisherman](https://www.thefisherman.com/article/what-a-drag-reel-time-maintenance/) |
+
+Compressed for play, and said so: a real strike offshore can be hours apart, here minutes (`rigDelay`); a real fight on a 200 kg marlin is an hour or more, here about ten minutes. The harness's and the chair's holds (18 and 40 kg) and the arms' time are my own judgment, not from a source. So are the dehooker's distances. No study isolates a dehooker from keeping the fish in the water, so the 29% is the air-exposure figure, taken at second hand. The fish's `troll` and `kite` weights are my judgment too, from what the sources say takes them.
+
+## Not done
+
+- The reel's low gear stays automatic, on purpose. There's no gear key.
+- A rider on someone else's boat can't let out her spread or fly her kite: those are her owner's, on her holders ([together.md](together.md), What a rider can do on her). A rider's own lead can be dropped (it's offered), but the drop itself hasn't been run in two games. The chum's slick isn't sent to the others.
+
+Done since this was first written, by the other streams:
+
+- **Riders' rigs.** A rider takes a rod that goes off in her spread, with their own line, reel and leader, and the catch goes in their hold (`src/together/Spread.js`, [together.md](together.md)).
+- **Others see a spread and a kite.** `Together` sends a few numbers a line (`spreadWire`) and the kite's place (`kiteWire`); `Spread.js` draws them with her copy, in one draw call.
+- **The electric reel's own sound.** While the deep drop is out and the reel is winding, `SoundScape.rodLoop` plays the `reel_electric` recording, its pitch following the winding and dropping as the line comes under load, in place of the hand reel's. A fish stripping line against the drag, and a rod going off in the spread, still use the usual `reel_drag`.
+
+## Where it reaches into other files
+
+- `Bites.js`: stream 6's (the fish's side, [fish.md](fish.md)). All this stream adds is `hook: true` in `NOT_WATER`.
+- `Game.habitat`: `atHook` sets `h.hook` after stream 6's line.
+- `test/cast-net.mjs`: "every bait can be stolen" leaves out lures and chum, which can't be.
+- Changed in others' files for the audit: `FishTable.js` (`ways`, the swordfish's hint), `Bait.js` (the plug's `tow`), `Bites.js` (a lure's `likes`), `Trophies.js` (reads `stats.tagKit`, `info.hurt`), `GameHUD.js` (the note for a hurt one), `GameState.js` (`leaderPick`), `Seat.js` (a gamepad's Y with the rod out), `Input.js`, `TouchControls.js`, `Guide.js`.

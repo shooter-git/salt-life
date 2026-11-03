@@ -1,11 +1,12 @@
-// Two real games (tools/two-players), far out (M15 step 18): apart; the same sea alongside at the bank; riding out there; a boat left adrift; her owner back.
-//   pnpm dev, then   node tools/two-players/far.mjs [dir for screenshots] [port]   (some minutes: two games on the CPU)
+// Two real games (tools/two-players), far out, each in the same boat (M16: lobster unless you say) (M15 step 18): apart; the same sea alongside at the bank; riding out there; a boat left adrift; her owner back.
+//   pnpm dev, then   node tools/two-players/far.mjs [dir for screenshots] [port] [boat]   (some minutes: two games on the CPU)
 // The stand-in's own save is kept in the browser here (host.js patched as it's fetched), so a player can really come back.
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const ROOT = join( dirname( fileURLToPath( import.meta.url ) ), '../..' );
-const { chromium } = await import( join( ROOT, '../all-the-spaces/node_modules/playwright/index.mjs' ) );
-const [ out = 'qa-output', PORT = '5189' ] = process.argv.slice( 2 );
+const { chromium } = await import( join( process.env.ALL_THE_SPACES || join( ROOT, '../all-the-spaces' ), 'node_modules/playwright/index.mjs' ) );
+const [ out = 'qa-output', PORT = '5189', BOAT = 'lobster' ] = process.argv.slice( 2 );
+const ANCHOR = { kayak: 'kayakAnchor', console: 'deepAnchor_console', lobster: 'deepAnchor_lobster', sportfisher: 'deepAnchor_sportfisher' }[ BOAT ];
 const browser = await chromium.launch( { args: [ '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required' ] } );
 const ctx = await browser.newContext( { viewport: { width: 640, height: 360 } } );
 await ctx.route( '**/tools/two-players/host.js*', async ( route ) => {
@@ -19,7 +20,7 @@ await ctx.route( '**/tools/two-players/host.js*', async ( route ) => {
 } );
 let problems = 0;
 const say = ( ok, what ) => { console.log( ( ok ? 'ok   ' : 'FAIL ' ) + what ); if ( ! ok ) problems ++; };
-const open = async ( name ) => {
+const open = async ( name, boat = null ) => {
 
 	const page = await ctx.newPage();
 	// (the dev server's hundreds of modules, with the other game holding the CPU: one can fail to come. Tried again)
@@ -32,7 +33,7 @@ const open = async ( name ) => {
 
 	} );
 	page.on( 'console', ( m ) => { if ( m.type() === 'error' && ! /ERR_NETWORK|Failed to load resource|dynamically imported/.test( m.text() ) ) { problems ++; console.log( name, 'CONSOLE', m.text().slice( 0, 300 ) ); } } );
-	await page.goto( `http://127.0.0.1:${ PORT }/tools/two-players/?name=${ name }&id=${ name.toLowerCase() }-1&tier=low` );
+	await page.goto( `http://127.0.0.1:${ PORT }/tools/two-players/?name=${ name }&id=${ name.toLowerCase() }-1&tier=low${ boat ? `&src=${ encodeURIComponent( `/?boat=${ boat }` ) }` : "" }` );
 	const f = () => page.frames().find( ( x ) => x !== page.mainFrame() );
 	for ( let i = 0; i < 500; i ++ ) {
 
@@ -49,13 +50,13 @@ const open = async ( name ) => {
 
 	}
 
-	await f().evaluate( () => { const g = window.__app.game; if ( g.guide ) { g.guide.seen.intro = true; if ( g.guide.open ) g.guide.close(); g.guide._wait = - 1; } } );
+	await f().evaluate( () => { const g = window.__app.game; if ( g.guide ) { g.guide.seen.intro = true; if ( g.guide.open ) g.guide.close(); g.guide._wait = - 1; } const pl = window.__app.player, up = pl.update; window.__real = { n: 0, since: performance.now() }; pl.update = function ( dt ) { up.call( this, dt ); window.__real.n ++; }; window.__app.together.stale = 120; /* (two games on the CPU, seconds between poses) */ /* (and on a CPU this loaded, a second of the game can be a minute of the clock's, which DaysOut takes for a rest: boats.mjs's morning) */ const d = g.daysOut; if ( ! window.__noRest ) window.__noRest = setInterval( () => { if ( ! window.__clockJumps ) d._T = null; }, 200 ); } );
 	return { page, game: f() };
 
 };
 const frames = ( g, n = 4 ) => g.evaluate( () => window.__app.renderer.info.render.frame ).then( ( t ) => g.waitForFunction( ( [ t, n ] ) => window.__app.renderer.info.render.frame > t + n, [ t, n ], { timeout: 200000, polling: 300 } ) );
 
-let robin = await open( 'Robin' );
+let robin = await open( 'Robin', BOAT );
 // ---- Robin out at the bank at her helm before Sam comes, so he's never been near her
 const FAR = { x: - 6200, z: 7400 }; // the bank
 await robin.game.evaluate( ( F ) => {
@@ -64,15 +65,25 @@ await robin.game.evaluate( ( F ) => {
 	app.game.state.money = 500;
 	app.player.boardBoat();
 	app.player.takeHelm();
-	b.moored = false;
+	b.moored = b.beached = false; // (a kayak: off the sand, not sliding down it)
+	if ( b.model.sliding !== undefined ) b.model.sliding = null;
 	b.position.set( F.x, b.position.y, F.z );
 
 }, FAR );
-const sam = await open( 'Sam' );
+// (where she is as Sam comes, should she not be where she was put)
+await robin.game.evaluate( () => { const a = window.__app, b = a.boatCtl, p = a.player, T = window.__trace = []; const mark = ( what ) => T.push( [ Math.round( performance.now() / 1000 ), what, a.settings.day, +a.settings.timeOfDay.toFixed( 2 ), p.mode, Math.round( b.position.x ), Math.round( b.position.z ) ] ); setInterval( () => mark( 'tick' ), 15000 ); const lh = p.leaveHelm; p.leaveHelm = function ( ...x ) { mark( 'leaveHelm ' + new Error().stack.split( '\n' ).slice( 2, 5 ).map( ( l ) => l.trim().replace( /https?:[^ ]*\/src\//, '' ).slice( 0, 60 ) ).join( ' < ' ) ); return lh.apply( this, x ); }; const pd = a.game.daysOut.passed; a.game.daysOut.passed = function ( f, t ) { mark( `passed ${ f } ${ t }` ); return pd.call( this, f, t ); }; } );
+const sam = await open( 'Sam', BOAT );
 await sam.game.waitForFunction( () => window.__app.together.others.size > 0 && [ ...window.__app.together.others.values() ][ 0 ].cur, null, { timeout: 200000, polling: 1000 } );
 await robin.game.waitForFunction( () => window.__app.together.others.size > 0 && [ ...window.__app.together.others.values() ][ 0 ].cur, null, { timeout: 200000, polling: 1000 } );
 console.log( 'both in' );
-await sam.game.waitForFunction( ( F ) => { const o = [ ...window.__app.together.others.values() ][ 0 ]; return o.cur && o.cur.boat && Math.hypot( o.cur.boat.pos.x - F.x, o.cur.boat.pos.z - F.z ) < 200; }, FAR, { timeout: 200000, polling: 500 } );
+await sam.game.waitForFunction( ( F ) => { const o = [ ...window.__app.together.others.values() ][ 0 ]; return o.cur && o.cur.boat && Math.hypot( o.cur.boat.pos.x - F.x, o.cur.boat.pos.z - F.z ) < 200; }, FAR, { timeout: 200000, polling: 500 } ).catch( async ( e ) => {
+
+	console.log( '     Robin\'s trace:', await robin.game.evaluate( () => JSON.stringify( window.__trace ) ) );
+	console.log( '     Robin:', await robin.game.evaluate( () => { const a = window.__app, b = a.boatCtl; return JSON.stringify( { boat: a.boat.id, mode: a.player.mode, at: b.position.toArray().map( ( v ) => Math.round( v ) ), moored: b.moored, hauled: !! b.hauled, boatAt: a.state && a.state.boat } ); } ) );
+	console.log( '     Sam sees:', await sam.game.evaluate( () => { const o = [ ...window.__app.together.others.values() ][ 0 ], c = o.cur; return JSON.stringify( { cur: !! c, boat: !! ( c && c.boat ), id: c && c.boatId, at: c && c.boat ? c.boat.pos.toArray().map( ( v ) => Math.round( v ) ) : null, age: performance.now() / 1000 - o.last } ); } ) );
+	throw e;
+
+} );
 await frames( sam.game, 3 );
 const apart = await sam.game.evaluate( () => {
 
@@ -91,7 +102,8 @@ await sam.game.evaluate( ( F ) => {
 	const app = window.__app, b = app.boatCtl;
 	app.player.boardBoat();
 	app.player.takeHelm();
-	b.moored = false;
+	b.moored = b.beached = false; // (a kayak: off the sand, not sliding down it)
+	if ( b.model.sliding !== undefined ) b.model.sliding = null;
 	b.position.set( F.x + 40, b.position.y, F.z + 20 );
 
 }, FAR );
@@ -150,7 +162,7 @@ await sam.game.evaluate( () => { const p = window.__app.player; p.ride( p.rideOf
 await frames( sam.game, 6 );
 const rode = await sam.game.evaluate( () => { const a = window.__app, p = a.player, c = a.camera.position, s = a.game.chartSpot; return { riding: !! p.riding, mode: p.mode, cam: [ Math.round( c.x ), Math.round( c.z ) ], spot: [ Math.round( s.x ), Math.round( s.z ) ], bank: a.game.state.chart.named( 'bank' ), found: a.game.state.found }; } );
 say( rode.riding && Math.hypot( rode.cam[ 0 ] - FAR.x, rode.cam[ 1 ] - FAR.z ) < 100, `Sam rides with her out here: ${ JSON.stringify( rode ) }` );
-await sam.page.screenshot( { path: `${ out }/far-sam-riding.png` } );
+await sam.page.screenshot( { path: `${ out }/far-sam-riding.png`, timeout: 300000 } );
 
 // ---- Sam off; Robin leaves her boat adrift, 20 km out, and goes
 await sam.game.evaluate( () => { const p = window.__app.player; if ( p.riding ) p.unride ? p.unride() : p.exitBoat(); } );
@@ -163,7 +175,7 @@ await robin.page.close();
 await sam.game.waitForFunction( () => window.__app.together.others.size === 0 && window.__app.together.session.isHost && window.__app.together.boats[ 'robin-1' ], null, { timeout: 200000, polling: 500 } );
 const rec = await sam.game.evaluate( () => window.__app.together.boats[ 'robin-1' ] );
 say( rec.a === null && Number.isFinite( rec.T ) && rec.z === 20000, `her record: adrift ${ JSON.stringify( { x: rec.x, z: rec.z, T: rec.T } ) }` );
-await sam.game.evaluate( ( A ) => { const app = window.__app, b = app.boatCtl, p = app.player; if ( p.mode !== 'boat' ) { p.boardBoat(); p.takeHelm(); } b.moored = false; b.position.set( A.x + 40, b.position.y, A.z + 40 ); }, A );
+await sam.game.evaluate( ( A ) => { const app = window.__app, b = app.boatCtl, p = app.player; if ( p.mode !== 'boat' ) { p.boardBoat(); p.takeHelm(); } b.moored = b.beached = false; if ( b.model.sliding !== undefined ) b.model.sliding = null; b.position.set( A.x + 40, b.position.y, A.z + 40 ); }, A );
 await frames( sam.game, 3 );
 console.log( '     Sam', JSON.stringify( await sam.game.evaluate( () => { const a = window.__app, c = a.camera.position; return { mode: a.player.mode, cam: [ Math.round( c.x ), Math.round( c.z ) ], entry: !! a.together.away.get( 'robin-1' ) }; } ) ) );
 await sam.game.waitForFunction( () => { const a = window.__app.together.away.get( 'robin-1' ); return a && a.boat && a.boat.visible; }, null, { timeout: 200000, polling: 500 } );
@@ -181,7 +193,7 @@ await frames( sam.game, 12 );
 const d1 = await sam.game.evaluate( () => { const a = window.__app.together.away.get( 'robin-1' ); return { x: a.boat.position.x, z: a.boat.position.z, sx: a.story && a.story.x, sz: a.story && a.story.z, where: a.story && a.story.where }; } );
 const moved = Math.hypot( d1.sx - 0, d1.sz - 20000 );
 say( moved > 20, `three hours on she's drifted ${ moved.toFixed( 0 ) } m (${ d1.where }), her boat easing after it (${ Math.hypot( d1.x - d0.x, d1.z - d0.z ).toFixed( 1 ) } m so far)` );
-await sam.page.screenshot( { path: `${ out }/far-sam-adrift.png` } );
+await sam.page.screenshot( { path: `${ out }/far-sam-adrift.png`, timeout: 300000 } );
 
 // ---- a hurricane's warning, then Robin's back
 await sam.game.evaluate( async () => {
@@ -209,5 +221,6 @@ const back = await robin.game.evaluate( () => { const a = window.__app; return {
 console.log( '     Robin back', JSON.stringify( back ) );
 say( tow && back.money === Math.max( 0, 500 - tow.fee ), `she paid what she had of $${ tow && tow.fee }: $${ back.money } left` );
 say( back.hauled && ! back.rec && !! back.note, 'her boat on the cradle, her record gone, the note there' );
+for ( const [ n, g ] of [ [ 'Robin', robin ], [ 'Sam', sam ] ] ) console.log( `     frames a second, really, ${ n }:`, await g.game.evaluate( () => +( window.__real.n / ( performance.now() - window.__real.since ) * 1000 ).toFixed( 1 ) ).catch( () => '?' ) );
 console.log( problems ? `${ problems } PROBLEM(S)` : 'no problems' );
 await browser.close();

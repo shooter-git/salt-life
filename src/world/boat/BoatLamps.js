@@ -102,22 +102,21 @@ export class BoatLamps {
 
 	constructor( boat ) {
 
-		const L = boat.lines;
+		const K = boat.lamps;
 		this.group = new THREE.Group();
 		this.group.name = 'BoatLamps';
-		const sternY = L.sheerY( 0 ) + 0.1;
 		const cosOf = ( deg ) => Math.cos( THREE.MathUtils.degToRad( deg ) );
 		const side = ( s ) => [ s * Math.sin( THREE.MathUtils.degToRad( 56.25 ) ), 0, Math.cos( THREE.MathUtils.degToRad( 56.25 ) ) ];
-		const sp = boat.searchlight || new THREE.Vector3( 0.42, 3.4, 1.15 );
+		const sp = boat.searchlight || new THREE.Vector3( 0, - 10, 0 ); // ((M16) a boat with none: its beam's never lit)
 		// [ position (boat frame), colour, sector middle, half its width (deg), kind ]
 		const lamps = [
-			[ [ 0.47, 3.45, - 0.47 ], [ 1.0, 0.08, 0.05 ], side( 1 ), 56.25, 0 ], // port: red
-			[ [ - 0.47, 3.45, - 0.47 ], [ 0.1, 1.0, 0.35 ], side( - 1 ), 56.25, 0 ], // starboard: green
-			[ [ 0, 3.97, - 0.5 ], [ 1.0, 0.96, 0.88 ], [ 0, 0, 1 ], 112.5, 0 ], // masthead
-			[ [ 0, sternY, L.zAft - 0.05 ], [ 1.0, 0.96, 0.88 ], [ 0, 0, - 1 ], 67.5, 0 ], // stern
-			[ [ 0, 4.05, - 0.5 ], [ 1.0, 0.96, 0.88 ], [ 0, 1, 0 ], 180, 1 ], // anchor light, all round
-			[ [ sp.x, sp.y, sp.z ], [ 1.0, 0.95, 0.84 ], SPOT_DIR.toArray(), 40, 2 ], // the searchlight's lens
-		];
+			K.port && [ K.port, [ 1.0, 0.08, 0.05 ], side( 1 ), 56.25, 0 ], // port: red
+			K.port && [ [ - K.port[ 0 ], K.port[ 1 ], K.port[ 2 ] ], [ 0.1, 1.0, 0.35 ], side( - 1 ), 56.25, 0 ], // starboard: green
+			K.masthead && [ K.masthead, [ 1.0, 0.96, 0.88 ], K.port ? [ 0, 0, 1 ] : [ 0, 1, 0 ], K.port ? 112.5 : 180, 0 ], // masthead (a small boat's white, all round)
+			K.stern && [ K.stern, [ 1.0, 0.96, 0.88 ], [ 0, 0, - 1 ], 67.5, 0 ], // stern
+			K.anchor && [ K.anchor, [ 1.0, 0.96, 0.88 ], [ 0, 1, 0 ], 180, 1 ], // anchor light, all round
+			K.spot && [ K.spot, [ 1.0, 0.95, 0.84 ], SPOT_DIR.toArray(), 40, 2 ], // the searchlight's lens
+		].filter( Boolean );
 		const pos = [], col = [], sec = [], kind = [];
 		for ( const [ p, c, s, deg, k ] of lamps ) {
 

@@ -34,6 +34,9 @@ export class TouchControls {
 				<button type="button" class="touch-btn touch-rod" data-key="KeyR" hidden>Rod</button>
 				<button type="button" class="touch-btn touch-net" data-key="KeyN" hidden>Cast net</button>
 				<button type="button" class="touch-btn touch-bait" data-key="KeyB" hidden>Bait</button>
+				<button type="button" class="touch-btn touch-rig" data-key="KeyC" hidden>Rig</button>
+				<button type="button" class="touch-btn touch-leader" data-key="KeyX" hidden>Leader</button>
+				<button type="button" class="touch-btn touch-run" data-key="ShiftLeft" hidden>Run</button>
 				<button type="button" class="touch-btn touch-cooler" data-key="KeyI" hidden>Cooler</button>
 				<button type="button" class="touch-btn touch-torch" data-key="KeyL" hidden>Torch</button>
 				<button type="button" class="touch-btn touch-horn" data-key="Horn" hidden>Horn</button>
@@ -52,6 +55,9 @@ export class TouchControls {
 			rod: el.querySelector( '.touch-rod' ),
 			net: el.querySelector( '.touch-net' ),
 			bait: el.querySelector( '.touch-bait' ),
+			rig: el.querySelector( '.touch-rig' ),
+			leader: el.querySelector( '.touch-leader' ),
+			run: el.querySelector( '.touch-run' ),
 			cooler: el.querySelector( '.touch-cooler' ),
 			torch: el.querySelector( '.touch-torch' ),
 			horn: el.querySelector( '.touch-horn' ),
@@ -204,17 +210,27 @@ export class TouchControls {
 		const offerNet = ! swim && ! lobstering && game && game.canFish && ! game.fight && ( ( prompt && prompt.key === 'R' ) || ( fishing && rod.state === 'idle' ) );
 		setButton( this.buttons.net, netFree ? 'Put away' : ! netting && offerNet ? 'Cast net' : null );
 		setButton( this.buttons.bait, fishing && rod.state === 'idle' ? 'Bait' : null );
+		setButton( this.buttons.rig, fishing && rod.state === 'idle' ? 'Rig' : null );
+		setButton( this.buttons.leader, fishing && rod.state === 'idle' && game.state?.stats?.leader > 0 ? 'Leader' : null );
+		// ((M16) a rod gone off in its holder)
+		if ( prompt && prompt.key === 'R' && game && game.rigs && game.rigs.rodOn ) setButton( this.buttons.rod, 'Take the rod' );
 		setButton( this.buttons.cast, fishing ? castLabel( game ) : spearing ? spearLabel( game ) : lobstering ? lobsterLabel( game ) : netting ? netLabel( game ) : null );
-		setButton( this.buttons.reel, fishing && ! game.fight && ( rod.state === 'floating' || rod.state === 'flying' ) ? 'Reel in' : null );
+		setButton( this.buttons.reel, fishing && ! game.fight && ( rod.state === 'floating' || rod.state === 'flying' ) ? 'Reel in' : fishing && ! game.fight && rod.state === 'idle' && game.rigs && game.rigs.linesOut ? 'Lines in' : null );
 		setButton( this.buttons.cooler, game && game.hud && ! fishing && ! spearing && ! lobstering && ! netting ? 'Cooler' : null );
 		// the flashlight: offered after dusk (or while it's on)
 		const lights = game && game.app && game.app.localLights;
 		const torchOn = !! ( lights && lights.flashlight.on );
 		// at the helm: the boat's searchlight, after dusk (or while it's on), and the horn
-		const helm = player && player.mode === 'boat', app = game && game.app;
+		// ((M16) a kayak's neither: the rod's button is the rod's, and her radio or flares are the rig's, the same key)
+		const seat = player && player.mode === 'boat' && player.boat?.model?.seated;
+		const helm = player && player.mode === 'boat' && ! seat, app = game && game.app;
+		if ( seat && ! fishing && ! netting ) setButton( this.buttons.rod, 'Rod' );
+		if ( seat && game.radio && game.radio.offer ) setButton( this.buttons.rig, game.radio.offer === 'radio' ? 'Radio' : 'Flares' );
 		if ( helm ) setButton( this.buttons.torch, app && ( app.searchlight || G.night.value > 0.35 ) ? ( app.searchlight ? 'Searchlight off' : 'Searchlight' ) : null );
 		else setButton( this.buttons.torch, lights && ( torchOn || G.night.value > 0.35 ) ? ( torchOn ? 'Torch off' : 'Torch' ) : null );
 		setButton( this.buttons.horn, helm ? 'Horn' : null );
+		// ((M16) with lines out she's held at the baits' speed: this runs her flat out, as Shift does)
+		setButton( this.buttons.run, helm && ! player.riding && game?.rigs?.linesOut ? 'Run' : null );
 		// ((M15) the rod's button is the radio's at the helm: R)
 		if ( helm && ! player.riding ) setButton( this.buttons.rod, 'Radio' );
 		const action = prompt && prompt.key === 'E' ? prompt.text.split( '   ·' )[ 0 ] : null;
@@ -234,8 +250,8 @@ function castLabel( game ) {
 	const rod = game.rod;
 	if ( game.fight ) return 'Reel';
 	if ( rod.state === 'windup' ) return 'Let go';
-	if ( rod.state === 'floating' ) return game.bite && game.bite.phase === 'take' ? 'Strike!' : 'Strike';
-	if ( rod.state === 'idle' ) return 'Cast';
+	if ( rod.state === 'floating' ) return game.bite && game.bite.phase === 'take' ? 'Strike!' : game.rigs?.leadLabel() || 'Strike';
+	if ( rod.state === 'idle' ) return game.rigs ? game.rigs.castLabel() : 'Cast';
 	return 'Wait';
 
 }

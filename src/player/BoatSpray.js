@@ -75,9 +75,17 @@ export class BoatSpray {
 		this.velocitySource = new Source( { speedThreshold: 0.4, velocityScale: 1.6, intensity: 1, lifetime: 0.8 } );
 		this.impactSource = new Source( { speedThreshold: 0.6, velocityScale: 1.2, intensity: 3, lifetime: 1.4 } );
 
+		this.setModel( boat.model );
+
+	}
+
+	// (M16) the boat she is (App.setBoat)
+	setModel( model ) {
+
+		const boat = this.boat, spray = this.spray;
 		// forebody waterline per side (boat frame, +X port, +Z forward): stations from the stem aft to
 		// where the entrance has opened to ~92 % of the maximum beam
-		const lines = boat.model.lines;
+		const lines = model.lines;
 		const zStem = lines.wlEnd - 0.02;
 		let maxHB = 0;
 		for ( let z = lines.wlStart; z <= lines.wlEnd; z += 0.05 ) maxHB = Math.max( maxHB, lines.halfBeamAt( z ) );
@@ -120,7 +128,7 @@ export class BoatSpray {
 		let zShWL = zStem;
 		while ( zShWL > lines.wlStart && lines.halfBeamAt( zShWL ) < 0.95 * maxHB ) zShWL -= 0.05;
 		const box = new Box3();
-		for ( const c of boat.model.colliders || [] ) {
+		for ( const c of model.colliders || [] ) {
 
 			if ( c.tag !== 'houseWall' && c.tag !== 'roof' ) continue;
 			box.expandByPoint( _v.copy( c.center ).sub( c.half ) );

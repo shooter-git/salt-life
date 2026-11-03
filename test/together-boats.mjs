@@ -1,0 +1,379 @@
+// (M16) Each boat as the boat she is, playing together: the types in memory, a phone's copy of her, the dock's spare
+// berths, how far off she shows, a crew's jobs. Two real games: tools/two-players/boats.mjs.
+import { register } from 'node:module';
+
+register( 'data:text/javascript,' + encodeURIComponent( `
+export async function resolve( specifier, context, next ) {
+
+	if ( specifier === '@allthespaces/portal/three' ) return { url: 'data:text/javascript,export const gltfLoader = {};', shortCircuit: true };
+	return next( specifier, context );
+
+}` ) );
+globalThis.window = globalThis.window || { devicePixelRatio: 1 };
+const { BOATS, loadBoat } = await import( '../src/world/boat/Boats.js' );
+const { BoatCopies, LOW_BOAT, SIZE, fitPaint, fitStats, fitWire, isBoat, lowMeshes, sizeOf, standInGeometry } = await import( '../src/together/BoatCopies.js' );
+const { dropView } = await import( '../src/world/boat/Vessel.js' );
+const { kiteWire, readSpread, rodOf, spreadWire } = await import( '../src/together/Spread.js' );
+const { berthOf } = await import( '../src/game/fleet/Berths.js' );
+const { AREAS } = await import( '../tools/two-players/areas.mjs' );
+const { SPARE_BERTHS, atDock, berthShare, laidAt, spareBerth } = await import( '../src/together/Berths.js' );
+const { clockFrom, footY, jobAt, perched, spotted } = await import( '../src/together/Crew.js' );
+const { seenHeight, speckAlpha, visualRange } = await import( '../src/together/Specks.js' );
+const { boatRecord, cleanBoats } = await import( '../src/game/Away.js' );
+const { Raycaster, Scene, Vector3 } = await import( '../src/engine/index.js' );
+const { triangleCount } = await import( '../src/world/boat/GeoKit.js' );
+const { WORLD } = await import( '../src/world/WorldLayout.js' );
+const { Together } = await import( '../src/together/Together.js' );
+const { BoatController } = await import( '../src/player/BoatController.js' );
+
+let bad = 0;
+const ok = ( c, what ) => {
+
+	if ( ! c ) bad ++;
+	console.log( ( c ? 'ok   ' : 'FAIL ' ) + what );
+
+};
+
+// ---- what's known of each without building her
+for ( const id of Object.keys( BOATS ) ) {
+
+	const m = await loadBoat( id );
+	ok( Math.abs( m.dimensions.length - SIZE[ id ].length ) < 1 && Math.abs( m.dimensions.beam - SIZE[ id ].beam ) < 0.6, `${ id }: her size as known without building her is her size (${ m.dimensions.length.toFixed( 1 ) } by ${ m.dimensions.beam.toFixed( 1 ) } m)` );
+	const low = lowMeshes( m ), tris = low.reduce( ( n, x ) => n + triangleCount( x.geometry ), 0 );
+	ok( low.length > 0, `${ id }: a phone's copy of her has ${ low.length } mesh(es), ${ tris } triangles` );
+	const stand = triangleCount( standInGeometry( id ) );
+	ok( stand < 200, `${ id }: her stand-in is ${ stand } triangles` );
+	const helm = footY( m, m.helmEye.x, m.helmEye.z, m.helmEye.y - 1 );
+	const sole = m.helm.y ?? m.dimensions.deckHeight; // (a flybridge's is its own deck)
+	ok( Math.abs( helm - sole ) < 0.6, `${ id }: someone at her helm stands on her sole (${ helm.toFixed( 2 ) } m, deck ${ sole.toFixed( 2 ) })` );
+	if ( id === 'lobster' ) ok( low.every( ( x ) => LOW_BOAT.includes( x.name ) ) && Math.abs( helm - m.dimensions.deckHeight ) < 1e-6, 'the lobster boat: as a phone drew her before, and her skipper on the same sole' );
+	m.dispose();
+
+}
+
+ok( isBoat( 'console' ) && ! isBoat( 'trawler' ) && ! isBoat( undefined ), 'a type from a pose is only taken if it\'s a boat there is' );
+ok( sizeOf( 'trawler' ) === SIZE.lobster, 'and a game that doesn\'t say is the lobster boat' );
+
+// ---- the types in memory
+{
+
+	const scene = new Scene();
+	const own = await loadBoat( 'lobster' );
+	const app = { tier: 'mid', boat: own, scene, localLights: { add: () => ( {} ), remove() {} }, instruments: null };
+	const c = new BoatCopies( app );
+	ok( c.want( 'lobster' ).model === own, 'your own type: your boat, nothing built' );
+	const a = c.make( 'lobster' );
+	ok( a && a.userData.model === own && a.getObjectByName( 'boat-hull' ).geometry === own.meshes.hull.geometry, 'a copy shares her meshes' );
+	ok( c.make( 'console' ) === null, 'another type: not there the moment she\'s asked for' );
+	const e = c.types.get( 'console' );
+	for ( let i = 0; i < 200 && ! e.model; i ++ ) await new Promise( ( r ) => setTimeout( r, 5 ) );
+	ok( !! e.model && e.model.id === 'console', 'and built in the background' );
+	const b1 = c.make( 'console' ), b2 = c.make( 'console' );
+	ok( b1.getObjectByName( 'boat-hull' ).geometry === b2.getObjectByName( 'boat-hull' ).geometry && e.copies.size === 2, 'two of her, one set of meshes' );
+	ok( b1.userData.lamps !== b2.userData.lamps && b1.userData.lamps.points.geometry.attributes.position.count > 0, 'their lamps their own, from her figures' );
+	// (M16) each with the engines her owner has
+	const engines = ( b ) => [ b.getObjectByName( 'boat-outboard-tilt' ).position.x, b.getObjectByName( 'boat-outboard2-tilt' ).visible ];
+	c.dress( b1, fitWire( 'console', { twin: true } ) );
+	c.dress( b2, fitWire( 'console', { twin: false } ) );
+	ok( engines( b1 )[ 0 ] > 0 && engines( b1 )[ 1 ] && engines( b2 )[ 0 ] === 0 && ! engines( b2 )[ 1 ], 'a console\'s copies: two outboards for a twin, one on the centreline for a single' );
+	c.dress( b1, fitWire( 'console', { twin: false } ) );
+	ok( engines( b1 )[ 0 ] === 0 && ! engines( b1 )[ 1 ], 'and a copy follows her owner when she changes' );
+	const noGear = new Scene();
+	e.model.dressCopy( noGear, { twin: true }, () => null );
+	ok( true, 'a low tier\'s copy, with no engines to show, is left as it is' );
+	const lob = c.make( 'lobster' );
+	c.dress( lob, fitWire( 'lobster', {} ) );
+	c.drop( lob );
+	c.tidy( 120 );
+	ok( c.types.has( 'console' ), 'kept while any of her is about' );
+	c.drop( b1 ); c.drop( b2 );
+	c.tidy( 30 );
+	ok( c.types.has( 'console' ), 'kept a while after the last' );
+	c.tidy( 31 );
+	ok( ! c.types.has( 'console' ), 'then let go' );
+
+	// you get into another boat
+	const con = c.want( 'console' );
+	for ( let i = 0; i < 200 && ! con.model; i ++ ) await new Promise( ( r ) => setTimeout( r, 5 ) );
+	const gen = con.gen, mine = await loadBoat( 'console' );
+	app.boat = mine;
+	const kept = c.boatChanged( own );
+	ok( kept === true && c.types.get( 'lobster' ).own === false && c.types.get( 'lobster' ).model === own, 'the boat you left stays for the copies of her still out there' );
+	ok( con.model === mine && con.own && con.gen === gen + 1, 'and your new one\'s the template for her type, the built one let go' );
+	c.drop( a );
+	const none = new BoatCopies( app );
+	none.want( 'console' );
+	app.boat = own;
+	ok( none.boatChanged( mine ) === false && ! none.types.has( 'console' ), 'with no copies of her, she goes as she did' );
+
+	// a phone's: only what it draws stays in memory
+	const pa = { tier: 'low', boat: mine, scene, localLights: app.localLights, instruments: null };
+	const pc = new BoatCopies( pa ), pe = pc.want( 'lobster' );
+	for ( let i = 0; i < 400 && ! pe.model; i ++ ) await new Promise( ( r ) => setTimeout( r, 5 ) );
+	const kinds = Object.values( pe.model.meshes ).map( ( x ) => x.name ).sort();
+	ok( kinds.join() === [ ...LOW_BOAT ].sort().join() && ! pe.model.wheelMesh && pe.model.boardPoint && pe.model.colliders.length > 0, `low: only ${ kinds.join( ', ' ) } kept, and all that's needed to walk her` );
+	const pb = pc.make( 'lobster' );
+	let n = 0;
+	pb.traverse( ( x ) => { if ( x.isMesh && x.name.startsWith( 'boat-' ) ) n ++; } );
+	ok( n === LOW_BOAT.length, `low: a copy draws ${ n } of them` );
+
+}
+
+// ---- the dock
+{
+
+	const taken = [];
+	for ( let i = 0; i < SPARE_BERTHS; i ++ ) taken.push( spareBerth( i, 4.8 ) );
+	const P = WORLD.pier;
+	ok( taken.every( ( b ) => Math.abs( b.x - P.x ) - P.width / 2 - 4.8 / 2 > 0 ), 'the spare berths clear the pier, even for the sportfisher' );
+	ok( taken.every( ( b ) => b.z + 7.3 < P.zEnd - P.headDepth ), 'and her bow the pier head' );
+	for ( let i = 0; i < SPARE_BERTHS; i ++ ) for ( let j = i + 1; j < SPARE_BERTHS; j ++ ) {
+
+		const a = taken[ i ], b = taken[ j ];
+		if ( Math.abs( a.x - b.x ) < 4.8 && Math.abs( a.z - b.z ) < 14.6 ) ok( false, `berths ${ i } and ${ j } overlap` );
+
+	}
+
+	const dock = WORLD.boatDock.position;
+	ok( atDock( dock.x, dock.z ) && atDock( 45, 36.5 ) && ! atDock( 64, - 40 ) && ! atDock( 300, 300 ), 'the pier head\'s berths are the dock\'s; the kayak\'s shallows and the open water aren\'t' );
+	const berth = spareBerth( 0, 2.9 ), from = { x: 64.5, z: 36.5 }, out = new Vector3();
+	laidAt( out, new Vector3( 64.6, 0.2, 36.4 ), from, berth, 0, berthShare( 0.14 ) );
+	ok( Math.abs( out.x - berth.x - 0.1 ) < 1e-6 && Math.abs( out.z - berth.z + 0.1 ) < 1e-6 && out.y === 0.2, 'at her berth she moves as her pose does, about the spare' );
+	laidAt( out, new Vector3( 64.5, 0, 100 ), from, berth, 0, berthShare( 63.5 ) );
+	ok( out.x === 64.5 && out.z === 100, 'gone from the dock she\'s where her pose says' );
+	const seq = [ 5, 15, 25, 35 ].map( berthShare );
+	ok( seq[ 0 ] === 1 && seq[ 0 ] > seq[ 1 ] && seq[ 1 ] > seq[ 2 ] && seq[ 2 ] > seq[ 3 ] && seq[ 3 ] > 0, 'let go gradually as she leaves' );
+
+}
+
+// ---- how far off she shows
+{
+
+	const eye = 2.3;
+	let far = 0;
+	for ( let d = 1000; d < 40000; d += 100 ) if ( seenHeight( d, eye, SIZE.lobster.air ) > 0 ) far = d;
+	ok( far > 12000 && far < 15000, `the lobster boat's above the horizon from a deck to ${ ( far / 1000 ).toFixed( 1 ) } km (about 14)` );
+	let tower = 0;
+	for ( let d = 1000; d < 40000; d += 100 ) if ( seenHeight( d, eye, SIZE.sportfisher.air ) > 0 ) tower = d;
+	ok( tower > far + 3000, `a sportfisher's tower to ${ ( tower / 1000 ).toFixed( 1 ) } km` );
+	ok( seenHeight( 3000, eye, 4 ) === 4 && seenHeight( 10000, eye, 4 ) < 4, 'her hull goes down first' );
+	const clear = visualRange( 1, 0 ), rain = visualRange( 0.55, 0 ), storm = visualRange( 0.42, 0 );
+	ok( clear === 30000 && rain > 4000 && rain < 6000 && storm < 3000, `what the air lets you see: ${ Math.round( clear / 1000 ) } km clear, ${ ( rain / 1000 ).toFixed( 1 ) } in rain, ${ ( storm / 1000 ).toFixed( 1 ) } in a storm` );
+	const at = ( id, d, range = clear ) => speckAlpha( { d, eye, air: SIZE[ id ].air, range } );
+	ok( at( 'lobster', 6000 ) > 0.3 && at( 'lobster', 10000 ) > 0.1 && at( 'lobster', 16000 ) === 0, `the lobster boat's speck: ${ at( 'lobster', 6000 ).toFixed( 2 ) } at 6 km, ${ at( 'lobster', 10000 ).toFixed( 2 ) } at 10, none at 16` );
+	ok( at( 'kayak', 2500 ) > 0.3 && at( 'kayak', 7000 ) < 0.03, `a kayak's too small to make out far off: ${ at( 'kayak', 2500 ).toFixed( 2 ) } at 2.5 km, ${ at( 'kayak', 7000 ).toFixed( 3 ) } at 7` );
+	ok( at( 'lobster', 6000, rain ) < 0.02, 'nothing past the rain' );
+
+}
+
+// ---- a crew's jobs
+{
+
+	const m = await loadBoat( 'sportfisher' ), S = m.stations;
+	ok( jobAt( m, 'helm', null ) === 'helm' && jobAt( m, 'boat', null ) === 'helm', 'at the helm' );
+	ok( jobAt( m, 'deck', new Vector3( S.tower.x, S.tower.y, S.tower.z ) ) === 'tower', 'up the tower' );
+	ok( jobAt( m, 'deck', new Vector3( S.chair.x, S.chair.y, S.chair.z ) ) === 'chair', 'in the chair' );
+	ok( jobAt( m, 'deck', new Vector3( S.tower.x, S.chair.y, S.tower.z ) ) === null, 'at the foot of the tower, not' );
+	ok( jobAt( m, 'walk', new Vector3( S.chair.x, S.chair.y, S.chair.z ) ) === null && jobAt( await loadBoat( 'lobster' ), 'deck', new Vector3() ) === null, 'ashore, or on a boat with none, no job' );
+	ok( clockFrom( 0, 0, 10 ) === 12 && clockFrom( 0, - 10, 0 ) === 3 && clockFrom( 0, 10, 0 ) === 9 && clockFrom( 0, 0, - 10 ) === 6, 'by the clock from her bow, her starboard at three' );
+	ok( clockFrom( Math.PI / 2, 10, 0 ) === 12, 'whichever way she\'s heading' );
+	const finds = { bait: [ { x: 1000, z: 0 }, { x: 0, z: - 900 } ], weed: [ { x: 0, z: 800 } ], debris: [ { x: 0, z: 2000 } ] };
+	const see = spotted( finds, new Vector3(), new Vector3( 1, - 0.05, 0.02 ).normalize() );
+	ok( see && see.kind === 'bait' && see.x === 1000, 'looking at the birds, it\'s the birds' );
+	ok( spotted( finds, new Vector3(), new Vector3( - 1, 0, 0 ) ) === null, 'looking at nothing, nothing' );
+	ok( spotted( { debris: finds.debris }, new Vector3(), new Vector3( 0, 0, 1 ) ) === null, 'and debris too far off to make out isn\'t' );
+
+	const k = await loadBoat( 'kayak' );
+	k.seated = true;
+	const r = perched( k ), p = new Vector3( 5, 0, 5 );
+	r.clampToDeck( p, 0.25 );
+	ok( ! r.seated && r.id === 'kayak' && r.colliders === k.colliders && Math.abs( p.z - r.boardPoint.z ) < 0.2 && p.x < 0.2, 'a rider on a boat that\'s sat in: held on her tank well' );
+	ok( perched( m ) === m, 'and on one that\'s walked, free of her deck' );
+
+}
+
+// ---- at someone else's helm: her owner's game runs her on the rider's lever and wheel
+{
+
+	const query = { latency: 0.05, allocate: () => 0, setPoint() {}, cpuValid: true, version: 0, resultTime: 0, cpu: new Float32Array( 4096 ), resultInputs: new Float64Array( 4096 ) };
+	const model = await loadBoat( 'console' ), b = new BoatController( { model, query, terrain: { heightAt: () => - 50 }, colliders: null } );
+	const toasts = [], t = Object.create( Together.prototype ), rider = { person: { id: 'sam', name: 'Sam' }, cur: { ride: 'robin', mode: 'helm', helm: [ 0.7, 0.2 ] } };
+	t.me = { id: 'robin' };
+	t.others = new Map( [ [ 'sam', rider ] ] );
+	t._handed = null;
+	t.app = { boatCtl: b, player: { mode: 'deck', riding: false }, game: { toast: ( x ) => toasts.push( x ) } };
+	b.position.set( 0, 0, 0 );
+	b.moored = true;
+	b.engineOn = true;
+	let n = 0;
+	const run = ( seconds ) => {
+
+		for ( let f = 0; f < seconds * 60; f ++ ) {
+
+			n += 1 / 60;
+			query.version ++;
+			query.resultTime = n;
+			t._crewHelm( 1 / 60 );
+			b.update( 1 / 60 );
+
+		}
+
+	};
+
+	run( 20 );
+	ok( b.driven && ! b.moored && toasts.length === 1, `a rider at her helm with you on deck: she's cast off and theirs ("${ toasts[ 0 ] }")` );
+	ok( b.rpm > 0.5 && b.forwardSpeed > 1 && b.steer > 0.1, `and she goes on their lever and wheel: ${ b.rpm.toFixed( 2 ) } revs, ${ b.forwardSpeed.toFixed( 1 ) } m/s` );
+	rider.cur.helm = [ - 0.5, 0 ];
+	run( 1 );
+	ok( b.throttleTarget === - 0.5, 'astern when they pull it back' );
+	t.app.player.mode = 'boat';
+	t._crewHelm( 1 / 60 );
+	ok( b.driven && t._handed === null, 'you take the helm: she\'s yours, and still driven' );
+	t.app.player.mode = 'deck';
+	t._crewHelm( 1 / 60 );
+	rider.cur = { ride: null, mode: 'walk' };
+	t._crewHelm( 1 / 60 );
+	ok( ! b.driven && b.throttle === 0, 'they leave her helm: stopped' );
+	rider.cur = { ride: 'robin', mode: 'helm', helm: [ 0.7, 0 ] };
+	t.app.player.mode = 'walk';
+	t._crewHelm( 1 / 60 );
+	ok( ! b.driven, 'with you gone ashore, nobody takes her' );
+
+	const boat = { owner: 'robin', helmFree: false };
+	const sam = Object.create( Together.prototype );
+	sam.me = { id: 'sam' };
+	const robin = { person: { id: 'robin' }, cur: { mode: 'deck', ride: null } };
+	sam.others = new Map( [ [ 'robin', robin ] ] );
+	sam._helmFree( boat, robin );
+	ok( boat.helmFree, 'her owner on deck: her helm\'s free' );
+	robin.cur.mode = 'helm';
+	sam._helmFree( boat, robin );
+	ok( ! boat.helmFree, 'at it: not' );
+	robin.cur.mode = 'walk';
+	sam._helmFree( boat, robin );
+	ok( ! boat.helmFree, 'ashore: not' );
+	robin.cur.mode = 'deck';
+	sam.others.set( 'alex', { person: { id: 'alex' }, cur: { ride: 'robin', mode: 'helm' } } );
+	sam._helmFree( boat, robin );
+	ok( ! boat.helmFree, 'someone before you at it: not' );
+	model.dispose();
+
+}
+
+// ---- away, her type goes with her
+{
+
+	const raw = boatRecord( { boat: 'console', name: 'Sam', x: 1, z: 2, heading: 0, anchor: { x: 1, z: 2 }, at: Date.now(), T: 5 } );
+	ok( cleanBoats( { s: raw } ).s.b === 'console', 'an away boat\'s record says which she is' );
+	const old = boatRecord( { name: 'Sam', x: 1, z: 2, heading: 0, anchor: { x: 1, z: 2 }, at: Date.now(), T: 5 } );
+	ok( cleanBoats( { s: old } ).s.b === undefined, 'one from before doesn\'t: the lobster boat' );
+
+}
+
+// ---- what's fitted, in the pose: it comes out as it went in, and her paint
+for ( const [ id, stats, want ] of [
+	[ 'sportfisher', { tower: false, outriggers: true, chair: false }, { tower: false, outriggers: true, chair: false } ],
+	[ 'sportfisher', {}, { tower: true, outriggers: true, chair: true } ],
+	[ 'console', { twin: true, tTop: false, diveLadder: true, tankRack: false }, { twin: true, tTop: false, diveLadder: true, tankRack: false } ],
+	[ 'kayak', { holdKg: 40, finder: true, anchorM: 0 }, { holdKg: 13, finder: true, trolley: false } ],
+	[ 'lobster', { holdKg: 40 }, {} ],
+] ) {
+
+	const f = fitWire( id, stats, 'navy' );
+	ok( JSON.stringify( fitStats( id, f ) ) === JSON.stringify( want ) && fitPaint( f ) === 0x14283f && f < 256, `what's fitted on the ${ id } goes in a number (${ f }), and her paint` );
+
+}
+
+ok( fitPaint( fitWire( 'console', {}, null ) ) === null, 'no paint: as she came' );
+
+// ---- someone else's boat of your type: fitted as hers, and yours as it was
+{
+
+	const own = await loadBoat( 'sportfisher', 'low' );
+	own.fit( { tower: true, outriggers: true, chair: true } );
+	const v = own.walkedAs( { tower: false, outriggers: true, chair: false } ), up = own.ladders.find( ( l ) => l.needs === 'tower' ), at = new Vector3( up.on.x, up.on.y, up.on.z );
+	ok( ! v.ladderAt( at ) && own.ladderAt( at ), 'her tower, not bought: none to climb on hers, yours still there' );
+	ok( ! v.colliders.find( ( c ) => c.tag === 'chair' ).solid && own.colliders.find( ( c ) => c.tag === 'chair' ).solid, 'her chair, not bought: not in the way on hers, yours still there' );
+	ok( ! v.stations.tower && ! v.stations.chair && own.stations.tower, 'no job up a tower she hasn\'t got' );
+	const copy = own.group.clone( true );
+	own.dressCopy( copy, { tower: false, outriggers: false, chair: true } );
+	ok( ! copy.getObjectByName( 'boat-tower' ).visible && own.meshes.tower.visible, 'a copy without her tower, yours still showing' );
+	own.dispose();
+
+	const con = await loadBoat( 'console', 'low' );
+	con.fit( { twin: true, tTop: true, diveLadder: true, tankRack: true } );
+	const views = new Map(), cc = con.group.clone( true ), full = con.meshes.fittings.geometry.drawRange.count;
+	con.dressCopy( cc, { twin: false, tTop: false, diveLadder: false, tankRack: false }, ( k, make ) => views.get( k ) || views.set( k, make() ).get( k ) );
+	const cf = cc.getObjectByName( con.meshes.fittings.name ).geometry;
+	ok( cf.drawRange.count < full && con.meshes.fittings.geometry.drawRange.count === full, `a console copy without her T-top: ${ cf.drawRange.count } indices against ${ full }, yours as it was` );
+	ok( cf.attributes.position === con.meshes.fittings.geometry.attributes.position, 'the same vertices' );
+	ok( ! cc.getObjectByName( 'boat-outboard2-tilt' ).visible && con.group.getObjectByName( 'boat-outboard2-tilt' ).visible, 'one engine on hers, two on yours' );
+	for ( const view of views.values() ) dropView( view );
+	const painted = con.paintedHull( 0x7c2a22 );
+	ok( painted.material !== con.materials.hull && painted.material.customProgramCacheKey() === con.materials.hull.customProgramCacheKey(), 'her paint: a material of her own, the same shader' );
+	const shader = { uniforms: {}, vertexShader: 'varying vec4 vAux;\n#include <common>', fragmentShader: 'varying vec4 vAux;\n#include <common>' };
+	painted.material.onBeforeCompile( shader, null );
+	ok( shader.uniforms.hullPaint && shader.uniforms.hullPaint !== con.materials.paint, 'and her colour its own' );
+	con.dispose();
+
+	const K = await loadBoat( 'kayak', 'low' ), kc = K.group.clone( true ), kv = new Map();
+	K.dressCopy( kc, { holdKg: 13, finder: true, trolley: true }, ( k, make ) => kv.get( k ) || kv.set( k, make() ).get( k ) );
+	ok( kc.getObjectByName( 'boat-hull' ).geometry.attributes.position !== K.meshes.hull.geometry.attributes.position && kv.size === 1, 'a kayak copy with her crate: vertices of its own, yours as it was' );
+	ok( perched( K ).soleY() === K.perch.y, 'a rider sits at the height of her tank well' );
+	const was = K.stroke.wire;
+	K.poseCopy( kc, [ 0.5, 0.1, 0.2, 0, 0 ] );
+	K.stroke.wire = was;
+	ok( K.stroke.wire.join() === was.join(), 'a copy posed, your stroke put back' );
+	K.dispose();
+
+}
+
+// ---- what's out of her, on the wire: a few numbers a line, and read back
+{
+
+	const lines = [ { spot: { kind: 'flat', side: - 1 }, len: 24.4, on: null }, { spot: { kind: 'rigger', side: 1 }, len: 61.7, on: { species: 'x' } }, { spot: { kind: 'shotgun', side: 0 }, len: 90, on: null, in: true } ];
+	const rl = spreadWire( lines ), read = readSpread( rl );
+	ok( rl.length === 6 && read.length === 2 && read[ 0 ].kind === 'flat' && read[ 0 ].side === - 1 && read[ 1 ].kind === 'rigger' && read[ 1 ].side === 1 && read[ 1 ].on && ! read[ 0 ].on, `the spread: ${ JSON.stringify( rl ).length } bytes for two lines, read back, the one coming in left out` );
+	ok( readSpread( [ 1, 2 ] ) === null && readSpread( 'x' ) === null && readSpread( [ 99, 3, 0 ] ).length === 0, 'and what doesn\'t read isn\'t drawn' );
+	ok( spreadWire( [] ) === undefined && kiteWire( null ) === undefined && kiteWire( { down: true, up: 0, at: new Vector3() } ) === undefined, 'nothing out: nothing sent' );
+	ok( kiteWire( { down: true, up: 0.5, at: new Vector3( 1, 20, 3 ) } )?.[ 1 ] === 20, 'a kite on its way down is still sent, till it\'s in' );
+	const sf = await loadBoat( 'sportfisher', 'low' ), at = { butt: new Vector3(), tip: new Vector3(), clip: new Vector3() };
+	rodOf( sf, { kind: 'rigger', side: 1, on: false }, at );
+	ok( at.hasClip && at.tip.y > at.butt.y, 'a rigger\'s line goes by her outrigger' );
+	rodOf( sf.walkedAs( { tower: true, outriggers: false, chair: true } ), { kind: 'rigger', side: 1, on: false }, at );
+	ok( ! at.hasClip, 'not on hers without them' );
+	ok( sf.walkedAs( { chair: true, tower: true, outriggers: true } ).chair && ! sf.walkedAs( { chair: false, tower: true, outriggers: true } ).chair, 'her chair to sit in, if she has it' );
+	sf.dispose();
+
+}
+
+// ---- each boat's own berth, for keeping and tow
+ok( berthOf( 'kayak' ).position.distanceTo( berthOf( 'lobster' ).position ) > 40 && berthOf( undefined ) === berthOf( 'lobster' ), `each boat's own berth (the kayak's ${ Math.round( berthOf( 'kayak' ).position.distanceTo( berthOf( 'lobster' ).position ) ) } m from the lobster boat's), and one that doesn't say, the lobster boat's` );
+
+// ---- every area she has has something drawn under the feet of whoever stands there, all of her on a phone as she's built for it
+{
+
+	const down = new Vector3( 0, - 1, 0 ), ray = new Raycaster();
+	for ( const id of Object.keys( AREAS ) ) {
+
+		const M = await loadBoat( id, 'low' );
+		M.group.updateMatrixWorld( true );
+		const meshes = [];
+		M.group.traverse( ( m ) => { if ( m.isMesh && m.visible ) meshes.push( m ); } );
+		for ( const A of AREAS[ id ]( M ) ) {
+
+			ray.set( new Vector3( A.x, A.y + 0.45, A.z ), down );
+			ray.far = 1.2;
+			const hit = ray.intersectObjects( meshes, false ).find( ( h ) => h.point.y <= A.y + 0.3 );
+			ok( hit && Math.abs( hit.point.y - A.y ) < 0.25, `${ id }, ${ A.name }: a drawn floor under the feet (${ hit ? hit.object.name + ' at ' + hit.point.y.toFixed( 2 ) : 'nothing' }, standing at ${ A.y })` );
+
+		}
+
+		M.dispose();
+
+	}
+
+}
+
+console.log( bad ? `\n${ bad } failed` : '\ntogether-boats: all passed' );
+process.exit( bad ? 1 : 0 );

@@ -1,7 +1,9 @@
 import * as THREE from '../../engine/index.js';
 import { FT, KT, gallons } from '../../game/Units.js';
 import { SHEETS, HOME, legTo, magnetic, fuelFor } from '../../game/Chart.js';
-import { S52, rgb, SHADES } from '../../game/ChartBake.js';
+import { rgb, SHADES } from '../../game/ChartBake.js';
+import { UP, PEAK, PRIME } from '../../core/Glyphs.js';
+import { PlotterChart, PALETTES, SCREEN, paletteFor } from './PlotterChart.js';
 
 // (M11) The boat's instruments as they read: five gauges about the helm and two screens on the dash,
 // drawn into one canvas that the dash's display meshes take their uvs from (RECTS, atlasUV: built in
@@ -16,7 +18,9 @@ import { S52, rgb, SHADES } from '../../game/ChartBake.js';
 //     watched for or warned of (reading.alert), as a plotter with a weather service shows one. (M15) Your chart
 //     (Chart.js: the minimap's two sheets as you've charted them, S-52's colours, ChartBake.js) with its
 //     soundings and names, your marks and where the fish were; zoomed by steps as a plotter is, out as you go
-//     further from the island; her heading magnetic, as her compass; how far home and the fuel for it.
+//     further from the island; her heading magnetic, as her compass; how far home and the fuel for it. (M16) Slowed
+//     to a stop, it ranges right in on the water she's on (plotterRange), its chart there drawn for the screen at
+//     its own pixel, and after dark in S-52's dusk and night colours (PlotterChart.js).
 //   - (M15) The compass on the dash top: its card (RECTS.compass, compassBand, drawn here; turned by BoatModel, as
 //     a compass's card swings to the north in its bowl).
 //   - (M14) The third, to port of the plotter: the radar (reading.radar: Radar.js, heading up, swept with
@@ -80,6 +84,10 @@ const CHART_M = 640, TRACK_EVERY = 2, TRACK_MAX = 90;
 // shows half what the minimap does (reading.view, its radius, m): closer in, as a skipper keeps it)
 export const PLOTTER_NM = [ CHART_M / 1852, 0.75, 1.5, 3, 6, 12, 24 ];
 export const plotterAcross = ( view ) => ( PLOTTER_NM.find( ( nm ) => nm * 1852 >= view * 1.1 ) ?? PLOTTER_NM[ PLOTTER_NM.length - 1 ] ) * 1852;
+// ((M16) slowed under this (m/s: 3 knots) for this long (s), drifting, anchored or fishing, it ranges right in: the water
+// she's on, not the way across to it. Under way, as above)
+export const PLOTTER_SLOW = { speed: 3 * KT, after: 4 };
+export const plotterRange = ( view, slowFor = 0 ) => slowFor >= PLOTTER_SLOW.after ? PLOTTER_NM[ 0 ] * 1852 : plotterAcross( view );
 // the soundings written black where shallower than this (m: S-52's safety depth, here the 60 ft shade), grey deeper
 const SAFETY = SHADES[ 1 ];
 // where the island is, for the plotter's position (a made-up spot off the Florida Keys), and degrees
@@ -120,7 +128,7 @@ export function position( x, z ) {
 	const dm = ( v ) => {
 
 		const a = Math.abs( v ), d = Math.floor( a );
-		return `${ d }°${ ( ( a - d ) * 60 ).toFixed( 3 ).padStart( 6, '0' ) }′`;
+		return `${ d }°${ ( ( a - d ) * 60 ).toFixed( 3 ).padStart( 6, '0' ) }${ PRIME }`;
 
 	};
 	return [ `${ dm( lat ) }${ lat >= 0 ? 'N' : 'S' }`, `${ dm( lon ) }${ lon >= 0 ? 'E' : 'W' }` ];
@@ -177,8 +185,31 @@ function segments( g, text, x, y, h, colour ) {
 
 export class BoatInstruments {
 
+	// (M16) onto the dash of another boat of yours (App.setBoat)
+	fit( material, gauges ) {
+
+		this.gauges( gauges );
+		if ( ! material ) return;
+		material.map = this.texture;
+		material.color.set( 0xffffff );
+		material.needsUpdate = true;
+		this.material = material;
+
+	}
+
+	// (M16) her dials' scales, a boat's own: { maxRpm, tachMax (x100), knotsMax } (none: the lobster boat's)
+	gauges( g = {} ) {
+
+		this._maxRpm = g.maxRpm || ENGINE.maxRpm;
+		DIALS.tach.max = g.tachMax || 40;
+		DIALS.speed.max = g.knotsMax || 30;
+
+	}
+
 	// material: the dash's display (BoatMaterials.display); tier: the low one draws at half size
-	constructor( { material, tier = 'high' } ) {
+	constructor( { material, tier = 'high', gauges } ) {
+
+		this.gauges( gauges );
 
 		const k = this.k = tier === 'low' ? 0.5 : 1;
 		const c = this.canvas = document.createElement( 'canvas' );
@@ -210,6 +241,9 @@ export class BoatInstruments {
 		this.track = [];
 		this._trackT = 0;
 		this._seed = 1;
+		this._slowFor = 0;
+		this._palette = 'day';
+		this.plotter = null; // ((M16) its chart: PlotterChart, made the first time it's drawn, aboard)
 		this.draw( null );
 
 	}
@@ -240,6 +274,7 @@ export class BoatInstruments {
 		}
 
 		this._on = true;
+		this._slowFor = reading.speed < PLOTTER_SLOW.speed ? this._slowFor + dt : 0;
 		// the sounder pings and the plotter lays its track whatever's shown
 		if ( ( this._ping -= dt ) <= 0 ) {
 
@@ -263,7 +298,7 @@ export class BoatInstruments {
 		// the needles, as a gauge's own swing lags
 		const N = this.needles, q = 1 - Math.exp( - dt * 5 );
 		const target = {
-			tach: running || reading.engine === 'cranking' ? reading.rpm * ENGINE.maxRpm / 100 + ( reading.engine === 'cranking' ? 2 : 0 ) : 0,
+			tach: running || reading.engine === 'cranking' ? reading.rpm * this._maxRpm / 100 + ( reading.engine === 'cranking' ? 2 : 0 ) : 0,
 			speed: reading.speed / KT,
 			fuel: reading.fuel,
 			temp: this.temp,
@@ -599,38 +634,28 @@ export class BoatInstruments {
 	_chart( reading ) {
 
 		const g = this.ctx, [ x, y, w, h ] = RECTS.chart;
-		const across = plotterAcross( reading.view || 0 ), s = w / across; // px a metre
+		const across = plotterRange( reading.view || 0, this._slowFor ), s = w / across; // px a metre
 		const rx = reading.x, rz = reading.z;
+		// ((M16) its colours by the light: S-52's day, dusk and night, as its chart is drawn)
+		const palette = this._palette = paletteFor( reading.night || 0, this._palette ), P = PALETTES[ palette ], U = SCREEN[ palette ];
 		g.save();
 		g.beginPath();
 		g.rect( x, y, w, h );
 		g.clip();
-		g.fillStyle = rgb( S52.NODTA );
+		g.fillStyle = rgb( P.NODTA );
 		g.fillRect( x, y, w, h );
 		const cx = x + w / 2, cy = y + h / 2 + 12;
 		const sx = ( wx ) => cx + ( wx - rx ) * s, sy = ( wz ) => cy + ( wz - rz ) * s;
 		const map = reading.chart, log = reading.log;
-		if ( map && map.sheets ) {
-
-			g.imageSmoothingEnabled = true;
-			// (the sheets, coarsest first, from the finest that covers the screen)
-			const covers = ( sp ) => sx( sp.x0 ) <= x && sy( sp.z0 ) <= y && sx( sp.x0 + sp.ext ) >= x + w && sy( sp.z0 + sp.ext ) >= y + h;
-			const S = map.sheets, list = [ S.far, S.mid, S.near ];
-			const from = covers( S.near.spec ) ? 2 : covers( S.mid.spec ) ? 1 : 0;
-			for ( const sh of list.slice( from ) ) if ( sh.drawn >= 0 ) {
-
-				const sp = sh.spec;
-				g.drawImage( sh.view, sx( sp.x0 ), sy( sp.z0 ), sp.ext * s, sp.ext * s );
-
-			}
-
-		}
+		// (the chart: PlotterChart. Her spot's 12 px below the screen's middle)
+		const plot = this.plotter || ( this.plotter = new PlotterChart( { k: this.k, w, h } ) );
+		plot.draw( g, { map, log, across, x, y, w, h, vx: rx, vz: rz - 12 / s, s, palette } );
 
 		if ( map && map.soundings && log ) {
 
 			// soundings, in feet, those charted that fit: the finest sheet's first (the island's close in, then its
 			// waters', then the far grounds'), the others' only where they leave room
-			const lists = [ across < 1500 && map.soundings.near, across < 12000 && map.soundings.mid, map.soundings.far ];
+			const lists = plot.vector ? [ across < 1500 && map.soundings.near, plot.soundings ] : [ across < 1500 && map.soundings.near, across < 12000 && map.soundings.mid, map.soundings.far ];
 			const drawn = [];
 			g.font = '500 11px system-ui, sans-serif';
 			g.textAlign = 'center';
@@ -642,7 +667,7 @@ export class BoatInstruments {
 				// (none closer to another than a sounding's width, as a chart spaces them)
 				if ( drawn.some( ( [ qx, qy ] ) => Math.abs( qx - px ) < 34 && Math.abs( qy - py ) < 18 ) || ! log.seen( p.x, p.z ) ) continue;
 				drawn.push( [ px, py ] );
-				g.fillStyle = rgb( p.d < SAFETY ? S52.SNDG2 : S52.SNDG1 );
+				g.fillStyle = rgb( p.d < SAFETY ? P.SNDG2 : P.SNDG1 );
 				g.fillText( String( Math.round( p.d / FT ) ), px, py );
 
 			}
@@ -663,19 +688,19 @@ export class BoatInstruments {
 				g.textAlign = 'center';
 				g.textBaseline = 'middle';
 				g.font = `${ n.water ? 'italic 500' : '600' } ${ n.small ? 12 : 14 }px system-ui, sans-serif`;
-				const half = g.measureText( n.peak ? `▲ ${ n.name }` : n.name ).width / 2 + 3, tall = n.light ? 22 : 10;
+				const half = g.measureText( n.peak ? `${ PEAK } ${ n.name }` : n.name ).width / 2 + 3, tall = n.light ? 22 : 10;
 				if ( boxes.some( ( b ) => Math.abs( b.x - px ) < b.half + half && py - 9 < b.y + b.tall && py + tall > b.y - 9 ) ) continue;
 				boxes.push( { x: px, y: py, half, tall } );
 				g.lineWidth = 3;
-				g.strokeStyle = 'rgba(255,255,255,0.75)';
-				const text = n.peak ? `▲ ${ n.name }` : n.name;
+				g.strokeStyle = U.halo;
+				const text = n.peak ? `${ PEAK } ${ n.name }` : n.name;
 				g.strokeText( text, px, py );
-				g.fillStyle = rgb( S52.CHBLK );
+				g.fillStyle = rgb( P.CHBLK );
 				g.fillText( text, px, py );
 				if ( n.light ) {
 
 					g.font = '600 11px system-ui, sans-serif';
-					g.fillStyle = rgb( S52.CHMGD );
+					g.fillStyle = rgb( P.CHMGD );
 					g.fillText( n.light, px, py + 13 );
 
 				}
@@ -689,8 +714,8 @@ export class BoatInstruments {
 				if ( px < x || px > x + w || py < y + 30 || py > y + h ) continue;
 				g.save();
 				g.translate( px, py );
-				g.fillStyle = '#1d5b8f';
-				g.strokeStyle = '#ffffff';
+				g.fillStyle = U.fish;
+				g.strokeStyle = U.edge;
 				g.lineWidth = 1.5;
 				g.beginPath();
 				g.ellipse( - 1, 0, 6, 3.4, 0, 0, Math.PI * 2 );
@@ -717,16 +742,16 @@ export class BoatInstruments {
 				g.lineTo( px, py + 7 );
 				g.lineTo( px - 7, py );
 				g.closePath();
-				g.fillStyle = '#d6303a';
-				g.strokeStyle = '#ffffff';
+				g.fillStyle = m.trap ? '#ff8a3c' : U.mark; // ((M16) a lobster trap's: orange, as its buoy)
+				g.strokeStyle = U.edge;
 				g.lineWidth = 1.5;
 				g.fill();
 				g.stroke();
 				g.lineWidth = 3;
-				g.strokeStyle = 'rgba(255,255,255,0.8)';
+				g.strokeStyle = U.haloMark;
 				const label = String( m.id ).padStart( 3, '0' );
 				g.strokeText( label, px + 10, py );
-				g.fillStyle = rgb( S52.CHBLK );
+				g.fillStyle = rgb( P.CHBLK );
 				g.fillText( label, px + 10, py );
 
 			}
@@ -737,7 +762,7 @@ export class BoatInstruments {
 		const T = this.track;
 		if ( T.length > 1 ) {
 
-			g.strokeStyle = 'rgba(30,30,30,0.75)';
+			g.strokeStyle = U.track;
 			g.setLineDash( [ 5, 4 ] );
 			g.lineWidth = 2;
 			g.beginPath();
@@ -756,8 +781,8 @@ export class BoatInstruments {
 		// her, pointing where she heads
 		g.translate( cx, cy );
 		g.rotate( reading.heading );
-		g.fillStyle = '#ff6a2a';
-		g.strokeStyle = '#1a1a1a';
+		g.fillStyle = U.her;
+		g.strokeStyle = U.herEdge;
 		g.lineWidth = 2;
 		g.beginPath();
 		g.moveTo( 0, - 12 );
@@ -769,9 +794,9 @@ export class BoatInstruments {
 		g.stroke();
 		g.restore();
 		// the data bar: her speed and heading (magnetic, as her compass), where she is; a scale and north
-		g.fillStyle = 'rgba(2,8,14,0.82)';
+		g.fillStyle = U.bar;
 		g.fillRect( x, y, w, 30 );
-		g.fillStyle = '#e8f4ff';
+		g.fillStyle = U.text;
 		g.font = '700 16px system-ui, sans-serif';
 		g.textAlign = 'left';
 		g.textBaseline = 'middle';
@@ -782,26 +807,26 @@ export class BoatInstruments {
 		g.fillText( lat, x + w - 10, y + 9 );
 		g.fillText( lon, x + w - 10, y + 22 );
 		// ((M15) home: how far and which way, and the fuel for it, along the foot)
-		g.fillStyle = 'rgba(2,8,14,0.82)';
+		g.fillStyle = U.bar;
 		g.fillRect( x, y + h - 24, w, 24 );
 		const leg = legTo( rx, rz, HOME.x, HOME.z );
 		g.font = '700 13px system-ui, sans-serif';
 		g.textAlign = 'left';
-		g.fillStyle = '#e8f4ff';
+		g.fillStyle = U.text;
 		g.fillText( `HOME ${ leg.m < 0.2 * 1852 ? `${ Math.round( leg.m / FT ) } ft` : `${ ( leg.m / 1852 ).toFixed( 1 ) } NM` } ${ String( magnetic( leg.bearing ) ).padStart( 3, '0' ) }°M`, x + 10, y + h - 12 );
 		if ( Number.isFinite( reading.fuelL ) ) {
 
-			const f = fuelFor( leg.m, reading.fuelL, { rpm: reading.rpm, speed: reading.speed, speedMul: reading.speedMul || 1 } );
+			const f = fuelFor( leg.m, reading.fuelL, { rpm: reading.rpm, speed: reading.speed, speedMul: reading.speedMul || 1, boat: reading.boat } );
 			g.textAlign = 'right';
-			g.fillStyle = f.state === 'ok' ? '#8fdc8a' : f.state === 'tight' ? '#f2c14e' : '#ff7a6a';
+			g.fillStyle = f.state === 'ok' ? U.ok : f.state === 'tight' ? U.tight : U.short;
 			g.fillText( `FUEL ${ gallons( reading.fuelL ) } gal · ${ gallons( f.litres ) } to get home${ f.state === 'short' ? ' · SHORT' : '' }`, x + w - 10, y + h - 12 );
 
 		}
 
-		g.fillStyle = 'rgba(16,20,22,0.85)';
+		g.fillStyle = U.ink;
 		g.textAlign = 'left';
 		g.font = '700 12px system-ui, sans-serif';
-		g.fillText( 'N ↑', x + 10, y + h - 38 );
+		g.fillText( `N ${ UP }`, x + 10, y + h - 38 );
 		// (a scale bar a round length, about a fifth of the screen)
 		const bar = niceLength( across / 5 ), bw = bar * s;
 		g.fillRect( x + w - 10 - bw, y + h - 34, bw, 2 );
@@ -811,9 +836,9 @@ export class BoatInstruments {
 		if ( reading.alert ) {
 
 			const warn = /WARNING/.test( reading.alert ), on = ! warn || ( Date.now() % 1600 ) < 1100;
-			g.fillStyle = warn ? ( on ? '#c8202c' : '#5a0f16' ) : '#c98a12';
+			g.fillStyle = warn ? ( on ? U.warn : U.warnOff ) : U.watch;
 			g.fillRect( x, y + 30, w, 24 );
-			g.fillStyle = '#ffffff';
+			g.fillStyle = U.alert;
 			g.font = '800 14px system-ui, sans-serif';
 			g.textAlign = 'center';
 			g.fillText( reading.alert, x + w / 2, y + 43 );

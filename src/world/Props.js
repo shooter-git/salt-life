@@ -197,7 +197,8 @@ export function lifeRing( B, x, y, z, ry = 0, seed = 0.5 ) {
 // Lighting fixtures
 
 // hanging lantern; (x, y, z) = hook point. Returns the local center of the glass.
-export function lantern( B, x, y, z, seed = 0.5, scale = 1 ) {
+// ((M16) glass: its glass's data, for one that isn't lit by the village's night (the fish camp's: CampLights))
+export function lantern( B, x, y, z, seed = 0.5, scale = 1, glass = null ) {
 
 	const s = scale;
 	const t = C.iron, d = HARD( seed, 0.35, 0.5, 0.45 );
@@ -205,7 +206,7 @@ export function lantern( B, x, y, z, seed = 0.5, scale = 1 ) {
 	B.cyl( 'hard', x, y - 0.13 * s, z, 0.02 * s, 0.12 * s, 0.1 * s, { segs: 6, capTop: true, capBot: true, tint: t, data: d } );
 	B.cyl( 'hard', x, y - 0.155 * s, z, 0.125 * s, 0.125 * s, 0.025 * s, { segs: 6, capBot: true, tint: t, data: d } );
 	const gy = y - 0.355 * s;
-	B.cyl( 'glass', x, gy, z, 0.085 * s, 0.075 * s, 0.2 * s, { segs: 6, capTop: false, tint: C.glassWarm, data: [ seed, 1, 1, 0 ] } );
+	B.cyl( 'glass', x, gy, z, 0.085 * s, 0.075 * s, 0.2 * s, { segs: 6, capTop: false, tint: C.glassWarm, data: glass || [ seed, 1, 1, 0 ] } );
 	for ( let i = 0; i < 4; i ++ ) {
 
 		const a = i / 4 * Math.PI * 2 + Math.PI / 4;

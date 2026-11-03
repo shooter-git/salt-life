@@ -2,6 +2,7 @@ import { Group, Vector3, Quaternion, MathUtils } from '../engine/index.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { Character } from '../game/Character.js';
 import { Figure } from './Figure.js';
+import { seatPose } from '../world/boat/kayak/SeatPose.js';
 
 // (Salt Life) Another player on the island: one of four islanders (Microsoft Rocketbox, as Joe and
 // Marta: tools/characters/players.sh), the one they chose (in the cooler; it comes with their poses),
@@ -29,6 +30,7 @@ export const LOOK_NAMES = {
 const WALK = 1.0, RUN = 2.2, JOG = 1.8;
 const LIE = Math.PI * 0.46; // face down in the water
 const CHEST = 1.3; // m above the feet: at the float point when swimming
+const SIT_DROP = 0.42, SIT_THIGH = 1.45; // (M16) sitting: how far the body's lower, and the thighs up, rad
 
 export function lookOf( person ) {
 
@@ -90,6 +92,7 @@ export class Avatar {
 		this.character = null;
 		this.bones = null;
 		this._swim = 0;
+		this._sit = 0;
 		this._phase = 0;
 		this._gesture = null;
 		this._reach = 0;
@@ -136,7 +139,7 @@ export class Avatar {
 
 		this.bones = {
 			hand: bone( /R_?Hand$/ ), handL: bone( /L_?Hand$/ ), armL: bone( /L_?UpperArm$/ ), armR: bone( /R_?UpperArm$/ ),
-			thighL: bone( /L_?Thigh$/ ), thighR: bone( /R_?Thigh$/ ),
+			thighL: bone( /L_?Thigh$/ ), thighR: bone( /R_?Thigh$/ ), calfL: bone( /L_?Calf$/ ), calfR: bone( /R_?Calf$/ ),
 		};
 		if ( this.figure ) {
 
@@ -168,33 +171,43 @@ export class Avatar {
 
 	// (Salt Life) gun: swimming with a speargun, held out ahead in the right hand; reach: { r, l } (world)
 	// where their hands hold something out (a cast net), or null
-	pose( { mode, speed = 0, rod = false, gun = false, reach = null }, dt ) {
+	// (M16) sit: in a seat (a kayak's, a fighting chair), facing as the group does
+	pose( { mode, speed = 0, rod = false, gun = false, reach = null, seat = null, sit = false }, dt ) {
 
 		// lying face down in the water (the chest at the float point), upright otherwise
 		this._swim += ( ( mode === 'swim' ? 1 : 0 ) - this._swim ) * ( 1 - Math.exp( - dt * 6 ) );
 		const tilt = this._swim * LIE;
 		this.body.rotation.x = tilt;
 		this.body.position.set( 0, - CHEST * Math.cos( tilt ) * this._swim, - CHEST * Math.sin( tilt ) * this._swim );
+		this._sit += ( ( sit ? 1 : 0 ) - this._sit ) * ( 1 - Math.exp( - dt * 6 ) );
+		this.body.position.y -= this._sit * SIT_DROP;
 		const reaching = !! reach && mode !== 'swim' && mode !== 'helm';
 		this._reach += ( ( reaching ? 1 : 0 ) - this._reach ) * ( 1 - Math.exp( - dt * 10 ) );
 		if ( reaching ) this._reachTo = reach;
 		if ( ! this.character ) {
 
-			this.figure.pose( { mode, speed, rod: rod || reaching }, dt );
+			this.figure.pose( { mode, speed: sit ? 0 : speed, rod: rod || reaching, sit: this._sit }, dt );
 			return;
 
 		}
 
 		const c = this.character;
 		let clip = 'idle_neutral_01', scale = 1, loop = true;
-		this._still = mode !== 'swim' && mode !== 'helm' && speed < 0.25;
-		if ( mode === 'helm' ) {
+		this._still = mode !== 'swim' && mode !== 'helm' && speed < 0.25 && ! sit;
+		// ((M16) seat: sat in a kayak, the arms to these, the clip's only breathing under it: SeatPose.js)
+		if ( mode === 'helm' && ! seat ) {
 
 			clip = 'trolley_idle';
 			loop = 'pingpong';
 
 		} else if ( mode === 'swim' ) clip = 'idle_neutral_01';
-		else if ( speed > JOG ) {
+		else if ( sit && ! rod ) clip = 'idle_neutral_01';
+		else if ( sit ) {
+
+			clip = 'umbrella_idle_01';
+			loop = 'pingpong';
+
+		} else if ( speed > JOG ) {
 
 			clip = 'run_slow_01';
 			scale = MathUtils.clamp( speed / RUN, 0.8, 2.2 );
@@ -232,7 +245,27 @@ export class Avatar {
 
 		}
 
+		// ((M16) sitting: the thighs forward from the hips, the shins down from the knees)
+		if ( this._sit > 0.01 && this.bones.thighL && this.bones.calfL ) {
+
+			const B = this.bones, a = this._sit * SIT_THIGH;
+			this.group.updateMatrixWorld( true );
+			_axis.set( 1, 0, 0 ).applyQuaternion( this.body.getWorldQuaternion( _q1 ) );
+			turnBone( B.thighL, _axis, - a );
+			turnBone( B.thighR, _axis, - a );
+			turnBone( B.calfL, _axis, a );
+			turnBone( B.calfR, _axis, a );
+
+		}
+
 		// both hands out to what they hold (eased in and out as they take it up and put it away)
+		if ( seat ) {
+
+			this.body.position.set( 0, 0, 0 );
+			seatPose( this, seat );
+
+		}
+
 		const B = this.bones, to = this._reachTo;
 		if ( this._reach > 0.01 && to && B.armR && B.hand ) {
 
