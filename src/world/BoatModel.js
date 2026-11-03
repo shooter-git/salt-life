@@ -144,7 +144,10 @@ export class BoatModel extends Vessel {
 		this.floods = [ - 0.8, 0.8 ].map( ( x ) => ( { at: [ x, 2.25, - 1.0 ], dir: [ x * 0.25, - 0.75, - 0.62 ] } ) );
 		this.bowWalk = 4.0;
 		this.nearDetail = [ 'fittings', 'wood', 'display', 'wheel', 'throttle', 'radar', 'propeller', 'rudder' ];
-		this.nearDist = 45; // ((M16) m: on Marta's cradle, seen from the path after a hurricane, her fittings alone took a phone past its 300,000 triangles)
+		// ((M16) m: on Marta's cradle, seen from the path after a hurricane, her fittings alone took a phone past its 300,000
+		// triangles. (v2.1.2) 38, not 45: the path's 51 to 53 m from her, and her fittings came back with a few metres' less
+		// of it, as the start's timing moved where the checks' walk ends)
+		this.nearDist = 38;
 
 		// ---- state
 
