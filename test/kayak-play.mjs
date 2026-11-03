@@ -211,13 +211,22 @@ press( 'KeyE' );
 ok( player.mode === 'boat', 'back on' );
 run( 3 );
 
-// a squall: past what she'll hold, she's over
+// a breaker: one coming down on her beam, she's over ((v2.0.1) a sit-on-top holds a squall's wind: Capsize.js)
 ctl.position.y = 0;
 ctl.quaternion.setFromAxisAngle( new Vector3( 0, 1, 0 ), 0 );
 ctl.velocity.set( 0, 0, 0 );
 ctl.angular.set( 0, 0, 0 );
-G.windSpeed.value = 26;
-G.windDir.value.set( 1, 0 );
+let crest = 0;
+query.breakerAt = ( x, z, t, out ) => {
+
+	out.n = ++ crest;
+	out.H = 3.4;
+	out.b = 1;
+	out.dx = 1;
+	out.dz = 0;
+	return out;
+
+};
 let seconds = 0;
 while ( player.mode === 'boat' && seconds < 20 ) {
 
@@ -226,7 +235,8 @@ while ( player.mode === 'boat' && seconds < 20 ) {
 
 }
 
-ok( player.mode === 'swim' && model.capsized, `a 26 m/s squall on her beam, sat idle: over in ${ seconds.toFixed( 1 ) } s` );
+query.breakerAt = null;
+ok( player.mode === 'swim' && model.capsized, `a 3.4 m breaker on her beam, sat idle: over in ${ seconds.toFixed( 1 ) } s` );
 ok( state.inventory.length === 2, `half the cooler gone (${ state.inventory.length } of 4 left)` );
 ok( toasts.some( ( x ) => /over/.test( x ) ), `told: ${ toasts[ toasts.length - 1 ] }` );
 ok( player.soak > 0.95, 'soaked, of course' );

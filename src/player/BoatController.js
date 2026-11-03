@@ -457,6 +457,17 @@ export class BoatController {
 
 		}
 
+		// ((v2.0.1) H.early { from, k, fade: [ from, to ] }: a small hull's own stiffness, from a few degrees, given way as her rail
+		// goes under. Her samples hold her only to a GZ of about 0.03 m)
+		const E = H.early;
+		if ( E && tilt > E.from && up.y > 0 ) {
+
+			const k = E.k * ( tilt - E.from ) * ( 1 - THREE.MathUtils.smoothstep( tilt, E.fade[ 0 ], E.fade[ 1 ] ) ) * wetD / Math.max( Math.hypot( up.x, up.z ), 1e-6 );
+			T.x -= up.z * k;
+			T.z += up.x * k;
+
+		}
+
 		// ---- mooring lines when docked and not driven
 		if ( this.moored && ! this.driven ) {
 

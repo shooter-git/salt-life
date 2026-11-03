@@ -299,6 +299,10 @@ export const KAYAK_HANDLING = {
 	windLead: 1.1,
 	rightFrom: 46 * DEG, // (past what you could hold her at: Capsize.js. Nobody aboard, she never quite goes over)
 	rightK: 2200,
+	// ((v2.0.1) and before it her own: her samples hold her only to a GZ of about 0.03 m, and from there a breath of wind or a
+	// wave on her beam flopped her over, past where she's over (Capsize.js). Hard to roll with the wind alone, as a sit-on-top
+	// is; it's a breaker on her beam that puts her over, Capsize.js)
+	early: { from: 5 * DEG, k: 600, fade: [ 24 * DEG, 40 * DEG ] },
 	rollInertia: 1,
 	addedMass: [ 0.45, 0.6, 0.05 ],
 	addedInertia: [ 0.8, 0.45, 0.2 ],
