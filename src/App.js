@@ -404,7 +404,9 @@ export class App {
 		this.shoreField = computeShoreField( this.terrainData, { res: SHORE_RES[ tier ] ?? SHORE_RES.low, swellDir: [ WORLD.swellDir.x, WORLD.swellDir.y ] } );
 		this.shore = new ShoreWaves( { field: this.shoreField } );
 		this.query = new WaterQuery( this.waves, this.terrainData, this.shore );
-		this.water = new WaterSurface( { scene, waves: this.waves, terrain: this.terrain, shore: this.shore, cover: this.cover, rocks: this.rockCover, tier, lean: this.cpuGL && ! new URLSearchParams( location.search ).has( 'fullsea' ) } );
+		// ((v2.1.5) lean, it's loaded with a plain sea too, the whole one put in after the start: fullSea)
+		const lean = this.cpuGL && ! new URLSearchParams( location.search ).has( 'fullsea' );
+		this.water = new WaterSurface( { scene, waves: this.waves, terrain: this.terrain, shore: this.shore, cover: this.cover, rocks: this.rockCover, tier, lean, plain: lean } );
 		// (M15) what's found out there: the debris floating (game/Finds.js; the weed and the bait's boils are the
 		// sea's own, the birds working it Wildlife's)
 		this.flotsam = new Flotsam( { scene, waves: this.waves } );
@@ -659,7 +661,8 @@ export class App {
 			// ((M15) and what M15 added about the island, none of it where you start but the signposts: the lighthouse,
 			// the harbour lights, the wreck, the turtles, the island's far shape, the signs. Theirs were nine more
 			// programs, and the load back past what v1.10.0 failed All the Spaces' checks at: 5.4 s to 9 s)
-			const landmarks = /^(Lighthouse|LighthouseGlare|HarbourLights|HarbourGlare|Wreck|Turtles|FarIsland|Signpost|ShelterSign|StormChart|BoardedUp|AnchorRode|Spray)/;
+			// ((v2.1.5) and the wake: only ever behind a boat under way, and the boat you start in waits too)
+			const landmarks = /^(Lighthouse|LighthouseGlare|HarbourLights|HarbourGlare|Wreck|Turtles|FarIsland|Signpost|ShelterSign|StormChart|BoardedUp|AnchorRode|Spray|Wake)/;
 			this._heldLandmarks = scene.children.filter( ( c ) => landmarks.test( c.name ) ).map( ( m ) => [ m, m.parent ] );
 			for ( const [ m ] of this._heldLandmarks ) m.removeFromParent();
 
@@ -1127,6 +1130,12 @@ export class App {
 		this.frame( Math.min( 0.1, dt + this._owed ) );
 		this._owed = 0;
 		this._drawn = gl.fenceSync( gl.SYNC_GPU_COMMANDS_COMPLETE, 0 );
+		if ( this._afterDraw ) {
+
+			this._afterDraw();
+			this._afterDraw = null;
+
+		}
 		this._rest = true;
 		gl.flush();
 
@@ -1188,12 +1197,28 @@ export class App {
 	// seconds more), then back in the scene, still hidden, for revealLate
 	async lateReady() {
 
+		await this.fullSea();
 		const held = this._lateHeld;
 		if ( ! held ) return;
 		await this.village.textures.bake( this.renderer, { slot: () => this.frameSlot(), ready: () => this.useNewPrograms() } );
 		await this.readyToDraw( held.map( ( [ root ] ) => root ) );
 		for ( const [ root, parent ] of held ) parent.add( root );
 		this._lateHeld = null;
+
+	}
+
+	// ((v2.1.5) WebGL drawn on the CPU) the whole sea for the plain one the load drew (WaterSurface's plain): its
+	// shader made and first used in ticks that draw nothing (readyToDraw), then drawn in the next frame, and the GPU
+	// let finish that frame (where the driver builds its pipeline: 1.7 s on four cores here) before the island's
+	// held-back parts are made ready and shown (lateReady), so that their first draws don't come in the same frame
+	async fullSea() {
+
+		const w = this.water;
+		if ( ! w.plainMaterial ) return;
+		await this.readyToDraw( new THREE.Mesh( w.mesh.geometry, w.material ) );
+		w.full();
+		await new Promise( ( resolve ) => this._afterDraw = resolve );
+		await this.gpuCaughtUp();
 
 	}
 

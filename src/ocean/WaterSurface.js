@@ -152,8 +152,11 @@ const rgb = ( r, g, b ) => {
 export class WaterSurface {
 
 	// lean: (step 20) a device that draws on its CPU: no weedlines nor the front's slick in the sea's shader, a third
-	// of what it took to build there, in the 45 s a creation has to load, and nowhere it could go at a playable rate
-	constructor( { scene, waves, terrain, shore = null, cover = null, rocks = null, tier = 'low', lean = false } ) {
+	// of what it took to build there, in the 45 s a creation has to load, and nowhere it could go at a playable rate.
+	// plain: ((v2.1.5) there too) loaded with a plain sea (WATER_PLAIN), the whole one put in after the start (full):
+	// the sea's shader was two thirds of what the loading frame built there (1.7 of 2.7 s on four cores here), and
+	// All the Spaces' server failed the cold first screen's 45 s now and then
+	constructor( { scene, waves, terrain, shore = null, cover = null, rocks = null, tier = 'low', lean = false, plain = false } ) {
 
 		this.waves = waves;
 		this.terrain = terrain;
@@ -438,7 +441,14 @@ float waterLaceK( vec2 p, int k, float cover ) {
 	float meanDepth = max( waterSeaLevel_ - floorH, 0.0 );
 	// see-through only over the shallows: deeper, the water's own colour is all there is
 	float cover = smoothstep( 0.0, 4.5, depth ) * 0.85 + 0.15;
+	// ((v2.1.5) WATER_PLAIN: the plain sea a device that draws on its CPU loads with (plain, in the constructor):
+	// none of the surf's lace, swash edge or milkiness, the whitecaps, the spume, the windrows, the boils, the
+	// rain's rings or a blow's rough water, the whale's marks or the sea's gusts and slicks)
+#ifdef WATER_PLAIN
+	float turbid = 0.0;
+#else
 	float turbid = ${ SH ? 'shoreSurfTurbidity( vWater.xz, meanDepth )' : '0.0' };
+#endif
 	if ( turbid > 0.0 ) turbid *= 1.0 - 0.8 * seaCaveCalm( vWater.xz );
 	// whitewater: the breakers' foam as lace, denser at the roller; a soft line where the swash
 	// runs out on the sand
@@ -447,28 +457,41 @@ float waterLaceK( vec2 p, int k, float cover ) {
 	// two scales of lace: clumps of bubbles (~0.5 m) torn into a fine net; solid only at the very top
 	// of the roller ((M16) only where there's whitewater: eight noises on every pixel of the open sea, for nothing)
 	float foam = 0.0;
+#ifdef WATER_PLAIN
+	foam = ww * 0.7;
+#else
 	if ( ww > 0.0 ) {
 		float lace = waterLace( vWater.xz * 2.1 + drift, ww * 0.9 ) * 0.65 + waterLace( vWater.xz * 5.3 + drift * 1.7 + 3.1, ww * 0.8 ) * 0.35;
 		foam = max( lace * ww, smoothstep( 0.75, 1.0, ww ) * 0.75 );
 	}
+#endif
 	float film = depth;
 ${ SH ? /* glsl */`
+#ifdef WATER_PLAIN
+	float sheetEdge = smoothstep( 0.0, 0.03, film );
+#else
 	vec4 se = shoreSwashEdge( vWater.xz, film );
 	float frontD = se.y;
 	float uprush = smoothstep( 0.46, 0.32, se.z );
 	float frontFoam = smoothstep( 0.9, 0.0, frontD ) * smoothstep( -0.05, 0.08, frontD ) * uprush;
 	if ( frontFoam > 0.0 ) foam = max( foam, waterLace( vWater.xz * 4.5 + 3.7, 0.65 ) * frontFoam * ( 1.0 - 0.9 * seaCaveCalm( vWater.xz ) ) * 0.85 );
 	// the swash sheet ends on its analytic front, not on the mesh triangles
-	float sheetEdge = smoothstep( 0.0, 0.012, se.x );` : `
+	float sheetEdge = smoothstep( 0.0, 0.012, se.x );
+#endif` : `
 	float sheetEdge = smoothstep( 0.0, 0.03, film );
 	float lap = sin( dot( vWater.xz, vec2( 0.11, 0.93 ) ) * 1.7 - waterTime * 1.3 ) * 0.5 + 0.5;
 	foam = max( foam, ( 1.0 - smoothstep( 0.0, 0.08 + 0.16 * lap, depth ) ) * ( 0.35 + 0.45 * lap ) );` }
 	// the humpback's marks: churned white water, and the flat slick of its fluke print (WhaleWater)
+#ifdef WATER_PLAIN
+	vec2 whaleMk = vec2( 0.0 );
+	vec4 seaD = vec4( 1.0, 0.5, 0.0, 0.0 );
+#else
 	vec2 whaleMk = whaleMarksOn > 0.5 ? whaleWater( vWater.xz ) : vec2( 0.0 );
 	foam = max( foam, whaleMk.x );
 	// the sea's large-scale detail: rougher gusts, calm slicks, the windrows' foam ((M14) beaded lines of it,
 	// granular as the whitecaps' foam; seen from afar, as much white spread)
 	vec4 seaD = seaDetailSample( vWater.xz );
+#endif
 	// ((M15) the edge where the green water meets the blue, and the slick along it: worked out here, as it
 	// sweeps the whitecaps and windrows off its water)
 	float frontOff = meanDepth - ${ g( WATER.front[ 0 ] ) } - ${ g( WATER.front[ 1 ] ) } * ( waterNoise( vWater.xz / ${ g( WATER.wander ) } ) * 2.0 - 1.0 );
@@ -500,6 +523,7 @@ ${ lean ? '' : /* glsl */`
 	}
 `}
 	float wrFw = length( fwidth( vWaterX0 ) );
+#ifndef WATER_PLAIN
 	if ( seaD.w > 0.0 ) {
 		float wr = min( seaD.w * 1.5, 0.75 );
 		foam = max( foam, mix( waterLaceK( vWaterX0 * ${ g( ROWS ) }, ${ KEY.rows }, wr ), wr, smoothstep( 0.35, 1.2, wrFw ) ) * 0.8 );
@@ -560,6 +584,7 @@ ${ lean ? '' : /* glsl */`
 			if ( spCover > 0.01 ) foam = max( foam, waterLaceK( sq * ${ g( SPUME_LACE ) }, ${ KEY.spume + 3 }, min( spCover, 0.75 ) ) * 0.85 );
 		}
 	}
+#endif
 ${ lean ? '' : /* glsl */`
 	if ( frontAcross < 30.0 ) {
 		// ((M15) the foam gathered down the front's middle, ragged: in clumps and gaps, wider and narrower, wandering a few
@@ -629,6 +654,7 @@ ${ lean ? '' : /* glsl */`
 `}
 	weed = clamp( weed, 0.0, 1.0 ) * smoothstep( 0.3, 1.0, depth );
 	// (the water boiling white where a school's driven bait up, in patches that come and go)
+#ifndef WATER_PLAIN
 	for ( int i = 0; i < ${ BOIL_MAX }; i ++ ) {
 		if ( i >= waterBoilCount ) break;
 		vec4 b = waterBoil[ i ];
@@ -639,6 +665,7 @@ ${ lean ? '' : /* glsl */`
 		float churn = waterLace( rp * 1.3 + waterTime * 0.2, 0.55 );
 		foam = max( foam, bp * churn * b.w * ( 1.0 - smoothstep( b.z * 0.6, b.z * 1.3, r ) ) );
 	}
+#endif
 	// the body of the water: light scattered back up from inside it and off the sand under it, lit by the
 	// sky and the sun whatever way the surface faces; milky in the surf (suspended sand and fine bubbles).
 	// ((M15) The sand's light coming back up through the water, each colour fading as the water takes it
@@ -714,6 +741,7 @@ ${ lean ? '' : /* glsl */`
 		vec2 r2 = texture2D( waterRipples, vWaterL.xz * ${ RIPPLE[ 1 ] } + waterRippleAt.zw + 0.3 - waterTime * vec2( 0.02, 0.008 ) ).xy * 2.0 - 1.0;
 		rs = ( r1 * 0.6 + r2 * 0.4 ) * 0.32 * rippleK;
 	}
+#ifndef WATER_PLAIN
 	// ((M16) and the sea's rough all the way out, on the waves the grid does draw: nothing on a breezy day or under)
 	if ( rippleBlow > 0.0 ) {
 		vec2 gs = ( waterRough( ${ roughDir( 0 ) }, vec2( ${ g( ROUGH[ 0 ].along ) }, ${ g( ROUGH[ 0 ].across ) } ), waterRoughAt.xy, waterTime * ${ g( ROUGH[ 0 ].speed / ROUGH[ 0 ].along ) } ) * ${ g( ROUGH_SLOPE ) }
@@ -739,6 +767,7 @@ ${ lean ? '' : /* glsl */`
 			rs = rs * ( 1.0 - 0.4 * rainN * rainK ) + ( waterRainRing( vWaterL.xz, waterRingAt.xy, waterRingCells.xy, ${ RING_CELL[ 0 ] }, 1.4, 0.0, rainN ) + waterRainRing( vWaterL.xz + 0.27, waterRingAt.zw, waterRingCells.zw, ${ RING_CELL[ 1 ] }, 1.1, 3.7, rainN ) * 0.8 ) * 0.5 * rainK;
 		}
 	}
+#endif
 	vec3 nP = normalize( wN + vec3( - rs.x, 0.0, - rs.y ) );
 	// ((M15) along the front's slick, glassier water: the sky in it as in a mirror)
 	nP = normalize( mix( nP, vec3( 0.0, 1.0, 0.0 ), ${ g( WATER.slick.flat ) } * waterFrontSlick ) );
@@ -800,7 +829,18 @@ ${ lean ? '' : /* glsl */`
 
 		};
 
-		this.mesh = new THREE.Mesh( this.lod.geometry, mat );
+		// ((v2.1.5) the plain sea: the same material, its shader with less in it, for the load and the frames until full())
+		if ( plain ) {
+
+			const p = this.plainMaterial = mat.clone();
+			p.defines = { ...mat.defines, WATER_PLAIN: '' };
+			p.uniformsGroups = mat.uniformsGroups;
+			p.onBeforeCompile = mat.onBeforeCompile;
+			p.forceSinglePass = true;
+
+		}
+
+		this.mesh = new THREE.Mesh( this.lod.geometry, this.plainMaterial || mat );
 		this.mesh.name = 'Water';
 		this.mesh.frustumCulled = false;
 		this.mesh.renderOrder = 1;
@@ -831,6 +871,16 @@ ${ lean ? '' : /* glsl */`
 			};
 
 		}
+
+	}
+
+	// ((v2.1.5) the whole sea for the plain one it loaded with: its shader made already (App.fullSea))
+	full() {
+
+		if ( ! this.plainMaterial ) return;
+		this.mesh.material = this.material;
+		this.plainMaterial.dispose();
+		this.plainMaterial = null;
 
 	}
 
@@ -904,6 +954,7 @@ ${ lean ? '' : /* glsl */`
 		// underside at the scene's fill
 		const env = this.scene.environment;
 		if ( this.material.envMap !== env ) this.material.envMap = env;
+		if ( this.plainMaterial ) this.plainMaterial.envMap = env;
 		this.envUnder.value = this.scene.environmentIntensity / REFLECT;
 
 	}
