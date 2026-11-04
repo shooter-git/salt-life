@@ -238,7 +238,7 @@ The island's day:
 | M14 | Storm skies and the sea: cumulonimbus, the eye's stadium and its bands, the open sea breaking, the north shore's sea, being knocked over wading, shutters and litter in a blow, the radar, rain heard on tin, Category 2 and 3 hurricanes, more of the island torn and its roof sheets flying, shelter under the rocks ([what's left over](docs/M14.md)) |
 | M15 | The world: the island worth going all the way round (the north side's fishing, its landmarks and sea caves, beachcombing, the trail and the fish camp), the sea past it (the seabed out there, its weather and finds, the far island, the chart you fill in, the radio and the tow, the soft edge, its sound), and picking up where you left off |
 | M16 | The boats: a fishing kayak to start in, a center console, the lobster boat and an offshore sportfisher to earn, each with her own upgrades, berth and sea she can stand; days out (ice, stores, bunks, flares, a deep-water anchor), trolling, kites and deep-dropping for the far water's fish, lobster traps, each boat as herself when playing together, Pearl's day and the rest of the north side ([docs/M16.md](docs/M16.md)) |
-| M17 | What M16 leaves, for consideration: the flats' sight-fishing, a few things for guests aboard, and the figures only a real device can settle ([docs/M17.md](docs/M17.md)) |
+| M17 | The flats, proposed: sight-fishing from the kayak and on foot, a tide with the moon behind it, everything M16 left for guests aboard, coming back where you were, and most of the rest M16 left ([docs/M17.md](docs/M17.md)) |
 
 ## How it fits All the Spaces
 
