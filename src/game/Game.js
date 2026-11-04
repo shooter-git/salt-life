@@ -1042,7 +1042,7 @@ export class Game {
 			if ( said !== undefined && stage && stage !== 'outlook' ) {
 
 				const news = wxNews( n, this.weatherNow, T, app.portal && app.portal.locale );
-				this.toast( stage === 'here' ? `${ news } · the shelter's open` : stage === 'warning' ? `${ news } · Marta can haul your boat out before she boards up` : news, 5200 );
+				this.toast( stage === 'here' ? `${ news } · the shelter's open` : stage === 'warning' ? `${ news } · sell your catch before Joe boards up · Marta can haul your boat out before she does` : news, 5200 );
 				if ( this.guide && stage !== 'watch' ) this.guide.tip( 'hurricane' );
 
 			}
