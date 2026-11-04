@@ -2046,13 +2046,24 @@ export class App {
 	}
 
 	// the canvas's resolution follows how long frames take (this.resolution), from the stage's for the
-	// screen (which it sets again when the screen turns or resizes)
+	// screen (which it sets again when the screen turns or resizes). Held while the catch card's fish is
+	// drawn in place of the world, and a second after: those frames say nothing of the world's, and each
+	// new size has the card copy the world's frame again (FishPortrait)
 	adaptResolution() {
 
 		const now = performance.now(), ms = this._lastTick ? now - this._lastTick : 0;
 		this._lastTick = now;
 		const r = this.renderer, ratio = r.getPixelRatio();
 		if ( ratio !== this._ratio ) this._fullRatio = ratio; // the stage sized it again
+		const portrait = this.game && this.game.portrait;
+		if ( portrait && portrait.active ) {
+
+			this._settleAt = Math.max( this._settleAt, now + 1000 );
+			this._ratio = ratio;
+			return;
+
+		}
+
 		if ( ms > 0 && now > this._settleAt ) this.resolution.frame( ms, now );
 		const want = this._fullRatio * this.resolution.scale;
 		if ( Math.abs( want - ratio ) > 1e-4 ) r.setPixelRatio( want );

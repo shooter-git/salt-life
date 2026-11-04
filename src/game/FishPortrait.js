@@ -109,6 +109,7 @@ export class FishPortrait {
 		this.t = 0;
 		this.frame = null; // FramebufferTexture: the world's last frame (while a card is up)
 		this._capture = false;
+		this._drawn = false; // the card's first frame drawn: a copy after it is for a new size
 
 	}
 
@@ -172,6 +173,7 @@ export class FishPortrait {
 		this.kg = kg;
 		this.t = 0;
 		this._capture = true;
+		this._drawn = false;
 
 	}
 
@@ -277,19 +279,16 @@ export class FishPortrait {
 			renderer.setRenderTarget( null );
 			renderer.copyFramebufferToTexture( frame );
 			this._capture = false;
+			// (copied again for a new size with the card up: that frame blurred and dimmed at once, as the
+			// card has it, or the world shows bare for a frame, a flash; the fish is back from the next)
+			if ( this._drawn ) this._backdrop( renderer, frame );
+			this._drawn = true;
 			return;
 
 		}
 
-		// the world behind, blurred and dimmed
-		const u = this.backdrop.material.uniforms;
-		u.frame.value = frame;
-		u.texel.value.set( 1 / frame.image.width, 1 / frame.image.height );
-		u.radius.value = 14 * renderer.getPixelRatio();
-		u.fade.value = Math.min( 1, this.t / FADE_IN );
 		const autoClear = renderer.autoClear, exposure = renderer.toneMappingExposure;
-		renderer.autoClear = true;
-		renderer.render( this.backScene, this.backCamera );
+		this._backdrop( renderer, frame );
 
 		// the fish, in the stage's box
 		const box = this.stage && this.stage.getBoundingClientRect();
@@ -331,6 +330,21 @@ export class FishPortrait {
 
 		renderer.autoClear = autoClear;
 		renderer.toneMappingExposure = exposure;
+
+	}
+
+	// the world behind the card, blurred and dimmed, over the whole canvas
+	_backdrop( renderer, frame ) {
+
+		const u = this.backdrop.material.uniforms;
+		u.frame.value = frame;
+		u.texel.value.set( 1 / frame.image.width, 1 / frame.image.height );
+		u.radius.value = 14 * renderer.getPixelRatio();
+		u.fade.value = Math.min( 1, this.t / FADE_IN );
+		const autoClear = renderer.autoClear;
+		renderer.autoClear = true;
+		renderer.render( this.backScene, this.backCamera );
+		renderer.autoClear = autoClear;
 
 	}
 
