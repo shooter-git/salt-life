@@ -402,7 +402,10 @@ export class BoatCopies {
 		b.name = 'PlayerBoat';
 		b.visible = false;
 		const u = b.userData;
-		if ( app.tier === 'low' && ( e.own || e.full ) ) {
+		// ((v2.1.2) on a phone whatever the template has past her low meshes waits till you're near, whoever's she is now: a
+		// template made while she was yours keeps all of her, and once you'd taken another out her copies (towed home in a
+		// hurricane, say) drew her fittings at any distance, over low's triangles)
+		if ( app.tier === 'low' ) {
 
 			const named = new Set( lowMeshes( model ).map( ( m ) => m.name ) );
 			u.extras = [];

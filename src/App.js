@@ -626,7 +626,12 @@ export class App {
 		if ( this.cpuGL ) {
 
 			const named = ( ...names ) => scene.children.filter( ( c ) => names.some( ( n ) => c.name === n || c.name.startsWith( n + ':' ) ) );
-			this._late = [ named( 'Rocks' ), named( 'Village' ), named( 'FishStand', 'Chandlery', 'StallFish', 'Vendor' ), named( 'LobsterBoat' ) ];
+			this._late = [ named( 'Rocks' ), named( 'Village' ), named( 'FishStand', 'Chandlery', 'StallFish', 'Vendor' ) ];
+			// ((v2.1.2) the boat you start in waits out of the scene as the rod does, her shaders made after the start
+			// (prepareLate), whichever she is. Only the lobster boat was held, by her name, with the island's parts, and since
+			// M16 a new game starts in the kayak, whose shaders came into the loading frame: past All the Spaces' 45 s)
+			this._heldBoat = [ [ this.boat.group, this.boat.group.parent ] ];
+			this.boat.group.removeFromParent();
 			for ( const group of this._late ) for ( const o of group ) o.visible = false;
 			// the rod, the speargun and the lobster gear wait out of the scene, not just out of sight: three's
 			// compile() makes the shaders of what's hidden too, and theirs are six of the island's biggest
@@ -1258,7 +1263,10 @@ export class App {
 
 		}
 
-		for ( const [ m, parent ] of [ ...( this._heldFish || [] ), ...( this._heldNet || [] ), ...( this._heldWeather || [] ), ...( this._heldLandmarks || [] ) ] ) {
+		// ((v2.1.2) the boat you started in, if she's still the one you're in: one taken out meanwhile is in the scene already)
+		const boat = ( this._heldBoat || [] ).filter( ( [ m ] ) => m === this.boat.group );
+		this._heldBoat = null;
+		for ( const [ m, parent ] of [ ...boat, ...( this._heldFish || [] ), ...( this._heldNet || [] ), ...( this._heldWeather || [] ), ...( this._heldLandmarks || [] ) ] ) {
 
 			roots.push( m );
 			show.push( () => parent.add( m ) );
@@ -2068,13 +2076,19 @@ export class App {
 	updateNearDetail() {
 
 		const cam = this.camera.position;
-		for ( const d of this.nearDetail ) {
+		const near = ( o, dist ) => {
 
-			const s = d.o.geometry.boundingSphere;
-			_c3.copy( s.center ).applyMatrix4( d.o.matrixWorld );
-			d.o.visible = d.o.userData.shown !== false && _c3.distanceTo( cam ) - s.radius * d.o.matrixWorld.getMaxScaleOnAxis() < d.dist;
+			const s = o.geometry.boundingSphere || ( o.geometry.computeBoundingSphere(), o.geometry.boundingSphere );
+			_c3.copy( s.center ).applyMatrix4( o.matrixWorld );
+			o.visible = o.userData.shown !== false && _c3.distanceTo( cam ) - s.radius * o.matrixWorld.getMaxScaleOnAxis() < dist;
 
-		}
+		};
+
+		for ( const d of this.nearDetail ) near( d.o, d.dist );
+		// ((v2.1.2) and the boat you're in, from her own list each frame: kept in nearDetail as she's taken out, a swap at the
+		// wrong moment on a CPU's WebGL left a lobster boat's fittings drawn at any distance, over low's triangles)
+		const M = this.boat;
+		if ( M && M.nearDetail ) for ( const k of M.nearDetail ) if ( M.meshes[ k ] ) near( M.meshes[ k ], M.nearDist ?? 70 );
 
 	}
 
