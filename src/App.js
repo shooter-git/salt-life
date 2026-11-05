@@ -847,7 +847,10 @@ export class App {
 		// L: the flashlight; at the helm, the boat's searchlight
 		if ( input.hit( 'KeyL' ) ) {
 
-			if ( this.player.mode === 'boat' && this.boat.searchlight ) {
+			// ((guest work) at someone else's helm: her searchlight, switched on her owner's game, if she has one)
+			const theirs = this.player.mode === 'boat' && this.player.riding && this.together ? this.together.theirSearchlight() : null;
+			if ( theirs ) this.together.askRig( { k: 'spot' } );
+			else if ( this.player.mode === 'boat' && ! this.player.riding && this.boat.searchlight ) {
 
 				this.searchlight = ! this.searchlight;
 				this.hud.toast( this.searchlight ? 'Searchlight on' : 'Searchlight off' );
@@ -2595,6 +2598,9 @@ export class App {
 		if ( this.wildlife && this.wildlife.birds ) this.wildlife.birds.boatModel = model;
 		const kept = this.together && this.together.boatChanged( old );
 		this.game.boatChanged();
+		// (her hold, her fuel, her gear: the HUD and the panels drawn again for her. selectBoat only saves, and the bar at the
+		// top kept the boat you'd left until something else changed, a catch or a bait on the hook)
+		st.emit();
 		if ( ! kept ) old.dispose();
 		return true;
 

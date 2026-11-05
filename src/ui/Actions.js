@@ -65,7 +65,11 @@ export function offers( player, game = null, o = {} ) {
 	const helm = player && player.mode === 'boat' && ! seat, app = game && game.app;
 	if ( seat && ! fishing && ! netting ) o.rod = 'Rod';
 	if ( seat && game.radio && game.radio.offer ) o.rig = game.radio.offer === 'radio' ? 'Radio' : 'Flares';
-	if ( helm ) o.torch = app && ( app.searchlight || G.night.value > 0.35 ) ? ( app.searchlight ? 'Searchlight off' : 'Searchlight' ) : null;
+	// ((guest work) at someone else's: hers, if she has one, else your torch)
+	const theirs = helm && player.riding && app && app.together ? app.together.theirSearchlight() : null;
+	const spotOn = theirs ? theirs.on : !! ( app && app.searchlight );
+	if ( helm && ( theirs || ! player.riding ) ) o.torch = app && ( spotOn || G.night.value > 0.35 ) ? ( spotOn ? 'Searchlight off' : 'Searchlight' ) : null;
+	else if ( helm ) o.torch = lights && ( torchOn || G.night.value > 0.35 ) ? ( torchOn ? 'Torch off' : 'Torch' ) : null;
 	else o.torch = lights && ( torchOn || G.night.value > 0.35 ) ? ( torchOn ? 'Torch off' : 'Torch' ) : null;
 	o.horn = helm ? 'Horn' : null;
 	// ((M16) with lines out she's held at the baits' speed: this runs her flat out, as Shift does)

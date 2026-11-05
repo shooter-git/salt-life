@@ -73,10 +73,28 @@ export class Spread {
 
 	}
 
+	// the boat a kite's flown off: theirs, or (guest work) the one they're riding, yours among them -> { M, f } (f: its frame,
+	// an Object3D or your boat's controller), or null if she's not drawn here
+	_kiteBoat( o, others ) {
+
+		const c = o.cur, T = this.together;
+		if ( c.ride === T.me.id ) {
+
+			const app = this.app;
+			return app.boat && app.boat.lines ? { M: app.boat, f: null } : null;
+
+		}
+
+		const r = c.ride ? others.get( c.ride ) : o;
+		if ( ! r || ! r.cur || ! r.boat || ! r.boat.visible ) return null;
+		return { M: T.copies.walked( r.boat.userData.model, r.cur.boatId, r.cur.fit ), f: r.boat };
+
+	}
+
 	update( others ) {
 
 		let any = false;
-		for ( const o of others.values() ) if ( o.cur && o.boat && o.boat.visible && ( o.cur.spread || o.cur.kite ) ) any = true;
+		for ( const o of others.values() ) if ( o.cur && ( ( o.boat && o.boat.visible && o.cur.spread ) || ( o.cur.kite && this._kiteBoat( o, others ) ) ) ) any = true;
 		if ( ! any ) {
 
 			if ( this.draw ) this.draw.hide();
@@ -89,10 +107,26 @@ export class Spread {
 		for ( const o of others.values() ) {
 
 			const c = o.cur;
-			if ( ! c || ! o.boat || ! o.boat.visible ) continue;
+			if ( ! c ) continue;
+			const k = c.kite ? this._kiteBoat( o, others ) : null;
+			if ( k && k.M.lines ) {
+
+				const S = k.M.lines;
+				_b.set( 0, S.sheerY( 0 ) + 1.8, S.zAft );
+				if ( k.f ) {
+
+					k.f.updateWorldMatrix( false, false );
+					k.f.localToWorld( _b );
+
+				} else this.app.boatCtl.toWorld( _b.clone(), _b );
+				this._kite( D, c.kite );
+
+			}
+
+			if ( ! o.boat || ! o.boat.visible || ! c.spread ) continue;
 			const M = this.together.copies.walked( o.boat.userData.model, c.boatId, c.fit ), f = o.boat;
 			f.updateWorldMatrix( false, false );
-			if ( c.spread && M.lines ) for ( const L of c.spread ) {
+			if ( M.lines ) for ( const L of c.spread ) {
 
 				rodOf( M, L, R );
 				f.localToWorld( _b.copy( R.butt ) );
@@ -107,24 +141,24 @@ export class Spread {
 
 			}
 
-			if ( c.kite && M.lines ) {
-
-				f.localToWorld( _b.set( 0, M.lines.sheerY( 0 ) + 1.8, M.lines.zAft ) );
-				_a.set( c.kite[ 0 ], c.kite[ 1 ], c.kite[ 2 ] );
-				D.line( _b, _m.copy( _b ).lerp( _a, 0.5 ).setY( ( _b.y + _a.y ) * 0.5 - 2.5 ), _a, 12, 0xe7e7e0 );
-				const s = 0.55 * Math.max( 1, _a.distanceTo( D.eye ) / 60 );
-				_d.set( s, 0, 0 );
-				const T = _a.clone().add( _m.set( 0, s, 0 ) ), Bt = _a.clone().sub( _m ), Rt = _a.clone().add( _d ), Lf = _a.clone().sub( _d );
-				D.fan( [ _a.clone(), T, Lf ], _up, 0xeeece2, 0.75, true );
-				D.fan( [ _a.clone(), Lf, Bt ], _up, 0xdedcd0, 0.75, true );
-				D.fan( [ _a.clone(), Bt, Rt ], _up, 0xeeece2, 0.75, true );
-				D.fan( [ _a.clone(), Rt, T ], _up, 0xdedcd0, 0.75, true );
-
-			}
-
 		}
 
 		D.end();
+
+	}
+
+	// a kite on its line from _b (world, her stern), at kt: [ x, y, z ]
+	_kite( D, kt ) {
+
+		_a.set( kt[ 0 ], kt[ 1 ], kt[ 2 ] );
+		D.line( _b, _m.copy( _b ).lerp( _a, 0.5 ).setY( ( _b.y + _a.y ) * 0.5 - 2.5 ), _a, 12, 0xe7e7e0 );
+		const s = 0.55 * Math.max( 1, _a.distanceTo( D.eye ) / 60 );
+		_d.set( s, 0, 0 );
+		const T = _a.clone().add( _m.set( 0, s, 0 ) ), Bt = _a.clone().sub( _m ), Rt = _a.clone().add( _d ), Lf = _a.clone().sub( _d );
+		D.fan( [ _a.clone(), T, Lf ], _up, 0xeeece2, 0.75, true );
+		D.fan( [ _a.clone(), Lf, Bt ], _up, 0xdedcd0, 0.75, true );
+		D.fan( [ _a.clone(), Bt, Rt ], _up, 0xeeece2, 0.75, true );
+		D.fan( [ _a.clone(), Rt, T ], _up, 0xdedcd0, 0.75, true );
 
 	}
 

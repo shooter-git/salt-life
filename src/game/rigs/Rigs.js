@@ -24,6 +24,12 @@ import { Glasses } from './Glasses.js';
 //                   well away downwind, with no line in the water to see; 5 to 25 knots of wind. Mostly for sailfish
 //   chum            over the side, and a slick drifts off downwind that brings them up
 //
+// Riding along with her owner aboard, her rods are yours to work as theirs are (her owner's game runs what's on her holders,
+// Together carries what you ask): her spread let out and brought in, her kite flown on her stand-up rod, her electric reel
+// dropped, her chum thrown, all with her owner's bait (`boatKit`: her tackle and her bait, from their game); and a fish on any
+// of them is fought on her tackle (`kit`), her rod, reel, drag and line, not your own. Your own rod's still yours.
+// A chum slick is everyone's: told to the others ('slick'), it brings up the fish on every game that's near it.
+//
 // Real figures and their sources are in docs/m16/tackle.md.
 const FLAT = [ { name: 'starboard flat', side: - 1, back: 24, kind: 'flat' }, { name: 'port flat', side: 1, back: 32, kind: 'flat' } ];
 const OUTRIGGED = [ { name: 'starboard rigger', side: - 1, back: 48, kind: 'rigger' }, { name: 'port rigger', side: 1, back: 62, kind: 'rigger' }, { name: 'shotgun', side: 0, back: 85, kind: 'shotgun' } ];
@@ -67,6 +73,97 @@ export class Rigs {
 		this._trollT = null;
 		this._waiting = false;
 		this._tellT = 0;
+		// (guest work) riding along: her tackle and bait as her owner's game sends them ('kit': { t, b, lu, sp, kite }), the
+		// tackle the rod in your hands fights on when it's hers (null: your own), the bait you've picked of hers, one of hers
+		// on your hook (it goes back to them, not into your bucket), and one asked of them for the kite or the drop
+		this.boatKit = null;
+		this.kit = null;
+		this.boatPick = null;
+		this._lent = null;
+		this._asked = null;
+		this.theirSlicks = []; // the others' chum slicks: { x, z, t, seed }
+
+	}
+
+	// the tackle the rod in your hands fights on: hers, off her holder or on her kite rod or her electric reel, or your own
+	get tackle() {
+
+		return this.kit || this.stats;
+
+	}
+
+	// (guest work) riding with her owner aboard, whose she is (Together's), or null
+	get skipper() {
+
+		const T = this.app.together;
+		return T ? T.skipper() : null;
+
+	}
+
+	// a rig that's worked on her rods, riding along: her spread, her kite, and her electric reel if she has one
+	boatRig( pick = this.pick ) {
+
+		const k = this.boatKit;
+		if ( ! k || ! this.skipper ) return false;
+		return pick === 'troll' || pick === 'kite' || ( pick === 'drop' && !! k.t.electricReel );
+
+	}
+
+	// what her owner's game sends you: her tackle, her bait, how many lines she takes and whether she flies a kite
+	kitOf() {
+
+		const s = this.stats, st = this.state, b = {};
+		for ( const id of BAIT_IDS ) if ( ! BAITS[ id ].lure && st.bait[ id ] > 0 ) b[ id ] = st.bait[ id ];
+		const seated = !! this.app.boat.seated;
+		return {
+			t: { lineKg: s.lineKg, reelSpeed: s.reelSpeed, dragKg: s.dragKg, spoolM: s.spoolM, twoSpeed: !! s.twoSpeed, standUp: !! s.standUp, electricReel: !! s.electricReel, leader: s.leader | 0 },
+			b, lu: st.upgrades.lures | 0, sp: seated ? 0 : this.spots().length, kite: ! seated,
+		};
+
+	}
+
+	// (and as it comes, checked: a number where a number's wanted)
+	static cleanKit( k ) {
+
+		if ( ! k || typeof k !== 'object' || ! k.t || typeof k.t !== 'object' ) return null;
+		const n = ( v, lo, hi, d ) => Number.isFinite( v ) ? Math.min( hi, Math.max( lo, v ) ) : d, T = k.t, b = {};
+		if ( k.b && typeof k.b === 'object' ) for ( const id of BAIT_IDS ) if ( ! BAITS[ id ].lure && Number.isFinite( k.b[ id ] ) && k.b[ id ] > 0 ) b[ id ] = Math.floor( k.b[ id ] );
+		return {
+			t: { lineKg: n( T.lineKg, 1, 200, 7 ), reelSpeed: n( T.reelSpeed, 0.5, 6, 1.1 ), dragKg: Number.isFinite( T.dragKg ) ? n( T.dragKg, 0, 60, null ) : null, spoolM: n( T.spoolM, 50, 2000, 180 ), twoSpeed: !! T.twoSpeed, standUp: !! T.standUp, electricReel: !! T.electricReel, leader: n( T.leader | 0, 0, 3, 0 ) },
+			b, lu: n( k.lu | 0, 0, 3, 0 ), sp: n( k.sp | 0, 0, 5, 0 ), kite: !! k.kite,
+		};
+
+	}
+
+	// of her bait, whether there's this kind aboard (a lure: her owner's for good, as yours are)
+	_hersOnHand( id ) {
+
+		const k = this.boatKit, B = BAITS[ id ];
+		return !! ( k && B && ( B.lure ? k.lu >= B.level : k.b[ id ] > 0 ) );
+
+	}
+
+	// how many of her lines are out, as her owner's poses have them
+	_theirLines() {
+
+		const o = this.skipper;
+		return o && o.cur && o.cur.spread ? o.cur.spread.length : 0;
+
+	}
+
+	// a bait off your hook back where it came from: hers, if it was hers, else your bucket
+	giveBack( b ) {
+
+		if ( ! b ) return;
+		if ( this._lent === b ) {
+
+			this._lent = null;
+			if ( this.app.together ) this.app.together.giveBack( b );
+			return;
+
+		}
+
+		this.state.returnBait( b );
 
 	}
 
@@ -115,9 +212,18 @@ export class Rigs {
 
 	available( id ) {
 
-		const n = RIGS[ id ].needs;
-		// ((M16) riding along: the spread and the kite are her owner's, but your own lead goes over her side as off any boat)
-		if ( id === 'drop' && this.app.player.riding && this.app.player.mode === 'deck' ) return true;
+		const n = RIGS[ id ].needs, p = this.app.player;
+		// ((M16) riding along: your own lead goes over her side as off any boat; (guest work) or down on her electric reel,
+		// and with her owner aboard, her spread and her kite (on her stand-up rod) are yours to work too)
+		if ( p.riding && n ) {
+
+			if ( id === 'drop' ) return p.mode === 'deck';
+			const k = this.boatKit;
+			if ( ! k || ! this.skipper ) return false;
+			return id === 'troll' ? k.sp > 0 : !! ( k.kite && k.t.standUp );
+
+		}
+
 		if ( n === 'boat' ) return this.aboard && ( id !== 'kite' || ! this.app.boat.seated );
 		return ! n || ( this.aboard && this.stats[ n ] );
 
@@ -136,9 +242,53 @@ export class Rigs {
 		}
 
 		this.pick = RIG_IDS[ i ];
+		if ( this.boatRig() ) {
+
+			this.fitBoatBait();
+			this.game.toast( `${ RIGS[ this.pick ].name } · ${ this._hersText() }`, 2600 );
+			return;
+
+		}
+
 		this.fitBait();
 		const s = this.state, bait = s.baitPick;
 		this.game.toast( `${ RIGS[ this.pick ].name } · ${ this.pickText( bait ) }`, 2600 );
+
+	}
+
+	// (guest work) of her bait, one that goes on her rig if what you'd picked doesn't (or isn't aboard any more)
+	fitBoatBait() {
+
+		const fits = ( id ) => this._hersOnHand( id ) && baitFits( this.pick, BAITS[ id ] );
+		if ( this.boatPick && ( fits( this.boatPick ) || ( BAITS[ this.boatPick ].chum && this._hersOnHand( this.boatPick ) ) ) ) return;
+		this.boatPick = BAIT_IDS.find( fits ) || null;
+
+	}
+
+	// her bait you've picked, in words: whose, and how many she's got
+	_hersText() {
+
+		const o = this.skipper, name = o ? o.person.name : 'Her owner', b = BAITS[ this.boatPick ];
+		if ( ! b ) return `${ name } has nothing for it: ${ this.pickText( null ).replace( /^needs /, '' ) }`;
+		return `${ name }'s ${ b.lure ? b.name.toLowerCase() : `${ b.short } · ${ this.boatKit.b[ this.boatPick ] | 0 } aboard` }`;
+
+	}
+
+	// the next of her bait for her rig (B, as your own bucket's is)
+	cycleBoatBait( step = 1 ) {
+
+		const kinds = this.baitChoices();
+		if ( kinds.length <= 1 ) {
+
+			this.boatPick = kinds[ 0 ] || null;
+			this.game.say( this._hersText() );
+			return;
+
+		}
+
+		const i = kinds.indexOf( this.boatPick );
+		this.boatPick = kinds[ i < 0 ? 0 : ( i + step + kinds.length ) % kinds.length ];
+		this.game.toast( `Bait: ${ this._hersText() }`, 1800 );
 
 	}
 
@@ -163,6 +313,8 @@ export class Rigs {
 	// the kinds the bait key steps through here
 	baitChoices() {
 
+		// ((guest work) her bait, for her rods)
+		if ( this.boatRig() ) return BAIT_IDS.filter( ( k ) => this._hersOnHand( k ) && ( BAITS[ k ].chum || baitFits( this.pick, BAITS[ k ] ) ) );
 		const s = this.state, kinds = BAIT_IDS.filter( ( k ) => onHand( k, s ) && ( BAITS[ k ].chum || baitFits( this.pick, BAITS[ k ] ) ) );
 		return baitFits( this.pick, null ) ? [ null, ...kinds ] : kinds;
 
@@ -199,6 +351,8 @@ export class Rigs {
 	press() {
 
 		const g = this.game, rod = g.rod, s = this.state, pick = s.baitPick;
+		this.kit = null; // (your own rod, unless it's one of hers: below)
+		if ( this.boatRig() ) return this._pressHers();
 		if ( BAITS[ pick ]?.chum ) {
 
 			this._chum();
@@ -231,13 +385,7 @@ export class Rigs {
 		if ( this.pick === 'drop' ) {
 
 			g.baitHook();
-			rod.setRig( 'drop' );
-			// ((M16) a rider has no electric reel of hers: only what's on their own rod to let down, or the first run spools it)
-			rod.dropReach = rod.spoolM = this.stats.electricReel ? ELECTRIC.spool : this.stats.spoolM;
-			rod.dropLine();
-			this._waiting = true;
-			g.bite = null;
-			g.toast( 'Lead away · it\'s a long way down · stop it at the depth you want', 3000 );
+			this._drop();
 			return true;
 
 		}
@@ -251,24 +399,109 @@ export class Rigs {
 
 	}
 
+	// the lead let down, on the tackle in your hands: your own rod, or (guest work) her electric reel. A rider without hers has
+	// only what's on their own rod to let down, or the first run spools it
+	_drop() {
+
+		const g = this.game, rod = g.rod, t = this.tackle;
+		rod.setRig( 'drop' );
+		rod.dropReach = rod.spoolM = t.electricReel ? ELECTRIC.spool : t.spoolM;
+		rod.dropLine();
+		this._waiting = true;
+		g.bite = null;
+		g.toast( this.kit ? `Down on ${ this.skipper ? `${ this.skipper.person.name }'s` : 'her' } electric reel · stop it at the depth you want` : 'Lead away · it\'s a long way down · stop it at the depth you want', 3000 );
+
+	}
+
+	// (guest work) the press on one of her rods, riding along: what's on her holders is her owner's game's to do, asked of it
+	// (Together); the kite and the drop are your hands' but want a bait of hers first
+	_pressHers() {
+
+		const g = this.game, T = this.app.together, o = this.skipper, name = o.person.name;
+		this.fitBoatBait();
+		const b = this.boatPick, B = BAITS[ b ];
+		if ( B && B.chum ) {
+
+			const c = this.app.camera.position, d = this.app.camera.getWorldDirection( _a ).setY( 0 ).normalize();
+			T.askRig( { k: 'chum', x: Math.round( ( c.x + d.x * 3 ) * 10 ) / 10, z: Math.round( ( c.z + d.z * 3 ) * 10 ) / 10 } );
+			return true;
+
+		}
+
+		if ( ! B || ! baitFits( this.pick, B ) ) {
+
+			g.say( `${ RIGS[ this.pick ].name }: ${ this._hersText() }` );
+			return true;
+
+		}
+
+		if ( this.pick === 'troll' ) {
+
+			const sp = this.boatKit.sp;
+			if ( this._theirLines() >= sp ) g.toast( `All ${ sp } of ${ name }'s lines are out · bring them in with the right button`, 2400 );
+			else T.askRig( { k: 'line', b } );
+			return true;
+
+		}
+
+		if ( this._asked ) return true;
+		if ( this.pick === 'kite' && ! this._kiteWind() ) return true;
+		this._asked = { rig: this.pick, b };
+		T.askRig( { k: 'take', b } );
+		return true;
+
+	}
+
+	// (guest work) her owner's game has given you a bait of theirs for her kite or her electric reel, or hasn't (why)
+	given( b, ok, why ) {
+
+		const A = this._asked, g = this.game, rod = g.rod;
+		this._asked = null;
+		if ( ! ok ) {
+
+			if ( why ) g.say( why );
+			return;
+
+		}
+
+		// (you've put the rod away meanwhile, or picked another rig, or left her: it goes back)
+		if ( ! A || A.b !== b || this.pick !== A.rig || ! rod.equipped || rod.state !== 'idle' || g.fight || ! this.boatRig() ) {
+
+			if ( this.app.together ) this.app.together.giveBack( b );
+			return;
+
+		}
+
+		if ( g.hookBait ) this.giveBack( g.hookBait );
+		g.hookBait = b;
+		this._lent = b;
+		this.kit = this.boatKit.t;
+		if ( A.rig === 'kite' ) this._flyKite( true );
+		else this._drop();
+
+	}
+
 	// ---- trolling
 
-	_setLine() {
+	// a line out on the next free holder, with your bait pick; (guest work) or with one of yours someone riding with you has
+	// picked (who: their name) -> what they're told, { ok, said }
+	_setLine( bait = this.state.baitPick, who = null ) {
 
-		const g = this.game, s = this.state, spots = this.spots(), bait = s.baitPick;
+		const g = this.game, s = this.state, spots = this.spots();
 		const free = spots.find( ( o ) => ! this.lines.some( ( L ) => L.spot === o ) );
 		if ( ! free ) {
 
-			g.toast( `All ${ spots.length === 1 ? 'your line is' : `${ spots.length } lines are` } out · run her at the bait's speed`, 2400 );
-			return;
+			if ( ! who ) g.toast( `All ${ spots.length === 1 ? 'your line is' : `${ spots.length } lines are` } out · run her at the bait's speed`, 2400 );
+			return { ok: false, said: `All ${ spots.length } lines are out` };
 
 		}
 
 		if ( ! s.takeBait( bait ) ) {
 
+			if ( who ) return { ok: false, said: `Out of ${ BAITS[ bait ].short }` };
 			g.say( `Out of ${ BAITS[ bait ].short }` );
 			this.fitBait();
-			return;
+			return { ok: false };
 
 		}
 
@@ -280,8 +513,49 @@ export class Rigs {
 		this._trollT = null;
 		this._poles( true );
 		if ( this.app.audio && this.app.audio.lineOut ) this.app.audio.lineOut( 0.4 );
-		const left = spots.length - this.lines.length;
-		g.toast( `${ BAITS[ bait ].name } out on the ${ free.name } · ${ left ? `room for ${ left } more` : 'all out' }, then to the helm`, 2800 );
+		const left = spots.length - this.lines.length, room = left ? `room for ${ left } more` : 'all out';
+		if ( who ) {
+
+			g.toast( `${ who } let ${ BAITS[ bait ].lure ? 'a' : '' } ${ BAITS[ bait ].name.toLowerCase() } out on the ${ free.name }`.replace( '  ', ' ' ), 2800 );
+			return { ok: true, said: `${ BAITS[ bait ].name } out on the ${ free.name } · ${ room }` };
+
+		}
+
+		g.toast( `${ BAITS[ bait ].name } out on the ${ free.name } · ${ room }, then to the helm`, 2800 );
+		return { ok: true };
+
+	}
+
+	// ---- (guest work) what someone riding with you asks of her rods (Together._rigAsked)
+
+	// a line let out with a bait of yours they've picked
+	letOut( bait, who ) {
+
+		const B = BAITS[ bait ];
+		if ( ! B || ! baitFits( 'troll', B ) || this.app.boat.seated ) return { ok: false, said: 'That won\'t troll' };
+		if ( ! onHand( bait, this.state ) ) return { ok: false, said: `Out of ${ B.short }` };
+		return this._setLine( bait, who );
+
+	}
+
+	// a bait of yours for their hands, for her kite or her electric reel -> whether there was one
+	lend( bait ) {
+
+		const B = BAITS[ bait ];
+		return !! B && ! B.chum && this.state.takeBait( bait );
+
+	}
+
+	// your chum, over the side where they are (x, z: within her length or so) -> whether there was any
+	chumFor( x, z, who ) {
+
+		const b = this.app.boatCtl;
+		if ( ! Number.isFinite( x ) || ! Number.isFinite( z ) || Math.hypot( x - b.position.x, z - b.position.z ) > 30 ) return false;
+		if ( ! ( this.state.bait.chum > 0 ) ) return false;
+		this.state.takeBait( 'chum' );
+		this._startSlick( x, z );
+		this.game.toast( `${ who } threw chum over the side`, 2400 );
+		return true;
 
 	}
 
@@ -479,13 +753,16 @@ export class Rigs {
 
 	}
 
-	// the rod in your hands with that fish on it ((M16) off your holder, or off someone's you're riding with: Together)
-	takeLine( L, spoolM ) {
+	// the rod in your hands with that fish on it ((M16) off your holder, or off someone's you're riding with: Together, and
+	// (guest work) then it's her rod you've got, on her tackle: kit)
+	takeLine( L, spoolM, kit = null ) {
 
-		const g = this.game, rod = g.rod, s = this.state;
+		const g = this.game, rod = g.rod;
 		if ( g.net.equipped ) g.dropNet();
 		g.cancelLine( true );
-		if ( g.hookBait ) s.returnBait( g.hookBait );
+		if ( g.hookBait ) this.giveBack( g.hookBait );
+		g.hookBait = null;
+		this.kit = kit;
 		rod.equip( true );
 		rod.setRig( 'troll', true );
 		rod.spoolM = spoolM;
@@ -493,6 +770,7 @@ export class Rigs {
 		rod.landedAt.copy( L.p );
 		rod.setState( 'floating' );
 		g.hookBait = L.bait;
+		this._lent = kit && L.bait ? L.bait : null; // (hers: if it's left on the hook, it goes back to her owner)
 		g.bite = { phase: 'take', t: 3, species: L.on.species, kg: L.on.kg, place: L.on.place, at: L.on.at };
 		rod.lineOut = L.len;
 		this._fightOut = L.len;
@@ -511,10 +789,10 @@ export class Rigs {
 
 	}
 
-	bringIn() {
+	bringIn( who = null ) {
 
 		for ( const L of this.lines ) if ( ! L.on ) L.in = true;
-		this.game.toast( 'Bringing the lines in', 1800 );
+		this.game.toast( who ? `${ who }'s bringing the lines in` : 'Bringing the lines in', 1800 );
 
 	}
 
@@ -530,27 +808,37 @@ export class Rigs {
 
 	// ---- the kite
 
-	_flyKite() {
+	// the wind's right for one (or you're told why not)
+	_kiteWind() {
 
-		const g = this.game, rod = g.rod, w = G.windSpeed.value;
-		if ( ! this.stats.standUp ) {
+		const w = G.windSpeed.value;
+		if ( w >= KITE.min && w <= KITE.max ) return true;
+		this.game.say( w < KITE.min ? 'Not wind enough to fly a kite: about 5 knots at least' : 'Too much wind to fly a kite: 25 knots at most' );
+		return false;
 
-			g.say( 'A kite wants a heavier rod: the stand-up trolling rod, from Marta' );
-			return;
+	}
+
+	// up off her stern on your stand-up rod; (guest work) hers: her stand-up rod, her owner's live bait already on the hook
+	_flyKite( hers = false ) {
+
+		const g = this.game, rod = g.rod;
+		if ( ! hers ) {
+
+			if ( ! this.stats.standUp ) {
+
+				g.say( 'A kite wants a heavier rod: the stand-up trolling rod, from Marta' );
+				return;
+
+			}
+
+			if ( ! this._kiteWind() ) return;
+			g.baitHook();
+			if ( ! g.hookBait ) return;
 
 		}
 
-		if ( w < KITE.min || w > KITE.max ) {
-
-			g.say( w < KITE.min ? 'Not wind enough to fly a kite: about 5 knots at least' : 'Too much wind to fly a kite: 25 knots at most' );
-			return;
-
-		}
-
-		g.baitHook();
-		if ( ! g.hookBait ) return;
 		rod.setRig( 'kite', true );
-		rod.spoolM = this.stats.spoolM;
+		rod.spoolM = this.tackle.spoolM;
 		this.kite = { up: 0, down: false, at: new Vector3(), clip: new Vector3(), bait: new Vector3(), from: new Vector3(), sway: Math.random() * 6 };
 		this._kiteAt( 0 );
 		rod.hung = this.kite.clip;
@@ -564,7 +852,9 @@ export class Rigs {
 
 	_kiteAt( dt ) {
 
-		const K = this.kite, b = this.app.boatCtl, S = this.app.boat.lines, wd = G.windDir.value, w = G.windSpeed.value;
+		// (off the stern of the boat you're on: yours, or (guest work) the one you're riding)
+		const p = this.app.player, ride = p.riding ? p.boat : null;
+		const K = this.kite, b = ride || this.app.boatCtl, S = ( ride ? ride.model : this.app.boat ).lines, wd = G.windDir.value, w = G.windSpeed.value;
 		K.sway += dt;
 		if ( K.down ) K.up = Math.max( 0, K.up - dt / KITE.climb );
 		else K.up = Math.min( 1, K.up + dt / KITE.climb );
@@ -636,19 +926,44 @@ export class Rigs {
 		const g = this.game, s = this.state, c = this.app.camera.position;
 		s.takeBait( 'chum' );
 		const d = this.app.camera.getWorldDirection( _a ).setY( 0 ).normalize();
-		this.slick = { x: c.x + d.x * 3, z: c.z + d.z * 3, t: 0, seed: Math.random() * 100 };
-		if ( this.app.audio && this.app.audio.plop ) this.app.audio.plop( _b.set( this.slick.x, 0, this.slick.z ) );
+		this._startSlick( c.x + d.x * 3, c.z + d.z * 3 );
 		s.pickBait( null );
 		this.fitBait();
 		g.toast( 'Chum over the side · the slick\'s drifting off · cast down it', 2800 );
 
 	}
 
-	// how far ( x, z ) is in the slick, 0..1 (as a boat's floodlights draw them: Bites' flood)
+	// a slick of yours from ( x, z ), told to the others: it brings the fish up on their games too
+	_startSlick( x, z ) {
+
+		this.slick = { x, z, t: 0, seed: Math.random() * 100 };
+		if ( this.app.audio && this.app.audio.plop ) this.app.audio.plop( _b.set( x, 0, z ) );
+		if ( this.app.together ) this.app.together.slick( this.slick );
+
+	}
+
+	// (guest work) someone else's ({ x, z, s: its seed, at: ms when it was thrown }): a few at most, the newest kept
+	theirSlick( b ) {
+
+		if ( ! b || ! Number.isFinite( b.x ) || ! Number.isFinite( b.z ) ) return;
+		const t = Math.min( SLICK_S, Math.max( 0, ( Date.now() - ( Number( b.at ) || Date.now() ) ) / 1000 ) );
+		if ( t >= SLICK_S ) return;
+		this.theirSlicks.push( { x: b.x, z: b.z, t, seed: Number.isFinite( b.s ) ? b.s : 0 } );
+		if ( this.theirSlicks.length > 4 ) this.theirSlicks.shift();
+
+	}
+
+	// how far ( x, z ) is in a slick, 0..1 (as a boat's floodlights draw them: Bites' flood): yours, or anyone's
 	slickAt( x, z ) {
 
-		const S = this.slick;
-		if ( ! S ) return 0;
+		let k = this.slick ? this._inSlick( this.slick, x, z ) : 0;
+		for ( const S of this.theirSlicks ) k = Math.max( k, this._inSlick( S, x, z ) );
+		return k;
+
+	}
+
+	_inSlick( S, x, z ) {
+
 		const wd = G.windDir.value, dx = x - S.x, dz = z - S.z, along = dx * wd.x + dz * wd.y, across = Math.abs( dx * wd.y - dz * wd.x );
 		const reach = SLICK_R + S.t * SLICK_DRIFT * 4;
 		if ( along < - 8 || along > reach || across > 8 + along * 0.3 ) return 0;
@@ -660,19 +975,20 @@ export class Rigs {
 
 	fightTerms( b ) {
 
-		const g = this.game, rod = g.rod, s = this.stats, electric = rod.rig === 'drop' && s.electricReel;
-		// (what was struck on a rod in its holder has what that line had on it)
-		const leader = this._fightLeader || leaderOn( this.state.leaderPick, s.leader, rod.rig, this.app.boatCtl.speed * KNOTS, BAITS[ g.hookBait ]?.lure ? g.hookBait : null );
+		// ((guest work) t: the tackle it's on, yours or hers; your own hands, gaff and dehooker whichever)
+		const g = this.game, rod = g.rod, s = this.stats, t = this.tackle, electric = rod.rig === 'drop' && t.electricReel;
+		// (what was struck on a rod in its holder has what that line had on it; on her kite rod or reel, the leader she'd have on)
+		const leader = this._fightLeader || leaderOn( this.kit ? null : this.state.leaderPick, t.leader | 0, rod.rig, this.app.boatCtl.speed * KNOTS, BAITS[ g.hookBait ]?.lure ? g.hookBait : null );
 		this._fightLeader = null;
 		const risk = leaderRisk( leader, b.species ), big = b.kg >= BIG_KG, off = s.dehooker && FISH[ b.species ].protected;
 		const chair = this.inChair && !! this._seat();
 		return {
-			lineKg: s.lineKg,
-			reelSpeed: electric ? ELECTRIC.speed : s.reelSpeed,
-			dragKg: electric ? ELECTRIC.drag : s.dragKg,
-			holdKg: chair ? HOLD_KG.chair : s.standUp ? HOLD_KG.harness : HOLD_KG.hand,
-			spoolM: electric ? ELECTRIC.spool : s.spoolM,
-			twoSpeed: !! s.twoSpeed || electric,
+			lineKg: t.lineKg,
+			reelSpeed: electric ? ELECTRIC.speed : t.reelSpeed,
+			dragKg: electric ? ELECTRIC.drag : t.dragKg,
+			holdKg: chair ? HOLD_KG.chair : t.standUp ? HOLD_KG.harness : HOLD_KG.hand,
+			spoolM: electric ? ELECTRIC.spool : t.spoolM,
+			twoSpeed: !! t.twoSpeed || electric,
 			electric,
 			chair,
 			hookM: rod.rig === 'bottom' || rod.rig === 'drop' ? rod.hookM : 0,
@@ -691,9 +1007,9 @@ export class Rigs {
 
 		const rod = this.game.rod;
 		if ( rod.rig === 'float' && ! this._fightOut ) return out;
-		const m = this._fightOut || Math.max( out, rod.lineOut );
+		const m = this._fightOut || Math.max( out, rod.lineOut ), t = this.tackle;
 		this._fightOut = 0;
-		return Math.min( m, rod.rig === 'drop' && this.stats.electricReel ? ELECTRIC.spool : this.stats.spoolM );
+		return Math.min( m, rod.rig === 'drop' && t.electricReel ? ELECTRIC.spool : t.spoolM );
 
 	}
 
@@ -837,7 +1153,7 @@ export class Rigs {
 		if ( f ) {
 
 			f.chair = on;
-			f.holdKg = on ? HOLD_KG.chair : this.stats.standUp ? HOLD_KG.harness : HOLD_KG.hand;
+			f.holdKg = on ? HOLD_KG.chair : this.tackle.standUp ? HOLD_KG.harness : HOLD_KG.hand;
 
 		}
 
@@ -847,6 +1163,8 @@ export class Rigs {
 	lineCancelled() {
 
 		const rod = this.game.rod;
+		this.kit = null;
+		this._asked = null;
 		this._waiting = false;
 		rod.hung = null;
 		this.hookAt = null;
@@ -859,23 +1177,28 @@ export class Rigs {
 
 	update( dt, { rDown, inp } ) {
 
-		if ( this.game.rod ) this.game.rod.electric = this.game.rod.rig === 'drop' && !! this.stats.electricReel;
+		if ( this.game.rod ) this.game.rod.electric = this.game.rod.rig === 'drop' && !! this.tackle.electricReel;
 
 		const g = this.game, rod = g.rod, p = this.app.player, app = this.app;
 		// she's left, or berthed, or you're ashore: what's out of her comes in
 		if ( this.lines.length && ( ! ( p.mode === 'deck' || p.mode === 'boat' ) || p.riding || app.boatCtl.moored ) ) this.clearLines();
 		if ( this.lines.length ) this.updateLines( dt );
 		if ( this.kite ) this.updateKite( dt );
-		if ( this.kite && ! this.aboard && ! this.kite.down ) this._kiteDown();
-		if ( this.slick ) {
+		// ((guest work) her kite, on her rod in your hands: up while you're on her deck)
+		const flying = this.aboard || ( this.kit && p.riding && p.mode === 'deck' );
+		if ( this.kite && ! flying && ! this.kite.down ) this._kiteDown();
+		const wd = G.windDir.value, drift = SLICK_DRIFT * G.windSpeed.value * dt;
+		for ( const S of [ this.slick, ...this.theirSlicks ] ) {
 
-			const S = this.slick, wd = G.windDir.value;
+			if ( ! S ) continue;
 			S.t += dt;
-			S.x += wd.x * SLICK_DRIFT * G.windSpeed.value * dt;
-			S.z += wd.y * SLICK_DRIFT * G.windSpeed.value * dt;
-			if ( S.t > SLICK_S ) this.slick = null;
+			S.x += wd.x * drift;
+			S.z += wd.y * drift;
 
 		}
+
+		if ( this.slick && this.slick.t > SLICK_S ) this.slick = null;
+		this.theirSlicks = this.theirSlicks.filter( ( S ) => S.t <= SLICK_S );
 
 		// a lead's got as far as it's going: the fish can find it now
 		if ( this._waiting && rod.state === 'floating' && rod.settled && ( rod.rig === 'bottom' || rod.rig === 'drop' ) ) {
@@ -899,6 +1222,8 @@ export class Rigs {
 
 		// the right button, with the spread out and nothing in your hands to reel: they come in
 		if ( rDown && this.lines.length && ! g.fight && rod.equipped && rod.state === 'idle' ) this.bringIn();
+		// ((guest work) and hers, riding along, with her spread picked)
+		else if ( rDown && ! g.fight && rod.equipped && rod.state === 'idle' && this.pick === 'troll' && this.boatRig() && this._theirLines() ) this.app.together.askRig( { k: 'in' } );
 		if ( rDown && this.kite && ! this.kite.down && rod.state === 'floating' ) this._kiteDown();
 
 		// the word on a rod that's gone off
@@ -928,7 +1253,7 @@ export class Rigs {
 
 	_draw() {
 
-		const any = this.lines.length || this.kite || this.slick;
+		const any = this.lines.length || this.kite || this.slick || this.theirSlicks.length;
 		if ( ! any ) {
 
 			if ( this.draw ) this.draw.hide();
@@ -941,7 +1266,8 @@ export class Rigs {
 		D.begin( cam );
 		for ( const L of this.lines ) this._drawLine( D, L );
 		if ( this.kite ) this._drawKite( D );
-		if ( this.slick ) this._drawSlick( D );
+		if ( this.slick ) this._drawSlick( D, this.slick );
+		for ( const S of this.theirSlicks ) this._drawSlick( D, S );
 		D.end();
 
 	}
@@ -1035,9 +1361,9 @@ export class Rigs {
 
 	}
 
-	_drawSlick( D ) {
+	_drawSlick( D, S ) {
 
-		const S = this.slick, wd = G.windDir.value, app = this.app;
+		const wd = G.windDir.value, app = this.app;
 		const fade = 1 - S.t / SLICK_S, n = Math.floor( 30 * fade );
 		for ( let i = 0; i < n; i ++ ) {
 
@@ -1059,6 +1385,25 @@ export class Rigs {
 
 		const g = this.game, rod = g.rod, pick = this.pick, s = this.state;
 		const k = ( c ) => g.keyName( c );
+		// ((guest work) her rods, riding along)
+		if ( rod.state === 'idle' && this.boatRig() ) {
+
+			const name = this.skipper.person.name, tail = `${ k( 'B' ) }  ${ name }'s bait   ·   ${ k( 'C' ) }  rig   ·   ${ k( 'R' ) }  put the rod away`;
+			if ( this._asked ) return { key: ELLIPSIS, text: `A bait from ${ name }${ ELLIPSIS }` };
+			if ( BAITS[ this.boatPick ]?.chum ) return { key: 'LMB', text: `Throw ${ name }'s chum over the side   ·   ${ tail }` };
+			if ( pick === 'troll' ) {
+
+				const n = this._theirLines(), more = n < this.boatKit.sp;
+				if ( ! n ) return { key: 'LMB', text: `Let out a line on ${ name }'s spread   ·   ${ tail }` };
+				return { key: more ? 'LMB' : 'RMB', text: `${ more ? `Let out another of ${ name }'s lines   ·   RMB  ` : '' }bring ${ more ? 'them' : `${ name }'s lines` } in   ·   ${ tail }` };
+
+			}
+
+			if ( pick === 'kite' ) return { key: 'LMB', text: `Fly the kite on ${ name }'s stand-up rod   ·   ${ tail }` };
+			return { key: 'LMB', text: `Drop the lead on ${ name }'s electric reel   ·   ${ tail }` };
+
+		}
+
 		if ( rod.state === 'idle' ) {
 
 			const tail = `${ k( 'B' ) }  bait   ·   ${ k( 'C' ) }  rig   ·   ${ this.stats.leader > 0 ? `${ k( 'X' ) }  leader   ·   ` : '' }${ k( 'R' ) }  put the rod away`;
@@ -1094,6 +1439,16 @@ export class Rigs {
 	chip() {
 
 		const g = this.game, s = this.state, k = s.baitPick, rod = g.rod, b = BAITS[ k ];
+		// ((guest work) her bait, on her rods)
+		if ( rod.state === 'idle' && this.boatRig() ) {
+
+			const h = BAITS[ this.boatPick ], n = this._theirLines(), name = this.skipper.person.name;
+			let text = h ? `${ name }'s ${ h.lure ? h.name.toLowerCase() : `${ h.short } ×${ this.boatKit.b[ this.boatPick ] | 0 }` }` : `${ name } has none for it`;
+			if ( n ) text += ` · ${ n } out`;
+			return { label: RIGS[ this.pick ].name, text };
+
+		}
+
 		let text = b ? ( b.lure ? b.name : `${ b.name } ×${ ( s.bait[ k ] | 0 ) + ( g.hookBait === k ? 1 : 0 ) }` ) : baitFits( this.pick, null ) ? 'Shrimp' : 'No bait for it';
 		// (the leader, once you've more than the one)
 		if ( this.stats.leader > 0 ) text += ` · ${ LEADER_CHIP[ leaderOn( s.leaderPick, this.stats.leader, this.pick, this.app.boatCtl.speed * KNOTS, b && b.lure ? k : null ) ] }`;
@@ -1106,7 +1461,7 @@ export class Rigs {
 	castLabel() {
 
 		const s = this.state;
-		if ( BAITS[ s.baitPick ]?.chum ) return 'Chum';
+		if ( BAITS[ this.boatRig() ? this.boatPick : s.baitPick ]?.chum ) return 'Chum';
 		return { troll: 'Let out', kite: 'Fly kite', drop: 'Drop' }[ this.pick ] || 'Cast';
 
 	}

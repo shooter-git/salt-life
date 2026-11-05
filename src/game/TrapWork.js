@@ -7,7 +7,7 @@ import { islandTime } from './Weather.js';
 import { WORLD } from '../world/WorldLayout.js';
 import { SEABED } from '../world/terrain/SeabedModel.js';
 import { SPRAY } from '../fx/Spray.js';
-import { TrapMeshes, TRAP, stowMatrix, stowWear, trapColliders } from '../world/boat/TrapModel.js';
+import { TrapMeshes, TRAP, STOW, stowMatrix, stowWear, trapColliders } from '../world/boat/TrapModel.js';
 import { BOTTOMS, HAULER_MS, HAUL_SPEED, TRAP_PRICE, WARP_M, aboardTraps, bottomAt, buoyColours, buoyOffset, buoyRecord, cleanBuoys, haulOf, ownedTraps, settle, soakOf, trapsTold, whyNot } from './Traps.js';
 
 // (M16) Lobster traps, at the rail of the boat that has the hauler and davit, and out on the sea (the rules: Traps.js; what's
@@ -15,7 +15,13 @@ import { BOTTOMS, HAULER_MS, HAUL_SPEED, TRAP_PRICE, WARP_M, aboardTraps, bottom
 // paying out and the buoy thrown after it, a mark going on your chart. Back alongside its buoy, starboard side to, E gaffs the
 // buoy, the hauler brings the warp in over the davit's block, the trap breaks the surface and swings in on to the rail, and
 // each thing in it comes out at a press: every lobster on the gauge. Nothing here's built until there's a trap to draw.
+// (guest work) Riding with her owner aboard, you're her deckhand: at her hauler you set her traps off her stack and haul hers, as
+// she's driven alongside, and what's in them comes out into your own hold. Her traps are her owner's (their save, their chart,
+// their buoys), so their game does the work at the rail ('trap', from you: set, haul, took one out, stack it; 'trapIs' back:
+// how it went, and what came up in it), and everyone sees it done: her stack on her deck and the work at her rail, out of her
+// owner's poses ('ts', 'tj'), drawn on her copy on every game. Anyone else's buoys are still theirs, not yours to touch.
 //   const w = new TrapWork( game );  w.update( dt, lDown );  w.boatChanged();  w.buyNew()
+//   w.asked( body, from, them )  w.told( body, from )  (Together's messages)   w.wire() -> what her owner's poses carry
 
 const NIGHT_SAID = ( n ) => n < 0.5 ? 'not a night down yet' : n < 1.5 ? 'a night down' : `${ Math.round( n ) } nights down`;
 const STAND_M = 2.1; // how near the hauler you work it (m, on her deck)
@@ -33,6 +39,70 @@ const wearAt = ( x, z ) => Math.abs( x * 12.9898 + z * 78.233 ) % 1;
 const ease = ( t ) => t * t * ( 3 - 2 * t );
 const clamp01 = ( t ) => Math.min( 1, Math.max( 0, t ) );
 const mix = ( a, b, t ) => a + ( b - a ) * t;
+const r1 = ( v ) => Math.round( v * 10 ) / 10, r2 = ( v ) => Math.round( v * 100 ) / 100, r3 = ( v ) => Math.round( v * 1000 ) / 1000;
+// (guest work) a haul's steps, as the poses carry them (0: a set)
+const PHASES = [ 'gaff', 'up', 'swing', 'rail', 'stack' ];
+const GONE_S = 2.5; // s a deckhand's been off her deck before her owner's game lets go of what they were doing
+const ASK_S = 3; // s a press waits on her owner's game before it can be pressed again
+
+// where the work's done on the boat with the hauler and davit, her frame (L: her lines)
+export function stationsOf( L ) {
+
+	const at = ( z ) => L.tAtSheerZ( z );
+	const xg = - ( L.sheerX( at( - 0.78 ) ) - 0.035 ), xr = - ( L.sheerX( at( - 1.66 ) ) - 0.035 ), yr = L.sheerY( at( - 1.66 ) ) + 0.045;
+	return {
+		block: new Vector3( xg - 0.43, 1.85, - 0.72 ), // under the davit's block
+		stand: new Vector3( xg + 0.55, 0, - 1.15 ), // where you work
+		reach: new Vector3( xg - 0.3, 0, - 0.72 ), // over the rail, by the block
+		over: new Vector3( xr - 1, 0, - 1.66 ), // where one goes over the side
+		rail: new Vector3( xr + 0.22, yr, - 1.66 ), // a trap on the rail
+		gaffed: new Vector3( xg + 0.04, L.sheerY( at( - 0.86 ) ) + 0.28, - 0.86 ), // the buoy, gaffed
+	};
+
+}
+
+const _stations = new WeakMap();
+const stationsFor = ( L ) => {
+
+	let s = _stations.get( L );
+	if ( ! s ) _stations.set( L, s = stationsOf( L ) );
+	return s;
+
+};
+
+// (guest work) her deck as a deckhand walks it with n of her traps stacked on it: their room taken, as on her owner's (model: the
+// view Together walks, BoatModel.walkedAs)
+const _stacked = new WeakMap();
+export function stackedOn( model, n ) {
+
+	if ( ! n || ! model || ! model.lines ) return model;
+	let byN = _stacked.get( model );
+	if ( ! byN ) _stacked.set( model, byN = new Map() );
+	let v = byN.get( n );
+	if ( ! v ) {
+
+		const extra = trapColliders( model.lines, n );
+		let from = null, kept = null;
+		v = Object.create( model );
+		Object.defineProperty( v, 'colliders', { get() {
+
+			if ( model.colliders !== from ) {
+
+				from = model.colliders;
+				kept = from.filter( ( c ) => c.tag !== 'trap' ).concat( extra );
+
+			}
+
+			return kept;
+
+		} } );
+		byN.set( n, v );
+
+	}
+
+	return v;
+
+}
 
 // the 8 m seagrass mask the bottoms keep once the island's own is let go (App.freeMasks): { data, res, texel, origin }
 export function grassMask( T ) {
@@ -69,6 +139,13 @@ export class TrapWork {
 		this._read = false;
 		this._boat = null;
 		this._aboard = - 1;
+		// (guest work) a deckhand's: what came up in her trap, yours to take out at her rail ({ from, trap, q, place, card, cardT }),
+		// and a press waiting on her owner's game; everyone's: the others' stacks and the work at their rails, as drawn here
+		this.helping = null;
+		this._askT = 0;
+		this._mirrors = new Map(); // owner's id -> the work at her rail, eased between their poses
+		this._theirs = []; // { o, W, A, L, stacked, job }: drawn this frame
+		this._frames = new Map(); // owner's id -> her frame, as a matrix
 
 	}
 
@@ -95,16 +172,7 @@ export class TrapWork {
 		this._boat = b;
 		this.on = b && b.id === 'lobster';
 		if ( ! this.on ) return;
-		const L = b.lines, at = ( z ) => L.tAtSheerZ( z );
-		const xg = - ( L.sheerX( at( - 0.78 ) ) - 0.035 ), xr = - ( L.sheerX( at( - 1.66 ) ) - 0.035 ), yr = L.sheerY( at( - 1.66 ) ) + 0.045;
-		this.at = {
-			block: new Vector3( xg - 0.43, 1.85, - 0.72 ), // under the davit's block
-			stand: new Vector3( xg + 0.55, 0, - 1.15 ), // where you work
-			reach: new Vector3( xg - 0.3, 0, - 0.72 ), // over the rail, by the block
-			over: new Vector3( xr - 1, 0, - 1.66 ), // where one goes over the side
-			rail: new Vector3( xr + 0.22, yr, - 1.66 ), // a trap on the rail
-			gaffed: new Vector3( xg + 0.04, L.sheerY( at( - 0.86 ) ) + 0.28, - 0.86 ), // the buoy, gaffed
-		};
+		this.at = stationsOf( b.lines );
 
 	}
 
@@ -119,11 +187,32 @@ export class TrapWork {
 		const aboard = this.on ? aboardTraps( this.traps, game.state.upgrades ) : 0;
 		if ( aboard !== this._aboard ) this._stowed( aboard );
 		if ( this.job ) this._work( dt, lDown );
-		// (the rail's "Jump overboard" makes way, by the hauler)
-		const pl = app.player, A = this.at;
-		pl.trapWork = !! ( this.on && pl.mode === 'deck' && ! game.rod.equipped && ! game.net.equipped && ( this.job || ( ( aboard || this.traps.set.length ) && Math.hypot( pl.deckPos.x - A.stand.x, pl.deckPos.z - A.stand.z ) <= STAND_M ) ) );
-		if ( ! app.player.prompt && ! game.makingRoom ) this._offer( aboard );
+		this._askT = Math.max( 0, this._askT - dt );
+		const crew = this._crewOn();
+		this._helpCard( dt, lDown, crew );
+		// (the rail's "Jump overboard" makes way, by the hauler: hers too, riding as her deckhand)
+		const pl = app.player, A = this.at, CA = crew && stationsFor( crew.L );
+		pl.trapWork = !! ( pl.mode === 'deck' && ! game.rod.equipped && ! game.net.equipped && ( ( this.on && ! pl.riding && ( this.job || ( ( aboard || this.traps.set.length ) && Math.hypot( pl.deckPos.x - A.stand.x, pl.deckPos.z - A.stand.z ) <= STAND_M ) ) )
+			|| ( CA && ( this.helping || Math.hypot( pl.deckPos.x - CA.stand.x, pl.deckPos.z - CA.stand.z ) <= STAND_M ) ) ) );
+		if ( ! app.player.prompt && ! game.makingRoom ) this._offer( aboard, crew );
+		this._gatherTheirs( dt );
 		this._draw( dt, aboard );
+
+	}
+
+	// (guest work) riding as her deckhand: her owner aboard and here, and she's the boat with the hauler -> { o, L }, or null
+	_crewOn() {
+
+		const T = this.app.together, o = T && T.skipper();
+		if ( ! o || o.cur.boatId !== 'lobster' ) {
+
+			if ( this.helping ) this.helping = null;
+			return null;
+
+		}
+
+		const L = this.app.player.boat.model.lines;
+		return L ? { o, L } : null;
 
 	}
 
@@ -170,16 +259,22 @@ export class TrapWork {
 	}
 
 	// ---- what the rail offers
-	_offer( aboard ) {
+	_offer( aboard, crew ) {
 
 		const app = this.app, p = app.player, game = this.game, inp = app.input;
 		if ( p.mode === 'swim' ) return this._offerDiver( p, inp );
-		this._hail( p );
+		this._hail( p, crew );
+		if ( crew && p.mode === 'deck' && ! game.rod.equipped && ! game.net.equipped && ! game.fight ) return this._offerCrew( p, inp, crew );
 		if ( p.mode !== 'deck' || p.riding || ! this.on || game.rod.equipped || game.net.equipped || game.fight ) return;
 		const a = this.at, j = this.job;
 		if ( j ) {
 
-			if ( j.kind === 'haul' && j.phase === 'rail' ) this._offerRail( j, p, inp );
+			// ((guest work) your deckhand's at it)
+			if ( j.by ) {
+
+				if ( Math.hypot( p.deckPos.x - a.stand.x, p.deckPos.z - a.stand.z ) <= STAND_M * 1.5 ) p.prompt = { key: ELLIPSIS, text: `${ j.byName } has the hauler` };
+
+			} else if ( j.kind === 'haul' && j.phase === 'rail' ) this._offerRail( j, p, inp );
 			else if ( j.kind === 'haul' && j.phase === 'up' ) p.prompt = { key: ELLIPSIS, text: 'The hauler\'s bringing it up' };
 			return;
 
@@ -265,10 +360,11 @@ export class TrapWork {
 	}
 
 	// telling you of a buoy as you come up to it, yours or someone else's, once each time
-	_hail( p ) {
+	_hail( p, crew ) {
 
 		if ( p.mode !== 'boat' && p.mode !== 'deck' ) return;
-		const b = this.app.boatCtl.position;
+		// ((guest work) riding, the boat you're on)
+		const b = p.riding ? p.boat.position : this.app.boatCtl.position, skipper = crew ? crew.o.person.id : null;
 		for ( const n of this._near ) {
 
 			const d = Math.hypot( n.bx - b.x, n.bz - b.z ), key = `${ n.bx },${ n.bz }`;
@@ -276,14 +372,283 @@ export class TrapWork {
 			if ( d > FOUND_M || this._hailed.has( key ) ) continue;
 			this._hailed.add( key );
 			if ( n.mine ) this.game.toast( `Your buoy · ${ NIGHT_SAID( soakOf( n.trap, this._T() ).nights ) }${ this.on ? ' · come alongside it, starboard side to' : ' · only the lobster boat can haul it' }`, 3600 );
+			else if ( n.id === skipper ) this.game.toast( `${ n.name || 'Her owner' }'s buoy · alongside it, starboard side to, and you gaff it at her hauler`, 3600 );
 			else this.game.toast( `${ n.name ? `${ n.name }'s` : 'Someone\'s' } buoy · their gear, not yours to touch`, 3000 );
 
 		}
 
 	}
 
-	// ---- setting one
-	_startSet( x, z, depth, id, aboard ) {
+	// ---- (guest work) her deckhand, riding along: at her hauler, what her owner's game is asked to do
+
+	_offerCrew( p, inp, crew ) {
+
+		const { o, L } = crew, c = o.cur, A = stationsFor( L ), boat = p.boat, name = o.person.name, T = this.app.together, way = c.bv ?? boat.flat;
+		if ( this.helping ) return this._offerHelp( this.helping, p, inp, A, boat );
+		if ( Math.hypot( p.deckPos.x - A.stand.x, p.deckPos.z - A.stand.z ) > STAND_M ) return;
+		if ( c.tj ) {
+
+			p.prompt = { key: ELLIPSIS, text: c.tb === T.me.id ? 'The hauler\'s bringing it up' : c.tb ? 'The hauler\'s busy' : `${ name } has the hauler` };
+			return;
+
+		}
+
+		if ( this._askT > 0 ) {
+
+			p.prompt = { key: ELLIPSIS, text: `At ${ name }'s hauler${ ELLIPSIS }` };
+			return;
+
+		}
+
+		// a buoy of hers in reach of the rail
+		boat.toWorld( A.reach, _a );
+		let best = null, near = Infinity;
+		const theirs = this.others[ o.person.id ];
+		if ( theirs ) for ( const [ x, z ] of theirs.b ) {
+
+			const w = buoyOffset( x, z, this.depthAt( x, z ) ), d = Math.hypot( x + w.x - _a.x, z + w.z - _a.z );
+			if ( d < near ) {
+
+				near = d;
+				best = [ x, z ];
+
+			}
+
+		}
+
+		if ( best && near < GAFF_M ) {
+
+			if ( way > HAUL_SPEED ) p.prompt = { key: ELLIPSIS, text: `${ name }'s buoy · she's to slow down for you to gaff it` };
+			else {
+
+				p.prompt = { key: 'E', text: `Gaff ${ name }'s buoy` };
+				if ( inp.hit( 'KeyE' ) ) this._ask( o, { k: 'haul', x: best[ 0 ], z: best[ 1 ] } );
+
+			}
+
+			return;
+
+		}
+
+		const stacked = c.ts | 0;
+		if ( ! stacked ) {
+
+			p.prompt = { key: ELLIPSIS, text: best && near < 40 ? `${ name }'s buoy's ${ feet( near ) } off · she wants to be alongside it, starboard side to` : `None of ${ name }'s traps aboard to set` };
+			return;
+
+		}
+
+		boat.toWorld( A.over, _b );
+		const depth = this.depthAt( _b.x, _b.z ), id = this.bottom( _b.x, _b.z ), dock = WORLD.boatDock.position;
+		const why = whyNot( { depth, bottom: id, speed: way, dock: Math.hypot( _b.x - dock.x, _b.z - dock.z ) } );
+		if ( why ) {
+
+			p.prompt = { key: ELLIPSIS, text: why.replace( 'Slow her down', 'She\'s to slow down' ).replace( 'take her clear', 'she\'s to be clear' ) };
+			return;
+
+		}
+
+		// (the bottom's seen in clear shallow water, and past that on her fish finder)
+		const known = depth < 12 || ( c.dash && c.dash.finder ), B = BOTTOMS[ id ];
+		p.prompt = { key: 'E', text: `Set one of ${ name }'s traps   ·   ${ known ? `${ feet( depth ) }, ${ B.name }: ${ B.say }` : 'can\'t see the bottom' }   ·   ${ stacked } aboard` };
+		if ( inp.hit( 'KeyE' ) ) this._ask( o, { k: 'set' } );
+
+	}
+
+	_ask( o, body ) {
+
+		const T = this.app.together;
+		this._askT = ASK_S;
+		T.session.send( 'trap', Object.assign( { to: o.person.id }, body ) );
+
+	}
+
+	// what came up in her trap, on her rail: out at a press each, into your hold, and then her trap's stacked
+	_offerHelp( H, p, inp, A, boat ) {
+
+		if ( H.card || this.game._cardDismissed ) return; // (this frame's E was the card's)
+		const next = H.q[ 0 ];
+		if ( next ) {
+
+			const lob = H.q.filter( ( x ) => x.lobster ).length;
+			p.prompt = { key: 'E', text: next.lobster ? `Gauge the lobster   ·   ${ lob } in the trap` : `Take out the ${ next.label.toLowerCase() }` };
+			if ( inp.hit( 'KeyE' ) ) {
+
+				const x = H.q.shift();
+				this._takeOut( H, x, boat.toWorld( A.rail, _p ) );
+				this.app.together.session.send( 'trap', { to: H.from, k: 'took' } );
+
+			}
+
+			return;
+
+		}
+
+		p.prompt = { key: 'E', text: `Stack ${ H.name }'s trap aboard` };
+		if ( inp.hit( 'KeyE' ) ) {
+
+			this.app.together.session.send( 'trap', { to: H.from, k: 'stack' } );
+			this.helping = null;
+
+		}
+
+	}
+
+	// a catch card from her trap, up till it's done with
+	_helpCard( dt, lDown, crew ) {
+
+		const H = this.helping, game = this.game;
+		if ( ! H ) return;
+		if ( ! crew || crew.o.person.id !== H.from || this.app.player.mode !== 'deck' ) {
+
+			this.helping = null;
+			return;
+
+		}
+
+		if ( ! H.card ) return;
+		H.cardT += dt;
+		if ( game.cardEnd( H.card, H.cardT, lDown ) ) {
+
+			game._cardDismissed = true;
+			H.card = null;
+			if ( game.hud && game.hud.catchOpen ) game.hud.hideCatch();
+
+		}
+
+	}
+
+	// ---- (guest work) her owner's game: what your deckhand asks ('trap': { k: 'set' | 'haul' | 'took' | 'stack', x, z })
+
+	// whoever's riding with you on your deck, at work there (their remote), or null
+	_deckhand( id ) {
+
+		const T = this.app.together, o = T && T.others.get( id );
+		return o && o.cur && o.cur.ride === T.me.id && o.cur.mode === 'deck' ? o : null;
+
+	}
+
+	_tell( id, body ) {
+
+		const T = this.app.together;
+		if ( T ) T.session.send( 'trapIs', Object.assign( { to: id }, body ) );
+
+	}
+
+	asked( b, from, o ) {
+
+		const T = this.app.together, app = this.app, p = app.player, c = app.boatCtl, game = this.game;
+		if ( ! T || ! b || b.to !== T.me.id || ! this._deckhand( from ) ) return;
+		const name = o.person.name, j = this.job;
+		// at the rail with what's in it, and stacking it: theirs to say
+		if ( b.k === 'took' || b.k === 'stack' ) {
+
+			if ( ! j || j.by !== from || j.kind !== 'haul' || j.phase !== 'rail' ) return;
+			if ( b.k === 'took' ) {
+
+				if ( j.queue ) j.queue.shift();
+				return;
+
+			}
+
+			j.phase = 'stack';
+			j.t = 0;
+			j.queue = [];
+			j.stow = aboardTraps( this.traps, game.state.upgrades ) - 1;
+			return;
+
+		}
+
+		const no = ( t ) => this._tell( from, { k: b.k, ok: false, t } );
+		if ( ! this.on || p.riding || ( p.mode !== 'deck' && p.mode !== 'boat' ) ) return no( `${ T.me.name || 'Her owner' }'s not aboard her` );
+		if ( j ) return no( j.by === from ? null : `${ j.by ? j.byName : T.me.name || 'Her owner' } has the hauler` );
+		if ( c.moored || c.hauled ) return no( 'Not at the dock: she\'s to go out' );
+		this._fit();
+		const W = this._boat.group.matrixWorld;
+		this._boat.group.updateWorldMatrix( true, false );
+		if ( b.k === 'set' ) {
+
+			const aboard = aboardTraps( this.traps, game.state.upgrades );
+			if ( ! aboard ) return no( 'None of her traps aboard' );
+			_b.copy( this.at.over ).applyMatrix4( W );
+			const depth = this.depthAt( _b.x, _b.z ), id = this.bottom( _b.x, _b.z ), dock = WORLD.boatDock.position;
+			const why = whyNot( { depth, bottom: id, speed: c.speed, dock: Math.hypot( _b.x - dock.x, _b.z - dock.z ) } );
+			if ( why ) return no( why );
+			const said = this._startSet( _b.x, _b.z, depth, id, aboard, from, name );
+			this._tell( from, { k: 'set', ok: true, t: said } );
+			return;
+
+		}
+
+		if ( b.k === 'haul' && Number.isFinite( b.x ) && Number.isFinite( b.z ) ) {
+
+			// (the one they're gaffing: yours whose buoy's at its place, in reach of her rail)
+			const t = this.traps.set.find( ( x ) => x.buoy && Math.abs( x.x - b.x ) < 1 && Math.abs( x.z - b.z ) < 1 );
+			if ( ! t ) return no( 'That buoy\'s gone' );
+			_a.copy( this.at.reach ).applyMatrix4( W );
+			const w = buoyOffset( t.x, t.z, this.depthAt( t.x, t.z ) );
+			if ( Math.hypot( t.x + w.x - _a.x, t.z + w.z - _a.z ) > GAFF_M + 2 ) return no( 'Out of reach of her rail' );
+			if ( c.speed > HAUL_SPEED ) return no( 'She\'s going too fast to gaff it' );
+			this._startHaul( t, from, name );
+			game.toast( `${ name } gaffed your buoy`, 2400 );
+			this._tell( from, { k: 'haul', ok: true, t: `Gaffed · ${ NIGHT_SAID( soakOf( t, this._T() ).nights ) } · the hauler's bringing it up` } );
+
+		}
+
+	}
+
+	// what your poses carry of her, for everyone else's game to draw: how many stacked on her deck (ts), the work at her rail
+	// (tj: [ 0 a set or 1 + its step, t, x, z, the bottom, yaw, where it's stowed, the haul's time up or what's in it, and the
+	// lobsters on her rail's lengths ]), and your deckhand's, if it's theirs (tb)
+	wire() {
+
+		if ( ! this.on ) return null;
+		const j = this.job, out = {}, aboard = aboardTraps( this.traps, this.game.state.upgrades );
+		const atRail = j && j.kind === 'haul' && ( j.phase === 'rail' || j.phase === 'stack' ), stacked = aboard - ( atRail ? 1 : 0 );
+		if ( stacked > 0 ) out.ts = stacked;
+		if ( j ) {
+
+			const lob = j.kind === 'haul' && j.phase === 'rail' && j.queue ? j.queue.filter( ( x ) => x.lobster ).slice( 0, 3 ).map( ( x ) => r1( x.cm ) ) : [];
+			out.tj = [ j.kind === 'set' ? 0 : 1 + PHASES.indexOf( j.phase ), r2( j.t ), r1( j.trap.x ), r1( j.trap.z ), r2( j.bottom ), r3( j.yaw ), j.stow | 0, r2( j.total || 0 ), ...lob ];
+			if ( j.by ) out.tb = j.by;
+
+		}
+
+		return out;
+
+	}
+
+	// her owner's game has answered ('trapIs': { k, ok, t, ... })
+	told( b, from ) {
+
+		const game = this.game;
+		this._askT = 0;
+		if ( b.t ) game.toast( String( b.t ), 3000 );
+		if ( b.k !== 'rail' || ! Array.isArray( b.q ) ) {
+
+			if ( b.k === 'lost' && this.helping && this.helping.from === from ) this.helping = null;
+			return;
+
+		}
+
+		// what's in it, as it came up
+		const q = [];
+		for ( const x of b.q.slice( 0, 24 ) ) {
+
+			if ( ! x || typeof x !== 'object' ) continue;
+			if ( x.lobster && Number.isFinite( x.cm ) && Number.isFinite( x.kg ) ) q.push( { lobster: true, cm: x.cm, kg: x.kg, berried: !! x.berried } );
+			else if ( ! x.lobster && typeof x.label === 'string' ) q.push( { species: FISH[ x.species ] ? x.species : null, label: x.label.slice( 0, 40 ), kg: Number.isFinite( x.kg ) ? x.kg : 0 } );
+
+		}
+
+		const o = this.app.together.others.get( from );
+		const trap = { x: Number( b.x ) || 0, z: Number( b.z ) || 0 };
+		this.helping = { from, name: o ? o.person.name : 'her owner', trap, q, place: game.placeAt( trap.x, trap.z ), card: null, cardT: 0 };
+
+	}
+
+	// ---- setting one ((guest work) by: your deckhand's id, who: their name, if it's theirs)
+	_startSet( x, z, depth, id, aboard, by = null, who = null ) {
 
 		const game = this.game, st = game.state, c = this.traps;
 		const mark = st.chart.mark( x, z, game.tradeDay, true );
@@ -294,20 +659,27 @@ export class TrapWork {
 		this._dirty = true;
 		this._aboard = aboard - 1;
 		this._stowed( aboard - 1 );
-		this.job = { kind: 'set', t: 0, trap, stow: aboard - 1, bottom: this.app.terrainData.heightAt( x, z ), splashed: false, thrown: false, yaw: trap.seed % 6.28 };
+		this.job = { kind: 'set', t: 0, trap, stow: aboard - 1, bottom: this.app.terrainData.heightAt( x, z ), splashed: false, thrown: false, yaw: trap.seed % 6.28, by, byName: who };
 		const a = this.app.audio;
 		if ( a && a.netReady ) a.netReady();
+		if ( who ) {
+
+			game.toast( `${ who } set one of your traps · ${ mark ? `trap ${ mark.id } on your chart` : 'your chart has no room for its mark' }`, 3600 );
+			return mark ? `Trap ${ mark.id } on her chart · ${ this.traps.set.length } set` : 'Set · her chart has no room for its mark';
+
+		}
+
 		game.toast( mark ? `Trap ${ mark.id } on your chart · ${ this.traps.set.length } set, leave it a few nights` : 'Your chart has no room for its mark: note where it is', 3600 );
 
 	}
 
 	// ---- hauling one
-	_startHaul( trap ) {
+	_startHaul( trap, by = null, who = null ) {
 
 		const a = this.app.audio;
 		if ( a && a.netReady ) a.netReady();
 		const d = this.depthAt( trap.x, trap.z ), o = buoyOffset( trap.x, trap.z, d );
-		this.job = { kind: 'haul', phase: 'gaff', t: 0, trap, o, bottom: this.app.terrainData.heightAt( trap.x, trap.z ), yaw: trap.seed % 6.28, y: 0, surfaced: false, queue: null, card: null };
+		this.job = { kind: 'haul', phase: 'gaff', t: 0, trap, o, bottom: this.app.terrainData.heightAt( trap.x, trap.z ), yaw: trap.seed % 6.28, y: 0, surfaced: false, queue: null, card: null, by, byName: who, gone: 0 };
 		if ( a && a.netThrow ) a.netThrow( 0.4 );
 
 	}
@@ -333,12 +705,26 @@ export class TrapWork {
 
 		}
 
-		// let go of it: off the deck, or she's going off with it
-		if ( j.phase !== 'rail' && j.phase !== 'stack' && ( p.mode !== 'deck' || c.speed > HAUL_SPEED ) ) {
+		// let go of it: off the deck, or she's going off with it ((guest work) your deckhand's: off her deck a moment)
+		const hand = j.by ? this._deckhand( j.by ) : null;
+		j.gone = j.by && ! hand ? ( j.gone || 0 ) + dt : 0;
+		if ( j.phase !== 'rail' && j.phase !== 'stack' && ( ( j.by ? j.gone > GONE_S : p.mode !== 'deck' ) || c.speed > HAUL_SPEED ) ) {
 
 			this.job = null;
 			if ( A && A.haulerRun ) A.haulerRun( false );
 			game.toast( 'The warp came off the hauler · the trap\'s gone back down', 3000 );
+			if ( j.by ) this._tell( j.by, { k: 'lost', t: 'The warp came off the hauler · her trap\'s gone back down' } );
+			return;
+
+		}
+
+		// (and at the rail, gone: what's left in it goes back over the side, and the trap's stacked)
+		if ( j.by && j.phase === 'rail' && j.gone > GONE_S ) {
+
+			j.phase = 'stack';
+			j.t = 0;
+			j.queue = [];
+			j.stow = aboardTraps( this.traps, game.state.upgrades ) - 1;
 			return;
 
 		}
@@ -377,7 +763,7 @@ export class TrapWork {
 
 		} else if ( j.phase === 'rail' ) {
 
-			if ( j.card ) {
+			if ( j.card && ! j.by ) {
 
 				j.cardT += dt;
 				const end = game.cardEnd( j.card, j.cardT, lDown );
@@ -425,7 +811,16 @@ export class TrapWork {
 		this._dirty = true;
 		st.save();
 		st.emit();
-		if ( ! j.queue.length ) game.toast( r.soak.nights < 1 ? 'Empty · they forage by night, leave it overnight at least' : 'Empty', 3000 );
+		const empty = ! j.queue.length && ( r.soak.nights < 1 ? 'Empty · they forage by night, leave it overnight at least' : 'Empty' );
+		// ((guest work) your deckhand's: theirs to take out, into their own hold)
+		if ( j.by ) {
+
+			this._tell( j.by, { k: 'rail', q: j.queue, x: t.x, z: t.z, t: empty || `${ NIGHT_SAID( r.soak.nights ) } · ${ j.queue.filter( ( x ) => x.lobster ).length } lobster${ j.queue.filter( ( x ) => x.lobster ).length === 1 ? '' : 's' } in it` } );
+			return;
+
+		}
+
+		if ( empty ) game.toast( empty, 3000 );
 
 	}
 
@@ -455,9 +850,11 @@ export class TrapWork {
 	}
 
 	// one out of the trap: a lobster on the gauge (the same rules as a diver's, Game.gaugeLobster), the rest as they are
-	_takeOut( j, x ) {
+	// ((guest work) j: your haul, or what came up in hers; sea: where her rail is, if it's hers)
+	_takeOut( j, x, sea = null ) {
 
-		const game = this.game, st = game.state, A = this.app.audio, at = this._boat.group.matrixWorld, sea = _p.copy( this.at.rail ).applyMatrix4( at );
+		const game = this.game, st = game.state, A = this.app.audio;
+		if ( ! sea ) sea = _p.copy( this.at.rail ).applyMatrix4( this._boat.group.matrixWorld );
 		if ( x.lobster || x.species ) {
 
 			const species = x.lobster ? 'lobster' : x.species;
@@ -598,7 +995,7 @@ export class TrapWork {
 			const d = Math.hypot( x - cam.x, z - cam.z );
 			if ( d > far ) return;
 			const depth = this.depthAt( x, z ), o = buoyOffset( x, z, depth );
-			list.push( { x, z, d, bx: x + o.x, bz: z + o.z, bottom: T.heightAt( x, z ), colours: buoyColours( id ), mine, trap, name, hasBuoy, yaw: ( x * 7.3 + z * 3.1 ) % 6.28 } );
+			list.push( { x, z, d, bx: x + o.x, bz: z + o.z, bottom: T.heightAt( x, z ), colours: buoyColours( id ), id, mine, trap, name, hasBuoy, yaw: ( x * 7.3 + z * 3.1 ) % 6.28 } );
 
 		};
 
@@ -638,7 +1035,7 @@ export class TrapWork {
 		const atRail = j && j.kind === 'haul' && ( j.phase === 'rail' || j.phase === 'stack' );
 		const stacked = aboard - ( atRail ? 1 : 0 );
 		const cam = app.camera.position, by = this.on && boat.group.parent && boat.group.position.distanceTo( cam ) < ABOARD_M;
-		if ( ! this.meshes && ! this._near.length && ! ( this.on && aboard ) && ! j ) return;
+		if ( ! this.meshes && ! this._near.length && ! ( this.on && aboard ) && ! j && ! this._theirs.length ) return;
 		this._build();
 		const M = this.meshes, sea = G.seaLevel.value, [ , farTrap ] = REACH[ app.tier ] || REACH.high;
 		M.begin();
@@ -646,14 +1043,17 @@ export class TrapWork {
 		const W = boat.group.matrixWorld;
 		// on her deck
 		if ( by ) for ( let i = 0; i < stacked; i ++ ) M.trap( _m.multiplyMatrices( W, stowMatrix( boat.lines, i, _n ) ), stowWear( i ) );
+		// ((guest work) and on the others')
+		for ( const e of this._theirs ) for ( let i = 0; i < e.stacked; i ++ ) M.trap( _m.multiplyMatrices( e.W, stowMatrix( e.L, i, _n ) ), stowWear( i ) );
 		// on the sea
 		let bobbing = 0;
 		const time = G.time.value, q = app.query, tq = q ? q.resultTime : 0;
 		for ( const n of this._near ) {
 
-			const t = n.trap;
+			const t = n.trap, theirs = t ? null : this._theirJob( n );
 			if ( j && t && j.trap === t && ( j.kind === 'set' || j.phase !== 'gaff' ) ) continue;
-			const onDeck = j && t && j.trap === t && j.kind === 'haul' && j.phase === 'gaff';
+			if ( theirs && ( theirs.kind === 'set' || theirs.phase !== 'gaff' ) ) continue;
+			const onDeck = ( j && t && j.trap === t && j.kind === 'haul' && j.phase === 'gaff' ) || !! theirs;
 			if ( n.d < farTrap ) M.trap( _m.compose( _p.set( n.x, n.bottom + 0.02, n.z ), _q.setFromAxisAngle( _y, n.yaw ), _s ), wearAt( n.x, n.z ) );
 			if ( ! n.hasBuoy || onDeck ) continue;
 			this._drawBuoy( M, n.bx, n.bz, n.x, n.bottom + TRAP.H, n.z, n.colours, n.yaw, bobbing ++ < BOB_N, time, q, tq, sea );
@@ -661,7 +1061,90 @@ export class TrapWork {
 		}
 
 		if ( j ) this._drawJob( M, W, j, sea, time, q, tq );
+		for ( const e of this._theirs ) if ( e.job ) this._drawJob( M, e.W, e.job, sea, time, q, tq, e.A, e.L, e.colours );
 		M.commit();
+
+	}
+
+	// (guest work) the work at someone's rail that's this trap of theirs, if any (n: one of _near)
+	_theirJob( n ) {
+
+		for ( const e of this._theirs ) {
+
+			const m = e.job;
+			if ( m && e.o.person.id === n.id && Math.abs( m.trap.x - n.x ) < 0.3 && Math.abs( m.trap.z - n.z ) < 0.3 ) return m;
+
+		}
+
+		return null;
+
+	}
+
+	// (guest work) the others' boats with the hauler, near enough, as their poses have them: her stack, and the work at her rail
+	_gatherTheirs( dt ) {
+
+		const T = this.app.together, list = this._theirs, cam = this.app.camera.position, A = this.app.audio;
+		list.length = 0;
+		if ( ! T ) return;
+		for ( const o of T.others.values() ) {
+
+			const c = o.cur, id = o.person.id, b = o.boat, L = b && b.userData.model && b.userData.model.lines, f = c && ( c.drawn || c.boat );
+			if ( ! c || ! f || c.boatId !== 'lobster' || ! b || ! b.visible || ! L || ( ! c.ts && ! c.tj ) || f.pos.distanceTo( cam ) > ABOARD_M ) {
+
+				this._mirrors.delete( id );
+				continue;
+
+			}
+
+			// (where her copy's put this frame, from her owner's pose: her copy's own matrix is last frame's till Together's placed her)
+			const W = ( this._frames.get( id ) || this._frames.set( id, new Matrix4() ).get( id ) ).compose( f.pos, f.quat, _s );
+			const job = c.tj ? this._mirror( id, c.tj, dt ) : null;
+			if ( ! job ) this._mirrors.delete( id );
+			list.push( { o, W, A: stationsFor( L ), L, stacked: Math.min( c.ts | 0, STOW.length ), job, colours: buoyColours( id ) } );
+			// (its splash as it goes over the side, heard and seen here too)
+			if ( job && job.kind === 'set' && ! job.splashed && job.t > 1.2 ) {
+
+				job.splashed = true;
+				const sea = G.seaLevel.value;
+				if ( A && A.netSplash ) A.netSplash( _p.set( job.trap.x, sea, job.trap.z ), 0.8 );
+				if ( this.app.spray ) this.app.spray.emit( _p.set( job.trap.x, sea + 0.1, job.trap.z ), _a.set( 0, 2.2, 0 ), 18, 0.05, SPRAY.DROPLET, { spread: 1.2, jitter: 0.5 } );
+
+			}
+
+		}
+
+	}
+
+	// the work at someone's rail as their poses have it (tj: wire's), run on here between them
+	_mirror( id, tj, dt ) {
+
+		if ( ! Array.isArray( tj ) || tj.length < 8 || tj.length > 11 || ! tj.every( Number.isFinite ) ) return null;
+		const [ kp, t, x, z, bottom, yaw, stow, total ] = tj, kind = kp === 0 ? 'set' : 'haul', phase = kind === 'haul' ? PHASES[ kp - 1 ] : null;
+		if ( kind === 'haul' && ! phase ) return null;
+		const key = `${ kind }:${ x }:${ z }`;
+		let m = this._mirrors.get( id );
+		if ( ! m || m.key !== key ) {
+
+			m = { key, kind, phase, t, trap: { x, z }, o: buoyOffset( x, z, this.depthAt( x, z ) ), surfaced: false, splashed: false };
+			this._mirrors.set( id, m );
+
+		}
+
+		if ( m.phase !== phase ) {
+
+			m.phase = phase;
+			m.t = t;
+
+		} else {
+
+			m.t += dt;
+			if ( Math.abs( m.t - t ) > 0.4 ) m.t = t;
+
+		}
+
+		Object.assign( m, { bottom, yaw, stow: Math.max( 0, Math.min( STOW.length - 1, stow | 0 ) ), total } );
+		m.queue = phase === 'rail' ? tj.slice( 8 ).map( ( cm ) => ( { lobster: true, cm } ) ) : null;
+		return m;
 
 	}
 
@@ -678,9 +1161,10 @@ export class TrapWork {
 
 	}
 
-	_drawJob( M, W, j, sea, time, q, tq ) {
+	// ((guest work) yours, or the work at someone else's rail: a, L, colours: her stations, her lines, her buoys' colours)
+	_drawJob( M, W, j, sea, time, q, tq, a = this.at, L = this._boat.lines, colours = null ) {
 
-		const a = this.at, boat = this._boat, myC = buoyColours( this.app.together && this.app.together.me ? this.app.together.me.id : null ), wear = wearAt( j.trap.x, j.trap.z );
+		const myC = colours || buoyColours( this.app.together && this.app.together.me ? this.app.together.me.id : null ), wear = wearAt( j.trap.x, j.trap.z );
 		if ( j.kind === 'set' ) {
 
 			const toRail = 0.7, over = 0.5, t = j.t, sinkAt = toRail + over;
@@ -688,7 +1172,7 @@ export class TrapWork {
 
 				// off the stack, on to the rail
 				const u = ease( t / toRail );
-				stowMatrix( boat.lines, j.stow, _n );
+				stowMatrix( L, j.stow, _n );
 				_n.decompose( _p, _q, _c );
 				_p.lerp( a.rail, u );
 				_p.y += Math.sin( u * Math.PI ) * 0.35;
@@ -803,7 +1287,7 @@ export class TrapWork {
 		} else {
 
 			const u = ease( clamp01( j.t / 0.7 ) );
-			stowMatrix( boat.lines, Math.max( 0, j.stow ), _n );
+			stowMatrix( L, Math.max( 0, j.stow ), _n );
 			_n.decompose( _p, _q, _c );
 			_p.lerpVectors( a.rail, _p, u );
 			_p.y += Math.sin( u * Math.PI ) * 0.35;
