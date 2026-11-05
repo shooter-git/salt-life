@@ -51,9 +51,19 @@ export class TouchControls {
 		// the joystick
 		let movePointer = null, cx = 0, cy = 0;
 		const moveZone = el.querySelector( '.touch-move' );
+		const endStick = () => {
+
+			movePointer = null;
+			this.stick.hidden = true;
+			this.stick.classList.remove( 'is-run' );
+			this.input.touchRun = false;
+			this.input.touchMove.x = this.input.touchMove.y = 0;
+
+		};
+		// (a thumb put down here takes the stick even while it's thought held: an iPhone now and then never says a
+		// thumb was lifted, and the stick stayed pushed, deaf to the next thumb, till a reload)
 		moveZone.addEventListener( 'pointerdown', ( e ) => {
 
-			if ( movePointer !== null ) return;
 			movePointer = e.pointerId;
 			moveZone.setPointerCapture( e.pointerId );
 			cx = e.clientX;
@@ -61,7 +71,10 @@ export class TouchControls {
 			this.stick.style.left = cx + 'px';
 			this.stick.style.top = cy + 'px';
 			this.stick.hidden = false;
+			this.stick.classList.remove( 'is-run' );
 			this._setKnob( 0, 0 );
+			this.input.touchRun = false;
+			this.input.touchMove.x = this.input.touchMove.y = 0;
 			this.input.lastDevice = 'touch';
 
 		} );
@@ -86,16 +99,12 @@ export class TouchControls {
 		} );
 		const endMove = ( e ) => {
 
-			if ( e.pointerId !== movePointer ) return;
-			movePointer = null;
-			this.stick.hidden = true;
-			this.stick.classList.remove( 'is-run' );
-			this.input.touchRun = false;
-			this.input.touchMove.x = this.input.touchMove.y = 0;
+			if ( e.pointerId === movePointer ) endStick();
 
 		};
 		moveZone.addEventListener( 'pointerup', endMove );
 		moveZone.addEventListener( 'pointercancel', endMove );
+		moveZone.addEventListener( 'lostpointercapture', endMove );
 
 		// looking around
 		const lookZone = el.querySelector( '.touch-look' );
@@ -120,8 +129,10 @@ export class TouchControls {
 		const endLook = ( e ) => lookers.delete( e.pointerId );
 		lookZone.addEventListener( 'pointerup', endLook );
 		lookZone.addEventListener( 'pointercancel', endLook );
+		lookZone.addEventListener( 'lostpointercapture', endLook );
 
 		// buttons hold their key while pressed (the gold one's key is the prompt's: data-key)
+		const letGos = [];
 		for ( const b of Object.values( this.buttons ) ) {
 
 			let held = null, key = null;
@@ -137,14 +148,20 @@ export class TouchControls {
 				this.input.lastDevice = 'touch';
 
 			} );
-			const up = ( e ) => {
+			const letGo = () => {
 
-				if ( e.pointerId !== held ) return;
+				if ( held === null ) return;
 				held = null;
 				b.classList.remove( 'is-down' );
 				this.input.release( key );
 
 			};
+			const up = ( e ) => {
+
+				if ( e.pointerId === held ) letGo();
+
+			};
+			letGos.push( letGo );
 			b.addEventListener( 'pointerup', up );
 			b.addEventListener( 'pointercancel', up );
 			// (a button hidden under a held thumb loses it, and never hears it lifted)
@@ -174,6 +191,33 @@ export class TouchControls {
 		// magnifier, whatever touch-action says; cancelling the touches stops both, and the pointer
 		// events above still come)
 		for ( const type of [ 'touchstart', 'touchend' ] ) el.addEventListener( type, ( e ) => e.preventDefault(), { passive: false } );
+
+		// (nothing left on the screen, or the game put away: the stick, the looks and the held buttons all let go,
+		// whatever lifting was lost. The touches' own events say it when a pointer's don't)
+		const letGoAll = () => {
+
+			if ( movePointer !== null ) endStick();
+			lookers.clear();
+			for ( const f of letGos ) f();
+
+		};
+		for ( const type of [ 'touchend', 'touchcancel' ] ) {
+
+			window.addEventListener( type, ( e ) => {
+
+				if ( ! e.touches || e.touches.length === 0 ) letGoAll();
+
+			}, { capture: true, passive: true } );
+
+		}
+
+		window.addEventListener( 'blur', letGoAll );
+		window.addEventListener( 'pagehide', letGoAll );
+		document.addEventListener( 'visibilitychange', () => {
+
+			if ( document.hidden ) letGoAll();
+
+		} );
 
 		// any touch turns them on (a laptop with a touch screen too)
 		window.addEventListener( 'pointerdown', ( e ) => {

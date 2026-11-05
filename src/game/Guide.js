@@ -592,7 +592,8 @@ export class Guide {
 		if ( lc && lc !== prev.lastCatch && lc.kept ) this._afterCard = 'caught';
 		if ( this._afterCard && ! ( g.hud && g.hud.catchOpen ) && ! g.landing ) {
 
-			this.tip( this._afterCard );
+			// ((v2.1.6) not for one let go off its card after all: the next one kept has it)
+			if ( this._afterCard !== 'caught' || ( lc && lc.kept ) ) this.tip( this._afterCard );
 			this._afterCard = null;
 
 		}

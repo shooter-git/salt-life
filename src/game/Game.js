@@ -494,12 +494,13 @@ export class Game {
 
 		this.tellAway();
 		const can = this.canFish, canSpear = this.canSpear, gun = this.gun, net = this.net;
-		const room = this.makingRoom;
-		if ( inp.hit( 'KeyR' ) && this.rigs.rodOn && this.rigs.takeRod() ) {
+		// (a card with keys of its own: making room, or (v2.1.6) offering to let its fish go, R)
+		const room = this.makingRoom || this.cardFree;
+		if ( inp.hit( 'KeyR' ) && ! room && this.rigs.rodOn && this.rigs.takeRod() ) {
 
 			// ((M16) a rod's gone off in its holder, and you've taken it)
 
-		} else if ( inp.hit( 'KeyR' ) && this.app.together && this.app.together.spread.take() ) {
+		} else if ( inp.hit( 'KeyR' ) && ! room && this.app.together && this.app.together.spread.take() ) {
 
 			// ((M16) riding along: a rod that's gone off in hers, asked for)
 
@@ -1884,6 +1885,8 @@ export class Game {
 	cardEnd( info, t, lDown ) {
 
 		const inp = this.app.input, hud = this.hud, R = hud.room;
+		// ((v2.1.6) one just kept let go at once instead: its button, R or X)
+		if ( ! R && hud.free && ( hud.takeCatchAct() === 'free' || inp.hit( 'KeyR' ) ) && this.freeCatch( info ) ) return 'go';
 		if ( ! R ) return lDown || inp.hit( 'KeyE' ) || inp.hit( 'Escape' ) || hud.takeCatchTap() || ( t > CATCH_CARD_MS / 1000 && ! info.trophyView ) ? 'go' : null;
 		if ( inp.hit( 'ArrowLeft' ) || inp.hit( 'ArrowRight' ) ) hud.roomStep( inp.hit( 'ArrowRight' ) ? 1 : - 1 );
 		if ( inp.hit( 'KeyR' ) ) hud.roomLetGo();
@@ -1907,6 +1910,26 @@ export class Game {
 	get makingRoom() {
 
 		return !! ( this.hud && this.hud.room );
+
+	}
+
+	// (v2.1.6) whether the catch card offers to let its fish go (R's then the card's: Game.cardEnd)
+	get cardFree() {
+
+		return !! ( this.hud && this.hud.catchOpen && this.hud.free );
+
+	}
+
+	// (v2.1.6) the catch just kept, let go off its card, alive: not in the cooler, and not counted in the day's bag
+	// (GameState.freeLast). -> whether it was
+	freeCatch( info ) {
+
+		if ( ! this.state.freeLast( info ) ) return false;
+		const au = this.app.audio;
+		if ( this.rod.state === 'landing' && au && au.fishSplash ) au.fishSplash( this.rod.bobber, 0.5 );
+		const b = info.bag;
+		this.toast( `${ FISH[ info.species ].name } let go alive${ b ? ` · not counted: ${ b.n } of ${ b.max } today` : '' }`, 2800 );
+		return true;
 
 	}
 
