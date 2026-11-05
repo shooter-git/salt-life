@@ -280,6 +280,9 @@ html:has(.gm-panel.is-open) .hud-hint { visibility: hidden; }
 .gm-catch-foot { display: flex; align-items: center; justify-content: center; gap: var(--tw-2); margin-top: var(--tw-3); color: rgba(244, 234, 214, 0.5); font-size: var(--tw-fs-sm); }
 .gm-catch-foot kbd { font: 600 var(--tw-fs-xs) var(--tw-mono); color: #f4ead6; padding: 2px calc(6 * var(--tw-u)); border-radius: 4px; border: 1px solid rgba(244, 234, 214, 0.3); background: rgba(244, 234, 214, 0.08); }
 .gm-catch-timer { width: calc(80 * var(--tw-u)); height: 2px; margin-left: var(--tw-2); border-radius: 2px; background: rgba(244, 234, 214, 0.15); overflow: hidden; }
+/* ((v2.1.6) let it go instead: one line, and the timer shorter beside it) */
+.gm-catch-free { flex: none; white-space: nowrap; font-size: var(--tw-fs-sm); padding: var(--tw-1) var(--tw-3); margin-right: var(--tw-1); }
+.gm-catch-foot:has(.gm-catch-free) .gm-catch-timer { width: calc(48 * var(--tw-u)); flex: none; }
 .gm-catch-timer > span { display: block; height: 100%; width: 100%; background: rgba(244, 234, 214, 0.55); transform-origin: 0 50%; }
 .gm-catch.is-on .gm-catch-timer > span { animation: gm-timer var(--gm-catch-ms, 9000ms) linear forwards; }
 @keyframes gm-timer { from { transform: scaleX(1); } to { transform: scaleX(0); } }
@@ -460,6 +463,7 @@ export class GameHUD {
 
 		} );
 		this.room = null; // (M15) { info, pick, ids, fits } while the card's making room for its fish
+		this.free = false; // ((v2.1.6) whether the card's fish, just kept, may be let go off it: GameState.canFree)
 		this._catchAct = null;
 		const hud = ui.hud || ui.root;
 		hud.append( this.veil, this.catchScrim, this.purse, this.fight, this.bite, this.cast, this.netWind, this.haul, this.dot, this.aimTag, this.catchCard );
@@ -693,6 +697,8 @@ export class GameHUD {
 		const board = info.islandRecord ? '. It still goes on the board at the fish stand' : '';
 		// ((M15) no room for one that could be kept: the card waits while you make room for it)
 		const room = this.game.state.roomFor( info ), where = this.game.state.upgrades.hold > 0 ? 'hold' : 'cooler';
+		// ((v2.1.6) one just kept may go straight back instead, alive, and then it isn't in the day's bag)
+		const free = this.free = ! room && ! info.trophyView && this.game.state.canFree( info );
 		if ( info.why === 'short' ) note = `<div class="gm-catch-note is-warn">Short: under ${ ( f.minCm * CARAPACE / IN ).toFixed( 0 ) } in on the gauge · back it goes, to grow${ board }.</div>`;
 		else if ( info.why === 'berried' ) note = `<div class="gm-catch-note is-warn">Berried: she's carrying eggs under her tail · back she goes${ board }.</div>`;
 		else if ( info.trophyView || info.bonus || info.hurt ) note = `<div class="gm-catch-note">${ trophyNote( info ) }${ board }.</div>`;
@@ -733,8 +739,17 @@ export class GameHUD {
 					<div class="gm-stat is-value"><span>Value</span><b>${ info.bonus ? `+$${ info.bonus + ( info.tagged || 0 ) }` : info.released ? EM_DASH : `$${ info.value }` }</b><i>${ info.released ? 'released' : room ? 'no room yet' : ! info.kept ? 'let go' : info.wanted ? info.wanted.text : info.bag ? `${ info.bag.n } of ${ info.bag.max } today` : 'in the cooler' }</i></div>
 				</div>
 				${ note }
-				${ room ? '<div class="gm-room"></div>' : `<div class="gm-catch-foot">${ { touch: 'Tap to continue', gamepad: '<kbd>RT</kbd> or <kbd>B</kbd> to continue' }[ this.device ] || '<kbd>Click</kbd> or <kbd>E</kbd> to continue' }<span class="gm-catch-timer"><span></span></span></div>` }
+				${ room ? '<div class="gm-room"></div>' : `<div class="gm-catch-foot">${ free ? `<button class="gm-btn is-ghost gm-catch-free" data-free>${ this.keyed( 'Let it go', 'R', 'X' ) }</button>` : '' }<span>${ { touch: 'Tap to continue', gamepad: '<kbd>RT</kbd> or <kbd>B</kbd> to continue' }[ this.device ] || '<kbd>Click</kbd> or <kbd>E</kbd> to continue' }</span><span class="gm-catch-timer"><span></span></span></div>` }
 			</div>`;
+		const freeBtn = c.querySelector( '[data-free]' );
+		// (its own press: not the card's tap, which keeps it)
+		if ( freeBtn ) freeBtn.addEventListener( 'pointerdown', ( e ) => {
+
+			e.preventDefault();
+			e.stopPropagation();
+			if ( this.free ) this._catchAct = 'free';
+
+		} );
 		// restart the entrance even when a card is already up
 		c.classList.remove( 'is-on' );
 		void c.offsetWidth;
@@ -916,6 +931,7 @@ export class GameHUD {
 		this._catchTap = false;
 		this._catchAct = null;
 		this.room = null;
+		this.free = false;
 		if ( this.portrait ) this.portrait.detach();
 
 	}

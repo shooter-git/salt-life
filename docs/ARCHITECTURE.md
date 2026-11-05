@@ -612,6 +612,8 @@ Everyone keeps their own progress and their own fish.
 
 The catch card (`GameHUD.showCatch`) for such a catch is a room card (`hud.room`): the cooler's fish to let go (`renderRoom`, redrawn by `refresh` as the cooler changes), no timer, and taps on its background ignored. `Game.cardEnd( info, t, lDown )` ends every catch card, the rod's, the speargun's and the lobster net's: a room card with its own buttons (`takeCatchAct`) and keys (← → `roomStep`, R `roomLetGo`, Enter, E, Esc), keeping the fish on 'keep'; any other as before. `Game.makingRoom` keeps R, N, I / Tab and the arrows from the gear and the panels while it's up.
 
+(v2.1.6) **Let go off its card.** A catch just kept may go straight back instead, alive, while its card is up: `GameState.canFree( info )` (kept, not let go already, still in the cooler, not speared: a speared fish is dead) and `freeLast( info )`, which takes it out of the cooler (`lastCatch.id` names its entry) and out of the day's bag. The rules count the fish kept, not caught: one put straight back never was, while one let go from the cooler later still counts (`bagged`), so a full bag can't be swapped for a bigger fish. It stays in the log. The card's button (`hud.free`, `takeCatchAct` 'free') or R / X does it (`Game.cardEnd`, `freeCatch`: a splash and a toast with the day's count); while it's offered `Game.cardFree` keeps R from the rod, as `makingRoom` does.
+
 ## Spearfishing
 
 The speargun is `src/game/Speargun.js` and its half of `src/game/Game.js`. The fish's side is in `src/world/Fish.js`, and the held breath in `src/player/Player.js`.

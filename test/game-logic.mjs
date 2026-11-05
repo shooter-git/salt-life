@@ -643,6 +643,34 @@ ok( Object.keys( defaultUpgrades() ).length === Object.keys( UPGRADES ).length &
 	const lob = st.lastCatch;
 	st.release( filler.id );
 	ok( st.keepLast( lob ) && lob.kept && lob.bag.n === 1 && st.bagged( 'lobster', 5 ) === 1, 'room made: kept, and in the day\'s bag' );
+	ok( st.canFree( lob ) && lob.id !== undefined, 'one kept after all may still be let go off its card' );
+
+}
+
+// ---- (v2.1.6) let go off the catch card, at once and alive: out of the cooler and out of the day's bag (the rules
+// count what's kept). From the cooler later it still counts; a speared fish can't go back
+{
+
+	const st = new GameState( { getItem: () => null, setItem: () => {} } );
+	const mahi = ( day = 7, method = 'rod' ) => st.addFish( 'mahi', 0.3, 10, { day, method } ); // (small: twenty fit)
+	for ( let i = 0; i < 9; i ++ ) mahi();
+	const tenth = mahi(), card = st.lastCatch;
+	ok( tenth && card.bag.n === 10 && card.id === tenth.id && st.canFree( card ), 'the tenth mahi kept: 10 of 10, and it may be let go off its card' );
+	const logged = st.log.mahi.count;
+	ok( st.freeLast( card ) && ! card.kept && card.released && card.why === 'freed' && card.bag.n === 9 && st.bagged( 'mahi', 7 ) === 9 && ! st.inventory.some( ( f ) => f.id === tenth.id ), 'let go off the card: out of the cooler, 9 of 10 today' );
+	ok( st.log.mahi.count === logged && ! st.canFree( card ) && ! st.freeLast( card ) && st.bagged( 'mahi', 7 ) === 9, 'still in the log, and only once' );
+	ok( mahi() && st.lastCatch.bag.n === 10 && ! st.lastCatch.bag.full, 'so a bigger one can be kept: 10 of 10' );
+	ok( mahi() === null && st.lastCatch.bag.full, 'and the next goes back: the bag is full' );
+	const inCooler = st.inventory.find( ( f ) => f.species === 'mahi' );
+	st.release( inCooler.id );
+	ok( mahi() === null && st.lastCatch.bag.full && st.bagged( 'mahi', 7 ) === 10, 'one let go from the cooler later still counts: no swapping for a bigger one' );
+	ok( mahi( 8, 'spear' ) && ! st.canFree( st.lastCatch ) && ! st.freeLast( st.lastCatch ), 'a speared fish can\'t be let go alive' );
+	const old = mahi( 9 ), oldCard = st.lastCatch;
+	st.release( old.id );
+	ok( ! st.canFree( oldCard ), 'nor one already out of the cooler' );
+	st.addFish( 'jack', 0.3, 10, { day: 9 } );
+	const jack = st.lastCatch;
+	ok( st.freeLast( jack ) && jack.bag === null && ! st.inventory.some( ( f ) => f.id === jack.id ), 'a kind with no bag limit may be let go off its card too' );
 
 }
 console.log( `value check ${ value }` );
