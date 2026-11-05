@@ -77,7 +77,7 @@ const RODE_SEGS = 16;
 const BAIL_FROM = 20;
 const WEAR_SAVE = 0.02;
 export { HAUL_FEE };
-const _a = new Vector3(), _b = new Vector3(), _h = new Vector3(), _sock = new Vector3();
+const _a = new Vector3(), _b = new Vector3(), _h = new Vector3(), _sock = new Vector3(), _stern = new Vector3(), _sternW = new Vector3();
 const _pose = { pos: new Vector3(), head: new Vector3(), roll: 0, thrash: 0 };
 const BAG_FROM = 0.85; // the brails drawn this far: the netting has closed round what's under it (it rides in the purse)
 // (Salt Life) the hand net's reach (m); how long a lobster in the net shows before it's gauged (s); a
@@ -1100,9 +1100,9 @@ export class Game {
 	// it at a boat lying still, not one under way. Swordfishermen drift over deep water with them on all night
 	underAt( x, z ) {
 
-		const on = this.underOn, b = this.app.boatCtl;
-		if ( on <= 0 || ! b || b.speed > 1.5 ) return 0;
-		const t = Math.min( 1, Math.max( 0, ( Math.hypot( x - b.sternWorld.x, z - b.sternWorld.z ) - 8 ) / 22 ) );
+		const r = this._litBy(), on = r ? r.under : this.underOn, b = this.app.boatCtl;
+		if ( on <= 0 || ! b || ( r ? r.speed : b.speed ) > 1.5 ) return 0;
+		const s = r ? r.stern : b.sternWorld, t = Math.min( 1, Math.max( 0, ( Math.hypot( x - s.x, z - s.z ) - 8 ) / 22 ) );
 		return on * ( 1 - t * t * ( 3 - 2 * t ) );
 
 	}
@@ -1110,10 +1110,24 @@ export class Game {
 	// how far a spot is in their pool, 0..1: all of it within 5 m of the stern, none past their 14 m
 	floodAt( x, z ) {
 
-		const on = this.floodsOn, b = this.app.boatCtl;
+		const r = this._litBy(), on = r ? r.flood : this.floodsOn, b = this.app.boatCtl;
 		if ( on <= 0 || ! b ) return 0;
-		const t = Math.min( 1, Math.max( 0, ( Math.hypot( x - b.sternWorld.x, z - b.sternWorld.z ) - 5 ) / 9 ) );
+		const s = r ? r.stern : b.sternWorld, t = Math.min( 1, Math.max( 0, ( Math.hypot( x - s.x, z - s.z ) - 5 ) / 9 ) );
 		return on * ( 1 - t * t * ( 3 - 2 * t ) );
+
+	}
+
+	// (guest work) riding along, the lights you fish under are hers, as lit as her owner's poses say, from her stern; not your
+	// own boat's, wherever she is -> { flood, under, stern, speed }, or null (you're in your own)
+	_litBy() {
+
+		const p = this.app.player, T = this.app.together;
+		if ( ! p.riding || ! T ) return null;
+		const o = T.others.get( p.boat.owner ), c = o && o.cur, L = p.boat.model && p.boat.model.lines;
+		return {
+			flood: c ? c.flood || 0 : 0, under: c ? c.under || 0 : 0, speed: ( c && c.bv ) ?? p.boat.flat ?? 0,
+			stern: p.boat.toWorld( _stern.set( 0, 0, L ? L.zAft : 0 ), _sternW ),
+		};
 
 	}
 
@@ -1988,7 +2002,7 @@ export class Game {
 	stowRod() {
 
 		this.cancelLine( true );
-		if ( this.hookBait ) this.state.returnBait( this.hookBait );
+		if ( this.hookBait ) this.rigs.giveBack( this.hookBait ); // ((guest work) one of hers goes back to her owner)
 		this.hookBait = null;
 		this.rod.equip( false );
 
@@ -2153,6 +2167,7 @@ export class Game {
 	cycleBait( step = 1 ) {
 
 		const s = this.state;
+		if ( this.rigs.boatRig() ) return this.rigs.cycleBoatBait( step ); // ((guest work) her bait, for her rods)
 		const kinds = this.rigs.baitChoices(); // ((M16) those that go on this rig)
 		if ( kinds.length <= 1 ) {
 
@@ -2174,9 +2189,10 @@ export class Game {
 	baitHook() {
 
 		const s = this.state, want = s.baitPick;
-		if ( this.hookBait === want ) return;
-		if ( this.hookBait ) s.returnBait( this.hookBait );
+		if ( this.hookBait === want && this.rigs._lent !== want ) return;
+		if ( this.hookBait ) this.rigs.giveBack( this.hookBait );
 		this.hookBait = null;
+		this.rigs._lent = null;
 		if ( ! want ) return;
 		if ( s.takeBait( want ) ) this.hookBait = want;
 		else {

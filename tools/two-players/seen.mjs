@@ -131,8 +131,8 @@ if ( PART === 'fights' ) {
 	const owner = await G.open( 'Robin', 'sportfisher', 30 ), guest = await G.open( 'Sam', 'lobster', 30 );
 	await ready( owner, guest );
 	await G.buy( owner );
-	// (his own tackle: the top of each track that isn't a boat's)
-	await guest.game.evaluate( async () => { const { UPGRADES } = await import( '/src/game/Gear.js' ); const g = window.__app.game, u = g.state.upgrades; for ( const [ k, t ] of Object.entries( UPGRADES ) ) if ( ! t.on ) u[ k ] = t.levels.length - 1; g.applyGear(); } );
+	// (his own tackle: the top of each track that isn't a boat's; (guest work) and hers, which a rod off her holder is fought on)
+	for ( const w of [ guest, owner ] ) await w.game.evaluate( async () => { const { UPGRADES } = await import( '/src/game/Gear.js' ); const g = window.__app.game, u = g.state.upgrades; for ( const [ k, t ] of Object.entries( UPGRADES ) ) if ( ! t.on ) u[ k ] = t.levels.length - 1; g.applyGear(); } );
 	note( 'his tackle:', JSON.stringify( await guest.game.evaluate( () => { const s = window.__app.game.state.stats; return { lineKg: s.lineKg, dragKg: s.dragKg, reelSpeed: s.reelSpeed, spoolM: s.spoolM, landKg: s.landKg, standUp: s.standUp }; } ) ) );
 	say( await G.aboard( owner, guest ), 'Sam\'s aboard the sportfisher' );
 	await G.helm( owner );
@@ -1057,6 +1057,8 @@ if ( PART === 'drop' ) {
 	const owner = await G.open( 'Robin', 'sportfisher', 30 ), guest = await G.open( 'Sam', 'lobster', 30 );
 	await ready( owner, guest );
 	await G.buy( owner );
+	// ((guest work) without her electric reel: his own lead, on his own rod. Hers, with her bait, is crew.mjs rods')
+	await owner.game.evaluate( () => { const g = window.__app.game; g.state.upgrades.sfElectricReel = 0; g.applyGear(); } );
 	await owner.game.evaluate( () => window.__app.player.boardBoat() );
 	await G.toSea( owner, { x: - 2600, z: 3000 } );
 	if ( process.env.DROP_TACKLE ) await myTackle( guest ); // (as he comes, he has the stock reel)
