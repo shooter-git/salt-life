@@ -52,7 +52,10 @@ export function offers( player, game = null, o = {} ) {
 	if ( prompt && prompt.key === 'R' && game && game.rigs && game.rigs.rodOn ) o.rod = 'Take the rod';
 	o.use = fishing ? castLabel( game ) : spearing ? spearLabel( game ) : lobstering ? lobsterLabel( game ) : netting ? netLabel( game ) : null;
 	o.reel = fishing && ! game.fight && ( rod.state === 'floating' || rod.state === 'flying' ) ? 'Reel in' : fishing && ! game.fight && rod.state === 'idle' && game.rigs && game.rigs.linesOut ? 'Lines in' : null;
-	o.cooler = game && game.hud && ! fishing && ! spearing && ! lobstering && ! netting ? 'Cooler' : null;
+	// (the cooler with the rod out and cast too, as I opens it; not while a cast's wound up or a fish is on: an open
+	// panel holds the rod's input, Game.update, so the wind-up would hang and the fish run free)
+	const rodBusy = fishing && ( !! game.fight || rod.state === 'windup' );
+	o.cooler = game && game.hud && ! rodBusy && ! spearing && ! lobstering && ! netting ? 'Cooler' : null;
 	// the flashlight: offered after dusk (or while it's on)
 	const lights = game && game.app && game.app.localLights;
 	const torchOn = !! ( lights && lights.flashlight.on );
