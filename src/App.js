@@ -1202,11 +1202,39 @@ export class App {
 
 		await this.fullSea();
 		const held = this._lateHeld;
-		if ( ! held ) return;
-		await this.village.textures.bake( this.renderer, { slot: () => this.frameSlot(), ready: () => this.useNewPrograms() } );
-		await this.readyToDraw( held.map( ( [ root ] ) => root ) );
-		for ( const [ root, parent ] of held ) parent.add( root );
-		this._lateHeld = null;
+		if ( held ) {
+
+			await this.village.textures.bake( this.renderer, this.bakeSlots() );
+			await this.readyToDraw( held.map( ( [ root ] ) => root ) );
+			for ( const [ root, parent ] of held ) parent.add( root );
+			this._lateHeld = null;
+
+		}
+
+		this.checkBakes();
+
+	}
+
+	// (a bake after the start on a device that draws on its CPU: a set a frame, its programs first used in ticks that
+	// draw nothing; with a graphics card all at once)
+	bakeSlots() {
+
+		return this.cpuGL ? { slot: () => this.frameSlot(), ready: () => this.useNewPrograms() } : {};
+
+	}
+
+	// ((v2.2.1) the village's baked textures looked at once they're made (with a graphics card, while the island loaded;
+	// on the CPU, just now), and again each time the page comes back on screen: any set that came out empty is baked
+	// again (VillageTextures.ensure). An iPhone drew all the village's wood flat black, a visit through, its bake lost)
+	checkBakes() {
+
+		const check = () => this.village.textures.ensure( this.renderer, this.bakeSlots() ).catch( ( e ) => console.warn( 'village textures', e ) );
+		check();
+		document.addEventListener( 'visibilitychange', () => {
+
+			if ( ! document.hidden ) check();
+
+		} );
 
 	}
 
