@@ -2,7 +2,8 @@
 # pads are soft and their frames rounded), exported as plain arrays for build-seats.mjs to pack into seats.data.js.
 #   blender -b -P tools/sportfisher/seats.py -- out.json
 # Shapes after a Murray Bros / Release Marine fighting chair and the Viking 48's helm chairs (docs/m16/sportfisher.md). Each
-# seat's origin is on the deck under its pedestal, +Y forward as it faces, +Z up (swapped to the game's frame on export).
+# seat's origin is on the deck under its pedestal, facing -Y (its back at +Y), +Z up (swapped to the game's frame on export:
+# -Y is the game's -Z, a boat's stern, so SportfisherModel turns the helm seats and leaves the chair).
 import bpy, bmesh, json, sys
 from math import pi, radians
 
