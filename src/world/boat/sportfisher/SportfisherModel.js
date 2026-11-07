@@ -299,16 +299,17 @@ export class SportfisherModel extends Vessel {
 	_seats( kit, q ) {
 
 		const lod = q.low ? 'low' : 'high', C = SEATS.chair, H = SEATS.helm;
-		// (facing aft, over the transom: its +Y-forward modelled front's turned to her stern)
-		kit.add( 'chair', seatPart( C.steel[ lod ], 0, SF.cockpit, CHAIR_Z, Math.PI ), PARTS.steel );
-		kit.add( 'chair', seatPart( C.teak[ lod ], 0, SF.cockpit, CHAIR_Z, Math.PI ), PARTS.teak );
-		kit.add( 'chair', seatPart( C.pad[ lod ], 0, SF.cockpit, CHAIR_Z, Math.PI ), PARTS.pad );
+		// (the seats are modelled facing -Z, toward her stern: the chair's left as it is, facing aft over the transom, and the
+		// helm seats are turned to face her bow and the wheel)
+		kit.add( 'chair', seatPart( C.steel[ lod ], 0, SF.cockpit, CHAIR_Z, 0 ), PARTS.steel );
+		kit.add( 'chair', seatPart( C.teak[ lod ], 0, SF.cockpit, CHAIR_Z, 0 ), PARTS.teak );
+		kit.add( 'chair', seatPart( C.pad[ lod ], 0, SF.cockpit, CHAIR_Z, 0 ), PARTS.pad );
 		for ( const x of [ 0, 0.62 ] ) {
 
 			if ( q.low && x ) continue;
-			kit.add( 'fittings', seatPart( H.steel[ lod ], x, SF.bridge, HELM.seatZ, 0 ), PARTS.steel );
-			kit.add( 'fittings', seatPart( H.teak[ lod ], x, SF.bridge, HELM.seatZ, 0 ), PARTS.helmTrim );
-			kit.add( 'chairs', seatPart( H.pad[ lod ], x, SF.bridge, HELM.seatZ, 0 ), PARTS.helmPad );
+			kit.add( 'fittings', seatPart( H.steel[ lod ], x, SF.bridge, HELM.seatZ, Math.PI ), PARTS.steel );
+			kit.add( 'fittings', seatPart( H.teak[ lod ], x, SF.bridge, HELM.seatZ, Math.PI ), PARTS.helmTrim );
+			kit.add( 'chairs', seatPart( H.pad[ lod ], x, SF.bridge, HELM.seatZ, Math.PI ), PARTS.helmPad );
 
 		}
 
