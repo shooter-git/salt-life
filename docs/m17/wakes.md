@@ -138,6 +138,15 @@ Without the crests the same patch differs by 0.10 mm RMS (the open sea's own inv
 - She settles upright as it goes by.
 - Lying still before it, she doesn't move.
 
+**Two players** (`tools/two-players/wakes.mjs`, mid, through `render-slot.sh`): Robin's console, driven along her line at 25 kn by the sea's clock, past Sam's kayak lying still 30 m off it, both seas flattened; nothing drawn between the checks, as the two-player scripts run.
+- On Sam's game, Robin's wake is followed from where she's drawn, and it reaches Sam's kayak on Robin's fourth pass: 3.5 cm crest to trough under her, the same 3.5 in her own water query.
+- Her kayak didn't ride it: she heaved 0.5 cm. The two games ran at 1.9 and 1.6 frames a second (30 asked; the machine at load 30, three streams' renders in its other slots). In company the sea's clock is the wall's, while a game steps its boat at most 0.1 s a frame. So below 10 frames a second she covers a fraction of the wake's passing, about a tenth here. Alone, the sea's clock is the game's own, and she rides it: in the game on high her roll across went from 1.75° to 4.4° in it, and the Node test has her heaving 7.5 cm on 6.5.
+- **Robin's speed** read off where she's drawn had been 5 to 99 kn for a true 25 at about a frame a second, frame to frame. It's taken over at least a second of her drawn track now (`DRAWN_SPAN`); at the same rate it read up to 58 kn here, and 19 to 33 kn in `test/wakes.mjs`, her drawn place 3 m out either way each frame.
+- **Earlier runs:**
+  - Robin's console under her own power wandered 23° off her line and passed Sam 240 m off.
+  - Sam's game stalled for up to 140 s at a time on its late building after the start, while the wake went by on the wall's clock.
+  - A wait for that building to end never ended with nothing drawn: it waits on first draws.
+
 **`pnpm test`**, with `test/wakes.mjs` (46 checks): everything passes but `north-plotter.mjs`'s timing ("a redraw's numbers 18.5 ms at best") at load 48, which is a stopwatch on a machine three times over; not run again quiet.
 
 **All the Spaces' complete check** (`cli.ts check` from its `main`, `57b4f25`), each on a clean copy, at load 45 to 80:
@@ -165,7 +174,7 @@ Everything else passed in both: 66 and 39 draw calls of 150, 218k and 170k trian
 
 - **A real graphics card,** and a phone's frame rate with the loop in the vertex shader: not measured here (Devices). With no boat under way the loop ends at once.
 - **On low, no console's crests** ([On low](#on-low)), and a boat in company leaves no foam on your screen (the foam's only the boat you're in, as before), so on a phone another player's console passes and leaves nothing to see but her.
-- **Two players:** a boat in company's wake from where she's drawn on each game; `tools/two-players` wasn't run. Each game's samples come from its own frames, so the crests can differ a little between the two.
+- **Two players at a real frame rate:** at the 1.6 frames a second this machine gave two games, a kayak in company doesn't ride a wake: her steps fall behind the sea's shared clock. At 10 frames a second and up they keep up; not run here. Each game's samples come from its own frames, so the crests can differ a little between the two.
 - **Shallow water:** the waves are deep water's, faded out as it shoals under 1.5 m. A wake's growth and change of shape as it nears the depth's critical speed isn't modelled.
 - **The ready A/B, `north-plotter.mjs` and a third complete check at a quiet hour:** the machine stayed at load 25 to 80 all afternoon.
 - **Left for the next stream:** stream 2's note (the shared notes) asked for the swash's 0.35 m run-up floor and the front's foam to go with the shore field's exposure, for the flats' hard white line. It's the sea's shader, but not done here.

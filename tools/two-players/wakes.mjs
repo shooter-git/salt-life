@@ -13,15 +13,15 @@ const [ out = 'qa-output/two-players/wakes', PORT = '5237', TIER = 'low' ] = pro
 mkdirSync( out, { recursive: true } );
 const G = await start( { out, port: PORT, tier: TIER } );
 const { say, note, until, frames } = G;
-const SEA = { x: - 2600, z: 3000 }, OFF = 30, FROM = 500, KN = 25;
+const SEA = { x: - 2600, z: 3000 }, OFF = 30, FROM = 300, ON = 500, KN = 25;
 const robin = await G.open( 'Robin', 'console', 30 );
 const sam = await G.open( 'Sam', 'kayak', 30 );
 await until( sam.game, `${ other } && ${ other }.cur` );
 await until( robin.game, `${ other } && ${ other }.cur` );
 note( 'both in, each seeing the other' );
-// (each game's late building over first, the whale the last of it: on a busy CPU it stalls a game for minutes at a time, and in
-// company the sea's clock runs on, so a wake would go by unseen)
-for ( const w of [ robin, sam ] ) await until( w.game, 'window.__app.whale', 1500000 );
+// (the late building after the start stalls a game for minutes at a time on a busy CPU, and in company the sea's clock runs on,
+// so a wake can go by unseen; and with nothing drawn it never ends, waiting on first draws. So Robin passes again and again,
+// below, till a pass's wake reaches Sam while her game runs)
 const steady = async ( w ) => {
 
 	for ( let i = 0; i < 60; i ++ ) {
@@ -87,28 +87,30 @@ await sam.game.evaluate( async () => {
 	} );
 
 } );
-await robin.game.evaluate( async ( [ SEA, OFF, FROM, KN ] ) => {
+await robin.game.evaluate( async ( [ SEA, OFF, FROM, KN, ON ] ) => {
 
 	const { G: Gl } = await import( '/src/core/Globals.js' );
 	const a = window.__app, R = window.__draws, rec = window.__rec = [], b = a.boatCtl, U = KN * 0.5144, t0 = Gl.time.value + 2, y = b.position.y;
 	R.after.push( () => {
 
-		const d = U * Math.max( 0, Gl.time.value - t0 );
+		// (a pass from FROM m back to ON m on, then back to the start for the next: her track starts again there, on both games)
+		const P = ( FROM + ON ) / U, run = Gl.time.value - t0, d = run > 0 ? U * ( run % P ) : 0;
+		window.__pass = run > 0 ? Math.floor( run / P ) : - 1;
 		b.position.set( SEA.x - FROM + d, y, SEA.z + OFF );
-		b.velocity.set( d > 0 ? U : 0, 0, 0 );
+		b.velocity.set( run > 0 ? U : 0, 0, 0 );
 		b.quaternion.set( 0, Math.sin( Math.PI / 4 ), 0, Math.cos( Math.PI / 4 ) );
 		rec.push( [ performance.now() / 1000, b.position.x, b.velocity.x, a.waves.wakes.count, a.waves.wakes.n ] );
 
 	} );
 
-}, [ SEA, OFF, FROM, KN ] );
+}, [ SEA, OFF, FROM, KN, ON ] );
 note( 'Robin under way' );
 // (till she's past Sam and well on, and her wake's gone by Sam: the arm's angle on the plane, and some)
 await until( robin.game, `window.__app.boatCtl.position.x > ${ SEA.x }`, 1200000 );
 const passed = await sam.game.evaluate( () => performance.now() / 1000 );
 note( 'Robin past Sam' );
-let shotTaken = false;
-for ( let i = 0; i < 900; i ++ ) {
+let shotTaken = false, shotAt = 0;
+for ( let i = 0; i < 1500; i ++ ) {
 
 	const now = await sam.game.evaluate( () => {
 
@@ -120,10 +122,11 @@ for ( let i = 0; i < 900; i ++ ) {
 
 		await G.shot( sam, 'sam-in-robins-wake' );
 		shotTaken = true;
+		shotAt = await sam.game.evaluate( () => performance.now() / 1000 );
 
 	}
 
-	if ( now.t - passed > ( shotTaken ? 60 : 200 ) ) break;
+	if ( shotTaken ? now.t - shotAt > 40 : now.t - passed > 1200 ) break;
 	await sam.page.waitForTimeout( 1000 );
 
 }
@@ -137,10 +140,13 @@ const top = Math.max( ...Rb.map( ( r ) => r[ 2 ] ) );
 note( `Robin's console at ${ ( top / 0.5144 ).toFixed( 1 ) } kn at most; her own wake ${ Math.max( ...Rb.map( ( r ) => r[ 4 ] ) ) } samples on her game` );
 note( `on Sam's game: her wake followed at ${ ( Math.max( ...S.map( ( r ) => r[ 8 ] ) ) / 0.5144 ).toFixed( 1 ) } kn, ${ Math.max( ...S.map( ( r ) => r[ 7 ] ) ) } wake(s) sent` );
 const settled = before.filter( ( r ) => r[ 0 ] > before[ 0 ][ 0 ] + 20 ), reach = after.find( ( r ) => Math.abs( r[ 4 ] ) > 0.005 );
-note( `Sam's kayak: still before ${ ( span( settled, 1 ) * 100 ).toFixed( 1 ) } cm, ${ span( settled, 2 ).toFixed( 1 ) } deg; in it heave ${ ( span( after, 1 ) * 100 ).toFixed( 1 ) } cm, roll ${ span( after, 2 ).toFixed( 1 ) }, pitch ${ span( after, 3 ).toFixed( 1 ) } deg; the wake ${ ( span( after, 4 ) * 100 ).toFixed( 1 ) } cm crest to trough under her, ${ ( span( after, 11 ) * 100 ).toFixed( 1 ) } in her own water query; it reached her ${ reach ? ( reach[ 0 ] - passed ).toFixed( 0 ) + ' s' : 'never' } after Robin passed` );
+const passes = await robin.game.evaluate( () => window.__pass + 1 );
+// (the pass whose wake reached her: from 10 s before to 40 s after)
+const inIt = reach ? S.filter( ( r ) => r[ 0 ] > reach[ 0 ] - 10 && r[ 0 ] < reach[ 0 ] + 40 ) : after;
+note( `Sam's kayak: still before ${ ( span( settled, 1 ) * 100 ).toFixed( 1 ) } cm, ${ span( settled, 2 ).toFixed( 1 ) } deg; in it heave ${ ( span( inIt, 1 ) * 100 ).toFixed( 1 ) } cm, roll ${ span( inIt, 2 ).toFixed( 1 ) }, pitch ${ span( inIt, 3 ).toFixed( 1 ) } deg; the wake ${ ( span( inIt, 4 ) * 100 ).toFixed( 1 ) } cm crest to trough under her, ${ ( span( inIt, 11 ) * 100 ).toFixed( 1 ) } in her own water query; ${ reach ? `reached her` : 'never reached her' } in ${ passes } pass(es) of Robin's, ${ inIt.length } of Sam's frames in it` );
 note( `frames a second: Robin ${ rate.robin }, Sam ${ rate.sam } (30 asked)` );
 say( Math.max( ...S.map( ( r ) => r[ 7 ] ) ) >= 1 && Math.max( ...S.map( ( r ) => r[ 8 ] ) ) > 5, 'Sam\'s game follows Robin\'s console\'s wake from where she\'s drawn' );
-say( span( after, 4 ) > 0.02 && Math.abs( span( after, 11 ) - span( after, 4 ) ) < 0.01, 'it reaches Sam\'s kayak, in her own water query' );
-say( span( after, 1 ) > 0.5 * span( after, 4 ), 'and her kayak rises and falls on it' );
+say( span( inIt, 4 ) > 0.02 && Math.abs( span( inIt, 11 ) - span( inIt, 4 ) ) < 0.01, 'it reaches Sam\'s kayak, in her own water query' );
+say( reach && span( inIt, 1 ) > 0.5 * span( inIt, 4 ), 'and her kayak rises and falls on it' );
 say( shotTaken, 'a look from her seat as it reaches her' );
 await G.end( 'wakes' );
