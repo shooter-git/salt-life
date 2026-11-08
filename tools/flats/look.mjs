@@ -37,12 +37,14 @@ const VIEW = {
 	mangroves: { stand: [ - 586, - 166 ], eye: [ - 586, - 166, 1.65, 'ground' ], at: [ - 500, 0.4, - 150 ] },
 	beach: { stand: [ 78, - 64 ], eye: [ 78, - 64, 1.7, 'ground' ], at: [ 40, - 0.2, - 30 ] },
 	pier: { stand: [ 55, 22 ], eye: [ 55, 22, 2.3 + 1.65, 'sea0' ], at: [ 66, 0, 38 ], boat: 'lobster' },
-	// ((M17, stream 2) the tide seen close: the pier's piles from the sand beside it, the mangroves' roots from the flat off
+	// ((M17, stream 2) the tide seen close: the pier's piles from the sand beside them, the mangroves' roots from the flat off
 	// their edge, the west arm's stack from the water, the west sea cave's inlet from off its mouth)
 	piles: { stand: [ 70, - 40 ], eye: [ 70, - 40, 1.65, 'ground' ], at: [ 55, - 0.2, - 31 ] },
 	roots: { stand: [ - 528, - 170 ], eye: [ - 528, - 170, 1.65, 'ground' ], at: [ - 505, 0.0, - 168 ] },
 	stack: { stand: [ - 140, 30 ], eye: [ - 140, 30, 1.2, 'sea' ], at: [ - 166, 0.5, 8 ] },
 	cave: { stand: [ - 592, - 383 ], eye: [ - 592, - 383, 1.5, 'sea' ], at: [ - 557, 0.3, - 380 ] },
+	// (and Joe's slate, its day's tides chalked on it)
+	slate: { stand: [ 52.6, - 73.9 ], eye: [ 52.6, - 73.9, 1.55, 'ground' ], at: [ 50.71, 2.9, - 74.14 ] },
 };
 // ((M17) the wet line held with the tide: on the ebb (FLATS_STAGE=ebb, the default) the highest it's stood in the hour and
 // a half before, about 0.15 m over it at a spring's mid-ebb or low water; on the flood the tide itself)
@@ -70,6 +72,17 @@ for ( const boat of groups ) {
 	await page.evaluate( async () => {
 
 		const a = window.__app, w = a.weather, up = w.update.bind( w ), cam = a.camera, { G } = await import( '/src/core/Globals.js' );
+		// ((M17) the clock held at noon: on a busy machine a run takes long enough for its last shots to come at dusk)
+		const hold = () => {
+
+			a.settings.timeSpeed = 0;
+			a.settings.timeOfDay = 12;
+			const t = a.together;
+			if ( t && t._clock ) t._clock = { ...t._clock, at: Date.now(), hour: 12, speed: 0 };
+
+		};
+		hold();
+		setInterval( hold, 1000 );
 		w.update = function ( ...args ) {
 
 			up( ...args );

@@ -241,11 +241,10 @@ ${ TERRAIN_SHADING_GLSL }
 				.replace( '#include <aomap_fragment>', /* glsl */`
 	reflectedLight.indirectDiffuse *= tAO * caveL.x;
 	reflectedLight.indirectSpecular *= tAO * caveL.x;
-#ifdef USE_ENVMAP
-	// ((M17) the sky in the water the tide's left lying: the world's reflections are kept low for the sand
-	// (scene.environmentIntensity), a pond's are the sky's own, as the sea's are)
-	reflectedLight.indirectSpecular *= 1.0 + max( tPond, tWet ) * ( 1.0 / max( envMapIntensity, 0.02 ) - 1.0 );
-#endif
+	// ((M17) the sky in the water the tide's left lying, and off wet sand's film: the world's reflections are kept low for
+	// the sand (Sky's levels.env, 0.09 of the sky's), a pond's are the sky's own, as the sea's are. Not after dark: the
+	// sky's environment is made again only now and then, and can hold the day's sky into the night)
+	reflectedLight.indirectSpecular *= 1.0 + max( tPond, tWet ) * ${ ( 1 / ENV_LEVEL - 1 ).toFixed( 2 ) } * ( 1.0 - terrainNight );
 	reflectedLight.directDiffuse *= ss( 0.03, 0.3, caveL.x );
 	reflectedLight.directSpecular *= ss( 0.03, 0.3, caveL.x );` );
 
@@ -288,6 +287,9 @@ ${ TERRAIN_SHADING_GLSL }
 	}
 
 }
+
+// (M17) the share of the sky's light the world's reflections are kept to, for the sand (Sky's levels.env)
+const ENV_LEVEL = 0.09;
 
 // TerrainData's heights as a float texture at `res` texels per side (box-filtered when smaller)
 function heightTexture( terrain, res ) {
