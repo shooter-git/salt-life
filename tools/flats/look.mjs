@@ -107,6 +107,8 @@ for ( const boat of groups ) {
 			a.player.position.set( L.stand[ 0 ], Math.max( g, sea - 1.2 ), L.stand[ 1 ] );
 			const base = L.eye[ 3 ] === 'ground' ? g : L.eye[ 3 ] === 'sea' ? sea : 0;
 			cam.position.set( L.eye[ 0 ], base + L.eye[ 2 ], L.eye[ 1 ] );
+			// ((M17) a view from the ground under a surge's sea: from 1.2 m over the water, as a swimmer's)
+			if ( L.eye[ 3 ] === 'ground' && cam.position.y < sea + 0.5 ) cam.position.y = sea + 1.2;
 			cam.up.set( 0, 1, 0 );
 			cam.lookAt( L.at[ 0 ], L.at[ 1 ], L.at[ 2 ] );
 			cam.updateMatrixWorld();
@@ -125,6 +127,12 @@ for ( const boat of groups ) {
 
 				a.scene.fog.near = a.sky.fogNear;
 				a.scene.fog.far = a.sky.fogFar;
+				// ((M17) and its colour, the sky's at the horizon: the frame's reading under water, at the swimmer's own
+				// camera, left the water's teal in it, over the whole sky)
+				a.scene.fog.color.copy( G.horizonColor.value );
+				// (and the plants it hid, and the marine snow it showed)
+				if ( a.vegetation && a.vegetation.ready ) a.vegetation.group.visible = true;
+				if ( a.snow && a.snow.mesh ) a.snow.mesh.visible = false;
 
 			}
 

@@ -94,19 +94,20 @@ The release checks ([M17.md](../M17.md#before-release)), on this machine (12 cor
 | The ground's program alone: link and first draw, eight rounds alternating in fresh browsers (load about 60) | median 2919 ms | median 3240 ms (+11%); its fragment source 128.3k to 133.4k characters (+4%), its vertex 23.8k to 24.2k |
 | One screen's whole play (the laptop's), one core each, the two side by side | 369 s | 399 s |
 
-**Ready.** The A/B can't tell them apart at this load: a round swings 12 to 27 s either way, the rounds' medians are 16.2 and 19.0 s and the paired rounds' differences' median is -0.4 s. What can be said is from the ground's program alone: about a tenth more to build. In v2.1.5's measures (the ground's first draw 0.42 s of a 4.5 s ready, and cutting 1 s of first draws cutting ready 0.4 s), that's of the order of +0.02 s on a quiet machine. It wants the A/B again when the machine's quiet, before the merge.
+**Ready.** The A/B can't tell them apart at this load: a round swings 12 to 27 s either way, the rounds' medians are 16.2 and 19.0 s and the paired rounds' differences' median is -0.4 s. What can be said is from the ground's program alone: about a tenth more to build. In v2.1.5's measures (the ground's first draw 0.42 s of a 4.5 s ready, and cutting 1 s of first draws cutting ready 0.4 s), that's of the order of +0.02 s on a quiet machine. The M17 session runs the A/B again for every stream's branch, one after another on a quiet machine.
 
-**One screen's whole play** was 8% longer, side by side on two cores of a machine at load 60. The ground's shader does a few more smoothsteps a pixel (the wet line's, the sand's table, the hollows' water in a branch) beside its hundreds of operations and fifteen texture reads, and four more height reads a vertex between the tides. The foundation's play alone was 317 s, v2.2.2's 342 s. It wants measuring again alone too.
+**One screen's whole play** was 8% longer, side by side on two cores of a machine at load 60. The ground's shader does a few more smoothsteps a pixel (the wet line's, the sand's table, the hollows' water in a branch) beside its hundreds of operations and fifteen texture reads, and four more height reads a vertex between the tides. The foundation's play alone was 317 s, v2.2.2's 342 s. The M17 session measures it again, alone, with the A/B.
 
-**All the Spaces' complete check** (`cli.ts check`), each on a clean copy, on four cores (`taskset -c 0-3`), the first two on 6eac103:
+**All the Spaces' complete check** (`cli.ts check`), each on a clean copy, on four cores (`taskset -c 0-3`), the first two on 6eac103 and the third on ca3fa80 (one shader line past it: the sky's lift by day only):
 
 | Script memory (MB, as the check gives it) | Phone, upright | Phone, on its side | Tablet | Laptop | Judged |
 |---|---|---|---|---|---|
 | First | 132.4 | 125.9 | 119.6 | 131.5 | **132.4**, 17.6 under |
 | Second | 119.7 | 137.8 | 130.5 | 110.6 | **137.8**, 12.2 under |
+| Third | 124.6 | 134.3 | 136.6 | 135.5 | **136.6**, 13.4 under |
 | The foundation, two checks | 130.3, 123.1 | 129.2, 141.1 | 140.8, 119.2 | 129.8, 128.7 | 140.8, 141.1 |
 
-Everything else passed in both: 59 and 41 draw calls of 150, 209k and 180k triangles of 300k, 64.8 and 61.9 MB of textures, 95.4 and 92.6 MB of graphics memory, 9 sounds, 7.0 MB before ready and 78.2 MB in all, no errors on any screen. Their ready times (15 to 25 s) are the machine's load. The creeks' tables are made only on the creeks, which the checks never go to, and nothing else here holds memory.
+Everything else passed in all three: 59, 41 and 69 draw calls of 150; 209k, 180k and 219k triangles of 300k; 64.8, 61.9 and 67.4 MB of textures; 95.4, 92.6 and 99.5 MB of graphics memory; 9, 9 and 14 sounds of 16; 7.0 MB before ready and 78.2 MB in all; no errors on any screen. Their ready times (15 to 25 s) are the machine's load. The creeks' tables are made only on the creeks, which the checks never go to, and nothing else here holds memory.
 
 ## Seen
 
@@ -115,18 +116,20 @@ In `qa-output/flats/look/low/` (not kept in the repo), `tools/flats/look.mjs` on
 - **Wading at low water**: the bar under you damp and paler, wetter toward the water (at a spring low it stands 0.3 m over the sea). At dusk its wet sand takes the sun's sheen.
 - **The mangroves' roots at low water**: arching clear of wet, dark mud, water lying between them with the sky in it, a dark band at their feet, much as the South Andros creek's photograph; at high water under the sea.
 - **The beach**: a darker wet band down to the water at an ordinary low.
-- **The sea cave's inlet**: its beach bared at low water, the coralline band at its foot, flooded to the mouth at high water.
+- **The sea cave's inlet**: its beach bared and wet at low water, the coralline band at the mouth's foot, the sea up into the mouth with its whitewater at high water.
+- **From the kayak's seat**: at low water a bar bared ahead across the flat; at high water open water over it.
+- **The pier, springs and neaps**: the lobster boat at her berth sits at -0.57, -0.20, +0.20 and +0.38 m with the sea at -0.6, -0.35, +0.35 and +0.6 (riding the bay's swell a couple of tenths either way; an earlier run read -0.70, -0.48, +0.20, +0.66), lower against the piles at low water, up by the deck at high water.
+- **A 2 m hurricane surge on spring high water** (`FLATS_SURGE=2`, the sea at 2.6 m): the sea over the beach up to Joe's stand and the boathouse, the pier's deck awash, the kayak afloat off the sand (2.45 m), the lobster boat riding at her berth at 2.12 m, the mangroves standing in the sea with their roots under it. The beach's view has a straight-edged dark band across its upper left that no other view has, where its eye's lifted to 3.8 m beside the boathouse (most likely a roof's edge by the lens): not chased.
+- **Joe's slate**: five rows, the tide's the widest ("High 12:35pm, low 6:40pm"), the note clear of them under the dashes.
 - **Left as it was**: the hard white line along the flat's water's edge (the sea's, above).
+
+**The views' own faults, found and fixed in the tool** (`tools/flats/look.mjs`; nothing in the game). Every view that puts the player in the water (the pier from its deck, the kayak's seat, the cave, the stack) had a teal sky. The tool imports `Globals.js` for itself, and once that file's been edited while the dev server runs, the app has it under Vite's `?t=` stamp and the tool's import is a second copy: its `G.cameraUnderwater = 0` never reached the game, so wherever the swimmer's own camera read under water the frame drew the underwater fog over the sky. A fresh dev server, and the tool now also gives the fog back its horizon colour and the plants and the marine snow back as above water. A view from the ground under a surge's sea is from 1.2 m over the water. The clock's held at noon, as long runs on a busy machine came to dusk.
 
 ## Not verified
 
-- **Ready and the play's length**: the A/B and the one-core play want running again on a quiet machine (Readings).
-- **A third complete check**, on the final commit ca3fa80 (one shader line past 6eac103's two: the sky's lift by day only), was running when this was written, as were the pier's views at springs and neaps (the boats at their berths) and a 2 m hurricane surge on spring high water (`FLATS_SURGE=2`: the beach, the roots, the piles, the pier). Their results aren't in this page.
+- **Ready and the play's length**: left to the M17 session's quiet-machine A/B and one-core play for every branch (Readings).
 - **The piles' band** close to: the views drawn show the piles small, against the light; the band's change with the tide isn't judged from them.
 - **On a graphics card** and a phone: none run, by the user's decision. The GPU limits check stands in for the card's limits, not its look.
 - **Resting and the tow's jump**: by construction (the wet line, the stage, the bites and the creeks are all worked out from the island's time alone, nothing kept between frames), not run.
 - **Two games**: the same island time gives the same tide and wet line; `tools/two-players` wasn't run.
 
-## Not verified
-
-(filled in below)
