@@ -19,6 +19,28 @@ const sam = await G.open( 'Sam', 'kayak', 30 );
 await until( sam.game, `${ other } && ${ other }.cur` );
 await until( robin.game, `${ other } && ${ other }.cur` );
 note( 'both in, each seeing the other' );
+// (each game's late building over first, the whale the last of it: on a busy CPU it stalls a game for minutes at a time, and in
+// company the sea's clock runs on, so a wake would go by unseen)
+for ( const w of [ robin, sam ] ) await until( w.game, 'window.__app.whale', 1500000 );
+const steady = async ( w ) => {
+
+	for ( let i = 0; i < 60; i ++ ) {
+
+		const gaps = await w.game.evaluate( () => new Promise( ( done ) => {
+
+			const R = window.__draws, t = [ performance.now() ], each = () => t.push( performance.now() );
+			R.after.push( each );
+			setTimeout( () => { R.after.splice( R.after.indexOf( each ), 1 ); t.push( performance.now() ); let most = 0; for ( let j = 1; j < t.length; j ++ ) most = Math.max( most, t[ j ] - t[ j - 1 ] ); done( most ); }, 20000 );
+
+		} ) );
+		if ( gaps < 4000 ) return gaps;
+
+	}
+
+	return - 1;
+
+};
+note( `the late building over; the longest gap between frames over 20 s: Robin ${ ( await steady( robin ) / 1000 ).toFixed( 1 ) } s, Sam ${ ( await steady( sam ) / 1000 ).toFixed( 1 ) } s` );
 
 // Sam in her kayak, still, her bow toward the console's way 30 m off; Robin at her helm 700 m back along it, heading past
 await sam.game.evaluate( ( SEA ) => {
