@@ -184,7 +184,7 @@ const _size = new THREE.Vector2();
 const _fwd = new THREE.Vector3();
 const _up = new THREE.Vector3();
 const _hornAt = new THREE.Vector3( - 0.42, 3.4, 1.15 ); // (the boat's horn, if its model doesn't say)
-const CATCH_UP = 1; // (M17) s of the water's time a frame of a slow game in company is worked out over, at most
+const CATCH_UP = 3; // (M17) s of the water's time a frame of a slow game in company is worked out over, at most (past it, a jump: joining, a hidden tab)
 const _shelter = new THREE.Matrix4(), _c4 = new THREE.Matrix4(); // (M9: the wheelhouse roof over the rain)
 const _ride = new THREE.Matrix4(), _one = new THREE.Vector3( 1, 1, 1 ); // (riding along: the boat you're on)
 const _fwdB = new THREE.Vector3(); // (M11: her heading, for her instruments)
@@ -891,8 +891,8 @@ export class App {
 		}
 		// (where the others are now, before the player: the boat you may be riding in)
 		if ( this.together ) this.together.track( dt );
-		// ((M17) in company, a frame of a slow game is the water's whole time since the last, as the waves go by it, up to a
-		// second: BoatController.catchUp. Alone, or past that (joining, a jump), the frame's own)
+		// ((M17) in company, a frame of a slow game is the water's whole time since the last, as the waves go by it, up to three
+		// seconds: BoatController.catchUp. Alone, or past that (joining, a jump), the frame's own)
 		const span = G.time.value - ( this._boatT ?? G.time.value - dt );
 		if ( span > dt + 1e-3 && span < CATCH_UP && this.together && this.together.others.size ) this.boatCtl.catchUp( span );
 		else this.boatCtl.update( dt );

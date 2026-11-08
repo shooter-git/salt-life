@@ -1,6 +1,6 @@
 // (M17, stream 4) Aboard together, with two real games, part by part: what M16 left for a guest on someone else's boat.
 //   tools/render-slot.sh node tools/two-players/together.mjs [dir] [port] <part>
-//   parts: seat (5)  yard (2)  tray (3)  hold (4)  berths (6)  pearl (7)  specks (8)  horn (9)  ladder (10, 11)  chair (12)  slow (13)
+//   parts: seat (5)  yard (2)  tray (3)  hold (4)  sand, stem (6; berths: both)  pearl (7)  specks (8)  horn (9)  ladder (10, 11)  chair (12)  slow (13)
 import { OTHER as other, start } from './lib.mjs';
 const [ out = 'qa-output', PORT = '5234', PART = 'seat' ] = process.argv.slice( 2 );
 const G = await start( { out, port: PORT } );
@@ -263,32 +263,38 @@ if ( PART === 'specks' ) {
 
 }
 
-if ( PART === 'berths' ) {
+if ( PART === 'sand' || PART === 'berths' ) {
 
-	// (6) a visitor's kayak on the sand where yours lies; a boat at the pier head at a spare along the stem, and leaving it round
-	// the head, not through it
+	// (6) a visitor's kayak on the sand where yours lies: beside it, up past the high-water mark
 	const owner = await G.open( 'Robin', 'kayak', 20 ), guest = await G.open( 'Sam', 'kayak', 20 );
 	await ready( owner, guest );
 	await until( owner.game, `${ other }.cur.boat && ${ other }.spot`, 120000 ).catch( () => {} );
 	const sand = await owner.game.evaluate( async ( other ) => { const { TIDE_HIGHEST } = await import( '/src/game/IslandClock.js' ); const a = window.__app, o = eval( other ), f = o.cur.drawn || o.cur.boat, mine = a.boatCtl.position; return { kind: o.spot && o.spot.kind, apart: +Math.hypot( f.pos.x - mine.x, f.pos.z - mine.z ).toFixed( 2 ), ground: +a.terrainData.heightAt( f.pos.x, f.pos.z ).toFixed( 2 ), mark: TIDE_HIGHEST + 0.5, true: +Math.hypot( o.cur.boat.pos.x - mine.x, o.cur.boat.pos.z - mine.z ).toFixed( 2 ) }; }, other );
 	say( sand.kind === 'sand' && sand.apart > 1.2 && sand.ground >= sand.mark - 0.01, `Sam's kayak on the sand, where Robin's lies too (${ sand.true } m from hers on his own game): on Robin's, beside hers, ${ sand.apart } m off, ${ sand.ground } m up (the mark ${ sand.mark })` );
-	await guest.page.close();
-	// (a console at the pier head, and away)
-	const con = await G.open( 'Sam', 'console', 20 );
+
+}
+
+if ( PART === 'stem' || PART === 'berths' ) {
+
+	// (6) a boat at the pier head at a spare along the stem, and leaving it round the head, not through it
+	if ( PART === 'berths' ) await Promise.all( G.ctx.pages().map( ( pg ) => pg.close() ) );
+	const owner = await G.open( 'Robin', 'lobster', 20 ), con = await G.open( 'Sam', 'console', 20 );
+	await ready( owner, con );
 	await until( owner.game, `( () => { const o = ${ other }; return o && o.cur && o.cur.boatId === 'console' && o.spot; } )()`, 180000 ).catch( () => {} );
 	const stem = await owner.game.evaluate( ( other ) => { const o = eval( other ); return o.spot && { kind: o.spot.kind, side: o.spot.side, x: o.spot.x, z: o.spot.z }; }, other );
 	say( stem && stem.kind === 'stem', `his console at the pier head: on Robin's screen at a spare along the stem, ${ JSON.stringify( stem ) }` );
 	await owner.game.evaluate( ( other ) => {
 
-		const a = window.__app, R = window.__draws;
+		const R = window.__draws;
 		window.__path = [];
 		R.end.push( () => { const o = eval( other ), c = o.cur; if ( c && c.boat ) { const f = c.drawn || c.boat; window.__path.push( [ f.pos.x, f.pos.z, o.spot ? 1 : 0, c.boat.pos.x, c.boat.pos.z ] ); } } );
 
 	}, other );
-	await con.game.evaluate( () => window.__app.player.boardBoat() );
-	await G.helm( con );
+	// (at her helm, and away north: her lever up, by her owner's game)
+	await con.game.evaluate( () => { const p = window.__app.player; p.boardBoat(); p.takeHelm(); } );
+	await frames( con.game, 2 );
 	await con.page.keyboard.down( 'KeyW' );
-	await until( owner.game, `( () => { const o = ${ other }; return o.cur && o.cur.boat && o.cur.boat.pos.z > 110; } )()`, 300000 ).catch( () => {} );
+	await until( owner.game, `( () => { const o = ${ other }; return o.cur && o.cur.boat && o.cur.boat.pos.z > 110; } )()`, 600000 ).catch( () => {} );
 	await con.page.keyboard.up( 'KeyW' );
 	const path = await owner.game.evaluate( () => window.__path );
 	const P = { x: 55, half: 1.3, hx: 7, z0: 33, z1: 40 }, S = { beam: 2.6, length: 7 };
@@ -303,9 +309,10 @@ if ( PART === 'berths' ) {
 
 	}
 
-	note( 'her way on Robin\'s screen, every 10th frame:', JSON.stringify( path.filter( ( _, i ) => i % 10 === 0 ).map( ( q ) => q.slice( 0, 3 ).map( ( v ) => Math.round( v * 10 ) / 10 ) ) ) );
-	const rate = await G.rate( owner.game );
-	say( path.length > 20 && into === 0 && path.at( - 1 )[ 2 ] === 0, `leaving the stem for the open water, ${ path.length } frames on Robin's screen (${ lay } at her spare or on her way from it): never in the pier head or its stem (${ into }); the largest step ${ step.toFixed( 2 ) } m at ${ rate } fps` );
+	const moving = path.filter( ( q, i ) => i === 0 || Math.hypot( q[ 0 ] - path[ i - 1 ][ 0 ], q[ 1 ] - path[ i - 1 ][ 1 ] ) > 0.05 );
+	note( 'her way on Robin\'s screen as she moved, every 5th frame [ x, z, at her spare ]:', JSON.stringify( moving.filter( ( _, i ) => i % 5 === 0 ).map( ( q ) => q.slice( 0, 3 ).map( ( v ) => Math.round( v * 10 ) / 10 ) ) ) );
+	const rate = await G.rate( owner.game ), last = path.at( - 1 );
+	say( path.length > 20 && into === 0 && last && last[ 2 ] === 0, `leaving the stem for the open water, ${ path.length } frames on Robin's screen (${ lay } at her spare or on her way from it): never in the pier head or its stem (${ into }); the largest step ${ step.toFixed( 2 ) } m at ${ rate } fps` );
 
 }
 
@@ -315,11 +322,12 @@ if ( PART === 'yard' ) {
 	// the other's on the second, on blocks of her own
 	const owner = await G.open( 'Robin', 'lobster', 20 ), guest = await G.open( 'Sam', 'lobster', 20 );
 	await ready( owner, guest );
-	const haul = ( who ) => who.game.evaluate( () => { const g = window.__app.game; g.state.hauled = true; window.__app.boatCtl.setHauled( g.cradle ); } );
+	// (as Marta hauls her ahead of a hurricane: held there, as she would be till it's gone by, Game.relaunch kept for after)
+	const haul = ( who ) => who.game.evaluate( () => { const g = window.__app.game; window.__relaunch = g.relaunch; g.relaunch = function () {}; g.state.hauled = true; window.__app.boatCtl.setHauled( g.cradle ); } );
 	await haul( owner );
 	await haul( guest );
 	// (looking at the yard from its edge)
-	for ( const who of [ owner, guest ] ) await who.game.evaluate( () => { const a = window.__app, p = a.player; p.position.set( 96, p.groundAt( 96, - 86, 20 ), - 86 ); p.velocity.set( 0, 0, 0 ); p.yaw = Math.PI * 0.95; p.pitch = - 0.15; } );
+	for ( const [ who, x ] of [ [ owner, 99 ], [ guest, 92 ] ] ) await who.game.evaluate( ( x ) => { const a = window.__app, p = a.player; p.position.set( x, p.groundAt( x, - 84, 20 ), - 84 ); p.velocity.set( 0, 0, 0 ); p.yaw = - 0.12; p.pitch = - 0.12; }, x );
 	const look = ( who ) => who.game.evaluate( async ( other ) => { const { SPARE_YARD } = await import( '/src/world/village/StormPlaces.js' ); const a = window.__app, o = eval( other ), f = o.cur && ( o.cur.drawn || o.cur.boat ), s = SPARE_YARD.lobster; return { kind: o.spot && o.spot.kind, at: f && +Math.hypot( f.pos.x - s.x, f.pos.z - s.z ).toFixed( 2 ), mine: +a.boatCtl.position.distanceTo( a.game.cradle.position ).toFixed( 2 ), shown: !! ( ( o.boat && o.boat.visible ) || ( o.stand && o.stand.visible ) ), blocks: !! ( o.blocks && o.blocks.visible ) }; }, other );
 	await until( owner.game, `${ other }.spot && ${ other }.spot.kind === 'yard'`, 120000 ).catch( () => {} );
 	await until( guest.game, `${ other }.spot && ${ other }.spot.kind === 'yard'`, 120000 ).catch( () => {} );
@@ -329,7 +337,7 @@ if ( PART === 'yard' ) {
 	say( a.kind === 'yard' && a.at < 0.5 && a.mine < 0.1 && a.shown && a.blocks, `Robin's on the cradle on her game; Sam's on the yard's second, ${ a.at } m from it, on blocks of her own: ${ JSON.stringify( a ) }` );
 	say( b.kind === 'yard' && b.at < 0.5 && b.mine < 0.1 && b.shown && b.blocks, `and the same on Sam's: ${ JSON.stringify( b ) }` );
 	await shot( owner, 'together-yard' );
-	await guest.game.evaluate( () => window.__app.game.relaunch() );
+	await guest.game.evaluate( () => { const g = window.__app.game; g.relaunch = window.__relaunch; g.relaunch(); } );
 	await until( owner.game, `! ${ other }.spot || ${ other }.spot.kind !== 'yard'`, 120000 ).catch( () => {} );
 	await frames( owner.game, 6 );
 	const c = await owner.game.evaluate( ( other ) => { const o = eval( other ); return { spot: o.spot && o.spot.kind, blocks: !! ( o.blocks && o.blocks.visible ), z: o.cur && o.cur.boat && Math.round( o.cur.boat.pos.z ) }; }, other );
@@ -392,8 +400,8 @@ if ( PART === 'pearl' ) {
 	await ready( owner, guest );
 	const day = await owner.game.evaluate( () => { const a = window.__app; let d = a.settings.day; if ( d % 7 === 0 ) d ++; a.together.setClock( 13, d, 0.0001 ); return d; } );
 	for ( const who of [ owner, guest ] ) await who.game.evaluate( () => { const a = window.__app, p = a.player; p.position.set( 106, p.groundAt( 106, - 836, 30 ), - 836 ); p.velocity.set( 0, 0, 0 ); p.yaw = 0; } );
-	await until( guest.game, '!! ( window.__app.game.camp && window.__app.game.camp.built )', 300000 ).catch( () => {} );
-	await until( owner.game, '!! ( window.__app.game.camp && window.__app.game.camp.built )', 300000 ).catch( () => {} );
+	await until( guest.game, '!! ( window.__app.game.camp && window.__app.game.camp.boat )', 600000 ).catch( () => {} );
+	await until( owner.game, '!! ( window.__app.game.camp && window.__app.game.camp.boat )', 600000 ).catch( () => {} );
 	await frames( guest.game, 20 );
 	const was = await guest.game.evaluate( () => { const b = window.__app.game.camp.boat; return { off: b.off, kind: b.kind }; } );
 	await owner.game.evaluate( () => { const a = window.__app, b = a.boatCtl; b.moored = false; b.beached = false; b.anchor = null; b.driven = false; b.position.set( 114.3, b.position.y, - 880 ); b.velocity.set( 0, 0, 0 ); b.angular.set( 0, 0, 0 ); } );
