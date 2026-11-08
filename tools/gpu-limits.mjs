@@ -6,6 +6,7 @@
 //
 //   pnpm dev, then   node tools/gpu-limits.mjs [tiers, comma separated] [s to wait for what comes late]
 //   SEA_PORT=5190 node tools/gpu-limits.mjs high     (a dev server on another port than 5189)
+//   SHOW=Water node tools/gpu-limits.mjs              ((M17) and the sea's own counts)
 //
 // It goes round the places whose shaders load only when you're near, and exits 1 if anything's over.
 
@@ -13,7 +14,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join( dirname( fileURLToPath( import.meta.url ) ), '..' );
-const { chromium } = await import( join( ROOT, '../all-the-spaces/node_modules/playwright/index.mjs' ) );
+const { chromium } = await import( join( process.env.ALL_THE_SPACES || join( ROOT, '../all-the-spaces' ), 'node_modules/playwright/index.mjs' ) );
 
 // (textures: the floor WebGL 2 promises, and what Direct3D 11 and Metal give. Uniforms: what they commonly give, WebGL 2's
 // floor of 224 being far under what any device here runs at. Varyings aren't counted: three's sources are full of those
@@ -84,6 +85,8 @@ for ( const tier of TIERS.split( ',' ) ) {
 	for ( const r of rows ) for ( const k of Object.keys( LIMITS ) ) if ( ! most[ k ] || r[ k ] > most[ k ][ 0 ] ) most[ k ] = [ r[ k ], r.name ];
 	console.log( `${ tier }: ${ rows.length } shaders` );
 	for ( const k of Object.keys( LIMITS ) ) console.log( `  ${ ( most[ k ][ 0 ] > LIMITS[ k ] ? 'OVER' : 'ok  ' ) } ${ k.padEnd( 17 ) } ${ String( most[ k ][ 0 ] ).padStart( 5 ) } of ${ LIMITS[ k ] }  ${ most[ k ][ 1 ] }` );
+	// ((M17) SHOW=<name>: that shader's own counts, each program of it)
+	if ( process.env.SHOW ) for ( const r of rows ) if ( r.name === process.env.SHOW ) console.log( `  ${ r.name }: ${ Object.keys( LIMITS ).map( ( k ) => `${ k } ${ r[ k ] }` ).join( ', ' ) }` );
 	for ( const r of rows ) {
 
 		const bad = Object.keys( LIMITS ).filter( ( k ) => r[ k ] > LIMITS[ k ] );

@@ -159,21 +159,19 @@ uniform vec4 wakeB[ WAKE_MAX ];
 uniform vec4 wakeTrack[ WAKE_TRACKS * 2 ];
 uniform int wakeTracks;
 // ((M17) her wake's far arms at x (about the sea's origin): their height, and its slope out. Each track's samples round one loop,
-// each sample's two arms round another: a call's a copy of the code (WakeWaves.heightAt is the same, on the CPU). The waves
-// too short for the grid's spacing there faded out, as the open sea's are)
+// each sample's two arms round another: a call's a copy of the code (WakeWaves.heightAt is the same, on the CPU). The loops run
+// to the uniforms' counts, not the arrays' sizes, so a compiler can't copy their body out forty times over. The waves too short
+// for the grid's spacing there faded out, as the open sea's are)
 float wakeAt( vec2 x, float spacing, out vec2 slope ) {
 	float h = 0.0;
 	slope = vec2( 0.0 );
-	for ( int j = 0; j < WAKE_TRACKS; j ++ ) {
-		if ( j >= wakeTracks ) break;
+	for ( int j = 0; j < wakeTracks; j ++ ) {
 		vec4 box = wakeTrack[ 2 * j ];
 		if ( x.x < box.x || x.y < box.y || x.x > box.z || x.y > box.w ) continue;
 		int from = int( wakeTrack[ 2 * j + 1 ].x ), to = int( wakeTrack[ 2 * j + 1 ].y );
 		vec2 pQ[ 2 ], pK[ 2 ];
 		float pc[ 2 ], pSig = 0.0, pLam = 0.0, pAmp = 0.0;
-		for ( int i = 0; i < WAKE_MAX; i ++ ) {
-			int s = from + i;
-			if ( s >= to ) break;
+		for ( int s = from; s < to; s ++ ) {
 			vec4 A = wakeA[ s ], B = wakeB[ s ];
 			float k = B.y, cs = B.z, sn = sqrt( max( 1.0 - cs * cs, 0.0 ) );
 			float om = sqrt( ${ f( GRAVITY ) } * k ), go = B.x * 0.5 * om / k;
@@ -183,7 +181,7 @@ float wakeAt( vec2 x, float spacing, out vec2 slope ) {
 				vec2 n = cs * d + ( e == 0 ? - side : side );
 				vec2 Q = A.xy + go * n, K = k * n;
 				float c = dot( K, A.xy ) + om * B.x;
-				if ( i > 0 ) {
+				if ( s > from ) {
 					// (this arm from the sample before: along it, how far into this length, faded where it meets the next)
 					vec2 ed = Q - pQ[ e ];
 					float len = max( length( ed ), 1e-3 );
