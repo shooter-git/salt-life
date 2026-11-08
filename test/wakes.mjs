@@ -209,7 +209,28 @@ function run( w, key, U, secs, L, vol, at = { x: 0, z: 0 }, dir = 0, t0 = 0, eac
 
 	ok( w3.count === 2 && w3.n <= 24, `five boats on low: ${ w3.count } wakes sent, ${ w3.n } samples` );
 	ok( w3.span[ 0 ] === 0 && Math.abs( w3.s.x[ 0 ] - ( 900 + 12 * t3 ) ) < 1e-6, '  the boat you\'re in first, though she\'s furthest' );
-	ok( w3.tracks.get( 'p0' ).head.U > 11.9 && w3.tracks.get( 'p0' ).head.U < 12.1, '  a boat in company\'s speed from her place frame to frame' );
+	ok( w3.tracks.get( 'p0' ).head.U > 11.9 && w3.tracks.get( 'p0' ).head.U < 12.1, '  a boat in company\'s speed from where she\'s drawn' );
+	// (and at a frame a second or so, her drawn place a little ahead or behind where she is each frame, as poses put in between
+	// catch up: her speed steady, not 5 kn one frame and 99 the next)
+	const w4 = new WakeWaves( { tier: 'mid' } );
+	let t4 = 0, lo = Infinity, hi = 0, seed = 7;
+	const rnd = () => ( ( seed = ( seed * 16807 ) % 2147483647 ) / 2147483647 );
+	for ( let f = 0; f < 120; f ++ ) {
+
+		t4 += 0.7 + 0.6 * rnd();
+		w4.followDrawn( 'p', 13 * t4 + ( rnd() - 0.5 ) * 6, 0, 'console', t4 );
+		w4.update( t4, { x: 0, z: 0 } );
+		if ( f > 10 ) {
+
+			const U = w4.tracks.get( 'p' ).head.U;
+			lo = Math.min( lo, U );
+			hi = Math.max( hi, U );
+
+		}
+
+	}
+
+	ok( lo > 13 * 0.6 && hi < 13 * 1.4, `  at about a frame a second, her place 3 m out either way each frame: her speed ${ ( lo / kn ).toFixed( 0 ) } to ${ ( hi / kn ).toFixed( 0 ) } kn (25 kn)` );
 	// (the hulls of the boats in company as their models have them)
 	for ( const id of Object.keys( WAKE.hulls ) ) {
 

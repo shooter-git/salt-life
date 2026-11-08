@@ -50,6 +50,7 @@ const DRAWN = { low: [ 0.2, 0.4 ], mid: [ 0.2, 0.4 ], high: [ 0.2, 0.4 ] };
 export const wakeDrawn = ( spacing, lam, tier = 'high' ) => 1 - smooth( ( DRAWN[ tier ] ?? DRAWN.low )[ 0 ], ( DRAWN[ tier ] ?? DRAWN.low )[ 1 ], spacing / lam );
 const KELVIN_TAN = 1 / Math.sqrt( 8 ); // (tan 19.47 degrees)
 const TAU = Math.PI * 2;
+const DRAWN_SPAN = 1; // s: a boat in company's speed's taken over at least this much of where she's been drawn
 const smooth = ( a, b, v ) => {
 
 	const x = Math.min( 1, Math.max( 0, ( v - a ) / ( b - a ) ) );
@@ -260,8 +261,9 @@ float wakeAt( vec2 x, float spacing, out vec2 slope ) {
 
 	}
 
-	// (M17) a boat in company under way, by where she's drawn: her velocity from her place frame to frame (smoothed: the poses
-	// come a few a second, put in between)
+	// (M17) a boat in company under way, by where she's drawn: her velocity over at least a second of where she's been drawn (the
+	// poses come a few a second and are put in between; at a few frames a second, frame to frame, she seemed to go from 5 kn to
+	// 99), smoothed
 	followDrawn( key, x, z, type, t ) {
 
 		const hull = WAKE.hulls[ type ];
@@ -271,15 +273,21 @@ float wakeAt( vec2 x, float spacing, out vec2 slope ) {
 		if ( ! hull ) return;
 		if ( ! l || t <= l.t || Math.hypot( x - l.x, z - l.z ) > WAKE.jump ) {
 
-			tr.last = { x, z, t, vx: 0, vz: 0 };
+			tr.last = { x, z, t, vx: 0, vz: 0, seen: [ { t, x, z } ] };
 			tr.followed = true;
 			return;
 
 		}
 
-		const dt = t - l.t, k = 1 - Math.exp( - dt / 0.4 );
-		l.vx += ( ( x - l.x ) / dt - l.vx ) * k;
-		l.vz += ( ( z - l.z ) / dt - l.vz ) * k;
+		const seen = l.seen;
+		seen.push( { t, x, z } );
+		while ( seen.length > 2 && t - seen[ 1 ].t >= DRAWN_SPAN ) seen.shift();
+		if ( seen.length > 24 ) seen.shift();
+		const from = seen[ 0 ], span = t - from.t;
+		const vx = span > 0 ? ( x - from.x ) / span : 0, vz = span > 0 ? ( z - from.z ) / span : 0;
+		const k = 1 - Math.exp( - ( t - l.t ) / 0.6 );
+		l.vx += ( vx - l.vx ) * k;
+		l.vz += ( vz - l.vz ) * k;
 		l.x = x;
 		l.z = z;
 		l.t = t;
