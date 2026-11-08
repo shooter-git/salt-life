@@ -83,11 +83,49 @@ Anywhere else the bites come as they always did.
 
 ## Readings
 
-(filled in below)
+The release checks ([M17.md](../M17.md#before-release)), on this machine (12 cores, shared with three other streams' renders and two-player runs: load 35 to 69 all afternoon, so every timing here is inflated and noisy):
+
+| Check | `m17-flats` 3f1367b | This stream |
+|---|---|---|
+| `pnpm test` (with `tide-seen.mjs`), the bake's check and the lock | passes | passes. `north-plotter.mjs` changed: its soundings are below chart datum now |
+| Programs built before ready (`tools/heap/programs.mjs`) | 16 | the same 16, by name and number |
+| `tools/gpu-limits.mjs` | high's sea 16 of 16 textures, mid's 14, low's village wood 16 | the same, all within: no texture added anywhere, one uniform (`G.tideWet`) to the ground, the rocks, the village and the roots |
+| Ready, phone upright, 4 CPUs, six rounds alternating (load 35 to 62) | 16.4, 12.5, 16.0, 13.2, 25.0, 25.1 s | 27.0, 15.5, 11.9, 11.7, 22.4, 25.8 s |
+| The ground's program alone: link and first draw, eight rounds alternating in fresh browsers (load about 60) | median 2919 ms | median 3240 ms (+11%); its fragment source 128.3k to 133.4k characters (+4%), its vertex 23.8k to 24.2k |
+| One screen's whole play (the laptop's), one core each, the two side by side | 369 s | 399 s |
+
+**Ready.** The A/B can't tell them apart at this load: a round swings 12 to 27 s either way, the rounds' medians are 16.2 and 19.0 s and the paired rounds' differences' median is -0.4 s. What can be said is from the ground's program alone: about a tenth more to build. In v2.1.5's measures (the ground's first draw 0.42 s of a 4.5 s ready, and cutting 1 s of first draws cutting ready 0.4 s), that's of the order of +0.02 s on a quiet machine. It wants the A/B again when the machine's quiet, before the merge.
+
+**One screen's whole play** was 8% longer, side by side on two cores of a machine at load 60. The ground's shader does a few more smoothsteps a pixel (the wet line's, the sand's table, the hollows' water in a branch) beside its hundreds of operations and fifteen texture reads, and four more height reads a vertex between the tides. The foundation's play alone was 317 s, v2.2.2's 342 s. It wants measuring again alone too.
+
+**All the Spaces' complete check** (`cli.ts check`), each on a clean copy, on four cores (`taskset -c 0-3`), the first two on 6eac103:
+
+| Script memory (MB, as the check gives it) | Phone, upright | Phone, on its side | Tablet | Laptop | Judged |
+|---|---|---|---|---|---|
+| First | 132.4 | 125.9 | 119.6 | 131.5 | **132.4**, 17.6 under |
+| Second | 119.7 | 137.8 | 130.5 | 110.6 | **137.8**, 12.2 under |
+| The foundation, two checks | 130.3, 123.1 | 129.2, 141.1 | 140.8, 119.2 | 129.8, 128.7 | 140.8, 141.1 |
+
+Everything else passed in both: 59 and 41 draw calls of 150, 209k and 180k triangles of 300k, 64.8 and 61.9 MB of textures, 95.4 and 92.6 MB of graphics memory, 9 sounds, 7.0 MB before ready and 78.2 MB in all, no errors on any screen. Their ready times (15 to 25 s) are the machine's load. The creeks' tables are made only on the creeks, which the checks never go to, and nothing else here holds memory.
 
 ## Seen
 
-(filled in below)
+In `qa-output/flats/look/low/` (not kept in the repo), `tools/flats/look.mjs` on the low tier, the CPU's WebGL (SwiftShader), at -0.6, -0.35, 0, +0.35 and +0.6 m (springs and neaps), the wet line held as on an ebb:
+- **From the air**: the bared flat grey-olive and mottled, darker in its lows, the mangroves' mud dark; it had been one tan of dry beach sand. The chart on the minimap shows the drying ground green.
+- **Wading at low water**: the bar under you damp and paler, wetter toward the water (at a spring low it stands 0.3 m over the sea). At dusk its wet sand takes the sun's sheen.
+- **The mangroves' roots at low water**: arching clear of wet, dark mud, water lying between them with the sky in it, a dark band at their feet, much as the South Andros creek's photograph; at high water under the sea.
+- **The beach**: a darker wet band down to the water at an ordinary low.
+- **The sea cave's inlet**: its beach bared at low water, the coralline band at its foot, flooded to the mouth at high water.
+- **Left as it was**: the hard white line along the flat's water's edge (the sea's, above).
+
+## Not verified
+
+- **Ready and the play's length**: the A/B and the one-core play want running again on a quiet machine (Readings).
+- **A third complete check**, on the final commit ca3fa80 (one shader line past 6eac103's two: the sky's lift by day only), was running when this was written, as were the pier's views at springs and neaps (the boats at their berths) and a 2 m hurricane surge on spring high water (`FLATS_SURGE=2`: the beach, the roots, the piles, the pier). Their results aren't in this page.
+- **The piles' band** close to: the views drawn show the piles small, against the light; the band's change with the tide isn't judged from them.
+- **On a graphics card** and a phone: none run, by the user's decision. The GPU limits check stands in for the card's limits, not its look.
+- **Resting and the tow's jump**: by construction (the wet line, the stage, the bites and the creeks are all worked out from the island's time alone, nothing kept between frames), not run.
+- **Two games**: the same island time gives the same tide and wet line; `tools/two-players` wasn't run.
 
 ## Not verified
 
