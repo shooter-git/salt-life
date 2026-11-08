@@ -19,7 +19,7 @@ import { LOBSTER_HINGE } from './CreatureGeometry.js';
 // sculling (rays undulate or flap, the turtle strokes; the spiny lobster walks, curls its tail and
 // sways its feelers).
 //
-// Port notes: the species table (46 species x 8 vec4) is a float texture (280 vec4 uniforms would
+// Port notes: the species table (47 species x 8 vec4) is a float texture (280 vec4 uniforms would
 // pass WebGL's guaranteed limit); no motion vectors; the underwater shading is the shared one
 // (materials/Underwater.js); translucency goes to the emissive term in the sun's colour; lite
 // (low-powered devices): no scale rows, relief or sheen.
@@ -726,11 +726,11 @@ const SURFACE = /* glsl */`
 		float tspot = ( 1.0 - fishSs( rr, rr + 0.1, length( fract( tq ) - 0.5 - ( vec2( fishHash( tc + 3.1 ), fishHash( tc + 7.7 ) ) - 0.5 ) * 0.5 ) ) ) * step( 0.3, fishHash( tc + seed * 7.0 ) );
 		float where = bodyK * fishSs( - 0.15, 0.1, h ) * fishSs( 0.2, 0.28, xL ) + ( ( P == ${ PA( 'DORSAL2' ) } || P == ${ PA( 'CAUDAL' ) } ) ? 1.0 : 0.0 );
 		c = mix( c, vec3( 0.025, 0.025, 0.03 ), tspot * min( where, 1.0 ) * 0.9 );
-	} else if ( pat >= ${ PT( 'reefShark' ) } && pat <= ${ PT( 'nurseShark' ) } ) {
+	} else if ( ( pat >= ${ PT( 'reefShark' ) } && pat <= ${ PT( 'nurseShark' ) } ) || pat == ${ PT( 'lemonShark' ) } ) {
 		// sharks: smooth skin; the fins solid, the body's colour (no rays, hardly lit through); five
 		// gill slits ahead of the pectoral fin. Blacktip: black tips on the first dorsal, the paired
 		// fins and the lower tail lobe, a pale band along the flank to the anal fin. Reef shark: the
-		// tail's trailing edge dusky
+		// tail's trailing edge dusky. (M17) Lemon: plain, as the nurse shark is
 		float blackTip = pat == ${ PT( 'blacktipShark' ) } ? 1.0 : 0.0;
 		float reef = pat == ${ PT( 'reefShark' ) } ? 1.0 : 0.0;
 		if ( isFin ) {

@@ -56,6 +56,7 @@ import { ordersOf, tagFor } from './Orders.js';
 import { ELLIPSIS, LEFT, RIGHT, UP } from '../core/Glyphs.js';
 import { letGo, trophyCardOf } from './Trophies.js';
 import { Rigs } from './rigs/Rigs.js';
+import { FlatsFishing } from './FlatsFishing.js';
 import { atHook, pickOnRig, waitOnRig } from './rigs/Presentation.js';
 
 // how long the catch card stays up unless dismissed (ms)
@@ -140,6 +141,7 @@ export class Game {
 		// berried, t, card }), and the one in front of you
 		this.tools = new LobsterTools( { scene: app.scene, camera: app.camera, ground: app.terrain, audio: app.audio } );
 		this.rigs = new Rigs( this ); // ((M16) the rig on the line, and what's out past the rod in your hands)
+		this.flats = new FlatsFishing( this ); // ((M17) sight-fishing on the flats: the fish seen, stalked and cast to)
 		this._scoop = null;
 		this.netted = null;
 		this.lobsterAim = null;
@@ -644,6 +646,7 @@ export class Game {
 		else if ( ! this.fight ) rod.dip = Math.max( 0, rod.dip - dt * 4 );
 		if ( this.fight ) this.updateFight( dt, lmb && ! panelOpen );
 		this.rigs.update( dt, { rDown: rDown && ! panelOpen, inp } );
+		this.flats.update( dt );
 
 		rod.update( dt, { visible: can, fight: this.fight } );
 		// (Salt Life) the cast net; the speargun; the lobster tools
@@ -1694,6 +1697,8 @@ export class Game {
 
 		// ((M16) on a lead, not till it's down: Rigs.update)
 		this.bite = this.rod.rig === 'bottom' ? null : { phase: 'wait', t: waitOnRig( this.habitat(), this.hour, Math.random, this.hookBait ) };
+		// ((M17) on the flats: what it lands on spooked, and the fish there seeing it as they come on: FlatsFishing.watch)
+		this.flats.landed( this.rod.bobber, this.rod.tip, this.hookBait );
 
 	}
 
@@ -1702,6 +1707,9 @@ export class Game {
 		const rod = this.rod;
 		const b = this.bite;
 		if ( ! b ) return;
+		// ((M17) a seen fish on its way to the bait: the bite's its, beside the habitat's roll)
+		if ( this.flats.watch( b, dt ) ) return;
+		if ( this.bite !== b ) return;
 		b.t -= dt;
 		// bobber motion for the cues
 		if ( b.phase === 'nibble' ) rod.dip = Math.max( 0, Math.sin( Math.min( 1, ( b.pulse || 0 ) ) * Math.PI ) * 0.45 );
@@ -1839,6 +1847,9 @@ export class Game {
 			// ((M16) a billfish let go: the fund pays for it, and it's a trophy in your log)
 			info.hurt = info.released && this.rigs.releaseHurt( f.species );
 			info.bonus = letGo( this.state, info );
+			// ((M17) the slams: a bonefish, a permit and a tarpon in one island day, a trophy in your log)
+			const slam = this.flats.caught( info );
+			if ( slam ) setTimeout( () => this.toast( slam, 6000 ), 2400 );
 			// (Salt Life) the others hear of it; the island's records (together/): the card says when
 			// it's the heaviest of its kind anyone here has landed
 			if ( this.app.together ) {

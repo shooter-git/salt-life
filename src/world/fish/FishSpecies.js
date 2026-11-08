@@ -44,6 +44,8 @@ export const PATTERN = {
 	pompano: 35, permit: 36, snook: 37,
 	// (M16) the far water's and the flats': the wahoo, the billfish, the yellowfin, the redfish and the trout
 	wahoo: 38, sailfish: 39, whiteMarlin: 40, blueMarlin: 41, swordfish: 42, yellowfin: 43, redfish: 44, trout: 45,
+	// (M17) the flats': the lemon shark
+	lemonShark: 46,
 };
 
 const spiny = ( from, to, rays, h, rake, notch = 0.16 ) => ( { from, to, rays, spiny: true, h, rake, notch } );
@@ -587,6 +589,27 @@ export const SPECIES = {
 		iris: 0x6a5020, irid: 0, metal: 0,
 	},
 
+	// (M17) lemon shark: stocky, the snout short, broad and rounded (shorter than the mouth is wide: brevirostris), the
+	// eyes small; the first dorsal set well back, behind the pectorals, and the second nearly as big as the first, over
+	// the anal fin (the kind's mark: FLMNH); broad, sickle-shaped pectorals; a plain yellow-brown back over a pale
+	// yellowish belly, no tips or markings. After photographs of them on the Bahamas' flats and over sand (Bimini's
+	// nursery, Tiger Beach): docs/m17/sight.md. (Dorsals second fin first, as the others')
+	lemonShark: {
+		pattern: PATTERN.lemonShark, body: 0.74, sec: 2.05,
+		top: [ [ 0, 0.008 ], [ 0.02, 0.024 ], [ 0.06, 0.044 ], [ 0.14, 0.064 ], [ 0.26, 0.08 ], [ 0.4, 0.087 ], [ 0.55, 0.082 ], [ 0.7, 0.064 ], [ 0.85, 0.04 ], [ 0.95, 0.025 ], [ 1, 0.02 ] ],
+		bot: [ [ 0, 0.008 ], [ 0.02, 0.02 ], [ 0.06, 0.038 ], [ 0.14, 0.058 ], [ 0.26, 0.074 ], [ 0.4, 0.082 ], [ 0.55, 0.076 ], [ 0.7, 0.057 ], [ 0.85, 0.035 ], [ 0.95, 0.022 ], [ 1, 0.018 ] ],
+		wid: [ [ 0, 0.01 ], [ 0.03, 0.034 ], [ 0.1, 0.058 ], [ 0.22, 0.072 ], [ 0.38, 0.077 ], [ 0.55, 0.069 ], [ 0.72, 0.049 ], [ 0.88, 0.028 ], [ 1, 0.018 ] ],
+		mouth: { corner: 0.075, y: - 0.028, tip: - 0.016, protrude: - 0.008 },
+		eye: { u: 0.075, y: 0.016, r: 0.0075 }, opercle: 0.2,
+		scales: 0, scaleVis: - 1, lateral: 0.35, arch: 0.05,
+		dorsal: [ soft( 0.76, 0.84, 7, [ [ 0, 0.082 ], [ 0.4, 0.06 ], [ 1, 0.012 ] ], [ 0.6, 1.35 ], 0 ), spiny( 0.41, 0.56, 9, [ [ 0, 0.132 ], [ 0.35, 0.088 ], [ 1, 0.012 ] ], [ 0.55, 1.35 ], 0 ) ],
+		anal: [ soft( 0.76, 0.83, 6, [ [ 0, 0.07 ], [ 0.4, 0.05 ], [ 1, 0.01 ] ], [ 0.6, 1.35 ], 0 ) ],
+		pectoral: { u: 0.27, y: - 0.048, len: 0.2, base: 0.1, rays: 9, shape: 'shark', spread: [ 1.12, 0.3 ], notch: 0 },
+		pelvic: { u: 0.6, len: 0.06, rays: 5 },
+		caudal: { shape: 'heterocercal', len: 0.25, span: 0.17, fork: 0.24, lower: 0.62, lowerLen: 0.5, rays: 15 },
+		iris: 0x7a6a30, irid: 0, metal: 0,
+	},
+
 	// rays and the turtle: geometry from CreatureGeometry.js; these entries only feed the skin table
 	stingray: { pattern: PATTERN.stingray, body: 1, eye: { u: 0.3, y: 0.05, r: 0.012 }, opercle: 0.4, mouth: { corner: 0.1, y: - 0.03, tip: - 0.03 }, lateral: 0, arch: 0, scales: 0, scaleVis: 0, iris: 0x606040, irid: 0, metal: 0 },
 	eagleRay: { pattern: PATTERN.eagleRay, body: 1, eye: { u: 0.2, y: 0.05, r: 0.014 }, opercle: 0.3, mouth: { corner: 0.1, y: - 0.03, tip: - 0.03 }, lateral: 0, arch: 0, scales: 0, scaleVis: 0, iris: 0x404040, irid: 0, metal: 0 },
@@ -838,6 +861,7 @@ export const SKIN = {
 	reefShark: { back: 0x5e6460, flank: 0x8a8e88, belly: 0xe4e2da, fin: 0x5a605c, edge: 0x2c302e, rough: 0.55 },
 	blacktipShark: { back: 0x6e6c60, flank: 0x9c9a8c, belly: 0xeeece4, fin: 0x6a685c, edge: 0x101010, rough: 0.55 },
 	nurseShark: { back: 0x8a6a3a, flank: 0x9a7a48, belly: 0xc4a87a, fin: 0x86663a, edge: 0x6a5030, rough: 0.6 },
+	lemonShark: { back: 0x7a6c46, flank: 0x9a8c5e, belly: 0xe2dbbd, fin: 0x786a44, edge: 0x5e5236, rough: 0.55 },
 	lobster: { back: 0x8a4a2a, flank: 0xb8784a, belly: 0xd8c09a, fin: 0x6a4a5a, edge: 0xe0c070, rough: 0.4 },
 	pompano: { back: 0x56707e, flank: 0xd2d6d4, belly: 0xe6d488, fin: 0xb8a04a, edge: 0x5e6458, rough: 0.27 },
 	permit: { back: 0x36424c, flank: 0xc6cac8, belly: 0xe2e0d6, fin: 0x2a2e32, edge: 0x101214, rough: 0.27 },

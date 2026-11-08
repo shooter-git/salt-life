@@ -28,12 +28,15 @@ for ( const tier of TIERS.split( ',' ) ) {
 	await page.goto( `http://127.0.0.1:${ process.env.SEA_PORT || 5189 }/?tier=${ tier }&hour=11&weather=fair&day=5&fullsea`, { waitUntil: 'domcontentloaded', timeout: 300000 } );
 	await page.waitForFunction( () => window.__app && window.__app._started, null, { timeout: 600000, polling: 1000 } );
 	await page.waitForTimeout( + WAIT * 1000 );
-	// (the fish camp, the windward reef and the sea caves load as you come near)
-	for ( const [ x, z ] of [ [ 116, - 870 ], [ - 460, - 760 ], [ - 542, - 378 ], [ - 6200, 7400 ] ] ) {
+	// (the fish camp, the windward reef and the sea caves load as you come near; (M17) and the flats' fish and their marks,
+	// the first time a school's in sight: day 5's late morning has bonefish milling by the north creek's mouth, a permit
+	// and tarpon about them)
+	for ( const [ x, z ] of [ [ 116, - 870 ], [ - 460, - 760 ], [ - 542, - 378 ], [ - 735, - 45 ], [ - 6200, 7400 ] ] ) {
 
 		await page.evaluate( ( [ x, z ] ) => {
 
 			const a = window.__app, p = a.player, b = a.boatCtl;
+			a.game.state.stats.polarized = true;
 			if ( p.mode !== 'boat' ) { p.boardBoat(); p.takeHelm(); }
 			b.moored = false;
 			b.position.set( x, b.position.y, z );
