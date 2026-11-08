@@ -896,6 +896,8 @@ export class App {
 		this.sky.update( s.timeOfDay, s.sunAzimuth, this.camera );
 
 		// ---- water
+		// ((M17) the wakes' far arms, from the boats' tracks as they are now: the same to the CPU's heights and the sea's)
+		this.wake.track( this.together, this.camera.position );
 		this.query.setCamera( this.camera.position.x, this.camera.position.z );
 		this.boatCtl.queueQueries();
 		this.query.update();
