@@ -228,10 +228,13 @@ export class ConsoleModel extends Vessel {
 
 	}
 
-	// a copy of her shows it in geometry of its own (one for each way she's fitted: the same vertices, its own index)
+	// a copy of her shows it in geometry of its own (one for each way she's fitted: the same vertices, its own index).
+	// ((M17) Her ladder folded down as her owner's game has it: stats.ladderDown, fitNow's. It's how she's drawn only: what's
+	// walked of her, walkedAs, is as she's fitted, and boarding and going down it read her ladder, fitted or not)
 	dressCopy( copy, stats, shared ) {
 
-		const F = fittedOf( stats ), on = { tTop: F.tTop, tankRack: F.tankRack, twin: F.twin, single: ! F.twin, coverDown: false, ladderUp: F.diveLadder, ladderDown: false };
+		const F = fittedOf( stats ), down = F.diveLadder && !! stats.ladderDown;
+		const on = { tTop: F.tTop, tankRack: F.tankRack, twin: F.twin, single: ! F.twin, coverDown: false, ladderUp: F.diveLadder && ! down, ladderDown: down };
 		for ( const name of Object.keys( this._ranges ) ) {
 
 			const was = this.meshes[ name ], mesh = was && copy.getObjectByName( was.name );
@@ -270,6 +273,13 @@ export class ConsoleModel extends Vessel {
 		if ( this.covered === down ) return;
 		this.covered = down;
 		this._applyFit();
+
+	}
+
+	// (M17, together/) how she is just now that someone else's copy of her shows: her ladder down (BoatCopies.fitWire)
+	fitNow() {
+
+		return { ladderDown: !! this.fitted.diveLadder && !! this._ladderDown };
 
 	}
 

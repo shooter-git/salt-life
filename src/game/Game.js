@@ -1264,7 +1264,9 @@ export class Game {
 		const app = this.app, B = app.beachcomb, s = this.state, hud = this.hud;
 		if ( ! B ) return;
 		// (what you've picked up's pruned as you pick more: so its last, not its length)
-		const day = app.settings.day, stamp = wreckStamp( app.damage ), key = `${ day }:${ s.picked.length }:${ s.picked[ s.picked.length - 1 ] || '' }:${ stamp }`;
+		// ((M17) Marta's tray's the group's: laid out once anyone's given her a whole set, Together.tray)
+		const tray = s.shells.wall !== null || !! ( app.together && app.together.tray );
+		const day = app.settings.day, stamp = wreckStamp( app.damage ), key = `${ day }:${ s.picked.length }:${ s.picked[ s.picked.length - 1 ] || '' }:${ stamp }:${ tray }`;
 		if ( key !== this._combKey ) {
 
 			this._combKey = key;
@@ -1272,7 +1274,7 @@ export class Game {
 			B.set( lying( day, ( d ) => app.beachDays( d ) ).filter( ( f ) => ! picked.has( f.id ) ) );
 			// ((M16) a hurricane's wreck in its wrack, as much of it as hasn't been cleared; your shell set at Marta's)
 			B.setWreck( wreckageAt( app.damage ).filter( ( f ) => ! picked.has( f.id ) ) );
-			B.setWall( s.shells.wall !== null );
+			B.setWall( tray );
 
 		}
 
@@ -1309,6 +1311,7 @@ export class Game {
 		const S = this.state.shells;
 		if ( S.wall !== null || SHELL_KINDS.some( ( k ) => ! S.have[ k ] ) ) return false;
 		S.wall = this.app.settings.day | 0;
+		if ( this.app.together ) this.app.together.layTray( S.wall ); // ((M17) the group's tray, for everyone)
 		this.state.money += WALL_PAY;
 		this.state.save();
 		this.state.emit();

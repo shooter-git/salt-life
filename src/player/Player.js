@@ -108,7 +108,7 @@ export class Player {
 		this.bailable = false;
 		// ((M16) and for the lobster traps, working at the hauler: game/TrapWork.js)
 		this.trapWork = false;
-		this.rideOffer = null; // { name, boat }: someone's boat you're next to, aboard it (together/Together.js)
+		this.rideOffer = null; // { name, boat, text }: someone's boat you're next to, aboard it (together/Together.js; text: (M17) her ladder's)
 		this.reef = reef;
 		this.audio = audio;
 
@@ -273,7 +273,7 @@ export class Player {
 		const offer = this.rideOffer;
 		if ( offer && ! this.busy ) {
 
-			this.prompt = { key: 'E', text: `Board ${ offer.name }'s boat` };
+			this.prompt = { key: 'E', text: offer.text || `Board ${ offer.name }'s boat` };
 			if ( inp.hit( 'KeyE' ) ) {
 
 				this.ride( offer.boat );
@@ -298,7 +298,7 @@ export class Player {
 		if ( this.mode === 'walk' ) this.updateWalk( dt );
 		else this.updateSwim( dt );
 		// (E boards their boat before anything else here: say so)
-		if ( offer && ! this.busy ) this.prompt = { key: 'E', text: `Board ${ offer.name }'s boat` };
+		if ( offer && ! this.busy ) this.prompt = { key: 'E', text: offer.text || `Board ${ offer.name }'s boat` };
 
 		// camera. Wading out of your depth, finding your feet again or climbing out on a ladder
 		// changes the eye height: ease the view there (critically damped) instead of jumping

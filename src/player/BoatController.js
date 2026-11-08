@@ -273,6 +273,28 @@ export class BoatController {
 
 	}
 
+	// (M17) Her time kept with the water's. In company the waves go by the wall clock (Together.syncWaves) while a frame's
+	// capped at 0.1 s, so under 10 fps she was worked out over less time than the waves had gone by: on a slow game they
+	// passed under her two or three times as fast as they do. Over span s of the water's time, then, in steps of 0.1 s at
+	// most, the water under her asked again at each step's own time (WaterQuery.updateSlots)
+	catchUp( span ) {
+
+		const n = Math.ceil( span / 0.1 - 1e-9 ), h = span / n, t1 = G.time.value;
+		for ( let i = 0; i < n; i ++ ) {
+
+			if ( i > 0 && this.hasWater ) {
+
+				this.queueQueries();
+				this.query.updateSlots( this.slot, this.samples.length, t1 - span + i * h );
+
+			}
+
+			this.update( h );
+
+		}
+
+	}
+
 	update( dt ) {
 
 		this.readQueries();

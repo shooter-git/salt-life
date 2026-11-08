@@ -1,6 +1,6 @@
 import { BufferAttribute, BufferGeometry, DynamicDrawUsage, MathUtils, Points, ShaderMaterial, Vector3 } from '../engine/index.js';
 import { G } from '../core/Globals.js';
-import { sizeOf } from './BoatCopies.js';
+import { airOf, sizeOf } from './BoatCopies.js';
 
 // (M16) The others' boats far off: past the fog, where a boat isn't drawn, she's a dash on the horizon as she really is.
 // How far: over the earth's curve (standard refraction's 7/6 of its radius: a boat's masthead 4 m up shows from a deck
@@ -12,7 +12,8 @@ import { sizeOf } from './BoatCopies.js';
 // One draw for all of them, nothing until someone's out there.
 //   seenHeight( d, eye, air ) -> m of her above your horizon (0: below it)
 //   speckAlpha( { d, eye, air, range } ) -> 0..1
-//   const s = new Specks( app );  s.update( [ { x, y, z, id, yaw, holder } ] )   (holder: anything of hers to keep a note on)
+//   const s = new Specks( app );  s.update( [ { x, y, z, id, f, yaw, holder } ] )   (holder: anything of hers to keep a note on; f: her fit,
+//   fitWire's: (M17) her height's as she's fitted, a sportfisher's with no tower her hardtop's: BoatCopies.airOf)
 
 const REFRACTED = 6371000 * 7 / 6; // m
 const CLEAR = 30000; // m: the visual range on a clear day (the weather's visibility of 1)
@@ -126,7 +127,7 @@ export class Specks {
 		if ( ! under ) for ( const b of boats ) {
 
 			if ( n >= MAX ) break;
-			const dx = b.x - c.x, dz = b.z - c.z, d = Math.hypot( dx, dz ), size = sizeOf( b.id ), air = size.air;
+			const dx = b.x - c.x, dz = b.z - c.z, d = Math.hypot( dx, dz ), size = sizeOf( b.id ), air = airOf( b.id, b.f ); // ((M17) as she's fitted)
 			// (the boat itself is drawn, fogged, till the fog has her whole)
 			const fade = MathUtils.smoothstep( d, from, sky.fogFar );
 			if ( fade <= 0 ) continue;
