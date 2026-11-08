@@ -44,13 +44,13 @@ What [M17.md](../M17.md) listed for a guest on someone else's boat ([Aboard toge
 
 ## Checked
 
-`tools/two-players/together.mjs <part>`, two real games on one machine, low tier, on the dev server; frame rates are the CPU's, printed by each part. RESULTS
+`tools/two-players/together.mjs <part>`, two real games on one machine, low tier, on the dev server; frame rates are the CPU's, printed by each part. Passed on 2026-11-08: `seat` (by injected look, the real mouse dragged, rod out, under way; her owner sees him turn), `chair` (a fish on, by the chair: not in it; E: in it, 0 m from its seat for her owner), `ladder` (her copy's fittings 39,924 and 39,132 indices down and up, as her owner's; 1.2 m off "Climb the ladder", 3.4 m off nothing; E puts him on her platform), `horn` (3.3 m from her middle on his game, his own kayak 853 m off; 2.5 m on hers), `specks` (16 km off from the pier head: 1 speck with her tower, 0 without), `hold` (a 42 kg yellowfin into her 600 kg hold, his 12 kg cooler empty; her room 600 to 558 kg and her owner told; sold by him; her room back), `sand` (3.6 m beside hers, 1.23 m up), `stem` (147 frames leaving at 1.4 fps, never in the head or the stem), `yard` (each on the other's screen on the second cradle with blocks; put back in, off it), and `crew.mjs` rods and lights still pass. Not yet run to the end when the session stopped: `tray`, `pearl` (both wait for the debris, a CPU's last late stage, many minutes on the busy machine), `slow` (earlier runs at 1.3 and 0.8 fps caught frames up to the cap and showed frames over it: the cap's now 10 s), `crew.mjs` traps and hold, and `mem.mjs`.
 
 `test/together-aboard.mjs` (in `pnpm test`): the stem's berths on both bakes, any mix, clear of the pier and each other, with water under them at the lowest tide; leaving them for five places never in the head or the stem and never a jump; the sand's places past the high-water mark; the yard's second cradles clear of every other place there and over a surge; the ladder's bit, the paint read through it, the walked view the same either way, and a copy's fittings as each way; boarding at the ladder; the speck's and the stand-in's heights; the chair by the seat; a fish in her hold, saved, and her owner's room; the tray's record; Pearl's berth; a slow game's boat on a swell.
 
 ## Readings
 
-READINGS
+Two complete checks on clean copies, both passed: 138.3 and 130.8 MB of script memory of 150 (9c72bec and f24eb11; the cap's change since is company only), 62 and 67 draw calls, 188,827 and 209,739 triangles, 64.7 and 65.0 MB of textures, 7.0 MB before ready, 78.2 MB in all. Programs before ready: the same 16 as `3f1367b`, by name and number (`tools/heap/programs.mjs`). **The ready A/B wasn't run**: the machine's load was 40 to 65 all afternoon (the checks' own ready times read 11 to 27 s); no shader changed and no program was added before ready. `tools/gpu-limits.mjs` not run: no shader changed.
 
 ## Not done
 
