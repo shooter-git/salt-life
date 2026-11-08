@@ -12,6 +12,7 @@ import { CONDITIONS, weatherAt, withEdge, towardOf, islandTime } from '../src/ga
 import { BOATS } from '../src/world/boat/Boats.js';
 import { WORLD } from '../src/world/WorldLayout.js';
 import { Vector3 } from '../src/engine/index.js';
+import { G } from '../src/core/Globals.js';
 
 let bad = 0;
 const ok = ( c, what ) => {
@@ -454,6 +455,23 @@ globalThis.setTimeout ??= ( f ) => f();
 	const g = { canvas: { width: 184, height: 92 }, fillRect: ( ...a ) => calls.push( a ), fillStyle: '' };
 	drawEcho( g, [ { depth: 500, fish: [ 0.5, - 1, - 1 ] }, { depth: null, fish: [ - 1, - 1, - 1 ] } ] );
 	ok( calls.length > 5 && calls.every( ( c ) => c.every( Number.isFinite ) ), 'its echo, and no bottom where it\'s lost it' );
+
+}
+
+// (M17) the sock's float on the water, as the waves have it there: their height has the sea's level in it already
+// (it sat at twice the tide's height while the tide was in the sea's level)
+{
+
+	const { d, app } = stand();
+	const level = G.seaLevel.value;
+	G.seaLevel.value = 0.55;
+	app.waves = { heightAt: () => G.seaLevel.value + 0.1 };
+	app.scene = { add() {} };
+	const out = d.sockPoint( new Vector3() );
+	ok( Math.abs( out.y - 0.65 ) < 1e-9 && Math.abs( d.float.position.y - 0.73 ) < 1e-9, `the sock's float rides the sea at high water (${ out.y.toFixed( 2 ) } m on a sea at 0.55 m and a wave 0.1 m)` );
+	app.waves = null;
+	ok( Math.abs( d.sockPoint( new Vector3() ).y - 0.55 ) < 1e-9, 'and with no waves, on the sea\'s level' );
+	G.seaLevel.value = level;
 
 }
 

@@ -628,9 +628,9 @@ export class DaysOut {
 		b.toWorld( b.stemHead, out );
 		out.x -= w.x * SOCK_OUT;
 		out.z -= w.y * SOCK_OUT;
-		// (on the water, as the waves have it there)
+		// (on the water, as the waves have it there: heightAt has the sea's level, tide and surge, in it already)
 		const waves = this.app.waves;
-		out.y = G.seaLevel.value + ( waves ? waves.heightAt( out.x, out.z ) : 0 );
+		out.y = waves ? waves.heightAt( out.x, out.z ) : G.seaLevel.value;
 		this._floatAt( out );
 		return out;
 
