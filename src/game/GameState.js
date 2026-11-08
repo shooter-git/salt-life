@@ -356,10 +356,38 @@ export class GameState {
 
 		const f = { id: this._nextId ++, species, kg, cm, value, caughtAt: timeOfDay, record, method };
 		if ( place ) f.place = place;
+		this.lastCatch.id = f.id;
 		this.inventory.push( f );
 		this.save();
 		this.emit();
 		return f;
+
+	}
+
+	// (v2.1.6) whether the catch just kept may be let go off its card, at once and alive: not a speared one (it's
+	// dead), nor one let go already, and only while it's still in the cooler
+	canFree( info = this.lastCatch ) {
+
+		return !! info && info.kept && ! info.released && info.method !== 'spear' && info.id !== undefined && this.inventory.some( ( f ) => f.id === info.id );
+
+	}
+
+	// (v2.1.6) let it go off its card: out of the cooler and out of the day's bag, as the rules have it (they count the
+	// fish kept, and one put straight back alive never was). One let go from the cooler later still counts (bagged).
+	// It stays in the log: it was caught. -> true, or false when it can't be (canFree)
+	freeLast( info = this.lastCatch ) {
+
+		if ( ! this.canFree( info ) ) return false;
+		this.inventory = this.inventory.filter( ( f ) => f.id !== info.id );
+		const max = info.day !== null && info.day !== undefined ? FISH[ info.species ].bag || 0 : 0;
+		if ( max && this.bag.day === info.day && this.bag.n[ info.species ] > 0 ) this.bag.n[ info.species ] --;
+		info.kept = false;
+		info.released = true;
+		info.why = 'freed';
+		info.bag = max ? { n: this.bagged( info.species, info.day ), max, full: false } : null;
+		this.save();
+		this.emit();
+		return true;
 
 	}
 
@@ -409,6 +437,7 @@ export class GameState {
 
 		info.kept = true;
 		const f = { id: this._nextId ++, species: info.species, kg: info.kg, cm: info.cm, value: info.value, caughtAt: info.at, record: info.record, method: info.method };
+		info.id = f.id;
 		if ( info.place ) f.place = info.place;
 		this.inventory.push( f );
 		this.save();

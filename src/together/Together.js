@@ -9,6 +9,8 @@ import { Avatar, LOOKS, lookOf } from './Avatar.js';
 import { figureStandIn } from './Figure.js';
 import { RecordsBoard } from './RecordsBoard.js';
 import { BoatCopies, isBoat, sizeOf, fitWire, fitStats } from './BoatCopies.js';
+import { BoatLamps } from '../world/boat/BoatLamps.js';
+import { stackedOn } from '../game/TrapWork.js';
 import { SPARE_BERTHS, atDock, berthShare, laidAt, spareBerth } from './Berths.js';
 import { Crew, footY, perched } from './Crew.js';
 import { Specks } from './Specks.js';
@@ -139,6 +141,7 @@ class TheirBoat {
 		this.position = new Vector3();
 		this.quaternion = new Quaternion();
 		this.speed = 0;
+		this.flat = 0;
 		this.driven = false;
 		this.moored = false;
 		this.throttle = 0;
@@ -180,7 +183,16 @@ class TheirBoat {
 	follow( frame, dt ) {
 
 		// ((M16) eased: poses come in steps, and a frame's jump isn't her speed)
-		if ( this._has && dt > 0 ) this.speed += ( this.position.distanceTo( frame.pos ) / dt - this.speed ) * ( 1 - Math.exp( - dt * 4 ) );
+		// ((guest work) a jump isn't way on her: towed in, picked up where she was, or her drift over a rest; not read as speed)
+		if ( this._has && dt > 0 && this.position.distanceTo( frame.pos ) < JUMP_M ) {
+
+			const k = 1 - Math.exp( - dt * 4 );
+			this.speed += ( this.position.distanceTo( frame.pos ) / dt - this.speed ) * k;
+			// ((guest work) and over the sea, as her own speed reads: her rise and fall on the waves isn't way on her)
+			this.flat += ( Math.hypot( frame.pos.x - this.position.x, frame.pos.z - this.position.z ) / dt - this.flat ) * k;
+
+		}
+
 		this.position.copy( frame.pos );
 		this.quaternion.copy( frame.quat );
 		this._has = true;
@@ -190,6 +202,10 @@ class TheirBoat {
 }
 
 const _fw = new Vector3(), _stem = new Vector3();
+const JUMP_M = 25; // m a ridden boat's moved between two frames past which it's a jump, not her speed
+// (guest work) a flashlight, as BoatLamps reads a boat: its lens, and the searchlight's light from it
+const TORCH = { lamps: { spot: [ 0, 0, 0 ] }, searchlight: new Vector3() };
+const _torchAt = new Vector3( 0.24, 1.3, 0.32 );
 const NAME_EVERY = 50, NAME_NEAR = 40; // poses between tellings of her name; m: near enough to read it
 const NEAR_ALL = 12; // m: on a phone, how near you are before all of a copy that's here whole is drawn (aboard, or about to board)
 
@@ -259,6 +275,14 @@ export class Together {
 		s.on( 'net', ( body, from ) => this._theirThrow( body, from ) );
 		s.on( 'rod', ( body, from ) => this._rodAsked( body, from ) );
 		s.on( 'rodIs', ( body, from ) => this._rodGiven( body, from ) );
+		// ((guest work) her rods and her traps worked by whoever rides with her owner aboard: her tackle and bait sent them,
+		// what they ask of her done by her owner's game, and what it says back; anyone's chum slick, for everyone's fish)
+		s.on( 'kit', ( body, from ) => this._kitGiven( body, from ) );
+		s.on( 'rig', ( body, from ) => this._rigAsked( body, from ) );
+		s.on( 'rigIs', ( body, from ) => this._rigSaid( body, from ) );
+		s.on( 'slick', ( body ) => this.app.game && this.app.game.rigs.theirSlick( body ) );
+		s.on( 'trap', ( body, from ) => this.app.game && this.app.game.traps.asked( body, from, this.others.get( from ) ) );
+		s.on( 'trapIs', ( body, from ) => this.app.game && body && body.to === this.me.id && this.app.game.traps.told( body, from ) );
 		s.on( 'horn', ( on, from ) => this._theirHorn( on, from ) );
 		// ((M16) a distress flare: game/DaysOut.js)
 		s.on( 'flare', ( at, from ) => this.app.game && this.app.game.daysOut.theirFlare( at, this.others.get( from )?.person.name ) );
@@ -1151,6 +1175,15 @@ export class Together {
 
 		const app = this.app;
 		app.scene.remove( o.avatar.group, o.tackle.rod, o.tackle.bobber, o.tackle.line );
+		if ( o.torch ) {
+
+			app.scene.remove( o.torch.group );
+			o.torch.removeLight( app.localLights );
+			o.torch.dispose();
+			o.torch = null;
+
+		}
+
 		o.avatar.dispose();
 		o.tackle.rod.material.dispose();
 		o.tackle.line.material.dispose();
@@ -1282,6 +1315,9 @@ export class Together {
 		const q = boat.quaternion, bp = boat.position;
 		body.B = [ r2( bp.x ), r2( bp.y ), r2( bp.z ), r3( q.x ), r3( q.y ), r3( q.z ), r3( q.w ), r2( app.waves.heightAt( bp.x, bp.z ) ) ];
 		body.Y = app.boat.id; // (M16) which boat she is
+		// ((guest work) her way through the water, as her own game reads it: worked out from her poses on a slow game, whose frames
+		// stop at 0.1 s while the poses keep the wall clock, it read twice what it was)
+		if ( boat.speed > 0.05 ) body.bv = r2( boat.speed );
 		body.f = this._fitted(); // (and what's fitted on her, her paint)
 		if ( app.boat.seated && ! p.riding ) body.kw = app.boat.sent; // (a kayak: her stroke, and whether she's over, with you in the water beside her)
 		// (M16) what's out of her: the spread, the kite, her pool of light; her name every so often
@@ -1325,6 +1361,14 @@ export class Together {
 
 		}
 		if ( m === 'd' ) body.D = [ r2( p.deckPos.x ), r2( p.deckPos.y ), r2( p.deckPos.z ) ];
+		// ((guest work) her traps stacked on her deck, and the work at her rail: TrapWork.wire)
+		if ( body.B && ! p.riding && app.game.traps ) {
+
+			const tw = app.game.traps.wire();
+			if ( tw ) Object.assign( body, tw );
+
+		}
+
 		// (M12) what her dash reads that a rider can't work out where they are: her fuel (a share), whether she
 		// has Marta's fish finder, and the fish it shows; while you're aboard her
 		if ( body.B && ! p.riding && ( m === 'd' || m === 'h' ) && this.app.game ) {
@@ -1369,6 +1413,9 @@ export class Together {
 		}
 
 		this._crewHelm( dt );
+		// ((guest work) her tackle and bait are only yours to work while you're aboard her: a new boat's sent anew)
+		const rigs = app.game && app.game.rigs;
+		if ( rigs && rigs.boatKit && ( ! p.riding || p.boat.owner !== rigs.boatKitFrom ) ) rigs.boatKit = null;
 
 		// riding: their boat's pose (gone, or they left: in the water where it was)
 		if ( p.riding ) {
@@ -1389,6 +1436,8 @@ export class Together {
 				p.boat.follow( frame, dt );
 				// ((M16) as she's fitted, and all of her if she's only now here whole)
 				if ( o && o.cur && o.cur.boat && this.copies.aboard( o.cur.boatId ) ) this._walkOn( p.boat, this._nearModel( o, o.cur.boatId ), o.cur.boatId, o.cur.fit );
+				// ((guest work) her stacked traps take room on her deck, as they do on her owner's)
+				if ( o && o.cur && o.cur.boatId === 'lobster' && p.boat.base ) p.boat.model = stackedOn( perched( p.boat.base ), o.cur.ts | 0 );
 				this._helmFree( p.boat, o );
 				if ( p.mode === 'boat' && ! p.boat.helmFree ) {
 
@@ -1484,6 +1533,7 @@ export class Together {
 		this._keepBoats( dt );
 		this._liveBoats = 0;
 		this.crew.update( dt );
+		if ( this.others.size ) this._kits( dt );
 		this._tidy( dt );
 		this._speckBoats();
 		if ( ! this.others.size ) return;
@@ -1536,7 +1586,8 @@ export class Together {
 		const L = rigs.lines.find( ( x ) => x.on && lineCode( x.spot ) === b.c );
 		if ( ! L || this.app.game.fight ) return;
 		rigs.lines.splice( rigs.lines.indexOf( L ), 1 );
-		this.session.send( 'rodIs', { to: from, s: L.on.species, k: r2( L.on.kg ), b: L.bait, l: r2( L.len ), p: [ r2( L.p.x ), r2( L.p.y ), r2( L.p.z ) ], w: L.on.place, a: [ r2( L.on.at.x ), r2( L.on.at.z ) ], m: rigs.stats.spoolM, e: L.on.leader } );
+		// ((guest work) her rod, on her tackle: t)
+		this.session.send( 'rodIs', { to: from, s: L.on.species, k: r2( L.on.kg ), b: L.bait, l: r2( L.len ), p: [ r2( L.p.x ), r2( L.p.y ), r2( L.p.z ) ], w: L.on.place, a: [ r2( L.on.at.x ), r2( L.on.at.z ) ], m: rigs.stats.spoolM, e: L.on.leader, t: rigs.kitOf() } );
 		this.app.game.toast( `${ o.person.name } has the rod`, 2600 );
 
 	}
@@ -1546,7 +1597,188 @@ export class Together {
 		const app = this.app, p = app.player, g = app.game;
 		if ( ! b || b.to !== this.me.id || ! p.riding || p.boat.owner !== from || p.mode !== 'deck' || g.fight || ! FISH[ b.s ] ) return;
 		if ( ! Number.isFinite( b.k ) || ! Number.isFinite( b.l ) || ! Array.isArray( b.p ) || ! b.p.every( Number.isFinite ) || ! Array.isArray( b.a ) || ! b.a.every( Number.isFinite ) ) return;
-		g.rigs.takeLine( { p: new Vector3( b.p[ 0 ], b.p[ 1 ], b.p[ 2 ] ), len: b.l, bait: BAITS[ b.b ] ? b.b : null, on: { species: b.s, kg: b.k, place: b.w, at: { x: b.a[ 0 ], z: b.a[ 1 ] }, leader: typeof b.e === 'string' ? b.e : undefined } }, Number.isFinite( b.m ) ? b.m : g.rigs.stats.spoolM );
+		const kit = g.rigs.constructor.cleanKit( b.t );
+		g.rigs.takeLine( { p: new Vector3( b.p[ 0 ], b.p[ 1 ], b.p[ 2 ] ), len: b.l, bait: BAITS[ b.b ] ? b.b : null, on: { species: b.s, kg: b.k, place: b.w, at: { x: b.a[ 0 ], z: b.a[ 1 ] }, leader: typeof b.e === 'string' ? b.e : undefined } }, Number.isFinite( b.m ) ? b.m : g.rigs.stats.spoolM, kit ? kit.t : null );
+		const name = this.others.get( from )?.person.name || 'Her owner';
+		app.game.toast( `${ name }'s rod · ${ name }'s reel, drag and line${ kit && kit.t.standUp ? ', a stand-up rig' : '' }`, 2600 );
+
+	}
+
+	// ---- (guest work) riding with her owner aboard: her rods and her traps
+
+	// whose boat you're aboard, with them aboard her too and here (their game runs her gear), or null
+	skipper() {
+
+		const p = this.app.player;
+		if ( ! p.riding || p.mode !== 'deck' ) return null;
+		const o = this.others.get( p.boat.owner ), c = o && o.cur;
+		return c && c.boat && ( c.mode === 'deck' || c.mode === 'helm' ) && ! c.ride && c.boatId === p.boat.model.id ? o : null;
+
+	}
+
+	// (guest work) their flashlight, as they hold it at their right hand, ahead of them and a little down: its lens glaring
+	// when it points at you, its beam in the night air and its light on what it meets. A boat's searchlight's lamp and light
+	// (BoatLamps: the same shaders, nothing new to build), half its size, with a hand torch's throw (LocalLights' own)
+	_torch( o, on ) {
+
+		if ( ! on ) {
+
+			if ( o.torch && o.torch.spot ) o.torch.set( { spot: false } );
+			return;
+
+		}
+
+		if ( ! o.torch ) {
+
+			const lamp = o.torch = new BoatLamps( TORCH ), fl = this.app.localLights.flashlight;
+			const light = lamp.addLight( this.app.localLights );
+			Object.assign( light, { intensity: fl.intensity, range: fl.range, cosInner: fl.cosInner, cosOuter: fl.cosOuter, kind: 'flashlight' } );
+			light.color.copy( fl.color );
+			lamp.group.scale.setScalar( 0.5 );
+			this.app.scene.add( lamp.group );
+
+		}
+
+		// (at their right hand, a little ahead: their figure's frame, its +z ahead of them)
+		const g = o.avatar.group;
+		o.torch.group.position.copy( _torchAt ).applyMatrix4( g.matrixWorld );
+		o.torch.group.quaternion.copy( g.quaternion );
+		o.torch.set( { spot: true } );
+
+	}
+
+	// at her helm, riding along: her searchlight as her owner's poses have it ({ on }), or null if she has none
+	theirSearchlight() {
+
+		const p = this.app.player, o = p.riding ? this.others.get( p.boat.owner ) : null;
+		const M = o && o.boat ? o.boat.userData.model : p.riding ? p.boat.model : null;
+		return M && M.searchlight && o && o.cur ? { on: !! o.cur.spot } : null;
+
+	}
+
+	// asked of her owner's game ({ k, ... }: 'line', 'in', 'take', 'give', 'chum', 'spot')
+	askRig( body ) {
+
+		const p = this.app.player;
+		if ( ! p.riding ) return;
+		this.session.send( 'rig', Object.assign( { to: p.boat.owner }, body ) );
+
+	}
+
+	// one of her bait off your hook, back to her owner
+	giveBack( b ) {
+
+		if ( BAITS[ b ] ) this.askRig( { k: 'give', b } );
+
+	}
+
+	// your chum slick, for everyone's fish ({ x, z, seed })
+	slick( S ) {
+
+		if ( this.others.size ) this.session.send( 'slick', { x: r2( S.x ), z: r2( S.z ), s: r2( S.seed ), at: Date.now() } );
+
+	}
+
+	// her tackle and bait, sent to whoever's riding with you: on boarding, and again as they change (every second's look)
+	_kits( dt ) {
+
+		this._kitT = ( this._kitT || 0 ) + dt;
+		if ( this._kitT < 1 ) return;
+		this._kitT = 0;
+		const p = this.app.player, aboard = ( p.mode === 'deck' || p.mode === 'boat' ) && ! p.riding;
+		let kit = null, wire = null;
+		for ( const o of this.others.values() ) {
+
+			if ( ! aboard || ! o.cur || o.cur.ride !== this.me.id ) {
+
+				o.kitSent = null;
+				continue;
+
+			}
+
+			if ( ! kit ) {
+
+				kit = this.app.game.rigs.kitOf();
+				wire = JSON.stringify( kit );
+
+			}
+
+			if ( o.kitSent === wire ) continue;
+			o.kitSent = wire;
+			this.session.send( 'kit', { to: o.person.id, k: kit } );
+
+		}
+
+	}
+
+	_kitGiven( b, from ) {
+
+		const p = this.app.player, rigs = this.app.game && this.app.game.rigs;
+		if ( ! rigs || ! b || b.to !== this.me.id || ! p.riding || p.boat.owner !== from ) return;
+		rigs.boatKit = rigs.constructor.cleanKit( b.k );
+		rigs.boatKitFrom = from;
+		if ( rigs.boatRig() ) rigs.fitBoatBait();
+
+	}
+
+	// what someone riding with you asks of her (her rods, her searchlight); they're told how it went ('rigIs')
+	_rigAsked( b, from ) {
+
+		const o = this.others.get( from ), app = this.app, g = app.game, p = app.player;
+		if ( ! o || ! g || ! b || b.to !== this.me.id || ! o.cur || o.cur.ride !== this.me.id ) return;
+		const say = ( t, more ) => this.session.send( 'rigIs', Object.assign( { to: from, k: b.k, t: t || null }, more ) );
+		const name = o.person.name, r = g.rigs;
+		// (a bait given back's yours again whatever: it was yours)
+		if ( b.k === 'give' ) {
+
+			if ( BAITS[ b.b ] ) g.state.returnBait( b.b );
+			return;
+
+		}
+
+		if ( ! ( ( p.mode === 'deck' || p.mode === 'boat' ) && ! p.riding ) || app.boatCtl.moored ) {
+
+			say( `${ this.me.name || 'She' }'s not aboard her`, { ok: false, b: b.b } );
+			return;
+
+		}
+
+		if ( b.k === 'line' ) {
+
+			const out = r.letOut( b.b, name );
+			say( out.said, { ok: out.ok } );
+
+		} else if ( b.k === 'in' ) {
+
+			r.bringIn( name );
+			say( 'Bringing the lines in' );
+
+		} else if ( b.k === 'take' ) {
+
+			const ok = BAITS[ b.b ] ? r.lend( b.b ) : false;
+			say( ok ? null : `${ this.me.name || 'She' }'s out of ${ BAITS[ b.b ] ? BAITS[ b.b ].short : 'that' }`, { ok, b: b.b } );
+
+		} else if ( b.k === 'chum' ) {
+
+			const ok = r.chumFor( b.x, b.z, name );
+			say( ok ? 'Chum over the side · the slick\'s drifting off · cast down it' : 'No chum aboard', { ok } );
+
+		} else if ( b.k === 'spot' && app.boat.searchlight && o.cur.mode === 'helm' ) {
+
+			app.searchlight = ! app.searchlight;
+			g.toast( `${ name } switched the searchlight ${ app.searchlight ? 'on' : 'off' }`, 2000 );
+			say( app.searchlight ? 'Searchlight on' : 'Searchlight off' );
+
+		}
+
+	}
+
+	_rigSaid( b, from ) {
+
+		const g = this.app.game, p = this.app.player;
+		if ( ! g || ! b || b.to !== this.me.id || ! p.riding || p.boat.owner !== from ) return;
+		if ( b.k === 'take' ) g.rigs.given( b.b, !! b.ok, b.t );
+		else if ( b.t ) g.toast( b.t, 2600 );
 
 	}
 
@@ -1923,6 +2155,11 @@ export class Together {
 		cur.helm = Array.isArray( near.c ) && near.c.length === 2 && near.c.every( Number.isFinite ) ? [ MathUtils.clamp( near.c[ 0 ], - 1, 1 ), MathUtils.clamp( near.c[ 1 ], - 1, 1 ) ] : null;
 		cur.spot = near.S === 1;
 		cur.torch = near.T === 1;
+		// ((guest work) her traps on her deck, the work at her rail, and whose it is)
+		cur.ts = Number.isInteger( near.ts ) ? MathUtils.clamp( near.ts, 0, 8 ) : 0;
+		cur.bv = Number.isFinite( near.bv ) ? Math.max( 0, near.bv ) : near.Y ? 0 : null; // (a game from before it: null)
+		cur.tj = Array.isArray( near.tj ) ? near.tj : null;
+		cur.tb = typeof near.tb === 'string' ? near.tb : null;
 		cur.anchored = near.A === 1;
 		cur.flood = MathUtils.clamp( Number( near.L ) || 0, 0, 1 ); // ((M14) her floodlights' lenses)
 		cur.rpm = ( Number( a.E ) || 0 ) + ( ( Number( b.E ) || 0 ) - ( Number( a.E ) || 0 ) ) * f;
@@ -2048,6 +2285,8 @@ export class Together {
 		const T = o.tackle;
 		if ( ! visible || ! c ) {
 
+			this._torch( o, false );
+
 			T.rod.visible = T.line.visible = T.bobber.visible = false;
 			o.spear.gun.visible = o.spear.bands.visible = o.spear.shaft.visible = o.spear.line.visible = false;
 			if ( o.net && o.net.equipped ) o.net.equip( false );
@@ -2099,6 +2338,7 @@ export class Together {
 
 		}
 		g.updateMatrixWorld( true );
+		this._torch( o, c.torch );
 
 		// the rod in their right hand: held as they hold it (ROD_ELEV), toward their bobber when the
 		// line is out; the line to the bobber

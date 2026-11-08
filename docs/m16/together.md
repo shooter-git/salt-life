@@ -62,10 +62,27 @@ Leaving, a boat on the stem's berths can pass through the pier head on your scre
 
 ## What a rider can do on her
 
-- **Take a rod that goes off** in her spread (R, within reach of its holder). The fish, its bait and how much line is out come over from her owner's game. Her spool's yours for that fight; your own line, reel and leader fight it. The catch goes in your hold.
+(Guest work, 2026-11-05: as a real crew does. The rods in a sportfisher's holders are the boat's, and whoever's angling fights the fish on that rod and reel; a lobster boat's deckhand pulls the captain's traps with the captain aboard. Before it, a rider worked none of her gear and fought her fish on their own tackle.)
+
+Her owner's game runs her gear: what a rider does to it is asked of that game and done there, so her save, her bait and her chart stay her owner's. All of it wants her owner aboard her and in the room (`Together.skipper`); on an away boat, with nobody home, you fish off her with your own rod and nothing more.
+
+- **Her tackle and bait, sent.** Her owner's game sends whoever's riding her rod, reel, drag and line, the leaders they own, the bait aboard her, how many lines she takes and whether she flies a kite (`'kit'`, `Rigs.kitOf`, checked by `Rigs.cleanKit`): on boarding, and again whenever it changes (a look each second).
+- **Her spread.** With Troll picked (C) and one of her baits (B steps through hers), the cast key lets out a line on her next free holder (`'rig'` `line`: `Rigs.letOut`, her bait used), and the right button brings them all in (`in`). Her owner's told who did it, and so are you.
+- **A rod that goes off** in her holder (R, within reach of it): the fish, its bait and how much line is out come over from her owner's game, and so does her tackle (`'rodIs'` `t`): you fight it on her reel, drag and line, and in a stand-up harness if she's the stand-up rod. The catch goes in your hold.
+- **Her kite**, on her stand-up rod, with one of her live baits (`take`: lent to your hook, and given back to her owner if it's still on it when the rod goes away, `give`). The kite flies off her stern (`Rigs._kiteAt` on the boat you're riding), on your game and on everyone else's (`Spread._kiteBoat`).
+- **Her electric reel** for a deep drop, with her bait, all 900 m of it. Without one, your own lead goes down as far as your own rod's line reaches.
+- **Her chum**, over the side where you are (`chum`, `Rigs.chumFor`).
 - **Sit in her chair** with a fish on, if she has one, with the chair's 40 kg hold.
-- **Drop your own lead**, as far as the line on your own rod reaches (all 900 m only with the electric reel of your own). Rod and rig by keys, stopped and fished up by keys, the fish in your hold (`seen.mjs drop`).
-- **Not** let out her spread or fly her kite: those are her owner's gear, on her holders. Chum's slick and deck traps aren't sent.
+- **Her searchlight**, at her helm (L): switched on her owner's game (`spot`). Her floodlights and underwater lights have no switch, for anyone: they come on from dusk if she's fitted with them. They're over your fish too, from her stern (`Game._litBy`), not your own boat's wherever she is.
+- **Her traps**, on the lobster boat: you're her deckhand. At her hauler (the stand by it, starboard side) E sets one off her stack where the bottom suits, on her owner's chart and their buoys; alongside one of her buoys, as she's driven up to it, E gaffs it, her hauler brings it up, and what's in it comes out at your rail at a press each, gauged as yours are, into your own hold; then E stacks it back on her deck (`'trap'` and `'trapIs'`: `TrapWork.asked`, `told`). If you leave her deck mid-haul her owner's game lets go of it after 2.5 s. Anyone else's buoys are still "their gear, not yours to touch".
+- **Your catch goes in your own hold**, from her rods and her traps alike (the user's call, 2026-11-05).
+
+## Seen on everyone's game
+
+- **Anyone's chum slick** is sent (`'slick'`), drawn, and brings the fish up on every game that's near it (`Rigs.theirSlicks`, `slickAt`).
+- **Her traps stacked on her deck** (`ts` in her owner's pose) are drawn on her copy, and someone walking her deck walks round them (`TrapWork.stackedOn`).
+- **The work at her rail** (`tj`, and `tb` when it's her deckhand's): the trap going over and its buoy after it, the buoy gaffed, the trap up under the davit's block and in on to the rail with its lobsters, and stacked. Run on between her poses on each game (`TrapWork._mirror`), drawn from her pose's frame, not her copy's (that's last frame's until `Together` has placed her).
+- **A flashlight** (`T`): its lens glaring when it points at you, its beam in the night air and its light on what it meets, at the player's right hand. A boat's searchlight lamp half its size (`BoatLamps`, the same shaders, so nothing new to build) with a hand torch's throw (`Together._torch`). Before, only the nesting turtles minded it.
 
 ## Every boat's berth
 
@@ -85,7 +102,7 @@ An away boat keeps, drifts and is towed by her own `berthOf`, not the lobster bo
 - Someone on a lobster boat's foredeck couldn't get off it. A hop off the bench takes you over the dash, and there's no walking back under the roof: it now has rails to go over the side from. Walking up there through the windscreen is still how you get there, and nothing gets you onto her roof by keys.
 - Her kite vanished on everyone else's game the moment a fish took it; now it comes down, as on hers.
 
-`tools/two-players/aboard.mjs` checks all this: every area in `areas.mjs`, under way, at a slow guest and a slow owner. `hard.mjs` is a guest pushed: taking off from her berth, her lever right up, hard over both ways, by keys between her areas and up her ladders, then all of it in a gale. `seen.mjs` is what's seen and done on another's game, part by part: the fights, kite, kayak, looks, flares, glasses, stern, north, kayakname, ladder, decks, sternfish, kitefish, drop, ashore. `heel-fps.mjs` is how far she really heels at a device's frame rate: the scripts' owners, at 1 to 3 fps, read more, as a shared game's waves keep the wall clock while the boat's frames stop at 0.1 s. `gap.mjs` is her poses going quiet, `mem.mjs` is script memory over a long run, and `heel.mjs` and `heel-flat.mjs` are how far each boat heels when she's flat out and hard over.
+`tools/two-players/crew.mjs` checks a rider's work, part by part: rods (her tackle and bait reaching them, her spread let out and brought in, a rod off her holder on her tackle, her kite, her electric reel, her chum), lights (her searchlight from her helm, a flashlight seen, her underwater lights over their fish), traps (her stack seen and walked round, one set and one hauled by her deckhand, its lobsters in their hold) and hold (a boat taken out shows her hold at once). `tools/two-players/aboard.mjs` checks all this: every area in `areas.mjs`, under way, at a slow guest and a slow owner. `hard.mjs` is a guest pushed: taking off from her berth, her lever right up, hard over both ways, by keys between her areas and up her ladders, then all of it in a gale. `seen.mjs` is what's seen and done on another's game, part by part: the fights, kite, kayak, looks, flares, glasses, stern, north, kayakname, ladder, decks, sternfish, kitefish, drop, ashore. `heel-fps.mjs` is how far she really heels at a device's frame rate: the scripts' owners, at 1 to 3 fps, read more, as a shared game's waves keep the wall clock while the boat's frames stop at 0.1 s. `gap.mjs` is her poses going quiet, `mem.mjs` is script memory over a long run, and `heel.mjs` and `heel-flat.mjs` are how far each boat heels when she's flat out and hard over.
 
 ## Not done
 

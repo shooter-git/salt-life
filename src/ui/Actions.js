@@ -52,7 +52,10 @@ export function offers( player, game = null, o = {} ) {
 	if ( prompt && prompt.key === 'R' && game && game.rigs && game.rigs.rodOn ) o.rod = 'Take the rod';
 	o.use = fishing ? castLabel( game ) : spearing ? spearLabel( game ) : lobstering ? lobsterLabel( game ) : netting ? netLabel( game ) : null;
 	o.reel = fishing && ! game.fight && ( rod.state === 'floating' || rod.state === 'flying' ) ? 'Reel in' : fishing && ! game.fight && rod.state === 'idle' && game.rigs && game.rigs.linesOut ? 'Lines in' : null;
-	o.cooler = game && game.hud && ! fishing && ! spearing && ! lobstering && ! netting ? 'Cooler' : null;
+	// (the cooler with the rod out and cast too, as I opens it; not while a cast's wound up or a fish is on: an open
+	// panel holds the rod's input, Game.update, so the wind-up would hang and the fish run free)
+	const rodBusy = fishing && ( !! game.fight || rod.state === 'windup' );
+	o.cooler = game && game.hud && ! rodBusy && ! spearing && ! lobstering && ! netting ? 'Cooler' : null;
 	// the flashlight: offered after dusk (or while it's on)
 	const lights = game && game.app && game.app.localLights;
 	const torchOn = !! ( lights && lights.flashlight.on );
@@ -62,7 +65,11 @@ export function offers( player, game = null, o = {} ) {
 	const helm = player && player.mode === 'boat' && ! seat, app = game && game.app;
 	if ( seat && ! fishing && ! netting ) o.rod = 'Rod';
 	if ( seat && game.radio && game.radio.offer ) o.rig = game.radio.offer === 'radio' ? 'Radio' : 'Flares';
-	if ( helm ) o.torch = app && ( app.searchlight || G.night.value > 0.35 ) ? ( app.searchlight ? 'Searchlight off' : 'Searchlight' ) : null;
+	// ((guest work) at someone else's: hers, if she has one, else your torch)
+	const theirs = helm && player.riding && app && app.together ? app.together.theirSearchlight() : null;
+	const spotOn = theirs ? theirs.on : !! ( app && app.searchlight );
+	if ( helm && ( theirs || ! player.riding ) ) o.torch = app && ( spotOn || G.night.value > 0.35 ) ? ( spotOn ? 'Searchlight off' : 'Searchlight' ) : null;
+	else if ( helm ) o.torch = lights && ( torchOn || G.night.value > 0.35 ) ? ( torchOn ? 'Torch off' : 'Torch' ) : null;
 	else o.torch = lights && ( torchOn || G.night.value > 0.35 ) ? ( torchOn ? 'Torch off' : 'Torch' ) : null;
 	o.horn = helm ? 'Horn' : null;
 	// ((M16) with lines out she's held at the baits' speed: this runs her flat out, as Shift does)

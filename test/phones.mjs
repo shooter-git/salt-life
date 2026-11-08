@@ -92,8 +92,13 @@ const check = ( ok, what ) => {
 {
 
 	const src = readFileSync( new URL( '../src/App.js', import.meta.url ), 'utf8' );
-	for ( const name of [ 'Lighthouse', 'HarbourLights', 'Wreck', 'Turtles', 'FarIsland', 'Signpost' ] ) check( new RegExp( `const landmarks = .*\\b${ name }\\b` ).test( src ), `${ name }: its shaders after the start` );
-	check( /lean: this\.cpuGL/.test( src ) && /coarseCaves: this\.cpuGL/.test( src ), 'the sea\'s weedlines and slick left out, the far caves coarse' );
+	for ( const name of [ 'Lighthouse', 'HarbourLights', 'Wreck', 'Turtles', 'FarIsland', 'Signpost', 'Wake' ] ) check( new RegExp( `const landmarks = .*\\b${ name }\\b` ).test( src ), `${ name }: its shaders after the start` );
+	check( /const lean = this\.cpuGL &&/.test( src ) && /lean, plain: lean/.test( src ) && /coarseCaves: this\.cpuGL/.test( src ), 'the sea\'s weedlines and slick left out, the far caves coarse' );
+	// ((v2.1.5) and the sea loaded plain, the whole one in before the island's held-back parts come back)
+	check( /async lateReady\(\) \{\s*await this\.fullSea\(\);/.test( src ), 'the whole sea made and drawn after the start, before the island\'s held-back parts' );
+	const sea = readFileSync( new URL( '../src/ocean/WaterSurface.js', import.meta.url ), 'utf8' );
+	const plain = ( sea.match( /#ifdef WATER_PLAIN|#ifndef WATER_PLAIN/g ) || [] ).length;
+	check( plain >= 7 && /WATER_PLAIN: ''/.test( sea ) && /this\.mesh\.material = this\.material;/.test( sea ), `the plain sea leaves out the surf's lace and swash, the whitecaps and the rest (${ plain } places)` );
 
 }
 

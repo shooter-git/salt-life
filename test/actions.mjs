@@ -54,11 +54,15 @@ const shown = ( o ) => Object.keys( ACTIONS ).filter( ( id ) => o[ id ] ).map( (
 {
 
 	let o = offers( player( 'walk' ), game( { rod: { equipped: true, state: 'idle' }, state: { stats: { leader: 1 } } } ) );
-	ok( o.use === 'Cast' && o.rod === 'Put away' && o.net === 'Cast net' && o.bait === 'Bait' && o.rig === 'Rig' && o.leader === 'Leader' && ! o.cooler && ! o.reel, `the rod out: cast; put away, the net, bait, rig, leader in the wheel (${ shown( o ) })` );
+	ok( o.use === 'Cast' && o.rod === 'Put away' && o.net === 'Cast net' && o.bait === 'Bait' && o.rig === 'Rig' && o.leader === 'Leader' && o.cooler === 'Cooler' && ! o.reel, `the rod out: cast; put away, the net, bait, rig, leader, the cooler in the wheel (${ shown( o ) })` );
+	o = offers( player( 'walk' ), game( { rod: { equipped: true, state: 'windup' } } ) );
+	ok( o.use === 'Let go' && ! o.cooler, `winding up: let go, and no cooler (${ shown( o ) })` );
+	o = offers( player( 'walk' ), game( { rod: { equipped: true, state: 'floating' } } ) );
+	ok( o.reel === 'Reel in' && o.cooler === 'Cooler' && ! o.bait, `cast: reel in, the cooler in the wheel (${ shown( o ) })` );
 	o = offers( player( 'walk' ), game( { rod: { equipped: true, state: 'floating' }, bite: { phase: 'take' } } ) );
 	ok( o.use === 'Strike!' && o.reel === 'Reel in' && ! o.bait, `a take: strike, and reel in (${ shown( o ) })` );
 	o = offers( player( 'walk' ), game( { rod: { equipped: true, state: 'floating' }, fight: {} } ) );
-	ok( o.use === 'Reel' && ! o.reel && ! o.net, 'a fish on: reel' );
+	ok( o.use === 'Reel' && ! o.reel && ! o.net && ! o.cooler, 'a fish on: reel, and no cooler' );
 	o = offers( player( 'walk' ), game( { rod: { equipped: true, state: 'idle' }, rigs: { linesOut: true } } ) );
 	ok( o.reel === 'Lines in', 'lines out: lines in' );
 	o = offers( player( 'walk', { prompt: { key: 'R', text: 'Take the rod · starboard · 12 s' } } ), game( { rigs: { rodOn: true } } ) );

@@ -4,7 +4,8 @@ import * as THREE from '../../engine/index.js';
 //
 // Every set is generated once, while the game loads (Village.init() -> bake( renderer )), or (WebGL drawn
 // on the CPU) after the start, a set a frame (App.lateReady), by
-// fullscreen fragment-shader passes into render targets; nothing is ever read back to the CPU:
+// fullscreen fragment-shader passes into render targets; nothing is read back to the CPU but a row of each
+// map afterwards, to see it came out ((v2.2.1) ensure: those that didn't are baked again):
 //   1. a "fields" pass (one small program per set: only its own generator) writes height /
 //      roughness / occlusion into a transient RGBA8 target (the height packed into two channels:
 //      16 bits, enough for the Sobel normals) and, in the same pass (two draw buffers), the
@@ -630,6 +631,22 @@ function transientTarget( w, h, count ) {
 
 }
 
+// ((v2.2.1) whether the page is out of sight, and a promise for once it's on screen (now, if it is; in Node, always)
+const hidden = () => typeof document !== 'undefined' && document.hidden;
+const seen = () => hidden() ? new Promise( ( resolve ) => {
+
+	const look = () => {
+
+		if ( hidden() ) return;
+		document.removeEventListener( 'visibilitychange', look );
+		resolve();
+
+	};
+
+	document.addEventListener( 'visibilitychange', look );
+
+} ) : Promise.resolve();
+
 function pass( fragmentShader, uniforms = {} ) {
 
 	return new THREE.RawShaderMaterial( {
@@ -691,6 +708,62 @@ export class VillageTextures {
 		if ( this.baked ) return;
 		this.baked = true;
 		const t0 = performance.now();
+		await this._bake( renderer, this.jobs, { slot, ready } );
+		this.bakeMs = performance.now() - t0;
+
+	}
+
+	// ((v2.2.1) The sets whose maps came out empty: a row across the middle of one all 0, which none of them is (normals
+	// about 0.5, colours and masks above 0). Nothing else reads the bake back, and a phone can lose its passes: an iPhone
+	// drew the village's wood flat black in the noon sun, a whole visit through. Read without stalling the page (a fence:
+	// readRenderTargetPixelsAsync) -> the jobs, or null if the page was hidden meanwhile (what was read says nothing)
+	async emptySets( renderer ) {
+
+		const empty = new Set();
+		await Promise.all( this.jobs.flatMap( ( job ) => [ job.albedo, job.nra ].filter( Boolean ).map( async ( rt ) => {
+
+			const row = new Uint8Array( rt.width * 4 );
+			const got = await renderer.readRenderTargetPixelsAsync( rt, 0, rt.height >> 1, rt.width, 1, row ).catch( () => null );
+			if ( ! got || got.every( ( v ) => v === 0 ) ) empty.add( job );
+
+		} ) ) );
+		return hidden() ? null : [ ...empty ];
+
+	}
+
+	// ((v2.2.1) bakes again the sets that came out empty (emptySets), once the page is on screen (a hidden page's GPU work
+	// can be dropped as well), up to three times; slot, ready: as bake's. One at a time -> how many sets were baked again
+	ensure( renderer, options = {} ) {
+
+		if ( ! this.baked ) return Promise.resolve( 0 );
+		if ( ! this._ensuring ) this._ensuring = this._ensure( renderer, options ).finally( () => this._ensuring = null );
+		return this._ensuring;
+
+	}
+
+	async _ensure( renderer, options ) {
+
+		let again = 0;
+		for ( let tries = 0; tries < 3; ) {
+
+			await seen();
+			const empty = await this.emptySets( renderer );
+			if ( ! empty ) continue;
+			if ( ! empty.length ) break;
+			tries ++;
+			console.warn( `village textures: ${ empty.map( ( j ) => j.set.name ).join( ', ' ) } came out empty, baked again` );
+			await this._bake( renderer, empty, options );
+			again += empty.length;
+
+		}
+
+		return again;
+
+	}
+
+	// the sets of `jobs`, rendered (bake, ensure)
+	async _bake( renderer, jobs, { slot = null, ready = null } = {} ) {
+
 		const camera = new THREE.Camera();
 		const tri = new THREE.BufferGeometry();
 		tri.setAttribute( 'position', new THREE.Float32BufferAttribute( [ - 1, - 1, 0, 3, - 1, 0, - 1, 3, 0 ], 3 ) );
@@ -707,7 +780,7 @@ export class VillageTextures {
 
 		};
 
-		const steps = this.jobs.map( ( job ) => {
+		const steps = jobs.map( ( job ) => {
 
 			const { set } = job;
 			const fields = !! job.nra, albedo = !! job.albedo;
@@ -762,13 +835,14 @@ export class VillageTextures {
 			gen.dispose();
 			renderer.setRenderTarget( prevTarget );
 			renderer.autoClear = prevAutoClear;
+			// ((v2.2.1) all at once, each set's passes sent to the GPU on their own: less in one go for a phone to drop)
+			if ( ! slot ) renderer.getContext().flush();
 
 		}
 
 		derive.dispose();
 		copy.dispose();
 		tri.dispose();
-		this.bakeMs = performance.now() - t0;
 
 	}
 

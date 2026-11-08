@@ -404,7 +404,9 @@ export class App {
 		this.shoreField = computeShoreField( this.terrainData, { res: SHORE_RES[ tier ] ?? SHORE_RES.low, swellDir: [ WORLD.swellDir.x, WORLD.swellDir.y ] } );
 		this.shore = new ShoreWaves( { field: this.shoreField } );
 		this.query = new WaterQuery( this.waves, this.terrainData, this.shore );
-		this.water = new WaterSurface( { scene, waves: this.waves, terrain: this.terrain, shore: this.shore, cover: this.cover, rocks: this.rockCover, tier, lean: this.cpuGL && ! new URLSearchParams( location.search ).has( 'fullsea' ) } );
+		// ((v2.1.5) lean, it's loaded with a plain sea too, the whole one put in after the start: fullSea)
+		const lean = this.cpuGL && ! new URLSearchParams( location.search ).has( 'fullsea' );
+		this.water = new WaterSurface( { scene, waves: this.waves, terrain: this.terrain, shore: this.shore, cover: this.cover, rocks: this.rockCover, tier, lean, plain: lean } );
 		// (M15) what's found out there: the debris floating (game/Finds.js; the weed and the bait's boils are the
 		// sea's own, the birds working it Wildlife's)
 		this.flotsam = new Flotsam( { scene, waves: this.waves } );
@@ -659,7 +661,8 @@ export class App {
 			// ((M15) and what M15 added about the island, none of it where you start but the signposts: the lighthouse,
 			// the harbour lights, the wreck, the turtles, the island's far shape, the signs. Theirs were nine more
 			// programs, and the load back past what v1.10.0 failed All the Spaces' checks at: 5.4 s to 9 s)
-			const landmarks = /^(Lighthouse|LighthouseGlare|HarbourLights|HarbourGlare|Wreck|Turtles|FarIsland|Signpost|ShelterSign|StormChart|BoardedUp|AnchorRode|Spray)/;
+			// ((v2.1.5) and the wake: only ever behind a boat under way, and the boat you start in waits too)
+			const landmarks = /^(Lighthouse|LighthouseGlare|HarbourLights|HarbourGlare|Wreck|Turtles|FarIsland|Signpost|ShelterSign|StormChart|BoardedUp|AnchorRode|Spray|Wake)/;
 			this._heldLandmarks = scene.children.filter( ( c ) => landmarks.test( c.name ) ).map( ( m ) => [ m, m.parent ] );
 			for ( const [ m ] of this._heldLandmarks ) m.removeFromParent();
 
@@ -844,7 +847,10 @@ export class App {
 		// L: the flashlight; at the helm, the boat's searchlight
 		if ( input.hit( 'KeyL' ) ) {
 
-			if ( this.player.mode === 'boat' && this.boat.searchlight ) {
+			// ((guest work) at someone else's helm: her searchlight, switched on her owner's game, if she has one)
+			const theirs = this.player.mode === 'boat' && this.player.riding && this.together ? this.together.theirSearchlight() : null;
+			if ( theirs ) this.together.askRig( { k: 'spot' } );
+			else if ( this.player.mode === 'boat' && ! this.player.riding && this.boat.searchlight ) {
 
 				this.searchlight = ! this.searchlight;
 				this.hud.toast( this.searchlight ? 'Searchlight on' : 'Searchlight off' );
@@ -1127,6 +1133,12 @@ export class App {
 		this.frame( Math.min( 0.1, dt + this._owed ) );
 		this._owed = 0;
 		this._drawn = gl.fenceSync( gl.SYNC_GPU_COMMANDS_COMPLETE, 0 );
+		if ( this._afterDraw ) {
+
+			this._afterDraw();
+			this._afterDraw = null;
+
+		}
 		this._rest = true;
 		gl.flush();
 
@@ -1188,12 +1200,56 @@ export class App {
 	// seconds more), then back in the scene, still hidden, for revealLate
 	async lateReady() {
 
+		await this.fullSea();
 		const held = this._lateHeld;
-		if ( ! held ) return;
-		await this.village.textures.bake( this.renderer, { slot: () => this.frameSlot(), ready: () => this.useNewPrograms() } );
-		await this.readyToDraw( held.map( ( [ root ] ) => root ) );
-		for ( const [ root, parent ] of held ) parent.add( root );
-		this._lateHeld = null;
+		if ( held ) {
+
+			await this.village.textures.bake( this.renderer, this.bakeSlots() );
+			await this.readyToDraw( held.map( ( [ root ] ) => root ) );
+			for ( const [ root, parent ] of held ) parent.add( root );
+			this._lateHeld = null;
+
+		}
+
+		this.checkBakes();
+
+	}
+
+	// (a bake after the start on a device that draws on its CPU: a set a frame, its programs first used in ticks that
+	// draw nothing; with a graphics card all at once)
+	bakeSlots() {
+
+		return this.cpuGL ? { slot: () => this.frameSlot(), ready: () => this.useNewPrograms() } : {};
+
+	}
+
+	// ((v2.2.1) the village's baked textures looked at once they're made (with a graphics card, while the island loaded;
+	// on the CPU, just now), and again each time the page comes back on screen: any set that came out empty is baked
+	// again (VillageTextures.ensure). An iPhone drew all the village's wood flat black, a visit through, its bake lost)
+	checkBakes() {
+
+		const check = () => this.village.textures.ensure( this.renderer, this.bakeSlots() ).catch( ( e ) => console.warn( 'village textures', e ) );
+		check();
+		document.addEventListener( 'visibilitychange', () => {
+
+			if ( ! document.hidden ) check();
+
+		} );
+
+	}
+
+	// ((v2.1.5) WebGL drawn on the CPU) the whole sea for the plain one the load drew (WaterSurface's plain): its
+	// shader made and first used in ticks that draw nothing (readyToDraw), then drawn in the next frame, and the GPU
+	// let finish that frame (where the driver builds its pipeline: 1.7 s on four cores here) before the island's
+	// held-back parts are made ready and shown (lateReady), so that their first draws don't come in the same frame
+	async fullSea() {
+
+		const w = this.water;
+		if ( ! w.plainMaterial ) return;
+		await this.readyToDraw( new THREE.Mesh( w.mesh.geometry, w.material ) );
+		w.full();
+		await new Promise( ( resolve ) => this._afterDraw = resolve );
+		await this.gpuCaughtUp();
 
 	}
 
@@ -2570,6 +2626,9 @@ export class App {
 		if ( this.wildlife && this.wildlife.birds ) this.wildlife.birds.boatModel = model;
 		const kept = this.together && this.together.boatChanged( old );
 		this.game.boatChanged();
+		// (her hold, her fuel, her gear: the HUD and the panels drawn again for her. selectBoat only saves, and the bar at the
+		// top kept the boat you'd left until something else changed, a catch or a bait on the hook)
+		st.emit();
 		if ( ! kept ) old.dispose();
 		return true;
 
