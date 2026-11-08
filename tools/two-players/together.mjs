@@ -401,8 +401,9 @@ if ( PART === 'pearl' ) {
 	const day = await owner.game.evaluate( () => { const a = window.__app; let d = a.settings.day; if ( d % 7 === 0 ) d ++; a.together.setClock( 13, d, 0.0001 ); return d; } );
 	for ( const who of [ owner, guest ] ) await who.game.evaluate( () => { const a = window.__app, p = a.player; p.position.set( 106, p.groundAt( 106, - 836, 30 ), - 836 ); p.velocity.set( 0, 0, 0 ); p.yaw = 0; } );
 	// (the camp's built once the debris is placed, the last of a CPU's late stages: minutes in, many on a busy machine)
-	await until( guest.game, '!! ( window.__app.game.camp && window.__app.game.camp.boat )', 2400000 );
-	await until( owner.game, '!! ( window.__app.game.camp && window.__app.game.camp.boat )', 600000 );
+	const built = ( who, ms ) => until( who.game, '!! ( window.__app.game.camp && window.__app.game.camp.boat )', ms ).catch( async ( e ) => { note( `${ who.name }'s camp not built:`, JSON.stringify( await who.game.evaluate( () => { const a = window.__app; return { debris: !! a.debris, built: a.game.camp.built, mats: !! ( a.village && a.village.materials ), at: [ Math.round( a.camera.position.x ), Math.round( a.camera.position.z ) ] }; } ) ) ); throw e; } );
+	await built( guest, 2400000 );
+	await built( owner, 600000 );
 	await frames( guest.game, 20 );
 	const was = await guest.game.evaluate( () => { const b = window.__app.game.camp.boat; return { off: b.off, kind: b.kind }; } );
 	await owner.game.evaluate( () => { const a = window.__app, b = a.boatCtl; b.moored = false; b.beached = false; b.anchor = null; b.driven = false; b.position.set( 114.3, b.position.y, - 880 ); b.velocity.set( 0, 0, 0 ); b.angular.set( 0, 0, 0 ); } );

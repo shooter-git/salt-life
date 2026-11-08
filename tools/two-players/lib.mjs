@@ -95,7 +95,9 @@ export async function start( { out, port, tier = 'low', stale = 120, viewport = 
 			R.end = [];
 			const tu = a.together.update;
 			a.together.update = function ( dt ) { const r = tu.call( this, dt ); for ( const f of R.end ) f( dt ); return r; };
-			window.__stop = () => { a.drawWorld = () => {}; const gl = a.renderer.getContext(); gl.clientWaitSync = () => gl.ALREADY_SIGNALED; Object.defineProperty( a, '_rest', { configurable: true, get: () => false, set() {} } ); };
+			// ((M17) nothing drawn, but a mesh waiting for its program's first draw is let go as a frame would (App.firstDraws): the late stages
+			// wait on them, and with drawing stopped the debris, the fish camp and Marta's tray never came)
+			window.__stop = () => { a.drawWorld = () => { const f = a._firsts && a._firsts.shift(); if ( f ) f.resolve(); }; const gl = a.renderer.getContext(); gl.clientWaitSync = () => gl.ALREADY_SIGNALED; Object.defineProperty( a, '_rest', { configurable: true, get: () => false, set() {} } ); };
 			window.__go = () => { delete a.drawWorld; delete a._rest; delete a.renderer.getContext().clientWaitSync; };
 			if ( ! drawing ) window.__stop();
 			a.together.setWeather( 'calm', 0 );
@@ -174,6 +176,15 @@ export async function start( { out, port, tier = 'low', stale = 120, viewport = 
 
 	G.toSea = ( owner, F = { x: - 2600, z: 3000 } ) => owner.game.evaluate( ( F ) => { const a = window.__app, b = a.boatCtl; b.moored = false; b.beached = false; b.anchor = null; a.boat.sliding = null; b.position.set( F.x, b.position.y, F.z ); b.velocity.set( 0, 0, 0 ); b.angular.set( 0, 0, 0 ); a.together.setClock( 10, a.settings.day, 0.0001 ); }, F );
 	G.end = async ( label ) => {
+
+		// ((M17) each game's frame rate over the run, as the CPU gave it: a slow pass is a slow machine, not a slow game)
+		for ( const pg of ctx.pages() ) {
+
+			const f = pg.frames().find( ( x ) => x !== pg.mainFrame() ), name = new URL( pg.url() ).searchParams.get( 'name' );
+			const r = f && await f.evaluate( () => { const R = window.__draws; return R && R.since ? +( R.frames / ( performance.now() - R.since ) * 1000 ).toFixed( 1 ) : null; } ).catch( () => null );
+			if ( r !== null && r !== undefined ) console.log( `     FPS ${ name }: ${ r } over the run` );
+
+		}
 
 		console.log( `SUMMARY ${ label }: ${ G.failed } failed, ${ G.problems } problem(s), ${ ( ( Date.now() - G.t0 ) / 60000 ).toFixed( 1 ) } minutes` );
 		await browser.close();
