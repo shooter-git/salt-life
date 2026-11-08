@@ -6,6 +6,7 @@
 
 export function freeNow( ...arrays ) {
 
-	for ( const a of arrays ) if ( a && a.buffer.transfer && a.byteLength === a.buffer.byteLength ) a.buffer.transfer( 0 );
+	// ((M17) one detached already, as an array two parts shared would be, left be: transfer throws on it)
+	for ( const a of arrays ) if ( a && a.buffer.transfer && a.buffer.byteLength > 0 && a.byteLength === a.buffer.byteLength ) a.buffer.transfer( 0 );
 
 }

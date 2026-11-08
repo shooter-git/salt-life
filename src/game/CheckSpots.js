@@ -5,11 +5,14 @@ import { findsAbout } from './Finds.js';
 // nowhere else, jumps her to the next of these, the last bringing you back as you were, and the checks' frames and
 // budgets are read out there as they are in the bay. tools/far-sea.mjs goes to them by name too. No three.js.
 // (M16) boat: who she is there. A new game starts in the kayak, the lightest of them, so the checks go on in the others:
-// the sportfisher far out, and the lobster boat, the heaviest on a phone, for the rest of the script.
+// the sportfisher far out, and the lobster boat, the heaviest on a phone, for the rest of the script. (M17) Far out
+// first, then the bank: so the lobster boat that takes you to the bank is the one you come home in, and each boat's
+// built once. Bank, far, home built her twice in twenty seconds (each build's garbage some 15 to 20 MB of script
+// memory before it's collected), and that third build was where the checks' memory peaked most often.
 
 export const CHECK_SPOTS = [
-	{ id: 'bank', x: - 6200, z: 7400, boat: 'lobster' }, // (a first place to make for: its reefs, its surf)
 	{ id: 'far', x: 0, z: 20000, boat: 'sportfisher' }, // (the open ocean, past the far grounds)
+	{ id: 'bank', x: - 6200, z: 7400, boat: 'lobster' }, // (a first place to make for: its reefs, its surf)
 	{ id: 'home', boat: 'lobster' },
 ];
 // (for tools/far-sea.mjs too: each stop in the script is time on all four screens, and the checks have 25 minutes)

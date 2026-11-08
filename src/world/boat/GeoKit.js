@@ -1,4 +1,5 @@
 import { BoxGeometry, BufferGeometry, CatmullRomCurve3, Color, CylinderGeometry, Euler, Float32BufferAttribute, LatheGeometry, Matrix4, Quaternion, ShapeUtils, SphereGeometry, TorusGeometry, TubeGeometry, Vector2, Vector3, RoundedBoxGeometry, mergeGeometries } from '../../engine/index.js';
+import { freeNow } from '../../core/FreeNow.js';
 
 // Geometry helpers for the procedural boat. Every geometry is normalized to the
 // same attribute layout so parts can be merged per material:
@@ -122,6 +123,17 @@ export class GeoKit {
 		if ( ! list || list.length === 0 ) return null;
 		const g = list.length === 1 ? list[ 0 ] : mergeGeometries( list, false );
 		if ( ! g ) throw new Error( 'BoatModel: failed to merge bucket ' + bucket );
+		// ((M17) the parts' own arrays given back as soon as they're merged, not left for the collector: 1.5 to 2.6 MB
+		// a boat, on top of her other garbage, while All the Spaces' checks take two boats out in a few seconds. Each
+		// part was made for its bucket alone (nothing holds one after add()), and a bucket's merged once)
+		if ( list.length > 1 ) for ( const p of list ) {
+
+			for ( const name of Object.keys( p.attributes ) ) freeNow( p.attributes[ name ].array );
+			if ( p.index ) freeNow( p.index.array );
+
+		}
+
+		this.buckets.delete( bucket );
 		g.computeBoundingBox();
 		g.computeBoundingSphere();
 		return g;

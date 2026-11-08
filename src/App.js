@@ -1814,8 +1814,31 @@ export class App {
 
 		await this.vegetation.init();
 		releaseGeometries( this.vegetation.group, { instanced: true } ); // ((M16) their shapes on the GPU alone)
+		this.plantsPlaced();
 		if ( this._started ) await this.readyOffstage( this.vegetation.group );
 		else this.lightUp( this.vegetation.group );
+
+	}
+
+	// (M17) what only the plants' placing and building read, let go as soon as they're placed, not with the rest of
+	// the build after the animals and the debris (letGoOfTheBuild, releaseMasks): on a CPU's WebGL those come minutes
+	// after the start, all through All the Spaces' checks. The plants' records but for what the drips, the crabs and
+	// the debris read (Vegetation.slimRecords); the gully, rubble and scarp masks (read by the ground's maps, the rocks
+	// and the plants, all made by now); and there the village's shapes (releaseParts: the debris and a storm's wrack
+	// make what they need, the same). Some 9 MB of script memory while the late stages and the checks' boats overlap
+	plantsPlaced() {
+
+		this.vegetation.slimRecords();
+		const T = this.terrainData;
+		for ( const k of [ 'gully', 'rubble', 'scarp' ] ) {
+
+			if ( T._masksBefore ) T._masksBefore.delete( T[ k ] );
+			T[ k ] = null;
+
+		}
+
+		// (with a graphics card the debris come next, at the load, and use the village's shapes)
+		if ( this.cpuGL ) releaseParts();
 
 	}
 
