@@ -147,7 +147,7 @@ Without the crests the same patch differs by 0.10 mm RMS (the open sea's own inv
   - Sam's game stalled for up to 140 s at a time on its late building after the start, while the wake went by on the wall's clock.
   - A wait for that building to end never ended with nothing drawn: it waits on first draws.
 
-**`pnpm test`**, with `test/wakes.mjs` (46 checks): everything passes but `north-plotter.mjs`'s timing ("a redraw's numbers 18.5 ms at best") at load 48, which is a stopwatch on a machine three times over; not run again quiet.
+**`pnpm test`**, with `test/wakes.mjs` (51 checks): all pass (a400c1c's tree). An earlier run at load 48 failed only `north-plotter.mjs`'s stopwatch ("a redraw's numbers 18.5 ms at best"); the run since passed it.
 
 **All the Spaces' complete check** (`cli.ts check` from its `main`, `57b4f25`), each on a clean copy, at load 45 to 80:
 
@@ -176,5 +176,5 @@ Everything else passed in both: 66 and 39 draw calls of 150, 218k and 170k trian
 - **On low, no console's crests** ([On low](#on-low)), and a boat in company leaves no foam on your screen (the foam's only the boat you're in, as before), so on a phone another player's console passes and leaves nothing to see but her.
 - **Two players at a real frame rate:** at the 1.6 frames a second this machine gave two games, a kayak in company doesn't ride a wake: her steps fall behind the sea's shared clock. At 10 frames a second and up they keep up; not run here. Each game's samples come from its own frames, so the crests can differ a little between the two.
 - **Shallow water:** the waves are deep water's, faded out as it shoals under 1.5 m. A wake's growth and change of shape as it nears the depth's critical speed isn't modelled.
-- **The ready A/B, `north-plotter.mjs` and a third complete check at a quiet hour:** the machine stayed at load 25 to 80 all afternoon.
+- **The ready A/B, `north-plotter.mjs` and a third complete check at a quiet hour:** the machine stayed at load 25 to 80 all day; the M17 session runs them for every branch in turn.
 - **Left for the next stream:** stream 2's note (the shared notes) asked for the swash's 0.35 m run-up floor and the front's foam to go with the shore field's exposure, for the flats' hard white line. It's the sea's shader, but not done here.
