@@ -27,7 +27,7 @@ What [M17.md](../M17.md#the-boats) asked: a boat's wake's far arms as smooth cre
 - a sample (her place, heading, speed and the sea's time) every 6 s on a straight run;
 - more in a turn (each 12°) or as her speed changes by 15%, at most one in 0.3 s;
 - 16 kept a boat;
-- none under 1.2 m/s. A jump of 60 m in a frame, or the sea's clock going back, starts her track again.
+- none under 1.2 m/s. A jump of 60 m since she was last followed, or the sea's clock going back, starts her track again.
 
 `Wake.track` follows the boat you're in (not the kayak, whose wake is ripples) and every boat in company by where she's drawn (`followDrawn`: her velocity from her place frame to frame, her hull from `WAKE.hulls`, as her model has it). `App.frame` calls it before the water's queries, so the CPU and the sea read the same samples each frame.
 
@@ -43,7 +43,7 @@ Each sample carries:
 - its age;
 - its waves' k and cos θ: θ is the divergent waves' way whose energy goes out at the wake's angle, tan ψ = tan θ / ( 1 + 2 tan² θ ), so the crests lie where the foam's arms do;
 - the height its crests have by then: Macfarlane's fit at her length, slenderness and speed, y off her track, faded in behind her and out at the end;
-- how far the train reaches behind its highest crest: wider as it goes out, and wider again under Kelvin's angle, for the feathered band of a slow boat.
+- how far the train reaches behind its highest crest: wider as it goes out, and wider again under Kelvin's angle, for the feathered band of a slow boat; but no further in than half its way off her track. The middle of her V is left nearly flat, as in the photographs: close behind her a ridge or two each side, the two trains crossing only further astern. (Before this cap they crossed right behind her, and from abeam the crossing drew an egg-crate of oval highlights.)
 
 **The crests** (`heightAt`, and the GLSL `wakeAt`, the same sum):
 - Each sample's crests are now at P + age · cg · n either side, n their way.
@@ -65,8 +65,96 @@ Each sample carries:
 
 **The foam** is `Wake.js` as it was.
 
+**What they come to**, from `wakeHeight` and the angle and length above (crest to trough; off her track):
+
+| Boat | kn | Fr | Arm's angle | λ (m) | T (s) | 10 m off | 30 m | 100 m |
+|---|---|---|---|---|---|---|---|---|
+| console (5.61 m on her waterline, 2.49 m³) | 12 | 0.83 | 13.5° | 5.7 | 1.9 | 0.34 | 0.24 | 0.16 |
+| | 23 (cruise) | 1.59 | 7.1° | 5.6 | 1.9 | 0.16 | 0.11 | 0.08 |
+| | 43 (flat out, twins) | 2.98 | 3.8° | 5.6 | 1.9 | 0.05 | 0.03 | 0.02 |
+| lobster boat (7.79 m, 3.26 m³) | 9 | 0.53 | 19.5° | 9.2 | 2.4 | 0.31 | 0.21 | 0.14 |
+| | 16 | 0.94 | 12.0° | 7.9 | 2.2 | 0.31 | 0.21 | 0.14 |
+| sportfisher (12.84 m, 18.5 m³) | 15 | 0.69 | 16.2° | 13.5 | 2.9 | 0.65 | 0.49 | 0.33 |
+| | 25 | 1.15 | 9.9° | 12.9 | 2.9 | 0.60 | 0.45 | 0.30 |
+
+The console's chunkier than Macfarlane's ski boat (L / V^1/3 4.14 against 4.79), so a little more; the sportfisher's a big boat's 2 ft wake at cruise.
+
 ## Readings
+
+On this machine (8 cores), shared all along with three other streams' renders and checks: load 25 to 80 through every reading below, against the foundation's 6 to 17. So nothing here is timed against the foundation's own numbers, only base and wakes side by side, alternating.
+
+**Before ready: the same programs.** `tools/wakes/ready-sources.mjs` loads each build as All the Spaces' harness does (phone upright, low) and sets the programs made by ready side by side by their sources:
+- 3f1367b and the wakes both make the same 16;
+- 14 are the same to the character;
+- the two seas (the plain one the loading frame draws, and the whole one put in straight after the start) have the same fragment shaders, character for character. Their vertex shaders differ only by the wakes' two blocks inside `#ifndef WATER_PLAIN`, which the plain sea's preprocessor takes out, so it compiles to the same program as before.
+
+**Ready, phone upright, 4 CPUs**, four rounds in turn: 3f1367b 7.7, 17.1, 10.8, 11.1 s; the wakes 12.0, 19.9, 12.6, 10.2 s, at load 25 to 38. Noise only, but the plain sea above compiles to the same program, so nothing the wakes add is built before ready. Not run at a quiet hour (below).
+
+**The whole sea after the start** (`fullSea`, where the wakes' GLSL is paid for on a device that draws on its CPU):
+- `tools/wakes/compile-time.mjs`: the sea's program alone, compiled, linked and first drawn on SwiftShader, base and wakes taken in turn, five rounds, each source made unique. Medians: 3f1367b 0.23 s; the wakes 0.20 s with their loops' trip counts fixed (40), 0.23 with them run to the uniforms' counts (as built); the plain sea 0.23. No difference to measure.
+- In the game, from ready to the whole sea in (FULL_SEA in `ready-sources.mjs`), three rounds each in turn at load 45 to 74: 3f1367b 25.2, 20.4, 13.2 s; the wakes 19.1, 29.6, 17.5. The noise is all there is.
+
+**The download:** 10.4 KB more (82,095,157 bytes against 82,084,749).
+
+**`tools/gpu-limits.mjs`** (`SHOW=Water` for the sea's own counts), all within on every tier:
+
+| Tier | The sea's textures (fragment / vertex) | Its vertex uniforms (the wakes') | Its fragment uniforms |
+|---|---|---|---|
+| high | 16 of 16 / 8 | 185 (89) | 225, 226 |
+| mid | 14 / 8 | 185 (89) | 208 |
+| low | 13 / 8 | 136 (53) | 186 |
+
+185 is under even WebGL 2's floor of 256 vertex uniform vectors.
+
+**The CPU's query against the drawn crests** (`tools/wakes/look.mjs` match, high, the console at 18 and 22 kn): the sea alone drawn from above into a float target, each pixel the drawn surface's place, against `WaterQuery.heightAt` there.
+
+| Where | Grid | Drawn against the CPU: RMS / most | The crests there: RMS / most | Their drawn RMS |
+|---|---|---|---|---|
+| 45 m astern, 8 m off (first run) | 0.25 m | 0.77 / 7.1 mm | 86 / 245 mm | 86 mm |
+| 45 m astern, 8 m off | 0.25 m | 0.43 / 4.0 mm | 50 / 158 mm | 49 mm |
+| 200 m astern, 26 m off | 0.25 m | 0.57 / 7.1 mm | 34 / 144 mm | 34 mm |
+| low, 45 m astern (console at 24 kn) | 2.3 m | 31 / 83 mm | 30 / 83 mm | 0 |
+| low, 200 m astern | 2.3 m | 16 / 60 mm | 16 / 58 mm | 0 |
+
+On low the console's 5.6 m crests aren't drawn at all (below), so there the difference is the crests themselves.
+
+Without the crests the same patch differs by 0.10 mm RMS (the open sea's own inversion): the rest is the triangles between vertices.
+
+**A kayak in a console's wake at speed** (`test/wakes.mjs`, the real `BoatController` on the CPU's sea, flat but for the wake): the kayak lying still, side on, and a console at 30 kn passing 30 m off.
+- The wake reaches her 17.6 s after the console passes; the arm's angle says 20.3, the train's front coming first.
+- It's 6.5 cm crest to trough there, against Macfarlane's fit's 6.6.
+- She heaves 7.5 cm and rolls 8.8° across (4.4 each way), pitching 0.9°.
+- She settles upright as it goes by.
+- Lying still before it, she doesn't move.
+
+**`pnpm test`**, with `test/wakes.mjs` (46 checks): everything passes but `north-plotter.mjs`'s timing ("a redraw's numbers 18.5 ms at best") at load 48, which is a stopwatch on a machine three times over; not run again quiet.
+
+**All the Spaces' complete check** (`cli.ts check` from its `main`, `57b4f25`), each on a clean copy, at load 45 to 80:
+
+| Script memory (MB) | Phone, upright | Phone, on its side | Tablet | Laptop | Judged |
+|---|---|---|---|---|---|
+| First (51b481e) | 135.6 | 128.9 | 132.1 | 111.1 | **135.6**, 14.4 under |
+| Second (b7fa644) | 130.4 | 136.1 | 113.0 | 137.5 | **137.5**, 12.5 under (its play fell behind: see below) |
+| The foundation's two | 130.3, 123.1 | 129.2, 141.1 | 140.8, 119.2 | 129.8, 128.7 | 140.8, 141.1 |
+
+Everything else passed in both: 66 and 39 draw calls of 150, 218k and 170k triangles of 300k, 65.0 and 61.9 MB of textures, 95.9 and 92.6 MB of graphics memory, 13 and 9 sounds, 7.0 MB before ready and 78.2 MB in all.
+- The second's play fell behind its script at load 60: its later screenshots never leave the far spot (no hurricane, no dawn), so its peaks don't cover what the first's did. A third, at a quieter hour, is left.
+- The first noted the laptop's screen pausing 8.9 s while drawing ("probably while making its shaders"), at load 60 to 80. The whole sea's build alone measures the same with the wakes as without (above).
 
 ## Seen
 
+`tools/wakes/look.mjs`, into `qa-output/wakes/<tier>/` (not kept in the repo), each view with the crests and the same instant without:
+- **Astern, high, midday, the console at 19 kn:** with the crests the two arms show as long smooth bands opening from the foam toward the horizon; without them, only the ripples. Low and long beside the foam, as in the photographs of planing boats on a rippled sea.
+- **From the air,** straight down: the deep water's nearly black and the crests hardly show; a wake shows by the sky in its faces, at a slant.
+- **Abeam,** at dusk (the first runs, before the trains' reach was capped): the two arms' inner trains crossed behind her and drew an egg-crate of oval highlights. The cap leaves the middle of her V nearly flat, as in the photographs (`test/wakes.mjs`: her arm's highest crest on its own line 20 m astern). The abeam view wasn't drawn again after the cap: the run put the camera under water (her pitched frame, fixed in the tool since).
+
 ## Not verified, and left
+
+- **A real graphics card,** and a phone's frame rate with the loop in the vertex shader: not measured here (Devices). With no boat under way the loop ends at once.
+- **On low, the console's crests aren't drawn near you:** her 5.6 m waves are under 2.5 vertices a wavelength on low's 2.3 m grid, so they fade out as the open sea's short waves do there. The lobster boat's (8 to 9 m) and the sportfisher's (13 m) are drawn. The CPU has them all, so on low a kayak rocks in a passing console's wake that's drawn only as her foam, and a boat in company leaves no foam on your screen (the foam's only the boat you're in, as before).
+- **Two players:** a boat in company's wake from where she's drawn on each game; `tools/two-players` wasn't run. Each game's samples come from its own frames, so the crests can differ a little between the two.
+- **Shallow water:** the waves are deep water's, faded out as it shoals under 1.5 m. A wake's growth and change of shape as it nears the depth's critical speed isn't modelled.
+- **The kayak's views in the game:** the look tool's kayak scene timed out at load 45 (a few frames a minute); the Node test measures her.
+- **The ready A/B, `north-plotter.mjs` and a third complete check at a quiet hour:** the machine stayed at load 25 to 80 all afternoon.
+- **Low's crests:** fading the wake's crests over 2.5 to 2 vertices a wavelength (not the open sea's 5 to 2.5) would show the console's on low near you at about 40% height; not tried.
+- **Left for the next stream:** stream 2's note (the shared notes) asked for the swash's 0.35 m run-up floor and the front's foam to go with the shore field's exposure, for the flats' hard white line. It's the sea's shader, but not done here.

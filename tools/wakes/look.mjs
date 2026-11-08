@@ -65,13 +65,18 @@ async function load( boat, size = [ 960, 540 ] ) {
 
 		const a = window.__app, c = a.boatCtl, cam = a.camera, { G } = await import( '/src/core/Globals.js' );
 		window.__G = G;
+		// (in her heading only: in her own frame, pitched up on the plane, a view 40 m astern was under the water)
+		const yawOnly = c.quaternion.clone(), f = c.position.clone();
 		const place = () => {
 
 			const L = window.__look;
 			if ( ! L ) return;
 			a.player.position.copy( c.position );
-			cam.position.set( ...L.eye ).applyQuaternion( L.frame || c.quaternion ).add( L.from || c.position );
-			const t = cam.position.clone().set( ...L.at ).applyQuaternion( L.frame || c.quaternion ).add( L.from || c.position );
+			f.set( 0, 0, 1 ).applyQuaternion( c.quaternion );
+			const yaw = Math.atan2( f.x, f.z );
+			yawOnly.set( 0, Math.sin( yaw / 2 ), 0, Math.cos( yaw / 2 ) );
+			cam.position.set( ...L.eye ).applyQuaternion( L.frame || yawOnly ).add( L.from || c.position );
+			const t = cam.position.clone().set( ...L.at ).applyQuaternion( L.frame || yawOnly ).add( L.from || c.position );
 			cam.up.set( 0, 1, 0 );
 			cam.lookAt( t );
 			cam.updateMatrixWorld();
@@ -254,11 +259,9 @@ if ( scenes.includes( 'run' ) || scenes.includes( 'match' ) ) {
 	readings.run = st;
 	if ( scenes.includes( 'run' ) ) {
 
-		await shot( page, 'run-transom', [ 0, 2.2, - 3.6 ], [ 0, - 1, - 40 ] );
-		await shot( page, 'run-astern', [ 0, 4.5, - 8 ], [ 0, 0, - 80 ] );
-		await shot( page, 'run-abeam', [ 30, 2.5, - 40 ], [ - 10, 0, - 70 ] );
-		await shot( page, 'run-air', [ 0, 55, - 50 ], [ 0, 0, - 51 ] );
-		await shot( page, 'run-air-high', [ 0, 170, - 170 ], [ 0, 0, - 171 ] );
+		// (WAKES_VIEWS: some of them)
+		const views = { transom: [ [ 0, 2.2, - 3.6 ], [ 0, - 1, - 40 ] ], astern: [ [ 0, 4.5, - 8 ], [ 0, 0, - 80 ] ], abeam: [ [ 30, 2.5, - 40 ], [ - 10, 0, - 70 ] ], air: [ [ 0, 55, - 50 ], [ 0, 0, - 51 ] ], 'air-high': [ [ 0, 170, - 170 ], [ 0, 0, - 171 ] ] };
+		for ( const [ name, [ eye, at ] ] of Object.entries( views ) ) if ( ! process.env.WAKES_VIEWS || process.env.WAKES_VIEWS.split( ',' ).includes( name ) ) await shot( page, 'run-' + name, eye, at );
 
 	}
 
