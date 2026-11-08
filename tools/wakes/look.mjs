@@ -158,7 +158,7 @@ async function shot( page, name, eye, at, opts = {} ) {
 		}
 
 	}, [ eye, at, opts ] );
-	await frames( page, 3 );
+	await frames( page, opts.wait ?? 3 );
 	await page.screenshot( { path: join( OUT, name + '.png' ) } );
 	if ( opts.pair !== false ) {
 
@@ -262,6 +262,8 @@ if ( scenes.includes( 'run' ) || scenes.includes( 'match' ) ) {
 		// (WAKES_VIEWS: some of them)
 		const views = { transom: [ [ 0, 2.2, - 3.6 ], [ 0, - 1, - 40 ] ], astern: [ [ 0, 4.5, - 8 ], [ 0, 0, - 80 ] ], abeam: [ [ 30, 2.5, - 40 ], [ - 10, 0, - 70 ] ], air: [ [ 0, 55, - 50 ], [ 0, 0, - 51 ] ], 'air-high': [ [ 0, 170, - 170 ], [ 0, 0, - 171 ] ] };
 		for ( const [ name, [ eye, at ] ] of Object.entries( views ) ) if ( ! process.env.WAKES_VIEWS || process.env.WAKES_VIEWS.split( ',' ).includes( name ) ) await shot( page, 'run-' + name, eye, at );
+		// (WAKES_SEQ=n: n frames running, one after another, close over her arm, to see whether its crests crawl over the grid)
+		for ( let i = 1; i <= ( + process.env.WAKES_SEQ || 0 ); i ++ ) await shot( page, 'run-seq-' + i, [ 6, 3.5, - 12 ], [ - 2, 0, - 40 ], { pair: false, wait: i === 1 ? 3 : 1 } );
 
 	}
 

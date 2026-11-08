@@ -160,6 +160,8 @@ export class WaterSurface {
 
 		this.waves = waves;
 		this.wakes = waves.wakes; // ((M17) the boats' wakes' far arms: WakeWaves)
+		// ((M17) and the finest of its grid's spacings, for what of them it draws near you: the CPU's heights are those)
+		this.wakes.spacing = ( LEAF[ tier ] ?? LEAF.low ) / ( LOD_GRID[ tier ] ?? LOD_GRID.low );
 		this.terrain = terrain;
 		this.shore = shore;
 		this.lod = new CDLOD( { gridSize: LOD_GRID[ tier ] ?? LOD_GRID.low, leafSize: LEAF[ tier ] ?? LEAF.low, levels: 12, minY: - 4, maxY: 4, prefix: 'oceanLod', follow: ORIGIN_STEP } );

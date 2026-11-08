@@ -41,6 +41,13 @@ export const WAKE = {
 };
 const MAX = { low: 24, mid: 40, high: 40 }; // samples sent to the sea
 const TRACKS = { low: 2, mid: 4, high: 4 }; // boats' wakes at once
+// how the crests too short for the sea's grid fade, by its spacing over their length: as the open sea's waves do (5 to 2.5
+// vertices a wavelength). (Tried on low from 2.5 to 2, so the console's 5.6 m crests showed at 44% on its 2.3 m grid: there the
+// triangles drew them more than half wrong against the CPU's, 7.6 mm RMS on 13.8, and they weren't to be seen astern. So on low
+// they're left out, drawn and floated on alike: docs/m17/wakes.md)
+const DRAWN = { low: [ 0.2, 0.4 ], mid: [ 0.2, 0.4 ], high: [ 0.2, 0.4 ] };
+// what of a wave of length lam the sea's grid of that spacing draws (as the GLSL's wakeAt)
+export const wakeDrawn = ( spacing, lam, tier = 'high' ) => 1 - smooth( ( DRAWN[ tier ] ?? DRAWN.low )[ 0 ], ( DRAWN[ tier ] ?? DRAWN.low )[ 1 ], spacing / lam );
 const KELVIN_TAN = 1 / Math.sqrt( 8 ); // (tan 19.47 degrees)
 const TAU = Math.PI * 2;
 const smooth = ( a, b, v ) => {
@@ -133,10 +140,14 @@ export class WakeWaves {
 
 		const max = this.max = MAX[ tier ] ?? MAX.low, tracks = this.maxTracks = TRACKS[ tier ] ?? TRACKS.low;
 		this.range = WAKE.range[ tier ] ?? WAKE.range.low;
+		this.tier = DRAWN[ tier ] ? tier : 'low';
+		// (the sea's finest grid spacing, m, as WaterSurface tells it: the CPU's crests are what that draws, near you. 0, with no
+		// sea: all of them)
+		this.spacing = 0;
 		this.tracks = new Map();
 		// what's sent (world, doubles): each sample's place, heading, envelope behind the arm (m), age, k, cos theta, height;
 		// and its two arms' (side 0 to starboard, 1 to port): where the crests are, their wave vector, their phase there
-		this.s = { x: new Float64Array( max ), z: new Float64Array( max ), a: new Float64Array( max ), sig: new Float64Array( max ), age: new Float64Array( max ), k: new Float64Array( max ), cos: new Float64Array( max ), amp: new Float64Array( max ) };
+		this.s = { x: new Float64Array( max ), z: new Float64Array( max ), a: new Float64Array( max ), sig: new Float64Array( max ), age: new Float64Array( max ), k: new Float64Array( max ), cos: new Float64Array( max ), amp: new Float64Array( max ), drawn: new Float64Array( max ) };
 		this.arm = { qx: new Float64Array( max * 2 ), qz: new Float64Array( max * 2 ), kx: new Float64Array( max * 2 ), kz: new Float64Array( max * 2 ), c: new Float64Array( max * 2 ), lam: new Float64Array( max ) };
 		this.span = new Int32Array( tracks * 2 ); // each track's samples [ from, to )
 		this.box = new Float64Array( tracks * 4 ); // and where its crests can reach: min x, z, max x, z
@@ -176,7 +187,7 @@ float wakeAt( vec2 x, float spacing, out vec2 slope ) {
 			float k = B.y, cs = B.z, sn = sqrt( max( 1.0 - cs * cs, 0.0 ) );
 			float om = sqrt( ${ f( GRAVITY ) } * k ), go = B.x * 0.5 * om / k;
 			vec2 d = vec2( cos( A.z ), sin( A.z ) ), side = sn * vec2( - d.y, d.x );
-			float lam = ${ f( TAU ) } / k, amp = B.w * ( 1.0 - smoothstep( 0.2, 0.4, spacing / lam ) );
+			float lam = ${ f( TAU ) } / k, amp = B.w * ( 1.0 - smoothstep( ${ f( DRAWN[ this.tier ][ 0 ] ) }, ${ f( DRAWN[ this.tier ][ 1 ] ) }, spacing / lam ) );
 			for ( int e = 0; e < 2; e ++ ) {
 				vec2 n = cs * d + ( e == 0 ? - side : side );
 				vec2 Q = A.xy + go * n, K = k * n;
@@ -391,7 +402,7 @@ float wakeAt( vec2 x, float spacing, out vec2 slope ) {
 		}
 
 		// (cut short by what the tier sends: the last one sent ends them)
-		if ( this.n > first ) this.s.amp[ this.n - 1 ] = 0;
+		if ( this.n > first ) this.s.amp[ this.n - 1 ] = this.s.drawn[ this.n - 1 ] = 0;
 
 	}
 
@@ -428,6 +439,8 @@ float wakeAt( vec2 x, float spacing, out vec2 slope ) {
 		}
 
 		A.lam[ i ] = lam;
+		// (the height the CPU reads: what the sea's grid draws of it near you; the GPU's sent all of it, and fades it by its own grid)
+		S.drawn[ i ] = S.amp[ i ] * wakeDrawn( this.spacing, lam, this.tier );
 
 	}
 
@@ -509,7 +522,7 @@ float wakeAt( vec2 x, float spacing, out vec2 slope ) {
 					const sg = u > 0 ? 0.45 * ( A.lam[ p ] + ( A.lam[ i ] - A.lam[ p ] ) * t ) : S.sig[ p ] + ( S.sig[ i ] - S.sig[ p ] ) * t;
 					const q = u / sg;
 					if ( q * q > 12 ) continue;
-					const env = Math.exp( - 0.5 * q * q ) * win * ( S.amp[ p ] + ( S.amp[ i ] - S.amp[ p ] ) * t );
+					const env = Math.exp( - 0.5 * q * q ) * win * ( S.drawn[ p ] + ( S.drawn[ i ] - S.drawn[ p ] ) * t );
 					const kx = A.kx[ pj ] + ( A.kx[ ij ] - A.kx[ pj ] ) * t, kz = A.kz[ pj ] + ( A.kz[ ij ] - A.kz[ pj ] ) * t;
 					// (each end's phase from its own place, k n . ( x - P ) - omega age, between them)
 					const ph = kx * x + kz * z - ( A.c[ pj ] + ( A.c[ ij ] - A.c[ pj ] ) * t );

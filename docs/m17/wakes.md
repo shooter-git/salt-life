@@ -56,11 +56,12 @@ Each sample carries:
 **The sea.**
 - In the vertex shader, on the grid's point, as the open sea's waves are, under the cave's calm and the swash's sheet. Its slope goes into the normal.
 - Faded out as the water shoals from 1.5 m to 0.2 m (`WAKE_SHOAL`), where it would have broken.
-- The waves too short for the grid's spacing fade as the open sea's do (5 to 2.5 vertices a wavelength).
+- The waves too short for the grid's spacing fade as the open sea's do (5 to 2.5 vertices a wavelength). On low's 2.3 m grid that leaves out the console's 5.6 m crests: see [On low](#on-low).
 - Not in the plain sea a device that draws on its CPU loads with (`WATER_PLAIN`), so nothing's added before ready there. It's in the whole sea put in after the start (`fullSea`). No texture. Its uniforms: 2 a sample and 2 a track, 89 on mid and high, 53 on low.
 
 **The CPU.**
 - `Waves.heightAt` adds it at the point it finds under (x, z) (the grid's point, as drawn), with the same shoaling. So the boats, the swimmer, the bobber, the spray, the debris and the foam's patches all ride it.
+- What it adds is what the sea draws near you: each sample's height faded by the sea's finest grid spacing (`WaterSurface` sets `wakes.spacing`: 2.29 m on low, 0.4 on mid, 0.25 on high; `wakeDrawn`), as `Waves` has always evaluated only the waves the tier draws. On mid and high that's all of every boat's. With no sea (Node), all of it.
 - `Waves.displacement` doesn't: the whitecaps' crests are the open sea's.
 
 **The foam** is `Wake.js` as it was.
@@ -113,10 +114,20 @@ On this machine (8 cores), shared all along with three other streams' renders an
 | 45 m astern, 8 m off (first run) | 0.25 m | 0.77 / 7.1 mm | 86 / 245 mm | 86 mm |
 | 45 m astern, 8 m off | 0.25 m | 0.43 / 4.0 mm | 50 / 158 mm | 49 mm |
 | 200 m astern, 26 m off | 0.25 m | 0.57 / 7.1 mm | 34 / 144 mm | 34 mm |
-| low, 45 m astern (console at 24 kn) | 2.3 m | 31 / 83 mm | 30 / 83 mm | 0 |
-| low, 200 m astern | 2.3 m | 16 / 60 mm | 16 / 58 mm | 0 |
+| low, 45 m astern (console at 24 kn; the CPU's then unfaded) | 2.3 m | 31 / 83 mm | 30 / 83 mm | 0 |
+| low, 200 m astern (the same) | 2.3 m | 16 / 60 mm | 16 / 58 mm | 0 |
+| low, 45 m astern, drawn at 44% (tried, not kept) | 2.3 m | 7.6 / 34 mm | 13.8 / 38 mm | 9.4 mm |
+| low, 200 m astern, the same | 2.3 m | 4.1 / 22 mm | 6.9 / 25 mm | 4.4 mm |
 
-On low the console's 5.6 m crests aren't drawn at all (below), so there the difference is the crests themselves.
+The first two were before the CPU took the sea's grid into account: low drew none of the console's crests and the CPU had them all. Now on low it has none of hers either (`test/wakes.mjs`: on low, a sportfisher's crests the shader's and the CPU's alike, to 0.00 mm).
+
+## On low
+
+Low's sea grid is 2.29 m near you, so the console's 5.6 m crests are 2.4 vertices a wavelength, under the 2.5 at which the open sea's waves are let go. Tried (2026-11-08): fading the wakes on low from 2.5 to 2 vertices a wavelength instead, so her crests were drawn at 44% near you, the CPU's matched to that.
+- **Against the CPU:** the triangles drew them more than half wrong: 7.6 mm RMS off on crests of 13.8 (the table above).
+- **Seen astern** with and without them: her arms weren't to be told apart. Four frames running, close over her arm, showed nothing regular enough to call a crest.
+
+So on low they're left out, drawn and ridden alike: on a phone a console's wake is her foam, and a kayak doesn't rock in it. The lobster boat's crests (8 to 9 m: about 60 to 85% of them near you) and the sportfisher's (13 m, all of them) are drawn and ridden on low as on the others.
 
 Without the crests the same patch differs by 0.10 mm RMS (the open sea's own inversion): the rest is the triangles between vertices.
 
@@ -151,10 +162,9 @@ Everything else passed in both: 66 and 39 draw calls of 150, 218k and 170k trian
 ## Not verified, and left
 
 - **A real graphics card,** and a phone's frame rate with the loop in the vertex shader: not measured here (Devices). With no boat under way the loop ends at once.
-- **On low, the console's crests aren't drawn near you:** her 5.6 m waves are under 2.5 vertices a wavelength on low's 2.3 m grid, so they fade out as the open sea's short waves do there. The lobster boat's (8 to 9 m) and the sportfisher's (13 m) are drawn. The CPU has them all, so on low a kayak rocks in a passing console's wake that's drawn only as her foam, and a boat in company leaves no foam on your screen (the foam's only the boat you're in, as before).
+- **On low, no console's crests** ([On low](#on-low)), and a boat in company leaves no foam on your screen (the foam's only the boat you're in, as before), so on a phone another player's console passes and leaves nothing to see but her.
 - **Two players:** a boat in company's wake from where she's drawn on each game; `tools/two-players` wasn't run. Each game's samples come from its own frames, so the crests can differ a little between the two.
 - **Shallow water:** the waves are deep water's, faded out as it shoals under 1.5 m. A wake's growth and change of shape as it nears the depth's critical speed isn't modelled.
 - **The kayak's views in the game:** the look tool's kayak scene timed out at load 45 (a few frames a minute); the Node test measures her.
 - **The ready A/B, `north-plotter.mjs` and a third complete check at a quiet hour:** the machine stayed at load 25 to 80 all afternoon.
-- **Low's crests:** fading the wake's crests over 2.5 to 2 vertices a wavelength (not the open sea's 5 to 2.5) would show the console's on low near you at about 40% height; not tried.
 - **Left for the next stream:** stream 2's note (the shared notes) asked for the swash's 0.35 m run-up floor and the front's foam to go with the shore field's exposure, for the flats' hard white line. It's the sea's shader, but not done here.

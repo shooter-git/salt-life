@@ -8,7 +8,7 @@ export async function resolve( specifier, context, next ) {
 	return next( specifier, context );
 }` ) );
 globalThis.window = globalThis.window || { devicePixelRatio: 1 };
-const { WakeWaves, WAKE, wakeTan, wakeCos, wakeHeight } = await import( '../src/ocean/WakeWaves.js' );
+const { WakeWaves, WAKE, wakeTan, wakeCos, wakeHeight, wakeDrawn } = await import( '../src/ocean/WakeWaves.js' );
 const { Waves } = await import( '../src/ocean/Waves.js' );
 const { WaterQuery } = await import( '../src/ocean/WaterQuery.js' );
 const { loadBoat } = await import( '../src/world/boat/Boats.js' );
@@ -62,6 +62,11 @@ G.seaLevel.value = 0;
 	const H17 = Math.max( ...[ 5, 6, 7, 8, 9, 10 ].map( ( U ) => wakeHeight( U, 17, 12 / 1.025, 20 ) ) );
 	ok( H17 > 0.22 && H17 < 0.4, `their 17 m monohull, 20 m off at its highest: ${ H17.toFixed( 2 ) } m (Macfarlane: 0.33 in 6 m of water)` );
 	ok( wakeHeight( 0.5, 5.61, 2.49, 10 ) === 0, 'a boat barely moving leaves none' );
+	// (what the sea's grid draws of them, near you, and so what the CPU has: on low's 2.3 m grid not the console's 5.6 m crests,
+	// about half the lobster boat's at 16 kn and all the sportfisher's; on mid's and high's all of them)
+	ok( wakeDrawn( 16 / 7, 5.61, 'low' ) === 0, 'on low the console\'s crests aren\'t drawn near you, nor ridden' );
+	ok( wakeDrawn( 16 / 7, 7.9, 'low' ) > 0.5 && wakeDrawn( 16 / 7, 12.9, 'low' ) === 1, `  the lobster boat's at 16 kn ${ ( wakeDrawn( 16 / 7, 7.9, 'low' ) * 100 ).toFixed( 0 ) }% of them, the sportfisher's whole` );
+	ok( wakeDrawn( 0.4, 5.61, 'mid' ) === 1 && wakeDrawn( 0.25, 5.61, 'high' ) === 1, '  and on mid and high all of the console\'s' );
 
 }
 
@@ -216,15 +221,17 @@ function run( w, key, U, secs, L, vol, at = { x: 0, z: 0 }, dir = 0, t0 = 0, eac
 }
 
 // ---- the uniforms about the sea's origin, as the CPU's samples less it; tens of km out the same crests
-{
+for ( const [ tier, spacing, L, V ] of [ [ 'mid', 0, 5.61, 2.49 ], [ 'low', 16 / 7, 12.84, 18.48 ] ] ) {
 
-	const w = new WakeWaves( { tier: 'mid' } ), O = { x: 40960, z: - 20480 };
-	const end = run( w, 'own', 15, 30, 5.61, 2.49, { x: 41000, z: - 20500 }, 0.6 );
+	const w = new WakeWaves( { tier } ), O = { x: 40960, z: - 20480 };
+	w.spacing = spacing;
+	const edges = [ 0.2, 0.4 ];
+	const end = run( w, 'own', 15, 30, L, V, { x: 41000, z: - 20500 }, 0.6 );
 	w.place( O );
 	const A = w.uniforms.wakeA.value, B = w.uniforms.wakeB.value;
 	let same = true;
 	for ( let i = 0; i < w.n; i ++ ) if ( Math.abs( A[ i ].x - ( w.s.x[ i ] - O.x ) ) > 1e-9 || B[ i ].y !== w.s.k[ i ] || B[ i ].w !== w.s.amp[ i ] ) same = false;
-	ok( same && w.uniforms.wakeTracks.value === 1, 'the uniforms are the CPU\'s samples about the sea\'s origin' );
+	if ( tier === 'mid' ) ok( same && w.uniforms.wakeTracks.value === 1, 'the uniforms are the CPU\'s samples about the sea\'s origin' );
 	// (the GPU's sum, worked here in 32-bit floats from the uniforms as wakeAt reads them, against the CPU's in doubles)
 	const f = Math.fround;
 	const gpuAt = ( x, z ) => {
@@ -236,7 +243,7 @@ function run( w, key, U, secs, L, vol, at = { x: 0, z: 0 }, dir = 0, t0 = 0, eac
 		for ( let s = span.x, i = 0; s < span.y; s ++, i ++ ) {
 
 			const a = A[ s ], b = B[ s ], k = f( b.y ), cs = f( b.z ), sn = f( Math.sqrt( 1 - cs * cs ) ), om = f( Math.sqrt( g * k ) ), go = f( b.x * 0.5 * om / k );
-			const d = [ f( Math.cos( a.z ) ), f( Math.sin( a.z ) ) ], side = [ - sn * d[ 1 ], sn * d[ 0 ] ], lam = f( 2 * Math.PI / k ), amp = f( b.w );
+			const d = [ f( Math.cos( a.z ) ), f( Math.sin( a.z ) ) ], side = [ - sn * d[ 1 ], sn * d[ 0 ] ], lam = f( 2 * Math.PI / k ), r0 = Math.min( 1, Math.max( 0, ( spacing / lam - edges[ 0 ] ) / ( edges[ 1 ] - edges[ 0 ] ) ) ), amp = f( b.w * ( 1 - r0 * r0 * ( 3 - 2 * r0 ) ) );
 			for ( let e = 0; e < 2; e ++ ) {
 
 				const sg0 = e === 0 ? - 1 : 1, n = [ cs * d[ 0 ] + sg0 * side[ 0 ], cs * d[ 1 ] + sg0 * side[ 1 ] ];
@@ -283,7 +290,7 @@ function run( w, key, U, secs, L, vol, at = { x: 0, z: 0 }, dir = 0, t0 = 0, eac
 
 	}
 
-	ok( scale > 0.03 && worst < 0.002, `41 km out, the shader's sum in floats about the origin as the CPU's in doubles: ${ ( worst * 1000 ).toFixed( 2 ) } mm at most, of crests ${ ( scale * 100 ).toFixed( 1 ) } cm` );
+	ok( scale > 0.01 && worst < 0.002, `${ tier }, 41 km out, the shader's sum in floats about the origin as the CPU's in doubles: ${ ( worst * 1000 ).toFixed( 2 ) } mm at most, of crests ${ ( scale * 100 ).toFixed( 1 ) } cm${ spacing ? ', both at low\'s finest grid' : '' }` );
 	void tan;
 
 }
