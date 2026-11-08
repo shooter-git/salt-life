@@ -68,7 +68,9 @@ What [M17.md](../M17.md) listed for a guest on someone else's boat ([Aboard toge
 
 ## Readings
 
-Two complete checks on clean copies, both passed: 138.3 and 130.8 MB of script memory of 150 (9c72bec and f24eb11; the cap's change since is company only), 62 and 67 draw calls, 188,827 and 209,739 triangles, 64.7 and 65.0 MB of textures, 7.0 MB before ready, 78.2 MB in all. Programs before ready: the same 16 as `3f1367b`, by name and number (`tools/heap/programs.mjs`). **The ready A/B wasn't run**: the machine's load was 40 to 65 all afternoon (the checks' own ready times read 11 to 27 s); no shader changed and no program was added before ready. `tools/gpu-limits.mjs` not run: no shader changed.
+Two complete checks on clean copies, both passed: 138.3 and 130.8 MB of script memory of 150 (9c72bec and f24eb11; the cap's change since is company only), 62 and 67 draw calls, 188,827 and 209,739 triangles, 64.7 and 65.0 MB of textures, 7.0 MB before ready, 78.2 MB in all. Programs before ready: the same 16 as `3f1367b`, by name and number (`tools/heap/programs.mjs`). **The ready A/B is the M17 session's** to run for every stream's branch on a quiet machine (the load here was 20 to 65 all day, and the checks' own ready times read 11 to 27 s); no shader changed and no program was added before ready. `tools/gpu-limits.mjs` not run: no shader changed.
+
+**Script memory over a long run with company** (`mem.mjs`, a build of `17b28b0` served on its own, low tier, both games drawing at 640 by 360, after a forced collection each 2.5 minutes; Robin's sportfisher going about at sea with Sam aboard). Geometries, textures and programs held flat (158 to 159, 94, 94 on Robin's; 164, 93 to 94, 92 on Sam's). Script memory rose slowly once it had settled: Robin's 94.0 to 95.8 MB and Sam's 93.4 to 95.0 MB from the tenth minute to the forty-third, about 2.7 and 2.4 KB a frame over some 670 frames each (0.3 fps: the machine was shared). The same game alone the same way (`MEM_MODE=alone`) rose too: 88.5 to 89.8 MB over 642 frames, 2.0 KB a frame (0.4 fps). So most of the rise isn't company's, and what company adds, about half a kilobyte a frame, is inside the runs' noise. A very slow rise still isn't ruled out, alone or together: at a phone's 30 fps, 2 KB a frame would be some 3.6 MB a minute if it never stopped, which these few hundred frames can't say. (`mem.mjs`'s own last line reads from its second reading, before the game had settled, so it reads a fall on one game and a large rise on the other: the per-reading figures above are the ones to go by.)
 
 ## Not done
 
@@ -77,3 +79,5 @@ Two complete checks on clean copies, both passed: 138.3 and 130.8 MB of script m
 - A guest's fish in someone else's hold is sold anywhere they sell and kept on their own ice.
 - A game from before M17 reads a console's paint wrongly while her ladder's down.
 - Two devices through All the Spaces' room, as for everything in `together/`.
+- A slow rise of script memory over a long run, alone and with company alike (Readings): not traced.
+- The ready A/B: left for the M17 session, which runs it for every stream's branch on a quiet machine.
