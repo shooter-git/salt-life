@@ -2,6 +2,7 @@ import { Vector2 } from '../engine/index.js';
 import { G } from '../core/Globals.js';
 import { islandTime, weatherHere, withEdge, seaSwell, seaTurn, seaPeriodOf, showers, towardOf, hurricaneAt, hurricaneNews, hash, squallWind, gustShare, FRONT_KMH, STORM_RANGE, SURF_MAX } from '../game/Weather.js';
 import { FRONT_KM, eyeCover, bandCells } from '../sky/SkyProClouds.js';
+import { tideAt } from '../game/IslandClock.js';
 
 // (Salt Life) The island's weather, each frame: what the day brings (game/Weather.js), or what you picked
 // on your own, eased onto everything that shows it:
@@ -33,7 +34,7 @@ import { FRONT_KM, eyeCover, bandCells } from '../sky/SkyProClouds.js';
 //     (Weather.hurricaneNews: this.news, for Joe's slate, the clock's menu and the dash). Its wind can come
 //     round the compass as it passes, so the wind turns the shorter way to where it's going, and quicker
 //     in the light airs of its eye. On your own a picked one passes (pick 'hurricane', picked at `since`).
-//     (step 2) Its storm surge is the sea's level (G.seaLevel).
+//     (step 2) Its storm surge is the sea's level (G.seaLevel), (M17) on the tide's (IslandClock.tideAt: `tide`).
 //   - (M14) each of the showers its own cloud towering over it (SkyProClouds.setStorms): a shower's
 //     towering cumulus, a thunderstorm's cumulonimbus and its anvil.
 //   - (M15) all of it the weather where you are (the camera: Weather.weatherHere), out past the island the
@@ -133,6 +134,7 @@ export class WeatherDriver {
 		this.news = null; // (M13) what's said of the next one (Weather.hurricaneNews), or null
 		this._since = 0;
 		this._newsT = 0;
+		this.tide = 0; // (M17) the tide's height now (m about mean sea level: IslandClock.tideAt)
 
 	}
 
@@ -180,6 +182,7 @@ export class WeatherDriver {
 		}
 
 		const T = islandTime( day, hour );
+		this.tide = tideAt( T );
 		// ((M15) the showers about you first: the rain where you are is theirs, out past the island)
 		const picked0 = pick !== this._pick || since !== this._since;
 		if ( picked0 || this._showerRain.size > 160 ) this._showerRain.clear();
@@ -290,11 +293,13 @@ export class WeatherDriver {
 		G.caustics.value = Math.max( 0, 1 - 0.85 * w.overcast - 0.15 * w.storm ) * ( 1 - 0.7 * w.murk );
 		G.murk.value = w.murk;
 		// ((M13) a hurricane's storm surge: the sea's level, everything that reads it following it, and the
-		// sea's culling box with it, opened for its surf's crests)
-		G.seaLevel.value = w.surge;
+		// sea's culling box with it, opened for its surf's crests; (M17) on the tide, the two adding up: a hurricane
+		// at spring high water is the worst of it)
+		G.tide.value = this.tide;
+		const sea = G.seaLevel.value = w.surge + this.tide;
 		if ( this.water.lod ) {
 
-			seaBox( w.surge, w.surf, this.waves.reachOf( seaSwell( w.swell, w.blow ), w.windSea ), _box );
+			seaBox( sea, w.surf, this.waves.reachOf( seaSwell( w.swell, w.blow ), w.windSea ), _box );
 			this.water.lod.minY = _box[ 0 ];
 			this.water.lod.maxY = _box[ 1 ];
 

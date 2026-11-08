@@ -39,9 +39,13 @@ import { G, GRAVITY } from '../core/Globals.js';
 // westerly's does; a uniform branch too, and on the GPU only where its field reaches (its exposure).
 // (M13) A storm surge: the sea's level (G.seaLevel) rises over the beach, and the shore field solved at
 // its sea level wouldn't know the water there. So a hurricane's surge gets a field of its own, solved at
-// its highest (setSurgeField: a worker's, before it comes), and the island's own swell reads the two
-// blended as far as the sea's risen toward it (surgeMix): the waves run on over the flooded beach as they
-// would in water that deep. At the usual sea level it's the island's own field alone, as it always was.
+// its highest (setUpperField: a worker's, before it comes), and the island's own swell reads the two
+// blended as far as the sea's risen toward it (upperMix): the waves run on over the flooded beach as they
+// would in water that deep. (M17) And the tide's: the island's own field is solved at low water (TIDE_FIELDS[ 0 ],
+// at the load: ShoreTrain.level, its field's seaLevel) and again at high water (TIDE_FIELDS[ 1 ], after the start,
+// in a worker), the two blended by where the sea is between them, the surge's taking the high water's place (one
+// texture slot: the sea's at 16 of 16 on high) while a hurricane's coming. Until high water's is solved, low
+// water's alone, at any level, as the island's own was at a surge's before its field came.
 // (M12) The surf's currents and its breakers, for a swimmer (CPU: currentAt, breakerAt): the rips,
 // seaward through the bar's channels (shoreBar) from where you can't stand out past the breakers, fed by
 // currents along the beach inside them, as strong as the breakers there; and the breaker a swimmer's
@@ -79,6 +83,9 @@ export const TUMBLE_H = 2.8;
 const RIP_MILK = 0.7;
 const RIP_REACH = 2.2;
 const EDGE = 100; // (M15) m: the shore's waves fade out over its field's last
+// (M17) the sea levels the island's own swell's field is solved at (m): low water's at the load, high water's after
+// the start (IslandClock: the tide reaches -0.62 and +0.72 in twenty years, and passes these one tide in a hundred)
+export const TIDE_FIELDS = [ - 0.6, 0.6 ];
 
 // (M14) where northNear looks: the point, and r off it each way
 const NEAR = [ [ 0, 0 ], [ 1, 0 ], [ - 1, 0 ], [ 0, 1 ], [ 0, - 1 ] ];
@@ -105,7 +112,11 @@ class ShoreTrain {
 		// as streaks). Old fields without it: the south's way)
 		const sd = field.swellDir || [ - 0.12, - 1 ], sl = Math.hypot( sd[ 0 ], sd[ 1 ] ) || 1;
 		this.across = [ - sd[ 1 ] / sl, sd[ 0 ] / sl ];
-		this.surge = null; // (M13) { field, level, texture }: a surge's (the island's own swell's only)
+		// ((M17) the sea level its field was solved at (computeShoreField's seaLevel); and the field solved higher,
+		// read as far as the sea's risen toward it: (M13) a surge's, (M17) or high water's, { field, level, texture }
+		// (the island's own swell's only))
+		this.level = field.seaLevel || 0;
+		this.upper = null;
 		this.amplitude = amplitude;
 		this.period = period;
 		this.runup = 1;
@@ -166,14 +177,14 @@ class ShoreTrain {
 	}
 
 	// the field at a point (bilinear): [ T, dirX * exposure, dirZ * exposure, shoreline T ]; (M13) blended
-	// with a surge's field as far as the sea's risen toward the level it was solved at
+	// with a surge's field ((M17) or high water's) as far as the sea's risen toward the level it was solved at
 	fieldAt( x, z, out = [ 0, 0, 0, 0 ] ) {
 
 		sampleField( this.field, x, z, out );
-		const m = this.surgeMix();
+		const m = this.upperMix();
 		if ( m > 0 ) {
 
-			const o = sampleField( this.surge.field, x, z, this._surgeAt || ( this._surgeAt = [ 0, 0, 0, 0 ] ) );
+			const o = sampleField( this.upper.field, x, z, this._upperAt || ( this._upperAt = [ 0, 0, 0, 0 ] ) );
 			for ( let c = 0; c < 4; c ++ ) out[ c ] += ( o[ c ] - out[ c ] ) * m;
 
 		}
@@ -182,11 +193,11 @@ class ShoreTrain {
 
 	}
 
-	// (M13) how far the sea's risen toward the surge field's level (0: none, or no field)
-	surgeMix() {
+	// (M13) how far the sea's risen from its own field's level toward the upper field's (0: none, or no field)
+	upperMix() {
 
-		const S = this.surge;
-		return S ? Math.min( 1, Math.max( 0, G.seaLevel.value / S.level ) ) : 0;
+		const U = this.upper;
+		return U ? Math.min( 1, Math.max( 0, ( G.seaLevel.value - this.level ) / ( U.level - this.level ) ) ) : 0;
 
 	}
 
@@ -281,10 +292,10 @@ export class ShoreWaves {
 			// and the bank's
 			shoreAcross: { value: new THREE.Vector4( ...home.across, ...home.across ) },
 			shoreAcross2: { value: new THREE.Vector4( ...home.across, ...home.across ) },
-			// (M13) a surge's field (the island's own until it's given), and the sea level it was solved at
-			// (0: none)
+			// (M13) a surge's field ((M17) or high water's; the island's own until it's given), and the sea levels
+			// the island's own and it were solved at ((M17) y <= x: none)
 			shoreTexS: { value: home.texture },
-			shoreSurgeLevel: { value: 0 },
+			shoreLevels: { value: new THREE.Vector2( home.level, home.level ) },
 		};
 		this.syncUniforms();
 		this.glsl = SHORE_GLSL;
@@ -356,14 +367,15 @@ export class ShoreWaves {
 	}
 
 	// (M13) a surge's field for the island's own swell (computeShoreField at the sea level `level`, m), or
-	// null to drop it once the surge's gone. The waves read it as far as the sea's risen toward `level`
-	setSurgeField( field, level = 0 ) {
+	// null to drop it once the surge's gone. The waves read it as far as the sea's risen toward `level`. (M17) Or
+	// high water's (the tide's: TIDE_FIELDS[ 1 ]), in the same slot
+	setUpperField( field, level = 0 ) {
 
 		const home = this.trains[ 0 ], U = this.uniforms;
-		if ( home.surge ) home.surge.texture.dispose();
-		home.surge = field && level > 0 ? { field, level, texture: fieldTexture( field ) } : null;
-		U.shoreTexS.value = home.surge ? home.surge.texture : home.texture;
-		U.shoreSurgeLevel.value = home.surge ? level : 0;
+		if ( home.upper ) home.upper.texture.dispose();
+		home.upper = field && level > home.level ? { field, level, texture: fieldTexture( field ) } : null;
+		U.shoreTexS.value = home.upper ? home.upper.texture : home.texture;
+		U.shoreLevels.value.set( home.level, home.upper ? level : home.level );
 
 	}
 
@@ -821,9 +833,10 @@ uniform vec2 shoreMilk4;
 // north's, the bank's)
 uniform vec4 shoreAcross;
 uniform vec4 shoreAcross2;
-// (M13) a surge's field for the island's own swell, and the sea level it was solved at (0: none)
+// (M13) a surge's field for the island's own swell ((M17) or high water's), and the sea levels the island's own
+// and it were solved at (y <= x: none)
 uniform highp sampler2D shoreTexS;
-uniform float shoreSurgeLevel;
+uniform vec2 shoreLevels;
 #define SHORE_PERIOD shoreP0.x
 #define SHORE_AMPLITUDE shoreP0.y
 #define SHORE_VARIATION shoreP0.z
@@ -876,11 +889,11 @@ vec4 shoreFieldSampleIn( highp sampler2D tex, vec4 info, vec2 xz ) {
 	return s;
 }
 vec4 shoreFieldSample( highp sampler2D tex, vec2 xz ) { return shoreFieldSampleIn( tex, shoreInfo, xz ); }
-// the south's; (M13) blended with a surge's field as far as the sea's risen toward its level
+// the south's; (M13) blended with a surge's field ((M17) or high water's) as far as the sea's risen toward its level
 vec4 terrainShoreSample( vec2 xz ) {
 	vec4 a = shoreFieldSample( shoreTex, xz );
-	if ( shoreSurgeLevel > 0.0 ) {
-		float m = clamp( shoreSeaLevel / shoreSurgeLevel, 0.0, 1.0 );
+	if ( shoreLevels.y > shoreLevels.x ) {
+		float m = clamp( ( shoreSeaLevel - shoreLevels.x ) / ( shoreLevels.y - shoreLevels.x ), 0.0, 1.0 );
 		if ( m > 0.0 ) a = mix( a, shoreFieldSample( shoreTexS, xz ), m );
 	}
 	return a;

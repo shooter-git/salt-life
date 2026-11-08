@@ -1,6 +1,7 @@
 import { GRAVITY } from '../core/Globals.js';
 import { mangroveAt } from './terrain/Mangrove.js';
 import { freeNow } from '../core/FreeNow.js';
+import { calmAt } from './terrain/Flats.js';
 
 // Offline wave-propagation field for shoreline waves.
 //
@@ -116,14 +117,16 @@ export function shelter( field, dir, { near = 150, far = 1200, step = 16, fan = 
 	}
 	return field;
 }
-// (M12) the ground under a field already solved (its depths, at its cells' middles), as the solve reads
-// the terrain: so another swell's field can be solved from it (in a worker: shore/ShoreWorker) without
-// the terrain's arrays, at the same cells
-export function fieldGround( { depth, res, size, origin, originZ = origin }, seaLevel = 0 ) {
+// (M12) the ground under a field already solved (its depths, at its cells' middles, (M17) under the sea level it was
+// solved at, `level`), as the solve reads the terrain: so another swell's field can be solved from it (in a worker:
+// shore/ShoreWorker) without the terrain's arrays, at the same cells
+export function fieldGround( { depth, res, size, origin, originZ = origin, level: seaLevel = 0, calm = null } ) {
 
 	const h = size / res;
 	return {
 		size, origin, originZ,
+		// ((M17) and how much of the shore's waves is left over the flats: TerrainData.shoreCalmAt's, as it's passed)
+		shoreCalmAt: ( x, z ) => calmAt( calm, x, z ),
 		heightAt: ( x, z ) => {
 
 			const i = Math.min( res - 1, Math.max( 0, Math.floor( ( x - origin ) / h ) ) ), j = Math.min( res - 1, Math.max( 0, Math.floor( ( z - originZ ) / h ) ) );
@@ -306,7 +309,9 @@ export function computeShoreField( terrain, { res = 512, swellDir = [ 0, - 1 ], 
 		// exposure: how directly the local wave direction faces the incoming swell; ((M15) none inside the
 		// west's mangroves: a forest of prop roots takes a wave out within tens of metres, their creek too)
 		const align = ( dx * sdx + dz * sdz ) / sl;
-		const exposure = Math.min( 1, Math.max( 0.02, align * 1.4 + 0.1 ) ) * ( 1 - 0.97 * mangroveAt( origin + ( i + 0.5 ) * h, originZ + ( j + 0.5 ) * h ).stand );
+		const cx = origin + ( i + 0.5 ) * h, cz = originZ + ( j + 0.5 ) * h;
+		// ((M17) and over the flats, past their rim: TerrainData.shoreCalmAt)
+		const exposure = Math.min( 1, Math.max( 0.02, align * 1.4 + 0.1 ) ) * ( 1 - 0.97 * mangroveAt( cx, cz ).stand ) * ( terrain.shoreCalmAt ? terrain.shoreCalmAt( cx, cz ) : 1 );
 		// direction scaled by exposure (length = exposure), alpha = shoreline arrival time
 		data[ k * 4 ] = isFinite( t ) ? t : 1e5;
 		data[ k * 4 + 1 ] = dx * exposure;
@@ -318,6 +323,7 @@ export function computeShoreField( terrain, { res = 512, swellDir = [ 0, - 1 ], 
 	// ((M16) the working arrays' memory back at once, at the load: 7 MB)
 	freeNow( speed, T, state, Tshore, Ts, spare );
 	// ((M15) and the way the swell came: the waves' own along-shore measure is taken across it)
-	return { data, res, cellSize: h, origin, originZ, size, depth, swellDir: [ sdx / sl, sdz / sl ] };
+	// ((M17) and the sea level it was solved at)
+	return { data, res, cellSize: h, origin, originZ, size, depth, seaLevel, swellDir: [ sdx / sl, sdz / sl ] };
 
 }

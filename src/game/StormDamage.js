@@ -1,4 +1,5 @@
 import { weatherAt, lastHurricane } from './Weather.js';
+import { tideAt } from './IslandClock.js';
 
 // (M13 step 6) What a hurricane does to the island, and its mending: from the clock, as the weather is,
 // so the same for everyone. Reckoned from the last hurricane whose winds reached the island
@@ -109,10 +110,10 @@ function trackOf( h, pick, since ) {
 	let wind = 0, water = - 1, runup = - 1;
 	for ( let k = 0; k < n; k ++ ) {
 
-		const w = weatherAt( t0 + k * S, pick, since );
+		const w = weatherAt( t0 + k * S, pick, since ), sea = w.surge + tideAt( t0 + k * S ); // ((M17) on the tide)
 		wind = Math.max( wind, w.wind );
-		water = Math.max( water, w.surge + DAMAGE.reach * w.surf );
-		const r = w.surge + DAMAGE.runup * w.surf;
+		water = Math.max( water, sea + DAMAGE.reach * w.surf );
+		const r = sea + DAMAGE.runup * w.surf;
 		if ( r > runup ) {
 
 			runup = r;

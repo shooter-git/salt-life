@@ -10,7 +10,7 @@ import { TerrainData } from './world/TerrainData.js';
 import { decodeIsland } from './world/terrain/IslandDecode.js';
 import { NAMES } from './game/Chart.js';
 import { Offshore, decodeSeabed } from './world/terrain/Offshore.js';
-import { setDetailData } from './world/terrain/DetailTextures.js';
+import { setDetailData, releaseDetailData } from './world/terrain/DetailTextures.js';
 import { WORLD } from './world/WorldLayout.js';
 import { Colliders } from './world/Colliders.js';
 import { Village } from './world/Village.js';
@@ -24,7 +24,7 @@ import { Sky } from './sky/Sky.js';
 import { Waves, SWELL_WEST } from './ocean/Waves.js';
 import { WaterQuery } from './ocean/WaterQuery.js';
 import { WaterSurface } from './ocean/WaterSurface.js';
-import { ShoreWaves, FAIR_AMPLITUDE } from './ocean/ShoreWaves.js';
+import { ShoreWaves, FAIR_AMPLITUDE, TIDE_FIELDS } from './ocean/ShoreWaves.js';
 import { SEABED } from './world/terrain/SeabedModel.js';
 import { findsAbout, hurricaneWake } from './game/Finds.js';
 import { CHECK_SPOTS, checkSpotAt } from './game/CheckSpots.js';
@@ -35,7 +35,7 @@ import { classicWorker } from './core/ClassicWorker.js';
 import { Player } from './player/Player.js';
 import { BoatController } from './player/BoatController.js';
 import { GameState } from './game/GameState.js';
-import { DAY_RATE, START_HOUR, advance } from './game/IslandClock.js';
+import { DAY_RATE, START_HOUR, advance, tideAt } from './game/IslandClock.js';
 import { grassMask } from './game/TrapWork.js';
 import { islandTime, isPick, NORTH, weatherAt, towardOf, seaSwell } from './game/Weather.js';
 import { BACK_MS, awayClock, awayOf, boatLeft, cleanBoats, leftOf, othersAway, tellOthers, withRecord } from './game/Away.js';
@@ -380,7 +380,7 @@ export class App {
 			windAt: ( T ) => {
 
 				const w = weatherAt( T, this.weatherPick(), this.settings.weatherSince );
-				return { wind: w.wind, toward: towardOf( w.windAngle ), surge: w.surge };
+				return { wind: w.wind, toward: towardOf( w.windAngle ), surge: w.surge + tideAt( T ) }; // ((M17) the sea's level: on the tide)
 
 			},
 			walls: this.village.buildings.filter( ( b ) => b.footprint && b.roofTop ).map( ( b ) => ( { x: b.x, z: b.z, r: ( b.footprint.r - 1 ) * 0.85, top: b.roofTop } ) ),
@@ -400,8 +400,9 @@ export class App {
 		// ---------------------------------------------------------------- ocean
 		await progress( 0.6, 'Rolling in the swell' );
 		this.waves = new Waves( { tier, terrain: this.terrainData } );
-		// the breaking shore waves: their phase from the wave travel-time field around the island
-		this.shoreField = computeShoreField( this.terrainData, { res: SHORE_RES[ tier ] ?? SHORE_RES.low, swellDir: [ WORLD.swellDir.x, WORLD.swellDir.y ] } );
+		// the breaking shore waves: their phase from the wave travel-time field around the island ((M17) at low water:
+		// high water's is solved after the start, solveTideField)
+		this.shoreField = computeShoreField( this.terrainData, { res: SHORE_RES[ tier ] ?? SHORE_RES.low, swellDir: [ WORLD.swellDir.x, WORLD.swellDir.y ], seaLevel: TIDE_FIELDS[ 0 ] } );
 		this.shore = new ShoreWaves( { field: this.shoreField } );
 		this.query = new WaterQuery( this.waves, this.terrainData, this.shore );
 		// ((v2.1.5) lean, it's loaded with a plain sea too, the whole one put in after the start: fullSea)
@@ -590,7 +591,8 @@ export class App {
 		releaseGeometries( this.rocks.group, { instanced: true } );
 		this.rocks.releaseShapes();
 		// (but the detail texture: the plants read its data as they're placed, and its bake keeps the data
-		// anyway, so letting go of the texture's reference would free nothing)
+		// anyway, so letting go of the texture's reference would free nothing; (M17) both go once they're placed:
+		// plantsPlaced)
 		releaseTextures( this.terrain.mesh, { keep: [ this.terrain.detailTexture ] } );
 		// the stalls' scans (mid and high) arrive after the game has started: they're not needed to
 		// begin, and the download before it does is limited
@@ -776,6 +778,9 @@ export class App {
 		if ( this.weather.target.north > 0.02 && ! this._northField && this._started ) this.solveNorthField();
 		// ((M15) and the bank's, out at sea, once you're near it)
 		if ( this._started ) this.bankSea();
+		// ((M17) the tide's: the island's own swell's field at high water, solved once, after the start, and again once
+		// a hurricane's surge has had its place)
+		if ( this._started && ! this._tideField && ! this._surgeKey ) this.solveTideField();
 		// ((M13) a hurricane's surge: its field solved before it comes, at its highest, dropped once it's gone)
 		if ( this._started ) {
 
@@ -1830,6 +1835,11 @@ export class App {
 
 		this.vegetation.slimRecords();
 		const T = this.terrainData;
+		T.letGoOfTheFlats(); // ((M17) what the flats' cut changed: read by the rocks' and the plants' placing alone)
+		// ((M17) and the ground's detail texture's data, kept from the load only for the plants to sample: on the GPU
+		// first, if it isn't yet)
+		this.renderer.initTexture( this.terrain.detailTexture );
+		releaseDetailData();
 		for ( const k of [ 'gully', 'rubble', 'scarp' ] ) {
 
 			if ( T._masksBefore ) T._masksBefore.delete( T[ k ] );
@@ -2316,25 +2326,47 @@ export class App {
 
 	}
 
+	// (M17) the tide's: the island's own swell's field solved at high water (TIDE_FIELDS[ 1 ]; low water's is the
+	// load's), as the westerly's is, after the start: the shore waves blend the two by where the sea is between them
+	// (ShoreWaves.upperMix). A hurricane's surge takes its place (solveSurgeField), and it's solved again after
+	solveTideField() {
+
+		if ( this._tideField ) return this._tideField;
+		const level = TIDE_FIELDS[ 1 ];
+		this._tideField = this.solveShoreField( [ WORLD.swellDir.x, WORLD.swellDir.y ], level ).then( ( field ) => {
+
+			if ( ! this._surgeKey ) this.shore.setUpperField( field, level );
+			return field;
+
+		} );
+		return this._tideField;
+
+	}
+
 	// (M13) a hurricane's storm surge: the island's own swell's field solved again at the highest the sea
-	// rises (the hurricane's peak, m), as the westerly's is, before it comes; the shore waves blend it in
-	// as the sea rises toward it. Dropped once the hurricane's gone (none: null)
+	// rises (the hurricane's peak, m, (M17) on the tide's high water), as the westerly's is, before it comes; the
+	// shore waves blend it in as the sea rises toward it, in high water's place. Dropped once the hurricane's gone
+	// (none: null), and high water's solved again (frame)
 	solveSurgeField( hurricane ) {
 
-		const key = hurricane ? `${ hurricane.tc }:${ hurricane.peak }` : null;
-		if ( key === this._surgeKey ) return;
+		const key = hurricane ? `${ hurricane.tc }:${ hurricane.peak }` : null, had = this._surgeKey;
+		if ( key === had || ( ! key && ! had ) ) return;
 		this._surgeKey = key;
 		if ( ! key ) {
 
-			this.shore.setSurgeField( null );
+			// ((M17) only once a surge's had its place: not the first frame's, with high water's on its way)
+			this.shore.setUpperField( null );
+			this._tideField = null;
 			return;
 
 		}
 
-		const level = hurricane.peak;
+		const level = hurricane.peak + TIDE_FIELDS[ 1 ];
 		this.solveShoreField( [ WORLD.swellDir.x, WORLD.swellDir.y ], level ).then( ( field ) => {
 
-			if ( this._surgeKey === key ) this.shore.setSurgeField( field, level );
+			if ( this._surgeKey !== key ) return;
+			this.shore.setUpperField( field, level );
+			this._tideField = null; // (high water's let go: solved again once the surge's gone)
 
 		} );
 
@@ -2499,7 +2531,7 @@ export class App {
 	solveShoreField( swellDir, seaLevel = 0, lee = false, over = null ) {
 
 		const home = this.shoreField;
-		const ground = over || { depth: home.depth, res: home.res, size: home.size, origin: home.origin };
+		const ground = over || { depth: home.depth, res: home.res, size: home.size, origin: home.origin, level: home.seaLevel, calm: this.terrainData.flatsCalm };
 		return new Promise( ( resolve, reject ) => {
 
 			const worker = classicWorker( ShoreWorker );

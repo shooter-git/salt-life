@@ -6,7 +6,7 @@ import { TerrainData } from '../src/world/TerrainData.js';
 import { decodeIsland } from '../src/world/terrain/IslandDecode.js';
 import { Waves, SWELL_WEST, SWELL_PERIOD } from '../src/ocean/Waves.js';
 import { WaterQuery } from '../src/ocean/WaterQuery.js';
-import { ShoreWaves, TUMBLE_H } from '../src/ocean/ShoreWaves.js';
+import { ShoreWaves, TUMBLE_H, TIDE_FIELDS } from '../src/ocean/ShoreWaves.js';
 import { computeShoreField, shelter } from '../src/world/ShoreField.js';
 import { WORLD } from '../src/world/WorldLayout.js';
 import { CHANDLERY } from '../src/game/Chandlery.js';
@@ -423,7 +423,7 @@ check( runs.every( ( [ start, foot, stall ] ) => start === 0 && foot < 0.01 && s
 	const hurSea = new Waves( { tier: 'high', terrain } );
 	hurSea.setSea( seaSwell( HURRICANE.swell, blowSeaOf( 38 ) ), gale.windSea );
 	const plain = new ShoreWaves( { field: home } ), surged = new ShoreWaves( { field: home } );
-	surged.setSurgeField( surgeField, LEVEL );
+	surged.setUpperField( surgeField, LEVEL );
 	// (at the usual sea level, the island's own field exactly)
 	let same = true;
 	G.seaLevel.value = 0;
@@ -435,7 +435,7 @@ check( runs.every( ( [ start, foot, stall ] ) => start === 0 && foot < 0.01 && s
 
 	}
 
-	check( same && surged.uniforms.shoreSurgeLevel.value === LEVEL, '(M13) at the usual sea level, a surge\'s field changes nothing' );
+	check( same && surged.uniforms.shoreLevels.value.y === LEVEL && surged.uniforms.shoreLevels.value.x === 0, '(M13) at the usual sea level, a surge\'s field changes nothing' );
 	// (as the sea rises toward its level, the waves' phase moves over to its field without a jump)
 	let jump = 0;
 	const pts = [ [ 0, - 40 ], [ 55, - 20 ], [ - 80, - 35 ], [ 120, - 30 ] ];
@@ -482,6 +482,61 @@ check( runs.every( ( [ start, foot, stall ] ) => start === 0 && foot < 0.01 && s
 	plain.setSurf( 0.4, 9, 0, 0 );
 	const dockDepth = - 0.6 - terrain.heightAt( WORLD.boatDock.position.x, WORLD.boatDock.position.z );
 	check( wetIn( plain, CHANDLERY.x, CHANDLERY.z ) === 0 && dockDepth > 2.5, `drawn out of the bay (0.6 m), the beach wider and the dock still ${ dockDepth.toFixed( 1 ) } m deep` );
+	G.seaLevel.value = 0;
+
+}
+
+// ---- (M17) the tide: the island's own swell's field solved at low water (the load's) and at high water (after the
+// start), blended by where the sea is between them; low water's alone until high water's is given; and the wash up
+// the beach following the tide
+{
+
+	const dir = [ WORLD.swellDir.x, WORLD.swellDir.y ], [ LOW, HIGH ] = TIDE_FIELDS;
+	const low = computeShoreField( terrain, { res: 512, swellDir: dir, seaLevel: LOW } ), high = computeShoreField( terrain, { res: 512, swellDir: dir, seaLevel: HIGH } );
+	const tw = new ShoreWaves( { field: low } ), lowOnly = new ShoreWaves( { field: low } ), highOnly = new ShoreWaves( { field: high } );
+	const U = tw.uniforms.shoreLevels.value;
+	check( low.seaLevel === LOW && tw.trains[ 0 ].level === LOW && U.x === LOW && U.y === LOW, `low water's field (${ LOW } m) alone until high water's is given` );
+	tw.setUpperField( high, HIGH );
+	check( U.x === LOW && U.y === HIGH, `then high water's (${ HIGH } m) beside it` );
+	const pts = [ [ 0, - 40 ], [ 55, - 20 ], [ - 80, - 35 ], [ 120, - 30 ], [ - 300, 120 ] ];
+	const same = ( a, b ) => pts.every( ( [ x, z ] ) => a.fieldAt( x, z, [ 0, 0, 0, 0 ] ).every( ( v, i ) => Math.abs( v - b.fieldAt( x, z, [ 0, 0, 0, 0 ] )[ i ] ) < 1e-6 ) );
+	G.seaLevel.value = LOW;
+	const atLow = same( tw, lowOnly );
+	G.seaLevel.value = HIGH;
+	const atHigh = same( tw, highOnly );
+	let jump = 0, prev = null;
+	for ( let L = LOW; L <= HIGH + 1e-6; L += 0.01 ) {
+
+		G.seaLevel.value = L;
+		const now = pts.map( ( [ x, z ] ) => tw.fieldAt( x, z, [ 0, 0, 0, 0 ] )[ 0 ] );
+		if ( prev ) now.forEach( ( T, i ) => jump = Math.max( jump, Math.abs( T - prev[ i ] ) / 9 ) );
+		prev = now;
+
+	}
+
+	check( atLow && atHigh && jump < 0.02, `low water's at low water, high water's at high, and between them a wave's phase moves at most ${ ( jump * 100 ).toFixed( 2 ) }% of a wave a centimetre` );
+	// (how far up the village beach the wash runs, at each: the highest ground it wets in two minutes)
+	tw.setSurf( 0.34, 9, 0, 0 );
+	const reach = ( L ) => {
+
+		G.seaLevel.value = L;
+		let top = - 9;
+		for ( let x = - 60; x <= 120; x += 30 ) for ( let z = - 20; z >= - 80; z -= 0.5 ) {
+
+			const g = terrain.heightAt( x, z );
+			if ( g < L ) continue;
+			let wet = false;
+			for ( let t = 0; t < 120 && ! wet; t += 0.25 ) wet = tw.sample( x, z, t, g, terrain ).swashLevel > g + 0.005;
+			if ( wet ) top = Math.max( top, g );
+
+		}
+
+		return top;
+
+	};
+	const up = [ reach( LOW ), reach( 0 ), reach( HIGH ) ];
+	console.log( `     the wash's top on the village beach: ${ up.map( ( v ) => v.toFixed( 2 ) ).join( ', ' ) } m at low water, mean and high water` );
+	check( up[ 1 ] - up[ 0 ] > 0.4 && up[ 2 ] - up[ 1 ] > 0.4 && up[ 2 ] - up[ 0 ] < 1.6, 'the wash running up the beach with the tide' );
 	G.seaLevel.value = 0;
 
 }
