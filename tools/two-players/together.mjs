@@ -354,7 +354,7 @@ if ( PART === 'tray' ) {
 	await ready( owner, guest );
 	await owner.game.evaluate( async () => { const { SHELL_KINDS } = await import( '/src/game/Shells.js' ); const g = window.__app.game, S = g.state.shells; for ( const k of SHELL_KINDS ) S.have[ k ] = { day: 1, id: k }; g.giveShells(); } );
 	await until( guest.game, `window.__app.together.tray && window.__app.together.tray.who === 'Robin'`, 60000 ).catch( () => {} );
-	await until( guest.game, '!! window.__app.beachcomb', 900000 ).catch( () => {} );
+	await until( guest.game, '!! window.__app.beachcomb', 2400000 ).catch( () => {} ); // (after the debris: a CPU's last late stage)
 	await frames( guest.game, 6 );
 	const s = await guest.game.evaluate( () => { const a = window.__app; return { tray: a.together.tray, wall: !! ( a.beachcomb && a.beachcomb.wall ), mine: a.game.state.shells.wall }; } );
 	say( s.tray && s.tray.who === 'Robin' && s.wall && s.mine === null, `Sam, with no set of his own (${ s.mine }), sees Robin's in Marta's tray: ${ JSON.stringify( s ) }` );
@@ -400,8 +400,9 @@ if ( PART === 'pearl' ) {
 	await ready( owner, guest );
 	const day = await owner.game.evaluate( () => { const a = window.__app; let d = a.settings.day; if ( d % 7 === 0 ) d ++; a.together.setClock( 13, d, 0.0001 ); return d; } );
 	for ( const who of [ owner, guest ] ) await who.game.evaluate( () => { const a = window.__app, p = a.player; p.position.set( 106, p.groundAt( 106, - 836, 30 ), - 836 ); p.velocity.set( 0, 0, 0 ); p.yaw = 0; } );
-	await until( guest.game, '!! ( window.__app.game.camp && window.__app.game.camp.boat )', 600000 ).catch( () => {} );
-	await until( owner.game, '!! ( window.__app.game.camp && window.__app.game.camp.boat )', 600000 ).catch( () => {} );
+	// (the camp's built once the debris is placed, the last of a CPU's late stages: minutes in, many on a busy machine)
+	await until( guest.game, '!! ( window.__app.game.camp && window.__app.game.camp.boat )', 2400000 );
+	await until( owner.game, '!! ( window.__app.game.camp && window.__app.game.camp.boat )', 600000 );
 	await frames( guest.game, 20 );
 	const was = await guest.game.evaluate( () => { const b = window.__app.game.camp.boat; return { off: b.off, kind: b.kind }; } );
 	await owner.game.evaluate( () => { const a = window.__app, b = a.boatCtl; b.moored = false; b.beached = false; b.anchor = null; b.driven = false; b.position.set( 114.3, b.position.y, - 880 ); b.velocity.set( 0, 0, 0 ); b.angular.set( 0, 0, 0 ); } );
@@ -430,19 +431,22 @@ if ( PART === 'slow' ) {
 
 		const { G: GL } = await import( '/src/core/Globals.js' );
 		const a = window.__app, b = a.boatCtl, up = b.update, R = window.__draws;
-		let boat = 0, n = 0;
+		// (each frame: the water's time it went by, and the boat's worked out over)
+		let boat = 0, n = 0, t = GL.time.value;
+		const rows = [];
 		b.update = function ( dt ) { boat += dt; return up.call( this, dt ); };
-		const t0 = GL.time.value, f0 = R.frames, w0 = performance.now(), heave = [];
-		await new Promise( ( done ) => { const f = () => { heave.push( [ b.position.y, a.waves.heightAt( b.position.x, b.position.z ) ] ); if ( ++ n >= 40 ) { R.after.splice( R.after.indexOf( f ), 1 ); done(); } }; R.after.push( f ); } );
+		const f0 = R.frames, w0 = performance.now(), heave = [];
+		await new Promise( ( done ) => { const f = () => { rows.push( [ GL.time.value - t, boat ] ); t = GL.time.value; boat = 0; heave.push( [ b.position.y, a.waves.heightAt( b.position.x, b.position.z ) ] ); if ( ++ n >= 40 ) { R.after.splice( R.after.indexOf( f ), 1 ); done(); } }; R.after.push( f ); } );
 		b.update = up;
-		const sea = GL.time.value - t0, frames = R.frames - f0;
+		const frames = R.frames - f0, sea = rows.reduce( ( s, q ) => s + q[ 0 ], 0 ), worked = rows.reduce( ( s, q ) => s + q[ 1 ], 0 );
 		const m = ( k ) => heave.reduce( ( s, v ) => s + v[ k ], 0 ) / heave.length, my = m( 0 ), mw = m( 1 );
 		let c = 0, vy = 0, vw = 0;
 		for ( const [ y, w ] of heave ) { c += ( y - my ) * ( w - mw ); vy += ( y - my ) ** 2; vw += ( w - mw ) ** 2; }
-		return { sea: +sea.toFixed( 2 ), boat: +boat.toFixed( 2 ), frames, fps: +( frames / ( performance.now() - w0 ) * 1000 ).toFixed( 1 ), corr: +( c / Math.sqrt( vy * vw ) ).toFixed( 2 ) };
+		const kept = rows.filter( ( q ) => q[ 0 ] > 0.1 && Math.abs( q[ 1 ] - q[ 0 ] ) < 0.01 * q[ 0 ] + 1e-3 ).length, slow = rows.filter( ( q ) => q[ 0 ] > 0.1 ).length;
+		return { sea: +sea.toFixed( 2 ), boat: +worked.toFixed( 2 ), frames, fps: +( frames / ( performance.now() - w0 ) * 1000 ).toFixed( 1 ), corr: +( c / Math.sqrt( vy * vw ) ).toFixed( 2 ), kept, slow, longest: +Math.max( ...rows.map( ( q ) => q[ 0 ] ) ).toFixed( 2 ) };
 
 	} );
-	say( r.fps < 10 && Math.abs( r.boat / r.sea - 1 ) < 0.05, `her owner's game at ${ r.fps } fps: the sea's gone ${ r.sea } s by over ${ r.frames } frames, and she's been worked out over ${ r.boat } s of it (M16: 0.1 s a frame, ${ ( r.frames * 0.1 ).toFixed( 1 ) }); her heave with the water under her ${ r.corr }` );
+	say( r.fps < 10 && r.kept === r.slow && Math.abs( r.boat / r.sea - 1 ) < 0.02, `her owner's game at ${ r.fps } fps: of ${ r.frames } frames, ${ r.slow } over 0.1 s (the longest ${ r.longest } s), each worked out over all the water's time it went by (${ r.kept }); the sea's gone ${ r.sea } s by and she's been worked out over ${ r.boat } s of it (M16: 0.1 s a frame, ${ ( r.frames * 0.1 ).toFixed( 1 ) }); her heave with the water under her ${ r.corr }` );
 
 }
 
