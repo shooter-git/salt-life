@@ -4,13 +4,15 @@ import { G } from '../../core/Globals.js';
 // (M17) What the flats' fish show of themselves besides their bodies (world/Fish.js' sight groups; docs/m17/sight.md),
 // each after photographs and video of the real thing:
 //   on the bottom, under the water (drawn before the sea, so the sea's own glare is over them as it's over the fish):
-//     - a fish's shadow on the sand, thrown by the sun through the water: darker and plainer than the grey fish itself
-//       (Louis Cahill's South Andros bonefish and its shadow; Peter Viau's "spotting shadows");
+//     - a fish's shadow on the sand, thrown by the sun through the water: darker and plainer than the grey fish itself,
+//       its outline the fish's from above, crisp in a foot or two of water (Louis Cahill's South Andros bonefish and its
+//       shadow; Peter Viau's "spotting shadows");
 //     - a mud: a milky cloud of silt where a bonefish has rooted head down in soft bottom, spreading and settling over
-//       a minute (Florida Sportsman's grass-flat mud);
+//       a minute, a school's puffs running together into a pale band metres across (Florida Sportsman's grass-flat mud);
 //   on the water (drawn after the sea):
-//     - nervous water: a school cruising just under a calm surface ruffles a patch of it with short crossed wavelets
-//       that flicker against the sky's sheen, moving with them (Deneki's Andros footage);
+//     - nervous water: a school cruising just under a calm surface ruffles a patch of it with short wavelets every which
+//       way that flicker against the sky's sheen, moving with them; far off and at a low angle, a dulling of the sheen
+//       (Deneki's Andros footage);
 //     - a wake: a fish pushing water as it bolts, a bulge at its head and a V of ripples spreading back;
 //     - a ring: where a tail broke the surface, or a tarpon rolled.
 // Two instanced quads, a program each, made the first time a school's within sight of you (nobody else pays for them):
@@ -20,8 +22,9 @@ import { G } from '../../core/Globals.js';
 //   marks.mud( x, y, z, size, a )   marks.ring( x, y, z, size, a )   (each lasts its life of its own)
 //   marks.end( dt, camera )                                   ages the lasting ones and draws them all
 export const MARK = { shadow: 0, mud: 1, nervous: 2, wake: 3, ring: 4 };
+export const MUD_LIFE = 70;
 const MAX = { under: 120, surface: 64 };
-const MUD = { life: 55, grow: 0.9, settle: 0.5 }, RING = { life: 1.6, grow: 2.2 };
+const MUD = { life: MUD_LIFE, grow: 2.4, settle: 0.5, most: 72 }, RING = { life: 1.6, grow: 2.2 };
 
 const NOISE = /* glsl */`
 float fmH( vec2 p ) { return fract( sin( dot( p, vec2( 127.1, 311.7 ) ) ) * 43758.5453 ); }
@@ -53,7 +56,7 @@ void main() {
 		float w = mix( 0.28, 1.0, smoothstep( - 0.85, 0.05, p.y ) ) * ( 1.0 - 0.4 * smoothstep( 0.35, 1.0, p.y ) );
 		float d = length( vec2( p.x / max( w, 0.05 ), p.y ) );
 		float tail = ( 1.0 - smoothstep( 0.15, 0.35, abs( abs( p.x ) - 0.35 * ( - 0.72 - p.y ) / 0.28 ) ) ) * step( p.y, - 0.72 ) * step( - 1.0, p.y );
-		float m = max( 1.0 - smoothstep( 0.6, 1.0, d ), tail * 0.8 );
+		float m = max( 1.0 - smoothstep( 0.78, 1.0, d ), tail * 0.8 );
 		gl_FragColor = vec4( vec3( 0.015, 0.035, 0.04 ) * uLight, m * a );
 	} else {
 		// silt: a lumpy cloud, densest in the middle, its edge broken
@@ -79,10 +82,15 @@ void main() {
 	float crest = 0.0, trough = 0.0, mask = 0.0;
 	if ( kind < 2.5 ) {
 		mask = 1.0 - smoothstep( 0.35, 1.0, length( p ) + ( fmN( p * 1.6 + seed * 13.0 ) - 0.5 ) * 0.6 );
-		vec2 q = p * vec2( 7.0, 9.0 );
-		float w = sin( q.x * 1.3 + q.y * 0.45 + uTime * 5.3 + seed * 6.0 ) * sin( - q.x * 0.55 + q.y * 1.15 + uTime * 4.1 + seed ) + ( fmN( q * 0.9 + uTime * 1.7 ) - 0.5 ) * 0.9;
-		crest = smoothstep( 0.3, 0.75, w );
-		trough = smoothstep( - 0.3, - 0.75, w );
+		// (short wavelets every which way, a hand's breadth or so, shifting: the quad's half-size, age's slot, in metres. Not
+		// a lattice of crossed waves, which reads as a pattern: nervous water's a flicker in the sheen, no two alike)
+		vec2 q = p * max( age, 1.0 ) * 0.5 * 6.0;
+		float w = ( fmN( q + vec2( uTime * 1.3, seed * 7.0 ) ) - 0.5 ) * 1.2 + ( fmN( q * 2.3 - vec2( uTime * 0.9, seed ) ) - 0.5 ) * 0.8;
+		// (wavelets finer than a pixel, as they are at a distance and at a low angle, are a dulling of the sheen, not specks:
+		// the ruffled water reflecting the sky higher up and letting more of the water's own colour through)
+		float detail = 1.0 - smoothstep( 0.35, 1.0, max( length( dFdx( q ) ), length( dFdy( q ) ) ) * 2.3 );
+		crest = smoothstep( 0.18, 0.42, w ) * 0.4 * detail;
+		trough = max( smoothstep( - 0.18, - 0.42, w ) * 0.4 * detail, 0.2 );
 	} else if ( kind < 3.5 ) {
 		// the bulge at its head, and the V spreading back from it (Kelvin's 19.5 degrees, in the quad's own units)
 		float back = 0.85 - p.y;
@@ -163,18 +171,19 @@ export class FlatsMarks {
 
 	}
 
-	// a school's sign on the water (nervous water, or a fish's wake: +y its way)
-	sign( x, y, z, yaw, len, wid, a, kind = MARK.nervous, seed = 0 ) {
+	// a school's sign on the water (nervous water, or a fish's wake: +y its way); size: nervous water's patch, m (its
+	// ripples are laid out in metres, so a big patch isn't a few big swells)
+	sign( x, y, z, yaw, len, wid, a, kind = MARK.nervous, seed = 0, size = 0 ) {
 
-		this._put( this.surface, x, y, z, yaw + Math.PI, len, wid, kind, a, 0, seed );
+		this._put( this.surface, x, y, z, yaw + Math.PI, len, wid, kind, a, size, seed );
 
 	}
 
-	// a puff of silt where a fish rooted (it lasts: MUD)
-	mud( x, y, z, size, a ) {
+	// a puff of silt where a fish rooted (it lasts: MUD; t: how long ago it was stirred up)
+	mud( x, y, z, size, a, t = 0 ) {
 
-		if ( this.muds.length >= 48 ) this.muds.shift();
-		this.muds.push( { x, y, z, size, a, t: 0, seed: Math.random(), yaw: Math.random() * 6.283 } );
+		if ( this.muds.length >= MUD.most ) this.muds.shift();
+		this.muds.push( { x, y, z, size, a, t, seed: Math.random(), yaw: Math.random() * 6.283 } );
 
 	}
 

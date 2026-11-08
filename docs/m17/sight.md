@@ -4,7 +4,9 @@ What [M17.md](../M17.md) asked of "Sight-fishing on the flats" and "The record":
 
 ## The fish drawn
 
-`game/Flats.js` (the foundation's) says where each school is by the clock, the tide and the moon. `game/FlatsFishing.js` asks it twice a second for those within 90 m of you, and `world/Fish.js` gives each a group of its own kind from a pool (`world/fish/FlatsPool.js`), parked well off until then: its anchor moves at the island's pace, and its fish swim about it in real time, each in its place in the school (along its way and across it). A school that's gone (spooked, out of reach, off the flat) has its group parked again once any run it's on is over; one given its group, or back from a fright, comes into sight over a couple of seconds. A kind too big for the water at its anchor (a tarpon laid up on the edge at a spring low, a barracuda on a bar bared at low water, a snook at the mangroves' foot) keeps to the nearest water deep enough for it within 36 m. A spooked school runs for deeper water, at its burst at once (a bonefish at 5 to 6 m/s).
+`game/Flats.js` (the foundation's) says where each school is by the clock, the tide and the moon. `game/FlatsFishing.js` asks it twice a second for those within 90 m of you, and `world/Fish.js` gives each a group of its own kind from a pool (`world/fish/FlatsPool.js`), parked well off until then: its anchor moves at the island's pace, and its fish swim about it in real time, each in its place in the school (along its way and across it). A school that's gone (spooked, out of reach, off the flat) has its group parked again once any run it's on is over; one given its group, or back from a fright, comes into sight over a couple of seconds. A kind too big for the water at its anchor (a tarpon laid up on the edge at a spring low, a barracuda on a bar bared at low water, a snook at the mangroves' foot) keeps to the nearest water deep enough for it within 36 m. A spooked school runs for deeper water, at its burst at once (a bonefish at 5 to 6 m/s). Each keeps to its height in the water as it goes (on the sand to root, up through the surface to roll).
+
+**How a bonefish tails.** Head down, as steeply as the water lets it: in a foot of water at about 40 degrees with a hand's breadth (0.11 to 0.15 m) of tail out, in deeper water at 52 degrees with the tail under. Each turns its own way to root, so a school's tails point every way. Out of the water its tail is wet and silver-white in the sun, as tailing bonefish are photographed; a permit's sickles and a shark's fin keep their own dark. A rolling tarpon's flank through the surface is a glossier mirror of the sky (wet), its back its own dark.
 
 **Tails are rarer than they'd be on a real flat.** The bonefish's feeding grounds (`game/Flats.js`' homes, the foundation's) are in 0.5 to 1.25 m of water while they feed (median 0.8 m), the top of the tide, and a bonefish's tail is out only in about 0.45 m or less. Up on the shallowest sand within reach, about one tailing school in seven by day has tailing water (45 of 550 under 0.32 m: `test/sight-fish.mjs`); the rest root head down with their tails under. Homes on the bars' tops would show many more ([the note for the M17 session](#not-verified)).
 
@@ -12,29 +14,38 @@ What [M17.md](../M17.md) asked of "Sight-fishing on the flats" and "The record":
 |---|---|---|
 | Bonefish | 3 / 4 / 5 schools of 12 / 16 / 19 | tailing: up on the shallowest sand within 25 m of the school's anchor (nearest a foot deep), each head down its own way, the tail out where the water's shallow enough for it, a ring where it breaks the surface; mudding: head down, puffs of silt left behind (plain over grass, hardly there on white sand); cruising: a loose school going on, nervous water over it in a foot or two of water, each fish's shadow on the sand; milling at a creek's mouth |
 | Spawning bonefish | 1 school of 16 / 28 / 48 of the hundreds | milling off the edge at dusk about new and full moon |
-| Permit | 2 of 1 or 2 | cruising the edge; deep-bodied, so in shallow water the black sickles of their dorsal and tail cut the surface |
-| Tarpon | 3 | laid up just under the surface, still, in calm sun; rolling: up through the surface and over, gulping air (a swirl and a splash), then down |
+| Permit | 2 of 1 or 2 | cruising the edge; one in under 0.7 m of water stops now and then to tail on a crab (guides' lore), its black tail out where it's under about half a metre. `game/Flats.js` keeps them 0.74 m deep and more by day, so that's seldom seen (`test/sight-fish.mjs` shows it on a bar) |
+| Tarpon | 3 | laid up just under the surface, still, in calm sun; rolling: half a metre or so under the top between rolls (0.4 m and a tenth of its length), then up through the surface and over, gulping air, its head, back and dorsal out (a ring and a splash), then down |
 | Snook | 3 | lying still at the mangroves' edge and the creeks' heads, facing into the ebb |
 | Barracuda | 2 | hanging still over the grass |
 | Blacktips | a pack of 4 | cruising, fins out over the flat |
 | Lemon shark | 1 | cruising alone (a new model: below) |
 
-**Looked at beside photographs** (`tools/flats/compare.mjs`: each render beside the photographs it's shaped after, hot-linked from where they're published, not kept):
-- tailing bonefish: the Florida Museum's (photo Kenneth Krysko);
-- a bonefish's shadow on the sand: Deneki's, South Andros (photos Louis Cahill, Peter Viau);
-- a cruising school: the Florida Museum's schooling bonefish;
-- a mud: Florida Sportsman's grass-flat mud (2023);
-- permit: Nick Price's tailing permit, Puerto Rico;
-- laid-up tarpon: Salt Water Sportsman's (photos Alex Suescun); rolling tarpon: Flylords' (2025);
-- snook over sand (Commons, Robertson); barracuda (Florida Museum, NOAA); lemon sharks (Commons: young ones at Key West NWR, one in the Bahamas).
+**Looked at beside photographs** (`tools/flats/sight.mjs` draws each on low; `tools/flats/compare.mjs` sets each render beside the photographs, hot-linked from where they're published, not kept). Judged by eye, and what didn't match fixed:
+
+| View | Photographs | Judged |
+|---|---|---|
+| Tails, from the kayak's seat and through a long lens | Florida Museum (Kenneth Krysko) | Tails were dark sticks and the fish stood on their heads, half out of the water, floating at the top of it. Now they sit on the sand, tip down as far as the water lets them, and the wet tails are silver. The bodies under the water were too plain at the edge of seeing; one seen half the time is now a ghost of itself |
+| One fish and its shadow, from above | Deneki (Louis Cahill) | The shadows were soft blobs; now a crisp fish's outline beside each fish, as his is |
+| A cruising school, from a bow | Deneki (Peter Viau), Florida Museum | The dark elongated shadows over the sand read as his. The nervous water over them had been a speckled oval twice the school's width, nearly hiding the fish (its wavelets finer than a pixel at 12 m and a low angle, aliased); now a faint dulling of the sheen the school's size, its wavelets drawn only where they're bigger than a pixel |
+| A mud, wading | Florida Sportsman (2023) | Too small and faint against the photograph's wide milky band; now puffs that grow to metres, a school come upon mudding with a band of older silt behind it. Plain over grass, hardly there on white sand |
+| Permit, from a poling platform | Nick Price (a permit tailing) | Two deep-bodied grey-blue fish with their dark sickles and their shadows over sand. His is tailing, its black sickle and dorsal out; that's shown in Node only (Flats.js keeps permit 0.74 m deep and more). The view first found its permit over grass from 9 m off a bow, where by the sight model it hardly shows (seen 0.06), and drew nothing: it now looks for one over sand from a platform's height |
+| A laid-up tarpon | Salt Water Sportsman (Alex Suescun) | A dark fish plain in clear shallow water, its shadow under it; the sea's own blue where his is a green flat |
+| A rolling tarpon | Flylords (2025) | Rolled too deep to reach the surface in its roll's time, and then its rise was held to the slow drift's vertical speed: its back stopped a quarter metre under. Now it rises at its own pace from half a metre or more under, and comes up through the surface and over: its head, back and dorsal out side on, rings about it (`test/sight-fish.mjs`). Theirs show the backs and dorsals of a few in a calm far off, and a flank silver-gold with its scales; out of the water its flank is the mirror it is under it, glossier (wet), its back dark. A try at a wet silver painted on came out flat white plastic beside theirs, and was taken out |
+| A barracuda | Commons (James St. John, San Salvador) | Long, grey, even its reddish fin tips, with its shadow under it |
+| Snook, from its side | Commons (Robertson) | Grey-olive, its yellow fins, its shadow crisp under it. The view had been shot from its group's centre, the fish itself far off and end on; it's now followed from its side through a longer lens |
+| A lemon shark | Commons (USFWS, young ones on a Key West flat) | A small brownish shape, as theirs; over grass its water darker than their white sand |
+| Blacktips | Commons (two at depth, underwater) | The model's grey back and pale belly only; no photograph of blacktips on a flat from above was found. Over grass and in the glare at 7 m they hardly show |
+
+**The marks' ovals.** Large soft pale and dark ovals about the fish in the views from above were the nervous water's: its patch had been sized by the school's whole spread (8 to 11 m) with its wavelets laid out in the patch's own units, so they came out as swells metres across. The ripples are now in metres, the patch the school's size; laid out on a lattice they still came out as rows of even dots, so they're now two drifting noises crossed (irregular wavelets a hand's breadth to a foot across), and where those are finer than a pixel a faint dulling instead. **The small pale ovals on low's bottom** near the camera in the views from the water are the bottom's own: drawn again with every mark and fish hidden (`SIGHT_HIDE=marks,fish`), they're all still there. So are the other shapes that might be taken for marks: the dark round head beside the permit, the bright oval past the lemon shark, the white sand with dark blotches beside the school from above (each drawn again with the marks hidden, `SIGHT_HIDE=marks`).
 
 **The lemon shark** (`FishSpecies`' `lemonShark`, its skin's own row): stocky, the snout short and broad (shorter than the mouth is wide, as its name says), small eyes, the first dorsal set back behind the pectorals and the second nearly as big as the first (the kind's mark, FLMNH), broad sickle-shaped pectorals, a plain yellow-brown back over a pale yellowish belly. `tools/fish-look/compare.mjs lemonShark` sets it beside Duane Raver's drawing and photographs from Commons. Its triangles by level of detail: 3322, 806, 226, 76.
 
 **The marks** (`world/fish/FlatsMarks.js`): two instanced quads with a program each, made the first time a school's in sight of you, so nobody else pays for them.
 - On the bottom, drawn before the sea (so its glare is over them as it is over the fish): each fish's shadow, along the sun's light bent into the water; a mud's silt, spreading and settling over a minute.
-- On the water, after the sea: nervous water over a school cruising under a calm surface, short crossed wavelets flickering against the sky's sheen; a wake (a bulge at a fish's head, a V spreading back) from one pushing water or bolting; a ring where a tail broke the surface or a tarpon rolled.
+- On the water, after the sea: nervous water over a school cruising under a calm surface, short irregular wavelets (a hand's breadth to a foot, two drifting noises crossed) flickering against the sky's sheen over the school, and where they're finer than a pixel (far off, at a low angle) the patch's sheen dulled instead; a wake (a bulge at a fish's head, a V spreading back) from one pushing water or bolting; a ring where a tail broke the surface or a tarpon rolled.
 
-**Within low's triangles.** The flats' fish are drawn last, nearest first, through a budget (`FlatsBudget`): on low no finer than the second level of detail, and 9,500 triangles a frame at most, the coarser levels taking over as it's spent (`test/sight.mjs`: every pooled fish as near as can be draws 9,460). That's inside the room the checks' camera leaves on low (about 13k). The flats are 500 m and more from where the checks' camera stands, so nothing of this is drawn in the checks at all.
+**Within low's triangles.** The flats' fish are drawn last, nearest first, through a budget (`FlatsBudget`): a level finer than their size says (their fins and tails are what's seen of them), on low no finer than the second level of detail, and 9,500 triangles a frame at most, the coarser levels taking over as it's spent (`test/sight.mjs`: every pooled fish as near as can be draws 9,460; `test/sight-fish.mjs`: a school of 12 from the kayak, 9,192). On low, where nothing's cross-faded, a fish is drawn or not (a dithered one there is specks). That's inside the room the checks' camera leaves on low (about 13k). The flats are 500 m and more from where the checks' camera stands, so nothing of this is drawn in the checks at all.
 
 ## Seeing them
 
@@ -111,15 +122,25 @@ On this machine (8 cores), shared with three other streams' sessions and their h
 | Programs built before ready (`tools/heap/programs.mjs`, phone upright, low) | 16 | the same 16, by name and number |
 | Ready, phone upright, 4 CPUs, four rounds alternating, load 46 to 72 | 26.4, 15.9, 18.8, 21.9 s (median 20.4) | 19.5, 14.8, 18.5, 24.2 s (median 19.0) |
 
-**All the Spaces' complete check** on a clean copy (`cli.ts check`, 4 cores), first: every check passed. 66 draw calls of 150, 225,175 triangles of 300k, 69.1 MB of textures, 99.7 MB of graphics memory, 11 sounds, **131.4 MB of script memory** (18.6 under 150; the foundation read 140.8 and 141.1), 7.1 MB before ready, 78.3 MB in all (the foundation's 78.2). The second wasn't run (the usage limit came first).
+**All the Spaces' complete check** on a clean copy (`cli.ts check`, 4 cores), first: every check passed. 66 draw calls of 150, 225,175 triangles of 300k, 69.1 MB of textures, 99.7 MB of graphics memory, 11 sounds, **131.4 MB of script memory** (18.6 under 150; the foundation read 140.8 and 141.1), 7.1 MB before ready, 78.3 MB in all (the foundation's 78.2). The second, the ready A/B again and the other timing checks are the M17 session's, run for all four streams one after another on a quiet machine. That first check ran before the later fixes below (the views' looks); none of those is drawn in the checks (the flats are far from the checks' camera), and the fish's own program gained only a bonefish's and a tarpon's out-of-water lines (no textures).
+
+**`tools/gpu-limits.mjs`** (it now ends on the flats, where it waits for their fish and marks: on a CPU the fish come last of all). All within what a graphics card allows on every tier:
+
+| Tier | Shaders | Fullest | The flats' marks |
+|---|---|---|---|
+| High | 164 | the sea, 16 of 16 fragment textures | FlatsUnder built and linked, no textures |
+| Mid | 98 | the sea, 14 of 16 | FlatsUnder, no textures |
+| Low | 84 | the village wood, 16 of 16 (as at the foundation) | FlatsUnder, no textures |
+
+FlatsSurface wasn't built in the run (no school made a sign on the water at that stop at that moment); it has no textures either, and it's built and drawn in the views (rings, wakes, nervous water).
 
 Ready can't be told apart from the foundation's at this load (each reading's 4 to 5 times the foundation's own 4.50 s, and they swing 10 s round to round). Nothing of this is built before ready on a CPU (the reef's fish, the flats' among them, come after the start), and the programs before ready are the same.
 
 ## Not verified
 
-- **The second complete check**, and `tools/gpu-limits.mjs` on high, mid and low (it now stops on the flats too): not run. The flats' marks' two programs have no textures.
-- **The headless views and the photographs side by side**: tails (from the kayak's seat), a cruising school with its shadows (from a bow) and a tailing school from above were drawn and looked at (`tools/flats/sight.mjs`); muds over grass, permit, a laid-up and a rolling tarpon, snook, barracuda and the sharks were drawn on an earlier build (each on water too shallow for it, since fixed) and not again; `tools/flats/compare.mjs` wasn't run. The lemon shark's model was set beside Duane Raver's drawing and a Bahamas photograph (`tools/fish-look/compare.mjs`).
-- Pale, smooth ovals on the bottom near the camera in the low-tier views: most likely the bottom's own (shells or rubble), not the marks, but not confirmed.
+- **The timing checks** (the second complete check, the ready A/B again, one screen's whole play): the M17 session's, on a quiet machine.
+- **A permit tailing, drawn**: it isn't where `game/Flats.js` puts permit (0.74 m deep and more); shown in Node only.
+- The views are drawn on low only (the CPU's tier); mid's and high's fish and marks are the same programs, their budgets and pools larger.
 
 - A phone's frame rate with the flats' fish, their marks and their programs: none run, by the user's decision. On the CPU, see Readings.
 - A cloud's shadow over a school is the CPU's own field, not the drawn shadows' pattern on high.

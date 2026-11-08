@@ -13,7 +13,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join( dirname( fileURLToPath( import.meta.url ) ), '..' );
-const { chromium } = await import( join( ROOT, '../all-the-spaces/node_modules/playwright/index.mjs' ) );
+const { chromium } = await import( join( process.env.ALL_THE_SPACES || join( ROOT, '../all-the-spaces' ), 'node_modules/playwright/index.mjs' ) ); // ((M17) from a worktree: ALL_THE_SPACES)
 
 // (textures: the floor WebGL 2 promises, and what Direct3D 11 and Metal give. Uniforms: what they commonly give, WebGL 2's
 // floor of 224 being far under what any device here runs at. Varyings aren't counted: three's sources are full of those
@@ -31,7 +31,7 @@ for ( const tier of TIERS.split( ',' ) ) {
 	// (the fish camp, the windward reef and the sea caves load as you come near; (M17) and the flats' fish and their marks,
 	// the first time a school's in sight: day 5's late morning has bonefish milling by the north creek's mouth, a permit
 	// and tarpon about them)
-	for ( const [ x, z ] of [ [ 116, - 870 ], [ - 460, - 760 ], [ - 542, - 378 ], [ - 735, - 45 ], [ - 6200, 7400 ] ] ) {
+	for ( const [ x, z ] of [ [ 116, - 870 ], [ - 460, - 760 ], [ - 542, - 378 ], [ - 6200, 7400 ], [ - 735, - 45 ] ] ) {
 
 		await page.evaluate( ( [ x, z ] ) => {
 
@@ -43,6 +43,14 @@ for ( const tier of TIERS.split( ',' ) ) {
 
 		}, [ x, z ] );
 		await page.waitForTimeout( 20000 );
+		// ((M17) the flats last: on a CPU the fish come last of all, so wait for them there, and for their marks)
+		if ( x === - 735 ) await page.waitForFunction( () => {
+
+			const a = window.__app, b = a.boatCtl, f = a.fish;
+			b.position.set( - 735, b.position.y, - 45 ); // (held there against the wind)
+			return f && f.marks && f.marks.under.n + f.marks.surface.n > 0;
+
+		}, null, { timeout: 900000, polling: 2000 } ).then( () => page.waitForTimeout( 8000 ) ).catch( () => console.log( `${ tier }: the flats' marks never came` ) );
 
 	}
 
@@ -86,6 +94,9 @@ for ( const tier of TIERS.split( ',' ) ) {
 	const most = {};
 	for ( const r of rows ) for ( const k of Object.keys( LIMITS ) ) if ( ! most[ k ] || r[ k ] > most[ k ][ 0 ] ) most[ k ] = [ r[ k ], r.name ];
 	console.log( `${ tier }: ${ rows.length } shaders` );
+	// ((M17) the flats': their fish's and their marks' (world/fish/FlatsMarks.js), made once a school's in sight)
+	const flats = rows.filter( ( r ) => /^Flats/.test( r.name ) );
+	console.log( `  the flats' marks: ${ flats.length ? flats.map( ( r ) => `${ r.name } (${ r.fragment } fragment, ${ r.vertex } vertex textures${ r.linked ? '' : ', NOT LINKED' })` ).join( ', ' ) : 'none built' }` );
 	for ( const k of Object.keys( LIMITS ) ) console.log( `  ${ ( most[ k ][ 0 ] > LIMITS[ k ] ? 'OVER' : 'ok  ' ) } ${ k.padEnd( 17 ) } ${ String( most[ k ][ 0 ] ).padStart( 5 ) } of ${ LIMITS[ k ] }  ${ most[ k ][ 1 ] }` );
 	for ( const r of rows ) {
 

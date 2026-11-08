@@ -19,15 +19,17 @@ const FM = 'https://www.floridamuseum.ufl.edu/wp-content/uploads/sites/66/2017/0
 const REFS = {
 	tails: [ [ FM + 'Albula-vulpes-03.jpg', 'Bonefish tailing on a shallow flat. Florida Museum, photo Kenneth Krysko' ] ],
 	above: [ [ 'https://deneki.wpengine.com/wp-content/uploads/2012/02/Bonefish-Shadow-1.jpg', 'A bonefish and its shadow on sand, South Andros. Photo Louis Cahill (Deneki)' ], [ 'https://deneki.wpengine.com/wp-content/uploads/2015/05/peter-bonefish-shadow.jpg', 'Spotting shadows. Photo Peter Viau (Deneki)' ] ],
+	tele: [ [ FM + 'Albula-vulpes-03.jpg', 'Bonefish tailing on a shallow flat. Florida Museum, photo Kenneth Krysko' ] ],
+	overhead: [ [ 'https://deneki.wpengine.com/wp-content/uploads/2012/02/Bonefish-Shadow-1.jpg', 'A bonefish and its shadow on sand, South Andros. Photo Louis Cahill (Deneki)' ] ],
 	cruise: [ [ FM + 'Albula-vulpes-02.jpg', 'Schooling bonefish. Florida Museum, photo Kenneth Krysko' ], [ 'https://deneki.wpengine.com/wp-content/uploads/2015/05/peter-bonefish-shadow.jpg', 'Spotting shadows. Photo Peter Viau (Deneki)' ] ],
 	muds: [ { page: 'https://www.floridasportsman.com/editorial/how-to-read-water-flats-surf-muds-bait-bottom/474760', img: 'img[alt*="muds"]', what: 'A mud left by a bonefish on a grass flat. Florida Sportsman (2023)' } ],
 	permit: [ [ 'https://images.squarespace-cdn.com/content/v1/509fcdf4e4b046b429519b35/5e562aa6-b92d-4996-b2a4-17091c5b6191/fly-fishing-tailing-permit-pr-1.jpg', 'Tailing permit, Puerto Rico. Photo Nick Price' ] ],
 	laid: [ [ 'https://www.saltwatersportsman.com/wp-content/uploads/2021/09/lu_tarpon-2a_-_suescun.jpg?w=800', 'A tarpon alone in clear shallow water. Salt Water Sportsman, photo Alex Suescun' ], [ 'https://www.saltwatersportsman.com/wp-content/uploads/2021/09/lu_tarpon-5a_-_suescun.jpg?w=800', 'A laid-up tarpon gulping air. Photo Alex Suescun' ] ],
 	roll: [ [ 'https://flylordsmag.com/wp-content/uploads/2025/05/Tarpon-Rolling.jpg', 'Tarpon rolling. Flylords (2025)' ], [ 'https://i0.wp.com/flylordsmag.com/wp-content/uploads/2025/06/DSC05178.webp?resize=696%2C464&quality=60&ssl=1', 'Why do tarpon roll. Flylords (2025)' ] ],
 	snook: [ [ commons( 'Snook (159046493).jpg' ), 'Snook over sand, Jupiter FL. Clinton & Charles Robertson, CC BY-SA 2.0' ] ],
-	cuda: [ [ FM + 'Albula-vulpes-pred.jpg', 'Great barracuda. Florida Museum, photo NOAA' ] ],
+	cuda: [ [ commons( 'Sphyraena barracuda (great barracuda) (San Salvador Island, Bahamas) 4 (16182738032).jpg' ), 'Great barracuda, San Salvador, Bahamas. James St. John, CC BY 2.0' ], [ commons( 'Sphyraena barracuda (great barracuda) (San Salvador Island, Bahamas) 5 (15997452879).jpg' ), 'The same (James St. John)' ] ],
 	sharks: [ [ commons( 'Juvenile Lemon Sharks at Key West National Wildlife Refuge (53815627550).jpg' ), 'Young lemon sharks, Key West NWR. USFWS' ], [ commons( 'Negaprion brevirostris bahamas.jpg' ), 'Lemon shark, Bahamas (Commons)' ] ],
-	blacktips: [ [ commons( 'Carcharhinus limbatus SI2.jpg' ), 'Blacktip shark (Commons)' ] ],
+	blacktips: [ [ commons( 'Carcharhinus limbatus - Bahamas.jpg' ), 'Blacktip shark, Bahamas (Commons)' ], [ commons( 'Blacktip Shark at Palmyra Atoll (5217804625).jpg' ), 'Blacktip shark, Palmyra Atoll (Commons)' ] ],
 };
 const views = ( VIEWS ? VIEWS.split( ',' ) : Object.keys( REFS ) ).filter( ( v ) => existsSync( join( IN, v + '.png' ) ) );
 const { chromium } = await import( join( ATS, 'node_modules/playwright/index.mjs' ) );

@@ -8,7 +8,7 @@ import { bandFade } from '../materials/LODFade.js';
 import { CONDITIONS, SURF_MAX } from '../game/Weather.js';
 import { G } from '../core/Globals.js';
 import { FLATS_POOL, KIND_OF, FlatsBudget } from './fish/FlatsPool.js';
-import { FlatsMarks } from './fish/FlatsMarks.js';
+import { FlatsMarks, MUD_LIFE } from './fish/FlatsMarks.js';
 
 // Fish and other swimmers of the reef and the bay, simulated on the CPU and drawn in a single
 // batch (reef/KindBatch.js: one instanced draw per model and level of detail in view) with the
@@ -216,7 +216,7 @@ const SIGHT_BASE = { mode: 'sight', flee: 0, wSep: 4, sep: 2, nbr: 6, ceiling: -
 Object.assign( BEHAVIOUR, {
 	flatsBone: { ...SIGHT_BASE, model: 'bonefish', fish: 'bonefish', length: [ 0.42, 0.7 ], cruise: 0.6, max: 2.2, burst: 14, accel: 6, wAli: 1.2, wCoh: 0.9, wGoal: 1, amp: 0.07, freq: [ 1.4, 0.8 ], sight: { spread: [ 4, 3 ], y: 'bottom', ahead: 5 } },
 	flatsSpawn: { ...SIGHT_BASE, model: 'bonefish', fish: 'bonefish', length: [ 0.45, 0.72 ], cruise: 0.4, max: 2, burst: 12, accel: 5, wAli: 1.6, wCoh: 1.1, wGoal: 0.8, amp: 0.07, freq: [ 1.4, 0.8 ], minDepth: 0.8, sight: { spread: [ 14, 10 ], y: 'mid', ahead: 4 } },
-	flatsPermit: { ...SIGHT_BASE, model: 'permit', fish: 'permit', length: [ 0.55, 0.95 ], cruise: 0.45, max: 1.8, burst: 9, accel: 4, sep: 3, wAli: 1, wCoh: 0.8, wGoal: 1, amp: 0.06, freq: [ 1.1, 0.7 ], minDepth: 0.2, sight: { spread: [ 1.6, 1.6 ], y: 'bottom', ahead: 6 } },
+	flatsPermit: { ...SIGHT_BASE, model: 'permit', fish: 'permit', length: [ 0.55, 0.95 ], cruise: 0.45, max: 1.8, burst: 9, accel: 4, sep: 3, wAli: 1, wCoh: 0.8, wGoal: 1, amp: 0.06, freq: [ 1.1, 0.7 ], minDepth: 0.2, sight: { spread: [ 1.6, 1.6 ], y: 'bottom', ahead: 6, crabs: 0.7 } },
 	flatsTarpon: { ...SIGHT_BASE, model: 'tarpon', fish: 'tarpon', length: [ 1.25, 1.9 ], cruise: 0.28, max: 1.2, burst: 4, accel: 1.2, wAli: 0, wCoh: 0, wGoal: 0.9, amp: 0.04, freq: [ 0.5, 0.7 ], minDepth: 0.8, sight: { spread: [ 0, 0 ], y: 'mid', ahead: 5 } },
 	flatsSnook: { ...SIGHT_BASE, model: 'snook', fish: 'snook', length: [ 0.55, 1.0 ], cruise: 0.3, max: 1.6, burst: 8, accel: 3, wAli: 0, wCoh: 0, wGoal: 0.9, amp: 0.05, freq: [ 1, 0.7 ], minDepth: 0.4, sight: { spread: [ 0, 0 ], y: 'bottom', ahead: 2 } },
 	flatsCuda: { ...SIGHT_BASE, model: 'barracuda', fish: 'barracuda', length: [ 0.8, 1.3 ], cruise: 0.15, max: 1.4, burst: 7, accel: 1.4, wAli: 0, wCoh: 0, wGoal: 0.7, amp: 0.035, freq: [ 0.5, 0.8 ], minDepth: 0.4, sight: { spread: [ 0, 0 ], y: 'mid', ahead: 2 } },
@@ -227,8 +227,8 @@ for ( const k in BEHAVIOUR ) BEHAVIOUR[ k ] = { name: k, ...base, ...BEHAVIOUR[ 
 // (M17) a bolting school's run (s), a rooting bonefish's tail-up and its gaps by mode (s), a rolling tarpon's (s)
 const BOLT = 3.2;
 const N_REFR = 1.34, MARK_NERVOUS = 2, MARK_WAKE = 3;
-const ROOT = { tail: [ 3, 7, 1, 4, BONE_TILT ], feed: [ 2, 5, 2, 6, 0.7 ] };
-const ROLL = { every: [ 14, 50 ], takes: 2.6 };
+const ROOT = { tail: [ 3, 7, 1, 4, BONE_TILT ], feed: [ 2, 5, 2, 6, 0.7 ], crab: [ 3, 8, 5, 14, 0.85 ] };
+const ROLL = { every: [ 14, 50 ], takes: 3.2, under: 0.4 }; // (s; a rolling tarpon cruises this far under the top between rolls, m)
 const TAIL = { reach: 25, depth: 0.28, least: 0.17 }, DEEP = 0.15; // m: where a tailing school roots (_tailGround)
 
 class Group {
@@ -1046,8 +1046,10 @@ export class FishSchools {
 		// (coming into sight over a couple of seconds: back from a fright, or given its group in view)
 		const life = ( S.bolt > 0 ? Math.min( 1, S.bolt / 1.2 ) * ( S.gone ? 1 : S.life ) : S.life ) * Math.min( 1, S.age / 2.5 );
 		if ( G.cameraUnderwater.value > 0.5 ) return life;
-		const out = this.sightOut( i ), v = S.seen;
-		return life * Math.max( v.body, out > 0.01 ? v.tail * Math.min( 1, out / 0.06 ) : 0, S.bolt > 0 ? v.sign : 0 );
+		// (as plainly as it shows: one seen half the time is a ghost of itself, not a fish drawn whole: the grey ghost)
+		const out = this.sightOut( i ), v = S.seen, k = Math.max( v.body, out > 0.01 ? v.tail * Math.min( 1, out / 0.06 ) : 0, S.bolt > 0 ? v.sign : 0 );
+		const t = Math.min( 1, Math.max( 0, ( k - 0.3 ) / 0.7 ) );
+		return life * t * t * ( 3 - 2 * t );
 
 	}
 
@@ -1075,7 +1077,23 @@ export class FishSchools {
 		}
 
 		if ( ! this.marks ) this.marks = new FlatsMarks( this.group );
-		const M = this.marks, sea = G.seaLevel.value, sun = G.sunDir.value, cp = camera.position, R = this.sightRange;
+		const M = this.marks;
+		// (a school come upon mudding has been at it a while: the water's milky about it already, older puffs settling)
+		for ( const g of this.sightGroups ) if ( g.sight && g.sight.mode === 'feed' && ! g.sight.mudded && g.active ) {
+
+			g.sight.mudded = true;
+			for ( let k = 0; k < 26; k ++ ) {
+
+				// (spread down the way the school's been going: the band it leaves behind it)
+				const back = g.rng() * 14, a = g.rng() * TAU, r = Math.sqrt( g.rng() ) * ( g.sp.sight.spread[ 0 ] + 2 );
+				const x = g.sight.tx - g.sight.dx * back + Math.cos( a ) * r, z = g.sight.tz - g.sight.dz * back + Math.sin( a ) * r;
+				M.mud( x, this.terrain.heightAt( x, z ) + 0.025, z, 1.8, 0.75, g.rng() * MUD_LIFE * 0.85 );
+
+			}
+
+		}
+
+		const sea = G.seaLevel.value, sun = G.sunDir.value, cp = camera.position, R = this.sightRange;
 		const under = G.cameraUnderwater.value > 0.5;
 		// (the sun's light under the water, bent toward the vertical: its way down, per m of depth)
 		const sy = Math.max( 0.2, sun.y ), sh = Math.hypot( sun.x, sun.z ) / N_REFR, sl = Math.hypot( sh, Math.sqrt( 1 - Math.min( 1, sh * sh ) ) );
@@ -1104,8 +1122,8 @@ export class FishSchools {
 				const k8 = i * 8;
 				if ( S.mode === 'feed' && this.aux[ k8 ] > 0 && ( this.aux[ k8 + 4 ] -= dt ) <= 0 ) {
 
-					this.aux[ k8 + 4 ] = 1.2 + g.rng() * 1.6;
-					M.mud( x + hx * L * 0.45, ground + 0.025, z + hz * L * 0.45, L * 1.6, 0.5 * life );
+					this.aux[ k8 + 4 ] = 0.8 + g.rng() * 1.2;
+					M.mud( x + hx * L * 0.45, ground + 0.025, z + hz * L * 0.45, L * 3.2, 0.75 * life );
 
 				}
 
@@ -1126,8 +1144,9 @@ export class FishSchools {
 			// nervous water over a school cruising (or milling) just under a calm surface
 			if ( cruising && S.bolt <= 0 && ( S.mode === 'cruise' || S.mode === 'mill' || S.mode === 'tail' ) ) {
 
-				const sz = Math.max( 2.5, g.radius * 1.4 );
-				M.sign( g.center.x, sea + 0.013, g.center.z, Math.atan2( S.dx, S.dz ), sz, sz * 0.8, life * ( under ? 0.4 : v.sign ) * Math.min( 1, cruising / 3 ) * ( S.mode === 'tail' ? 0.5 : 1 ), MARK_NERVOUS, g.offset * 0.13 );
+				// (the patch the school's spread over, its ripples a hand's breadth or so whatever its size: FlatsMarks)
+				const sz = Math.min( 5, Math.max( 2, g.sp.sight.spread[ 0 ] + 1 ) );
+				M.sign( g.center.x, sea + 0.013, g.center.z, Math.atan2( S.dx, S.dz ), sz, sz * 0.8, life * ( under ? 0.4 : v.sign ) * Math.min( 1, cruising / 3 ) * ( S.mode === 'tail' ? 0.5 : 1 ), MARK_NERVOUS, g.offset * 0.13, sz );
 
 			}
 
@@ -1951,6 +1970,9 @@ export class FishSchools {
 			ax += ( dx / dl * want * arrive - vx ) * kGoal;
 			ay += ( dy / dl * want * arrive - vy ) * kGoal;
 			az += ( dz / dl * want * arrive - vz ) * kGoal;
+			// ((M17) and a flats fish keeps to its height in the water whatever its way: down on the sand to root, up
+			// through the surface to roll; the steering above gives a goal metres off only a hair of it)
+			if ( S ) ay += ( ty - y ) * 4 - vy * 2;
 
 			// flee from the diver (horizontally for fish near the surface)
 			let panic = Math.max( 0, this.panic[ i ] - dt * 0.5 );
@@ -2037,7 +2059,7 @@ export class FishSchools {
 			if ( this.jump[ i ] < 0.5 ) {
 
 				const hs = Math.sqrt( vx * vx + vz * vz );
-				const vyMax = ( sp.mode === 'turtle' ? 0.3 : 0.15 ) + hs * 0.4;
+				const vyMax = ( sp.mode === 'turtle' ? 0.3 : 0.15 ) + hs * 0.4 + ( S && X[ i * 8 + 3 ] > 0 ? 1.2 : 0 ); // ((M17) a tarpon rolling: up and over)
 				vy = Math.max( - vyMax, Math.min( vyMax, vy ) );
 
 			}
@@ -2162,10 +2184,12 @@ export class FishSchools {
 			T.want = cruise;
 			T.y = yIn( Q.y === 'bottom' ? 0.05 : Q.y === 'mid' ? 0.4 : 0.8 );
 			const mode = S.mode;
-			if ( mode === 'tail' || mode === 'feed' ) {
+			// (a permit cruising in shallow water stops now and then to tail on a crab, its black sickle up: guides' lore)
+			const crabbing = Q.crabs && mode === 'cruise' && col < Q.crabs;
+			if ( mode === 'tail' || mode === 'feed' || crabbing ) {
 
 				// rooting head down in the sand a while, then on to the next spot: tails up where it's shallowest
-				const R = ROOT[ mode ];
+				const R = ROOT[ crabbing ? 'crab' : mode ];
 				let tt = X[ k8 ];
 				if ( tt > 0 ) {
 
@@ -2188,11 +2212,13 @@ export class FishSchools {
 				X[ k8 ] = tt;
 				if ( tt > 0 ) {
 
+					// (head down as steeply as the water lets it: in a foot of it the tail's a hand's breadth out, the back
+					// under; in deeper water its full tilt and the tail under too)
 					px = x + Math.cos( X[ k8 + 6 ] ) * 0.05;
 					pz = z + Math.sin( X[ k8 + 6 ] ) * 0.05;
-					T.y = floor + L * 0.37;
+					tilt = Math.max( 0.35, Math.min( R[ 4 ], Math.asin( Math.min( 1, ( col + 0.02 ) / ( 0.66 * L ) ) ) ) );
+					T.y = floor + 0.08 + Math.sin( tilt ) * 0.2 * L;
 					T.want = cruise * 0.1;
-					tilt = R[ 4 ];
 
 				} else T.want = cruise * ( Math.hypot( px - x, pz - z ) > 6 ? 1.6 : 0.6 );
 
@@ -2218,10 +2244,10 @@ export class FishSchools {
 
 			} else if ( mode === 'roll' ) {
 
-				// slowly about its hole, and now and then up through the surface and over, gulping air
+				// slowly about its hole a little under the top, and now and then up through the surface and over, gulping air
 				px += fx * Math.sin( t * 0.05 + s * 9 ) * 6;
 				pz += fz * Math.sin( t * 0.05 + s * 9 ) * 6;
-				T.y = yIn( 0.45 );
+				T.y = Math.max( yIn( 0.15 ), sea - ROLL.under - L * 0.1 );
 				T.want = cruise * 0.7;
 				let ph = X[ k8 + 3 ];
 				if ( ph <= 0 && ( X[ k8 + 2 ] -= dt ) <= 0 ) ph = 0.001;
@@ -2246,7 +2272,7 @@ export class FishSchools {
 
 					} else {
 
-						T.y = floor + 0.2 + L * 0.2;
+						T.y = Math.max( yIn( 0.15 ), sea - ROLL.under - L * 0.1 );
 						tilt = 0.55;
 						T.want = cruise * 2;
 
@@ -2732,7 +2758,9 @@ export class FishSchools {
 				if ( ! _frustum.intersectsSphere( _sphere ) ) continue;
 
 				// orientation: yaw from the heading, pitch (a rooting bonefish's nose down), bank into turns
-				yawPitchRoll( Math.atan2( hx, hz ), - Math.asin( Math.max( - 1, Math.min( 1, hy ) ) ) + ( flats && ! held ? this.aux[ i * 8 + 1 ] : 0 ), this.roll[ i ], _q );
+				// ((M17) a flats fish rooting: its tilt alone, not the bob of its settling to the bottom as well)
+				const rootPitch = sight && ! held && this.aux[ i * 8 ] > 0;
+				yawPitchRoll( Math.atan2( hx, hz ), ( rootPitch ? 0 : - Math.asin( Math.max( - 1, Math.min( 1, hy ) ) ) ) + ( flats && ! held ? this.aux[ i * 8 + 1 ] : 0 ), this.roll[ i ], _q );
 
 				const o = i * 16;
 				D[ o ] = x;
@@ -2763,7 +2791,12 @@ export class FishSchools {
 					lod = budget.take( sp.model, Math.max( 0, lod - 1 ) );
 					if ( lod < 0 ) continue;
 					const kf = this.kind[ i ] + lod, ff = f * ( d > RANGE * 0.9 ? 1 - bandFade( d, RANGE * 0.9, RANGE + L ) : 1 );
-					if ( ff < 0.98 ) batch.addFade( kf, i, ff, false );
+					// (where nothing's cross-faded, low, a fish is there or it isn't: a dithered one there is specks)
+					if ( ! C.fades ) {
+
+						if ( ff >= 0.5 ) batch.add( kf, i );
+
+					} else if ( ff < 0.98 ) batch.addFade( kf, i, ff, false );
 					else batch.add( kf, i );
 					continue;
 
