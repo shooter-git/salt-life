@@ -7,6 +7,8 @@
 //   a dev server on FLATS_PORT (5231: the project's .claude/launch.json "salt-life-m17"), then
 //   node tools/flats/look.mjs [tier] [levels, m] [views]
 //   node tools/flats/look.mjs low -0.6,0.6 aerial,wading,kayak,mangroves,beach,pier
+//   ((M17, stream 2) and roots, piles, stack, cave: the tide seen close; FLATS_STAGE=flood|ebb, the wet line held with
+//   the tide (on the ebb the highest it stood in the hour and a half before); FLATS_SURGE=m, a hurricane's surge on it)
 //   (ALL_THE_SPACES: its checkout, if it isn't ../all-the-spaces)
 //
 // A load takes a minute or two (the island's all there once its plants have grown); each shot some tens of seconds
@@ -35,7 +37,18 @@ const VIEW = {
 	mangroves: { stand: [ - 586, - 166 ], eye: [ - 586, - 166, 1.65, 'ground' ], at: [ - 500, 0.4, - 150 ] },
 	beach: { stand: [ 78, - 64 ], eye: [ 78, - 64, 1.7, 'ground' ], at: [ 40, - 0.2, - 30 ] },
 	pier: { stand: [ 55, 22 ], eye: [ 55, 22, 2.3 + 1.65, 'sea0' ], at: [ 66, 0, 38 ], boat: 'lobster' },
+	// ((M17, stream 2) the tide seen close: the pier's piles from the sand beside it, the mangroves' roots from the flat off
+	// their edge, the west arm's stack from the water, the west sea cave's inlet from off its mouth)
+	piles: { stand: [ 70, - 40 ], eye: [ 70, - 40, 1.65, 'ground' ], at: [ 55, - 0.2, - 31 ] },
+	roots: { stand: [ - 528, - 170 ], eye: [ - 528, - 170, 1.65, 'ground' ], at: [ - 505, 0.0, - 168 ] },
+	stack: { stand: [ - 140, 30 ], eye: [ - 140, 30, 1.2, 'sea' ], at: [ - 166, 0.5, 8 ] },
+	cave: { stand: [ - 592, - 383 ], eye: [ - 592, - 383, 1.5, 'sea' ], at: [ - 557, 0.3, - 380 ] },
 };
+// ((M17) the wet line held with the tide: on the ebb (FLATS_STAGE=ebb, the default) the highest it's stood in the hour and
+// a half before, about 0.15 m over it at a spring's mid-ebb or low water; on the flood the tide itself)
+const STAGE = process.env.FLATS_STAGE || 'ebb';
+// ((M17) FLATS_SURGE=m: a hurricane's surge held on the tide, the two adding up)
+const SURGE = Number( process.env.FLATS_SURGE || 0 );
 const levels = LEVELS.split( ',' ).map( Number ), views = VIEWS.split( ',' );
 const groups = [ ...new Set( views.map( ( v ) => VIEW[ v ].boat || '' ) ) ];
 
@@ -63,6 +76,9 @@ for ( const boat of groups ) {
 			if ( window.__tide !== undefined ) {
 
 				this.tide = window.__tide;
+				this.tideWet = window.__tideWet ?? window.__tide;
+				// ((M17) FLATS_SURGE: a hurricane's surge on it, m)
+				if ( window.__surge !== undefined && this.live ) this.live.surge = window.__surge;
 				this.apply();
 
 			}
@@ -136,14 +152,16 @@ for ( const boat of groups ) {
 
 	for ( const v of views.filter( ( k ) => ( VIEW[ k ].boat || '' ) === boat ) ) for ( const level of levels ) {
 
-		await page.evaluate( ( [ L, level ] ) => {
+		await page.evaluate( ( [ L, level, stage, surge ] ) => {
 
 			window.__look = L;
 			window.__tide = level;
+			window.__tideWet = stage === 'ebb' ? Math.min( level + 0.15, 0.72 ) : level;
+			if ( surge ) window.__surge = surge;
 			const g = window.__app.game && window.__app.game.guide;
 			if ( g && g.open ) g.close();
 
-		}, [ VIEW[ v ], level ] );
+		}, [ VIEW[ v ], level, STAGE, SURGE ] );
 		await frames( 6 );
 		await page.evaluate( () => {
 
@@ -173,7 +191,7 @@ for ( const boat of groups ) {
 
 		}
 
-		const name = `${ v }-${ level >= 0 ? '+' : '' }${ level.toFixed( 2 ) }${ process.env.FLATS_HIDE ? '-no-' + process.env.FLATS_HIDE.replace( /,/g, '-' ) : '' }${ process.env.FLATS_EVAL ? '-eval' : '' }`;
+		const name = `${ v }-${ level >= 0 ? '+' : '' }${ level.toFixed( 2 ) }${ STAGE === 'ebb' ? '' : '-' + STAGE }${ SURGE ? '-surge' + SURGE : '' }${ process.env.FLATS_HIDE ? '-no-' + process.env.FLATS_HIDE.replace( /,/g, '-' ) : '' }${ process.env.FLATS_EVAL ? '-eval' : '' }`;
 		await page.screenshot( { path: join( OUT, name + '.png' ) } );
 		const info = await page.evaluate( () => {
 

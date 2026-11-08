@@ -16,6 +16,7 @@ import { shellTab, bindShellTab, shellShopRow, stepShell, SHELL_CSS } from './Sh
 import { shellsHave } from './Shells.js';
 import { CAMP } from './FishCamp.js';
 import { NAMES, MAX_MARKS, legTo, magnetic, namedAs } from './Chart.js';
+import { tidesOf, tideText } from '../world/shore/Tide.js';
 import { LEFT, RIGHT, CHECK, CROSS, STAR, EM_DASH, OPEN_QUOTE, CLOSE_QUOTE, DOT, RING } from '../core/Glyphs.js';
 import { ChartMap, CHART_MAP_CSS } from './ChartMap.js';
 
@@ -1057,6 +1058,8 @@ export class GameHUD {
 				} ).join( '' );
 			if ( ! c.marks.length ) body += empty( 'Your chart\'s drawn in where you go: the coast as you see it, the far grounds\' depths as you run over them, each place\'s name as you come to it. Mark a good spot to find it again.' );
 			if ( named.length ) body += `<div class="gm-wanted"><span class="gm-wanted-h">Named on your chart</span><p class="gm-sub">${ named.join( ' · ' ) }</p></div>`;
+			// ((M17) the day's tides, as the chart's table gives them: each turn's time and height over its datum)
+			body += `<div class="gm-wanted"><span class="gm-wanted-h">Tides, day ${ Math.max( 1, Math.floor( a.settings.day ) || 1 ) }</span><p class="gm-sub">${ tidesOf( a.settings.day ).map( ( t ) => tideText( t, a.portal && a.portal.locale ) ).join( ' · ' ) }</p><p class="gm-sub">Heights over chart datum (mean lower low water); depths on the chart are below it, and the green dries at low water</p></div>`;
 			hint = `${ d === 'touch' ? 'Mark here' : d === 'gamepad' ? 'Mark here' : '<kbd>P</kbd>' } marks where you are${ c.bought ? '' : ' · Marta sells a chart of the island' }${ { gamepad: ' · Stick moves the map, <kbd>RB</kbd> <kbd>LB</kbd> zoom, <kbd>RT</kbd> where you are', keyboard: ' · <kbd>WASD</kbd> moves the map, <kbd>+</kbd> <kbd>-</kbd> zoom, <kbd>F</kbd> where you are' }[ d ] || '' }`;
 
 		} else if ( tab === 'records' ) {

@@ -40,6 +40,7 @@ const _c5 = new THREE.Vector3();
 const _invQ = new THREE.Quaternion();
 const _dq = new THREE.Quaternion();
 const _q = {}; // what a boat's propulsion's told (world/boat/Handling.js)
+const _cur = { x: 0, z: 0, q: 0, u: 0 }; // ((M17) the water's current where she is: currentAt's)
 const CONTACT = { k: 400000, c: 30000, slide: 6000, pileK: 260000, pileC: 8000 }; // N/m and N s/m, on a pile and on the ground
 
 // Rigid-body model of an 8.2 m, 3.2 t Downeast lobster boat (semi-displacement hull, full keel).
@@ -93,6 +94,10 @@ export class BoatController {
 		this.onSlam = null;
 		// (M9) the wind's speed where she is (m/s): the gusts on the sea, from WeatherDriver (null: the day's)
 		this.windAt = null;
+		// (M17) the water's own current where she is ( x, z, out ) -> { x, z } (m/s) or null: a creek running on the tide
+		// (world/shore/Creeks.js, from App). Her hull, her keel, her rudder and her paddle or propeller work on the water
+		// going past her, so she's carried with it
+		this.currentAt = null;
 		// (M10) the hull (game/Hull.js, through Game): whether her engine's running (stalled, or cranking,
 		// it gives no thrust and its revs run down), what its revs are held to (it coughs as the water nears
 		// it), the share of her thrust a worn hull leaves; and what she's felt since Game last looked: the
@@ -375,7 +380,17 @@ export class BoatController {
 		const fwd = this.forward( _fwd );
 		const side = _side.set( 1, 0, 0 ).applyQuaternion( this.quaternion ); // port
 		const up = _up.set( 0, 1, 0 ).applyQuaternion( this.quaternion );
-		_vl.copy( this.velocity ).applyQuaternion( invQ ); // boat frame: x port, z forward
+		// ((M17) through the water: her velocity less the water's own, a creek's current)
+		const cur = this.currentAt ? this.currentAt( this.position.x, this.position.z, _cur ) : null;
+		_vl.copy( this.velocity );
+		if ( cur ) {
+
+			_vl.x -= cur.x;
+			_vl.z -= cur.z;
+
+		}
+
+		_vl.applyQuaternion( invQ ); // boat frame: x port, z forward
 		const u = _vl.z, vs = _vl.x;
 		this.speed = this.velocity.length();
 		this.forwardSpeed = u;
@@ -504,6 +519,7 @@ export class BoatController {
 			// comes round to the wind and she goes down it slower (Cd 1.4, its mouth: Seaworthy's ABLE)
 			const bow = this.toWorld( this.stemHead, _p );
 			_vp.copy( this.angular ).cross( _r.copy( bow ).sub( comW ) ).add( this.velocity );
+			if ( cur ) _vp.set( _vp.x - cur.x, _vp.y, _vp.z - cur.z );
 			const v = Math.hypot( _vp.x, _vp.z ), drag = 0.5 * RHO * 1.4 * ableOf( this.model.id ).sockM2 * v;
 			addForceAt( _f.set( - _vp.x * drag, 0, - _vp.z * drag ), bow );
 			// (its long rode holds her stem up to the wind's push, where a point at her bow would let her lie well off it)

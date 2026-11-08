@@ -2,7 +2,8 @@ import { Vector2 } from '../engine/index.js';
 import { G } from '../core/Globals.js';
 import { islandTime, weatherHere, withEdge, seaSwell, seaTurn, seaPeriodOf, showers, towardOf, hurricaneAt, hurricaneNews, hash, squallWind, gustShare, FRONT_KMH, STORM_RANGE, SURF_MAX } from '../game/Weather.js';
 import { FRONT_KM, eyeCover, bandCells } from '../sky/SkyProClouds.js';
-import { tideAt } from '../game/IslandClock.js';
+import { tideAt, tideRate } from '../game/IslandClock.js';
+import { wetLine } from './shore/Tide.js';
 
 // (Salt Life) The island's weather, each frame: what the day brings (game/Weather.js), or what you picked
 // on your own, eased onto everything that shows it:
@@ -135,6 +136,8 @@ export class WeatherDriver {
 		this._since = 0;
 		this._newsT = 0;
 		this.tide = 0; // (M17) the tide's height now (m about mean sea level: IslandClock.tideAt)
+		this.tideRate = 0; // ((M17) how fast it's rising (m an island hour), and its wet line (m): shore/Tide.js)
+		this.tideWet = 0;
 
 	}
 
@@ -183,6 +186,8 @@ export class WeatherDriver {
 
 		const T = islandTime( day, hour );
 		this.tide = tideAt( T );
+		this.tideRate = tideRate( T );
+		this.tideWet = wetLine( T );
 		// ((M15) the showers about you first: the rain where you are is theirs, out past the island)
 		const picked0 = pick !== this._pick || since !== this._since;
 		if ( picked0 || this._showerRain.size > 160 ) this._showerRain.clear();
@@ -297,6 +302,7 @@ export class WeatherDriver {
 		// at spring high water is the worst of it)
 		G.tide.value = this.tide;
 		const sea = G.seaLevel.value = w.surge + this.tide;
+		G.tideWet.value = w.surge + Math.max( this.tideWet, this.tide );
 		if ( this.water.lod ) {
 
 			seaBox( sea, w.surf, this.waves.reachOf( seaSwell( w.swell, w.blow ), w.windSea ), _box );

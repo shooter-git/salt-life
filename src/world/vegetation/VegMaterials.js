@@ -1,5 +1,6 @@
 import * as THREE from '../../engine/index.js';
 import { VEG_GLSL, vegUniforms, C } from './VegNodes.js';
+import { G } from '../../core/Globals.js';
 
 // Vegetation materials: three's MeshStandardMaterial with Tidewater's vertex / surface snippets
 // (translated from WGSL) patched in by onBeforeCompile, and a MeshDepthMaterial for the shadow pass
@@ -838,19 +839,28 @@ export function canopyMaterialDef( leafAtlas ) {
 // mangrove's: reddish brown, dark and wet low down, an olive tide line of algae and oysters at the water
 export function rootMaterialDef( leafAtlas ) {
 
+	const def = canopyMaterialDef( leafAtlas );
 	return {
-		...canopyMaterialDef( leafAtlas ),
+		...def,
 		name: 'veg-roots',
+		// ((M17) the wet line, the highest the sea's stood lately: G.tideWet)
+		uniforms: { ...( def.uniforms || {} ), vegTideWet: G.tideWet },
+		fragmentPars: ( def.fragmentPars || '' ) + '\nuniform float vegTideWet;\n',
 		surface: /* glsl */`
 	vec2 st = vegUv;
 	float n2 = vegNoise( vec2( st.x * 6.0, st.y * 0.7 ) );
 	vec3 bark = vegBarkColor( vegNoise( vec2( st.x * 30.0, st.y * 2.5 + vIDat.w * 40.0 ) ), n2 ) * vec3( 1.08, 0.94, 0.86 );
 	float wy = vegP.y - vIPos.y; // (m over the mud)
-	bark = mix( bark, bark * 0.45, ss( 0.5, 0.05, wy ) );
-	bark = mix( bark, mix( ${ C( 0x55563a ) }, ${ C( 0x8a8670 ) }, n2 ), ss( 0.1, 0.18, wy ) * ( 1.0 - ss( 0.3, 0.45, wy ) ) * 0.7 );
+	// ((M17) on the tide: wet and dark from the water up to the wet line and a hand over it, glossy, and dark at the mud;
+	// the oysters' and the algae's crust between the mean tides, olive and grey, ragged at its top (photographs of red
+	// mangroves' prop roots at low water: a dark band at the water, the roots clear above it); dry, the bark's own red-brown)
+	float wetR = ss( 0.15, - 0.05, vegP.y - vegTideWet + ( n2 - 0.5 ) * 0.06 );
+	bark = mix( bark, bark * 0.45, max( wetR, ss( 0.25, 0.02, wy ) ) );
+	float crust = ss( - 0.55, - 0.35, vegP.y ) * ( 1.0 - ss( 0.0, 0.2, vegP.y + ( n2 - 0.5 ) * 0.18 ) ) * ss( 0.0, 0.05, wy );
+	bark = mix( bark, mix( ${ C( 0x55563a ) }, ${ C( 0x8a8670 ) }, n2 ) * mix( 1.0, 0.7, wetR ), crust * 0.75 );
 	vegAlbedo = bark;
 	vegAO = ss( 0.0, 0.75, vHf ) * 0.45 + 0.4;
-	vegRough = 0.9;
+	vegRough = mix( 0.9, 0.45, wetR );
 	vegSpec = 0.15;
 	vegNormalW = vegN;
 	vegTransN = normalize( vVegN );`,

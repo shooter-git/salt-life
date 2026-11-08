@@ -43,6 +43,7 @@ import { ableEnv } from './game/Seaworthy.js';
 import { berthOf } from './game/fleet/Berths.js';
 import { FLEET } from './game/fleet/Fleet.js';
 import { WeatherDriver } from './world/WeatherDriver.js';
+import { Creeks } from './world/shore/Creeks.js';
 import { lampsLit } from './game/Bites.js';
 import { FishStand, STAND } from './game/FishStand.js';
 import { Chandlery, CHANDLERY } from './game/Chandlery.js';
@@ -497,6 +498,9 @@ export class App {
 		this.player.rocks = this.rocks; // ((M15) the sea caves' roofs to walk on)
 		// ((M13) the wind you stand in, in the gusts the sea shows: a hurricane's pushes you along)
 		this.player.windAt = ( x, z ) => this.weather.windAt( x, z );
+		// ((M17) the creeks running on the tide, for the boat you're in and a swimmer: world/shore/Creeks.js)
+		this.creeks = new Creeks( ( x, z ) => this.terrainData.heightAt( x, z ) );
+		this.boatCtl.currentAt = this.player.creekAt = ( x, z, out ) => this.creekAt( x, z, out );
 
 		// ---------------------------------------------------------------- sound
 		// Tidewater's field recordings (public/audio): surf wave by wave, wind, palms, birds by the
@@ -2598,6 +2602,16 @@ export class App {
 		}
 
 		return c.get( key );
+
+	}
+
+	// (M17) a creek's current at ( x, z ) (m/s, into out), or null off them: its tables worked out a few milliseconds at a time
+	// the first time you're on one
+	creekAt( x, z, out ) {
+
+		const c = this.creeks;
+		if ( ! c.near( x, z ) || ! c.build( 2 ) ) return null;
+		return c.at( x, z, G.seaLevel.value, this.weather.tideRate, out );
 
 	}
 

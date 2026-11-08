@@ -39,6 +39,9 @@ import { NORTH } from './Weather.js';
 // (M15) And far, 0..1: how far the spot is out in the soft edge past the far grounds (Weather.edgeAt), where
 // the open blue's emptier (FAR_SLOWER: biteDelay). Not a water type.
 // (M16) And under, 0..1: how far the spot is in a boat's underwater lights after dark, drifting (FishTable's under).
+// (M17) And tide: how much sooner the bites come at the spot at the tide's stage (world/shore/Tide.js's tideBites: the
+// flats on the flood and about high water, their edge and channels on the ebb, a creek's mouth on the ebb most, the pier
+// at the turn), the game's; not a water type.
 // (Salt Life) The game adds flood, 0..1: how far the spot is in a boat's deck floodlights after dark (not
 // a water type: it draws in the fish that gather under lights, and the bait, so they bite sooner), and
 // (M9) weather: the weather now (Weather.weatherAt's; none, or a fair day's, changes nothing: weatherMood).
@@ -147,7 +150,7 @@ export const WASH = { day: 0.9, blown: 0.85, open: 0.5 };
 // north sea roughs its water as it does the north shore's (`blown`)
 export const BIG = { skew: 0.5, from: 4, more: 1.5, blown: 0.4 };
 // (not water types: what the game adds to a spot's habitat)
-const NOT_WATER = { flood: true, under: true, lively: true, weather: true, side: true, big: true, far: true, hook: true, wake: true };
+const NOT_WATER = { flood: true, under: true, lively: true, weather: true, side: true, big: true, far: true, hook: true, wake: true, tide: true };
 
 // (M16) the hook: how the bait's fished, and how deep it is, on the spot's habitat (Game.habitat: habitat.hook; the
 // interface with the rigs: docs/m16/fish.md):
@@ -283,6 +286,8 @@ export function biteDelay( habitat, hour, rng = Math.random, bait = null ) {
 	rich = Math.max( rich, 0.35 ) + ( habitat.flood || 0 ) + 0.5 * ( habitat.under || 0 );
 	const light = hour > 6 && hour < 19 ? 1 : 0.8;
 	let mean = 8 / ( Math.min( rich, 1.6 ) * light ) * ( BAITS[ bait ] ? BAITS[ bait ].speed : 1 );
+	// ((M17) the tide: how much faster the spot fishes at its stage, habitat.tide: world/shore/Tide.js's tideBites)
+	if ( habitat.tide > 0 ) mean /= habitat.tide;
 	// ((M16) live bait from a pumped well's still lively on the hook: habitat.lively, the game's)
 	if ( habitat.lively && BAITS[ bait ] && BAITS[ bait ].live ) mean *= LIVELY;
 	// ((M15) past the far grounds the open blue's emptier still (FAR): for its share of the spot's water)

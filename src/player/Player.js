@@ -153,6 +153,8 @@ export class Player {
 		this.roll = 0;
 		this.lean = 0; // (M13) leaning into a hurricane's wind (rad: the view's roll)
 		this.windAt = null; // (M13) the wind's speed at ( x, z ), in its gusts (m/s: App, the weather's)
+		this.creekAt = null; // (M17) a creek's current at ( x, z, out ) -> { x, z } (m/s) or null (App: world/shore/Creeks.js)
+		this._creek = { x: 0, z: 0, q: 0, u: 0 };
 		this.sheltered = false; // (M13) out of the wind (the shelter: App)
 		this._tumble = { T: 1, k: 0, dx: 0, dz: 1, spin: 1, carry: TUMBLE_CARRY, down: TUMBLE_DOWN };
 		this._breaker = { n: 0, H: 0, b: - 9, dx: 0, dz: 1 };
@@ -336,6 +338,15 @@ export class Player {
 		const c = q.currentAt( p.x, p.z, undefined, this.current );
 		p.x += c.x * dt;
 		p.z += c.z * dt;
+		// ((M17) and a creek's, running on the tide: App's)
+		const k = this.creekAt ? this.creekAt( p.x, p.z, this._creek ) : null;
+		if ( k ) {
+
+			p.x += k.x * dt;
+			p.z += k.z * dt;
+
+		}
+
 		this.inRip = c.rip > 0.5 && Math.hypot( c.x, c.z ) > 0.2 ? this.inRip + dt : 0;
 		const br = q.breakerAt( p.x, p.z, undefined, this._breaker );
 		if ( ! br ) return;

@@ -3,6 +3,7 @@ import { northReefMask } from '../world/TerrainData.js';
 import { mangroveAt } from '../world/terrain/Mangrove.js';
 import { FT } from './Units.js';
 import { WAY } from '../world/terrain/NorthTrail.js';
+import { DATUMS } from '../world/shore/Tide.js';
 
 // (M15) The chart's sheets drawn as a chart is (Chart.js has what they cover and what you've seen of them):
 // in the colours of IHO S-52, the standard every electronic chart (an ECDIS, a plotter's charts) is drawn
@@ -55,6 +56,13 @@ export const LAND_STEP = 200 * FT;
 const SMOOTH = 7;
 // the soundings' spacing on each sheet (m), and the shallowest written (m)
 const SOUNDING = { near: 44, mid: 200, far: 700, min: 0.6 };
+
+// (M17) as a chart has the tide: its depths below its chart datum (MLLW, as a US chart's and NOAA's for Settlement Point,
+// 0.45 m under the mean: what's left at an ordinary low water's lowest), its coast the line of mean high water, and the
+// ground between them drying ground (S-52's DEPIT), covered and bared by the tide. Heights (m about the mean)
+export const CHART_DATUM = DATUMS.MLLW, COAST = DATUMS.MHW;
+// a depth as the chart gives it: below its datum (m; under 0 it dries)
+export const chartDepth = ( h ) => CHART_DATUM - h;
 
 // the water's shade at a depth (m)
 export function shadeOf( depth ) {
@@ -211,8 +219,10 @@ export class SheetBake {
 
 			const k = j * N + i, h = this.H[ k ], o = k * 4;
 			let c;
-			if ( h >= 0 ) c = S52.LANDA;
-			else c = shadeOf( Math.max( - h * 0.5, - this.S[ k ] ) );
+			if ( h >= COAST ) c = S52.LANDA;
+			// ((M17) between the coast and the datum, drying ground; below it, its shade by the depth below datum)
+			else if ( h > CHART_DATUM ) c = S52.DEPIT;
+			else c = shadeOf( Math.max( chartDepth( h ) * 0.5, chartDepth( this.S[ k ] ) ) );
 			// (the mangroves' stand: on its mud, a hand's depth under, at the waterline)
 			if ( this.island && h < 0.6 && h > - 1.2 && mangroveAt( this.xAt( i ), this.zAt( j ) ).stand > 0.5 ) c = S52.DEPIT;
 			d[ o ] = c[ 0 ]; d[ o + 1 ] = c[ 1 ]; d[ o + 2 ] = c[ 2 ]; d[ o + 3 ] = 255;
@@ -249,10 +259,12 @@ export class SheetBake {
 	_edge( k1, i1, j1, k2, i2, j2 ) {
 
 		const H = this.H, S = this.S, h1 = H[ k1 ], h2 = H[ k2 ];
-		if ( ( h1 < 0 ) !== ( h2 < 0 ) ) return this._ink( i1, j1, i2, j2, S52.CSTLN, 1.7, h1 / ( h1 - h2 ) );
-		if ( h1 < 0 ) {
+		// ((M17) the coast at high water; the drying line, the datum's, as a depth contour)
+		if ( ( h1 < COAST ) !== ( h2 < COAST ) ) return this._ink( i1, j1, i2, j2, S52.CSTLN, 1.7, ( h1 - COAST ) / ( h1 - h2 ) );
+		if ( h1 < COAST ) {
 
-			const a = - Math.min( - 0.01, S[ k1 ] ), b = - Math.min( - 0.01, S[ k2 ] );
+			if ( ( h1 < CHART_DATUM ) !== ( h2 < CHART_DATUM ) ) this._ink( i1, j1, i2, j2, S52.DEPCN, 0.9, ( h1 - CHART_DATUM ) / ( h1 - h2 ) );
+			const a = Math.max( 0.01, chartDepth( S[ k1 ] ) ), b = Math.max( 0.01, chartDepth( S[ k2 ] ) );
 			if ( a === b ) return;
 			// ((M16) by index: an iterator an edge, all over a sheet, was garbage piling up as the island's made)
 			for ( let n = 0; n < CONTOURS.length; n ++ ) {
@@ -316,7 +328,7 @@ export class SheetBake {
 		for ( let z = s.z0 + step / 2; z < s.z0 + s.ext; z += step ) for ( let x = s.x0 + step / 2; x < s.x0 + s.ext; x += step ) {
 
 			const px = x + ( rand() - 0.5 ) * step * 0.7, pz = z + ( rand() - 0.5 ) * step * 0.7, h = this.heightAt( px, pz );
-			if ( h !== null && - h > SOUNDING.min ) out.push( { x: px, z: pz, d: - h } );
+			if ( h !== null && chartDepth( h ) > SOUNDING.min ) out.push( { x: px, z: pz, d: chartDepth( h ) } ); // ((M17) below datum)
 
 		}
 

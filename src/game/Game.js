@@ -22,7 +22,8 @@ import { TimeHUD } from './TimeHUD.js';
 import { Radio } from './Radio.js';
 import { Compass } from '../world/boat/kayak/Compass.js';
 import { DaysOut } from './DaysOut.js';
-import { timeText } from './IslandClock.js';
+import { timeText, tideTurns } from './IslandClock.js';
+import { tidePlace, stageOf, tideBites } from '../world/shore/Tide.js';
 import { HOURS, NIGHT_BOX, ordersFor, tradeDay, stallOpen, shutFor } from './Orders.js';
 import { WantedBoard } from './WantedBoard.js';
 import { ForecastSlate } from './ForecastSlate.js';
@@ -1374,7 +1375,8 @@ export class Game {
 		if ( this._forecastT > 0 || ! wx ) return;
 		this._forecastT = 1;
 		const s = this.app.settings, pick = this.app.weatherPick ? this.app.weatherPick() : null;
-		this.forecastSlate.draw( wx, forecast( islandTime( s.day, s.timeOfDay ), 12, pick, s.weatherSince ), this.app.portal && this.app.portal.locale, this.app.weather ? this.app.weather.news : null );
+		const T = islandTime( s.day, s.timeOfDay );
+		this.forecastSlate.draw( wx, forecast( T, 12, pick, s.weatherSince ), this.app.portal && this.app.portal.locale, this.app.weather ? this.app.weather.news : null, tideTurns( T, T + 13, this._slateTides || ( this._slateTides = [] ) ) ); // ((M17) and the tide's next turns)
 		// ((M13) and the shelter's tracking chart)
 		if ( this.stormChart ) this.stormChart.draw( this.app.weather.hurricane, this.app.weather.news, islandTime( s.day, s.timeOfDay ), this.app.portal && this.app.portal.locale );
 
@@ -1501,6 +1503,8 @@ export class Game {
 		// ((M16) under a hurricane's debris: the mahi; and the rig, how it's fished: Bites' hook, docs/m16/fish.md)
 		h.wake = this.findsNear( p.x, p.z ).wake;
 		h.hook = this.hook || null;
+		// ((M17) and the tide's stage there: the flats, their edge, their channels and mouths, the pier)
+		h.tide = tideBites( tidePlace( p.x, p.z ), stageOf( islandTime( this.app.settings.day, this.app.settings.timeOfDay ), this._stage || ( this._stage = {} ) ), h.pier );
 		return h;
 
 	}
