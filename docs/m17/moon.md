@@ -150,7 +150,9 @@ Seen, on low (every phase and view), mid (every phase, the disc, sky, beach and 
   - Under a quarter moon all of it's dimmer, the sky darker about the moon's aureole.
   - On a moonless night: the stars down to 6.5, the Milky Way's stars thicker across the sky, the beach's sand and the sea's edge just there, the horizon a shade lighter than the sea. With the flashlight on, its beam carries the sand ahead and the beach's line, the jetty and the camp show beyond: you find your way.
 - **The moon's path on the sea**, out past the island at an hour of each night with the moon about 12 degrees up: a column of glints under it at every phase, brightest and widest at full, as the photographs over the Mediterranean, the Red Sea and Cala Millor have it.
-- **By day** a first quarter in the afternoon (day 30, 14:45) is a pale disc in the blue.
+- **By day** a first quarter in the afternoon (day 30, 14:45) is a pale half-disc in the blue, the sky showing through its seas.
+- **On mid and high** the same. High's bloom spreads the full moon's path into a glow on the water, as the photographs' long exposures do. Through the north beach's trees the full moon's seas are plain at the game's own lens.
+- `qa-output/moon/summary.png` puts the low tier's four phases, the north beach at new and full moon, a quarter moon's path and the flashlight on a moonless night side by side.
 
 ## Readings
 
