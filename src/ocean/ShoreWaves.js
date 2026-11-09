@@ -19,7 +19,8 @@ import { G, GRAVITY } from '../core/Globals.js';
 //   coarse to draw them, seen from afar: the breaker line and the whitewater inside it; lam: their length)
 //   ShoreSample shoreEvaluate( vec2 xz, float depth, float groundH )        (with the normal: the water mesh)
 //   vec4 terrainShoreSample( vec2 xz )        the shore field ( T, dir * exposure, shoreline T )
-//   vec4 shoreSwashEdge( vec2 xz, float t )   ( clipped film thickness, distance to the swash front, tau, Rt )
+//   vec4 shoreSwashEdge( vec2 xz, float t )   ( clipped film thickness, distance to the swash front, tau, Rt: its run-up,
+//                                              m up a beach's face at SHORE_BEACH_SLOPE )
 //   float shoreSurfTurbidity( vec2 xz, float depth )   how milky the surf zone is there (0..1; (M11) more
 //                                                      and further out in a big surf: shoreMilk)
 // CPU: sample( x, z, t, groundH ) -> { y, swashLevel, env } for WaterQuery.
@@ -521,7 +522,8 @@ export class ShoreWaves {
 				const su = sat( tau / SWASH_UP ), sb = sat( ( tau - SWASH_UP ) / SWASH_DOWN );
 				const Rh = ( tau < SWASH_UP ? 1 - Math.pow( 1 - su, 1.5 ) : 1 - Math.pow( sb, 1.6 ) ) * RhMax - 0.3;
 				const lobes = Math.sin( along * 0.61 + ms * 2.3 ) * 0.5 + Math.sin( along * 1.73 + ms * 5.1 ) * 0.3 + Math.sin( along * 4.3 + ms * 1.7 ) * 0.2;
-				return Math.max( Rh + lobes * ( Math.max( Rh, 0 ) * 0.07 + 0.35 ), 0.35 ) * P.enabled;
+				const least = 0.35 * smooth( 0.02, 0.15, exposure );
+				return Math.max( Rh + lobes * ( Math.max( Rh, 0 ) * 0.07 + least ), least ) * P.enabled;
 
 			};
 
@@ -583,7 +585,9 @@ export class ShoreWaves {
 		const su = sat( tau / SWASH_UP ), sb = sat( ( tau - SWASH_UP ) / SWASH_DOWN );
 		const Rh = ( tau < SWASH_UP ? 1 - Math.pow( 1 - su, 1.5 ) : 1 - Math.pow( sb, 1.6 ) ) * RhMax - 0.3;
 		const lobes = Math.sin( along * 0.61 + ms * 2.3 ) * 0.5 + Math.sin( along * 1.73 + ms * 5.1 ) * 0.3 + Math.sin( along * 4.3 + ms * 1.7 ) * 0.2;
-		const Rt = Math.max( Rh + lobes * ( Math.max( Rh, 0 ) * 0.07 + 0.35 ), 0.35 ) * P.enabled;
+		// ((M17) the least a swash runs up by how open the shore is, as the sea's shader has it: shoreSwashRunup)
+		const least = 0.35 * smooth( 0.02, 0.15, exposure );
+		const Rt = Math.max( Rh + lobes * ( Math.max( Rh, 0 ) * 0.07 + least ), least ) * P.enabled;
 		const fm = Rt - inland + SWASH_OVERSHOOT;
 		const thick = clamp( Math.min( fm * 0.3, Math.max( fm - 0.1, 0 ) * ( BEACH_SLOPE * 0.22 ) + 0.03 ), - 0.1, 0.12 );
 		out.swashLevel = Math.max( out.swashLevel, groundH + thick );
@@ -1086,7 +1090,11 @@ ShoreRunup shoreSwashRunup( ShoreTrain tr, vec4 sh, float along, float groundH )
 	bool isUp = tau < SHORE_SWASH_UP;
 	float Rh = ( isUp ? 1.0 - pow( 1.0 - su, 1.5 ) : 1.0 - pow( sb, 1.6 ) ) * RhMax - 0.3;
 	float lobes = sin( along * 0.61 + ms * 2.3 ) * 0.5 + sin( along * 1.73 + ms * 5.1 ) * 0.3 + sin( along * 4.3 + ms * 1.7 ) * 0.2;
-	float Rt = max( Rh + lobes * ( max( Rh, 0.0 ) * 0.07 + 0.35 ), 0.35 ) * SHORE_ENABLED;
+	// ((M17) the least a swash runs up, and its lobes' wander, by how open the shore is to the waves: all of it on an
+	// open beach, none in the island's lee or over a flat whose waves are taken out, where it laid a swash's line along
+	// every bar and creek bank bared by the tide)
+	float least = 0.35 * shSS( 0.02, 0.15, exposure );
+	float Rt = max( Rh + lobes * ( max( Rh, 0.0 ) * 0.07 + least ), least ) * SHORE_ENABLED;
 	return ShoreRunup( tau, Rt, inland, RhMax, su, sb, isUp );
 }
 

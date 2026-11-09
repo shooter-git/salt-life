@@ -14,6 +14,7 @@ import { weatherAt, SURF_MAX, PERIOD_MAX, GROUNDSWELL_MAX, SURF_HURRICANE, HURRI
 import { G } from '../src/core/Globals.js';
 import { windShove, knockHeight } from '../src/player/Player.js';
 import { seaBox } from '../src/world/WeatherDriver.js';
+import { flatsAt } from '../src/world/terrain/Flats.js';
 
 let failed = 0;
 const check = ( ok, label ) => {
@@ -537,6 +538,49 @@ check( runs.every( ( [ start, foot, stall ] ) => start === 0 && foot < 0.01 && s
 	const up = [ reach( LOW ), reach( 0 ), reach( HIGH ) ];
 	console.log( `     the wash's top on the village beach: ${ up.map( ( v ) => v.toFixed( 2 ) ).join( ', ' ) } m at low water, mean and high water` );
 	check( up[ 1 ] - up[ 0 ] > 0.4 && up[ 2 ] - up[ 1 ] > 0.4 && up[ 2 ] - up[ 0 ] < 1.6, 'the wash running up the beach with the tide' );
+	// (and on the flats bared at low water, where their waves are taken out: no swash to speak of up their creeks' banks
+	// and their potholes' sides, where a swash's least run-up (0.35 m up a beach's face whatever the waves) laid a band
+	// of wet sand and a line of foam along every edge. The run-up there in a minute on a calm day's and a fair day's surf,
+	// as the sea's shader has it (ShoreWaves.swash, the shorebirds' probe: shoreSwashRunup's), and the swash front's
+	// foam it leaves (WaterSurface: none under 0.8 m of it up a beach's face, all of it from 2.5); on the village beach,
+	// as it was)
+	G.seaLevel.value = LOW;
+	const sstep = ( a, b, v ) => { const k = Math.min( 1, Math.max( 0, ( v - a ) / ( b - a ) ) ); return k * k * ( 3 - 2 * k ); };
+	const runups = ( list, surf ) => {
+
+		tw.setSurf( surf, 9, 0, 0 );
+		const all = [], sw = {};
+		for ( const [ x, z ] of list ) {
+
+			let most = 0;
+			for ( let t = 0; t < 60; t += 0.5 ) most = Math.max( most, tw.swash( x, z, t, terrain.heightAt( x, z ), sw ).runup );
+			all.push( most );
+
+		}
+
+		all.sort( ( a, b ) => a - b );
+		return { most: all[ all.length - 1 ], mid: all[ all.length >> 1 ], foam: sstep( 0.8, 2.5, all[ all.length - 1 ] ), n: all.length };
+
+	};
+	const flat = [], beach = [];
+	for ( let x = - 720; x <= - 540; x += 4 ) for ( let z = - 260; z <= - 40; z += 4 ) {
+
+		const g = terrain.heightAt( x, z );
+		if ( flatsAt( x, z ).on > 0.9 && terrain.shoreCalmAt( x, z ) < 0.1 && g > LOW && g < LOW + 0.05 ) flat.push( [ x, z ] );
+
+	}
+
+	for ( let x = - 60; x <= 120; x += 15 ) for ( let z = - 20; z >= - 80; z -= 0.5 ) {
+
+		const g = terrain.heightAt( x, z );
+		if ( g > LOW && g < LOW + 0.05 ) beach.push( [ x, z ] );
+
+	}
+
+	const calm = runups( flat, 0.24 ), fair = runups( flat, 0.34 ), onBeach = runups( beach, 0.24 );
+	const cm = ( r ) => `${ ( r.mid * 6.6 ).toFixed( 1 ) } cm (half of them), ${ ( r.most * 6.6 ).toFixed( 1 ) } at most, its front's foam ${ ( r.foam * 100 ).toFixed( 0 ) }%`;
+	console.log( `     the swash on the flats bared at low water (${ calm.n } points by the waterline, their waves 90% or more taken out): on a calm day's surf ${ cm( calm ) }; a fair day's ${ cm( fair ) }; on the village beach on a calm day ${ cm( onBeach ) }` );
+	check( calm.n > 15 && sstep( 0.8, 2.5, calm.mid ) === 0 && sstep( 0.8, 2.5, fair.mid ) === 0 && calm.foam < 0.15 && fair.foam < 0.4 && onBeach.foam > 0.99, 'no swash\'s line of foam along the flats bared at low water (where their waves run up most, a touch of it); the village beach\'s as it was' );
 	G.seaLevel.value = 0;
 
 }

@@ -487,7 +487,10 @@ ${ SH ? /* glsl */`
 	vec4 se = shoreSwashEdge( vWater.xz, film );
 	float frontD = se.y;
 	float uprush = smoothstep( 0.46, 0.32, se.z );
-	float frontFoam = smoothstep( 0.9, 0.0, frontD ) * smoothstep( -0.05, 0.08, frontD ) * uprush;
+	// ((M17) foam at the swash's front only where a wave's broken and run up the sand: by its run-up (se.w, m up a beach's
+	// face: 0.8 to 2.5 of it is 5 to 17 cm up), so none where the waves are taken out, as over the flat bared by the tide,
+	// nor in the island's lee on a still day)
+	float frontFoam = smoothstep( 0.9, 0.0, frontD ) * smoothstep( -0.05, 0.08, frontD ) * uprush * smoothstep( 0.8, 2.5, se.w );
 	if ( frontFoam > 0.0 ) foam = max( foam, waterLace( vWater.xz * 4.5 + 3.7, 0.65 ) * frontFoam * ( 1.0 - 0.9 * seaCaveCalm( vWater.xz ) ) * 0.85 );
 	// the swash sheet ends on its analytic front, not on the mesh triangles
 	float sheetEdge = smoothstep( 0.0, 0.012, se.x );
