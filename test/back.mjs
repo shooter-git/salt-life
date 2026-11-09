@@ -178,9 +178,9 @@ const v3 = ( v ) => `(${ v.x.toFixed( 2 ) }, ${ v.y.toFixed( 2 ) }, ${ v.z.toFix
 // ---- aboard someone else's
 {
 
-	const r = { o: 'robin-1', b: 'lobster', x: 1234.567, z: - 88.12, on: [ 1.31, 1.16, 0.3, 0.2 ], helm: false };
+	const r = { o: 'robin-1', n: 'Robin', b: 'lobster', x: 1234.567, z: - 88.12, on: [ 1.31, 1.16, 0.3, 0.2 ], helm: false };
 	const rec = leftOf( JSON.stringify( boatLeft( { x: 1, z: 2, heading: 0, anchor: null, moored: true, aboard: null, ride: r, T: 3, at: 4 } ) ) );
-	ok( rec.ride && rec.ride.o === 'robin-1' && rec.ride.b === 'lobster' && rec.ride.x === 1234.6 && rec.ride.on[ 0 ] === 1.31 && ! rec.ride.swim, `aboard Robin's lobster boat, on her side deck: through the save (${ JSON.stringify( rec.ride ) })` );
+	ok( rec.ride && rec.ride.o === 'robin-1' && rec.ride.n === 'Robin' && rec.ride.b === 'lobster' && rec.ride.x === 1234.6 && rec.ride.on[ 0 ] === 1.31 && ! rec.ride.swim, `aboard Robin's lobster boat, on her side deck: through the save (${ JSON.stringify( rec.ride ) })` );
 	const sw = leftOf( JSON.stringify( boatLeft( { x: 1, z: 2, heading: 0, anchor: null, moored: true, aboard: null, ride: { o: 'sam-1', b: 'console', x: 5, z: 6, swim: [ 3, - 4 ] }, T: 3, at: 4 } ) ) );
 	ok( sw.ride && sw.ride.swim && sw.ride.swim[ 1 ] === - 4 && ! sw.ride.on, 'in the water by Sam\'s console: through the save' );
 

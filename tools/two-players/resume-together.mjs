@@ -194,15 +194,25 @@ const boardHer = async ( sam, mine ) => {
 
 	}, [ mine.x, mine.z ] );
 	await sam.game.waitForFunction( () => { const o = [ ...window.__app.together.others.values() ][ 0 ]; return o && o.boat && o.boat.visible; }, null, { timeout: 200000, polling: 500 } ).catch( () => note( 'her copy not drawn' ) );
-	await sam.game.evaluate( () => {
+	// (at her boarding point as her copy has it now, again and again till she's offered: on a phone's tier at a frame a second her
+	// copy's built whole, and her stand-in replaced, a while after she's first drawn)
+	for ( let i = 0; i < 15; i ++ ) {
 
-		const a = window.__app, o = [ ...a.together.others.values() ][ 0 ], p = a.player, M = o && o.boat && o.boat.userData.model;
-		if ( ! M ) return;
-		const from = M.boardFrom && M.boardFrom( 'swim' ), bp = ( from ? from.at : M.boardPoint ).clone().applyQuaternion( o.boat.quaternion ).add( o.boat.position );
-		p.position.set( bp.x, bp.y + 0.1, bp.z );
+		await sam.game.evaluate( () => {
 
-	} );
-	await sam.game.waitForFunction( () => !! window.__app.player.rideOffer, null, { timeout: 120000, polling: 300 } ).catch( () => note( 'no ride offered' ) );
+			const a = window.__app, o = [ ...a.together.others.values() ][ 0 ], p = a.player, M = o && o.boat && o.boat.userData.model;
+			if ( ! M || p.rideOffer ) return;
+			const from = M.boardFrom && M.boardFrom( 'swim' ), bp = ( from ? from.at : M.boardPoint ).clone().applyQuaternion( o.boat.quaternion ).add( o.boat.position );
+			p.position.set( bp.x, bp.y + 0.1, bp.z );
+			p.mode = 'swim';
+			p.velocity.set( 0, 0, 0 );
+
+		} );
+		if ( await sam.game.waitForFunction( () => !! window.__app.player.rideOffer, null, { timeout: 20000, polling: 300 } ).then( () => true ).catch( () => false ) ) break;
+		if ( i === 14 ) note( 'no ride offered' );
+
+	}
+
 	return sam.game.evaluate( () => {
 
 		const p = window.__app.player;
@@ -227,7 +237,8 @@ const SC = {
 		const sam = await R.open( 'Sam', 'console' );
 		await sam.game.waitForFunction( () => { const o = [ ...window.__app.together.others.values() ][ 0 ]; return o && o.cur && o.cur.boat; }, null, { timeout: 200000, polling: 1000 } );
 		const spot = await farSpot( robin.game, { max: boat === 'kayak' ? 9 : 18 } );
-		const mine = boat === 'kayak' ? await atSea( robin.game, spot ).then( () => frames( robin.game, 3 ) ).then( () => view( robin.game ) ) : await anchored( robin.game, boat, spot );
+		// (a kayak at anchor with Robin sat in her: left to drift she'd go 0.4 m a second from where Sam's put by her)
+		const mine = boat === 'kayak' ? await atSea( robin.game, spot ).then( () => robin.game.evaluate( ( t ) => { const a = window.__app; a.game.state.upgrades[ t ] = 1; a.game.state.emit(); }, ANCHOR.kayak ) ).then( () => frames( robin.game, 3 ) ).then( () => robin.game.evaluate( () => window.__app.game.dropAnchor() ) ).then( () => frames( robin.game, 3 ) ).then( () => view( robin.game ) ) : await anchored( robin.game, boat, spot );
 		await sam.game.waitForFunction( ( s ) => { const o = [ ...window.__app.together.others.values() ][ 0 ]; return o.cur && o.cur.boat && Math.hypot( o.cur.boat.pos.x - s.x, o.cur.boat.pos.z - s.z ) < 60; }, spot, { timeout: 200000, polling: 500 } );
 		const rode = await boardHer( sam, mine );
 		await frames( sam.game, 3 );
@@ -620,26 +631,8 @@ const SC = {
 		const spot = await farSpot( robin.game, { max: boat === 'kayak' ? 9 : 18 } );
 		const mine = boat === 'kayak' ? await atSea( robin.game, spot ).then( () => frames( robin.game, 3 ) ).then( () => view( robin.game ) ) : await anchored( robin.game, boat, spot );
 		await sam.game.waitForFunction( ( s ) => { const o = [ ...window.__app.together.others.values() ][ 0 ]; return o.cur && o.cur.boat && Math.hypot( o.cur.boat.pos.x - s.x, o.cur.boat.pos.z - s.z ) < 60; }, spot, { timeout: 200000, polling: 500 } );
-		await sam.game.evaluate( ( [ x, z ] ) => {
-
-			const a = window.__app, p = a.player;
-			p.position.set( x + 3, a.waves.heightAt( x + 3, z + 3 ) - 0.2, z + 3 );
-			p.mode = 'swim';
-			p.velocity.set( 0, 0, 0 );
-			p.floating = true;
-
-		}, [ mine.x, mine.z ] );
-		await sam.game.waitForFunction( () => { const o = [ ...window.__app.together.others.values() ][ 0 ]; return o && o.boat && o.boat.visible; }, null, { timeout: 200000, polling: 500 } ).catch( () => note( 'her copy not drawn' ) );
-		await sam.game.evaluate( () => {
-
-			const a = window.__app, o = [ ...a.together.others.values() ][ 0 ], p = a.player, M = o && o.boat && o.boat.userData.model;
-			if ( ! M ) return;
-			const bp = M.boardPoint.clone().applyQuaternion( o.boat.quaternion ).add( o.boat.position );
-			p.position.set( bp.x, bp.y + 0.1, bp.z );
-
-		} );
-		await sam.game.waitForFunction( () => !! window.__app.player.rideOffer, null, { timeout: 120000, polling: 300 } ).catch( () => note( 'no ride offered' ) );
-		const rode = await sam.game.evaluate( () => { const p = window.__app.player; if ( ! p.rideOffer ) return false; p.ride( p.rideOffer.boat ); return true; } );
+		// ((M17) boarded as the rejoin's guest is: at her boarding point as her copy has it, again till she's offered)
+		const rode = await boardHer( sam, mine );
 		await frames( sam.game, 3 );
 		const v0 = await view( sam.game );
 		say( rode && v0.riding, `vanish (${ boat }): Sam's aboard far out (${ v0.mode } at ${ v0.you })` );

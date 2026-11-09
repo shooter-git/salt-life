@@ -90,7 +90,7 @@ export function wearRate( w, boat = 'lobster' ) {
 //                           deck, the bridge, the tower, a cabin, by the chair, the lobster boat's roof (stoodOf)
 //   helm: 'upper'           at her helm, her upper one (the sportfisher's tower's)
 //   swim: [ dx, dz ]        in the water, this far from her (m, the world's), she out there (swimBy)
-//   ride: { o, b, x, z, on, helm, swim }   aboard someone else's (o: her owner's id, b: which she is, x z: where she was),
+//   ride: { o, n, b, x, z, on, helm, swim }   aboard someone else's (o: her owner's id, n: their name, b: which she is, x z: where she was),
 //                           where you stood on her (on), at her helm (helm: 1), or in the water by her (swim) (Together.rideLeft)
 export const boatLeft = ( { x, z, heading, anchor, sock, moored, aboard, on = null, helm = null, swim = null, ride = null, T, at, boat = 'lobster' } ) => ( {
 	v: 1, boat, ...( sock ? { sock: true } : {} ), x: round( x ), z: round( z ), h: Math.round( heading * 1000 ) / 1000, anchor: anchor ? [ round( anchor.x ), round( anchor.z ) ] : null, moored: !! moored, aboard: aboard === 'deck' || aboard === 'helm' ? aboard : null,
@@ -104,11 +104,11 @@ const isSwim = ( s ) => Array.isArray( s ) && s.length === 2 && s.every( Number.
 const onWire = ( on ) => [ r2( on[ 0 ] ), r2( on[ 1 ] ), r2( on[ 2 ] ), Math.round( on[ 3 ] * 1000 ) / 1000 ];
 const swimWire = ( s ) => [ round( s[ 0 ] ), round( s[ 1 ] ) ];
 const rideWire = ( r ) => ( {
-	o: String( r.o ).slice( 0, 64 ), b: String( r.b ).slice( 0, 24 ), x: round( r.x ), z: round( r.z ),
+	o: String( r.o ).slice( 0, 64 ), ...( typeof r.n === 'string' && r.n ? { n: r.n.slice( 0, 40 ) } : {} ), b: String( r.b ).slice( 0, 24 ), x: round( r.x ), z: round( r.z ),
 	...( isOn( r.on ) ? { on: onWire( r.on ) } : {} ), ...( r.helm ? { helm: 1 } : {} ), ...( isSwim( r.swim ) ? { swim: swimWire( r.swim ) } : {} ),
 } );
 const rideOf = ( r ) => r && typeof r === 'object' && typeof r.o === 'string' && r.o && typeof r.b === 'string' && Number.isFinite( r.x ) && Number.isFinite( r.z ) && ( isOn( r.on ) || isSwim( r.swim ) || r.helm === 1 )
-	? { o: r.o, b: r.b, x: r.x, z: r.z, on: isOn( r.on ) ? r.on.slice() : null, helm: r.helm === 1, swim: isSwim( r.swim ) ? r.swim.slice() : null } : null;
+	? { o: r.o, n: typeof r.n === 'string' ? r.n : null, b: r.b, x: r.x, z: r.z, on: isOn( r.on ) ? r.on.slice() : null, helm: r.helm === 1, swim: isSwim( r.swim ) ? r.swim.slice() : null } : null;
 
 // the save's boat as it's reckoned from, or null if there's none (or it's not one)
 export function leftOf( text ) {

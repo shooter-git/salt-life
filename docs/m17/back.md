@@ -11,7 +11,7 @@ What [M17.md](../M17.md) asked under [Coming back](../M17.md#coming-back), [The 
 | `on: [ x, y, z, look ]` | `aboard: 'deck'` | where you stood on her deck, in her frame (m, to the cm), and which way you looked on her (rad) |
 | `helm: 'upper'` | `aboard: 'helm'` | her upper helm, the sportfisher's tower's |
 | `swim: [ dx, dz ]` | not aboard | in the water, this far from her (m, the world's), she out on the water and you within 300 m of her |
-| `ride: { o, b, x, z, on?, helm?, swim? }` | not aboard | aboard someone else's (`o` her owner's id, `b` which she is, `x z` where she was): where you stood on her, at her helm, or in the water by her |
+| `ride: { o, n?, b, x, z, on?, helm?, swim? }` | not aboard | aboard someone else's (`o` her owner's id, `n` their name, `b` which she is, `x z` where she was): where you stood on her, at her helm, or in the water by her |
 
 **Where you stood** (`stoodOf`, `standBack`). Saved from where your feet are: the deck, the bridge, the tower, a cabin, the lobster boat's side decks, foredeck and roof. Part way up a ladder, its foot or its head, whichever's nearer. Strapped in the fighting chair, its spot: you come back standing beside it, since there's no fish on when you're back. Put back on her as she is now: on what's under you there within a step, else where she's boarded (a place she hasn't got any more). At her upper helm, at it again.
 
@@ -86,7 +86,43 @@ Two burn 2.02 times one at the same revs; home from 10 km at her cruise takes 6.
 
 ## Readings
 
-(filled in from the runs)
+Real loads of the page on the dev server, low tier, on this machine (8 cores, no graphics card), shared all along with the other streams' renders and checks: load 13 to 40 through the runs below. Ready took 6 to 66 s a load (the load's, not the game's); a pair of games up to 5 minutes to start; a run's cut at 25 minutes (`render-slot.sh`).
+
+**Alone** (`tools/two-players/resume.mjs`):
+
+| Boat, scenario | What came back | |
+|---|---|---|
+| Lobster boat, `aboard` | her cockpit, the house's bench, her port side deck, her bow, her roof, each where you stood, 0.00 m; at her helm | each where-you-stood passes ("in the scene" read the harness race below) |
+| Sportfisher, `aboard` | her cockpit, salon, guest cabin, bridge and tower, each 0.00 m; her helm; her upper helm, the tower's, again | 32 ok, no problems |
+| Kayak, `swim` | in the water 11.4 m off her at anchor: back 11.4 m off her, 0.22 m from where you were; still by her 3 h on (11.5 m); 420 m off, ashore | pass |
+| Kayak, `kayakanchor` | sat in her at anchor: sat in her again, her anchor still down, no "Anchor up"; 3 h on, still at her anchor, 2.1 m from where she was | pass |
+| Lobster boat, `swim` | 11.4 m off her: back 11.5 m off, 0.10 m from where you were; still by her 3 h on (11.6 m); 420 m off, ashore, she at her anchor | 8 ok, no problems |
+| Kayak and lobster boat, `anchor` (M16's, its kayak and adrift checks changed) | at anchor out of the kayak, in the water: back in the water by her, then 3 h on; at the helm adrift 3 h; left adrift, 3 h on: in the water by her where she's drifted (the lobster boat 87 m, you 2.1 m from her); her drift sock | 76 ok, no problems |
+| Console, `aboard` and `swim` | her cockpit both sides and her foredeck, each 0.00 m; her helm; in the water 11.5 m off her, 0.10 m from where you were; 3 h on; 420 m off, ashore | 29 ok, no problems |
+
+"She's in the scene and shown" read false straight after a load in the early runs: on a CPU the boat you start in is held out of the scene until `prepareLate`, after what `started()` waited for. A harness race on a busy machine, not the game: `resume-lib.mjs`' `started()` now waits for her to be back in the scene, and the sportfisher's run, after the fix, passes it every time.
+
+**Together** (`tools/two-players/resume-together.mjs`):
+
+| Boat, scenario | What came back | |
+|---|---|---|
+| Lobster boat, `rejoin` | Sam up on Robin's roof, Robin aboard her; Sam goes and comes back: aboard her again, 0.00 m from where he stood, "Back aboard Robin's boat", and Robin's game has him riding her. Over her side 6 m off; back: in the water by her, 4.3 m off | pass; "no veil" read the start's veil still up (below) |
+| Lobster boat, `guest` | Sam aboard Robin's at anchor; Robin goes, Sam rides on; Sam goes and comes back: aboard her again at her anchor, Robin away (her record on everyone's sea), 0.00 m from where he stood; his own console at her berth | 7 ok, no problems |
+| Sportfisher, `rejoin` | Sam up on Robin's bridge, Robin aboard her; back: aboard her again, 0.00 m from where he stood, "Back aboard Robin's boat", Robin's game has him riding her; in the water by her again, 4.5 m off | 5 ok, no problems |
+| Console, `rejoin` | Sam on Robin's foredeck, Robin aboard her; back: aboard her again, 0.00 m from where he stood, "Back aboard Robin's boat", Robin's game has him riding her; in the water by her again, 5.8 m off | 5 ok, no problems |
+| Kayak, `far` (in company) | Robin out of her kayak in the water by her at anchor when she left; back in a room with Sam: in the water by her, her anchor where it was (0.2 m off); both games have her in one place | 7 ok, no problems |
+| Lobster boat, `vanish` | Sam aboard Robin's far out; he goes; Robin takes her home and goes. Sam back: in the water where she was, then told "Robin's boat isn't out there now · you're ashore", ashore, his console at her berth, no record of her left | 5 ok, no problems |
+| Kayak, `rejoin` | Sam on Robin's tank well, Robin sat in her at anchor; back: on her tank well again, 0.00 m, "Back aboard Robin's boat", Robin's game has him riding her; in the water by her again, 0.2 m from where he was | 5 ok, no problems |
+
+**`tools/two-players/aboard.mjs`, the lobster boat** (a guest on her real deck, her owner's game running her): every area, her foredeck, her bow and her roof among them, each 0.00 m from where he was put, his camera 1.64 m over her floor, Robin's game seeing him 0.000 m off; still aboard as she's moved out; under way at 6 m/s through a 74° turn, 105 frames, 0 off her. All passed, at 0.8 and 0.6 real frames a second, 23.6 minutes.
+
+**`tools/two-players/crew.mjs traps`** (a guest working her traps, her trap bait her owner's): all passed at load 18 to 23: her deckhand sets one of hers, gaffs her buoy alongside, it comes up onto her rail with a lobster in it, taken out into his own hold (0.90 kg) and stacked (0 failed, 5.2 minutes). Two runs at load 35 to 40 failed at the haul, as the base commit (7495f79), run on its own server at the same load, did one step later: about one frame a second.
+
+The scripts' boarding from the water (`boardHer`) now puts Sam at her boarding point as her copy has it again and again till she's offered: at about a frame a second, on a phone's tier, her copy's built whole a while after she's first drawn, and one try missed (the sportfisher's and the kayak's first runs, `vanish` twice). The kayak's `rejoin` anchors her, Robin sat in her: left to drift she went 0.4 m a second from where Sam had been put by her before the check.
+
+The first `rejoin` runs found two faults, both fixed: `Together` already had a `ridden()` (the boat you're riding, for her dash), defined later in the class, so it replaced mine and the save got that boat, not a ride (mine's `rideLeft()` now, and `test/back.mjs` checks each is defined once); and a pause wrote the save's own data before the app wrote where you were, which then waited its 1.2 s (the app's pause handler now flushes after it writes).
+
+"No veil" once read the standalone loading veil still up seconds after the start: it's taken away by a 1.5 s timer after the start, and at load 37 a CPU frame takes seconds. The screenshot then shows Sam on her roof, the veil gone.
 
 ## For the M17 session's timing checks
 

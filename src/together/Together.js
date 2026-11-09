@@ -627,20 +627,20 @@ export class Together {
 		const p = this.app.player;
 		if ( p.riding && ( p.mode === 'deck' || p.mode === 'boat' ) ) {
 
-			const b = p.boat, M = b.model, h = p.mode === 'boat' && p.atHelm;
-			return { o: b.owner, b: M.id, x: b.position.x, z: b.position.z, on: h ? [ h.rise[ 0 ], h.y ?? M.lines.deckY, h.rise[ 1 ], 0 ] : stoodOf( p ), helm: !! h };
+			const b = p.boat, M = b.model, h = p.mode === 'boat' && p.atHelm, o = this.others.get( b.owner ), r = this.boats[ b.owner ];
+			return { o: b.owner, n: ( o && o.person.name ) || ( r && r.n ) || null, b: M.id, x: b.position.x, z: b.position.z, on: h ? [ h.rise[ 0 ], h.y ?? M.lines.deckY, h.rise[ 1 ], 0 ] : stoodOf( p ), helm: !! h };
 
 		}
 
 		if ( p.mode !== 'swim' || p.riding ) return null;
 		let best = null, near = SWIM_NEAR;
-		const by = ( o, b, f ) => {
+		const by = ( o, n, b, f ) => {
 
 			const d = Math.hypot( p.position.x - f.pos.x, p.position.z - f.pos.z );
 			if ( d < near ) {
 
 				near = d;
-				best = { o, b, x: f.pos.x, z: f.pos.z, swim: [ p.position.x - f.pos.x, p.position.z - f.pos.z ] };
+				best = { o, n, b, x: f.pos.x, z: f.pos.z, swim: [ p.position.x - f.pos.x, p.position.z - f.pos.z ] };
 
 			}
 
@@ -649,11 +649,11 @@ export class Together {
 		for ( const o of this.others.values() ) {
 
 			const c = o.cur;
-			if ( c && c.boat && ( c.mode === 'deck' || c.mode === 'helm' ) && ! c.ride ) by( o.person.id, c.boatId, c.drawn || c.boat );
+			if ( c && c.boat && ( c.mode === 'deck' || c.mode === 'helm' ) && ! c.ride ) by( o.person.id, o.person.name, c.boatId, c.drawn || c.boat );
 
 		}
 
-		for ( const [ id, a ] of this.away ) if ( a.r && a.r.a && this._awayFrame( id ) ) by( id, a.r.b, a.frame );
+		for ( const [ id, a ] of this.away ) if ( a.r && a.r.a && this._awayFrame( id ) ) by( id, a.r.n || null, a.r.b, a.frame );
 		return best;
 
 	}
@@ -709,7 +709,7 @@ export class Together {
 		p.velocity.set( 0, 0, 0 );
 		p.yaw = S.yaw;
 		p._camY = null;
-		const name = ( this.others.get( R.o ) && this.others.get( R.o ).person.name ) || ( this.boats[ R.o ] && this.boats[ R.o ].n ) || 'Their';
+		const name = ( this.others.get( R.o ) && this.others.get( R.o ).person.name ) || ( this.boats[ R.o ] && this.boats[ R.o ].n ) || R.n || 'Their';
 		if ( app.game && app.game.toast ) app.game.toast( `${ name === 'Their' ? name : name + '\'s' } boat isn't out there now · you're ashore`, 3600 );
 
 	}
