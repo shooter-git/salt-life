@@ -74,6 +74,8 @@ export const MEADOW = {
 const consts = ( prefix, o ) => Object.entries( o ).map( ( [ k, v ] ) => `const vec3 ${ prefix }${ k } = ${ v };` ).join( '\n' );
 
 export const TERRAIN_SHADING_GLSL = /* glsl */`
+// ((M17) the wet line, m: the highest the sea's stood lately, G.tideWet; a material that doesn't give it has 0, mean water)
+uniform float terrainTideWet;
 ${ consts( 'PAL_', PALETTE ) }
 ${ consts( 'MEADOW_', MEADOW ) }
 
@@ -207,8 +209,10 @@ RockSurface terrainRockSurface( vec3 p, vec3 N, float h, float mcr, float seed, 
 	float sub = ss( -0.3, -1.2, h );
 	col = mix( col, mix( PAL_algae, PAL_coralline, ss( 0.45, 0.7, mid.w ) ), sub * 0.55 );
 
-	// wet below the swash line (dark, glossy)
-	float wet = ss( 1.0, 0.25, h + mid.w * 0.3 );
+	// wet below the swash line (dark, glossy); ((M17) on the tide: up from the wet line, the highest the sea's stood
+	// lately (terrainTideWet), the rock above it dried in the sun. The zones above are by the datums, as the tide's
+	// reach on average sets them: the black zone over high water, barnacles and algae between the mean low and high)
+	float wet = ss( 1.0, 0.25, h - terrainTideWet + mid.w * 0.3 );
 	col = col * mix( 1.0, 0.55, wet );
 
 	RockSurface r;

@@ -8,7 +8,7 @@ import { TerrainData } from '../src/world/TerrainData.js';
 import { decodeIsland } from '../src/world/terrain/IslandDecode.js';
 import { Offshore, decodeSeabed } from '../src/world/terrain/Offshore.js';
 import { SHEETS, NAMES, NAME, ChartLog, namedAs, magnetic, VARIATION } from '../src/game/Chart.js';
-import { S52, S52_DUSK, S52_NIGHT, SHADES, CONTOURS } from '../src/game/ChartBake.js';
+import { S52, S52_DUSK, S52_NIGHT, SHADES, CONTOURS, chartDepth } from '../src/game/ChartBake.js';
 import { PLACES, placeOf } from '../src/game/Places.js';
 import { PlotterChart, PALETTES, SCREEN, paletteFor, paletteTable, isoFill, isoLine, blurField, softSeen, sheetBlown, RESOLVE } from '../src/world/boat/PlotterChart.js';
 import { BoatInstruments, plotterRange, plotterAcross, PLOTTER_NM, PLOTTER_SLOW, RECTS } from '../src/world/boat/Instruments.js';
@@ -262,7 +262,7 @@ for ( const [ tier, k ] of [ [ 'high', 1 ], [ 'low', 0.5 ] ] ) {
 	A.draw( a, view( map, log, bank.x, bank.z, across0 ) );
 	B.draw( a, view( map, log, bank.x + 60, bank.z + 40, across0 ) );
 	const onBoth = A.soundings.filter( ( p ) => B.soundings.some( ( q ) => q.x === p.x && q.z === p.z ) );
-	ok( A.soundings.length > 6 && onBoth.length > 2 && A.soundings.every( ( p ) => Math.abs( p.d + T.heightAt( p.x, p.z ) ) < 1e-6 ), `soundings of its own at this range (${ A.soundings.length }, each what's there), the same ones as she moves` );
+	ok( A.soundings.length > 6 && onBoth.length > 2 && A.soundings.every( ( p ) => Math.abs( p.d - chartDepth( T.heightAt( p.x, p.z ) ) ) < 1e-6 ), `soundings of its own at this range (${ A.soundings.length }, each what's there below chart datum: (M17)), the same ones as she moves` );
 	// the bigger ranges: the sheet, once its pixels no longer show
 	const wide = plotter( k );
 	wide.draw( a, view( map, log, bank.x, bank.z, 24 * 1852 ) );

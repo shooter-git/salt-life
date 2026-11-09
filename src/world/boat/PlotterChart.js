@@ -1,4 +1,4 @@
-import { SHADES, CONTOURS, S52, S52_DUSK, S52_NIGHT, rgb } from '../../game/ChartBake.js';
+import { SHADES, CONTOURS, S52, S52_DUSK, S52_NIGHT, rgb, CHART_DATUM, COAST, chartDepth } from '../../game/ChartBake.js';
 
 // (M16) What's on the plotter's screen, drawn for that screen alone: a small canvas (the screen and a little margin,
 // `layer`), drawn again only when the view's changed, and copied into the instruments' atlas at each of its redraws.
@@ -384,11 +384,12 @@ export class PlotterChart {
 		const ox = x0 - pad * m, oz = z0 - pad * m;
 		for ( let j = 0; j < ny; j ++ ) for ( let i = 0; i < nx; i ++ ) Hh[ j * nx + i ] = T.heightAt( ox + i * m, oz + j * m );
 		blurField( Hh, Hs, Ht, nx, ny, r );
-		// (as the sheets are: shallower than it's smoothed to, by half of where it really is, for a shoal not to be lost)
+		// (as the sheets are: shallower than it's smoothed to, by half of where it really is, for a shoal not to be lost;
+		// (M17) the depths below chart datum, so drying ground's under 0 and the land under DATUM - COAST)
 		let lo = Infinity, hi = - Infinity;
 		for ( let k = 0; k < N; k ++ ) {
 
-			const h = Hh[ k ], f = h >= 0 ? - h : Math.max( - h * 0.5, - Hs[ k ] );
+			const h = Hh[ k ], f = h >= CHART_DATUM ? chartDepth( h ) : Math.max( chartDepth( h ) * 0.5, chartDepth( Hs[ k ] ) );
 			Ht[ k ] = f;
 			if ( f < lo ) lo = f;
 			if ( f > hi ) hi = f;
@@ -421,10 +422,12 @@ export class PlotterChart {
 		fill( SHADES[ 2 ], rgb( P.DEPMD ) );
 		fill( SHADES[ 1 ], rgb( P.DEPMS ) );
 		fill( SHADES[ 0 ], rgb( P.DEPVS ) );
-		fill( 0, rgb( P.LANDA ) );
+		fill( 0, rgb( P.DEPIT ) );
+		fill( CHART_DATUM - COAST, rgb( P.LANDA ) );
 		const thin = Math.max( 1, 1.1 * this.k ), bold = Math.max( 1.4, 2 * this.k );
 		for ( const c of CONTOURS ) line( c, rgb( c === SHADES[ 1 ] ? P.DEPSC : P.DEPCN ), c === SHADES[ 1 ] ? bold : thin );
-		line( 0, rgb( P.CSTLN ), bold );
+		line( 0, rgb( P.DEPCN ), thin );
+		line( CHART_DATUM - COAST, rgb( P.CSTLN ), bold );
 		// (blank: S-52's for no chart, past a clean edge)
 		const mid = log.mid, far = log.far, q = SEEN_GRID / pxm;
 		for ( let j = 0; j < sy; j ++ ) for ( let i = 0; i < sx; i ++ ) {
@@ -452,7 +455,7 @@ export class PlotterChart {
 		while ( sp * s < SOUND_PX ) sp *= 2;
 		for ( let j = Math.floor( z0 / sp ); j * sp < z1; j ++ ) for ( let i = Math.floor( x0 / sp ); i * sp < x1; i ++ ) {
 
-			const x = ( i + 0.15 + 0.7 * hash2( i, j, sp ) ) * sp, z = ( j + 0.15 + 0.7 * hash2( j, i, sp + 1 ) ) * sp, d = - T.heightAt( x, z );
+			const x = ( i + 0.15 + 0.7 * hash2( i, j, sp ) ) * sp, z = ( j + 0.15 + 0.7 * hash2( j, i, sp + 1 ) ) * sp, d = chartDepth( T.heightAt( x, z ) );
 			if ( d > SOUND_MIN ) this.soundings.push( { x, z, d } );
 
 		}

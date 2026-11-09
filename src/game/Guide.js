@@ -323,6 +323,8 @@ const TIPS = {
 	spookCast: '<b>Too close</b>: a bait landing on a fish\'s head, or the line laid over its back, sends the whole school off. Lead them.',
 	flatsRefused: 'It came to it and <b>turned off</b>: refused. What they take is their own: a bonefish a shrimp or a jig, a tarpon or a snook a plug or live bait. A <b>permit</b> refuses most things. Try the next one.',
 	grandSlam: 'A <b>bonefish</b>, a <b>permit</b> and a <b>tarpon</b> in one day, all let go, is a <b>grand slam</b>: the flats\' trophy, in your log. The day\'s from sunrise, and a sleep ends it.',
+	// (M17) the tide, the first time you're out on the flats
+	tide: 'The <b>tide</b> rises and falls twice a day, each high about 50 minutes later than the day before\'s, and most at new and full moon (the <b>springs</b>). The flats fish on the <b>flood</b> and about <b>high water</b>, when the fish come up onto them; their <b>edge</b> and <b>creeks</b> on the <b>ebb</b>, a creek\'s <b>mouth</b> most of all; the pier at the <b>turn</b>. A creek runs with it, out on the ebb and in on the flood. <b>Joe\'s slate</b> and the cooler\'s <b>Chart</b> tab give the day\'s tides.',
 	// (M13) a hurricane
 	hurricane: 'A <b>hurricane</b> is coming. <b>Sell your catch</b> before Joe boards up: he\'s shut a day or two, longer than fish keeps without plenty of ice. Ahead of it Marta can <b>haul your boat out</b>, before she boards up; left in the water the storm batters her. In it, the <b>shelter</b> (on your map) keeps you safe from the wind, the rain and the sea. You can always step out to watch.',
 };
@@ -655,6 +657,8 @@ export class Guide {
 		if ( logged0( s ) >= 12 ) this.tip( 'goRound' );
 		const cam = app.camera.position;
 		if ( Math.hypot( cam.x, cam.z + 320 ) > 3000 ) this.tip( 'farWater' );
+		// ((M17) the first time you're out on the west's flats or in the mangrove creek: the tide)
+		if ( cam.x < - 470 && cam.x > - 820 && cam.z > - 350 && cam.z < 40 ) this.tip( 'tide' );
 		// ((M15) the first name you come to past the bay's)
 		if ( s.chart.names.size > NAMES.filter( ( n ) => n.known ).length ) this.tip( 'chart' );
 		// ((M15) the radio, the first time you're well out at the helm; and past the far grounds, the soft edge)

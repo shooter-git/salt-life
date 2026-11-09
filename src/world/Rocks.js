@@ -569,6 +569,7 @@ export class Rocks {
 			terrainHeightMap: U.terrainHeightMap, terrainHeightInfo: U.terrainHeightInfo, offshoreHeightMap: U.offshoreHeightMap, offshoreHeightInfo: U.offshoreHeightInfo,
 			terrainDetailTex: U.terrainDetailTex, terrainSplatTex: U.terrainSplatTex, terrainMapInfo: U.terrainMapInfo,
 			terrainCaustics: U.terrainCaustics, terrainTime: U.terrainTime, terrainNight: U.terrainNight,
+			terrainTideWet: U.terrainTideWet, // ((M17) the wet line: the rock the tide's left lately is wet still)
 		};
 		mat.onBeforeCompile = ( shader ) => {
 
@@ -629,7 +630,7 @@ float rockBayer4( vec2 pixel ) {
 	float tone = dM.x * 0.7 + ( mcr - 0.5 ) * 0.8;
 	vec3 rockAlbedo = mix( PAL_rockDark, PAL_rockMid, ss( 0.2, 0.6, tone ) );
 	rockAlbedo = mix( rockAlbedo, PAL_rockLight, ss( 0.35, 0.95, N.y ) * ss( 1.5, 3.0, p.y ) * 0.3 );
-	rockAlbedo *= mix( 1.0, 0.55, ss( 1.0, 0.25, p.y + dM.w * 0.3 ) );
+	rockAlbedo *= mix( 1.0, 0.55, ss( 1.0, 0.25, p.y - terrainTideWet + dM.w * 0.3 ) );
 	float rockRough = 0.85, rockHd = dM.x * 0.1, rockHeight = dM.x;
 #else
 	RockGrad g;
@@ -669,7 +670,7 @@ float rockBayer4( vec2 pixel ) {
 		rockAlbedo = mix( rockAlbedo, coralC, coral * 0.8 );
 		float dark = 1.0 - ss( 0.02, 0.3, vSea.x );
 		rockAlbedo *= 1.0 - dark * 0.25;
-		caveWet = max( dark * 0.8, ss( 2.4, 0.9, p.y + ( cd.w - 0.5 ) * 0.8 ) ) * ( 1.0 - land );
+		caveWet = max( dark * 0.8, ss( 2.4, 0.9, p.y - terrainTideWet + ( cd.w - 0.5 ) * 0.8 ) ) * ( 1.0 - land ); // ((M17) up from the wet line)
 		rockRough = mix( rockRough, 0.4, caveWet );
 		// (the land's rock as rough to the eye as the terrain draws it)
 		rockHd = mix( rockHd, rockHd * 2.2 + rockHeight * 0.6, land );

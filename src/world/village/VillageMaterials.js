@@ -36,6 +36,7 @@ const COMMON = /* glsl */`
 #define VLM_TAU ${ TAU }
 uniform float vlmTime;
 uniform float vlmNight;
+uniform float vlmTideWet;
 uniform vec2 vlmWindDir;
 uniform float vlmWindSpeed;
 varying vec3 vTint;
@@ -91,7 +92,12 @@ VlmTidal vlmTidal( vec3 pw, vec3 col, float rough ) {
 	vec3 c = col * ( 1.0 - damp );
 	c = mix( c, algae, wet );
 	c = mix( c, vec3( 0.52, 0.5, 0.44 ), barn * 0.9 );
-	float r = mix( rough, 0.3, wet * 0.9 );
+	// ((M17) the band's by the datums, as the tide's reach on average sets it; the water's film on it from the sea up to
+	// the wet line, the highest it's stood lately (vlmTideWet), and a hand of splash over that: glossy and dark there,
+	// the algae above it dried in the sun to a duller, paler crust)
+	float film = 1.0 - smoothstep( 0.05, 0.45, y - vlmTideWet );
+	c = mix( c, c * 1.3 + 0.012, wet * ( 1.0 - film ) * 0.6 );
+	float r = mix( rough, mix( 0.8, 0.3, film ), wet * 0.9 );
 	r = mix( r, 0.55, damp );
 	r = mix( r, 0.9, barn );
 	return VlmTidal( c, r, wet );
@@ -148,6 +154,7 @@ function villageMaterial( params, T, names, { surface, vertex = '', extra = [] }
 	const m = new THREE.MeshStandardMaterial( params );
 	const uniforms = {
 		vlmTime: G.time, vlmNight: G.night, vlmWindDir: G.windDir, vlmWindSpeed: G.windSpeed,
+		vlmTideWet: G.tideWet, // ((M17) the wet line: vlmTidal)
 	};
 	for ( const n of names ) uniforms[ samplerOf( n ) ] = { value: T[ n ] };
 	const extras = [].concat( extra );
