@@ -1124,19 +1124,19 @@ function buildRoofGear( kit, L, parts ) {
 
 	}
 
-	// life ring on the port house side
-	const lx = wallX( L, - 0.02, 1.72 ) + 0.05;
+	// life ring ((M17) on the inside of her transom, between the trap stacks: her house side's her side deck now, the way forward)
+	const ly = 0.72, lz = L.zAft + L.shell + 0.06;
 	const ringG = torus( 0.235, 0.05, 8, 24 );
-	ringG.applyMatrix4( mat4( lx, 1.72, - 0.02, 0, Math.PI / 2, 0 ) );
+	ringG.applyMatrix4( mat4( 0, ly, lz, 0, 0, 0 ) );
 	paintVertices( ringG, ( p ) => {
 
-		const a = Math.atan2( p.y - 1.72, p.z + 0.02 );
+		const a = Math.atan2( p.y - ly, p.x );
 		return Math.abs( ( ( a / ( Math.PI / 2 ) ) % 1 + 1 ) % 1 - 0.5 ) > 0.4 ? 0xf2f0ea : 0xf25a12;
 
 	} );
 	kit.add( 'fittings', ringG, { rough: 0.6 } );
-	const hook = box( 0.03, 0.05, 0.08 );
-	hook.translate( lx - 0.03, 1.72 + 0.26, - 0.02 );
+	const hook = box( 0.08, 0.05, 0.03 );
+	hook.translate( 0, ly + 0.26, lz - 0.03 );
 	kit.add( 'fittings', hook, STAINLESS );
 
 	void parts;

@@ -561,7 +561,7 @@ export class Minimap {
 
 		const hud = this.game.hud, b = this.game.app.boatCtl, s = this.game.state, fwd = b && b.forward( _fwd );
 		// ((M16) with no plotter aboard, only her compass: her heading, magnetic; a kayak has no fuel to know)
-		if ( hud ) hud.setHome( homeReadout( { x, z, aboard: ( p.mode === 'boat' && ( p.riding || s.stats.plotter || ! p.boat?.model?.seated ) ) || p.mode === 'deck', riding: p.riding, fuelL: s.fuelL, tank: s.stats.fuelL, rpm: b && b.rpm, speed: b && b.speed, speedMul: s.stats.speedMul || 1, boat: s.boat, fix: !! ( p.riding || s.stats.plotter ), heading: fwd ? Math.atan2( fwd.x, - fwd.z ) : 0 } ) );
+		if ( hud ) hud.setHome( homeReadout( { x, z, aboard: ( p.mode === 'boat' && ( p.riding || s.stats.plotter || ! p.boat?.model?.seated ) ) || p.mode === 'deck', riding: p.riding, fuelL: s.fuelL, tank: s.stats.fuelL, rpm: b && b.rpm, speed: b && b.speed, speedMul: s.stats.speedMul || 1, boat: s.boat, twin: !! s.stats.twin, fix: !! ( p.riding || s.stats.plotter ), heading: fwd ? Math.atan2( fwd.x, - fwd.z ) : 0 } ) );
 
 	}
 

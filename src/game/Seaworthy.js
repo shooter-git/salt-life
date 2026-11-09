@@ -14,6 +14,7 @@ import { seaHeight, squallWind } from './Weather.js';
 //     cruise          { rpm, speed }: her cruise, the revs and her speed there on a calm sea (m/s), measured by tools/boat-figures.mjs
 //                     (the kayak's is a steady paddle's: docs/m16/kayak.md)
 //     burn            [ idle, k ]: litres a second at rpm: idle + k rpm^2 (Gear.fuelBurn)
+//     twin            (M17) { burn }: hers with a second engine fitted (stats.twin: the console's twin 150s): burnOf
 //     drift           of the wind's speed, left to it, in a fair day's sea (Away.awayOf; tools/boat-figures.mjs)
 //     draught         m of water she touches in (Away.awayOf; the lobster boat's is her skeg's, past her hull's 0.77)
 //     storesDays      days of food and water she has room for
@@ -27,7 +28,10 @@ export const ABLE = {
 	},
 	console: {
 		seas: [ 1.2, 2.2 ], wind: [ 10.3, 14.4 ],
-		cruise: { rpm: 0.7, speed: 12.1 }, burn: [ 0.002, 0.03 ], drift: 0.055, draught: 0.53, storesDays: 3, sockM2: 2,
+		// ((M17) a single Yamaha F150's burn, and two's: their own bulletins fitted, docs/m17/back.md. A 21 ft boat on one F150 burns
+		// 0.8 gal an hour at 1,000 rpm, 6.5 at 4,000 and 16.1 flat out at 5,900; the Regulator 23 on two, 1.6, 13.9 and 31.4. Her
+		// M16 figure, 0.002 and 0.03, was about the twins' on her single)
+		cruise: { rpm: 0.7, speed: 12.1 }, burn: [ 0.00084, 0.0154 ], twin: { burn: [ 0.00168, 0.0312 ] }, drift: 0.055, draught: 0.53, storesDays: 3, sockM2: 2,
 		waters: 'The reef, the wrecks and the near offshore, in up to 7 ft of sea and 28 knots of wind. A blow sends you running in',
 	},
 	lobster: {
@@ -44,6 +48,13 @@ export const ABLE = {
 
 // (a boat's figures, or the lobster boat's for one that's not on the list)
 export const ableOf = ( boat ) => ABLE[ boat ] || ABLE.lobster;
+// (M17) her burn as she's fitted: [ idle, k ], a second engine's with twin
+export const burnOf = ( boat, twin = false ) => {
+
+	const A = ableOf( boat );
+	return twin && A.twin ? A.twin.burn : A.burn;
+
+};
 // (for Away.awayOf: what's her own of how she fares left to it)
 export const ableEnv = ( boat ) => {
 

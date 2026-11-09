@@ -7,7 +7,8 @@ import { lastHurricane, categoryOf, weatherAt, towardOf } from './Weather.js';
 // under Node; TrapWork.js does it all at the rail, world/boat/TrapModel.js draws it. Sources: docs/m16/traps.md.
 //   bottomAt( { depth, reefDist, windReef, patch, sand, grass, creek, onMap } ) -> a BOTTOMS id
 //   whyNot( { depth, bottom, speed, dock } ) -> null, or why one can't be set here
-//   soakOf( trap, T, now ) -> { hours, days, nights }    meanCatch( q, soak )    haulOf( trap, q, sizeCm, T, now ) -> what comes up
+//   soakOf( trap, T, now ) -> { hours, days, nights }    meanCatch( q, soak, baited )    haulOf( trap, q, sizeCm, T, now ) -> what comes up
+//   (M17) BAIT, baitSaid( trap, soak ), buyBait( traps, money ) -> what it cost: trap bait, Marta's, used up in a soak
 //   settle( traps, T, env ) -> [ what the hurricanes did ]    trapsTold( events ) -> Marta's paragraphs
 //   newTraps()  cleanTraps( raw )  ownedTraps( upgrades )  aboardTraps( traps, upgrades )
 //   buoyRecord( ... )  cleanBuoys( raw, now )  buoyOffset( x, z, depth )  buoyColours( id )
@@ -94,11 +95,34 @@ export function soakOf( trap, T, now = Date.now() ) {
 
 }
 
-// lobsters to expect in it, on a bottom of quality q
-export function meanCatch( q, { days, nights } ) {
+// (M17) Trap bait, Marta's (`price` for `per` traps): fish heads and cowhide, as the Keys' and the Bahamas' trappers use. A trap's a
+// shelter a spiny lobster comes to unbaited, and bait brings more: live shorts, the best of it, about three times an unbaited trap's
+// catch (Heatwole et al. 1988 and Butler et al. 2022, as Marine Ecology Progress Series 696: 43 has them); dead bait less. Taken
+// here: an unbaited trap fishes `bare` of what a baited one does. And it's used up: eaten and gone off in days (a dead lobster in a
+// trap kept it fishing worse about 5 days, MEPS 696: 43), and after `nights` of its soak the trap fishes as an unbaited one. Both
+// chosen to fit those: no figure for cowhide or fish heads was found. SOAK.most is a baited trap's, as Florida's traps were
+export const BAIT = { bare: 0.35, nights: 5, per: 4, price: 8 };
+
+// lobsters to expect in it, on a bottom of quality q ((M17) baited, or not: its bait drawing them for BAIT.nights, and after that
+// only as the trap itself does)
+export function meanCatch( q, { days, nights }, baited = true ) {
 
 	const fade = days <= SOAK.fade ? 1 : SOAK.floor + ( 1 - SOAK.floor ) * Math.exp( - ( days - SOAK.fade ) / SOAK.fadeTau );
-	return SOAK.most * q * ( 1 - Math.exp( - nights / SOAK.tau ) ) * fade;
+	const grown = ( n ) => 1 - Math.exp( - n / SOAK.tau );
+	const drawn = BAIT.bare * grown( nights ) + ( baited ? ( 1 - BAIT.bare ) * grown( Math.min( nights, BAIT.nights ) ) : 0 );
+	return SOAK.most * q * drawn * fade;
+
+}
+
+// (M17) what's said of its bait as it comes up: none in it, or used up, or nothing
+export const baitSaid = ( trap, soak ) => trap.bait === false ? 'no bait in it' : soak.nights >= BAIT.nights ? 'the bait\'s long gone' : '';
+
+// (M17) a bag of bait from Marta, for BAIT.per traps (traps: the save's): -> what it cost, or 0 if you couldn't
+export function buyBait( traps, money ) {
+
+	if ( money < BAIT.price ) return 0;
+	traps.bait = ( traps.bait | 0 ) + BAIT.per;
+	return BAIT.price;
 
 }
 
@@ -170,7 +194,7 @@ export function haulOf( trap, q, sizeCm, depth, T, now = Date.now() ) {
 
 	}
 
-	const n = poisson( meanCatch( q, soak ) * ( others.length ? BYCATCH.lobsters : 1 ), r ), lobsters = [];
+	const n = poisson( meanCatch( q, soak, trap.bait !== false ) * ( others.length ? BYCATCH.lobsters : 1 ), r ), lobsters = [];
 	for ( let i = 0; i < n; i ++ ) {
 
 		const z = Math.sqrt( - 2 * Math.log( Math.max( 1e-6, r() ) ) ) * Math.cos( 2 * Math.PI * r() );
@@ -303,8 +327,9 @@ export function trapsTold( events ) {
 }
 
 // ---- the save, per player: { set: [ { x, z, T: the island's time set, at: ms set, seed, buoy, mark: chart mark's id,
-// seen: reckoned to, q, size: its bottom's } ], lost: how many a storm's had that you've not replaced }
-export const newTraps = () => ( { set: [], lost: 0 } );
+// seen: reckoned to, q, size: its bottom's, (M17) bait: false if it was set with none } ], lost: how many a storm's had that you've
+// not replaced, (M17) bait: how many traps' worth of bait you have }
+export const newTraps = () => ( { set: [], lost: 0, bait: 0 } );
 
 const round = ( v ) => Math.round( v * 10 ) / 10;
 
@@ -313,10 +338,12 @@ export function cleanTraps( raw ) {
 	const out = newTraps();
 	if ( ! raw || typeof raw !== 'object' ) return out;
 	out.lost = Number.isInteger( raw.lost ) && raw.lost > 0 ? raw.lost : 0;
+	out.bait = Number.isInteger( raw.bait ) && raw.bait > 0 ? Math.min( raw.bait, 999 ) : 0;
 	for ( const t of Array.isArray( raw.set ) ? raw.set : [] ) {
 
 		if ( ! t || ! Number.isFinite( t.x ) || ! Number.isFinite( t.z ) || ! Number.isFinite( t.T ) ) continue;
-		out.set.push( { x: t.x, z: t.z, T: t.T, at: Number.isFinite( t.at ) ? t.at : null, seed: Number.isInteger( t.seed ) ? t.seed : 1, buoy: t.buoy !== false, mark: Number.isInteger( t.mark ) ? t.mark : null, seen: Number.isFinite( t.seen ) ? t.seen : t.T, q: Number.isFinite( t.q ) ? t.q : null, size: Number.isFinite( t.size ) ? t.size : 0 } );
+		// ((M17) one set before bait was sold had it, as M16 reckoned them)
+		out.set.push( { x: t.x, z: t.z, T: t.T, at: Number.isFinite( t.at ) ? t.at : null, seed: Number.isInteger( t.seed ) ? t.seed : 1, buoy: t.buoy !== false, mark: Number.isInteger( t.mark ) ? t.mark : null, seen: Number.isFinite( t.seen ) ? t.seen : t.T, q: Number.isFinite( t.q ) ? t.q : null, size: Number.isFinite( t.size ) ? t.size : 0, ...( t.bait === false ? { bait: false } : {} ) } );
 
 	}
 

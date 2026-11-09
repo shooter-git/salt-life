@@ -38,7 +38,7 @@ import { GameState } from './game/GameState.js';
 import { DAY_RATE, START_HOUR, advance, tideAt } from './game/IslandClock.js';
 import { grassMask } from './game/TrapWork.js';
 import { islandTime, isPick, NORTH, weatherAt, towardOf, seaSwell } from './game/Weather.js';
-import { BACK_MS, awayClock, awayOf, boatLeft, cleanBoats, leftOf, othersAway, tellOthers, withRecord } from './game/Away.js';
+import { BACK_MS, awayClock, awayOf, besideHer, boatLeft, cleanBoats, intoWater, leftOf, othersAway, standBack, stoodOf, swimBy, tellOthers, withRecord } from './game/Away.js';
 import { ableEnv } from './game/Seaworthy.js';
 import { berthOf } from './game/fleet/Berths.js';
 import { FLEET } from './game/fleet/Fleet.js';
@@ -2051,12 +2051,15 @@ export class App {
 		this.chartReading( r, map );
 		r.fuelL = g.state.fuelL;
 		r.speedMul = g.state.stats.speedMul || 1;
+		r.twin = !! g.state.stats.twin; // ((M17) her burn as she's fitted)
 		r.alert = this.weatherAlert();
 		// ((M15) the VHF, overhead: Radio.js)
 		r.vhf = g.radio ? g.radio.reading : null;
 		r.night = G.night.value;
 		// ((M14) her radar, swept with her array; at the helm, ← → its range, as the panels aren't up)
 		if ( p.mode === 'boat' && g.quietKeys && g.quietKeys() && ( this.input.hit( 'ArrowLeft' ) || this.input.hit( 'ArrowRight' ) ) ) this.radar.step( this.input.hit( 'ArrowRight' ) ? 1 : - 1 );
+		// ((M17) and Z, the plotter's: Instruments.stepRange)
+		if ( p.mode === 'boat' && g.state.stats.plotter && g.quietKeys && g.quietKeys() && this.input.hit( 'KeyZ' ) ) g.toast( this.instruments.stepRange(), 1600 );
 		r.radar = this.sweepRadar( dt, r, this.boat.radarBearing );
 		this.instruments.update( dt, r );
 
@@ -2293,6 +2296,9 @@ export class App {
 		this.portal.on( 'pause', () => {
 
 			this.saveClock();
+			// ((M17) and out now: the store's own flush on a pause came before this, so what saveClock wrote waited its 1.2 s, and a
+			// page closed soon after a pause lost where you were: aboard someone else's, in the water by her)
+			this.store.flush();
 			if ( this.together ) this.together.mineBoat( true );
 
 		} );
@@ -2734,8 +2740,11 @@ export class App {
 		// (as stepping ashore makes her fast: Player.exitBoat)
 		const moored = b.moored || ( ! b.anchor && ! b.hauled && Math.hypot( b.position.x - dock.x, b.position.z - dock.z ) < 14 && b.speed < 1.5 );
 		const aboard = p.riding ? null : p.mode === 'deck' ? 'deck' : p.mode === 'boat' ? 'helm' : null;
+		// ((M17) and where: on her deck, at her upper helm, in the water by her, or aboard someone else's: Away.boatLeft)
+		const on = aboard === 'deck' ? stoodOf( p ) : null, helm = aboard === 'helm' && p.atHelm && p.atHelm.upper ? 'upper' : null;
+		const swim = aboard ? null : swimBy( p, b ), ride = aboard || swim || ! this.together ? null : this.together.rideLeft();
 		// ((M16) drawn up on the sand, she's as fast as at the dock)
-		this.store.setItem( BOAT_KEY, JSON.stringify( boatLeft( { x: b.position.x, z: b.position.z, heading: b.getYaw(), anchor: b.anchor, sock: b.sock, moored: moored || b.beached, aboard, T: islandTime( s.day, s.timeOfDay ), at: Date.now(), boat: this.boat.id } ) ) );
+		this.store.setItem( BOAT_KEY, JSON.stringify( boatLeft( { x: b.position.x, z: b.position.z, heading: b.getYaw(), anchor: b.anchor, sock: b.sock, moored: moored || b.beached, aboard, on, helm, swim, ride, T: islandTime( s.day, s.timeOfDay ), at: Date.now(), boat: this.boat.id } ) ) );
 		if ( this.together ) this.together.mineBoat();
 
 	}
@@ -2756,7 +2765,7 @@ export class App {
 		const depth = ( x, z ) => Math.max( 0, G.seaLevel.value - this.terrainData.heightAt( x, z ) );
 		const away = ! ( Date.now() - left.at < BACK_MS );
 		// ((M16) a record of another boat than the one you're in: you'd got into this one, so she's at her berth)
-		if ( left.boat !== st.boat ) Object.assign( left, { x: dock.x, z: dock.z, heading: b.berth.heading, anchor: null, sock: false, moored: true, aboard: null } );
+		if ( left.boat !== st.boat ) Object.assign( left, { x: dock.x, z: dock.z, heading: b.berth.heading, anchor: null, sock: false, moored: true, aboard: null, swim: null } );
 		const story = withRecord( awayOf( left, away ? T : left.T, { dock, pick, since, depth, haul: FLEET[ st.boat ].haul, ...ableEnv( st.boat ) } ), away ? mine : null, dock );
 		const paid = st.payTow( story.fee ), towed = story.tows.length > 0;
 		if ( story.wear > 0 ) {
@@ -2802,9 +2811,19 @@ export class App {
 		if ( left.aboard && ! towed && ! b.hauled ) {
 
 			p.boardBoat();
-			if ( left.aboard === 'helm' ) p.takeHelm();
+			// ((M17) where you were on her: her upper helm, where you stood. Put back in her seat or at her wheel isn't taking it:
+			// her anchor stays down, Game.updateAnchor)
+			if ( left.aboard === 'helm' ) p.takeHelm( left.helm === 'upper' && b.model.towerHelm ? b.model.towerHelm : undefined );
+			else if ( left.on && p.mode === 'deck' ) standBack( p, left.on, b.model );
+			g._wasDriven = b.driven;
 
-		}
+		} else if ( left.swim && ! towed && ! b.hauled ) {
+
+			// ((M17) in the water far out: by her still)
+			const at = besideHer( b.position.x, b.position.z, b.getYaw(), left.swim );
+			intoWater( p, at, this.terrainData.heightAt( at.x, at.z ), G.seaLevel.value );
+
+		} else if ( left.ride ) this.together.rejoin( left.ride ); // ((M17) aboard someone else's, or in the water by her)
 
 		// ((M16) and the boats you weren't in, each at her own berth: game/Away.js)
 		let others = [];

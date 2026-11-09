@@ -8,7 +8,7 @@ import { WORLD } from '../world/WorldLayout.js';
 import { SEABED } from '../world/terrain/SeabedModel.js';
 import { SPRAY } from '../fx/Spray.js';
 import { TrapMeshes, TRAP, STOW, stowMatrix, stowWear, trapColliders } from '../world/boat/TrapModel.js';
-import { BOTTOMS, HAULER_MS, HAUL_SPEED, TRAP_PRICE, WARP_M, aboardTraps, bottomAt, buoyColours, buoyOffset, buoyRecord, cleanBuoys, haulOf, ownedTraps, settle, soakOf, trapsTold, whyNot } from './Traps.js';
+import { BAIT, BOTTOMS, HAULER_MS, HAUL_SPEED, TRAP_PRICE, WARP_M, aboardTraps, baitSaid, bottomAt, buoyColours, buoyOffset, buoyRecord, buyBait, cleanBuoys, haulOf, ownedTraps, settle, soakOf, trapsTold, whyNot } from './Traps.js';
 
 // (M16) Lobster traps, at the rail of the boat that has the hauler and davit, and out on the sea (the rules: Traps.js; what's
 // drawn: world/boat/TrapModel.js). Standing by the hauler with one aboard, E sets it over the side where the bottom suits, its warp
@@ -20,7 +20,8 @@ import { BOTTOMS, HAULER_MS, HAUL_SPEED, TRAP_PRICE, WARP_M, aboardTraps, bottom
 // their buoys), so their game does the work at the rail ('trap', from you: set, haul, took one out, stack it; 'trapIs' back:
 // how it went, and what came up in it), and everyone sees it done: her stack on her deck and the work at her rail, out of her
 // owner's poses ('ts', 'tj'), drawn on her copy on every game. Anyone else's buoys are still theirs, not yours to touch.
-//   const w = new TrapWork( game );  w.update( dt, lDown );  w.boatChanged();  w.buyNew()
+//   const w = new TrapWork( game );  w.update( dt, lDown );  w.boatChanged();  w.buyNew()  w.buyBait()
+// (M17) Each set with a trap's worth of bait if you have it (Marta's: Traps.BAIT), used up in its soak, and said as it comes up.
 //   w.asked( body, from, them )  w.told( body, from )  (Together's messages)   w.wire() -> what her owner's poses carry
 
 const NIGHT_SAID = ( n ) => n < 0.5 ? 'not a night down yet' : n < 1.5 ? 'a night down' : `${ Math.round( n ) } nights down`;
@@ -331,7 +332,8 @@ export class TrapWork {
 
 		// (the bottom's seen in clear shallow water, and past that on the fish finder)
 		const known = depth < 12 || game.state.stats.finder, B = BOTTOMS[ id ];
-		p.prompt = { key: 'E', text: `Set a trap   ·   ${ known ? `${ feet( depth ) }, ${ B.name }: ${ B.say }` : 'can\'t see the bottom' }` };
+		const bait = this.traps.bait | 0;
+		p.prompt = { key: 'E', text: `Set a trap   ·   ${ known ? `${ feet( depth ) }, ${ B.name }: ${ B.say }` : 'can\'t see the bottom' }   ·   ${ bait ? `bait for ${ bait }` : 'no bait' }` };
 		if ( inp.hit( 'KeyE' ) ) this._startSet( _b.x, _b.z, depth, id, aboard );
 
 	}
@@ -652,7 +654,10 @@ export class TrapWork {
 
 		const game = this.game, st = game.state, c = this.traps;
 		const mark = st.chart.mark( x, z, game.tradeDay, true );
-		const trap = { x: Math.round( x * 10 ) / 10, z: Math.round( z * 10 ) / 10, T: this._T(), at: Date.now(), seed: Math.floor( Math.random() * 2147483647 ), buoy: true, mark: mark ? mark.id : null, seen: this._T(), q: BOTTOMS[ id ].q, size: BOTTOMS[ id ].sizeCm };
+		// ((M17) baited, if there's bait: one trap's worth of what's aboard, her owner's)
+		const baited = ( c.bait | 0 ) > 0;
+		if ( baited ) c.bait --;
+		const trap = { x: Math.round( x * 10 ) / 10, z: Math.round( z * 10 ) / 10, T: this._T(), at: Date.now(), seed: Math.floor( Math.random() * 2147483647 ), buoy: true, mark: mark ? mark.id : null, seen: this._T(), q: BOTTOMS[ id ].q, size: BOTTOMS[ id ].sizeCm, ...( baited ? {} : { bait: false } ) };
 		c.set.push( trap );
 		st.save();
 		st.emit();
@@ -669,7 +674,8 @@ export class TrapWork {
 
 		}
 
-		game.toast( mark ? `Trap ${ mark.id } on your chart · ${ this.traps.set.length } set, leave it a few nights` : 'Your chart has no room for its mark: note where it is', 3600 );
+		const unbaited = trap.bait === false ? ' · no bait in it: it\'ll fish about a third as well. Marta sells it' : '';
+		game.toast( `${ mark ? `Trap ${ mark.id } on your chart · ${ this.traps.set.length } set, leave it a few nights` : 'Your chart has no room for its mark: note where it is' }${ unbaited }`, 3600 + ( unbaited ? 1400 : 0 ) );
 
 	}
 
@@ -811,16 +817,18 @@ export class TrapWork {
 		this._dirty = true;
 		st.save();
 		st.emit();
-		const empty = ! j.queue.length && ( r.soak.nights < 1 ? 'Empty · they forage by night, leave it overnight at least' : 'Empty' );
+		const bait = baitSaid( t, r.soak );
+		const empty = ! j.queue.length && ( r.soak.nights < 1 ? 'Empty · they forage by night, leave it overnight at least' : `Empty${ bait ? ` · ${ bait }` : '' }` );
 		// ((guest work) your deckhand's: theirs to take out, into their own hold)
 		if ( j.by ) {
 
-			this._tell( j.by, { k: 'rail', q: j.queue, x: t.x, z: t.z, t: empty || `${ NIGHT_SAID( r.soak.nights ) } · ${ j.queue.filter( ( x ) => x.lobster ).length } lobster${ j.queue.filter( ( x ) => x.lobster ).length === 1 ? '' : 's' } in it` } );
+			this._tell( j.by, { k: 'rail', q: j.queue, x: t.x, z: t.z, t: empty || `${ NIGHT_SAID( r.soak.nights ) } · ${ j.queue.filter( ( x ) => x.lobster ).length } lobster${ j.queue.filter( ( x ) => x.lobster ).length === 1 ? '' : 's' } in it${ bait ? ` · ${ bait }` : '' }` } );
 			return;
 
 		}
 
 		if ( empty ) game.toast( empty, 3000 );
+		else if ( bait ) game.toast( `${ NIGHT_SAID( r.soak.nights ) } · ${ bait }`, 2600 ); // ((M17) why it's few)
 
 	}
 
@@ -894,6 +902,18 @@ export class TrapWork {
 			if ( A && A.plop ) A.plop( sea );
 
 		}
+
+	}
+
+	// ---- (M17) Marta's: a bag of bait, for Traps.BAIT.per traps
+	buyBait() {
+
+		const st = this.game.state, cost = buyBait( this.traps, st.money );
+		if ( ! cost ) return false;
+		st.money -= cost;
+		st.save();
+		st.emit();
+		return true;
 
 	}
 

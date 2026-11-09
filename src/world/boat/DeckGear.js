@@ -34,12 +34,79 @@ export function buildDeckGear( kit, L, parts ) {
 	buildBow( kit, L );
 	buildContainers( kit, L );
 	buildStern( kit, L, parts );
+	buildWayUp( kit, L );
 
 }
+
+// ------------------------------------------------------------------ (M17) the way forward and up (docs/m17/back.md)
+// As a Downeast boat has it: her side decks past the house, about 8 in wide (the Jarvis Newman 32's are 9 3/4 in), walked with a
+// hand on the roof's grab rail, to her foredeck and its forward-opening hatch over the cuddy (the Holland 32's) and the anchor on
+// her bow roller. Up to them from the cockpit, two teak steps at the house's aft corner, to port (the hauler's to starboard);
+// on to her roof, two fold-down steps on the house's side by the grab rail's post. Her frame: +x port.
+export const WAY_UP = {
+	z0: - 0.82, z1: - 0.4, // the steps, along her
+	lower: { x0: 0.8, x1: 1.05, top: 0.64 }, upper: { x0: 1.05, x1: 1.3, top: 0.93 },
+	roofZ: - 0.1, // the fold-down steps up the house side
+	rungs: [ 1.58, 1.98 ], // their treads' heights
+	hatch: { z: 2.45, w: 0.56, d: 0.56 }, // on her foredeck's centreline
+	bow: 3.75, // where her anchor's worked: by the roller, on her foredeck
+};
+
+function buildWayUp( kit, L ) {
+
+	const W = WAY_UP, TEAK = { color: 0x9a6b40, rough: 0.5 }; // (teak, weathered)
+	// the teak steps: two treads on a riser block against her side
+	for ( const [ t, y0 ] of [ [ W.lower, L.deckY ], [ W.upper, W.lower.top - 0.06 ] ] ) {
+
+		const w = t.x1 - t.x0, d = W.z1 - W.z0, h = t.top - y0;
+		const g = roundedBox( w, h, d, 0.012, 1 );
+		g.translate( ( t.x0 + t.x1 ) / 2, y0 + h / 2, ( W.z0 + W.z1 ) / 2 );
+		kit.add( 'wood', g, TEAK );
+
+	}
+
+	// the fold-down steps up the house side to her roof: a stainless tread on a hinge plate each, outboard of the house
+	const hw = houseHalf( L, W.roofZ );
+	for ( const y of W.rungs ) {
+
+		const plate = box( 0.012, 0.09, 0.16 );
+		plate.translate( hw + 0.006, y - 0.03, W.roofZ );
+		kit.add( 'fittings', plate, STAINLESS );
+		const tread = roundedBox( 0.11, 0.014, 0.15, 0.005, 1 );
+		tread.translate( hw + 0.062, y, W.roofZ );
+		kit.add( 'fittings', tread, STAINLESS );
+		for ( const s of [ 1, - 1 ] ) kit.add( 'fittings', rod( V( hw + 0.01, y - 0.07, W.roofZ + s * 0.065 ), V( hw + 0.11, y - 0.005, W.roofZ + s * 0.065 ), 0.006, 4 ), STAINLESS );
+
+	}
+
+	// the foredeck hatch: a low aluminium frame, its smoked lid hinged at its forward edge (it opens forward, as hers do)
+	const H = W.hatch, t = L.tAtSheerZ( H.z ), y = foredeckY( L, t, 0 );
+	const frame = roundedBox( H.w + 0.05, 0.035, H.d + 0.05, 0.012, 1 );
+	frame.translate( 0, y + 0.012, H.z );
+	kit.add( 'fittings', frame, { color: 0xb8bcc0, rough: 0.45, metal: 1 } );
+	const lid = roundedBox( H.w, 0.018, H.d, 0.01, 1 );
+	lid.translate( 0, y + 0.037, H.z );
+	kit.add( 'fittings', lid, { color: 0x2b3036, rough: 0.12, metal: 0 } );
+	for ( const s of [ 1, - 1 ] ) {
+
+		const hinge = cylinder( 0.012, 0.012, 0.07, 6 );
+		hinge.applyMatrix4( mat4( s * 0.16, y + 0.04, H.z + H.d / 2 + 0.02, 0, 0, Math.PI / 2 ) );
+		kit.add( 'fittings', hinge, STAINLESS );
+
+	}
+
+	const handle = rod( V( - 0.06, y + 0.05, H.z - H.d / 2 + 0.05 ), V( 0.06, y + 0.05, H.z - H.d / 2 + 0.05 ), 0.008, 5 );
+	kit.add( 'fittings', handle, STAINLESS );
+
+}
+
+// (the house's half width outboard, as HullBuilder has it: her sheer less 0.2)
+const houseHalf = ( L, z ) => L.sheerX( L.tAtSheerZ( z ) ) - 0.2;
 
 // ------------------------------------------------------------------ hauler and davit (starboard)
 
 export const HAULER = { x: - 1.0, z: - 0.62, y: 1.34 };
+export const BARREL_Z = - 1.12; // (M17) the bait barrel's middle, along her (it was - 0.8: the steps are there now)
 
 function buildHauler( kit, L ) {
 
@@ -242,25 +309,26 @@ function buildBow( kit, L ) {
 	roller.applyMatrix4( mat4( 0, yTip + 0.085, L.zBow + 0.07, 0, 0, Math.PI / 2 ) );
 	kit.add( 'fittings', roller, BLACK );
 
-	// plow anchor stowed on the roller: shank over the roller, plowshare hanging against the stem
+	// plow anchor stowed on the roller: shank over the roller, plowshare hanging against the stem ((M17) its own bucket, put last in her
+	// fittings, so it's not drawn while it's down: BoatModel.setAnchorStowed)
 	const sa = V( 0, yTip + 0.1, L.zBow - 0.45 ), sb = V( 0, yTip + 0.12, L.zBow + 0.13 );
-	kit.add( 'fittings', rod( sa, sb, 0.017, 8 ), GALV );
+	kit.add( 'stowedAnchor', rod( sa, sb, 0.017, 8 ), GALV );
 	const knuckle = cylinder( 0.025, 0.025, 0.07, 10 );
 	knuckle.applyMatrix4( mat4( sb.x, sb.y, sb.z, 0, 0, Math.PI / 2 ) );
-	kit.add( 'fittings', knuckle, GALV );
+	kit.add( 'stowedAnchor', knuckle, GALV );
 	const plowDir = V( 0, - 0.85, - 0.4 ).normalize();
 	const plow = new ConeGeometry( 0.12, 0.34, 4 );
 	plow.rotateY( Math.PI / 4 );
 	plow.scale( 1, 1, 0.38 );
 	plow.applyMatrix4( alignY( sb.clone().add( V( 0, - 0.02, 0.02 ) ).addScaledVector( plowDir, 0.17 ), plowDir ) );
-	kit.add( 'fittings', plow, GALV );
+	kit.add( 'stowedAnchor', plow, GALV );
 	// rode running aft to the deck pipe
 	const t = L.tAtSheerZ( L.zBow - 0.75 );
 	const pipeY = foredeckY( L, t, 0 );
 	const dp = cylinder( 0.035, 0.045, 0.04, 14 );
 	dp.translate( 0, pipeY + 0.02, L.zBow - 0.75 );
 	kit.add( 'fittings', dp, STAINLESS );
-	kit.add( 'fittings', tube( [ sa, V( 0, lerp( sa.y, pipeY, 0.6 ) + 0.03, L.zBow - 0.6 ), V( 0, pipeY + 0.04, L.zBow - 0.75 ) ], 0.012, 10, 5 ), GALV );
+	kit.add( 'stowedAnchor', tube( [ sa, V( 0, lerp( sa.y, pipeY, 0.6 ) + 0.03, L.zBow - 0.6 ), V( 0, pipeY + 0.04, L.zBow - 0.75 ) ], 0.012, 10, 5 ), GALV );
 
 }
 
@@ -278,8 +346,8 @@ function buildContainers( kit, L ) {
 	bait.translate( - 0.72, L.deckY + 0.352, - 1.45 );
 	kit.add( 'fittings', bait, { color: 0x5a2c22, rough: 0.35 } );
 
-	// bait barrel against the port rail aft of the wheelhouse
-	const bx = 0.86, bz = - 0.8;
+	// bait barrel against the port rail aft of the wheelhouse ((M17) a little further aft, for the steps up at the house's corner)
+	const bx = 0.86, bz = BARREL_Z;
 	const barrel = cylinder( 0.26, 0.26, 0.78, 20 );
 	barrel.translate( bx, L.deckY + 0.39, bz );
 	kit.add( 'fittings', barrel, { color: 0x1f5ea6, rough: 0.5 } );

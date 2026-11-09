@@ -85,10 +85,30 @@ export function wearRate( w, boat = 'lobster' ) {
 // a personal save's boat ({ x, z, h: heading, anchor: [ x, z ] | null, moored, aboard: 'deck' | 'helm' | null,
 // T: the island's time, at: ms since 1970, (M16) boat: which she is. The others you own are at their berths (or on
 // their cradles) since that T: one out at sea comes home when you get into another: othersAway)
-export const boatLeft = ( { x, z, heading, anchor, sock, moored, aboard, T, at, boat = 'lobster' } ) => ( {
-	v: 1, boat, ...( sock ? { sock: true } : {} ), x: round( x ), z: round( z ), h: Math.round( heading * 1000 ) / 1000, anchor: anchor ? [ round( anchor.x ), round( anchor.z ) ] : null, moored: !! moored, aboard: aboard === 'deck' || aboard === 'helm' ? aboard : null, T: Math.round( T * 1000 ) / 1000, at,
+// (M17) And where you were, each only when it's so (docs/m17/back.md):
+//   on: [ x, y, z, look ]   aboard her deck: where you stood in her frame (m) and which way you looked on her (rad): the
+//                           deck, the bridge, the tower, a cabin, by the chair, the lobster boat's roof (stoodOf)
+//   helm: 'upper'           at her helm, her upper one (the sportfisher's tower's)
+//   swim: [ dx, dz ]        in the water, this far from her (m, the world's), she out there (swimBy)
+//   ride: { o, b, x, z, on, helm, swim }   aboard someone else's (o: her owner's id, b: which she is, x z: where she was),
+//                           where you stood on her (on), at her helm (helm: 1), or in the water by her (swim) (Together.rideLeft)
+export const boatLeft = ( { x, z, heading, anchor, sock, moored, aboard, on = null, helm = null, swim = null, ride = null, T, at, boat = 'lobster' } ) => ( {
+	v: 1, boat, ...( sock ? { sock: true } : {} ), x: round( x ), z: round( z ), h: Math.round( heading * 1000 ) / 1000, anchor: anchor ? [ round( anchor.x ), round( anchor.z ) ] : null, moored: !! moored, aboard: aboard === 'deck' || aboard === 'helm' ? aboard : null,
+	...( aboard === 'deck' && isOn( on ) ? { on: onWire( on ) } : {} ), ...( aboard === 'helm' && helm === 'upper' ? { helm: 'upper' } : {} ), ...( ! aboard && isSwim( swim ) ? { swim: swimWire( swim ) } : {} ),
+	...( ! aboard && ride ? { ride: rideWire( ride ) } : {} ), T: Math.round( T * 1000 ) / 1000, at,
 } );
 const round = ( v ) => Math.round( v * 10 ) / 10;
+const r2 = ( v ) => Math.round( v * 100 ) / 100;
+const isOn = ( on ) => Array.isArray( on ) && on.length === 4 && on.every( Number.isFinite ) && Math.abs( on[ 0 ] ) < 20 && Math.abs( on[ 1 ] ) < 30 && Math.abs( on[ 2 ] ) < 30;
+const isSwim = ( s ) => Array.isArray( s ) && s.length === 2 && s.every( Number.isFinite ) && Math.hypot( s[ 0 ], s[ 1 ] ) <= SWIM_NEAR;
+const onWire = ( on ) => [ r2( on[ 0 ] ), r2( on[ 1 ] ), r2( on[ 2 ] ), Math.round( on[ 3 ] * 1000 ) / 1000 ];
+const swimWire = ( s ) => [ round( s[ 0 ] ), round( s[ 1 ] ) ];
+const rideWire = ( r ) => ( {
+	o: String( r.o ).slice( 0, 64 ), b: String( r.b ).slice( 0, 24 ), x: round( r.x ), z: round( r.z ),
+	...( isOn( r.on ) ? { on: onWire( r.on ) } : {} ), ...( r.helm ? { helm: 1 } : {} ), ...( isSwim( r.swim ) ? { swim: swimWire( r.swim ) } : {} ),
+} );
+const rideOf = ( r ) => r && typeof r === 'object' && typeof r.o === 'string' && r.o && typeof r.b === 'string' && Number.isFinite( r.x ) && Number.isFinite( r.z ) && ( isOn( r.on ) || isSwim( r.swim ) || r.helm === 1 )
+	? { o: r.o, b: r.b, x: r.x, z: r.z, on: isOn( r.on ) ? r.on.slice() : null, helm: r.helm === 1, swim: isSwim( r.swim ) ? r.swim.slice() : null } : null;
 
 // the save's boat as it's reckoned from, or null if there's none (or it's not one)
 export function leftOf( text ) {
@@ -102,9 +122,104 @@ export function leftOf( text ) {
 
 	if ( ! d || d.v !== 1 || ! Number.isFinite( d.x ) || ! Number.isFinite( d.z ) || ! Number.isFinite( d.T ) ) return null;
 	const A = Array.isArray( d.anchor ) && d.anchor.length === 2 && d.anchor.every( Number.isFinite ) ? { x: d.anchor[ 0 ], z: d.anchor[ 1 ] } : null;
-	return { x: d.x, z: d.z, heading: Number.isFinite( d.h ) ? d.h : 0, anchor: A, sock: d.sock === true, moored: d.moored === true, aboard: d.aboard === 'deck' || d.aboard === 'helm' ? d.aboard : null, T: d.T, at: Number.isFinite( d.at ) ? d.at : null, boat: typeof d.boat === 'string' ? d.boat : 'lobster' };
+	const aboard = d.aboard === 'deck' || d.aboard === 'helm' ? d.aboard : null;
+	return {
+		x: d.x, z: d.z, heading: Number.isFinite( d.h ) ? d.h : 0, anchor: A, sock: d.sock === true, moored: d.moored === true, aboard, T: d.T, at: Number.isFinite( d.at ) ? d.at : null, boat: typeof d.boat === 'string' ? d.boat : 'lobster',
+		on: aboard === 'deck' && isOn( d.on ) ? d.on.slice() : null, helm: aboard === 'helm' && d.helm === 'upper' ? 'upper' : null,
+		swim: ! aboard && isSwim( d.swim ) ? d.swim.slice() : null, ride: ! aboard ? rideOf( d.ride ) : null,
+	};
 
 }
+
+// ---- (M17) where you were, and put back there (docs/m17/back.md). p: the Player (or as much of it as these read)
+
+// m: in the water this near her when you go, you come back in the water by her; further off, you've left her (ashore, as
+// before). Under BESIDE_M you're put back where you were by her, further off at her side
+export const SWIM_NEAR = 300;
+export const BESIDE_M = 25;
+const SIDE_M = 3.2; // m off her middle, abeam, where you're put beside her
+
+// where you stood on her deck, or null off it: [ x, y, z, look ] in her frame. Part way up a ladder, at its foot or its head,
+// whichever's nearer; strapped in the chair, its spot (you stand up beside it: there's no fish on when you come back)
+export function stoodOf( p ) {
+
+	if ( ! p || p.mode !== 'deck' ) return null;
+	const c = p.climbing, L = c && c.ladder, chair = p.chair && p.boat && p.boat.model && p.boat.model.stations && p.boat.model.stations.chair;
+	const at = L ? ( ! c.falling && c.s > c.len / 2 ? L.off : L.on ) : chair || p.deckPos;
+	return [ at.x, at.y, at.z, Number.isFinite( p.deckYaw ) ? p.deckYaw : 0 ];
+
+}
+
+// you in the water this far from her ([ dx, dz ]), or null: she's to be out there (not at her berth, on the sand or on her
+// cradle) and you within SWIM_NEAR of her. b: her BoatController (or { position, moored, beached, hauled })
+export function swimBy( p, b ) {
+
+	if ( ! p || p.mode !== 'swim' || p.riding || ! b || b.moored || b.beached || b.hauled ) return null;
+	const dx = p.position.x - b.position.x, dz = p.position.z - b.position.z;
+	return Math.hypot( dx, dz ) <= SWIM_NEAR ? [ dx, dz ] : null;
+
+}
+
+// where you're put back in the water by her ( x, z, heading: hers now ): where you were, if that was by her; further off, at
+// her side, a few metres off her middle, so she's right there to climb aboard. -> { x, z, yaw: facing her }
+export function besideHer( x, z, heading, swim ) {
+
+	let dx = swim[ 0 ], dz = swim[ 1 ];
+	if ( Math.hypot( dx, dz ) > BESIDE_M ) {
+
+		// (to starboard of her middle, her frame's -x: x across her is ( cos h, -sin h ))
+		dx = - Math.cos( heading ) * SIDE_M;
+		dz = Math.sin( heading ) * SIDE_M;
+
+	}
+
+	return { x: x + dx, z: z + dz, yaw: Math.atan2( - dx, - dz ) };
+
+}
+
+// you put there ( at: besideHer's ): in the water, or on the ground if it's out of it there (she's gone ashore). ground: the
+// ground's height there; sea: the sea's level
+export function intoWater( p, at, ground, sea ) {
+
+	p.velocity.set( 0, 0, 0 );
+	p.yaw = at.yaw;
+	p.pitch = - 0.05;
+	p._camY = null;
+	if ( ground > sea - 0.3 ) {
+
+		p.mode = 'walk';
+		p.position.set( at.x, ground, at.z );
+		return 'walk';
+
+	}
+
+	p.mode = 'swim';
+	p.position.set( at.x, sea - 0.2, at.z );
+	p.floating = true;
+	p.waterH = p.waterMean = sea;
+	return 'swim';
+
+}
+
+// back on her deck where you stood ( on: stoodOf's ), on her as she is now: on what's under you there within a step, else
+// where she's boarded. -> true if it was where you stood
+export function standBack( p, on, model ) {
+
+	const [ x, y, z, look ] = on;
+	p.deckPos.set( x, y, z );
+	if ( model.clampToDeck ) model.clampToDeck( p.deckPos, STAND_R );
+	const g = p.deckGroundAt( p.deckPos.x, p.deckPos.z, y + STAND_STEP );
+	const there = Math.abs( g - y ) <= STAND_STEP && Math.hypot( p.deckPos.x - x, p.deckPos.z - z ) < 0.3;
+	if ( there ) p.deckPos.y = g;
+	else p.deckPos.copy( model.boardPoint );
+	p.deckYaw = look;
+	p.deckVel.set( 0, 0, 0 );
+	p.deckGrounded = true;
+	p.deckToWorld();
+	return there;
+
+}
+const STAND_R = 0.24, STAND_STEP = 0.4;
 
 // What happened to her between the island's time she was left (left.T) and T. left: leftOf's, and hauled (on
 // Marta's cradle). env: dock { x, z } (required), and the weather picked ( pick, since ), the water's depth ( depth(

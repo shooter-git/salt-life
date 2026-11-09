@@ -1,5 +1,7 @@
 // (M16) Coming back, together: two real games (tools/two-players) in each boat, the players' saves kept in the browser so a page can really be
 // loaded again (host.js patched as it's fetched, as away.mjs does). Leaving's the app covering the game, then the page closed.
+// (M17) And coming back aboard someone else's, where you stood on her, or in the water by her: with her owner gone (guest) and with her
+// owner there (rejoin).
 //   tools/render-slot.sh node tools/two-players/resume-together.mjs [dir for screenshots] [port] [boats: kayak,console,...] [scenarios: dock,far,...]
 // A pair of games is minutes on the CPU: a run's capped at 25 minutes, so split them.
 import { launch, say, note, tally, watch, toastWatch, started, frames, quiet, view, brief, shots, farSpot, BOAT_IDS, ANCHOR, SOCK } from './resume-lib.mjs';
@@ -11,6 +13,23 @@ async function room( tag ) {
 
 	const ctx = await browser.newContext( { viewport: { width: 640, height: 360 } } );
 	await ctx.addInitScript( toastWatch );
+	// ((M17) what a coming back aboard someone else's did, as it went: Together._rejoin set, and let go)
+	await ctx.addInitScript( () => {
+
+		window.__rejoins = [];
+		let was = undefined;
+		const t = setInterval( () => {
+
+			const a = window.__app, T = a && a.together;
+			if ( ! T ) return;
+			const r = T._rejoin || null, p = a.player;
+			if ( ( r === null ) !== ( was === null ) || was === undefined ) window.__rejoins.push( { t: Math.round( performance.now() ), r: r && { o: r.o, b: r.b, on: r.on, swim: r.swim }, mode: p && p.mode, riding: p && p.riding, started: !! a._started } );
+			was = r;
+			if ( window.__rejoins.length > 20 ) clearInterval( t );
+
+		}, 50 );
+
+	} );
 	await ctx.route( '**/tools/two-players/host.js*', async ( route ) => {
 
 		const res = await route.fetch(); let body = await res.text();
@@ -47,6 +66,14 @@ async function room( tag ) {
 
 				await P.page.evaluate( () => document.querySelector( 'iframe' ).contentWindow.postMessage( { ats: 'bridge', v: 1, msg: { type: 'pause' } }, '*' ) );
 				await P.page.waitForTimeout( 1800 );
+				// ((M17) and what it wrote out, written: on a busy machine 1.8 s wasn't always enough for the second of two writes)
+				await P.game.evaluate( async () => {
+
+					const s = window.__app.store;
+					for ( let i = 0; i < 3 && s.dirty.size; i ++ ) await s.flush();
+					await s._writing;
+
+				} ).catch( () => {} );
 
 			}
 
@@ -152,7 +179,113 @@ const swimBy = ( g, x, z ) => g.evaluate( ( [ x, z ] ) => {
 
 }, [ x, z ] );
 
+// (M17) a guest coming back aboard someone else's: till he's aboard her, or it's known she's not coming (Together._rejoin)
+const rejoined = ( g ) => g.waitForFunction( () => ! window.__app.together._rejoin, null, { timeout: 240000, polling: 500 } ).catch( () => note( 'still waiting to rejoin her after 4 minutes' ) );
+// Sam aboard Robin's boat from the water at her ladder or board point, as the game offers it
+const boardHer = async ( sam, mine ) => {
+
+	await sam.game.evaluate( ( [ x, z ] ) => {
+
+		const a = window.__app, p = a.player;
+		p.position.set( x + 3, a.waves.heightAt( x + 3, z + 3 ) - 0.2, z + 3 );
+		p.mode = 'swim';
+		p.velocity.set( 0, 0, 0 );
+		p.floating = true;
+
+	}, [ mine.x, mine.z ] );
+	await sam.game.waitForFunction( () => { const o = [ ...window.__app.together.others.values() ][ 0 ]; return o && o.boat && o.boat.visible; }, null, { timeout: 200000, polling: 500 } ).catch( () => note( 'her copy not drawn' ) );
+	await sam.game.evaluate( () => {
+
+		const a = window.__app, o = [ ...a.together.others.values() ][ 0 ], p = a.player, M = o && o.boat && o.boat.userData.model;
+		if ( ! M ) return;
+		const from = M.boardFrom && M.boardFrom( 'swim' ), bp = ( from ? from.at : M.boardPoint ).clone().applyQuaternion( o.boat.quaternion ).add( o.boat.position );
+		p.position.set( bp.x, bp.y + 0.1, bp.z );
+
+	} );
+	await sam.game.waitForFunction( () => !! window.__app.player.rideOffer, null, { timeout: 120000, polling: 300 } ).catch( () => note( 'no ride offered' ) );
+	return sam.game.evaluate( () => {
+
+		const p = window.__app.player;
+		if ( ! p.rideOffer ) return false;
+		p.ride( p.rideOffer.boat );
+		return true;
+
+	} );
+
+};
+// where on her a guest's put to stand: up where only her own can be, as her copy has her
+const UP_ON = { kayak: null, console: { x: 0, y: 1.65, z: 3.7 }, lobster: { x: 0, y: 2.41, z: 0.2 }, sportfisher: { x: 0, y: 3.1, z: - 2.6 } };
+
 const SC = {
+
+	// (M17) a guest aboard someone else's, her owner aboard her, there when he comes back: put back where he stood (up on her roof, her
+	// bridge, her foredeck; a kayak's tank well); and in the water by her
+	async rejoin( boat ) {
+
+		const R = await room( `rejoin-${ boat }` );
+		const robin = await R.open( 'Robin', boat );
+		const sam = await R.open( 'Sam', 'console' );
+		await sam.game.waitForFunction( () => { const o = [ ...window.__app.together.others.values() ][ 0 ]; return o && o.cur && o.cur.boat; }, null, { timeout: 200000, polling: 1000 } );
+		const spot = await farSpot( robin.game, { max: boat === 'kayak' ? 9 : 18 } );
+		const mine = boat === 'kayak' ? await atSea( robin.game, spot ).then( () => frames( robin.game, 3 ) ).then( () => view( robin.game ) ) : await anchored( robin.game, boat, spot );
+		await sam.game.waitForFunction( ( s ) => { const o = [ ...window.__app.together.others.values() ][ 0 ]; return o.cur && o.cur.boat && Math.hypot( o.cur.boat.pos.x - s.x, o.cur.boat.pos.z - s.z ) < 60; }, spot, { timeout: 200000, polling: 500 } );
+		const rode = await boardHer( sam, mine );
+		await frames( sam.game, 3 );
+		const up = UP_ON[ boat ];
+		if ( up ) await sam.game.evaluate( ( P ) => {
+
+			const p = window.__app.player;
+			p.deckPos.set( P.x, P.y, P.z );
+			p.deckVel.set( 0, 0, 0 );
+			p.deckGrounded = true;
+			p.deckToWorld();
+
+		}, up );
+		await frames( sam.game, 6 );
+		const was = await view( sam.game );
+		say( rode && was.riding && was.mode === 'deck', `rejoin (${ boat }): Sam aboard Robin's, ${ up ? `up at ${ was.deck }` : `on her tank well at ${ was.deck }` }` );
+		await sam.page.screenshot( { path: `${ out }/tog-rejoin-${ boat }-before.png` } );
+		note( `Sam's ride as saved: ${ JSON.stringify( await sam.game.evaluate( () => { const a = window.__app; a.saveClock(); return { ridden: a.together.rideLeft(), rec: a.store.getItem( 'saltlife.boat' ) }; } ) ) }` );
+		// ---- Sam goes; Robin stays aboard her; Sam comes back
+		await R.leave( sam );
+		note( `kept: ${ await robin.page.evaluate( () => ( JSON.parse( localStorage.getItem( 'tp-sam-1' ) || '[]' ).find( ( e ) => e[ 0 ] === 'personal/boat' ) || [ 0, {} ] )[ 1 ].value ).then( ( v ) => JSON.stringify( v ) ).catch( ( e ) => e.message ) }` );
+		const sam2 = await R.open( 'Sam' );
+		note( `on his return: ${ JSON.stringify( await sam2.game.evaluate( () => { const a = window.__app; return { rejoins: window.__rejoins, mode: a.player.mode, at: a.player.position.toArray().map( Math.round ) }; } ) ) }` );
+		await rejoined( sam2.game );
+		await frames( sam2.game, 6 );
+		let v = await view( sam2.game );
+		note( `Sam back ${ brief( v ) } toasts ${ JSON.stringify( v.toasts ) }` );
+		const stood = v.deck && was.deck ? Math.hypot( v.deck[ 0 ] - was.deck[ 0 ], v.deck[ 1 ] - was.deck[ 1 ], v.deck[ 2 ] - was.deck[ 2 ] ) : Infinity;
+		say( v.riding && v.mode === 'deck' && stood < 0.3, `rejoin (${ boat }): Sam's back aboard her with Robin, where he stood: ${ was.deck } -> ${ v.deck } (${ stood.toFixed( 2 ) } m) ${ JSON.stringify( v.toasts.slice( - 1 ) ) }` );
+		say( ! v.veil && v.inScene, `rejoin (${ boat }): no veil` );
+		const seen = await robin.game.evaluate( () => { const o = [ ...window.__app.together.others.values() ][ 0 ], c = o && o.cur; return c ? { ride: c.ride || null, mode: c.mode } : null; } );
+		say( seen && seen.ride, `rejoin (${ boat }): Robin sees him aboard her (${ JSON.stringify( seen ) })` );
+		await sam2.page.screenshot( { path: `${ out }/tog-rejoin-${ boat }-back.png` } );
+		// ---- over her side, swum a little off; goes; comes back: in the water by her
+		await sam2.game.evaluate( () => {
+
+			const a = window.__app, p = a.player;
+			p.exitBoat( null, 1 );
+			p.position.x += 5;
+			p.position.z -= 4;
+
+		} );
+		await frames( sam2.game, 4 );
+		const sw = await view( sam2.game );
+		const herAt = await robin.game.evaluate( () => ( { x: window.__app.boatCtl.position.x, z: window.__app.boatCtl.position.z } ) );
+		await R.leave( sam2 );
+		const sam3 = await R.open( 'Sam' );
+		await rejoined( sam3.game );
+		await frames( sam3.game, 4 );
+		v = await view( sam3.game );
+		const herNow = await robin.game.evaluate( () => ( { x: window.__app.boatCtl.position.x, z: window.__app.boatCtl.position.z } ) );
+		const offWas = [ sw.you[ 0 ] - herAt.x, sw.you[ 2 ] - herAt.z ], offNow = [ v.you[ 0 ] - herNow.x, v.you[ 2 ] - herNow.z ];
+		note( `Sam back ${ brief( v ) } off her ${ offWas.map( ( a ) => a.toFixed( 1 ) ) } -> ${ offNow.map( ( a ) => a.toFixed( 1 ) ) }` );
+		say( v.mode === 'swim' && ! v.riding && Math.hypot( offNow[ 0 ] - offWas[ 0 ], offNow[ 1 ] - offWas[ 1 ] ) < 4, `rejoin (${ boat }): in the water by her again (${ v.mode }, ${ Math.hypot( ...offNow ).toFixed( 1 ) } m off her)` );
+		await sam3.page.screenshot( { path: `${ out }/tog-rejoin-${ boat }-swim.png` } );
+		await R.close();
+
+	},
 
 	// joining with each at the dock: each sees the other's boat as she is, at her own berth or a spare
 	async dock( boat ) {
@@ -238,7 +371,7 @@ const SC = {
 		const v = await view( robin2.game );
 		note( `Robin back ${ brief( v ) }` );
 		say( v.boat === boat && !! v.anchor && Math.hypot( v.x - live.x, v.z - live.z ) < 6, `far (${ boat }): Robin back in a room: same boat, her anchor, ${ Math.hypot( v.x - live.x, v.z - live.z ).toFixed( 1 ) } m off` );
-		say( v.mode === ( boat === 'kayak' ? 'walk' : mine.mode ), `far (${ boat }): Robin ${ boat === 'kayak' ? 'out of her, in the water, when she left, ashore now' : 'aboard as she was' } (${ mine.mode } -> ${ v.mode })` );
+		say( v.mode === mine.mode, `far (${ boat }): Robin ${ boat === 'kayak' ? '(M17) out of her, in the water, when she left, in the water by her now' : 'aboard as she was' } (${ mine.mode } -> ${ v.mode })` );
 		say( ! v.veil && v.inScene, `far (${ boat }): no veil, she's in the scene` );
 		await frames( robin2.game, 3 );
 		await shots( robin2.page, robin2.game, `${ out }/tog-far-${ boat }-robin-back`, { from: [ 12, 8, - 16 ] } );
@@ -281,7 +414,7 @@ const SC = {
 		await frames( robin2.game, 3 );
 		let v = await view( robin2.game );
 		note( `Robin back ${ brief( v ) }` );
-		say( v.boat === boat && !! v.anchor && Math.hypot( v.x - mine.x, v.z - mine.z ) < 12 && v.mode === ( boat === 'kayak' ? 'walk' : mine.mode ), `away (${ boat }): Robin back: the ${ v.boat } at her anchor, ${ v.mode }, ${ Math.hypot( v.x - mine.x, v.z - mine.z ).toFixed( 1 ) } m off` );
+		say( v.boat === boat && !! v.anchor && Math.hypot( v.x - mine.x, v.z - mine.z ) < 12 && v.mode === mine.mode, `away (${ boat }): Robin back: the ${ v.boat } at her anchor, ${ v.mode }, ${ Math.hypot( v.x - mine.x, v.z - mine.z ).toFixed( 1 ) } m off` );
 		// (who's host: the one who stayed)
 		const hosts = [ await sam.game.evaluate( () => window.__app.together.session.isHost ), await robin2.game.evaluate( () => window.__app.together.session.isHost ) ];
 		say( hosts[ 0 ] && ! hosts[ 1 ], `away (${ boat }): Sam hosts still, Robin doesn't (${ hosts })` );
@@ -439,15 +572,19 @@ const SC = {
 		note( `Sam, her owner gone ${ brief( v ) } toasts ${ JSON.stringify( v.toasts ) } ${ JSON.stringify( a ) }` );
 		say( Number.isFinite( v.you[ 0 ] ) && ( v.riding ? Math.hypot( v.you[ 0 ] - mine.x, v.you[ 2 ] - mine.z ) < 30 : v.mode === 'swim' ), `guest (${ boat }): her owner's gone, she's at anchor: Sam ${ v.riding ? 'rides on' : 'is in the water' } (${ v.mode } at ${ v.you })` );
 		await sam.page.screenshot( { path: `${ out }/tog-guest-${ boat }-owner-gone.png` } );
-		// ---- the guest goes too, comes back: on their own, ashore or in their own boat
-		const ownBefore = v;
+		// ---- the guest goes too, comes back: (M17) aboard her again, where he stood, she at her anchor on everyone's sea; his own
+		// console at her berth
+		const ownBefore = v, own = await sam.game.evaluate( () => ( { x: window.__app.boatCtl.position.x, z: window.__app.boatCtl.position.z } ) );
 		await R.leave( sam );
 		const sam2 = await R.open( 'Sam' );
+		await rejoined( sam2.game );
 		await frames( sam2.game, 4 );
 		v = await view( sam2.game );
-		note( `Sam back ${ brief( v ) }` );
-		say( ! v.riding && v.boat === 'console' && ( v.moored || v.beached ) && Math.hypot( v.x - ownBefore.x, v.z - ownBefore.z ) < 5, `guest (${ boat }): Sam's come back: not riding, his own console at her berth (${ v.x }, ${ v.z })` );
-		say( v.mode === 'walk', `guest (${ boat }): Sam's ashore (${ v.mode } at ${ v.you })` );
+		note( `Sam back ${ brief( v ) } toasts ${ JSON.stringify( v.toasts ) }` );
+		const stood = ownBefore.deck && v.deck ? Math.hypot( v.deck[ 0 ] - ownBefore.deck[ 0 ], v.deck[ 1 ] - ownBefore.deck[ 1 ], v.deck[ 2 ] - ownBefore.deck[ 2 ] ) : Infinity;
+		say( v.riding && v.mode === 'deck' && Math.hypot( v.you[ 0 ] - mine.x, v.you[ 2 ] - mine.z ) < 30, `guest (${ boat }): (M17) Sam's come back aboard Robin's, at her anchor, Robin away (${ v.mode }, riding ${ v.riding }, at ${ v.you })` );
+		say( stood < 0.3, `guest (${ boat }): where he stood on her, ${ ownBefore.deck } -> ${ v.deck } (${ stood.toFixed( 2 ) } m)` );
+		say( v.boat === 'console' && ( v.moored || v.beached ) && Math.hypot( v.x - own.x, v.z - own.z ) < 5, `guest (${ boat }): his own console at her berth still (${ v.x }, ${ v.z })` );
 		say( ! v.veil && v.inScene, `guest (${ boat }): no veil, his boat's in the scene` );
 		await shots( sam2.page, sam2.game, `${ out }/tog-guest-${ boat }-sam-back`, { outside: false } );
 		// ---- Robin back, Sam rides again; Sam goes; Robin takes her home so she's no longer there; Sam comes back
@@ -521,11 +658,13 @@ const SC = {
 		await robin.game.evaluate( () => window.__app.together.mineBoat( true ) );
 		await frames( robin.game, 2 );
 		await R.leave( robin );
-		// the guest back to an empty room
+		// the guest back to an empty room ((M17) in the water where she was, till it's known she's not coming: then ashore)
 		const sam2 = await R.open( 'Sam' );
+		await rejoined( sam2.game );
 		await frames( sam2.game, 4 );
 		const v = await view( sam2.game );
-		note( `Sam back ${ brief( v ) }` );
+		note( `Sam back ${ brief( v ) } toasts ${ JSON.stringify( v.toasts ) }` );
+		say( v.toasts.some( ( t ) => /isn't out there now/.test( t ) ), `vanish (${ boat }): told her boat isn't out there now` );
 		say( ! v.riding && v.mode === 'walk' && v.boat === 'console' && ( v.moored || v.beached ), `vanish (${ boat }): Sam back, the boat he rode no longer there: ashore (${ v.you }), his own console at her berth` );
 		say( ! v.veil && v.inScene, `vanish (${ boat }): no veil` );
 		const g = await sam2.game.evaluate( () => Object.keys( window.__app.together.boats ) );

@@ -97,7 +97,16 @@ export async function started( game, { reveal = true, page = null, reload = null
 	}
 
 	const f = typeof game === 'function' ? game() : game;
-	if ( reveal ) await f.waitForFunction( () => ! window.__app._lateHeld && ! window.__app._late, null, { timeout: 180000, polling: 500 } ).catch( () => note( 'still held back after 3 minutes' ) );
+	// ((M17) and the boat you start in, held out of the scene on a CPU till prepareLate, after the rest: a check of her straight after
+	// the load read her not there on a busy machine)
+	if ( reveal ) await f.waitForFunction( () => {
+
+		const a = window.__app;
+		if ( a._lateHeld || a._late || a._heldBoat ) return false;
+		for ( let o = a.boat.group; o; o = o.parent ) if ( o === a.scene ) return true; // (prepareLate adds her once her shaders are made)
+		return false;
+
+	}, null, { timeout: 180000, polling: 500 } ).catch( () => note( 'still held back after 3 minutes' ) );
 	return f;
 
 }

@@ -29,6 +29,8 @@ export const ICONS = {
 	search: '<circle cx="7" cy="11" r="4"/><path d="M11 8l10-3.6M11 14l10 3.6"/><path d="M7 15v5M4 20.5h6"/>',
 	horn: '<path d="M3 9.5v5h3.2l6.8 5v-15l-6.8 5z"/><path d="M16 9a4 4 0 0 1 0 6M18.6 6.4a7.7 7.7 0 0 1 0 11.2"/>',
 	camera: '<path d="M3.5 8h3.4l2-2.6h6.2l2 2.6h3.4v11h-17z"/><circle cx="12" cy="13.3" r="3.6"/>',
+	plotter: '<rect x="2.5" y="3.5" width="19" height="14" rx="2"/><circle cx="12" cy="10.5" r="4.3" stroke-dasharray="2 1.8"/><path d="M12 10.5l2.8-2.8"/><path d="M8.5 21h7M12 17.5V21"/>',
+	anchor: '<circle cx="12" cy="4.6" r="2"/><path d="M12 6.6V21M8 10h8"/><path d="M4.5 14.5c.6 3.8 3.7 6.5 7.5 6.5s6.9-2.7 7.5-6.5"/><path d="M4.5 14.5L3 16.6M19.5 14.5l1.5 2.1"/>',
 	radio: '<rect x="7" y="7" width="10" height="14" rx="2"/><path d="M9.5 7V2"/><path d="M10 11h4M10 14h4"/>' + dot( 12, 17.6, 1.1 ),
 	flare: '<path d="M8 21.5l4.6-10"/><path d="M11.2 10.6l3 1.4"/><path d="M14.4 9.8c-1.6-1.6-1.2-4.2 1.4-6.3.4 2.1 2.6 3.2 1.5 5.7-.6 1.3-2 1.6-2.9.6z"/><path d="M20 12.5l1.6.6M19.4 15.8l1.2 1.3"/>',
 	guide: '<circle cx="12" cy="12" r="9"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.6 2.3c-.8.4-1.2 1-1.2 1.8v.6"/>' + dot( 12, 17.2, 1.1 ),
@@ -75,7 +77,7 @@ export function iconSvg( id, cls = 'ai' ) {
 export const ACTION_ICON = {
 	Rod: 'rod', 'Take the rod': 'rod', Speargun: 'speargun', 'Lobster gear': 'lobster', Radio: 'radio', Flares: 'flare',
 	'Cast net': 'net', Bait: 'bait', Rig: 'rig', Leader: 'leader', Cooler: 'cooler',
-	Torch: 'torch', 'Torch off': 'torch', Searchlight: 'search', 'Searchlight off': 'search', Horn: 'horn', Camera: 'camera', Guide: 'guide',
+	Torch: 'torch', 'Torch off': 'torch', Searchlight: 'search', 'Searchlight off': 'search', Horn: 'horn', Camera: 'camera', Guide: 'guide', 'Plotter range': 'plotter',
 	Run: 'run', Dive: 'dive', Jump: 'jump', 'Swim up': 'swimup', 'Climb ladder': 'ladder', 'Reel in': 'reelin', 'Lines in': 'reelin',
 	// (the big button's, as it goes)
 	Cast: 'cast', 'Let out': 'cast', 'Fly kite': 'kite', Drop: 'drop', Deeper: 'drop', 'Stop here': 'drop', Chum: 'chum', 'Let go': 'letgo',
@@ -89,7 +91,7 @@ export const iconFor = ( label, away = 'rod' ) => label === 'Put away' ? `${ awa
 // the gold button's picture, from what the prompt says it does
 const PROMPT_ICONS = [
 	[ /^(Sleep|Turn in)/, 'sleep' ], [ /^(Leave|Get out|Step out|Step ashore|Over the side|Close the radio|Put it away)/, 'exit' ],
-	[ /helm/, 'helm' ], [ /ladder|^Climb/, 'ladder' ], [ /overboard/i, 'dive' ], [ /^Talk|night box|honesty box|'s shut|'s (back|home|out)/, 'talk' ],
+	[ /anchor|drift sock/, 'anchor' ], [ /helm/, 'helm' ], [ /ladder|^Climb/, 'ladder' ], [ /overboard/i, 'dive' ], [ /^Talk|night box|honesty box|'s shut|'s (back|home|out)/, 'talk' ],
 	[ /chair/, 'chair' ], [ /^Bail/, 'bucket' ], [ /speargun/, 'speargun' ], [ /\brod\b/, 'rod' ],
 	[ /trap|buoy|lobster|^Stack|^Take out the/i, 'trap' ], [ /^Board|^Take .* out|kayak|^Shove|^Right her|^Climb back/i, 'boat' ],
 ];

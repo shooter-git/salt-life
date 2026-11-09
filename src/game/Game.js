@@ -744,6 +744,7 @@ export class Game {
 
 		// (M10) the bucket on deck; the crank at the helm while she's stalled
 		this.updateBail( inp, p );
+		this.updateBow( inp, p );
 		this.daysOut.update( dt, inp, p );
 		// ((M16) beside a boat of yours you're not in: get into her)
 		this.fleet.updatePrompt( inp, p );
@@ -844,7 +845,7 @@ export class Game {
 	updateBoat( dt ) {
 
 		const app = this.app, b = app.boatCtl, p = app.player, s = this.state;
-		if ( b.driven && b.engineOn && b.handling.engine ) s.burn( fuelBurn( b.rpm, s.boat ) * dt );
+		if ( b.driven && b.engineOn && b.handling.engine ) s.burn( fuelBurn( b.rpm, s.boat, !! s.stats.twin ) * dt ); // ((M17) a twin's two)
 		else if ( this._wasDriven && ! b.driven ) s.save();
 		if ( app.boat.play ) app.boat.play( dt, this ); // ((M16) a kayak's own: kayak/KayakModel.js)
 		this.updateHull( dt );
@@ -1166,11 +1167,49 @@ export class Game {
 
 		}
 
+		// ((M17) her anchor off her roller while it's down)
+		if ( this.app.boat && this.app.boat.setAnchorStowed ) this.app.boat.setAnchorStowed( ! b.anchor );
 		const rode = this.rode;
 		rode.visible = !! b.anchor || !! b.sock;
 		if ( ! rode.visible ) return;
 		b.toWorld( b.stemHead, rode.material.uniforms.lineA.value );
 		this.layRode( rode, b.anchor || this.daysOut.sockPoint( _sock ) );
+
+	}
+
+	// (M17) her anchor worked at her bow, by her roller (Vessel's bowAnchor: the lobster boat's): let go where she lies, or got up,
+	// as you stand by it, and her drift sock in. She's yours to anchor: riding in someone else's, it's theirs
+	updateBow( inp, p ) {
+
+		const b = this.app.boatCtl, A = b.model && b.model.bowAnchor, st = this.state.stats;
+		const at = !! A && p.mode === 'deck' && ! p.riding && ! p.busy && ! p.climbing && ! b.moored && ! b.hauled && Math.hypot( p.deckPos.x - A.x, p.deckPos.z - A.z ) < A.r;
+		p.anchorWork = at;
+		if ( ! at || p.prompt ) return;
+		if ( b.anchor || b.sock ) {
+
+			p.prompt = { key: 'E', text: b.anchor ? 'Get the anchor up' : 'Get the drift sock in' };
+			if ( inp.hit( 'KeyE' ) ) {
+
+				const sock = ! b.anchor;
+				b.anchor = null;
+				b.sock = false;
+				this._anchorDue = false;
+				this.toast( sock ? 'Drift sock in' : 'Anchor up · she\'s adrift', 2200 );
+
+			}
+
+			return;
+
+		}
+
+		if ( ! ( st.anchorM > 0 ) && ! st.sock ) p.prompt = { key: ELLIPSIS, text: 'No anchor aboard her · Marta sells one' };
+		else if ( b.speed >= ANCHOR_SPEED ) p.prompt = { key: ELLIPSIS, text: 'She\'s to slow down to anchor' };
+		else {
+
+			p.prompt = { key: 'E', text: 'Let go the anchor' };
+			if ( inp.hit( 'KeyE' ) ) this.dropAnchor();
+
+		}
 
 	}
 

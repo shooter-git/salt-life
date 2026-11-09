@@ -138,8 +138,9 @@ export class LadderClimb {
 		}
 
 		this.feet( player.deckPos );
-		// you hang a little off it, on the climbing side
-		player.deckPos.z -= 0.16;
+		// you hang a little off it, on the climbing side ((M17) its own, for one that's not climbed facing forward: ladder.lean)
+		if ( L.lean ) player.deckPos.add( L.lean );
+		else player.deckPos.z -= 0.16;
 		player.deckToWorld();
 
 		player.prompt = this.grip < GRIP.warn ? { key: '', text: 'Hold on! Stop climbing till she eases' } : { key: 'W / S', text: 'Climb' };

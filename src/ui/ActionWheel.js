@@ -13,9 +13,9 @@ import { LEFT, RIGHT, UP, DOWN } from '../core/Glyphs.js';
 // The horn's held as long as its picture is (or blown for a moment, from a key).
 //   const w = new ActionWheel( input, { game } );  w.update( dt, player, game ) after input.update, before the player
 
-const ORDER = [ 'rod', 'net', 'bait', 'rig', 'leader', 'cooler', 'torch', 'horn', 'camera', 'guide' ];
+const ORDER = [ 'rod', 'net', 'bait', 'rig', 'leader', 'cooler', 'torch', 'horn', 'plotter', 'camera', 'guide' ];
 const KEY_NAMES = {
-	keyboard: { KeyR: 'R', KeyN: 'N', KeyB: 'B', KeyC: 'C', KeyX: 'X', KeyI: 'I', KeyL: 'L', KeyV: 'V', Horn: 'H', guide: 'H' },
+	keyboard: { KeyR: 'R', KeyN: 'N', KeyB: 'B', KeyC: 'C', KeyX: 'X', KeyI: 'I', KeyL: 'L', KeyV: 'V', KeyZ: 'Z', Horn: 'H', guide: 'H' },
 	gamepad: { KeyR: 'X', KeyN: `D-pad ${ UP }`, KeyB: `D-pad ${ LEFT }${ RIGHT }`, KeyC: 'LB', KeyX: 'Y', KeyI: 'Back', KeyL: `D-pad ${ DOWN }`, KeyV: 'Y', Horn: 'L3' },
 };
 const HOLD_S = 0.25; // Q (or Start) held longer than this and let go: the one it points at
