@@ -124,6 +124,17 @@ The first `rejoin` runs found two faults, both fixed: `Together` already had a `
 
 "No veil" once read the standalone loading veil still up seconds after the start: it's taken away by a 1.5 s timer after the start, and at load 37 a CPU frame takes seconds. The screenshot then shows Sam on her roof, the veil gone.
 
+**`pnpm test`** passes on the final tree (twice: before and after the fixes above).
+
+**All the Spaces' complete check** (`cli.ts check` from its `main`, `57b4f25`), once, on a clean copy of e67fbaa, on four cores (`taskset -c 0-3`), at load 10 to 13: everything passed, every screen played to the hurricane's night.
+
+| Script memory (MB) | Phone, upright | Phone, on its side | Tablet | Laptop | Judged |
+|---|---|---|---|---|---|
+| e67fbaa | 125.3 | 133.5 | 138.4 | 143.3 | **143.3**, 6.7 under |
+| `m17-flats`' last two | | | | | 142.5, 135.8 |
+
+Draw calls 81 of 150, triangles 238,073 of 300,000 (the merge's 232k to 238k), texture memory 70.3 MB, graphics memory 107.6 MB, 14 sounds of 16, 7.1 MB before ready, 78.3 MB in all (as `m17-flats`). Ready by screen 4.9, 4.8, 6.0 and 5.9 s. These look like the load's, and a wait loop of mine spun one unpinned core for some minutes of the play, so they judge nothing: the ready A/B is the M17 session's.
+
 ## For the M17 session's timing checks
 
 Nothing new before ready: no new shader, material or program. The lobster boat's 804 more triangles are in her existing merged buckets (`wood`, `fittings`), her colliders (from 20 to 54 boxes) walked only while someone's aboard her. Still to run, on a quiet machine: the ready A/B (phone upright, 4 CPUs) and one screen's whole play on one core, and the two complete checks that judge the release.
