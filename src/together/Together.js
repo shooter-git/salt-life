@@ -748,8 +748,11 @@ export class Together {
 
 		} ).catch( ( e ) => {
 
+			// (the SDK's update tries three times: when more saves than that cross, tried again a while after)
 			console.warn( 'records', e );
 			this._lifeNew = fresh;
+			clearTimeout( this._lifeT );
+			this._lifeT = setTimeout( () => this._sendLife(), 5000 );
 
 		} );
 

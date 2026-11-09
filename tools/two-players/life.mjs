@@ -15,24 +15,32 @@ const group = `life-${ Date.now() }`;
 const toasts = ( who ) => who.game.evaluate( () => { const g = window.__app.game, was = g.toast; window.__toasts = []; g.toast = function ( t, ms ) { window.__toasts.push( t ); return was.call( this, t, ms ); }; } );
 // (what's sent to the others, by kind, and the largest of each, in characters of JSON)
 const sends = ( who ) => who.game.evaluate( () => { const S = window.__app.together.session, was = S.send.bind( S ); window.__sent = {}; S.send = ( k, b ) => { const n = JSON.stringify( b ?? null ).length, r = window.__sent[ k ] || ( window.__sent[ k ] = { n: 0, most: 0 } ); r.n ++; r.most = Math.max( r.most, n ); return was( k, b ); }; } );
-// a catch in their own game, as Game.updateFight has it: logged, its slams, the group's records
-const land = ( who, list ) => who.game.evaluate( ( list ) => {
+// a catch in their own game, as Game.updateFight has it: logged, its slams, the group's records. One at a time, each in the
+// group's records before the next, as real catches come minutes apart (the SDK's update tries three times: a burst of nine
+// catches at once lost four of the weights)
+const land = async ( who, list ) => {
 
-	const a = window.__app, g = a.game, s = g.state, said = [];
+	const said = [];
 	for ( const [ k, kg, place ] of list ) {
 
-		s.addFish( k, kg, a.settings.timeOfDay, { day: g.tradeDay, place } );
-		const info = s.lastCatch;
-		info.slams = g.flats.caught( info );
-		if ( info.slams.length && a.together ) a.together.lifeChanged( info.slams );
-		if ( a.together ) a.together.caught( k, info.kg, info.cm, 'rod', info.place );
-		said.push( info.slams.join( '+' ) || '-' );
+		said.push( await who.game.evaluate( ( [ k, kg, place ] ) => {
+
+			const a = window.__app, g = a.game, s = g.state;
+			s.addFish( k, kg, a.settings.timeOfDay, { day: g.tradeDay, place } );
+			const info = s.lastCatch;
+			info.slams = g.flats.caught( info );
+			if ( info.slams.length && a.together ) a.together.lifeChanged( info.slams );
+			if ( a.together ) a.together.caught( k, info.kg, info.cm, 'rod', info.place );
+			return info.slams.join( '+' ) || '-';
+
+		}, [ k, kg, place ] ) );
+		await until( who.game, `!! window.__app.together.records[ '${ k }' ]`, 60000 ).catch( () => note( `${ k } not in the records` ) );
 
 	}
 
 	return said.join( ' ' );
 
-}, list );
+};
 const lines = ( who ) => who.game.evaluate( async () => {
 
 	const { lifeLines } = await import( '/src/together/RecordsBoard.js' );
@@ -80,7 +88,9 @@ say( told.robin.some( ( t ) => /^Sam has had a billfish grand slam/.test( t ) ) 
 const sent = { robin: await owner.game.evaluate( () => window.__sent.life ), sam: await guest.game.evaluate( () => window.__sent.life ) };
 const shared = await owner.game.evaluate( () => { const R = window.__app.together.records; return { all: JSON.stringify( R ).length, lists: JSON.stringify( Object.fromEntries( Object.entries( R ).filter( ( [ k ] ) => k[ 0 ] === '#' ) ) ).length }; } );
 say( sent.robin && sent.sam && sent.robin.most <= 40 && sent.sam.most <= 40, `what's sent: 'life' messages Robin ${ JSON.stringify( sent.robin ) }, Sam ${ JSON.stringify( sent.sam ) } (characters of JSON); the group's records ${ shared.all } characters, the life lists ${ shared.lists } of them` );
-const board = await owner.game.evaluate( () => Object.keys( window.__app.together.board._last || {} ).filter( ( k ) => /^[a-z]/i.test( k ) ).length );
+const weights = `Object.keys( window.__app.together.board._last || {} ).filter( ( k ) => /^[a-z]/i.test( k ) ).length`;
+await until( owner.game, `${ weights } === 9`, 120000 ).catch( () => {} );
+const board = await owner.game.evaluate( weights );
 say( board === 9, `the weights on the board's records with it: ${ board } kinds' records (seven drawn, the line under them)` );
 
 // the board's slate as it's drawn
