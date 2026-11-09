@@ -28,40 +28,56 @@ const LOW_TRIS = 9000;
 
 // What's known of each without building her, m. air: her highest point over the water, for how far off she shows.
 // The lobster boat's anchor light; a center console's T-top, about 2.8 m; a 48 ft sportfisher's tuna tower, about
-// 11 m to its top; a kayak, the head of whoever's sitting in her
+// 11 m to its top; a kayak, the head of whoever's sitting in her. (M17) bare: as high as she is without what comes and goes
+// up there (her fit: airOf), as the models measure it: a sportfisher with no tower, her hardtop and its radar, 5.65 m; a
+// console with no T-top, her console's grab rail, 2.06 m, about as high as the head of whoever's at her wheel. Her outriggers
+// and a whip are a few centimetres thick: nothing at a speck's distance
 export const SIZE = {
 	kayak: { length: 3.7, beam: 0.85, air: 1.0, free: 0.3, draft: 0.1, color: 0xc8732a },
-	console: { length: 7, beam: 2.6, air: 2.8, free: 0.9, draft: 0.45, color: 0xe6e8e6 },
+	console: { length: 7, beam: 2.6, air: 2.8, bare: 2.1, free: 0.9, draft: 0.45, color: 0xe6e8e6 },
 	lobster: { length: 8.2, beam: 2.9, air: 4.05, free: 1.05, draft: 0.55, color: 0xdfe3e2 },
-	sportfisher: { length: 14.6, beam: 4.8, air: 11, free: 1.9, draft: 1.1, color: 0xeef0ee },
+	sportfisher: { length: 14.6, beam: 4.8, air: 11, bare: 5.65, free: 1.9, draft: 1.1, color: 0xeef0ee },
 };
 export const sizeOf = ( id ) => SIZE[ id ] || SIZE.lobster;
+// (M17) is she without what stands up high on her (her tower, her T-top)? f: fitWire's (null: as she came, with it)
+const TALL = { console: 'tTop', sportfisher: 'tower' };
+export const bareOf = ( id, f ) => !! TALL[ id ] && Number.isInteger( f ) && ! fitStats( id, f )[ TALL[ id ] ];
+// her highest point over the water as she's fitted
+export const airOf = ( id, f ) => bareOf( id, f ) ? sizeOf( id ).bare : sizeOf( id ).air;
 
 // What's fitted on her and her paint, in a number for the pose: the bits as each boat's fit reads them, the paint above them
-// (PAINTS' place and one; 0: as she came). The lobster boat has nothing that comes and goes
+// (PAINTS' place and one; 0: as she came). The lobster boat has nothing that comes and goes. (M17) Above the paint, how she
+// is just now that a copy shows: the console's ladder folded down into the water (NOW_SHIFT), from her owner's game as it
+// folds it (Vessel.fitNow). What's walked on her is the same either way: walked() leaves it out (STILL)
 const FITS = {
 	kayak: { send: ( s ) => [ s.holdKg > 12, s.finder, s.anchorM > 0 || s.trolley ], stats: ( [ crate, finder, trolley ] ) => ( { holdKg: crate ? 13 : 12, finder, trolley } ) },
-	console: { send: ( s ) => [ s.twin, s.tTop, s.diveLadder, s.tankRack ], stats: ( [ twin, tTop, diveLadder, tankRack ] ) => ( { twin, tTop, diveLadder, tankRack } ) },
+	console: { send: ( s ) => [ s.twin, s.tTop, s.diveLadder, s.tankRack ], stats: ( [ twin, tTop, diveLadder, tankRack ] ) => ( { twin, tTop, diveLadder, tankRack } ), now: [ 'ladderDown' ] },
 	sportfisher: { send: ( s ) => [ s.tower ?? true, s.outriggers ?? true, s.chair ?? true ], stats: ( [ tower, outriggers, chair ] ) => ( { tower, outriggers, chair } ) },
 };
-const PAINT_SHIFT = 4;
+const PAINT_SHIFT = 4, NOW_SHIFT = 8;
+export const STILL = ( 1 << NOW_SHIFT ) - 1;
 
-export function fitWire( id, stats, paint ) {
+export function fitWire( id, stats, paint, now = null ) {
 
-	const bits = FITS[ id ] ? FITS[ id ].send( stats ).reduce( ( n, on, i ) => n | ( on ? 1 << i : 0 ), 0 ) : 0;
-	return bits | ( ( paintOf( paint ) ? PAINTS.indexOf( paintOf( paint ) ) + 1 : 0 ) << PAINT_SHIFT );
+	const F = FITS[ id ], bits = F ? F.send( stats ).reduce( ( n, on, i ) => n | ( on ? 1 << i : 0 ), 0 ) : 0;
+	const at = F && F.now && now ? F.now.reduce( ( n, k, i ) => n | ( now[ k ] ? 1 << ( NOW_SHIFT + i ) : 0 ), 0 ) : 0;
+	return bits | ( ( paintOf( paint ) ? PAINTS.indexOf( paintOf( paint ) ) + 1 : 0 ) << PAINT_SHIFT ) | at;
 
 }
 
 export function fitStats( id, f ) {
 
-	return FITS[ id ] ? FITS[ id ].stats( [ 0, 1, 2, 3 ].map( ( i ) => !! ( f & 1 << i ) ) ) : {};
+	const F = FITS[ id ];
+	if ( ! F ) return {};
+	const s = F.stats( [ 0, 1, 2, 3 ].map( ( i ) => !! ( f & 1 << i ) ) );
+	if ( F.now ) F.now.forEach( ( k, i ) => s[ k ] = !! ( f & 1 << ( NOW_SHIFT + i ) ) );
+	return s;
 
 }
 
 export function fitPaint( f ) {
 
-	const p = PAINTS[ ( f >> PAINT_SHIFT ) - 1 ];
+	const p = PAINTS[ ( ( f & STILL ) >> PAINT_SHIFT ) - 1 ];
 	return p ? p.hex : null;
 
 }
@@ -128,14 +144,23 @@ function standInHull( { length, beam, free, draft } ) {
 // (a box of her upperworks: x and z its middle, y its bottom)
 const box = ( w, h, d, y, z, color ) => prepare( new BoxGeometry( w, h, d ), { color, rough: 0.6, matrix: mat4( 0, y + h / 2, z ) } );
 
-// a boat you'd take for her from a way off, a hundred triangles or so in one mesh
-export function standInGeometry( id ) {
+// a boat you'd take for her from a way off, a hundred triangles or so in one mesh ((M17) bare: without her tower or T-top)
+export function standInGeometry( id, bare = false ) {
 
 	const S = sizeOf( id ), L = S.length, B = S.beam, top = S.free * 0.9, parts = [ prepare( standInHull( S ), { color: S.color, rough: 0.5 } ) ];
 	const dark = 0x46525a, white = 0xe8eae8;
-	if ( id === 'console' ) parts.push( box( 0.9, 1.05, 0.8, top, 0.02 * L, white ), box( 1.5, 0.08, 2, S.air - 0.08, 0, white ) );
+	if ( id === 'console' ) parts.push( box( 0.9, 1.05, 0.8, top, 0.02 * L, white ) );
+	if ( id === 'console' && ! bare ) parts.push( box( 1.5, 0.08, 2, S.air - 0.08, 0, white ) );
 	else if ( id === 'lobster' ) parts.push( box( 1.9, S.air * 0.42, 2.1, top, 0.07 * L, white ), box( 0.08, S.air - top - S.air * 0.42, 0.08, top + S.air * 0.42, 0, dark ) );
-	else if ( id === 'sportfisher' ) parts.push( box( 3.6, 1.5, 5, top, 0.08 * L, white ), box( 3, 1.15, 2.6, top + 1.5, 0.05 * L, dark ), box( 1.5, S.air - top - 2.65 - 0.5, 1.5, top + 2.65, 0.05 * L, dark ), box( 2.1, 0.08, 2.2, S.air - 0.5, 0.05 * L, white ) );
+	else if ( id === 'sportfisher' ) {
+
+		parts.push( box( 3.6, 1.5, 5, top, 0.08 * L, white ), box( 3, 1.15, 2.6, top + 1.5, 0.05 * L, dark ) );
+		// (her tower over the bridge, or with none, the hardtop's roof on its posts)
+		if ( ! bare ) parts.push( box( 1.5, S.air - top - 2.65 - 0.5, 1.5, top + 2.65, 0.05 * L, dark ), box( 2.1, 0.08, 2.2, S.air - 0.5, 0.05 * L, white ) );
+		else parts.push( box( 3.1, 0.1, 3.4, S.bare - 0.6, 0.05 * L, white ) );
+
+	}
+
 	return mergePrepared( parts );
 
 }
@@ -212,6 +237,8 @@ export class BoatCopies {
 
 		const e = this.types.get( id );
 		if ( ! Number.isInteger( f ) || ! e || e.model !== model ) return model;
+		// ((M17) not by how she is just now, her ladder down or up: what's walked and its colliders stay hers as she's fitted)
+		f &= STILL;
 		let w = e.walks.get( f );
 		if ( ! w ) e.walks.set( f, w = model.walkedAs( fitStats( id, f ) ) );
 		return w;
@@ -515,22 +542,30 @@ export class BoatCopies {
 
 	}
 
-	standIn( id ) {
+	// ((M17) bare: without her tower or her T-top, as she's fitted: bareOf)
+	standIn( id, bare = false ) {
 
-		let g = this._stands.get( id );
-		if ( ! g ) this._stands.set( id, g = standInGeometry( id ) );
-		// (the props' own program, nothing new)
+		const key = bare ? `${ id }:bare` : id;
+		let g = this._stands.get( key );
+		if ( ! g ) this._stands.set( key, g = standInGeometry( id, bare ) );
+		const mesh = new Mesh( g, this.propMaterial() );
+		mesh.name = 'BoatStandIn';
+		return mesh;
+
+	}
+
+	// (the props' own program, nothing new: the stand-ins', and (M17) the blocks under a boat in the yard)
+	propMaterial() {
+
 		const m = this._standMaterial || ( this._standMaterial = createPropMaterial( 'boatStandIn' ) );
 		if ( ! this._standLit ) {
 
 			this._standLit = true;
-			if ( this.app.lightUp ) this.app.lightUp( new Mesh( g, m ) );
+			if ( this.app.lightUp ) this.app.lightUp( new Mesh( new BufferGeometry(), m ) );
 
 		}
 
-		const mesh = new Mesh( g, m );
-		mesh.name = 'BoatStandIn';
-		return mesh;
+		return m;
 
 	}
 

@@ -110,9 +110,17 @@ export class WaterQuery {
 
 	update() {
 
-		const t = G.time.value;
+		this.updateSlots( 0, this.count, G.time.value );
+		this.resultInputs.set( this.inputs );
+
+	}
+
+	// (M17) those slots alone, at the water's time t: a boat worked out in several steps in one frame asks again at each
+	// (BoatController.catchUp)
+	updateSlots( from, n, t ) {
+
 		const e = 0.35;
-		for ( let i = 0; i < this.count; i ++ ) {
+		for ( let i = from; i < from + n; i ++ ) {
 
 			const x = this.inputs[ i * 4 ], z = this.inputs[ i * 4 + 1 ];
 			const h = this.heightAt( x, z, t );
@@ -124,10 +132,11 @@ export class WaterQuery {
 			this.cpu[ i * 4 + 1 ] = nx / len;
 			this.cpu[ i * 4 + 2 ] = nz / len;
 			this.cpu[ i * 4 + 3 ] = this.terrain ? this.terrain.heightAt( x, z ) : - 500;
+			this.resultInputs[ i * 4 ] = x;
+			this.resultInputs[ i * 4 + 1 ] = z;
 
 		}
 
-		this.resultInputs.set( this.inputs );
 		this.resultTime = t;
 		this.cpuValid = true;
 		this.version ++;

@@ -8,9 +8,11 @@ import { farOff } from '../game/Units.js';
 //    half of it: about a knot astern, BACKING)
 //  - the tower: looking at birds, a weedline or something floating, for a moment, is calling it: each of the crew hears
 //    where it lies by the clock from her bow, and it's on their map for a few minutes
-//  - the chair: sat in, facing aft; everyone sees them there and the helm's told when a fish is on
+//  - the chair: sat in, facing aft; everyone sees them there and the helm's told when a fish is on ((M17) sat in it, strapped in
+//    for a fish: not stood beside it)
 // Where they are: `stations` on her Vessel. Sent in the pose ('J').
-//   jobAt( model, mode, deck ) -> 'helm' | 'tower' | 'chair' | null   clockFrom( yaw, dx, dz ) -> 1..12
+//   jobAt( model, mode, deck, chair ) -> 'helm' | 'tower' | 'chair' | null   clockFrom( yaw, dx, dz ) -> 1..12
+//   ((M17) chair: whether they're sat in it, strapped in (Player.chair, Rigs._sit): by the seat, not by how near they stand)
 //   spotted( finds, cam, look ) -> { kind, x, z, d } | null   (what you're looking at from up there)
 //   perched( model ) -> the model, or for a boat that's sat in, the same with a place for a rider
 //   footY( model, x, z, maxY ) -> the deck under that spot
@@ -28,18 +30,15 @@ const CALLS = {
 };
 const SAID = { helm: 'took the helm', tower: 'went up the tower', chair: 'took the chair' };
 
-export function jobAt( model, mode, deck ) {
+export function jobAt( model, mode, deck, chair = null ) {
 
 	if ( mode === 'helm' || mode === 'boat' ) return 'helm';
 	const S = model && model.stations;
 	if ( ! S || ! deck || mode !== 'deck' ) return null;
-	for ( const job of [ 'tower', 'chair' ] ) {
-
-		const s = S[ job ];
-		if ( s && Math.hypot( deck.x - s.x, deck.z - s.z ) < s.r && Math.abs( deck.y - s.y ) < 1.2 ) return job;
-
-	}
-
+	// ((M17) the chair's whoever's in it: standing beside it, or behind it at the rail, isn't)
+	if ( chair && S.chair ) return 'chair';
+	const s = S.tower;
+	if ( s && Math.hypot( deck.x - s.x, deck.z - s.z ) < s.r && Math.abs( deck.y - s.y ) < 1.2 ) return 'tower';
 	return null;
 
 }
@@ -170,7 +169,7 @@ export class Crew {
 	update( dt ) {
 
 		const t = this.t, app = this._app, p = app.player;
-		this.job = p.station || jobAt( p.boat.model, p.mode, p.deckPos );
+		this.job = p.station || jobAt( p.boat.model, p.mode, p.deckPos, p.chair );
 		const crew = this.aboard( this._list || ( this._list = [] ) );
 		for ( const o of t.others.values() ) {
 
