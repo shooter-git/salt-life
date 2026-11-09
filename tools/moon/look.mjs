@@ -6,13 +6,14 @@
 //
 //   a dev server on MOON_PORT (5236: the project's .claude/launch.json "salt-life-moon"), then
 //   node tools/moon/look.mjs [tier] [phases] [views]
-//   node tools/moon/look.mjs low new,crescent,quarter,gibbous,full disc,sky,beach,sea
+//   node tools/moon/look.mjs low new,crescent,quarter,gibbous,full disc,sky,beach,sea[,torch]
 //   (ALL_THE_SPACES: its checkout, if it isn't ../all-the-spaces; MOON_CLEAR=1: no cloud; MOON_QUICK=1: no waiting
 //   for the island's plants, for the disc)
 //
 // Views: disc, the moon through a 1.5 degree lens (its phase, its seas, earthshine); sky, it and the sky about it as you
-// see them (60 degrees), the sea under it; beach, the village beach from the sand out to sea; sea, from the water toward
-// it, its path on the sea. A load takes a minute or two; each shot some tens of seconds more. Don't edit src while it runs.
+// see them (60 degrees); beach, the north's turtle beach from the sand out to sea; sea, from the water toward it, its path
+// on the sea; torch, along the beach with the flashlight on. A load takes a minute or two (on mid and high on the CPU,
+// many); each shot some tens of seconds more. Don't edit src while it runs.
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -50,6 +51,16 @@ function nightOf( name ) {
 
 	}
 
+	// (and the hour that night it's lowest over 8 degrees, in the dark: its path on the sea, as the photographs have it)
+	if ( best ) for ( let h = 18.5; h < 29.5; h += 0.25 ) {
+
+		const hour = h % 24, d = best.day - ( best.hour < 12 ? 1 : 0 ) + ( h >= 24 ? 1 : 0 ), T = ( d - 1 ) * 24 + hour;
+		if ( sunAt( hour )[ 1 ] > sunMax ) continue;
+		const up = Math.asin( moonSky( T, hour ).dir[ 1 ] ) * 180 / Math.PI;
+		if ( up > 8 && ( ! best.low || Math.abs( up - 12 ) < Math.abs( best.low[ 2 ] - 12 ) ) ) best.low = [ d, hour, up ];
+
+	}
+
 	return best;
 
 }
@@ -57,12 +68,15 @@ function nightOf( name ) {
 // each view: where you stand ( x, z ), the eye's height over the ground or the sea, and how it looks: at the moon
 // (`moon`, its pitch held to `pitch` degrees at most, `down` at least), or at a point; and its lens (degrees). On the
 // north's turtle beach, away from any lamp; `offshore`: out from the island toward the moon until the sea's deep
-// (its path on the water). With no moon up (new), the sky views look north over the sea, 25 degrees up
+// (its path on the water, at an hour of its own that night with the moon about 12 degrees up). With no moon up (new),
+// the sky views look northwest, 30 degrees up, across the Milky Way
 const VIEW = {
 	disc: { stand: [ 150, - 826 ], eye: [ 1.7, 'ground' ], moon: true, fov: 1.5 },
 	sky: { stand: [ 150, - 826 ], eye: [ 1.7, 'ground' ], moon: true, pitch: 28, fov: 60 },
 	beach: { stand: [ 150, - 818 ], eye: [ 1.7, 'ground' ], at: [ 150, - 0.4, - 900 ], fov: 60 },
-	sea: { offshore: true, eye: [ 2.2, 'sea' ], moon: true, pitch: 10, down: - 3, fov: 60 },
+	sea: { offshore: true, eye: [ 2.2, 'sea' ], moon: true, pitch: 10, down: - 3, fov: 60, low: true },
+	// (along the beach with the flashlight on: finding your way on the darkest night)
+	torch: { stand: [ 150, - 826 ], eye: [ 1.7, 'ground' ], at: [ 128, - 0.6, - 838 ], fov: 60, torch: true },
 };
 const phases = PHASES.split( ',' ), views = VIEWS.split( ',' );
 const nights = Object.fromEntries( phases.map( ( p ) => [ p, nightOf( p ) ] ) );
@@ -135,7 +149,8 @@ await page.evaluate( async ( clear ) => {
 		a.player.position.set( L.stand[ 0 ], Math.max( g, sea - 1.2 ), L.stand[ 1 ] );
 		cam.position.set( L.stand[ 0 ], ( L.eye[ 1 ] === 'ground' ? Math.max( g, sea ) : sea ) + L.eye[ 0 ], L.stand[ 1 ] );
 		cam.up.set( 0, 1, 0 );
-		if ( L.moon && a.sky.moonDir.y < - 0.02 && L.fov > 10 ) cam.lookAt( cam.position.x, cam.position.y + Math.tan( 25 * Math.PI / 180 ), cam.position.z - 1 );
+		// (no moon up: the sky's own, west over the sea's corner 30 degrees up, across the Milky Way's band)
+		if ( L.moon && a.sky.moonDir.y < - 0.02 && L.fov > 10 ) cam.lookAt( cam.position.x - 0.7, cam.position.y + Math.tan( 30 * Math.PI / 180 ), cam.position.z - 0.7 );
 		else if ( L.moon ) {
 
 			const m = a.sky.moonDir;
@@ -163,6 +178,8 @@ await page.evaluate( async ( clear ) => {
 		}
 
 		cam.updateMatrixWorld();
+		const fl = a.localLights && a.localLights.flashlight;
+		if ( fl && fl.on !== !! L.torch ) a.localLights.toggleFlashlight( !! L.torch );
 		G.cameraUnderwater.value = 0;
 		a.scene.fog.near = a.sky.fogNear;
 		a.scene.fog.far = a.sky.fogFar;
@@ -203,7 +220,7 @@ await page.evaluate( async ( clear ) => {
 const frames = async ( n ) => {
 
 	const from = await page.evaluate( () => window.__frames || 0 );
-	await page.waitForFunction( ( to ) => ( window.__frames || 0 ) >= to, from + n, { timeout: 240000 } );
+	await page.waitForFunction( ( to ) => ( window.__frames || 0 ) >= to, from + n, { timeout: 900000, polling: 1000 } );
 
 };
 
@@ -217,16 +234,21 @@ for ( const p of phases ) {
 		window.__hold();
 
 	}, [ N.day, N.hour ] );
-	// (the clouds' panorama and the reflections made again for the new hour)
-	await frames( 30 );
+	// (the clouds' panorama and the reflections made again for the new hour: fewer frames on the tiers that draw slower)
+	await frames( TIER === 'low' ? 30 : 16 );
 	for ( const v of views ) {
 
 		if ( v === 'disc' && N.up < 0 ) continue;
-		await page.evaluate( ( L ) => {
+		// (the sea's view an hour of its own that night, the moon low: its path)
+		const at = VIEW[ v ].low && N.low ? N.low.slice( 0, 2 ) : [ N.day, N.hour ];
+		await page.evaluate( ( [ L, at ] ) => {
 
 			window.__look = L;
+			window.__at = at;
+			window.__hold();
 
-		}, { ...VIEW[ v ] } );
+		}, [ { ...VIEW[ v ] }, at ] );
+		if ( VIEW[ v ].low && N.low ) await frames( 24 );
 		await frames( v === 'disc' ? 3 : 8 );
 		const name = `${ p }-${ v }`;
 		await page.screenshot( { path: join( OUT, name + '.png' ) } );

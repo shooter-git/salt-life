@@ -147,7 +147,17 @@ READINGS
 
 ## Not done, or not verified
 
-NOT_DONE
+- **Timing** (the M17 session's, on a quiet machine): the ready A/B, phone upright, 4 CPUs. The sky's shader is built in the loading frame. Its program count before ready is unchanged (16, by name and number), but the main view's fragment has grown by the disc (`skyMoon`: a loop over 27 seas, five value-noise lookups, only past an early return outside the disc). Also the one-core whole play.
+- **A real GPU or phone:** every look here is a CPU render (SwiftShader).
+- **Two players:** nothing's sent. Both games work the moon out from the same clock, so they have the same moon, and a turtle's night saved is each player's own. `tools/two-players` wasn't run for it.
+- **Not modelled:**
+  - libration, the moon's parallax and eclipses;
+  - the last of the opposition surge within 4 degrees of exactly full;
+  - a lower moon lessening the hatchlings' misorientation more (Stanley et al.);
+  - the adult turtles minding the moon;
+  - the swordfish's depth by whether the moon's up (Lerner's relation is to the lit share alone).
+- **The stars and the Milky Way don't turn with the sky.** They're fixed to the world as they always were, while the moon now crosses the sky through the night. Turning them by the sidereal hour about the sky's pole is a small change in the same shader, and wasn't asked.
+- **The moon's place in the reflections:** the sea's environment has no moon disc (it never had a sun's); its path on the water is the key light's specular.
 
 ## Sources
 
