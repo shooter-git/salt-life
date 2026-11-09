@@ -184,10 +184,11 @@ function play() {
 	P.game.app.settings.timeOfDay += 2; // (a rest: the clock's jumped)
 	P.step( 1 );
 	const none = P.flats.caught( { species: 'tarpon', kg: 30, place: 'flats', released: true } );
-	check( none === '' && ! g.state.trophies[ 'slam:grand' ], 'a rest between the second and the third: no slam' );
+	check( none.length === 0 && ! g.state.trophies[ 'slam:grand' ], 'a rest between the second and the third: no slam' );
 	P.flats.caught( { species: 'bonefish', kg: 2, place: 'flats', released: true } );
 	const note = P.flats.caught( { species: 'permit', kg: 8, place: 'flats', released: true } );
-	check( /Grand slam/.test( note ) && g.state.trophies[ 'slam:grand' ].n === 1 && P.game.app.settings.day === day, `then a bonefish and a permit the same day: "${ note }"` );
+	// ((M17's stream 7) caught() gives the slams' ids, the catch card their note)
+	check( note.join() === 'grand' && g.state.trophies[ 'slam:grand' ].n === 1 && P.game.app.settings.day === day, `then a bonefish and a permit the same day: "${ note }"` );
 
 }
 
