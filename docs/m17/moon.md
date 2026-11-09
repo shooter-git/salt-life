@@ -139,11 +139,47 @@ NOAA's age of the tide at Settlement Point is 25.6 h (the foundation's 1.2 days 
 
 These are headless on SwiftShader, into `qa-output/moon/look/<tier>/`. `tools/moon/compare.mjs` sets them beside photographs from Wikimedia Commons, hot-linked, not kept: crescents with earthshine, a first quarter, a waxing gibbous, Gregory H. Revera's and Luc Viatour's full moons, the moon over the sea at Cala Millor and the Red Sea, moonlit beaches, a beach under the Milky Way.
 
-READINGS_SEEN
+Seen, on low (every phase and view), mid (every phase, the disc, sky, beach and sea) and high (every phase, the disc, sky, beach and sea), on the first month's nights: the new moon's on day 23 at midnight, a crescent day 26 at 19:15, a quarter day 30 at 22:15, a gibbous day 5 at 1:00, the full moon day 8 at 2:45.
+- **The disc beside the photographs.**
+  - A crescent lies on its back low in the west at dusk. It's near white, with a dim grey earthshine disc showing its seas, as the photographs of crescents with earthshine show it.
+  - A quarter's terminator is ragged. Its dark half is gone in the lit half's glare, as to the eye.
+  - A gibbous and the full moon: their seas run together into the face's dark regions (Imbrium, Procellarum and Frigoris in one, Serenitatis, Tranquillitatis, Crisium and Fecunditatis down the other side), and Tycho is bright.
+  - The seas are lighter than in Revera's and Viatour's full moons (processed photographs: 0.8 sRGB highlands to 0.45 seas; here 0.8 to 0.65, as the tone mapping's shoulder lets them). Their shapes are smoother and rounder than the real seas' at the 1.5 degree lens. At the game's own lens the moon's 4 to 9 pixels across, and it reads as the moon.
+- **The night.**
+  - Under a full moon the north beach's white sand, the water's teal over the shallows and the clouds are lit as this game's night always was, with the stars thinned to the brighter ones.
+  - Under a quarter moon all of it's dimmer, the sky darker about the moon's aureole.
+  - On a moonless night: the stars down to 6.5, the Milky Way's stars thicker across the sky, the beach's sand and the sea's edge just there, the horizon a shade lighter than the sea. With the flashlight on, its beam carries the sand ahead and the beach's line, the jetty and the camp show beyond: you find your way.
+- **The moon's path on the sea**, out past the island at an hour of each night with the moon about 12 degrees up: a column of glints under it at every phase, brightest and widest at full, as the photographs over the Mediterranean, the Red Sea and Cala Millor have it.
+- **By day** a first quarter in the afternoon (day 30, 14:45) is a pale disc in the blue.
 
 ## Readings
 
-READINGS
+On this machine (8 cores), shared with two other streams' renders and checks: load 30 to 43 through all of it.
+
+| Check | |
+|---|---|
+| `pnpm test` (with `moon.mjs`, `moon-life.mjs`) | passes |
+| The programs built before ready (`tools/heap/programs.mjs`, 7495f79 against 8ebe9dd) | the same 16, by name and number |
+| `tools/gpu-limits.mjs`, one tier at a time | all within: high's sea 16 of 16 fragment textures, mid's 14; low's village wood 16. The sky has 5 textures and 45 to 46 fragment uniforms on each |
+
+**All the Spaces' complete check** (`cli.ts check` from its `main`, `57b4f25`) on a clean copy of 8ebe9dd's tree (ead73f2, which adds only docs and the look tool), four cores (`taskset -c 0-3`), load 31 to 43:
+
+| | Phone, upright | Phone, on its side | Tablet | Laptop | Judged |
+|---|---|---|---|---|---|
+| Script memory (MB) | 123.6 | 130.2 | 127.7 | 128.9 | **130.2** of 150 |
+| Ready (s) | 29.0 | 33.6 | 34.1 | 35.9 | |
+
+Everything else passed:
+- 59 draw calls of 150, 184,519 triangles of 300,000;
+- 61.9 MB of textures, 92.3 MB of graphics memory;
+- 9 sounds;
+- 7.1 MB before ready, 78.3 MB in all of 80.
+
+**The times read like the load's, not the build's.** Ready took 29 to 36 s, against 4.4 to 6.3 s in the first wave's checks, and frames' p95 33 to 67 ms. Under it, two screens' plays didn't reach the night:
+- On the phone on its side and the laptop, the clock's menu was left open at 11:15 to 11:40 and the weather never came. Their thunderstorm, hurricane and dawn shots are the bank at noon.
+- The phone upright and the tablet played through the hurricane's night (21:35 to 23:20).
+
+So the night under the moon was played on two of the four screens. The draw calls and triangles are lower than the first wave's (82 to 87, 232k to 238k), likely for the same reason. The M17 session's two judging checks, on a quiet machine, settle it.
 
 ## Not done, or not verified
 

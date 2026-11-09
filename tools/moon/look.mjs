@@ -31,18 +31,20 @@ const T0 = Date.now();
 const log = ( ...a ) => console.log( `[${ ( ( Date.now() - T0 ) / 1000 ).toFixed( 0 ) } s]`, ...a );
 
 // each phase: its phase (0 new, 0.5 full), and how high the sun may be (sin): a crescent's seen in the dusk
-const PHASE = { new: [ 0, - 0.3 ], crescent: [ 0.12, - 0.2 ], quarter: [ 0.25, - 0.3 ], gibbous: [ 0.38, - 0.3 ], full: [ 0.5, - 0.3 ] };
+// (and `day`: a first quarter in the afternoon's sky, the sun well up)
+const PHASE = { new: [ 0, - 0.3 ], crescent: [ 0.12, - 0.2 ], quarter: [ 0.25, - 0.3 ], gibbous: [ 0.38, - 0.3 ], full: [ 0.5, - 0.3 ], day: [ 0.25, 1 ] };
 // the night of it: the day (of the first month) and hour where its phase is nearest, the sky's dark enough, and the moon
 // highest up to 40 degrees (so the sea's in a view of it); for new, where it's furthest down
 function nightOf( name ) {
 
 	const [ want, sunMax ] = PHASE[ name ];
 	let best = null;
-	for ( let day = 1; day <= 31; day ++ ) for ( let h = 18.5; h < 29.5; h += 0.25 ) {
+	const [ h0, h1 ] = name === 'day' ? [ 14, 17.5 ] : [ 18.5, 29.5 ];
+	for ( let day = 1; day <= 31; day ++ ) for ( let h = h0; h < h1; h += 0.25 ) {
 
 		const hour = h % 24, d = day + ( h >= 24 ? 1 : 0 ), T = ( d - 1 ) * 24 + hour;
 		const sun = sunAt( hour );
-		if ( sun[ 1 ] > sunMax ) continue;
+		if ( sun[ 1 ] > sunMax || ( name === 'day' && sun[ 1 ] < 0.4 ) ) continue;
 		const m = moonSky( T, hour );
 		const off = Math.abs( ( ( m.phase - want + 1.5 ) % 1 ) - 0.5 );
 		const up = Math.asin( m.dir[ 1 ] ) * 180 / Math.PI;

@@ -28,6 +28,8 @@ const REFS = {
 	'full-beach': [ [ 'Moonlit beach in Calas de Mallorca.jpg', 'Moonlit beach, Calas de Mallorca (Commons)' ], [ 'Tegbi Beach on a Moonlit Night.jpg', 'Tegbi beach on a moonlit night (Commons)' ] ],
 	'new-sky': [ [ 'Milky way beach.jpg', 'The Milky Way over a beach (Commons)' ], [ 'Beach-night-stars-usa (24216497582).jpg', 'A beach under the stars (Commons)' ] ],
 	'new-beach': [ [ 'Beach-night-stars-usa (24216497582).jpg', 'A beach under the stars (Commons)' ], [ 'Milky Way at Kevin Grove Beach (53178270349).jpg', 'Milky Way at a beach (Commons)' ] ],
+	'quarter-sea': [ [ 'Moonlight over the Mediterranean Sea - panoramio.jpg', 'Moonlight over the Mediterranean (Commons)' ], [ 'Moon over sea Cala Millor.jpg', 'Moon over the sea, Cala Millor (Commons)' ] ],
+	'crescent-sea': [ [ 'Moonlight over the Red Sea (53255278929).jpg', 'Moonlight over the Red Sea (Commons)' ] ],
 };
 const shots = ( SHOTS ? SHOTS.split( ',' ) : Object.keys( REFS ) ).filter( ( v ) => existsSync( join( IN, v + '.png' ) ) );
 const { chromium } = await import( join( ATS, 'node_modules/playwright/index.mjs' ) );
