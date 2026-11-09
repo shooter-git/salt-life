@@ -22,7 +22,7 @@ import { TimeHUD } from './TimeHUD.js';
 import { Radio } from './Radio.js';
 import { Compass } from '../world/boat/kayak/Compass.js';
 import { DaysOut } from './DaysOut.js';
-import { timeText, tideTurns } from './IslandClock.js';
+import { timeText, tideTurns, moonAt } from './IslandClock.js';
 import { tidePlace, stageOf, tideBites } from '../world/shore/Tide.js';
 import { HOURS, NIGHT_BOX, ordersFor, tradeDay, stallOpen, shutFor } from './Orders.js';
 import { WantedBoard } from './WantedBoard.js';
@@ -1511,6 +1511,8 @@ export class Game {
 		h.hook = this.hook || null;
 		// ((M17) and the tide's stage there: the flats, their edge, their channels and mouths, the pier)
 		h.tide = tideBites( tidePlace( p.x, p.z ), stageOf( islandTime( this.app.settings.day, this.app.settings.timeOfDay ), this._stage || ( this._stage = {} ) ), h.pier );
+		// ((M17) and how much of the moon's lit: the swordfish's nights by it, Bites.depthWeight)
+		h.moon = moonAt( islandTime( this.app.settings.day, this.app.settings.timeOfDay ) ).lit;
 		return h;
 
 	}

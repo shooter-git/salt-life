@@ -1,5 +1,6 @@
 import { mulberry32 } from '../util/Noise.js';
 import { secondsBetween } from './IslandClock.js';
+import { moonSky, horizonOf } from '../sky/Moon.js';
 
 // (M15) The green turtles nesting on the north beach (world/terrain/NorthBeach.js's berm) and their hatchlings:
 // who comes ashore which night, when and where, the way each goes up the beach and back, and what each is doing
@@ -28,6 +29,14 @@ import { secondsBetween } from './IslandClock.js';
 //     minds whoever it knows is there, so a local departure from her night, the same in both games when they see
 //     the same people; turnBack and femaleAt's `turned` are that departure
 //   soundBeats( prev, st ): the moments her night makes a sound (NestingTurtles.sounds)
+// (M17) And the moon (docs/m17/moon.md):
+//   seaGlow( T, hour ): the sea's low horizon under the moon, of a moonless night's (Moon.horizonOf): a light has to be
+//     that much brighter to draw a hatchling off (Clutch.lure's `sea`). Hatchlings are misoriented most near new moon
+//     (Salmon and Witherington 1995; 1992's Florida cases, Witherington et al. 2014), less the more of it's lit
+//     (Stanley et al. 2020), and normal orientation came back with a full moon (Berry et al. 2013). None of them says
+//     how much brighter a lamp has to be, so it's the horizon's own brightness: 25 times under a full moon high
+//   Minding.kept( hour, day ) / restore( list, ground ): a turned-back turtle's night in the save (App.saveClock's
+//     `turtles`), so her tracks the next morning are hers, not the clock's
 
 export const BEACH_X = [ 88, 218 ]; // m: where along the turtle beach they land (terrain/NorthBeach.js)
 export const NEST = {
@@ -73,7 +82,12 @@ export const MINDING = {
 };
 // (M16) a light on the sand and the hatchlings: at `from` it pulls as much as the sea's horizon does (45 degrees
 // off their way), and they're following it once it's a third of that
+// ((M17) on a moonless night; under the moon the horizon's brighter: seaGlow)
 export const LURE = { from: 0.02, onto: 0.35, reach: 0.8, tick: 0.4 };
+
+const _moon = {};
+// (M17) the sea's horizon at T (hour of the day: hour), of a moonless night's
+export const seaGlow = ( T, hour ) => horizonOf( moonSky( T, hour, 0, _moon ) );
 
 const hash = ( ...k ) => mulberry32( k.reduce( ( a, b ) => ( Math.imul( a ^ ( b | 0 ), 2654435761 ) + 0x9e3779b9 ) | 0, 0x2545f491 ) );
 const between = ( r, [ a, b ] ) => a + ( b - a ) * r();
@@ -503,6 +517,7 @@ export class Clutch {
 		this.start = new Float32Array( h.count );
 		this.routes = new Array( h.count );
 		this.lured = new Uint8Array( h.count );
+		this.seaLight = 1; // ((M17) the sea's horizon by the moon: lure's `sea`)
 		this.at_ = new Array( h.count ); // each one's where-it-is now, reused
 		const fine = this._fine();
 		for ( let i = 0; i < h.count; i ++ ) {
@@ -604,7 +619,7 @@ export class Clutch {
 
 		}
 
-		const w = best / LURE.from;
+		const w = best / ( LURE.from * this.seaLight );
 		return w < LURE.onto ? null : { dx: b.x - x, dz: b.z - z, d: Math.hypot( b.x - x, b.z - z ), w };
 
 	}
@@ -660,10 +675,12 @@ export class Clutch {
 
 	// the lights on the beach now, at t: each hatchling on the sand that one's drawing is led off to it from where
 	// it is, its route rewritten ahead of it; one no longer drawn goes back to the sea. The way it's come stays as
-	// it was: its track shows it. Returns whether any route changed
-	lure( t, lights ) {
+	// it was: its track shows it. Returns whether any route changed. ((M17) sea: how bright the sea's horizon is, of a
+	// moonless night's: seaGlow)
+	lure( t, lights, sea = 1 ) {
 
 		let changed = false;
+		this.seaLight = sea;
 		const fine = this._fine(), o = [ 0, 0, 0, 0 ];
 		for ( let i = 0; i < this.count; i ++ ) {
 
@@ -865,6 +882,35 @@ export class Minding {
 		if ( a > 0 ) this.alarm.set( f.id, a );
 		else this.alarm.delete( f.id );
 		return null;
+
+	}
+
+	// (M17) the turned-back turtles whose tracks are still on the sand at ( hour, day ), as the save keeps them: each
+	// [ id, t, x, z, heading, phase, s, dig, out ], where and how she turned, which makes her way down again (turnBack:
+	// seeded by her alone); null, none
+	kept( hour, day ) {
+
+		if ( ! this.turned.size ) return null;
+		const live = new Set( tracksOf( day, hour ).map( ( q ) => q.female.id ) ), out = [];
+		for ( const [ id, tu ] of this.turned ) if ( live.has( id ) ) out.push( [ id, tu.t, tu.x, tu.z, tu.heading, tu.from, tu.s, tu.dig, tu.out ] );
+		return out.length ? out : null;
+
+	}
+
+	// and back from the save: her turning made again where she turned
+	restore( list, ground ) {
+
+		if ( ! Array.isArray( list ) ) return;
+		for ( const q of list ) {
+
+			if ( ! Array.isArray( q ) || q.length < 9 ) continue;
+			const [ id, t, x, z, heading, phase, s, dig, out ] = q;
+			const [ day, k ] = String( id ).split( ':' ).map( Number );
+			const f = Number.isInteger( day ) ? femalesOf( day ).find( ( g ) => g.k === k ) : null;
+			if ( ! f || ! [ t, x, z, heading, dig, out ].every( Number.isFinite ) || ! MINDING.wary[ phase ] ) continue;
+			this.turned.set( f.id, turnBack( f, { x, z, heading, phase, s: Number.isFinite( s ) ? s : 0, dig, out }, t, ground ) );
+
+		}
 
 	}
 

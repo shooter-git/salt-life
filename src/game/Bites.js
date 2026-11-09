@@ -151,7 +151,7 @@ export const WASH = { day: 0.9, blown: 0.85, open: 0.5 };
 // north sea roughs its water as it does the north shore's (`blown`)
 export const BIG = { skew: 0.5, from: 4, more: 1.5, blown: 0.4 };
 // (not water types: what the game adds to a spot's habitat)
-const NOT_WATER = { flood: true, under: true, lively: true, weather: true, side: true, big: true, far: true, hook: true, wake: true, tide: true };
+const NOT_WATER = { flood: true, under: true, lively: true, weather: true, side: true, big: true, far: true, hook: true, wake: true, tide: true, moon: true };
 
 // (M16) the hook: how the bait's fished, and how deep it is, on the spot's habitat (Game.habitat: habitat.hook; the
 // interface with the rigs: docs/m16/fish.md):
@@ -164,20 +164,32 @@ const LURE_OTHER = 0.3;
 // its weight fished a way
 const wayOf = ( f, way ) => ( f.ways && f.ways[ way ] !== undefined ? f.ways[ way ] : way === 'float' ? 1 : way === 'drop' && ( f.habitat.deep || f.habitat.ledge ) ? 1 : 0 );
 // how far a hook's in the depths it feeds at, by the hour (between its day's and its night's at dusk and dawn, as it
-// rises and goes down): 1 inside them, fading out over a third of their span past each end
-export function depthWeight( at, depth, hour ) {
+// rises and goes down): 1 inside them, fading out over a third of their span past each end. ((M17) moon: how much of the
+// moon's lit, 0..1 (moonAt's lit: Game.habitatOf's h.moon). A fish with `full` has its night's depths that far toward
+// those under a full moon: the swordfish's, Lerner et al. 2013)
+export function depthWeight( at, depth, hour, moon = 0 ) {
 
-	const k = daylight( hour ), lo = at.night[ 0 ] + ( at.day[ 0 ] - at.night[ 0 ] ) * k, hi = at.night[ 1 ] + ( at.day[ 1 ] - at.night[ 1 ] ) * k;
+	const night = at.full ? _night( at, moon ) : at.night;
+	const k = daylight( hour ), lo = night[ 0 ] + ( at.day[ 0 ] - night[ 0 ] ) * k, hi = night[ 1 ] + ( at.day[ 1 ] - night[ 1 ] ) * k;
 	const fade = Math.max( 10, ( hi - lo ) / 3 );
 	return depth < lo ? Math.max( 0, 1 - ( lo - depth ) / fade ) : depth > hi ? Math.max( 0, 1 - ( depth - hi ) / fade ) : 1;
 
 }
-// a species' bite weight on this hook (null: the float), times this
-export function hookWeight( id, hook, hour ) {
+const _nightAt = [ 0, 0 ];
+const _night = ( at, moon ) => {
+
+	const m = Math.min( 1, Math.max( 0, moon || 0 ) );
+	_nightAt[ 0 ] = at.night[ 0 ] + ( at.full[ 0 ] - at.night[ 0 ] ) * m;
+	_nightAt[ 1 ] = at.night[ 1 ] + ( at.full[ 1 ] - at.night[ 1 ] ) * m;
+	return _nightAt;
+
+};
+// a species' bite weight on this hook (null: the float), times this ((M17) moon: depthWeight's)
+export function hookWeight( id, hook, hour, moon = 0 ) {
 
 	const f = FISH[ id ], h = hook || FLOAT;
 	let x = wayOf( f, h.way );
-	if ( x > 0 && f.at ) x *= depthWeight( f.at, h.depth ?? FLOAT.depth, hour );
+	if ( x > 0 && f.at ) x *= depthWeight( f.at, h.depth ?? FLOAT.depth, hour, moon );
 	if ( x > 0 && h.lure ) x *= f.eats?.[ h.lure ] ?? BAITS[ h.lure ]?.likes[ id ] ?? LURE_OTHER;
 	return x;
 
@@ -236,7 +248,7 @@ export function pickSpecies( habitat, hour, rng = Math.random, bait = null ) {
 		// ((M15) under the birds, what's busting the bait is feeding now, whatever the hour)
 		if ( habitat.birds && f.habitat.birds ) act += ( 1 - act ) * habitat.birds;
 		// ((M16) how it's fished: the way, the depth; a lure in place of bait. And under a hurricane's debris)
-		let x = hw * f.rarity * act * hookWeight( id, habitat.hook, hour ) * ( habitat.hook && habitat.hook.lure ? 1 : baitWeight( bait, id ) );
+		let x = hw * f.rarity * act * hookWeight( id, habitat.hook, hour, habitat.moon ) * ( habitat.hook && habitat.hook.lure ? 1 : baitWeight( bait, id ) );
 		if ( f.wake && habitat.wake ) x *= 1 + f.wake * habitat.wake;
 		// ((M15) on the windward reef the big ones bite more)
 		if ( habitat.big && f.kg[ 1 ] >= BIG.from ) x *= 1 + BIG.more * habitat.big;
