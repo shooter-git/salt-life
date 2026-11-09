@@ -55,7 +55,7 @@ import { FINDS, lying, messageOf, wreckageAt, wreckStamp } from './Beachcomb.js'
 import { SHELLS, SHELL_KINDS, shellsHave, WALL_PAY } from './Shells.js';
 import { ordersOf, tagFor } from './Orders.js';
 import { ELLIPSIS, LEFT, RIGHT, UP } from '../core/Glyphs.js';
-import { letGo, trophyCardOf } from './Trophies.js';
+import { letGo, trophyCardOf, slamNote } from './Trophies.js';
 import { Rigs } from './rigs/Rigs.js';
 import { FlatsFishing } from './FlatsFishing.js';
 import { atHook, pickOnRig, waitOnRig } from './rigs/Presentation.js';
@@ -1854,9 +1854,11 @@ export class Game {
 			// ((M16) a billfish let go: the fund pays for it, and it's a trophy in your log)
 			info.hurt = info.released && this.rigs.releaseHurt( f.species );
 			info.bonus = letGo( this.state, info );
-			// ((M17) the slams: a bonefish, a permit and a tarpon in one island day, a trophy in your log)
-			const slam = this.flats.caught( info );
-			if ( slam ) setTimeout( () => this.toast( slam, 6000 ), 2400 );
+			// ((M17) the slams: a bonefish, a permit and a tarpon in one island day, a trophy in your log; (stream 7) the super grand
+			// slam and the billfish grand slam beside it, told on the catch card (a toast with no card), and the group's board told)
+			info.slams = this.flats.caught( info );
+			if ( info.slams.length && ! this.hud ) setTimeout( () => this.toast( slamNote( info.slams ), 6000 ), 2400 );
+			if ( info.slams.length && this.app.together ) this.app.together.lifeChanged( info.slams );
 			// (Salt Life) the others hear of it; the island's records (together/): the card says when
 			// it's the heaviest of its kind anyone here has landed
 			if ( this.app.together ) {

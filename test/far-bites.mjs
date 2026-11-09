@@ -142,8 +142,8 @@ check( reefy > 0.4, `the bank's top a reef: its fish ${ Math.round( reefy * 100 
 
 }
 
-// ---- Joe's hints say where they are now
-check( biteHint( 'mahi' ) === 'under the weedlines, by day' && biteHint( 'tuna' ) === 'where the birds are working, at dawn and dusk' && biteHint( 'silkSnapper' ) === 'on the deep ledges', `Joe's hints: mahi "${ biteHint( 'mahi' ) }", tuna "${ biteHint( 'tuna' ) }", silk snapper "${ biteHint( 'silkSnapper' ) }"` );
+// ---- Joe's hints say where they are now ((M17) each kind's own line, FishTable's HINTS: test/life-list.mjs)
+check( /weedline/.test( biteHint( 'mahi' ) ) && /birds/.test( biteHint( 'tuna' ) ) && /dawn/.test( biteHint( 'tuna' ) ) && /ledge/.test( biteHint( 'silkSnapper' ) ), `Joe's hints: mahi "${ biteHint( 'mahi' ) }", tuna "${ biteHint( 'tuna' ) }", silk snapper "${ biteHint( 'silkSnapper' ) }"` );
 
 console.log( failed ? `${ failed } failed` : 'all passed' );
 process.exit( failed ? 1 : 0 );

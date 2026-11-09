@@ -48,7 +48,7 @@
 //   teeth      it cuts mono (a rig's chance of a bite-off without wire is stream 7's: rigs/)
 //   wake       its weight counts ( 1 + this x how much ) times under a hurricane's debris (habitat.wake)
 //   release    (with protected, cr) a billfish: $ for letting one go, for a typical one (releaseBonus)
-//   hint       Joe's hint, where its habitat and hour don't say it
+//   hint       Joe's line of where to look ((M17) every kind has one: most in HINTS, below the table)
 export const FISH = {
 	silverside: { name: 'Hardhead silverside', sci: 'Atherinomorus stipes', lw: [ 0.0074, 3.1 ], model: 'silverside', habitat: { shallows: 1, pier: 0.6, bay: 0.2 }, kg: [ 0.02, 0.08 ], price: 3, fight: 0.05, stamina: 1.5, time: 'any', rarity: 0.2, net: true },
 	mullet: { name: 'Striped mullet', sci: 'Mugil cephalus', lw: [ 0.0112, 2.98 ], model: 'mullet', habitat: { shallows: 1, pier: 0.4 }, kg: [ 0.4, 2.2 ], price: 5, fight: 0.3, stamina: 5, time: 'day', rarity: 0.8, net: true },
@@ -155,6 +155,52 @@ export const SIGHT = {
 		eats: { plug: 0.55, silverside: 0.6, mullet: 0.6, jig: 0.25, cutMullet: 0.2, shrimp: 0.04 } },
 };
 for ( const k in SIGHT ) FISH[ k ].sight = SIGHT[ k ];
+
+// (M17) Joe's line of where to look, for every kind (the life list's kinds still to catch, the wanted slate: Orders.biteHint;
+// docs/m17/life-list.md): each from where the fish really is and when, and where the game's bites have it (its habitat's
+// heaviest waters, its hours, its ways). Its own lines here so the table's rows stay as they are; the trout's and the
+// swordfish's are in their rows. A kind on Joe's slate (Orders' TWILIGHT and MORE) keeps to 40 characters, the slate's line
+// at its chalk's size
+export const HINTS = {
+	silverside: 'schooling in the shallows and by the pier: throw the net',
+	mullet: 'in the shallows by day: throw the net',
+	needlefish: 'cruising the top of the shallows by day',
+	sergeant: 'round the piles and the reef by day',
+	grunt: 'in the pier\'s shade, and on the reef',
+	yellowtail: 'up in a chum slick over the reef at dusk',
+	chromis: 'in clouds over the reef tops, by day',
+	tang: 'grazing the reef in schools, by day',
+	wrasse: 'rooting by the reef: best speared',
+	parrot: 'grazing the coral on the reef by day',
+	angel: 'among the reef\'s sponges, by day',
+	jack: 'busting bait in the bay, dawn and dusk',
+	barracuda: 'trolled in the bay, or seen on the flats',
+	grouper: 'a bait on the bottom by the reef and offshore',
+	redSnapper: 'on the bottom offshore, deep-dropped',
+	tuna: 'under the birds on the drop-off at dawn',
+	mahi: 'under weedlines and anything afloat',
+	wahoo: 'trolled on the drop-off at dawn, on wire',
+	yellowfin: 'under the birds past the drop-off, early',
+	sailfish: 'a kite bait on the drop-off, best after a front',
+	whiteMarlin: 'ballyhoo trolled on the drop-off and the hump',
+	blueMarlin: 'a big lure trolled out in the blue',
+	tarpon: 'in the creek and under the pier lights after dark, or laid up on the flats in the sun',
+	blackGrouper: 'a bait on the bottom, deep off the reef',
+	muttonSnapper: 'on the sand by the reef, dawn and dusk',
+	lionfish: 'under the reef\'s ledges: spear every one',
+	silkSnapper: 'deep-dropped on the north ledge',
+	cuberaSnapper: 'a big live bait deep off the reef at dusk',
+	graySnapper: 'under the pier and the mangroves at dusk',
+	bonefish: 'tailing on the flats on the flood, on a calm day',
+	goliathGrouper: 'under the pier, on a big bait',
+	whiteMullet: 'in the shallows and by the pier: the net',
+	pompano: 'in the north beach\'s surf, best on a surf day',
+	permit: 'in the north beach\'s surf, and on the flats\' edge',
+	snook: 'in the mangrove creek and the surf, at dawn and dusk',
+	redfish: 'tailing in the shallows at dawn and dusk',
+	lobster: 'in the reef\'s ledges, by hand, after dark',
+};
+for ( const k in HINTS ) FISH[ k ].hint ??= HINTS[ k ];
 
 // (Salt Life) a spiny lobster's carapace length, of its total length (the gauge measures the
 // carapace: 3 inches, 7.62 cm, to keep one)
