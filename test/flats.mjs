@@ -1,12 +1,15 @@
 // (M17) Plain-node tests of the flats: the ground cut in on the west (world/terrain/Flats.js: where it is, how deep, its
 // creeks, its edge, its masks, what it kept for the placing, and that it costs the load little) and its fish as data
-// (game/Flats.js: each school where it should be by the tide, the same for everyone, spooked and hooked).
+// (game/Flats.js: each school where it should be by the tide, in water of its depth, the same for everyone, spooked
+// and hooked; and the ground it follows the tide over, baked into game/FlatsGround.js, still the ground's).
 import { readFileSync } from 'node:fs';
 import { TerrainData } from '../src/world/TerrainData.js';
 import { decodeIsland } from '../src/world/terrain/IslandDecode.js';
 import { FLATS, flatsAt, cutFlats } from '../src/world/terrain/Flats.js';
 import { FLATS_FISH, FLATS_HOMES, FLATS_ROUTES, flatsSchools, tideStage, newFlatsState, spook, hook, forgetFlats } from '../src/game/Flats.js';
 import { tideAt, moonAt, SYNODIC, TIDE_LOWEST } from '../src/game/IslandClock.js';
+import { FEED_RAYS } from '../src/game/FlatsGround.js';
+import { feedRays, profile } from '../tools/flats/ground.mjs';
 
 let fails = 0;
 const ok = ( c, msg ) => {
@@ -176,6 +179,88 @@ ok( Math.min( ...per ) >= FLATS_FISH.bonefish.schools[ 0 ] && Math.max( ...per )
 ok( Math.min( ...sizes ) >= 3 && Math.max( ...sizes ) <= 20, `of ${ Math.min( ...sizes ) } to ${ Math.max( ...sizes ) } fish` );
 ok( permitOn > 50 && permitOff > 50, `permit on the flat's edge at high water (${ permitOn }), off it at low (${ permitOff })` );
 ok( spawnSeen > 4 && spawnOff === 0, `the bonefish gathering to spawn at dusk about new and full moon, and only then (${ spawnSeen } readings)` );
+
+// the ground the feeding grounds' rays follow, baked into FlatsGround.js from the 1 m bake: still what it makes (or
+// run tools/flats/ground.mjs), and low's own ground along them near it
+{
+
+	const T1 = new TerrainData( 7, bake( 'island.bin' ) ), now = feedRays( T1 );
+	const same = ( A ) => JSON.stringify( A.map( ( r ) => [ r.p, r.off, r.g ] ) );
+	ok( same( now ) === same( FEED_RAYS ), `game/FlatsGround.js is the ground's as it is (${ FEED_RAYS.length } rays; if not, run tools/flats/ground.mjs)` );
+	let most = 0, sum = 0, n = 0;
+	for ( const r of FEED_RAYS ) {
+
+		const low = profile( T, r.p );
+		for ( let j = 0; j < low.length; j ++ ) if ( r.g[ j ] < 60 ) {
+
+			const d = Math.abs( low[ j ] - r.g[ j ] ) / 100;
+			most = Math.max( most, d );
+			sum += d;
+			n ++;
+
+		}
+
+	}
+
+	ok( sum / n < 0.03 && most < 0.35, `and low's 2 m ground along them near it: ${ ( sum / n * 100 ).toFixed( 1 ) } cm on average, ${ ( most * 100 ).toFixed( 0 ) } at most (under water)` );
+
+}
+
+// each kind in water of its depth, two months of island days: world/Fish.js' least water for each (its minDepth and
+// 0.15 m more); feeding bonefish on their rays, tailing only where it's a foot or so deep; permit up onto the flat into
+// water they tail in; and each school's anchor moving as fish swim, not leaping (a hundredth of an island hour is a
+// second by day)
+{
+
+	// (a bonefish's fins are out under 0.1 m: Colton and Alevizon 1983)
+	const NEED = { bonefish: 0.12, permit: 0.35, tarpon: 0.95, snook: 0.55, barracuda: 0.55, blacktipShark: 0.5, lemonShark: 0.55 };
+	const shallow = {}, all = {}, prev = new Map(), speeds = [];
+	let feeding = 0, tails = 0, tailsDeep = 0, permitTails = 0, permits = 0;
+	for ( let t = 24; t < 24 * 60; t += 0.25 ) {
+
+		const sea = tideAt( t );
+		for ( const s of flatsSchools( t, { wind: 3, overcast: 0.1, hour: t % 24 } ) ) {
+
+			if ( s.life < 0.99 ) continue;
+			const d = sea - T.heightAt( s.x, s.z );
+			all[ s.kind ] = ( all[ s.kind ] || 0 ) + 1;
+			if ( d < NEED[ s.kind ] ) shallow[ s.kind ] = ( shallow[ s.kind ] || 0 ) + 1;
+			if ( s.kind === 'bonefish' && ( s.mode === 'feed' || s.mode === 'tail' ) ) feeding ++;
+			if ( s.mode === 'tail' ) {
+
+				tails ++;
+				if ( d > 0.7 ) tailsDeep ++;
+
+			}
+
+			if ( s.kind === 'permit' ) {
+
+				permits ++;
+				if ( d <= 0.6 ) permitTails ++;
+
+			}
+
+		}
+
+	}
+
+	for ( const k of Object.keys( NEED ) ) ok( ( shallow[ k ] || 0 ) / all[ k ] < 0.03, `${ k }: in water deep enough for it ${ ( 100 - ( shallow[ k ] || 0 ) / all[ k ] * 100 ).toFixed( 1 ) }% of the time (${ NEED[ k ] } m or more)` );
+	ok( tails / feeding > 0.2 && tailsDeep / tails < 0.05, `feeding bonefish tailing ${ ( tails / feeding * 100 ).toFixed( 0 ) }% of the time, and then in a foot or two of water (${ ( tailsDeep / tails * 100 ).toFixed( 1 ) }% over 0.7 m)` );
+	ok( permitTails / permits > 0.1, `permit up on the flat in water they tail in (0.6 m or less) ${ ( permitTails / permits * 100 ).toFixed( 0 ) }% of the time` );
+	for ( let t = 48; t < 48 + 24 * 10; t += 0.01 ) for ( const s of flatsSchools( t, { wind: 3, overcast: 0, hour: t % 24 } ) ) {
+
+		if ( s.kind !== 'bonefish' && s.kind !== 'permit' ) continue;
+		const p = prev.get( s.id );
+		if ( p && Math.abs( p.t - ( t - 0.01 ) ) < 1e-6 && p.mode === s.mode && ( s.mode !== 'cruise' || s.kind === 'permit' ) ) speeds.push( Math.hypot( s.x - p.x, s.z - p.z ) );
+		prev.set( s.id, { x: s.x, z: s.z, t, mode: s.mode } );
+
+	}
+
+	speeds.sort( ( x, y ) => x - y );
+	const q = ( f ) => speeds[ Math.floor( f * ( speeds.length - 1 ) ) ];
+	ok( q( 0.9 ) < 1 && q( 0.99 ) < 3.5, `feeding bonefish and permit keep to a fish's pace with the tide: ${ q( 0.5 ).toFixed( 2 ) } m a second by day (half the time), ${ q( 0.9 ).toFixed( 2 ) } (90%), ${ q( 0.99 ).toFixed( 2 ) } (99%), the most ${ q( 1 ).toFixed( 1 ) }` );
+
+}
 
 // the same for everyone: worked out again, the same to the last bit
 const a = JSON.stringify( flatsSchools( 1234.567, { wind: 5, overcast: 0.1, hour: 10.5 } ) ), b = JSON.stringify( flatsSchools( 1234.567, { wind: 5, overcast: 0.1, hour: 10.5 } ) );

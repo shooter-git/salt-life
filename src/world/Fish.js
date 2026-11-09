@@ -881,8 +881,9 @@ export class FishSchools {
 	// a foot of water or less (the Florida Museum: feeding often in under 30 cm). The shallowest sand within TAIL.reach of
 	// the anchor that's still water enough for them, nearest a foot deep; the anchor itself where there's none. Worked out
 	// from the ground and the sea alone, so it's the same on every device
-	// And the others: a kind that's too big for the water at its anchor (a tarpon laid up on the edge at low water, a
-	// snook at the mangroves' foot) keeps to the nearest water deep enough for it (DEEP: its minDepth and this)
+	// And the others: a kind that's too big for the water at its anchor keeps to the nearest water deep enough for it
+	// (DEEP: its minDepth and this). game/Flats.js puts each kind in water of its depth already (tools/flats/depths.mjs);
+	// this is the drawn fish's own check, on the ground each tier draws
 	_tailGround( S, sp ) {
 
 		const sea = G.seaLevel.value;

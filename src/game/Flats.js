@@ -1,6 +1,7 @@
 import { FLATS } from '../world/terrain/Flats.js';
-import { tideTurns, moonAt, SYNODIC } from './IslandClock.js';
+import { tideTurns, tideAt, moonAt, SYNODIC } from './IslandClock.js';
 import { hash } from './Weather.js';
+import { FEED_RAYS, RAY_STEP } from './FlatsGround.js';
 
 // (M17) The flats' fish, as data: where each school is on the west's flats (world/terrain/Flats.js) at the island's
 // time, by the tide and the moon, and what's happened to it (spooked, hooked). Worked out from the clock alone, as the
@@ -9,17 +10,23 @@ import { hash } from './Weather.js';
 // and cast to is sight-fishing's (M17's stream 1); this is where they are.
 //
 // Each high water brings its own fish, from the sources (docs/m17/sources-tide-fish.md):
-//   - bonefish, 3 to 6 schools of 3 to 20, onto the flat up its creeks from about 3 h into the flood, feeding over it
-//     (tailing where it's shallow, mudding), and off again down the creeks by about 3 h into the ebb (Murchie and
-//     others 2013, Cape Eleuthera's telemetry: almost never on the flats outside that); staging at the creeks' mouths
-//     and along the edge before and after. Fewer in a blow. For some days about each new and full moon, a school of
-//     hundreds gathering off the edge at dusk to spawn (Danylchuk 2011);
-//   - permit, alone or in pairs, cruising the flat's edge on the flood and at high water, off it in deeper water at low;
+//   - bonefish, 3 to 6 schools of 3 to 20, onto the flat up its creeks from about 3 h into the flood, feeding over it,
+//     and off again down the creeks by about 3 h into the ebb (Murchie and others 2013, Cape Eleuthera's telemetry:
+//     almost never on the flats outside that); staging at the creeks' mouths and along the edge before and after. Each
+//     school keeps to water of the depth it likes as it feeds, up toward the shallows (a bar's top, the shore) as the
+//     tide floods and back as it ebbs, as bonefish follow the tide's edge: tailing where it's a foot or so deep (the
+//     Florida Museum: feeding often in under 30 cm), mudding where it's deeper. Fewer in a blow. For some days about
+//     each new and full moon, a school of hundreds gathering off the edge at dusk to spawn (Danylchuk 2011);
+//   - permit, alone or in pairs, off the flat's edge in deeper water at low, and up onto it on the flood and at high
+//     water, into water of half a metre to most of a metre over its sand, where they tail on crabs;
 //   - blacktip sharks in a small pack, and a lemon shark alone, cruising the flat at high water and the edge at low;
-//   - barracuda, alone, lying over the grass and the potholes at any tide;
+//   - barracuda, alone, lying in the potholes and just off the edge at any tide;
 //   - tarpon, in the main creek's mouth and the potholes, rolling (more at dawn and dusk and in still air: they gulp
-//     air, most where the water's short of it), and laid up on the edge in calm, sunny water;
-//   - snook along the mangroves' edge and at the creeks' heads on the ebb, facing into the current.
+//     air, most where the water's short of it), and laid up just off the edge in calm, sunny water;
+//   - snook in the creeks' deep upper reaches on the ebb, the mangrove creek's most of all, facing into the current.
+// Each is put in water deep enough for it at every tide: the feeding grounds' ground is baked into FlatsGround.js
+// (tools/flats/ground.mjs), the rest is the flat's own measures (its edge, its holes, its creeks' beds;
+// tools/flats/depths.mjs measures them all).
 // A school's anchor moves at the island's pace (an island hour is 100 s by day): up a creek in about an island hour,
 // then drifting tens of metres over its feeding ground; the fish themselves swim about it in real time (world/Fish.js).
 // Like the weather it's + - x / and integer hashes (with Math.sqrt, which IEEE rounds the same everywhere), so every
@@ -34,23 +41,24 @@ import { hash } from './Weather.js';
 
 export const FLATS_FISH = {
 	quiet: 0.6, // island hours a spooked school's gone for (the flat goes quiet a while: about a minute by day)
-	bonefish: { schools: [ 3, 6 ], n: [ 3, 20 ], on: [ - 3.2, 3.2 ], up: 1.1, stage: 5.2, roam: 26, blow: [ 9, 15 ] },
+	// (depth: the water a feeding school keeps to, m; tail: a bonefish's tail's out in this or less; along: how much the
+	// depth it keeps to drifts, m; side: how far it drifts across its ray, m)
+	bonefish: { schools: [ 3, 6 ], n: [ 3, 20 ], on: [ - 3.2, 3.2 ], up: 1.1, stage: 5.2, depth: [ 0.2, 0.5 ], tail: 0.42, along: 0.06, side: 12, blow: [ 9, 15 ] },
 	spawn: { days: 3, from: 17, to: 21, n: [ 300, 900 ], off: 40 }, // (days either side of new and full moon; the hours)
-	permit: { most: 2, chance: 0.75, on: [ - 4, 2.6 ], inside: 18, off: 30 },
-	blacktipShark: { chance: 0.6, n: [ 2, 5 ], on: [ - 2.5, 2.5 ] },
+	permit: { most: 2, chance: 0.75, on: [ - 4, 2.6 ], depth: [ 0.45, 0.85 ], off: 30 },
+	blacktipShark: { chance: 0.6, n: [ 2, 5 ], on: [ - 2.5, 2.5 ], depth: 0.75 },
 	lemonShark: { chance: 0.35, on: [ - 3, 3 ] },
-	barracuda: { n: [ 1, 3 ] },
-	tarpon: { n: [ 1, 6 ], calm: 4, sunny: 0.3 },
-	snook: { n: [ 2, 4 ], on: [ 0.5, 5.5 ] },
+	barracuda: { n: [ 1, 3 ], holes: 0.6 }, // (of them in the potholes; the rest just off the edge)
+	tarpon: { n: [ 1, 6 ], calm: 4, sunny: 0.3, laid: 8 }, // (laid up this far off the edge, m: a couple of metres down)
+	snook: { n: [ 2, 4 ], on: [ 0.5, 5.5 ], bed: - 1.1, reach: 0.25, mangrove: 0.5 }, // (in a creek where its bed's this deep or deeper, its upper `reach` of that; the mangrove creek's this often)
 };
 
 const F = FLATS_FISH;
 const HIGH_GAP = 12.4206; // h: M2's period, high to high (the integer of each high water's, its `k`)
 // where they feed, on the flat's sand and grass (x, z): each well in from its edge, off the creeks, the holes and the
-// mangroves' mud, in a few tenths of a metre of water at mean and the same about it (test/flats.mjs)
+// mangroves' mud, in a few tenths of a metre of water at mean and the same about it (test/flats.mjs). Each has its ray
+// in FlatsGround.js, up which a school follows the tide (tools/flats/ground.mjs makes them from these)
 export const FLATS_HOMES = [ [ - 622, - 214 ], [ - 520, - 4 ], [ - 712, - 52 ], [ - 744, - 176 ], [ - 524, - 132 ], [ - 544, - 296 ], [ - 608, - 68 ], [ - 696, - 272 ], [ - 668, - 132 ], [ - 616, - 288 ], [ - 596, - 148 ], [ - 552, - 228 ] ];
-// where the mangroves' edge is, for the snook (x, z: off the stand, in its fringe's water)
-export const FLATS_MANGROVE_EDGE = [ [ - 556, - 252 ], [ - 548, - 214 ], [ - 532, - 168 ], [ - 512, - 130 ], [ - 496, - 96 ] ];
 const LEN = ( a, b ) => Math.sqrt( ( b[ 0 ] - a[ 0 ] ) * ( b[ 0 ] - a[ 0 ] ) + ( b[ 1 ] - a[ 1 ] ) * ( b[ 1 ] - a[ 1 ] ) );
 
 // the creeks' ways in, mouth to head: each of the three from the edge, and the branches by way of their own creek
@@ -95,9 +103,106 @@ function edgeLine( d ) {
 
 }
 
-const EDGE_IN = edgeLine( F.permit.inside ), EDGE_OUT = edgeLine( - F.permit.off );
+// (the sharks' on the flat, in from its edge; the permit's and the sharks' off it, in deeper water; where the tarpon
+// lie up and the barracuda lie, just off it, a couple of metres down at a spring low)
+const EDGE_IN = edgeLine( 18 ), EDGE_OUT = edgeLine( - F.permit.off ), LAID = edgeLine( - F.tarpon.laid );
 // the main creek's mouth (its line's first point), for the tarpon and the spawning bonefish
 const MOUTH = FLATS.creeks[ 0 ].line[ 0 ];
+
+// each feeding ground's ray (FlatsGround.js): its legs ( [ from, length ] m along it), its length, its ground (m) every
+// RAY_STEP m from its deep end (the last sample at its end), and `top`: going up it, a school wanting the water so deep
+// stops at the first ground that high. The highest of the ground from its deep end, rising at least RISE m a m, so that
+// as the tide floods over a bar's top a school goes on across the trough beyond it over some minutes, not at once
+const RISE = 0.003;
+const RAYS = FEED_RAYS.map( ( { p, g, off } ) => {
+
+	const legs = [];
+	let len = 0;
+	for ( let i = 1; i < p.length; i ++ ) {
+
+		const l = LEN( p[ i - 1 ], p[ i ] );
+		legs.push( [ len, l ] );
+		len += l;
+
+	}
+
+	const ground = g.map( ( h ) => h / 100 ), top = [];
+	let most = - Infinity;
+	for ( const h of ground ) top.push( most = Math.max( most + RISE * RAY_STEP, h ) );
+	return { p, off, legs, len, ground, top };
+
+} );
+// (the rays the permit come up: those from the deeper grounds, near the edge)
+const PERMIT_RAYS = RAYS.filter( ( R ) => R.ground[ 0 ] <= - 0.75 && R.off );
+const sAt = ( R, j ) => Math.min( j * RAY_STEP, R.len );
+
+// the ground s m up ray R
+function groundOn( R, s ) {
+
+	const n = R.ground.length, j = Math.min( n - 2, Math.max( 0, Math.floor( s / RAY_STEP ) ) );
+	const s0 = sAt( R, j ), s1 = sAt( R, j + 1 ), t = s1 > s0 ? Math.min( 1, Math.max( 0, ( s - s0 ) / ( s1 - s0 ) ) ) : 0;
+	return R.ground[ j ] + ( R.ground[ j + 1 ] - R.ground[ j ] ) * t;
+
+}
+
+// how far up ray R the ground first comes up to y (m): 0 if its deep end's higher, its length if it never does
+function upTo( R, y ) {
+
+	const top = R.top, n = top.length;
+	if ( y <= top[ 0 ] ) return 0;
+	for ( let j = 1; j < n; j ++ ) {
+
+		if ( top[ j ] < y ) continue;
+		const a = R.ground[ j - 1 ], b = R.ground[ j ], s0 = sAt( R, j - 1 ), s1 = sAt( R, j );
+		return s0 + ( s1 - s0 ) * ( b > a ? Math.min( 1, Math.max( 0, ( y - a ) / ( b - a ) ) ) : 1 );
+
+	}
+
+	return R.len;
+
+}
+
+// the point s m up ray R, and the way up it there (out: x, z, dx, dz)
+function onRay( R, s, out ) {
+
+	const { p, legs } = R;
+	let i = 0;
+	while ( i < legs.length - 1 && ( s > legs[ i ][ 0 ] + legs[ i ][ 1 ] || legs[ i ][ 1 ] <= 0 ) ) i ++;
+	const [ s0, l ] = legs[ i ], a = p[ i ], b = p[ i + 1 ], t = l > 0 ? Math.min( 1, Math.max( 0, ( s - s0 ) / l ) ) : 0;
+	out.x = a[ 0 ] + ( b[ 0 ] - a[ 0 ] ) * t;
+	out.z = a[ 1 ] + ( b[ 1 ] - a[ 1 ] ) * t;
+	out.dx = l > 0 ? ( b[ 0 ] - a[ 0 ] ) / l : 0;
+	out.dz = l > 0 ? ( b[ 1 ] - a[ 1 ] ) / l : 1;
+	return out;
+
+}
+
+// a fish keeping to water `depth` m deep on ray R at T: up it to where the ground's that far under the sea, the depth
+// it keeps to drifting by `along` m (up and down the ray, far where it's level, hardly at all up a beach) and itself
+// `side` m across the ray where it's level (less where it's steep: across a beach is up it) by t (the wobble's clock)
+// and seed; out: x, z, and the water's depth on the ray there (depth)
+function keepTo( R, T, depth, along, side, t, seed, out ) {
+
+	const sea = tideAt( T );
+	const s = upTo( R, sea - depth - along * wobble( t, seed ) );
+	onRay( R, s, out );
+	const slope = Math.abs( groundOn( R, s + RAY_STEP ) - groundOn( R, s - RAY_STEP ) ) / ( 2 * RAY_STEP );
+	const w = side * wobble( t * 0.7, seed ^ 0x5d ) * Math.min( 1, 0.01 / ( slope + 1e-4 ) );
+	out.x -= out.dz * w;
+	out.z += out.dx * w;
+	out.depth = sea - groundOn( R, s );
+	return out;
+
+}
+
+// where the snook lie on the ebb: in the creeks' upper reaches still deep enough for them (each creek's bed falls
+// from its head to its mouth: the `reach` of it below its last point that deep), and which way is up it there
+const SNOOK_LIES = FLATS.creeks.map( ( C, ci ) => {
+
+	const [ b0, b1 ] = C.bed, k1 = b1 <= F.snook.bed ? 1 : ( F.snook.bed - b0 ) / ( b1 - b0 );
+	return k1 > 0.1 ? { line: C.line, k: [ Math.max( 0.1, k1 - F.snook.reach ), k1 ], mangrove: ci === 0 } : null;
+
+} ).filter( Boolean );
 
 // a point along a route (polyline) u of the way (0..1), and the way it's going there
 function along( route, u, out ) {
@@ -188,7 +293,7 @@ export function forgetFlats( state, T ) {
 
 }
 
-const _p = { x: 0, z: 0, dx: 0, dz: 1 }, _q = { x: 0, z: 0, dx: 0, dz: 1 };
+const _p = { x: 0, z: 0, dx: 0, dz: 1 }, _q = { x: 0, z: 0, dx: 0, dz: 1 }, _f = { x: 0, z: 0, dx: 0, dz: 1, depth: 0 };
 const NONE = { wind: 7, overcast: 0, hour: 12 };
 
 export function flatsSchools( T, conditions = NONE, state = null, out = [] ) {
@@ -227,9 +332,24 @@ export function flatsSchools( T, conditions = NONE, state = null, out = [] ) {
 	const B = F.barracuda;
 	for ( let i = 0, n = between( B.n, hash( day, 0x0bac0da ) ); i < n; i ++ ) {
 
-		const s = Math.imul( day, 131 ) + i, home = pick( FLATS_HOMES, hash( s, 0x0bac1 ) ), r = 12;
-		const t = T / 3 + hash( s, 0x0bac2 ) * 50;
-		add( `cuda:${ day }:${ i }`, 'barracuda', 1, home[ 0 ] + r * wobble( t, s ^ 0x55 ), home[ 1 ] + r * wobble( t, s ^ 0x66 ), wobble( t * 3, s ^ 0x77 ), wobble( t * 3 + 9, s ^ 0x77 ), 'hold', 1 );
+		// (in a pothole, over its deep middle; or lying just off the edge)
+		const s = Math.imul( day, 131 ) + i, t = T / 3 + hash( s, 0x0bac2 ) * 50;
+		let x, z;
+		if ( hash( s, 0x0bac1 ) < B.holes ) {
+
+			const [ hx, hz, hr ] = pick( FLATS.holes, hash( s, 0x0bac3 ) ), r = hr * 0.4;
+			x = hx + r * wobble( t, s ^ 0x55 );
+			z = hz + r * wobble( t, s ^ 0x66 );
+
+		} else {
+
+			along( LAID, 0.5 + 0.45 * wobble( t / 4, s ^ 0x0bac4 ), _q );
+			x = _q.x;
+			z = _q.z;
+
+		}
+
+		add( `cuda:${ day }:${ i }`, 'barracuda', 1, x, z, wobble( t * 3, s ^ 0x77 ), wobble( t * 3 + 9, s ^ 0x77 ), 'hold', 1 );
 
 	}
 
@@ -238,12 +358,13 @@ export function flatsSchools( T, conditions = NONE, state = null, out = [] ) {
 	for ( let i = 0, n = between( P.n, hash( day, 0x7a4b0 ) ); i < n; i ++ ) {
 
 		const s = Math.imul( day, 173 ) + i, hole = FLATS.holes[ Math.floor( hash( s, 0x7a4b1 ) * FLATS.holes.length ) ];
-		const at = hash( s, 0x7a4b2 ) < 0.5 ? MOUTH : hole;
-		const t = T / 2 + hash( s, 0x7a4b3 ) * 40, r = 10;
+		const mouth = hash( s, 0x7a4b2 ) < 0.5, at = mouth ? MOUTH : hole;
+		// (about the creek's mouth, or within a pothole: its deep middle)
+		const t = T / 2 + hash( s, 0x7a4b3 ) * 40, r = mouth ? 10 : hole[ 2 ] * 0.5;
 		if ( calm && sunny ) {
 
-			// (laid up on the edge in calm, sunny water, as still as logs)
-			along( EDGE_IN, hash( s, 0x7a4b4 ), _q );
+			// (laid up just off the edge in calm, sunny water, as still as logs)
+			along( LAID, hash( s, 0x7a4b4 ), _q );
 			add( `tarpon:${ day }:${ i }`, 'tarpon', 1, _q.x, _q.z, _q.dx, _q.dz, 'laid', 1 );
 
 		} else add( `tarpon:${ day }:${ i }`, 'tarpon', 1, at[ 0 ] + r * wobble( t, s ^ 0x11 ), at[ 1 ] + r * wobble( t, s ^ 0x22 ), wobble( t * 2, s ^ 0x33 ), wobble( t * 2 + 5, s ^ 0x33 ), calm || dusk > 0.3 ? 'roll' : 'cruise', 1 );
@@ -277,10 +398,12 @@ function highWater( k, phi, T, c, add ) {
 		const s = Math.imul( k, 977 ) + i * 31;
 		const n = BF.n[ 0 ] + Math.floor( ( BF.n[ 1 ] - BF.n[ 0 ] + 1 ) * hash( s, 0xb0e1 ) * hash( s, 0xb0e2 ) );
 		const inRoute = pick( FLATS_ROUTES, hash( s, 0xb0e3 ) ), outRoute = pick( FLATS_ROUTES, hash( s, 0xb0e4 ) );
-		const home = pick( FLATS_HOMES, hash( s, 0xb0e5 ) );
+		const R = pick( RAYS, hash( s, 0xb0e5 ) ), depth = BF.depth[ 0 ] + ( BF.depth[ 1 ] - BF.depth[ 0 ] ) * hash( s, 0xb0e8 );
 		// (each school a little early or late)
 		const p = phi + ( hash( s, 0xb0e6 ) - 0.5 ) * 0.8, id = `bone:${ k }:${ i }`;
 		const life = sstep( - BF.stage - 0.5, - BF.stage, p ) * ( 1 - sstep( BF.stage, BF.stage + 0.5, p ) );
+		// (where it feeds at p': on its ray in water `depth` deep, drifting about it; from its arriving to its leaving)
+		const feeding = ( pp, out ) => keepTo( R, T + pp - p, depth, BF.along, BF.side, ( pp - on0 ) / 1.6 + i * 7.3, s ^ 3, out );
 		if ( p < on0 ) {
 
 			// staging at its creek's mouth, milling
@@ -290,21 +413,26 @@ function highWater( k, phi, T, c, add ) {
 		} else if ( p < on0 + BF.up ) {
 
 			// up the creek and out over the flat to where it'll feed
-			along( [ ...inRoute, home ], ( p - on0 ) / BF.up, _p );
+			feeding( on0 + BF.up, _f );
+			along( [ ...inRoute, [ _f.x, _f.z ] ], ( p - on0 ) / BF.up, _p );
 			add( id, 'bonefish', n, _p.x, _p.z, _p.dx, _p.dz, 'cruise', life );
 
 		} else if ( p < on1 - BF.up ) {
 
-			// feeding over its ground, drifting: tailing in the shallowest of it (sight-fishing reads the water there)
-			const t = ( p - on0 ) / 1.6 + i * 7.3, R = BF.roam;
-			const x = home[ 0 ] + R * wobble( t, s ^ 3 ), z = home[ 1 ] + R * wobble( t, s ^ 4 );
-			const x1 = home[ 0 ] + R * wobble( t + 0.05, s ^ 3 ), z1 = home[ 1 ] + R * wobble( t + 0.05, s ^ 4 ), l = Math.sqrt( ( x1 - x ) * ( x1 - x ) + ( z1 - z ) * ( z1 - z ) ) || 1;
-			add( id, 'bonefish', n, x, z, ( x1 - x ) / l, ( z1 - z ) / l, hash( Math.floor( p * 3 ) + s, 0xb0e7 ) < 0.55 ? 'tail' : 'feed', life );
+			// feeding, in the water it likes: tailing where that's shallow enough for its tail to be out (sight-fishing
+			// reads the water there), mudding where it's deeper
+			feeding( p, _f );
+			const x = _f.x, z = _f.z, d = _f.depth;
+			feeding( p + 0.05, _f );
+			const dx = _f.x - x, dz = _f.z - z, l = Math.sqrt( dx * dx + dz * dz ) || 1;
+			const tail = d >= 0.08 && d <= BF.tail && hash( Math.floor( p * 3 ) + s, 0xb0e7 ) < 0.85;
+			add( id, 'bonefish', n, x, z, dx / l, dz / l, tail ? 'tail' : 'feed', life );
 
 		} else if ( p < on1 ) {
 
 			// back to a creek and down it
-			along( [ home, ...outRoute.slice().reverse() ], ( p - on1 + BF.up ) / BF.up, _p );
+			feeding( on1 - BF.up, _f );
+			along( [ [ _f.x, _f.z ], ...outRoute.slice().reverse() ], ( p - on1 + BF.up ) / BF.up, _p );
 			add( id, 'bonefish', n, _p.x, _p.z, _p.dx, _p.dz, 'cruise', life );
 
 		} else {
@@ -317,17 +445,33 @@ function highWater( k, phi, T, c, add ) {
 
 	}
 
-	// the permit: along the edge on the flood and at high water, off it in deeper water at low
+	// the permit: off the edge in deeper water at low, cruising along it; up onto the flat on the flood and at high
+	// water, each into water of the depth it likes over the sand, by one of the rays from the deeper grounds (coming
+	// and going between the two as the tide turns)
 	const PM = F.permit;
 	for ( let i = 0; i < PM.most; i ++ ) {
 
 		const s = Math.imul( k, 613 ) + i * 17;
 		if ( hash( s, 0x9e10 ) > PM.chance * ( i === 0 ? 1 : 0.5 ) ) continue;
-		const n = hash( s, 0x9e11 ) < 0.6 ? 1 : 2, on = inWindow( phi, PM.on );
-		const u = 0.5 + 0.45 * wobble( T / 1.5 + i * 3.1, s ^ 0x9e12 );
-		along( on > 0.5 ? EDGE_IN : EDGE_OUT, u, _q );
-		const u1 = 0.5 + 0.45 * wobble( T / 1.5 + i * 3.1 + 0.02, s ^ 0x9e12 ), back = u1 < u ? - 1 : 1;
-		add( `permit:${ k }:${ i }`, 'permit', n, _q.x, _q.z, _q.dx * back, _q.dz * back, 'cruise', 1 );
+		const n = hash( s, 0x9e11 ) < 0.6 ? 1 : 2, on = inWindow( phi, PM.on ), t = T / 6 + i * 3.1;
+		const R = pick( PERMIT_RAYS, hash( s, 0x9e13 ) ), depth = PM.depth[ 0 ] + ( PM.depth[ 1 ] - PM.depth[ 0 ] ) * hash( s, 0x9e14 );
+		const at = ( tt, out ) => {
+
+			// (off the edge in deeper water by its ray's deep end, cruising about it)
+			out.x = R.off[ 0 ] + 20 * wobble( tt, s ^ 0x9e12 );
+			out.z = R.off[ 1 ] + 20 * wobble( tt, s ^ 0x9e16 );
+			if ( on <= 0 ) return out;
+			keepTo( R, T + ( tt - t ) * 6, depth, 0.05, 5, tt * 4, s ^ 0x9e15, _f );
+			out.x += ( _f.x - out.x ) * on;
+			out.z += ( _f.z - out.z ) * on;
+			return out;
+
+		};
+		at( t, _q );
+		const x = _q.x, z = _q.z;
+		at( t + 0.005, _q );
+		const dx = _q.x - x, dz = _q.z - z, l = Math.sqrt( dx * dx + dz * dz ) || 1;
+		add( `permit:${ k }:${ i }`, 'permit', n, x, z, dx / l, dz / l, 'cruise', 1 );
 
 	}
 
@@ -338,8 +482,13 @@ function highWater( k, phi, T, c, add ) {
 		const s = Math.imul( k, 389 ), on = inWindow( phi, BT.on ) > 0.5, t = T / 1.2;
 		if ( on ) {
 
-			const home = pick( FLATS_HOMES, hash( s, 0x5a2 ) ), R = 40;
-			add( `blacktip:${ k }`, 'blacktipShark', between( BT.n, hash( s, 0x5a3 ) ), home[ 0 ] + R * wobble( t, s ), home[ 1 ] + R * wobble( t, s ^ 1 ), wobble( t * 2, s ^ 2 ), wobble( t * 2 + 4, s ^ 2 ), 'cruise', 1 );
+			// (over the flat in water of most of a metre, up and down a feeding ground's ray as the tide goes)
+			const R = pick( RAYS, hash( s, 0x5a2 ) );
+			keepTo( R, T, BT.depth, 0.15, 30, t, s, _f );
+			const x = _f.x, z = _f.z;
+			keepTo( R, T + 0.05, BT.depth, 0.15, 30, t + 0.05 / 1.2, s, _f );
+			const dx = _f.x - x, dz = _f.z - z, l = Math.sqrt( dx * dx + dz * dz ) || 1;
+			add( `blacktip:${ k }`, 'blacktipShark', between( BT.n, hash( s, 0x5a3 ) ), x, z, dx / l, dz / l, 'cruise', 1 );
 
 		} else {
 
@@ -358,26 +507,16 @@ function highWater( k, phi, T, c, add ) {
 
 	}
 
-	// the snook: along the mangroves' edge and at the creeks' heads on the ebb, facing into its current (the ebb runs
-	// out to the edge, so they face up the creeks, toward the mangroves)
+	// the snook: on the ebb in the creeks' upper reaches while they're still deep, the mangrove creek's most of all
+	// (where it comes out of the stand), facing up the creek into the ebb running out of it
 	const SN = F.snook, ebb = inWindow( phi, SN.on, 0.6 );
 	if ( ebb > 0 ) for ( let i = 0, n = between( SN.n, hash( k, 0x5e00 ) ); i < n; i ++ ) {
 
 		const s = Math.imul( k, 59 ) + i;
-		const r = hash( s, 0x5e01 ), head = r < 0.5 ? pick( FLATS_ROUTES, hash( s, 0x5e02 ) ).slice( - 1 )[ 0 ] : null;
-		if ( head ) {
-
-			const route = FLATS_ROUTES.find( ( q ) => q[ q.length - 1 ] === head ), b = route[ route.length - 2 ];
-			const l = LEN( b, head ) || 1;
-			add( `snook:${ k }:${ i }`, 'snook', 1, head[ 0 ], head[ 1 ], ( head[ 0 ] - b[ 0 ] ) / l, ( head[ 1 ] - b[ 1 ] ) / l, 'hold', ebb );
-
-		} else {
-
-			along( FLATS_MANGROVE_EDGE, hash( s, 0x5e03 ), _q );
-			// (facing in to the mangroves: across the ebb that runs out along their edge)
-			add( `snook:${ k }:${ i }`, 'snook', 1, _q.x, _q.z, _q.dz, - _q.dx, 'hold', ebb );
-
-		}
+		const lie = hash( s, 0x5e01 ) < SN.mangrove ? SNOOK_LIES.find( ( L ) => L.mangrove ) : pick( SNOOK_LIES.filter( ( L ) => ! L.mangrove ), hash( s, 0x5e02 ) );
+		const u = lie.k[ 0 ] + ( lie.k[ 1 ] - lie.k[ 0 ] ) * hash( s, 0x5e03 );
+		along( lie.line, u, _q );
+		add( `snook:${ k }:${ i }`, 'snook', 1, _q.x, _q.z, _q.dx, _q.dz, 'hold', ebb );
 
 	}
 
