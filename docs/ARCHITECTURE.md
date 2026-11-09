@@ -32,7 +32,7 @@ Salt Life is [Tidewater](https://github.com/dgreenheck/tidewater) rebuilt as an 
 4. The boat's physics (`BoatController`).
 5. The player (`Player`: walking, swimming, on deck or at the helm), then the fishing game (`Game`).
 6. The sky.
-7. The CPU water queries (`WaterQuery`: Gerstner waves plus the shore waves). They give heights for the boat, the swimmer, the bobber and the birds.
+7. The CPU water queries (`WaterQuery`: Gerstner waves plus the shore waves, and (M17) the boats' wakes' far arms, followed from their tracks just before: `Wake.track`). They give heights for the boat, the swimmer, the bobber and the birds.
 8. Everything else (plants, reef, fish, wildlife, spray, sound).
 9. The drawing, through the SDK's `createStage`. On high it also goes through `PostChain`.
 
@@ -170,6 +170,15 @@ The bay's harbour lights (`world/HarbourLights.js`, `HARBOUR_LIGHTS`: where, the
 **The bites by the tide's stage** (`Tide.js`: `stageOf( T )` flooding or ebbing and how hard, about high or low water, at the turn; `tidePlace( x, z )` a creek's mouth, a channel, the flat's edge, its top; `tideBites`, `TIDE_BITES`): `Game.habitatOf` sets `habitat.tide`, and `Bites.biteDelay` divides its mean by it (not a water type). The flats bite on the flood and about high water, their edge and channels on the ebb, a creek's mouth on the ebb most of all, the pier at the turn; anywhere else as it always did.
 
 **The day's tides told**: the chart's in a chart's convention (`ChartBake`: `CHART_DATUM` MLLW, `COAST` MHW, `chartDepth`): its depths and soundings below datum, its coast the MHW line, drying ground between them in S-52's DEPIT with the datum's line as a contour; the plotter's vector chart the same (`PlotterChart`). The cooler's Chart tab gives the day's tides as a tide table does, each turn's time and height over datum (`tidesOf`, `tideText`); Joe's slate chalks the next two (`slateText`'s `tides`, a fifth row); the Guide's `tide` tip, the first time you're out on the flats. `test/tide-seen.mjs`; `tools/flats/look.mjs`'s `roots`, `piles`, `cave` views, `FLATS_STAGE`, `FLATS_SURGE`.
+
+## The wakes
+
+(M17) **A boat's wake's far arms are waves** (`ocean/WakeWaves.js`; [m17/wakes.md](m17/wakes.md)): smooth crests on the sea's surface, worked out from her track, the same on the GPU (the sea's vertex shader, `wakeAt`) and the CPU (`WakeWaves.heightAt`, added by `Waves.heightAt` at the grid's point it finds, so whatever floats rides them). The foam is `Wake.js`' as it was.
+- **Her track:** `follow( key, x, z, vx, vz, L, V, t )` each frame, a sample (place, heading, speed, the sea's time) every 6 s straight, each 12° of a turn or 15% of a change of speed, 16 kept; `followDrawn` for a boat in company, her velocity from where she's drawn frame to frame and her hull from `WAKE.hulls`. `Wake.track( together, cam )` follows the boat you're in (not a kayak) and the boats in company, from `App.frame` before the water's queries.
+- **What's sent** (`update`, then `place( O )` from `WaterSurface.update` about the sea's origin): the boat you're in first, then the nearest; 40 samples in 4 tracks on mid and high, 24 in 2 on low (`wakeA`, `wakeB`: place, heading, the train's reach; age, k, cos θ, height; `wakeTrack`: each one's box and samples). Each track: her now, where her arms come up (1 and 2.5 waterline lengths behind her middle: none on her own hull), what's recorded, and their end at 75 s. No texture: the sea's at 16 of 16 on high.
+- **The crests:** each sample's divergent waves at P + age · cg · n either side, at the θ whose energy goes out at the wake's angle (`wakeTan`, `wakeCos`: where the foam's arms are), their phase k n · ( x − P ) − ω age; the arm the line through them sample to sample, each length fading into the next over 2 m; across it the train's highest crest on the line and the rest behind it toward her track, wider as it goes out and under Kelvin's angle. Their height crest to trough by her length, slenderness and speed, y^-1/3 off her track (`wakeHeight`: Macfarlane et al.'s predictions). Faded out as the water shoals from 1.5 to 0.2 m (`WAKE_SHOAL`), and where the grid's too coarse for them, as the open sea's short waves are: the CPU's heights faded at the sea's finest grid (`wakes.spacing`, set by `WaterSurface`; `wakeDrawn`), so what floats rides what's drawn near you. On low that leaves out a console's 5.6 m crests, drawn and ridden alike (drawn at 44% on its 2.3 m grid they were more than half wrong: [m17/wakes.md](m17/wakes.md#on-low)).
+- **On a device that draws on its CPU** they're not in the plain sea it loads with (`WATER_PLAIN`), only in the whole one put in after the start. With no boat under way the shader's loop ends at once (`wakeTracks` 0).
+- `test/wakes.mjs`; `tools/wakes/look.mjs` draws a console's at cruise and a kayak in one's wake, each view with them and without, and sets the drawn sea against the CPU's query.
 
 ## The windward reef
 
@@ -901,7 +910,7 @@ The checks hold the low tier to its budgets: 150 draw calls, 300k triangles, 128
 ## Devices that draw on the CPU
 
 The checks' browser has no graphics card, and some laptops don't either. `App.cpuGL` (from `probeCpuGL`) changes how loading works there:
-- (M15 step 20) Held out until the start with the rain (`_heldLandmarks`): the lighthouse, the harbour lights, the turtles, the far island, the signs. The wreck's built in `lifeAndDebris`. The far sea caves coarse, their light after the start (`Rocks` `coarseCaves`). The sea's shader `lean`: no weedlines, slick or caves; `?fullsea` for the look. **Before a release, A/B the ready time against the last** (`ats-qa play <dist> <out> --viewports phone-portrait --seconds 1 --json`, on 4 CPUs): phone upright failed the server's 45 s at about 7 s here.
+- (M15 step 20) Held out until the start with the rain (`_heldLandmarks`): the lighthouse, the harbour lights, the turtles, the far island, the signs. The wreck's built in `lifeAndDebris`. The far sea caves coarse, their light after the start (`Rocks` `coarseCaves`). The sea's shader `lean`: no weedlines, slick or caves; `?fullsea` for the look. ((M17) The wakes' far arms aren't in the plain sea it loads with: `WATER_PLAIN`.) **Before a release, A/B the ready time against the last** (`ats-qa play <dist> <out> --viewports phone-portrait --seconds 1 --json`, on 4 CPUs): phone upright failed the server's 45 s at about 7 s here.
 
 - **Small, staggered drawing:**
   - The canvas is held to a phone's pixels.

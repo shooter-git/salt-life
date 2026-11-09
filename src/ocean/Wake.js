@@ -1,5 +1,8 @@
 import * as THREE from '../engine/index.js';
 import { G } from '../core/Globals.js';
+import { wakeTan } from './WakeWaves.js';
+
+export { wakeTan };
 
 // The boat's wake: foam left behind the hull. Tidewater simulated a Kelvin wake on a 512² grid with
 // compute shaders; here the boat sheds patches of lacy foam at its quarters (spreading outward, the
@@ -10,22 +13,15 @@ import { G } from '../core/Globals.js';
 // feathering off. A patch is long along her track, so at speed they run together and last their whole life on the same count. The
 // arms open at a real wake's angle: 19.47 degrees (Kelvin) up to a hull Froude number of about 0.5, then narrowing as 1 / Fr, about 5
 // degrees for her at 36 kn (Rabaud & Moisy 2013, https://arxiv.org/abs/1304.2653).)
+//
+// ((M17) The arms' crests are waves on the sea's surface now (WakeWaves, through Waves: drawn and floated on alike), followed from
+// her track by track(), the boats in company's too; the foam's as it was.)
 
 const MAX = 160;
 const LIFE = 9; // s
 const LIFE_LOW = 6; // s (a phone's: the same patches, overlapping as much, less of them at a time on the screen)
-const G_ACCEL = 9.81;
-const KELVIN_TAN = 0.3536;
 const OVERLAP = 2.2; // a patch's length, in the distance between patches
 const FAR = 60; // m in a frame: she was moved, not run
-
-// the tangent of a wake's half angle: U her speed (m/s), L her waterline's length (m)
-export function wakeTan( U, L ) {
-
-	const Fr = U / Math.sqrt( G_ACCEL * L );
-	return Math.min( KELVIN_TAN, 1 / ( 2 * Math.sqrt( 2 * Math.PI ) * Math.max( Fr, 1e-3 ) ) );
-
-}
 
 export class Wake {
 
@@ -139,6 +135,24 @@ void main() {
 		this._next = 0;
 		this._t = 0;
 		this._fwd = new THREE.Vector3();
+
+	}
+
+	// (M17) her wake's far arms as waves (WakeWaves: the sea's and the CPU's): the boat you're in and the boats in company under
+	// way, followed each frame before the water's heights are worked out (App.frame), so what's drawn and what floats agree.
+	// A kayak's are ripples, left out
+	track( together, cam ) {
+
+		const wakes = this.waves.wakes, b = this.boat, m = b.model, t = G.time.value;
+		if ( m && m.id !== 'kayak' && m.dimensions && m.hydro && b.velocity ) wakes.follow( 'own', b.position.x, b.position.z, b.velocity.x, b.velocity.z, m.dimensions.waterlineLength, m.hydro.displacedVolume, t );
+		if ( together ) for ( const [ id, o ] of together.others ) {
+
+			const c = o.cur, f = c && c.boat && ( c.drawn || c.boat );
+			if ( f && f.pos ) wakes.followDrawn( id, f.pos.x, f.pos.z, c.boatId, t );
+
+		}
+
+		wakes.update( t, cam );
 
 	}
 

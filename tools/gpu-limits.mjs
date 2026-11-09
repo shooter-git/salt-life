@@ -6,6 +6,7 @@
 //
 //   pnpm dev, then   node tools/gpu-limits.mjs [tiers, comma separated] [s to wait for what comes late]
 //   SEA_PORT=5190 node tools/gpu-limits.mjs high     (a dev server on another port than 5189)
+//   SHOW=Water node tools/gpu-limits.mjs              ((M17) and the sea's own counts)
 //
 // It goes round the places whose shaders load only when you're near, and exits 1 if anything's over.
 
@@ -98,6 +99,8 @@ for ( const tier of TIERS.split( ',' ) ) {
 	const flats = rows.filter( ( r ) => /^Flats/.test( r.name ) );
 	console.log( `  the flats' marks: ${ flats.length ? flats.map( ( r ) => `${ r.name } (${ r.fragment } fragment, ${ r.vertex } vertex textures${ r.linked ? '' : ', NOT LINKED' })` ).join( ', ' ) : 'none built' }` );
 	for ( const k of Object.keys( LIMITS ) ) console.log( `  ${ ( most[ k ][ 0 ] > LIMITS[ k ] ? 'OVER' : 'ok  ' ) } ${ k.padEnd( 17 ) } ${ String( most[ k ][ 0 ] ).padStart( 5 ) } of ${ LIMITS[ k ] }  ${ most[ k ][ 1 ] }` );
+	// ((M17) SHOW=<name>: that shader's own counts, each program of it)
+	if ( process.env.SHOW ) for ( const r of rows ) if ( r.name === process.env.SHOW ) console.log( `  ${ r.name }: ${ Object.keys( LIMITS ).map( ( k ) => `${ k } ${ r[ k ] }` ).join( ', ' ) }` );
 	for ( const r of rows ) {
 
 		const bad = Object.keys( LIMITS ).filter( ( k ) => r[ k ] > LIMITS[ k ] );
