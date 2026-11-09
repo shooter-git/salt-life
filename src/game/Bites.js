@@ -1,6 +1,7 @@
 import { FISH, FISH_IDS } from './FishTable.js';
 import { BAITS, baitWeight } from './Bait.js';
 import { NORTH } from './Weather.js';
+import { sightOf, splashOf, SPLASH } from './Sight.js';
 
 // Where the bobber is and what lives there.
 //   depth     water depth under the bobber (m)
@@ -300,6 +301,45 @@ export function biteDelay( habitat, hour, rng = Math.random, bait = null ) {
 	}
 
 	return 2 + - Math.log( 1 - rng() * 0.98 ) * mean * 0.6;
+
+}
+
+// (M17) A seen fish's own take, beside the habitat's roll: a fish on the flats you've cast to (game/FlatsFishing.js). How
+// it takes what it's shown is its own (FishTable's sight, Sight.js' sharks'): a bait put ahead of its nose, on its way,
+// it sees and comes to (a cruising fish over a few feet, one feeding head down or lying still only close in); one put
+// on its head spooks it; one behind it, or off to the side, it doesn't see, unless it's loud enough to hear (a plug's
+// splash brings a barracuda, a snook or a tarpon round to it from any side). It comes to it, and eats it or refuses it
+// by what it is and what it's shown: a tailing fish is the keenest, a milling one the least; a permit refuses most
+// things, and some of its refusals spook it as it turns off.
+//   kind  the flats fish's kind (FishTable id, or a shark's: blacktipShark, lemonShark)
+//   bait  what's on the hook (Bait.js' id; null: the frozen shrimp)
+//   at    { ahead, side, mode }: where it landed from the fish's nose, m along its way (< 0 behind it) and off its line,
+//         and what it's doing (game/Flats.js' modes: tail, feed, cruise, mill, roll, laid, hold)
+// -> { act: 'none' | 'spook' | 'eat' | 'refuse', t: s until it's at the bait (eat, refuse), turn: s until it turns to it,
+//      unseen: true when it neither saw nor heard it (it may yet, as it comes on) }
+export const SEEN = { keen: { tail: 1.25, feed: 1.15, cruise: 0.9, hold: 1, laid: 1, roll: 0.75, mill: 0.6 }, aside: 0.4, wide: 0.4, predator: 2.5, most: 0.92, other: 0.02 };
+const CLOSE = { tail: true, feed: true, laid: true, hold: true };
+export function seenTake( kind, bait, at, rng = Math.random ) {
+
+	const S = sightOf( kind );
+	if ( ! S ) return { act: 'none', t: 0, turn: 0 };
+	const id = bait || 'shrimp', loud = splashOf( bait ), dist = Math.hypot( at.ahead, at.side );
+	const [ l0, l1 ] = CLOSE[ at.mode ] ? S.close : S.lead;
+	// on its head (a heavier splash further off; never a shark's)
+	if ( S.head > 0 && dist < S.head * Math.sqrt( loud / SPLASH.shrimp ) ) return { act: 'spook', t: 0, turn: 0 };
+	// in front of it, where it sees it; or heard
+	const front = at.ahead >= l0 * 0.5 && at.ahead <= l1 && Math.abs( at.side ) <= SEEN.wide + SEEN.wide * at.ahead;
+	const predator = S.lead[ 1 ] >= 3.5 || S.eats.plug >= 0.3 || S.bites;
+	const heard = dist <= loud * ( predator ? SEEN.predator : 1 );
+	if ( ! front && ! heard ) return { act: 'none', t: 0, turn: 0, unseen: true };
+	if ( ! front && rng() > 0.5 ) return { act: 'none', t: 0, turn: 0 };
+	// how well it's shown: best in the middle of its window, less toward its ends, less again heard and turned to
+	const mid = ( l0 + l1 ) / 2, half = Math.max( 0.1, ( l1 - l0 ) / 2 );
+	const shown = front ? 1 - 0.5 * Math.min( 1, Math.abs( at.ahead - mid ) / half ) : SEEN.aside;
+	const p = Math.min( SEEN.most, ( S.eats[ id ] ?? SEEN.other ) * ( SEEN.keen[ at.mode ] || 1 ) * shown );
+	const turn = 0.3 + rng() * 0.6, t = turn + dist / S.speed;
+	if ( rng() < p ) return { act: 'eat', t: t + 0.3 + rng() * 0.6, turn };
+	return { act: rng() < S.picky ? 'spook' : 'refuse', t: t + 0.6 + rng() * 0.8, turn, after: true };
 
 }
 

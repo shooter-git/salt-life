@@ -1031,7 +1031,8 @@ export class GameHUD {
 				|| empty( 'Each kind you catch is logged here, with your best.' );
 			// ((M16) and the billfish you've let go: the log's their trophy, and the button their picture)
 			const won = trophyRows( s );
-			if ( won.length ) body = `<div class="gm-wanted"><span class="gm-wanted-h">Trophies, let go alive</span>${ won.map( ( t ) => item( t.name, t.meta, `<span class="gm-btns"><span class="gm-item-num">${ lb( t.kg ) }</span><button class="gm-mini" data-trophy="${ t.species }">See it</button></span>` ) ).join( '' ) }</div>` + body;
+			// ((M17) and the slams: no picture of their own, the day's fish all let go)
+			if ( won.length ) body = `<div class="gm-wanted"><span class="gm-wanted-h">Trophies, let go alive</span>${ won.map( ( t ) => item( t.name, t.meta, t.species ? `<span class="gm-btns"><span class="gm-item-num">${ lb( t.kg ) }</span><button class="gm-mini" data-trophy="${ t.species }">See it</button></span>` : `<span class="gm-item-num">${ t.n > 1 ? `${ t.n }×` : '' }</span>` ) ).join( '' ) }</div>` + body;
 			// ((M15) and the places you've fished: how many there, and the first)
 			const places = Object.entries( s.places || {} ).filter( ( [ k ] ) => PLACES[ k ] );
 			if ( places.length ) body += `<div class="gm-wanted"><span class="gm-wanted-h">Places you've fished</span>${ places.map( ( [ k, p ] ) => item( placeName( k, true ), `first ${ p.first && FISH[ p.first ] ? `a ${ FISH[ p.first ].name.toLowerCase() }` : 'a fish' }${ Number.isFinite( p.day ) ? `, day ${ p.day + 1 }` : '' }`, `<span class="gm-item-num">${ p.n } fish</span>` ) ).join( '' ) }</div>`;

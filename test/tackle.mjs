@@ -342,7 +342,7 @@ const among = ( s, ...ids ) => ids.reduce( ( a, id ) => a + ( s[ id ] || 0 ), 0 
 // ---- the glasses: as physics has it, the higher you are the more they show you
 {
 
-	ok( glareLeft( 37 * Math.PI / 180 ) < 0.1 && glareLeft( 0 ) >= 0.45, 'they take most of the glare at Brewster\'s angle, half of it along the surface' );
+	ok( glareLeft( 37 * Math.PI / 180 ) < 0.1 && glareLeft( 0 ) >= 0.45, 'they take most of the glare at Brewster\'s angle, little of it along the surface (M17: Fresnel\'s)' );
 	ok( fishSeen( 3, 12 ) > 0.8 && fishSeen( 3, 60 ) === 0, 'from the deck you see a fish close to, not 60 m off' );
 	ok( fishSeen( 14, 60 ) > 0.8 && fishSeen( 14, 120 ) > 0, 'from the tower, out to more than 100 m' );
 	ok( fishSeen( 40, 300 ) === 0, 'but not for ever' );

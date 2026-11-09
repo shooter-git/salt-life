@@ -7,6 +7,8 @@ import { createSwimMaterial } from './fish/FishMaterial.js';
 import { bandFade } from '../materials/LODFade.js';
 import { CONDITIONS, SURF_MAX } from '../game/Weather.js';
 import { G } from '../core/Globals.js';
+import { FLATS_POOL, KIND_OF, FlatsBudget } from './fish/FlatsPool.js';
+import { FlatsMarks, MUD_LIFE } from './fish/FlatsMarks.js';
 
 // Fish and other swimmers of the reef and the bay, simulated on the CPU and drawn in a single
 // batch (reef/KindBatch.js: one instanced draw per model and level of detail in view) with the
@@ -45,6 +47,17 @@ import { G } from '../core/Globals.js';
 // nurse sharks resting on the sand. A shark or a goliath near a speared or hooked fish now and then
 // comes in and takes it (raid). Spiny lobsters in dens at the foot of the coral heads by day, out
 // walking after dark, taken by hand: tickled out (tickle), netted (netLobster).
+//
+// (M17) And the flats' own, for sight-fishing (docs/m17/sight.md): a pool of groups of each kind (fish/FlatsPool.js),
+// parked until one of game/Flats.js' schools comes within reach (setSight, from game/FlatsFishing.js), then about its
+// anchor as it moves at the island's pace, each fish in its place in the school in real time: bonefish tailing on the
+// shallowest sand (head down, the tail out), mudding where it's softer and deeper (a puff of silt), cruising as nervous
+// water and a shadow on the sand; permit alone or a pair along the edge, the black sickles of their fins out in
+// shallow water; tarpon rolling (up through the surface and over) or laid up just under it; snook and barracuda lying
+// still, facing the current; a pack of blacktips and a lemon shark cruising, their fins out over the flat. A fright
+// sends a school off with its wake seen (sightBolt); one fish comes to a bait (sightFollow) and eats it or turns off
+// (sightFollowEnd). Each is drawn as plainly as it shows from above the water (its group's `seen`: game/Sight.js), its
+// shadow, its muds and its sign on the water with it (fish/FlatsMarks.js), nearest first within low's triangles.
 
 const TAU = Math.PI * 2;
 const CEILING = - 0.7; // reef fish stay below this (m)
@@ -195,7 +208,28 @@ const BEHAVIOUR = {
 	blueMarlin: { model: 'blueMarlin', fish: 'blueMarlin', far: 'open', length: [ 2.6, 4.2 ], mode: 'cruise', curious: 8, cruise: 0.35, max: 1.6, burst: 5, accel: 1.2, sep: 5, nbr: 4, wSep: 2, wAli: 0, wCoh: 0, wGoal: 0.8, flee: 8, under: [ 1.5, 9 ], homeRadius: 34, amp: 0.045, freq: [ 0.55, 0.45 ], ceiling: - 0.3, band: [ 8, 1e9 ] },
 	swordfish: { model: 'swordfish', fish: 'swordfish', far: 'night', length: [ 1.6, 3.2 ], mode: 'cruise', curious: 6, cruise: 0.4, max: 2, burst: 6, accel: 1.4, sep: 5, nbr: 4, wSep: 2, wAli: 0, wCoh: 0, wGoal: 0.8, flee: 6, under: [ 2, 12 ], homeRadius: 30, amp: 0.05, freq: [ 0.6, 0.5 ], ceiling: - 0.4, band: [ 8, 1e9 ] },
 };
+// (M17) the flats' (setSight), steered by their school's anchor, not their own wandering; flee 0: what frightens them is
+// the flats' own (game/Sight.js, FlatsFishing.js). sight: { spread (m: how far its fish are about the anchor, along
+// and across its way), y ('bottom', 'mid' or 'top': where in the water), ahead (m: how far ahead of the anchor a
+// cruising one makes for) }
+const SIGHT_BASE = { mode: 'sight', flee: 0, wSep: 4, sep: 2, nbr: 6, ceiling: - 0.02, minDepth: 0.1, band: [ 0, 1e9 ], depth: [ 0, 0.15 ] };
+Object.assign( BEHAVIOUR, {
+	flatsBone: { ...SIGHT_BASE, model: 'bonefish', fish: 'bonefish', length: [ 0.42, 0.7 ], cruise: 0.6, max: 2.2, burst: 14, accel: 6, wAli: 1.2, wCoh: 0.9, wGoal: 1, amp: 0.07, freq: [ 1.4, 0.8 ], sight: { spread: [ 4, 3 ], y: 'bottom', ahead: 5 } },
+	flatsSpawn: { ...SIGHT_BASE, model: 'bonefish', fish: 'bonefish', length: [ 0.45, 0.72 ], cruise: 0.4, max: 2, burst: 12, accel: 5, wAli: 1.6, wCoh: 1.1, wGoal: 0.8, amp: 0.07, freq: [ 1.4, 0.8 ], minDepth: 0.8, sight: { spread: [ 14, 10 ], y: 'mid', ahead: 4 } },
+	flatsPermit: { ...SIGHT_BASE, model: 'permit', fish: 'permit', length: [ 0.55, 0.95 ], cruise: 0.45, max: 1.8, burst: 9, accel: 4, sep: 3, wAli: 1, wCoh: 0.8, wGoal: 1, amp: 0.06, freq: [ 1.1, 0.7 ], minDepth: 0.2, sight: { spread: [ 1.6, 1.6 ], y: 'bottom', ahead: 6, crabs: 0.7 } },
+	flatsTarpon: { ...SIGHT_BASE, model: 'tarpon', fish: 'tarpon', length: [ 1.25, 1.9 ], cruise: 0.28, max: 1.2, burst: 4, accel: 1.2, wAli: 0, wCoh: 0, wGoal: 0.9, amp: 0.04, freq: [ 0.5, 0.7 ], minDepth: 0.8, sight: { spread: [ 0, 0 ], y: 'mid', ahead: 5 } },
+	flatsSnook: { ...SIGHT_BASE, model: 'snook', fish: 'snook', length: [ 0.55, 1.0 ], cruise: 0.3, max: 1.6, burst: 8, accel: 3, wAli: 0, wCoh: 0, wGoal: 0.9, amp: 0.05, freq: [ 1, 0.7 ], minDepth: 0.4, sight: { spread: [ 0, 0 ], y: 'bottom', ahead: 2 } },
+	flatsCuda: { ...SIGHT_BASE, model: 'barracuda', fish: 'barracuda', length: [ 0.8, 1.3 ], cruise: 0.15, max: 1.4, burst: 7, accel: 1.4, wAli: 0, wCoh: 0, wGoal: 0.7, amp: 0.035, freq: [ 0.5, 0.8 ], minDepth: 0.4, sight: { spread: [ 0, 0 ], y: 'mid', ahead: 2 } },
+	flatsBlacktip: { ...SIGHT_BASE, model: 'blacktipShark', label: 'Blacktip shark', rule: 'shark', length: [ 1.0, 1.6 ], cruise: 0.45, max: 1.5, burst: 5, accel: 1.5, sep: 3, nbr: 5, wSep: 2, wAli: 0.8, wCoh: 0.5, wGoal: 0.9, amp: 0.09, freq: [ 0.6, 0.5 ], minDepth: 0.35, sight: { spread: [ 7, 6 ], y: 'mid', ahead: 8 } },
+	flatsLemon: { ...SIGHT_BASE, model: 'lemonShark', label: 'Lemon shark', rule: 'shark', length: [ 1.4, 2.3 ], cruise: 0.3, max: 1.2, burst: 4, accel: 1.2, wAli: 0, wCoh: 0, wGoal: 0.9, amp: 0.08, freq: [ 0.5, 0.45 ], minDepth: 0.4, sight: { spread: [ 0, 0 ], y: 'mid', ahead: 6 } },
+} );
 for ( const k in BEHAVIOUR ) BEHAVIOUR[ k ] = { name: k, ...base, ...BEHAVIOUR[ k ] };
+// (M17) a bolting school's run (s), a rooting bonefish's tail-up and its gaps by mode (s), a rolling tarpon's (s)
+const BOLT = 3.2;
+const N_REFR = 1.34, MARK_NERVOUS = 2, MARK_WAKE = 3;
+const ROOT = { tail: [ 3, 7, 1, 4, BONE_TILT ], feed: [ 2, 5, 2, 6, 0.7 ], crab: [ 3, 8, 5, 14, 0.85 ] };
+const ROLL = { every: [ 14, 50 ], takes: 3.2, under: 0.4 }; // (s; a rolling tarpon cruises this far under the top between rolls, m)
+const TAIL = { reach: 25, depth: 0.28, least: 0.17 }, DEEP = 0.15; // m: where a tailing school roots (_tailGround)
 
 class Group {
 
@@ -242,6 +276,7 @@ export class FishSchools {
 	constructor( { parent, terrain, ground, floorAt = null, center, radius, anchors = [], seed = 23, bay = true, shoreField = null, tier = 'high', north = null } ) {
 
 		this.cfg = TIER[ tier ] || TIER.high;
+		this.tierName = TIER[ tier ] ? tier : 'high';
 		this.terrain = terrain;
 		this.floorAt = floorAt ?? ( ( x, z ) => terrain.heightAt( x, z ) );
 		this.center = center.clone();
@@ -267,6 +302,10 @@ export class FishSchools {
 		this.n = 0;
 		this.lobsterGroups = [];
 		this.layout( bay );
+		// ((M17) and the flats' pool, last: everyone else keeps their places)
+		this.sight0 = this.groups.length;
+		this.sightGroups = bay ? this.layoutSight() : [];
+		this.marks = null; // (fish/FlatsMarks.js, the first time a school's in sight)
 
 		// ---- models: their names (built apart: setModels, fish/FishModels.js), the first kind of each
 		this.modelNames = [ ...new Set( this.groups.map( ( g ) => g.sp.model ) ) ];
@@ -728,6 +767,395 @@ export class FishSchools {
 
 	}
 
+	// ------------------------------------------------------------------ (M17) the flats' fish
+
+	// the pool (fish/FlatsPool.js), each group parked well off until a school's given it
+	layoutSight() {
+
+		const P = FLATS_POOL[ this.tierName ], out = [];
+		for ( const [ name, k ] of Object.entries( P.kinds ) ) for ( let i = 0; i < k.groups; i ++ ) {
+
+			const g = this.addGroup( name, k.count, { x: 0, z: - 7000 - out.length * 40, r: 4, band: [ 0, 1e9 ] } );
+			g.sight = null;
+			out.push( g );
+
+		}
+
+		this.sightRange = P.range;
+		return out;
+
+	}
+
+	// the schools within reach of you (game/Flats.js' flatsSchools, nearest first): each keeps the group it has, the rest
+	// given one of their kind's that's free, and those whose school's gone (spooked, hooked out, out of reach, off the
+	// flat) parked again once any run they're on is over
+	setSight( schools ) {
+
+		const G_ = this.sightGroups;
+		if ( ! G_.length ) return;
+		const want = this._want || ( this._want = new Map() );
+		want.clear();
+		for ( const q of schools ) want.set( q.id, q );
+		for ( const g of G_ ) {
+
+			const S = g.sight;
+			if ( ! S ) continue;
+			const q = want.get( S.id );
+			if ( q && KIND_OF( q ) === g.sp.name ) {
+
+				want.delete( S.id );
+				this._sightTo( g, q );
+
+			} else if ( S.bolt <= 0 ) this._park( g );
+			else S.gone = true;
+
+		}
+
+		for ( const q of want.values() ) {
+
+			const name = KIND_OF( q );
+			const g = name && G_.find( ( h ) => h.sp.name === name && ! h.sight );
+			if ( g ) this._sightNew( g, q );
+
+		}
+
+	}
+
+	_park( g ) {
+
+		g.sight = null;
+		g.zone.x = 0;
+		g.zone.z = - 7000 - this.sightGroups.indexOf( g ) * 40;
+		g.home.set( g.zone.x, 0, g.zone.z );
+		g.center.copy( g.home );
+		for ( let k = 0; k < g.count; k ++ ) this.held[ g.offset + k ] = 2;
+		g.active = false;
+
+	}
+
+	_sightNew( g, q ) {
+
+		g.sight = { id: q.id, kind: q.kind, mode: q.mode, x: q.x, z: q.z, dx: q.dx, dz: q.dz, life: q.life, n: q.n, shown: 0, bolt: 0, bx: 0, bz: 0, follow: - 1, fx: 0, fz: 0, fv: 0, eat: false, gone: false, eaten: new Set(), seen: { body: 1, shadow: 1, tail: 1, sign: 1, mud: 1 }, age: 0, tx: q.x, tz: q.z, tAt: null };
+		this._tailGround( g.sight, g.sp );
+		g.zone.x = g.sight.tx;
+		g.zone.z = g.sight.tz;
+		g.home.set( g.zone.x, 0, g.zone.z );
+		this.initGroup( g );
+		const l = Math.hypot( q.dx, q.dz ) || 1;
+		for ( let k = 0; k < g.count; k ++ ) {
+
+			const i = g.offset + k;
+			this.head.set( [ q.dx / l, 0, q.dz / l ], i * 3 );
+			this.vel.set( [ q.dx / l * 0.05, 0, q.dz / l * 0.05 ], i * 3 );
+			this.aux.fill( 0, i * 8, i * 8 + 8 );
+			this.aux[ i * 8 ] = - 1 - g.rng() * 4;
+			this.aux[ i * 8 + 2 ] = ROLL.every[ 0 ] * g.rng();
+
+		}
+
+		this._sightTo( g, q );
+		this.resume( g );
+
+	}
+
+	// a school's anchor, its way and what it's doing, as game/Flats.js has it now; as many of its fish shown as it has
+	_sightTo( g, q ) {
+
+		const S = g.sight, l = Math.hypot( q.dx, q.dz ) || 1;
+		S.mode = q.mode;
+		S.x = q.x;
+		S.z = q.z;
+		S.dx = q.dx / l;
+		S.dz = q.dz / l;
+		S.life = q.life;
+		S.n = q.n;
+		this._tailGround( S, g.sp );
+		const shown = Math.min( g.count, q.n );
+		if ( shown === S.shown ) return;
+		S.shown = shown;
+		for ( let k = 0; k < g.count; k ++ ) if ( this.held[ g.offset + k ] !== 1 ) this.held[ g.offset + k ] = k < shown && ! S.eaten.has( k ) ? 0 : 2;
+
+	}
+
+	// (M17) where a tailing school roots: bonefish push up onto the shallowest of their ground to feed, their tails out in
+	// a foot of water or less (the Florida Museum: feeding often in under 30 cm). The shallowest sand within TAIL.reach of
+	// the anchor that's still water enough for them, nearest a foot deep; the anchor itself where there's none. Worked out
+	// from the ground and the sea alone, so it's the same on every device
+	// And the others: a kind that's too big for the water at its anchor (a tarpon laid up on the edge at low water, a
+	// snook at the mangroves' foot) keeps to the nearest water deep enough for it (DEEP: its minDepth and this)
+	_tailGround( S, sp ) {
+
+		const sea = G.seaLevel.value;
+		if ( S.tAt && Math.hypot( S.tAt[ 0 ] - S.x, S.tAt[ 1 ] - S.z ) < 3 && Math.abs( S.tAt[ 2 ] - sea ) < 0.04 ) return;
+		S.tAt = [ S.x, S.z, sea ];
+		if ( S.mode !== 'tail' ) {
+
+			S.tx = S.x;
+			S.tz = S.z;
+			const need = sp.minDepth + DEEP;
+			if ( sea - this.terrain.heightAt( S.x, S.z ) >= need ) return;
+			for ( let r = 6; r <= 36; r += 6 ) {
+
+				let bd = - Infinity;
+				for ( let k = 0; k < 16; k ++ ) {
+
+					const a = k / 16 * TAU, x = S.x + Math.cos( a ) * r, z = S.z + Math.sin( a ) * r, d = sea - this.terrain.heightAt( x, z );
+					if ( d >= need && d > bd ) {
+
+						bd = d;
+						S.tx = x;
+						S.tz = z;
+
+					}
+
+				}
+
+				if ( bd > - Infinity ) return;
+
+			}
+
+			return;
+
+		}
+
+		let bx = S.x, bz = S.z, best = Math.abs( sea - this.terrain.heightAt( S.x, S.z ) - TAIL.depth );
+		for ( let r = TAIL.reach / 3; r <= TAIL.reach + 1e-6; r += TAIL.reach / 3 ) for ( let k = 0; k < 16; k ++ ) {
+
+			const a = k / 16 * TAU, x = S.x + Math.cos( a ) * r, z = S.z + Math.sin( a ) * r, d = sea - this.terrain.heightAt( x, z );
+			if ( d < TAIL.least ) continue;
+			const e = Math.abs( d - TAIL.depth ) + r * 0.003;
+			if ( e < best ) {
+
+				best = e;
+				bx = x;
+				bz = z;
+
+			}
+
+		}
+
+		S.tx = bx;
+		S.tz = bz;
+
+	}
+
+	// a school frightened (from ( x, z )): it bolts, each fish away from it at its burst, its wake seen, then it's gone
+	sightBolt( g, x, z ) {
+
+		const S = g.sight;
+		if ( ! S || S.bolt > 0 ) return;
+		// (away from it, toward the deepest water that way: a spooked school runs for the edge, not up onto the sand)
+		const dx = g.center.x - x, dz = g.center.z - z, l = Math.hypot( dx, dz ) || 1, a0 = Math.atan2( dz / l, dx / l );
+		let best = - Infinity, ba = a0;
+		for ( const da of [ 0, - 0.5, 0.5, - 1, 1, - 1.4, 1.4 ] ) {
+
+			const a = a0 + da, h = this.terrain.heightAt( g.center.x + Math.cos( a ) * 12, g.center.z + Math.sin( a ) * 12 );
+			const score = - h - Math.abs( da ) * 0.15;
+			if ( score > best ) {
+
+				best = score;
+				ba = a;
+
+			}
+
+		}
+
+		S.bolt = BOLT;
+		S.bx = Math.cos( ba );
+		S.bz = Math.sin( ba );
+		S.follow = - 1;
+		if ( ! this.marks ) return;
+		const sea = G.seaLevel.value;
+		for ( let k = 0; k < S.shown; k ++ ) {
+
+			const i = g.offset + k;
+			if ( this.held[ i ] ) continue;
+			const L = this.size[ i ];
+			if ( sea - this.pos[ i * 3 + 1 ] < 0.6 + L * 0.3 ) {
+
+				this.marks.ring( this.pos[ i * 3 ], sea + 0.012, this.pos[ i * 3 + 2 ], L * 1.2, 0.6 );
+				if ( g.rng() < 0.35 ) this.splash( this.pos[ i * 3 ], this.pos[ i * 3 + 2 ], S.bx * 2, S.bz * 2, L, 0.25 );
+
+			}
+
+		}
+
+	}
+
+	// one of a school (its k-th shown fish) coming to a bait at ( x, z ), at `speed` m/s; eat: it stops on it
+	sightFollow( g, k, x, z, speed, eat ) {
+
+		const S = g.sight;
+		if ( ! S ) return;
+		S.follow = k;
+		S.fx = x;
+		S.fz = z;
+		S.fv = speed;
+		S.eat = eat;
+
+	}
+
+	// and how it ended: 'eat' (it's on the hook: not drawn with its school), 'refuse' (it turns off and goes back to
+	// them) or 'spook' (and the school bolts)
+	sightFollowEnd( g, act, x = 0, z = 0 ) {
+
+		const S = g.sight;
+		if ( ! S ) return;
+		const k = S.follow;
+		S.follow = - 1;
+		if ( act === 'eat' && k >= 0 ) {
+
+			S.eaten.add( k );
+			this.held[ g.offset + k ] = 2;
+
+		} else if ( act === 'spook' ) this.sightBolt( g, x, z );
+		else if ( k >= 0 ) {
+
+			// (a turn away, a short dash off the bait's line)
+			const i = g.offset + k, side = g.rng() < 0.5 ? 1 : - 1, L = this.size[ i ], v = this.vel;
+			v[ i * 3 ] += - S.dz * side * L * 2.5;
+			v[ i * 3 + 2 ] += S.dx * side * L * 2.5;
+
+		}
+
+	}
+
+	// the shown fish of a sight group: f( i, k ) for each (its fish index, and its place in the school)
+	sightFish( g, f ) {
+
+		const S = g.sight;
+		if ( ! S ) return;
+		for ( let k = 0; k < S.shown; k ++ ) if ( ! this.held[ g.offset + k ] ) f( g.offset + k, k );
+
+	}
+
+	// how far fish i's tail (or the top of its fins) is out of the water (m, 0: under it)
+	sightOut( i ) {
+
+		const L = this.size[ i ], y = this.pos[ i * 3 + 1 ], tilt = this.aux[ i * 8 + 1 ], sea = G.seaLevel.value;
+		// (head down, the tail's tip up behind it; level, the dorsal's and the tail's tips about a fifth of it up)
+		return Math.max( 0, y + Math.sin( Math.max( 0, tilt ) ) * L * 0.46 + L * 0.06 - sea, y + L * 0.17 - sea );
+
+	}
+
+	// how plainly fish i of group g is drawn: its school's coming and going, by what shows of it from above the water
+	sightFade( g, i ) {
+
+		const S = g.sight;
+		if ( ! S ) return 0;
+		// (coming into sight over a couple of seconds: back from a fright, or given its group in view)
+		const life = ( S.bolt > 0 ? Math.min( 1, S.bolt / 1.2 ) * ( S.gone ? 1 : S.life ) : S.life ) * Math.min( 1, S.age / 2.5 );
+		if ( G.cameraUnderwater.value > 0.5 ) return life;
+		// (as plainly as it shows: one seen half the time is a ghost of itself, not a fish drawn whole: the grey ghost)
+		const out = this.sightOut( i ), v = S.seen, k = Math.max( v.body, out > 0.01 ? v.tail * Math.min( 1, out / 0.06 ) : 0, S.bolt > 0 ? v.sign : 0 );
+		const t = Math.min( 1, Math.max( 0, ( k - 0.3 ) / 0.7 ) );
+		return life * t * t * ( 3 - 2 * t );
+
+	}
+
+	// their marks (fish/FlatsMarks.js): each shown fish's shadow on the sand, the muds where they root, their school's
+	// sign on the water (nervous water as it cruises in shallow water, the wakes as it bolts), the rings where a tail's
+	// out. seenAt( x, z, kind ) is the flats' sight (FlatsFishing): how plainly one shows there
+	updateMarks( camera, dt ) {
+
+		const any = this.sightGroups.some( ( g ) => g.sight && g.active );
+		if ( ! any ) {
+
+			if ( this.marks ) {
+
+				if ( this.marks.muds.length || this.marks.rings.length ) {
+
+					this.marks.begin();
+					this.marks.end( dt, this.sightSeenAt );
+
+				} else this.marks.hide();
+
+			}
+
+			return;
+
+		}
+
+		if ( ! this.marks ) this.marks = new FlatsMarks( this.group );
+		const M = this.marks;
+		// (a school come upon mudding has been at it a while: the water's milky about it already, older puffs settling)
+		for ( const g of this.sightGroups ) if ( g.sight && g.sight.mode === 'feed' && ! g.sight.mudded && g.active ) {
+
+			g.sight.mudded = true;
+			for ( let k = 0; k < 26; k ++ ) {
+
+				// (spread down the way the school's been going: the band it leaves behind it)
+				const back = g.rng() * 14, a = g.rng() * TAU, r = Math.sqrt( g.rng() ) * ( g.sp.sight.spread[ 0 ] + 2 );
+				const x = g.sight.tx - g.sight.dx * back + Math.cos( a ) * r, z = g.sight.tz - g.sight.dz * back + Math.sin( a ) * r;
+				M.mud( x, this.terrain.heightAt( x, z ) + 0.025, z, 1.8, 0.75, g.rng() * MUD_LIFE * 0.85 );
+
+			}
+
+		}
+
+		const sea = G.seaLevel.value, sun = G.sunDir.value, cp = camera.position, R = this.sightRange;
+		const under = G.cameraUnderwater.value > 0.5;
+		// (the sun's light under the water, bent toward the vertical: its way down, per m of depth)
+		const sy = Math.max( 0.2, sun.y ), sh = Math.hypot( sun.x, sun.z ) / N_REFR, sl = Math.hypot( sh, Math.sqrt( 1 - Math.min( 1, sh * sh ) ) );
+		const ex = - sun.x / Math.max( 1e-4, Math.hypot( sun.x, sun.z ) ) * sh / sl, ez = - sun.z / Math.max( 1e-4, Math.hypot( sun.x, sun.z ) ) * sh / sl, ey = Math.sqrt( 1 - Math.min( 1, sh * sh ) ) / sl;
+		M.begin();
+		for ( const g of this.sightGroups ) {
+
+			const S = g.sight;
+			if ( ! S || ! g.active || Math.hypot( g.center.x - cp.x, g.center.z - cp.z ) > R + g.radius ) continue;
+			const v = S.seen, life = S.bolt > 0 ? Math.min( 1, S.bolt / 1.2 ) : S.life;
+			let cruising = 0;
+			this.sightFish( g, ( i ) => {
+
+				const L = this.size[ i ], x = this.pos[ i * 3 ], y = this.pos[ i * 3 + 1 ], z = this.pos[ i * 3 + 2 ];
+				const hx = this.head[ i * 3 ], hz = this.head[ i * 3 + 2 ], yaw = Math.atan2( hx, hz );
+				const ground = this.terrain.heightAt( x, z ), up = Math.max( 0, y - ground );
+				// its shadow: down along the sun's light from it to the bottom (none at night, or under a cloud: seen)
+				if ( sun.y > 0.1 && up < 4 ) {
+
+					const t = up / Math.max( 0.3, ey ), gx = x + ex * t, gz = z + ez * t;
+					M.shadow( gx, this.terrain.heightAt( gx, gz ) + 0.03, gz, yaw, L * 1.05, L * 0.26 * ( g.sp.model === 'permit' ? 1.6 : 1 ), 0.62 * life * ( under ? 0.6 : v.shadow ) * Math.min( 1, sy * 1.6 ) );
+
+				}
+
+				// a mud as a bonefish roots head down in the soft bottom; a ring where a tail's broken the surface
+				const k8 = i * 8;
+				if ( S.mode === 'feed' && this.aux[ k8 ] > 0 && ( this.aux[ k8 + 4 ] -= dt ) <= 0 ) {
+
+					this.aux[ k8 + 4 ] = 0.8 + g.rng() * 1.2;
+					M.mud( x + hx * L * 0.45, ground + 0.025, z + hz * L * 0.45, L * 3.2, 0.75 * life );
+
+				}
+
+				const out = this.sightOut( i );
+				if ( out > 0.02 && ( this.aux[ k8 + 5 ] -= dt ) <= 0 ) {
+
+					this.aux[ k8 + 5 ] = 0.8 + g.rng() * 1.8;
+					M.ring( x - hx * L * 0.35, sea + 0.012, z - hz * L * 0.35, L * 0.5, 0.55 * life );
+
+				}
+
+				// a wake, bolting or pushing water in a foot of it
+				const depth = sea - ground, speed = Math.hypot( this.vel[ i * 3 ], this.vel[ i * 3 + 2 ] );
+				if ( depth < 0.5 + L * 0.6 && speed > L * 1.5 ) M.sign( x + hx * L * 0.3, sea + 0.014, z + hz * L * 0.3, yaw, L * 3.2, L * 2.6, Math.min( 1, speed / ( L * 5 ) ) * life * ( under ? 0.5 : Math.max( v.sign, 0.5 * v.tail ) ), MARK_WAKE, i * 0.37 );
+				if ( depth < 0.9 && speed > L * 0.25 ) cruising ++;
+
+			} );
+			// nervous water over a school cruising (or milling) just under a calm surface
+			if ( cruising && S.bolt <= 0 && ( S.mode === 'cruise' || S.mode === 'mill' || S.mode === 'tail' ) ) {
+
+				// (the patch the school's spread over, its ripples a hand's breadth or so whatever its size: FlatsMarks)
+				const sz = Math.min( 5, Math.max( 2, g.sp.sight.spread[ 0 ] + 1 ) );
+				M.sign( g.center.x, sea + 0.013, g.center.z, Math.atan2( S.dx, S.dz ), sz, sz * 0.8, life * ( under ? 0.4 : v.sign ) * Math.min( 1, cruising / 3 ) * ( S.mode === 'tail' ? 0.5 : 1 ), MARK_NERVOUS, g.offset * 0.13, sz );
+
+			}
+
+		}
+
+		M.end( dt, this.sightSeenAt );
+
+	}
+
 	// The humpback (world/marine/Whale.js): its escort follows the posed body.
 	setWhale( whale ) {
 
@@ -972,6 +1400,15 @@ export class FishSchools {
 	retarget( g, away ) {
 
 		const sp = g.sp, rng = g.rng;
+		// ((M17) the flats' go where their school does: stepGroup's sight)
+		if ( sp.mode === 'sight' ) {
+
+			g.goal.copy( g.home );
+			g.timer = 1e9;
+			return;
+
+		}
+
 		// (Salt Life) a group with a place for the night (the tarpon: under the pier's lamps) goes there once they're lit
 		// ((M13) and one with a place to wait out the weather (the blacktips: deep water) goes there)
 		const night = g.storm && this.sharksAway ? g.storm : g.night && this.lit > 0.5 ? g.night : null;
@@ -1206,7 +1643,17 @@ export class FishSchools {
 		}
 
 		const gx = g.goal.x - g.center.x, gz = g.goal.z - g.center.z;
-		const roams = sp.mode !== 'mill' && sp.mode !== 'hover' && sp.mode !== 'pile' && sp.mode !== 'lurk';
+		const roams = sp.mode !== 'mill' && sp.mode !== 'hover' && sp.mode !== 'pile' && sp.mode !== 'lurk' && sp.mode !== 'sight';
+		// ((M17) a flats school's run, and its anchor as the island's clock moves it)
+		const S = sp.mode === 'sight' ? g.sight : null;
+		if ( S ) {
+
+			if ( S.bolt > 0 && ( S.bolt -= dt ) <= 0 && S.gone ) return this._park( g );
+			g.home.set( S.x, g.home.y, S.z );
+			S.age += dt;
+
+		}
+
 		if ( g.timer <= 0 || ( roams && gx * gx + gz * gz < 1.5 ) ) this.retarget( g, null );
 
 		// jacks hunt the bait ball when it is near
@@ -1362,8 +1809,11 @@ export class FishSchools {
 			}
 
 			const cruise = sp.cruise * L * this.speedMul[ i ];
-			let ax = A[ ai ] * sp.wSep, ay = A[ ai + 1 ] * sp.wSep, az = A[ ai + 2 ] * sp.wSep;
-			const c = C[ i ];
+			// ((M17) on a flat they keep apart side by side, not one over the other: there's no room; and one coming to a
+			// bait has left its school)
+			const lone = S && S.follow === a;
+			let ax = lone ? 0 : A[ ai ] * sp.wSep, ay = sp.mode === 'sight' ? 0 : A[ ai + 1 ] * sp.wSep, az = lone ? 0 : A[ ai + 2 ] * sp.wSep;
+			const c = lone ? 0 : C[ i ];
 			if ( c > 0 ) {
 
 				const inv = 1 / c;
@@ -1467,6 +1917,15 @@ export class FishSchools {
 				ty = Math.max( this.terrain.heightAt( x, z ), this.floorAt( x, z ) ) + 0.04 + ( sp.hug || 0 ) * L;
 				want = 0;
 
+			} else if ( sp.mode === 'sight' ) {
+
+				// (M17) the flats' fish, about their school's anchor (setSight)
+				const T = this._sightGoal( g, S, i, a, x, y, z, L, cruise, dt );
+				tx = T.x;
+				ty = T.y;
+				tz = T.z;
+				want = T.want;
+
 			} else if ( sp.mode === 'flats' ) {
 
 				// (Salt Life) bonefish: nosing along the bottom with the school; now and then one stops,
@@ -1505,10 +1964,15 @@ export class FishSchools {
 
 			let dx = tx - x, dy = ty - y, dz = tz - z;
 			let dl = Math.sqrt( dx * dx + dy * dy + dz * dz ) + 1e-6;
-			const arrive = raid && ! raid.got ? 1 : Math.min( 1, dl / Math.max( 0.3, L * 4 ) );
-			ax += ( dx / dl * want * arrive - vx ) * sp.wGoal;
-			ay += ( dy / dl * want * arrive - vy ) * sp.wGoal;
-			az += ( dz / dl * want * arrive - vz ) * sp.wGoal;
+			const arrive = raid && ! raid.got ? 1 : Math.min( 1, dl / Math.max( 0.3, S && S.follow === a ? L * 0.5 : L * 4 ) );
+			// ((M17) a bolting flats fish is off at once, a fraction of a second to its burst; one going to a bait, keen)
+			const kGoal = sp.wGoal * ( S ? ( S.bolt > 0 ? 7 : lone ? 2.5 : 1 ) : 1 );
+			ax += ( dx / dl * want * arrive - vx ) * kGoal;
+			ay += ( dy / dl * want * arrive - vy ) * kGoal;
+			az += ( dz / dl * want * arrive - vz ) * kGoal;
+			// ((M17) and a flats fish keeps to its height in the water whatever its way: down on the sand to root, up
+			// through the surface to roll; the steering above gives a goal metres off only a hair of it)
+			if ( S ) ay += ( ty - y ) * 4 - vy * 2;
 
 			// flee from the diver (horizontally for fish near the surface)
 			let panic = Math.max( 0, this.panic[ i ] - dt * 0.5 );
@@ -1543,12 +2007,12 @@ export class FishSchools {
 				const lx = x + vx * 0.7, lz = z + vz * 0.7;
 				this.floorC[ i ] = Math.max( this.floorAt( x, z ), this.floorAt( lx, lz ) );
 				const deepAhead = G.seaLevel.value - this.terrain.heightAt( lx, lz );
-				this.shallowC[ i ] = deepAhead < sp.minDepth || ( ! sp.surf && deepAhead < this.breakDepthFast( lx, lz ) ) ? 1 : 0;
+				this.shallowC[ i ] = deepAhead < sp.minDepth || ( ! sp.surf && sp.mode !== 'sight' && deepAhead < this.breakDepthFast( lx, lz ) ) ? 1 : 0;
 
 			}
 
 			// (Salt Life: the bottom huggers, and bonefish on the flats, close over it)
-			const clear = sp.hug ? 0.05 + sp.hug * L : sp.mode === 'glide' ? 0.03 : sp.mode === 'flats' ? 0.05 + L * 0.25 : FLOOR_CLEARANCE + L * 0.8;
+			const clear = sp.hug ? 0.05 + sp.hug * L : sp.mode === 'glide' ? 0.03 : sp.mode === 'flats' || sp.mode === 'sight' ? 0.05 + L * 0.2 : FLOOR_CLEARANCE + L * 0.8;
 			const floor = this.floorC[ i ] + clear;
 			if ( y < floor ) ay += ( floor - y ) * 8;
 			// shallow water ahead (or the breakers): turn back
@@ -1559,7 +2023,7 @@ export class FishSchools {
 
 			}
 
-			const ceil = sp.ceiling + G.seaLevel.value, under = sp.mode === 'flats' ? 0.08 : 0.3;
+			const ceil = sp.ceiling + G.seaLevel.value + ( S && X[ i * 8 + 3 ] > 0 ? 0.5 : 0 ), under = sp.mode === 'flats' ? 0.08 : sp.mode === 'sight' ? 0.04 : 0.3;
 			if ( y > ceil - under && ! ( sp.mode === 'jumper' && this.jump[ i ] > 0.5 ) ) ay -= ( y - ( ceil - under ) ) * 8;
 			if ( sp.mode !== 'turtle' ) ay -= vy * 1.5; // fish prefer to swim level
 
@@ -1587,7 +2051,7 @@ export class FishSchools {
 			vz += az * dt;
 			const speed = Math.sqrt( vx * vx + vy * vy + vz * vz ) + 1e-6;
 			const vmax = ( sp.max + ( sp.burst - sp.max ) * panic ) * L * ( this.jump[ i ] > 0.5 ? 2 : 1 );
-			const vmin = sp.mode === 'hover' || sp.mode === 'solo' || sp.mode === 'mill' || sp.mode === 'lurk' || sp.mode === 'pile' || sp.mode === 'glide' || sp.mode === 'flats' ? 0.0 : cruise * 0.3;
+			const vmin = sp.mode === 'hover' || sp.mode === 'solo' || sp.mode === 'mill' || sp.mode === 'lurk' || sp.mode === 'pile' || sp.mode === 'glide' || sp.mode === 'flats' || sp.mode === 'sight' ? 0.0 : cruise * 0.3;
 			const sc = speed > vmax ? vmax / speed : ( speed < vmin ? vmin / speed : 1 );
 			vx *= sc;
 			vy *= sc;
@@ -1595,7 +2059,7 @@ export class FishSchools {
 			if ( this.jump[ i ] < 0.5 ) {
 
 				const hs = Math.sqrt( vx * vx + vz * vz );
-				const vyMax = ( sp.mode === 'turtle' ? 0.3 : 0.15 ) + hs * 0.4;
+				const vyMax = ( sp.mode === 'turtle' ? 0.3 : 0.15 ) + hs * 0.4 + ( S && X[ i * 8 + 3 ] > 0 ? 1.2 : 0 ); // ((M17) a tarpon rolling: up and over)
 				vy = Math.max( - vyMax, Math.min( vyMax, vy ) );
 
 			}
@@ -1610,7 +2074,7 @@ export class FishSchools {
 
 			}
 
-			const bottom = this.floorC[ i ] + ( sp.hug ? 0.02 + sp.hug * L : sp.mode === 'glide' ? 0.02 : sp.mode === 'flats' ? 0.03 + L * 0.1 : FLOOR_CLEARANCE );
+			const bottom = this.floorC[ i ] + ( sp.hug ? 0.02 + sp.hug * L : sp.mode === 'glide' ? 0.02 : sp.mode === 'flats' || sp.mode === 'sight' ? 0.03 + L * 0.1 : FLOOR_CLEARANCE );
 			let ny = y + vy * dt;
 			if ( this.jump[ i ] > 0.5 && ny > G.seaLevel.value - 0.25 ) {
 
@@ -1663,6 +2127,185 @@ export class FishSchools {
 		// the group's heading (for surface runs)
 		const vx = g.goal.x - g.center.x, vz = g.goal.z - g.center.z, vl = Math.hypot( vx, vz );
 		if ( vl > 0.5 ) g.heading.set( vx / vl, 0, vz / vl );
+
+	}
+
+	// (M17) where one of a flats school's fish makes for now, and how fast: { x, y, z, want }. Its place in the school
+	// about the anchor (along its way and across it), and what the school's doing there: rooting head down (a tail up in
+	// the shallowest, a mud in the softer), cruising on ahead, milling, lying still facing its way, rolling; or bolting,
+	// or coming to a bait
+	_sightGoal( g, S, i, a, x, y, z, L, cruise, dt ) {
+
+		const T = this._sg || ( this._sg = { x: 0, y: 0, z: 0, want: 0 } ), X = this.aux, k8 = i * 8, sea = G.seaLevel.value;
+		const Q = g.sp.sight, s = this.seed[ i ], H = this.head;
+		const floor = this.floorC[ i ] > - 999 ? this.floorC[ i ] : this.terrain.heightAt( x, z ), col = Math.max( 0, sea - floor );
+		const yIn = ( k ) => floor + 0.05 + L * 0.2 + Math.max( 0, col - 0.1 - L * 0.4 ) * k;
+		let tilt = 0;
+		if ( ! S ) {
+
+			T.x = x;
+			T.y = y;
+			T.z = z;
+			T.want = 0;
+			return T;
+
+		}
+
+		if ( S.bolt > 0 ) {
+
+			// off, away from what frightened them, fanning out a little, low
+			T.x = x + S.bx * 30 + ( s - 0.5 ) * 8 * S.bz;
+			T.z = z + S.bz * 30 - ( s - 0.5 ) * 8 * S.bx;
+			T.y = yIn( 0.15 );
+			T.want = g.sp.burst * L * 0.7;
+			X[ k8 ] = Math.min( X[ k8 ], - 4 );
+			X[ k8 + 3 ] = 0;
+			this.panic[ i ] = 1;
+
+		} else if ( S.follow === a ) {
+
+			// to the bait, and onto it, nose down, if it'll eat it
+			const d = Math.hypot( S.fx - x, S.fz - z );
+			T.x = S.fx;
+			T.z = S.fz;
+			T.y = yIn( 0.1 );
+			T.want = S.eat && d < L * 0.6 ? 0 : S.fv;
+			X[ k8 ] = Math.min( X[ k8 ], - 2 );
+			X[ k8 + 3 ] = 0;
+			if ( S.eat && d < L * 0.9 ) tilt = 0.35;
+
+		} else {
+
+			const fx = S.dx, fz = S.dz, rx = fz, rz = - fx, t = this.time;
+			const u = ( ( s * 7.31 ) % 1 - 0.5 ) * Q.spread[ 0 ] * 2 + Math.sin( t * 0.21 + s * 40 ) * Q.spread[ 0 ] * 0.3;
+			const v = ( ( s * 3.17 + 0.5 ) % 1 - 0.5 ) * Q.spread[ 1 ] * 2 + Math.sin( t * 0.17 + s * 23 ) * Q.spread[ 1 ] * 0.3;
+			const ox = S.tx, oz = S.tz;
+			let px = ox + fx * u + rx * v, pz = oz + fz * u + rz * v;
+			T.want = cruise;
+			T.y = yIn( Q.y === 'bottom' ? 0.05 : Q.y === 'mid' ? 0.4 : 0.8 );
+			const mode = S.mode;
+			// (a permit cruising in shallow water stops now and then to tail on a crab, its black sickle up: guides' lore)
+			const crabbing = Q.crabs && mode === 'cruise' && col < Q.crabs;
+			if ( mode === 'tail' || mode === 'feed' || crabbing ) {
+
+				// rooting head down in the sand a while, then on to the next spot: tails up where it's shallowest
+				const R = ROOT[ crabbing ? 'crab' : mode ];
+				let tt = X[ k8 ];
+				if ( tt > 0 ) {
+
+					tt -= dt;
+					if ( tt <= 0 ) tt = - R[ 2 ] - g.rng() * ( R[ 3 ] - R[ 2 ] );
+
+				} else {
+
+					tt += dt;
+					if ( tt >= 0 ) {
+
+						tt = R[ 0 ] + g.rng() * ( R[ 1 ] - R[ 0 ] );
+						// (each turns its own way to root, after what it's smelt: a school's tails point every way)
+						X[ k8 + 6 ] = Math.atan2( H[ i * 3 + 2 ], H[ i * 3 ] ) + ( g.rng() - 0.5 ) * 3;
+
+					}
+
+				}
+
+				X[ k8 ] = tt;
+				if ( tt > 0 ) {
+
+					// (head down as steeply as the water lets it: in a foot of it the tail's a hand's breadth out, the back
+					// under; in deeper water its full tilt and the tail under too)
+					px = x + Math.cos( X[ k8 + 6 ] ) * 0.05;
+					pz = z + Math.sin( X[ k8 + 6 ] ) * 0.05;
+					tilt = Math.max( 0.35, Math.min( R[ 4 ], Math.asin( Math.min( 1, ( col + 0.02 ) / ( 0.66 * L ) ) ) ) );
+					T.y = floor + 0.08 + Math.sin( tilt ) * 0.2 * L;
+					T.want = cruise * 0.1;
+
+				} else T.want = cruise * ( Math.hypot( px - x, pz - z ) > 6 ? 1.6 : 0.6 );
+
+			} else if ( mode === 'cruise' ) {
+
+				px += fx * Q.ahead;
+				pz += fz * Q.ahead;
+
+			} else if ( mode === 'mill' ) {
+
+				const ang = t * 0.12 * g.spin + s * TAU, r = Math.max( Q.spread[ 0 ], 2 ) * ( 0.4 + 0.6 * s );
+				px = S.x + Math.cos( ang ) * r;
+				pz = S.z + Math.sin( ang ) * r;
+				T.want = cruise * 0.7;
+
+			} else if ( mode === 'hold' || mode === 'laid' ) {
+
+				// lying still, its nose a little ahead into its way (a snook into the current; a tarpon just under the top)
+				px += fx * 0.6;
+				pz += fz * 0.6;
+				T.want = Math.hypot( px - x, pz - z ) > L ? cruise : cruise * 0.08;
+				if ( mode === 'laid' ) T.y = sea - 0.22 - L * 0.06;
+
+			} else if ( mode === 'roll' ) {
+
+				// slowly about its hole a little under the top, and now and then up through the surface and over, gulping air
+				px += fx * Math.sin( t * 0.05 + s * 9 ) * 6;
+				pz += fz * Math.sin( t * 0.05 + s * 9 ) * 6;
+				T.y = Math.max( yIn( 0.15 ), sea - ROLL.under - L * 0.1 );
+				T.want = cruise * 0.7;
+				let ph = X[ k8 + 3 ];
+				if ( ph <= 0 && ( X[ k8 + 2 ] -= dt ) <= 0 ) ph = 0.001;
+				if ( ph > 0 ) {
+
+					const was = ph;
+					ph += dt / ROLL.takes;
+					px = x + H[ i * 3 ] * 3;
+					pz = z + H[ i * 3 + 2 ] * 3;
+					if ( ph < 0.42 ) {
+
+						T.y = sea + 0.2;
+						tilt = - 0.3;
+						T.want = cruise * 3;
+
+					} else if ( ph < 0.62 ) {
+
+						T.y = sea - 0.06;
+						tilt = 0.2;
+						T.want = cruise * 2.5;
+						if ( was < 0.42 ) this._rolled( x, z, L );
+
+					} else {
+
+						T.y = Math.max( yIn( 0.15 ), sea - ROLL.under - L * 0.1 );
+						tilt = 0.55;
+						T.want = cruise * 2;
+
+					}
+
+					if ( ph >= 1 ) {
+
+						ph = 0;
+						X[ k8 + 2 ] = ROLL.every[ 0 ] + g.rng() * ( ROLL.every[ 1 ] - ROLL.every[ 0 ] );
+
+					}
+
+					X[ k8 + 3 ] = ph;
+
+				}
+
+			}
+
+			T.x = px;
+			T.z = pz;
+
+		}
+
+		X[ k8 + 1 ] += ( tilt - X[ k8 + 1 ] ) * Math.min( 1, dt * 2.5 );
+		return T;
+
+	}
+
+	// a tarpon's back and dorsal through the surface: its swirl and a splash
+	_rolled( x, z, L ) {
+
+		this.splash( x, z, 0, 0, L, 0.35 );
+		if ( this.marks ) this.marks.ring( x, G.seaLevel.value + 0.012, z, L * 1.1, 0.8 );
 
 	}
 
@@ -2006,15 +2649,30 @@ export class FishSchools {
 		const cp = camera.position;
 		// pixels per metre at 1 m: level of detail by the fish's size on screen
 		const pxScale = camera.projectionMatrix.elements[ 5 ] * this.viewHeight * 0.5;
-		const batch = this.batch, D = batch.records, C = this.cfg, RANGE = C.range;
+		const batch = this.batch, D = batch.records, C = this.cfg;
 		const LOD_PX = C.lodPx === 1 ? LOD_PX0 : LOD_PX0.map( ( x ) => x * C.lodPx );
 		const P = this.pos, V = this.vel, H = this.head, R = this.prev;
 		const kHead = 1 - Math.exp( - dt * 6 ), kRoll = 1 - Math.exp( - dt * 3 );
 		batch.begin();
-		for ( const g of this.groups ) {
+		// ((M17) the flats' last, nearest first, through low's triangles: FlatsBudget)
+		const S0 = this.sight0, SG = this.sightGroups, list = this.groups;
+		const order = this._sightOrder || ( this._sightOrder = [] );
+		order.length = 0;
+		for ( const g of SG ) if ( g.active && g.sight ) {
 
+			g._d = Math.hypot( g.center.x - cp.x, g.center.z - cp.z );
+			order.push( g );
+
+		}
+
+		order.sort( ( a, b ) => a._d - b._d );
+		const budget = SG.length ? ( this._budget || ( this._budget = new FlatsBudget( this.sightTris() ) ) ).begin( this.tierName ) : null;
+		const nGroups = S0 + order.length;
+		for ( let gi = 0; gi < nGroups; gi ++ ) {
+
+			const g = gi < S0 ? list[ gi ] : order[ gi - S0 ];
 			if ( ! g.active ) continue;
-			const sp = g.sp;
+			const sp = g.sp, sight = gi >= S0, RANGE = sight ? this.sightRange : C.range;
 			// whole group out of range / view (not while it has fish held: they're wherever they're held,
 			// far from the rest)
 			if ( ! g.holding ) {
@@ -2027,7 +2685,7 @@ export class FishSchools {
 
 			}
 			const turtle = sp.mode === 'turtle', ray = sp.model === 'stingray' || sp.model === 'eagleRay';
-			const lob = sp.mode === 'lobster', flats = sp.mode === 'flats';
+			const lob = sp.mode === 'lobster', flats = sp.mode === 'flats' || sight;
 			for ( let a = 0; a < g.count; a ++ ) {
 
 				const i = g.offset + a, i3 = i * 3;
@@ -2100,7 +2758,9 @@ export class FishSchools {
 				if ( ! _frustum.intersectsSphere( _sphere ) ) continue;
 
 				// orientation: yaw from the heading, pitch (a rooting bonefish's nose down), bank into turns
-				yawPitchRoll( Math.atan2( hx, hz ), - Math.asin( Math.max( - 1, Math.min( 1, hy ) ) ) + ( flats && ! held ? this.aux[ i * 8 + 1 ] : 0 ), this.roll[ i ], _q );
+				// ((M17) a flats fish rooting: its tilt alone, not the bob of its settling to the bottom as well)
+				const rootPitch = sight && ! held && this.aux[ i * 8 ] > 0;
+				yawPitchRoll( Math.atan2( hx, hz ), ( rootPitch ? 0 : - Math.asin( Math.max( - 1, Math.min( 1, hy ) ) ) ) + ( flats && ! held ? this.aux[ i * 8 + 1 ] : 0 ), this.roll[ i ], _q );
 
 				const o = i * 16;
 				D[ o ] = x;
@@ -2121,7 +2781,27 @@ export class FishSchools {
 				D[ o + 15 ] = dPhase;
 				// level of detail by size on screen, cross-faded (dithered) over a band before each
 				// switch; faded out over the last tenth of the draw distance
-				const lod = px > LOD_PX[ 0 ] ? 0 : px > LOD_PX[ 1 ] ? 1 : px > LOD_PX[ 2 ] ? 2 : 3;
+				let lod = px > LOD_PX[ 0 ] ? 0 : px > LOD_PX[ 1 ] ? 1 : px > LOD_PX[ 2 ] ? 2 : 3;
+				if ( sight ) {
+
+					// ((M17) as plainly as it shows from above the water; a level finer than its size says (its fins and its tail
+					// out are what's seen of it), low's triangles spent nearest first)
+					const f = this.sightFade( g, i );
+					if ( f <= 0.02 ) continue;
+					lod = budget.take( sp.model, Math.max( 0, lod - 1 ) );
+					if ( lod < 0 ) continue;
+					const kf = this.kind[ i ] + lod, ff = f * ( d > RANGE * 0.9 ? 1 - bandFade( d, RANGE * 0.9, RANGE + L ) : 1 );
+					// (where nothing's cross-faded, low, a fish is there or it isn't: a dithered one there is specks)
+					if ( ! C.fades ) {
+
+						if ( ff >= 0.5 ) batch.add( kf, i );
+
+					} else if ( ff < 0.98 ) batch.addFade( kf, i, ff, false );
+					else batch.add( kf, i );
+					continue;
+
+				}
+
 				const k0 = this.kind[ i ] + lod;
 				const far = RANGE * 0.9;
 				if ( ! C.fades ) batch.add( k0, i );
@@ -2140,6 +2820,23 @@ export class FishSchools {
 
 		batch.commit();
 		batch.texture.needsUpdate = true;
+		if ( SG.length ) this.updateMarks( camera, dt );
+
+	}
+
+	// (M17) the triangles of each of the flats' models at each level of detail (from the batch's kinds)
+	sightTris() {
+
+		const out = {}, K = this.batch.kinds;
+		for ( const g of this.sightGroups ) {
+
+			const m = g.sp.model, k0 = this.modelKind[ m ];
+			if ( out[ m ] ) continue;
+			out[ m ] = [ 0, 1, 2, 3 ].map( ( l ) => Math.round( K[ k0 + l ].count / 3 ) );
+
+		}
+
+		return out;
 
 	}
 

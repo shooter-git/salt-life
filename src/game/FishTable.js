@@ -127,6 +127,35 @@ export const FISH = {
 	lobster: { name: 'Spiny lobster', sci: 'Panulirus argus', lw: [ 0.0575, 2.9 ], model: 'lobster', habitat: {}, kg: [ 0.25, 3 ], price: 24, fight: 0, stamina: 1, time: 'night', rarity: 0, hand: true, minCm: 22.4, bag: 6 },
 };
 
+// (M17) The flats' fish, seen before they're cast to (game/Sight.js, Bites.seenTake; docs/m17/sight.md), each kind's
+// sight: its own lines here so the table's rows stay as they are:
+//   back    how its back shows from above against white sand (0..1, a contrast: the bonefish the grey ghost, the
+//           permit's back and black fins darker, the tarpon's big blue-green back)
+//   wary    how far it notices you coming, times a bonefish's (Sight.noticeRange)
+//   lead    [ m, m ]: where a bait's put ahead of its nose, on its way, for it to see it and come to it (guides: a few
+//           feet for a cruising bonefish, a crab right in front of a permit, two feet ahead of a laid-up tarpon's nose).
+//           close: the same for one feeding head down (a tail up: it sees only what lands close) or lying still
+//   head    m: a bait landing closer than this to it spooks it: on its head
+//   eats    bait or lure id (shrimp: the frozen shrimp) -> the chance it eats one shown well; what it doesn't eat it
+//           refuses, following and turning off (a tailing fish is the keenest: Bites.seenTake)
+//   picky   of its refusals, the share that spook it as it turns away
+//   speed   m/s it comes to a bait at
+// Guides' lore, consistent between them but not measured (docs/m17/sources-tide-fish.md: no study of flats fish's
+// takes or flight distances was found). No fly rod (the user's, M17): shrimp, jigs, plugs and live bait
+export const SIGHT = {
+	bonefish: { back: 0.14, wary: 1, lead: [ 0.6, 2.4 ], close: [ 0.25, 1 ], head: 0.45, speed: 0.9, picky: 0.25,
+		eats: { shrimp: 0.62, jig: 0.38, plug: 0.01, silverside: 0.06, cutMullet: 0.12, mullet: 0.02 } },
+	permit: { back: 0.18, wary: 1.25, lead: [ 0.5, 1.6 ], close: [ 0.25, 0.9 ], head: 0.7, speed: 0.8, picky: 0.4,
+		eats: { shrimp: 0.16, jig: 0.1, plug: 0.01, silverside: 0.03, cutMullet: 0.05 } },
+	tarpon: { back: 0.3, wary: 0.7, lead: [ 1.2, 4 ], close: [ 0.25, 0.9 ], head: 0.3, speed: 1, picky: 0.15,
+		eats: { mullet: 0.5, silverside: 0.3, plug: 0.32, jig: 0.24, shrimp: 0.14, cutMullet: 0.08 } },
+	snook: { back: 0.2, wary: 0.55, lead: [ 0.3, 1.6 ], close: [ 0.2, 1.2 ], head: 0.25, speed: 1.4, picky: 0.1,
+		eats: { silverside: 0.5, mullet: 0.5, plug: 0.42, shrimp: 0.4, jig: 0.36, cutMullet: 0.2 } },
+	barracuda: { back: 0.18, wary: 0.45, lead: [ 0.5, 6 ], close: [ 0.5, 4 ], head: 0.2, speed: 3, picky: 0.05,
+		eats: { plug: 0.55, silverside: 0.6, mullet: 0.6, jig: 0.25, cutMullet: 0.2, shrimp: 0.04 } },
+};
+for ( const k in SIGHT ) FISH[ k ].sight = SIGHT[ k ];
+
 // (Salt Life) a spiny lobster's carapace length, of its total length (the gauge measures the
 // carapace: 3 inches, 7.62 cm, to keep one)
 export const CARAPACE = 0.34;
