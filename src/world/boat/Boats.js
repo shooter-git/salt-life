@@ -37,6 +37,8 @@ export const START_BOAT = 'kayak';
 export const loadBoat = ( id, tier ) => BOATS[ id ].load( tier ).then( ( model ) => {
 
 	if ( model.lines && model.lines._sectionCache ) model.lines._sectionCache.clear();
+	// ((M17) her outside's shade, after her own materials' changes: Vessel.shadeFill, BoatMaterials' useShadeFill)
+	if ( model.shadeFill ) model.shadeFill();
 	return model;
 
 } );

@@ -487,6 +487,8 @@ export class GameHUD {
 		// which wraps on narrow screens (game-ui.css): where it ends, and how tall the fight panel is (and
 		// where the purse starts, for the toasts: style.css. On a computer a toast goes under the purse
 		// when it doesn't fit beside it, so that's checked again here)
+		// ((M17) a toast waits while it would cover the catch card's name: Hud.clearOf)
+		if ( ui.toastClearOf ) ui.toastClearOf( () => this.catchOpen ? this.catchCard.querySelectorAll( '.gm-catch-eyebrow, h2, .gm-catch-sci' ) : null );
 		if ( typeof ResizeObserver !== 'undefined' ) {
 
 			const measure = () => {

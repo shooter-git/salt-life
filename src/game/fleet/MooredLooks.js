@@ -34,9 +34,10 @@ export const LOOK_PARTS = {
 	},
 };
 
-// how much her model's materials lift her shade by day (of her colour, as light of its own): the sportfisher's
-// (SportfisherMaterials' OUTSIDE_FILL); the others' have none of their own
-export const LIFT = { sportfisher: 0.3 };
+// how much her model's materials lift her shade by day (of her colour, as light of its own). ((M16) The sportfisher's was 0.3,
+// SportfisherMaterials' OUTSIDE_FILL: (M17) every boat's shade is BoatMaterials' fill now, the scene's environment, as the
+// moored boats' own is (MooredBoats' FILL), so none has a lift of her own)
+export const LIFT = {};
 
 // what of her stats her look shows: a change in it is a new geometry
 export const lookSign = ( id, stats ) => Object.entries( LOOK_PARTS[ id ] || {} ).map( ( [ k, p ] ) => p.when( stats ) ? k : '' ).join();
@@ -67,13 +68,11 @@ export function readLook( buffer ) {
 
 }
 
-// a paint's colour on her, as her model's material makes it (linear): the console's and the sportfisher's go to linear twice
-// over (ConsoleMaterials, SportfisherMaterials), the others' once
-const TWICE = { console: true, sportfisher: true };
+// a paint's colour on her, as her model's material makes it (linear: setHex takes the hex as sRGB). ((M17) The console's and
+// the sportfisher's went to linear twice over, and this copied it so they matched; now every boat's goes once)
 export function paintColor( id, hex, out = new Color() ) {
 
-	out.setHex( hex );
-	return TWICE[ id ] ? out.convertSRGBToLinear() : out;
+	return out.setHex( hex );
 
 }
 

@@ -27,7 +27,11 @@ export class PostChain {
 		this.shafts = new SunShafts();
 		this.composer.addPass( this.shafts.pass );
 		this.composer.addPass( this.bloom );
-		this.composer.addPass( new OutputPass() );
+		// ((M17) its alpha 1: the boats' height is left in the frame's alpha for the sea (SeenInWater), read by now, and the canvas
+		// has an alpha channel, so the page behind it showed through. SMAA after it carries the 1 to the canvas)
+		const output = new OutputPass(), fs = output.material.fragmentShader, end = fs.lastIndexOf( '}' );
+		output.material.fragmentShader = fs.slice( 0, end ) + '\tgl_FragColor.a = 1.0;\n' + fs.slice( end );
+		this.composer.addPass( output );
 		this.composer.addPass( this.smaa );
 		this._size = size.clone();
 

@@ -1,4 +1,4 @@
-import { CanvasTexture, Mesh, MeshStandardMaterial, SphereGeometry, Sprite, SpriteMaterial } from '../engine/index.js';
+import { CanvasTexture, Color, Mesh, MeshStandardMaterial, SRGBColorSpace, SphereGeometry, Sprite, SpriteMaterial, Vector2, Vector3 } from '../engine/index.js';
 import { G } from '../core/Globals.js';
 import { BOATS } from '../world/boat/Boats.js';
 import { awayOf, tellOf, ISLE, FOUND_M } from './Away.js';
@@ -24,12 +24,30 @@ import { ableOf, ableEnv, awashLs, seaHere, fetchAt, strainOf, windOn, slamK, ke
 
 // a clock that moves by more than this is a rest, not time going by; by more than JUMP_MAX, another room's day (island hours)
 const JUMP = 0.5, JUMP_MAX = 30;
+// (M17) and the wall's seconds a look may be out by: the clock's read once in a frame (the room's, in company) and the wall's
+// time here later in it, so the two are a frame's work apart at most, half a second on a slow CPU. With only the 1% the guard
+// had, a look at deep night read 0.986 to 0.994 of what's allowed. Two seconds are four slow frames; a real jump is caught
+// still (a rest, a bunk, a tow all move the clock at once, by half an hour and more: two seconds of the night are 0.08 h)
+const CLOCK_SLACK_S = 2;
 // how far you can reach a bunk (m), how much sea wakes you; how many frames apart it all looks (s)
 const BUNK_M = 1.6, LOOK_S = 1;
 // the sock's rode: streamed this far upwind of her (m), its trip line's float on the water over it
 const SOCK_OUT = 26;
 // a flare's climb (m/s, m) and burn (s)
 const FLARE = { rise: 28, up: 120, burn: 8 };
+// (M17) A red meteor as it's seen (docs/m17/looks.md): its light (cd: a 12-gauge red meteor's, 16,000; SOLAS's parachute rocket is
+// 30,000), the eye's least at night (lux: COLREGS' 2e-7), and from how near it's at its brightest, by night and by day (m). Its
+// brightness goes by Allard's law, I T^d / d^2, the air's T worked out so that it's at the eye's least where Seaworthy's
+// FLARE_M has it seen; by day it's against the sky, so it's gone at the day's reach. Drawn as the eye has it, by the log of
+// its light between the two. Its glare at night (rad across, at 1.5 km, after the International Fleet Review's photograph:
+// growing as the cube root of its light up close), and the least it's drawn (CSS px): a point that's the brightest thing in
+// view, never tone-mapped down with the scene. Its light on the water and what's about it (LocalLights): its red, as a full
+// moon's light is drawn against its lux (the cube root: a full moon high, 0.244 lux, is the key light's 0.25), at the
+// water under it from the top of its climb
+const FLARE_SEEN = { cd: 16000, eyeLux: 2e-7, brightNight: 2000, brightDay: 250, glare: 0.003, glareAt: 1500, px: 12, pxDay: 8, light: 4000, range: 500 };
+const FLARE_RED = [ 1.0, 0.08, 0.03 ];
+const NEAREST = 11000; // (drawn no further than this along its line of sight: the far plane's 12 km)
+const _px = new Vector2();
 // the deep finder's screen: columns kept and a look every (s)
 const PINGS = 120, PING_S = 0.5, RANGES = [ 60, 120, 300, 600, 1200, 2000 ];
 
@@ -179,7 +197,7 @@ export class DaysOut {
 		const h = T - this._T, was = this._at;
 		// (the clock's the wall's, frames or none: all it could have run since the last look, at night's pace, isn't a rest. A
 		// page hidden a minute, or frames seconds apart, are no reason to pull you off her helm and reckon her drift)
-		const ran = ( now - was ) / 1000 * NIGHT_X * s.timeSpeed * 1.01;
+		const ran = ( ( now - was ) / 1000 + CLOCK_SLACK_S ) * NIGHT_X * s.timeSpeed * 1.01;
 		this._stamp();
 		if ( h < - JUMP || h > JUMP_MAX ) {
 
@@ -686,26 +704,45 @@ export class DaysOut {
 		const app = this.app;
 		if ( ! this.flare ) {
 
+			// (its star: a hot core, saturated red about it, and its glare; sRGB, as every canvas texture is, and drawn as it is)
 			const c = document.createElement( 'canvas' );
-			c.width = c.height = 32;
-			const g = c.getContext( '2d' ), r = g.createRadialGradient( 16, 16, 0, 16, 16, 16 );
-			r.addColorStop( 0, '#ffd8c8' );
-			r.addColorStop( 0.3, '#ff2c12' );
-			r.addColorStop( 1, 'rgba(255,30,10,0)' );
+			c.width = c.height = 64;
+			const g = c.getContext( '2d' ), r = g.createRadialGradient( 32, 32, 0, 32, 32, 32 );
+			// (its core half of it across, so at the least it's drawn, 8 or 12 pixels, it's still a solid red point of 4 or 6)
+			r.addColorStop( 0, 'rgba(255,170,150,1)' );
+			r.addColorStop( 0.2, 'rgba(255,72,48,1)' );
+			r.addColorStop( 0.5, 'rgba(250,30,16,1)' );
+			r.addColorStop( 0.6, 'rgba(238,22,12,0.5)' );
+			r.addColorStop( 0.8, 'rgba(222,16,8,0.14)' );
+			r.addColorStop( 1, 'rgba(210,12,6,0)' );
 			g.fillStyle = r;
-			g.fillRect( 0, 0, 32, 32 );
-			const s = new Sprite( new SpriteMaterial( { map: new CanvasTexture( c ), depthWrite: false, transparent: true, fog: false } ) );
+			g.fillRect( 0, 0, 64, 64 );
+			const map = new CanvasTexture( c );
+			map.colorSpace = SRGBColorSpace;
+			const s = new Sprite( new SpriteMaterial( { map, depthWrite: false, transparent: true, fog: false, toneMapped: false } ) );
 			s.name = 'Flare';
+			s.renderOrder = 5;
+			s.frustumCulled = false;
 			s.visible = false;
 			app.scene.add( s );
-			this.flare = { sprite: s, t: 0 };
+			// (its light: on the water under it and on what's about it, after dark)
+			const light = { position: new Vector3(), color: new Color( ...FLARE_RED ), intensity: FLARE_SEEN.light, range: FLARE_SEEN.range, kind: 'flare', scale: 0 };
+			this.flare = { sprite: s, t: 0, at: new Vector3(), light, lit: false };
 
 		}
 
 		const f = this.flare;
-		f.sprite.position.set( x, G.seaLevel.value + 3, z );
+		f.at.set( x, G.seaLevel.value + 3, z );
 		f.t = FLARE.burn;
 		f.sprite.visible = true;
+		if ( app.localLights && ! f.lit ) {
+
+			app.localLights.add( f.light );
+			f.lit = true;
+
+		}
+
+		this._updateFlare( 0 );
 
 	}
 
@@ -714,18 +751,47 @@ export class DaysOut {
 		const f = this.flare;
 		if ( ! f || ! f.sprite.visible ) return;
 		f.t -= dt;
+		const app = this.app;
 		if ( f.t <= 0 ) {
 
 			f.sprite.visible = false;
+			f.light.scale = 0;
+			if ( f.lit && app.localLights ) app.localLights.remove( f.light );
+			f.lit = false;
 			return;
 
 		}
 
-		const y = G.seaLevel.value + FLARE.up, s = f.sprite, flick = 0.85 + 0.15 * Math.sin( f.t * 37 ) * Math.sin( f.t * 13 );
-		s.position.y = Math.min( y, s.position.y + FLARE.rise * dt );
-		// (it hangs and falls a little; and a size it's seen by a long way off)
-		if ( s.position.y >= y ) s.position.y = y - ( FLARE.burn - f.t ) * 2;
-		s.scale.setScalar( ( 4 + 0.004 * s.position.distanceTo( this.app.camera.position ) ) * flick );
+		// up to the top of its climb, then hanging and falling a little as it burns out
+		const sea = G.seaLevel.value, e = FLARE.burn - f.t, top = FLARE.up / FLARE.rise;
+		f.at.y = sea + 3 + ( e < top ? FLARE.rise * e : FLARE.up - ( e - top ) * 2 );
+		// (lit in a breath, guttering as it burns, and gone)
+		const burn = Math.min( 1, e / 0.25 ) * Math.min( 1, f.t / 0.6 ) * ( 0.88 + 0.12 * Math.sin( f.t * 37 ) * Math.sin( f.t * 13 ) );
+		f.light.position.copy( f.at );
+		f.light.scale = burn * Math.min( 1, e / top );
+		const cam = app.camera, c = cam.position, d = Math.max( 1, f.at.distanceTo( c ) ), w = app.weather && ( app.weather.live || app.weather.target );
+		const night = Math.min( 1, Math.max( 0, ( G.night.value - 0.15 ) / 0.6 ) ), b = this._flareBright( d, w ? Math.min( 1, w.visibility ) : 1, night ) * burn;
+		// its size: its glare at night as the eye sees it (the cube root of its light), none by day; and a few pixels at least
+		// (pixels on the screen, CSS's: the canvas may be drawn at fewer and stretched, as on a CPU's, or at more)
+		const buf = app.renderer.getDrawingBufferSize( _px ), css = app.renderer.domElement.clientHeight || buf.y;
+		const rad = 2 * Math.tan( cam.fov * Math.PI / 360 ) / Math.max( 1, css );
+		const glare = FLARE_SEEN.glare * Math.cbrt( ( FLARE_SEEN.glareAt / d ) ** 2 ) * ( 0.35 + 0.65 * night );
+		const px = FLARE_SEEN.pxDay + ( FLARE_SEEN.px - FLARE_SEEN.pxDay ) * night;
+		const k = Math.min( 1, NEAREST / d );
+		f.sprite.position.set( c.x + ( f.at.x - c.x ) * k, c.y + ( f.at.y - c.y ) * k, c.z + ( f.at.z - c.z ) * k );
+		f.sprite.scale.setScalar( Math.max( glare, rad * px ) * d * k );
+		f.sprite.material.opacity = b;
+
+	}
+
+	// how bright a flare d m off looks, 0..1 (vis: the weather's visibility; night 0..1)
+	_flareBright( d, vis, night ) {
+
+		const S = FLARE_SEEN, reachN = FLARE_M.night * vis, reachD = FLARE_M.day * vis;
+		// (the air's ln T a metre: the eye's least at night's reach)
+		const lnT = Math.log( S.eyeLux * reachN * reachN / S.cd ) / reachN, lnE = ( m ) => Math.log( S.cd ) + lnT * m - 2 * Math.log( Math.max( 1, m ) );
+		const seen = ( reach, bright ) => Math.min( 1, Math.max( 0, ( lnE( reach ) - lnE( d ) ) / ( lnE( reach ) - lnE( Math.min( bright, reach * 0.5 ) ) ) ) );
+		return seen( reachD, S.brightDay ) + ( seen( reachN, S.brightNight ) - seen( reachD, S.brightDay ) ) * night;
 
 	}
 

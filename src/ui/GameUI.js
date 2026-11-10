@@ -22,6 +22,12 @@ export function createGameUI( hud ) {
 		toast: ( text, ms = 2600 ) => hud.toast( text, ms / 1000 ),
 		// (the purse moved or changed: the toast beside it, or under it if it no longer fits)
 		placeToast: () => hud.placeToast(),
+		// ((M17) what a toast mustn't cover: () -> elements or null. Hud.clearOf)
+		toastClearOf: ( fn ) => {
+
+			hud.clearOf = fn;
+
+		},
 	};
 
 }

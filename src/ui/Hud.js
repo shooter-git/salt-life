@@ -21,6 +21,12 @@ export class Hud {
 		this.toastEl = el.querySelector( '.hud-toast' );
 		this._hintTime = 0;
 		this._toastTime = 0;
+		// (M17) what a toast mustn't cover: () -> elements, or null (the catch card's title while it's up: GameHUD). One that would
+		// waits, its time not running, and shows once it wouldn't (the card gone); toasts that come meanwhile wait behind it. On a
+		// short screen a toast at the top sat over the card's name (844 x 390, and 390 x 844 under the purse); where there's room
+		// beside it, a laptop's, it shows at once
+		this.clearOf = null;
+		this._waiting = [];
 		// a tap or a click on the hint or a toast puts it away (the tap goes no further: it isn't a look or a step)
 		for ( const [ e, time ] of [ [ this.hint, '_hintTime' ], [ this.toastEl, '_toastTime' ] ] ) e.addEventListener( 'pointerdown', ( ev ) => {
 
@@ -48,10 +54,43 @@ export class Hud {
 
 	toast( text, seconds = 2.5 ) {
 
+		if ( this._waiting.length ) {
+
+			this._waiting.push( [ text, seconds ] );
+			if ( this._waiting.length > 4 ) this._waiting.shift(); // (a few at most: the oldest goes)
+			return;
+
+		}
+
 		this.toastEl.textContent = text;
 		this.toastEl.hidden = false;
 		this._toastTime = seconds;
 		this.placeToast();
+		if ( this._covering() ) this._wait();
+
+	}
+
+	// (M17) whether the toast up covers anything clearOf names
+	_covering() {
+
+		const els = this.clearOf && ! this.toastEl.hidden ? this.clearOf() : null;
+		if ( ! els || ! els.length ) return false;
+		const t = this.toastEl.getBoundingClientRect();
+		return [ ...els ].some( ( e ) => {
+
+			const r = e.getBoundingClientRect();
+			return r.width > 0 && r.height > 0 && t.left < r.right - 1 && r.left < t.right - 1 && t.top < r.bottom - 1 && r.top < t.bottom - 1;
+
+		} );
+
+	}
+
+	// the toast up waits, with what's left of its time, ahead of any waiting already
+	_wait() {
+
+		if ( this._toastTime > 0 ) this._waiting.unshift( [ this.toastEl.textContent, Math.max( 1.5, this._toastTime ) ] );
+		this.toastEl.hidden = true;
+		this._toastTime = 0;
 
 	}
 
@@ -83,7 +122,24 @@ export class Hud {
 
 		this.prompt.hidden = ! show;
 		if ( this._hintTime > 0 && ( this._hintTime -= dt ) <= 0 ) this.hint.hidden = true;
+		if ( this._toastTime > 0 && ! this.toastEl.hidden && this._covering() ) this._wait();
 		if ( this._toastTime > 0 && ( this._toastTime -= dt ) <= 0 ) this.toastEl.hidden = true;
+		// (the next that's waiting, once it would cover nothing: tried, measured and hidden again in the one frame, so nothing flickers)
+		if ( this._toastTime <= 0 && this._waiting.length ) {
+
+			const [ text, seconds ] = this._waiting[ 0 ];
+			this.toastEl.textContent = text;
+			this.toastEl.hidden = false;
+			this.placeToast();
+			if ( this._covering() ) this.toastEl.hidden = true;
+			else {
+
+				this._waiting.shift();
+				this._toastTime = seconds;
+
+			}
+
+		}
 
 	}
 

@@ -40,7 +40,7 @@ const TONE = 0.1; // how far apart two colours at a point may be and be one (sRG
 const THIN = { long: 0.2, across: 4 };
 const THIN_ERROR = 0.4;
 
-const lin = ( hex ) => new Color().setHex( hex ).convertSRGBToLinear();
+const lin = ( hex ) => new Color().setHex( hex );
 const smoothstep = ( a, b, x ) => {
 
 	const t = Math.min( 1, Math.max( 0, ( x - a ) / ( b - a ) ) );
@@ -50,7 +50,7 @@ const smoothstep = ( a, b, x ) => {
 
 // ---- what each material looks like, as its shader paints it (world/boat/*Materials.js), at a distance: a pattern too fine to
 // see is its average. Her paint's lines are cut into her triangles (bands below), so they stay sharp
-// (lin: as BoatMaterials and the rest make their colours, to linear twice over; a material's own colour's once, new Color)
+// (lin: as BoatMaterials and the rest make their colours, to linear once ((M17) it was twice, as theirs were))
 const TINTED = new Color( 0x0b0f12 ), DISPLAY = new Color( 0x0a1418 );
 // (her teak-look soles: from the pier, about as much of their pale seams as their planks, as the shader draws them that far off)
 const TEAK_SF = lin( 0xc48a52 ).multiplyScalar( 0.98 ).lerp( lin( 0xd9c7aa ), 0.45 );
