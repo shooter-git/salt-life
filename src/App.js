@@ -1672,6 +1672,9 @@ export class App {
 		await this.firstDraws( [ fish.batch.meshes[ 0 ] ] );
 		this.fish = fish;
 		fish.spray = this.spray; // (leaping mullet)
+		// ((M17) the flats' tails and bolts, heard)
+		fish.onTail = ( x, y, z, out, permit ) => this.audio.tailSplash( x, y, z, out, permit );
+		fish.onBolt = ( x, y, z, n ) => this.audio.schoolBolt( x, y, z, n );
 		await this.pause();
 		// and the specks drifting in the water around the swimmer (fx/MarineSnow.js)
 		const snow = new MarineSnow( { waves: this.waves, tier: this.tier } );
@@ -2022,6 +2025,7 @@ export class App {
 			aboard: this.player.mode === 'boat' || this.player.mode === 'deck',
 			daylight: 1 - G.night.value,
 			nearPier: Math.abs( p.x - pier.x ) < 12 && p.z > pier.zStart - 5 && p.z < pier.zEnd + 8,
+			flats: !! ( this.game && this.game.flats && this.game.flats.near( p.x, p.z ) ), // ((M17) their tails' and bolts' sounds ready)
 			boat: theirs ? { active: theirs.active, rpm: theirs.rpm, speed: theirs.speed, position: theirs.position, listenerInside: false, sound: theirs.id } : {
 				sound: engineOf( this.boat.id, this.boat.fitted && this.boat.fitted.twin ), // ((M16) her own engine)
 				active: boat.driven && !! boat.handling.engine, rpm: boat.rpm, throttle: boat.throttle, speed: boat.velocity.length(),

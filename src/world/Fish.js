@@ -306,6 +306,10 @@ export class FishSchools {
 		this.sight0 = this.groups.length;
 		this.sightGroups = bay ? this.layoutSight() : [];
 		this.marks = null; // (fish/FlatsMarks.js, the first time a school's in sight)
+		// ((M17) heard: a tailing fish's tail breaking the top, onTail( x, y, z, out m, permit ), as its ring's drawn; a school bolting,
+		// onBolt( x, y, z, n ), the moment it goes: SoundScape.tailSplash, schoolBolt)
+		this.onTail = null;
+		this.onBolt = null;
 
 		// ---- models: their names (built apart: setModels, fish/FishModels.js), the first kind of each
 		this.modelNames = [ ...new Set( this.groups.map( ( g ) => g.sp.model ) ) ];
@@ -965,6 +969,7 @@ export class FishSchools {
 		S.bx = Math.cos( ba );
 		S.bz = Math.sin( ba );
 		S.follow = - 1;
+		if ( this.onBolt && S.n > 0 ) this.onBolt( g.center.x, G.seaLevel.value, g.center.z, S.n );
 		if ( ! this.marks ) return;
 		const sea = G.seaLevel.value;
 		for ( let k = 0; k < S.shown; k ++ ) {
@@ -1133,6 +1138,8 @@ export class FishSchools {
 
 					this.aux[ k8 + 5 ] = 0.8 + g.rng() * 1.8;
 					M.ring( x - hx * L * 0.35, sea + 0.012, z - hz * L * 0.35, L * 0.5, 0.55 * life );
+					// (a tail, head down: not a laid-up tarpon's back or a fin cruising)
+					if ( this.onTail && this.aux[ k8 + 1 ] > 0.3 && S.bolt <= 0 ) this.onTail( x - hx * L * 0.35, sea, z - hz * L * 0.35, out, g.sp.model === 'permit' );
 
 				}
 
