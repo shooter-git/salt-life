@@ -2,7 +2,7 @@
 // bottom a few centimetres under the surface as if it lay on the seabed too. So a boat's materials leave their height in the frame's
 // alpha, which nothing else reads. On high the sea reads it from its copy of the frame (no other texture, no other draw) and goes
 // by the water that's really in the way.
-// ((M17) Only where the sea reads it: SEEN.written, the sea's to set (WaterSurface: on high, built before any boat is). The canvas has
+// ((v2.2.3) Only where the sea reads it: SEEN.written, the sea's to set (WaterSurface: on high, built before any boat is). The canvas has
 // an alpha channel, the stage's, premultiplied, so what's left in the frame's alpha shows the page behind it: its navy (style.css) lay
 // over every boat's lower parts, about half at her waterline, and barn red in shade read navy-grey. On low and mid nothing reads it,
 // so it's left at 1. On high the post chain's output sets it back to 1 (PostChain), once the sea's read it, in a pass drawn anyway)

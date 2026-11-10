@@ -46,7 +46,7 @@ ok( rising, 'her keel runs forward all the way to the stem' );
 	const read = shader();
 	seenInWater( read );
 	ok( read.fragmentShader.includes( 'gl_FragColor.a' ) && read.vertexShader.includes( 'vSeenY' ), 'a boat\'s height goes to the frame\'s alpha where the sea reads it' );
-	// ((M17) and where it doesn't, the alpha's left at 1: the canvas has one, and the page behind it showed through)
+	// ((v2.2.3) and where it doesn't, the alpha's left at 1: the canvas has one, and the page behind it showed through)
 	SEEN.written = false;
 	const unread = shader();
 	seenInWater( unread );
