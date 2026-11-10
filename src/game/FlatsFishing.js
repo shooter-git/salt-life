@@ -475,7 +475,7 @@ export class FlatsFishing {
 
 			}
 
-			if ( this.app.audio && this.app.audio.fishSplash && S.n > 0 ) this.app.audio.fishSplash( { x: g.center.x, y: G.seaLevel.value, z: g.center.z }, 0.25 );
+			// (heard as your own spook is: sightBolt's onBolt, SoundScape.schoolBolt)
 			return true;
 
 		}

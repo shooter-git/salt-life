@@ -283,6 +283,9 @@ ok( boltDb( BOLT.school ) === 0 && boltDb( 1 ) === BOLT.least && boltDb( 3 ) < b
 	ok( /sightBolt\( g, x, z \) \{[\s\S]*?this\.onBolt\( g\.center\.x/.test( fish ) && /this\.onTail\( x - hx/.test( fish ), 'the fish call for them where they happen: a bolt in sightBolt, a tail where its ring\'s drawn' );
 	ok( app.includes( 'audio.tailSplash(' ) && app.includes( 'audio.schoolBolt(' ) && app.includes( 'flats.near(' ), 'and App hands them to the mixer, and says when you\'re near the flats' );
 	ok( ! /spooked\( g, why[\s\S]{0,600}fishSplash/.test( flats ), 'a spooked school no longer plays the hooked fish\'s splash' );
+	// ((M17) the flats together: someone else's spook bolts a school here through sightBolt too, so it's heard as yours is, once)
+	const theirs = flats.match( /\ttheirSpook\( id, x, z \) \{[\s\S]*?\n\t\}\n/ );
+	ok( theirs && theirs[ 0 ].includes( 'sightBolt(' ) && ! theirs[ 0 ].includes( 'fishSplash' ), 'a school bolting for someone else\'s spook: heard by sightBolt\'s bolt alone, not the splash on top' );
 
 }
 
