@@ -182,9 +182,9 @@ On 60 lb braid, standing came to land what the chair does, in about three times 
 
 - **Its class.** 80 lb is IGFA's 37 kg class, the big-game chair's line, mono for its stretch on a trolled fish. It breaks at 36.29 kg.
 - **Its drag.** Full drag on 80 lb is 19.05 kg, past the harness's 18, so standing you can't quite hold it. Strike is 13.6 kg, within it.
-- **The reel.** The two-speed holds full drag on 80 lb at the 20 kg most listings give the Tiagra 50W (the US listing's 40 lb would stop it at 18.1). So no new reel is needed.
+- **The reel's drag.** The two-speed holds full drag on 80 lb at the 20 kg most listings give the Tiagra 50W (the US listing's 40 lb would stop it at 18.1).
   - An 80-class reel's 24 kg (the Tiagra 80W: [BCF](https://www.bcf.com.au/p/shimano-tiagra-t180wa-overhead-reel/130840.html), [Sportfish Tackle](https://www.sportfishtackle.com/en/artiklar/shimano-tiagra-a-80lb-w-right-hand.html)) was tried in the sweep.
-  - It changes nothing, because the drag's set at full, under either reel's most.
+  - Its drag changes nothing, because the drag's set at full, under either reel's most. Its spool does: [The 80-class reel](#the-80-class-reel), below.
 - **The price** is judgment: the next step after $60, $180 and $450, about seven minutes of the sportfisher's earnings for a steady hand. It's past the unlock (`UNLOCK.line` is still 3), so the unlock's $1,435 stands.
 - **What's unchanged.** Every cell of the sweep on the four other lines is identical, all 10,848 of them.
 
@@ -202,8 +202,45 @@ What it does (20 fights each, from the sweep):
 - **A 225 kg swordfish** is landed every time from the chair on 80 lb, in 7.4 minutes. On 60 lb it was 55%, in 10.3.
 - **Everything smaller** fights a little shorter on 80 lb, since a fish pulls less against a stronger line (a 108 kg yellowfin: 2.0 minutes against 2.5).
 - **Unchanged as a design.** One line goes on every rod, so with 80 lb bought you fight a bonefish on it too. A line's thickness doesn't put fish off; the leader's what they see (`shy`).
-- **Not done.** Past 260 kg no blue marlin is landed on rod and reel: the table runs them to 450 kg. That's 130 lb's (IGFA's 60 kg class): full drag 31 kg, on a 130-class reel, with the chair's 40 kg holding it (Marlin: 36 kg and more on 130 lb). It would be its own line, reel and sweep.
+- **Past 260 kg** no blue marlin was landed on the two-speed, and the table runs them to 450 kg. They weren't breaking the line: every one was spooled. So the answer's a bigger spool, not a 130 lb line: [The 80-class reel](#the-80-class-reel).
 
 `test/lines.mjs` holds it:
 - a 260 kg blue marlin on 80 lb, at least 80% from the chair and at most 10% standing or on 60 lb;
 - a 200 kg one on both, standing at least 1.5 times as long.
+
+## The 80-class reel
+
+On the two-speed, every blue marlin over about 260 kg lost from the chair on 80 lb was spooled: it took all 600 m, and the line never broke. Real anglers land bigger ones on 80 lb. A 1,450 lb (658 kg) blue was landed on 80 lb off Kona in 1979 ([Hawaii Fishing News](https://www.hawaiifishingnews.com/grander_d_ID-393-order-Weight.html)). What they have is more line, and a boat after the fish. So there's a fifth reel, **a wide 80-class two-speed** ($1,200, after the two-speed's $900), the reel 80 lb is spooled on.
+
+- **Its figures are the Tiagra 80W's:**
+  - 868 m of 80 lb mono: 36 kg / 868 m, or 80 lb / 950 yd ([Burnsco](https://www.burnsco.co.nz/reel-tiagra-80w-2-speed), [Smart Marine](https://smartmarine.co.nz/product/1350/tiagra-ti-80w-2-speed-overhead-lever-drag-big-game-reel-37kg)).
+  - 24 kg of drag, from most metric listings; imperial ones give 40 to 44 lb. On these lines it never comes in: full drag on 80 lb is 19 kg.
+  - High gear brings in 94 cm a turn, as the 50W's does ([Team Outdoors](https://team-outdoors.nl/en/shimano-tiagra-50-wlrs-a.html)), so its `reelSpeed` is the two-speed's 2.6.
+- **Its low gear** is 48 cm a turn against the 50W's 38. The game's low gear is one figure for both (`CatchMinigame`'s 0.35), unchanged.
+- **The price** is judgment. It's past the unlock (`UNLOCK.reel` is 2), so the unlock's $1,435 stands.
+- **An old kit.** Its 24 kg drag is the old two-speed's figure, so `realTackle` tells them apart by the spool: 24 kg on 600 m is an old two-speed, and comes in as 20 kg. 24 kg on 868 m is this reel, and comes in as it is (`OLD_SPOOL_M`).
+
+Blue marlin on 80 lb from the chair, 40 fights each. Each cell is the share landed alone, then with a second player backing down (`Crew`'s `BACKING`, 0.4 m/s), with minutes to land:
+
+| Reel | 260 kg | 300 kg | 330 kg | 367 kg | 400 kg | 441 kg |
+|---|---|---|---|---|---|---|
+| Two-speed, 600 m | 93%, 9.6 / 100%, 7.7 | 0% / 40%, 9.2 | 0% / 0% | 0% / 0% | 0% / 0% | 0% / 0% |
+| 80-class, 868 m | 100%, 9.6 / 100%, 7.7 | 100%, 12.3 / 100%, 9.5 | 100%, 14.8 / 100%, 11.0 | 33%, 17.5 / 100%, 13.1 | 0% / 35%, 15.2 | 0% / 0% |
+
+- **From the chair alone** they're landed to about 350 kg, against 260. On a skirt, the share of blue marlin hooked that are out of reach goes from about 36% to about 18% (`Bites.rollWeight`).
+- **With a second player backing down** it's to about 390 kg, about 11% out of reach.
+- **Standing gains nothing.** A 260 kg one standing on 80 lb is spooled on either reel: your arms give out, and then it takes however much line is on. A 233 kg one lands as often on both (43% in 53 minutes).
+- **60 lb on the 80-class reel** gets more from the chair too: a 260 kg blue marlin 100% (it was 0%), 300 kg 30%.
+- **Swordfish** are as they were: the table's biggest, 225 kg, was already landed every time on 80 lb.
+- **A lead let down on your own reel** (a rider's, without her electric reel) goes as far as its spool: 868 m on this one.
+
+Not done:
+
+- **The last 400 to 450 kg.** It needs the boat after the fish faster than the crew's 0.4 m/s, under a knot. In a test, 900 m of line and a boat closing at 1.5 m/s landed the table's biggest. That 1.5 m/s was picked for the test, not taken from a source. Alone in the chair there's no one at the helm at all.
+- **Spool by line.** Here a reel holds the same metres of any line. The Tiagra 50W LRSA really holds about 500 m of 80 lb mono ([BCF](https://www.bcf.com.au/shimano-tiagra-wa-ti50w-lrsa-overhead-reel/136208.html)), and the game gives it 600. Thinner line fits more, and braid far more.
+
+`test/lines.mjs` holds it:
+- the reel's figures;
+- an old kit and a new one told apart;
+- a 330 kg blue marlin from the chair on 80 lb: at least 80% on the 80-class reel, at most 10% on the two-speed;
+- alone, none at 400 kg from the chair, and none at 260 kg standing.

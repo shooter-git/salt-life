@@ -135,7 +135,7 @@ export class Rigs {
 		if ( ! k || typeof k !== 'object' || ! k.t || typeof k.t !== 'object' ) return null;
 		const n = ( v, lo, hi, d ) => Number.isFinite( v ) ? Math.min( hi, Math.max( lo, v ) ) : d, b = {};
 		// ((M17) from a game still on the old figures, its line and drag as they are now)
-		const T = { ...k.t, ...realTackle( k.t.lineKg, k.t.dragKg ) };
+		const T = { ...k.t, ...realTackle( k.t.lineKg, k.t.dragKg, k.t.spoolM ) };
 		if ( k.b && typeof k.b === 'object' ) for ( const id of BAIT_IDS ) if ( ! BAITS[ id ].lure && Number.isFinite( k.b[ id ] ) && k.b[ id ] > 0 ) b[ id ] = Math.floor( k.b[ id ] );
 		return {
 			t: { lineKg: n( T.lineKg, 1, 200, UPGRADES.line.levels[ 0 ].lineKg ), reelSpeed: n( T.reelSpeed, 0.5, 6, 1.1 ), dragKg: Number.isFinite( T.dragKg ) ? n( T.dragKg, 0, 60, null ) : null, spoolM: n( T.spoolM, 50, 2000, 180 ), twoSpeed: !! T.twoSpeed, standUp: !! T.standUp, electricReel: !! T.electricReel, leader: n( T.leader | 0, 0, 3, 0 ) },

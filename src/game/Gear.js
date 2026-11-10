@@ -12,13 +12,15 @@ import { ableOf, burnOf, BASE, DAYS_TRACKS } from './Seaworthy.js';
 // class; docs/m17/lines.md)
 export const LB = 0.45359237;
 // (M17) the line's and the drag's figures before M17, and those they are now: a kit sent by a game that's still on the old
-// ones (Rigs.cleanKit) comes in as the same line and reel, not as a line twice as strong. (The new figures are never these.)
-export const OLD_LINE_KG = [ 7, 13, 26, 50 ], OLD_DRAG_KG = [ 12, 24 ];
-export function realTackle( lineKg, dragKg ) {
+// ones (Rigs.cleanKit) comes in as the same line and reel, not as a line twice as strong. (The new lines are never these;
+// the 80-class reel's 24 kg is the old two-speed's, told from it by its spool: OLD_SPOOL_M, the old reels' own)
+export const OLD_LINE_KG = [ 7, 13, 26, 50 ], OLD_DRAG_KG = [ 12, 24 ], OLD_SPOOL_M = [ 350, 600 ];
+export function realTackle( lineKg, dragKg, spoolM ) {
 
 	const l = OLD_LINE_KG.indexOf( lineKg ), d = OLD_DRAG_KG.indexOf( dragKg );
+	const old = d >= 0 && ( spoolM === undefined || spoolM === OLD_SPOOL_M[ d ] );
 	const drags = UPGRADES.reel.levels.filter( ( r ) => r.dragKg !== null );
-	return { lineKg: l >= 0 ? UPGRADES.line.levels[ l ].lineKg : lineKg, dragKg: d >= 0 ? drags[ d ].dragKg : dragKg };
+	return { lineKg: l >= 0 ? UPGRADES.line.levels[ l ].lineKg : lineKg, dragKg: old ? drags[ d ].dragKg : dragKg };
 
 }
 
@@ -37,12 +39,15 @@ export const UPGRADES = {
 	// reel, whose fight's as it always was; twoSpeed: a low gear. (M17) Real reels' most: a 30-class lever drag's 33 lb, as
 	// Penn's Fathom II Lever Drag 30; a 50-class two-speed's 20 kg, as Shimano's Tiagra 50W LRSA (most listings; one US one
 	// has 40 lb), which holds full drag on the 80 lb line. The drag's set at a share of the line under that:
-	// CatchMinigame.DRAG_SET)
+	// CatchMinigame.DRAG_SET. And an 80-class two-speed, as Shimano's Tiagra 80W: 24 kg of drag (most listings), 868 m of
+	// 80 lb mono (36 kg / 868 m, 80 lb / 950 yd) against the 50-class's 600 here, and the same 94 cm a turn in its high
+	// gear. It's the spool the biggest blue marlin need: they run the 50-class out of line, they don't break 80 lb)
 	reel: { name: 'Reel', levels: [
 		{ cost: 0, label: 'Old spinning reel', reelSpeed: 1.1, spoolM: 180, dragKg: null },
 		{ cost: 90, label: 'Smooth spinning reel', reelSpeed: 1.6, spoolM: 220, dragKg: null },
 		{ cost: 320, label: 'Conventional reel', reelSpeed: 2.2, spoolM: 350, dragKg: 33 * LB },
 		{ cost: 900, label: 'Two-speed big-game reel (its low gear comes in by itself on a heavy fish)', reelSpeed: 2.6, spoolM: 600, dragKg: 20, twoSpeed: true },
+		{ cost: 1200, label: 'Wide 80-class two-speed reel (870 m of 80 lb line, for the biggest fish\'s runs)', reelSpeed: 2.6, spoolM: 868, dragKg: 24, twoSpeed: true },
 	] },
 	rod: { name: 'Rod', levels: [
 		{ cost: 0, label: 'Hand-me-down rod', castM: 22 },

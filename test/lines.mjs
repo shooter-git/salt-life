@@ -8,7 +8,7 @@
 import { readFileSync } from 'node:fs';
 import { FISH } from '../src/game/FishTable.js';
 import { CatchMinigame, DRAG_SET, LINE_MATCH } from '../src/game/CatchMinigame.js';
-import { gearStats, defaultUpgrades, LB, OLD_DRAG_KG, OLD_LINE_KG, UPGRADES } from '../src/game/Gear.js';
+import { gearStats, defaultUpgrades, LB, OLD_DRAG_KG, OLD_LINE_KG, OLD_SPOOL_M, UPGRADES } from '../src/game/Gear.js';
 import { DEHOOK, ELECTRIC, HOLD_KG, Rigs } from '../src/game/rigs/Rigs.js';
 import { cell, SIZES, SPECIES, sweep, uncompact } from '../tools/fight-sweep.mjs';
 
@@ -34,13 +34,15 @@ const near = ( a, b, e = 1e-9 ) => Math.abs( a - b ) <= e;
 {
 
 	const lb = ( kg ) => kg / LB;
-	const reels = UPGRADES.reel.levels, conv = reels[ 2 ], two = reels[ 3 ], line = UPGRADES.line.levels;
+	const reels = UPGRADES.reel.levels, conv = reels[ 2 ], two = reels[ 3 ], wide = reels[ 4 ], line = UPGRADES.line.levels;
 	ok( reels[ 0 ].dragKg === null && reels[ 1 ].dragKg === null, 'the spinning reels have no drag to speak of, as before' );
 	ok( near( lb( conv.dragKg ), 33 ), `the conventional reel's most is a 30-class lever drag's 33 lb (Penn Fathom II LD 30): ${ conv.dragKg.toFixed( 1 ) } kg` );
 	ok( two.dragKg === 20, `the two-speed's a 50-class two-speed's 20 kg (Shimano Tiagra 50W LRSA, in most listings): ${ two.dragKg } kg, not an 80-class reel's 24` );
+	ok( wide.dragKg === 24 && wide.spoolM === 868 && wide.twoSpeed && wide.reelSpeed === two.reelSpeed, `the 80-class two-speed's a Shimano Tiagra 80W's 24 kg (most listings) and 868 m of 80 lb mono (36 kg / 868 m), its high gear the 50W's 94 cm a turn: ${ wide.spoolM } m against the 50-class's ${ two.spoolM }` );
+	ok( reels.every( ( r ) => OLD_DRAG_KG.every( ( d, i ) => ! ( r.dragKg === d && r.spoolM === OLD_SPOOL_M[ i ] ) ) ), 'no reel has an old reel\'s drag on an old reel\'s spool (so an old kit can be told from a new one)' );
 	ok( near( lb( ELECTRIC.drag ), 48, 0.6 ), `the electric reel's a deep-drop reel's 48 lb (Daiwa Tanacom 1000): ${ ELECTRIC.drag } kg` );
 	ok( DRAG_SET.strike >= 0.35 && DRAG_SET.strike <= 0.40 && DRAG_SET.full >= 0.50 && DRAG_SET.full <= 0.55, `the drag's set at strike (${ DRAG_SET.strike }) and full (${ DRAG_SET.full }) of the line, Caputi's 35 to 40% and 50 to 55%` );
-	ok( conv.dragKg >= DRAG_SET.full * line[ 2 ].lineKg && two.dragKg >= DRAG_SET.full * line[ 4 ].lineKg && ELECTRIC.drag >= DRAG_SET.full * line[ 4 ].lineKg, 'each reel holds full drag on the line it\'s offered with (30 lb on the conventional, 80 lb on the two-speed and the electric)' );
+	ok( conv.dragKg >= DRAG_SET.full * line[ 2 ].lineKg && two.dragKg >= DRAG_SET.full * line[ 4 ].lineKg && wide.dragKg >= DRAG_SET.full * line[ 4 ].lineKg && ELECTRIC.drag >= DRAG_SET.full * line[ 4 ].lineKg, 'each reel holds full drag on the line it\'s offered with (30 lb on the conventional, 80 lb on the two-speeds and the electric)' );
 	// (the drag slips at what it's set to, as the fish tires: strike when it's fresh, full once it's half spent)
 	const g = new CatchMinigame( { species: 'tuna', kg: 20, lineKg: line[ 3 ].lineKg, dragKg: two.dragKg, holdKg: HOLD_KG.chair, spoolM: 600, rng: () => 0.5 } );
 	ok( near( g._give( 0 ), DRAG_SET.strike ) && near( g._give( DRAG_SET.spent ), DRAG_SET.full ) && near( g._give( 1 ), DRAG_SET.full ), `fresh it slips at strike, half spent and on at full (${ g._give( 0 ).toFixed( 3 ) }, ${ g._give( 0.25 ).toFixed( 3 ) }, ${ g._give( 0.5 ).toFixed( 3 ) })` );
@@ -77,6 +79,8 @@ const near = ( a, b, e = 1e-9 ) => Math.abs( a - b ) <= e;
 	const all = OLD_LINE_KG.map( ( kg, i ) => Rigs.cleanKit( { t: { lineKg: kg, dragKg: OLD_DRAG_KG[ i % 2 ] } } ).t );
 	ok( all.every( ( t, i ) => near( t.lineKg, UPGRADES.line.levels[ i ].lineKg ) ) && near( all[ 0 ].dragKg, UPGRADES.reel.levels[ 2 ].dragKg ), 'each old line as its label, the old conventional\'s drag as the new' );
 	ok( Rigs.cleanKit( { t: { lineKg: 20 } } ).t.lineKg === 20, 'any other figure as it comes' );
+	const wide = UPGRADES.reel.levels[ 4 ], now = Rigs.cleanKit( { t: { lineKg: 80 * LB, dragKg: wide.dragKg, spoolM: wide.spoolM, reelSpeed: wide.reelSpeed, twoSpeed: true } } ).t;
+	ok( now.dragKg === wide.dragKg && now.spoolM === wide.spoolM, `a kit on the 80-class reel comes through as it is (${ now.dragKg } kg on ${ now.spoolM } m), not as the old two-speed's 24 kg` );
 	// (a guest on her rods: her tackle, his own hands; in her chair. As her owner would fight it, on the same throw of the dice)
 	const mine = gearStats( defaultUpgrades(), 'kayak' );
 	const guest = Object.assign( Object.create( Rigs.prototype ), { game: { state: { stats: mine, leaderPick: null }, rod: { rig: 'troll', hookM: 0 }, hookBait: null }, app: { boatCtl: { speed: 0 }, player: { riding: true, boat: { model: { chair: {} } } } }, inChair: false, kit: got.t } );
@@ -156,6 +160,11 @@ const near = ( a, b, e = 1e-9 ) => Math.abs( a - b ) <= e;
 	ok( chair.caught >= 0.8 && stand.caught <= 0.1 && was.caught <= 0.1, `a 260 kg blue marlin on 80 lb: from the chair ${ Math.round( 100 * chair.caught ) }% in ${ ( chair.t / 60 ).toFixed( 1 ) } min, standing ${ Math.round( 100 * stand.caught ) }%; on 60 lb from the chair ${ Math.round( 100 * was.caught ) }%` );
 	const c2 = at( big, 'chair', 200 ), s2 = at( big, 'harness', 200 );
 	ok( c2.caught >= 0.9 && s2.caught >= 0.9 && s2.t > 1.5 * c2.t, `a 200 kg one on 80 lb: standing ${ ( s2.t / 60 ).toFixed( 1 ) } min, from the chair ${ ( c2.t / 60 ).toFixed( 1 ) }` );
+	// (and on the 80-class reel's 868 m: the bigger ones ran the 50-class's 600 m out, they didn't break the line)
+	const wide = { line: 4, reel: 4, electric: false };
+	const w3 = at( wide, 'chair', 330 ), n3 = at( big, 'chair', 330 ), w4 = at( wide, 'chair', 400 ), ws = at( wide, 'harness', 260 );
+	ok( w3.caught >= 0.8 && n3.caught <= 0.1, `a 330 kg blue marlin on 80 lb from the chair: on the 80-class reel ${ Math.round( 100 * w3.caught ) }% in ${ ( w3.t / 60 ).toFixed( 1 ) } min, on the 50-class ${ Math.round( 100 * n3.caught ) }%` );
+	ok( w4.caught <= 0.1 && ws.caught <= 0.1, `past it still none alone: a 400 kg one from the chair ${ Math.round( 100 * w4.caught ) }%, a 260 kg one standing ${ Math.round( 100 * ws.caught ) }% (your arms give out, and then it takes however much is on)` );
 
 }
 
