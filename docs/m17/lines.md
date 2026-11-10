@@ -13,9 +13,9 @@ Done 2026-11-10 on `claude/m17-lines-501e31`, cut from `m17-flats` at dfb8b83. [
 
 | What | Before | Now | Source |
 |---|---|---|---|
-| Lines (`Gear.js`, `lineLb`, `lineKg`) | 7, 13, 26, 50 kg | at the label: 3.63, 6.80, 13.61, 27.22 kg (`LB` = 0.45359237) | [IGFA](https://igfa.org/international-angling-rules/): line classes 2 to 130 lb, a line breaking at or under its class |
+| Lines (`Gear.js`, `lineLb`, `lineKg`) | 7, 13, 26, 50 kg | at the label: 3.63, 6.80, 13.61, 27.22 kg (`LB` = 0.45359237); and a fifth, 80 lb mono, 36.29 kg ($750, below) | [IGFA](https://igfa.org/international-angling-rules/): line classes 2 to 130 lb, a line breaking at or under its class |
 | Conventional reel's most (`dragKg`) | 12 kg | 15.0 kg (33 lb) | A 30-class lever drag, Penn's [Fathom II Lever Drag 30](https://www.pennfishing.com/products/fathom-ii-lever-drag-conventional-reel): 33 lb |
-| Two-speed's most | 24 kg | 18.1 kg (40 lb) | A 50-class two-speed, Shimano's Tiagra 50W LRSA: 40 lb in US listings ([Sportsman's](https://www.sportsmans.com/fishing-gear-supplies/trolling-conventional-reels/shimano-tiagra-trollingconventional-reel/p/1463358)), 20 kg in NZ ones ([Land & Sea](https://www.land-sea.co.nz/product/2793/shimano-tiagra-50w-lrs-lever-drag-game-reel)) |
+| Two-speed's most | 24 kg | 20 kg | A 50-class two-speed, Shimano's Tiagra 50W LRSA: 20 kg in most listings ([Land & Sea](https://www.land-sea.co.nz/product/2793/shimano-tiagra-50w-lrs-lever-drag-game-reel), Onecheq, Fishing Tackle Shop), 40 lb (18.1 kg) in a US one ([Sportsman's](https://www.sportsmans.com/fishing-gear-supplies/trolling-conventional-reels/shimano-tiagra-trollingconventional-reel/p/1463358)). 20 kg holds full drag on the 80 lb line; no fight on 60 lb or lighter comes near either figure |
 | Electric reel's most (`Rigs.ELECTRIC.drag`) | 24 kg | 22 kg (48 lb) | Daiwa's Tanacom 1000: 48 lb ([J&H](https://www.jandh.com/products/daiwa-dendoh-tanacom-1000-power-assist-electric-reel.html)), 22 kg in NZ ([Complete Angler](https://www.completeangler.co.nz/daiwa-tanacom-1000-u-electric-reel-52)) |
 | The drag as it's set (`CatchMinigame.DRAG_SET`) | the reel's most, always | strike (37.5% of the line) as the fight starts, rising to full (52.5%) by the time the fish is half spent, under the reel's most | Gary Caputi, [Stand-Up Tackle Tactics](https://www.saltwatersportsman.com/?p=49243), *Salt Water Sportsman*: prestrike 25 to 30% for the first run, strike 35 to 40% once it stops and you pump, full 50 to 55% at the end with it circling under the boat |
 | The fish's pull (`LINE_MATCH`) | power read against half the line's figure | read against 0.9645 × the line's: the same fish on the 8 lb line, and under 3% weaker on the others | Not a source: it keeps the old balance (below) |
@@ -139,7 +139,7 @@ The base fought these at 77% of the line's strength by hand, and at 92% in the h
 - **`test/tackle.mjs`.**
   - Its fights read the gear's own figures, not 26 and 50 kg.
   - "Standing up it takes all your line" is now "standing up it takes far longer", as above.
-  - The top reel's drag is 18 kg or more, not 20.
+  - The top reel's drag is 18 kg or more.
 - **`test/game-logic.mjs`, `test/m16-fish.mjs`, `test/spearfishing.mjs`.** The lines' figures from `UPGRADES`, the spear's `SHAFT_MATCH`.
 - **`tools/earnings.mjs`.**
   - Its stages read the lines from `UPGRADES`.
@@ -163,7 +163,7 @@ The base fought these at 77% of the line's strength by hand, and at 92% in the h
   - the arms' time (`ARMS`, `ARMS_CHAIR`);
   - the hand's 10 kg;
   - `LINE_MATCH`, which keeps the old balance rather than coming from a source. No source gives how hard a fish pulls.
-- **The reels' most are from listings as searches reported them.** Several listings agree for each: Penn's 33 lb; 40 lb in the US and 20 kg in NZ for the Tiagra 50W; 48 lb and 22 kg for the Tanacom 1000. The pages themselves weren't opened (they refused or rate-limited the fetch). Caputi's settings were read on his page.
+- **The reels' most are from listings as searches reported them.** Several listings agree for each: Penn's 33 lb; 20 kg for the Tiagra 50W in NZ and Australia, 40 lb in a US one; 24 kg for the Tiagra 80W; 48 lb and 22 kg for the Tanacom 1000. The pages themselves weren't opened (they refused or rate-limited the fetch). Caputi's settings were read on his page.
 - **Not changed.** The spools (180, 220, 350 and 600 m) are the game's, not a source's.
   - Real reels hold more braid: a Fathom II 30 about 740 yd of 40 lb braid, a Tiagra 50W 1,575 yd of 80 lb.
   - More line would make the spooled fights above rarer. But `spoolM` also sets how far a sinker goes and how much a trolled line lets out, so it's its own change.
@@ -173,6 +173,34 @@ The base fought these at 77% of the line's strength by hand, and at 92% in the h
   - the ready A/B and one-core plays, which the M17 session runs.
 - **No device ran this.** The fight is plain Node and draws nothing new; no shader changed.
 
-## The user's call
+## The 80 lb line
 
-On 60 lb braid, standing now lands what the chair does, in about three times as long. That's the realistic outcome of the real line and the sources' holds. If the chair should again be the only way to a 200 kg blue marlin, the realistic way is an 80 or 130 lb line, where full drag (19 or 31 kg) is past the harness's 18 kg. That would be its own figures and its own sweep. Shortening the arms' time to get there instead would have no source.
+On 60 lb braid, standing came to land what the chair does, in about three times as long. That's the real line and the sources' holds: full drag on 60 lb is 14.3 kg, inside the harness's 18. The user wanted the chair to matter again, so there's a fifth line, **80 lb mono** ($750, after the 60 lb braid's $450).
+
+- **Its class.** 80 lb is IGFA's 37 kg class, the big-game chair's line, mono for its stretch on a trolled fish. It breaks at 36.29 kg.
+- **Its drag.** Full drag on 80 lb is 19.05 kg, past the harness's 18, so standing you can't quite hold it. Strike is 13.6 kg, within it.
+- **The reel.** The two-speed holds full drag on 80 lb at the 20 kg most listings give the Tiagra 50W (the US listing's 40 lb would stop it at 18.1). So no new reel is needed.
+  - An 80-class reel's 24 kg (the Tiagra 80W: [BCF](https://www.bcf.com.au/p/shimano-tiagra-t180wa-overhead-reel/130840.html), [Sportfish Tackle](https://www.sportfishtackle.com/en/artiklar/shimano-tiagra-a-80lb-w-right-hand.html)) was tried in the sweep.
+  - It changes nothing, because the drag's set at full, under either reel's most.
+- **The price** is judgment: the next step after $60, $180 and $450, about seven minutes of the sportfisher's earnings for a steady hand. It's past the unlock (`UNLOCK.line` is still 3), so the unlock's $1,435 stands.
+- **What's unchanged.** Every cell of the sweep on the four other lines is identical, all 10,848 of them.
+
+What it does (20 fights each, from the sweep):
+
+| Blue marlin | 137 kg | 200 kg | 233 kg | 260 kg | 367 kg |
+|---|---|---|---|---|---|
+| 60 lb, chair | 100%, 5.3 min | 100%, 9.3 min | 0% | 0% | 0% |
+| 60 lb, standing | 100%, 5.2 min | 100%, 25 min | 0% | 0% | 0% |
+| 80 lb, chair | 100%, 4.0 min | 100%, 6.6 min | 100%, 8.2 min | 95%, 9.6 min | 0% |
+| 80 lb, standing | 100%, 3.9 min | 100%, 12.4 min | 65%, 52 min | 0% | 0% |
+
+- **The chair is the only way to the biggest blue marlin.** On 80 lb from the chair they're landed to about 260 kg. Standing on 80 lb tops out near 230 kg, and takes most of an hour there.
+- **A 200 kg one can still be fought standing,** in about twice the chair's time. That's real: Caputi's stand-up anglers take on up to 32 kg on 80 and 130 lb, and the harness's 18 kg is the game's strong angler, not the most anyone holds.
+- **A 225 kg swordfish** is landed every time from the chair on 80 lb, in 7.4 minutes. On 60 lb it was 55%, in 10.3.
+- **Everything smaller** fights a little shorter on 80 lb, since a fish pulls less against a stronger line (a 108 kg yellowfin: 2.0 minutes against 2.5).
+- **Unchanged as a design.** One line goes on every rod, so with 80 lb bought you fight a bonefish on it too. A line's thickness doesn't put fish off; the leader's what they see (`shy`).
+- **Not done.** Past 260 kg no blue marlin is landed on rod and reel: the table runs them to 450 kg. That's 130 lb's (IGFA's 60 kg class): full drag 31 kg, on a 130-class reel, with the chair's 40 kg holding it (Marlin: 36 kg and more on 130 lb). It would be its own line, reel and sweep.
+
+`test/lines.mjs` holds it:
+- a 260 kg blue marlin on 80 lb, at least 80% from the chair and at most 10% standing or on 60 lb;
+- a 200 kg one on both, standing at least 1.5 times as long.

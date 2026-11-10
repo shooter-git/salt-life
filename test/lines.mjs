@@ -10,7 +10,7 @@ import { FISH } from '../src/game/FishTable.js';
 import { CatchMinigame, DRAG_SET, LINE_MATCH } from '../src/game/CatchMinigame.js';
 import { gearStats, defaultUpgrades, LB, OLD_DRAG_KG, OLD_LINE_KG, UPGRADES } from '../src/game/Gear.js';
 import { DEHOOK, ELECTRIC, HOLD_KG, Rigs } from '../src/game/rigs/Rigs.js';
-import { SIZES, SPECIES, sweep, uncompact } from '../tools/fight-sweep.mjs';
+import { cell, SIZES, SPECIES, sweep, uncompact } from '../tools/fight-sweep.mjs';
 
 let failed = 0;
 const ok = ( c, what ) => {
@@ -37,10 +37,10 @@ const near = ( a, b, e = 1e-9 ) => Math.abs( a - b ) <= e;
 	const reels = UPGRADES.reel.levels, conv = reels[ 2 ], two = reels[ 3 ], line = UPGRADES.line.levels;
 	ok( reels[ 0 ].dragKg === null && reels[ 1 ].dragKg === null, 'the spinning reels have no drag to speak of, as before' );
 	ok( near( lb( conv.dragKg ), 33 ), `the conventional reel's most is a 30-class lever drag's 33 lb (Penn Fathom II LD 30): ${ conv.dragKg.toFixed( 1 ) } kg` );
-	ok( near( lb( two.dragKg ), 40 ), `the two-speed's a 50-class two-speed's 40 lb (Shimano Tiagra 50W LRSA): ${ two.dragKg.toFixed( 1 ) } kg, not an 80-class reel's 24` );
+	ok( two.dragKg === 20, `the two-speed's a 50-class two-speed's 20 kg (Shimano Tiagra 50W LRSA, in most listings): ${ two.dragKg } kg, not an 80-class reel's 24` );
 	ok( near( lb( ELECTRIC.drag ), 48, 0.6 ), `the electric reel's a deep-drop reel's 48 lb (Daiwa Tanacom 1000): ${ ELECTRIC.drag } kg` );
 	ok( DRAG_SET.strike >= 0.35 && DRAG_SET.strike <= 0.40 && DRAG_SET.full >= 0.50 && DRAG_SET.full <= 0.55, `the drag's set at strike (${ DRAG_SET.strike }) and full (${ DRAG_SET.full }) of the line, Caputi's 35 to 40% and 50 to 55%` );
-	ok( conv.dragKg >= DRAG_SET.full * line[ 2 ].lineKg && two.dragKg >= DRAG_SET.full * line[ 3 ].lineKg && ELECTRIC.drag >= DRAG_SET.full * line[ 3 ].lineKg, 'each reel holds full drag on the line it\'s offered with (30 lb on the conventional, 60 lb on the two-speed and the electric)' );
+	ok( conv.dragKg >= DRAG_SET.full * line[ 2 ].lineKg && two.dragKg >= DRAG_SET.full * line[ 4 ].lineKg && ELECTRIC.drag >= DRAG_SET.full * line[ 4 ].lineKg, 'each reel holds full drag on the line it\'s offered with (30 lb on the conventional, 80 lb on the two-speed and the electric)' );
 	// (the drag slips at what it's set to, as the fish tires: strike when it's fresh, full once it's half spent)
 	const g = new CatchMinigame( { species: 'tuna', kg: 20, lineKg: line[ 3 ].lineKg, dragKg: two.dragKg, holdKg: HOLD_KG.chair, spoolM: 600, rng: () => 0.5 } );
 	ok( near( g._give( 0 ), DRAG_SET.strike ) && near( g._give( DRAG_SET.spent ), DRAG_SET.full ) && near( g._give( 1 ), DRAG_SET.full ), `fresh it slips at strike, half spent and on at full (${ g._give( 0 ).toFixed( 3 ) }, ${ g._give( 0.25 ).toFixed( 3 ) }, ${ g._give( 0.5 ).toFixed( 3 ) })` );
@@ -73,7 +73,7 @@ const near = ( a, b, e = 1e-9 ) => Math.abs( a - b ) <= e;
 	const sent = owner.kitOf(), got = Rigs.cleanKit( JSON.parse( JSON.stringify( sent ) ) );
 	ok( got.t.lineKg === her.lineKg && got.t.dragKg === her.dragKg && got.t.standUp, `her kit comes through as it was sent: ${ got.t.lineKg.toFixed( 2 ) } kg line, ${ got.t.dragKg.toFixed( 2 ) } kg drag` );
 	const old = Rigs.cleanKit( { t: { lineKg: 50, dragKg: 24, reelSpeed: 2.6, spoolM: 600, twoSpeed: true, standUp: true, electricReel: true, leader: 3 }, b: {} } );
-	ok( near( old.t.lineKg, 60 * LB ) && near( old.t.dragKg, 40 * LB ), `an old game's 50 kg line comes in as the 60 lb braid (${ old.t.lineKg.toFixed( 2 ) } kg), its 24 kg drag as the two-speed's, not as a 110 lb line` );
+	ok( near( old.t.lineKg, 60 * LB ) && old.t.dragKg === UPGRADES.reel.levels[ 3 ].dragKg, `an old game's 50 kg line comes in as the 60 lb braid (${ old.t.lineKg.toFixed( 2 ) } kg), its 24 kg drag as the two-speed's ${ old.t.dragKg } kg, not as a 110 lb line` );
 	const all = OLD_LINE_KG.map( ( kg, i ) => Rigs.cleanKit( { t: { lineKg: kg, dragKg: OLD_DRAG_KG[ i % 2 ] } } ).t );
 	ok( all.every( ( t, i ) => near( t.lineKg, UPGRADES.line.levels[ i ].lineKg ) ) && near( all[ 0 ].dragKg, UPGRADES.reel.levels[ 2 ].dragKg ), 'each old line as its label, the old conventional\'s drag as the new' );
 	ok( Rigs.cleanKit( { t: { lineKg: 20 } } ).t.lineKg === 20, 'any other figure as it comes' );
@@ -144,6 +144,18 @@ const near = ( a, b, e = 1e-9 ) => Math.abs( a - b ) <= e;
 	// (a 200 kg one standing takes about three times the chair's time: test/tackle.mjs)
 	const blue = now.blueMarlin[ 0.5 ];
 	ok( blue[ 'L3/R3/harness' ].caught >= 0.8, `a ${ blue.kg.toFixed( 0 ) } kg blue marlin standing on 60 lb: landed now (${ Math.round( 100 * blue[ 'L3/R3/harness' ].caught ) }%, ${ ( blue[ 'L3/R3/harness' ].t / 60 ).toFixed( 1 ) } min; from the chair ${ ( blue[ 'L3/R3/chair' ].t / 60 ).toFixed( 1 ) })` );
+
+}
+
+// ---- the 80 lb line: its full drag (19 kg) past the harness's 18, so the biggest blue marlin are the chair's
+{
+
+	const big = { line: 4, reel: 3, electric: false }, mid = { line: 3, reel: 3, electric: false };
+	const at = ( c, hold, kg ) => cell( { ...c, key: hold, hold }, 'blueMarlin', kg, 20 );
+	const chair = at( big, 'chair', 260 ), stand = at( big, 'harness', 260 ), was = at( mid, 'chair', 260 );
+	ok( chair.caught >= 0.8 && stand.caught <= 0.1 && was.caught <= 0.1, `a 260 kg blue marlin on 80 lb: from the chair ${ Math.round( 100 * chair.caught ) }% in ${ ( chair.t / 60 ).toFixed( 1 ) } min, standing ${ Math.round( 100 * stand.caught ) }%; on 60 lb from the chair ${ Math.round( 100 * was.caught ) }%` );
+	const c2 = at( big, 'chair', 200 ), s2 = at( big, 'harness', 200 );
+	ok( c2.caught >= 0.9 && s2.caught >= 0.9 && s2.t > 1.5 * c2.t, `a 200 kg one on 80 lb: standing ${ ( s2.t / 60 ).toFixed( 1 ) } min, from the chair ${ ( c2.t / 60 ).toFixed( 1 ) }` );
 
 }
 

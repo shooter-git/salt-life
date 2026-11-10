@@ -24,22 +24,25 @@ export function realTackle( lineKg, dragKg ) {
 
 export const UPGRADES = {
 	// rod and reel ((M17) lineLb: the label's pounds; lineKg: its breaking strength. Before M17 these held 7, 13, 26 and 50 kg,
-	// about 1.9 times their labels: OLD_LINE_KG)
+	// about 1.9 times their labels: OLD_LINE_KG. 80 lb is IGFA's 37 kg class, the big-game chair's: its full drag, 19 kg, is
+	// past what you hold standing in the harness, so the biggest fish are the chair's)
 	line: { name: 'Fishing line', levels: [
 		{ cost: 0, label: '8 lb mono', lineLb: 8, lineKg: 8 * LB },
 		{ cost: 60, label: '15 lb mono', lineLb: 15, lineKg: 15 * LB },
 		{ cost: 180, label: '30 lb braid', lineLb: 30, lineKg: 30 * LB },
 		{ cost: 450, label: '60 lb braid', lineLb: 60, lineKg: 60 * LB },
+		{ cost: 750, label: '80 lb mono', lineLb: 80, lineKg: 80 * LB },
 	] },
 	// ((M16) spoolM: the line it holds; dragKg: the most its drag holds (CatchMinigame), none to speak of on a spinning
 	// reel, whose fight's as it always was; twoSpeed: a low gear. (M17) Real reels' most: a 30-class lever drag's 33 lb, as
-	// Penn's Fathom II Lever Drag 30; a 50-class two-speed's 40 lb, as Shimano's Tiagra 50W LRSA. The drag's set at a share
-	// of the line under that: CatchMinigame.DRAG_SET)
+	// Penn's Fathom II Lever Drag 30; a 50-class two-speed's 20 kg, as Shimano's Tiagra 50W LRSA (most listings; one US one
+	// has 40 lb), which holds full drag on the 80 lb line. The drag's set at a share of the line under that:
+	// CatchMinigame.DRAG_SET)
 	reel: { name: 'Reel', levels: [
 		{ cost: 0, label: 'Old spinning reel', reelSpeed: 1.1, spoolM: 180, dragKg: null },
 		{ cost: 90, label: 'Smooth spinning reel', reelSpeed: 1.6, spoolM: 220, dragKg: null },
 		{ cost: 320, label: 'Conventional reel', reelSpeed: 2.2, spoolM: 350, dragKg: 33 * LB },
-		{ cost: 900, label: 'Two-speed big-game reel (its low gear comes in by itself on a heavy fish)', reelSpeed: 2.6, spoolM: 600, dragKg: 40 * LB, twoSpeed: true },
+		{ cost: 900, label: 'Two-speed big-game reel (its low gear comes in by itself on a heavy fish)', reelSpeed: 2.6, spoolM: 600, dragKg: 20, twoSpeed: true },
 	] },
 	rod: { name: 'Rod', levels: [
 		{ cost: 0, label: 'Hand-me-down rod', castM: 22 },
