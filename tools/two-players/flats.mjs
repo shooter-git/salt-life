@@ -286,6 +286,7 @@ if ( doing( 'spot' ) ) {
 		await until( robin.game, `window.__app.together.flats.calls > ${ before }`, 180000 ).catch( () => {} );
 		const call = await robin.game.evaluate( ( id ) => ( { calls: window.__app.together.flats.calls, said: window.__toasts.filter( ( t ) => /^You call it/.test( t ) ).at( - 1 ), it: window.__app.together.flats._calledAt.has( id ), spooked: window.__app.game.flats.state.spooked[ id ] !== undefined } ), C );
 		await until( sam.game, 'window.__toasts.some( ( t ) => /^Robin: / .test( t ) )', 120000 ).catch( () => {} );
+		await frames( sam.game, 2 ); // (his game's drawn it since the call)
 		const heard = await sam.game.evaluate( async ( id ) => {
 
 			const { seenOnFlats } = await import( '/src/game/Sight.js' );
