@@ -3,7 +3,7 @@ import { G } from '../core/Globals.js';
 import { WORLD } from '../world/WorldLayout.js';
 import { FISH, CARAPACE, fishWeightKg, spearRule } from './FishTable.js';
 import { habitatAt, rollWeight } from './Bites.js';
-import { CatchMinigame } from './CatchMinigame.js';
+import { CatchMinigame, SHAFT_MATCH } from './CatchMinigame.js';
 import { GameState } from './GameState.js';
 import { FishingRod, buildLineGeometry } from './FishingRod.js';
 import { createLineMaterial } from './GameMaterials.js';
@@ -2380,7 +2380,8 @@ export class Game {
 
 				const g = gun.gear;
 				// (landed once it's tired and pulled close: CatchMinigame landAt, tired)
-				const f = this.spearFight = new CatchMinigame( { species: sp.id, kg: sp.kg, lineKg: g.spearHold * ( sp.tail ? 0.6 : 1 ), reelSpeed: 1.0, distance: Math.max( 1.5, gun.muzzle.distanceTo( gun.tip ) - g.shaftM ), landAt: 1.0, tired: 0.25 } );
+				const hold = g.spearHold * ( sp.tail ? 0.6 : 1 );
+				const f = this.spearFight = new CatchMinigame( { species: sp.id, kg: sp.kg, lineKg: hold, matchKg: hold * SHAFT_MATCH, reelSpeed: 1.0, distance: Math.max( 1.5, gun.muzzle.distanceTo( gun.tip ) - g.shaftM ), landAt: 1.0, tired: 0.25 } );
 				// it runs to the end of the line, and tears free (with a reel, it takes line first)
 				f.maxDistance = g.lineM + ( g.spearReel ? 25 : 0.4 );
 				f.spear = true;

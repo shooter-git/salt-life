@@ -14,6 +14,7 @@ import { baitWeight } from '../src/game/Bait.js';
 import { biteHint, ordersFor } from '../src/game/Orders.js';
 import { weekOrder } from '../src/game/WeekOrder.js';
 import { CatchMinigame } from '../src/game/CatchMinigame.js';
+import { UPGRADES } from '../src/game/Gear.js';
 import { GameState } from '../src/game/GameState.js';
 import { letGo, trophyRows, trophyCardOf, trophyNote, cleanTrophies } from '../src/game/Trophies.js';
 import { findsAbout, hurricaneWake, FINDS } from '../src/game/Finds.js';
@@ -205,7 +206,7 @@ const hooked = ( h, hook ) => ( { ...h, hook } );
 	const rate = ( species, kg ) => {
 
 		let n = 0;
-		for ( let i = 0; i < 20; i ++ ) if ( fight( species, kg, 27, 1.6 ) === 'caught' ) n ++;
+		for ( let i = 0; i < 20; i ++ ) if ( fight( species, kg, UPGRADES.line.levels[ 3 ].lineKg, UPGRADES.reel.levels[ 1 ].reelSpeed ) === 'caught' ) n ++;
 		return n / 20;
 
 	};

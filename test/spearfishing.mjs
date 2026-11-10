@@ -5,7 +5,7 @@ import { Vector3, Scene, PerspectiveCamera } from 'three';
 import { Player, BREATH } from '../src/player/Player.js';
 import { Speargun, gunLayout, gunModels, groundHit } from '../src/game/Speargun.js';
 import { gearStats, defaultUpgrades, UPGRADES } from '../src/game/Gear.js';
-import { CatchMinigame } from '../src/game/CatchMinigame.js';
+import { CatchMinigame, SHAFT_MATCH } from '../src/game/CatchMinigame.js';
 import { fishWeightKg } from '../src/game/FishTable.js';
 import { Colliders } from '../src/world/Colliders.js';
 import { wariness } from '../src/world/Fish.js';
@@ -152,7 +152,7 @@ const run = ( gun, s, env = {} ) => {
 	const fight = ( species, cm, level, pull ) => {
 
 		const g = lv( level );
-		const f = new CatchMinigame( { species, kg: fishWeightKg( species, cm ), lineKg: g.spearHold, reelSpeed: 1, distance: 2.5, rng, landAt: 1.0, tired: 0.25 } );
+		const f = new CatchMinigame( { species, kg: fishWeightKg( species, cm ), lineKg: g.spearHold, matchKg: g.spearHold * SHAFT_MATCH, reelSpeed: 1, distance: 2.5, rng, landAt: 1.0, tired: 0.25 } );
 		f.maxDistance = g.lineM + ( g.spearReel ? 25 : 0.4 );
 		let st = 'fighting';
 		for ( let i = 0; i < 60 * 90 && st === 'fighting'; i ++ ) st = f.update( 1 / 60, pull( f ) );

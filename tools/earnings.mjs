@@ -6,7 +6,7 @@
 import { habitatAt, pickSpecies, rollWeight, biteDelay } from '../src/game/Bites.js';
 import { FISH, fishValue, releaseBonus } from '../src/game/FishTable.js';
 import { ABLE } from '../src/game/Seaworthy.js';
-import { fuelBurn, fuelPrice } from '../src/game/Gear.js';
+import { fuelBurn, fuelPrice, UPGRADES } from '../src/game/Gear.js';
 
 const far = 500;
 const SPOTS = {
@@ -21,16 +21,21 @@ const SPOTS = {
 };
 
 // a stage of the game: where they fish, the gear, the box, and the run in: seconds under way (0 walking or paddling) and
-// the rest of the time a trip costs (tying up, walking to Joe, selling)
+// the rest of the time a trip costs (tying up, walking to Joe, selling). ((M17) line: the line's level, at its label)
+const LINE = UPGRADES.line.levels.map( ( l ) => l.lineKg );
 const STAGES = [
-	{ name: 'kayak, bare', boat: 'kayak', spot: [ 'flats', 'pier', 'bay' ], lineKg: 7, reel: 1.1, holdKg: 12, ashore: 150, run: 0 },
-	{ name: 'kayak, line and rod and crate', boat: 'kayak', spot: [ 'flats', 'pier', 'bay', 'creek' ], lineKg: 13, reel: 1.6, holdKg: 25, ashore: 170, run: 0 },
-	{ name: 'console, inshore gear', boat: 'console', spot: [ 'reef', 'reef', 'bay', 'creek' ], lineKg: 13, reel: 1.6, holdKg: 60, ashore: 70, run: 60 },
-	{ name: 'console, near offshore', boat: 'console', spot: [ 'reef', 'shelf', 'shelf' ], lineKg: 26, reel: 2.2, holdKg: 60, ashore: 70, run: 240 },
-	{ name: 'lobster boat, bare', boat: 'lobster', spot: [ 'reef', 'shelf', 'shelf' ], lineKg: 26, reel: 2.2, holdKg: 30, ashore: 70, run: 360 },
-	{ name: 'lobster boat, upgraded', boat: 'lobster', spot: [ 'reef', 'shelf', 'shelf', 'edge' ], lineKg: 50, reel: 2.2, holdKg: 160, ashore: 70, run: 500 },
-	{ name: 'sportfisher, edge and blue', boat: 'sportfisher', spot: [ 'edge', 'blue' ], lineKg: 50, reel: 2.6, holdKg: 300, ashore: 90, run: 520, dragKg: 24 },
+	{ name: 'kayak, bare', boat: 'kayak', spot: [ 'flats', 'pier', 'bay' ], lineKg: LINE[ 0 ], reel: 1.1, holdKg: 12, ashore: 150, run: 0 },
+	{ name: 'kayak, line and rod and crate', boat: 'kayak', spot: [ 'flats', 'pier', 'bay', 'creek' ], lineKg: LINE[ 1 ], reel: 1.6, holdKg: 25, ashore: 170, run: 0 },
+	{ name: 'console, inshore gear', boat: 'console', spot: [ 'reef', 'reef', 'bay', 'creek' ], lineKg: LINE[ 1 ], reel: 1.6, holdKg: 60, ashore: 70, run: 60 },
+	{ name: 'console, near offshore', boat: 'console', spot: [ 'reef', 'shelf', 'shelf' ], lineKg: LINE[ 2 ], reel: 2.2, holdKg: 60, ashore: 70, run: 240 },
+	{ name: 'lobster boat, bare', boat: 'lobster', spot: [ 'reef', 'shelf', 'shelf' ], lineKg: LINE[ 2 ], reel: 2.2, holdKg: 30, ashore: 70, run: 360 },
+	{ name: 'lobster boat, upgraded', boat: 'lobster', spot: [ 'reef', 'shelf', 'shelf', 'edge' ], lineKg: LINE[ 3 ], reel: 2.2, holdKg: 160, ashore: 70, run: 500 },
+	{ name: 'sportfisher, edge and blue', boat: 'sportfisher', spot: [ 'edge', 'blue' ], lineKg: LINE[ 3 ], reel: 2.6, holdKg: 300, ashore: 90, run: 520, drag: true },
 ];
+// (past about 3.9 times its line's breaking strength a fish is mostly lost: twice the 8 lb line's old 7 kg, the lines
+// having held about 1.9 times their labels before M17. With the two-speed's drag, up to about 200 kg: tools/fight-sweep.mjs
+// has a blue marlin landed from the chair to there on 60 lb, docs/m17/lines.md)
+const LOST = 2 * 7 / LINE[ 0 ], DRAG_LANDS = 200;
 
 let seed = 11;
 const rng = () => ( seed = ( seed * 16807 ) % 2147483647 ) / 2147483647;
@@ -49,8 +54,8 @@ function play( st, hours = 400 ) {
 		const f = FISH[ id ], kg = rollWeight( id, rng );
 		// (the fight: its stamina as CatchMinigame has it, a little of it out of the band, and the line back on the reel)
 		const fightS = f.stamina * Math.pow( Math.max( kg / f.kg[ 1 ], 0.15 ), 0.35 ) * 1.3 + 25 / st.reel;
-		// (past about twice its line's strength a fish is mostly lost: half the fight for nothing)
-		if ( kg > st.lineKg * 2 && ! ( st.dragKg && kg < st.dragKg * 8 ) ) {
+		// (past what its line lands, half the fight for nothing)
+		if ( kg > st.lineKg * LOST && ! ( st.drag && kg < DRAG_LANDS ) ) {
 
 			t += fightS / 2;
 			continue;

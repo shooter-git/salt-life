@@ -258,7 +258,9 @@ const policies = {
 	mash: () => true,
 	idle: () => false,
 };
-const fight = ( species, kg, policy, lineKg = 7, reelSpeed = 1.1 ) => {
+// ((M17) the lines at their labels: 8 lb, 30 lb and 60 lb)
+const LINE = UPGRADES.line.levels.map( ( l ) => l.lineKg );
+const fight = ( species, kg, policy, lineKg = LINE[ 0 ], reelSpeed = 1.1 ) => {
 
 	const g = new CatchMinigame( { species, kg, lineKg, reelSpeed, distance: 18, rng } );
 	let st = 'fighting';
@@ -281,10 +283,10 @@ for ( const [ species, kg ] of [ [ 'grunt', 0.8 ], [ 'yellowtail', 1.2 ], [ 'jac
 ok( table[ 'grunt/careful' ].st === 'caught' && table[ 'yellowtail/careful' ].st === 'caught', 'careful reeling lands small fish' );
 ok( table[ 'jack/careful' ].st === 'caught', 'careful reeling lands a 6 kg jack on the starter line' );
 ok( table[ 'tuna/mash' ].st === 'snapped' && table[ 'tarpon/mash' ].st === 'snapped', 'holding reel on a big fish snaps the line' );
-ok( table[ 'tuna/careful' ].st !== 'caught' && fight( 'tuna', 13, policies.careful, 26, 1.6 ).st === 'caught', 'a 13 kg tuna needs the 30 lb line' );
+ok( table[ 'tuna/careful' ].st !== 'caught' && fight( 'tuna', 13, policies.careful, LINE[ 2 ], 1.6 ).st === 'caught', 'a 13 kg tuna needs the 30 lb line' );
 ok( [ 'escaped' ].includes( table[ 'grunt/idle' ].st ), 'never reeling loses the fish' );
 ok( fight( 'tarpon', 35, policies.careful ).st !== 'caught', 'a 35 kg tarpon beats the starter line' );
-ok( fight( 'tarpon', 35, policies.careful, 50, 2.2 ).st === 'caught', 'the top line and reel land it' );
+ok( fight( 'tarpon', 35, policies.careful, LINE[ 3 ], 2.2 ).st === 'caught', 'the top line and reel land it' );
 
 // ---- (M10) the fight in a blow: gusts on the line snap it if you reel on through them; careful
 // reeling still lands them; a fair day's fight is exactly as it was (nothing's drawn for the wind)
@@ -293,7 +295,7 @@ ok( fight( 'tarpon', 35, policies.careful, 50, 2.2 ).st === 'caught', 'the top l
 	const lcg = ( s0 ) => () => ( ( s0 = ( s0 * 1664525 + 1013904223 ) >>> 0 ) / 4294967296 );
 	const run = ( species, kg, policy, wind, seed ) => {
 
-		const g = new CatchMinigame( { species, kg, lineKg: 7, reelSpeed: 1.1, distance: 18, rng: lcg( seed ), wind } );
+		const g = new CatchMinigame( { species, kg, lineKg: LINE[ 0 ], reelSpeed: 1.1, distance: 18, rng: lcg( seed ), wind } );
 		let st = 'fighting';
 		for ( let i = 0; i < 60 * 180 && st === 'fighting'; i ++ ) st = g.update( 1 / 60, policy( g ) );
 		return { st, t: g.time };
@@ -331,7 +333,7 @@ ok( fight( 'tarpon', 35, policies.careful, 50, 2.2 ).st === 'caught', 'the top l
 	console.log( `     a 6 kg jack reeled steadily by the needle: lost ${ fairLost } of 120 on a fair day, ${ galeLost } in a gale; reeled carefully in a gale, ${ ( landed( 'grunt', 0.8, 1 ) * 100 ).toFixed( 0 ) }% of grunts and ${ ( landed( 'jack', 6, 1 ) * 100 ).toFixed( 0 ) }% of 6 kg jacks landed` );
 	ok( galeLost > fairLost + 15, 'in a gale the same reeling loses more fish: the gusts snap the line' );
 	ok( landed( 'grunt', 0.8, 1 ) > 0.9 && landed( 'jack', 6, 1 ) > 0.8, '... and careful reeling still lands them' );
-	const a = run( 'tuna', 6, policies.careful, 0, 77 ), b = new CatchMinigame( { species: 'tuna', kg: 6, lineKg: 7, reelSpeed: 1.1, distance: 18, rng: lcg( 77 ) } );
+	const a = run( 'tuna', 6, policies.careful, 0, 77 ), b = new CatchMinigame( { species: 'tuna', kg: 6, lineKg: LINE[ 0 ], reelSpeed: 1.1, distance: 18, rng: lcg( 77 ) } );
 	let st = 'fighting';
 	for ( let i = 0; i < 60 * 180 && st === 'fighting'; i ++ ) st = b.update( 1 / 60, policies.careful( b ) );
 	ok( a.st === st && a.t === b.time, 'a fair day\'s fight goes exactly as it did' );
