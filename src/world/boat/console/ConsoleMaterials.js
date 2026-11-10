@@ -8,7 +8,7 @@ import { useGroundBounce } from '../../../materials/GroundBounce.js';
 //   3 the bottom (white over antifouling)   4 the teak-look mat on her platform
 export const SURFACE = { plain: 0, nonSkid: 1, topsides: 2, bottom: 3, mat: 4 };
 
-const BOTTOM = new Color( 0x1c2c44 ).convertSRGBToLinear(); // (her antifouling, blue as a boat kept in clear water's is)
+const BOTTOM = new Color( 0x1c2c44 ); // (her antifouling, blue as a boat kept in clear water's is; three's Color takes a hex as sRGB, to linear once)
 const NAVY = 0x234a75; // (her topsides as she comes, as the Regulator's in the running shots)
 
 const DECK_BOUNCE = new Color( 0.44, 0.44, 0.43 ); // (white gelcoat throwing it back: no sand's colour in it)
@@ -35,7 +35,7 @@ export class ConsoleMaterials extends BoatMaterials {
 
 	createHull() {
 
-		this.paint = { value: new Color( NAVY ).convertSRGBToLinear() };
+		this.paint = { value: new Color( NAVY ) };
 		const m = withAux( new MeshStandardMaterial( { roughness: 0.3, metalness: 0, side: 2 } ), { fragment: /* glsl */`
 	float pat = vAux.z;
 	float surfRough = -1.0;
@@ -90,10 +90,11 @@ export class ConsoleMaterials extends BoatMaterials {
 
 	}
 
-	// (null: as she came. ((M16) it was black: setHex( null ))
+	// (null: as she came. ((M16) it was black: setHex( null ). (M17) setHex takes it from sRGB to linear itself: it went to
+	// linear twice over, and barn red was 0.85% albedo where it's 6%)
 	setPaint( hex ) {
 
-		this.paint.value.setHex( hex ?? NAVY ).convertSRGBToLinear();
+		this.paint.value.setHex( hex ?? NAVY );
 
 	}
 

@@ -3,7 +3,7 @@
 // reckoning, or by App.pickUp's: on the ground, not in it.
 //   node test/days-out-clock.mjs
 import { DaysOut } from '../src/game/DaysOut.js';
-import { DAY_RATE } from '../src/game/IslandClock.js';
+import { DAY_RATE, NIGHT_X } from '../src/game/IslandClock.js';
 import { BoatController } from '../src/player/BoatController.js';
 import { Vector3 } from '../src/engine/index.js';
 
@@ -97,6 +97,56 @@ Date.now = () => now;
 	s.timeOfDay = 12;
 	d._clock( 0.016 );
 	ok( d.rests.length === 1, 'the clock held, moved on by hand: a rest' );
+
+}
+
+{
+
+	// (M17) at deep night in company the clock's the room's, read once in a frame, and the wall's time is read here later in it: a
+	// slow frame's half second apart either way. Pages hidden 13 s to 5 minutes, each look's clock up to half a second ahead
+	// of the wall: no rest. Before, the guard's 1% alone was all it had (looks read 0.986 to 0.994 of what's allowed)
+	const rate = NIGHT_X * DAY_RATE;
+	let spare = Infinity, spareOld = Infinity, rests = 0, oldRests = 0;
+	for ( const gap of [ 13, 20, 30, 60, 120, 300 ] ) for ( const skew of [ - 0.5, - 0.25, 0, 0.25, 0.5 ] ) {
+
+		const d = stub(), s = d.app.settings;
+		s.timeOfDay = 22;
+		d._clock( 0 );
+		const was = now;
+		now += gap * 1000;
+		s.timeOfDay += ( gap + skew ) * rate;
+		const h = ( gap + skew ) * rate;
+		// (what's to spare, in the wall's seconds: what the guard allows the clock, less what it ran)
+		spare = Math.min( spare, ( ( now - was ) / 1000 + 2 ) * 1.01 - h / rate );
+		spareOld = Math.min( spareOld, ( now - was ) / 1000 * 1.01 - h / rate );
+		if ( h > ( now - was ) / 1000 * rate * 1.01 ) oldRests ++;
+		d._clock( 0.1 );
+		rests += d.rests.length;
+
+	}
+
+	ok( rests === 0, `deep night, pages hidden 13 s to 5 min, the clock up to 0.5 s off the wall: no rest (${ rests }; the old guard took ${ oldRests } of 30 for one)` );
+	ok( spare > 1.5, `the least to spare at a look: ${ spare.toFixed( 2 ) } s of the wall (the old guard's ${ spareOld.toFixed( 2 ) } s; a slow frame's 0.5 s)` );
+
+}
+
+{
+
+	// a real jump at deep night is still one: a rest just after a page hidden 10 s, and a tow's half hour after a second's look
+	const d = stub(), s = d.app.settings, rate = NIGHT_X * DAY_RATE;
+	s.timeOfDay = 22;
+	d._clock( 0 );
+	now += 10e3;
+	s.timeOfDay += 10 * rate + 0.6;
+	d._clock( 0.1 );
+	ok( d.rests.length === 1, `a 0.6 h rest straight after a page hidden 10 s at night: a rest (${ JSON.stringify( d.rests ) })` );
+	const e = stub(), t = e.app.settings;
+	t.timeOfDay = 23;
+	e._clock( 0 );
+	now += 1000;
+	t.timeOfDay += rate + 0.51;
+	e._clock( 0.1 );
+	ok( e.rests.length === 1, `a tow's 0.51 h after a second's look at night: a rest (${ JSON.stringify( e.rests ) })` );
 
 }
 

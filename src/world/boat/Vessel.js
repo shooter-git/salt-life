@@ -1,6 +1,7 @@
 import { BufferGeometry, Group, MathUtils, Matrix4, Quaternion, Vector3 } from '../../engine/index.js';
 import { RHO_SEAWATER } from './HullLines.js';
 import { triangleCount } from './GeoKit.js';
+import { useShadeFill } from './BoatMaterials.js';
 
 // (M16) a compass's card on its gimbal, held level by its own weight as she pitches and rolls: a pendulum's period (s) and damping
 // in the fluid, quick and well damped against a boat's slow roll; free of the bowl to this much (rad) fore and aft and
@@ -331,6 +332,7 @@ export class Vessel {
 		} else material.color.set( hex );
 
 		material.customProgramCacheKey = () => from.customProgramCacheKey();
+		material.onBeforeRender = from.onBeforeRender; // ((M17) her shade fill: BoatMaterials' useShadeFill, on the material it's drawn with)
 		material.onBeforeCompile = ( shader, renderer ) => {
 
 			compile.call( from, shader, renderer );
@@ -339,6 +341,14 @@ export class Vessel {
 		};
 
 		return { from, material };
+
+	}
+
+	// (M17) her outside's shade, once she's built (loadBoat): BoatMaterials' useShadeFill on what of hers there is
+	shadeFill() {
+
+		const M = this.materials || {};
+		for ( const k of [ 'hull', 'gelcoat', 'wood', 'fittings' ] ) useShadeFill( M[ k ] );
 
 	}
 

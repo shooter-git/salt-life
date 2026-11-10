@@ -1,5 +1,4 @@
 import * as THREE from '../../../engine/index.js';
-import { G } from '../../../core/Globals.js';
 import { BoatMaterials, withAux, extend } from '../BoatMaterials.js';
 import { SF } from './SportfisherLines.js';
 
@@ -8,15 +7,18 @@ import { SF } from './SportfisherLines.js';
 // cabin's its own material, cherry and cream under its downlights, lit by them, as it's always dark in there otherwise;
 // and her side windows are one-way as tinted glass is: near black from outside, clear from in the salon.
 
-const linear = ( hex ) => new THREE.Color().setHex( hex ).convertSRGBToLinear();
+// (a hex, sRGB, to linear: setHex does that itself. (M17) It went to linear twice over, every dark colour on her too dark)
+const linear = ( hex ) => new THREE.Color().setHex( hex );
 const vec3 = ( c ) => `vec3( ${ c.r.toFixed( 5 ) }, ${ c.g.toFixed( 5 ) }, ${ c.b.toFixed( 5 ) } )`;
 
-// how much white gelcoat in deep shade is lifted by the sea's bounce: the world's sky fill is kept low for the sand, and
-// the underside of her overhang and the faces away from the sun otherwise come out black
-const OUTSIDE_FILL = 0.3;
+// ((M16) her gelcoat in deep shade was lifted by an OUTSIDE_FILL of its own, 0.3 of its colour: (M17) every boat's outside
+// takes BoatMaterials' shade fill now, the sky's light in her gloss too, and the dark paints with it)
 const CABIN_FILL = 0.8; // her downlights
 const TOPSIDES = 0xf4f2ec;
-const UNDER_GLOW = { r: 0.03, g: 0.2, b: 0.12 }; // (the pool's own hue; on white paint at the waterline about as bright as the water lighting it)
+// her underwater lights on her paint from below (the pool's own green, SportfisherModel's POOL: on white paint at the waterline
+// about as bright as the water lighting it), going off up her (UNDER_UP, m) and along her from the transom (UNDER_ALONG, m), as
+// the photographs of real ones have it: (M17) the transom's foot lit bright, her topsides only near the stern
+const UNDER_GLOW = { r: 0.03, g: 0.5, b: 0.22 }, UNDER_UP = 0.45, UNDER_ALONG = 3.2;
 const CABIN_SUN = 0.04; // what daylight gets in: the sun's shadows aren't drawn on a phone, and without this it lights her soles through the deck
 
 export class SportfisherMaterials extends BoatMaterials {
@@ -27,8 +29,7 @@ export class SportfisherMaterials extends BoatMaterials {
 		this.topsides = { value: linear( TOPSIDES ) }; // (setPaint)
 		this.under = { value: 0 }; // her underwater lights, 0..1 (Model.setUnderLights)
 		this.hull.onBeforeCompile = this._hullCompile();
-		this._fillGelcoat();
-		this._fillFittings();
+		this._teakSoles();
 		this.cabin = this._createCabin();
 		this._oneWayGlass();
 		// (three shares a program between materials whose onBeforeCompile reads the same, and BoatMaterials' extend reads the same
@@ -64,24 +65,21 @@ export class SportfisherMaterials extends BoatMaterials {
 		return extend( m, ( shader ) => {
 
 			shader.uniforms.sfTopsides = topsides;
-			shader.uniforms.sfNight = G.night;
 			shader.uniforms.sfUnder = under;
 			shader.fragmentShader = shader.fragmentShader
-				.replace( '#include <common>', '#include <common>\nuniform vec3 sfTopsides;\nuniform float sfNight;\nuniform float sfUnder;' )
+				.replace( '#include <common>', '#include <common>\nuniform vec3 sfTopsides;\nuniform float sfUnder;' )
 				.replace( '#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n\troughnessFactor = hullRough;' )
-				.replace( '#include <emissivemap_fragment>', `#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * ${ OUTSIDE_FILL.toFixed( 3 ) } * ( 1.0 - 0.9 * sfNight );\n\t// the green water under her stern lights it from below: most at the waterline and the transom, going off up her and along her\n\ttotalEmissiveRadiance += diffuseColor.rgb * ${ vec3( UNDER_GLOW ) } * sfUnder * exp( - max( vLocal.y, 0.0 ) * 1.1 ) * exp( - max( vLocal.z - ( ${ SF.zAft.toFixed( 2 ) } ), 0.0 ) / 6.0 );` );
+				.replace( '#include <emissivemap_fragment>', `#include <emissivemap_fragment>\n\t// the green water under her stern lights it from below: most at the waterline and the transom, going off up her and along her\n\ttotalEmissiveRadiance += diffuseColor.rgb * ${ vec3( UNDER_GLOW ) } * sfUnder * exp( - max( vLocal.y, 0.0 ) / ${ UNDER_UP.toFixed( 2 ) } ) * exp( - max( vLocal.z - ( ${ SF.zAft.toFixed( 2 ) } ), 0.0 ) / ${ UNDER_ALONG.toFixed( 2 ) } );` );
 
 		} ).onBeforeCompile;
 
 	}
 
-	_fillGelcoat() {
+	_teakSoles() {
 
 		extend( this.gelcoat, ( shader ) => {
 
-			shader.uniforms.sfNight = G.night;
 			shader.fragmentShader = shader.fragmentShader
-				.replace( '#include <common>', '#include <common>\nuniform float sfNight;' )
 				.replace( '#include <color_fragment>', /* glsl */`#include <color_fragment>
 	if ( vAux.z > 1.5 && vAux.z < 2.5 ) {
 
@@ -95,8 +93,7 @@ export class SportfisherMaterials extends BoatMaterials {
 		diffuseColor.rgb = mix( ${ vec3( linear( 0xd9c7aa ) ) }, teak, seam );
 
 	}
-` )
-				.replace( '#include <emissivemap_fragment>', `#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * ${ OUTSIDE_FILL.toFixed( 3 ) } * ( 1.0 - 0.9 * sfNight );` );
+` );
 
 		} );
 
@@ -140,20 +137,6 @@ export class SportfisherMaterials extends BoatMaterials {
 	float sfGloss = pow( max( sfR.y, 0.0 ), 18.0 ) * ( 1.0 - clamp( vAux.x * 1.6, 0.0, 1.0 ) );
 	totalEmissiveRadiance += diffuseColor.rgb * ${ CABIN_FILL.toFixed( 3 ) } * sfLit + vec3( 1.0, 0.93, 0.82 ) * sfGloss * 0.5;` )
 				.replace( '#include <lights_fragment_end>', `#include <lights_fragment_end>\n\treflectedLight.directDiffuse *= ${ CABIN_SUN.toFixed( 3 ) };\n\treflectedLight.directSpecular *= ${ CABIN_SUN.toFixed( 3 ) };` );
-
-		} );
-
-	}
-
-	// what isn't metal among her fittings takes the same lift as her gelcoat (her tower's roof, seen from under it)
-	_fillFittings() {
-
-		extend( this.fittings, ( shader ) => {
-
-			shader.uniforms.sfNight = G.night;
-			shader.fragmentShader = shader.fragmentShader
-				.replace( '#include <common>', '#include <common>\nuniform float sfNight;' )
-				.replace( '#include <emissivemap_fragment>', `#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += diffuseColor.rgb * ${ OUTSIDE_FILL.toFixed( 3 ) } * ( 1.0 - 0.9 * sfNight ) * ( 1.0 - vAux.y );` );
 
 		} );
 
