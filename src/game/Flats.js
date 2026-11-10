@@ -36,8 +36,11 @@ import { FEED_RAYS, RAY_STEP } from './FlatsGround.js';
 //     id: the school's own (its high water's and its number); n: how many (what's been hooked taken off); ( x, z ): its
 //     anchor; ( dx, dz ): the way it's going; mode: 'cruise' | 'feed' | 'tail' | 'mill' | 'roll' | 'laid' | 'hold';
 //     life: 0..1 as it comes and goes
-//   newFlatsState() -> { spooked: { id: T until }, hooked: { id: count } }   spook( state, id, T )   hook( state, id )
+//   newFlatsState() -> { spooked: { id: T until }, hooked: { id: count }, at: { id: [ x, z ] spooked from } }
+//   spook( state, id, T, x, z )   hook( state, id )
 //   forgetFlats( state, T ): what's long past let go     tideStage( T ) -> { high: { T, k }, phi } (hours from high water)
+//   (M17, the flats together) mergeFlats( out, records ), flatsWire( state ), cleanFlats( raw ): everyone's records as one,
+//   and as they're sent (below)
 
 export const FLATS_FISH = {
 	quiet: 0.6, // island hours a spooked school's gone for (the flat goes quiet a while: about a minute by day)
@@ -265,12 +268,15 @@ export function tideStage( T ) {
 
 }
 
-export const newFlatsState = () => ( { spooked: {}, hooked: {} } );
+// ((M17, the flats together) at: where each was spooked from, so it bolts away from there on everyone's game)
+export const newFlatsState = () => ( { spooked: {}, hooked: {}, at: {} } );
 
-// a school spooked at T: it bolts, and it's gone for a while
-export function spook( state, id, T ) {
+// a school spooked at T (from ( x, z ), if it's known): it bolts, and it's gone for a while ((M17, the flats together) till a
+// hundredth of an island hour, a second of play by day, as it's sent: so it's back at the same moment on every game)
+export function spook( state, id, T, x, z ) {
 
-	state.spooked[ id ] = T + F.quiet;
+	state.spooked[ id ] = Math.max( state.spooked[ id ] ?? - Infinity, Math.round( ( T + F.quiet ) * 100 ) / 100 );
+	if ( Number.isFinite( x ) && Number.isFinite( z ) && state.at ) state.at[ id ] = [ Math.round( x * 10 ) / 10, Math.round( z * 10 ) / 10 ];
 	return state;
 
 }
@@ -283,13 +289,116 @@ export function hook( state, id ) {
 
 }
 
-// what's long past let go (the schools of tides gone by)
+// (M17, the flats together) a school's id, and when its visit's over: a high water's (`bone`, `permit`, `blacktip`, `lemon`,
+// `snook`: its integer k, its fish about for seven hours either side of it), an island day's (`cuda`, `tarpon`), a lunation's
+// (`spawn`). null for anything else
+const ID = /^(bone|permit|blacktip|lemon|snook|cuda|tarpon|spawn):(-?\d{1,7})(?::(\d{1,3}))?$/;
+const BY_DAY = { cuda: true, tarpon: true };
+export const flatsId = ( id ) => typeof id === 'string' && ID.test( id );
+function visitOver( id, T ) {
+
+	const m = ID.exec( id );
+	if ( ! m ) return true;
+	const n = Number( m[ 2 ] );
+	if ( m[ 1 ] === 'spawn' ) return n < Math.floor( ( T / 24 ) / ( SYNODIC / 2 ) + 0.5 );
+	if ( BY_DAY[ m[ 1 ] ] ) return n < Math.floor( T / 24 );
+	return n < Math.round( T / HIGH_GAP ) - 2;
+
+}
+
+// what's long past let go: a spook's quiet over, a school's visit over ((M17, the flats together) a barracuda's and a tarpon's
+// by their island day, the spawning school's by its lunation: they were read as high waters, and a fish hooked from one
+// came back the next time this ran)
 export function forgetFlats( state, T ) {
 
-	const k = Math.round( T / HIGH_GAP );
-	for ( const id of Object.keys( state.spooked ) ) if ( state.spooked[ id ] < T ) delete state.spooked[ id ];
-	for ( const id of Object.keys( state.hooked ) ) if ( Number( id.split( ':' )[ 1 ] ) < k - 2 ) delete state.hooked[ id ];
+	for ( const id of Object.keys( state.spooked ) ) if ( ! ( state.spooked[ id ] >= T ) ) {
+
+		delete state.spooked[ id ];
+		if ( state.at ) delete state.at[ id ];
+
+	}
+
+	for ( const id of Object.keys( state.hooked ) ) if ( visitOver( id, T ) ) delete state.hooked[ id ];
+	if ( state.at ) for ( const id of Object.keys( state.at ) ) if ( state.spooked[ id ] === undefined ) delete state.at[ id ];
 	return state;
+
+}
+
+// (M17, the flats together: docs/m17/flats-together.md) Each player's own record of what they've done to the flats' fish (a
+// state as above) is theirs alone to write; everyone's game runs on all of them together:
+//   mergeFlats( out, records ) -> out: a school's gone until the latest anyone's spooked it till (and from where that
+//     spook was), one fewer for each fish anyone's hooked from it
+//   flatsWire( state ) -> { s: { id: [ until, x, z ] }, h: { id: n } }   what's sent (until to a hundredth of an island
+//     hour, as spook keeps it; where from to a tenth of a metre)
+//   cleanFlats( raw ) -> a state: what came from someone else's game, anything malformed dropped
+export const FLATS_WIRE = { most: 120 }; // entries a record keeps (a spook's quiet is minutes, a visit hours: a handful)
+export function mergeFlats( out, records ) {
+
+	for ( const k of [ 'spooked', 'hooked', 'at' ] ) {
+
+		if ( ! out[ k ] ) out[ k ] = {};
+		for ( const id of Object.keys( out[ k ] ) ) delete out[ k ][ id ];
+
+	}
+
+	for ( const r of records ) {
+
+		if ( ! r ) continue;
+		for ( const [ id, until ] of Object.entries( r.spooked ) ) if ( ! ( out.spooked[ id ] >= until ) ) {
+
+			out.spooked[ id ] = until;
+			if ( r.at && r.at[ id ] ) out.at[ id ] = r.at[ id ];
+			else delete out.at[ id ];
+
+		}
+
+		for ( const [ id, n ] of Object.entries( r.hooked ) ) out.hooked[ id ] = ( out.hooked[ id ] || 0 ) + n;
+
+	}
+
+	return out;
+
+}
+
+export function flatsWire( state ) {
+
+	const s = {}, h = {};
+	for ( const [ id, until ] of Object.entries( state.spooked ) ) {
+
+		const at = state.at && state.at[ id ];
+		s[ id ] = at ? [ Math.round( until * 100 ) / 100, at[ 0 ], at[ 1 ] ] : [ Math.round( until * 100 ) / 100 ];
+
+	}
+
+	for ( const [ id, n ] of Object.entries( state.hooked ) ) h[ id ] = n;
+	return { s, h };
+
+}
+
+export function cleanFlats( raw ) {
+
+	const out = newFlatsState();
+	if ( ! raw || typeof raw !== 'object' ) return out;
+	let n = 0;
+	const s = raw.s && typeof raw.s === 'object' ? raw.s : {}, h = raw.h && typeof raw.h === 'object' ? raw.h : {};
+	for ( const [ id, v ] of Object.entries( s ) ) {
+
+		if ( n >= FLATS_WIRE.most || ! flatsId( id ) || ! Array.isArray( v ) || ! Number.isFinite( v[ 0 ] ) ) continue;
+		out.spooked[ id ] = v[ 0 ];
+		if ( Number.isFinite( v[ 1 ] ) && Number.isFinite( v[ 2 ] ) && Math.abs( v[ 1 ] ) < 1e5 && Math.abs( v[ 2 ] ) < 1e5 ) out.at[ id ] = [ v[ 1 ], v[ 2 ] ];
+		n ++;
+
+	}
+
+	for ( const [ id, v ] of Object.entries( h ) ) {
+
+		if ( n >= FLATS_WIRE.most || ! flatsId( id ) || ! Number.isInteger( v ) || v < 1 || v > 1000 ) continue;
+		out.hooked[ id ] = v;
+		n ++;
+
+	}
+
+	return out;
 
 }
 

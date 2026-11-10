@@ -33,6 +33,7 @@ import { islandTime, weatherHere } from '../game/Weather.js';
 import { ableOf, SOCK_DRIFT } from '../game/Seaworthy.js';
 import { SWIM_NEAR, anchorLie, besideHer, boatRecord, cleanBoats, driftOf, intoWater, keepBoat, sheerAt, standBack, stoodOf, swingRate, wearRate } from '../game/Away.js';
 import { RODE_SLACK } from '../player/BoatController.js';
+import { FlatsShare } from './FlatsShare.js';
 
 // (Salt Life) Playing together: whoever else is on the island (portal.session, All the Spaces), drawn
 // where they are, doing what they do. Light, drop-in: everyone keeps their own progress and their own
@@ -84,6 +85,7 @@ import { RODE_SLACK } from '../player/BoatController.js';
 //   t.setWeather( id, since )  (a pick, for everyone here)
 //   t.week()  (this week's order's tally)  t.deliver( kg )  (a sale toward it)
 //   t.setBoats( boats, mine )  (the group's anchored boats, as read at the start)  t.mineBoat( now )  (yours in it)
+//   (M17) t.flats  (the flats together: FlatsShare.js, each player's record of the flats' fish in the room's 'flats.<id>', the calls 'flats')
 
 const SEND = 0.1; // s between poses
 const SEND_FAR = 0.5; // (M15) and with nobody near enough to see you (for the map and the radar)
@@ -338,6 +340,8 @@ export class Together {
 		this._keepT = 0;
 		this._owed = {};
 		s.on( 'boats', ( boats ) => this._setBoats( boats ) );
+		// ((M17) the flats together: what each of you has done to the flats' fish, and the fish you call: FlatsShare.js)
+		this.flats = new FlatsShare( this );
 
 	}
 
@@ -1812,6 +1816,7 @@ export class Together {
 		}
 
 		this._keepBoats( dt );
+		this.flats.update( dt );
 		// ((M17) a set given to Marta before the tray was the group's: into it, once, if there's none there)
 		const shells = app.game.state && app.game.state.shells;
 		if ( this._trayRead && ! this._trayKept && shells ) {

@@ -56,6 +56,10 @@ export const SIGHT = {
 	up: 1.1, // the bottom's light out through the surface, relative to the sky's glare (radiance divided by n squared)
 	attenuate: 0.16, // per m of water, down and up again (clear Bahamas water, a few per cent a metre in the blue-green)
 	c0: 0.046, // the threshold contrast for a big target, searched for (a few times the lab's 0.01 to 0.02: not knowing where to look)
+	// (M17, the flats together) and told roughly where to look (a fish called by the clock): a cued location's threshold is about
+	// half to two-thirds of an uncued one's in the lab (2 grey levels against 3 in a display study; collinear flankers' up to a
+	// factor of 2, mostly uncertainty taken away), and a call's a sector and a distance, not a point: 0.032
+	told: 0.7,
 	size0: 0.006, // rad: below this a target needs more contrast, as the inverse square of its size (Blackwell)
 	shadow: 0.16, // a fish's shadow's contrast on the bottom, of the sun's light, as the ripples' caustics break it up
 	chop: 7, // m/s of wind: a ripple's blur, the image's contrast halved past here
@@ -115,7 +119,8 @@ function detect( C, size, clutter = 1 ) {
 //        sight.back), glasses, sun (its height, sin of its elevation; 0 down), behind (the cosine of the angle between
 //        where you look and away from the sun: 1 with it at your back, -1 in your face), shade (0..1: a cloud's shadow
 //        over the fish), overcast (0..1), wind (m/s), rain (0..1), night (0..1), tailUp (m of its tail out: 0 none),
-//        sign (0..1: how much of a sign its school makes: cruising in shallow water 1, still 0) }
+//        sign (0..1: how much of a sign its school makes: cruising in shallow water 1, still 0), told (0..1: how far
+//        you've been told where to look: (M17) someone's called it, together/FlatsShare.js) }
 const _out = { body: 0, shadow: 0, tail: 0, sign: 0 };
 export function seenOnFlats( q, out = _out ) {
 
@@ -132,18 +137,19 @@ export function seenOnFlats( q, out = _out ) {
 	const glare = R * ( 1 + ( S.cloud - 1 ) * Math.max( shade, over ) ) * S.diffuse * 2 + S.glint * smooth( - 0.2, - 0.9, q.behind ) * ( 1 - smooth( 0.35, 0.75, q.sun ) ) * ( 1 - shade ) * ( q.glasses ? 0.5 : 1 ) * S.diffuse;
 	// the image through the surface: a ripple's blur, rain's pocks
 	const wind = Math.max( 0, q.wind || 0 ), clear = 1 / ( 1 + ( wind / S.chop ) ** 2 ), rain = 1 - Math.min( 1, ( q.rain || 0 ) * 1.6 );
-	const back = Math.max( 0, q.back ), busy = clutterOf( q.bottom );
+	const back = Math.max( 0, q.back ), busy = clutterOf( q.bottom ) * ( 1 - ( 1 - S.told ) * Math.min( 1, Math.max( 0, q.told || 0 ) ) );
 	out.body = day * rain * detect( up * back * clear / ( up + glare ), size, busy );
 	// its shadow: the sun's light it takes off the bottom, on sand under a sun high enough to throw one
 	const sh = q.bottom * direct * out1 * S.shadow * smooth( 0.25, 0.55, q.sun );
 	out.shadow = day * rain * detect( sh * clear / ( up + glare ), size, busy );
 	// its tail against the water (seen above the surface: no glare in the way, only the water's own ruffle)
 	const tailK = ( 1 - smooth( S.tail.chop[ 0 ], S.tail.chop[ 1 ], wind ) ) * ( 1 - 0.8 * Math.min( 1, q.rain || 0 ) );
-	out.tail = q.tailUp > 0 ? day * tailK * detect( S.tail.c, Math.min( q.tailUp, q.L * 0.3 ) / r ) : 0;
+	const told = 1 - ( 1 - S.told ) * Math.min( 1, Math.max( 0, q.told || 0 ) );
+	out.tail = q.tailUp > 0 ? day * tailK * detect( S.tail.c, Math.min( q.tailUp, q.L * 0.3 ) / r, told ) : 0;
 	// its school's sign: nervous water, a push, a wake; seen in the sheen of a low look, lost in a breeze's chop
 	const signK = ( 1 - smooth( S.sign.chop[ 0 ], S.sign.chop[ 1 ], wind ) ) * ( 1 - Math.min( 1, ( q.rain || 0 ) * 2 ) );
 	const W = q.L * 6; // (a school's patch of water, several fish across: seen foreshortened)
-	out.sign = q.sign > 0 ? ( 0.35 + 0.65 * day ) * signK * detect( S.sign.c * q.sign, Math.sqrt( W * Math.sin( e ) / r * W / r ) ) : 0;
+	out.sign = q.sign > 0 ? ( 0.35 + 0.65 * day ) * signK * detect( S.sign.c * q.sign, Math.sqrt( W * Math.sin( e ) / r * W / r ), told ) : 0;
 	return out;
 
 }
