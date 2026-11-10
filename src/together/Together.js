@@ -17,6 +17,8 @@ import { Specks } from './Specks.js';
 import { RADAR_RPM, PROP_DISPLAY_RPS } from '../world/BoatModel.js';
 import { FISH, fishLengthCm, isTrophy } from '../game/FishTable.js';
 import { PLACES } from '../game/Places.js';
+import { KINDS, lifeOf } from '../game/LifeList.js';
+import { SLAMS, slamTold } from '../game/Trophies.js';
 import { VARIATION } from '../game/Chart.js';
 import { ROD_L, SEAT_Y } from '../game/FishingRod.js';
 import { gunModels, setBands } from '../game/Speargun.js';
@@ -53,7 +55,9 @@ import { RODE_SLACK } from '../player/BoatController.js';
 //    toast only for one worth hearing of (an island record or a trophy-sized fish)
 //  - the island's records: each species' heaviest fish anyone in the group has landed, who and when,
 //    in the group's shared save ('records': kept between visits), chalked on a board at Joe's stand
-//    (RecordsBoard) and listed in the cooler
+//    (RecordsBoard) and listed in the cooler; (M17) and each player's life list there, '#' and their id: { who, k: how many kinds,
+//    sl: the slams they've had } (LifeList.lifeOf), written when it changes, the others told ('life': the slams just had,
+//    for a toast), for the board's line under the weights
 //  - the week's order (game/WeekOrder.js): what each of the group has brought toward it, in the
 //    group's shared save ('weekOrder'); a sale toward it brings that up to date and tells the others
 //    ('week', with the tally)
@@ -277,6 +281,7 @@ export class Together {
 
 		} );
 		s.on( 'catch', ( body, from ) => this._theirCatch( body, from ) );
+		s.on( 'life', ( body, from ) => this._theirLife( body, from ) );
 		s.on( 'net', ( body, from ) => this._theirThrow( body, from ) );
 		s.on( 'rod', ( body, from ) => this._rodAsked( body, from ) );
 		s.on( 'rodIs', ( body, from ) => this._rodGiven( body, from ) );
@@ -305,6 +310,18 @@ export class Together {
 		// (on a device that draws on its CPU, after the start: its shader is load time)
 		if ( this.ready ) app.scene.add( this.board.group );
 		this._readRecords();
+		// ((M17) your life list, in the group's records when it changes: a kind you'd not had before, a slam)
+		this._lifeN = - 1;
+		app.game.state.onChange( ( st ) => {
+
+			if ( st.log && Object.keys( st.log ).length !== this._lifeN ) {
+
+				this._lifeN = Object.keys( st.log ).length;
+				this.lifeChanged();
+
+			}
+
+		} );
 		this.tray = null; // ((M17) Marta's shell tray, the group's)
 		this._readTray();
 		s.on( 'tray', ( t ) => this._setTray( t ) );
@@ -812,9 +829,71 @@ export class Together {
 		for ( const [ k, v ] of Object.entries( r ) ) if ( FISH[ k ] && v && typeof v.kg === 'number' ) clean[ k ] = v;
 		// ((M15) and each place's: '@' and its id, which fish it was)
 		for ( const [ k, v ] of Object.entries( r ) ) if ( k[ 0 ] === '@' && PLACES[ k.slice( 1 ) ] && v && typeof v.kg === 'number' && FISH[ v.s ] ) clean[ k ] = v;
+		// ((M17) and each player's life list: '#' and their id)
+		for ( const [ k, v ] of Object.entries( r ) ) if ( k[ 0 ] === '#' && v && Number.isInteger( v.k ) && v.k >= 0 ) clean[ k ] = { who: String( v.who || '' ).slice( 0, 40 ), k: Math.min( v.k, KINDS ), sl: Array.isArray( v.sl ) ? v.sl.filter( ( id ) => SLAMS[ id ] ) : [] };
 		this.records = clean;
+		if ( ! this._lifeRead ) {
+
+			this._lifeRead = true;
+			this.lifeChanged();
+
+		}
+
 		this.board.draw( clean );
 		if ( this.app.game.hud && this.app.game.hud.inv && ! this.app.game.hud.inv.hidden ) this.app.game.hud.renderInventory();
+
+	}
+
+	// ---- (M17) your life list in the group's records ('#' and your id: { who, k, sl }), once it's changed (a while after, so a
+	// catch's new kind and its slam go as one). slams: the ones just had, for the others' toast
+
+	lifeChanged( slams = null ) {
+
+		if ( slams && slams.length ) this._lifeNew = [ ...( this._lifeNew || [] ), ...slams ];
+		clearTimeout( this._lifeT );
+		this._lifeT = setTimeout( () => this._sendLife(), 400 );
+
+	}
+
+	_sendLife() {
+
+		const g = this.app.game;
+		if ( ! g || ! this._lifeRead ) return;
+		const L = lifeOf( g.state ), key = '#' + this.me.id, had = this.records[ key ], fresh = this._lifeNew || [];
+		const who = ( this.me.name || 'Someone' ).slice( 0, 40 );
+		this._lifeNew = null;
+		if ( had && had.k === L.k && had.sl.join() === L.sl.join() && had.who === who ) {
+
+			// (a slam had again: the others told, the records as they were)
+			if ( fresh.length && this.others.size ) this.session.send( 'life', { sl: fresh } );
+			return;
+
+		}
+
+		const mine = { who, k: L.k, sl: L.sl };
+		return this.portal.save.shared.update( 'records', ( cur ) => ( { ...( cur && typeof cur === 'object' ? cur : {} ), [ key ]: mine } ) ).then( ( saved ) => {
+
+			this._setRecords( saved );
+			if ( this.others.size ) this.session.send( 'life', fresh.length ? { sl: fresh } : 1 );
+
+		} ).catch( ( e ) => {
+
+			// (the SDK's update tries three times: when more saves than that cross, tried again a while after)
+			console.warn( 'records', e );
+			this._lifeNew = fresh;
+			clearTimeout( this._lifeT );
+			this._lifeT = setTimeout( () => this._sendLife(), 5000 );
+
+		} );
+
+	}
+
+	// someone else's has changed: the board's line, read again; a slam told
+	_theirLife( b, from ) {
+
+		const o = this.others.get( from ), sl = b && Array.isArray( b.sl ) ? slamTold( b.sl.filter( ( id ) => SLAMS[ id ] ) ) : [];
+		if ( o && sl.length && this.app.game ) this.app.game.toast( `${ o.person.name } has had a ${ SLAMS[ sl[ 0 ] ].name.toLowerCase() }: ${ SLAMS[ sl[ 0 ] ].what }`, 4800 );
+		this._readRecords();
 
 	}
 

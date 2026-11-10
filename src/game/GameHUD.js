@@ -6,7 +6,8 @@ import { BAIT, TRAP_PRICE, ownedTraps } from './Traps.js';
 import { BAITS, BAIT_IDS, chunksOf } from './Bait.js';
 import { LOOKS, LOOK_NAMES } from '../together/Avatar.js';
 import { NIGHT_BOX, biteHint, orderTerms, orderPlace } from './Orders.js';
-import { trophyNote, trophyRows } from './Trophies.js';
+import { trophyNote, trophyRows, slamRows, slamNote, slamTold, slamToday, slamDay, SLAMS } from './Trophies.js';
+import { lifeList, lifeCount, whenWhere, KINDS } from './LifeList.js';
 import { WEEK_MUL, delivered, filled, mineOf, shareOf, weekEnds } from './WeekOrder.js';
 import { timeText } from './IslandClock.js';
 import { LB, IN, GAL, lb, pounds, inches, feet, farOff, gallons, lbOz, feetInches } from './Units.js';
@@ -24,6 +25,8 @@ import { ChartMap, CHART_MAP_CSS } from './ChartMap.js';
 const escape = ( t ) => String( t ).replace( /[&<>"']/g, ( c ) => ( { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } )[ c ] );
 // a row of the cooler or Joe's stand: a name over its details, then what's on the right
 const item = ( name, meta, ...right ) => `<div class="gm-item"><span class="gm-item-main"><span class="gm-item-name">${ name }</span><span class="gm-item-meta">${ meta }</span></span>${ right.join( '' ) }</div>`;
+// ((M17) the life list's: one still to get, its name dimmed, what to look for under it)
+const leftItem = ( name, meta ) => `<div class="gm-item is-left"><span class="gm-item-main"><span class="gm-item-name">${ name }</span><span class="gm-item-meta">${ meta }</span></span></div>`;
 // (Salt Life) price: what it fetches here (a wanted fish: the order's price); wanted: on today's list
 const fishItem = ( f, button, price = f.value, wanted = false ) => item( `${ FISH[ f.species ].name }${ f.record ? '<small>record</small>' : '' }${ wanted ? '<small class="is-wanted">wanted</small>' : '' }`,
 	`${ sizeOf( f.species, f.cm ?? fishLengthCm( f.species, f.kg ) ) } · ${ lb( f.kg ) }${ { spear: ' · speared', net: ' · netted', hand: ' · by hand' }[ f.method ] || '' }${ f.w > FRESH_H ? ' · <span class="is-going">going soft</span>' : '' }`, `<span class="gm-item-val">$${ price }</span>`, button );
@@ -215,6 +218,15 @@ html:has(.gm-panel.is-open) .hud-hint { visibility: hidden; }
 .gm-wanted .gm-item { padding: var(--tw-1) 0; border-color: rgba(var(--tw-sun-rgb), 0.14); }
 .gm-wanted .gm-item-meta { white-space: normal; }
 .gm-wanted .gm-item.is-done .gm-item-name { color: var(--tw-ink-3); text-decoration: line-through; }
+/* (M17) the life list: how far along (a bar, as the week's order's), the lists' heads, and a kind or a slam still to get: its
+   name dimmed, where to look under it, whole */
+.gm-life { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--tw-1) var(--tw-2); margin: 0 0 var(--tw-2); color: var(--tw-ink-2); font-size: var(--tw-fs-md); }
+.gm-life b { color: var(--tw-ink); font-size: var(--tw-fs-lg); font-weight: 700; }
+.gm-life .gm-week-bar { flex: 1 0 100%; margin: 0; background: rgba(var(--tw-aqua-rgb), 0.14); }
+.gm-life .gm-week-bar > span { background: var(--tw-aqua); }
+.gm-list-h { display: block; margin: var(--tw-3) 0 0; color: var(--tw-ink-2); font-size: var(--tw-fs-xs); font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; }
+.gm-item.is-left .gm-item-name { color: var(--tw-ink-2); }
+.gm-item.is-left .gm-item-meta { white-space: normal; }
 /* (Salt Life) the week's order: the group's progress under it */
 .gm-week-bar { height: calc(4 * var(--tw-u)); margin: var(--tw-1) 0 0; border-radius: 99px; background: rgba(var(--tw-sun-rgb), 0.14); overflow: hidden; }
 .gm-week-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--tw-sun); }
@@ -278,6 +290,9 @@ html:has(.gm-panel.is-open) .hud-hint { visibility: hidden; }
 .gm-catch-note { margin-top: var(--tw-3); min-height: 1.4em; color: rgba(244, 234, 214, 0.78); font-family: 'Kalam', var(--tw-font); font-size: clamp(14px, 1.25vw, 19px); line-height: 1.4; }
 .gm-catch-note b { color: #f0c46a; font-weight: 700; }
 .gm-catch-note.is-warn { color: #ff9a8a; }
+/* (M17) a slam's line, over the catch's own */
+.gm-catch-note.is-slam { color: #f6dfae; }
+.gm-catch-note.is-slam + .gm-catch-note { margin-top: var(--tw-1); }
 .gm-catch-foot { display: flex; align-items: center; justify-content: center; gap: var(--tw-2); margin-top: var(--tw-3); color: rgba(244, 234, 214, 0.5); font-size: var(--tw-fs-sm); }
 .gm-catch-foot kbd { font: 600 var(--tw-fs-xs) var(--tw-mono); color: #f4ead6; padding: 2px calc(6 * var(--tw-u)); border-radius: 4px; border: 1px solid rgba(244, 234, 214, 0.3); background: rgba(244, 234, 214, 0.08); }
 .gm-catch-timer { width: calc(80 * var(--tw-u)); height: 2px; margin-left: var(--tw-2); border-radius: 2px; background: rgba(244, 234, 214, 0.15); overflow: hidden; }
@@ -689,7 +704,9 @@ export class GameHUD {
 		const f = FISH[ info.species ];
 		const inch = info.cm / IN, lbs = info.kg * LB;
 		const isle = info.islandHeld;
-		const badge = info.trophyView ? `<span class="gm-badge is-record">${ STAR } Trophy</span>` : info.islandRecord ? `<span class="gm-badge is-record">${ STAR } Island record</span>`
+		// ((M17) a slam's last fish: the slam's the badge, and its line over the rest (Trophies.slamNote; docs/m17/life-list.md))
+		const slams = info.slams && info.slams.length && ! info.trophyView ? slamTold( info.slams ) : null;
+		const badge = slams ? `<span class="gm-badge is-record">${ STAR } ${ SLAMS[ slams[ 0 ] ].name }</span>` : info.trophyView ? `<span class="gm-badge is-record">${ STAR } Trophy</span>` : info.islandRecord ? `<span class="gm-badge is-record">${ STAR } Island record</span>`
 			: info.record ? `<span class="gm-badge is-record">${ STAR } New record</span>`
 			: info.newSpecies ? '<span class="gm-badge is-new">New species</span>' : `<span class="gm-badge is-plain">${ { spear: 'Speared', hand: 'By hand' }[ info.method ] || 'Catch' }</span>`;
 		let note;
@@ -712,9 +729,10 @@ export class GameHUD {
 		else if ( info.islandRecord ) note = `<div class="gm-catch-note">The heaviest anyone here has landed${ isle ? `. It beats ${ escape( isle.who || 'someone' ) }'s <b>${ lb( isle.kg ) }</b>` : '' }. It goes on the board at the fish stand.</div>`;
 		else if ( info.record ) note = `<div class="gm-catch-note">Previous best <b>${ lb( info.prevBestKg ) }</b> · ${ sizeOf( info.species, info.prevBestCm ) }. Beaten by ${ lb( info.kg - info.prevBestKg ) }.</div>`;
 		else if ( info.placeRecord ) note = `<div class="gm-catch-note">The heaviest fish anyone here has had from ${ placeName( info.placeRecord ) }. It's on the records, in your cooler.</div>`;
-		else if ( info.newSpecies ) note = `<div class="gm-catch-note">First one in your fish log${ info.firstAt ? `, and your first fish from ${ placeName( info.firstAt ) }` : '' }.</div>`;
+		else if ( info.newSpecies ) note = `<div class="gm-catch-note">First one in your fish log: <b>${ lifeCount( this.game.state ) } of ${ KINDS }</b> kinds${ info.firstAt ? `, and your first fish from ${ placeName( info.firstAt ) }` : '' }.</div>`;
 		else if ( info.firstAt ) note = `<div class="gm-catch-note">Your first fish from ${ placeName( info.firstAt ) }: it's in your log.</div>`;
 		else note = `<div class="gm-catch-note">Your best: ${ lb( info.prevBestKg ) } · ${ sizeOf( info.species, info.prevBestCm ) }</div>`;
+		if ( slams ) note = `<div class="gm-catch-note is-slam">${ slamNote( slams, ( t ) => `<b>${ t }</b>` ) }.</div>` + note;
 		// splash burst around the fish as it lands in view
 		let drops = '';
 		for ( let i = 0; i < 26; i ++ ) {
@@ -982,10 +1000,9 @@ export class GameHUD {
 
 		const s = this.game.state;
 		const together = this.game.app && this.game.app.together, me = together && together.me.id;
-		const logged = Object.entries( s.log ).filter( ( [ k ] ) => FISH[ k ] );
 		// (Salt Life) the island's records: the group's heaviest of each kind (together/)
 		const isle = together ? Object.entries( together.records ).filter( ( [ k ] ) => FISH[ k ] ).sort( ( a, b ) => b[ 1 ].kg - a[ 1 ].kg ) : [];
-		const tabs = [ [ 'fish', 'Fish', s.inventory.length ], [ 'bait', 'Bait', Object.values( s.bait ).reduce( ( a, n ) => a + n, 0 ) ], [ 'finds', 'Finds', s.finds.length ], [ 'shells', 'Shells', shellsHave( s.shells ) ], [ 'log', 'Log', logged.length ], [ 'chart', 'Chart', s.chart.marks.length ] ];
+		const tabs = [ [ 'fish', 'Fish', s.inventory.length ], [ 'bait', 'Bait', Object.values( s.bait ).reduce( ( a, n ) => a + n, 0 ) ], [ 'finds', 'Finds', s.finds.length ], [ 'shells', 'Shells', shellsHave( s.shells ) ], [ 'log', 'Log', lifeCount( s ) ], [ 'chart', 'Chart', s.chart.marks.length ] ];
 		if ( together ) tabs.push( [ 'records', 'Records', isle.length ], [ 'islander', 'Islander', 0 ] );
 		this._invTabs = tabs.map( ( t ) => t[ 0 ] );
 		const tab = this._invTabs.includes( this.invTab ) ? this.invTab : 'fish';
@@ -1028,19 +1045,31 @@ export class GameHUD {
 
 		} else if ( tab === 'log' ) {
 
-			body = logged.map( ( [ k, v ] ) => item( FISH[ k ].name, `${ v.count } caught`, `<span class="gm-item-num">${ lb( v.bestKg ) } · ${ sizeOf( k, v.bestCm ?? fishLengthCm( k, v.bestKg ) ) }</span>` ) ).join( '' )
-				|| empty( 'Each kind you catch is logged here, with your best.' );
+			// ((M17) a life list (LifeList.js; docs/m17/life-list.md): how far along you are, the slams had and to have, the billfish
+			// let go, each kind you've caught with its first and its best (the day and the place), and each still to catch with
+			// where to look (FishTable's hint))
+			const L = lifeList( s ), ww = ( w ) => whenWhere( w, s.found ), set = this.game.app.settings;
+			body = `<div class="gm-life"><span><b>${ L.n }</b> of ${ L.of } kinds</span>${ L.left.length ? `<button class="gm-mini" data-left>${ L.left.length } still to catch</button>` : '<span>every one!</span>' }<span class="gm-week-bar"><span style="width: ${ ( 100 * L.n / L.of ).toFixed( 1 ) }%"></span></span></div>`;
+			// ((M17) the slams: had (with their days), and still to have (with the day's tally toward each))
+			const today = slamToday( s, slamDay( set.day, set.timeOfDay ) );
+			body += `<div class="gm-wanted"><span class="gm-wanted-h">Slams</span>${ [ ...slamRows( s ).map( ( t ) => item( t.name, t.meta ) ),
+				...Object.keys( SLAMS ).filter( ( id ) => ! s.trophies[ 'slam:' + id ] ).map( ( id ) => leftItem( SLAMS[ id ].name, `${ upper( SLAMS[ id ].what ) }${ today[ id ].got.length ? ` · today ${ today[ id ].got.length } of ${ SLAMS[ id ].kinds.length }` : '' }` ) ) ].join( '' ) }</div>`;
 			// ((M16) and the billfish you've let go: the log's their trophy, and the button their picture)
-			const won = trophyRows( s );
-			// ((M17) and the slams: no picture of their own, the day's fish all let go)
-			if ( won.length ) body = `<div class="gm-wanted"><span class="gm-wanted-h">Trophies, let go alive</span>${ won.map( ( t ) => item( t.name, t.meta, t.species ? `<span class="gm-btns"><span class="gm-item-num">${ lb( t.kg ) }</span><button class="gm-mini" data-trophy="${ t.species }">See it</button></span>` : `<span class="gm-item-num">${ t.n > 1 ? `${ t.n }×` : '' }</span>` ) ).join( '' ) }</div>` + body;
+			const won = trophyRows( s ).filter( ( t ) => t.species );
+			// (its weight in its line, so on a narrow phone the line isn't squeezed beside the weight and the button)
+			if ( won.length ) body += `<div class="gm-wanted"><span class="gm-wanted-h">Billfish, let go alive</span>${ won.map( ( t ) => item( t.name, `${ lb( t.kg ) } · ${ t.meta }`, `<button class="gm-mini" data-trophy="${ t.species }">See it</button>` ) ).join( '' ) }</div>`;
+			// (one caught once: its first is its best, told once)
+			const once = ( e ) => e.count === 1 && e.first.day === e.best.day && e.first.place === e.best.place;
+			body += `<span class="gm-list-h">Caught</span>` + ( L.caught.map( ( e ) => item( FISH[ e.species ].name, [ `${ e.count } caught`, once( e ) ? ww( e.best ) : ww( e.first ) && `first ${ ww( e.first ) }`, ! once( e ) && ww( e.best ) && `best ${ ww( e.best ) }` ].filter( Boolean ).join( ' · ' ), `<span class="gm-item-num">${ lb( e.kg ) } · ${ sizeOf( e.species, e.cm ?? fishLengthCm( e.species, e.kg ) ) }</span>` ) ).join( '' )
+				|| empty( 'Each kind you catch is logged here, with your best: the day and the place.' ) );
+			if ( L.left.length ) body += `<span class="gm-list-h gm-left-h">Still to catch</span>${ L.left.map( ( e ) => leftItem( FISH[ e.species ].name, upper( e.hint ) ) ).join( '' ) }`;
 			// ((M15) and the places you've fished: how many there, and the first)
 			const places = Object.entries( s.places || {} ).filter( ( [ k ] ) => PLACES[ k ] );
 			if ( places.length ) body += `<div class="gm-wanted"><span class="gm-wanted-h">Places you've fished</span>${ places.map( ( [ k, p ] ) => item( placeName( k, true ), `first ${ p.first && FISH[ p.first ] ? `a ${ FISH[ p.first ].name.toLowerCase() }` : 'a fish' }${ Number.isFinite( p.day ) ? `, day ${ p.day + 1 }` : '' }`, `<span class="gm-item-num">${ p.n } fish</span>` ) ).join( '' ) }</div>`;
 			// ((M15) the far places you've come to and not fished yet, and how many are still out there)
 			const seen = FAR_PLACES.filter( ( k ) => s.found[ k ] !== undefined && ! s.places[ k ] ), left = FAR_PLACES.filter( ( k ) => s.found[ k ] === undefined ).length;
 			if ( seen.length || left ) body += `<div class="gm-wanted"><span class="gm-wanted-h">Far places you've found</span>${ seen.map( ( k ) => item( placeName( k, true ), `${ PLACES[ k ].what }${ Number.isFinite( s.found[ k ] ) ? `, day ${ s.found[ k ] + 1 }` : '' }`, '<span class="gm-item-num">no fish yet</span>' ) ).join( '' ) }${ left ? `<div class="gm-item"><span class="gm-item-main"><span class="gm-item-meta">${ left } more out there, not found yet</span></span></div>` : '' }</div>`;
-			hint = 'Your best of each kind, and where you\'ve fished';
+			hint = 'Your bests, and where to look for the rest';
 
 		} else if ( tab === 'chart' ) {
 
@@ -1070,7 +1099,10 @@ export class GameHUD {
 			// ((M15) and each place's: the heaviest fish anyone's had there; a far place named once you've found it)
 			const at = Object.entries( together.records ).filter( ( [ k, r ] ) => k[ 0 ] === '@' && PLACES[ k.slice( 1 ) ] && FISH[ r.s ] ).sort( ( a, b ) => b[ 1 ].kg - a[ 1 ].kg );
 			if ( at.length ) body += `<div class="gm-wanted"><span class="gm-wanted-h">The heaviest from each place</span>${ at.map( ( [ k, r ] ) => item( farName( k.slice( 1 ), s.found, true ), `${ FISH[ r.s ].name } · ${ r.id === me ? '<b>You</b>' : escape( r.who || '?' ) }`, `<span class="gm-item-num">${ lb( r.kg ) }</span>` ) ).join( '' ) }</div>`;
-			hint = 'The heaviest of each kind anyone here has landed, and from each place';
+			// ((M17) and everyone's life list: how many kinds each has had, and their slams ('#' and their id: Together's)
+			const lives = Object.entries( together.records ).filter( ( [ k ] ) => k[ 0 ] === '#' ).sort( ( a, b ) => b[ 1 ].k - a[ 1 ].k );
+			if ( lives.length ) body += `<div class="gm-wanted"><span class="gm-wanted-h">Life lists</span>${ lives.map( ( [ k, r ] ) => item( k.slice( 1 ) === me ? '<b>You</b>' : escape( r.who || '?' ), r.sl.length ? slamTold( r.sl ).map( ( id ) => SLAMS[ id ].name ).join( ', ' ) : 'no slams yet', `<span class="gm-item-num">${ r.k } of ${ KINDS } kinds</span>` ) ).join( '' ) }</div>`;
+			hint = 'The heaviest of each kind anyone here has landed, from each place, and everyone\'s kinds';
 
 		} else {
 
@@ -1102,6 +1134,13 @@ export class GameHUD {
 		if ( tab === 'chart' ) ( this._chartMap ||= new ChartMap( this.game ) ).mount( this.inv.querySelector( '.gm-chartmap-slot' ) );
 		for ( const b of this.inv.querySelectorAll( '[data-release]' ) ) b.onclick = () => s.release( Number( b.dataset.release ) );
 		for ( const b of this.inv.querySelectorAll( '[data-trophy]' ) ) b.onclick = () => this.game.showTrophy( b.dataset.trophy );
+		// ((M17) the life list's kinds still to catch, down the list)
+		for ( const b of this.inv.querySelectorAll( '[data-left]' ) ) b.onclick = () => {
+
+			const list = this.inv.querySelector( '.gm-list' ), h = list.querySelector( '.gm-left-h' );
+			if ( h ) list.scrollTop = h.getBoundingClientRect().top - list.getBoundingClientRect().top + list.scrollTop - 4;
+
+		};
 		for ( const b of this.inv.querySelectorAll( '[data-cut]' ) ) b.onclick = () => {
 
 			const n = s.cutBait( Number( b.dataset.cut ) );

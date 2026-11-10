@@ -14,15 +14,21 @@ import { placeName, PLACES } from './Places.js';
 // day, kept beside the billfish as a trophy (state.trophies[ 'slam:<id>' ]: how many, and the first and the last), the
 // day's tally with them (state.trophies.today). The grand slam is a bonefish, a permit and a tarpon: anglers' own
 // (IGFA's inshore slam is any three of its list; its club began with these and the snook). SLAMS is the list: another
-// slam is another entry, its kinds and its name (M17's stream 7 adds the super grand slam and the billfish grand slam).
+// slam is another entry, its kinds and its name. (M17's stream 7, docs/m17/life-list.md) The super grand slam is the grand
+// slam and a snook (the IGFA's inshore club's own four), and the billfish grand slam a sailfish, a white marlin and a blue
+// marlin, each let go: the offshore anglers' (the billfish trophies are below; this counts them by day).
 // "One day" is the island's, sunrise to sunrise (slamDay), and sleeping ends it (slamSlept: the game calls it when the
-// clock's jumped). A slam pays nothing.
+// clock's jumped). A guest's fish counts for the guest, aboard anyone's boat: the catch is theirs, on their own game. A slam
+// pays nothing.
 //   slamDay( day, hour )               the island day a catch counts in        slamCatch( state, info, day ) -> [ slam ids ]
 //   slamSlept( state )                 the day's tally gone                    slamRows( state )   the log's rows
-//   slamNote( ids )                    what's told of them
+//   slamNote( ids )                    what's told of them                     slamTold( ids )     the one told: the biggest
 
+// (short: the records board's word for it, together/RecordsBoard.js)
 export const SLAMS = {
-	grand: { name: 'Grand slam', kinds: [ 'bonefish', 'permit', 'tarpon' ], what: 'a bonefish, a permit and a tarpon in one day' },
+	grand: { name: 'Grand slam', short: 'grand', kinds: [ 'bonefish', 'permit', 'tarpon' ], what: 'a bonefish, a permit and a tarpon in one day' },
+	superGrand: { name: 'Super grand slam', short: 'super grand', kinds: [ 'bonefish', 'permit', 'tarpon', 'snook' ], what: 'a bonefish, a permit, a tarpon and a snook in one day', over: 'grand' },
+	billfish: { name: 'Billfish grand slam', short: 'billfish', kinds: [ 'sailfish', 'whiteMarlin', 'blueMarlin' ], what: 'a sailfish, a white marlin and a blue marlin in one day' },
 };
 export const SUNRISE = 5.8; // (IslandClock's sunUp)
 export const slamDay = ( day, hour ) => ( hour < SUNRISE ? day - 1 : day );
@@ -74,12 +80,21 @@ export const slamRows = ( state ) => Object.keys( SLAMS ).filter( ( id ) => stat
 
 	const t = state.trophies[ 'slam:' + id ];
 	return { slam: id, species: null, name: SLAMS[ id ].name, n: t.n, kg: Object.values( t.kinds ).reduce( ( a, b ) => a + b, 0 ),
-		meta: `${ t.n > 1 ? `${ t.n } times, the first day ${ t.first + 1 }; the last` : 'Had' } day ${ t.day + 1 }${ t.place && PLACES[ t.place ] ? ` on ${ placeName( t.place ) }` : '' }: ${ SLAMS[ id ].what }` };
+		meta: `${ t.n > 1 ? `${ t.n } times, the first day ${ t.first + 1 }; the last day` : 'Day' } ${ t.day + 1 }${ t.place && PLACES[ t.place ] ? `, ${ placeName( t.place ) }` : '' }: ${ SLAMS[ id ].what }` };
 
 } );
 
-// what's told of slams just had
-export const slamNote = ( ids ) => ids.map( ( id ) => `${ SLAMS[ id ].name }! ${ SLAMS[ id ].what[ 0 ].toUpperCase() + SLAMS[ id ].what.slice( 1 ) }, all let go · it's a trophy in your log` ).join( ' · ' );
+// of slams had together (a snook that makes the grand slam and the super grand slam at once), the one told: the biggest
+export const slamTold = ( ids ) => ids.filter( ( id ) => ! ids.some( ( o ) => SLAMS[ o ].over === id ) );
+
+// what's told of slams just had ('all let go' only when every kind of it is: a snook may be kept)
+// (b: how its name's set: the catch card's in bold)
+export const slamNote = ( ids, b = ( t ) => t ) => slamTold( ids ).map( ( id ) => {
+
+	const S = SLAMS[ id ], gone = S.kinds.every( ( k ) => FISH[ k ].protected ) ? ', all let go' : '';
+	return `${ b( S.name + '!' ) } ${ S.what[ 0 ].toUpperCase() + S.what.slice( 1 ) }${ gone } · it's a trophy in your log`;
+
+} ).join( ' · ' );
 
 // the day's tally so far, for the Guide and the card: the kinds of each slam you've had today, and still to get
 export function slamToday( state, day ) {

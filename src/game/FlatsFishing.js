@@ -5,7 +5,7 @@ import { islandTime } from './Weather.js';
 import { FISH } from './FishTable.js';
 import { seenTake } from './Bites.js';
 import { seenOnFlats, scareOf, castScare, sightOf, knockOf, SIGHT } from './Sight.js';
-import { slamDay, slamCatch, slamSlept, slamNote, slamsOf, slamToday } from './Trophies.js';
+import { SLAMS, slamDay, slamCatch, slamSlept, slamsOf, slamToday } from './Trophies.js';
 
 // (M17) Sight-fishing on the flats, as it's played (docs/m17/sight.md): the schools game/Flats.js has about you given to
 // the fish (world/Fish.js' setSight); how plainly each shows to you (game/Sight.js: your eye's height over the water,
@@ -17,7 +17,7 @@ import { slamDay, slamCatch, slamSlept, slamNote, slamsOf, slamToday } from './T
 //   flats.update( dt )        each frame (Game)
 //   flats.landed( at, tip, bait )             a cast down on the water: what it spooked
 //   flats.watch( bite, dt ) -> true while a seen fish has the bait's bite (Game.updateBite leaves it alone then)
-//   flats.caught( info )      a fish landed: the slams it makes, if any (-> their note, or '')
+//   flats.caught( info )      a fish landed: the slams it makes, if any (-> their ids: the catch card tells them)
 //   flats.events              for the Guide: { on, seen, tailing, spooked (why), refused, slam }
 
 const ACTIVE = 90; // m: schools this near you are given fish (past the farthest tier's drawing, 50 m)
@@ -151,12 +151,13 @@ export class FlatsFishing {
 	update( dt ) {
 
 		const fish = this.fish, app = this.app, c = app.camera.position;
-		if ( ! fish || ! fish.sightGroups || ! fish.sightGroups.length ) return;
-		fish.sightSeenAt = this._seenAt;
 		const T = this.T;
-		// (a jump of the clock: a rest or a sleep, which ends the island day for the slams)
+		// (a jump of the clock: a rest or a sleep, which ends the island day for the slams; (M17's stream 7) watched before
+		// the flats' fish are made, and far from them: the billfish grand slam's offshore)
 		if ( this._T !== null && T - this._T > 1.5 ) slamSlept( this.game.state );
 		this._T = T;
+		if ( ! fish || ! fish.sightGroups || ! fish.sightGroups.length ) return;
+		fish.sightSeenAt = this._seenAt;
 		const near = this.near( c.x, c.z );
 		if ( ( this._t -= dt ) <= 0 ) {
 
@@ -427,13 +428,15 @@ export class FlatsFishing {
 
 	}
 
-	// a fish caught or let go: the slams it makes today, kept as trophies (-> what's told of them, or '')
+	// a fish caught or let go: the slams it makes today, kept as trophies (-> their ids; (M17's stream 7) the catch card tells
+	// them: Trophies.slamNote)
 	caught( info ) {
 
-		if ( ! slamsOf( info.species ).length ) return '';
-		const s = this.app.settings, done = slamCatch( this.game.state, info, slamDay( s.day, s.timeOfDay ) );
-		this.events.slam = done.length ? done : slamToday( this.game.state, slamDay( s.day, s.timeOfDay ) ).grand;
-		return done.length ? slamNote( done ) : '';
+		if ( ! slamsOf( info.species ).length ) return [];
+		const s = this.app.settings, day = slamDay( s.day, s.timeOfDay ), done = slamCatch( this.game.state, info, day );
+		// (the Guide's tip is the grand slam's, on its fish: not a snook's or a billfish's)
+		if ( SLAMS.grand.kinds.includes( info.species ) ) this.events.slam = done.length ? done : slamToday( this.game.state, day ).grand;
+		return done;
 
 	}
 
