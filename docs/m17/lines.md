@@ -154,6 +154,9 @@ The base fought these at 77% of the line's strength by hand, and at 92% in the h
   - Script memory 142.6 MB of 150, by screen 136.8, 142.6, 110.5 and 132.9; `m17-flats`' last two read 142.7 and 142.3. Nothing here is held in memory but a few constants.
   - 86 draw calls of 150; 238,229 triangles of 300k; 70.3 MB of textures; 107.6 MB of graphics memory; 14 sounds of 16.
   - 7.1 MB before ready, 78.7 MB in all. Ready in 4.7 to 5.1 s.
+- **Again with the 80 lb line, on a clean copy of 9c0d1e3:** `pnpm test` passes (5 min 31 s, load about 11), and the complete check passes too, under the lock at a load of 10.6 to 11.4.
+  - Script memory 137.9 MB of 150, by screen 110.9, 120.8, 120.8 and 137.9. Ready in 4.5 to 4.8 s, no errors.
+  - 85 draw calls; 238,249 triangles; 102.0 MB of graphics memory; 78.7 MB in all.
 - **No shader changed.** The fight's figures are all in plain JavaScript, so `tools/gpu-limits.mjs` wasn't run.
 
 ## Not verified, and judgment
