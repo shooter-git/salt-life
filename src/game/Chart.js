@@ -389,10 +389,11 @@ export const CRUISE = ableOf( 'lobster' ).cruise;
 // Fuel for the way home. `perM`: litres a metre as she's going (her burn over her speed, when she's making
 // way), else at her cruise; the mariner's rule of thirds: a third out, a third back, a third kept
 //   -> { litres (to get there), state: 'ok' | 'tight' (into the last third) | 'short' (not enough) }
-export function fuelFor( metres, fuelL, { rpm = 0, speed = 0, speedMul = 1, boat = 'lobster' } = {} ) {
+// ((M17) twin: a second engine fitted, burning as hers does: Seaworthy.burnOf)
+export function fuelFor( metres, fuelL, { rpm = 0, speed = 0, speedMul = 1, boat = 'lobster', twin = false } = {} ) {
 
 	const under = speed > 2 && rpm > 0.1, cruise = ableOf( boat ).cruise;
-	const perM = under ? fuelBurn( rpm, boat ) / speed : fuelBurn( cruise.rpm, boat ) / ( cruise.speed * speedMul );
+	const perM = under ? fuelBurn( rpm, boat, twin ) / speed : fuelBurn( cruise.rpm, boat, twin ) / ( cruise.speed * speedMul );
 	const litres = metres * perM;
 	return { litres, perM, state: fuelL < litres ? 'short' : fuelL < litres * 1.5 ? 'tight' : 'ok' };
 

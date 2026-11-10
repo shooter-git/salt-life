@@ -2,7 +2,7 @@ import { FISH, CARAPACE, fishLengthCm } from './FishTable.js';
 import { UPGRADES, nextLevel, fuelOf, fuelPrice } from './Gear.js';
 import { FRESH_H } from './Seaworthy.js';
 import { FLEET_CSS, fleetRows, bindFleet, martaSays } from './fleet/FleetPanel.js';
-import { TRAP_PRICE } from './Traps.js';
+import { BAIT, TRAP_PRICE, ownedTraps } from './Traps.js';
 import { BAITS, BAIT_IDS, chunksOf } from './Bait.js';
 import { LOOKS, LOOK_NAMES } from '../together/Avatar.js';
 import { NIGHT_BOX, biteHint, orderTerms, orderPlace } from './Orders.js';
@@ -1464,6 +1464,8 @@ GameHUD.prototype.renderShop = function () {
 	const frozen = BAIT_IDS.filter( ( k ) => BAITS[ k ].price && ! BAITS[ k ].lure ).map( ( k ) => `<div class="gm-shop-row"><span>${ BAITS[ k ].name }<small>${ BAITS[ k ].per > 1 ? `${ BAITS[ k ].per } at a time` : 'A block' } · you have ${ s.bait[ k ] | 0 }</small></span><button class="gm-btn" data-lot="${ k }" ${ BAITS[ k ].price > s.money ? 'disabled' : '' }>$${ BAITS[ k ].price }</button></div>` ).join( '' );
 	// ((M16) traps a hurricane's had: Traps.js)
 	const lostTraps = s.traps.lost, trapRow = lostTraps ? `<div class="gm-shop-row"><span>A new lobster trap<small>${ lostTraps } lost to the weather</small></span><button class="gm-btn" data-newtrap ${ TRAP_PRICE > s.money ? 'disabled' : '' }>$${ TRAP_PRICE }</button></div>` : '';
+	// ((M17) trap bait, once you've traps: Traps.BAIT)
+	const trapBait = ownedTraps( s.upgrades ) ? `<div class="gm-shop-row"><span>Trap bait · fish heads and cowhide<small>For ${ BAIT.per } traps · it draws them about ${ BAIT.nights } nights · you have bait for ${ s.traps.bait | 0 }</small></span><button class="gm-btn" data-trapbait ${ BAIT.price > s.money ? 'disabled' : '' }>$${ BAIT.price }</button></div>` : '';
 	const greeting = this.closingSoon( v ) ? `I'm shutting at ${ this.at( v.hours[ 1 ] ) }` : martaSays( s ) || v.greeting;
 	const boats = this._shopTab === 'boats';
 	const tabs = `<div class="gm-tabs" role="tablist">${ [ [ 'gear', 'Gear' ], [ 'boats', 'Boats' ] ].map( ( [ id, label ] ) => `<button class="gm-tab${ boats === ( id === 'boats' ) ? ' is-on' : '' }" role="tab" aria-selected="${ boats === ( id === 'boats' ) }" data-shoptab="${ id }">${ label }</button>` ).join( '' ) }</div>`;
@@ -1472,7 +1474,7 @@ GameHUD.prototype.renderShop = function () {
 		<div class="gm-head"><h2>${ v.name }</h2>
 		<p class="gm-sub">${ greeting } · You have $${ s.money.toLocaleString() }</p></div>
 		${ tabs }
-		<div class="gm-list">${ boats ? fleetRows( this ) : `${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ this.findsBlock( 'marta', 'From the beach: she\'ll buy' ) }${ shellShopRow( s ) }${ bucketRow }${ baitRows }${ haulRow }${ towRow }${ repairRow }${ fuelRow }${ frozen }${ trapRow }${ g.daysOut.shopRows() }${ rows }` }</div>
+		<div class="gm-list">${ boats ? fleetRows( this ) : `${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ this.findsBlock( 'marta', 'From the beach: she\'ll buy' ) }${ shellShopRow( s ) }${ bucketRow }${ baitRows }${ haulRow }${ towRow }${ repairRow }${ fuelRow }${ frozen }${ trapRow }${ trapBait }${ g.daysOut.shopRows() }${ rows }` }</div>
 		<div class="gm-foot"><span class="gm-sub">${ boats ? 'Boats stay at their berths till you take one out' : 'Upgrades take effect at once' }</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>` );
 	bindFuel();
 	g.daysOut.bindShop( this.stand, () => this.renderShop() );
@@ -1509,6 +1511,13 @@ GameHUD.prototype.renderShop = function () {
 	if ( rp ) rp.onclick = () => {
 
 		this.game.repair();
+		this.renderShop();
+
+	};
+	const tb = this.stand.querySelector( '[data-trapbait]' );
+	if ( tb ) tb.onclick = () => {
+
+		this.game.traps.buyBait();
 		this.renderShop();
 
 	};

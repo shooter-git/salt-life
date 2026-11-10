@@ -48,7 +48,7 @@ const after = ( d ) => meanCatch( 1, soakOf( trap, 12 + d * 24, 0 ) );
 ok( after( 0.1 ) === 0, 'nothing before dark' );
 ok( after( 1 ) < after( 3 ) && after( 3 ) < after( 7 ) && after( 7 ) < after( 14 ), 'catch rises with the soak' );
 ok( after( 3 ) - after( 1 ) > after( 14 ) - after( 12 ), 'at a decreasing rate' );
-ok( after( 40 ) < after( 14 ) && after( 400 ) > SOAK.most * SOAK.floor * 0.9, 'and falls as they find the way out, to a floor' );
+ok( after( 40 ) < after( 14 ) && after( 400 ) > after( 14 ) * SOAK.floor * 0.9, 'and falls as they find the way out, to a floor' ); // ((M17) of its own best: its bait's used up long before)
 ok( soakOf( { T: 500, at: 0 }, 400, 3600e3 * 48 ).hours === 48, 'a room whose clock\'s behind: the real time' );
 
 // what comes up, over many hauls: lobsters a trap, how many legal, against the fishery

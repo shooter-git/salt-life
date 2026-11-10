@@ -88,6 +88,10 @@ export const plotterAcross = ( view ) => ( PLOTTER_NM.find( ( nm ) => nm * 1852 
 // she's on, not the way across to it. Under way, as above)
 export const PLOTTER_SLOW = { speed: 3 * KT, after: 4 };
 export const plotterRange = ( view, slowFor = 0 ) => slowFor >= PLOTTER_SLOW.after ? PLOTTER_NM[ 0 ] * 1852 : plotterAcross( view );
+// ((M17) its range by its key, as a plotter's range buttons step it: -1, as it picks itself (above); or one of PLOTTER_NM. -> the next,
+// out a step each press, and from the widest back to its own pick)
+export const nextRange = ( step ) => step + 1 >= PLOTTER_NM.length ? - 1 : step + 1;
+export const rangeSaid = ( step ) => step < 0 ? 'Plotter range: auto' : `Plotter range: ${ step === 0 ? `${ Math.round( PLOTTER_NM[ 0 ] * 1852 / 0.3048 / 10 ) * 10 } ft` : `${ PLOTTER_NM[ step ] } NM` } across`;
 // the soundings written black where shallower than this (m: S-52's safety depth, here the 60 ft shade), grey deeper
 const SAFETY = SHADES[ 1 ];
 // where the island is, for the plotter's position (a made-up spot off the Florida Keys), and degrees
@@ -244,6 +248,7 @@ export class BoatInstruments {
 		this._slowFor = 0;
 		this._palette = 'day';
 		this.plotter = null; // ((M16) its chart: PlotterChart, made the first time it's drawn, aboard)
+		this.rangeStep = - 1; // ((M17) its range as you've set it (stepRange), or -1: its own pick
 		this.draw( null );
 
 	}
@@ -629,12 +634,20 @@ export class BoatInstruments {
 
 	}
 
+	// (M17) its range a step out (its key, Z, at the helm; the actions wheel's): -> what it's at now, said
+	stepRange() {
+
+		this.rangeStep = nextRange( this.rangeStep );
+		return rangeSaid( this.rangeStep );
+
+	}
+
 	// the chart plotter: north up, about her, her track, her heading, speed and position; (M15) your chart, its
 	// soundings and names, your marks, where the fish were, home and the fuel for it
 	_chart( reading ) {
 
 		const g = this.ctx, [ x, y, w, h ] = RECTS.chart;
-		const across = plotterRange( reading.view || 0, this._slowFor ), s = w / across; // px a metre
+		const across = this.rangeStep >= 0 ? PLOTTER_NM[ this.rangeStep ] * 1852 : plotterRange( reading.view || 0, this._slowFor ), s = w / across; // px a metre
 		const rx = reading.x, rz = reading.z;
 		// ((M16) its colours by the light: S-52's day, dusk and night, as its chart is drawn)
 		const palette = this._palette = paletteFor( reading.night || 0, this._palette ), P = PALETTES[ palette ], U = SCREEN[ palette ];
@@ -816,7 +829,7 @@ export class BoatInstruments {
 		g.fillText( `HOME ${ leg.m < 0.2 * 1852 ? `${ Math.round( leg.m / FT ) } ft` : `${ ( leg.m / 1852 ).toFixed( 1 ) } NM` } ${ String( magnetic( leg.bearing ) ).padStart( 3, '0' ) }°M`, x + 10, y + h - 12 );
 		if ( Number.isFinite( reading.fuelL ) ) {
 
-			const f = fuelFor( leg.m, reading.fuelL, { rpm: reading.rpm, speed: reading.speed, speedMul: reading.speedMul || 1, boat: reading.boat } );
+			const f = fuelFor( leg.m, reading.fuelL, { rpm: reading.rpm, speed: reading.speed, speedMul: reading.speedMul || 1, boat: reading.boat, twin: !! reading.twin } );
 			g.textAlign = 'right';
 			g.fillStyle = f.state === 'ok' ? U.ok : f.state === 'tight' ? U.tight : U.short;
 			g.fillText( `FUEL ${ gallons( reading.fuelL ) } gal · ${ gallons( f.litres ) } to get home${ f.state === 'short' ? ' · SHORT' : '' }`, x + w - 10, y + h - 12 );
@@ -832,6 +845,9 @@ export class BoatInstruments {
 		g.fillRect( x + w - 10 - bw, y + h - 34, bw, 2 );
 		g.textAlign = 'right';
 		g.fillText( bar < 0.2 * 1852 ? `${ Math.round( bar / FT ) } ft` : `${ +( bar / 1852 ).toFixed( 2 ) } NM`, x + w - 10, y + h - 44 );
+		// ((M17) its range: its own pick, or as you've set it)
+		g.textAlign = 'left';
+		g.fillText( this.rangeStep < 0 ? 'AUTO' : 'RANGE', x + 10, y + h - 54 );
 		// ((M13) the weather alert under the data bar, flashing for a warning)
 		if ( reading.alert ) {
 

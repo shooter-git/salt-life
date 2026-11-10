@@ -29,7 +29,7 @@ import { lb } from '../game/Units.js';
 import { WORLD } from '../world/WorldLayout.js';
 import { islandTime, weatherHere } from '../game/Weather.js';
 import { ableOf, SOCK_DRIFT } from '../game/Seaworthy.js';
-import { anchorLie, boatRecord, cleanBoats, driftOf, keepBoat, sheerAt, swingRate, wearRate } from '../game/Away.js';
+import { SWIM_NEAR, anchorLie, besideHer, boatRecord, cleanBoats, driftOf, intoWater, keepBoat, sheerAt, standBack, stoodOf, swingRate, wearRate } from '../game/Away.js';
 import { RODE_SLACK } from '../player/BoatController.js';
 
 // (Salt Life) Playing together: whoever else is on the island (portal.session, All the Spaces), drawn
@@ -209,6 +209,9 @@ const _torchAt = new Vector3( 0.24, 1.3, 0.32 );
 const NAME_EVERY = 50, NAME_NEAR = 40; // poses between tellings of her name; m: near enough to read it
 const NEAR_ALL = 12; // m: on a phone, how near you are before all of a copy that's here whole is drawn (aboard, or about to board)
 const BOARD_REACH = 4.2; // m from where she's boarded (her ladder's own reach from the water: Vessel.boardFrom)
+// (M17) coming back aboard someone else's: how long after the room's known you're kept in the water where she was for her to come
+// (ms), and for her to be built once she's known to be there; m off her middle you wait
+const REJOIN_MS = 4000, REJOIN_BUILT_MS = 180e3, REJOIN_OFF = 3.5;
 
 // (M16) where her rode leaves her (as BoatController's stem head)
 const stemOf = ( model ) => {
@@ -611,6 +614,133 @@ export class Together {
 		a.storyAt = now;
 		const depth = ( x, z ) => Math.max( 0, G.seaLevel.value - app.terrainData.heightAt( x, z ) );
 		return a.story = driftOf( a.r, T, { dock: berthOf( a.r.b ).position, pick: app.weatherPick(), since: s.weatherSince, depth } );
+
+	}
+
+	// ---- (M17) coming back aboard someone else's boat (docs/m17/back.md)
+
+	// what's saved of you aboard someone else's, or in the water by hers (App.saveBoat: Away.boatLeft's ride), or null: on her deck
+	// where you stood, at her helm (put back beside it: it's hers to give), or swimming within SWIM_NEAR of her. (Not ridden(): that's
+	// the boat you're riding, for her dash)
+	rideLeft() {
+
+		const p = this.app.player;
+		if ( p.riding && ( p.mode === 'deck' || p.mode === 'boat' ) ) {
+
+			const b = p.boat, M = b.model, h = p.mode === 'boat' && p.atHelm, o = this.others.get( b.owner ), r = this.boats[ b.owner ];
+			return { o: b.owner, n: ( o && o.person.name ) || ( r && r.n ) || null, b: M.id, x: b.position.x, z: b.position.z, on: h ? [ h.rise[ 0 ], h.y ?? M.lines.deckY, h.rise[ 1 ], 0 ] : stoodOf( p ), helm: !! h };
+
+		}
+
+		if ( p.mode !== 'swim' || p.riding ) return null;
+		let best = null, near = SWIM_NEAR;
+		const by = ( o, n, b, f ) => {
+
+			const d = Math.hypot( p.position.x - f.pos.x, p.position.z - f.pos.z );
+			if ( d < near ) {
+
+				near = d;
+				best = { o, n, b, x: f.pos.x, z: f.pos.z, swim: [ p.position.x - f.pos.x, p.position.z - f.pos.z ] };
+
+			}
+
+		};
+
+		for ( const o of this.others.values() ) {
+
+			const c = o.cur;
+			if ( c && c.boat && ( c.mode === 'deck' || c.mode === 'helm' ) && ! c.ride ) by( o.person.id, o.person.name, c.boatId, c.drawn || c.boat );
+
+		}
+
+		for ( const [ id, a ] of this.away ) if ( a.r && a.r.a && this._awayFrame( id ) ) by( id, a.r.n || null, a.r.b, a.frame );
+		return best;
+
+	}
+
+	// back aboard her ( r: Away.leftOf's ride ): in the water where she was till she's here (her owner aboard her, or her record on
+	// everyone's sea, at anchor) and built, then on her deck where you stood, or in the water by her. If she's not out there once
+	// the room's known, ashore
+	rejoin( r ) {
+
+		const app = this.app, at = besideHer( r.x, r.z, 0, r.swim || [ REJOIN_OFF, 0 ] );
+		this._rejoin = { ...r, since: null }; // (counted from the first frame: a slow load's not her gone)
+		intoWater( app.player, at, app.terrainData.heightAt( at.x, at.z ), G.seaLevel.value );
+
+	}
+
+	_rejoinStep( p ) {
+
+		const R = this._rejoin, app = this.app;
+		if ( R.since === null ) R.since = Date.now();
+		if ( p.riding || ( p.mode !== 'swim' && p.mode !== 'walk' ) ) {
+
+			this._rejoin = null;
+			return;
+
+		}
+
+		const her = this._boardable( R.o, R.b );
+		if ( her && her.boat ) {
+
+			this._rejoin = null;
+			if ( R.swim ) {
+
+				const f = her.frame, at = besideHer( f.pos.x, f.pos.z, Math.atan2( _bow.set( 0, 0, 1 ).applyQuaternion( f.quat ).x, _bow.z ), R.swim );
+				intoWater( p, at, app.terrainData.heightAt( at.x, at.z ), G.seaLevel.value );
+				return;
+
+			}
+
+			p.ride( her.boat );
+			if ( R.on && p.mode === 'deck' ) standBack( p, R.on, her.boat.model );
+			if ( app.game && app.game.toast ) app.game.toast( `Back aboard ${ her.name }'s boat`, 2600 );
+			return;
+
+		}
+
+		// (her owner's here with her, or her record's on the sea: she's coming, as she's built)
+		const wait = her ? REJOIN_BUILT_MS : REJOIN_MS;
+		if ( ! this.roomKnown || Date.now() - R.since < wait ) return;
+		this._rejoin = null;
+		const S = WORLD.start || WORLD.spawn, x = S.position.x, z = S.position.z;
+		p.mode = 'walk';
+		p.position.set( x, Math.max( app.terrainData.heightAt( x, z ), app.colliders ? app.colliders.groundHeightAt( x, z, 50 ) : - Infinity ), z );
+		p.velocity.set( 0, 0, 0 );
+		p.yaw = S.yaw;
+		p._camY = null;
+		const name = ( this.others.get( R.o ) && this.others.get( R.o ).person.name ) || ( this.boats[ R.o ] && this.boats[ R.o ].n ) || R.n || 'Their';
+		if ( app.game && app.game.toast ) app.game.toast( `${ name === 'Their' ? name : name + '\'s' } boat isn't out there now · you're ashore`, 3600 );
+
+	}
+
+	// someone's boat of this type to board now ( { boat: TheirBoat, frame, name } ), coming ( { boat: null } : her owner's aboard
+	// her, or her record's on the sea at anchor, and she's not built here yet), or null
+	_boardable( id, type ) {
+
+		const o = this.others.get( id ), c = o && o.cur;
+		if ( o && ! c ) return { boat: null }; // (they're here, their poses not yet)
+		if ( c && c.boat && ( c.mode === 'deck' || c.mode === 'helm' ) && ! c.ride && c.boatId === type ) {
+
+			const model = this.copies.aboard( type ) && this._nearModel( o, type );
+			if ( ! model ) return { boat: null };
+			const frame = c.drawn || c.boat;
+			if ( ! o.theirBoat ) o.theirBoat = new TheirBoat( id, perched( this.copies.walked( model, type, c.fit ) ) );
+			this._walkOn( o.theirBoat, model, type, c.fit );
+			o.theirBoat.follow( frame, 0 );
+			return { boat: o.theirBoat, frame, name: o.person.name };
+
+		}
+
+		if ( o ) return null; // (they're here, not aboard her)
+		const a = this.away.get( id );
+		if ( ! a || ! a.r || ! a.r.a || a.r.b !== type || ( this.boats[ id ] && this.boats[ id ].tow ) ) return null;
+		if ( ! a.boat || ! a.boat.visible || ! this._awayFrame( id ) || ! this.copies.aboard( type ) ) return { boat: null };
+		const model = a.boat.userData.model;
+		if ( ! a.theirBoat ) a.theirBoat = new TheirBoat( id, perched( this.copies.walked( model, type, a.r.f ) ) );
+		this._walkOn( a.theirBoat, model, type, a.r.f );
+		a.theirBoat.follow( a.frame, 0 );
+		return { boat: a.theirBoat, frame: a.frame, name: a.r.n || 'someone' };
 
 	}
 
@@ -1525,6 +1655,9 @@ export class Together {
 			}
 
 		}
+
+		// ((M17) coming back aboard someone else's, once she's here)
+		if ( this._rejoin ) this._rejoinStep( p );
 
 		// next to the boat of someone aboard it: board theirs (at the dock, theirs before yours)
 		p.rideOffer = null;

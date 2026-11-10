@@ -1,5 +1,5 @@
 import { BOATS } from '../world/boat/Boats.js';
-import { ableOf, BASE, DAYS_TRACKS } from './Seaworthy.js';
+import { ableOf, burnOf, BASE, DAYS_TRACKS } from './Seaworthy.js';
 
 // Gear and upgrade data, sold by Marta at the chandlery by the boathouse; everything the game reads
 // goes through gearStats( state.upgrades ), so buying a level is just state.upgrades[ key ]++ and the
@@ -286,9 +286,10 @@ export const towTime = ( metres ) => Math.max( 0, metres ) * ( 1 / TOW.out + 1 /
 // (M16: each boat's by her length, game/fleet/Fleet.js)
 export const HAUL_FEE = 40;
 // litres per second at the helm: idle plus a lot more at full rpm (40 L lasts ~25 min flat out; (M16) each boat's: Seaworthy)
-export function fuelBurn( rpm, boat = 'lobster' ) {
+// ((M17) twin: a second engine fitted, stats.twin: Seaworthy.burnOf)
+export function fuelBurn( rpm, boat = 'lobster', twin = false ) {
 
-	const [ idle, k ] = ableOf( boat ).burn;
+	const [ idle, k ] = burnOf( boat, twin );
 	return idle + k * rpm * rpm;
 
 }

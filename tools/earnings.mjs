@@ -39,7 +39,7 @@ function play( st, hours = 400 ) {
 
 	let t = 0, money = 0, hold = 0, fish = 0;
 	const seen = {};
-	const burn = st.boat === 'kayak' ? 0 : fuelBurn( ABLE[ st.boat ].cruise.rpm, st.boat ) * fuelPrice( st.boat );
+	const burn = st.boat === 'kayak' ? 0 : fuelBurn( ABLE[ st.boat ].cruise.rpm, st.boat, !! st.twin ) * fuelPrice( st.boat ); // ((M17) a twin's two: st.twin)
 	while ( t < hours * 3600 ) {
 
 		const hour = 6 + rng() * 13, h = habitatAt( SPOTS[ st.spot[ Math.floor( rng() * st.spot.length ) ] ] );
