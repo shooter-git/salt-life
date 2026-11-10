@@ -1056,7 +1056,6 @@ export class App {
 		const portrait = this.game && this.game.portrait;
 		if ( portrait && portrait.active ) portrait.render( this.renderer, () => this.drawWorld() );
 		else this.drawWorld();
-		this.opaqueFrame();
 
 		this.touch.update( this.player, this.game );
 		this.hud.update( dt, { player: this.player, device: input.lastDevice } );
@@ -2218,24 +2217,6 @@ export class App {
 		// wrong moment on a CPU's WebGL left a lobster boat's fittings drawn at any distance, over low's triangles)
 		const M = this.boat;
 		if ( M && M.nearDetail ) for ( const k of M.nearDetail ) if ( M.meshes[ k ] ) near( M.meshes[ k ], M.nearDist ?? 70 );
-
-	}
-
-	// (M17) the frame's alpha to 1, once it's drawn, before the page shows it. A boat's materials leave their height in it for
-	// the sea to read (materials/SeenInWater.js: on high, from its copy of the frame), and the stage makes the canvas with an
-	// alpha channel, premultiplied: so the page's own navy behind it (style.css) showed through every boat's lower parts, by as
-	// much as her height left out, about half at her waterline. A dark paint's shade had more of it than of its own colour, and
-	// barn red read navy-grey there (docs/m17/looks.md). Only the alpha's written, and three's colour state is handed back
-	opaqueFrame() {
-
-		const r = this.renderer;
-		if ( r.getRenderTarget() !== null ) return;
-		const gl = r.getContext();
-		gl.colorMask( false, false, false, true );
-		gl.clearColor( 0, 0, 0, 1 );
-		gl.clear( gl.COLOR_BUFFER_BIT );
-		gl.colorMask( true, true, true, true );
-		r.state.buffers.color.reset();
 
 	}
 
