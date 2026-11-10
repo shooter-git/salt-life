@@ -35,7 +35,7 @@ Salt Life is [Tidewater](https://github.com/dgreenheck/tidewater) rebuilt as an 
 7. The CPU water queries (`WaterQuery`: Gerstner waves plus the shore waves, and (M17) the boats' wakes' far arms, followed from their tracks just before: `Wake.track`). They give heights for the boat, the swimmer, the bobber and the birds.
 8. Everything else (plants, reef, fish, wildlife, spray, sound).
 9. The drawing, through the SDK's `createStage`. On high it also goes through `PostChain`.
-10. (M17) The frame's alpha set back to 1 (`App.opaqueFrame`). The stage's canvas has an alpha channel, premultiplied, and the boats' materials write their height into the frame's alpha for the sea (`materials/SeenInWater.js`). Left there, the page's own colour behind the canvas (`style.css`'s navy) showed through every boat's lower parts, about half at her waterline. Anything that writes alpha below 1 in an opaque pass leans on this.
+10. (M17) The canvas's alpha is 1. The stage's canvas has an alpha channel, premultiplied, so whatever's left in the frame's alpha shows the page behind it (`style.css`'s navy). The boats' materials write their height into the frame's alpha for the sea (`materials/SeenInWater.js`), but only on high, where the sea reads it (`SEEN.written`, set by `WaterSurface`). On high the post chain's output pass writes alpha 1 (`PostChain`), after the sea's read it. Anything new that writes alpha below 1 in an opaque pass on low or mid would show the page; blending over 1 keeps 1.
 
 ## Where things are
 

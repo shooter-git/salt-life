@@ -27,7 +27,7 @@ The before set was drawn from a clean copy of 53ffb1c on a server of its own, th
 | The catch card in its first seconds | the stand-ins drawn in it (caught once on low) | none |
 | A toast over the card | over its name at 844 × 390 and 390 × 844 | waits till the card goes, where it would cover the name |
 | The helm's guard at deep night | 1% to spare, −0.37 s of the wall at worst | 1.65 s of the wall at worst |
-| Every boat's lower parts | the page's navy behind the canvas showing through, about half at her waterline | the frame's alpha 1 when the page shows it |
+| Every boat's lower parts | the page's navy behind the canvas showing through, about half at her waterline | the canvas's alpha 1 on every tier: the boats' height left in it only on high, where the sea reads it, and set back in the post chain's last pass |
 
 ## The paint, to linear once
 
@@ -110,11 +110,33 @@ These sweeps were first run with the page's navy over every boat's lower parts (
   - On a white hull it's a blue cast. On barn red in shade, whose own light is about (20,1,1), the navy was most of what showed.
   - Every boat and every tier had it, the boats at their berths too. It's been so since M16's `SeenInWater`.
 
-**The fix** (`App.opaqueFrame`, after the frame's drawn, the catch card's fish included): the canvas's alpha back to 1, an alpha-only clear (`colorMask` false, false, false, true), three's colour state handed back (`state.buffers.color.reset`). The sea on high still reads the boats' heights from its copy of the frame, taken mid-frame. The context's alpha isn't the game's to turn off: the stage (All the Spaces) makes it. No shader changed: the programs before ready are the same 16, to the character (dbd23fb against 53ffb1c), so no GPU limits changed either.
+**The fix, first** (dbd23fb, `App.opaqueFrame`): an alpha-only clear of the whole canvas after each frame. It worked, but it was a draw of its own over every pixel, and the CPU pays for it in full. The M17 session measured it against 53ffb1c: ready a median 0.08 s later paired by round (11 of 16 rounds behind), and one-core whole plays about 3% slower in both pairs (309.2 against 300.5 s, 290.7 against 280.9). 6a0281d, before it, wasn't slower. The context's alpha isn't the game's to turn off: the stage (All the Spaces) makes it.
+
+**The fix, now** (79f0049): no draw of its own. The height is written only where something reads it, and set back to 1 in a pass that's drawn anyway:
+- **Low and mid:** only the sea reads the frame's alpha, and only on high (`WATER_REFRACT`; `WaterSurface.refract` is `tier === 'high'`). The catch card's copy of the frame reads its colour alone. So on low and mid a boat's materials write no height (`SEEN.written`, which the sea sets as it's built, before any boat is). The alpha stays 1.
+- **High:** every frame goes through the post chain (the scene, the sun's shafts, the bloom, the output pass, SMAA). The sea's copy of the frame is taken in the scene's pass, so it still has the boats' heights. The output pass now writes alpha 1 (`PostChain`: one line in its fragment shader), and SMAA after it carries the 1 to the canvas.
+- The catch card draws straight to the canvas, not through the chain: its backdrop writes alpha 1, and its fish over it keeps 1 (below).
+- `App.opaqueFrame` is gone.
+- Every boat material goes through `seenInWater`: `BoatMaterials`' `withAux` (the lobster boat's, the console's and the sportfisher's) and `KayakModel`'s hull. The moored boats' material never wrote a height. The other materials that write alpha below 1 are blended, and every blend in the game leaves an alpha of 1 at 1 (spray, rain, drips and motes add theirs over what's there, the contact shadows the same, the hatchlings' tracks keep what's there).
+
+**Seen on all three tiers** (`tools/looks/look.mjs` now reads the canvas's alpha straight after the game's own draw, and counts the programs writing a height):
+- Low, mid and high: 0 of 360,000 pixels under 1, in every shot (paint and the lobster boat). Programs writing a height: none on low or mid; on high 6 with the console or the sportfisher in view and 4 with the lobster boat, so the sea still has them.
+- A control on mid, the heights switched back on in the page with nothing to set the alpha back: 45,156 pixels under 1, and the lobster boat's white in sun read (125,138,146), blue-grey, where it reads (169,165,160). So the count sees a veil when there is one.
+- The catch card on high (a probe of its own, not kept: a yellowtail's card raised at the start, the canvas read after each of its frames): its first frame, the world's, and 46 of its own with the fish in, all 1.
+- The probe pixels on every tier read as with `opaqueFrame` on mid, within a level or two:
+
+| | Low | Mid | High |
+|---|---|---|---|
+| Barn red, shade (sportfisher, console) | (20,2,2), (21,1,1) | (20,2,2), (21,1,1) | (21,3,3), (22,2,2) |
+| Barn red, shade, 6 m | (19,1,1), (21,1,1) | (19,1,1), (21,1,1) | (19,1,1), (21,1,1) |
+| The console's own navy, sun / shade | (1,23,51) / (1,7,24) | (1,23,51) / (1,7,24) | (1,23,51) / (0,8,25) |
+| The lobster boat's white, shade | (81,84,90) | (81,85,91) | (81,85,91) |
+
+High's bloom adds a level here and there.
 
 **What it reads now** (`tools/looks/look.mjs` as above, 10:30, the bounce 0.3 and the environment twice over as before; sRGB medians of her topsides; `qa-output/looks/compare-veil/` has them beside the photographs):
 
-| | With the veil (6a0281d) | Now (dbd23fb) | The photographs |
+| | With the veil (6a0281d) | Now (dbd23fb and 79f0049, mid) | The photographs |
 |---|---|---|---|
 | The lobster boat's white topsides, sun | (152,163,165) | (168,165,159) | the Viking's (228,227,219) |
 | Her topsides in shade | (93,108,118) | (81,85,91), 0.23 of sunlit | the Viking's (44,75,95), 0.09; *Bella*'s house (141,157,168), 0.43 |
@@ -259,11 +281,18 @@ That 1% was the only slack, and what it has to cover isn't a share of the gap. I
 
 ## The checks
 
-- **`pnpm test`:** passes (58c32c8; 7 min 44 s at a load of 25 to 30, `test/flats.mjs`' timing included; the two commits after change no tested figure). Passes again on dbd23fb, the frame's alpha (6 min 35 s). `test/days-out-clock.mjs` has the helm's guard (above), and every boat test builds the boats through `loadBoat` with their shade.
+- **`pnpm test`:** passes (58c32c8; 7 min 44 s at a load of 25 to 30, `test/flats.mjs`' timing included; the two commits after change no tested figure). Passes again on dbd23fb, the frame's alpha (6 min 35 s). And on 79f0049, the height only where it's read (5 min 22 s, at a load of 14.8 falling to 3.3). `test/console.mjs` checks the height's written only where the sea reads it. `test/days-out-clock.mjs` has the helm's guard (above), and every boat test builds the boats through `loadBoat` with their shade.
+- **The GPU limits on 79f0049**, high, mid and low one at a time: high 161 shaders, all within, the sea 16 of 16 fragment textures and 185 vertex uniforms; mid 100, all within, the sea 14 of 16; low 87, all within, the village's wood 16 of 16. As before: the change takes a varying from the boats' programs on low and mid and adds a line to high's output pass, no texture or uniform anywhere.
 - **The GPU limits** (`tools/gpu-limits.mjs`, high, mid and low one at a time, on ec3587b): high 165 shaders, all within, the sea 16 of 16 fragment textures and 185 vertex uniforms as before; mid 98 shaders, all within, the sea 14 of 16; low 85 shaders, all within, the village's wood 16 of 16 as before ("the flats' marks never came" in the time it waits, as on `m17-flats`). No texture was added anywhere. The fill is uniforms and a few lines in the boats' own materials, the environment's map is the one they read already, and the flare's and the pool's programs have one texture or none. The sea's shader isn't touched: the flare's light on it is a local light, which it already takes.
-- **The programs built before ready** (`tools/heap/programs.mjs`, `tools/wakes/ready-sources.mjs`, phone upright on low, builds of 53ffb1c and 58c32c8): the same 16 by name and number, and all 16 the same to the character. The two commits after (b605bd6, ec3587b) change a uniform's value and the flare's canvas, neither in a program's source. dbd23fb, the frame's alpha, against 53ffb1c again: the same 16, to the character.
+- **The programs built before ready** (`tools/heap/programs.mjs`, `tools/wakes/ready-sources.mjs`, phone upright on low, builds of 53ffb1c and 58c32c8): the same 16 by name and number, and all 16 the same to the character. The two commits after (b605bd6, ec3587b) change a uniform's value and the flare's canvas, neither in a program's source. dbd23fb, the frame's alpha, against 53ffb1c again: the same 16, to the character. And 79f0049, the height only where it's read: the same 16, to the character. None of the 16 is a boat's: the boats are built after the start on the CPU, so the line they lose on low isn't among them.
+  - On low and mid every boat's program, built after the start, has a varying fewer, and three lines (about 150 characters) fewer: the height in the vertex shader and the alpha in the fragment's.
   - Nothing here is drawn before ready on a CPU: the boats are held to after the start, and the flare, the pool and the card's fish come after it.
   - On a GPU the boat you start in, the kayak, builds in the loading frame with the fill's few lines in her hull.
+- **The complete check on a clean copy of 79f0049**, the height only where it's read (`cli.ts check`): passes, no warning.
+  - Script memory 144.2 MB of 150, on the tablet; 123.2 on the phone upright, 116.4 on its side, 138.0 on the laptop. dbd23fb's read 138.0 and b605bd6's 143.5: a run swings that much.
+  - Whole download 78.3 MB of 80; 7.1 MB before it's ready.
+  - 84 draw calls, 242,040 triangles, textures 73.6 MB, graphics memory 111.6 MB, 14 sounds at once.
+  - Ready in 4.8, 4.7, 7.1 and 6.7 s on the four screens. It started at a load of 2.9 and ended at 13.3, the other sessions' work coming back, so the times are for the M17 session's quiet runs to judge.
 - **The complete check on a clean copy of dbd23fb**, the frame's alpha (`cli.ts check`): passes, no warning.
   - Script memory 138.0 MB of 150, on the tablet; 127.4 on the phone upright, 119.4 on its side, 129.6 on the laptop.
   - Whole download 78.3 MB of 80; 7.1 MB before it's ready.
@@ -289,7 +318,7 @@ What might move them:
 - The moored boats' program changed with them (`mooredBoat|groundBounce`), built after the start.
 - The flare is a sprite (a program three already has, the glares') and one local light while it burns.
 - The pool's material is new (not tone-mapped), built the first time her lights come on.
-- `App.opaqueFrame`: one alpha-only clear of the whole screen each frame, after it's drawn. On the CPU that's a pass over every pixel. On a phone's GPU it should fall within the frame's own pass, but that isn't measured.
+- The frame's alpha (79f0049): no draw of its own. On low and mid the boats' programs have a varying and three lines fewer. On high the output pass has one line more, in a pass drawn anyway. `App.opaqueFrame`'s clear of the whole canvas each frame (dbd23fb), which cost the CPU about 3% of a one-core play, is gone.
 
 ## Not verified
 

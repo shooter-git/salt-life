@@ -267,25 +267,32 @@ for ( const S of shots ) {
 	await frames( S.hour !== lastHour ? ( TIER === 'low' ? 30 : 18 ) : 8 );
 	lastHour = S.hour;
 	await page.screenshot( { path: join( OUT, S.name + '.png' ) } );
-	const info = await page.evaluate( () => new Promise( ( done ) => requestAnimationFrame( () => {
+	const info = await page.evaluate( () => new Promise( ( done ) => {
 
-		const a = window.__app, r = ( x ) => Number( x.toFixed( 3 ) ), R = a.renderer, gl = R.getContext();
-		// ((M17) the canvas's alpha, read straight after the game's frame: under 1, the page behind it shows through (SeenInWater);
-		// and how many programs leave a boat's height in it)
-		let under = null;
-		if ( R.getRenderTarget() === null ) {
+		// ((M17) the canvas's alpha, read straight after the game's own draw (App.drawWorld), before the page composites it: under 1,
+		// the page behind it shows through (SeenInWater); and how many programs leave a boat's height in it)
+		const a = window.__app, r = ( x ) => Number( x.toFixed( 3 ) ), R = a.renderer, gl = R.getContext(), draw = a.drawWorld;
+		a.drawWorld = function () {
 
-			const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight, px = new Uint8Array( w * h * 4 );
-			gl.readPixels( 0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px );
-			under = 0;
-			for ( let i = 3; i < px.length; i += 4 ) if ( px[ i ] < 255 ) under ++;
+			draw.call( this );
+			a.drawWorld = draw; // (the staged camera's, above)
+			let under = null, px = null;
+			if ( R.getRenderTarget() === null ) {
 
-		}
+				const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+				px = new Uint8Array( w * h * 4 );
+				gl.readPixels( 0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px );
+				under = 0;
+				for ( let i = 3; i < px.length; i += 4 ) if ( px[ i ] < 255 ) under ++;
 
-		const heights = R.info.programs.filter( ( p ) => gl.getAttachedShaders( p.program ).some( ( x ) => gl.getShaderParameter( x, gl.SHADER_TYPE ) === gl.FRAGMENT_SHADER && gl.getShaderSource( x ).includes( 'vSeenY' ) ) ).length;
-		done( { hour: r( a.settings.timeOfDay ), boat: a.boat.id, programs: R.info.programs.length, calls: R.info.render.calls, lights: a.localLights ? a.localLights.active : null, alphaUnder1: under, heights } );
+			}
 
-	} ) ) );
+			const heights = R.info.programs.filter( ( p ) => gl.getAttachedShaders( p.program ).some( ( x ) => gl.getShaderParameter( x, gl.SHADER_TYPE ) === gl.FRAGMENT_SHADER && gl.getShaderSource( x ).includes( 'vSeenY' ) ) ).length;
+			done( { hour: r( a.settings.timeOfDay ), boat: a.boat.id, programs: R.info.programs.length, calls: R.info.render.calls, lights: a.localLights ? a.localLights.active : null, alphaUnder1: under, pixels: px && px.length / 4, heights } );
+
+		};
+
+	} ) );
 	results.push( { shot: S.name, ...info } );
 	log( 'shot', S.name, JSON.stringify( info ) );
 
