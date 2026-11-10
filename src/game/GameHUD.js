@@ -1,6 +1,6 @@
 import { FISH, CARAPACE, fishLengthCm } from './FishTable.js';
 import { UPGRADES, nextLevel, fuelOf, fuelPrice } from './Gear.js';
-import { FRESH_H } from './Seaworthy.js';
+import { FRESH_H, iceHeld } from './Seaworthy.js';
 import { FLEET_CSS, fleetRows, bindFleet, martaSays } from './fleet/FleetPanel.js';
 import { TRAP_PRICE } from './Traps.js';
 import { BAITS, BAIT_IDS, chunksOf } from './Bait.js';
@@ -29,6 +29,10 @@ const fishItem = ( f, button, price = f.value, wanted = false ) => item( `${ FIS
 // (Salt Life) why the net's catch went back (GameState.addHaul)
 const BACK = { protected: 'protected', notNet: 'not bait', full: 'no room in the cooler', bucket: 'the bucket\'s full' };
 const upper = ( t ) => t.charAt( 0 ).toUpperCase() + t.slice( 1 );
+// ((v2.3.0) the box your catch goes in, as said: 'the hold', or riding along, 'Jeremy's hold')
+const boxIn = ( b ) => ( b.whose ? `${ escape( b.whose ) }'s ${ b.word }` : `the ${ b.word }` );
+// (and the others' fish in it: "Jeremy's 3 fish, 420 lb")
+const othersIn = ( b ) => ( b.by || [] ).map( ( o ) => `${ escape( o.name ) }'s ${ o.n } fish, ${ pounds( o.kg ) } lb` ).join( ' · ' );
 // (Salt Life) a spiny lobster's carapace (the gauge's measure), of its total length (cm), in inches;
 // a catch's size as it's told (a lobster by its carapace)
 const carapaceIn = ( cm ) => cm * CARAPACE / IN;
@@ -517,14 +521,8 @@ export class GameHUD {
 	refresh() {
 
 		const s = this.game.state;
-		const st = s.stats;
 		this.moneyEl.textContent = `$${ s.money.toLocaleString() }`;
-		// ((M16) the ice takes room in it too: DaysOut)
-		const kg = s.holdKg + ( this.game.daysOut ? this.game.daysOut.box.ice : 0 );
-		this.coolerLabel.textContent = s.upgrades.hold > 0 ? 'Hold' : 'Cooler';
-		this.coolerKg.textContent = `${ pounds( kg ) } / ${ pounds( st.holdKg ) } lb`;
-		this.coolerBar.style.width = `${ Math.min( 100, kg / st.holdKg * 100 ) }%`;
-		this.coolerEl.classList.toggle( 'is-full', kg > st.holdKg * 0.9 );
+		this.drawHold();
 		if ( this._last.money !== undefined && this._last.money !== s.money ) {
 
 			this.purse.classList.remove( 'is-bump' );
@@ -540,12 +538,34 @@ export class GameHUD {
 
 	}
 
+	// ((M16) the ice takes room in it too: DaysOut) (v2.3.0) The box your catch is in, all of it: your fish, anyone else's
+	// (your guests', or riding along, her owner's and theirs) and its ice. Drawn as it changes, not only when the save does
+	// (the ice melts, an icemaker makes it, a guest's catch comes aboard: none of them is a change to your save)
+	drawHold() {
+
+		const s = this.game.state, b = s.box(), kg = s.holdKg + b.others + b.ice;
+		const label = upper( b.word ), text = `${ pounds( kg ) } / ${ pounds( b.cap ) } lb`, width = `${ Math.min( 100, kg / b.cap * 100 ).toFixed( 1 ) }%`;
+		if ( this.coolerLabel.textContent !== label ) this.coolerLabel.textContent = label;
+		if ( this.coolerKg.textContent !== text ) this.coolerKg.textContent = text;
+		if ( this.coolerBar.style.width !== width ) this.coolerBar.style.width = width;
+		this.coolerEl.classList.toggle( 'is-full', kg > b.cap * 0.9 );
+
+	}
+
 	// per frame
 	// (Salt Life) aim: what's under the speargun's sights ({ label, cm, rule, far }); breath: the swimmer's
 	// ({ s, max, blackout }) while it matters; netWind: the cast net's wind-up ({ charge, win: [ lo, hi ],
 	// tired }); bait: the chip in the purse ({ label, text }: the hook's bait, or the bucket); (M10) hull:
 	// the boat's wear (0..1) once it shows, bilge: the litres in her bilge while there are any
 	update( { fight, casting, power, bite, aiming, fuel = null, sonar = null, aim = null, breath = null, netWind = null, bait = null, hull = null, bilge = null } ) {
+
+		// ((v2.3.0) the hold's bar, every 20 frames)
+		if ( ( this._holdT = ( this._holdT || 0 ) + 1 ) >= 20 ) {
+
+			this._holdT = 0;
+			this.drawHold();
+
+		}
 
 		this.netWind.classList.toggle( 'is-on', !! netWind );
 		if ( netWind ) {
@@ -696,7 +716,7 @@ export class GameHUD {
 		// berried lobster; one over the day's bag goes back; the lionfish's bounty)
 		const board = info.islandRecord ? '. It still goes on the board at the fish stand' : '';
 		// ((M15) no room for one that could be kept: the card waits while you make room for it)
-		const room = this.game.state.roomFor( info ), where = this.game.state.upgrades.hold > 0 ? 'hold' : 'cooler';
+		const room = this.game.state.roomFor( info ), box = this.game.state.box(), where = boxIn( box );
 		// ((v2.1.6) one just kept may go straight back instead, alive, and then it isn't in the day's bag)
 		const free = this.free = ! room && ! info.trophyView && this.game.state.canFree( info );
 		if ( info.why === 'short' ) note = `<div class="gm-catch-note is-warn">Short: under ${ ( f.minCm * CARAPACE / IN ).toFixed( 0 ) } in on the gauge · back it goes, to grow${ board }.</div>`;
@@ -705,8 +725,8 @@ export class GameHUD {
 		else if ( info.tagged ) note = `<div class="gm-catch-note">Tagged and let go alive for Marta's tag-and-release log: <b>$${ info.tagged }</b>${ board }.</div>`;
 		else if ( info.released ) note = `<div class="gm-catch-note">${ f.cr ? 'Catch and release: everyone lets one go. Measured and' : 'Protected: measured and' } let go alive${ board }.</div>`;
 		else if ( info.bag && info.bag.full ) note = `<div class="gm-catch-note is-warn">That's your ${ info.bag.max } for today, the most anyone may keep · back it goes</div>`;
-		else if ( room ) note = `<div class="gm-catch-note is-warn">No room in the ${ where } for it · let fish go to make room, or let this one go</div>`;
-		else if ( ! info.kept ) note = `<div class="gm-catch-note is-warn">${ info.kg > this.game.state.stats.holdKg ? `Too big for the ${ where }, even empty` : `No room in the ${ where }` } · you let it go</div>`;
+		else if ( room ) note = `<div class="gm-catch-note is-warn">No room in ${ where } for it · let fish go to make room, or let this one go</div>`;
+		else if ( ! info.kept ) note = `<div class="gm-catch-note is-warn">${ info.kg > box.cap ? `Too big for ${ where }, even empty` : box.others > 0 ? `No room in ${ where } with ${ box.whose ? 'the rest of the catch' : 'your guests\' catch' } in it` : box.ice > 0 ? `No room in ${ where } beside the ice that keeps the catch` : `No room in ${ where }` } · you let it go</div>`;
 		else if ( f.bounty && ! info.islandRecord && ! info.record ) note = `<div class="gm-catch-note">An invader on the reef: Joe pays $${ f.bounty } a fish on top.</div>`;
 		else if ( info.islandRecord ) note = `<div class="gm-catch-note">The heaviest anyone here has landed${ isle ? `. It beats ${ escape( isle.who || 'someone' ) }'s <b>${ lb( isle.kg ) }</b>` : '' }. It goes on the board at the fish stand.</div>`;
 		else if ( info.record ) note = `<div class="gm-catch-note">Previous best <b>${ lb( info.prevBestKg ) }</b> · ${ sizeOf( info.species, info.prevBestCm ) }. Beaten by ${ lb( info.kg - info.prevBestKg ) }.</div>`;
@@ -870,18 +890,20 @@ export class GameHUD {
 
 		const R = this.room, el = this.catchCard.querySelector( '.gm-room' );
 		if ( ! R || ! el ) return;
-		const s = this.game.state, info = R.info, cap = s.stats.holdKg, held = s.holdKg;
-		const need = held + info.kg - cap;
+		// ((v2.3.0) in the box: anyone else's fish, and the ice it holds for the catch, as well as yours)
+		const s = this.game.state, info = R.info, box = s.box(), cap = box.cap;
+		const need = s.shortOf( info.kg, s.holdKg, box ), held = cap + need - info.kg;
 		const fish = s.inventory.slice().sort( ( a, b ) => a.value - b.value || a.kg - b.kg );
 		R.ids = fish.map( ( f ) => f.id );
 		R.pick = Math.max( 0, Math.min( R.pick, fish.length - 1 ) );
 		R.fits = need <= 1e-6;
-		const d = this.device, where = s.upgrades.hold > 0 ? 'hold' : 'cooler';
+		const d = this.device, ice = iceHeld( box, info.kg );
+		const where = `${ box.whose ? `${ escape( box.whose ) }'s ${ box.word }` : upper( box.word ) }${ ice > 0.05 ? ` (${ pounds( ice ) } lb of it ice)` : '' }`;
 		const pct = ( kg ) => Math.max( 0, Math.min( 100, kg / cap * 100 ) ).toFixed( 1 );
 		const chips = fish.map( ( f, i ) => `<div class="gm-room-fish${ i === R.pick && d !== 'touch' ? ' is-pick' : '' }"><b>${ FISH[ f.species ].name }</b><span>${ lb( f.kg ) } · $${ f.value }</span><button class="gm-mini" data-let="${ f.id }">Let go</button></div>` ).join( '' );
 		const keys = { gamepad: `<kbd>${ LEFT }</kbd> <kbd>${ RIGHT }</kbd> on the d-pad to pick one · <kbd>X</kbd> lets it go`, keyboard: `<kbd>${ LEFT }</kbd> <kbd>${ RIGHT }</kbd> to pick one · <kbd>R</kbd> lets it go` }[ d ];
 		el.innerHTML = `
-			<div class="gm-room-head"><span>${ upper( where ) } ${ pounds( held ) } of ${ pounds( cap ) } lb</span>
+			<div class="gm-room-head"><span>${ where } ${ pounds( held ) } of ${ pounds( cap ) } lb</span>
 				<span class="gm-room-meter"><span class="is-in" style="width:${ pct( held ) }%"></span><span class="is-new${ R.fits ? ' is-ok' : '' }" style="left:${ pct( held ) }%;width:${ pct( info.kg ) }%"></span></span>
 				<b class="${ R.fits ? 'is-ok' : '' }">${ R.fits ? 'Room for it' : `${ lb( need, 1 ) } short` }</b></div>
 			<div class="gm-room-list">${ chips }</div>
@@ -979,7 +1001,7 @@ export class GameHUD {
 	// the cooler, in tabs: the fish in it, your log, the island's records, and how the others see you
 	renderInventory() {
 
-		const s = this.game.state;
+		const s = this.game.state, box = s.box();
 		const together = this.game.app && this.game.app.together, me = together && together.me.id;
 		const logged = Object.entries( s.log ).filter( ( [ k ] ) => FISH[ k ] );
 		// (Salt Life) the island's records: the group's heaviest of each kind (together/)
@@ -1086,8 +1108,8 @@ export class GameHUD {
 		this._invDrawn = tab;
 		const keys = d === 'touch' ? '' : `<span class="gm-tabs-keys">${ d === 'gamepad' ? 'D-pad' : `<kbd>${ LEFT }</kbd><kbd>${ RIGHT }</kbd>` }</span>`;
 		this.inv.innerHTML = `
-			<div class="gm-head"><h2>${ s.upgrades.hold > 0 ? 'Fish hold' : 'Cooler' }</h2>
-			<p class="gm-sub">${ s.inventory.length } fish · ${ pounds( s.holdKg ) } of ${ pounds( s.stats.holdKg ) } lb · worth $${ s.holdValue }${ this.game.daysOut.boxSaid() }</p></div>
+			<div class="gm-head"><h2>${ box.whose ? `${ escape( box.whose ) }'s ${ box.word }` : box.word === 'hold' ? 'Fish hold' : 'Cooler' }</h2>
+			<p class="gm-sub">${ box.whose || box.by.length ? `Yours: ${ s.inventory.length } fish · ${ pounds( s.holdKg ) } lb · worth $${ s.holdValue } · ${ box.by.length ? `${ othersIn( box ) } · ` : '' }${ pounds( s.holdKg + box.others ) } of ${ pounds( box.cap ) } lb in all` : `${ s.inventory.length } fish · ${ pounds( s.holdKg ) } of ${ pounds( box.cap ) } lb · worth $${ s.holdValue }` }${ this.game.daysOut.boxSaid() }</p></div>
 			<div class="gm-tabs" role="tablist">${ tabs.map( ( [ id, label, n ] ) => `<button class="gm-tab${ id === tab ? ' is-on' : '' }" role="tab" aria-selected="${ id === tab }" data-tab="${ id }">${ label }${ n ? `<small>${ n }</small>` : '' }</button>` ).join( '' ) }${ keys }</div>
 			<div class="gm-list" role="tabpanel">${ body }</div>
 			<div class="gm-foot"><span class="gm-sub">${ hint }</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Close', 'I', 'Back' ) }</button></div>`;

@@ -12,7 +12,7 @@ import { LEADERS } from './rigs/Presentation.js';
 import { PLACES } from './Places.js';
 import { ChartLog } from './Chart.js';
 import { BOATS, START_BOAT } from '../world/boat/Boats.js';
-import { cleanDays } from './Seaworthy.js';
+import { cleanDays, shortOf, holdWord } from './Seaworthy.js';
 import { newTraps, cleanTraps } from './Traps.js';
 
 const SAVE_KEY = 'tidewater.save.v1';
@@ -75,6 +75,7 @@ export class GameState {
 		this.traps = newTraps(); // ((M16) your lobster traps out on the sea: Traps.js)
 		this._nextId = 1;
 		this.listeners = new Set();
+		this.boxIs = null; // ((v2.3.0) () => the box your catch goes in: DaysOut.boxOf. box() has it)
 		this._chartBought();
 
 	}
@@ -317,10 +318,31 @@ export class GameState {
 
 	}
 
+	// (v2.3.0) the box your catch goes in, as DaysOut has it (boxIs, set as the game starts): your boat's, or riding with
+	// her owner aboard, hers (together/SharedBox.js). -> { cap, ice, melt (kg an hour), others (kg of fish in it not yours:
+	// aboard your own, your guests'; riding along, her owner's and any other guest's), word ('hold' | 'cooler'), whose (her
+	// owner's name, riding along; else null), by: [ { name, n, kg } ] (whose those others are) }. Without one (plain Node):
+	// your boat's, with no ice and only your fish
+	box() {
+
+		if ( this.boxIs ) return this.boxIs();
+		const cap = this.stats.holdKg;
+		return { cap, ice: 0, melt: 0, makes: 0, others: 0, word: holdWord( cap ), whose: null, by: [] };
+
+	}
+
+	// (v2.3.0) how far a fish of `kg` is short of room in the box (<= 0: it fits), beside everyone's fish in it and the ice
+	// it holds for them (Seaworthy.shortOf); mine: your fish in it (all of them; 0: if you let every one go)
+	shortOf( kg, mine = this.holdKg, b = this.box() ) {
+
+		return shortOf( { cap: b.cap, fish: b.others + mine, ice: b.ice, melt: b.melt }, kg );
+
+	}
+
 	// room in the cooler / hold for a fish of `kg`?
 	fits( kg ) {
 
-		return this.holdKg + kg <= this.stats.holdKg + 1e-6;
+		return this.shortOf( kg ) <= 1e-6;
 
 	}
 
@@ -415,10 +437,11 @@ export class GameState {
 	}
 
 	// (M15) whether room could be made for a catch there was none for, by letting fish go from the cooler:
-	// one not let go for its own sake (protected, short, over the bag) and no heavier than the cooler holds
+	// one not let go for its own sake (protected, short, over the bag) that would fit with all of yours let go ((v2.3.0)
+	// beside anyone else's in the box, and the ice it holds for the catch)
 	roomFor( info = this.lastCatch ) {
 
-		return !! info && ! info.kept && ! info.released && ! ( info.bag && info.bag.full ) && info.kg <= this.stats.holdKg + 1e-6;
+		return !! info && ! info.kept && ! info.released && ! ( info.bag && info.bag.full ) && this.shortOf( info.kg, 0 ) <= 1e-6;
 
 	}
 

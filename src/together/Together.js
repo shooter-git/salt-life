@@ -13,6 +13,7 @@ import { BoatLamps } from '../world/boat/BoatLamps.js';
 import { stackedOn } from '../game/TrapWork.js';
 import { SPARE_BERTHS, atDock, berthShare, laidAt, spareBerth } from './Berths.js';
 import { Crew, footY, perched } from './Crew.js';
+import { SharedBox } from './SharedBox.js';
 import { Specks } from './Specks.js';
 import { RADAR_RPM, PROP_DISPLAY_RPS } from '../world/BoatModel.js';
 import { FISH, fishLengthCm, isTrophy } from '../game/FishTable.js';
@@ -248,6 +249,7 @@ export class Together {
 		this._tags = null;
 		this.copies = new BoatCopies( app ); // (M16) the others' boats, by type
 		this.crew = new Crew( this );
+		this.box = new SharedBox( this ); // ((v2.3.0) one fish box aboard: a guest's catch in hers, kept on her ice)
 		this.specks = null; // (M16) and past the fog (made when there's someone out there)
 		this._specks = [];
 		this._tidyT = 0;
@@ -289,6 +291,8 @@ export class Together {
 		s.on( 'week', ( tally ) => this._setWeek( tally ) );
 		s.on( 'world', ( body ) => this._theirWorld( body ) );
 		s.on( 'call', ( body, from ) => this.crew.theirCall( body, from ) );
+		s.on( 'box', ( body, from ) => this.box.told( body, from ) );
+		s.on( 'boxIn', ( body, from ) => this.box.given( body, from ) );
 		this._worldT = 0;
 		// ((M14) coming to host: the whale's surfacings your own again)
 		if ( s.onHostChange ) s.onHostChange( () => { if ( s.isHost && app.whale ) app.whale.brain.led = false; } );
@@ -1534,6 +1538,7 @@ export class Together {
 		this._liveBoats = 0;
 		this.crew.update( dt );
 		if ( this.others.size ) this._kits( dt );
+		this.box.update( dt );
 		this._tidy( dt );
 		this._speckBoats();
 		if ( ! this.others.size ) return;

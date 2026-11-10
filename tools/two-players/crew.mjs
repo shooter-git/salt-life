@@ -1,9 +1,10 @@
 // (guest work) A guest as her crew, with two real games: her rods worked on her owner's tackle and bait (her spread let out and
 // brought in, a rod taken off her holder, her kite, her electric reel, her chum, her searchlight at her helm, her lights over his
 // fish), a flashlight seen on the other's game, her traps set and hauled by her deckhand with what's in them in his own hold and
-// the work seen from both games, and a boat taken out showing her hold at once.
+// the work seen from both games, and a boat taken out showing her hold at once. (v2.3.0) One fish box aboard: his catch in her
+// hold, on her ice, and his.
 //   tools/render-slot.sh node tools/two-players/crew.mjs [dir] [port] <part>
-//   parts: rods  lights  traps  hold
+//   parts: rods  lights  traps  hold  box
 import { OTHER as other, start } from './lib.mjs';
 const [ out = 'qa-output', PORT = '5223', PART = 'rods' ] = process.argv.slice( 2 );
 const G = await start( { out, port: PORT } );
@@ -279,7 +280,7 @@ if ( PART === 'traps' ) {
 	const after = await guest.game.evaluate( () => window.__app.game.state.holdKg );
 	const herEnd = await owner.game.evaluate( async () => { const { aboardTraps } = await import( '/src/game/Traps.js' ); const w = window.__app.game.traps, s = window.__app.game.state; return { set: w.traps.set.length, aboard: aboardTraps( w.traps, s.upgrades ), job: !! w.job, hold: s.holdKg }; } );
 	say( ! herEnd.job && herEnd.set === 0 && herEnd.aboard === owned, `taken out by E and stacked: her trap's back on her deck (${ JSON.stringify( herEnd ) }), his hold ${ before.toFixed( 2 ) } -> ${ after.toFixed( 2 ) } kg after ${ n } presses` );
-	say( help && ( ! help.lobsters || after > before ), 'what came up went in his own hold, not hers' );
+	say( help && ( ! help.lobsters || after > before ), 'what came up is his: in his save, not hers (in her box while he\'s aboard: v2.3.0)' );
 	note( 'her toasts:', JSON.stringify( await told( owner ) ), ' his:', JSON.stringify( await told( guest ) ) );
 	await G.end( 'crew traps' );
 
@@ -308,5 +309,97 @@ if ( PART === 'hold' ) {
 	const lbs = r.now.split( '/' )[ 1 ];
 	say( r.ok && r.was !== r.now && Math.abs( parseFloat( lbs ) - r.kg * 2.20462 ) < 1.5, `the console taken out: the bar reads "${ r.now }" at once (was "${ r.was }"; her hold ${ r.kg } kg)` );
 	await G.end( 'crew hold' );
+
+}
+
+if ( PART === 'box' ) {
+
+	// (v2.3.0) one fish box aboard: Sam's catch in her hold, kept on her ice and his to keep; her ice chilling it, once; both
+	// bars drawn from the box as it changes; her icemaker stopping when the box is full; his fish with him when he's off her
+	const owner = await G.open( 'Robin', 'sportfisher', 30 ), guest = await G.open( 'Sam', 'lobster', 30 );
+	await ready( owner, guest );
+	await G.buy( owner );
+	// (her big box, and her icemaker off for now: what her ice does is the catch's alone)
+	await owner.game.evaluate( () => { const g = window.__app.game; g.state.upgrades.sfIcemaker = 0; g.applyGear(); g.daysOut.box.ice = 100; g.state.emit(); } );
+	const bar = ( who ) => who.game.evaluate( () => { const a = window.__app, s = a.game.state, b = s.box(); return { bar: a.game.hud.coolerKg.textContent, label: a.game.hud.coolerLabel.textContent, cap: b.cap, ice: +b.ice.toFixed( 2 ), others: +b.others.toFixed( 2 ), mine: +s.holdKg.toFixed( 2 ), whose: b.whose, by: b.by, fish: s.inventory.length }; } );
+	const lbs = ( kg ) => String( Math.round( kg * 2.20462 ) );
+	const clock = ( speed ) => owner.game.evaluate( ( v ) => { const a = window.__app; a.together.setClock( a.settings.timeOfDay, a.settings.day, v ); }, speed );
+	say( await G.aboard( owner, guest ), 'Sam\'s aboard the sportfisher' );
+	await G.helm( owner );
+	await G.toSea( owner );
+	await until( guest.game, '!! window.__app.together.box.herBox()', 30000 ).catch( () => {} );
+	await frames( guest.game, 25 );
+	const g0 = await bar( guest );
+	say( g0.cap === 600 && g0.whose === 'Robin' && g0.label === 'Hold' && g0.bar === `${ lbs( 100 ) } / ${ lbs( 600 ) } lb`, `aboard her, Sam's bar is her hold and her ice: ${ JSON.stringify( g0 ) }` );
+
+	// his tuna, in her hold (his own cooler holds 30 kg)
+	const kept = await guest.game.evaluate( () => { const g = window.__app.game, f = g.state.addFish( 'yellowfin', 40, g.hour, { day: g.tradeDay } ); return f ? f.kg : null; } );
+	say( kept === 40, 'a 40 kg tuna kept, in her hold: his own cooler holds 30 kg' );
+	await until( owner.game, 'Math.abs( window.__app.game.daysOut.guestsKg - 40 ) < 0.01', 30000 ).catch( () => {} );
+	await frames( owner.game, 25 );
+	const o1 = await bar( owner );
+	say( Math.abs( o1.ice - ( 100 - 0.285 * 40 ) ) < 0.3 && o1.others === 40 && o1.by.length === 1 && o1.by[ 0 ].name === 'Sam' && Math.abs( parseFloat( o1.bar ) - lbs( 40 + o1.ice ) ) <= 1, `Robin's game: his tuna in her box, chilled on her ice, and on her bar: ${ JSON.stringify( o1 ) }` );
+	await frames( owner.game, 90 );
+	const o1b = await bar( owner );
+	say( Math.abs( o1b.ice - o1.ice ) < 0.05, `chilled once, though he says what's his each few seconds (${ o1.ice } -> ${ o1b.ice } kg)` );
+	await frames( guest.game, 40 );
+	const g1 = await bar( guest );
+	say( g1.mine === 40 && Math.abs( g1.ice - o1.ice ) < 0.3 && Math.abs( parseFloat( g1.bar ) - lbs( 40 + g1.ice ) ) <= 1, `and Sam's bar the same box: ${ JSON.stringify( g1 ) }` );
+	const panel = ( who ) => who.game.evaluate( () => { const i = window.__app.game.hud.inv; return `${ i.querySelector( 'h2' ).textContent } | ${ i.querySelector( '.gm-sub' ).textContent }`; } );
+	await guest.game.evaluate( () => window.__app.game.hud.toggleInventory( true ) );
+	const gp = await panel( guest );
+	note( 'Sam\'s panel:', gp );
+	await shot( guest, 'crew-box-guest' );
+	await guest.game.evaluate( () => window.__app.game.hud.toggleInventory( false ) );
+	await owner.game.evaluate( () => window.__app.game.hud.toggleInventory( true ) );
+	const op = await panel( owner );
+	note( 'Robin\'s panel:', op );
+	await shot( owner, 'crew-box-owner' );
+	await owner.game.evaluate( () => window.__app.game.hud.toggleInventory( false ) );
+	say( gp.startsWith( 'Robin\'s hold' ) && gp.includes( 'Yours: 1 fish' ) && op.includes( 'Sam\'s 1 fish' ), 'each panel says whose is whose' );
+
+	// thirteen island hours: his tuna on her ice
+	const t0 = await guest.game.evaluate( () => window.__app.settings.timeOfDay ), T0 = await guest.game.evaluate( () => window.__app.settings.day * 24 + window.__app.settings.timeOfDay );
+	await clock( 0.4 );
+	await until( guest.game, `( ( window.__app.settings.timeOfDay - ${ t0 } + 24 ) % 24 ) > 13`, 300000 ).catch( () => {} );
+	await clock( 0.0001 );
+	await frames( guest.game, 40 );
+	const aged = await guest.game.evaluate( () => { const a = window.__app, f = a.game.state.inventory[ 0 ]; return f ? { w: +( f.w || 0 ).toFixed( 2 ), value: f.value, v0: f.v0, T: a.settings.day * 24 + a.settings.timeOfDay } : null; } );
+	const o2 = await bar( owner ), hours = aged ? aged.T - T0 : 0;
+	// (iced, a fish ages a twenty-fourth as fast: what it's aged past that is the hours it was warm. A slow game's clock can run on past 13)
+	say( aged && hours >= 13 && aged.w - hours / 24 < 0.3 && aged.value === aged.v0 && o2.ice < o1.ice, `${ hours.toFixed( 1 ) } hours on: his tuna iced all of them and fresh (aged ${ aged && aged.w } hours, ${ ( hours / 24 ).toFixed( 2 ) } of them for its hours on ice); her ice ${ o1.ice } -> ${ o2.ice } kg` );
+
+	await toasts( guest );
+	const watch = setInterval( () => guest.game.evaluate( () => { const a = window.__app, f = a.game.state.inventory[ 0 ], h = a.together.box.herBox(); return { t: +a.settings.timeOfDay.toFixed( 2 ), d: a.settings.day, fish: a.game.state.inventory.length, w: f ? +( f.w || 0 ).toFixed( 2 ) : null, her: !! h, ice: h ? h.ice : null, mode: a.player.mode, riding: a.player.riding }; } ).then( ( r ) => note( 'Sam:', JSON.stringify( r ) ) ).catch( () => {} ), 4000 );
+	// her icemaker on, under way on her generator: the bars follow the ice as it's made (no change to anyone's save), and it
+	// stops when the box is full
+	await owner.game.evaluate( () => { const g = window.__app.game; g.state.upgrades.sfIcemaker = 1; g.applyGear(); } );
+	await clock( 0.4 );
+	await frames( owner.game, 150 );
+	await clock( 0.0001 );
+	await frames( owner.game, 40 );
+	await frames( guest.game, 60 );
+	clearInterval( watch );
+	note( 'Sam\'s toasts:', JSON.stringify( await told( guest ) ) );
+	const o3 = await bar( owner ), g3 = await bar( guest );
+	say( o3.ice > o2.ice + 1 && Math.abs( parseFloat( o3.bar ) - lbs( o3.mine + o3.others + o3.ice ) ) <= 1 && Math.abs( parseFloat( g3.bar ) - parseFloat( o3.bar ) ) <= 2, `her icemaker making ice: ${ o2.ice } -> ${ o3.ice } kg, and both bars with it ("${ o3.bar }", "${ g3.bar }")` );
+	await owner.game.evaluate( () => { const g = window.__app.game; g.daysOut.box.ice = 600 - 40 - 3; } );
+	await clock( 0.4 );
+	await frames( owner.game, 150 );
+	await clock( 0.0001 );
+	await frames( owner.game, 40 );
+	const o4 = await bar( owner );
+	say( o4.ice <= 560 + 0.01 && o4.ice > 559 && o4.bar === `${ lbs( 600 ) } / ${ lbs( 600 ) } lb`, `and the box full, it stops: ${ o4.ice } kg of ice beside his 40 kg tuna ("${ o4.bar }")` );
+	const big = await guest.game.evaluate( () => { const s = window.__app.game.state; return { fits60: s.fits( 60 ), short60: +s.shortOf( 60 ).toFixed( 1 ) }; } );
+	say( big.fits60, `a box full of ice still takes a fish: the ice past the catch's day is let go for it (${ JSON.stringify( big ) })` );
+
+	// he goes over her side: his tuna's still his, her box hers alone
+	await guest.game.evaluate( () => window.__app.player.exitBoat( null, 1 ) );
+	await frames( guest.game, 40 );
+	await until( owner.game, 'window.__app.game.daysOut.guestsKg === 0', 30000 ).catch( () => {} );
+	await frames( owner.game, 25 );
+	const g5 = await bar( guest ), o5 = await bar( owner );
+	say( g5.fish === 1 && g5.cap === 30 && g5.whose === null && o5.others === 0 && o5.by.length === 0, `off her: his tuna's his, in his own cooler's count (${ JSON.stringify( g5 ) }); hers alone (${ JSON.stringify( o5 ) })` );
+	await G.end( 'crew box' );
 
 }
