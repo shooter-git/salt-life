@@ -54,7 +54,7 @@ import { BANK } from './soundBank.js';
 import { SURF_HURRICANE } from '../game/Weather.js';
 import { G } from '../core/Globals.js';
 import { seaGain, openWater, roarCut, roarCarry } from './OpenSea.js';
-import { TAIL, BOLT, stillOf, pushShare, pushRate, tailDb, tailSlice, boltDb } from './FlatsSound.js';
+import { TAIL, BOLT, pushShare, pushRate, tailDb, tailSlice, boltDb } from './FlatsSound.js';
 
 const clamp = ( v, a, b ) => ( v < a ? a : v > b ? b : v );
 const lerp = ( a, b, t ) => a + ( b - a ) * t;
@@ -1964,8 +1964,7 @@ export class SoundScape {
 
 				const k = smooth( 1.2, 9, sp );
 				this._slapT = ( 0.3 + Math.random() * ( 2.2 - 1.6 * k ) ) / Math.sqrt( big );
-				// ((M17) a kayak on still water has her push, not the chop's slaps: fewer of them the stiller it is)
-				if ( ! kayak || Math.random() >= stillOf( e.wind ) ) this._shot( 'hull_slap', 'hull', this.boatSum, MIX.hullSlap - 14 + 8 * k + bigDb + ( Math.random() - 0.5 ) * 4, 0.85 + Math.random() * 0.3 );
+				this._shot( 'hull_slap', 'hull', this.boatSum, MIX.hullSlap - 14 + 8 * k + bigDb + ( Math.random() - 0.5 ) * 4, 0.85 + Math.random() * 0.3 );
 
 			}
 

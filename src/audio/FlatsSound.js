@@ -10,7 +10,7 @@ export const TAIL = { heard: 30, ref: 10, chance: 0.4, gap: 0.25, out: 0.1, bone
 // (as power), within `least` and `most` dB
 export const BOLT = { heard: 120, ref: 15, school: 12, least: - 6, most: 2 };
 // the kayak's push: from nothing drifting to her level between `from` m/s, at it at her hull speed (`top`, 4.4 knots: Paddle.js),
-// and gone in a breeze (`calm`: m/s of wind, all of it to none), where the chop's slaps are her water
+// and gone in a breeze (`calm`: m/s of wind, all of it to none), under the chop's lapping and her slaps
 export const PUSH = { from: [ 0.2, 0.6 ], top: 2.26, calm: [ 3, 8 ] };
 
 const clamp = ( v, a, b ) => ( v < a ? a : v > b ? b : v );

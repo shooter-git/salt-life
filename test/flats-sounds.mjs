@@ -1,7 +1,7 @@
 // (M17) Plain-node tests of the flats' sounds on the real mixer, on a stand-in context (as fleet-sounds.mjs's): a tail's slap
 // where a tailing fish's ring is drawn (bonefish and permit, within its reach, now and then, never two at once), a school's rush
-// where it bolts (by its count, within its reach), the kayak's push by her speed on still water (and her slaps there given up
-// for it), each loaded when it's wanted, the low tier's caps, and Pearl's outboard at its level by ear.
+// where it bolts (by its count, within its reach), the kayak's push by her speed on still water (under her slaps, kept as they
+// were), each loaded when it's wanted, the low tier's caps, and Pearl's outboard at its level by ear.
 import { readFileSync } from 'node:fs';
 import { SoundScape, MIX, PASSING } from '../src/audio/SoundScape.js';
 import { BANK } from '../src/audio/soundBank.js';
@@ -300,7 +300,7 @@ ok( boltDb( BOLT.school ) === 0 && boltDb( 1 ) === BOLT.least && boltDb( 3 ) < b
 	ok( near( lv(), MIX.kayakPush, 0.3 ) && near( bed().src.playbackRate.value, pushRate( PUSH.top ), 0.01 ), `at her hull speed: ${ lv().toFixed( 1 ) }, its level, a little brighter` );
 	ok( MIX.kayakPush < MIX.paddle, 'under her strokes' );
 	await run( S, 6, state( { windSpeed: 10 }, { speed: PUSH.top } ) );
-	ok( ! bed() || bed().gain.gain.value < 1e-4, 'a breeze: the chop\'s slaps are her water, no push' );
+	ok( ! bed() || bed().gain.gain.value < 1e-4, 'a breeze: no push' );
 	await run( S, 6, state( { underwater: 1 }, { speed: PUSH.top } ) );
 	ok( ! bed() || bed().gain.gain.value < 1e-4, 'under the water: none' );
 	await run( S, 8, state( {}, { sound: 'console', active: true, rpm: 0.3, speed: 2 } ) );
@@ -308,8 +308,8 @@ ok( boltDb( BOLT.school ) === 0 && boltDb( 1 ) === BOLT.least && boltDb( 3 ) < b
 
 }
 
-// ---- her slaps on still water given up for the push
-for ( const [ wind, want ] of [ [ 1, 'none' ], [ 10, 'some' ] ] ) {
+// ---- her slaps kept as they were, on still water too (the user's, by ear: the push plays under them)
+for ( const wind of [ 1, 10 ] ) {
 
 	const S = await scape();
 	let n = 0;
@@ -322,7 +322,7 @@ for ( const [ wind, want ] of [ [ 1, 'none' ], [ 10, 'some' ] ] ) {
 	};
 	S.s.engineStart(); // (as App does once you're in a boat: the hull's sounds ready)
 	await run( S, 30, state( { windSpeed: wind }, { speed: 1.6 } ) );
-	ok( want === 'none' ? n === 0 : n > 3, `the kayak at 3 knots in ${ wind } m/s of wind: ${ n } slaps` );
+	ok( n > 3, `the kayak at 3 knots in ${ wind } m/s of wind: ${ n } slaps, as before` );
 
 }
 
