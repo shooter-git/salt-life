@@ -708,12 +708,12 @@ export class DaysOut {
 			const c = document.createElement( 'canvas' );
 			c.width = c.height = 64;
 			const g = c.getContext( '2d' ), r = g.createRadialGradient( 32, 32, 0, 32, 32, 32 );
-			// (its core a third of it across, so at the least it's drawn, a few pixels, it's still a solid red point)
+			// (its core half of it across, so at the least it's drawn, 8 or 12 pixels, it's still a solid red point of 4 or 6)
 			r.addColorStop( 0, 'rgba(255,170,150,1)' );
-			r.addColorStop( 0.14, 'rgba(255,72,48,1)' );
-			r.addColorStop( 0.32, 'rgba(250,30,16,1)' );
-			r.addColorStop( 0.42, 'rgba(238,22,12,0.5)' );
-			r.addColorStop( 0.66, 'rgba(222,16,8,0.14)' );
+			r.addColorStop( 0.2, 'rgba(255,72,48,1)' );
+			r.addColorStop( 0.5, 'rgba(250,30,16,1)' );
+			r.addColorStop( 0.6, 'rgba(238,22,12,0.5)' );
+			r.addColorStop( 0.8, 'rgba(222,16,8,0.14)' );
 			r.addColorStop( 1, 'rgba(210,12,6,0)' );
 			g.fillStyle = r;
 			g.fillRect( 0, 0, 64, 64 );
