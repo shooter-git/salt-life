@@ -8,6 +8,7 @@ import { CAMP } from './FishCamp.js';
 import { isOpen } from './IslandClock.js';
 import { boatAt, hauledAt, BOAT } from './PearlsDay.js';
 import { farOff } from './Units.js';
+import { reachTo } from './Seaworthy.js';
 
 // (M16) Help on the water, other than Marta's tow: the radio's (Radio.js) other two things to ask for.
 //   - Pearl, on the north side (nearer her jetty than Marta's dock, or round on the windward shore), through her hours and
@@ -76,8 +77,8 @@ export function pearlCall( game ) {
 	const app = game.app, s = app.settings, wx = game.weatherNow, news = app.weather && app.weather.news, pick = app.weatherPick ? app.weatherPick() : null;
 	const blown = wx && wx.wind >= NO_PEARL, warned = news && news.stage !== 'outlook', up = hauledAt( islandTime( s.day, s.timeOfDay ), pick, s.weatherSince );
 	let say, can = false;
-	// (as Marta's: a set reaches so far)
-	if ( job.metres > game.state.stats.vhfM ) say = `Nothing but static. You're ${ farOff( job.metres ) } off her jetty, past your set's reach.`;
+	// (as Marta's: a set reaches so far, (M17) to her own antenna on the camp's shed: Seaworthy.reachTo)
+	if ( job.metres > reachTo( game.state.stats, 'pearl' ) ) say = `Nothing but static. You're ${ farOff( job.metres ) } off her jetty, past your set's reach.`;
 	else if ( blown || warned || up ) say = `Pearl. The boat's not going out in this: ${ warned ? 'there\'s a hurricane on its way, and she\'s up the beach' : up ? 'she\'s up the beach till it\'s blown through' : 'she\'s too small for it' }. Try Marta, or sit tight and call me when it's dropped.`;
 	else {
 

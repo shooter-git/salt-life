@@ -2,7 +2,7 @@
 // can stand and where, the ice and the catch, food and water, each boat's gear and figures, the sock and sleeping aboard,
 // flares and the EPIRB.
 //   node test/days-out.mjs
-import { ABLE, ableEnv, awashLs, seaHere, fetchAt, strainOf, keepCatch, feedOf, strengthOf, meltKgH, worthOf, cleanDays, FRESH_H, OFF_H, ICED_SLOW, SOCK_DRIFT, ICE_BAG_KG, CHILL_KG, STORES_PRICE, ICE_BAG_PRICE } from '../src/game/Seaworthy.js';
+import { ABLE, ableEnv, awashLs, seaHere, fetchAt, strainOf, keepCatch, feedOf, strengthOf, meltKgH, worthOf, cleanDays, FRESH_H, OFF_H, ICED_SLOW, SOCK_DRIFT, ICE_BAG_KG, CHILL_KG, STORES_PRICE, ICE_BAG_PRICE, STORES_WATER_L, VHF_H, SHORE_VHF_H, vhfReach, reachTo, FLARE_M } from '../src/game/Seaworthy.js';
 import { DaysOut, restOf, wakeOf, drawEcho } from '../src/game/DaysOut.js';
 import { awayOf, boatLeft, leftOf, boatRecord, cleanBoats, driftOf, DRIFT } from '../src/game/Away.js';
 import { gearStats, defaultUpgrades, fuelBurn, UPGRADES } from '../src/game/Gear.js';
@@ -57,8 +57,12 @@ const ok = ( c, what ) => {
 	r = keepCatch( fish(), 0, OFF_H, 0.3 );
 	ok( r.off.length === 1 && r.fish.length === 0, 'twelve hours: gone off' );
 	const melt = meltKgH( 30 );
-	ok( Math.abs( ICE_BAG_KG / melt - 15 ) < 1, `a bag in the cooler lasts ${ ( ICE_BAG_KG / melt ).toFixed( 1 ) } hours` );
+	ok( Math.abs( ICE_BAG_KG / melt - 23 ) < 1, `(M17) a bag in the cheap cooler lasts ${ ( ICE_BAG_KG / melt ).toFixed( 1 ) } hours, a day's mean (0.2 kg an hour)` );
 	ok( meltKgH( 160 ) / 160 < meltKgH( 70 ) / 70 && meltKgH( 300 ) > meltKgH( 160 ), 'the insulated hold keeps it better for its size; a big box melts more all told' );
+	// ((M17) FAO's measured box: 90 L insulated, in shade at 28 C, 3.6 kg a day; 0.1233 kg a day a degree)
+	ok( Math.abs( meltKgH( 60, true ) * 24 - 0.1233 * 28 ) < 0.01, `an insulated 90 L box melts ${ ( meltKgH( 60, true ) * 24 ).toFixed( 2 ) } kg a day, FAO's` );
+	ok( Math.abs( meltKgH( 160 ) - 0.277 ) < 0.005 && Math.abs( meltKgH( 600 ) - 0.668 ) < 0.005, `the hold ${ meltKgH( 160 ).toFixed( 3 ) } and the big fish box ${ meltKgH( 600 ).toFixed( 3 ) } kg an hour: about half M16's 0.55 and 1.33` );
+	ok( meltKgH( 160 ) < meltKgH( 70 ), 'the insulated hold melts less all told than the bigger cheap chest' );
 	r = keepCatch( fish(), 100, 24 * 6, 0.1 );
 	ok( r.fish[ 0 ].value === 100 && r.ice > 80, `on ice, six days on: fresh, ${ r.ice.toFixed( 0 ) } kg left` );
 	r = keepCatch( fish(), 100, 24 * 12, 0.1 );
@@ -90,10 +94,17 @@ const ok = ( c, what ) => {
 {
 
 	const u = defaultUpgrades();
-	ok( ! gearStats( u, 'kayak' ).plotter && gearStats( u, 'kayak' ).vhfM === 0 && gearStats( u, 'kayak' ).compass, 'a new kayak: a compass, no plotter, no radio' );
-	ok( gearStats( u, 'lobster' ).plotter && gearStats( u, 'lobster' ).vhfM > 30000, 'the lobster boat has hers' );
-	ok( gearStats( { ...u, vhf_kayak: 1 }, 'kayak' ).vhfM === 9000 && gearStats( { ...u, vhf_console: 1 }, 'console' ).vhfM === 37000, 'a handheld reaches 5 miles, a fixed set 20' );
-	ok( gearStats( { ...u, vhf_console: 1 }, 'kayak' ).vhfM === 0, 'each boat\'s stays hers' );
+	ok( ! gearStats( u, 'kayak' ).plotter && gearStats( u, 'kayak' ).vhfH === 0 && reachTo( gearStats( u, 'kayak' ) ) === 0 && gearStats( u, 'kayak' ).compass, 'a new kayak: a compass, no plotter, no radio' );
+	ok( gearStats( u, 'lobster' ).plotter && gearStats( u, 'lobster' ).vhfH === VHF_H.lobster, 'the lobster boat has hers' );
+	ok( gearStats( { ...u, vhf_kayak: 1 }, 'kayak' ).vhfH === VHF_H.hand && gearStats( { ...u, vhf_console: 1 }, 'console' ).vhfH === VHF_H.console, 'a handheld, a fixed set on a whip' );
+	ok( gearStats( { ...u, vhf_console: 1 }, 'kayak' ).vhfH === 0, 'each boat\'s stays hers' );
+	// ((M17) each reach the two antennas' radio horizons, 4.12 km sqrt h each, added)
+	ok( Math.abs( vhfReach( 4, 9 ) - 4120 * 5 ) < 1e-6 && vhfReach( 0, 9.5 ) === 0, 'two antennas 4 m and 9 m up reach each other 20.6 km' );
+	const km = ( id, h = gearStats( { ...u, vhf_kayak: 1, vhf_console: 1 }, id ) ) => reachTo( h ) / 1000;
+	ok( Math.abs( km( 'kayak' ) - 16.8 ) < 0.1 && Math.abs( km( 'console' ) - 20.6 ) < 0.1 && Math.abs( km( 'lobster' ) - 20.6 ) < 0.1 && Math.abs( km( 'sportfisher' ) - 23.2 ) < 0.1,
+		`Marta's set from a handheld ${ km( 'kayak' ).toFixed( 1 ) } km, the console's ${ km( 'console' ).toFixed( 1 ) }, the lobster boat's ${ km( 'lobster' ).toFixed( 1 ) }, the sportfisher's ${ km( 'sportfisher' ).toFixed( 1 ) }` );
+	ok( reachTo( gearStats( u, 'lobster' ), 'pearl' ) < reachTo( gearStats( u, 'lobster' ) ) && SHORE_VHF_H.pearl < SHORE_VHF_H.marta, 'Pearl\'s antenna on her shed is lower than Marta\'s: a little less reach' );
+	ok( /9 miles out/.test( UPGRADES.vhf_kayak.levels[ 1 ].label ) && /11 miles out/.test( UPGRADES.vhf_console.levels[ 1 ].label ), `the shop says how far Marta hears it: "${ UPGRADES.vhf_kayak.levels[ 1 ].label }", "${ UPGRADES.vhf_console.levels[ 1 ].label }"` );
 	ok( ! UPGRADES.deepFinder_kayak && ! UPGRADES.deepAnchor_kayak, 'none of the deep gear on a kayak' );
 	ok( gearStats( { ...u, deepAnchor_lobster: 1 }, 'lobster' ).anchorM === 122 && gearStats( { ...u, anchor: 1 }, 'lobster' ).anchorM === 20, 'the long rode reaches the hump\'s top; the Danforth stays as it was' );
 	ok( gearStats( { ...u, anchor: 1, deepAnchor_lobster: 1 }, 'lobster' ).anchorM === 122, 'with both, the deeper' );
@@ -376,7 +387,13 @@ globalThis.setTimeout ??= ( f ) => f();
 	d.theirFlare( [ 40000, 0 ], 'Sam' );
 	ok( ! up, 'too far off by day: not seen' );
 	d.theirFlare( [ 3000, 0 ], 'Sam' );
-	ok( up && up[ 0 ] === 3000 && /Sam has fired a distress flare/.test( toasts.at( - 1 ) ), 'near enough: seen, and said whose' );
+	ok( ! up, '(M17) 3 km off by day: past a red meteor\'s 2.8 km' );
+	d.theirFlare( [ 2500, 0 ], 'Sam' );
+	ok( up && up[ 0 ] === 2500 && /Sam has fired a distress flare/.test( toasts.at( - 1 ) ), 'near enough: seen, and said whose' );
+	// ((M17) and the look agrees with it: gone at the reach, by day and by night, and seen inside it)
+	ok( FLARE_M.day === 2800 && FLARE_M.night === 25000, 'a red meteor: 2.8 km by day, 25 by night' );
+	ok( d._flareBright( FLARE_M.day, 1, 0 ) === 0 && d._flareBright( FLARE_M.day * 0.8, 1, 0 ) > 0 && d._flareBright( 300, 1, 0 ) > 0.9, `by day drawn to its reach and no further: ${ d._flareBright( 300, 1, 0 ).toFixed( 2 ) } at 300 m, ${ d._flareBright( 1500, 1, 0 ).toFixed( 2 ) } at 1.5 km, ${ d._flareBright( FLARE_M.day * 0.8, 1, 0 ).toFixed( 2 ) } at 2.2 km` );
+	ok( d._flareBright( FLARE_M.night, 1, 1 ) === 0 && d._flareBright( 8000, 1, 1 ) > 0.5 && d._flareBright( FLARE_M.day * 0.5, 0.5, 0 ) === 0, 'by night to 25 km; in half the visibility, half the reach' );
 
 }
 
@@ -417,12 +434,12 @@ globalThis.setTimeout ??= ( f ) => f();
 
 	};
 
-	ok( after( 4, { vhfM: 0 } ), 'nothing to call with: a passing boat, within 4 hours near in' );
-	ok( ! after( 40, { vhfM: 9260 } ), 'a handheld in range: you call for yourself' );
-	ok( after( 18, { vhfM: 9260 }, 3, 20000 ) && ! after( 17, { vhfM: 9260 }, 3, 20000 ), 'a handheld out of range doesn\'t count: a passing boat, within 18 hours far out' );
-	ok( ! after( 40, { vhfM: 0, flares: true } ), 'flares left: you fire them' );
-	ok( after( 4, { vhfM: 0, flares: true }, 0 ), 'the flares gone: a passing boat' );
-	ok( ! after( 40, { vhfM: 0, flares: true, epirb: true }, 0 ), 'an EPIRB always reaches someone' );
+	ok( after( 4, { vhfH: 0 } ), 'nothing to call with: a passing boat, within 4 hours near in' );
+	ok( ! after( 40, { vhfH: VHF_H.hand } ), 'a handheld in range: you call for yourself' );
+	ok( after( 18, { vhfH: VHF_H.hand }, 3, 20000 ) && ! after( 17, { vhfH: VHF_H.hand }, 3, 20000 ), 'a handheld out of range doesn\'t count: a passing boat, within 18 hours far out' );
+	ok( ! after( 40, { vhfH: 0, flares: true } ), 'flares left: you fire them' );
+	ok( after( 4, { vhfH: 0, flares: true }, 0 ), 'the flares gone: a passing boat' );
+	ok( ! after( 40, { vhfH: 0, flares: true, epirb: true }, 0 ), 'an EPIRB always reaches someone' );
 	delete st.stats;
 
 }
@@ -440,6 +457,7 @@ globalThis.setTimeout ??= ( f ) => f();
 	const i = {}, s = {};
 	const html = d.shopRows();
 	ok( html.includes( 'data-ice' ) && html.includes( 'data-stores' ) && html.includes( 'nearshore' .replace( 'n', 'N' ) ), 'Marta sells ice and stores, and says what she can stand' );
+	ok( STORES_WATER_L === 6 && STORES_PRICE === 16 && html.includes( 'A day\'s food and 1.6 gallons of water' ) && html.includes( '$16 a day' ), '(M17) a day\'s stores: its food and 6 litres of water, $16' );
 	d.bindShop( el(), () => {} );
 	const m0 = st.money;
 	i.onclick();

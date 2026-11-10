@@ -76,7 +76,7 @@ R is the rod here, so C (LB, or the touch button that's the rig's with the rod o
 
 Sat in her, being in the shallows isn't trouble (`DaysOut.trouble`), so the flares and EPIRB stay for what is: too much sea for her, or you're parched.
 
-What you carry decides who comes (`DaysOut._rescueNet`). With nothing that can reach anyone, a passing boat finds you in the end (4 hours near in, 18 past 14 km). A handheld only counts within its 5 miles of her dock, and flares only while you've some left; out of range or out of flares and you're back to the passing boat. An EPIRB always counts: it works anywhere. A tow or a rescue leaves you on the sand beside her (`KayakModel.setDown`), or still sat in her on Pearl's mooring.
+What you carry decides who comes (`DaysOut._rescueNet`). With nothing that can reach anyone, a passing boat finds you in the end (4 hours near in, 18 past 14 km). A handheld only counts within its 5 miles of her dock ((M17) 9 nm since, the two antennas' radio horizons: [m17/figures.md](../m17/figures.md)), and flares only while you've some left; out of range or out of flares and you're back to the passing boat. An EPIRB always counts: it works anywhere. A tow or a rescue leaves you on the sand beside her (`KayakModel.setDown`), or still sat in her on Pearl's mooring.
 
 ## Her compass
 

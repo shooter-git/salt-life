@@ -170,6 +170,11 @@ const hooked = ( h, hook ) => ( { ...h, hook } );
 	check( FISH.wahoo.teeth && ! FISH.sailfish.teeth, 'a wahoo\'s teeth' );
 	check( hookWeight( 'redSnapper', { way: 'drop', depth: 200 }, 11 ) === 1 && hookWeight( 'silkSnapper', { way: 'drop', depth: 200 }, 11 ) === 1 && hookWeight( 'redSnapper', { way: 'troll', depth: 2 }, 11 ) === 0, 'the bottom\'s fish on a deep drop, not on a troll' );
 	check( hookWeight( 'blueMarlin', null, 11 ) === FISH.blueMarlin.ways.float * depthWeight( FISH.blueMarlin.at, FLOAT.depth, 11 ), 'no hook is today\'s float' );
+	// ((M17) the billfish shallower at night, by their tags: the sailfish and the white marlin in the top 20 m, the blue the top 30)
+	const [ sail, white, blue ] = [ 'sailfish', 'whiteMarlin', 'blueMarlin' ].map( ( k ) => FISH[ k ].at );
+	check( sail.night.join() === '0,20' && white.night.join() === '0,20' && blue.night.join() === '0,30' && sail.day.join() === '0,40' && white.day.join() === '0,90' && blue.day.join() === '0,120', 'billfish by day as M16 had them, shallower by night (Kerstetter 2011, Hoolihan 2015, Goodyear 2008)' );
+	check( depthWeight( blue, 60, 11 ) === 1 && depthWeight( blue, 60, 23 ) === 0 && depthWeight( white, 40, 23 ) === 0 && depthWeight( sail, 6, 23 ) === 1 && depthWeight( blue, 6, 23 ) === 1,
+		'a bait 60 m down takes a blue marlin by day and none at midnight; the float\'s 6 m reaches every one of them by night' );
 	const shrimp = shares( edge, 11 );
 	check( bill( shrimp ) < 0.04, `next to none on frozen shrimp (${ ( bill( shrimp ) * 100 ).toFixed( 1 ) }%)` );
 	const onShelf = shares( shelf, 11, 'mullet', 20000 );

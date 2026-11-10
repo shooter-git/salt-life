@@ -28,7 +28,7 @@ Where and when, from the sources:
 - **Redfish:** sand and sandy mud, coastal water and estuaries, the surf zone too (FishBase), south to southern Florida: this island's as far south as they come. **Spotted seatrout:** shallow water over sand, near seagrass (FishBase). Both are at the edge of their ranges here, as the design asks for them.
 - **Bag limits** as the US rules have them: one swordfish, two wahoo, three yellowfin, ten mahi, one redfish, four trout. Billfish aren't kept at all, as the design's rules say (real rules let a big one be landed).
 
-Not checked against a source, and worth knowing: the sailfish and marlin depths (`at`) are from general knowledge of them as surface-layer fish; the search that would have sourced them came back empty. Sizes at capture and `rarity` are judgement. Prices are a start. The opening stream tuned the boats' prices against what these fish fetch ([opening.md](opening.md), The prices) and left the fish's own prices where they were.
+Not checked against a source, and worth knowing: the sailfish and marlin depths (`at`) are from general knowledge of them as surface-layer fish; the search that would have sourced them came back empty. ((M17) Sourced since from their tags: by day as they were, at night the sailfish and the white marlin [0, 20] m and the blue [0, 30] ([m17/figures.md](../m17/figures.md)).) Sizes at capture and `rarity` are judgement. Prices are a start. The opening stream tuned the boats' prices against what these fish fetch ([opening.md](opening.md), The prices) and left the fish's own prices where they were.
 
 ## What bites, and how it's fished: the interface with `m16/tackle`
 
