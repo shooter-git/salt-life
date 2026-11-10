@@ -92,8 +92,13 @@ export const FISH = {
 	// the swordfish feeds up near the surface at night and down past 300 m by day (Lerner et al. 2013, Dewar et al.
 	// 2011: under 100 m at night, past 400 by day), moving between them at dusk and dawn: so at night on a float, by
 	// day only deep-dropped, and over deep water; lights draw the squid and the squid draw it (flood). W(kg) =
-	// 4.45373e-6 LJFL^3.2038 (ICCAT, North Atlantic), LJFL 0.68 TL (the sword's a third of it, measured off photographs)
-	swordfish: { name: 'Swordfish', sci: 'Xiphias gladius', lw: [ 0.001295, 3.204 ], model: 'swordfish', habitat: { blue: 1, edge: 0.8, ledge: 0.3 }, kg: [ 15, 230 ], price: 20, fight: 0.95, stamina: 240, time: 'any', rarity: 0.14, bag: 1, flood: 2, under: 5, hint: 'in the deep blue, near the top after dark, or deep-dropped by day and stopped 350 to 750 m down', ways: { float: 1, troll: 0, kite: 0, drop: 2 }, at: { day: [ 320, 750 ], night: [ 0, 110 ] }, eats: { shrimp: 0.1, squid: 5, mullet: 1.5, cutMullet: 1, ballyhoo: 1.5, silverside: 0.5 } },
+	// 4.45373e-6 LJFL^3.2038 (ICCAT, North Atlantic), LJFL 0.68 TL (the sword's a third of it, measured off photographs).
+	// ((M17) Deeper at night under a fuller moon (Lerner et al. 2013, eight fish in the Florida Straits: at new moon 82% of
+	// their time above 75 m, most of it 25 to 50 m; at full 64% at 100 to 500 m, most 100 to 200, and 36% above 75; their
+	// median depth 32 m + 53 m x the moon's lit share): `night` the new moon's, `full` the full moon's, between by how much
+	// of it's lit, so a float 6 m down has about 36 / 82 of its new-moon chance under a full one. Dewar et al. 2011 and
+	// Tracey et al. 2023, Pacific, the same way)
+	swordfish: { name: 'Swordfish', sci: 'Xiphias gladius', lw: [ 0.001295, 3.204 ], model: 'swordfish', habitat: { blue: 1, edge: 0.8, ledge: 0.3 }, kg: [ 15, 230 ], price: 20, fight: 0.95, stamina: 240, time: 'any', rarity: 0.14, bag: 1, flood: 2, under: 5, hint: 'in the deep blue, near the top after dark, or deep-dropped by day and stopped 350 to 750 m down', ways: { float: 1, troll: 0, kite: 0, drop: 2 }, at: { day: [ 320, 750 ], night: [ 0, 75 ], full: [ 52, 300 ] }, eats: { shrimp: 0.1, squid: 5, mullet: 1.5, cutMullet: 1, ballyhoo: 1.5, silverside: 0.5 } },
 	// (catch and release only; M9: they roll and feed in the rain)
 	tarpon: { name: 'Tarpon', sci: 'Megalops atlanticus', lw: [ 0.0077, 3.02 ], model: 'tarpon', habitat: { pier: 0.35, bay: 0.5, shallows: 0.15, creek: 0.8 }, kg: [ 10, 45 ], price: 4, fight: 1, stamina: 24, time: 'night', rarity: 0.2, protected: true, cr: true, lights: 3, weather: { rain: 1.5 }, ways: { troll: 0.8, kite: 0.6 } },
 	blackGrouper: { name: 'Black grouper', sci: 'Mycteroperca bonaci', lw: [ 0.0115, 3.03 ], model: 'blackGrouper', habitat: { reef: 0.4, deep: 0.7 }, kg: [ 3, 25 ], price: 16, fight: 0.75, stamina: 14, time: 'any', rarity: 0.35, spear: true, minCm: 61, ways: { troll: 0.4, drop: 1 } },

@@ -2,7 +2,7 @@ import * as THREE from '../engine/index.js';
 import { G } from '../core/Globals.js';
 import { turtleGeometry } from './fish/CreatureGeometry.js';
 import { PART } from './fish/FishGeometry.js';
-import { femalesOf, planCrawl, timeline, femaleAt, hatchingsOf, tracksOf, hatchTrackFade, soundBeats, Clutch, Minding, CRAWL, HATCHLING, LURE, TRACK_LAG } from '../game/Turtles.js';
+import { femalesOf, planCrawl, timeline, femaleAt, hatchingsOf, tracksOf, hatchTrackFade, soundBeats, seaGlow, Clutch, Minding, CRAWL, HATCHLING, LURE, TRACK_LAG } from '../game/Turtles.js';
 import { secondsBetween } from '../game/IslandClock.js';
 import { NORTH_BEACH } from './terrain/NorthBeach.js';
 
@@ -1063,7 +1063,8 @@ export class NestingTurtles {
 				if ( C.lureT >= LURE.tick ) {
 
 					C.lureT = 0;
-					if ( C.lure( t, this.lights ) ) C.dirty = true;
+					// ((M17) the sea's horizon brighter under the moon: a light has that much more to outshine)
+					if ( C.lure( t, this.lights, seaGlow( ( Math.max( 1, day ) - 1 ) * 24 + hour, hour ) ) ) C.dirty = true;
 
 				}
 

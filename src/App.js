@@ -361,6 +361,7 @@ export class App {
 		if ( ! this.cpuGL ) this.wreck = new Wreck( { scene, colliders: this.colliders } );
 		// ((M15) the green turtles nesting on the north coast's turtle beach: world/NestingTurtles.js)
 		this.turtles = new NestingTurtles( { scene, terrain: this.terrainData } );
+		this.turtles.minding.restore( this._turnedBack, this.turtles.ground );
 		// ((M15) the island seen from far off, where its own ground isn't drawn: world/FarIsland.js)
 		this.farIsland = new FarIsland( { scene, terrain: this.terrainData } );
 		await this.village.init( renderer );
@@ -906,6 +907,7 @@ export class App {
 		this.game.update( dt );
 		if ( this.together ) this.together.update( dt );
 		this.releaseMasks();
+		this.sky.day = s.day; // ((M17) the moon's phase and place go by the island's day)
 		this.sky.update( s.timeOfDay, s.sunAzimuth, this.camera );
 
 		// ---- water
@@ -2270,6 +2272,7 @@ export class App {
 
 			}
 			s.timeSpeed = saved.held ? 0 : DAY_RATE;
+			this._turnedBack = saved.turtles; // ((M17) a turned-back turtle's night: Turtles' Minding.restore)
 			s.weather = isPick( saved.weather ) ? saved.weather : null;
 			s.weatherSince = Number.isFinite( saved.since ) ? saved.since : islandTime( s.day, s.timeOfDay );
 
@@ -2718,7 +2721,8 @@ export class App {
 
 		this._clockSaveT = 30;
 		const s = this.settings, held = s.timeSpeed === 0;
-		const text = JSON.stringify( { hour: Math.round( s.timeOfDay * 1000 ) / 1000, day: s.day, held, ...( held ? {} : { at: Date.now() } ), ...( s.weather ? { weather: s.weather } : {} ), ...( s.weather === 'hurricane' ? { since: s.weatherSince } : {} ) } );
+		const turtles = this.turtles && this.turtles.minding.kept( s.timeOfDay, s.day ); // ((M17) a turned-back turtle's night)
+		const text = JSON.stringify( { hour: Math.round( s.timeOfDay * 1000 ) / 1000, day: s.day, held, ...( held ? {} : { at: Date.now() } ), ...( s.weather ? { weather: s.weather } : {} ), ...( s.weather === 'hurricane' ? { since: s.weatherSince } : {} ), ...( turtles ? { turtles } : {} ) } );
 		if ( this.store && text !== this._clockSaved ) this.store.setItem( CLOCK_KEY, text );
 		this._clockSaved = text;
 		this.saveBoat();
