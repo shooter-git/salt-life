@@ -46,8 +46,9 @@ export function withAux( material, { fragment = '', uniforms = {}, roughness = t
 // her own materials' changes. docs/m17/looks.md has them beside photographs
 // (env: swept at 1, 2, 3 and 8, and the bounce at 0 to 0.2, at 8:30 and 10:30, beside the photographs: tools/looks/look.mjs.
 // The sea's own albedo is about 0.07, and bluish; what lights a hull's side from under her is that, the sunlit sea's glitter
-// and her own sunlit decks, about neutral. The sky in the gloss past 2 times over veils a dark paint grey)
-export const SHADE = { env: 2, bounce: new THREE.Color( 0.16, 0.16, 0.15 ) };
+// and her own sunlit decks and house, about neutral: 0.3, near the console's white decks' 0.35 (ConsoleMaterials), is what
+// keeps barn red red in shade under the world's blue sky light. The sky in the gloss past 2 times over veils a dark paint grey)
+export const SHADE = { env: 2, bounce: new THREE.Color( 0.3, 0.3, 0.29 ) };
 const _filled = new WeakSet();
 export function useShadeFill( material, { bounce = SHADE.bounce } = {} ) {
 

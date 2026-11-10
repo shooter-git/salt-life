@@ -150,6 +150,10 @@ await page.evaluate( async ( SEA ) => {
 
 		cam.updateMatrixWorld();
 		G.cameraUnderwater.value = 0;
+		// (what the frame worked out from the camera before it was put here, again for this one: the flare's size and how bright,
+		// the lamps' places in its view. A frame runs them against the player's own camera, ashore by the dock)
+		if ( L.flare && a.game.daysOut.flare ) a.game.daysOut._updateFlare( 0 );
+		if ( a.localLights ) a.localLights.update( cam, 0 );
 		// (a flare held at the top of its climb, burning)
 		const d = a.game.daysOut, F = L.flare && d.flare;
 		if ( F ) {
