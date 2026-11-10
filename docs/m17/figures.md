@@ -246,6 +246,17 @@ These are left as they were, for you to decide:
     - 300 m: its path of glints on the water;
     - 2 km: 10 × 9;
     - 8 km: 8 × 7, (119, 35, 33).
+- **All the Spaces' complete check** passed once, on a clean copy of d4a81d7 (`git archive`). It ran with `cli.ts check` from All the Spaces' `main`, 57b4f25, on four cores (`taskset -c 0-3`), under the timing lock, with the load 9.8 at the start. Every check passed and every screen played:
+  - draw calls 88 of 150;
+  - triangles 252,000 of 300,000;
+  - textures 70.3 MB of 128;
+  - graphics memory 107.5 MB of 256;
+  - 14 sounds of 16;
+  - **script memory 119.8 MB of 150**;
+  - 7.1 MB downloaded before it's ready (of 10);
+  - the whole download 78.7 MB of 80.
+
+  It's one run, and this branch changes figures, not what's held. So the script memory being lower than `m17-flats`' recent readings isn't this branch's doing.
 - **No shader changed**, so `tools/gpu-limits.mjs` wasn't needed. The flare's look reads `FLARE_M` in script. The rest is figures and words.
 - Not run here: the ready A/B and one-core plays. The M17 session runs those.
 
