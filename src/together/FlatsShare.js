@@ -12,7 +12,7 @@ import { clockFrom } from './Crew.js';
 //    FlatsFishing's `state`): a school spooked on one game bolts and is gone for its quiet time on everyone's, from the same
 //    island time; a fish hooked from a school is one fewer on everyone's for the rest of its visit. The room keeps the values,
 //    so someone joining later, or coming back, reads the flat as it stands; what's long past is let go (forgetFlats)
-//  - a fish one of you has seen and looked at, called to whoever's near it by the clock, as a guide calls it from the
+//  - a fish one of you has seen (or its mud) and looked at, called to whoever's near it by the clock, as a guide calls it from the
 //    platform: "bonefish, 10 o'clock, 40 ft, moving left" ('flats': the school and where it is; each hears it from where they
 //    are, 12 o'clock their bow, or ahead of them on foot). Told where to look, they see it better (Sight.js' `told`)
 // A fish being fought is seen on everyone's game as anyone's is (the pose's rod and line). A guest's catch is landed on
@@ -225,10 +225,11 @@ export class FlatsShare {
 
 			const S = g.sight;
 			if ( ! S || ! g.active || S.bolt > 0 || S.life < 0.5 ) continue;
-			const o = S.seen;
-			if ( Math.max( o.body, o.shadow, o.tail, o.sign ) < CALL.seen ) continue;
-			const dx = g.center.x - c.x, dz = g.center.z - c.z, d = Math.hypot( dx, dz );
+			const o = S.seen, dx = g.center.x - c.x, dz = g.center.z - c.z, d = Math.hypot( dx, dz );
 			if ( d < 1 || d > fish.sightRange ) continue;
+			// (what shows of it: the fish, their shadows, a tail, their sign on the water; or a feeding school's mud, the milky
+			// water guides call as plainly as the fish, plainest over dark grass, where the fish themselves hardly show)
+			if ( Math.max( o.body, o.shadow, o.tail, o.sign, S.mode === 'feed' && S.mudded ? F.seenAt( g.center.x, g.center.z, 'mud' ) : 0 ) < CALL.seen ) continue;
 			const k = ( dx * look.x + dz * look.z ) / ( d * lf );
 			if ( k > score ) {
 

@@ -196,7 +196,7 @@ if ( doing( 'hook' ) ) {
 	// (the shot's long on a CPU: Sam's fight held as it is meanwhile, or his fish, with nobody reeling, is off before it's done)
 	await sam.game.evaluate( () => { const g = window.__app.game; g.__fight = g.updateFight; g.updateFight = () => {}; } );
 	// (Robin looking at Sam, a tip closed if one's up)
-	await robin.game.evaluate( () => { const a = window.__app, o = a.together.others.values().next().value, p = a.player, gd = a.game.guide; if ( gd && gd.open ) gd.close(); if ( o.cur ) { p.yaw = Math.atan2( - ( o.cur.pos.x - p.position.x ), - ( o.cur.pos.z - p.position.z ) ); p.pitch = - 0.12; } } );
+	await robin.game.evaluate( () => { const a = window.__app, o = a.together.others.values().next().value, p = a.player, gd = a.game.guide; if ( gd && gd._current ) { gd.seen[ gd._current ] = true; gd._queue.length = 0; gd._hideCoach(); } if ( o.cur ) { p.yaw = Math.atan2( - ( o.cur.pos.x - p.position.x ), - ( o.cur.pos.z - p.position.z ) ); p.pitch = - 0.12; } } );
 	await frames( robin.game, 2 );
 	await G.shot( robin, 'flats-robin-sees-sam-on' );
 	await sam.game.evaluate( () => { const g = window.__app.game; g.updateFight = g.__fight; } );
@@ -227,33 +227,52 @@ if ( doing( 'spook' ) || doing( 'hook' ) ) {
 // ---- spot: Robin looks at a school he sees, a second; Sam hears it called from where he is, and sees it better
 if ( doing( 'spot' ) ) {
 
-	// (whichever bonefish school is on the flat in sight of them now: A, or B)
-	let C = null, at = null;
-	for ( const id of [ A, B ] ) {
+	// (a time a school of bonefish is cruising over the flat's white sand, in water a wader stands in, by day: the clock set to it)
+	const cruise = await robin.game.evaluate( async () => {
 
-		// (not so near that he spooks it as he comes: a school's fish spread metres either side of its middle)
+		const { flatsSchools } = await import( '/src/game/Flats.js' );
+		const { tideAt } = await import( '/src/game/IslandClock.js' );
+		const a = window.__app, td = a.terrainData, F = a.game.flats, from = F.T;
+		for ( let t = from + 0.25; t < from + 24 * 20; t += 0.25 ) {
+
+			const h = t % 24;
+			if ( h < 10 || h > 14 ) continue;
+			const sea = tideAt( t );
+			const q = flatsSchools( t, { wind: 2, overcast: 0, hour: h }, F.state ).find( ( q ) => q.kind === 'bonefish' && q.mode === 'cruise' && q.life > 0.99 && q.n >= 4 && F.bottomAt( q.x, q.z ) > 0.4 && sea - td.heightAt( q.x, q.z ) > 0.3 && sea - td.heightAt( q.x, q.z ) < 0.9 );
+			if ( q ) return { t, id: q.id, n: q.n };
+
+		}
+
+		return null;
+
+	} );
+	let C = null, at = null;
+	if ( cruise ) {
+
+		await robin.game.evaluate( ( t ) => window.__app.together.setClock( t % 24, Math.floor( t / 24 ) + 1, 0.0001 ), cruise.t );
+		for ( const w of [ robin, sam ] ) await until( w.game, `Math.abs( ${ T } - ${ cruise.t } ) < 0.02`, 120000 ).catch( () => {} );
+		note( `${ cruise.id } (${ cruise.n }) cruising over white sand at island hour ${ cruise.t.toFixed( 2 ) }` );
+		// (Robin with the sun behind him, not so near that he spooks it as he comes: a school's fish spread metres about its middle)
 		for ( const d of [ 9, 11, 13, 15 ] ) {
 
-			if ( ! await wade( robin, id, d ) ) break;
-			await wade( sam, id, 26, Math.PI * 0.85, false );
-			await until( robin.game, active( id ), 60000 ).catch( () => {} );
+			if ( ! await wade( robin, cruise.id, d ) ) break;
+			await wade( sam, cruise.id, 26, Math.PI * 0.85, false );
+			await until( robin.game, active( cruise.id ), 60000 ).catch( () => {} );
 			await frames( robin.game, 4 );
-			await wade( robin, id, d );
+			await wade( robin, cruise.id, d );
 			await frames( robin.game, 3 );
-			const s = await robin.game.evaluate( ( id ) => { const g = window.__app.fish.sightGroups.find( ( h ) => h.sight && h.sight.id === id && h.active ); return g ? Math.max( g.sight.seen.body, g.sight.seen.shadow, g.sight.seen.tail, g.sight.seen.sign ) : 0; }, id );
-			const spooked = await robin.game.evaluate( ( id ) => window.__app.game.flats.state.spooked[ id ] !== undefined, id );
-			if ( spooked ) break;
-			if ( s > 0.5 ) {
+			const s = await robin.game.evaluate( ( id ) => { const g = window.__app.fish.sightGroups.find( ( h ) => h.sight && h.sight.id === id && h.active ); return g ? { best: Math.max( g.sight.seen.body, g.sight.seen.shadow, g.sight.seen.tail, g.sight.seen.sign ), spooked: window.__app.game.flats.state.spooked[ id ] !== undefined } : { best: 0, spooked: window.__app.game.flats.state.spooked[ id ] !== undefined }; }, cruise.id );
+			note( `Robin ${ d } m off: seen ${ s.best.toFixed( 2 ) }${ s.spooked ? ', spooked' : '' }` );
+			if ( s.spooked ) break;
+			if ( s.best > 0.5 ) {
 
-				C = id;
+				C = cruise.id;
 				at = d;
 				break;
 
 			}
 
 		}
-
-		if ( C ) break;
 
 	}
 
