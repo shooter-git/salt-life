@@ -392,7 +392,7 @@ globalThis.setTimeout ??= ( f ) => f();
 	ok( up && up[ 0 ] === 2500 && /Sam has fired a distress flare/.test( toasts.at( - 1 ) ), 'near enough: seen, and said whose' );
 	// ((M17) and the look agrees with it: gone at the reach, by day and by night, and seen inside it)
 	ok( FLARE_M.day === 2800 && FLARE_M.night === 25000, 'a red meteor: 2.8 km by day, 25 by night' );
-	ok( d._flareBright( FLARE_M.day, 1, 0 ) === 0 && d._flareBright( FLARE_M.day * 0.8, 1, 0 ) > 0 && d._flareBright( 300, 1, 0 ) > 0.9, `by day drawn to its reach and no further: ${ d._flareBright( 300, 1, 0 ).toFixed( 2 ) } at 300 m, ${ d._flareBright( 1500, 1, 0 ).toFixed( 2 ) } at 1.5 km, ${ d._flareBright( FLARE_M.day * 0.8, 1, 0 ).toFixed( 2 ) } at 2.2 km` );
+	ok( d._flareBright( FLARE_M.day, 1, 0 ) === 0 && d._flareBright( 2500, 1, 0 ) >= 0.4 && d._flareBright( 300, 1, 0 ) > 0.9, `by day drawn to its reach and no further: ${ d._flareBright( 300, 1, 0 ).toFixed( 2 ) } at 300 m, ${ d._flareBright( 1500, 1, 0 ).toFixed( 2 ) } at 1.5 km, ${ d._flareBright( 2500, 1, 0 ).toFixed( 2 ) } at 2.5 km, still a red point over the day's sky (0.38 at least)` );
 	ok( d._flareBright( FLARE_M.night, 1, 1 ) === 0 && d._flareBright( 8000, 1, 1 ) > 0.5 && d._flareBright( FLARE_M.day * 0.5, 0.5, 0 ) === 0, 'by night to 25 km; in half the visibility, half the reach' );
 
 }

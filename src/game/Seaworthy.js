@@ -175,7 +175,8 @@ export const stateOf = ( f, iced ) => ( ( f.w || 0 ) > FRESH_H ? 'going' : iced 
 // 2003, after White et al. 1972: 4.5 L at 25 C, about 6 at 30; FEMA's gallon, 3.8 L, is the least, for someone at rest).
 // STORES_PRICE, a day's as Marta has them: a day of the USDA's Thrifty Food Plan for one adult living alone (December 2025: a
 // week $71.40 for a man of 20 to 50, $56.90 for a woman, and 20% more for one alone: $11.00 a day between them) and the water
-// bottled, at the 2.4 cents an ounce IBWA gives for 2025 ($4.87): $16 (M16 had $12, not sourced)
+// bottled, at about 2.4 cents an ounce (IBWA's price an ounce, with the Beverage Marketing Corporation's 2025 figures, as The
+// Shelby Report gave them: $4.87): $16 (M16 had $12, not sourced)
 export const STORES_PRICE = 16, STORES_WATER_L = 6, LUNCH_H = 12, DRY_H = 12, WEAK_H = 36;
 export function feedOf( { stores, out, dry }, hours ) {
 

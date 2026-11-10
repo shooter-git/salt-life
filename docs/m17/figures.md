@@ -72,18 +72,30 @@ The shop's labels now say how far out Marta hears each set: "Handheld VHF, 5 wat
 - the look by `DaysOut._flareBright`, how bright it's drawn at a distance;
 - the seen test by `DaysOut.fire` (someone on the island sees yours) and `theirFlare` (you see someone else's).
 
-So the changed figure moves both together. By day it's drawn gone at the reach, as at night. How bright it's drawn by day, from the camera, by the opacity `_flareBright` gives:
+So the changed figure moves both together.
 
-| | 300 m | 1 km | 1.5 km | 2 km | 2.5 km | 2.8 km | 3 km | 4 km |
-|---|---|---|---|---|---|---|---|---|
-| M16's 5 km | 0.95 | 0.58 | 0.45 | 0.35 | 0.27 | 0.23 | 0.20 | 0.09 |
-| Now, 2.8 km | 0.93 | 0.45 | 0.28 | 0.16 | 0.05 | 0 | 0 | 0 |
+**By day the look needed a floor, so it's seen as far as the test has it seen.** With the reach alone changed, step 4's look drew the flare by day fading to nothing at its reach, by the log of its light. `tools/looks/look.mjs` showed what that does on mid at 11:00, counting the pixels where red is 40 or more over the mean of green and blue:
+- at 300 m, a red point 4 × 4 px, (190, 78, 84);
+- at 1.5 km, only a faint pink tint, (163, 150, 165);
+- at 2 km and 2.5 km, nothing.
 
-The night's is unchanged: full within 2 km, 0.59 at 8 km, 0.15 at 20 km. What `tools/looks/look.mjs` drew is under [Checks](#checks).
+Yet the seen test has it seen to 2.8 km. Step 4's 5 km had the same gap, from about 2 km out.
+
+The reason is the day's sky. Against it, a red sprite is lost under about 0.38 opacity: at 11:00 the sky beside it is about (55, 100, 158), and that's where red comes out 40 over the mean of the others. By night even a faint one shows against the dark.
+
+So by day it's now drawn at `FLARE_SEEN.dayLeast`, 0.4, at its reach, the eye's least. From there it rises with the log of its light, and it's gone over the last `dayEdge` (5%) of the reach. The night's drawing is unchanged. The opacity `_flareBright` gives by day:
+
+| | 300 m | 1 km | 1.5 km | 2 km | 2.5 km | 2.7 km | 2.8 km | 3 km | 4 km |
+|---|---|---|---|---|---|---|---|---|---|
+| Step 4, M16's 5 km | 0.95 | 0.58 | 0.45 | 0.35 | 0.27 | 0.25 | 0.23 | 0.20 | 0.09 |
+| The reach alone at 2.8 km | 0.93 | 0.45 | 0.28 | 0.16 | 0.05 | 0.02 | 0 | 0 | 0 |
+| Now, with the floor | 0.96 | 0.67 | 0.57 | 0.49 | 0.43 | 0.29 | 0 | 0 | 0 |
+
+By night it's as step 4 had it: full within 2 km, 0.59 at 8 km, 0.15 at 20 km. Dusk blends the two by the night's share, as before. What `look.mjs` drew with the floor is under [Checks](#checks).
 
 **What a player notices.**
 - A flare fired by day is seen from the island only within 2.8 km of its middle, where M16 had 5. The island itself reaches about 670 m from its middle.
-- Someone else's flare is seen by day only within 2.8 km of you.
+- Someone else's flare is seen by day only within 2.8 km of you, and now it's drawn as a red point all that way. Step 4's faded out of sight by about 2 km.
 - By night it's as before.
 
 ## 3. Ice
@@ -125,7 +137,7 @@ The insulated hold now melts less all told than the cheaper, smaller ice chest, 
 
 **Its cost, $16 (was $12, not sourced).**
 - **Food: $11.00 a day.** USDA's Thrifty Food Plan, December 2025 (issued January 2026): $71.40 a week for a man of 20 to 50, $56.90 for a woman, and 20% more for one person living alone (the report's own adjustment). That's $12.24 a day for a man and $9.75 for a woman; between them, $11.00.
-- **Water: $4.87.** Six litres bottled, at the 2.4 cents an ounce IBWA gives for bottled water's 2025 retail sales.
+- **Water: $4.87.** Six litres bottled, at about 2.4 cents an ounce. That's from The Shelby Report's account of the 2025 bottled water figures (Beverage Marketing Corporation's, for IBWA), under a chart of IBWA's price an ounce; the text names no source for the price itself.
 - **Together:** $15.87, so $16.
 
 **What a player notices.** Staying out costs $4 a day more: $64 more to fill the sportfisher's 14 days. A day trip's first 12 hours are still free (`LUNCH_H`).
@@ -219,7 +231,21 @@ These are left as they were, for you to decide:
   - `test/getting-home.mjs`: the radio panel with and without a set.
   - `test/m16-fish.mjs`: the billfish's day and night bands, and a 60 m bait by day and at midnight.
   - `test/traps.mjs`: Austin's shares, the first night, unbaited, and the hauler.
-- **`pnpm test`:** see below.
+- **`pnpm test`** on 0aa4909 passed: every test file, 3,998 checks, and the assets' lock. After it, only the day flare's floor and a comment changed. `test/days-out.mjs`, `getting-home.mjs` and `north-pearl.mjs` were run again on that and pass.
+- **`tools/looks/look.mjs` on mid, the flare** (the new `flare-day-2000` and `-2500` shots added). Counting the pixels where red is 40 or more over the mean of green and blue:
+  - **By day with the floor:**
+    - 300 m: a red point 4 × 4 px, (196, 77, 80);
+    - 1.5 km: 2 × 3, (187, 126, 132) against the sky's (122, 161, 194);
+    - 2 km: 2 × 3, (187, 135, 140);
+    - 2.5 km: 2 × 1, (187, 143, 147);
+    - 3 km: nothing.
+
+    Without it (the reach alone): nothing at 2 and 2.5 km, and only a pink tint at 1.5 km. Seen by eye side by side, the floor's point reads as red at 1.5, 2 and 2.5 km.
+  - **By night, as step 4 had it:**
+    - 100 m: 10 × 11 px, (205, 50, 37);
+    - 300 m: its path of glints on the water;
+    - 2 km: 10 × 9;
+    - 8 km: 8 × 7, (119, 35, 33).
 - **No shader changed**, so `tools/gpu-limits.mjs` wasn't needed. The flare's look reads `FLARE_M` in script. The rest is figures and words.
 - Not run here: the ready A/B and one-core plays. The M17 session runs those.
 
