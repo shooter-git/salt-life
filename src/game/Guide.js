@@ -200,7 +200,7 @@ function cards( device, kayak ) {
 const CARD_COUNT = 3;
 
 // (M17) a school spooked: the tip for why (FlatsFishing's events.spooked)
-const SPOOK_TIP = { speed: 'spookSpeed', push: 'spookPush', shadow: 'spookShadow', knock: 'spookKnock', engine: 'spookEngine', cast: 'spookCast', line: 'spookCast', refused: 'flatsRefused' };
+const SPOOK_TIP = { speed: 'spookSpeed', push: 'spookPush', shadow: 'spookShadow', knock: 'spookKnock', engine: 'spookEngine', cast: 'spookCast', line: 'spookCast', refused: 'flatsRefused', theirs: 'spookTheirs' };
 
 // (M16) a tip that isn't the same in a kayak (no helm, no fuel, no bilge), or is hers alone; by the device where it's a key
 const IN_KAYAK = {
@@ -322,6 +322,9 @@ const TIPS = {
 	spookEngine: 'An <b>engine</b> running spooks the flat\'s fish a hundred metres off. Shut it down well short of them, and drift or pole in.',
 	spookCast: '<b>Too close</b>: a bait landing on a fish\'s head, or the line laid over its back, sends the whole school off. Lead them.',
 	flatsRefused: 'It came to it and <b>turned off</b>: refused. What they take is their own: a bonefish a shrimp or a jig, a tarpon or a snook a plug or live bait. A <b>permit</b> refuses most things. Try the next one.',
+	// ((M17) the flats together: a school someone else spooked; a fish called to you)
+	spookTheirs: 'Someone else <b>spooked that school</b>. A flat\'s fish are everyone\'s: what spooks them for one of you spooks them for all, and they\'re gone a while. Fish apart, or come on together, slowly.',
+	flatsCalled: 'A fish <b>called</b> to you, as guides call them: by the <b>clock</b>, twelve ahead of your bow (on foot, ahead of you), three off your right, nine your left; how far in feet; and which way it\'s going. Look there: knowing where to look, you\'ll see it further off.',
 	grandSlam: 'A <b>bonefish</b>, a <b>permit</b> and a <b>tarpon</b> in one day, all let go, is a <b>grand slam</b>: the flats\' trophy, in your log. A <b>snook</b> the same day makes it a <b>super grand slam</b>. The day\'s from sunrise, and a sleep ends it.',
 	// (M17) the tide, the first time you're out on the flats
 	tide: 'The <b>tide</b> rises and falls twice a day, each high about 50 minutes later than the day before\'s, and most at new and full moon (the <b>springs</b>). The flats fish on the <b>flood</b> and about <b>high water</b>, when the fish come up onto them; their <b>edge</b> and <b>creeks</b> on the <b>ebb</b>, a creek\'s <b>mouth</b> most of all; the pier at the <b>turn</b>. A creek runs with it, out on the ebb and in on the flood. <b>Joe\'s slate</b> and the cooler\'s <b>Chart</b> tab give the day\'s tides.',
@@ -679,7 +682,9 @@ export class Guide {
 			if ( E.spooked ) this.tip( SPOOK_TIP[ E.spooked ] || 'spookSpeed' );
 			if ( E.refused ) this.tip( 'flatsRefused' );
 			if ( E.slam ) this.tip( 'grandSlam' );
+			if ( E.called ) this.tip( 'flatsCalled' );
 			E.spooked = null;
+			E.called = null;
 			E.refused = false;
 			E.slam = null;
 

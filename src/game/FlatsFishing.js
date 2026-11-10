@@ -13,18 +13,22 @@ import { SLAMS, slamDay, slamCatch, slamSlept, slamsOf, slamToday } from './Trop
 // your height, your shadow, the push of water ahead of a hull, a paddle knocking it, an engine, a cast on their heads,
 // the line over their backs), a school spooked bolting and the flat going quiet a while (Flats' spook); a seen fish's
 // own take of a bait put to it (Bites.seenTake), beside the bites' roll; and the grand slam (Trophies.js).
-// What changes is kept in Flats' small record (`state`: spooked, hooked), for the second wave to send to a guest.
+// What changes is kept in Flats' small record (`state`: spooked, hooked), and ((M17) the flats together) what you did in your
+// own (`mine`), which together/FlatsShare.js sends the others; `state` is everyone's together.
 //   flats.update( dt )        each frame (Game)
 //   flats.landed( at, tip, bait )             a cast down on the water: what it spooked
 //   flats.watch( bite, dt ) -> true while a seen fish has the bait's bite (Game.updateBite leaves it alone then)
 //   flats.caught( info )      a fish landed: the slams it makes, if any (-> their ids: the catch card tells them)
-//   flats.events              for the Guide: { on, seen, tailing, spooked (why), refused, slam }
+//   flats.events              for the Guide: { on, seen, tailing, spooked (why), refused, slam, called (who) }
+//   (the flats together) flats.theirSpook( id, x, z )   a school spooked on someone else's game, bolting here
+//   flats.called              school id -> s (performance.now) till which you've been told where it is: seen by that
 
 const ACTIVE = 90; // m: schools this near you are given fish (past the farthest tier's drawing, 50 m)
 const NEAR = 160; // m off the flats' window that it's all worked out at all
 const EVERY = 0.5; // s between looks at where the schools are
 const LOOK = 0.2; // s between a bait's looks for a fish that might see it
 const CLOUD = { cell: 520, drift: 1.6 }; // a cloud's shadow over the flats: its size (m), its drift on the wind (x)
+const TOLD_FADE = 8; // s: (M17, the flats together) a call's help to your eye fades over its last seconds
 const SILT = 0.45; // the light a mud's silt sends back (stirred-up oolite and marl), half of it seen through
 const _o = { x: 0, z: 0, vx: 0, vz: 0, eye: 1.6, tall: 1.8, knock: 0, engine: false, hull: false }, _school = { x: 0, z: 0, r: 2, depth: 0.5 };
 const _q = { h: 1, d: 1, L: 0.5, depth: 0.5, bottom: 0.55, back: 0.15, glasses: false, sun: 1, behind: 1, shade: 0, overcast: 0, wind: 4, rain: 0, night: 0, tailUp: 0.1, sign: 1 };
@@ -53,8 +57,11 @@ export class FlatsFishing {
 		this.game = game;
 		this.app = game.app;
 		this.state = newFlatsState();
+		this.mine = newFlatsState(); // ((M17) the flats together: what you've done to them, for the others)
+		this.onMine = null; // ( ) => void: mine changed (together/FlatsShare.js)
+		this.called = new Map();
 		this.schools = [];
-		this.events = { on: false, seen: false, tailing: false, spooked: null, refused: false, slam: null };
+		this.events = { on: false, seen: false, tailing: false, spooked: null, refused: false, slam: null, called: null };
 		this._t = 0;
 		this._lookT = 0;
 		this._was = { x: 0, z: 0, has: false, vx: 0, vz: 0 };
@@ -123,6 +130,7 @@ export class FlatsFishing {
 		_q.wind = G.windSpeed.value;
 		_q.rain = G.rain.value;
 		_q.night = G.night.value;
+		_q.told = 0;
 		return _q;
 
 	}
@@ -196,7 +204,9 @@ export class FlatsFishing {
 			let bottom = this.bottoms.get( S.id );
 			if ( bottom === undefined || Math.random() < dt / 2 ) this.bottoms.set( S.id, bottom = this.bottomAt( x, z ) );
 			// how plainly it shows
-			const v = seenOnFlats( this._look( x, z, L, S.kind, depth, bottom ), _seen ), o = S.seen;
+			const q = this._look( x, z, L, S.kind, depth, bottom );
+			q.told = this.toldOf( S.id );
+			const v = seenOnFlats( q, _seen ), o = S.seen;
 			o.body = v.body;
 			o.shadow = v.shadow;
 			o.tail = v.tail;
@@ -262,7 +272,7 @@ export class FlatsFishing {
 
 		const S = g.sight;
 		if ( ! S || S.bolt > 0 ) return;
-		spook( this.state, S.id, this.T );
+		this._spook( S.id, x, z );
 		this.fish.sightBolt( g, x, z );
 		if ( why !== 'hooked' ) this.events.spooked = why;
 		if ( this.follow && this.follow.g === g ) this._endFollow( 'spook' );
@@ -384,7 +394,7 @@ export class FlatsFishing {
 		this.follow = null;
 		const S = sightOf( F.kind );
 		this.fish.sightFollowEnd( F.g, 'eat' );
-		hook( this.state, F.id );
+		this._hook( F.id );
 		this.spooked( F.g, 'hooked', rod.bobber.x, rod.bobber.z );
 		if ( S.bites ) {
 
@@ -421,10 +431,74 @@ export class FlatsFishing {
 		this.fish.sightFollowEnd( F.g, act, this.game.rod.bobber.x, this.game.rod.bobber.z );
 		if ( act === 'spook' ) {
 
-			spook( this.state, F.id, this.T );
+			this._spook( F.id, this.game.rod.bobber.x, this.game.rod.bobber.z );
 			this.events.spooked = 'refused';
 
 		} else this.events.refused = F.kind;
+
+	}
+
+	// ((M17) the flats together: docs/m17/flats-together.md) a school spooked or a fish hooked by you: in everyone's record here
+	// and in your own, which the others are sent (together/FlatsShare.js)
+	_spook( id, x, z ) {
+
+		spook( this.state, id, this.T, x, z );
+		spook( this.mine, id, this.T, x, z );
+		if ( this.onMine ) this.onMine();
+
+	}
+
+	_hook( id ) {
+
+		hook( this.state, id );
+		hook( this.mine, id );
+		if ( this.onMine ) this.onMine();
+
+	}
+
+	// a school spooked on someone else's game (from ( x, z ) there): if it's in sight here it bolts too, from there. It's in
+	// `state` already (FlatsShare), so it stays gone for its quiet time from the same island time
+	theirSpook( id, x, z ) {
+
+		const fish = this.fish;
+		if ( ! fish || ! fish.sightGroups ) return false;
+		for ( const g of fish.sightGroups ) {
+
+			const S = g.sight;
+			if ( ! S || S.id !== id || ! g.active || S.bolt > 0 ) continue;
+			fish.sightBolt( g, Number.isFinite( x ) ? x : this.app.camera.position.x, Number.isFinite( z ) ? z : this.app.camera.position.z );
+			if ( this.follow && this.follow.g === g ) {
+
+				// (it was coming to your bait: it's gone with the rest)
+				const F = this.follow;
+				this.follow = null;
+				fish.sightFollowEnd( F.g, 'refuse', this.game.rod.bobber.x, this.game.rod.bobber.z );
+
+			}
+
+			if ( this.app.audio && this.app.audio.fishSplash && S.n > 0 ) this.app.audio.fishSplash( { x: g.center.x, y: G.seaLevel.value, z: g.center.z }, 0.25 );
+			return true;
+
+		}
+
+		return false;
+
+	}
+
+	// how far you've been told where a school is (someone's called it: together/FlatsShare.js), 0..1: you know where to look
+	toldOf( id ) {
+
+		const until = this.called.size ? this.called.get( id ) : undefined;
+		if ( until === undefined ) return 0;
+		const left = until - performance.now() / 1000;
+		if ( left <= 0 ) {
+
+			this.called.delete( id );
+			return 0;
+
+		}
+
+		return Math.min( 1, left / TOLD_FADE );
 
 	}
 
