@@ -233,6 +233,8 @@ export class WaterSurface {
 		// under water) copied just before the sea is drawn (one copy a frame, no second scene pass),
 		// and seen through the surface bent by its waves and ripples
 		this.refract = tier === 'high';
+		// ((v2.2.3) and a boat's height left in the frame's alpha for it, only here: SeenInWater. App builds the sea before the boats)
+		SEEN.written = this.refract;
 		if ( this.refract ) {
 
 			mat.defines = { ...( mat.defines || {} ), WATER_REFRACT: '' };

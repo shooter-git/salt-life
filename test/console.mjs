@@ -40,9 +40,18 @@ ok( rising, 'her keel runs forward all the way to the stem' );
 // ---- what the sea can see down to: her materials leave their height in the frame's alpha (materials/SeenInWater.js)
 {
 
-	const shader = { uniforms: {}, vertexShader: '#include <common>\n#include <begin_vertex>', fragmentShader: '#include <common>\n#include <opaque_fragment>' };
-	seenInWater( shader );
-	ok( shader.fragmentShader.includes( 'gl_FragColor.a' ) && shader.vertexShader.includes( 'vSeenY' ), 'a boat\'s height goes to the frame\'s alpha' );
+	const shader = () => ( { uniforms: {}, vertexShader: '#include <common>\n#include <begin_vertex>', fragmentShader: '#include <common>\n#include <opaque_fragment>' } );
+	const was = SEEN.written;
+	SEEN.written = true;
+	const read = shader();
+	seenInWater( read );
+	ok( read.fragmentShader.includes( 'gl_FragColor.a' ) && read.vertexShader.includes( 'vSeenY' ), 'a boat\'s height goes to the frame\'s alpha where the sea reads it' );
+	// ((v2.2.3) and where it doesn't, the alpha's left at 1: the canvas has one, and the page behind it showed through)
+	SEEN.written = false;
+	const unread = shader();
+	seenInWater( unread );
+	ok( ! unread.fragmentShader.includes( 'gl_FragColor.a' ) && ! unread.vertexShader.includes( 'vSeenY' ), 'nothing in the frame\'s alpha where the sea doesn\'t read it' );
+	SEEN.written = was;
 	const at = ( y ) => Math.min( ( y + SEEN.base ) / SEEN.span, 1 );
 	ok( at( 0 ) < SEEN.plain && at( - 1.4 ) >= 0 && at( 5.8 ) >= SEEN.plain, 'all under the water and her lower topsides read as hers, above that as nothing' );
 
