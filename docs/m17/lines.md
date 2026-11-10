@@ -146,6 +146,16 @@ The base fought these at 77% of the line's strength by hand, and at 92% in the h
   - Its rule "lost past twice the line" is now 3.9 times the real line (the same fish), and up to 200 kg with the two-speed (from the sweep).
   - Its dollars an hour move by under 0.4%.
 
+## The checks
+
+- **`pnpm test` passes:** 6 min 52 s, at a load of 18 to 22, `test/flats.mjs` included.
+- **All the Spaces' complete check passes on a clean copy of d0071cf.** That's `cli.ts check` from its `main` (57b4f25), on four cores, under the timing lock, at a load of 9.9 to 10.9.
+  - Every check passed and every screen played, with no errors.
+  - Script memory 142.6 MB of 150, by screen 136.8, 142.6, 110.5 and 132.9; `m17-flats`' last two read 142.7 and 142.3. Nothing here is held in memory but a few constants.
+  - 86 draw calls of 150; 238,229 triangles of 300k; 70.3 MB of textures; 107.6 MB of graphics memory; 14 sounds of 16.
+  - 7.1 MB before ready, 78.7 MB in all. Ready in 4.7 to 5.1 s.
+- **No shader changed.** The fight's figures are all in plain JavaScript, so `tools/gpu-limits.mjs` wasn't run.
+
 ## Not verified, and judgment
 
 - **Judgment:**
