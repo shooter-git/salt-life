@@ -302,7 +302,7 @@ export class App {
 
 		// ---------------------------------------------------------------- sky
 		await progress( 0.4, 'Lighting the sky' );
-		this.sky = new Sky( { scene, renderer, tier } );
+		this.sky = new Sky( { scene, renderer, tier, holdMoon: this.cpuGL } ); // ((M17) the moon's disc after the start there: prepareLate)
 		// (high) the clouds' shadows on the island and the sea: lightUp gives them to the lit materials,
 		// so before anything is lit (with a graphics card the plants are lit early in loading)
 		this.cloudShadows = !! this.sky.clouds.shadowMap;
@@ -1338,6 +1338,14 @@ export class App {
 				held.holdBack = false;
 
 			} );
+
+		}
+
+		// ((M17) the moon's disc: the sky's whole program, held while loading on a device that draws on its CPU (Sky's holdMoon))
+		if ( this.sky.moonDome ) {
+
+			roots.push( this.sky.moonDome );
+			show.push( () => this.sky.showMoon() );
 
 		}
 

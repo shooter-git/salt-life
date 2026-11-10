@@ -280,7 +280,11 @@ float skyCurtainNoise( vec2 p ) {
 // (the stars). On its sphere, s: east (toward Mare Crisium, the sky's west), north, toward us. Lit by the sun's side to
 // the Lommel-Seeliger law (2 mu0 / ( mu0 + mu ): flat to the limb at full, darkening to the terminator), its seas
 // darker and their edges broken, Tycho bright; the earthshine even over it all. A loop over the seas (GLSL inlines every
-// call: one place, not one a sea)
+// call: one place, not one a sea). ((M17) SKY_NO_MOON: none, the dome's program while loading on a device that draws on
+// its CPU: Sky's holdMoon)
+#ifdef SKY_NO_MOON
+vec4 skyMoon( vec3 dir ) { return vec4( 0.0 ); }
+#else
 const vec4 SKY_MARIA[ ${ MARIA.length } ] = vec4[]( ${ MARIA_GLSL } );
 vec4 skyMoon( vec3 dir ) {
 	vec3 east = cross( skyMoonDir, skyMoonNorth );
@@ -311,6 +315,7 @@ vec4 skyMoon( vec3 dir ) {
 	mask *= smoothstep( -0.01, 0.01, dir.y );
 	return vec4( L * mask, mask );
 }
+#endif
 
 vec4 skyCurtain( vec3 dir, vec3 behind ) {
 	float hl = length( dir.xz );
@@ -422,7 +427,11 @@ void main() {
 
 export class Sky {
 
-	constructor( { scene, renderer, tier = 'low' } ) {
+	// ((M17) holdMoon: the dome's first program without the moon's disc (SKY_NO_MOON), on a device that draws on its CPU,
+	// where a program's build and first draw is load time: the disc made the dome's 0.37 s there against 0.28 without
+	// it, a tenth of a second more before ready (docs/M17.md, Second wave merged). After the start App.prepareLate
+	// compiles the whole one on moonDome, then shows it: showMoon)
+	constructor( { scene, renderer, tier = 'low', holdMoon = false } ) {
 
 		this.scene = scene;
 		this.renderer = renderer;
@@ -475,24 +484,27 @@ export class Sky {
 		this.sunDiskIntensity = this.uniforms.skySunDiskIntensity;
 		this.starIntensity = this.uniforms.skyStarIntensity;
 
-		const material = ( env ) => new THREE.ShaderMaterial( {
+		const material = ( env, noMoon = false ) => new THREE.ShaderMaterial( {
 			name: env ? 'SkyEnvironment' : 'Sky',
 			vertexShader: SKY_VERTEX,
 			fragmentShader: SKY_FRAGMENT,
 			uniforms: this.uniforms,
-			defines: env ? { SKY_ENVIRONMENT: '' } : {},
+			defines: env ? { SKY_ENVIRONMENT: '' } : noMoon ? { SKY_NO_MOON: '' } : {},
 			side: THREE.BackSide,
 			depthWrite: false,
 			depthTest: ! env,
 		} );
 
 		// the dome: drawn after the opaque objects (only the pixels they leave), before the water
-		const dome = this.dome = new THREE.Mesh( new THREE.BoxGeometry( 1, 1, 1 ), material( false ) );
+		const dome = this.dome = new THREE.Mesh( new THREE.BoxGeometry( 1, 1, 1 ), material( false, holdMoon ) );
 		dome.name = 'Sky';
 		dome.frustumCulled = false;
 		dome.renderOrder = 1e6;
 		dome.onBeforeRender = ( r ) => this.fog.color.getRGB( this.uniforms.skyFogColor.value, r.getRenderTarget() === null ? r.outputColorSpace : THREE.ColorManagement.workingColorSpace );
 		scene.add( dome );
+		// ((M17) the whole dome, the moon's disc in it, while it's held: out of the scene, for App.prepareLate to compile)
+		this.moonDome = holdMoon ? new THREE.Mesh( dome.geometry, material( false ) ) : null;
+		this.moonShown = ! holdMoon;
 
 		// (Salt Life) on high three's SunLight: two shadow maps fitted to the view, a sharp one near the
 		// camera and a wider one beyond (App sets them up). Below, a directional light: on mid its one
@@ -847,6 +859,18 @@ export class Sky {
 
 	}
 
+	// ((M17) the moon's disc in: the dome given the whole program, compiled on moonDome (App.prepareLate), the held one let go)
+	showMoon() {
+
+		if ( ! this.moonDome ) return;
+		const held = this.dome.material;
+		this.dome.material = this.moonDome.material;
+		held.dispose();
+		this.moonDome = null;
+		this.moonShown = true;
+
+	}
+
 	dispose() {
 
 		this.environment.dispose();
@@ -854,6 +878,7 @@ export class Sky {
 		this.atmosphere.dispose();
 		this.dome.geometry.dispose();
 		this.dome.material.dispose();
+		if ( this.moonDome ) this.moonDome.material.dispose();
 
 	}
 

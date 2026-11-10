@@ -93,6 +93,9 @@ const first = nights[ phases[ 0 ] ];
 await page.goto( `http://127.0.0.1:${ PORT }/?tier=${ TIER }&weather=calm&hour=${ first.hour }&day=${ first.day }&fullsea` );
 await page.waitForFunction( () => window.__app && window.__app._started, null, { timeout: 400000 } );
 log( 'started' );
+// (the disc comes in after the start on the CPU: Sky's holdMoon, App.prepareLate)
+await page.waitForFunction( () => window.__app.sky.moonShown, null, { timeout: 600000 } );
+log( 'the moon in' );
 // (MOON_QUICK=1: the disc and the sky alone, without waiting for the island's plants)
 if ( ! process.env.MOON_QUICK ) {
 
