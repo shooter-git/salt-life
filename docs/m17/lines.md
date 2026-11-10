@@ -244,3 +244,13 @@ Not done:
 - an old kit and a new one told apart;
 - a 330 kg blue marlin from the chair on 80 lb: at least 80% on the 80-class reel, at most 10% on the two-speed;
 - alone, none at 400 kg from the chair, and none at 260 kg standing.
+
+Checks on 997860a:
+
+- `pnpm test` passes, in 7 minutes 41 seconds.
+- The complete check on a clean copy passes:
+  - script memory 142.3 MB of 150 (by screen 142.3, 129.9, 135.5 and 141.1);
+  - 86 draws;
+  - 245,914 triangles;
+  - ready in 4.4 to 4.5 s.
+- The reel is a row of figures, so no shader changed.
