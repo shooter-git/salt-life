@@ -62,6 +62,13 @@ squelch, a nesting turtle's night, the trap hauler) are built the same way: `nod
 662864:schneidi67 623692:launchsite 516923:mariethompson 696035:BeroundSound 435656:YellowJacketStudios`, then `node build-fleet.mjs` (its bank entries in
 `fleet-bank.json`), then `tame.mjs`. `node build-fleet.mjs --try` also copies each to `tools/sounds/try/`.
 
+The flats' own (M17: a tail's slap and its trickle, a spooked school's rush, the kayak's push through still water) are built the
+same way: `node dl.mjs 443380:kylecutsfilms 507092:paulprit 273725:darthbaul 637957:kyles 509323:AugustSandberg
+870597:CHallSmith`, then `node build-flats.mjs` (its bank entries in `flats-bank.json`: the picks only, from 443380, 507092,
+273725 and 870597), then `tame.mjs`. `node build-flats.mjs --try` writes every candidate cut on its own to `tools/sounds/try/`
+(with `try-m17.json`, each one's loudness), the ones the user didn't pick too. The asp's river is taken down by `afftdn` with
+its own noise profile, sampled between two charges; the push is the glides between the strokes, joined.
+
 ## All the Spaces' loudness rule, and the AAC copies
 
 All the Spaces' build turns a sound down when it's louder than -14 LUFS integrated or peaks above -1 dBFS.

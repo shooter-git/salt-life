@@ -266,7 +266,6 @@ export class FlatsFishing {
 		this.fish.sightBolt( g, x, z );
 		if ( why !== 'hooked' ) this.events.spooked = why;
 		if ( this.follow && this.follow.g === g ) this._endFollow( 'spook' );
-		if ( this.app.audio && this.app.audio.fishSplash && S.n > 0 ) this.app.audio.fishSplash( { x: g.center.x, y: G.seaLevel.value, z: g.center.z }, 0.25 );
 
 	}
 

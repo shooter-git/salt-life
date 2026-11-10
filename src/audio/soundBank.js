@@ -107,4 +107,9 @@ export const BANK = {
 	outboard_start: { file: 'outboard_start.ogg', slices: [ [ 0.08, 1.15 ], [ 1.31, 3.1 ], [ 4.49, 1.15 ] ], lufs: [ -21.8, -21.8, -21.8 ] },
 	diesels_start: { file: 'diesels_start.ogg', slices: [ [ 0.08, 1.1 ], [ 1.26, 3.4 ], [ 4.74, 1.08 ] ], lufs: [ -14.5, -14.5, -14.5 ] },
 	turtle_hatch: { file: 'turtle_hatch.ogg', slices: [ [ 0.08, 0.8 ], [ 0.96, 0.8 ], [ 1.84, 0.8 ], [ 2.72, 0.8 ], [ 3.6, 0.8 ] ], lufs: [ -15.3, -18.7, -12.8, -13.3, -17.9 ] },
+	// (M17) the flats: a tail's slap and its trickle (koi for a bonefish's, slices 0-7; a fish landing for a permit's, 8-9), a
+	// spooked school's rush through shallow water, and the kayak's water in still water by her speed
+	tail_splash: { file: 'tail_splash.ogg', slices: [ [ 0.08, 0.7027 ], [ 0.8627, 0.85 ], [ 1.7927, 0.75 ], [ 2.6227, 0.5933 ], [ 3.296, 0.808 ], [ 4.184, 0.75 ], [ 5.014, 0.67 ], [ 5.764, 0.7053 ], [ 6.5493, 0.9 ], [ 7.5293, 0.72 ] ], lufs: [ -24, -27.7, -19.8, -20, -15.6, -22.2, -26.1, -25, -16.2, -24 ] },
+	school_bolt: { file: 'school_bolt.ogg', slices: [ [ 0.08, 1.45 ], [ 1.61, 1.3 ], [ 2.99, 1.5 ], [ 4.57, 1.3 ], [ 5.95, 1.3 ] ], lufs: [ -19, -17.9, -21.2, -16, -17.2 ] },
+	kayak_push: { file: 'kayak_push.ogg', loop: true, lufs: -27.2 },
 };

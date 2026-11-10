@@ -366,6 +366,20 @@
 			"author": "kyles"
 		},
 		{
+			"path": "public/audio/kayak_push.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/CHallSmith/sounds/870597/",
+			"title": "Kayak or Canoe, Paddling on Lake",
+			"author": "CHallSmith"
+		},
+		{
+			"path": "public/audio/kayak_push.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/CHallSmith/sounds/870597/",
+			"title": "Kayak or Canoe, Paddling on Lake",
+			"author": "CHallSmith"
+		},
+		{
 			"path": "public/audio/keel_scrape.m4a",
 			"license": "CC0-1.0",
 			"source": "https://freesound.org/people/launchsite/sounds/623692/",
@@ -772,6 +786,20 @@
 			"author": "Mrthenoronha, mwchristian95"
 		},
 		{
+			"path": "public/audio/school_bolt.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/darthbaul/sounds/273725/",
+			"title": "Asp attacks riverside and underwater",
+			"author": "darthbaul"
+		},
+		{
+			"path": "public/audio/school_bolt.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/darthbaul/sounds/273725/",
+			"title": "Asp attacks riverside and underwater",
+			"author": "darthbaul"
+		},
+		{
 			"path": "public/audio/sea_open.m4a",
 			"license": "CC0-1.0",
 			"source": "https://freesound.org/people/Sotiris_Laskaris/sounds/583205/",
@@ -1036,6 +1064,20 @@
 			"source": "https://freesound.org/people/tbsounddesigns/sounds/530158/",
 			"title": "POOL SWIMMING R-L",
 			"author": "tbsounddesigns"
+		},
+		{
+			"path": "public/audio/tail_splash.m4a",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/kylecutsfilms/sounds/443380/",
+			"title": "Fish Splashing Pond.wav; Fish Jumping Splash 1.wav",
+			"author": "kylecutsfilms, paulprit"
+		},
+		{
+			"path": "public/audio/tail_splash.ogg",
+			"license": "CC0-1.0",
+			"source": "https://freesound.org/people/kylecutsfilms/sounds/443380/",
+			"title": "Fish Splashing Pond.wav; Fish Jumping Splash 1.wav",
+			"author": "kylecutsfilms, paulprit"
 		},
 		{
 			"path": "public/audio/tern.m4a",
