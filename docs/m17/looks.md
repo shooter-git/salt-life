@@ -18,15 +18,16 @@ The before set was drawn from a clean copy of 53ffb1c on a server of its own, th
 
 | Look | Before (53ffb1c) | Now |
 |---|---|---|
-| Barn red on the console and the sportfisher | 0.85% albedo, near black in sun or shade | 6%, red in sun; in shade dark maroon-grey, not yet plainly red (see below) |
+| Barn red on the console and the sportfisher | 0.85% albedo, near black in sun or shade | 6%, red in sun and plainly red in shade, darker than the photographs (the tone curve: below) |
 | The console's own navy | near black | navy blue |
-| A boat's side out of the sun | a tenth of its sunlit brightness, dark slate | about two fifths, light blue-grey (as *Bella*'s; the Viking's is a tenth) |
+| A boat's side out of the sun | a tenth of its sunlit brightness, dark slate | about a quarter, light grey (between the Viking's tenth and *Bella*'s two fifths) |
 | The flare at night | an orange dot 6 px across at 100 m, a pale speck at 300 m, nothing at 2 km or 8 km | a saturated red point at every range, the brightest thing in view; a red path on the water under it |
 | The flare by day | an orange speck 2 × 3 px at 300 m, nothing past 1.5 km | a red point 4 × 4 px at 300 m, faint at 1.5 km |
 | The underwater lights | a uniform pale turquoise disc | a hot core at her transom lights, an emerald glow going off over 15 to 20 m, her transom's foot lit |
 | The catch card in its first seconds | the stand-ins drawn in it (caught once on low) | none |
 | A toast over the card | over its name at 844 × 390 and 390 × 844 | waits till the card goes, where it would cover the name |
 | The helm's guard at deep night | 1% to spare, −0.37 s of the wall at worst | 1.65 s of the wall at worst |
+| Every boat's lower parts | the page's navy behind the canvas showing through, about half at her waterline | the frame's alpha 1 when the page shows it |
 
 ## The paint, to linear once
 
@@ -62,16 +63,15 @@ So white in shade is anything from a tenth to two fifths of sunlit, by how much 
 - The sportfisher's `OUTSIDE_FILL` went into it. The boats at their berths take the same (`MooredBoats`: the bounce, and the environment `SHADE.env` times over, where it was 8), so a boat matches herself at sea.
 
 How the figures were chosen: swept live in the real game (`SHADE` hangs on each material's `userData`) at 8:30 and 10:30, the environment at 1, 2, 3 and 8 times, the bounce at 0 to 0.3, against the photographs:
-- **The environment past about 2 veils a dark paint grey.** At 8 times, barn red in shade read (31,25,34) on the console, purple-grey; on the moored boats that's how it was. Real glossy dark hulls show the sky in them, but not as a veil over their colour.
-- **The bounce, not the sky, warms the shade.** The game's sky light is a saturated blue, and red reflects next to none of it.
-  - With a bounce of 0.16 the sportfisher's barn red in shade still read (18,25,36) from 6 m, red the least of the three.
-  - Her topsides take a quarter to a third of the bounce the lobster boat's do (measured: 0.0015 of red for each 0.2 of bounce, against what her albedo would give from the lobster boat's white).
-  - The console, with her decks' 0.35, read dark red.
-  - So 0.3 for every boat: what keeps barn red red in shade, as the user asked of it ("dark, but plainly red").
+These sweeps were first run with the page's navy over every boat's lower parts (found later: [Barn red in shade: the page showing through](#barn-red-in-shade-the-page-showing-through)). They were run again without it, and the figures here are those:
+- **The environment past 2 turns a white side in shade blue and does little for a dark one.** At 8 times the lobster boat's white in shade went from (72,84,93) to (98,116,136), sky-blue; the sportfisher's barn red in shade from (17,2,2) to (21,3,3), the console's navy in shade from (1,7,24) to (1,10,37). Real glossy hulls show the sky in them, but not as a cast over a white side's own colour. With the page's navy over them, 8 times had read a purple-grey (31,25,34) on barn red; the boats at their berths had that.
+- **The bounce, not the sky, warms the shade.** The game's sky light is a saturated blue, and red reflects next to none of it. The sportfisher's barn red in shade read (8,1,1) at a bounce of 0.09, (11,1,1) at 0.16 and (17,2,2) at 0.3: below 0.3 it's near black. The console keeps her decks' 0.35.
+  - So 0.3 for every boat: what keeps barn red red in shade, as the user asked of it ("dark, but plainly red"). White in shade is then 0.23 of sunlit, inside the photographs' tenth to two fifths.
+  - With the page's navy over them, the red had seemed to take a quarter to a third of the bounce the lobster boat's white did, for its albedo. It takes its albedo's share: the navy laid over it was most of what showed.
 
-**What it reads now** (`tools/looks/look.mjs`, 10:30, her side to the sun or away from it, 13 to 22 m off and from 6 m; sRGB medians of her topsides):
+**What it read at 6a0281d** (`tools/looks/look.mjs`, 10:30, her side to the sun or away from it, 13 to 22 m off and from 6 m; sRGB medians of her topsides). Both columns have the page's navy over every boat's lower parts; what they read without it is in [the next section](#barn-red-in-shade-the-page-showing-through):
 
-| | Before | Now | The photographs |
+| | Before (53ffb1c) | 6a0281d | The photographs |
 |---|---|---|---|
 | The lobster boat's white topsides, sun | (155,165,165) | (152,163,165) | the Viking's (228,227,219) |
 | Her topsides in shade | (24,45,62), 0.07 of sunlit | (93,108,118), about 0.39 of sunlit | the Viking's (44,75,95), 0.09; *Bella*'s house (141,157,168), 0.43 |
@@ -81,19 +81,74 @@ How the figures were chosen: swept live in the real game (`SHADE` hangs on each 
 | The console's own navy, sun | (7,23,38) | (7,45,83) | the Donzi's (12,37,84), the Competition's (24,37,56) |
 | Her navy in shade, 6 m | (5,21,31) | (6,29,56) | |
 
-- **Barn red in sun is barn red**, and the console's navy navy, as the photographs have them. Beside *Bella* it's darker than most of her side: her sampled patch (52,15,22) is one of her darker ones.
-- **White in shade** went from the Viking's end of the photographs (a tenth) to *Bella*'s (two fifths), its blue cast kept.
-- **Barn red in shade is not yet plainly red.** It's a dark maroon-grey, its red only a little over its green and blue, from 6 m as from 20.
-  - Its own light in shade rose about four times (red channel 0.0008 to about 0.003 of linear light, under the sky's sheen and the haze). The lobster boat's white in the same light rose about five.
-  - For their albedos, the console's and the sportfisher's topsides take about a third of the light hers do. Their sides flare out and look down at the sea more, but that doesn't account for a third; it wasn't found.
-  - A bounce strong enough to make it plainly red would put white in shade past anything the photographs show. Left for the M17 session to judge with the renders beside the photographs (`tools/looks/compare.mjs`).
+- **Barn red in sun read barn red**, and the console's navy navy. Beside *Bella* it's darker than most of her side: her sampled patch (52,15,22) is one of her darker ones.
+- **White in shade** went from the Viking's end of the photographs (a tenth) to *Bella*'s (two fifths), with a blue cast that was the page's navy.
+- **Barn red in shade read maroon-grey here**, (26,21,30), from 6 m as from 20. The cause wasn't the light on it: it was the page behind the canvas showing through every boat's lower parts. It's found and fixed in [Barn red in shade: the page showing through](#barn-red-in-shade-the-page-showing-through), below, with what these figures read after it.
 
 **At their berths** (the console and the sportfisher moored, seen from the water west and east of the pier at 10:30 and 15:30; you in the kayak). Before, both were near black in barn red or navy: their baked looks carried the double conversion on purpose. Now:
 - barn red reads red in the sun and dark red in shade;
 - the console's navy reads navy blue, the sportfisher's navy dark navy;
 - each as the same boat does out at sea, the moored boats' material taking the same bounce and environment as the boats' own.
 
-**The air's haze, not a fault.** Seen from 20 m, a dark paint's shade side has the marine haze over it (`HeightHaze`): about (0.003, 0.008, 0.014) of linear light at 22 m, a blue veil, and barn red's own light in shade is less than that. The haze is about right: an extinction of 2.4 × 10⁻⁴ a metre, near the sea, is about 20 km's visibility. A real dark hull's shaded side at that distance is veiled the same way. From a dock's or a kayak's distance (6 m) the veil is a quarter of that.
+**The air's haze.** Before the page's navy was found, the marine haze (`HeightHaze`) was suspected for the grey over a far shade side. With the navy gone, barn red in shade reads the same from 6 m as from 22 m, within a level: at that range the haze barely shows, as it should (an extinction of 2.4 × 10⁻⁴ a metre near the sea is about 20 km's visibility).
+
+## Barn red in shade: the page showing through
+
+**What it was.** After the paint and the fill, barn red in shade still read a dark maroon-grey: (26,21,30) on the console, (26,24,34) on the sportfisher, from 6 m as from 20. It looked as if their topsides took a third of the light the lobster boat's did.
+
+**How it was found.** Each lighting term of the three hulls was written to the frame in turn, at the same pixel of a side in shade, same sun and camera. A copy of `look.mjs` swapped each boat material's output for one term, its tone mapping and fog off: the direct and indirect diffuse and specular, the albedo, the emissive, metalness and roughness, the normal, the irradiance and the environment's.
+- **The lighting is right.** The red's indirect diffuse is (0.0445, 0.0113, 0.0132) on the sportfisher and (0.0478, 0.0113, 0.0128) on the console. The lobster boat's white beside it is (0.194, 0.226, 0.248). In the red channel that's 0.23 of the white's, the paint's own albedo ratio (0.227).
+  - Metalness is 0, roughness 0.23 to 0.29, the normals face out.
+  - The albedo after `color_fragment` is the paint.
+  - The bounce and the environment are the same on all three.
+  - Inverting three's ACES curve on the final pixels gives the same: the red's red channel 0.23 of the white's.
+- **Something was added after the shader.** Every term that should have been zero read sRGB (6,22,32), with the material's own fog and tone mapping off. Something outside the material put a dark navy over every boat pixel.
+- **The page behind the canvas.**
+  - `materials/SeenInWater.js` has every boat material write its height into the frame's alpha, for the sea to read on high: `( y + 4 ) / 10`, so about 0.45 at her waterline. Its note said "the frame's opaque, the canvas has none".
+  - But the stage makes the WebGL context with `alpha: true, premultipliedAlpha: true`, and the page behind the canvas is `#0b2a3c` (`style.css`), rgb(11, 42, 60).
+  - So the browser laid the page's navy over every boat's lower parts by one less her alpha: about 55% of (11,42,60) at her waterline, which is (6,23,33), the floor exactly. It's the same at any distance, because it's height, not air.
+  - On a white hull it's a blue cast. On barn red in shade, whose own light is about (20,1,1), the navy was most of what showed.
+  - Every boat and every tier had it, the boats at their berths too. It's been so since M16's `SeenInWater`.
+
+**The fix** (`App.opaqueFrame`, after the frame's drawn, the catch card's fish included): the canvas's alpha back to 1, an alpha-only clear (`colorMask` false, false, false, true), three's colour state handed back (`state.buffers.color.reset`). The sea on high still reads the boats' heights from its copy of the frame, taken mid-frame. The context's alpha isn't the game's to turn off: the stage (All the Spaces) makes it. No shader changed: the programs before ready are the same 16, to the character (dbd23fb against 53ffb1c), so no GPU limits changed either.
+
+**What it reads now** (`tools/looks/look.mjs` as above, 10:30, the bounce 0.3 and the environment twice over as before; sRGB medians of her topsides; `qa-output/looks/compare-veil/` has them beside the photographs):
+
+| | With the veil (6a0281d) | Now (dbd23fb) | The photographs |
+|---|---|---|---|
+| The lobster boat's white topsides, sun | (152,163,165) | (168,165,159) | the Viking's (228,227,219) |
+| Her topsides in shade | (93,108,118) | (81,85,91), 0.23 of sunlit | the Viking's (44,75,95), 0.09; *Bella*'s house (141,157,168), 0.43 |
+| Barn red, sun (sportfisher, console) | (58,26,36), (61,25,35) | (53,4,5), (31,2,2) | *Bella*'s side (52,15,22), her flare (97,36,43) |
+| Barn red, shade, 13 to 22 m | (26,24,34), (26,21,30) | (20,2,2), (21,1,1) | |
+| Barn red, shade, 6 m | (24,21,29), (26,22,31) | (19,1,1), (20,1,1) | |
+| The console's own navy, sun / shade | (7,45,83) / (7,29,56) | (1,23,52) / (1,7,24) | the Donzi's (12,37,84), the Competition's (24,37,56) |
+| The sportfisher's navy, sun / shade | (6,25,43) / (6,22,34) | (1,5,14) / (1,2,5) | |
+
+- **Barn red is plainly red in shade now**, and in the sun, at any distance. White in shade lost its blue cast: that was the page's navy too.
+- **The lighting on the paint was right all along.** In the scene's own light, before the tone curve, barn red in shade is 0.23 of the lobster boat's white in its red channel, its albedo ratio, and 0.084 of it in luminance.
+- **The bounce stays at 0.3.** With the veil gone, white in shade is 0.23 of sunlit, inside the photographs' tenth to two fifths. Swept again at 0.09, 0.16 and 0.3: lower leaves barn red in shade near black. The environment swept at 2, 4, 6 and 8 times moves a dark paint by a few levels at most (the sportfisher's red in shade (17,2,2) to (21,3,3)): the sky in the gloss isn't what the photographs' dark hulls have more of.
+
+## Dark paints and the tone curve: the user's call
+
+What's left between the renders and the photographs is the tone curve, not the light on the paint. Barn red and navy now read darker than the photographs:
+- barn red in shade is 0.021 of white in shade on the screen (luminance), where *Bella*'s is about 0.035 and the scene's own light 0.084;
+- the console's navy in sun is (1,23,52), the photographs' (12,37,84) and (24,37,56).
+
+The cause is three's ACES Filmic, the curve the whole game is drawn through (`App`: `ACESFilmicToneMapping`). Its toe takes dark values down about three times against mid-tones, and its matrices take a dark saturated colour's lesser channels to nothing. White barely moves.
+
+Worked from the probe's own scene light (`outgoingLight`, before the curve) at the day's exposure, through each curve, the options (sRGB; the renders' medians above sit a few levels off these, at other pixels):
+
+| | Barn red, shade | Barn red, sun | Navy, sun | Navy, shade | White, shade ÷ sun (at the probe's pixels) |
+|---|---|---|---|---|---|
+| **A. ACES Filmic, as now** | (22,3,5), 0.021 of white | (56,11,12) | (0,23,51) | (0,7,23) | 0.33 |
+| **B. Neutral (Khronos PBR Neutral, three's `NeutralToneMapping`)**, exposure ×1.38 so white in sun is the same | (44,1,6), 0.046 of white | (78,8,5) | (1,41,74) | (0,21,47) | 0.34 |
+| *The photographs* | *Bella* (52,15,22), about 0.035 | *Bella*'s flare (97,36,43) | (12,37,84), (24,37,56) | | 0.09 to 0.43 |
+
+- **A** keeps every other look as it was tuned: the sky, the sea, the sand, the night, the moon, the flare and the pool were all set beside photographs under ACES.
+- **B** is the more realistic for dark paint, by the photographs. But it changes the whole game's look: its highlights roll off from 0.76, and it keeps colours more saturated. Every look would want checking again beside its photographs, a pass of its own (and the ready A/B: the curve is in every program).
+- A boats-only lift of dark paints would make a dark boat differ from a dark rock in the same light. Not offered.
+
+This branch stays on A. B is for the user to choose, as its own piece of work.
 
 ## The flare
 
@@ -204,11 +259,16 @@ That 1% was the only slack, and what it has to cover isn't a share of the gap. I
 
 ## The checks
 
-- **`pnpm test`:** passes (58c32c8; 7 min 44 s at a load of 25 to 30, `test/flats.mjs`' timing included; the two commits after change no tested figure). `test/days-out-clock.mjs` has the helm's guard (above), and every boat test builds the boats through `loadBoat` with their shade.
+- **`pnpm test`:** passes (58c32c8; 7 min 44 s at a load of 25 to 30, `test/flats.mjs`' timing included; the two commits after change no tested figure). Passes again on dbd23fb, the frame's alpha (6 min 35 s). `test/days-out-clock.mjs` has the helm's guard (above), and every boat test builds the boats through `loadBoat` with their shade.
 - **The GPU limits** (`tools/gpu-limits.mjs`, high, mid and low one at a time, on ec3587b): high 165 shaders, all within, the sea 16 of 16 fragment textures and 185 vertex uniforms as before; mid 98 shaders, all within, the sea 14 of 16; low 85 shaders, all within, the village's wood 16 of 16 as before ("the flats' marks never came" in the time it waits, as on `m17-flats`). No texture was added anywhere. The fill is uniforms and a few lines in the boats' own materials, the environment's map is the one they read already, and the flare's and the pool's programs have one texture or none. The sea's shader isn't touched: the flare's light on it is a local light, which it already takes.
-- **The programs built before ready** (`tools/heap/programs.mjs`, `tools/wakes/ready-sources.mjs`, phone upright on low, builds of 53ffb1c and 58c32c8): the same 16 by name and number, and all 16 the same to the character. The two commits after (b605bd6, ec3587b) change a uniform's value and the flare's canvas, neither in a program's source.
+- **The programs built before ready** (`tools/heap/programs.mjs`, `tools/wakes/ready-sources.mjs`, phone upright on low, builds of 53ffb1c and 58c32c8): the same 16 by name and number, and all 16 the same to the character. The two commits after (b605bd6, ec3587b) change a uniform's value and the flare's canvas, neither in a program's source. dbd23fb, the frame's alpha, against 53ffb1c again: the same 16, to the character.
   - Nothing here is drawn before ready on a CPU: the boats are held to after the start, and the flare, the pool and the card's fish come after it.
   - On a GPU the boat you start in, the kayak, builds in the loading frame with the fill's few lines in her hull.
+- **The complete check on a clean copy of dbd23fb**, the frame's alpha (`cli.ts check`): passes, no warning.
+  - Script memory 138.0 MB of 150, on the tablet; 127.4 on the phone upright, 119.4 on its side, 129.6 on the laptop.
+  - Whole download 78.3 MB of 80; 7.1 MB before it's ready.
+  - 80 draw calls, 231,905 triangles, textures 74.9 MB, graphics memory 112.8 MB, 14 sounds at once.
+  - Ready in 4.6, 4.5, 5.6 and 4.5 s on the four screens. It started at a load of 3.2 and ended at 12.0, so the times are for the M17 session's quiet runs to judge.
 - **The complete check on a clean copy** (b605bd6, `cli.ts check`; ec3587b after it changes only the flare's canvas, which the check never fires): passes, every screen played to the hurricane's dawn.
   - Script memory 143.5 MB of 150, on the phone on its side; 112.0 upright, 141.6 on the tablet, 134.3 on the laptop. `m17-flats`' last two read 142.7 and 142.3, and a run swings 20 MB.
   - Whole download 78.3 MB of 80; 7.1 MB before it's ready.
@@ -229,6 +289,7 @@ What might move them:
 - The moored boats' program changed with them (`mooredBoat|groundBounce`), built after the start.
 - The flare is a sprite (a program three already has, the glares') and one local light while it burns.
 - The pool's material is new (not tone-mapped), built the first time her lights come on.
+- `App.opaqueFrame`: one alpha-only clear of the whole screen each frame, after it's drawn. On the CPU that's a pass over every pixel. On a phone's GPU it should fall within the frame's own pass, but that isn't measured.
 
 ## Not verified
 

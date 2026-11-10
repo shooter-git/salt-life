@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // (M17 step 4) The looks beside the photographs they're set after (docs/m17/looks.md): tools/looks/look.mjs' renders, before and
 // after, side by side with photographs hot-linked from where they're published (not kept), one picture a look, into <out>/.
-//   node tools/looks/compare.mjs <before dir> <after dir> <out> [looks]     (the dirs: look.mjs' <out>/<tier>; ALL_THE_SPACES)
+//   node tools/looks/compare.mjs <before dir> <after dir> <out> [looks]     (the dirs: look.mjs' <out>/<tier>; ALL_THE_SPACES;
+//   BEFORE_LABEL, AFTER_LABEL: the columns' names, 53ffb1c and this branch by default)
 
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -47,7 +48,7 @@ for ( const [ name, L ] of Object.entries( LOOKS ) ) {
 	const photos = L.photos.map( ( k ) => `<figure><img src="${ PHOTO[ k ][ 0 ] }"><figcaption>${ PHOTO[ k ][ 1 ] }</figcaption></figure>` ).join( '' );
 	await page.setContent( `<style>body{margin:8px;background:#1d1f22;color:#ddd;font:13px sans-serif}table{border-collapse:collapse}th{font-weight:normal;text-align:left;width:140px;vertical-align:top}td img{width:560px;display:block}td{padding:2px}.none{width:560px;height:60px;color:#777}
 		.photos{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}figure{margin:0;width:420px}figure img{width:100%}h2{margin:4px 0}</style>
-		<h2>${ name }: before (53ffb1c) · after</h2><table>${ rows }</table><div class="photos">${ photos }</div>` );
+		<h2>${ name }: ${ process.env.BEFORE_LABEL || 'before (53ffb1c)' } · ${ process.env.AFTER_LABEL || 'after' }</h2><table>${ rows }</table><div class="photos">${ photos }</div>` );
 	await page.waitForLoadState( 'networkidle' ).catch( () => {} );
 	await page.waitForTimeout( 1500 );
 	await page.screenshot( { path: join( OUT, name + '.png' ), fullPage: true } );
