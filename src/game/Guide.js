@@ -666,7 +666,7 @@ export class Guide {
 		if ( s.chart.names.size > NAMES.filter( ( n ) => n.known ).length ) this.tip( 'chart' );
 		// ((M15) the radio, the first time you're well out at the helm; and past the far grounds, the soft edge)
 		// ((M16) on a boat with a set to hear it on, and at a helm: R is a kayak's rod)
-		if ( p.mode === 'boat' && ! p.riding && s.stats.vhfM > 0 && ! app.boatCtl.model.seated && Math.hypot( cam.x, cam.z + 320 ) > 2000 ) this.tip( 'radio' );
+		if ( p.mode === 'boat' && ! p.riding && s.stats.vhfH > 0 && ! app.boatCtl.model.seated && Math.hypot( cam.x, cam.z + 320 ) > 2000 ) this.tip( 'radio' );
 		if ( edgeAt( cam.x, cam.z ) > 0.15 ) this.tip( 'edge' );
 		// ((M16) days out: the sea more than she likes; the catch going soft; bunks to sleep in)
 		if ( g.daysOut.aboard && g.daysOut.strain >= 0.6 ) this.tip( 'stand' );

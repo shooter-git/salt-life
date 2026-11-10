@@ -236,7 +236,7 @@ const check = ( ok, what ) => {
 	const player = { mode: 'boat', riding: false, helmHeld: false };
 	const app = { player, audio: { muted: false, volume: 0.8 }, settings: { day: 5, timeOfDay: 10, weatherSince: 0 }, weather: { news: null }, input: { lastDevice: 'keyboard' }, weatherPick: () => 'fair' };
 	const job = { metres: 9700, fee: 505, time: towTime( 9700 ) };
-	const game = { app, state: { boat: 'lobster', money: 900, fuelL: 0, stats: { vhfM: 37000 } }, daysOut: { distress: () => [], saidHere: () => '' }, weatherNow: { wind: 7 }, hud: null, makingRoom: false, towJob: () => game.job, job, tow: ( aboard ) => { towed += aboard ? 1 : 100; } };
+	const game = { app, state: { boat: 'lobster', money: 900, fuelL: 0, stats: { vhfH: 3.66 } }, daysOut: { distress: () => [], saidHere: () => '' }, weatherNow: { wind: 7 }, hud: null, makingRoom: false, towJob: () => game.job, job, tow: ( aboard ) => { towed += aboard ? 1 : 100; } };
 	const r = new Radio( { root: el(), hud: el() }, game );
 	const keys = ( ...down ) => ( { hit: ( k ) => down.includes( k ), lastDevice: 'keyboard' } );
 	r.update( 0.1, keys( 'KeyR' ), false );
@@ -322,12 +322,12 @@ const check = ( ok, what ) => {
 	game.towJob = () => job;
 	game.keyName = ( k ) => k;
 	game.state.boat = 'kayak';
-	game.state.stats = { vhfM: 0 };
+	game.state.stats = { vhfH: 0 };
 	player.boat = { model: { seated: true } };
 	player.prompt = { key: 'E', text: 'Over the side' };
 	r.update( 0.1, keys( 'KeyC' ), false );
 	check( ! r.open && r.offer === null && player.prompt.text === 'Over the side', 'nothing to get out: no panel, nothing offered' );
-	game.state.stats = { vhfM: 0, flares: true, epirb: true };
+	game.state.stats = { vhfH: 0, flares: true, epirb: true };
 	game.daysOut.distress = () => [ { id: 'flare', name: 'Fire a flare', say: '', can: true, fee: 100 }, { id: 'epirb', name: 'Set off the EPIRB', say: '', can: true, fee: 100 } ];
 	r.update( 0.1, keys(), false );
 	check( r.offer === 'flares' && / {3}C {2}flares$/.test( player.prompt.text ), 'flares and no set: offered as flares' );
@@ -344,7 +344,7 @@ const check = ( ok, what ) => {
 	r.update( 0.1, keys( 'ArrowRight' ), false );
 	r.update( 0.1, keys( 'Enter' ), false );
 	check( fired[ 0 ] === 'epirb' && ! r.open && ! player.helmHeld, 'and fires what\'s picked' );
-	game.state.stats = { vhfM: 9260 };
+	game.state.stats = { vhfH: 1 };
 	game.daysOut.distress = () => [];
 	game.state.fuelL = 0;
 	r.update( 0.1, keys(), false );

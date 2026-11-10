@@ -7,7 +7,7 @@ import { lastHurricane, categoryOf, weatherAt, towardOf } from './Weather.js';
 // under Node; TrapWork.js does it all at the rail, world/boat/TrapModel.js draws it. Sources: docs/m16/traps.md.
 //   bottomAt( { depth, reefDist, windReef, patch, sand, grass, creek, onMap } ) -> a BOTTOMS id
 //   whyNot( { depth, bottom, speed, dock } ) -> null, or why one can't be set here
-//   soakOf( trap, T, now ) -> { hours, days, nights }    meanCatch( q, soak, baited )    haulOf( trap, q, sizeCm, T, now ) -> what comes up
+//   soakOf( trap, T, now ) -> { hours, days, nights }    grown( nights )    meanCatch( q, soak, baited )    haulOf( trap, q, sizeCm, T, now ) -> what comes up
 //   (M17) BAIT, baitSaid( trap, soak ), buyBait( traps, money ) -> what it cost: trap bait, Marta's, used up in a soak
 //   settle( traps, T, env ) -> [ what the hurricanes did ]    trapsTold( events ) -> Marta's paragraphs
 //   newTraps()  cleanTraps( raw )  ownedTraps( upgrades )  aboardTraps( traps, upgrades )
@@ -19,7 +19,9 @@ export const WARP_M = 36.6;
 export const SHALLOW_M = 1.5;
 export const SET_SPEED = 1.6;
 export const HAUL_SPEED = 2.4;
-// what a hydraulic hauler brings a warp in at (m/s: about 240 ft a minute)
+// what a hydraulic hauler brings a warp in at (m/s: 236 ft a minute). (M17) Within what makers give for theirs, not measured on a
+// lobster boat (none found): Hydro-Slave's 10 in hanging hauler about 166 ft a minute, Mustad's line haulers up to 425 and 500,
+// Marco's crab hauler 600; a small boat's pump would put hers at 150 to 250 (docs/m17/figures.md)
 export const HAULER_MS = 1.2;
 // what Marta asks for a trap to replace one lost, with its warp and buoy
 export const TRAP_PRICE = 70;
@@ -65,10 +67,17 @@ export function whyNot( { depth, bottom, speed = 0, dock = Infinity } ) {
 
 // ---- the soak: catch rises with it at a decreasing rate, and with a long one may peak and fall as the bait goes and
 // they find the way out (Austin's fit to Florida's traps). A spiny lobster forages by night and shelters by day, so
-// it's the nights that count. most: lobsters in a trap on the best bottom, soaked till the bait draws no more: from
+// it's the nights that count. most: lobsters in a trap on the best bottom soaked `full` nights, the fishery's two weeks: from
 // Florida's 24 kg a trap a season in 1969-70, when there were few traps, in about 14 hauls, at 0.7 kg, 55% legal: 3.6 a
-// haul. tau: nights to come to 63% of it. After `fade` days the trap's fishing out, toward `floor` of it
-export const SOAK = { most: 3.6, tau: 3, fade: 14, fadeTau: 14, floor: 0.4, nightFrom: 19.5, nightH: 10 };
+// haul. (M17) How it comes to that: Austin's own fit (Fishery Bulletin 75: 213, 1977) to Robinson and Dimitriou's 1963 Florida
+// traps, catch a trap-day 2.94 B^-0.90 over a B-day soak (R^2 0.86), so a haul's catch goes as B^0.10: of the two weeks' catch,
+// (n / 14)^0.1, 77% after the first night, 86% after three, 93% after a week (`grown`). Within the first night it comes in
+// as the night goes. M16's 1 - e^(-n / 3) had 29%, 64% and 91% (docs/m17/figures.md). After `fade` days the trap's fishing
+// out, toward `floor` of it (a long soak fishing worse: the 2024 video study of Florida's traps; the floor and the fade's
+// time are judgement)
+export const SOAK = { most: 3.6, full: 14, power: 0.1, fade: 14, fadeTau: 14, floor: 0.4, nightFrom: 19.5, nightH: 10 };
+// of the `full` soak's catch after n nights
+export const grown = ( n ) => ( n <= 0 ? 0 : n < 1 ? n * Math.pow( 1 / SOAK.full, SOAK.power ) : Math.min( 1, Math.pow( n / SOAK.full, SOAK.power ) ) );
 
 // the island's hours from T0 to T1 that were night, in nights
 export function nightsIn( T0, T1 ) {
@@ -108,7 +117,6 @@ export const BAIT = { bare: 0.35, nights: 5, per: 4, price: 8 };
 export function meanCatch( q, { days, nights }, baited = true ) {
 
 	const fade = days <= SOAK.fade ? 1 : SOAK.floor + ( 1 - SOAK.floor ) * Math.exp( - ( days - SOAK.fade ) / SOAK.fadeTau );
-	const grown = ( n ) => 1 - Math.exp( - n / SOAK.tau );
 	const drawn = BAIT.bare * grown( nights ) + ( baited ? ( 1 - BAIT.bare ) * grown( Math.min( nights, BAIT.nights ) ) : 0 );
 	return SOAK.most * q * drawn * fade;
 

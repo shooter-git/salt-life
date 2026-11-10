@@ -5,10 +5,10 @@ import { awayOf, tellOf, ISLE, FOUND_M } from './Away.js';
 import { awayTowFee, TOW } from './Gear.js';
 import { restTo, timeText, REST, NIGHT_X } from './IslandClock.js';
 import { islandTime, towardOf, weatherHere, hurricaneNews } from './Weather.js';
-import { FT, feet, farOff, pounds, knots } from './Units.js';
+import { FT, feet, farOff, pounds, knots, gallons } from './Units.js';
 import { FLEET } from './fleet/Fleet.js';
 import { berthOf } from './fleet/Berths.js';
-import { ableOf, ableEnv, awashLs, seaHere, fetchAt, strainOf, windOn, slamK, keepCatch, feedOf, strengthOf, meltKgH, GENERATOR_LH, CHILL_KG, ICE_BAG_KG, ICE_BAG_PRICE, STORES_PRICE, LUNCH_H, DRY_H, FRESH_H, FLARES, FLARE_M, EPIRB_S, PASSING_H } from './Seaworthy.js';
+import { ableOf, ableEnv, awashLs, seaHere, fetchAt, strainOf, windOn, slamK, keepCatch, feedOf, strengthOf, meltKgH, GENERATOR_LH, CHILL_KG, ICE_BAG_KG, ICE_BAG_PRICE, STORES_PRICE, STORES_WATER_L, LUNCH_H, DRY_H, FRESH_H, FLARES, FLARE_M, EPIRB_S, PASSING_H, reachTo } from './Seaworthy.js';
 
 // (M16) Days out, and what each boat can stand: ice and the catch keeping, stores, sleeping aboard, flares and the EPIRB,
 // the drift sock, the deep finder's screen. The figures are Seaworthy.js'. Game makes one and calls update each frame; what
@@ -43,8 +43,11 @@ const FLARE = { rise: 28, up: 120, burn: 8 };
 // growing as the cube root of its light up close), and the least it's drawn (CSS px): a point that's the brightest thing in
 // view, never tone-mapped down with the scene. Its light on the water and what's about it (LocalLights): its red, as a full
 // moon's light is drawn against its lux (the cube root: a full moon high, 0.244 lux, is the key light's 0.25), at the
-// water under it from the top of its climb
-const FLARE_SEEN = { cd: 16000, eyeLux: 2e-7, brightNight: 2000, brightDay: 250, glare: 0.003, glareAt: 1500, px: 12, pxDay: 8, light: 4000, range: 500 };
+// water under it from the top of its climb. ((M17, the figures: docs/m17/figures.md) By day a faint red point is lost against the
+// bright sky on a screen, so at its reach, the eye's least, it's drawn at `dayLeast`, what one needs over a clear day's sky to be
+// picked out as red (tools/looks/look.mjs: 0.38 at 11:00), rising from there with the log of its light, and gone over the last
+// `dayEdge` of its reach: so it's seen in the look as far as the seen test has it seen. By night it shows faint against the dark)
+const FLARE_SEEN = { cd: 16000, eyeLux: 2e-7, brightNight: 2000, brightDay: 250, dayLeast: 0.4, dayEdge: 0.05, glare: 0.003, glareAt: 1500, px: 12, pxDay: 8, light: 4000, range: 500 };
 const FLARE_RED = [ 1.0, 0.08, 0.03 ];
 const NEAREST = 11000; // (drawn no further than this along its line of sight: the far plane's 12 km)
 const _px = new Vector2();
@@ -504,7 +507,7 @@ export class DaysOut {
 		const boat = BOATS[ st.boat ].name.toLowerCase();
 		const ice = `<div class="gm-shop-row"><span>Ice · $${ ICE_BAG_PRICE } a 10 lb bag<small>${ box.ice > 0 ? `${ pounds( box.ice ) } lb in the box, about ${ Math.max( 1, Math.round( hrs ) ) } hours of it` : 'None in the box: the catch keeps about 12 hours without it' }</small></span><button class="gm-btn" data-ice ${ st.money < ICE_BAG_PRICE || room < ICE_BAG_KG ? 'disabled' : '' }>${ room < ICE_BAG_KG ? 'No room' : `Bag · $${ ICE_BAG_PRICE }` }</button></div>`;
 		const full = box.stores >= A.storesDays - 0.01;
-		const stores = `<div class="gm-shop-row"><span>Food and water · $${ STORES_PRICE } a day<small>${ box.stores >= 0.05 ? `${ box.stores.toFixed( 1 ) } of ${ A.storesDays } days aboard` : `For staying out past a day · her lockers hold ${ A.storesDays } day${ A.storesDays === 1 ? '' : 's' }` }</small></span>${ full ? '<span class="gm-have">Full</span>' : `<button class="gm-btn" data-stores ${ st.money < STORES_PRICE ? 'disabled' : '' }>A day · $${ STORES_PRICE }</button>` }</div>`;
+		const stores = `<div class="gm-shop-row"><span>Food and water · $${ STORES_PRICE } a day<small>${ box.stores >= 0.05 ? `${ box.stores.toFixed( 1 ) } of ${ A.storesDays } days aboard` : `A day's food and ${ gallons( STORES_WATER_L ) } gallons of water, for staying out past a day · her lockers hold ${ A.storesDays } day${ A.storesDays === 1 ? '' : 's' }` }</small></span>${ full ? '<span class="gm-have">Full</span>' : `<button class="gm-btn" data-stores ${ st.money < STORES_PRICE ? 'disabled' : '' }>A day · $${ STORES_PRICE }</button>` }</div>`;
 		const stands = `<div class="gm-shop-row"><span>What your ${ boat } can stand<small>${ A.waters }</small></span></div>`;
 		return stands + ice + stores;
 
@@ -626,7 +629,7 @@ export class DaysOut {
 
 		const b = this.app.boatCtl, st = this.state, s = st.stats, why = this.aboard ? this.trouble() : null;
 		const dock = berthOf( this.state.boat ).position, metres = Math.hypot( b.position.x - dock.x, b.position.z - dock.z );
-		const canCall = ( s.vhfM >= metres ) || s.epirb || ( s.flares && st.days.flares > 0 );
+		const canCall = ( reachTo( s ) >= metres ) || s.epirb || ( s.flares && st.days.flares > 0 );
 		if ( ! why || canCall ) {
 
 			this._stranded = 0;
@@ -791,7 +794,9 @@ export class DaysOut {
 		// (the air's ln T a metre: the eye's least at night's reach)
 		const lnT = Math.log( S.eyeLux * reachN * reachN / S.cd ) / reachN, lnE = ( m ) => Math.log( S.cd ) + lnT * m - 2 * Math.log( Math.max( 1, m ) );
 		const seen = ( reach, bright ) => Math.min( 1, Math.max( 0, ( lnE( reach ) - lnE( d ) ) / ( lnE( reach ) - lnE( Math.min( bright, reach * 0.5 ) ) ) ) );
-		return seen( reachD, S.brightDay ) + ( seen( reachN, S.brightNight ) - seen( reachD, S.brightDay ) ) * night;
+		// ((M17) by day from dayLeast at its reach, gone over its last dayEdge)
+		const day = d >= reachD ? 0 : ( S.dayLeast + ( 1 - S.dayLeast ) * seen( reachD, S.brightDay ) ) * Math.min( 1, ( reachD - d ) / ( S.dayEdge * reachD ) );
+		return day + ( seen( reachN, S.brightNight ) - day ) * night;
 
 	}
 

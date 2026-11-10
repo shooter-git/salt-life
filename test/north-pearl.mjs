@@ -320,7 +320,7 @@ const terrains = [ 'island-1024.bin', 'island.bin' ].map( ( f ) => [ f, new Terr
 
 	const money = { v: 1000 };
 	const state = {
-		boat: 'lobster', stats: { fuelL: 40 }, fuel: 0, get fuelL() { return this.fuel === null ? this.stats.fuelL : this.fuel; }, saved: 0, emit() {}, save() { this.saved ++; },
+		boat: 'lobster', stats: { fuelL: 40, vhfH: 3.66 }, fuel: 0, get fuelL() { return this.fuel === null ? this.stats.fuelL : this.fuel; }, saved: 0, emit() {}, save() { this.saved ++; },
 		get money() { return money.v; }, set money( v ) { money.v = v; },
 		payTow( fee ) { const p = Math.min( fee, money.v ); money.v -= p; return p; },
 	};
@@ -403,7 +403,7 @@ const terrains = [ 'island-1024.bin', 'island.bin' ].map( ( f ) => [ f, new Terr
 	player.leaveHelm = () => { player.mode = 'deck'; };
 	player.deckToWorld = () => {};
 	const app = { player, boatCtl: b, audio: { muted: false, volume: 0.8 }, settings: { day: 3, timeOfDay: 10, weatherSince: 0 }, weather: { news: null }, input: { lastDevice: 'keyboard' }, weatherPick: () => 'fair', terrainData: terrains[ 0 ][ 1 ] };
-	const state = { boat: 'lobster', stats: { fuelL: 40, vhfM: 40000 }, fuel: 0, get fuelL() { return this.fuel; }, money: 2000, payTow( f ) { const p = Math.min( f, this.money ); this.money -= p; return p; }, save() {}, emit() {} };
+	const state = { boat: 'lobster', stats: { fuelL: 40, vhfH: 3.66 }, fuel: 0, get fuelL() { return this.fuel; }, money: 2000, payTow( f ) { const p = Math.min( f, this.money ); this.money -= p; return p; }, save() {}, emit() {} };
 	let towed = 0;
 	const game = { app, state, daysOut: { distress: () => [], saidHere: () => '' }, weatherNow: { wind: 7 }, hud: null, makingRoom: false, windwardAt: () => 0.9, toast() {}, towJob: () => ( { metres: 9700, fee: towFee( 9700 ), time: towTime( 9700 ) } ), tow: () => { towed ++; } };
 	const r = new Radio( { root: el(), hud: el() }, game );
@@ -426,12 +426,14 @@ const terrains = [ 'island-1024.bin', 'island.bin' ].map( ( f ) => [ f, new Terr
 	check( r.call && r.call.who === 'pearl' && /To her jetty/.test( r.panel.innerHTML ), 'Pearl answers on her row' );
 	{
 
-		// (past the set's reach: static, as Marta's)
-		const reach = state.stats.vhfM;
-		state.stats.vhfM = 500;
+		// (past the set's reach: static, as Marta's. (M17) The lobster boat's whip reaches Pearl's on her shed about 19.9 km)
+		const z = pos.z;
+		pos.z = - 23000;
 		const out = pearlCall( game );
 		check( ! out.can && /static/.test( out.say ) && /past your set's reach/.test( out.say ), `past her set's reach Pearl's no answer: "${ out.say }"` );
-		state.stats.vhfM = reach;
+		pos.z = - 20000;
+		check( pearlCall( game ).can, '19 km off her jetty she still hears you' );
+		pos.z = z;
 
 	}
 

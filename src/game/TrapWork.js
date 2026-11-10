@@ -675,7 +675,7 @@ export class TrapWork {
 		}
 
 		const unbaited = trap.bait === false ? ' · no bait in it: it\'ll fish about a third as well. Marta sells it' : '';
-		game.toast( `${ mark ? `Trap ${ mark.id } on your chart · ${ this.traps.set.length } set, leave it a few nights` : 'Your chart has no room for its mark: note where it is' }${ unbaited }`, 3600 + ( unbaited ? 1400 : 0 ) );
+		game.toast( `${ mark ? `Trap ${ mark.id } on your chart · ${ this.traps.set.length } set, leave it overnight: the first night brings most of it` : 'Your chart has no room for its mark: note where it is' }${ unbaited }`, 3600 + ( unbaited ? 1400 : 0 ) );
 
 	}
 

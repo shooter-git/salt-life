@@ -46,7 +46,8 @@ const SHOTS = {
 	],
 	flare: [
 		...[ 100, 300, 2000, 8000 ].map( ( m ) => ( { name: `flare-night-${ m }`, boat: 'console', paint: null, at: 'sea', hour: 22.5, cam: 'west', flare: m } ) ),
-		...[ 300, 1500, 3000 ].map( ( m ) => ( { name: `flare-day-${ m }`, boat: 'console', paint: null, at: 'sea', hour: 11, cam: 'west', flare: m } ) ),
+		// ((M17) the figures: by day to 2.8 km, Seaworthy.FLARE_M: inside it near its edge, and past it)
+		...[ 300, 1500, 2000, 2500, 3000 ].map( ( m ) => ( { name: `flare-day-${ m }`, boat: 'console', paint: null, at: 'sea', hour: 11, cam: 'west', flare: m } ) ),
 	],
 };
 const shots = GROUPS.split( ',' ).flatMap( ( g ) => SHOTS[ g ] || [] );
