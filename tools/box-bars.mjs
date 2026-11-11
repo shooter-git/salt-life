@@ -7,6 +7,7 @@
 //
 //   dev server up, then   node tools/box-bars.mjs <dir for the pictures> [port, 5189] [screens, comma separated]
 //   CASES=icebox,cooler node tools/box-bars.mjs ...      (ALL_THE_SPACES: its checkout, if it isn't ../all-the-spaces)
+//   CASES=rod,rodfish MONEY=1234567 node tools/box-bars.mjs ... phone-390,side-844   (the purse's size, with the rod out)
 
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -22,12 +23,14 @@ const SCREENS = [ [ 'phone-390', 390, 844, true, 'touch' ], [ 'side-844', 844, 3
 const CASES = ( process.env.CASES || 'icebox,icemaker,cooler,riding' ).split( ',' );
 const browser = await chromium.launch( { args: [ '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist' ] } );
 
-// in the page: the case staged
-const STAGE = async ( tag ) => {
+// in the page: the case staged ((purse) rod, rodfish: sat in the kayak with the rod out, as tools/ui-fit.mjs has the HUD in
+// play, her soft bag empty or with three fish and some ice; MONEY: your money, 12345 unless it's given)
+const STAGE = async ( [ tag, money ] ) => {
 
 	const a = window.__app, g = a.game, s = g.state, p = a.player, d = g.daysOut;
 	delete d.her; // (the riding case's stand-in, gone)
-	s.money = 12345;
+	s.money = money;
+	g.rod.equip( tag === 'rod' || tag === 'rodfish' );
 	const ashore = () => {
 
 		if ( p.mode === 'boat' && p.leaveHelm ) p.leaveHelm();
@@ -87,6 +90,14 @@ const STAGE = async ( tag ) => {
 		Object.defineProperty( d, 'her', { configurable: true, get: () => her } );
 		fish( [ [ 'mahi', 8 ] ] );
 
+	} else if ( tag === 'rod' || tag === 'rodfish' ) {
+
+		await take( 'kayak' );
+		s.upgrades.kayakCrate = 0;
+		g.applyGear();
+		fish( tag === 'rod' ? [] : [ [ 'graySnapper', 2.2 ], [ 'graySnapper', 2.0 ], [ 'yellowtail', 1.4 ] ] );
+		d.box.ice = tag === 'rod' ? 0 : 2;
+
 	}
 
 	s.emit();
@@ -103,7 +114,10 @@ const LOOK = () => {
 	const purse = document.querySelector( '.gm-purse' ), money = document.querySelector( '.gm-money' );
 	const shown = ( e ) => e && getComputedStyle( e ).display !== 'none' && e.getBoundingClientRect().width > 0;
 	const gauges = [ ...purse.querySelectorAll( '.gm-cooler, .gm-gauge, .gm-hold, .gm-ice' ) ].filter( shown ).map( ( e ) => `${ e.className.replace( /gm-gauge |is-on ?/g, '' ).trim() }: ${ e.textContent.trim().replace( /\s+/g, ' ' ) }${ e.classList.contains( 'is-full' ) || e.classList.contains( 'is-low' ) ? ' [coral]' : '' } ${ JSON.stringify( r( e ) ) }` );
-	return { purse: r( purse ), money: r( money ), gauges };
+	// (to a tenth of a pixel: the purse, the clock and the money in it, where it says it ends (--gm-band) and the map under it)
+	const f = ( e ) => { if ( ! e ) return null; const q = e.getBoundingClientRect(); return { x: +q.left.toFixed( 1 ), y: +q.top.toFixed( 1 ), w: +q.width.toFixed( 1 ), h: +q.height.toFixed( 1 ) }; };
+	const exact = { purse: f( purse ), clock: f( purse.querySelector( '.gm-clock' ) ), money: f( money ), band: document.documentElement.style.getPropertyValue( '--gm-band' ), map: f( document.querySelector( '.gm-map' ) ) };
+	return { purse: r( purse ), money: r( money ), gauges, exact };
 
 };
 
@@ -128,11 +142,14 @@ for ( const [ name, w, h, touch, device ] of SCREENS ) {
 	console.log( `\n== ${ name } ${ w }x${ h } ${ device }` );
 	for ( const tag of CASES ) {
 
-		const box = await page.evaluate( STAGE, tag ).catch( ( e ) => ( { error: e.message.slice( 0, 300 ) } ) );
+		const box = await page.evaluate( STAGE, [ tag, Number( process.env.MONEY || 12345 ) ] ).catch( ( e ) => ( { error: e.message.slice( 0, 300 ) } ) );
 		await page.evaluate( ( device ) => { const a = window.__app; if ( device !== 'touch' ) a.input.lastDevice = device; if ( a.game.guide.open ) a.game.guide.close(); }, device );
 		await page.waitForTimeout( 2500 );
+		// (the rod out: its bait's chip in the purse comes a few frames on)
+		if ( tag.startsWith( 'rod' ) ) await page.waitForFunction( () => document.querySelector( '.gm-bait.is-on' ), null, { timeout: 60000, polling: 250 } ).catch( () => console.log( '  (no bait chip came up)' ) );
+		await page.waitForTimeout( 500 );
 		const look = await page.evaluate( LOOK );
-		console.log( `  ${ tag.padEnd( 9 ) } ${ JSON.stringify( box ) }\n    purse ${ JSON.stringify( look.purse ) } money ${ JSON.stringify( look.money ) }\n    ${ look.gauges.join( '\n    ' ) }` );
+		console.log( `  ${ tag.padEnd( 9 ) } ${ JSON.stringify( box ) }\n    purse ${ JSON.stringify( look.purse ) } money ${ JSON.stringify( look.money ) }\n    ${ look.gauges.join( '\n    ' ) }\n    exact ${ JSON.stringify( look.exact ) }` );
 		const top = Math.min( h, Math.max( 140, ( look.purse ? look.purse[ 3 ] : 100 ) + 24 ) );
 		await page.screenshot( { path: `${ out }/${ name }-${ tag }-top.png`, clip: { x: 0, y: 0, width: w, height: top }, timeout: 90000 } ).catch( () => console.log( 'shot failed', name, tag ) );
 		await page.evaluate( () => { const H = window.__app.game.hud; H.toggleInventory( true ); H.showTab( 'fish' ); } );
