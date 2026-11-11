@@ -103,6 +103,9 @@ if ( PART === 'chair' ) {
 	const owner = await G.open( 'Robin', 'sportfisher', 20 ), guest = await G.open( 'Sam', 'lobster', 20 );
 	await ready( owner, guest );
 	await G.buy( owner );
+	// ((M17) and her tackle as a boat with a fighting chair has it, her best reel and line: on her first, the lines at their
+	// labels since M17, the 30 kg yellowfin had her 180 m or her 8 lb before the slow game's E had him in the chair)
+	await owner.game.evaluate( async () => { const { UPGRADES } = await import( '/src/game/Gear.js' ); const g = window.__app.game, u = g.state.upgrades; u.reel = UPGRADES.reel.levels.length - 1; u.line = UPGRADES.line.levels.length - 1; g.applyGear(); } );
 	say( await G.aboard( owner, guest ), 'Sam\'s aboard the sportfisher' );
 	// (beside it, where M16's nearness had him in it: within its station's reach)
 	await guest.game.evaluate( () => { const p = window.__app.player, S = p.boat.model.stations.chair; p.deckPos.set( S.x + 0.45, S.y, S.z ); p.deckVel.set( 0, 0, 0 ); } );
