@@ -3,25 +3,35 @@ import { HOURS, shutFor } from './Orders.js';
 import { CONDITIONS, PICK_IDS, SOUTHERLY, WEATHER_NAMES, MURKY, sideText, islandTime, forecast, surfText, swellFrom, windFrom } from './Weather.js';
 import { G } from '../core/Globals.js';
 import { knots } from './Units.js';
+import { moonFace, moonIcon, tideMarker, tideMoon, WHAT_THEY_DO } from './TideMoon.js';
 
 // (Salt Life) The island's clock in the HUD: the time at the left of the purse (a sun by day, a moon at
-// night, two bars while it's held), and, when it's tapped (T; R3 on a gamepad), a small menu under the
-// purse:
+// night, two bars while it's held; (after M17) the moon at its real phase and tilt, dimmed while it's down,
+// and under the time the tide: rising or falling and its next turn, or slack water near one: TideMoon),
+// and, when it's tapped (T; R3 on a gamepad), a small menu under the purse:
 //   on your own   hold the clock or let it run, rest until dawn, noon, dusk or night
 //   in company    time runs for everyone; a rest happens once all of you want it (each choice shows
 //                 who wants it; a dot on the clock when someone else does and you haven't said)
 // It says when Joe and Marta open or shut (M9: or that they've shut for the weather), and (Salt Life) the
 // weather: what it is (M9: and its rain), what's coming, and a choice of it (in company, for everyone
-// here: Together.setWeather). No toasts: a rest dims the world for a moment instead.
+// here: Together.setWeather); (after M17) and the tide and the moon: the tide now and what it and the moon are
+// doing in the game just now, and behind their own buttons the day's tides and springs or neaps, the moon and
+// tonight, what they do in the game, and what the clock's new marks mean.
+// No toasts: a rest dims the world for a moment instead.
 //   const t = new TimeHUD( game, purse, root );  t.update( dt )  (per frame)  t.toggle( open? )
 //   wxWind( weather ) -> 'NNW' (where it's from)   wxRain( weather ) -> 'rain' ('' dry, or the name says it)
 //   (M13) wxNews( news, weather, T, locale ) -> 'Hurricane warning: its winds from 03:00 tomorrow' ('' none)
 
 const ICON = {
 	sun: '<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="3" fill="currentColor"/><g stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M8 1.5v1.6M8 12.9v1.6M1.5 8h1.6M12.9 8h1.6M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M3.4 12.6l1.1-1.1M11.5 4.5l1.1-1.1"/></g></svg>',
-	moon: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M10.6 2.3a5.9 5.9 0 1 0 3.1 9.2A4.9 4.9 0 0 1 10.6 2.3z" fill="currentColor"/></svg>',
 	held: '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="4" y="3" width="2.6" height="10" rx="1" fill="currentColor"/><rect x="9.4" y="3" width="2.6" height="10" rx="1" fill="currentColor"/></svg>',
 	play: '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 3.2v9.6L12.6 8z" fill="currentColor"/></svg>',
+};
+// (after M17) the tide's marks by the time: rising, falling, and slack water (still water's two level lines)
+const TIDE_ICON = {
+	up: '<svg viewBox="0 0 8 8" aria-hidden="true"><path d="M4 1 7.4 6.8H.6z" fill="currentColor"/></svg>',
+	down: '<svg viewBox="0 0 8 8" aria-hidden="true"><path d="M4 7 .6 1.2h6.8z" fill="currentColor"/></svg>',
+	slack: '<svg viewBox="0 0 8 8" aria-hidden="true"><path d="M.9 2.7h6.2M.9 5.3h6.2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" fill="none"/></svg>',
 };
 
 const CSS = /* css */`
@@ -33,7 +43,16 @@ const CSS = /* css */`
 .gm-clock:hover, .gm-clock.is-open { color: var(--tw-ink); }
 .gm-clock:hover .gm-clock-face, .gm-clock.is-open .gm-clock-face { background: var(--tw-fill-2); }
 .gm-clock svg { width: calc(14 * var(--tw-u)); height: calc(14 * var(--tw-u)); flex: none; }
-.gm-clock.is-day svg { color: var(--tw-sun); }
+.gm-clock.is-day .gm-clock-ico svg { color: var(--tw-sun); }
+/* (after M17) two lines: the time, and under it the tide (its mark and next turn), small; the pill a little shorter in
+   its padding and the box's margins giving back less, so it stays inside the purse */
+.gm-clock { margin-block: calc(-12px + 4 * var(--tw-u)); }
+.gm-clock-face { padding-block: calc(2 * var(--tw-u)); }
+.gm-clock-tx { display: inline-flex; flex-direction: column; align-items: flex-start; line-height: 1.12; }
+.gm-clock-tide { display: inline-flex; align-items: center; gap: calc(3 * var(--tw-u)); font: 500 var(--tw-fs-xs) var(--tw-font); color: var(--tw-ink-3); }
+.gm-clock .gm-clock-tide svg { width: calc(7 * var(--tw-u)); height: calc(7 * var(--tw-u)); color: var(--tw-aqua); }
+.gm-clock.is-night .gm-clock-ico { color: var(--tw-ink); }
+.gm-moon.is-down { opacity: 0.4; }
 .gm-clock.is-held { color: var(--tw-ink-3); }
 .gm-clock-dot { position: absolute; top: calc(2 * var(--tw-u)); left: calc(16 * var(--tw-u)); width: calc(7 * var(--tw-u)); height: calc(7 * var(--tw-u));
 	border-radius: 50%; background: var(--tw-aqua); box-shadow: 0 0 0 2px rgba(12, 18, 26, 0.8); display: none; }
@@ -68,6 +87,29 @@ const CSS = /* css */`
 .gm-time-note { margin: var(--tw-2) 0 0; color: var(--tw-ink-2); font-size: var(--tw-fs-sm); min-height: 1.4em; }
 .gm-time-note b { color: var(--tw-aqua); font-weight: 600; }
 .gm-time-foot { margin-top: var(--tw-2); color: var(--tw-ink-4); font-size: var(--tw-fs-xs); }
+/* (after M17) the tide and the moon: set off by its label alone, as the panel's other parts are, and its gaps small, so
+   that shut it fits a phone upright under the purse */
+.gm-tm .gm-time-sub { color: var(--tw-ink-2); }
+.gm-tm .gm-time-sub b { color: var(--tw-ink); font-weight: 600; }
+.gm-tm svg { width: calc(8 * var(--tw-u)); height: calc(8 * var(--tw-u)); color: var(--tw-aqua); vertical-align: 0.05em; }
+.gm-tm .gm-moon { width: calc(16 * var(--tw-u)); height: calc(16 * var(--tw-u)); color: var(--tw-ink); vertical-align: -0.28em; margin-right: calc(2 * var(--tw-u)); }
+.gm-tm-tides { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: var(--tw-1); margin: var(--tw-1) 0 0; }
+.gm-tm-tides span { display: flex; flex-direction: column; align-items: center; padding: var(--tw-1) 0; border-radius: var(--tw-r-md); background: var(--tw-fill); border: 1px solid transparent; }
+.gm-tm-tides small { color: var(--tw-ink-3); font: 500 var(--tw-fs-xs) var(--tw-font); }
+.gm-tm-tides b { font: 600 var(--tw-fs-sm) var(--tw-mono); color: var(--tw-ink); white-space: nowrap; }
+.gm-tm-tides .is-past { opacity: 0.45; }
+.gm-tm-tides .is-next { border-color: rgba(var(--tw-aqua-rgb), 0.6); }
+.gm-tm-now { margin: var(--tw-1) 0 0; padding: 0; list-style: none; }
+.gm-tm-now li { position: relative; margin-top: 2px; padding-left: calc(12 * var(--tw-u)); color: var(--tw-ink); font-size: var(--tw-fs-sm); }
+.gm-tm-now li::before { content: ''; position: absolute; left: calc(3 * var(--tw-u)); top: 0.4em; width: calc(5 * var(--tw-u)); height: calc(5 * var(--tw-u)); border-radius: 50%; background: var(--tw-aqua); }
+.gm-tm-do { margin: 0; padding: 0; list-style: none; }
+.gm-tm-do li { margin-top: 3px; color: var(--tw-ink-2); font-size: var(--tw-fs-xs); line-height: 1.35; }
+.gm-tm-do li b { color: var(--tw-ink); font-weight: 600; }
+.gm-tm-key { margin: var(--tw-2) 0 0; color: var(--tw-ink-3); font-size: var(--tw-fs-xs); line-height: 1.35; }
+.gm-tm-parts { margin-top: var(--tw-1); }
+.gm-tm-parts button small { font-family: var(--tw-font); white-space: nowrap; }
+.gm-tm-part { margin-top: var(--tw-2); }
+.gm-tm-more { margin: 0 0 var(--tw-2); }
 .gm-time :focus-visible { outline: 2px solid rgba(var(--tw-aqua-rgb), 0.9); outline-offset: 1px; }
 .gm-rest-fade { position: absolute; inset: 0; background: #02060b; opacity: 0; pointer-events: none; transition: opacity 420ms var(--tw-ease-io); }
 .gm-rest-fade.is-on { opacity: 0.92; transition-duration: 220ms; }
@@ -137,6 +179,73 @@ const h = ( tag, cls, html ) => {
 
 const esc = ( t ) => String( t ).replace( /[&<>"']/g, ( c ) => ( { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' } )[ c ] );
 
+// (after M17) hours (the clock's) as they're said: '40 min', '2 h 5 min'
+const hoursText = ( h ) => {
+
+	const m = Math.max( 0, Math.round( h * 12 ) * 5 );
+	return m < 60 ? `${ m } min` : `${ Math.floor( m / 60 ) } h${ m % 60 ? ` ${ m % 60 } min` : '' }`;
+
+};
+
+// (after M17) the panel's tide and moon (TideMoon.tideMoon's x): the tide now and the day's tides, springs or neaps, the
+// moon and tonight, what they're doing in the game now, what they do, and what the clock's marks mean. Always shown: the
+// tide now and the lines for right now, the first TM_NOW of them (so that shut it fits a phone upright under the purse);
+// the rest in four parts behind their own buttons (TM_PARTS), one open at a time (`open`: its id, or null for none), any
+// more lines for now at the top of Effects, its button saying so
+export const TM_PARTS = [ [ 'tides', 'Tides' ], [ 'moon', 'Moon' ], [ 'effects', 'Effects' ], [ 'clock', 'Clock' ] ];
+export const TM_NOW = 2;
+export function tideMoonHtml( x, open = null ) {
+
+	const m = x.marker, n = x.next;
+	const turn = n ? `${ n.high ? 'high' : 'low' } at ${ n.time } (in ${ hoursText( n.in ) })` : '';
+	const tide = m.dir === 'slack'
+		? `${ TIDE_ICON.slack } <b>Slack water</b>${ n ? n.high === m.high ? `, ${ turn }` : ` just past the ${ m.high ? 'high' : 'low' }; ${ turn }` : '' }`
+		: `${ TIDE_ICON[ m.dir ] } <b>${ m.dir === 'up' ? 'Rising' : 'Falling' }</b>${ turn ? `, ${ turn }` : '' }`;
+	const s = x.springs, mo = x.moon, t = x.tonight, now = x.now.slice( 0, TM_NOW ), more = x.now.slice( TM_NOW );
+	// (each part's button says a word of what's in it, as the rest's say their times)
+	const small = { tides: s.kind, moon: `${ mo.lit }% lit`, effects: more.length ? `+${ more.length } now` : 'in game', clock: 'its marks' };
+	const buttons = TM_PARTS.map( ( [ id, name ] ) => `<button type="button" data-tm="${ id }" class="${ open === id ? 'is-on' : '' }" aria-expanded="${ open === id }" aria-controls="gm-tm-part">${ name }<small>${ small[ id ] }</small></button>` ).join( '' );
+	let part = '';
+	if ( open === 'tides' ) {
+
+		const cells = x.tides.map( ( c ) => `<span role="listitem" class="${ c.past ? 'is-past' : '' }${ c.next ? ' is-next' : '' }"><small>${ c.high ? 'High' : 'Low' }</small><b>${ esc( c.time ) }</b><small>${ c.feet } ft</small></span>` ).join( '' );
+		const kind = s.kind === 'springs' ? '<b>Springs</b>: a big tide' : s.kind === 'neaps' ? '<b>Neaps</b>: a small tide' : `<b>Between</b> springs and neaps, ${ s.toward === 'springs' ? 'growing' : 'easing' }`;
+		const near = s.perigee >= 0.8 ? ', the bigger with the moon near' : s.perigee <= 0.2 ? ', the smaller with the moon far' : '';
+		part = `<div class="gm-tm-tides" role="list" aria-label="Today's tides">${ cells }</div>
+			<p class="gm-time-sub">${ kind }: ${ s.range } ft from low to high today${ near }</p>
+			<p class="gm-tm-key">Heights over chart datum (mean lower low water), as the tide table and the chart give them.</p>`;
+
+	} else if ( open === 'moon' ) {
+
+		part = `<p class="gm-time-sub">${ moonIcon( mo.face ) }<b>${ mo.name }</b>, ${ mo.lit }% lit · ${ mo.next.text }</p>
+			<p class="gm-time-sub">Tonight: <b>${ t.word }</b>${ esc( t.rest ) }</p>`;
+
+	} else if ( open === 'effects' ) {
+
+		part = `${ more.length ? `<ul class="gm-tm-now gm-tm-more">${ more.map( ( l ) => `<li>${ esc( l ) }</li>` ).join( '' ) }</ul>` : '' }
+			<ul class="gm-tm-do">${ WHAT_THEY_DO.map( ( l ) => `<li>${ l }</li>` ).join( '' ) }</ul>`;
+
+	}
+	else if ( open === 'clock' ) {
+
+		part = `<ul class="gm-tm-do">
+			<li>Under the time: ${ TIDE_ICON.up } <b>rising</b> or ${ TIDE_ICON.down } <b>falling</b>, and when it next turns, high or low.</li>
+			<li>${ TIDE_ICON.slack } <b>Slack water</b>, near a turn: the tide still, the pier at its best.</li>
+			<li>At night the clock's <b>moon</b> is the moon as it is: its phase, lit on the sun's side as it hangs in the sky here, and dimmed while it's down.</li>
+		</ul>`;
+
+	}
+
+	return `<div class="gm-tm">
+		<div class="gm-time-label">Tide and moon</div>
+		<p class="gm-time-sub">${ tide }</p>
+		${ now.length ? `<ul class="gm-tm-now">${ now.map( ( l ) => `<li>${ esc( l ) }</li>` ).join( '' ) }</ul>` : '' }
+		<div class="gm-time-rest gm-tm-parts">${ buttons }</div>
+		${ part ? `<div class="gm-tm-part" id="gm-tm-part">${ part }</div>` : '' }
+	</div>`;
+
+}
+
 export class TimeHUD {
 
 	constructor( game, purse, root ) {
@@ -146,10 +255,19 @@ export class TimeHUD {
 		const style = h( 'style' );
 		style.textContent = CSS;
 		document.head.append( style );
-		this.button = h( 'button', 'gm-clock tw-interactive', `<span class="gm-clock-face"><span class="gm-clock-ico"></span><span class="gm-clock-t"></span><i class="gm-clock-dot"></i></span>` );
+		this.button = h( 'button', 'gm-clock tw-interactive', `<span class="gm-clock-face"><span class="gm-clock-ico"></span><span class="gm-clock-tx"><span class="gm-clock-t"></span><span class="gm-clock-tide"></span></span><i class="gm-clock-dot"></i></span>` );
 		this.button.type = 'button';
 		this.ico = this.button.querySelector( '.gm-clock-ico' );
 		this.text = this.button.querySelector( '.gm-clock-t' );
+		this.tide = this.button.querySelector( '.gm-clock-tide' );
+		// ((after M17) the tide's marker and the night's moon, worked out again as the shown time changes; the panel's
+		// tide and moon each five minutes of the clock, and which of its parts is open)
+		this._tmAt = '';
+		this._mark = null;
+		this._moon = '';
+		this._tmKey = '';
+		this._tm = null;
+		this._tmOpen = null;
 		purse.prepend( this.button );
 		this.menu = h( 'div', 'gm-time tw-glass' );
 		this.menu.setAttribute( 'role', 'dialog' );
@@ -202,19 +320,32 @@ export class TimeHUD {
 	update() {
 
 		const inp = this.app.input, st = this.state();
-		// the readout: once the shown time, the sun or moon, or a wish changes
-		const day = sunUp( st.hour );
-		const face = `${ timeText( st.hour, this.locale ) }|${ st.held ? 'held' : day ? 'sun' : 'moon' }|${ st.asks.length && ! st.mine ? 1 : 0 }`;
+		// the readout: once the shown time, the sun or moon, the tide's marker or a wish changes ((after M17) the moon
+		// and the tide worked out again only as the shown time does, each five minutes of the clock)
+		const day = sunUp( st.hour ), text = timeText( st.hour, this.locale ), at = `${ st.day }|${ text }`;
+		if ( at !== this._tmAt || ! this._mark ) {
+
+			this._tmAt = at;
+			const T = islandTime( st.day, st.hour );
+			this._mark = tideMarker( T, this.locale );
+			this._moon = moonIcon( moonFace( T, st.hour ) );
+
+		}
+
+		const icon = st.held ? 'held' : day ? 'sun' : 'moon', ask = st.asks.length && ! st.mine, mark = this._mark;
+		const face = `${ text }|${ icon }|${ ask }|${ icon === 'moon' ? this._moon : '' }|${ mark.dir }|${ mark.text }`;
 		if ( face !== this._face ) {
 
 			this._face = face;
-			const [ text, icon, ask ] = face.split( '|' );
 			this.text.textContent = text;
-			this.ico.innerHTML = ICON[ icon ];
+			this.ico.innerHTML = icon === 'moon' ? this._moon : ICON[ icon ];
+			this.tide.innerHTML = `${ TIDE_ICON[ mark.dir ] }<span>${ esc( mark.text ) }</span>`;
 			this.button.classList.toggle( 'is-day', icon === 'sun' );
+			this.button.classList.toggle( 'is-night', icon === 'moon' );
 			this.button.classList.toggle( 'is-held', icon === 'held' );
-			this.button.classList.toggle( 'has-ask', ask === '1' );
-			this.button.setAttribute( 'aria-label', `${ text }${ st.held ? ', held' : '' }. The clock` );
+			this.button.classList.toggle( 'has-ask', !! ask );
+			const moon = icon === 'moon' && this._moon.includes( 'is-down' ) ? ', the moon down' : '';
+			this.button.setAttribute( 'aria-label', `${ text }${ st.held ? ', held' : '' }${ moon }. ${ mark.label }. The clock` );
 
 		}
 
@@ -241,6 +372,7 @@ export class TimeHUD {
 
 				this._focus = ( this._focus + step + buttons.length ) % buttons.length;
 				buttons[ this._focus ].focus( { preventScroll: true } );
+				this._reveal( buttons[ this._focus ] );
 
 			} else if ( code === 'Space' && buttons.includes( document.activeElement ) ) document.activeElement.click();
 
@@ -276,6 +408,8 @@ export class TimeHUD {
 
 		this._sig = '';
 		this.render( this.state() );
+		// ((after M17) opened at its top, wherever it was scrolled to when it last closed)
+		this.menu.scrollTop = 0;
 		// from the keyboard or a gamepad: the first choice has the focus (Enter or A takes it)
 		const first = this.menu.querySelector( 'button' );
 		this._focus = 0;
@@ -311,7 +445,17 @@ export class TimeHUD {
 		const wxSaid = pick ? '' : news, warned = this.app.weather && this.app.weather.news && this.app.weather.news.stage === 'warning';
 		// ((M16) too far out to rest, with no bunks aboard)
 		const barred = !! ( this.game.daysOut && this.game.daysOut.noRest );
-		const sig = [ barred, timeText( st.hour, loc ), st.day, st.held, st.alone, st.mine, asks, st.here.length, this.app.input.lastDevice, wxLine, wxNext, wxSaid, chosen ].join( '|' );
+		// ((after M17) the tide and the moon: worked out again each five minutes of the clock, as the time shown is)
+		const tmKey = `${ st.day }|${ Math.floor( st.hour * 12 ) }|${ loc }`;
+		if ( tmKey !== this._tmKey ) {
+
+			this._tmKey = tmKey;
+			this._tm = tideMoon( islandTime( st.day, st.hour ), loc );
+
+		}
+
+		// (and which of its parts is open: TM_PARTS)
+		const sig = [ barred, timeText( st.hour, loc ), st.day, st.held, st.alone, st.mine, asks, st.here.length, this.app.input.lastDevice, wxLine, wxNext, wxSaid, chosen, tmKey, this._tmOpen ].join( '|' );
 		if ( sig === this._sig ) return;
 		this._sig = sig;
 		const focused = this.menu.contains( document.activeElement ) ? [ ...this.menu.querySelectorAll( 'button' ) ].indexOf( document.activeElement ) : - 1;
@@ -354,13 +498,39 @@ export class TimeHUD {
 			<p class="gm-time-sub">${ stalls }</p>
 			${ wxLine ? `<p class="gm-time-sub gm-time-wx">${ wxLine }</p>${ wxSaid ? `<p class="gm-time-sub gm-time-news${ warned ? ' is-warn' : '' }">${ wxSaid }</p>` : '' }<p class="gm-time-sub">${ wxNext }</p>` : '' }
 			${ body }
+			${ tideMoonHtml( this._tm, this._tmOpen ) }
 			${ keys ? `<div class="gm-time-foot">${ keys }</div>` : '' }`;
 		const hold = this.menu.querySelector( '[data-hold]' );
 		if ( hold ) hold.onclick = () => this.hold( ! st.held );
 		for ( const b of this.menu.querySelectorAll( '[data-rest]' ) ) b.onclick = () => this.rest( b.dataset.rest === this.state().mine ? null : b.dataset.rest );
 		for ( const b of this.menu.querySelectorAll( '[data-weather]' ) ) b.onclick = () => this.pickWeather( b.dataset.weather || null );
+		for ( const b of this.menu.querySelectorAll( '[data-tm]' ) ) b.onclick = () => this.part( b.dataset.tm );
 		const buttons = this.menu.querySelectorAll( 'button' );
 		if ( focused >= 0 && buttons[ focused ] ) buttons[ focused ].focus( { preventScroll: true } );
+
+	}
+
+	// (after M17) one of the tide and moon's parts opened (TM_PARTS: its id), or closed if it's the one open; it's kept open
+	// as the panel's closed and opened again, and brought into view under its button
+	part( id ) {
+
+		this._tmOpen = this._tmOpen === id ? null : id;
+		this._sig = '';
+		this.render( this.state() );
+		const p = this.menu.querySelector( '.gm-tm-part' ), row = this.menu.querySelector( '.gm-tm-parts' );
+		if ( p && row ) this._reveal( p, row );
+
+	}
+
+	// (after M17) something in the panel scrolled into view where the panel's taller than the screen (a choice reached by
+	// the keys or the d-pad, a part opened), never so far that `keep` (its buttons) goes off the top
+	_reveal( el, keep = el ) {
+
+		const m = this.menu;
+		if ( m.scrollHeight <= m.clientHeight ) return;
+		const r = el.getBoundingClientRect(), k = keep.getBoundingClientRect(), R = m.getBoundingClientRect();
+		if ( k.top < R.top ) m.scrollTop += k.top - R.top - 8;
+		else if ( r.bottom > R.bottom ) m.scrollTop += Math.min( r.bottom - R.bottom + 8, k.top - R.top - 8 );
 
 	}
 
