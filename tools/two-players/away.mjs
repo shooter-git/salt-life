@@ -223,4 +223,5 @@ const gone = await sam.game.evaluate( () => { const a = window.__app.together; r
 say( ! gone.rec && ! gone.drawn, `her record gone, on Sam's sea too: ${ JSON.stringify( gone ) }` );
 await robin.page.screenshot( { path: `${ out }/two-robin-back.png`, timeout: 300000 } );
 console.log( problems ? `${ problems } PROBLEM(S)` : 'no problems' );
+process.exitCode = problems ? 1 : 0;
 await browser.close();

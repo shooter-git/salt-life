@@ -224,4 +224,5 @@ say( tow && back.money === Math.max( 0, 500 - tow.fee ), `she paid what she had 
 say( back.hauled && ! back.rec && !! back.note, 'her boat on the cradle, her record gone, the note there' );
 for ( const [ n, g ] of [ [ 'Robin', robin ], [ 'Sam', sam ] ] ) console.log( `     frames a second, really, ${ n }:`, await g.game.evaluate( () => +( window.__real.n / ( performance.now() - window.__real.since ) * 1000 ).toFixed( 1 ) ).catch( () => '?' ) );
 console.log( problems ? `${ problems } PROBLEM(S)` : 'no problems' );
+process.exitCode = problems ? 1 : 0;
 await browser.close();

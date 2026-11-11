@@ -737,4 +737,5 @@ for ( const boat of BOATS.split( ',' ) ) for ( const name of Object.keys( SC ) )
 
 const { oks, problems } = tally();
 console.log( problems ? `${ problems } PROBLEM(S), ${ oks } ok` : `no problems, ${ oks } ok` );
+process.exitCode = problems ? 1 : 0;
 await browser.close();
