@@ -224,8 +224,8 @@ Done, M0 to M17:
     seen by night and day, and the underwater lights after photographs; a tail's slap, a school
     bolting and the kayak's push through still water, and Pearl's outboard by ear;
   - the figures from sources: the lines at their labels and the reels' real drags, with an 80 lb line
-    for the biggest marlin from the chair, the VHF's reach by its antenna, a flare's reach, ice's melt,
-    a day's stores, the billfish's night depths and a trap's soak;
+    and a wide 80-class reel for the biggest marlin from the chair, the VHF's reach by its antenna, a
+    flare's reach, ice's melt, a day's stores, the billfish's night depths and a trap's soak;
 - playing together:
   - you see the others on the island, walking, swimming, fishing and out in their boats, each the boat
     she is, with her paint and what's fitted on her; far off a boat is a speck on the horizon;
