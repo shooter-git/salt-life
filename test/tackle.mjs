@@ -277,10 +277,10 @@ const among = ( s, ...ids ) => ids.reduce( ( a, id ) => a + ( s[ id ] || 0 ), 0 
 
 	const u = defaultUpgrades(), base = gearStats( u );
 	ok( base.dragKg === null && base.spoolM > 100 && base.landKg > 0 && base.swimMul === 1 && base.breathS === 50 && ! base.polarized && ! base.lifeJacket, 'what you start with' );
-	const top = gearStats( { ...u, rod: 3, reel: 3, leader: 3, lures: 3, landing: 2, glasses: 1, diveKit: 3, safety: 2 } );
-	ok( top.standUp && top.twoSpeed && top.dragKg >= 18 && top.spoolM >= 500 && top.leader === 3 && top.lures === 3 && top.landKg >= 200 && top.dehooker && top.tagKit && top.polarized && top.airS > 0 && top.flares && top.epirb && top.lifeJacket, 'the top of each' );
+	const top = gearStats( { ...u, rod: 3, reel: 4, leader: 3, lures: 3, landing: 2, glasses: 1, diveKit: 3, safety: 2 } );
+	ok( top.standUp && top.twoSpeed && top.dragKg >= 18 && top.spoolM >= 800 && top.leader === 3 && top.lures === 3 && top.landKg >= 200 && top.dehooker && top.tagKit && top.polarized && top.airS > 0 && top.flares && top.epirb && top.lifeJacket, 'the top of each' );
 	for ( const k of [ 'leader', 'lures', 'landing', 'glasses', 'diveKit', 'safety' ] ) ok( UPGRADES[ k ] && ! UPGRADES[ k ].on, `${ k } is your own gear, with you on any boat` );
-	ok( UPGRADES.rod.levels.length === 4 && UPGRADES.reel.levels.length === 4 && UPGRADES.rod.levels[ 3 ].cost === 600 && UPGRADES.reel.levels[ 3 ].cost === 900, 'the rod and the reel have their fourth level, at the doc\'s prices' );
+	ok( UPGRADES.rod.levels.length === 4 && UPGRADES.reel.levels.length === 5 && UPGRADES.rod.levels[ 3 ].cost === 600 && UPGRADES.reel.levels[ 3 ].cost === 900 && UPGRADES.reel.levels[ 4 ].cost === 1200, 'the rod has its fourth level and the reel its fourth and (M17) fifth, at the doc\'s prices' );
 	ok( UPGRADES.leader.levels.map( ( l ) => l.cost ).join() === '0,40,60,90' && UPGRADES.lures.levels.map( ( l ) => l.cost ).join() === '0,50,90,180' && UPGRADES.landing.levels.map( ( l ) => l.cost ).join() === '0,60,80' && UPGRADES.diveKit.levels.map( ( l ) => l.cost ).join() === '0,80,220,600', 'the rest at the doc\'s prices' );
 	const S = new GameState( { load: () => null, save() {} } );
 	S.money = 100;
@@ -392,7 +392,7 @@ const water = ( o ) => habitatAt( { reefDist: 4000, pierDist: 9000, ...o } );
 	S.pickLeader( 'wire' );
 	const J = JSON.parse( JSON.stringify( S.toJSON() ) );
 	ok( J.leaderPick === 'wire', 'it saves' );
-	ok( ! /lever/i.test( UPGRADES.reel.levels[ 3 ].label ), 'the reel\'s label promises no lever: its low gear\'s automatic' );
+	ok( UPGRADES.reel.levels.every( ( r ) => ! /lever/i.test( r.label ) ), 'no reel\'s label promises a lever: the two-speeds\' low gear\'s automatic' );
 
 }
 
