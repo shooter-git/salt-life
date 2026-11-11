@@ -215,7 +215,7 @@ if ( PART === 'horn' ) {
 	// (9) the horn's heard from the boat it's sounded on: a rider at her helm sounds hers, on his game and hers
 	const owner = await G.open( 'Robin', 'lobster', 20 ), guest = await G.open( 'Sam', 'kayak', 20 );
 	await ready( owner, guest );
-	const hear = ( who ) => who.game.evaluate( () => { const A = window.__app.audio, was = A.hornStart; window.__horns = []; A.hornStart = function ( p ) { window.__horns.push( p && [ p.x, p.y, p.z ] ); return was.call( this, p ); }; } );
+	const hear = ( who ) => who.game.evaluate( () => { const A = window.__app.audio, was = A.hornStart; window.__horns = []; A.hornStart = function ( p ) { const a = window.__app, her = a.player.boat && a.player.boat.position, own = a.boatCtl.position; window.__horns.push( p && { at: [ p.x, p.y, p.z ], her: her && [ her.x, her.z ], own: [ own.x, own.z ] } ); return was.call( this, p ); }; } );
 	await hear( owner );
 	await hear( guest );
 	say( await G.aboard( owner, guest ), 'Sam\'s aboard her' );
@@ -228,8 +228,9 @@ if ( PART === 'horn' ) {
 	await frames( guest.game, 6 );
 	await until( owner.game, 'window.__horns.length > 0', 60000 ).catch( () => {} );
 	await guest.page.keyboard.up( 'KeyH' );
-	const his = await guest.game.evaluate( () => { const a = window.__app, h = window.__horns[ 0 ], her = a.player.boat.position, own = a.boatCtl.position; return h && { fromHer: Math.hypot( h[ 0 ] - her.x, h[ 2 ] - her.z ), fromHis: Math.hypot( h[ 0 ] - own.x, h[ 2 ] - own.z ), mode: a.player.mode, riding: a.player.riding }; } );
-	const hers = await owner.game.evaluate( () => { const a = window.__app, h = window.__horns[ 0 ], b = a.boatCtl.position; return h && { fromHer: Math.hypot( h[ 0 ] - b.x, h[ 2 ] - b.z ) }; } );
+	// ((M17) against where she and his own kayak were as it sounded: at 0.7 fps she's moved on a way by the time it's read)
+	const his = await guest.game.evaluate( () => { const a = window.__app, h = window.__horns[ 0 ]; return h && h.her && { fromHer: Math.hypot( h.at[ 0 ] - h.her[ 0 ], h.at[ 2 ] - h.her[ 1 ] ), fromHis: Math.hypot( h.at[ 0 ] - h.own[ 0 ], h.at[ 2 ] - h.own[ 1 ] ), mode: a.player.mode, riding: a.player.riding }; } );
+	const hers = await owner.game.evaluate( () => { const h = window.__horns[ 0 ]; return h && { fromHer: Math.hypot( h.at[ 0 ] - h.own[ 0 ], h.at[ 2 ] - h.own[ 1 ] ) }; } );
 	note( 'his:', JSON.stringify( his ), ' hers:', JSON.stringify( hers ) );
 	say( his && his.riding && his.fromHer < 4 && his.fromHis > 100, `at her helm Sam hears it from her, ${ his && his.fromHer.toFixed( 1 ) } m from her middle (his own kayak ${ his && his.fromHis.toFixed( 0 ) } m off)` );
 	say( hers && hers.fromHer < 4, `and Robin hears it from her own boat, ${ hers && hers.fromHer.toFixed( 1 ) } m from her middle` );
