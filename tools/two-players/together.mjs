@@ -141,11 +141,13 @@ if ( PART === 'chair' ) {
 	const by = await guest.game.evaluate( () => { const a = window.__app; return { fight: !! a.game.fight, job: a.together.crew.job, said: a.player.prompt && a.player.prompt.text }; } );
 	say( by.fight && by.job === null && await owner.game.evaluate( ( other ) => eval( other ).cur.job === null, other ), `a fish on, by the chair: his job ${ by.job }, offered "${ by.said }"` );
 	await press( guest, 'KeyE', 3 );
+	// ((M17) his side read at once: on a slow game his fish can be over, and the chair let him go, by the time Robin's has him)
+	await frames( guest.game, 2 );
+	const his = await guest.game.evaluate( () => { const a = window.__app; return { job: a.together.crew.job, chair: !! a.player.chair, hold: a.game.fight && a.game.fight.holdKg }; } );
 	await until( owner.game, `${ other }.cur.job === 'chair'`, 60000 ).catch( () => {} );
 	// (and drawn there: on a CPU's game the figures are placed once its late shaders are in, Together.ready)
 	await until( owner.game, `( () => { const a = window.__app, S = a.boat.stations.chair, g = ${ other }.avatar.group, w = g.position.clone().set( S.x, S.y, S.z ).applyQuaternion( a.boatCtl.quaternion ).add( a.boatCtl.position ); return a.together.ready && g.position.distanceTo( w ) < 0.3; } )()`, 120000 ).catch( () => {} );
 	const inIt = await owner.game.evaluate( ( other ) => { const o = eval( other ), a = window.__app, M = a.boat, S = M.stations.chair, g = o.avatar.group, w = new g.position.constructor( S.x, S.y, S.z ).applyQuaternion( a.boatCtl.quaternion ).add( a.boatCtl.position ); return { job: o.cur.job, from: +g.position.distanceTo( w ).toFixed( 2 ) }; }, other );
-	const his = await guest.game.evaluate( () => { const a = window.__app; return { job: a.together.crew.job, chair: !! a.player.chair, hold: a.game.fight && a.game.fight.holdKg }; } );
 	say( his.job === 'chair' && his.chair && inIt.job === 'chair' && inIt.from < 0.3, `E sits him in it: his job ${ his.job }, his fight held at ${ his.hold } kg; Robin sees him in the chair, ${ inIt.from } m from its seat` );
 	await guest.game.evaluate( () => { const g = window.__app.game; g.cancelLine( true ); g.stowRod(); } );
 	await until( owner.game, `${ other }.cur.job === null`, 60000 ).catch( () => {} );
