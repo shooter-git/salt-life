@@ -667,7 +667,11 @@ const SC = {
 			note( `Sam sees ${ JSON.stringify( t ) } (day ${ v2.day } ${ v2.hour })` );
 			say( v.day === v2.day && Math.abs( v.hour - v2.hour ) < 0.5, `clocks ${ days } d (${ boat }): one clock in the room: day ${ v.day } ${ v.hour }, day ${ v2.day } ${ v2.hour }` );
 			say( v.boat === boat && ! v.veil && v.inScene, `clocks ${ days } d (${ boat }): Robin's back in her ${ boat }, no veil` );
-			say( Math.hypot( v.x - left.x, v.z - left.z ) < 30, `clocks ${ days } d (${ boat }): a reload's not being away: she's ${ Math.hypot( v.x - left.x, v.z - left.z ).toFixed( 0 ) } m from where she left her` );
+			// ((M17) she drifts on as long as her game's open again, now worked out over the real time even on a slow game
+			// (BoatController.catchUp), so by the day's wind: on day 5 here a breezy 12 m/s, about 36 m on the scripts' slow
+			// frames, on day 2 a fair 5.5 m/s, 14 to 20. Days adrift would have put her where Sam's story has her, 0.6 to 2 km)
+			const off = Math.hypot( v.x - left.x, v.z - left.z ), story = a && a.story ? Math.hypot( a.story.x - left.x, a.story.z - left.z ) : NaN;
+			say( off < Math.min( 100, story / 10 ), `clocks ${ days } d (${ boat }): a reload's not being away: she's ${ off.toFixed( 0 ) } m from where she left her, where ${ days } days adrift would have taken her ${ story.toFixed( 0 ) } m` );
 			say( v.mode === left.mode, `clocks ${ days } d (${ boat }): at her helm as she was (${ left.mode } -> ${ v.mode })` );
 			const o = t.list[ 0 ];
 			say( o && o.at && Math.hypot( o.at[ 0 ] - v.x, o.at[ 1 ] - v.z ) < 25, `clocks ${ days } d (${ boat }): both have her in one place: ${ o && o.at && Math.hypot( o.at[ 0 ] - v.x, o.at[ 1 ] - v.z ).toFixed( 1 ) } m apart` );
