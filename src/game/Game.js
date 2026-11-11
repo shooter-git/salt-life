@@ -1856,7 +1856,7 @@ export class Game {
 			else {
 
 				if ( entry ) this.toast( `${ info.record ? 'New record! ' : '' }${ name } · ${ lb( entry.kg ) } · $${ entry.value }`, 3600 );
-				else this.toast( `${ name } · ${ lb( f.kg, 1 ) } · no room in the ${ this.state.upgrades.hold > 0 ? 'hold' : 'cooler' }, let it go`, 3600 );
+				else this.toast( `${ name } · ${ lb( f.kg, 1 ) } · no room in ${ this.boxIn() }, let it go`, 3600 );
 				this.landing = { species: f.species, kg: f.kg };
 
 			}
@@ -1912,11 +1912,19 @@ export class Game {
 			const entry = this.state.keepLast( info );
 			if ( ! entry ) return null;
 			info.wanted = this.wantedFor( entry );
-			this.toast( `${ FISH[ entry.species ].name } · ${ lb( entry.kg ) } · $${ entry.value } · in the ${ this.state.upgrades.hold > 0 ? 'hold' : 'cooler' }`, 2600 );
+			this.toast( `${ FISH[ entry.species ].name } · ${ lb( entry.kg ) } · $${ entry.value } · in ${ this.boxIn() }`, 2600 );
 
 		}
 
 		return act;
+
+	}
+
+	// (v2.3.0) the box your catch goes in, as said: 'the hold', or riding along, 'Jeremy's hold'
+	boxIn() {
+
+		const b = this.state.box();
+		return b.whose ? `${ b.whose }'s ${ b.word }` : `the ${ b.word }`;
 
 	}
 
