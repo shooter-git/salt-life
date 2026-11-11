@@ -576,6 +576,9 @@ const SC = {
 			if ( p.mode === 'boat' && ! a.boat.seated ) p.leaveHelm();
 			if ( p.mode === 'boat' || p.mode === 'deck' ) p.exitBoat( { out: { x: 55, z: 20 }, g: 2.5 } );
 			b.reset();
+			// ((M17) home in the same moment she's left, as no player can: her anchor, due to go down once she slows where you
+			// left her (Game.updateAnchor), would go down by her on the sand. Game.tow, the game's own way home, clears it so)
+			a.game._anchorDue = false;
 			a.saveBoat();
 
 		} );
@@ -614,6 +617,9 @@ const SC = {
 			if ( p.mode === 'boat' && ! a.boat.seated ) p.leaveHelm();
 			if ( p.mode === 'boat' || p.mode === 'deck' ) p.exitBoat( { out: { x: 55, z: 20 }, g: 2.5 } );
 			b.reset();
+			// ((M17) home in the same moment she's left, as no player can: her anchor, due to go down once she slows where you
+			// left her (Game.updateAnchor), would go down by her on the sand. Game.tow, the game's own way home, clears it so)
+			a.game._anchorDue = false;
 			a.saveBoat();
 
 		} );
