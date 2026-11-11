@@ -572,12 +572,18 @@ const SC = {
 		await robin2.game.waitForFunction( () => window.__app.together.others.size > 0, null, { timeout: 200000, polling: 1000 } );
 		await robin2.game.evaluate( () => {
 
-			const a = window.__app, b = a.boatCtl, p = a.player;
+			const a = window.__app, p = a.player;
 			if ( p.mode === 'boat' && ! a.boat.seated ) p.leaveHelm();
 			if ( p.mode === 'boat' || p.mode === 'deck' ) p.exitBoat( { out: { x: 55, z: 20 }, g: 2.5 } );
-			b.reset();
-			// ((M17) home in the same moment she's left, as no player can: her anchor, due to go down once she slows where you
-			// left her (Game.updateAnchor), would go down by her on the sand. Game.tow, the game's own way home, clears it so)
+
+		} );
+		// ((M17) and only then home: her anchor's due once the game's seen her left (Game.updateAnchor, a frame on), and taken
+		// home before that it went down by her on the sand, 22 m from her berth's point. As Game.tow does it, long after)
+		await frames( robin2.game, 3 );
+		await robin2.game.evaluate( () => {
+
+			const a = window.__app;
+			a.boatCtl.reset();
 			a.game._anchorDue = false;
 			a.saveBoat();
 
