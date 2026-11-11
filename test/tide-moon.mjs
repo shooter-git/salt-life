@@ -11,7 +11,7 @@ import {
 	moonName, moonNext, moonFace, moonIcon, springsOf, tideMarker, tonight, nowLines, tideMoon, tideBitesNow, swordfishShare,
 	spawnNext, TIDE_AGE, SLACK, WELL, NAMED_DAYS, NEW_LIT, GLOW, WHAT_THEY_DO,
 } from '../src/game/TideMoon.js';
-import { tideMoonHtml, TM_PARTS } from '../src/game/TimeHUD.js';
+import { tideMoonHtml, TM_PARTS, TM_NOW } from '../src/game/TimeHUD.js';
 
 let fails = 0;
 const ok = ( c, msg ) => {
@@ -167,12 +167,11 @@ const find = ( f, T0 = 0, to = 24 * 60, step = 0.25 ) => {
 	ok( /^On the ebb: the creek mouths/.test( nowLines( ebb, L )[ 0 ] ), `on the ebb: "${ nowLines( ebb, L )[ 0 ] }"` );
 	// the bonefish: the first dusk they gather, its afternoon, the day before's, and while they're there
 	const first = find( ( T ) => spawning( T ), 24 * 2 );
-	const day = Math.floor( first / 24 ), fromHere = ( T ) => nowLines( T, L, 9 ).find( ( l ) => /bonefish/.test( l ) ) || '';
+	const day = Math.floor( first / 24 ), fromHere = ( T ) => nowLines( T, L, 9 ).find( ( l ) => /bonefish/i.test( l ) ) || '';
 	const before = fromHere( day * 24 + 15 ), dayBefore = fromHere( ( day - 1 ) * 24 + 15 ), during = fromHere( first + 0.5 );
-	const moon = Math.abs( moonAt( first ).phase - 0.5 ) < 0.25 ? 'full' : 'new';
-	ok( before === `The bonefish gather off the flats' edge to spawn at dusk around the ${ moon } moon: tonight, from about ${ timeText( first % 24, L, 30 ) }`, `that afternoon: "${ before }"` );
-	ok( dayBefore === `The bonefish gather off the flats' edge to spawn at dusk around the ${ moon } moon: tomorrow`, `the day before: "${ dayBefore }"` );
-	ok( during === `The bonefish are gathered off the flats' edge to spawn, until about ${ timeText( FLATS_FISH.spawn.to, L, 30 ) }`, `while they're there: "${ during }"` );
+	ok( before === `Bonefish gather to spawn off the flats' edge tonight, from about ${ timeText( first % 24, L, 30 ) }`, `that afternoon: "${ before }"` );
+	ok( dayBefore === 'Bonefish gather to spawn off the flats\' edge at dusk: tomorrow', `the day before: "${ dayBefore }"` );
+	ok( during === `Bonefish gathered off the flats' edge to spawn, until about ${ timeText( FLATS_FISH.spawn.to, L, 30 ) }`, `while they're there: "${ during }"` );
 	ok( spawnNext( ( day - 6 ) * 24 + 15 ) === null || ! fromHere( ( day - 6 ) * 24 + 15 ).includes( 'tonight' ), 'nothing said of it a week off' );
 
 }
@@ -228,6 +227,25 @@ const find = ( f, T0 = 0, to = 24 * 60, step = 0.25 ) => {
 	ok( has( part( 'moon' ), x.moon.name ) && has( part( 'moon' ), 'Tonight: <b>' ) && ! has( part( 'moon' ), 'listitem' ), 'Moon: its name, how much is lit and tonight' );
 	ok( WHAT_THEY_DO.every( ( l ) => has( part( 'effects' ), l ) ) && has( part( 'clock' ), 'dimmed while it' ) && has( part( 'clock' ), 'Slack water' ), 'Effects: what they do in the game; Clock: what its marks mean' );
 	ok( TM_PARTS.every( ( [ id ] ) => has( part( id ), `data-tm="${ id }" class="is-on" aria-expanded="true"` ) && ( part( id ).match( /is-on/g ) || [] ).length === 1 ), 'the one open marked so, and only it' );
+	// with three lines for now (day 22, 7:30 PM: slack water, the bonefish, a nest hatching), the first TM_NOW shut, the rest
+	// at the top of Effects, its button saying how many
+	const y = tideMoon( 21 * 24 + 19.5, L ), ys = tideMoonHtml( y ), ye = tideMoonHtml( y, 'effects' ), esc = ( l ) => l.replace( /'/g, '&#39;' );
+	ok( y.now.length === 3 && TM_NOW === 2 && y.now.slice( 0, 2 ).every( ( l ) => has( ys, esc( l ) ) ) && ! has( ys, esc( y.now[ 2 ] ) ) && has( ys, 'Effects<small>+1 now</small>' ), `three lines for now: two shut, and Effects says "+1 now" (${ y.now.length } lines)` );
+	ok( has( ye, esc( y.now[ 2 ] ) ) && ye.indexOf( esc( y.now[ 2 ] ) ) < ye.indexOf( WHAT_THEY_DO[ 0 ] ) && ! has( shut.replace( /[\s\S]*data-tm="effects"/, '' ), '+' ) && has( shut, 'Effects<small>in game</small>' ), 'the third at the top of Effects, before what they do; with two, Effects says "in game"' );
+	// (over a month of hours, the lines shut are never more than TM_NOW, and none's lost: what's not shut is in Effects)
+	let lost = 0;
+	for ( let T = 0; T < 24 * 30; T += 0.5 ) {
+
+		const z = tideMoon( T, L ), zs = tideMoonHtml( z ), ze = tideMoonHtml( z, 'effects' );
+		if ( ( zs.match( /<li>/g ) || [] ).length > TM_NOW || ! z.now.every( ( l ) => has( zs, esc( l ) ) || has( ze, esc( l ) ) ) ) lost ++;
+
+	}
+
+	ok( lost === 0, `a month of hours: never more than ${ TM_NOW } lines shut, every line shut or in Effects (${ lost } wrong)` );
+	// (each line for now short enough for two lines at a phone's width upright, about 42 characters a line: 84 at most)
+	let longest = '';
+	for ( let T = 0; T < 24 * 60; T += 0.25 ) for ( const l of nowLines( T, L, 9 ) ) if ( l.length > longest.length ) longest = l;
+	ok( longest.length <= 84, `the longest line for now in two months, ${ longest.length } characters: "${ longest }"` );
 
 }
 

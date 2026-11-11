@@ -87,8 +87,8 @@ const CSS = /* css */`
 .gm-time-note { margin: var(--tw-2) 0 0; color: var(--tw-ink-2); font-size: var(--tw-fs-sm); min-height: 1.4em; }
 .gm-time-note b { color: var(--tw-aqua); font-weight: 600; }
 .gm-time-foot { margin-top: var(--tw-2); color: var(--tw-ink-4); font-size: var(--tw-fs-xs); }
-/* (after M17) the tide and the moon */
-.gm-tm { margin-top: var(--tw-1); padding-top: var(--tw-1); border-top: 1px solid var(--tw-line); }
+/* (after M17) the tide and the moon: set off by its label alone, as the panel's other parts are, and its gaps small, so
+   that shut it fits a phone upright under the purse */
 .gm-tm .gm-time-sub { color: var(--tw-ink-2); }
 .gm-tm .gm-time-sub b { color: var(--tw-ink); font-weight: 600; }
 .gm-tm svg { width: calc(8 * var(--tw-u)); height: calc(8 * var(--tw-u)); color: var(--tw-aqua); vertical-align: 0.05em; }
@@ -99,16 +99,17 @@ const CSS = /* css */`
 .gm-tm-tides b { font: 600 var(--tw-fs-sm) var(--tw-mono); color: var(--tw-ink); white-space: nowrap; }
 .gm-tm-tides .is-past { opacity: 0.45; }
 .gm-tm-tides .is-next { border-color: rgba(var(--tw-aqua-rgb), 0.6); }
-.gm-tm-now { margin: var(--tw-2) 0 0; padding: 0; list-style: none; }
+.gm-tm-now { margin: var(--tw-1) 0 0; padding: 0; list-style: none; }
 .gm-tm-now li { position: relative; margin-top: 2px; padding-left: calc(12 * var(--tw-u)); color: var(--tw-ink); font-size: var(--tw-fs-sm); }
-.gm-tm-now li::before { content: ''; position: absolute; left: calc(3 * var(--tw-u)); top: 0.55em; width: calc(5 * var(--tw-u)); height: calc(5 * var(--tw-u)); border-radius: 50%; background: var(--tw-aqua); }
+.gm-tm-now li::before { content: ''; position: absolute; left: calc(3 * var(--tw-u)); top: 0.4em; width: calc(5 * var(--tw-u)); height: calc(5 * var(--tw-u)); border-radius: 50%; background: var(--tw-aqua); }
 .gm-tm-do { margin: 0; padding: 0; list-style: none; }
 .gm-tm-do li { margin-top: 3px; color: var(--tw-ink-2); font-size: var(--tw-fs-xs); line-height: 1.35; }
 .gm-tm-do li b { color: var(--tw-ink); font-weight: 600; }
 .gm-tm-key { margin: var(--tw-2) 0 0; color: var(--tw-ink-3); font-size: var(--tw-fs-xs); line-height: 1.35; }
-.gm-tm-parts { margin-top: var(--tw-2); }
+.gm-tm-parts { margin-top: var(--tw-1); }
 .gm-tm-parts button small { font-family: var(--tw-font); white-space: nowrap; }
 .gm-tm-part { margin-top: var(--tw-2); }
+.gm-tm-more { margin: 0 0 var(--tw-2); }
 .gm-time :focus-visible { outline: 2px solid rgba(var(--tw-aqua-rgb), 0.9); outline-offset: 1px; }
 .gm-rest-fade { position: absolute; inset: 0; background: #02060b; opacity: 0; pointer-events: none; transition: opacity 420ms var(--tw-ease-io); }
 .gm-rest-fade.is-on { opacity: 0.92; transition-duration: 220ms; }
@@ -188,9 +189,11 @@ const hoursText = ( h ) => {
 
 // (after M17) the panel's tide and moon (TideMoon.tideMoon's x): the tide now and the day's tides, springs or neaps, the
 // moon and tonight, what they're doing in the game now, what they do, and what the clock's marks mean. Always shown: the
-// tide now and the lines for right now; the rest in four parts behind their own buttons (TM_PARTS), one open at a time
-// (`open`: its id, or null for none)
+// tide now and the lines for right now, the first TM_NOW of them (so that shut it fits a phone upright under the purse);
+// the rest in four parts behind their own buttons (TM_PARTS), one open at a time (`open`: its id, or null for none), any
+// more lines for now at the top of Effects, its button saying so
 export const TM_PARTS = [ [ 'tides', 'Tides' ], [ 'moon', 'Moon' ], [ 'effects', 'Effects' ], [ 'clock', 'Clock' ] ];
+export const TM_NOW = 2;
 export function tideMoonHtml( x, open = null ) {
 
 	const m = x.marker, n = x.next;
@@ -198,9 +201,9 @@ export function tideMoonHtml( x, open = null ) {
 	const tide = m.dir === 'slack'
 		? `${ TIDE_ICON.slack } <b>Slack water</b>${ n ? n.high === m.high ? `, ${ turn }` : ` just past the ${ m.high ? 'high' : 'low' }; ${ turn }` : '' }`
 		: `${ TIDE_ICON[ m.dir ] } <b>${ m.dir === 'up' ? 'Rising' : 'Falling' }</b>${ turn ? `, ${ turn }` : '' }`;
-	const s = x.springs, mo = x.moon, t = x.tonight;
+	const s = x.springs, mo = x.moon, t = x.tonight, now = x.now.slice( 0, TM_NOW ), more = x.now.slice( TM_NOW );
 	// (each part's button says a word of what's in it, as the rest's say their times)
-	const small = { tides: s.kind, moon: `${ mo.lit }% lit`, effects: 'in game', clock: 'its marks' };
+	const small = { tides: s.kind, moon: `${ mo.lit }% lit`, effects: more.length ? `+${ more.length } now` : 'in game', clock: 'its marks' };
 	const buttons = TM_PARTS.map( ( [ id, name ] ) => `<button type="button" data-tm="${ id }" class="${ open === id ? 'is-on' : '' }" aria-expanded="${ open === id }" aria-controls="gm-tm-part">${ name }<small>${ small[ id ] }</small></button>` ).join( '' );
 	let part = '';
 	if ( open === 'tides' ) {
@@ -217,7 +220,12 @@ export function tideMoonHtml( x, open = null ) {
 		part = `<p class="gm-time-sub">${ moonIcon( mo.face ) }<b>${ mo.name }</b>, ${ mo.lit }% lit · ${ mo.next.text }</p>
 			<p class="gm-time-sub">Tonight: <b>${ t.word }</b>${ esc( t.rest ) }</p>`;
 
-	} else if ( open === 'effects' ) part = `<ul class="gm-tm-do">${ WHAT_THEY_DO.map( ( l ) => `<li>${ l }</li>` ).join( '' ) }</ul>`;
+	} else if ( open === 'effects' ) {
+
+		part = `${ more.length ? `<ul class="gm-tm-now gm-tm-more">${ more.map( ( l ) => `<li>${ esc( l ) }</li>` ).join( '' ) }</ul>` : '' }
+			<ul class="gm-tm-do">${ WHAT_THEY_DO.map( ( l ) => `<li>${ l }</li>` ).join( '' ) }</ul>`;
+
+	}
 	else if ( open === 'clock' ) {
 
 		part = `<ul class="gm-tm-do">
@@ -231,7 +239,7 @@ export function tideMoonHtml( x, open = null ) {
 	return `<div class="gm-tm">
 		<div class="gm-time-label">Tide and moon</div>
 		<p class="gm-time-sub">${ tide }</p>
-		${ x.now.length ? `<ul class="gm-tm-now">${ x.now.map( ( l ) => `<li>${ esc( l ) }</li>` ).join( '' ) }</ul>` : '' }
+		${ now.length ? `<ul class="gm-tm-now">${ now.map( ( l ) => `<li>${ esc( l ) }</li>` ).join( '' ) }</ul>` : '' }
 		<div class="gm-time-rest gm-tm-parts">${ buttons }</div>
 		${ part ? `<div class="gm-tm-part" id="gm-tm-part">${ part }</div>` : '' }
 	</div>`;

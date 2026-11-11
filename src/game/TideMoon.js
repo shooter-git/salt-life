@@ -5,7 +5,7 @@ import { FISH } from './FishTable.js';
 import { depthWeight, FLOAT } from './Bites.js';
 import { hatchingsOf, seaGlow } from './Turtles.js';
 import { moonSky, nightOf } from '../sky/Moon.js';
-import { FT, feet } from './Units.js';
+import { FT } from './Units.js';
 
 // (after M17) The tide and the moon as the clock tells them (game/TimeHUD.js): the night's moon drawn at its phase, a
 // marker for the tide by the time, and the clock's panel's "Tide and moon": the day's tides, springs or neaps, the moon
@@ -272,12 +272,12 @@ function spawnLine( T, locale ) {
 	const s = spawnNext( T );
 	if ( ! s ) return '';
 	const S = FLATS_FISH.spawn, at = ( h ) => timeText( h, locale, 30 );
-	if ( s.now ) return `The bonefish are gathered off the flats' edge to spawn, until about ${ at( S.to ) }`;
-	const d = Math.floor( s.T / 24 ) - Math.floor( T / 24 ), m = moonAt( s.T );
-	const moon = Math.abs( m.phase - 0.5 ) < 0.25 ? 'full' : 'new';
+	// (each said in two lines or less at a phone's width, upright: the moon they gather by is the Moon part's and Effects')
+	if ( s.now ) return `Bonefish gathered off the flats' edge to spawn, until about ${ at( S.to ) }`;
+	const d = Math.floor( s.T / 24 ) - Math.floor( T / 24 );
 	if ( d > 2 ) return '';
-	const when = d === 0 ? `tonight, from about ${ at( s.T % 24 ) }` : d === 1 ? 'tomorrow' : 'in 2 days';
-	return `The bonefish gather off the flats' edge to spawn at dusk around the ${ moon } moon: ${ when }`;
+	if ( d === 0 ) return `Bonefish gather to spawn off the flats' edge tonight, from about ${ at( s.T % 24 ) }`;
+	return `Bonefish gather to spawn off the flats' edge at dusk: ${ d === 1 ? 'tomorrow' : 'in 2 days' }`;
 
 }
 
@@ -296,8 +296,8 @@ export const SWORD = { deeper: 0.7, dark: 0.97 };
 function swordLine( T ) {
 
 	const share = swordfishShare( T );
-	if ( share <= SWORD.deeper ) return `Swordfish stay deeper under tonight's moon: a float ${ feet( FLOAT.depth ) } down gets about ${ Math.round( share * 10 ) * 10 }% of a dark night's bites`;
-	if ( share >= SWORD.dark ) return 'A dark night for the swordfish: up near the top after dark, in a float\'s reach';
+	if ( share <= SWORD.deeper ) return `Swordfish deeper under tonight's moon: about ${ Math.round( share * 10 ) * 10 }% of dark-night bites on a float`;
+	if ( share >= SWORD.dark ) return 'A dark night for the swordfish: up near the top, in a float\'s reach';
 	return '';
 
 }
@@ -317,7 +317,7 @@ function hatchLine( T ) {
 	}
 
 	if ( soon === null || seaGlow( soon, soon % 24 ) >= GLOW ) return '';
-	return 'A turtle nest hatches on the north beach tonight, and it\'s a dark night: a light on the sand draws the hatchlings off';
+	return 'Hatchlings on the north beach this dark night: a light on the sand draws them off';
 
 }
 
