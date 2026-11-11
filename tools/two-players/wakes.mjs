@@ -9,7 +9,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { OTHER as other, start } from './lib.mjs';
 
-const [ out = 'qa-output/two-players/wakes', PORT = '5237', TIER = 'low' ] = process.argv.slice( 2 );
+// (mid by default: on low a console's crests are left out, drawn and ridden alike (docs/m17/wakes.md, On low), so there's none to reach her)
+const [ out = 'qa-output/two-players/wakes', PORT = '5237', TIER = 'mid' ] = process.argv.slice( 2 );
 mkdirSync( out, { recursive: true } );
 const G = await start( { out, port: PORT, tier: TIER } );
 const { say, note, until, frames } = G;
