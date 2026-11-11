@@ -8,7 +8,7 @@ import { islandTime, towardOf, weatherHere, hurricaneNews } from './Weather.js';
 import { FT, feet, farOff, pounds, knots, gallons } from './Units.js';
 import { FLEET } from './fleet/Fleet.js';
 import { berthOf } from './fleet/Berths.js';
-import { ableOf, ableEnv, awashLs, seaHere, fetchAt, strainOf, windOn, slamK, keepCatch, feedOf, strengthOf, meltKgH, holdWord, GENERATOR_LH, CHILL_KG, ICE_BAG_KG, ICE_BAG_PRICE, STORES_PRICE, STORES_WATER_L, LUNCH_H, DRY_H, FRESH_H, FLARES, FLARE_M, EPIRB_S, PASSING_H, reachTo } from './Seaworthy.js';
+import { ableOf, ableEnv, awashLs, seaHere, fetchAt, strainOf, windOn, slamK, keepCatch, feedOf, strengthOf, meltKgH, holdWord, GENERATOR_LH, CHILL_KG, ICE_BAG_KG, ICE_BAG_PRICE, STORES_PRICE, STORES_WATER_L, LUNCH_H, DRY_H, FRESH_H, FLARES, FLARE_M, EPIRB_S, PASSING_H, reachTo, boxBars, iceSaid } from './Seaworthy.js';
 
 // (M16) Days out, and what each boat can stand: ice and the catch keeping, stores, sleeping aboard, flares and the EPIRB,
 // the drift sock, the deep finder's screen. The figures are Seaworthy.js'. Game makes one and calls update each frame; what
@@ -84,10 +84,9 @@ const CSS = /* css */`
 .do-screen b { position: absolute; left: calc(5 * var(--tw-u)); top: calc(3 * var(--tw-u)); font: 600 var(--tw-fs-xs) var(--tw-mono); color: #ffe36a; text-shadow: 0 1px 2px #000; }
 .do-screen i { position: absolute; right: calc(5 * var(--tw-u)); bottom: calc(3 * var(--tw-u)); font: 500 var(--tw-fs-xs) var(--tw-mono); font-style: normal; color: #cfe3f5; text-shadow: 0 1px 2px #000; }
 .tw-root[data-panel='open'] .do-screen { display: none; }
-.gm-ice-bar > span { background: #a8dcf0; }
-.gm-ice.is-low .gm-ice-bar > span { background: var(--tw-coral); }
-/* (a phone's purse has no room to spare: the toast goes beside it. Only when they want seeing to; the rest's in the cooler's tab) */
-html.is-touch .gm-ice:not(.is-low), html.is-touch .gm-stores:not(.is-low) { display: none; }
+/* (a phone's purse has no room to spare: the toast goes beside it. Only when they want seeing to; the rest's in the cooler's tab.
+   (v2.4.1) The ice is the box's now, in its own row (GameHUD), on a phone too: how long it keeps the catch) */
+html.is-touch .gm-stores:not(.is-low) { display: none; }
 html.is-touch .do-screen { right: auto; bottom: auto; left: var(--tw-edge); top: calc(var(--tw-edge) + 64px + 48 * var(--tw-u)); width: calc(132 * var(--tw-u)); height: calc(66 * var(--tw-u)); }
 @media (orientation: portrait) { html.is-touch .do-screen { top: auto; bottom: 30vh; } }
 html.is-touch .tw-root:has(.gm-panel.is-open, .gm-coach.is-on) .do-screen { display: none; }
@@ -551,11 +550,13 @@ export class DaysOut {
 
 	}
 
-	// the box and the lockers, as the cooler's tab says them
-	boxSaid() {
+	// the box and the lockers, as the cooler's tab says them ((v2.4.1) how long the ice keeps the catch, as its bar says it.
+	// k: Seaworthy's boxBars of the box)
+	boxSaid( k = boxBars( this.state.box(), this.state.holdKg ) ) {
 
-		const box = this.box, her = this.her, ice = her ? her.ice : box.ice;
-		return `${ ice > 0 ? ` · ${ pounds( ice ) } lb of ice` : '' }${ ! her && box.stores >= 0.05 ? ` · ${ box.stores.toFixed( 1 ) } days' stores` : '' }`;
+		const box = this.box, her = this.her;
+		const ice = k.hours === Infinity ? 'ice being made' : k.hours > 0 ? `ice for ${ iceSaid( k.hours ) }` : 'no ice';
+		return ` · ${ ice }${ ! her && box.stores >= 0.05 ? ` · ${ box.stores.toFixed( 1 ) } days' stores` : '' }`;
 
 	}
 
@@ -893,47 +894,27 @@ export class DaysOut {
 
 	}
 
-	// ---- the gauges by your money (GameHUD's): the ice, and the stores once they count
+	// ---- the gauge by your money (GameHUD's): the stores once they count, with the boat's ((v2.4.1) the ice is the box's,
+	// in its own row beside its room: GameHUD.drawHold)
 	gauges( purse ) {
 
-		if ( ! purse || this._ice ) return;
-		const mk = ( cls, html ) => {
-
-			const e = document.createElement( 'span' );
-			e.className = `gm-gauge ${ cls }`;
-			e.innerHTML = html;
-			purse.append( e );
-			return e;
-
-		};
-
+		if ( ! purse || this._stores ) return;
 		const style = document.createElement( 'style' );
 		style.textContent = CSS;
 		document.head.append( style );
-		this._ice = mk( 'gm-ice', '<span>Ice</span><span class="gm-cooler-bar gm-ice-bar"><span></span></span><b></b>' );
-		this._iceBar = this._ice.querySelector( '.gm-ice-bar > span' );
-		this._iceText = this._ice.querySelector( 'b' );
-		this._stores = mk( 'gm-stores', '<span>Stores</span><b></b>' );
-		this._storesText = this._stores.querySelector( 'b' );
+		const e = document.createElement( 'span' );
+		e.className = 'gm-gauge gm-stores';
+		e.innerHTML = '<span>Stores</span><b></b>';
+		( purse.querySelector( '.gm-purse-boat' ) || purse ).append( e );
+		this._stores = e;
+		this._storesText = e.querySelector( 'b' );
 
 	}
 
 	showGauges() {
 
-		if ( ! this._ice ) return;
-		// ((v2.3.0) riding along, her ice: what keeps your catch)
-		const st = this.state, box = this.box, aboard = this.aboard, her = this.her, fish = st.inventory.length > 0 || ( aboard && this.guestsKg > 0 );
-		const ice = her ? her.ice : box.ice, cap = her ? her.cap : st.stats.holdKg;
-		const showIce = ( aboard || !! her ) && ( ice > 0 || fish );
-		this._ice.classList.toggle( 'is-on', showIce );
-		if ( showIce ) {
-
-			this._ice.classList.toggle( 'is-low', ice <= 0 );
-			this._iceBar.style.width = `${ Math.min( 100, ice / Math.max( 1, cap * 0.5 ) * 100 ) }%`;
-			this._iceText.textContent = ice > 0 ? `${ pounds( ice ) } lb` : 'none';
-
-		}
-
+		if ( ! this._stores ) return;
+		const st = this.state, box = this.box, aboard = this.aboard;
 		const showStores = aboard && ( box.stores > 0 || st.days.out > LUNCH_H );
 		this._stores.classList.toggle( 'is-on', showStores );
 		if ( showStores ) {
