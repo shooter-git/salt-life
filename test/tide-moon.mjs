@@ -11,7 +11,7 @@ import {
 	moonName, moonNext, moonFace, moonIcon, springsOf, tideMarker, tonight, nowLines, tideMoon, tideBitesNow, swordfishShare,
 	spawnNext, TIDE_AGE, SLACK, WELL, NAMED_DAYS, NEW_LIT, GLOW, WHAT_THEY_DO,
 } from '../src/game/TideMoon.js';
-import { tideMoonHtml } from '../src/game/TimeHUD.js';
+import { tideMoonHtml, TM_PARTS } from '../src/game/TimeHUD.js';
 
 let fails = 0;
 const ok = ( c, msg ) => {
@@ -207,7 +207,7 @@ const find = ( f, T0 = 0, to = 24 * 60, step = 0.25 ) => {
 	const t0 = performance.now();
 	for ( let T = 0; T < 24 * 30; T += 0.75 ) {
 
-		const x = tideMoon( T, L ), html = tideMoonHtml( x );
+		const x = tideMoon( T, L ), html = [ null, ...TM_PARTS.map( ( p ) => p[ 0 ] ) ].map( ( open ) => tideMoonHtml( x, open ) ).join( '' );
 		const day = Math.floor( T / 24 ) + 1, turns = tidesOf( day ), nextAt = turns.findIndex( ( t ) => t.T > T );
 		if ( /NaN|undefined|null|\[object/.test( html ) || x.tides.length !== turns.length || x.tides.some( ( t, i ) => t.feet !== datumFeet( turns[ i ].height ) || t.next !== ( i === nextAt ) ) ) bad ++;
 		worst = Math.max( worst, html.length );
@@ -220,6 +220,14 @@ const find = ( f, T0 = 0, to = 24 * 60, step = 0.25 ) => {
 	ok( said > 960, `something said for right now most of the time (${ ( said / 960 ).toFixed( 1 ) } lines on average)` );
 	console.log( `      (${ ms.toFixed( 2 ) } ms a section, its HTML up to ${ worst } characters)` );
 	ok( moonIcon( moonFace( 20, 20 ) ).length < 600 && moonFace( 20, 20 ).lit > NEW_LIT, 'the clock\'s night icon small' );
+	// its parts: the tide now and the lines for right now always; each part behind its button, one open at a time
+	const x = tideMoon( 24 * 4 + 16, L ), shut = tideMoonHtml( x ), part = ( id ) => tideMoonHtml( x, id );
+	const has = ( h, s ) => h.includes( s );
+	ok( has( shut, 'Slack water' ) && x.now.every( ( l ) => has( shut, l.replace( /'/g, '&#39;' ) ) ) && ! has( shut, 'class="gm-tm-part"' ) && TM_PARTS.every( ( [ id ] ) => has( shut, `data-tm="${ id }"` ) && has( shut, `data-tm="${ id }" class="" aria-expanded="false"` ) ), 'shut: the tide now, the lines for right now and the four parts\' buttons, none open' );
+	ok( has( part( 'tides' ), 'role="listitem"' ) && ( part( 'tides' ).match( /role="listitem"/g ) || [] ).length === x.tides.length && has( part( 'tides' ), 'from low to high today' ) && ! has( part( 'tides' ), 'Tonight' ), 'Tides: the day\'s turns and the range, and nothing else' );
+	ok( has( part( 'moon' ), x.moon.name ) && has( part( 'moon' ), 'Tonight: <b>' ) && ! has( part( 'moon' ), 'listitem' ), 'Moon: its name, how much is lit and tonight' );
+	ok( WHAT_THEY_DO.every( ( l ) => has( part( 'effects' ), l ) ) && has( part( 'clock' ), 'dimmed while it' ) && has( part( 'clock' ), 'Slack water' ), 'Effects: what they do in the game; Clock: what its marks mean' );
+	ok( TM_PARTS.every( ( [ id ] ) => has( part( id ), `data-tm="${ id }" class="is-on" aria-expanded="true"` ) && ( part( id ).match( /is-on/g ) || [] ).length === 1 ), 'the one open marked so, and only it' );
 
 }
 

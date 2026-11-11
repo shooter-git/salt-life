@@ -14,8 +14,9 @@ import { moonFace, moonIcon, tideMarker, tideMoon, WHAT_THEY_DO } from './TideMo
 //                 who wants it; a dot on the clock when someone else does and you haven't said)
 // It says when Joe and Marta open or shut (M9: or that they've shut for the weather), and (Salt Life) the
 // weather: what it is (M9: and its rain), what's coming, and a choice of it (in company, for everyone
-// here: Together.setWeather); (after M17) and the tide and the moon: the day's tides, springs or neaps, the
-// moon and tonight, what they're doing in the game now, what they do, and what the clock's new marks mean.
+// here: Together.setWeather); (after M17) and the tide and the moon: the tide now and what it and the moon are
+// doing in the game just now, and behind their own buttons the day's tides and springs or neaps, the moon and
+// tonight, what they do in the game, and what the clock's new marks mean.
 // No toasts: a rest dims the world for a moment instead.
 //   const t = new TimeHUD( game, purse, root );  t.update( dt )  (per frame)  t.toggle( open? )
 //   wxWind( weather ) -> 'NNW' (where it's from)   wxRain( weather ) -> 'rain' ('' dry, or the name says it)
@@ -105,6 +106,9 @@ const CSS = /* css */`
 .gm-tm-do li { margin-top: 3px; color: var(--tw-ink-2); font-size: var(--tw-fs-xs); line-height: 1.35; }
 .gm-tm-do li b { color: var(--tw-ink); font-weight: 600; }
 .gm-tm-key { margin: var(--tw-2) 0 0; color: var(--tw-ink-3); font-size: var(--tw-fs-xs); line-height: 1.35; }
+.gm-tm-parts { margin-top: var(--tw-2); }
+.gm-tm-parts button small { font-family: var(--tw-font); white-space: nowrap; }
+.gm-tm-part { margin-top: var(--tw-2); }
 .gm-time :focus-visible { outline: 2px solid rgba(var(--tw-aqua-rgb), 0.9); outline-offset: 1px; }
 .gm-rest-fade { position: absolute; inset: 0; background: #02060b; opacity: 0; pointer-events: none; transition: opacity 420ms var(--tw-ease-io); }
 .gm-rest-fade.is-on { opacity: 0.92; transition-duration: 220ms; }
@@ -183,30 +187,53 @@ const hoursText = ( h ) => {
 };
 
 // (after M17) the panel's tide and moon (TideMoon.tideMoon's x): the tide now and the day's tides, springs or neaps, the
-// moon and tonight, what they're doing in the game now, what they do, and what the clock's marks mean
-export function tideMoonHtml( x ) {
+// moon and tonight, what they're doing in the game now, what they do, and what the clock's marks mean. Always shown: the
+// tide now and the lines for right now; the rest in four parts behind their own buttons (TM_PARTS), one open at a time
+// (`open`: its id, or null for none)
+export const TM_PARTS = [ [ 'tides', 'Tides' ], [ 'moon', 'Moon' ], [ 'effects', 'Effects' ], [ 'clock', 'Clock' ] ];
+export function tideMoonHtml( x, open = null ) {
 
 	const m = x.marker, n = x.next;
 	const turn = n ? `${ n.high ? 'high' : 'low' } at ${ n.time } (in ${ hoursText( n.in ) })` : '';
 	const tide = m.dir === 'slack'
 		? `${ TIDE_ICON.slack } <b>Slack water</b>${ n ? n.high === m.high ? `, ${ turn }` : ` just past the ${ m.high ? 'high' : 'low' }; ${ turn }` : '' }`
 		: `${ TIDE_ICON[ m.dir ] } <b>${ m.dir === 'up' ? 'Rising' : 'Falling' }</b>${ turn ? `, ${ turn }` : '' }`;
-	const cells = x.tides.map( ( t ) => `<span class="${ t.past ? 'is-past' : '' }${ t.next ? ' is-next' : '' }"><small>${ t.high ? 'High' : 'Low' }</small><b>${ esc( t.time ) }</b><small>${ t.feet } ft</small></span>` ).join( '' );
-	const s = x.springs;
-	const kind = s.kind === 'springs' ? '<b>Springs</b>: a big tide' : s.kind === 'neaps' ? '<b>Neaps</b>: a small tide' : `<b>Between</b> springs and neaps, ${ s.toward === 'springs' ? 'growing' : 'easing' }`;
-	const near = s.perigee >= 0.8 ? ', the bigger with the moon near' : s.perigee <= 0.2 ? ', the smaller with the moon far' : '';
-	const mo = x.moon, t = x.tonight;
+	const s = x.springs, mo = x.moon, t = x.tonight;
+	// (each part's button says a word of what's in it, as the rest's say their times)
+	const small = { tides: s.kind, moon: `${ mo.lit }% lit`, effects: 'in game', clock: 'its marks' };
+	const buttons = TM_PARTS.map( ( [ id, name ] ) => `<button type="button" data-tm="${ id }" class="${ open === id ? 'is-on' : '' }" aria-expanded="${ open === id }" aria-controls="gm-tm-part">${ name }<small>${ small[ id ] }</small></button>` ).join( '' );
+	let part = '';
+	if ( open === 'tides' ) {
+
+		const cells = x.tides.map( ( c ) => `<span role="listitem" class="${ c.past ? 'is-past' : '' }${ c.next ? ' is-next' : '' }"><small>${ c.high ? 'High' : 'Low' }</small><b>${ esc( c.time ) }</b><small>${ c.feet } ft</small></span>` ).join( '' );
+		const kind = s.kind === 'springs' ? '<b>Springs</b>: a big tide' : s.kind === 'neaps' ? '<b>Neaps</b>: a small tide' : `<b>Between</b> springs and neaps, ${ s.toward === 'springs' ? 'growing' : 'easing' }`;
+		const near = s.perigee >= 0.8 ? ', the bigger with the moon near' : s.perigee <= 0.2 ? ', the smaller with the moon far' : '';
+		part = `<div class="gm-tm-tides" role="list" aria-label="Today's tides">${ cells }</div>
+			<p class="gm-time-sub">${ kind }: ${ s.range } ft from low to high today${ near }</p>
+			<p class="gm-tm-key">Heights over chart datum (mean lower low water), as the tide table and the chart give them.</p>`;
+
+	} else if ( open === 'moon' ) {
+
+		part = `<p class="gm-time-sub">${ moonIcon( mo.face ) }<b>${ mo.name }</b>, ${ mo.lit }% lit · ${ mo.next.text }</p>
+			<p class="gm-time-sub">Tonight: <b>${ t.word }</b>${ esc( t.rest ) }</p>`;
+
+	} else if ( open === 'effects' ) part = `<ul class="gm-tm-do">${ WHAT_THEY_DO.map( ( l ) => `<li>${ l }</li>` ).join( '' ) }</ul>`;
+	else if ( open === 'clock' ) {
+
+		part = `<ul class="gm-tm-do">
+			<li>Under the time: ${ TIDE_ICON.up } <b>rising</b> or ${ TIDE_ICON.down } <b>falling</b>, and when it next turns, high or low.</li>
+			<li>${ TIDE_ICON.slack } <b>Slack water</b>, near a turn: the tide still, the pier at its best.</li>
+			<li>At night the clock's <b>moon</b> is the moon as it is: its phase, lit on the sun's side as it hangs in the sky here, and dimmed while it's down.</li>
+		</ul>`;
+
+	}
+
 	return `<div class="gm-tm">
 		<div class="gm-time-label">Tide and moon</div>
 		<p class="gm-time-sub">${ tide }</p>
-		<div class="gm-tm-tides" role="list" aria-label="Today's tides">${ cells }</div>
-		<p class="gm-time-sub">${ kind }: ${ s.range } ft from low to high today${ near }</p>
-		<p class="gm-time-sub">${ moonIcon( mo.face ) }<b>${ mo.name }</b>, ${ mo.lit }% lit · ${ mo.next.text }</p>
-		<p class="gm-time-sub">Tonight: <b>${ t.word }</b>${ esc( t.rest ) }</p>
 		${ x.now.length ? `<ul class="gm-tm-now">${ x.now.map( ( l ) => `<li>${ esc( l ) }</li>` ).join( '' ) }</ul>` : '' }
-		<div class="gm-time-label">In the game</div>
-		<ul class="gm-tm-do">${ WHAT_THEY_DO.map( ( l ) => `<li>${ l }</li>` ).join( '' ) }</ul>
-		<p class="gm-tm-key">By the time: ${ TIDE_ICON.up } rising or ${ TIDE_ICON.down } falling, and when it next turns; ${ TIDE_ICON.slack } slack water, near a turn. At night the clock's moon is the moon as it is: its phase, lit on the sun's side as it hangs in the sky here, and dimmed while it's down.</p>
+		<div class="gm-time-rest gm-tm-parts">${ buttons }</div>
+		${ part ? `<div class="gm-tm-part" id="gm-tm-part">${ part }</div>` : '' }
 	</div>`;
 
 }
@@ -226,12 +253,13 @@ export class TimeHUD {
 		this.text = this.button.querySelector( '.gm-clock-t' );
 		this.tide = this.button.querySelector( '.gm-clock-tide' );
 		// ((after M17) the tide's marker and the night's moon, worked out again as the shown time changes; the panel's
-		// tide and moon each five minutes of the clock)
+		// tide and moon each five minutes of the clock, and which of its parts is open)
 		this._tmAt = '';
 		this._mark = null;
 		this._moon = '';
 		this._tmKey = '';
-		this._tmHtml = '';
+		this._tm = null;
+		this._tmOpen = null;
 		purse.prepend( this.button );
 		this.menu = h( 'div', 'gm-time tw-glass' );
 		this.menu.setAttribute( 'role', 'dialog' );
@@ -336,7 +364,7 @@ export class TimeHUD {
 
 				this._focus = ( this._focus + step + buttons.length ) % buttons.length;
 				buttons[ this._focus ].focus( { preventScroll: true } );
-				this._reveal( buttons[ this._focus ], this._focus === buttons.length - 1 );
+				this._reveal( buttons[ this._focus ] );
 
 			} else if ( code === 'Space' && buttons.includes( document.activeElement ) ) document.activeElement.click();
 
@@ -414,11 +442,12 @@ export class TimeHUD {
 		if ( tmKey !== this._tmKey ) {
 
 			this._tmKey = tmKey;
-			this._tmHtml = tideMoonHtml( tideMoon( islandTime( st.day, st.hour ), loc ) );
+			this._tm = tideMoon( islandTime( st.day, st.hour ), loc );
 
 		}
 
-		const sig = [ barred, timeText( st.hour, loc ), st.day, st.held, st.alone, st.mine, asks, st.here.length, this.app.input.lastDevice, wxLine, wxNext, wxSaid, chosen, tmKey ].join( '|' );
+		// (and which of its parts is open: TM_PARTS)
+		const sig = [ barred, timeText( st.hour, loc ), st.day, st.held, st.alone, st.mine, asks, st.here.length, this.app.input.lastDevice, wxLine, wxNext, wxSaid, chosen, tmKey, this._tmOpen ].join( '|' );
 		if ( sig === this._sig ) return;
 		this._sig = sig;
 		const focused = this.menu.contains( document.activeElement ) ? [ ...this.menu.querySelectorAll( 'button' ) ].indexOf( document.activeElement ) : - 1;
@@ -461,27 +490,39 @@ export class TimeHUD {
 			<p class="gm-time-sub">${ stalls }</p>
 			${ wxLine ? `<p class="gm-time-sub gm-time-wx">${ wxLine }</p>${ wxSaid ? `<p class="gm-time-sub gm-time-news${ warned ? ' is-warn' : '' }">${ wxSaid }</p>` : '' }<p class="gm-time-sub">${ wxNext }</p>` : '' }
 			${ body }
-			${ this._tmHtml }
+			${ tideMoonHtml( this._tm, this._tmOpen ) }
 			${ keys ? `<div class="gm-time-foot">${ keys }</div>` : '' }`;
 		const hold = this.menu.querySelector( '[data-hold]' );
 		if ( hold ) hold.onclick = () => this.hold( ! st.held );
 		for ( const b of this.menu.querySelectorAll( '[data-rest]' ) ) b.onclick = () => this.rest( b.dataset.rest === this.state().mine ? null : b.dataset.rest );
 		for ( const b of this.menu.querySelectorAll( '[data-weather]' ) ) b.onclick = () => this.pickWeather( b.dataset.weather || null );
+		for ( const b of this.menu.querySelectorAll( '[data-tm]' ) ) b.onclick = () => this.part( b.dataset.tm );
 		const buttons = this.menu.querySelectorAll( 'button' );
 		if ( focused >= 0 && buttons[ focused ] ) buttons[ focused ].focus( { preventScroll: true } );
 
 	}
 
-	// (after M17) a choice reached by the keys or the d-pad scrolled into the panel where it's taller than the screen; the
-	// last one goes to the panel's top, to show as much as fits of the rest under it (the tide and the moon), which has
-	// no choice to reach
-	_reveal( b, last ) {
+	// (after M17) one of the tide and moon's parts opened (TM_PARTS: its id), or closed if it's the one open; it's kept open
+	// as the panel's closed and opened again, and brought into view under its button
+	part( id ) {
+
+		this._tmOpen = this._tmOpen === id ? null : id;
+		this._sig = '';
+		this.render( this.state() );
+		const p = this.menu.querySelector( '.gm-tm-part' ), row = this.menu.querySelector( '.gm-tm-parts' );
+		if ( p && row ) this._reveal( p, row );
+
+	}
+
+	// (after M17) something in the panel scrolled into view where the panel's taller than the screen (a choice reached by
+	// the keys or the d-pad, a part opened), never so far that `keep` (its buttons) goes off the top
+	_reveal( el, keep = el ) {
 
 		const m = this.menu;
 		if ( m.scrollHeight <= m.clientHeight ) return;
-		const r = b.getBoundingClientRect(), R = m.getBoundingClientRect();
-		if ( last || r.top < R.top ) m.scrollTop += r.top - R.top - 8;
-		else if ( r.bottom > R.bottom ) m.scrollTop += r.bottom - R.bottom + 8;
+		const r = el.getBoundingClientRect(), k = keep.getBoundingClientRect(), R = m.getBoundingClientRect();
+		if ( k.top < R.top ) m.scrollTop += k.top - R.top - 8;
+		else if ( r.bottom > R.bottom ) m.scrollTop += Math.min( r.bottom - R.bottom + 8, k.top - R.top - 8 );
 
 	}
 
