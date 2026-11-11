@@ -1,7 +1,7 @@
 // (M17, stream 4) Aboard together: what M16 left for a guest on someone else's boat. The dock's berths along the stem by each
 // boat's size and the tide, the way out round the pier head, a kayak's place on the sand, the yard's second cradle; the
-// console's ladder in her fit; a speck's height by her fit; the chair by the seat; a guest's fish too big for their hold in
-// hers; Marta's tray from the group's save; Pearl's berth with anyone's boat in it; a slow game's boat kept with the water.
+// console's ladder in her fit; a speck's height by her fit; the chair by the seat; a guest's catch in her box (main's v2.3.0);
+// Marta's tray from the group's save; Pearl's berth with anyone's boat in it; a slow game's boat kept with the water.
 // Two real games: tools/two-players/together.mjs.
 import { register } from 'node:module';
 import { readFileSync } from 'node:fs';
@@ -21,7 +21,6 @@ const { jobAt } = await import( '../src/together/Crew.js' );
 const { seenHeight } = await import( '../src/together/Specks.js' );
 const { Together } = await import( '../src/together/Together.js' );
 const { GameState } = await import( '../src/game/GameState.js' );
-const { Rigs } = await import( '../src/game/rigs/Rigs.js' );
 const { BoatController } = await import( '../src/player/BoatController.js' );
 const { WaterQuery } = await import( '../src/ocean/WaterQuery.js' );
 const { G } = await import( '../src/core/Globals.js' );
@@ -232,32 +231,21 @@ for ( const file of [ 'island.bin', 'island-1024.bin' ] ) {
 
 }
 
-// ---- (4) a guest's fish too big for their own hold, in hers
+// ---- (4) a guest's catch in her box: main's v2.3.0 (together/SharedBox.js, test/shared-box.mjs), in place of M17's fish too
+// big for a guest's own hold in hers. Here only that her box decides the room, riding along
 {
 
 	const st = new GameState();
 	st.save = () => {};
 	const cooler = st.stats.holdKg; // (a new game's: the kayak's)
-	st.aboardHold = { owner: 'robin', name: 'Robin', room: 300 };
+	const her = ( others ) => () => ( { cap: 300, ice: 0, melt: 0, makes: 0, others, word: 'hold', whose: 'Robin', by: [] } );
+	st.boxIs = her( 40 );
 	const tuna = st.addFish( 'yellowfin', 42, 10 );
-	ok( tuna && tuna.aboard === 'robin' && tuna.boat === 'Robin' && st.lastCatch.kept && st.lastCatch.stowed === 'Robin', `a 42 kg tuna caught aboard Robin's boat, too big for your ${ cooler } kg cooler: in her hold` );
-	ok( st.holdKg === 0 && st.stowedIn( 'robin' ) === 42 && st.holdValue === tuna.value && st.log.yellowfin, 'still yours: in your log and your hold\'s list, worth its price, not in your cooler' );
-	const snapper = st.addFish( 'muttonSnapper', 3, 10 );
-	ok( snapper && ! snapper.aboard && st.holdKg === 3, 'one that fits your cooler goes in it, as the user had it' );
-	st.aboardHold = { owner: 'robin', name: 'Robin', room: 60 };
-	ok( st.addFish( 'yellowfin', 30, 10 ) === null && ! st.lastCatch.kept, 'and when her hold\'s full, it\'s let go as before' );
-	st.aboardHold = null;
-	ok( st.addFish( 'yellowfin', 35, 10 ) === null, 'off her, it\'s too big again' );
-	const back = new GameState();
-	back.save = () => {};
-	back.fromJSON( JSON.parse( JSON.stringify( st.toJSON() ) ) );
-	ok( back.inventory.some( ( f ) => f.aboard === 'robin' && f.boat === 'Robin' ) && back.holdKg === 3, 'and saved so' );
-	const host = new GameState();
-	Object.defineProperty( host, 'stats', { value: { ...host.stats, holdKg: 100 } } );
-	host.lent = 80;
-	ok( ! host.fits( 25 ) && host.fits( 15 ), 'her owner\'s hold has the room it has: hers less what\'s of theirs in it' );
-	const k = Rigs.cleanKit( { t: { lineKg: 20 }, b: {}, h: 123.4 } );
-	ok( k.h === 123.4 && Rigs.cleanKit( { t: {}, h: 'x' } ).h === 0, 'her kit says the room in her hold' );
+	ok( tuna && st.lastCatch.kept && st.holdKg === 42 && st.log.yellowfin, `a 42 kg tuna caught aboard Robin's boat, too big for your ${ cooler } kg cooler: in her hold, and still yours` );
+	st.boxIs = her( 250 );
+	ok( st.addFish( 'yellowfin', 30, 10 ) === null && ! st.lastCatch.kept, 'and when her hold\'s full, it\'s let go' );
+	st.boxIs = null;
+	ok( st.addFish( 'yellowfin', 35, 10 ) === null, 'off her, your own cooler again' );
 
 }
 

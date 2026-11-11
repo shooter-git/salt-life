@@ -60,14 +60,15 @@ for ( const w of [ owner, guest ] ) {
 }
 
 say( await G.aboard( owner, guest ), 'Sam rides along on Robin\'s sportfisher' );
-const hold = await until( guest.game, 'window.__app.game.state.aboardHold', 120000 ).then( () => guest.game.evaluate( () => window.__app.game.state.aboardHold ) ).catch( () => null );
-note( `Sam's game has her hold as ${ JSON.stringify( hold ) }` );
+// (his catch in her box: main's v2.3.0, together/SharedBox.js)
+const hold = await until( guest.game, "window.__app.game.state.box().whose === 'Robin'", 120000 ).then( () => guest.game.evaluate( () => { const b = window.__app.game.state.box(); return { cap: b.cap, others: b.others, whose: b.whose }; } ) ).catch( () => null );
+note( `Sam's game has her box as ${ JSON.stringify( hold ) }` );
 
 const r = await land( owner, [ [ 'grunt', 0.9, 'bay' ], [ 'bonefish', 2.4, 'coast' ], [ 'permit', 9.1, 'coast' ], [ 'tarpon', 31, 'creek' ], [ 'snook', 5.6, 'creek' ] ] );
 say( r === '- - - grand superGrand', `Robin's grunt, bonefish, permit, tarpon (the grand slam) and snook (the super grand slam): ${ r }` );
 const s = await land( guest, [ [ 'sailfish', 32, 'dropoff' ], [ 'whiteMarlin', 27, 'dropoff' ], [ 'yellowfin', 48, 'dropoff' ], [ 'blueMarlin', 170, 'blue' ] ] );
 say( s === '- - - billfish', `Sam's sailfish, white marlin, yellowfin and blue marlin aboard Robin's boat: ${ s }` );
-const sam = await guest.game.evaluate( () => { const st = window.__app.game.state; return { tuna: st.inventory.filter( ( f ) => f.species === 'yellowfin' ).map( ( f ) => f.aboard || 'his own' ), slam: !! st.trophies[ 'slam:billfish' ], kinds: Object.keys( st.log ).length }; } );
+const sam = await guest.game.evaluate( () => { const st = window.__app.game.state; return { kept: st.inventory.map( ( f ) => f.species ), slam: !! st.trophies[ 'slam:billfish' ], kinds: Object.keys( st.log ).length }; } );
 const robin = await owner.game.evaluate( () => { const st = window.__app.game.state; return { slam: !! st.trophies[ 'slam:billfish' ], kinds: Object.keys( st.log ).length, supers: !! st.trophies[ 'slam:superGrand' ] }; } );
 say( sam.slam && sam.kinds === 4 && ! robin.slam && robin.kinds === 5 && robin.supers, `the billfish grand slam and its kinds are Sam's, not Robin's (Sam ${ JSON.stringify( sam ) }, Robin ${ JSON.stringify( robin ) })` );
 

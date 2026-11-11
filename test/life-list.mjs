@@ -164,7 +164,8 @@ const fish = ( species, kg, place = 'coast' ) => ( { species, kg, place, release
 {
 
 	const host = fresh(), guest = fresh(), settings = { day: 11, timeOfDay: 10 };
-	guest.aboardHold = { owner: 'robin', name: 'Robin', room: 600 };
+	// (riding Robin's boat, the guest's catch in her box: main's v2.3.0, together/SharedBox.js)
+	guest.boxIs = () => ( { cap: 600, ice: 0, melt: 0, makes: 0, others: 0, word: 'hold', whose: 'Robin', by: [] } );
 	// (the guest's own game lands it: FlatsFishing.caught on the guest's state, as Game.updateFight calls it)
 	const theirs = Object.assign( Object.create( FlatsFishing.prototype ), { app: { settings }, game: { state: guest }, events: {} } );
 	let last = [];
@@ -175,7 +176,7 @@ const fish = ( species, kg, place = 'coast' ) => ( { species, kg, place, release
 
 	}
 
-	ok( guest.inventory.some( ( f ) => f.species === 'yellowfin' && f.aboard === 'robin' ), 'a guest\'s 48 kg yellowfin, too big for their cooler: in Robin\'s hold, still theirs' );
+	ok( guest.inventory.some( ( f ) => f.species === 'yellowfin' ), 'a guest\'s 48 kg yellowfin, too big for their cooler: in Robin\'s hold, still theirs' );
 	ok( guest.trophies[ 'slam:billfish' ] && guest.trophies[ 'slam:billfish' ].n === 1 && lifeCount( guest ) === 4, 'the guest\'s three billfish aboard Robin\'s boat: the guest\'s billfish grand slam, and four kinds on the guest\'s list' );
 	ok( ! host.trophies[ 'slam:billfish' ] && lifeCount( host ) === 0 && ! last.length, 'none of it Robin\'s' );
 	ok( ! theirs.events.slam, 'the Guide\'s grand slam tip isn\'t set by a billfish' );

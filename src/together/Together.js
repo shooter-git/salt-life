@@ -13,6 +13,7 @@ import { BoatLamps } from '../world/boat/BoatLamps.js';
 import { stackedOn } from '../game/TrapWork.js';
 import { SWING, atDock, berthShare, cradleGeometry, inTheYard, laidAt, leaving, onTheSand, sandBerth, spareYard, stemBerth } from './Berths.js';
 import { Crew, footY, perched } from './Crew.js';
+import { SharedBox } from './SharedBox.js';
 import { Specks } from './Specks.js';
 import { RADAR_RPM, PROP_DISPLAY_RPS } from '../world/BoatModel.js';
 import { FISH, fishLengthCm, isTrophy } from '../game/FishTable.js';
@@ -258,6 +259,7 @@ export class Together {
 		this._tags = null;
 		this.copies = new BoatCopies( app ); // (M16) the others' boats, by type
 		this.crew = new Crew( this );
+		this.box = new SharedBox( this ); // ((v2.3.0) one fish box aboard: a guest's catch in hers, kept on her ice)
 		this.specks = null; // (M16) and past the fog (made when there's someone out there)
 		this._specks = [];
 		this._tidyT = 0;
@@ -301,6 +303,8 @@ export class Together {
 		s.on( 'week', ( tally ) => this._setWeek( tally ) );
 		s.on( 'world', ( body ) => this._theirWorld( body ) );
 		s.on( 'call', ( body, from ) => this.crew.theirCall( body, from ) );
+		s.on( 'box', ( body, from ) => this.box.told( body, from ) );
+		s.on( 'boxIn', ( body, from ) => this.box.given( body, from ) );
 		this._worldT = 0;
 		// ((M14) coming to host: the whale's surfacings your own again)
 		if ( s.onHostChange ) s.onHostChange( () => { if ( s.isHost && app.whale ) app.whale.brain.led = false; } );
@@ -1589,15 +1593,6 @@ export class Together {
 		const named = this._nameN === 0 && app.game.state && app.game.state.fleet && app.game.state.fleet[ app.boat.id ];
 		if ( named && named.name ) body.Nm = named.name;
 		if ( p.riding ) body.R = p.boat.owner;
-		// ((M17) what of yours is in someone else's hold, by whose: their game makes room for it)
-		const inv = app.game.state && app.game.state.inventory;
-		if ( inv ) for ( const f of inv ) if ( f.aboard ) {
-
-			const Hs = body.Hs || ( body.Hs = [] ), i = Hs.indexOf( f.aboard );
-			if ( i < 0 ) Hs.push( f.aboard, r2( f.kg ) );
-			else Hs[ i + 1 ] = r2( Hs[ i + 1 ] + f.kg );
-
-		}
 		// (M16) your job aboard (Crew.js), and at someone else's helm, the lever and the wheel
 		if ( this.crew.job === 'tower' || ( m === 'h' && p.atHelm?.upper ) ) body.J = 1; // (at the tower's helm: their job's still the helm, Crew's)
 		else if ( this.crew.job === 'chair' ) body.J = 2;
@@ -1678,26 +1673,6 @@ export class Together {
 		// ((guest work) her tackle and bait are only yours to work while you're aboard her: a new boat's sent anew)
 		const rigs = app.game && app.game.rigs;
 		if ( rigs && rigs.boatKit && ( ! p.riding || p.boat.owner !== rigs.boatKitFrom ) ) rigs.boatKit = null;
-		// ((M17) her hold, for a fish too big for yours, with her owner aboard; and what's of theirs in yours)
-		const st = app.game && app.game.state;
-		if ( st ) {
-
-			const sk = rigs && rigs.boatKit ? this.skipper() : null;
-			st.aboardHold = sk ? Object.assign( st.aboardHold || {}, { owner: sk.person.id, name: sk.person.name, room: rigs.boatKit.h || 0 } ) : null;
-			let lent = 0;
-			for ( const o of this.others.values() ) {
-
-				const kg = o.cur ? o.cur.stowMine : o.stowWas || 0;
-				if ( o.stowWas !== undefined && kg > o.stowWas + 0.01 && app.game.toast ) app.game.toast( `${ o.person.name }'s fish is in your hold: too big for theirs`, 3000 );
-				o.stowWas = kg;
-				lent += kg;
-
-			}
-
-			st.lent = lent;
-
-		}
-
 		// riding: their boat's pose (gone, or they left: in the water where it was)
 		if ( p.riding ) {
 
@@ -1829,6 +1804,7 @@ export class Together {
 		this._liveBoats = 0;
 		this.crew.update( dt );
 		if ( this.others.size ) this._kits( dt );
+		this.box.update( dt );
 		this._tidy( dt );
 		this._speckBoats();
 		if ( ! this.others.size ) return;
@@ -1992,13 +1968,16 @@ export class Together {
 
 			}
 
-			if ( ! kit ) kit = this.app.game.rigs.kitOf();
-			// ((M17) and the room in her hold for a fish too big for theirs: what she holds, less her own catch and anyone else's in it)
-			const st = this.app.game.state, k = Object.assign( {}, kit, { h: r2( Math.max( 0, st.stats.holdKg - st.holdKg - ( st.lent - ( o.cur.stowMine || 0 ) ) ) ) } );
-			wire = JSON.stringify( k );
+			if ( ! kit ) {
+
+				kit = this.app.game.rigs.kitOf();
+				wire = JSON.stringify( kit );
+
+			}
+
 			if ( o.kitSent === wire ) continue;
 			o.kitSent = wire;
-			this.session.send( 'kit', { to: o.person.id, k } );
+			this.session.send( 'kit', { to: o.person.id, k: kit } );
 
 		}
 
@@ -2552,9 +2531,6 @@ export class Together {
 		cur.tj = Array.isArray( near.tj ) ? near.tj : null;
 		cur.tb = typeof near.tb === 'string' ? near.tb : null;
 		cur.anchored = near.A === 1;
-		// ((M17) theirs in your hold, kg)
-		cur.stowMine = 0;
-		if ( Array.isArray( near.Hs ) ) for ( let i = 0; i + 1 < near.Hs.length; i += 2 ) if ( near.Hs[ i ] === this.me.id && Number.isFinite( near.Hs[ i + 1 ] ) ) cur.stowMine = MathUtils.clamp( near.Hs[ i + 1 ], 0, 5000 );
 		cur.flood = MathUtils.clamp( Number( near.L ) || 0, 0, 1 ); // ((M14) her floodlights' lenses)
 		cur.rpm = ( Number( a.E ) || 0 ) + ( ( Number( b.E ) || 0 ) - ( Number( a.E ) || 0 ) ) * f;
 		cur.crank = near.K === 1 || near.K === 2 ? near.K : 0;

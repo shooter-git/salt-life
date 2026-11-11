@@ -139,7 +139,7 @@ export class Rigs {
 		if ( k.b && typeof k.b === 'object' ) for ( const id of BAIT_IDS ) if ( ! BAITS[ id ].lure && Number.isFinite( k.b[ id ] ) && k.b[ id ] > 0 ) b[ id ] = Math.floor( k.b[ id ] );
 		return {
 			t: { lineKg: n( T.lineKg, 1, 200, UPGRADES.line.levels[ 0 ].lineKg ), reelSpeed: n( T.reelSpeed, 0.5, 6, 1.1 ), dragKg: Number.isFinite( T.dragKg ) ? n( T.dragKg, 0, 60, null ) : null, spoolM: n( T.spoolM, 50, 2000, 180 ), twoSpeed: !! T.twoSpeed, standUp: !! T.standUp, electricReel: !! T.electricReel, leader: n( T.leader | 0, 0, 3, 0 ) },
-			b, lu: n( k.lu | 0, 0, 3, 0 ), sp: n( k.sp | 0, 0, 5, 0 ), kite: !! k.kite, h: n( k.h, 0, 5000, 0 ),
+			b, lu: n( k.lu | 0, 0, 3, 0 ), sp: n( k.sp | 0, 0, 5, 0 ), kite: !! k.kite,
 		};
 
 	}

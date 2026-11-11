@@ -1,6 +1,6 @@
 // (M17, stream 4) Aboard together, with two real games, part by part: what M16 left for a guest on someone else's boat.
 //   tools/render-slot.sh node tools/two-players/together.mjs [dir] [port] <part>
-//   parts: seat (5)  yard (2)  tray (3)  hold (4)  sand, stem (6; berths: both)  pearl (7)  specks (8)  horn (9)  ladder (10, 11)  chair (12)  slow (13)
+//   parts: seat (5)  yard (2)  tray (3)  sand, stem (6; berths: both)  pearl (7)  specks (8)  horn (9)  ladder (10, 11)  chair (12)  slow (13)
 import { OTHER as other, start } from './lib.mjs';
 const [ out = 'qa-output', PORT = '5234', PART = 'seat' ] = process.argv.slice( 2 );
 const G = await start( { out, port: PORT } );
@@ -369,33 +369,6 @@ if ( PART === 'tray' ) {
 	const late = await G.open( 'Alex', 'kayak', 20, { group } );
 	await until( late.game, `window.__app.together.tray && window.__app.together.tray.who === 'Robin'`, 60000 ).catch( () => {} );
 	say( await late.game.evaluate( () => !! ( window.__app.together.tray && window.__app.together.tray.who === 'Robin' ) ), 'and Alex, coming later, reads it from the group\'s save' );
-
-}
-
-if ( PART === 'hold' ) {
-
-	// (4) a fish too big for a guest's own hold goes in hers: still his, his to sell; her owner's room is less by it
-	const owner = await G.open( 'Robin', 'sportfisher', 20 ), guest = await G.open( 'Sam', 'kayak', 20 );
-	await ready( owner, guest );
-	await G.buy( owner );
-	await toasts( owner );
-	say( await G.aboard( owner, guest ), 'Sam\'s aboard the sportfisher' );
-	await G.toSea( owner, { x: - 900, z: 900 } );
-	await until( guest.game, 'window.__app.game.state.aboardHold && window.__app.game.state.aboardHold.room > 100', 60000 ).catch( () => {} );
-	const before = await guest.game.evaluate( () => { const st = window.__app.game.state; return { hold: st.aboardHold && { ...st.aboardHold }, cooler: st.stats.holdKg }; } );
-	const roomBefore = await owner.game.evaluate( () => { const st = window.__app.game.state; return st.stats.holdKg - st.holdKg - st.lent; } );
-	const caught = await guest.game.evaluate( () => { const g = window.__app.game, f = g.state.addFish( 'yellowfin', 42, g.hour, { day: g.tradeDay } ), L = g.state.lastCatch; return { kept: L.kept, stowed: L.stowed, aboard: f && f.aboard, inCooler: g.state.holdKg, worth: g.state.holdValue, log: !! g.state.log.yellowfin }; } );
-	say( caught.kept && caught.stowed === 'Robin' && caught.aboard === 'robin-1' && caught.inCooler === 0 && caught.worth > 0 && caught.log, `a 42 kg yellowfin, his cooler ${ before.cooler } kg, her hold's room ${ before.hold && before.hold.room } kg: in her hold, still his: ${ JSON.stringify( caught ) }` );
-	await until( owner.game, 'window.__app.game.state.lent > 40', 60000 ).catch( () => {} );
-	const after = await owner.game.evaluate( () => { const st = window.__app.game.state; return { lent: st.lent, room: st.stats.holdKg - st.holdKg - st.lent, toasts: window.__toasts.filter( ( t ) => /hold/.test( t ) ) }; } );
-	say( after.lent === 42 && Math.abs( roomBefore - after.room - 42 ) < 0.01, `on Robin's game her hold has 42 kg of his in it: room ${ roomBefore } to ${ after.room } kg; ${ JSON.stringify( after.toasts ) }` );
-	const small = await guest.game.evaluate( () => { const g = window.__app.game, f = g.state.addFish( 'muttonSnapper', 3, g.hour, { day: g.tradeDay } ); return { aboard: f && f.aboard, inCooler: g.state.holdKg }; } );
-	say( ! small.aboard && small.inCooler === 3, 'one that fits his cooler goes in it, as the user had it' );
-	// (his to sell: off her and ashore, Joe buys it of him)
-	const sold = await guest.game.evaluate( () => { const st = window.__app.game.state, was = st.money, n = st.inventory.length; const r = st.sell(); return { n, count: r.count, total: r.total, money: st.money - was, left: st.inventory.length }; } );
-	say( sold.count === 2 && sold.money > 0 && sold.left === 0, `his to sell: ${ sold.count } fish to Joe for $${ sold.money }, the tuna among them` );
-	await until( owner.game, 'window.__app.game.state.lent === 0', 60000 ).catch( () => {} );
-	say( await owner.game.evaluate( () => window.__app.game.state.lent === 0 ), 'and her hold\'s room is hers again' );
 
 }
 

@@ -212,10 +212,9 @@ Done, M0 to M17:
   - with others: a school spooked or a fish hooked on one game is so on everyone's, a fish one of you
     sees is called to the others by the clock, and someone joining later finds the flat as it stands;
   - everything M16 left for guests aboard: a second cradle in Marta's yard, the shell tray from the
-    group's save, a fish too big for your hold in hers, berths along the stem by each boat's size and
-    the tide, Pearl lying off for anyone's boat, the console's ladder on her copy and boarding by it,
-    the horn heard from the boat it's sounded on, the chair by its seat, a slow game's boat kept with
-    the water;
+    group's save, berths along the stem by each boat's size and the tide, Pearl lying off for
+    anyone's boat, the console's ladder on her copy and boarding by it, the horn heard from the boat
+    it's sounded on, the chair by its seat, a slow game's boat kept with the water;
   - coming back where you were: on her deck, bridge, tower or roof, in the water beside her far out,
     or aboard someone else's once she's there;
   - a boat's wake's far arms as waves that rock a kayak and lift the bobber; the lobster boat's side

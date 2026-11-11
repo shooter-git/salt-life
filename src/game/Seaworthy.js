@@ -165,6 +165,18 @@ export function keepCatch( fish, ice, hours, melt, makes = 0 ) {
 
 }
 
+// (v2.3.0) Room held for ice. The box holds fish and ice together, and a fish going in melts its share of the ice
+// (CHILL_KG). Past that, ice that won't fit beside the catch is let go to make room for fish (DaysOut._stamp), but never
+// the ice the catch needs to keep: a day's melt of the box (HELD_H), or what there is once the fish is chilled, if that's
+// less. A box packed to the lid with fish would have none, and the catch would be off in half a day. With no ice in the
+// box, none's held. box: { cap, fish (kg in it, everyone's), ice, melt (kg an hour) }
+export const HELD_H = 24;
+export const iceHeld = ( box, kg = 0 ) => Math.min( Math.max( 0, box.ice - CHILL_KG * kg ), box.melt * HELD_H );
+// how far a fish of `kg` is short of room in it, kg (<= 0: it fits)
+export const shortOf = ( box, kg ) => box.fish + kg + iceHeld( box, kg ) - box.cap;
+// (v2.3.0) what the box is called: a cooler, or (an ice chest and up) her hold
+export const holdWord = ( cap ) => ( cap >= 70 ? 'hold' : 'cooler' );
+
 // how the catch is, as the fish tab says it: 'iced' | 'fresh' | 'going' (past FRESH_H: its price is falling)
 export const stateOf = ( f, iced ) => ( ( f.w || 0 ) > FRESH_H ? 'going' : iced ? 'iced' : 'fresh' );
 

@@ -8,7 +8,7 @@ import { islandTime, towardOf, weatherHere, hurricaneNews } from './Weather.js';
 import { FT, feet, farOff, pounds, knots, gallons } from './Units.js';
 import { FLEET } from './fleet/Fleet.js';
 import { berthOf } from './fleet/Berths.js';
-import { ableOf, ableEnv, awashLs, seaHere, fetchAt, strainOf, windOn, slamK, keepCatch, feedOf, strengthOf, meltKgH, GENERATOR_LH, CHILL_KG, ICE_BAG_KG, ICE_BAG_PRICE, STORES_PRICE, STORES_WATER_L, LUNCH_H, DRY_H, FRESH_H, FLARES, FLARE_M, EPIRB_S, PASSING_H, reachTo } from './Seaworthy.js';
+import { ableOf, ableEnv, awashLs, seaHere, fetchAt, strainOf, windOn, slamK, keepCatch, feedOf, strengthOf, meltKgH, holdWord, GENERATOR_LH, CHILL_KG, ICE_BAG_KG, ICE_BAG_PRICE, STORES_PRICE, STORES_WATER_L, LUNCH_H, DRY_H, FRESH_H, FLARES, FLARE_M, EPIRB_S, PASSING_H, reachTo } from './Seaworthy.js';
 
 // (M16) Days out, and what each boat can stand: ice and the catch keeping, stores, sleeping aboard, flares and the EPIRB,
 // the drift sock, the deep finder's screen. The figures are Seaworthy.js'. Game makes one and calls update each frame; what
@@ -114,6 +114,7 @@ export class DaysOut {
 		this._ping = 0;
 		this.pings = [];
 		this.flare = null;
+		this.state.boxIs = () => this.boxOf(); // ((v2.3.0) the box your catch goes in, for GameState's room)
 
 	}
 
@@ -127,6 +128,60 @@ export class DaysOut {
 
 		const d = this.state.days.boats, id = this.state.boat;
 		return d[ id ] || ( d[ id ] = { ice: 0, stores: 0 } );
+
+	}
+
+	// (v2.3.0) riding with her owner aboard her and here: her box, as her owner's game says it (together/SharedBox.js), your
+	// catch in it and kept on her ice; else null (your own boat's box: box)
+	get her() {
+
+		const t = this.app.together;
+		return t && t.box ? t.box.herBox() : null;
+
+	}
+
+	// (v2.3.0) kg of your guests' fish in your box (theirs, in their saves: they've told your game them)
+	get guestsKg() {
+
+		const t = this.app.together;
+		return t && t.box ? t.box.guestsKg : 0;
+
+	}
+
+	// ((M16) an icemaker wants AC: shore power at her berth or on the hard, the generator anywhere else, for as long as she's
+	// fuel) -> kg an hour it's making now
+	_makes() {
+
+		const st = this.state, s = st.stats, b = this.app.boatCtl, shore = ! b || b.moored || b.hauled;
+		return s.icemaker && ( shore || ( s.generator && st.fuelL > 0 ) ) ? s.iceMakesKgH || 0 : 0;
+
+	}
+
+	// (v2.3.0) the box your catch goes in (GameState.box): your boat's, with your guests' fish in it too, or hers
+	boxOf() {
+
+		const her = this.her;
+		if ( her ) return her;
+		const st = this.state, s = st.stats, t = this.app.together;
+		return { cap: s.holdKg, ice: this.box.ice, melt: meltKgH( s.holdKg, s.insulated ), makes: this._makes(), others: this.guestsKg, word: holdWord( s.holdKg ), whose: null, by: t && t.box ? t.box.guests : [] };
+
+	}
+
+	// (v2.3.0) your box's ice let go to make room for what's in it (fish come first: GameState.fits holds the ice they need)
+	_makeRoom() {
+
+		const box = this.box;
+		box.ice = Math.min( box.ice, Math.max( 0, this.state.stats.holdKg - this.state.holdKg - this.guestsKg ) );
+
+	}
+
+	// (v2.3.0) a guest's fish caught aboard, in your box: its heat melts your ice, as yours does; then what won't fit beside
+	// it goes (together/SharedBox.js)
+	chillFor( kg ) {
+
+		const box = this.box;
+		box.ice = Math.max( 0, box.ice - CHILL_KG * kg );
+		this._makeRoom();
 
 	}
 
@@ -226,34 +281,39 @@ export class DaysOut {
 
 	// a fish new in the box: what it fetched fresh, and the heat it gives up to the ice. Any that's more than the box holds
 	// besides goes over the side (you make room for fish with the ice)
+	// ((v2.3.0) riding along, in her box: her ice, which her owner's game melts for it when it's told: SharedBox.chill)
 	_stamp() {
 
-		const st = this.state, box = this.box;
+		const st = this.state, box = this.box, her = this.her, t = this.app.together;
 		let n = 0;
 		for ( const f of st.inventory ) if ( f.v0 === undefined ) {
 
 			f.v0 = f.value;
 			f.w = 0;
-			box.ice = Math.max( 0, box.ice - CHILL_KG * f.kg );
+			if ( her ) t.box.chill( f );
+			else box.ice = Math.max( 0, box.ice - CHILL_KG * f.kg );
 			n ++;
 
 		}
 
-		if ( n ) box.ice = Math.min( box.ice, Math.max( 0, st.stats.holdKg - st.holdKg ) );
+		if ( n && ! her ) this._makeRoom();
 
 	}
 
 	// `hours` go by. away: you weren't there (no stores eaten) -> how many fish went off
+	// ((v2.3.0) riding along in her box, your catch keeps on her ice, which her owner's game melts; your own boat's box, where
+	// she lies, keeps its ice on its own. An icemaker stops when the box is full: there's never more ice than room for it)
 	pass( hours, away = false ) {
 
-		const st = this.state, box = this.box, s = st.stats, had = st.inventory.map( ( f ) => f.value );
-		// ((M16) an icemaker wants AC: shore power at her berth or on the hard, the generator anywhere else, for as long as she's fuel)
-		const b = this.app.boatCtl, shore = ! b || b.moored || b.hauled, runs = s.icemaker && ! shore && s.generator && st.fuelL > 0;
-		if ( runs ) st.burn( GENERATOR_LH * hours );
-		const r = keepCatch( st.inventory, box.ice, hours, meltKgH( s.holdKg, s.insulated ), shore || runs ? s.iceMakesKgH || 0 : 0 );
-		box.ice = r.ice;
+		const st = this.state, box = this.box, s = st.stats, had = new Map( st.inventory.map( ( f ) => [ f, f.value ] ) ), her = this.her;
+		const b = this.app.boatCtl, shore = ! b || b.moored || b.hauled, makes = this._makes();
+		if ( makes && ! shore ) st.burn( GENERATOR_LH * hours );
+		const own = keepCatch( her ? [] : st.inventory, box.ice, hours, meltKgH( s.holdKg, s.insulated ), makes );
+		const room = s.holdKg - ( her ? 0 : own.fish.reduce( ( kg, f ) => kg + f.kg, 0 ) ) - this.guestsKg;
+		box.ice = Math.min( own.ice, Math.max( 0, room ) ); // ((v2.3.0) and a box an icemaker overfilled before is put right)
+		const r = her ? keepCatch( st.inventory, her.ice, hours, her.melt, her.makes ) : own;
 		st.inventory = r.fish;
-		const changed = r.off.length > 0 || r.fish.some( ( f, i ) => f.value !== had[ i ] );
+		const changed = r.off.length > 0 || r.fish.some( ( f ) => f.value !== had.get( f ) );
 		if ( changed ) st.emit();
 		if ( r.off.length ) st.save();
 		if ( ! away ) {
@@ -304,13 +364,13 @@ export class DaysOut {
 	// what's worth saying as the time goes by
 	_warn( off ) {
 
-		const g = this.game, st = this.state, box = this.box, d = st.days;
+		const g = this.game, st = this.state, box = this.box, d = st.days, her = this.her, ice = her ? her.ice : box.ice; // ((v2.3.0) riding along, hers)
 		const fish = st.inventory, going = fish.some( ( f ) => f.w > FRESH_H );
 		if ( off ) g.toast( `${ off } fish went off in the box · over the side`, 4200 );
-		if ( going && ! this._warm ) g.toast( box.ice > 0 ? 'Some of the catch has been in a long while · sell it soon' : 'The catch is going soft in this heat · ice it, or sell it soon', 4800 );
+		if ( going && ! this._warm ) g.toast( ice > 0 ? 'Some of the catch has been in a long while · sell it soon' : 'The catch is going soft in this heat · ice it, or sell it soon', 4800 );
 		this._warm = going;
-		if ( box.ice <= 0 && this._iced && fish.length ) g.toast( 'The ice has gone · the catch keeps about 12 hours without it', 4200 );
-		this._iced = box.ice > 0;
+		if ( ice <= 0 && this._iced && fish.length ) g.toast( 'The ice has gone · the catch keeps about 12 hours without it', 4200 );
+		this._iced = ice > 0;
 		const stage = d.out <= LUNCH_H ? 0 : box.stores > 1 ? 1 : box.stores > 0 ? 2 : d.dry < DRY_H ? 3 : 4;
 		if ( stage !== this._storesSaid && this.aboard && stage >= 2 ) {
 
@@ -494,15 +554,15 @@ export class DaysOut {
 	// the box and the lockers, as the cooler's tab says them
 	boxSaid() {
 
-		const box = this.box;
-		return `${ box.ice > 0 ? ` · ${ pounds( box.ice ) } lb of ice` : '' }${ box.stores >= 0.05 ? ` · ${ box.stores.toFixed( 1 ) } days' stores` : '' }`;
+		const box = this.box, her = this.her, ice = her ? her.ice : box.ice;
+		return `${ ice > 0 ? ` · ${ pounds( ice ) } lb of ice` : '' }${ ! her && box.stores >= 0.05 ? ` · ${ box.stores.toFixed( 1 ) } days' stores` : '' }`;
 
 	}
 
 	// ---- Marta's ice and stores
 	shopRows() {
 
-		const st = this.state, box = this.box, s = st.stats, A = ableOf( st.boat ), room = Math.max( 0, s.holdKg - st.holdKg - box.ice );
+		const st = this.state, box = this.box, s = st.stats, A = ableOf( st.boat ), room = Math.max( 0, s.holdKg - st.holdKg - this.guestsKg - box.ice );
 		const melt = meltKgH( s.holdKg, s.insulated ), hrs = box.ice / melt;
 		const boat = BOATS[ st.boat ].name.toLowerCase();
 		const ice = `<div class="gm-shop-row"><span>Ice · $${ ICE_BAG_PRICE } a 10 lb bag<small>${ box.ice > 0 ? `${ pounds( box.ice ) } lb in the box, about ${ Math.max( 1, Math.round( hrs ) ) } hours of it` : 'None in the box: the catch keeps about 12 hours without it' }</small></span><button class="gm-btn" data-ice ${ st.money < ICE_BAG_PRICE || room < ICE_BAG_KG ? 'disabled' : '' }>${ room < ICE_BAG_KG ? 'No room' : `Bag · $${ ICE_BAG_PRICE }` }</button></div>`;
@@ -861,14 +921,16 @@ export class DaysOut {
 	showGauges() {
 
 		if ( ! this._ice ) return;
-		const st = this.state, box = this.box, aboard = this.aboard, fish = st.inventory.length > 0;
-		const showIce = aboard && ( box.ice > 0 || fish );
+		// ((v2.3.0) riding along, her ice: what keeps your catch)
+		const st = this.state, box = this.box, aboard = this.aboard, her = this.her, fish = st.inventory.length > 0 || ( aboard && this.guestsKg > 0 );
+		const ice = her ? her.ice : box.ice, cap = her ? her.cap : st.stats.holdKg;
+		const showIce = ( aboard || !! her ) && ( ice > 0 || fish );
 		this._ice.classList.toggle( 'is-on', showIce );
 		if ( showIce ) {
 
-			this._ice.classList.toggle( 'is-low', box.ice <= 0 );
-			this._iceBar.style.width = `${ Math.min( 100, box.ice / Math.max( 1, st.stats.holdKg * 0.5 ) * 100 ) }%`;
-			this._iceText.textContent = box.ice > 0 ? `${ pounds( box.ice ) } lb` : 'none';
+			this._ice.classList.toggle( 'is-low', ice <= 0 );
+			this._iceBar.style.width = `${ Math.min( 100, ice / Math.max( 1, cap * 0.5 ) * 100 ) }%`;
+			this._iceText.textContent = ice > 0 ? `${ pounds( ice ) } lb` : 'none';
 
 		}
 

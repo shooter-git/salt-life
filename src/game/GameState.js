@@ -13,7 +13,7 @@ import { LEADERS } from './rigs/Presentation.js';
 import { PLACES } from './Places.js';
 import { ChartLog } from './Chart.js';
 import { BOATS, START_BOAT } from '../world/boat/Boats.js';
-import { cleanDays } from './Seaworthy.js';
+import { cleanDays, shortOf, holdWord } from './Seaworthy.js';
 import { newTraps, cleanTraps } from './Traps.js';
 
 const SAVE_KEY = 'tidewater.save.v1';
@@ -38,11 +38,7 @@ export class GameState {
 
 		this.storage = storage;
 		this.money = 0;
-		this.inventory = []; // { id, species, kg, cm, value, caughtAt (game hours), record, method } ((M17) aboard, boat: in someone else's hold, hers)
-		// ((M17) not saved: riding with her owner, the room in her hold for a fish too big for yours ({ owner, name, room }), and kg of
-		// someone else's in yours (together/))
-		this.aboardHold = null;
-		this.lent = 0;
+		this.inventory = []; // { id, species, kg, cm, value, caughtAt (game hours), record, method }
 		// species -> { count, bestKg, bestCm, ((M17) the life list: docs/m17/life-list.md) bestDay, bestAt: your best's island day and
 		// place (Places.js), first: [ day, place ] of the first one (each null when it wasn't known: a save from before M17) }
 		this.log = {};
@@ -82,6 +78,7 @@ export class GameState {
 		this.traps = newTraps(); // ((M16) your lobster traps out on the sea: Traps.js)
 		this._nextId = 1;
 		this.listeners = new Set();
+		this.boxIs = null; // ((v2.3.0) () => the box your catch goes in: DaysOut.boxOf. box() has it)
 		this._chartBought();
 
 	}
@@ -308,32 +305,11 @@ export class GameState {
 
 	}
 
-	// ((M17) not counting one of yours in someone else's hold: aboard, as stowFor puts it there)
 	get holdKg() {
 
 		let kg = 0;
-		for ( const f of this.inventory ) if ( ! f.aboard ) kg += f.kg;
+		for ( const f of this.inventory ) kg += f.kg;
 		return kg;
-
-	}
-
-	// (M17) what of yours is in someone else's hold (their id): fish too big for yours, caught aboard her (together/)
-	stowedIn( owner ) {
-
-		let kg = 0;
-		for ( const f of this.inventory ) if ( f.aboard === owner ) kg += f.kg;
-		return kg;
-
-	}
-
-	// (M17) riding with her owner aboard: a fish too big for your own hold goes in hers, if there's room in it (aboardHold:
-	// { owner, name, room }, Together's from her owner's game). It's still yours: your log, your hold's list, yours to sell.
-	// -> her owner's name, or null
-	stowFor( kg ) {
-
-		const H = this.aboardHold;
-		if ( ! H || kg <= this.stats.holdKg + 1e-6 ) return null;
-		return kg <= H.room - this.stowedIn( H.owner ) + 1e-6 ? H.name : null;
 
 	}
 
@@ -345,11 +321,31 @@ export class GameState {
 
 	}
 
+	// (v2.3.0) the box your catch goes in, as DaysOut has it (boxIs, set as the game starts): your boat's, or riding with
+	// her owner aboard, hers (together/SharedBox.js). -> { cap, ice, melt (kg an hour), others (kg of fish in it not yours:
+	// aboard your own, your guests'; riding along, her owner's and any other guest's), word ('hold' | 'cooler'), whose (her
+	// owner's name, riding along; else null), by: [ { name, n, kg } ] (whose those others are) }. Without one (plain Node):
+	// your boat's, with no ice and only your fish
+	box() {
+
+		if ( this.boxIs ) return this.boxIs();
+		const cap = this.stats.holdKg;
+		return { cap, ice: 0, melt: 0, makes: 0, others: 0, word: holdWord( cap ), whose: null, by: [] };
+
+	}
+
+	// (v2.3.0) how far a fish of `kg` is short of room in the box (<= 0: it fits), beside everyone's fish in it and the ice
+	// it holds for them (Seaworthy.shortOf); mine: your fish in it (all of them; 0: if you let every one go)
+	shortOf( kg, mine = this.holdKg, b = this.box() ) {
+
+		return shortOf( { cap: b.cap, fish: b.others + mine, ice: b.ice, melt: b.melt }, kg );
+
+	}
+
 	// room in the cooler / hold for a fish of `kg`?
-	// ((M17) less what someone riding with you has in it: lent, Together's, not saved)
 	fits( kg ) {
 
-		return this.holdKg + ( this.lent || 0 ) + kg <= this.stats.holdKg + 1e-6;
+		return this.shortOf( kg ) <= 1e-6;
 
 	}
 
@@ -370,12 +366,11 @@ export class GameState {
 		const released = !! FISH[ species ].protected || !! release;
 		const max = day !== null ? FISH[ species ].bag || 0 : 0;
 		const full = max > 0 && ! released && this.bagged( species, day ) >= max;
-		const stowed = ! released && ! full && ! this.fits( kg ) ? this.stowFor( kg ) : null; // ((M17) in the hold of the boat you're aboard)
-		const kept = ! released && ! full && ( this.fits( kg ) || !! stowed );
+		const kept = ! released && ! full && this.fits( kg );
 		if ( kept && max ) this.bagOne( species, day );
 		const bag = max ? { n: this.bagged( species, day ), max, full } : null;
 		const why = release || ( FISH[ species ].protected ? 'protected' : null );
-		this.lastCatch = { species, kg, cm, value, newSpecies, record, prevBestKg, prevBestCm, kept, released, why, method, bag, at: timeOfDay, day, place, firstAt, stowed };
+		this.lastCatch = { species, kg, cm, value, newSpecies, record, prevBestKg, prevBestCm, kept, released, why, method, bag, at: timeOfDay, day, place, firstAt };
 		if ( ! kept ) {
 
 			this.save();
@@ -386,12 +381,6 @@ export class GameState {
 
 		const f = { id: this._nextId ++, species, kg, cm, value, caughtAt: timeOfDay, record, method };
 		if ( place ) f.place = place;
-		if ( stowed ) {
-
-			f.aboard = this.aboardHold.owner;
-			f.boat = stowed;
-
-		}
 
 		this.lastCatch.id = f.id;
 		this.inventory.push( f );
@@ -452,10 +441,11 @@ export class GameState {
 	}
 
 	// (M15) whether room could be made for a catch there was none for, by letting fish go from the cooler:
-	// one not let go for its own sake (protected, short, over the bag) and no heavier than the cooler holds
+	// one not let go for its own sake (protected, short, over the bag) that would fit with all of yours let go ((v2.3.0)
+	// beside anyone else's in the box, and the ice it holds for the catch)
 	roomFor( info = this.lastCatch ) {
 
-		return !! info && ! info.kept && ! info.released && ! ( info.bag && info.bag.full ) && info.kg <= this.stats.holdKg + 1e-6;
+		return !! info && ! info.kept && ! info.released && ! ( info.bag && info.bag.full ) && this.shortOf( info.kg, 0 ) <= 1e-6;
 
 	}
 
@@ -1021,13 +1011,6 @@ export class GameState {
 		this.inventory = Array.isArray( d.inventory ) ? d.inventory.filter( ( f ) => f && FISH[ f.species ] && Number.isFinite( f.kg ) ) : [];
 		// saves from before lengths were recorded
 		for ( const f of this.inventory ) if ( ! Number.isFinite( f.cm ) ) f.cm = Math.round( fishLengthCm( f.species, f.kg ) );
-		// ((M17) one in someone else's hold: whose, and her owner's name)
-		for ( const f of this.inventory ) if ( typeof f.aboard !== 'string' || ! f.aboard ) {
-
-			delete f.aboard;
-			delete f.boat;
-
-		} else f.boat = typeof f.boat === 'string' ? f.boat.slice( 0, 40 ) : '';
 		this.log = cleanLog( d.log );
 		// ((M15) the places you've fished: saves from before had none)
 		this.places = {};
