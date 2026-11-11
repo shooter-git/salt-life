@@ -240,6 +240,10 @@ The island's day:
 - the day runs on its own, about half an hour from dawn to dawn, and quickly through the dark;
 - on your own you can hold the clock or rest until dawn, noon, dusk or night (T, or tap the time);
   with others, time runs for everyone and you rest once you all choose the same;
+- under the time, the tide: rising or falling and when it next turns, or slack water; by night the
+  clock's moon is the moon at its phase, tilted as it hangs in the sky, dimmed while it's down; and the
+  clock's menu gives the day's tides, springs or neaps, the moon and tonight's dark, and what the tide
+  and the moon are doing in the game just now;
 - Joe and Marta keep hours; when they've gone home, Joe's night box takes your catch and Marta's
   honesty box has diesel;
 - each morning Joe chalks the fish he's after on his counter and pays over the odds for them, and

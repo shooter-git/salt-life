@@ -481,8 +481,8 @@ export function flatsSchools( T, conditions = NONE, state = null, out = [] ) {
 	}
 
 	// the bonefish gathering to spawn: about new and full moon, off the edge at dusk
-	const m = moonAt( T ), fromSyzygy = Math.min( m.phase, Math.abs( m.phase - 0.5 ), 1 - m.phase ) * SYNODIC, S = F.spawn;
-	if ( fromSyzygy < S.days && hour > S.from && hour < S.to ) {
+	const S = F.spawn;
+	if ( spawning( T, hour ) ) {
 
 		const lunation = Math.floor( ( T / 24 ) / ( SYNODIC / 2 ) + 0.5 ), life = sstep( S.from, S.from + 0.7, hour ) * ( 1 - sstep( S.to - 0.7, S.to, hour ) );
 		along( EDGE_OUT, 0.45 + 0.1 * wobble( T / 2, lunation ), _q );
@@ -491,6 +491,15 @@ export function flatsSchools( T, conditions = NONE, state = null, out = [] ) {
 	}
 
 	return out;
+
+}
+
+// (the bonefish gathering to spawn) whether they're gathered at island time T, `hour` its hour of the day: within
+// F.spawn.days of new or full moon, between its hours at dusk (also the clock's panel's: game/TideMoon.js)
+export function spawning( T, hour = ( ( T % 24 ) + 24 ) % 24 ) {
+
+	const m = moonAt( T ), fromSyzygy = Math.min( m.phase, Math.abs( m.phase - 0.5 ), 1 - m.phase ) * SYNODIC, S = F.spawn;
+	return fromSyzygy < S.days && hour > S.from && hour < S.to;
 
 }
 

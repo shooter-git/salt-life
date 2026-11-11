@@ -11,6 +11,7 @@ import { MANGROVE } from '../terrain/Mangrove.js';
 //   tidePlace( x, z )    where a spot is on the flats: their top, their edge, a channel, a creek's mouth
 //   tideBites( place, stage, pier )   how much faster (> 1) or slower the bites come there now (Bites: habitat.tide)
 //   tidesOf( day )       the island day's tides, as a tide table gives them;  tideText( turn, locale ) one of them told
+//   datumFeet( height )  a height as the tide table gives it: feet over chart datum
 
 // NOAA CO-OPS' datums for Settlement Point, Grand Bahama (9710441, the 1983-2001 epoch), as heights about its mean sea
 // level: https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations/9710441/datums.json (MSL 12.207 m on the
@@ -149,10 +150,18 @@ export function tidesOf( day ) {
 
 }
 
-// a turn told as a US tide table tells it: 'High 12:35 PM, 3.1 ft' (over chart datum, to a tenth of a foot; a low under
+// a height (m about mean sea level) as a US tide table gives it: feet over chart datum, to a tenth ('3.1'; a low under
 // it, at a big spring, goes negative)
+export function datumFeet( height ) {
+
+	const f = ( height - DATUMS.MLLW ) / FT;
+	return ( Math.abs( f ) < 0.05 ? 0 : f ).toFixed( 1 );
+
+}
+
+// a turn told as a US tide table tells it: 'High 12:35 PM, 3.1 ft'
 export function tideText( t, locale = undefined ) {
 
-	return `${ t.high ? 'High' : 'Low' } ${ timeText( t.T % 24, locale, 1 ) }, ${ ( ( t.height - DATUMS.MLLW ) / FT ).toFixed( 1 ) } ft`;
+	return `${ t.high ? 'High' : 'Low' } ${ timeText( t.T % 24, locale, 1 ) }, ${ datumFeet( t.height ) } ft`;
 
 }
