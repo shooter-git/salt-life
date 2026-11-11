@@ -16,6 +16,9 @@ const SEND_MS = 1000; // between looks at what's to tell (the wall's: a slow dev
 const AGAIN_S = 5; // s after which it's told again even if nothing's changed (someone come aboard, a lost message)
 const MOST = 5000; // kg: past any box's
 const r2 = ( v ) => Math.round( v * 100 ) / 100;
+// ((v2.4.1) her melt finer: a guest's ice bar says the time her ice lasts, the same as hers. A hundredth of a kg an hour
+// was 1% of a console's, hours off over a box of ice)
+const r5 = ( v ) => Math.round( v * 1e5 ) / 1e5;
 const kgOk = ( v ) => Number.isFinite( v ) && v >= 0 && v <= MOST;
 
 export class SharedBox {
@@ -200,7 +203,7 @@ export class SharedBox {
 				const b = g.daysOut.boxOf(), st = g.state;
 				const f = [ [ t.me.id, r2( st.holdKg ), st.inventory.length ] ];
 				for ( const [ id, e ] of this._in ) f.push( [ id, r2( e.kg ), e.n ] );
-				body = { c: r2( b.cap ), i: r2( b.ice ), m: r2( b.melt ), k: r2( b.makes ), w: b.word, f };
+				body = { c: r2( b.cap ), i: r2( b.ice ), m: r5( b.melt ), k: r2( b.makes ), w: b.word, f };
 				wire = JSON.stringify( body );
 
 			}

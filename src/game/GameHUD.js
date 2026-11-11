@@ -1,6 +1,6 @@
 import { FISH, CARAPACE, fishLengthCm } from './FishTable.js';
 import { UPGRADES, nextLevel, fuelOf, fuelPrice } from './Gear.js';
-import { FRESH_H, iceHeld } from './Seaworthy.js';
+import { FRESH_H, iceHeld, boxBars, iceSaid } from './Seaworthy.js';
 import { FLEET_CSS, fleetRows, bindFleet, martaSays } from './fleet/FleetPanel.js';
 import { BAIT, TRAP_PRICE, ownedTraps } from './Traps.js';
 import { BAITS, BAIT_IDS, chunksOf } from './Bait.js';
@@ -37,6 +37,11 @@ const upper = ( t ) => t.charAt( 0 ).toUpperCase() + t.slice( 1 );
 const boxIn = ( b ) => ( b.whose ? `${ escape( b.whose ) }'s ${ b.word }` : `the ${ b.word }` );
 // (and the others' fish in it: "Jeremy's 3 fish, 420 lb")
 const othersIn = ( b ) => ( b.by || [] ).map( ( o ) => `${ escape( o.name ) }'s ${ o.n } fish, ${ pounds( o.kg ) } lb` ).join( ' · ' );
+// ((v2.4.1) the box's bars: pounds in thousands as your money is, "13 / 1,287 lb"; a bar's width)
+const lbs = ( kg ) => ( kg * LB < 10 ? pounds( kg ) : Math.round( kg * LB ).toLocaleString( 'en-US' ) );
+// ((v2.4.1) and as the Fish hold panel says them: "13 of 1,287 lb of room for fish")
+const roomSaid = ( k ) => `${ lbs( k.fish ) } of ${ lbs( k.room ) } lb of room for fish`;
+const barW = ( f ) => `${ ( Math.max( 0, Math.min( 1, f ) ) * 100 ).toFixed( 1 ) }%`;
 // (Salt Life) a spiny lobster's carapace (the gauge's measure), of its total length (cm), in inches;
 // a catch's size as it's told (a lobster by its carapace)
 const carapaceIn = ( cm ) => cm * CARAPACE / IN;
@@ -51,13 +56,14 @@ const sizeOf = ( species, cm ) => species === 'lobster' ? `${ carapaceIn( cm ).t
 //                 (FishPortrait) with the species above and length, weight, value, record below
 const CSS = /* css */`
 .gm-purse { position: absolute; top: var(--tw-edge); right: var(--tw-edge); display: flex; flex-direction: column; align-items: stretch;
-	padding: var(--tw-2) var(--tw-4); border-radius: 999px; font: 500 var(--tw-fs-lg) var(--tw-font); color: var(--tw-ink); pointer-events: none;
+	padding: var(--tw-2) var(--tw-4); border-radius: var(--tw-r-lg); font: 500 var(--tw-fs-lg) var(--tw-font); color: var(--tw-ink); pointer-events: none;
 	transition: transform var(--tw-med) var(--tw-ease), right var(--tw-slow) var(--tw-ease); }
-/* (M16) one panel: the time, your money and the cooler; under them aboard, the boat's: fuel, hull, bilge, finder and the way home */
-.gm-purse-top, .gm-purse-boat { display: flex; flex-wrap: wrap; gap: var(--tw-1) var(--tw-3); align-items: center; justify-content: flex-end; }
+/* (M16) one panel: the time and your money; ((v2.4.1) under them the box: its room for fish and how long its ice keeps
+   them;) under them aboard, the boat's: fuel, hull, bilge, finder and the way home */
+.gm-purse-top, .gm-purse-box, .gm-purse-boat { display: flex; flex-wrap: wrap; gap: var(--tw-1) var(--tw-3); align-items: center; justify-content: flex-end; }
+.gm-purse-box { margin-top: var(--tw-1); }
 .gm-purse-boat { max-width: calc(620 * var(--tw-u)); margin-top: var(--tw-2); padding-top: var(--tw-2); border-top: 1px solid var(--tw-line); }
 .gm-purse-boat:not(:has(.is-on)) { display: none; }
-.gm-purse:has(.gm-purse-boat .is-on) { border-radius: var(--tw-r-lg); }
 .gm-fuel-bar { position: relative; overflow: visible; }
 .gm-fuel-tick { display: none; position: absolute; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: #fff; box-shadow: 0 0 2px rgba(0,0,0,0.7); }
 .gm-fuel-tick.is-on { display: block; }
@@ -73,6 +79,10 @@ const CSS = /* css */`
 .gm-cooler-bar { width: calc(64 * var(--tw-u)); height: calc(5 * var(--tw-u)); border-radius: 99px; background: var(--tw-fill-2); overflow: hidden; }
 .gm-cooler-bar > span { display: block; height: 100%; width: 0; background: var(--tw-aqua); border-radius: inherit; transition: width var(--tw-med) var(--tw-ease); }
 .gm-cooler.is-full .gm-cooler-bar > span { background: var(--tw-coral); }
+.gm-ice:not(.is-on) { display: none; }
+.gm-spare { display: block; margin-top: 2px; }
+.gm-ice-bar > span { background: #a8dcf0; }
+.gm-ice.is-low .gm-ice-bar > span { background: var(--tw-coral); }
 .gm-fight { position: absolute; left: 50%; bottom: calc(max(calc(72 * var(--tw-u)), 13vh) + calc(58 * var(--tw-u))); transform: translateX(-50%);
 	width: calc(360 * var(--tw-u)); padding: var(--tw-3) var(--tw-4); border-radius: var(--tw-r-lg); font: 500 var(--tw-fs-md) var(--tw-font); color: var(--tw-ink);
 	opacity: 0; transition: opacity var(--tw-med) var(--tw-ease); pointer-events: none; }
@@ -423,7 +433,7 @@ export class GameHUD {
 		style.textContent = CSS + FLEET_CSS + SHELL_CSS + CHART_MAP_CSS;
 		document.head.append( style );
 
-		this.purse = h( 'div', 'gm-purse tw-glass', `<div class="gm-purse-top"><span class="gm-money">$0</span><span class="gm-cooler"><span class="gm-cooler-label">Cooler</span><span class="gm-cooler-bar"><span></span></span><span class="gm-cooler-kg">0 / 66 lb</span></span><span class="gm-gauge gm-breath"><span>Breath</span><span class="gm-cooler-bar gm-breath-bar"><span></span></span></span><span class="gm-gauge gm-bait"><span class="gm-bait-l">Bait</span><b class="gm-bait-t">Shrimp</b></span></div><div class="gm-purse-boat"><span class="gm-gauge gm-fuel"><span>Fuel</span><span class="gm-cooler-bar gm-fuel-bar"><span></span><i class="gm-fuel-tick"></i></span><b class="gm-fuel-l">11 gal</b><i class="gm-fuel-state"></i></span><span class="gm-gauge gm-hull"><span>Hull</span><span class="gm-cooler-bar gm-hull-bar"><span></span></span><b class="gm-hull-p">100%</b></span><span class="gm-gauge gm-bilge"><span>Bilge</span><span class="gm-cooler-bar gm-bilge-bar"><span></span></span><b class="gm-bilge-l">0 gal</b></span><span class="gm-gauge gm-sonar"><span>Sonar</span><b class="gm-sonar-d">0 ft</b><span class="gm-sonar-dots"></span></span><span class="gm-gauge gm-home"><span>Home</span><b class="gm-home-t"></b></span></div>` );
+		this.purse = h( 'div', 'gm-purse tw-glass', `<div class="gm-purse-top"><span class="gm-money">$0</span><span class="gm-gauge gm-breath"><span>Breath</span><span class="gm-cooler-bar gm-breath-bar"><span></span></span></span><span class="gm-gauge gm-bait"><span class="gm-bait-l">Bait</span><b class="gm-bait-t">Shrimp</b></span></div><div class="gm-purse-box"><span class="gm-cooler"><span class="gm-cooler-label">Cooler</span><span class="gm-cooler-bar"><span></span></span><span class="gm-cooler-kg">0 / 66 lb</span></span><span class="gm-cooler gm-ice"><span>Ice</span><span class="gm-cooler-bar gm-ice-bar"><span></span></span><span class="gm-cooler-kg gm-ice-t"></span></span></div><div class="gm-purse-boat"><span class="gm-gauge gm-fuel"><span>Fuel</span><span class="gm-cooler-bar gm-fuel-bar"><span></span><i class="gm-fuel-tick"></i></span><b class="gm-fuel-l">11 gal</b><i class="gm-fuel-state"></i></span><span class="gm-gauge gm-hull"><span>Hull</span><span class="gm-cooler-bar gm-hull-bar"><span></span></span><b class="gm-hull-p">100%</b></span><span class="gm-gauge gm-bilge"><span>Bilge</span><span class="gm-cooler-bar gm-bilge-bar"><span></span></span><b class="gm-bilge-l">0 gal</b></span><span class="gm-gauge gm-sonar"><span>Sonar</span><b class="gm-sonar-d">0 ft</b><span class="gm-sonar-dots"></span></span><span class="gm-gauge gm-home"><span>Home</span><b class="gm-home-t"></b></span></div>` );
 		this.purseTop = this.purse.firstElementChild;
 		this.fuelTick = this.purse.querySelector( '.gm-fuel-tick' );
 		this.fuelState = this.purse.querySelector( '.gm-fuel-state' );
@@ -448,9 +458,12 @@ export class GameHUD {
 		this.sonarDots = this.purse.querySelector( '.gm-sonar-dots' );
 		this.moneyEl = this.purse.querySelector( '.gm-money' );
 		this.coolerEl = this.purse.querySelector( '.gm-cooler' );
-		this.coolerBar = this.purse.querySelector( '.gm-cooler-bar > span' );
-		this.coolerKg = this.purse.querySelector( '.gm-cooler-kg' );
+		this.coolerBar = this.coolerEl.querySelector( '.gm-cooler-bar > span' ); // ((v2.4.1) its own: the breath's is first in the purse now)
+		this.coolerKg = this.coolerEl.querySelector( '.gm-cooler-kg' );
 		this.coolerLabel = this.purse.querySelector( '.gm-cooler-label' );
+		this.iceEl = this.purse.querySelector( '.gm-ice' );
+		this.iceBar = this.purse.querySelector( '.gm-ice-bar > span' );
+		this.iceT = this.purse.querySelector( '.gm-ice-t' );
 
 		this.fight = h( 'div', 'gm-fight tw-glass', `
 			<div class="gm-fight-head"><span class="gm-fight-call">Fish on!</span><span class="gm-fight-dist">0 ft</span></div>
@@ -556,17 +569,28 @@ export class GameHUD {
 
 	}
 
-	// ((M16) the ice takes room in it too: DaysOut) (v2.3.0) The box your catch is in, all of it: your fish, anyone else's
-	// (your guests', or riding along, her owner's and theirs) and its ice. Drawn as it changes, not only when the save does
-	// (the ice melts, an icemaker makes it, a guest's catch comes aboard: none of them is a change to your save)
+	// (v2.3.0) The box your catch is in: your fish, anyone else's (your guests', or riding along, her owner's and theirs) and
+	// its ice. Drawn as it changes, not only when the save does (the ice melts, an icemaker makes it, a guest's catch comes
+	// aboard: none of them is a change to your save). (v2.4.1) In two bars, each a skipper's own question (Seaworthy's
+	// boxBars): how many more fish fit, all the fish in it against the room they can have once the ice the catch must keep
+	// is in (the rest gives way to them as they go in); and how long the ice keeps them, full at a day. A fish going in
+	// grows the first and takes its chill off the second; as melt takes the ice under a day, the room it held goes to fish
 	drawHold() {
 
-		const s = this.game.state, b = s.box(), kg = s.holdKg + b.others + b.ice;
-		const label = upper( b.word ), text = `${ pounds( kg ) } / ${ pounds( b.cap ) } lb`, width = `${ Math.min( 100, kg / b.cap * 100 ).toFixed( 1 ) }%`;
+		const s = this.game.state, b = s.box(), k = boxBars( b, s.holdKg );
+		const label = upper( b.word ), text = `${ lbs( k.fish ) } / ${ lbs( k.room ) } lb`, width = barW( k.fish / Math.max( 1e-6, k.room ) );
 		if ( this.coolerLabel.textContent !== label ) this.coolerLabel.textContent = label;
 		if ( this.coolerKg.textContent !== text ) this.coolerKg.textContent = text;
 		if ( this.coolerBar.style.width !== width ) this.coolerBar.style.width = width;
-		this.coolerEl.classList.toggle( 'is-full', kg > b.cap * 0.9 );
+		this.coolerEl.classList.toggle( 'is-full', k.full );
+		// (the ice: while there's any, or it's being made, or fish in the box that want it)
+		const ice = b.ice > 0 || b.makes > 0 || k.fish > 0;
+		this.iceEl.classList.toggle( 'is-on', ice );
+		if ( ! ice ) return;
+		const said = iceSaid( k.hours ), iw = barW( k.ice );
+		if ( this.iceT.textContent !== said ) this.iceT.textContent = said;
+		if ( this.iceBar.style.width !== iw ) this.iceBar.style.width = iw;
+		this.iceEl.classList.toggle( 'is-low', k.low );
 
 	}
 
@@ -1022,7 +1046,7 @@ export class GameHUD {
 	// the cooler, in tabs: the fish in it, your log, the island's records, and how the others see you
 	renderInventory() {
 
-		const s = this.game.state, box = s.box();
+		const s = this.game.state, box = s.box(), bars = boxBars( box, s.holdKg );
 		const together = this.game.app && this.game.app.together, me = together && together.me.id;
 		// (Salt Life) the island's records: the group's heaviest of each kind (together/)
 		const isle = together ? Object.entries( together.records ).filter( ( [ k ] ) => FISH[ k ] ).sort( ( a, b ) => b[ 1 ].kg - a[ 1 ].kg ) : [];
@@ -1147,7 +1171,7 @@ export class GameHUD {
 		const keys = d === 'touch' ? '' : `<span class="gm-tabs-keys">${ d === 'gamepad' ? 'D-pad' : `<kbd>${ LEFT }</kbd><kbd>${ RIGHT }</kbd>` }</span>`;
 		this.inv.innerHTML = `
 			<div class="gm-head"><h2>${ box.whose ? `${ escape( box.whose ) }'s ${ box.word }` : box.word === 'hold' ? 'Fish hold' : 'Cooler' }</h2>
-			<p class="gm-sub">${ box.whose || box.by.length ? `Yours: ${ s.inventory.length } fish · ${ pounds( s.holdKg ) } lb · worth $${ s.holdValue } · ${ box.by.length ? `${ othersIn( box ) } · ` : '' }${ pounds( s.holdKg + box.others ) } of ${ pounds( box.cap ) } lb in all` : `${ s.inventory.length } fish · ${ pounds( s.holdKg ) } of ${ pounds( box.cap ) } lb · worth $${ s.holdValue }` }${ this.game.daysOut.boxSaid() }</p></div>
+			<p class="gm-sub">${ box.whose || box.by.length ? `Yours: ${ s.inventory.length } fish · ${ pounds( s.holdKg ) } lb · worth $${ s.holdValue } · ${ box.by.length ? `${ othersIn( box ) } · ` : '' }${ roomSaid( bars ) }, in all` : `${ s.inventory.length } fish · ${ roomSaid( bars ) } · worth $${ s.holdValue }` }${ this.game.daysOut.boxSaid( bars ) }${ bars.spare >= 0.5 ? `<span class="gm-spare"> ${ lbs( bars.spare ) } lb of spare ice gives way as fish go in</span>` : '' }</p></div>
 			<div class="gm-tabs" role="tablist">${ tabs.map( ( [ id, label, n ] ) => `<button class="gm-tab${ id === tab ? ' is-on' : '' }" role="tab" aria-selected="${ id === tab }" data-tab="${ id }">${ label }${ n ? `<small>${ n }</small>` : '' }</button>` ).join( '' ) }${ keys }</div>
 			<div class="gm-list" role="tabpanel">${ body }</div>
 			<div class="gm-foot"><span class="gm-sub">${ hint }</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Close', 'I', 'Back' ) }</button></div>`;

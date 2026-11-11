@@ -177,6 +177,45 @@ export const shortOf = ( box, kg ) => box.fish + kg + iceHeld( box, kg ) - box.c
 // (v2.3.0) what the box is called: a cooler, or (an ice chest and up) her hold
 export const holdWord = ( cap ) => ( cap >= 70 ? 'hold' : 'cooler' );
 
+// (v2.4.1) The box's two bars, at the top (GameHUD.drawHold) and in the Fish hold panel, each a skipper's own question
+// about it: how many more fish fit, and how long the ice keeps the catch. box: { cap, fish (kg in it, everyone's), ice,
+// melt, makes (kg an hour an icemaker adds) }.
+//   Room for fish: the fish in it against the room they can have, the box less the ice their catch must keep (iceHeld).
+//   Ice past that isn't counted against them: it gives way as they go in (DaysOut._makeRoom), as anglers fill the fish box
+//   most of the way with ice before an offshore trip and put the fish in among it (FAO's usual figure for the tropics is
+//   about a kg of ice to each kg of fish).
+export const fishRoom = ( box ) => Math.max( 0, box.cap - iceHeld( box ) );
+//   Nearly gone, its bar coral: no room for a fish a tenth of that room, by shortOf, the catch card's own rule, so the two
+//   agree. Any fish the bar shows room for goes in (its chill can only free more), and a full bar is always no room.
+export const ROOM_LOW = 0.1;
+export const roomLow = ( box ) => shortOf( box, ROOM_LOW * fishRoom( box ) ) > 1e-6;
+//   How long the catch keeps: hours of ice at the box's net melt, less what an icemaker makes; Infinity while one keeps up
+//   (it stops when the box is full: DaysOut.pass), as keepCatch reckons it. Its bar's full at a day (HELD_H), so a full
+//   ice bar is the ice the room's kept for (with an icemaker that can't keep up, a little sooner: the room's kept for the
+//   day's melt without it)
+export const iceHours = ( box ) => {
+
+	const net = box.melt - ( box.makes || 0 );
+	return net > 0 ? Math.max( 0, box.ice ) / net : box.ice > 0 || box.makes > 0 ? Infinity : 0;
+
+};
+//   Running out with fish in it, its bar coral: under FRESH_H of ice, the hours a fish keeps fresh with none, so it's said
+//   as long before the ice is gone as the catch has after it
+export const iceLow = ( box ) => box.fish > 1e-6 && iceHours( box ) < FRESH_H;
+// the ice's time as its bar says it (the time it's sure of: rounded down): '37 days', '5 h', '36 min', 'No ice', and while
+// an icemaker keeps up, 'Making' (short, so a phone upright has the box's room and its ice on one row)
+export const iceSaid = ( h ) => ( h === Infinity ? 'Making' : ! ( h > 0 ) ? 'No ice' : h < 1 ? `${ Math.max( 1, Math.floor( h * 60 ) ) } min`
+	: h < 48 ? `${ Math.floor( h ) } h` : `${ Math.floor( h / 24 ) } days` );
+// both bars of the box GameState.box() has (your boat's, or riding along, hers: together/SharedBox.js), mine: kg of your
+// fish in it -> { fish, room: kg, full: its bar coral, hours, ice: its bar, 0..1, low: its bar coral, spare: kg of ice
+// that gives way to fish }
+export function boxBars( b, mine ) {
+
+	const box = { cap: b.cap, fish: mine + ( b.others || 0 ), ice: b.ice, melt: b.melt, makes: b.makes || 0 }, hours = iceHours( box );
+	return { fish: box.fish, room: fishRoom( box ), full: roomLow( box ), hours, ice: Math.min( 1, hours / HELD_H ), low: iceLow( box ), spare: Math.max( 0, box.ice - iceHeld( box ) ) };
+
+}
+
 // how the catch is, as the fish tab says it: 'iced' | 'fresh' | 'going' (past FRESH_H: its price is falling)
 export const stateOf = ( f, iced ) => ( ( f.w || 0 ) > FRESH_H ? 'going' : iced ? 'iced' : 'fresh' );
 

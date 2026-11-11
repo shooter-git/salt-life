@@ -201,8 +201,8 @@ html.is-touch .tw-root:has(.gm-panel.is-open) :is(.gm-map, .gm-coach) { visibili
 	html.is-touch .gm-purse { padding-inline: var(--tw-3); }
 	html.is-touch .gm-purse :is(.gm-cooler-bar) { width: calc(30 * var(--tw-u)); }
 	html.is-touch .gm-purse :is(.gm-cooler, .gm-gauge) { font-size: var(--tw-fs-sm); gap: var(--tw-1); }
-	html.is-touch .gm-purse-top, html.is-touch .gm-purse-boat { column-gap: var(--tw-2); }
-	html.is-touch .gm-purse-top, html.is-touch .gm-purse-boat { justify-content: space-between; max-width: none; }
+	html.is-touch :is(.gm-purse-top, .gm-purse-box, .gm-purse-boat) { column-gap: var(--tw-2); }
+	html.is-touch :is(.gm-purse-top, .gm-purse-box, .gm-purse-boat) { justify-content: space-between; max-width: none; }
 	/* a panel hangs under the purse (its top stays put as its tabs change) */
 	html.is-touch .gm-panel { top: var(--gm-top); max-height: calc(100% - var(--gm-top) - var(--tw-edge) - env(safe-area-inset-bottom)); transform: translate(-50%, 2%); }
 	html.is-touch .gm-panel.is-open { transform: translate(-50%, 0); }
@@ -232,7 +232,7 @@ html.is-touch .tw-root:has(.gm-panel.is-open) :is(.gm-map, .gm-coach) { visibili
 	html.is-touch .gm-panel.is-open { transform: translate(-50%, 0); }
 	/* with a panel up, the purse is only your money (the cooler's load is in the panel), so a phone
 	   on its side has room for both */
-	html.is-touch .tw-root:has(.gm-panel.is-open) :is(.gm-purse-top > :not(.gm-money), .gm-purse-boat) { display: none; }
+	html.is-touch .tw-root:has(.gm-panel.is-open) :is(.gm-purse-top > :not(.gm-money), .gm-purse-box, .gm-purse-boat) { display: none; }
 }
 
 /* a phone on its side with room for it: Joe's wanted list and the week's order beside your fish, each
