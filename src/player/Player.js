@@ -108,7 +108,9 @@ export class Player {
 		this.bailable = false;
 		// ((M16) and for the lobster traps, working at the hauler: game/TrapWork.js)
 		this.trapWork = false;
-		this.rideOffer = null; // { name, boat }: someone's boat you're next to, aboard it (together/Together.js)
+		// ((M17) and her anchor, at her bow: Game.updateBow)
+		this.anchorWork = false;
+		this.rideOffer = null; // { name, boat, text }: someone's boat you're next to, aboard it (together/Together.js; text: (M17) her ladder's)
 		this.reef = reef;
 		this.audio = audio;
 
@@ -153,6 +155,8 @@ export class Player {
 		this.roll = 0;
 		this.lean = 0; // (M13) leaning into a hurricane's wind (rad: the view's roll)
 		this.windAt = null; // (M13) the wind's speed at ( x, z ), in its gusts (m/s: App, the weather's)
+		this.creekAt = null; // (M17) a creek's current at ( x, z, out ) -> { x, z } (m/s) or null (App: world/shore/Creeks.js)
+		this._creek = { x: 0, z: 0, q: 0, u: 0 };
 		this.sheltered = false; // (M13) out of the wind (the shelter: App)
 		this._tumble = { T: 1, k: 0, dx: 0, dz: 1, spin: 1, carry: TUMBLE_CARRY, down: TUMBLE_DOWN };
 		this._breaker = { n: 0, H: 0, b: - 9, dx: 0, dz: 1 };
@@ -273,7 +277,7 @@ export class Player {
 		const offer = this.rideOffer;
 		if ( offer && ! this.busy ) {
 
-			this.prompt = { key: 'E', text: `Board ${ offer.name }'s boat` };
+			this.prompt = { key: 'E', text: offer.text || `Board ${ offer.name }'s boat` };
 			if ( inp.hit( 'KeyE' ) ) {
 
 				this.ride( offer.boat );
@@ -298,7 +302,7 @@ export class Player {
 		if ( this.mode === 'walk' ) this.updateWalk( dt );
 		else this.updateSwim( dt );
 		// (E boards their boat before anything else here: say so)
-		if ( offer && ! this.busy ) this.prompt = { key: 'E', text: `Board ${ offer.name }'s boat` };
+		if ( offer && ! this.busy ) this.prompt = { key: 'E', text: offer.text || `Board ${ offer.name }'s boat` };
 
 		// camera. Wading out of your depth, finding your feet again or climbing out on a ladder
 		// changes the eye height: ease the view there (critically damped) instead of jumping
@@ -336,6 +340,15 @@ export class Player {
 		const c = q.currentAt( p.x, p.z, undefined, this.current );
 		p.x += c.x * dt;
 		p.z += c.z * dt;
+		// ((M17) and a creek's, running on the tide: App's)
+		const k = this.creekAt ? this.creekAt( p.x, p.z, this._creek ) : null;
+		if ( k ) {
+
+			p.x += k.x * dt;
+			p.z += k.z * dt;
+
+		}
+
 		this.inRip = c.rip > 0.5 && Math.hypot( c.x, c.z ) > 0.2 ? this.inRip + dt : 0;
 		const br = q.breakerAt( p.x, p.z, undefined, this._breaker );
 		if ( ! br ) return;
@@ -973,7 +986,8 @@ export class Player {
 			if ( ! c.solid ) continue;
 			const top = c.center.y + c.half.y, bot = c.center.y - c.half.y;
 			if ( top <= stepFrom || bot >= p.y + HEIGHT ) continue;
-			const ex = c.half.x + DECK_RADIUS, ez = c.half.z + DECK_RADIUS;
+			// ((M17) a wall you press close to, sideways: a house side above a narrow side deck, c.r)
+			const ex = c.half.x + ( c.r ?? DECK_RADIUS ), ez = c.half.z + ( c.r ?? DECK_RADIUS );
 			const dx = p.x - c.center.x, dz = p.z - c.center.z;
 			if ( Math.abs( dx ) >= ex || Math.abs( dz ) >= ez ) continue;
 			const px = ex - Math.abs( dx ), pz = ez - Math.abs( dz );
@@ -1069,7 +1083,7 @@ export class Player {
 
 				}
 
-			} else if ( atRail && ! this.bailable && ! this.trapWork ) {
+			} else if ( atRail && ! this.bailable && ! this.trapWork && ! this.anchorWork ) {
 
 				const over = b.model.overboard && b.model.overboard( p, Math.sign( p.x ) || 1 );
 				this.prompt = { key: 'E', text: over && over.text ? over.text : 'Jump overboard' };

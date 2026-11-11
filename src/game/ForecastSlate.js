@@ -27,8 +27,9 @@ export const FEEDING = 0.4;
 
 // what the slate says: [ [ label, value ], … ] and the note at the bottom ('' for none). weather:
 // Weather.weatherAt's (null: not yet known); next: Weather.forecast's ({ id, at }, or null: settled);
-// (M13) news: Weather.hurricaneNews's (null: none)
-export function slateText( weather, next, locale = undefined, news = null ) {
+// (M13) news: Weather.hurricaneNews's (null: none); (M17) tides: the tide's next turns (IslandClock.tideTurns': { T, high }),
+// chalked as the next two, in order: 'High 12:35pm, low 6:40pm'
+export function slateText( weather, next, locale = undefined, news = null, tides = null ) {
 
 	if ( ! weather ) return { rows: [], note: '' };
 	const wet = wxRain( weather );
@@ -39,6 +40,7 @@ export function slateText( weather, next, locale = undefined, news = null ) {
 			[ 'Wind', `${ wxWind( weather ) } ${ knots( weather.wind ) }` ],
 			[ 'Surf', `${ surfText( weather.surf ) } ${ swellFrom( weather.west || 0 ) }, ${ Math.round( weather.period ) } s` ],
 			[ 'Later', later ],
+			...( tides && tides.length ? [ [ 'Tide', tides.slice( 0, 2 ).map( ( t, i ) => `${ i ? ( t.high ? 'high' : 'low' ) : ( t.high ? 'High' : 'Low' ) } ${ chalkTime( t.T, locale ) }` ).join( ', ' ) ] ] : [] ),
 		],
 		note: news ? hurricaneNote( news, weather ) : weather.front >= FEEDING ? 'Fish feeding: a blow\'s coming' : weather.murk >= MURKY ? 'The water\'s murky after the blow'
 			: upper( sideText( weather.north ) ),
@@ -47,6 +49,8 @@ export function slateText( weather, next, locale = undefined, news = null ) {
 }
 
 const upper = ( t ) => t.charAt( 0 ).toUpperCase() + t.slice( 1 );
+// (M17) a time as it's chalked: '12:35pm' (the locale's, its AM and PM run in, lower case)
+const chalkTime = ( T, locale ) => timeText( T % 24, locale, 5 ).replace( /\s*([AaPp])\.?\s?[Mm]\.?$/, ( m, a ) => a.toLowerCase() + 'm' );
 
 // (M13) what Joe chalks of a hurricane on its way
 function hurricaneNote( news, weather ) {
@@ -83,14 +87,14 @@ export class ForecastSlate {
 	}
 
 	// weather: the weather now (WeatherDriver.target); next: what's coming (Weather.forecast); (M13) news:
-	// what's said of a hurricane (WeatherDriver.news)
-	draw( weather = null, next = null, locale = undefined, news = null ) {
+	// what's said of a hurricane (WeatherDriver.news); (M17) tides: the tide's next turns
+	draw( weather = null, next = null, locale = undefined, news = null, tides = null ) {
 
-		const text = slateText( weather, next, locale, news );
+		const text = slateText( weather, next, locale, news, tides );
 		const key = JSON.stringify( text );
 		if ( key === this._key ) return;
 		this._key = key;
-		this._last = [ weather, next, locale, news ];
+		this._last = [ weather, next, locale, news, tides ];
 		const font = '"Caveat Brush", "Comic Sans MS", cursive';
 		// (the chalk font is the HUD's: drawn again once it has loaded)
 		if ( ! this._font && document.fonts && document.fonts.load ) {
@@ -129,8 +133,9 @@ export class ForecastSlate {
 		g.font = `48px ${ font }`;
 		g.fillText( 'Weather', W / 2, 66 );
 		g.fillRect( 130, 78, W - 260, 3 );
-		// each row: what it is in dim chalk, then the chalked value
-		let y = 128;
+		// each row: what it is in dim chalk, then the chalked value ((M17) five rows closer)
+		const step = text.rows.length > 4 ? 42 : 48;
+		let y = text.rows.length > 4 ? 120 : 128;
 		for ( const [ label, value ] of text.rows ) {
 
 			g.textAlign = 'left';
@@ -140,7 +145,7 @@ export class ForecastSlate {
 			g.font = `34px ${ font }`;
 			g.fillStyle = '#f2efe4';
 			g.fillText( value, 132, y, W - 132 - 34 );
-			y += 48;
+			y += step;
 
 		}
 
@@ -148,11 +153,12 @@ export class ForecastSlate {
 		if ( text.note ) {
 
 			g.fillStyle = 'rgba(242, 239, 228, 0.5)';
-			for ( let x = 38; x < W - 38; x += 18 ) g.fillRect( x, 304, 10, 2 );
+			const low = text.rows.length > 4 ? 6 : 0;
+			for ( let x = 38; x < W - 38; x += 18 ) g.fillRect( x, 304 + low, 10, 2 );
 			g.textAlign = 'center';
 			g.font = `30px ${ font }`;
 			g.fillStyle = '#f5d98a';
-			g.fillText( text.note, W / 2, 342, W - 76 );
+			g.fillText( text.note, W / 2, 342 + low, W - 76 );
 
 		}
 

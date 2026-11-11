@@ -6,6 +6,7 @@
 //
 //   pnpm dev, then   node tools/gpu-limits.mjs [tiers, comma separated] [s to wait for what comes late]
 //   SEA_PORT=5190 node tools/gpu-limits.mjs high     (a dev server on another port than 5189)
+//   SHOW=Water node tools/gpu-limits.mjs              ((M17) and the sea's own counts)
 //
 // It goes round the places whose shaders load only when you're near, and exits 1 if anything's over.
 
@@ -13,7 +14,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join( dirname( fileURLToPath( import.meta.url ) ), '..' );
-const { chromium } = await import( join( ROOT, '../all-the-spaces/node_modules/playwright/index.mjs' ) );
+const { chromium } = await import( join( process.env.ALL_THE_SPACES || join( ROOT, '../all-the-spaces' ), 'node_modules/playwright/index.mjs' ) ); // ((M17) from a worktree: ALL_THE_SPACES)
 
 // (textures: the floor WebGL 2 promises, and what Direct3D 11 and Metal give. Uniforms: what they commonly give, WebGL 2's
 // floor of 224 being far under what any device here runs at. Varyings aren't counted: three's sources are full of those
@@ -28,18 +29,29 @@ for ( const tier of TIERS.split( ',' ) ) {
 	await page.goto( `http://127.0.0.1:${ process.env.SEA_PORT || 5189 }/?tier=${ tier }&hour=11&weather=fair&day=5&fullsea`, { waitUntil: 'domcontentloaded', timeout: 300000 } );
 	await page.waitForFunction( () => window.__app && window.__app._started, null, { timeout: 600000, polling: 1000 } );
 	await page.waitForTimeout( + WAIT * 1000 );
-	// (the fish camp, the windward reef and the sea caves load as you come near)
-	for ( const [ x, z ] of [ [ 116, - 870 ], [ - 460, - 760 ], [ - 542, - 378 ], [ - 6200, 7400 ] ] ) {
+	// (the fish camp, the windward reef and the sea caves load as you come near; (M17) and the flats' fish and their marks,
+	// the first time a school's in sight: day 5's late morning has bonefish milling by the north creek's mouth, a permit
+	// and tarpon about them)
+	for ( const [ x, z ] of [ [ 116, - 870 ], [ - 460, - 760 ], [ - 542, - 378 ], [ - 6200, 7400 ], [ - 735, - 45 ] ] ) {
 
 		await page.evaluate( ( [ x, z ] ) => {
 
 			const a = window.__app, p = a.player, b = a.boatCtl;
+			a.game.state.stats.polarized = true;
 			if ( p.mode !== 'boat' ) { p.boardBoat(); p.takeHelm(); }
 			b.moored = false;
 			b.position.set( x, b.position.y, z );
 
 		}, [ x, z ] );
 		await page.waitForTimeout( 20000 );
+		// ((M17) the flats last: on a CPU the fish come last of all, so wait for them there, and for their marks)
+		if ( x === - 735 ) await page.waitForFunction( () => {
+
+			const a = window.__app, b = a.boatCtl, f = a.fish;
+			b.position.set( - 735, b.position.y, - 45 ); // (held there against the wind)
+			return f && f.marks && f.marks.under.n + f.marks.surface.n > 0;
+
+		}, null, { timeout: 900000, polling: 2000 } ).then( () => page.waitForTimeout( 8000 ) ).catch( () => console.log( `${ tier }: the flats' marks never came` ) );
 
 	}
 
@@ -83,7 +95,12 @@ for ( const tier of TIERS.split( ',' ) ) {
 	const most = {};
 	for ( const r of rows ) for ( const k of Object.keys( LIMITS ) ) if ( ! most[ k ] || r[ k ] > most[ k ][ 0 ] ) most[ k ] = [ r[ k ], r.name ];
 	console.log( `${ tier }: ${ rows.length } shaders` );
+	// ((M17) the flats': their fish's and their marks' (world/fish/FlatsMarks.js), made once a school's in sight)
+	const flats = rows.filter( ( r ) => /^Flats/.test( r.name ) );
+	console.log( `  the flats' marks: ${ flats.length ? flats.map( ( r ) => `${ r.name } (${ r.fragment } fragment, ${ r.vertex } vertex textures${ r.linked ? '' : ', NOT LINKED' })` ).join( ', ' ) : 'none built' }` );
 	for ( const k of Object.keys( LIMITS ) ) console.log( `  ${ ( most[ k ][ 0 ] > LIMITS[ k ] ? 'OVER' : 'ok  ' ) } ${ k.padEnd( 17 ) } ${ String( most[ k ][ 0 ] ).padStart( 5 ) } of ${ LIMITS[ k ] }  ${ most[ k ][ 1 ] }` );
+	// ((M17) SHOW=<name>: that shader's own counts, each program of it)
+	if ( process.env.SHOW ) for ( const r of rows ) if ( r.name === process.env.SHOW ) console.log( `  ${ r.name }: ${ Object.keys( LIMITS ).map( ( k ) => `${ k } ${ r[ k ] }` ).join( ', ' ) }` );
 	for ( const r of rows ) {
 
 		const bad = Object.keys( LIMITS ).filter( ( k ) => r[ k ] > LIMITS[ k ] );

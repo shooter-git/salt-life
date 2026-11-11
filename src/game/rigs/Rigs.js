@@ -3,6 +3,7 @@ import { Vector3 } from '../../engine/index.js';
 import { G } from '../../core/Globals.js';
 import { BAITS, BAIT_IDS, onHand } from '../Bait.js';
 import { FISH } from '../FishTable.js';
+import { realTackle, UPGRADES } from '../Gear.js';
 import { pickSpecies, rollWeight } from '../Bites.js';
 import { placeOf } from '../Places.js';
 import { fishLength } from '../CatchDisplay.js';
@@ -44,11 +45,17 @@ const KITE = { min: 2.6, max: 12.9, far: 95, high: 34, clip: 0.62, climb: 9, sag
 const SLICK_S = 300, SLICK_R = 45, SLICK_DRIFT = 0.03;
 // what you can lean back against (kg): by hand, in a stand-up harness on the stand-up rod, and in the chair
 export const HOLD_KG = { hand: 10, harness: 18, chair: 40 };
-const ELECTRIC = { speed: 4.5, drag: 24, spool: 900 };
+// (the electric reel: (M17) its drag's most a deep-drop reel's, as Daiwa's Tanacom 1000's 48 lb; set under that at a share of
+// the line, as any other's: CatchMinigame.DRAG_SET)
+export const ELECTRIC = { speed: 4.5, drag: 22, spool: 900 };
 const BIG_KG = 30; // from here it's brought to the boat tired, and gaffed or wired at arm's length
 // let go with a dehooker it's over at the leader, in the water and sooner; by hand, out of the water, this share don't
-// live (a billfish: 29% against under 2% left in it, VIMS by way of Mercury: docs/m16/tackle.md)
-const DEHOOK = { landBig: 6, landSmall: 2.5, tiredBig: 0.5 }, BY_HAND_HURT = 0.29;
+// live (a billfish: 29% against under 2% left in it, VIMS by way of Mercury: docs/m16/tackle.md). (M17) The m are the
+// line out when it's over: a big one's leader taken at the rod tip, the fish a leader's length off (IGFA's leader is up to
+// 9.14 m over the 10 kg class); a small one in the dehooker's own reach, a 6 to 12 ft pole (NOAA, ARC); and one let go
+// with neither, unhooked by hand alongside (byHand)
+export const DEHOOK = { landBig: 6, landSmall: 2.5, tiredBig: 0.5, byHand: 1 };
+const BY_HAND_HURT = 0.29;
 const LEADER_CHIP = { mono: 'mono', fluoro: 'fluoro', wire: 'wire', heavy: '200 lb' };
 const LEADER_WORD = { mono: 'fine, and teeth go through it', fluoro: 'shy fish can\'t see it, and teeth go through it', wire: 'nothing bites through it, and shy fish keep off', heavy: 'it holds a bill and most teeth, and some shy fish keep off' };
 
@@ -126,10 +133,12 @@ export class Rigs {
 	static cleanKit( k ) {
 
 		if ( ! k || typeof k !== 'object' || ! k.t || typeof k.t !== 'object' ) return null;
-		const n = ( v, lo, hi, d ) => Number.isFinite( v ) ? Math.min( hi, Math.max( lo, v ) ) : d, T = k.t, b = {};
+		const n = ( v, lo, hi, d ) => Number.isFinite( v ) ? Math.min( hi, Math.max( lo, v ) ) : d, b = {};
+		// ((M17) from a game still on the old figures, its line and drag as they are now)
+		const T = { ...k.t, ...realTackle( k.t.lineKg, k.t.dragKg, k.t.spoolM ) };
 		if ( k.b && typeof k.b === 'object' ) for ( const id of BAIT_IDS ) if ( ! BAITS[ id ].lure && Number.isFinite( k.b[ id ] ) && k.b[ id ] > 0 ) b[ id ] = Math.floor( k.b[ id ] );
 		return {
-			t: { lineKg: n( T.lineKg, 1, 200, 7 ), reelSpeed: n( T.reelSpeed, 0.5, 6, 1.1 ), dragKg: Number.isFinite( T.dragKg ) ? n( T.dragKg, 0, 60, null ) : null, spoolM: n( T.spoolM, 50, 2000, 180 ), twoSpeed: !! T.twoSpeed, standUp: !! T.standUp, electricReel: !! T.electricReel, leader: n( T.leader | 0, 0, 3, 0 ) },
+			t: { lineKg: n( T.lineKg, 1, 200, UPGRADES.line.levels[ 0 ].lineKg ), reelSpeed: n( T.reelSpeed, 0.5, 6, 1.1 ), dragKg: Number.isFinite( T.dragKg ) ? n( T.dragKg, 0, 60, null ) : null, spoolM: n( T.spoolM, 50, 2000, 180 ), twoSpeed: !! T.twoSpeed, standUp: !! T.standUp, electricReel: !! T.electricReel, leader: n( T.leader | 0, 0, 3, 0 ) },
 			b, lu: n( k.lu | 0, 0, 3, 0 ), sp: n( k.sp | 0, 0, 5, 0 ), kite: !! k.kite,
 		};
 
@@ -995,7 +1004,7 @@ export class Rigs {
 			cut: risk.cut,
 			wear: risk.wear,
 			leaps: leapsOf( b.species ),
-			landAt: big ? ( off ? DEHOOK.landBig : 3 ) : off ? DEHOOK.landSmall : 1.2,
+			landAt: off ? ( big ? DEHOOK.landBig : DEHOOK.landSmall ) : FISH[ b.species ].protected ? DEHOOK.byHand : big ? 3 : 1.2,
 			tired: big ? ( off ? DEHOOK.tiredBig : 0.3 ) : 1,
 			leader,
 		};

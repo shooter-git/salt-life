@@ -3,7 +3,10 @@ import { G } from '../core/Globals.js';
 import { Atmosphere, ATMOSPHERE_GLSL, SUN_ANGULAR_RADIUS, SUN_ILLUMINANCE, f } from './Atmosphere.js';
 import { SkyProClouds, CLOUDS_GLSL, CB, CLOUD_MELT } from './SkyProClouds.js';
 import { Environment } from './Environment.js';
+import { moonSky, moonLight, phaseLight, FULL_HIGH, MOON as MOON_FIGURES } from './Moon.js';
 import { SunLight } from 'three/addons/lights/SunLight.js';
+
+const col = ( c ) => `vec3( ${ f( c.r ) }, ${ f( c.g ) }, ${ f( c.b ) } )`;
 
 // The sky and the light it gives: Tidewater's physically based atmosphere (Hillaire 2020 LUTs) with
 // the sun disk, stars, moon and moonlit sky, composited with sky-pro's volumetric cumulus and
@@ -21,9 +24,16 @@ import { SunLight } from 'three/addons/lights/SunLight.js';
 // GLSL of the sky (main view and environment variants):
 //   vec3 skySunDisk( vec3 dir )        sun disk radiance (atmospheric transmittance included)
 //   vec3 skyStars( vec3 dir )
-//   vec3 skyMoon( vec3 dir )
-//   vec3 skyMoonSky( vec3 dir )        faint moonlit sky + aureole
+//   vec4 skyMoon( vec3 dir )           (M17) the moon's disc: its light, and how much of the sky it hides
+//   vec3 skyMoonSky( vec3 dir )        faint moonlit sky + aureole, (M17) and the moonless night's own
 //   vec3 skyBackground( vec3 dir, float starK )   everything behind the clouds but the disks
+//
+// (M17) The moon (docs/m17/moon.md; Moon.js): where its phase puts it, lit to its phase from the sun's side (the
+// Lommel-Seeliger law the moon's surface follows, flat to its limb at full, and its opposition surge), its seas
+// darker, earthshine on the rest; and the night's light by it. The night's brightness is drawn as a dark-adapted eye
+// sees it, as the cube root of the real light (Stevens' power law for brightness): the full moon high is the night as
+// it always was here, a moonless night's 0.002 lux about a fifth as bright, its stars down to magnitude 6.5 and the
+// Milky Way out, where under a full moon they're lost to 5.
 
 const STAR_CELLS = 160; // cells per half cube face (one star candidate per cell, ~9 px at 25 px/deg)
 const STAR_SIGMA = 0.1; // star PSF (cells, ~1 px)
@@ -48,7 +58,60 @@ const ENV = { low: { size: 64, interval: 60 }, mid: { size: 128, interval: 10 },
 // Tidewater's night (its units): the moon's light on the clouds and the night sky's ambient, the
 // moonlit sky at the horizon (skyMoonSky)
 const NIGHT_LIGHT = new THREE.Color( 0.6, 0.7, 1.0 );
-const MOON_SKY = new THREE.Color( 0.005, 0.0068, 0.0105 ).multiplyScalar( 2.2 );
+// ((M17) the moonlit sky's colour (skyMoonSky's, its horizon's MOON_SKY with the aureole), at the full moon high; and a
+// moonless night's own, starlight and airglow, greyer (the dark-adapted eye sees little colour in it))
+const MOONLIT = new THREE.Color( 0.005, 0.0068, 0.0105 );
+const MOON_SKY = MOONLIT.clone().multiplyScalar( 2.2 );
+const NIGHT_GLOW = new THREE.Color( 0.0058, 0.0066, 0.0082 );
+// (M17) the night's light at the full moon high (Moon.FULL_HIGH): the moon's (the key) square to it, and all of it on
+// level ground with the sky's fill (as this game's night always was: 0.25 at 60 degrees up, and levels.sky's 0.65)
+const KEY_FULL = 0.25;
+const TOTAL_FULL = KEY_FULL * Math.sin( Math.PI / 3 ) + 0.25 * 0.65;
+// (M17) the moon's disc: its highlands' brightness, by day as the full moon really is against the day's sky (the sky's
+// units: the full moon's 0.31 lux above the air over its disc, its seas darker), at night as the photographs of it show
+// it, its highlands near white and its seas plain; and its seas' albedo, of the highlands' (0.05 to 0.10 against 0.11 to
+// 0.18: the darkest seas a third of the brightest highlands; as dark as the photographs show them, through the tone
+// mapping's shoulder)
+const MOON_RADIANCE = 0.5, MOON_NIGHT = 0.22;
+const MARE = 0.3;
+// its seas, as they lie on its near side (selenographic latitude, longitude east, radius: degrees, a degree 30.3 km;
+// after the IAU's centres and diameters, the big irregular ones as several, laid over the full moon's photograph), their
+// edges broken in the shader
+const MARIA = [
+	[ 45, - 45, 12 ], [ 35, - 58, 14 ], [ 20, - 60, 15 ], [ 5, - 55, 14 ], [ - 5, - 45, 10 ], [ 54, - 46, 8 ], // Procellarum, Roris
+	[ 33, - 16, 19 ], [ 45, - 32, 6 ], // Imbrium, Iridum
+	[ 56, - 25, 7 ], [ 58, - 5, 6 ], [ 56, 18, 6 ], [ 55, 35, 5 ], // Frigoris
+	[ 28, 17.5, 11.5 ], // Serenitatis
+	[ 8.5, 31.4, 14 ], [ 15, 22, 7 ], // Tranquillitatis
+	[ 13, 4, 4.5 ], [ 2, 2, 4 ], [ 11, - 9, 5 ], // Vaporum, Sinus Medii, Sinus Aestuum
+	[ 8, - 31, 8 ], [ - 10, - 23, 6 ], [ - 21, - 16, 11 ], // Insularum, Cognitum, Nubium
+	[ - 24, - 39, 6.5 ], // Humorum
+	[ 17, 59, 9 ], // Crisium
+	[ - 2, 52, 8 ], [ - 12, 50, 7.5 ], // Fecunditatis
+	[ - 15, 35, 5.5 ], // Nectaris
+	[ - 45, 85, 8 ], // Australe, on the limb
+];
+const MARIA_GLSL = MARIA.map( ( [ la, lo, r ] ) => {
+
+	const a = la * Math.PI / 180, o = lo * Math.PI / 180;
+	// (each a little past its outline: the noise takes its edge in)
+	return `vec4( ${ f( Math.cos( a ) * Math.sin( o ) ) }, ${ f( Math.sin( a ) ) }, ${ f( Math.cos( a ) * Math.cos( o ) ) }, ${ f( Math.cos( r * 1.15 * Math.PI / 180 ) ) } )`;
+
+} ).join( ', ' );
+// Tycho, the bright young crater whose rays light the southern highlands at full
+const TYCHO = ( () => {
+
+	const a = - 43.3 * Math.PI / 180, o = - 11.4 * Math.PI / 180;
+	return [ Math.cos( a ) * Math.sin( o ), Math.sin( a ), Math.cos( a ) * Math.cos( o ) ].map( f ).join( ', ' );
+
+} )();
+// (M17) the night sky's brightness and the faintest stars seen in it: a natural starlit night's (21.4 to 21.9 mag /
+// arcsec^2: Hänel et al. 2018), the naked eye's limiting magnitude by it (Crumey 2014, as Hänel et al. give it, F 1.4:
+// 6.5 dark, 5.1 under a full moon), the Milky Way out where the sky's as dark as this (seen at about 19.8 in a partial
+// eclipse's: Project Nightflight; its bulge 20.5 to 21.0: Roach and Gordon 1973)
+const DARK_SKY = 21.7;
+const limitingMag = ( sb ) => 0.426 * sb - 2.365 - 2.5 * Math.log10( 1.4 );
+const MILKY_WAY = [ 19.8, 21.3 ];
 // (M9) a flash's radiance on the clouds (the sky's units), and the light it throws on the island (of the
 // sky fill's level: a strike a few km off lights the land about as a dull day does)
 const FLASH = 0.5;
@@ -90,6 +153,9 @@ void main() {
 
 const SKY_FRAGMENT = ATMOSPHERE_GLSL + CLOUDS_GLSL + /* glsl */`
 uniform vec3 skyMoonDir;
+uniform vec3 skyMoonNorth; // (M17) its north pole's way on the sky
+uniform vec4 skyMoonFace; // (M17) its highlands' light where the sun's square on them, its earthshine, its radius (rad)
+uniform vec4 skyNightLight; // (M17) the moonlit sky's level, the moonless night's, the Milky Way's, the faintest stars' magnitude + 1
 uniform float skySunDiskIntensity;
 uniform float skyStarIntensity;
 uniform float skyNight;
@@ -154,9 +220,10 @@ vec3 skyStars( vec3 dir ) {
 	bool has = h < band * 0.035 + 0.025;
 	float uc = max( skyHash13( cell + 7.7 ), 2e-4 );
 	float m = log2( uc ) * 0.602 + 6.5;
-	// limiting magnitude: -1 when the sun is 6 deg below the horizon, 6.5 below 16 deg
+	// limiting magnitude: -1 when the sun is 6 deg below the horizon, 6.5 below 16 deg ((M17) on a moonless night; under a
+	// full moon about 5)
 	float dark = 1.0 - smoothstep( -0.28, -0.1, atmoSunDir.y );
-	float vis = smoothstep( m - 0.6, m + 0.6, dark * 7.5 - 1.0 ) * ( has ? 1.0 : 0.0 );
+	float vis = smoothstep( m - 0.6, m + 0.6, dark * skyNightLight.w - 1.0 ) * ( has ? 1.0 : 0.0 );
 	// angular distance to the star (isotropic whatever the cube face distortion), in cells
 	vec2 sp = ( floor( uv ) + vec2( skyHash13( cell + 3.1 ), skyHash13( cell + 5.7 ) ) * 0.4 + 0.3 ) / ${ f( STAR_CELLS ) };
 	vec3 sdir = normalize( onX ? vec3( sign( dir.x ), sp ) : ( onY ? vec3( sp.x, sign( dir.y ), sp.y ) : vec3( sp, sign( dir.z ) ) ) );
@@ -169,29 +236,21 @@ vec3 skyStars( vec3 dir ) {
 	float tw = sin( skyTime * ( skyHash13( cell + 13.3 ) * 9.0 + 5.0 ) + h * 60.0 ) * mix( 0.18, 0.06, clamp( dir.y * 2.0, 0.0, 1.0 ) ) + 1.0;
 	vec3 col = mix( vec3( 1.0, 0.8, 0.6 ), vec3( 0.75, 0.85, 1.0 ), skyHash13( cell + 17.0 ) ) * 0.5 + 0.5;
 	vec3 star = col * ( psf * flux * vis * tw * 0.0075 );
-	// diffuse glow of the Milky Way
-	vec3 glow = vec3( 0.55, 0.6, 0.75 ) * ( band * dark * 0.0035 );
+	// diffuse glow of the Milky Way ((M17) lost in a moonlit sky)
+	vec3 glow = vec3( 0.55, 0.6, 0.75 ) * ( band * dark * 0.0035 * skyNightLight.z );
 	// atmospheric extinction toward the horizon
 	return ( star + glow ) * skyStarIntensity * smoothstep( 0.0, 0.2, dir.y );
 }
 
-vec3 skyMoon( vec3 dir ) {
-	float cosA = dot( dir, skyMoonDir );
-	float ang = acos( clamp( cosA, -1.0, 1.0 ) );
-	float r = ang / 0.0048;
-	float mask = skySmooth( 1.0, 0.92, r );
-	return vec3( 0.9, 0.92, 1.0 ) * mask * 3.0 * skyStarIntensity * smoothstep( -0.02, 0.02, dir.y );
-}
-
 // Faint blue-grey moonlit sky (a little brighter toward the horizon) and the moon's aureole.
-// Physically dim: about the level of the night ambient light.
+// Physically dim: about the level of the night ambient light. ((M17) As bright as the moon's light makes it, and with
+// none, the night's own, starlight and airglow, a little brighter toward the horizon too)
 vec3 skyMoonSky( vec3 dir ) {
 	float cosA = dot( dir, skyMoonDir );
 	float ang = acos( clamp( cosA, -1.0, 1.0 ) );
 	float aureole = exp( ang * -14.0 ) * 2.4 + exp( ang * -2.5 ) * 0.9;
 	float grad = mix( 1.7, 1.0, clamp( dir.y * 3.0, 0.0, 1.0 ) );
-	float up = smoothstep( -0.05, 0.15, skyMoonDir.y );
-	return vec3( 0.005, 0.0068, 0.0105 ) * ( grad + aureole ) * skyNight * up;
+	return ( ${ col( MOONLIT ) } * ( grad + aureole ) * skyNightLight.x + ${ col( NIGHT_GLOW ) } * grad * skyNightLight.y ) * skyNight;
 }
 
 // Everything behind the clouds except the sun and moon disks. The night terms are only
@@ -216,6 +275,48 @@ float skyCurtainNoise( vec2 p ) {
 	float c = skyHash13( vec3( i + vec2( 0.0, 1.0 ), 3.0 ) ), d = skyHash13( vec3( i + vec2( 1.0, 1.0 ), 3.0 ) );
 	return mix( mix( a, b, t.x ), mix( c, d, t.x ), t.y );
 }
+
+// (M17) The moon's disc along dir: its light (through the air, as the sun's), and how much of the sky behind it it hides
+// (the stars). On its sphere, s: east (toward Mare Crisium, the sky's west), north, toward us. Lit by the sun's side to
+// the Lommel-Seeliger law (2 mu0 / ( mu0 + mu ): flat to the limb at full, darkening to the terminator), its seas
+// darker and their edges broken, Tycho bright; the earthshine even over it all. A loop over the seas (GLSL inlines every
+// call: one place, not one a sea). ((M17) SKY_NO_MOON: none, the dome's program while loading on a device that draws on
+// its CPU: Sky's holdMoon)
+#ifdef SKY_NO_MOON
+vec4 skyMoon( vec3 dir ) { return vec4( 0.0 ); }
+#else
+const vec4 SKY_MARIA[ ${ MARIA.length } ] = vec4[]( ${ MARIA_GLSL } );
+vec4 skyMoon( vec3 dir ) {
+	vec3 east = cross( skyMoonDir, skyMoonNorth );
+	vec2 q = vec2( dot( dir, east ), dot( dir, skyMoonNorth ) ) / skyMoonFace.z;
+	float r = length( q ), aa = fwidth( r ) + 0.01;
+	if ( r > 1.0 + aa || dot( dir, skyMoonDir ) < 0.0 ) return vec4( 0.0 );
+	float z = sqrt( max( 1.0 - r * r, 0.0 ) );
+	vec3 s = vec3( q, z );
+	float mu0 = dot( east * q.x + skyMoonNorth * q.y - skyMoonDir * z, atmoSunDir );
+	// (and its craters' and mountains' shadows near the terminator, its edge ragged with them)
+	float lit = mu0 > 0.0 ? 2.0 * mu0 / ( mu0 + z + 1e-3 ) : 0.0;
+	lit *= smoothstep( 0.0, 0.22, mu0 + ( skyCurtainNoise( q * 23.0 + 7.0 ) - 0.5 ) * 0.08 );
+	// (the seas as one field, each 1 at its middle and 0 at its edge, added: where they overlap they run together, as the
+	// seas do; their edges broken inward by the noise, never past their outlines)
+	float field = 0.0;
+	for ( int i = 0; i < ${ MARIA.length }; i ++ ) {
+		vec4 m = SKY_MARIA[ i ];
+		field += max( ( dot( s, m.xyz ) - m.w ) / ( 1.0 - m.w ), 0.0 );
+	}
+	float wob = skyCurtainNoise( q * 3.1 + 17.0 ) * 0.25 + skyCurtainNoise( q * 7.3 + 5.0 ) * 0.4 + skyCurtainNoise( q * 16.0 + 41.0 ) * 0.35;
+	float sea = smoothstep( 0.06, 0.22, field - wob * 0.65 * smoothstep( 0.0, 0.7, field ) );
+	// (each sea's own darker and lighter lava; the highlands' craters, finer)
+	sea *= 0.75 + 0.45 * skyCurtainNoise( q * 6.3 + 29.0 );
+	float albedo = ( 1.0 - ${ f( 1 - MARE ) } * min( sea, 1.0 ) ) * ( 0.9 + 0.2 * skyCurtainNoise( q * 19.0 ) );
+	albedo += 0.5 * smoothstep( 0.9994, 0.99995, dot( s, vec3( ${ TYCHO } ) ) );
+	float mask = 1.0 - smoothstep( 1.0 - aa, 1.0 + aa, r );
+	vec3 L = vec3( 1.0, 0.97, 0.92 ) * albedo * ( lit * skyMoonFace.x + skyMoonFace.y ) * atmosphereTransmittanceToSpace( dir );
+	mask *= smoothstep( -0.01, 0.01, dir.y );
+	return vec4( L * mask, mask );
+}
+#endif
+
 vec4 skyCurtain( vec3 dir, vec3 behind ) {
 	float hl = length( dir.xz );
 	float top = skyCurtainInfo.x, camY = skyCurtainInfo.y;
@@ -290,8 +391,9 @@ void main() {
 	vec3 L = base * c.a + c.rgb;
 #else
 	// the main view: the view clouds, the sun's disc behind them with cloudsSunTransmittance (no sun
-	// through the cut-off remainder of thick cloud)
-	vec3 base = skyBackground( dir, 1.0 ) + skyMoon( dir );
+	// through the cut-off remainder of thick cloud) ((M17) the moon by day too, and hiding the stars behind it)
+	vec4 moon = skyMoon( dir );
+	vec3 base = skyBackground( dir, 1.0 - moon.a ) + moon.rgb;
 	vec3 sun = skySunDisk( dir );
 	vec4 c = cloudsSampleView( dir );
 	vec3 L = base * c.a + sun * cloudsSunTransmittance( c.a ) + c.rgb;
@@ -325,7 +427,11 @@ void main() {
 
 export class Sky {
 
-	constructor( { scene, renderer, tier = 'low' } ) {
+	// ((M17) holdMoon: the dome's first program without the moon's disc (SKY_NO_MOON), on a device that draws on its CPU,
+	// where a program's build and first draw is load time: the disc made the dome's 0.37 s there against 0.28 without
+	// it, a tenth of a second more before ready (docs/M17.md, Second wave merged). After the start App.prepareLate
+	// compiles the whole one on moonDome, then shows it: showMoon)
+	constructor( { scene, renderer, tier = 'low', holdMoon = false } ) {
 
 		this.scene = scene;
 		this.renderer = renderer;
@@ -338,6 +444,9 @@ export class Sky {
 			...this.atmosphere.uniforms,
 			...this.clouds.sampleUniforms,
 			skyMoonDir: { value: new THREE.Vector3( - 0.3, 0.5, 0.8 ).normalize() },
+			skyMoonNorth: { value: new THREE.Vector3( 0, 1, 0 ) },
+			skyMoonFace: { value: new THREE.Vector4( 0, 0, 0.0045, 0 ) },
+			skyNightLight: { value: new THREE.Vector4( 1, 0, 0, limitingMag( DARK_SKY ) + 1 ) },
 			skySunDiskIntensity: { value: 1 },
 			skyStarIntensity: { value: 0 },
 			skyNight: G.night,
@@ -362,27 +471,40 @@ export class Sky {
 		};
 		this._curtains = [];
 		this.moonDir = this.uniforms.skyMoonDir.value;
+		// ((M17) the island's day (App sets it with the hour): the moon's phase and place follow it; and what's worked
+		// out from it each frame (Moon.js), and the night's light as it's drawn (night: Sky.update))
+		this.day = 1;
+		this.moon = { dir: [ 0, 0, 0 ], sun: [ 0, 0, 0 ], north: [ 0, 0, 0 ] };
+		this.moonLight = {};
+		this.night = { key: KEY_FULL, fill: 1, sky: 1, glow: 0, seen: 1, skySeen: 1, sb: DARK_SKY, lux: FULL_HIGH.ground };
+		this._moonKey = new THREE.Vector3( 0, 1, 0 );
+		this._moonLit = { sunTransmittance: new THREE.Color(), skyIrradiance: new THREE.Color(), horizon: new THREE.Color() };
+		this._keyTint = new THREE.Color();
+		this._nightHorizon = MOON_SKY.clone();
 		this.sunDiskIntensity = this.uniforms.skySunDiskIntensity;
 		this.starIntensity = this.uniforms.skyStarIntensity;
 
-		const material = ( env ) => new THREE.ShaderMaterial( {
+		const material = ( env, noMoon = false ) => new THREE.ShaderMaterial( {
 			name: env ? 'SkyEnvironment' : 'Sky',
 			vertexShader: SKY_VERTEX,
 			fragmentShader: SKY_FRAGMENT,
 			uniforms: this.uniforms,
-			defines: env ? { SKY_ENVIRONMENT: '' } : {},
+			defines: env ? { SKY_ENVIRONMENT: '' } : noMoon ? { SKY_NO_MOON: '' } : {},
 			side: THREE.BackSide,
 			depthWrite: false,
 			depthTest: ! env,
 		} );
 
 		// the dome: drawn after the opaque objects (only the pixels they leave), before the water
-		const dome = this.dome = new THREE.Mesh( new THREE.BoxGeometry( 1, 1, 1 ), material( false ) );
+		const dome = this.dome = new THREE.Mesh( new THREE.BoxGeometry( 1, 1, 1 ), material( false, holdMoon ) );
 		dome.name = 'Sky';
 		dome.frustumCulled = false;
 		dome.renderOrder = 1e6;
 		dome.onBeforeRender = ( r ) => this.fog.color.getRGB( this.uniforms.skyFogColor.value, r.getRenderTarget() === null ? r.outputColorSpace : THREE.ColorManagement.workingColorSpace );
 		scene.add( dome );
+		// ((M17) the whole dome, the moon's disc in it, while it's held: out of the scene, for App.prepareLate to compile)
+		this.moonDome = holdMoon ? new THREE.Mesh( dome.geometry, material( false ) ) : null;
+		this.moonShown = ! holdMoon;
 
 		// (Salt Life) on high three's SunLight: two shadow maps fitted to the view, a sharp one near the
 		// camera and a wider one beyond (App sets them up). Below, a directional light: on mid its one
@@ -493,9 +615,24 @@ export class Sky {
 		const night = THREE.MathUtils.smoothstep( - dir.y, 0.02, 0.18 );
 		G.night.value = night;
 		this.starIntensity.value = night;
-		this.moonDir.set( - dir.x, Math.abs( dir.y ) * 0.8 + 0.25, - dir.z ).normalize();
+		// ((M17) the moon where its phase puts it on the island's day, and the night's light by it. Its light comes its
+		// own way, from no lower than the horizon; under it, it gives none, and the light's way is straight down, so
+		// nothing that reads it (a creature's shadow on the sand, say) draws a shadow from a moon that's set)
+		const m = moonSky( ( Math.max( 1, Math.floor( this.day ) || 1 ) - 1 ) * 24 + hours, hours, azimuth, this.moon );
+		this.moonDir.fromArray( m.dir );
+		this.uniforms.skyMoonNorth.value.fromArray( m.north );
+		this._nightLight( m, moonLight( m, this.moonLight ), night );
+		const key = this._moonKey.copy( this.moonDir );
+		if ( key.y < - 0.01 ) key.set( 0, 1, 0 );
+		else if ( key.y < 0.02 ) {
+
+			const h = Math.hypot( key.x, key.z ) || 1;
+			key.set( key.x / h * 0.9998, 0.02, key.z / h * 0.9998 );
+
+		}
+
 		const sunUp = dir.y > - 0.07;
-		const light = sunUp ? dir : this.moonDir;
+		const light = sunUp ? dir : key;
 		G.sunDir.value.copy( light );
 
 		// the atmosphere at sea level (CPU): the sun's transmittance, the sky's irradiance, the horizon
@@ -521,8 +658,9 @@ export class Sky {
 
 		} else {
 
-			this.sun.color.copy( MOON );
-			this.sun.intensity = 0.25 * night * veiled;
+			// ((M17) as bright as the moon is now, and low down reddened by the air as the sun is)
+			this.sun.color.copy( MOON ).multiply( this._keyTint );
+			this.sun.intensity = this.night.key * night * veiled;
 
 		}
 
@@ -563,10 +701,12 @@ export class Sky {
 		_tint.setRGB( irr.r / il, irr.g / il, irr.b / il ).lerp( _c.setRGB( 1, 1, 1 ), 0.45 + 0.35 * this.overcast ).multiplyScalar( 0.68 );
 		// (a floor: at dusk the adapted eye still sees the land by the sky's light)
 		this.hemi.color.copy( _tint ).multiplyScalar( 0.32 + 0.68 * k ).lerp( MOON, night * 0.5 );
-		this.hemi.intensity = this.levels.sky * ( 0.65 + 0.35 * day ) * ( 1 + 0.3 * this.overcast ) + deck;
+		// ((M17) at night as much as the night's light leaves after the moon's own: Sky._nightLight)
+		const skyBase = this.levels.sky * ( 0.65 * ( 1 + ( this.night.fill - 1 ) * night ) + 0.35 * day );
+		this.hemi.intensity = skyBase * ( 1 + 0.3 * this.overcast ) + deck;
 		// ((M10) how much more of the sky's light there is under a grey sky and rain's deck: the
 		// environment's level rises with it, below; 1 under a clear sky)
-		const greyRise = this.hemi.intensity / Math.max( this.levels.sky * ( 0.65 + 0.35 * day ), 1e-6 );
+		const greyRise = this.hemi.intensity / Math.max( skyBase, 1e-6 );
 		this.hemi.groundColor.setRGB( 0.32, 0.28, 0.2 ).multiplyScalar( 0.1 + 0.9 * day );
 		// (M9) a flash of lightning lights the island from the sky, bluish white (more so at night, where the
 		// eye's adapted to the dark: the scene's exposure, which follows the sky, does the rest). ((M12) As
@@ -586,7 +726,7 @@ export class Sky {
 		// side, level)
 		if ( storm > 0 ) {
 
-			const sky = Math.max( luminance( _flashSky.copy( MOON_SKY ).multiplyScalar( night ).add( lit.horizon ) ) * SKY_MEAN, 1e-6 );
+			const sky = Math.max( luminance( _flashSky.copy( this._nightHorizon ).multiplyScalar( night ).add( lit.horizon ) ) * SKY_MEAN, 1e-6 );
 			const omega = Math.sqrt( 2 * Math.PI / S.x ) * Math.atan( TOWER_BODY * Math.min( 2, S.y ) ) * TOWER_FILL;
 			const share = this.flash * FLASH * 2.5 * omega * storm / ( Math.PI * sky );
 			this.flashLight.intensity = skyLight * share / luminance( FLASH_LIGHT );
@@ -609,7 +749,7 @@ export class Sky {
 		// the horizon haze the fog fades into: the atmosphere's horizon (Tidewater's units, those of the
 		// sky behind the island) and the moonlit sky's at night. (Salt Life) Under a grey sky, a grey of
 		// its brightness, a little dimmer the greyer it is; the sky's dome takes the same toward its horizon
-		_c.copy( MOON_SKY ).multiplyScalar( night ).add( lit.horizon );
+		_c.copy( this._nightHorizon ).multiplyScalar( night ).add( lit.horizon );
 		const grey = this.uniforms.skyGrey.value, gl = luminance( _c ) * ( 1 - 0.35 * this.overcast );
 		grey.set( 0.93 * gl, 0.96 * gl, gl, 0.85 * this.overcast );
 		// ((M13) the murk overhead: the haze through the air up to a hurricane's cloud, MURK_DEPTH m of it)
@@ -637,8 +777,9 @@ export class Sky {
 		const cameraY = camera ? camera.position.y : 2;
 		this.atmosphere.update( cameraY );
 		// the clouds' key light at night and the night sky's ambient: Tidewater's (its units)
-		this._keyColor.copy( NIGHT_LIGHT ).multiplyScalar( sunUp ? 0 : 0.12 * night );
-		this._nightSky.copy( NIGHT_LIGHT ).multiplyScalar( 0.012 );
+		// ((M17) the moon's as bright as it is now, and the night sky's as bright as it's drawn)
+		this._keyColor.copy( NIGHT_LIGHT ).multiply( this._keyTint ).multiplyScalar( sunUp ? 0 : 0.12 * night * this.night.key / KEY_FULL );
+		this._nightSky.copy( NIGHT_LIGHT ).multiplyScalar( 0.012 * this.night.skySeen );
 		this._skyIrr.copy( this._nightSky ).multiplyScalar( night ).add( lit.skyIrradiance );
 		if ( camera ) this.clouds.update( dt, camera, this._keyColor, this._nightSky, night, this._skyIrr );
 		// the environment is re-made once the clouds have faded in, and with every new panorama
@@ -647,6 +788,48 @@ export class Sky {
 		this._envVersion = version;
 		this.environment.update( dt, dir, soon );
 		this.stats.passes = this.atmosphere.passes + this.clouds.passes + this.environment.passes;
+
+	}
+
+	// (M17) the night's light by the moon m, its light at sea level ml (Moon.js: lux), the night's share nightK. Drawn as a
+	// dark-adapted eye sees it: its brightness as the cube root of the real light (Stevens' power law), the full moon high
+	// (Moon.FULL_HIGH) the night as this game always drew it. So the light's split as it really is between the moon's own
+	// (the key, square to it) and the rest (the sky's fill), with a gain on both that makes their sum seen so, the fill
+	// taking what's left of the full moon's share of the fill (it was this game's choice to lift the night's shadows). The
+	// sky the same way: the moonlit sky and the night's own glow; the faintest stars and the Milky Way by its brightness.
+	// The disc by day as bright as the moon is against the day's sky; at night as the eye sees it, the cube root again
+	_nightLight( m, ml, nightK ) {
+
+		const N = this.night, F = FULL_HIGH, U = this.uniforms, up = Math.max( 0, m.dir[ 1 ] );
+		N.lux = ml.ground;
+		N.seen = Math.cbrt( ml.ground / F.ground );
+		const gain = N.seen * F.ground / ml.ground;
+		N.key = KEY_FULL * ml.direct / F.direct * gain;
+		N.fill = ( TOTAL_FULL * N.seen - N.key * up ) / ( 0.25 * 0.65 );
+		// (the key's colour: the air's on its light at its height, as the sun's)
+		const T = this.atmosphere.lighting( Math.max( m.dir[ 1 ], 0.02 ), this._moonLit ).sunTransmittance, tm = Math.max( T.r, T.g, T.b, 1e-6 );
+		this._keyTint.setRGB( T.r / tm, T.g / tm, T.b / tm );
+		// the sky
+		const sky = ml.sky + ml.glow, ref = F.sky + MOON_FIGURES.glow;
+		N.skySeen = Math.cbrt( sky / ref );
+		const g = N.skySeen * ref / sky;
+		N.sky = ml.sky / ref * g;
+		N.glow = ml.glow / ref * g;
+		this._nightHorizon.copy( MOON_SKY ).multiplyScalar( N.sky ).add( _c.copy( NIGHT_GLOW ).multiplyScalar( 1.7 * N.glow ) );
+		const sb = DARK_SKY - 2.5 * Math.log10( sky / ml.glow );
+		N.sb = sb;
+		U.skyNightLight.value.set( N.sky, N.glow, THREE.MathUtils.smoothstep( sb, MILKY_WAY[ 0 ], MILKY_WAY[ 1 ] ), limitingMag( sb ) + 1 );
+		// its disc: its surface's brightness by its phase angle, apart from what its shading (Lommel-Seeliger) gives (a
+		// crescent's a tenth of the full moon's). By day as it is. At night as the photographs and the eye have it: a
+		// crescent's near white too, so by the fifth root (the cube root left it a dull grey beside them); its earthshine
+		// by the cube root, as the night's brightness, which draws a crescent's as the photographs show it, a dim grey
+		// disc; and seen only on a crescent, past which the lit part's glare hides it (to the naked eye it's a crescent's)
+		const k = phaseLight( m.alpha ) / Math.max( lsPhase( m.alpha ), 0.02 );
+		const glare = 1 - THREE.MathUtils.smoothstep( m.lit, 0.15, 0.4 );
+		U.skyMoonFace.value.set(
+			THREE.MathUtils.lerp( MOON_RADIANCE * k, MOON_NIGHT * Math.pow( k, 0.2 ), nightK ),
+			THREE.MathUtils.lerp( MOON_RADIANCE * m.earthshine, MOON_NIGHT * Math.cbrt( m.earthshine ) * glare, nightK ),
+			m.radius, 0 );
 
 	}
 
@@ -676,6 +859,18 @@ export class Sky {
 
 	}
 
+	// ((M17) the moon's disc in: the dome given the whole program, compiled on moonDome (App.prepareLate), the held one let go)
+	showMoon() {
+
+		if ( ! this.moonDome ) return;
+		const held = this.dome.material;
+		this.dome.material = this.moonDome.material;
+		held.dispose();
+		this.moonDome = null;
+		this.moonShown = true;
+
+	}
+
 	dispose() {
 
 		this.environment.dispose();
@@ -683,6 +878,7 @@ export class Sky {
 		this.atmosphere.dispose();
 		this.dome.geometry.dispose();
 		this.dome.material.dispose();
+		if ( this.moonDome ) this.moonDome.material.dispose();
 
 	}
 
@@ -691,6 +887,15 @@ export class Sky {
 function luminance( c ) {
 
 	return c.r * 0.2126 + c.g * 0.7152 + c.b * 0.0722;
+
+}
+
+// (M17) a Lommel-Seeliger sphere's light by its phase angle (degrees), of its full: 1 - sin( a/2 ) tan( a/2 ) ln cot( a/4 )
+export function lsPhase( alpha ) {
+
+	const a = Math.min( Math.abs( alpha ), 179.9 ) * Math.PI / 180;
+	if ( a < 1e-6 ) return 1;
+	return Math.max( 0, 1 - Math.sin( a / 2 ) * Math.tan( a / 2 ) * Math.log( 1 / Math.tan( a / 4 ) ) );
 
 }
 

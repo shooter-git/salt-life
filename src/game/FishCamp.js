@@ -39,6 +39,7 @@ export const CAMP = {
 };
 
 const _v = new Vector3(), _h = new Vector3();
+const IN_BERTH = 7; // m: a boat this near her berth's in it (PearlsBoat's own)
 
 export class FishCamp {
 
@@ -88,8 +89,11 @@ export class FishCamp {
 		if ( ! app || ! this.built ) return;
 		const s = app.settings, pick = app.weatherPick ? app.weatherPick() : null, since = s.weatherSince;
 		const part = this.village.parts.find( ( p ) => p.part === 'camp' ), hidden = !! part && part.hidden, b = app.boatCtl;
-		// (your boat, in the berth she'd come in to: stopped there, not passing)
-		const yours = b && ! ( b.driven && b.speed > 1.5 ) ? b.position : null;
+		// (your boat, in the berth she'd come in to: stopped there, not passing. (M17) Or anyone's, on your screen: someone else's
+		// boat stopped there, or one whose owner's away, as Together has her. Every game knows the same boats, so she lies off on
+		// all of them)
+		const B = BOAT.berth, mine = b && ! ( b.driven && b.speed > 1.5 ) ? b.position : null;
+		const yours = ( mine && Math.hypot( mine.x - B.x, mine.z - B.z ) < IN_BERTH ) || ! app.together ? mine : app.together.stoppedNear( B.x, B.z, IN_BERTH ) || mine;
 		this.boat.update( dt, app.camera, s.timeOfDay, s.day, pick, since, yours, hidden );
 		if ( app.loadPerson ) this.boat.crew( dt, app.camera, ( url ) => app.loadPerson( url, HAND.clips ) );
 		this.lights.update( dt, app.camera, s.timeOfDay, s.day, pick, since, app.sky ? app.sky.visibility : 1, app.renderer ? app.renderer.domElement.height : 720, hidden );

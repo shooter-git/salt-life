@@ -20,7 +20,7 @@ You can walk, swim and take the boat around the island. You can fish from the pi
 boat, or dive and spear a fish, sell your catch to Joe and buy better gear from Marta. It plays with a
 mouse and keyboard, a gamepad or a touch screen.
 
-Done, M0 to M16:
+Done, M0 to M17:
 - the sea and its shore, spray, gusts and slicks, and the haze;
 - the whole world: the village, the pier, the reef and its fish, the birds and crabs, the beach's
   debris, the whale and the lights at night;
@@ -193,6 +193,38 @@ Done, M0 to M16:
   - on the north side: the way over made easy to find, Pearl's boat going out and coming in, her tow and
     Marta's can of diesel, turtles that mind lights and people and the hatchlings' tracks, fourteen
     shells to collect, and a gale's sea at its true height;
+- the flats and the tide (M17):
+  - a tide twice a day, as Grand Bahama's is, springs at new and full moon: the flats drying at a spring
+    low, the mangroves' roots out of the water, a wet band on the piles and the rocks, the boats riding up
+    and down at their berths, the creeks running out on the ebb and in on the flood; the bites go by it,
+    and Joe's slate and the chart give the day's tides;
+  - the moon waxing and waning with the island's days, lit to its phase, rising later each day, its
+    light on the night; the hatchlings and the swordfish mind it;
+  - new flats on the west, seaward of the mangroves: bonefish tailing and mudding in schools, permit,
+    tarpon rolling, snook along the mangroves, barracuda and sharks cruising, each drawn as it's seen;
+  - sight-fishing: see them first (the sun behind you, a cloud's shadow hiding them, the glasses taking
+    out the glare, your eye's height), stalk them from the kayak or on foot, and cast to the fish you've
+    seen, which takes, follows, refuses or spooks by what it is and what it's shown; a spooked school
+    bolts and the flat goes quiet a while;
+  - the Log tab is a life list, every kind caught and still to catch, with where to look for each, and
+    the slams: the grand slam, the super grand slam and the billfish grand slam, and the records board's
+    line of who has the most kinds and which slams;
+  - with others: a school spooked or a fish hooked on one game is so on everyone's, a fish one of you
+    sees is called to the others by the clock, and someone joining later finds the flat as it stands;
+  - everything M16 left for guests aboard: a second cradle in Marta's yard, the shell tray from the
+    group's save, berths along the stem by each boat's size and the tide, Pearl lying off for
+    anyone's boat, the console's ladder on her copy and boarding by it, the horn heard from the boat
+    it's sounded on, the chair by its seat, a slow game's boat kept with the water;
+  - coming back where you were: on her deck, bridge, tower or roof, in the water beside her far out,
+    or aboard someone else's once she's there;
+  - a boat's wake's far arms as waves that rock a kayak and lift the bobber; the lobster boat's side
+    decks, foredeck and roof to walk and look from, and her anchor at her bow;
+  - the boats in their own colours (the page's navy no longer showing through them), the flare as it's
+    seen by night and day, and the underwater lights after photographs; a tail's slap, a school
+    bolting and the kayak's push through still water, and Pearl's outboard by ear;
+  - the figures from sources: the lines at their labels and the reels' real drags, with an 80 lb line
+    and a wide 80-class reel for the biggest marlin from the chair, the VHF's reach by its antenna, a
+    flare's reach, ice's melt, a day's stores, the billfish's night depths and a trap's soak;
 - playing together:
   - you see the others on the island, walking, swimming, fishing and out in their boats, each the boat
     she is, with her paint and what's fitted on her; far off a boat is a speck on the horizon;
@@ -238,7 +270,7 @@ The island's day:
 | M14 | Storm skies and the sea: cumulonimbus, the eye's stadium and its bands, the open sea breaking, the north shore's sea, being knocked over wading, shutters and litter in a blow, the radar, rain heard on tin, Category 2 and 3 hurricanes, more of the island torn and its roof sheets flying, shelter under the rocks ([what's left over](docs/M14.md)) |
 | M15 | The world: the island worth going all the way round (the north side's fishing, its landmarks and sea caves, beachcombing, the trail and the fish camp), the sea past it (the seabed out there, its weather and finds, the far island, the chart you fill in, the radio and the tow, the soft edge, its sound), and picking up where you left off |
 | M16 | The boats: a fishing kayak to start in, a center console, the lobster boat and an offshore sportfisher to earn, each with her own upgrades, berth and sea she can stand; days out (ice, stores, bunks, flares, a deep-water anchor), trolling, kites and deep-dropping for the far water's fish, lobster traps, each boat as herself when playing together, Pearl's day and the rest of the north side ([docs/M16.md](docs/M16.md)) |
-| M17 | What M16 leaves, for consideration: the flats' sight-fishing, a few things for guests aboard, and the figures only a real device can settle ([docs/M17.md](docs/M17.md)) |
+| M17 | The flats on a tide: sight-fishing from the kayak and on foot on the west's new flats, a tide with the moon behind it, everything M16 left for guests aboard, coming back where you were, a life list of every kind with the slams, the wakes as waves, and the figures from sources ([docs/M17.md](docs/M17.md)) |
 
 ## How it fits All the Spaces
 

@@ -5,6 +5,7 @@ import { defaultUpgrades, gearStats, nextLevel, UPGRADES, fuelPrice, unlockProgr
 import { repairFee } from './Hull.js';
 import { FLEET, TRADE, SALE, MONTH, MOST_MONTHS, DUES_LEAVE, gearWorth, monthly, cleanName, paintOf, kindOf } from './fleet/Fleet.js';
 import { cleanTrophies } from './Trophies.js';
+import { cleanLog } from './LifeList.js';
 import { ordersOf, orderPrice } from './Orders.js';
 import { WEEK_MUL } from './WeekOrder.js';
 import { BAITS, KEEPER_KG, baitOf, chunksOf } from './Bait.js';
@@ -38,7 +39,9 @@ export class GameState {
 		this.storage = storage;
 		this.money = 0;
 		this.inventory = []; // { id, species, kg, cm, value, caughtAt (game hours), record, method }
-		this.log = {}; // species -> { count, bestKg, bestCm }
+		// species -> { count, bestKg, bestCm, ((M17) the life list: docs/m17/life-list.md) bestDay, bestAt: your best's island day and
+		// place (Places.js), first: [ day, place ] of the first one (each null when it wasn't known: a save from before M17) }
+		this.log = {};
 		this.places = {}; // ((M15) Places.js) place -> { n, day, first: species } (the first catch there: the log)
 		this.trophies = {}; // ((M16) Trophies.js) a billfish let go: species -> { n, kg, cm, day, place, tagged } (your best)
 		this.found = {}; // ((M15) Places.js' FAR_PLACES) place -> the day you first came to it (the log names it then)
@@ -357,7 +360,7 @@ export class GameState {
 
 		kg = Math.round( kg * 100 ) / 100;
 		cm = Math.round( cm ?? fishLengthCm( species, kg ) );
-		const { newSpecies, record, prevBestKg, prevBestCm } = this.logFish( species, kg, cm );
+		const { newSpecies, record, prevBestKg, prevBestCm } = this.logFish( species, kg, cm, day, place );
 		const firstAt = this.logPlace( place, species, day );
 		const value = fishValue( species, kg );
 		const released = !! FISH[ species ].protected || !! release;
@@ -378,6 +381,7 @@ export class GameState {
 
 		const f = { id: this._nextId ++, species, kg, cm, value, caughtAt: timeOfDay, record, method };
 		if ( place ) f.place = place;
+
 		this.lastCatch.id = f.id;
 		this.inventory.push( f );
 		this.save();
@@ -470,17 +474,22 @@ export class GameState {
 	}
 
 	// a fish in the log: one more of its kind, and its best -> { newSpecies, record, prevBestKg, prevBestCm }
-	logFish( species, kg, cm ) {
+	// ((M17) day, place: when and where, the island's day and Places.js', kept with the first of its kind and with your best)
+	logFish( species, kg, cm, day = null, place = null ) {
 
 		const logEntry = this.log[ species ] || ( this.log[ species ] = { count: 0, bestKg: 0 } );
 		const newSpecies = logEntry.count === 0;
 		const prevBestKg = logEntry.bestKg, prevBestCm = logEntry.bestCm ?? ( prevBestKg > 0 ? Math.round( fishLengthCm( species, prevBestKg ) ) : 0 );
 		const record = ! newSpecies && kg > prevBestKg;
+		const when = Number.isInteger( day ) && day >= 0 ? day : null, where = PLACES[ place ] ? place : null;
+		if ( newSpecies ) logEntry.first = [ when, where ];
 		logEntry.count ++;
 		if ( kg > prevBestKg ) {
 
 			logEntry.bestKg = kg;
 			logEntry.bestCm = cm;
+			logEntry.bestDay = when;
+			logEntry.bestAt = where;
 
 		}
 
@@ -522,7 +531,7 @@ export class GameState {
 			}
 
 			const kg = Math.round( f.kg * 100 ) / 100, cm = Math.round( f.cm ?? fishLengthCm( f.species, kg ) );
-			const log = this.logFish( f.species, kg, cm );
+			const log = this.logFish( f.species, kg, cm, day, place );
 			r.firstAt = this.logPlace( place, f.species, day ) || r.firstAt;
 			if ( log.newSpecies ) r.news.push( f.species );
 			else if ( log.record && ! r.records.includes( f.species ) ) r.records.push( f.species );
@@ -1002,8 +1011,7 @@ export class GameState {
 		this.inventory = Array.isArray( d.inventory ) ? d.inventory.filter( ( f ) => f && FISH[ f.species ] && Number.isFinite( f.kg ) ) : [];
 		// saves from before lengths were recorded
 		for ( const f of this.inventory ) if ( ! Number.isFinite( f.cm ) ) f.cm = Math.round( fishLengthCm( f.species, f.kg ) );
-		this.log = d.log && typeof d.log === 'object' ? d.log : {};
-		for ( const [ k, v ] of Object.entries( this.log ) ) if ( FISH[ k ] && v && v.bestKg > 0 && ! Number.isFinite( v.bestCm ) ) v.bestCm = Math.round( fishLengthCm( k, v.bestKg ) );
+		this.log = cleanLog( d.log );
 		// ((M15) the places you've fished: saves from before had none)
 		this.places = {};
 		for ( const [ k, v ] of Object.entries( d.places && typeof d.places === 'object' ? d.places : {} ) ) if ( PLACES[ k ] && v && Number.isInteger( v.n ) && v.n > 0 ) this.places[ k ] = { n: v.n, day: Number.isFinite( v.day ) ? v.day : null, first: FISH[ v.first ] ? v.first : null };

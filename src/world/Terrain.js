@@ -113,6 +113,7 @@ float terrainHeightAt( vec2 xz ) {
 			terrainDetailTex: { value: this.detailTexture },
 			terrainMapInfo: { value: new THREE.Vector3( terrainData.origin, terrainData.origin, terrainData.size ) },
 			terrainSeaLevel: G.seaLevel,
+			terrainTideWet: G.tideWet, // ((M17) the wet line: what the tide's left lately is wet still)
 			terrainWaterAbsorption: G.waterAbsorption,
 			terrainWindDir: G.windPrevailing, // (Salt Life: the sand's ripples and the grass's comb, as the trades laid them)
 			terrainWindSpeed: G.windSpeed,
@@ -160,7 +161,11 @@ vec4 terrainSeaOf( vec2 xz, float e ) {
 	float tH = terrainHeightAt( tXZ );
 	vec3 objectNormal = vec3( 0.0, 1.0, 0.0 ); // the fragment shader takes the normal from the baked map
 	vTerrain = vec3( tXZ, tH );
-	vTerrainSea = terrainSeaOf( tXZ, max( lod.spacing, 16.0 ) );` )
+	vTerrainSea = terrainSeaOf( tXZ, max( lod.spacing, 16.0 ) );
+	// ((M17) how far down in a hollow of the ground it is (m: the ground 5 m about it, less its own), for the water the tide
+	// leaves lying in them: between the tides only)
+	if ( abs( tH ) < 1.2 ) vTerrainSea.w = ( terrainHeightAt( tXZ + vec2( 5.0, 0.0 ) ) + terrainHeightAt( tXZ - vec2( 5.0, 0.0 ) )
+		+ terrainHeightAt( tXZ + vec2( 0.0, 5.0 ) ) + terrainHeightAt( tXZ - vec2( 0.0, 5.0 ) ) ) * 0.25 - tH;` )
 				.replace( '#include <begin_vertex>', 'vec3 transformed = vec3( lod.xz.x, tH, lod.xz.y );' );
 
 			shader.fragmentShader = shader.fragmentShader
@@ -213,7 +218,11 @@ ${ TERRAIN_SHADING_GLSL }
 		vec4 cb = terDetail( xz / 1.7 + 0.31 ), cs = terDetail( xz / 0.45 + 0.77 );
 		float stone = ss( 0.42, 0.58, cs.w + ( cb.w - 0.5 ) * 0.6 );
 		vec3 cob = mix( ${ srgb( 0.08, 0.075, 0.07 ) }, mix( ${ srgb( 0.2, 0.19, 0.18 ) }, ${ srgb( 0.3, 0.27, 0.24 ) }, cb.y ), stone ) * ( 0.8 + 0.4 * cs.x );
+		// ((M17) its floor bared at low water wet still up to the wet line, and higher in its spray: dark, glossy)
+		float cobWet = ss( 0.6, 0.0, h - terrainTideWet + ( cb.w - 0.5 ) * 0.3 );
+		cob *= 1.0 - 0.45 * cobWet;
 		tAlbedo = mix( tAlbedo, cob, caveL.z );
+		tRough = mix( tRough, mix( tRough, 0.35, cobWet ), caveL.z );
 	}
 	// under the sea: the water takes the red out first, then the green, on the way down and back
 	float cWater = max( terrainSeaLevel - h, 0.0 );
@@ -232,6 +241,10 @@ ${ TERRAIN_SHADING_GLSL }
 				.replace( '#include <aomap_fragment>', /* glsl */`
 	reflectedLight.indirectDiffuse *= tAO * caveL.x;
 	reflectedLight.indirectSpecular *= tAO * caveL.x;
+	// ((M17) the sky in the water the tide's left lying, and off wet sand's film: the world's reflections are kept low for
+	// the sand (Sky's levels.env, 0.09 of the sky's), a pond's are the sky's own, as the sea's are. Not after dark: the
+	// sky's environment is made again only now and then, and can hold the day's sky into the night)
+	reflectedLight.indirectSpecular *= 1.0 + max( tPond, tWet ) * ${ ( 1 / ENV_LEVEL - 1 ).toFixed( 2 ) } * ( 1.0 - terrainNight );
 	reflectedLight.directDiffuse *= ss( 0.03, 0.3, caveL.x );
 	reflectedLight.directSpecular *= ss( 0.03, 0.3, caveL.x );` );
 
@@ -274,6 +287,9 @@ ${ TERRAIN_SHADING_GLSL }
 	}
 
 }
+
+// (M17) the share of the sky's light the world's reflections are kept to, for the sand (Sky's levels.env)
+const ENV_LEVEL = 0.09;
 
 // TerrainData's heights as a float texture at `res` texels per side (box-filtered when smaller)
 function heightTexture( terrain, res ) {

@@ -174,7 +174,8 @@ await robin.page.waitForTimeout( 1000 );
 await robin.page.close();
 await sam.game.waitForFunction( () => window.__app.together.others.size === 0 && window.__app.together.session.isHost && window.__app.together.boats[ 'robin-1' ], null, { timeout: 200000, polling: 500 } );
 const rec = await sam.game.evaluate( () => window.__app.together.boats[ 'robin-1' ] );
-say( rec.a === null && Number.isFinite( rec.T ) && rec.z === 20000, `her record: adrift ${ JSON.stringify( { x: rec.x, z: rec.z, T: rec.T } ) }` );
+// ((M17) where she is as she's left, a frame or three after she was put there, not where she was put: within a few metres)
+say( rec.a === null && Number.isFinite( rec.T ) && Math.hypot( rec.x - A.x, rec.z - A.z ) < 5, `her record: adrift ${ JSON.stringify( { x: rec.x, z: rec.z, T: rec.T } ) }` );
 await sam.game.evaluate( ( A ) => { const app = window.__app, b = app.boatCtl, p = app.player; if ( p.mode !== 'boat' ) { p.boardBoat(); p.takeHelm(); } b.moored = b.beached = false; if ( b.model.sliding !== undefined ) b.model.sliding = null; b.position.set( A.x + 40, b.position.y, A.z + 40 ); }, A );
 await frames( sam.game, 3 );
 console.log( '     Sam', JSON.stringify( await sam.game.evaluate( () => { const a = window.__app, c = a.camera.position; return { mode: a.player.mode, cam: [ Math.round( c.x ), Math.round( c.z ) ], entry: !! a.together.away.get( 'robin-1' ) }; } ) ) );
@@ -223,4 +224,5 @@ say( tow && back.money === Math.max( 0, 500 - tow.fee ), `she paid what she had 
 say( back.hauled && ! back.rec && !! back.note, 'her boat on the cradle, her record gone, the note there' );
 for ( const [ n, g ] of [ [ 'Robin', robin ], [ 'Sam', sam ] ] ) console.log( `     frames a second, really, ${ n }:`, await g.game.evaluate( () => +( window.__real.n / ( performance.now() - window.__real.since ) * 1000 ).toFixed( 1 ) ).catch( () => '?' ) );
 console.log( problems ? `${ problems } PROBLEM(S)` : 'no problems' );
+process.exitCode = problems ? 1 : 0;
 await browser.close();

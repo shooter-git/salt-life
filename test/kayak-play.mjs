@@ -6,6 +6,7 @@ import { BoatController } from '../src/player/BoatController.js';
 import { Player } from '../src/player/Player.js';
 import { Group, PerspectiveCamera, Vector3 } from '../src/engine/index.js';
 import { G } from '../src/core/Globals.js';
+import { TIDE_HIGHEST } from '../src/game/IslandClock.js';
 
 let bad = 0;
 const ok = ( c, what ) => {
@@ -150,7 +151,8 @@ run( 1 );
 ok( model.stroke.park < 0.1, 'the rod away, the paddle\'s back' );
 player.camMode = 'third';
 
-// A takes her to port: her compass comes down through the numbers (Game.compassHeading), D back up
+// A takes her to port: her compass comes down through the numbers (Game.compassHeading), D back up ((M17) held through
+// a whole stroke, 1.5 s: a second can end on the blade's recovery, where she hardly turns)
 {
 
 	const compass = () => { const f = ctl.forward( new Vector3() ); return Math.atan2( f.x, - f.z ); };
@@ -158,7 +160,7 @@ player.camMode = 'third';
 
 		const h = compass();
 		input.keys.add( k );
-		run( 1 );
+		run( 1.5 );
 		input.keys.delete( k );
 		const d = compass() - h;
 		run( 1 );
@@ -289,8 +291,13 @@ ok( ! model.figure || ! model.figure.group.visible, 'nobody in her' );
 run( 1 );
 ok( model.stroke.park > 0.9, 'the paddle laid along her gunwale' );
 
+// ((M17) the tide at its highest comes up the sand to her and doesn't float her: she was pulled up past its mark)
+G.seaLevel.value = G.tide.value = TIDE_HIGHEST;
+run( 0.1 );
+ok( ctl.beached, 'the highest tide doesn\'t float her off' );
+G.seaLevel.value = G.tide.value = 0;
 // a surge up the sand floats her off
-G.seaLevel.value = 1.2;
+G.seaLevel.value = 2;
 run( 0.1 );
 ok( ! ctl.beached, 'a surge up the sand floats her off' );
 G.seaLevel.value = 0;

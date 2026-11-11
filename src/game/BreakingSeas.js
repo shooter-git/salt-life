@@ -14,15 +14,29 @@
 // only out in it: not where the shallows have faded the open sea.
 //   const seas = new BreakingSeas( { waves, caps, hull } );  seas.step( dt, boat, hs, t ) -> strength of a hit, or 0
 //   seas.update( dt, app ): what the game calls, aboard
+// (M17) And said, as it comes aboard: a toast of where it came and what it left in her (seaAboardSaid), so a knock and the bilge
+// rising have a cause you're told of.
 
 import { G } from '../core/Globals.js';
 import { seaHeight } from './Weather.js';
 import { HULLS } from './Hull.js';
+import { gallons } from './Units.js';
 
 const FROM = 2.9, HS = 3.66, ON_CREST = 0.3, COOL = 6, EVERY = 0.1;
 export const BREAKING = { FROM, HS, ON_CREST, COOL };
 const POINTS = [ 0.36, 0, - 0.33 ]; // of her length, along her from her middle: where a sea can come aboard
 export const breakingLitres = ( hs, boat = 'lobster' ) => ( hs < FROM ? 0 : HULLS[ boat ].sea * hs / HS );
+// (M17) what's said as one comes aboard her: litres, what it put in her bilge; bilge, what's in it now (L). A kayak's bilge is the sea:
+// it breaks over you. The others' by where it comes: over the lobster boat's low rail aft and down round her engine box, over the
+// console's bow, into the sportfisher's cockpit, and what of it her scuppers don't clear
+const WHERE = { lobster: 'over her rail', console: 'over her bow', sportfisher: 'into her cockpit' };
+export function seaAboardSaid( boat, litres, bilge = 0 ) {
+
+	if ( boat === 'kayak' ) return 'A sea broke over you';
+	const down = litres >= 0.5 ? `${ gallons( litres ) } gal of it in her bilge${ bilge >= litres + 4 ? `, ${ gallons( bilge ) } now` : '' }` : 'her scuppers cleared it';
+	return `A sea came ${ WHERE[ boat ] || 'aboard' } · ${ down }`;
+
+}
 
 export class BreakingSeas {
 
@@ -34,6 +48,7 @@ export class BreakingSeas {
 		this._t = 0;
 		this._cool = 0;
 		this.hits = 0;
+		this.lastLitres = 0;
 		this._f = { roller: 0, foam: 0 };
 
 	}
@@ -46,6 +61,7 @@ export class BreakingSeas {
 		const hs = seaHeight( live.swell, live.windSea, live.blow ) * this.waves.leeAt( b.position.x, b.position.z )[ 0 ];
 		const hit = this.step( dt, b, hs, G.time.value );
 		if ( hit > 0 && app.audio ) app.audio.hullSlap( 1 );
+		if ( hit > 0 && app.game && app.game.toast ) app.game.toast( seaAboardSaid( this.hull.boat, this.lastLitres, this.hull.bilge ), 3200 );
 		return hit;
 
 	}
@@ -70,8 +86,9 @@ export class BreakingSeas {
 		this.hits ++;
 		const hull = this.hull;
 		hull.slam( 0.96 );
-		const her = hull.figures;
+		const her = hull.figures, was = hull.bilge;
 		hull.bilge = Math.min( her.bilgeMax, hull.bilge + breakingLitres( hs, hull.boat ) );
+		this.lastLitres = hull.bilge - was; // ((M17) for what's said)
 		// (thrown over about her keel, away from the side the wind's on)
 		const w = G.windDir.value, side = w.x * fz - w.y * fx >= 0 ? 1 : - 1, k = side * her.knock * Math.min( 2, hs / HS );
 		boat.angular.x += fx * k;

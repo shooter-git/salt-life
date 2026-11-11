@@ -21,6 +21,15 @@ export const YARD = {
 	console: { x: 88.5, z: - 98, yaw: 0 },
 	sportfisher: { x: 112, z: - 113, yaw: 0 },
 };
+// (M17) and a second place for each, for a guest's boat hauled out while yours is on hers (together/Berths.js): drawn only on
+// a screen where both are, on blocks of their own. The lobster boat's beside the cradle, the kayak's and the console's behind
+// their own, the sportfisher's beside hers, each clear of the others on the yard's level ground
+export const SPARE_YARD = {
+	lobster: { x: 105.5, z: - 100, yaw: 0 },
+	kayak: { x: 92.5, z: - 101, yaw: 0 },
+	console: { x: 88.5, z: - 107, yaw: 0 },
+	sportfisher: { x: 118.5, z: - 113, yaw: 0 },
+};
 // a boat's keel blocks hold her this far off the highest ground under her
 const BLOCKS = 0.35;
 // her pose on her blocks: { position (her waterline), heading }, her length and draft (m) from what she is

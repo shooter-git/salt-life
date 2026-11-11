@@ -1,5 +1,6 @@
 import { BufferAttribute, BufferGeometry, DoubleSide, InstancedBufferAttribute, InstancedMesh, Matrix4, Quaternion, ShaderMaterial, Vector3 } from '../../engine/index.js';
 import { G } from '../../core/Globals.js';
+import { glareLeft as fresnelLeft } from '../Sight.js';
 
 // (M16) Polarized glasses. The glare off the water is light polarized flat, and they take it out. How much depends on how
 // you look: at the water's Brewster angle (37 degrees below the horizon) a polarizer takes nearly all the reflection, and
@@ -14,8 +15,13 @@ import { G } from '../../core/Globals.js';
 //
 // The shapes are one instanced mesh with a little program of its own, made when you're first out there with the glasses on,
 // so nobody without them pays for it. It's drawn after the sea, just on top of it, so your boat still hides what's behind her.
+//
+// (M17) The glare by Fresnel's equations for seawater (game/Sight.js: what's left is the reflection's p-polarized part, of
+// the whole): nearly all of it along the surface, none at Brewster's angle, where M16 had half and a twelfth. On the
+// flats, where the fish are drawn as themselves on a shallow, bright bottom, Sight.js has how plainly each shows through
+// them, by the same physics (seenOnFlats: the bottom's light out through the surface against the glare left), its shadow
+// on the sand, a cloud's shadow, the wind and the rain: game/FlatsFishing.js and world/Fish.js draw them by it.
 const MAX = 36, REFRACT = 1.33;
-const BREWSTER = 37 * Math.PI / 180;
 const SEE = { from: 4 * Math.PI / 180, to: 13 * Math.PI / 180, far: [ 150, 260 ] }; // the angle under which fish show; m
 const _m = new Matrix4(), _q = new Quaternion(), _p = new Vector3(), _s = new Vector3(), _d = new Vector3(), _y = new Vector3( 0, 1, 0 );
 
@@ -26,15 +32,8 @@ const smooth = ( a, b, x ) => {
 
 };
 
-// how much of the sea's reflection is left through them, looking `below` radians under the horizon: all but what a
-// polarizer takes, half of it along the surface and nearly all at Brewster's angle
-export function glareLeft( below ) {
-
-	const e = Math.min( Math.PI / 2, Math.abs( below ) );
-	const k = e < BREWSTER ? e / BREWSTER : 1 - ( e - BREWSTER ) / ( Math.PI / 2 - BREWSTER );
-	return 0.5 - 0.42 * k;
-
-}
+// how much of the sea's reflection is left through them, looking `below` radians under the horizon (M17: Fresnel's, Sight.js)
+export const glareLeft = fresnelLeft;
 
 // how plainly they show a fish d m off with your eye h m above the water, 0..1
 export function fishSeen( h, d ) {

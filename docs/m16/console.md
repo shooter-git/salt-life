@@ -29,7 +29,7 @@ A 23 ft deep-V with an open deck all round the helm, a T-top, and outboards on a
 - **Slow frames:** patches are spread along the way she came since the last frame, not dropped in a heap.
 - **On the waves:** each is flat between two heights, and the depth test takes it as a little nearer you, or the waves in front hid it. There's still only one draw.
 
-The arms are foam only: a real wake's far arms are smooth wave crests, which would take the sea's surface moving.
+The arms are foam only: a real wake's far arms are smooth wave crests, which would take the sea's surface moving. (M17: they are now, from her track, on the GPU and the CPU alike: [wakes.md](../m17/wakes.md).)
 
 **Her light.** White gelcoat in the shade came out near black, so her body and fittings take `GroundBounce` with a white bounce of their own in place of the sand's colour.
 

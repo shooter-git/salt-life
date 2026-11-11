@@ -120,13 +120,15 @@ export class FishPortrait {
 	}
 
 	// with the load's shaders: the fish materials in this light, and the backdrop (stand-in fish: any
-	// geometry gives the same programs). environment: the world's, for the low tier's studio
+	// geometry gives the same programs; hidden, never drawn). environment: the world's, for the low tier's studio
 	compile( renderer, environment = null ) {
 
 		const g = new BufferGeometry();
 		g.setAttribute( 'position', new Float32BufferAttribute( [ 0, 0, 0, 0.1, 0, 0, 0, 0.1, 0 ], 3 ) );
 		g.setAttribute( 'normal', new Float32BufferAttribute( [ 0, 0, 1, 0, 0, 1, 0, 0, 1 ], 3 ) );
-		const stand = this.materials.map( ( m ) => new Mesh( g, m ) );
+		// ((M17) hidden: three compiles what's hidden too, and a card up while this runs, in the first second or so after the
+		// start, drew them in its scene)
+		const stand = this.materials.map( ( m ) => Object.assign( new Mesh( g, m ), { visible: false } ) );
 		const frame = new FramebufferTexture( 1, 1 );
 		if ( this.lite ) this.scene.environment = environment;
 		else {

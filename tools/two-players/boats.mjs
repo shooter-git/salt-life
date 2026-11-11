@@ -252,7 +252,9 @@ await until( sam.game, 'window.__app.together.crew._marks.length > 0', 30000 ).c
 const marks = await sam.game.evaluate( () => window.__app.together.crew._marks.length );
 say( marks > 0, 'the helm has it on the map' );
 // in the chair
-await robin.game.evaluate( () => { const p = window.__app.player, s = p.boat.model.stations.chair; p.deckPos.set( s.x, s.y, s.z ); p.deckVel.set( 0, 0, 0 ); } );
+// ((M17) the chair's by its seat, not by nearness (Crew.jobAt): she's sat in it, and held there with no fish on, which would let
+// her go at once (Rigs.updateChair). together.mjs' chair part sits a guest in it the real way, a fish on and E)
+await robin.game.evaluate( () => { const a = window.__app, p = a.player, s = p.boat.model.stations.chair, r = a.game.rigs; p.deckPos.set( s.x, s.y, s.z ); p.deckVel.set( 0, 0, 0 ); r.updateChair = () => null; r._sit( true ); } );
 await until( sam.game, `${ other }.job === 'chair'` );
 await frames( sam.game, 6 );
 await posed( sam.game );
@@ -264,6 +266,7 @@ await sam.game.evaluate( () => { const a = window.__app; a.player.camMode = 'thi
 await until( sam.game, `${ other }.avatar._sit > 0.95` );
 await shot( sam, 'crew' );
 await reads( sam.game, 'Sam at his helm, Robin aboard' );
+await robin.game.evaluate( () => { const r = window.__app.game.rigs; delete r.updateChair; r._sit( false ); } ); // (out of the chair)
 
 // the tower's helm: to the others it's the helm, and they see you up there; and they're told what's fitted on her
 await sam.game.evaluate( () => { const p = window.__app.player; p.leaveHelm(); p.takeHelm( p.boat.model.towerHelm ); } );

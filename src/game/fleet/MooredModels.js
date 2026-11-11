@@ -13,7 +13,7 @@ const WHITE = 0xf2efe6, GLASS = 0x18242c, DECK = 0xd9d4c4, BLACK = 0x17191b, STE
 // what's painted under her waterline, her boot top and her topsides as she comes; her deck's height
 export const SHAPES = {
 	kayak: { length: 3.7, beam: 0.85, draft: 0.1, free: 0.28, rise: 0.35, transom: 0.55, bottom: 0xb86a28, boot: 0xb86a28, top: 0xc8732a, deck: 0xb86a28, deckY: 0.12 },
-	console: { length: 7, beam: 2.6, draft: 0.5, free: 0.85, rise: 0.45, transom: 0.86, bottom: 0x24323c, boot: 0x24323c, top: WHITE, deck: DECK, deckY: 0.42 },
+	console: { length: 7, beam: 2.6, draft: 0.5, free: 0.85, rise: 0.45, transom: 0.86, bottom: 0x24323c, boot: 0x24323c, top: 0x234a75, deck: DECK, deckY: 0.42 }, // ((M17) her navy as she came, ConsoleMaterials': it was white)
 	lobster: { length: 8.2, beam: 2.9, draft: 0.77, free: 0.98, rise: 0.63, transom: 0.8, bottom: 0x7a1d15, boot: 0x0f1a30, top: WHITE, deck: DECK, deckY: 0.35 },
 	sportfisher: { length: 14.6, beam: 4.8, draft: 1.4, free: 1.35, rise: 0.72, transom: 0.86, bottom: 0x1a2a3a, boot: 0x0f1a30, top: WHITE, deck: DECK, deckY: 0.75 },
 };

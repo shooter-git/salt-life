@@ -6,6 +6,7 @@ import { MANGROVE, mangroveAt } from './terrain/Mangrove.js';
 import { CAVES, carveAt } from './terrain/SeaCaves.js';
 import { beachBerm } from './terrain/NorthBeach.js';
 import { trailCut } from './terrain/NorthTrail.js';
+import { cutFlats, KeptMask, calmAt } from './terrain/Flats.js';
 
 const smin = ( a, b, k ) => {
 
@@ -111,6 +112,13 @@ export class TerrainData {
 			beachBerm( this, record, recordMask );
 			// ((M15) and the way over to it on foot, its trail cut into the slopes: terrain/NorthTrail.js)
 			trailCut( this, record, recordMask );
+			// ((M17) and the flats on the west, seaward of the mangroves: terrain/Flats.js. What they changed is kept in
+			// windows of the arrays (tens of thousands of texels: a Map of them would be megabytes), read by uncut as
+			// the rest is, and let go once the plants are placed (letGoOfTheFlats))
+			this._flats = cutFlats( this );
+			for ( const [ a, K ] of this._flats.masks ) M.set( a, new KeptMask( M.get( a ), K, this.res ) );
+			// (and how much of the shore's waves is left over them, for its fields' solves: kept)
+			this.flatsCalm = this._flats.calm;
 
 		}
 		this.offshore = offshore;
@@ -926,18 +934,50 @@ export class TerrainData {
 		}
 
 		const T = this;
+		// (what a texel was, if it's been cut: (M17) the flats' kept in their window)
+		const was = ( q ) => {
+
+			if ( U.has( q ) ) return U.get( q );
+			const F = T._flats, p = F ? F.heights.at( q, res ) : - 1;
+			return p >= 0 ? F.heights.data[ p ] : undefined;
+
+		};
 		// (how much the ground at ( x, z ) is raised or cut from what it was: for setting the rocks and the plants
 		// placed on it back on it)
-		this.raisedAt = ( x, z ) => U.size ? T.heightAt( x, z ) - T.uncut.heightAt( x, z ) : 0;
+		this.raisedAt = ( x, z ) => U.size || T._flats ? T.heightAt( x, z ) - T.uncut.heightAt( x, z ) : 0;
 		this.uncut = Object.create( this, { masksBefore: { value: MB }, heightAt: { value( x, z ) {
 
 			const h = T.heightAt( x, z );
 			const fx = ( x - o ) / t - 0.5, fz = ( z - o ) / t - 0.5, i = Math.floor( fx ), j = Math.floor( fz ), k = j * res + i;
-			if ( ! ( U.has( k ) || U.has( k + 1 ) || U.has( k + res ) || U.has( k + res + 1 ) ) ) return h;
-			const at = ( q ) => U.has( q ) ? U.get( q ) : H[ q ], tx = fx - i, tz = fz - j;
-			return ( at( k ) * ( 1 - tx ) + at( k + 1 ) * tx ) * ( 1 - tz ) + ( at( k + res ) * ( 1 - tx ) + at( k + res + 1 ) * tx ) * tz;
+			const a = was( k ), b = was( k + 1 ), c = was( k + res ), d = was( k + res + 1 );
+			if ( a === undefined && b === undefined && c === undefined && d === undefined ) return h;
+			const tx = fx - i, tz = fz - j;
+			return ( ( a ?? H[ k ] ) * ( 1 - tx ) + ( b ?? H[ k + 1 ] ) * tx ) * ( 1 - tz ) + ( ( c ?? H[ k + res ] ) * ( 1 - tx ) + ( d ?? H[ k + res + 1 ] ) * tx ) * tz;
 
 		} } } );
+
+	}
+
+	// (M17) how much of the shore's waves is left at ( x, z ): taken out over the flats (ShoreField)
+	shoreCalmAt( x, z ) {
+
+		return calmAt( this.flatsCalm, x, z );
+
+	}
+
+	// (M17) what the flats changed, let go once the rocks and the plants are placed (App.plantsPlaced): the masks' kept
+	// windows back to what the north beach and the trail kept of them alone
+	letGoOfTheFlats() {
+
+		const F = this._flats, M = this._masksBefore;
+		if ( ! F ) return;
+		this._flats = null;
+		if ( M ) for ( const [ a, K ] of M ) if ( K instanceof KeptMask ) {
+
+			if ( K.before ) M.set( a, K.before );
+			else M.delete( a );
+
+		}
 
 	}
 

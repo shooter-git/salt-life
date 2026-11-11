@@ -1,5 +1,7 @@
 // (M16) Picking up where you left off, alone, in each boat: a real game in a driven browser (the SDK's stand-in keeps your save in the
 // browser), a real load of the page each time. Her times are faked in the saved records between visits, never the state in the game.
+// (M17) And where you were: each place on her deck (aboard), her upper helm, in the water by her far out (swim), the kayak at anchor
+// with you sat in her (kayakanchor).
 //   tools/render-slot.sh node tools/two-players/resume.mjs [dir for screenshots] [port] [boats: kayak,console,...] [scenarios: berth,anchor,...]
 // Each's about a minute a load on the CPU: a run's capped at 25 minutes, so split them. Screenshots are <dir>/<boat>-<scenario>-seen.png (what you
 // see) and -out.png (her from outside).
@@ -232,7 +234,7 @@ const SC = {
 		kept( v, was, 'anchor' );
 		say( near( v, was, 2 ), `anchor: she's where she was, ${ Math.hypot( v.x - was.x, v.z - was.z ).toFixed( 2 ) } m off` );
 		say( v.anchor && Math.hypot( v.anchor[ 0 ] - was.anchor[ 0 ], v.anchor[ 1 ] - was.anchor[ 1 ] ) < 0.2, 'anchor: her anchor where it was' );
-		say( v.mode === ( boat === 'kayak' ? 'walk' : was.mode ), `anchor: ${ boat === 'kayak' ? 'in the water when you left, ashore now' : 'aboard as you were' } (${ was.mode } -> ${ v.mode })` );
+		say( v.mode === was.mode, `anchor: ${ boat === 'kayak' ? '(M17) in the water when you left, in the water by her now' : 'aboard as you were' } (${ was.mode } -> ${ v.mode })` );
 		say( ! v.note, `anchor: no note (a reload's not being away): ${ v.note || '' }` );
 		await settled( S, v, 'anchor', boat === 'kayak' ? 16 : 40 );
 		await shots( page, g, F );
@@ -243,7 +245,7 @@ const SC = {
 		note( brief( v ) );
 		say( near( v, was, 45 ) && v.anchor, `anchor 3 h: still at her anchor, ${ Math.hypot( v.x - was.x, v.z - was.z ).toFixed( 1 ) } m from where she was` );
 		say( Math.abs( hoursBetween( clock, v ) - 3 ) < 0.5, `anchor 3 h: the clock's gone on (${ hoursBetween( clock, v ).toFixed( 2 ) } h: day ${ clock.day } ${ clock.hour } -> day ${ v.day } ${ v.hour })` );
-		say( v.mode === ( boat === 'kayak' ? 'walk' : was.mode ), `anchor 3 h: where you were (${ v.mode })` );
+		say( v.mode === was.mode, `anchor 3 h: where you were (${ v.mode })` );
 		good( v, 'anchor 3 h' );
 		await shots( page, g, `${ F }-3h` );
 		// ---- at her helm: the anchor comes up, she's adrift
@@ -297,7 +299,7 @@ const SC = {
 		const dA = Math.hypot( v.x - adrift.x, v.z - adrift.z );
 		sameBoat( v, boat, 'adrift' );
 		say( dA > 20 && ! v.anchor && ! v.moored, `adrift 3 h: she drifted ${ dA.toFixed( 0 ) } m (${ JSON.stringify( v.toasts ) })` );
-		say( v.mode === 'walk', `adrift 3 h: you're ashore, she's out there (${ v.mode } at ${ v.you })` );
+		say( v.mode === 'swim' && Math.hypot( v.you[ 0 ] - v.x, v.you[ 2 ] - v.z ) < 30, `adrift 3 h: (M17) in the water by her still, where she's drifted (${ v.mode } at ${ v.you }, ${ Math.hypot( v.you[ 0 ] - v.x, v.you[ 2 ] - v.z ).toFixed( 1 ) } m from her)` );
 		good( v, 'adrift 3 h' );
 		await shots( page, g, `${ F }-adrift-you`, { outside: false } );
 		await swimTo( g );
@@ -322,7 +324,7 @@ const SC = {
 		v = await S.reload( 'on her sock' );
 		note( brief( v ) );
 		say( v.sock && near( v, sock, 5 ), `sock: still out after a reload, ${ Math.hypot( v.x - sock.x, v.z - sock.z ).toFixed( 1 ) } m off` );
-		say( v.mode === ( boat === 'kayak' ? 'walk' : sock.mode ), `sock: where you were (${ sock.mode } -> ${ v.mode })` );
+		say( v.mode === sock.mode, `sock: where you were (${ sock.mode } -> ${ v.mode })` );
 		await frames( g, 3 );
 		const s0 = await view( g );
 		await shots( page, g, `${ F }-sock` );
@@ -425,7 +427,11 @@ const SC = {
 			return { id: M.id, bunks: M.bunks, stations: M.stations && M.stations.tower, helm: M.helm, lines: null };
 
 		} );
-		const list = boat === 'sportfisher' ? [ { name: 'cockpit', x: 0, y: 0.5, z: - 3.75 }, { name: 'salon', x: 0, y: 1.02, z: - 0.5 }, { name: 'guest cabin', x: places.bunks[ 0 ].x, y: places.bunks[ 0 ].y, z: places.bunks[ 0 ].z }, { name: 'bridge, aft', x: 0, y: 3.1, z: - 2.6 }, { name: 'tower', x: places.stations.x, y: places.stations.y, z: places.stations.z } ] : AREAS[ boat ]( {} ).slice( 0, 2 );
+		// ((M17) and the lobster boat's side deck, her bow and her roof; the console's foredeck)
+		const named = ( ...names ) => AREAS[ boat ]( {} ).filter( ( a ) => names.includes( a.name ) );
+		const list = boat === 'sportfisher' ? [ { name: 'cockpit', x: 0, y: 0.5, z: - 3.75 }, { name: 'salon', x: 0, y: 1.02, z: - 0.5 }, { name: 'guest cabin', x: places.bunks[ 0 ].x, y: places.bunks[ 0 ].y, z: places.bunks[ 0 ].z }, { name: 'bridge, aft', x: 0, y: 3.1, z: - 2.6 }, { name: 'tower', x: places.stations.x, y: places.stations.y, z: places.stations.z } ]
+			: boat === 'lobster' ? [ ...named( 'cockpit', 'the house\'s bench' ), { name: 'side deck', x: 1.31, y: 1.16, z: 0.3 }, ...named( 'the bow', 'the house\'s roof' ) ]
+				: [ ...AREAS[ boat ]( {} ).slice( 0, 2 ), ...named( 'foredeck' ) ];
 		for ( const P of list ) {
 
 			await g.evaluate( ( P ) => {
@@ -444,7 +450,9 @@ const SC = {
 			v = await S.reload( `far out, ${ P.name }` );
 			note( `${ P.name }: ${ brief( v ) }` );
 			say( v.mode === 'deck' && near( v, was, 4 ), `aboard (${ P.name }): on deck where she was, ${ Math.hypot( v.x - was.x, v.z - was.z ).toFixed( 1 ) } m off` );
-			note( `${ P.name }: you were at ${ was.deck } in her, you're at ${ v.deck } now` );
+			// ((M17) where you stood on her: not her cockpit)
+			const off = v.deck && was.deck ? Math.hypot( v.deck[ 0 ] - was.deck[ 0 ], v.deck[ 1 ] - was.deck[ 1 ], v.deck[ 2 ] - was.deck[ 2 ] ) : Infinity;
+			say( off < 0.25, `aboard (${ P.name }): (M17) where you stood on her, ${ was.deck } -> ${ v.deck } (${ off.toFixed( 2 ) } m)` );
 			good( v, P.name );
 			await shots( page, g, `${ F }-${ P.name.replace( /[ ,]+/g, '-' ) }`, { outside: P === list[ 0 ] } );
 
@@ -457,6 +465,33 @@ const SC = {
 		v = await S.reload( 'far out, helm' );
 		note( `helm: ${ brief( v ) }` );
 		say( v.mode === 'boat', 'aboard: at her helm' );
+		// ((M17) her upper helm, the tower's: there again)
+		if ( boat === 'sportfisher' ) {
+
+			await g.evaluate( () => {
+
+				const a = window.__app, p = a.player;
+				p.leaveHelm();
+				p.takeHelm( a.boat.towerHelm );
+
+			} );
+			await frames( g, 2 );
+			await saveNow( g );
+			v = await S.reload( 'far out, the tower\'s helm' );
+			const upper = await g.evaluate( () => !! ( window.__app.player.atHelm && window.__app.player.atHelm.upper ) );
+			say( v.mode === 'boat' && upper, `aboard: (M17) at her upper helm, the tower's, again (${ v.mode }, upper ${ upper })` );
+			await g.evaluate( () => window.__app.player.camMode = 'first' );
+			await frames( g, 2 );
+			await shots( page, g, `${ F }-tower-helm`, { outside: false } );
+			await g.evaluate( () => {
+
+				const a = window.__app, p = a.player;
+				p.leaveHelm();
+				p.takeHelm();
+
+			} );
+
+		}
 		await frames( g, 2 );
 		await g.evaluate( () => window.__app.player.camMode = 'first' );
 		await frames( g, 2 );
@@ -958,6 +993,84 @@ const SC = {
 
 	},
 
+	// (M17) in the water far out: by her when you come back, still at anchor and hours on; drifted, by her where she's got to; too far
+	// from her, ashore
+	async swim( S ) {
+
+		const { boat, g, page } = S, F = `${ out }/${ boat }-swim`;
+		await S.load( `${ plain }&boat=${ boat }`, 'goto', 'first, ?boat' );
+		await S.fitted( ANCHOR[ boat ] );
+		const at = await farSpot( g, { max: boat === 'kayak' ? 9 : 18 } );
+		await S.toSea( at );
+		await frames( g, 3 );
+		await leaveHer( g );
+		await frames( g, 2 );
+		await swimTo( g, 9, - 7 );
+		await frames( g, 4 );
+		const was = await view( g );
+		say( was.mode === 'swim' && !! was.anchor, `swim: in the water ${ Math.hypot( was.you[ 0 ] - was.x, was.you[ 2 ] - was.z ).toFixed( 1 ) } m off her, her anchor down` );
+		await saveNow( g );
+		note( `her record ${ JSON.stringify( ( await S.records() ).boat ) }` );
+		let v = await S.reload( 'in the water by her' );
+		note( brief( v ) );
+		good( v, 'swim' );
+		const by = ( v ) => Math.hypot( v.you[ 0 ] - v.x, v.you[ 2 ] - v.z );
+		const offAt = ( v ) => Math.hypot( v.you[ 0 ] - v.x - ( was.you[ 0 ] - was.x ), v.you[ 2 ] - v.z - ( was.you[ 2 ] - was.z ) );
+		say( v.mode === 'swim' && near( v, was, 3 ) && offAt( v ) < 2, `swim: in the water by her again, ${ by( v ).toFixed( 1 ) } m off, where you were (${ offAt( v ).toFixed( 2 ) } m)` );
+		await settled( S, v, 'swim', 12 );
+		await shots( page, g, F, { outside: false } );
+		await saveNow( g );
+		v = await S.gone( 3, null, 'in the water by her, 3 h gone' );
+		note( brief( v ) );
+		say( v.mode === 'swim' && v.anchor && by( v ) < 30, `swim 3 h: by her still, at her anchor (${ v.mode }, ${ by( v ).toFixed( 1 ) } m)` );
+		// too far from her: you'd left her, ashore
+		await g.evaluate( () => {
+
+			const a = window.__app, p = a.player, b = a.boatCtl.position;
+			p.position.set( b.x + 420, a.waves.heightAt( b.x + 420, b.z ) - 0.2, b.z );
+			p.mode = 'swim';
+
+		} );
+		await frames( g, 2 );
+		await saveNow( g );
+		v = await S.reload( 'far from her in the water' );
+		note( brief( v ) );
+		say( v.mode === 'walk' && !! v.anchor, `swim, 420 m off: ashore, as before, she at her anchor (${ v.mode })` );
+
+	},
+
+	// (M17) the kayak at anchor with you sat in her: being put back in her seat isn't taking her helm
+	async kayakanchor( S ) {
+
+		const { boat, g, page } = S, F = `${ out }/${ boat }-kayakanchor`;
+		if ( boat !== 'kayak' ) return note( 'the kayak\'s alone' );
+		await S.load( `${ plain }&boat=${ boat }`, 'goto', 'first, ?boat' );
+		await S.fitted( ANCHOR[ boat ] );
+		const at = await farSpot( g, { max: 9 } );
+		await S.toSea( at );
+		await frames( g, 3 );
+		await g.evaluate( () => window.__app.game.dropAnchor() );
+		await frames( g, 4 );
+		const was = await view( g );
+		say( was.mode === 'boat' && !! was.anchor, `kayak at anchor: sat in her, her anchor down (${ was.mode }, ${ JSON.stringify( was.anchor ) }) ${ JSON.stringify( was.toasts.slice( - 1 ) ) }` );
+		await saveNow( g );
+		let v = await S.reload( 'sat in her at anchor' );
+		note( brief( v ) );
+		good( v, 'kayak at anchor' );
+		await frames( g, 6 );
+		v = await view( g );
+		say( v.mode === 'boat' && !! v.anchor && near( v, was, 5 ) && ! v.toasts.includes( 'Anchor up' ), `kayak at anchor: sat in her again, her anchor still down (${ v.mode }, ${ JSON.stringify( v.anchor ) }, toasts ${ JSON.stringify( v.toasts ) })` );
+		await settled( S, v, 'kayak at anchor', 16 );
+		await shots( page, g, F, { from: [ 4, 3, - 7 ] } );
+		await saveNow( g );
+		v = await S.gone( 3, null, 'sat in her at anchor, 3 h gone' );
+		await frames( g, 6 );
+		v = await view( g );
+		note( brief( v ) );
+		say( v.mode === 'boat' && !! v.anchor && near( v, was, 45 ), `kayak at anchor 3 h: sat in her, still at her anchor (${ Math.hypot( v.x - was.x, v.z - was.z ).toFixed( 1 ) } m from where she was)` );
+
+	},
+
 	// a new game
 	async fresh( S ) {
 
@@ -1006,4 +1119,5 @@ for ( const boat of list ) for ( const name of Object.keys( SC ) ) {
 console.log( 'readings', JSON.stringify( readings ) );
 const { oks, problems } = tally();
 console.log( problems ? `${ problems } PROBLEM(S), ${ oks } ok` : `no problems, ${ oks } ok` );
+process.exitCode = problems ? 1 : 0;
 await browser.close();

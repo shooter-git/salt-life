@@ -2,22 +2,24 @@ import { Spread, kiteWire, lineCode, readSpread, spreadWire } from './Spread.js'
 import { cleanName } from '../game/fleet/Fleet.js';
 import { BAITS } from '../game/Bait.js';
 import { engineOf } from '../audio/SoundScape.js';
-import { berthOf } from '../game/fleet/Berths.js';
-import { Vector3, Quaternion, Matrix4, MathUtils } from '../engine/index.js';
+import { ashoreOf, berthOf } from '../game/fleet/Berths.js';
+import { Mesh, Vector3, Quaternion, Matrix4, MathUtils } from '../engine/index.js';
 import { gltfLoader } from '@allthespaces/portal/three';
 import { Avatar, LOOKS, lookOf } from './Avatar.js';
 import { figureStandIn } from './Figure.js';
 import { RecordsBoard } from './RecordsBoard.js';
-import { BoatCopies, isBoat, sizeOf, fitWire, fitStats } from './BoatCopies.js';
+import { BoatCopies, airOf, bareOf, isBoat, sizeOf, fitWire, fitStats } from './BoatCopies.js';
 import { BoatLamps } from '../world/boat/BoatLamps.js';
 import { stackedOn } from '../game/TrapWork.js';
-import { SPARE_BERTHS, atDock, berthShare, laidAt, spareBerth } from './Berths.js';
+import { SWING, atDock, berthShare, cradleGeometry, inTheYard, laidAt, leaving, onTheSand, sandBerth, spareYard, stemBerth } from './Berths.js';
 import { Crew, footY, perched } from './Crew.js';
 import { SharedBox } from './SharedBox.js';
 import { Specks } from './Specks.js';
 import { RADAR_RPM, PROP_DISPLAY_RPS } from '../world/BoatModel.js';
 import { FISH, fishLengthCm, isTrophy } from '../game/FishTable.js';
 import { PLACES } from '../game/Places.js';
+import { KINDS, lifeOf } from '../game/LifeList.js';
+import { SLAMS, slamTold } from '../game/Trophies.js';
 import { VARIATION } from '../game/Chart.js';
 import { ROD_L, SEAT_Y } from '../game/FishingRod.js';
 import { gunModels, setBands } from '../game/Speargun.js';
@@ -30,8 +32,9 @@ import { lb } from '../game/Units.js';
 import { WORLD } from '../world/WorldLayout.js';
 import { islandTime, weatherHere } from '../game/Weather.js';
 import { ableOf, SOCK_DRIFT } from '../game/Seaworthy.js';
-import { anchorLie, boatRecord, cleanBoats, driftOf, keepBoat, sheerAt, swingRate, wearRate } from '../game/Away.js';
+import { SWIM_NEAR, anchorLie, besideHer, boatRecord, cleanBoats, driftOf, intoWater, keepBoat, sheerAt, standBack, stoodOf, swingRate, wearRate } from '../game/Away.js';
 import { RODE_SLACK } from '../player/BoatController.js';
+import { FlatsShare } from './FlatsShare.js';
 
 // (Salt Life) Playing together: whoever else is on the island (portal.session, All the Spaces), drawn
 // where they are, doing what they do. Light, drop-in: everyone keeps their own progress and their own
@@ -54,7 +57,9 @@ import { RODE_SLACK } from '../player/BoatController.js';
 //    toast only for one worth hearing of (an island record or a trophy-sized fish)
 //  - the island's records: each species' heaviest fish anyone in the group has landed, who and when,
 //    in the group's shared save ('records': kept between visits), chalked on a board at Joe's stand
-//    (RecordsBoard) and listed in the cooler
+//    (RecordsBoard) and listed in the cooler; (M17) and each player's life list there, '#' and their id: { who, k: how many kinds,
+//    sl: the slams they've had } (LifeList.lifeOf), written when it changes, the others told ('life': the slams just had,
+//    for a toast), for the board's line under the weights
 //  - the week's order (game/WeekOrder.js): what each of the group has brought toward it, in the
 //    group's shared save ('weekOrder'); a sale toward it brings that up to date and tells the others
 //    ('week', with the tally)
@@ -81,6 +86,7 @@ import { RODE_SLACK } from '../player/BoatController.js';
 //   t.setWeather( id, since )  (a pick, for everyone here)
 //   t.week()  (this week's order's tally)  t.deliver( kg )  (a sale toward it)
 //   t.setBoats( boats, mine )  (the group's anchored boats, as read at the start)  t.mineBoat( now )  (yours in it)
+//   (M17) t.flats  (the flats together: FlatsShare.js, each player's record of the flats' fish in the room's 'flats.<id>', the calls 'flats')
 
 const SEND = 0.1; // s between poses
 const SEND_FAR = 0.5; // (M15) and with nobody near enough to see you (for the map and the radar)
@@ -129,7 +135,7 @@ const r3 = ( v ) => Math.round( v * 1000 ) / 1000;
 const _p = new Vector3(), _q = new Vector3(), _tip = new Vector3(), _hand = new Vector3(), _d = new Vector3();
 const _x = new Vector3(), _y = new Vector3(), _z = new Vector3(), _up = new Vector3( 0, 1, 0 );
 const _qa = new Quaternion(), _qb = new Quaternion(), _m = new Matrix4(), _mt = new Matrix4();
-const _bp = new Vector3(), _bq = new Quaternion(), _bow = new Vector3();
+const _bp = new Vector3(), _bq = new Quaternion(), _bow = new Vector3(), _at3 = new Vector3();
 
 // another player's boat, to ride in: the boat's shape (yours: the same model) at their boat's pose,
 // with what the Player asks of a boat while you're on its deck
@@ -209,6 +215,10 @@ const TORCH = { lamps: { spot: [ 0, 0, 0 ] }, searchlight: new Vector3() };
 const _torchAt = new Vector3( 0.24, 1.3, 0.32 );
 const NAME_EVERY = 50, NAME_NEAR = 40; // poses between tellings of her name; m: near enough to read it
 const NEAR_ALL = 12; // m: on a phone, how near you are before all of a copy that's here whole is drawn (aboard, or about to board)
+const BOARD_REACH = 4.2; // m from where she's boarded (her ladder's own reach from the water: Vessel.boardFrom)
+// (M17) coming back aboard someone else's: how long after the room's known you're kept in the water where she was for her to come
+// (ms), and for her to be built once she's known to be there; m off her middle you wait
+const REJOIN_MS = 4000, REJOIN_BUILT_MS = 180e3, REJOIN_OFF = 3.5;
 
 // (M16) where her rode leaves her (as BoatController's stem head)
 const stemOf = ( model ) => {
@@ -254,7 +264,8 @@ export class Together {
 		this._specks = [];
 		this._tidyT = 0;
 		this._handed = null; // (M16) the rider at your helm
-		this._berths = new Set(); // (M16) the spare berths taken
+		this._berths = new Set(); // (M16) the spare berths taken ((M17) each { kind, ... }: Berths.js)
+		this._berthN = 0;
 
 		const s = this.session;
 		this._sync( s.players, true );
@@ -274,6 +285,7 @@ export class Together {
 
 		} );
 		s.on( 'catch', ( body, from ) => this._theirCatch( body, from ) );
+		s.on( 'life', ( body, from ) => this._theirLife( body, from ) );
 		s.on( 'net', ( body, from ) => this._theirThrow( body, from ) );
 		s.on( 'rod', ( body, from ) => this._rodAsked( body, from ) );
 		s.on( 'rodIs', ( body, from ) => this._rodGiven( body, from ) );
@@ -304,6 +316,21 @@ export class Together {
 		// (on a device that draws on its CPU, after the start: its shader is load time)
 		if ( this.ready ) app.scene.add( this.board.group );
 		this._readRecords();
+		// ((M17) your life list, in the group's records when it changes: a kind you'd not had before, a slam)
+		this._lifeN = - 1;
+		app.game.state.onChange( ( st ) => {
+
+			if ( st.log && Object.keys( st.log ).length !== this._lifeN ) {
+
+				this._lifeN = Object.keys( st.log ).length;
+				this.lifeChanged();
+
+			}
+
+		} );
+		this.tray = null; // ((M17) Marta's shell tray, the group's)
+		this._readTray();
+		s.on( 'tray', ( t ) => this._setTray( t ) );
 
 		// the week's order: the group's tally, read now and sent on whenever someone brings fish toward it
 		this._week = null;
@@ -317,6 +344,8 @@ export class Together {
 		this._keepT = 0;
 		this._owed = {};
 		s.on( 'boats', ( boats ) => this._setBoats( boats ) );
+		// ((M17) the flats together: what each of you has done to the flats' fish, and the fish you call: FlatsShare.js)
+		this.flats = new FlatsShare( this );
 
 	}
 
@@ -488,7 +517,7 @@ export class Together {
 
 			const on = show.has( id ), type = isBoat( a.r && a.r.b ) ? a.r.b : 'lobster';
 			// (past what the device draws in full, her stand-in)
-			const boat = this._showBoat( a, type, a.frame, on || !! a.seen, on );
+			const boat = this._showBoat( a, type, a.frame, on || !! a.seen, on, bareOf( type, a.r && a.r.f ) );
 			if ( boat ) {
 
 				this.copies.dress( boat, a.r && a.r.f );
@@ -613,6 +642,133 @@ export class Together {
 
 	}
 
+	// ---- (M17) coming back aboard someone else's boat (docs/m17/back.md)
+
+	// what's saved of you aboard someone else's, or in the water by hers (App.saveBoat: Away.boatLeft's ride), or null: on her deck
+	// where you stood, at her helm (put back beside it: it's hers to give), or swimming within SWIM_NEAR of her. (Not ridden(): that's
+	// the boat you're riding, for her dash)
+	rideLeft() {
+
+		const p = this.app.player;
+		if ( p.riding && ( p.mode === 'deck' || p.mode === 'boat' ) ) {
+
+			const b = p.boat, M = b.model, h = p.mode === 'boat' && p.atHelm, o = this.others.get( b.owner ), r = this.boats[ b.owner ];
+			return { o: b.owner, n: ( o && o.person.name ) || ( r && r.n ) || null, b: M.id, x: b.position.x, z: b.position.z, on: h ? [ h.rise[ 0 ], h.y ?? M.lines.deckY, h.rise[ 1 ], 0 ] : stoodOf( p ), helm: !! h };
+
+		}
+
+		if ( p.mode !== 'swim' || p.riding ) return null;
+		let best = null, near = SWIM_NEAR;
+		const by = ( o, n, b, f ) => {
+
+			const d = Math.hypot( p.position.x - f.pos.x, p.position.z - f.pos.z );
+			if ( d < near ) {
+
+				near = d;
+				best = { o, n, b, x: f.pos.x, z: f.pos.z, swim: [ p.position.x - f.pos.x, p.position.z - f.pos.z ] };
+
+			}
+
+		};
+
+		for ( const o of this.others.values() ) {
+
+			const c = o.cur;
+			if ( c && c.boat && ( c.mode === 'deck' || c.mode === 'helm' ) && ! c.ride ) by( o.person.id, o.person.name, c.boatId, c.drawn || c.boat );
+
+		}
+
+		for ( const [ id, a ] of this.away ) if ( a.r && a.r.a && this._awayFrame( id ) ) by( id, a.r.n || null, a.r.b, a.frame );
+		return best;
+
+	}
+
+	// back aboard her ( r: Away.leftOf's ride ): in the water where she was till she's here (her owner aboard her, or her record on
+	// everyone's sea, at anchor) and built, then on her deck where you stood, or in the water by her. If she's not out there once
+	// the room's known, ashore
+	rejoin( r ) {
+
+		const app = this.app, at = besideHer( r.x, r.z, 0, r.swim || [ REJOIN_OFF, 0 ] );
+		this._rejoin = { ...r, since: null }; // (counted from the first frame: a slow load's not her gone)
+		intoWater( app.player, at, app.terrainData.heightAt( at.x, at.z ), G.seaLevel.value );
+
+	}
+
+	_rejoinStep( p ) {
+
+		const R = this._rejoin, app = this.app;
+		if ( R.since === null ) R.since = Date.now();
+		if ( p.riding || ( p.mode !== 'swim' && p.mode !== 'walk' ) ) {
+
+			this._rejoin = null;
+			return;
+
+		}
+
+		const her = this._boardable( R.o, R.b );
+		if ( her && her.boat ) {
+
+			this._rejoin = null;
+			if ( R.swim ) {
+
+				const f = her.frame, at = besideHer( f.pos.x, f.pos.z, Math.atan2( _bow.set( 0, 0, 1 ).applyQuaternion( f.quat ).x, _bow.z ), R.swim );
+				intoWater( p, at, app.terrainData.heightAt( at.x, at.z ), G.seaLevel.value );
+				return;
+
+			}
+
+			p.ride( her.boat );
+			if ( R.on && p.mode === 'deck' ) standBack( p, R.on, her.boat.model );
+			if ( app.game && app.game.toast ) app.game.toast( `Back aboard ${ her.name }'s boat`, 2600 );
+			return;
+
+		}
+
+		// (her owner's here with her, or her record's on the sea: she's coming, as she's built)
+		const wait = her ? REJOIN_BUILT_MS : REJOIN_MS;
+		if ( ! this.roomKnown || Date.now() - R.since < wait ) return;
+		this._rejoin = null;
+		const S = WORLD.start || WORLD.spawn, x = S.position.x, z = S.position.z;
+		p.mode = 'walk';
+		p.position.set( x, Math.max( app.terrainData.heightAt( x, z ), app.colliders ? app.colliders.groundHeightAt( x, z, 50 ) : - Infinity ), z );
+		p.velocity.set( 0, 0, 0 );
+		p.yaw = S.yaw;
+		p._camY = null;
+		const name = ( this.others.get( R.o ) && this.others.get( R.o ).person.name ) || ( this.boats[ R.o ] && this.boats[ R.o ].n ) || R.n || 'Their';
+		if ( app.game && app.game.toast ) app.game.toast( `${ name === 'Their' ? name : name + '\'s' } boat isn't out there now · you're ashore`, 3600 );
+
+	}
+
+	// someone's boat of this type to board now ( { boat: TheirBoat, frame, name } ), coming ( { boat: null } : her owner's aboard
+	// her, or her record's on the sea at anchor, and she's not built here yet), or null
+	_boardable( id, type ) {
+
+		const o = this.others.get( id ), c = o && o.cur;
+		if ( o && ! c ) return { boat: null }; // (they're here, their poses not yet)
+		if ( c && c.boat && ( c.mode === 'deck' || c.mode === 'helm' ) && ! c.ride && c.boatId === type ) {
+
+			const model = this.copies.aboard( type ) && this._nearModel( o, type );
+			if ( ! model ) return { boat: null };
+			const frame = c.drawn || c.boat;
+			if ( ! o.theirBoat ) o.theirBoat = new TheirBoat( id, perched( this.copies.walked( model, type, c.fit ) ) );
+			this._walkOn( o.theirBoat, model, type, c.fit );
+			o.theirBoat.follow( frame, 0 );
+			return { boat: o.theirBoat, frame, name: o.person.name };
+
+		}
+
+		if ( o ) return null; // (they're here, not aboard her)
+		const a = this.away.get( id );
+		if ( ! a || ! a.r || ! a.r.a || a.r.b !== type || ( this.boats[ id ] && this.boats[ id ].tow ) ) return null;
+		if ( ! a.boat || ! a.boat.visible || ! this._awayFrame( id ) || ! this.copies.aboard( type ) ) return { boat: null };
+		const model = a.boat.userData.model;
+		if ( ! a.theirBoat ) a.theirBoat = new TheirBoat( id, perched( this.copies.walked( model, type, a.r.f ) ) );
+		this._walkOn( a.theirBoat, model, type, a.r.f );
+		a.theirBoat.follow( a.frame, 0 );
+		return { boat: a.theirBoat, frame: a.frame, name: a.r.n || 'someone' };
+
+	}
+
 	// where an away boat lies this frame, on your sea, or null
 	_awayFrame( id ) {
 
@@ -681,9 +837,105 @@ export class Together {
 		for ( const [ k, v ] of Object.entries( r ) ) if ( FISH[ k ] && v && typeof v.kg === 'number' ) clean[ k ] = v;
 		// ((M15) and each place's: '@' and its id, which fish it was)
 		for ( const [ k, v ] of Object.entries( r ) ) if ( k[ 0 ] === '@' && PLACES[ k.slice( 1 ) ] && v && typeof v.kg === 'number' && FISH[ v.s ] ) clean[ k ] = v;
+		// ((M17) and each player's life list: '#' and their id)
+		for ( const [ k, v ] of Object.entries( r ) ) if ( k[ 0 ] === '#' && v && Number.isInteger( v.k ) && v.k >= 0 ) clean[ k ] = { who: String( v.who || '' ).slice( 0, 40 ), k: Math.min( v.k, KINDS ), sl: Array.isArray( v.sl ) ? v.sl.filter( ( id ) => SLAMS[ id ] ) : [] };
 		this.records = clean;
+		if ( ! this._lifeRead ) {
+
+			this._lifeRead = true;
+			this.lifeChanged();
+
+		}
+
 		this.board.draw( clean );
 		if ( this.app.game.hud && this.app.game.hud.inv && ! this.app.game.hud.inv.hidden ) this.app.game.hud.renderInventory();
+
+	}
+
+	// ---- (M17) your life list in the group's records ('#' and your id: { who, k, sl }), once it's changed (a while after, so a
+	// catch's new kind and its slam go as one). slams: the ones just had, for the others' toast
+
+	lifeChanged( slams = null ) {
+
+		if ( slams && slams.length ) this._lifeNew = [ ...( this._lifeNew || [] ), ...slams ];
+		clearTimeout( this._lifeT );
+		this._lifeT = setTimeout( () => this._sendLife(), 400 );
+
+	}
+
+	_sendLife() {
+
+		const g = this.app.game;
+		if ( ! g || ! this._lifeRead ) return;
+		const L = lifeOf( g.state ), key = '#' + this.me.id, had = this.records[ key ], fresh = this._lifeNew || [];
+		const who = ( this.me.name || 'Someone' ).slice( 0, 40 );
+		this._lifeNew = null;
+		if ( had && had.k === L.k && had.sl.join() === L.sl.join() && had.who === who ) {
+
+			// (a slam had again: the others told, the records as they were)
+			if ( fresh.length && this.others.size ) this.session.send( 'life', { sl: fresh } );
+			return;
+
+		}
+
+		const mine = { who, k: L.k, sl: L.sl };
+		return this.portal.save.shared.update( 'records', ( cur ) => ( { ...( cur && typeof cur === 'object' ? cur : {} ), [ key ]: mine } ) ).then( ( saved ) => {
+
+			this._setRecords( saved );
+			if ( this.others.size ) this.session.send( 'life', fresh.length ? { sl: fresh } : 1 );
+
+		} ).catch( ( e ) => {
+
+			// (the SDK's update tries three times: when more saves than that cross, tried again a while after)
+			console.warn( 'records', e );
+			this._lifeNew = fresh;
+			clearTimeout( this._lifeT );
+			this._lifeT = setTimeout( () => this._sendLife(), 5000 );
+
+		} );
+
+	}
+
+	// someone else's has changed: the board's line, read again; a slam told
+	_theirLife( b, from ) {
+
+		const o = this.others.get( from ), sl = b && Array.isArray( b.sl ) ? slamTold( b.sl.filter( ( id ) => SLAMS[ id ] ) ) : [];
+		if ( o && sl.length && this.app.game ) this.app.game.toast( `${ o.person.name } has had a ${ SLAMS[ sl[ 0 ] ].name.toLowerCase() }: ${ SLAMS[ sl[ 0 ] ].what }`, 4800 );
+		this._readRecords();
+
+	}
+
+	// ---- (M17) Marta's shell tray: the group's, laid out from the first whole set anyone gave her, for everyone to see
+	// (the group's save, 'tray': { who, id, day, at }), not from your own save's shells.wall
+
+	_readTray() {
+
+		return this.portal.save.shared.get( 'tray' ).then( ( t ) => {
+
+			this._setTray( t );
+			this._trayRead = true;
+
+		} ).catch( ( e ) => console.warn( 'tray', e ) );
+
+	}
+
+	_setTray( t ) {
+
+		this.tray = t && typeof t === 'object' && typeof t.who === 'string' && Number.isFinite( t.day ) ? { who: t.who.slice( 0, 40 ), id: typeof t.id === 'string' ? t.id : '', day: t.day | 0, at: Number( t.at ) || 0 } : null;
+
+	}
+
+	// your set in her tray: in the group's save if there's none there yet (the first stays), and the others told
+	layTray( day ) {
+
+		const mine = { who: this.me.name || 'Someone', id: this.me.id, day: day | 0, at: Date.now() };
+		if ( ! this.tray ) this.tray = mine;
+		return this.portal.save.shared.update( 'tray', ( cur ) => cur && typeof cur === 'object' && typeof cur.who === 'string' ? cur : mine ).then( ( saved ) => {
+
+			this._setTray( saved );
+			if ( this.others.size ) this.session.send( 'tray', saved );
+
+		} ).catch( ( e ) => console.warn( 'tray', e ) );
 
 	}
 
@@ -722,7 +974,7 @@ export class Together {
 
 		const skipper = on && on.cur && on.cur.boat ? on : o, S = skipper.cur;
 		const frame = S.drawn || S.boat, M = skipper.boat && skipper.boat.userData.model;
-		_bp.copy( M && M.hornAt || _bp.set( 0, sizeOf( S.boatId ).air * 0.8, 0 ) ).applyQuaternion( frame.quat ).add( frame.pos );
+		_bp.copy( M && M.hornAt || _bp.set( 0, airOf( S.boatId, S.fit ) * 0.8, 0 ) ).applyQuaternion( frame.quat ).add( frame.pos );
 		return true;
 
 	}
@@ -1198,7 +1450,8 @@ export class Together {
 
 		}
 		this._dropBoat( o );
-		if ( o.berth ) this._berths.delete( o.berth - 1 );
+		this._unberth( o );
+		this._dropBlocks( o );
 		if ( o.horn ) app.audio.hornStop( o.horn );
 		if ( o.fish ) {
 
@@ -1420,7 +1673,6 @@ export class Together {
 		// ((guest work) her tackle and bait are only yours to work while you're aboard her: a new boat's sent anew)
 		const rigs = app.game && app.game.rigs;
 		if ( rigs && rigs.boatKit && ( ! p.riding || p.boat.owner !== rigs.boatKitFrom ) ) rigs.boatKit = null;
-
 		// riding: their boat's pose (gone, or they left: in the water where it was)
 		if ( p.riding ) {
 
@@ -1462,6 +1714,9 @@ export class Together {
 
 		}
 
+		// ((M17) coming back aboard someone else's, once she's here)
+		if ( this._rejoin ) this._rejoinStep( p );
+
 		// next to the boat of someone aboard it: board theirs (at the dock, theirs before yours)
 		p.rideOffer = null;
 		if ( ! p.riding && ( p.mode === 'walk' || p.mode === 'swim' ) ) {
@@ -1478,15 +1733,16 @@ export class Together {
 				if ( ! this.copies.aboard( c.boatId ) ) continue;
 				const model = this._nearModel( o, c.boatId );
 				if ( ! model ) continue;
-				const M = perched( model );
-				_bp.copy( M.boardPoint ).applyQuaternion( frame.quat ).add( frame.pos );
+				// ((M17) from the water, at her ladder if she has one, as near as you'd be to climb it: Vessel.boardFrom, as she's fitted)
+				const M = perched( this.copies.walked( model, c.boatId, c.fit ) ), from = M.boardFrom && M.boardFrom( p.mode );
+				_bp.copy( from ? from.at : M.boardPoint ).applyQuaternion( frame.quat ).add( frame.pos );
 				const d = Math.hypot( _bp.x - p.position.x, _bp.z - p.position.z );
-				if ( d > 4.2 || Math.abs( _bp.y - p.position.y ) > 3.2 || d > best ) continue;
+				if ( d > ( from ? from.reach : BOARD_REACH ) || Math.abs( _bp.y - p.position.y ) > 3.2 || d > best ) continue;
 				best = d;
 				if ( ! o.theirBoat ) o.theirBoat = new TheirBoat( o.person.id, M );
 				this._walkOn( o.theirBoat, model, c.boatId, c.fit );
 				o.theirBoat.follow( frame, 0 );
-				p.rideOffer = { name: o.person.name, boat: o.theirBoat };
+				p.rideOffer = { name: o.person.name, boat: o.theirBoat, text: from ? from.text : null };
 
 			}
 
@@ -1495,17 +1751,17 @@ export class Together {
 			for ( const [ id, a ] of this.away ) {
 
 				if ( ! a.boat || ! a.boat.visible || ! a.r.a ) continue;
-				const f = a.frame, model = a.boat.userData.model, M = perched( model );
-				_bp.copy( M.boardPoint ).applyQuaternion( f.quat ).add( f.pos );
+				const f = a.frame, model = a.boat.userData.model, M = perched( this.copies.walked( model, a.boat.userData.type, a.r.f ) ), from = M.boardFrom && M.boardFrom( p.mode );
+				_bp.copy( from ? from.at : M.boardPoint ).applyQuaternion( f.quat ).add( f.pos );
 				const d = Math.hypot( _bp.x - p.position.x, _bp.z - p.position.z );
-				if ( d > 4.2 || Math.abs( _bp.y - p.position.y ) > 3.2 || d > best ) continue;
+				if ( d > ( from ? from.reach : BOARD_REACH ) || Math.abs( _bp.y - p.position.y ) > 3.2 || d > best ) continue;
 				if ( ! this.copies.aboard( a.boat.userData.type ) ) continue;
 				best = d;
 				if ( ! a.theirBoat ) a.theirBoat = new TheirBoat( id, M );
 				this._walkOn( a.theirBoat, a.boat.userData.model, a.boat.userData.type, a.r.f );
 				const boat = a.theirBoat;
 				boat.follow( f, 0 );
-				p.rideOffer = { name: a.r.n || 'someone', boat };
+				p.rideOffer = { name: a.r.n || 'someone', boat, text: from ? from.text : null };
 
 			}
 
@@ -1535,6 +1791,16 @@ export class Together {
 		}
 
 		this._keepBoats( dt );
+		this.flats.update( dt );
+		// ((M17) a set given to Marta before the tray was the group's: into it, once, if there's none there)
+		const shells = app.game.state && app.game.state.shells;
+		if ( this._trayRead && ! this._trayKept && shells ) {
+
+			this._trayKept = true;
+			if ( ! this.tray && shells.wall !== null ) this.layTray( shells.wall );
+
+		}
+
 		this._liveBoats = 0;
 		this.crew.update( dt );
 		if ( this.others.size ) this._kits( dt );
@@ -1565,9 +1831,10 @@ export class Together {
 		const show = new Set( list.filter( ( o ) => o === riding || o.cur.pos.distanceToSquared( cam ) < person ).slice( 0, this.limits.avatars ) );
 		for ( const o of show ) if ( o.look && o.wearing !== o.look ) this._wear( o, o.look );
 		// ((M16) those past the device's few, in sight: a stand-in)
-		// ((M16) there's the one cradle in Marta's yard: with yours on it, yours is what's on it here, as your berth's yours at her dock)
+		// ((M16) there's the one cradle in Marta's yard: with yours on it, yours is what's on it here, as your berth's yours at her dock.
+		// (M17) Theirs is on the yard's second (_berth); only one past that, with the second taken, isn't drawn on yours)
 		const cradle = app.boatCtl.hauled ? app.boatCtl.position : null;
-		const seen = list.filter( ( o ) => o.cur.boat && ( o.cur.drawn || o.cur.boat ).pos.distanceToSquared( cam ) < see && ! ( cradle && o.cur.boat.pos.distanceToSquared( cradle ) < 9 ) );
+		const seen = list.filter( ( o ) => o.cur.boat && ( o.cur.drawn || o.cur.boat ).pos.distanceToSquared( cam ) < see && ! ( cradle && ! o.spot && o.cur.boat.pos.distanceToSquared( cradle ) < 9 ) );
 		const boats = new Set( seen.slice( 0, this.limits.boats ) );
 		if ( riding && riding.cur && riding.cur.boat ) boats.add( riding );
 		this._liveBoats = boats.size;
@@ -1791,7 +2058,7 @@ export class Together {
 
 	// what's drawn of a boat (holder: an other's, or an away boat's entry): full, a copy of her once she's built, with a
 	// stand-in until then; or just the stand-in; on false, nothing -> the copy, or null
-	_showBoat( h, id, frame, on, full ) {
+	_showBoat( h, id, frame, on, full, bare = false ) {
 
 		const C = this.copies, app = this.app;
 		let boat = h.boat;
@@ -1819,7 +2086,8 @@ export class Together {
 		}
 
 		const stand = on && ! ( boat && full );
-		if ( h.stand && h.standId !== id ) {
+		// ((M17) as she's fitted: no tower or T-top if she hasn't one)
+		if ( h.stand && ( h.standId !== id || h.standBare !== bare ) ) {
 
 			app.scene.remove( h.stand );
 			h.stand = null;
@@ -1828,8 +2096,9 @@ export class Together {
 
 		if ( stand && ! h.stand ) {
 
-			h.stand = C.standIn( id );
+			h.stand = C.standIn( id, bare );
 			h.standId = id;
+			h.standBare = bare;
 			app.scene.add( h.stand );
 
 		}
@@ -1856,7 +2125,8 @@ export class Together {
 		const app = this.app, st = app.game && app.game.state;
 		if ( ! st ) return undefined;
 		const rec = st.fleet && st.fleet[ app.boat.id ];
-		return fitWire( app.boat.id, st.stats, rec && rec.paint );
+		// ((M17) and how she is just now that a copy shows: the console's ladder down)
+		return fitWire( app.boat.id, st.stats, rec && rec.paint, app.boat.fitNow ? app.boat.fitNow() : null );
 
 	}
 
@@ -1912,43 +2182,137 @@ export class Together {
 
 	// Everyone's boat is at the same place at the dock on their own screen: on yours theirs lies at a spare berth for as
 	// long as she's about it, let go as she leaves (Berths.js). In c.drawn: where she's drawn
+	// (M17) As many as the stem holds; a visitor's kayak on the sand where yours lies, beside it; one on her cradle in Marta's
+	// yard while yours is on it, on the yard's second; and leaving the stem, round the head, not through it
 	_berth( o, c ) {
 
 		const b = c.boat;
 		if ( ! b ) return;
 		const app = this.app, p = b.pos;
-		if ( ! o.berth && atDock( p.x, p.z ) ) {
-
-			for ( let i = 0; i < SPARE_BERTHS; i ++ ) if ( ! this._berths.has( i ) ) {
-
-				this._berths.add( i );
-				o.berth = i + 1;
-				o.berthFrom = { x: p.x, z: p.z };
-				_bow.set( 0, 0, 1 ).applyQuaternion( b.quat );
-				o.berthTurn = - Math.atan2( _bow.x, _bow.z );
-				break;
-
-			}
-
-		}
-
+		if ( o.spot && o.spotId !== c.boatId ) this._unberth( o ); // (a spot's for the boat she was)
+		if ( ! o.spot ) this._takeBerth( o, c );
 		c.drawn = b;
-		if ( ! o.berth ) return;
-		const k = berthShare( Math.hypot( p.x - o.berthFrom.x, p.z - o.berthFrom.z ) );
-		if ( k <= 0 ) {
+		const S = o.spot;
+		if ( ! S ) return;
+		const d = c._drawn || ( c._drawn = { pos: new Vector3(), quat: new Quaternion(), water: null } ), size = sizeOf( c.boatId );
+		if ( S.kind === 'yard' ) {
 
-			this._berths.delete( o.berth - 1 );
-			o.berth = 0;
+			// (on her blocks till she's put back in: then she's where her pose has her)
+			if ( ! inTheYard( c.boatId, p.x, p.z ) ) return this._unberth( o );
+			d.pos.set( p.x + S.x - o.berthFrom.x, p.y + S.rise, p.z + S.z - o.berthFrom.z );
+			d.quat.setFromAxisAngle( _up, o.berthTurn ).multiply( b.quat );
+			c.drawn = d;
 			return;
 
 		}
 
-		const d = c._drawn || ( c._drawn = { pos: new Vector3(), quat: new Quaternion(), water: null } );
-		laidAt( d.pos, p, o.berthFrom, spareBerth( o.berth - 1, sizeOf( c.boatId ).beam ), o.berthTurn, k );
-		// (on the sea where she's drawn)
-		if ( app.waves ) d.pos.y += app.waves.heightAt( d.pos.x, d.pos.z ) - app.waves.heightAt( p.x, p.z );
+		const k = berthShare( Math.hypot( p.x - o.berthFrom.x, p.z - o.berthFrom.z ) );
+		if ( k <= 0 ) return this._unberth( o );
+		if ( S.kind === 'stem' ) {
+
+			laidAt( _at3, p, o.berthFrom, S, o.berthTurn, 1, SWING );
+			leaving( d.pos, _at3, p, S, size, k );
+
+		} else laidAt( d.pos, p, o.berthFrom, S, o.berthTurn, k );
+
+		// (on the sea where she's drawn, or on the sand)
+		const T = app.terrainData, sea = G.seaLevel.value;
+		d.pos.y = p.y;
+		if ( S.kind === 'sand' && T && T.heightAt( p.x, p.z ) > sea ) d.pos.y += T.heightAt( d.pos.x, d.pos.z ) - T.heightAt( p.x, p.z );
+		else if ( app.waves ) d.pos.y += app.waves.heightAt( d.pos.x, d.pos.z ) - app.waves.heightAt( p.x, p.z );
 		d.quat.setFromAxisAngle( _up, o.berthTurn * k ).multiply( b.quat );
 		c.drawn = d;
+
+	}
+
+	// a place of her own on your screen, if she's where yours would be: at the pier head, on the sand where your kayak lies, or on
+	// her cradle in the yard with yours on it
+	_takeBerth( o, c ) {
+
+		const app = this.app, T = app.terrainData, p = c.boat.pos, id = c.boatId;
+		if ( ! T ) return;
+		const dock = atDock( p.x, p.z ), sand = ! dock && onTheSand( id, p.x, p.z, this._sandRest || ( this._sandRest = ashoreOf( 'kayak', T ).position ) );
+		const yard = ! dock && ! sand && inTheYard( id, p.x, p.z ) && this._yardMine( id );
+		if ( ! dock && ! sand && ! yard ) return;
+		const held = this._berths || ( this._berths = new Set() ), taken = [ ...held ];
+		const S = dock ? stemBerth( taken, sizeOf( id ), ( x, z ) => T.heightAt( x, z ) ) : sand ? sandBerth( taken, T ) : taken.some( ( t ) => t.kind === 'yard' && t.id === id ) ? null : spareYard( id, T );
+		if ( ! S ) return;
+		S.id = id;
+		held.add( S );
+		o.spot = S;
+		o.spotId = id;
+		o.berth = this._berthN = ( this._berthN || 0 ) + 1; // (for the checks: she has one)
+		o.berthFrom = { x: p.x, z: p.z };
+		_bow.set( 0, 0, 1 ).applyQuaternion( c.boat.quat );
+		o.berthTurn = ( S.heading || 0 ) - Math.atan2( _bow.x, _bow.z );
+
+	}
+
+	_unberth( o ) {
+
+		if ( o.spot && this._berths ) this._berths.delete( o.spot );
+		o.spot = null;
+		o.berth = 0;
+
+	}
+
+	// is one of yours on her cradle in the yard? (the one you're in, hauled out, or one you own lying there)
+	_yardMine( id ) {
+
+		const st = this.app.game && this.app.game.state;
+		if ( ! st || ! st.fleet || ! st.fleet[ id ] ) return false;
+		return st.boat === id ? !! st.hauled : !! st.fleet[ id ].hauled;
+
+	}
+
+	// (M17) a boat of theirs on her cradle in the yard, where the village has no blocks for her (the lobster boat's own cradle
+	// has): blocks and stands of her own under her copy, in the props' program
+	_blocks( o, c, on ) {
+
+		const S = o.spot, p = c && c.boat && c.boat.pos;
+		const yard = on && !! p && ( ( S && S.kind === 'yard' ) || ( c.boatId !== 'lobster' && inTheYard( c.boatId, p.x, p.z ) ) );
+		if ( ! yard ) {
+
+			if ( o.blocks ) o.blocks.visible = false;
+			return;
+
+		}
+
+		const app = this.app, f = c.drawn || c.boat, key = `${ c.boatId }:${ S && S.kind === 'yard' ? 'spare' : 'hers' }`;
+		if ( ! o.blocks || o.blocksKey !== key ) {
+
+			this._dropBlocks( o );
+			const T = app.terrainData, size = sizeOf( c.boatId ), q = f.quat, at = f.pos.clone();
+			const ground = ( x, z ) => {
+
+				_bp.set( x, 0, z ).applyQuaternion( q ).add( at );
+				return T.heightAt( _bp.x, _bp.z );
+
+			};
+
+			// (her keel where her owner's game has her, on blocks a third of a metre over the highest ground under her: yardPose)
+			let under = - Infinity;
+			for ( let k = - size.length / 2; k <= size.length / 2; k += 0.5 ) under = Math.max( under, ground( 0, k ) );
+			const g = cradleGeometry( c.boatId, { ...size, draft: MathUtils.clamp( at.y - under - 0.35, 0.1, 2 ) }, at.y, ground );
+			o.blocks = new Mesh( g, this.copies.propMaterial() );
+			o.blocks.name = 'yardBlocks';
+			o.blocksKey = key;
+			app.scene.add( o.blocks );
+
+		}
+
+		o.blocks.visible = true;
+		o.blocks.position.copy( f.pos );
+		o.blocks.quaternion.copy( f.quat );
+
+	}
+
+	_dropBlocks( o ) {
+
+		if ( ! o.blocks ) return;
+		this.app.scene.remove( o.blocks );
+		o.blocks.geometry.dispose();
+		o.blocks = null;
 
 	}
 
@@ -2010,24 +2374,25 @@ export class Together {
 
 		const list = this._specks;
 		list.length = 0;
-		const add = ( holder, pos, quat, id ) => {
+		// ((M17) f: what's fitted on her, so a sportfisher without her tower shows as one: Specks, airOf)
+		const add = ( holder, pos, quat, id, f ) => {
 
 			_bow.set( 0, 0, 1 ).applyQuaternion( quat );
-			list.push( { x: pos.x, y: pos.y, z: pos.z, id, yaw: Math.atan2( _bow.x, _bow.z ), holder } );
+			list.push( { x: pos.x, y: pos.y, z: pos.z, id, f, yaw: Math.atan2( _bow.x, _bow.z ), holder } );
 
 		};
 
-		for ( const o of this.others.values() ) if ( o.cur && o.cur.boat ) add( o, o.cur.boat.pos, o.cur.boat.quat, o.cur.boatId );
+		for ( const o of this.others.values() ) if ( o.cur && o.cur.boat ) add( o, o.cur.boat.pos, o.cur.boat.quat, o.cur.boatId, o.cur.fit );
 		for ( const [ id, r ] of Object.entries( this.boats ) ) {
 
 			if ( id === this.me.id || r.tow || this.others.get( id )?.cur?.boat ) continue;
 			const a = this.away.get( id );
-			if ( a && a.y !== null ) add( a, a.frame.pos, a.frame.quat, r.b );
-			else if ( a && r.a ) add( a, _p.set( r.a[ 0 ], G.seaLevel.value, r.a[ 1 ] ), _qa.identity(), r.b );
+			if ( a && a.y !== null ) add( a, a.frame.pos, a.frame.quat, r.b, r.f );
+			else if ( a && r.a ) add( a, _p.set( r.a[ 0 ], G.seaLevel.value, r.a[ 1 ] ), _qa.identity(), r.b, r.f );
 			else if ( a ) {
 
 				const s = this._driftSpot( a );
-				add( a, _p.set( s.x, G.seaLevel.value, s.z ), _qa.setFromAxisAngle( _up, s.heading ), r.b );
+				add( a, _p.set( s.x, G.seaLevel.value, s.z ), _qa.setFromAxisAngle( _up, s.heading ), r.b, r.f );
 
 			}
 
@@ -2228,7 +2593,8 @@ export class Together {
 
 		// their boat, the boat she is
 		const has = !! c && !! c.boat, drawn = has ? c.drawn || c.boat : null;
-		const boat = this._showBoat( o, has ? c.boatId : o.boat ? o.boat.userData.type : 'lobster', drawn, has && ( boatShown || boatSeen ), boatShown );
+		const boat = this._showBoat( o, has ? c.boatId : o.boat ? o.boat.userData.type : 'lobster', drawn, has && ( boatShown || boatSeen ), boatShown, has && bareOf( c.boatId, c.fit ) );
+		this._blocks( o, c, has && ( boatShown || boatSeen ) );
 		if ( boat ) {
 
 			this.copies.dress( boat, c.fit );
@@ -2548,6 +2914,28 @@ export class Together {
 		const p = this.app.player;
 		if ( p.riding && this.app.boat && this.app.boat.group.visible ) out.push( this.app.boatCtl.position );
 		return out;
+
+	}
+
+	// (M17) someone else's boat stopped within r of (x, z), as she's drawn here (Pearl's berth: FishCamp), or an away boat's; or null
+	stoppedNear( x, z, r ) {
+
+		for ( const o of this.others.values() ) {
+
+			const c = o.cur, f = c && c.boat && ( c.drawn || c.boat );
+			if ( ! f || Math.hypot( f.pos.x - x, f.pos.z - z ) > r ) continue;
+			if ( c.mode !== 'helm' || ( c.bv ?? o.boatSpeed ) < 1.5 ) return f.pos;
+
+		}
+
+		for ( const a of this.away.values() ) {
+
+			const at = a.boat && a.boat.visible ? a.boat.position : a.r && a.r.a ? _p.set( a.r.a[ 0 ], 0, a.r.a[ 1 ] ) : null;
+			if ( at && ! ( a.r && a.r.tow ) && Math.hypot( at.x - x, at.z - z ) < r ) return at;
+
+		}
+
+		return null;
 
 	}
 

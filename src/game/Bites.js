@@ -1,6 +1,7 @@
 import { FISH, FISH_IDS } from './FishTable.js';
 import { BAITS, baitWeight } from './Bait.js';
 import { NORTH } from './Weather.js';
+import { sightOf, splashOf, SPLASH } from './Sight.js';
 
 // Where the bobber is and what lives there.
 //   depth     water depth under the bobber (m)
@@ -39,6 +40,9 @@ import { NORTH } from './Weather.js';
 // (M15) And far, 0..1: how far the spot is out in the soft edge past the far grounds (Weather.edgeAt), where
 // the open blue's emptier (FAR_SLOWER: biteDelay). Not a water type.
 // (M16) And under, 0..1: how far the spot is in a boat's underwater lights after dark, drifting (FishTable's under).
+// (M17) And tide: how much sooner the bites come at the spot at the tide's stage (world/shore/Tide.js's tideBites: the
+// flats on the flood and about high water, their edge and channels on the ebb, a creek's mouth on the ebb most, the pier
+// at the turn), the game's; not a water type.
 // (Salt Life) The game adds flood, 0..1: how far the spot is in a boat's deck floodlights after dark (not
 // a water type: it draws in the fish that gather under lights, and the bait, so they bite sooner), and
 // (M9) weather: the weather now (Weather.weatherAt's; none, or a fair day's, changes nothing: weatherMood).
@@ -147,7 +151,7 @@ export const WASH = { day: 0.9, blown: 0.85, open: 0.5 };
 // north sea roughs its water as it does the north shore's (`blown`)
 export const BIG = { skew: 0.5, from: 4, more: 1.5, blown: 0.4 };
 // (not water types: what the game adds to a spot's habitat)
-const NOT_WATER = { flood: true, under: true, lively: true, weather: true, side: true, big: true, far: true, hook: true, wake: true };
+const NOT_WATER = { flood: true, under: true, lively: true, weather: true, side: true, big: true, far: true, hook: true, wake: true, tide: true, moon: true };
 
 // (M16) the hook: how the bait's fished, and how deep it is, on the spot's habitat (Game.habitat: habitat.hook; the
 // interface with the rigs: docs/m16/fish.md):
@@ -160,20 +164,32 @@ const LURE_OTHER = 0.3;
 // its weight fished a way
 const wayOf = ( f, way ) => ( f.ways && f.ways[ way ] !== undefined ? f.ways[ way ] : way === 'float' ? 1 : way === 'drop' && ( f.habitat.deep || f.habitat.ledge ) ? 1 : 0 );
 // how far a hook's in the depths it feeds at, by the hour (between its day's and its night's at dusk and dawn, as it
-// rises and goes down): 1 inside them, fading out over a third of their span past each end
-export function depthWeight( at, depth, hour ) {
+// rises and goes down): 1 inside them, fading out over a third of their span past each end. ((M17) moon: how much of the
+// moon's lit, 0..1 (moonAt's lit: Game.habitatOf's h.moon). A fish with `full` has its night's depths that far toward
+// those under a full moon: the swordfish's, Lerner et al. 2013)
+export function depthWeight( at, depth, hour, moon = 0 ) {
 
-	const k = daylight( hour ), lo = at.night[ 0 ] + ( at.day[ 0 ] - at.night[ 0 ] ) * k, hi = at.night[ 1 ] + ( at.day[ 1 ] - at.night[ 1 ] ) * k;
+	const night = at.full ? _night( at, moon ) : at.night;
+	const k = daylight( hour ), lo = night[ 0 ] + ( at.day[ 0 ] - night[ 0 ] ) * k, hi = night[ 1 ] + ( at.day[ 1 ] - night[ 1 ] ) * k;
 	const fade = Math.max( 10, ( hi - lo ) / 3 );
 	return depth < lo ? Math.max( 0, 1 - ( lo - depth ) / fade ) : depth > hi ? Math.max( 0, 1 - ( depth - hi ) / fade ) : 1;
 
 }
-// a species' bite weight on this hook (null: the float), times this
-export function hookWeight( id, hook, hour ) {
+const _nightAt = [ 0, 0 ];
+const _night = ( at, moon ) => {
+
+	const m = Math.min( 1, Math.max( 0, moon || 0 ) );
+	_nightAt[ 0 ] = at.night[ 0 ] + ( at.full[ 0 ] - at.night[ 0 ] ) * m;
+	_nightAt[ 1 ] = at.night[ 1 ] + ( at.full[ 1 ] - at.night[ 1 ] ) * m;
+	return _nightAt;
+
+};
+// a species' bite weight on this hook (null: the float), times this ((M17) moon: depthWeight's)
+export function hookWeight( id, hook, hour, moon = 0 ) {
 
 	const f = FISH[ id ], h = hook || FLOAT;
 	let x = wayOf( f, h.way );
-	if ( x > 0 && f.at ) x *= depthWeight( f.at, h.depth ?? FLOAT.depth, hour );
+	if ( x > 0 && f.at ) x *= depthWeight( f.at, h.depth ?? FLOAT.depth, hour, moon );
 	if ( x > 0 && h.lure ) x *= f.eats?.[ h.lure ] ?? BAITS[ h.lure ]?.likes[ id ] ?? LURE_OTHER;
 	return x;
 
@@ -232,7 +248,7 @@ export function pickSpecies( habitat, hour, rng = Math.random, bait = null ) {
 		// ((M15) under the birds, what's busting the bait is feeding now, whatever the hour)
 		if ( habitat.birds && f.habitat.birds ) act += ( 1 - act ) * habitat.birds;
 		// ((M16) how it's fished: the way, the depth; a lure in place of bait. And under a hurricane's debris)
-		let x = hw * f.rarity * act * hookWeight( id, habitat.hook, hour ) * ( habitat.hook && habitat.hook.lure ? 1 : baitWeight( bait, id ) );
+		let x = hw * f.rarity * act * hookWeight( id, habitat.hook, hour, habitat.moon ) * ( habitat.hook && habitat.hook.lure ? 1 : baitWeight( bait, id ) );
 		if ( f.wake && habitat.wake ) x *= 1 + f.wake * habitat.wake;
 		// ((M15) on the windward reef the big ones bite more)
 		if ( habitat.big && f.kg[ 1 ] >= BIG.from ) x *= 1 + BIG.more * habitat.big;
@@ -283,6 +299,8 @@ export function biteDelay( habitat, hour, rng = Math.random, bait = null ) {
 	rich = Math.max( rich, 0.35 ) + ( habitat.flood || 0 ) + 0.5 * ( habitat.under || 0 );
 	const light = hour > 6 && hour < 19 ? 1 : 0.8;
 	let mean = 8 / ( Math.min( rich, 1.6 ) * light ) * ( BAITS[ bait ] ? BAITS[ bait ].speed : 1 );
+	// ((M17) the tide: how much faster the spot fishes at its stage, habitat.tide: world/shore/Tide.js's tideBites)
+	if ( habitat.tide > 0 ) mean /= habitat.tide;
 	// ((M16) live bait from a pumped well's still lively on the hook: habitat.lively, the game's)
 	if ( habitat.lively && BAITS[ bait ] && BAITS[ bait ].live ) mean *= LIVELY;
 	// ((M15) past the far grounds the open blue's emptier still (FAR): for its share of the spot's water)
@@ -300,6 +318,45 @@ export function biteDelay( habitat, hour, rng = Math.random, bait = null ) {
 	}
 
 	return 2 + - Math.log( 1 - rng() * 0.98 ) * mean * 0.6;
+
+}
+
+// (M17) A seen fish's own take, beside the habitat's roll: a fish on the flats you've cast to (game/FlatsFishing.js). How
+// it takes what it's shown is its own (FishTable's sight, Sight.js' sharks'): a bait put ahead of its nose, on its way,
+// it sees and comes to (a cruising fish over a few feet, one feeding head down or lying still only close in); one put
+// on its head spooks it; one behind it, or off to the side, it doesn't see, unless it's loud enough to hear (a plug's
+// splash brings a barracuda, a snook or a tarpon round to it from any side). It comes to it, and eats it or refuses it
+// by what it is and what it's shown: a tailing fish is the keenest, a milling one the least; a permit refuses most
+// things, and some of its refusals spook it as it turns off.
+//   kind  the flats fish's kind (FishTable id, or a shark's: blacktipShark, lemonShark)
+//   bait  what's on the hook (Bait.js' id; null: the frozen shrimp)
+//   at    { ahead, side, mode }: where it landed from the fish's nose, m along its way (< 0 behind it) and off its line,
+//         and what it's doing (game/Flats.js' modes: tail, feed, cruise, mill, roll, laid, hold)
+// -> { act: 'none' | 'spook' | 'eat' | 'refuse', t: s until it's at the bait (eat, refuse), turn: s until it turns to it,
+//      unseen: true when it neither saw nor heard it (it may yet, as it comes on) }
+export const SEEN = { keen: { tail: 1.25, feed: 1.15, cruise: 0.9, hold: 1, laid: 1, roll: 0.75, mill: 0.6 }, aside: 0.4, wide: 0.4, predator: 2.5, most: 0.92, other: 0.02 };
+const CLOSE = { tail: true, feed: true, laid: true, hold: true };
+export function seenTake( kind, bait, at, rng = Math.random ) {
+
+	const S = sightOf( kind );
+	if ( ! S ) return { act: 'none', t: 0, turn: 0 };
+	const id = bait || 'shrimp', loud = splashOf( bait ), dist = Math.hypot( at.ahead, at.side );
+	const [ l0, l1 ] = CLOSE[ at.mode ] ? S.close : S.lead;
+	// on its head (a heavier splash further off; never a shark's)
+	if ( S.head > 0 && dist < S.head * Math.sqrt( loud / SPLASH.shrimp ) ) return { act: 'spook', t: 0, turn: 0 };
+	// in front of it, where it sees it; or heard
+	const front = at.ahead >= l0 * 0.5 && at.ahead <= l1 && Math.abs( at.side ) <= SEEN.wide + SEEN.wide * at.ahead;
+	const predator = S.lead[ 1 ] >= 3.5 || S.eats.plug >= 0.3 || S.bites;
+	const heard = dist <= loud * ( predator ? SEEN.predator : 1 );
+	if ( ! front && ! heard ) return { act: 'none', t: 0, turn: 0, unseen: true };
+	if ( ! front && rng() > 0.5 ) return { act: 'none', t: 0, turn: 0 };
+	// how well it's shown: best in the middle of its window, less toward its ends, less again heard and turned to
+	const mid = ( l0 + l1 ) / 2, half = Math.max( 0.1, ( l1 - l0 ) / 2 );
+	const shown = front ? 1 - 0.5 * Math.min( 1, Math.abs( at.ahead - mid ) / half ) : SEEN.aside;
+	const p = Math.min( SEEN.most, ( S.eats[ id ] ?? SEEN.other ) * ( SEEN.keen[ at.mode ] || 1 ) * shown );
+	const turn = 0.3 + rng() * 0.6, t = turn + dist / S.speed;
+	if ( rng() < p ) return { act: 'eat', t: t + 0.3 + rng() * 0.6, turn };
+	return { act: rng() < S.picky ? 'spook' : 'refuse', t: t + 0.6 + rng() * 0.8, turn, after: true };
 
 }
 

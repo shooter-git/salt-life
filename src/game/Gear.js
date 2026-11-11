@@ -1,5 +1,5 @@
 import { BOATS } from '../world/boat/Boats.js';
-import { ableOf, BASE, DAYS_TRACKS } from './Seaworthy.js';
+import { ableOf, burnOf, BASE, DAYS_TRACKS } from './Seaworthy.js';
 
 // Gear and upgrade data, sold by Marta at the chandlery by the boathouse; everything the game reads
 // goes through gearStats( state.upgrades ), so buying a level is just state.upgrades[ key ]++ and the
@@ -8,21 +8,46 @@ import { ableOf, BASE, DAYS_TRACKS } from './Seaworthy.js';
 // Each track: levels[ 0 ] is what you start with; cost is the price of that level (0 for the first).
 // (M16) on: the boat it belongs to (world/boat/Boats.js: it counts only while she's the boat you're in, and stays with her
 // when you're in another); without it, it's your own gear, and goes with you onto any boat.
+// (M17) a pound, in kg: a line breaks at its label (IGFA's line classes are 2 to 130 lb, a line breaking at or under its
+// class; docs/m17/lines.md)
+export const LB = 0.45359237;
+// (M17) the line's and the drag's figures before M17, and those they are now: a kit sent by a game that's still on the old
+// ones (Rigs.cleanKit) comes in as the same line and reel, not as a line twice as strong. (The new lines are never these;
+// the 80-class reel's 24 kg is the old two-speed's, told from it by its spool: OLD_SPOOL_M, the old reels' own)
+export const OLD_LINE_KG = [ 7, 13, 26, 50 ], OLD_DRAG_KG = [ 12, 24 ], OLD_SPOOL_M = [ 350, 600 ];
+export function realTackle( lineKg, dragKg, spoolM ) {
+
+	const l = OLD_LINE_KG.indexOf( lineKg ), d = OLD_DRAG_KG.indexOf( dragKg );
+	const old = d >= 0 && ( spoolM === undefined || spoolM === OLD_SPOOL_M[ d ] );
+	const drags = UPGRADES.reel.levels.filter( ( r ) => r.dragKg !== null );
+	return { lineKg: l >= 0 ? UPGRADES.line.levels[ l ].lineKg : lineKg, dragKg: old ? drags[ d ].dragKg : dragKg };
+
+}
+
 export const UPGRADES = {
-	// rod and reel
+	// rod and reel ((M17) lineLb: the label's pounds; lineKg: its breaking strength. Before M17 these held 7, 13, 26 and 50 kg,
+	// about 1.9 times their labels: OLD_LINE_KG. 80 lb is IGFA's 37 kg class, the big-game chair's: its full drag, 19 kg, is
+	// past what you hold standing in the harness, so the biggest fish are the chair's)
 	line: { name: 'Fishing line', levels: [
-		{ cost: 0, label: '8 lb mono', lineKg: 7 },
-		{ cost: 60, label: '15 lb mono', lineKg: 13 },
-		{ cost: 180, label: '30 lb braid', lineKg: 26 },
-		{ cost: 450, label: '60 lb braid', lineKg: 50 },
+		{ cost: 0, label: '8 lb mono', lineLb: 8, lineKg: 8 * LB },
+		{ cost: 60, label: '15 lb mono', lineLb: 15, lineKg: 15 * LB },
+		{ cost: 180, label: '30 lb braid', lineLb: 30, lineKg: 30 * LB },
+		{ cost: 450, label: '60 lb braid', lineLb: 60, lineKg: 60 * LB },
+		{ cost: 750, label: '80 lb mono', lineLb: 80, lineKg: 80 * LB },
 	] },
 	// ((M16) spoolM: the line it holds; dragKg: the most its drag holds (CatchMinigame), none to speak of on a spinning
-	// reel, whose fight's as it always was; twoSpeed: a low gear)
+	// reel, whose fight's as it always was; twoSpeed: a low gear. (M17) Real reels' most: a 30-class lever drag's 33 lb, as
+	// Penn's Fathom II Lever Drag 30; a 50-class two-speed's 20 kg, as Shimano's Tiagra 50W LRSA (most listings; one US one
+	// has 40 lb), which holds full drag on the 80 lb line. The drag's set at a share of the line under that:
+	// CatchMinigame.DRAG_SET. And an 80-class two-speed, as Shimano's Tiagra 80W: 24 kg of drag (most listings), 868 m of
+	// 80 lb mono (36 kg / 868 m, 80 lb / 950 yd) against the 50-class's 600 here, and the same 94 cm a turn in its high
+	// gear. It's the spool the biggest blue marlin need: they run the 50-class out of line, they don't break 80 lb)
 	reel: { name: 'Reel', levels: [
 		{ cost: 0, label: 'Old spinning reel', reelSpeed: 1.1, spoolM: 180, dragKg: null },
 		{ cost: 90, label: 'Smooth spinning reel', reelSpeed: 1.6, spoolM: 220, dragKg: null },
-		{ cost: 320, label: 'Conventional reel', reelSpeed: 2.2, spoolM: 350, dragKg: 12 },
-		{ cost: 900, label: 'Two-speed big-game reel (its low gear comes in by itself on a heavy fish)', reelSpeed: 2.6, spoolM: 600, dragKg: 24, twoSpeed: true },
+		{ cost: 320, label: 'Conventional reel', reelSpeed: 2.2, spoolM: 350, dragKg: 33 * LB },
+		{ cost: 900, label: 'Two-speed big-game reel (its low gear comes in by itself on a heavy fish)', reelSpeed: 2.6, spoolM: 600, dragKg: 20, twoSpeed: true },
+		{ cost: 1200, label: 'Wide 80-class two-speed reel (870 m of 80 lb line, for the biggest fish\'s runs)', reelSpeed: 2.6, spoolM: 868, dragKg: 24, twoSpeed: true },
 	] },
 	rod: { name: 'Rod', levels: [
 		{ cost: 0, label: 'Hand-me-down rod', castM: 22 },
@@ -286,9 +311,10 @@ export const towTime = ( metres ) => Math.max( 0, metres ) * ( 1 / TOW.out + 1 /
 // (M16: each boat's by her length, game/fleet/Fleet.js)
 export const HAUL_FEE = 40;
 // litres per second at the helm: idle plus a lot more at full rpm (40 L lasts ~25 min flat out; (M16) each boat's: Seaworthy)
-export function fuelBurn( rpm, boat = 'lobster' ) {
+// ((M17) twin: a second engine fitted, stats.twin: Seaworthy.burnOf)
+export function fuelBurn( rpm, boat = 'lobster', twin = false ) {
 
-	const [ idle, k ] = ableOf( boat ).burn;
+	const [ idle, k ] = burnOf( boat, twin );
 	return idle + k * rpm * rpm;
 
 }

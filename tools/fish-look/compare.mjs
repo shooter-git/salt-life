@@ -1,4 +1,4 @@
-// (M16) Each new fish's render beside the photographs it's shaped after (the photographs hot-linked from Wikimedia
+// (M16) Each new fish's render ((M17) and the lemon shark's) beside the photographs it's shaped after (the photographs hot-linked from Wikimedia
 // Commons, not kept): node tools/fish-look/compare.mjs <out dir> [ fish ... ]   with the dev server on PORT (5206).
 // Wrap it in tools/render-slot.sh.
 import { chromium } from '/home/shooter/Documents/VS Code/all-the-spaces/node_modules/playwright/index.mjs';
@@ -15,6 +15,8 @@ const REFS = {
 	tuna: [ 'File:Blackfin_tuna,_Duane_Raver_Jr.jpg', 'File:Thunnus_atlanticus_215085116.jpg' ],
 	redfish: [ 'File:Red_Drum_(Sciaenops_ocellatus).jpg', 'File:Sciaenops_ocellatus.jpg' ],
 	trout: [ 'File:Spotted_seatrout_fish_cynoscion_nebulosus.jpg', 'File:Cynoscion_nebulosus.jpg' ],
+	// (M17) the flats' lemon shark
+	lemonShark: [ 'File:Lemon_shark_(Duane_Raver).png', 'File:Negaprion_brevirostris_bahamas.jpg', 'File:Negaprion_brevirostris.jpg', 'File:Lemon_shark2.jpg' ],
 };
 const [ dir, ...want ] = process.argv.slice( 2 );
 const fish = want.length ? want : Object.keys( REFS );

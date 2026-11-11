@@ -149,13 +149,13 @@ const FISHING = {
 const AROUND = {
 	keyboard: [ [ k( 'W', 'A', 'S', 'D' ), 'Move, mouse to look, <kbd>Shift</kbd> to run' ], [ k( 'E' ), 'Board the boat, take the helm, talk to Joe and Marta' ],
 		[ k( 'L' ), 'Flashlight (at night). At the helm, the searchlight' ], [ k( 'H' ), 'This guide again. At the helm, hold for the horn' ],
-		[ k( LEFT, RIGHT ), 'At the helm, the radar\'s range' ], [ k( 'R' ), 'At the helm, the radio: the forecast, and Marta\'s tow' ],
-		[ k( 'P' ), 'A mark of your own on your chart, where you are' ],
+		[ k( LEFT, RIGHT ), 'At the helm, the radar\'s range' ], [ k( 'Z' ), 'At the helm, the plotter\'s range: out a step, and back to auto' ],
+		[ k( 'R' ), 'At the helm, the radio: the forecast, and Marta\'s tow' ], [ k( 'P' ), 'A mark of your own on your chart, where you are' ],
 		[ k( 'T' ), 'The clock: hold it or rest until later (with others, once everyone agrees)' ], [ k( 'Q' ), 'The actions wheel: what you can do here, and the key for each' ] ],
 	touch: [ [ k( 'Left side' ), 'Drag to walk, from wherever your thumb lands; push out past the ring to run' ], [ k( 'Right side' ), 'Drag to look around' ],
 		[ k( 'Gold button' ), 'Board the boat, take the helm, talk to Joe and Marta' ], [ ico( 'wheel' ), 'The actions wheel: tap it, then a picture. Or press it, slide to one and let go' ],
 		[ ico( 'torch' ), 'Flashlight, after dusk. At the helm: the searchlight' ],
-		[ ico( 'horn' ), 'At the helm, hold it to sound the horn' ], [ ico( 'radio' ), 'At the helm, the forecast, and Marta\'s tow' ], [ k( 'Time' ), 'Tap the time at the top to hold the clock or rest until later' ] ],
+		[ ico( 'horn' ), 'At the helm, hold it to sound the horn' ], [ ico( 'plotter' ), 'At the helm, the plotter\'s range' ], [ ico( 'radio' ), 'At the helm, the forecast, and Marta\'s tow' ], [ k( 'Time' ), 'Tap the time at the top to hold the clock or rest until later' ] ],
 	gamepad: [ [ k( 'Left stick' ), 'Move, right stick to look' ], [ k( 'B' ), 'Board the boat, take the helm, talk to Joe and Marta' ], [ k( `D-pad ${ DOWN }` ), 'Flashlight. At the helm, the searchlight' ],
 		[ k( `D-pad ${ LEFT } ${ RIGHT }` ), 'At the helm, the radar\'s range' ], [ k( 'X' ), 'At the helm, the radio: the forecast, and Marta\'s tow' ],
 		[ k( 'L3' ), 'At the helm, press and hold the left stick for the horn' ], [ k( 'R3' ), 'The clock: hold it or rest until later' ],
@@ -199,6 +199,9 @@ function cards( device, kayak ) {
 
 const CARD_COUNT = 3;
 
+// (M17) a school spooked: the tip for why (FlatsFishing's events.spooked)
+const SPOOK_TIP = { speed: 'spookSpeed', push: 'spookPush', shadow: 'spookShadow', knock: 'spookKnock', engine: 'spookEngine', cast: 'spookCast', line: 'spookCast', refused: 'flatsRefused', theirs: 'spookTheirs' };
+
 // (M16) a tip that isn't the same in a kayak (no helm, no fuel, no bilge), or is hers alone; by the device where it's a key
 const IN_KAYAK = {
 	keyboard: {
@@ -219,6 +222,7 @@ const IN_KAYAK = {
 	chart: 'Your <b>chart</b> fills in where you go: the coast as you see it, the depths as you paddle over them, each place\'s name as you come to it, on the map. It has them by their names on a chart: ' + namedAs( NAME.bank ) + ', and so on. Mark a good spot from the cooler\'s <b>Chart</b> tab. Marta sells a chart of the island, if you\'d rather not.',
 	edge: 'You\'re past the far grounds, in a <b>kayak</b>. The sea\'s the open ocean\'s out here, the wind fresher and the seas bigger, and it\'s a long paddle home.',
 	goRound: 'You\'ve the hang of the bay. There\'s more of the island: the <b>north beach\'s surf</b> for pompano (best on a surf day: Joe\'s slate says) and the <b>mangrove creek</b> on the west for snook and redfish at dawn and dusk. Paddle round on a calm day, or walk: the trail from the square goes round the east to the north beach, the red dashes on your map, with fingerposts at its turns, and <b>Pearl\'s fish camp</b> there buys fish.',
+	flats: 'The <b>flats</b>: a foot or two of water over white sand. The bonefish come up onto them on the <b>flood</b>, from about three hours in, and go off on the ebb; permit along the edge, tarpon in the channels and the holes. <b>See them before you cast</b>: polarized glasses (Marta\'s) take the glare off the water. From her seat you\'re <b>low</b>: you\'ll see them close in, ten metres or so, so <b>drift</b>, don\'t paddle at them.',
 	hurricane: 'A <b>hurricane</b> is coming. <b>Sell your catch</b> before Joe boards up: it won\'t keep till he opens again. Get your kayak off the beach: Marta can <b>haul her up</b> into her yard before she boards up. In it, the <b>shelter</b> (on your map) keeps you safe from the wind, the rain and the sea. You can always step out to watch.',
 };
 
@@ -307,6 +311,23 @@ const TIPS = {
 	ice: 'Fish goes off in the heat: about <b>12 hours</b> in a box with no ice, its price falling after 6. Marta sells <b>ice by the bag</b>, and on ice it keeps for days as long as the ice lasts.',
 	bunk: 'She has <b>bunks</b>. Sleep aboard to pass the night, and bring <b>food and water</b> from Marta for days out. Anchor first, or stream a <b>drift sock</b>: she goes where the wind takes her while you sleep.',
 	farWater: 'Out here the fish are <b>under things</b>: look for <b>weedlines</b> (mahi), <b>floating debris</b>, and <b>birds working bait</b> (tuna). On the <b>drop-off</b> the tuna come at first light.',
+	// (M17) the flats, and sight-fishing on them (docs/m17/sight.md)
+	flats: 'The <b>flats</b>: a foot or two of water over white sand. The bonefish come up onto them on the <b>flood</b>, from about three hours in, and go off on the ebb; permit along the edge, tarpon in the channels and the holes. <b>See them before you cast</b>: polarized glasses (Marta\'s) take the glare off the water, the higher you are the better, with the sun behind you. Come on <b>slowly</b>.',
+	flatsSeen: 'Fish on the flat. See which way they\'re going and put your bait <b>a metre or two ahead</b> of them on their way: not on their heads, and not with the line over their backs. Let it sit. One that sees it comes to it: <b>strike when it takes</b>.',
+	flatsTailing: '<b>Tails</b>: bonefish feeding head down on the bottom, their tails out of the water, best seen on a calm day. A tailing fish is the keenest, but it only sees what lands close: <b>a foot or two</b> in front of it.',
+	spookSpeed: 'Spooked: <b>they saw you coming</b>. Within about 15 metres, slow down: drift, wade or pole the last of it, and they\'ll let you close. A spooked school\'s gone from there a while.',
+	spookPush: 'Spooked by the <b>push of water</b> ahead of the bow, running ahead of her over the flat. Stop well short and drift in the last of the way.',
+	spookShadow: 'Spooked by <b>your shadow</b> over them: long early and late. Come at them with the sun to one side, so it falls away from them.',
+	spookKnock: 'Spooked: a <b>paddle knocked the hull</b>, and they heard it through the water. Easy strokes near fish.',
+	spookEngine: 'An <b>engine</b> running spooks the flat\'s fish a hundred metres off. Shut it down well short of them, and drift or pole in.',
+	spookCast: '<b>Too close</b>: a bait landing on a fish\'s head, or the line laid over its back, sends the whole school off. Lead them.',
+	flatsRefused: 'It came to it and <b>turned off</b>: refused. What they take is their own: a bonefish a shrimp or a jig, a tarpon or a snook a plug or live bait. A <b>permit</b> refuses most things. Try the next one.',
+	// ((M17) the flats together: a school someone else spooked; a fish called to you)
+	spookTheirs: 'Someone else <b>spooked that school</b>. A flat\'s fish are everyone\'s: what spooks them for one of you spooks them for all, and they\'re gone a while. Fish apart, or come on together, slowly.',
+	flatsCalled: 'A fish <b>called</b> to you, as guides call them: by the <b>clock</b>, twelve ahead of your bow (on foot, ahead of you), three off your right, nine your left; how far in feet; and which way it\'s going. Look there: knowing where to look, you\'ll see it further off.',
+	grandSlam: 'A <b>bonefish</b>, a <b>permit</b> and a <b>tarpon</b> in one day, all let go, is a <b>grand slam</b>: the flats\' trophy, in your log. A <b>snook</b> the same day makes it a <b>super grand slam</b>. The day\'s from sunrise, and a sleep ends it.',
+	// (M17) the tide, the first time you're out on the flats
+	tide: 'The <b>tide</b> rises and falls twice a day, each high about 50 minutes later than the day before\'s, and most at new and full moon (the <b>springs</b>). The flats fish on the <b>flood</b> and about <b>high water</b>, when the fish come up onto them; their <b>edge</b> and <b>creeks</b> on the <b>ebb</b>, a creek\'s <b>mouth</b> most of all; the pier at the <b>turn</b>. A creek runs with it, out on the ebb and in on the flood. <b>Joe\'s slate</b> and the cooler\'s <b>Chart</b> tab give the day\'s tides.',
 	// (M13) a hurricane
 	hurricane: 'A <b>hurricane</b> is coming. <b>Sell your catch</b> before Joe boards up: he\'s shut a day or two, longer than fish keeps without plenty of ice. Ahead of it Marta can <b>haul your boat out</b>, before she boards up; left in the water the storm batters her. In it, the <b>shelter</b> (on your map) keeps you safe from the wind, the rain and the sea. You can always step out to watch.',
 };
@@ -639,16 +660,36 @@ export class Guide {
 		if ( logged0( s ) >= 12 ) this.tip( 'goRound' );
 		const cam = app.camera.position;
 		if ( Math.hypot( cam.x, cam.z + 320 ) > 3000 ) this.tip( 'farWater' );
+		// ((M17) the first time you're out on the west's flats or in the mangrove creek: the tide)
+		if ( cam.x < - 470 && cam.x > - 820 && cam.z > - 350 && cam.z < 40 ) this.tip( 'tide' );
 		// ((M15) the first name you come to past the bay's)
 		if ( s.chart.names.size > NAMES.filter( ( n ) => n.known ).length ) this.tip( 'chart' );
 		// ((M15) the radio, the first time you're well out at the helm; and past the far grounds, the soft edge)
 		// ((M16) on a boat with a set to hear it on, and at a helm: R is a kayak's rod)
-		if ( p.mode === 'boat' && ! p.riding && s.stats.vhfM > 0 && ! app.boatCtl.model.seated && Math.hypot( cam.x, cam.z + 320 ) > 2000 ) this.tip( 'radio' );
+		if ( p.mode === 'boat' && ! p.riding && s.stats.vhfH > 0 && ! app.boatCtl.model.seated && Math.hypot( cam.x, cam.z + 320 ) > 2000 ) this.tip( 'radio' );
 		if ( edgeAt( cam.x, cam.z ) > 0.15 ) this.tip( 'edge' );
 		// ((M16) days out: the sea more than she likes; the catch going soft; bunks to sleep in)
 		if ( g.daysOut.aboard && g.daysOut.strain >= 0.6 ) this.tip( 'stand' );
 		if ( s.inventory.some( ( f ) => f.w > 3 ) ) this.tip( 'ice' );
 		if ( g.daysOut.aboard && app.boatCtl.model.bunks.length ) this.tip( 'bunk' );
+		// ((M17) the flats: on them; the first fish seen, the first tails; what spooked a school; a refusal; a slam's fish)
+		const F = g.flats, E = F && F.events;
+		if ( E ) {
+
+			if ( E.on && p.mode !== 'swim' ) this.tip( 'flats' );
+			if ( E.seen ) this.tip( 'flatsSeen' );
+			if ( E.tailing ) this.tip( 'flatsTailing' );
+			if ( E.spooked ) this.tip( SPOOK_TIP[ E.spooked ] || 'spookSpeed' );
+			if ( E.refused ) this.tip( 'flatsRefused' );
+			if ( E.slam ) this.tip( 'grandSlam' );
+			if ( E.called ) this.tip( 'flatsCalled' );
+			E.spooked = null;
+			E.called = null;
+			E.refused = false;
+			E.slam = null;
+
+		}
+
 		// ((M15) the first time you come to the fish camp, ashore or alongside its jetty)
 		if ( Math.hypot( cam.x - CAMP.keeper.x, cam.z - CAMP.keeper.z ) < 30 ) this.tip( 'camp' );
 		// (M10) the boat's hull: the first water in the bilge, aboard; the first real wear

@@ -7,6 +7,18 @@ const GUST_EASED = 0.2;
 // (M16) a run past the drag, m/s for each time over it (a blue marlin's first run is ten or more); and the s of a heavy
 // load your arms have in them, standing and in a chair
 const RUN = 2.2, ARMS = 280, ARMS_CHAIR = 1500;
+// (M17) the drag as anglers set it, a share of the line's breaking strength: prestrike for the first run, strike once it
+// stops and you pump, full at the end with it circling under the boat (Caputi, Salt Water Sportsman: 25 to 30%, 35 to
+// 40%, 50 to 55%). The prestrike run is the one a rod in its holder takes before you're to it (Rigs), so a fight in your
+// hands starts at strike, and it's pushed up to full by the time the fish is half spent (spent: judgment, docs/m17/lines.md)
+export const DRAG_SET = { prestrike: 0.275, strike: 0.375, full: 0.525, spent: 0.5 };
+// (M17) how heavy a fish (of fight 1) pulls a line to its breaking point when it surges fresh, for each kg of the line's
+// breaking strength: about its own class. It was half the line's figure while the lines held 1.9 times their labels, and
+// it's that still on the 8 lb line, which had 7 kg, so every fight on it goes as it did (on the others the fish are
+// under 3% weaker than they were: docs/m17/lines.md)
+export const LINE_MATCH = 0.5 * 7 / ( 8 * 0.45359237 );
+// (and a speargun's shaft, for each kg it holds before it tears out: as it always was)
+export const SHAFT_MATCH = 0.5;
 
 // Line-tension fight. Hold to reel: the line shortens and the tension climbs; let go and it eases
 // off, but a running fish then takes line. Keep the tension in the green band: the fish tires there
@@ -26,9 +38,11 @@ const RUN = 2.2, ARMS = 280, ARMS_CHAIR = 1500;
 // it, and the spool (spoolM of line) is what it can beat you with. So a fish far over the line can be fought as they
 // are, for a long time, and it's lost when it spools you, or at the boat. A fish within the drag fights exactly as it
 // did. You tire too (arms: 1 fresh .. 0 done, and then you hold less and reel slower), hardly at all in a chair
-// (chair). cut, wear: the chance at each run that teeth, or a bill, go through the leader (Presentation.leaderRisk).
+// (chair). (M17) The drag's set as a share of the line (DRAG_SET), up to what the reel can hold (dragKg). cut, wear: the
+// chance at each run that teeth, or a bill, go through the leader (Presentation.leaderRisk).
 // electric: the reel winds itself, and your arms aren't in it; twoSpeed: low gear gets line back from a heavy fish.
-// hookM: how deep the fish was hooked (the rod draws the line down to it, shallower as it comes up).
+// hookM: how deep the fish was hooked (the rod draws the line down to it, shallower as it comes up). (M17) matchKg: the
+// fish that pulls it to the breaking point on a surge (a line's own class, LINE_MATCH; a speargun's shaft, half its hold).
 //
 //   const g = new CatchMinigame( { species, kg, lineKg, reelSpeed, distance, rng, landAt, tired, wind, dragKg, holdKg, spoolM, ... } )
 //   g.update( dt, reeling, away ) -> 'fighting' | 'caught' | 'snapped' | 'escaped' | 'cut' | 'spooled'
@@ -37,7 +51,7 @@ const RUN = 2.2, ARMS = 280, ARMS_CHAIR = 1500;
 //   g.band = [ lo, hi ] (the green band)
 export class CatchMinigame {
 
-	constructor( { species, kg, lineKg = 7, reelSpeed = 1.1, distance = 15, rng = Math.random, landAt = 1.2, tired = 1, wind = 0, dragKg = null, holdKg = Infinity, spoolM = null, chair = false, electric = false, twoSpeed = false, cut = 0, wear = 0, hookM = 0, leaps = false } ) {
+	constructor( { species, kg, lineKg = 8 * 0.45359237 /* (the 8 lb line) */, reelSpeed = 1.1, distance = 15, rng = Math.random, landAt = 1.2, tired = 1, wind = 0, dragKg = null, holdKg = Infinity, spoolM = null, chair = false, electric = false, twoSpeed = false, cut = 0, wear = 0, hookM = 0, leaps = false, matchKg = lineKg * LINE_MATCH } ) {
 
 		const f = FISH[ species ];
 		this.species = species;
@@ -45,7 +59,7 @@ export class CatchMinigame {
 		this.rng = rng;
 		this.reelSpeed = reelSpeed;
 		// pull relative to the line: a fish near the line rating is hard, one far above it is a lottery
-		const power = ( 0.25 + 0.75 * f.fight ) * Math.pow( kg / Math.max( lineKg * 0.5, 0.2 ), 0.55 );
+		const power = ( 0.25 + 0.75 * f.fight ) * Math.pow( kg / Math.max( matchKg, 0.2 ), 0.55 );
 		this.drag = dragKg !== null;
 		this.power = this.drag ? power : Math.min( 2.2, power ); // ((M16) with no drag past this it's a lottery anyway)
 		this.lineKg = lineKg;
@@ -70,7 +84,7 @@ export class CatchMinigame {
 		this.slack = 0;
 		this.time = 0;
 		this.band = [ 0.3, 0.85 ];
-		if ( this.drag ) this.band[ 0 ] = Math.min( 0.3, this._give() * 0.9 ); // (it tires on what your drag can hold)
+		if ( this.drag ) this.band[ 0 ] = Math.min( 0.3, this._give( 1 ) * 0.9 ); // (it tires on what your drag can hold, set full)
 		this.overload = 0; // seconds above the breaking point: the line snaps only if it's held there
 		this._nextSurge = 1.2 + rng() * 2;
 		this._surgeT = 0;
@@ -84,11 +98,13 @@ export class CatchMinigame {
 
 	}
 
-	// what the drag slips at, as the share of the line's breaking strength: the reel's, your back's, as you're tired
-	_give() {
+	// what the drag slips at, as the share of the line's breaking strength: as it's set for how tired the fish is (0 fresh
+	// .. 1 spent), up to the reel's most, and your back's, as you're tired
+	_give( tired = 1 - this.stamina ) {
 
-		const arms = this.arms < 0.25 ? 0.5 + 2 * this.arms : 1;
-		return Math.min( this.dragKg, this.holdKg * arms ) / this.lineKg;
+		const arms = this.arms < 0.25 ? 0.5 + 2 * this.arms : 1, D = DRAG_SET;
+		const set = Math.min( D.full, D.strike + ( D.full - D.strike ) * tired / D.spent );
+		return Math.min( this.dragKg, set * this.lineKg, this.holdKg * arms ) / this.lineKg;
 
 	}
 

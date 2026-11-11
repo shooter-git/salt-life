@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { UPGRADES, gearStats, defaultUpgrades, UNLOCK, unlockProgress } from '../src/game/Gear.js';
 import { GameState } from '../src/game/GameState.js';
 import { FISH } from '../src/game/FishTable.js';
-import { BOTTOMS, SOAK, WARP_M, aboardTraps, bottomAt, buoyColours, buoyOffset, buoyRecord, cleanBuoys, cleanTraps, haulOf, meanCatch, newTraps, nightsIn, ownedTraps, settle, soakOf, touchedBy, trapsTold, whyNot } from '../src/game/Traps.js';
+import { BOTTOMS, SOAK, WARP_M, HAULER_MS, grown, aboardTraps, bottomAt, buoyColours, buoyOffset, buoyRecord, cleanBuoys, cleanTraps, haulOf, meanCatch, newTraps, nightsIn, ownedTraps, settle, soakOf, touchedBy, trapsTold, whyNot } from '../src/game/Traps.js';
 import { MAX, STOW, TRAP, trapColliders, trapGeometry, buoyGeometry, lobsterInTrap } from '../src/world/boat/TrapModel.js';
 import { triangleCount } from '../src/world/boat/GeoKit.js';
 import { HullLines } from '../src/world/boat/HullLines.js';
@@ -48,7 +48,13 @@ const after = ( d ) => meanCatch( 1, soakOf( trap, 12 + d * 24, 0 ) );
 ok( after( 0.1 ) === 0, 'nothing before dark' );
 ok( after( 1 ) < after( 3 ) && after( 3 ) < after( 7 ) && after( 7 ) < after( 14 ), 'catch rises with the soak' );
 ok( after( 3 ) - after( 1 ) > after( 14 ) - after( 12 ), 'at a decreasing rate' );
-ok( after( 40 ) < after( 14 ) && after( 400 ) > SOAK.most * SOAK.floor * 0.9, 'and falls as they find the way out, to a floor' );
+ok( after( 40 ) < after( 14 ) && after( 400 ) > after( 14 ) * SOAK.floor * 0.9, 'and falls as they find the way out, to a floor' );
+// ((M17) Austin's fit, 1977: a haul's catch as the soak's B^0.10, of the two weeks' catch (n / 14)^0.1)
+ok( Math.abs( grown( 1 ) - 0.768 ) < 0.001 && Math.abs( grown( 3 ) - 0.857 ) < 0.001 && Math.abs( grown( 7 ) - 0.933 ) < 0.001 && grown( 14 ) === 1 && grown( 30 ) === 1, `of the fortnight's catch: ${ grown( 1 ).toFixed( 2 ) } after a night, ${ grown( 3 ).toFixed( 2 ) } after three, ${ grown( 7 ).toFixed( 2 ) } after a week (M16's 0.29, 0.64, 0.91)` );
+ok( grown( 0 ) === 0 && Math.abs( grown( 0.5 ) - grown( 1 ) / 2 ) < 1e-9, 'within the first night they come in as it goes' );
+ok( Math.abs( meanCatch( 1, { days: 14, nights: 14 }, false ) - SOAK.most * 0.35 ) < 1e-9, 'unbaited, its share of the two weeks\' catch' );
+ok( after( 1 ) > 0.75 * after( 14 ), `a night's soak brings most of a fortnight's: ${ after( 1 ).toFixed( 2 ) } of ${ after( 14 ).toFixed( 2 ) }` );
+ok( HAULER_MS === 1.2, 'the hauler at 236 ft a minute, within makers\' 166 to 600' ); // ((M17) of its own best: its bait's used up long before)
 ok( soakOf( { T: 500, at: 0 }, 400, 3600e3 * 48 ).hours === 48, 'a room whose clock\'s behind: the real time' );
 
 // what comes up, over many hauls: lobsters a trap, how many legal, against the fishery

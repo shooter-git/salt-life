@@ -1,12 +1,14 @@
 import * as THREE from '../../engine/index.js';
 import { seenInWater } from '../../materials/SeenInWater.js';
+import { useGroundBounce } from '../../materials/GroundBounce.js';
 
 // The lobster boat's materials, for WebGL 2. Its geometry carries the look: GeoKit's `color` is the
 // linear albedo and `aux` = ( roughness, metalness, pattern, animation weight ). Tidewater's WGSL
 // materials added procedural wear (non-skid, grime, streaks, the radar and chart plotter screens);
 // these keep the paint, the finishes and the glowing lenses.
 
-const linear = ( hex ) => new THREE.Color().setHex( hex ).convertSRGBToLinear();
+// (a hex, sRGB, to linear: setHex does that itself. (M17) It went to linear twice over: her antifouling and boot top near black)
+const linear = ( hex ) => new THREE.Color().setHex( hex );
 const vec3 = ( c ) => `vec3( ${ c.r.toFixed( 5 ) }, ${ c.g.toFixed( 5 ) }, ${ c.b.toFixed( 5 ) } )`;
 
 // every boat material: aux to the fragment (roughness, metalness, pattern) and the model-space position
@@ -27,6 +29,49 @@ export function withAux( material, { fragment = '', uniforms = {}, roughness = t
 		seenInWater( shader );
 
 	};
+	return material;
+
+}
+
+// (M17) A boat's shade: the sky's light and the sea's on her faces out of the sun, and the sky in her gloss. The world's fill is
+// kept low for the sand (Sky's levels: its environment 0.09, its hemisphere 0.25 against the sun's 3.2), so a boat's side
+// out of the sun was a tenth of its sunlit brightness, the underside of her hardtop black, and a dark paint near black: real
+// barn red is about a tenth of white gelcoat in sun or shade, dark but plainly red. So a boat's outside takes what a person's
+// does (GroundBounce): the sky's light as much again, and the light thrown up from under her, the sea's (SHADE.bounce: its
+// albedo to the sun and the sky, the sky it mirrors low down; the console's her own white decks', ConsoleMaterials), diffuse
+// only; and the sky in her gloss, the scene's environment SHADE.env times over, as the boats at their berths (MooredBoats)
+// have it: three puts the scene's own intensity in place of a material's that reads the scene's, so each holds the
+// environment's map itself (the same program: the map's the scene's). Her hull, decks, wood and fittings; not her glass,
+// nor the sportfisher's cabin, lit by its own downlights. Applied once she's built (Vessel.shadeFill, from loadBoat), after
+// her own materials' changes. docs/m17/looks.md has them beside photographs
+// (env: swept at 1, 2, 3 and 8, and the bounce at 0 to 0.2, at 8:30 and 10:30, beside the photographs: tools/looks/look.mjs.
+// The sea's own albedo is about 0.07, and bluish; what lights a hull's side from under her is that, the sunlit sea's glitter
+// and her own sunlit decks and house, about neutral: 0.3, near the console's white decks' 0.35 (ConsoleMaterials), is what
+// keeps barn red red in shade under the world's blue sky light. The sky in the gloss past 2 times over veils a dark paint grey)
+export const SHADE = { env: 2, bounce: new THREE.Color( 0.3, 0.3, 0.29 ) };
+const _filled = new WeakSet();
+export function useShadeFill( material, { bounce = SHADE.bounce } = {} ) {
+
+	if ( ! material || _filled.has( material ) || ! material.isMeshStandardMaterial ) return material;
+	_filled.add( material );
+	useGroundBounce( material, { sand: bounce } );
+	material.userData.shade = SHADE; // (to look at, and to try other figures in a driven page: tools/looks)
+	const before = material.onBeforeRender;
+	material.onBeforeRender = function ( renderer, scene, camera, geometry, object, group ) {
+
+		before.call( this, renderer, scene, camera, geometry, object, group );
+		const env = scene.environment;
+		if ( this.envMap !== env ) {
+
+			if ( ! this.envMap !== ! env ) this.needsUpdate = true;
+			this.envMap = env;
+
+		}
+
+		this.envMapIntensity = scene.environmentIntensity * SHADE.env;
+
+	};
+
 	return material;
 
 }

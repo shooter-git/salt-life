@@ -19,7 +19,7 @@ import { LOBSTER_HINGE } from './CreatureGeometry.js';
 // sculling (rays undulate or flap, the turtle strokes; the spiny lobster walks, curls its tail and
 // sways its feelers).
 //
-// Port notes: the species table (46 species x 8 vec4) is a float texture (280 vec4 uniforms would
+// Port notes: the species table (47 species x 8 vec4) is a float texture (280 vec4 uniforms would
 // pass WebGL's guaranteed limit); no motion vectors; the underwater shading is the shared one
 // (materials/Underwater.js); translucency goes to the emissive term in the sun's colour; lite
 // (low-powered devices): no scale rows, relief or sheen.
@@ -726,11 +726,11 @@ const SURFACE = /* glsl */`
 		float tspot = ( 1.0 - fishSs( rr, rr + 0.1, length( fract( tq ) - 0.5 - ( vec2( fishHash( tc + 3.1 ), fishHash( tc + 7.7 ) ) - 0.5 ) * 0.5 ) ) ) * step( 0.3, fishHash( tc + seed * 7.0 ) );
 		float where = bodyK * fishSs( - 0.15, 0.1, h ) * fishSs( 0.2, 0.28, xL ) + ( ( P == ${ PA( 'DORSAL2' ) } || P == ${ PA( 'CAUDAL' ) } ) ? 1.0 : 0.0 );
 		c = mix( c, vec3( 0.025, 0.025, 0.03 ), tspot * min( where, 1.0 ) * 0.9 );
-	} else if ( pat >= ${ PT( 'reefShark' ) } && pat <= ${ PT( 'nurseShark' ) } ) {
+	} else if ( ( pat >= ${ PT( 'reefShark' ) } && pat <= ${ PT( 'nurseShark' ) } ) || pat == ${ PT( 'lemonShark' ) } ) {
 		// sharks: smooth skin; the fins solid, the body's colour (no rays, hardly lit through); five
 		// gill slits ahead of the pectoral fin. Blacktip: black tips on the first dorsal, the paired
 		// fins and the lower tail lobe, a pale band along the flank to the anal fin. Reef shark: the
-		// tail's trailing edge dusky
+		// tail's trailing edge dusky. (M17) Lemon: plain, as the nurse shark is
 		float blackTip = pat == ${ PT( 'blacktipShark' ) } ? 1.0 : 0.0;
 		float reef = pat == ${ PT( 'reefShark' ) } ? 1.0 : 0.0;
 		if ( isFin ) {
@@ -1055,6 +1055,21 @@ export function createPropMaterial( { lite = false, fins = false } = {} ) {
 
 }
 
+// (M17) A bonefish's tail out of the water as it roots head down on a flat: wet, its fins' membranes and their film of
+// water catch the sky and the sun, silver-white, as tailing bonefish are photographed (the Florida Museum's, Kenneth
+// Krysko's); under the water they're the fish's own pale grey. A permit's sickles out of the water stay black, a shark's
+// fin its own dark. A tarpon's flank through the surface as it rolls is a glossier mirror, its back its own dark
+const OUT_OF_WATER = /* glsl */`
+	float fishOut = pat == ${ PT( 'bonefish' ) } ? uwSs( uwSeaLevel + 0.004, uwSeaLevel + 0.03, vFishP.y ) : 0.0;
+	fishAlbedo = mix( fishAlbedo, max( fishAlbedo, vec3( 0.8, 0.82, 0.84 ) ), fishOut );
+	fishRough = mix( fishRough, 0.16, fishOut );
+	// ((M17) a tarpon rolling: its flank's already a mirror (its silver's metal); out of the water the wet film on it
+	// gives a sharper picture of the sky, nothing painted on. Its back keeps its own dark)
+	fishRough = pat == ${ PT( 'tarpon' ) } ? mix( fishRough, 0.14, uwSs( uwSeaLevel + 0.004, uwSeaLevel + 0.03, vFishP.y ) * bodyK * ( 1.0 - tBack ) ) : fishRough;
+`;
+// (its sheen, whichever side of the thin fin's lit: the film of water on it catching the sun and the sky about it)
+const OUT_OF_WATER_SHEEN = '\n\ttotalEmissiveRadiance += fishOut * vec3( 0.78, 0.8, 0.82 ) * ( fishSunColor * 0.1 + vec3( 0.08 ) * ( 1.0 - uwNight ) );';
+
 // The material of the swimming fish (batch: the KindBatch of the fish kinds; ground: the Terrain,
 // for the shared underwater shading).
 export function createSwimMaterial( batch, { ground, lite = false } ) {
@@ -1072,8 +1087,8 @@ export function createSwimMaterial( batch, { ground, lite = false } ) {
 			.replace( '#include <begin_vertex>', 'vec3 transformed = fishWorld;' );
 		shader.fragmentShader = shader.fragmentShader
 			.replace( '#include <common>', '#include <common>\n' + FISH_GLSL + LOD_FADE_GLSL + UNDERWATER_GLSL + FRAG_GLSL )
-			.replace( '#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + SURFACE + '\tnormal = normalize( ( viewMatrix * vec4( fishN, 0.0 ) ).xyz );\n\tdiffuseColor.rgb = uwShade( fishAlbedo, vFishP, fN );\n\troughnessFactor = fishRough;\n\tmetalnessFactor = fishMetal;' )
-			.replace( '#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += uwShade( fishTrans, vFishP, vec3( 0.0, 1.0, 0.0 ) ) * fishSunColor * 0.5;' );
+			.replace( '#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n' + SURFACE + OUT_OF_WATER + '\tnormal = normalize( ( viewMatrix * vec4( fishN, 0.0 ) ).xyz );\n\tdiffuseColor.rgb = uwShade( fishAlbedo, vFishP, fN );\n\troughnessFactor = fishRough;\n\tmetalnessFactor = fishMetal;' )
+			.replace( '#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += uwShade( fishTrans, vFishP, vec3( 0.0, 1.0, 0.0 ) ) * fishSunColor * 0.5;' + OUT_OF_WATER_SHEEN );
 
 	};
 	m.customProgramCacheKey = () => 'fish' + ( lite ? 'Lite' : '' );

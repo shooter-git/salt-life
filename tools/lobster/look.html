@@ -1,0 +1,56 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Lobster boat look</title>
+<style>html,body{margin:0;height:100%;background:#88a}canvas{display:block}</style>
+<script type="module">
+// (M17) The lobster boat on her own (or ?boat= another), for side by side with her photographs: no game about her, a sun, a sky and a flat sea.
+// /tools/lobster/look.html, then window.shot( { eye, at, fov } ) from a driver (Playwright on SwiftShader).
+import * as THREE from '/src/engine/index.js';
+import { loadBoat } from '/src/world/boat/Boats.js';
+
+const W = + ( new URLSearchParams( location.search ).get( 'w' ) || 1100 ), H = + ( new URLSearchParams( location.search ).get( 'h' ) || 720 );
+const renderer = new THREE.WebGLRenderer( { antialias: true, preserveDrawingBuffer: true } );
+renderer.setSize( W, H );
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+document.body.appendChild( renderer.domElement );
+const scene = new THREE.Scene();
+scene.background = new THREE.Color( 0x9fc4e6 );
+const pm = new THREE.PMREMGenerator( renderer );
+const sky = new THREE.Scene();
+sky.background = new THREE.Color( 0xc8dcf0 );
+const hemi0 = new THREE.Mesh( new THREE.SphereGeometry( 50, 16, 8 ), new THREE.ShaderMaterial( { side: THREE.BackSide, vertexShader: 'varying vec3 v; void main(){ v=position; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.);}', fragmentShader: 'varying vec3 v; void main(){ float h=normalize(v).y; gl_FragColor=vec4(mix(vec3(.05,.2,.3),mix(vec3(.75,.85,.95),vec3(.3,.5,.85),max(h,0.)),smoothstep(-.02,.02,h))*1.2,1.);}' } ) );
+sky.add( hemi0 );
+scene.environment = pm.fromScene( sky ).texture;
+scene.environmentIntensity = 0.75;
+const sun = new THREE.DirectionalLight( 0xfff4e6, 3 );
+sun.position.set( 10, 16, 6 );
+sun.castShadow = true;
+sun.shadow.mapSize.set( 2048, 2048 );
+Object.assign( sun.shadow.camera, { left: - 8, right: 8, top: 8, bottom: - 8, near: 1, far: 40 } );
+sun.shadow.bias = - 0.0004;
+scene.add( sun );
+// the sea, flat and clear enough to show her waterline
+const sea = new THREE.Mesh( new THREE.PlaneGeometry( 800, 800 ), new THREE.MeshStandardMaterial( { color: 0x1a6a86, roughness: 0.35, transparent: true, opacity: 0.86 } ) );
+sea.rotation.x = - Math.PI / 2;
+sea.receiveShadow = true;
+scene.add( sea );
+const boat = window.boat = await loadBoat( new URLSearchParams( location.search ).get( 'boat' ) || 'lobster', new URLSearchParams( location.search ).get( 'tier' ) || 'high' );
+scene.add( boat.group );
+const camera = new THREE.PerspectiveCamera( 40, W / H, 0.05, 800 );
+window.shot = ( { eye, at, fov = 40, seaOn = true } ) => {
+
+	camera.fov = fov;
+	camera.updateProjectionMatrix();
+	camera.position.set( ...eye );
+	camera.lookAt( ...at );
+	sea.visible = seaOn;
+	boat.update( 1 / 60 );
+	renderer.render( scene, camera );
+	return renderer.info.render;
+
+};
+window.info = () => ( { tris: boat.triangleCount, meshes: Object.keys( boat.meshes ), dims: boat.dimensions, hydro: { mass: boat.hydro.suggestedMass } } );
+window.ready = true;
+</script>

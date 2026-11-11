@@ -48,7 +48,7 @@
 //   teeth      it cuts mono (a rig's chance of a bite-off without wire is stream 7's: rigs/)
 //   wake       its weight counts ( 1 + this x how much ) times under a hurricane's debris (habitat.wake)
 //   release    (with protected, cr) a billfish: $ for letting one go, for a typical one (releaseBonus)
-//   hint       Joe's hint, where its habitat and hour don't say it
+//   hint       Joe's line of where to look ((M17) every kind has one: most in HINTS, below the table)
 export const FISH = {
 	silverside: { name: 'Hardhead silverside', sci: 'Atherinomorus stipes', lw: [ 0.0074, 3.1 ], model: 'silverside', habitat: { shallows: 1, pier: 0.6, bay: 0.2 }, kg: [ 0.02, 0.08 ], price: 3, fight: 0.05, stamina: 1.5, time: 'any', rarity: 0.2, net: true },
 	mullet: { name: 'Striped mullet', sci: 'Mugil cephalus', lw: [ 0.0112, 2.98 ], model: 'mullet', habitat: { shallows: 1, pier: 0.4 }, kg: [ 0.4, 2.2 ], price: 5, fight: 0.3, stamina: 5, time: 'day', rarity: 0.8, net: true },
@@ -86,14 +86,25 @@ export const FISH = {
 	// the billfish, every one let go: the sailfish working the bait along the drop-off and now and then in over the
 	// shelf's outer edge; the white marlin on the edges and the humps; the blue out in the open blue, rare and huge.
 	// W(kg) = a LJFL^b and LJFL from TL, each Prager, Prince and Lee 1995 (ICCAT's), fitted here as W(g) = a TL^b
-	sailfish: { name: 'Sailfish', sci: 'Istiophorus platypterus', lw: [ 0.002962, 2.932 ], model: 'sailfish', habitat: { edge: 0.7, blue: 0.5, birds: 0.9, deep: 0.12, weed: 0.15 }, kg: [ 12, 55 ], price: 0, fight: 0.95, stamina: 90, time: 'day', rarity: 0.16, protected: true, cr: true, release: 150, ways: { float: 0.5, troll: 1.3, kite: 5, drop: 0 }, at: { day: [ 0, 40 ], night: [ 0, 40 ] }, eats: { shrimp: 0.12, silverside: 1.6, mullet: 2, sergeant: 0.6, grunt: 0.6, ballyhoo: 3, skirt: 1.3, plug: 0.4 }, weather: { front: 1 } },
-	whiteMarlin: { name: 'White marlin', sci: 'Kajikia albida', lw: [ 0.002102, 3.024 ], model: 'whiteMarlin', habitat: { edge: 0.8, blue: 0.4, birds: 0.3, weed: 0.2 }, kg: [ 14, 60 ], price: 0, fight: 0.9, stamina: 120, time: 'day', rarity: 0.08, protected: true, cr: true, release: 220, ways: { float: 0.4, troll: 1.5, kite: 1, drop: 0 }, at: { day: [ 0, 90 ], night: [ 0, 90 ] }, eats: { shrimp: 0.08, silverside: 1.4, mullet: 1.8, ballyhoo: 3, skirt: 1.6, squid: 1 } },
-	blueMarlin: { name: 'Blue marlin', sci: 'Makaira nigricans', lw: [ 0.000572, 3.341 ], model: 'blueMarlin', habitat: { blue: 1, edge: 0.5, birds: 0.25, debris: 0.2 }, kg: [ 50, 450 ], price: 0, fight: 1, stamina: 300, time: 'day', rarity: 0.035, protected: true, cr: true, release: 600, ways: { float: 0.3, troll: 1.8, kite: 0.6, drop: 0 }, at: { day: [ 0, 120 ], night: [ 0, 120 ] }, eats: { shrimp: 0.03, silverside: 0.5, mullet: 2, grunt: 1, ballyhoo: 2.4, skirt: 3, squid: 0.6 } },
+	// ((M17) Their depths (`at`), from tags (docs/m17/figures.md): each band holds the depths most of their time is spent in, by
+	// day and by night. The sailfish mostly in the top 20 m, diving to 50 to 150 m now and then, more by day (Kerstetter et al.
+	// 2011, 16 fish; Mourato et al. 2010: most of the day and night in the top 10 m), so [ 0, 40 ] by day and [ 0, 20 ] by night.
+	// The white marlin 95% of the day in the top 100 m and 82% of the night in the top 20 (Hoolihan et al. 2015, 28 fish): [ 0, 90 ]
+	// and [ 0, 20 ]. The blue at 40 to past 100 m by day, 17% of it at 100 m or more, and at night 86% in the top 30 (Goodyear et
+	// al. 2008, 51 fish): [ 0, 120 ] and [ 0, 30 ]. M16 had each one's day depths at night as well)
+	sailfish: { name: 'Sailfish', sci: 'Istiophorus platypterus', lw: [ 0.002962, 2.932 ], model: 'sailfish', habitat: { edge: 0.7, blue: 0.5, birds: 0.9, deep: 0.12, weed: 0.15 }, kg: [ 12, 55 ], price: 0, fight: 0.95, stamina: 90, time: 'day', rarity: 0.16, protected: true, cr: true, release: 150, ways: { float: 0.5, troll: 1.3, kite: 5, drop: 0 }, at: { day: [ 0, 40 ], night: [ 0, 20 ] }, eats: { shrimp: 0.12, silverside: 1.6, mullet: 2, sergeant: 0.6, grunt: 0.6, ballyhoo: 3, skirt: 1.3, plug: 0.4 }, weather: { front: 1 } },
+	whiteMarlin: { name: 'White marlin', sci: 'Kajikia albida', lw: [ 0.002102, 3.024 ], model: 'whiteMarlin', habitat: { edge: 0.8, blue: 0.4, birds: 0.3, weed: 0.2 }, kg: [ 14, 60 ], price: 0, fight: 0.9, stamina: 120, time: 'day', rarity: 0.08, protected: true, cr: true, release: 220, ways: { float: 0.4, troll: 1.5, kite: 1, drop: 0 }, at: { day: [ 0, 90 ], night: [ 0, 20 ] }, eats: { shrimp: 0.08, silverside: 1.4, mullet: 1.8, ballyhoo: 3, skirt: 1.6, squid: 1 } },
+	blueMarlin: { name: 'Blue marlin', sci: 'Makaira nigricans', lw: [ 0.000572, 3.341 ], model: 'blueMarlin', habitat: { blue: 1, edge: 0.5, birds: 0.25, debris: 0.2 }, kg: [ 50, 450 ], price: 0, fight: 1, stamina: 300, time: 'day', rarity: 0.035, protected: true, cr: true, release: 600, ways: { float: 0.3, troll: 1.8, kite: 0.6, drop: 0 }, at: { day: [ 0, 120 ], night: [ 0, 30 ] }, eats: { shrimp: 0.03, silverside: 0.5, mullet: 2, grunt: 1, ballyhoo: 2.4, skirt: 3, squid: 0.6 } },
 	// the swordfish feeds up near the surface at night and down past 300 m by day (Lerner et al. 2013, Dewar et al.
 	// 2011: under 100 m at night, past 400 by day), moving between them at dusk and dawn: so at night on a float, by
 	// day only deep-dropped, and over deep water; lights draw the squid and the squid draw it (flood). W(kg) =
-	// 4.45373e-6 LJFL^3.2038 (ICCAT, North Atlantic), LJFL 0.68 TL (the sword's a third of it, measured off photographs)
-	swordfish: { name: 'Swordfish', sci: 'Xiphias gladius', lw: [ 0.001295, 3.204 ], model: 'swordfish', habitat: { blue: 1, edge: 0.8, ledge: 0.3 }, kg: [ 15, 230 ], price: 20, fight: 0.95, stamina: 240, time: 'any', rarity: 0.14, bag: 1, flood: 2, under: 5, hint: 'in the deep blue, near the top after dark, or deep-dropped by day and stopped 350 to 750 m down', ways: { float: 1, troll: 0, kite: 0, drop: 2 }, at: { day: [ 320, 750 ], night: [ 0, 110 ] }, eats: { shrimp: 0.1, squid: 5, mullet: 1.5, cutMullet: 1, ballyhoo: 1.5, silverside: 0.5 } },
+	// 4.45373e-6 LJFL^3.2038 (ICCAT, North Atlantic), LJFL 0.68 TL (the sword's a third of it, measured off photographs).
+	// ((M17) Deeper at night under a fuller moon (Lerner et al. 2013, eight fish in the Florida Straits: at new moon 82% of
+	// their time above 75 m, most of it 25 to 50 m; at full 64% at 100 to 500 m, most 100 to 200, and 36% above 75; their
+	// median depth 32 m + 53 m x the moon's lit share): `night` the new moon's, `full` the full moon's, between by how much
+	// of it's lit, so a float 6 m down has about 36 / 82 of its new-moon chance under a full one. Dewar et al. 2011 and
+	// Tracey et al. 2023, Pacific, the same way)
+	swordfish: { name: 'Swordfish', sci: 'Xiphias gladius', lw: [ 0.001295, 3.204 ], model: 'swordfish', habitat: { blue: 1, edge: 0.8, ledge: 0.3 }, kg: [ 15, 230 ], price: 20, fight: 0.95, stamina: 240, time: 'any', rarity: 0.14, bag: 1, flood: 2, under: 5, hint: 'in the deep blue, near the top after dark, or deep-dropped by day and stopped 350 to 750 m down', ways: { float: 1, troll: 0, kite: 0, drop: 2 }, at: { day: [ 320, 750 ], night: [ 0, 75 ], full: [ 52, 300 ] }, eats: { shrimp: 0.1, squid: 5, mullet: 1.5, cutMullet: 1, ballyhoo: 1.5, silverside: 0.5 } },
 	// (catch and release only; M9: they roll and feed in the rain)
 	tarpon: { name: 'Tarpon', sci: 'Megalops atlanticus', lw: [ 0.0077, 3.02 ], model: 'tarpon', habitat: { pier: 0.35, bay: 0.5, shallows: 0.15, creek: 0.8 }, kg: [ 10, 45 ], price: 4, fight: 1, stamina: 24, time: 'night', rarity: 0.2, protected: true, cr: true, lights: 3, weather: { rain: 1.5 }, ways: { troll: 0.8, kite: 0.6 } },
 	blackGrouper: { name: 'Black grouper', sci: 'Mycteroperca bonaci', lw: [ 0.0115, 3.03 ], model: 'blackGrouper', habitat: { reef: 0.4, deep: 0.7 }, kg: [ 3, 25 ], price: 16, fight: 0.75, stamina: 14, time: 'any', rarity: 0.35, spear: true, minCm: 61, ways: { troll: 0.4, drop: 1 } },
@@ -126,6 +137,81 @@ export const FISH = {
 	// (it never takes a bait or a spear: tickled out of its den in the reef and netted, after dark)
 	lobster: { name: 'Spiny lobster', sci: 'Panulirus argus', lw: [ 0.0575, 2.9 ], model: 'lobster', habitat: {}, kg: [ 0.25, 3 ], price: 24, fight: 0, stamina: 1, time: 'night', rarity: 0, hand: true, minCm: 22.4, bag: 6 },
 };
+
+// (M17) The flats' fish, seen before they're cast to (game/Sight.js, Bites.seenTake; docs/m17/sight.md), each kind's
+// sight: its own lines here so the table's rows stay as they are:
+//   back    how its back shows from above against white sand (0..1, a contrast: the bonefish the grey ghost, the
+//           permit's back and black fins darker, the tarpon's big blue-green back)
+//   wary    how far it notices you coming, times a bonefish's (Sight.noticeRange)
+//   lead    [ m, m ]: where a bait's put ahead of its nose, on its way, for it to see it and come to it (guides: a few
+//           feet for a cruising bonefish, a crab right in front of a permit, two feet ahead of a laid-up tarpon's nose).
+//           close: the same for one feeding head down (a tail up: it sees only what lands close) or lying still
+//   head    m: a bait landing closer than this to it spooks it: on its head
+//   eats    bait or lure id (shrimp: the frozen shrimp) -> the chance it eats one shown well; what it doesn't eat it
+//           refuses, following and turning off (a tailing fish is the keenest: Bites.seenTake)
+//   picky   of its refusals, the share that spook it as it turns away
+//   speed   m/s it comes to a bait at
+// Guides' lore, consistent between them but not measured (docs/m17/sources-tide-fish.md: no study of flats fish's
+// takes or flight distances was found). No fly rod (the user's, M17): shrimp, jigs, plugs and live bait
+export const SIGHT = {
+	bonefish: { back: 0.14, wary: 1, lead: [ 0.6, 2.4 ], close: [ 0.25, 1 ], head: 0.45, speed: 0.9, picky: 0.25,
+		eats: { shrimp: 0.62, jig: 0.38, plug: 0.01, silverside: 0.06, cutMullet: 0.12, mullet: 0.02 } },
+	permit: { back: 0.18, wary: 1.25, lead: [ 0.5, 1.6 ], close: [ 0.25, 0.9 ], head: 0.7, speed: 0.8, picky: 0.4,
+		eats: { shrimp: 0.16, jig: 0.1, plug: 0.01, silverside: 0.03, cutMullet: 0.05 } },
+	tarpon: { back: 0.3, wary: 0.7, lead: [ 1.2, 4 ], close: [ 0.25, 0.9 ], head: 0.3, speed: 1, picky: 0.15,
+		eats: { mullet: 0.5, silverside: 0.3, plug: 0.32, jig: 0.24, shrimp: 0.14, cutMullet: 0.08 } },
+	snook: { back: 0.2, wary: 0.55, lead: [ 0.3, 1.6 ], close: [ 0.2, 1.2 ], head: 0.25, speed: 1.4, picky: 0.1,
+		eats: { silverside: 0.5, mullet: 0.5, plug: 0.42, shrimp: 0.4, jig: 0.36, cutMullet: 0.2 } },
+	barracuda: { back: 0.18, wary: 0.45, lead: [ 0.5, 6 ], close: [ 0.5, 4 ], head: 0.2, speed: 3, picky: 0.05,
+		eats: { plug: 0.55, silverside: 0.6, mullet: 0.6, jig: 0.25, cutMullet: 0.2, shrimp: 0.04 } },
+};
+for ( const k in SIGHT ) FISH[ k ].sight = SIGHT[ k ];
+
+// (M17) Joe's line of where to look, for every kind (the life list's kinds still to catch, the wanted slate: Orders.biteHint;
+// docs/m17/life-list.md): each from where the fish really is and when, and where the game's bites have it (its habitat's
+// heaviest waters, its hours, its ways). Its own lines here so the table's rows stay as they are; the trout's and the
+// swordfish's are in their rows. A kind on Joe's slate (Orders' TWILIGHT and MORE) keeps to 40 characters, the slate's line
+// at its chalk's size
+export const HINTS = {
+	silverside: 'schooling in the shallows and by the pier: throw the net',
+	mullet: 'in the shallows by day: throw the net',
+	needlefish: 'cruising the top of the shallows by day',
+	sergeant: 'round the piles and the reef by day',
+	grunt: 'in the pier\'s shade, and on the reef',
+	yellowtail: 'up in a chum slick over the reef at dusk',
+	chromis: 'in clouds over the reef tops, by day',
+	tang: 'grazing the reef in schools, by day',
+	wrasse: 'rooting by the reef: best speared',
+	parrot: 'grazing the coral on the reef by day',
+	angel: 'among the reef\'s sponges, by day',
+	jack: 'busting bait in the bay, dawn and dusk',
+	barracuda: 'trolled in the bay, or seen on the flats',
+	grouper: 'a bait on the bottom by the reef and offshore',
+	redSnapper: 'on the bottom offshore, deep-dropped',
+	tuna: 'under the birds on the drop-off at dawn',
+	mahi: 'under weedlines and anything afloat',
+	wahoo: 'trolled on the drop-off at dawn, on wire',
+	yellowfin: 'under the birds past the drop-off, early',
+	sailfish: 'a kite bait on the drop-off, best after a front',
+	whiteMarlin: 'ballyhoo trolled on the drop-off and the hump',
+	blueMarlin: 'a big lure trolled out in the blue',
+	tarpon: 'in the creek and under the pier lights after dark, or laid up on the flats in the sun',
+	blackGrouper: 'a bait on the bottom, deep off the reef',
+	muttonSnapper: 'on the sand by the reef, dawn and dusk',
+	lionfish: 'under the reef\'s ledges: spear every one',
+	silkSnapper: 'deep-dropped on the north ledge',
+	cuberaSnapper: 'a big live bait deep off the reef at dusk',
+	graySnapper: 'under the pier and the mangroves at dusk',
+	bonefish: 'tailing on the flats on the flood, on a calm day',
+	goliathGrouper: 'under the pier, on a big bait',
+	whiteMullet: 'in the shallows and by the pier: the net',
+	pompano: 'in the north beach\'s surf, best on a surf day',
+	permit: 'in the north beach\'s surf, and on the flats\' edge',
+	snook: 'in the mangrove creek and the surf, at dawn and dusk',
+	redfish: 'tailing in the shallows at dawn and dusk',
+	lobster: 'in the reef\'s ledges, by hand, after dark',
+};
+for ( const k in HINTS ) FISH[ k ].hint ??= HINTS[ k ];
 
 // (Salt Life) a spiny lobster's carapace length, of its total length (the gauge measures the
 // carapace: 3 inches, 7.62 cm, to keep one)

@@ -249,6 +249,15 @@ export function detailData() {
 
 }
 
+// (M17) its data let go once the plants are placed (App.plantsPlaced: they're the last to read it on the CPU), the
+// texture on the GPU already: 1 MB of script memory. Asked for again (Node, a tool), it's made again
+export function releaseDetailData() {
+
+	cachedData = null;
+	if ( cached && cached.image && cached.image.data ) cached.image = { width: cached.image.width, height: cached.image.height, data: null };
+
+}
+
 export function getDetailTexture() {
 
 	if ( cached ) return cached;

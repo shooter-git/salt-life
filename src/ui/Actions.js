@@ -8,7 +8,8 @@ import { G } from '../core/Globals.js';
 //   use       the left mouse button's part: cast / strike / reel, shoot / load, throw / close / haul, tickle / net
 //   reel      the right's: reel an empty line in, or the lines
 //   jump      jump / swim up / the prompt's Space (climb the ladder); dive (in the water); run (at the helm, lines out)
-//   rod, net, bait, rig, leader, cooler, torch, horn, camera: the wheel's
+//   rod, net, bait, rig, leader, cooler, torch, horn, plotter, camera: the wheel's ((M17) plotter: its range, a step out, at a helm
+//   with one: Instruments.stepRange)
 export const ACTIONS = {
 	action: { key: 'KeyE' },
 	use: { key: 'mouse0', hold: true },
@@ -25,6 +26,7 @@ export const ACTIONS = {
 	torch: { key: 'KeyL' },
 	camera: { key: 'KeyV' },
 	horn: { key: 'Horn', hold: true },
+	plotter: { key: 'KeyZ' },
 	guide: {},
 };
 
@@ -72,6 +74,7 @@ export function offers( player, game = null, o = {} ) {
 	else if ( helm ) o.torch = lights && ( torchOn || G.night.value > 0.35 ) ? ( torchOn ? 'Torch off' : 'Torch' ) : null;
 	else o.torch = lights && ( torchOn || G.night.value > 0.35 ) ? ( torchOn ? 'Torch off' : 'Torch' ) : null;
 	o.horn = helm ? 'Horn' : null;
+	o.plotter = helm && ! player.riding && game && game.state && game.state.stats && game.state.stats.plotter ? 'Plotter range' : null;
 	// ((M16) with lines out she's held at the baits' speed: this runs her flat out, as Shift does)
 	o.run = helm && ! player.riding && game?.rigs?.linesOut ? 'Run' : null;
 	// ((M15) the rod's button is the radio's at the helm: R)

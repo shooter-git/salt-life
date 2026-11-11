@@ -5,7 +5,7 @@ import { rippleTexture } from './SeaTextures.js';
 import { WHALE_WATER_GLSL, whaleMarkUniforms } from './WhaleWater.js';
 import { SeaDetail } from './SeaDetail.js';
 import { Whitecaps, WHITECAP_CREST } from './Whitecaps.js';
-import { LEE } from './Waves.js';
+import { LEE, WAKE_SHOAL } from './Waves.js';
 import { useLocalLights, LOCAL_LIGHTS_MAX } from '../materials/LocalLights.js';
 import { SEA_CAVE_GLSL, SEA_CAVE_CALM_GLSL, seaCaveUniforms } from '../world/terrain/CaveLight.js';
 import { SEEN } from '../materials/SeenInWater.js';
@@ -159,6 +159,9 @@ export class WaterSurface {
 	constructor( { scene, waves, terrain, shore = null, cover = null, rocks = null, tier = 'low', lean = false, plain = false } ) {
 
 		this.waves = waves;
+		this.wakes = waves.wakes; // ((M17) the boats' wakes' far arms: WakeWaves)
+		// ((M17) and the finest of its grid's spacings, for what of them it draws near you: the CPU's heights are those)
+		this.wakes.spacing = ( LEAF[ tier ] ?? LEAF.low ) / ( LOD_GRID[ tier ] ?? LOD_GRID.low );
 		this.terrain = terrain;
 		this.shore = shore;
 		this.lod = new CDLOD( { gridSize: LOD_GRID[ tier ] ?? LOD_GRID.low, leafSize: LEAF[ tier ] ?? LEAF.low, levels: 12, minY: - 4, maxY: 4, prefix: 'oceanLod', follow: ORIGIN_STEP } );
@@ -176,6 +179,7 @@ export class WaterSurface {
 			...this.lod.uniforms,
 			...terrain.heightUniforms,
 			...waves.uniforms,
+			...waves.wakes.uniforms, // ((M17) the wakes' far arms: WakeWaves)
 			...( SH ? shore.uniforms : {} ),
 			waterSeaLevel: G.seaLevel,
 			waterTime: G.time,
@@ -254,7 +258,7 @@ export class WaterSurface {
 
 			Object.assign( shader.uniforms, uniforms, seaCaveUniforms );
 			shader.vertexShader = shader.vertexShader
-				.replace( '#include <common>', '#include <common>\n' + this.lod.glsl + terrain.heightGlsl + waves.glsl + ( SH ? shore.glsl : '' ) + ( lean ? SEA_CAVE_LEAN : SEA_CAVE_GLSL + SEA_CAVE_CALM_GLSL ) + /* glsl */`
+				.replace( '#include <common>', '#include <common>\n' + this.lod.glsl + terrain.heightGlsl + waves.glsl + ( SH ? shore.glsl : '' ) + ( lean ? SEA_CAVE_LEAN : SEA_CAVE_GLSL + SEA_CAVE_CALM_GLSL ) + '#ifndef WATER_PLAIN\n' + waves.wakes.glsl + '#endif\n' + /* glsl */`
 uniform float waterSeaLevel;
 varying vec3 vWater;
 varying vec3 vWaterL; // (M15) about the sea's origin
@@ -275,6 +279,16 @@ varying vec2 vWaterX0; // (M14) the grid's point: the water's own (its foam ride
 	float fade = waveFade( depth );
 	vec3 wn;
 	vec3 total = waveDisplacementLod( x0, fade, lod.spacing, wn );
+#ifndef WATER_PLAIN
+	// ((M17) the boats' wakes' far arms, from their tracks (WakeWaves), on the grid's point as the CPU's query has them (Waves.wakeAt):
+	// through the shallows, gone as the water shoals to nothing. Not in the plain sea a device that draws on its CPU loads with)
+	if ( wakeTracks > 0 ) {
+		vec2 wakeSlope;
+		float wakeK = smoothstep( ${ WAKE_SHOAL[ 0 ].toFixed( 2 ) }, ${ WAKE_SHOAL[ 1 ].toFixed( 2 ) }, depth );
+		total.y += wakeAt( xL, lod.spacing, wakeSlope ) * wakeK;
+		wn.xz -= wakeSlope * wakeK;
+	}
+#endif
 	// ((M15) in a sea cave's gully, inlet and cave: a gentler surge)
 	float caveCalm = seaCaveCalm( x0 );
 	total *= 1.0 - 0.4 * caveCalm;
@@ -475,7 +489,10 @@ ${ SH ? /* glsl */`
 	vec4 se = shoreSwashEdge( vWater.xz, film );
 	float frontD = se.y;
 	float uprush = smoothstep( 0.46, 0.32, se.z );
-	float frontFoam = smoothstep( 0.9, 0.0, frontD ) * smoothstep( -0.05, 0.08, frontD ) * uprush;
+	// ((M17) foam at the swash's front only where a wave's broken and run up the sand: by its run-up (se.w, m up a beach's
+	// face: 0.8 to 2.5 of it is 5 to 17 cm up), so none where the waves are taken out, as over the flat bared by the tide,
+	// nor in the island's lee on a still day)
+	float frontFoam = smoothstep( 0.9, 0.0, frontD ) * smoothstep( -0.05, 0.08, frontD ) * uprush * smoothstep( 0.8, 2.5, se.w );
 	if ( frontFoam > 0.0 ) foam = max( foam, waterLace( vWater.xz * 4.5 + 3.7, 0.65 ) * frontFoam * ( 1.0 - 0.9 * seaCaveCalm( vWater.xz ) ) * 0.85 );
 	// the swash sheet ends on its analytic front, not on the mesh triangles
 	float sheetEdge = smoothstep( 0.0, 0.012, se.x );
@@ -951,6 +968,7 @@ ${ lean ? '' : /* glsl */`
 		// wind as fast as it did, half the gusts' pace)
 		this.marble.spume += 0.35 * G.windSpeed.value * G.dt.value;
 		this.whitecaps.place( O.x, O.z );
+		if ( this.wakes ) this.wakes.place( O ); // ((M17) the wakes' far arms, about it)
 		foamKeys( O, this.marble, G.windDir.value, camera.position, this.keys );
 		// (M11) the sky it reflects, as the scene's environment is (made once, refreshed in place); its
 		// underside at the scene's fill

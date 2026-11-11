@@ -4,11 +4,14 @@ import { createPropMaterial, PAT } from '../game/GameMaterials.js';
 import { STAND } from '../game/FishStand.js';
 import { FISH } from '../game/FishTable.js';
 import { pounds } from '../game/Units.js';
+import { SLAMS, slamTold } from '../game/Trophies.js';
+import { KINDS } from '../game/LifeList.js';
 
 // (Salt Life) The island's records, chalked on an A-frame board beside Joe's stand (across the
 // counter from his price board): each species' heaviest fish anyone in the group has landed, its
 // weight and who caught it (together/Together.js keeps them, in the group's shared save). The slate is
-// a canvas, redrawn when a record falls.
+// a canvas, redrawn when a record falls. (M17) And under the weights, a line of the group's life lists (Together's '#' records):
+// who has had the most kinds, and who has which slams (lifeLines).
 //   const b = new RecordsBoard( { terrain } );  scene.add( b.group );  b.draw( records )
 
 const W = 512, H = 726; // the slate's canvas (0.55 × 0.78 m)
@@ -66,7 +69,7 @@ export class RecordsBoard {
 
 	}
 
-	// records: species -> { kg, cm, who, m ('s': speared, 'h': by hand) }
+	// records: species -> { kg, cm, who, m ('s': speared, 'h': by hand) }; ((M17) '#' and a player's id -> { who, k, sl })
 	draw( records ) {
 
 		this._last = records;
@@ -96,7 +99,9 @@ export class RecordsBoard {
 		g.font = `62px ${ font }`;
 		g.fillText( 'Island records', W / 2, 78 );
 		g.fillRect( 60, 98, W - 120, 3 );
-		const list = Object.entries( records ).filter( ( [ k, r ] ) => FISH[ k ] && r && r.kg > 0 ).sort( ( a, b ) => b[ 1 ].kg - a[ 1 ].kg ).slice( 0, 8 ); // (all of them: in the cooler)
+		// ((M17) the life lists' line takes the eighth's room)
+		const lines = lifeLines( records );
+		const list = Object.entries( records ).filter( ( [ k, r ] ) => FISH[ k ] && r && r.kg > 0 ).sort( ( a, b ) => b[ 1 ].kg - a[ 1 ].kg ).slice( 0, lines.length ? 7 : 8 ); // (all of them: in the cooler)
 		if ( ! list.length ) {
 
 			g.font = `44px ${ font }`;
@@ -123,8 +128,44 @@ export class RecordsBoard {
 
 		}
 
+		if ( lines.length ) {
+
+			g.fillStyle = 'rgba(242, 239, 228, 0.5)';
+			for ( let x = 28; x < W - 28; x += 18 ) g.fillRect( x, 642, 10, 2 );
+			g.textAlign = 'left';
+			g.font = `30px ${ font }`;
+			lines.forEach( ( t, i ) => {
+
+				g.fillStyle = i ? 'rgba(242, 239, 228, 0.82)' : '#f5d98a';
+				g.fillText( t, 28, lines.length > 1 ? 678 + i * 36 : 690, W - 56 );
+
+			} );
+
+		}
+
 		this.texture.needsUpdate = true;
 
 	}
+
+}
+
+// (M17) the line under the weights: who has the most kinds ('Most kinds: Robin, 23 of 39'), and who has which slams ('Slams: Sam's
+// grand · Robin's super grand and billfish'; each player's biggest, Trophies.slamTold) -> [ text ] (none: nobody's sent theirs)
+const and = ( a ) => ( a.length > 1 ? `${ a.slice( 0, - 1 ).join( ', ' ) } and ${ a[ a.length - 1 ] }` : a[ 0 ] || '' );
+export function lifeLines( records ) {
+
+	const lives = Object.entries( records || {} ).filter( ( [ k, r ] ) => k[ 0 ] === '#' && r && r.k > 0 ).map( ( [ , r ] ) => r );
+	if ( ! lives.length ) return [];
+	const most = Math.max( ...lives.map( ( r ) => r.k ) ), top = lives.filter( ( r ) => r.k === most ).map( ( r ) => r.who || 'Someone' );
+	const out = [ `Most kinds: ${ top.length > 3 ? `${ top.slice( 0, 2 ).join( ', ' ) } and ${ top.length - 2 } more` : and( top ) }, ${ most } of ${ KINDS }` ];
+	const slammed = lives.filter( ( r ) => r.sl && r.sl.length ).sort( ( a, b ) => b.sl.length - a.sl.length );
+	if ( slammed.length ) {
+
+		const each = slammed.slice( 0, 3 ).map( ( r ) => `${ r.who || 'Someone' }'s ${ and( slamTold( r.sl ).map( ( id ) => SLAMS[ id ].short ) ) }` );
+		out.push( `Slams: ${ each.join( ' · ' ) }${ slammed.length > 3 ? ` · ${ slammed.length - 3 } more` : '' }` );
+
+	}
+
+	return out;
 
 }

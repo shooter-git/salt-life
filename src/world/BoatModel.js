@@ -2,14 +2,15 @@ import { MathUtils, Mesh, Object3D, Quaternion, Vector3 } from '../engine/index.
 import { G } from '../core/Globals.js';
 import { HullLines } from './boat/HullLines.js';
 import { GeoKit } from './boat/GeoKit.js';
-import { Vessel, GIMBAL } from './boat/Vessel.js';
+import { Vessel, GIMBAL, geometryView } from './boat/Vessel.js';
 import { LOBSTER_HANDLING } from './boat/Handling.js';
 import { wheelhousePoints } from '../fx/Drips.js';
 import { BoatMaterials } from './boat/BoatMaterials.js';
 import { buildHull, buildHullVolume, keelVolume, houseHalfWidth, KEEL } from './boat/HullBuilder.js';
 import { buildWheelhouse, wheelGeometry, throttleGeometry, radarArrayGeometry, compassCardGeometry, HOUSE, roofTopY } from './boat/Wheelhouse.js';
 import { VARIATION } from '../game/Chart.js';
-import { buildDeckGear, HAULER } from './boat/DeckGear.js';
+import { buildDeckGear, HAULER, BARREL_Z, WAY_UP } from './boat/DeckGear.js';
+import { LadderClimb } from './boat/sportfisher/LadderClimb.js';
 import { propellerGeometry, rudderGeometry, PROP, RUDDER } from './boat/Running.js';
 
 // (M15) the compass's card: its natural period (s) and damping (of critical), a small boat's dash compass's (a
@@ -24,6 +25,11 @@ export const PROP_DISPLAY_RPS = 5;
 
 const _v = new Vector3();
 const _pos = new Vector3();
+const CAP = 0.045; // (M17) her gunwale's cap over her sheer: her washboard, and her side decks
+// (M17) on her side decks and the steps up: from how far out it's so (m), and how near her house and her side you go (a walker's
+// radius there: Player's colliders' r, clampToDeck)
+const SIDE = { from: 0.75, r: 0.05, ease: 0.6 };
+const WALL_END = ( L ) => L.houseFront - 0.06;
 const _scale = new Vector3();
 const _q = new Quaternion();
 
@@ -58,6 +64,12 @@ export class BoatModel extends Vessel {
 		buildDeckGear( kit, lines, parts );
 
 		this.group.name = 'LobsterBoat';
+		// ((M17) her stowed anchor last in her fittings, so its triangles can be left undrawn while it's down: setAnchorStowed)
+		const stowed = kit.buckets.get( 'stowedAnchor' ) || [];
+		kit.buckets.delete( 'stowedAnchor' );
+		let stowedN = 0;
+		for ( const g of stowed ) stowedN += g.index ? g.index.count : g.attributes.position.count;
+		kit.buckets.get( 'fittings' ).push( ...stowed );
 
 		for ( const name of STATIC_BUCKETS ) {
 
@@ -72,6 +84,10 @@ export class BoatModel extends Vessel {
 			this.meshes[ name ] = mesh;
 
 		}
+
+		const fit = this.meshes.fittings.geometry;
+		this._stowedFrom = ( fit.index ? fit.index.count : fit.attributes.position.count ) - stowedN;
+		this._stowed = true;
 
 		// ---- animated parts (one draw call each)
 
@@ -143,6 +159,12 @@ export class BoatModel extends Vessel {
 		this.lamps = { dome: [ 0, 2.24, 0.42 ], instruments: [ - 0.45, 1.5, 1.12 ], port: [ 0.47, 3.45, - 0.47 ], masthead: [ 0, 3.97, - 0.5 ], anchor: [ 0, 4.05, - 0.5 ], stern: [ 0, sternY, lines.zAft - 0.05 ], spot: parts.searchlight.toArray() };
 		this.floods = [ - 0.8, 0.8 ].map( ( x ) => ( { at: [ x, 2.25, - 1.0 ], dir: [ x * 0.25, - 0.75, - 0.62 ] } ) );
 		this.bowWalk = 4.0;
+		// ((M17) up her steps and along her side decks to her foredeck, and up the house side to her roof (WAY_UP): a climb, as the
+		// sportfisher's ladders are. Her roof's eye, for what's seen from it: the camera's own height (Glasses, Sight), about 4 m;
+		// her anchor's worked at her bow, by her roller (Game.updateBow)
+		this.ladders = this._buildLadders();
+		this.roofEye = roofTopY( 0 ) + 1.62;
+		this.bowAnchor = { x: 0, z: WAY_UP.bow, r: 0.9 };
 		this.nearDetail = [ 'fittings', 'wood', 'display', 'wheel', 'throttle', 'radar', 'propeller', 'rudder' ];
 		// ((M16) m: on Marta's cradle, seen from the path after a hurricane, her fittings alone took a phone past its 300,000
 		// triangles. (v2.1.2) 38, not 45: the path's 51 to 53 m from her, and her fittings came back with a few metres' less
@@ -332,6 +354,68 @@ export class BoatModel extends Vessel {
 
 	}
 
+	// (together/) someone else's her: her copy's a clone of your boat's meshes, so her fittings a view of their own, her stowed anchor
+	// drawn on her roller whatever yours is doing (setAnchorStowed)
+	dressCopy( copy, stats, shared ) {
+
+		const was = this.meshes.fittings, mesh = was && copy.getObjectByName( was.name );
+		if ( mesh && mesh.geometry === was.geometry ) mesh.geometry = shared( 'fittings, her own anchor', () => geometryView( was.geometry ) );
+
+	}
+
+	// (M17) her stowed anchor drawn on her roller, or not while it's down
+	setAnchorStowed( on ) {
+
+		if ( on === this._stowed ) return;
+		this._stowed = on;
+		this.meshes.fittings.geometry.setDrawRange( 0, on ? Infinity : this._stowedFrom );
+
+	}
+
+	// (M17) on her side decks and the steps up to them, you're close in against her house and her side (a walker's 0.24 m is wider
+	// than the 8 in deck): kept inside her by her sheer, not by her breadth less your width
+	clampToDeck( p, r ) {
+
+		const L = this.lines;
+		// (and onto her foredeck, out to its usual reach over a few steps, not at a stroke)
+		if ( Math.abs( p.x ) > SIDE.from && p.z > WAY_UP.z0 - 0.1 && p.z < L.houseFront + SIDE.ease && p.y > WAY_UP.lower.top - 0.08 ) r = Math.min( r, SIDE.r + ( r - SIDE.r ) * Math.max( 0, p.z - L.houseFront ) / SIDE.ease );
+		super.clampToDeck( p, r );
+
+	}
+
+	// the foot or head of a climb you're near, on the deck you're on, or null. { ladder, top } (as the sportfisher's)
+	ladderAt( p ) {
+
+		for ( const l of this.ladders ) {
+
+			if ( Math.hypot( p.x - l.on.x, p.z - l.on.z ) < 0.45 && Math.abs( p.y - l.on.y ) < 0.35 ) return { ladder: l, top: false };
+			if ( Math.hypot( p.x - l.off.x, p.z - l.off.z ) < 0.45 && Math.abs( p.y - l.off.y ) < 0.5 ) return { ladder: l, top: true };
+
+		}
+
+		return null;
+
+	}
+
+	climb( at ) {
+
+		return new LadderClimb( at.ladder, at.top );
+
+	}
+
+	// up her house side to her roof, from her port side deck: the fold-down steps, and the roof's grab rail
+	_buildLadders() {
+
+		const L = this.lines, z = WAY_UP.roofZ, hw = houseHalfWidth( L, z ), deck = L.sheerY( L.tAtSheerZ( z ) ) + CAP;
+		const x = hw + SIDE.r + 0.01, top = roofTopY( 0.95 );
+		return [ {
+			id: 'roof', text: 'Climb onto her roof', downText: 'Climb down to her side deck',
+			foot: new Vector3( x, deck, z ), head: new Vector3( x, roofTopY( hw ) + 0.04, z ), on: new Vector3( x, deck, z + 0.2 ), off: new Vector3( 0.95, top, z ),
+			speed: 0.7, lean: new Vector3( 0.12, 0, 0 ),
+		} ];
+
+	}
+
 	// Rough boat-frame colliders (axis-aligned in the boat frame) for a character controller.
 	_buildColliders() {
 
@@ -341,42 +425,74 @@ export class BoatModel extends Vessel {
 
 			const center = new Vector3().addVectors( min, max ).multiplyScalar( 0.5 );
 			const half = new Vector3().subVectors( max, min ).multiplyScalar( 0.5 );
-			boxes.push( { tag, center, half, walkable, solid } );
+			const b = { tag, center, half, walkable, solid };
+			boxes.push( b );
+			return b;
 
 		};
 
 		const V = ( x, y, z ) => new Vector3( x, y, z );
 		const inner = ( z ) => L.halfBreadth( L.tAtSheerZ( z ), L.deckY ) - L.shell;
 		add( 'deck', V( - inner( - 1.5 ), L.deckY - 0.1, L.zAft + L.shell ), V( inner( - 1.5 ), L.deckY, HOUSE.dash.zFace ), true, false );
-		// bulwarks in three segments following the sheer
-		for ( const [ z0, z1 ] of [ [ L.zAft, - 2.3 ], [ - 2.3, - 0.7 ], [ - 0.7, L.houseFront ] ] ) {
+		// bulwarks in segments following the sheer ((M17) the one by the steps up, to port, its own: you're close in against it as you
+		// climb, its cap the washboard you step on to)
+		const W = WAY_UP, zw = W.z0 - 0.3; // (clear of a walker on the steps)
+		for ( const [ z0, z1 ] of [ [ L.zAft, - 2.3 ], [ - 2.3, zw ], [ zw, L.houseBack ], [ L.houseBack, L.houseFront ] ] ) {
 
 			const t0 = L.tAtSheerZ( z0 ), t1 = L.tAtSheerZ( z1 );
 			const top = Math.max( L.sheerY( t0 ), L.sheerY( t1 ) ) + 0.045;
 			const xo = Math.max( L.sheerX( t0 ), L.sheerX( t1 ) );
 			const xi = Math.min( inner( z0 ), inner( z1 ) );
-			for ( const s of [ 1, - 1 ] ) add( 'bulwark', V( Math.min( s * xi, s * xo ), L.deckY, z0 ), V( Math.max( s * xi, s * xo ), top, z1 ) );
+			for ( const s of [ 1, - 1 ] ) {
+
+				const b = add( 'bulwark', V( Math.min( s * xi, s * xo ), L.deckY, z0 ), V( Math.max( s * xi, s * xo ), top, z1 ) );
+				if ( s > 0 && z0 === zw ) {
+
+					b.r = SIDE.r;
+					b.walkable = true;
+
+				}
+
+			}
 
 		}
 
 		add( 'transom', V( - L.sheerX( 0 ), L.deckY, L.zAft ), V( L.sheerX( 0 ), L.sheerY( 0 ) + 0.045, L.zAft + L.shell ) );
-		for ( const s of [ 1, - 1 ] ) {
+		// ((M17) her house's sides, in lengths following its taper, pressed close to from her side decks; and the side decks on her
+		// washboards outside them, walked, up to her foredeck)
+		// (the house's sides only to where her windshield's raked back at your shoulder: past her house's front corner you go round it
+		// as she narrows to her bow, so they stop a hand short of it)
+		const N = 8, dz = ( WALL_END( L ) - L.houseBack ) / N;
+		for ( let i = 0; i < N; i ++ ) {
 
-			const x0 = houseHalfWidth( L, L.houseBack ) - HOUSE.wallT, x1 = houseHalfWidth( L, L.houseBack );
-			add( 'houseWall', V( Math.min( s * x0, s * x1 ), L.sheerY( L.tAtSheerZ( L.houseBack ) ), L.houseBack ), V( Math.max( s * x0, s * x1 ), HOUSE.roofUnderY, L.houseFront ) );
+			const z0 = L.houseBack + i * dz, z1 = z0 + dz, hw0 = houseHalfWidth( L, ( z0 + z1 ) / 2 ), hw1 = houseHalfWidth( L, z1 ), t0 = L.tAtSheerZ( z0 ), t1 = L.tAtSheerZ( z1 );
+			const deck = L.sheerY( L.tAtSheerZ( ( z0 + z1 ) / 2 ) ) + CAP;
+			for ( const s of [ 1, - 1 ] ) {
+
+				const wall = add( 'houseWall', V( Math.min( s * ( hw1 - HOUSE.wallT ), s * hw0 ), L.sheerY( t0 ), z0 ), V( Math.max( s * ( hw1 - HOUSE.wallT ), s * hw0 ), HOUSE.roofUnderY, z1 ) );
+				wall.r = SIDE.r;
+				const xo = Math.max( L.sheerX( t0 ), L.sheerX( t1 ) );
+				add( 'sideDeck', V( Math.min( s * ( hw1 - 0.02 ), s * xo ), deck - 0.05, z0 ), V( Math.max( s * ( hw1 - 0.02 ), s * xo ), deck, i === N - 1 ? L.houseFront : z1 ), true, false );
+
+			}
 
 		}
 
+		// the steps up to it, to port
+		for ( const t of [ W.lower, W.upper ] ) add( 'steps', V( t.x0, L.deckY, W.z0 ), V( t.x1, t.top, W.z1 ), true );
+
 		const d = HOUSE.dash;
 		add( 'console', V( - d.halfW, L.deckY, d.zFace ), V( d.halfW, d.yTop, L.houseFront ) );
-		// ((M16) her windshield, and the dash no place to stand under the roof)
-		add( 'windshield', V( - 1.25, d.yTop, d.zFace ), V( 1.25, HOUSE.roofUnderY, L.houseFront ) );
+		// ((M16) her windshield, and the dash no place to stand under the roof) ((M17) as wide as her house at its front, pressed close
+		// to from her side decks)
+		const ws = houseHalfWidth( L, L.houseFront ) - 0.03;
+		add( 'windshield', V( - ws, d.yTop, d.zFace ), V( ws, HOUSE.roofUnderY, WALL_END( L ) ) ).r = SIDE.r;
 		add( 'helmSeat', V( HOUSE.helmX - 0.23, L.deckY, HOUSE.seatZ - 0.24 ), V( HOUSE.helmX + 0.23, 1.05, HOUSE.seatZ + 0.21 ) );
 		add( 'bench', V( 0.65, L.deckY, 0.075 ), V( 1.07, L.deckY + 0.47, 0.825 ), true );
 		// ((M16) something to stand on, not a wall: with your head at it, a hop in the house threw you out from under it)
 		add( 'roof', V( - 1.25, HOUSE.roofUnderY, HOUSE.roofZ0 ), V( 1.25, roofTopY( 0 ), HOUSE.roofZ1 ), true, false );
 		add( 'hauler', V( HAULER.x - 0.2, L.deckY, HAULER.z - 0.08 ), V( HAULER.x + 0.2, HAULER.y + 0.2, HAULER.z + 0.25 ) );
-		add( 'baitBarrel', V( 0.6, L.deckY, - 1.06 ), V( 1.12, L.deckY + 0.8, - 0.54 ) );
+		add( 'baitBarrel', V( 0.6, L.deckY, BARREL_Z - 0.26 ), V( 1.12, L.deckY + 0.8, BARREL_Z + 0.26 ) );
 		// foredeck steps (walkable) from the house front to the stem head
 		for ( const [ z0, z1 ] of [ [ L.houseFront, 2.4 ], [ 2.4, 3.3 ], [ 3.3, 4.15 ] ] ) {
 

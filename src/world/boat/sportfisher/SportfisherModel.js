@@ -30,6 +30,10 @@ import { SEATS } from './seats.data.js';
 
 const DEG = Math.PI / 180;
 const sstep = MathUtils.smoothstep;
+// (M17) her underwater lights' pool (_makeGlow): the lamps apart (m), the near glow's half-width and the far glow's fall (m), its
+// green (linear, at the core: an LED's 520 nm, the photographs' emerald) and the white of the core's heart, where the eye's
+// dazzled and a camera's saturated
+const POOL = { lamps: 1.1, near: 1.4, far: 7, green: [ 0.02, 0.6, 0.17 ], hot: 0.2 };
 const RPM_SHOWN = 5; // rev/s: past this the blades strobe
 const WHEEL_TURNS = 0.75;
 
@@ -483,20 +487,55 @@ export class SportfisherModel extends Vessel {
 
 		if ( ! this._glowShape ) {
 
-			// (a dim pool, fading out smoothly: the sea's lit from under, not painted. A little above the water, so the swell
-			// doesn't cut it)
-			// (and down to the water against her, or the part of her transom seen through it lights up as a hard band)
-			const N = 28, RINGS = 10, RADIUS = 13, pos = [], col = [], idx = [];
-			const CZ = - this.lines.length / 2 - 1, overSea = 0.4, atHull = 0.06;
-			const heightAt = ( x, z ) => atHull + ( overSea - atHull ) * sstep( Math.hypot( Math.max( 0, Math.abs( x ) - 2.4 ), Math.max( 0, this.lines.zAft - ( z + CZ ) ) ), 0.6, 4 );
-			pos.push( 0, heightAt( 0, 0 ) - overSea, 0 );
-			col.push( 0.012, 0.1, 0.06 );
+			// ((M17) after photographs of real ones, from the side and from above: docs/m17/looks.md.) Her transom's lights (two, 1.1 m
+			// apart, a little under her waterline) shine aft, as a transom series does: a hot core at each, then the water lit a
+			// saturated green, brightest a few metres astern and going off over about fifteen to twenty as green light does in clear blue
+			// water (POOL: the near glow's half-width, m, and the far glow's fall, m), a little light spilling to her sides and
+			// none forward under her. The sea lit from under it, not painted: additive, a little above the water so the swell
+			// doesn't cut it, and down to the water against her, or her transom seen through it lights up as a hard band
+			const N = 36, RINGS = 16, RADIUS = 22, pos = [], col = [], idx = [], lamps = [ - POOL.lamps / 2, POOL.lamps / 2 ];
+			const overSea = 0.4, atHull = 0.06;
+			// (how far from her hull: aft of her transom, or out from her side)
+			const heightAt = ( x, z ) => atHull + ( overSea - atHull ) * sstep( Math.hypot( Math.max( 0, Math.abs( x ) - 2.4 ), Math.max( 0, - z ) ), 0.6, 4 );
+			// (the light at ( x, z ), her transom at z = 0 and her stern toward - z, 0..1 at the core)
+			const lit = ( x, z ) => {
+
+				let k = 0;
+				for ( const lx of lamps ) {
+
+					const dx = x - lx, dz = z + 0.1, r = Math.hypot( dx, dz ) + 1e-6, aft = Math.max( 0, - dz / r );
+					const lobe = Math.pow( 0.18 + 0.82 * aft, 1.6 ) * ( dz > 0.2 ? Math.exp( - ( dz - 0.2 ) / 0.6 ) : 1 );
+					k += lobe * ( 0.62 / ( 1 + ( r / POOL.near ) ** 2 ) + 0.38 * Math.exp( - r / POOL.far ) );
+
+				}
+
+				return Math.min( 1, k / 1.2 );
+
+			};
+
+			// a ring of points about the transom, stretched aft
+			const at = ( r, a ) => {
+
+				const x = Math.cos( a ) * r * 0.75, z = Math.sin( a ) * r;
+				return [ x, z < 0 ? z : z * 0.35 ];
+
+			};
+
+			// (t: how far out the ring is, 0..1: going to nothing at the mesh's edge, so it has none)
+			const put = ( x, z, t = 0 ) => {
+
+				const k = lit( x, z ) * ( 1 - t ** 4 ) ** 2, hot = k * k * k;
+				pos.push( x, heightAt( x, z ) - overSea, z );
+				col.push( POOL.green[ 0 ] * k + POOL.hot * hot, POOL.green[ 1 ] * k + POOL.hot * hot, POOL.green[ 2 ] * k + POOL.hot * hot );
+
+			};
+
+			put( 0, - 0.4 );
 			for ( let r = 1; r <= RINGS; r ++ ) for ( let i = 0; i < N; i ++ ) {
 
-				const a = i / N * Math.PI * 2, t = r / RINGS, k = Math.exp( - 4 * t * t ) * ( 1 - t );
-				const x = Math.cos( a ) * RADIUS * t, z = Math.sin( a ) * RADIUS * t;
-				pos.push( x, heightAt( x, z ) - overSea, z );
-				col.push( 0.012 * k, 0.1 * k, 0.06 * k );
+				// (rings closer together near the lamps, where the light changes fastest)
+				const t = r / RINGS;
+				put( ...at( RADIUS * t * t, i / N * Math.PI * 2 ), t );
 
 			}
 
@@ -519,9 +558,10 @@ export class SportfisherModel extends Vessel {
 
 		}
 
-		const m = new Mesh( this._glowShape, new MeshBasicMaterial( { vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false, fog: false } ) );
+		// (its light as it is, as the island's lamps' glares are: never tone-mapped up with the night's exposure, where its core went white)
+		const m = new Mesh( this._glowShape, new MeshBasicMaterial( { vertexColors: true, transparent: true, blending: AdditiveBlending, depthWrite: false, fog: false, toneMapped: false } ) );
 		m.name = name;
-		m.position.set( 0, 0.4, - this.lines.length / 2 - 1 ); // (under her cockpit's sole)
+		m.position.set( 0, 0.4, this.lines.zAft ); // (her transom's lights)
 		m.renderOrder = 6;
 		return m;
 

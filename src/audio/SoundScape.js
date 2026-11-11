@@ -54,6 +54,7 @@ import { BANK } from './soundBank.js';
 import { SURF_HURRICANE } from '../game/Weather.js';
 import { G } from '../core/Globals.js';
 import { seaGain, openWater, roarCut, roarCarry } from './OpenSea.js';
+import { TAIL, BOLT, pushShare, pushRate, tailDb, tailSlice, boltDb } from './FlatsSound.js';
 
 const clamp = ( v, a, b ) => ( v < a ? a : v > b ? b : v );
 const lerp = ( a, b, t ) => a + ( b - a ) * t;
@@ -187,6 +188,11 @@ export const MIX = {
 	whitecap: - 30,
 	windSea: - 36,
 	birdPlunge: - 32,
+	// (M17) the flats (FlatsSound.js), chosen by ear: a bonefish's tail slapping the top 10 m off (a permit's 3 dB more); a school of 12
+	// rushing off through shallow water 15 m off; the kayak's own water at her seat at her hull speed on still water
+	tailSplash: - 33,
+	schoolBolt: - 26,
+	kayakPush: - 40,
 };
 
 // (M12) thunder from far off: it fades from the first distance (m: refracted up over the listener) and is
@@ -205,7 +211,7 @@ const SHUTTER_WIND = 9;
 // from fade[ 0 ] to fade[ 1 ] (the lobster boat has the one recording, opened up); db: at the helm at idle, at full rpm;
 // rate: of the running bed at rpm 0, and what full rpm adds (the recordings are of a cruise); lp: the top of what's
 // heard at rpm 0, and what full rpm adds: a diesel's below deck and dark, an outboard's out in the open behind you
-const ENGINES = {
+export const ENGINES = {
 	lobster: { run: 'boat_engine', db: [ MIX.engineIdle, MIX.engineRun ], rate: [ 0.8, 0.85 ], lp: [ 900, 6500 ] },
 	console: { starter: 'outboard_start', idle: 'outboard_idle', run: 'outboard_run', fade: [ 0.18, 0.4 ], db: [ - 28, - 21 ], rate: [ 0.76, 0.48 ], lp: [ 1800, 8000 ] },
 	twin: { starter: 'outboard_start', idle: 'twin_idle', run: 'twin_run', fade: [ 0.18, 0.4 ], db: [ - 27, - 20 ], rate: [ 0.74, 0.46 ], lp: [ 1800, 8000 ] },
@@ -213,8 +219,9 @@ const ENGINES = {
 	kayak: null,
 };
 // (M16) an outboard going by (passingOutboard): her recording, m she's heard to, m where she's at its level, its level (LUFS) at idle (a
-// flat-out one's 6 dB more), its rate at no throttle and what full adds
-const PASSING = { bank: 'outboard_run', range: 700, ref: 12, db: - 27, rate: [ 0.7, 0.45 ] };
+// flat-out one's 6 dB more), its rate at no throttle and what full adds. ((M17) Her level by ear: 9 dB under M16's -27, so that flat
+// out 12 m off she's 9 dB under your own console flat out at her helm, as published helm and pass-by levels have it.)
+export const PASSING = { bank: 'outboard_run', range: 700, ref: 12, db: - 36, rate: [ 0.7, 0.45 ] };
 // which of them a boat has: the console's two outboards are her own sound
 export const engineOf = ( id, twin ) => id === 'console' && twin ? 'twin' : id;
 const ENGINE_BEDS = [ 'boat_engine', 'outboard_idle', 'outboard_run', 'twin_idle', 'twin_run', 'diesels_idle', 'diesels_run' ];
@@ -222,6 +229,8 @@ const ENGINE_BEDS = [ 'boat_engine', 'outboard_idle', 'outboard_run', 'twin_idle
 // sign goes from 27); a landing on the sand or the grass this much quieter (dB), slowed and its
 // top cut)
 const SHEET_WIND = 24, SHEET_SOFT = 8;
+// (M17) the flats' tails and bolts: loaded once you're on or near the flats (App's state.flats)
+const FLATS_SET = [ 'tail_splash', 'school_bolt' ];
 
 // forest bird sprite: slices per source recording (a singer sings from one of them)
 const FOREST = [ [ 0, 1, 2, 3, 4, 5, 6 ], [ 7, 8, 9, 10, 11, 12 ] ];
@@ -260,12 +269,12 @@ const STEP = {
 };
 
 // max simultaneous one-shot voices per category (oldest is faded out beyond this)
-const LIMITS = { turtle: 3, hatch: 2, radio: 1, step: 3, swim: 2, splash: 3, trans: 2, hull: 3, gull: 2, crash: 7, wash: 5, back: 5, bird: 4, tern: 2, whale: 4, rod: 4, fish: 3, coin: 1, net: 6, thunder: 2, start: 1, bucket: 2, creak: 2, shutter: 2, drip: 2, sheet: 3, whitecap: 4, plunge: 3 };
+const LIMITS = { tail: 3, bolt: 2, turtle: 3, hatch: 2, radio: 1, step: 3, swim: 2, splash: 3, trans: 2, hull: 3, gull: 2, crash: 7, wash: 5, back: 5, bird: 4, tern: 2, whale: 4, rod: 4, fish: 3, coin: 1, net: 6, thunder: 2, start: 1, bucket: 2, creak: 2, shutter: 2, drip: 2, sheet: 3, whitecap: 4, plunge: 3 };
 // Salt Life: All the Spaces allows 16 / 32 / 64 sounds at once by device tier. Beds and one-shots
 // together stay under it (a new one-shot is left out when it's full), and the low tier keeps fewer of
 // each kind so the surf can't crowd out the footsteps.
 const VOICES = { low: 14, mid: 30, high: 62 };
-const LOW_LIMITS = { ...LIMITS, turtle: 2, hatch: 1, step: 2, splash: 2, hull: 2, gull: 1, crash: 3, wash: 2, back: 2, bird: 2, tern: 1, whale: 2, rod: 3, fish: 2, net: 3, thunder: 1, creak: 1, shutter: 1, drip: 1, sheet: 2, whitecap: 1, plunge: 1 };
+const LOW_LIMITS = { ...LIMITS, tail: 1, bolt: 1, turtle: 2, hatch: 1, step: 2, splash: 2, hull: 2, gull: 1, crash: 3, wash: 2, back: 2, bird: 2, tern: 1, whale: 2, rod: 3, fish: 2, net: 3, thunder: 1, creak: 1, shutter: 1, drip: 1, sheet: 2, whitecap: 1, plunge: 1 };
 // a bed that has been silent this long (s) stops, freeing its voice (it starts again when wanted)
 const BED_IDLE = 4;
 
@@ -349,6 +358,7 @@ export class SoundScape {
 
 		};
 		this._walls = 0; // (M13) dB the shelter's walls take off the storm (WALLS, while you're inside)
+		this._tailAt = - 1; // ((M17) when a tail was last heard: TAIL.gap)
 		this._fakeT = 3;
 		this._warned = new Set();
 		this.env = {
@@ -1115,7 +1125,7 @@ export class SoundScape {
 			under_reef: this.under, birds_dawn: this.above, whale_song: this.songPan,
 			boat_engine: this.engineLP, outboard_idle: this.engineLP, outboard_run: this.engineLP, twin_idle: this.engineLP, twin_run: this.engineLP, diesels_idle: this.engineLP, diesels_run: this.engineLP,
 			reel_electric: this.rod, radio_hiss: this.above, hauler: this.boatSum,
-			boat_rush: this.boatSum, boat_lap: this.boatSum,
+			boat_rush: this.boatSum, boat_lap: this.boatSum, kayak_push: this.boatSum,
 			reel_wind: this.rod, reel_drag: this.rod, line_strain: this.rod,
 			rain_light: this.rainLP, rain_heavy: this.rainLP, rain_boat: this.above,
 			// (M11) on what it falls on
@@ -1683,6 +1693,13 @@ export class SoundScape {
 			if ( this._boatWanted ) this._wantEngine();
 
 		}
+		// ((M17) aboard the kayak: her push ready before she's paddled)
+		if ( sound === 'kayak' && e.aboard && ! this._pushWanted ) {
+
+			this._pushWanted = true;
+			this._want( 'kayak_push' );
+
+		}
 
 		// (M10) the hull you're aboard: the water in her bilge (a share of what reaches the engine), her pump
 		// at work, the keel sliding along the bottom (m/s), her wear and how hard she's working in a sea
@@ -1705,6 +1722,15 @@ export class SoundScape {
 		er.overhead = clamp( num( ro.overhead, 0 ), 0, 1 ); // ((M14) and how much within arm's reach, and how much of a rock's face is round you)
 		er.walled = clamp( num( ro.walled, 0 ), 0, 1 );
 		e.radio = !! s.radio;
+		// ((M17) on or near the flats: their tails' and bolts' sounds ready)
+		e.flats = !! s.flats;
+		if ( e.flats && ! this._flatsWanted ) {
+
+			this._flatsWanted = true;
+			for ( const n of FLATS_SET ) this._want( n );
+
+		}
+
 		e.onLand = typeof s.coastDistance === 'number' && Number.isFinite( s.coastDistance ) ? s.coastDistance < 0 : true;
 		if ( e.u > 0.01 || eb.active ) e.onLand = false;
 
@@ -1928,6 +1954,9 @@ export class SoundScape {
 		// ((M15) the lapping and the slaps as big as the sea she's in: seaBig, 1 a fair day's open sea)
 		const big = clamp( e.seaBig, 0.4, 3 ), bigDb = 8 * Math.log10( big ) * 2;
 		this._bed( 'boat_lap', nearBoat ? dB( MIX.boatLap + bigDb * 0.5 ) * ( 1 - smooth( 1.5, 5, sp ) ) / dB( BANK.boat_lap.lufs ) : 0, now, 0.5 );
+		// ((M17) the kayak's own water through still water, by her speed: at her seat, or a little way off her; none under the water)
+		const kayak = eb.sound === 'kayak', pushAt = kayak && e.u < 0.5 ? ( e.aboard ? 1 : 1 - smooth( 3, 15, bd ) ) : 0;
+		this._bed( 'kayak_push', pushAt > 0 ? dB( MIX.kayakPush ) * pushShare( sp, e.wind ) * pushAt / dB( BANK.kayak_push.lufs ) : 0, now, 0.3, pushRate( sp ) );
 		if ( nearBoat && sp > 1.2 && e.u < 0.5 ) {
 
 			this._slapT -= dt;
@@ -2026,6 +2055,31 @@ export class SoundScape {
 		const e = this.env;
 		if ( ! this.enabled || e.u > 0.5 || Math.hypot( x - e.lx, z - e.lz ) > PLUNGE_HEARD ) return;
 		this._shotAt( 'fish_splash', 'plunge', x, y, z, MIX.birdPlunge + 12 * Math.log10( clamp( k / 0.35, 0.3, 3 ) ) + ( Math.random() - 0.5 ) * 3, 1.5 - 0.5 * clamp( k, 0, 1 ) + Math.random() * 0.15, 0, 10 );
+
+	}
+
+	// (M17) a fish's tail breaking the top on the flats at ( x, y, z ) (world/Fish.js' onTail, where its ring's drawn; out: how far
+	// it's out of the water, m): now and then its slap and the water running off it (TAIL.chance of its rings), within TAIL.heard
+	tailSplash( x, y, z, out = TAIL.out, permit = false ) {
+
+		const e = this.env;
+		if ( ! this.enabled || e.u > 0.5 || Math.hypot( x - e.lx, z - e.lz ) > TAIL.heard ) return;
+		const now = this.ctx.currentTime;
+		if ( now - this._tailAt < TAIL.gap || Math.random() >= TAIL.chance ) return;
+		this._want( 'tail_splash' );
+		const pick = tailSlice( permit, Math.random() );
+		const v = this._shotAt( 'tail_splash', 'tail', x, y, z, MIX.tailSplash + tailDb( out, permit ) + ( Math.random() - 0.5 ) * 4, ( permit ? 0.86 : 0.92 ) + Math.random() * 0.16, 0, TAIL.ref, 1, pick );
+		if ( v ) this._tailAt = now;
+
+	}
+
+	// (M17) a spooked school rushing off through shallow water at ( x, y, z ) (world/Fish.js' onBolt, the moment it bolts; n: how many)
+	schoolBolt( x, y, z, n = BOLT.school ) {
+
+		const e = this.env;
+		if ( ! this.enabled || e.u > 0.5 || n <= 0 || Math.hypot( x - e.lx, z - e.lz ) > BOLT.heard ) return;
+		this._want( 'school_bolt' );
+		this._shotAt( 'school_bolt', 'bolt', x, y, z, MIX.schoolBolt + boltDb( n ) + ( Math.random() - 0.5 ) * 3, 0.94 + Math.random() * 0.12, 0, BOLT.ref );
 
 	}
 

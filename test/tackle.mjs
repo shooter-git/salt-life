@@ -13,7 +13,7 @@ import { GameState } from '../src/game/GameState.js';
 import * as Bites from '../src/game/Bites.js';
 import { atHook, baitFits, hookOf, LEADER_IDS, leaderFor, leaderOn, leaderRisk, pickOnRig, rigDelay, rigWeight, towTaste, waitOnRig } from '../src/game/rigs/Presentation.js';
 import { fishSeen, glareLeft } from '../src/game/rigs/Glasses.js';
-import { HOLD_KG, Rigs } from '../src/game/rigs/Rigs.js';
+import { ELECTRIC, HOLD_KG, Rigs } from '../src/game/rigs/Rigs.js';
 import { DAYS_TRACKS } from '../src/game/Seaworthy.js';
 import { letGo } from '../src/game/Trophies.js';
 import { FishingRod } from '../src/game/FishingRod.js';
@@ -29,6 +29,14 @@ const ok = ( c, what ) => {
 };
 
 const { habitatAt } = Bites;
+// ((M17) the gear's own figures, the lines at their labels: 30 lb braid on the conventional reel, 60 lb on the two-speed)
+const tackleOf = ( line, reel ) => {
+
+	const s = gearStats( { ...defaultUpgrades(), line, reel } );
+	return { lineKg: s.lineKg, reelSpeed: s.reelSpeed, dragKg: s.dragKg, spoolM: s.spoolM, twoSpeed: !! s.twoSpeed };
+
+};
+const TACKLE = { conv: tackleOf( 2, 2 ), big: tackleOf( 3, 3 ) };
 // a fish's whole weight on a hook: the fish table's say of it (Bites.hookWeight) and ours
 const weight = ( rig, id, hour = 12 ) => rigWeight( rig, id ) * ( FISH[ id ] ? Bites.hookWeight( id, rig, hour ) : 1 );
 let seed = 5;
@@ -132,7 +140,7 @@ const among = ( s, ...ids ) => ids.reduce( ( a, id ) => a + ( s[ id ] || 0 ), 0 
 		let lost = 0;
 		for ( let i = 0; i < 80; i ++ ) {
 
-			const g = new CatchMinigame( { species: 'barracuda', kg: 8, lineKg: 26, reelSpeed: 2.2, dragKg: 12, holdKg: 10, spoolM: 350, distance: 20, rng, cut } );
+			const g = new CatchMinigame( { species: 'barracuda', kg: 8, ...TACKLE.conv, holdKg: HOLD_KG.hand, distance: 20, rng, cut } );
 			let st = 'fighting';
 			while ( st === 'fighting' && g.time < 300 ) st = g.update( 1 / 30, g.tension < 0.68 && g.surge < 0.6 );
 			if ( st === 'cut' ) lost ++;
@@ -175,22 +183,24 @@ const among = ( s, ...ids ) => ids.reduce( ( a, id ) => a + ( s[ id ] || 0 ), 0 
 		return r;
 
 	};
-	const gear = { lineKg: 50, reelSpeed: 2.6, dragKg: 24, spoolM: 600, twoSpeed: true };
+	const gear = TACKLE.big;
 	const chair = fight( { ...gear, holdKg: HOLD_KG.chair, chair: true } );
 	const stand = fight( { ...gear, holdKg: HOLD_KG.harness } );
-	const light = fight( { lineKg: 26, reelSpeed: 2.2, dragKg: 12, holdKg: HOLD_KG.hand, spoolM: 350 } );
+	const light = fight( { ...TACKLE.conv, holdKg: HOLD_KG.hand } );
 	const mash = fight( { ...gear, holdKg: HOLD_KG.chair, chair: true }, () => true );
-	console.log( `     200 kg blue marlin. In the chair: ${ chair.caught | 0 } of 30 landed, ${ ( chair.time / 60 ).toFixed( 1 ) } min, ${ chair.far.toFixed( 0 ) } m out at most. Standing on the same tackle: ${ stand.caught | 0 }. On 30 lb and a conventional reel: ${ light.caught | 0 }` );
+	console.log( `     200 kg blue marlin. In the chair: ${ chair.caught | 0 } of 30 landed, ${ ( chair.time / 60 ).toFixed( 1 ) } min, ${ chair.far.toFixed( 0 ) } m out at most. Standing on the same tackle: ${ stand.caught | 0 }, ${ ( stand.time / 60 ).toFixed( 1 ) } min. On 30 lb and a conventional reel: ${ light.caught | 0 }` );
 	ok( chair.caught >= 22 && chair.time > 240 && chair.time < 900, 'a 200 kg fish is beaten from the chair, in minutes, with care' );
 	ok( chair.far > 200, '... having been hundreds of metres out' );
-	ok( ( stand.caught | 0 ) < chair.caught / 2 && ( stand.spooled | 0 ) > 15, 'standing up it takes all your line' );
+	// ((M17) on a real 60 lb line its full drag's 14 kg, within the harness's 18: standing holds the drag the chair does, and
+	// it's your arms that give out, so it's a far longer fight. docs/m17/lines.md)
+	ok( stand.time > chair.time * 2, 'standing up it takes far longer: your arms give out' );
 	ok( ( light.caught | 0 ) === 0, 'on lighter tackle there\'s no stopping it' );
 	ok( ( mash.snapped | 0 ) > 25, 'hold the reel into its runs and the line goes' );
-	const g = new CatchMinigame( { species: 'blueMarlin', kg: 200, ...gear, holdKg: 18, distance: 60, rng } );
+	const g = new CatchMinigame( { species: 'blueMarlin', kg: 200, ...gear, holdKg: HOLD_KG.harness, distance: 60, rng } );
 	for ( let i = 0; i < 30 * 30; i ++ ) g.update( 1 / 30, false );
 	ok( g.overload === 0 && g.tension < 0.6, 'with the reel let be the drag gives and the line\'s in no danger' );
 	// the drag leaves a fish within it as it was
-	const a = new CatchMinigame( { species: 'grunt', kg: 0.8, lineKg: 26, reelSpeed: 1.1, distance: 18, rng: () => 0.4 } ), b = new CatchMinigame( { species: 'grunt', kg: 0.8, lineKg: 26, reelSpeed: 1.1, distance: 18, rng: () => 0.4, dragKg: 12, holdKg: 10, spoolM: 350 } );
+	const L = TACKLE.conv.lineKg, a = new CatchMinigame( { species: 'grunt', kg: 0.8, lineKg: L, reelSpeed: 1.1, distance: 18, rng: () => 0.4 } ), b = new CatchMinigame( { species: 'grunt', kg: 0.8, lineKg: L, reelSpeed: 1.1, distance: 18, rng: () => 0.4, dragKg: TACKLE.conv.dragKg, holdKg: HOLD_KG.hand, spoolM: 350 } );
 	for ( let i = 0; i < 600; i ++ ) {
 
 		a.update( 1 / 60, i % 200 < 120 );
@@ -199,11 +209,11 @@ const among = ( s, ...ids ) => ids.reduce( ( a, id ) => a + ( s[ id ] || 0 ), 0 
 	}
 
 	ok( Math.abs( a.distance - b.distance ) < 0.01 && Math.abs( a.tension - b.tension ) < 0.01, 'a little fish on a big reel fights just as it did' );
-	const deep = new CatchMinigame( { species: 'blueMarlin', kg: 40, lineKg: 50, reelSpeed: 4.5, dragKg: 24, holdKg: 40, spoolM: 900, distance: 500, hookM: 500, electric: true, twoSpeed: true, chair: true, rng } );
+	const deep = new CatchMinigame( { species: 'blueMarlin', kg: 40, lineKg: TACKLE.big.lineKg, reelSpeed: ELECTRIC.speed, dragKg: ELECTRIC.drag, holdKg: HOLD_KG.chair, spoolM: ELECTRIC.spool, distance: 500, hookM: 500, electric: true, twoSpeed: true, chair: true, rng } );
 	let st = 'fighting';
 	while ( st === 'fighting' && deep.time < 1200 ) st = deep.update( 1 / 30, true );
 	ok( deep.hookM < 5, `a fish on the electric reel comes up as it's wound in (from 500 m, ${ deep.time.toFixed( 0 ) } s, ${ st })` );
-	const away = new CatchMinigame( { species: 'grunt', kg: 0.8, lineKg: 26, distance: 20, rng: () => 0.5 } );
+	const away = new CatchMinigame( { species: 'grunt', kg: 0.8, lineKg: TACKLE.conv.lineKg, distance: 20, rng: () => 0.5 } );
 	const d0 = away.distance;
 	away.update( 1, false, 3 );
 	ok( away.distance > d0 + 2.5, 'a boat running from a fish takes line out' );
@@ -267,10 +277,10 @@ const among = ( s, ...ids ) => ids.reduce( ( a, id ) => a + ( s[ id ] || 0 ), 0 
 
 	const u = defaultUpgrades(), base = gearStats( u );
 	ok( base.dragKg === null && base.spoolM > 100 && base.landKg > 0 && base.swimMul === 1 && base.breathS === 50 && ! base.polarized && ! base.lifeJacket, 'what you start with' );
-	const top = gearStats( { ...u, rod: 3, reel: 3, leader: 3, lures: 3, landing: 2, glasses: 1, diveKit: 3, safety: 2 } );
-	ok( top.standUp && top.twoSpeed && top.dragKg >= 20 && top.spoolM >= 500 && top.leader === 3 && top.lures === 3 && top.landKg >= 200 && top.dehooker && top.tagKit && top.polarized && top.airS > 0 && top.flares && top.epirb && top.lifeJacket, 'the top of each' );
+	const top = gearStats( { ...u, rod: 3, reel: 4, leader: 3, lures: 3, landing: 2, glasses: 1, diveKit: 3, safety: 2 } );
+	ok( top.standUp && top.twoSpeed && top.dragKg >= 18 && top.spoolM >= 800 && top.leader === 3 && top.lures === 3 && top.landKg >= 200 && top.dehooker && top.tagKit && top.polarized && top.airS > 0 && top.flares && top.epirb && top.lifeJacket, 'the top of each' );
 	for ( const k of [ 'leader', 'lures', 'landing', 'glasses', 'diveKit', 'safety' ] ) ok( UPGRADES[ k ] && ! UPGRADES[ k ].on, `${ k } is your own gear, with you on any boat` );
-	ok( UPGRADES.rod.levels.length === 4 && UPGRADES.reel.levels.length === 4 && UPGRADES.rod.levels[ 3 ].cost === 600 && UPGRADES.reel.levels[ 3 ].cost === 900, 'the rod and the reel have their fourth level, at the doc\'s prices' );
+	ok( UPGRADES.rod.levels.length === 4 && UPGRADES.reel.levels.length === 5 && UPGRADES.rod.levels[ 3 ].cost === 600 && UPGRADES.reel.levels[ 3 ].cost === 900 && UPGRADES.reel.levels[ 4 ].cost === 1200, 'the rod has its fourth level and the reel its fourth and (M17) fifth, at the doc\'s prices' );
 	ok( UPGRADES.leader.levels.map( ( l ) => l.cost ).join() === '0,40,60,90' && UPGRADES.lures.levels.map( ( l ) => l.cost ).join() === '0,50,90,180' && UPGRADES.landing.levels.map( ( l ) => l.cost ).join() === '0,60,80' && UPGRADES.diveKit.levels.map( ( l ) => l.cost ).join() === '0,80,220,600', 'the rest at the doc\'s prices' );
 	const S = new GameState( { load: () => null, save() {} } );
 	S.money = 100;
@@ -342,7 +352,7 @@ const among = ( s, ...ids ) => ids.reduce( ( a, id ) => a + ( s[ id ] || 0 ), 0 
 // ---- the glasses: as physics has it, the higher you are the more they show you
 {
 
-	ok( glareLeft( 37 * Math.PI / 180 ) < 0.1 && glareLeft( 0 ) >= 0.45, 'they take most of the glare at Brewster\'s angle, half of it along the surface' );
+	ok( glareLeft( 37 * Math.PI / 180 ) < 0.1 && glareLeft( 0 ) >= 0.45, 'they take most of the glare at Brewster\'s angle, little of it along the surface (M17: Fresnel\'s)' );
 	ok( fishSeen( 3, 12 ) > 0.8 && fishSeen( 3, 60 ) === 0, 'from the deck you see a fish close to, not 60 m off' );
 	ok( fishSeen( 14, 60 ) > 0.8 && fishSeen( 14, 120 ) > 0, 'from the tower, out to more than 100 m' );
 	ok( fishSeen( 40, 300 ) === 0, 'but not for ever' );
@@ -382,7 +392,7 @@ const water = ( o ) => habitatAt( { reefDist: 4000, pierDist: 9000, ...o } );
 	S.pickLeader( 'wire' );
 	const J = JSON.parse( JSON.stringify( S.toJSON() ) );
 	ok( J.leaderPick === 'wire', 'it saves' );
-	ok( ! /lever/i.test( UPGRADES.reel.levels[ 3 ].label ), 'the reel\'s label promises no lever: its low gear\'s automatic' );
+	ok( UPGRADES.reel.levels.every( ( r ) => ! /lever/i.test( r.label ) ), 'no reel\'s label promises a lever: the two-speeds\' low gear\'s automatic' );
 
 }
 
@@ -422,7 +432,7 @@ const water = ( o ) => habitatAt( { reefDist: 4000, pierDist: 9000, ...o } );
 
 		const T = stub( stats ).fightTerms( { species, kg } );
 		let r = 11;
-		const f = new CatchMinigame( { species, kg, ...T, lineKg: 50, reelSpeed: 2.6, dragKg: 24, holdKg: 40, chair: true, spoolM: 600, twoSpeed: true, distance: 60, rng: () => ( ( r = ( r * 1664525 + 1013904223 ) >>> 0 ) / 4294967296 ) } );
+		const f = new CatchMinigame( { species, kg, ...T, ...TACKLE.big, holdKg: HOLD_KG.chair, chair: true, distance: 60, rng: () => ( ( r = ( r * 1664525 + 1013904223 ) >>> 0 ) / 4294967296 ) } );
 		let st = 'fighting';
 		// (reeling except on the runs)
 		while ( st === 'fighting' && f.time < 3000 ) st = f.update( 1 / 30, f.surge < 0.5 );

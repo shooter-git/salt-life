@@ -6,6 +6,11 @@ export const G = {
 	time: { value: 0 }, // simulation time (s)
 	dt: { value: 1 / 60 },
 	seaLevel: { value: 0 },
+	// (M17) the tide's share of it (m about mean sea level: IslandClock.tideAt; the rest's a hurricane's surge)
+	tide: { value: 0 },
+	// (M17) the wet line: the highest the sea's stood lately (world/shore/Tide.js's wetLine, and a surge's): the ground,
+	// the rocks, the piles and the mangroves' roots below it still wet from it
+	tideWet: { value: 0 },
 	// sun (or moon at night) direction, pointing toward the light
 	sunDir: { value: new Vector3( 0.3, 0.6, - 0.7 ).normalize() },
 	sunColor: { value: new Color( 1, 1, 1 ) },

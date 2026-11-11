@@ -198,7 +198,8 @@ check( breezy.north >= NORTH.day && breezy.north < NORTH.big && blustery.north >
 
 }
 
-check( biteHint( 'pompano' ) === 'in the surf' && biteHint( 'snook' ) === 'in the mangrove creek, at dawn and dusk', `Joe's hints: pompano "${ biteHint( 'pompano' ) }", snook "${ biteHint( 'snook' ) }"` );
+// ((M17) each kind's own line, FishTable's HINTS: test/life-list.mjs)
+check( /surf/.test( biteHint( 'pompano' ) ) && /mangrove creek/.test( biteHint( 'snook' ) ) && /dawn and dusk/.test( biteHint( 'snook' ) ), `Joe's hints: pompano "${ biteHint( 'pompano' ) }", snook "${ biteHint( 'snook' ) }"` );
 
 console.log( failed ? `${ failed } failed` : 'all passed' );
 process.exit( failed ? 1 : 0 );

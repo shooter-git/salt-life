@@ -7,6 +7,7 @@ import { KayakLines } from './KayakLines.js';
 import { kayakBody, paddleGeometry } from './KayakHull.js';
 import { KAYAK_HANDLING, Stroke } from './Paddle.js';
 import { dryFrom, layOn, waterFrom } from './Shore.js';
+import { TIDE_HIGHEST } from '../../../game/IslandClock.js';
 import { Drops } from './Drops.js';
 import { TUMBLE_B, capsizeHeel, breakerCapsizes, spillShare, climbSeconds, soakStep, SOAKED } from './Capsize.js';
 import { seenInWater } from '../../../materials/SeenInWater.js';
@@ -30,6 +31,10 @@ const HOME = { x: 44, z: - 24 }; // m
 // splashes, you in her, a capsize and righting her, launching and landing, getting soaked.
 const showOf = ( s ) => ( { cooler: ! ( s.holdKg > 12 ), crate: s.holdKg > 12, puck: !! s.finder, trolley: s.anchorM > 0 || !! s.trolley } );
 const LEFT_TURNED = 0.7;
+// (M17) she's pulled up past the high-water mark, the most the tide reaches (on whatever surge there is), so the flood
+// comes to her and goes, and doesn't float her off; and the way up from low water's longer (m: dryFrom, waterFrom)
+const markOf = () => Math.max( G.seaLevel.value, G.seaLevel.value - G.tide.value + TIDE_HIGHEST );
+const UP_THE_SAND = 40, DOWN_THE_SAND = 60;
 
 export class KayakModel extends Vessel {
 
@@ -252,7 +257,7 @@ export class KayakModel extends Vessel {
 		this._settle = GRACE;
 		if ( ctl.beached && ! this.sliding ) {
 
-			const to = waterFrom( ctl.terrain, G.seaLevel.value, ctl.position.x, ctl.position.z );
+			const to = waterFrom( ctl.terrain, G.seaLevel.value, ctl.position.x, ctl.position.z, DOWN_THE_SAND );
 			if ( to ) this.sliding = { x0: ctl.position.x, z0: ctl.position.z, h0: ctl.getYaw(), x1: to.x, z1: to.z, h1: to.heading, t: 0, T: MathUtils.clamp( to.metres / 2, 0.7, 5.5 ) };
 
 		}
@@ -268,7 +273,7 @@ export class KayakModel extends Vessel {
 		if ( now > this._canT ) {
 
 			this._canT = now + 300;
-			this._can = !! dryFrom( ctl.terrain, G.seaLevel.value, ctl.position.x, ctl.position.z );
+			this._can = !! dryFrom( ctl.terrain, markOf(), ctl.position.x, ctl.position.z, UP_THE_SAND );
 
 		}
 
@@ -279,7 +284,7 @@ export class KayakModel extends Vessel {
 	// getting out: onto what's there (target: Player.ashoreTarget), and she's pulled up the sand; or over the side
 	leave( ctl, p, target ) {
 
-		const dry = target ? dryFrom( ctl.terrain, G.seaLevel.value, ctl.position.x, ctl.position.z ) : null;
+		const dry = target ? dryFrom( ctl.terrain, markOf(), ctl.position.x, ctl.position.z, UP_THE_SAND ) : null;
 		p.exitBoat( target, target ? 0 : 1 );
 		if ( ! dry ) {
 
@@ -350,7 +355,7 @@ export class KayakModel extends Vessel {
 	// fleet's berths, once they're there)
 	atHome( ctl ) {
 
-		const b = ctl.berth && ctl.berth.position, spot = dryFrom( ctl.terrain, G.seaLevel.value, b ? b.x : HOME.x, b ? b.z : HOME.z, 60 );
+		const b = ctl.berth && ctl.berth.position, spot = dryFrom( ctl.terrain, markOf(), b ? b.x : HOME.x, b ? b.z : HOME.z, 60 );
 		this.capsized = this.righting = false;
 		this._roll = this._rollTo = 0;
 		this.body.rotation.z = 0;

@@ -5,6 +5,7 @@ import { TOW } from './Gear.js';
 import { farOff } from './Units.js';
 import { LEFT, RIGHT, OPEN_QUOTE, CLOSE_QUOTE } from '../core/Glyphs.js';
 import { canJob, canWords, deliverCan, fuelOf, pearlCall, pearlJob, towToPearl } from './Help.js';
+import { reachTo } from './Seaworthy.js';
 
 // (M15) The VHF at the helm (R, the pad's X, the Radio button; on the boat's dash its set: world/boat/Wheelhouse.js,
 // its display drawn by Instruments.js from Radio.reading). Its panel has two things on it:
@@ -16,7 +17,8 @@ import { canJob, canWords, deliverCan, fuelOf, pearlCall, pearlJob, towToPearl }
 //   - Marta, on channel 16: her tow in, called for from wherever you are (Game.towJob( true )): what it'll
 //     cost and how long she'll be, her fee by the distance (Gear.towFee). Not in a blow: she won't come out in
 //     a gale (`NO_TOW`) or once a hurricane's warned of, until it's gone by.
-// (M16) Each boat's own set (Gear's vhfM): a handheld's reach is shorter than the distance home, far out; none, no rows
+// (M16) Each boat's own set (Gear's vhfH, (M17) its antenna's height: Seaworthy.reachTo): a handheld's reach is shorter than
+// a fixed set's, and far out shorter than the distance home; none, no rows
 // for it. And your flares and EPIRB (DaysOut.distress), for real trouble, whatever the set can reach.
 //   - (M16) her can of diesel, on the same call, and Pearl on the north side: game/Help.js.
 // Keys while its panel's open: ← → picks, Enter (RT, F) does it, R (X), E (B) or Esc closes it (E doesn't
@@ -107,7 +109,7 @@ export class Radio {
 	// what the set's display shows (Instruments.js)
 	get reading() {
 
-		const c = this.call || ! ( this.listening || ( this.open && this.pick === 0 && this.game.state.stats.vhfM > 0 ) ) ? CH16 : WX;
+		const c = this.call || ! ( this.listening || ( this.open && this.pick === 0 && this.game.state.stats.vhfH > 0 ) ) ? CH16 : WX;
 		return { ...c, on: this.listening || !! this.call };
 
 	}
@@ -140,7 +142,7 @@ export class Radio {
 		const p = this.game.app.player;
 		if ( p.handsFull || p.busy || p.boat.model.sliding ) return null;
 		const s = this.game.state.stats;
-		return s.vhfM > 0 ? 'radio' : s.flares || s.epirb ? 'flares' : null;
+		return s.vhfH > 0 ? 'radio' : s.flares || s.epirb ? 'flares' : null;
 
 	}
 
@@ -191,7 +193,7 @@ export class Radio {
 		this.open = true;
 		this.game.app.player.helmHeld = true;
 		this.call = null;
-		this.pick = this.game.towJob( true ) && fuelOf( this.game.state.boat ) && this.game.state.fuelL <= 0 && this.game.state.stats.vhfM > 0 ? ( this._pearl() ? 2 : 1 ) : 0;
+		this.pick = this.game.towJob( true ) && fuelOf( this.game.state.boat ) && this.game.state.fuelL <= 0 && this.game.state.stats.vhfH > 0 ? ( this._pearl() ? 2 : 1 ) : 0;
 		this.draw();
 		this.panel.classList.add( 'is-open' );
 		try {
@@ -259,7 +261,7 @@ export class Radio {
 	// what's on the panel: her set's, and your distress gear (DaysOut.distress)
 	rows() {
 
-		return [ ...( this.game.state.stats.vhfM > 0 ? [ { id: 'wx' }, { id: 'marta' }, ...( pearlJob( this.game ) ? [ { id: 'pearl' } ] : [] ) ] : [] ), ...this.game.daysOut.distress() ];
+		return [ ...( this.game.state.stats.vhfH > 0 ? [ { id: 'wx' }, { id: 'marta' }, ...( pearlJob( this.game ) ? [ { id: 'pearl' } ] : [] ) ] : [] ), ...this.game.daysOut.distress() ];
 
 	}
 
@@ -270,7 +272,7 @@ export class Radio {
 		if ( ! job ) return;
 		const blown = wx && wx.wind >= NO_TOW, warned = news && news.stage === 'warning';
 		let say, can = false, drop = null;
-		if ( job.metres > g.state.stats.vhfM ) say = `Nothing but static. You're ${ farOff( job.metres ) } off her dock, past your set's reach.`;
+		if ( job.metres > reachTo( g.state.stats ) ) say = `Nothing but static. You're ${ farOff( job.metres ) } off her dock, past your set's reach.`;
 		else if ( blown || warned ) say = `Marta here. Not in this: ${ warned ? 'there\'s a hurricane on its way' : 'it\'s blowing a gale' }, and I'd not get to you. Anchor if you can, ride it out, and call me when it's blown through.`;
 		else {
 
@@ -370,11 +372,11 @@ export class Radio {
 				return `<div class="gm-shop-row rd-row${ sel }"><span>${ row.name }<small>${ row.say }</small></span><button class="gm-btn" data-fire="${ row.id }" ${ row.can ? '' : 'disabled' }>${ ! row.can ? 'Not now' : row.id === 'flare' ? 'Fire' : `$${ Math.min( row.fee, g.state.money ).toLocaleString() }` }</button></div>`;
 
 			} ).join( '' ) || '<p class="rd-say">There\'s no radio aboard her. Marta sells them.</p>';
-			sub = g.state.stats.vhfM > 0 ? ( this._seat ? 'Your handheld VHF' : 'The VHF at the helm' ) : 'Nothing to call with but what you carry';
+			sub = g.state.stats.vhfH > 0 ? ( this._seat ? 'Your handheld VHF' : 'The VHF at the helm' ) : 'Nothing to call with but what you carry';
 
 		}
 
-		this.panel.innerHTML = `<div class="gm-head"><h2>${ g.state.stats.vhfM > 0 || ! this._seat ? 'Radio' : 'Flares' }</h2><p class="gm-sub">${ sub }</p></div>${ lcd }<div class="gm-list">${ list }</div>
+		this.panel.innerHTML = `<div class="gm-head"><h2>${ g.state.stats.vhfH > 0 || ! this._seat ? 'Radio' : 'Flares' }</h2><p class="gm-sub">${ sub }</p></div>${ lcd }<div class="gm-list">${ list }</div>
 			<div class="gm-foot"><span class="gm-sub">${ g.app.input.lastDevice === 'touch' ? '' : `Pick ${ LEFT } ${ RIGHT }, then Enter` }</span><button class="gm-btn is-ghost" data-close>${ this._seat ? key( 'Close', 'C', 'LB' ) : key( 'Close', 'R', 'X' ) }</button></div>`;
 		const on = ( sel, fn ) => {
 

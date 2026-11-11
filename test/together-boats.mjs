@@ -172,7 +172,7 @@ ok( sizeOf( 'trawler' ) === SIZE.lobster, 'and a game that doesn\'t say is the l
 	const m = await loadBoat( 'sportfisher' ), S = m.stations;
 	ok( jobAt( m, 'helm', null ) === 'helm' && jobAt( m, 'boat', null ) === 'helm', 'at the helm' );
 	ok( jobAt( m, 'deck', new Vector3( S.tower.x, S.tower.y, S.tower.z ) ) === 'tower', 'up the tower' );
-	ok( jobAt( m, 'deck', new Vector3( S.chair.x, S.chair.y, S.chair.z ) ) === 'chair', 'in the chair' );
+	ok( jobAt( m, 'deck', new Vector3( S.chair.x, S.chair.y, S.chair.z ), m.chair ) === 'chair', 'in the chair ((M17) sat in it: test/together-aboard.mjs)' );
 	ok( jobAt( m, 'deck', new Vector3( S.tower.x, S.chair.y, S.tower.z ) ) === null, 'at the foot of the tower, not' );
 	ok( jobAt( m, 'walk', new Vector3( S.chair.x, S.chair.y, S.chair.z ) ) === null && jobAt( await loadBoat( 'lobster' ), 'deck', new Vector3() ) === null, 'ashore, or on a boat with none, no job' );
 	ok( clockFrom( 0, 0, 10 ) === 12 && clockFrom( 0, - 10, 0 ) === 3 && clockFrom( 0, 10, 0 ) === 9 && clockFrom( 0, 0, - 10 ) === 6, 'by the clock from her bow, her starboard at three' );
@@ -274,7 +274,7 @@ ok( sizeOf( 'trawler' ) === SIZE.lobster, 'and a game that doesn\'t say is the l
 for ( const [ id, stats, want ] of [
 	[ 'sportfisher', { tower: false, outriggers: true, chair: false }, { tower: false, outriggers: true, chair: false } ],
 	[ 'sportfisher', {}, { tower: true, outriggers: true, chair: true } ],
-	[ 'console', { twin: true, tTop: false, diveLadder: true, tankRack: false }, { twin: true, tTop: false, diveLadder: true, tankRack: false } ],
+	[ 'console', { twin: true, tTop: false, diveLadder: true, tankRack: false }, { twin: true, tTop: false, diveLadder: true, tankRack: false, ladderDown: false } ], // ((M17) and her ladder as it is: up)
 	[ 'kayak', { holdKg: 40, finder: true, anchorM: 0 }, { holdKg: 13, finder: true, trolley: false } ],
 	[ 'lobster', { holdKg: 40 }, {} ],
 ] ) {

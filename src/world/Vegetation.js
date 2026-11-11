@@ -488,6 +488,21 @@ export class Vegetation {
 
 	}
 
+	// (M17) once they're built, only what's read of the records after: the palms whole (the drips under their
+	// fronds, the crabs' homes, the debris kept off their trunks), and the trees' feet and size, the bananas' and
+	// the young palms' feet (the debris keeps off those trunks too). The shrubs, the ferns and the broad leaves
+	// are their instances' alone. Some 3 MB of script memory that a CPU's WebGL held until the debris, long after
+	// the start (App.plantsGrow)
+	slimRecords() {
+
+		const R = this.records;
+		if ( ! R ) return;
+		const feet = ( list, s ) => ( list || [] ).map( s ? ( r ) => ( { x: r.x, z: r.z, s: r.s } ) : ( r ) => ( { x: r.x, z: r.z } ) );
+		this.records = { palms: R.palms, villagePalms: R.villagePalms, trees: feet( R.trees, true ), bananas: feet( R.bananas ), youngPalms: feet( R.youngPalms ) };
+		this.site = null;
+
+	}
+
 	// (M16) every plant's record, as it was scattered: their instances have what they draw from, and the drips,
 	// the crabs and the debris have read them (App.letGoOfTheBuild)
 	releaseRecords() {

@@ -1,6 +1,7 @@
 import { Vector4, MathUtils } from '../engine/index.js';
 import { G, GRAVITY } from '../core/Globals.js';
 import { WORLD } from '../world/WorldLayout.js';
+import { WakeWaves } from './WakeWaves.js';
 
 // The open sea: a sum of Gerstner (trochoidal) waves, evaluated the same way on the GPU (the water
 // surface) and on the CPU (WaterQuery: the boat, the swimmer, the bobber). It stands in for Tidewater's
@@ -30,6 +31,9 @@ import { WORLD } from '../world/WorldLayout.js';
 //   theta = k (d . x0) - omega t + phase,  omega = sqrt( g k ) (deep water)
 //   x = x0 + qa d cos( theta ),  y = a sin( theta )
 // and every wave fades out over shallow water (the shore waves take over there).
+//
+// (M17) And the boats' wakes' far arms (WakeWaves: `wakes`), smooth crests worked out from their tracks, on the sea's
+// height at its grid point, as the sea's vertex shader adds them (wakeAt); faded out only in the last metre or so of water.
 
 // wavelength (m) or, (M14) for the swell's, period (its share of its train's, T), amplitude (m), direction:
 // rotation (rad) from the swell (s) or the wind (w). (The swell's shares are as their lengths were before
@@ -63,6 +67,8 @@ const crest = ( a, k, n ) => Math.min( a * 1.4, STEEPNESS / ( k * n ) );
 // island's own comes in along WORLD.swellDir
 export const SWELL_WEST = { x: 1, y: 0 };
 
+// (M17) depth (m) over which the wakes' crests fade out as the water shoals (their height's 0.78 of the depth breaks them)
+export const WAKE_SHOAL = [ 0.2, 1.5 ];
 // depth (m) over which the open-sea waves fade out toward the beach
 export const SHALLOW_FADE = [ 1.5, 12.0 ]; // (the shore waves take over from ~13 m of depth in)
 
@@ -113,6 +119,8 @@ export class Waves {
 		const turn = Math.atan2( SWELL_WEST.y, SWELL_WEST.x ) - swell;
 		this._westTurn = Math.atan2( Math.sin( turn ), Math.cos( turn ) );
 		this.iterations = 2; // the CPU height's fixed-point steps (more on steep seas: setSea)
+		// (M17) the boats' wakes' far arms
+		this.wakes = new WakeWaves( { tier } );
 
 		// GLSL: uniforms waveA[ i ] = ( d.x, d.z, k, omega ), waveB[ i ] = ( a, qa, phase, 0 )
 		this.uniforms = {
@@ -396,7 +404,18 @@ vec3 waveDisplacement( vec2 x0, float fade, out vec3 normal ) { return waveDispl
 		}
 
 		this.displacement( x0, z0, t, d, fade, lee );
-		return G.seaLevel.value + d[ 1 ];
+		return G.seaLevel.value + d[ 1 ] + this.wakeAt( x0, z0 );
+
+	}
+
+	// (M17) the wakes' far arms at the sea's grid point (x0, z0), as the sea's vertex shader has them: faded out as the water
+	// shoals to nothing (WAKE_SHOAL m of it), where they've broken
+	wakeAt( x0, z0 ) {
+
+		if ( ! this.wakes.count ) return 0;
+		const h = this.wakes.heightAt( x0, z0 );
+		if ( h === 0 || ! this.terrain ) return h;
+		return h * MathUtils.smoothstep( G.seaLevel.value - this.terrain.heightAt( x0, z0 ), WAKE_SHOAL[ 0 ], WAKE_SHOAL[ 1 ] );
 
 	}
 

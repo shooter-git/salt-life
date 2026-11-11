@@ -1,5 +1,6 @@
 import { Vector3 } from '../../engine/index.js';
 import { WORLD } from '../../world/WorldLayout.js';
+import { TIDE_HIGHEST } from '../IslandClock.js';
 
 // (M16) Where the boats you own are kept, each sized to her (the sportfisher overlaps the pier at the lobster boat's):
 //   the lobster boat, on the east side of the pier head, as ever;
@@ -19,8 +20,9 @@ export const BERTHS = {
 export const berthOf = ( id ) => BERTHS[ id ] || BERTHS.lobster;
 
 // a boat kept on the sand: where she lies, up it from her berth till she's this far over the sea, and her slope.
-// -> { position, heading, pitch }
-const CLEAR = 0.5;
+// -> { position, heading, pitch } ((M17) over the tide's highest, as the kayak you're in is pulled up: kayak/Shore.js's
+// DRY past IslandClock's TIDE_HIGHEST)
+const CLEAR = TIDE_HIGHEST + 0.5;
 export function ashoreOf( id, terrain, lift = 0.1 ) {
 
 	const B = berthOf( id ), P = B.position;

@@ -5,6 +5,8 @@ import { ashoreOf, berthOf } from './Berths.js';
 import { mooredGeometry, standsGeometry, SHAPES } from './MooredModels.js';
 import { LIFT, lookGeometry, lookSign, readLook } from './MooredLooks.js';
 import { BOATS } from '../../world/boat/Boats.js';
+import { SHADE } from '../../world/boat/BoatMaterials.js';
+import { useGroundBounce } from '../../materials/GroundBounce.js';
 import { releaseGeometry } from '../../core/ReleaseAfterUpload.js';
 import { G } from '../../core/Globals.js';
 
@@ -20,7 +22,6 @@ const SEEN = 700; // m (they're small things past this)
 // m: how near she's drawn as she looks, by the device's tier. On a phone the village after a hurricane, the yard's boats
 // in sight from the path, is a frame's most triangles: there it's her stand-in
 export const NEAR = { low: 45, mid: 160, high: SEEN };
-const FILL = 8;
 const LOOKS = ( ( import.meta.env && import.meta.env.BASE_URL ) || '/' ) + 'boats/moored/';
 const _up = new Vector3( 0, 1, 0 ), _side = new Vector3( 1, 0, 0 ), _n = new Vector3(), _q = new Quaternion(), _yaw = new Quaternion();
 
@@ -54,6 +55,9 @@ export class MooredBoats {
 			};
 
 			m.customProgramCacheKey = () => 'mooredBoat';
+			// ((M17) her shade as the boat you're in has hers, so she matches herself out at sea: BoatMaterials' SHADE, the light from
+			// under her diffuse, and the sky in her gloss below)
+			useGroundBounce( m, { sand: SHADE.bounce } );
 			return m;
 
 		};
@@ -61,8 +65,8 @@ export class MooredBoats {
 		this.material = material( 0 );
 		this.lifted = {};
 		for ( const [ id, lift ] of Object.entries( LIFT ) ) this.lifted[ id ] = material( lift );
-		// (their faces out of the sun: the world's shade is near black, and white paint isn't. The scene's environment, FILL
-		// times over, as the wreck and the signposts have it)
+		// (their faces out of the sun: the world's shade is near black, and white paint isn't. The scene's environment, as the
+		// boat you're in has it: BoatMaterials' SHADE.env times over ((M16) it was 8 here, as the wreck and the signposts have it))
 		this._fill = ( renderer, scene, camera, geometry, m ) => {
 
 			if ( m.envMap !== scene.environment ) {
@@ -72,7 +76,7 @@ export class MooredBoats {
 
 			}
 
-			m.envMapIntensity = scene.environmentIntensity * FILL;
+			m.envMapIntensity = scene.environmentIntensity * SHADE.env;
 
 		};
 		this.boats = {}; // id -> { mesh: her group, far: the stand-in, near: as she looks, sign, hauled, box, stands }

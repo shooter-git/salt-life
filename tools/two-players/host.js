@@ -77,7 +77,7 @@ const write = async ( scope, key, value, schemaVersion, basedOn ) => {
 	} );
 
 };
-let inited = false;
+let inited = false, handed = false; // (handed: the room's values given to the game, 400 ms after joining)
 document.title = `${ name } · Salt Life`;
 
 const send = ( msg ) => frame.contentWindow && frame.contentWindow.postMessage( { ats: 'bridge', v: 1, msg }, '*' );
@@ -98,6 +98,8 @@ room.onmessage = ( { data: m } ) => {
 			if ( shared.has( k ) && ! ( stamp && later( stamp, stamps.get( k ) ) ) ) continue;
 			shared.set( k, v );
 			if ( stamp ) stamps.set( k, stamp );
+			// (a value come after the game was given the room's: given it now, as the app gives a value whenever it comes)
+			if ( handed ) send( { type: 'mp:shared', data: { key: k, value: v, by: null } } );
 
 		}
 
@@ -154,6 +156,7 @@ addEventListener( 'message', ( e ) => {
 				// (the others answer: then who's here and the values go to the game together)
 				setTimeout( () => {
 
+					handed = true;
 					for ( const [ k, v ] of shared ) send( { type: 'mp:shared', data: { key: k, value: v, by: null } } );
 					tellPlayers();
 

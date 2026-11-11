@@ -3,7 +3,7 @@ import { G } from '../core/Globals.js';
 import { WORLD } from '../world/WorldLayout.js';
 import { FISH, CARAPACE, fishWeightKg, spearRule } from './FishTable.js';
 import { habitatAt, rollWeight } from './Bites.js';
-import { CatchMinigame } from './CatchMinigame.js';
+import { CatchMinigame, SHAFT_MATCH } from './CatchMinigame.js';
 import { GameState } from './GameState.js';
 import { FishingRod, buildLineGeometry } from './FishingRod.js';
 import { createLineMaterial } from './GameMaterials.js';
@@ -22,7 +22,8 @@ import { TimeHUD } from './TimeHUD.js';
 import { Radio } from './Radio.js';
 import { Compass } from '../world/boat/kayak/Compass.js';
 import { DaysOut } from './DaysOut.js';
-import { timeText } from './IslandClock.js';
+import { timeText, tideTurns, moonAt } from './IslandClock.js';
+import { tidePlace, stageOf, tideBites } from '../world/shore/Tide.js';
 import { HOURS, NIGHT_BOX, ordersFor, tradeDay, stallOpen, shutFor } from './Orders.js';
 import { WantedBoard } from './WantedBoard.js';
 import { ForecastSlate } from './ForecastSlate.js';
@@ -54,8 +55,9 @@ import { FINDS, lying, messageOf, wreckageAt, wreckStamp } from './Beachcomb.js'
 import { SHELLS, SHELL_KINDS, shellsHave, WALL_PAY } from './Shells.js';
 import { ordersOf, tagFor } from './Orders.js';
 import { ELLIPSIS, LEFT, RIGHT, UP } from '../core/Glyphs.js';
-import { letGo, trophyCardOf } from './Trophies.js';
+import { letGo, trophyCardOf, slamNote } from './Trophies.js';
 import { Rigs } from './rigs/Rigs.js';
+import { FlatsFishing } from './FlatsFishing.js';
 import { atHook, pickOnRig, waitOnRig } from './rigs/Presentation.js';
 
 // how long the catch card stays up unless dismissed (ms)
@@ -140,6 +142,7 @@ export class Game {
 		// berried, t, card }), and the one in front of you
 		this.tools = new LobsterTools( { scene: app.scene, camera: app.camera, ground: app.terrain, audio: app.audio } );
 		this.rigs = new Rigs( this ); // ((M16) the rig on the line, and what's out past the rod in your hands)
+		this.flats = new FlatsFishing( this ); // ((M17) sight-fishing on the flats: the fish seen, stalked and cast to)
 		this._scoop = null;
 		this.netted = null;
 		this.lobsterAim = null;
@@ -644,6 +647,7 @@ export class Game {
 		else if ( ! this.fight ) rod.dip = Math.max( 0, rod.dip - dt * 4 );
 		if ( this.fight ) this.updateFight( dt, lmb && ! panelOpen );
 		this.rigs.update( dt, { rDown: rDown && ! panelOpen, inp } );
+		this.flats.update( dt );
 
 		rod.update( dt, { visible: can, fight: this.fight } );
 		// (Salt Life) the cast net; the speargun; the lobster tools
@@ -740,6 +744,7 @@ export class Game {
 
 		// (M10) the bucket on deck; the crank at the helm while she's stalled
 		this.updateBail( inp, p );
+		this.updateBow( inp, p );
 		this.daysOut.update( dt, inp, p );
 		// ((M16) beside a boat of yours you're not in: get into her)
 		this.fleet.updatePrompt( inp, p );
@@ -840,7 +845,7 @@ export class Game {
 	updateBoat( dt ) {
 
 		const app = this.app, b = app.boatCtl, p = app.player, s = this.state;
-		if ( b.driven && b.engineOn && b.handling.engine ) s.burn( fuelBurn( b.rpm, s.boat ) * dt );
+		if ( b.driven && b.engineOn && b.handling.engine ) s.burn( fuelBurn( b.rpm, s.boat, !! s.stats.twin ) * dt ); // ((M17) a twin's two)
 		else if ( this._wasDriven && ! b.driven ) s.save();
 		if ( app.boat.play ) app.boat.play( dt, this ); // ((M16) a kayak's own: kayak/KayakModel.js)
 		this.updateHull( dt );
@@ -1162,11 +1167,49 @@ export class Game {
 
 		}
 
+		// ((M17) her anchor off her roller while it's down)
+		if ( this.app.boat && this.app.boat.setAnchorStowed ) this.app.boat.setAnchorStowed( ! b.anchor );
 		const rode = this.rode;
 		rode.visible = !! b.anchor || !! b.sock;
 		if ( ! rode.visible ) return;
 		b.toWorld( b.stemHead, rode.material.uniforms.lineA.value );
 		this.layRode( rode, b.anchor || this.daysOut.sockPoint( _sock ) );
+
+	}
+
+	// (M17) her anchor worked at her bow, by her roller (Vessel's bowAnchor: the lobster boat's): let go where she lies, or got up,
+	// as you stand by it, and her drift sock in. She's yours to anchor: riding in someone else's, it's theirs
+	updateBow( inp, p ) {
+
+		const b = this.app.boatCtl, A = b.model && b.model.bowAnchor, st = this.state.stats;
+		const at = !! A && p.mode === 'deck' && ! p.riding && ! p.busy && ! p.climbing && ! b.moored && ! b.hauled && Math.hypot( p.deckPos.x - A.x, p.deckPos.z - A.z ) < A.r;
+		p.anchorWork = at;
+		if ( ! at || p.prompt ) return;
+		if ( b.anchor || b.sock ) {
+
+			p.prompt = { key: 'E', text: b.anchor ? 'Get the anchor up' : 'Get the drift sock in' };
+			if ( inp.hit( 'KeyE' ) ) {
+
+				const sock = ! b.anchor;
+				b.anchor = null;
+				b.sock = false;
+				this._anchorDue = false;
+				this.toast( sock ? 'Drift sock in' : 'Anchor up · she\'s adrift', 2200 );
+
+			}
+
+			return;
+
+		}
+
+		if ( ! ( st.anchorM > 0 ) && ! st.sock ) p.prompt = { key: ELLIPSIS, text: 'No anchor aboard her · Marta sells one' };
+		else if ( b.speed >= ANCHOR_SPEED ) p.prompt = { key: ELLIPSIS, text: 'She\'s to slow down to anchor' };
+		else {
+
+			p.prompt = { key: 'E', text: 'Let go the anchor' };
+			if ( inp.hit( 'KeyE' ) ) this.dropAnchor();
+
+		}
 
 	}
 
@@ -1264,7 +1307,9 @@ export class Game {
 		const app = this.app, B = app.beachcomb, s = this.state, hud = this.hud;
 		if ( ! B ) return;
 		// (what you've picked up's pruned as you pick more: so its last, not its length)
-		const day = app.settings.day, stamp = wreckStamp( app.damage ), key = `${ day }:${ s.picked.length }:${ s.picked[ s.picked.length - 1 ] || '' }:${ stamp }`;
+		// ((M17) Marta's tray's the group's: laid out once anyone's given her a whole set, Together.tray)
+		const tray = s.shells.wall !== null || !! ( app.together && app.together.tray );
+		const day = app.settings.day, stamp = wreckStamp( app.damage ), key = `${ day }:${ s.picked.length }:${ s.picked[ s.picked.length - 1 ] || '' }:${ stamp }:${ tray }`;
 		if ( key !== this._combKey ) {
 
 			this._combKey = key;
@@ -1272,7 +1317,7 @@ export class Game {
 			B.set( lying( day, ( d ) => app.beachDays( d ) ).filter( ( f ) => ! picked.has( f.id ) ) );
 			// ((M16) a hurricane's wreck in its wrack, as much of it as hasn't been cleared; your shell set at Marta's)
 			B.setWreck( wreckageAt( app.damage ).filter( ( f ) => ! picked.has( f.id ) ) );
-			B.setWall( s.shells.wall !== null );
+			B.setWall( tray );
 
 		}
 
@@ -1309,6 +1354,7 @@ export class Game {
 		const S = this.state.shells;
 		if ( S.wall !== null || SHELL_KINDS.some( ( k ) => ! S.have[ k ] ) ) return false;
 		S.wall = this.app.settings.day | 0;
+		if ( this.app.together ) this.app.together.layTray( S.wall ); // ((M17) the group's tray, for everyone)
 		this.state.money += WALL_PAY;
 		this.state.save();
 		this.state.emit();
@@ -1374,7 +1420,8 @@ export class Game {
 		if ( this._forecastT > 0 || ! wx ) return;
 		this._forecastT = 1;
 		const s = this.app.settings, pick = this.app.weatherPick ? this.app.weatherPick() : null;
-		this.forecastSlate.draw( wx, forecast( islandTime( s.day, s.timeOfDay ), 12, pick, s.weatherSince ), this.app.portal && this.app.portal.locale, this.app.weather ? this.app.weather.news : null );
+		const T = islandTime( s.day, s.timeOfDay );
+		this.forecastSlate.draw( wx, forecast( T, 12, pick, s.weatherSince ), this.app.portal && this.app.portal.locale, this.app.weather ? this.app.weather.news : null, tideTurns( T, T + 13, this._slateTides || ( this._slateTides = [] ) ) ); // ((M17) and the tide's next turns)
 		// ((M13) and the shelter's tracking chart)
 		if ( this.stormChart ) this.stormChart.draw( this.app.weather.hurricane, this.app.weather.news, islandTime( s.day, s.timeOfDay ), this.app.portal && this.app.portal.locale );
 
@@ -1501,6 +1548,10 @@ export class Game {
 		// ((M16) under a hurricane's debris: the mahi; and the rig, how it's fished: Bites' hook, docs/m16/fish.md)
 		h.wake = this.findsNear( p.x, p.z ).wake;
 		h.hook = this.hook || null;
+		// ((M17) and the tide's stage there: the flats, their edge, their channels and mouths, the pier)
+		h.tide = tideBites( tidePlace( p.x, p.z ), stageOf( islandTime( this.app.settings.day, this.app.settings.timeOfDay ), this._stage || ( this._stage = {} ) ), h.pier );
+		// ((M17) and how much of the moon's lit: the swordfish's nights by it, Bites.depthWeight)
+		h.moon = moonAt( islandTime( this.app.settings.day, this.app.settings.timeOfDay ) ).lit;
 		return h;
 
 	}
@@ -1694,6 +1745,8 @@ export class Game {
 
 		// ((M16) on a lead, not till it's down: Rigs.update)
 		this.bite = this.rod.rig === 'bottom' ? null : { phase: 'wait', t: waitOnRig( this.habitat(), this.hour, Math.random, this.hookBait ) };
+		// ((M17) on the flats: what it lands on spooked, and the fish there seeing it as they come on: FlatsFishing.watch)
+		this.flats.landed( this.rod.bobber, this.rod.tip, this.hookBait );
 
 	}
 
@@ -1702,6 +1755,9 @@ export class Game {
 		const rod = this.rod;
 		const b = this.bite;
 		if ( ! b ) return;
+		// ((M17) a seen fish on its way to the bait: the bite's its, beside the habitat's roll)
+		if ( this.flats.watch( b, dt ) ) return;
+		if ( this.bite !== b ) return;
 		b.t -= dt;
 		// bobber motion for the cues
 		if ( b.phase === 'nibble' ) rod.dip = Math.max( 0, Math.sin( Math.min( 1, ( b.pulse || 0 ) ) * Math.PI ) * 0.45 );
@@ -1839,6 +1895,11 @@ export class Game {
 			// ((M16) a billfish let go: the fund pays for it, and it's a trophy in your log)
 			info.hurt = info.released && this.rigs.releaseHurt( f.species );
 			info.bonus = letGo( this.state, info );
+			// ((M17) the slams: a bonefish, a permit and a tarpon in one island day, a trophy in your log; (stream 7) the super grand
+			// slam and the billfish grand slam beside it, told on the catch card (a toast with no card), and the group's board told)
+			info.slams = this.flats.caught( info );
+			if ( info.slams.length && ! this.hud ) setTimeout( () => this.toast( slamNote( info.slams ), 6000 ), 2400 );
+			if ( info.slams.length && this.app.together ) this.app.together.lifeChanged( info.slams );
 			// (Salt Life) the others hear of it; the island's records (together/): the card says when
 			// it's the heaviest of its kind anyone here has landed
 			if ( this.app.together ) {
@@ -2327,7 +2388,8 @@ export class Game {
 
 				const g = gun.gear;
 				// (landed once it's tired and pulled close: CatchMinigame landAt, tired)
-				const f = this.spearFight = new CatchMinigame( { species: sp.id, kg: sp.kg, lineKg: g.spearHold * ( sp.tail ? 0.6 : 1 ), reelSpeed: 1.0, distance: Math.max( 1.5, gun.muzzle.distanceTo( gun.tip ) - g.shaftM ), landAt: 1.0, tired: 0.25 } );
+				const hold = g.spearHold * ( sp.tail ? 0.6 : 1 );
+				const f = this.spearFight = new CatchMinigame( { species: sp.id, kg: sp.kg, lineKg: hold, matchKg: hold * SHAFT_MATCH, reelSpeed: 1.0, distance: Math.max( 1.5, gun.muzzle.distanceTo( gun.tip ) - g.shaftM ), landAt: 1.0, tired: 0.25 } );
 				// it runs to the end of the line, and tears free (with a reel, it takes line first)
 				f.maxDistance = g.lineM + ( g.spearReel ? 25 : 0.4 );
 				f.spear = true;

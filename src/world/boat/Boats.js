@@ -31,5 +31,14 @@ export const BOATS = {
 // what a new game starts in
 export const START_BOAT = 'kayak';
 
-// (tier: the device's: a boat may have a lighter version for phones)
-export const loadBoat = ( id, tier ) => BOATS[ id ].load( tier );
+// (tier: the device's: a boat may have a lighter version for phones). ((M17) Her lines' sections, kept as she was built,
+// let go once she is, as the sportfisher's were after her floating: 0.7 to 0.9 MB of script memory held for as long as
+// she's the boat you're in. The few asked of her afterwards, her ladder's, are worked out again)
+export const loadBoat = ( id, tier ) => BOATS[ id ].load( tier ).then( ( model ) => {
+
+	if ( model.lines && model.lines._sectionCache ) model.lines._sectionCache.clear();
+	// ((M17) her outside's shade, after her own materials' changes: Vessel.shadeFill, BoatMaterials' useShadeFill)
+	if ( model.shadeFill ) model.shadeFill();
+	return model;
+
+} );

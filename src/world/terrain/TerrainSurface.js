@@ -117,6 +117,11 @@ export const TERRAIN_SURFACE_GLSL = /* glsl */`
 	float notRock = 1.0 - rockW;
 	float underW = ss( 0.12, -0.6, h );
 	float landW = 1.0 - underW;
+	// ((M17) the sea as it is on the tide: how far under it now (subW: the seabed's looks are by the ground's own height,
+	// what the water does to it by the water's), and the shore below the tide's high water, where nothing grows)
+	float hSea = h - terrainSeaLevel;
+	float subW = ss( 0.12, -0.6, hSea );
+	float tidalW = ss( 0.5, 0.25, h );
 	float sandW = ss( 0.3, 0.72, sp.x + ( dM.z - 0.5 ) * 0.5 + ( mcr - 0.5 ) * 0.35 ) * notRock;
 	float pathW = ss( 0.28, 0.62, sp.y + ( dN.y - 0.45 ) * 0.4 + ( dM.w - 0.5 ) * 0.25 ) * notRock * landW
 		* ( 1.0 - ss( 50.0, 220.0, camDist ) * 0.85 );
@@ -152,7 +157,7 @@ export const TERRAIN_SURFACE_GLSL = /* glsl */`
 
 	// ---- seabed: sand with ripple fields, seagrass meadows, rubble heads (below the berm)
 	float depth = -h;
-	float fieldW = 0.0; float seagrassW = 0.0; float blades = 0.0; float rubbleW = 0.0;
+	float fieldW = 0.0; float seagrassW = 0.0; float blades = 0.0; float rubbleW = 0.0; float mudW = 0.0;
 	vec3 under = sand;
 	if ( underW > 0.0 ) {
 		float reefD = length( xz - rc );
@@ -166,13 +171,16 @@ export const TERRAIN_SURFACE_GLSL = /* glsl */`
 		under = under * ( ( rip2 - 0.55 ) * 0.22 * fieldW * fade2 + 1.0 );
 		// seagrass meadows: ragged edges, blade streaks leaning with the wave surge
 		float clumps = ( dM.w - 0.5 ) * 0.5 + ( dN.y - 0.45 ) * 0.4 + ( macroB - 0.5 ) * 0.3;
-		seagrassW = ss( 0.3, 0.55, sp.z + clumps ) * underW * ss( 0.3, 0.9, depth );
+		// ((M17) a bed's grass bared by the tide still: it lies flat on the wet sand, matted, darker and browner (photographs
+		// of intertidal meadows at low water); it needed depth over it, so the flats' beds went to sand as they bared)
+		seagrassW = ss( 0.3, 0.55, sp.z + clumps ) * underW * ss( 0.12, 0.45, depth );
 		vec2 swPerp = vec2( -swDir.y, swDir.x );
 		blades = terDetail( vec2( dot( xz, swDir ) / 2.6, dot( xz, swPerp ) / 0.35 ) ).y;
 		vec3 meadow = mix( ${ S( 0.12, 0.16, 0.07 ) }, ${ S( 0.27, 0.29, 0.15 ) }, ss( 0.35, 0.75, blades ) );
 		meadow = mix( meadow, ${ S( 0.24, 0.2, 0.11 ) }, ss( 0.55, 0.8, dM.y + ( macroB - 0.5 ) * 0.4 ) * 0.5 );
 		meadow = mix( under, meadow, ss( 0.3, 0.85, sp.z + clumps * 0.5 ) * 0.35 + 0.65 );
 		meadow = mix( meadow, mix( meadow, under, 0.45 ), ss( 0.58, 0.8, macroB + ( dM.w - 0.5 ) * 0.4 ) );
+		meadow = mix( meadow, meadow * vec3( 0.78, 0.72, 0.6 ) + ${ S( 0.03, 0.025, 0.01 ) }, ss( - 0.05, 0.1, hSea ) );
 		under = mix( under, meadow, seagrassW );
 		// rubble heads: coral rubble and rock turfed with algae, pink coralline crusts
 		rubbleW = ss( 0.3, 0.6, sp.w + ( dN.x - 0.5 ) * 0.4 + ( dM.w - 0.5 ) * 0.3 ) * underW;
@@ -182,6 +190,14 @@ export const TERRAIN_SURFACE_GLSL = /* glsl */`
 		under = mix( under, rubble, rubbleW );
 		// reef flat: coral rubble and pink crusts toward the reef
 		under = mix( under, mix( ${ S( 0.56, 0.50, 0.44 ) }, ${ S( 0.60, 0.43, 0.46 ) }, ss( 0.45, 0.7, dM.x ) ), reefW * 0.7 * ss( 0.4, 0.6, dN.x ) );
+		// ((M17) between the tides: a film of algae and the microbes' mats over the sand, grey-olive in patches, most in its
+		// lows (photographs of Bahamian flats bared at low water); and the mangroves' mud, where the sand's taken for it (its
+		// mask: TerrainData), grey-brown, peaty, under their floor's hand of water and bared by a spring low)
+		float film = ss( 0.45, 0.05, h ) * ss( - 0.8, - 0.4, h ) * ss( 0.35, 0.65, dM.w * 0.6 + macroB * 0.4 + ( dN.y - 0.45 ) * 0.3 ) * ( 1.0 - seagrassW );
+		under = mix( under, under * ${ S( 0.8, 0.8, 0.7 ) }, film * 0.6 );
+		mudW = ( 1.0 - ss( 0.22, 0.55, sp.x + ( dN.y - 0.45 ) * 0.2 ) ) * ss( 0.4, 0.0, h ) * ( 1.0 - reefW );
+		vec3 mud = mix( ${ S( 0.2, 0.18, 0.14 ) }, ${ S( 0.3, 0.27, 0.2 ) }, ss( 0.35, 0.7, dM.w + ( dF.y - 0.45 ) * 0.4 ) );
+		under = mix( under, mud, mudW * ( 1.0 - seagrassW * 0.5 ) );
 	}
 	sand = mix( sand, under, underW );
 
@@ -253,7 +269,7 @@ export const TERRAIN_SURFACE_GLSL = /* glsl */`
 
 	// ---- combine
 	vec3 albedo = mix( ground, dirt, pathW );
-	albedo = mix( albedo, sand, max( sandW, underW * notRock ) );
+	albedo = mix( albedo, sand, max( sandW, max( underW, tidalW * ( 1.0 - jungleW ) ) * notRock ) );
 	albedo = mix( albedo, rockAlbedo, rockW );
 
 	// ---- eroded beach scarp (splat alpha on land): the storm-cut face of the foredune
@@ -312,10 +328,19 @@ export const TERRAIN_SURFACE_GLSL = /* glsl */`
 
 	// ---- wetness: the swash zone's damp band (Tidewater's shore simulation drew it wave by wave); ((M13)
 	// up from the water as it is: a storm surge moves it up the beach, and wets what it floods)
-	float hSea = h - terrainSeaLevel;
-	float wet = ss( 0.5, 0.0, hSea ) * ( 1.0 - jungleW * 0.8 ) * landW;
+	// ((M17) and on the tide: what it's left within the hour or two is wet still, its sand saturated (terrainTideWet, the
+	// highest the sea's stood lately), the bars' tops paling first, with a damp fringe above as far as the water's drawn up
+	// in the sand; the swash's band from the sea as it is, and none of it under the sea (it had been by the ground's height)
+	float hWet = h - terrainTideWet + ( dM.w - 0.5 ) * 0.1 + ( dN.w - 0.5 ) * 0.04;
+	// (and above the water left in the sand, its table, as it drains behind the tide: a fine sand's held wet a hand over
+	// it (its capillary fringe: a quarter metre in a fine sand) and damp twice that, a mud's higher, so a flat bared at low
+	// water is wet all over but its bars' tops)
+	float table = terrainSeaLevel + 0.35 * max( terrainTideWet - terrainSeaLevel, 0.0 );
+	float hTable = h - table + ( dM.w - 0.5 ) * 0.1 + ( dN.w - 0.5 ) * 0.04;
+	float drained = max( ss( 0.04, - 0.04, hWet ), ss( mix( 0.25, 0.6, mudW ), 0.02, hTable ) * tidalW );
+	float wet = max( ss( 0.5, 0.0, hSea ), drained ) * ( 1.0 - jungleW * 0.8 ) * ( 1.0 - subW );
 	float dampMottle = ss( 0.3, 0.7, dM.w + ( dN.y - 0.45 ) * 0.6 + ( macroB - 0.5 ) * 0.4 );
-	float damp = ss( 1.7, 0.5, hSea + dM.w * 0.3 ) * sandW * mix( 0.22, 0.5, dampMottle );
+	float damp = max( ss( 1.7, 0.5, hSea + dM.w * 0.3 ) * sandW, max( ss( 0.3, 0.0, hWet ), ss( 0.55, 0.15, hTable ) ) * tidalW ) * mix( 0.22, 0.5, dampMottle ) * ( 1.0 - subW );
 	float mottle = ss( 0.25, 0.75, dM.w + ( dN.y - 0.45 ) * 0.5 );
 	float dryEdge = ss( 0.0, 0.6, wet ) * ss( 1.0, 0.6, wet );
 	float wetK = max( wet, damp ) * ( 1.0 - dryEdge * mottle * 0.6 ) * notRock;
@@ -325,6 +350,17 @@ export const TERRAIN_SURFACE_GLSL = /* glsl */`
 	if ( rillK > 0.0 ) { rill = terDetail( vec2( dot( xz, slopeDir ) / 3.2, dot( xz, vec2( -slopeDir.y, slopeDir.x ) ) / 0.3 ) ).w; }
 	vec3 wetAlbedo = terrainSaturation( albedo * 0.58, 1.15 ) * vec3( 0.97, 0.98, 1.0 ) * ( ( rill - 0.5 ) * 0.25 * rillK + 1.0 );
 	albedo = mix( albedo, wetAlbedo, wetK );
+	// ((M17) water lying in the hollows of what the tide's bared: a sheet a few centimetres deep in each low of the sand,
+	// still as glass, the sky in it. Low down wherever the ground dips under the water left in the sand (its table), and
+	// over the wet flat in its hollows (vTerrainSea.w: how far down in one it is, its sand waves' troughs and the lows
+	// between its bars), the smaller lumps below the ground's texel from the detail)
+	float pond = 0.0;
+	if ( hTable < 0.4 && hSea > - 0.05 ) {
+		float lows = ( dM.w - 0.5 ) * 0.06 + ( dN.w - 0.5 ) * 0.03 + ( macroB - 0.5 ) * 0.04;
+		float lying = max( ss( 0.012, - 0.008, hTable - lows ), ss( 0.01, 0.03, vTerrainSea.w - lows * 0.5 ) * ss( 0.4, 0.15, hTable ) );
+		pond = lying * ( 1.0 - subW ) * notRock * tidalW * ( 1.0 - seagrassW * 0.6 );
+		albedo = mix( albedo, wetAlbedo * 0.85, pond );
+	}
 	// swash marks: thin wavy lines of grit left at the limits of earlier uprushes
 	float sl = ( hSea + dM.w * 0.18 + dN.w * 0.05 ) / 0.13;
 	float slD = abs( fract( sl ) - 0.5 );
@@ -358,7 +394,8 @@ export const TERRAIN_SURFACE_GLSL = /* glsl */`
 	rough = mix( rough, rockRough, rockW );
 	// wet sand has a film of water: glossy while fresh, satin as it drains
 	rough = mix( rough, mix( 0.6, 0.3, wet ), wetK ); // (Tidewater 0.42 / 0.16: with this sun that glared like a mirror)
-	rough = mix( rough, 0.75, underW );
+	rough = mix( rough, 0.75, subW );
+	rough = mix( rough, 0.04, pond );
 	rough = mix( rough, 0.94, scarpW );
 
 	// ---- micro relief for the normal
@@ -386,5 +423,11 @@ export const TERRAIN_SURFACE_GLSL = /* glsl */`
 
 	vec3 tAlbedo = albedo;
 	float tRough = rough;
-	vec3 tNormal = terrainPerturbNormal( p, N0, hd, 1.0 );
+	vec3 tNormal = terrainPerturbNormal( p, N0, hd * ( 1.0 - pond ), 1.0 );
+	// ((M17) a pond's a mirror: level, and the sky's light off it in full, Terrain's)
+	tNormal = normalize( mix( tNormal, vec3( 0.0, 1.0, 0.0 ), pond ) );
+	float tPond = pond;
+	// ((M17) and a wet sand's film of water: the sky's sheen off it at a low angle, as a beach's swash band and a bared flat
+	// shine in photographs)
+	float tWet = wet * notRock;
 `;
