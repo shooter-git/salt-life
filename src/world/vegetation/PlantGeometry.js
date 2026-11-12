@@ -470,6 +470,18 @@ export const TREE_LOBES = [
 	[ 3.7, 5.2, - 0.9, 1.9 ],
 ];
 const TREE_FORK = [ 0.15, 3.7, - 0.05 ];
+// (the trunk's foot, its height in the tree's frame, and its radius with the buttress fins at the foot: at f of the way
+// up it to the fork, a its ring's angle, c its centre there (a ring's direction: about ( sin a, 0, - cos a )); (the
+// mangroves' trunks fixed) the mangroves' roots meet it)
+export const TREE_FOOT = - 0.5;
+function treeTrunkR( f, a, c ) {
+
+	const y = c.y;
+	const r = 0.34 - 0.1 * f;
+	const fin = Math.pow( Math.max( 0, Math.cos( 4 * a + 0.4 ) ), 4 ) * Math.exp( - Math.max( y, 0 ) / 0.8 );
+	return r * ( 1 + 0.9 * fin + 0.25 * Math.exp( - Math.max( y + 0.3, 0 ) / 0.5 ) );
+
+}
 
 export const SHRUB_H = 1.6;
 export const SHRUB_LOBES = [
@@ -698,16 +710,7 @@ export function buildTreeNear( seed = 21, b = new GeoBuilder() ) {
 	const fork = new THREE.Vector3( ...TREE_FORK );
 
 	// trunk with buttress fins at the foot
-	const trunkR = ( f, a, c ) => {
-
-		const y = c.y;
-		const r = 0.34 - 0.1 * f;
-		const fin = Math.pow( Math.max( 0, Math.cos( 4 * a + 0.4 ) ), 4 ) * Math.exp( - Math.max( y, 0 ) / 0.8 );
-		return r * ( 1 + 0.9 * fin + 0.25 * Math.exp( - Math.max( y + 0.3, 0 ) / 0.5 ) );
-
-	};
-
-	addBranch( b, new THREE.Vector3( 0, - 0.5, 0 ), fork, 0.34, 0.24, 10, 7, [ 0, 0, 0, 0 ], H, flex, trunkR );
+	addBranch( b, new THREE.Vector3( 0, TREE_FOOT, 0 ), fork, 0.34, 0.24, 10, 7, [ 0, 0, 0, 0 ], H, flex, treeTrunkR );
 
 	// limbs to the lobes (the first five from the fork, the rest from the middle of a limb)
 	const mids = [];
@@ -771,35 +774,87 @@ export function buildTreeNear( seed = 21, b = new GeoBuilder() ) {
 
 // (M15) Red mangrove's prop roots: arching out and down from the lower trunk into the water all round it, some
 // branching on their way, and a few aerial roots dropping straight from the limbs. For the reference mangrove
-// (MANGROVE_TREE: a canopy tree at that scale and squash, its trunk held up `lift` over the water on them, its
-// fork about 1.4 m over that; Scatter scales them with each one; their own foot is the mud's); bark (part 0) in
-// the roots' material, still (no sway)
-export const MANGROVE_TREE = { s: 0.55, sy: 0.68, lift: 0.55 }; // (lift: its trunk's foot over the water, m)
+// (MANGROVE_TREE: a canopy tree at that scale and squash, its fork about 1.4 m over its trunk's foot; Scatter scales
+// them with each one; their own foot is the mud's); bark (part 0) in the roots' material, still (no sway).
+// (The mangroves' trunks fixed) A red mangrove stands on its roots, its trunk's foot clear of the mud (walking trees),
+// but the trunk doesn't end over them: it divides into them. So the canopy tree's trunk is carried on down under its
+// foot, tapering away, its fins and all at its own ring's angles, and the roots spring from it, the lowest from the
+// taper, the highest a metre up the trunk's side (they'd all come from a ring inside it, the trunk's open,
+// buttressed foot hanging over them). Scatter sets each tree on its roots, its trunk's foot `foot` over the mud
+// (their foot), turned the same way, so they meet wherever the ground is
+export const MANGROVE_TREE = { s: 0.55, sy: 0.68, foot: 0.64 }; // (foot: its trunk's foot over the mud, m)
 export function buildMangroveRoots( seed = 61, b = new GeoBuilder() ) {
 
 	const rand = mulberry32( seed ), V = THREE.Vector3, H = 4.5, still = () => 0, BARK = [ 0, 0, 0, 0 ];
 	const at = ( p0, c, p1, t ) => new V().copy( p0 ).multiplyScalar( ( 1 - t ) * ( 1 - t ) ).addScaledVector( c, 2 * ( 1 - t ) * t ).addScaledVector( p1, t * t );
-	const n = 11;
-	for ( let i = 0; i < n; i ++ ) {
+	const lerp = ( [ a, c ], t ) => a + ( c - a ) * t;
+	// (the trunk in the roots' frame: the tree's own scaled to the reference's, its foot at F; its radius toward
+	// ( ux, uz ) at a height y and its centre there, leaning a little toward its fork; under its foot, the taper's)
+	const { s: hs, sy, foot: F } = MANGROVE_TREE, vs = hs * sy, up = TREE_FORK[ 1 ] - TREE_FOOT;
+	const TOP = F + 0.015, TIP = F - 0.36;
+	const footR = ( ux, uz ) => hs * treeTrunkR( 0, Math.atan2( ux, - uz ), { y: TREE_FOOT } );
+	const taper = ( g ) => 1 - Math.pow( g, 1.6 ); // (g: 0 at its top, 1 at its tip; rounded, as a trunk's end is)
+	const trunk = ( y, ux, uz ) => {
 
-		const a = ( i / n ) * Math.PI * 2 + ( rand() - 0.5 ) * 0.4;
-		const y0 = 0.75 + rand() * 0.8, R = 1.1 + rand() * 1.5, r0 = 0.045 + rand() * 0.02;
-		const p0 = new V( Math.cos( a ) * 0.12, y0, Math.sin( a ) * 0.12 );
-		const p1 = new V( Math.cos( a ) * R, - 0.35, Math.sin( a ) * R );
-		// (out first, then down: an arch)
-		const ctrl = new V( Math.cos( a ) * R * 0.75, y0 + 0.35 + rand() * 0.3, Math.sin( a ) * R * 0.75 );
-		addLimb( b, p0, ctrl, p1, r0, r0 * 0.75, 6, 8, BARK, H, still );
-		if ( rand() < 0.5 ) {
+		if ( y < TOP ) {
 
-			// (a root branching off it, on further out)
-			const q = at( p0, ctrl, p1, 0.45 + rand() * 0.2 ), a2 = a + ( rand() - 0.5 ) * 0.9, R2 = 0.8 + rand() * 0.9;
-			const q1 = new V( q.x + Math.cos( a2 ) * R2, - 0.35, q.z + Math.sin( a2 ) * R2 );
-			const qc = new V( q.x + Math.cos( a2 ) * R2 * 0.6, q.y + 0.15, q.z + Math.sin( a2 ) * R2 * 0.6 );
-			addLimb( b, q, qc, q1, r0 * 0.7, r0 * 0.55, 5, 6, BARK, H, still );
+			const g = Math.min( 1, ( TOP - y ) / ( TOP - TIP ) );
+			return { r: footR( ux, uz ) * taper( g ) + 0.02 * g, cx: 0, cz: 0 };
 
 		}
 
-	}
+		const yl = TREE_FOOT + ( y - F ) / vs, f = ( yl - TREE_FOOT ) / up;
+		return { r: hs * treeTrunkR( f, Math.atan2( ux, - uz ), { y: yl } ), cx: hs * TREE_FORK[ 0 ] * f, cz: hs * TREE_FORK[ 2 ] * f };
+
+	};
+
+	// the trunk's foot, tapering away under it (its ring's 10 angles, so the two meet: down the taper, a ring's
+	// direction is ( sin a, 0, cos a ))
+	addBranch( b, new V( 0, TOP, 0 ), new V( 0, TIP, 0 ), 0, 0, 10, 5, BARK, H, still, ( g, a ) => trunk( TOP - g * ( TOP - TIP ), Math.sin( a ), Math.cos( a ) ).r );
+
+	// the prop roots, in three tiers: from the taper, short and steep; from the trunk's lowest 40 cm; and from up to a
+	// metre over its foot, arching widest. Each tier round the trunk unevenly, turned from the last, each root
+	// wandering to one side as it goes; a root leaves the trunk about level, or rising a little, and comes down steep
+	const TIERS = [
+		{ n: 6, y: [ - 0.3, - 0.05 ], R: [ 0.55, 1.1 ], r: [ 0.042, 0.052 ], rise: [ - 0.1, 0.02 ], radial: 6, rows: 5 },
+		{ n: 7, y: [ 0.0, 0.4 ], R: [ 1.0, 1.9 ], r: [ 0.036, 0.046 ], rise: [ 0.0, 0.16 ], radial: 5, rows: 6 },
+		{ n: 6, y: [ 0.4, 1.05 ], R: [ 1.5, 2.6 ], r: [ 0.03, 0.04 ], rise: [ 0.06, 0.26 ], radial: 5, rows: 6 },
+	];
+	let turn = rand() * Math.PI * 2;
+	TIERS.forEach( ( T, k ) => {
+
+		turn += 2.4;
+		for ( let i = 0; i < T.n; i ++ ) {
+
+			const a = turn + ( i + ( rand() - 0.5 ) * 0.6 ) / T.n * Math.PI * 2, ux = Math.cos( a ), uz = Math.sin( a );
+			const y0 = F + lerp( T.y, rand() ), R = lerp( T.R, rand() ), r0 = lerp( T.r, rand() ), S = trunk( y0, ux, uz );
+			// (from just under the trunk's bark)
+			const p0 = new V( S.cx + ux * ( S.r - r0 * 0.7 ), y0, S.cz + uz * ( S.r - r0 * 0.7 ) );
+			const side = ( rand() - 0.5 ) * 0.5, vx = - uz, vz = ux, out = S.r + ( R - S.r ) * ( 0.62 + rand() * 0.16 );
+			const ctrl = new V( ux * out + vx * side * R * 0.4, y0 + lerp( T.rise, rand() ), uz * out + vz * side * R * 0.4 );
+			const p1 = new V( ux * R + vx * side * R * 0.25, - 0.3, uz * R + vz * side * R * 0.25 );
+			addLimb( b, p0, ctrl, p1, r0, r0 * 0.72, T.radial, T.rows, BARK, H, still );
+			if ( k && rand() < 0.55 ) {
+
+				// (a root branching off it, on further out)
+				const q = at( p0, ctrl, p1, 0.45 + rand() * 0.25 ), a2 = a + ( rand() < 0.5 ? - 1 : 1 ) * ( 0.35 + rand() * 0.5 ), R2 = 0.5 + rand() * 0.8;
+				const qc = new V( q.x + Math.cos( a2 ) * R2 * 0.55, q.y + 0.04 + rand() * 0.1, q.z + Math.sin( a2 ) * R2 * 0.55 );
+				addLimb( b, q, qc, new V( q.x + Math.cos( a2 ) * R2, - 0.3, q.z + Math.sin( a2 ) * R2 ), r0 * 0.68, r0 * 0.5, 4, 5, BARK, H, still );
+
+			}
+
+			if ( rand() < 0.35 ) {
+
+				// (and some forking at the mud, a short leg off to one side)
+				const q = at( p0, ctrl, p1, 0.82 + rand() * 0.06 ), a3 = a + ( rand() - 0.5 ) * 2.2, R3 = 0.25 + rand() * 0.35;
+				const qc = new V( q.x + Math.cos( a3 ) * R3 * 0.6, q.y, q.z + Math.sin( a3 ) * R3 * 0.6 );
+				addLimb( b, q, qc, new V( q.x + Math.cos( a3 ) * R3, - 0.3, q.z + Math.sin( a3 ) * R3 ), r0 * 0.55, r0 * 0.45, 4, 3, BARK, H, still );
+
+			}
+
+		}
+
+	} );
 
 	// (aerial roots dropping from the limbs)
 	for ( let i = 0; i < 4; i ++ ) {

@@ -3,7 +3,7 @@ import { Noise2D, mulberry32, smoothstep, clamp } from '../../util/Noise.js';
 import { WORLD } from '../WorldLayout.js';
 import { getDetailTexture } from '../terrain/DetailTextures.js';
 import { MANGROVE, mangroveAt } from '../terrain/Mangrove.js';
-import { MANGROVE_TREE } from './PlantGeometry.js';
+import { MANGROVE_TREE, TREE_FOOT } from './PlantGeometry.js';
 
 // CPU-side vegetation placement: land cover, exclusion zones and per-type scattering.
 //
@@ -672,8 +672,12 @@ export function* scatterSteps( site, seed = 99, { ferns = true } = {} ) {
 	// --- (M15) the mangroves on the west (terrain/Mangrove.js): red mangrove on their mud, in the water, each
 	// a canopy tree of the yellow-green kind (vegTreeSpecies 2) on its prop roots (out.mangroves, scaled from
 	// PlantGeometry's MANGROVE_TREE); younger and thinner toward their seaward edge; none in the creek, though
-	// their crowns lean out over it. Their trunks stand MANGROVE_TREE.lift over the water on the roots, as a red
-	// mangrove's do. Their own random numbers, last: nothing else on the island moves
+	// their crowns lean out over it. Each trunk stands on its roots, its foot MANGROVE_TREE.foot over theirs (the
+	// mud), as a red mangrove's does, both scaled with it and turned the same way. Their own random numbers, last:
+	// nothing else on the island moves.
+	// ((the mangroves' trunks fixed) The trunks had been set over the water and the roots on the mud, so where the mud
+	// was deeper than the stand's floor, along its seaward edge, a trunk hung over its roots; and the ground raised
+	// since (Vegetation: the flats' cut) raised it a second time, the roots once. One in six hung 0.25 to 1.7 m clear)
 	const mr = mulberry32( seed * 7 + 3 ), mg = {}, [ mx0, mz0, mx1, mz1 ] = MANGROVE.window;
 	out.mangroves = [];
 	yield* scatter( mr, mx0, mz0, mx1, mz1, 3.2, ( x, z ) => {
@@ -690,8 +694,9 @@ export function* scatterSteps( site, seed = 99, { ferns = true } = {} ) {
 		const yaw = mr() * TAU;
 		let sd;
 		do sd = mr(); while ( Math.floor( ( ( sd * 5.31 ) % 1 ) * 4 ) !== 2 );
-		out.trees.push( { x, y: MANGROVE_TREE.lift * s / MANGROVE_TREE.s, z, s, sy, yaw, la: yaw, l: sy, H: 12.5 * s * sy, seed: sd } );
-		out.mangroves.push( { x, y: h, z, s: s / MANGROVE_TREE.s, yaw: yaw + 0.7, la: 0, l: 0, H: 0.02, seed: sd } );
+		const k = s / MANGROVE_TREE.s;
+		out.trees.push( { x, y: h + MANGROVE_TREE.foot * k - TREE_FOOT * s * sy, z, s, sy, yaw, la: yaw, l: sy, H: 12.5 * s * sy, seed: sd } );
+		out.mangroves.push( { x, y: h, z, s: k, yaw, la: 0, l: 0, H: 0.02, seed: sd } );
 
 	} );
 
