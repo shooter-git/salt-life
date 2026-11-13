@@ -94,6 +94,7 @@ import { Wake } from './ocean/Wake.js';
 import { SoundScape, engineOf } from './audio/SoundScape.js';
 import { Game } from './game/Game.js';
 import { Together } from './together/Together.js';
+import { fitStats } from './together/BoatCopies.js';
 import { BoatLamps } from './world/boat/BoatLamps.js';
 import { createGameUI } from './ui/GameUI.js';
 import { PostChain } from './post/PostChain.js';
@@ -2089,6 +2090,8 @@ export class App {
 		// ((M17) and Z, the plotter's: Instruments.stepRange)
 		if ( p.mode === 'boat' && g.state.stats.plotter && g.quietKeys && g.quietKeys() && this.input.hit( 'KeyZ' ) ) g.toast( this.instruments.stepRange(), 1600 );
 		r.radar = this.sweepRadar( dt, r, this.boat.radarBearing );
+		// ((M19) a boat whose plotter's split with her radar's picture, the console with her dome: Instruments)
+		r.split = !! this.boat.splitRadar && !! g.state.stats.radar;
 		this.instruments.update( dt, r );
 
 	}
@@ -2126,6 +2129,8 @@ export class App {
 		// ((M14) and their radar, as their array turns)
 		const arr = ride.group && ride.group.userData.radar;
 		r.radar = this.sweepRadar( dt, r, arr ? ( ( - arr.rotation.y ) % ( Math.PI * 2 ) + Math.PI * 2 ) % ( Math.PI * 2 ) : 0 );
+		// ((M19) hers split with her radar as her fit says: the console with her dome)
+		r.split = c.boatId === 'console' && c.fit !== null && !! fitStats( 'console', c.fit ).radar;
 		return r;
 
 	}
@@ -2775,7 +2780,10 @@ export class App {
 		const swim = aboard ? null : swimBy( p, b ), ride = aboard || swim || ! this.together ? null : this.together.rideLeft();
 		// ((M16) drawn up on the sand, she's as fast as at the dock)
 		// ((M19) no anchor saved with her on the sand)
-		this.store.setItem( BOAT_KEY, JSON.stringify( boatLeft( { x: b.position.x, z: b.position.z, heading: b.getYaw(), anchor: b.beached ? null : b.anchor, sock: b.sock, moored: moored || b.beached, aboard, on, helm, swim, ride, T: islandTime( s.day, s.timeOfDay ), at: Date.now(), boat: this.boat.id } ) ) );
+		// ((M19) staked, by her pole or her Power-Poles: kept held where she is, as at anchor where the pole went in (the stake's not
+		// kept itself: she comes back on her anchor there))
+		const held = b.anchor || ( b.stake ? new THREE.Vector3( b.stake.x, this.terrainData.heightAt( b.stake.x, b.stake.z ), b.stake.z ) : null );
+		this.store.setItem( BOAT_KEY, JSON.stringify( boatLeft( { x: b.position.x, z: b.position.z, heading: b.getYaw(), anchor: b.beached ? null : held, sock: b.sock, moored: moored || b.beached, aboard, on, helm, swim, ride, T: islandTime( s.day, s.timeOfDay ), at: Date.now(), boat: this.boat.id } ) ) );
 		if ( this.together ) this.together.mineBoat();
 
 	}

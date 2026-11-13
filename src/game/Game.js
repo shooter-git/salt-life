@@ -74,6 +74,9 @@ const UPWIND = { x: - NORTH.dir.x, z: - NORTH.dir.y };
 // and it goes down once the boat is slower than this (m/s)
 const BERTH_M = 14;
 const ANCHOR_SPEED = 2.5;
+// (M19) the console's trolling motor wants this much water under its prop (m); her Power-Poles take this long to run down (s:
+// a Blade's 4.0, Power-Pole's)
+const TROLL_DEPTH = 0.75, POLE_DOWN_S = 4;
 const ANCHOR_MIN_M = 0.1; // (M19) m of water at her stem head: under it there's nothing to anchor in (a kayak run up on the sand)
 // (M15) the far places are looked for from this far from the middle of the world (m: Game.updateFound)
 const FOUND_FROM = 1000;
@@ -761,6 +764,7 @@ export class Game {
 		// (M10) the bucket on deck; the crank at the helm while she's stalled
 		this.updateBail( inp, p );
 		this.updateBow( inp, p );
+		this.updateFittings( inp, p, dt );
 		this.daysOut.update( dt, inp, p );
 		this.challenges.update( dt );
 		this.flyCast.update( dt );
@@ -1199,16 +1203,17 @@ export class Game {
 	}
 
 	// (M17) her anchor worked at her bow, by her roller (Vessel's bowAnchor: the lobster boat's): let go where she lies, or got up,
-	// as you stand by it, and her drift sock in. She's yours to anchor: riding in someone else's, it's theirs
+	// as you stand by it, and her drift sock in. She's yours to anchor: riding in someone else's, it's theirs. ((M19) The console's
+	// at her foredeck too, the sportfisher's by the windlass switch on her bridge: A.y, only at that height; A.windlass, its words)
 	updateBow( inp, p ) {
 
 		const b = this.app.boatCtl, A = b.model && b.model.bowAnchor, st = this.state.stats;
-		const at = !! A && p.mode === 'deck' && ! p.riding && ! p.busy && ! p.climbing && ! b.moored && ! b.hauled && Math.hypot( p.deckPos.x - A.x, p.deckPos.z - A.z ) < A.r;
+		const at = !! A && p.mode === 'deck' && ! p.riding && ! p.busy && ! p.climbing && ! b.moored && ! b.hauled && Math.hypot( p.deckPos.x - A.x, p.deckPos.z - A.z ) < A.r && ( A.y === undefined || Math.abs( p.deckPos.y - A.y ) < 1 );
 		p.anchorWork = at;
 		if ( ! at || p.prompt ) return;
 		if ( b.anchor || b.sock ) {
 
-			p.prompt = { key: 'E', text: b.anchor ? 'Get the anchor up' : 'Get the drift sock in' };
+			p.prompt = { key: 'E', text: b.anchor ? ( A.windlass ? 'Windlass: get the anchor up' : 'Get the anchor up' ) : 'Get the drift sock in' };
 			if ( inp.hit( 'KeyE' ) ) {
 
 				const sock = ! b.anchor;
@@ -1227,10 +1232,90 @@ export class Game {
 		else if ( b.speed >= ANCHOR_SPEED ) p.prompt = { key: ELLIPSIS, text: 'She\'s to slow down to anchor' };
 		else {
 
-			p.prompt = { key: 'E', text: 'Let go the anchor' };
+			p.prompt = { key: 'E', text: A.windlass ? 'Windlass: let go the anchor' : 'Let go the anchor' };
 			if ( inp.hit( 'KeyE' ) ) this.dropAnchor( true );
 
 		}
+
+	}
+
+	// (M19) her fittings that hold her or drive her (stream BOATS: docs/m19/boats.md). In your own boat, not riding:
+	//   M    at the console's helm, her trolling motor down into the water in place of her outboards, or up again
+	//   K    aboard the console, her two Power-Poles down into the bottom (held there 4 s on, her heading too), or up; sat in the
+	//        kayak, her stake-out pole driven in through its scupper (she swings about it), or pulled
+	// Each as deep as it reaches (the poles' stakeM), and her model draws it down or up. Taking the helm leaves them be: the
+	// trolling motor's her drive, and a stake holds her against her engines, as a real one does
+	updateFittings( inp, p, dt = 1 / 60 ) {
+
+		const b = this.app.boatCtl, M = b.model, st = this.state.stats, mine = ! p.riding && ( p.mode === 'boat' || p.mode === 'deck' ), quiet = this.quietKeys();
+		// (another's poles and motor don't follow you about: a boat that isn't yours, or yours that's been put away)
+		if ( M && M.setMotorDown ) M.setMotorDown( !! b.trolling );
+		if ( M && M.setPoleDown ) M.setPoleDown( !! b.stake || this._poleT > 0 );
+		if ( M && M.setStaked ) M.setStaked( !! b.stake );
+		if ( this._poleT > 0 && ( this._poleT -= dt ) <= 0 ) this._stakeHer( b, st.stakeM, true );
+		if ( ! mine || ! quiet || b.moored || b.hauled || b.beached ) return;
+		const seat = !! ( M && M.seated );
+		if ( inp.hit( 'KeyM' ) && p.mode === 'boat' && ! seat && M && M.trollingAt ) {
+
+			if ( b.trolling ) {
+
+				b.trolling = null;
+				this.toast( 'Trolling motor up · her outboards down', 2200 );
+
+			} else if ( ! ( st.trollingN > 0 ) ) this.toast( 'No trolling motor on her · Marta sells one', 2400 );
+			else if ( this.depthAt( b.toWorld( M.trollingAt, _a ) ) < TROLL_DEPTH ) this.toast( 'Too shallow to put the trolling motor down', 2200 );
+			else {
+
+				b.trolling = { n: st.trollingN, at: M.trollingAt };
+				this.toast( 'Trolling motor down · quiet on the flats: the lever and the wheel', 2600 );
+
+			}
+
+		}
+
+		if ( inp.hit( 'KeyK' ) && ( M && M.stakeAt ) ) {
+
+			if ( b.stake || this._poleT > 0 ) {
+
+				b.stake = null;
+				this._poleT = 0;
+				this.toast( seat ? 'Pole pulled · she\'s adrift' : 'Power-Poles up · she\'s adrift', 2200 );
+
+			} else if ( ! ( st.stakeM > 0 ) ) this.toast( seat ? 'No stake-out pole for her · Marta sells one' : 'No Power-Poles on her · Marta sells them', 2400 );
+			else if ( seat ) this._stakeHer( b, st.stakeM, false );
+			else if ( this.depthAt( b.toWorld( M.stakeAt, _a ) ) > st.stakeM ) this.toast( `Too deep for her Power-Poles · they hold in ${ feet( st.stakeM ) } of water`, 2600 );
+			else {
+
+				this._poleT = POLE_DOWN_S; // (they run down, 4 s)
+				this.toast( 'Power-Poles going down', 1600 );
+
+			}
+
+		}
+
+	}
+
+	// the water's depth under a point (m)
+	depthAt( at ) {
+
+		return Math.max( 0, G.seaLevel.value - this.app.terrainData.heightAt( at.x, at.z ) );
+
+	}
+
+	// (M19) a pole into the bottom where her pole's point is: two of them (the console's) hold her heading as well
+	_stakeHer( b, reach, both ) {
+
+		const M = b.model, at = b.toWorld( M.stakeAt, new Vector3() ), d = this.depthAt( at );
+		this._poleT = 0;
+		if ( d > reach ) {
+
+			this.toast( both ? `Too deep for her Power-Poles · they hold in ${ feet( reach ) } of water` : `Too deep for her pole · it stakes her in ${ feet( reach ) } of water`, 2600 );
+			return;
+
+		}
+
+		b.stake = { x: at.x, z: at.z, at: M.stakeAt, yaw: both ? b.getYaw() : undefined };
+		this.toast( both ? 'Power-Poles down · she\'s held' : `Staked out in ${ feet( d ) } of water · she swings about it`, 2200 );
 
 	}
 

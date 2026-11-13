@@ -27,6 +27,8 @@ export const ACTIONS = {
 	camera: { key: 'KeyV' },
 	horn: { key: 'Horn', hold: true },
 	plotter: { key: 'KeyZ' },
+	motor: { key: 'KeyM' }, // ((M19) the console's trolling motor, at her helm: Game.updateFittings)
+	stake: { key: 'KeyK' }, // ((M19) the console's Power-Poles, the kayak's stake-out pole)
 	guide: {},
 };
 
@@ -93,9 +95,14 @@ export function offers( player, game = null, o = {} ) {
 
 	}
 
+	// ((M19) her trolling motor at the console's helm; her Power-Poles aboard her, or the kayak's pole sat in her; stood up and sat
+	// down in the Pilot (Space): Game.updateFittings, kayak/Seat.js)
+	const ctl = app && app.boatCtl, M = ctl && ctl.model, st = game && game.state && game.state.stats, mine = player && ! player.riding && ( player.mode === 'boat' || player.mode === 'deck' );
+	o.motor = mine && helm && M && M.trollingAt && st && st.trollingN > 0 ? ( ctl.trolling ? 'Outboards' : 'Trolling motor' ) : null;
+	o.stake = mine && M && M.stakeAt && st && st.stakeM > 0 ? ( ctl.stake ? ( seat ? 'Pull the pole' : 'Poles up' ) : ( seat ? 'Stake out' : 'Power-Poles' ) ) : null;
 	o.camera = player && player.mode === 'boat' ? 'Camera' : null;
 	o.dive = player && player.mode === 'swim' ? 'Dive' : null;
-	o.jump = prompt && prompt.key === 'Space' ? prompt.text : player && player.mode === 'swim' ? 'Swim up' : player && player.mode === 'boat' ? null : 'Jump';
+	o.jump = prompt && prompt.key === 'Space' ? prompt.text : player && player.mode === 'swim' ? 'Swim up' : player && player.mode === 'boat' ? ( seat && M && M.pedal ? ( M.standing ? 'Sit down' : 'Stand up' ) : null ) : 'Jump';
 	// (the first-play guide again: H, ashore; from the wheel, anywhere)
 	o.guide = game && game.guide && ! game.guide.open ? 'Guide' : null;
 	return o;

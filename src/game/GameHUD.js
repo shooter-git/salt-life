@@ -763,12 +763,13 @@ export class GameHUD {
 		const room = this.game.state.roomFor( info ), box = this.game.state.box(), where = boxIn( box );
 		// ((v2.1.6) one just kept may go straight back instead, alive, and then it isn't in the day's bag)
 		const free = this.free = ! room && ! info.trophyView && this.game.state.canFree( info );
-		if ( info.why === 'short' ) note = `<div class="gm-catch-note is-warn">Short: under ${ ( f.minCm * CARAPACE / IN ).toFixed( 0 ) } in on the gauge · back it goes, to grow${ board }.</div>`;
+		if ( info.why === 'short' ) note = `<div class="gm-catch-note is-warn">Short: under ${ ( f.minCm * CARAPACE / IN ).toFixed( 2 ) } in on the gauge · back it goes, to grow${ board }.</div>`; // ((M19) the Bahamas' 3.25
 		else if ( info.why === 'berried' ) note = `<div class="gm-catch-note is-warn">Berried: she's carrying eggs under her tail · back she goes${ board }.</div>`;
 		else if ( info.trophyView || info.bonus || info.hurt ) note = `<div class="gm-catch-note">${ trophyNote( info ) }${ board }.</div>`;
 		else if ( info.tagged ) note = `<div class="gm-catch-note">Tagged and let go alive for Marta's tag-and-release log: <b>$${ info.tagged }</b>${ board }.</div>`;
 		else if ( info.released ) note = `<div class="gm-catch-note">${ f.cr ? 'Catch and release: everyone lets one go. Measured and' : 'Protected: measured and' } let go alive${ board }.</div>`;
 		else if ( info.bag && info.bag.full ) note = `<div class="gm-catch-note is-warn">That's your ${ info.bag.max } for today, the most anyone may keep · back it goes</div>`;
+		else if ( info.aboard ) note = `<div class="gm-catch-note is-warn">That's ${ Math.round( info.aboard.max / 0.45359237 ) } lb of them aboard, the most she may carry · back it goes</div>`; // ((M19) the crawfish's
 		else if ( room ) note = `<div class="gm-catch-note is-warn">No room in ${ where } for it · let fish go to make room, or let this one go</div>`;
 		else if ( ! info.kept ) note = `<div class="gm-catch-note is-warn">${ info.kg > box.cap ? `Too big for ${ where }, even empty` : box.others > 0 ? `No room in ${ where } with ${ box.whose ? 'the rest of the catch' : 'your guests\' catch' } in it` : box.ice > 0 ? `No room in ${ where } beside the ice that keeps the catch` : `No room in ${ where }` } · you let it go</div>`;
 		else if ( f.bounty && ! info.islandRecord && ! info.record ) note = `<div class="gm-catch-note">An invader on the reef: Joe pays $${ f.bounty } a fish on top.</div>`;

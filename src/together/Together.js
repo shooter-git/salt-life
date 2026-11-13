@@ -1618,7 +1618,7 @@ export class Together {
 		// ((M14) her deck floodlights' lenses, as lit as yours are: fitted, and as dark as it is)
 		const flood = app.game.floodsOn;
 		if ( flood > 0 ) body.L = r2( flood );
-		if ( body.B && ( boat.anchor || boat.moored ) ) body.A = 1; // (it's at anchor or moored: its lamps say so)
+		if ( body.B && ( boat.anchor || boat.moored || boat.stake ) ) body.A = 1; // (it's at anchor or moored: its lamps say so. (M19) Or staked)
 		// (the engine's revs: what the others hear. (M16) Whoever's at her helm, you or one of them; riding, not yours)
 		const running = boat.driven && ! p.riding;
 		if ( running ) body.E = r2( boat.rpm );

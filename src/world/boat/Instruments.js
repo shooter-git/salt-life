@@ -335,7 +335,17 @@ export class BoatInstruments {
 		if ( reading ) {
 
 			this._sounder( reading );
-			this._chart( reading );
+			// ((M19) a plotter split with the radar's picture, as a small boat's one display has it (the console's: her panel has
+			// room for two screens, the chart's and the sounder's): the chart in its left half, the radar in its right)
+			if ( reading.split && reading.radar ) {
+
+				const [ x, y, w, h ] = RECTS.chart, half = Math.floor( w / 2 );
+				this._chart( reading, [ x, y, half - 2, h ] );
+				reading.radar.draw( g, [ x + half + 2, y, w - half - 2, h ], reading );
+				g.fillStyle = '#05080a';
+				g.fillRect( x + half - 2, y, 4, h );
+
+			} else this._chart( reading );
 			if ( reading.radar ) reading.radar.draw( g, RECTS.radar, reading );
 
 		}
@@ -644,9 +654,9 @@ export class BoatInstruments {
 
 	// the chart plotter: north up, about her, her track, her heading, speed and position; (M15) your chart, its
 	// soundings and names, your marks, where the fish were, home and the fuel for it
-	_chart( reading ) {
+	_chart( reading, rect = RECTS.chart ) {
 
-		const g = this.ctx, [ x, y, w, h ] = RECTS.chart;
+		const g = this.ctx, [ x, y, w, h ] = rect;
 		const across = this.rangeStep >= 0 ? PLOTTER_NM[ this.rangeStep ] * 1852 : plotterRange( reading.view || 0, this._slowFor ), s = w / across; // px a metre
 		const rx = reading.x, rz = reading.z;
 		// ((M16) its colours by the light: S-52's day, dusk and night, as its chart is drawn)
@@ -661,7 +671,8 @@ export class BoatInstruments {
 		const sx = ( wx ) => cx + ( wx - rx ) * s, sy = ( wz ) => cy + ( wz - rz ) * s;
 		const map = reading.chart, log = reading.log;
 		// (the chart: PlotterChart. Her spot's 12 px below the screen's middle)
-		const plot = this.plotter || ( this.plotter = new PlotterChart( { k: this.k, w, h } ) );
+		// ((M19) a split screen's chart its own, half as wide)
+		const plot = w === RECTS.chart[ 2 ] ? this.plotter || ( this.plotter = new PlotterChart( { k: this.k, w, h } ) ) : this._halfPlotter || ( this._halfPlotter = new PlotterChart( { k: this.k, w, h } ) );
 		plot.draw( g, { map, log, across, x, y, w, h, vx: rx, vz: rz - 12 / s, s, palette } );
 
 		if ( map && map.soundings && log ) {

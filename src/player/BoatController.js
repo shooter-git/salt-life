@@ -57,6 +57,10 @@ const CONTACT = { k: 400000, c: 30000, slide: 6000, pileK: 260000, pileC: 8000 }
 // turning circle, speed lost in turns, outward heel); running trim and rise with speed (the bow
 // lifts over the hump, then runs at a few degrees); prop walk astern. Grounding, pier piles and
 // mooring lines as before.
+// (M19) a trolling motor's thrust gone by this speed through the water (m/s: its prop's pitch speed, set so the console's top on
+// it is the sources' 4 knots, 498 N falling to 314 there: judgement), and how far the wheel turns it
+const TROLL_U = 5.5, TROLL_TURN = 0.9;
+const _tw = new THREE.Vector3(), _tf = new THREE.Vector3();
 // (M19) a stake's spring (rad/s: how stiffly it holds her, critically damped); and a gyro stabilizer's precession against her
 // roll, a damping of `roll` per second on her roll's inertia at rest, none past `fade` m/s through the water: a Seakeeper takes
 // 82 to 95% of a boat's roll at rest and less under way (docs/m19/sources-big-game.md). On the real sportfisher in Node,
@@ -123,6 +127,9 @@ export class BoatController {
 		// into the bottom, { x, z } in the world, at: that point in her frame, yaw: her heading held too (two poles), or her
 		// left free to swing about it (one); null: none. Set by stream BOATS, held here (stake below)
 		this.stake = null;
+		// ((M19) on her trolling motor, in place of her engines: { n: its thrust (N), at: its prop in her frame, turn: how far the
+		// wheel turns it (rad) }, or null. Her engines' revs run down to nothing while it drives her (stream BOATS: the console's)
+		this.trolling = null;
 		// ((M19) a gyro stabilizer running, 0..1: her roll damped the more she's slow (stream BIG sets it from her fit and her
 		// generator; GYRO below)
 		this.gyro = 0;
@@ -144,6 +151,8 @@ export class BoatController {
 	// Where she lies and what she's doing stay as they are; see App.setBoat
 	setModel( model ) {
 
+		// ((M19) another boat: the last one's pole and trolling motor aren't hers)
+		if ( this.model && this.model !== model ) this.stake = this.trolling = null;
 		this.model = model;
 		const hydro = model.hydro, H = this.handling = model.handling, E = H.engine;
 		this.mass = hydro.suggestedMass;
@@ -220,6 +229,19 @@ export class BoatController {
 	forward( out ) {
 
 		return out.set( 0, 0, 1 ).applyQuaternion( this.quaternion );
+
+	}
+
+	// (M19) her trolling motor's thrust at her bow, turned by the wheel (the motor turns, not a rudder), forward or astern as the
+	// lever is, falling to nothing at TROLL_U through the water, and nothing out of the water or on the bottom
+	_troll( q ) {
+
+		const T = this.trolling, at = this.toWorld( T.at, _tw ), wet = Math.min( 1, Math.max( 0, ( this.sampleWaterAt( at ) - at.y ) / 0.2 + 0.5 ) );
+		const run = this.driven && Math.abs( this.throttle ) > 0.02, ahead = Math.sign( this.throttle ) * q.u;
+		const n = run ? T.n * this.throttle * Math.max( 0, 1 - Math.max( 0, ahead ) / TROLL_U ) * wet : 0;
+		const a = this.steer * ( T.turn ?? TROLL_TURN );
+		q.addForceAt( _tf.copy( q.fwd ).multiplyScalar( Math.cos( a ) * n ).addScaledVector( q.side, Math.sin( a ) * n ), at );
+		this.thrust = n;
 
 	}
 
@@ -341,7 +363,7 @@ export class BoatController {
 
 		// engine: spools up after the lever (~0.9 s), a little slower down; idles while driven. (M10) Stalled
 		// at the helm, its revs run down in a moment
-		const run = this.driven && this.engineOn;
+		const run = this.driven && this.engineOn && ! this.trolling;
 		const lever = run ? Math.abs( this.throttle ) : 0;
 		const target = Math.max( lever, run ? 0.15 : 0 ) * this.cough;
 		const tau = target > this.rpm ? 0.9 : this.driven && ! run ? 0.35 : 1.3;
@@ -492,7 +514,8 @@ export class BoatController {
 		_q.comZ = this.com.z;
 		_q.wetD = wetD;
 		_q.torque = T;
-		H.propulsion( this, _q );
+		if ( this.trolling ) this._troll( _q );
+		else H.propulsion( this, _q );
 
 		// ---- running trim and rise: the bow lifts over the hump, then the hull runs at a few degrees
 		// with some dynamic lift (only while the hull is in the water)
@@ -679,6 +702,7 @@ export class BoatController {
 		this.beached = false;
 		this.beaching = false;
 		this.stake = null;
+		this.trolling = null;
 		this.helmsman = null;
 		if ( this.model.atHome ) this.model.atHome( this ); // ((M16) kept on the sand, not at the dock)
 

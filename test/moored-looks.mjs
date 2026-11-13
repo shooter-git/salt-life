@@ -25,8 +25,9 @@ const ok = ( c, what ) => {
 
 // the most a boat's look is let have, every part of her fitted (tools/moored-bake.mjs TARGET), and a floor: she's more than her stand-in
 const MOST = { kayak: 1500, console: 3800, lobster: 3800, sportfisher: 4800 };
-const ALL = { tTop: true, twin: true, diveLadder: true, tankRack: true, tower: true, outriggers: true, chair: true, holdKg: 99, finder: true, trolley: true, anchorM: 10 };
-const NONE = { tTop: false, twin: false, diveLadder: false, tankRack: false, tower: false, outriggers: false, chair: false, holdKg: 12, finder: false, trolley: false, anchorM: 0 };
+// ((M19) and M19's: the console's trolling motor, Power-Poles and radar, the kayak's pedal drive and pole)
+const ALL = { tTop: true, twin: true, diveLadder: true, tankRack: true, tower: true, outriggers: true, chair: true, holdKg: 99, finder: true, trolley: true, anchorM: 10, trollingN: 498, stakeM: 2.4, radar: true, pedal: true };
+const NONE = { tTop: false, twin: false, diveLadder: false, tankRack: false, tower: false, outriggers: false, chair: false, holdKg: 12, finder: false, trolley: false, anchorM: 0, trollingN: 0, stakeM: 0, radar: false, pedal: false };
 const tris = ( g ) => g.index.count / 3;
 
 // what of a model's drawn: its meshes that show, as far as each one's drawn
@@ -79,8 +80,9 @@ for ( const id of Object.keys( BOATS ) ) {
 	const fittedOf = ( s ) => {
 
 		model.fit( s );
-		if ( id === 'kayak' ) return Object.fromEntries( model._fitKey.split( ',' ).map( ( v, i ) => [ [ 'cooler', 'crate', 'puck', 'trolley' ][ i ], v === 'true' ] ) );
-		if ( id === 'console' ) return { tTop: model.fitted.tTop, tankRack: model.fitted.tankRack, twin: model.fitted.twin, single: ! model.fitted.twin, ladderUp: model.fitted.diveLadder };
+		// ((M19) and M19's: the kayak's pedal drive and pole (staked: never, as she's left), the console's three and her anchor)
+		if ( id === 'kayak' ) return Object.fromEntries( model._fitKey.split( ',' ).map( ( v, i ) => [ [ 'cooler', 'crate', 'puck', 'trolley', 'pedal', 'pole', 'staked' ][ i ], v === 'true' ] ) );
+		if ( id === 'console' ) return { tTop: model.fitted.tTop, tankRack: model.fitted.tankRack, twin: model.fitted.twin, single: ! model.fitted.twin, ladderUp: model.fitted.diveLadder, trolling: model.fitted.trolling, powerPole: model.fitted.powerPole, radar: model.fitted.radar, anchorStowed: true };
 		return { ...model.fitted };
 
 	};
@@ -94,7 +96,7 @@ for ( const id of Object.keys( BOATS ) ) {
 
 	}
 
-	ok( Object.keys( parts ).every( ( k ) => lookSign( id, { ...NONE, [ k === 'single' ? 'twin' : k === 'cooler' || k === 'crate' ? 'holdKg' : k === 'puck' ? 'finder' : k === 'ladderUp' ? 'diveLadder' : k ]: k === 'crate' || k === 'cooler' ? 99 : true } ) !== lookSign( id, NONE ) ), `${ id }: a change in any of them is a new look` );
+	ok( Object.keys( parts ).filter( ( k ) => ! parts[ k ].always ).every( ( k ) => lookSign( id, { ...NONE, [ k === 'single' ? 'twin' : k === 'cooler' || k === 'crate' ? 'holdKg' : k === 'puck' ? 'finder' : k === 'ladderUp' ? 'diveLadder' : k ]: k === 'crate' || k === 'cooler' ? 99 : true } ) !== lookSign( id, NONE ) ), `${ id }: a change in any of them is a new look` );
 	// her paint: on her topsides alone (the kayak's all tinted by it, as her model's material is), the colour her model makes
 	// of it, and as she came without one
 	const paintOn = ( hex ) => {

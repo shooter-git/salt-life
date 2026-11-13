@@ -11,6 +11,7 @@ import { OUTBOARD } from './Moulded.js';
 import { buildHull, DECK, RODS_AT, hullAt } from './ConsoleHull.js';
 import { buildHelm, wheelGeometry, throttleGeometry, CONSOLE, POST, TOP, RACK, WHEEL } from './ConsoleHelm.js';
 import { buildLadder, LADDER } from './ConsoleStern.js';
+import { buildFittings, TROLLING, POLES } from './ConsoleFittings.js';
 import { CONSOLE_HANDLING } from './ConsoleHandling.js';
 import { STEER_MAX, TRIM } from './Outboards.js';
 
@@ -30,7 +31,13 @@ const _p = new Vector3();
 
 // (M16) The center console: a 23 ft deep-V with an open deck all round the helm, a T-top, outboards on a bracket, a door in
 // the transom to the platform and a dive ladder over its side. Modelled after the Regulator 23: docs/m16/console.md.
-const fittedOf = ( s ) => ( { twin: !! s.twin, tTop: !! s.tTop, diveLadder: !! s.diveLadder, tankRack: !! s.tankRack } );
+// ((M19) and M19's: her trolling motor, Power-Poles and radar, from gearStats' (trollingN, stakeM, radar) or a copy's fit (trolling,
+// powerPole, radar: together/BoatCopies.js))
+const fittedOf = ( s ) => ( { twin: !! s.twin, tTop: !! s.tTop, diveLadder: !! s.diveLadder, tankRack: !! s.tankRack, trolling: !! ( s.trolling ?? s.trollingN > 0 ), powerPole: !! ( s.powerPole ?? s.stakeM > 0 ), radar: !! s.radar } );
+// (M19) which of her M19 fittings are drawn: each fitted, the ones that move as they are (stowed, or motorDown, poleDown). The radar's
+// dome is on her T-top, which it can't be bought without (Gear's needs)
+const m19On = ( F, motorDown, poleDown ) => ( { trolling: F.trolling && ! motorDown, motorDown: F.trolling && motorDown, powerPole: F.powerPole && ! poleDown, poleDown: F.powerPole && poleDown, radar: F.radar } );
+const RADAR_RPS = 24 / 60; // (M19) her dome's turns a second (Garmin's and Raymarine's 24 rpm)
 
 export class ConsoleModel extends Vessel {
 
@@ -46,6 +53,7 @@ export class ConsoleModel extends Vessel {
 		buildHull( kit, lines );
 		buildHelm( kit, lines, parts );
 		buildLadder( kit, lines );
+		buildFittings( kit, lines ); // ((M19) her trolling motor, Power-Poles and radar dome)
 
 		// ---- one mesh a material; what's fitted says what of its index is drawn (fit)
 		this._ranges = {};
@@ -122,6 +130,15 @@ export class ConsoleModel extends Vessel {
 		this.propeller = new Vector3( 0, MOUNT.y - 0.79, MOUNT.z - 0.5 );
 		this.rudder = new Vector3( 0, MOUNT.y - 0.79, MOUNT.z - 0.2 );
 		this.bowSprayPoints = this.waterlinePoints( [ 0.9, 1.4, 1.9, 2.3 ] );
+		// ((M19) her anchor's worked at her bow, on her foredeck by the locker and the stem's roller (Game.updateBow), as the lobster
+		// boat's is)
+		this.bowAnchor = { x: 0, z: 3.7, r: 0.9 };
+		// ((M19) where her trolling motor's prop is, down (BoatController.trolling), and the point of her her Power-Poles hold
+		// (BoatController.stake: both, so her heading too); her plotter's split with her radar's picture when she has one)
+		this.trollingAt = new Vector3( TROLLING.x, TROLLING.down.pod, TROLLING.down.z );
+		this.stakeAt = new Vector3( 0, 0, POLES.z - 0.42 );
+		this.stakeDepth = POLES.down;
+		this.splitRadar = true;
 		this.colliders = this._buildColliders();
 		this._topShelter = this.shelterBox( TOP.halfW - 0.04, S - 0.5, TOP.under - 0.02, TOP.z0 + 0.06, TOP.z1 - 0.06 );
 		this.shelter = this._topShelter;
@@ -155,8 +172,11 @@ export class ConsoleModel extends Vessel {
 		this._steer = 0;
 		this._throttle = 0;
 		this._trim = TRIM.up;
-		this.fitted = { twin: true, tTop: true, diveLadder: true, tankRack: true };
+		this.fitted = { twin: true, tTop: true, diveLadder: true, tankRack: true, trolling: false, powerPole: false, radar: false };
 		this._ladderDown = null;
+		this._anchorDown = false; // ((M19) her anchor off the roller, down: setAnchorStowed)
+		this._motorDown = false; // ((M19) her trolling motor down in the water: setMotorDown)
+		this._poleDown = false; // ((M19) her Power-Poles down: setPoleDown)
 		this.covered = false;
 		this.fit( this.fitted );
 		this.setLadder( false );
@@ -191,6 +211,8 @@ export class ConsoleModel extends Vessel {
 			tTop: this.fitted.tTop, tankRack: this.fitted.tankRack, twin: this.fitted.twin, single: ! this.fitted.twin,
 			coverDown: this.fitted.tTop && this.covered,
 			ladderUp: this.fitted.diveLadder && ! this._ladderDown, ladderDown: this.fitted.diveLadder && !! this._ladderDown,
+			anchorStowed: ! this._anchorDown,
+			...m19On( this.fitted, this._motorDown, this._poleDown ),
 		};
 		for ( const name of Object.keys( this._ranges ) ) {
 
@@ -234,7 +256,7 @@ export class ConsoleModel extends Vessel {
 	dressCopy( copy, stats, shared ) {
 
 		const F = fittedOf( stats ), down = F.diveLadder && !! stats.ladderDown;
-		const on = { tTop: F.tTop, tankRack: F.tankRack, twin: F.twin, single: ! F.twin, coverDown: false, ladderUp: F.diveLadder && ! down, ladderDown: down };
+		const on = { tTop: F.tTop, tankRack: F.tankRack, twin: F.twin, single: ! F.twin, coverDown: false, ladderUp: F.diveLadder && ! down, ladderDown: down, anchorStowed: true, ...m19On( F, !! stats.motorDown, !! stats.poleDown ) };
 		for ( const name of Object.keys( this._ranges ) ) {
 
 			const was = this.meshes[ name ], mesh = was && copy.getObjectByName( was.name );
@@ -279,7 +301,48 @@ export class ConsoleModel extends Vessel {
 	// (M17, together/) how she is just now that someone else's copy of her shows: her ladder down (BoatCopies.fitWire)
 	fitNow() {
 
-		return { ladderDown: !! this.fitted.diveLadder && !! this._ladderDown };
+		return { ladderDown: !! this.fitted.diveLadder && !! this._ladderDown, poleDown: !! this.fitted.powerPole && this._poleDown, motorDown: !! this.fitted.trolling && this._motorDown };
+
+	}
+
+	// (M19) her trolling motor down in the water, or stowed on her foredeck; her Power-Poles down, or stood up
+	setMotorDown( on ) {
+
+		if ( this._motorDown === on ) return;
+		this._motorDown = on;
+		this._applyFit();
+
+	}
+
+	setPoleDown( on ) {
+
+		if ( this._poleDown === on ) return;
+		this._poleDown = on;
+		this._applyFit();
+
+	}
+
+	// (M19) her dome's sweep, clockwise from her bow, as it turns (none fitted: still)
+	get radarBearing() {
+
+		return this.fitted.radar ? ( performance.now() / 1000 * RADAR_RPS * Math.PI * 2 ) % ( Math.PI * 2 ) : 0;
+
+	}
+
+	// (M19) what the fish hear of her: on her trolling motor, no engine, only her hull's push (a trolling motor's prop is quieter
+	// than a push pole on shell, the sources say: docs/m19/sources-boats-bait.md, section 3); else as every boat (null)
+	noise( ctl ) {
+
+		return ctl && ctl.trolling ? { engine: false, knock: 0, hull: true } : null;
+
+	}
+
+	// (M19) her anchor drawn on her roller, or not while it's down (as the lobster boat's: Game.updateAnchor)
+	setAnchorStowed( on ) {
+
+		if ( this._anchorDown === ! on ) return;
+		this._anchorDown = ! on;
+		this._applyFit();
 
 	}
 

@@ -13,6 +13,7 @@ const _boatQ = new Quaternion(), _yawQ = new Quaternion(), _base = new Quaternio
 const smooth = ( x ) => x * x * ( 3 - 2 * x );
 
 const CHASE = { dist: 6.2, min: 3.2, max: 24, height: 0.65 };
+const STAND_SPEED = 0.6; // (M19) m/s: the most she's going for you to stand up in her
 
 export function updateSeat( p, dt ) {
 
@@ -25,10 +26,18 @@ export function updateSeat( p, dt ) {
 	// the paddle laid by with the rod out, and taken up again
 	const full = p.handsFull || p.busy;
 	const free = ! full && ! p.helmHeld && ! M.sliding;
-	st.held = full || p.helmHeld;
+	// ((M19) the Pilot (the pedal drive): Space stands you up in her (near enough still) and sits you down; sat, W and S pedal her,
+	// hands free, A and D her hand rudder; stood up, with her pole, they pole her in water it reaches the bottom in. The paddle's
+	// laid by for either: Pedal.js)
+	if ( M.pedal && inp.hit( 'Space' ) && ! p.helmHeld && ( M.standing || b.speed < STAND_SPEED ) ) M.standing = ! M.standing;
+	if ( ! M.pedal ) M.standing = false;
+	M.drive = M.pedal && ! M.standing ? 'pedal' : M.standing && M.pole ? 'pole' : null;
+	M.helmEye.y = M.standing ? M.standEye : M.sitEye;
+	const drives = !! M.drive && ! p.helmHeld && ! M.sliding;
+	st.held = full || p.helmHeld || !! M.drive || M.standing;
 
 	let throttle = 0, steer = 0;
-	if ( free ) {
+	if ( free || drives ) {
 
 		const hard = inp.down( 'ShiftLeft' ) || inp.down( 'ShiftRight' );
 		if ( inp.down( 'KeyW' ) ) throttle = hard ? 1 : 0.7;
@@ -60,9 +69,11 @@ export function updateSeat( p, dt ) {
 	else if ( free ) {
 
 		const off = p._ashore ? ( M.canPullUp( b ) ? 'Step out and pull her up' : 'Step out' ) : 'Over the side';
-		p.prompt = { key: 'E', text: `${ off }   ·   V  camera   ·   R  the rod` };
+		p.prompt = { key: 'E', text: `${ off }   ·   V  camera   ·   R  the rod${ M.pedal ? `   ·   Space  ${ M.standing ? 'sit down' : 'stand up' }` : '' }` };
 		if ( inp.hit( 'KeyE' ) ) {
 
+			M.standing = false;
+			M.helmEye.y = M.sitEye;
 			M.leave( b, p, p._ashore );
 			return;
 

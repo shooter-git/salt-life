@@ -234,6 +234,10 @@ const TIPS = {
 	keyboard: {
 		radio: 'The <b>radio</b> at the helm (<kbd>R</kbd>): the <b>weather</b> for these waters, read out on WX1 while you steer, and <b>Marta</b> on channel 16, who\'ll come and tow you in if you run dry, her fee by the distance.',
 		rodOut: 'Hold the <b>left mouse button</b> to wind up and release to cast. Try deeper water, around the pier or over the reef.',
+		// ((M19) her new fittings: Game.updateFittings, kayak/Seat.js)
+		trollingMotor: 'Her <b>trolling motor</b>: <kbd>M</kbd> at the helm puts it down over her bow, quiet on the flats, the lever and the wheel driving it. <kbd>M</kbd> again for her outboards.',
+		powerPole: '<kbd>K</kbd> runs her <b>Power-Poles</b> down into the bottom: she\'s held where she is, her heading too, in up to 8 ft of water. <kbd>K</kbd> again brings them up.',
+		pilot: 'She\'s the <b>Pilot</b> now: <kbd>W</kbd><kbd>S</kbd> pedal her, the rod out or not, <kbd>A</kbd><kbd>D</kbd> her rudder. <kbd>Space</kbd> stands you up to see into the flat, and with her pole, <kbd>W</kbd> poles her. <kbd>K</kbd> stakes her out.',
 		nibble: 'The bobber is dipping: something is <b>nibbling</b>. Wait until it is <b>pulled under</b>, then click to strike.',
 		fishOn: '<b>Hold the left mouse button</b> to reel. When the tension needle nears the <b>red</b>, let go until it settles, then reel again.',
 		caught: 'Into the cooler (<kbd>I</kbd>). Sell your catch to <b>Joe</b> at the fish stand by the pier: he is on the map.',
@@ -253,6 +257,9 @@ const TIPS = {
 	touch: {
 		radio: `The <b>radio</b> at the helm (${ pic( 'radio' ) } in ${ WHEEL }): the <b>weather</b> for these waters, read out on WX1 while you steer, and <b>Marta</b> on channel 16, who'll come and tow you in if you run dry, her fee by the distance.`,
 		rodOut: `Hold ${ pic( 'cast', 'Cast' ) } to wind up and let go to cast. Try deeper water, around the pier or over the reef.`,
+		trollingMotor: `Her <b>trolling motor</b>: ${ pic( 'motor' ) } in ${ WHEEL } at the helm puts it down over her bow, quiet on the flats, the lever and the wheel driving it; again for her outboards.`,
+		powerPole: `${ pic( 'stake' ) } in ${ WHEEL } runs her <b>Power-Poles</b> down into the bottom: she's held where she is, her heading too, in up to 8 ft of water. Again brings them up.`,
+		pilot: `She's the <b>Pilot</b> now: drag on the left to pedal her, the rod out or not, and steer her rudder. ${ pic( 'jump', 'Stand up' ) } to see into the flat, and with her pole, drag to pole her. ${ pic( 'stake' ) } in ${ WHEEL } stakes her out.`,
 		nibble: 'The bobber is dipping: something is <b>nibbling</b>. Wait until it is <b>pulled under</b>, then tap <b>Strike</b>.',
 		fishOn: '<b>Hold Reel</b> to reel in. When the tension needle nears the <b>red</b>, let go until it settles, then reel again.',
 		caught: `Into the cooler (${ pic( 'cooler' ) } in ${ WHEEL }). Sell your catch to <b>Joe</b> at the fish stand by the pier: he is on the map.`,
@@ -271,6 +278,9 @@ const TIPS = {
 	gamepad: {
 		radio: 'The <b>radio</b> at the helm (<kbd>X</kbd>): the <b>weather</b> for these waters, read out on WX1 while you steer, and <b>Marta</b> on channel 16, who\'ll come and tow you in if you run dry, her fee by the distance.',
 		rodOut: 'Hold <kbd>RT</kbd> to wind up and release to cast. Try deeper water, around the pier or over the reef.',
+		trollingMotor: `Her <b>trolling motor</b>: ${ pic( 'motor' ) } in ${ WHEEL } at the helm puts it down over her bow, quiet on the flats, the throttle and the wheel driving it; again for her outboards.`,
+		powerPole: `${ pic( 'stake' ) } in ${ WHEEL } runs her <b>Power-Poles</b> down into the bottom: she's held where she is, her heading too, in up to 8 ft of water. Again brings them up.`,
+		pilot: `She's the <b>Pilot</b> now: the left stick pedals her, the rod out or not, and steers her rudder. <kbd>A</kbd> stands you up to see into the flat, and with her pole, the stick poles her. ${ pic( 'stake' ) } in ${ WHEEL } stakes her out.`,
 		nibble: 'The bobber is dipping: something is <b>nibbling</b>. Wait until it is <b>pulled under</b>, then <kbd>RT</kbd> to strike.',
 		fishOn: '<b>Hold <kbd>RT</kbd></b> to reel. When the tension needle nears the <b>red</b>, let go until it settles, then reel again.',
 		caught: 'Into the cooler (<kbd>Back</kbd>). Sell your catch to <b>Joe</b> at the fish stand by the pier: he is on the map.',
@@ -614,6 +624,15 @@ export class Guide {
 		if ( b && b.phase === 'nibble' ) this.tip( 'nibble' );
 		if ( g.fight && ! prev.fight ) this.tip( 'fishOn' );
 		if ( rod.state === 'falsecast' ) this.tip( 'flyCast' ); // ((M19) the fly rod's first false cast)
+		// ((M19) her new fittings, the first time you're at them with them bought)
+		{
+
+			const bc = app.boatCtl, BM = bc && bc.model, ss = g.state.stats, own = ! p.riding && ( p.mode === 'boat' || p.mode === 'deck' );
+			if ( own && BM && BM.trollingAt && ss.trollingN > 0 && p.mode === 'boat' ) this.tip( 'trollingMotor' );
+			if ( own && BM && BM.trollingAt && ss.stakeM > 0 ) this.tip( 'powerPole' );
+			if ( own && BM && BM.seated && BM.pedal ) this.tip( 'pilot' );
+
+		}
 		const lc = g.state.lastCatch;
 		if ( lc && lc !== prev.lastCatch && lc.kept ) this._afterCard = 'caught';
 		if ( this._afterCard && ! ( g.hud && g.hud.catchOpen ) && ! g.landing ) {

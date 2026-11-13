@@ -37,8 +37,9 @@
 //   cr         (with protected) a catch-and-release fish: a sport fish everyone lets go, rather than one
 //              the law protects from the table (the card says so)
 //   hand       taken by hand only, never speared or hooked (the spiny lobster: tickled out of its den
-//              and netted; its minCm is the gauge's 3-inch carapace as a total length: CARAPACE)
+//              and netted; its minCm is the gauge's carapace as a total length: CARAPACE)
 //   bag        the most one person may keep in a day
+//   aboardKg   (M19) the most of it she may have aboard, kg (the crawfish: a Bahamian resident's 250 lb)
 // (M16) and for how it's fished and what it's worth let go (docs/m16/fish.md; Bites.hookWeight, Bait.baitWeight):
 //   ways       { float, troll, kite, drop }: its bite weight fished each way. Missing: 1 on the float, 1 deep-dropped
 //              for a bottom fish of the deep or the ledge, else 0: only what really takes one takes a towed bait or a kite's
@@ -135,7 +136,7 @@ export const FISH = {
 	redfish: { name: 'Redfish', sci: 'Sciaenops ocellatus', lw: [ 0.00851, 3.07 ], model: 'redfish', habitat: { shallows: 0.45, creek: 0.42, wash: 0.25, bay: 0.04 }, kg: [ 1, 14 ], price: 13, fight: 0.7, stamina: 11, time: 'dawnDusk', rarity: 0.3, bag: 1, spear: true, minCm: 46, ways: { troll: 0.5 }, eats: { shrimp: 1.6, cutMullet: 2.2, mullet: 1.6, silverside: 1.1, jig: 1.2, plug: 0.8 }, weather: { surf: - 0.4 } },
 	trout: { name: 'Spotted seatrout', sci: 'Cynoscion nebulosus', lw: [ 0.00832, 3.05 ], model: 'trout', habitat: { bay: 0.22, shallows: 0.35, creek: 0.25, pier: 0.08 }, kg: [ 0.3, 3.6 ], price: 11, fight: 0.4, stamina: 5, time: 'dawnDusk', rarity: 0.5, bag: 4, flood: 1.5, lights: 1.5, hint: 'over the bay\'s grass, at dawn and dusk', ways: { troll: 0.6 }, eats: { shrimp: 1.6, silverside: 1.8, jig: 1.3, plug: 1.2, mullet: 1 } },
 	// (it never takes a bait or a spear: tickled out of its den in the reef and netted, after dark)
-	lobster: { name: 'Spiny lobster', sci: 'Panulirus argus', lw: [ 0.0575, 2.9 ], model: 'lobster', habitat: {}, kg: [ 0.25, 3 ], price: 24, fight: 0, stamina: 1, time: 'night', rarity: 0, hand: true, minCm: 22.4, bag: 6 },
+	lobster: { name: 'Spiny lobster', sci: 'Panulirus argus', lw: [ 0.0575, 2.9 ], model: 'lobster', habitat: {}, kg: [ 0.25, 3 ], price: 24, fight: 0, stamina: 1, time: 'night', rarity: 0, hand: true, minCm: 24.3, aboardKg: 113.4 },
 };
 
 // (M17) The flats' fish, seen before they're cast to (game/Sight.js, Bites.seenTake; docs/m17/sight.md), each kind's
@@ -216,8 +217,10 @@ export const HINTS = {
 };
 for ( const k in HINTS ) FISH[ k ].hint ??= HINTS[ k ];
 
-// (Salt Life) a spiny lobster's carapace length, of its total length (the gauge measures the
-// carapace: 3 inches, 7.62 cm, to keep one)
+// (Salt Life) a spiny lobster's carapace length, of its total length (the gauge measures the carapace). (M19) The Bahamas'
+// 3 1/4 inches, 8.26 cm, to keep one (a government notice, 2024: docs/m19/sources-boats-bait.md, section 10), where it was
+// Florida's 3 in; so minCm 24.3. No bag a day for a Bahamian or a resident, but no more than 250 lb aboard (aboardKg: the
+// Ministry of Tourism's figure for a resident); the closed season, 1 April to 31 July, waits for the island to have seasons
 export const CARAPACE = 0.34;
 
 export const FISH_IDS = Object.keys( FISH );

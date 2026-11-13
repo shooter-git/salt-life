@@ -4,7 +4,7 @@
 import { readFileSync } from 'node:fs';
 import { UPGRADES, gearStats, defaultUpgrades, UNLOCK, unlockProgress } from '../src/game/Gear.js';
 import { GameState } from '../src/game/GameState.js';
-import { FISH } from '../src/game/FishTable.js';
+import { FISH, CARAPACE } from '../src/game/FishTable.js';
 import { BOTTOMS, SOAK, WARP_M, HAULER_MS, grown, aboardTraps, bottomAt, buoyColours, buoyOffset, buoyRecord, cleanBuoys, cleanTraps, haulOf, meanCatch, newTraps, nightsIn, ownedTraps, settle, soakOf, touchedBy, trapsTold, whyNot } from '../src/game/Traps.js';
 import { MAX, STOW, TRAP, trapColliders, trapGeometry, buoyGeometry, lobsterInTrap } from '../src/world/boat/TrapModel.js';
 import { triangleCount } from '../src/world/boat/GeoKit.js';
@@ -79,7 +79,8 @@ const many = ( id, days, depth, q = BOTTOMS[ id ].q, size = BOTTOMS[ id ].sizeCm
 const edge = many( 'edge', 10, 15 ), grass = many( 'grass', 10, 5 ), sand = many( 'sand', 10, 10 );
 console.log( '    a ten-day soak: reef\'s edge', edge, '· grass', grass, '· sand', sand );
 ok( edge.per > 2 && edge.per < 4, 'about 3 lobsters a trap on the best ground, as lightly fished Florida\'s 24 kg a season' );
-ok( edge.share > 0.5 && edge.share < 0.8, 'a little over half of them legal' );
+// ((M19) at the Bahamas' 3 1/4 in, not Florida's 3 in the fishery's 55% was had at: the same lobsters, fewer of them legal)
+ok( edge.share > 0.3 && edge.share < 0.5, `about a third of them legal, at the Bahamas' 3 1/4 in (${ ( edge.share * 100 ).toFixed( 0 ) }%)` );
 ok( grass.share < edge.share * 0.5, 'the grass: mostly shorts' );
 ok( sand.per < edge.per * 0.2, 'open sand: next to nothing' );
 ok( edge.by > 0.25 && edge.by < 0.4, 'a third come up with something else in them' );
@@ -95,8 +96,13 @@ ok( gauged.lastCatch.why === 'short' && ! gauged.lastCatch.kept, 'a short one go
 gauged.addFish( 'lobster', 0.8, 12, { method: 'trap', cm: 27, day: 3, release: 'berried' } );
 ok( gauged.lastCatch.why === 'berried' && ! gauged.lastCatch.kept, 'a berried one goes back' );
 gauged.upgrades.hold = 2;
-for ( let i = 0; i < FISH.lobster.bag + 1; i ++ ) gauged.addFish( 'lobster', 0.8, 12, { method: 'trap', cm: 27, day: 3 } );
-ok( gauged.inventory.length === FISH.lobster.bag && gauged.lastCatch.bag.full, 'and one over the day\'s bag' );
+gauged.boat = 'lobster'; // (her insulated hold, 160 kg)
+// ((M19) the Bahamas' rules for a resident: no bag a day, but no more than 250 lb aboard)
+ok( ! FISH.lobster.bag && Math.abs( FISH.lobster.aboardKg - 250 * 0.45359237 ) < 0.1 && Math.abs( FISH.lobster.minCm * CARAPACE - 3.25 * 2.54 ) < 0.03, 'the Bahamas\' crawfish: 3 1/4 in of carapace, no bag a day, 250 lb aboard' );
+let kept = 0;
+for ( let i = 0; i < 200 && ! gauged.lastCatch?.aboard; i ++ ) if ( gauged.addFish( 'lobster', 1.5, 12, { method: 'trap', cm: 30, day: 3 } ) ) kept ++;
+const aboard = gauged.aboardKg( 'lobster' );
+ok( kept > 6 && gauged.lastCatch.aboard && ! gauged.lastCatch.kept && aboard <= FISH.lobster.aboardKg && aboard > FISH.lobster.aboardKg - 1.5, `${ kept } kept in a day, ${ aboard.toFixed( 1 ) } kg aboard, then the next goes back: 250 lb's the most` );
 
 // ---- a hurricane: more of the shallow ones than the deep, Irma's 43% for a big one on shallow bottom
 ok( touchedBy( 1, 5 ) > touchedBy( 1, 30 ) && touchedBy( 3, 5 ) > touchedBy( 1, 5 ), 'the shallower and the stronger, the more touched' );

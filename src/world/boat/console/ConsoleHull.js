@@ -330,7 +330,10 @@ function stemFitting( kit, L ) {
 	kit.add( 'fittings', plate, STAINLESS );
 	kit.add( 'fittings', rod( V( - 0.035, y + 0.002, z + 0.07 ), V( 0.035, y + 0.002, z + 0.07 ), 0.018, 10 ), { color: 0x24262a, rough: 0.5 } );
 	for ( const s of [ 1, - 1 ] ) kit.add( 'fittings', box( 0.005, 0.045, 0.1 ).translate( s * 0.038, y + 0.002, z + 0.04 ), STAINLESS );
-	// the anchor, its shank back over the plate, its flukes hanging at the stem
+	// the anchor, its shank back over the plate, its flukes hanging at the stem ((M19) its own fitting, so it's not drawn on the
+	// roller while it's down: ConsoleModel.setAnchorStowed)
+	const was = kit.fitting;
+	kit.fitting = 'anchorStowed';
 	const shankTop = V( 0, y + 0.06, z - 0.32 ), crown = V( 0, y - 0.055, z + 0.1 );
 	kit.add( 'fittings', rod( shankTop, crown, 0.009, 6 ), STAINLESS );
 	for ( const s of [ 1, - 1 ] ) {
@@ -339,6 +342,8 @@ function stemFitting( kit, L ) {
 		kit.add( 'fittings', f, STAINLESS );
 
 	}
+
+	kit.fitting = was;
 
 }
 

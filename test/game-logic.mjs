@@ -619,7 +619,12 @@ ok( Object.keys( defaultUpgrades() ).length === Object.keys( UPGRADES ).length &
 	ok( spearRule( 'goliathGrouper', 150 ) === 'protected' && spearRule( 'bonefish', 60 ) === 'protected' && FISH.bonefish.cr && ! FISH.goliathGrouper.cr, 'the goliath grouper is protected; the bonefish is catch and release' );
 	ok( [ 'silkSnapper', 'cuberaSnapper', 'graySnapper' ].every( ( id ) => spearRule( id, 90 ) === 'ok' ) && spearRule( 'graySnapper', 20 ) === 'small' && spearRule( 'whiteMullet', 30 ) === 'notTarget', 'the snappers may be speared over their minimum sizes; nobody spears a mullet' );
 	ok( spearRule( 'lobster', 30 ) === 'byHand' && Object.keys( FISH.lobster.habitat ).length === 0 && FISH.lobster.hand, 'the spiny lobster: by hand only, never on a hook or a spear' );
-	ok( Math.abs( FISH.lobster.minCm * CARAPACE / 2.54 - 3 ) < 0.01 && FISH.lobster.bag === 6, 'the lobster gauge: a 3 in carapace; six a day' );
+	ok( Math.abs( FISH.lobster.minCm * CARAPACE / 2.54 - 3.25 ) < 0.01 && ! FISH.lobster.bag && FISH.lobster.aboardKg > 113, 'the lobster gauge: the Bahamas\' 3 1/4 in carapace; no bag a day, 250 lb aboard ((M19) a resident\'s rules)' );
+	// ((M19) a resident has no bag of them a day now: the day's bag's own rules (still had on other kinds) are tried on her here, lent
+	// Florida's six, and given back below)
+	const bagOf = FISH.lobster.bag, aboardOf = FISH.lobster.aboardKg;
+	FISH.lobster.bag = 6;
+	delete FISH.lobster.aboardKg;
 	const lv = UPGRADES.lobster.levels, g0 = gearStats( defaultUpgrades() );
 	ok( g0.lobster === 0 && lv[ 1 ].cost > 0 && lv[ 2 ].cost > lv[ 1 ].cost && lv[ 2 ].tickleM > lv[ 1 ].tickleM && lv[ 2 ].coaxS < lv[ 1 ].coaxS, 'lobster gear at Marta\'s: none to start; a tickle stick and net; a longer stick that coaxes them out quicker' );
 	const m = new Map();
@@ -646,6 +651,8 @@ ok( Object.keys( defaultUpgrades() ).length === Object.keys( UPGRADES ).length &
 	st.release( filler.id );
 	ok( st.keepLast( lob ) && lob.kept && lob.bag.n === 1 && st.bagged( 'lobster', 5 ) === 1, 'room made: kept, and in the day\'s bag' );
 	ok( st.canFree( lob ) && lob.id !== undefined, 'one kept after all may still be let go off its card' );
+	FISH.lobster.bag = bagOf;
+	FISH.lobster.aboardKg = aboardOf;
 
 }
 

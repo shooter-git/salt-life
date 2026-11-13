@@ -350,11 +350,13 @@ async function trianglesOf( id ) {
 	if ( model.dispose ) model.dispose();
 	// every way she can be fitted: each part on or off (but those that go together: the console's single engine is her
 	// twin's off, the kayak's cooler her crate's)
-	const names = Object.keys( parts ).filter( ( k ) => ! parts[ k ].not );
+	// ((M19) and those always there as she's left, the console's anchor on her roller, on in every way)
+	const names = Object.keys( parts ).filter( ( k ) => ! parts[ k ].not && ! parts[ k ].always );
 	const configs = [];
 	for ( let bits = 0; bits < 1 << names.length; bits ++ ) {
 
 		const on = { base: true };
+		for ( const k of Object.keys( parts ) ) if ( parts[ k ].always ) on[ k ] = true;
 		names.forEach( ( k, i ) => on[ k ] = !! ( bits & 1 << i ) );
 		for ( const k of Object.keys( parts ) ) if ( parts[ k ].not ) on[ k ] = ! on[ parts[ k ].not ];
 		configs.push( on );

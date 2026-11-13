@@ -360,6 +360,15 @@ export class GameState {
 	}
 
 	// room in the cooler / hold for a fish of `kg`?
+	// (M19) kg of this kind aboard, in the cooler and the hold (FishTable's aboardKg: the most there may be)
+	aboardKg( species ) {
+
+		let kg = 0;
+		for ( const f of this.inventory ) if ( f.species === species ) kg += f.kg;
+		return kg;
+
+	}
+
 	fits( kg ) {
 
 		return this.shortOf( kg ) <= 1e-6;
@@ -383,11 +392,14 @@ export class GameState {
 		const released = !! FISH[ species ].protected || !! release;
 		const max = day !== null ? FISH[ species ].bag || 0 : 0;
 		const full = max > 0 && ! released && this.bagged( species, day ) >= max;
-		const kept = ! released && ! full && this.fits( kg );
+		// ((M19) no more of it aboard than the law allows: the crawfish's 250 lb)
+		const most = FISH[ species ].aboardKg || 0, laden = most > 0 && ! released && ! full && this.aboardKg( species ) + kg > most;
+		const kept = ! released && ! full && ! laden && this.fits( kg );
 		if ( kept && max ) this.bagOne( species, day );
 		const bag = max ? { n: this.bagged( species, day ), max, full } : null;
 		const why = release || ( FISH[ species ].protected ? 'protected' : null );
-		this.lastCatch = { species, kg, cm, value, newSpecies, record, prevBestKg, prevBestCm, kept, released, why, method, bag, at: timeOfDay, day, place, firstAt };
+		const aboard = laden ? { max: most } : null;
+		this.lastCatch = { species, kg, cm, value, newSpecies, record, prevBestKg, prevBestCm, kept, released, why, method, bag, aboard, at: timeOfDay, day, place, firstAt };
 		// ((M19) told to whoever's listening: Pearl's challenges, the line-class records. rig: the rig it took ('fly'...);
 		// cls: its line's IGFA class)
 		this._caught( { species, kg, cm, method, rig, cls, kept, released, day, place, at: timeOfDay } );

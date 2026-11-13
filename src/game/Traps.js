@@ -11,6 +11,7 @@ import { lastHurricane, categoryOf, weatherAt, towardOf } from './Weather.js';
 //   (M17) BAIT, baitSaid( trap, soak ), buyBait( traps, money ) -> what it cost: trap bait, Marta's, used up in a soak
 //   settle( traps, T, env ) -> [ what the hurricanes did ]    trapsTold( events ) -> Marta's paragraphs
 //   newTraps()  cleanTraps( raw )  ownedTraps( upgrades )  aboardTraps( traps, upgrades )
+//   (M19) haulS( m, haulerMs ) -> s a trap takes to come up
 //   buoyRecord( ... )  cleanBuoys( raw, now )  buoyOffset( x, z, depth )  buoyColours( id )
 
 // 120 ft of warp (the most on a trap: over that the buoy's pulled under); the shallowest it's worth setting in (m); the
@@ -23,6 +24,9 @@ export const HAUL_SPEED = 2.4;
 // lobster boat (none found): Hydro-Slave's 10 in hanging hauler about 166 ft a minute, Mustad's line haulers up to 425 and 500,
 // Marco's crab hauler 600; a small boat's pump would put hers at 150 to 250 (docs/m17/figures.md)
 export const HAULER_MS = 1.2;
+// (M19) how long a trap takes to come up from `m` below her block (s), on her hauler (m/s: Gear's haulerMs, the bigger head and
+// pump's 1.9: a Hydro-Slave 12 in head on an 11 gpm pump, 380 ft a minute, derived: docs/m19/sources-boats-bait.md, section 6)
+export const haulS = ( m, ms = HAULER_MS ) => Math.max( 1, m / ( ms > 0 ? ms : HAULER_MS ) );
 // what Marta asks for a trap to replace one lost, with its warp and buoy
 export const TRAP_PRICE = 70;
 
@@ -75,7 +79,8 @@ export function whyNot( { depth, bottom, speed = 0, dock = Infinity } ) {
 // as the night goes. M16's 1 - e^(-n / 3) had 29%, 64% and 91% (docs/m17/figures.md). After `fade` days the trap's fishing
 // out, toward `floor` of it (a long soak fishing worse: the 2024 video study of Florida's traps; the floor and the fade's
 // time are judgement)
-export const SOAK = { most: 3.6, full: 14, power: 0.1, fade: 14, fadeTau: 14, floor: 0.4, nightFrom: 19.5, nightH: 10 };
+// (M19) most 3.85, the user's (docs/M19.md): M17's figures left judgement were taken to their sources' middle
+export const SOAK = { most: 3.85, full: 14, power: 0.1, fade: 14, fadeTau: 14, floor: 0.4, nightFrom: 19.5, nightH: 10 };
 // of the `full` soak's catch after n nights
 export const grown = ( n ) => ( n <= 0 ? 0 : n < 1 ? n * Math.pow( 1 / SOAK.full, SOAK.power ) : Math.min( 1, Math.pow( n / SOAK.full, SOAK.power ) ) );
 
@@ -173,7 +178,8 @@ const BYCATCH = { share: 0.33, lobsters: 0.75, kinds: [
 	{ s: 'lionfish', w: 0.12 }, { s: 'sergeant', w: 0.08 }, { s: 'wrasse', w: 0.08 }, { label: 'Hermit crab', w: 0.07 },
 ] };
 // a lobster's length in a trap (cm, mean and spread): how many are legal, of the gauge's 22.4 cm (3 in of carapace), goes
-// by the bottom and the depth; a little over half on a reef's edge, as in the fishery. Berried: as the dens' (Fish.js)
+// by the bottom and the depth; a little over half on a reef's edge, as in the fishery. Berried: as the dens' (Fish.js).
+// ((M19) The gauge is the Bahamas' 24.3 cm now, 3 1/4 in of carapace: about half on the reef's edge are legal)
 export const SIZES = { mean: 20.5, perM: 0.08, most: 2.5, sd: 4.2, min: 15, max: 42, berried: 0.06, berriedFrom: 20 };
 
 // What comes up, the same however often it's asked of the same soak: { lobsters: [ { cm, kg, berried } ], others: [
