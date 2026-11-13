@@ -360,7 +360,7 @@ export class Rigs {
 
 		if ( bait && BAITS[ bait ] ) return BAITS[ bait ].name;
 		if ( baitFits( this.pick, null ) ) return 'Frozen shrimp';
-		return { troll: 'needs frozen ballyhoo or squid from Marta, or plugs and skirts', kite: 'needs a live bait: throw the cast net', drop: 'needs squid, ballyhoo or cut bait', fly: 'needs flies: a fly box from Marta' }[ this.pick ];
+		return { troll: 'needs frozen ballyhoo or squid from Joe, or plugs and skirts from Marta', kite: 'needs a live bait: throw the cast net', drop: 'needs squid, ballyhoo or cut bait', fly: 'needs flies: a fly box from Marta' }[ this.pick ];
 
 	}
 

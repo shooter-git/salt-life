@@ -652,7 +652,7 @@ export class GameState {
 
 	}
 
-	// (M16) frozen bait or chum from Marta, by the trip's lot -> whether you could
+	// (M16) frozen bait or chum from Marta, by the trip's lot ((M19) Joe's now, or Pearl's) -> whether you could
 	buyBait( kind ) {
 
 		const b = BAITS[ kind ];
@@ -717,11 +717,24 @@ export class GameState {
 
 	}
 
-	// Marta's order from the bucket, on `terms` (quote's): how many of today's bait kind she'd take
+	// (M19) Pearl pays what you're owed for her day's challenges (Challenges.js) -> $ paid
+	collectChallenges() {
+
+		const n = this.challenges.owed | 0;
+		if ( n <= 0 ) return 0;
+		this.money += n;
+		this.challenges = { ...this.challenges, owed: 0 };
+		this.save();
+		this.emit();
+		return n;
+
+	}
+
+	// ((M19) Joe's) order from the bucket, on `terms` (quote's): how many of today's bait kind he'd take, while he's open
 	// -> { species, n, each, total, order } or null
 	quoteBait( terms ) {
 
-		const o = terms && terms.who === 'marta' ? ( terms.orders || [] ).find( ( x ) => x.who === 'marta' ) : null;
+		const o = terms && terms.who === 'joe' && terms.open !== false ? ( terms.orders || [] ).find( ( x ) => x.bait ) : null;
 		if ( ! o ) return null;
 		const n = Math.min( this.bait[ o.species ] | 0, Math.max( 0, o.max - ( this.orders.day === terms.day ? this.orders.filled[ o.id ] | 0 : 0 ) ) );
 		return { species: o.species, n, each: o.each, total: n * o.each, order: o };
@@ -747,7 +760,7 @@ export class GameState {
 	// (Salt Life) what selling the given fish ids (all when null) would pay, on `terms`: { who: 'joe' |
 	// 'marta', orders (Orders.ordersFor), day (the list's), rate (what Joe's night box pays of his price;
 	// the wanted list in full), week (Joe's: the week's order, { species, left: kg }, until it's filled) }.
-	// Without terms, Joe's price. Marta takes only the fish she's after. The biggest fill an order first;
+	// Without terms, Joe's price. Marta takes only the fish she's after ((M19) none, now his bait tank's Joe's: her asks are tags). The biggest fill an order first;
 	// each of the week's kind goes toward it (the one that fills it whole) and fetches WEEK_MUL, or the
 	// day's list's price if that's on it too.
 	// -> { total, count, wanted, prices (id -> $), ids, filled, week (kg toward it), weekN (how many) }
@@ -760,7 +773,7 @@ export class GameState {
 		for ( const f of pick ) {
 
 			// (the first order it fills that still wants one: (M15) its place's first)
-			const o = terms ? ordersOf( terms.orders, terms.who, f.species, f.place ).find( ( q ) => ( filled[ q.id ] | 0 ) < q.max ) : null;
+			const o = terms ? ordersOf( terms.orders, terms.who, f.species, f.place, terms.open !== false ).find( ( q ) => ( filled[ q.id ] | 0 ) < q.max ) : null;
 			const toWeek = left > 0 && f.species === terms.week.species;
 			let price;
 			if ( o ) {
@@ -1111,6 +1124,13 @@ export class GameState {
 		this.look = typeof d.look === 'string' ? d.look : null;
 		const o = d.orders;
 		this.orders = o && Number.isFinite( o.day ) && o.filled && typeof o.filled === 'object' ? { day: o.day, filled: { ...o.filled } } : { day: null, filled: {} };
+		// ((M19) the bait order's Joe's, 'bait': what was filled of Marta's, 'marta', that day carried over)
+		if ( this.orders.filled.marta !== undefined ) {
+
+			this.orders.filled.bait = ( this.orders.filled.bait | 0 ) + ( this.orders.filled.marta | 0 );
+			delete this.orders.filled.marta;
+
+		}
 		this.weekPaid = Number.isFinite( d.weekPaid ) ? d.weekPaid : null;
 		this.bait = {};
 		for ( const [ k, n ] of Object.entries( d.bait && typeof d.bait === 'object' ? d.bait : {} ) ) if ( BAITS[ k ] && Number.isInteger( n ) && n > 0 ) this.bait[ k ] = n;

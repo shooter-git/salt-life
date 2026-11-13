@@ -16,7 +16,7 @@ import { ableOf, ableEnv, awashLs, seaHere, fetchAt, strainOf, windOn, slamK, ke
 //   d.update( dt, inp, p )   d.strain: how she's being worked here (Seaworthy.strainOf)
 //   d.sleep()                turning in, at a bunk (Vessel.bunks) or from the clock's menu
 //   d.noRest                 too far out to rest, with no bunks aboard (TimeHUD)
-//   d.shopRows() d.bindShop( el )   Marta's ice and stores
+//   d.shopRows() d.bindShop( el )   Marta's stores; ((M19) d.iceRow( trust ): Joe's ice, and his ice chest out of hours)
 //   d.distress() d.fire( kind )     the radio panel's flares and EPIRB (Radio.js)
 //   d.sonar( depth, rich )   what the finder reads (Game.updateBoat)
 //   d.awayHours( h )         the box over hours you weren't there -> how many fish went off (App.pickUp)
@@ -585,17 +585,25 @@ export class DaysOut {
 
 	}
 
-	// ---- Marta's ice and stores
-	shopRows() {
+	// ---- Marta's ice and stores ((M19) Joe's ice)
+	// ((M19) Marta's: what your boat can stand and her stores; the ice is Joe's now, iceRow, unless ice: true)
+	shopRows( { ice = false } = {} ) {
 
-		const st = this.state, box = this.box, s = st.stats, A = ableOf( st.boat ), room = Math.max( 0, s.holdKg - st.holdKg - this.guestsKg - box.ice );
-		const melt = meltKgH( s.holdKg, s.insulated ), hrs = box.ice / melt;
+		const st = this.state, box = this.box, A = ableOf( st.boat );
 		const boat = BOATS[ st.boat ].name.toLowerCase();
-		const ice = `<div class="gm-shop-row"><span>Ice · $${ ICE_BAG_PRICE } a 10 lb bag<small>${ box.ice > 0 ? `${ pounds( box.ice ) } lb in the box, about ${ Math.max( 1, Math.round( hrs ) ) } hours of it` : 'None in the box: the catch keeps about 12 hours without it' }</small></span><button class="gm-btn" data-ice ${ st.money < ICE_BAG_PRICE || room < ICE_BAG_KG ? 'disabled' : '' }>${ room < ICE_BAG_KG ? 'No room' : `Bag · $${ ICE_BAG_PRICE }` }</button></div>`;
 		const full = box.stores >= A.storesDays - 0.01;
 		const stores = `<div class="gm-shop-row"><span>Food and water · $${ STORES_PRICE } a day<small>${ box.stores >= 0.05 ? `${ box.stores.toFixed( 1 ) } of ${ A.storesDays } days aboard` : `A day's food and ${ gallons( STORES_WATER_L ) } gallons of water, for staying out past a day · her lockers hold ${ A.storesDays } day${ A.storesDays === 1 ? '' : 's' }` }</small></span>${ full ? '<span class="gm-have">Full</span>' : `<button class="gm-btn" data-stores ${ st.money < STORES_PRICE ? 'disabled' : '' }>A day · $${ STORES_PRICE }</button>` }</div>`;
 		const stands = `<div class="gm-shop-row"><span>What your ${ boat } can stand<small>${ A.waters }</small></span></div>`;
-		return stands + ice + stores;
+		return stands + ( ice ? this.iceRow() : '' ) + stores;
+
+	}
+
+	// (M19) ice for her box, by the 10 lb bag: Joe's, and out of hours from the chest by his night box, on trust (trust: true)
+	iceRow( trust = false ) {
+
+		const st = this.state, box = this.box, s = st.stats, room = Math.max( 0, s.holdKg - st.holdKg - this.guestsKg - box.ice );
+		const melt = meltKgH( s.holdKg, s.insulated ), hrs = box.ice / melt;
+		return `<div class="gm-shop-row"><span>Ice · $${ ICE_BAG_PRICE } a 10 lb bag${ trust ? ' · from his ice chest, on trust' : '' }<small>${ box.ice > 0 ? `${ pounds( box.ice ) } lb in the box, about ${ Math.max( 1, Math.round( hrs ) ) } hours of it` : 'None in the box: the catch keeps about 12 hours without it' }</small></span><button class="gm-btn" data-ice ${ st.money < ICE_BAG_PRICE || room < ICE_BAG_KG ? 'disabled' : '' }>${ room < ICE_BAG_KG ? 'No room' : `Bag · $${ ICE_BAG_PRICE }` }</button></div>`;
 
 	}
 

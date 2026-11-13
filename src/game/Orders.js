@@ -3,7 +3,9 @@ import { isOpen } from './IslandClock.js';
 import { placeName } from './Places.js';
 
 // (Salt Life) What Joe and Marta want today: Joe chalks two fish on the board by his stand and pays
-// over the odds for them, Marta buys one kind of bait fish at the chandlery. A new list each morning,
+// over the odds for them, Marta buys one kind of bait fish at the chandlery. ((M19) The bait's Joe's now, with the ice and
+// the frozen bait (docs/m19/stalls.md): his bait tank takes the day's kind while he's open, not into his night box. Marta keeps
+// her tag-and-release asks) A new list each morning,
 // from the day alone, so everyone sharing an island's clock sees the same one and nothing is sent.
 // The day's list runs from Joe opening (OPENS) to his opening the next morning: a fish caught after he
 // shuts still counts, left in his night box. Each order takes a few fish from each player at its price.
@@ -27,8 +29,9 @@ export const stallOpen = ( hours, hour, weatherId = null ) => isOpen( hours, hou
 // among them). Never a protected fish: it's let go (FishTable.js)
 const TWILIGHT = [ 'yellowtail', 'jack', 'tuna', 'muttonSnapper', 'graySnapper', 'trout', 'redfish' ];
 const MORE = [ 'sergeant', 'grunt', 'tang', 'wrasse', 'lionfish', 'angel', 'barracuda', 'blackGrouper', 'redSnapper', 'mahi', 'mullet', 'needlefish', 'silkSnapper', 'lobster', 'wahoo', 'yellowfin' ];
-// Marta's bait tank: $ a fish
-const BAIT = { silverside: 6, sergeant: 8, grunt: 10, mullet: 12, needlefish: 12, whiteMullet: 10 };
+// (M19) Joe's bait tank (Marta's, before M19): $ a fish. Only the kinds a bait bucket holds (Bait.baitOf): a needlefish or a
+// white mullet never goes in it, so on their days the order couldn't be filled (since v2.4.1)
+const BAIT = { silverside: 6, sergeant: 8, grunt: 10, mullet: 12 };
 // (M15) and one ask a day for a place's fish (Places.js), paid as no other (PLACE_MUL): Joe's for the table
 // (pompano from the north beach's surf, a snook or a mangrove snapper from the mangrove creek, a black grouper
 // or a mutton snapper from the windward reef, a tuna off the drop-off, a mahi from the blue water, a silk
@@ -90,7 +93,7 @@ export function ordersFor( day ) {
 	return [
 		{ id: 'joe-a', who: 'joe', species: a, mul: 2, max: 3 },
 		{ id: 'joe-b', who: 'joe', species: b, mul: 1.5, max: 3 },
-		{ id: 'marta', who: 'marta', species: bait, each: BAIT[ bait ], max: 4 },
+		{ id: 'bait', who: 'joe', bait: true, species: bait, each: BAIT[ bait ], max: 4 }, // ((M19) Joe's: it was Marta's, id 'marta')
 		p.tag ? { id: 'place', who: p.who, species: p.species, place: p.place, each: p.tag, max: p.max, tag: true } : { id: 'place', who: p.who, species: p.species, place: p.place, mul: PLACE_MUL, max: p.max },
 	].filter( ( o ) => FISH[ o.species ] );
 
@@ -98,7 +101,8 @@ export function ordersFor( day ) {
 
 // the orders a fish from `place` would fill, the place's own first (none that's a tag-and-release one: those
 // are paid as they're let go)
-export const ordersOf = ( list, who, species, place = null ) => ( list || [] ).filter( ( o ) => o.who === who && o.species === species && ! o.tag && ( ! o.place || o.place === place ) )
+// ((M19) shut: none for his bait tank, which only takes them while he's there: open false)
+export const ordersOf = ( list, who, species, place = null, open = true ) => ( list || [] ).filter( ( o ) => o.who === who && o.species === species && ! o.tag && ( ! o.place || o.place === place ) && ( open || ! o.bait ) )
 	.sort( ( a, b ) => ( b.place ? 1 : 0 ) - ( a.place ? 1 : 0 ) );
 export const orderFor = ( list, who, species, place = null ) => ordersOf( list, who, species, place )[ 0 ] || null;
 // (M15) Marta's tag-and-release ask a fish let go at `place` fills, or null

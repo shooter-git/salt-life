@@ -21,7 +21,7 @@ import { BAIT, BOTTOMS, HAUL_SPEED, haulS, TRAP_PRICE, WARP_M, aboardTraps, bait
 // how it went, and what came up in it), and everyone sees it done: her stack on her deck and the work at her rail, out of her
 // owner's poses ('ts', 'tj'), drawn on her copy on every game. Anyone else's buoys are still theirs, not yours to touch.
 //   const w = new TrapWork( game );  w.update( dt, lDown );  w.boatChanged();  w.buyNew()  w.buyBait()
-// (M17) Each set with a trap's worth of bait if you have it (Marta's: Traps.BAIT), used up in its soak, and said as it comes up.
+// (M17) Each set with a trap's worth of bait if you have it (Marta's, (M19) Joe's now: Traps.BAIT), used up in its soak, and said as it comes up.
 //   w.asked( body, from, them )  w.told( body, from )  (Together's messages)   w.wire() -> what her owner's poses carry
 
 const NIGHT_SAID = ( n ) => n < 0.5 ? 'not a night down yet' : n < 1.5 ? 'a night down' : `${ Math.round( n ) } nights down`;
@@ -677,7 +677,7 @@ export class TrapWork {
 
 		}
 
-		const unbaited = trap.bait === false ? ' · no bait in it: it\'ll fish about a third as well. Marta sells it' : '';
+		const unbaited = trap.bait === false ? ' · no bait in it: it\'ll fish about a third as well. Joe sells it' : ''; // ((M19) his now)
 		game.toast( `${ mark ? `Trap ${ mark.id } on your chart · ${ this.traps.set.length } set, leave it overnight: the first night brings most of it` : 'Your chart has no room for its mark: note where it is' }${ unbaited }`, 3600 + ( unbaited ? 1400 : 0 ) );
 
 	}
@@ -909,7 +909,7 @@ export class TrapWork {
 
 	}
 
-	// ---- (M17) Marta's: a bag of bait, for Traps.BAIT.per traps
+	// ---- (M17) Marta's ((M19) Joe's): a bag of bait, for Traps.BAIT.per traps
 	buyBait() {
 
 		const st = this.game.state, cost = buyBait( this.traps, st.money );

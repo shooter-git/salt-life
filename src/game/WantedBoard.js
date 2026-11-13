@@ -6,7 +6,7 @@ import { pounds } from './Units.js';
 import { CHECK } from '../core/Glyphs.js';
 
 // (Salt Life) The day's wanted list, chalked on a slate hung on the front of Joe's counter: his two
-// fish, where and when they bite, what he pays, and Marta's bait ((M15) and the day's ask for a place's
+// fish, where and when they bite, what he pays, and ((M19) his bait tank's, live) bait ((M15) and the day's ask for a place's
 // fish, where it has to come from); ticked off as you fill them (each
 // player sees their own ticks). Under it, the week's order (WeekOrder.js) and how far the group has
 // got with it. One plane, its frame painted into the canvas; the same program as the records board's
@@ -103,7 +103,7 @@ export class WantedBoard {
 			g.textAlign = 'left';
 			g.font = `${ small }px ${ font }`;
 			g.fillStyle = 'rgba(242, 239, 228, 0.62)';
-			g.fillText( o.place ? orderPlace( o ) : o.who === 'marta' ? 'bait, at the chandlery' : biteHint( o.species ), 56, y + ( tight ? 24 : 28 ), 400 );
+			g.fillText( o.place ? orderPlace( o ) : o.bait ? 'live bait, for his tank' : biteHint( o.species ), 56, y + ( tight ? 24 : 28 ), 400 );
 			y += step;
 
 		}

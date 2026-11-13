@@ -11,6 +11,8 @@
 //                            colour + coverage), drawn with ImageMagick and OFL / Apache fonts
 //
 // Needs ImageMagick (magick) on the PATH. Raw downloads: tools/props/.raw (see fetch.py).
+//   (M19) node tools/props/build.mjs --signs   signs.png alone, with no downloads (then pnpm lock); ImageMagick 6's convert where
+//   there's no magick
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -29,7 +31,24 @@ export const MODELS = [
 export const SURFACES = [ 'weathered_brown_planks', 'weathered_planks', 'worn_corrugated_iron', 'weathered_peeling_timber' ];
 
 fs.mkdirSync( OUT, { recursive: true } );
-const magick = ( ...a ) => execFileSync( 'magick', a, { stdio: [ 'ignore', 'ignore', 'inherit' ] } );
+const SIGNS_ONLY = process.argv.includes( '--signs' );
+const MAGICK = process.env.MAGICK || ( () => {
+
+	try {
+
+		execFileSync( 'magick', [ '-version' ], { stdio: 'ignore' } );
+		return 'magick';
+
+	} catch ( e ) {
+
+		return 'convert';
+
+	}
+
+} )();
+const magick = ( ...a ) => execFileSync( MAGICK, a, { stdio: [ 'ignore', 'ignore', 'inherit' ] } );
+
+if ( ! SIGNS_ONLY ) {
 
 // ---------------------------------------------------------------- surfaces
 for ( const s of SURFACES ) {
@@ -169,8 +188,11 @@ fs.writeFileSync( path.join( OUT, 'props.bin' ), buf );
 fs.writeFileSync( path.join( OUT, 'props.json' ), JSON.stringify( { vertexFloats: 9, vertexCount: vb.length / 9, indexCount: ib.length, indexByteOffset: vb.byteLength, layers, props }, null, '\t' ) );
 console.log( 'props', Object.keys( props ).length, 'layers', layers.length, 'vertices', vb.length / 9, 'triangles', ib.length / 3 );
 
+}
+
 // ---------------------------------------------------------------- signs (2048 x 1024, RGBA)
-//   rows: [0, 256) "JOE'S FRESH FISH", [256, 512) "MARTA'S CHANDLERY" + "BAIT · TACKLE · FUEL",
+//   rows: [0, 256) "JOE'S FRESH FISH" + ((M19) "BAIT · ICE"), [256, 512) "MARTA'S CHANDLERY" + ((M19) "TACKLE · FUEL · BOATS":
+//   the bait and the ice are Joe's now, docs/m19/stalls.md),
 //   [512, 1024) left: chalk prices (1024 x 512), right: the scale dial (512 x 512) + spare
 const FONT = path.join( HERE, 'fonts' );
 const signs = path.join( OUT, 'signs.png' );
@@ -178,13 +200,14 @@ magick(
 	'-size', '2048x1024', 'xc:none',
 	// Joe
 	'-font', path.join( FONT, 'PermanentMarker-Regular.ttf' ),
-	'-fill', '#f1ead6', '-pointsize', '150', '-gravity', 'NorthWest', '-annotate', '+190+40', 'JOE\'S FRESH FISH',
+	'-fill', '#f1ead6', '-pointsize', '136', '-gravity', 'North', '-annotate', '+0+12', 'JOE\'S FRESH FISH',
+	'-fill', '#e8b04a', '-pointsize', '72', '-annotate', '+0+166', 'BAIT  ·  ICE', '-gravity', 'NorthWest',
 	// a painted fish either side
 	'-fill', '#e2a53a', '-draw', 'ellipse 64,130 44,22 0,360', '-draw', 'polygon 100,130 134,106 134,154',
 	'-draw', 'ellipse 1968,130 50,24 0,360', '-draw', 'polygon 1928,130 1898,104 1898,156',
 	// Marta
 	'-fill', '#f4e7c4', '-pointsize', '118', '-annotate', '+110+262', 'MARTA\'S CHANDLERY',
-	'-fill', '#e8b04a', '-pointsize', '72', '-annotate', '+300+398', 'BAIT  ·  TACKLE  ·  FUEL',
+	'-fill', '#e8b04a', '-pointsize', '72', '-annotate', '+260+398', 'TACKLE  ·  FUEL  ·  BOATS',
 	// chalk prices
 	'-font', path.join( FONT, 'CabinSketch-Bold.ttf' ), '-fill', '#ecebe4',
 	'-pointsize', '84', '-annotate', '+60+540', 'TODAY  WE BUY',

@@ -8,7 +8,7 @@ import { lastHurricane, categoryOf, weatherAt, towardOf } from './Weather.js';
 //   bottomAt( { depth, reefDist, windReef, patch, sand, grass, creek, onMap } ) -> a BOTTOMS id
 //   whyNot( { depth, bottom, speed, dock } ) -> null, or why one can't be set here
 //   soakOf( trap, T, now ) -> { hours, days, nights }    grown( nights )    meanCatch( q, soak, baited )    haulOf( trap, q, sizeCm, T, now ) -> what comes up
-//   (M17) BAIT, baitSaid( trap, soak ), buyBait( traps, money ) -> what it cost: trap bait, Marta's, used up in a soak
+//   (M17) BAIT, baitSaid( trap, soak ), buyBait( traps, money ) -> what it cost: trap bait, ((M19) Joe's,) used up in a soak
 //   settle( traps, T, env ) -> [ what the hurricanes did ]    trapsTold( events ) -> Marta's paragraphs
 //   newTraps()  cleanTraps( raw )  ownedTraps( upgrades )  aboardTraps( traps, upgrades )
 //   (M19) haulS( m, haulerMs ) -> s a trap takes to come up
@@ -109,7 +109,7 @@ export function soakOf( trap, T, now = Date.now() ) {
 
 }
 
-// (M17) Trap bait, Marta's (`price` for `per` traps): fish heads and cowhide, as the Keys' and the Bahamas' trappers use. A trap's a
+// (M17) Trap bait, Marta's ((M19) Joe's now, with the rest of the bait) (`price` for `per` traps): fish heads and cowhide, as the Keys' and the Bahamas' trappers use. A trap's a
 // shelter a spiny lobster comes to unbaited, and bait brings more: live shorts, the best of it, about three times an unbaited trap's
 // catch (Heatwole et al. 1988 and Butler et al. 2022, as Marine Ecology Progress Series 696: 43 has them); dead bait less. Taken
 // here: an unbaited trap fishes `bare` of what a baited one does. And it's used up: eaten and gone off in days (a dead lobster in a
@@ -130,7 +130,7 @@ export function meanCatch( q, { days, nights }, baited = true ) {
 // (M17) what's said of its bait as it comes up: none in it, or used up, or nothing
 export const baitSaid = ( trap, soak ) => trap.bait === false ? 'no bait in it' : soak.nights >= BAIT.nights ? 'the bait\'s long gone' : '';
 
-// (M17) a bag of bait from Marta, for BAIT.per traps (traps: the save's): -> what it cost, or 0 if you couldn't
+// (M17) a bag of bait from Marta ((M19) Joe), for BAIT.per traps (traps: the save's): -> what it cost, or 0 if you couldn't
 export function buyBait( traps, money ) {
 
 	if ( money < BAIT.price ) return 0;

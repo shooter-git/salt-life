@@ -171,8 +171,10 @@ export class FishCamp {
 
 			B.box( 'wood', S.x, low - 0.06, out + 0.1, 3.8, 0.12, 0.1, { grain: 1, data: wd } );
 			// its board, hand-painted, along the lean-to's front beam
-			const board = paintedBoard( { width: 1.9, height: 0.46, lines: [ 'Pearl\'s fish camp', 'fish bought · diesel' ], paint: 0x2a6f8f } );
-			board.position.set( S.x - 0.6, low + 0.16, out + 0.04 );
+			// ((M19) and bait, and the day's challenges)
+			const board = paintedBoard( { width: 1.9, height: 0.46, lines: [ 'Pearl\'s fish camp', 'fish bought · bait · diesel' ], paint: 0x2a6f8f } );
+			// ((M19) 0.16 m higher, clear of the lean-to's roof: its lower line was under it from the beach)
+			board.position.set( S.x - 0.6, low + 0.32, out + 0.04 );
 			board.rotation.set( - 0.08, Math.PI, 0.015 );
 			this.scene.add( board );
 			this.board = board;

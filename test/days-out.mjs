@@ -455,8 +455,9 @@ globalThis.setTimeout ??= ( f ) => f();
 
 	const el = () => ( { querySelector: ( q ) => ( { '[data-ice]': i, '[data-stores]': s }[ q ] ) } );
 	const i = {}, s = {};
-	const html = d.shopRows();
-	ok( html.includes( 'data-ice' ) && html.includes( 'data-stores' ) && html.includes( 'nearshore' .replace( 'n', 'N' ) ), 'Marta sells ice and stores, and says what she can stand' );
+	// ((M19) the ice is Joe's: iceRow; his ice chest out of hours, on trust)
+	const html = d.shopRows(), ice = d.iceRow(), chest = d.iceRow( true );
+	ok( ! html.includes( 'data-ice' ) && ice.includes( 'data-ice' ) && chest.includes( 'on trust' ) && html.includes( 'data-stores' ) && html.includes( 'nearshore' .replace( 'n', 'N' ) ), 'Marta sells stores and says what she can stand; the ice is Joe\'s, and his ice chest\'s on trust out of hours' );
 	ok( STORES_WATER_L === 6 && STORES_PRICE === 16 && html.includes( 'A day\'s food and 1.6 gallons of water' ) && html.includes( '$16 a day' ), '(M17) a day\'s stores: its food and 6 litres of water, $16' );
 	d.bindShop( el(), () => {} );
 	const m0 = st.money;

@@ -236,7 +236,7 @@ export class Game {
 		// weather, it says so
 		const back = ( v ) => `Back at ${ timeText( v.hours[ 0 ], app.portal && app.portal.locale, 60 ) }`;
 		const signs = [
-			[ this.stand.vendor, STAND, { x: 0.32, y: 1.045, z: 0.96, tilt: 0.24, roll: 0.03 }, 0.5, 'Fish in the night box' ],
+			[ this.stand.vendor, STAND, { x: 0.32, y: 1.045, z: 0.96, tilt: 0.24, roll: 0.03 }, 0.5, 'Night box · ice chest' ], // ((M19) his ice, on trust)
 			[ this.chandlery.vendor, CHANDLERY, { x: 0.35, y: 0, z: 0.41, tilt: 0.33, roll: - 0.02 }, 0.6, 'Diesel: pay into the box' ], // (leaning on the table's front, z 0.29)
 			[ this.camp.vendor, CAMP.keeper, { x: - 0.6, y: 0, z: 1.3, tilt: 0.3, roll: 0.04 }, 0.6, 'Gone round to market' ], // ((M15) leaning on the counter's front)
 		];
@@ -1508,7 +1508,8 @@ export class Game {
 		// (M9) or gone home for the weather
 		const back = v.boarded ? 'boarded up for the hurricane' : v.weatherShut ? 'shut for the weather' : `back at ${ timeText( v.hours[ 0 ], this.app.portal && this.app.portal.locale, 60 ) }`;
 		if ( v.kind === 'camp' ) return `${ name }'s ${ back }`;
-		return v.kind === 'shop' ? `${ fuelOf( this.state.boat ) ? `${ fuelOf( this.state.boat ).name } on the honesty box` : 'The chandlery\'s shut' }   ·   ${ name }'s ${ back }` : `${ name }'s night box   ·   he's ${ back }`;
+		// ((M19) Joe's night box has his ice chest beside it)
+		return v.kind === 'shop' ? `${ fuelOf( this.state.boat ) ? `${ fuelOf( this.state.boat ).name } on the honesty box` : 'The chandlery\'s shut' }   ·   ${ name }'s ${ back }` : `${ name }'s night box and ice chest   ·   he's ${ back }`;
 
 	}
 
@@ -1599,13 +1600,15 @@ export class Game {
 	}
 
 	// what selling to `vendor` is on (GameState.quote): Joe's price, his wanted list and the week's order;
-	// his night box when he's gone home (less, but the orders in full); Marta: only the bait she's after
+	// his night box when he's gone home (less, but the orders in full); Marta: only the bait she's after ((M19) none: the bait
+	// tank's Joe's now, and open: false keeps it out of his night box)
 	saleTerms( vendor ) {
 
 		const who = vendor && vendor.kind === 'shop' ? 'marta' : vendor && vendor.kind === 'camp' ? 'camp' : 'joe';
 		// ((M15) Pearl: her price, Joe's less the trip to market; no list, no week's order)
 		if ( who === 'camp' ) return { who, orders: null, day: this.tradeDay, rate: CAMP.rate, week: null };
-		return { who, orders: this.orders, day: this.tradeDay, rate: who === 'joe' && vendor && ! vendor.open ? NIGHT_BOX : 1, week: who === 'joe' ? this.weekTerms() : null };
+		// ((M19) open: whether he's there, for his bait tank's order, which isn't taken into the night box)
+		return { who, orders: this.orders, day: this.tradeDay, rate: who === 'joe' && vendor && ! vendor.open ? NIGHT_BOX : 1, week: who === 'joe' ? this.weekTerms() : null, open: ! vendor || vendor.open !== false };
 
 	}
 
@@ -2443,13 +2446,13 @@ export class Game {
 
 	}
 
-	// Marta's order filled from the bait bucket
+	// Marta's order filled from the bait bucket ((M19) Joe's now, for his bait tank)
 	sellBait( vendor = this.hud && this.hud.vendor ) {
 
 		const r = this.state.sellBait( this.saleTerms( vendor ) );
 		if ( r.count ) {
 
-			this.toast( `Sold Marta ${ r.count } live bait for $${ r.total }` );
+			this.toast( `Sold Joe ${ r.count } live bait for his tank · $${ r.total }` );
 			if ( this.app.audio && this.app.audio.coin ) this.app.audio.coin();
 
 		}

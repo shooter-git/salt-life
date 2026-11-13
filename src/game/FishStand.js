@@ -4,6 +4,7 @@ import { prepare, mergePrepared, box, cylinder, sphere, rod, mat4 } from '../wor
 import { loadStallAssets, KitBuilder, LAYER, ATLAS, place, Shapes, PAT, createPlainMaterial } from './StallKit.js';
 import { FishProps } from '../world/village/FishProps.js';
 import { FISH } from './FishTable.js';
+import { paintedBoard } from './Signpost.js';
 import { Vendor } from './Vendor.js';
 import { HOURS } from './Orders.js';
 import { PriceBoard } from './PriceBoard.js';
@@ -55,6 +56,10 @@ export class FishStand {
 			// one on every device)
 			this.sheets = this._sheets( stall.sheets, this.material );
 			this.kitMaterial = this.material;
+			// ((M19) his sign, hand-painted where the scanned stall's lettered board hangs: what he sells, the bait and the ice too)
+			const sign = paintedBoard( { width: 2.3, height: 0.36, lines: [ 'Joe\'s fresh fish', 'bait · ice' ] } );
+			sign.position.set( 0, 2.13, 0.88 );
+			this.group.add( sign );
 
 		};
 		if ( tier === 'low' ) {
@@ -302,9 +307,9 @@ function buildStall() {
 	add( rod( V( 0.6, 2.25, 0.62 ), V( 0.6, 1.75, 0.62 ), 0.006, 4 ), { color: 0x555a5c, rough: 0.4, metal: 1 } );
 	add( cylinder( 0.1, 0.1, 0.05, 18 ), { color: 0xc9c2b0, rough: 0.5, metal: 0.4, pattern: PAT.rusty, matrix: mat4( 0.6, 1.66, 0.62, Math.PI / 2, 0, 0 ) } );
 	add( cylinder( 0.14, 0.11, 0.05, 16 ), { color: 0xa9b0b3, rough: 0.35, metal: 1, matrix: mat4( 0.6, 1.45, 0.62 ) } );
-	// floats hanging from the eave, a coiled line and a bucket
-	for ( let i = 0; i < 5; i ++ ) add( sphere( 0.06, 10, 8 ), { color: [ 0xe2552a, 0xf2c230, 0xe8e2d0, 0x2f8f6f, 0xe2552a ][ i ], rough: 0.5, matrix: mat4( - 1.1 + i * 0.5, 2.05 + jit( 0.1 ), 0.95 ) } );
-	for ( let i = 0; i < 5; i ++ ) add( rod( V( - 1.1 + i * 0.5, 2.4, 0.95 ), V( - 1.1 + i * 0.5, 2.1, 0.95 ), 0.004, 3 ), { color: 0xcbb999, rough: 0.9 } );
+	// floats hanging from the eave, a coiled line and a bucket ((M19) hung lower, under his painted sign's words)
+	for ( let i = 0; i < 5; i ++ ) add( sphere( 0.06, 10, 8 ), { color: [ 0xe2552a, 0xf2c230, 0xe8e2d0, 0x2f8f6f, 0xe2552a ][ i ], rough: 0.5, matrix: mat4( - 1.1 + i * 0.5, 1.8 + jit( 0.06 ), 0.95 ) } );
+	for ( let i = 0; i < 5; i ++ ) add( rod( V( - 1.1 + i * 0.5, 2.4, 0.95 ), V( - 1.1 + i * 0.5, 1.85, 0.95 ), 0.004, 3 ), { color: 0xcbb999, rough: 0.9 } );
 	add( cylinder( 0.16, 0.13, 0.3, 14, 1, true ), { color: 0x3d6d8a, rough: 0.6, pattern: PAT.rusty, matrix: mat4( 1.6, 0.15, 0.9 ) } );
 	add( cylinder( 0.15, 0.15, 0.02, 14 ), { color: 0x2a2a2a, rough: 0.9, matrix: mat4( 1.6, 0.02, 0.9 ) } );
 	// a board propped against the front: the price chalkboard

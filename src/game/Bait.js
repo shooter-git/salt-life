@@ -14,7 +14,8 @@ import { FISH } from './FishTable.js';
 //   likes    species -> its bite weight, times this
 //   skew     how far toward the big end the weights go (Bites.rollWeight's exponent, times this)
 //   steal    the chance each nibble takes it off the hook
-// (M16) and frozen from Marta by the trip (price, per): ballyhoo for trolling, squid for anything and the deep. Lures
+// (M16) and frozen from Marta by the trip (price, per): ballyhoo for trolling, squid for anything and the deep ((M19) Joe's now,
+// with the ice: stream STALLS, docs/m19/stalls.md). Lures
 // (lure: your own gear, Gear.js' lures track, never used up; level: the track's level it comes with) go on the rig that
 // works them: a jig (sinks) on a sinker, a plug (surface) cast on its own, a skirt towed. tow: a towed bait's speeds,
 // knots (Presentation.towTaste): [ too slow, best from, best to, washed out ]. towed: it's only for that. Chum isn't for
@@ -41,7 +42,7 @@ export const BAITS = {
 		likes: { barracuda: 2.6, jack: 2.4, tarpon: 2, snook: 2.2, mahi: 1.6, wahoo: 1.4, blackGrouper: 1.2 } },
 	skirt: { name: 'Trolling skirt', short: 'skirts', live: false, speed: 0.8, small: 0.1, skew: 0.65, steal: 0, lure: true, level: 3, towed: true, tow: [ 5, 7, 16, 24 ],
 		likes: { wahoo: 2.8, mahi: 2, tuna: 2, yellowfin: 2, blueMarlin: 3, whiteMarlin: 1.6, sailfish: 1.2, barracuda: 1.4 } },
-	// (M19) Bought by the lot from Joe and from Pearl (seller: whose; one without is Marta's until stream STALLS moves them:
+	// (M19) Bought by the lot from Joe and from Pearl (seller: whose; one without is Joe's too, the frozen bait he took over from Marta:
 	// docs/M19.md). Their figures are placeholders until STALLS' and FLY's sources set them (docs/m19/sources-boats-bait.md):
 	// live shrimp by the dozen, $10 (judgement; the Keys' $8 to $15), sardines by the pound (Nassau's $5), conch cut from a
 	// legal conch with a flared lip, hermit crabs for permit and bonefish
