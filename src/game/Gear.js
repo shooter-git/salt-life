@@ -34,8 +34,8 @@ export const UPGRADES = {
 		{ cost: 180, label: '30 lb braid', lineLb: 30, lineKg: 30 * LB },
 		{ cost: 450, label: '60 lb braid', lineLb: 60, lineKg: 60 * LB },
 		{ cost: 750, label: '80 lb mono', lineLb: 80, lineKg: 80 * LB },
-		// ((M19) IGFA's 60 kg class, the chair's for the biggest blue marlin: docs/m19/sources-big-game.md. Its price is a
-		// placeholder until stream BIG's)
+		// ((M19) IGFA's 60 kg class, the chair's for the biggest blue marlin: docs/m19/sources-big-game.md. Priced on the line's
+		// own ladder, past 80 lb's: docs/m19/big.md)
 		{ cost: 1000, label: '130 lb mono', lineLb: 130, lineKg: 130 * LB },
 	] },
 	// ((M16) spoolM: the line it holds; dragKg: the most its drag holds (CatchMinigame), none to speak of on a spinning
@@ -52,8 +52,8 @@ export const UPGRADES = {
 		{ cost: 900, label: 'Two-speed big-game reel (its low gear comes in by itself on a heavy fish)', reelSpeed: 2.6, spoolM: 600, dragKg: 20, twoSpeed: true },
 		{ cost: 1200, label: 'Wide 80-class two-speed reel (870 m of 80 lb line, for the biggest fish\'s runs)', reelSpeed: 2.6, spoolM: 868, dragKg: 24, twoSpeed: true },
 		// ((M19) a 130-class two-speed (Shimano's Tiagra 130, Penn's International 130: 914 m of 130 lb, 40 kg and more of
-		// drag) with its bent-butt chair rod. Figures and price placeholders until stream BIG's sweep)
-		{ cost: 1500, label: '130-class two-speed reel and a bent-butt chair rod (914 m of 130 lb line)', reelSpeed: 2.6, spoolM: 914, dragKg: 40, twoSpeed: true },
+		// drag, $1,470 to $1,520) with its bent-butt chair rod ($470 to $800): docs/m19/sources-big-game.md, docs/m19/big.md)
+		{ cost: 2000, label: '130-class two-speed reel and a bent-butt chair rod (914 m of 130 lb line)', reelSpeed: 2.6, spoolM: 914, dragKg: 40, twoSpeed: true },
 	] },
 	rod: { name: 'Rod', levels: [
 		{ cost: 0, label: 'Hand-me-down rod', castM: 22 },
@@ -340,9 +340,10 @@ export const UPGRADES = {
 		{ cost: 0, label: 'None', underwaterLights: false },
 		{ cost: 600, label: 'Underwater lights, for swordfish at night', underwaterLights: true },
 	] },
-	// ((M19) stream BIG, docs/m19/sources-big-game.md: a mate, paid $200 for each day out (mateDay), who takes her helm and
-	// backs her down on a fish while you're in the chair; teasers in her spread, to raise more billfish; a gyro stabilizer
-	// (a Seakeeper 6 on a 48 ft boat: most of her roll gone at rest), which runs on her generator (needs). Prices placeholders)
+	// ((M19) stream BIG, docs/m19/sources-big-game.md and docs/m19/big.md: a mate, paid $200 for each day out (mateDay), who
+	// takes her helm and backs her down on a fish while you're in the chair (rigs/Mate.js); teasers in her spread, raising more
+	// billfish (Presentation's TEASE); a gyro stabilizer (a Seakeeper 6 on a 48 ft boat), which runs on her generator (needs).
+	// Her fittings priced at about a tenth to a fortieth of real ones, as she is: real teasers about $1,000, a gyro fitted $92,000)
 	sfMate: { name: 'Mate', on: 'sportfisher', levels: [
 		{ cost: 0, label: 'None', mate: false, mateDay: 0 },
 		{ cost: 0, label: 'A mate, $200 a day out (he backs her down on a big fish)', mate: true, mateDay: 200 },
@@ -442,6 +443,41 @@ export function defaultUpgrades() {
 
 }
 
+// (M19) A reel holds a volume of line: the metres it takes go as one over the line's diameter squared (every maker's chart:
+// metres x diameter^2 the same for one spool to within 1% on the big reels, docs/m19/sources-big-game.md). SPOOL_V, each
+// reel's (m mm^2, by the reel track's level: two spinning reels', a Penn Fathom II 30's, a Shimano Tiagra 50W's, 80W's and
+// 130's); LINE_D, each line's diameter as spooled (mm, by the line track's level), Penn's for mono of its strength. Braid
+// is counted as mono of its strength, not at its own thinness (a third of mono's, which would put two kilometres of 60 lb
+// on a 50-class reel, and a 370 kg blue marlin landed on it from the chair every time): a big-game reel is filled with mono,
+// or mono over braid backing, for the stretch and the bill. Judgement, docs/m19/big.md. So the 50-class two-speed holds
+// 684 m of 60 lb and 499 of 80 (it had 600 of each), the conventional 302 m of 30 lb (350); the rest as they were (180,
+// 220, 869, and the 130-class's 914 m of 130 lb)
+export const SPOOL_V = [ 11.2, 28.5, 88, 395, 688, 1126 ];
+export const LINE_D = [ 0.25, 0.36, 0.54, 0.76, 0.89, 1.11 ];
+export const spoolOf = ( reel, line ) => Math.min( 2000, Math.round( SPOOL_V[ reel ] / LINE_D[ line ] ** 2 ) );
+
+// (M19) A line for each rod (M18: one line went on every rod, so with 80 lb bought a bonefish was fought on it). What you
+// cast (the float and the sinker) is your light tackle: your best casting rod, a reel up to the conventional and the
+// heaviest line you have up to 30 lb braid. What you troll, fly a kite on or drop deep, and fight from a holder or the
+// chair, is your heavy tackle: the best of everything you have (gearStats'). Each spooled with what that reel holds of it
+export const LIGHT = { rod: 2, reel: 2, line: 2 };
+// (and on each reel the heaviest line you have up to its class, as anglers match them: a 50-class reel takes the 60 lb, not
+// the 80, which it holds only 499 m of; the spinning reels to 15 and 30 lb, the conventional 30)
+export const REEL_LB = [ 15, 30, 30, 60, 80, 130 ];
+export function tackleOf( upgrades, heavy = true ) {
+
+	const at = ( k, most ) => Math.max( 0, Math.min( most, UPGRADES[ k ].levels.length - 1, upgrades[ k ] | 0 ) );
+	const rod = at( 'rod', heavy ? Infinity : LIGHT.rod ), reel = at( 'reel', heavy ? Infinity : LIGHT.reel );
+	let line = at( 'line', heavy ? Infinity : LIGHT.line );
+	while ( line > 0 && UPGRADES.line.levels[ line ].lineLb > REEL_LB[ reel ] ) line --;
+	const R = UPGRADES.reel.levels[ reel ], N = UPGRADES.line.levels[ line ], D = UPGRADES.rod.levels[ rod ];
+	return {
+		rod, reel, line, lineLb: N.lineLb, lineKg: N.lineKg, reelSpeed: R.reelSpeed, dragKg: R.dragKg, twoSpeed: !! R.twoSpeed,
+		spoolM: spoolOf( reel, line ), castM: D.castM, standUp: !! D.standUp,
+	};
+
+}
+
 // merged stats of the current levels: your own gear's and the boat's you're in, over what she is without them
 export function gearStats( upgrades, boat = 'lobster' ) {
 
@@ -455,6 +491,12 @@ export function gearStats( upgrades, boat = 'lobster' ) {
 
 	}
 
+	// ((M19) your heavy tackle: its reel's line and spool by that line; and your light tackle for what you cast: tackleOf)
+	const heavy = tackleOf( upgrades, true );
+	s.lineKg = heavy.lineKg;
+	s.lineLb = heavy.lineLb;
+	s.spoolM = heavy.spoolM;
+	s.light = { ...tackleOf( upgrades, false ), electricReel: false, leader: s.leader };
 	return s;
 
 }

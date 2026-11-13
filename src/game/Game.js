@@ -84,6 +84,7 @@ const BAIL_FROM = 20;
 const WEAR_SAVE = 0.02;
 export { HAUL_FEE };
 const _a = new Vector3(), _b = new Vector3(), _h = new Vector3(), _sock = new Vector3(), _stern = new Vector3(), _sternW = new Vector3();
+const _ride = { last: new Vector3(), v: new Vector3(), has: false }, _rd = new Vector3(); // ((M19) the boat you're riding's velocity)
 const _pose = { pos: new Vector3(), head: new Vector3(), roll: 0, thrash: 0 };
 const BAG_FROM = 0.85; // the brails drawn this far: the netting has closed round what's under it (it rides in the purse)
 // (Salt Life) the hand net's reach (m); how long a lobster in the net shows before it's gauged (s); a
@@ -293,7 +294,8 @@ export class Game {
 	applyGear() {
 
 		const g = this.state.stats;
-		this.rod.setGear( { castM: g.castM, reelSpeed: g.reelSpeed, spoolM: g.spoolM, standUp: g.standUp } );
+		// ((M19) the rod for the rig that's picked: Rigs' rodGear, your light tackle or your heavy)
+		this.rod.setGear( this.rigs ? this.rigs.rodGear() : { castM: g.castM, reelSpeed: g.reelSpeed, spoolM: g.spoolM, standUp: g.standUp } );
 		if ( this.app.player && this.app.player.setDive ) this.app.player.setDive( g );
 		if ( this.gun ) this.gun.setGear( g );
 		if ( this.net ) this.net.setGear( g );
@@ -1869,12 +1871,27 @@ export class Game {
 
 	}
 
+	// (M19) the velocity of a boat you're riding (Together's TheirBoat: her pose, without one of its own), from how she moves on
+	// your screen, smoothed over a quarter of a second
+	_riddenVelocity( boat, dt ) {
+
+		if ( _ride.has && dt > 0 ) _ride.v.lerp( _rd.subVectors( boat.position, _ride.last ).divideScalar( dt ).setY( 0 ), 1 - Math.exp( - dt * 4 ) );
+		else _ride.v.set( 0, 0, 0 );
+		_ride.last.copy( boat.position );
+		_ride.has = true;
+		return _ride.v;
+
+	}
+
 	updateFight( dt, reeling ) {
 
 		const f = this.fight;
-		// ((M16) and she takes line too, running from it: the helm's backing down on it if she's closing)
-		const bv = this.app.boatCtl.velocity, to = _a.subVectors( this.rod.bobber, this.rod.tip ).setY( 0 ).normalize();
-		const riding = this.app.player.mode === 'deck' || this.app.player.mode === 'boat';
+		// ((M16) and she takes line too, running from it: the helm's backing down on it if she's closing. (M19) The boat you're
+		// on: riding someone else's, hers (as she moves on your screen), not your own moored one, so her owner's backing down,
+		// or her mate's, reaches your fight)
+		const p = this.app.player, bv = p.riding ? this._riddenVelocity( p.boat, dt ) : this.app.boatCtl.velocity, to = _a.subVectors( this.rod.bobber, this.rod.tip ).setY( 0 ).normalize();
+		if ( ! p.riding ) _ride.has = false;
+		const riding = p.mode === 'deck' || p.mode === 'boat';
 		let st = f.update( dt, reeling, riding ? - ( bv.x * to.x + bv.z * to.z ) : 0 );
 		this.rigs.leap( f, dt );
 		// ((M16) at the boat: lifted aboard, or shaken off)

@@ -80,7 +80,8 @@ export class BreakingSeas {
 		const yaw = boat.getYaw(), fx = Math.sin( yaw ), fz = Math.cos( yaw );
 		const L = boat.model.lines.length;
 		let hit = 0;
-		for ( const along of POINTS ) hit = Math.max( hit, this.caps.foamAt( p.x + fx * along * L, p.z + fz * along * L, t, this._f ).roller );
+		// ((M19) the short seas' rollers and a long sea's own breaking heads: one of those went through her before)
+		for ( const along of POINTS ) hit = Math.max( hit, this.caps.foamAt( p.x + fx * along * L, p.z + fz * along * L, t, this._f, true ).roller );
 		if ( hit < 0.5 ) return 0;
 		this._cool = COOL;
 		this.hits ++;

@@ -35,6 +35,8 @@ const BUNK_M = 1.6, LOOK_S = 1;
 const SOCK_OUT = 26;
 // a flare's climb (m/s, m) and burn (s)
 const FLARE = { rise: 28, up: 120, burn: 8 };
+// (M19) s of play a gyro takes to spin up (a Seakeeper's 21 minutes at the island's 36 times: docs/m19/sources-big-game.md)
+const GYRO_SPIN = 35;
 // (M17) A red meteor as it's seen (docs/m17/looks.md): its light (cd: a 12-gauge red meteor's, 16,000; SOLAS's parachute rocket is
 // 30,000), the eye's least at night (lux: COLREGS' 2e-7), and from how near it's at its brightest, by night and by day (m). Its
 // brightness goes by Allard's law, I T^d / d^2, the air's T worked out so that it's at the eye's least where Seaworthy's
@@ -222,7 +224,28 @@ export class DaysOut {
 	}
 
 	// ---- per frame
+	// (M19) the sportfisher's gyro stabilizer (Gear.js' sfGyro): on her generator, out at sea, with fuel to run it; at her
+	// berth or on the hard, off. It spins up as a Seakeeper does, over about 21 minutes, 35 s of play at the island's 36 times
+	// (GYRO_SPIN), and down again as fast: BoatController.gyro, 0..1
+	gyroWanted() {
+
+		const s = this.state.stats, b = this.app.boatCtl;
+		return !! ( s.gyro && s.generator && this.app.boat && this.app.boat.id === 'sportfisher' && b && ! b.moored && ! b.hauled && this.state.fuelL > 0 );
+
+	}
+
+	_gyro( dt ) {
+
+		const b = this.app.boatCtl;
+		if ( ! b ) return;
+		const want = this.gyroWanted() ? 1 : 0;
+		b.gyro = want ? Math.min( 1, ( b.gyro || 0 ) + dt / GYRO_SPIN ) : Math.max( 0, ( b.gyro || 0 ) - dt / GYRO_SPIN );
+
+	}
+
 	update( dt, inp, p ) {
+
+		this._gyro( dt ); // ((M19))
 
 		this._clock( dt );
 		if ( ( this._lookT -= dt ) <= 0 ) {
@@ -306,7 +329,8 @@ export class DaysOut {
 
 		const st = this.state, box = this.box, s = st.stats, had = new Map( st.inventory.map( ( f ) => [ f, f.value ] ) ), her = this.her;
 		const b = this.app.boatCtl, shore = ! b || b.moored || b.hauled, makes = this._makes();
-		if ( makes && ! shore ) st.burn( GENERATOR_LH * hours );
+		// ((M19) one generator for her icemaker and her gyro: GYRO_SPIN)
+		if ( ( makes || this.gyroWanted() ) && ! shore ) st.burn( GENERATOR_LH * hours );
 		const own = keepCatch( her ? [] : st.inventory, box.ice, hours, meltKgH( s.holdKg, s.insulated ), makes );
 		const room = s.holdKg - ( her ? 0 : own.fish.reduce( ( kg, f ) => kg + f.kg, 0 ) ) - this.guestsKg;
 		box.ice = Math.min( own.ice, Math.max( 0, room ) ); // ((v2.3.0) and a box an icemaker overfilled before is put right)
@@ -347,11 +371,12 @@ export class DaysOut {
 
 		} else if ( this.app.player.mode === 'walk' || ( this.aboard && b.moored ) ) {
 
-			if ( d.out > 0 || d.dry > 0 || d.flares < FLARES ) {
+			if ( d.out > 0 || d.dry > 0 || d.flares < FLARES || d.mate > 0 ) {
 
 				d.out = 0;
 				d.dry = 0;
 				d.flares = FLARES;
+				d.mate = 0; // ((M19) a new trip, a new day for the mate: rigs/Mate.js)
 				st.save();
 
 			}

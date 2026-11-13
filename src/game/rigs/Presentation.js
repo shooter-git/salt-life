@@ -101,6 +101,10 @@ const BILL = { sailfish: true, whiteMarlin: true, blueMarlin: true, swordfish: t
 const LEAPS = { sailfish: true, whiteMarlin: true, blueMarlin: true, mahi: true, tarpon: true };
 
 // a species' weight on this hook, times this, past what Bites made of it (no hook: as it was)
+// (M19) teasers in the spread (the sportfisher's: daisy chains and dredges): the billfish raised to the baits the more. No
+// study measures it; captains say noticeably (docs/m19/sources-big-game.md). Judgement
+export const TEASE = 1.3;
+
 export function rigWeight( rig, id ) {
 
 	if ( ! rig ) return 1;
@@ -110,6 +114,7 @@ export function rigWeight( rig, id ) {
 
 		const k = f.knots || TOW_KNOTS[ id ] || TOW_KNOTS_ELSE, v = rig.knots || 0;
 		x *= v < k[ 0 ] ? Math.max( 0, 1 - ( k[ 0 ] - v ) / 3 ) : v > k[ 1 ] ? Math.max( 0, 1 - ( v - k[ 1 ] ) / 3 ) : 1;
+		if ( rig.teasers && f.release > 0 ) x *= TEASE; // ((M19) a billfish, raised by the teasers)
 
 	}
 

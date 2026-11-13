@@ -246,7 +246,8 @@ export const cleanDays = ( d ) => {
 
 	const num = ( v, least = 0 ) => ( Number.isFinite( v ) ? Math.max( least, v ) : least ), boats = {};
 	for ( const [ k, b ] of Object.entries( d && d.boats && typeof d.boats === 'object' ? d.boats : {} ) ) if ( ABLE[ k ] && b ) boats[ k ] = { ice: num( b.ice ), stores: num( b.stores ) };
-	return { boats, out: num( d && d.out ), dry: num( d && d.dry ), flares: d && Number.isFinite( d.flares ) ? Math.max( 0, Math.min( FLARES, d.flares ) ) : FLARES };
+	// ((M19) mate: the days of this trip the sportfisher's mate has been paid for: rigs/Mate.js)
+	return { boats, out: num( d && d.out ), dry: num( d && d.dry ), flares: d && Number.isFinite( d.flares ) ? Math.max( 0, Math.min( FLARES, d.flares ) ) : FLARES, mate: Math.floor( num( d && d.mate ) ) };
 
 };
 

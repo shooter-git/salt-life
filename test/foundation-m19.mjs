@@ -43,6 +43,7 @@ const ok = ( c, msg ) => {
 	// the fly rods' figures apart: buying one doesn't change the line every other rod fights on
 	const u = defaultUpgrades();
 	u.line = 2;
+	u.reel = 2; // ((M19) a reel takes the line of its class: the conventional's is 30 lb, Gear's tackleOf)
 	u.flyRod = 3;
 	const s = gearStats( u, 'kayak' );
 	ok( s.lineKg === 30 * LB && s.flyRods.join() === '8,10,12' && FLY_RODS[ 12 ].lineKg === 20 * LB, 'with the fly rods, the line is still the 30 lb braid; the 12-weight\'s 20 lb tippet is its own' );

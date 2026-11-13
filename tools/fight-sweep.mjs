@@ -17,7 +17,8 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FISH, FISH_IDS } from '../src/game/FishTable.js';
 import { CatchMinigame } from '../src/game/CatchMinigame.js';
-import { gearStats, defaultUpgrades, UPGRADES } from '../src/game/Gear.js';
+import { gearStats, defaultUpgrades, UPGRADES, spoolOf } from '../src/game/Gear.js';
+import { mateTarget } from '../src/game/rigs/Mate.js';
 import { Rigs } from '../src/game/rigs/Rigs.js';
 import { leaderRisk } from '../src/game/rigs/Presentation.js';
 
@@ -45,6 +46,8 @@ export function combos() {
 	}
 
 	for ( let l = 0; l < lines; l ++ ) for ( const hold of [ 'hand', 'chair' ] ) out.push( { key: `L${ l }/E/${ hold }`, line: l, reel: reels - 1, hold, electric: true } );
+	// ((M19) and from the chair with her mate backing her down, on every reel with a drag)
+	for ( let l = 0; l < lines; l ++ ) for ( let r = 0; r < reels; r ++ ) if ( UPGRADES.reel.levels[ r ].dragKg !== null ) out.push( { key: `L${ l }/R${ r }/chair+mate`, line: l, reel: r, hold: 'chair', electric: false, mate: true } );
 	return out;
 
 }
@@ -70,6 +73,10 @@ export function termsOf( c, id, kg, { dehooker = false } = {} ) {
 
 	const u = { ...defaultUpgrades(), line: c.line, reel: c.reel, rod: c.hold === 'harness' ? 3 : 2, landing: dehooker ? 2 : 1, sfElectricReel: c.electric ? 1 : 0, sfChair: c.hold === 'chair' ? 1 : 0 };
 	const stats = gearStats( u, 'sportfisher' );
+	// ((M19) this line on this reel, as the combo names them, though the game would put a lighter one on a reel of a lower
+	// class: Gear's tackleOf; and the spool that reel holds of it)
+	stats.lineKg = UPGRADES.line.levels[ c.line ].lineKg;
+	stats.spoolM = spoolOf( c.reel, c.line );
 	const seat = {};
 	const r = Object.assign( Object.create( Rigs.prototype ), {
 		game: { state: { stats, leaderPick: null }, rod: { rig: c.electric ? 'drop' : 'troll', hookM: c.electric ? DEEP : 0 }, hookBait: null },
@@ -86,13 +93,25 @@ export function termsOf( c, id, kg, { dehooker = false } = {} ) {
 
 }
 
-export function fightOnce( c, id, kg, seed, { dehooker = false, policy = careful, capS = 3600 } = {} ) {
+// ((M19) the boat after the fish: her mate backing her down (c.mate: the closing speed he wants, Mate.mateTarget, reached
+// with her lag, MATE_LAG s, once he's had her helm and her stern round, MATE_ON s: the real sportfisher in Node took 4 s to
+// make speed astern and up to 17 s to bring her stern round, test/mate.mjs), or a second player at her helm (c.backing: the
+// crew's flat 0.4 m/s, Crew.BACKING). Hs: the sea, m)
+export const MATE_ON = 12, MATE_LAG = 3;
+export function fightOnce( c, id, kg, seed, { dehooker = false, policy = careful, capS = 3600, Hs = 0 } = {} ) {
 
 	const T = termsOf( c, id, kg, { dehooker } );
 	const g = new CatchMinigame( { species: id, kg, ...T, distance: c.electric ? DEEP : START[ c.hold ], rng: lcg( seed ) } );
-	let st = 'fighting';
-	const dt = 1 / 30;
-	while ( st === 'fighting' && g.time < capS ) st = g.update( dt, policy( g ) );
+	let st = 'fighting', v = 0;
+	const dt = 1 / 30, k = 1 - Math.exp( - dt / MATE_LAG );
+	while ( st === 'fighting' && g.time < capS ) {
+
+		const want = c.mate && g.time > MATE_ON ? mateTarget( g.distance, g.landAt, Hs ) : c.backing || 0;
+		v += ( want - v ) * k;
+		st = g.update( dt, policy( g ), - v );
+
+	}
+
 	return { st: st === 'fighting' ? 'long' : st, t: g.time };
 
 }

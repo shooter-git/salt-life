@@ -57,11 +57,14 @@ const CONTACT = { k: 400000, c: 30000, slide: 6000, pileK: 260000, pileC: 8000 }
 // turning circle, speed lost in turns, outward heel); running trim and rise with speed (the bow
 // lifts over the hump, then runs at a few degrees); prop walk astern. Grounding, pier piles and
 // mooring lines as before.
-// (M19) a stake's spring (rad/s: how stiffly it holds her, critically damped) and a gyro stabilizer's roll damping: her own
-// times 1 + roll at rest, none past `fade` m/s through the water (a Seakeeper takes most of a boat's roll at rest and
-// less under way: docs/m19/sources-big-game.md; the figures judgement, stream BIG's to set against its test)
+// (M19) a stake's spring (rad/s: how stiffly it holds her, critically damped); and a gyro stabilizer's precession against her
+// roll, a damping of `roll` per second on her roll's inertia at rest, none past `fade` m/s through the water: a Seakeeper takes
+// 82 to 95% of a boat's roll at rest and less under way (docs/m19/sources-big-game.md). On the real sportfisher in Node,
+// knocked over at rest she rolls half as far with it (5.5 degrees, 2.8). Short of a Seakeeper's figure, which is for rolling
+// in a sea: her hull rights her slowly from a heel, and a damper slows a roll without changing the heel she settles at.
+// Judgement, docs/m19/big.md
 const STAKE_W = 2;
-const GYRO = { roll: 8, fade: 6 };
+const GYRO = { roll: 12, fade: 6 };
 
 export class BoatController {
 
@@ -500,8 +503,11 @@ export class BoatController {
 		const wd = 0.2 + wetD;
 		// the keel's lift resists roll in proportion to speed (a boat underway rolls much less)
 		// ((M19) and a gyro's, the more she's slow: GYRO)
-		const gyro = this.gyro > 0 ? this.gyro * GYRO.roll * Math.max( 0, 1 - au / GYRO.fade ) : 0;
-		_v.set( - aLoc.x * H.damping[ 0 ], - aLoc.y * H.damping[ 1 ], - aLoc.z * ( H.damping[ 2 ] * ( 1 + gyro ) + H.damping[ 3 ] * au ) ).multiplyScalar( wd ).applyQuaternion( this.quaternion );
+		// ((M19) and a gyro's precession against her roll, the more she's slow: GYRO, a damping rate of her roll's inertia)
+		const gyro = this.gyro > 0 ? this.gyro * GYRO.roll * Math.max( 0, 1 - au / GYRO.fade ) * this.inertia.z : 0;
+		_v.set( - aLoc.x * H.damping[ 0 ], - aLoc.y * H.damping[ 1 ], - aLoc.z * ( H.damping[ 2 ] + H.damping[ 3 ] * au ) ).multiplyScalar( wd );
+		_v.z -= aLoc.z * gyro;
+		_v.applyQuaternion( this.quaternion );
 		T.add( _v );
 		// ---- (Salt Life) righting past RIGHT_FROM: a torque turning her up toward upright
 		const tilt = Math.asin( Math.min( 1, Math.hypot( up.x, up.z ) ) );

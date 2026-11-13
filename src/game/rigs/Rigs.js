@@ -95,7 +95,25 @@ export class Rigs {
 	// the tackle the rod in your hands fights on: hers, off her holder or on her kite rod or her electric reel, or your own
 	get tackle() {
 
-		return this.kit || this.stats;
+		// ((M19) what you cast is on your light tackle; what's trolled, flown, dropped or taken off a holder on your heavy: Gear's
+		// tackleOf. Riding along, her kit)
+		return this.kit || ( this.heavy() ? this.stats : this.stats.light );
+
+	}
+
+	// (M19) whether the rig on the line is your heavy tackle's: trolled, a kite's, a deep drop's (and so a fish taken off a holder,
+	// on the troll rig), or you're in the chair; otherwise what you cast is on your light tackle
+	heavy( rig = this.game.rod.rig || this.pick ) {
+
+		return rig === 'troll' || rig === 'kite' || rig === 'drop' || !! this.inChair;
+
+	}
+
+	// (M19) the rod in your hands for the rig that's picked: its reach, its reel, its spool, and whether it's the stand-up rod
+	rodGear( rig = this.pick ) {
+
+		const t = this.heavy( rig ) ? this.stats : this.stats.light;
+		return { castM: t.castM, reelSpeed: t.reelSpeed, spoolM: t.spoolM, standUp: !! t.standUp };
 
 	}
 
@@ -251,6 +269,8 @@ export class Rigs {
 		}
 
 		this.pick = RIG_IDS[ i ];
+		// ((M19) the rod for it in your hands: the light one for a cast, the stand-up one for the rest)
+		this.game.rod.setGear( this.rodGear() );
 		if ( this.boatRig() ) {
 
 			this.fitBoatBait();
@@ -402,7 +422,8 @@ export class Rigs {
 		// a cast
 		const lure = BAITS[ pick ];
 		rod.setRig( this.pick, !! ( lure && lure.lure ) );
-		rod.dropReach = rod.spoolM = this.stats.spoolM;
+		// ((M19) a cast's on your light tackle: its spool's what a sinker can go down)
+		rod.dropReach = rod.spoolM = this.tackle.spoolM;
 		this._waiting = this.pick === 'bottom';
 		return false;
 
@@ -707,7 +728,8 @@ export class Rigs {
 		const g = this.game, x = L.p.x, z = L.p.z, T = this.app.terrainData, floorM = Math.max( 0, G.seaLevel.value - T.heightAt( x, z ) );
 		const lure = BAITS[ L.bait ]?.lure ? L.bait : null;
 		// (a plug swims a couple of metres down; the rest skip on top)
-		return atHook( g.habitatOf( x, z, floorM ), hookOf( 'troll', lure === 'plug' ? 2 : 0.3, floorM, { knots, lines: this.lines.length, lure, leader: leaderOn( L.leader, this.stats.leader, 'troll', knots, lure ) } ) );
+		// ((M19) teasers: the sportfisher's, out with her spread: Presentation's TEASE)
+		return atHook( g.habitatOf( x, z, floorM ), hookOf( 'troll', lure === 'plug' ? 2 : 0.3, floorM, { knots, lines: this.lines.length, lure, leader: leaderOn( L.leader, this.stats.leader, 'troll', knots, lure ), teasers: !! this.stats.teasers } ) );
 
 	}
 
@@ -1274,6 +1296,14 @@ export class Rigs {
 		const cam = this.app.camera;
 		D.begin( cam );
 		for ( const L of this.lines ) this._drawLine( D, L );
+		// ((M19) her teasers, with her spread out)
+		if ( this.lines.length && this.stats.teasers && this.app.boat && this.app.boat.id === 'sportfisher' ) {
+
+			const b = this.app.boatCtl, waves = this.app.waves;
+			D.teasers( this.app.boat, ( l, out ) => b.toWorld( l, out ), ( x, z ) => ( waves ? waves.heightAt( x, z ) : G.seaLevel.value ) );
+
+		}
+
 		if ( this.kite ) this._drawKite( D );
 		if ( this.slick ) this._drawSlick( D, this.slick );
 		for ( const S of this.theirSlicks ) this._drawSlick( D, S );
