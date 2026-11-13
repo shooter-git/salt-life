@@ -271,12 +271,14 @@ for ( const [ tier, k ] of [ [ 'high', 1 ], [ 'low', 0.5 ] ] ) {
 	three.draw( a, view( map, log, bank.x, bank.z, 3 * 1852 ) );
 	ok( three.vector, 'at 3 NM across, still its own' );
 	// what it costs
+	// ((M19) by this process's own CPU time, which a busy machine's other work doesn't stretch as it does the wall clock)
 	const times = [];
 	for ( let i = 0; i < 9; i ++ ) {
 
-		const t0 = performance.now();
+		const c0 = process.cpuUsage();
 		P._redraw( map, log, across0, bank.x + i, bank.z, W / across0, pxm, 'night' );
-		times.push( performance.now() - t0 );
+		const c = process.cpuUsage( c0 );
+		times.push( ( c.user + c.system ) / 1000 );
 
 	}
 

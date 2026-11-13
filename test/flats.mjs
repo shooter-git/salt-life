@@ -114,10 +114,19 @@ for ( const file of [ 'island.bin', 'island-1024.bin' ] ) {
 	// what it costs the load
 	const copy = { res: T.res, texel: T.texel, origin: T.origin, heights: new Float32Array( before ), sand: new Uint8Array( sand0 ), rock: new Float32Array( rock0 ), seagrass: new Uint8Array( T.seagrass ), rubble: new Uint8Array( T.rubble ) };
 	cutFlats( copy );
-	const t0 = performance.now();
-	for ( let r = 0; r < 3; r ++ ) cutFlats( { ...copy, heights: new Float32Array( before ) } );
-	const ms = ( performance.now() - t0 ) / 3;
-	console.log( `     ${ tag } the cut: ${ ms.toFixed( 0 ) } ms here` );
+	// ((M19) the quickest of three by this process's own CPU time, which a busy machine's other work doesn't stretch as it
+	// does the wall clock: past a load of about 12 the wall clock's average went over the ceiling)
+	let ms = Infinity;
+	for ( let r = 0; r < 3; r ++ ) {
+
+		const run = { ...copy, heights: new Float32Array( before ) }, c0 = process.cpuUsage();
+		cutFlats( run );
+		const c = process.cpuUsage( c0 );
+		ms = Math.min( ms, ( c.user + c.system ) / 1000 );
+
+	}
+
+	console.log( `     ${ tag } the cut: ${ ms.toFixed( 0 ) } ms of CPU here` );
 	// (a ceiling well over this machine's, for a slower runner: a texel at a time it took 0.55 and 2 s here)
 	ok( ms < ( T.texel > 1 ? 400 : 1200 ), `${ tag } cut in a fraction of a second (${ ms.toFixed( 0 ) } ms here)` );
 

@@ -24,7 +24,7 @@ Run through, headless: `node tools/two-players/away.mjs` (the away boats by the 
 
 For the real thing, see All the Spaces' `docs/development.md`.
 
-`hard.mjs [dir] [port] [boat] [owner's fps] [guest's fps]` (`HARD_FROM=gale`, `HARD_UNTIL=calm`, `HARD_ONLY=turning`, `HARD_DRY=1`, as a run's cut at 25 minutes), `heel-fps.mjs`, `seen.mjs [dir] [port] <part>`, `gap.mjs [dir] [port] [boat]`, `mem.mjs [dir] [port] [boat] [minutes] [every]` and `heel.mjs`: `docs/m16/together.md` says what each checks. `lib.mjs` is what they share. The fps asked for is only a ceiling: three runs at once here gets about 2.
+`hard.mjs [dir] [port] [boat] [owner's fps] [guest's fps]` (`HARD_FROM=gale`, `HARD_UNTIL=calm`, `HARD_ONLY=turning`, `HARD_DRY=1`, as a run's cut at 25 minutes), `heel-fps.mjs`, `seen.mjs [dir] [port] <part>`, `gap.mjs [dir] [port] [boat]`, `mem.mjs [dir] [port] [boat] [minutes] [every]` and `heel.mjs`: `docs/m16/together.md` says what each checks. `mem.mjs`'s `MEM_DRAW=0`, `MEM_VIEW`, `MEM_FPS` and `MEM_SNAP` (heap snapshots for `tools/heap/grow.mjs`) tell a climb by frames from one by the clock: `docs/long-session-memory.md`. `lib.mjs` is what they share. The fps asked for is only a ceiling: three runs at once here gets about 2.
 
 `aboard.mjs [dir] [port] [boat] [owner's fps] [guest's fps] [guest's own boat]`: a guest on the owner's real boat, every area she has (`areas.mjs`), under way, walking, climbing, stepping ashore, what's fitted, her spread, her chair. A run's frames a second are printed: the fps asked for is only a ceiling on a CPU.
 
