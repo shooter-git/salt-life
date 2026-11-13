@@ -200,7 +200,7 @@ function cards( device, kayak ) {
 const CARD_COUNT = 3;
 
 // (M17) a school spooked: the tip for why (FlatsFishing's events.spooked)
-const SPOOK_TIP = { speed: 'spookSpeed', push: 'spookPush', shadow: 'spookShadow', knock: 'spookKnock', wade: 'spookWade', engine: 'spookEngine', cast: 'spookCast', line: 'spookCast', refused: 'flatsRefused', theirs: 'spookTheirs' };
+const SPOOK_TIP = { speed: 'spookSpeed', push: 'spookPush', shadow: 'spookShadow', knock: 'spookKnock', wade: 'spookWade', engine: 'spookEngine', cast: 'spookCast', line: 'spookCast', refused: 'flatsRefused', theirs: 'spookTheirs', falsecast: 'spookFalseCast' };
 
 // (M16) a tip that isn't the same in a kayak (no helm, no fuel, no bilge), or is hers alone; by the device where it's a key
 const IN_KAYAK = {
@@ -222,7 +222,7 @@ const IN_KAYAK = {
 	chart: 'Your <b>chart</b> fills in where you go: the coast as you see it, the depths as you paddle over them, each place\'s name as you come to it, on the map. It has them by their names on a chart: ' + namedAs( NAME.bank ) + ', and so on. Mark a good spot from the cooler\'s <b>Chart</b> tab. Marta sells a chart of the island, if you\'d rather not.',
 	edge: 'You\'re past the far grounds, in a <b>kayak</b>. The sea\'s the open ocean\'s out here, the wind fresher and the seas bigger, and it\'s a long paddle home.',
 	goRound: 'You\'ve the hang of the bay. There\'s more of the island: the <b>north beach\'s surf</b> for pompano (best on a surf day: Joe\'s slate says) and the <b>mangrove creek</b> on the west for snook and redfish at dawn and dusk. Paddle round on a calm day, or walk: the trail from the square goes round the east to the north beach, the red dashes on your map, with fingerposts at its turns, and <b>Pearl\'s fish camp</b> there buys fish.',
-	flats: 'The <b>flats</b>: a foot or two of water over white sand. The bonefish come up onto them on the <b>flood</b>, from about three hours in, and go off on the ebb; permit along the edge, tarpon in the channels and the holes. <b>See them before you cast</b>: polarized glasses (Marta\'s) take the glare off the water. From her seat you\'re <b>low</b>: you\'ll see them close in, ten metres or so, so <b>drift</b>, don\'t paddle at them.',
+	flats: 'The <b>flats</b>: a foot or two of water over white sand. The bonefish come up onto them on the <b>flood</b>, from about three hours in, and go off on the ebb; permit along the edge, tarpon in the channels and the holes. <b>See them before you cast</b>: polarized glasses (Marta\'s) take the glare off the water. From her seat you\'re <b>low</b>: you\'ll see them close in, ten metres or so, so <b>drift</b>, don\'t paddle at them. Nothing takes a bait here without a <b>flats licence</b>: free at Marta\'s.',
 	hurricane: 'A <b>hurricane</b> is coming. <b>Sell your catch</b> before Joe boards up: it won\'t keep till he opens again. Get your kayak off the beach: Marta can <b>haul her up</b> into her yard before she boards up. In it, the <b>shelter</b> (on your map) keeps you safe from the wind, the rain and the sea. You can always step out to watch.',
 };
 
@@ -312,7 +312,7 @@ const TIPS = {
 	bunk: 'She has <b>bunks</b>. Sleep aboard to pass the night, and bring <b>food and water</b> from Marta for days out. Anchor first, or stream a <b>drift sock</b>: she goes where the wind takes her while you sleep.',
 	farWater: 'Out here the fish are <b>under things</b>: look for <b>weedlines</b> (mahi), <b>floating debris</b>, and <b>birds working bait</b> (tuna). On the <b>drop-off</b> the tuna come at first light.',
 	// (M17) the flats, and sight-fishing on them (docs/m17/sight.md)
-	flats: 'The <b>flats</b>: a foot or two of water over white sand. The bonefish come up onto them on the <b>flood</b>, from about three hours in, and go off on the ebb; permit along the edge, tarpon in the channels and the holes. <b>See them before you cast</b>: polarized glasses (Marta\'s) take the glare off the water, the higher you are the better, with the sun behind you. Come on <b>slowly</b>.',
+	flats: 'The <b>flats</b>: a foot or two of water over white sand. The bonefish come up onto them on the <b>flood</b>, from about three hours in, and go off on the ebb; permit along the edge, tarpon in the channels and the holes. <b>See them before you cast</b>: polarized glasses (Marta\'s) take the glare off the water, the higher you are the better, with the sun behind you. Come on <b>slowly</b>. Nothing takes a bait here without a <b>flats licence</b>: free at Marta\'s.',
 	flatsSeen: 'Fish on the flat. See which way they\'re going and put your bait <b>a metre or two ahead</b> of them on their way: not on their heads, and not with the line over their backs. Let it sit. One that sees it comes to it: <b>strike when it takes</b>.',
 	flatsTailing: '<b>Tails</b>: bonefish feeding head down on the bottom, their tails out of the water, best seen on a calm day. A tailing fish is the keenest, but it only sees what lands close: <b>a foot or two</b> in front of it.',
 	spookSpeed: 'Spooked: <b>they saw you coming</b>. Within about 15 metres, slow down: drift, wade or pole the last of it, and they\'ll let you close. A spooked school\'s gone from there a while.',
@@ -322,6 +322,9 @@ const TIPS = {
 	spookWade: 'Spooked: they <b>heard you wading</b>. Slow, quiet steps near fish, and flats booties on rock and rubble.',
 	spookEngine: 'An <b>engine</b> running spooks the flat\'s fish a hundred metres off. Shut it down well short of them, and drift or pole in.',
 	spookCast: '<b>Too close</b>: a bait landing on a fish\'s head, or the line laid over its back, sends the whole school off. Lead them.',
+	// ((M19) the fly rod: game/FlyCast.js)
+	spookFalseCast: 'Spooked by your <b>false casts</b>: the line going over them, its flash and its shadow. False cast to one side of them, or short of them, and shoot the rest; two false casts are plenty.',
+	flyCast: 'The <b>fly rod</b>: hold the cast button to false cast, and each one carries more line. <b>Let go as the rod stops</b> on the forward stroke to shoot it. Then tap to strip the fly back; when a fish eats it, <b>strip-set</b> with one long pull, the rod kept low. Lifting the rod pulls it out of its mouth. The other button picks the line up to cast again.',
 	flatsRefused: 'It came to it and <b>turned off</b>: refused. What they take is their own: a bonefish a shrimp or a jig, a tarpon or a snook a plug or live bait. A <b>permit</b> refuses most things. Try the next one.',
 	// ((M17) the flats together: a school someone else spooked; a fish called to you)
 	spookTheirs: 'Someone else <b>spooked that school</b>. A flat\'s fish are everyone\'s: what spooks them for one of you spooks them for all, and they\'re gone a while. Fish apart, or come on together, slowly.',
@@ -610,6 +613,7 @@ export class Guide {
 		if ( rod.equipped && ! prev.equipped ) this.tip( 'rodOut' );
 		if ( b && b.phase === 'nibble' ) this.tip( 'nibble' );
 		if ( g.fight && ! prev.fight ) this.tip( 'fishOn' );
+		if ( rod.state === 'falsecast' ) this.tip( 'flyCast' ); // ((M19) the fly rod's first false cast)
 		const lc = g.state.lastCatch;
 		if ( lc && lc !== prev.lastCatch && lc.kept ) this._afterCard = 'caught';
 		if ( this._afterCard && ! ( g.hud && g.hud.catchOpen ) && ! g.landing ) {

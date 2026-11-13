@@ -624,7 +624,12 @@ export class Game {
 		// ((M16) and the leader: X, or Y on a gamepad, whose camera is the helm's)
 		if ( rod.equipped && quiet && rod.state === 'idle' && ( inp.hit( 'KeyX' ) || ( inp.lastDevice === 'gamepad' && inp.hit( 'KeyV' ) ) ) ) this.rigs.cycleLeader();
 
-		if ( rod.equipped && ! panelOpen ) {
+		// ((M19) a fly on: false casting, shooting, stripping and setting are its own: game/FlyCast.js)
+		if ( rod.equipped && ! panelOpen && this.flyCast.input( { lDown, lUp, lmb, rDown } ) ) {
+
+			// (dealt with)
+
+		} else if ( rod.equipped && ! panelOpen ) {
 
 			if ( rod.state === 'idle' && lDown ) {
 
@@ -1769,8 +1774,22 @@ export class Game {
 
 		// ((M16) on a lead, not till it's down: Rigs.update)
 		this.bite = this.rod.rig === 'bottom' ? null : { phase: 'wait', t: waitOnRig( this.habitat(), this.hour, Math.random, this.hookBait ) };
+		// ((M19) a fly's landing: how hard it came down, and the fly line laid heavier than mono: FlyCast)
+		const fly = this.rod.rig === 'fly' ? this.flyCast.landing : null;
+		// ((M19) on the flats with no flats licence: nothing there takes your bait or fly (what lands on them still spooks them))
+		if ( ! this.flats.licensed( this.rod.bobber.x, this.rod.bobber.z ) ) {
+
+			this.bite = null;
+			this.flats.landed( this.rod.bobber, this.rod.tip, this.hookBait, { ...fly, take: false } );
+			const now = performance.now();
+			if ( ! ( now < this._licenceSaid ) ) this.toast( 'Nothing takes a bait on the flats without a flats licence · free at Marta\'s', 3600 );
+			this._licenceSaid = now + 60000;
+			return;
+
+		}
+
 		// ((M17) on the flats: what it lands on spooked, and the fish there seeing it as they come on: FlatsFishing.watch)
-		this.flats.landed( this.rod.bobber, this.rod.tip, this.hookBait );
+		this.flats.landed( this.rod.bobber, this.rod.tip, this.hookBait, fly );
 
 	}
 
@@ -1782,7 +1801,8 @@ export class Game {
 		// ((M17) a seen fish on its way to the bait: the bite's its, beside the habitat's roll)
 		if ( this.flats.watch( b, dt ) ) return;
 		if ( this.bite !== b ) return;
-		b.t -= dt;
+		// ((M19) a fly draws bites as it's worked; left still, hardly: FlyCast.working)
+		b.t -= dt * ( rod.rig === 'fly' && b.phase === 'wait' ? this.flyCast.working() : 1 );
 		// bobber motion for the cues
 		if ( b.phase === 'nibble' ) rod.dip = Math.max( 0, Math.sin( Math.min( 1, ( b.pulse || 0 ) ) * Math.PI ) * 0.45 );
 		else if ( b.phase === 'take' ) rod.dip += ( 1.4 - rod.dip ) * ( 1 - Math.exp( - dt * 14 ) );
@@ -1809,6 +1829,14 @@ export class Game {
 			b.nibbles = 1 + Math.floor( Math.random() * 3 );
 			b.t = 0.7 + Math.random() * 0.8;
 			b.pulse = 0;
+			// ((M19) a fly isn't nibbled: it's eaten, the line comes tight, and it's strip-set or spat out)
+			if ( rod.rig === 'fly' ) {
+
+				b.phase = 'take';
+				b.t = 2.4 - FISH[ species ].fight * 0.5;
+				if ( this.app.audio && this.app.audio.fishSplash ) this.app.audio.fishSplash( rod.bobber, 0.35 );
+
+			}
 
 		} else if ( b.phase === 'nibble' ) {
 
@@ -1837,7 +1865,9 @@ export class Game {
 
 		} else if ( b.phase === 'take' ) {
 
-			this.toast( this.hookBait ? `It ran off with your ${ BAITS[ this.hookBait ].name.toLowerCase() }` : 'It took the bait and ran', 1800 );
+			// ((M19) a fly's spat out, or a tarpon's set once only and the hook not in its bony mouth)
+			if ( rod.rig === 'fly' ) this.toast( b.sets ? 'The hook didn\'t stick in its bony mouth · strip-set again, and again' : 'It spat the fly · strip-set as it eats: the rod low, one long pull', 2600 );
+			else this.toast( this.hookBait ? `It ran off with your ${ BAITS[ this.hookBait ].name.toLowerCase() }` : 'It took the bait and ran', 1800 );
 			this.hookBait = null;
 			this.bite = { phase: 'wait', t: waitOnRig( this.habitat(), this.hour ) };
 
@@ -1863,6 +1893,7 @@ export class Game {
 		const out = this.rigs.fightOut( Math.min( Math.max( 3, this.rod.lineOut ), this.rod.castM * 1.5 + 10 ) ), T = this.rigs.fightTerms( b );
 		this.fight = new CatchMinigame( { species: b.species, kg: b.kg, ...T, reelSpeed: T.reelSpeed * this.daysOut.strength, distance: Number.isFinite( out ) ? out : 3, wind: blowShare( G.windSpeed.value ) } );
 		this.fight.leader = T.leader;
+		this.fight.rig = this.rod.rig; // ((M19) what it was taken on: the catch's log and Pearl's challenges, a fly's among them)
 		this.fight.place = b.place;
 		this.fight.at = b.at;
 		this.bite = null;
@@ -1924,7 +1955,7 @@ export class Game {
 		const name = FISH[ f.species ].name;
 		if ( st === 'caught' ) {
 
-			const entry = this.state.addFish( f.species, f.kg, this.hour, { day: this.tradeDay, place: f.place } );
+			const entry = this.state.addFish( f.species, f.kg, this.hour, { day: this.tradeDay, place: f.place, rig: f.rig || null } );
 			const info = this.state.lastCatch;
 			this.charted( f.species, f.place, f.at );
 			info.wanted = entry ? this.wantedFor( entry ) : null; // (Salt Life) on today's wanted list

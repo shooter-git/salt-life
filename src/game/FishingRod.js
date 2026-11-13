@@ -5,6 +5,7 @@ import { G } from '../core/Globals.js';
 import { windBeyondFair } from './Weather.js';
 import { RIGS } from './rigs/Presentation.js';
 import { buildBigRodGeometry } from './rigs/BigRod.js';
+import { buildFlyRodGeometry, FLY_K, FLY_HOLD, FLY_LINE_COLOR, FLY_LINE_GLOW } from './rigs/FlyRod.js';
 
 // The fishing rod in the player's hands, its line and the bobber.
 //
@@ -35,6 +36,12 @@ import { buildBigRodGeometry } from './rigs/BigRod.js';
 // the hook is: under a float a little way, or sinking on a lead from where it went in until it's on the bottom or
 // you've no more line you can work. Past 'float' there's no float to draw. big: the stand-up rod (rigs/BigRod.js), its
 // reel on top of it, so it's the same frame turned over.
+//
+// (M19) flyRod: the 9 ft fly rod (rigs/FlyRod.js), drawn by this rod's material stretched FLY_K along the blank, held by its
+// cork. With it, 'idle' -> 'falsecast' (the line in the air, back and forth) -> 'shoot' (shot, unrolling and laid down) ->
+// 'floating' (the fly on the water, stripped back) as game/FlyCast.js drives them: it sets the pose through each stroke
+// (flyPose), the fly's place (the bobber) and draws the line in the air (rigs/FlyLine.js); the fly's line on the water is this
+// line, wider and the fly line's colour.
 export const ROD_L = 2.13; // 7 ft
 
 // The blank's bend: a damped spring toward its load (~2.5 Hz, lightly damped), stepped in substeps of at
@@ -119,7 +126,9 @@ export const POSES = {
 	fighting: { elev: 0.9, side: 0.12, hand: [ 0.14, - 0.03, - 0.43 ] },
 	landing: { elev: 0.85, side: 0.3, hand: [ 0.16, - 0.08, - 0.46 ] }, // rod up, the fish swinging in view
 	rigging: { elev: 0.12, side: 0.3, hand: [ 0.12, - 0.16, - 0.36 ] }, // ((M14) held low and close, tying on a new hook)
+	fly: { elev: 0.22, side: 0.12, hand: [ 0.17, - 0.1, - 0.42 ] }, // ((M19) a fly rod's false casting: FlyCast sets its elevation
 };
+const FLY_MONO = 0xd8dde0; // (the fishing line's own colour, given back off the fly rig)
 
 // the rod's material: the carbon blank, its wraps and the reel, with the reel's and the blank's
 // animation in the vertex shader (uniforms rodBend, rodShape, reelAnim, reelAnim2)
@@ -236,6 +245,10 @@ export class FishingRod {
 		this.stopM = null; // ((M16) where you've stopped a lead on its way down, m: null, it goes on: Rigs.holdLead)
 		this.hung = null; // (Vector3: where a kite's clip holds the line up: Kite.js)
 		this.big = false;
+		this.flyRod = false; // ((M19) the fly rod's in your hands: rigs/FlyRod.js)
+		this._kind = 'small'; // ((M19) the rod that's fitted, and the one that's wanted: 'small' | 'big' | 'fly')
+		this._want = 'small';
+		this.flyPose = null; // ((M19) { elev, bend }: FlyCast's, through a false cast and the fly fished)
 		this.scream = 0; // (a rod in its holder taking line, m/s: its reel's the sound you hear)
 
 		// reel / bend animation state
@@ -294,7 +307,7 @@ export class FishingRod {
 	// materials of their own (the rod's bend and the line's ends are uniforms) in the same programs
 	tackle() {
 
-		const rod = new Mesh( this.rodMesh.geometry, createRodMaterial() );
+		const rod = new Mesh( this._smallRod || this.rodMesh.geometry, createRodMaterial() ); // ((M19) the spinning rod's, whichever's in your hands)
 		const bobber = new Mesh( this.bobberMesh.geometry, this.bobberMat );
 		const line = new Mesh( this.lineMesh.geometry, createLineMaterial( LINE_SEGS ) );
 		for ( const m of [ rod, bobber, line ] ) {
@@ -311,28 +324,46 @@ export class FishingRod {
 
 	}
 
-	setGear( { castM, reelSpeed, spoolM = 180, standUp = false } ) {
+	setGear( { castM, reelSpeed, spoolM = 180, standUp = false, fly = 0 } ) {
 
 		this.castM = castM;
 		this.reelSpeed = reelSpeed;
 		this.spoolM = spoolM;
 		this.standUp = standUp;
-		// ((M16) the stand-up rod's built as it's first bought or taken out: most never get there)
-		if ( standUp !== this.big && ( ! standUp || this.equipped ) ) this._fitRod( standUp );
+		this.flyWt = fly; // ((M19) the fly rod's weight, 0 none)
+		// ((M16) the stand-up rod's built as it's first bought or taken out: most never get there; (M19) the fly rod too)
+		this._want = fly ? 'fly' : standUp ? 'big' : 'small';
+		if ( this._want !== this._kind && ( this._want === 'small' || this.equipped ) ) this._fitRod( this._want );
 
 	}
 
-	_fitRod( big ) {
+	// (M19) the fly rod's model, built the first time it's wanted (yours, or another player's in their hands: Together)
+	flyRodGeometry() {
 
-		this.big = big;
+		return ( this._flyRod = this._flyRod || buildFlyRodGeometry() );
+
+	}
+
+	_fitRod( kind ) {
+
+		this._kind = kind;
+		this.big = kind === 'big';
+		this.flyRod = kind === 'fly';
 		this._smallRod = this._smallRod || this.rodMesh.geometry;
-		this.rodMesh.geometry = big ? ( this._bigRod = this._bigRod || buildBigRodGeometry() ) : this._smallRod;
+		this.rodMesh.geometry = kind === 'big' ? ( this._bigRod = this._bigRod || buildBigRodGeometry() ) : kind === 'fly' ? this.flyRodGeometry() : this._smallRod;
 
 	}
 
 	// (M16) what's on the line for the next cast
 	setRig( rig, floatOff = false ) {
 
+		// ((M19) a fly's line is the fly line: its colour and its glow (FlyLine's), and wider)
+		if ( ( rig === 'fly' ) !== ( this.rig === 'fly' ) ) {
+
+			this.lineMat.color.setHex( rig === 'fly' ? FLY_LINE_COLOR : FLY_MONO );
+			if ( rig !== 'fly' ) this.lineMat.emissive.setHex( 0 );
+
+		}
 		this.rig = rig;
 		this.floatOff = floatOff;
 		this.hookM = 0;
@@ -357,7 +388,7 @@ export class FishingRod {
 
 	equip( on ) {
 
-		if ( on && this.standUp !== this.big ) this._fitRod( !! this.standUp );
+		if ( on && this._want !== this._kind ) this._fitRod( this._want );
 		this.equipped = on;
 		if ( on && this.state === 'stowed' ) this.setState( 'idle' );
 		if ( on && this.audio && this.audio.rodReady ) this.audio.rodReady();
@@ -374,7 +405,7 @@ export class FishingRod {
 
 	get lineInWater() {
 
-		return this.state === 'floating' || this.state === 'fighting' || this.state === 'retrieving' || this.state === 'flying' || this.state === 'landing';
+		return this.state === 'floating' || this.state === 'fighting' || this.state === 'retrieving' || this.state === 'flying' || this.state === 'landing' || this.state === 'shoot';
 
 	}
 
@@ -469,7 +500,16 @@ export class FishingRod {
 		if ( this.state === 'flying' ) target = POSES.follow;
 		if ( this.state === 'retrieving' ) target = POSES.floating;
 		if ( this.state === 'flick' && this.t < 0.06 ) target = POSES.windup;
-		const speed = this.state === 'flick' ? 28 : this.state === 'windup' ? 7 : 5;
+		// ((M19) a fly: false casting, shot, or fished with the rod low: its elevation as FlyCast has it at this moment)
+		const fp = this.flyPose && ( this.state === 'falsecast' || this.state === 'shoot' || this.state === 'floating' ) ? this.flyPose : null;
+		if ( fp ) {
+
+			target = POSES.fly;
+			target.elev = fp.elev;
+
+		}
+
+		const speed = this.state === 'flick' ? 28 : this.state === 'windup' ? 7 : fp && this.state !== 'floating' ? 30 : 5;
 		const k = 1 - Math.exp( - speed * dt );
 		const p = this.pose;
 		p.elev += ( target.elev - p.elev ) * k;
@@ -503,7 +543,9 @@ export class FishingRod {
 
 		}
 
-		_m.makeBasis( _x, _y, _z ).setPosition( _h.copy( p.hand ).addScaledVector( _y, - SEAT_Y ) );
+		// ((M19) the fly rod: stretched back to its 9 ft along the blank, held by its cork)
+		if ( this.flyRod ) _m.makeBasis( _x, _w.copy( _y ).multiplyScalar( FLY_K ), _z ).setPosition( _h.copy( p.hand ).addScaledVector( _y, - FLY_HOLD ) );
+		else _m.makeBasis( _x, _y, _z ).setPosition( _h.copy( p.hand ).addScaledVector( _y, - SEAT_Y ) );
 		cam.updateMatrixWorld();
 		this.rodMesh.matrix.multiplyMatrices( cam.matrixWorld, _m );
 		this.rodMesh.matrixWorldNeedsUpdate = true;
@@ -525,6 +567,12 @@ export class FishingRod {
 			loadT = 0.55;
 
 		} else if ( this.state === 'floating' ) bendT = 0.012 + this.dip * 0.07;
+		else if ( fp && fp.bend !== null ) {
+
+			bendT = fp.bend; // ((M19) a fly rod loaded through each stroke, and let go at its stop
+			loadT = 0.6;
+
+		}
 		else if ( this.state === 'landing' ) {
 
 			bendT = 0.14;
@@ -540,7 +588,7 @@ export class FishingRod {
 		this.load += ( loadT - this.load ) * ( 1 - Math.exp( - dt * 6 ) );
 		// bend direction: toward the bobber (rod space, across the blank) when the line is out,
 		// otherwise down toward the reel side (negative bend = loaded back up)
-		if ( this.lineInWater && this.state !== 'flying' ) {
+		if ( this.lineInWater && this.state !== 'flying' && this.state !== 'shoot' ) {
 
 			_v.copy( this.bobber ).applyMatrix4( _m.copy( this.rodMesh.matrix ).invert() ).setY( 0 );
 			if ( _v.lengthSq() > 1e-6 ) this.bendDir.lerp( _v.normalize(), 1 - Math.exp( - dt * 10 ) ).normalize();
@@ -557,7 +605,7 @@ export class FishingRod {
 		// ---- reel: the bail opens as you wind up (finger on the line) and snaps shut on the first
 		// crank; the handle and rotor turn with the line coming in, the spool slips back when a fish
 		// takes line against the drag
-		this.bailTarget = this.state === 'windup' || this.state === 'flick' || this.state === 'flying' ? 1 : 0;
+		this.bailTarget = ! this.flyRod && ( this.state === 'windup' || this.state === 'flick' || this.state === 'flying' ) ? 1 : 0; // ((M19) a fly reel's none
 		if ( this.bailTarget !== this._bailSnd ) {
 
 			if ( this._bailSnd !== undefined && this.audio && this.audio.bail ) this.audio.bail( this.bailTarget === 1 );
@@ -741,10 +789,13 @@ export class FishingRod {
 		const taut = this.state === 'fighting' ? Math.min( 1, ( fight ? fight.tension : 0 ) * 1.5 ) : this.state === 'retrieving' ? 0.6 : 0;
 		const sag = this.lineOut * ( this.state === 'flying' ? 0.03 : 0.07 ) * ( 1 - taut ) + 0.02;
 		lm.lineCtl.value.copy( this.tip ).lerp( this.bobber, 0.5 ).y -= sag;
+		// ((M19) a fly line on the water lies on it: down from the tip and along the surface to the fly, not sagging under it)
+		if ( this.rig === 'fly' && ( this.state === 'floating' || this.state === 'retrieving' ) ) lm.lineCtl.value.copy( this.tip ).lerp( this.bobber, 0.15 ).setY( this.waterY + 0.02 );
 		// the line near the rod follows the rod's motion a little (whips on the flick)
 		if ( this.state === 'flying' ) lm.lineCtl.value.addScaledVector( _v.copy( this.tip ).sub( tipOld ), - 2 );
-		lm.lineShow.value = 1;
-		this.lineMesh.visible = visible && out;
+		lm.lineShow.value = this.rig === 'fly' ? 1.8 : 1; // ((M19) a fly line's 1.1 to 1.5 mm, mono's a third of it: rigs/FlyLine.js)
+		if ( this.rig === 'fly' ) this.lineMat.emissive.setHex( FLY_LINE_COLOR ).multiplyScalar( FLY_LINE_GLOW * ( 1 - Math.min( 1, G.night.value ) ) ); // (and its glow, by day)
+		this.lineMesh.visible = visible && out && this.state !== 'shoot'; // ((M19) shot, it's drawn as it unrolls: FlyLine
 		this.bobberMesh.visible = visible && out && this.state !== 'landing' && this.rig === 'float' && ! this.floatOff;
 		this.bobberMesh.position.copy( this.bobber );
 		// a real float is a few pixels at casting range: grow it with distance so it stays readable
@@ -761,6 +812,16 @@ export class FishingRod {
 	_sinkHook( dt ) {
 
 		const R = RIGS[ this.rig ], floor = Math.max( 0, this.depth - 0.4 );
+		// ((M19) a fly sinks at its own pace to the bottom (Bait.js' sink), lifted off it by each strip: FlyCast)
+		if ( this.rig === 'fly' ) {
+
+			const to = Math.max( 0, this.depth - 0.05 );
+			this.hookM = Math.min( to, this.hookM + ( this.flySink || 0.2 ) * dt );
+			this.settled = this.hookM >= to - 1e-3;
+			return;
+
+		}
+
 		if ( this.rig === 'float' || this.rig === 'troll' || this.rig === 'kite' ) {
 
 			this.hookM = this.floatOff || this.rig !== 'float' ? 0.3 : Math.min( floor, R.stop );

@@ -4,8 +4,8 @@ import { FLATS, flatsAt } from '../world/terrain/Flats.js';
 import { flatsSchools, newFlatsState, spook, hook, forgetFlats } from './Flats.js';
 import { islandTime } from './Weather.js';
 import { FISH } from './FishTable.js';
-import { seenTake } from './Bites.js';
-import { seenOnFlats, scareOf, castScare, sightOf, knockOf, wadeNoise, WADE, SIGHT } from './Sight.js';
+import { seenTake, workedTake, WORK } from './Bites.js';
+import { seenOnFlats, scareOf, castScare, falseCastScare, sightOf, knockOf, wadeNoise, WADE, SIGHT } from './Sight.js';
 import { SLAMS, slamDay, slamCatch, slamSlept, slamsOf, slamToday } from './Trophies.js';
 
 // (M17) Sight-fishing on the flats, as it's played (docs/m17/sight.md): the schools game/Flats.js has about you given to
@@ -17,7 +17,10 @@ import { SLAMS, slamDay, slamCatch, slamSlept, slamsOf, slamToday } from './Trop
 // What changes is kept in Flats' small record (`state`: spooked, hooked), and ((M17) the flats together) what you did in your
 // own (`mine`), which together/FlatsShare.js sends the others; `state` is everyone's together.
 //   flats.update( dt )        each frame (Game)
-//   flats.landed( at, tip, bait )             a cast down on the water: what it spooked
+//   flats.landed( at, tip, bait, { hard, lineM, take } )   a cast down on the water: what it spooked ((M19) a fly's: how hard,
+//                             its line; take: false, with no flats licence nothing comes to it)
+//   (M19) flats.falseCast( a, b )   a false cast's line in the air over the flat: what it spooked
+//   (M19) flats.licensed( x, z )    whether anything there takes a bait: off the flats, or with the flats licence
 //   flats.watch( bite, dt ) -> true while a seen fish has the bait's bite (Game.updateBite leaves it alone then)
 //   flats.caught( info )      a fish landed: the slams it makes, if any (-> their ids: the catch card tells them)
 //   flats.events              for the Guide: { on, seen, tailing, spooked (why), refused, slam, called (who) }
@@ -317,8 +320,9 @@ export class FlatsFishing {
 	}
 
 	// a cast down on the water at `at`, the line laid from the rod's tip: on any fish's head, or over its back, its
-	// school bolts. Then the bait's looked at by the fish as they come on (watch)
-	landed( at, tip, bait ) {
+	// school bolts. Then the bait's looked at by the fish as they come on (watch). ((M19) A fly cast badly lands harder (hard),
+	// its line lies heavier (lineM); take: false, nothing comes to it, as with no flats licence)
+	landed( at, tip, bait, { hard = 1, lineM = 0.5, take = true } = {} ) {
 
 		const fish = this.fish;
 		this.cast = null;
@@ -330,14 +334,46 @@ export class FlatsFishing {
 			let why = null;
 			fish.sightFish( g, ( i ) => {
 
-				why = why || castScare( S.kind, fish.pos[ i * 3 ], fish.pos[ i * 3 + 2 ], at, tip, bait );
+				why = why || castScare( S.kind, fish.pos[ i * 3 ], fish.pos[ i * 3 + 2 ], at, tip, bait, hard, lineM );
 
 			} );
 			if ( why ) this.spooked( g, why, at.x, at.z );
 
 		}
 
-		this.cast = { at: { x: at.x, z: at.z }, bait, tried: new Set(), t: 0 };
+		if ( take ) this.cast = { at: { x: at.x, z: at.z }, bait, tried: new Set(), t: 0 };
+
+	}
+
+	// (M19) a false cast's line in the air from a (the rod's tip) to b (its far end), or the line torn off the water picking it up:
+	// each school it goes near may spook, the nearer the likelier (Sight.falseCastScare). The guides: false cast to the side of
+	// the fish, or short of them, and shoot the rest
+	falseCast( a, b, rng = Math.random ) {
+
+		const fish = this.fish;
+		if ( ! fish || ! fish.sightGroups || ( ! this.near( a.x, a.z ) && ! this.near( b.x, b.z ) ) ) return;
+		const sun = G.sunDir.value, lit = sun.y > 0 && this.shadeAt( a.x, a.z ) < 0.5 ? sun : null;
+		for ( const g of fish.sightGroups ) {
+
+			const S = g.sight;
+			if ( ! S || ! g.active || S.bolt > 0 ) continue;
+			let p = 0;
+			fish.sightFish( g, ( i ) => {
+
+				p = Math.max( p, falseCastScare( S.kind, fish.pos[ i * 3 ], fish.pos[ i * 3 + 2 ], a, b, lit ) );
+
+			} );
+			if ( p > 0 && rng() < p ) this.spooked( g, 'falsecast', a.x, a.z );
+
+		}
+
+	}
+
+	// (M19) whether a bait or fly down at ( x, z ) can be taken: off the flats, anything; on them, only with the flats licence
+	// (free to her, picked up at Marta's: Gear.js' flatsLicence)
+	licensed( x, z ) {
+
+		return !! this.game.state.stats.flatsLicence || ! ( flatsAt( x, z ).on > 0.5 );
 
 	}
 
@@ -357,6 +393,20 @@ export class FlatsFishing {
 			}
 
 			fish.sightFollow( F.g, F.k, rod.bobber.x, rod.bobber.z, F.speed, F.act === 'eat' );
+			// ((M19) a fly moved once a fish that wants it still has turned to it and is close: it's off, as from a crab that ran)
+			const W = rod.rig === 'fly' ? WORK[ F.kind ] : null;
+			if ( W && W.want === 'still' && this.game.flyCast.work().moving ) {
+
+				const j = F.g.offset + F.k;
+				if ( Math.hypot( fish.pos[ j * 3 ] - rod.bobber.x, fish.pos[ j * 3 + 2 ] - rod.bobber.z ) < W.near ) {
+
+					this._endFollow( 'spook' );
+					return false;
+
+				}
+
+			}
+
 			if ( ( F.t -= dt ) > 0 ) return true;
 			// (not there yet, it's a little longer coming; one that can't get to it, over sand too shallow, gives it up)
 			const i = F.g.offset + F.k, off = Math.hypot( fish.pos[ i * 3 ] - rod.bobber.x, fish.pos[ i * 3 + 2 ] - rod.bobber.z );
@@ -420,6 +470,8 @@ export class FlatsFishing {
 	_take( bite ) {
 
 		const F = this.follow, game = this.game, rod = game.rod;
+		// ((M19) a fly: how it's been worked on the fish's way to it, as that kind wants it: Bites.workedTake)
+		if ( rod.rig === 'fly' ) F.act = workedTake( F.kind, F.act, game.flyCast.work() );
 		if ( F.act !== 'eat' ) {
 
 			this._endFollow( F.act );

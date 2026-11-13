@@ -124,20 +124,23 @@ export const UPGRADES = {
 		{ cost: 520, label: '10 ft pro net, 1½ lb a foot', netM: 3.05, meshCm: 1.27, leadKgM: 2.2, sinkMs: 1.95, throwM: 9, spreadWin: 0.18, holdCm: 62, netTwine: 'mono' },
 	] },
 	// (M19) Your own new gear (docs/M19.md). Prices are placeholders until each stream sets its own with tools/earnings.mjs.
-	// The fly rods (stream FLY): each level adds a rod, so flyRods is the weights you have (FLY_RODS below has each one's
-	// figures, kept apart from the line's and the reel's so they don't take their place in gearStats)
+	// The fly rods (stream FLY: docs/m19/fly.md): each level adds a rod, so flyRods is the weights you have (FLY_RODS below has
+	// each one's figures, kept apart from the line's and the reel's so they don't take their place in gearStats). Priced as an
+	// outfit at the shops' middle: an Orvis Clearwater 8-weight $449 to $646, a mid-range rod $400, reel $150, line $100 to $130
+	// (docs/m19/sources-fly.md, section 10)
 	flyRod: { name: 'Fly rod', levels: [
 		{ cost: 0, label: 'None', flyRods: [] },
 		{ cost: 500, label: '9 ft 8-weight fly rod and reel, for bonefish', flyRods: [ 8 ] },
 		{ cost: 750, label: '9 ft 10-weight, for permit (and the 8-weight)', flyRods: [ 8, 10 ] },
 		{ cost: 1000, label: '9 ft 12-weight, for tarpon (and the 8 and 10)', flyRods: [ 8, 10, 12 ] },
 	] },
-	// (stream FLY) the flies: Bait.js has each, tied for a rod's weight
+	// (stream FLY) the flies: Bait.js has each, tied for a rod's weight; a box of each, yours for good as the lures are, at the
+	// shops' $4 a Gotcha, $10 a Merkin, $6 a Toad (docs/m19/sources-fly.md, section 7)
 	flies: { name: 'Flies', levels: [
 		{ cost: 0, label: 'None', flies: 0 },
-		{ cost: 30, label: 'Shrimp flies: Gotchas and Crazy Charlies', flies: 1 },
-		{ cost: 60, label: 'Crab flies: Merkins, for permit', flies: 2 },
-		{ cost: 50, label: 'Tarpon flies: Toads and Cockroaches', flies: 3 },
+		{ cost: 30, label: 'A box of shrimp flies: Gotchas and Crazy Charlies', flies: 1 },
+		{ cost: 60, label: 'A box of crab flies: Merkins, for permit', flies: 2 },
+		{ cost: 50, label: 'A box of tarpon flies: Toads, on a bite tippet', flies: 3 },
 	] },
 	// (stream SEE) quieter wading on the flats
 	booties: { name: 'Flats booties', levels: [
@@ -359,13 +362,25 @@ export const UPGRADES = {
 };
 
 // (M19) each fly rod's own figures (stream FLY's), apart from the line's and reel's in gearStats: the tippet's breaking
-// strength (lineKg: 12, 16, 20 lb), the drag as most anglers set it (dragKg), backing and fly line (spoolM), the line got
-// back a second (reelSpeed), how far it carries in the air (carryM) and is shot (castM). docs/m19/sources-fly.md
+// strength (lineKg: 12, 16 and 20 lb, IGFA's most), the reel's most drag (dragKg: between makers' figures and Trident's
+// measurements; the drag as it's set, half the tippet, never reaches it), backing and fly line (spoolM: the fly line and 200
+// to 300 yd of backing), the line got back a second (reelSpeed: a 1:1 reel's 0.28 m a turn, two or three turns a second;
+// the 12-weight's bigger arbor), the most line a good caster keeps in the air (carryM: a weight-forward head and a little
+// running line) and the farthest cast with the shoot (castM: 8 m shot past it, the Keys' 75 ft). A heavier line carries no
+// further. docs/m19/sources-fly.md, sections 2 to 4
 export const FLY_RODS = {
-	8: { wt: 8, lineKg: 12 * LB, dragKg: 4.0, spoolM: 210, reelSpeed: 0.7, carryM: 13, castM: 23 },
-	10: { wt: 10, lineKg: 16 * LB, dragKg: 6.8, spoolM: 240, reelSpeed: 0.7, carryM: 13, castM: 23 },
-	12: { wt: 12, lineKg: 20 * LB, dragKg: 9.0, spoolM: 300, reelSpeed: 0.7, carryM: 14, castM: 21 },
+	8: { wt: 8, lineKg: 12 * LB, dragKg: 4.0, spoolM: 210, reelSpeed: 0.7, carryM: 14, castM: 22 },
+	10: { wt: 10, lineKg: 16 * LB, dragKg: 6.8, spoolM: 240, reelSpeed: 0.7, carryM: 14, castM: 22 },
+	12: { wt: 12, lineKg: 20 * LB, dragKg: 9.0, spoolM: 300, reelSpeed: 0.8, carryM: 14, castM: 22 },
 };
+// (M19) the rod a fly's cast on: the one it's tied for, if you have it, else the heaviest you have (the rods come in order,
+// so it's the nearest under it). null: no fly rod
+export function flyRodFor( flyRods, wt ) {
+
+	if ( ! flyRods || ! flyRods.length ) return null;
+	return flyRods.includes( wt ) ? wt : flyRods[ flyRods.length - 1 ];
+
+}
 
 // (M16) what the sportfisher asks before she's shown: each of these tracks to this level (docs/M16.md: every upgrade on
 // the lobster boat, and the rod, reel and line as they were before M16's big-game levels). A track added later, or a

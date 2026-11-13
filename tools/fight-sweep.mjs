@@ -48,6 +48,9 @@ export function combos() {
 	for ( let l = 0; l < lines; l ++ ) for ( const hold of [ 'hand', 'chair' ] ) out.push( { key: `L${ l }/E/${ hold }`, line: l, reel: reels - 1, hold, electric: true } );
 	// ((M19) and from the chair with her mate backing her down, on every reel with a drag)
 	for ( let l = 0; l < lines; l ++ ) for ( let r = 0; r < reels; r ++ ) if ( UPGRADES.reel.levels[ r ].dragKg !== null ) out.push( { key: `L${ l }/R${ r }/chair+mate`, line: l, reel: r, hold: 'chair', electric: false, mate: true } );
+	// ((M19) and each fly rod with the fly tied for it: the 8-weight's shrimp fly, the 10's crab, the 12's tarpon fly, played by
+	// hand with the rod low; F12 is the tarpon fly's bite tippet)
+	for ( const wt of [ 8, 10, 12 ] ) out.push( { key: `F${ wt }`, fly: wt, hold: 'hand', electric: false } );
 	return out;
 
 }
@@ -56,9 +59,11 @@ export function combos() {
 export const compact = ( r ) => [ + r.caught.toFixed( 3 ), + r.snapped.toFixed( 3 ), + r.spooled.toFixed( 3 ), Math.round( r.t * 10 ) / 10 ];
 export const uncompact = ( c ) => ( { caught: c[ 0 ], snapped: c[ 1 ], spooled: c[ 2 ], t: c[ 3 ] } );
 
-// a careful player: reels below two-thirds of the breaking point and not into a run (test/game-logic's, test/tackle's)
-const careful = ( g ) => g.tension < 0.68 && g.surge < 0.6;
-const START = { hand: 25, harness: 50, chair: 60 };
+// a careful player: reels below two-thirds of the breaking point and not into a run (test/game-logic's, test/tackle's); ((M19) on
+// a fly, they bow to a jump: they let go while it's out of the water)
+const careful = ( g ) => g.tension < 0.68 && g.surge < 0.6 && ! ( g.bow > 0 && g.leap > 0 );
+const START = { hand: 25, harness: 50, chair: 60, fly: 15 };
+const FLY_OF = { 8: 'flyShrimp', 10: 'flyCrab', 12: 'flyTarpon' };
 const DEEP = 300;
 
 function lcg( s ) {
@@ -70,6 +75,20 @@ function lcg( s ) {
 
 // the fight's terms for this gear, from the game's own code (a Rigs on a stub, as test/tackle does)
 export function termsOf( c, id, kg, { dehooker = false } = {} ) {
+
+	// ((M19) a fly rod: its fly on, as the game puts it on (the fly rig's own branch of fightTerms, and its own leaders)
+	if ( c.fly ) {
+
+		const st = gearStats( { ...defaultUpgrades(), flyRod: { 8: 1, 10: 2, 12: 3 }[ c.fly ], flies: 3, landing: dehooker ? 2 : 1 } );
+		const r = Object.assign( Object.create( Rigs.prototype ), {
+			game: { state: { stats: st, leaderPick: null, baitPick: FLY_OF[ c.fly ] }, rod: { rig: 'fly', hookM: 0 }, hookBait: FLY_OF[ c.fly ] },
+			app: { boatCtl: { speed: 0 }, player: { riding: false }, boat: { chair: {} } },
+			inChair: false,
+			kit: null,
+		} );
+		return r.fightTerms( { species: id, kg } );
+
+	}
 
 	const u = { ...defaultUpgrades(), line: c.line, reel: c.reel, rod: c.hold === 'harness' ? 3 : 2, landing: dehooker ? 2 : 1, sfElectricReel: c.electric ? 1 : 0, sfChair: c.hold === 'chair' ? 1 : 0 };
 	const stats = gearStats( u, 'sportfisher' );
@@ -101,7 +120,7 @@ export const MATE_ON = 12, MATE_LAG = 3;
 export function fightOnce( c, id, kg, seed, { dehooker = false, policy = careful, capS = 3600, Hs = 0 } = {} ) {
 
 	const T = termsOf( c, id, kg, { dehooker } );
-	const g = new CatchMinigame( { species: id, kg, ...T, distance: c.electric ? DEEP : START[ c.hold ], rng: lcg( seed ) } );
+	const g = new CatchMinigame( { species: id, kg, ...T, distance: c.electric ? DEEP : START[ c.fly ? 'fly' : c.hold ], rng: lcg( seed ) } );
 	let st = 'fighting', v = 0;
 	const dt = 1 / 30, k = 1 - Math.exp( - dt / MATE_LAG );
 	while ( st === 'fighting' && g.time < capS ) {

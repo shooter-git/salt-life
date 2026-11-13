@@ -152,8 +152,10 @@ export const FISH = {
 //   picky   of its refusals, the share that spook it as it turns away
 //   speed   m/s it comes to a bait at
 // Guides' lore, consistent between them but not measured (docs/m17/sources-tide-fish.md: no study of flats fish's
-// takes or flight distances was found). (M19) With M19's baits and flies (Bait.js), placeholders until stream FLY's
-// sources set them (docs/m19/sources-fly.md): M17's "No fly rod" was the user's, reversed for M19
+// takes or flight distances was found). (M19) With M19's baits and flies (Bait.js): M17's "No fly rod" was the user's,
+// reversed for M19. No source measures what a fish takes of a fly either (docs/m19/sources-fly.md): each fly a little under
+// the bait it's tied to look like (a shrimp fly under a shrimp, a crab fly under a live crab), as guides find them. Judgement.
+// How it's worked counts too (Bites.workedTake)
 export const SIGHT = {
 	bonefish: { back: 0.14, wary: 1, lead: [ 0.6, 2.4 ], close: [ 0.25, 1 ], head: 0.45, speed: 0.9, picky: 0.25,
 		eats: { shrimp: 0.62, jig: 0.38, plug: 0.01, silverside: 0.06, cutMullet: 0.12, mullet: 0.02, liveShrimp: 0.75, conch: 0.5, hermitCrab: 0.45, sardine: 0.05, flyShrimp: 0.55, flyCrab: 0.3, flyTarpon: 0.02 } },

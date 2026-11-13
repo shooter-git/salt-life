@@ -54,12 +54,14 @@ export const BAITS = {
 	hermitCrab: { name: 'Live hermit crab', short: 'hermit crabs', live: true, speed: 0.7, small: 0.5, skew: 0.85, steal: 0.06, price: 8, per: 6, seller: 'pearl', kite: false,
 		likes: { permit: 3, bonefish: 2, wrasse: 1.6, muttonSnapper: 1.4 } },
 	// (M19) The flies (stream FLY), your own gear as the lures are, with the Flies track's level they come with (fly: the
-	// fly rod's alone; wt: the rod each is tied for, FLY_RODS). Only the fly rig takes them (Presentation's ONLY)
-	flyShrimp: { name: 'Shrimp fly', short: 'shrimp flies', live: false, speed: 0.8, small: 0.6, skew: 0.85, steal: 0, lure: true, fly: true, level: 1, wt: 8,
+	// fly rod's alone; wt: the rod each is tied for, FLY_RODS; sink: m/s it goes down to the bottom between strips). Only the
+	// fly rig takes them (Presentation's ONLY). A Gotcha on bead-chain eyes reaches the bottom of a 0.5 m flat in 2.5 s; a
+	// Merkin on lead eyes sinks fast; a Toad's light and slow (docs/m19/sources-fly.md: the shrimp's derived, the rest judgement)
+	flyShrimp: { name: 'Shrimp fly', short: 'shrimp flies', live: false, speed: 0.8, small: 0.6, skew: 0.85, steal: 0, lure: true, fly: true, level: 1, wt: 8, sink: 0.2,
 		likes: { bonefish: 2.4, permit: 1.2, snook: 1.6, redfish: 1.6, trout: 1.6 } },
-	flyCrab: { name: 'Crab fly', short: 'crab flies', live: false, speed: 0.85, small: 0.4, skew: 0.85, steal: 0, lure: true, fly: true, level: 2, wt: 10,
+	flyCrab: { name: 'Crab fly', short: 'crab flies', live: false, speed: 0.85, small: 0.4, skew: 0.85, steal: 0, lure: true, fly: true, level: 2, wt: 10, sink: 0.35,
 		likes: { permit: 2.6, bonefish: 1.4 } },
-	flyTarpon: { name: 'Tarpon fly', short: 'tarpon flies', live: false, speed: 0.85, small: 0.2, skew: 0.75, steal: 0, lure: true, fly: true, level: 3, wt: 12,
+	flyTarpon: { name: 'Tarpon fly', short: 'tarpon flies', live: false, speed: 0.85, small: 0.2, skew: 0.75, steal: 0, lure: true, fly: true, level: 3, wt: 12, sink: 0.07,
 		likes: { tarpon: 2.6, snook: 1.8, barracuda: 1.4 } },
 };
 export const BAIT_IDS = Object.keys( BAITS );

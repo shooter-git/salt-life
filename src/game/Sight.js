@@ -264,9 +264,9 @@ export const ENGINE_HEARD = 120; // m: and an engine running (guides: an idling 
 
 // a bait or lure landing: the splash it makes, how far off a fish hears it (m), by what it is (a shrimp's a soft plop,
 // a plug a loud one: Bait.js' ids, null the frozen shrimp)
-// ((M19) and M19's baits and flies their own: a bead-chain shrimp fly lands softly, a lead-eyed crab fly plops (docs/m19/
-// sources-fly.md); placeholders until stream FLY's. The others as before)
-export const SPLASH = { shrimp: 0.6, jig: 1.2, plug: 2.2, live: 1.0, liveShrimp: 0.6, sardine: 0.7, conch: 0.6, hermitCrab: 0.8, flyShrimp: 0.4, flyCrab: 0.8, flyTarpon: 0.6 };
+// ((M19) and M19's baits and flies their own: a bead-chain shrimp fly lands with "minimal splash", a lead-eyed crab fly as
+// loud as a live bait, a Toad on mono eyes softly (docs/m19/sources-fly.md: judgement from the tiers' words). The others as before)
+export const SPLASH = { shrimp: 0.6, jig: 1.2, plug: 2.2, live: 1.0, liveShrimp: 0.6, sardine: 0.7, conch: 0.6, hermitCrab: 0.8, flyShrimp: 0.4, flyCrab: 1.0, flyTarpon: 0.4 };
 const SPLASH_OWN = new Set( [ 'liveShrimp', 'sardine', 'conch', 'hermitCrab', 'flyShrimp', 'flyCrab', 'flyTarpon' ] );
 export const splashOf = ( bait ) => SPLASH[ SPLASH_OWN.has( bait ) ? bait : bait === 'jig' || bait === 'plug' ? bait : bait && bait !== 'shrimp' && bait !== 'cutMullet' ? 'live' : 'shrimp' ];
 
@@ -304,14 +304,39 @@ export function scareOf( kind, school, o, sun, cond = {} ) {
 
 // a cast landing at `at` with the line laid on the water from the rod's tip `tip` to it: whether it lands on the head of
 // a fish at ( x, z ) of this kind ('cast'), or lays the line over its back ('line': across it, short of the bait), or
-// neither (null). bait: Bait.js' id (a plug's splash spooks further off)
-export function castScare( kind, x, z, at, tip, bait = null ) {
+// neither (null). bait: Bait.js' id (a plug's splash spooks further off). ((M19) hard: a fly cast badly lands this much
+// louder, FlyCast; lineM: how near its back the line laid on the water spooks it, a fly line's heavier than mono)
+export function castScare( kind, x, z, at, tip, bait = null, hard = 1, lineM = 0.5 ) {
 
 	const S = sightOf( kind );
 	if ( ! S ) return null;
-	const loud = splashOf( bait ), d = Math.hypot( x - at.x, z - at.z );
+	const loud = splashOf( bait ) * hard, d = Math.hypot( x - at.x, z - at.z );
 	if ( S.head > 0 && d < S.head * Math.sqrt( loud / SPLASH.shrimp ) ) return 'cast';
-	if ( S.head > 0 && d > 1.2 && nearLine( tip.x, tip.z, at.x, at.z, x, z ) < 0.5 ) return 'line';
+	if ( S.head > 0 && d > 1.2 && nearLine( tip.x, tip.z, at.x, at.z, x, z ) < lineM ) return 'line';
 	return null;
+
+}
+
+// (M19) a false cast's line in the air, from a to b (the rod's tip and the line's far end, over the ground): the chance it spooks
+// a fish of this kind at ( x, z ) as it goes over. Certain right under it, nothing past `near` m (a bonefish's: Deneki's 15 ft,
+// times how wary it is), more where the sun's behind the line and its flash and shadow come at the fish ((sun: to the sun; the
+// zone half as wide again). Squared in between, as each false cast is two strokes. No measurement exists: the 15 ft is the
+// guides' (docs/m19/sources-fly.md, section 5); the curve and the sun's share are judgement. A shark doesn't care (head 0)
+export const FALSE_CAST = { near: 4.6, sun: 1.5 };
+export function falseCastScare( kind, x, z, a, b, sun = null ) {
+
+	const S = sightOf( kind );
+	if ( ! S || ! ( S.head > 0 ) ) return 0;
+	let zone = FALSE_CAST.near * S.wary;
+	if ( sun && sun.y > 0.15 ) {
+
+		// (the fish on the far side of the line from the sun: under its shadow and its flash)
+		const mx = ( a.x + b.x ) / 2, mz = ( a.z + b.z ) / 2;
+		if ( ( x - mx ) * - sun.x + ( z - mz ) * - sun.z > 0 ) zone *= FALSE_CAST.sun;
+
+	}
+
+	const d = nearLine( a.x, a.z, b.x, b.z, x, z );
+	return d >= zone ? 0 : ( 1 - d / zone ) ** 2;
 
 }

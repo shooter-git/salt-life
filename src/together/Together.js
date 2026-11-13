@@ -22,6 +22,9 @@ import { KINDS, lifeOf } from '../game/LifeList.js';
 import { SLAMS, slamTold } from '../game/Trophies.js';
 import { VARIATION } from '../game/Chart.js';
 import { ROD_L, SEAT_Y } from '../game/FishingRod.js';
+import { FLY_K, FLY_L, FLY_HOLD } from '../game/rigs/FlyRod.js';
+import { FlyLine, loopShape, newPoints } from '../game/rigs/FlyLine.js';
+import { FLY, strokeTime } from '../game/FlyCast.js';
 import { gunModels, setBands } from '../game/Speargun.js';
 import { CastNet } from '../game/CastNet.js';
 import { G } from '../core/Globals.js';
@@ -110,8 +113,10 @@ const MODES = { walk: 'w', swim: 's', deck: 'd', boat: 'h' };
 const NAMES = { w: 'walk', s: 'swim', d: 'deck', h: 'helm' };
 // the rod: 0 put away, 1 held, 2 drawn back to cast, 3 cast, 4 line out, 5 a fish on, 6 landing it;
 // and how it's held then (rad above level: past a right angle, back over the shoulder)
-const ROD = { stowed: 0, idle: 1, windup: 2, flick: 3, flying: 3, floating: 4, retrieving: 4, fighting: 5, landing: 6 };
-const ROD_ELEV = [ 0, 0.5, 1.95, 0.18, 0.45, 0.95, 0.9 ];
+// ((M19) 7: a fly's false casts, with how far through which stroke (fp) and the line in the air (fl), drawn as the loop; shot,
+// it's 3 as a cast is. fw: the fly rod's weight, in your hands. An older game draws a held rod for 7)
+const ROD = { stowed: 0, idle: 1, windup: 2, flick: 3, flying: 3, floating: 4, retrieving: 4, fighting: 5, landing: 6, falsecast: 7, shoot: 3 };
+const ROD_ELEV = [ 0, 0.5, 1.95, 0.18, 0.45, 0.95, 0.9, 1.2 ];
 // (Salt Life) the cast net: 0 put away, 1 loaded in the hands, 2 winding up, 3 thrown, 4 in the water, 5
 // its purse up in front of them, 6 being loaded again (their net, here: game/CastNet.js, thrown as
 // they threw it, the 'net' message)
@@ -132,7 +137,7 @@ const CSS = /* css */`
 
 const r2 = ( v ) => Math.round( v * 100 ) / 100;
 const r3 = ( v ) => Math.round( v * 1000 ) / 1000;
-const _p = new Vector3(), _q = new Vector3(), _tip = new Vector3(), _hand = new Vector3(), _d = new Vector3();
+const _p = new Vector3(), _q = new Vector3(), _tip = new Vector3(), _hand = new Vector3(), _d = new Vector3(), _e = new Vector3();
 const _x = new Vector3(), _y = new Vector3(), _z = new Vector3(), _up = new Vector3( 0, 1, 0 );
 const _qa = new Quaternion(), _qb = new Quaternion(), _m = new Matrix4(), _mt = new Matrix4();
 const _bp = new Vector3(), _bq = new Quaternion(), _bow = new Vector3(), _at3 = new Vector3();
@@ -1462,6 +1467,8 @@ export class Together {
 		}
 
 		if ( o.net ) o.net.dispose();
+		if ( o.flyLine ) o.flyLine.dispose(); // ((M19) their fly line's loop)
+		o.flyLine = null;
 		if ( o.tag ) o.tag.remove();
 		if ( o.mapped && app.game.minimap ) app.game.minimap.removePlayer( o.person.id );
 
@@ -1562,6 +1569,14 @@ export class Together {
 			body.r = r;
 			if ( r >= 3 && rod.lineInWater ) body.b = [ r2( rod.bobber.x ), r2( rod.bobber.y ), r2( rod.bobber.z ), r2( app.waves.heightAt( rod.bobber.x, rod.bobber.z ) ) ];
 			if ( r === 5 && app.game.fight ) body.k = r2( Math.min( 1, app.game.fight.tension || 0 ) );
+			// ((M19) the fly rod, and its false casts)
+			if ( rod.flyRod ) body.fw = rod.flyWt | 0;
+			if ( r === 7 && app.game.flyCast ) {
+
+				body.fp = r2( app.game.flyCast.phase );
+				body.fl = r2( app.game.flyCast.L );
+
+			}
 
 		}
 
@@ -2514,6 +2529,10 @@ export class Together {
 		cur.mode = NAMES[ near.m ] || 'walk';
 		cur.speed = ( a.v || 0 ) + ( ( b.v || 0 ) - ( a.v || 0 ) ) * f;
 		cur.rod = near.r || 0;
+		// ((M19) their fly rod, and a false cast: how far through which stroke, and the line in the air)
+		cur.fw = Number.isFinite( near.fw ) && near.fw > 0 ? near.fw : 0;
+		cur.fp = Number.isFinite( near.fp ) ? MathUtils.clamp( near.fp, - 1, 1 ) : null;
+		cur.fl = Number.isFinite( near.fl ) ? MathUtils.clamp( near.fl, 0, 30 ) : null;
 		cur.ride = typeof near.R === 'string' ? near.R : null;
 		// ((M16) which boat she is (a game that doesn't say: the lobster boat), their job aboard, the lever and wheel at another's helm)
 		cur.boatId = isBoat( near.Y ) ? near.Y : 'lobster';
@@ -2663,6 +2682,7 @@ export class Together {
 			this._torch( o, false );
 
 			T.rod.visible = T.line.visible = T.bobber.visible = false;
+			if ( o.flyLine ) o.flyLine.hide();
 			o.spear.gun.visible = o.spear.bands.visible = o.spear.shaft.visible = o.spear.line.visible = false;
 			if ( o.net && o.net.equipped ) o.net.equip( false );
 			return;
@@ -2719,6 +2739,7 @@ export class Together {
 		// line is out; the line to the bobber
 		const rodOn = c.rod > 0 && ! app.game.rod.holdBack;
 		T.rod.visible = rodOn;
+		if ( ! rodOn && o.flyLine ) o.flyLine.hide();
 		if ( rodOn ) {
 
 			o.avatar.hand( _hand );
@@ -2731,16 +2752,45 @@ export class Together {
 			}
 
 			_d.normalize();
-			const elev = ROD_ELEV[ c.rod ] ?? 0.5;
+			// ((M19) a false cast: the rod back and forth through its strokes, as FlyCast's own)
+			const casting = c.rod === 7 && c.fp !== null && c.fl !== null, flyRod = c.fw > 0;
+			let elev = ROD_ELEV[ c.rod ] ?? 0.5;
+			if ( casting ) {
+
+				const u = Math.abs( c.fp ), Tt = strokeTime( c.fl ), t = u * Tt, s = Math.min( 1, t / FLY.stroke ), E = FLY.elev;
+				elev = c.fp < 0 ? E.follow + ( E.back - E.follow ) * s : E.back + ( E.fwd - E.back ) * s + ( E.follow - E.fwd ) * Math.min( 1, Math.max( 0, ( t - FLY.stroke ) / ( Tt - FLY.stroke ) ) );
+
+			}
+
 			_y.copy( _d ).multiplyScalar( Math.cos( elev ) ).addScaledVector( _up, Math.sin( elev ) ).normalize();
 			_z.copy( _up ).addScaledVector( _y, - _y.y );
 			if ( _z.lengthSq() < 1e-6 ) _z.set( 0, 0, 1 );
 			_z.normalize();
 			_x.crossVectors( _y, _z ).normalize();
-			_m.makeBasis( _x, _y, _z ).setPosition( _p.copy( _hand ).addScaledVector( _y, - SEAT_Y ) );
+			// ((M19) their fly rod: its own model, stretched back to its 9 ft along the blank and held by its cork)
+			if ( flyRod !== !! T.flyFit ) {
+
+				T.smallRod = T.smallRod || T.rod.geometry;
+				T.rod.geometry = flyRod ? app.game.rod.flyRodGeometry() : T.smallRod;
+				T.flyFit = flyRod;
+
+			}
+
+			if ( flyRod ) _m.makeBasis( _x, _e.copy( _y ).multiplyScalar( FLY_K ), _z ).setPosition( _p.copy( _hand ).addScaledVector( _y, - FLY_HOLD ) );
+			else _m.makeBasis( _x, _y, _z ).setPosition( _p.copy( _hand ).addScaledVector( _y, - SEAT_Y ) );
 			T.rod.matrix.copy( _m );
 			T.rod.matrixWorldNeedsUpdate = true;
-			_tip.copy( _p ).addScaledVector( _y, ROD_L );
+			_tip.copy( _p ).addScaledVector( _y, flyRod ? FLY_L : ROD_L );
+			// ((M19) and the loop in the air, as theirs unrolls)
+			if ( casting ) {
+
+				const u = Math.abs( c.fp ), back = c.fp < 0, t = u * strokeTime( c.fl );
+				o.flyPts = o.flyPts || newPoints();
+				o.flyLine = o.flyLine || new FlyLine( app.scene );
+				loopShape( o.flyPts, _tip, _e.copy( _d ).multiplyScalar( back ? - 1 : 1 ), c.fl, ( FLY.speed / 2 ) * Math.max( 0, t - FLY.stroke ), FLY.loop.good, back ? FLY.rise.back : FLY.rise.fwd );
+				o.flyLine.show( o.flyPts );
+
+			} else if ( o.flyLine ) o.flyLine.hide();
 			// a fish on bends the blank toward the line
 			const U = T.rod.material.uniforms;
 			if ( c.rod === 5 && c.bobber ) {
