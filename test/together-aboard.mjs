@@ -25,7 +25,7 @@ const { BoatController } = await import( '../src/player/BoatController.js' );
 const { WaterQuery } = await import( '../src/ocean/WaterQuery.js' );
 const { G } = await import( '../src/core/Globals.js' );
 const { TIDE_HIGHEST, TIDE_LOWEST } = await import( '../src/game/IslandClock.js' );
-const { YARD, CRADLE, SPARE_YARD } = await import( '../src/world/village/StormPlaces.js' );
+const { YARD, CRADLE, SPARE_YARD, THIRD_YARD } = await import( '../src/world/village/StormPlaces.js' );
 const { ashoreOf } = await import( '../src/game/fleet/Berths.js' );
 const { WORLD } = await import( '../src/world/WorldLayout.js' );
 const { TerrainData } = await import( '../src/world/TerrainData.js' );
@@ -92,6 +92,16 @@ for ( const file of [ 'island.bin', 'island-1024.bin' ] ) {
 		const s = B.spareYard( id, T ), box = yardBox( s, id );
 		const clear = places.every( ( [ k, p ] ) => p === SPARE_YARD[ id ] || ! over( box, yardBox( p, k ) ) );
 		ok( s && s.kind === 'yard' && clear && T.heightAt( s.x, s.z ) > 2 && Math.abs( s.rise ) < 1, `${ file }: ${ id }'s second cradle at ${ s.x }, ${ s.z }: clear of the yard's others, ${ T.heightAt( s.x, s.z ).toFixed( 1 ) } m up, ${ s.rise.toFixed( 2 ) } m off her own's level` );
+
+	}
+
+	// ((M19) and the third, for a second guest's of a kind: clear of every other place, the third ones among them; none past it)
+	const all = [ ...places, ...Object.entries( THIRD_YARD ) ];
+	for ( const id of Object.keys( THIRD_YARD ) ) {
+
+		const s = B.spareYard( id, T, 1 ), box = yardBox( s, id );
+		const clear = all.every( ( [ k, p ] ) => p === THIRD_YARD[ id ] || ! over( box, yardBox( p, k ) ) );
+		ok( s && s.kind === 'yard' && clear && T.heightAt( s.x, s.z ) > 2 && Math.abs( s.rise ) < 1 && B.spareYard( id, T, 2 ) === null, `${ file }: ${ id }'s third cradle at ${ s.x }, ${ s.z }: clear of the yard's others, ${ T.heightAt( s.x, s.z ).toFixed( 1 ) } m up, ${ s.rise.toFixed( 2 ) } m off her own's level; no fourth` );
 
 	}
 

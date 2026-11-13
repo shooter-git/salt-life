@@ -256,7 +256,7 @@ export class ConsoleModel extends Vessel {
 	dressCopy( copy, stats, shared ) {
 
 		const F = fittedOf( stats ), down = F.diveLadder && !! stats.ladderDown;
-		const on = { tTop: F.tTop, tankRack: F.tankRack, twin: F.twin, single: ! F.twin, coverDown: false, ladderUp: F.diveLadder && ! down, ladderDown: down, anchorStowed: true, ...m19On( F, !! stats.motorDown, !! stats.poleDown ) };
+		const on = { tTop: F.tTop, tankRack: F.tankRack, twin: F.twin, single: ! F.twin, coverDown: false, ladderUp: F.diveLadder && ! down, ladderDown: down, anchorStowed: ! stats.anchorDown, ...m19On( F, !! stats.motorDown, !! stats.poleDown ) };
 		for ( const name of Object.keys( this._ranges ) ) {
 
 			const was = this.meshes[ name ], mesh = was && copy.getObjectByName( was.name );
@@ -301,7 +301,7 @@ export class ConsoleModel extends Vessel {
 	// (M17, together/) how she is just now that someone else's copy of her shows: her ladder down (BoatCopies.fitWire)
 	fitNow() {
 
-		return { ladderDown: !! this.fitted.diveLadder && !! this._ladderDown, poleDown: !! this.fitted.powerPole && this._poleDown, motorDown: !! this.fitted.trolling && this._motorDown };
+		return { ladderDown: !! this.fitted.diveLadder && !! this._ladderDown, poleDown: !! this.fitted.powerPole && this._poleDown, motorDown: !! this.fitted.trolling && this._motorDown, anchorDown: this._anchorDown };
 
 	}
 

@@ -38,6 +38,7 @@ import { ableOf, SOCK_DRIFT } from '../game/Seaworthy.js';
 import { SWIM_NEAR, anchorLie, besideHer, boatRecord, cleanBoats, driftOf, intoWater, keepBoat, sheerAt, standBack, stoodOf, swingRate, wearRate } from '../game/Away.js';
 import { RODE_SLACK } from '../player/BoatController.js';
 import { FlatsShare } from './FlatsShare.js';
+import { isSlot, ownerOf, slotFor, updateAgain } from './RoomSlots.js';
 
 // (Salt Life) Playing together: whoever else is on the island (portal.session, All the Spaces), drawn
 // where they are, doing what they do. Light, drop-in: everyone keeps their own progress and their own
@@ -379,6 +380,14 @@ export class Together {
 
 	}
 
+	// (M19) a change to the group's save, tried again when more saves cross than the SDK's update lets through (RoomSlots.updateAgain)
+	_update( key, change ) {
+
+		const shared = this.portal.save.shared;
+		return updateAgain( ( k, c ) => shared.update( k, c ), key, change );
+
+	}
+
 	_readBoats() {
 
 		return this.portal.save.shared.get( 'boats' ).then( ( b ) => this._setBoats( b ) ).catch( ( e ) => console.warn( 'boats', e ) );
@@ -388,7 +397,7 @@ export class Together {
 	// a change to the group's boats: all of it, whoever else saved meanwhile (update tries again), and the others told
 	_saveBoats( change ) {
 
-		return this.portal.save.shared.update( 'boats', ( cur ) => change( cleanBoats( cur ) ) ).then( ( saved ) => {
+		return this._update( 'boats', ( cur ) => change( cleanBoats( cur ) ) ).then( ( saved ) => {
 
 			this._setBoats( saved );
 			if ( this.others.size ) this.session.send( 'boats', saved );
@@ -746,12 +755,15 @@ export class Together {
 	}
 
 	// someone's boat of this type to board now ( { boat: TheirBoat, frame, name } ), coming ( { boat: null } : her owner's aboard
-	// her, or her record's on the sea at anchor, and she's not built here yet), or null
+	// her, ((M19) or here with her at anchor out on the water,) or her record's on the sea at anchor, and she's not built here yet),
+	// or null
 	_boardable( id, type ) {
 
 		const o = this.others.get( id ), c = o && o.cur;
 		if ( o && ! c ) return { boat: null }; // (they're here, their poses not yet)
-		if ( c && c.boat && ( c.mode === 'deck' || c.mode === 'helm' ) && ! c.ride && c.boatId === type ) {
+		// ((M19) or her owner's here and ashore, she's at anchor out on the water: you're put back aboard her, not ashore)
+		const out = c && c.boat && c.anchored && ! atDock( c.boat.pos.x, c.boat.pos.z );
+		if ( c && c.boat && ( c.mode === 'deck' || c.mode === 'helm' || out ) && ! c.ride && c.boatId === type ) {
 
 			const model = this.copies.aboard( type ) && this._nearModel( o, type );
 			if ( ! model ) return { boat: null };
@@ -819,7 +831,7 @@ export class Together {
 
 		const w = weekOrder( Date.now() ), me = { id: this.me.id, name: this.me.name };
 		this._setWeek( deliver( this._week, w, me, kg ), true );
-		return this.portal.save.shared.update( 'weekOrder', ( cur ) => deliver( cur, w, me, kg ) ).then( ( saved ) => {
+		return this._update( 'weekOrder', ( cur ) => deliver( cur, w, me, kg ) ).then( ( saved ) => {
 
 			this._setWeek( saved, true );
 			if ( this.others.size ) this.session.send( 'week', saved );
@@ -885,14 +897,14 @@ export class Together {
 		}
 
 		const mine = { who, k: L.k, sl: L.sl };
-		return this.portal.save.shared.update( 'records', ( cur ) => ( { ...( cur && typeof cur === 'object' ? cur : {} ), [ key ]: mine } ) ).then( ( saved ) => {
+		return this._update( 'records', ( cur ) => ( { ...( cur && typeof cur === 'object' ? cur : {} ), [ key ]: mine } ) ).then( ( saved ) => {
 
 			this._setRecords( saved );
 			if ( this.others.size ) this.session.send( 'life', fresh.length ? { sl: fresh } : 1 );
 
 		} ).catch( ( e ) => {
 
-			// (the SDK's update tries three times: when more saves than that cross, tried again a while after)
+			// (the SDK's update tries three times, and _update four more: when more saves than that cross, tried again a while after)
 			console.warn( 'records', e );
 			this._lifeNew = fresh;
 			clearTimeout( this._lifeT );
@@ -936,7 +948,7 @@ export class Together {
 
 		const mine = { who: this.me.name || 'Someone', id: this.me.id, day: day | 0, at: Date.now() };
 		if ( ! this.tray ) this.tray = mine;
-		return this.portal.save.shared.update( 'tray', ( cur ) => cur && typeof cur === 'object' && typeof cur.who === 'string' ? cur : mine ).then( ( saved ) => {
+		return this._update( 'tray', ( cur ) => cur && typeof cur === 'object' && typeof cur.who === 'string' ? cur : mine ).then( ( saved ) => {
 
 			this._setTray( saved );
 			if ( this.others.size ) this.session.send( 'tray', saved );
@@ -1012,7 +1024,7 @@ export class Together {
 
 		const mine = { kg: r3( kg ), cm, who: this.me.name, id: this.me.id, at: Date.now() };
 		if ( m ) mine.m = m;
-		this.portal.save.shared.update( 'records', ( cur ) => {
+		this._update( 'records', ( cur ) => {
 
 			const next = cur && typeof cur === 'object' ? { ...cur } : {};
 			const r = next[ species ];
@@ -1294,7 +1306,10 @@ export class Together {
 
 		}
 
-		this.session.set( `rest.${ this.me.id }`, REST[ to ] !== undefined ? { to, c: this._clock ? this._clock.at : 0 } : null )
+		// ((M19) in one of the room's slots, 'rest.@<n>', with your id in it: RoomSlots.js)
+		const s2 = this.session, here = [ this.me.id, ...this.others.keys() ];
+		const key = this._restSlot = slotFor( 'rest.', s2.entries ? [ ...s2.entries( 'rest.' ) ] : [], this.me.id, here, () => true, this._restSlot );
+		s2.set( key, REST[ to ] !== undefined ? { id: this.me.id, to, c: this._clock ? this._clock.at : 0 } : null )
 			.then( () => this._restVote( true ) ).catch( ( e ) => console.warn( 'rest', e ) );
 		return false;
 
@@ -1307,9 +1322,18 @@ export class Together {
 		const c = this._clock ? this._clock.at : 0, now = performance.now();
 		const here = [ this.me.id, ...this.others.keys() ];
 		const wishes = new Map();
+		// ((M19) each one's wish, in a slot with their id in it, or (an older game's) in their own key)
+		const byId = new Map();
+		if ( this.session.entries ) for ( const [ k, v ] of this.session.entries( 'rest.' ) ) {
+
+			const o = ownerOf( 'rest.', k, v );
+			if ( o && v && ( ! byId.has( o ) || isSlot( 'rest.', k ) ) ) byId.set( o, v );
+
+		}
+
 		for ( const id of here ) {
 
-			const key = `rest.${ id }`, w = this.session.get( key );
+			const key = `rest.${ id }`, w = this.session.entries ? byId.get( id ) || null : this.session.get( key );
 			if ( ! w || REST[ w.to ] === undefined || w.c !== c ) continue;
 			const text = JSON.stringify( w ), seen = this._wishSeen.get( key );
 			if ( ! seen || seen.text !== text ) this._wishSeen.set( key, { text, t: now } );
@@ -2252,7 +2276,8 @@ export class Together {
 		const yard = ! dock && ! sand && inTheYard( id, p.x, p.z ) && this._yardMine( id );
 		if ( ! dock && ! sand && ! yard ) return;
 		const held = this._berths || ( this._berths = new Set() ), taken = [ ...held ];
-		const S = dock ? stemBerth( taken, sizeOf( id ), ( x, z ) => T.heightAt( x, z ) ) : sand ? sandBerth( taken, T ) : taken.some( ( t ) => t.kind === 'yard' && t.id === id ) ? null : spareYard( id, T );
+		// ((M19) a third of her kind in the yard where yours is: the yard's third cradle)
+		const S = dock ? stemBerth( taken, sizeOf( id ), ( x, z ) => T.heightAt( x, z ) ) : sand ? sandBerth( taken, T ) : spareYard( id, T, taken.filter( ( t ) => t.kind === 'yard' && t.id === id ).length );
 		if ( ! S ) return;
 		S.id = id;
 		held.add( S );
@@ -3017,6 +3042,32 @@ export class Together {
 		if ( ! p.riding ) return null;
 		const o = this.others.get( p.boat.owner );
 		return o && o.cur ? { group: o.boat || null, cur: o.cur, speed: o.boatSpeed || 0 } : null;
+
+	}
+
+	// (M19) another player's kayak within earshot of her push (15 m), when the boat you hear isn't hers: you're in your own boat or
+	// riding, or another boat's nearer (theirs: boatSound's). -> { d, speed } or null
+	kayakHeard( theirs = null ) {
+
+		const p = this.app.player, cam = this.app.camera.position;
+		let best = null, bd = 15;
+		for ( const o of this.others.values() ) {
+
+			const c = o.cur;
+			if ( ! c || ! c.boat || c.boatId !== 'kayak' || c.mode !== 'helm' || ( p.riding && p.boat.owner === o.person.id ) ) continue;
+			const at = ( c.drawn || c.boat ).pos;
+			if ( theirs && theirs.position === at ) continue; // (she's the boat you hear already)
+			const d = at.distanceTo( cam );
+			if ( d < bd ) {
+
+				bd = d;
+				best = { d, speed: o.boatSpeed || 0 };
+
+			}
+
+		}
+
+		return best;
 
 	}
 

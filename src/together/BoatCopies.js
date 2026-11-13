@@ -56,9 +56,12 @@ export const airOf = ( id, f ) => bareOf( id, f ) ? sizeOf( id ).bare : sizeOf( 
 const FITS = {
 	kayak: { send: ( s ) => [ s.holdKg > 12, s.finder, s.anchorM > 0 || s.trolley ], stats: ( [ crate, finder, trolley ] ) => ( { holdKg: crate ? 13 : 12, finder, trolley } ),
 		more: { send: ( s ) => [ s.stakeM > 0, !! s.pedal ], stats: ( [ stakePole, pedal ] ) => ( { stakePole, pedal } ) }, now: [ 'staked' ] },
-	console: { send: ( s ) => [ s.twin, s.tTop, s.diveLadder, s.tankRack ], stats: ( [ twin, tTop, diveLadder, tankRack ] ) => ( { twin, tTop, diveLadder, tankRack } ), now: [ 'ladderDown', 'poleDown', 'motorDown' ],
+	console: { send: ( s ) => [ s.twin, s.tTop, s.diveLadder, s.tankRack ], stats: ( [ twin, tTop, diveLadder, tankRack ] ) => ( { twin, tTop, diveLadder, tankRack } ), now: [ 'ladderDown', 'poleDown', 'motorDown', 'anchorDown' ],
 		more: { send: ( s ) => [ s.trollingN > 0, s.stakeM > 0, !! s.radar ], stats: ( [ trolling, powerPole, radar ] ) => ( { trolling, powerPole, radar } ) } },
 	sportfisher: { send: ( s ) => [ s.tower ?? true, s.outriggers ?? true, s.chair ?? true, !! s.teasers ], stats: ( [ tower, outriggers, chair, teasers ] ) => ( { tower, outriggers, chair, teasers } ) },
+	// ((M19) the lobster boat, nothing that comes and goes, but her anchor off her roller while it's down (and the console's, above):
+	// a copy shows it so. A game from before M19 has no reader for her and draws it on her roller, as it did)
+	lobster: { send: () => [], stats: () => ( {} ), now: [ 'anchorDown' ] },
 };
 const PAINT_SHIFT = 4, NOW_SHIFT = 8, EXTRA_SHIFT = 12;
 export const STILL = ( 1 << NOW_SHIFT ) - 1;

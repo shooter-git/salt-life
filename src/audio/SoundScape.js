@@ -1125,7 +1125,7 @@ export class SoundScape {
 			under_reef: this.under, birds_dawn: this.above, whale_song: this.songPan,
 			boat_engine: this.engineLP, outboard_idle: this.engineLP, outboard_run: this.engineLP, twin_idle: this.engineLP, twin_run: this.engineLP, diesels_idle: this.engineLP, diesels_run: this.engineLP,
 			reel_electric: this.rod, radio_hiss: this.above, hauler: this.boatSum,
-			boat_rush: this.boatSum, boat_lap: this.boatSum, kayak_push: this.boatSum,
+			boat_rush: this.boatSum, boat_lap: this.boatSum, kayak_push: this.boatSum, kayak_push_theirs: this.boatSum,
 			reel_wind: this.rod, reel_drag: this.rod, line_strain: this.rod,
 			rain_light: this.rainLP, rain_heavy: this.rainLP, rain_boat: this.above,
 			// (M11) on what it falls on
@@ -1154,6 +1154,16 @@ export class SoundScape {
 
 		const b = this._buffers.get( name );
 		if ( b ) return b;
+		// ((M19) a bed of its own on another's recording: that one's buffer, loaded once)
+		const same = BANK[ name ] && BANK[ name ].same;
+		if ( same ) {
+
+			const s = this._want( same );
+			if ( s ) this._buffers.set( name, s );
+			return s || null;
+
+		}
+
 		if ( ! this._loading.has( name ) && BANK[ name ] && this.ctx ) {
 
 			const load = ( ext ) => fetch( this.baseUrl + BANK[ name ].file.replace( /\.ogg$/, ext ) )
@@ -1957,6 +1967,10 @@ export class SoundScape {
 		// ((M17) the kayak's own water through still water, by her speed: at her seat, or a little way off her; none under the water)
 		const kayak = eb.sound === 'kayak', pushAt = kayak && e.u < 0.5 ? ( e.aboard ? 1 : 1 - smooth( 3, 15, bd ) ) : 0;
 		this._bed( 'kayak_push', pushAt > 0 ? dB( MIX.kayakPush ) * pushShare( sp, e.wind ) * pushAt / dB( BANK.kayak_push.lufs ) : 0, now, 0.3, pushRate( sp ) );
+		// ((M19) and another player's kayak by you, as she pushes through the water, while the boat you hear is your own or the one
+		// you ride: e.theirKayak, { d (m off), speed } (Together.kayakHeard))
+		const tk = e.theirKayak, theirAt = tk && e.u < 0.5 ? 1 - smooth( 3, 15, tk.d ) : 0;
+		this._bed( 'kayak_push_theirs', theirAt > 0 ? dB( MIX.kayakPush ) * pushShare( tk.speed, e.wind ) * theirAt / dB( BANK.kayak_push.lufs ) : 0, now, 0.3, tk ? pushRate( tk.speed ) : 1 );
 		if ( nearBoat && sp > 1.2 && e.u < 0.5 ) {
 
 			this._slapT -= dt;

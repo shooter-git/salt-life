@@ -851,6 +851,16 @@ The rest of it:
 - **Saves:** a staked boat is saved as at anchor where her pole went in (`App.saveBoat`).
 - **Tests:** `test/boats-m19.mjs`.
 
+(M19, [m19/together.md](m19/together.md)) **Playing together's loose ends.**
+- **The yard's third cradles:** `THIRD_YARD`, `spareYard`'s `n`.
+- **A guest put back aboard** an anchored boat whose owner's ashore: `_boardable`'s `anchored`.
+- **Anchored copies:** BoatCopies' `anchorDown`, `fitNow`, `dressCopy`.
+- **The room's keys in slots:** `together/RoomSlots.js` (`slotFor`, `ownerOf`, `isSlot`), for `'flats.@<n>'` and `'rest.@<n>'`.
+- **The group's save tried again:** `updateAgain`, `Together._update`.
+- **Company foam:** `Wake.track`'s company and `_shed`.
+- **Another kayak heard:** `Together.kayakHeard`, SoundScape's `kayak_push_theirs` and the bank's `same`.
+- **Tests:** `test/together-m19.mjs`.
+
 - **The rig on the line.** `Rigs.js` (`game.rigs`) asks and does the rig that's on: your rod's own `float` and `bottom` (a sinker), and past them `drop` (the sportfisher's electric reel, 900 m of line), `troll` (rods in holders off the stern, one press each; with outriggers four and a shotgun), `kite` and `chum`. `Presentation.js` (pure) is the water as the hook finds it (`atHook`), who strikes at what speed and leader (`pickOnRig`, `LEADERS`) and how long the wait is (`waitOnRig`). `RigMesh.js` draws all that's out of your hands, one mesh in the float's own program. `BigRod.js` is the stand-up rod and its reel. `Glasses.js` is the polarized glasses: the sea's reflection down by the angle you look at it, and fish shown under the far water's weed, debris and bait (one instanced mesh with a program of its own, made when you're first out there with them on). (M19, [m19/see.md](m19/see.md)) Reckoned from your eye (`Player.eyeAt`: the helm's or a kayak's seat's, wherever the camera is), the glare cut by the sea's part of the view (`seaGlareLeft`; none looking up), the plain sea's too; the fish shown where `world/Fish.js`' far groups are (none for one drawn as itself; stand-ins about the finds until the fish have come, a weedline's at fixed stations), fewer in grey light, rain, whitecaps and murk (`Sight.seenOffshore`). Copper lenses (the glasses' second level) a contrast gain on the flats (`SIGHT.lens`).
 - **The hook** is `habitat.hook` (set in `Game.habitatOf`, and not a water type: it's in `Bites`' `NOT_WATER`): `way` (`float`, `troll`, `kite`, `drop`), `depth`, `lure`, and from the rigs' side `kind`, `floorM`, `knots`, `lines` and `leader`. A fish table entry says who takes what: `ways` (its bite weight fished each way), `at` (the depths it feeds at by day and night; (M17) the billfish's night bands from tags: the sailfish and white marlin [ 0, 20 ] m, the blue [ 0, 30 ]: [m17/figures.md](m17/figures.md)), `eats` (weights on baits and lures), and `teeth`, `bill`, `shy`, `knots`, `leaps` for the rigs.
 - **The fight.** `CatchMinigame` takes a drag (`dragKg`), a spool (`spoolM`), what you can lean back against (`holdKg`, from `Rigs.HOLD_KG`: by hand, in the harness, in the chair) and a two-speed reel (`twoSpeed`). A fish past the drag strips line instead of breaking it; running out is "Spooled".

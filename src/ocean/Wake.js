@@ -22,6 +22,7 @@ const LIFE = 9; // s
 const LIFE_LOW = 6; // s (a phone's: the same patches, overlapping as much, less of them at a time on the screen)
 const OVERLAP = 2.2; // a patch's length, in the distance between patches
 const FAR = 60; // m in a frame: she was moved, not run
+const _fwd = new THREE.Vector3();
 
 export class Wake {
 
@@ -145,10 +146,20 @@ void main() {
 
 		const wakes = this.waves.wakes, b = this.boat, m = b.model, t = G.time.value;
 		if ( m && m.id !== 'kayak' && m.dimensions && m.hydro && b.velocity ) wakes.follow( 'own', b.position.x, b.position.z, b.velocity.x, b.velocity.z, m.dimensions.waterlineLength, m.hydro.displacedVolume, t );
+		const company = this._company || ( this._company = [] );
+		company.length = 0;
+		this._theirs = this._theirs || new Map();
 		if ( together ) for ( const [ id, o ] of together.others ) {
 
 			const c = o.cur, f = c && c.boat && ( c.drawn || c.boat );
-			if ( f && f.pos ) wakes.followDrawn( id, f.pos.x, f.pos.z, c.boatId, t );
+			if ( ! f || ! f.pos ) continue;
+			wakes.followDrawn( id, f.pos.x, f.pos.z, c.boatId, t );
+			// ((M19) and her foam: her way as the waves' track has it, her heading as she's drawn, her model's figures)
+			const l = wakes.tracks.get( id ) && wakes.tracks.get( id ).last, e = together.copies && together.copies.types && together.copies.types.get( c.boatId );
+			const M = e && e.model;
+			if ( ! l || ! M || ! M.wake || ! f.quat ) continue;
+			_fwd.set( 0, 0, 1 ).applyQuaternion( f.quat );
+			company.push( { id, x: f.pos.x, z: f.pos.z, yaw: Math.atan2( _fwd.x, _fwd.z ), vx: l.vx || 0, vz: l.vz || 0, W: M.wake, dims: M.dimensions } );
 
 		}
 
@@ -177,34 +188,34 @@ void main() {
 
 	}
 
-	update( dt ) {
+	// foam shed by a boat at ( px, pz ) heading yaw going ( vx, vz ), her engine's revs rpm, her wake's own figures W (Vessel.wake)
+	// and her dimensions; st: her own count and where she was last ((M19) yours, and each boat in company's)
+	_shed( st, px, pz, yaw, vx, vz, rpm, W, dims, dt ) {
 
-		const b = this.boat;
-		const speed = b.velocity ? Math.hypot( b.velocity.x, b.velocity.z ) : 0;
-		const yaw = b.getYaw();
+		if ( ! W ) return;
+		const speed = Math.hypot( vx, vz );
 		const fx = Math.sin( yaw ), fz = Math.cos( yaw ); // the boat's forward (+Z in its frame)
 		const rx = fz, rz = - fx; // its port side
-		const p = b.model.group.position;
 		// shed foam with distance travelled: the faster, the more, as far as they last their life
 		// ((M16) a boat can say her own: how big, and where her wash is if she's two engines; Vessel.wake)
-		const W = b.model.wake, life = this.life;
-		const rate = speed > 0.8 ? Math.min( speed * ( W.shed ?? 0.9 ) + ( b.rpm || 0 ) * 3, this.max / 3 / life ) : 0;
+		const life = this.life;
+		const rate = speed > 0.8 ? Math.min( speed * ( W.shed ?? 0.9 ) + rpm * 3, this.max / 3 / life ) : 0;
 		// (spread along the way she came since the last frame: a slow frame mustn't drop them in a heap)
-		const last = this._last || ( this._last = { x: p.x, z: p.z } );
-		let moveX = p.x - last.x, moveZ = p.z - last.z;
+		const last = st.last || ( st.last = { x: px, z: pz } );
+		let moveX = px - last.x, moveZ = pz - last.z;
 		if ( Math.hypot( moveX, moveZ ) > FAR ) moveX = moveZ = 0;
-		const fromX = p.x - moveX, fromZ = p.z - moveZ;
-		last.x = p.x;
-		last.z = p.z;
-		this._t += dt * rate;
-		const n = Math.floor( this._t );
+		const fromX = px - moveX, fromZ = pz - moveZ;
+		last.x = px;
+		last.z = pz;
+		st.t += dt * rate;
+		const n = Math.floor( st.t );
 		if ( n > 0 ) {
 
-			this._t -= n;
+			st.t -= n;
 			// astern along her track, not her heading: in a turn she slides
-			const backX = speed > 0.01 ? - b.velocity.x / speed : - fx, backZ = speed > 0.01 ? - b.velocity.z / speed : - fz;
+			const backX = speed > 0.01 ? - vx / speed : - fx, backZ = speed > 0.01 ? - vz / speed : - fz;
 			const crossX = - backZ, crossZ = backX;
-			const dims = b.model.dimensions, tan = wakeTan( speed, ( dims && dims.waterlineLength ) || W.length || 6 );
+			const tan = wakeTan( speed, ( dims && dims.waterlineLength ) || W.length || 6 );
 			const len = Math.max( 1, speed / rate * OVERLAP ), strong = 0.45 + 0.55 * THREE.MathUtils.smoothstep( speed, 2, 10 );
 			const armLen = len * Math.hypot( 1, tan ), norm = 1 / Math.hypot( 1, tan );
 			for ( let j = 1; j <= n; j ++ ) {
@@ -227,7 +238,32 @@ void main() {
 
 		}
 
-		const t = G.time.value, at = this.at.set( Math.round( p.x ), 0, Math.round( p.z ) ), xz = this.xz;
+	}
+
+	update( dt ) {
+
+		const b = this.boat;
+		const p = b.model.group.position;
+		this._shed( this._own || ( this._own = { t: 0, last: null } ), p.x, p.z, b.getYaw(), b.velocity ? b.velocity.x : 0, b.velocity ? b.velocity.z : 0, b.rpm || 0, b.model.wake, b.model.dimensions, dt );
+		// ((M19) and the boats in company under way, from where they're drawn on your screen (track): their foam's on your sea too,
+		// on low as on the rest, where before only the boat you're in left any)
+		if ( this._company ) for ( const c of this._company ) {
+
+			let st = this._theirs.get( c.id );
+			if ( ! st ) this._theirs.set( c.id, st = { t: 0, last: null } );
+			st.seen = true;
+			this._shed( st, c.x, c.z, c.yaw, c.vx, c.vz, 0, c.W, c.dims, dt );
+
+		}
+
+		if ( this._theirs ) for ( const [ id, st ] of this._theirs ) {
+
+			if ( ! st.seen ) this._theirs.delete( id );
+			st.seen = false;
+
+		}
+
+		const t = G.time.value, at = this.at.set( Math.round( p.x ), 0, Math.round( p.z ) ), xz = this.xz, life = this.life;
 		this.mesh.position.copy( at );
 		// (the lace's origin, near enough to stay in a float: a faint seam every 256 m)
 		this.material.uniforms.wakeAt.value.set( ( ( at.x % 256 ) + 256 ) % 256, ( ( at.z % 256 ) + 256 ) % 256 );

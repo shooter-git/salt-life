@@ -2038,6 +2038,7 @@ export class App {
 			songbirds: this.wildMood ? this.wildMood.song : 1, // ((M13) the island's birds in the weather)
 			gulls: this.wildMood ? this.wildMood.gull : 1,
 			aboard: this.player.mode === 'boat' || this.player.mode === 'deck',
+			theirKayak: this.together ? this.together.kayakHeard( theirs ) : null, // ((M19) another player's kayak by you)
 			daylight: 1 - G.night.value,
 			nearPier: Math.abs( p.x - pier.x ) < 12 && p.z > pier.zStart - 5 && p.z < pier.zEnd + 8,
 			flats: !! ( this.game && this.game.flats && this.game.flats.near( p.x, p.z ) ), // ((M17) their tails' and bolts' sounds ready)

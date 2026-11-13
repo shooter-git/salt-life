@@ -279,9 +279,9 @@ for ( const [ id, stats, want ] of [
 	// ((M19) and M19's fittings, none of them here: test/fit-bits.mjs has them)
 	[ 'sportfisher', { tower: false, outriggers: true, chair: false }, { tower: false, outriggers: true, chair: false, teasers: false } ],
 	[ 'sportfisher', {}, { tower: true, outriggers: true, chair: true, teasers: false } ],
-	[ 'console', { twin: true, tTop: false, diveLadder: true, tankRack: false }, { twin: true, tTop: false, diveLadder: true, tankRack: false, ladderDown: false, poleDown: false, motorDown: false, trolling: false, powerPole: false, radar: false } ], // ((M17) and her ladder as it is: up)
+	[ 'console', { twin: true, tTop: false, diveLadder: true, tankRack: false }, { twin: true, tTop: false, diveLadder: true, tankRack: false, ladderDown: false, poleDown: false, motorDown: false, anchorDown: false, trolling: false, powerPole: false, radar: false } ], // ((M17) and her ladder as it is: up; (M19) her anchor up)
 	[ 'kayak', { holdKg: 40, finder: true, anchorM: 0 }, { holdKg: 13, finder: true, trolley: false, staked: false, stakePole: false, pedal: false } ],
-	[ 'lobster', { holdKg: 40 }, {} ],
+	[ 'lobster', { holdKg: 40 }, { anchorDown: false } ], // ((M19) her anchor as it is: on her roller)
 ] ) {
 
 	const f = fitWire( id, stats, 'navy' );

@@ -355,11 +355,25 @@ export class BoatModel extends Vessel {
 	}
 
 	// (together/) someone else's her: her copy's a clone of your boat's meshes, so her fittings a view of their own, her stowed anchor
-	// drawn on her roller whatever yours is doing (setAnchorStowed)
+	// drawn on her roller whatever yours is doing (setAnchorStowed). ((M19) Or not, while hers is down: her owner's game says,
+	// BoatCopies' anchorDown, fitNow)
 	dressCopy( copy, stats, shared ) {
 
-		const was = this.meshes.fittings, mesh = was && copy.getObjectByName( was.name );
-		if ( mesh && mesh.geometry === was.geometry ) mesh.geometry = shared( 'fittings, her own anchor', () => geometryView( was.geometry ) );
+		const was = this.meshes.fittings, mesh = was && copy.getObjectByName( was.name ), down = !! stats.anchorDown;
+		if ( mesh ) mesh.geometry = shared( down ? 'fittings, her anchor down' : 'fittings, her own anchor', () => {
+
+			const v = geometryView( was.geometry );
+			v.setDrawRange( 0, down ? this._stowedFrom : Infinity );
+			return v;
+
+		} );
+
+	}
+
+	// (M19, together/) how she is just now that someone else's copy of her shows: her anchor down (BoatCopies.fitWire)
+	fitNow() {
+
+		return { anchorDown: ! this._stowed };
 
 	}
 

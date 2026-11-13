@@ -2,13 +2,15 @@ import { Vector3 } from '../engine/index.js';
 import { cleanFlats, flatsId, flatsWire, forgetFlats, mergeFlats } from '../game/Flats.js';
 import { FT } from '../game/Units.js';
 import { clockFrom } from './Crew.js';
+import { isSlot, ownerOf, slotFor } from './RoomSlots.js';
 
 // (M17) The flats together (docs/m17/flats-together.md): a guest and her host fishing the same flat see the same fish and the
 // same happenings. Each school's placed from the clock, the tide and its patch of flat (game/Flats.js), the same on every game,
 // so only what changes is shared:
 //  - what each player's done to them, in their own record (FlatsFishing's `mine`: the schools they've spooked, till when and
 //    from where, and how many they've hooked from each), as a shared value of the room's that's theirs alone to write
-//    ('flats.<id>': Flats' flatsWire), so no two writes ever cross. Every game runs on all of them together (mergeFlats into
+//    ('flats.<id>': Flats' flatsWire), so no two writes ever cross. ((M19) In one of the room's few slots, 'flats.@<n>', with your
+//    id in it, taken over once its player's gone and it's spent: RoomSlots.js. A player's own key, an older game's, still read) Every game runs on all of them together (mergeFlats into
 //    FlatsFishing's `state`): a school spooked on one game bolts and is gone for its quiet time on everyone's, from the same
 //    island time; a fish hooked from a school is one fewer on everyone's for the rest of its visit. The room keeps the values,
 //    so someone joining later, or coming back, reads the flat as it stands; what's long past is let go (forgetFlats)
@@ -20,7 +22,7 @@ import { clockFrom } from './Crew.js';
 //   const f = new FlatsShare( together )   f.update( dt )   (Together.update, alone too: the room keeps your record for whoever comes)
 //   callText( kind, mode, n, x, z, hx, hz, from )   the words of a call, heard at from = { x, z, yaw }
 
-export const FLATS_KEY = 'flats.'; // + a player's id: their record
+export const FLATS_KEY = 'flats.'; // + a player's id: their record; ((M19) or + '@' and a slot: RoomSlots)
 const WRITE_S = 0.3; // s after a change that your record's written: a hook and its school's spook go as one
 const AGAIN_S = 5; // s before a write that failed is tried again
 const FORGET_S = 20; // s between lettings-go of what's long past
@@ -70,7 +72,9 @@ export class FlatsShare {
 		this.t = t;
 		this.session = t.session;
 		this.me = t.me;
-		this.theirs = new Map(); // player id -> their record, cleaned
+		this.theirs = new Map(); // ((M19) the room's key ->) their record, cleaned
+		this.owners = new Map(); // ((M19) the room's key -> whose it is)
+		this._slot = null; // ((M19) the slot your record's in)
 		this._dirty = false;
 		this._writeT = 0;
 		this._forgetT = FORGET_S;
@@ -125,8 +129,27 @@ export class FlatsShare {
 
 		const F = this.flats;
 		if ( ! F ) return;
-		const id = key.slice( FLATS_KEY.length ), T = this.T, rec = forgetFlats( cleanFlats( raw ), T );
+		const id = ownerOf( FLATS_KEY, key, raw ), T = this.T, rec = forgetFlats( cleanFlats( raw ), T );
+		// ((M19) an empty slot: whoever's it was is let go)
+		if ( ! id ) {
+
+			if ( this.theirs.delete( key ) ) this._merge();
+			this.owners.delete( key );
+			return;
+
+		}
+
+		// ((M19) the slot you wrote to taken by someone else as you took it: yours goes into another)
+		if ( key === this._slot && id !== this.me.id ) {
+
+			this._slot = null;
+			this._changed();
+
+		}
+
 		if ( id === this.me.id ) {
+
+			if ( isSlot( FLATS_KEY, key ) && ! this._slot ) this._slot = key;
 
 			// (yours: from before a reload, or your own write coming back. Kept with what you've done since)
 			const M = F.mine;
@@ -147,8 +170,9 @@ export class FlatsShare {
 
 		}
 
-		const was = this.theirs.get( id );
-		this.theirs.set( id, rec );
+		const was = this.owners.get( key ) === id ? this.theirs.get( key ) : null;
+		this.theirs.set( key, rec );
+		this.owners.set( key, id );
 		this._merge();
 		// (a school they've spooked since: it bolts here too, from where it was spooked there, or from them)
 		for ( const [ s, until ] of Object.entries( rec.spooked ) ) {
@@ -189,7 +213,16 @@ export class FlatsShare {
 		this._dirty = false;
 		if ( s.mode === 'solo' || ! s.set ) return;
 		this.sent ++;
-		Promise.resolve( s.set( FLATS_KEY + this.me.id, flatsWire( F.mine ) ) ).catch( ( e ) => {
+		// ((M19) into your slot, or one free, or one whose player's gone and whose record's spent)
+		const T = this.T, here = [ this.me.id, ...this.t.others.keys() ];
+		const spent = ( v ) => {
+
+			const r = forgetFlats( cleanFlats( v ), T );
+			return ! Object.keys( r.spooked ).length && ! Object.keys( r.hooked ).length;
+
+		};
+		const key = this._slot = slotFor( FLATS_KEY, s.entries ? [ ...s.entries( FLATS_KEY ) ] : [], this.me.id, here, spent, this._slot );
+		Promise.resolve( s.set( key, { id: this.me.id, ...flatsWire( F.mine ) } ) ).catch( ( e ) => {
 
 			// (refused, or lost: tried again a while after)
 			console.warn( 'flats', e );

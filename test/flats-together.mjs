@@ -14,6 +14,7 @@ import { WORLD } from '../src/world/WorldLayout.js';
 import { FlatsFishing } from '../src/game/FlatsFishing.js';
 import { flatsSchools, newFlatsState, spook, hook, forgetFlats, mergeFlats, flatsWire, cleanFlats, FLATS_FISH } from '../src/game/Flats.js';
 import { FlatsShare, callText, CALL, FLATS_KEY } from '../src/together/FlatsShare.js';
+import { ownerOf } from '../src/together/RoomSlots.js';
 import { seenOnFlats } from '../src/game/Sight.js';
 import { G } from '../src/core/Globals.js';
 import { tideAt } from '../src/game/IslandClock.js';
@@ -113,6 +114,8 @@ const setT = ( t ) => {
 
 // the room: its shared values (kept for whoever comes; each change to everyone, the one who made it too) and its messages
 const room = { values: new Map(), sessions: [], sets: 0 };
+// ((M19) a player's record in the room, in whichever slot it's in (RoomSlots), or their own key (an older game's)
+const recOf = ( id ) => [ ...room.values ].find( ( [ k, v ] ) => k.startsWith( FLATS_KEY ) && ownerOf( FLATS_KEY, k, v ) === id )?.[ 1 ];
 function join( id ) {
 
 	const any = [], on = new Map();
@@ -223,10 +226,10 @@ ok( !! group( robin, A.id ) && !! group( sam, A.id ), `the same school on both g
 	ok( until === Math.round( ( T + FLATS_FISH.quiet ) * 100 ) / 100 && gR.sight.bolt > 0 && robin.flats.events.spooked === 'cast', `Robin's cast on its head: it bolts on his game, in his record till island hour ${ until.toFixed( 3 ) }` );
 	const before = room.sets;
 	step( 3 );
-	ok( room.sets === before && ! room.values.get( FLATS_KEY + 'robin-1' ), 'not written at once (a hook and its spook go as one)' );
+	ok( room.sets === before && ! recOf( 'robin-1' ), 'not written at once (a hook and its spook go as one)' );
 	step( 12 );
 	const gS = group( sam, A.id );
-	const rec = room.values.get( FLATS_KEY + 'robin-1' );
+	const rec = recOf( 'robin-1' );
 	ok( rec && rec.s[ A.id ] && sam.flats.state.spooked[ A.id ] === until && sam.flats.state.at[ A.id ] && gS && gS.sight.bolt > 0, `on Sam's: bolting from where Robin's bait landed (${ sam.flats.state.at[ A.id ].join( ', ' ) }), gone till the same ${ sam.flats.state.spooked[ A.id ].toFixed( 2 ) }; Robin's record ${ JSON.stringify( rec ) }` );
 	ok( sam.flats.events.spooked === 'theirs' && ! sam.flats.mine.spooked[ A.id ], 'Sam told someone else spooked it (the Guide\'s tip), and it\'s not in his own record' );
 	step( 150 );
@@ -411,7 +414,7 @@ let hooked = null;
 	step( 1 );
 	for ( const P of players.values() ) P.share._forgetT = 0;
 	step( 15 );
-	const R = room.values.get( FLATS_KEY + 'robin-1' ), S = room.values.get( FLATS_KEY + 'sam-1' );
+	const R = recOf( 'robin-1' ), S = recOf( 'sam-1' );
 	ok( [ ...players.values() ].every( ( P ) => ! Object.keys( P.flats.state.spooked ).length && ! Object.keys( P.flats.state.hooked ).length && ! Object.keys( P.flats.mine.hooked ).length ), 'two days on, nothing left in anyone\'s record' );
 	ok( R && S && ! Object.keys( R.s ).length && ! Object.keys( R.h ).length && ! Object.keys( S.s ).length && ! Object.keys( S.h ).length, `and the room's copies written empty: ${ JSON.stringify( R ) } ${ JSON.stringify( S ) }` );
 	// (someone joining then has nothing to read; one joining with a stale record left in the room lets it go)
