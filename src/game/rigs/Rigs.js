@@ -56,6 +56,12 @@ const BIG_KG = 30; // from here it's brought to the boat tired, and gaffed or wi
 // with neither, unhooked by hand alongside (byHand)
 export const DEHOOK = { landBig: 6, landSmall: 2.5, tiredBig: 0.5, byHand: 1 };
 const BY_HAND_HURT = 0.29;
+// (M19) the rubber landing net (Gear's landingNet; docs/m19/sources-big-game.md, sec. 9): a fish up to kg (EGO's rated load,
+// 30 lb) is netted, never lost at the side; from reach m off (the hoop on its handle at arm's length, against a hand's 1.2:
+// judgement). Not a billfish (its bill), nor a big one (BIG_KG). A fish let go from it is hurt about 4 in 100 (Barthel et al.
+// 2003, rubber mesh), but only a billfish let go is counted hurt in the game, so that figure isn't used
+export const NET = { kg: 13.6, reach: 1.8 };
+export const netted = ( s, id, kg ) => !! s.landingNet && kg <= NET.kg && ! FISH[ id ].release;
 // (M19) a fish on a fly: what you can lean against it with the rod low and within 45 degrees of it (Andy Mill's test, 12.5 lb:
 // docs/m19/sources-fly.md); and a jump on a tight line, the chance it parts the tippet or throws the hook unless you bow
 // (judgement: the guides say it's how most tarpon are lost)
@@ -1068,7 +1074,7 @@ export class Rigs {
 				wear: b.species === 'tarpon' && ! bite ? 0.1 : 0,
 				leaps: leapsOf( b.species ),
 				bow: FLY_BOW,
-				landAt: off ? ( big ? DEHOOK.landBig : DEHOOK.landSmall ) : FISH[ b.species ].protected ? DEHOOK.byHand : big ? 3 : 1.2,
+				landAt: this.landAt( b, off, big ),
 				tired: big ? ( off ? DEHOOK.tiredBig : 0.3 ) : 1,
 				leader: leader === 'wire' ? 'wire' : bite ? 'bite' : 'tippet',
 				tippetLb: t.lineKg / LB_KG,
@@ -1089,10 +1095,20 @@ export class Rigs {
 			cut: risk.cut,
 			wear: risk.wear,
 			leaps: leapsOf( b.species ),
-			landAt: off ? ( big ? DEHOOK.landBig : DEHOOK.landSmall ) : FISH[ b.species ].protected ? DEHOOK.byHand : big ? 3 : 1.2,
+			landAt: this.landAt( b, off, big ),
 			tired: big ? ( off ? DEHOOK.tiredBig : 0.3 ) : 1,
 			leader,
 		};
+
+	}
+
+	// how far off it's landed (the fight's landAt): a dehooker's reach, by hand alongside, a big one at the leader, ((M19) or in
+	// the landing net, from further off than a hand)
+	landAt( b, off, big ) {
+
+		if ( off ) return big ? DEHOOK.landBig : DEHOOK.landSmall;
+		const by = FISH[ b.species ].protected ? DEHOOK.byHand : big ? 3 : 1.2;
+		return netted( this.stats, b.species, b.kg ) ? Math.max( by, NET.reach ) : by;
 
 	}
 
@@ -1112,7 +1128,7 @@ export class Rigs {
 	landedAtBoat( f ) {
 
 		const s = this.stats;
-		if ( FISH[ f.species ].protected || f.kg <= s.landKg ) return true;
+		if ( FISH[ f.species ].protected || f.kg <= s.landKg || netted( s, f.species, f.kg ) ) return true; // ((M19) or netted)
 		return Math.random() > Math.min( 0.75, ( f.kg - s.landKg ) / 30 );
 
 	}

@@ -3,7 +3,7 @@ import { G } from '../core/Globals.js';
 import { WORLD } from '../world/WorldLayout.js';
 import { FISH, CARAPACE, fishWeightKg, spearRule } from './FishTable.js';
 import { habitatAt, rollWeight } from './Bites.js';
-import { CatchMinigame, SHAFT_MATCH } from './CatchMinigame.js';
+import { CatchMinigame } from './CatchMinigame.js';
 import { GameState } from './GameState.js';
 import { FishingRod, buildLineGeometry } from './FishingRod.js';
 import { createLineMaterial } from './GameMaterials.js';
@@ -40,7 +40,7 @@ import { delivered, filled, owed, weekEnds } from './WeekOrder.js';
 import { Minimap } from './Minimap.js';
 import { sightOf, MAX_MARKS, NAME, namedAs } from './Chart.js';
 import { Guide } from './Guide.js';
-import { Speargun, groundHit } from './Speargun.js';
+import { Speargun, groundHit, spearTerms } from './Speargun.js';
 import { CastNet, sweetWindow } from './CastNet.js';
 import { BAITS, BAIT_IDS } from './Bait.js';
 import { LobsterTools } from './LobsterTools.js';
@@ -2545,13 +2545,15 @@ export class Game {
 			if ( sp.big ) {
 
 				const g = gun.gear;
-				// (landed once it's tired and pulled close: CatchMinigame landAt, tired)
-				const hold = g.spearHold * ( sp.tail ? 0.6 : 1 );
-				const f = this.spearFight = new CatchMinigame( { species: sp.id, kg: sp.kg, lineKg: hold, matchKg: hold * SHAFT_MATCH, reelSpeed: 1.0, distance: Math.max( 1.5, gun.muzzle.distanceTo( gun.tip ) - g.shaftM ), landAt: 1.0, tired: 0.25 } );
-				// it runs to the end of the line, and tears free (with a reel, it takes line first)
-				f.maxDistance = g.lineM + ( g.spearReel ? 25 : 0.4 );
+				// (landed once it's tired and pulled close: CatchMinigame landAt, tired; (M19) the terms Speargun.spearTerms', the
+				// sweep's too: it runs to the end of the line and tears free, with a reel taking line first, on a breakaway out on
+				// its float line, towing the float)
+				const T = spearTerms( g, { tail: sp.tail, distance: Math.max( 1.5, gun.muzzle.distanceTo( gun.tip ) - g.shaftM ) } );
+				const f = this.spearFight = new CatchMinigame( { species: sp.id, kg: sp.kg, ...T.terms } );
+				f.maxDistance = T.maxDistance;
+				f.floatM = T.floatM;
 				f.spear = true;
-				this.toast( 'A big one · hold to pull it in, ease off when it runs', 2600 );
+				this.toast( g.breakaway ? 'A big one · it\'ll run on the float: let it tire, and haul in when it\'s not running' : 'A big one · hold to pull it in, ease off when it runs', 2600 );
 
 			} else gun.pull();
 
@@ -2561,7 +2563,7 @@ export class Game {
 
 			const f = this.spearFight;
 			const st = f.update( dt, lmb );
-			gun.fight( f.distance, f.surge );
+			gun.fight( f.distance, f.surge, f.distance > f.floatM );
 			if ( st === 'caught' ) {
 
 				this.spearFight = null;

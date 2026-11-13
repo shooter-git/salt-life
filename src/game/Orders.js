@@ -33,13 +33,13 @@ const MORE = [ 'sergeant', 'grunt', 'tang', 'wrasse', 'lionfish', 'angel', 'barr
 // white mullet never goes in it, so on their days the order couldn't be filled (since v2.4.1)
 const BAIT = { silverside: 6, sergeant: 8, grunt: 10, mullet: 12 };
 // (M15) and one ask a day for a place's fish (Places.js), paid as no other (PLACE_MUL): Joe's for the table
-// (pompano from the north beach's surf, a snook or a mangrove snapper from the mangrove creek, a black grouper
+// (pompano from the north beach's surf, a snook ((M19) let go now: Marta's tag) or a mangrove snapper from the mangrove creek, a black grouper
 // or a mutton snapper from the windward reef, a tuna off the drop-off, a mahi from the blue water, a silk
 // snapper from the north ledge), or Marta's for her tag-and-release log for the fisheries office: a tarpon
 // let go in the creek, a permit on the north beach, paid as it's let go (tag: GameState.tag)
 const PLACE_ASKS = [
 	{ who: 'joe', species: 'pompano', place: 'northBeach', max: 3 },
-	{ who: 'joe', species: 'snook', place: 'creek', max: 1 },
+	{ who: 'marta', species: 'snook', place: 'creek', max: 1, tag: 30 }, // ((M19) Joe's, before the snook was let go)
 	{ who: 'joe', species: 'graySnapper', place: 'creek', max: 3 },
 	{ who: 'joe', species: 'blackGrouper', place: 'windReef', max: 2 },
 	{ who: 'joe', species: 'muttonSnapper', place: 'windReef', max: 3 },

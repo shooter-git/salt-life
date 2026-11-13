@@ -2492,7 +2492,7 @@ export class Together {
 		_m.makeBasis( _x, _y, _z ).setPosition( _hand );
 		S.gun.matrix.copy( _m );
 		S.bands.matrix.copy( _m );
-		setBands( S.bands.material.uniforms, m.lay, m.bands, c.gun === 1 ? [ 1, 1 ] : [ 0, 0 ] );
+		setBands( S.bands.material.uniforms, m.lay, m.bands, c.gun === 1 ? [ 1, 1, 1, 1 ] : [ 0, 0, 0, 0 ] ); // ((M19) up to four)
 		S.gun.material.uniforms.gunWraps.value = out ? 0 : 1;
 		S.shaft.material.uniforms.shaftFlopper.value = c.gun === 4 ? 1 : 0;
 		if ( out ) {

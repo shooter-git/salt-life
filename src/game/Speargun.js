@@ -2,13 +2,15 @@ import { Mesh, Matrix4, Vector3, Vector4, Quaternion, MathUtils } from '../engin
 import { prepare, mergePrepared, cylinder, torus, mat4, roundedBox, box, tube, lathe } from '../world/boat/GeoKit.js';
 import { createPropMaterial, createLineMaterial, PAT } from './GameMaterials.js';
 import { buildLineGeometry } from './FishingRod.js';
+import { SHAFT_MATCH } from './CatchMinigame.js';
 
 // (Salt Life) The speargun in the diver's hands, its shaft and its shooting line.
 //
 // A band gun at real scale, in three builds (Gear.js gunStyle): an anodised aluminium tube with a
 // polymer handle and muzzle, a teak stock with an open muzzle, and a railgun with a reel under it.
 // Each has a pistol grip with the trigger mechanism over it, a rubber butt, line hooks and the
-// shooting line wrapped along the barrel's underside; latex bands (one or two) anchored at the muzzle,
+// shooting line wrapped along the barrel's underside; latex bands (one or two; (M19) four on the blue-water gun, a long
+// teak stock) anchored at the muzzle,
 // joined by a wire wishbone; a spring-steel shaft with a notch tab for each band, a slide ring for the
 // line at its tail, and a Tahitian tip with a flopper that opens once it's through a fish.
 //
@@ -25,6 +27,10 @@ import { buildLineGeometry } from './FishingRod.js';
 // 'pulling' (the line hauled in hand over hand, with the fish if there is one) -> 'landing' (the fish
 // in front of you, while the catch card is up) -> 'empty' (the shaft back in the gun, the bands off)
 // -> ( hold ) 'loading', band by band -> 'loaded'.
+// (M19) The blue-water gun's breakaway (Gear's `breakaway`, `floatLineM`; stream GEAR, docs/m19/gear.md): a big fish shot with
+// it takes the shooting line off the gun and runs on the float line against its float, as a reel's drag (spearTerms), out
+// to the float line's end and no further (CatchMinigame's tether); the float's drawn at the surface over it, the line bowed
+// up to it.
 
 const SHAFT_R = 0.0035; // 7 mm spring steel
 const BAND_R = 0.0082; // 16 mm latex tubing (16.5 mm across)
@@ -35,6 +41,11 @@ const PULL_V = [ 1.8, 1.0 ]; // m/s hauling the line in: the shaft alone, with a
 const SINK = 0.5; // m/s² the steel shaft sinks while it flies (water bears most of its weight)
 const LINE_SEGS = 40;
 const LOADED_STATES = new Set( [ 'loaded', 'empty', 'loading' ] );
+const BANDS = 4; // (M19) the most a gun has (the blue-water gun's), each drawn: one fewer folded away into the one before
+const NOTCHES = { 1: [ 0.15 ], 2: [ 0.12, 0.2 ], 4: [ 0.1, 0.16, 0.22, 0.28 ] }; // band notches, from the shaft's tail
+// (M19) a breakaway rig's float, 11 L (docs/m19/sources-big-game.md, sec. 8): kg, what it holds back a running fish with, the
+// most of its buoyancy pulled under, less the bungee's stretch (judgement); r, its radius (11 L)
+export const FLOAT = { kg: 9, r: 0.138 };
 
 // poses in camera space: the grip ( hand ), the barrel turned by yaw (to the left) and pitch (up), rolled
 // about itself
@@ -54,19 +65,20 @@ const _r = new Vector3(), _t = new Vector3(), _sl = new Matrix4();
 export function gunLayout( g ) {
 
 	const L = g.gunCm / 100, style = g.gunStyle || 'tube';
-	const teak = style === 'teak', rail = style === 'rail';
-	const half = teak ? 0.017 : rail ? 0.016 : 0.0145; // the barrel's half width
-	const top = teak ? 0.023 : half, bottom = teak ? - 0.023 : - half;
+	// ((M19) the blue-water gun: a teak stock, deeper and wider for its four bands)
+	const blue = style === 'blue', teak = style === 'teak' || blue, rail = style === 'rail';
+	const half = blue ? 0.019 : teak ? 0.017 : rail ? 0.016 : 0.0145; // the barrel's half width
+	const top = blue ? 0.027 : teak ? 0.023 : half, bottom = - top;
 	const shaftZ = top + ( rail ? 0.0075 : 0 ) + SHAFT_R; // on the barrel (on the rail)
-	const notches = g.bands > 1 ? [ 0.12, 0.2 ] : [ 0.15 ]; // band notches, from the shaft's tail
+	const notches = NOTCHES[ g.bands > 2 ? 4 : g.bands > 1 ? 2 : 1 ].slice( 0, Math.max( 1, g.bands ) );
 	const anchor = { x: teak ? half + 0.002 : 0.021, y: L - 0.022, z: ( top + bottom ) / 2 + 0.003 };
 	const rest = notches.map( ( n, k ) => ( anchor.y - k * 0.028 - ( SHAFT_TAIL + n ) ) / STRETCH );
-	return { L, style, teak, rail, half, top, bottom, shaftZ, notches, anchor, rest, butt: teak ? - 0.19 : - 0.16 };
+	return { L, style, teak, rail, blue, half, top, bottom, shaftZ, notches, anchor, rest, butt: teak ? - 0.19 : - 0.16 };
 
 }
 
 // the bands: tubes laid by the vertex shader (aux.w: 1, 2 band 1's left and right strands, 3, 4 band
-// 2's, 5, 6 their wishbones); P.y runs 0 .. 1 along each, ( P.x, P.z ) round it
+// 2's, ((M19) on to 7, 8 band 4's; 9 to 12 their wishbones); P.y runs 0 .. 1 along each, ( P.x, P.z ) round it
 function createBandMaterial( ground ) {
 
 	const f = ( x ) => x.toFixed( 4 );
@@ -77,17 +89,20 @@ function createBandMaterial( ground ) {
 			bandAnchor: { value: new Vector4() }, // the muzzle anchors: x (each side), y, z; w: band 2's, back from band 1's
 			bandEnd0: { value: new Vector4() }, // band 1's wishbone (gun frame), its rest length
 			bandEnd1: { value: new Vector4() },
+			bandEnd2: { value: new Vector4() },
+			bandEnd3: { value: new Vector4() },
 		},
 		vertex: /* glsl */`
 	float part = aux.w;
 	float tB = P.y;
 	vec2 ring = P.xz;
-	bool second = ( part > 2.5 && part < 4.5 ) || part > 5.5;
-	vec4 E = second ? bandEnd1 : bandEnd0;
+	bool wish = part > 8.5;
+	float band = wish ? part - 9.0 : floor( ( part - 0.5 ) * 0.5 );
+	vec4 E = band < 0.5 ? bandEnd0 : band < 1.5 ? bandEnd1 : band < 2.5 ? bandEnd2 : bandEnd3;
 	vec3 A; vec3 B; vec3 C; float r;
-	if ( part < 4.5 ) {
+	if ( ! wish ) {
 		float side = mod( part, 2.0 ) > 0.5 ? - 1.0 : 1.0;
-		A = vec3( side * bandAnchor.x, bandAnchor.y - ( second ? bandAnchor.w : 0.0 ), bandAnchor.z );
+		A = vec3( side * bandAnchor.x, bandAnchor.y - band * bandAnchor.w, bandAnchor.z );
 		B = E.xyz + vec3( side * 0.011, 0.0, 0.0 );
 		float len = length( B - A );
 		float rest = E.w;
@@ -166,13 +181,14 @@ export function gunModels( g ) {
 export function setBands( U, lay, bands, load ) {
 
 	U.bandAnchor.value.set( lay.anchor.x, lay.anchor.y, lay.anchor.z, 0.028 );
-	for ( let b = 0; b < 2; b ++ ) {
+	const ends = [ U.bandEnd0, U.bandEnd1, U.bandEnd2, U.bandEnd3 ];
+	for ( let b = 0; b < BANDS; b ++ ) {
 
 		const rest = lay.rest[ Math.min( b, lay.rest.length - 1 ) ];
-		bandEnd( lay, b, b < bands ? load[ b ] : 0, rest, _a );
-		// (a gun of one band: the second folded away into the first's anchor)
+		bandEnd( lay, b, b < bands ? load[ b ] || 0 : 0, rest, _a );
+		// (a gun of fewer bands: the rest folded away into the first's anchor)
 		if ( b >= bands ) _a.set( 0, lay.anchor.y, lay.anchor.z - 0.001 );
-		( b ? U.bandEnd1 : U.bandEnd0 ).value.set( _a.x, _a.y, _a.z, b >= bands ? 0.001 : rest );
+		if ( ends[ b ] ) ends[ b ].value.set( _a.x, _a.y, _a.z, b >= bands ? 0.001 : rest );
 
 	}
 
@@ -193,7 +209,7 @@ export class Speargun {
 		this.lay = null;
 		this.pose = { hand: new Vector3( ...POSES.stowed.hand ), yaw: POSES.stowed.yaw, pitch: POSES.stowed.pitch, roll: POSES.stowed.roll };
 		this.kick = 0; // recoil, 1 at the shot
-		this.load = [ 1, 1 ]; // each band: 0 slack .. 1 on its notch
+		this.load = [ 1, 1, 1, 1 ]; // each band: 0 slack .. 1 on its notch
 		this.loading = 0; // the band being drawn back
 		this.safety = false; // set by the game: what's under the sights mustn't be shot
 		this.tip = new Vector3();
@@ -234,6 +250,15 @@ export class Speargun {
 
 		this.lineMesh.matrixAutoUpdate = true;
 		scene.add( this.gunMesh, this.bandMesh, this.shaftMesh, this.lineMesh );
+		// ((M19) the breakaway's float, in the shaft's material (its program), at the surface while a fish is on it)
+		this.floatMesh = new Mesh( buildFloatGeometry(), this.shaftMat );
+		this.floatMesh.name = 'SpearFloat';
+		this.floatMesh.frustumCulled = false;
+		this.floatMesh.visible = false;
+		this.floatMesh.castShadow = false;
+		scene.add( this.floatMesh );
+		this.onFloat = false; // (set by fight: the fish is out on the float line)
+		this.floatAt = new Vector3();
 
 	}
 
@@ -248,7 +273,7 @@ export class Speargun {
 		this.gunMesh.geometry = m.gun;
 		this.shaftMesh.geometry = m.shaft;
 		this.shaftMat.uniforms.shaftHinge.value = m.hinge;
-		this.load = [ 1, g.bands > 1 ? 1 : 0 ];
+		this.load = [ 0, 1, 2, 3 ].map( ( b ) => b < g.bands ? 1 : 0 );
 		if ( ! LOADED_STATES.has( this.state ) && this.state !== 'stowed' ) return;
 		this.setState( this.state === 'stowed' ? 'stowed' : 'loaded' );
 
@@ -289,7 +314,7 @@ export class Speargun {
 			// the line comes in and the shaft goes back in the gun
 			this.fish = null;
 			this.stuck = false;
-			if ( ! LOADED_STATES.has( this.state ) ) this.load = [ 0, 0 ];
+			if ( ! LOADED_STATES.has( this.state ) ) this.load = [ 0, 0, 0, 0 ];
 			this.setState( 'stowed' );
 
 		}
@@ -333,7 +358,7 @@ export class Speargun {
 		this.dir.normalize();
 		this.prevTip.copy( this.tip ).addScaledVector( this.dir, - 0.6 );
 		this.vel.copy( this.dir ).multiplyScalar( this.gear.spearV );
-		this.load = [ 0, 0 ];
+		this.load = [ 0, 0, 0, 0 ];
 		this.stuck = false;
 		this.fish = null;
 		this.kick = 1;
@@ -377,11 +402,20 @@ export class Speargun {
 	}
 
 	// a big fish running on the line: how far off it is (m), its surges (CatchMinigame)
-	fight( distance, surge ) {
+	// ((M19) onFloat: the blue-water gun's fish is out on its float line)
+	fight( distance, surge, onFloat = false ) {
 
-		if ( this.state === 'stuck' || this.state === 'pulling' ) this.setState( 'fighting' );
+		if ( this.state === 'stuck' || this.state === 'pulling' ) {
+
+			this.setState( 'fighting' );
+			// ((M19) it runs on from where it was shot, not from the last fight's way (it swung round to it over seconds))
+			this.fightDir.set( this.dir.x, Math.min( this.dir.y, - 0.1 ), this.dir.z ).normalize();
+
+		}
+
 		this.fightDist = distance;
 		this.surge = surge;
+		this.onFloat = onFloat;
 
 	}
 
@@ -568,6 +602,23 @@ export class Speargun {
 			lm.lineB.value.copy( _b );
 			lm.lineCtl.value.copy( this.muzzle ).lerp( _b, 0.5 ).y -= out * 0.12 * ( 1 - taut ) + 0.01;
 			lm.lineShow.value = 1;
+			// ((M19) out on the float: it's at the surface between you and the fish, the line bowed up to it)
+			if ( this.onFloat && this.state === 'fighting' ) {
+
+				this.floatAt.copy( this.muzzle ).lerp( _b, 0.55 );
+				this.floatAt.y = waterY + Math.sin( this.t * 1.7 ) * 0.03 + FLOAT.r * 0.3; // (foam: it rides high)
+				lm.lineCtl.value.copy( this.floatAt ).multiplyScalar( 2 ).sub( _w.copy( this.muzzle ).add( _b ).multiplyScalar( 0.5 ) );
+
+			}
+
+		}
+
+		const floatOn = lineOn && this.onFloat && this.state === 'fighting';
+		this.floatMesh.visible = floatOn;
+		if ( floatOn ) {
+
+			this.floatMesh.position.copy( this.floatAt );
+			this.floatMesh.rotation.set( Math.sin( this.t * 1.3 ) * 0.15, 0, Math.sin( this.t * 1.1 ) * 0.12 );
 
 		}
 
@@ -721,6 +772,14 @@ export class Speargun {
 
 		}
 
+		// ((M19) a big one running out on a long line stays in the water and off the bottom)
+		if ( this.state === 'fighting' ) {
+
+			const gnd = groundAt ? groundAt( this.tip.x, this.tip.z ) + 0.25 : - Infinity;
+			this.tip.y = Math.min( waterY - 0.3, Math.max( gnd, this.tip.y ) );
+
+		}
+
 		// it rests on the bottom, and doesn't leave the water
 		if ( this.state === 'flying' || this.state === 'spent' || this.state === 'stuck' ) {
 
@@ -869,14 +928,48 @@ function buildShaftGeometry( L, notches, hinge ) {
 function buildBandGeometry() {
 
 	const parts = [];
-	for ( let part = 1; part <= 6; part ++ ) {
+	// ((M19) four bands' strands, parts 1 to 8, then their wishbones, 9 to 12)
+	for ( let part = 1; part <= BANDS * 3; part ++ ) {
 
-		const g = cylinder( 1, 1, 1, 8, part > 4 ? 6 : 14, true );
+		const wish = part > BANDS * 2;
+		const g = cylinder( 1, 1, 1, 8, wish ? 6 : 14, true );
 		g.translate( 0, 0.5, 0 );
-		parts.push( prepare( g, part > 4 ? { ...STEEL, color: 0x8a8e92, anim: part } : { color: 0x5a2a14, rough: 0.45, pattern: PAT.rubber, anim: part } ) );
+		parts.push( prepare( g, wish ? { ...STEEL, color: 0x8a8e92, anim: part } : { color: 0x5a2a14, rough: 0.45, pattern: PAT.rubber, anim: part } ) );
 
 	}
 
 	return mergePrepared( parts );
+
+}
+
+// (M19) the breakaway's float: an 11 L hard foam float, orange, with a band round it (FLOAT.r)
+function buildFloatGeometry() {
+
+	const r = FLOAT.r, prof = [];
+	for ( let i = 0; i <= 10; i ++ ) {
+
+		const a = - Math.PI / 2 + Math.PI * i / 10;
+		prof.push( [ Math.max( 0.004, Math.cos( a ) * r ), Math.sin( a ) * r * 0.92 ] );
+
+	}
+
+	return mergePrepared( [
+		prepare( lathe( prof, 16 ), { color: 0xf26a1b, rough: 0.55, pattern: PAT.plain } ),
+		prepare( cylinder( r * 1.02, r * 1.02, 0.03, 16 ), { color: 0x1b1c1e, rough: 0.7, pattern: PAT.plain } ),
+	] );
+
+}
+
+// (M19) a big fish on the shaft: the fight's terms (CatchMinigame's), for the game and the sweep alike (tools/fight-sweep.mjs).
+// g: the gun's stats (Gear.js); tail: shot through the tail (it holds less); distance: how far off it is to start. A gun with a
+// reel lets it take 25 m more before it tears free; one on a breakaway, its float line's (a tether: no further, towing the
+// float), the float holding it back as a drag (FLOAT.kg) so the shaft seldom tears out unless you haul into a run
+//   -> { terms (CatchMinigame's), maxDistance, floatM (the line out past which it's on the float, or Infinity) }
+export function spearTerms( g, { tail = false, distance = 2.5 } = {} ) {
+
+	const hold = g.spearHold * ( tail ? 0.6 : 1 );
+	const terms = { lineKg: hold, matchKg: hold * SHAFT_MATCH, reelSpeed: 1.0, distance, landAt: 1.0, tired: 0.25 };
+	if ( g.breakaway ) return { terms: { ...terms, dragKg: FLOAT.kg, tether: g.lineM + g.floatLineM }, maxDistance: Infinity, floatM: g.lineM };
+	return { terms, maxDistance: g.lineM + ( g.spearReel ? 25 : 0.4 ), floatM: Infinity };
 
 }

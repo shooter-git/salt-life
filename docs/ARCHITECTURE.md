@@ -691,7 +691,7 @@ The catch card (`GameHUD.showCatch`) for such a catch is a room card (`hud.room`
 The speargun is `src/game/Speargun.js` and its half of `src/game/Game.js`. The fish's side is in `src/world/Fish.js`, and the held breath in `src/player/Player.js`.
 
 - **The law** (`game/FishTable.js`):
-  - Each species is a fish spearfishers take (`spear`), protected (`protected`: the Nassau grouper, the stoplight parrotfish, the tarpon), or neither (the reef's aquarium fish and the bait).
+  - Each species is a fish spearfishers take (`spear`), protected (`protected`: the Nassau grouper, the stoplight parrotfish, the tarpon, (M19) the snook), or neither (the reef's aquarium fish and the bait).
   - Some have a minimum size (`minCm`). `spearRule()` says whether one may be taken, and why not.
   - A protected fish caught on a line is measured, logged and released. The island's records still count it.
   - Joe pays a bounty on lionfish, an invader on the reef.
@@ -722,6 +722,12 @@ The speargun is `src/game/Speargun.js` and its half of `src/game/Game.js`. The f
   - Others see it in your hand (`gunModels`, per gun), its shaft and line, and a speared fish on the shaft.
   - The catch message and the records say a fish was speared (`m`).
 - **Sound**: the speargun has no recordings of its own yet, so the fishing ones stand in (`SoundScape.spearShot`, `spearHit`, `bandStretch`).
+- (M19, [m19/gear.md](m19/gear.md)) **The blue-water gun**, the fourth gun:
+  - **The gun:** a deep teak stock (`gunLayout`'s `blue`) with four bands, drawn by the same shader (`BANDS`, `bandEnd0` to `bandEnd3`, its strands parts 1 to 8 and wishbones 9 to 12), each on its own notch.
+  - **The breakaway:** a big fish shot with it runs out on its float line. The float holds it back as a reel's drag does (`spearTerms`, `FLOAT`), out to the line's end and no further (CatchMinigame's `tether`).
+  - **The float** is drawn at the surface between you and the fish, in the shaft's program (`floatMesh`). A fish being fought stays off the bottom and under the surface.
+  - **The terms** are `Speargun.spearTerms`, which the game and the sweep share (`tools/fight-sweep.mjs --spear`).
+- (M19) **The law, and the guns kept anyway:** the Bahamas ban spearguns. Only a Hawaiian sling or a pole spear may be used, on a permit; nothing may be taken on scuba; and there's no spearfishing within 200 yd of a Family Island's shore ([m19/sources-big-game.md](m19/sources-big-game.md)). The game keeps its guns, the scuba tanks and the blue-water gun. That's the user's choice, not an oversight ([M19.md](M19.md)).
 
 ## The cast net
 
@@ -885,6 +891,10 @@ The rest of it:
   - A fish's pull is read against `LINE_MATCH` of the line's strength; a speargun's shaft reads it against `SHAFT_MATCH`.
   - `Gear.realTackle` reads a kit sent on the old figures as the same line and reel (`Rigs.cleanKit`).
   - A fish let go is over at the leader with the dehooker (`Rigs.DEHOOK`: a big one 6 m off, a small one at the pole's 2.5 m), and without it unhooked by hand alongside, at 1 m (`byHand`).
+  - (M19, [m19/gear.md](m19/gear.md)) **The rubber landing net** (`landingNet`):
+    - It takes a fish up to 13.6 kg (`Rigs.NET`, `netted`), though not a billfish.
+    - It nets one from 1.8 m off (`Rigs.landAt`), where a hand takes it at 1.2 m.
+    - A fish in it is never lost at the side (`landedAtBoat`).
   - `tools/fight-sweep.mjs` fights every fish at its weights on every line, reel and hold in plain Node, through `Rigs.fightTerms`. `test/lines.mjs` holds the gear each stage is meant for to M17's base ([m17/lines.md](m17/lines.md)).
 - **Fish and trophies.** The far water's fish are in `FishTable.js` with their models in `world/fish/` and skins in `FishMaterial.js`; their groups are `Fish.js`' `FAR`, placed round what the water holds (`setFinds`). A billfish is never kept: `Trophies.letGo` pays the release bonus (more with the dehooker and tag kit) and the log keeps your best of each. After a hurricane `Finds.hurricaneWake` scatters its wreckage over the offshore water, and the mahi gather under it.
 - **Bait** (`Bait.js`): frozen ballyhoo, squid and chum from Marta, and the lures (jigs, plugs, skirts) your gear gives.

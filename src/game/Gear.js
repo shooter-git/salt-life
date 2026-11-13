@@ -107,10 +107,12 @@ export const UPGRADES = {
 		{ cost: 0, label: 'Hand-me-down 30-inch speargun', gunStyle: 'tube', gunCm: 75, bands: 1, shaftM: 1.15, spearV: 16, spearM: 3, lineM: 4.5, spearHold: 7, spearReel: false },
 		{ cost: 180, label: '40-inch teak speargun, two bands', gunStyle: 'teak', gunCm: 100, bands: 2, shaftM: 1.4, spearV: 20, spearM: 4, lineM: 6, spearHold: 11, spearReel: false },
 		{ cost: 480, label: '48-inch railgun with a reel', gunStyle: 'rail', gunCm: 120, bands: 2, shaftM: 1.6, spearV: 23, spearM: 5, lineM: 7.5, spearHold: 16, spearReel: true },
-		// ((M19) a blue-water gun for wahoo, tuna and big mahi: about 150 cm, four bands, the shaft on a breakaway rig to a
-		// 30 m float line and an 11 L float (docs/m19/sources-big-game.md; the Bahamas ban spearguns: kept, the user's call).
-		// Stream GEAR's figures, these placeholders)
-		{ cost: 1300, label: 'Blue-water speargun, 60 inch, a breakaway rig on 30 m of float line', gunStyle: 'blue', gunCm: 150, bands: 4, shaftM: 1.9, spearV: 25, spearM: 6, lineM: 7.5, spearHold: 23, spearReel: false, floatLineM: 30, breakaway: true },
+		// ((M19) a blue-water gun for wahoo, tuna and big mahi (docs/m19/sources-big-game.md, sec. 8; Florida Sportsman's rig, Wong's
+		// and Riffe's guns): 140 cm (55 in), four 14 mm bands, a 1.65 m shaft, 4.6 m of shooting line onto a breakaway, a bungee and
+		// 30 m of float line to an 11 L float (Speargun.spearTerms); reaching 6 m, the shooting line and the shaft. A fish to about
+		// 23 kg (50 lb) on the shaft, bigger ones fought on the float. $1,345 for Wong's 60 in, $100 the float line, $135 the float.
+		// The Bahamas ban spearguns: kept, the user's call (docs/M19.md))
+		{ cost: 1580, label: 'Blue-water speargun, 55 inch, four bands, a breakaway rig on 30 m of float line', gunStyle: 'blue', gunCm: 140, bands: 4, shaftM: 1.65, spearV: 25, spearM: 6, lineM: 4.6, spearHold: 23, spearReel: false, floatLineM: 30, breakaway: true },
 	] },
 	// (Salt Life) the cast net, for bait and mullet (CastNet.js): its size is its radius (netM, from the
 	// horn to the lead line, as nets are sold), its mesh (meshCm, the square), the lead line's weight
@@ -148,10 +150,11 @@ export const UPGRADES = {
 		{ cost: 90, label: 'Flats booties (less noise and push wading)', booties: true },
 	] },
 	// (stream GEAR) a rubber-meshed net: small and middling fish aboard sooner, and one let go in better shape (Barthel et
-	// al. 2003). Its own track: a level put into Landing would move every saved level after it
+	// al. 2003). Its own track: a level put into Landing would move every saved level after it. (M19) To 13.6 kg (30 lb, EGO's
+	// rated load), $85 to $95 (docs/m19/sources-big-game.md, sec. 9): Rigs.NET
 	landingNet: { name: 'Landing net', levels: [
 		{ cost: 0, label: 'None', landingNet: false },
-		{ cost: 90, label: 'Rubber landing net', landingNet: true },
+		{ cost: 90, label: 'Rubber landing net (a fish to 30 lb netted from further off, none lost at the side)', landingNet: true },
 	] },
 	// (stream FLY) the Bahamas' flats fishing licence: free to a Bahamian or a resident, as she is (a visitor pays $15 a day
 	// to $600 a year: docs/m19/sources-boats-bait.md). Nothing on the flats takes a bait or a fly without it

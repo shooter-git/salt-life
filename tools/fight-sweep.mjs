@@ -5,7 +5,8 @@
 // reads the fight before a change and after it. docs/m17/lines.md.
 //
 //   node tools/fight-sweep.mjs [--n 10] [--json out.json] [--species tuna,mahi] [--only L3/R3/chair,...] [--no-dh]
-//                              [--compact] [--base base.json]
+//                              [--compact] [--base base.json] [--spear]
+//   ((M19) --spear: the speargun's fights instead, each kind it may shoot on each gun, S0 to S3: docs/m19/gear.md)
 //
 // Each cell: the share landed, broken (the line snapped), spooled, got away (slack or past the line) and cut (teeth or a
 // bill through the leader), and the landed fights' mean length in s. With --base, each cell's change from that file's.
@@ -21,6 +22,7 @@ import { gearStats, defaultUpgrades, UPGRADES, spoolOf } from '../src/game/Gear.
 import { mateTarget } from '../src/game/rigs/Mate.js';
 import { Rigs } from '../src/game/rigs/Rigs.js';
 import { leaderRisk } from '../src/game/rigs/Presentation.js';
+import { spearTerms } from '../src/game/Speargun.js';
 
 // sizes as the bites roll them (Bites.rollWeight: kg = a + ( b - a ) u ^ 2.2), at these shares of the fish that bite
 export const SIZES = [ 0.1, 0.3, 0.5, 0.7, 0.9, 0.99 ];
@@ -158,6 +160,60 @@ export function cell( c, id, kg, n, opts = {} ) {
 
 export const SPECIES = FISH_IDS.filter( ( id ) => ! FISH[ id ].hand && FISH[ id ].fight > 0 );
 
+// ((M19) the speargun: a fish on the shaft that fights (one not shot through the head, Game.updateSpear's `big`), on each gun
+// (S0 the starter to S3 the blue-water gun on its breakaway), pulled with care, on the game's own terms (Speargun.spearTerms)
+export const SPEAR_SPECIES = FISH_IDS.filter( ( id ) => FISH[ id ].spear && ! FISH[ id ].protected && FISH[ id ].fight > 0 );
+export const GUNS = UPGRADES.speargun.levels.map( ( l, i ) => `S${ i }` );
+export function spearOnce( level, id, kg, seed, { policy = careful, capS = 900 } = {} ) {
+
+	const T = spearTerms( gearStats( { ...defaultUpgrades(), speargun: level } ), { distance: 2.5 } );
+	const g = new CatchMinigame( { species: id, kg, ...T.terms, rng: lcg( seed ) } );
+	g.maxDistance = T.maxDistance;
+	let st = 'fighting';
+	while ( st === 'fighting' && g.time < capS ) st = g.update( 1 / 30, policy( g ) );
+	return { st: st === 'fighting' ? 'long' : st, t: g.time, far: g.distance };
+
+}
+
+export function spearCell( level, id, kg, n ) {
+
+	const r = { n, t: 0 };
+	for ( const k of OUT ) r[ k ] = 0;
+	let h = 0;
+	for ( let i = 0; i < id.length; i ++ ) h = ( h * 31 + id.charCodeAt( i ) ) >>> 0;
+	for ( let i = 0; i < n; i ++ ) {
+
+		const o = spearOnce( level, id, kg, ( h ^ ( Math.round( kg * 1000 ) * 2654435761 ) ^ ( i * 40503 ) ) >>> 0 );
+		r[ o.st ] ++;
+		if ( o.st === 'caught' ) r.t += o.t;
+
+	}
+
+	r.t = r.caught ? r.t / r.caught : 0;
+	for ( const k of OUT ) r[ k ] /= n;
+	return r;
+
+}
+
+export function spearSweep( { n = 10, species = SPEAR_SPECIES, sizes = SIZES } = {} ) {
+
+	const out = {};
+	for ( const id of species ) {
+
+		out[ id ] = {};
+		for ( const q of sizes ) {
+
+			const kg = sizeKg( id, q ), row = out[ id ][ q ] = { kg };
+			GUNS.forEach( ( k, l ) => row[ k ] = spearCell( l, id, kg, n ) );
+
+		}
+
+	}
+
+	return out;
+
+}
+
 export function sweep( { n = 10, species = SPECIES, sizes = SIZES, only = null, dh = true } = {} ) {
 
 	const out = {};
@@ -189,10 +245,11 @@ if ( process.argv[ 1 ] && fileURLToPath( import.meta.url ) === resolve( process.
 
 	};
 	const n = + arg( '--n', 10 );
-	const species = arg( '--species', null )?.split( ',' ) || SPECIES;
+	const spear = process.argv.includes( '--spear' );
+	const species = arg( '--species', null )?.split( ',' ) || ( spear ? SPEAR_SPECIES : SPECIES );
 	const t0 = Date.now();
 	const only = arg( '--only', null )?.split( ',' ) || null;
-	const res = sweep( { n, species, only, dh: ! process.argv.includes( '--no-dh' ) } );
+	const res = spear ? spearSweep( { n, species } ) : sweep( { n, species, only, dh: ! process.argv.includes( '--no-dh' ) } );
 	const json = arg( '--json', null );
 	const meta = { n, lines: UPGRADES.line.levels.map( ( l ) => [ l.label, + l.lineKg.toFixed( 3 ) ] ), reels: UPGRADES.reel.levels.map( ( l ) => [ l.label, l.dragKg === null ? null : + l.dragKg.toFixed( 3 ) ] ), s: ( Date.now() - t0 ) / 1000 };
 	if ( json ) {

@@ -87,7 +87,7 @@ export const slamRows = ( state ) => Object.keys( SLAMS ).filter( ( id ) => stat
 // of slams had together (a snook that makes the grand slam and the super grand slam at once), the one told: the biggest
 export const slamTold = ( ids ) => ids.filter( ( id ) => ! ids.some( ( o ) => SLAMS[ o ].over === id ) );
 
-// what's told of slams just had ('all let go' only when every kind of it is: a snook may be kept)
+// what's told of slams just had ('all let go' only when every kind of it is: (M19) the snook's let go now too)
 // (b: how its name's set: the catch card's in bold)
 export const slamNote = ( ids, b = ( t ) => t ) => slamTold( ids ).map( ( id ) => {
 

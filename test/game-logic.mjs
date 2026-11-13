@@ -661,6 +661,9 @@ ok( Object.keys( defaultUpgrades() ).length === Object.keys( UPGRADES ).length &
 {
 
 	const st = new GameState( { getItem: () => null, setItem: () => {} } );
+	// ((M19) the pelagics have no bag now, the Bahamas' rules: the mahi's Florida bag of 10 lent it for the bag's own workings)
+	const mahiBag = FISH.mahi.bag;
+	FISH.mahi.bag = 10;
 	const mahi = ( day = 7, method = 'rod' ) => st.addFish( 'mahi', 0.3, 10, { day, method } ); // (small: twenty fit)
 	for ( let i = 0; i < 9; i ++ ) mahi();
 	const tenth = mahi(), card = st.lastCatch;
@@ -680,6 +683,7 @@ ok( Object.keys( defaultUpgrades() ).length === Object.keys( UPGRADES ).length &
 	st.addFish( 'jack', 0.3, 10, { day: 9 } );
 	const jack = st.lastCatch;
 	ok( st.freeLast( jack ) && jack.bag === null && ! st.inventory.some( ( f ) => f.id === jack.id ), 'a kind with no bag limit may be let go off its card too' );
+	FISH.mahi.bag = mahiBag;
 
 }
 console.log( `value check ${ value }` );

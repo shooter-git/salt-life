@@ -110,7 +110,7 @@ const fish = ( species, kg, place = 'coast' ) => ( { species, kg, place, release
 	ok( slamCatch( s, fish( 'tarpon', 30 ), 4 ).join() === 'grand', 'a tarpon: the grand slam' );
 	const got = slamCatch( s, fish( 'snook', 5, 'creek' ), 4 );
 	ok( got.join() === 'superGrand' && s.trophies[ 'slam:superGrand' ].n === 1 && s.trophies[ 'slam:superGrand' ].kinds.snook === 5, 'and a snook the same day: the super grand slam' );
-	ok( ! /all let go/.test( slamNote( got ) ) && /Super grand slam!/.test( slamNote( got ) ), `told without "all let go" (a snook may be kept): "${ slamNote( got ) }"` );
+	ok( /all let go/.test( slamNote( got ) ) && /Super grand slam!/.test( slamNote( got ) ), `told "all let go" ((M19) the snook's let go too now): "${ slamNote( got ) }"` );
 	// (the snook first: the tarpon makes both at once, and the biggest is the one told)
 	const t = fresh();
 	for ( const k of [ 'snook', 'bonefish', 'permit' ] ) slamCatch( t, fish( k, 3 ), 9 );
