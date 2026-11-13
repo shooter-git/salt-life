@@ -250,8 +250,9 @@ export class Speargun {
 
 		this.lineMesh.matrixAutoUpdate = true;
 		scene.add( this.gunMesh, this.bandMesh, this.shaftMesh, this.lineMesh );
-		// ((M19) the breakaway's float, in the shaft's material (its program), at the surface while a fish is on it)
-		this.floatMesh = new Mesh( buildFloatGeometry(), this.shaftMat );
+		// ((M19) the breakaway's float, in the shaft's material (its program), at the surface while a fish is on it; its geometry
+		// made the first time it's shown, so the shaft's program isn't built before the game's ready for it, as the shaft's isn't)
+		this.floatMesh = new Mesh( undefined, this.shaftMat );
 		this.floatMesh.name = 'SpearFloat';
 		this.floatMesh.frustumCulled = false;
 		this.floatMesh.visible = false;
@@ -616,6 +617,13 @@ export class Speargun {
 		const floatOn = lineOn && this.onFloat && this.state === 'fighting';
 		this.floatMesh.visible = floatOn;
 		if ( floatOn ) {
+
+			if ( ! this._floatMade ) {
+
+				this._floatMade = true;
+				this.floatMesh.geometry = buildFloatGeometry();
+
+			}
 
 			this.floatMesh.position.copy( this.floatAt );
 			this.floatMesh.rotation.set( Math.sin( this.t * 1.3 ) * 0.15, 0, Math.sin( this.t * 1.1 ) * 0.12 );
