@@ -71,6 +71,7 @@ const UPWIND = { x: - NORTH.dir.x, z: - NORTH.dir.y };
 // and it goes down once the boat is slower than this (m/s)
 const BERTH_M = 14;
 const ANCHOR_SPEED = 2.5;
+const ANCHOR_MIN_M = 0.1; // (M19) m of water at her stem head: under it there's nothing to anchor in (a kayak run up on the sand)
 // (M15) the far places are looked for from this far from the middle of the world (m: Game.updateFound)
 const FOUND_FROM = 1000;
 const RODE_SEGS = 16;
@@ -1167,6 +1168,8 @@ export class Game {
 
 		}
 
+		// ((M19) drawn up on the sand, she's no anchor out: one let go as she was pulled up, or from an old save, goes)
+		if ( b.beached && b.anchor ) b.anchor = null;
 		// ((M17) her anchor off her roller while it's down)
 		if ( this.app.boat && this.app.boat.setAnchorStowed ) this.app.boat.setAnchorStowed( ! b.anchor );
 		const rode = this.rode;
@@ -1207,7 +1210,7 @@ export class Game {
 		else {
 
 			p.prompt = { key: 'E', text: 'Let go the anchor' };
-			if ( inp.hit( 'KeyE' ) ) this.dropAnchor();
+			if ( inp.hit( 'KeyE' ) ) this.dropAnchor( true );
 
 		}
 
@@ -1236,14 +1239,22 @@ export class Game {
 
 	}
 
-	// where the boat is, unless the dock lines have her or it's deeper than the rode holds in
-	dropAnchor() {
+	// where the boat is, unless the dock lines have her, she's on the sand, or it's deeper than the rode holds in.
+	// (M19) Not in under ANCHOR_MIN_M at her bow either: said only when you let it go by hand (asked), not as you step out
+	dropAnchor( asked = false ) {
 
 		const b = this.app.boatCtl, max = this.state.stats.anchorM, dock = b.berth.position;
-		if ( b.moored || Math.hypot( b.position.x - dock.x, b.position.z - dock.z ) < BERTH_M ) return;
+		if ( b.moored || b.beached || b.beaching || Math.hypot( b.position.x - dock.x, b.position.z - dock.z ) < BERTH_M ) return;
 		const at = b.toWorld( b.stemHead, new Vector3() );
 		const floor = this.app.terrainData.heightAt( at.x, at.z );
 		const depth = Math.max( 0, G.seaLevel.value - floor );
+		if ( depth < ANCHOR_MIN_M ) {
+
+			if ( asked ) this.toast( 'Too shallow to anchor', 2200 );
+			return;
+
+		}
+
 		if ( depth > max ) {
 
 			// ((M16) past its reach, her drift sock if she has one)

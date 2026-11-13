@@ -2760,7 +2760,8 @@ export class App {
 		const on = aboard === 'deck' ? stoodOf( p ) : null, helm = aboard === 'helm' && p.atHelm && p.atHelm.upper ? 'upper' : null;
 		const swim = aboard ? null : swimBy( p, b ), ride = aboard || swim || ! this.together ? null : this.together.rideLeft();
 		// ((M16) drawn up on the sand, she's as fast as at the dock)
-		this.store.setItem( BOAT_KEY, JSON.stringify( boatLeft( { x: b.position.x, z: b.position.z, heading: b.getYaw(), anchor: b.anchor, sock: b.sock, moored: moored || b.beached, aboard, on, helm, swim, ride, T: islandTime( s.day, s.timeOfDay ), at: Date.now(), boat: this.boat.id } ) ) );
+		// ((M19) no anchor saved with her on the sand)
+		this.store.setItem( BOAT_KEY, JSON.stringify( boatLeft( { x: b.position.x, z: b.position.z, heading: b.getYaw(), anchor: b.beached ? null : b.anchor, sock: b.sock, moored: moored || b.beached, aboard, on, helm, swim, ride, T: islandTime( s.day, s.timeOfDay ), at: Date.now(), boat: this.boat.id } ) ) );
 		if ( this.together ) this.together.mineBoat();
 
 	}

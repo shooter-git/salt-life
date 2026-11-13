@@ -109,6 +109,7 @@ export class BoatController {
 		this.contact = { pile: 0, ground: 0, slide: 0, aground: false };
 		this.hauled = null; // (M13) on her cradle ashore (Marta's haul-out: { position, heading }), or null
 		this.beached = false; // ((M16) drawn up on the sand, where she lies out of the water: kayak/Shore.js)
+		this.beaching = false; // ((M19) being pulled up onto it, the moment before she's beached: KayakModel.leave)
 		this._acc = 0;
 		this._age = 0; // s since the latest read-back was issued
 
@@ -635,6 +636,7 @@ export class BoatController {
 		this.sock = false;
 		this.hasWater = false; // (Salt Life: the water where she was is no use here)
 		this.beached = false;
+		this.beaching = false;
 		if ( this.model.atHome ) this.model.atHome( this ); // ((M16) kept on the sand, not at the dock)
 
 	}

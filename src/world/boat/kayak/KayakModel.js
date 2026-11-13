@@ -301,6 +301,8 @@ export class KayakModel extends Vessel {
 
 		}
 
+		// ((M19) she's being pulled up from now, so no anchor goes down in the moment before she's on the sand: Game.dropAnchor)
+		ctl.beaching = true;
 		const go = () => {
 
 			this.lie( ctl, dry.x, dry.z, dry.heading );
@@ -345,6 +347,7 @@ export class KayakModel extends Vessel {
 		ctl.angular.set( 0, 0, 0 );
 		ctl.speed = 0;
 		ctl.beached = true;
+		ctl.beaching = false;
 		ctl.moored = false;
 		ctl.anchor = null;
 		ctl.apply();

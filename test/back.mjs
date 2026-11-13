@@ -217,6 +217,77 @@ const v3 = ( v ) => `(${ v.x.toFixed( 2 ) }, ${ v.y.toFixed( 2 ) }, ${ v.z.toFix
 
 }
 
+// ---- (M19) the kayak run up on the sand: stepping out and pulling her up lets no anchor go, with the fade or without it
+// (reduced motion), by the real KayakModel.leave, Game.updateAnchor and Game.dropAnchor; and none in under 10 cm of water
+{
+
+	const { G } = await import( '../src/core/Globals.js' );
+	G.seaLevel.value = 0;
+	G.tide.value = 0;
+	// a beach rising to +x: the water's edge at x 3010, her clear of the wash about 15 m up it
+	const T = { heightAt: ( x ) => ( x - 3010 ) * 0.08 };
+	const onSand = async ( dim ) => {
+
+		const kayak = new KayakModel(), q = query();
+		const b = new BoatController( { model: kayak, query: q, terrain: T, colliders: null } );
+		b.position.set( 3005, 0, 3000 ); // (in 0.4 m of water, her bow anywhere within 0.24 to 0.56: deep enough to anchor in)
+		b.moored = false;
+		b.beached = false;
+		const p = new Player( { camera: new PerspectiveCamera(), input, terrain: T, colliders: { groundHeightAt: () => - Infinity, resolveCapsule() {} }, query: q, boat: b } );
+		const toasts = [];
+		const g = {
+			app: { boatCtl: b, boat: kayak, terrainData: T }, state: { stats: { anchorM: 10 }, save() {} }, rigs: { linesOut: false }, toast: ( t ) => toasts.push( t ),
+			rode: { visible: false, material: { uniforms: { lineA: { value: new Vector3() } } } }, layRode() {}, daysOut: { sockPoint: ( v ) => v },
+			dropAnchor: Game.prototype.dropAnchor, time: { dim: () => dim },
+		};
+		kayak._game = g;
+		p.boardBoat();
+		g._wasDriven = b.driven;
+		const frame = () => {
+
+			Game.prototype.updateAnchor.call( g, b.driven && ! g._wasDriven, ! b.driven && g._wasDriven );
+			g._wasDriven = b.driven;
+
+		};
+
+		kayak.leave( b, p, { out: new Vector3( 3012, 0, 3000 ), g: 0.16 } );
+		frame();
+		const first = { anchor: !! b.anchor, beaching: b.beaching, beached: b.beached };
+		await new Promise( ( r ) => setTimeout( r, 280 ) );
+		frame();
+		return { first, anchor: !! b.anchor, beached: b.beached, beaching: b.beaching, toasts, b, g };
+
+	};
+
+	const fade = await onSand( true );
+	ok( fade.first.beaching && ! fade.first.anchor && ! fade.toasts.length, 'with the fade: the frame after you step out she\'s being pulled up, and no anchor goes down' );
+	ok( fade.beached && ! fade.beaching && ! fade.anchor, 'and once she\'s on the sand: none' );
+	const still = await onSand( false );
+	ok( still.first.beached && ! still.first.anchor && ! still.anchor && ! still.toasts.length, `with reduced motion (no fade): on the sand at once, and no anchor (before M19 it went down on the sand and stayed)` );
+
+	// an anchor left on a beached kayak (an old save, a group's record) goes
+	still.b.anchor = new Vector3( 3005, - 0.4, 3000 );
+	Game.prototype.updateAnchor.call( still.g, false, false );
+	ok( ! still.b.anchor, 'an old anchor on her as she lies on the sand is let go' );
+
+	// and none in under 10 cm of water at her bow, out on the water
+	let floor = - 0.05;
+	const flat = { heightAt: () => floor };
+	const kayak = new KayakModel(), b = new BoatController( { model: kayak, query: query(), terrain: flat, colliders: null } );
+	b.position.set( 3000, 0, 3000 );
+	b.moored = false;
+	const toasts = [];
+	const g = { app: { boatCtl: b, terrainData: flat }, state: { stats: { anchorM: 10 } }, toast: ( t ) => toasts.push( t ) };
+	Game.prototype.dropAnchor.call( g );
+	ok( ! b.anchor && ! toasts.length, 'in 5 cm: no anchor as you step out, and nothing said' );
+	Game.prototype.dropAnchor.call( g, true );
+	ok( ! b.anchor && toasts[ 0 ] === 'Too shallow to anchor', `let go by hand in 5 cm: "${ toasts[ 0 ] }"` );
+	floor = - 0.3;
+	Game.prototype.dropAnchor.call( g );
+	ok( !! b.anchor && /Anchor down in 1 ft/.test( toasts.at( - 1 ) ), `in 0.3 m it goes down: "${ toasts.at( - 1 ) }"` );
+
+}
+
 // ---- the lobster boat's way forward and up, walked by the real Player
 {
 
