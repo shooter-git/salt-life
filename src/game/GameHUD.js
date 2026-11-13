@@ -1538,17 +1538,21 @@ GameHUD.prototype.renderShop = function () {
 
 		const cur = track.levels[ s.upgrades[ key ] | 0 ];
 		const next = nextLevel( s.upgrades, key );
+		// ((M19) one that needs another fitted first says so: UPGRADES' needs)
+		const needs = next && ! s.hasNeeds( key ) ? UPGRADES[ track.needs ] : null;
 		const btn = next
-			? `<button class="gm-btn" data-buy="${ key }" ${ next.cost > s.money ? 'disabled' : '' }>$${ next.cost }</button>`
+			? `<button class="gm-btn" data-buy="${ key }" ${ next.cost > s.money || needs ? 'disabled' : '' }>$${ next.cost }</button>`
 			: '<span class="gm-have">Top of the line</span>';
-		return `<div class="gm-shop-row"><span>${ track.name }: ${ next ? next.label : cur.label }<small>Now: ${ cur.label }</small></span>${ btn }</div>`;
+		const needed = needs ? ( /^[A-Z][a-z]/.test( needs.name ) ? needs.name[ 0 ].toLowerCase() + needs.name.slice( 1 ) : needs.name ) : '';
+		return `<div class="gm-shop-row"><span>${ track.name }: ${ next ? next.label : cur.label }<small>${ needs ? `Needs the ${ needed } first` : `Now: ${ cur.label }` }</small></span>${ btn }</div>`;
 
 	};
 
 	const tracks = Object.entries( UPGRADES ), mine = tracks.filter( ( [ , t ] ) => ! t.on ), hers = tracks.filter( ( [ , t ] ) => t.on === s.boat );
 	const rows = `<span class="gm-boat-section">Your gear</span>${ mine.map( track ).join( '' ) }${ hers.length ? `<span class="gm-boat-section">For ${ escape( s.boatName() ) }</span>${ hers.map( track ).join( '' ) }` : '' }`;
 	// ((M16) bait by the trip's lot: what the net can't bring up; lures are the Lures track)
-	const frozen = BAIT_IDS.filter( ( k ) => BAITS[ k ].price && ! BAITS[ k ].lure ).map( ( k ) => `<div class="gm-shop-row"><span>${ BAITS[ k ].name }<small>${ BAITS[ k ].per > 1 ? `${ BAITS[ k ].per } at a time` : 'A block' } · you have ${ s.bait[ k ] | 0 }</small></span><button class="gm-btn" data-lot="${ k }" ${ BAITS[ k ].price > s.money ? 'disabled' : '' }>$${ BAITS[ k ].price }</button></div>` ).join( '' );
+	// ((M19) Marta's own: those with a seller are Joe's and Pearl's, sold at their stalls)
+	const frozen = BAIT_IDS.filter( ( k ) => BAITS[ k ].price && ! BAITS[ k ].lure && ! BAITS[ k ].seller ).map( ( k ) => `<div class="gm-shop-row"><span>${ BAITS[ k ].name }<small>${ BAITS[ k ].per > 1 ? `${ BAITS[ k ].per } at a time` : 'A block' } · you have ${ s.bait[ k ] | 0 }</small></span><button class="gm-btn" data-lot="${ k }" ${ BAITS[ k ].price > s.money ? 'disabled' : '' }>$${ BAITS[ k ].price }</button></div>` ).join( '' );
 	// ((M16) traps a hurricane's had: Traps.js)
 	const lostTraps = s.traps.lost, trapRow = lostTraps ? `<div class="gm-shop-row"><span>A new lobster trap<small>${ lostTraps } lost to the weather</small></span><button class="gm-btn" data-newtrap ${ TRAP_PRICE > s.money ? 'disabled' : '' }>$${ TRAP_PRICE }</button></div>` : '';
 	// ((M17) trap bait, once you've traps: Traps.BAIT)

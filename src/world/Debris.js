@@ -42,21 +42,48 @@ export class Debris {
 	// 'high'. (Salt Life: mid is drawn about as low: its triangles are mostly spent on the island
 	// already. Low and mid: none of the smallest items, no pebbles, no shadows, shorter range, the
 	// scans without their finest level; low also the lite nature material and the scans' albedo only)
-	static async create( { scene, terrain, ground, village, vegetation = null, rocks = null, colliders = null, seed = 5150, tier = 'high', loader = null, show = true } ) {
+	// (M19) What the debris are placed from, handed to their worker as soon as the plants are placed and held there until
+	// they're made (create( { handed } )), so the page can let go of the island's masks then (App.handDebris), not minutes
+	// later on a device that draws on its CPU. { worker } once it has them, or { input } if there's no worker to hold them
+	// (made on the page as before). The same input either way: the colliders, the plants' records and the rocks are all
+	// there by the time the plants are placed, on every device
+	static handOff( { terrain, village, vegetation = null, rocks = null, colliders = null, seed = 5150, tier = 'high' } ) {
 
 		const lite = tier !== 'high';
 		const input = debrisInput( { terrain, village, vegetation, rocks, colliders, seed, detail: geometryDetail(), lite, mask: ! lite, area: AREA } );
-		let built = null;
 		try {
+
+			const worker = classicWorker( DebrisWorker );
+			worker.postMessage( { hold: input } );
+			return { worker };
+
+		} catch ( e ) {
+
+			console.warn( 'Debris: no worker to hand them to', e && e.message );
+			return { input };
+
+		}
+
+	}
+
+	static async create( { scene, terrain, ground, village, vegetation = null, rocks = null, colliders = null, seed = 5150, tier = 'high', loader = null, show = true, handed = null } ) {
+
+		const h = handed || Debris.handOff( { terrain, village, vegetation, rocks, colliders, seed, tier } );
+		let built = null, input = h.input || null;
+		if ( h.worker ) try {
 
 			built = await new Promise( ( resolve, reject ) => {
 
-				const worker = classicWorker( DebrisWorker );
+				const worker = h.worker;
 				worker.onmessage = ( e ) => {
 
 					worker.terminate();
-					if ( e.data.error ) reject( new Error( e.data.error ) );
-					else resolve( e.data.out );
+					if ( e.data.error ) {
+
+						input = e.data.input || null; // (given back, to make it here)
+						reject( new Error( e.data.error ) );
+
+					} else resolve( e.data.out );
 
 				};
 
@@ -67,17 +94,20 @@ export class Debris {
 
 				};
 
-				worker.postMessage( input );
+				worker.postMessage( { go: true } );
 
 			} );
 
 		} catch ( e ) {
 
-			// (no worker: made here)
 			console.warn( 'Debris: made on the page (no worker)', e && e.message );
-			built = buildDebris( input );
 
 		}
+
+		// (no worker, or it failed: made here, from the input given back. If even that's gone, as when a worker dies
+		// outright, the island goes without its debris rather than the late stages stopping)
+		if ( ! built && input ) built = buildDebris( input );
+		if ( ! built ) built = { batches: [], colliders: [], counts: {}, mask: null };
 
 		// the colliders the placement added, in its order
 		if ( colliders ) for ( const c of built.colliders ) {
@@ -109,7 +139,7 @@ export class Debris {
 		this._assemble( built.batches, village );
 
 		// (Salt Life) 4,700 triangles a 4 m patch: high only, within 20 m
-		this.pebbles = this.lite ? null : new PebbleField( { terrain, ground, mask: built.mask, radius: 20 } );
+		this.pebbles = this.lite || ! built.mask ? null : new PebbleField( { terrain, ground, mask: built.mask, radius: 20 } );
 		if ( this.pebbles ) {
 
 			this.group.add( this.pebbles.mesh );

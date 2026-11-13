@@ -152,18 +152,19 @@ export const FISH = {
 //   picky   of its refusals, the share that spook it as it turns away
 //   speed   m/s it comes to a bait at
 // Guides' lore, consistent between them but not measured (docs/m17/sources-tide-fish.md: no study of flats fish's
-// takes or flight distances was found). No fly rod (the user's, M17): shrimp, jigs, plugs and live bait
+// takes or flight distances was found). (M19) With M19's baits and flies (Bait.js), placeholders until stream FLY's
+// sources set them (docs/m19/sources-fly.md): M17's "No fly rod" was the user's, reversed for M19
 export const SIGHT = {
 	bonefish: { back: 0.14, wary: 1, lead: [ 0.6, 2.4 ], close: [ 0.25, 1 ], head: 0.45, speed: 0.9, picky: 0.25,
-		eats: { shrimp: 0.62, jig: 0.38, plug: 0.01, silverside: 0.06, cutMullet: 0.12, mullet: 0.02 } },
+		eats: { shrimp: 0.62, jig: 0.38, plug: 0.01, silverside: 0.06, cutMullet: 0.12, mullet: 0.02, liveShrimp: 0.75, conch: 0.5, hermitCrab: 0.45, sardine: 0.05, flyShrimp: 0.55, flyCrab: 0.3, flyTarpon: 0.02 } },
 	permit: { back: 0.18, wary: 1.25, lead: [ 0.5, 1.6 ], close: [ 0.25, 0.9 ], head: 0.7, speed: 0.8, picky: 0.4,
-		eats: { shrimp: 0.16, jig: 0.1, plug: 0.01, silverside: 0.03, cutMullet: 0.05 } },
+		eats: { shrimp: 0.16, jig: 0.1, plug: 0.01, silverside: 0.03, cutMullet: 0.05, liveShrimp: 0.22, conch: 0.1, hermitCrab: 0.45, sardine: 0.02, flyShrimp: 0.08, flyCrab: 0.22, flyTarpon: 0.01 } },
 	tarpon: { back: 0.3, wary: 0.7, lead: [ 1.2, 4 ], close: [ 0.25, 0.9 ], head: 0.3, speed: 1, picky: 0.15,
-		eats: { mullet: 0.5, silverside: 0.3, plug: 0.32, jig: 0.24, shrimp: 0.14, cutMullet: 0.08 } },
+		eats: { mullet: 0.5, silverside: 0.3, plug: 0.32, jig: 0.24, shrimp: 0.14, cutMullet: 0.08, liveShrimp: 0.25, conch: 0.04, hermitCrab: 0.04, sardine: 0.2, flyShrimp: 0.1, flyCrab: 0.03, flyTarpon: 0.35 } },
 	snook: { back: 0.2, wary: 0.55, lead: [ 0.3, 1.6 ], close: [ 0.2, 1.2 ], head: 0.25, speed: 1.4, picky: 0.1,
-		eats: { silverside: 0.5, mullet: 0.5, plug: 0.42, shrimp: 0.4, jig: 0.36, cutMullet: 0.2 } },
+		eats: { silverside: 0.5, mullet: 0.5, plug: 0.42, shrimp: 0.4, jig: 0.36, cutMullet: 0.2, liveShrimp: 0.55, conch: 0.08, hermitCrab: 0.08, sardine: 0.4, flyShrimp: 0.3, flyCrab: 0.05, flyTarpon: 0.35 } },
 	barracuda: { back: 0.18, wary: 0.45, lead: [ 0.5, 6 ], close: [ 0.5, 4 ], head: 0.2, speed: 3, picky: 0.05,
-		eats: { plug: 0.55, silverside: 0.6, mullet: 0.6, jig: 0.25, cutMullet: 0.2, shrimp: 0.04 } },
+		eats: { plug: 0.55, silverside: 0.6, mullet: 0.6, jig: 0.25, cutMullet: 0.2, shrimp: 0.04, liveShrimp: 0.08, conch: 0.05, hermitCrab: 0.02, sardine: 0.5, flyShrimp: 0.05, flyCrab: 0.02, flyTarpon: 0.4 } },
 };
 for ( const k in SIGHT ) FISH[ k ].sight = SIGHT[ k ];
 

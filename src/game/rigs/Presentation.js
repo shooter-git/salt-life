@@ -27,6 +27,9 @@ export const RIGS = {
 	troll: { name: 'Troll', needs: 'boat' },
 	kite: { name: 'Kite', needs: 'boat' },
 	drop: { name: 'Deep drop', sink: 2.5, reach: 900, needs: 'electricReel' },
+	// ((M19) the fly rod's, stream FLY's: anywhere, wading and from the kayak too (anywhere). needs names the track, not a
+	// stat, so Rigs.available finds it wanting until FLY reads the fly rods you have: gearStats' flyRods)
+	fly: { name: 'Fly', needs: 'flyRod', anywhere: true },
 };
 export const RIG_IDS = Object.keys( RIGS );
 
@@ -37,8 +40,10 @@ const ONLY = {
 	float: ( b ) => b === null || ( ! b.towed && ! b.chum && ( ! b.lure || b.surface ) ),
 	bottom: ( b ) => b === null || ( ! b.towed && ! b.chum && ( ! b.lure || b.sinks ) ),
 	troll: ( b ) => b !== null && ! b.chum && ( b.towed || b.tow ),
-	kite: ( b ) => b !== null && b.live,
+	kite: ( b ) => b !== null && b.live && b.kite !== false, // ((M19) a live fish: not a shrimp or a crab, kite: false)
 	drop: ( b ) => b !== null && ! b.chum && ! b.lure && ! b.live,
+	// ((M19) a fly, and nothing but)
+	fly: ( b ) => b !== null && !! b.fly,
 };
 export const baitFits = ( kind, bait ) => ONLY[ kind ]( bait || null );
 

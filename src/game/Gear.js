@@ -34,6 +34,9 @@ export const UPGRADES = {
 		{ cost: 180, label: '30 lb braid', lineLb: 30, lineKg: 30 * LB },
 		{ cost: 450, label: '60 lb braid', lineLb: 60, lineKg: 60 * LB },
 		{ cost: 750, label: '80 lb mono', lineLb: 80, lineKg: 80 * LB },
+		// ((M19) IGFA's 60 kg class, the chair's for the biggest blue marlin: docs/m19/sources-big-game.md. Its price is a
+		// placeholder until stream BIG's)
+		{ cost: 1000, label: '130 lb mono', lineLb: 130, lineKg: 130 * LB },
 	] },
 	// ((M16) spoolM: the line it holds; dragKg: the most its drag holds (CatchMinigame), none to speak of on a spinning
 	// reel, whose fight's as it always was; twoSpeed: a low gear. (M17) Real reels' most: a 30-class lever drag's 33 lb, as
@@ -48,6 +51,9 @@ export const UPGRADES = {
 		{ cost: 320, label: 'Conventional reel', reelSpeed: 2.2, spoolM: 350, dragKg: 33 * LB },
 		{ cost: 900, label: 'Two-speed big-game reel (its low gear comes in by itself on a heavy fish)', reelSpeed: 2.6, spoolM: 600, dragKg: 20, twoSpeed: true },
 		{ cost: 1200, label: 'Wide 80-class two-speed reel (870 m of 80 lb line, for the biggest fish\'s runs)', reelSpeed: 2.6, spoolM: 868, dragKg: 24, twoSpeed: true },
+		// ((M19) a 130-class two-speed (Shimano's Tiagra 130, Penn's International 130: 914 m of 130 lb, 40 kg and more of
+		// drag) with its bent-butt chair rod. Figures and price placeholders until stream BIG's sweep)
+		{ cost: 1500, label: '130-class two-speed reel and a bent-butt chair rod (914 m of 130 lb line)', reelSpeed: 2.6, spoolM: 914, dragKg: 40, twoSpeed: true },
 	] },
 	rod: { name: 'Rod', levels: [
 		{ cost: 0, label: 'Hand-me-down rod', castM: 22 },
@@ -78,8 +84,11 @@ export const UPGRADES = {
 		{ cost: 80, label: 'Release dehooker and billfish tag kit', landKg: 250, dehooker: true, tagKit: true },
 	] },
 	glasses: { name: 'Polarized glasses', levels: [
-		{ cost: 0, label: 'None', polarized: false },
-		{ cost: 120, label: 'Polarized glasses (fish seen under the water, from the tower above all)', polarized: true },
+		{ cost: 0, label: 'None', polarized: false, lens: null },
+		{ cost: 120, label: 'Polarized glasses (fish seen under the water, from the tower above all)', polarized: true, lens: 'grey' },
+		// ((M19) glass lenses in copper, as flats guides wear them for the contrast over sand (no measurement found: its
+		// gain is judgement, docs/m19/sources-fly.md). Stream SEE's, its price a placeholder)
+		{ cost: 250, label: 'Glass polarized lenses, copper, for the flats (fish seen further over sand)', polarized: true, lens: 'copper' },
 	] },
 	diveKit: { name: 'Dive kit', levels: [
 		{ cost: 0, label: 'None', swimMul: 1, breathS: 50, airS: 0 },
@@ -98,6 +107,10 @@ export const UPGRADES = {
 		{ cost: 0, label: 'Hand-me-down 30-inch speargun', gunStyle: 'tube', gunCm: 75, bands: 1, shaftM: 1.15, spearV: 16, spearM: 3, lineM: 4.5, spearHold: 7, spearReel: false },
 		{ cost: 180, label: '40-inch teak speargun, two bands', gunStyle: 'teak', gunCm: 100, bands: 2, shaftM: 1.4, spearV: 20, spearM: 4, lineM: 6, spearHold: 11, spearReel: false },
 		{ cost: 480, label: '48-inch railgun with a reel', gunStyle: 'rail', gunCm: 120, bands: 2, shaftM: 1.6, spearV: 23, spearM: 5, lineM: 7.5, spearHold: 16, spearReel: true },
+		// ((M19) a blue-water gun for wahoo, tuna and big mahi: about 150 cm, four bands, the shaft on a breakaway rig to a
+		// 30 m float line and an 11 L float (docs/m19/sources-big-game.md; the Bahamas ban spearguns: kept, the user's call).
+		// Stream GEAR's figures, these placeholders)
+		{ cost: 1300, label: 'Blue-water speargun, 60 inch, a breakaway rig on 30 m of float line', gunStyle: 'blue', gunCm: 150, bands: 4, shaftM: 1.9, spearV: 25, spearM: 6, lineM: 7.5, spearHold: 23, spearReel: false, floatLineM: 30, breakaway: true },
 	] },
 	// (Salt Life) the cast net, for bait and mullet (CastNet.js): its size is its radius (netM, from the
 	// horn to the lead line, as nets are sold), its mesh (meshCm, the square), the lead line's weight
@@ -109,6 +122,44 @@ export const UPGRADES = {
 		{ cost: 70, label: '6 ft monofilament cast net', netM: 1.83, meshCm: 1.0, leadKgM: 0.9, sinkMs: 1.2, throwM: 7, spreadWin: 0.25, holdCm: 50, netTwine: 'mono' },
 		{ cost: 210, label: '8 ft bait net, heavy lead', netM: 2.44, meshCm: 1.0, leadKgM: 1.2, sinkMs: 1.5, throwM: 8, spreadWin: 0.21, holdCm: 55, netTwine: 'mono' },
 		{ cost: 520, label: '10 ft pro net, 1½ lb a foot', netM: 3.05, meshCm: 1.27, leadKgM: 2.2, sinkMs: 1.95, throwM: 9, spreadWin: 0.18, holdCm: 62, netTwine: 'mono' },
+	] },
+	// (M19) Your own new gear (docs/M19.md). Prices are placeholders until each stream sets its own with tools/earnings.mjs.
+	// The fly rods (stream FLY): each level adds a rod, so flyRods is the weights you have (FLY_RODS below has each one's
+	// figures, kept apart from the line's and the reel's so they don't take their place in gearStats)
+	flyRod: { name: 'Fly rod', levels: [
+		{ cost: 0, label: 'None', flyRods: [] },
+		{ cost: 500, label: '9 ft 8-weight fly rod and reel, for bonefish', flyRods: [ 8 ] },
+		{ cost: 750, label: '9 ft 10-weight, for permit (and the 8-weight)', flyRods: [ 8, 10 ] },
+		{ cost: 1000, label: '9 ft 12-weight, for tarpon (and the 8 and 10)', flyRods: [ 8, 10, 12 ] },
+	] },
+	// (stream FLY) the flies: Bait.js has each, tied for a rod's weight
+	flies: { name: 'Flies', levels: [
+		{ cost: 0, label: 'None', flies: 0 },
+		{ cost: 30, label: 'Shrimp flies: Gotchas and Crazy Charlies', flies: 1 },
+		{ cost: 60, label: 'Crab flies: Merkins, for permit', flies: 2 },
+		{ cost: 50, label: 'Tarpon flies: Toads and Cockroaches', flies: 3 },
+	] },
+	// (stream SEE) quieter wading on the flats
+	booties: { name: 'Flats booties', levels: [
+		{ cost: 0, label: 'Bare feet', booties: false },
+		{ cost: 90, label: 'Flats booties (less noise and push wading)', booties: true },
+	] },
+	// (stream GEAR) a rubber-meshed net: small and middling fish aboard sooner, and one let go in better shape (Barthel et
+	// al. 2003). Its own track: a level put into Landing would move every saved level after it
+	landingNet: { name: 'Landing net', levels: [
+		{ cost: 0, label: 'None', landingNet: false },
+		{ cost: 90, label: 'Rubber landing net', landingNet: true },
+	] },
+	// (stream FLY) the Bahamas' flats fishing licence: free to a Bahamian or a resident, as she is (a visitor pays $15 a day
+	// to $600 a year: docs/m19/sources-boats-bait.md). Nothing on the flats takes a bait or a fly without it
+	flatsLicence: { name: 'Flats licence', levels: [
+		{ cost: 0, label: 'None', flatsLicence: false },
+		{ cost: 0, label: 'Bahamas flats fishing licence (free to a resident)', flatsLicence: true },
+	] },
+	// (stream BOATS) a crawfish trap permit, $50: the Bahamas' traps are a Bahamian's, with one
+	trapPermit: { name: 'Crawfish trap permit', levels: [
+		{ cost: 0, label: 'None', trapPermit: false },
+		{ cost: 50, label: 'Crawfish trap permit (the Department of Marine Resources\')', trapPermit: true },
 	] },
 	// (Salt Life) where the bait you net is kept alive (Bait.js): how many it holds
 	baitWell: { name: 'Bait well', on: 'lobster', levels: [
@@ -172,6 +223,12 @@ export const UPGRADES = {
 		{ cost: 140, label: '4 wire traps, warp and buoys', traps: 4 },
 		{ cost: 280, label: '8 wire traps, warp and buoys', traps: 8 },
 	] },
+	// ((M19) stream BOATS: her hauler as she has it (Traps.HAULER_MS), and a bigger head on a bigger pump: Hydro-Slave's 12 in
+	// on 11 gpm, about 380 ft a minute (derived, docs/m19/sources-boats-bait.md). The price a placeholder)
+	hauler: { name: 'Trap hauler', on: 'lobster', levels: [
+		{ cost: 0, label: 'Hydraulic hauler, 236 ft a minute', haulerMs: 1.2 },
+		{ cost: 600, label: 'Bigger hauler head and pump, 380 ft a minute', haulerMs: 1.9 },
+	] },
 	// (M15) a chart of the island and its waters out to the drop-off, for those who'd rather not chart it
 	// themselves (Chart.js: the island's sheet and its names, the far sheet within SOLD.r); a waterproof one,
 	// as a chandlery sells them, at what one costs
@@ -187,8 +244,12 @@ export const UPGRADES = {
 		{ cost: 40, label: 'Milk crate and a small cooler, strapped in the tankwell', holdKg: 25 },
 	] },
 	kayakPaddle: { name: 'Paddle', on: 'kayak', levels: [
-		{ cost: 0, label: 'Plastic-bladed paddle', speedMul: 1 },
-		{ cost: 90, label: 'Carbon-shaft paddle', speedMul: 1.12 },
+		{ cost: 0, label: 'Plastic-bladed paddle', speedMul: 1, pedal: false },
+		{ cost: 90, label: 'Carbon-shaft paddle', speedMul: 1.12, pedal: false },
+		// ((M19) the pedal drive makes her the Pescador Pilot 12: a drive well and a frame seat, stood in to pole and cast,
+		// hands free to fish as she goes (docs/m19/sources-boats-bait.md: 3 knots cruising, 3.6 flat out). Stream BOATS'
+		// figures, these and the price placeholders)
+		{ cost: 450, label: 'Pedal drive (she\'s the Pescador Pilot 12: hands free to fish, and stood in)', speedMul: 1.12, pedal: true },
 	] },
 	// (a line along her side that lets the anchor hold her bow, stern or beam to the sea, as a kayak has to)
 	kayakAnchor: { name: 'Anchor trolley', on: 'kayak', levels: [
@@ -203,6 +264,12 @@ export const UPGRADES = {
 	kayakHatch: { name: 'Dry hatch', on: 'kayak', levels: [
 		{ cost: 0, label: 'Nothing strapped down', dryHatch: false },
 		{ cost: 30, label: 'Dry hatch and deck bungees: less of your catch goes if she turns over', dryHatch: true },
+	] },
+	// ((M19) stream BOATS: an 8 ft pole that runs out to 12 (YakAttack's ParkNPole), to pole her quietly over the flats stood
+	// in her, and to stake her out where an anchor's no use: stakeM, the deepest water it holds her in (derived))
+	kayakPole: { name: 'Push and stake-out pole', on: 'kayak', levels: [
+		{ cost: 0, label: 'None', stakeM: 0 },
+		{ cost: 110, label: 'Push and stake-out pole, 8 to 12 ft', stakeM: 2.9 },
 	] },
 	// (M16) the center console's own
 	consoleEngine: { name: 'Outboards', on: 'console', levels: [
@@ -224,6 +291,21 @@ export const UPGRADES = {
 	consoleTanks: { name: 'Tank rack', on: 'console', levels: [
 		{ cost: 0, label: 'None', tankRack: false },
 		{ cost: 150, label: 'Tanks racked behind the leaning post (a fresh one each time you\'re back aboard)', tankRack: true },
+	] },
+	// ((M19) stream BOATS, docs/m19/sources-boats-bait.md: a bow-mount trolling motor, 112 lb (498 N) at 36 V, about 4 knots
+	// flat out and quiet; a pair of Power-Pole Blades, 8 ft, holding her in up to 2.4 m at a press; a radar dome on her
+	// T-top (needs: bought only with the T-top fitted). Prices placeholders)
+	consoleTrolling: { name: 'Trolling motor', on: 'console', levels: [
+		{ cost: 0, label: 'None', trollingN: 0 },
+		{ cost: 1200, label: 'Bow trolling motor, 112 lb thrust, 36 V', trollingN: 498 },
+	] },
+	consolePole: { name: 'Shallow-water anchor', on: 'console', levels: [
+		{ cost: 0, label: 'None', stakeM: 0 },
+		{ cost: 900, label: 'Power-Pole Blades, a pair, 8 ft (holds her in 2.4 m at a press)', stakeM: 2.4 },
+	] },
+	consoleRadar: { name: 'Radar', on: 'console', needs: 'consoleTop', levels: [
+		{ cost: 0, label: 'None', radar: false },
+		{ cost: 700, label: '18 in radar dome on the T-top, shown on her plotter', radar: true },
 	] },
 	// (M16) the sportfisher's own
 	sfOutriggers: { name: 'Outriggers', on: 'sportfisher', levels: [
@@ -258,6 +340,30 @@ export const UPGRADES = {
 		{ cost: 0, label: 'None', underwaterLights: false },
 		{ cost: 600, label: 'Underwater lights, for swordfish at night', underwaterLights: true },
 	] },
+	// ((M19) stream BIG, docs/m19/sources-big-game.md: a mate, paid $200 for each day out (mateDay), who takes her helm and
+	// backs her down on a fish while you're in the chair; teasers in her spread, to raise more billfish; a gyro stabilizer
+	// (a Seakeeper 6 on a 48 ft boat: most of her roll gone at rest), which runs on her generator (needs). Prices placeholders)
+	sfMate: { name: 'Mate', on: 'sportfisher', levels: [
+		{ cost: 0, label: 'None', mate: false, mateDay: 0 },
+		{ cost: 0, label: 'A mate, $200 a day out (he backs her down on a big fish)', mate: true, mateDay: 200 },
+	] },
+	sfTeasers: { name: 'Teasers', on: 'sportfisher', levels: [
+		{ cost: 0, label: 'None', teasers: false },
+		{ cost: 500, label: 'Teasers: daisy chains and dredges, to raise billfish', teasers: true },
+	] },
+	sfGyro: { name: 'Gyro stabilizer', on: 'sportfisher', needs: 'sfGenerator', levels: [
+		{ cost: 0, label: 'None', gyro: false },
+		{ cost: 3000, label: 'Gyro stabilizer (most of her roll gone at rest; runs on the generator)', gyro: true },
+	] },
+};
+
+// (M19) each fly rod's own figures (stream FLY's), apart from the line's and reel's in gearStats: the tippet's breaking
+// strength (lineKg: 12, 16, 20 lb), the drag as most anglers set it (dragKg), backing and fly line (spoolM), the line got
+// back a second (reelSpeed), how far it carries in the air (carryM) and is shot (castM). docs/m19/sources-fly.md
+export const FLY_RODS = {
+	8: { wt: 8, lineKg: 12 * LB, dragKg: 4.0, spoolM: 210, reelSpeed: 0.7, carryM: 13, castM: 23 },
+	10: { wt: 10, lineKg: 16 * LB, dragKg: 6.8, spoolM: 240, reelSpeed: 0.7, carryM: 13, castM: 23 },
+	12: { wt: 12, lineKg: 20 * LB, dragKg: 9.0, spoolM: 300, reelSpeed: 0.7, carryM: 14, castM: 21 },
 };
 
 // (M16) what the sportfisher asks before she's shown: each of these tracks to this level (docs/M16.md: every upgrade on

@@ -157,8 +157,8 @@ export function seenOnFlats( q, out = _out ) {
 // the sight entry of a kind: FishTable's (the catch table's flats fish), or the sharks' own (not the catch table's:
 // nobody keeps one, and one on a rod bites through the line)
 export const SHARK_SIGHT = {
-	blacktipShark: { back: 0.32, wary: 0.6, lead: [ 0.5, 4 ], head: 0, speed: 1.6, bites: true, eats: { shrimp: 0.25, cutMullet: 0.55, mullet: 0.45, silverside: 0.35, jig: 0.08, plug: 0.06 }, picky: 0.5 },
-	lemonShark: { back: 0.36, wary: 0.4, lead: [ 0.5, 3.5 ], head: 0, speed: 1.2, bites: true, eats: { shrimp: 0.3, cutMullet: 0.65, mullet: 0.5, silverside: 0.35, jig: 0.06, plug: 0.04 }, picky: 0.3 },
+	blacktipShark: { back: 0.32, wary: 0.6, lead: [ 0.5, 4 ], head: 0, speed: 1.6, bites: true, eats: { shrimp: 0.25, cutMullet: 0.55, mullet: 0.45, silverside: 0.35, jig: 0.08, plug: 0.06, liveShrimp: 0.3, conch: 0.4, hermitCrab: 0.2, sardine: 0.55, flyShrimp: 0.05, flyCrab: 0.03, flyTarpon: 0.1 }, picky: 0.5 },
+	lemonShark: { back: 0.36, wary: 0.4, lead: [ 0.5, 3.5 ], head: 0, speed: 1.2, bites: true, eats: { shrimp: 0.3, cutMullet: 0.65, mullet: 0.5, silverside: 0.35, jig: 0.06, plug: 0.04, liveShrimp: 0.35, conch: 0.45, hermitCrab: 0.25, sardine: 0.6, flyShrimp: 0.04, flyCrab: 0.03, flyTarpon: 0.08 }, picky: 0.3 },
 };
 export const sightOf = ( kind ) => ( FISH[ kind ] && FISH[ kind ].sight ) || SHARK_SIGHT[ kind ] || null;
 
@@ -231,8 +231,11 @@ export const ENGINE_HEARD = 120; // m: and an engine running (guides: an idling 
 
 // a bait or lure landing: the splash it makes, how far off a fish hears it (m), by what it is (a shrimp's a soft plop,
 // a plug a loud one: Bait.js' ids, null the frozen shrimp)
-export const SPLASH = { shrimp: 0.6, jig: 1.2, plug: 2.2, live: 1.0 };
-export const splashOf = ( bait ) => SPLASH[ bait === 'jig' || bait === 'plug' ? bait : bait && bait !== 'shrimp' && bait !== 'cutMullet' ? 'live' : 'shrimp' ];
+// ((M19) and M19's baits and flies their own: a bead-chain shrimp fly lands softly, a lead-eyed crab fly plops (docs/m19/
+// sources-fly.md); placeholders until stream FLY's. The others as before)
+export const SPLASH = { shrimp: 0.6, jig: 1.2, plug: 2.2, live: 1.0, liveShrimp: 0.6, sardine: 0.7, conch: 0.6, hermitCrab: 0.8, flyShrimp: 0.4, flyCrab: 0.8, flyTarpon: 0.6 };
+const SPLASH_OWN = new Set( [ 'liveShrimp', 'sardine', 'conch', 'hermitCrab', 'flyShrimp', 'flyCrab', 'flyTarpon' ] );
+export const splashOf = ( bait ) => SPLASH[ SPLASH_OWN.has( bait ) ? bait : bait === 'jig' || bait === 'plug' ? bait : bait && bait !== 'shrimp' && bait !== 'cutMullet' ? 'live' : 'shrimp' ];
 
 // what tells a school someone's there now, or null: 'speed' (they came on too fast for how near they are), 'push' (the
 // push of water ahead of a hull coming at it), 'shadow' (their shadow on the bottom over it), 'knock' (a paddle knocking

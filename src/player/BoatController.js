@@ -57,6 +57,12 @@ const CONTACT = { k: 400000, c: 30000, slide: 6000, pileK: 260000, pileC: 8000 }
 // turning circle, speed lost in turns, outward heel); running trim and rise with speed (the bow
 // lifts over the hump, then runs at a few degrees); prop walk astern. Grounding, pier piles and
 // mooring lines as before.
+// (M19) a stake's spring (rad/s: how stiffly it holds her, critically damped) and a gyro stabilizer's roll damping: her own
+// times 1 + roll at rest, none past `fade` m/s through the water (a Seakeeper takes most of a boat's roll at rest and
+// less under way: docs/m19/sources-big-game.md; the figures judgement, stream BIG's to set against its test)
+const STAKE_W = 2;
+const GYRO = { roll: 8, fade: 6 };
+
 export class BoatController {
 
 	constructor( { model, query, terrain, colliders } ) {
@@ -110,6 +116,16 @@ export class BoatController {
 		this.hauled = null; // (M13) on her cradle ashore (Marta's haul-out: { position, heading }), or null
 		this.beached = false; // ((M16) drawn up on the sand, where she lies out of the water: kayak/Shore.js)
 		this.beaching = false; // ((M19) being pulled up onto it, the moment before she's beached: KayakModel.leave)
+		// ((M19) staked: a pole (the kayak's stake-out pole, the console's Power-Poles) holding a point of her where it's driven
+		// into the bottom, { x, z } in the world, at: that point in her frame, yaw: her heading held too (two poles), or her
+		// left free to swing about it (one); null: none. Set by stream BOATS, held here (stake below)
+		this.stake = null;
+		// ((M19) a gyro stabilizer running, 0..1: her roll damped the more she's slow (stream BIG sets it from her fit and her
+		// generator; GYRO below)
+		this.gyro = 0;
+		// ((M19) someone at her helm who isn't a player: 'mate' (stream BIG's hired mate), or null. While set she's driven by
+		// them (driven true, their input through setInput)
+		this.helmsman = null;
 		this._acc = 0;
 		this._age = 0; // s since the latest read-back was issued
 
@@ -483,7 +499,9 @@ export class BoatController {
 		// ---- small extra angular damping (appendages, bilge), scaled by wetness
 		const wd = 0.2 + wetD;
 		// the keel's lift resists roll in proportion to speed (a boat underway rolls much less)
-		_v.set( - aLoc.x * H.damping[ 0 ], - aLoc.y * H.damping[ 1 ], - aLoc.z * ( H.damping[ 2 ] + H.damping[ 3 ] * au ) ).multiplyScalar( wd ).applyQuaternion( this.quaternion );
+		// ((M19) and a gyro's, the more she's slow: GYRO)
+		const gyro = this.gyro > 0 ? this.gyro * GYRO.roll * Math.max( 0, 1 - au / GYRO.fade ) : 0;
+		_v.set( - aLoc.x * H.damping[ 0 ], - aLoc.y * H.damping[ 1 ], - aLoc.z * ( H.damping[ 2 ] * ( 1 + gyro ) + H.damping[ 3 ] * au ) ).multiplyScalar( wd ).applyQuaternion( this.quaternion );
 		T.add( _v );
 		// ---- (Salt Life) righting past RIGHT_FROM: a torque turning her up toward upright
 		const tilt = Math.asin( Math.min( 1, Math.hypot( up.x, up.z ) ) );
@@ -517,6 +535,23 @@ export class BoatController {
 			let dy = this.mooring.heading - this.getYaw();
 			dy = Math.atan2( Math.sin( dy ), Math.cos( dy ) );
 			T.y += dy * ( M ? M.yawK : 60000 ) - this.angular.y * ( M ? M.yawC : 30000 );
+
+		} else if ( this.stake ) {
+
+			// ---- (M19) staked: a stiff spring holding her point `at` over the stake, critically damped for her mass (a pole
+			// driven into the sand gives a little and doesn't let go); one pole leaves her free to swing about it, two hold
+			// her heading as well
+			const S = this.stake, at = this.toWorld( S.at || this.stemHead, _p ), m = this.mass;
+			_vp.copy( this.angular ).cross( _r.copy( at ).sub( comW ) ).add( this.velocity );
+			addForceAt( _f.set( ( S.x - at.x ) * m * STAKE_W * STAKE_W - _vp.x * m * 2 * STAKE_W, 0, ( S.z - at.z ) * m * STAKE_W * STAKE_W - _vp.z * m * 2 * STAKE_W ), at );
+			if ( Number.isFinite( S.yaw ) ) {
+
+				let dy = S.yaw - this.getYaw();
+				dy = Math.atan2( Math.sin( dy ), Math.cos( dy ) );
+				const I = this.inertia.y;
+				T.y += dy * I * STAKE_W * STAKE_W - this.angular.y * I * 2 * STAKE_W;
+
+			}
 
 		} else if ( this.anchor ) {
 
@@ -637,6 +672,8 @@ export class BoatController {
 		this.hasWater = false; // (Salt Life: the water where she was is no use here)
 		this.beached = false;
 		this.beaching = false;
+		this.stake = null;
+		this.helmsman = null;
 		if ( this.model.atHome ) this.model.atHome( this ); // ((M16) kept on the sand, not at the dock)
 
 	}

@@ -765,6 +765,15 @@ export class Player {
 
 	}
 
+	// (M19) where your eyes are, into out (world): what you'd see from, for what the flats' fish and the polarized glasses
+	// reckon by. The camera's place for now: stream SEE makes it your own eye at the helm or a kayak's seat when the camera's
+	// behind you in third person (it was found spotting from 2.5 m up off a kayak's seat at 0.81: docs/M19.md, the glasses)
+	eyeAt( out ) {
+
+		return out.copy( this.camera.position );
+
+	}
+
 	// sit down at the helm and drive (the old "enter boat"). ((M16) helm: which, on a boat of two: Vessel.helmAt)
 	takeHelm( helm = this.boat.model.helm ) {
 

@@ -272,10 +272,11 @@ ok( sizeOf( 'trawler' ) === SIZE.lobster, 'and a game that doesn\'t say is the l
 
 // ---- what's fitted, in the pose: it comes out as it went in, and her paint
 for ( const [ id, stats, want ] of [
-	[ 'sportfisher', { tower: false, outriggers: true, chair: false }, { tower: false, outriggers: true, chair: false } ],
-	[ 'sportfisher', {}, { tower: true, outriggers: true, chair: true } ],
-	[ 'console', { twin: true, tTop: false, diveLadder: true, tankRack: false }, { twin: true, tTop: false, diveLadder: true, tankRack: false, ladderDown: false } ], // ((M17) and her ladder as it is: up)
-	[ 'kayak', { holdKg: 40, finder: true, anchorM: 0 }, { holdKg: 13, finder: true, trolley: false } ],
+	// ((M19) and M19's fittings, none of them here: test/fit-bits.mjs has them)
+	[ 'sportfisher', { tower: false, outriggers: true, chair: false }, { tower: false, outriggers: true, chair: false, teasers: false } ],
+	[ 'sportfisher', {}, { tower: true, outriggers: true, chair: true, teasers: false } ],
+	[ 'console', { twin: true, tTop: false, diveLadder: true, tankRack: false }, { twin: true, tTop: false, diveLadder: true, tankRack: false, ladderDown: false, poleDown: false, motorDown: false, trolling: false, powerPole: false, radar: false } ], // ((M17) and her ladder as it is: up)
+	[ 'kayak', { holdKg: 40, finder: true, anchorM: 0 }, { holdKg: 13, finder: true, trolley: false, staked: false, stakePole: false, pedal: false } ],
 	[ 'lobster', { holdKg: 40 }, {} ],
 ] ) {
 

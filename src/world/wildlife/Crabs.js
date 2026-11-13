@@ -26,6 +26,10 @@ const ACTIVE = 36; // m: burrows / homes simulated within this distance of the v
 const DRAW = 34; // m: crabs shrink away before this distance
 const MAX_GHOST = 32, MAX_HERMIT = 14;
 const CELL = 12;
+// (M19) the village beach's sand the burrows and homes are placed on (x -150 to 170, z -130 to -40, by WORLD.beach and
+// placeBurrows' and placeHomes' bounds, a little jitter each side): kept as a window of the island's sand mask
+// (App.handDebris), so the whole mask can go before the animals come
+export const CRAB_BEACH = { x: 10, z: - 85, half: 165 };
 
 export class Crabs {
 
@@ -83,7 +87,10 @@ export class Crabs {
 		const T = this.terrain;
 		const i = Math.floor( ( x - T.origin ) / T.texel ), j = Math.floor( ( z - T.origin ) / T.texel );
 		if ( i < 0 || j < 0 || i >= T.res || j >= T.res ) return 0;
-		return T.sand[ j * T.res + i ] / 255;
+		if ( T.sand ) return T.sand[ j * T.res + i ] / 255;
+		// ((M19) the island's sand let go before the animals came: the village beach's, kept for them (App.handDebris))
+		const W = T.crabSand, a = W ? i - W.i0 : - 1, b = W ? j - W.j0 : - 1;
+		return W && a >= 0 && b >= 0 && a < W.w && b < W.h ? W.data[ b * W.w + a ] / 255 : 0;
 
 	}
 

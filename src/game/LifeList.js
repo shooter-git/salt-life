@@ -84,6 +84,16 @@ export function cleanLog( saved ) {
 		}
 
 		if ( Array.isArray( v.first ) ) e.first = [ dayOf( v.first[ 0 ] ), placeOf( v.first[ 1 ] ) ];
+		// ((M19) the line-class records, stream RECORDS': each class's best, { kg, day, place }, by a class's key (IGFA's kg,
+		// a tippet's with an f before it))
+		if ( v.cls && typeof v.cls === 'object' ) {
+
+			const c = {};
+			for ( const [ cl, r ] of Object.entries( v.cls ) ) if ( /^f?\d{1,3}$/.test( cl ) && r && Number.isFinite( r.kg ) && r.kg > 0 ) c[ cl ] = { kg: r.kg, day: dayOf( r.day ), place: placeOf( r.place ) };
+			if ( Object.keys( c ).length ) e.cls = c;
+
+		}
+
 		out[ k ] = e;
 
 	}

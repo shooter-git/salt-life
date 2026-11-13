@@ -102,6 +102,8 @@ import { releaseGeometries, releaseTextures, uploadTextures, watchContext } from
 import { decodeInWorker } from './core/MeshoptWorker.js';
 import { freeNow } from './core/FreeNow.js';
 import { releaseParts } from './world/village/GeoBuilder.js';
+import { maskWindow } from './world/terrain/MaskWindow.js';
+import { CRAB_BEACH } from './world/wildlife/Crabs.js';
 
 // Salt Life: the island, the sea and the boat, drawn with three.js inside All the Spaces. It follows
 // Tidewater's App (same systems, same order each frame); what isn't ported yet is simply not here.
@@ -143,16 +145,6 @@ function beachMask( T ) {
 	}
 
 	return { data, res, texel: T.texel * k, origin: T.origin };
-
-}
-
-// (M15) a square window of one of the island's masks, `half` m about c: { i0, j0, w, h, data } (in its texels)
-function maskWindow( T, mask, c, half ) {
-
-	const i0 = Math.max( 0, Math.floor( ( c.x - half - T.origin ) / T.texel ) ), j0 = Math.max( 0, Math.floor( ( c.z - half - T.origin ) / T.texel ) );
-	const w = Math.min( T.res - i0, Math.ceil( 2 * half / T.texel ) ), h = Math.min( T.res - j0, Math.ceil( 2 * half / T.texel ) ), data = new Uint8Array( w * h );
-	for ( let j = 0; j < h; j ++ ) data.set( mask.subarray( ( j0 + j ) * T.res + i0, ( j0 + j ) * T.res + i0 + w ), j * w );
-	return { i0, j0, w, h, data };
 
 }
 
@@ -1569,9 +1561,11 @@ export class App {
 
 		if ( this.debris ) return;
 		performance.mark( 'world: debris' );
+		const handed = this._debrisHanded;
+		this._debrisHanded = null;
 		this.debris = await Debris.create( {
 			scene: this.scene, terrain: this.terrainData, ground: this.terrain, village: this.village, vegetation: this.vegetation,
-			rocks: this.rocks, colliders: this.colliders, tier: this.tier, loader: gltfLoader(), show: false,
+			rocks: this.rocks, colliders: this.colliders, tier: this.tier, loader: gltfLoader(), show: false, handed,
 		} );
 		// (the areas out of range are hidden at once: frames go on while the shaders compile)
 		await this.readyOffstage( this.debris.group, () => this.debris.update( this.camera ) );
@@ -1877,6 +1871,25 @@ export class App {
 
 		// (with a graphics card the debris come next, at the load, and use the village's shapes)
 		if ( this.cpuGL ) releaseParts();
+		this.handDebris();
+
+	}
+
+	// (M19) the debris' input (Debris.handOff) handed to their worker now, and the crabs' beach cut out of the sand, so the
+	// island's rock, sand and path masks can go (releaseMasks) as soon as the plants are placed. On a CPU's WebGL the
+	// debris come minutes later (lifeAndDebris), and the masks were held all through the late stages until then: some
+	// 6 MB of script memory at their high point. The worker's copy isn't the page's
+	handDebris() {
+
+		const T = this.terrainData;
+		// (not before the game's colliders are there for them to keep clear of: with a graphics card the plants come first,
+		// and the debris straight after the game, as before)
+		if ( this.debris || this._debrisHanded || ! T.sand || ! this.game ) return;
+		this._debrisHanded = Debris.handOff( { terrain: T, village: this.village, vegetation: this.vegetation, rocks: this.rocks, colliders: this.colliders, tier: this.tier } );
+		T.crabSand = maskWindow( T, T.sand, CRAB_BEACH, CRAB_BEACH.half );
+		// (with no worker to hold them, its input holds the masks: they go after the debris, as before)
+		this._masksHanded = !! this._debrisHanded.worker;
+		this.releaseMasks();
 
 	}
 
@@ -1911,7 +1924,8 @@ export class App {
 	releaseMasks() {
 
 		const T = this.terrainData;
-		if ( ! this._plantsGrown || ! this.game || ! this.game.minimap || ! this.game.minimap._bake.done ) return;
+		// ((M19) or as soon as the debris have theirs: handDebris)
+		if ( ! ( this._plantsGrown || this._masksHanded ) || ! this.game || ! this.game.minimap || ! this.game.minimap._bake.done ) return;
 		if ( T.rock !== null ) {
 
 			// ((M15) what the bites keep of them: the sand that isn't rock, at 4 m (the beaches' wash: Game.sandAt))

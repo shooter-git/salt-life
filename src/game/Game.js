@@ -58,6 +58,9 @@ import { ELLIPSIS, LEFT, RIGHT, UP } from '../core/Glyphs.js';
 import { letGo, trophyCardOf, slamNote } from './Trophies.js';
 import { Rigs } from './rigs/Rigs.js';
 import { FlatsFishing } from './FlatsFishing.js';
+import { Challenges } from './Challenges.js';
+import { FlyCast } from './FlyCast.js';
+import { Mate } from './rigs/Mate.js';
 import { atHook, pickOnRig, waitOnRig } from './rigs/Presentation.js';
 
 // how long the catch card stays up unless dismissed (ms)
@@ -249,6 +252,11 @@ export class Game {
 		// (her mass, as it's aboard) and her engine; the bucket going; what's been said
 		this.hull = new Hull( { store: this.state, boat: this.state.boat } );
 		this.daysOut = new DaysOut( this ); // ((M16) ice, stores, bunks, flares: DaysOut.js)
+		// ((M19) streams STALLS', FLY's and BIG's, made and updated here so each fills its own file: Pearl's challenges, fly
+		// casting, the sportfisher's mate)
+		this.challenges = new Challenges( this );
+		this.flyCast = new FlyCast( this );
+		this.mate = new Mate( this );
 		// ((M16) your fleet: fleet/FleetDesk.js)
 		this.fleet = new FleetDesk( this );
 		this._massBase = b.mass;
@@ -747,6 +755,9 @@ export class Game {
 		this.updateBail( inp, p );
 		this.updateBow( inp, p );
 		this.daysOut.update( dt, inp, p );
+		this.challenges.update( dt );
+		this.flyCast.update( dt );
+		this.mate.update( dt );
 		// ((M16) beside a boat of yours you're not in: get into her)
 		this.fleet.updatePrompt( inp, p );
 		// ((M16) out on her open deck in a squall: world/boat/console/Soak.js)

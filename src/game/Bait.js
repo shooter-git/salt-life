@@ -41,6 +41,26 @@ export const BAITS = {
 		likes: { barracuda: 2.6, jack: 2.4, tarpon: 2, snook: 2.2, mahi: 1.6, wahoo: 1.4, blackGrouper: 1.2 } },
 	skirt: { name: 'Trolling skirt', short: 'skirts', live: false, speed: 0.8, small: 0.1, skew: 0.65, steal: 0, lure: true, level: 3, towed: true, tow: [ 5, 7, 16, 24 ],
 		likes: { wahoo: 2.8, mahi: 2, tuna: 2, yellowfin: 2, blueMarlin: 3, whiteMarlin: 1.6, sailfish: 1.2, barracuda: 1.4 } },
+	// (M19) Bought by the lot from Joe and from Pearl (seller: whose; one without is Marta's until stream STALLS moves them:
+	// docs/M19.md). Their figures are placeholders until STALLS' and FLY's sources set them (docs/m19/sources-boats-bait.md):
+	// live shrimp by the dozen, $10 (judgement; the Keys' $8 to $15), sardines by the pound (Nassau's $5), conch cut from a
+	// legal conch with a flared lip, hermit crabs for permit and bonefish
+	liveShrimp: { name: 'Live shrimp', short: 'live shrimp', live: true, speed: 0.6, small: 1.1, skew: 0.9, steal: 0.12, price: 10, per: 12, seller: 'joe', kite: false,
+		likes: { bonefish: 2.6, snook: 2.4, permit: 1.8, tarpon: 1.6, redfish: 2.2, trout: 2.4, muttonSnapper: 1.8, yellowtail: 1.6, grunt: 1.4 } },
+	sardine: { name: 'Frozen sardines', short: 'sardines', live: false, speed: 0.7, small: 0.7, skew: 0.85, steal: 0.1, price: 5, per: 8, seller: 'joe',
+		likes: { redSnapper: 2, muttonSnapper: 2, yellowtail: 1.8, blackGrouper: 1.8, grouper: 1.8, jack: 1.6, barracuda: 1.4 } },
+	conch: { name: 'Cut conch', short: 'conch', live: false, speed: 0.75, small: 0.8, skew: 0.85, steal: 0.08, price: 6, per: 6, seller: 'pearl',
+		likes: { bonefish: 2.2, muttonSnapper: 2.2, permit: 1.4, wrasse: 1.6, yellowtail: 1.4 } },
+	hermitCrab: { name: 'Live hermit crab', short: 'hermit crabs', live: true, speed: 0.7, small: 0.5, skew: 0.85, steal: 0.06, price: 8, per: 6, seller: 'pearl', kite: false,
+		likes: { permit: 3, bonefish: 2, wrasse: 1.6, muttonSnapper: 1.4 } },
+	// (M19) The flies (stream FLY), your own gear as the lures are, with the Flies track's level they come with (fly: the
+	// fly rod's alone; wt: the rod each is tied for, FLY_RODS). Only the fly rig takes them (Presentation's ONLY)
+	flyShrimp: { name: 'Shrimp fly', short: 'shrimp flies', live: false, speed: 0.8, small: 0.6, skew: 0.85, steal: 0, lure: true, fly: true, level: 1, wt: 8,
+		likes: { bonefish: 2.4, permit: 1.2, snook: 1.6, redfish: 1.6, trout: 1.6 } },
+	flyCrab: { name: 'Crab fly', short: 'crab flies', live: false, speed: 0.85, small: 0.4, skew: 0.85, steal: 0, lure: true, fly: true, level: 2, wt: 10,
+		likes: { permit: 2.6, bonefish: 1.4 } },
+	flyTarpon: { name: 'Tarpon fly', short: 'tarpon flies', live: false, speed: 0.85, small: 0.2, skew: 0.75, steal: 0, lure: true, fly: true, level: 3, wt: 12,
+		likes: { tarpon: 2.6, snook: 1.8, barracuda: 1.4 } },
 };
 export const BAIT_IDS = Object.keys( BAITS );
 
@@ -50,7 +70,8 @@ export const CUT_KG = 0.2; // a chunk of cut bait
 
 // what can be put on the hook now, of these kinds (state: GameState): any of the bucket's or the freezer's, and the
 // lures you've bought
-export const onHand = ( k, state ) => ( BAITS[ k ].lure ? ( state.upgrades.lures | 0 ) >= BAITS[ k ].level : state.bait[ k ] > 0 );
+// ((M19) a fly, the flies you've bought: the Flies track's level)
+export const onHand = ( k, state ) => ( BAITS[ k ].fly ? ( state.upgrades.flies | 0 ) >= BAITS[ k ].level : BAITS[ k ].lure ? ( state.upgrades.lures | 0 ) >= BAITS[ k ].level : state.bait[ k ] > 0 );
 
 // the bait a netted fish of this species makes (live, in the bucket), or null
 export const baitOf = ( species ) => ( BAITS[ species ] && BAITS[ species ].live ? species : null );
