@@ -354,7 +354,8 @@ const among = ( s, ...ids ) => ids.reduce( ( a, id ) => a + ( s[ id ] || 0 ), 0 
 
 	ok( glareLeft( 37 * Math.PI / 180 ) < 0.1 && glareLeft( 0 ) >= 0.45, 'they take most of the glare at Brewster\'s angle, little of it along the surface (M17: Fresnel\'s)' );
 	ok( fishSeen( 3, 12 ) > 0.8 && fishSeen( 3, 60 ) === 0, 'from the deck you see a fish close to, not 60 m off' );
-	ok( fishSeen( 14, 60 ) > 0.8 && fishSeen( 14, 120 ) > 0, 'from the tower, out to more than 100 m' );
+	// ((M19) the tower's eye is 8.62 m (SportfisherModel's towerEye), not 14)
+	ok( fishSeen( 8.62, 40 ) > 0.8 && fishSeen( 8.62, 100 ) > 0, 'from the tower (8.62 m), plainly 40 m off, and out to more than 100 m' );
 	ok( fishSeen( 40, 300 ) === 0, 'but not for ever' );
 
 }

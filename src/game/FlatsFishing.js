@@ -1,10 +1,11 @@
 import { G } from '../core/Globals.js';
+import { Vector3 } from '../engine/index.js';
 import { FLATS, flatsAt } from '../world/terrain/Flats.js';
 import { flatsSchools, newFlatsState, spook, hook, forgetFlats } from './Flats.js';
 import { islandTime } from './Weather.js';
 import { FISH } from './FishTable.js';
 import { seenTake } from './Bites.js';
-import { seenOnFlats, scareOf, castScare, sightOf, knockOf, SIGHT } from './Sight.js';
+import { seenOnFlats, scareOf, castScare, sightOf, knockOf, wadeNoise, WADE, SIGHT } from './Sight.js';
 import { SLAMS, slamDay, slamCatch, slamSlept, slamsOf, slamToday } from './Trophies.js';
 
 // (M17) Sight-fishing on the flats, as it's played (docs/m17/sight.md): the schools game/Flats.js has about you given to
@@ -30,9 +31,10 @@ const LOOK = 0.2; // s between a bait's looks for a fish that might see it
 const CLOUD = { cell: 520, drift: 1.6 }; // a cloud's shadow over the flats: its size (m), its drift on the wind (x)
 const TOLD_FADE = 8; // s: (M17, the flats together) a call's help to your eye fades over its last seconds
 const SILT = 0.45; // the light a mud's silt sends back (stirred-up oolite and marl), half of it seen through
-const _o = { x: 0, z: 0, vx: 0, vz: 0, eye: 1.6, tall: 1.8, knock: 0, engine: false, hull: false }, _school = { x: 0, z: 0, r: 2, depth: 0.5 };
+const _o = { x: 0, z: 0, vx: 0, vz: 0, eye: 1.6, tall: 1.8, knock: 0, wade: 0, engine: false, hull: false }, _school = { x: 0, z: 0, r: 2, depth: 0.5 };
 const _q = { h: 1, d: 1, L: 0.5, depth: 0.5, bottom: 0.55, back: 0.15, glasses: false, sun: 1, behind: 1, shade: 0, overcast: 0, wind: 4, rain: 0, night: 0, tailUp: 0.1, sign: 1 };
 const _seen = { body: 0, shadow: 0, tail: 0, sign: 0 };
+const _eye = new Vector3(); // ((M19) eye())
 
 // a smooth value noise in 0..1 (a cloud's shadow over the flat: no CPU copy of the sky's clouds exists)
 const hash2 = ( i, j ) => {
@@ -110,10 +112,19 @@ export class FlatsFishing {
 
 	}
 
-	// the conditions of seeing: _q filled for a look from the camera at ( x, z ) at a fish `L` long of this kind
+	// (M19) where you look from: your own eye (Player.eyeAt), not the camera, which in third person is behind and above you
+	// at a helm or a kayak's seat
+	eye() {
+
+		const p = this.app.player;
+		return p && p.eyeAt ? p.eyeAt( _eye ) : _eye.copy( this.app.camera.position );
+
+	}
+
+	// the conditions of seeing: _q filled for a look from your eye at ( x, z ) at a fish `L` long of this kind
 	_look( x, z, L, kind, depth, bottom ) {
 
-		const c = this.app.camera.position, sun = G.sunDir.value, w = this.game.weatherNow;
+		const c = this.eye(), sun = G.sunDir.value, w = this.game.weatherNow;
 		const dx = x - c.x, dz = z - c.z, d = Math.hypot( dx, dz ) || 1, sf = Math.hypot( sun.x, sun.z ) || 1;
 		const S = sightOf( kind );
 		_q.h = c.y - G.seaLevel.value;
@@ -122,7 +133,9 @@ export class FlatsFishing {
 		_q.depth = depth;
 		_q.bottom = bottom;
 		_q.back = S ? S.back : 0.15;
-		_q.glasses = !! this.game.state.stats.polarized;
+		const st = this.game.state.stats;
+		_q.glasses = !! st.polarized;
+		_q.lens = st.lens || null; // ((M19) copper lenses: Sight's lens)
 		_q.sun = sun.y;
 		_q.behind = ( dx * - sun.x + dz * - sun.z ) / ( d * sf );
 		_q.shade = this.shadeAt( x, z );
@@ -158,7 +171,7 @@ export class FlatsFishing {
 
 	update( dt ) {
 
-		const fish = this.fish, app = this.app, c = app.camera.position;
+		const fish = this.fish, app = this.app, c = this.eye();
 		const T = this.T;
 		// (a jump of the clock: a rest or a sleep, which ends the island day for the slams; (M17's stream 7) watched before
 		// the flats' fish are made, and far from them: the billfish grand slam's offshore)
@@ -227,10 +240,11 @@ export class FlatsFishing {
 	}
 
 	// who's looking, as the fish take them: where, how fast over the ground, how high, a hull or not, a paddle's knock,
-	// an engine running
+	// an engine running. ((M19) From your eye, and the boat you're aboard: riding someone else's, hers, not your own
+	// moored one; and as quiet as she says she is, if she says: Vessel.noise)
 	_observer( dt ) {
 
-		const app = this.app, p = app.player, c = app.camera.position, W = this._was, b = app.boatCtl;
+		const app = this.app, p = app.player, c = this.eye(), W = this._was;
 		if ( W.has && dt > 0 ) {
 
 			const k = 1 - Math.exp( - dt * 4 );
@@ -251,15 +265,38 @@ export class FlatsFishing {
 		_o.tall = Math.max( 0.3, _o.eye + 0.15 );
 		_o.hull = aboard;
 		_o.knock = 0;
+		_o.wade = 0;
 		_o.engine = false;
-		if ( aboard && b ) {
+		// ((M19) on foot in the water, each step a chance of being heard: off the soft flat the louder, flats booties the
+		// quieter: Sight.wadeNoise)
+		if ( p.mode === 'walk' && ( p.wade || 0 ) > 0.05 && dt > 0 ) {
 
-			const m = b.model, st = m && m.stroke;
-			if ( st ) {
+			const speed = Math.hypot( W.vx, W.vz ), steps = speed * dt / WADE.step, hard = flatsAt( c.x, c.z ).on > 0.5 ? 0 : 1;
+			if ( Math.random() < wadeNoise( speed, hard, !! this.game.state.stats.booties ) * steps ) _o.wade = 1;
+
+		}
+
+		const b = aboard ? p.boat : null;
+		if ( b ) {
+
+			const m = b.model, st = m && m.stroke, own = m && m.noise ? m.noise( b ) : null;
+			if ( own ) {
+
+				_o.engine = !! own.engine;
+				_o.knock = own.knock || 0;
+				if ( own.hull !== undefined ) _o.hull = !! own.hull;
+
+			} else if ( st && ! p.riding ) {
 
 				// (a paddle stroke's catch: now and then the shaft knocks the gunwale, the harder the stroke the oftener)
 				if ( st.wet && ! this._wet && Math.random() < knockOf( Math.min( 1, Math.max( 0, ( 1.75 - st.T ) / 1.01 ) ) ) ) _o.knock = 1;
 				this._wet = st.wet;
+
+			} else if ( p.riding ) {
+
+				// (her engine as her owner's pose has it: Together's cur.rpm, 0..1 as sent)
+				const o = app.together && app.together.others.get( b.owner ), cur = o && o.cur;
+				_o.engine = !! ( cur && cur.rpm > 0.03 );
 
 			} else _o.engine = !! ( b.engineOn && b.driven && b.rpm > 0.03 );
 
@@ -465,7 +502,8 @@ export class FlatsFishing {
 
 			const S = g.sight;
 			if ( ! S || S.id !== id || ! g.active || S.bolt > 0 ) continue;
-			fish.sightBolt( g, Number.isFinite( x ) ? x : this.app.camera.position.x, Number.isFinite( z ) ? z : this.app.camera.position.z );
+			const e = this.eye();
+			fish.sightBolt( g, Number.isFinite( x ) ? x : e.x, Number.isFinite( z ) ? z : e.z );
 			if ( this.follow && this.follow.g === g ) {
 
 				// (it was coming to your bait: it's gone with the rest)

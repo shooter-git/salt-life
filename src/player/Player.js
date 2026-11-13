@@ -78,6 +78,7 @@ const _e = new THREE.Euler( 0, 0, 0, 'YXZ' );
 const _yAxis = new THREE.Vector3( 0, 1, 0 );
 const _qa = new THREE.Quaternion(), _qb = new THREE.Quaternion(), _qc = new THREE.Quaternion();
 const _wish = new THREE.Vector3();
+const _eyeAt = new THREE.Vector3(); // ((M19) eyeAt's)
 // walking on the boat
 const DECK_RADIUS = 0.24;
 const DECK_STEP = 0.36; // highest ledge you step up onto
@@ -766,10 +767,13 @@ export class Player {
 	}
 
 	// (M19) where your eyes are, into out (world): what you'd see from, for what the flats' fish and the polarized glasses
-	// reckon by. The camera's place for now: stream SEE makes it your own eye at the helm or a kayak's seat when the camera's
-	// behind you in third person (it was found spotting from 2.5 m up off a kayak's seat at 0.81: docs/M19.md, the glasses)
+	// reckon by. At a helm or a kayak's seat it's the helm's eye wherever the camera is: in third person the camera's
+	// behind you, 13 m off and up to 40 (a kayaker spotted fish as from 2.5 m up, not her seat's 0.81: docs/M19.md, the
+	// glasses). Walking, wading, swimming and about a deck the camera is your eye
 	eyeAt( out ) {
 
+		const b = this.boat;
+		if ( this.mode === 'boat' && b && b.model ) return b.toWorld( _eyeAt.copy( this.atHelm?.eye || b.model.helmEye ), out );
 		return out.copy( this.camera.position );
 
 	}

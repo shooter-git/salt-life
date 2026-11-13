@@ -120,7 +120,10 @@ for ( const weather of [ ...new Set( views.map( ( k ) => VIEW[ k ].weather ) ) ]
 		// (the clock held where each view sets it: the shared clock's not let move it)
 		if ( a.together ) a.together.syncClock = () => {};
 		a.settings.timeSpeed = 0;
-		a.game.state.stats.polarized = glasses;
+		// ((M19) put on as buying them does: state.stats is made afresh each time it's read, so setting stats.polarized did
+		// nothing, and the renders "through the glasses" were bare)
+		a.game.state.upgrades.glasses = glasses ? 1 : 0;
+		a.game.applyGear();
 		const css = document.createElement( 'style' );
 		css.textContent = 'body * { visibility: hidden !important }';
 		document.head.appendChild( css );

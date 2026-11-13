@@ -200,7 +200,7 @@ function cards( device, kayak ) {
 const CARD_COUNT = 3;
 
 // (M17) a school spooked: the tip for why (FlatsFishing's events.spooked)
-const SPOOK_TIP = { speed: 'spookSpeed', push: 'spookPush', shadow: 'spookShadow', knock: 'spookKnock', engine: 'spookEngine', cast: 'spookCast', line: 'spookCast', refused: 'flatsRefused', theirs: 'spookTheirs' };
+const SPOOK_TIP = { speed: 'spookSpeed', push: 'spookPush', shadow: 'spookShadow', knock: 'spookKnock', wade: 'spookWade', engine: 'spookEngine', cast: 'spookCast', line: 'spookCast', refused: 'flatsRefused', theirs: 'spookTheirs' };
 
 // (M16) a tip that isn't the same in a kayak (no helm, no fuel, no bilge), or is hers alone; by the device where it's a key
 const IN_KAYAK = {
@@ -319,6 +319,7 @@ const TIPS = {
 	spookPush: 'Spooked by the <b>push of water</b> ahead of the bow, running ahead of her over the flat. Stop well short and drift in the last of the way.',
 	spookShadow: 'Spooked by <b>your shadow</b> over them: long early and late. Come at them with the sun to one side, so it falls away from them.',
 	spookKnock: 'Spooked: a <b>paddle knocked the hull</b>, and they heard it through the water. Easy strokes near fish.',
+	spookWade: 'Spooked: they <b>heard you wading</b>. Slow, quiet steps near fish, and flats booties on rock and rubble.',
 	spookEngine: 'An <b>engine</b> running spooks the flat\'s fish a hundred metres off. Shut it down well short of them, and drift or pole in.',
 	spookCast: '<b>Too close</b>: a bait landing on a fish\'s head, or the line laid over its back, sends the whole school off. Lead them.',
 	flatsRefused: 'It came to it and <b>turned off</b>: refused. What they take is their own: a bonefish a shrimp or a jig, a tarpon or a snook a plug or live bait. A <b>permit</b> refuses most things. Try the next one.',
