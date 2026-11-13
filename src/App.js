@@ -1292,7 +1292,7 @@ export class App {
 		const { rod, gun, tools } = this.game;
 		return [
 			[ rod, [ rod.rodMesh, rod.lineMesh, rod.bobberMesh, rod.lostMesh, rod.lostLine ] ],
-			[ gun, [ gun.gunMesh, gun.bandMesh, gun.shaftMesh, gun.lineMesh ] ],
+			[ gun, [ gun.gunMesh, gun.bandMesh, gun.shaftMesh, gun.lineMesh, gun.floatMesh ] ], // ((M19) and the blue-water gun's float)
 			[ tools, [ tools.stickMesh, tools.netMesh ] ],
 		];
 
