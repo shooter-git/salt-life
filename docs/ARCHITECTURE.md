@@ -110,6 +110,11 @@ New code that draws from world positions on the GPU takes the same care: a point
 - **Joe's line for every kind:** `FishTable.HINTS` (below the table, so its rows stay as they are; the trout's and the swordfish's in their rows), each `hint`. `Orders.biteHint` reads it first, so it's Joe's slate's line too: the slate's kinds keep to 40 characters.
 - **The slams** (`Trophies.SLAMS`): `grand` (stream 1's), `superGrand` (the grand slam and a snook; `over: 'grand'`, so `slamTold` tells only it when both come at once) and `billfish` (a sailfish, a white marlin and a blue marlin), each `{ name, short, kinds, what }`. `FlatsFishing.caught( info )` returns the ids `slamCatch` completed; `Game.updateFight` puts them on the catch (`info.slams`), the catch card makes the slam its badge and its line (`slamNote( ids, bold )`, `.gm-catch-note.is-slam`), and `Together.lifeChanged( ids )` tells the group. `FlatsFishing.update` watches the clock for a sleep (`slamSlept`) before it asks for the flats' fish. A guest's fish is landed on the guest's own game, so its slam is theirs.
 - **The group's board:** each player's `{ who, k, sl }` (`LifeList.lifeOf`) under `'#'` and their id in the shared `records`: below.
+- (M19, [m19/records.md](m19/records.md)) **Line-class records.**
+  - **The classes:** `game/LineClass.js` (pure) has IGFA's classes in kg, keyed `'4'` to `'60'` for lines and `'f6'` to `'f10'` for tippets (`classOf`, `classLabel`, `counts`, `beats`, `ratio`).
+  - **A rod's catch** carries its class (`Game.updateFight`: the fight's `lineKg`, a fly's tippet, none on the electric reel) into `addFish`'s `cls`.
+  - **The log:** `logFish` keeps each kind's best on each class in its entry's `cls` (`{ kg, day, place }`), and `lastCatch.clsRecord` tells the catch card.
+  - **Where it shows:** the Log tab's "Line-class records", the card's note and badge, and the board's line (`RecordsBoard.classLine`). The board's line is the island's best fish for its class, by IGFA's ratio, kept under the shared records' one `'%'` key (`Together.caughtClass`).
 
 ## The chart you fill in
 

@@ -6,6 +6,7 @@ import { repairFee } from './Hull.js';
 import { FLEET, TRADE, SALE, MONTH, MOST_MONTHS, DUES_LEAVE, gearWorth, monthly, cleanName, paintOf, kindOf } from './fleet/Fleet.js';
 import { cleanTrophies } from './Trophies.js';
 import { cleanLog } from './LifeList.js';
+import { counts as classCounts, beats as classBeats } from './LineClass.js';
 import { ordersOf, orderPrice } from './Orders.js';
 import { WEEK_MUL } from './WeekOrder.js';
 import { BAITS, KEEPER_KG, baitOf, chunksOf } from './Bait.js';
@@ -386,7 +387,7 @@ export class GameState {
 
 		kg = Math.round( kg * 100 ) / 100;
 		cm = Math.round( cm ?? fishLengthCm( species, kg ) );
-		const { newSpecies, record, prevBestKg, prevBestCm } = this.logFish( species, kg, cm, day, place );
+		const { newSpecies, record, prevBestKg, prevBestCm, clsRecord } = this.logFish( species, kg, cm, day, place, cls );
 		const firstAt = this.logPlace( place, species, day );
 		const value = fishValue( species, kg );
 		const released = !! FISH[ species ].protected || !! release;
@@ -399,7 +400,7 @@ export class GameState {
 		const bag = max ? { n: this.bagged( species, day ), max, full } : null;
 		const why = release || ( FISH[ species ].protected ? 'protected' : null );
 		const aboard = laden ? { max: most } : null;
-		this.lastCatch = { species, kg, cm, value, newSpecies, record, prevBestKg, prevBestCm, kept, released, why, method, bag, aboard, at: timeOfDay, day, place, firstAt };
+		this.lastCatch = { species, kg, cm, value, newSpecies, record, prevBestKg, prevBestCm, kept, released, why, method, bag, aboard, at: timeOfDay, day, place, firstAt, cls, clsRecord };
 		// ((M19) told to whoever's listening: Pearl's challenges, the line-class records. rig: the rig it took ('fly'...);
 		// cls: its line's IGFA class)
 		this._caught( { species, kg, cm, method, rig, cls, kept, released, day, place, at: timeOfDay } );
@@ -507,7 +508,9 @@ export class GameState {
 
 	// a fish in the log: one more of its kind, and its best -> { newSpecies, record, prevBestKg, prevBestCm }
 	// ((M17) day, place: when and where, the island's day and Places.js', kept with the first of its kind and with your best)
-	logFish( species, kg, cm, day = null, place = null ) {
+	// ((M19) cls: the line's IGFA class (LineClass.js), its best kept in the entry's cls when this beats it, by IGFA's margins, and
+	// it's heavy enough for the class -> clsRecord: { cls, prevKg (0: the first on it) } or null)
+	logFish( species, kg, cm, day = null, place = null, cls = null ) {
 
 		const logEntry = this.log[ species ] || ( this.log[ species ] = { count: 0, bestKg: 0 } );
 		const newSpecies = logEntry.count === 0;
@@ -525,7 +528,20 @@ export class GameState {
 
 		}
 
-		return { newSpecies, record, prevBestKg, prevBestCm };
+		let clsRecord = null;
+		if ( cls && classCounts( cls, kg ) ) {
+
+			const C = logEntry.cls || ( logEntry.cls = {} ), held = C[ cls ];
+			if ( classBeats( kg, held && held.kg ) ) {
+
+				clsRecord = { cls, prevKg: held ? held.kg : 0 };
+				C[ cls ] = { kg, day: when, place: where };
+
+			}
+
+		}
+
+		return { newSpecies, record, prevBestKg, prevBestCm, clsRecord };
 
 	}
 

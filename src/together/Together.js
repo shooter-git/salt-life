@@ -26,6 +26,7 @@ import { FLY_K, FLY_L, FLY_HOLD } from '../game/rigs/FlyRod.js';
 import { FlyLine, loopShape, newPoints } from '../game/rigs/FlyLine.js';
 import { FLY, strokeTime } from '../game/FlyCast.js';
 import { gunModels, setBands } from '../game/Speargun.js';
+import { isClass, counts, ratio } from '../game/LineClass.js';
 import { CastNet } from '../game/CastNet.js';
 import { G } from '../core/Globals.js';
 import { gearStats, defaultUpgrades } from '../game/Gear.js';
@@ -857,6 +858,9 @@ export class Together {
 		for ( const [ k, v ] of Object.entries( r ) ) if ( k[ 0 ] === '@' && PLACES[ k.slice( 1 ) ] && v && typeof v.kg === 'number' && FISH[ v.s ] ) clean[ k ] = v;
 		// ((M17) and each player's life list: '#' and their id)
 		for ( const [ k, v ] of Object.entries( r ) ) if ( k[ 0 ] === '#' && v && Number.isInteger( v.k ) && v.k >= 0 ) clean[ k ] = { who: String( v.who || '' ).slice( 0, 40 ), k: Math.min( v.k, KINDS ), sl: Array.isArray( v.sl ) ? v.sl.filter( ( id ) => SLAMS[ id ] ) : [] };
+		// ((M19) and the island's best fish for its line class, '%': the one key, whatever the class, so the save stays small)
+		const lc = r[ '%' ];
+		if ( lc && FISH[ lc.s ] && isClass( lc.c ) && typeof lc.kg === 'number' && lc.kg > 0 ) clean[ '%' ] = { s: lc.s, c: lc.c, kg: lc.kg, who: String( lc.who || '' ).slice( 0, 40 ), id: lc.id, at: lc.at };
 		this.records = clean;
 		if ( ! this._lifeRead ) {
 
@@ -1047,6 +1051,27 @@ export class Together {
 
 		} );
 		return { island, held, place: atPlace, placeHeld };
+
+	}
+
+	// (M19) a fish landed on a line of an IGFA class (LineClass.js): is it the island's best for its class, the heaviest for the
+	// class it was on (the fish's weight to the class's)? Kept in the group's records under '%' (one key: whatever the class), on
+	// the board -> whether it is, from what's known now
+	caughtClass( species, kg, cls ) {
+
+		if ( ! counts( cls, kg ) ) return false;
+		const held = this.records[ '%' ], mine = ratio( cls, kg );
+		if ( held && ratio( held.c, held.kg ) >= mine ) return false;
+		const rec = { s: species, c: cls, kg: r3( kg ), who: this.me.name, id: this.me.id, at: Date.now() };
+		this._update( 'records', ( cur ) => {
+
+			const next = cur && typeof cur === 'object' ? { ...cur } : {};
+			const was = next[ '%' ];
+			if ( ! was || ! isClass( was.c ) || ratio( was.c, was.kg ) < mine ) next[ '%' ] = rec;
+			return next;
+
+		} ).then( ( saved ) => this._setRecords( saved ) ).catch( ( e ) => console.warn( 'records', e ) );
+		return true;
 
 	}
 

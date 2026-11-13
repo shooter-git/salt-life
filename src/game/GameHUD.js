@@ -8,6 +8,7 @@ import { LOOKS, LOOK_NAMES } from '../together/Avatar.js';
 import { NIGHT_BOX, biteHint, orderTerms, orderPlace } from './Orders.js';
 import { trophyNote, trophyRows, slamRows, slamNote, slamTold, slamToday, slamDay, SLAMS } from './Trophies.js';
 import { lifeList, lifeCount, whenWhere, KINDS } from './LifeList.js';
+import { classLabel, classKg } from './LineClass.js';
 import { WEEK_MUL, delivered, filled, mineOf, shareOf, weekEnds } from './WeekOrder.js';
 import { timeText } from './IslandClock.js';
 import { LB, IN, GAL, lb, pounds, inches, feet, farOff, gallons, lbOz, feetInches } from './Units.js';
@@ -754,6 +755,7 @@ export class GameHUD {
 		const slams = info.slams && info.slams.length && ! info.trophyView ? slamTold( info.slams ) : null;
 		const badge = slams ? `<span class="gm-badge is-record">${ STAR } ${ SLAMS[ slams[ 0 ] ].name }</span>` : info.trophyView ? `<span class="gm-badge is-record">${ STAR } Trophy</span>` : info.islandRecord ? `<span class="gm-badge is-record">${ STAR } Island record</span>`
 			: info.record ? `<span class="gm-badge is-record">${ STAR } New record</span>`
+			: info.clsRecord ? `<span class="gm-badge is-record">${ STAR } Line-class record</span>` // ((M19))
 			: info.newSpecies ? '<span class="gm-badge is-new">New species</span>' : `<span class="gm-badge is-plain">${ { spear: 'Speared', hand: 'By hand' }[ info.method ] || 'Catch' }</span>`;
 		let note;
 		// (Salt Life: a protected fish is measured and let go, as is a catch-and-release one and a short or
@@ -780,6 +782,10 @@ export class GameHUD {
 		else if ( info.firstAt ) note = `<div class="gm-catch-note">Your first fish from ${ placeName( info.firstAt ) }: it's in your log.</div>`;
 		else note = `<div class="gm-catch-note">Your best: ${ lb( info.prevBestKg ) } · ${ sizeOf( info.species, info.prevBestCm ) }</div>`;
 		if ( slams ) note = `<div class="gm-catch-note is-slam">${ slamNote( slams, ( t ) => `<b>${ t }</b>` ) }.</div>` + note;
+		// ((M19) a line-class record (LineClass.js): your heaviest of its kind on the class it was fought on, IGFA's way; and the
+		// island's best fish for its line class, on the board)
+		const C = info.clsRecord && ! info.trophyView ? info.clsRecord : null;
+		if ( C ) note = `<div class="gm-catch-note is-slam">A line-class record: your heaviest ${ f.name.toLowerCase() } on <b>${ classLabel( C.cls ) }</b>${ C.prevKg ? `, beating ${ lb( C.prevKg ) }` : ', the first on it' }${ info.islandClass ? '. The island\'s best for its line class: it goes on the board' : '' }.</div>` + note;
 		// splash burst around the fish as it lands in view
 		let drops = '';
 		for ( let i = 0; i < 26; i ++ ) {
@@ -1107,6 +1113,11 @@ export class GameHUD {
 			const won = trophyRows( s ).filter( ( t ) => t.species );
 			// (its weight in its line, so on a narrow phone the line isn't squeezed beside the weight and the button)
 			if ( won.length ) body += `<div class="gm-wanted"><span class="gm-wanted-h">Billfish, let go alive</span>${ won.map( ( t ) => item( t.name, `${ lb( t.kg ) } · ${ t.meta }`, `<button class="gm-mini" data-trophy="${ t.species }">See it</button>` ) ).join( '' ) }</div>`;
+			// ((M19) the line-class records: your heaviest of each kind on each IGFA class it's been fought on, the lines' classes
+			// first, then the tippets', lightest first)
+			const rank = ( c ) => ( c[ 0 ] === 'f' ? 100 : 0 ) + classKg( c );
+			const cls = Object.entries( s.log ).flatMap( ( [ k, e ] ) => FISH[ k ] && e.cls ? Object.entries( e.cls ).map( ( [ c, r ] ) => ( { k, c, r } ) ) : [] ).sort( ( a, b ) => rank( a.c ) - rank( b.c ) || b.r.kg - a.r.kg );
+			if ( cls.length ) body += `<div class="gm-wanted"><span class="gm-wanted-h">Line-class records</span>${ cls.map( ( { k, c, r } ) => item( FISH[ k ].name, [ `on ${ classLabel( c ) }`, ww( r ) ].filter( Boolean ).join( ' · ' ), `<span class="gm-item-num">${ lb( r.kg ) }</span>` ) ).join( '' ) }</div>`;
 			// (one caught once: its first is its best, told once)
 			const once = ( e ) => e.count === 1 && e.first.day === e.best.day && e.first.place === e.best.place;
 			body += `<span class="gm-list-h">Caught</span>` + ( L.caught.map( ( e ) => item( FISH[ e.species ].name, [ `${ e.count } caught`, once( e ) ? ww( e.best ) : ww( e.first ) && `first ${ ww( e.first ) }`, ! once( e ) && ww( e.best ) && `best ${ ww( e.best ) }` ].filter( Boolean ).join( ' · ' ), `<span class="gm-item-num">${ lb( e.kg ) } · ${ sizeOf( e.species, e.cm ?? fishLengthCm( e.species, e.kg ) ) }</span>` ) ).join( '' )

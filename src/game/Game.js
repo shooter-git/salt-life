@@ -41,6 +41,7 @@ import { Minimap } from './Minimap.js';
 import { sightOf, MAX_MARKS, NAME, namedAs } from './Chart.js';
 import { Guide } from './Guide.js';
 import { Speargun, groundHit, spearTerms } from './Speargun.js';
+import { classOf } from './LineClass.js';
 import { CastNet, sweetWindow } from './CastNet.js';
 import { BAITS, BAIT_IDS } from './Bait.js';
 import { LobsterTools } from './LobsterTools.js';
@@ -2043,7 +2044,10 @@ export class Game {
 		const name = FISH[ f.species ].name;
 		if ( st === 'caught' ) {
 
-			const entry = this.state.addFish( f.species, f.kg, this.hour, { day: this.tradeDay, place: f.place, rig: f.rig || null } );
+			// ((M19) on its line's IGFA class (LineClass.js): the line or the fly's tippet it was fought on, yours or the tackle you
+			// had in your hands; not on the electric reel, a powered one IGFA won't have)
+			const cls = f.electric ? null : classOf( f.lineKg, f.rig === 'fly' );
+			const entry = this.state.addFish( f.species, f.kg, this.hour, { day: this.tradeDay, place: f.place, rig: f.rig || null, cls } );
 			const info = this.state.lastCatch;
 			this.charted( f.species, f.place, f.at );
 			info.wanted = entry ? this.wantedFor( entry ) : null; // (Salt Life) on today's wanted list
@@ -2064,6 +2068,8 @@ export class Game {
 
 				const isle = this.app.together.caught( f.species, f.kg, info.cm, 'rod', info.place );
 				info.islandRecord = isle.island;
+				// ((M19) and the island's best fish for its line class, on the board)
+				info.islandClass = info.cls ? this.app.together.caughtClass( f.species, f.kg, info.cls ) : false;
 				info.islandHeld = isle.held || null;
 				info.placeRecord = isle.place ? info.place : null; // ((M15) the heaviest anyone's had there)
 

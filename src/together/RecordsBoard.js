@@ -6,12 +6,13 @@ import { FISH } from '../game/FishTable.js';
 import { pounds } from '../game/Units.js';
 import { SLAMS, slamTold } from '../game/Trophies.js';
 import { KINDS } from '../game/LifeList.js';
+import { classKg, classLabel, ratio, isClass } from '../game/LineClass.js';
 
 // (Salt Life) The island's records, chalked on an A-frame board beside Joe's stand (across the
 // counter from his price board): each species' heaviest fish anyone in the group has landed, its
 // weight and who caught it (together/Together.js keeps them, in the group's shared save). The slate is
 // a canvas, redrawn when a record falls. (M17) And under the weights, a line of the group's life lists (Together's '#' records):
-// who has had the most kinds, and who has which slams (lifeLines).
+// who has had the most kinds, and who has which slams (lifeLines). (M19) And the island's best fish for its line class (classLine).
 //   const b = new RecordsBoard( { terrain } );  scene.add( b.group );  b.draw( records )
 
 const W = 512, H = 726; // the slate's canvas (0.55 × 0.78 m)
@@ -99,9 +100,10 @@ export class RecordsBoard {
 		g.font = `62px ${ font }`;
 		g.fillText( 'Island records', W / 2, 78 );
 		g.fillRect( 60, 98, W - 120, 3 );
-		// ((M17) the life lists' line takes the eighth's room)
-		const lines = lifeLines( records );
-		const list = Object.entries( records ).filter( ( [ k, r ] ) => FISH[ k ] && r && r.kg > 0 ).sort( ( a, b ) => b[ 1 ].kg - a[ 1 ].kg ).slice( 0, lines.length ? 7 : 8 ); // (all of them: in the cooler)
+		// ((M17) the life lists' line takes the eighth's room; (M19) a third line, the line class's, the seventh's too)
+		const lines = [ ...lifeLines( records ), ...classLine( records ) ];
+		const rows = lines.length > 2 ? 6 : lines.length ? 7 : 8, dash = 642 - ( 7 - Math.min( 7, rows ) ) * 70;
+		const list = Object.entries( records ).filter( ( [ k, r ] ) => FISH[ k ] && r && r.kg > 0 ).sort( ( a, b ) => b[ 1 ].kg - a[ 1 ].kg ).slice( 0, rows ); // (all of them: in the cooler)
 		if ( ! list.length ) {
 
 			g.font = `44px ${ font }`;
@@ -131,13 +133,13 @@ export class RecordsBoard {
 		if ( lines.length ) {
 
 			g.fillStyle = 'rgba(242, 239, 228, 0.5)';
-			for ( let x = 28; x < W - 28; x += 18 ) g.fillRect( x, 642, 10, 2 );
+			for ( let x = 28; x < W - 28; x += 18 ) g.fillRect( x, dash, 10, 2 );
 			g.textAlign = 'left';
 			g.font = `30px ${ font }`;
 			lines.forEach( ( t, i ) => {
 
 				g.fillStyle = i ? 'rgba(242, 239, 228, 0.82)' : '#f5d98a';
-				g.fillText( t, 28, lines.length > 1 ? 678 + i * 36 : 690, W - 56 );
+				g.fillText( t, 28, lines.length > 1 ? dash + 36 + i * 36 : dash + 48, W - 56 );
 
 			} );
 
@@ -167,5 +169,16 @@ export function lifeLines( records ) {
 	}
 
 	return out;
+
+}
+
+// (M19) the island's best fish for its line class (Together.caughtClass's '%'): 'Line class: Robin's 9.3 lb bonefish on 4 kg (8 lb),
+// 1.1 to 1' -> [ text ] (none: nobody's had one)
+export function classLine( records ) {
+
+	const r = records && records[ '%' ];
+	if ( ! r || ! FISH[ r.s ] || ! isClass( r.c ) || ! ( r.kg > 0 ) || ! classKg( r.c ) ) return [];
+	const on = classLabel( r.c ).replace( / line$/, '' );
+	return [ `Line class: ${ r.who || 'Someone' }'s ${ pounds( r.kg ) } lb ${ FISH[ r.s ].name.toLowerCase() } on ${ on }, ${ ratio( r.c, r.kg ).toFixed( 1 ) } to 1` ];
 
 }
