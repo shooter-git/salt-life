@@ -44,7 +44,10 @@ for ( const level of LEVELS.split( ',' ).map( Number ) ) for ( const name of SPO
 
 	const r = await page.evaluate( async ( [ level, mid, T ] ) => {
 
-		const a = window.__app, THREE = await import( '/src/engine/index.js' ), { G } = await import( '/src/core/Globals.js' ), W = a.water;
+		// (the game's own Globals: once src has changed under the dev server, the game's imports carry a ?t= of their own, and a bare
+		// import of it would be another copy, its clock not the sea's)
+		const globals = performance.getEntriesByType( 'resource' ).map( ( e ) => e.name ).filter( ( u ) => /\/src\/core\/Globals\.js(\?|$)/.test( u ) ).pop() || '/src/core/Globals.js';
+		const a = window.__app, THREE = await import( '/src/engine/index.js' ), { G } = await import( globals ), W = a.water;
 		// (the world held: no frame runs while it's measured; the tide where it's asked, the clock stopped for both)
 		const hold = a.frame;
 		a.frame = () => {};

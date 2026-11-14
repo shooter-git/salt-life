@@ -74,3 +74,84 @@ At 50,000 s on the water's clock (14 hours: a long day's thousands of waves), mi
 - the integer hash, against PCG's in BigInt;
 - the heights in a big day's surf, against every resting point drawn there found by brute force, at two tides and two clocks. The old way is more than 5 cm off at 35 points and the new at 2;
 - the cost.
+
+## The moon in the sea
+
+**Before:** the panorama the sea reflects has no disc in it, so at dusk the moon left nothing on the water. Once the sun was down and the moon became the key light, the water's own glint of the key light drew a path, as wide as the drawn waves and three's specular lobe made it.
+
+**Now** (`WaterSurface.js`'s glint, `Sky.update`, the uniforms `waterMoon`, `waterMoonLight` and `waterMoonSlope`; no texture):
+- **From moonrise, at dusk too.** The moon's light off the facets tilted to send it to you, as Cox and Munk's glitter has it: its light, times the density of the slopes that send it, over 4 cos( the view's angle ) cos⁴( the facet's tilt ).
+  - The facets' tilt is taken from the drawn normal (its waves and ripples), so the path still glitters with the waves.
+  - Smith's masking takes out the facets hidden behind the waves before them.
+  - It never sends more than a mirror would, the disc's own brightness.
+- **Its width follows the wind** (`MOON_SLOPE`). The slopes' density is Cox and Munk's: along the wind 3.16×10⁻³ U, across it 0.003 + 1.92×10⁻³ U, less what the drawn waves and ripples already give. That's 0.8 of them, judged by the paths measured below: at 1 they came out 20% too wide, and at 0.05 (the drawn waves alone) 1.8° against Cox and Munk's 4.2°.
+- **Its light:**
+  - by night, the moon's light as the key light has it (as bright as the night is drawn);
+  - at dusk, the disc's light as the sky draws it against the day's sky, through the air at its height;
+  - in between, as the night comes on;
+  - under a grey sky's veil, and its greyed horizon.
+- **No double count:** while the moon is the key light, the key light's own glint is kept off the sea (in three's lights' loop, a light within 0.8° of the key's way).
+
+**Measured** (`tools/moon/sea.mjs`): a boat offshore, the eye 2.2 m up, looking toward the moon with a 40° lens, the sky clear. The path's full width at half its brightness over the sea beside it, at its mirror point, in linear light (the ACES curve undone from the shot). It's set against Cox and Munk's for the same wind, the disc added.
+
+The full width at half brightness, in degrees, at night and then at twilight, on mid. In brackets, Cox and Munk's: wind along the line of sight to the moon, then across it.
+
+| Weather (wind) | Moon 5° up | 10° | 20° |
+|---|---|---|---|
+| calm (2.5 m/s) | 2.5, 2.3 (2.1) | 4.1, 5.0 (4.2) | 10.2, 7.5 (8.2) |
+| fair (7) | 3.2, 3.7 (3.0, 3.5) | 6.3, 6.1 (6.0, 7.0) | 12.9, 15.6 (11.8, 13.7) |
+| breezy (11) | 4.9, 4.2 (3.7, 4.4) | 7.6, 7.6 (7.3, 8.8) | 16.9, 15.2 (14.3, 17.2) |
+
+- 10 of the 18 fall inside Cox and Munk's range. The rest are within 25% over it: a 20° moon on a calm night, and in a fair twilight; the calm twilight at 10°; the low moon on a calm night and a breezy one.
+- The sources call the formula rough above about 20°.
+- At night the path's core is clipped by the tone curve on a calm sea; the widths are read from the pixels around it.
+
+**Seen:** at night the path runs from the horizon to the boat, broken by the waves. In the twilight it stands out against the sky's paler reflection, a column of glints. Shots in `tools/moon/sea.mjs`' output.
+
+**Left over:**
+- **Clouds:** the clouds aren't read on the CPU, so a cloud passing over the moon leaves its path on the sea. Only a grey sky veils it.
+- **Glassy water** (a disc-wide streak) needs still water the game doesn't have: its calm is 2.5 m/s, inside Cox and Munk's range.
+
+## Wakes in shallow water
+
+**Before:**
+- The wakes' far arms took no account of the depth. Their angle, their waves' length and their speed were the deep water's.
+- They faded out as the water shoaled from 1.5 m to 0.2 m (`WAKE_SHOAL`). The physics keeps a crest as it is until it breaks.
+- The foam patches were shed over shallows and sand alike.
+
+**Now** (`WakeWaves.js`; its sources are [sources-sea.md](sources-sea.md)'s 1):
+- **The depth under her as she makes them.** Each sample of her track keeps the depth under her then (`WakeWaves.depthAt`, given by `Waves`). Her waves go as that depth has them: ω² = g k tanh( k h ), at n of their speed (`waveNumber`, `groupShare`).
+- **Her arms** (`wakeWave`):
+  - Her hull makes waves running the way they run in deep water, so that way is held. Their length is the depth's, and her arm is where their energy goes, so it's a little wider in shallow water.
+  - On the plane at 20 kn she's at 8.2° at sea, 9.1° over 2 m and 15.0° over 1 m, where her waves barely run. Her waves are 5.8 m and 10.4 m long there, the sources' figures.
+  - Over the transcritical range her arms open toward the wedge's cusp waves. They start at a depth Froude number of 0.7, are fully open by 0.95, and are back by 1.16 (judgement).
+  - The wedge itself is worked from the dispersion (`wakeWedge`). Against the sources' table, from Kelvin's 19.5° to 72° near critical and asin( 1 / Fh ) past it, it's 0.05° off at most.
+  - Past critical, no wave goes faster than the shallow water lets.
+- **Twice as high near critical:** ×2 from a depth Froude number of 0.9 to 1, back to ×1 by 0.84 and 1.16 (`SHALLOW.bump`, judgement, from Soomere's "considerably" and the Tallinn paper's highest at critical).
+- **Breaking** (`wakeBreak`, and the sea's shader's the same):
+  - Each crest stays as high as it is until it's near 0.78 of the depth, crest to trough, then it's held under that. It's 1.5% lower at half of it and 16% at it.
+  - The sea's foam shows where it breaks.
+  - The fade from 1.5 m is gone.
+- **The foam patches** aren't shed where the water's shallower than she draws (her model's draft), and one carried onto the sand is gone.
+- **The shader:** each sample's depth goes in a new uniform array, four to a vector (`wakeDepth`, 10 vectors on mid and high, 6 on low). The plan had the depth in the tracks' spare slots, but a track's samples each need their own. No texture was added.
+
+**Measured** (`tools/wakes/bank.mjs`): the console coming off the plane at 8.2 kn along the start's bay, over its bank, with the beach 45 m off her port side; and the same speed 2 km out.
+
+| | The depth under her | Fh | Her arms | Her waves | Her crest, crest to trough |
+|---|---|---|---|---|---|
+| The bay's bank | 2.2 m | 0.90 | 34.4° | 12.7 m | 0.49 m (×2) |
+| Out at sea | 179 m | 0.10 | 19.3° | 6.9 m | 0.24 m |
+
+Her port arm runs in onto the beach and breaks there: a long crest, white along its top, that isn't there without her wake (the shots' `-without` pairs).
+
+**Left over:**
+- **Each wave keeps the depth it was made in.** As it runs from deep water over a bank it doesn't slow or turn (refraction), and doesn't shoal. For her short waves the shoaling factor is 0.91 to 1.03 anyway. It does break by the depth where it is.
+- **The kayak's** ripples are still left out of the waves, as M17 left them. On the flats near critical they'd fan out to 35 to 80°, but they're 2 to 5 cm high.
+
+**Tests:** `test/wakes.mjs` gains:
+- the wedge against the sources' table;
+- the dispersion;
+- deep water as before, to the bit;
+- the console on the plane over 2 m and 1 m, and coming off it over 2 m;
+- the breaking;
+- the shader's sum in 32-bit floats against the CPU's over a 2 m bank.

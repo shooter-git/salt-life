@@ -1,7 +1,7 @@
 import { Vector4, MathUtils } from '../engine/index.js';
 import { G, GRAVITY } from '../core/Globals.js';
 import { WORLD } from '../world/WorldLayout.js';
-import { WakeWaves } from './WakeWaves.js';
+import { WakeWaves, wakeBreak } from './WakeWaves.js';
 
 // The open sea: a sum of Gerstner (trochoidal) waves, evaluated the same way on the GPU (the water
 // surface) and on the CPU (WaterQuery: the boat, the swimmer, the bobber). It stands in for Tidewater's
@@ -67,8 +67,6 @@ const crest = ( a, k, n ) => Math.min( a * 1.4, STEEPNESS / ( k * n ) );
 // island's own comes in along WORLD.swellDir
 export const SWELL_WEST = { x: 1, y: 0 };
 
-// (M17) depth (m) over which the wakes' crests fade out as the water shoals (their height's 0.78 of the depth breaks them)
-export const WAKE_SHOAL = [ 0.2, 1.5 ];
 // depth (m) over which the open-sea waves fade out toward the beach
 export const SHALLOW_FADE = [ 1.5, 12.0 ]; // (the shore waves take over from ~13 m of depth in)
 
@@ -121,6 +119,8 @@ export class Waves {
 		this.iterations = 2; // the CPU height's fixed-point steps (more on steep seas: setSea)
 		// (M17) the boats' wakes' far arms
 		this.wakes = new WakeWaves( { tier } );
+		// ((M20) and the depth under a boat as she makes them: their dispersion, and her arms' angle, in shallow water)
+		if ( terrain ) this.wakes.depthAt = ( x, z ) => G.seaLevel.value - terrain.heightAt( x, z );
 
 		// GLSL: uniforms waveA[ i ] = ( d.x, d.z, k, omega ), waveB[ i ] = ( a, qa, phase, 0 )
 		this.uniforms = {
@@ -408,14 +408,15 @@ vec3 waveDisplacement( vec2 x0, float fade, out vec3 normal ) { return waveDispl
 
 	}
 
-	// (M17) the wakes' far arms at the sea's grid point (x0, z0), as the sea's vertex shader has them: faded out as the water
-	// shoals to nothing (WAKE_SHOAL m of it), where they've broken
+	// (M17) the wakes' far arms at the sea's grid point (x0, z0), as the sea's vertex shader has them: ((M20) each crest as high
+	// as it is until it's near 0.78 of the depth, crest to trough, then broken, held under it: WakeWaves.wakeBreak. It was faded
+	// out from 1.5 m of depth to 0.2, where the physics keeps it as it is until it breaks: docs/m20/sea.md)
 	wakeAt( x0, z0 ) {
 
 		if ( ! this.wakes.count ) return 0;
 		const h = this.wakes.heightAt( x0, z0 );
 		if ( h === 0 || ! this.terrain ) return h;
-		return h * MathUtils.smoothstep( G.seaLevel.value - this.terrain.heightAt( x0, z0 ), WAKE_SHOAL[ 0 ], WAKE_SHOAL[ 1 ] );
+		return wakeBreak( h, G.seaLevel.value - this.terrain.heightAt( x0, z0 ) );
 
 	}
 

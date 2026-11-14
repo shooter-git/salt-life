@@ -8,7 +8,7 @@ export async function resolve( specifier, context, next ) {
 	return next( specifier, context );
 }` ) );
 globalThis.window = globalThis.window || { devicePixelRatio: 1 };
-const { WakeWaves, WAKE, wakeTan, wakeCos, wakeHeight, wakeDrawn } = await import( '../src/ocean/WakeWaves.js' );
+const { WakeWaves, WAKE, wakeTan, wakeCos, wakeHeight, wakeDrawn, wakeWave, wakeWedge, waveNumber, wakeBreak, WAKE_BREAK } = await import( '../src/ocean/WakeWaves.js' );
 const { Waves } = await import( '../src/ocean/Waves.js' );
 const { WaterQuery } = await import( '../src/ocean/WaterQuery.js' );
 const { loadBoat } = await import( '../src/world/boat/Boats.js' );
@@ -241,18 +241,52 @@ function run( w, key, U, secs, L, vol, at = { x: 0, z: 0 }, dir = 0, t0 = 0, eac
 
 }
 
-// ---- the uniforms about the sea's origin, as the CPU's samples less it; tens of km out the same crests
-for ( const [ tier, spacing, L, V ] of [ [ 'mid', 0, 5.61, 2.49 ], [ 'low', 16 / 7, 12.84, 18.48 ] ] ) {
+// ---- (M20) in shallow water (docs/m20/sea.md; the sources, docs/m20/sources-sea.md's 1): the wedge by the depth Froude number,
+// the console on the plane over a bank and coming off it there, her crests breaking at 0.78 of the depth
+{
+
+	// (the wedge's half-angle by Fh, against the sources' worked table)
+	const table = [ [ 0.5, 19.5 ], [ 0.8, 24.3 ], [ 0.9, 34.6 ], [ 0.95, 46.1 ], [ 0.99, 67.9 ], [ 1.05, 72.2 ], [ 1.2, 56.4 ], [ 1.5, 41.8 ], [ 2, 30.0 ], [ 3, 19.5 ] ];
+	let worst = 0;
+	for ( const [ Fh, deg ] of table ) worst = Math.max( worst, Math.abs( wakeWedge( 5, 25 / ( g * Fh * Fh ) ).alpha * 180 / Math.PI - deg ) );
+	ok( worst < 0.6, `the wake's wedge by the depth Froude number as the sources work it: Kelvin's, 72 degrees near critical, asin( 1 / Fh ) past it (${ worst.toFixed( 2 ) } degrees off at most)` );
+	// (the waves' dispersion in the depth, omega^2 = g k tanh kh; none faster than the shallow water's speed)
+	const k1 = waveNumber( 2.5, 1 );
+	ok( Math.abs( g * Math.tanh( k1 ) / k1 - 2.5 * 2.5 ) < 1e-9 && waveNumber( 2.5, Infinity ) === g / 6.25 && waveNumber( 3.2, 1 ) === 0, 'her waves go as the depth has them: g tanh( kh ) / k their speed squared, none faster than sqrt( g h )' );
+	// (deep water, or too deep for her waves to feel: as before, to the bit)
+	const U20 = 20 * kn, deep = wakeWave( U20, 5.61 ), d30 = wakeWave( U20, 5.61, 30 );
+	ok( deep.cos === wakeCos( U20, 5.61 ) && deep.tan === wakeTan( U20, 5.61 ) && deep.high === 1 && deep.n === 0.5 && d30.cos === deep.cos && d30.k === deep.k, 'over deep water her waves are as they were' );
+	// (on the plane at 20 kn, supercritical over 2 m and 1 m: her arms where they were, her waves a little longer, 5.8 and 10.4 m)
+	const p2 = wakeWave( U20, 5.61, 2 ), p1 = wakeWave( U20, 5.61, 1 ), lam = ( w ) => 2 * Math.PI / w.k;
+	const deg = ( w ) => Math.atan( w.tan ) * 180 / Math.PI;
+	const edge1 = wakeWedge( U20, 1 ).alpha * 180 / Math.PI;
+	ok( Math.abs( p2.cos - deep.cos ) < 1e-12 && deg( p2 ) > deg( deep ) && deg( p2 ) < 11 && deg( p1 ) < edge1, `on the plane over 2 m and 1 m of water (Fh ${ p2.Fh.toFixed( 2 ) }, ${ p1.Fh.toFixed( 2 ) }) her arms open a little: ${ deg( deep ).toFixed( 1 ) } degrees out at sea, ${ deg( p2 ).toFixed( 1 ) } and ${ deg( p1 ).toFixed( 1 ) } there (the sources' apparent angle about 9 and 11, the wedge's edge ${ edge1.toFixed( 1 ) } in 1 m, where her waves barely run)` );
+	ok( Math.abs( lam( p2 ) - 5.8 ) < 0.2 && Math.abs( lam( p1 ) - 10.4 ) < 0.6, `  her waves ${ lam( p2 ).toFixed( 2 ) } m and ${ lam( p1 ).toFixed( 2 ) } m long there (the sources: 5.8 and 10.4)` );
+	// (coming off the plane at 8.2 kn over 2 m, Fh 0.95: her arms wide open, her waves long, her crests twice as high)
+	const c = wakeWave( 8.2 * kn, 5.61, 2 ), cDeep = wakeWave( 8.2 * kn, 5.61 );
+	ok( c.Fh > 0.94 && c.Fh < 0.96 && Math.atan( c.tan ) > Math.atan( cDeep.tan ) + 15 * Math.PI / 180 && lam( c ) > 1.5 * lam( cDeep ) && c.high === 2, `coming off the plane over 2 m (Fh ${ c.Fh.toFixed( 2 ) }): her arms ${ ( Math.atan( c.tan ) * 180 / Math.PI ).toFixed( 0 ) } degrees out, not ${ ( Math.atan( cDeep.tan ) * 180 / Math.PI ).toFixed( 0 ) }, her waves ${ lam( c ).toFixed( 1 ) } m, not ${ lam( cDeep ).toFixed( 1 ) }, twice as high` );
+	ok( wakeWave( 8.2 * kn, 5.61, 2 * ( 0.95 / 0.8 ) ** 2 ).high === 1 && wakeWave( 8.2 * kn, 5.61, 2 * ( 0.95 / 1.2 ) ** 2 ).high === 1, '  and as high as before by Fh 0.84 and 1.16' );
+	// (breaking: as high as they are at half of what the depth stands, held under it past that, none on the sand)
+	const h0 = 0.5 * WAKE_BREAK * 0.5;
+	ok( Math.abs( wakeBreak( h0 * 0.5, 0.5 ) / ( h0 * 0.5 ) - 1 ) < 0.016 && wakeBreak( 0.1, 30 ) > 0.09999, 'a crest at half of what the depth stands is as high as it was (1.5% lower at most), and out at sea untouched' );
+	ok( wakeBreak( 0.6, 0.5 ) < h0 && wakeBreak( - 0.6, 0.5 ) > - h0 && Math.abs( wakeBreak( 0.3, 0 ) ) < 0.002, `  one past it held under ${ ( WAKE_BREAK * 100 ).toFixed( 0 ) }% of the depth crest to trough, and none on the sand` );
+
+}
+
+// ---- the uniforms about the sea's origin, as the CPU's samples less it; tens of km out the same crests; ((M20) and over a
+// 2 m bank coming off the plane, the shader's dispersion in the depth as the CPU's)
+for ( const [ tier, spacing, L, V, U, depth ] of [ [ 'mid', 0, 5.61, 2.49, 15, 0 ], [ 'low', 16 / 7, 12.84, 18.48, 15, 0 ], [ 'mid', 0, 5.61, 2.49, 8.2 * kn, 2 ] ] ) {
 
 	const w = new WakeWaves( { tier } ), O = { x: 40960, z: - 20480 };
 	w.spacing = spacing;
+	if ( depth ) w.depthAt = () => depth;
 	const edges = [ 0.2, 0.4 ];
-	const end = run( w, 'own', 15, 30, L, V, { x: 41000, z: - 20500 }, 0.6 );
+	const end = run( w, 'own', U, 30, L, V, { x: 41000, z: - 20500 }, 0.6 );
 	w.place( O );
-	const A = w.uniforms.wakeA.value, B = w.uniforms.wakeB.value;
+	const A = w.uniforms.wakeA.value, B = w.uniforms.wakeB.value, D = w.uniforms.wakeDepth.value;
 	let same = true;
 	for ( let i = 0; i < w.n; i ++ ) if ( Math.abs( A[ i ].x - ( w.s.x[ i ] - O.x ) ) > 1e-9 || B[ i ].y !== w.s.k[ i ] || B[ i ].w !== w.s.amp[ i ] ) same = false;
-	if ( tier === 'mid' ) ok( same && w.uniforms.wakeTracks.value === 1, 'the uniforms are the CPU\'s samples about the sea\'s origin' );
+	if ( tier === 'mid' && ! depth ) ok( same && w.uniforms.wakeTracks.value === 1, 'the uniforms are the CPU\'s samples about the sea\'s origin' );
 	// (the GPU's sum, worked here in 32-bit floats from the uniforms as wakeAt reads them, against the CPU's in doubles)
 	const f = Math.fround;
 	const gpuAt = ( x, z ) => {
@@ -263,7 +297,8 @@ for ( const [ tier, spacing, L, V ] of [ [ 'mid', 0, 5.61, 2.49 ], [ 'low', 16 /
 		let pQ = [], pK = [], pc = [], pSig = 0, pLam = 0, pAmp = 0;
 		for ( let s = span.x, i = 0; s < span.y; s ++, i ++ ) {
 
-			const a = A[ s ], b = B[ s ], k = f( b.y ), cs = f( b.z ), sn = f( Math.sqrt( 1 - cs * cs ) ), om = f( Math.sqrt( g * k ) ), go = f( b.x * 0.5 * om / k );
+			const a = A[ s ], b = B[ s ], k = f( b.y ), cs = f( b.z ), sn = f( Math.sqrt( 1 - cs * cs ) );
+			const kh = f( Math.min( k * f( D[ s >> 2 ].getComponent( s & 3 ) ), 12 ) ), om = f( Math.sqrt( g * k * Math.tanh( kh ) ) ), go = f( b.x * ( kh >= 12 ? 0.5 : 0.5 + kh / Math.sinh( 2 * Math.max( kh, 1e-3 ) ) ) * om / k );
 			const d = [ f( Math.cos( a.z ) ), f( Math.sin( a.z ) ) ], side = [ - sn * d[ 1 ], sn * d[ 0 ] ], lam = f( 2 * Math.PI / k ), r0 = Math.min( 1, Math.max( 0, ( spacing / lam - edges[ 0 ] ) / ( edges[ 1 ] - edges[ 0 ] ) ) ), amp = f( b.w * ( 1 - r0 * r0 * ( 3 - 2 * r0 ) ) );
 			for ( let e = 0; e < 2; e ++ ) {
 
@@ -311,7 +346,7 @@ for ( const [ tier, spacing, L, V ] of [ [ 'mid', 0, 5.61, 2.49 ], [ 'low', 16 /
 
 	}
 
-	ok( scale > 0.01 && worst < 0.002, `${ tier }, 41 km out, the shader's sum in floats about the origin as the CPU's in doubles: ${ ( worst * 1000 ).toFixed( 2 ) } mm at most, of crests ${ ( scale * 100 ).toFixed( 1 ) } cm${ spacing ? ', both at low\'s finest grid' : '' }` );
+	ok( scale > 0.01 && worst < 0.002, `${ tier }, 41 km out, the shader's sum in floats about the origin as the CPU's in doubles: ${ ( worst * 1000 ).toFixed( 2 ) } mm at most, of crests ${ ( scale * 100 ).toFixed( 1 ) } cm${ spacing ? ', both at low\'s finest grid' : '' }${ depth ? `, coming off the plane over ${ depth } m of water` : '' }` );
 	void tan;
 
 }

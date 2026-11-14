@@ -79,6 +79,9 @@ const TOTAL_FULL = KEY_FULL * Math.sin( Math.PI / 3 ) + 0.25 * 0.65;
 // mapping's shoulder)
 const MOON_RADIANCE = 0.5, MOON_NIGHT = 0.22;
 const MARE = 0.3;
+// ((M20) the disc's albedo on average, as skyMoon draws it: its seas, MARE of the highlands', 31% of the near side
+// (derived), for its light in the sea: WaterSurface's glint)
+const MOON_ALBEDO = 1 - ( 1 - MARE ) * 0.31;
 // its seas, as they lie on its near side (selenographic latitude, longitude east, radius: degrees, a degree 30.3 km;
 // after the IAU's centres and diameters, the big irregular ones as several, laid over the full moon's photograph), their
 // edges broken in the shader
@@ -760,6 +763,23 @@ export class Sky {
 		this.adaptation = jump ? target : this.adaptation + ( target - this.adaptation ) * ( 1 - Math.exp( - dt * ( target > this.adaptation ? 1.6 : 1.1 ) ) );
 		const skyAdapt = this.sceneAdaptation ? 1 : this.adaptation;
 		this.uniforms.skyExposure.value = skyAdapt;
+		// ((M20) The moon in the sea (WaterSurface's glint), from moonrise: the light it's lit by, and 1 / its disc's solid angle,
+		// the most a mirror sends of it (its disc's own brightness). By night the moon's light as the key light has it (as bright
+		// as the night's drawn, the sea's glint as the night's light on everything else); in the dusk, its disc's light, all of
+		// it, as the sky draws it against the day's sky (its albedo's mean, its lit part, its earthshine, through the air at its
+		// height, at the sky's exposure); between, as the night comes on. Under a grey sky's veil, and its greyed horizon. And
+		// whether it's the key light, whose own glint on the sea it takes the place of: stream SEA, docs/m20/sea.md)
+		{
+
+			const up = this.moonDir.y, show = THREE.MathUtils.smoothstep( up, - 0.01, 0.01 ) * veiled * ( 1 - 0.85 * this.overcast * ( 1 - THREE.MathUtils.smoothstep( up, 0, 0.3 ) ) );
+			const F = this.uniforms.skyMoonFace.value, omega = Math.PI * F.z * F.z, T = this._moonLit.sunTransmittance;
+			const disc = MOON_ALBEDO * ( this.moon.lit * F.x + F.y ) * omega * skyAdapt * ( 1 - night ) * show, key = this.night.key * night * show;
+			_c.copy( MOON ).multiply( this._keyTint ).multiplyScalar( key );
+			G.moonLight.value.set( T.r * disc + _c.r, 0.97 * T.g * disc + _c.g, 0.92 * T.b * disc + _c.b, sunUp ? 0 : 1 );
+			G.moonGlint.value.set( this.moonDir.x, this.moonDir.y, this.moonDir.z, show > 0 ? 1 / omega : 0 );
+
+		}
+
 
 		// the horizon haze the fog fades into: the atmosphere's horizon (Tidewater's units, those of the
 		// sky behind the island) and the moonlit sky's at night. (Salt Life) Under a grey sky, a grey of
