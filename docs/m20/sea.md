@@ -155,3 +155,28 @@ Her port arm runs in onto the beach and breaks there: a long crest, white along 
 - the console on the plane over 2 m and 1 m, and coming off it over 2 m;
 - the breaking;
 - the shader's sum in 32-bit floats against the CPU's over a 2 m bank.
+
+## Checks
+
+- **`tools/gpu-limits.mjs`, every tier** (`SHOW=Water`). The sea has no texture more than before.
+
+  | Tier | Fragment textures | Vertex uniforms (of 1024) |
+  |---|---|---|
+  | high | 16 of 16 | 195 |
+  | mid | 14 | 195 |
+  | low | 13 | 142 |
+
+  All within what a graphics card allows. On low the flats' under-water marks didn't come within the wait, as before; their surface's did.
+- **`pnpm test`:** every test file, and the assets' lock. `test/sea-origin.mjs`' stand-in sea gained the moon's slopes.
+- **Renders on every tier:**
+  - **The moon's path** at 10° up, calm and fair, night and twilight. The widths on low and high are as mid's, within 6% of Cox and Munk's at the top of their range:
+
+    | Tier | Calm night | Calm twilight | Fair night | Fair twilight |
+    |---|---|---|---|---|
+    | low | 4.3 | 3.9 | 6.4 | 6.6 |
+    | mid | 4.1 | 5.0 | 6.3 | 6.1 |
+    | high | 4.3 | 4.3 | 6.5 | 7.0 |
+    | Cox and Munk's | 4.2 | 4.2 | 6.0 to 7.0 | 6.0 to 7.0 |
+
+  - **High's bloom.** On high at night the path throws a wide haze of bloom about it. v2.5.0's path did the same, a little more (its peak 25.7 against 24.3 now, `MOON_OLD=1`); the new path's better defined inside it. It's left for the tone curve's trial in wave 2.
+  - **The wake over the bay's bank** (`tools/wakes/bank.mjs`) on low, mid and high: her figures the same on each (34.3 to 34.4°, 12.7 m, 0.49 m). Her port arm breaks on the beach on all three.

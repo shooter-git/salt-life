@@ -8,7 +8,8 @@
 //   a dev server on LOOK_PORT (5241), then
 //   node tools/moon/sea.mjs <out> [tier] [heights] [weathers] [when]
 //   node tools/moon/sea.mjs qa-output/moon-sea mid 5,10,20 calm,fair,breezy night,twilight
-//   (MOON_K=k: the share of Cox and Munk's slopes the glint's own spread takes, for the trials: WaterSurface's MOON_SLOPE)
+//   (MOON_K=k: the share of Cox and Munk's slopes the glint's own spread takes, for the trials: WaterSurface's MOON_SLOPE;
+//   MOON_OLD=1: as v2.5.0 drew it, the key light's own glint at night and nothing at dusk)
 //
 // Each shot: 960 by 540, a 40 degree lens, the eye 2.2 m over the sea, the horizon a fifth of the way down; the width is
 // read on the rows a degree either side of the mirror point, over four frames as the waves move. Don't edit src while it runs.
@@ -90,6 +91,7 @@ for ( const weather of WEATHERS.split( ',' ) ) {
 	await page.waitForFunction( () => window.__app && window.__app._started && window.__app.sky.moonShown, null, { timeout: 900000 } );
 	log( weather, 'started' );
 	if ( process.env.MOON_K ) await page.evaluate( ( k ) => window.__moonK = k, + process.env.MOON_K );
+	if ( process.env.MOON_OLD ) await page.evaluate( () => window.__moonOld = true );
 	await page.evaluate( async () => {
 
 		// (the game's own Globals: once src has changed under the dev server, the game's imports carry a ?t= of their own, and a
@@ -142,6 +144,8 @@ for ( const weather of WEATHERS.split( ',' ) ) {
 
 			cam.updateMatrixWorld();
 			G.cameraUnderwater.value = 0;
+			// (MOON_OLD: as v2.5.0 drew it, the key light's own glint and none of the moon's)
+			if ( window.__moonOld ) G.moonGlint.value.w = G.moonLight.value.w = 0;
 			a.scene.fog.near = a.sky.fogNear;
 			a.scene.fog.far = a.sky.fogFar;
 			a.scene.fog.color.copy( G.horizonColor.value );
