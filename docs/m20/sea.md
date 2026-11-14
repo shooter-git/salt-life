@@ -168,6 +168,12 @@ Her port arm runs in onto the beach and breaks there: a long crest, white along 
 
   All within what a graphics card allows. On low the flats' under-water marks didn't come within the wait, as before; their surface's did.
 - **`pnpm test`:** every test file, and the assets' lock. `test/sea-origin.mjs`' stand-in sea gained the moon's slopes.
+- **The merge check** (`4f8cd1d`, a clean copy built, against v2.5.0 built the same way):
+  - the same 16 programs before ready, by name and number;
+  - All the Spaces' complete check 14 of 14;
+  - low's script memory 126.2 MB (up to 150), run with nothing else on the machine;
+  - the download 78.9 MB (up to 80).
+- **The ready A/B**, since the sea's loading shader changed (the integer hash): phone upright on 4 cores, 4 rounds each, alternating. v2.5.0: 2.32, 2.23, 2.23, 2.23 s (median 2.23). SEA: 2.27, 2.23, 2.30, 2.20 s (median 2.25). The same within the rounds' spread.
 - **Renders on every tier:**
   - **The moon's path** at 10° up, calm and fair, night and twilight. The widths on low and high are as mid's, within 6% of Cox and Munk's at the top of their range:
 
