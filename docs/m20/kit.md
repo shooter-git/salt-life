@@ -96,3 +96,14 @@ A 40 kg wahoo on one float is now lost 85% of the time; M19's test had it landed
 - `test/gear-m19.mjs`: its wahoo's now 30 kg.
 - `tools/two-players/kit.mjs` (two real games), on low, mid and high, all passing: Robin's blue-water gun with two floats out, on her game and as her copy on Sam's (the copy's floats within 0.5 m of hers); Robin landing a netted fish, on both.
 - `tools/two-players/resume.mjs kayak kayaksand`: all passing (out on the sand, no anchor; reloaded, the same; an old anchor let go).
+
+## Checks
+
+- **`pnpm test`:** every test file, and the assets' lock. `test/back.mjs`' stand-in game gained the anchor's splash.
+- **The merge check** (`4d8ce2b`, a clean copy built, against v2.5.0 built the same way):
+  - the same 16 programs before ready, by name and number;
+  - All the Spaces' complete check 14 of 14;
+  - low's script memory 131.3 MB (up to 150), run with nothing else on the machine; SEA's read 126.2;
+  - the download 78.9 MB (up to 80).
+- **The first merge check found 17 programs.** The landing net was in the scene from the start, in the bobber's material, and the load's compile builds hidden meshes' programs, so it built the bobber's program before ready. The net's now made, and put in the scene, the first time it's wanted (M19 had the same with the spear shaft).
+- No shader in the loading frame changed, so no ready A/B.
