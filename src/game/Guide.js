@@ -200,7 +200,8 @@ function cards( device, kayak ) {
 const CARD_COUNT = 3;
 
 // (M17) a school spooked: the tip for why (FlatsFishing's events.spooked)
-const SPOOK_TIP = { speed: 'spookSpeed', push: 'spookPush', shadow: 'spookShadow', knock: 'spookKnock', wade: 'spookWade', engine: 'spookEngine', cast: 'spookCast', line: 'spookCast', refused: 'flatsRefused', theirs: 'spookTheirs', falsecast: 'spookFalseCast' };
+// ((M20) and an anchor's splash, the Power-Poles' or a stake-out pole's thump: FlatsFishing.splash)
+const SPOOK_TIP = { speed: 'spookSpeed', push: 'spookPush', shadow: 'spookShadow', knock: 'spookKnock', wade: 'spookWade', engine: 'spookEngine', cast: 'spookCast', line: 'spookCast', refused: 'flatsRefused', theirs: 'spookTheirs', falsecast: 'spookFalseCast', anchor: 'spookAnchor', poles: 'spookPoles', stake: 'spookStake' };
 
 // (M16) a tip that isn't the same in a kayak (no helm, no fuel, no bilge), or is hers alone; by the device where it's a key
 const IN_KAYAK = {
@@ -331,6 +332,10 @@ const TIPS = {
 	spookKnock: 'Spooked: a <b>paddle knocked the hull</b>, and they heard it through the water. Easy strokes near fish.',
 	spookWade: 'Spooked: they <b>heard you wading</b>. Slow, quiet steps near fish, and flats booties on rock and rubble.',
 	spookEngine: 'An <b>engine</b> running spooks the flat\'s fish a hundred metres off. Shut it down well short of them, and drift or pole in.',
+	// ((M20) things going into the water: FlatsFishing.splash)
+	spookAnchor: 'Spooked: the <b>anchor went in with a splash</b>, and they heard it through the water. Anchor well short of fish, or hold her with a pole: it\'s quieter.',
+	spookPoles: 'Spooked: her <b>Power-Poles thumped into the bottom</b> close by. Quiet as they are, put them down a little further off and let the fish come to you.',
+	spookStake: 'Spooked: the <b>stake-out pole</b> went in too near them. Stake out a little further off, and let them come.',
 	spookCast: '<b>Too close</b>: a bait landing on a fish\'s head, or the line laid over its back, sends the whole school off. Lead them.',
 	// ((M19) the fly rod: game/FlyCast.js)
 	spookFalseCast: 'Spooked by your <b>false casts</b>: the line going over them, its flash and its shadow. False cast to one side of them, or short of them, and shoot the rest; two false casts are plenty.',

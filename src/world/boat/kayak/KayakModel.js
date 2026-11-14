@@ -9,7 +9,7 @@ import { KAYAK_HANDLING, Stroke } from './Paddle.js';
 import { dryFrom, layOn, waterFrom } from './Shore.js';
 import { TIDE_HIGHEST } from '../../../game/IslandClock.js';
 import { Drops } from './Drops.js';
-import { TUMBLE_B, capsizeHeel, breakerCapsizes, spillShare, climbSeconds, soakStep, SOAKED } from './Capsize.js';
+import { TUMBLE_B, HEEL, capsizeHeel, breakerCapsizes, spillShare, climbSeconds, soakStep, SOAKED } from './Capsize.js';
 import { seenInWater } from '../../../materials/SeenInWater.js';
 
 const _mid = new Vector3(), _dir = new Vector3(), _up = new Vector3(), _z = new Vector3(), _m = new Matrix4();
@@ -586,8 +586,16 @@ export class KayakModel extends Vessel {
 		if ( ( this._settle = ( this._settle || 0 ) - dt ) > 0 ) return;
 		_up.set( 0, 1, 0 ).applyQuaternion( ctl.quaternion );
 		const heel = Math.asin( Math.min( 1, Math.hypot( _up.x, _up.z ) ) );
-		const limit = capsizeHeel( !! this.stroke.kind && this.stroke.park === 0, p.handsFull || p.busy );
+		// ((M20) stood up in the Pilot: your footing goes first, at HEEL.stand, and you go in, not her)
+		const limit = this.standing ? HEEL.stand : capsizeHeel( !! this.stroke.kind && this.stroke.park === 0, p.handsFull || p.busy );
 		this._over = heel > limit ? this._over + dt : Math.max( 0, this._over - dt * 2 );
+		if ( this.standing && this._over > 0.18 ) {
+
+			this.fallIn( game, ctl, p, _v.set( 1, 0, 0 ).applyQuaternion( ctl.quaternion ).y >= 0 ? 1 : - 1 );
+			return;
+
+		}
+
 		let over = this._over > 0.18;
 		const q = ctl.query, x = ctl.position.x, z = ctl.position.z;
 		if ( ! over && q.breakerAt ) {
@@ -606,6 +614,24 @@ export class KayakModel extends Vessel {
 
 		// (her high side comes up and over)
 		if ( over ) this.capsize( game, ctl, p, _v.set( 1, 0, 0 ).applyQuaternion( ctl.quaternion ).y >= 0 ? 1 : - 1 );
+
+	}
+
+	// (M20) stood up in the Pilot, she's heeled past your footing: you go in over her low side (side: + her port side up), and she
+	// stays upright, the cooler with her. Climb back aboard as after a capsize, without righting her
+	fallIn( game, ctl, p, side ) {
+
+		this._over = 0;
+		this.standing = false;
+		this.drive = null;
+		const st = this.stroke, stats = game.state.stats;
+		st.kind = null;
+		st.phase = 1;
+		st.park = 1;
+		p.exitBoat( null, - side );
+		p.soak = 1;
+		p.breath = Math.min( p.breath, p.breathMax * ( stats.lifeJacket ? 0.95 : 0.75 ) );
+		game.toast( 'You lost your footing and went in · she\'s upright: swim to her and climb back aboard', 4600 );
 
 	}
 

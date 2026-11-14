@@ -53,13 +53,13 @@ const BLUE = UPGRADES.speargun.levels.length - 1;
 	const rail = spearTerms( gun( 2 ) ), blue = spearTerms( gun( BLUE ) );
 	ok( rail.maxDistance === gun( 2 ).lineM + 25 && rail.floatM === Infinity && ! rail.terms.dragKg, `the railgun as it was: ${ rail.maxDistance } m and it tears free` );
 	ok( blue.maxDistance === Infinity && blue.terms.tether === gun( BLUE ).lineM + 30 && blue.terms.dragKg === FLOAT.kg && blue.floatM === gun( BLUE ).lineM, `the blue-water gun: on its float past ${ blue.floatM } m, held back by it (${ FLOAT.kg } kg) out to ${ blue.terms.tether } m` );
-	// a 40 kg wahoo, pulled with care: lost on the railgun, landed on the float
-	const w2 = spearCell( 2, 'wahoo', 40, 20 ), w3 = spearCell( BLUE, 'wahoo', 40, 20 );
-	ok( w2.caught === 0 && w3.caught === 1, `a 40 kg wahoo: the railgun lands ${ w2.caught * 100 }%, the blue-water gun ${ w3.caught * 100 }% (in ${ w3.t.toFixed( 0 ) } s)` );
+	// a 30 kg wahoo, pulled with care: lost on the railgun, landed on the float ((M20) one float holds 35 kg: test/kit-m20.mjs)
+	const w2 = spearCell( 2, 'wahoo', 30, 20 ), w3 = spearCell( BLUE, 'wahoo', 30, 20 );
+	ok( w2.caught < 0.5 && w3.caught === 1, `a 30 kg wahoo: the railgun lands ${ w2.caught * 100 }%, the blue-water gun ${ w3.caught * 100 }% (in ${ w3.t.toFixed( 0 ) } s)` );
 	const small = spearCell( 2, 'mahi', 8, 20 ), small3 = spearCell( BLUE, 'mahi', 8, 20 );
 	ok( small.caught === 1 && small3.caught === 1, 'an 8 kg mahi on either' );
 	// out to the float line's end and no further
-	const f = new CatchMinigame( { species: 'wahoo', kg: 48, ...blue.terms, rng: () => 0.5 } );
+	const f = new CatchMinigame( { species: 'wahoo', kg: 34, ...blue.terms, rng: () => 0.5 } );
 	let far = 0;
 	for ( let i = 0; i < 30 * 60; i ++ ) {
 
@@ -71,7 +71,7 @@ const BLUE = UPGRADES.speargun.levels.length - 1;
 	ok( far <= blue.terms.tether + 1e-9 && far > blue.floatM && f.state === 'fighting', `let it run: out to ${ far.toFixed( 1 ) } m (its float line's end), towing the float, still on` );
 	// hauling into every run: torn off
 	let torn = 0;
-	for ( let s = 1; s <= 20; s ++ ) if ( spearOnce( BLUE, 'wahoo', 40, s * 977, { policy: () => true } ).st === 'snapped' ) torn ++;
+	for ( let s = 1; s <= 20; s ++ ) if ( spearOnce( BLUE, 'wahoo', 34, s * 977, { policy: () => true } ).st === 'snapped' ) torn ++;
 	ok( torn >= 15, `hauling into every run tears it off the shaft (${ torn } of 20)` );
 
 }

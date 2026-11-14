@@ -345,6 +345,40 @@ export class FlatsFishing {
 
 	}
 
+	// (M20) something going into the water at `at` with a splash or a thump (stream KIT, docs/m20/kit.md): an anchor, a Power-Pole's
+	// spike, a stake-out pole. Heard heardM m off by a fish of a bonefish's wariness, the warier the further (Sight's wary). Each
+	// school in sight with a fish that near bolts, the flat quiet a while (spooked: in everyone's record, so the others' flats
+	// hear it too, as M17 has it) -> how many schools it sent off
+	splash( at, heardM, why ) {
+
+		const fish = this.fish;
+		if ( ! fish || ! fish.sightGroups || ! this.near( at.x, at.z ) ) return 0;
+		let n = 0;
+		for ( const g of fish.sightGroups ) {
+
+			const S = g.sight;
+			if ( ! S || ! g.active || S.bolt > 0 ) continue;
+			const r = heardM * ( sightOf( S.kind ) ? sightOf( S.kind ).wary : 1 );
+			if ( Math.hypot( g.center.x - at.x, g.center.z - at.z ) > r + g.radius ) continue;
+			let heard = false;
+			fish.sightFish( g, ( i ) => {
+
+				heard = heard || Math.hypot( fish.pos[ i * 3 ] - at.x, fish.pos[ i * 3 + 2 ] - at.z ) < r;
+
+			} );
+			if ( heard ) {
+
+				this.spooked( g, why, at.x, at.z );
+				n ++;
+
+			}
+
+		}
+
+		return n;
+
+	}
+
 	// (M19) a false cast's line in the air from a (the rod's tip) to b (its far end), or the line torn off the water picking it up:
 	// each school it goes near may spook, the nearer the likelier (Sight.falseCastScare). The guides: false cast to the side of
 	// the fish, or short of them, and shoot the rest

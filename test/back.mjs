@@ -277,7 +277,7 @@ const v3 = ( v ) => `(${ v.x.toFixed( 2 ) }, ${ v.y.toFixed( 2 ) }, ${ v.z.toFix
 	b.position.set( 3000, 0, 3000 );
 	b.moored = false;
 	const toasts = [];
-	const g = { app: { boatCtl: b, terrainData: flat }, state: { stats: { anchorM: 10 } }, toast: ( t ) => toasts.push( t ) };
+	const g = { app: { boatCtl: b, terrainData: flat }, state: { stats: { anchorM: 10 } }, toast: ( t ) => toasts.push( t ), plunk() {} }; // ((M20) its splash: test/kit-m20.mjs)
 	Game.prototype.dropAnchor.call( g );
 	ok( ! b.anchor && ! toasts.length, 'in 5 cm: no anchor as you step out, and nothing said' );
 	Game.prototype.dropAnchor.call( g, true );

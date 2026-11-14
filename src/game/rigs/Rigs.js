@@ -1075,6 +1075,7 @@ export class Rigs {
 				leaps: leapsOf( b.species ),
 				bow: FLY_BOW,
 				landAt: this.landAt( b, off, big ),
+				net: netted( s, b.species, b.kg ) && ! off, // ((M20) in the landing net: the rod draws it)
 				tired: big ? ( off ? DEHOOK.tiredBig : 0.3 ) : 1,
 				leader: leader === 'wire' ? 'wire' : bite ? 'bite' : 'tippet',
 				tippetLb: t.lineKg / LB_KG,
@@ -1096,6 +1097,7 @@ export class Rigs {
 			wear: risk.wear,
 			leaps: leapsOf( b.species ),
 			landAt: this.landAt( b, off, big ),
+			net: netted( s, b.species, b.kg ) && ! off, // ((M20) in the landing net: the rod draws it)
 			tired: big ? ( off ? DEHOOK.tiredBig : 0.3 ) : 1,
 			leader,
 		};

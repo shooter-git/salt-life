@@ -6,7 +6,8 @@
 //
 //   node tools/fight-sweep.mjs [--n 10] [--json out.json] [--species tuna,mahi] [--only L3/R3/chair,...] [--no-dh]
 //                              [--compact] [--base base.json] [--spear]
-//   ((M19) --spear: the speargun's fights instead, each kind it may shoot on each gun, S0 to S3: docs/m19/gear.md)
+//   ((M19) --spear: the speargun's fights instead, each kind it may shoot on each gun, S0 to S3: docs/m19/gear.md; (M20) and
+//   S3+1 to S3+3, the blue-water gun with one to three extra floats: docs/m20/kit.md)
 //
 // Each cell: the share landed, broken (the line snapped), spooled, got away (slack or past the line) and cut (teeth or a
 // bill through the leader), and the landed fights' mean length in s. With --base, each cell's change from that file's.
@@ -163,10 +164,18 @@ export const SPECIES = FISH_IDS.filter( ( id ) => ! FISH[ id ].hand && FISH[ id 
 // ((M19) the speargun: a fish on the shaft that fights (one not shot through the head, Game.updateSpear's `big`), on each gun
 // (S0 the starter to S3 the blue-water gun on its breakaway), pulled with care, on the game's own terms (Speargun.spearTerms)
 export const SPEAR_SPECIES = FISH_IDS.filter( ( id ) => FISH[ id ].spear && ! FISH[ id ].protected && FISH[ id ].fight > 0 );
-export const GUNS = UPGRADES.speargun.levels.map( ( l, i ) => `S${ i }` );
-export function spearOnce( level, id, kg, seed, { policy = careful, capS = 900 } = {} ) {
+// ((M20) and the blue-water gun with its extra floats, S3+1 to S3+3: Gear's spearFloats)
+export const GUNS = [ ...UPGRADES.speargun.levels.map( ( l, i ) => `S${ i }` ), ...UPGRADES.spearFloats.levels.slice( 1 ).map( ( l, i ) => `S${ UPGRADES.speargun.levels.length - 1 }+${ i + 1 }` ) ];
+const gunOf = ( k ) => {
 
-	const T = spearTerms( gearStats( { ...defaultUpgrades(), speargun: level } ), { distance: 2.5 } );
+	const [ , level, floats = 0 ] = k.match( /^S(\d+)(?:\+(\d+))?$/ ).map( ( v ) => v === undefined ? undefined : + v );
+	return [ level, floats ];
+
+};
+
+export function spearOnce( level, id, kg, seed, { policy = careful, capS = 900, floats = 0 } = {} ) {
+
+	const T = spearTerms( gearStats( { ...defaultUpgrades(), speargun: level, spearFloats: floats } ), { distance: 2.5, kg } );
 	const g = new CatchMinigame( { species: id, kg, ...T.terms, rng: lcg( seed ) } );
 	g.maxDistance = T.maxDistance;
 	let st = 'fighting';
@@ -175,7 +184,7 @@ export function spearOnce( level, id, kg, seed, { policy = careful, capS = 900 }
 
 }
 
-export function spearCell( level, id, kg, n ) {
+export function spearCell( level, id, kg, n, floats = 0 ) {
 
 	const r = { n, t: 0 };
 	for ( const k of OUT ) r[ k ] = 0;
@@ -183,7 +192,7 @@ export function spearCell( level, id, kg, n ) {
 	for ( let i = 0; i < id.length; i ++ ) h = ( h * 31 + id.charCodeAt( i ) ) >>> 0;
 	for ( let i = 0; i < n; i ++ ) {
 
-		const o = spearOnce( level, id, kg, ( h ^ ( Math.round( kg * 1000 ) * 2654435761 ) ^ ( i * 40503 ) ) >>> 0 );
+		const o = spearOnce( level, id, kg, ( h ^ ( Math.round( kg * 1000 ) * 2654435761 ) ^ ( i * 40503 ) ) >>> 0, { floats } );
 		r[ o.st ] ++;
 		if ( o.st === 'caught' ) r.t += o.t;
 
@@ -204,7 +213,12 @@ export function spearSweep( { n = 10, species = SPEAR_SPECIES, sizes = SIZES } =
 		for ( const q of sizes ) {
 
 			const kg = sizeKg( id, q ), row = out[ id ][ q ] = { kg };
-			GUNS.forEach( ( k, l ) => row[ k ] = spearCell( l, id, kg, n ) );
+			for ( const k of GUNS ) {
+
+				const [ l, f ] = gunOf( k );
+				row[ k ] = spearCell( l, id, kg, n, f );
+
+			}
 
 		}
 

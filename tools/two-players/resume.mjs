@@ -1,7 +1,8 @@
 // (M16) Picking up where you left off, alone, in each boat: a real game in a driven browser (the SDK's stand-in keeps your save in the
 // browser), a real load of the page each time. Her times are faked in the saved records between visits, never the state in the game.
 // (M17) And where you were: each place on her deck (aboard), her upper helm, in the water by her far out (swim), the kayak at anchor
-// with you sat in her (kayakanchor).
+// with you sat in her (kayakanchor). (M20) The kayak out of her at the water's edge with an anchor aboard, no anchor going down
+// (kayaksand).
 //   tools/render-slot.sh node tools/two-players/resume.mjs [dir for screenshots] [port] [boats: kayak,console,...] [scenarios: berth,anchor,...]
 // Each's about a minute a load on the CPU: a run's capped at 25 minutes, so split them. Screenshots are <dir>/<boat>-<scenario>-seen.png (what you
 // see) and -out.png (her from outside).
@@ -1068,6 +1069,56 @@ const SC = {
 		v = await view( g );
 		note( brief( v ) );
 		say( v.mode === 'boat' && !! v.anchor && near( v, was, 45 ), `kayak at anchor 3 h: sat in her, still at her anchor (${ Math.hypot( v.x - was.x, v.z - was.z ).toFixed( 1 ) } m from where she was)` );
+
+	},
+
+	// (M20) the kayak's anchor on the sand (M19's step 1, docs/M19.md; asked of M19 and not run: docs/M20.md). Sat in her at the
+	// water's edge with an anchor aboard, and out of her as the game does it: she's pulled up the sand, and no anchor goes down
+	// (the game lets it go as you step out of a boat at sea: Game.updateAnchor). Reloaded, she's there on her sand, no anchor; and
+	// an anchor saved on a beached kayak (an old save's) is let go on the load
+	async kayaksand( S ) {
+
+		const { boat, g, page } = S, F = `${ out }/${ boat }-kayaksand`;
+		if ( boat !== 'kayak' ) return note( 'the kayak\'s alone' );
+		await S.load( `${ plain }&boat=${ boat }`, 'goto', 'first, ?boat' );
+		await S.fitted( ANCHOR[ boat ] );
+		await S.toSea( { x: 44, z: 120 } );
+		await frames( g, 3 );
+		await g.evaluate( () => {
+
+			// (paddled in to the water's edge, and out of her as the game does it)
+			const a = window.__app, b = a.boatCtl, p = a.player, M = a.boat;
+			b.position.x = 44;
+			b.position.z = - 37;
+			b.velocity.set( 0, 0, 0 );
+			b.apply();
+			M.leave( b, p, p.ashoreTarget() || { out: { x: 46, z: - 45 }, g: 1 } );
+
+		} );
+		await page.waitForTimeout( 1500 );
+		await frames( g, 6 );
+		const sand = await view( g );
+		note( `out of her at the water's edge: ${ brief( sand ) }` );
+		say( sand.beached && ! sand.anchor && sand.mode === 'walk', `kayak out on the sand: pulled up, no anchor down (beached ${ sand.beached }, anchor ${ JSON.stringify( sand.anchor ) }, toasts ${ JSON.stringify( sand.toasts ) })` );
+		await saveNow( g );
+		let v = await S.reload( 'out of her on the sand' );
+		note( brief( v ) );
+		good( v, 'kayak on the sand' );
+		say( v.beached && ! v.anchor && near( v, sand, 1 ), `kayak on the sand, reloaded: there, no anchor (${ Math.hypot( v.x - sand.x, v.z - sand.z ).toFixed( 2 ) } m off, anchor ${ JSON.stringify( v.anchor ) })` );
+		await shots( page, g, F, { from: [ 5, 3, - 7 ] } );
+		// ---- an anchor saved on her sand: let go on the load
+		await g.evaluate( () => {
+
+			const b = window.__app.boatCtl;
+			b.anchor = b.position.clone();
+
+		} );
+		await saveNow( g );
+		v = await S.reload( 'an anchor saved on her sand' );
+		await frames( g, 6 );
+		v = await view( g );
+		note( brief( v ) );
+		say( v.beached && ! v.anchor, `an anchor saved on her sand: let go on the load (anchor ${ JSON.stringify( v.anchor ) })` );
 
 	},
 

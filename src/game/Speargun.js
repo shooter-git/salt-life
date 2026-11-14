@@ -45,7 +45,9 @@ const BANDS = 4; // (M19) the most a gun has (the blue-water gun's), each drawn:
 const NOTCHES = { 1: [ 0.15 ], 2: [ 0.12, 0.2 ], 4: [ 0.1, 0.16, 0.22, 0.28 ] }; // band notches, from the shaft's tail
 // (M19) a breakaway rig's float, 11 L (docs/m19/sources-big-game.md, sec. 8): kg, what it holds back a running fish with, the
 // most of its buoyancy pulled under, less the bungee's stretch (judgement); r, its radius (11 L)
-export const FLOAT = { kg: 9, r: 0.138 };
+// ((M20) holds: the biggest fish one float holds at the surface, kg; past it, all of them on the line together, it drags them
+// under and pulls free: spearTerms)
+export const FLOAT = { kg: 9, r: 0.138, holds: 35 };
 
 // poses in camera space: the grip ( hand ), the barrel turned by yaw (to the left) and pitch (up), rolled
 // about itself
@@ -259,6 +261,7 @@ export class Speargun {
 		this.floatMesh.castShadow = false;
 		scene.add( this.floatMesh );
 		this.onFloat = false; // (set by fight: the fish is out on the float line)
+		this.floats = 1; // ((M20) how many floats on its line: Game, from spearTerms)
 		this.floatAt = new Vector3();
 
 	}
@@ -282,13 +285,16 @@ export class Speargun {
 
 	// (Together.js) another diver's gun, shaft and line: materials of their own in the same programs; the
 	// models are their gun's (gunModels)
+	// ((M20) and their float, or floats, on the blue-water gun's line, its models made when they're first out: floatGeometry)
 	tackle() {
 
 		const gun = new Mesh( this.gunMesh.geometry, createGunMaterial( this.ground ) );
 		const bands = new Mesh( this.bandMesh.geometry, createBandMaterial( this.ground ) );
 		const shaft = new Mesh( this.shaftMesh.geometry, createShaftMaterial( this.ground ) );
 		const line = new Mesh( this.lineMesh.geometry, createLineMaterial( LINE_SEGS ) );
-		for ( const m of [ gun, bands, shaft, line ] ) {
+		const float = new Mesh( undefined, createShaftMaterial( this.ground ) );
+		float.name = 'SpearFloat';
+		for ( const m of [ gun, bands, shaft, line, float ] ) {
 
 			m.frustumCulled = false;
 			m.castShadow = false;
@@ -300,8 +306,9 @@ export class Speargun {
 		}
 
 		line.matrixAutoUpdate = true;
+		float.matrixAutoUpdate = true;
 		line.material.uniforms.lineShow.value = 1;
-		return { gun, bands, shaft, line };
+		return { gun, bands, shaft, line, float };
 
 	}
 
@@ -618,15 +625,15 @@ export class Speargun {
 		this.floatMesh.visible = floatOn;
 		if ( floatOn ) {
 
-			if ( ! this._floatMade ) {
+			// ((M20) as many as are on its line, clipped together in a row along it: floatGeometry)
+			if ( this._floatMade !== this.floats ) {
 
-				this._floatMade = true;
-				this.floatMesh.geometry = buildFloatGeometry();
+				this._floatMade = this.floats;
+				this.floatMesh.geometry = floatGeometry( this.floats );
 
 			}
 
-			this.floatMesh.position.copy( this.floatAt );
-			this.floatMesh.rotation.set( Math.sin( this.t * 1.3 ) * 0.15, 0, Math.sin( this.t * 1.1 ) * 0.12 );
+			placeFloats( this.floatMesh, this.floatAt, this.muzzle, this.t );
 
 		}
 
@@ -950,6 +957,63 @@ function buildBandGeometry() {
 
 }
 
+// (M20) n floats clipped together in a row along +X, the first at the origin (made once a count, shared with the copies'), and
+// a mesh of them laid at `at` on the water, the row trailing back toward `from` (the muzzle), bobbing at time t
+const _floats = new Map();
+export function floatGeometry( n = 1 ) {
+
+	n = Math.max( 1, Math.min( 4, n | 0 ) );
+	if ( ! _floats.has( n ) ) {
+
+		const one = _floats.get( 1 ) || buildFloatGeometry();
+		_floats.set( n, n === 1 ? one : mergeFloats( one, n ) );
+
+	}
+
+	return _floats.get( n );
+
+}
+
+function mergeFloats( one, n ) {
+
+	const g = one.clone();
+	const pos = one.attributes.position, count = pos.count;
+	const out = {};
+	for ( const [ k, a ] of Object.entries( one.attributes ) ) {
+
+		const arr = new a.array.constructor( a.array.length * n );
+		for ( let i = 0; i < n; i ++ ) {
+
+			arr.set( a.array, i * a.array.length );
+			if ( k === 'position' ) for ( let v = 0; v < count; v ++ ) arr[ i * a.array.length + v * a.itemSize ] += i * FLOAT.r * 2.3;
+
+		}
+
+		out[ k ] = new a.constructor( arr, a.itemSize, a.normalized );
+
+	}
+
+	for ( const k of Object.keys( one.attributes ) ) g.setAttribute( k, out[ k ] );
+	if ( one.index ) {
+
+		const idx = one.index.array, arr = new ( count * n > 65535 ? Uint32Array : Uint16Array )( idx.length * n );
+		for ( let i = 0; i < n; i ++ ) for ( let j = 0; j < idx.length; j ++ ) arr[ i * idx.length + j ] = idx[ j ] + i * count;
+		g.setIndex( new one.index.constructor( arr, 1 ) );
+
+	}
+
+	g.computeBoundingSphere();
+	return g;
+
+}
+
+export function placeFloats( mesh, at, from, t ) {
+
+	mesh.position.copy( at );
+	mesh.rotation.set( Math.sin( t * 1.3 ) * 0.15, Math.atan2( - ( from.z - at.z ), from.x - at.x ), Math.sin( t * 1.1 ) * 0.12, 'YXZ' );
+
+}
+
 // (M19) the breakaway's float: an 11 L hard foam float, orange, with a band round it (FLOAT.r)
 function buildFloatGeometry() {
 
@@ -973,11 +1037,20 @@ function buildFloatGeometry() {
 // reel lets it take 25 m more before it tears free; one on a breakaway, its float line's (a tether: no further, towing the
 // float), the float holding it back as a drag (FLOAT.kg) so the shaft seldom tears out unless you haul into a run
 //   -> { terms (CatchMinigame's), maxDistance, floatM (the line out past which it's on the float, or Infinity) }
-export function spearTerms( g, { tail = false, distance = 2.5 } = {} ) {
+// ((M20) kg: the fish's. On the breakaway, its floats (the one its rig comes with, and Gear's extraFloats) each hold a fish to
+// FLOAT.holds and drag on it another FLOAT.kg; one heavier than they hold together drags them under at the end of the float
+// line and pulls free: under, and no tether to stop it there. -> floats, under too)
+export function spearTerms( g, { tail = false, distance = 2.5, kg = 0 } = {} ) {
 
 	const hold = g.spearHold * ( tail ? 0.6 : 1 );
 	const terms = { lineKg: hold, matchKg: hold * SHAFT_MATCH, reelSpeed: 1.0, distance, landAt: 1.0, tired: 0.25 };
-	if ( g.breakaway ) return { terms: { ...terms, dragKg: FLOAT.kg, tether: g.lineM + g.floatLineM }, maxDistance: Infinity, floatM: g.lineM };
-	return { terms, maxDistance: g.lineM + ( g.spearReel ? 25 : 0.4 ), floatM: Infinity };
+	if ( g.breakaway ) {
+
+		const floats = 1 + ( g.extraFloats | 0 ), under = kg > floats * FLOAT.holds, end = g.lineM + g.floatLineM;
+		return { terms: { ...terms, dragKg: FLOAT.kg * floats, tether: under ? Infinity : end }, maxDistance: under ? end : Infinity, floatM: g.lineM, floats, under };
+
+	}
+
+	return { terms, maxDistance: g.lineM + ( g.spearReel ? 25 : 0.4 ), floatM: Infinity, floats: 0, under: false };
 
 }

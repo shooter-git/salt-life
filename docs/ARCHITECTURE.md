@@ -737,6 +737,7 @@ The speargun is `src/game/Speargun.js` and its half of `src/game/Game.js`. The f
   - **The breakaway:** a big fish shot with it runs out on its float line. The float holds it back as a reel's drag does (`spearTerms`, `FLOAT`), out to the line's end and no further (CatchMinigame's `tether`).
   - **The float** is drawn at the surface between you and the fish, in the shaft's program (`floatMesh`). A fish being fought stays off the bottom and under the surface.
   - **The terms** are `Speargun.spearTerms`, which the game and the sweep share (`tools/fight-sweep.mjs --spear`).
+  - (M20, [m20/kit.md](m20/kit.md)) **Its floats:** each holds a fish to 35 kg (`FLOAT.holds`) and drags on it 9 kg more; extra ones are Gear's `spearFloats` (`extraFloats`, bought only with the blue-water gun: `needsLevel`). One heavier than they hold together drags them under at the line's end and pulls free (`spearTerms`' `under`). They're drawn in a row on the line (`floatGeometry`, `placeFloats`), on other players' copies too (the pose's `Gf`; the copies' gun level reaches the blue-water gun).
 - (M19) **The law, and the guns kept anyway:** the Bahamas ban spearguns. Only a Hawaiian sling or a pole spear may be used, on a permit; nothing may be taken on scuba; and there's no spearfishing within 200 yd of a Family Island's shore ([m19/sources-big-game.md](m19/sources-big-game.md)). The game keeps its guns, the scuba tanks and the blue-water gun. That's the user's choice, not an oversight ([M19.md](M19.md)).
 
 ## The cast net
@@ -861,7 +862,8 @@ The rest of it:
 (M19, [m19/boats.md](m19/boats.md)) **The boats' new gear.**
 - **The Pilot** (the kayak with the pedal drive, `KayakModel.pedal`): `kayak/Pedal.js`' `pedalling` (her prop at `driveAt`, her hand rudder) and `poling` (stood up, `standing`, with her pole), chosen each frame by `kayak/Seat.js` (`M.drive`; Space stands you up, `standEye`). Paddle.js' `paddling` hands over to them.
 - **Stakes:** `BoatController.stake` from `Game.updateFittings` (K): the kayak's pole, one, at `stakeAt`; the console's Power-Poles, two, after 4 s. They're drawn by `KayakModel.setStaked` and `ConsoleModel.setPoleDown`.
-- **The console's trolling motor:** `BoatController.trolling` and `_troll` (M; her revs run down), drawn by `setMotorDown`, quiet through `ConsoleModel.noise`.
+- **The console's trolling motor:** `BoatController.trolling` and `_troll` (M; her revs run down), drawn by `setMotorDown`, quiet through `ConsoleModel.noise`. (M20) On batteries (`Trolling.js`: 80 Ah, 52 A at full thrust as the lever to the 1.5, 10 Ah an hour back from her outboards or the dock's charger; `days.boats.console.troll`, the purse's Battery gauge).
+- (M20, [m20/kit.md](m20/kit.md)) **Standing in the Pilot** you go in past 14 degrees of heel, and she stays upright (`HEEL.stand`, `KayakModel.fallIn`). **The poles** won't stake in rock or the reef's edge, and aren't put down on live coral (`Game._stakeHer`, the traps' `bottom`). **An anchor's splash** spooks the flats' fish that hear it, the poles' thump nearer (`FlatsFishing.splash`, `Game.plunk`: shared, as a spook is).
 - **Her radar:** her plotter split (`Instruments`' `split`, App's `r.split`), `radarBearing`.
 - **Her fittings:** `console/ConsoleFittings.js` (`trolling`, `motorDown`, `powerPole`, `poleDown`, `radar`); the kayak's `pedal`, `pole` and `staked` in `KayakHull`'s gear. Copies draw them through BoatCopies' bits, the moored looks through `LOOK_PARTS` (`always`: the console's anchor on her roller).
 - **The bow anchors:** the console's and the sportfisher's `bowAnchor` (`y`, `windlass`), `ConsoleModel.setAnchorStowed`.
@@ -907,6 +909,7 @@ The rest of it:
     - It takes a fish up to 13.6 kg (`Rigs.NET`, `netted`), though not a billfish.
     - It nets one from 1.8 m off (`Rigs.landAt`), where a hand takes it at 1.2 m.
     - A fish in it is never lost at the side (`landedAtBoat`).
+    - (M20) It's drawn: in the water beside a netted fish as it comes alongside, and under it as it's lifted out (`FishingRod.netting`, `netGeometry`, `placeNet`; `Rigs.fightTerms`' `net`), and on your copy (the pose's `Ln`).
   - `tools/fight-sweep.mjs` fights every fish at its weights on every line, reel and hold in plain Node, through `Rigs.fightTerms`. `test/lines.mjs` holds the gear each stage is meant for to M17's base ([m17/lines.md](m17/lines.md)).
 - **Fish and trophies.** The far water's fish are in `FishTable.js` with their models in `world/fish/` and skins in `FishMaterial.js`; their groups are `Fish.js`' `FAR`, placed round what the water holds (`setFinds`). A billfish is never kept: `Trophies.letGo` pays the release bonus (more with the dehooker and tag kit) and the log keeps your best of each. After a hurricane `Finds.hurricaneWake` scatters its wreckage over the offshore water, and the mahi gather under it.
 - **Bait** (`Bait.js`): frozen ballyhoo, squid and chum from Marta, and the lures (jigs, plugs, skirts) your gear gives.

@@ -21,15 +21,15 @@ import { PLACES } from '../game/Places.js';
 import { KINDS, lifeOf } from '../game/LifeList.js';
 import { SLAMS, slamTold } from '../game/Trophies.js';
 import { VARIATION } from '../game/Chart.js';
-import { ROD_L, SEAT_Y } from '../game/FishingRod.js';
+import { ROD_L, SEAT_Y, placeNet } from '../game/FishingRod.js';
 import { FLY_K, FLY_L, FLY_HOLD } from '../game/rigs/FlyRod.js';
 import { FlyLine, loopShape, newPoints } from '../game/rigs/FlyLine.js';
 import { FLY, strokeTime } from '../game/FlyCast.js';
-import { gunModels, setBands } from '../game/Speargun.js';
+import { gunModels, setBands, floatGeometry, placeFloats } from '../game/Speargun.js';
 import { isClass, counts, ratio } from '../game/LineClass.js';
 import { CastNet } from '../game/CastNet.js';
 import { G } from '../core/Globals.js';
-import { gearStats, defaultUpgrades } from '../game/Gear.js';
+import { gearStats, defaultUpgrades, UPGRADES } from '../game/Gear.js';
 import { DAY_RATE, REST, clockAt, restTo } from '../game/IslandClock.js';
 import { weekOrder, weekNumber, tallyFor, deliver, delivered } from '../game/WeekOrder.js';
 import { lb } from '../game/Units.js';
@@ -1441,10 +1441,10 @@ export class Together {
 		app.scene.add( avatar.group );
 		app.lightPerson( avatar.group );
 		const tackle = app.game.rod.tackle();
-		app.scene.add( tackle.rod, tackle.bobber, tackle.line );
+		app.scene.add( tackle.rod, tackle.bobber, tackle.line, tackle.net );
 		// (Salt Life) and their speargun, its shaft and line
 		const spear = app.game.gun.tackle();
-		app.scene.add( spear.gun, spear.bands, spear.shaft, spear.line );
+		app.scene.add( spear.gun, spear.bands, spear.shaft, spear.line, spear.float );
 		// (their look comes with their first pose: the stand-in figure until then)
 		const o = { person, avatar, tackle, spear, samples: [], last: - Infinity, boat: null, tag: null, shown: false, mapped: false, cur: null, wearing: null };
 		return o;
@@ -1591,6 +1591,8 @@ export class Together {
 
 				const L = gun.gear.shaftM, t = gun.tip, d = gun.dir;
 				body.G = [ r2( t.x - d.x * L ), r2( t.y - d.y * L ), r2( t.z - d.z * L ), r3( d.x ), r3( d.y ), r3( d.z ) ];
+				// ((M20) a fish out on the blue-water gun's float line: where its float rides, and how many floats: docs/m20/kit.md)
+				if ( gun.onFloat && gun.state === 'fighting' ) body.Gf = [ r2( gun.floatAt.x ), r2( gun.floatAt.y ), r2( gun.floatAt.z ), gun.floats | 0 ];
 
 			}
 
@@ -1618,6 +1620,8 @@ export class Together {
 			body.r = r;
 			if ( r >= 3 && rod.lineInWater ) body.b = [ r2( rod.bobber.x ), r2( rod.bobber.y ), r2( rod.bobber.z ), r2( app.waves.heightAt( rod.bobber.x, rod.bobber.z ) ) ];
 			if ( r === 5 && app.game.fight ) body.k = r2( Math.min( 1, app.game.fight.tension || 0 ) );
+			// ((M20) a netted fish alongside or being lifted out: their landing net: docs/m20/kit.md)
+			if ( rod.netMesh && rod.netMesh.visible ) body.Ln = 1;
 			// ((M19) the fly rod, and its false casts)
 			if ( rod.flyRod ) body.fw = rod.flyWt | 0;
 			if ( r === 7 && app.game.flyCast ) {
@@ -2480,6 +2484,7 @@ export class Together {
 		const on = c.gun > 0 && c.mode === 'swim' && ! app.game.gun.holdBack;
 		S.gun.visible = S.bands.visible = S.shaft.visible = on;
 		S.line.visible = false;
+		S.float.visible = false;
 		if ( ! on ) return;
 		if ( o.gunLevel !== c.gunLevel ) {
 
@@ -2519,7 +2524,8 @@ export class Together {
 		S.bands.matrix.copy( _m );
 		setBands( S.bands.material.uniforms, m.lay, m.bands, c.gun === 1 ? [ 1, 1, 1, 1 ] : [ 0, 0, 0, 0 ] ); // ((M19) up to four)
 		S.gun.material.uniforms.gunWraps.value = out ? 0 : 1;
-		S.shaft.material.uniforms.shaftFlopper.value = c.gun === 4 ? 1 : 0;
+		// ((M20) its flopper open with a fish on it: landed, or out on its float)
+		S.shaft.material.uniforms.shaftFlopper.value = c.gun === 4 || ( out && c.float ) ? 1 : 0;
 		if ( out ) {
 
 			_y.copy( c.shaft.dir );
@@ -2535,6 +2541,22 @@ export class Together {
 			L.lineB.value.copy( c.shaft.tail );
 			L.lineCtl.value.copy( _tip ).lerp( c.shaft.tail, 0.5 ).y -= _tip.distanceTo( c.shaft.tail ) * 0.05;
 			S.line.visible = true;
+			// ((M20) a fish out on the blue-water gun's float line: its float, or floats, where their owner's ride, the line bowed
+			// up to them, as their own game draws them)
+			if ( c.float ) {
+
+				if ( o.floats !== c.float.n ) {
+
+					o.floats = c.float.n;
+					S.float.geometry = floatGeometry( c.float.n );
+
+				}
+
+				placeFloats( S.float, c.float.at, _tip, performance.now() / 1000 );
+				L.lineCtl.value.copy( c.float.at ).multiplyScalar( 2 ).sub( _p.copy( _tip ).add( c.shaft.tail ).multiplyScalar( 0.5 ) );
+				S.float.visible = true;
+
+			}
 
 		} else S.shaft.matrix.copy( _m ).multiply( _mt.makeTranslation( 0, 0, m.lay.shaftZ ) );
 		for ( const mesh of [ S.gun, S.bands, S.shaft ] ) mesh.matrixWorldNeedsUpdate = true;
@@ -2613,11 +2635,23 @@ export class Together {
 		const F = Array.isArray( near.F ) && near.F.length === 3 && near.F.every( Number.isFinite ) ? near.F : null;
 		cur.dash = F ? Object.assign( cur._dash, { fuel: MathUtils.clamp( F[ 0 ], 0, 1 ), finder: F[ 1 ] === 1, fish: MathUtils.clamp( F[ 2 ], 0, 1 ) } ) : null;
 		cur.tension = b.k || 0;
+		cur.netting = near.Ln === 1; // ((M20) their landing net out)
 		cur.bobber = lerp3( cur._bobber, a.b, b.b );
 		// (and where their bobber floats, theirs)
 		cur.bobberWater = cur.bobber && Array.isArray( a.b ) && Array.isArray( b.b ) ? lerp1( a.b[ 3 ], b.b[ 3 ] ) : null;
 		cur.gun = near.g || 0;
-		cur.gunLevel = MathUtils.clamp( near.gl | 0, 0, 2 );
+		// ((M20) to the blue-water gun: it was held to the railgun's, so they saw a railgun)
+		cur.gunLevel = MathUtils.clamp( near.gl | 0, 0, UPGRADES.speargun.levels.length - 1 );
+		const Fa = Array.isArray( a.Gf ) && a.Gf.length === 4 && a.Gf.every( Number.isFinite ) ? a.Gf : null, Fb = Array.isArray( b.Gf ) && b.Gf.length === 4 && b.Gf.every( Number.isFinite ) ? b.Gf : null;
+		cur.float = null;
+		if ( Fa || Fb ) {
+
+			const A = Fa || Fb, B = Fb || Fa;
+			cur.float = cur._float || ( cur._float = { at: new Vector3(), n: 1 } );
+			cur.float.at.set( A[ 0 ] + ( B[ 0 ] - A[ 0 ] ) * f, A[ 1 ] + ( B[ 1 ] - A[ 1 ] ) * f, A[ 2 ] + ( B[ 2 ] - A[ 2 ] ) * f );
+			cur.float.n = MathUtils.clamp( B[ 3 ] | 0, 1, 4 );
+
+		}
 		cur.net = MathUtils.clamp( near.n | 0, 0, NET_STATE.length - 1 );
 		cur.netLevel = MathUtils.clamp( near.nl | 0, 0, 3 );
 		cur.netDraw = Number.isFinite( b.nd ) ? b.nd : Number.isFinite( a.nd ) ? a.nd : 0;
@@ -2731,7 +2765,7 @@ export class Together {
 
 			this._torch( o, false );
 
-			T.rod.visible = T.line.visible = T.bobber.visible = false;
+			T.rod.visible = T.line.visible = T.bobber.visible = T.net.visible = false;
 			if ( o.flyLine ) o.flyLine.hide();
 			o.spear.gun.visible = o.spear.bands.visible = o.spear.shaft.visible = o.spear.line.visible = false;
 			if ( o.net && o.net.equipped ) o.net.equip( false );
@@ -2867,6 +2901,10 @@ export class Together {
 			T.bobber.position.copy( c.bobber );
 
 		}
+
+		// ((M20) their landing net, under their netted fish as it comes alongside and as it's lifted out, its handle toward them)
+		T.net.visible = !! lineOn && c.netting;
+		if ( T.net.visible ) placeNet( T.net, c.bobber, g.position, c.rod === 6 ? c.bobber.y : c.bobberWater ?? c.bobber.y );
 
 		// (Salt Life) their speargun, held out ahead of them as they swim (toward its shaft when that's out)
 		this._spear( o, c, g );
