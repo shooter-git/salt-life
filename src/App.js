@@ -94,6 +94,7 @@ import { Wake } from './ocean/Wake.js';
 import { SoundScape, engineOf } from './audio/SoundScape.js';
 import { Game } from './game/Game.js';
 import { Together } from './together/Together.js';
+import { fitStats } from './together/BoatCopies.js';
 import { BoatLamps } from './world/boat/BoatLamps.js';
 import { createGameUI } from './ui/GameUI.js';
 import { PostChain } from './post/PostChain.js';
@@ -102,6 +103,8 @@ import { releaseGeometries, releaseTextures, uploadTextures, watchContext } from
 import { decodeInWorker } from './core/MeshoptWorker.js';
 import { freeNow } from './core/FreeNow.js';
 import { releaseParts } from './world/village/GeoBuilder.js';
+import { maskWindow } from './world/terrain/MaskWindow.js';
+import { CRAB_BEACH } from './world/wildlife/Crabs.js';
 
 // Salt Life: the island, the sea and the boat, drawn with three.js inside All the Spaces. It follows
 // Tidewater's App (same systems, same order each frame); what isn't ported yet is simply not here.
@@ -143,16 +146,6 @@ function beachMask( T ) {
 	}
 
 	return { data, res, texel: T.texel * k, origin: T.origin };
-
-}
-
-// (M15) a square window of one of the island's masks, `half` m about c: { i0, j0, w, h, data } (in its texels)
-function maskWindow( T, mask, c, half ) {
-
-	const i0 = Math.max( 0, Math.floor( ( c.x - half - T.origin ) / T.texel ) ), j0 = Math.max( 0, Math.floor( ( c.z - half - T.origin ) / T.texel ) );
-	const w = Math.min( T.res - i0, Math.ceil( 2 * half / T.texel ) ), h = Math.min( T.res - j0, Math.ceil( 2 * half / T.texel ) ), data = new Uint8Array( w * h );
-	for ( let j = 0; j < h; j ++ ) data.set( mask.subarray( ( j0 + j ) * T.res + i0, ( j0 + j ) * T.res + i0 + w ), j * w );
-	return { i0, j0, w, h, data };
 
 }
 
@@ -1299,7 +1292,7 @@ export class App {
 		const { rod, gun, tools } = this.game;
 		return [
 			[ rod, [ rod.rodMesh, rod.lineMesh, rod.bobberMesh, rod.lostMesh, rod.lostLine ] ],
-			[ gun, [ gun.gunMesh, gun.bandMesh, gun.shaftMesh, gun.lineMesh ] ],
+			[ gun, [ gun.gunMesh, gun.bandMesh, gun.shaftMesh, gun.lineMesh, gun.floatMesh ] ], // ((M19) and the blue-water gun's float)
 			[ tools, [ tools.stickMesh, tools.netMesh ] ],
 		];
 
@@ -1569,9 +1562,11 @@ export class App {
 
 		if ( this.debris ) return;
 		performance.mark( 'world: debris' );
+		const handed = this._debrisHanded;
+		this._debrisHanded = null;
 		this.debris = await Debris.create( {
 			scene: this.scene, terrain: this.terrainData, ground: this.terrain, village: this.village, vegetation: this.vegetation,
-			rocks: this.rocks, colliders: this.colliders, tier: this.tier, loader: gltfLoader(), show: false,
+			rocks: this.rocks, colliders: this.colliders, tier: this.tier, loader: gltfLoader(), show: false, handed,
 		} );
 		// (the areas out of range are hidden at once: frames go on while the shaders compile)
 		await this.readyOffstage( this.debris.group, () => this.debris.update( this.camera ) );
@@ -1877,6 +1872,25 @@ export class App {
 
 		// (with a graphics card the debris come next, at the load, and use the village's shapes)
 		if ( this.cpuGL ) releaseParts();
+		this.handDebris();
+
+	}
+
+	// (M19) the debris' input (Debris.handOff) handed to their worker now, and the crabs' beach cut out of the sand, so the
+	// island's rock, sand and path masks can go (releaseMasks) as soon as the plants are placed. On a CPU's WebGL the
+	// debris come minutes later (lifeAndDebris), and the masks were held all through the late stages until then: some
+	// 6 MB of script memory at their high point. The worker's copy isn't the page's
+	handDebris() {
+
+		const T = this.terrainData;
+		// (not before the game's colliders are there for them to keep clear of: with a graphics card the plants come first,
+		// and the debris straight after the game, as before)
+		if ( this.debris || this._debrisHanded || ! T.sand || ! this.game ) return;
+		this._debrisHanded = Debris.handOff( { terrain: T, village: this.village, vegetation: this.vegetation, rocks: this.rocks, colliders: this.colliders, tier: this.tier } );
+		T.crabSand = maskWindow( T, T.sand, CRAB_BEACH, CRAB_BEACH.half );
+		// (with no worker to hold them, its input holds the masks: they go after the debris, as before)
+		this._masksHanded = !! this._debrisHanded.worker;
+		this.releaseMasks();
 
 	}
 
@@ -1911,7 +1925,8 @@ export class App {
 	releaseMasks() {
 
 		const T = this.terrainData;
-		if ( ! this._plantsGrown || ! this.game || ! this.game.minimap || ! this.game.minimap._bake.done ) return;
+		// ((M19) or as soon as the debris have theirs: handDebris)
+		if ( ! ( this._plantsGrown || this._masksHanded ) || ! this.game || ! this.game.minimap || ! this.game.minimap._bake.done ) return;
 		if ( T.rock !== null ) {
 
 			// ((M15) what the bites keep of them: the sand that isn't rock, at 4 m (the beaches' wash: Game.sandAt))
@@ -2023,6 +2038,7 @@ export class App {
 			songbirds: this.wildMood ? this.wildMood.song : 1, // ((M13) the island's birds in the weather)
 			gulls: this.wildMood ? this.wildMood.gull : 1,
 			aboard: this.player.mode === 'boat' || this.player.mode === 'deck',
+			theirKayak: this.together ? this.together.kayakHeard( theirs ) : null, // ((M19) another player's kayak by you)
 			daylight: 1 - G.night.value,
 			nearPier: Math.abs( p.x - pier.x ) < 12 && p.z > pier.zStart - 5 && p.z < pier.zEnd + 8,
 			flats: !! ( this.game && this.game.flats && this.game.flats.near( p.x, p.z ) ), // ((M17) their tails' and bolts' sounds ready)
@@ -2075,6 +2091,8 @@ export class App {
 		// ((M17) and Z, the plotter's: Instruments.stepRange)
 		if ( p.mode === 'boat' && g.state.stats.plotter && g.quietKeys && g.quietKeys() && this.input.hit( 'KeyZ' ) ) g.toast( this.instruments.stepRange(), 1600 );
 		r.radar = this.sweepRadar( dt, r, this.boat.radarBearing );
+		// ((M19) a boat whose plotter's split with her radar's picture, the console with her dome: Instruments)
+		r.split = !! this.boat.splitRadar && !! g.state.stats.radar;
 		this.instruments.update( dt, r );
 
 	}
@@ -2112,6 +2130,8 @@ export class App {
 		// ((M14) and their radar, as their array turns)
 		const arr = ride.group && ride.group.userData.radar;
 		r.radar = this.sweepRadar( dt, r, arr ? ( ( - arr.rotation.y ) % ( Math.PI * 2 ) + Math.PI * 2 ) % ( Math.PI * 2 ) : 0 );
+		// ((M19) hers split with her radar as her fit says: the console with her dome)
+		r.split = c.boatId === 'console' && c.fit !== null && !! fitStats( 'console', c.fit ).radar;
 		return r;
 
 	}
@@ -2760,7 +2780,11 @@ export class App {
 		const on = aboard === 'deck' ? stoodOf( p ) : null, helm = aboard === 'helm' && p.atHelm && p.atHelm.upper ? 'upper' : null;
 		const swim = aboard ? null : swimBy( p, b ), ride = aboard || swim || ! this.together ? null : this.together.rideLeft();
 		// ((M16) drawn up on the sand, she's as fast as at the dock)
-		this.store.setItem( BOAT_KEY, JSON.stringify( boatLeft( { x: b.position.x, z: b.position.z, heading: b.getYaw(), anchor: b.anchor, sock: b.sock, moored: moored || b.beached, aboard, on, helm, swim, ride, T: islandTime( s.day, s.timeOfDay ), at: Date.now(), boat: this.boat.id } ) ) );
+		// ((M19) no anchor saved with her on the sand)
+		// ((M19) staked, by her pole or her Power-Poles: kept held where she is, as at anchor where the pole went in (the stake's not
+		// kept itself: she comes back on her anchor there))
+		const held = b.anchor || ( b.stake ? new THREE.Vector3( b.stake.x, this.terrainData.heightAt( b.stake.x, b.stake.z ), b.stake.z ) : null );
+		this.store.setItem( BOAT_KEY, JSON.stringify( boatLeft( { x: b.position.x, z: b.position.z, heading: b.getYaw(), anchor: b.beached ? null : held, sock: b.sock, moored: moored || b.beached, aboard, on, helm, swim, ride, T: islandTime( s.day, s.timeOfDay ), at: Date.now(), boat: this.boat.id } ) ) );
 		if ( this.together ) this.together.mineBoat();
 
 	}

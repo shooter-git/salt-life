@@ -3,6 +3,7 @@ import { prepare, mergePrepared, box, cylinder, sphere, rod, torus, mat4 } from 
 import { loadStallAssets, KitBuilder, LAYER, ATLAS, place, Shapes, PAT, createPlainMaterial } from './StallKit.js';
 import { Vendor } from './Vendor.js';
 import { HOURS } from './Orders.js';
+import { paintedBoard } from './Signpost.js';
 import { pieceState, GONE } from './StormDamage.js';
 
 // The upgrade trader by the boathouse: a scanned work table with a tackle box, spools of line and
@@ -30,6 +31,10 @@ export class Chandlery {
 			mesh.name = 'ChandleryStall';
 			mesh.castShadow = true;
 			this.group.add( mesh );
+			// ((M19) her sign, hand-painted where the scanned stall's board hangs on its posts: tackle, fuel and boats, the bait Joe's)
+			const sign = paintedBoard( { width: 2.3, height: 0.5, lines: [ 'Marta\'s chandlery', 'tackle · fuel · boats' ] } );
+			sign.position.set( 0, 2.28, - 1.66 );
+			this.group.add( sign );
 
 		};
 		if ( tier === 'low' ) {

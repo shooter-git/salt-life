@@ -19,10 +19,14 @@ const KINDS = ( bone, spawn ) => ( {
 	flatsLemon: { groups: 1, count: 1 },
 } );
 
+// ((M19) ranges out to what's documented as seen (docs/m19/see.md): low the lobster boat's roof (35 m), mid a fish called
+// from a console's bow (44 m), high one called from her roof (56 m). They were 32, 40 and 50, nearer than all three. A
+// longer range costs no more triangles: the budget and the pool are spent nearest first, and the fish further off are
+// drawn coarser; it lets the pool take a school further off when there's one)
 export const FLATS_POOL = {
-	low: { range: 32, budget: 9500, minLod: 1, kinds: KINDS( [ 3, 12 ], 16 ) },
-	mid: { range: 40, budget: 26000, minLod: 0, kinds: KINDS( [ 4, 16 ], 28 ) },
-	high: { range: 50, budget: 60000, minLod: 0, kinds: KINDS( [ 5, 19 ], 48 ) },
+	low: { range: 36, budget: 9500, minLod: 1, kinds: KINDS( [ 3, 12 ], 16 ) },
+	mid: { range: 46, budget: 26000, minLod: 0, kinds: KINDS( [ 4, 16 ], 28 ) },
+	high: { range: 58, budget: 60000, minLod: 0, kinds: KINDS( [ 5, 19 ], 48 ) },
 };
 
 const BY_KIND = { permit: 'flatsPermit', tarpon: 'flatsTarpon', snook: 'flatsSnook', barracuda: 'flatsCuda', blacktipShark: 'flatsBlacktip', lemonShark: 'flatsLemon' };

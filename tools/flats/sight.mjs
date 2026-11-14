@@ -46,6 +46,10 @@ const VIEW = {
 	overhead: { kind: 'bonefish', mode: 'tail', weather: 'calm', eye: 3.5, dist: 1.5, turn: 0.3, shallow: 0.32, fov: 30 },
 	// (over sand, from a poling platform, as permit are looked for: over grass from a bow at 9 m one hardly shows)
 	permit: { kind: 'permit', mode: 'cruise', weather: 'calm', eye: 3.5, dist: 8, turn: 0.6, deep: 1.1, bare: 0.05, hours: [ 9.5, 15 ] },
+	// ((M19) a tailing permit, never drawn before (M18's list): a school cruising in water under Fish.js' crabs depth (0.7 m) stops
+	// to root on a crab now and then, and in a foot of water or so its black sickle's up out of it; from wading. (In 0.57 m it
+	// rooted with its tail under: nothing showed)
+	permitTail: { kind: 'permit', mode: 'cruise', weather: 'calm', eye: 1.65, dist: 8, turn: 0.5, deep: 0.35, hours: [ 9.5, 15 ], fov: 20 },
 	laid: { kind: 'tarpon', mode: 'laid', weather: 'calm', eye: 2.5, dist: 8, turn: 0.5 },
 	roll: { kind: 'tarpon', mode: 'roll', weather: 'calm', eye: 1.65, dist: 8, turn: 0, side: true, fov: 30, hours: [ 16.25, 17.5 ] },
 	snook: { kind: 'snook', mode: 'hold', weather: 'calm', eye: 1.65, dist: 5, turn: 0, side: true, fov: 30 },
@@ -120,7 +124,10 @@ for ( const weather of [ ...new Set( views.map( ( k ) => VIEW[ k ].weather ) ) ]
 		// (the clock held where each view sets it: the shared clock's not let move it)
 		if ( a.together ) a.together.syncClock = () => {};
 		a.settings.timeSpeed = 0;
-		a.game.state.stats.polarized = glasses;
+		// ((M19) put on as buying them does: state.stats is made afresh each time it's read, so setting stats.polarized did
+		// nothing, and the renders "through the glasses" were bare)
+		a.game.state.upgrades.glasses = glasses ? 1 : 0;
+		a.game.applyGear();
 		const css = document.createElement( 'style' );
 		css.textContent = 'body * { visibility: hidden !important }';
 		document.head.appendChild( css );
@@ -270,6 +277,17 @@ for ( const weather of [ ...new Set( views.map( ( k ) => VIEW[ k ].weather ) ) ]
 			}, s.id, { timeout: 120000, polling: 'raf' } ).catch( () => log( 'no roll caught' ) );
 
 		}
+
+		// ((M19) a permit's tail is up only while it roots on a crab: shot as one is out of the water, Fish.js' aux[ 1 ] past 0.3, as
+		// its onTail has it)
+		if ( v === 'permitTail' ) await page.waitForFunction( ( id ) => {
+
+			const f = window.__app.fish, g = window.__groupOf( id );
+			if ( ! g ) return false;
+			for ( let k = 0; k < g.count; k ++ ) if ( f.aux[ ( g.offset + k ) * 8 + 1 ] > 0.3 ) return true;
+			return false;
+
+		}, s.id, { timeout: 240000, polling: 'raf' } ).catch( () => log( 'no tail caught' ) );
 
 		const name = `${ v }${ GLASSES === '1' ? '' : '-bare' }`;
 		await page.screenshot( { path: join( OUT, name + '.png' ) } );

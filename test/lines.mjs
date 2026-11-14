@@ -143,8 +143,9 @@ const near = ( a, b, e = 1e-9 ) => Math.abs( a - b ) <= e;
 	ok( slow.length === 0, `and no fight that lands is far longer or shorter${ slow.length ? ': ' + slow.join( '; ' ) : '' }` );
 	console.log( `     landed more often now (${ gains.length }): ${ gains.join( '; ' ) }` );
 	// (the gains are where the old figures held a fish back: standing on 60 lb, now the harness holds the line's full drag;
-	// and the conventional on 30 lb, its drag set up to full as the fish tires)
-	ok( gains.every( ( g ) => / on (L3\/R3\/harness|L2\/R2\/hand) / .test( g ) ), 'and the only gains are standing on 60 lb and the conventional on 30 lb' );
+	// and the conventional on 30 lb, its drag set up to full as the fish tires. (M19) And 60 lb on the 50-class from the chair:
+	// a reel holds more of a thinner line, 684 m of 60 lb where it had 600 of any: Gear's spoolOf)
+	ok( gains.every( ( g ) => / on (L3\/R3\/harness|L2\/R2\/hand|L3\/R3\/chair) / .test( g ) ), 'and the only gains are standing on 60 lb, the conventional on 30 lb, and (M19) 60 lb on the 50-class\'s 684 m' );
 	// (a 200 kg one standing takes about three times the chair's time: test/tackle.mjs)
 	const blue = now.blueMarlin[ 0.5 ];
 	ok( blue[ 'L3/R3/harness' ].caught >= 0.8, `a ${ blue.kg.toFixed( 0 ) } kg blue marlin standing on 60 lb: landed now (${ Math.round( 100 * blue[ 'L3/R3/harness' ].caught ) }%, ${ ( blue[ 'L3/R3/harness' ].t / 60 ).toFixed( 1 ) } min; from the chair ${ ( blue[ 'L3/R3/chair' ].t / 60 ).toFixed( 1 ) })` );
@@ -154,17 +155,27 @@ const near = ( a, b, e = 1e-9 ) => Math.abs( a - b ) <= e;
 // ---- the 80 lb line: its full drag (19 kg) past the harness's 18, so the biggest blue marlin are the chair's
 {
 
-	const big = { line: 4, reel: 3, electric: false }, mid = { line: 3, reel: 3, electric: false };
+	// ((M19) on the 80-class reel: the 50-class holds only 499 m of 80 lb now, as its makers' charts have it, and a reel takes
+	// the line of its class: the 60 lb, Gear's tackleOf)
+	const big = { line: 4, reel: 4, electric: false }, mid = { line: 3, reel: 3, electric: false };
 	const at = ( c, hold, kg ) => cell( { ...c, key: hold, hold }, 'blueMarlin', kg, 20 );
 	const chair = at( big, 'chair', 260 ), stand = at( big, 'harness', 260 ), was = at( mid, 'chair', 260 );
 	ok( chair.caught >= 0.8 && stand.caught <= 0.1 && was.caught <= 0.1, `a 260 kg blue marlin on 80 lb: from the chair ${ Math.round( 100 * chair.caught ) }% in ${ ( chair.t / 60 ).toFixed( 1 ) } min, standing ${ Math.round( 100 * stand.caught ) }%; on 60 lb from the chair ${ Math.round( 100 * was.caught ) }%` );
 	const c2 = at( big, 'chair', 200 ), s2 = at( big, 'harness', 200 );
 	ok( c2.caught >= 0.9 && s2.caught >= 0.9 && s2.t > 1.5 * c2.t, `a 200 kg one on 80 lb: standing ${ ( s2.t / 60 ).toFixed( 1 ) } min, from the chair ${ ( c2.t / 60 ).toFixed( 1 ) }` );
-	// (and on the 80-class reel's 868 m: the bigger ones ran the 50-class's 600 m out, they didn't break the line)
-	const wide = { line: 4, reel: 4, electric: false };
-	const w3 = at( wide, 'chair', 330 ), n3 = at( big, 'chair', 330 ), w4 = at( wide, 'chair', 400 ), ws = at( wide, 'harness', 260 );
+	// (and on the 80-class reel's 868 m: the bigger ones ran the 50-class's spool out, they didn't break the line)
+	const wide = { line: 4, reel: 4, electric: false }, narrow = { line: 4, reel: 3, electric: false };
+	const w3 = at( wide, 'chair', 330 ), n3 = at( narrow, 'chair', 330 ), w4 = at( wide, 'chair', 400 ), ws = at( wide, 'harness', 260 );
 	ok( w3.caught >= 0.8 && n3.caught <= 0.1, `a 330 kg blue marlin on 80 lb from the chair: on the 80-class reel ${ Math.round( 100 * w3.caught ) }% in ${ ( w3.t / 60 ).toFixed( 1 ) } min, on the 50-class ${ Math.round( 100 * n3.caught ) }%` );
-	ok( w4.caught <= 0.1 && ws.caught <= 0.1, `past it still none alone: a 400 kg one from the chair ${ Math.round( 100 * w4.caught ) }%, a 260 kg one standing ${ Math.round( 100 * ws.caught ) }% (your arms give out, and then it takes however much is on)` );
+	ok( w4.caught <= 0.1 && ws.caught <= 0.1, `past it still none alone on 80 lb: a 400 kg one from the chair ${ Math.round( 100 * w4.caught ) }%, a 260 kg one standing ${ Math.round( 100 * ws.caught ) }% (your arms give out, and then it takes however much is on)` );
+
+	// ---- (M19) the biggest blue marlin, landed alone (docs/M19.md, the user's decision): on 130-class tackle, or with the
+	// sportfisher's mate backing her down, or both. The 80-class alone stays as M17 left it (above)
+	const big130 = { line: 5, reel: 5, electric: false }, mate80 = { line: 4, reel: 4, electric: false, mate: true }, mate130 = { ...big130, mate: true };
+	const a = at( big130, 'chair', 450 ), b = at( mate80, 'chair', 450 ), c = at( mate130, 'chair', 450 );
+	ok( a.caught >= 0.8, `a 450 kg blue marlin on 130 lb from the chair, alone: ${ Math.round( 100 * a.caught ) }% in ${ ( a.t / 60 ).toFixed( 1 ) } min` );
+	ok( b.caught >= 0.8, `on 80 lb with the mate backing her down: ${ Math.round( 100 * b.caught ) }% in ${ ( b.t / 60 ).toFixed( 1 ) } min` );
+	ok( c.caught >= 0.8 && c.t < a.t && c.t < b.t, `on 130 lb with the mate: ${ Math.round( 100 * c.caught ) }% in ${ ( c.t / 60 ).toFixed( 1 ) } min, the quickest` );
 
 }
 

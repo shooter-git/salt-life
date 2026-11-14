@@ -66,7 +66,7 @@ const share = ( pts, ids, w = null, hour = 10, n = 600 ) => {
 
 // ---- the new fish: in the catch table and drawn (an anatomy and a skin each)
 check( [ 'pompano', 'permit', 'snook' ].every( ( id ) => FISH[ id ] && SPECIES[ FISH[ id ].model ] && SKIN[ FISH[ id ].model ] && FISH[ id ].habitat.wash > 0 ), 'the pompano, the permit and the snook: caught in the wash, each with its model' );
-check( FISH.permit.protected && FISH.permit.cr && FISH.snook.bag === 1 && ! FISH.pompano.protected, 'the permit let go (everyone does), one snook a day, the pompano kept' );
+check( FISH.permit.protected && FISH.permit.cr && FISH.snook.protected && FISH.snook.cr && ! FISH.pompano.protected, 'the permit let go (everyone does), ((M19) the snook too, the Bahamas\' rules), the pompano kept' );
 
 // ---- the island's sides: the north beach windward, the bay leeward, the west and east coasts little of it
 const side = ( x, z ) => P.windwardAt.call( game, x, z );

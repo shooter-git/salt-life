@@ -200,7 +200,7 @@ function cards( device, kayak ) {
 const CARD_COUNT = 3;
 
 // (M17) a school spooked: the tip for why (FlatsFishing's events.spooked)
-const SPOOK_TIP = { speed: 'spookSpeed', push: 'spookPush', shadow: 'spookShadow', knock: 'spookKnock', engine: 'spookEngine', cast: 'spookCast', line: 'spookCast', refused: 'flatsRefused', theirs: 'spookTheirs' };
+const SPOOK_TIP = { speed: 'spookSpeed', push: 'spookPush', shadow: 'spookShadow', knock: 'spookKnock', wade: 'spookWade', engine: 'spookEngine', cast: 'spookCast', line: 'spookCast', refused: 'flatsRefused', theirs: 'spookTheirs', falsecast: 'spookFalseCast' };
 
 // (M16) a tip that isn't the same in a kayak (no helm, no fuel, no bilge), or is hers alone; by the device where it's a key
 const IN_KAYAK = {
@@ -222,7 +222,7 @@ const IN_KAYAK = {
 	chart: 'Your <b>chart</b> fills in where you go: the coast as you see it, the depths as you paddle over them, each place\'s name as you come to it, on the map. It has them by their names on a chart: ' + namedAs( NAME.bank ) + ', and so on. Mark a good spot from the cooler\'s <b>Chart</b> tab. Marta sells a chart of the island, if you\'d rather not.',
 	edge: 'You\'re past the far grounds, in a <b>kayak</b>. The sea\'s the open ocean\'s out here, the wind fresher and the seas bigger, and it\'s a long paddle home.',
 	goRound: 'You\'ve the hang of the bay. There\'s more of the island: the <b>north beach\'s surf</b> for pompano (best on a surf day: Joe\'s slate says) and the <b>mangrove creek</b> on the west for snook and redfish at dawn and dusk. Paddle round on a calm day, or walk: the trail from the square goes round the east to the north beach, the red dashes on your map, with fingerposts at its turns, and <b>Pearl\'s fish camp</b> there buys fish.',
-	flats: 'The <b>flats</b>: a foot or two of water over white sand. The bonefish come up onto them on the <b>flood</b>, from about three hours in, and go off on the ebb; permit along the edge, tarpon in the channels and the holes. <b>See them before you cast</b>: polarized glasses (Marta\'s) take the glare off the water. From her seat you\'re <b>low</b>: you\'ll see them close in, ten metres or so, so <b>drift</b>, don\'t paddle at them.',
+	flats: 'The <b>flats</b>: a foot or two of water over white sand. The bonefish come up onto them on the <b>flood</b>, from about three hours in, and go off on the ebb; permit along the edge, tarpon in the channels and the holes. <b>See them before you cast</b>: polarized glasses (Marta\'s) take the glare off the water. From her seat you\'re <b>low</b>: you\'ll see them close in, ten metres or so, so <b>drift</b>, don\'t paddle at them. Nothing takes a bait here without a <b>flats licence</b>: free at Marta\'s.',
 	hurricane: 'A <b>hurricane</b> is coming. <b>Sell your catch</b> before Joe boards up: it won\'t keep till he opens again. Get your kayak off the beach: Marta can <b>haul her up</b> into her yard before she boards up. In it, the <b>shelter</b> (on your map) keeps you safe from the wind, the rain and the sea. You can always step out to watch.',
 };
 
@@ -234,6 +234,10 @@ const TIPS = {
 	keyboard: {
 		radio: 'The <b>radio</b> at the helm (<kbd>R</kbd>): the <b>weather</b> for these waters, read out on WX1 while you steer, and <b>Marta</b> on channel 16, who\'ll come and tow you in if you run dry, her fee by the distance.',
 		rodOut: 'Hold the <b>left mouse button</b> to wind up and release to cast. Try deeper water, around the pier or over the reef.',
+		// ((M19) her new fittings: Game.updateFittings, kayak/Seat.js)
+		trollingMotor: 'Her <b>trolling motor</b>: <kbd>M</kbd> at the helm puts it down over her bow, quiet on the flats, the lever and the wheel driving it. <kbd>M</kbd> again for her outboards.',
+		powerPole: '<kbd>K</kbd> runs her <b>Power-Poles</b> down into the bottom: she\'s held where she is, her heading too, in up to 8 ft of water. <kbd>K</kbd> again brings them up.',
+		pilot: 'She\'s the <b>Pilot</b> now: <kbd>W</kbd><kbd>S</kbd> pedal her, the rod out or not, <kbd>A</kbd><kbd>D</kbd> her rudder. <kbd>Space</kbd> stands you up to see into the flat, and with her pole, <kbd>W</kbd> poles her. <kbd>K</kbd> stakes her out.',
 		nibble: 'The bobber is dipping: something is <b>nibbling</b>. Wait until it is <b>pulled under</b>, then click to strike.',
 		fishOn: '<b>Hold the left mouse button</b> to reel. When the tension needle nears the <b>red</b>, let go until it settles, then reel again.',
 		caught: 'Into the cooler (<kbd>I</kbd>). Sell your catch to <b>Joe</b> at the fish stand by the pier: he is on the map.',
@@ -253,6 +257,9 @@ const TIPS = {
 	touch: {
 		radio: `The <b>radio</b> at the helm (${ pic( 'radio' ) } in ${ WHEEL }): the <b>weather</b> for these waters, read out on WX1 while you steer, and <b>Marta</b> on channel 16, who'll come and tow you in if you run dry, her fee by the distance.`,
 		rodOut: `Hold ${ pic( 'cast', 'Cast' ) } to wind up and let go to cast. Try deeper water, around the pier or over the reef.`,
+		trollingMotor: `Her <b>trolling motor</b>: ${ pic( 'motor' ) } in ${ WHEEL } at the helm puts it down over her bow, quiet on the flats, the lever and the wheel driving it; again for her outboards.`,
+		powerPole: `${ pic( 'stake' ) } in ${ WHEEL } runs her <b>Power-Poles</b> down into the bottom: she's held where she is, her heading too, in up to 8 ft of water. Again brings them up.`,
+		pilot: `She's the <b>Pilot</b> now: drag on the left to pedal her, the rod out or not, and steer her rudder. ${ pic( 'jump', 'Stand up' ) } to see into the flat, and with her pole, drag to pole her. ${ pic( 'stake' ) } in ${ WHEEL } stakes her out.`,
 		nibble: 'The bobber is dipping: something is <b>nibbling</b>. Wait until it is <b>pulled under</b>, then tap <b>Strike</b>.',
 		fishOn: '<b>Hold Reel</b> to reel in. When the tension needle nears the <b>red</b>, let go until it settles, then reel again.',
 		caught: `Into the cooler (${ pic( 'cooler' ) } in ${ WHEEL }). Sell your catch to <b>Joe</b> at the fish stand by the pier: he is on the map.`,
@@ -271,6 +278,9 @@ const TIPS = {
 	gamepad: {
 		radio: 'The <b>radio</b> at the helm (<kbd>X</kbd>): the <b>weather</b> for these waters, read out on WX1 while you steer, and <b>Marta</b> on channel 16, who\'ll come and tow you in if you run dry, her fee by the distance.',
 		rodOut: 'Hold <kbd>RT</kbd> to wind up and release to cast. Try deeper water, around the pier or over the reef.',
+		trollingMotor: `Her <b>trolling motor</b>: ${ pic( 'motor' ) } in ${ WHEEL } at the helm puts it down over her bow, quiet on the flats, the throttle and the wheel driving it; again for her outboards.`,
+		powerPole: `${ pic( 'stake' ) } in ${ WHEEL } runs her <b>Power-Poles</b> down into the bottom: she's held where she is, her heading too, in up to 8 ft of water. Again brings them up.`,
+		pilot: `She's the <b>Pilot</b> now: the left stick pedals her, the rod out or not, and steers her rudder. <kbd>A</kbd> stands you up to see into the flat, and with her pole, the stick poles her. ${ pic( 'stake' ) } in ${ WHEEL } stakes her out.`,
 		nibble: 'The bobber is dipping: something is <b>nibbling</b>. Wait until it is <b>pulled under</b>, then <kbd>RT</kbd> to strike.',
 		fishOn: '<b>Hold <kbd>RT</kbd></b> to reel. When the tension needle nears the <b>red</b>, let go until it settles, then reel again.',
 		caught: 'Into the cooler (<kbd>Back</kbd>). Sell your catch to <b>Joe</b> at the fish stand by the pier: he is on the map.',
@@ -308,19 +318,23 @@ const TIPS = {
 	chart: 'Your <b>chart</b> fills in where you go: the coast as you see it, the depths as you run over them, each place\'s name as you come to it, on the map and the boat\'s plotter. It has them by their names on a chart: ' + namedAs( NAME.bank ) + ', and so on. Mark a good spot from the cooler\'s <b>Chart</b> tab. Marta sells a chart of the island, if you\'d rather not.',
 	edge: 'You\'re past the far grounds. The sea\'s the open ocean\'s out here: the <b>wind fresher</b>, the <b>seas bigger</b>, fewer birds and fewer fish. Nothing stops you going on, but <b>watch your fuel</b>: Marta\'s tow is by the distance.',
 	stand: 'Every boat has <b>what she can stand</b>. Past it she ships water and takes a beating: the <b>radio</b> says how the sea is for her, and the lee of the island is calmer. Run for shelter, or for port.',
-	ice: 'Fish goes off in the heat: about <b>12 hours</b> in a box with no ice, its price falling after 6. Marta sells <b>ice by the bag</b>, and on ice it keeps for days as long as the ice lasts.',
+	ice: 'Fish goes off in the heat: about <b>12 hours</b> in a box with no ice, its price falling after 6. <b>Joe</b> sells <b>ice by the bag</b> at his stand (after hours, from his ice chest, on trust), and on ice it keeps for days as long as the ice lasts.',
 	bunk: 'She has <b>bunks</b>. Sleep aboard to pass the night, and bring <b>food and water</b> from Marta for days out. Anchor first, or stream a <b>drift sock</b>: she goes where the wind takes her while you sleep.',
 	farWater: 'Out here the fish are <b>under things</b>: look for <b>weedlines</b> (mahi), <b>floating debris</b>, and <b>birds working bait</b> (tuna). On the <b>drop-off</b> the tuna come at first light.',
 	// (M17) the flats, and sight-fishing on them (docs/m17/sight.md)
-	flats: 'The <b>flats</b>: a foot or two of water over white sand. The bonefish come up onto them on the <b>flood</b>, from about three hours in, and go off on the ebb; permit along the edge, tarpon in the channels and the holes. <b>See them before you cast</b>: polarized glasses (Marta\'s) take the glare off the water, the higher you are the better, with the sun behind you. Come on <b>slowly</b>.',
+	flats: 'The <b>flats</b>: a foot or two of water over white sand. The bonefish come up onto them on the <b>flood</b>, from about three hours in, and go off on the ebb; permit along the edge, tarpon in the channels and the holes. <b>See them before you cast</b>: polarized glasses (Marta\'s) take the glare off the water, the higher you are the better, with the sun behind you. Come on <b>slowly</b>. Nothing takes a bait here without a <b>flats licence</b>: free at Marta\'s.',
 	flatsSeen: 'Fish on the flat. See which way they\'re going and put your bait <b>a metre or two ahead</b> of them on their way: not on their heads, and not with the line over their backs. Let it sit. One that sees it comes to it: <b>strike when it takes</b>.',
 	flatsTailing: '<b>Tails</b>: bonefish feeding head down on the bottom, their tails out of the water, best seen on a calm day. A tailing fish is the keenest, but it only sees what lands close: <b>a foot or two</b> in front of it.',
 	spookSpeed: 'Spooked: <b>they saw you coming</b>. Within about 15 metres, slow down: drift, wade or pole the last of it, and they\'ll let you close. A spooked school\'s gone from there a while.',
 	spookPush: 'Spooked by the <b>push of water</b> ahead of the bow, running ahead of her over the flat. Stop well short and drift in the last of the way.',
 	spookShadow: 'Spooked by <b>your shadow</b> over them: long early and late. Come at them with the sun to one side, so it falls away from them.',
 	spookKnock: 'Spooked: a <b>paddle knocked the hull</b>, and they heard it through the water. Easy strokes near fish.',
+	spookWade: 'Spooked: they <b>heard you wading</b>. Slow, quiet steps near fish, and flats booties on rock and rubble.',
 	spookEngine: 'An <b>engine</b> running spooks the flat\'s fish a hundred metres off. Shut it down well short of them, and drift or pole in.',
 	spookCast: '<b>Too close</b>: a bait landing on a fish\'s head, or the line laid over its back, sends the whole school off. Lead them.',
+	// ((M19) the fly rod: game/FlyCast.js)
+	spookFalseCast: 'Spooked by your <b>false casts</b>: the line going over them, its flash and its shadow. False cast to one side of them, or short of them, and shoot the rest; two false casts are plenty.',
+	flyCast: 'The <b>fly rod</b>: hold the cast button to false cast, and each one carries more line. <b>Let go as the rod stops</b> on the forward stroke to shoot it. Then tap to strip the fly back; when a fish eats it, <b>strip-set</b> with one long pull, the rod kept low. Lifting the rod pulls it out of its mouth. The other button picks the line up to cast again.',
 	flatsRefused: 'It came to it and <b>turned off</b>: refused. What they take is their own: a bonefish a shrimp or a jig, a tarpon or a snook a plug or live bait. A <b>permit</b> refuses most things. Try the next one.',
 	// ((M17) the flats together: a school someone else spooked; a fish called to you)
 	spookTheirs: 'Someone else <b>spooked that school</b>. A flat\'s fish are everyone\'s: what spooks them for one of you spooks them for all, and they\'re gone a while. Fish apart, or come on together, slowly.',
@@ -609,6 +623,16 @@ export class Guide {
 		if ( rod.equipped && ! prev.equipped ) this.tip( 'rodOut' );
 		if ( b && b.phase === 'nibble' ) this.tip( 'nibble' );
 		if ( g.fight && ! prev.fight ) this.tip( 'fishOn' );
+		if ( rod.state === 'falsecast' ) this.tip( 'flyCast' ); // ((M19) the fly rod's first false cast)
+		// ((M19) her new fittings, the first time you're at them with them bought)
+		{
+
+			const bc = app.boatCtl, BM = bc && bc.model, ss = g.state.stats, own = ! p.riding && ( p.mode === 'boat' || p.mode === 'deck' );
+			if ( own && BM && BM.trollingAt && ss.trollingN > 0 && p.mode === 'boat' ) this.tip( 'trollingMotor' );
+			if ( own && BM && BM.trollingAt && ss.stakeM > 0 ) this.tip( 'powerPole' );
+			if ( own && BM && BM.seated && BM.pedal ) this.tip( 'pilot' );
+
+		}
 		const lc = g.state.lastCatch;
 		if ( lc && lc !== prev.lastCatch && lc.kept ) this._afterCard = 'caught';
 		if ( this._afterCard && ! ( g.hud && g.hud.catchOpen ) && ! g.landing ) {

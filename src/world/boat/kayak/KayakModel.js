@@ -29,7 +29,14 @@ const HOME = { x: 44, z: - 24 }; // m
 //
 // What she does beyond the rest of the fleet is here: play( dt, game ), each frame (Game.updateBoat): the paddle's
 // splashes, you in her, a capsize and righting her, launching and landing, getting soaked.
-const showOf = ( s ) => ( { cooler: ! ( s.holdKg > 12 ), crate: s.holdKg > 12, puck: !! s.finder, trolley: s.anchorM > 0 || !! s.trolley } );
+// ((M19) and the Pilot's pedal drive, her pole stowed or staked: gearStats' pedal and stakeM, or a copy's fit's pedal, stakePole
+// and staked: together/BoatCopies.js)
+const showOf = ( s ) => {
+
+	const pole = !! ( s.stakePole ?? s.stakeM > 0 );
+	return { cooler: ! ( s.holdKg > 12 ), crate: s.holdKg > 12, puck: !! s.finder, trolley: s.anchorM > 0 || !! s.trolley, pedal: !! s.pedal, pole: pole && ! s.staked, staked: pole && !! s.staked };
+
+};
 const LEFT_TURNED = 0.7;
 // (M17) she's pulled up past the high-water mark, the most the tide reaches (on whatever surge there is), so the flood
 // comes to her and goes, and doesn't float her off; and the way up from low water's longer (m: dryFrom, waterFrom)
@@ -77,6 +84,17 @@ export class KayakModel extends Vessel {
 		const sz = deck.seatZ, seatZ = ( sz[ 0 ] + sz[ 1 ] ) / 2 - 0.04, seatY = deck.y( 0, seatZ ) + 0.045;
 		this.seat = new Vector3( 0, seatY, seatZ );
 		this.helmEye = new Vector3( 0, seatY + 0.87, seatZ + 0.08 ); // (as a person's sat up on her seat)
+		// ((M19) stood up in her, the Pilot: an eye 1.7 m over the water (judgement, docs/m19/sources-boats-bait.md); where her
+		// stake-out pole goes down, through the scupper at her stern (BoatController.stake); she swings about it)
+		this.sitEye = this.helmEye.y;
+		this.standEye = 1.7;
+		this.standing = false;
+		this.pedal = false;
+		this.pole = false;
+		this._staked = false;
+		this.stakeAt = new Vector3( 0, 0, L.zAft + 0.22 );
+		this.driveAt = new Vector3( 0, - 0.3, deck.seatZ[ 1 ] + 0.42 ); // (the pedal drive's prop, under her: Pedal.js)
+		this.drive = null; // ('pedal' | 'pole' | null: what drives her this moment, Seat's)
 		this.helm = { x: 0, z: seatZ, eye: this.helmEye, rise: [ 0.5, seatZ ] };
 		this.stroke = new Stroke( seatZ );
 		this.boardPoint = new Vector3( 0, seatY, seatZ );
@@ -192,12 +210,33 @@ export class KayakModel extends Vessel {
 	// is in her one mesh, its vertices folded to a point while it's not there (no new draw, and they're in her count)
 	fit( stats ) {
 
-		const show = showOf( stats ), key = Object.values( show ).join();
+		// ((M19) her pedal drive (she's the Pilot) and her pole, for the seat and the stake; how she's staked as she is now)
+		this.pedal = !! stats.pedal;
+		this.pole = stats.stakeM > 0;
+		if ( ! this.pedal ) this.standing = false;
+		this._stats = stats;
+		const show = showOf( { ...stats, staked: this._staked } ), key = Object.values( show ).join();
 		if ( key === this._fitKey ) return;
 		this._fitKey = key;
 		const pos = this.meshes.hull.geometry.attributes.position;
 		this._foldInto( pos.array, show );
 		pos.needsUpdate = true;
+
+	}
+
+	// (M19) her pole driven in, or pulled: drawn as it is (Game.updateFittings)
+	setStaked( on ) {
+
+		if ( this._staked === on ) return;
+		this._staked = on;
+		if ( this._stats ) this.fit( this._stats );
+
+	}
+
+	// (M19, together/) how she is just now that someone else's copy of her shows: staked (BoatCopies.fitWire)
+	fitNow() {
+
+		return { staked: this._staked };
 
 	}
 
@@ -301,6 +340,8 @@ export class KayakModel extends Vessel {
 
 		}
 
+		// ((M19) she's being pulled up from now, so no anchor goes down in the moment before she's on the sand: Game.dropAnchor)
+		ctl.beaching = true;
 		const go = () => {
 
 			this.lie( ctl, dry.x, dry.z, dry.heading );
@@ -345,6 +386,7 @@ export class KayakModel extends Vessel {
 		ctl.angular.set( 0, 0, 0 );
 		ctl.speed = 0;
 		ctl.beached = true;
+		ctl.beaching = false;
 		ctl.moored = false;
 		ctl.anchor = null;
 		ctl.apply();

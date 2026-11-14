@@ -297,6 +297,15 @@ export class Vessel {
 
 	fit( stats ) {}
 
+	// (M19) what the fish under her hear of her, ctl: her BoatController -> { engine, knock, hull } (each 0..1), or null: as
+	// game/FlatsFishing.js works it out for every boat (her engine by her revs, a paddle's knock, her hull's push). Stream
+	// BOATS gives a quiet boat her own (the console on her trolling motor, the kayak poled), read through here by stream SEE
+	noise() {
+
+		return null;
+
+	}
+
 	// (together/) someone else's her, as she's fitted there. walkedAs( stats ): for whoever's aboard, what's walked and climbed:
 	// a view of this model, never this model's own fit (she may be the boat you're in). dressCopy( copy, stats, shared ): how a
 	// copy of her shows it, the copy's own meshes (shared( key, make ): a geometry a copy needs of its own, one for each key)

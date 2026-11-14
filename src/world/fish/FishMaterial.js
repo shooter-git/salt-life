@@ -499,7 +499,12 @@ const SURFACE = /* glsl */`
 		// (Salt Life) hogfish: mottled pinkish tan, a black spot at the rear base of the soft dorsal fin;
 		// a big male's snout and brow dark maroon back to the first dorsal spines
 		bool male = fract( seed * 5.3 ) < 0.3;
-		float mott = fishSs( 0.45, 0.85, fishVnoise( vec2( z, y ) * 55.0 + seed * 7.0 ) ) * bodyK;
+		// ((M19) not square: the noise's grid turned and warped by a coarser one, and a finer octave on another turn, so the blotches
+		// are as irregular and round-edged as a hogfish's, not the grid's squares (M18's list))
+		vec2 mq = mat2( 0.8, - 0.6, 0.6, 0.8 ) * vec2( z, y ) * 55.0 + seed * 7.0;
+		float mw = fishVnoise( mq * 0.45 + 3.1 ) - 0.5;
+		float mn = fishVnoise( mq + vec2( mw, - mw ) * 1.8 ) * 0.68 + fishVnoise( mat2( 0.6, 0.8, - 0.8, 0.6 ) * mq * 2.1 + 5.3 ) * 0.32;
+		float mott = fishSs( 0.46, 0.72, mn ) * bodyK;
 		c = mix( c, c * vec3( 0.68, 0.5, 0.46 ), mott * 0.7 );
 		float spot = 1.0 - fishSs( 0.014, 0.022, length( vec2( z - ${ f( 0.5 - 0.82 * SPECIES.hogfish.body ) }, y - 0.088 ) ) );
 		c = mix( c, vec3( 0.02, 0.015, 0.015 ), spot * ( isBody || P == ${ PA( 'DORSAL2' ) } ? 0.92 : 0.0 ) );

@@ -263,6 +263,17 @@ function hardtop( kit, L, q, parts ) {
 	for ( let k = N - 1; k >= 0; k -- ) ring.push( [ top[ 0 ][ k ], under[ 0 ][ k ] ] );
 	kit.add( 'gelcoat', gridSurface( ring ), { color: WHITE, rough: 0.3 } );
 
+	// (M19) her VHF whips, one at each after corner of the hardtop: an 8 ft (2.44 m) fibreglass whip on a steel ratchet mount,
+	// raked a little aft (Shakespeare's 5225-XT, Digital Antenna's 529-VW: docs/m19/sources-big-game.md). Her radio's reach was
+	// worked out for one up here (Seaworthy's VHF_H.sportfisher); now it's drawn
+	for ( const s of [ 1, - 1 ] ) {
+
+		const zw = z0 + 0.3, base = V( s * edgeX( zw ) * 0.85, y + 0.03, zw ), up = V( base.x, base.y + 0.12, base.z );
+		kit.add( 'fittings', rod( base, up, 0.025, q.low ? 5 : 8 ), STEEL );
+		kit.add( 'fittings', rod( up, V( base.x + s * 0.05, up.y + 2.42, base.z - 0.3 ), 0.014, q.low ? 4 : 6, 0.005 ), { color: WHITE, rough: 0.35 } );
+
+	}
+
 	// the frame: tube posts, raked, X-braced aft and across the front (the tower stands on its own legs outside it)
 	const r = 0.028, rad = q.low ? 5 : 8, b = SF.bridge;
 	const legs = [

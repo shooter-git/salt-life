@@ -39,6 +39,8 @@
 //   nearLine( ax, az, bx, bz, x, z )    m from ( x, z ) to the segment a to b (the line on the water, a shadow)
 //   pushAhead( speed, depth )           m ahead of a moving hull that its push of water reaches
 //   knockOf( force )                    the chance a paddle stroke this hard knocks the hull
+//   wadeNoise( speed, hard, booties )   (M19) the chance a wading step is heard
+//   seenOffshore( w )                   (M19) how well fish show out on the open sea for the light and the weather
 
 import { FISH } from './FishTable.js';
 
@@ -66,12 +68,18 @@ export const SIGHT = {
 	glint: 0.9, // the sun's glitter ahead, with the sun low in front of you
 	tail: { c: 0.3, chop: [ 3, 11 ] }, // a tail out of the water against the water's own sheen; the wind that hides it
 	sign: { c: 0.1, chop: [ 1.5, 6.5 ] }, // the school's sign on the surface (nervous water, a push); glassy to a breeze
+	// ((M19) glass copper lenses (Gear.js' glasses 2): a fish's contrast against the sand and grass the more for them, as
+	// flats guides wear them for. No measurement found (Wolffsohn 2000: a yellow lens raises contrast against blue): judgement,
+	// docs/m19/see.md)
+	lens: { copper: 1.2 },
 };
 
-// the sea's reflectance looking `below` radians under the horizon: Fresnel's for air to seawater
+// the sea's reflectance looking `below` radians under the horizon: Fresnel's for air to seawater. ((M19) Looking up, the sea
+// in view is along the surface: grazing, as at the horizon. It took the angle's size, so looking 37 degrees up read as
+// Brewster's and the glasses took the glare)
 export function fresnel( below ) {
 
-	const e = Math.min( Math.PI / 2, Math.max( 1e-4, Math.abs( below ) ) );
+	const e = Math.min( Math.PI / 2, Math.max( 1e-4, below ) );
 	const ci = Math.sin( e ), si = Math.cos( e ), st = si / N_WATER, ct = Math.sqrt( Math.max( 0, 1 - st * st ) );
 	const rs = ( ( ci - N_WATER * ct ) / ( ci + N_WATER * ct ) ) ** 2, rp = ( ( N_WATER * ci - ct ) / ( N_WATER * ci + ct ) ) ** 2;
 	return { R: ( rs + rp ) / 2, Rs: rs, Rp: rp };
@@ -85,6 +93,24 @@ export function glareLeft( below ) {
 
 	const f = fresnel( below );
 	return Math.max( 0.03, f.Rp / Math.max( f.R, 1e-6 ) );
+
+}
+
+// (M19) how well fish show out on the open sea through the glasses for the light and the weather, 0..1, by what the flats'
+// own reckoning has (seenOnFlats): by day, the sun up; less under a grey sky (flat light, the glare even and no light into
+// the water to show them by); lost in rain's pocks; a breeze's ripple fine from a tower, whitecaps not; the water a blow's
+// stirred up (G.murk). Crews spot fish from the tower in 15 to 20 knots, so the wind only tells past a moderate breeze.
+// Judgement figures, no source measures them (docs/m19/see.md)
+//   w: { sun (sin of its elevation), overcast, wind (m/s), rain, night, murk } (each 0..1 but wind and sun)
+export const OFFSHORE = { grey: 0.5, wind: [ 7, 15 ], windTake: 0.8, murk: 0.85 };
+export function seenOffshore( w ) {
+
+	const day = ( 1 - smooth( 0.25, 0.6, w.night || 0 ) ) * smooth( 0, 0.1, w.sun );
+	const grey = 1 - OFFSHORE.grey * Math.min( 1, Math.max( 0, w.overcast || 0 ) );
+	const rain = 1 - Math.min( 1, ( w.rain || 0 ) * 1.6 );
+	const wind = 1 - OFFSHORE.windTake * smooth( OFFSHORE.wind[ 0 ], OFFSHORE.wind[ 1 ], w.wind || 0 );
+	const murk = 1 - OFFSHORE.murk * Math.min( 1, Math.max( 0, w.murk || 0 ) );
+	return day * grey * rain * wind * murk;
 
 }
 
@@ -138,10 +164,11 @@ export function seenOnFlats( q, out = _out ) {
 	// the image through the surface: a ripple's blur, rain's pocks
 	const wind = Math.max( 0, q.wind || 0 ), clear = 1 / ( 1 + ( wind / S.chop ) ** 2 ), rain = 1 - Math.min( 1, ( q.rain || 0 ) * 1.6 );
 	const back = Math.max( 0, q.back ), busy = clutterOf( q.bottom ) * ( 1 - ( 1 - S.told ) * Math.min( 1, Math.max( 0, q.told || 0 ) ) );
-	out.body = day * rain * detect( up * back * clear / ( up + glare ), size, busy );
+	const lens = q.glasses && q.lens && S.lens[ q.lens ] ? S.lens[ q.lens ] : 1; // ((M19) copper lenses)
+	out.body = day * rain * detect( lens * up * back * clear / ( up + glare ), size, busy );
 	// its shadow: the sun's light it takes off the bottom, on sand under a sun high enough to throw one
 	const sh = q.bottom * direct * out1 * S.shadow * smooth( 0.25, 0.55, q.sun );
-	out.shadow = day * rain * detect( sh * clear / ( up + glare ), size, busy );
+	out.shadow = day * rain * detect( lens * sh * clear / ( up + glare ), size, busy );
 	// its tail against the water (seen above the surface: no glare in the way, only the water's own ruffle)
 	const tailK = ( 1 - smooth( S.tail.chop[ 0 ], S.tail.chop[ 1 ], wind ) ) * ( 1 - 0.8 * Math.min( 1, q.rain || 0 ) );
 	const told = 1 - ( 1 - S.told ) * Math.min( 1, Math.max( 0, q.told || 0 ) );
@@ -157,8 +184,8 @@ export function seenOnFlats( q, out = _out ) {
 // the sight entry of a kind: FishTable's (the catch table's flats fish), or the sharks' own (not the catch table's:
 // nobody keeps one, and one on a rod bites through the line)
 export const SHARK_SIGHT = {
-	blacktipShark: { back: 0.32, wary: 0.6, lead: [ 0.5, 4 ], head: 0, speed: 1.6, bites: true, eats: { shrimp: 0.25, cutMullet: 0.55, mullet: 0.45, silverside: 0.35, jig: 0.08, plug: 0.06 }, picky: 0.5 },
-	lemonShark: { back: 0.36, wary: 0.4, lead: [ 0.5, 3.5 ], head: 0, speed: 1.2, bites: true, eats: { shrimp: 0.3, cutMullet: 0.65, mullet: 0.5, silverside: 0.35, jig: 0.06, plug: 0.04 }, picky: 0.3 },
+	blacktipShark: { back: 0.32, wary: 0.6, lead: [ 0.5, 4 ], head: 0, speed: 1.6, bites: true, eats: { shrimp: 0.25, cutMullet: 0.55, mullet: 0.45, silverside: 0.35, jig: 0.08, plug: 0.06, liveShrimp: 0.3, conch: 0.4, hermitCrab: 0.2, sardine: 0.55, flyShrimp: 0.05, flyCrab: 0.03, flyTarpon: 0.1 }, picky: 0.5 },
+	lemonShark: { back: 0.36, wary: 0.4, lead: [ 0.5, 3.5 ], head: 0, speed: 1.2, bites: true, eats: { shrimp: 0.3, cutMullet: 0.65, mullet: 0.5, silverside: 0.35, jig: 0.06, plug: 0.04, liveShrimp: 0.35, conch: 0.45, hermitCrab: 0.25, sardine: 0.6, flyShrimp: 0.04, flyCrab: 0.03, flyTarpon: 0.08 }, picky: 0.3 },
 };
 export const sightOf = ( kind ) => ( FISH[ kind ] && FISH[ kind ].sight ) || SHARK_SIGHT[ kind ] || null;
 
@@ -227,12 +254,21 @@ export function pushAhead( speed, depth ) {
 // one now and then
 export const knockOf = ( force ) => 0.015 + 0.12 * Math.max( 0, Math.min( 1, force ) ) ** 2;
 export const KNOCK_HEARD = 22; // m: how far a fish hears a knock on the hull through the water
+// (M19) wading: the chance each step is heard (a foot on the bottom, the splash of a quick one), the more the faster you
+// go, the louder off the soft flat (rock and rubble); flats booties take the most of it. How far it's heard: a step's
+// quieter than a knock on a hull. No measurement found (docs/m19/sources-fly.md: guides say slow and quiet, and booties on
+// sand): judgement, docs/m19/see.md
+export const WADE = { step: 0.65, quiet: 0.02, loud: 0.25, speed: [ 0.4, 1.4 ], hard: 2, booties: 0.4, heard: 14 };
+export const wadeNoise = ( speed, hard = 0, booties = false ) => ( WADE.quiet + WADE.loud * smooth( WADE.speed[ 0 ], WADE.speed[ 1 ], speed ) ) * ( 1 + WADE.hard * Math.min( 1, Math.max( 0, hard ) ) ) * ( booties ? WADE.booties : 1 );
 export const ENGINE_HEARD = 120; // m: and an engine running (guides: an idling engine spooks them for hundreds of yards)
 
 // a bait or lure landing: the splash it makes, how far off a fish hears it (m), by what it is (a shrimp's a soft plop,
 // a plug a loud one: Bait.js' ids, null the frozen shrimp)
-export const SPLASH = { shrimp: 0.6, jig: 1.2, plug: 2.2, live: 1.0 };
-export const splashOf = ( bait ) => SPLASH[ bait === 'jig' || bait === 'plug' ? bait : bait && bait !== 'shrimp' && bait !== 'cutMullet' ? 'live' : 'shrimp' ];
+// ((M19) and M19's baits and flies their own: a bead-chain shrimp fly lands with "minimal splash", a lead-eyed crab fly as
+// loud as a live bait, a Toad on mono eyes softly (docs/m19/sources-fly.md: judgement from the tiers' words). The others as before)
+export const SPLASH = { shrimp: 0.6, jig: 1.2, plug: 2.2, live: 1.0, liveShrimp: 0.6, sardine: 0.7, conch: 0.6, hermitCrab: 0.8, flyShrimp: 0.4, flyCrab: 1.0, flyTarpon: 0.4 };
+const SPLASH_OWN = new Set( [ 'liveShrimp', 'sardine', 'conch', 'hermitCrab', 'flyShrimp', 'flyCrab', 'flyTarpon' ] );
+export const splashOf = ( bait ) => SPLASH[ SPLASH_OWN.has( bait ) ? bait : bait === 'jig' || bait === 'plug' ? bait : bait && bait !== 'shrimp' && bait !== 'cutMullet' ? 'live' : 'shrimp' ];
 
 // what tells a school someone's there now, or null: 'speed' (they came on too fast for how near they are), 'push' (the
 // push of water ahead of a hull coming at it), 'shadow' (their shadow on the bottom over it), 'knock' (a paddle knocking
@@ -254,6 +290,7 @@ export function scareOf( kind, school, o, sun, cond = {} ) {
 	const wary = sightOf( kind ) ? sightOf( kind ).wary : 1;
 	if ( o.engine && d < ENGINE_HEARD * wary ) return 'engine';
 	if ( o.knock > 0 && d < KNOCK_HEARD * wary ) return 'knock';
+	if ( o.wade > 0 && d < WADE.heard * wary ) return 'wade'; // ((M19) a wading step heard)
 	if ( ( cond.shade || 0 ) < 0.5 && sun ) {
 
 		shadowLine( o.tall, sun, _sh );
@@ -267,14 +304,39 @@ export function scareOf( kind, school, o, sun, cond = {} ) {
 
 // a cast landing at `at` with the line laid on the water from the rod's tip `tip` to it: whether it lands on the head of
 // a fish at ( x, z ) of this kind ('cast'), or lays the line over its back ('line': across it, short of the bait), or
-// neither (null). bait: Bait.js' id (a plug's splash spooks further off)
-export function castScare( kind, x, z, at, tip, bait = null ) {
+// neither (null). bait: Bait.js' id (a plug's splash spooks further off). ((M19) hard: a fly cast badly lands this much
+// louder, FlyCast; lineM: how near its back the line laid on the water spooks it, a fly line's heavier than mono)
+export function castScare( kind, x, z, at, tip, bait = null, hard = 1, lineM = 0.5 ) {
 
 	const S = sightOf( kind );
 	if ( ! S ) return null;
-	const loud = splashOf( bait ), d = Math.hypot( x - at.x, z - at.z );
+	const loud = splashOf( bait ) * hard, d = Math.hypot( x - at.x, z - at.z );
 	if ( S.head > 0 && d < S.head * Math.sqrt( loud / SPLASH.shrimp ) ) return 'cast';
-	if ( S.head > 0 && d > 1.2 && nearLine( tip.x, tip.z, at.x, at.z, x, z ) < 0.5 ) return 'line';
+	if ( S.head > 0 && d > 1.2 && nearLine( tip.x, tip.z, at.x, at.z, x, z ) < lineM ) return 'line';
 	return null;
+
+}
+
+// (M19) a false cast's line in the air, from a to b (the rod's tip and the line's far end, over the ground): the chance it spooks
+// a fish of this kind at ( x, z ) as it goes over. Certain right under it, nothing past `near` m (a bonefish's: Deneki's 15 ft,
+// times how wary it is), more where the sun's behind the line and its flash and shadow come at the fish ((sun: to the sun; the
+// zone half as wide again). Squared in between, as each false cast is two strokes. No measurement exists: the 15 ft is the
+// guides' (docs/m19/sources-fly.md, section 5); the curve and the sun's share are judgement. A shark doesn't care (head 0)
+export const FALSE_CAST = { near: 4.6, sun: 1.5 };
+export function falseCastScare( kind, x, z, a, b, sun = null ) {
+
+	const S = sightOf( kind );
+	if ( ! S || ! ( S.head > 0 ) ) return 0;
+	let zone = FALSE_CAST.near * S.wary;
+	if ( sun && sun.y > 0.15 ) {
+
+		// (the fish on the far side of the line from the sun: under its shadow and its flash)
+		const mx = ( a.x + b.x ) / 2, mz = ( a.z + b.z ) / 2;
+		if ( ( x - mx ) * - sun.x + ( z - mz ) * - sun.z > 0 ) zone *= FALSE_CAST.sun;
+
+	}
+
+	const d = nearLine( a.x, a.z, b.x, b.z, x, z );
+	return d >= zone ? 0 : ( 1 - d / zone ) ** 2;
 
 }

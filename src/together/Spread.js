@@ -1,6 +1,7 @@
 import { Vector3 } from '../engine/index.js';
 import { RigMesh } from '../game/rigs/RigMesh.js';
 import { G } from '../core/Globals.js';
+import { fitStats } from './BoatCopies.js';
 
 // (M16) What someone's got out of their boat, on everyone else's game: their spread of rods and lines, their kite, and for someone
 // riding along, the rod that's gone off, to take. In the pose: a few numbers a line (spreadWire), the kite's place (kiteWire). The
@@ -140,6 +141,9 @@ export class Spread {
 				D.line( from, _m.copy( from ).lerp( _p, 0.5 ).setY( ( from.y + _p.y ) / 2 - ( L.on ? 0 : 0.015 * L.len ) ), _p, 12 );
 
 			}
+
+			// ((M19) her teasers, if she has them: her fit's fourth bit)
+			if ( c.spread.length && c.boatId === 'sportfisher' && fitStats( 'sportfisher', c.fit | 0 ).teasers ) D.teasers( M, ( l, out ) => f.localToWorld( out.copy( l ) ), ( x, z ) => ( waves ? waves.heightAt( x, z ) : G.seaLevel.value ) );
 
 		}
 

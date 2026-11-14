@@ -22,7 +22,11 @@ import { KINDS, lifeOf } from '../game/LifeList.js';
 import { SLAMS, slamTold } from '../game/Trophies.js';
 import { VARIATION } from '../game/Chart.js';
 import { ROD_L, SEAT_Y } from '../game/FishingRod.js';
+import { FLY_K, FLY_L, FLY_HOLD } from '../game/rigs/FlyRod.js';
+import { FlyLine, loopShape, newPoints } from '../game/rigs/FlyLine.js';
+import { FLY, strokeTime } from '../game/FlyCast.js';
 import { gunModels, setBands } from '../game/Speargun.js';
+import { isClass, counts, ratio } from '../game/LineClass.js';
 import { CastNet } from '../game/CastNet.js';
 import { G } from '../core/Globals.js';
 import { gearStats, defaultUpgrades } from '../game/Gear.js';
@@ -35,6 +39,7 @@ import { ableOf, SOCK_DRIFT } from '../game/Seaworthy.js';
 import { SWIM_NEAR, anchorLie, besideHer, boatRecord, cleanBoats, driftOf, intoWater, keepBoat, sheerAt, standBack, stoodOf, swingRate, wearRate } from '../game/Away.js';
 import { RODE_SLACK } from '../player/BoatController.js';
 import { FlatsShare } from './FlatsShare.js';
+import { isSlot, ownerOf, slotFor, updateAgain } from './RoomSlots.js';
 
 // (Salt Life) Playing together: whoever else is on the island (portal.session, All the Spaces), drawn
 // where they are, doing what they do. Light, drop-in: everyone keeps their own progress and their own
@@ -110,8 +115,10 @@ const MODES = { walk: 'w', swim: 's', deck: 'd', boat: 'h' };
 const NAMES = { w: 'walk', s: 'swim', d: 'deck', h: 'helm' };
 // the rod: 0 put away, 1 held, 2 drawn back to cast, 3 cast, 4 line out, 5 a fish on, 6 landing it;
 // and how it's held then (rad above level: past a right angle, back over the shoulder)
-const ROD = { stowed: 0, idle: 1, windup: 2, flick: 3, flying: 3, floating: 4, retrieving: 4, fighting: 5, landing: 6 };
-const ROD_ELEV = [ 0, 0.5, 1.95, 0.18, 0.45, 0.95, 0.9 ];
+// ((M19) 7: a fly's false casts, with how far through which stroke (fp) and the line in the air (fl), drawn as the loop; shot,
+// it's 3 as a cast is. fw: the fly rod's weight, in your hands. An older game draws a held rod for 7)
+const ROD = { stowed: 0, idle: 1, windup: 2, flick: 3, flying: 3, floating: 4, retrieving: 4, fighting: 5, landing: 6, falsecast: 7, shoot: 3 };
+const ROD_ELEV = [ 0, 0.5, 1.95, 0.18, 0.45, 0.95, 0.9, 1.2 ];
 // (Salt Life) the cast net: 0 put away, 1 loaded in the hands, 2 winding up, 3 thrown, 4 in the water, 5
 // its purse up in front of them, 6 being loaded again (their net, here: game/CastNet.js, thrown as
 // they threw it, the 'net' message)
@@ -132,7 +139,7 @@ const CSS = /* css */`
 
 const r2 = ( v ) => Math.round( v * 100 ) / 100;
 const r3 = ( v ) => Math.round( v * 1000 ) / 1000;
-const _p = new Vector3(), _q = new Vector3(), _tip = new Vector3(), _hand = new Vector3(), _d = new Vector3();
+const _p = new Vector3(), _q = new Vector3(), _tip = new Vector3(), _hand = new Vector3(), _d = new Vector3(), _e = new Vector3();
 const _x = new Vector3(), _y = new Vector3(), _z = new Vector3(), _up = new Vector3( 0, 1, 0 );
 const _qa = new Quaternion(), _qb = new Quaternion(), _m = new Matrix4(), _mt = new Matrix4();
 const _bp = new Vector3(), _bq = new Quaternion(), _bow = new Vector3(), _at3 = new Vector3();
@@ -374,6 +381,14 @@ export class Together {
 
 	}
 
+	// (M19) a change to the group's save, tried again when more saves cross than the SDK's update lets through (RoomSlots.updateAgain)
+	_update( key, change ) {
+
+		const shared = this.portal.save.shared;
+		return updateAgain( ( k, c ) => shared.update( k, c ), key, change );
+
+	}
+
 	_readBoats() {
 
 		return this.portal.save.shared.get( 'boats' ).then( ( b ) => this._setBoats( b ) ).catch( ( e ) => console.warn( 'boats', e ) );
@@ -383,7 +398,7 @@ export class Together {
 	// a change to the group's boats: all of it, whoever else saved meanwhile (update tries again), and the others told
 	_saveBoats( change ) {
 
-		return this.portal.save.shared.update( 'boats', ( cur ) => change( cleanBoats( cur ) ) ).then( ( saved ) => {
+		return this._update( 'boats', ( cur ) => change( cleanBoats( cur ) ) ).then( ( saved ) => {
 
 			this._setBoats( saved );
 			if ( this.others.size ) this.session.send( 'boats', saved );
@@ -400,7 +415,8 @@ export class Together {
 		// ((M15) out on the water with no anchor down, she's adrift if you go: as stepping ashore makes her fast, Player.exitBoat)
 		const berthed = b.moored || b.hauled || b.beached || ( Math.hypot( b.position.x - dock.x, b.position.z - dock.z ) < 14 && b.speed < 1.5 );
 		// ((M16) sat in a kayak with her anchor down, after a rest in her, you're not about to take it up)
-		if ( ( b.anchor && b.driven && ! ( b.model && b.model.seated ) ) || ( ! b.anchor && berthed ) ) {
+		// ((M19) on the sand she's berthed, whatever an anchor says: Game.updateAnchor lets it go)
+		if ( ( b.anchor && b.driven && ! ( b.model && b.model.seated ) ) || ( ( ! b.anchor || b.beached ) && berthed ) ) {
 
 			if ( ! this._boatSaved ) return Promise.resolve();
 			this._boatSaved = false;
@@ -740,12 +756,15 @@ export class Together {
 	}
 
 	// someone's boat of this type to board now ( { boat: TheirBoat, frame, name } ), coming ( { boat: null } : her owner's aboard
-	// her, or her record's on the sea at anchor, and she's not built here yet), or null
+	// her, ((M19) or here with her at anchor out on the water,) or her record's on the sea at anchor, and she's not built here yet),
+	// or null
 	_boardable( id, type ) {
 
 		const o = this.others.get( id ), c = o && o.cur;
 		if ( o && ! c ) return { boat: null }; // (they're here, their poses not yet)
-		if ( c && c.boat && ( c.mode === 'deck' || c.mode === 'helm' ) && ! c.ride && c.boatId === type ) {
+		// ((M19) or her owner's here and ashore, she's at anchor out on the water: you're put back aboard her, not ashore)
+		const out = c && c.boat && c.anchored && ! atDock( c.boat.pos.x, c.boat.pos.z );
+		if ( c && c.boat && ( c.mode === 'deck' || c.mode === 'helm' || out ) && ! c.ride && c.boatId === type ) {
 
 			const model = this.copies.aboard( type ) && this._nearModel( o, type );
 			if ( ! model ) return { boat: null };
@@ -813,7 +832,7 @@ export class Together {
 
 		const w = weekOrder( Date.now() ), me = { id: this.me.id, name: this.me.name };
 		this._setWeek( deliver( this._week, w, me, kg ), true );
-		return this.portal.save.shared.update( 'weekOrder', ( cur ) => deliver( cur, w, me, kg ) ).then( ( saved ) => {
+		return this._update( 'weekOrder', ( cur ) => deliver( cur, w, me, kg ) ).then( ( saved ) => {
 
 			this._setWeek( saved, true );
 			if ( this.others.size ) this.session.send( 'week', saved );
@@ -839,6 +858,9 @@ export class Together {
 		for ( const [ k, v ] of Object.entries( r ) ) if ( k[ 0 ] === '@' && PLACES[ k.slice( 1 ) ] && v && typeof v.kg === 'number' && FISH[ v.s ] ) clean[ k ] = v;
 		// ((M17) and each player's life list: '#' and their id)
 		for ( const [ k, v ] of Object.entries( r ) ) if ( k[ 0 ] === '#' && v && Number.isInteger( v.k ) && v.k >= 0 ) clean[ k ] = { who: String( v.who || '' ).slice( 0, 40 ), k: Math.min( v.k, KINDS ), sl: Array.isArray( v.sl ) ? v.sl.filter( ( id ) => SLAMS[ id ] ) : [] };
+		// ((M19) and the island's best fish for its line class, '%': the one key, whatever the class, so the save stays small)
+		const lc = r[ '%' ];
+		if ( lc && FISH[ lc.s ] && isClass( lc.c ) && typeof lc.kg === 'number' && lc.kg > 0 ) clean[ '%' ] = { s: lc.s, c: lc.c, kg: lc.kg, who: String( lc.who || '' ).slice( 0, 40 ), id: lc.id, at: lc.at };
 		this.records = clean;
 		if ( ! this._lifeRead ) {
 
@@ -879,14 +901,14 @@ export class Together {
 		}
 
 		const mine = { who, k: L.k, sl: L.sl };
-		return this.portal.save.shared.update( 'records', ( cur ) => ( { ...( cur && typeof cur === 'object' ? cur : {} ), [ key ]: mine } ) ).then( ( saved ) => {
+		return this._update( 'records', ( cur ) => ( { ...( cur && typeof cur === 'object' ? cur : {} ), [ key ]: mine } ) ).then( ( saved ) => {
 
 			this._setRecords( saved );
 			if ( this.others.size ) this.session.send( 'life', fresh.length ? { sl: fresh } : 1 );
 
 		} ).catch( ( e ) => {
 
-			// (the SDK's update tries three times: when more saves than that cross, tried again a while after)
+			// (the SDK's update tries three times, and _update four more: when more saves than that cross, tried again a while after)
 			console.warn( 'records', e );
 			this._lifeNew = fresh;
 			clearTimeout( this._lifeT );
@@ -930,7 +952,7 @@ export class Together {
 
 		const mine = { who: this.me.name || 'Someone', id: this.me.id, day: day | 0, at: Date.now() };
 		if ( ! this.tray ) this.tray = mine;
-		return this.portal.save.shared.update( 'tray', ( cur ) => cur && typeof cur === 'object' && typeof cur.who === 'string' ? cur : mine ).then( ( saved ) => {
+		return this._update( 'tray', ( cur ) => cur && typeof cur === 'object' && typeof cur.who === 'string' ? cur : mine ).then( ( saved ) => {
 
 			this._setTray( saved );
 			if ( this.others.size ) this.session.send( 'tray', saved );
@@ -1006,7 +1028,7 @@ export class Together {
 
 		const mine = { kg: r3( kg ), cm, who: this.me.name, id: this.me.id, at: Date.now() };
 		if ( m ) mine.m = m;
-		this.portal.save.shared.update( 'records', ( cur ) => {
+		this._update( 'records', ( cur ) => {
 
 			const next = cur && typeof cur === 'object' ? { ...cur } : {};
 			const r = next[ species ];
@@ -1029,6 +1051,27 @@ export class Together {
 
 		} );
 		return { island, held, place: atPlace, placeHeld };
+
+	}
+
+	// (M19) a fish landed on a line of an IGFA class (LineClass.js): is it the island's best for its class, the heaviest for the
+	// class it was on (the fish's weight to the class's)? Kept in the group's records under '%' (one key: whatever the class), on
+	// the board -> whether it is, from what's known now
+	caughtClass( species, kg, cls ) {
+
+		if ( ! counts( cls, kg ) ) return false;
+		const held = this.records[ '%' ], mine = ratio( cls, kg );
+		if ( held && ratio( held.c, held.kg ) >= mine ) return false;
+		const rec = { s: species, c: cls, kg: r3( kg ), who: this.me.name, id: this.me.id, at: Date.now() };
+		this._update( 'records', ( cur ) => {
+
+			const next = cur && typeof cur === 'object' ? { ...cur } : {};
+			const was = next[ '%' ];
+			if ( ! was || ! isClass( was.c ) || ratio( was.c, was.kg ) < mine ) next[ '%' ] = rec;
+			return next;
+
+		} ).then( ( saved ) => this._setRecords( saved ) ).catch( ( e ) => console.warn( 'records', e ) );
+		return true;
 
 	}
 
@@ -1288,7 +1331,10 @@ export class Together {
 
 		}
 
-		this.session.set( `rest.${ this.me.id }`, REST[ to ] !== undefined ? { to, c: this._clock ? this._clock.at : 0 } : null )
+		// ((M19) in one of the room's slots, 'rest.@<n>', with your id in it: RoomSlots.js)
+		const s2 = this.session, here = [ this.me.id, ...this.others.keys() ];
+		const key = this._restSlot = slotFor( 'rest.', s2.entries ? [ ...s2.entries( 'rest.' ) ] : [], this.me.id, here, () => true, this._restSlot );
+		s2.set( key, REST[ to ] !== undefined ? { id: this.me.id, to, c: this._clock ? this._clock.at : 0 } : null )
 			.then( () => this._restVote( true ) ).catch( ( e ) => console.warn( 'rest', e ) );
 		return false;
 
@@ -1301,9 +1347,18 @@ export class Together {
 		const c = this._clock ? this._clock.at : 0, now = performance.now();
 		const here = [ this.me.id, ...this.others.keys() ];
 		const wishes = new Map();
+		// ((M19) each one's wish, in a slot with their id in it, or (an older game's) in their own key)
+		const byId = new Map();
+		if ( this.session.entries ) for ( const [ k, v ] of this.session.entries( 'rest.' ) ) {
+
+			const o = ownerOf( 'rest.', k, v );
+			if ( o && v && ( ! byId.has( o ) || isSlot( 'rest.', k ) ) ) byId.set( o, v );
+
+		}
+
 		for ( const id of here ) {
 
-			const key = `rest.${ id }`, w = this.session.get( key );
+			const key = `rest.${ id }`, w = this.session.entries ? byId.get( id ) || null : this.session.get( key );
 			if ( ! w || REST[ w.to ] === undefined || w.c !== c ) continue;
 			const text = JSON.stringify( w ), seen = this._wishSeen.get( key );
 			if ( ! seen || seen.text !== text ) this._wishSeen.set( key, { text, t: now } );
@@ -1461,6 +1516,8 @@ export class Together {
 		}
 
 		if ( o.net ) o.net.dispose();
+		if ( o.flyLine ) o.flyLine.dispose(); // ((M19) their fly line's loop)
+		o.flyLine = null;
 		if ( o.tag ) o.tag.remove();
 		if ( o.mapped && app.game.minimap ) app.game.minimap.removePlayer( o.person.id );
 
@@ -1561,6 +1618,14 @@ export class Together {
 			body.r = r;
 			if ( r >= 3 && rod.lineInWater ) body.b = [ r2( rod.bobber.x ), r2( rod.bobber.y ), r2( rod.bobber.z ), r2( app.waves.heightAt( rod.bobber.x, rod.bobber.z ) ) ];
 			if ( r === 5 && app.game.fight ) body.k = r2( Math.min( 1, app.game.fight.tension || 0 ) );
+			// ((M19) the fly rod, and its false casts)
+			if ( rod.flyRod ) body.fw = rod.flyWt | 0;
+			if ( r === 7 && app.game.flyCast ) {
+
+				body.fp = r2( app.game.flyCast.phase );
+				body.fl = r2( app.game.flyCast.L );
+
+			}
 
 		}
 
@@ -1602,10 +1667,11 @@ export class Together {
 		// ((M14) her deck floodlights' lenses, as lit as yours are: fitted, and as dark as it is)
 		const flood = app.game.floodsOn;
 		if ( flood > 0 ) body.L = r2( flood );
-		if ( body.B && ( boat.anchor || boat.moored ) ) body.A = 1; // (it's at anchor or moored: its lamps say so)
+		if ( body.B && ( boat.anchor || boat.moored || boat.stake ) ) body.A = 1; // (it's at anchor or moored: its lamps say so. (M19) Or staked)
 		// (the engine's revs: what the others hear. (M16) Whoever's at her helm, you or one of them; riding, not yours)
 		const running = boat.driven && ! p.riding;
 		if ( running ) body.E = r2( boat.rpm );
+		if ( body.B && boat.helmsman === 'mate' ) body.Mt = 1; // ((M19) her mate has her helm: game/rigs/Mate.js)
 		// (M10) the starter turning her over (1; 2: it'll catch), heard by whoever's aboard
 		const crank = running && this.app.game ? this.app.game.hull.crank : 0;
 		if ( crank ) body.K = crank;
@@ -2235,7 +2301,8 @@ export class Together {
 		const yard = ! dock && ! sand && inTheYard( id, p.x, p.z ) && this._yardMine( id );
 		if ( ! dock && ! sand && ! yard ) return;
 		const held = this._berths || ( this._berths = new Set() ), taken = [ ...held ];
-		const S = dock ? stemBerth( taken, sizeOf( id ), ( x, z ) => T.heightAt( x, z ) ) : sand ? sandBerth( taken, T ) : taken.some( ( t ) => t.kind === 'yard' && t.id === id ) ? null : spareYard( id, T );
+		// ((M19) a third of her kind in the yard where yours is: the yard's third cradle)
+		const S = dock ? stemBerth( taken, sizeOf( id ), ( x, z ) => T.heightAt( x, z ) ) : sand ? sandBerth( taken, T ) : spareYard( id, T, taken.filter( ( t ) => t.kind === 'yard' && t.id === id ).length );
 		if ( ! S ) return;
 		S.id = id;
 		held.add( S );
@@ -2450,7 +2517,7 @@ export class Together {
 		_m.makeBasis( _x, _y, _z ).setPosition( _hand );
 		S.gun.matrix.copy( _m );
 		S.bands.matrix.copy( _m );
-		setBands( S.bands.material.uniforms, m.lay, m.bands, c.gun === 1 ? [ 1, 1 ] : [ 0, 0 ] );
+		setBands( S.bands.material.uniforms, m.lay, m.bands, c.gun === 1 ? [ 1, 1, 1, 1 ] : [ 0, 0, 0, 0 ] ); // ((M19) up to four)
 		S.gun.material.uniforms.gunWraps.value = out ? 0 : 1;
 		S.shaft.material.uniforms.shaftFlopper.value = c.gun === 4 ? 1 : 0;
 		if ( out ) {
@@ -2512,6 +2579,10 @@ export class Together {
 		cur.mode = NAMES[ near.m ] || 'walk';
 		cur.speed = ( a.v || 0 ) + ( ( b.v || 0 ) - ( a.v || 0 ) ) * f;
 		cur.rod = near.r || 0;
+		// ((M19) their fly rod, and a false cast: how far through which stroke, and the line in the air)
+		cur.fw = Number.isFinite( near.fw ) && near.fw > 0 ? near.fw : 0;
+		cur.fp = Number.isFinite( near.fp ) ? MathUtils.clamp( near.fp, - 1, 1 ) : null;
+		cur.fl = Number.isFinite( near.fl ) ? MathUtils.clamp( near.fl, 0, 30 ) : null;
 		cur.ride = typeof near.R === 'string' ? near.R : null;
 		// ((M16) which boat she is (a game that doesn't say: the lobster boat), their job aboard, the lever and wheel at another's helm)
 		cur.boatId = isBoat( near.Y ) ? near.Y : 'lobster';
@@ -2534,6 +2605,7 @@ export class Together {
 		cur.flood = MathUtils.clamp( Number( near.L ) || 0, 0, 1 ); // ((M14) her floodlights' lenses)
 		cur.rpm = ( Number( a.E ) || 0 ) + ( ( Number( b.E ) || 0 ) - ( Number( a.E ) || 0 ) ) * f;
 		cur.crank = near.K === 1 || near.K === 2 ? near.K : 0;
+		cur.mate = near.Mt === 1; // ((M19) her mate at her helm)
 		// (M11) her hull as the skipper hears it (none sent: nothing to hear)
 		const H = Array.isArray( near.H ) && near.H.length === 5 && near.H.every( Number.isFinite ) ? near.H : null;
 		cur.hull = H ? Object.assign( cur._hull, { flood: MathUtils.clamp( H[ 0 ], 0, 3 ), pump: H[ 1 ] === 1, scrape: Math.max( 0, H[ 2 ] ), wear: MathUtils.clamp( H[ 3 ], 0, 1 ), motion: MathUtils.clamp( H[ 4 ], 0, 1 ) } ) : null;
@@ -2603,6 +2675,7 @@ export class Together {
 			boat.userData.lamps.set( { underway: c.mode === 'helm' || ! c.anchored, spot: c.spot } );
 			boat.userData.floodOn.value = c.flood;
 			this._spin( boat, c.rpm, dt );
+			this._mate( boat, c.mate );
 
 		}
 
@@ -2659,6 +2732,7 @@ export class Together {
 			this._torch( o, false );
 
 			T.rod.visible = T.line.visible = T.bobber.visible = false;
+			if ( o.flyLine ) o.flyLine.hide();
 			o.spear.gun.visible = o.spear.bands.visible = o.spear.shaft.visible = o.spear.line.visible = false;
 			if ( o.net && o.net.equipped ) o.net.equip( false );
 			return;
@@ -2715,6 +2789,7 @@ export class Together {
 		// line is out; the line to the bobber
 		const rodOn = c.rod > 0 && ! app.game.rod.holdBack;
 		T.rod.visible = rodOn;
+		if ( ! rodOn && o.flyLine ) o.flyLine.hide();
 		if ( rodOn ) {
 
 			o.avatar.hand( _hand );
@@ -2727,16 +2802,45 @@ export class Together {
 			}
 
 			_d.normalize();
-			const elev = ROD_ELEV[ c.rod ] ?? 0.5;
+			// ((M19) a false cast: the rod back and forth through its strokes, as FlyCast's own)
+			const casting = c.rod === 7 && c.fp !== null && c.fl !== null, flyRod = c.fw > 0;
+			let elev = ROD_ELEV[ c.rod ] ?? 0.5;
+			if ( casting ) {
+
+				const u = Math.abs( c.fp ), Tt = strokeTime( c.fl ), t = u * Tt, s = Math.min( 1, t / FLY.stroke ), E = FLY.elev;
+				elev = c.fp < 0 ? E.follow + ( E.back - E.follow ) * s : E.back + ( E.fwd - E.back ) * s + ( E.follow - E.fwd ) * Math.min( 1, Math.max( 0, ( t - FLY.stroke ) / ( Tt - FLY.stroke ) ) );
+
+			}
+
 			_y.copy( _d ).multiplyScalar( Math.cos( elev ) ).addScaledVector( _up, Math.sin( elev ) ).normalize();
 			_z.copy( _up ).addScaledVector( _y, - _y.y );
 			if ( _z.lengthSq() < 1e-6 ) _z.set( 0, 0, 1 );
 			_z.normalize();
 			_x.crossVectors( _y, _z ).normalize();
-			_m.makeBasis( _x, _y, _z ).setPosition( _p.copy( _hand ).addScaledVector( _y, - SEAT_Y ) );
+			// ((M19) their fly rod: its own model, stretched back to its 9 ft along the blank and held by its cork)
+			if ( flyRod !== !! T.flyFit ) {
+
+				T.smallRod = T.smallRod || T.rod.geometry;
+				T.rod.geometry = flyRod ? app.game.rod.flyRodGeometry() : T.smallRod;
+				T.flyFit = flyRod;
+
+			}
+
+			if ( flyRod ) _m.makeBasis( _x, _e.copy( _y ).multiplyScalar( FLY_K ), _z ).setPosition( _p.copy( _hand ).addScaledVector( _y, - FLY_HOLD ) );
+			else _m.makeBasis( _x, _y, _z ).setPosition( _p.copy( _hand ).addScaledVector( _y, - SEAT_Y ) );
 			T.rod.matrix.copy( _m );
 			T.rod.matrixWorldNeedsUpdate = true;
-			_tip.copy( _p ).addScaledVector( _y, ROD_L );
+			_tip.copy( _p ).addScaledVector( _y, flyRod ? FLY_L : ROD_L );
+			// ((M19) and the loop in the air, as theirs unrolls)
+			if ( casting ) {
+
+				const u = Math.abs( c.fp ), back = c.fp < 0, t = u * strokeTime( c.fl );
+				o.flyPts = o.flyPts || newPoints();
+				o.flyLine = o.flyLine || new FlyLine( app.scene );
+				loopShape( o.flyPts, _tip, _e.copy( _d ).multiplyScalar( back ? - 1 : 1 ), c.fl, ( FLY.speed / 2 ) * Math.max( 0, t - FLY.stroke ), FLY.loop.good, back ? FLY.rise.back : FLY.rise.fwd );
+				o.flyLine.show( o.flyPts );
+
+			} else if ( o.flyLine ) o.flyLine.hide();
 			// a fish on bends the blank toward the line
 			const U = T.rod.material.uniforms;
 			if ( c.rod === 5 && c.bobber ) {
@@ -2812,6 +2916,24 @@ export class Together {
 
 	// their boat's radar turning, and her propeller at her engine's revs (rpm: 0..1, as sent), as yours do
 	// (BoatModel.update)
+	// (M19) her mate at her helm on her copy, as she's backing down on someone's fish: a stand-in figure (Figure.js, one mesh),
+	// made the first time it's wanted
+	_mate( boat, on ) {
+
+		const u = boat.userData, M = u.model;
+		if ( ! on && ! u.mate ) return;
+		if ( ! u.mate && M && M.helmEye ) {
+
+			u.mate = figureStandIn();
+			u.mate.position.set( M.helmEye.x, M.helmEye.y - 1.62, M.helmEye.z );
+			boat.add( u.mate );
+
+		}
+
+		if ( u.mate ) u.mate.visible = !! on;
+
+	}
+
 	_spin( boat, rpm, dt ) {
 
 		const u = boat.userData;
@@ -2945,6 +3067,32 @@ export class Together {
 		if ( ! p.riding ) return null;
 		const o = this.others.get( p.boat.owner );
 		return o && o.cur ? { group: o.boat || null, cur: o.cur, speed: o.boatSpeed || 0 } : null;
+
+	}
+
+	// (M19) another player's kayak within earshot of her push (15 m), when the boat you hear isn't hers: you're in your own boat or
+	// riding, or another boat's nearer (theirs: boatSound's). -> { d, speed } or null
+	kayakHeard( theirs = null ) {
+
+		const p = this.app.player, cam = this.app.camera.position;
+		let best = null, bd = 15;
+		for ( const o of this.others.values() ) {
+
+			const c = o.cur;
+			if ( ! c || ! c.boat || c.boatId !== 'kayak' || c.mode !== 'helm' || ( p.riding && p.boat.owner === o.person.id ) ) continue;
+			const at = ( c.drawn || c.boat ).pos;
+			if ( theirs && theirs.position === at ) continue; // (she's the boat you hear already)
+			const d = at.distanceTo( cam );
+			if ( d < bd ) {
+
+				bd = d;
+				best = { d, speed: o.boatSpeed || 0 };
+
+			}
+
+		}
+
+		return best;
 
 	}
 

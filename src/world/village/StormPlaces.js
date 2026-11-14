@@ -30,6 +30,14 @@ export const SPARE_YARD = {
 	console: { x: 88.5, z: - 107, yaw: 0 },
 	sportfisher: { x: 118.5, z: - 113, yaw: 0 },
 };
+// (M19) and a third, for a second guest's of the same kind: on the yard's level ground clear of the others (each within 0.15 m
+// along her length, and 1.6 m or more from the next boat), behind or beside the rest
+export const THIRD_YARD = {
+	lobster: { x: 95, z: - 109, yaw: 0 },
+	kayak: { x: 96.5, z: - 96, yaw: 0 },
+	console: { x: 84, z: - 107, yaw: 0 },
+	sportfisher: { x: 105.5, z: - 113, yaw: 0 },
+};
 // a boat's keel blocks hold her this far off the highest ground under her
 const BLOCKS = 0.35;
 // her pose on her blocks: { position (her waterline), heading }, her length and draft (m) from what she is

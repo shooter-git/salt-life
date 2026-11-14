@@ -7,6 +7,9 @@ import { createPropMaterial } from '../GameMaterials.js';
 // variant), so it's one draw call, and no new shader. Made the first time it's wanted: it costs nothing until then.
 const MAX_VERTS = 1600, MAX_INDEX = 4800;
 const _c = new Color(), _toCam = new Vector3(), _t = new Vector3(), _w = new Vector3(), _p = new Vector3(), _q = new Vector3(), _u = new Vector3(), _v = new Vector3(), _n = new Vector3();
+// (M19) a sportfisher's teasers: off her bridge's after corners to a daisy chain of soft squids streaming astern (m, her frame)
+const TEASE = { corner: [ 1.1, - 0.5, - 1.2 ], out: 2.6, from: 10.5, to: 14, squids: 4 };
+const _ta = new Vector3(), _tb = new Vector3(), _tc = new Vector3(), _td = new Vector3(), _te = new Vector3();
 
 export class RigMesh {
 
@@ -119,6 +122,33 @@ export class RigMesh {
 			}
 
 			last = v0;
+
+		}
+
+	}
+
+	// (M19) her teasers, with her spread out (game/rigs/Rigs.js on yours, together/Spread.js on another's copy): a line each
+	// side from her bridge's after corners, and on the water astern a daisy chain of squids, pink and green. M: her model
+	// (lines, helmEye); w( local, out ): her frame to the world; sea( x, z ): the water's height
+	teasers( M, w, sea ) {
+
+		const L = M.lines, eye = M.helmEye, T = TEASE;
+		if ( ! L || ! eye ) return;
+		for ( const s of [ 1, - 1 ] ) {
+
+			w( _ta.set( s * T.corner[ 0 ], eye.y + T.corner[ 1 ], eye.z + T.corner[ 2 ] ), _ta );
+			w( _tb.set( s * T.out, 0, L.zAft - T.from ), _tb );
+			_tb.y = sea( _tb.x, _tb.z );
+			w( _tc.set( s * T.out, 0, L.zAft - T.to ), _tc );
+			_tc.y = sea( _tc.x, _tc.z );
+			this.line( _ta, _td.copy( _ta ).lerp( _tb, 0.5 ).setY( ( _ta.y + _tb.y ) / 2 - 0.4 ), _tb, 10 );
+			for ( let i = 0; i < T.squids; i ++ ) {
+
+				_td.lerpVectors( _tb, _tc, i / T.squids );
+				_te.lerpVectors( _tb, _tc, ( i + 0.6 ) / T.squids );
+				this.tube( [ _td.clone(), _te.clone() ], [ 0.05, 0.02 ], i % 2 ? 0x3fbf6a : 0xe0508a, 0.5, 0, 5 );
+
+			}
 
 		}
 

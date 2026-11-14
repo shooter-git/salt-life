@@ -360,6 +360,47 @@ export function seenTake( kind, bait, at, rng = Math.random ) {
 
 }
 
+// (M19) A fly's worked (stream FLY: docs/m19/sources-fly.md, section 6), and each kind of fish wants it its own way: a bonefish a
+// fly that moves, short strips and on, and loses interest in one left still; a permit a long slow strip and then the fly left
+// dead, as a crab freezes, and moved again once it's turned to it, it's off; a tarpon a steady slow strip that doesn't stop;
+// a barracuda a fly stripped fast. What a seen fish coming to it makes of it, past seenTake's first look (act): a well-worked
+// fly turns a refusal into an eat now and then, a badly worked one an eat into a refusal, and a permit's moved fly spooks it.
+//   want   'move' | 'still' | 'fast'      still  s left still it loses interest      near  m: (still) moved this near, it spooks
+// The guides' words, no measurement; the chances are judgement
+export const WORK = {
+	bonefish: { want: 'move', still: 2.5 },
+	permit: { want: 'still', near: 1.5 },
+	tarpon: { want: 'move', still: 2 },
+	snook: { want: 'move', still: 2 },
+	barracuda: { want: 'fast', still: 1 },
+};
+export const WORKED = { lost: 0.7, won: 0.3, dead: 0.25, slow: 0.5 };
+// -> 'eat' | 'refuse' | 'spook'. work: FlyCast.work's { still (s since a strip), moving, strips, fast (stripped on) }
+export function workedTake( kind, act, work, rng = Math.random ) {
+
+	const W = WORK[ kind ];
+	if ( ! W || act === 'spook' || ! work ) return act;
+	if ( W.want === 'still' ) {
+
+		if ( act === 'refuse' && work.still > 1 && work.strips > 0 && rng() < WORKED.dead ) return 'eat';
+		return act;
+
+	}
+
+	if ( W.want === 'fast' ) {
+
+		if ( act === 'eat' && ! work.fast && rng() < WORKED.slow ) return 'refuse';
+		if ( act === 'refuse' && work.fast && rng() < WORKED.won ) return 'eat';
+		return act;
+
+	}
+
+	if ( act === 'eat' && work.still > W.still && rng() < WORKED.lost ) return 'refuse';
+	if ( act === 'refuse' && work.strips >= 2 && work.still <= W.still && rng() < WORKED.won ) return 'eat';
+	return act;
+
+}
+
 // 0 at a, 1 at b and past it (a missing value: 0)
 function ramp( a, b, x ) {
 

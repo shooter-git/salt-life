@@ -27,6 +27,9 @@ export const RIGS = {
 	troll: { name: 'Troll', needs: 'boat' },
 	kite: { name: 'Kite', needs: 'boat' },
 	drop: { name: 'Deep drop', sink: 2.5, reach: 900, needs: 'electricReel' },
+	// ((M19) the fly rod's, stream FLY's: anywhere, wading and from the kayak too (anywhere). needs names the track, not a
+	// stat, so Rigs.available finds it wanting until FLY reads the fly rods you have: gearStats' flyRods)
+	fly: { name: 'Fly', needs: 'flyRod', anywhere: true },
 };
 export const RIG_IDS = Object.keys( RIGS );
 
@@ -37,8 +40,10 @@ const ONLY = {
 	float: ( b ) => b === null || ( ! b.towed && ! b.chum && ( ! b.lure || b.surface ) ),
 	bottom: ( b ) => b === null || ( ! b.towed && ! b.chum && ( ! b.lure || b.sinks ) ),
 	troll: ( b ) => b !== null && ! b.chum && ( b.towed || b.tow ),
-	kite: ( b ) => b !== null && b.live,
+	kite: ( b ) => b !== null && b.live && b.kite !== false, // ((M19) a live fish: not a shrimp or a crab, kite: false)
 	drop: ( b ) => b !== null && ! b.chum && ! b.lure && ! b.live,
+	// ((M19) a fly, and nothing but)
+	fly: ( b ) => b !== null && !! b.fly,
 };
 export const baitFits = ( kind, bait ) => ONLY[ kind ]( bait || null );
 
@@ -96,6 +101,10 @@ const BILL = { sailfish: true, whiteMarlin: true, blueMarlin: true, swordfish: t
 const LEAPS = { sailfish: true, whiteMarlin: true, blueMarlin: true, mahi: true, tarpon: true };
 
 // a species' weight on this hook, times this, past what Bites made of it (no hook: as it was)
+// (M19) teasers in the spread (the sportfisher's: daisy chains and dredges): the billfish raised to the baits the more. No
+// study measures it; captains say noticeably (docs/m19/sources-big-game.md). Judgement
+export const TEASE = 1.3;
+
 export function rigWeight( rig, id ) {
 
 	if ( ! rig ) return 1;
@@ -105,6 +114,7 @@ export function rigWeight( rig, id ) {
 
 		const k = f.knots || TOW_KNOTS[ id ] || TOW_KNOTS_ELSE, v = rig.knots || 0;
 		x *= v < k[ 0 ] ? Math.max( 0, 1 - ( k[ 0 ] - v ) / 3 ) : v > k[ 1 ] ? Math.max( 0, 1 - ( v - k[ 1 ] ) / 3 ) : 1;
+		if ( rig.teasers && f.release > 0 ) x *= TEASE; // ((M19) a billfish, raised by the teasers)
 
 	}
 

@@ -1,5 +1,6 @@
 // (M16) What the two-game checks that came after aboard.mjs share (hard.mjs, jobs.mjs, seen.mjs): two real games on one machine, each at
 // a device's frame rate, nothing drawn between the shots so what's counted in frames gets on; script memory read after a forced GC.
+// TWO_JS_FLAGS adds V8 flags (--no-opt --no-maglev --no-sparkplug: nothing compiled past the interpreter).
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 const ROOT = join( dirname( fileURLToPath( import.meta.url ) ), '../..' );
@@ -10,7 +11,7 @@ export const OTHER = 'window.__app.together.others.values().next().value';
 
 export async function start( { out, port, tier = 'low', stale = 120, viewport = { width: 960, height: 540 }, drawing = false } ) {
 
-	const browser = await chromium.launch( { args: [ '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', '--enable-precise-memory-info', '--js-flags=--expose-gc' ] } );
+	const browser = await chromium.launch( { args: [ '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required', '--enable-precise-memory-info', `--js-flags=--expose-gc${ process.env.TWO_JS_FLAGS ? ` ${ process.env.TWO_JS_FLAGS }` : '' }` ] } );
 	const ctx = await browser.newContext( { viewport } );
 	await ctx.addInitScript( () => {
 

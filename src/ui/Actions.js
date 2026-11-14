@@ -27,6 +27,8 @@ export const ACTIONS = {
 	camera: { key: 'KeyV' },
 	horn: { key: 'Horn', hold: true },
 	plotter: { key: 'KeyZ' },
+	motor: { key: 'KeyM' }, // ((M19) the console's trolling motor, at her helm: Game.updateFittings)
+	stake: { key: 'KeyK' }, // ((M19) the console's Power-Poles, the kayak's stake-out pole)
 	guide: {},
 };
 
@@ -54,9 +56,11 @@ export function offers( player, game = null, o = {} ) {
 	if ( prompt && prompt.key === 'R' && game && game.rigs && game.rigs.rodOn ) o.rod = 'Take the rod';
 	o.use = fishing ? castLabel( game ) : spearing ? spearLabel( game ) : lobstering ? lobsterLabel( game ) : netting ? netLabel( game ) : null;
 	o.reel = fishing && ! game.fight && ( rod.state === 'floating' || rod.state === 'flying' ) ? 'Reel in' : fishing && ! game.fight && rod.state === 'idle' && game.rigs && game.rigs.linesOut ? 'Lines in' : null;
+	// ((M19) a fly's: picked up off the water to cast again, or false casting stopped)
+	if ( fishing && ! game.fight && rod.rig === 'fly' ) o.reel = rod.state === 'floating' ? 'Pick up' : rod.state === 'falsecast' ? 'Stop' : o.reel;
 	// (the cooler with the rod out and cast too, as I opens it; not while a cast's wound up or a fish is on: an open
 	// panel holds the rod's input, Game.update, so the wind-up would hang and the fish run free)
-	const rodBusy = fishing && ( !! game.fight || rod.state === 'windup' );
+	const rodBusy = fishing && ( !! game.fight || rod.state === 'windup' || rod.state === 'falsecast' || rod.state === 'shoot' ); // ((M19) and a fly's false casts
 	o.cooler = game && game.hud && ! rodBusy && ! spearing && ! lobstering && ! netting ? 'Cooler' : null;
 	// the flashlight: offered after dusk (or while it's on)
 	const lights = game && game.app && game.app.localLights;
@@ -91,9 +95,14 @@ export function offers( player, game = null, o = {} ) {
 
 	}
 
+	// ((M19) her trolling motor at the console's helm; her Power-Poles aboard her, or the kayak's pole sat in her; stood up and sat
+	// down in the Pilot (Space): Game.updateFittings, kayak/Seat.js)
+	const ctl = app && app.boatCtl, M = ctl && ctl.model, st = game && game.state && game.state.stats, mine = player && ! player.riding && ( player.mode === 'boat' || player.mode === 'deck' );
+	o.motor = mine && helm && M && M.trollingAt && st && st.trollingN > 0 ? ( ctl.trolling ? 'Outboards' : 'Trolling motor' ) : null;
+	o.stake = mine && M && M.stakeAt && st && st.stakeM > 0 ? ( ctl.stake ? ( seat ? 'Pull the pole' : 'Poles up' ) : ( seat ? 'Stake out' : 'Power-Poles' ) ) : null;
 	o.camera = player && player.mode === 'boat' ? 'Camera' : null;
 	o.dive = player && player.mode === 'swim' ? 'Dive' : null;
-	o.jump = prompt && prompt.key === 'Space' ? prompt.text : player && player.mode === 'swim' ? 'Swim up' : player && player.mode === 'boat' ? null : 'Jump';
+	o.jump = prompt && prompt.key === 'Space' ? prompt.text : player && player.mode === 'swim' ? 'Swim up' : player && player.mode === 'boat' ? ( seat && M && M.pedal ? ( M.standing ? 'Sit down' : 'Stand up' ) : null ) : 'Jump';
 	// (the first-play guide again: H, ashore; from the wheel, anywhere)
 	o.guide = game && game.guide && ! game.guide.open ? 'Guide' : null;
 	return o;
@@ -107,6 +116,8 @@ function castLabel( game ) {
 	const rod = game.rod;
 	if ( game.fight ) return 'Reel';
 	if ( rod.state === 'windup' ) return 'Let go';
+	// ((M19) a fly: false casting (its word's when to let go), shooting, stripped and strip-set: game/FlyCast.js)
+	if ( game.flyCast && ( rod.state === 'falsecast' || rod.state === 'shoot' || ( rod.state === 'floating' && rod.rig === 'fly' ) ) ) return game.flyCast.label();
 	if ( rod.state === 'floating' ) return game.bite && game.bite.phase === 'take' ? 'Strike!' : game.rigs?.leadLabel() || 'Strike';
 	if ( rod.state === 'idle' ) return game.rigs ? game.rigs.castLabel() : 'Cast';
 	return 'Wait';

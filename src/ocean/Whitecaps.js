@@ -356,13 +356,14 @@ vec2 whitecapsAt( vec2 x0 ) {
 
 	// the whitecaps at Lagrangian point ( x0, z0 ) at time t, as the GPU draws them near by (no far fade;
 	// (M15) as few as the wind sea's grown there, in the island's lee: Waves.windGrownAt)
-	foamAt( x0, z0, t = G.time.value, out = { roller: 0, foam: 0 } ) {
+	foamAt( x0, z0, t = G.time.value, out = { roller: 0, foam: 0 }, long = false ) {
 
 		out.roller = 0;
 		out.foam = 0;
 		if ( this.cover.value <= 0 ) return out;
-		// ((M16) the short seas': what a sea coming aboard is reckoned by, BreakingSeas', whose figures are about these)
-		CARRIERS.forEach( ( c, i ) => {
+		// ((M16) the short seas': what a sea coming aboard is reckoned by, BreakingSeas', whose figures are about these. (M19) And
+		// with `long`, a long sea's own heads too (the third carrier): one breaking on her comes aboard as well, M18's)
+		( long ? this.carriers : CARRIERS ).forEach( ( c, i ) => {
 
 			const chance = this.chance[ i ];
 			if ( chance <= 0 ) return;

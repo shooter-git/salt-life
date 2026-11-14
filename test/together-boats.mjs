@@ -177,10 +177,14 @@ ok( sizeOf( 'trawler' ) === SIZE.lobster, 'and a game that doesn\'t say is the l
 	ok( jobAt( m, 'walk', new Vector3( S.chair.x, S.chair.y, S.chair.z ) ) === null && jobAt( await loadBoat( 'lobster' ), 'deck', new Vector3() ) === null, 'ashore, or on a boat with none, no job' );
 	ok( clockFrom( 0, 0, 10 ) === 12 && clockFrom( 0, - 10, 0 ) === 3 && clockFrom( 0, 10, 0 ) === 9 && clockFrom( 0, 0, - 10 ) === 6, 'by the clock from her bow, her starboard at three' );
 	ok( clockFrom( Math.PI / 2, 10, 0 ) === 12, 'whichever way she\'s heading' );
-	const finds = { bait: [ { x: 1000, z: 0 }, { x: 0, z: - 900 } ], weed: [ { x: 0, z: 800 } ], debris: [ { x: 0, z: 2000 } ] };
+	// ((M19) a weedline as Finds.js makes one: its two ends, no point of its own)
+	const finds = { bait: [ { x: 1000, z: 0 }, { x: 0, z: - 900 } ], weed: [ { x0: - 300, z0: 800, x1: 300, z1: 820 } ], debris: [ { x: 0, z: 2000 } ] };
 	const see = spotted( finds, new Vector3(), new Vector3( 1, - 0.05, 0.02 ).normalize() );
 	ok( see && see.kind === 'bait' && see.x === 1000, 'looking at the birds, it\'s the birds' );
 	ok( spotted( finds, new Vector3(), new Vector3( - 1, 0, 0 ) ) === null, 'looking at nothing, nothing' );
+	const weed = spotted( finds, new Vector3(), new Vector3( 0, - 0.05, 1 ).normalize() );
+	ok( weed && weed.kind === 'weed' && Math.abs( weed.x + 26.6 ) < 0.5 && Math.abs( weed.z - 809.1 ) < 0.5, // (the foot of the perpendicular from you: it slants 20 m in 600)
+		 `looking at the weedline, it's called, where it's nearest (${ weed && weed.kind } at ${ weed && weed.x.toFixed( 0 ) }, ${ weed && weed.z.toFixed( 0 ) }; before M19 a weedline was never called)` );
 	ok( spotted( { debris: finds.debris }, new Vector3(), new Vector3( 0, 0, 1 ) ) === null, 'and debris too far off to make out isn\'t' );
 
 	const k = await loadBoat( 'kayak' );
@@ -272,11 +276,12 @@ ok( sizeOf( 'trawler' ) === SIZE.lobster, 'and a game that doesn\'t say is the l
 
 // ---- what's fitted, in the pose: it comes out as it went in, and her paint
 for ( const [ id, stats, want ] of [
-	[ 'sportfisher', { tower: false, outriggers: true, chair: false }, { tower: false, outriggers: true, chair: false } ],
-	[ 'sportfisher', {}, { tower: true, outriggers: true, chair: true } ],
-	[ 'console', { twin: true, tTop: false, diveLadder: true, tankRack: false }, { twin: true, tTop: false, diveLadder: true, tankRack: false, ladderDown: false } ], // ((M17) and her ladder as it is: up)
-	[ 'kayak', { holdKg: 40, finder: true, anchorM: 0 }, { holdKg: 13, finder: true, trolley: false } ],
-	[ 'lobster', { holdKg: 40 }, {} ],
+	// ((M19) and M19's fittings, none of them here: test/fit-bits.mjs has them)
+	[ 'sportfisher', { tower: false, outriggers: true, chair: false }, { tower: false, outriggers: true, chair: false, teasers: false } ],
+	[ 'sportfisher', {}, { tower: true, outriggers: true, chair: true, teasers: false } ],
+	[ 'console', { twin: true, tTop: false, diveLadder: true, tankRack: false }, { twin: true, tTop: false, diveLadder: true, tankRack: false, ladderDown: false, poleDown: false, motorDown: false, anchorDown: false, trolling: false, powerPole: false, radar: false } ], // ((M17) and her ladder as it is: up; (M19) her anchor up)
+	[ 'kayak', { holdKg: 40, finder: true, anchorM: 0 }, { holdKg: 13, finder: true, trolley: false, staked: false, stakePole: false, pedal: false } ],
+	[ 'lobster', { holdKg: 40 }, { anchorDown: false } ], // ((M19) her anchor as it is: on her roller)
 ] ) {
 
 	const f = fitWire( id, stats, 'navy' );

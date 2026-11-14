@@ -16,14 +16,22 @@ export const LOOK_PARTS = {
 		cooler: { not: 'crate', when: ( s ) => ! ( s.holdKg > 12 ) },
 		puck: { when: ( s ) => !! s.finder },
 		trolley: { when: ( s ) => s.anchorM > 0 || !! s.trolley },
+		// ((M19) the Pilot's pedal drive; her pole stowed along her side, as she's left: never staked)
+		pedal: { when: ( s ) => !! s.pedal },
+		pole: { when: ( s ) => !! ( s.pole ?? s.stakePole ?? s.stakeM > 0 ) },
 	},
-	// (ConsoleModel's fittedOf, her ladder up and her cover off, as she's left)
+	// (ConsoleModel's fittedOf, her ladder up and her cover off, as she's left; (M19) her trolling motor stowed and her Power-Poles
+	// stood up, her radar's dome; her anchor on her roller, always as she's left (always: not one of the ways she's fitted))
 	console: {
 		tTop: { when: ( s ) => !! s.tTop },
 		tankRack: { when: ( s ) => !! s.tankRack },
 		twin: { when: ( s ) => !! s.twin },
 		single: { not: 'twin', when: ( s ) => ! s.twin },
 		ladderUp: { when: ( s ) => !! s.diveLadder },
+		trolling: { when: ( s ) => !! ( s.trolling ?? s.trollingN > 0 ) },
+		powerPole: { when: ( s ) => !! ( s.powerPole ?? s.stakeM > 0 ) },
+		radar: { when: ( s ) => !! s.radar },
+		anchorStowed: { always: true, when: () => true },
 	},
 	lobster: {},
 	// (SportfisherModel's fittedOf: one she has no track for yet is shown)

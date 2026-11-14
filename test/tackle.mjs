@@ -280,7 +280,7 @@ const among = ( s, ...ids ) => ids.reduce( ( a, id ) => a + ( s[ id ] || 0 ), 0 
 	const top = gearStats( { ...u, rod: 3, reel: 4, leader: 3, lures: 3, landing: 2, glasses: 1, diveKit: 3, safety: 2 } );
 	ok( top.standUp && top.twoSpeed && top.dragKg >= 18 && top.spoolM >= 800 && top.leader === 3 && top.lures === 3 && top.landKg >= 200 && top.dehooker && top.tagKit && top.polarized && top.airS > 0 && top.flares && top.epirb && top.lifeJacket, 'the top of each' );
 	for ( const k of [ 'leader', 'lures', 'landing', 'glasses', 'diveKit', 'safety' ] ) ok( UPGRADES[ k ] && ! UPGRADES[ k ].on, `${ k } is your own gear, with you on any boat` );
-	ok( UPGRADES.rod.levels.length === 4 && UPGRADES.reel.levels.length === 5 && UPGRADES.rod.levels[ 3 ].cost === 600 && UPGRADES.reel.levels[ 3 ].cost === 900 && UPGRADES.reel.levels[ 4 ].cost === 1200, 'the rod has its fourth level and the reel its fourth and (M17) fifth, at the doc\'s prices' );
+	ok( UPGRADES.rod.levels.length === 4 && UPGRADES.reel.levels.length === 6 && UPGRADES.rod.levels[ 3 ].cost === 600 && UPGRADES.reel.levels[ 3 ].cost === 900 && UPGRADES.reel.levels[ 4 ].cost === 1200 && UPGRADES.reel.levels[ 5 ].spoolM === 914, 'the rod has its fourth level and the reel its fourth and (M17) fifth, at the doc\'s prices, and (M19) the 130-class sixth' );
 	ok( UPGRADES.leader.levels.map( ( l ) => l.cost ).join() === '0,40,60,90' && UPGRADES.lures.levels.map( ( l ) => l.cost ).join() === '0,50,90,180' && UPGRADES.landing.levels.map( ( l ) => l.cost ).join() === '0,60,80' && UPGRADES.diveKit.levels.map( ( l ) => l.cost ).join() === '0,80,220,600', 'the rest at the doc\'s prices' );
 	const S = new GameState( { load: () => null, save() {} } );
 	S.money = 100;
@@ -354,7 +354,8 @@ const among = ( s, ...ids ) => ids.reduce( ( a, id ) => a + ( s[ id ] || 0 ), 0 
 
 	ok( glareLeft( 37 * Math.PI / 180 ) < 0.1 && glareLeft( 0 ) >= 0.45, 'they take most of the glare at Brewster\'s angle, little of it along the surface (M17: Fresnel\'s)' );
 	ok( fishSeen( 3, 12 ) > 0.8 && fishSeen( 3, 60 ) === 0, 'from the deck you see a fish close to, not 60 m off' );
-	ok( fishSeen( 14, 60 ) > 0.8 && fishSeen( 14, 120 ) > 0, 'from the tower, out to more than 100 m' );
+	// ((M19) the tower's eye is 8.62 m (SportfisherModel's towerEye), not 14)
+	ok( fishSeen( 8.62, 40 ) > 0.8 && fishSeen( 8.62, 100 ) > 0, 'from the tower (8.62 m), plainly 40 m off, and out to more than 100 m' );
 	ok( fishSeen( 40, 300 ) === 0, 'but not for ever' );
 
 }

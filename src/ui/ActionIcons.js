@@ -28,6 +28,9 @@ export const ICONS = {
 	torch: '<path d="M2.5 10h8.5v4H2.5z"/><path d="M11 8.2l3.5-1.2v10l-3.5-1.2z"/><path d="M17 9.2l4.5-2M17 12h4.5M17 14.8l4.5 2"/>',
 	search: '<circle cx="7" cy="11" r="4"/><path d="M11 8l10-3.6M11 14l10 3.6"/><path d="M7 15v5M4 20.5h6"/>',
 	horn: '<path d="M3 9.5v5h3.2l6.8 5v-15l-6.8 5z"/><path d="M16 9a4 4 0 0 1 0 6M18.6 6.4a7.7 7.7 0 0 1 0 11.2"/>',
+	// ((M19) a trolling motor: its head, its shaft, its pod and prop; a pole driven into the bottom)
+	motor: '<rect x="8" y="2.5" width="8" height="4" rx="1"/><path d="M12 6.5V17"/><path d="M7.5 17.5h8.5a1.6 1.6 0 0 1 0 3.2H7.5z"/><path d="M5 18v2.5"/>',
+	stake: '<path d="M12 2.5V18.5l-1.4 3M12 18.5l1.4 3"/><path d="M3 15c3 1.4 6 1.4 9 0s6-1.4 9 0"/><path d="M9.5 6h5"/>',
 	camera: '<path d="M3.5 8h3.4l2-2.6h6.2l2 2.6h3.4v11h-17z"/><circle cx="12" cy="13.3" r="3.6"/>',
 	plotter: '<rect x="2.5" y="3.5" width="19" height="14" rx="2"/><circle cx="12" cy="10.5" r="4.3" stroke-dasharray="2 1.8"/><path d="M12 10.5l2.8-2.8"/><path d="M8.5 21h7M12 17.5V21"/>',
 	anchor: '<circle cx="12" cy="4.6" r="2"/><path d="M12 6.6V21M8 10h8"/><path d="M4.5 14.5c.6 3.8 3.7 6.5 7.5 6.5s6.9-2.7 7.5-6.5"/><path d="M4.5 14.5L3 16.6M19.5 14.5l1.5 2.1"/>',
@@ -78,6 +81,7 @@ export const ACTION_ICON = {
 	Rod: 'rod', 'Take the rod': 'rod', Speargun: 'speargun', 'Lobster gear': 'lobster', Radio: 'radio', Flares: 'flare',
 	'Cast net': 'net', Bait: 'bait', Rig: 'rig', Leader: 'leader', Cooler: 'cooler',
 	Torch: 'torch', 'Torch off': 'torch', Searchlight: 'search', 'Searchlight off': 'search', Horn: 'horn', Camera: 'camera', Guide: 'guide', 'Plotter range': 'plotter',
+	'Trolling motor': 'motor', Outboards: 'motor', 'Power-Poles': 'stake', 'Poles up': 'stake', 'Stake out': 'stake', 'Pull the pole': 'stake', 'Stand up': 'jump', 'Sit down': 'jump',
 	Run: 'run', Dive: 'dive', Jump: 'jump', 'Swim up': 'swimup', 'Climb ladder': 'ladder', 'Reel in': 'reelin', 'Lines in': 'reelin',
 	// (the big button's, as it goes)
 	Cast: 'cast', 'Let out': 'cast', 'Fly kite': 'kite', Drop: 'drop', Deeper: 'drop', 'Stop here': 'drop', Chum: 'chum', 'Let go': 'letgo',

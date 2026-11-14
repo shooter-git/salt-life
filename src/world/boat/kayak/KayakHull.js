@@ -472,7 +472,54 @@ function gear( L, D ) {
 
 	}
 
-	return { cooler: small, crate, puck, trolley };
+	// ((M19) the Pescador Pilot's pedal drive (stream BOATS: docs/m19/boats.md): in its well ahead of the seat, the crank on its mast
+	// with a pedal each side, the drive's leg down through her and its prop under her; the hand rudder's lever by the seat and
+	// its blade at her stern)
+	const [ pedal, addPedal ] = collect();
+	{
+
+		const z = D.seatZ[ 1 ] + 0.5, deckY = y( 0, z ), dark = new Color( 0x1c1d20 ), grey = new Color( 0x5d6166 ), crankY = deckY + 0.3;
+		addPedal( box( 0.16, 0.06, 0.34 ), dark, 0.5, mat4( 0, deckY + 0.02, z ) ); // its base in the well
+		addPedal( rod( new Vector3( 0, deckY + 0.04, z - 0.05 ), new Vector3( 0, crankY, z + 0.04 ), 0.03, 6 ), dark, 0.45 ); // the mast
+		addPedal( cylinder( 0.05, 0.05, 0.08, 8 ), grey, 0.4, mat4( 0, crankY, z + 0.04, 0, 0, Math.PI / 2 ) ); // the crank's hub
+		for ( const s of [ 1, - 1 ] ) {
+
+			const end = new Vector3( s * 0.06, crankY + s * 0.15, z + 0.04 + s * 0.06 );
+			addPedal( rod( new Vector3( s * 0.045, crankY, z + 0.04 ), end, 0.012, 4 ), grey, 0.35 );
+			addPedal( box( 0.1, 0.025, 0.07 ), dark, 0.6, mat4( end.x + s * 0.05, end.y, end.z ) );
+
+		}
+
+		// the leg down through her, the prop under her, two blades
+		addPedal( box( 0.05, 0.42, 0.1 ), dark, 0.45, mat4( 0, deckY - 0.19, z - 0.08 ) );
+		addPedal( rod( new Vector3( 0, deckY - 0.38, z - 0.05 ), new Vector3( 0, deckY - 0.38, z - 0.2 ), 0.025, 6 ), dark, 0.45 );
+		for ( const s of [ 1, - 1 ] ) addPedal( box( 0.012, 0.11, 0.04 ), grey, 0.4, mat4( 0, deckY - 0.38 + s * 0.06, z - 0.21 ) );
+		// the rudder's lever by the seat, to port, and its blade under her stern
+		const sz = D.seatZ[ 0 ] + 0.1;
+		addPedal( rod( new Vector3( 0.24, y( 0.24, sz ), sz ), new Vector3( 0.26, y( 0.24, sz ) + 0.16, sz + 0.03 ), 0.009, 4 ), dark, 0.4 );
+		const zs = L.zAft + 0.08;
+		addPedal( box( 0.01, 0.2, 0.16 ), dark, 0.45, mat4( 0, - 0.12, zs ) );
+
+	}
+
+	// ((M19) the push and stake-out pole (a YakAttack ParkNPole, 8 ft run out to 12): stowed in its clips along her starboard side,
+	// or driven down through the scupper at her stern, standing in the bottom (staked)
+	const [ pole, addPole ] = collect(), [ staked, addStaked ] = collect();
+	{
+
+		const tan = new Color( 0xb9b19a ), black = new Color( 0x17181a ), side = ( z ) => new Vector3( - ( L.sheerX( L.tAtSheerZ( z ) ) - 0.03 ), L.sheerY( L.tAtSheerZ( z ) ) + 0.02, z );
+		const a = side( Z( 0.22 ) ), b = side( Z( 0.88 ) );
+		addPole( rod( a, b, 0.016, 6 ), tan, 0.5 );
+		addPole( sphere( 0.024, 5, 3 ), black, 0.5, mat4( b.x, b.y, b.z ) );
+		addPole( box( 0.05, 0.04, 0.12 ), black, 0.5, mat4( a.x, a.y - 0.01, a.z + 0.02 ) );
+		const zs = Z( 0.07 ), top = new Vector3( 0, y( 0, zs ) + 1.55, zs - 0.05 ), foot = new Vector3( 0, - 2.1, zs + 0.02 );
+		addStaked( box( 0.045, 0.02, 0.045 ), black, 0.5, mat4( 0, y( 0, zs ) + 0.01, zs ) ); // (its collar in the scupper first: folded away, it's there)
+		addStaked( rod( top, foot, 0.016, 6 ), tan, 0.5 );
+		addStaked( box( 0.05, 0.12, 0.04 ), black, 0.5, mat4( top.x, top.y - 0.05, top.z ) );
+
+	}
+
+	return { cooler: small, crate, puck, trolley, pedal, pole, staked };
 
 }
 

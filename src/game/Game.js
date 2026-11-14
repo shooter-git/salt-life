@@ -3,7 +3,7 @@ import { G } from '../core/Globals.js';
 import { WORLD } from '../world/WorldLayout.js';
 import { FISH, CARAPACE, fishWeightKg, spearRule } from './FishTable.js';
 import { habitatAt, rollWeight } from './Bites.js';
-import { CatchMinigame, SHAFT_MATCH } from './CatchMinigame.js';
+import { CatchMinigame } from './CatchMinigame.js';
 import { GameState } from './GameState.js';
 import { FishingRod, buildLineGeometry } from './FishingRod.js';
 import { createLineMaterial } from './GameMaterials.js';
@@ -40,7 +40,8 @@ import { delivered, filled, owed, weekEnds } from './WeekOrder.js';
 import { Minimap } from './Minimap.js';
 import { sightOf, MAX_MARKS, NAME, namedAs } from './Chart.js';
 import { Guide } from './Guide.js';
-import { Speargun, groundHit } from './Speargun.js';
+import { Speargun, groundHit, spearTerms } from './Speargun.js';
+import { classOf } from './LineClass.js';
 import { CastNet, sweetWindow } from './CastNet.js';
 import { BAITS, BAIT_IDS } from './Bait.js';
 import { LobsterTools } from './LobsterTools.js';
@@ -58,6 +59,9 @@ import { ELLIPSIS, LEFT, RIGHT, UP } from '../core/Glyphs.js';
 import { letGo, trophyCardOf, slamNote } from './Trophies.js';
 import { Rigs } from './rigs/Rigs.js';
 import { FlatsFishing } from './FlatsFishing.js';
+import { Challenges } from './Challenges.js';
+import { FlyCast } from './FlyCast.js';
+import { Mate } from './rigs/Mate.js';
 import { atHook, pickOnRig, waitOnRig } from './rigs/Presentation.js';
 
 // how long the catch card stays up unless dismissed (ms)
@@ -71,6 +75,10 @@ const UPWIND = { x: - NORTH.dir.x, z: - NORTH.dir.y };
 // and it goes down once the boat is slower than this (m/s)
 const BERTH_M = 14;
 const ANCHOR_SPEED = 2.5;
+// (M19) the console's trolling motor wants this much water under its prop (m); her Power-Poles take this long to run down (s:
+// a Blade's 4.0, Power-Pole's)
+const TROLL_DEPTH = 0.75, POLE_DOWN_S = 4;
+const ANCHOR_MIN_M = 0.1; // (M19) m of water at her stem head: under it there's nothing to anchor in (a kayak run up on the sand)
 // (M15) the far places are looked for from this far from the middle of the world (m: Game.updateFound)
 const FOUND_FROM = 1000;
 const RODE_SEGS = 16;
@@ -80,6 +88,7 @@ const BAIL_FROM = 20;
 const WEAR_SAVE = 0.02;
 export { HAUL_FEE };
 const _a = new Vector3(), _b = new Vector3(), _h = new Vector3(), _sock = new Vector3(), _stern = new Vector3(), _sternW = new Vector3();
+const _ride = { last: new Vector3(), v: new Vector3(), has: false }, _rd = new Vector3(); // ((M19) the boat you're riding's velocity)
 const _pose = { pos: new Vector3(), head: new Vector3(), roll: 0, thrash: 0 };
 const BAG_FROM = 0.85; // the brails drawn this far: the netting has closed round what's under it (it rides in the purse)
 // (Salt Life) the hand net's reach (m); how long a lobster in the net shows before it's gauged (s); a
@@ -228,7 +237,7 @@ export class Game {
 		// weather, it says so
 		const back = ( v ) => `Back at ${ timeText( v.hours[ 0 ], app.portal && app.portal.locale, 60 ) }`;
 		const signs = [
-			[ this.stand.vendor, STAND, { x: 0.32, y: 1.045, z: 0.96, tilt: 0.24, roll: 0.03 }, 0.5, 'Fish in the night box' ],
+			[ this.stand.vendor, STAND, { x: 0.32, y: 1.045, z: 0.96, tilt: 0.24, roll: 0.03 }, 0.5, 'Night box · ice chest' ], // ((M19) his ice, on trust)
 			[ this.chandlery.vendor, CHANDLERY, { x: 0.35, y: 0, z: 0.41, tilt: 0.33, roll: - 0.02 }, 0.6, 'Diesel: pay into the box' ], // (leaning on the table's front, z 0.29)
 			[ this.camp.vendor, CAMP.keeper, { x: - 0.6, y: 0, z: 1.3, tilt: 0.3, roll: 0.04 }, 0.6, 'Gone round to market' ], // ((M15) leaning on the counter's front)
 		];
@@ -248,6 +257,11 @@ export class Game {
 		// (her mass, as it's aboard) and her engine; the bucket going; what's been said
 		this.hull = new Hull( { store: this.state, boat: this.state.boat } );
 		this.daysOut = new DaysOut( this ); // ((M16) ice, stores, bunks, flares: DaysOut.js)
+		// ((M19) streams STALLS', FLY's and BIG's, made and updated here so each fills its own file: Pearl's challenges, fly
+		// casting, the sportfisher's mate)
+		this.challenges = new Challenges( this );
+		this.flyCast = new FlyCast( this );
+		this.mate = new Mate( this );
 		// ((M16) your fleet: fleet/FleetDesk.js)
 		this.fleet = new FleetDesk( this );
 		this._massBase = b.mass;
@@ -284,7 +298,8 @@ export class Game {
 	applyGear() {
 
 		const g = this.state.stats;
-		this.rod.setGear( { castM: g.castM, reelSpeed: g.reelSpeed, spoolM: g.spoolM, standUp: g.standUp } );
+		// ((M19) the rod for the rig that's picked: Rigs' rodGear, your light tackle or your heavy)
+		this.rod.setGear( this.rigs ? this.rigs.rodGear() : { castM: g.castM, reelSpeed: g.reelSpeed, spoolM: g.spoolM, standUp: g.standUp } );
 		if ( this.app.player && this.app.player.setDive ) this.app.player.setDive( g );
 		if ( this.gun ) this.gun.setGear( g );
 		if ( this.net ) this.net.setGear( g );
@@ -417,6 +432,7 @@ export class Game {
 			// (off the helm first: moored at the dock, she'd be pulled back to it from wherever she went next)
 			if ( p.mode === 'boat' && p.boat === b ) p.leaveHelm();
 			b.reset();
+			if ( this.daysOut && this.daysOut.settleSoon ) this.daysOut.settleSoon(); // ((M19) on the water at the dock, as she floated, not flung)
 			if ( aboard && p.mode === 'deck' && p.boat === b ) p.deckToWorld();
 			const where = b.beached ? 'she\'s on the sand' : 'she\'s at the dock';
 			this.toast( paid < job.fee ? `Marta towed her in for the $${ paid } you had · ${ where }` : `Marta towed her in · $${ paid } · ${ where }`, aboard ? 4200 : 2600 );
@@ -613,7 +629,12 @@ export class Game {
 		// ((M16) and the leader: X, or Y on a gamepad, whose camera is the helm's)
 		if ( rod.equipped && quiet && rod.state === 'idle' && ( inp.hit( 'KeyX' ) || ( inp.lastDevice === 'gamepad' && inp.hit( 'KeyV' ) ) ) ) this.rigs.cycleLeader();
 
-		if ( rod.equipped && ! panelOpen ) {
+		// ((M19) a fly on: false casting, shooting, stripping and setting are its own: game/FlyCast.js)
+		if ( rod.equipped && ! panelOpen && this.flyCast.input( { lDown, lUp, lmb, rDown } ) ) {
+
+			// (dealt with)
+
+		} else if ( rod.equipped && ! panelOpen ) {
 
 			if ( rod.state === 'idle' && lDown ) {
 
@@ -745,7 +766,11 @@ export class Game {
 		// (M10) the bucket on deck; the crank at the helm while she's stalled
 		this.updateBail( inp, p );
 		this.updateBow( inp, p );
+		this.updateFittings( inp, p, dt );
 		this.daysOut.update( dt, inp, p );
+		this.challenges.update( dt );
+		this.flyCast.update( dt );
+		this.mate.update( dt );
 		// ((M16) beside a boat of yours you're not in: get into her)
 		this.fleet.updatePrompt( inp, p );
 		// ((M16) out on her open deck in a squall: world/boat/console/Soak.js)
@@ -1167,6 +1192,8 @@ export class Game {
 
 		}
 
+		// ((M19) drawn up on the sand, she's no anchor out: one let go as she was pulled up, or from an old save, goes)
+		if ( b.beached && b.anchor ) b.anchor = null;
 		// ((M17) her anchor off her roller while it's down)
 		if ( this.app.boat && this.app.boat.setAnchorStowed ) this.app.boat.setAnchorStowed( ! b.anchor );
 		const rode = this.rode;
@@ -1178,16 +1205,17 @@ export class Game {
 	}
 
 	// (M17) her anchor worked at her bow, by her roller (Vessel's bowAnchor: the lobster boat's): let go where she lies, or got up,
-	// as you stand by it, and her drift sock in. She's yours to anchor: riding in someone else's, it's theirs
+	// as you stand by it, and her drift sock in. She's yours to anchor: riding in someone else's, it's theirs. ((M19) The console's
+	// at her foredeck too, the sportfisher's by the windlass switch on her bridge: A.y, only at that height; A.windlass, its words)
 	updateBow( inp, p ) {
 
 		const b = this.app.boatCtl, A = b.model && b.model.bowAnchor, st = this.state.stats;
-		const at = !! A && p.mode === 'deck' && ! p.riding && ! p.busy && ! p.climbing && ! b.moored && ! b.hauled && Math.hypot( p.deckPos.x - A.x, p.deckPos.z - A.z ) < A.r;
+		const at = !! A && p.mode === 'deck' && ! p.riding && ! p.busy && ! p.climbing && ! b.moored && ! b.hauled && Math.hypot( p.deckPos.x - A.x, p.deckPos.z - A.z ) < A.r && ( A.y === undefined || Math.abs( p.deckPos.y - A.y ) < 1 );
 		p.anchorWork = at;
 		if ( ! at || p.prompt ) return;
 		if ( b.anchor || b.sock ) {
 
-			p.prompt = { key: 'E', text: b.anchor ? 'Get the anchor up' : 'Get the drift sock in' };
+			p.prompt = { key: 'E', text: b.anchor ? ( A.windlass ? 'Windlass: get the anchor up' : 'Get the anchor up' ) : 'Get the drift sock in' };
 			if ( inp.hit( 'KeyE' ) ) {
 
 				const sock = ! b.anchor;
@@ -1206,10 +1234,90 @@ export class Game {
 		else if ( b.speed >= ANCHOR_SPEED ) p.prompt = { key: ELLIPSIS, text: 'She\'s to slow down to anchor' };
 		else {
 
-			p.prompt = { key: 'E', text: 'Let go the anchor' };
-			if ( inp.hit( 'KeyE' ) ) this.dropAnchor();
+			p.prompt = { key: 'E', text: A.windlass ? 'Windlass: let go the anchor' : 'Let go the anchor' };
+			if ( inp.hit( 'KeyE' ) ) this.dropAnchor( true );
 
 		}
+
+	}
+
+	// (M19) her fittings that hold her or drive her (stream BOATS: docs/m19/boats.md). In your own boat, not riding:
+	//   M    at the console's helm, her trolling motor down into the water in place of her outboards, or up again
+	//   K    aboard the console, her two Power-Poles down into the bottom (held there 4 s on, her heading too), or up; sat in the
+	//        kayak, her stake-out pole driven in through its scupper (she swings about it), or pulled
+	// Each as deep as it reaches (the poles' stakeM), and her model draws it down or up. Taking the helm leaves them be: the
+	// trolling motor's her drive, and a stake holds her against her engines, as a real one does
+	updateFittings( inp, p, dt = 1 / 60 ) {
+
+		const b = this.app.boatCtl, M = b.model, st = this.state.stats, mine = ! p.riding && ( p.mode === 'boat' || p.mode === 'deck' ), quiet = this.quietKeys();
+		// (another's poles and motor don't follow you about: a boat that isn't yours, or yours that's been put away)
+		if ( M && M.setMotorDown ) M.setMotorDown( !! b.trolling );
+		if ( M && M.setPoleDown ) M.setPoleDown( !! b.stake || this._poleT > 0 );
+		if ( M && M.setStaked ) M.setStaked( !! b.stake );
+		if ( this._poleT > 0 && ( this._poleT -= dt ) <= 0 ) this._stakeHer( b, st.stakeM, true );
+		if ( ! mine || ! quiet || b.moored || b.hauled || b.beached ) return;
+		const seat = !! ( M && M.seated );
+		if ( inp.hit( 'KeyM' ) && p.mode === 'boat' && ! seat && M && M.trollingAt ) {
+
+			if ( b.trolling ) {
+
+				b.trolling = null;
+				this.toast( 'Trolling motor up · her outboards down', 2200 );
+
+			} else if ( ! ( st.trollingN > 0 ) ) this.toast( 'No trolling motor on her · Marta sells one', 2400 );
+			else if ( this.depthAt( b.toWorld( M.trollingAt, _a ) ) < TROLL_DEPTH ) this.toast( 'Too shallow to put the trolling motor down', 2200 );
+			else {
+
+				b.trolling = { n: st.trollingN, at: M.trollingAt };
+				this.toast( 'Trolling motor down · quiet on the flats: the lever and the wheel', 2600 );
+
+			}
+
+		}
+
+		if ( inp.hit( 'KeyK' ) && ( M && M.stakeAt ) ) {
+
+			if ( b.stake || this._poleT > 0 ) {
+
+				b.stake = null;
+				this._poleT = 0;
+				this.toast( seat ? 'Pole pulled · she\'s adrift' : 'Power-Poles up · she\'s adrift', 2200 );
+
+			} else if ( ! ( st.stakeM > 0 ) ) this.toast( seat ? 'No stake-out pole for her · Marta sells one' : 'No Power-Poles on her · Marta sells them', 2400 );
+			else if ( seat ) this._stakeHer( b, st.stakeM, false );
+			else if ( this.depthAt( b.toWorld( M.stakeAt, _a ) ) > st.stakeM ) this.toast( `Too deep for her Power-Poles · they hold in ${ feet( st.stakeM ) } of water`, 2600 );
+			else {
+
+				this._poleT = POLE_DOWN_S; // (they run down, 4 s)
+				this.toast( 'Power-Poles going down', 1600 );
+
+			}
+
+		}
+
+	}
+
+	// the water's depth under a point (m)
+	depthAt( at ) {
+
+		return Math.max( 0, G.seaLevel.value - this.app.terrainData.heightAt( at.x, at.z ) );
+
+	}
+
+	// (M19) a pole into the bottom where her pole's point is: two of them (the console's) hold her heading as well
+	_stakeHer( b, reach, both ) {
+
+		const M = b.model, at = b.toWorld( M.stakeAt, new Vector3() ), d = this.depthAt( at );
+		this._poleT = 0;
+		if ( d > reach ) {
+
+			this.toast( both ? `Too deep for her Power-Poles · they hold in ${ feet( reach ) } of water` : `Too deep for her pole · it stakes her in ${ feet( reach ) } of water`, 2600 );
+			return;
+
+		}
+
+		b.stake = { x: at.x, z: at.z, at: M.stakeAt, yaw: both ? b.getYaw() : undefined };
+		this.toast( both ? 'Power-Poles down · she\'s held' : `Staked out in ${ feet( d ) } of water · she swings about it`, 2200 );
 
 	}
 
@@ -1236,14 +1344,22 @@ export class Game {
 
 	}
 
-	// where the boat is, unless the dock lines have her or it's deeper than the rode holds in
-	dropAnchor() {
+	// where the boat is, unless the dock lines have her, she's on the sand, or it's deeper than the rode holds in.
+	// (M19) Not in under ANCHOR_MIN_M at her bow either: said only when you let it go by hand (asked), not as you step out
+	dropAnchor( asked = false ) {
 
 		const b = this.app.boatCtl, max = this.state.stats.anchorM, dock = b.berth.position;
-		if ( b.moored || Math.hypot( b.position.x - dock.x, b.position.z - dock.z ) < BERTH_M ) return;
+		if ( b.moored || b.beached || b.beaching || Math.hypot( b.position.x - dock.x, b.position.z - dock.z ) < BERTH_M ) return;
 		const at = b.toWorld( b.stemHead, new Vector3() );
 		const floor = this.app.terrainData.heightAt( at.x, at.z );
 		const depth = Math.max( 0, G.seaLevel.value - floor );
+		if ( depth < ANCHOR_MIN_M ) {
+
+			if ( asked ) this.toast( 'Too shallow to anchor', 2200 );
+			return;
+
+		}
+
 		if ( depth > max ) {
 
 			// ((M16) past its reach, her drift sock if she has one)
@@ -1394,7 +1510,8 @@ export class Game {
 		// (M9) or gone home for the weather
 		const back = v.boarded ? 'boarded up for the hurricane' : v.weatherShut ? 'shut for the weather' : `back at ${ timeText( v.hours[ 0 ], this.app.portal && this.app.portal.locale, 60 ) }`;
 		if ( v.kind === 'camp' ) return `${ name }'s ${ back }`;
-		return v.kind === 'shop' ? `${ fuelOf( this.state.boat ) ? `${ fuelOf( this.state.boat ).name } on the honesty box` : 'The chandlery\'s shut' }   ·   ${ name }'s ${ back }` : `${ name }'s night box   ·   he's ${ back }`;
+		// ((M19) Joe's night box has his ice chest beside it)
+		return v.kind === 'shop' ? `${ fuelOf( this.state.boat ) ? `${ fuelOf( this.state.boat ).name } on the honesty box` : 'The chandlery\'s shut' }   ·   ${ name }'s ${ back }` : `${ name }'s night box and ice chest   ·   he's ${ back }`;
 
 	}
 
@@ -1485,13 +1602,15 @@ export class Game {
 	}
 
 	// what selling to `vendor` is on (GameState.quote): Joe's price, his wanted list and the week's order;
-	// his night box when he's gone home (less, but the orders in full); Marta: only the bait she's after
+	// his night box when he's gone home (less, but the orders in full); Marta: only the bait she's after ((M19) none: the bait
+	// tank's Joe's now, and open: false keeps it out of his night box)
 	saleTerms( vendor ) {
 
 		const who = vendor && vendor.kind === 'shop' ? 'marta' : vendor && vendor.kind === 'camp' ? 'camp' : 'joe';
 		// ((M15) Pearl: her price, Joe's less the trip to market; no list, no week's order)
 		if ( who === 'camp' ) return { who, orders: null, day: this.tradeDay, rate: CAMP.rate, week: null };
-		return { who, orders: this.orders, day: this.tradeDay, rate: who === 'joe' && vendor && ! vendor.open ? NIGHT_BOX : 1, week: who === 'joe' ? this.weekTerms() : null };
+		// ((M19) open: whether he's there, for his bait tank's order, which isn't taken into the night box)
+		return { who, orders: this.orders, day: this.tradeDay, rate: who === 'joe' && vendor && ! vendor.open ? NIGHT_BOX : 1, week: who === 'joe' ? this.weekTerms() : null, open: ! vendor || vendor.open !== false };
 
 	}
 
@@ -1745,8 +1864,22 @@ export class Game {
 
 		// ((M16) on a lead, not till it's down: Rigs.update)
 		this.bite = this.rod.rig === 'bottom' ? null : { phase: 'wait', t: waitOnRig( this.habitat(), this.hour, Math.random, this.hookBait ) };
+		// ((M19) a fly's landing: how hard it came down, and the fly line laid heavier than mono: FlyCast)
+		const fly = this.rod.rig === 'fly' ? this.flyCast.landing : null;
+		// ((M19) on the flats with no flats licence: nothing there takes your bait or fly (what lands on them still spooks them))
+		if ( ! this.flats.licensed( this.rod.bobber.x, this.rod.bobber.z ) ) {
+
+			this.bite = null;
+			this.flats.landed( this.rod.bobber, this.rod.tip, this.hookBait, { ...fly, take: false } );
+			const now = performance.now();
+			if ( ! ( now < this._licenceSaid ) ) this.toast( 'Nothing takes a bait on the flats without a flats licence · free at Marta\'s', 3600 );
+			this._licenceSaid = now + 60000;
+			return;
+
+		}
+
 		// ((M17) on the flats: what it lands on spooked, and the fish there seeing it as they come on: FlatsFishing.watch)
-		this.flats.landed( this.rod.bobber, this.rod.tip, this.hookBait );
+		this.flats.landed( this.rod.bobber, this.rod.tip, this.hookBait, fly );
 
 	}
 
@@ -1758,7 +1891,8 @@ export class Game {
 		// ((M17) a seen fish on its way to the bait: the bite's its, beside the habitat's roll)
 		if ( this.flats.watch( b, dt ) ) return;
 		if ( this.bite !== b ) return;
-		b.t -= dt;
+		// ((M19) a fly draws bites as it's worked; left still, hardly: FlyCast.working)
+		b.t -= dt * ( rod.rig === 'fly' && b.phase === 'wait' ? this.flyCast.working() : 1 );
 		// bobber motion for the cues
 		if ( b.phase === 'nibble' ) rod.dip = Math.max( 0, Math.sin( Math.min( 1, ( b.pulse || 0 ) ) * Math.PI ) * 0.45 );
 		else if ( b.phase === 'take' ) rod.dip += ( 1.4 - rod.dip ) * ( 1 - Math.exp( - dt * 14 ) );
@@ -1785,6 +1919,14 @@ export class Game {
 			b.nibbles = 1 + Math.floor( Math.random() * 3 );
 			b.t = 0.7 + Math.random() * 0.8;
 			b.pulse = 0;
+			// ((M19) a fly isn't nibbled: it's eaten, the line comes tight, and it's strip-set or spat out)
+			if ( rod.rig === 'fly' ) {
+
+				b.phase = 'take';
+				b.t = 2.4 - FISH[ species ].fight * 0.5;
+				if ( this.app.audio && this.app.audio.fishSplash ) this.app.audio.fishSplash( rod.bobber, 0.35 );
+
+			}
 
 		} else if ( b.phase === 'nibble' ) {
 
@@ -1813,7 +1955,9 @@ export class Game {
 
 		} else if ( b.phase === 'take' ) {
 
-			this.toast( this.hookBait ? `It ran off with your ${ BAITS[ this.hookBait ].name.toLowerCase() }` : 'It took the bait and ran', 1800 );
+			// ((M19) a fly's spat out, or a tarpon's set once only and the hook not in its bony mouth)
+			if ( rod.rig === 'fly' ) this.toast( b.sets ? 'The hook didn\'t stick in its bony mouth · strip-set again, and again' : 'It spat the fly · strip-set as it eats: the rod low, one long pull', 2600 );
+			else this.toast( this.hookBait ? `It ran off with your ${ BAITS[ this.hookBait ].name.toLowerCase() }` : 'It took the bait and ran', 1800 );
 			this.hookBait = null;
 			this.bite = { phase: 'wait', t: waitOnRig( this.habitat(), this.hour ) };
 
@@ -1839,6 +1983,7 @@ export class Game {
 		const out = this.rigs.fightOut( Math.min( Math.max( 3, this.rod.lineOut ), this.rod.castM * 1.5 + 10 ) ), T = this.rigs.fightTerms( b );
 		this.fight = new CatchMinigame( { species: b.species, kg: b.kg, ...T, reelSpeed: T.reelSpeed * this.daysOut.strength, distance: Number.isFinite( out ) ? out : 3, wind: blowShare( G.windSpeed.value ) } );
 		this.fight.leader = T.leader;
+		this.fight.rig = this.rod.rig; // ((M19) what it was taken on: the catch's log and Pearl's challenges, a fly's among them)
 		this.fight.place = b.place;
 		this.fight.at = b.at;
 		this.bite = null;
@@ -1847,12 +1992,27 @@ export class Game {
 
 	}
 
+	// (M19) the velocity of a boat you're riding (Together's TheirBoat: her pose, without one of its own), from how she moves on
+	// your screen, smoothed over a quarter of a second
+	_riddenVelocity( boat, dt ) {
+
+		if ( _ride.has && dt > 0 ) _ride.v.lerp( _rd.subVectors( boat.position, _ride.last ).divideScalar( dt ).setY( 0 ), 1 - Math.exp( - dt * 4 ) );
+		else _ride.v.set( 0, 0, 0 );
+		_ride.last.copy( boat.position );
+		_ride.has = true;
+		return _ride.v;
+
+	}
+
 	updateFight( dt, reeling ) {
 
 		const f = this.fight;
-		// ((M16) and she takes line too, running from it: the helm's backing down on it if she's closing)
-		const bv = this.app.boatCtl.velocity, to = _a.subVectors( this.rod.bobber, this.rod.tip ).setY( 0 ).normalize();
-		const riding = this.app.player.mode === 'deck' || this.app.player.mode === 'boat';
+		// ((M16) and she takes line too, running from it: the helm's backing down on it if she's closing. (M19) The boat you're
+		// on: riding someone else's, hers (as she moves on your screen), not your own moored one, so her owner's backing down,
+		// or her mate's, reaches your fight)
+		const p = this.app.player, bv = p.riding ? this._riddenVelocity( p.boat, dt ) : this.app.boatCtl.velocity, to = _a.subVectors( this.rod.bobber, this.rod.tip ).setY( 0 ).normalize();
+		if ( ! p.riding ) _ride.has = false;
+		const riding = p.mode === 'deck' || p.mode === 'boat';
 		let st = f.update( dt, reeling, riding ? - ( bv.x * to.x + bv.z * to.z ) : 0 );
 		this.rigs.leap( f, dt );
 		// ((M16) at the boat: lifted aboard, or shaken off)
@@ -1885,7 +2045,10 @@ export class Game {
 		const name = FISH[ f.species ].name;
 		if ( st === 'caught' ) {
 
-			const entry = this.state.addFish( f.species, f.kg, this.hour, { day: this.tradeDay, place: f.place } );
+			// ((M19) on its line's IGFA class (LineClass.js): the line or the fly's tippet it was fought on, yours or the tackle you
+			// had in your hands; not on the electric reel, a powered one IGFA won't have)
+			const cls = f.electric ? null : classOf( f.lineKg, f.rig === 'fly' );
+			const entry = this.state.addFish( f.species, f.kg, this.hour, { day: this.tradeDay, place: f.place, rig: f.rig || null, cls } );
 			const info = this.state.lastCatch;
 			this.charted( f.species, f.place, f.at );
 			info.wanted = entry ? this.wantedFor( entry ) : null; // (Salt Life) on today's wanted list
@@ -1906,6 +2069,8 @@ export class Game {
 
 				const isle = this.app.together.caught( f.species, f.kg, info.cm, 'rod', info.place );
 				info.islandRecord = isle.island;
+				// ((M19) and the island's best fish for its line class, on the board)
+				info.islandClass = info.cls ? this.app.together.caughtClass( f.species, f.kg, info.cls ) : false;
 				info.islandHeld = isle.held || null;
 				info.placeRecord = isle.place ? info.place : null; // ((M15) the heaviest anyone's had there)
 
@@ -2288,13 +2453,13 @@ export class Game {
 
 	}
 
-	// Marta's order filled from the bait bucket
+	// Marta's order filled from the bait bucket ((M19) Joe's now, for his bait tank)
 	sellBait( vendor = this.hud && this.hud.vendor ) {
 
 		const r = this.state.sellBait( this.saleTerms( vendor ) );
 		if ( r.count ) {
 
-			this.toast( `Sold Marta ${ r.count } live bait for $${ r.total }` );
+			this.toast( `Sold Joe ${ r.count } live bait for his tank · $${ r.total }` );
 			if ( this.app.audio && this.app.audio.coin ) this.app.audio.coin();
 
 		}
@@ -2387,13 +2552,15 @@ export class Game {
 			if ( sp.big ) {
 
 				const g = gun.gear;
-				// (landed once it's tired and pulled close: CatchMinigame landAt, tired)
-				const hold = g.spearHold * ( sp.tail ? 0.6 : 1 );
-				const f = this.spearFight = new CatchMinigame( { species: sp.id, kg: sp.kg, lineKg: hold, matchKg: hold * SHAFT_MATCH, reelSpeed: 1.0, distance: Math.max( 1.5, gun.muzzle.distanceTo( gun.tip ) - g.shaftM ), landAt: 1.0, tired: 0.25 } );
-				// it runs to the end of the line, and tears free (with a reel, it takes line first)
-				f.maxDistance = g.lineM + ( g.spearReel ? 25 : 0.4 );
+				// (landed once it's tired and pulled close: CatchMinigame landAt, tired; (M19) the terms Speargun.spearTerms', the
+				// sweep's too: it runs to the end of the line and tears free, with a reel taking line first, on a breakaway out on
+				// its float line, towing the float)
+				const T = spearTerms( g, { tail: sp.tail, distance: Math.max( 1.5, gun.muzzle.distanceTo( gun.tip ) - g.shaftM ) } );
+				const f = this.spearFight = new CatchMinigame( { species: sp.id, kg: sp.kg, ...T.terms } );
+				f.maxDistance = T.maxDistance;
+				f.floatM = T.floatM;
 				f.spear = true;
-				this.toast( 'A big one · hold to pull it in, ease off when it runs', 2600 );
+				this.toast( g.breakaway ? 'A big one · it\'ll run on the float: let it tire, and haul in when it\'s not running' : 'A big one · hold to pull it in, ease off when it runs', 2600 );
 
 			} else gun.pull();
 
@@ -2403,7 +2570,7 @@ export class Game {
 
 			const f = this.spearFight;
 			const st = f.update( dt, lmb );
-			gun.fight( f.distance, f.surge );
+			gun.fight( f.distance, f.surge, f.distance > f.floatM );
 			if ( st === 'caught' ) {
 
 				this.spearFight = null;

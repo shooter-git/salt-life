@@ -37,7 +37,9 @@ for ( const tier of TIERS.split( ',' ) ) {
 		await page.evaluate( ( [ x, z ] ) => {
 
 			const a = window.__app, p = a.player, b = a.boatCtl;
-			a.game.state.stats.polarized = true;
+			// ((M19) put on as buying them does, so the glasses' own program is made and counted: stats is made afresh each read)
+			a.game.state.upgrades.glasses = 1;
+			a.game.applyGear();
 			if ( p.mode !== 'boat' ) { p.boardBoat(); p.takeHelm(); }
 			b.moored = false;
 			b.position.set( x, b.position.y, z );

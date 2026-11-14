@@ -43,6 +43,7 @@ export const SHAFT_MATCH = 0.5;
 // electric: the reel winds itself, and your arms aren't in it; twoSpeed: low gear gets line back from a heavy fish.
 // hookM: how deep the fish was hooked (the rod draws the line down to it, shallower as it comes up). (M17) matchKg: the
 // fish that pulls it to the breaking point on a surge (a line's own class, LINE_MATCH; a speargun's shaft, half its hold).
+// (M19) tether: the most line it can take, towing what's on the end past that (a blue-water gun's float: Speargun.spearTerms).
 //
 //   const g = new CatchMinigame( { species, kg, lineKg, reelSpeed, distance, rng, landAt, tired, wind, dragKg, holdKg, spoolM, ... } )
 //   g.update( dt, reeling, away ) -> 'fighting' | 'caught' | 'snapped' | 'escaped' | 'cut' | 'spooled'
@@ -51,7 +52,7 @@ export const SHAFT_MATCH = 0.5;
 //   g.band = [ lo, hi ] (the green band)
 export class CatchMinigame {
 
-	constructor( { species, kg, lineKg = 8 * 0.45359237 /* (the 8 lb line) */, reelSpeed = 1.1, distance = 15, rng = Math.random, landAt = 1.2, tired = 1, wind = 0, dragKg = null, holdKg = Infinity, spoolM = null, chair = false, electric = false, twoSpeed = false, cut = 0, wear = 0, hookM = 0, leaps = false, matchKg = lineKg * LINE_MATCH } ) {
+	constructor( { species, kg, lineKg = 8 * 0.45359237 /* (the 8 lb line) */, reelSpeed = 1.1, distance = 15, rng = Math.random, landAt = 1.2, tired = 1, wind = 0, dragKg = null, holdKg = Infinity, spoolM = null, chair = false, electric = false, twoSpeed = false, cut = 0, wear = 0, hookM = 0, leaps = false, bow = 0, matchKg = lineKg * LINE_MATCH, tether = Infinity } ) {
 
 		const f = FISH[ species ];
 		this.species = species;
@@ -73,6 +74,10 @@ export class CatchMinigame {
 		this.hookStart = this.hookM = hookM;
 		this.leaps = leaps;
 		this.leap = 0; // (M16) s left of a leap, for what's drawn of it
+		this.bow = bow; // ((M19) a fly's tippet: the chance a jump parts it, landing on a tight line: you bow, not reeling)
+		this.tether = tether;
+		this.jumped = false; // (and it did)
+		this._leapTried = false;
 		this.arms = 1;
 		this.staminaMax = f.stamina * Math.pow( Math.max( kg / f.kg[ 1 ], 0.15 ), 0.35 );
 		this.stamina = 1;
@@ -123,12 +128,31 @@ export class CatchMinigame {
 			// (M16) and at each the leader may go, and it may come out of the water
 			if ( this.cut > 0 && this.rng() < this.cut ) this.state = 'cut';
 			else if ( this.wear > 0 && this.rng() < this.wear * Math.min( 1, this.time / 60 ) ) this.state = 'cut';
-			else if ( this.leaps && this.rng() < 0.6 * ( 1 - tired * 0.7 ) && this.distance > 6 && this.hookM < 5 ) this.leap = 1.1;
+			else if ( this.leaps && this.rng() < 0.6 * ( 1 - tired * 0.7 ) && this.distance > 6 && this.hookM < 5 ) {
+
+				this.leap = 1.1;
+				this._leapTried = false;
+
+			}
 			if ( this.state === 'cut' ) return this.state;
 
 		}
 
 		this.leap = Math.max( 0, this.leap - dt );
+		// ((M19) on a fly's tippet, falling back from a jump on a tight line: it may part. Bowed to it (not reeling), it holds)
+		if ( this.bow > 0 && this.leap > 0 && this.leap < 0.6 && reeling && ! this._leapTried ) {
+
+			this._leapTried = true;
+			if ( this.rng() < this.bow ) {
+
+				this.jumped = true;
+				this.state = 'snapped';
+				return this.state;
+
+			}
+
+		}
+
 		this._surgeT -= dt;
 		const surgeTarget = this._surgeT > 0 ? 1 : 0;
 		this.surge += ( surgeTarget - this.surge ) * ( 1 - Math.exp( - dt * 6 ) );
@@ -182,7 +206,7 @@ export class CatchMinigame {
 		if ( over > 0 ) this.distance += Math.min( over, 4 ) * RUN * dt;
 		this.distance += Math.max( - 3, away ) * dt;
 		if ( this.hookM > 0 ) this.hookM = Math.min( this.hookM, Math.max( 0, this.distance ) ) * ( this.hookStart > 5 ? 1 : Math.exp( - dt * 0.3 ) );
-		this.distance = Math.max( this.stamina > this.tired ? this.landAt * 0.8 : 0, this.distance );
+		this.distance = Math.max( this.stamina > this.tired ? this.landAt * 0.8 : 0, Math.min( this.tether, this.distance ) );
 
 		// tiring: fastest in the band, slowly otherwise
 		const inBand = this.tension >= this.band[ 0 ] && this.tension <= this.band[ 1 ];

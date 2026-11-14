@@ -246,7 +246,8 @@ export const cleanDays = ( d ) => {
 
 	const num = ( v, least = 0 ) => ( Number.isFinite( v ) ? Math.max( least, v ) : least ), boats = {};
 	for ( const [ k, b ] of Object.entries( d && d.boats && typeof d.boats === 'object' ? d.boats : {} ) ) if ( ABLE[ k ] && b ) boats[ k ] = { ice: num( b.ice ), stores: num( b.stores ) };
-	return { boats, out: num( d && d.out ), dry: num( d && d.dry ), flares: d && Number.isFinite( d.flares ) ? Math.max( 0, Math.min( FLARES, d.flares ) ) : FLARES };
+	// ((M19) mate: the days of this trip the sportfisher's mate has been paid for: rigs/Mate.js)
+	return { boats, out: num( d && d.out ), dry: num( d && d.dry ), flares: d && Number.isFinite( d.flares ) ? Math.max( 0, Math.min( FLARES, d.flares ) ) : FLARES, mate: Math.floor( num( d && d.mate ) ) };
 
 };
 
@@ -265,8 +266,8 @@ export const cleanDays = ( d ) => {
 // on its ground), an 8 ft base station whip on a 3 m pole stood on the ridge. Up the spur behind the village it would need a
 // long run of coax or a repeater, more than a village chandler has. Pearl's is the same on her camp's shed (its front 4.3 m).
 // So Marta's from a handheld in the kayak about 16.8 km, the console and the lobster boat 20.6, the sportfisher 23.2 (M16 had
-// a handheld's 9 km and any fixed set's 37, which would want her antenna 50 m up). Line of sight only: the island's hills
-// don't shade it here.
+// a handheld's 9 km and any fixed set's 37, which would want her antenna 50 m up). Line of sight only: ((M19) the island's
+// hills shade it now, inSight).
 // FLARE_M: a red meteor seen, m (x the day's visibility), the one place the look (DaysOut._flareBright) and the seen test
 // (DaysOut.fire, theirFlare) both read. By Allard's law with the game's 16,000 cd (Orion's 12-gauge red meteor): at night to
 // the eye's least, 2e-7 lux, 25 km, 11 to 15 nm in 10 nm of visibility (it stands). By day to IALA's least for a light seen
@@ -280,6 +281,39 @@ export const VHF_H = { hand: 1.0, console: 3.71, lobster: 3.66, sportfisher: 6.4
 export const SHORE_VHF_H = { marta: 9.5, pearl: 8.5 };
 export const FLARE_M = { day: 2800, night: 25000 }, FLARES = 3, EPIRB_S = 600;
 export const PASSING_H = { near: 4, far: 18, farM: 14000 };
+// (M19) Line of sight only, and now over the island too (stream CHECKS: docs/m19/checks.md; M18's "a real set on the north side
+// couldn't raise Marta"): her aerial on the boathouse's ridge by the chandlery (Village's boathouse, SHORE_VHF_H over the sea),
+// Pearl's on her camp's shed. A set the island's hills stand between can't raise her: from behind the ridge you raise Pearl.
+// A rise standing up to VHF_CLEAR m over the straight line between the two aerials doesn't stop it (the signal bends over it:
+// knife-edge diffraction over a headland that size costs a set some 20 dB of the 40 to 70 it has in hand at these ranges);
+// the island's ridge, to 302 m, does. Judgement, with it: Marta's raised from the south half of the sea round the island and
+// round the east and west, Pearl's from the north half, both east and west, the north Pearl's alone
+// (test/checks-m19.mjs).
+export const SHORE_AERIAL = { marta: { x: 92.5, z: - 57.5 }, pearl: { x: 99, z: - 832.6 } };
+export const VHF_CLEAR = 60;
+// (M19) A flare's watched for from the village (the harbour, the pier and the plaza by the bay) and from Pearl's camp, an eye
+// over each's ground, not the island's middle: seen from whichever is in range and has the sky over the meteor in sight (it
+// bursts FLARE_UP m over the sea: DaysOut's sprite)
+export const WATCHERS = { village: { x: 60, z: - 95, eye: 1.7 }, camp: { x: 99, z: - 836, eye: 1.7 } };
+export const FLARE_UP = 111;
+// (M19) the earth's bulge between two points d1 and d2 m from them, for radio and light over the sea (the 4/3 earth's radius)
+const BULGE_R = 2 * ( 4 / 3 ) * 6371000;
+// (M19) can a ( x, y, z ) see b over the ground (heightAt( x, z ), the world's heights), every step m along the way? (clear: how
+// far the ground may stand over the line and not block it: VHF_CLEAR for a radio, 0 for light)
+export function inSight( heightAt, a, b, clear = 0, step = 12 ) {
+
+	const d = Math.hypot( b.x - a.x, b.z - a.z ), n = Math.max( 2, Math.ceil( d / step ) );
+	for ( let i = 1; i < n; i ++ ) {
+
+		const t = i / n, x = a.x + ( b.x - a.x ) * t, z = a.z + ( b.z - a.z ) * t;
+		const line = a.y + ( b.y - a.y ) * t, ground = heightAt( x, z ) + ( d * t ) * ( d * ( 1 - t ) ) / BULGE_R;
+		if ( ground > line + clear ) return false;
+
+	}
+
+	return true;
+
+}
 // how far two antennas reach each other (m over the sea; none, nothing)
 export const vhfReach = ( h, h2 ) => ( h > 0 && h2 > 0 ? RADIO_HORIZON_M * ( Math.sqrt( h ) + Math.sqrt( h2 ) ) : 0 );
 // how far her set (gearStats' vhfH: its antenna's height, 0 with none) reaches a shore set: 'marta' | 'pearl'

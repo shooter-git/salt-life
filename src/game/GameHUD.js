@@ -8,6 +8,7 @@ import { LOOKS, LOOK_NAMES } from '../together/Avatar.js';
 import { NIGHT_BOX, biteHint, orderTerms, orderPlace } from './Orders.js';
 import { trophyNote, trophyRows, slamRows, slamNote, slamTold, slamToday, slamDay, SLAMS } from './Trophies.js';
 import { lifeList, lifeCount, whenWhere, KINDS } from './LifeList.js';
+import { classLabel, classKg } from './LineClass.js';
 import { WEEK_MUL, delivered, filled, mineOf, shareOf, weekEnds } from './WeekOrder.js';
 import { timeText } from './IslandClock.js';
 import { LB, IN, GAL, lb, pounds, inches, feet, farOff, gallons, lbOz, feetInches } from './Units.js';
@@ -754,6 +755,7 @@ export class GameHUD {
 		const slams = info.slams && info.slams.length && ! info.trophyView ? slamTold( info.slams ) : null;
 		const badge = slams ? `<span class="gm-badge is-record">${ STAR } ${ SLAMS[ slams[ 0 ] ].name }</span>` : info.trophyView ? `<span class="gm-badge is-record">${ STAR } Trophy</span>` : info.islandRecord ? `<span class="gm-badge is-record">${ STAR } Island record</span>`
 			: info.record ? `<span class="gm-badge is-record">${ STAR } New record</span>`
+			: info.clsRecord ? `<span class="gm-badge is-record">${ STAR } Line-class record</span>` // ((M19))
 			: info.newSpecies ? '<span class="gm-badge is-new">New species</span>' : `<span class="gm-badge is-plain">${ { spear: 'Speared', hand: 'By hand' }[ info.method ] || 'Catch' }</span>`;
 		let note;
 		// (Salt Life: a protected fish is measured and let go, as is a catch-and-release one and a short or
@@ -763,12 +765,13 @@ export class GameHUD {
 		const room = this.game.state.roomFor( info ), box = this.game.state.box(), where = boxIn( box );
 		// ((v2.1.6) one just kept may go straight back instead, alive, and then it isn't in the day's bag)
 		const free = this.free = ! room && ! info.trophyView && this.game.state.canFree( info );
-		if ( info.why === 'short' ) note = `<div class="gm-catch-note is-warn">Short: under ${ ( f.minCm * CARAPACE / IN ).toFixed( 0 ) } in on the gauge · back it goes, to grow${ board }.</div>`;
+		if ( info.why === 'short' ) note = `<div class="gm-catch-note is-warn">Short: under ${ ( f.minCm * CARAPACE / IN ).toFixed( 2 ) } in on the gauge · back it goes, to grow${ board }.</div>`; // ((M19) the Bahamas' 3.25
 		else if ( info.why === 'berried' ) note = `<div class="gm-catch-note is-warn">Berried: she's carrying eggs under her tail · back she goes${ board }.</div>`;
 		else if ( info.trophyView || info.bonus || info.hurt ) note = `<div class="gm-catch-note">${ trophyNote( info ) }${ board }.</div>`;
 		else if ( info.tagged ) note = `<div class="gm-catch-note">Tagged and let go alive for Marta's tag-and-release log: <b>$${ info.tagged }</b>${ board }.</div>`;
 		else if ( info.released ) note = `<div class="gm-catch-note">${ f.cr ? 'Catch and release: everyone lets one go. Measured and' : 'Protected: measured and' } let go alive${ board }.</div>`;
 		else if ( info.bag && info.bag.full ) note = `<div class="gm-catch-note is-warn">That's your ${ info.bag.max } for today, the most anyone may keep · back it goes</div>`;
+		else if ( info.aboard ) note = `<div class="gm-catch-note is-warn">That's ${ Math.round( info.aboard.max / 0.45359237 ) } lb of them aboard, the most she may carry · back it goes</div>`; // ((M19) the crawfish's
 		else if ( room ) note = `<div class="gm-catch-note is-warn">No room in ${ where } for it · let fish go to make room, or let this one go</div>`;
 		else if ( ! info.kept ) note = `<div class="gm-catch-note is-warn">${ info.kg > box.cap ? `Too big for ${ where }, even empty` : box.others > 0 ? `No room in ${ where } with ${ box.whose ? 'the rest of the catch' : 'your guests\' catch' } in it` : box.ice > 0 ? `No room in ${ where } beside the ice that keeps the catch` : `No room in ${ where }` } · you let it go</div>`;
 		else if ( f.bounty && ! info.islandRecord && ! info.record ) note = `<div class="gm-catch-note">An invader on the reef: Joe pays $${ f.bounty } a fish on top.</div>`;
@@ -779,6 +782,10 @@ export class GameHUD {
 		else if ( info.firstAt ) note = `<div class="gm-catch-note">Your first fish from ${ placeName( info.firstAt ) }: it's in your log.</div>`;
 		else note = `<div class="gm-catch-note">Your best: ${ lb( info.prevBestKg ) } · ${ sizeOf( info.species, info.prevBestCm ) }</div>`;
 		if ( slams ) note = `<div class="gm-catch-note is-slam">${ slamNote( slams, ( t ) => `<b>${ t }</b>` ) }.</div>` + note;
+		// ((M19) a line-class record (LineClass.js): your heaviest of its kind on the class it was fought on, IGFA's way; and the
+		// island's best fish for its line class, on the board)
+		const C = info.clsRecord && ! info.trophyView ? info.clsRecord : null;
+		if ( C ) note = `<div class="gm-catch-note is-slam">A line-class record: your heaviest ${ f.name.toLowerCase() } on <b>${ classLabel( C.cls ) }</b>${ C.prevKg ? `, beating ${ lb( C.prevKg ) }` : ', the first on it' }${ info.islandClass ? '. The island\'s best for its line class: it goes on the board' : '' }.</div>` + note;
 		// splash burst around the fish as it lands in view
 		let drops = '';
 		for ( let i = 0; i < 26; i ++ ) {
@@ -1106,6 +1113,11 @@ export class GameHUD {
 			const won = trophyRows( s ).filter( ( t ) => t.species );
 			// (its weight in its line, so on a narrow phone the line isn't squeezed beside the weight and the button)
 			if ( won.length ) body += `<div class="gm-wanted"><span class="gm-wanted-h">Billfish, let go alive</span>${ won.map( ( t ) => item( t.name, `${ lb( t.kg ) } · ${ t.meta }`, `<button class="gm-mini" data-trophy="${ t.species }">See it</button>` ) ).join( '' ) }</div>`;
+			// ((M19) the line-class records: your heaviest of each kind on each IGFA class it's been fought on, the lines' classes
+			// first, then the tippets', lightest first)
+			const rank = ( c ) => ( c[ 0 ] === 'f' ? 100 : 0 ) + classKg( c );
+			const cls = Object.entries( s.log ).flatMap( ( [ k, e ] ) => FISH[ k ] && e.cls ? Object.entries( e.cls ).map( ( [ c, r ] ) => ( { k, c, r } ) ) : [] ).sort( ( a, b ) => rank( a.c ) - rank( b.c ) || b.r.kg - a.r.kg );
+			if ( cls.length ) body += `<div class="gm-wanted"><span class="gm-wanted-h">Line-class records</span>${ cls.map( ( { k, c, r } ) => item( FISH[ k ].name, [ `on ${ classLabel( c ) }`, ww( r ) ].filter( Boolean ).join( ' · ' ), `<span class="gm-item-num">${ lb( r.kg ) }</span>` ) ).join( '' ) }</div>`;
 			// (one caught once: its first is its best, told once)
 			const once = ( e ) => e.count === 1 && e.first.day === e.best.day && e.first.place === e.best.place;
 			body += `<span class="gm-list-h">Caught</span>` + ( L.caught.map( ( e ) => item( FISH[ e.species ].name, [ `${ e.count } caught`, once( e ) ? ww( e.best ) : ww( e.first ) && `first ${ ww( e.first ) }`, ! once( e ) && ww( e.best ) && `best ${ ww( e.best ) }` ].filter( Boolean ).join( ' · ' ), `<span class="gm-item-num">${ lb( e.kg ) } · ${ sizeOf( e.species, e.cm ?? fishLengthCm( e.species, e.kg ) ) }</span>` ) ).join( '' )
@@ -1278,17 +1290,19 @@ export class GameHUD {
 		this.standOpen = false;
 		this.stand.classList.remove( 'is-open' );
 		this.game.paidNote = 0;
+		this._campPaid = 0; // ((M19) Pearl's word on paying for the challenges said the once)
 
 	}
 
 	// (Salt Life) a trader's part of the day's wanted list ('joe' | 'marta'): a block over the list, each
 	// fish with what it pays, where it bites and how many you've brought
-	wantedBlock( who, title ) {
+	// ((M19) box: his night box, where his bait tank's order isn't taken)
+	wantedBlock( who, title, box = false ) {
 
 		const g = this.game, s = g.state;
-		const rows = ( g.orders || [] ).filter( ( o ) => o.who === who ).map( ( o ) => {
+		const rows = ( g.orders || [] ).filter( ( o ) => o.who === who && ! ( box && o.bait ) ).map( ( o ) => {
 
-			const n = s.filledOf( o, g.tradeDay ), hint = o.place ? orderPlace( o ) : who === 'marta' ? 'for her bait tank' : biteHint( o.species );
+			const n = s.filledOf( o, g.tradeDay ), hint = o.place ? orderPlace( o ) : o.bait ? 'for his bait tank, live' : biteHint( o.species ); // ((M19) the bait's Joe's
 			return item( FISH[ o.species ].name, `${ orderTerms( o ) }${ hint ? ` · ${ hint }` : '' }`, `<span class="gm-item-num">${ n } / ${ o.max }</span>` )
 				.replace( 'class="gm-item"', `class="gm-item${ n >= o.max ? ' is-done' : '' }"` );
 
@@ -1352,7 +1366,7 @@ export class GameHUD {
 		// the wanted list and the week's order scroll with the fish, under the title and over the
 		// buttons: on a short screen they'd leave no room for either. On a phone on its side with
 		// room, they're beside the fish (gm-split, game-ui.css)
-		const orders = this.wantedBlock( 'joe', 'Wanted today' ) + this.weekBlock( box ) + ( box ? '' : this.findsBlock( 'joe', 'He\'ll take off your hands' ) );
+		const orders = this.joeBait( box ) + this.wantedBlock( 'joe', 'Wanted today', box ) + this.weekBlock( box ) + ( box ? '' : this.findsBlock( 'joe', 'He\'ll take off your hands' ) );
 		this.drawStand( v, `
 			<div class="gm-head"><h2>${ box ? 'Joe\'s night box' : v.name }</h2>
 			<p class="gm-sub">${ sub }</p></div>
@@ -1362,6 +1376,45 @@ export class GameHUD {
 		this.stand.querySelector( '[data-all]' ).onclick = () => this.game.sellAll();
 		for ( const b of this.stand.querySelectorAll( '[data-sell]' ) ) b.onclick = () => this.game.sell( [ Number( b.dataset.sell ) ] );
 		this.bindFinds( 'joe' );
+		this.bindBait( () => this.renderStand() );
+
+	}
+
+	// (M19) Joe's bait and ice (stream STALLS: docs/m19/stalls.md): the bucket's live bait fish for his bait tank's order, ice for
+	// her box, the frozen bait by the lot (and his live shrimp and sardines), trap bait once you've traps. Out of hours, ice from the
+	// chest by his night box, on trust
+	joeBait( box ) {
+
+		const g = this.game, s = g.state;
+		if ( box ) return `<div class="gm-wanted"><span class="gm-wanted-h">His ice chest</span>${ g.daysOut.iceRow( true ) }</div>`;
+		const bq = s.quoteBait( g.saleTerms( this.vendor ) );
+		const bucket = bq && bq.n ? item( `${ FISH[ bq.species ].name }<small class="is-wanted">wanted</small>`, `${ bq.n } live from your bait bucket · $${ bq.each } each`, `<span class="gm-item-val">$${ bq.total }</span>`, `<button class="gm-mini" data-sellbait>Sell ${ bq.n }</button>` ) : '';
+		const lots = BAIT_IDS.filter( ( k ) => BAITS[ k ].price && ! BAITS[ k ].lure && ( ! BAITS[ k ].seller || BAITS[ k ].seller === 'joe' ) ).map( ( k ) => lotRow( s, k ) ).join( '' );
+		const trap = ownedTraps( s.upgrades ) ? `<div class="gm-shop-row"><span>Trap bait · fish heads and cowhide<small>For ${ BAIT.per } traps · it draws them about ${ BAIT.nights } nights · you have bait for ${ s.traps.bait | 0 }</small></span><button class="gm-btn" data-trapbait ${ BAIT.price > s.money ? 'disabled' : '' }>$${ BAIT.price }</button></div>` : '';
+		return `<div class="gm-wanted"><span class="gm-wanted-h">Bait and ice</span>${ bucket }${ g.daysOut.iceRow() }${ lots }${ trap }</div>`;
+
+	}
+
+	// (M19) a stall's bait buttons bound: lots, the bucket's sale, trap bait, ice (again: the panel drawn afresh)
+	bindBait( again ) {
+
+		const g = this.game;
+		for ( const b of this.stand.querySelectorAll( '[data-lot]' ) ) b.onclick = () => {
+
+			g.buyBait( b.dataset.lot );
+			again();
+
+		};
+		const sb = this.stand.querySelector( '[data-sellbait]' );
+		if ( sb ) sb.onclick = () => g.sellBait();
+		const tb = this.stand.querySelector( '[data-trapbait]' );
+		if ( tb ) tb.onclick = () => {
+
+			g.traps.buyBait();
+			again();
+
+		};
+		g.daysOut.bindShop( this.stand, again );
 
 	}
 
@@ -1393,14 +1446,20 @@ export class GameHUD {
 
 		const terms = g.saleTerms( v ), all = s.quote( null, terms );
 		const rows = s.inventory.map( ( f ) => fishItem( f, `<button class="gm-mini" data-sell="${ f.id }">Sell</button>`, s.quote( [ f.id ], terms ).prices.get( f.id ), false ) ).join( '' );
+		// ((M19) what she's owed you for her challenges, paid as you come by; her bait, cut conch and hermit crabs; the day's challenges)
+		const paid = s.collectChallenges();
+		if ( paid > 0 ) this._campPaid = paid;
+		const bait = BAIT_IDS.filter( ( k ) => BAITS[ k ].seller === 'pearl' ).map( ( k ) => lotRow( s, k ) ).join( '' );
+		const day = g.challenges && g.challenges.today ? g.challenges.today() : null;
+		const challenges = day ? `<div class="gm-wanted"><span class="gm-wanted-h">Pearl's challenges today</span>${ day.list.map( ( c ) => item( { rod: 'With a rod', spear: 'With a speargun', net: 'With the cast net' }[ c.id ], c.what, `<span class="gm-item-val">$${ c.pay }</span>`, c.done ? '<span class="gm-have">Done</span>' : '' ).replace( 'class="gm-item"', `class="gm-item${ c.done ? ' is-done' : '' }"` ) ).join( '' )}</div>` : '';
 		// ((M16) what your boat burns, at what she charges over Marta)
 		const missing = s.stats.fuelL - s.fuelL, F = fuelOf( s.boat ), litre = fuelPrice( s.boat, CAMP.fuel );
 		const fuelRow = ! F ? '' : `<div class="gm-shop-row"><span>${ F.name } · $${ ( litre * GAL ).toFixed( 2 ) } / gal<small>From her drums by the jetty · tank: ${ gallons( s.fuelL ) } of ${ gallons( s.stats.fuelL ) } gal</small></span>${ missing > 0.5 ? `<button class="gm-btn" data-fuel ${ s.money < litre ? 'disabled' : '' }>Fill · $${ Math.min( s.refuelCost( litre ), Math.floor( s.money / litre ) * litre ) }</button>` : '<span class="gm-have">Full</span>' }</div>`;
 		const sub = this.closingSoon( v ) ? `I'm off round to market at ${ this.at( v.hours[ 1 ] ) }.` : F ? ( s.inventory.length ? v.greeting : v.idle ) : s.inventory.length ? 'Paddled round from the bay? I\'ll take what you caught.' : 'Nothing today? Come back when you\'ve got fish.';
 		this.drawStand( v, `
 			<div class="gm-head"><h2>${ v.name }</h2>
-			<p class="gm-sub">${ sub } She pays ${ Math.round( CAMP.rate * 100 ) }% of Joe's price. You have $${ s.money.toLocaleString() }</p></div>
-			<div class="gm-list">${ fuelRow }<div class="gm-rows">${ rows || '<div class="gm-empty">Your cooler is empty.</div>' }</div></div>
+			<p class="gm-sub">${ this._campPaid ? `Here's your money for the challenges: $${ this._campPaid }. ` : '' }${ sub } She pays ${ Math.round( CAMP.rate * 100 ) }% of Joe's price. You have $${ s.money.toLocaleString() }</p></div>
+			<div class="gm-list">${ challenges }${ bait ? `<div class="gm-wanted"><span class="gm-wanted-h">Her bait</span>${ bait }</div>` : '' }${ fuelRow }<div class="gm-rows">${ rows || '<div class="gm-empty">Your cooler is empty.</div>' }</div></div>
 			<div class="gm-foot"><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button><button class="gm-btn" data-all ${ s.inventory.length ? '' : 'disabled' }>Sell all · $${ all.total }</button></div>` );
 		// (each drawn again by the state's change: refresh)
 		this.stand.querySelector( '[data-close]' ).onclick = () => this.closeStand();
@@ -1408,6 +1467,7 @@ export class GameHUD {
 		for ( const b of this.stand.querySelectorAll( '[data-sell]' ) ) b.onclick = () => this.game.sell( [ Number( b.dataset.sell ) ] );
 		const f = this.stand.querySelector( '[data-fuel]' );
 		if ( f ) f.onclick = () => this.game.refuel( litre );
+		this.bindBait( () => this.renderCamp() );
 
 	}
 
@@ -1479,6 +1539,14 @@ export class GameHUD {
 
 }
 
+// (M19) a lot of bait, as Joe and Pearl sell it: its name, how many come, how many you have, its price
+function lotRow( s, k ) {
+
+	const B = BAITS[ k ];
+	return `<div class="gm-shop-row"><span>${ B.name }<small>${ B.per > 1 ? `${ B.per } at a time` : 'A block' } · you have ${ s.bait[ k ] | 0 }</small></span><button class="gm-btn" data-lot="${ k }" ${ B.price > s.money ? 'disabled' : '' }>$${ B.price }</button></div>`;
+
+}
+
 GameHUD.prototype.renderShop = function () {
 
 	// ((M16) typing her name: not drawn again under you)
@@ -1526,33 +1594,28 @@ GameHUD.prototype.renderShop = function () {
 
 	}
 
-	// what she's after today, from your cooler
-	const terms = g.saleTerms ? g.saleTerms( v ) : null;
-	const bait = terms ? s.quote( null, terms ) : { prices: new Map() };
-	const baitRows = s.inventory.filter( ( f ) => bait.prices.has( f.id ) ).map( ( f ) => fishItem( f, `<button class="gm-mini" data-sell="${ f.id }">Sell</button>`, bait.prices.get( f.id ), true ) ).join( '' );
-	// (Salt Life) and from the bait bucket, alive
-	const bq = terms ? s.quoteBait( terms ) : null;
-	const bucketRow = bq && bq.n ? item( `${ FISH[ bq.species ].name }<small class="is-wanted">wanted</small>`, `${ bq.n } live from your bait bucket · $${ bq.each } each`, `<span class="gm-item-val">$${ bq.total }</span>`, `<button class="gm-mini" data-sellbait>Sell ${ bq.n }</button>` ) : '';
+	// ((M19) what she's after is her tag-and-release asks; the bait tank's, the bait and the ice are Joe's now: renderStand)
 	// ((M16) your own gear, then the boat's you're in: the others' wait till you are)
 	const track = ( [ key, track ] ) => {
 
 		const cur = track.levels[ s.upgrades[ key ] | 0 ];
 		const next = nextLevel( s.upgrades, key );
+		// ((M19) one that needs another fitted first says so: UPGRADES' needs)
+		const needs = next && ! s.hasNeeds( key ) ? UPGRADES[ track.needs ] : null;
 		const btn = next
-			? `<button class="gm-btn" data-buy="${ key }" ${ next.cost > s.money ? 'disabled' : '' }>$${ next.cost }</button>`
+			? `<button class="gm-btn" data-buy="${ key }" ${ next.cost > s.money || needs ? 'disabled' : '' }>$${ next.cost }</button>`
 			: '<span class="gm-have">Top of the line</span>';
-		return `<div class="gm-shop-row"><span>${ track.name }: ${ next ? next.label : cur.label }<small>Now: ${ cur.label }</small></span>${ btn }</div>`;
+		const needed = needs ? ( /^[A-Z][a-z]/.test( needs.name ) ? needs.name[ 0 ].toLowerCase() + needs.name.slice( 1 ) : needs.name ) : '';
+		return `<div class="gm-shop-row"><span>${ track.name }: ${ next ? next.label : cur.label }<small>${ needs ? `Needs the ${ needed } first` : `Now: ${ cur.label }` }</small></span>${ btn }</div>`;
 
 	};
 
 	const tracks = Object.entries( UPGRADES ), mine = tracks.filter( ( [ , t ] ) => ! t.on ), hers = tracks.filter( ( [ , t ] ) => t.on === s.boat );
 	const rows = `<span class="gm-boat-section">Your gear</span>${ mine.map( track ).join( '' ) }${ hers.length ? `<span class="gm-boat-section">For ${ escape( s.boatName() ) }</span>${ hers.map( track ).join( '' ) }` : '' }`;
-	// ((M16) bait by the trip's lot: what the net can't bring up; lures are the Lures track)
-	const frozen = BAIT_IDS.filter( ( k ) => BAITS[ k ].price && ! BAITS[ k ].lure ).map( ( k ) => `<div class="gm-shop-row"><span>${ BAITS[ k ].name }<small>${ BAITS[ k ].per > 1 ? `${ BAITS[ k ].per } at a time` : 'A block' } · you have ${ s.bait[ k ] | 0 }</small></span><button class="gm-btn" data-lot="${ k }" ${ BAITS[ k ].price > s.money ? 'disabled' : '' }>$${ BAITS[ k ].price }</button></div>` ).join( '' );
+	// ((M19) bait by the trip's lot is Joe's now, and Pearl's: lures are still hers, the Lures track)
 	// ((M16) traps a hurricane's had: Traps.js)
 	const lostTraps = s.traps.lost, trapRow = lostTraps ? `<div class="gm-shop-row"><span>A new lobster trap<small>${ lostTraps } lost to the weather</small></span><button class="gm-btn" data-newtrap ${ TRAP_PRICE > s.money ? 'disabled' : '' }>$${ TRAP_PRICE }</button></div>` : '';
-	// ((M17) trap bait, once you've traps: Traps.BAIT)
-	const trapBait = ownedTraps( s.upgrades ) ? `<div class="gm-shop-row"><span>Trap bait · fish heads and cowhide<small>For ${ BAIT.per } traps · it draws them about ${ BAIT.nights } nights · you have bait for ${ s.traps.bait | 0 }</small></span><button class="gm-btn" data-trapbait ${ BAIT.price > s.money ? 'disabled' : '' }>$${ BAIT.price }</button></div>` : '';
+	// ((M19) trap bait's Joe's now, with the rest of the bait)
 	const greeting = this.closingSoon( v ) ? `I'm shutting at ${ this.at( v.hours[ 1 ] ) }` : martaSays( s ) || v.greeting;
 	const boats = this._shopTab === 'boats';
 	const tabs = `<div class="gm-tabs" role="tablist">${ [ [ 'gear', 'Gear' ], [ 'boats', 'Boats' ] ].map( ( [ id, label ] ) => `<button class="gm-tab${ boats === ( id === 'boats' ) ? ' is-on' : '' }" role="tab" aria-selected="${ boats === ( id === 'boats' ) }" data-shoptab="${ id }">${ label }</button>` ).join( '' ) }</div>`;
@@ -1561,7 +1624,7 @@ GameHUD.prototype.renderShop = function () {
 		<div class="gm-head"><h2>${ v.name }</h2>
 		<p class="gm-sub">${ greeting } · You have $${ s.money.toLocaleString() }</p></div>
 		${ tabs }
-		<div class="gm-list">${ boats ? fleetRows( this ) : `${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ this.findsBlock( 'marta', 'From the beach: she\'ll buy' ) }${ shellShopRow( s ) }${ bucketRow }${ baitRows }${ haulRow }${ towRow }${ repairRow }${ fuelRow }${ frozen }${ trapRow }${ trapBait }${ g.daysOut.shopRows() }${ rows }` }</div>
+		<div class="gm-list">${ boats ? fleetRows( this ) : `${ this.wantedBlock( 'marta', 'Marta\'s after' ) }${ this.findsBlock( 'marta', 'From the beach: she\'ll buy' ) }${ shellShopRow( s ) }${ haulRow }${ towRow }${ repairRow }${ fuelRow }${ trapRow }${ g.daysOut.shopRows() }${ rows }` }</div>
 		<div class="gm-foot"><span class="gm-sub">${ boats ? 'Boats stay at their berths till you take one out' : 'Upgrades take effect at once' }</span><button class="gm-btn is-ghost" data-close>${ this.keyed( 'Leave', 'E', 'B' ) }</button></div>` );
 	bindFuel();
 	g.daysOut.bindShop( this.stand, () => this.renderShop() );

@@ -273,6 +273,8 @@ export class Radio {
 		const blown = wx && wx.wind >= NO_TOW, warned = news && news.stage === 'warning';
 		let say, can = false, drop = null;
 		if ( job.metres > reachTo( g.state.stats ) ) say = `Nothing but static. You're ${ farOff( job.metres ) } off her dock, past your set's reach.`;
+		// ((M19) the island's ridge between you and her aerial by the chandlery: from the north side, Pearl)
+		else if ( g.daysOut && g.daysOut.radioSees && ! g.daysOut.radioSees( 'marta' ) ) say = `Nothing but static. The island's between you and Marta's aerial by the chandlery.${ pearlJob( g ) ? ' Pearl, on the north side, may hear you.' : '' }`;
 		else if ( blown || warned ) say = `Marta here. Not in this: ${ warned ? 'there\'s a hurricane on its way' : 'it\'s blowing a gale' }, and I'd not get to you. Anchor if you can, ride it out, and call me when it's blown through.`;
 		else {
 

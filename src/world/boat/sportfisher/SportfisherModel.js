@@ -237,6 +237,9 @@ export class SportfisherModel extends Vessel {
 		this.colliders = buildColliders( L );
 		this.ladders = buildLadders();
 		this.helm = { x: 0, z: HELM.z, y: SF.bridge, eye: HELM.eye, rise: [ 0.5, HELM.z - 0.45 ], open: true, stand: [ 0, 0.02 ] }; // (stand: where a figure's seen at it, clear of her seat)
+		// ((M19) her anchor's let go and got up from her bridge, by the windlass switch at her console's starboard end, as a
+		// sportfisher's is: her foredeck isn't walked (Game.updateBow; y: only on the bridge, not under it)
+		this.bowAnchor = { x: HELM.halfW + 0.25, z: ( HELM.consoleZ0 + HELM.consoleZ1 ) / 2, r: 0.6, y: SF.bridge, windlass: true };
 		this.helmEye = HELM.eye;
 		this.towerHelm = { x: 0, z: TOWER_HELM.z, y: SF.tower, eye: TOWER_HELM.eye, rise: TOWER_HELM.rise, reach: TOWER_HELM.reach, upper: true, open: true };
 		this.helmInUse = this.helm; // (whose wheel and lever move: Player.takeHelm)

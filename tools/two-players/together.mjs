@@ -1,6 +1,6 @@
 // (M17, stream 4) Aboard together, with two real games, part by part: what M16 left for a guest on someone else's boat.
 //   tools/render-slot.sh node tools/two-players/together.mjs [dir] [port] <part>
-//   parts: seat (5)  yard (2)  tray (3)  sand, stem (6; berths: both)  pearl (7)  specks (8)  horn (9)  ladder (10, 11)  chair (12)  slow (13)
+//   parts: seat (5)  seatpads (5: (M19) a gamepad and touch)  yard (2)  tray (3)  sand, stem (6; berths: both)  pearl (7)  specks (8)  horn (9)  ladder (10, 11)  chair (12)  slow (13)
 import { OTHER as other, start } from './lib.mjs';
 const [ out = 'qa-output', PORT = '5234', PART = 'seat' ] = process.argv.slice( 2 );
 const G = await start( { out, port: PORT } );
@@ -96,6 +96,64 @@ if ( PART === 'seat' ) {
 
 }
 
+
+if ( PART === 'seatpads' ) {
+
+	// ((M19, stream TOGETHER's left) the guest sat on her tank well looks about with a gamepad's right stick, relayed by the app
+	// as All the Spaces relays it (portal.input.gamepads), and with a finger on the touch screen's look side: real touches, sent
+	// as the browser's own (the DevTools protocol, with touch on), the touch controls shown by the first, as any touch shows them
+	// (TouchControls). A real pointer lock can't be had in a driven browser: the mouse's is the drag 'seat' tries)
+	const owner = await G.open( 'Robin', 'kayak', 20 ), guest = await G.open( 'Sam', process.env.GUEST_BOAT || 'kayak', 20 );
+	await ready( owner, guest );
+	say( await G.aboard( owner, guest ), 'Sam\'s on her tank well' );
+	await frames( guest.game, 6 );
+	const a = await view( guest );
+	await guest.game.evaluate( () => {
+
+		window.__app.input.portal.input.gamepads = () => [ { axes: [ 0, 0, 0.9, 0 ], buttons: [] } ];
+
+	} );
+	await frames( guest.game, 20 );
+	await guest.game.evaluate( () => {
+
+		window.__app.input.portal.input.gamepads = () => [];
+
+	} );
+	await frames( guest.game, 2 );
+	const b = await view( guest );
+	note( 'gamepad, before:', JSON.stringify( a ), ' after:', JSON.stringify( b ) );
+	say( Math.abs( b.rel - a.rel ) > 0.3 && b.mode === a.mode, `by a gamepad's right stick, sat on her tank well, he looks about: ${ a.rel } to ${ b.rel } rad off her bow, still ${ b.mode }` );
+	const cdp = await guest.page.context().newCDPSession( guest.page );
+	await cdp.send( 'Emulation.setTouchEmulationEnabled', { enabled: true, maxTouchPoints: 5 } );
+	const touch = ( type, x, y ) => cdp.send( 'Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [ { x, y, id: 1 } ] } );
+	const box = await guest.page.evaluate( () => { const r = document.querySelector( 'iframe' ).getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; } );
+	// (the first touch shows the touch controls)
+	await touch( 'touchStart', box.x + box.w * 0.5, box.y + box.h * 0.3 );
+	await touch( 'touchEnd' );
+	await frames( guest.game, 4 );
+	const zone = await guest.game.evaluate( () => {
+
+		const z = document.querySelector( '.touch-look' ), r = z && z.getBoundingClientRect();
+		return { on: window.__app.touch.active, z: r && { x: r.x, y: r.y, w: r.width, h: r.height } };
+
+	} );
+	const c = await view( guest );
+	const zx = box.x + ( zone.z ? zone.z.x + zone.z.w * 0.4 : box.w * 0.7 ), zy = box.y + ( zone.z ? zone.z.y + zone.z.h * 0.5 : box.h * 0.5 );
+	await touch( 'touchStart', zx, zy );
+	for ( let i = 1; i <= 12; i ++ ) {
+
+		await touch( 'touchMove', zx + i * 14, zy );
+		await frames( guest.game, 1 );
+
+	}
+
+	await touch( 'touchEnd' );
+	await frames( guest.game, 2 );
+	const d = await view( guest );
+	note( 'touch, zone:', JSON.stringify( zone ), ' before:', JSON.stringify( c ), ' after:', JSON.stringify( d ) );
+	say( zone.on && Math.abs( d.rel - c.rel ) > 0.3 && d.mode === c.mode, `by a finger on the touch screen, sat on her tank well, he looks about: ${ c.rel } to ${ d.rel } rad off her bow, still ${ d.mode }` );
+
+}
 
 if ( PART === 'chair' ) {
 

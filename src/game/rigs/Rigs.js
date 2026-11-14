@@ -3,7 +3,7 @@ import { Vector3 } from '../../engine/index.js';
 import { G } from '../../core/Globals.js';
 import { BAITS, BAIT_IDS, onHand } from '../Bait.js';
 import { FISH } from '../FishTable.js';
-import { realTackle, UPGRADES } from '../Gear.js';
+import { realTackle, UPGRADES, FLY_RODS, flyRodFor } from '../Gear.js';
 import { pickSpecies, rollWeight } from '../Bites.js';
 import { placeOf } from '../Places.js';
 import { fishLength } from '../CatchDisplay.js';
@@ -56,6 +56,16 @@ const BIG_KG = 30; // from here it's brought to the boat tired, and gaffed or wi
 // with neither, unhooked by hand alongside (byHand)
 export const DEHOOK = { landBig: 6, landSmall: 2.5, tiredBig: 0.5, byHand: 1 };
 const BY_HAND_HURT = 0.29;
+// (M19) the rubber landing net (Gear's landingNet; docs/m19/sources-big-game.md, sec. 9): a fish up to kg (EGO's rated load,
+// 30 lb) is netted, never lost at the side; from reach m off (the hoop on its handle at arm's length, against a hand's 1.2:
+// judgement). Not a billfish (its bill), nor a big one (BIG_KG). A fish let go from it is hurt about 4 in 100 (Barthel et al.
+// 2003, rubber mesh), but only a billfish let go is counted hurt in the game, so that figure isn't used
+export const NET = { kg: 13.6, reach: 1.8 };
+export const netted = ( s, id, kg ) => !! s.landingNet && kg <= NET.kg && ! FISH[ id ].release;
+// (M19) a fish on a fly: what you can lean against it with the rod low and within 45 degrees of it (Andy Mill's test, 12.5 lb:
+// docs/m19/sources-fly.md); and a jump on a tight line, the chance it parts the tippet or throws the hook unless you bow
+// (judgement: the guides say it's how most tarpon are lost)
+const FLY_HOLD_KG = 5.7, FLY_BOW = 0.6, LB_KG = 0.45359237;
 const LEADER_CHIP = { mono: 'mono', fluoro: 'fluoro', wire: 'wire', heavy: '200 lb' };
 const LEADER_WORD = { mono: 'fine, and teeth go through it', fluoro: 'shy fish can\'t see it, and teeth go through it', wire: 'nothing bites through it, and shy fish keep off', heavy: 'it holds a bill and most teeth, and some shy fish keep off' };
 
@@ -95,7 +105,44 @@ export class Rigs {
 	// the tackle the rod in your hands fights on: hers, off her holder or on her kite rod or her electric reel, or your own
 	get tackle() {
 
-		return this.kit || this.stats;
+		// ((M19) what you cast is on your light tackle; what's trolled, flown, dropped or taken off a holder on your heavy: Gear's
+		// tackleOf. Riding along, her kit. A fly's on its fly rod: flyTackle)
+		if ( ! this.kit && ( this.game.rod.rig || this.pick ) === 'fly' ) return this.flyTackle();
+		return this.kit || ( this.heavy() ? this.stats : this.stats.light );
+
+	}
+
+	// (M19) the fly rod a fly's cast on (Gear.flyRodFor: the one it's tied for, else your heaviest), its weight or null
+	flyWt( bait = this.state.baitPick ) {
+
+		return flyRodFor( this.stats.flyRods, BAITS[ bait ]?.wt );
+
+	}
+
+	// (M19) its tackle: the tippet's strength, the reel's drag, its backing and line, as the rest of your tackle's set out
+	flyTackle() {
+
+		const f = FLY_RODS[ this.flyWt() ] || FLY_RODS[ 8 ];
+		return { ...f, twoSpeed: false, standUp: false, electricReel: false, leader: this.stats.leader | 0 };
+
+	}
+
+	// (M19) whether the rig on the line is your heavy tackle's: trolled, a kite's, a deep drop's (and so a fish taken off a holder,
+	// on the troll rig), or you're in the chair; otherwise what you cast is on your light tackle
+	heavy( rig = this.game.rod.rig || this.pick ) {
+
+		return rig === 'troll' || rig === 'kite' || rig === 'drop' || !! this.inChair;
+
+	}
+
+	// (M19) the rod in your hands for the rig that's picked: its reach, its reel, its spool, and whether it's the stand-up rod
+	rodGear( rig = this.pick ) {
+
+		// ((M19) a fly's on the fly rod it's tied for)
+		const w = rig === 'fly' ? this.flyWt() : null;
+		if ( w ) return { castM: FLY_RODS[ w ].castM, reelSpeed: FLY_RODS[ w ].reelSpeed, spoolM: FLY_RODS[ w ].spoolM, standUp: false, fly: w };
+		const t = this.heavy( rig ) ? this.stats : this.stats.light;
+		return { castM: t.castM, reelSpeed: t.reelSpeed, spoolM: t.spoolM, standUp: !! t.standUp };
 
 	}
 
@@ -222,6 +269,8 @@ export class Rigs {
 	available( id ) {
 
 		const n = RIGS[ id ].needs, p = this.app.player;
+		// ((M19) the fly rod, wherever you are: wading, in a kayak, riding along, aboard)
+		if ( RIGS[ id ].anywhere ) return ( this.stats.flyRods || [] ).length > 0;
 		// ((M16) riding along: your own lead goes over her side as off any boat; (guest work) or down on her electric reel,
 		// and with her owner aboard, her spread and her kite (on her stand-up rod) are yours to work too)
 		if ( p.riding && n ) {
@@ -251,6 +300,8 @@ export class Rigs {
 		}
 
 		this.pick = RIG_IDS[ i ];
+		// ((M19) the rod for it in your hands: the light one for a cast, the stand-up one for the rest)
+		this.game.rod.setGear( this.rodGear() );
 		if ( this.boatRig() ) {
 
 			this.fitBoatBait();
@@ -315,7 +366,7 @@ export class Rigs {
 
 		if ( bait && BAITS[ bait ] ) return BAITS[ bait ].name;
 		if ( baitFits( this.pick, null ) ) return 'Frozen shrimp';
-		return { troll: 'needs frozen ballyhoo or squid from Marta, or plugs and skirts', kite: 'needs a live bait: throw the cast net', drop: 'needs squid, ballyhoo or cut bait' }[ this.pick ];
+		return { troll: 'needs frozen ballyhoo or squid from Joe, or plugs and skirts from Marta', kite: 'needs a live bait: throw the cast net', drop: 'needs squid, ballyhoo or cut bait', fly: 'needs flies: a fly box from Marta' }[ this.pick ];
 
 	}
 
@@ -399,10 +450,22 @@ export class Rigs {
 
 		}
 
+		// ((M19) a fly: false casting begins, on the fly rod it's tied for: game/FlyCast.js)
+		if ( this.pick === 'fly' ) {
+
+			rod.setRig( 'fly', true );
+			rod.setGear( this.rodGear( 'fly' ) );
+			rod.dropReach = rod.spoolM;
+			this._waiting = false;
+			return g.flyCast.start( true );
+
+		}
+
 		// a cast
 		const lure = BAITS[ pick ];
 		rod.setRig( this.pick, !! ( lure && lure.lure ) );
-		rod.dropReach = rod.spoolM = this.stats.spoolM;
+		// ((M19) a cast's on your light tackle: its spool's what a sinker can go down)
+		rod.dropReach = rod.spoolM = this.tackle.spoolM;
 		this._waiting = this.pick === 'bottom';
 		return false;
 
@@ -707,7 +770,8 @@ export class Rigs {
 		const g = this.game, x = L.p.x, z = L.p.z, T = this.app.terrainData, floorM = Math.max( 0, G.seaLevel.value - T.heightAt( x, z ) );
 		const lure = BAITS[ L.bait ]?.lure ? L.bait : null;
 		// (a plug swims a couple of metres down; the rest skip on top)
-		return atHook( g.habitatOf( x, z, floorM ), hookOf( 'troll', lure === 'plug' ? 2 : 0.3, floorM, { knots, lines: this.lines.length, lure, leader: leaderOn( L.leader, this.stats.leader, 'troll', knots, lure ) } ) );
+		// ((M19) teasers: the sportfisher's, out with her spread: Presentation's TEASE)
+		return atHook( g.habitatOf( x, z, floorM ), hookOf( 'troll', lure === 'plug' ? 2 : 0.3, floorM, { knots, lines: this.lines.length, lure, leader: leaderOn( L.leader, this.stats.leader, 'troll', knots, lure ), teasers: !! this.stats.teasers } ) );
 
 	}
 
@@ -991,6 +1055,33 @@ export class Rigs {
 		this._fightLeader = null;
 		const risk = leaderRisk( leader, b.species ), big = b.kg >= BIG_KG, off = s.dehooker && FISH[ b.species ].protected;
 		const chair = this.inChair && !! this._seat();
+		// ((M19) on a fly: the tippet's, played with the rod low; a tarpon fly's leader has a bite tippet for its mouth, any other
+		// fly's class tippet wears on one as a bill wears a leader; a jump on a tight line parts it unless you bow (let go))
+		if ( rod.rig === 'fly' && ! this.kit ) {
+
+			const bite = g.hookBait === 'flyTarpon';
+			return {
+				lineKg: t.lineKg,
+				reelSpeed: t.reelSpeed,
+				dragKg: t.dragKg,
+				holdKg: FLY_HOLD_KG,
+				spoolM: t.spoolM,
+				twoSpeed: false,
+				electric: false,
+				chair: false,
+				hookM: 0,
+				cut: leaderRisk( leader === 'wire' ? 'wire' : 'fluoro', b.species ).cut, // (teeth through a tippet, unless you've tied on wire)
+				wear: b.species === 'tarpon' && ! bite ? 0.1 : 0,
+				leaps: leapsOf( b.species ),
+				bow: FLY_BOW,
+				landAt: this.landAt( b, off, big ),
+				tired: big ? ( off ? DEHOOK.tiredBig : 0.3 ) : 1,
+				leader: leader === 'wire' ? 'wire' : bite ? 'bite' : 'tippet',
+				tippetLb: t.lineKg / LB_KG,
+			};
+
+		}
+
 		return {
 			lineKg: t.lineKg,
 			reelSpeed: electric ? ELECTRIC.speed : t.reelSpeed,
@@ -1004,10 +1095,20 @@ export class Rigs {
 			cut: risk.cut,
 			wear: risk.wear,
 			leaps: leapsOf( b.species ),
-			landAt: off ? ( big ? DEHOOK.landBig : DEHOOK.landSmall ) : FISH[ b.species ].protected ? DEHOOK.byHand : big ? 3 : 1.2,
+			landAt: this.landAt( b, off, big ),
 			tired: big ? ( off ? DEHOOK.tiredBig : 0.3 ) : 1,
 			leader,
 		};
+
+	}
+
+	// how far off it's landed (the fight's landAt): a dehooker's reach, by hand alongside, a big one at the leader, ((M19) or in
+	// the landing net, from further off than a hand)
+	landAt( b, off, big ) {
+
+		if ( off ) return big ? DEHOOK.landBig : DEHOOK.landSmall;
+		const by = FISH[ b.species ].protected ? DEHOOK.byHand : big ? 3 : 1.2;
+		return netted( this.stats, b.species, b.kg ) ? Math.max( by, NET.reach ) : by;
 
 	}
 
@@ -1027,7 +1128,7 @@ export class Rigs {
 	landedAtBoat( f ) {
 
 		const s = this.stats;
-		if ( FISH[ f.species ].protected || f.kg <= s.landKg ) return true;
+		if ( FISH[ f.species ].protected || f.kg <= s.landKg || netted( s, f.species, f.kg ) ) return true; // ((M19) or netted)
 		return Math.random() > Math.min( 0.75, ( f.kg - s.landKg ) / 30 );
 
 	}
@@ -1051,6 +1152,9 @@ export class Rigs {
 
 		}
 
+		// ((M19) a fly's tippet parted by a jump on a tight line, or worn through on a tarpon's mouth)
+		if ( st === 'snapped' && f.jumped ) return 'It jumped on a tight line and broke the tippet · bow to it: let go as it jumps';
+		if ( st === 'cut' && f.leader === 'tippet' ) return leaderRisk( 'fluoro', f.species ).cut > 0 ? `Cut off! Its teeth went through the tippet · ${ own >= 2 ? `${ key } ties on the wire, fly or not` : 'Marta sells wire' }` : 'Its mouth wore through the tippet · tarpon flies come with a bite tippet';
 		if ( st === 'spooled' ) return 'Spooled: it took every metre of your line · more line on a bigger reel, and more drag';
 		return null;
 
@@ -1274,6 +1378,14 @@ export class Rigs {
 		const cam = this.app.camera;
 		D.begin( cam );
 		for ( const L of this.lines ) this._drawLine( D, L );
+		// ((M19) her teasers, with her spread out)
+		if ( this.lines.length && this.stats.teasers && this.app.boat && this.app.boat.id === 'sportfisher' ) {
+
+			const b = this.app.boatCtl, waves = this.app.waves;
+			D.teasers( this.app.boat, ( l, out ) => b.toWorld( l, out ), ( x, z ) => ( waves ? waves.heightAt( x, z ) : G.seaLevel.value ) );
+
+		}
+
 		if ( this.kite ) this._drawKite( D );
 		if ( this.slick ) this._drawSlick( D, this.slick );
 		for ( const S of this.theirSlicks ) this._drawSlick( D, S );
@@ -1471,7 +1583,7 @@ export class Rigs {
 
 		const s = this.state;
 		if ( BAITS[ this.boatRig() ? this.boatPick : s.baitPick ]?.chum ) return 'Chum';
-		return { troll: 'Let out', kite: 'Fly kite', drop: 'Drop' }[ this.pick ] || 'Cast';
+		return { troll: 'Let out', kite: 'Fly kite', drop: 'Drop', fly: 'False cast' }[ this.pick ] || 'Cast';
 
 	}
 

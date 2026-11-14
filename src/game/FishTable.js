@@ -37,8 +37,10 @@
 //   cr         (with protected) a catch-and-release fish: a sport fish everyone lets go, rather than one
 //              the law protects from the table (the card says so)
 //   hand       taken by hand only, never speared or hooked (the spiny lobster: tickled out of its den
-//              and netted; its minCm is the gauge's 3-inch carapace as a total length: CARAPACE)
-//   bag        the most one person may keep in a day
+//              and netted; its minCm is the gauge's carapace as a total length: CARAPACE)
+//   bag        the most one person may keep in a day ((M19) none on the pelagics: the Bahamas' 18 a vessel is a visitor's
+//              limit, and she's a resident; the snook let go, as the Bahamas' 2017 flats rules have it: docs/M19.md)
+//   aboardKg   (M19) the most of it she may have aboard, kg (the crawfish: a Bahamian resident's 250 lb)
 // (M16) and for how it's fished and what it's worth let go (docs/m16/fish.md; Bites.hookWeight, Bait.baitWeight):
 //   ways       { float, troll, kite, drop }: its bite weight fished each way. Missing: 1 on the float, 1 deep-dropped
 //              for a bottom fish of the deep or the ledge, else 0: only what really takes one takes a towed bait or a kite's
@@ -75,14 +77,14 @@ export const FISH = {
 	// (M16: to 20.6 kg, FishBase's; the mahi from schoolies at 1.5 kg to bulls at 32, the record's 39.9, and under a
 	// hurricane's debris above all (wake); FAO: fishers gather them under floating bundles of reeds and planks)
 	tuna: { name: 'Blackfin tuna', sci: 'Thunnus atlanticus', lw: [ 0.0145, 3.0 ], model: 'tuna', habitat: { edge: 1, blue: 0.8, birds: 1.6, debris: 0.4, weed: 0.3 }, kg: [ 3, 20 ], price: 16, fight: 0.85, stamina: 16, time: 'dawnDusk', rarity: 0.5, spear: true, weather: { wind: 0.8 }, ways: { float: 1, troll: 1.4, kite: 0.35, drop: 0 }, at: { day: [ 0, 60 ], night: [ 0, 60 ] }, eats: { ballyhoo: 1.6, squid: 1.2, skirt: 1.5, jig: 2, plug: 1.4 } },
-	mahi: { name: 'Mahi-mahi', sci: 'Coryphaena hippurus', lw: [ 0.0079, 3.0 ], model: 'mahi', habitat: { blue: 1, edge: 0.3, weed: 1.6, debris: 1.3, birds: 0.8 }, kg: [ 1.5, 32 ], price: 14, fight: 0.8, stamina: 15, time: 'day', rarity: 0.4, spear: true, minCm: 51, weather: { wind: 1.5 }, ways: { float: 1, troll: 1.4, kite: 0.5, drop: 0 }, at: { day: [ 0, 50 ], night: [ 0, 50 ] }, eats: { ballyhoo: 2.4, squid: 1.4, skirt: 1.8, jig: 1.4, plug: 1.2 }, wake: 3, bag: 10 },
+	mahi: { name: 'Mahi-mahi', sci: 'Coryphaena hippurus', lw: [ 0.0079, 3.0 ], model: 'mahi', habitat: { blue: 1, edge: 0.3, weed: 1.6, debris: 1.3, birds: 0.8 }, kg: [ 1.5, 32 ], price: 14, fight: 0.8, stamina: 15, time: 'day', rarity: 0.4, spear: true, minCm: 51, weather: { wind: 1.5 }, ways: { float: 1, troll: 1.4, kite: 0.5, drop: 0 }, at: { day: [ 0, 50 ], night: [ 0, 50 ] }, eats: { ballyhoo: 2.4, squid: 1.4, skirt: 1.8, jig: 1.4, plug: 1.2 }, wake: 3 },
 	// (M16) Fish of the far water, each from its own published relation (docs/m16/fish.md has the sources):
 	// the wahoo on the drop-off, fast, first light its best and trolled above all, its teeth through anything
 	// but wire. W(kg) = 1.845e-6 TL^3.218, Hogarth's 795 off North Carolina; to 83.5 kg (the record), most 5 to 30
-	wahoo: { name: 'Wahoo', sci: 'Acanthocybium solandri', lw: [ 0.001845, 3.218 ], model: 'wahoo', habitat: { edge: 1, blue: 0.5, debris: 0.4, weed: 0.25, birds: 0.3 }, kg: [ 5, 50 ], price: 12, fight: 0.9, stamina: 45, time: 'dawnDusk', rarity: 0.15, spear: true, bag: 2, teeth: true, ways: { float: 0.25, troll: 1.6, kite: 0.4, drop: 0 }, at: { day: [ 0, 100 ], night: [ 0, 100 ] }, eats: { shrimp: 0.15, silverside: 1.4, mullet: 1.5, ballyhoo: 2.5, skirt: 2, plug: 3, jig: 2 }, weather: { wind: 0.3 } },
+	wahoo: { name: 'Wahoo', sci: 'Acanthocybium solandri', lw: [ 0.001845, 3.218 ], model: 'wahoo', habitat: { edge: 1, blue: 0.5, debris: 0.4, weed: 0.25, birds: 0.3 }, kg: [ 5, 50 ], price: 12, fight: 0.9, stamina: 45, time: 'dawnDusk', rarity: 0.15, spear: true, teeth: true, ways: { float: 0.25, troll: 1.6, kite: 0.4, drop: 0 }, at: { day: [ 0, 100 ], night: [ 0, 100 ] }, eats: { shrimp: 0.15, silverside: 1.4, mullet: 1.5, ballyhoo: 2.5, skirt: 2, plug: 3, jig: 2 }, weather: { wind: 0.3 } },
 	// the yellowfin about the drop-off and the bait, the big ones free of the debris (ICCAT: those under floating
 	// things mostly small); W(kg) = 2.153e-5 FL^2.976 (Caverivière 1976, ICCAT's), FL 0.9 TL on these lobes; to 200
-	yellowfin: { name: 'Yellowfin tuna', sci: 'Thunnus albacares', lw: [ 0.01574, 2.976 ], model: 'yellowfin', habitat: { edge: 0.8, blue: 0.7, birds: 1.4, debris: 0.3, weed: 0.15 }, kg: [ 8, 110 ], price: 17, fight: 0.95, stamina: 120, time: 'dawnDusk', rarity: 0.25, spear: true, bag: 3, ways: { float: 0.6, troll: 1.4, kite: 0.5, drop: 0 }, at: { day: [ 0, 110 ], night: [ 0, 110 ] }, eats: { shrimp: 0.4, silverside: 2.2, mullet: 1.6, ballyhoo: 2, squid: 1.6, skirt: 2, plug: 1.5, jig: 2 }, weather: { wind: 0.5 } },
+	yellowfin: { name: 'Yellowfin tuna', sci: 'Thunnus albacares', lw: [ 0.01574, 2.976 ], model: 'yellowfin', habitat: { edge: 0.8, blue: 0.7, birds: 1.4, debris: 0.3, weed: 0.15 }, kg: [ 8, 110 ], price: 17, fight: 0.95, stamina: 120, time: 'dawnDusk', rarity: 0.25, spear: true, ways: { float: 0.6, troll: 1.4, kite: 0.5, drop: 0 }, at: { day: [ 0, 110 ], night: [ 0, 110 ] }, eats: { shrimp: 0.4, silverside: 2.2, mullet: 1.6, ballyhoo: 2, squid: 1.6, skirt: 2, plug: 1.5, jig: 2 }, weather: { wind: 0.5 } },
 	// the billfish, every one let go: the sailfish working the bait along the drop-off and now and then in over the
 	// shelf's outer edge; the white marlin on the edges and the humps; the blue out in the open blue, rare and huge.
 	// W(kg) = a LJFL^b and LJFL from TL, each Prager, Prince and Lee 1995 (ICCAT's), fitted here as W(g) = a TL^b
@@ -104,7 +106,7 @@ export const FISH = {
 	// median depth 32 m + 53 m x the moon's lit share): `night` the new moon's, `full` the full moon's, between by how much
 	// of it's lit, so a float 6 m down has about 36 / 82 of its new-moon chance under a full one. Dewar et al. 2011 and
 	// Tracey et al. 2023, Pacific, the same way)
-	swordfish: { name: 'Swordfish', sci: 'Xiphias gladius', lw: [ 0.001295, 3.204 ], model: 'swordfish', habitat: { blue: 1, edge: 0.8, ledge: 0.3 }, kg: [ 15, 230 ], price: 20, fight: 0.95, stamina: 240, time: 'any', rarity: 0.14, bag: 1, flood: 2, under: 5, hint: 'in the deep blue, near the top after dark, or deep-dropped by day and stopped 350 to 750 m down', ways: { float: 1, troll: 0, kite: 0, drop: 2 }, at: { day: [ 320, 750 ], night: [ 0, 75 ], full: [ 52, 300 ] }, eats: { shrimp: 0.1, squid: 5, mullet: 1.5, cutMullet: 1, ballyhoo: 1.5, silverside: 0.5 } },
+	swordfish: { name: 'Swordfish', sci: 'Xiphias gladius', lw: [ 0.001295, 3.204 ], model: 'swordfish', habitat: { blue: 1, edge: 0.8, ledge: 0.3 }, kg: [ 15, 230 ], price: 20, fight: 0.95, stamina: 240, time: 'any', rarity: 0.14, flood: 2, under: 5, hint: 'in the deep blue, near the top after dark, or deep-dropped by day and stopped 350 to 750 m down', ways: { float: 1, troll: 0, kite: 0, drop: 2 }, at: { day: [ 320, 750 ], night: [ 0, 75 ], full: [ 52, 300 ] }, eats: { shrimp: 0.1, squid: 5, mullet: 1.5, cutMullet: 1, ballyhoo: 1.5, silverside: 0.5 } },
 	// (catch and release only; M9: they roll and feed in the rain)
 	tarpon: { name: 'Tarpon', sci: 'Megalops atlanticus', lw: [ 0.0077, 3.02 ], model: 'tarpon', habitat: { pier: 0.35, bay: 0.5, shallows: 0.15, creek: 0.8 }, kg: [ 10, 45 ], price: 4, fight: 1, stamina: 24, time: 'night', rarity: 0.2, protected: true, cr: true, lights: 3, weather: { rain: 1.5 }, ways: { troll: 0.8, kite: 0.6 } },
 	blackGrouper: { name: 'Black grouper', sci: 'Mycteroperca bonaci', lw: [ 0.0115, 3.03 ], model: 'blackGrouper', habitat: { reef: 0.4, deep: 0.7 }, kg: [ 3, 25 ], price: 16, fight: 0.75, stamina: 14, time: 'any', rarity: 0.35, spear: true, minCm: 61, ways: { troll: 0.4, drop: 1 } },
@@ -128,14 +130,14 @@ export const FISH = {
 	// one snook a day
 	pompano: { name: 'Florida pompano', sci: 'Trachinotus carolinus', lw: [ 0.0174, 2.95 ], model: 'pompano', habitat: { wash: 1, shallows: 0.1 }, kg: [ 0.4, 2.8 ], price: 20, fight: 0.6, stamina: 7, time: 'any', rarity: 0.8 },
 	permit: { name: 'Permit', sci: 'Trachinotus falcatus', lw: [ 0.0216, 2.96 ], model: 'permit', habitat: { wash: 0.45, shallows: 0.2 }, kg: [ 3, 18 ], price: 8, fight: 0.9, stamina: 18, time: 'day', rarity: 0.12, protected: true, cr: true },
-	snook: { name: 'Common snook', sci: 'Centropomus undecimalis', lw: [ 0.0075, 3.04 ], model: 'snook', habitat: { creek: 1, wash: 0.6, shallows: 0.1 }, kg: [ 1.5, 12 ], price: 13, fight: 0.8, stamina: 13, time: 'dawnDusk', rarity: 0.35, bag: 1, ways: { troll: 0.8 } },
+	snook: { name: 'Common snook', sci: 'Centropomus undecimalis', lw: [ 0.0075, 3.04 ], model: 'snook', habitat: { creek: 1, wash: 0.6, shallows: 0.1 }, kg: [ 1.5, 12 ], price: 13, fight: 0.8, stamina: 13, time: 'dawnDusk', rarity: 0.35, protected: true, cr: true, ways: { troll: 0.8 } },
 	// (M16) and the flats', the kayak's: the redfish rooting on the sand and along the mangroves' edge, tails up on
 	// a calm morning; the spotted seatrout over the grass and in the channels, about any light at night. This is as
 	// far south as either comes (FishBase: southern Florida). FishBase's relations; one redfish a day, four trout
 	redfish: { name: 'Redfish', sci: 'Sciaenops ocellatus', lw: [ 0.00851, 3.07 ], model: 'redfish', habitat: { shallows: 0.45, creek: 0.42, wash: 0.25, bay: 0.04 }, kg: [ 1, 14 ], price: 13, fight: 0.7, stamina: 11, time: 'dawnDusk', rarity: 0.3, bag: 1, spear: true, minCm: 46, ways: { troll: 0.5 }, eats: { shrimp: 1.6, cutMullet: 2.2, mullet: 1.6, silverside: 1.1, jig: 1.2, plug: 0.8 }, weather: { surf: - 0.4 } },
 	trout: { name: 'Spotted seatrout', sci: 'Cynoscion nebulosus', lw: [ 0.00832, 3.05 ], model: 'trout', habitat: { bay: 0.22, shallows: 0.35, creek: 0.25, pier: 0.08 }, kg: [ 0.3, 3.6 ], price: 11, fight: 0.4, stamina: 5, time: 'dawnDusk', rarity: 0.5, bag: 4, flood: 1.5, lights: 1.5, hint: 'over the bay\'s grass, at dawn and dusk', ways: { troll: 0.6 }, eats: { shrimp: 1.6, silverside: 1.8, jig: 1.3, plug: 1.2, mullet: 1 } },
 	// (it never takes a bait or a spear: tickled out of its den in the reef and netted, after dark)
-	lobster: { name: 'Spiny lobster', sci: 'Panulirus argus', lw: [ 0.0575, 2.9 ], model: 'lobster', habitat: {}, kg: [ 0.25, 3 ], price: 24, fight: 0, stamina: 1, time: 'night', rarity: 0, hand: true, minCm: 22.4, bag: 6 },
+	lobster: { name: 'Spiny lobster', sci: 'Panulirus argus', lw: [ 0.0575, 2.9 ], model: 'lobster', habitat: {}, kg: [ 0.25, 3 ], price: 24, fight: 0, stamina: 1, time: 'night', rarity: 0, hand: true, minCm: 24.3, aboardKg: 113.4 },
 };
 
 // (M17) The flats' fish, seen before they're cast to (game/Sight.js, Bites.seenTake; docs/m17/sight.md), each kind's
@@ -152,18 +154,21 @@ export const FISH = {
 //   picky   of its refusals, the share that spook it as it turns away
 //   speed   m/s it comes to a bait at
 // Guides' lore, consistent between them but not measured (docs/m17/sources-tide-fish.md: no study of flats fish's
-// takes or flight distances was found). No fly rod (the user's, M17): shrimp, jigs, plugs and live bait
+// takes or flight distances was found). (M19) With M19's baits and flies (Bait.js): M17's "No fly rod" was the user's,
+// reversed for M19. No source measures what a fish takes of a fly either (docs/m19/sources-fly.md): each fly a little under
+// the bait it's tied to look like (a shrimp fly under a shrimp, a crab fly under a live crab), as guides find them. Judgement.
+// How it's worked counts too (Bites.workedTake)
 export const SIGHT = {
 	bonefish: { back: 0.14, wary: 1, lead: [ 0.6, 2.4 ], close: [ 0.25, 1 ], head: 0.45, speed: 0.9, picky: 0.25,
-		eats: { shrimp: 0.62, jig: 0.38, plug: 0.01, silverside: 0.06, cutMullet: 0.12, mullet: 0.02 } },
+		eats: { shrimp: 0.62, jig: 0.38, plug: 0.01, silverside: 0.06, cutMullet: 0.12, mullet: 0.02, liveShrimp: 0.75, conch: 0.5, hermitCrab: 0.45, sardine: 0.05, flyShrimp: 0.55, flyCrab: 0.3, flyTarpon: 0.02 } },
 	permit: { back: 0.18, wary: 1.25, lead: [ 0.5, 1.6 ], close: [ 0.25, 0.9 ], head: 0.7, speed: 0.8, picky: 0.4,
-		eats: { shrimp: 0.16, jig: 0.1, plug: 0.01, silverside: 0.03, cutMullet: 0.05 } },
+		eats: { shrimp: 0.16, jig: 0.1, plug: 0.01, silverside: 0.03, cutMullet: 0.05, liveShrimp: 0.22, conch: 0.1, hermitCrab: 0.45, sardine: 0.02, flyShrimp: 0.08, flyCrab: 0.22, flyTarpon: 0.01 } },
 	tarpon: { back: 0.3, wary: 0.7, lead: [ 1.2, 4 ], close: [ 0.25, 0.9 ], head: 0.3, speed: 1, picky: 0.15,
-		eats: { mullet: 0.5, silverside: 0.3, plug: 0.32, jig: 0.24, shrimp: 0.14, cutMullet: 0.08 } },
+		eats: { mullet: 0.5, silverside: 0.3, plug: 0.32, jig: 0.24, shrimp: 0.14, cutMullet: 0.08, liveShrimp: 0.25, conch: 0.04, hermitCrab: 0.04, sardine: 0.2, flyShrimp: 0.1, flyCrab: 0.03, flyTarpon: 0.35 } },
 	snook: { back: 0.2, wary: 0.55, lead: [ 0.3, 1.6 ], close: [ 0.2, 1.2 ], head: 0.25, speed: 1.4, picky: 0.1,
-		eats: { silverside: 0.5, mullet: 0.5, plug: 0.42, shrimp: 0.4, jig: 0.36, cutMullet: 0.2 } },
+		eats: { silverside: 0.5, mullet: 0.5, plug: 0.42, shrimp: 0.4, jig: 0.36, cutMullet: 0.2, liveShrimp: 0.55, conch: 0.08, hermitCrab: 0.08, sardine: 0.4, flyShrimp: 0.3, flyCrab: 0.05, flyTarpon: 0.35 } },
 	barracuda: { back: 0.18, wary: 0.45, lead: [ 0.5, 6 ], close: [ 0.5, 4 ], head: 0.2, speed: 3, picky: 0.05,
-		eats: { plug: 0.55, silverside: 0.6, mullet: 0.6, jig: 0.25, cutMullet: 0.2, shrimp: 0.04 } },
+		eats: { plug: 0.55, silverside: 0.6, mullet: 0.6, jig: 0.25, cutMullet: 0.2, shrimp: 0.04, liveShrimp: 0.08, conch: 0.05, hermitCrab: 0.02, sardine: 0.5, flyShrimp: 0.05, flyCrab: 0.02, flyTarpon: 0.4 } },
 };
 for ( const k in SIGHT ) FISH[ k ].sight = SIGHT[ k ];
 
@@ -213,8 +218,10 @@ export const HINTS = {
 };
 for ( const k in HINTS ) FISH[ k ].hint ??= HINTS[ k ];
 
-// (Salt Life) a spiny lobster's carapace length, of its total length (the gauge measures the
-// carapace: 3 inches, 7.62 cm, to keep one)
+// (Salt Life) a spiny lobster's carapace length, of its total length (the gauge measures the carapace). (M19) The Bahamas'
+// 3 1/4 inches, 8.26 cm, to keep one (a government notice, 2024: docs/m19/sources-boats-bait.md, section 10), where it was
+// Florida's 3 in; so minCm 24.3. No bag a day for a Bahamian or a resident, but no more than 250 lb aboard (aboardKg: the
+// Ministry of Tourism's figure for a resident); the closed season, 1 April to 31 July, waits for the island to have seasons
 export const CARAPACE = 0.34;
 
 export const FISH_IDS = Object.keys( FISH );

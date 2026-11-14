@@ -274,3 +274,16 @@ export function nearestWeed( weed, x, z ) {
 	return best ? { weed: best, d: bd } : null;
 
 }
+
+// (M19) the point of a weedline ( { x0, z0, x1, z1 } ) nearest ( x, z ): { x, z, t } (t: 0 at its first end, 1 at its
+// last). A weedline has no point of its own, as a log or a school of bait has: where it's called from, or where fish
+// hold on it, is the part nearest (together/Crew.js' spotted, world/Fish.js' farSpot)
+export function nearestOnWeed( w, x, z, out = { x: 0, z: 0, t: 0 } ) {
+
+	const ex = w.x1 - w.x0, ez = w.z1 - w.z0, t = Math.min( 1, Math.max( 0, ( ( x - w.x0 ) * ex + ( z - w.z0 ) * ez ) / Math.max( ex * ex + ez * ez, 1e-6 ) ) );
+	out.x = w.x0 + ex * t;
+	out.z = w.z0 + ez * t;
+	out.t = t;
+	return out;
+
+}

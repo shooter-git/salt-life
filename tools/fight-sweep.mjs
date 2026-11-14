@@ -5,7 +5,8 @@
 // reads the fight before a change and after it. docs/m17/lines.md.
 //
 //   node tools/fight-sweep.mjs [--n 10] [--json out.json] [--species tuna,mahi] [--only L3/R3/chair,...] [--no-dh]
-//                              [--compact] [--base base.json]
+//                              [--compact] [--base base.json] [--spear]
+//   ((M19) --spear: the speargun's fights instead, each kind it may shoot on each gun, S0 to S3: docs/m19/gear.md)
 //
 // Each cell: the share landed, broken (the line snapped), spooled, got away (slack or past the line) and cut (teeth or a
 // bill through the leader), and the landed fights' mean length in s. With --base, each cell's change from that file's.
@@ -17,9 +18,11 @@ import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { FISH, FISH_IDS } from '../src/game/FishTable.js';
 import { CatchMinigame } from '../src/game/CatchMinigame.js';
-import { gearStats, defaultUpgrades, UPGRADES } from '../src/game/Gear.js';
+import { gearStats, defaultUpgrades, UPGRADES, spoolOf } from '../src/game/Gear.js';
+import { mateTarget } from '../src/game/rigs/Mate.js';
 import { Rigs } from '../src/game/rigs/Rigs.js';
 import { leaderRisk } from '../src/game/rigs/Presentation.js';
+import { spearTerms } from '../src/game/Speargun.js';
 
 // sizes as the bites roll them (Bites.rollWeight: kg = a + ( b - a ) u ^ 2.2), at these shares of the fish that bite
 export const SIZES = [ 0.1, 0.3, 0.5, 0.7, 0.9, 0.99 ];
@@ -45,6 +48,11 @@ export function combos() {
 	}
 
 	for ( let l = 0; l < lines; l ++ ) for ( const hold of [ 'hand', 'chair' ] ) out.push( { key: `L${ l }/E/${ hold }`, line: l, reel: reels - 1, hold, electric: true } );
+	// ((M19) and from the chair with her mate backing her down, on every reel with a drag)
+	for ( let l = 0; l < lines; l ++ ) for ( let r = 0; r < reels; r ++ ) if ( UPGRADES.reel.levels[ r ].dragKg !== null ) out.push( { key: `L${ l }/R${ r }/chair+mate`, line: l, reel: r, hold: 'chair', electric: false, mate: true } );
+	// ((M19) and each fly rod with the fly tied for it: the 8-weight's shrimp fly, the 10's crab, the 12's tarpon fly, played by
+	// hand with the rod low; F12 is the tarpon fly's bite tippet)
+	for ( const wt of [ 8, 10, 12 ] ) out.push( { key: `F${ wt }`, fly: wt, hold: 'hand', electric: false } );
 	return out;
 
 }
@@ -53,9 +61,11 @@ export function combos() {
 export const compact = ( r ) => [ + r.caught.toFixed( 3 ), + r.snapped.toFixed( 3 ), + r.spooled.toFixed( 3 ), Math.round( r.t * 10 ) / 10 ];
 export const uncompact = ( c ) => ( { caught: c[ 0 ], snapped: c[ 1 ], spooled: c[ 2 ], t: c[ 3 ] } );
 
-// a careful player: reels below two-thirds of the breaking point and not into a run (test/game-logic's, test/tackle's)
-const careful = ( g ) => g.tension < 0.68 && g.surge < 0.6;
-const START = { hand: 25, harness: 50, chair: 60 };
+// a careful player: reels below two-thirds of the breaking point and not into a run (test/game-logic's, test/tackle's); ((M19) on
+// a fly, they bow to a jump: they let go while it's out of the water)
+const careful = ( g ) => g.tension < 0.68 && g.surge < 0.6 && ! ( g.bow > 0 && g.leap > 0 );
+const START = { hand: 25, harness: 50, chair: 60, fly: 15 };
+const FLY_OF = { 8: 'flyShrimp', 10: 'flyCrab', 12: 'flyTarpon' };
 const DEEP = 300;
 
 function lcg( s ) {
@@ -68,8 +78,26 @@ function lcg( s ) {
 // the fight's terms for this gear, from the game's own code (a Rigs on a stub, as test/tackle does)
 export function termsOf( c, id, kg, { dehooker = false } = {} ) {
 
+	// ((M19) a fly rod: its fly on, as the game puts it on (the fly rig's own branch of fightTerms, and its own leaders)
+	if ( c.fly ) {
+
+		const st = gearStats( { ...defaultUpgrades(), flyRod: { 8: 1, 10: 2, 12: 3 }[ c.fly ], flies: 3, landing: dehooker ? 2 : 1 } );
+		const r = Object.assign( Object.create( Rigs.prototype ), {
+			game: { state: { stats: st, leaderPick: null, baitPick: FLY_OF[ c.fly ] }, rod: { rig: 'fly', hookM: 0 }, hookBait: FLY_OF[ c.fly ] },
+			app: { boatCtl: { speed: 0 }, player: { riding: false }, boat: { chair: {} } },
+			inChair: false,
+			kit: null,
+		} );
+		return r.fightTerms( { species: id, kg } );
+
+	}
+
 	const u = { ...defaultUpgrades(), line: c.line, reel: c.reel, rod: c.hold === 'harness' ? 3 : 2, landing: dehooker ? 2 : 1, sfElectricReel: c.electric ? 1 : 0, sfChair: c.hold === 'chair' ? 1 : 0 };
 	const stats = gearStats( u, 'sportfisher' );
+	// ((M19) this line on this reel, as the combo names them, though the game would put a lighter one on a reel of a lower
+	// class: Gear's tackleOf; and the spool that reel holds of it)
+	stats.lineKg = UPGRADES.line.levels[ c.line ].lineKg;
+	stats.spoolM = spoolOf( c.reel, c.line );
 	const seat = {};
 	const r = Object.assign( Object.create( Rigs.prototype ), {
 		game: { state: { stats, leaderPick: null }, rod: { rig: c.electric ? 'drop' : 'troll', hookM: c.electric ? DEEP : 0 }, hookBait: null },
@@ -86,13 +114,25 @@ export function termsOf( c, id, kg, { dehooker = false } = {} ) {
 
 }
 
-export function fightOnce( c, id, kg, seed, { dehooker = false, policy = careful, capS = 3600 } = {} ) {
+// ((M19) the boat after the fish: her mate backing her down (c.mate: the closing speed he wants, Mate.mateTarget, reached
+// with her lag, MATE_LAG s, once he's had her helm and her stern round, MATE_ON s: the real sportfisher in Node took 4 s to
+// make speed astern and up to 17 s to bring her stern round, test/mate.mjs), or a second player at her helm (c.backing: the
+// crew's flat 0.4 m/s, Crew.BACKING). Hs: the sea, m)
+export const MATE_ON = 12, MATE_LAG = 3;
+export function fightOnce( c, id, kg, seed, { dehooker = false, policy = careful, capS = 3600, Hs = 0 } = {} ) {
 
 	const T = termsOf( c, id, kg, { dehooker } );
-	const g = new CatchMinigame( { species: id, kg, ...T, distance: c.electric ? DEEP : START[ c.hold ], rng: lcg( seed ) } );
-	let st = 'fighting';
-	const dt = 1 / 30;
-	while ( st === 'fighting' && g.time < capS ) st = g.update( dt, policy( g ) );
+	const g = new CatchMinigame( { species: id, kg, ...T, distance: c.electric ? DEEP : START[ c.fly ? 'fly' : c.hold ], rng: lcg( seed ) } );
+	let st = 'fighting', v = 0;
+	const dt = 1 / 30, k = 1 - Math.exp( - dt / MATE_LAG );
+	while ( st === 'fighting' && g.time < capS ) {
+
+		const want = c.mate && g.time > MATE_ON ? mateTarget( g.distance, g.landAt, Hs ) : c.backing || 0;
+		v += ( want - v ) * k;
+		st = g.update( dt, policy( g ), - v );
+
+	}
+
 	return { st: st === 'fighting' ? 'long' : st, t: g.time };
 
 }
@@ -119,6 +159,60 @@ export function cell( c, id, kg, n, opts = {} ) {
 }
 
 export const SPECIES = FISH_IDS.filter( ( id ) => ! FISH[ id ].hand && FISH[ id ].fight > 0 );
+
+// ((M19) the speargun: a fish on the shaft that fights (one not shot through the head, Game.updateSpear's `big`), on each gun
+// (S0 the starter to S3 the blue-water gun on its breakaway), pulled with care, on the game's own terms (Speargun.spearTerms)
+export const SPEAR_SPECIES = FISH_IDS.filter( ( id ) => FISH[ id ].spear && ! FISH[ id ].protected && FISH[ id ].fight > 0 );
+export const GUNS = UPGRADES.speargun.levels.map( ( l, i ) => `S${ i }` );
+export function spearOnce( level, id, kg, seed, { policy = careful, capS = 900 } = {} ) {
+
+	const T = spearTerms( gearStats( { ...defaultUpgrades(), speargun: level } ), { distance: 2.5 } );
+	const g = new CatchMinigame( { species: id, kg, ...T.terms, rng: lcg( seed ) } );
+	g.maxDistance = T.maxDistance;
+	let st = 'fighting';
+	while ( st === 'fighting' && g.time < capS ) st = g.update( 1 / 30, policy( g ) );
+	return { st: st === 'fighting' ? 'long' : st, t: g.time, far: g.distance };
+
+}
+
+export function spearCell( level, id, kg, n ) {
+
+	const r = { n, t: 0 };
+	for ( const k of OUT ) r[ k ] = 0;
+	let h = 0;
+	for ( let i = 0; i < id.length; i ++ ) h = ( h * 31 + id.charCodeAt( i ) ) >>> 0;
+	for ( let i = 0; i < n; i ++ ) {
+
+		const o = spearOnce( level, id, kg, ( h ^ ( Math.round( kg * 1000 ) * 2654435761 ) ^ ( i * 40503 ) ) >>> 0 );
+		r[ o.st ] ++;
+		if ( o.st === 'caught' ) r.t += o.t;
+
+	}
+
+	r.t = r.caught ? r.t / r.caught : 0;
+	for ( const k of OUT ) r[ k ] /= n;
+	return r;
+
+}
+
+export function spearSweep( { n = 10, species = SPEAR_SPECIES, sizes = SIZES } = {} ) {
+
+	const out = {};
+	for ( const id of species ) {
+
+		out[ id ] = {};
+		for ( const q of sizes ) {
+
+			const kg = sizeKg( id, q ), row = out[ id ][ q ] = { kg };
+			GUNS.forEach( ( k, l ) => row[ k ] = spearCell( l, id, kg, n ) );
+
+		}
+
+	}
+
+	return out;
+
+}
 
 export function sweep( { n = 10, species = SPECIES, sizes = SIZES, only = null, dh = true } = {} ) {
 
@@ -151,10 +245,11 @@ if ( process.argv[ 1 ] && fileURLToPath( import.meta.url ) === resolve( process.
 
 	};
 	const n = + arg( '--n', 10 );
-	const species = arg( '--species', null )?.split( ',' ) || SPECIES;
+	const spear = process.argv.includes( '--spear' );
+	const species = arg( '--species', null )?.split( ',' ) || ( spear ? SPEAR_SPECIES : SPECIES );
 	const t0 = Date.now();
 	const only = arg( '--only', null )?.split( ',' ) || null;
-	const res = sweep( { n, species, only, dh: ! process.argv.includes( '--no-dh' ) } );
+	const res = spear ? spearSweep( { n, species } ) : sweep( { n, species, only, dh: ! process.argv.includes( '--no-dh' ) } );
 	const json = arg( '--json', null );
 	const meta = { n, lines: UPGRADES.line.levels.map( ( l ) => [ l.label, + l.lineKg.toFixed( 3 ) ] ), reels: UPGRADES.reel.levels.map( ( l ) => [ l.label, l.dragKg === null ? null : + l.dragKg.toFixed( 3 ) ] ), s: ( Date.now() - t0 ) / 1000 };
 	if ( json ) {

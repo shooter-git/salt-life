@@ -1,4 +1,5 @@
 import { MathUtils, Vector3 } from '../../../engine/index.js';
+import { pedalling, poling } from './Pedal.js';
 
 // (M16) A paddle in the water: what drives and turns the kayak, in place of a propeller and a rudder. There's no
 // force here to tune as such: the stroke moves the blade through the water (its kinematics, below, the low-angle stroke
@@ -243,6 +244,10 @@ export function paddling( ctl, q ) {
 	// (a fish on: it tows her round, by the rod in your hands)
 	if ( st.tow.lengthSq() > 0 ) q.addForceAt( st.tow, ctl.toWorld( _rod, _bw ) );
 	st.step( ctl );
+	// ((M19) the Pilot pedalled, or poled stood up (Pedal.js): the paddle's laid by meanwhile (Seat), so none of what's below
+	// pushes her)
+	if ( ctl.model.drive === 'pedal' ) pedalling( ctl, q );
+	else if ( ctl.model.drive === 'pole' ) poling( ctl, q );
 	st.bladeAt( st._b );
 	// (the blade's speed through the kayak's frame)
 	if ( ! st._hasPrev ) st._prev.copy( st._b );

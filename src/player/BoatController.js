@@ -57,6 +57,19 @@ const CONTACT = { k: 400000, c: 30000, slide: 6000, pileK: 260000, pileC: 8000 }
 // turning circle, speed lost in turns, outward heel); running trim and rise with speed (the bow
 // lifts over the hump, then runs at a few degrees); prop walk astern. Grounding, pier piles and
 // mooring lines as before.
+// (M19) a trolling motor's thrust gone by this speed through the water (m/s: its prop's pitch speed, set so the console's top on
+// it is the sources' 4 knots, 498 N falling to 314 there: judgement), and how far the wheel turns it
+const TROLL_U = 5.5, TROLL_TURN = 0.9;
+const _tw = new THREE.Vector3(), _tf = new THREE.Vector3();
+// (M19) a stake's spring (rad/s: how stiffly it holds her, critically damped); and a gyro stabilizer's precession against her
+// roll, a damping of `roll` per second on her roll's inertia at rest, none past `fade` m/s through the water: a Seakeeper takes
+// 82 to 95% of a boat's roll at rest and less under way (docs/m19/sources-big-game.md). On the real sportfisher in Node,
+// knocked over at rest she rolls half as far with it (5.5 degrees, 2.8). Short of a Seakeeper's figure, which is for rolling
+// in a sea: her hull rights her slowly from a heel, and a damper slows a roll without changing the heel she settles at.
+// Judgement, docs/m19/big.md
+const STAKE_W = 2;
+const GYRO = { roll: 12, fade: 6 };
+
 export class BoatController {
 
 	constructor( { model, query, terrain, colliders } ) {
@@ -109,6 +122,20 @@ export class BoatController {
 		this.contact = { pile: 0, ground: 0, slide: 0, aground: false };
 		this.hauled = null; // (M13) on her cradle ashore (Marta's haul-out: { position, heading }), or null
 		this.beached = false; // ((M16) drawn up on the sand, where she lies out of the water: kayak/Shore.js)
+		this.beaching = false; // ((M19) being pulled up onto it, the moment before she's beached: KayakModel.leave)
+		// ((M19) staked: a pole (the kayak's stake-out pole, the console's Power-Poles) holding a point of her where it's driven
+		// into the bottom, { x, z } in the world, at: that point in her frame, yaw: her heading held too (two poles), or her
+		// left free to swing about it (one); null: none. Set by stream BOATS, held here (stake below)
+		this.stake = null;
+		// ((M19) on her trolling motor, in place of her engines: { n: its thrust (N), at: its prop in her frame, turn: how far the
+		// wheel turns it (rad) }, or null. Her engines' revs run down to nothing while it drives her (stream BOATS: the console's)
+		this.trolling = null;
+		// ((M19) a gyro stabilizer running, 0..1: her roll damped the more she's slow (stream BIG sets it from her fit and her
+		// generator; GYRO below)
+		this.gyro = 0;
+		// ((M19) someone at her helm who isn't a player: 'mate' (stream BIG's hired mate), or null. While set she's driven by
+		// them (driven true, their input through setInput)
+		this.helmsman = null;
 		this._acc = 0;
 		this._age = 0; // s since the latest read-back was issued
 
@@ -124,6 +151,8 @@ export class BoatController {
 	// Where she lies and what she's doing stay as they are; see App.setBoat
 	setModel( model ) {
 
+		// ((M19) another boat: the last one's pole and trolling motor aren't hers)
+		if ( this.model && this.model !== model ) this.stake = this.trolling = null;
 		this.model = model;
 		const hydro = model.hydro, H = this.handling = model.handling, E = H.engine;
 		this.mass = hydro.suggestedMass;
@@ -200,6 +229,19 @@ export class BoatController {
 	forward( out ) {
 
 		return out.set( 0, 0, 1 ).applyQuaternion( this.quaternion );
+
+	}
+
+	// (M19) her trolling motor's thrust at her bow, turned by the wheel (the motor turns, not a rudder), forward or astern as the
+	// lever is, falling to nothing at TROLL_U through the water, and nothing out of the water or on the bottom
+	_troll( q ) {
+
+		const T = this.trolling, at = this.toWorld( T.at, _tw ), wet = Math.min( 1, Math.max( 0, ( this.sampleWaterAt( at ) - at.y ) / 0.2 + 0.5 ) );
+		const run = this.driven && Math.abs( this.throttle ) > 0.02, ahead = Math.sign( this.throttle ) * q.u;
+		const n = run ? T.n * this.throttle * Math.max( 0, 1 - Math.max( 0, ahead ) / TROLL_U ) * wet : 0;
+		const a = this.steer * ( T.turn ?? TROLL_TURN );
+		q.addForceAt( _tf.copy( q.fwd ).multiplyScalar( Math.cos( a ) * n ).addScaledVector( q.side, Math.sin( a ) * n ), at );
+		this.thrust = n;
 
 	}
 
@@ -321,7 +363,7 @@ export class BoatController {
 
 		// engine: spools up after the lever (~0.9 s), a little slower down; idles while driven. (M10) Stalled
 		// at the helm, its revs run down in a moment
-		const run = this.driven && this.engineOn;
+		const run = this.driven && this.engineOn && ! this.trolling;
 		const lever = run ? Math.abs( this.throttle ) : 0;
 		const target = Math.max( lever, run ? 0.15 : 0 ) * this.cough;
 		const tau = target > this.rpm ? 0.9 : this.driven && ! run ? 0.35 : 1.3;
@@ -472,7 +514,8 @@ export class BoatController {
 		_q.comZ = this.com.z;
 		_q.wetD = wetD;
 		_q.torque = T;
-		H.propulsion( this, _q );
+		if ( this.trolling ) this._troll( _q );
+		else H.propulsion( this, _q );
 
 		// ---- running trim and rise: the bow lifts over the hump, then the hull runs at a few degrees
 		// with some dynamic lift (only while the hull is in the water)
@@ -482,7 +525,12 @@ export class BoatController {
 		// ---- small extra angular damping (appendages, bilge), scaled by wetness
 		const wd = 0.2 + wetD;
 		// the keel's lift resists roll in proportion to speed (a boat underway rolls much less)
-		_v.set( - aLoc.x * H.damping[ 0 ], - aLoc.y * H.damping[ 1 ], - aLoc.z * ( H.damping[ 2 ] + H.damping[ 3 ] * au ) ).multiplyScalar( wd ).applyQuaternion( this.quaternion );
+		// ((M19) and a gyro's, the more she's slow: GYRO)
+		// ((M19) and a gyro's precession against her roll, the more she's slow: GYRO, a damping rate of her roll's inertia)
+		const gyro = this.gyro > 0 ? this.gyro * GYRO.roll * Math.max( 0, 1 - au / GYRO.fade ) * this.inertia.z : 0;
+		_v.set( - aLoc.x * H.damping[ 0 ], - aLoc.y * H.damping[ 1 ], - aLoc.z * ( H.damping[ 2 ] + H.damping[ 3 ] * au ) ).multiplyScalar( wd );
+		_v.z -= aLoc.z * gyro;
+		_v.applyQuaternion( this.quaternion );
 		T.add( _v );
 		// ---- (Salt Life) righting past RIGHT_FROM: a torque turning her up toward upright
 		const tilt = Math.asin( Math.min( 1, Math.hypot( up.x, up.z ) ) );
@@ -516,6 +564,23 @@ export class BoatController {
 			let dy = this.mooring.heading - this.getYaw();
 			dy = Math.atan2( Math.sin( dy ), Math.cos( dy ) );
 			T.y += dy * ( M ? M.yawK : 60000 ) - this.angular.y * ( M ? M.yawC : 30000 );
+
+		} else if ( this.stake ) {
+
+			// ---- (M19) staked: a stiff spring holding her point `at` over the stake, critically damped for her mass (a pole
+			// driven into the sand gives a little and doesn't let go); one pole leaves her free to swing about it, two hold
+			// her heading as well
+			const S = this.stake, at = this.toWorld( S.at || this.stemHead, _p ), m = this.mass;
+			_vp.copy( this.angular ).cross( _r.copy( at ).sub( comW ) ).add( this.velocity );
+			addForceAt( _f.set( ( S.x - at.x ) * m * STAKE_W * STAKE_W - _vp.x * m * 2 * STAKE_W, 0, ( S.z - at.z ) * m * STAKE_W * STAKE_W - _vp.z * m * 2 * STAKE_W ), at );
+			if ( Number.isFinite( S.yaw ) ) {
+
+				let dy = S.yaw - this.getYaw();
+				dy = Math.atan2( Math.sin( dy ), Math.cos( dy ) );
+				const I = this.inertia.y;
+				T.y += dy * I * STAKE_W * STAKE_W - this.angular.y * I * 2 * STAKE_W;
+
+			}
 
 		} else if ( this.anchor ) {
 
@@ -635,6 +700,10 @@ export class BoatController {
 		this.sock = false;
 		this.hasWater = false; // (Salt Life: the water where she was is no use here)
 		this.beached = false;
+		this.beaching = false;
+		this.stake = null;
+		this.trolling = null;
+		this.helmsman = null;
 		if ( this.model.atHome ) this.model.atHome( this ); // ((M16) kept on the sand, not at the dock)
 
 	}

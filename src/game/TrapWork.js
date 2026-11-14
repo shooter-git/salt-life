@@ -8,7 +8,7 @@ import { WORLD } from '../world/WorldLayout.js';
 import { SEABED } from '../world/terrain/SeabedModel.js';
 import { SPRAY } from '../fx/Spray.js';
 import { TrapMeshes, TRAP, STOW, stowMatrix, stowWear, trapColliders } from '../world/boat/TrapModel.js';
-import { BAIT, BOTTOMS, HAULER_MS, HAUL_SPEED, TRAP_PRICE, WARP_M, aboardTraps, baitSaid, bottomAt, buoyColours, buoyOffset, buoyRecord, buyBait, cleanBuoys, haulOf, ownedTraps, settle, soakOf, trapsTold, whyNot } from './Traps.js';
+import { BAIT, BOTTOMS, HAUL_SPEED, haulS, TRAP_PRICE, WARP_M, aboardTraps, baitSaid, bottomAt, buoyColours, buoyOffset, buoyRecord, buyBait, cleanBuoys, haulOf, ownedTraps, settle, soakOf, trapsTold, whyNot } from './Traps.js';
 
 // (M16) Lobster traps, at the rail of the boat that has the hauler and davit, and out on the sea (the rules: Traps.js; what's
 // drawn: world/boat/TrapModel.js). Standing by the hauler with one aboard, E sets it over the side where the bottom suits, its warp
@@ -21,7 +21,7 @@ import { BAIT, BOTTOMS, HAULER_MS, HAUL_SPEED, TRAP_PRICE, WARP_M, aboardTraps, 
 // how it went, and what came up in it), and everyone sees it done: her stack on her deck and the work at her rail, out of her
 // owner's poses ('ts', 'tj'), drawn on her copy on every game. Anyone else's buoys are still theirs, not yours to touch.
 //   const w = new TrapWork( game );  w.update( dt, lDown );  w.boatChanged();  w.buyNew()  w.buyBait()
-// (M17) Each set with a trap's worth of bait if you have it (Marta's: Traps.BAIT), used up in its soak, and said as it comes up.
+// (M17) Each set with a trap's worth of bait if you have it (Marta's, (M19) Joe's now: Traps.BAIT), used up in its soak, and said as it comes up.
 //   w.asked( body, from, them )  w.told( body, from )  (Together's messages)   w.wire() -> what her owner's poses carry
 
 const NIGHT_SAID = ( n ) => n < 0.5 ? 'not a night down yet' : n < 1.5 ? 'a night down' : `${ Math.round( n ) } nights down`;
@@ -32,6 +32,8 @@ const LEFT_M = 90; // and again once you've been this far off
 const REACH = { low: [ 240, 45 ], mid: [ 360, 60 ], high: [ 460, 70 ] }; // how far buoys, and traps on the bottom, are drawn (m)
 const ABOARD_M = 90; // and those on her deck
 const BOB_N = 8; // the nearest this many ride the waves
+// (M19) a trap's set only with a crawfish trap permit, a Bahamian's (Gear's trapPermit): what you're told without one
+const NO_PERMIT = 'A trap needs a crawfish trap permit · $50 at Marta\'s';
 const SETTLE_S = 15; // how often the weather's reckoned
 
 const _m = new Matrix4(), _n = new Matrix4(), _p = new Vector3(), _q = new Quaternion(), _s = new Vector3( 1, 1, 1 ), _a = new Vector3(), _b = new Vector3(), _c = new Vector3(), _y = new Vector3( 0, 1, 0 ), _qi = new Quaternion(), _e = new Vector3();
@@ -322,7 +324,8 @@ export class TrapWork {
 
 		_b.copy( a.over ).applyMatrix4( boat );
 		const depth = this.depthAt( _b.x, _b.z ), id = this.bottom( _b.x, _b.z ), dock = WORLD.boatDock.position;
-		const why = c.moored || c.hauled ? 'Not at the dock: take her out' : whyNot( { depth, bottom: id, speed: c.speed, dock: Math.hypot( _b.x - dock.x, _b.z - dock.z ) } );
+		// ((M19) a trap's set only with a crawfish trap permit: a Bahamian's, $50 at Marta's)
+		const why = ! game.state.stats.trapPermit ? NO_PERMIT : c.moored || c.hauled ? 'Not at the dock: take her out' : whyNot( { depth, bottom: id, speed: c.speed, dock: Math.hypot( _b.x - dock.x, _b.z - dock.z ) } );
 		if ( why ) {
 
 			p.prompt = { key: ELLIPSIS, text: why };
@@ -574,7 +577,7 @@ export class TrapWork {
 			if ( ! aboard ) return no( 'None of her traps aboard' );
 			_b.copy( this.at.over ).applyMatrix4( W );
 			const depth = this.depthAt( _b.x, _b.z ), id = this.bottom( _b.x, _b.z ), dock = WORLD.boatDock.position;
-			const why = whyNot( { depth, bottom: id, speed: c.speed, dock: Math.hypot( _b.x - dock.x, _b.z - dock.z ) } );
+			const why = ! game.state.stats.trapPermit ? NO_PERMIT : whyNot( { depth, bottom: id, speed: c.speed, dock: Math.hypot( _b.x - dock.x, _b.z - dock.z ) } );
 			if ( why ) return no( why );
 			const said = this._startSet( _b.x, _b.z, depth, id, aboard, from, name );
 			this._tell( from, { k: 'set', ok: true, t: said } );
@@ -674,7 +677,7 @@ export class TrapWork {
 
 		}
 
-		const unbaited = trap.bait === false ? ' · no bait in it: it\'ll fish about a third as well. Marta sells it' : '';
+		const unbaited = trap.bait === false ? ' · no bait in it: it\'ll fish about a third as well. Joe sells it' : ''; // ((M19) his now)
 		game.toast( `${ mark ? `Trap ${ mark.id } on your chart · ${ this.traps.set.length } set, leave it overnight: the first night brings most of it` : 'Your chart has no room for its mark: note where it is' }${ unbaited }`, 3600 + ( unbaited ? 1400 : 0 ) );
 
 	}
@@ -743,7 +746,8 @@ export class TrapWork {
 				j.t = 0;
 				if ( A && A.haulerRun ) A.haulerRun( true );
 				this._boat.group.updateWorldMatrix( true, false );
-				j.total = Math.max( 1, ( _a.copy( this.at.block ).applyMatrix4( this._boat.group.matrixWorld ).y - TRAP.H - 0.3 - j.bottom ) / HAULER_MS );
+				// ((M19) at her hauler's speed: the bigger head and pump, Gear's hauler)
+				j.total = haulS( _a.copy( this.at.block ).applyMatrix4( this._boat.group.matrixWorld ).y - TRAP.H - 0.3 - j.bottom, this.game.state.stats.haulerMs );
 
 			}
 
@@ -889,7 +893,7 @@ export class TrapWork {
 			} else {
 
 				const name = FISH[ species ].name, size = x.lobster ? `${ ( info.cm * CARAPACE / 2.54 ).toFixed( 2 ) } in carapace` : '';
-				const why = { short: 'short, over the side', berried: 'carrying eggs, over the side she goes' }[ info.why ] || ( info.bag && info.bag.full ? 'your bag\'s full today, over the side' : ! info.kept ? 'no room, over the side' : `$${ info.value }` );
+				const why = { short: 'short, over the side', berried: 'carrying eggs, over the side she goes' }[ info.why ] || ( info.bag && info.bag.full ? 'your bag\'s full today, over the side' : info.aboard ? '250 lb of them aboard, the most she may carry: over the side' : ! info.kept ? 'no room, over the side' : `$${ info.value }` );
 				game.toast( [ name, size, why ].filter( Boolean ).join( ' · ' ), 3200 );
 
 			}
@@ -905,7 +909,7 @@ export class TrapWork {
 
 	}
 
-	// ---- (M17) Marta's: a bag of bait, for Traps.BAIT.per traps
+	// ---- (M17) Marta's ((M19) Joe's): a bag of bait, for Traps.BAIT.per traps
 	buyBait() {
 
 		const st = this.game.state, cost = buyBait( this.traps, st.money );

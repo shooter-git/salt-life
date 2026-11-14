@@ -1,5 +1,6 @@
 import { MathUtils, Vector3 } from '../engine/index.js';
 import { farOff } from '../game/Units.js';
+import { nearestOnWeed } from '../game/Finds.js';
 
 // (M16) A boat's crew. Anyone aboard takes a job by going where it's done: the helm (hers, or with her owner aboard and
 // away from it, anyone's who rides along: the owner's game still runs her, on their input), up the tower spotting, or in
@@ -51,19 +52,22 @@ export const clockFrom = ( yaw, dx, dz ) => {
 
 };
 
+const _on = { x: 0, z: 0, t: 0 };
 export function spotted( finds, cam, look ) {
 
 	let best = null, score = LOOK;
 	const flat = Math.hypot( look.x, look.z ) || 1;
 	for ( const kind of Object.keys( CALLS ) ) for ( const f of finds[ kind ] || [] ) {
 
-		const dx = f.x - cam.x, dz = f.z - cam.z, d = Math.hypot( dx, dz );
+		// ((M19) a weedline by the part of it nearest: it has no x and z of its own, so none was ever called)
+		const at = f.x0 !== undefined ? nearestOnWeed( f, cam.x, cam.z, _on ) : f;
+		const dx = at.x - cam.x, dz = at.z - cam.z, d = Math.hypot( dx, dz );
 		if ( d < 40 || d > CALLS[ kind ].far ) continue;
 		const k = ( dx * look.x + dz * look.z ) / ( d * flat );
 		if ( k > score ) {
 
 			score = k;
-			best = { kind, x: f.x, z: f.z, d };
+			best = { kind, x: at.x, z: at.z, d };
 
 		}
 

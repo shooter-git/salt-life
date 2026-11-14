@@ -1,9 +1,13 @@
 // (M16) Shoots the center console on her own from the given views, through a dev server on 5202, with Playwright on SwiftShader:
 //   tools/render-slot.sh node tools/console/look.mjs out-dir [ view ... ]
-// and if given a photo by url for a view, sets it beside the render (viewed, not saved: the page fetches it for the sheet)
-import { chromium } from '/home/shooter/Documents/VS Code/all-the-spaces/node_modules/playwright/index.mjs';
+// and if given a photo by url for a view, sets it beside the render (viewed, not saved: the page fetches it for the sheet).
+// ((M19) All the Spaces' Playwright where ALL_THE_SPACES says (beside this checkout by default), the server's port LOOK_PORT;
+// BOAT_JS run on the page first, e.g. to fit her: window.boat.fit( { tTop: true, trollingN: 498 } ))
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+const ATS = process.env.ALL_THE_SPACES || path.join( fileURLToPath( new URL( '../..', import.meta.url ) ), '../all-the-spaces' );
+const { chromium } = await import( path.join( ATS, 'node_modules/playwright/index.mjs' ) );
 
 const [ out, ...names ] = process.argv.slice( 2 );
 // eye and target in her frame (+Z bow, +X port)
@@ -36,7 +40,7 @@ const b = await chromium.launch( { args: [ '--use-angle=swiftshader', '--enable-
 const p = await b.newPage( { viewport: { width: 1100, height: 720 } } );
 p.on( 'pageerror', ( e ) => console.log( 'ERROR', e.message ) );
 p.on( 'console', ( m ) => { if ( [ 'error', 'warning' ].includes( m.type() ) && ! /GPU stall|ReadPixels/.test( m.text() ) ) console.log( m.type(), m.text().slice( 0, 400 ) ); } );
-await p.goto( 'http://127.0.0.1:5202/tools/console/look.html' );
+await p.goto( `http://127.0.0.1:${ process.env.LOOK_PORT || 5202 }/tools/console/look.html` );
 await p.waitForFunction( () => window.ready, null, { timeout: 120000 } ).catch( ( e ) => console.log( e.message ) );
 console.log( JSON.stringify( await p.evaluate( () => window.info() ) ) );
 if ( process.env.BOAT_JS ) await p.evaluate( process.env.BOAT_JS );

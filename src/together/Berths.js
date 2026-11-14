@@ -1,7 +1,7 @@
 import { BoxGeometry, MathUtils } from '../engine/index.js';
 import { TIDE_HIGHEST, TIDE_LOWEST } from '../game/IslandClock.js';
 import { berthOf } from '../game/fleet/Berths.js';
-import { CRADLE, SPARE_YARD, YARD } from '../world/village/StormPlaces.js';
+import { CRADLE, SPARE_YARD, THIRD_YARD, YARD } from '../world/village/StormPlaces.js';
 import { mat4, mergePrepared, prepare } from '../world/boat/GeoKit.js';
 
 // (M16) Marta's dock holding more than yours. Everyone's boat lies at the same berth on their own device (the pier
@@ -109,10 +109,11 @@ export function inTheYard( id, x, z ) {
 }
 
 // the yard's second cradle for her: { kind: 'yard', x, z, heading, rise } (rise: m the ground under her keel's higher there
-// than under her own, so she sits on her blocks as high over it)
-export function spareYard( id, terrain ) {
+// than under her own, so she sits on her blocks as high over it). ((M19) n: those of her kind already given one; the second
+// visitor's is the third cradle, THIRD_YARD, and past that there's none)
+export function spareYard( id, terrain, n = 0 ) {
 
-	const c = yardOf( id ), s = SPARE_YARD[ id ], L = { kayak: 3.7, console: 7, lobster: 8.2, sportfisher: 14.6 }[ id ];
+	const c = yardOf( id ), s = [ SPARE_YARD, THIRD_YARD ][ n ]?.[ id ], L = { kayak: 3.7, console: 7, lobster: 8.2, sportfisher: 14.6 }[ id ];
 	if ( ! c || ! s ) return null;
 	const under = ( p ) => {
 

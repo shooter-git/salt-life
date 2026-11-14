@@ -8,7 +8,8 @@ import { islandTime, towardOf, weatherHere, hurricaneNews } from './Weather.js';
 import { FT, feet, farOff, pounds, knots, gallons } from './Units.js';
 import { FLEET } from './fleet/Fleet.js';
 import { berthOf } from './fleet/Berths.js';
-import { ableOf, ableEnv, awashLs, seaHere, fetchAt, strainOf, windOn, slamK, keepCatch, feedOf, strengthOf, meltKgH, holdWord, GENERATOR_LH, CHILL_KG, ICE_BAG_KG, ICE_BAG_PRICE, STORES_PRICE, STORES_WATER_L, LUNCH_H, DRY_H, FRESH_H, FLARES, FLARE_M, EPIRB_S, PASSING_H, reachTo, boxBars, iceSaid } from './Seaworthy.js';
+import { ableOf, ableEnv, awashLs, seaHere, fetchAt, strainOf, windOn, slamK, keepCatch, feedOf, strengthOf, meltKgH, holdWord, GENERATOR_LH, CHILL_KG, ICE_BAG_KG, ICE_BAG_PRICE, STORES_PRICE, STORES_WATER_L, LUNCH_H, DRY_H, FRESH_H, FLARES, FLARE_M, EPIRB_S, PASSING_H, reachTo, boxBars, iceSaid, inSight, SHORE_AERIAL, SHORE_VHF_H, VHF_CLEAR, WATCHERS, FLARE_UP } from './Seaworthy.js';
+import { pearlJob } from './Help.js';
 
 // (M16) Days out, and what each boat can stand: ice and the catch keeping, stores, sleeping aboard, flares and the EPIRB,
 // the drift sock, the deep finder's screen. The figures are Seaworthy.js'. Game makes one and calls update each frame; what
@@ -16,7 +17,7 @@ import { ableOf, ableEnv, awashLs, seaHere, fetchAt, strainOf, windOn, slamK, ke
 //   d.update( dt, inp, p )   d.strain: how she's being worked here (Seaworthy.strainOf)
 //   d.sleep()                turning in, at a bunk (Vessel.bunks) or from the clock's menu
 //   d.noRest                 too far out to rest, with no bunks aboard (TimeHUD)
-//   d.shopRows() d.bindShop( el )   Marta's ice and stores
+//   d.shopRows() d.bindShop( el )   Marta's stores; ((M19) d.iceRow( trust ): Joe's ice, and his ice chest out of hours)
 //   d.distress() d.fire( kind )     the radio panel's flares and EPIRB (Radio.js)
 //   d.sonar( depth, rich )   what the finder reads (Game.updateBoat)
 //   d.awayHours( h )         the box over hours you weren't there -> how many fish went off (App.pickUp)
@@ -35,6 +36,8 @@ const BUNK_M = 1.6, LOOK_S = 1;
 const SOCK_OUT = 26;
 // a flare's climb (m/s, m) and burn (s)
 const FLARE = { rise: 28, up: 120, burn: 8 };
+// (M19) s of play a gyro takes to spin up (a Seakeeper's 21 minutes at the island's 36 times: docs/m19/sources-big-game.md)
+const GYRO_SPIN = 35;
 // (M17) A red meteor as it's seen (docs/m17/looks.md): its light (cd: a 12-gauge red meteor's, 16,000; SOLAS's parachute rocket is
 // 30,000), the eye's least at night (lux: COLREGS' 2e-7), and from how near it's at its brightest, by night and by day (m). Its
 // brightness goes by Allard's law, I T^d / d^2, the air's T worked out so that it's at the eye's least where Seaworthy's
@@ -222,9 +225,31 @@ export class DaysOut {
 	}
 
 	// ---- per frame
+	// (M19) the sportfisher's gyro stabilizer (Gear.js' sfGyro): on her generator, out at sea, with fuel to run it; at her
+	// berth or on the hard, off. It spins up as a Seakeeper does, over about 21 minutes, 35 s of play at the island's 36 times
+	// (GYRO_SPIN), and down again as fast: BoatController.gyro, 0..1
+	gyroWanted() {
+
+		const s = this.state.stats, b = this.app.boatCtl;
+		return !! ( s.gyro && s.generator && this.app.boat && this.app.boat.id === 'sportfisher' && b && ! b.moored && ! b.hauled && this.state.fuelL > 0 );
+
+	}
+
+	_gyro( dt ) {
+
+		const b = this.app.boatCtl;
+		if ( ! b ) return;
+		const want = this.gyroWanted() ? 1 : 0;
+		b.gyro = want ? Math.min( 1, ( b.gyro || 0 ) + dt / GYRO_SPIN ) : Math.max( 0, ( b.gyro || 0 ) - dt / GYRO_SPIN );
+
+	}
+
 	update( dt, inp, p ) {
 
+		this._gyro( dt ); // ((M19))
+
 		this._clock( dt );
+		this._settle(); // ((M19) on the sea where it is)
 		if ( ( this._lookT -= dt ) <= 0 ) {
 
 			this._lookT = LOOK_S;
@@ -236,6 +261,35 @@ export class DaysOut {
 		this._updateFlare( dt );
 		this._screen( dt );
 		if ( this.float && this.float.visible && ! this.app.boatCtl.sock ) this.sockIn();
+
+	}
+
+	// (M19) She floats where the sea is (stream CHECKS: docs/m19/checks.md, tools/checks/tide-rest.mjs). Her own height over the
+	// water under her (the CPU's) is kept on quiet frames; for a few frames after the clock's jumped (a rest) or a tow's put her
+	// somewhere (settleSoon), she's set at it over the water where she is, nothing rising or falling. Before, a rest left her where
+	// the old sea had her: moored at her berth from low water to dusk, 0.49 m under the risen sea, flung up at 1.6 m/s.
+	_settle() {
+
+		const b = this.app.boatCtl, q = this.app.query;
+		if ( ! b || ! q || b.hauled || b.beached ) return;
+		const w = q.heightAt( b.position.x, b.position.z, G.time.value );
+		if ( this._settleN > 0 ) {
+
+			this._settleN --;
+			b.position.y = w + ( this._overW ?? 0 );
+			b.velocity.y = 0;
+			b.angular.set( 0, b.angular.y, 0 );
+			return;
+
+		}
+
+		if ( Math.abs( b.velocity.y ) < 0.3 ) this._overW = this._overW === undefined ? b.position.y - w : this._overW + ( b.position.y - w - this._overW ) * 0.05;
+
+	}
+
+	settleSoon() {
+
+		this._settleN = 3;
 
 	}
 
@@ -306,7 +360,8 @@ export class DaysOut {
 
 		const st = this.state, box = this.box, s = st.stats, had = new Map( st.inventory.map( ( f ) => [ f, f.value ] ) ), her = this.her;
 		const b = this.app.boatCtl, shore = ! b || b.moored || b.hauled, makes = this._makes();
-		if ( makes && ! shore ) st.burn( GENERATOR_LH * hours );
+		// ((M19) one generator for her icemaker and her gyro: GYRO_SPIN)
+		if ( ( makes || this.gyroWanted() ) && ! shore ) st.burn( GENERATOR_LH * hours );
 		const own = keepCatch( her ? [] : st.inventory, box.ice, hours, meltKgH( s.holdKg, s.insulated ), makes );
 		const room = s.holdKg - ( her ? 0 : own.fish.reduce( ( kg, f ) => kg + f.kg, 0 ) ) - this.guestsKg;
 		box.ice = Math.min( own.ice, Math.max( 0, room ) ); // ((v2.3.0) and a box an icemaker overfilled before is put right)
@@ -347,11 +402,12 @@ export class DaysOut {
 
 		} else if ( this.app.player.mode === 'walk' || ( this.aboard && b.moored ) ) {
 
-			if ( d.out > 0 || d.dry > 0 || d.flares < FLARES ) {
+			if ( d.out > 0 || d.dry > 0 || d.flares < FLARES || d.mate > 0 ) {
 
 				d.out = 0;
 				d.dry = 0;
 				d.flares = FLARES;
+				d.mate = 0; // ((M19) a new trip, a new day for the mate: rigs/Mate.js)
 				st.save();
 
 			}
@@ -516,6 +572,7 @@ export class DaysOut {
 
 		}
 
+		this.settleSoon(); // ((M19) on the sea the clock's brought, where she is now)
 		if ( aboard ) this._toldAboard( story, left, woke );
 		else {
 
@@ -560,17 +617,25 @@ export class DaysOut {
 
 	}
 
-	// ---- Marta's ice and stores
-	shopRows() {
+	// ---- Marta's ice and stores ((M19) Joe's ice)
+	// ((M19) Marta's: what your boat can stand and her stores; the ice is Joe's now, iceRow, unless ice: true)
+	shopRows( { ice = false } = {} ) {
 
-		const st = this.state, box = this.box, s = st.stats, A = ableOf( st.boat ), room = Math.max( 0, s.holdKg - st.holdKg - this.guestsKg - box.ice );
-		const melt = meltKgH( s.holdKg, s.insulated ), hrs = box.ice / melt;
+		const st = this.state, box = this.box, A = ableOf( st.boat );
 		const boat = BOATS[ st.boat ].name.toLowerCase();
-		const ice = `<div class="gm-shop-row"><span>Ice · $${ ICE_BAG_PRICE } a 10 lb bag<small>${ box.ice > 0 ? `${ pounds( box.ice ) } lb in the box, about ${ Math.max( 1, Math.round( hrs ) ) } hours of it` : 'None in the box: the catch keeps about 12 hours without it' }</small></span><button class="gm-btn" data-ice ${ st.money < ICE_BAG_PRICE || room < ICE_BAG_KG ? 'disabled' : '' }>${ room < ICE_BAG_KG ? 'No room' : `Bag · $${ ICE_BAG_PRICE }` }</button></div>`;
 		const full = box.stores >= A.storesDays - 0.01;
 		const stores = `<div class="gm-shop-row"><span>Food and water · $${ STORES_PRICE } a day<small>${ box.stores >= 0.05 ? `${ box.stores.toFixed( 1 ) } of ${ A.storesDays } days aboard` : `A day's food and ${ gallons( STORES_WATER_L ) } gallons of water, for staying out past a day · her lockers hold ${ A.storesDays } day${ A.storesDays === 1 ? '' : 's' }` }</small></span>${ full ? '<span class="gm-have">Full</span>' : `<button class="gm-btn" data-stores ${ st.money < STORES_PRICE ? 'disabled' : '' }>A day · $${ STORES_PRICE }</button>` }</div>`;
 		const stands = `<div class="gm-shop-row"><span>What your ${ boat } can stand<small>${ A.waters }</small></span></div>`;
-		return stands + ice + stores;
+		return stands + ( ice ? this.iceRow() : '' ) + stores;
+
+	}
+
+	// (M19) ice for her box, by the 10 lb bag: Joe's, and out of hours from the chest by his night box, on trust (trust: true)
+	iceRow( trust = false ) {
+
+		const st = this.state, box = this.box, s = st.stats, room = Math.max( 0, s.holdKg - st.holdKg - this.guestsKg - box.ice );
+		const melt = meltKgH( s.holdKg, s.insulated ), hrs = box.ice / melt;
+		return `<div class="gm-shop-row"><span>Ice · $${ ICE_BAG_PRICE } a 10 lb bag${ trust ? ' · from his ice chest, on trust' : '' }<small>${ box.ice > 0 ? `${ pounds( box.ice ) } lb in the box, about ${ Math.max( 1, Math.round( hrs ) ) } hours of it` : 'None in the box: the catch keeps about 12 hours without it' }</small></span><button class="gm-btn" data-ice ${ st.money < ICE_BAG_PRICE || room < ICE_BAG_KG ? 'disabled' : '' }>${ room < ICE_BAG_KG ? 'No room' : `Bag · $${ ICE_BAG_PRICE }` }</button></div>`;
 
 	}
 
@@ -645,10 +710,30 @@ export class DaysOut {
 		if ( room && room.others && room.others.size ) room.session.send( 'flare', [ Math.round( b.position.x ), Math.round( b.position.z ) ] );
 		const night = G.night.value > 0.35, reach = ( night ? FLARE_M.night : FLARE_M.day ) * ( w ? Math.min( 1, w.visibility ) : 1 );
 		const t = app.together, near = t && t.others && t._inSight && t._inSight();
-		const seen = Math.hypot( b.position.x - ISLE.x, b.position.z - ISLE.z ) < reach || !! near;
+		const seen = this.flareSeen( b.position.x, b.position.z, reach ) || !! near; // ((M19) from the village or Pearl's camp)
 		if ( seen ) setTimeout( () => this.rescue( metres, 'Somebody saw your flare and called it in. Marta came out for you', 600 ), FLARE.burn * 600 );
 		else g.toast( `Nobody saw it · ${ d.flares } left`, 3200 );
 		return seen;
+
+	}
+
+	// (M19) can her set raise who's aerial ('marta' | 'pearl') over the island: no ridge between (Seaworthy.inSight, a set's VHF_CLEAR)?
+	// (how far it reaches is reachTo's)
+	radioSees( who ) {
+
+		const t = this.app.terrainData, A = SHORE_AERIAL[ who ], b = this.app.boatCtl, sea = G.seaLevel.value;
+		if ( ! t || ! A || ! b ) return true;
+		const h = ( this.state.stats && this.state.stats.vhfH ) || 1;
+		return inSight( ( x, z ) => t.heightAt( x, z ), { x: b.position.x, y: sea + h, z: b.position.z }, { x: A.x, y: sea + SHORE_VHF_H[ who ], z: A.z }, VHF_CLEAR );
+
+	}
+
+	// (M19) a flare going up from ( x, z ) is seen from the village or Pearl's camp (Seaworthy.WATCHERS): one in its reach (m)
+	// with the meteor's height over the hills in sight
+	flareSeen( x, z, reach ) {
+
+		const t = this.app.terrainData, top = { x, y: G.seaLevel.value + FLARE_UP, z };
+		return Object.values( WATCHERS ).some( ( w ) => Math.hypot( x - w.x, z - w.z ) < reach && ( ! t || inSight( ( a, b ) => t.heightAt( a, b ), { x: w.x, y: t.heightAt( w.x, w.z ) + w.eye, z: w.z }, top ) ) );
 
 	}
 
@@ -660,6 +745,7 @@ export class DaysOut {
 
 			if ( p.mode === 'boat' && p.boat === b ) p.leaveHelm();
 			b.reset();
+			this.settleSoon(); // ((M19) on the water at her berth, as she floated)
 			if ( p.mode === 'deck' && p.boat === b ) p.deckToWorld();
 			g.toast( `${ said } · ${ paid < fee ? `she took the $${ paid } you had` : `$${ paid }` }`, 5600 );
 			// (her time out to you and back with you in tow)
@@ -690,7 +776,10 @@ export class DaysOut {
 
 		const b = this.app.boatCtl, st = this.state, s = st.stats, why = this.aboard ? this.trouble() : null;
 		const dock = berthOf( this.state.boat ).position, metres = Math.hypot( b.position.x - dock.x, b.position.z - dock.z );
-		const canCall = ( reachTo( s ) >= metres ) || s.epirb || ( s.flares && st.days.flares > 0 );
+		// ((M19) a set raises Marta in its reach and with the island's ridge not between, or Pearl, open, on the north side)
+		const pj = s.vhfH > 0 ? pearlJob( this.game ) : null;
+		const radio = ( reachTo( s ) >= metres && this.radioSees( 'marta' ) ) || ( !! pj && pj.open && pj.metres <= reachTo( s, 'pearl' ) && this.radioSees( 'pearl' ) );
+		const canCall = radio || s.epirb || ( s.flares && st.days.flares > 0 );
 		if ( ! why || canCall ) {
 
 			this._stranded = 0;
@@ -757,6 +846,9 @@ export class DaysOut {
 		if ( ! Array.isArray( at ) || ! at.every( Number.isFinite ) ) return;
 		const m = Math.hypot( at[ 0 ] - c.x, at[ 1 ] - c.z ), reach = ( G.night.value > 0.35 ? FLARE_M.night : FLARE_M.day ) * ( w ? Math.min( 1, w.visibility ) : 1 );
 		if ( m > reach ) return;
+		// ((M19) and over the island's hills from where you are)
+		const t = app.terrainData;
+		if ( t && ! inSight( ( x, z ) => t.heightAt( x, z ), c, { x: at[ 0 ], y: G.seaLevel.value + FLARE_UP, z: at[ 1 ] } ) ) return;
 		this._launch( at[ 0 ], at[ 1 ] );
 		this.game.toast( `${ name || 'Someone' } has fired a distress flare, ${ farOff( m ) } off`, 5200 );
 

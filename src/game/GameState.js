@@ -6,6 +6,7 @@ import { repairFee } from './Hull.js';
 import { FLEET, TRADE, SALE, MONTH, MOST_MONTHS, DUES_LEAVE, gearWorth, monthly, cleanName, paintOf, kindOf } from './fleet/Fleet.js';
 import { cleanTrophies } from './Trophies.js';
 import { cleanLog } from './LifeList.js';
+import { counts as classCounts, beats as classBeats } from './LineClass.js';
 import { ordersOf, orderPrice } from './Orders.js';
 import { WEEK_MUL } from './WeekOrder.js';
 import { BAITS, KEEPER_KG, baitOf, chunksOf } from './Bait.js';
@@ -32,6 +33,19 @@ const newBoat = ( b = {} ) => ( {
 // Everything the player owns: wallet, the fish in the cooler / hold, the fish log and the gear
 // levels. Saved to localStorage (per browser) after every change; storage can be missing or throw
 // (private windows, blocked site data), so every access is guarded and the game runs without it.
+// (M19) the save's challenges read back (Challenges.js): { day, done: { rod, spear, net: true }, owed }
+const CHALLENGE_IDS = [ 'rod', 'spear', 'net' ];
+export function cleanChallenges( c ) {
+
+	const out = { day: null, done: {}, owed: 0 };
+	if ( ! c || typeof c !== 'object' ) return out;
+	out.day = Number.isInteger( c.day ) ? c.day : null;
+	for ( const k of CHALLENGE_IDS ) if ( c.done && c.done[ k ] === true ) out.done[ k ] = true;
+	out.owed = Number.isFinite( c.owed ) && c.owed > 0 ? Math.round( c.owed ) : 0;
+	return out;
+
+}
+
 export class GameState {
 
 	constructor( storage = safeStorage() ) {
@@ -76,6 +90,10 @@ export class GameState {
 		this.chart = new ChartLog(); // ((M15) the chart you fill in: Chart.js)
 		this.days = cleanDays(); // ((M16) ice, stores, how long you've been out: DaysOut.js)
 		this.traps = newTraps(); // ((M16) your lobster traps out on the sea: Traps.js)
+		// ((M19) Pearl's day's challenges, stream STALLS' (Challenges.js): the trading day they're for, which of the rod's, the
+		// speargun's and the cast net's are done, and what she owes you for them
+		this.challenges = { day: null, done: {}, owed: 0 };
+		this._catchFns = []; // ((M19) onCatch's listeners)
 		this._nextId = 1;
 		this.listeners = new Set();
 		this.boxIs = null; // ((v2.3.0) () => the box your catch goes in: DaysOut.boxOf. box() has it)
@@ -343,6 +361,15 @@ export class GameState {
 	}
 
 	// room in the cooler / hold for a fish of `kg`?
+	// (M19) kg of this kind aboard, in the cooler and the hold (FishTable's aboardKg: the most there may be)
+	aboardKg( species ) {
+
+		let kg = 0;
+		for ( const f of this.inventory ) if ( f.species === species ) kg += f.kg;
+		return kg;
+
+	}
+
 	fits( kg ) {
 
 		return this.shortOf( kg ) <= 1e-6;
@@ -356,21 +383,27 @@ export class GameState {
 	// day: the island's day, for a kind with a bag limit (one over it is let go: lastCatch.bag); release:
 	// why one that may be kept is let go all the same ('short', 'berried': lastCatch.why)
 	// (M15) place: where it was caught (Places.js), or null; the first fish there is noted (firstAt)
-	addFish( species, kg, timeOfDay = 12, { method = 'rod', cm = null, day = null, release = null, place = null } = {} ) {
+	addFish( species, kg, timeOfDay = 12, { method = 'rod', cm = null, day = null, release = null, place = null, rig = null, cls = null } = {} ) {
 
 		kg = Math.round( kg * 100 ) / 100;
 		cm = Math.round( cm ?? fishLengthCm( species, kg ) );
-		const { newSpecies, record, prevBestKg, prevBestCm } = this.logFish( species, kg, cm, day, place );
+		const { newSpecies, record, prevBestKg, prevBestCm, clsRecord } = this.logFish( species, kg, cm, day, place, cls );
 		const firstAt = this.logPlace( place, species, day );
 		const value = fishValue( species, kg );
 		const released = !! FISH[ species ].protected || !! release;
 		const max = day !== null ? FISH[ species ].bag || 0 : 0;
 		const full = max > 0 && ! released && this.bagged( species, day ) >= max;
-		const kept = ! released && ! full && this.fits( kg );
+		// ((M19) no more of it aboard than the law allows: the crawfish's 250 lb)
+		const most = FISH[ species ].aboardKg || 0, laden = most > 0 && ! released && ! full && this.aboardKg( species ) + kg > most;
+		const kept = ! released && ! full && ! laden && this.fits( kg );
 		if ( kept && max ) this.bagOne( species, day );
 		const bag = max ? { n: this.bagged( species, day ), max, full } : null;
 		const why = release || ( FISH[ species ].protected ? 'protected' : null );
-		this.lastCatch = { species, kg, cm, value, newSpecies, record, prevBestKg, prevBestCm, kept, released, why, method, bag, at: timeOfDay, day, place, firstAt };
+		const aboard = laden ? { max: most } : null;
+		this.lastCatch = { species, kg, cm, value, newSpecies, record, prevBestKg, prevBestCm, kept, released, why, method, bag, aboard, at: timeOfDay, day, place, firstAt, cls, clsRecord };
+		// ((M19) told to whoever's listening: Pearl's challenges, the line-class records. rig: the rig it took ('fly'...);
+		// cls: its line's IGFA class)
+		this._caught( { species, kg, cm, method, rig, cls, kept, released, day, place, at: timeOfDay } );
 		if ( ! kept ) {
 
 			this.save();
@@ -475,7 +508,9 @@ export class GameState {
 
 	// a fish in the log: one more of its kind, and its best -> { newSpecies, record, prevBestKg, prevBestCm }
 	// ((M17) day, place: when and where, the island's day and Places.js', kept with the first of its kind and with your best)
-	logFish( species, kg, cm, day = null, place = null ) {
+	// ((M19) cls: the line's IGFA class (LineClass.js), its best kept in the entry's cls when this beats it, by IGFA's margins, and
+	// it's heavy enough for the class -> clsRecord: { cls, prevKg (0: the first on it) } or null)
+	logFish( species, kg, cm, day = null, place = null, cls = null ) {
 
 		const logEntry = this.log[ species ] || ( this.log[ species ] = { count: 0, bestKg: 0 } );
 		const newSpecies = logEntry.count === 0;
@@ -493,7 +528,20 @@ export class GameState {
 
 		}
 
-		return { newSpecies, record, prevBestKg, prevBestCm };
+		let clsRecord = null;
+		if ( cls && classCounts( cls, kg ) ) {
+
+			const C = logEntry.cls || ( logEntry.cls = {} ), held = C[ cls ];
+			if ( classBeats( kg, held && held.kg ) ) {
+
+				clsRecord = { cls, prevKg: held ? held.kg : 0 };
+				C[ cls ] = { kg, day: when, place: where };
+
+			}
+
+		}
+
+		return { newSpecies, record, prevBestKg, prevBestCm, clsRecord };
 
 	}
 
@@ -568,9 +616,43 @@ export class GameState {
 
 		}
 
+		// ((M19) a throw's whole haul, told at once: what came up, and what was kept as bait and in the cooler)
+		this._caught( { method: 'net', haul: r, fish: fish.map( ( f ) => ( { species: f.species || null, kg: f.kg, kept: !! f.kept } ) ), day, place, at: timeOfDay } );
 		this.save();
 		this.emit();
 		return r;
+
+	}
+
+	// (M19) fn( catch ) for every fish caught, however it was (addFish: one; addHaul: a throw's haul, { method: 'net', haul,
+	// fish }); returns the way to stop. Each's own failing doesn't stop the catch
+	onCatch( fn ) {
+
+		this._catchFns.push( fn );
+		return () => {
+
+			const i = this._catchFns.indexOf( fn );
+			if ( i >= 0 ) this._catchFns.splice( i, 1 );
+
+		};
+
+	}
+
+	_caught( ev ) {
+
+		for ( const fn of this._catchFns.slice() ) {
+
+			try {
+
+				fn( ev );
+
+			} catch ( e ) {
+
+				console.warn( 'GameState.onCatch', e );
+
+			}
+
+		}
 
 	}
 
@@ -586,7 +668,7 @@ export class GameState {
 
 	}
 
-	// (M16) frozen bait or chum from Marta, by the trip's lot -> whether you could
+	// (M16) frozen bait or chum from Marta, by the trip's lot ((M19) Joe's now, or Pearl's) -> whether you could
 	buyBait( kind ) {
 
 		const b = BAITS[ kind ];
@@ -651,11 +733,24 @@ export class GameState {
 
 	}
 
-	// Marta's order from the bucket, on `terms` (quote's): how many of today's bait kind she'd take
+	// (M19) Pearl pays what you're owed for her day's challenges (Challenges.js) -> $ paid
+	collectChallenges() {
+
+		const n = this.challenges.owed | 0;
+		if ( n <= 0 ) return 0;
+		this.money += n;
+		this.challenges = { ...this.challenges, owed: 0 };
+		this.save();
+		this.emit();
+		return n;
+
+	}
+
+	// ((M19) Joe's) order from the bucket, on `terms` (quote's): how many of today's bait kind he'd take, while he's open
 	// -> { species, n, each, total, order } or null
 	quoteBait( terms ) {
 
-		const o = terms && terms.who === 'marta' ? ( terms.orders || [] ).find( ( x ) => x.who === 'marta' ) : null;
+		const o = terms && terms.who === 'joe' && terms.open !== false ? ( terms.orders || [] ).find( ( x ) => x.bait ) : null;
 		if ( ! o ) return null;
 		const n = Math.min( this.bait[ o.species ] | 0, Math.max( 0, o.max - ( this.orders.day === terms.day ? this.orders.filled[ o.id ] | 0 : 0 ) ) );
 		return { species: o.species, n, each: o.each, total: n * o.each, order: o };
@@ -681,7 +776,7 @@ export class GameState {
 	// (Salt Life) what selling the given fish ids (all when null) would pay, on `terms`: { who: 'joe' |
 	// 'marta', orders (Orders.ordersFor), day (the list's), rate (what Joe's night box pays of his price;
 	// the wanted list in full), week (Joe's: the week's order, { species, left: kg }, until it's filled) }.
-	// Without terms, Joe's price. Marta takes only the fish she's after. The biggest fill an order first;
+	// Without terms, Joe's price. Marta takes only the fish she's after ((M19) none, now his bait tank's Joe's: her asks are tags). The biggest fill an order first;
 	// each of the week's kind goes toward it (the one that fills it whole) and fetches WEEK_MUL, or the
 	// day's list's price if that's on it too.
 	// -> { total, count, wanted, prices (id -> $), ids, filled, week (kg toward it), weekN (how many) }
@@ -694,7 +789,7 @@ export class GameState {
 		for ( const f of pick ) {
 
 			// (the first order it fills that still wants one: (M15) its place's first)
-			const o = terms ? ordersOf( terms.orders, terms.who, f.species, f.place ).find( ( q ) => ( filled[ q.id ] | 0 ) < q.max ) : null;
+			const o = terms ? ordersOf( terms.orders, terms.who, f.species, f.place, terms.open !== false ).find( ( q ) => ( filled[ q.id ] | 0 ) < q.max ) : null;
 			const toWeek = left > 0 && f.species === terms.week.species;
 			let price;
 			if ( o ) {
@@ -921,11 +1016,21 @@ export class GameState {
 
 	}
 
+	// (M19) whether what a track needs fitted first is (UPGRADES[ key ].needs: another track's key, at any level past none)
+	hasNeeds( key ) {
+
+		const n = UPGRADES[ key ] && UPGRADES[ key ].needs;
+		return ! n || ( this.upgrades[ n ] | 0 ) > 0;
+
+	}
+
 	// buy the next level of an upgrade track; returns the new level entry or null
 	buy( key ) {
 
 		// ((M16) the boat's own, while she's the boat you're in)
 		if ( ! UPGRADES[ key ] || ( UPGRADES[ key ].on && UPGRADES[ key ].on !== this.boat ) ) return null;
+		// ((M19) and not without what it needs fitted first: the radar its T-top, the gyro the generator)
+		if ( ! this.hasNeeds( key ) ) return null;
 		const next = nextLevel( this.upgrades, key );
 		if ( ! next || next.cost > this.money ) return null;
 		this.money -= next.cost;
@@ -1000,7 +1105,7 @@ export class GameState {
 	toJSON() {
 
 		this._boatAway();
-		return { v: 2, boat: this.boat, fleet: this.fleet, earned: this.earned, dues: this.dues, money: this.money, inventory: this.inventory, log: this.log, places: this.places, trophies: this.trophies, found: this.found, upgrades: this.upgrades, fuel: this.fuel, hull: this.hull, hauled: this.hauled, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, leaderPick: this.leaderPick, bag: this.bag, finds: this.finds, picked: this.picked, shells: this.shells, chart: this.chart.toJSON(), days: this.days, traps: this.traps, nextId: this._nextId };
+		return { v: 2, boat: this.boat, fleet: this.fleet, earned: this.earned, dues: this.dues, money: this.money, inventory: this.inventory, log: this.log, places: this.places, trophies: this.trophies, found: this.found, upgrades: this.upgrades, fuel: this.fuel, hull: this.hull, hauled: this.hauled, look: this.look, orders: this.orders, weekPaid: this.weekPaid, bait: this.bait, baitPick: this.baitPick, leaderPick: this.leaderPick, bag: this.bag, finds: this.finds, picked: this.picked, shells: this.shells, chart: this.chart.toJSON(), days: this.days, traps: this.traps, challenges: this.challenges, nextId: this._nextId };
 
 	}
 
@@ -1035,6 +1140,13 @@ export class GameState {
 		this.look = typeof d.look === 'string' ? d.look : null;
 		const o = d.orders;
 		this.orders = o && Number.isFinite( o.day ) && o.filled && typeof o.filled === 'object' ? { day: o.day, filled: { ...o.filled } } : { day: null, filled: {} };
+		// ((M19) the bait order's Joe's, 'bait': what was filled of Marta's, 'marta', that day carried over)
+		if ( this.orders.filled.marta !== undefined ) {
+
+			this.orders.filled.bait = ( this.orders.filled.bait | 0 ) + ( this.orders.filled.marta | 0 );
+			delete this.orders.filled.marta;
+
+		}
 		this.weekPaid = Number.isFinite( d.weekPaid ) ? d.weekPaid : null;
 		this.bait = {};
 		for ( const [ k, n ] of Object.entries( d.bait && typeof d.bait === 'object' ? d.bait : {} ) ) if ( BAITS[ k ] && Number.isInteger( n ) && n > 0 ) this.bait[ k ] = n;
@@ -1051,6 +1163,7 @@ export class GameState {
 		this._chartBought();
 		this.days = cleanDays( d.days );
 		this.traps = cleanTraps( d.traps );
+		this.challenges = cleanChallenges( d.challenges ); // ((M19) saves from before had none)
 		this._nextId = Math.max( d.nextId | 0, ...this.inventory.map( ( f ) => f.id + 1 ), 1 );
 		return true;
 
@@ -1112,6 +1225,7 @@ export class GameState {
 		this._chartBought();
 		this.days = cleanDays();
 		this.traps = newTraps();
+		this.challenges = { day: null, done: {}, owed: 0 };
 		this.save();
 		this.emit();
 

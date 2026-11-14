@@ -49,19 +49,31 @@ export const airOf = ( id, f ) => bareOf( id, f ) ? sizeOf( id ).bare : sizeOf( 
 // (PAINTS' place and one; 0: as she came). The lobster boat has nothing that comes and goes. (M17) Above the paint, how she
 // is just now that a copy shows: the console's ladder folded down into the water (NOW_SHIFT), from her owner's game as it
 // folds it (Vessel.fitNow). What's walked on her is the same either way: walked() leaves it out (STILL)
+// (M19) And M19's fittings, past the four bits (the console's and the kayak's were all used, or will be): `more`, from
+// EXTRA_SHIFT up, where a game from before M19 doesn't look (its four bits, its paint and its ladder read the same:
+// test/fit-bits.mjs). The sportfisher's teasers take her fourth bit. And more of how she is just now: the console's
+// Power-Pole down and her trolling motor down in the water, the kayak staked out
 const FITS = {
-	kayak: { send: ( s ) => [ s.holdKg > 12, s.finder, s.anchorM > 0 || s.trolley ], stats: ( [ crate, finder, trolley ] ) => ( { holdKg: crate ? 13 : 12, finder, trolley } ) },
-	console: { send: ( s ) => [ s.twin, s.tTop, s.diveLadder, s.tankRack ], stats: ( [ twin, tTop, diveLadder, tankRack ] ) => ( { twin, tTop, diveLadder, tankRack } ), now: [ 'ladderDown' ] },
-	sportfisher: { send: ( s ) => [ s.tower ?? true, s.outriggers ?? true, s.chair ?? true ], stats: ( [ tower, outriggers, chair ] ) => ( { tower, outriggers, chair } ) },
+	kayak: { send: ( s ) => [ s.holdKg > 12, s.finder, s.anchorM > 0 || s.trolley ], stats: ( [ crate, finder, trolley ] ) => ( { holdKg: crate ? 13 : 12, finder, trolley } ),
+		more: { send: ( s ) => [ s.stakeM > 0, !! s.pedal ], stats: ( [ stakePole, pedal ] ) => ( { stakePole, pedal } ) }, now: [ 'staked' ] },
+	console: { send: ( s ) => [ s.twin, s.tTop, s.diveLadder, s.tankRack ], stats: ( [ twin, tTop, diveLadder, tankRack ] ) => ( { twin, tTop, diveLadder, tankRack } ), now: [ 'ladderDown', 'poleDown', 'motorDown', 'anchorDown' ],
+		more: { send: ( s ) => [ s.trollingN > 0, s.stakeM > 0, !! s.radar ], stats: ( [ trolling, powerPole, radar ] ) => ( { trolling, powerPole, radar } ) } },
+	sportfisher: { send: ( s ) => [ s.tower ?? true, s.outriggers ?? true, s.chair ?? true, !! s.teasers ], stats: ( [ tower, outriggers, chair, teasers ] ) => ( { tower, outriggers, chair, teasers } ) },
+	// ((M19) the lobster boat, nothing that comes and goes, but her anchor off her roller while it's down (and the console's, above):
+	// a copy shows it so. A game from before M19 has no reader for her and draws it on her roller, as it did)
+	lobster: { send: () => [], stats: () => ( {} ), now: [ 'anchorDown' ] },
 };
-const PAINT_SHIFT = 4, NOW_SHIFT = 8;
+const PAINT_SHIFT = 4, NOW_SHIFT = 8, EXTRA_SHIFT = 12;
 export const STILL = ( 1 << NOW_SHIFT ) - 1;
+// ((M19) what's walked on a copy: her fit and her paint (STILL) and her M19 fittings, not how she is just now)
+export const WALKED = STILL | ( 0xf << EXTRA_SHIFT );
 
 export function fitWire( id, stats, paint, now = null ) {
 
 	const F = FITS[ id ], bits = F ? F.send( stats ).reduce( ( n, on, i ) => n | ( on ? 1 << i : 0 ), 0 ) : 0;
 	const at = F && F.now && now ? F.now.reduce( ( n, k, i ) => n | ( now[ k ] ? 1 << ( NOW_SHIFT + i ) : 0 ), 0 ) : 0;
-	return bits | ( ( paintOf( paint ) ? PAINTS.indexOf( paintOf( paint ) ) + 1 : 0 ) << PAINT_SHIFT ) | at;
+	const more = F && F.more ? F.more.send( stats ).reduce( ( n, on, i ) => n | ( on ? 1 << ( EXTRA_SHIFT + i ) : 0 ), 0 ) : 0;
+	return bits | ( ( paintOf( paint ) ? PAINTS.indexOf( paintOf( paint ) ) + 1 : 0 ) << PAINT_SHIFT ) | at | more;
 
 }
 
@@ -71,6 +83,7 @@ export function fitStats( id, f ) {
 	if ( ! F ) return {};
 	const s = F.stats( [ 0, 1, 2, 3 ].map( ( i ) => !! ( f & 1 << i ) ) );
 	if ( F.now ) F.now.forEach( ( k, i ) => s[ k ] = !! ( f & 1 << ( NOW_SHIFT + i ) ) );
+	if ( F.more ) Object.assign( s, F.more.stats( [ 0, 1, 2, 3 ].map( ( i ) => !! ( f & 1 << ( EXTRA_SHIFT + i ) ) ) ) );
 	return s;
 
 }
@@ -237,8 +250,9 @@ export class BoatCopies {
 
 		const e = this.types.get( id );
 		if ( ! Number.isInteger( f ) || ! e || e.model !== model ) return model;
-		// ((M17) not by how she is just now, her ladder down or up: what's walked and its colliders stay hers as she's fitted)
-		f &= STILL;
+		// ((M17) not by how she is just now, her ladder down or up: what's walked and its colliders stay hers as she's fitted;
+		// (M19) her new fittings with them: WALKED)
+		f &= WALKED;
 		let w = e.walks.get( f );
 		if ( ! w ) e.walks.set( f, w = model.walkedAs( fitStats( id, f ) ) );
 		return w;
