@@ -339,14 +339,11 @@ export class FishingRod {
 
 		scene.add( this.rodMesh, this.bobberMesh, this.lineMesh, this.lostMesh, this.lostLine );
 		// ((M20) the landing net (Gear's landingNet), drawn as a netted fish comes alongside and as it's lifted out: netting, set by
-		// the game as the fight starts (Rigs' net). Its model's made the first time it's wanted)
+		// the game as the fight starts (Rigs' net). Made, and put in the scene, the first time it's wanted: in it from the start, the
+		// load's compile built the bobber's program before ready, a 17th)
 		this.netting = false;
-		this.netMesh = new Mesh( undefined, this.bobberMat );
-		this.netMesh.name = 'LandingNet';
-		this.netMesh.frustumCulled = false;
-		this.netMesh.castShadow = false;
-		this.netMesh.visible = false;
-		scene.add( this.netMesh );
+		this.netMesh = null;
+		this._scene = scene;
 
 	}
 
@@ -848,7 +845,17 @@ export class FishingRod {
 		this.bobberMesh.position.copy( this.bobber );
 		// ((M20) the landing net: in the water beside a netted fish once it's alongside, and under it as it's lifted out)
 		const netOn = visible && this.netting && ( this.state === 'landing' || ( this.state === 'fighting' && fight && fight.distance < NET_SHOWN ) );
-		this.netMesh.visible = netOn;
+		if ( netOn && ! this.netMesh ) {
+
+			const m = this.netMesh = new Mesh( netGeometry(), this.bobberMat );
+			m.name = 'LandingNet';
+			m.frustumCulled = false;
+			m.castShadow = false;
+			this._scene.add( m );
+
+		}
+
+		if ( this.netMesh ) this.netMesh.visible = netOn;
 		if ( netOn ) placeNet( this.netMesh, this.bobber, cam.position, this.state === 'landing' ? this.bobber.y : this.waterY );
 		if ( this.state !== 'fighting' && this.state !== 'landing' ) this.netting = false;
 		// a real float is a few pixels at casting range: grow it with distance so it stays readable
