@@ -20,13 +20,14 @@ You can walk, swim and take the boat around the island. You can fish from the pi
 boat, or dive and spear a fish, sell your catch to Joe and buy better gear from Marta. It plays with a
 mouse and keyboard, a gamepad or a touch screen.
 
-Done, M0 to M17:
+Done, M0 to M19 (no M18: its list went into M19):
 - the sea and its shore, spray, gusts and slicks, and the haze;
 - the whole world: the village, the pier, the reef and its fish, the birds and crabs, the beach's
   debris, the whale and the lights at night;
 - the fishing game;
 - spearfishing:
-  - a speargun to dive with, three of them at Marta's; it fires only under water;
+  - a speargun to dive with, four of them at Marta's, the last a blue-water gun on a breakaway float; it fires only
+    under water;
   - the law: protected fish are let go, and nobody spears the reef's aquarium fish or one too small;
   - the spearfisher's fish: hogfish, black groupers, mutton snappers, lionfish, and red snappers, mahi
     and tuna offshore;
@@ -225,6 +226,28 @@ Done, M0 to M17:
   - the figures from sources: the lines at their labels and the reels' real drags, with an 80 lb line
     and a wide 80-class reel for the biggest marlin from the chair, the VHF's reach by its antenna, a
     flare's reach, ice's melt, a day's stores, the billfish's night depths and a trap's soak;
+- the fly, the big fish and the stalls (M19):
+  - **A fly rod for the flats:** false casts, the shot, the fly stripped and strip-set, on 8, 10 and 12-weight rods, and
+    the flats licence.
+  - **The biggest blue marlin landed alone:** on 130 lb tackle, or with the sportfisher's hired mate backing her down,
+    and her teasers and a gyro.
+  - **New gear for the boats:**
+    - the kayak as a Pescador Pilot, pedalled, poled and staked out;
+    - the console's trolling motor, Power-Poles and radar;
+    - bow anchors;
+    - the lobster boat's bigger hauler.
+  - **The Bahamas' rules:** the crawfish's size and the trap permit, the snook let go, no bags on the pelagics.
+  - **Your own gear:** copper-lens glasses and wading booties, a rubber landing net.
+  - **The stalls:**
+    - Joe's: the bait and the ice, and his ice chest on trust after hours;
+    - Pearl's: her bait, and a challenge a day for the rod, the speargun and the cast net;
+    - the signs, saying so.
+  - **Records:** line-class records, IGFA's way, in your log, on the catch card and on the island's board.
+  - **On the island:**
+    - the radio shaded by the island's ridge;
+    - flares seen from the village or Pearl's camp;
+    - the stars turning with the sky.
+  - **What M17 left for playing together**, and the checks it never ran.
 - playing together:
   - you see the others on the island, walking, swimming, fishing and out in their boats, each the boat
     she is, with her paint and what's fitted on her; far off a boat is a speck on the horizon;
@@ -275,6 +298,7 @@ The island's day:
 | M15 | The world: the island worth going all the way round (the north side's fishing, its landmarks and sea caves, beachcombing, the trail and the fish camp), the sea past it (the seabed out there, its weather and finds, the far island, the chart you fill in, the radio and the tow, the soft edge, its sound), and picking up where you left off |
 | M16 | The boats: a fishing kayak to start in, a center console, the lobster boat and an offshore sportfisher to earn, each with her own upgrades, berth and sea she can stand; days out (ice, stores, bunks, flares, a deep-water anchor), trolling, kites and deep-dropping for the far water's fish, lobster traps, each boat as herself when playing together, Pearl's day and the rest of the north side ([docs/M16.md](docs/M16.md)) |
 | M17 | The flats on a tide: sight-fishing from the kayak and on foot on the west's new flats, a tide with the moon behind it, everything M16 left for guests aboard, coming back where you were, a life list of every kind with the slams, the wakes as waves, and the figures from sources ([docs/M17.md](docs/M17.md)) |
+| M19 | The fly, the big fish and the stalls: a fly rod for the flats, the biggest marlin landed alone, the boats' new gear, the bait and the ice at Joe's and Pearl's challenges, line-class records, and most of what M17 left (M18's list: no M18 milestone) ([docs/M19.md](docs/M19.md)) |
 
 ## How it fits All the Spaces
 

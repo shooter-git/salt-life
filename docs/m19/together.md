@@ -59,7 +59,11 @@ Stream TOGETHER of [M19.md](../M19.md), built 2026-11-13 on `m19-together` from 
 
 ## Not done here
 
-- **The seated guest looking about** (M17's item 5, never reproduced) on touch, a gamepad and a real pointer lock: left to the final pass's two-player runs with those devices emulated.
+- **The seated guest looking about** (M17's item 5, never reproduced): run in the final pass (`tools/two-players/together.mjs`'s new `seatpads`, beside `seat`), all passed:
+  - sat on a kayak's tank well, he turns with a gamepad's right stick (0.04 to -1.56 rad off her bow), relayed as All the Spaces relays it;
+  - he turns with a finger dragged on the touch screen's look side (-1.56 to -2.04), real touches sent as the browser's own, the touch controls shown by the first;
+  - he turns with the mouse, as before;
+  - a real pointer lock can't be had in a driven browser, so it's still untried.
 - **Two real devices** through All the Spaces' room: still untried.
 
 ## Tests
