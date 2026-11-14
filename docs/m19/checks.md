@@ -86,7 +86,7 @@ Each was landed on its first fight. The grand slam came with the tarpon, the sup
 
 **The method** (`tools/checks/water.mjs`):
 - A small magenta ball, 6 cm across, is put at the CPU's height for the sea there (`App.query.heightAt`: `Waves` and `ShoreWaves`, what the boats, the swimmer and the bobber ride).
-- The waves' clock is stopped, the same for both.
+- The waves' clock is stopped, the same for both. ((M20) Not for the breakers: `App.frame` had already run `shore.update` before the tool set the clock back, so the drawn surf ran a frame ahead of the CPU's. Some of the swash's 6 to 12 cm may be the tool's; M20 measures it again: [M20.md](../M20.md).)
 - The ball is looked down on from over it and stepped from 12 cm under the CPU's height to 12 over.
 - Where its top comes out of the drawn sea (bright, not dimmed) is the drawn sea's height there, to ±2 cm.
 
