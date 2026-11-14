@@ -26,6 +26,8 @@ The fourth gun (`speargun` level 3), $1,580:
 
 **The terms** are one pure function, `Speargun.spearTerms`, used by the game (`Game.updateSpear`) and the sweep (`tools/fight-sweep.mjs --spear`). The other guns' fights are as they were.
 
+**Held back while loading:** the float is held out of the scene with the rest of the gun while the game loads (`App.heldTools`), and its geometry is made the first time it's shown. That keeps the shaft's program out of the loading frame. The merge check had first found it there: 17 programs before ready.
+
 **The sweep** (`--spear --n 40`): the share of each size landed, pulled with care. The railgun (S2) and the blue-water gun (S3) against the kinds the blue water's for:
 
 | Kind (kg) | S2, the railgun | S3, on its float |

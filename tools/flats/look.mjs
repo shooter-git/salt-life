@@ -40,6 +40,8 @@ const VIEW = {
 	// ((M17, stream 2) the tide seen close: the pier's piles from the sand beside them, the mangroves' roots from the flat off
 	// their edge, the west arm's stack from the water, the west sea cave's inlet from off its mouth)
 	piles: { stand: [ 70, - 40 ], eye: [ 70, - 40, 1.65, 'ground' ], at: [ 55, - 0.2, - 31 ] },
+	// ((M19) and one pile close up, its wet band judged as M18's list asked: from the sand 4 m off it)
+	pileClose: { stand: [ 58.5, - 34.5 ], eye: [ 58.5, - 34.5, 1.2, 'ground' ], at: [ 55, - 0.1, - 31 ] },
 	roots: { stand: [ - 528, - 170 ], eye: [ - 528, - 170, 1.65, 'ground' ], at: [ - 505, 0.0, - 168 ] },
 	stack: { stand: [ - 140, 30 ], eye: [ - 140, 30, 1.2, 'sea' ], at: [ - 166, 0.5, 8 ] },
 	cave: { stand: [ - 592, - 383 ], eye: [ - 592, - 383, 1.5, 'sea' ], at: [ - 557, 0.3, - 380 ] },

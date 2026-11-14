@@ -79,6 +79,8 @@ export function pearlCall( game ) {
 	let say, can = false;
 	// (as Marta's: a set reaches so far, (M17) to her own antenna on the camp's shed: Seaworthy.reachTo)
 	if ( job.metres > reachTo( game.state.stats, 'pearl' ) ) say = `Nothing but static. You're ${ farOff( job.metres ) } off her jetty, past your set's reach.`;
+	// ((M19) the island between you and her aerial on the camp's shed)
+	else if ( game.daysOut && game.daysOut.radioSees && ! game.daysOut.radioSees( 'pearl' ) ) say = 'Nothing but static. The island\'s between you and Pearl\'s camp.';
 	else if ( blown || warned || up ) say = `Pearl. The boat's not going out in this: ${ warned ? 'there\'s a hurricane on its way, and she\'s up the beach' : up ? 'she\'s up the beach till it\'s blown through' : 'she\'s too small for it' }. Try Marta, or sit tight and call me when it's dropped.`;
 	else {
 

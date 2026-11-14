@@ -432,6 +432,7 @@ export class Game {
 			// (off the helm first: moored at the dock, she'd be pulled back to it from wherever she went next)
 			if ( p.mode === 'boat' && p.boat === b ) p.leaveHelm();
 			b.reset();
+			if ( this.daysOut && this.daysOut.settleSoon ) this.daysOut.settleSoon(); // ((M19) on the water at the dock, as she floated, not flung)
 			if ( aboard && p.mode === 'deck' && p.boat === b ) p.deckToWorld();
 			const where = b.beached ? 'she\'s on the sand' : 'she\'s at the dock';
 			this.toast( paid < job.fee ? `Marta towed her in for the $${ paid } you had · ${ where }` : `Marta towed her in · $${ paid } · ${ where }`, aboard ? 4200 : 2600 );

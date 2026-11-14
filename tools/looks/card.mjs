@@ -4,6 +4,7 @@
 // toast over the card's title at 844 x 390. Pictures of each into <out>/.
 //
 //   a dev server on LOOK_PORT (5241), then   node tools/looks/card.mjs <out> [screens: side-844,phone-390,laptop-1366,side-667]
+//   ((M19) CARD_TIER=mid|high: on that tier's studio light, RoomEnvironment's, as M18's list asked; low by default)
 
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -68,7 +69,7 @@ for ( const name of ONLY.split( ',' ) ) {
 		setInterval( hook, 20 );
 
 	} );
-	await page.goto( `http://127.0.0.1:${ PORT }/?tier=low&hour=10&weather=fair&day=5`, { waitUntil: 'domcontentloaded', timeout: 180000 } );
+	await page.goto( `http://127.0.0.1:${ PORT }/?tier=${ process.env.CARD_TIER || 'low' }&hour=10&weather=fair&day=5`, { waitUntil: 'domcontentloaded', timeout: 180000 } );
 	// a card up the moment the game starts, before the card's shaders are made (App.prepareLate: FishPortrait.compile)
 	await page.waitForFunction( () => window.__app && window.__app._started && window.__app.game && window.__app.game.hud, null, { timeout: 600000, polling: 50 } );
 	await page.evaluate( () => {

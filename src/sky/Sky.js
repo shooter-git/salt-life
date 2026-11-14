@@ -42,6 +42,11 @@ const MW = new THREE.Vector3( 0.3, 0.2, 1 ).normalize(); // pole of the Milky Wa
 const STAR_REFLECTION = 0.08;
 
 const _up = new THREE.Vector3( 0, 1, 0 );
+// (M19) the stars and the Milky Way turn with the sky (stream CHECKS: docs/m19/checks.md; M17 left them still): about the celestial
+// pole, at the island's latitude in the north, once a sidereal day, so a degree a day ahead of the sun. skyCelestial takes a
+// direction in the world to the sky's own frame, where each star's place is fixed (the sky's azimuth undone first)
+const SIDEREAL = 366.2422 / 365.2422, POLE_LAT = 24 * Math.PI / 180;
+const _pole = new THREE.Vector3(), _m4 = new THREE.Matrix4(), _m4b = new THREE.Matrix4();
 const _origin = new THREE.Vector3();
 const _anchor = new THREE.Vector3(), _fwd = new THREE.Vector3(), _u = new THREE.Vector3(), _v = new THREE.Vector3();
 const _c = new THREE.Color();
@@ -158,6 +163,7 @@ uniform vec4 skyMoonFace; // (M17) its highlands' light where the sun's square o
 uniform vec4 skyNightLight; // (M17) the moonlit sky's level, the moonless night's, the Milky Way's, the faintest stars' magnitude + 1
 uniform float skySunDiskIntensity;
 uniform float skyStarIntensity;
+uniform mat3 skyCelestial; // (M19) the world's directions to the turning sky's
 uniform float skyNight;
 uniform float skyUnderwater;
 uniform vec3 skyFogColor;
@@ -205,15 +211,17 @@ vec3 skySunDisk( vec3 dir ) {
 // magnitude distribution (few bright stars, many faint ones), denser along the Milky Way. They
 // come out after civil twilight: the brightest first, the faintest once the sky is fully dark.
 vec3 skyStars( vec3 dir ) {
+	// ((M19) on the turning sky: its stars where they are tonight, the horizon's light and the twinkle by where you look)
+	vec3 cd = skyCelestial * dir;
 	// cube face coordinates
-	vec3 a = abs( dir );
+	vec3 a = abs( cd );
 	bool onX = a.x > a.y && a.x > a.z;
 	bool onY = a.y > a.z;
-	float face = onX ? sign( dir.x ) + 2.0 : ( onY ? sign( dir.y ) + 5.0 : sign( dir.z ) + 8.0 );
-	vec2 uv = ( onX ? dir.yz / a.x : ( onY ? dir.xz / a.y : dir.xy / a.z ) ) * ${ f( STAR_CELLS ) };
+	float face = onX ? sign( cd.x ) + 2.0 : ( onY ? sign( cd.y ) + 5.0 : sign( cd.z ) + 8.0 );
+	vec2 uv = ( onX ? cd.yz / a.x : ( onY ? cd.xz / a.y : cd.xy / a.z ) ) * ${ f( STAR_CELLS ) };
 	vec3 cell = vec3( floor( uv ), face );
 	float h = skyHash13( cell );
-	float bx = dot( dir, vec3( ${ f( MW.x ) }, ${ f( MW.y ) }, ${ f( MW.z ) } ) ) * 4.0;
+	float bx = dot( cd, vec3( ${ f( MW.x ) }, ${ f( MW.y ) }, ${ f( MW.z ) } ) ) * 4.0;
 	float band = exp( - bx * bx );
 	// the cell holds a star with probability P (higher along the Milky Way); an independent
 	// uniform u ranks its brightness: N( < m ) ~ 10^( m / 2 ), brightest about magnitude -1
@@ -226,8 +234,8 @@ vec3 skyStars( vec3 dir ) {
 	float vis = smoothstep( m - 0.6, m + 0.6, dark * skyNightLight.w - 1.0 ) * ( has ? 1.0 : 0.0 );
 	// angular distance to the star (isotropic whatever the cube face distortion), in cells
 	vec2 sp = ( floor( uv ) + vec2( skyHash13( cell + 3.1 ), skyHash13( cell + 5.7 ) ) * 0.4 + 0.3 ) / ${ f( STAR_CELLS ) };
-	vec3 sdir = normalize( onX ? vec3( sign( dir.x ), sp ) : ( onY ? vec3( sp.x, sign( dir.y ), sp.y ) : vec3( sp, sign( dir.z ) ) ) );
-	float d = length( dir - sdir ) * ${ f( STAR_CELLS ) };
+	vec3 sdir = normalize( onX ? vec3( sign( cd.x ), sp ) : ( onY ? vec3( sp.x, sign( cd.y ), sp.y ) : vec3( sp, sign( cd.z ) ) ) );
+	float d = length( cd - sdir ) * ${ f( STAR_CELLS ) };
 	// flux relative to a magnitude 6.5 star; bright stars look bigger (glare), not just clipped
 	float flux = pow( uc, -0.8 );
 	float size = log2( flux ) * 0.08 + 1.0;
@@ -449,6 +457,7 @@ export class Sky {
 			skyNightLight: { value: new THREE.Vector4( 1, 0, 0, limitingMag( DARK_SKY ) + 1 ) },
 			skySunDiskIntensity: { value: 1 },
 			skyStarIntensity: { value: 0 },
+			skyCelestial: { value: new THREE.Matrix3() },
 			skyNight: G.night,
 			skyTime: G.time,
 			skyExposure: G.skyExposure, // ((M10) shared: the sea's flash takes it too)
@@ -621,6 +630,12 @@ export class Sky {
 		const m = moonSky( ( Math.max( 1, Math.floor( this.day ) || 1 ) - 1 ) * 24 + hours, hours, azimuth, this.moon );
 		this.moonDir.fromArray( m.dir );
 		this.uniforms.skyMoonNorth.value.fromArray( m.north );
+		// ((M19) the stars' sky turned to the hour and the day: the pole due north, POLE_LAT up; turned as the sun turns, a little
+		// more each day)
+		const turns = ( ( Math.max( 1, Math.floor( this.day ) || 1 ) - 1 ) * 24 + hours - 12 ) / 24 * SIDEREAL;
+		_pole.set( 0, Math.sin( POLE_LAT ), - Math.cos( POLE_LAT ) );
+		_m4.makeRotationAxis( _pole, ( turns - Math.floor( turns ) ) * Math.PI * 2 ).multiply( _m4b.makeRotationY( - THREE.MathUtils.degToRad( azimuth ) ) );
+		this.uniforms.skyCelestial.value.setFromMatrix4( _m4 );
 		this._nightLight( m, moonLight( m, this.moonLight ), night );
 		const key = this._moonKey.copy( this.moonDir );
 		if ( key.y < - 0.01 ) key.set( 0, 1, 0 );
