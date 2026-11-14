@@ -516,7 +516,7 @@ export class Speargun {
 	// ---- per frame. env: { visible, groundAt( x, z ) (the seabed, the reef, the pier's decks: m),
 	// colliders (the piles), waterY (the surface over the diver), pierce( a, b ) (the shaft moved from
 	// a to b: true if it went into a fish, the game having struck it) }
-	update( dt, { visible = true, groundAt = null, colliders = null, waterY = 0, pierce = null } = {} ) {
+	update( dt, { visible = true, groundAt = null, colliders = null, waterY = 0, pierce = null, waterAt = null } = {} ) {
 
 		// (held back from the load's first frames, as the rod is: App.prepareLate)
 		if ( this.holdBack ) visible = false;
@@ -614,7 +614,8 @@ export class Speargun {
 			if ( this.onFloat && this.state === 'fighting' ) {
 
 				this.floatAt.copy( this.muzzle ).lerp( _b, 0.55 );
-				this.floatAt.y = waterY + Math.sin( this.t * 1.7 ) * 0.03 + FLOAT.r * 0.3; // (foam: it rides high)
+				// (foam: it rides high; (M20) on the sea where it is: waterAt)
+				this.floatAt.y = ( waterAt ? waterAt( this.floatAt.x, this.floatAt.z ) : waterY ) + Math.sin( this.t * 1.7 ) * 0.03 + FLOAT.r * 0.3;
 				lm.lineCtl.value.copy( this.floatAt ).multiplyScalar( 2 ).sub( _w.copy( this.muzzle ).add( _b ).multiplyScalar( 0.5 ) );
 
 			}

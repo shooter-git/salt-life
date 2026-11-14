@@ -25,7 +25,7 @@ import { ROD_L, SEAT_Y, placeNet } from '../game/FishingRod.js';
 import { FLY_K, FLY_L, FLY_HOLD } from '../game/rigs/FlyRod.js';
 import { FlyLine, loopShape, newPoints } from '../game/rigs/FlyLine.js';
 import { FLY, strokeTime } from '../game/FlyCast.js';
-import { gunModels, setBands, floatGeometry, placeFloats } from '../game/Speargun.js';
+import { gunModels, setBands, floatGeometry, placeFloats, FLOAT } from '../game/Speargun.js';
 import { isClass, counts, ratio } from '../game/LineClass.js';
 import { CastNet } from '../game/CastNet.js';
 import { G } from '../core/Globals.js';
@@ -2650,6 +2650,9 @@ export class Together {
 			cur.float = cur._float || ( cur._float = { at: new Vector3(), n: 1 } );
 			cur.float.at.set( A[ 0 ] + ( B[ 0 ] - A[ 0 ] ) * f, A[ 1 ] + ( B[ 1 ] - A[ 1 ] ) * f, A[ 2 ] + ( B[ 2 ] - A[ 2 ] ) * f );
 			cur.float.n = MathUtils.clamp( B[ 3 ] | 0, 1, 4 );
+			// (riding your sea there, as theirs rides theirs)
+			const q = this.app.query;
+			if ( q ) cur.float.at.y = q.heightAt( cur.float.at.x, cur.float.at.z, G.time.value ) + FLOAT.r * 0.3;
 
 		}
 		cur.net = MathUtils.clamp( near.n | 0, 0, NET_STATE.length - 1 );

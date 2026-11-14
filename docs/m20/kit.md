@@ -33,6 +33,7 @@ A 40 kg wahoo on one float is now lost 85% of the time; M19's test had it landed
 - The level reaches the blue-water gun.
 - A fish out on the float line sends where the float rides and how many floats there are (the pose's `Gf`).
 - The copy draws them there (its `tackle()`'s `float`), the line bowed up to them as the owner's game draws it, and the shaft's flopper open with the fish on.
+- The floats ride the sea where they are, on both games. They took the sea's height over the diver, so on high a swell's crest between covered them (`Speargun.update`'s `waterAt`; the copy's from its own sea).
 
 ## The landing net, drawn
 
@@ -93,4 +94,5 @@ A 40 kg wahoo on one float is now lost 85% of the time; M19's test had it landed
 - `test/kit-m20.mjs`: the floats' holds and drag, the sweep's fights, bought only with the blue-water gun; standing and sitting in the Pilot; the batteries' draw, run times, charging and record; the poles on each bottom.
 - `test/flats-together.mjs`: Robin's anchor sends a school off on her game and Sam's; her Power-Poles' thump 24 m off isn't heard.
 - `test/gear-m19.mjs`: its wahoo's now 30 kg.
-- `tools/two-players/kit.mjs` (two real games): Robin's blue-water gun with two floats out, on her game and as her copy on Sam's; Robin landing a netted fish, on both.
+- `tools/two-players/kit.mjs` (two real games), on low, mid and high, all passing: Robin's blue-water gun with two floats out, on her game and as her copy on Sam's (the copy's floats within 0.5 m of hers); Robin landing a netted fish, on both.
+- `tools/two-players/resume.mjs kayak kayaksand`: all passing (out on the sand, no anchor; reloaded, the same; an old anchor let go).

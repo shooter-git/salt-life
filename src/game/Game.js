@@ -2569,6 +2569,8 @@ export class Game {
 
 		gun.update( dt, {
 			visible: canSpear, groundAt: ( x, z ) => p.groundAt( x, z, gun.tip.y + 0.3 ), colliders: app.colliders, waterY: app.cameraWaterHeight ?? 0,
+			// ((M20) the sea where its floats ride, metres off you: over you a swell's crest or trough isn't theirs)
+			waterAt: ( x, z ) => app.query ? app.query.heightAt( x, z, G.time.value ) : G.seaLevel.value,
 			// the shaft in flight: through the first fish it may take (it passes the others by)
 			pierce: ( a, b ) => {
 
