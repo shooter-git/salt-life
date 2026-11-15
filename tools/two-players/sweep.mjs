@@ -9,7 +9,8 @@
 //
 // The jobs and what they check are in tools/two-players/README.md and the docs each names. A job's own pass or fail is its
 // exit (lib.mjs' G.end: 1 for any FAIL or page error); one that runs past its minutes is stopped by render-slot.sh and counted
-// as out of time, its log kept as far as it got.
+// as out of time, its log kept as far as it got; one that exits well having checked nothing (a part a job doesn't have) is
+// counted as having run nothing.
 import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync, createWriteStream, readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -23,7 +24,8 @@ mkdirSync( OUT, { recursive: true } );
 const JOBS = [
 	// (M17) what M16 left for guests aboard (docs/m17/together.md), the life lists, the flats together, the wakes together, and the
 	// back stream's crew and picking-up-where-you-left-off (docs/m17/back.md)
-	...[ 'seat', 'yard', 'tray', 'hold', 'berths', 'pearl', 'specks', 'horn', 'ladder', 'chair', 'slow' ].map( ( p ) => [ `together-${ p }`, 'm17', 'together.mjs', [ p ], 30 ] ),
+	// (M17's `hold`, a fish too big for a guest's hold in hers, is crew.mjs' since: below)
+	...[ 'seat', 'yard', 'tray', 'berths', 'pearl', 'specks', 'horn', 'ladder', 'chair', 'slow' ].map( ( p ) => [ `together-${ p }`, 'm17', 'together.mjs', [ p ], 30 ] ),
 	[ 'life', 'm17', 'life.mjs', [], 40 ],
 	...[ 'spook', 'hook', 'spot', 'late' ].map( ( p ) => [ `flats-${ p }`, 'm17', 'flats.mjs', [ p ], 30 ] ),
 	[ 'wakes', 'm17', 'wakes.mjs', [ 'mid' ], 40 ],
@@ -71,8 +73,9 @@ function run( [ name, m, script, args, minutes ] ) {
 
 				} );
 				const summary = lines.find( ( l ) => l.startsWith( 'SUMMARY' ) ) || null;
-				const r = { name, milestone: m, script, args, code, minutes: + ( ( Date.now() - t ) / 60000 ).toFixed( 1 ), outOfTime: code === 124, passes: lines.filter( ( l ) => /^ok /.test( l ) ).length, fails: lines.filter( ( l ) => /^FAIL /.test( l ) ).length, summary, failures: fails.slice( 0, 20 ), tail: code ? lines.filter( Boolean ).slice( - 6 ) : [] };
-				console.log( `[${ mins() } min] ${ code === 0 ? 'pass' : r.outOfTime ? 'OUT OF TIME' : 'FAIL' } ${ name } (${ r.passes } ok, ${ r.fails } FAIL, ${ r.minutes } min)` );
+				const passes = lines.filter( ( l ) => /^ok /.test( l ) ).length;
+				const r = { name, milestone: m, script, args, code: code === 0 && ! passes ? 'nothing' : code, minutes: + ( ( Date.now() - t ) / 60000 ).toFixed( 1 ), outOfTime: code === 124, passes, fails: lines.filter( ( l ) => /^FAIL /.test( l ) ).length, summary, failures: fails.slice( 0, 20 ), tail: code ? lines.filter( Boolean ).slice( - 6 ) : [] };
+				console.log( `[${ mins() } min] ${ r.code === 0 ? 'pass' : r.code === 'nothing' ? 'RAN NOTHING' : r.outOfTime ? 'OUT OF TIME' : 'FAIL' } ${ name } (${ r.passes } ok, ${ r.fails } FAIL, ${ r.minutes } min)` );
 				resolve( r );
 
 			} );
@@ -93,7 +96,7 @@ results.sort( ( a, b ) => JOBS.findIndex( ( j ) => j[ 0 ] === a.name ) - JOBS.fi
 writeFileSync( join( OUT, 'sweep.json' ), JSON.stringify( results, null, 1 ) );
 const bad = results.filter( ( r ) => r.code !== 0 );
 const md = [ `# The two-player sweep`, '', `${ results.length } jobs in ${ mins() } minutes: ${ results.length - bad.length } passed, ${ bad.length } didn't.`, '', '| Job | Milestone | Result | ok | FAIL | Minutes |', '|---|---|---|---|---|---|' ];
-for ( const r of results ) md.push( `| ${ r.name } | ${ r.milestone.toUpperCase() } | ${ r.code === 0 ? 'pass' : r.outOfTime ? 'out of time' : 'fail' } | ${ r.passes } | ${ r.fails } | ${ r.minutes } |` );
+for ( const r of results ) md.push( `| ${ r.name } | ${ r.milestone.toUpperCase() } | ${ r.code === 0 ? 'pass' : r.code === 'nothing' ? 'ran nothing' : r.outOfTime ? 'out of time' : 'fail' } | ${ r.passes } | ${ r.fails } | ${ r.minutes } |` );
 for ( const r of bad ) md.push( '', `## ${ r.name }`, '', `\`node tools/two-players/${ r.script } <dir> ${ PORT } ${ r.args.join( ' ' ) }\`: exit ${ r.code }${ r.summary ? `, ${ r.summary }` : '' }`, '', '```', ...( r.failures.length ? r.failures : r.tail ), '```' );
 writeFileSync( join( OUT, 'sweep.md' ), md.join( '\n' ) + '\n' );
 console.log( `${ results.length - bad.length } of ${ results.length } passed: ${ join( OUT, 'sweep.md' ) }` );
