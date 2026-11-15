@@ -72,7 +72,7 @@ say( await sam.game.evaluate( () => window.__app.player.mode === 'boat' && windo
 // (what each game sees, frame by frame: Sam's kayak, the wake under her and Robin's console as Sam has her; Robin's own speed)
 await sam.game.evaluate( async () => {
 
-	window.__G = ( await import( '/src/core/Globals.js' ) ).G;
+	window.__G = ( await import( performance.getEntriesByType( 'resource' ).map( ( e ) => e.name ).filter( ( u ) => u.includes( '/src/core/Globals.js' ) ).pop() || '/src/core/Globals.js' ) ).G;
 	const a = window.__app, R = window.__draws, rec = window.__rec = [], P = a.camera.position.constructor;
 	const e = { x: 0, z: 0 }, f = new P();
 	R.after.push( () => {
@@ -90,7 +90,7 @@ await sam.game.evaluate( async () => {
 } );
 await robin.game.evaluate( async ( [ SEA, OFF, FROM, KN, ON ] ) => {
 
-	const { G: Gl } = await import( '/src/core/Globals.js' );
+	const { G: Gl } = await import( performance.getEntriesByType( 'resource' ).map( ( e ) => e.name ).filter( ( u ) => u.includes( '/src/core/Globals.js' ) ).pop() || '/src/core/Globals.js' );
 	const a = window.__app, R = window.__draws, rec = window.__rec = [], b = a.boatCtl, U = KN * 0.5144, t0 = Gl.time.value + 2, y = b.position.y;
 	R.after.push( () => {
 

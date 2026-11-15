@@ -382,7 +382,7 @@ await guest.game.evaluate( () => { window.__app.weather.live = null; } );
 await until( owner.game, 'window.__app.weather.live && window.__app.weather.live.wind > 15', 120000 ).catch( () => note( '(no gale on her game)' ) );
 await offshore();
 await frames( owner.game, 30 );
-const sea = await owner.game.evaluate( async () => { const { G: GL } = await import( '/src/core/Globals.js' ); const a = window.__app, b = a.boatCtl; let lo = 9, hi = - 9; for ( let i = 0; i < 40; i ++ ) { const h = a.waves.heightAt( b.position.x + i * 7, b.position.z - i * 5 ); lo = Math.min( lo, h ); hi = Math.max( hi, h ); } return { wind: +GL.windSpeed.value.toFixed( 1 ), span: +( hi - lo ).toFixed( 2 ), pick: a.weatherPick() }; } );
+const sea = await owner.game.evaluate( async () => { const { G: GL } = await import( performance.getEntriesByType( 'resource' ).map( ( e ) => e.name ).filter( ( u ) => u.includes( '/src/core/Globals.js' ) ).pop() || '/src/core/Globals.js' ); const a = window.__app, b = a.boatCtl; let lo = 9, hi = - 9; for ( let i = 0; i < 40; i ++ ) { const h = a.waves.heightAt( b.position.x + i * 7, b.position.z - i * 5 ); lo = Math.min( lo, h ); hi = Math.max( hi, h ); } return { wind: +GL.windSpeed.value.toFixed( 1 ), span: +( hi - lo ).toFixed( 2 ), pick: a.weatherPick() }; } );
 note( 'the gale on Robin\'s sea:', JSON.stringify( sea ) );
 await pushed( 'gale' );
 const hull = await owner.game.evaluate( () => { const g = window.__app.game; return { flood: g.hull && g.hull.flood, mode: window.__app.player.mode, health: g.state.hull }; } );

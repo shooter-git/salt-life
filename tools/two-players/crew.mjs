@@ -100,7 +100,7 @@ if ( PART === 'rods' || PART === 'lights' ) {
 		// her kite, on her stand-up rod (his own rod has none), with her live bait; and her bait back as the rod goes away
 		await owner.game.evaluate( () => window.__app.together.setWeather( 'breezy', 0 ) );
 		await frames( owner.game, 30 );
-		const wind = await guest.game.evaluate( async () => { const { G } = await import( '/src/core/Globals.js' ); return +G.windSpeed.value.toFixed( 1 ); } );
+		const wind = await guest.game.evaluate( async () => { const { G } = await import( performance.getEntriesByType( 'resource' ).map( ( e ) => e.name ).filter( ( u ) => u.includes( '/src/core/Globals.js' ) ).pop() || '/src/core/Globals.js' ); return +G.windSpeed.value.toFixed( 1 ); } );
 		const pk = await pressHers( guest, 'kite', 'silverside' );
 		await until( guest.game, '!! window.__app.game.rigs.kite', 30000 ).catch( () => {} );
 		const k = await guest.game.evaluate( () => { const g = window.__app.game, r = g.rigs; return { kite: !! r.kite, kit: !! r.kit, hook: g.hookBait, lent: r._lent, spool: g.rod.spoolM }; } );
@@ -185,6 +185,8 @@ if ( PART === 'traps' ) {
 	const owner = await G.open( 'Robin', 'lobster', 30 ), guest = await G.open( 'Sam', 'console', 30 );
 	await ready( owner, guest );
 	await G.buy( owner );
+	// ((M20) and her crawfish trap permit, M19's: without it her game refuses a guest's set, "A trap needs a crawfish trap permit")
+	await owner.game.evaluate( async () => { const { UPGRADES } = await import( '/src/game/Gear.js' ); const g = window.__app.game; g.state.upgrades.trapPermit = UPGRADES.trapPermit.levels.length - 1; g.applyGear(); } );
 	const owned = await owner.game.evaluate( async () => { const { ownedTraps } = await import( '/src/game/Traps.js' ); return ownedTraps( window.__app.game.state.upgrades ); } );
 	note( 'her traps:', owned );
 	say( await G.aboard( owner, guest ), 'Sam\'s aboard the lobster boat' );

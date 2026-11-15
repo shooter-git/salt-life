@@ -467,7 +467,7 @@ if ( PART === 'slow' ) {
 	await frames( owner.game, 6 );
 	const r = await owner.game.evaluate( async () => {
 
-		const { G: GL } = await import( '/src/core/Globals.js' );
+		const { G: GL } = await import( performance.getEntriesByType( 'resource' ).map( ( e ) => e.name ).filter( ( u ) => u.includes( '/src/core/Globals.js' ) ).pop() || '/src/core/Globals.js' );
 		const a = window.__app, b = a.boatCtl, up = b.update, R = window.__draws;
 		// (each frame: the water's time it went by, and the boat's worked out over)
 		let boat = 0, n = 0, t = GL.time.value;

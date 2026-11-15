@@ -69,7 +69,7 @@ const A = pick.A.id;
 // wading, d m off the school (the sun behind you, turned about it), looking at it or away
 const wade = ( who, d, turn = 0, look = true ) => who.game.evaluate( async ( [ id, d, turn, look ] ) => {
 
-	const { G } = await import( '/src/core/Globals.js' );
+	const { G } = await import( performance.getEntriesByType( 'resource' ).map( ( e ) => e.name ).filter( ( u ) => u.includes( '/src/core/Globals.js' ) ).pop() || '/src/core/Globals.js' );
 	const { flatsSchools } = await import( '/src/game/Flats.js' );
 	const a = window.__app, p = a.player, F = a.game.flats, sea = G.seaLevel.value, sun = G.sunDir.value, sl = Math.hypot( sun.x, sun.z ) || 1;
 	const g = a.fish.sightGroups.find( ( h ) => h.sight && h.sight.id === id && h.active );
@@ -116,7 +116,7 @@ if ( doing( 'loop' ) ) {
 	const at = await sam.game.evaluate( () => { const p = window.__app.player.position; return [ p.x, p.z ]; } );
 	await robin.game.evaluate( async ( at ) => {
 
-		const { G } = await import( '/src/core/Globals.js' );
+		const { G } = await import( performance.getEntriesByType( 'resource' ).map( ( e ) => e.name ).filter( ( u ) => u.includes( '/src/core/Globals.js' ) ).pop() || '/src/core/Globals.js' );
 		const a = window.__app, p = a.player, x = at[ 0 ] + 9, z = at[ 1 ] + 3, sea = G.seaLevel.value;
 		p.position.set( x, Math.max( a.terrainData.heightAt( x, z ), sea - 1.2 ), z );
 		p.velocity.set( 0, 0, 0 );

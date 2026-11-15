@@ -230,7 +230,7 @@ if ( PART === 'kite' ) {
 	await G.toSea( owner );
 	const n = await spread( owner, null, 0 );
 	// (her kite, by the rig's own call: a live bait on the hook)
-	const k = await owner.game.evaluate( async () => { const { G: GL } = await import( '/src/core/Globals.js' ); const a = window.__app, g = a.game, r = g.rigs; const p = a.player; p.leaveHelm(); await new Promise( ( d ) => setTimeout( d, 500 ) ); p.deckPos.set( 0, 0.5, - 4.8 ); g.state.bait.mullet = 6; g.state.baitPick = 'mullet'; r.pick = 'kite'; g.rod.equip( true ); try { r._flyKite(); } catch ( e ) { return { error: e.message }; } return { kite: !! r.kite, wind: +GL.windSpeed.value.toFixed( 1 ), up: r.kite && r.kite.up, down: r.kite && r.kite.down, avail: r.available( 'kite' ) }; } );
+	const k = await owner.game.evaluate( async () => { const { G: GL } = await import( performance.getEntriesByType( 'resource' ).map( ( e ) => e.name ).filter( ( u ) => u.includes( '/src/core/Globals.js' ) ).pop() || '/src/core/Globals.js' ); const a = window.__app, g = a.game, r = g.rigs; const p = a.player; p.leaveHelm(); await new Promise( ( d ) => setTimeout( d, 500 ) ); p.deckPos.set( 0, 0.5, - 4.8 ); g.state.bait.mullet = 6; g.state.baitPick = 'mullet'; r.pick = 'kite'; g.rod.equip( true ); try { r._flyKite(); } catch ( e ) { return { error: e.message }; } return { kite: !! r.kite, wind: +GL.windSpeed.value.toFixed( 1 ), up: r.kite && r.kite.up, down: r.kite && r.kite.down, avail: r.available( 'kite' ) }; } );
 	note( 'her kite:', JSON.stringify( k ) );
 	await owner.page.waitForTimeout( 20000 );
 	const ku = await owner.game.evaluate( () => { const K = window.__app.game.rigs.kite; return K ? { up: +K.up.toFixed( 2 ), at: K.at.toArray().map( ( v ) => +v.toFixed( 1 ) ), down: K.down } : null; } );
@@ -995,7 +995,7 @@ if ( PART === 'kitefish' ) {
 	await toasts( owner );
 	// her rod, her rig, her bait, by keys
 	await until( owner.game, `( () => { const a = window.__app; return a.weather.live && a.weather.live.wind > 3; } )()`, 180000 ).catch( () => {} );
-	await owner.game.evaluate( async () => { const { G: GL } = await import( '/src/core/Globals.js' ); const a = window.__app, g = a.game, p = a.player; g.state.bait.mullet = 6; p.deckPos.set( 0, 0.5, - 4.8 ); p.deckVel.set( 0, 0, 0 ); window.__wind = () => +GL.windSpeed.value.toFixed( 1 ); } );
+	await owner.game.evaluate( async () => { const { G: GL } = await import( performance.getEntriesByType( 'resource' ).map( ( e ) => e.name ).filter( ( u ) => u.includes( '/src/core/Globals.js' ) ).pop() || '/src/core/Globals.js' ); const a = window.__app, g = a.game, p = a.player; g.state.bait.mullet = 6; p.deckPos.set( 0, 0.5, - 4.8 ); p.deckVel.set( 0, 0, 0 ); window.__wind = () => +GL.windSpeed.value.toFixed( 1 ); } );
 	await frames( owner.game, 3 );
 	await press( owner, 'KeyR', 2 );
 	await frames( owner.game, 3 );
