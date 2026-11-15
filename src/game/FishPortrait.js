@@ -322,7 +322,7 @@ export class FishPortrait {
 			renderer.setScissorTest( true );
 			renderer.autoClear = false;
 			renderer.clearDepth();
-			renderer.toneMappingExposure = EXPOSURE;
+			renderer.toneMappingExposure = EXPOSURE * ( renderer.toneK || 1 ); // ((M20) at the curve's own: App's TONE)
 			// (the fish's material also takes the island's lamps at night: not in the studio)
 			holdLocalLights( () => holdCloudShadows( () => renderer.render( this.scene, this.camera ) ) );
 			renderer.setScissorTest( false );

@@ -341,6 +341,7 @@ function noiseK( px, pz, key ) {
 		w.material = { envMap: null };
 		w.envUnder = { value: 0 };
 		w.moonSlope = { value: new Vector4() }; // ((M20) the moon's glint's slopes)
+		w.moonCap = { value: 0 }; // ((M20) and its cap)
 		w._finds = { near: [], max: 6, weed: { value: Array.from( { length: 12 }, () => new Vector4() ) }, weedCount: { value: 0 }, boil: { value: Array.from( { length: 4 }, () => new Vector4() ) }, boilCount: { value: 0 } };
 		return w;
 

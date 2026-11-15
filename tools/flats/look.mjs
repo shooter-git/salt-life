@@ -13,6 +13,7 @@
 //
 // A load takes a minute or two (the island's all there once its plants have grown); each shot some tens of seconds
 // more. The pier's view loads again, in the lobster boat. Don't edit src while it runs: the dev server reloads the page.
+// (M20) TONE=neutral|agx: drawn under that tone curve, for FINISH's trial (App's ?tone=: docs/m20/finish.md)
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -64,7 +65,7 @@ for ( const boat of groups ) {
 	const errors = [];
 	page.on( 'pageerror', ( e ) => errors.push( e.message ) );
 	page.on( 'console', ( m ) => m.type() === 'error' && errors.push( m.text() ) );
-	await page.goto( `http://127.0.0.1:${ PORT }/?tier=${ TIER }&weather=calm&hour=11&fullsea${ boat ? '&boat=' + boat : '' }` );
+	await page.goto( `http://127.0.0.1:${ PORT }/?tier=${ TIER }&weather=calm&hour=11&fullsea${ boat ? '&boat=' + boat : '' }${ process.env.TONE ? '&tone=' + process.env.TONE : '' }` );
 	await page.waitForFunction( () => window.__app && window.__app._started, null, { timeout: 400000 } );
 	log( 'started', boat || 'kayak' );
 	// (high water's shore field, solved after the start, and on the CPU the island's held-back parts revealed and the

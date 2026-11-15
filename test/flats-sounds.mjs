@@ -311,6 +311,24 @@ ok( boltDb( BOLT.school ) === 0 && boltDb( 1 ) === BOLT.least && boltDb( 3 ) < b
 
 }
 
+// ---- (M20) another player's kayak by you (M19's, which the state sent and the mix never read): her push where she is
+{
+
+	const S = await scape();
+	const bed = () => S.s._beds.get( 'kayak_push_theirs' );
+	const lv = () => bed() ? toDb( bed().gain.gain.value * dB( BANK.kayak_push.lufs ) ) : - Infinity;
+	const her = ( d ) => ( { d, speed: PUSH.top, x: d, y: 0.3, z: 0 } );
+	await run( S, 4, state( { theirKayak: her( 2 ) }, { speed: 0 } ) );
+	const P = S.s.theirPan;
+	ok( near( lv(), MIX.kayakPush, 0.3 ) && S.s._dest.kayak_push_theirs === P, `her at hull speed 2 m off, you sat still: ${ lv().toFixed( 1 ) } LUFS, as loud as your own (MONO's trim not taken: her own panner splits it)` );
+	ok( P.positionX.value === 2 && P.positionY.value === 0.3 && P.positionZ.value === 0, '  heard from where she is, her own panner (it went through your boat\'s, from your boat)' );
+	await run( S, 4, state( { theirKayak: her( 9 ) }, { speed: 0 } ) );
+	ok( near( lv(), MIX.kayakPush - 6, 0.3 ), `9 m off: ${ lv().toFixed( 1 ) }, 6 dB under` );
+	await run( S, 6, state( { theirKayak: null }, { speed: 0 } ) );
+	ok( ! bed() || bed().gain.gain.value < 1e-4, 'past her 15 m (none sent): nothing' );
+
+}
+
 // ---- her slaps kept as they were, on still water too (the user's, by ear: the push plays under them)
 for ( const wind of [ 1, 10 ] ) {
 
@@ -347,17 +365,22 @@ for ( const wind of [ 1, 10 ] ) {
 
 }
 
-// ---- Pearl's outboard, by ear: 9 dB under M16's
+// ---- Pearl's outboard, by ear: 9 dB under M16's; ((M20) on mid and high her HRTF panner's gain on her recording taken off,
+// measured in the game: docs/m20/finish.md)
 {
 
-	ok( PASSING.db === - 36, `her level: ${ PASSING.db } LUFS 12 m off idling, ${ PASSING.db + 6 } flat out` );
-	const S = await scape();
-	await run( S, 0.5, state( {}, { sound: 'lobster' } ) );
-	S.s.passingOutboard( { x: 0, y: 0, z: - 12, speed: 10.8, throttle: 1 } );
-	await settle();
-	S.s.passingOutboard( { x: 0, y: 0, z: - 12, speed: 10.8, throttle: 1 } );
-	const g = S.s._passing ? S.s._passing.gain.gain.value : 0;
-	ok( near( toDb( g * dB( BANK.outboard_run.lufs ) ), PASSING.db + 6, 0.01 ), `flat out 12 m off: ${ toDb( g * dB( BANK.outboard_run.lufs ) ).toFixed( 1 ) } LUFS, 9 dB under the console flat out at her helm (-21)` );
+	ok( PASSING.db === - 36 && PASSING.hrtf === 4.4, `her level: ${ PASSING.db } LUFS 12 m off idling, ${ PASSING.db + 6 } flat out; ${ PASSING.hrtf } dB off on mid and high` );
+	for ( const tier of [ 'low', 'high' ] ) {
+
+		const S = await scape( tier );
+		await run( S, 0.5, state( {}, { sound: 'lobster' } ) );
+		S.s.passingOutboard( { x: 0, y: 0, z: - 12, speed: 10.8, throttle: 1 } );
+		await settle();
+		S.s.passingOutboard( { x: 0, y: 0, z: - 12, speed: 10.8, throttle: 1 } );
+		const g = S.s._passing ? S.s._passing.gain.gain.value : 0, want = PASSING.db + 6 - ( tier === 'low' ? 0 : PASSING.hrtf );
+		ok( near( toDb( g * dB( BANK.outboard_run.lufs ) ), want, 0.01 ), `${ tier }: flat out 12 m off, ${ toDb( g * dB( BANK.outboard_run.lufs ) ).toFixed( 1 ) } LUFS into her panner${ tier === 'low' ? ', 9 dB under the console flat out at her helm (-21)' : ', heard as on low through the HRTF' }` );
+
+	}
 
 }
 

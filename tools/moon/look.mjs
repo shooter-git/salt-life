@@ -14,6 +14,7 @@
 // see them (60 degrees); beach, the north's turtle beach from the sand out to sea; sea, from the water toward it, its path
 // on the sea; torch, along the beach with the flashlight on. A load takes a minute or two (on mid and high on the CPU,
 // many); each shot some tens of seconds more. Don't edit src while it runs.
+// (M20) TONE=neutral|agx: drawn under that tone curve, for FINISH's trial (App's ?tone=: docs/m20/finish.md)
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -90,7 +91,7 @@ const errors = [];
 page.on( 'pageerror', ( e ) => errors.push( e.message ) );
 page.on( 'console', ( m ) => m.type() === 'error' && errors.push( m.text() ) );
 const first = nights[ phases[ 0 ] ];
-await page.goto( `http://127.0.0.1:${ PORT }/?tier=${ TIER }&weather=calm&hour=${ first.hour }&day=${ first.day }&fullsea` );
+await page.goto( `http://127.0.0.1:${ PORT }/?tier=${ TIER }&weather=calm&hour=${ first.hour }&day=${ first.day }&fullsea${ process.env.TONE ? '&tone=' + process.env.TONE : '' }` );
 await page.waitForFunction( () => window.__app && window.__app._started, null, { timeout: 400000 } );
 log( 'started' );
 // (the disc comes in after the start on the CPU: Sky's holdMoon, App.prepareLate)

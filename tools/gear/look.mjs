@@ -6,6 +6,7 @@
 //   a dev server on LOOK_PORT (5241), then
 //   node tools/gear/look.mjs <out> [tier]
 //   (ALL_THE_SPACES: its checkout, if it isn't ../all-the-spaces. Don't edit src while it runs.)
+// (M20) TONE=neutral|agx: drawn under that tone curve, for FINISH's trial (App's ?tone=: docs/m20/finish.md)
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -29,7 +30,7 @@ page.setDefaultTimeout( 900000 );
 const errors = [];
 page.on( 'pageerror', ( e ) => errors.push( e.message ) );
 page.on( 'console', ( m ) => m.type() === 'error' && errors.push( m.text() ) );
-await page.goto( `http://127.0.0.1:${ PORT }/?tier=${ TIER }&weather=calm&hour=11&boat=kayak&fullsea` );
+await page.goto( `http://127.0.0.1:${ PORT }/?tier=${ TIER }&weather=calm&hour=11&boat=kayak&fullsea${ process.env.TONE ? '&tone=' + process.env.TONE : '' }` );
 await page.waitForFunction( () => window.__app && window.__app._started && window.__app.game, null, { timeout: 900000 } );
 await page.waitForFunction( () => window.__app._plantsGrown, null, { timeout: 900000 } ).catch( () => log( 'no plants yet' ) );
 log( 'started' );
