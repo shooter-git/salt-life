@@ -93,8 +93,17 @@ export class FlatsFishing {
 
 	}
 
-	// a cloud's shadow at ( x, z ), 0..1: the sky's cover, drifting on the wind (as the clouds' own shadows on high)
+	// a cloud's shadow at ( x, z ), 0..1. ((M20) On high, the drawn clouds' own, read back from their shadow map (App's cloudShade:
+	// CloudShadows); elsewhere, or till it's read, the field below)
 	shadeAt( x, z ) {
+
+		const drawn = this.app.cloudShade ? this.app.cloudShade( x, z ) : null;
+		return drawn !== null ? drawn : this.shadeField( x, z );
+
+	}
+
+	// the sky's cover, drifting on the wind: the shade where no clouds' shadows are drawn (low, mid)
+	shadeField( x, z ) {
 
 		const sky = this.app.sky, cover = sky && sky.clouds && sky.clouds.coverage ? sky.clouds.coverage.value : 0.3;
 		if ( cover <= 0.02 ) return 0;

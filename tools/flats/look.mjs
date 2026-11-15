@@ -13,7 +13,8 @@
 //
 // A load takes a minute or two (the island's all there once its plants have grown); each shot some tens of seconds
 // more. The pier's view loads again, in the lobster boat. Don't edit src while it runs: the dev server reloads the page.
-// (M20) TONE=neutral|agx: drawn under that tone curve, for FINISH's trial (App's ?tone=: docs/m20/finish.md)
+// (M20) TONE=neutral|agx: drawn under that tone curve, for FINISH's trial (App's ?tone=: docs/m20/finish.md); FLATS_HOUR=h: the
+// clock held there, not at noon (CHECKS' piles in a low sun: docs/m20/checks.md)
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -72,16 +73,19 @@ for ( const boat of groups ) {
 	// plants grown (till then whole tiles of it aren't drawn); then the tide's held where it's asked, and the views staged)
 	await page.waitForFunction( () => window.__app.shore.trains[ 0 ].upper && window.__app._plantsGrown, null, { timeout: 600000 } );
 	log( 'high water\'s field in, the island all there' );
+	if ( process.env.FLATS_HOUR ) await page.evaluate( ( h ) => window.__hour = h, Number( process.env.FLATS_HOUR ) );
 	await page.evaluate( async () => {
 
 		const a = window.__app, w = a.weather, up = w.update.bind( w ), cam = a.camera, { G } = await import( '/src/core/Globals.js' );
-		// ((M17) the clock held at noon: on a busy machine a run takes long enough for its last shots to come at dusk)
+		// ((M17) the clock held at noon: on a busy machine a run takes long enough for its last shots to come at dusk. (M20) Or
+		// at FLATS_HOUR)
+		const H = window.__hour ?? 12;
 		const hold = () => {
 
 			a.settings.timeSpeed = 0;
-			a.settings.timeOfDay = 12;
+			a.settings.timeOfDay = H;
 			const t = a.together;
-			if ( t && t._clock ) t._clock = { ...t._clock, at: Date.now(), hour: 12, speed: 0 };
+			if ( t && t._clock ) t._clock = { ...t._clock, at: Date.now(), hour: H, speed: 0 };
 
 		};
 		hold();
@@ -215,7 +219,7 @@ for ( const boat of groups ) {
 
 		}
 
-		const name = `${ v }-${ level >= 0 ? '+' : '' }${ level.toFixed( 2 ) }${ STAGE === 'ebb' ? '' : '-' + STAGE }${ SURGE ? '-surge' + SURGE : '' }${ process.env.FLATS_HIDE ? '-no-' + process.env.FLATS_HIDE.replace( /,/g, '-' ) : '' }${ process.env.FLATS_EVAL ? '-eval' : '' }`;
+		const name = `${ v }-${ level >= 0 ? '+' : '' }${ level.toFixed( 2 ) }${ STAGE === 'ebb' ? '' : '-' + STAGE }${ SURGE ? '-surge' + SURGE : '' }${ process.env.FLATS_HIDE ? '-no-' + process.env.FLATS_HIDE.replace( /,/g, '-' ) : '' }${ process.env.FLATS_EVAL ? '-eval' : '' }${ process.env.FLATS_HOUR ? '-h' + process.env.FLATS_HOUR : '' }`;
 		await page.screenshot( { path: join( OUT, name + '.png' ) } );
 		const info = await page.evaluate( () => {
 

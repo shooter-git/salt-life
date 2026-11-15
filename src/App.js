@@ -306,7 +306,9 @@ export class App {
 		// (high) the clouds' shadows on the island and the sea: lightUp gives them to the lit materials,
 		// so before anything is lit (with a graphics card the plants are lit early in loading)
 		this.cloudShadows = !! this.sky.clouds.shadowMap;
-		if ( this.cloudShadows ) cloudShadows.attach( this.sky.clouds );
+		if ( this.cloudShadows ) cloudShadows.attach( this.sky.clouds, renderer );
+		// ((M20) the drawn shadows for the CPU (FlatsFishing.shadeAt): on high, read back from their map; null, so its own field, elsewhere)
+		this.cloudShade = this.cloudShadows ? ( x, z ) => cloudShadows.shadeAt( x, z ) : null;
 		// the eye adapts at dusk and at night: the whole scene's exposure follows (Tidewater's auto exposure)
 		this.sky.sceneAdaptation = true;
 		if ( SHADOW[ tier ] ) {
