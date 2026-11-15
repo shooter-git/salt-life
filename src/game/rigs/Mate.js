@@ -114,7 +114,9 @@ export class Mate {
 		this._pay( s, sportfisher, b );
 		const fish = s.mate && sportfisher && p.mode === 'deck' && ! p.riding ? this._fishAt( _at ) : null;
 		const human = !! ( app.together && app.together._handed );
-		const can = !! fish && ! b.moored && ! b.hauled && ! b.beached && b.engineOn && ! human && g.state.fuelL > 0;
+		// ((M20) not only with her engines running: leaving her helm stops them (Hull), so he never took her. He starts her, as
+		// taking her helm does (her hull cranks her once she's driven))
+		const can = !! fish && ! b.moored && ! b.hauled && ! b.beached && ! human && g.state.fuelL > 0;
 		if ( can ) this._drive( dt, fish );
 		else if ( b.helmsman === 'mate' ) this.handBack();
 		if ( this.figure ) this.figure.visible = b.helmsman === 'mate';

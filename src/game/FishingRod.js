@@ -7,6 +7,44 @@ import { RIGS } from './rigs/Presentation.js';
 import { buildBigRodGeometry } from './rigs/BigRod.js';
 import { buildFlyRodGeometry, FLY_K, FLY_HOLD, FLY_LINE_COLOR, FLY_LINE_GLOW } from './rigs/FlyRod.js';
 
+// (M20) the landing net's hoop, ready, this far off a netted fish as it comes in (m: Rigs' NET.reach, and a little more)
+const NET_SHOWN = 2.2;
+
+// (M20) The rubber landing net (Gear's landingNet; stream KIT, docs/m20/kit.md): an EGO S2's medium hoop, about 50 cm across, its
+// rubber bag 42 cm deep, on a 1.2 m handle. Hoop level about the origin, the bag below it, the handle out along -Z from its
+// rim, up a little. Made once, shared with the copies' (Together)
+let _net = null;
+export function netGeometry() {
+
+	if ( _net ) return _net;
+	const R = 0.25, parts = [];
+	parts.push( prepare( torus( R, 0.009, 6, 32 ), { color: 0x1d1f22, rough: 0.45, pattern: PAT.machined, matrix: mat4( 0, 0, 0, Math.PI / 2 ) } ) );
+	// (the bag: a lathe from its bottom up to the hoop, outside and in, so it's seen from above too)
+	const prof = [];
+	for ( let i = 8; i >= 0; i -- ) {
+
+		const k = i / 8;
+		prof.push( [ R * 0.98 * ( 1 - 0.78 * k * k ), - 0.42 * k ] );
+
+	}
+
+	parts.push( prepare( lathe( prof, 20 ), { color: 0x3c4447, rough: 0.85, pattern: PAT.rubber } ) );
+	parts.push( prepare( lathe( prof.map( ( [ r, y ] ) => [ r, y ] ).reverse(), 20 ), { color: 0x2c3336, rough: 0.9, pattern: PAT.rubber } ) );
+	// (the handle from the hoop's rim out and up toward whoever holds it)
+	parts.push( prepare( cylinder( 0.014, 0.017, 1.2, 8 ), { color: 0x2a2c2f, rough: 0.6, pattern: PAT.eva, matrix: mat4( 0, 0.12, - R - 0.58, Math.PI / 2 + 0.2 ) } ) );
+	return ( _net = mergePrepared( parts ) );
+
+}
+
+// (M20) a net mesh under `at` (its fish), its hoop at y, its handle toward `from` (whoever's netting it)
+export function placeNet( mesh, at, from, y ) {
+
+	if ( ! mesh.geometry || mesh.geometry !== _net ) mesh.geometry = netGeometry();
+	mesh.position.set( at.x, Math.min( y, at.y ) - 0.06, at.z );
+	mesh.rotation.set( 0, Math.atan2( at.x - from.x, at.z - from.z ), 0 );
+
+}
+
 // The fishing rod in the player's hands, its line and the bobber.
 //
 // A 7 ft medium saltwater spinning combo at real scale: a tapered carbon blank under clear coat,
@@ -300,6 +338,12 @@ export class FishingRod {
 		}
 
 		scene.add( this.rodMesh, this.bobberMesh, this.lineMesh, this.lostMesh, this.lostLine );
+		// ((M20) the landing net (Gear's landingNet), drawn as a netted fish comes alongside and as it's lifted out: netting, set by
+		// the game as the fight starts (Rigs' net). Made, and put in the scene, the first time it's wanted: in it from the start, the
+		// load's compile built the bobber's program before ready, a 17th)
+		this.netting = false;
+		this.netMesh = null;
+		this._scene = scene;
 
 	}
 
@@ -310,7 +354,8 @@ export class FishingRod {
 		const rod = new Mesh( this._smallRod || this.rodMesh.geometry, createRodMaterial() ); // ((M19) the spinning rod's, whichever's in your hands)
 		const bobber = new Mesh( this.bobberMesh.geometry, this.bobberMat );
 		const line = new Mesh( this.lineMesh.geometry, createLineMaterial( LINE_SEGS ) );
-		for ( const m of [ rod, bobber, line ] ) {
+		const net = new Mesh( undefined, this.bobberMat ); // ((M20) their landing net: netGeometry, when it's first wanted)
+		for ( const m of [ rod, bobber, line, net ] ) {
 
 			m.frustumCulled = false;
 			m.castShadow = false;
@@ -320,7 +365,7 @@ export class FishingRod {
 
 		rod.matrixAutoUpdate = false;
 		line.material.uniforms.lineShow.value = 1;
-		return { rod, bobber, line };
+		return { rod, bobber, line, net };
 
 	}
 
@@ -798,6 +843,21 @@ export class FishingRod {
 		this.lineMesh.visible = visible && out && this.state !== 'shoot'; // ((M19) shot, it's drawn as it unrolls: FlyLine
 		this.bobberMesh.visible = visible && out && this.state !== 'landing' && this.rig === 'float' && ! this.floatOff;
 		this.bobberMesh.position.copy( this.bobber );
+		// ((M20) the landing net: in the water beside a netted fish once it's alongside, and under it as it's lifted out)
+		const netOn = visible && this.netting && ( this.state === 'landing' || ( this.state === 'fighting' && fight && fight.distance < NET_SHOWN ) );
+		if ( netOn && ! this.netMesh ) {
+
+			const m = this.netMesh = new Mesh( netGeometry(), this.bobberMat );
+			m.name = 'LandingNet';
+			m.frustumCulled = false;
+			m.castShadow = false;
+			this._scene.add( m );
+
+		}
+
+		if ( this.netMesh ) this.netMesh.visible = netOn;
+		if ( netOn ) placeNet( this.netMesh, this.bobber, cam.position, this.state === 'landing' ? this.bobber.y : this.waterY );
+		if ( this.state !== 'fighting' && this.state !== 'landing' ) this.netting = false;
 		// a real float is a few pixels at casting range: grow it with distance so it stays readable
 		const camD = this.bobber.distanceTo( cam.position );
 		this.bobberMesh.scale.setScalar( Math.max( 1, camD / 7 ) );

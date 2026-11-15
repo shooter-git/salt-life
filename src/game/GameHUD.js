@@ -202,6 +202,8 @@ html:has(.gm-panel.is-open) .hud-hint { visibility: hidden; }
 .gm-hull-bar > span { background: var(--tw-ink-2); }
 .gm-hull.is-low .gm-hull-bar > span { background: var(--tw-coral); }
 .gm-bilge-bar > span { background: var(--tw-aqua); }
+.gm-batt-bar > span { background: #8fdc8a; }
+.gm-batt.is-low .gm-batt-bar > span { background: var(--tw-coral); }
 .gm-bilge.is-low .gm-bilge-bar > span { background: var(--tw-coral); }
 .gm-bilge.is-low { animation: gm-breath-pulse 0.9s ease-in-out infinite; }
 .gm-sonar-dots { letter-spacing: 1px; color: var(--tw-aqua); }
@@ -434,7 +436,7 @@ export class GameHUD {
 		style.textContent = CSS + FLEET_CSS + SHELL_CSS + CHART_MAP_CSS;
 		document.head.append( style );
 
-		this.purse = h( 'div', 'gm-purse tw-glass', `<div class="gm-purse-top"><span class="gm-money">$0</span><span class="gm-gauge gm-breath"><span>Breath</span><span class="gm-cooler-bar gm-breath-bar"><span></span></span></span><span class="gm-gauge gm-bait"><span class="gm-bait-l">Bait</span><b class="gm-bait-t">Shrimp</b></span></div><div class="gm-purse-box"><span class="gm-cooler"><span class="gm-cooler-label">Cooler</span><span class="gm-cooler-bar"><span></span></span><span class="gm-cooler-kg">0 / 66 lb</span></span><span class="gm-cooler gm-ice"><span>Ice</span><span class="gm-cooler-bar gm-ice-bar"><span></span></span><span class="gm-cooler-kg gm-ice-t"></span></span></div><div class="gm-purse-boat"><span class="gm-gauge gm-fuel"><span>Fuel</span><span class="gm-cooler-bar gm-fuel-bar"><span></span><i class="gm-fuel-tick"></i></span><b class="gm-fuel-l">11 gal</b><i class="gm-fuel-state"></i></span><span class="gm-gauge gm-hull"><span>Hull</span><span class="gm-cooler-bar gm-hull-bar"><span></span></span><b class="gm-hull-p">100%</b></span><span class="gm-gauge gm-bilge"><span>Bilge</span><span class="gm-cooler-bar gm-bilge-bar"><span></span></span><b class="gm-bilge-l">0 gal</b></span><span class="gm-gauge gm-sonar"><span>Sonar</span><b class="gm-sonar-d">0 ft</b><span class="gm-sonar-dots"></span></span><span class="gm-gauge gm-home"><span>Home</span><b class="gm-home-t"></b></span></div>` );
+		this.purse = h( 'div', 'gm-purse tw-glass', `<div class="gm-purse-top"><span class="gm-money">$0</span><span class="gm-gauge gm-breath"><span>Breath</span><span class="gm-cooler-bar gm-breath-bar"><span></span></span></span><span class="gm-gauge gm-bait"><span class="gm-bait-l">Bait</span><b class="gm-bait-t">Shrimp</b></span></div><div class="gm-purse-box"><span class="gm-cooler"><span class="gm-cooler-label">Cooler</span><span class="gm-cooler-bar"><span></span></span><span class="gm-cooler-kg">0 / 66 lb</span></span><span class="gm-cooler gm-ice"><span>Ice</span><span class="gm-cooler-bar gm-ice-bar"><span></span></span><span class="gm-cooler-kg gm-ice-t"></span></span></div><div class="gm-purse-boat"><span class="gm-gauge gm-fuel"><span>Fuel</span><span class="gm-cooler-bar gm-fuel-bar"><span></span><i class="gm-fuel-tick"></i></span><b class="gm-fuel-l">11 gal</b><i class="gm-fuel-state"></i></span><span class="gm-gauge gm-batt"><span>Battery</span><span class="gm-cooler-bar gm-batt-bar"><span></span></span><b class="gm-batt-p">100%</b></span><span class="gm-gauge gm-hull"><span>Hull</span><span class="gm-cooler-bar gm-hull-bar"><span></span></span><b class="gm-hull-p">100%</b></span><span class="gm-gauge gm-bilge"><span>Bilge</span><span class="gm-cooler-bar gm-bilge-bar"><span></span></span><b class="gm-bilge-l">0 gal</b></span><span class="gm-gauge gm-sonar"><span>Sonar</span><b class="gm-sonar-d">0 ft</b><span class="gm-sonar-dots"></span></span><span class="gm-gauge gm-home"><span>Home</span><b class="gm-home-t"></b></span></div>` );
 		this.purseTop = this.purse.firstElementChild;
 		this.fuelTick = this.purse.querySelector( '.gm-fuel-tick' );
 		this.fuelState = this.purse.querySelector( '.gm-fuel-state' );
@@ -448,6 +450,9 @@ export class GameHUD {
 		this.fuelEl = this.purse.querySelector( '.gm-fuel' );
 		this.fuelBar = this.purse.querySelector( '.gm-fuel-bar > span' );
 		this.fuelL = this.purse.querySelector( '.gm-fuel-l' );
+		this.battEl = this.purse.querySelector( '.gm-batt' ); // ((M20) the trolling motor's batteries)
+		this.battBar = this.purse.querySelector( '.gm-batt-bar > span' );
+		this.battP = this.purse.querySelector( '.gm-batt-p' );
 		this.hullEl = this.purse.querySelector( '.gm-hull' );
 		this.hullBar = this.purse.querySelector( '.gm-hull-bar > span' );
 		this.hullP = this.purse.querySelector( '.gm-hull-p' );
@@ -600,7 +605,7 @@ export class GameHUD {
 	// ({ s, max, blackout }) while it matters; netWind: the cast net's wind-up ({ charge, win: [ lo, hi ],
 	// tired }); bait: the chip in the purse ({ label, text }: the hook's bait, or the bucket); (M10) hull:
 	// the boat's wear (0..1) once it shows, bilge: the litres in her bilge while there are any
-	update( { fight, casting, power, bite, aiming, fuel = null, sonar = null, aim = null, breath = null, netWind = null, bait = null, hull = null, bilge = null } ) {
+	update( { fight, casting, power, bite, aiming, fuel = null, sonar = null, aim = null, breath = null, netWind = null, bait = null, hull = null, bilge = null, battery = null } ) {
 
 		// ((v2.3.0) the hold's bar, every 20 frames)
 		if ( ( this._holdT = ( this._holdT || 0 ) + 1 ) >= 20 ) {
@@ -644,6 +649,17 @@ export class GameHUD {
 			this.fuelBar.style.width = `${ fuel.litres / fuel.tank * 100 }%`;
 			this.fuelL.textContent = `${ gallons( fuel.litres ) } gal`;
 			this.fuelEl.classList.toggle( 'is-low', fuel.litres < fuel.tank * 0.15 );
+
+		}
+
+		// ((M20) the trolling motor's batteries, fitted: what's left)
+		this.battEl.classList.toggle( 'is-on', battery !== null );
+		if ( battery !== null ) {
+
+			const left = Math.round( battery * 100 );
+			this.battBar.style.width = `${ left }%`;
+			if ( this.battP.textContent !== `${ left }%` ) this.battP.textContent = `${ left }%`;
+			this.battEl.classList.toggle( 'is-low', battery < 0.15 );
 
 		}
 
@@ -1605,7 +1621,7 @@ GameHUD.prototype.renderShop = function () {
 		const btn = next
 			? `<button class="gm-btn" data-buy="${ key }" ${ next.cost > s.money || needs ? 'disabled' : '' }>$${ next.cost }</button>`
 			: '<span class="gm-have">Top of the line</span>';
-		const needed = needs ? ( /^[A-Z][a-z]/.test( needs.name ) ? needs.name[ 0 ].toLowerCase() + needs.name.slice( 1 ) : needs.name ) : '';
+		const needed = needs ? track.needsName || ( /^[A-Z][a-z]/.test( needs.name ) ? needs.name[ 0 ].toLowerCase() + needs.name.slice( 1 ) : needs.name ) : '';
 		return `<div class="gm-shop-row"><span>${ track.name }: ${ next ? next.label : cur.label }<small>${ needs ? `Needs the ${ needed } first` : `Now: ${ cur.label }` }</small></span>${ btn }</div>`;
 
 	};

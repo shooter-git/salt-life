@@ -85,8 +85,15 @@ await page.evaluate( async () => {
 
 		const L = window.__look;
 		if ( ! L ) return;
-		// ((sweep) the waves' clock stopped, the same for the CPU's query and the drawn sea)
-		if ( window.__T !== undefined ) G.time.value = window.__T;
+		// ((sweep) the waves' clock stopped, the same for the CPU's query and the drawn sea; (M20) the breakers' too: App.frame ran
+		// shore.update before this, on the frame's own clock, so the drawn surf had run a frame ahead of the CPU's)
+		if ( window.__T !== undefined ) {
+
+			G.time.value = window.__T;
+			a.shore.update( G.time.value );
+
+		}
+
 		const y = a.query.heightAt( L.x, L.z, G.time.value );
 		ball.position.set( L.x, y + ( L.dh || 0 ), L.z );
 		window.__said = { y, ground: a.terrainData.heightAt( L.x, L.z ), t: G.time.value, tide: a.weather.tide };

@@ -44,6 +44,10 @@ export const G = {
 	// how much it's a storm of its own on the horizon (Lightning.flashSeen)
 	skyFlashShape: { value: new Vector4( 7, 1, 0, 0 ) },
 	skyExposure: { value: 1 },
+	// (M20) the moon in the sea (Sky, WaterSurface's glint): toward the moon and 1 / its disc's solid angle (0 while it's down);
+	// its disc's light, all of it, as the sky draws it, and 1 while it's the key light (whose own glint on the sea it replaces)
+	moonGlint: { value: new Vector4() },
+	moonLight: { value: new Vector4() },
 	envIntensity: { value: 1 },
 };
 

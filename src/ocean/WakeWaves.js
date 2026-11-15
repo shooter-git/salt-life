@@ -46,6 +46,143 @@ const TRACKS = { low: 2, mid: 4, high: 4 }; // boats' wakes at once
 // triangles drew them more than half wrong against the CPU's, 7.6 mm RMS on 13.8, and they weren't to be seen astern. So on low
 // they're left out, drawn and floated on alike: docs/m17/wakes.md)
 const DRAWN = { low: [ 0.2, 0.4 ], mid: [ 0.2, 0.4 ], high: [ 0.2, 0.4 ] };
+// (M20) Wakes in shallow water (stream SEA: docs/m20/sea.md; the sources, docs/m20/sources-sea.md's 1). In water h deep her waves
+// go as omega^2 = g k tanh( k h ), and the wake's wedge widens by the depth Froude number Fh = U / sqrt( g h ): Kelvin's up to
+// about 0.7, 90 degrees at 1, asin( 1 / Fh ) past it. Her arms open toward that wedge over the transcritical range (from `open`,
+// and back to her own by `close`: judgement; on the plane, supercritical, her visible arms barely move), her waves grow long
+// near critical, and her crests stand `high` times as high at Fh 0.9 to 1, back to as they were by 0.84 and 1.16 (`bump`:
+// judgement, from Soomere's "considerably" and the Tallinn paper's highest at critical). Each crest breaks where it's BREAK of
+// the depth, crest to trough (McCowan's 0.78): wakeBreak, the sea's shader's the same
+export const SHALLOW = { open: [ 0.7, 0.95 ], close: [ 1, 1.16 ], bump: [ 0.84, 0.9, 1, 1.16 ], high: 2, deep: 1e4 };
+export const WAKE_BREAK = 0.78;
+// kh past this, the deep water's (tanh 1, n 1/2: the GLSL's the same)
+const KH_MAX = 12;
+
+// the water's depth Froude number for a boat at U m/s over h m (0 over deep water)
+export const depthFroude = ( U, h ) => h < SHALLOW.deep ? U / Math.sqrt( GRAVITY * Math.max( h, 0.05 ) ) : 0;
+
+// the wave number (rad/m) of the wave whose phase speed in water h deep is c, omega^2 = g k tanh( k h ): kh solves
+// tanh( x ) / x = c^2 / g h (Newton's from the deep water's guess). 0 if none can go so fast there (c^2 >= g h)
+export function waveNumber( c, h ) {
+
+	const deep = GRAVITY / ( c * c );
+	if ( ! ( h < SHALLOW.deep ) ) return deep;
+	const r = c * c / ( GRAVITY * h );
+	if ( r >= 1 ) return 0;
+	let x = 1 / r;
+	if ( x > KH_MAX ) return deep;
+	for ( let i = 0; i < 30; i ++ ) {
+
+		const th = Math.tanh( x ), f = th - r * x, d = 1 - th * th - r;
+		const nx = x - f / d;
+		if ( ! ( nx > 0 ) ) {
+
+			x *= 0.5;
+			continue;
+
+		}
+
+		if ( Math.abs( nx - x ) < 1e-10 * x ) {
+
+			x = nx;
+			break;
+
+		}
+
+		x = nx;
+
+	}
+
+	return x / h;
+
+}
+
+// n, the group speed over the phase speed, for kh (1/2 deep, 1 shallow)
+export const groupShare = ( kh ) => kh >= KH_MAX ? 0.5 : 0.5 + kh / Math.sinh( 2 * Math.max( kh, 1e-3 ) );
+
+// the angle (rad) off her track that a steady wake's waves running psi off her heading send their energy out at, at U over h
+// (tan alpha = n cos psi sin psi / ( 1 - n cos^2 psi ), n by their kh); -1 where no such wave goes
+function energyAngle( psi, U, h ) {
+
+	const c = U * Math.cos( psi ), k = waveNumber( c, h );
+	if ( ! ( k > 0 ) ) return - 1;
+	const n = groupShare( Math.min( k * h, KH_MAX ) ), cs = Math.cos( psi );
+	return Math.atan2( n * cs * Math.sin( psi ), 1 - n * cs * cs );
+
+}
+
+// the wedge's half-angle (rad) at U over h, and the way its cusp waves run (psi, rad): the most the energy angle comes to
+export function wakeWedge( U, h, out = {} ) {
+
+	const Fh = depthFroude( U, h ), lo = Fh > 1 ? Math.acos( 1 / Fh ) + 1e-6 : 1e-4, hi = Math.PI / 2 - 1e-4;
+	let best = - 1, at = lo;
+	const N = 72;
+	for ( let i = 0; i <= N; i ++ ) {
+
+		const psi = lo + ( hi - lo ) * i / N, a = energyAngle( psi, U, h );
+		if ( a > best ) {
+
+			best = a;
+			at = psi;
+
+		}
+
+	}
+
+	// (and closer about it: golden-section)
+	let a = Math.max( lo, at - ( hi - lo ) / N ), b = Math.min( hi, at + ( hi - lo ) / N );
+	for ( let i = 0; i < 30; i ++ ) {
+
+		const m1 = b - ( b - a ) * 0.618, m2 = a + ( b - a ) * 0.618;
+		if ( energyAngle( m1, U, h ) < energyAngle( m2, U, h ) ) a = m1;
+		else b = m2;
+
+	}
+
+	out.psi = ( a + b ) / 2;
+	out.alpha = Math.max( best, energyAngle( out.psi, U, h ) );
+	return out;
+
+}
+
+// (M20) her arms' waves at U m/s, her waterline L m, over h m of water: cos, the way they run off her heading; k, their wave
+// number; n, their group speed over their phase speed; tan, the way their energy goes off her track (her arm's angle); Fh;
+// high, her crests' height over the deep water's. Her hull makes the waves running the way they run in deep water (wakeCos:
+// that way held, the sources' figures for her on the plane: docs/m20/sources-sea.md), their length and speed the depth's,
+// and her arm where their energy goes, a little wider in shallow water; toward the wedge's cusp waves over the transcritical
+// range; and none going faster than the shallow water lets (past critical, the slowest that can). Over deep water (or water
+// too deep for her waves to feel, outside the transcritical range) wakeCos's and wakeTan's exactly
+export function wakeWave( U, L, h = Infinity, out = {} ) {
+
+	const T = wakeTan( U, L ), cs = wakeCos( U, L ), Fh = depthFroude( U, h );
+	const kDeep = GRAVITY / ( U * cs ) ** 2, w = smooth( SHALLOW.open[ 0 ], SHALLOW.open[ 1 ], Fh ) * ( 1 - smooth( SHALLOW.close[ 0 ], SHALLOW.close[ 1 ], Fh ) );
+	const [ b0, b1, b2, b3 ] = SHALLOW.bump;
+	out.Fh = Fh;
+	out.high = 1 + ( SHALLOW.high - 1 ) * smooth( b0, b1, Fh ) * ( 1 - smooth( b2, b3, Fh ) );
+	if ( w === 0 && ! ( kDeep * h < Math.PI ) ) {
+
+		out.cos = cs;
+		out.k = kDeep;
+		out.n = 0.5;
+		out.tan = T;
+		return out;
+
+	}
+
+	let psi = Math.acos( cs );
+	if ( w > 0 ) psi += ( wakeWedge( U, h, _wedgeOut ).psi - psi ) * w;
+	if ( Fh > 1 ) psi = Math.max( psi, Math.acos( 0.995 / Fh ) );
+	const k = waveNumber( U * Math.cos( psi ), h );
+	out.cos = Math.cos( psi );
+	out.k = k > 0 ? k : kDeep;
+	out.n = groupShare( Math.min( out.k * h, KH_MAX ) );
+	out.tan = Math.tan( Math.max( energyAngle( psi, U, h ), 0 ) );
+	return out;
+
+}
+
+const _wedgeOut = {};
+
 // what of a wave of length lam the sea's grid of that spacing draws (as the GLSL's wakeAt)
 export const wakeDrawn = ( spacing, lam, tier = 'high' ) => 1 - smooth( ( DRAWN[ tier ] ?? DRAWN.low )[ 0 ], ( DRAWN[ tier ] ?? DRAWN.low )[ 1 ], spacing / lam );
 const KELVIN_TAN = 1 / Math.sqrt( 8 ); // (tan 19.47 degrees)
@@ -90,8 +227,18 @@ export function wakeHeight( U, L, vol, y ) {
 
 }
 
-// one sample of a track (its place, heading (rad, atan2( z, x )), speed and when)
-const sample = () => ( { t: 0, x: 0, z: 0, a: 0, U: 0 } );
+// (M20) a wake's crests, h m over the sea's, where the water's depth m deep: as they are until they're near BREAK of it crest to
+// trough, then held under it, broken (h / ( 1 + r^4 )^1/4, r the crest over half the most it can stand: 1.5% lower at half
+// of it, 16% at it); -> the height. The sea's shader the same (wakeBreak's GLSL), and its foam where r passes 0.8
+export function wakeBreak( h, depth ) {
+
+	const cap = Math.max( 0.5 * WAKE_BREAK * depth, 1e-3 ), r = h / cap;
+	return h / Math.sqrt( Math.sqrt( 1 + r * r * r * r ) );
+
+}
+
+// one sample of a track (its place, heading (rad, atan2( z, x )), speed, when and (M20) the depth under her then)
+const sample = () => ( { t: 0, x: 0, z: 0, a: 0, U: 0, h: SHALLOW.deep } );
 const lerpAngle = ( a, b, f ) => a + Math.atan2( Math.sin( b - a ), Math.cos( b - a ) ) * f;
 
 class Track {
@@ -148,7 +295,11 @@ export class WakeWaves {
 		this.tracks = new Map();
 		// what's sent (world, doubles): each sample's place, heading, envelope behind the arm (m), age, k, cos theta, height;
 		// and its two arms' (side 0 to starboard, 1 to port): where the crests are, their wave vector, their phase there
-		this.s = { x: new Float64Array( max ), z: new Float64Array( max ), a: new Float64Array( max ), sig: new Float64Array( max ), age: new Float64Array( max ), k: new Float64Array( max ), cos: new Float64Array( max ), amp: new Float64Array( max ), drawn: new Float64Array( max ) };
+		this.s = { x: new Float64Array( max ), z: new Float64Array( max ), a: new Float64Array( max ), sig: new Float64Array( max ), age: new Float64Array( max ), k: new Float64Array( max ), cos: new Float64Array( max ), amp: new Float64Array( max ), drawn: new Float64Array( max ), h: new Float64Array( max ) };
+		// ((M20) the water's depth at ( x, z ), m (Waves gives it the island's): the depth under her as each sample's taken. With
+		// none, the deep sea's)
+		this.depthAt = null;
+		this._wave = {};
 		this.arm = { qx: new Float64Array( max * 2 ), qz: new Float64Array( max * 2 ), kx: new Float64Array( max * 2 ), kz: new Float64Array( max * 2 ), c: new Float64Array( max * 2 ), lam: new Float64Array( max ) };
 		this.span = new Int32Array( tracks * 2 ); // each track's samples [ from, to )
 		this.box = new Float64Array( tracks * 4 ); // and where its crests can reach: min x, z, max x, z
@@ -161,6 +312,8 @@ export class WakeWaves {
 			wakeB: { value: Array.from( { length: max }, () => new Vector4() ) }, // age, k, cos theta, height
 			wakeTrack: { value: Array.from( { length: tracks * 2 }, () => new Vector4() ) }, // box, [ from, to ]
 			wakeTracks: { value: 0 },
+			// ((M20) each sample's depth under her as it was taken, four a vector: her waves' dispersion there)
+			wakeDepth: { value: Array.from( { length: Math.ceil( max / 4 ) }, () => new Vector4( SHALLOW.deep, SHALLOW.deep, SHALLOW.deep, SHALLOW.deep ) ) },
 		};
 		const f = ( v ) => v.toFixed( 5 );
 		this.glsl = /* glsl */`
@@ -170,6 +323,16 @@ uniform vec4 wakeA[ WAKE_MAX ];
 uniform vec4 wakeB[ WAKE_MAX ];
 uniform vec4 wakeTrack[ WAKE_TRACKS * 2 ];
 uniform int wakeTracks;
+uniform vec4 wakeDepth[ ${ Math.ceil( max / 4 ) } ];
+// ((M20) a crest broken where it's near ${ WAKE_BREAK } of the depth, crest to trough: its height ( WakeWaves.wakeBreak ), and its
+// slope's share, the height's rate with the crest ( ( 1 + r^4 )^-5/4 ); r out, for the foam)
+float wakeBreak( float h, float depth, out float slopeK, out float r ) {
+	float cap = max( ${ f( 0.5 * WAKE_BREAK ) } * depth, 1e-3 );
+	r = h / cap;
+	float q = inversesqrt( sqrt( 1.0 + r * r * r * r ) );
+	slopeK = q * q * q * q * q;
+	return h * q;
+}
 // ((M17) her wake's far arms at x (about the sea's origin): their height, and its slope out. Each track's samples round one loop,
 // each sample's two arms round another: a call's a copy of the code (WakeWaves.heightAt is the same, on the CPU). The loops run
 // to the uniforms' counts, not the arrays' sizes, so a compiler can't copy their body out forty times over. The waves too short
@@ -186,7 +349,11 @@ float wakeAt( vec2 x, float spacing, out vec2 slope ) {
 		for ( int s = from; s < to; s ++ ) {
 			vec4 A = wakeA[ s ], B = wakeB[ s ];
 			float k = B.y, cs = B.z, sn = sqrt( max( 1.0 - cs * cs, 0.0 ) );
-			float om = sqrt( ${ f( GRAVITY ) } * k ), go = B.x * 0.5 * om / k;
+			// ((M20) in the depth under her as she made them: omega^2 = g k tanh( k h ), going at n of their speed)
+			vec4 hv = wakeDepth[ s / 4 ];
+			int hc = s - 4 * ( s / 4 );
+			float kh = min( k * ( hc == 0 ? hv.x : hc == 1 ? hv.y : hc == 2 ? hv.z : hv.w ), ${ f( KH_MAX ) } );
+			float om = sqrt( ${ f( GRAVITY ) } * k * tanh( kh ) ), go = B.x * ( kh >= ${ f( KH_MAX ) } ? 0.5 : 0.5 + kh / sinh( 2.0 * max( kh, 1e-3 ) ) ) * om / k;
 			vec2 d = vec2( cos( A.z ), sin( A.z ) ), side = sn * vec2( - d.y, d.x );
 			float lam = ${ f( TAU ) } / k, amp = B.w * ( 1.0 - smoothstep( ${ f( DRAWN[ this.tier ][ 0 ] ) }, ${ f( DRAWN[ this.tier ][ 1 ] ) }, spacing / lam ) );
 			for ( int e = 0; e < 2; e ++ ) {
@@ -243,6 +410,7 @@ float wakeAt( vec2 x, float spacing, out vec2 slope ) {
 		h.x = x;
 		h.z = z;
 		h.U = U;
+		h.h = this.depthAt ? Math.min( this.depthAt( x, z ), SHALLOW.deep ) : SHALLOW.deep;
 		if ( U > 1e-3 ) h.a = Math.atan2( vz, vx );
 		if ( ! tr.moving ) {
 
@@ -374,6 +542,7 @@ float wakeAt( vec2 x, float spacing, out vec2 slope ) {
 				n.z = h.z + ( s0.z - h.z ) * f;
 				n.a = lerpAngle( h.a, s0.a, f );
 				n.U = h.U + ( s0.U - h.U ) * f;
+				n.h = h.h + ( s0.h - h.h ) * f;
 				this._put( tr, n, t );
 				prev = n;
 
@@ -396,6 +565,7 @@ float wakeAt( vec2 x, float spacing, out vec2 slope ) {
 					e.z = prev.z + ( s.z - prev.z ) * f;
 					e.a = lerpAngle( prev.a, s.a, f );
 					e.U = prev.U + ( s.U - prev.U ) * f;
+					e.h = prev.h + ( s.h - prev.h ) * f;
 					this._put( tr, e, t );
 
 				}
@@ -418,8 +588,10 @@ float wakeAt( vec2 x, float spacing, out vec2 slope ) {
 
 		const i = this.n ++, S = this.s, A = this.arm, L = tr.L;
 		const age = Math.max( 0, t - s.t ), U = Math.max( s.U, 0.01 ), Fr = U / Math.sqrt( GRAVITY * L );
-		const cs = wakeCos( U, L ), sn = Math.sqrt( Math.max( 0, 1 - cs * cs ) );
-		const k = GRAVITY / ( U * cs ) ** 2, om = Math.sqrt( GRAVITY * k ), go = age * 0.5 * om / k, lam = TAU / k;
+		// ((M20) in the depth under her as she made them: their way, length and speed, and how much higher near critical)
+		const depth = Math.min( Math.max( s.h, 0.05 ), SHALLOW.deep ), wv = wakeWave( U, L, depth, this._wave );
+		const cs = wv.cos, sn = Math.sqrt( Math.max( 0, 1 - cs * cs ) ), k = wv.k, kh = Math.min( k * depth, KH_MAX );
+		const om = Math.sqrt( GRAVITY * k * Math.tanh( kh ) ), go = age * groupShare( kh ) * om / k, lam = TAU / k;
 		const y = go * sn;
 		// (none on her own hull: they come up as she leaves them behind; and they go at the end of what's followed)
 		const ramp = smooth( WAKE.near[ 0 ] * L, WAKE.near[ 1 ] * L, U * age ), tail = 1 - smooth( 0.7 * WAKE.age, WAKE.age, age );
@@ -433,7 +605,8 @@ float wakeAt( vec2 x, float spacing, out vec2 slope ) {
 		S.age[ i ] = age;
 		S.k[ i ] = k;
 		S.cos[ i ] = cs;
-		S.amp[ i ] = 0.5 * wakeHeight( U, L, tr.vol, y ) * ramp * tail;
+		S.amp[ i ] = 0.5 * wakeHeight( U, L, tr.vol, y ) * ramp * tail * wv.high;
+		S.h[ i ] = depth;
 		const dx = Math.cos( s.a ), dz = Math.sin( s.a );
 		for ( let e = 0; e < 2; e ++ ) {
 
@@ -485,10 +658,12 @@ float wakeAt( vec2 x, float spacing, out vec2 slope ) {
 	place( O ) {
 
 		const S = this.s, UA = this.uniforms.wakeA.value, UB = this.uniforms.wakeB.value, UT = this.uniforms.wakeTrack.value, b = this.box;
+		const UD = this.uniforms.wakeDepth.value;
 		for ( let i = 0; i < this.n; i ++ ) {
 
 			UA[ i ].set( S.x[ i ] - O.x, S.z[ i ] - O.z, S.a[ i ], S.sig[ i ] );
 			UB[ i ].set( S.age[ i ], S.k[ i ], S.cos[ i ], S.amp[ i ] );
+			UD[ i >> 2 ].setComponent( i & 3, S.h[ i ] );
 
 		}
 

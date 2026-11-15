@@ -404,6 +404,18 @@ let hooked = null;
 	const n1 = robin.share.calls;
 	step( 60, 1 / 30, [ robin ] );
 	ok( robin.share.calls === n1, 'with nobody within 60 m of it, it isn\'t called' );
+	// ((M20) an anchor going down by it on Robin's game (FlatsFishing.splash: docs/m20/kit.md): it bolts there, and it's gone on
+	// Sam's game too, as any spook is; a Power-Pole's thump further off isn't heard)
+
+	const gA = group( robin, C.id ), r = gA.radius;
+	const farA = new Vector3( gA.center.x + r + 20, G.seaLevel.value, gA.center.z ), nearA = new Vector3( gA.center.x + r + 8, G.seaLevel.value, gA.center.z );
+	const had = robin.flats.mine.spooked[ C.id ], s0 = robin.flats.splash( farA, 6, 'poles' );
+	ok( s0 === 0 && robin.flats.mine.spooked[ C.id ] === had && ! ( gA.sight.bolt > 0 ), `her Power-Poles' thump ${ ( r + 20 ).toFixed( 0 ) } m from its middle: not heard` );
+	const s1 = robin.flats.splash( nearA, 15, 'anchor' );
+	const untilA = robin.flats.mine.spooked[ C.id ];
+	ok( s1 === 1 && gA.sight.bolt > 0 && robin.flats.events.spooked === 'anchor' && untilA > ( had || 0 ), `the anchor going in ${ ( r + 8 ).toFixed( 0 ) } m from its middle: it bolts, in Robin's record till island hour ${ untilA && untilA.toFixed( 2 ) } (the Guide's tip: an anchor's splash)` );
+	step( 15 );
+	ok( sam.flats.state.spooked[ C.id ] === untilA, `and on Sam's game, gone till the same island hour (${ sam.flats.state.spooked[ C.id ] })` );
 
 }
 

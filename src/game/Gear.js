@@ -114,6 +114,16 @@ export const UPGRADES = {
 		// The Bahamas ban spearguns: kept, the user's call (docs/M19.md))
 		{ cost: 1580, label: 'Blue-water speargun, 55 inch, four bands, a breakaway rig on 30 m of float line', gunStyle: 'blue', gunCm: 140, bands: 4, shaftM: 1.65, spearV: 25, spearM: 6, lineM: 4.6, spearHold: 23, spearReel: false, floatLineM: 30, breakaway: true },
 	] },
+	// (M20) more floats on the blue-water gun's float line (stream KIT, docs/m20/kit.md): each an 11 L hard float, holding a fish to
+	// Speargun's FLOAT.holds (35 kg: divers hold one to 23 kg "without fear", wahoo to 36: docs/m20/sources-boats.md's 4; the user's
+	// call), its drag on a running fish another FLOAT.kg. Rob Allen's 11 L, $135. Bought with the blue-water gun fitted (needs, at
+	// needsLevel); extraFloats: how many past the one its rig comes with
+	spearFloats: { name: 'Extra floats', needs: 'speargun', needsLevel: 3, needsName: 'blue-water speargun', levels: [
+		{ cost: 0, label: 'None: the one float on the line', extraFloats: 0 },
+		{ cost: 135, label: 'A second float, 11 L: two hold a fish to 70 kg', extraFloats: 1 },
+		{ cost: 135, label: 'A third float, 11 L: three hold one to 105 kg', extraFloats: 2 },
+		{ cost: 135, label: 'A fourth float, 11 L: four hold one to 140 kg', extraFloats: 3 },
+	] },
 	// (Salt Life) the cast net, for bait and mullet (CastNet.js): its size is its radius (netM, from the
 	// horn to the lead line, as nets are sold), its mesh (meshCm, the square), the lead line's weight
 	// (leadKgM) and how fast that sinks it (sinkMs), how far it's thrown (throwM), how wide the moment

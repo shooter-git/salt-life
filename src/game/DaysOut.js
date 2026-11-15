@@ -1,4 +1,5 @@
 import { CanvasTexture, Color, Mesh, MeshStandardMaterial, SRGBColorSpace, SphereGeometry, Sprite, SpriteMaterial, Vector2, Vector3 } from '../engine/index.js';
+import { chargeHours } from './Trolling.js';
 import { G } from '../core/Globals.js';
 import { BOATS } from '../world/boat/Boats.js';
 import { awayOf, tellOf, ISLE, FOUND_M } from './Away.js';
@@ -129,7 +130,7 @@ export class DaysOut {
 	get box() {
 
 		const d = this.state.days.boats, id = this.state.boat;
-		return d[ id ] || ( d[ id ] = { ice: 0, stores: 0 } );
+		return d[ id ] || ( d[ id ] = { ice: 0, stores: 0, troll: 0 } );
 
 	}
 
@@ -362,6 +363,8 @@ export class DaysOut {
 		const b = this.app.boatCtl, shore = ! b || b.moored || b.hauled, makes = this._makes();
 		// ((M19) one generator for her icemaker and her gyro: GYRO_SPIN)
 		if ( ( makes || this.gyroWanted() ) && ! shore ) st.burn( GENERATOR_LH * hours );
+		// ((M20) her trolling motor's batteries on the dock's charger: Trolling.js)
+		if ( shore && box.troll > 0 ) box.troll = chargeHours( box.troll, hours );
 		const own = keepCatch( her ? [] : st.inventory, box.ice, hours, meltKgH( s.holdKg, s.insulated ), makes );
 		const room = s.holdKg - ( her ? 0 : own.fish.reduce( ( kg, f ) => kg + f.kg, 0 ) ) - this.guestsKg;
 		box.ice = Math.min( own.ice, Math.max( 0, room ) ); // ((v2.3.0) and a box an icemaker overfilled before is put right)

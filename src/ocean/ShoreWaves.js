@@ -546,7 +546,8 @@ export class ShoreWaves {
 	// swells' heights add; the swash is whichever's higher, the envelope whichever's more
 	sample( x, z, t, groundH, terrain ) {
 
-		const out = this._out || ( this._out = { y: 0, swashLevel: - 1e4, env: 0 } );
+		const out = this._out || ( this._out = { x: 0, y: 0, z: 0, swashLevel: - 1e4, env: 0, reach: 0, ux: 1, uz: 0 } );
+		out.x = out.z = out.reach = 0;
 		out.y = 0;
 		out.env = 0;
 		out.swashLevel = - 1e4;
@@ -563,6 +564,10 @@ export class ShoreWaves {
 		const d = sea - groundH;
 		const sh = tr.fieldAt( x, z, this._sh || ( this._sh = [ 0, 0, 0, 0 ] ) );
 		const exposure = Math.hypot( sh[ 1 ], sh[ 2 ] );
+		// ((M20) where the train's field doesn't reach it moves nothing, and its swash runs up by none: the sheet alone, as below
+		// with no exposure. WaterQuery's steps ask here several times a point, and the north's train is half of the cost at the
+		// beach)
+		if ( exposure === 0 ) return this._sheet( 0, groundH, out );
 		const dx = sh[ 1 ] / Math.max( exposure, 1e-4 ), dz = sh[ 2 ] / Math.max( exposure, 1e-4 );
 		const along = tr.alongAt( x, z );
 		const s = tr.phase( t, sh[ 0 ] ) + wobble( along );
@@ -575,9 +580,39 @@ export class ShoreWaves {
 		const dB = dc + ( d - dc ) * smooth( 0.3, 0.5, Math.abs( u ) );
 		const env = smooth( 26, 13, d ) * smooth( - 0.25, 0.05, d ) * sat( exposure * 1.4 ) * P.enabled;
 		out.env = Math.max( out.env, env );
-		out.y += this.profileY( u, A, dB, lam ) * env;
+		// ((M20) the whole of the sea's vertex's shore wave at this, its resting point: its height and its push along the wave's
+		// way (the profile's x, shoreProfile's), and the roller's lumps; WaterQuery.heightAt finds the resting point whose drawn
+		// place is the point asked about, as the sea draws it: docs/m20/sea.md)
+		const pr = this.profile( u, A, dB, lam, this._pr || ( this._pr = { x: 0, y: 0, roller: 0 } ) );
+		// ((M20) and the most its push could be either way, for WaterQuery's scan: the face's, or the trough's before it pulled
+		// back, by its uf ( 0.09 ) of the wave's length, and the unbroken wave's, its Q at most, as if it had broken (a bigger
+		// wave behind it may have, and run over it: weighed by this one's breaking, the scan missed 1 in 30 of the faces it found).
+		// And the way the train that could push furthest goes)
+		const reach = ( Math.max( _B.Xc + _B.Wt, lam * 0.09 - _B.Xc - _B.Wt ) + _B.Ash * 0.35 ) * env;
+		if ( reach > out.reach ) {
+
+			out.reach = reach;
+			out.ux = dx;
+			out.uz = dz;
+
+		}
+
+		let y = pr.y * env;
+		const roller = pr.roller * env;
+		if ( roller !== 0 ) {
+
+			const sx = u * lam;
+			const lumpy = sat( lumpNoise( along * 0.045, m * 3.7 ) * 1.2 + 0.55 );
+			const amp = roller * lerp( 0.25, 0.7, lumpy );
+			const L0 = lumpNoise( along * 0.28, sx * 0.7 - t * 0.8 ) * 0.7 + lumpNoise( along * 0.8 + 11.3, sx * 1.6 - t * 1.5 ) * 0.3;
+			y += Math.max( L0 * 1.5 + 0.2, - 0.3 ) * amp;
+
+		}
+
+		out.y += y;
+		out.x += dx * pr.x * env;
+		out.z += dz * pr.x * env;
 		// swash run-up of the most recent wave on the sand
-		const inland = Math.max( groundH - sea, 0 ) / BEACH_SLOPE;
 		const ssw = tr.phase( t, sh[ 3 ] ) + wobble( along );
 		const ms = Math.floor( ssw ), tau = ssw - ms;
 		const Am = this.waveAmp( ms, along, tr.amplitude );
@@ -588,6 +623,14 @@ export class ShoreWaves {
 		// ((M17) the least a swash runs up by how open the shore is, as the sea's shader has it: shoreSwashRunup)
 		const least = 0.35 * smooth( 0.02, 0.15, exposure );
 		const Rt = Math.max( Rh + lobes * ( Math.max( Rh, 0 ) * 0.07 + least ), least ) * P.enabled;
+		return this._sheet( Rt, groundH, out );
+
+	}
+
+	// the swash sheet's level on the sand a run-up of Rt (m up the beach) leaves, into out.swashLevel (the highest of the trains')
+	_sheet( Rt, groundH, out ) {
+
+		const inland = Math.max( groundH - G.seaLevel.value, 0 ) / BEACH_SLOPE;
 		const fm = Rt - inland + SWASH_OVERSHOOT;
 		const thick = clamp( Math.min( fm * 0.3, Math.max( fm - 0.1, 0 ) * ( BEACH_SLOPE * 0.22 ) + 0.03 ), - 0.1, 0.12 );
 		out.swashLevel = Math.max( out.swashLevel, groundH + thick );
@@ -703,7 +746,7 @@ export class ShoreWaves {
 
 		const P = this.params;
 		const waveSet = Math.abs( Math.sin( m * Math.PI / 7 ) ) * 0.6 + 0.55;
-		const rnd = ( hash1( m ) - 0.5 ) * 2;
+		const rnd = ( ampHash( m ) - 0.5 ) * 2; // ((M20) shoreAmpHash's to the bit, so the sea's shader makes the same waves)
 		const warp = Math.sin( along * 0.016 + m * 0.9 ) * 1.6;
 		const a1 = Math.sin( along * 0.062 + m * 1.7 + warp );
 		const a2 = Math.sin( along * 0.13 + m * 4.1 + 1.3 - warp * 0.7 );
@@ -713,8 +756,9 @@ export class ShoreWaves {
 
 	}
 
-	// the cross-section's height (shoreProfile( ... ).y)
-	profileY( u, A, d, lam ) {
+	// (M20) the cross-section (shoreProfile's): x, the push along the wave's way; y, the height; roller, the bore's roller's
+	// height (for its lumps) -> out
+	profile( u, A, d, lam, out ) {
 
 		const P = this.params;
 		const B = breakParams( A, d, P );
@@ -722,15 +766,25 @@ export class ShoreWaves {
 		const phi = u - skew * ( 1 - Math.cos( u * TAU ) ) / TAU;
 		const c = Math.max( ( Math.cos( phi * TAU ) + 1 ) * 0.5, 0 );
 		const yPre = B.Ash * 2 * ( Math.pow( c, B.p ) - B.meanP ) * B.crestPeak;
+		const Q = smooth( - 3, 0, B.b ) * 0.25 + 0.1;
+		const xPre = Math.sin( u * TAU ) * B.Ash * Q;
 		const uf = 0.09;
 		const inFace = u > - uf;
 		const th = clamp( - u / uf, 0, 1 ) * Math.PI / 2;
+		const fx = lerp( 1 - Math.cos( th ), Math.sin( th ), B.wBore );
 		const fy = lerp( 1 - Math.sin( th ), Math.cos( th ), B.wBore );
+		const sTr = clamp( ( - u - uf ) / ( 0.5 - uf ), 0, 1 );
+		const xFront = ( inFace ? B.Xc + B.Wt * fx : lerp( B.Xc + B.Wt, lam * 0.5, sTr ) ) + u * lam;
 		const yFront = inFace ? B.ytB + ( B.ycB - B.ytB ) * fy : B.ytB;
 		const cb = Math.pow( Math.max( ( Math.cos( u * TAU * 0.85 ) + 1 ) * 0.5, 0 ), B.p );
 		const yBack = B.ytB + ( B.ycB - B.ytB ) * lerp( cb, Math.exp( u * - 7 ), B.wBore );
+		const xBack = B.Xc * Math.exp( u * - 6 ) * smooth( 0.5, 0.35, u ) + xPre * ( 1 - B.wBore );
+		const front = u < 0;
 		const wC = smooth( - 0.35, 0.25, B.b ) * P.curl;
-		return lerp( yPre, u < 0 ? yFront : yBack, wC );
+		out.x = lerp( xPre, front ? xFront : xBack, wC );
+		out.y = lerp( yPre, front ? yFront : yBack, wC );
+		out.roller = ( front ? ( inFace ? 1 : 0 ) : Math.exp( u * - 25 ) ) * B.wBore * B.Hb * wC;
+		return out;
 
 	}
 
@@ -745,13 +799,6 @@ const smooth = ( a, b, x ) => {
 	return t * t * ( 3 - 2 * t );
 
 };
-const hash1 = ( x ) => {
-
-	const v = Math.sin( x * 127.1 + 311.7 ) * 43758.5453;
-	return v - Math.floor( v );
-
-};
-
 // (Salt Life: bar() and breakParams() fill one object each, read at once by their callers; the CPU
 // samples of the sea run them every frame)
 const _bar = { k: 0, rip: 0 };
@@ -802,7 +849,53 @@ function breakParams( A, d, P ) {
 	B.Hb = Math.min( B.H * 0.6, Math.max( d, 0 ) * 0.75 ) * ( smooth( 0, 0.3, d ) * 0.7 + 0.3 );
 	B.ycB = lerp( B.yc, B.yt * 0.6 + B.Hb, B.wBore );
 	B.ytB = lerp( B.yt, B.yt * 0.6, B.wBore );
+	// ((M20) and where the face is, as shoreBreakParams has it, for the profile's push: profile)
+	B.Xi = B.H * 0.8;
+	B.Xc = lerp( 0, B.Xi - B.Hb * 0.55, B.wBore ) * smooth( 0.03, 0.3, B.Hb );
+	B.Wt = lerp( B.H * lerp( 0.25, 0.55, smooth( 0.1, 0.9, B.b ) ), B.Hb * 0.6 + 0.08, B.wBore );
 	return B;
+
+}
+
+// (M20) An integer's hash (PCG's: Jarzynski and Olano, "Hash functions for GPU rendering", 2020), shorePcg's to the bit: the
+// wave's index for its own height (shoreAmpHash), and the roller's lumps' lattice (shoreLumpHash). A hash of floats differs
+// between the sea's shader in 32-bit floats and the CPU in doubles, a sine's at once and a "hash without sine" as a day's waves
+// count up into the thousands, so the CPU's query found other waves than the ones drawn (tools/checks/shore-match.mjs)
+export function pcgHash( v ) {
+
+	const s = ( Math.imul( v, 747796405 ) + 2891336453 ) >>> 0;
+	const w = Math.imul( ( ( s >>> ( ( s >>> 28 ) + 4 ) ) ^ s ) >>> 0, 277803737 ) >>> 0;
+	return ( ( w >>> 22 ) ^ w ) >>> 0;
+
+}
+
+// each wave's own height's hash, in [ 0, 1 ) (shoreAmpHash's)
+export const ampHash = ( m ) => pcgHash( m | 0 ) / 4294967296;
+const _lh = [ 0, 0 ];
+// the lumps' gradient at the lattice point ( px, py ), each part in [ -1, 1 ] (shoreLumpHash's)
+function lumpHash( px, py ) {
+
+	const h = pcgHash( ( ( px | 0 ) + pcgHash( py | 0 ) ) >>> 0 );
+	_lh[ 0 ] = ( h & 65535 ) * ( 2 / 65535 ) - 1;
+	_lh[ 1 ] = ( h >>> 16 ) * ( 2 / 65535 ) - 1;
+	return _lh;
+
+}
+
+// the roller's lumps' gradient noise, about [ -1, 1 ] (shoreLumpNoise's)
+export function lumpNoise( px, py ) {
+
+	const ix = Math.floor( px ), iy = Math.floor( py ), fx = px - ix, fy = py - iy;
+	const ux = fx * fx * fx * ( fx * ( fx * 6 - 15 ) + 10 ), uy = fy * fy * fy * ( fy * ( fy * 6 - 15 ) + 10 );
+	let h = lumpHash( ix, iy );
+	const a = h[ 0 ] * fx + h[ 1 ] * fy;
+	h = lumpHash( ix + 1, iy );
+	const b = h[ 0 ] * ( fx - 1 ) + h[ 1 ] * fy;
+	h = lumpHash( ix, iy + 1 );
+	const c = h[ 0 ] * fx + h[ 1 ] * ( fy - 1 );
+	h = lumpHash( ix + 1, iy + 1 );
+	const e = h[ 0 ] * ( fx - 1 ) + h[ 1 ] * ( fy - 1 );
+	return lerp( lerp( a, b, ux ), lerp( c, e, ux ), uy ) * 1.4;
 
 }
 
@@ -903,8 +996,29 @@ vec4 terrainShoreSample( vec2 xz ) {
 	return a;
 }
 
-float shoreHash1( float x ) { return fract( sin( x * 127.1 + 311.7 ) * 43758.5453 ); }
+// ((M20) an integer's hash, the CPU's pcgHash to the bit: each wave's own height, and the roller's lumps' lattice. A float's hash
+// differs between this shader's 32-bit floats and the CPU's doubles, so the CPU's query found other waves than these)
+highp uint shorePcg( highp uint v ) {
+	highp uint s = v * 747796405u + 2891336453u;
+	highp uint w = ( ( s >> ( ( s >> 28u ) + 4u ) ) ^ s ) * 277803737u;
+	return ( w >> 22u ) ^ w;
+}
+float shoreAmpHash( float m ) { return float( shorePcg( uint( int( m ) ) ) ) * ( 1.0 / 4294967296.0 ); }
 vec2 shoreHash2( vec2 p ) { return fract( sin( vec2( dot( p, vec2( 127.1, 311.7 ) ), dot( p, vec2( 269.5, 183.3 ) ) ) ) * 43758.5453 ) * 2.0 - 1.0; }
+// ((M20) the roller's lumps' noise, on the integer hash, so the CPU's query makes the same lumps: lumpNoise)
+vec2 shoreLumpHash( vec2 p ) {
+	highp uint h = shorePcg( uint( int( p.x ) ) + shorePcg( uint( int( p.y ) ) ) );
+	return vec2( float( h & 65535u ), float( h >> 16u ) ) * ( 2.0 / 65535.0 ) - 1.0;
+}
+float shoreLumpNoise( vec2 p ) {
+	vec2 i = floor( p ), fr = fract( p );
+	vec2 u = fr * fr * fr * ( fr * ( fr * 6.0 - 15.0 ) + 10.0 );
+	float a = dot( shoreLumpHash( i ), fr );
+	float b = dot( shoreLumpHash( i + vec2( 1.0, 0.0 ) ), fr - vec2( 1.0, 0.0 ) );
+	float c = dot( shoreLumpHash( i + vec2( 0.0, 1.0 ) ), fr - vec2( 0.0, 1.0 ) );
+	float d = dot( shoreLumpHash( i + vec2( 1.0, 1.0 ) ), fr - vec2( 1.0, 1.0 ) );
+	return mix( mix( a, b, u.x ), mix( c, d, u.x ), u.y ) * 1.4;
+}
 // gradient noise, roughly [-1, 1]
 float shorePerlin2( vec2 p ) {
 	vec2 i = floor( p ), fr = fract( p );
@@ -970,7 +1084,7 @@ float shoreWobble( float along ) {
 // per-wave height: sets of ~7 waves, randomness, along-shore peaks so waves peel instead of closing out
 float shoreWaveAmp( float m, float along, float amplitude ) {
 	float waveSet = abs( sin( m * ${ f( Math.PI / 7 ) } ) ) * 0.6 + 0.55;
-	float rnd = ( shoreHash1( m ) - 0.5 ) * 2.0;
+	float rnd = ( shoreAmpHash( m ) - 0.5 ) * 2.0;
 	float warp = sin( along * 0.016 + m * 0.9 ) * 1.6;
 	float a1 = sin( along * 0.062 + m * 1.7 + warp );
 	float a2 = sin( along * 0.13 + m * 4.1 + 1.3 - warp * 0.7 );
@@ -1183,14 +1297,14 @@ ShoreSample shoreEvaluateTrain( vec4 field, ShoreTrain tr, vec2 xz, float depth,
 		if ( roller != 0.0 ) {
 			float sx = u * lam;
 			float t = shoreTime;
-			float lumpy = shSat( shorePerlin2( vec2( along * 0.045, m * 3.7 ) ) * 1.2 + 0.55 );
+			float lumpy = shSat( shoreLumpNoise( vec2( along * 0.045, m * 3.7 ) ) * 1.2 + 0.55 );
 			float amp = roller * mix( 0.25, 0.7, lumpy );
 			vec2 q1 = vec2( along * 0.28, sx * 0.7 - t * 0.8 );
 			vec2 q2 = vec2( along * 0.8 + 11.3, sx * 1.6 - t * 1.5 );
 			float eL = 0.25;
-			float L0 = shorePerlin2( q1 ) * 0.7 + shorePerlin2( q2 ) * 0.3;
-			float La = shorePerlin2( q1 + vec2( eL * 0.28, 0.0 ) ) * 0.7 + shorePerlin2( q2 + vec2( eL * 0.8, 0.0 ) ) * 0.3;
-			float Ls = shorePerlin2( q1 + vec2( 0.0, eL * 0.7 ) ) * 0.7 + shorePerlin2( q2 + vec2( 0.0, eL * 1.6 ) ) * 0.3;
+			float L0 = shoreLumpNoise( q1 ) * 0.7 + shoreLumpNoise( q2 ) * 0.3;
+			float La = shoreLumpNoise( q1 + vec2( eL * 0.28, 0.0 ) ) * 0.7 + shoreLumpNoise( q2 + vec2( eL * 0.8, 0.0 ) ) * 0.3;
+			float Ls = shoreLumpNoise( q1 + vec2( 0.0, eL * 0.7 ) ) * 0.7 + shoreLumpNoise( q2 + vec2( 0.0, eL * 1.6 ) ) * 0.3;
 			float lump = max( L0 * 1.5 + 0.2, -0.3 );
 			disp.y += lump * amp;
 			bool up = L0 * 1.5 + 0.2 > -0.3;

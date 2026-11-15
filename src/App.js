@@ -111,6 +111,9 @@ import { CRAB_BEACH } from './world/wildlife/Crabs.js';
 //
 // `portal` is the All the Spaces SDK (connect()): its tier ('low' | 'mid' | 'high') sizes everything.
 
+// (M20) the tone curves FINISH's trial compares (?tone=), and the exposure each takes to give a scene's mid-grey (0.18) the display
+// value ACES gives it, worked from three 0.186's own curves (Neutral x1.41, step 0's 1.38 to 1.42; AgX x0.99)
+const TONE = { aces: { mapping: 'ACESFilmicToneMapping', k: 1 }, neutral: { mapping: 'NeutralToneMapping', k: 1.4 }, agx: { mapping: 'AgXToneMapping', k: 1 } };
 // the sun's shadows: on high two maps fitted to the view (Sky's SunLight), each `size` px, as far as
 // `distance` (m); on mid one map, `box` m across, its middle `ahead` m in front of the camera (2.3 cm
 // a texel: the railings' shadows were stairs at mid's earlier 6 cm)
@@ -259,8 +262,12 @@ export class App {
 		const stage = this.stage = createStage( portal, { fov: 70, shadows: tier !== 'low', antialias: ! this.cpuGL, dynamicResolution: false } );
 		const { renderer, camera } = stage;
 		// Tidewater's grading: ACES (the SDK's default AgX greys out the sand and the sea)
-		renderer.toneMapping = THREE.ACESFilmicToneMapping;
-		renderer.toneMappingExposure = this.settings.exposure;
+		// ((M20) ?tone=neutral|agx: three's other curves, for FINISH's trial (docs/m20/finish.md), each at the exposure that gives a
+		// scene's mid-grey the display value ACES gives it: TONE)
+		const tone = TONE[ portal.standalone && new URLSearchParams( location.search ).get( 'tone' ) ] || TONE.aces;
+		renderer.toneMapping = THREE[ tone.mapping ];
+		this.toneK = renderer.toneK = tone.k; // (the renderer's too, for what draws on its own exposure: FishPortrait)
+		renderer.toneMappingExposure = this.settings.exposure * this.toneK;
 		// the near clip plane is the lens: it slices the water surface at the waterline
 		camera.near = 0.1;
 		camera.far = 12000;
@@ -299,7 +306,9 @@ export class App {
 		// (high) the clouds' shadows on the island and the sea: lightUp gives them to the lit materials,
 		// so before anything is lit (with a graphics card the plants are lit early in loading)
 		this.cloudShadows = !! this.sky.clouds.shadowMap;
-		if ( this.cloudShadows ) cloudShadows.attach( this.sky.clouds );
+		if ( this.cloudShadows ) cloudShadows.attach( this.sky.clouds, renderer );
+		// ((M20) the drawn shadows for the CPU (FlatsFishing.shadeAt): on high, read back from their map; null, so its own field, elsewhere)
+		this.cloudShade = this.cloudShadows ? ( x, z ) => cloudShadows.shadeAt( x, z ) : null;
 		// the eye adapts at dusk and at night: the whole scene's exposure follows (Tidewater's auto exposure)
 		this.sky.sceneAdaptation = true;
 		if ( SHADOW[ tier ] ) {
@@ -489,6 +498,7 @@ export class App {
 
 		// laptops: bloom and SMAA (phones draw straight to the screen)
 		this.post = tier === 'high' ? new PostChain( renderer, scene, camera ) : null;
+		if ( this.post ) this.water.bloomThreshold = this.post.bloom.threshold; // ((M20) the moon's glint kept under it: MOON_CAP)
 		this.player = new Player( { camera, input: this.input, terrain: this.terrainData, colliders: this.colliders, query: this.query, boat: this.boatCtl } );
 		this.player.rocks = this.rocks; // ((M15) the sea caves' roofs to walk on)
 		// ((M13) the wind you stand in, in the gusts the sea shows: a hurricane's pushes you along)
@@ -1044,7 +1054,7 @@ export class App {
 		for ( const d of [ 2, 5, 9 ] ) caveSeen = Math.min( caveSeen, this.rocks.caveLevel( at.copy( ahead ).multiplyScalar( d ).add( eye ) ) );
 		const caveT = Math.min( 12, Math.max( 1, 1 / Math.max( 0.3 * caveHere + 0.7 * caveSeen, 0.01 ) ) );
 		this.caveAdapt = this.caveAdapt === undefined ? caveT : this.caveAdapt + ( caveT - this.caveAdapt ) * ( 1 - Math.exp( - dt * ( caveT > this.caveAdapt ? 0.8 : 2 ) ) );
-		this.renderer.toneMappingExposure = s.exposure * this.sky.adaptation * this.caveAdapt;
+		this.renderer.toneMappingExposure = s.exposure * this.sky.adaptation * this.caveAdapt * this.toneK;
 		// (while the catch card is up its fish portrait is drawn in place of the world: FishPortrait)
 		const portrait = this.game && this.game.portrait;
 		if ( portrait && portrait.active ) portrait.render( this.renderer, () => this.drawWorld() );
@@ -2843,6 +2853,10 @@ export class App {
 			b.anchor = story.anchor ? new THREE.Vector3( story.anchor.x, this.terrainData.heightAt( story.anchor.x, story.anchor.z ), story.anchor.z ) : null;
 			b.sock = !! story.sock;
 			b.hasWater = false;
+			// ((M20) afloat where she was left, at anchor or adrift: a kayak's start lays her on her sand at home (KayakModel.atHome),
+			// and left so, M19's "drawn up on the sand, no anchor out" (Game.updateAnchor) let go the anchor she was left at, and she
+			// drifted off. Aground or on her sand she's kept lying there, as before: docs/m20/checks.md)
+			if ( story.where === 'anchor' || story.where === 'adrift' ) b.beached = b.beaching = false;
 			b.apply();
 			if ( b.moored && b.model.rest ) b.model.rest( b, story.x, story.z );
 

@@ -5,7 +5,7 @@ import { rippleTexture } from './SeaTextures.js';
 import { WHALE_WATER_GLSL, whaleMarkUniforms } from './WhaleWater.js';
 import { SeaDetail } from './SeaDetail.js';
 import { Whitecaps, WHITECAP_CREST } from './Whitecaps.js';
-import { LEE, WAKE_SHOAL } from './Waves.js';
+import { LEE } from './Waves.js';
 import { useLocalLights, LOCAL_LIGHTS_MAX } from '../materials/LocalLights.js';
 import { SEA_CAVE_GLSL, SEA_CAVE_CALM_GLSL, seaCaveUniforms } from '../world/terrain/CaveLight.js';
 import { SEEN } from '../materials/SeenInWater.js';
@@ -140,6 +140,20 @@ const IBL_FROM = 'iblIrradiance += getIBLIrradiance( geometryNormal );';
 if ( ! THREE.ShaderChunk.lights_fragment_maps.includes( IBL_FROM ) ) throw new Error( 'WaterSurface: three\'s lights_fragment_maps changed (' + IBL_FROM + ')' );
 const LIGHTS_MAPS = THREE.ShaderChunk.lights_fragment_maps.replace( IBL_FROM, 'iblIrradiance = waterSky * 0.5;' );
 const REFLECT_RAY = 'reflectVec = transformDirectionByInverseViewMatrix( reflectVec, viewMatrix );';
+// (M20) The moon in the sea (stream SEA: docs/m20/sea.md). The waves' slopes it's spread by, Cox and Munk's (1954): along the
+// wind up * U, across it cross0 + cross * U (U the wind, m/s: their 12.5 m wind taken as the game's 10 m one), less what of
+// them the sea's drawn already, its waves and ripples in its normals (k of them left: judged against the photographs' paths
+// in docs/m20/sources-sea.md); and the key light's own glint, kept off the sea while the moon's the key light, which a light
+// is if it's within KEY of the key's way (its colour put out in three's lights' loop)
+export const MOON_SLOPE = { up: 3.16e-3, cross0: 0.003, cross: 1.92e-3, k: 0.8 };
+// ((M20) FINISH: on high the glint kept under the bloom's threshold (`share` of it), which takes the scene's light before the
+// frame's exposure. By night the path's light was many times it, the exposure being up to 6 times the day's, and the bloom spread
+// it over the whole night as a haze. Where there's no bloom (low, mid) nothing's capped: docs/m20/finish.md)
+export const MOON_CAP = { share: 0.95 };
+const MOON_KEY = 0.9999;
+const KEY_LIGHTS = [ 'getSunLightInfo( sunLight, directLight );', 'getDirectionalLightInfo( directionalLight, directLight );' ];
+for ( const k of KEY_LIGHTS ) if ( ! THREE.ShaderChunk.lights_fragment_begin.includes( k ) ) throw new Error( 'WaterSurface: three\'s lights_fragment_begin changed (' + k + ')' );
+const LIGHTS_BEGIN = KEY_LIGHTS.reduce( ( s, k ) => s.replace( k, k + '\n#ifndef WATER_PLAIN\n\t\tdirectLight.color *= waterKeyOff( directLight.direction );\n#endif' ), THREE.ShaderChunk.lights_fragment_begin );
 if ( ! THREE.ShaderChunk.envmap_physical_pars_fragment.includes( REFLECT_RAY ) ) throw new Error( 'WaterSurface: three\'s envmap_physical_pars_fragment changed (' + REFLECT_RAY + ')' );
 // an sRGB colour as a linear GLSL vec3 (shading is linear)
 const rgb = ( r, g, b ) => {
@@ -213,10 +227,19 @@ export class WaterSurface {
 			waterFlash: G.skyFlash, // (M10: lightning in the reflections)
 			waterFlashShape: G.skyFlashShape, // ((M12) its glow's shape: Sky's)
 			waterSkyExposure: G.skyExposure,
+			// ((M20) the moon in the sea: toward it, and 1 / its disc's solid angle; its disc's light and whether it's the key; the
+			// slopes it's spread by along and across the wind, and the wind's way: Sky, update)
+			waterMoon: G.moonGlint,
+			waterMoonLight: G.moonLight,
+			waterMoonSlope: { value: new THREE.Vector4( 0.01, 0.01, 1, 0 ) },
+			waterMoonCap: { value: 1e4 }, // ((M20) the most the glint's luminance is, the scene's light: MOON_CAP, update; 1e4 none)
 			// (M11) the underside's reflection, of the surface's: the scene's fill (update)
 			waterEnvUnder: { value: 0.07 },
 		};
 		this.envUnder = uniforms.waterEnvUnder;
+		this.moonSlope = uniforms.waterMoonSlope;
+		this.moonCap = uniforms.waterMoonCap;
+		this.bloomThreshold = Infinity; // ((M20) high's bloom's, App's: MOON_CAP)
 		this.rippleAt = uniforms.waterRippleAt;
 		this.roughAt = uniforms.waterRoughAt;
 		this.ringAt = uniforms.waterRingAt;
@@ -281,13 +304,18 @@ varying vec2 vWaterX0; // (M14) the grid's point: the water's own (its foam ride
 	vec3 total = waveDisplacementLod( x0, fade, lod.spacing, wn );
 #ifndef WATER_PLAIN
 	// ((M17) the boats' wakes' far arms, from their tracks (WakeWaves), on the grid's point as the CPU's query has them (Waves.wakeAt):
-	// through the shallows, gone as the water shoals to nothing. Not in the plain sea a device that draws on its CPU loads with)
+	// ((M20) each crest as high as it is until it's near 0.78 of the depth, then broken, held under it, white where it breaks: it
+	// was faded out from 1.5 m of depth). Not in the plain sea a device that draws on its CPU loads with)
+	float wakeFoam = 0.0;
 	if ( wakeTracks > 0 ) {
 		vec2 wakeSlope;
-		float wakeK = smoothstep( ${ WAKE_SHOAL[ 0 ].toFixed( 2 ) }, ${ WAKE_SHOAL[ 1 ].toFixed( 2 ) }, depth );
-		total.y += wakeAt( xL, lod.spacing, wakeSlope ) * wakeK;
-		wn.xz -= wakeSlope * wakeK;
+		float wakeSlopeK, wakeR;
+		total.y += wakeBreak( wakeAt( xL, lod.spacing, wakeSlope ), depth, wakeSlopeK, wakeR );
+		wn.xz -= wakeSlope * wakeSlopeK;
+		wakeFoam = smoothstep( 0.8, 1.4, wakeR );
 	}
+#else
+	float wakeFoam = 0.0;
 #endif
 	// ((M15) in a sea cave's gully, inlet and cave: a gentler surge)
 	float caveCalm = seaCaveCalm( x0 );
@@ -332,6 +360,8 @@ ${ SH ? /* glsl */`
 		vSurf.xyz *= vec3( 1.0, still, still );
 		objectNormal = normalize( mix( objectNormal, vec3( 0.0, 1.0, 0.0 ), hmx ) );
 	}` : '' }
+	// ((M20) a wake's crests white where they break in the shallows)
+	vSurf.x = max( vSurf.x, wakeFoam );
 	// hide the water sheet below dry land (beyond the swash zone)
 	float below = depth < -3.0 ? min( ground - 2.0, waterSeaLevel - 1.0 ) : ground - 0.06;
 	if ( y < ground ) y = min( y, below );
@@ -369,6 +399,20 @@ uniform float waterRain;
 uniform vec4 waterFlash;
 uniform vec4 waterFlashShape;
 uniform float waterSkyExposure;
+uniform vec4 waterMoon;
+uniform vec4 waterMoonLight;
+uniform vec4 waterMoonSlope;
+uniform float waterMoonCap;
+// ((M20) the key light kept off the sea while the moon's the key: the moon's own glint below takes its place)
+float waterKeyOff( vec3 dirV ) {
+	return dot( dirV, normalize( ( viewMatrix * vec4( waterSunDir, 0.0 ) ).xyz ) ) > ${ g( MOON_KEY ) } ? 1.0 - waterMoonLight.w : 1.0;
+}
+// ((M20) Smith's masking for Gaussian slopes of rms sigma, seen mu = cos( angle ) off the surface's normal (Walter et al. 2007's
+// fit for Beckmann's): how much of the facets that would send the moon to you hide behind the waves before them)
+float waterMoonLambda( float mu, float sigma ) {
+	float a = mu / ( max( sqrt( 1.0 - mu * mu ), 1e-4 ) * 1.4142 * sigma );
+	return a < 1.6 ? ( 1.0 - 1.259 * a + 0.396 * a * a ) / ( 3.535 * a + 2.181 * a * a ) : 0.0;
+}
 uniform vec3 oceanLodView; // (M15) the camera about the sea's origin
 uniform vec4 waterRippleAt;
 uniform vec4 waterRoughAt;
@@ -797,6 +841,7 @@ ${ lean ? '' : /* glsl */`
 				// flash's lobe takes it, below)
 				.replace( '#include <envmap_physical_pars_fragment>', THREE.ShaderChunk.envmap_physical_pars_fragment.replace( REFLECT_RAY, REFLECT_RAY + '\n\t\t\treflectVec.y = abs( reflectVec.y );' ) )
 				.replace( '#include <lights_fragment_maps>', LIGHTS_MAPS )
+				.replace( '#include <lights_fragment_begin>', LIGHTS_BEGIN )
 				.replace( '#include <lights_fragment_end>', /* glsl */`#include <lights_fragment_end>
 	// (M11) from under water, the underside's faint fill, not the sky's mirror
 	if ( ! gl_FrontFacing ) reflectedLight.indirectSpecular *= waterEnvUnder;
@@ -841,7 +886,31 @@ ${ lean ? '' : /* glsl */`
 		float fres = 0.02 + 0.98 * pow( 1.0 - max( dot( - vd, nP ), 0.0 ), 5.0 );
 		float lobe = exp( ( dot( normalize( rd ), waterFlash.xyz ) - 1.0 ) * waterFlashShape.x );
 		gl_FragColor.rgb += ${ rgb( 0.82, 0.86, 1.0 ) } * waterFlash.w * ( 2.5 * lobe + 0.2 * ( 1.0 - waterFlashShape.z ) ) * fres * waterSkyExposure * ( 1.0 - foam * 0.8 ) * sheetEdge;
-	}` )
+	}
+#ifndef WATER_PLAIN
+	// ((M20) The moon in the sea, from moonrise, at dusk too: the panorama the sea reflects has no disc in it. Its disc's light
+	// off the facets tilted to send it to you, at the slopes it takes (Cox and Munk's glitter: its light times the facets'
+	// slopes' density there, over 4 cos( the view's angle ) cos^4( the facet's tilt )), the drawn waves and ripples in the
+	// normal it's tilted from and the rest of Cox and Munk's slopes in the density; the facets hidden behind the waves before
+	// them taken out (Smith's); never more than a mirror sends of it, its disc's own brightness)
+	if ( waterMoon.w > 0.0 && gl_FrontFacing ) {
+		vec3 mv = normalize( oceanLodView - vWaterL ), mh = normalize( waterMoon.xyz + mv );
+		vec3 mT = vec3( waterMoonSlope.z, 0.0, waterMoonSlope.w );
+		mT = normalize( mT - nP * dot( mT, nP ) );
+		vec3 mB = cross( nP, mT );
+		float mc = max( dot( mh, nP ), 1e-3 );
+		vec2 ms = vec2( dot( mh, mT ), dot( mh, mB ) ) / mc;
+		float mp = exp( - 0.5 * ( ms.x * ms.x / waterMoonSlope.x + ms.y * ms.y / waterMoonSlope.y ) ) / ( 6.2832 * sqrt( waterMoonSlope.x * waterMoonSlope.y ) );
+		float mvn = max( dot( mv, nP ), 0.0 ), mln = max( dot( waterMoon.xyz, nP ), 0.0 ), sg = sqrt( 0.5 * ( waterMoonSlope.x + waterMoonSlope.y ) );
+		float mG = mvn > 0.0 && mln > 0.0 ? 1.0 / ( 1.0 + waterMoonLambda( mvn, sg ) + waterMoonLambda( mln, sg ) ) : 0.0;
+		float mf = 0.02 + 0.98 * pow( 1.0 - max( dot( mv, mh ), 0.0 ), 5.0 );
+		float mk = min( mp * mG / ( 4.0 * max( mvn, 0.02 ) * mc * mc * mc * mc ), waterMoon.w );
+		vec3 mg = waterMoonLight.rgb * mf * mk;
+		// ((M20) under high's bloom, its colour kept: MOON_CAP)
+		mg *= min( 1.0, waterMoonCap / max( dot( mg, vec3( 0.2126, 0.7152, 0.0722 ) ), 1e-6 ) );
+		gl_FragColor.rgb += mg * ( 1.0 - foam * 0.8 ) * sheetEdge;
+	}
+#endif` )
 				.replace( '#include <premultiplied_alpha_fragment>', '' );
 			shader.fragmentShader = shader.fragmentShader.replace( 'uniform float waterTime;', 'uniform float waterTime;\nuniform float waterSeaLevel_;\nuniform float waterEnvUnder;' );
 			shader.uniforms.waterSeaLevel_ = G.seaLevel;
@@ -976,6 +1045,11 @@ ${ lean ? '' : /* glsl */`
 		if ( this.material.envMap !== env ) this.material.envMap = env;
 		if ( this.plainMaterial ) this.plainMaterial.envMap = env;
 		this.envUnder.value = this.scene.environmentIntensity / REFLECT;
+		// ((M20) the moon's glint's slopes, by the wind: MOON_SLOPE)
+		const U = G.windSpeed.value, M = MOON_SLOPE;
+		this.moonSlope.value.set( M.up * U * M.k + 1e-5, ( M.cross0 + M.cross * U ) * M.k + 1e-5, rwd.x, rwd.y );
+		this.moonCap.value = Number.isFinite( this.bloomThreshold ) ? MOON_CAP.share * this.bloomThreshold : 1e4; // ((1e4: past any glint's
+		// few thousand, and within a phone's half floats)
 
 	}
 

@@ -8,7 +8,10 @@
 // day's surf bow on is what everyone does. A life jacket doesn't stop any of it: you're quicker back aboard and lose less.
 
 const DEG = Math.PI / 180;
-export const HEEL = { brace: 41 * DEG, idle: 33 * DEG, fishing: 28 * DEG };
+// ((M20) stand: stood up in the Pilot, your own balance's the limit, not her hull: past it you go in and she stays upright
+// (judgement, from ship research's standing person stepping or grabbing hold at a quarter of their weight sideways, and a
+// kayak test's angler in before the kayak flips: docs/m20/sources-boats.md's 3; the user's call))
+export const HEEL = { brace: 41 * DEG, idle: 33 * DEG, fishing: 28 * DEG, stand: 14 * DEG };
 export const TUMBLE_B = 0.85; // how broken a breaker is, to count (Player's)
 const BEAM_H = 2.9, BOW_H = 4.2;
 

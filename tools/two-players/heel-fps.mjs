@@ -22,7 +22,7 @@ for ( const id of BOATS.split( ',' ) ) {
 
 			const r = await me.game.evaluate( async ( [ fps, runs, lever, right ] ) => {
 
-				const { G: GL } = await import( '/src/core/Globals.js' );
+				const { G: GL } = await import( performance.getEntriesByType( 'resource' ).map( ( e ) => e.name ).filter( ( u ) => u.includes( '/src/core/Globals.js' ) ).pop() || '/src/core/Globals.js' );
 				const a = window.__app, b = a.boatCtl, q = a.query, V = a.camera.position.constructor, u = new V(), Y = new V( 0, 1, 0 ), dt = Math.min( 1 / fps, 0.1 );
 				a.frame = function () {}; // (her frames are this loop's)
 				if ( right !== null ) b.handling.rightFrom = right;

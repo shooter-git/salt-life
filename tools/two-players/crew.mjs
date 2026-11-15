@@ -4,7 +4,7 @@
 // the work seen from both games, and a boat taken out showing her hold at once. (v2.3.0) One fish box aboard: his catch in her
 // hold, on her ice, and his. ((v2.4.1) Its two bars: room for fish, and how long the ice keeps them.)
 //   tools/render-slot.sh node tools/two-players/crew.mjs [dir] [port] <part>
-//   parts: rods  lights  traps  hold  box
+//   parts: rods  lights  traps  hold  box  mate ((M20) her mate backing her down on a guest's fish in her chair)
 import { OTHER as other, start } from './lib.mjs';
 import { boxBars, iceSaid } from '../../src/game/Seaworthy.js';
 import { LB } from '../../src/game/Units.js';
@@ -100,7 +100,7 @@ if ( PART === 'rods' || PART === 'lights' ) {
 		// her kite, on her stand-up rod (his own rod has none), with her live bait; and her bait back as the rod goes away
 		await owner.game.evaluate( () => window.__app.together.setWeather( 'breezy', 0 ) );
 		await frames( owner.game, 30 );
-		const wind = await guest.game.evaluate( async () => { const { G } = await import( '/src/core/Globals.js' ); return +G.windSpeed.value.toFixed( 1 ); } );
+		const wind = await guest.game.evaluate( async () => { const { G } = await import( performance.getEntriesByType( 'resource' ).map( ( e ) => e.name ).filter( ( u ) => u.includes( '/src/core/Globals.js' ) ).pop() || '/src/core/Globals.js' ); return +G.windSpeed.value.toFixed( 1 ); } );
 		const pk = await pressHers( guest, 'kite', 'silverside' );
 		await until( guest.game, '!! window.__app.game.rigs.kite', 30000 ).catch( () => {} );
 		const k = await guest.game.evaluate( () => { const g = window.__app.game, r = g.rigs; return { kite: !! r.kite, kit: !! r.kit, hook: g.hookBait, lent: r._lent, spool: g.rod.spoolM }; } );
@@ -185,6 +185,8 @@ if ( PART === 'traps' ) {
 	const owner = await G.open( 'Robin', 'lobster', 30 ), guest = await G.open( 'Sam', 'console', 30 );
 	await ready( owner, guest );
 	await G.buy( owner );
+	// ((M20) and her crawfish trap permit, M19's: without it her game refuses a guest's set, "A trap needs a crawfish trap permit")
+	await owner.game.evaluate( async () => { const { UPGRADES } = await import( '/src/game/Gear.js' ); const g = window.__app.game; g.state.upgrades.trapPermit = UPGRADES.trapPermit.levels.length - 1; g.applyGear(); } );
 	const owned = await owner.game.evaluate( async () => { const { ownedTraps } = await import( '/src/game/Traps.js' ); return ownedTraps( window.__app.game.state.upgrades ); } );
 	note( 'her traps:', owned );
 	say( await G.aboard( owner, guest ), 'Sam\'s aboard the lobster boat' );
@@ -421,5 +423,113 @@ if ( PART === 'box' ) {
 	// ((v2.4.1) his own bars again: his tuna in his cooler, over its room and coral, and no ice in it, coral)
 	say( drawn( g5 ) && g5.full && g5.iceT === 'No ice' && g5.low && drawn( o5 ), `and his bars his own cooler's: "${ g5.bar }" and "${ g5.iceT }", both coral; hers "${ o5.bar }", "${ o5.iceT }"` );
 	await G.end( 'crew box' );
+
+}
+
+// (M20, stream CHECKS) Her mate backing her down on a guest's fish (M19's, docs/m19/big.md, never run with two games): Robin
+// hires him and stands on her deck; Sam takes a big fish off her holder into her chair. On her game her mate has her helm
+// (helmsman 'mate'), brings her stern round to Sam's line and backs her down on it, closing at 1 to 3 m/s; on Sam's, his fight
+// takes her way through the water as she moves on his screen (Game._riddenVelocity), so the line comes back to him with it.
+if ( PART === 'mate' ) {
+
+	const owner = await G.open( 'Robin', 'sportfisher', 30 ), guest = await G.open( 'Sam', 'lobster', 30 );
+	await ready( owner, guest );
+	await G.buy( owner );
+	const hired = await owner.game.evaluate( async () => { const { UPGRADES } = await import( '/src/game/Gear.js' ); const g = window.__app.game, s = g.state, u = s.upgrades; for ( const [ k, t ] of Object.entries( UPGRADES ) ) if ( ! t.on ) u[ k ] = t.levels.length - 1; u.sfMate = UPGRADES.sfMate.levels.length - 1; s.money = Math.max( s.money, 5000 ); g.applyGear(); return { mate: !! s.stats.mate, day: s.stats.mateDay }; } );
+	say( hired.mate, `Robin's hired her mate: ${ JSON.stringify( hired ) }` );
+	say( await G.aboard( owner, guest ), 'Sam\'s aboard the sportfisher' );
+	await G.helm( owner );
+	await G.toSea( owner );
+	await until( guest.game, `Math.hypot( window.__app.player.boat.position.x + 2600, window.__app.player.boat.position.z - 3000 ) < 300` );
+	await toasts( owner );
+	// (Robin off her helm, on her deck: her engines left running for him)
+	await owner.game.evaluate( () => { const a = window.__app; a.player.leaveHelm(); a.boatCtl.engineOn = true; } );
+	await frames( owner.game, 10 );
+	say( await owner.game.evaluate( () => window.__app.player.mode === 'deck' && ! window.__app.player.riding ), 'Robin on her deck, off her helm' );
+
+	// a blue marlin on her first rod, off to port and long on it
+	await owner.game.evaluate( async () => {
+
+		const a = window.__app, r = a.game.rigs, V = a.camera.position.constructor, s = r.spots()[ 0 ];
+		const L = { spot: s, bait: 'ballyhoo', len: 60, p: new V(), tip: new V(), clip: null, butt: new V(), on: { species: 'blueMarlin', kg: 220, t: - 600, place: null, at: { x: a.boatCtl.position.x, z: a.boatCtl.position.z } }, in: false, torn: 0, bend: 0 };
+		r.lines.length = 0;
+		r._place( L );
+		L.p.copy( L.tip );
+		r.lines.push( L );
+		r._trollT = 1e9;
+
+	} );
+	await until( guest.game, `${ other }.cur.spread && ${ other }.cur.spread.some( ( x ) => x.on )`, 90000 );
+	await guest.game.evaluate( `( async () => { const { rodOf } = await import( '/src/together/Spread.js' ); const p = window.__app.player, V = p.deckPos.constructor, at = { butt: new V(), tip: new V(), clip: new V() }, L = ${ other }.cur.spread.find( ( x ) => x.on ); rodOf( p.boat.model, L, at ); const y = p.deckGroundAt( at.butt.x * 0.8, at.butt.z + 0.5, at.butt.y ); p.deckPos.set( at.butt.x * 0.8, y, at.butt.z + 0.5 ); p.deckVel.set( 0, 0, 0 ); } )()` );
+	await frames( guest.game, 4 );
+	await press( guest, 'KeyR', 3 );
+	await until( guest.game, '!! window.__app.game.fight', 60000 ).catch( () => {} );
+	// (into her chair, by E beside it)
+	await guest.game.evaluate( () => { const p = window.__app.player, s = p.boat.model.chair; p.deckPos.set( s.eye.x + 0.6, 0.5, s.eye.z + 0.6 ); p.deckVel.set( 0, 0, 0 ); } );
+	await frames( guest.game, 3 );
+	await press( guest, 'KeyE', 3 );
+	await frames( guest.game, 3 );
+	const sat = await guest.game.evaluate( () => { const g = window.__app.game, f = g.fight; return { fight: !! f, species: f && f.species, kg: f && f.kg ? +f.kg.toFixed( 0 ) : null, inChair: g.rigs.inChair, hold: f && f.holdKg }; } );
+	say( sat.fight && sat.inChair, `Sam's fighting her blue marlin from her chair: ${ JSON.stringify( sat ) }` );
+	// (his fight held on, the fish kept from tiring or throwing the hook while it's watched, and her way through the water as his
+	// game has it, each frame: what _riddenVelocity gives his fight, and the closing speed it makes along his line)
+	await guest.game.evaluate( () => {
+
+		const g = window.__app.game, rv = g._riddenVelocity.bind( g ), W = window.__ride = [];
+		g._riddenVelocity = function ( boat, dt ) {
+
+			const v = rv( boat, dt ), r = this.rod, dx = r.bobber.x - r.tip.x, dz = r.bobber.z - r.tip.z, l = Math.hypot( dx, dz ) || 1;
+			W.push( { t: Date.now(), dt, v: Math.hypot( v.x, v.z ), closing: ( v.x * dx + v.z * dz ) / l, out: this.fight ? this.fight.distance : null } );
+			if ( W.length > 4000 ) W.splice( 0, 1000 );
+			return v;
+
+		};
+		window.__hold = setInterval( () => { const f = g.fight; if ( f ) { f.stamina = 1; f.overload = 0; f.slack = 0; f.hookM = f.hookStart; f.distance = Math.min( f.distance, f.maxDistance - 80 ); } }, 200 );
+
+	} );
+	// ---- on her game: her mate at her helm, her stern round to the line, backing down
+	await until( owner.game, 'window.__app.boatCtl.helmsman === "mate"', 90000 ).catch( () => {} );
+	const took = await owner.game.evaluate( `( () => { const a = window.__app, g = a.game, b = a.boatCtl, p = a.player, o = ${ other }, T = a.together, crew = T && T.crew && T.crew.aboard ? T.crew.aboard() : null, V = b.position.constructor; return { helmsman: b.helmsman, fishOn: !! ( o && o.fishOn ), bobber: !! ( o && o.cur && o.cur.bobber ), figure: !! ( g.mate.figure && g.mate.figure.visible ), why: { mate: !! g.state.stats.mate, boat: a.boat.id, mode: p.mode, riding: !! p.riding, crew: crew ? crew.length : null, fish: !! g.mate._fishAt( new V() ), moored: !! b.moored, hauled: !! b.hauled, beached: !! b.beached, engineOn: !! b.engineOn, handed: !! T._handed, fuel: g.state.fuelL } }; } )()` );
+	say( took.helmsman === 'mate', `her mate has her helm on Sam's fish (${ JSON.stringify( took ) })` );
+	await owner.game.evaluate( `( () => { window.__mate = []; const a = window.__app, b = a.boatCtl, o = ${ other }; window.__mateT = setInterval( () => { const c = o && o.cur && o.cur.bobber; if ( ! c ) return; const dx = c.x - b.position.x, dz = c.z - b.position.z, l = Math.hypot( dx, dz ) || 1; let err = Math.atan2( - dx, - dz ) - b.getYaw(); err = Math.atan2( Math.sin( err ), Math.cos( err ) ); window.__mate.push( { t: Date.now(), d: l, err, closing: ( b.velocity.x * dx + b.velocity.z * dz ) / l, helm: b.helmsman, th: b.throttle } ); }, 250 ); } )()` );
+	await until( owner.game, 'window.__mate.some( ( m ) => Math.abs( m.err ) < 0.5 )', 120000 ).catch( () => {} );
+	await frames( owner.game, 120 );
+	const her = await owner.game.evaluate( () => {
+
+		const M = window.__mate, round = M.findIndex( ( m ) => Math.abs( m.err ) < 0.5 ), after = round < 0 ? [] : M.slice( round + 8 ), med = ( a ) => a.length ? a.slice().sort( ( p, q ) => p - q )[ a.length >> 1 ] : null;
+		clearInterval( window.__mateT );
+		let came = 0;
+		for ( let i = 1; i < after.length; i ++ ) came += after[ i ].closing * ( after[ i ].t - after[ i - 1 ].t ) / 1000;
+		return { from: after.length ? after[ 0 ].t : null, to: after.length ? after.at( - 1 ).t : null, came, samples: M.length, roundAt: round, firstErr: M.length ? +( M[ 0 ].err * 180 / Math.PI ).toFixed( 0 ) : null, err: med( after.map( ( m ) => Math.abs( m.err ) * 180 / Math.PI ) ), closing: med( after.map( ( m ) => m.closing ) ), most: after.length ? Math.max( ...after.map( ( m ) => m.closing ) ) : null, d: med( after.map( ( m ) => m.d ) ), helm: after.every( ( m ) => m.helm === 'mate' ), astern: after.length ? med( after.map( ( m ) => m.th ) ) : null };
+
+	} );
+	note( `her mate: ${ JSON.stringify( her ) }` );
+	say( her.roundAt >= 0 && her.err !== null && her.err < 30, `her stern round to his line (from ${ her.firstErr }° off to ${ her.err && her.err.toFixed( 0 ) }° off, median)` );
+	// (test/mate.mjs' bounds: 0.75 to 1.2 of the 3 m/s he wants; his fish well past the 60 m he starts easing off at)
+	// (test/mate.mjs' bounds, 0.75 to 1.2 of the 3 m/s he wants, are at 30 frames a second; at the 8 two games get here his wheel
+	// and lever come a frame late each time, and he runs over: 1.3 of it here, inside boat tests' 3.3 to 4.6 m/s)
+	say( her.helm && her.closing > 0.75 * 3 && her.closing < 1.3 * 3 && her.most < 4.6, `backing down on it at ${ her.closing && her.closing.toFixed( 2 ) } m/s (the most ${ her.most && her.most.toFixed( 2 ) }; his fish ${ her.d && her.d.toFixed( 0 ) } m off)` );
+	// ---- on his game: her way through the water reaches his fight
+	const his = await guest.game.evaluate( ( [ from, to ] ) => {
+
+		const W = window.__ride.filter( ( w ) => w.t >= from && w.t <= to ), med = ( a ) => a.length ? a.slice().sort( ( p, q ) => p - q )[ a.length >> 1 ] : null;
+		clearInterval( window.__hold );
+		return { frames: W.length, line: W.reduce( ( s, w ) => s + w.closing * w.dt, 0 ), gameS: W.reduce( ( s, w ) => s + w.dt, 0 ), realS: W.length ? ( W.at( - 1 ).t - W[ 0 ].t ) / 1000 : 0, v: med( W.map( ( w ) => w.v ) ), closing: med( W.map( ( w ) => w.closing ) ), riding: window.__app.player.riding, inChair: window.__app.game.rigs.inChair, fight: !! window.__app.game.fight };
+
+	}, [ her.from, her.to ] );
+	note( `on his game, over the same seconds: ${ JSON.stringify( his ) }` );
+	// (by the line it gives back to him, her closing times his game's own time: a slow game's frames are held to 0.1 s of its
+	// time while her copy moves in real time, so the speed his fight sees is higher, and the line it gets back the same)
+	say( his.riding && his.fight && his.frames > 30 && his.line > 0.7 * her.came && his.line < 1.3 * her.came, `his fight takes her backing down as she moves on his screen: ${ his.line.toFixed( 1 ) } m of line back to him over those seconds, against the ${ her.came.toFixed( 1 ) } m she closed on hers (his game's ${ his.gameS.toFixed( 1 ) } s of time in ${ his.realS.toFixed( 1 ) } s)` );
+	await owner.game.evaluate( () => { const a = window.__app, p = a.player; p.camMode = 'third'; p.orbitDist = 16; p.orbitYaw = a.boatCtl.getYaw() + 2.4; p.orbitPitch = 0.3; } );
+	await frames( owner.game, 6 );
+	await shot( owner, 'crew-mate-owner' );
+	await shot( guest, 'crew-mate-guest' );
+	// (the fish off: she's hers again, stopped)
+	await guest.game.evaluate( () => { const g = window.__app.game; if ( g.rigs.inChair ) g.rigs._sit( false ); g.cancelLine( true ); g.fight = null; } );
+	await until( owner.game, 'window.__app.boatCtl.helmsman !== "mate"', 60000 ).catch( () => {} );
+	const back = await owner.game.evaluate( () => { const b = window.__app.boatCtl; return { helmsman: b.helmsman, throttle: b.throttle, driven: b.driven }; } );
+	say( back.helmsman !== 'mate' && ! back.driven, `the fish off, she's Robin's again, stopped (${ JSON.stringify( back ) })` );
+	await G.end( 'crew mate' );
 
 }

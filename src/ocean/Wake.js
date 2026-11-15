@@ -169,6 +169,8 @@ void main() {
 
 	_spawn( x, z, vx, vz, size, spread, dx, dz, len, strong, fade, slows ) {
 
+		// ((M20) none shed where the water's shallower than she draws, nor on the sand: docs/m20/sea.md)
+		if ( this._shallow( x, z, this._draft ) ) return;
 		const i = this._next;
 		this._next = ( i + 1 ) % this.max;
 		// (its front end where it's shed: it lies out behind that)
@@ -188,11 +190,20 @@ void main() {
 
 	}
 
+	// (M20) whether ( x, z ) is water shallower than `draft` m, or land
+	_shallow( x, z, draft = 0 ) {
+
+		const T = this.waves.terrain;
+		return !! T && G.seaLevel.value - T.heightAt( x, z ) < Math.max( draft, 0.02 );
+
+	}
+
 	// foam shed by a boat at ( px, pz ) heading yaw going ( vx, vz ), her engine's revs rpm, her wake's own figures W (Vessel.wake)
 	// and her dimensions; st: her own count and where she was last ((M19) yours, and each boat in company's)
 	_shed( st, px, pz, yaw, vx, vz, rpm, W, dims, dt ) {
 
 		if ( ! W ) return;
+		this._draft = ( dims && dims.draft ) || 0.3;
 		const speed = Math.hypot( vx, vz );
 		const fx = Math.sin( yaw ), fz = Math.cos( yaw ); // the boat's forward (+Z in its frame)
 		const rx = fz, rz = - fx; // its port side
@@ -280,6 +291,14 @@ void main() {
 			this.data[ i * 4 ] = xz[ i * 2 ] - at.x;
 			this.data[ i * 4 + 1 ] = xz[ i * 2 + 1 ] - at.z;
 			if ( age > 0 && ( i & 1 ) !== turn ) continue;
+			// ((M20) one carried onto the sand is gone)
+			if ( this._shallow( xz[ i * 2 ], xz[ i * 2 + 1 ] ) ) {
+
+				this.data[ i * 4 + 2 ] = life;
+				continue;
+
+			}
+
 			const half = Math.max( this.size[ i * 3 ], this.lie[ i * 4 + 2 ] ) * 0.5, dx = this.lie[ i * 4 ] * half, dz = this.lie[ i * 4 + 1 ] * half;
 			this.heights[ i * 2 ] = this.waves.heightAt( xz[ i * 2 ] - dx, xz[ i * 2 + 1 ] - dz, t );
 			this.heights[ i * 2 + 1 ] = this.waves.heightAt( xz[ i * 2 ] + dx, xz[ i * 2 + 1 ] + dz, t );

@@ -245,7 +245,8 @@ export const strengthOf = ( dry ) => 1 - 0.5 * Math.min( 1, Math.max( 0, dry - D
 export const cleanDays = ( d ) => {
 
 	const num = ( v, least = 0 ) => ( Number.isFinite( v ) ? Math.max( least, v ) : least ), boats = {};
-	for ( const [ k, b ] of Object.entries( d && d.boats && typeof d.boats === 'object' ? d.boats : {} ) ) if ( ABLE[ k ] && b ) boats[ k ] = { ice: num( b.ice ), stores: num( b.stores ) };
+	// ((M20) troll: Ah drawn from her trolling motor's batteries, 0 full: Trolling.js)
+	for ( const [ k, b ] of Object.entries( d && d.boats && typeof d.boats === 'object' ? d.boats : {} ) ) if ( ABLE[ k ] && b ) boats[ k ] = { ice: num( b.ice ), stores: num( b.stores ), troll: Math.min( 80, num( b.troll ) ) };
 	// ((M19) mate: the days of this trip the sportfisher's mate has been paid for: rigs/Mate.js)
 	return { boats, out: num( d && d.out ), dry: num( d && d.dry ), flares: d && Number.isFinite( d.flares ) ? Math.max( 0, Math.min( FLARES, d.flares ) ) : FLARES, mate: Math.floor( num( d && d.mate ) ) };
 

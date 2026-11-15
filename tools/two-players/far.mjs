@@ -119,7 +119,7 @@ const seaOf = ( g ) => g.evaluate( async () => {
 	const cut = 6, Tq = Math.round( T * 200 ) / 200; // (the same moment for both)
 	const f = findsAbout( Tq, - 6200, 7400, 3000, { weed: [], debris: [], bait: [] }, ( x, z ) => - app.terrainData.heightAt( x, z ) );
 	const nums = ( l ) => l.map( ( e ) => [ Math.round( e.x ), Math.round( e.z ) ] );
-	const { G } = await import( '/src/core/Globals.js' );
+	const { G } = await import( performance.getEntriesByType( 'resource' ).map( ( e ) => e.name ).filter( ( u ) => u.includes( '/src/core/Globals.js' ) ).pop() || '/src/core/Globals.js' );
 	app.together.syncWaves();
 	const waveClock = G.time.value - Date.now() / 1000;
 	return { T, waveClock, wind: +w.wind.toFixed( 3 ), id: w.id, waveAt: +app.waves.heightAt( - 6200, 7400 ).toFixed( 3 ), Tq, weed: nums( f.weed ), debris: nums( f.debris ), bait: nums( f.bait ) };

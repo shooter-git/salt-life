@@ -1,4 +1,6 @@
 import { Vector3, Color, Mesh, BoxGeometry, MeshStandardMaterial, Group } from '../engine/index.js';
+import { SPRAY } from '../fx/Spray.js';
+import { BATTERY, batteryStep, thrustLeft } from './Trolling.js';
 import { G } from '../core/Globals.js';
 import { WORLD } from '../world/WorldLayout.js';
 import { FISH, CARAPACE, fishWeightKg, spearRule } from './FishTable.js';
@@ -78,6 +80,12 @@ const ANCHOR_SPEED = 2.5;
 // (M19) the console's trolling motor wants this much water under its prop (m); her Power-Poles take this long to run down (s:
 // a Blade's 4.0, Power-Pole's)
 const TROLL_DEPTH = 0.75, POLE_DOWN_S = 4;
+// (M20) how far off a fish of a bonefish's wariness hears each go into the water (m: FlatsFishing.splash): an anchor's splash
+// (the plan's 15), her Power-Poles' spikes into the bottom and a stake-out pole, quieter (judgement: docs/m20/kit.md)
+const HEARD = { anchor: 15, poles: 6, stake: 4 };
+// (M20) the bottoms a pole won't hold in (Traps' BOTTOMS): rock and the reef's edge; and live coral, where it isn't put down at all
+// (the Exuma park and the Keys' sanctuary forbid it: docs/m20/sources-boats.md's 2)
+const POLE_ROCK = new Set( [ 'hard', 'edge' ] );
 const ANCHOR_MIN_M = 0.1; // (M19) m of water at her stem head: under it there's nothing to anchor in (a kayak run up on the sand)
 // (M15) the far places are looked for from this far from the middle of the world (m: Game.updateFound)
 const FOUND_FROM = 1000;
@@ -789,6 +797,8 @@ export class Game {
 		if ( this.hud ) this.hud.update( {
 			// ((M16) a boat with no engine has no fuel to show, and riding in another's isn't yours to know)
 			fuel: aboard && ! p.riding && this.state.stats.fuelL > 0 ? { litres: this.state.fuelL, tank: this.state.stats.fuelL } : null,
+			// ((M20) her trolling motor's batteries, fitted: what's left of them)
+			battery: aboard && ! p.riding && this.state.stats.trollingN > 0 ? 1 - ( this.daysOut.box.troll || 0 ) / BATTERY.ah : null,
 			// (M10) the hull once it's worn, and the bilge with water in it
 			hull: aboard && ! p.riding && this.hull.wear > 0.02 ? this.hull.wear : null,
 			bilge: aboard && ! p.riding && this.hull.bilge >= 1 ? this.hull.bilge : null,
@@ -871,6 +881,18 @@ export class Game {
 
 		const app = this.app, b = app.boatCtl, p = app.player, s = this.state;
 		if ( b.driven && b.engineOn && b.handling.engine ) s.burn( fuelBurn( b.rpm, s.boat, !! s.stats.twin ) * dt ); // ((M17) a twin's two)
+		// ((M20) her trolling motor's batteries: drawn down by its lever, charged by her outboards running, and her thrust going as
+		// they go flat: Trolling.js)
+		if ( s.stats.trollingN > 0 && ! p.riding ) {
+
+			const box = this.daysOut.box, was = box.troll || 0;
+			box.troll = batteryStep( was, dt, { lever: b.trolling && b.driven ? b.throttle : 0, charging: !! ( b.driven && b.engineOn && b.handling.engine && ! b.trolling ) } );
+			if ( b.trolling ) b.trolling.n = s.stats.trollingN * thrustLeft( box.troll );
+			if ( was < BATTERY.ah * ( 1 - BATTERY.low ) && box.troll >= BATTERY.ah * ( 1 - BATTERY.low ) ) this.toast( 'Trolling motor\'s batteries low · her outboards charge them, or the dock\'s charger overnight', 3600 );
+			if ( was < BATTERY.ah && box.troll >= BATTERY.ah ) this.toast( 'Trolling motor\'s batteries flat', 2600 );
+
+		}
+
 		else if ( this._wasDriven && ! b.driven ) s.save();
 		if ( app.boat.play ) app.boat.play( dt, this ); // ((M16) a kayak's own: kayak/KayakModel.js)
 		this.updateHull( dt );
@@ -1286,6 +1308,7 @@ export class Game {
 			} else if ( ! ( st.stakeM > 0 ) ) this.toast( seat ? 'No stake-out pole for her · Marta sells one' : 'No Power-Poles on her · Marta sells them', 2400 );
 			else if ( seat ) this._stakeHer( b, st.stakeM, false );
 			else if ( this.depthAt( b.toWorld( M.stakeAt, _a ) ) > st.stakeM ) this.toast( `Too deep for her Power-Poles · they hold in ${ feet( st.stakeM ) } of water`, 2600 );
+			else if ( this.traps.bottom( _a.x, _a.z ) === 'coral' ) this.toast( 'Live coral under her · the Power-Poles don\'t go down on it', 2600 );
 			else {
 
 				this._poleT = POLE_DOWN_S; // (they run down, 4 s)
@@ -1294,6 +1317,17 @@ export class Game {
 			}
 
 		}
+
+	}
+
+	// (M20) an anchor or a pole going into the water at `at` (why: HEARD's): its splash, heard, and the flats' fish that hear it
+	// off (FlatsFishing.splash: shared, as a spook is)
+	plunk( at, why ) {
+
+		const app = this.app, y = G.seaLevel.value + 0.02;
+		this.flats.splash( at, HEARD[ why ] || HEARD.anchor, why );
+		if ( app.audio && app.audio.splash ) app.audio.splash( why === 'anchor' ? 0.75 : 0.35, at );
+		if ( app.spray && why === 'anchor' ) app.spray.emit( _a.set( at.x, y, at.z ), _b.set( 0, 1.6, 0 ), 18, 0.035, SPRAY.DROPLET, { spread: 1.1, jitter: 0.12, life: 1.1 } );
 
 	}
 
@@ -1316,8 +1350,25 @@ export class Game {
 
 		}
 
+		// ((M20) not on live coral, and no hold in rock: sand, mud and grass take a pole: docs/m20/kit.md)
+		const bottom = this.traps.bottom( at.x, at.z );
+		if ( bottom === 'coral' ) {
+
+			this.toast( both ? 'Live coral under her · the Power-Poles don\'t go down on it' : 'Live coral under you · the pole doesn\'t go in it', 2600 );
+			return;
+
+		}
+
+		if ( POLE_ROCK.has( bottom ) ) {
+
+			this.toast( both ? 'Hard bottom · her Power-Poles won\'t bite: find sand, mud or grass' : 'Hard bottom · the pole won\'t go in: find sand, mud or grass', 2600 );
+			return;
+
+		}
+
 		b.stake = { x: at.x, z: at.z, at: M.stakeAt, yaw: both ? b.getYaw() : undefined };
 		this.toast( both ? 'Power-Poles down · she\'s held' : `Staked out in ${ feet( d ) } of water · she swings about it`, 2200 );
+		this.plunk( at, both ? 'poles' : 'stake' );
 
 	}
 
@@ -1375,6 +1426,7 @@ export class Game {
 
 		b.anchor = at.setY( floor );
 		this.toast( `Anchor down in ${ feet( depth ) } of water`, 2200 );
+		this.plunk( b.anchor, 'anchor' );
 
 	}
 
@@ -1986,6 +2038,7 @@ export class Game {
 		this.fight.rig = this.rod.rig; // ((M19) what it was taken on: the catch's log and Pearl's challenges, a fly's among them)
 		this.fight.place = b.place;
 		this.fight.at = b.at;
+		this.rod.netting = !! T.net; // ((M20) it's netted: the rod draws the net as it comes in)
 		this.bite = null;
 		this.rod.hook();
 		this.toast( 'Fish on!', 1200 );
@@ -2516,6 +2569,8 @@ export class Game {
 
 		gun.update( dt, {
 			visible: canSpear, groundAt: ( x, z ) => p.groundAt( x, z, gun.tip.y + 0.3 ), colliders: app.colliders, waterY: app.cameraWaterHeight ?? 0,
+			// ((M20) the sea where its floats ride, metres off you: over you a swell's crest or trough isn't theirs)
+			waterAt: ( x, z ) => app.query ? app.query.heightAt( x, z, G.time.value ) : G.seaLevel.value,
 			// the shaft in flight: through the first fish it may take (it passes the others by)
 			pierce: ( a, b ) => {
 
@@ -2555,11 +2610,14 @@ export class Game {
 				// (landed once it's tired and pulled close: CatchMinigame landAt, tired; (M19) the terms Speargun.spearTerms', the
 				// sweep's too: it runs to the end of the line and tears free, with a reel taking line first, on a breakaway out on
 				// its float line, towing the float)
-				const T = spearTerms( g, { tail: sp.tail, distance: Math.max( 1.5, gun.muzzle.distanceTo( gun.tip ) - g.shaftM ) } );
+				const T = spearTerms( g, { tail: sp.tail, distance: Math.max( 1.5, gun.muzzle.distanceTo( gun.tip ) - g.shaftM ), kg: sp.kg } );
 				const f = this.spearFight = new CatchMinigame( { species: sp.id, kg: sp.kg, ...T.terms } );
 				f.maxDistance = T.maxDistance;
 				f.floatM = T.floatM;
 				f.spear = true;
+				// ((M20) more than its floats hold: it'll drag them under at the float line's end and pull free)
+				f.under = T.under;
+				gun.floats = T.floats;
 				this.toast( g.breakaway ? 'A big one · it\'ll run on the float: let it tire, and haul in when it\'s not running' : 'A big one · hold to pull it in, ease off when it runs', 2600 );
 
 			} else gun.pull();
@@ -2579,7 +2637,7 @@ export class Game {
 			} else if ( st !== 'fighting' ) {
 
 				this.spearFight = null;
-				this.loseSpeared( st === 'snapped' ? 'It tore off the shaft' : 'It ran out the line and tore free' );
+				this.loseSpeared( st === 'snapped' ? 'It tore off the shaft' : f.under ? `It dragged the float${ gun.floats > 1 ? 's' : '' } under and pulled free · more floats hold a bigger fish` : 'It ran out the line and tore free' );
 				return;
 
 			}

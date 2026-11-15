@@ -1020,7 +1020,8 @@ export class GameState {
 	hasNeeds( key ) {
 
 		const n = UPGRADES[ key ] && UPGRADES[ key ].needs;
-		return ! n || ( this.upgrades[ n ] | 0 ) > 0;
+		// ((M20) at needsLevel or past it, where a track says: the extra floats the blue-water gun)
+		return ! n || ( this.upgrades[ n ] | 0 ) >= ( UPGRADES[ key ].needsLevel || 1 );
 
 	}
 

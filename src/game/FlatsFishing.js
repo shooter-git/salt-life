@@ -93,8 +93,17 @@ export class FlatsFishing {
 
 	}
 
-	// a cloud's shadow at ( x, z ), 0..1: the sky's cover, drifting on the wind (as the clouds' own shadows on high)
+	// a cloud's shadow at ( x, z ), 0..1. ((M20) On high, the drawn clouds' own, read back from their shadow map (App's cloudShade:
+	// CloudShadows); elsewhere, or till it's read, the field below)
 	shadeAt( x, z ) {
+
+		const drawn = this.app.cloudShade ? this.app.cloudShade( x, z ) : null;
+		return drawn !== null ? drawn : this.shadeField( x, z );
+
+	}
+
+	// the sky's cover, drifting on the wind: the shade where no clouds' shadows are drawn (low, mid)
+	shadeField( x, z ) {
 
 		const sky = this.app.sky, cover = sky && sky.clouds && sky.clouds.coverage ? sky.clouds.coverage.value : 0.3;
 		if ( cover <= 0.02 ) return 0;
@@ -342,6 +351,40 @@ export class FlatsFishing {
 		}
 
 		if ( take ) this.cast = { at: { x: at.x, z: at.z }, bait, tried: new Set(), t: 0 };
+
+	}
+
+	// (M20) something going into the water at `at` with a splash or a thump (stream KIT, docs/m20/kit.md): an anchor, a Power-Pole's
+	// spike, a stake-out pole. Heard heardM m off by a fish of a bonefish's wariness, the warier the further (Sight's wary). Each
+	// school in sight with a fish that near bolts, the flat quiet a while (spooked: in everyone's record, so the others' flats
+	// hear it too, as M17 has it) -> how many schools it sent off
+	splash( at, heardM, why ) {
+
+		const fish = this.fish;
+		if ( ! fish || ! fish.sightGroups || ! this.near( at.x, at.z ) ) return 0;
+		let n = 0;
+		for ( const g of fish.sightGroups ) {
+
+			const S = g.sight;
+			if ( ! S || ! g.active || S.bolt > 0 ) continue;
+			const r = heardM * ( sightOf( S.kind ) ? sightOf( S.kind ).wary : 1 );
+			if ( Math.hypot( g.center.x - at.x, g.center.z - at.z ) > r + g.radius ) continue;
+			let heard = false;
+			fish.sightFish( g, ( i ) => {
+
+				heard = heard || Math.hypot( fish.pos[ i * 3 ] - at.x, fish.pos[ i * 3 + 2 ] - at.z ) < r;
+
+			} );
+			if ( heard ) {
+
+				this.spooked( g, why, at.x, at.z );
+				n ++;
+
+			}
+
+		}
+
+		return n;
 
 	}
 
