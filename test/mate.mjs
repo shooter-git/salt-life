@@ -80,6 +80,28 @@ for ( const [ name, b ] of [ [ 'astern', Math.PI ], [ 'abeam', Math.PI / 2 ], [ 
 const rough = back( Math.PI, { Hs: 3 } );
 ok( rough.closing > 0.6 * MATE.least && rough.closing < 1.4 * MATE.least, `in 3 m of sea, slower: ${ rough.closing.toFixed( 2 ) } m/s (he wants ${ MATE.least })` );
 
+// ((M20) taking her helm in the game (Mate.update): you've left her helm for the chair, so her engines are off (Hull stops them
+// as you leave it), and a fish is on. M19 asked for them running, so he never took her: tools/two-players/crew.mjs' mate part)
+{
+
+	const { Mate } = await import( '../src/game/rigs/Mate.js' );
+	const ctl = new BoatController( { model: m, query, terrain: { heightAt: () => - 50 }, colliders: null } );
+	ctl.moored = false;
+	ctl.driven = false;
+	ctl.engineOn = false;
+	const toasts = [], state = { stats: { mate: true, mateDay: 200 }, days: { out: 1, mate: 1 }, fuelL: 500, money: 0, dues: { owed: 0 }, save() {}, emit() {} };
+	const game = { state, fight: { distance: 90, landAt: 3 }, rod: { lineInWater: true, bobber: new Vector3( 0, 0, - 90 ) }, toast: ( t ) => toasts.push( t ) };
+	game.app = { boatCtl: ctl, boat: { id: 'sportfisher' }, player: { mode: 'deck', riding: null }, together: null, weather: null };
+	const mate = new Mate( game );
+	mate.update( dt );
+	ok( ctl.helmsman === 'mate' && ctl.driven && toasts.some( ( t ) => /mate has her helm/.test( t ) ), `you off her helm, her engines stopped, a fish on: he takes her helm and starts her (${ ctl.helmsman }, driven ${ ctl.driven })` );
+	game.fight = null;
+	game.rod.lineInWater = false;
+	mate.update( dt );
+	ok( ctl.helmsman === null && ! ctl.driven, 'the fish off: hers again, stopped' );
+
+}
+
 if ( fails ) {
 
 	console.log( `${ fails } failed` );
