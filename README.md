@@ -20,7 +20,7 @@ You can walk, swim and take the boat around the island. You can fish from the pi
 boat, or dive and spear a fish, sell your catch to Joe and buy better gear from Marta. It plays with a
 mouse and keyboard, a gamepad or a touch screen.
 
-Done, M0 to M19 (no M18: its list went into M19):
+Done, M0 to M20 (no M18: its list went into M19 and M20):
 - the sea and its shore, spray, gusts and slicks, and the haze;
 - the whole world: the village, the pier, the reef and its fish, the birds and crabs, the beach's
   debris, the whale and the lights at night;
@@ -248,6 +248,15 @@ Done, M0 to M19 (no M18: its list went into M19):
     - flares seen from the village or Pearl's camp;
     - the stars turning with the sky.
   - **What M17 left for playing together**, and the checks it never ran.
+- what M19 left (M20):
+  - **The surf's water height:** what a swimmer, a kayak or a bobber rides in the breakers is the water the sea draws.
+  - **The moon in the sea:** its path on the water from moonrise, as wide as the wind's waves spread it.
+  - **Wakes in shallow water:** a boat's wake opening out and standing up over the flats, breaking white where it's too
+    shallow for it.
+  - **The gear:** extra floats for the blue-water gun, the landing net drawn, the anchor's splash scaring the flats' fish,
+    standing in the Pilot, the trolling motor's batteries, and the poles refusing rock and live coral.
+  - **The sounds measured in the game,** another player's kayak heard at last, and the sportfisher's mate taking her helm.
+  - **The tone curve tried again** (ACES kept), and high's moonlit night without its haze.
 - playing together:
   - you see the others on the island, walking, swimming, fishing and out in their boats, each the boat
     she is, with her paint and what's fitted on her; far off a boat is a speck on the horizon;
@@ -299,6 +308,7 @@ The island's day:
 | M16 | The boats: a fishing kayak to start in, a center console, the lobster boat and an offshore sportfisher to earn, each with her own upgrades, berth and sea she can stand; days out (ice, stores, bunks, flares, a deep-water anchor), trolling, kites and deep-dropping for the far water's fish, lobster traps, each boat as herself when playing together, Pearl's day and the rest of the north side ([docs/M16.md](docs/M16.md)) |
 | M17 | The flats on a tide: sight-fishing from the kayak and on foot on the west's new flats, a tide with the moon behind it, everything M16 left for guests aboard, coming back where you were, a life list of every kind with the slams, the wakes as waves, and the figures from sources ([docs/M17.md](docs/M17.md)) |
 | M19 | The fly, the big fish and the stalls: a fly rod for the flats, the biggest marlin landed alone, the boats' new gear, the bait and the ice at Joe's and Pearl's challenges, line-class records, and most of what M17 left (M18's list: no M18 milestone) ([docs/M19.md](docs/M19.md)) |
+| M20 | What M19 left: the surf's water height, the moon in the sea, wakes in shallow water, the blue-water gun's floats, the landing net, the anchor's splash, the boats' details, the sounds measured in the game, the tone curve's trial, and the checks M19 didn't run ([docs/M20.md](docs/M20.md)) |
 
 ## How it fits All the Spaces
 
