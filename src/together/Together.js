@@ -3112,7 +3112,7 @@ export class Together {
 	}
 
 	// (M19) another player's kayak within earshot of her push (15 m), when the boat you hear isn't hers: you're in your own boat or
-	// riding, or another boat's nearer (theirs: boatSound's). -> { d, speed } or null
+	// riding, or another boat's nearer (theirs: boatSound's). -> { d, speed, x, y, z } or null ((M20) where she is, for her panner)
 	kayakHeard( theirs = null ) {
 
 		const p = this.app.player, cam = this.app.camera.position;
@@ -3127,7 +3127,7 @@ export class Together {
 			if ( d < bd ) {
 
 				bd = d;
-				best = { d, speed: o.boatSpeed || 0 };
+				best = { d, speed: o.boatSpeed || 0, x: at.x, y: at.y + 0.3, z: at.z };
 
 			}
 

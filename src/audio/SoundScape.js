@@ -221,7 +221,14 @@ export const ENGINES = {
 // (M16) an outboard going by (passingOutboard): her recording, m she's heard to, m where she's at its level, its level (LUFS) at idle (a
 // flat-out one's 6 dB more), its rate at no throttle and what full adds. ((M17) Her level by ear: 9 dB under M16's -27, so that flat
 // out 12 m off she's 9 dB under your own console flat out at her helm, as published helm and pass-by levels have it.)
-export const PASSING = { bank: 'outboard_run', range: 700, ref: 12, db: - 36, rate: [ 0.7, 0.45 ] };
+// ((M20) hrtf: dB her recording gains through the HRTF panner of mid and high over low's equal-power one, taken off there. Measured
+// in the game she was on her level on low and 4.7 dB over it on mid and high; Chromium's HRTF adds that much to a low, even sound
+// like hers: tools/audio/levels.mjs, tools/audio/hrtf.mjs, docs/m20/finish.md)
+export const PASSING = { bank: 'outboard_run', range: 700, ref: 12, db: - 36, rate: [ 0.7, 0.45 ], hrtf: 4.4 };
+// (M20) ears this near the boat's own sound (m: her hull's middle, a little up) are in her: her water and her engine round you,
+// as at a helm, not panned from a point under you (sat in the kayak her push was 4.8 dB under its level on low, through her
+// panner and its mono trim both: tools/audio/levels.mjs, docs/m20/finish.md)
+const IN_BOAT = 1.5;
 // which of them a boat has: the console's two outboards are her own sound
 export const engineOf = ( id, twin ) => id === 'console' && twin ? 'twin' : id;
 const ENGINE_BEDS = [ 'boat_engine', 'outboard_idle', 'outboard_run', 'twin_idle', 'twin_run', 'diesels_idle', 'diesels_run' ];
@@ -683,7 +690,7 @@ export class SoundScape {
 		v.air.frequency.value = clamp( 18000 / ( 1 + d / 45 ), 1500, 18000 );
 		v.src.playbackRate.value = PASSING.rate[ 0 ] + PASSING.rate[ 1 ] * o.throttle;
 		// (dying away at the edge of hearing, so it stops at nothing)
-		this._ramp( v.gain.gain, dB( PASSING.db + 6 * o.throttle ) / dB( BANK[ PASSING.bank ].lufs ) * ( 1 - smooth( PASSING.range * 0.75, PASSING.range, d ) ), 0.4 );
+		this._ramp( v.gain.gain, dB( PASSING.db + 6 * o.throttle - ( this.tier === 'low' ? 0 : PASSING.hrtf ) ) / dB( BANK[ PASSING.bank ].lufs ) * ( 1 - smooth( PASSING.range * 0.75, PASSING.range, d ) ), 0.4 );
 
 	}
 
@@ -1100,6 +1107,8 @@ export class SoundScape {
 		this.boatSum.connect( this.boatIn );
 		this.engineLP = lowpass( 1200, 0.6, this.boatSum );
 		this.pierPan = panner( this.above, 3, 1.3 );
+		// ((M20) another player's kayak heard where she is: her push's level falls off by her distance itself, so no more here)
+		this.theirPan = panner( this.above, 1, 0 );
 		this.windLP = lowpass( 1400, 0.5, this.above );
 		// (M11) the rain's beds: muffled under a roof
 		this.rainLP = lowpass( 20000, 0.6, this.above );
@@ -1125,7 +1134,7 @@ export class SoundScape {
 			under_reef: this.under, birds_dawn: this.above, whale_song: this.songPan,
 			boat_engine: this.engineLP, outboard_idle: this.engineLP, outboard_run: this.engineLP, twin_idle: this.engineLP, twin_run: this.engineLP, diesels_idle: this.engineLP, diesels_run: this.engineLP,
 			reel_electric: this.rod, radio_hiss: this.above, hauler: this.boatSum,
-			boat_rush: this.boatSum, boat_lap: this.boatSum, kayak_push: this.boatSum, kayak_push_theirs: this.boatSum,
+			boat_rush: this.boatSum, boat_lap: this.boatSum, kayak_push: this.boatSum, kayak_push_theirs: this.theirPan,
 			reel_wind: this.rod, reel_drag: this.rod, line_strain: this.rod,
 			rain_light: this.rainLP, rain_heavy: this.rainLP, rain_boat: this.above,
 			// (M11) on what it falls on
@@ -1237,7 +1246,8 @@ export class SoundScape {
 			gn.gain.value = 0;
 			src.connect( gn ).connect( this._dest[ name ] );
 			src.start( now + 0.02, Math.random() * buf.duration );
-			bed = { src, gain: gn, trim: buf.numberOfChannels === 1 ? MONO : 1 };
+			// ((M20) MONO's 3 dB not taken for a bed of her own panner's, which splits it between the ears itself: _shot's whole)
+			bed = { src, gain: gn, trim: buf.numberOfChannels === 1 && this._dest[ name ] !== this.theirPan ? MONO : 1 };
 			this._beds.set( name, bed );
 			if ( this._dest[ name ] !== this.rod ) tau = Math.max( tau, 0.8 ); // fade in on first start (the reel follows the crank at once)
 
@@ -1252,7 +1262,8 @@ export class SoundScape {
 
 	// plays a random slice of a sprite bank (never the same one twice in a row) at a target loudness;
 	// `at`: context time (default now); `pick`: slice index (default random)
-	_shot( bank, cat, dest, targetLufs, rate = 1, at = 0, pick = - 1 ) {
+	// ((M20) whole: put through a panner, which splits a mono file between the ears (equal power): MONO's 3 dB not taken again)
+	_shot( bank, cat, dest, targetLufs, rate = 1, at = 0, pick = - 1, whole = false ) {
 
 		if ( ! this.enabled || ! dest || this._playing() >= this.maxVoices ) return null;
 		const info = BANK[ bank ];
@@ -1268,7 +1279,7 @@ export class SoundScape {
 		src.buffer = buf;
 		src.playbackRate.value = rate;
 		const g = c.createGain();
-		g.gain.value = dB( clamp( targetLufs - info.lufs[ i ], - 80, 24 ) ) * ( buf.numberOfChannels === 1 ? MONO : 1 );
+		g.gain.value = dB( clamp( targetLufs - info.lufs[ i ], - 80, 24 ) ) * ( buf.numberOfChannels === 1 && ! whole ? MONO : 1 );
 		src.connect( g ).connect( dest );
 		src.start( t, start, dur );
 
@@ -1302,7 +1313,9 @@ export class SoundScape {
 	}
 
 	// a one-shot placed in the world: HRTF panner at (x, y, z) + air absorption with distance
-	_shotAt( bank, cat, x, y, z, targetLufs, rate, at, ref, rolloff = 1, pick = - 1 ) {
+	// ((M20) whole: MONO's 3 dB not taken twice, the panner having split it: _shot. M17's flats sounds, measured in the game, are;
+	// the older ones, set by ear against the old way, aren't yet: docs/m20/finish.md)
+	_shotAt( bank, cat, x, y, z, targetLufs, rate, at, ref, rolloff = 1, pick = - 1, whole = false ) {
 
 		if ( ! this.enabled || this._playing() >= this.maxVoices || ! this._want( bank ) ) return null;
 		const c = this.ctx, e = this.env;
@@ -1315,7 +1328,7 @@ export class SoundScape {
 		air.type = 'lowpass';
 		air.frequency.value = clamp( 18000 / ( 1 + d / 45 ), 1500, 18000 );
 		air.connect( p );
-		const v = this._shot( bank, cat, air, targetLufs, rate, at, pick );
+		const v = this._shot( bank, cat, air, targetLufs, rate, at, pick, whole );
 		if ( ! v ) {
 
 			air.disconnect();
@@ -1684,6 +1697,10 @@ export class SoundScape {
 		e.song = clamp( num( s.songbirds, 1 ), 0, 2 );
 		e.gulls = clamp( num( s.gulls, 1 ), 0, 1 );
 		e.aboard = !! s.aboard;
+		// ((M20) another player's kayak by you (Together.kayakHeard): { d, speed, x, y, z }. M19 sent it and it never got here, so
+		// her push was never heard)
+		const tk = s.theirKayak;
+		e.theirKayak = tk && Number.isFinite( tk.d ) && Number.isFinite( tk.x ) ? tk : null;
 		e.day = clamp( num( s.daylight, 1 ), 0, 1 );
 		e.nearPier = !! s.nearPier;
 		e.hour = typeof s.timeOfDay === 'number' && Number.isFinite( s.timeOfDay ) ? ( ( s.timeOfDay % 24 ) + 24 ) % 24 : null;
@@ -1793,10 +1810,12 @@ export class SoundScape {
 
 		this._pos( this.surfPan, e.lx + e.surfX * 40, e.ly - 1.5, e.lz + e.surfZ * 40 );
 		this._pos( this.boatPan, e.boat.x, e.boat.y + 0.3, e.boat.z );
-		this._ramp( this.boatIn.gain, e.boat.inside ? 1 : 0, 0.1 );
-		this._ramp( this.boatOut.gain, e.boat.inside ? 0 : 1, 0.1 );
+		const inBoat = e.boat.inside || ( e.aboard && Math.hypot( e.lx - e.boat.x, e.ly - e.boat.y - 0.3, e.lz - e.boat.z ) < IN_BOAT );
+		this._ramp( this.boatIn.gain, inBoat ? 1 : 0, 0.1 );
+		this._ramp( this.boatOut.gain, inBoat ? 0 : 1, 0.1 );
 		const pier = WORLD.pier;
 		this._pos( this.pierPan, pier.x, 0, clamp( e.lz, Math.max( pier.zStart, - 40 ), pier.zEnd ) );
+		if ( e.theirKayak ) this._pos( this.theirPan, e.theirKayak.x, e.theirKayak.y, e.theirKayak.z );
 
 	}
 
@@ -1968,7 +1987,7 @@ export class SoundScape {
 		const kayak = eb.sound === 'kayak', pushAt = kayak && e.u < 0.5 ? ( e.aboard ? 1 : 1 - smooth( 3, 15, bd ) ) : 0;
 		this._bed( 'kayak_push', pushAt > 0 ? dB( MIX.kayakPush ) * pushShare( sp, e.wind ) * pushAt / dB( BANK.kayak_push.lufs ) : 0, now, 0.3, pushRate( sp ) );
 		// ((M19) and another player's kayak by you, as she pushes through the water, while the boat you hear is your own or the one
-		// you ride: e.theirKayak, { d (m off), speed } (Together.kayakHeard))
+		// you ride: e.theirKayak, { d (m off), speed, x, y, z } (Together.kayakHeard), from where she is: (M20) her own panner)
 		const tk = e.theirKayak, theirAt = tk && e.u < 0.5 ? 1 - smooth( 3, 15, tk.d ) : 0;
 		this._bed( 'kayak_push_theirs', theirAt > 0 ? dB( MIX.kayakPush ) * pushShare( tk.speed, e.wind ) * theirAt / dB( BANK.kayak_push.lufs ) : 0, now, 0.3, tk ? pushRate( tk.speed ) : 1 );
 		if ( nearBoat && sp > 1.2 && e.u < 0.5 ) {
@@ -2082,7 +2101,7 @@ export class SoundScape {
 		if ( now - this._tailAt < TAIL.gap || Math.random() >= TAIL.chance ) return;
 		this._want( 'tail_splash' );
 		const pick = tailSlice( permit, Math.random() );
-		const v = this._shotAt( 'tail_splash', 'tail', x, y, z, MIX.tailSplash + tailDb( out, permit ) + ( Math.random() - 0.5 ) * 4, ( permit ? 0.86 : 0.92 ) + Math.random() * 0.16, 0, TAIL.ref, 1, pick );
+		const v = this._shotAt( 'tail_splash', 'tail', x, y, z, MIX.tailSplash + tailDb( out, permit ) + ( Math.random() - 0.5 ) * 4, ( permit ? 0.86 : 0.92 ) + Math.random() * 0.16, 0, TAIL.ref, 1, pick, true );
 		if ( v ) this._tailAt = now;
 
 	}
@@ -2093,7 +2112,7 @@ export class SoundScape {
 		const e = this.env;
 		if ( ! this.enabled || e.u > 0.5 || n <= 0 || Math.hypot( x - e.lx, z - e.lz ) > BOLT.heard ) return;
 		this._want( 'school_bolt' );
-		this._shotAt( 'school_bolt', 'bolt', x, y, z, MIX.schoolBolt + boltDb( n ) + ( Math.random() - 0.5 ) * 3, 0.94 + Math.random() * 0.12, 0, BOLT.ref );
+		this._shotAt( 'school_bolt', 'bolt', x, y, z, MIX.schoolBolt + boltDb( n ) + ( Math.random() - 0.5 ) * 3, 0.94 + Math.random() * 0.12, 0, BOLT.ref, 1, - 1, true );
 
 	}
 
