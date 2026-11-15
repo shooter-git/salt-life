@@ -2853,6 +2853,10 @@ export class App {
 			b.anchor = story.anchor ? new THREE.Vector3( story.anchor.x, this.terrainData.heightAt( story.anchor.x, story.anchor.z ), story.anchor.z ) : null;
 			b.sock = !! story.sock;
 			b.hasWater = false;
+			// ((M20) afloat where she was left, at anchor or adrift: a kayak's start lays her on her sand at home (KayakModel.atHome),
+			// and left so, M19's "drawn up on the sand, no anchor out" (Game.updateAnchor) let go the anchor she was left at, and she
+			// drifted off. Aground or on her sand she's kept lying there, as before: docs/m20/checks.md)
+			if ( story.where === 'anchor' || story.where === 'adrift' ) b.beached = b.beaching = false;
 			b.apply();
 			if ( b.moored && b.model.rest ) b.model.rest( b, story.x, story.z );
 
