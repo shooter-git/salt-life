@@ -1055,7 +1055,10 @@ const SC = {
 		const was = await view( g );
 		say( was.mode === 'boat' && !! was.anchor, `kayak at anchor: sat in her, her anchor down (${ was.mode }, ${ JSON.stringify( was.anchor ) }) ${ JSON.stringify( was.toasts.slice( - 1 ) ) }` );
 		await saveNow( g );
+		// ((M20) her record as it's kept, and as the load reads it)
+		note( `kept: ${ await g.evaluate( () => window.__app.store.getItem( 'saltlife.boat' ) ) }` );
 		let v = await S.reload( 'sat in her at anchor' );
+		note( `read back: ${ await g.evaluate( () => window.__app.store.getItem( 'saltlife.boat' ) ) }; anchor now ${ JSON.stringify( await g.evaluate( () => { const b = window.__app.boatCtl; return b.anchor ? [ b.anchor.x, b.anchor.z ] : null; } ) ) }` );
 		note( brief( v ) );
 		good( v, 'kayak at anchor' );
 		await frames( g, 6 );

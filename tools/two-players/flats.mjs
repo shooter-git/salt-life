@@ -45,7 +45,10 @@ const pick = await robin.game.evaluate( async () => {
 	for ( let day = a.settings.day; day < a.settings.day + 40; day ++ ) for ( let h = 10.5; h <= 13.5; h += 0.25 ) {
 
 		const T = ( day - 1 ) * 24 + h, sea = tideAt( T );
-		const bones = flatsSchools( T, { wind: 2, overcast: 0, hour: h } ).filter( ( q ) => q.kind === 'bonefish' && q.life > 0.99 && q.n >= 4 && q.mode !== 'mill' && sea - td.heightAt( q.x, q.z ) > 0.35 && sea - td.heightAt( q.x, q.z ) < 1.0 );
+		// ((M20) not where the shore's waves still run in over the flat's edge, by the mangroves: a wader there is knocked over by a
+		// breaker (M14) and swims, and can't cast. The sweep's clock put a school there: docs/m20/checks.md)
+		const surf = ( q ) => a.query.breakerAt ? a.query.breakerAt( q.x, q.z, undefined, {} ).H : 0;
+		const bones = flatsSchools( T, { wind: 2, overcast: 0, hour: h } ).filter( ( q ) => q.kind === 'bonefish' && q.life > 0.99 && q.n >= 4 && q.mode !== 'mill' && sea - td.heightAt( q.x, q.z ) > 0.35 && sea - td.heightAt( q.x, q.z ) < 1.0 && surf( q ) < 0.15 );
 		for ( const A of bones ) for ( const B of bones ) {
 
 			const d = Math.hypot( A.x - B.x, A.z - B.z );
@@ -67,7 +70,7 @@ for ( const w of [ robin, sam ] ) await until( w.game, `Math.abs( ${ T } - ${ pi
 // wading, d m off a school (the sun behind you, turned about it), looking at it
 const wade = ( who, id, d, turn = 0, look = true ) => who.game.evaluate( async ( [ id, d, turn, look ] ) => {
 
-	const { G } = await import( '/src/core/Globals.js' );
+	const { G } = await import( performance.getEntriesByType( 'resource' ).map( ( e ) => e.name ).filter( ( u ) => u.includes( '/src/core/Globals.js' ) ).pop() || '/src/core/Globals.js' );
 	const { flatsSchools } = await import( '/src/game/Flats.js' );
 	const a = window.__app, p = a.player, F = a.game.flats, sea = G.seaLevel.value, sun = G.sunDir.value, sl = Math.hypot( sun.x, sun.z ) || 1;
 	const g = a.fish.sightGroups.find( ( h ) => h.sight && h.sight.id === id && h.active );
@@ -77,6 +80,10 @@ const wade = ( who, id, d, turn = 0, look = true ) => who.game.evaluate( async (
 	const ground = a.terrainData.heightAt( x, z );
 	p.position.set( x, Math.max( ground, sea - 1.2 ), z );
 	p.velocity.set( 0, 0, 0 );
+	// ((M20) his water's height the sea's here, and its low-passed level with it, as going over a boat's side sets them: put
+	// straight in from the dry sand, where the water's height is the sand's (and the query's a frame behind), it was a metre and
+	// more over him and he swam (Player's SWIM_DEPTH), and couldn't cast: docs/m20/checks.md)
+	p.waterH = p.waterMean = sea;
 	const fx = look ? q.x - x : x - q.x, fz = look ? q.z - z : z - q.z;
 	p.yaw = Math.atan2( - fx, - fz );
 	p.pitch = - 0.3;
@@ -88,7 +95,7 @@ const active = ( id ) => `window.__app.fish.sightGroups.some( ( g ) => g.sight &
 const listed = ( who, id, t = null ) => who.game.evaluate( async ( [ id, t ] ) => {
 
 	const { flatsSchools } = await import( '/src/game/Flats.js' );
-	const { G } = await import( '/src/core/Globals.js' );
+	const { G } = await import( performance.getEntriesByType( 'resource' ).map( ( e ) => e.name ).filter( ( u ) => u.includes( '/src/core/Globals.js' ) ).pop() || '/src/core/Globals.js' );
 	const a = window.__app, F = a.game.flats, at = t ?? F.T, c = { wind: G.windSpeed.value, overcast: 0, hour: at % 24 };
 	const mine = flatsSchools( at, c, F.state ).find( ( q ) => q.id === id ), bare = flatsSchools( at, c ).find( ( q ) => q.id === id );
 	return { n: mine ? mine.n : 0, of: bare ? bare.n : 0 };
@@ -149,6 +156,7 @@ if ( doing( 'spook' ) ) {
 if ( doing( 'hook' ) ) {
 
 	note( `Sam ${ JSON.stringify( await wade( sam, B, 13, 0.3 ) ) }, Robin ${ JSON.stringify( await wade( robin, B, 18, - 0.6 ) ) }, ${ B }` );
+	note( `Sam put there: ${ JSON.stringify( await sam.game.evaluate( () => { const p = window.__app.player; return { mode: p.mode, knocks: p.knocks | 0, feet: +p.position.y.toFixed( 2 ) }; } ) ) }` );
 	await until( sam.game, active( B ), 180000 ).catch( () => {} );
 	await until( robin.game, active( B ), 180000 ).catch( () => {} );
 	say( await robin.game.evaluate( active( B ) ) && await sam.game.evaluate( active( B ) ), `${ B } in sight on both games` );
@@ -156,6 +164,8 @@ if ( doing( 'hook' ) ) {
 	await sam.game.evaluate( () => { const p = window.__app.player; p.yaw += Math.PI; } );
 	await G.press( sam, 'KeyR', 2 );
 	await frames( sam.game, 4 );
+	// ((M20) what R did: his rod, whether he can fish where he stands, how he's standing)
+	note( `after R: ${ JSON.stringify( await sam.game.evaluate( () => { const a = window.__app, g = a.game, p = a.player; return { rod: g.rod.state, equipped: g.rod.equipped, can: g.canFish, spear: g.canSpear, mode: p.mode, surface: p.surface, gun: g.gun.equipped, fight: !! g.fight, net: g.net.equipped, knocks: p.knocks | 0, feet: +p.position.y.toFixed( 2 ), waterMean: p.waterMean === null ? null : +p.waterMean.toFixed( 2 ), waterH: +( p.waterH ?? NaN ).toFixed( 2 ), ground: +a.terrainData.heightAt( p.position.x, p.position.z ).toFixed( 2 ) }; } ) ) }` );
 	await sam.page.keyboard.down( 'KeyF' );
 	await sam.game.waitForFunction( () => window.__app.game.rod.state === 'windup', null, { timeout: 120000, polling: 100 } ).catch( () => {} );
 	await frames( sam.game, 6 );
@@ -290,7 +300,7 @@ if ( doing( 'spot' ) ) {
 		const heard = await sam.game.evaluate( async ( id ) => {
 
 			const { seenOnFlats } = await import( '/src/game/Sight.js' );
-			const { G } = await import( '/src/core/Globals.js' );
+			const { G } = await import( performance.getEntriesByType( 'resource' ).map( ( e ) => e.name ).filter( ( u ) => u.includes( '/src/core/Globals.js' ) ).pop() || '/src/core/Globals.js' );
 			const a = window.__app, F = a.game.flats, g = a.fish.sightGroups.find( ( h ) => h.sight && h.sight.id === id && h.active );
 			const said = window.__toasts.filter( ( t ) => /^Robin: /.test( t ) ).at( - 1 );
 			if ( ! g ) return { said, told: F.toldOf( id ), missing: { spooked: F.state.spooked[ id ] !== undefined, listed: F.schools.some( ( q ) => q.id === id ) } };

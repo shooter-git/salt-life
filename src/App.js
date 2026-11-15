@@ -306,7 +306,9 @@ export class App {
 		// (high) the clouds' shadows on the island and the sea: lightUp gives them to the lit materials,
 		// so before anything is lit (with a graphics card the plants are lit early in loading)
 		this.cloudShadows = !! this.sky.clouds.shadowMap;
-		if ( this.cloudShadows ) cloudShadows.attach( this.sky.clouds );
+		if ( this.cloudShadows ) cloudShadows.attach( this.sky.clouds, renderer );
+		// ((M20) the drawn shadows for the CPU (FlatsFishing.shadeAt): on high, read back from their map; null, so its own field, elsewhere)
+		this.cloudShade = this.cloudShadows ? ( x, z ) => cloudShadows.shadeAt( x, z ) : null;
 		// the eye adapts at dusk and at night: the whole scene's exposure follows (Tidewater's auto exposure)
 		this.sky.sceneAdaptation = true;
 		if ( SHADOW[ tier ] ) {
@@ -2851,6 +2853,10 @@ export class App {
 			b.anchor = story.anchor ? new THREE.Vector3( story.anchor.x, this.terrainData.heightAt( story.anchor.x, story.anchor.z ), story.anchor.z ) : null;
 			b.sock = !! story.sock;
 			b.hasWater = false;
+			// ((M20) afloat where she was left, at anchor or adrift: a kayak's start lays her on her sand at home (KayakModel.atHome),
+			// and left so, M19's "drawn up on the sand, no anchor out" (Game.updateAnchor) let go the anchor she was left at, and she
+			// drifted off. Aground or on her sand she's kept lying there, as before: docs/m20/checks.md)
+			if ( story.where === 'anchor' || story.where === 'adrift' ) b.beached = b.beaching = false;
 			b.apply();
 			if ( b.moored && b.model.rest ) b.model.rest( b, story.x, story.z );
 
