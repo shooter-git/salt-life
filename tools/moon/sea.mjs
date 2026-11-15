@@ -9,7 +9,8 @@
 //   node tools/moon/sea.mjs <out> [tier] [heights] [weathers] [when]
 //   node tools/moon/sea.mjs qa-output/moon-sea mid 5,10,20 calm,fair,breezy night,twilight
 //   (MOON_K=k: the share of Cox and Munk's slopes the glint's own spread takes, for the trials: WaterSurface's MOON_SLOPE;
-//   MOON_OLD=1: as v2.5.0 drew it, the key light's own glint at night and nothing at dusk)
+//   MOON_OLD=1: as v2.5.0 drew it, the key light's own glint at night and nothing at dusk; (M20) MOON_CAP=k: the share of high's
+//   bloom threshold the glint's kept under, WaterSurface's MOON_CAP, 1e9 for none)
 //
 // Each shot: 960 by 540, a 40 degree lens, the eye 2.2 m over the sea, the horizon a fifth of the way down; the width is
 // read on the rows a degree either side of the mirror point, over four frames as the waves move. Don't edit src while it runs.
@@ -92,6 +93,7 @@ for ( const weather of WEATHERS.split( ',' ) ) {
 	await page.waitForFunction( () => window.__app && window.__app._started && window.__app.sky.moonShown, null, { timeout: 900000 } );
 	log( weather, 'started' );
 	if ( process.env.MOON_K ) await page.evaluate( ( k ) => window.__moonK = k, + process.env.MOON_K );
+	if ( process.env.MOON_CAP ) await page.evaluate( ( k ) => window.__moonCap = k, + process.env.MOON_CAP );
 	if ( process.env.MOON_OLD ) await page.evaluate( () => window.__moonOld = true );
 	await page.evaluate( async () => {
 
@@ -104,6 +106,15 @@ for ( const weather of WEATHERS.split( ',' ) ) {
 
 			const url = performance.getEntriesByType( 'resource' ).map( ( e ) => e.name ).filter( ( u ) => /\/src\/ocean\/WaterSurface\.js(\?|$)/.test( u ) ).pop();
 			( await import( url ) ).MOON_SLOPE.k = window.__moonK;
+
+		}
+
+		// ((M20) MOON_CAP: the share of high's bloom threshold the glint's kept under, WaterSurface's MOON_CAP, for FINISH's
+		// trials; 1e9 for none)
+		if ( window.__moonCap !== undefined ) {
+
+			const url = performance.getEntriesByType( 'resource' ).map( ( e ) => e.name ).filter( ( u ) => /\/src\/ocean\/WaterSurface\.js(\?|$)/.test( u ) ).pop();
+			( await import( url ) ).MOON_CAP.share = window.__moonCap;
 
 		}
 
@@ -227,7 +238,7 @@ for ( const weather of WEATHERS.split( ',' ) ) {
 			const THREE = await import( '/src/engine/index.js' );
 			const p = new THREE.Vector3( m.x, - m.y, m.z ).multiplyScalar( 1000 ).add( cam.position ).project( cam );
 			const hz = new THREE.Vector3( m.x, 0, m.z ).multiplyScalar( 10000 ).add( cam.position ).project( cam );
-			return { moonUp: Math.asin( m.y ) * 180 / Math.PI, mirror: [ p.x, p.y ], horizon: hz.y, wind: G.windSpeed.value, glint: G.moonGlint.value.toArray(), light: G.moonLight.value.toArray(), key: G.sunDir.value.toArray() };
+			return { moonUp: Math.asin( m.y ) * 180 / Math.PI, mirror: [ p.x, p.y ], horizon: hz.y, wind: G.windSpeed.value, glint: G.moonGlint.value.toArray(), light: G.moonLight.value.toArray(), key: G.sunDir.value.toArray(), exposure: a.renderer.toneMappingExposure };
 
 		} );
 		// the luminance across each row a degree either side of the mirror point, the four frames averaged
@@ -273,7 +284,7 @@ for ( const weather of WEATHERS.split( ',' ) ) {
 		// (Cox and Munk's, for the wind: across the path, both ways the wind may blow, and the disc in quadrature: sources-sea.md)
 		const U = info.wind, sA = Math.sqrt( 3.16e-3 * U ), sC = Math.sqrt( 0.003 + 1.92e-3 * U ), e = info.moonUp * DEG;
 		const cm = [ sC, sA ].map( ( s ) => + Math.hypot( 2.355 * s * 2 * Math.sin( e ) / DEG, 0.52 ).toFixed( 2 ) );
-		const res = { weather, kind, up, at: N, moonUp: + info.moonUp.toFixed( 2 ), wind: U, mirrorRow: my, peak: + peak.toFixed( 3 ), sea: + bg.toFixed( 3 ), clipped, width, coxMunk: cm, keyIsMoon: info.light[ 3 ], errors: errors.length };
+		const res = { weather, kind, up, at: N, moonUp: + info.moonUp.toFixed( 2 ), wind: U, mirrorRow: my, peak: + peak.toFixed( 3 ), sea: + bg.toFixed( 3 ), clipped, width, coxMunk: cm, keyIsMoon: info.light[ 3 ], exposure: + info.exposure.toFixed( 2 ), errors: errors.length };
 		results.push( res );
 		log( name, JSON.stringify( res ) );
 

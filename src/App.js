@@ -496,6 +496,7 @@ export class App {
 
 		// laptops: bloom and SMAA (phones draw straight to the screen)
 		this.post = tier === 'high' ? new PostChain( renderer, scene, camera ) : null;
+		if ( this.post ) this.water.bloomThreshold = this.post.bloom.threshold; // ((M20) the moon's glint kept under it: MOON_CAP)
 		this.player = new Player( { camera, input: this.input, terrain: this.terrainData, colliders: this.colliders, query: this.query, boat: this.boatCtl } );
 		this.player.rocks = this.rocks; // ((M15) the sea caves' roofs to walk on)
 		// ((M13) the wind you stand in, in the gusts the sea shows: a hurricane's pushes you along)

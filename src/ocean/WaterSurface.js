@@ -146,6 +146,10 @@ const REFLECT_RAY = 'reflectVec = transformDirectionByInverseViewMatrix( reflect
 // in docs/m20/sources-sea.md); and the key light's own glint, kept off the sea while the moon's the key light, which a light
 // is if it's within KEY of the key's way (its colour put out in three's lights' loop)
 export const MOON_SLOPE = { up: 3.16e-3, cross0: 0.003, cross: 1.92e-3, k: 0.8 };
+// ((M20) FINISH: on high the glint kept under the bloom's threshold (`share` of it), which takes the scene's light before the
+// frame's exposure. By night the path's light was many times it, the exposure being up to 6 times the day's, and the bloom spread
+// it over the whole night as a haze. Where there's no bloom (low, mid) nothing's capped: docs/m20/finish.md)
+export const MOON_CAP = { share: 0.95 };
 const MOON_KEY = 0.9999;
 const KEY_LIGHTS = [ 'getSunLightInfo( sunLight, directLight );', 'getDirectionalLightInfo( directionalLight, directLight );' ];
 for ( const k of KEY_LIGHTS ) if ( ! THREE.ShaderChunk.lights_fragment_begin.includes( k ) ) throw new Error( 'WaterSurface: three\'s lights_fragment_begin changed (' + k + ')' );
@@ -228,11 +232,14 @@ export class WaterSurface {
 			waterMoon: G.moonGlint,
 			waterMoonLight: G.moonLight,
 			waterMoonSlope: { value: new THREE.Vector4( 0.01, 0.01, 1, 0 ) },
+			waterMoonCap: { value: 1e4 }, // ((M20) the most the glint's luminance is, the scene's light: MOON_CAP, update; 1e4 none)
 			// (M11) the underside's reflection, of the surface's: the scene's fill (update)
 			waterEnvUnder: { value: 0.07 },
 		};
 		this.envUnder = uniforms.waterEnvUnder;
 		this.moonSlope = uniforms.waterMoonSlope;
+		this.moonCap = uniforms.waterMoonCap;
+		this.bloomThreshold = Infinity; // ((M20) high's bloom's, App's: MOON_CAP)
 		this.rippleAt = uniforms.waterRippleAt;
 		this.roughAt = uniforms.waterRoughAt;
 		this.ringAt = uniforms.waterRingAt;
@@ -395,6 +402,7 @@ uniform float waterSkyExposure;
 uniform vec4 waterMoon;
 uniform vec4 waterMoonLight;
 uniform vec4 waterMoonSlope;
+uniform float waterMoonCap;
 // ((M20) the key light kept off the sea while the moon's the key: the moon's own glint below takes its place)
 float waterKeyOff( vec3 dirV ) {
 	return dot( dirV, normalize( ( viewMatrix * vec4( waterSunDir, 0.0 ) ).xyz ) ) > ${ g( MOON_KEY ) } ? 1.0 - waterMoonLight.w : 1.0;
@@ -897,7 +905,10 @@ ${ lean ? '' : /* glsl */`
 		float mG = mvn > 0.0 && mln > 0.0 ? 1.0 / ( 1.0 + waterMoonLambda( mvn, sg ) + waterMoonLambda( mln, sg ) ) : 0.0;
 		float mf = 0.02 + 0.98 * pow( 1.0 - max( dot( mv, mh ), 0.0 ), 5.0 );
 		float mk = min( mp * mG / ( 4.0 * max( mvn, 0.02 ) * mc * mc * mc * mc ), waterMoon.w );
-		gl_FragColor.rgb += waterMoonLight.rgb * mf * mk * ( 1.0 - foam * 0.8 ) * sheetEdge;
+		vec3 mg = waterMoonLight.rgb * mf * mk;
+		// ((M20) under high's bloom, its colour kept: MOON_CAP)
+		mg *= min( 1.0, waterMoonCap / max( dot( mg, vec3( 0.2126, 0.7152, 0.0722 ) ), 1e-6 ) );
+		gl_FragColor.rgb += mg * ( 1.0 - foam * 0.8 ) * sheetEdge;
 	}
 #endif` )
 				.replace( '#include <premultiplied_alpha_fragment>', '' );
@@ -1037,6 +1048,8 @@ ${ lean ? '' : /* glsl */`
 		// ((M20) the moon's glint's slopes, by the wind: MOON_SLOPE)
 		const U = G.windSpeed.value, M = MOON_SLOPE;
 		this.moonSlope.value.set( M.up * U * M.k + 1e-5, ( M.cross0 + M.cross * U ) * M.k + 1e-5, rwd.x, rwd.y );
+		this.moonCap.value = Number.isFinite( this.bloomThreshold ) ? MOON_CAP.share * this.bloomThreshold : 1e4; // ((1e4: past any glint's
+		// few thousand, and within a phone's half floats)
 
 	}
 
