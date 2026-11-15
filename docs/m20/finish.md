@@ -134,4 +134,35 @@ The tail's spread is its own: each slap is jittered ±2 dB and its slices differ
 
 ## Checks
 
-CHECKS
+- **`pnpm test`:** every test file, and the assets' lock.
+- **`tools/gpu-limits.mjs`, every tier** (`SHOW=Water`): the sea has one uniform more and no texture more.
+
+  | Tier | Fragment textures | Fragment uniforms (of 1024) | Vertex uniforms |
+  |---|---|---|---|
+  | high | 16 of 16 | 228 | 195 |
+  | mid | 14 | 212 | 195 |
+  | low | 13 | 190 | 142 |
+
+  All within what a graphics card allows.
+- **The merge check** (`405ca77`, a clean copy built, against v2.5.0 built the same way):
+  - the same 16 programs before ready, by name and number;
+  - All the Spaces' complete check 14 of 14;
+  - low's script memory 126.9 MB (up to 150), run with nothing else on the machine;
+  - the download 79.0 MB (up to 80; 78.9 at SEA and KIT).
+- **The ready A/B**, since the sea's loading program gained the cap's uniform: phone upright on 4 cores, 4 rounds each, alternating. v2.5.0: 2.29, 2.23, 2.29, 2.27 s (median 2.28). FINISH: 2.21, 2.24, 2.22, 2.21 s (median 2.22). No slower.
+- **The trial's renders** were drawn from copies of the branch at `62b6ac1`, before the moon's cap, so high's night in them still has its haze under every curve.
+
+**The commands** (from the repository, a dev server on 5241 for the game's tools):
+
+```sh
+# the sounds in the game, every tier (ALL_THE_SPACES for Playwright, Node 24)
+for t in low mid high; do node tools/audio/levels.mjs qa-output/audio/levels-$t.json $t; done
+ONLY=another node tools/audio/levels.mjs qa-output/audio/theirs-mid.json mid   # one measure alone
+node tools/audio/hrtf.mjs qa-output/audio/hrtf.json                             # HRTF over equal-power, each recording
+# the moon's path, and a cap tried (MOON_CAP=1e9 for none)
+node tools/moon/sea.mjs qa-output/moon-sea high 10 calm,fair night,twilight
+MOON_CAP=1e9 node tools/moon/sea.mjs qa-output/moon-sea-before high 10 calm night
+# the tone curves (the game's ?tone=, TONE= on the look tools; a dev server for each curve's copy, LOOK_PORT etc. on it)
+TONE=neutral node tools/looks/look.mjs qa-output/looks-neutral mid paint,lobster,pool,flare
+TONE=agx node tools/flats/look.mjs mid 0.6 aerial,wading,beach
+```
