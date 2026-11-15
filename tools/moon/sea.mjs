@@ -13,6 +13,7 @@
 //
 // Each shot: 960 by 540, a 40 degree lens, the eye 2.2 m over the sea, the horizon a fifth of the way down; the width is
 // read on the rows a degree either side of the mirror point, over four frames as the waves move. Don't edit src while it runs.
+// (M20) TONE=neutral|agx: drawn under that tone curve, for FINISH's trial (App's ?tone=: docs/m20/finish.md)
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -87,7 +88,7 @@ for ( const weather of WEATHERS.split( ',' ) ) {
 	const errors = [];
 	page.on( 'pageerror', ( e ) => errors.push( e.message ) );
 	const first = when( + HEIGHTS.split( ',' )[ 0 ], WHEN.split( ',' )[ 0 ] );
-	await page.goto( `http://127.0.0.1:${ PORT }/?tier=${ TIER }&weather=${ weather }&hour=${ first.hour }&day=${ first.day }&fullsea` );
+	await page.goto( `http://127.0.0.1:${ PORT }/?tier=${ TIER }&weather=${ weather }&hour=${ first.hour }&day=${ first.day }&fullsea${ process.env.TONE ? '&tone=' + process.env.TONE : '' }` );
 	await page.waitForFunction( () => window.__app && window.__app._started && window.__app.sky.moonShown, null, { timeout: 900000 } );
 	log( weather, 'started' );
 	if ( process.env.MOON_K ) await page.evaluate( ( k ) => window.__moonK = k, + process.env.MOON_K );
