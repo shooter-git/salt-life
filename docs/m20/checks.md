@@ -75,7 +75,30 @@ So about one point in five was shaded on one and not the other: a fish under a d
 
 Judged: in the sun it reads as piles darker and greener toward the water, as the weak photographs of piles have it (sources-tide-fish.md: no clear Bahamas photograph of a band was found). There's no sharp line at the high water mark: the shader fades the algae over 0.3 to 0.75 m, broken by the grime's noise. Nothing changed.
 
-SWEEP
+## The full two-player sweep
+
+**The runner** (`tools/two-players/sweep.mjs`, new): every two-player job M17 and M19 added, and M20's, 36 in all, each through `tools/render-slot.sh` two at a time, one log each, and `sweep.md` with every failure and the lines before it. A job that exits well having checked nothing (a part it doesn't have) counts as having run nothing.
+
+**The first pass** (61.7 minutes): 31 of 36 passed. The five that didn't, each followed up:
+
+| Job | What it was | Now |
+|---|---|---|
+| `together slow` | The job read the sea's clock through a bare `import( '/src/core/Globals.js' )`. Once source has changed under the dev server, the game's modules carry a `?t=` and a bare import is a second copy, whose clock never moves: "the sea's gone 0 s by". | The two-player jobs import the game's own copy (14 places in 9 jobs). Passing. |
+| `wakes` | The same stale clock: Robin never got under way, and it timed out. Run again, two jobs at once at 4 frames a second, the wake under Sam's kayak read 2.0 cm, on the check's edge. | Alone: 9.4 cm under her, the same in her own water query. Passing. |
+| `flats hook` | The stale copy too, and then a real cause in the job: its waders were put from the dry beach straight into the flats, where the water's height a frame before was the sand's (the query reads dry sand as the ground less 0.1 m, on v2.5.0 as now). A metre and more of water over his feet, Sam swam (`SWIM_DEPTH`), and couldn't cast. | `wade` sets his water's height to the sea's, as going over a boat's side does; and the schools it picks are kept out of the flats' surf edge, where the shore's waves still run (a wader there is knocked over, on v2.5.0 as now). Passing. |
+| `crew traps` | Robin's game refused Sam's set: "A trap needs a crawfish trap permit". The job predates M19's permit. | It buys her the permit. Passing. |
+| `resume kayakanchor` | **A real fault, from M19** (its own check, never run). Sat in the kayak at anchor and reloaded, she came back with no anchor and drifted, 126 m in three hours; v2.5.0 did the same. Her record was kept with the anchor and saved again two seconds into the load without it. | Fixed (below). Passing, and every kayak scenario of `resume.mjs` with it, 198 checks. |
+
+And `together hold` ran nothing: `together.mjs` has no `hold` part (it's `crew.mjs`'s since, which the sweep runs). It's dropped from the list.
+
+**The kayak's anchor over a reload** (`App.pickUp`):
+1. A kayak's start lays her on her sand at home (`KayakModel.atHome`), which marks her beached.
+2. The load put her back where she was left, afloat at her anchor, still marked beached.
+3. M19's rule, "drawn up on the sand, she's no anchor out" (`Game.updateAnchor`), let the anchor go that frame, without a word, and the next save kept her so.
+
+Now the load clears that when she's left afloat, at anchor or adrift. Aground, or on her sand, she's kept lying there as before. (A first try cleared it always, and a kayak found aground slid off the sand: `resume.mjs`' `long` caught it.)
+
+**The full sweep, run again** for the five on a fresh dev server: all passing.
 
 ## Tests and tools
 
@@ -87,4 +110,4 @@ SWEEP
 
 ## Checks
 
-CHECKS
+CHECKS_FINAL
