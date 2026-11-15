@@ -110,4 +110,12 @@ Now the load clears that when she's left afloat, at anchor or adrift. Aground, o
 
 ## Checks
 
-CHECKS_FINAL
+- **`pnpm test`:** every test file, and the assets' lock (`test/mate.mjs`' new check among them).
+- **The merge check** (`134d912`, a clean copy built, against v2.5.0 built the same way):
+  - the same 16 programs before ready, by name and number;
+  - All the Spaces' complete check 14 of 14;
+  - low's script memory 125.9 MB (up to 150), run with nothing else on the machine;
+  - the download 79.0 MB (up to 80).
+- **One screen's whole play on one core, again on that build** (the clouds' read back runs on the laptop's tier): v2.5.0 205 and 210 s, CHECKS 209 and 212 s. The same.
+- No shader changed (the read back is the CPU's), so no ready A/B past the one above and no `tools/gpu-limits.mjs` past FINISH's.
+- **The two-player sweep:** 36 jobs; the five that didn't pass at first all pass, each run again on a fresh dev server (above).
