@@ -44,6 +44,8 @@ const JOBS = [
 	// (M20) the floats and the net on copies on each tier, and a kayak left on the sand (docs/m20/kit.md)
 	...[ 'low', 'mid', 'high' ].map( ( t ) => [ `kit-${ t }`, 'm20', 'kit.mjs', [ t ], 40 ] ),
 	[ 'resume-kayaksand', 'm20', 'resume.mjs', [ 'kayak', 'kayaksand' ], 40 ],
+	// (M21) each rod, reel and line as itself on a copy, and her spread's rods in her holders, on each tier (docs/m21/gear.md)
+	...[ 'low', 'mid', 'high' ].map( ( t ) => [ `gear-${ t }`, 'm21', 'gear.mjs', [ t ], 40 ] ),
 ];
 const want = ONLY === 'all' ? null : new Set( ONLY.split( ',' ) );
 const jobs = JOBS.filter( ( [ name, m ] ) => ! want || want.has( name ) || want.has( m ) );
