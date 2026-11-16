@@ -127,6 +127,56 @@ room.onmessage = ( { data: m } ) => {
 };
 addEventListener( 'pagehide', () => window.__host.leave() );
 
+// (M20) The wire as All the Spaces' room would take it (apps/realtime's CreationRoom LIMITS), measured, not enforced: each
+// message's size and each shared value's, how many a second (a value set and a message both count, as its `allowed` does), the
+// shared values' total, and every time one of its limits would have been passed. window.__wire, read by lib.mjs' G.end.
+//   messages a second 60 (past it the room drops them, unsaid); a message 16 KB (dropped); a value 32 KB, all of them 256 KB
+//   (refused); a frame 64 KB (the server closes the connection: ws-transport's maxPayload)
+const LIMITS = { perSecond: 60, messageBytes: 16 * 1024, valueBytes: 32 * 1024, totalBytes: 256 * 1024, frameBytes: 64 * 1024 };
+const wire = window.__wire = { LIMITS, sec: 0, n: 0, peak: 0, seconds: 0, sum: 0, kinds: {}, keys: {}, total: 0, over: [] };
+const meter = ( kind, bytes, value = null ) => {
+
+	const s = Math.floor( Date.now() / 1000 );
+	if ( s !== wire.sec ) {
+
+		if ( wire.sec ) {
+
+			wire.seconds ++;
+			wire.sum += wire.n;
+
+		}
+
+		wire.sec = s;
+		wire.n = 0;
+
+	}
+
+	wire.n ++;
+	wire.peak = Math.max( wire.peak, wire.n );
+	const over = ( what ) => wire.over.length < 50 && wire.over.push( { at: Date.now(), what, kind, bytes, n: wire.n } );
+	if ( wire.n === LIMITS.perSecond + 1 ) over( 'messages a second' );
+	if ( bytes > LIMITS.frameBytes ) over( 'frame: the connection closed' );
+	if ( value === null ) {
+
+		const k = wire.kinds[ kind ] || ( wire.kinds[ kind ] = { n: 0, max: 0 } );
+		k.n ++;
+		k.max = Math.max( k.max, bytes );
+		if ( bytes > LIMITS.messageBytes ) over( 'message dropped' );
+
+	} else {
+
+		const k = wire.keys[ kind ] || ( wire.keys[ kind ] = { n: 0, max: 0, now: 0 } );
+		wire.total += value - k.now;
+		k.n ++;
+		k.now = value;
+		k.max = Math.max( k.max, value );
+		if ( value > LIMITS.valueBytes ) over( 'value refused' );
+		if ( wire.total > LIMITS.totalBytes ) over( 'all values refused' );
+
+	}
+
+};
+
 // the game: what the app answers
 addEventListener( 'message', ( e ) => {
 
@@ -175,6 +225,14 @@ addEventListener( 'message', ( e ) => {
 			break;
 		case 'mp:shared': {
 
+			{
+
+				// ((M20) as the app sends it to the room, { id, key, value }, and as the room keeps it: its JSON)
+				const v = JSON.stringify( msg.value ?? null ).length;
+				meter( msg.key, JSON.stringify( { id: 0, key: msg.key, value: msg.value ?? null } ).length + 16, v );
+
+			}
+
 			// (after anything this page has seen set)
 			const seen = stamps.get( msg.key ), stamp = [ Math.max( Date.now(), seen ? seen[ 0 ] + 1 : 0 ), me.id ];
 			shared.set( msg.key, msg.value );
@@ -186,6 +244,7 @@ addEventListener( 'message', ( e ) => {
 
 		}
 		case 'mp:send':
+			meter( msg.kind, JSON.stringify( { kind: msg.kind, body: msg.body ?? null, ...( msg.to ? { to: msg.to } : {} ) } ).length + 16 ); // ((M20) the room's envelope, roughly)
 			room.postMessage( { t: 'send', kind: msg.kind, body: msg.body, from: me.id, to: msg.to } );
 			break;
 		case 'ui:toast':

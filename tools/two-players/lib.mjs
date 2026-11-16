@@ -187,6 +187,17 @@ export async function start( { out, port, tier = 'low', stale = 120, viewport = 
 
 		}
 
+		// ((M20) each player's wire as All the Spaces' room would take it: host.js' __wire)
+		for ( const pg of ctx.pages() ) {
+
+			const name = new URL( pg.url() ).searchParams.get( 'name' );
+			const w = await pg.evaluate( () => window.__wire || null ).catch( () => null );
+			if ( ! w ) continue;
+			const top = ( o, k ) => Object.entries( o ).sort( ( a, b ) => b[ 1 ][ k ] - a[ 1 ][ k ] ).slice( 0, 4 ).map( ( [ n, v ] ) => `${ n } ${ v[ k ] }${ k === 'n' ? '' : ' B' }` ).join( ', ' );
+			console.log( `     WIRE ${ name }: ${ w.seconds ? ( w.sum / w.seconds ).toFixed( 1 ) : '?' } a second on average, ${ w.peak } at most (room's limit ${ w.LIMITS.perSecond }); most sent: ${ top( w.kinds, 'n' ) }; biggest: ${ top( w.kinds, 'max' ) }; values, biggest: ${ top( w.keys, 'max' ) }, all ${ w.total } B; over the room's limits: ${ w.over.length ? JSON.stringify( w.over.slice( 0, 6 ) ) : 'never' }` );
+
+		}
+
 		console.log( `SUMMARY ${ label }: ${ G.failed } failed, ${ G.problems } problem(s), ${ ( ( Date.now() - G.t0 ) / 60000 ).toFixed( 1 ) } minutes` );
 		await browser.close();
 		process.exit( G.failed || G.problems ? 1 : 0 );
