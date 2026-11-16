@@ -1,12 +1,14 @@
 // (M19) The fly line in the air and the fly rod (stream FLY: docs/m19/fly.md), in plain Node.
 //   - the loop's shape: the fly from the line's length behind the tip to as far in front as the rod's leg grows, the line as
 //     drawn as long as the line, the loop no bigger than the line left, laid down on the water from its far end;
-//   - drawn in the fishing line's own program (no new one), the fly rod drawn in the spinning rod's: stretched back to 9 ft.
+//   - drawn in the fishing line's own program (no new one), the fly rod drawn in the spinning rod's: (M21) at its own 9 ft, a
+//     model for each weight (rigs/GearModels.js).
 //   node test/fly-line.mjs
 import { Vector3, Box3, Scene } from '../src/engine/index.js';
 import { loopShape, drawnLength, newPoints, FlyLine, PIECES } from '../src/game/rigs/FlyLine.js';
-import { buildFlyRodGeometry, FLY_K, FLY_L, SPIN_L, FLY_HOLD } from '../src/game/rigs/FlyRod.js';
-import { FishingRod, ROD_L, buildLineGeometry } from '../src/game/FishingRod.js';
+import { FLY_L } from '../src/game/rigs/FlyRod.js';
+import { gearModel, modelOf } from '../src/game/rigs/GearModels.js';
+import { FishingRod, buildLineGeometry } from '../src/game/FishingRod.js';
 import { createLineMaterial } from '../src/game/GameMaterials.js';
 import { G } from '../src/core/Globals.js';
 
@@ -88,10 +90,9 @@ const ok = ( c, msg ) => {
 // ---- the fly rod
 {
 
-	ok( SPIN_L === ROD_L, `the spinning rod's length kept the same in both files (${ SPIN_L }, ${ ROD_L })` );
-	const g = buildFlyRodGeometry(), box = new Box3().setFromBufferAttribute( g.attributes.position );
-	ok( Math.abs( box.max.y * FLY_K - FLY_L ) < 0.005 && Math.abs( box.max.y - ROD_L ) < 0.005, `built ${ box.max.y.toFixed( 3 ) } m along the blank, the spinning rod's ${ ROD_L }: drawn ${ ( box.max.y * FLY_K ).toFixed( 3 ) } m, 9 ft` );
-	ok( box.min.z < - 0.09 && box.min.z > - 0.13, `its reel hangs under the seat (${ box.min.z.toFixed( 3 ) } m)` );
+	const F = modelOf( { fly: 8 } ), m = gearModel( F.rod, F.reel ), g = m.geometry, box = new Box3().setFromBufferAttribute( g.attributes.position );
+	ok( Math.abs( box.max.y - FLY_L ) < 0.005 && m.fit.L === FLY_L, `(M21) built at its own length: ${ box.max.y.toFixed( 3 ) } m, 9 ft (M19's was drawn the spinning rod's and stretched)` );
+	ok( box.min.z < - 0.1 && box.min.z > - 0.14, `its reel hangs under the seat (${ box.min.z.toFixed( 3 ) } m)` );
 	ok( g.attributes.position.count < 30000, `a few thousand points (${ g.attributes.position.count })` );
 	// in the hand: the real rod, its tip 9 ft out from the butt and the hand on the cork
 	const query = { allocate: () => 0, setPoint() {}, cpuValid: true, cpu: new Float32Array( [ 0, 0, 0, - 1 ] ) };
@@ -105,14 +106,13 @@ const ok = ( c, msg ) => {
 	const short = rod.tip.clone();
 	rod.setGear( { castM: 22, reelSpeed: 0.7, spoolM: 210, fly: 8 } );
 	for ( let i = 0; i < 60; i ++ ) rod.update( 1 / 60, { visible: true } );
-	const butt = new Vector3( 0, 0, 0 ).applyMatrix4( rod.rodMesh.matrix ), tip = rod.tip;
-	ok( rod.flyRod && rod.rodMesh.geometry === rod.flyRodGeometry(), 'the fly rod fitted in your hands' );
+	const butt = new Vector3( 0, 0, 0 ).applyMatrix4( rod.rodMesh.matrix ), tip = rod.lineTip;
+	ok( rod.flyRod && rod.rodMesh.geometry === g, 'the fly rod fitted in your hands' );
 	ok( Math.abs( butt.distanceTo( tip ) - FLY_L ) < 0.05, `butt to tip ${ butt.distanceTo( tip ).toFixed( 2 ) } m` );
 	ok( tip.distanceTo( camera.position ) > short.distanceTo( camera.position ) + 0.4, `its tip further out than the spinning rod's (${ tip.distanceTo( camera.position ).toFixed( 2 ) } m, ${ short.distanceTo( camera.position ).toFixed( 2 ) })` );
-	ok( FLY_HOLD > 0.17 && FLY_HOLD < 0.45, 'held by its cork' );
+	ok( rod.fit.hold > 0.17 && rod.fit.hold < 0.45 && rod.tip.distanceTo( rod.lineTip ) < 0.02, `held by its cork, its tip where M19's was (${ rod.tip.distanceTo( rod.lineTip ).toFixed( 3 ) } m off): the fly line's loop's drawn from it` );
 	rod.setGear( { castM: 22, reelSpeed: 1.1, spoolM: 180 } );
-	ok( ! rod.flyRod && rod.rodMesh.geometry !== rod.flyRodGeometry(), 'and the spinning rod back' );
-	ok( rod.tackle().rod.geometry !== rod.flyRodGeometry(), 'the others\' copies get the spinning rod, whichever you hold' );
+	ok( ! rod.flyRod && rod.rodMesh.geometry !== g, 'and the spinning rod back' );
 
 }
 
