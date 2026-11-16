@@ -24,6 +24,7 @@ import { VARIATION } from '../game/Chart.js';
 import { ROD_L, SEAT_Y, placeNet } from '../game/FishingRod.js';
 import { FLY_K, FLY_L, FLY_HOLD } from '../game/rigs/FlyRod.js';
 import { FlyLine, loopShape, newPoints } from '../game/rigs/FlyLine.js';
+import { Deckhand, mateRead } from '../game/rigs/Mate.js';
 import { FLY, strokeTime } from '../game/FlyCast.js';
 import { gunModels, setBands, floatGeometry, placeFloats, FLOAT } from '../game/Speargun.js';
 import { isClass, counts, ratio } from '../game/LineClass.js';
@@ -1679,7 +1680,9 @@ export class Together {
 		// (the engine's revs: what the others hear. (M16) Whoever's at her helm, you or one of them; riding, not yours)
 		const running = boat.driven && ! p.riding;
 		if ( running ) body.E = r2( boat.rpm );
-		if ( body.B && boat.helmsman === 'mate' ) body.Mt = 1; // ((M19) her mate has her helm: game/rigs/Mate.js)
+		// ((M19) her mate has her helm: game/rigs/Mate.js. (M21) Or he's aboard, in her cockpit: 2)
+		const mt = app.game.mate ? app.game.mate.wire() : 0;
+		if ( body.B && mt ) body.Mt = mt;
 		// (M10) the starter turning her over (1; 2: it'll catch), heard by whoever's aboard
 		const crank = running && this.app.game ? this.app.game.hull.crank : 0;
 		if ( crank ) body.K = crank;
@@ -2632,7 +2635,7 @@ export class Together {
 		cur.flood = MathUtils.clamp( Number( near.L ) || 0, 0, 1 ); // ((M14) her floodlights' lenses)
 		cur.rpm = ( Number( a.E ) || 0 ) + ( ( Number( b.E ) || 0 ) - ( Number( a.E ) || 0 ) ) * f;
 		cur.crank = near.K === 1 || near.K === 2 ? near.K : 0;
-		cur.mate = near.Mt === 1; // ((M19) her mate at her helm)
+		cur.mate = mateRead( near.Mt ); // ((M19) her mate at her helm. (M21) 'helm', 'cockpit' or null: aboard in her cockpit too)
 		// (M11) her hull as the skipper hears it (none sent: nothing to hear)
 		const H = Array.isArray( near.H ) && near.H.length === 5 && near.H.every( Number.isFinite ) ? near.H : null;
 		cur.hull = H ? Object.assign( cur._hull, { flood: MathUtils.clamp( H[ 0 ], 0, 3 ), pump: H[ 1 ] === 1, scrape: Math.max( 0, H[ 2 ] ), wear: MathUtils.clamp( H[ 3 ], 0, 1 ), motion: MathUtils.clamp( H[ 4 ], 0, 1 ) } ) : null;
@@ -2717,7 +2720,7 @@ export class Together {
 			boat.userData.lamps.set( { underway: c.mode === 'helm' || ! c.anchored, spot: c.spot } );
 			boat.userData.floodOn.value = c.flood;
 			this._spin( boat, c.rpm, dt );
-			this._mate( boat, c.mate );
+			this._mate( boat, c.mate, dt );
 
 		}
 
@@ -2962,21 +2965,15 @@ export class Together {
 
 	// their boat's radar turning, and her propeller at her engine's revs (rpm: 0..1, as sent), as yours do
 	// (BoatModel.update)
-	// (M19) her mate at her helm on her copy, as she's backing down on someone's fish: a stand-in figure (Figure.js, one mesh),
-	// made the first time it's wanted
-	_mate( boat, on ) {
+	// (M19) her mate at her helm on her copy, as she's backing down on someone's fish. ((M21) Or in her cockpit, aboard: by her
+	// pose's Mt (where: mateRead), drawn as on her owner's game, the islander in his polo shirt (rigs/Mate.js' Deckhand), made the
+	// first time he's aboard her copy)
+	_mate( boat, where, dt ) {
 
-		const u = boat.userData, M = u.model;
-		if ( ! on && ! u.mate ) return;
-		if ( ! u.mate && M && M.helmEye ) {
-
-			u.mate = figureStandIn();
-			u.mate.position.set( M.helmEye.x, M.helmEye.y - 1.62, M.helmEye.z );
-			boat.add( u.mate );
-
-		}
-
-		if ( u.mate ) u.mate.visible = !! on;
+		const u = boat.userData;
+		if ( ! where && ! u.mate ) return;
+		u.mate = u.mate || new Deckhand( this.app );
+		u.mate.update( where, u.model, boat, dt );
 
 	}
 
