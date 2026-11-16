@@ -395,8 +395,9 @@ export class BoatCopies {
 		const app = this.app;
 		if ( e.template ) return e.template;
 		const t = e.template = e.model.group.clone( true );
-		// (what's yours or hers alone: her lamps, her name on her transom, her pool of light)
-		for ( const name of [ 'BoatLamps', 'boat-name', 'boat-underGlowOwn' ] ) {
+		// (what's yours or hers alone: her lamps, her name on her transom, her pool of light; ((M21) her mate, rigs/Mate.js: a copy has
+		// its own, by her pose)
+		for ( const name of [ 'BoatLamps', 'boat-name', 'boat-underGlowOwn', 'Deckhand' ] ) {
 
 			const own = t.getObjectByName( name );
 			if ( own ) own.removeFromParent();

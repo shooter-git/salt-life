@@ -41,3 +41,5 @@ For the real thing, see All the Spaces' `docs/development.md`.
 (M19) `records.mjs [out] [port]`: the line-class records with two players (fish landed through the game's own landing: each one's record on their own card and in their own log, the island's best for its class on both boards, one key for it, the Log tab): `docs/m19/records.md`.
 
 (M20) `kit.mjs [out] [port] [tier]`: the blue-water gun's floats and the landing net on another player's copy (`docs/m20/kit.md`). `crew.mjs`' `mate` part: her mate backing her down on a guest's fish in her chair. `sweep.mjs [out] [port] [jobs: all | names or milestones] [at once: 2]`: the full sweep, every job M17, M19 and M20 added, one log each and `sweep.md` with each failure (`docs/m20/checks.md`).
+
+(M21) `crew.mjs`' `mate` part also checks her mate drawn on both games, by her pose's `Mt`: in her cockpit once she's out, at her helm while he backs her down, in her cockpit again (`docs/m21/deckhand.md`).

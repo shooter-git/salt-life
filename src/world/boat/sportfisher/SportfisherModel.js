@@ -23,6 +23,7 @@ import { SEATS } from './seats.data.js';
 //   setUnderLights( on )  her underwater lights' green pool, 0..1
 //   setOutriggersOut( out ) the poles down for trolling, or up
 //   bunks, chair, rodHolders, outriggerTips, stations  what the days out, the tackle and the crew's jobs read
+//   mateSpot              ((M21) where her hired mate stands in her cockpit, and at her helm with his hands on its wheel: rigs/Mate.js)
 //   ladders, ladderAt( p ) the two climbs (LadderClimb)
 //   towerHelm, helmAt( p, reach ) her second helm, on the tower's platform, if she has the tower
 //   walkedAs( stats ), dressCopy( copy, stats )  what's fitted on someone else's (Vessel's)
@@ -250,6 +251,15 @@ export class SportfisherModel extends Vessel {
 		const chairY = SF.cockpit + 0.55;
 		this.chair = { at: V( 0, chairY, CHAIR_Z ), eye: V( 0, SF.cockpit + 1.25, CHAIR_Z + 0.05 ), yaw: Math.PI };
 		this.rodHolders = [ - 5.5, - 4.5, - 3.6 ].flatMap( ( z ) => [ 1, - 1 ].map( ( s ) => V( s * ( L.sheerX( L.tAtSheerZ( z ) ) - 0.12 ), L.sheerY( L.tAtSheerZ( z ) ) + 0.005, z ) ) );
+		// ((M21) where her hired mate stands in her cockpit (rigs/Mate.js' Deckhand), facing aft and a little inboard over it: its
+		// forward corner to port, his back to the mezzanine's box. 1.7 m off the chair, 1.6 m off where you're put aboard and outside
+		// the step's width (where you walk down into her), 0.5 m in from her side under the holders (their rods lean outboard), and
+		// across her from the transom door and the bridge ladder (both to starboard). yaw: rad about up, 0 facing her bow.
+		// At her helm (helm): a step nearer her wheel than its stand, his hands on its rim at ten to two (grips, right then left: wheelOf's
+		// 0.2 m rim, as it's mounted), his toes 0.15 m short of the console's foot and further still from her seat
+		const wq = new Quaternion().setFromUnitVectors( V( 0, 0, 1 ), parts.wheelAxis );
+		const grip = ( s ) => V( s * 0.2 * Math.cos( Math.PI / 6 ), 0.2 * Math.sin( Math.PI / 6 ), 0 ).applyQuaternion( wq ).add( parts.wheelCenter );
+		this.mateSpot = { x: 1.6, y: SF.cockpit, z: - 4.0, yaw: - 2.6, helm: { x: 0, y: SF.bridge, z: 0.15, yaw: 0, grips: [ grip( - 1 ), grip( 1 ) ] } };
 		this.outriggerTips = [ riggerTip( 1, true ), riggerTip( - 1, true ) ];
 		this.stations = {
 			tower: { x: 0, y: SF.tower, z: ( TOWER.z0 + TOWER.z1 ) / 2, r: 1 },
