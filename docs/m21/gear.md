@@ -199,9 +199,9 @@ Each is one number, rod x 100 + reel x 10 + line (`gearCode`, `readGear`): about
   - one program.
 - `test/fly-line.mjs` updated for the fly rods' own models.
 
-**Renders:** `tools/gear/rods.mjs <out> <tier>`. Each model in first person, its reel close from its handle's side (the crank turned, a spinning reel's bail open, the line part off), the whole rod bent with a fish on, and the big outfits and two light ones in the sportfisher's aft holders, close and from over her stern. Low, mid and high, with `figures.json` (each shot's draws, programs and triangles).
+**Renders:** `tools/gear/rods.mjs <out> <tier>` (in the stream's worktree: `qa-output/rods/low`, `mid`, `high`, 51 shots and a `figures.json` each, no page errors; a frame aboard with two rods in her holders drew 55 to 61 draws on low, 109 to 120 on mid, 137 to 147 on high, the most with the 80s and the chair rods). In the page, after four models were fitted in turn and two holders drawn, the rods' material had one program (its key with `rodFit` in it), as before. Each model in first person, its reel close from its handle's side (the crank turned, a spinning reel's bail open, the line part off), the whole rod bent with a fish on, and the big outfits and two light ones in the sportfisher's aft holders, close and from over her stern. Low, mid and high, with `figures.json` (each shot's draws, programs and triangles).
 
-**Two players:** `tools/two-players/gear.mjs [out] [port] [tier]`:
+**Two players:** `tools/two-players/gear.mjs [out] [port] [tier]`, all its checks passed on low, mid and high (`qa-output/gear-together`; the biggest pose 279 bytes, at most 10 messages a second against the room's 60):
 - Robin casting on her light tackle: on Sam's game her copy holds the surf rod with the conventional on top, its line moss green;
 - her spread out: her holders hold her stand-up rods and wide 80s, the reels on top, the lines smoke blue;
 - then as an older game sends it: the graphite and a spinning reel, clear mono, the stand-up rod and the two-speed in her holders.
