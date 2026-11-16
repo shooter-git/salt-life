@@ -132,13 +132,83 @@ Looked at on every tier:
 - **His look:** the same man on every tier, lit as the players are.
 - **Seen:** from astern and from off her bow he's seen as a man aboard her.
 
+## The players at a helm, and the chair on low (the user's calls, 2026-11-16)
+
+Asked after the deck hand was merged: he stays ashore at her berth, as built; the players' own avatars at a helm get his reach to the wheel; the unbought fighting chair drawn on low is fixed now.
+
+### Hands on the wheel
+
+**Before:** another player at a helm was drawn on `trolley_idle`, which holds the hands at the hips, so their arms hung by their sides.
+
+**Now:**
+- **The reach is shared,** not copied. It's in `game/ArmReach.js`, used by the mate (`Deckhand._grip`) and the avatars (`Avatar.pose`'s `wheel`):
+  - `reachTo`: one arm's two bones solved as a triangle;
+  - `gripWheel`: both hands, the elbows out and down;
+  - `armsOf`: a Rocketbox skeleton's arms.
+
+  Out of reach, the arm goes straight toward the rim and says how far short it is (`Avatar.short`).
+- **Each wheel says where it's held:** `helm.grips` (right, left) on the lobster boat, the console and the sportfisher's bridge, and `towerHelm.grips` on her tower. Each is at ten to two on the rim as it's mounted (`Vessel.wheelGrips`, from the wheel's centre, axis and radius). The mate's spot at her helm uses the bridge's.
+- **Where a player at a helm stands is unchanged.** `Crew.helmStand` is what `Together._place` already did, put where the tests and renders can ask it: at the helm's `stand` if it has one (the sportfisher's bridge), else under its eye.
+- **`Together._place`** gives the avatar its helm's grips, on the boat as she's drawn there: someone at your helm, or at their own on their copy, or at a third player's.
+- **Left as they are:**
+  - the kayak, which has no wheel (sat in, a paddle in the hands: `SeatPose`);
+  - Pearl's boatman at the pirogue's tiller (`idle_neutral_01`);
+  - the stand-in figure's own helm pose.
+
+**Whether the hands reach,** measured in the game (`tools/deckhand/helms.mjs`) for each look, the further wrist's shortfall:
+
+| Helm | Stands | Wheel ahead | player-m1 | player-m2 | player-f1 | player-f2 |
+|---|---|---|---|---|---|---|
+| Lobster boat | under her helm's eye, before her seat | 0.69 m | 22 to 23 cm short | 22 to 26 cm | 28 to 29 cm | 25 to 28 cm |
+| Console | under her helm's eye | 0.50 m | 14 to 16 cm | 14 to 15 cm | 17 to 18 cm | 15 to 20 cm |
+| Sportfisher, bridge | at her helm's `stand` | 0.47 m | 8 cm | 8 cm | 10 to 11 cm | 10 to 11 cm |
+| Sportfisher, tower | under her tower helm's eye | 0.23 m | on it | on it | on it | on it |
+
+The ranges are low, mid and high; the women's looks are 8 cm shorter to the shoulder (1.37 m against 1.44).
+- **On the tower's wheel** every look's hands are on the rim.
+- **Elsewhere the wheel is out of reach** from where a player at the helm is drawn, so the arms go straight out to it and stop short:
+  - 8 to 11 cm on the sportfisher's bridge;
+  - 14 to 20 cm on the console;
+  - 22 to 29 cm on the lobster boat.
+
+  In the renders from beside they read as reaching for the wheel; from behind, as at it.
+- **Not moved,** as asked. A `stand` nearer the wheel for each would put the hands on it, as the mate's own spot does on the bridge (0.13 m nearer). By the measurements that's about 0.12 m on the bridge, 0.2 m on the console and 0.3 m on the lobster boat. **That's the user's call.**
+
+### The chair on low
+
+**Before:** on low your sportfisher's `nearDetail` names her chair, so it's drawn only near the camera. `App.updateNearDetail` set it visible whenever it was near, whether `fit` had hidden it or not, so an unbought fighting chair showed in her cockpit.
+
+**Now:**
+- **Your own boat:** `SportfisherModel.fit` keeps what it hides as `userData.shown`, which `updateNearDetail` already honours (Joe's roof's sheets use it). That's her tower and its helm's parts, her outriggers and her chair.
+- **Copies on low were the other way round.** `dressCopy` showed what's fitted at any distance, so a phone drew a copy's tower, outriggers and chair however far off she was, till she'd once been near. `BoatCopies.dress` now leaves what's past her low meshes to `near`, where it's drawn only near and only if it's fitted.
+- **The other boats' fits** don't hide meshes:
+  - the console's are cut out of her index (`_keptInto`);
+  - the kayak's are folded away in her vertices;
+  - the lobster boat has nothing that comes and goes.
+
+  None of them leaves a hidden mesh for near detail to bring back. `test/helm-reach.mjs` holds it for every boat.
+
+### Checked
+- **`test/helm-reach.mjs`** (new, in `pnpm test`):
+  - **the reach:** within reach, the wrist 5 cm shy of the point, the bones their own lengths and the elbow out and down; out of reach, straight toward it with its shortfall said; both hands to a rim;
+  - **each wheel's grips** on its rim at ten to two, the right to starboard, and where a player at each helm stands with how far their shoulders are;
+  - **near detail and fit:** for every boat on low, what her fit hides is kept hidden near the camera, and shown again once bought;
+  - **a phone's copy of the sportfisher:** none of her extras far off, near only what's fitted, the chair once it's bought.
+- **`test/mate.mjs`:** the mate's spot uses her bridge's grips, his hands within reach.
+- **`crew.mjs`' `mate` part** has one more check, 0 failed: Robin at her helm on Sam's game, `trolley_idle`, her hands to the wheel's rim. In the `player-m2` look she's 8 cm short, the bridge's shortfall, each wrist where the reach puts it.
+- **The renders**, `tools/render-slot.sh node tools/deckhand/helms.mjs qa-output/helms <tier>`, are in `qa-output/helms/<tier>/`:
+  - for each helm, Sam in `player-m2` and `player-f1`, from beside and from behind;
+  - on low, `chair-unbought.png` and `chair-bought.png`, looking aft over her cockpit from its forward end;
+  - `report.json`: every look's wrists at every helm.
+
+  Looked at: on the tower the hands are on the rim; on the bridge, the console and the lobster boat the arms reach out to it, stopping short as measured. Nothing goes through anything. The unbought chair isn't drawn, its socket in the sole is; bought, it is.
+
 ## What's left
 
 - **He isn't solid:** you walk through him in her corner. A collider for him would be hers, and walked on by guests' games too.
 - **He doesn't walk** from his corner up the ladder to her helm and back: a cut. Walking him would mean the ladder's climb for a character.
 - **His hands stay at ten to two** as the wheel turns under them.
-- **The other players at someone's helm** are drawn on the same `trolley_idle`, so their hands hang by their sides there too (`Avatar.js`, not this stream's). His reach (`reach` in `Mate.js`) would serve them.
-- **Found, not touched:** on low the fighting chair is drawn on your sportfisher near the camera even when it isn't bought. Her `nearDetail` names it, and `App.updateNearDetail` shows near meshes regardless of `fit` (`qa-output/deckhand/low/cockpit-quarter.png` has it; mid and high don't).
-- **At her berth he's ashore** (above), the user's to change.
+- **The players at the lobster boat's, the console's and the sportfisher bridge's helms** reach for their wheels from where they stand and stop short (above). A `stand` nearer each wheel would put their hands on it: the user's call.
+- **At her berth he's ashore** (above), as the user decided.
 - **A second copy of his look** loads if a player in `player-m1` comes after him: theirs is loaded with all the players' clips, his with two.
 - **Someone else's mate on a copy of their sportfisher** (Robin's, on Sam's game) loads `player-m1` on Sam's game, as Robin's own game does. That's one skinned character more on a guest's phone.

@@ -17,6 +17,8 @@ import { nearestOnWeed } from '../game/Finds.js';
 //   spotted( finds, cam, look ) -> { kind, x, z, d } | null   (what you're looking at from up there)
 //   perched( model ) -> the model, or for a boat that's sat in, the same with a place for a rider
 //   footY( model, x, z, maxY ) -> the deck under that spot
+//   helmStand( model, upper, out ) -> out: where someone at her helm is drawn standing ({ x, y, z }, her frame), and its wheel's grips
+//                                     (null: no wheel), the tower's if upper ((M21) Together._place, and the helms' renders)
 //   const c = new Crew( together );  c.update( dt )  c.job  c.aboard()  c.backing()  c.theirCall( body )
 
 const BACKING = 0.4; // m/s of line she takes back, backing down at a knot or so against the fish's run
@@ -95,6 +97,20 @@ export function perched( model ) {
 	};
 
 	return v;
+
+}
+
+// (on the sole under her helm, at its stand if it says where a figure's seen at it (clear of a seat), else under its eye: its
+// camera's eye is lower than a figure standing there)
+export function helmStand( model, upper, out = { x: 0, y: 0, z: 0, grips: null } ) {
+
+	const up = upper && model.towerHelm, H = up ? model.towerHelm : model.helm, eye = up ? model.towerHelm.eye : model.helmEye;
+	const at = ! up && H && H.stand;
+	out.x = at ? at[ 0 ] : eye.x;
+	out.z = at ? at[ 1 ] : eye.z;
+	out.y = footY( model, out.x, out.z, eye.y - 1 );
+	out.grips = ( H && H.grips ) || null;
+	return out;
 
 }
 

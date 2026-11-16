@@ -277,6 +277,9 @@ export class BoatCopies {
 			return v;
 
 		} );
+		// ((M21) on a phone, what's past her low meshes only as near as she is (near), and only what's fitted: dressCopy showed
+		// what's fitted at any distance, her tower, outriggers and chair over a phone's triangles till she'd once been near)
+		if ( u.extras ) for ( const m of u.extras ) m.visible = !! u.nearOn && m.userData.fits !== false;
 		const hex = fitPaint( f );
 		let p = hex === null ? null : e.paints.get( hex );
 		if ( hex !== null && ! p ) {
