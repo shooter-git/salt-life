@@ -33,12 +33,19 @@ const ok = ( c, msg ) => {
 
 const note = ( ...a ) => console.log( '    ', ...a );
 
-// ---- the reach: a figure facing +z, its arms hanging (a Rocketbox skeleton's names: armsOf finds them)
+// ---- the reach: a figure facing +z, its arms hanging from its shoulders, which hang from its lowest spine bone (a Rocketbox
+// skeleton's names: armsOf finds them). The looks' own, measured on trolley_idle in the game and off their skeletons: the men's
+// shoulders 1.444 m up, the women's 1.367 and 8 cm nearer each other; their arms 0.557 and 0.493 m to the wrist
 const UPPER = 0.29, FORE = 0.27, SHOULDER = 1.42;
-function figure() {
+const LOOK = {
+	men: { H: 1.444, sz: - 0.04, sx: 0.21, upper: 0.286, fore: 0.271, spine: 1.015 },
+	women: { H: 1.367, sz: - 0.053, sx: 0.172, upper: 0.253, fore: 0.24, spine: 1.044 },
+};
+function figure( L = { H: SHOULDER, sz: 0, sx: 0.19, upper: UPPER, fore: FORE, spine: 1.0 } ) {
 
 	const g = new Group(), body = new Bone();
-	body.name = 'Bip01 Spine';
+	body.name = 'Bip01_Spine';
+	body.position.set( 0, L.spine, 0 );
 	g.add( body );
 	for ( const [ s, side ] of [ [ - 1, 'R' ], [ 1, 'L' ] ] ) {
 
@@ -46,12 +53,28 @@ function figure() {
 		arm.name = `Bip01_${ side }_UpperArm`;
 		fore.name = `Bip01_${ side }_Forearm`;
 		hand.name = `Bip01_${ side }_Hand`;
-		arm.position.set( s * 0.19, SHOULDER, 0 );
-		fore.position.set( 0, - UPPER, 0 );
-		hand.position.set( 0, - FORE, 0 );
+		arm.position.set( s * L.sx, L.H - L.spine, L.sz );
+		fore.position.set( 0, - L.upper, 0 );
+		hand.position.set( 0, - L.fore, 0 );
 		body.add( arm );
 		arm.add( fore );
 		fore.add( hand );
+
+	}
+
+	// (and the thighs from the spine, as a Biped's: leaning it in mustn't swing the legs)
+	for ( const [ s, side ] of [ [ - 1, 'R' ], [ 1, 'L' ] ] ) {
+
+		const thigh = new Bone(), calf = new Bone(), foot = new Bone();
+		thigh.name = `Bip01_${ side }_Thigh`;
+		calf.name = `Bip01_${ side }_Calf`;
+		foot.name = `Bip01_${ side }_Foot`;
+		thigh.position.set( s * 0.088, L.spine - 0.12 - L.spine, 0 );
+		calf.position.set( 0, - 0.42, 0 );
+		foot.position.set( 0, - 0.4, 0 );
+		body.add( thigh );
+		thigh.add( calf );
+		calf.add( foot );
 
 	}
 
@@ -82,16 +105,15 @@ function figure() {
 
 }
 
-// ---- each boat's wheel, and where a player at its helm stands
-const ARM = UPPER + FORE + 0.05; // (player-m1's: to the wrist, and the hand round the rim)
-const reach = {};
+// ---- each boat's wheel, where a player at its helm stands (Crew.helmStand: nearer it, the user's call), and every look's hands on it
+const lean = ( g ) => 2 * Math.acos( Math.min( 1, Math.abs( armsOf( g ).spine.quaternion.w ) ) );
 for ( const id of [ 'lobster', 'console', 'sportfisher', 'kayak' ] ) for ( const tier of [ 'low', 'high' ] ) {
 
 	const M = await loadBoat( id, tier );
 	for ( const upper of [ false, true ] ) {
 
 		if ( upper && ! M.towerHelm ) continue;
-		const H = upper ? M.towerHelm : M.helm, at = helmStand( M, upper ), name = `${ id }${ upper ? '\'s tower' : '' }`;
+		const H = upper ? M.towerHelm : M.helm, eye = ( upper ? M.towerHelm.eye : M.helmEye ).clone(), at = helmStand( M, upper ), name = `${ id }${ upper ? '\'s tower' : '' }`;
 		if ( id === 'kayak' ) {
 
 			if ( tier === 'low' ) ok( ! H.grips && ! at.grips, 'the kayak: no wheel, nothing to reach (sat in, with a paddle)' );
@@ -105,18 +127,35 @@ for ( const id of [ 'lobster', 'console', 'sportfisher', 'kayak' ] ) for ( const
 		const pivot = id === 'sportfisher' ? new Vector3().setFromMatrixPosition( M._wheels[ upper ? 1 : 0 ] ) : M.wheelPivot.position;
 		const onRim = G.every( ( g ) => Math.abs( g.distanceTo( pivot ) - r ) < 1e-6 ) && Math.abs( mid.distanceTo( pivot ) - r / 2 ) < 1e-6;
 		if ( tier === 'low' ) ok( onRim && G[ 0 ].x < G[ 1 ].x && mid.y > pivot.y, `${ name }: her grips on her wheel's rim (${ r.toFixed( 2 ) } m) at ten to two, the right to starboard` );
-		const d = G.map( ( g, k ) => g.distanceTo( new Vector3( at.x + ( k ? 0.19 : - 0.19 ), at.y + SHOULDER, at.z ) ) );
-		reach[ name ] = Math.max( ...d );
-		if ( tier === 'low' ) note( `${ name }: a player at her helm stands at ( ${ at.x.toFixed( 2 ) }, ${ at.y.toFixed( 2 ) }, ${ at.z.toFixed( 2 ) } ), ${ ( G[ 0 ].z - at.z ).toFixed( 2 ) } m behind her wheel; the grips ${ d.map( ( v ) => v.toFixed( 2 ) ).join( ' and ' ) } m from player-m1's shoulders, his reach ${ ARM.toFixed( 2 ) }: ${ reach[ name ] <= ARM ? 'his hands on it' : `${ ( ( reach[ name ] - ARM ) * 100 ).toFixed( 0 ) } cm short` }` );
-		ok( at.grips === G, `${ name } (${ tier }): Crew.helmStand gives her helm's grips` );
+		ok( at.grips === G && ( upper ? M.towerHelm.eye : M.helmEye ).equals( eye ) && ( upper || M.helm.eye === M.helmEye ), `${ name } (${ tier }): Crew.helmStand gives her helm's grips, and the eye you look from at her helm is where it was` );
+		// (feet: 0.2 m to the toes, 0.1 m back to the heels, 0.15 m either side: clear of whatever's solid there, by 3 cm. Behind and
+		// ahead: her seat and its pedestal, her dash, her console, its leaning post)
+		const hits = M.colliders.filter( ( c ) => c.solid !== false && Math.abs( at.x - c.center.x ) < c.half.x + 0.15 && at.y + 0.05 < c.center.y + c.half.y && at.y + 0.4 > c.center.y - c.half.y && at.z + 0.2 + 0.029 > c.center.z - c.half.z && at.z - 0.1 - 0.029 < c.center.z + c.half.z );
+		const ahead = M.colliders.filter( ( c ) => c.solid !== false && Math.abs( at.x - c.center.x ) < c.half.x + 0.15 && at.y + 0.05 < c.center.y + c.half.y && at.y + 0.4 > c.center.y - c.half.y && c.center.z - c.half.z > at.z ).map( ( c ) => c.center.z - c.half.z - at.z );
+		ok( ! hits.length, `${ name } (${ tier }): stood at ( ${ at.x.toFixed( 2 ) }, ${ at.y.toFixed( 2 ) }, ${ at.z.toFixed( 2 ) } ), the feet clear of her${ ahead.length ? `, ${ ( Math.min( ...ahead ) - 0.2 ).toFixed( 2 ) } m from the toes to what's ahead` : '' }${ hits.length ? ': in her ' + hits.map( ( c ) => c.tag ).join( ', ' ) : '' }` );
+		// (every look's hands on the rim: the women's reach and the men's)
+		const said = [];
+		for ( const [ k, L ] of Object.entries( LOOK ) ) {
+
+			const g = figure( L );
+			g.position.set( at.x, at.y, at.z );
+			g.updateMatrixWorld( true );
+			const feet0 = g.getObjectByName( 'Bip01_R_Foot' ).getWorldPosition( new Vector3() );
+			const short = gripWheel( armsOf( g ), g, G[ 0 ], G[ 1 ], 0.05 ), a = lean( g );
+			const feet = g.getObjectByName( 'Bip01_R_Foot' ).getWorldPosition( new Vector3() ), moved = feet.distanceTo( feet0 );
+			if ( moved > 0.07 ) said.push( `FAIL: the feet moved ${ moved.toFixed( 2 ) } m` );
+			said.push( `${ k } ${ short < 1e-3 ? 'on it' : ( short * 100 ).toFixed( 0 ) + ' cm short' }${ a > 0.01 ? `, leaning in ${ ( a * 180 / Math.PI ).toFixed( 0 ) } degrees` : '' }` );
+			if ( short > 1e-3 || a > 0.6 ) said.push( 'FAIL' );
+
+		}
+
+		ok( ! said.some( ( x ) => x.startsWith( 'FAIL' ) ), `${ name } (${ tier }): every look's hands on her wheel's rim, the feet where they stood (${ said.filter( ( x ) => x !== 'FAIL' ).join( '; ' ) })` );
 
 	}
 
 	M.dispose();
 
 }
-
-ok( reach[ 'sportfisher\'s tower' ] <= ARM, 'at the sportfisher\'s tower helm the hands are on the wheel' );
 
 // ---- her fit near the camera: whatever her fit hides, what's drawn only near the camera on a phone keeps hidden
 const app = readFileSync( new URL( '../src/App.js', import.meta.url ), 'utf8' ), nd = app.slice( app.indexOf( '	updateNearDetail() {' ), app.indexOf( '	drawWorld() {' ) );

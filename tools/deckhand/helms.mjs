@@ -3,7 +3,8 @@
 // lobster boat's, the console's, the sportfisher's bridge's and her tower's, in each of the four looks, as your game draws them.
 // One game: a second player ("Sam") is made up on it, riding your boat at her helm (his poses put in as the room would bring
 // them: Together._pose), so Together places him as it places anyone at someone's helm (Crew.helmStand). For each helm and
-// look: how far each wrist is from its grip on the rim; two of the looks drawn from beside and behind. And (low) the sportfisher's
+// look: how far each wrist is from its grip on the rim, and how far leaned in; two of the looks drawn from beside, from behind
+// and low from beside (the feet against her console and seat). And (low) the sportfisher's
 // fighting chair near the camera, unbought and bought. Drawn on the CPU (Chromium on SwiftShader, from All the Spaces'
 // Playwright), into <out>/<tier>/.
 //
@@ -77,6 +78,9 @@ await page.evaluate( () => {
 			cam.position.copy( G.localToWorld( new V( ...c[ 0 ] ).add( at ) ) );
 			cam.lookAt( G.localToWorld( new V( ...c[ 1 ] ).add( at ) ) );
 			cam.updateMatrixWorld();
+			// (the sea's nodes chosen for this camera: it chose them for the player's, before the world's drawn, and those outside
+			// the player's view were missing from this one's, the sea black there: WaterSurface.update)
+			a.water.update( cam );
 
 		}
 
@@ -167,7 +171,12 @@ const sam = async ( look, up ) => {
 		const a = window.__app, o = a.together.others.get( 'sam-1' ), A = o.avatar, B = A.arms, V = a.camera.position.constructor;
 		const w = ( b ) => b.getWorldPosition( new V() ), G = a.boat.group, at = G.worldToLocal( A.group.position.clone() );
 		A.group.updateMatrixWorld( true );
-		return { short: A.short === null ? null : +A.short.toFixed( 3 ), right: +w( B.handR ).distanceTo( o.wheel.r ).toFixed( 3 ), left: +w( B.handL ).distanceTo( o.wheel.l ).toFixed( 3 ), shoulder: +( w( B.armR ).y - A.group.position.y ).toFixed( 3 ), stand: at.toArray().map( ( v ) => +v.toFixed( 2 ) ), clip: A.character.current };
+		// (where the clip's ankles and toes are, her frame, from where he stands: z ahead of it, y up)
+		const bone = ( re ) => { let f = null; A.character.group.traverse( ( b ) => { if ( ! f && b.isBone && re.test( b.name ) ) f = b; } ); return f; };
+		const feet = [ /R_?Foot$/, /L_?Foot$/, /R_?Toe0$/, /L_?Toe0$/ ].map( ( re ) => { const b = bone( re ); return b ? G.worldToLocal( w( b ) ).sub( at ).toArray().map( ( v ) => +v.toFixed( 2 ) ) : null; } );
+		// (how far forward the shoulders are over the waist, degrees: leaned in to reach, or as the clip stands)
+		const sp = A.group.worldToLocal( w( B.spine ) ), sh = A.group.worldToLocal( w( B.armR ).add( w( B.armL ) ).multiplyScalar( 0.5 ) );
+		return { short: A.short === null ? null : +A.short.toFixed( 3 ), right: +w( B.handR ).distanceTo( o.wheel.r ).toFixed( 3 ), left: +w( B.handL ).distanceTo( o.wheel.l ).toFixed( 3 ), lean: +( Math.atan2( sh.z - sp.z, sh.y - sp.y ) * 180 / Math.PI ).toFixed( 0 ), shoulder: +( w( B.armR ).y - A.group.position.y ).toFixed( 3 ), feet, stand: at.toArray().map( ( v ) => +v.toFixed( 2 ) ), clip: A.character.current };
 
 	} );
 
@@ -175,6 +184,7 @@ const sam = async ( look, up ) => {
 
 const SIDE = [ [ 1.35, 1.5, 0.35 ], [ 0, 1.05, 0.35 ] ];
 const BEHIND = [ [ 0.55, 1.8, - 1.15 ], [ 0, 1.1, 0.45 ] ];
+const FEET = [ [ 0.9, 1.3, 0.55 ], [ 0, 0.15, - 0.1 ] ]; // (from ahead and above, to port: the feet and legs against her console and seat)
 const report = { tier: TIER, helms: {} };
 for ( const H of HELMS ) {
 
@@ -196,6 +206,7 @@ for ( const H of HELMS ) {
 
 			await shot( `${ name }-${ look }-side`, SIDE );
 			await shot( `${ name }-${ look }-behind`, BEHIND );
+			await shot( `${ name }-${ look }-feet`, FEET );
 
 		}
 
@@ -229,6 +240,7 @@ if ( TIER === 'low' ) {
 						cam.position.copy( G.localToWorld( new V( 0.9, 2.3, - 3.2 ) ) );
 						cam.lookAt( G.localToWorld( new V( 0, 0.7, - 5.2 ) ) );
 						cam.updateMatrixWorld();
+						a.water.update( cam );
 
 					}
 

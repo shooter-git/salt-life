@@ -7,15 +7,20 @@ import { Quaternion, Vector3 } from '../engine/index.js';
 //   reachTo( arm, fore, hand, to, pole, short ) -> m        the wrist to `to` (world), `short` m shy of it, the elbow out toward
 //                                                           `pole` (a world direction); how far short of it the wrist stays (out
 //                                                           of reach: the arm straight toward it)
-//   armsOf( root ) -> { armR, foreR, handR, armL, foreL, handL }   a Rocketbox skeleton's (Bip01 R UpperArm ...)
+//   armsOf( root ) -> { armR, foreR, handR, armL, foreL, handL, spine, legs }   a Rocketbox skeleton's (Bip01 R UpperArm ...;
+//                                                           legs: its thighs, if they hang from the spine, as a Biped's do)
 //   gripWheel( arms, frame, right, left, short ) -> m       both hands to a wheel's rim (world), the elbows a little out and
-//                                                           down in `frame`'s own (the character's group, facing +Z); the further
-//                                                           wrist's shortfall
+//                                                           down in `frame`'s own (the character's group, facing +Z); out of
+//                                                           reach upright, leaned in from the waist first (up to LEAN_MOST);
+//                                                           the further wrist's shortfall
 // Each the world matrices of what it moves brought up to date as it goes.
 
 const _qa = new Quaternion(), _qb = new Quaternion(), _q = new Quaternion();
 const _s = new Vector3(), _e = new Vector3(), _h = new Vector3(), _t = new Vector3(), _d = new Vector3(), _p = new Vector3();
-const _u = new Vector3(), _v = new Vector3(), _pole = new Vector3();
+const _u = new Vector3(), _v = new Vector3(), _pole = new Vector3(), _ax = new Vector3(), _piv = new Vector3(), _sr = new Vector3();
+const _sl = new Vector3(), _w = new Vector3(), _ql = new Quaternion();
+const LEAN_MOST = 0.6; // rad: the most someone leans in from the waist to reach a wheel (34 degrees)
+const SPARE = 0.01; // m: leaned in till each grip's this much inside the arm's reach (the elbow not locked straight)
 
 export function turnBoneBy( bone, q ) {
 
@@ -66,7 +71,15 @@ export function armsOf( root ) {
 
 	};
 
-	return { armR: bone( /R_?UpperArm$/ ), foreR: bone( /R_?Forearm$/ ), handR: bone( /R_?Hand$/ ), armL: bone( /L_?UpperArm$/ ), foreL: bone( /L_?Forearm$/ ), handL: bone( /L_?Hand$/ ) };
+	// ((the thighs: a Biped's hang from its lowest spine bone, so leaning it in swung the legs back: they're turned back upright)
+	const spine = bone( /Spine$/ ), under = ( b ) => {
+
+		for ( let p = b && b.parent; p; p = p.parent ) if ( p === spine ) return true;
+		return false;
+
+	};
+
+	return { armR: bone( /R_?UpperArm$/ ), foreR: bone( /R_?Forearm$/ ), handR: bone( /R_?Hand$/ ), armL: bone( /L_?UpperArm$/ ), foreL: bone( /L_?Forearm$/ ), handL: bone( /L_?Hand$/ ), spine, legs: [ bone( /R_?Thigh$/ ), bone( /L_?Thigh$/ ) ].filter( under ) };
 
 }
 
@@ -75,9 +88,47 @@ export function gripWheel( B, frame, right, left, short = 0.05 ) {
 
 	if ( ! B || ! B.armR || ! B.foreR || ! B.handR || ! B.armL || ! B.foreL || ! B.handL ) return Infinity;
 	frame.updateMatrixWorld( true );
+	if ( B.spine ) leanIn( B, frame, right, left, short );
 	_pole.set( - 0.7, - 0.7, 0 ).transformDirection( frame.matrixWorld );
 	const r = reachTo( B.armR, B.foreR, B.handR, right, _pole, short );
 	_pole.set( 0.7, - 0.7, 0 ).transformDirection( frame.matrixWorld );
 	return Math.max( r, reachTo( B.armL, B.foreL, B.handL, left, _pole, short ) );
+
+}
+
+// ((M21) a wheel past an arm's reach from where they stand (the console's, low on its slope over a toe-high face): the least lean
+// forward from the waist, about its lowest spine bone and the figure's left-right axis, that brings both grips within reach, no
+// more than LEAN_MOST
+function leanIn( B, frame, right, left, short ) {
+
+	const arm = ( a, f, h ) => a.getWorldPosition( _u ).distanceTo( f.getWorldPosition( _v ) ) + _v.distanceTo( h.getWorldPosition( _u ) );
+	const reachR = arm( B.armR, B.foreR, B.handR ) + short, reachL = arm( B.armL, B.foreL, B.handL ) + short;
+	B.spine.getWorldPosition( _piv );
+	B.armR.getWorldPosition( _sr ).sub( _piv );
+	B.armL.getWorldPosition( _sl ).sub( _piv );
+	_ax.set( 1, 0, 0 ).transformDirection( frame.matrixWorld );
+	// (how far the further grip is past its arm's reach, leaned by a)
+	const over = ( a ) => {
+
+		_q.setFromAxisAngle( _ax, a );
+		const r = _w.copy( _sr ).applyQuaternion( _q ).add( _piv ).distanceTo( right ) - reachR;
+		return Math.max( r, _w.copy( _sl ).applyQuaternion( _q ).add( _piv ).distanceTo( left ) - reachL ) + SPARE;
+
+	};
+
+	if ( over( 0 ) <= 0 ) return 0;
+	let lo = 0, hi = LEAN_MOST;
+	if ( over( hi ) <= 0 ) for ( let i = 0; i < 12; i ++ ) {
+
+		const m = ( lo + hi ) / 2;
+		if ( over( m ) > 0 ) lo = m;
+		else hi = m;
+
+	}
+
+	turnBoneBy( B.spine, _ql.setFromAxisAngle( _ax, hi ) );
+	// (bending at the hips: the legs stay as they stood)
+	if ( B.legs ) for ( const t of B.legs ) turnBoneBy( t, _ql.setFromAxisAngle( _ax, - hi ) );
+	return hi;
 
 }

@@ -863,13 +863,10 @@ The cast net is `src/game/CastNet.js` and its half of `src/game/Game.js`. The fi
   - `armsOf`: a Rocketbox skeleton's arms.
 - **Where a wheel is held:** a helm with a wheel says where, `helm.grips` and the sportfisher's `towerHelm.grips` ([ right, left ], her frame), made by `Vessel.wheelGrips( centre, axis, r )` at ten to two on the rim.
 - **Where a player at a helm stands:** `Crew.helmStand( model, upper )` gives where they're drawn standing and that helm's grips. `Together._place` uses it, and passes the grips on her as drawn to `Avatar.pose`'s `wheel`, which reaches the arms after the clip (`Avatar.short`).
-- **Which wheels they reach:**
-  - the tower's wheel, on it;
-  - the sportfisher bridge's, 8 to 11 cm short;
-  - the console's, 14 to 20 cm;
-  - the lobster boat's, 22 to 29 cm.
-
-  The kayak has no wheel.
+  - At a helm with a wheel (not the tower's), it's worked out from the grips (`nearWheel`, `NEAR`): as near as the women's looks' reach needs, the toes clear of what's ahead, the heels of a seat behind.
+  - Every look's hands are on the rim at every wheel. At the console, whose wheel is low, `gripWheel` first leans the figure in from the waist (`LEAN_MOST`, 34°), turning the thighs back so the legs stay put.
+  - The kayak has no wheel.
+- **The tools' cameras:** a render that puts its own camera in at `drawWorld` has the sea pick its patches for it (`water.update( camera )`): they're picked for the player's camera before the world's drawn, and the sea was black outside its view.
 - **Her fit near the camera:**
   - `SportfisherModel.fit` keeps what it hides as `userData.shown`, so `App.updateNearDetail` doesn't draw an unbought chair near the camera on low.
   - `BoatCopies.dress` leaves a phone's copy's extras to `near`: only near, only what's fitted.

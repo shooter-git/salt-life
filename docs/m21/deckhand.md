@@ -146,33 +146,47 @@ Asked after the deck hand was merged: he stays ashore at her berth, as built; th
   - `gripWheel`: both hands, the elbows out and down;
   - `armsOf`: a Rocketbox skeleton's arms.
 
-  Out of reach, the arm goes straight toward the rim and says how far short it is (`Avatar.short`).
+  Out of reach upright, the figure first leans in from the waist, as little as it takes (no more than 34°). It bends at the hips: a Biped's thighs hang from its lowest spine bone, so they're turned back as it leans and the legs stay where they stood. The arm then goes as near as it reaches and says how far short it is (`Avatar.short`).
 - **Each wheel says where it's held:** `helm.grips` (right, left) on the lobster boat, the console and the sportfisher's bridge, and `towerHelm.grips` on her tower. Each is at ten to two on the rim as it's mounted (`Vessel.wheelGrips`, from the wheel's centre, axis and radius). The mate's spot at her helm uses the bridge's.
-- **Where a player at a helm stands is unchanged.** `Crew.helmStand` is what `Together._place` already did, put where the tests and renders can ask it: at the helm's `stand` if it has one (the sportfisher's bridge), else under its eye.
 - **`Together._place`** gives the avatar its helm's grips, on the boat as she's drawn there: someone at your helm, or at their own on their copy, or at a third player's.
 - **Left as they are:**
   - the kayak, which has no wheel (sat in, a paddle in the hands: `SeatPose`);
   - Pearl's boatman at the pirogue's tiller (`idle_neutral_01`);
   - the stand-in figure's own helm pose.
 
-**Whether the hands reach,** measured in the game (`tools/deckhand/helms.mjs`) for each look, the further wrist's shortfall:
+**Where a player at a helm stands (the user's call after the first renders: hands on the wheel, for every look).** It's in `Crew.helmStand`, the one rule for `_place`, the tests and the renders, worked out per helm from where its wheel's grips are:
+- **The reach it allows for:** the shortest among the looks, the women's (shoulders 1.37 m up, 0.49 m to the wrist), with 3 cm to spare.
+- **No nearer than the toes allow:** the men's feet, 0.2 m to the toes, are kept 3 cm short of whatever's solid ahead of them (her dash, her console).
+- **Clear of a seat behind:** the heels, 0.1 m back, are kept clear of it, but never at the toes' cost.
+- **The tower helm is left as it was.** Its wheel's in reach from under its eye.
+- **The player's own view doesn't move:** the eye they look from at a helm (`helmEye`, `atHelm.eye`) is where it was. Only how others see them there changes.
 
-| Helm | Stands | Wheel ahead | player-m1 | player-m2 | player-f1 | player-f2 |
-|---|---|---|---|---|---|---|
-| Lobster boat | under her helm's eye, before her seat | 0.69 m | 22 to 23 cm short | 22 to 26 cm | 28 to 29 cm | 25 to 28 cm |
-| Console | under her helm's eye | 0.50 m | 14 to 16 cm | 14 to 15 cm | 17 to 18 cm | 15 to 20 cm |
-| Sportfisher, bridge | at her helm's `stand` | 0.47 m | 8 cm | 8 cm | 10 to 11 cm | 10 to 11 cm |
-| Sportfisher, tower | under her tower helm's eye | 0.23 m | on it | on it | on it | on it |
+| Helm | Was | Now | Hands, every look | Feet |
+|---|---|---|---|---|
+| Lobster boat | 0.30 m (in her helm seat's pedestal) | 0.66 m | on the rim | in front of her seat, 0.12 m from the toes to her dash |
+| Console | −0.94 m | −0.85 m | on the rim, leaning in to it | between her console and her leaning post, 3 cm from the toes to the console |
+| Sportfisher, bridge | 0.02 m (the `stand`) | 0.19 m | on the rim | 3 cm from the toes to the console's foot, well clear of her seat |
+| Sportfisher, tower | −0.58 m | as it was | on the rim | as they were |
 
-The ranges are low, mid and high; the women's looks are 8 cm shorter to the shoulder (1.37 m against 1.44).
-- **On the tower's wheel** every look's hands are on the rim.
-- **Elsewhere the wheel is out of reach** from where a player at the helm is drawn, so the arms go straight out to it and stop short:
-  - 8 to 11 cm on the sportfisher's bridge;
-  - 14 to 20 cm on the console;
-  - 22 to 29 cm on the lobster boat.
+(her frame, along her: where the feet are drawn. Measured in the game, `tools/deckhand/helms.mjs`, on low, mid and high, every look's wrists 5 cm shy of their grips, where the hand closes round the rim.)
+- **The console's wheel is low on its slope,** 0.91 m off her sole, over a face as high as a knee, so standing upright with the toes at the console the rim's still out of reach. Every look leans in to it over the clip's own stance, which sways: the men's looks 18 to 24°, the women's 24 to 34°. It reads as someone bent to a low wheel.
+- **Her leaning post's footrest bars** stick out 0.14 m ahead of its box, at shin height. Between them and the console's face there's no room for a pair of feet, so a bar crosses the left shin. The space between the console and the post (0.36 m at the sole) is the model's, not this stream's to move.
 
-  In the renders from beside they read as reaching for the wheel; from behind, as at it.
-- **Not moved,** as asked. A `stand` nearer the wheel for each would put the hands on it, as the mate's own spot does on the bridge (0.13 m nearer). By the measurements that's about 0.12 m on the bridge, 0.2 m on the console and 0.3 m on the lobster boat. **That's the user's call.**
+### The black sea in the renders (the coordinator's question)
+
+**What was black:** a sector of the sea near the horizon in `look.mjs`' and `helms.mjs`' shots out at sea (`helms/mid/lobster-player-f1-side.png`, `deckhand/high/cockpit-quarter.png`).
+- **The cause is the tools' camera.** The sea is one instanced grid whose patches are picked each frame for the camera, the frustum's view of them (`CDLOD.update`, from `WaterSurface.update` in `App.frame`), before the world's drawn. The tools put their own camera in just before the world's drawn (`drawWorld`), so the sea's patches were the ones in the player's view. Where the shot looked past it, there was no sea: black.
+- **Tested** (the same view three ways, on mid):
+  - the shot's camera at once: black;
+  - eight seconds later: still black, so it's not the sea's tiles catching up after the boat's jump;
+  - with the sea's patches picked for the shot's camera: the whole sea;
+  - the player's own camera turned that way: the whole sea.
+- **A player sailing out doesn't see it.** Their camera is the one the patches are picked for.
+- **Fixed in the tools:** `look.mjs` and `helms.mjs` have the sea pick its patches for their camera (`water.update( camera )`) once they've put it in. Their renders were made again.
+- **Sam's views in `crew.mjs`** (`crew-mate-guest.png`, `-back.png`) are his own camera, so the patches are picked for it. There's no black sector in them. The run notes his sea: the whole one, not the plain one a CPU device starts on, 121 patches.
+  - There are darker streaks on the sea out there, which vary from run to run.
+  - They aren't missing sea: they're drawn over it.
+  - I haven't traced them; they may be the blue water's weedlines.
 
 ### The chair on low
 
@@ -191,24 +205,26 @@ The ranges are low, mid and high; the women's looks are 8 cm shorter to the shou
 ### Checked
 - **`test/helm-reach.mjs`** (new, in `pnpm test`):
   - **the reach:** within reach, the wrist 5 cm shy of the point, the bones their own lengths and the elbow out and down; out of reach, straight toward it with its shortfall said; both hands to a rim;
-  - **each wheel's grips** on its rim at ten to two, the right to starboard, and where a player at each helm stands with how far their shoulders are;
+  - **each wheel's grips** on its rim at ten to two, the right to starboard;
+  - **where a player at each helm stands:** the feet clear of her console, dash, seat and leaning post, and the eye they look from unmoved;
+  - **every look's hands on the rim** at every helm, on figures of the men's and the women's proportions, leaning in where it takes (the console's) with the feet where they stood;
   - **near detail and fit:** for every boat on low, what her fit hides is kept hidden near the camera, and shown again once bought;
   - **a phone's copy of the sportfisher:** none of her extras far off, near only what's fitted, the chair once it's bought.
 - **`test/mate.mjs`:** the mate's spot uses her bridge's grips, his hands within reach.
-- **`crew.mjs`' `mate` part** has one more check, 0 failed: Robin at her helm on Sam's game, `trolley_idle`, her hands to the wheel's rim. In the `player-m2` look she's 8 cm short, the bridge's shortfall, each wrist where the reach puts it.
+- **`crew.mjs`' `mate` part** has one more check: Robin at her helm on Sam's game, `trolley_idle`, her hands on the wheel's rim.
 - **The renders**, `tools/render-slot.sh node tools/deckhand/helms.mjs qa-output/helms <tier>`, are in `qa-output/helms/<tier>/`:
-  - for each helm, Sam in `player-m2` and `player-f1`, from beside and from behind;
+  - for each helm, Sam in `player-m2` and `player-f1`, from beside, from behind, and from ahead and above at the feet (`-feet`);
   - on low, `chair-unbought.png` and `chair-bought.png`, looking aft over her cockpit from its forward end;
   - `report.json`: every look's wrists at every helm.
 
-  Looked at: on the tower the hands are on the rim; on the bridge, the console and the lobster boat the arms reach out to it, stopping short as measured. Nothing goes through anything. The unbought chair isn't drawn, its socket in the sole is; bought, it is.
+  Looked at, every shot: the hands on the rim at every helm; the feet on the sole clear of the dash, the consoles and the seats; the console's figures bent to the wheel, a footrest bar across the left shin. The unbought chair isn't drawn, its socket in the sole is; bought, it is. No black sea.
 
 ## What's left
 
 - **He isn't solid:** you walk through him in her corner. A collider for him would be hers, and walked on by guests' games too.
 - **He doesn't walk** from his corner up the ladder to her helm and back: a cut. Walking him would mean the ladder's climb for a character.
 - **His hands stay at ten to two** as the wheel turns under them.
-- **The players at the lobster boat's, the console's and the sportfisher bridge's helms** reach for their wheels from where they stand and stop short (above). A `stand` nearer each wheel would put their hands on it: the user's call.
+- **The console's leaning post's footrest bars** cross the left shin of whoever's at her helm (above): there's no room for the feet between them and the console's face.
 - **At her berth he's ashore** (above), as the user decided.
 - **A second copy of his look** loads if a player in `player-m1` comes after him: theirs is loaded with all the players' clips, his with two.
 - **Someone else's mate on a copy of their sportfisher** (Robin's, on Sam's game) loads `player-m1` on Sam's game, as Robin's own game does. That's one skinned character more on a guest's phone.

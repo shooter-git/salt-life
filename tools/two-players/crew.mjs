@@ -573,6 +573,7 @@ if ( PART === 'mate' ) {
 	// (Sam at her transom, looking forward to port at him in her cockpit's corner)
 	await guest.game.evaluate( () => { const p = window.__app.player; p.deckPos.set( - 0.6, 0.5, - 5.8 ); p.deckVel.set( 0, 0, 0 ); p.deckYaw = Math.atan2( 2.2, 1.8 ); p.pitch = - 0.12; } );
 	await frames( guest.game, 3 );
+	note( `Sam's sea: ${ JSON.stringify( await guest.game.evaluate( () => ( { plain: !! window.__app.water.plainMaterial, nodes: window.__app.water.lod.count } ) ) ) }` );
 	await shot( guest, 'crew-mate-guest-back' );
 	await G.end( 'crew mate' );
 
