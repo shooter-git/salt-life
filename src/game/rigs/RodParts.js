@@ -273,7 +273,8 @@ export function spinReel( add, y0, z0, P ) {
 // On top of the rod (drawn on the reel's side, -Z, and the hand's frame turned over), its spool across the rod. The game's
 // gold two-speed reel (M16's: two round side plates, the handle's side deeper, four pillars, the spool and its flanges, the
 // drag lever and its arc, the star and the speed button, a long arm and a big knob), made to the size asked:
-//   R: the side plates' radius, W: half the width between them, dD / dH: the drag side's and the handle's side's depth,
+//   R: the side plates' radius, W: half the width between them, dD / dH: the drag side's (-X) and the handle's side's (+X)
+//   depth, hub: how far out past W the handle's hub starts (dH, unless it's given: the 50's, as M16 drew it),
 //   stand: the foot's stand from the seat to the plates, lineR: a full spool's radius, arbour: its core (null: none drawn),
 //   crank: the handle's length, knob: 'T' | 'paddle' | 'power', lever: { side: -1 the drag side, 1 the handle's; len; at:
 //   [ dy, dz ] its direction from the hub; off: how far it stands off its plate }, lugs: the harness lugs' half spacing (an
@@ -287,9 +288,10 @@ export function drumReel( add, y0, z0, P ) {
 	// its foot on the seat, and the two blocks of its stand
 	add( roundedBox( 0.026 * P.k, P.foot, 0.006, 0.002, 2 ), { ...P.footLook, matrix: M( 0, y0, z0 - 0.002 ) } );
 	for ( const y of [ - P.foot * 0.33, P.foot * 0.33 ] ) add( roundedBox( 0.016 * P.k, 0.014 * P.k, P.stand + 0.03, 0.003, 2 ), { ...P.footLook, matrix: M( 0, y0 + y, z0 - P.stand / 2 - 0.0135 ) } );
-	// the two round side plates (the handle's side deeper)
-	add( lathe( [ [ R + 0.002, W - 0.005 ], [ R + 0.002, W + 0.002 ], [ R * 0.95, W + dD * 0.57 ], [ R * 0.5, W + dD * 0.96 ], [ 0, W + dD ] ], seg ), { ...P.plate, matrix: AX( 0, - Math.PI / 2 ) } );
-	add( lathe( [ [ R + 0.002, W - 0.005 ], [ R + 0.002, W + dH * 0.17 ], [ R * 0.8, W + dH * 0.58 ], [ R * 0.42, W + dH ], [ 0, W + dH ] ], seg ), { ...( P.gearPlate || P.plate ), matrix: AX( 0, Math.PI / 2 ) } );
+	// the two round side plates: the handle's (+X: a lathe's +Y turned that way by - 90 degrees about z), its gear plate if it has
+	// one of its own; the drag side's (-X). ((M21) Each by its own side's depth: the two had been put on each other's sides)
+	add( lathe( [ [ R + 0.002, W - 0.005 ], [ R + 0.002, W + 0.002 ], [ R * 0.95, W + dH * 0.57 ], [ R * 0.5, W + dH * 0.96 ], [ 0, W + dH ] ], seg ), { ...( P.gearPlate || P.plate ), matrix: AX( 0, - Math.PI / 2 ) } );
+	add( lathe( [ [ R + 0.002, W - 0.005 ], [ R + 0.002, W + dD * 0.17 ], [ R * 0.8, W + dD * 0.58 ], [ R * 0.42, W + dD ], [ 0, W + dD ] ], seg ), { ...P.plate, matrix: AX( 0, Math.PI / 2 ) } );
 	// the pillars between them
 	for ( const a of [ 1.1, 2.6, 4.2, 5.2 ] ) add( cylinder( 0.0035 * P.k, 0.0035 * P.k, 2 * W, 8 ), { ...P.pillar, matrix: M( 0, y0 + Math.cos( a ) * ( R - 0.004 ), az + Math.sin( a ) * ( R - 0.004 ), 0, 0, Math.PI / 2 ) } );
 	// the spool (6), its flanges, its core, and the line on it (7)
@@ -315,7 +317,7 @@ export function drumReel( add, y0, z0, P ) {
 
 	add( torus( R * 0.68, 0.0022 * P.k, 6, 20, 2.2 ), { ...LOOK.chrome, matrix: M( lx + ls * - 0.002, y0, az, 0, Math.PI / 2, 0 ) } );
 	// the star and the speed button on the handle's side
-	const hx = W + dH;
+	const hx = W + ( P.hub ?? dH );
 	if ( P.star ) add( cylinder( 0.012 * P.k, 0.016 * P.k, 0.018 * P.k, 16 ), { ...LOOK.black, matrix: AX( hx + 0.002 ) } );
 	else add( cylinder( 0.011 * P.k, 0.013 * P.k, 0.012 * P.k, 16 ), { ...( P.gearPlate || P.plate ), matrix: AX( hx + 0.002 ) } );
 	if ( P.button ) add( cylinder( 0.005 * P.k, 0.005 * P.k, 0.01, 10 ), { ...P.button, matrix: AX( hx + 0.014 * P.k ) } );

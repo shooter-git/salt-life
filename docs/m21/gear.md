@@ -22,7 +22,7 @@ Stream GEAR of [M21.md](../M21.md), built 2026-11-16 on its own branch from `m21
 | The old spinning reel | A 5000: a 58 mm spool's lip, its axis 100 mm under the foot's top, 157 mm long; black with a gold skirted spool, a chrome bail, a round knob on a 62 mm crank, its paint worn through in patches | Penn's Spinfisher 650SS (black and gold, front drag); its spool derived, its body scaled off the Stradic's photograph |
 | The smooth spinning reel | A 4000: a 52 mm spool, its axis 93 mm under the foot's top, a 57 mm crank with a flat T knob; silver and champagne with black trim | Shimano's Stradic 4000 (52 / 19 mm spool, 57 mm handle); TackleDirect's side view |
 | The conventional | A 30-class lever drag: side plates 75 mm, the frame about 85 mm wide, a 55 mm spool, a 72 mm crank with an oval knob, a black lever at the top rear of the handle's plate; silver; no harness lugs | Penn's Fathom II 30LD (its spool derived, its frame off TackleDirect's photograph) |
-| The two-speed 50-class | M16's gold reel, kept: 112 mm side plates, a 100 mm spool, its lever on the drag side, its star and speed button, a 78 mm arm and T knob | A Penn International 50 and a Shimano Tiagra 50W |
+| The two-speed 50-class | M16's gold reel, kept: 112 mm side plates, a 100 mm spool, its star and speed button, a 78 mm arm and T knob; its lever moved to the handle's side (below) | A Penn International 50 and a Shimano Tiagra 50W |
 | The wide 80-class | Side plates 150 mm, the frame about 175 mm wide, a 121 mm spool; an 80 mm crank and a big power knob; a chrome lever 85 mm on the handle's side, its knurled tip over the frame at the rear; two harness lugs 128 mm apart; a bronze foot and the rod clamp with its leash eye; gold, its gear plate chrome | Shimano's Tiagra 80W (121 x 97 mm spool, 80 mm handle); TackleDirect's side and end photographs |
 | The 130-class | The 80's shape 1.2 times taller: 180 mm side plates, a 148 mm spool, an 89 mm crank; all gold | Shimano's Tiagra 130 (148 x 96 mm spool, 89 mm handle) |
 | The electric reel | A black block: its 90 mm spool between two side frames, the motor's housing over it, a display and three buttons on top facing you, a 75 mm crank with a ball knob, a gold speed lever and a star on the handle's side, its power socket, and its cable down the rod's underside to its butt (and on to a battery) | Shimano's Beastmaster 9000 (90 x 62 mm spool, 75 mm handle; black and gold); Daiwa's Tanacom 1200 (ball knob). Its body's size is judgement |
@@ -89,6 +89,21 @@ A rod drawn longer or shorter would otherwise have moved where a cast lands. The
 `test/game-logic.mjs`, `test/tackle.mjs` and `test/fly.mjs` print the same figures as on `m21` before the stream, line for line. Nothing in Gear, the fights or the line's metres changed.
 
 The fly rods are held 0.3 m up, as M19's was, so their drawn tip is where FlyCast draws the loop from (within 2 cm while a stroke loads the rod).
+
+### The 50-class's lever, moved (after the merge, 2026-11-16)
+
+M16 drew the gold two-speed's drag lever on the side away from its handle. The sources put it on the handle's plate, as the 80, the 130 and the conventional are drawn here.
+
+**It's on the handle's side now** (the user's call: each drawn as itself), between the side plate and the handle's arm, at the same height and angle it was drawn at before. Its pivot sits under the hub's cap, as a real one's does. Everything else on the reel is as it was: its plates, spool, star, speed button, arm and knob, and all its figures.
+
+**Also found, and put right:** `drumReel` had put its two side plates on each other's sides. So the 80's and the 130's deeper plate, the 80's chrome gear plate among them, was on the drag side, and the conventional's deeper plate too. Each plate is on its own side now, its hub and lever sitting on it. Only the plates' static vertices moved (242 on the 80, 142 on the conventional); the reels' sizes and moving parts are as they were.
+
+**Checked:**
+- **Vertex by vertex against the merged `m21`:**
+  - on the 50, the 300 vertices of its lever, its knob and its arc moved from the drag side to the handle's;
+  - every other vertex is where it was, its moving parts among them.
+- **The tests:** its moving parts still turn on their axes (`test/gear-m21.mjs`, with a check that its lever's on the handle's side); `pnpm test` passed.
+- **The renders:** its reel and first-person shots on low, mid and high (`tools/gear/rods.mjs <out> <tier> standup-50 hand,reel`). In your hands its lever's now by the handle, on the left; close up, beside the crank's arm on the handle's plate.
 
 ## The line's colour
 
@@ -238,7 +253,6 @@ The user's to change:
 
 - **The ready A/B:** the rod's shader source changed (above); its program's one of the sixteen before ready on a GPU.
 - **The checks this stream doesn't run:** All the Spaces' complete checks, `tools/gpu-limits.mjs`, the one-core plays (the coordinator's, after merging).
-- **The two-speed 50-class's lever** is on its drag side, as M16 drew it. The sources put the lever on the handle's plate, as on the new 80 and 130 and the conventional. Kept, as the user asked; it's a line to move.
 - **Lures and baits on the hook,** left for later by the user.
 - **The holders' rods are a draw each.** If a phone's frame wanted them fewer, a rod could share one draw with the spread's lines, at the cost of writing its vertices each frame again.
 - **The electric reel's cable** ends at the rod's butt: the battery isn't drawn.

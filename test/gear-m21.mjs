@@ -6,6 +6,7 @@
 import { Box3, Matrix4, PerspectiveCamera, Scene, Vector3 } from '../src/engine/index.js';
 import { DEFAULT_GEAR, DEFAULT_SPREAD, FLY_LINE, LINES, REELS, RODS, gearCode, gearModel, hasModel, modelOf, modelsBuilt, readGear } from '../src/game/rigs/GearModels.js';
 import { PART } from '../src/game/rigs/RodParts.js';
+import { TWO_SPEED_50 } from '../src/game/rigs/BigRod.js';
 import { FLY_LINE_COLOR } from '../src/game/rigs/FlyRod.js';
 import { FishingRod, createRodMaterial } from '../src/game/FishingRod.js';
 import { HolderRods } from '../src/game/rigs/HolderRods.js';
@@ -127,6 +128,23 @@ ok( gearModel( 2, 2 ) === gearModel( 2, 2 ) && hasModel( 2, 2 ) && ! hasModel( 7
 	ok( near( w80.fit.lineR * 2, 0.121, 0.002 ) && near( b130.fit.lineR * 2, 0.148, 0.002 ) && near( conv.fit.lineR * 2, 0.055, 0.002 ), `the spools: the 80's ${ ( w80.fit.lineR * 2000 ).toFixed( 0 ) } mm (121), the 130's ${ ( b130.fit.lineR * 2000 ).toFixed( 0 ) } (148), the conventional's ${ ( conv.fit.lineR * 2000 ).toFixed( 0 ) } (55)` );
 	ok( near( f8.fit.lineR / 0.8 * 2, 0.105, 0.001 ) && near( f12.fit.lineR / 0.8 * 2, 0.121, 0.001 ), 'the fly reels: 105 mm on the 8, 121 on the 12' );
 	ok( spread( b130 ).min.z < spread( w80 ).min.z && spread( w80 ).min.z < spread( up ).min.z, 'the 130 taller than the 80, the 80 than the 50' );
+	// (the 50's lever on its handle's side, as the sources have it: nothing out past its drag side's plate any more, its knob by
+	// the handle's plate, at the height it was drawn)
+	{
+
+		const { W, dD, dH } = TWO_SPEED_50, [ sy, sz ] = up.fit.reelAxis, pos = up.geometry.attributes.position, v = new Vector3();
+		let knob = false;
+		for ( let i = 0; i < pos.count; i ++ ) {
+
+			v.fromBufferAttribute( pos, i );
+			if ( Math.abs( v.x - ( W + dH + 0.004 ) ) < 0.008 && Math.abs( v.y - sy - 0.036 ) < 0.009 && Math.abs( v.z - sz + 0.056 ) < 0.009 ) knob = true;
+
+		}
+
+		ok( spread( up ).min.x > - ( W + dD ) - 0.0025 && knob, `the two-speed 50's lever on its handle's side (nothing past its drag plate: ${ spread( up ).min.x.toFixed( 3 ) } m), its knob by the handle's plate` );
+
+	}
+
 	ok( b130.fit.tilt > 0.5 && b130.fit.tilt < 0.55 && b130.fit.butt.z > 0.15, `the chair rod's butt bent ${ ( b130.fit.tilt * 180 / Math.PI ).toFixed( 0 ) } degrees, its gimbal ${ b130.fit.butt.z.toFixed( 2 ) } m off the blank's line, away from the reel` );
 
 }

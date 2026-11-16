@@ -9,7 +9,7 @@
 // and a figures.json: each model's triangles, the draw calls of a frame with it, the program count.
 //
 //   a dev server on LOOK_PORT (5241), then
-//   node tools/gear/rods.mjs <out> [tier] [only: model names, comma separated]
+//   node tools/gear/rods.mjs <out> [tier] [only: model names, comma separated] [shots: hand,reel,rod,holder,spread]
 //   (ALL_THE_SPACES: its checkout, if it isn't ../all-the-spaces. Don't edit src while it runs.)
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath( new URL( '../..', import.meta.url ) );
 const ATS = process.env.ALL_THE_SPACES || join( ROOT, '../all-the-spaces' );
-const [ OUTDIR = join( ROOT, 'qa-output/rods' ), TIER = 'mid', ONLY = '' ] = process.argv.slice( 2 );
+const [ OUTDIR = join( ROOT, 'qa-output/rods' ), TIER = 'mid', ONLY = '', SHOTS = '' ] = process.argv.slice( 2 );
 const PORT = process.env.LOOK_PORT || 5241;
 const OUT = join( OUTDIR, TIER );
 mkdirSync( OUT, { recursive: true } );
@@ -112,6 +112,9 @@ await page.evaluate( async ( SEA ) => {
 
 	};
 
+	// (and the game's own gear, put on the rod as its state changes, doesn't take the asked model off it)
+	const sg = rod.setGear.bind( rod );
+	rod.setGear = ( o ) => sg( L.gear && ! L.spread ? { ...o, model: L.gear } : o );
 	const ru = rod.update.bind( rod );
 	rod.update = function ( dt, o ) {
 
@@ -288,7 +291,7 @@ const figures = { tier: TIER, programsAtStart: programs0, models: { ...( had && 
 for ( const [ name, rodId, reelId, line, holder ] of MODELS ) {
 
 	const gear = { rod: rodId, reel: reelId, line };
-	for ( const shot of [ 'hand', 'reel', 'rod', ...( holder ? [ 'holder', 'spread' ] : [] ) ] ) {
+	for ( const shot of [ 'hand', 'reel', 'rod', ...( holder ? [ 'holder', 'spread' ] : [] ) ].filter( ( s ) => ! SHOTS || SHOTS.split( ',' ).includes( s ) ) ) {
 
 		await page.evaluate( ( [ gear, shot ] ) => {
 

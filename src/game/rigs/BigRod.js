@@ -96,10 +96,12 @@ const MathLerp = ( a, b, t ) => a + ( b - a ) * t;
 
 // ---- the reels (RodParts' drumReel: what each figure is)
 // the gold two-speed 50-class (M16's, after a Penn International 50 and a Shimano Tiagra 50W: its 112 mm side plates, its
-// 100 mm spool, its lever on the drag side, its star and speed button, its 78 mm arm and T knob), kept as it was
+// 100 mm spool, its star and speed button, its 78 mm arm and T knob), kept as it was; its lever moved from the drag side to the
+// handle's, between the plate and the arm, as real ones have it and as the 80, the 130 and the conventional are drawn (the user's
+// call, 2026-11-16: each drawn as itself)
 export const TWO_SPEED_50 = {
-	R: 0.056, W: 0.041, dD: 0.014, dH: 0.024, stand: 0.0195, lineR: 0.05, arbour: null, crank: 0.078, knob: 'T', k: 1, foot: 0.11,
-	lever: { side: - 1, off: 0.012 }, star: true, button: LOOK.gold, lugs: 0, clamp: 0,
+	R: 0.056, W: 0.041, dD: 0.024, dH: 0.014, hub: 0.024, stand: 0.0195, lineR: 0.05, arbour: null, crank: 0.078, knob: 'T', k: 1, foot: 0.11,
+	lever: { side: 1, off: 0.004 }, star: true, button: LOOK.gold, lugs: 0, clamp: 0,
 	plate: PLATE, pillar: LOOK.chrome, flange: LOOK.black, footLook: LOOK.gold, leverLook: LOOK.black, arm: LOOK.gold, knobLook: KNOB,
 };
 // the wide 80-class (a Shimano Tiagra 80W's: side plates about 150 mm, frame 185 mm wide, its spool 121 x 97 mm, an 80 mm crank
