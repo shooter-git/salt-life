@@ -102,6 +102,10 @@ const SETTLE_MS = 8000; // (Salt Life) after this long with nobody else in the l
 const DELAY = 0.15; // s behind the newest pose: room to ease between two
 const STALE = 6; // s without a pose: not shown
 const STALE_ABOARD = 90; // (M16) and the boat you're aboard, in the open sea: a quiet spell isn't her gone. When they leave the room, she is
+// (M21) s with everyone else in the session silent: said once. All the Spaces lost a session's connection for good and never
+// told the game, until its own fix (its room holding a dropped player's place, its app joining again: docs/M21.md); someone's
+// game paused out of sight is silent too, so it's put as a maybe
+const QUIET_S = 20;
 const TAG_FAR = 70; // m: names fade out toward here
 const DRIFT_MS = 3000; // (M15) ms between workings-out of where an away boat adrift has got to
 const KEEP_S = 10; // (M15) s between the host's looks at the boats whose owners are away
@@ -1843,6 +1847,7 @@ export class Together {
 
 		const app = this.app;
 		if ( ! app.game.hud ) return; // (the HUD comes with the game's first frame)
+		this._quiet();
 		this._sendT += dt;
 		if ( this.others.size && this._sendT >= ( this._inSight() ? SEND : SEND_FAR ) ) {
 
@@ -3134,6 +3139,29 @@ export class Together {
 		}
 
 		return best;
+
+	}
+
+	// (M21) everyone else still in the session and none of them heard from for QUIET_S: once, till one's heard again
+	_quiet() {
+
+		let newest = - Infinity, first = null;
+		for ( const o of this.others.values() ) {
+
+			if ( o.last > newest ) newest = o.last;
+			first = first || o;
+
+		}
+
+		const silent = !! first && Number.isFinite( newest ) && performance.now() / 1000 - newest > QUIET_S;
+		if ( silent && ! this._quietSaid && this.app.game && this.app.game.toast ) {
+
+			const who = this.others.size > 1 ? 'the others' : first.person.name;
+			this.app.game.toast( `Not hearing from ${ who } for a while · if they're still playing, reload to rejoin them`, 6000 );
+
+		}
+
+		this._quietSaid = silent;
 
 	}
 
