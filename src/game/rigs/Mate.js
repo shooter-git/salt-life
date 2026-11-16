@@ -1,7 +1,8 @@
-import { Group, Quaternion, Vector3 } from '../../engine/index.js';
+import { Group, Vector3 } from '../../engine/index.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { seaHere } from '../Seaworthy.js';
 import { Character } from '../Character.js';
+import { armsOf, gripWheel } from '../ArmReach.js';
 import { figureStandIn } from '../../together/Figure.js';
 
 // (M19) The sportfisher's hired mate (Gear.js' sfMate, docs/m19/big.md). With a fish on (yours, or a guest's aboard her)
@@ -152,45 +153,8 @@ export function deckhandLook( app ) {
 
 }
 
-const _w = new Vector3(), _s = new Vector3(), _e = new Vector3(), _h = new Vector3(), _t = new Vector3(), _d = new Vector3();
-const _p = new Vector3(), _u = new Vector3(), _v = new Vector3(), _q = new Quaternion(), _qa = new Quaternion(), _qb = new Quaternion();
-
-// turn a bone by a rotation in the world (after the clip has posed it: Avatar's turnBoneBy)
-function turnBy( bone, q ) {
-
-	bone.parent.getWorldQuaternion( _qa );
-	bone.getWorldQuaternion( _qb );
-	bone.quaternion.copy( _qa.invert().multiply( _qb.premultiply( q ) ) );
-	bone.updateMatrixWorld( true );
-
-}
-
-// an arm's wrist to `to` (world), `short` m shy of it toward the shoulder (the hand closes round it), the elbow bent out toward
-// `pole` (a world direction): the upper arm and the forearm solved as a triangle of their own lengths
-function reach( arm, fore, hand, to, pole, short ) {
-
-	arm.getWorldPosition( _s );
-	fore.getWorldPosition( _e );
-	hand.getWorldPosition( _h );
-	const a = _s.distanceTo( _e ), b = _e.distanceTo( _h );
-	_d.subVectors( to, _s );
-	const d = Math.min( Math.max( _d.length() - short, Math.abs( a - b ) + 1e-3 ), a + b - 1e-3 );
-	_d.normalize();
-	const cos = ( a * a + d * d - b * b ) / ( 2 * a * d ), sin = Math.sqrt( Math.max( 0, 1 - cos * cos ) );
-	_p.copy( pole ).addScaledVector( _d, - pole.dot( _d ) ).normalize();
-	_t.copy( _s ).addScaledVector( _d, a * cos ).addScaledVector( _p, a * sin ); // (the elbow)
-	_q.setFromUnitVectors( _u.subVectors( _e, _s ).normalize(), _v.subVectors( _t, _s ).normalize() );
-	turnBy( arm, _q );
-	fore.getWorldPosition( _e );
-	hand.getWorldPosition( _h );
-	_t.copy( _s ).addScaledVector( _d, d ); // (the wrist)
-	_q.setFromUnitVectors( _u.subVectors( _h, _e ).normalize(), _v.subVectors( _t, _e ).normalize() );
-	turnBy( fore, _q );
-
-}
-
-const GRIP_SHORT = 0.05; // m: the wrist that far shy of the rim
-const _pole = new Vector3();
+const _w = new Vector3(), _r = new Vector3(), _l = new Vector3();
+const GRIP_SHORT = 0.05; // m: the wrist that far shy of the rim (the hand closes round it)
 
 export class Deckhand {
 
@@ -202,7 +166,8 @@ export class Deckhand {
 		this.root.visible = false;
 		this.standIn = null; // (the grey figure until his look's in)
 		this.character = null;
-		this.bones = null; // (his arms, to reach to her wheel)
+		this.bones = null; // (his arms, to reach to her wheel: ArmReach.armsOf)
+		this.short = null; // (how far the further wrist is from its grip, m)
 		this.where = null;
 		this._loading = false;
 
@@ -256,21 +221,11 @@ export class Deckhand {
 
 	}
 
-	// both hands on her wheel at ten to two (grips: her frame, right then left), the elbows a little out and down
+	// both hands on her wheel at ten to two (grips: her frame, right then left), the elbows a little out and down (ArmReach, as the
+	// players' at a helm)
 	_grip( grips, parent ) {
 
-		const B = this.bones;
-		if ( ! B || ! B.armR || ! B.armL ) return;
-		this.root.updateMatrixWorld( true );
-		for ( const [ k, side ] of [ [ 0, - 1 ], [ 1, 1 ] ] ) {
-
-			const arm = side < 0 ? B.armR : B.armL, fore = side < 0 ? B.foreR : B.foreL, hand = side < 0 ? B.handR : B.handL;
-			if ( ! fore || ! hand ) continue;
-			_w.copy( grips[ k ] ).applyMatrix4( parent.matrixWorld );
-			_pole.set( side * 0.7, - 0.7, 0 ).transformDirection( this.root.matrixWorld );
-			reach( arm, fore, hand, _w, _pole, GRIP_SHORT );
-
-		}
+		this.short = gripWheel( this.bones, this.root, _r.copy( grips[ 0 ] ).applyMatrix4( parent.matrixWorld ), _l.copy( grips[ 1 ] ).applyMatrix4( parent.matrixWorld ), GRIP_SHORT );
 
 	}
 
@@ -329,19 +284,7 @@ export class Deckhand {
 
 		}
 
-		const bone = ( re ) => {
-
-			let found = null;
-			scene.traverse( ( o ) => {
-
-				if ( ! found && o.isBone && re.test( o.name ) ) found = o;
-
-			} );
-			return found;
-
-		};
-
-		this.bones = { armR: bone( /R_?UpperArm$/ ), foreR: bone( /R_?Forearm$/ ), handR: bone( /R_?Hand$/ ), armL: bone( /L_?UpperArm$/ ), foreL: bone( /L_?Forearm$/ ), handL: bone( /L_?Hand$/ ) };
+		this.bones = armsOf( scene );
 		this.character = c;
 		this.root.add( scene );
 		this._pose();

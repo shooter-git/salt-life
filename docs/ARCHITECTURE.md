@@ -856,6 +856,22 @@ The cast net is `src/game/CastNet.js` and its half of `src/game/Game.js`. The fi
 - When he takes her helm, her bridge's wheel turns under his hands (`helmInUse`).
 - `test/mate.mjs` holds his spots on her low and high models, where he is as she's hired, out, backing down and handed back, and the pose's `Mt` both ways. `tools/deckhand/look.mjs` draws him and measures what he costs. `crew.mjs`' `mate` part checks him on a guest's game.
 
+(M21, [m21/deckhand.md](m21/deckhand.md#the-players-at-a-helm-and-the-chair-on-low-the-users-calls-2026-11-16)) **Hands on a wheel, and her fit near the camera.**
+- **`game/ArmReach.js`** is the reach the mate and the players at a helm share:
+  - `reachTo`: an arm's two bones to a point;
+  - `gripWheel`: both hands to a rim, the elbows out and down, saying how far short the further wrist is;
+  - `armsOf`: a Rocketbox skeleton's arms.
+- **Where a wheel is held:** a helm with a wheel says where, `helm.grips` and the sportfisher's `towerHelm.grips` ([ right, left ], her frame), made by `Vessel.wheelGrips( centre, axis, r )` at ten to two on the rim.
+- **Where a player at a helm stands:** `Crew.helmStand( model, upper )` gives where they're drawn standing and that helm's grips. `Together._place` uses it, and passes the grips on her as drawn to `Avatar.pose`'s `wheel`, which reaches the arms after the clip (`Avatar.short`).
+  - At a helm with a wheel (not the tower's), it's worked out from the grips (`nearWheel`, `NEAR`): as near as the women's looks' reach needs, the toes clear of what's ahead, the heels of a seat behind.
+  - Every look's hands are on the rim at every wheel. At the console, whose wheel is low, `gripWheel` first leans the figure in from the waist (`LEAN_MOST`, 34°), turning the thighs back so the legs stay put.
+  - The kayak has no wheel.
+- **The tools' cameras:** a render that puts its own camera in at `drawWorld` has the sea pick its patches for it (`water.update( camera )`): they're picked for the player's camera before the world's drawn, and the sea was black outside its view.
+- **Her fit near the camera:**
+  - `SportfisherModel.fit` keeps what it hides as `userData.shown`, so `App.updateNearDetail` doesn't draw an unbought chair near the camera on low.
+  - `BoatCopies.dress` leaves a phone's copy's extras to `near`: only near, only what's fitted.
+- `test/helm-reach.mjs` holds the reach, the grips, where each helm's player stands, and near detail with fit on every boat and on a phone's copy. `tools/deckhand/helms.mjs` draws a player at each helm in each look and the chair bought and not.
+
 (M19, [m19/fly.md](m19/fly.md)) **The fly rod.** `game/FlyCast.js` (Game's `flyCast`) drives FishingRod's two new states:
 - `'falsecast'`: held, back and forward on the line's rhythm (`strokeTime`: the rod's stroke and the loop's unrolling), each forward stroke carrying `FLY.gain` more line up to the rod's `carryM`;
 - `'shoot'`: let go, timed by `releaseOf` (good, tail, late, heap), as far as `castLength` gives with the wind along it, unrolled and laid down, then `'floating'`.

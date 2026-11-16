@@ -12,7 +12,7 @@ import { BoatCopies, airOf, bareOf, isBoat, sizeOf, fitWire, fitStats } from './
 import { BoatLamps } from '../world/boat/BoatLamps.js';
 import { stackedOn } from '../game/TrapWork.js';
 import { SWING, atDock, berthShare, cradleGeometry, inTheYard, laidAt, leaving, onTheSand, sandBerth, spareYard, stemBerth } from './Berths.js';
-import { Crew, footY, perched } from './Crew.js';
+import { Crew, helmStand, perched } from './Crew.js';
 import { SharedBox } from './SharedBox.js';
 import { Specks } from './Specks.js';
 import { RADAR_RPM, PROP_DISPLAY_RPS } from '../world/BoatModel.js';
@@ -153,6 +153,7 @@ const _p = new Vector3(), _q = new Vector3(), _tip = new Vector3(), _hand = new 
 const _x = new Vector3(), _y = new Vector3(), _z = new Vector3(), _up = new Vector3( 0, 1, 0 );
 const _qa = new Quaternion(), _qb = new Quaternion(), _m = new Matrix4(), _mt = new Matrix4();
 const _bp = new Vector3(), _bq = new Quaternion(), _bow = new Vector3(), _at3 = new Vector3();
+const _stand = { x: 0, y: 0, z: 0, grips: null }; // ((M21) where a figure at a helm stands: Crew.helmStand)
 
 // another player's boat, to ride in: the boat's shape (yours: the same model) at their boat's pose,
 // with what the Player asks of a boat while you're on its deck
@@ -2796,7 +2797,7 @@ export class Together {
 
 		// the figure: aboard, it stands where they stand on her deck or at her helm (M16: hers, and sitting where she's sat in, or in her chair)
 		const chair = c.mode === 'deck' && c.job === 'chair' && M && M.stations && M.stations.chair;
-		let sit = !! M && !! M.seated;
+		let sit = !! M && !! M.seated, wheel = null;
 		if ( seat ) {
 
 			g.position.copy( M.seat ).applyQuaternion( deck.quat ).add( deck.pos );
@@ -2804,12 +2805,21 @@ export class Together {
 
 		} else if ( deck && c.mode === 'helm' ) {
 
-			// (on the sole under her helm: its camera's eye is lower than a figure standing there)
-			const up = c.job === 'tower' && M.towerHelm, helm = up ? M.towerHelm.eye : M.helmEye, at = ! up && M.helm && M.helm.stand, hx = at ? at[ 0 ] : helm.x, hz = at ? at[ 1 ] : helm.z;
-			_bp.set( hx, footY( M, hx, hz, helm.y - 1 ), hz ).applyQuaternion( deck.quat ).add( deck.pos );
+			// (on the sole under her helm: its camera's eye is lower than a figure standing there. (M21) Crew.helmStand)
+			const at = helmStand( M, c.job === 'tower', _stand );
+			_bp.set( at.x, at.y, at.z ).applyQuaternion( deck.quat ).add( deck.pos );
 			g.position.copy( _bp );
 			_bq.setFromAxisAngle( _up, c.yaw + Math.PI );
 			g.quaternion.copy( _bq );
+			// ((M21) and their hands on its wheel's rim, where it has one (Vessel.wheelGrips), on her as she's drawn here
+			const grips = at.grips;
+			if ( grips ) {
+
+				wheel = o.wheel || ( o.wheel = { r: new Vector3(), l: new Vector3() } );
+				wheel.r.copy( grips[ 0 ] ).applyQuaternion( deck.quat ).add( deck.pos );
+				wheel.l.copy( grips[ 1 ] ).applyQuaternion( deck.quat ).add( deck.pos );
+
+			}
 
 		} else if ( chair ) {
 
@@ -2829,7 +2839,7 @@ export class Together {
 
 		// (Salt Life) their cast net first: their arms reach for where its hands are
 		this._net( o, c, g, dt );
-		o.avatar.pose( { mode: c.mode, speed: c.speed, rod: c.rod > 0, gun: c.gun > 0, sit: sit && ! seat, seat, reach: o.net && o.net.equipped ? o.netHands : null }, dt );
+		o.avatar.pose( { mode: c.mode, speed: c.speed, rod: c.rod > 0, gun: c.gun > 0, sit: sit && ! seat, seat, reach: o.net && o.net.equipped ? o.netHands : null, wheel }, dt );
 		// meeting someone: a wave, the first time
 		if ( ! o.waved && g.position.distanceTo( app.player.position ) < WAVE_NEAR && c.mode !== 'swim' && app.player.mode !== 'swim' ) {
 

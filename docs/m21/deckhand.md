@@ -132,13 +132,99 @@ Looked at on every tier:
 - **His look:** the same man on every tier, lit as the players are.
 - **Seen:** from astern and from off her bow he's seen as a man aboard her.
 
+## The players at a helm, and the chair on low (the user's calls, 2026-11-16)
+
+Asked after the deck hand was merged: he stays ashore at her berth, as built; the players' own avatars at a helm get his reach to the wheel; the unbought fighting chair drawn on low is fixed now.
+
+### Hands on the wheel
+
+**Before:** another player at a helm was drawn on `trolley_idle`, which holds the hands at the hips, so their arms hung by their sides.
+
+**Now:**
+- **The reach is shared,** not copied. It's in `game/ArmReach.js`, used by the mate (`Deckhand._grip`) and the avatars (`Avatar.pose`'s `wheel`):
+  - `reachTo`: one arm's two bones solved as a triangle;
+  - `gripWheel`: both hands, the elbows out and down;
+  - `armsOf`: a Rocketbox skeleton's arms.
+
+  Out of reach upright, the figure first leans in from the waist, as little as it takes (no more than 34°). It bends at the hips: a Biped's thighs hang from its lowest spine bone, so they're turned back as it leans and the legs stay where they stood. The arm then goes as near as it reaches and says how far short it is (`Avatar.short`).
+- **Each wheel says where it's held:** `helm.grips` (right, left) on the lobster boat, the console and the sportfisher's bridge, and `towerHelm.grips` on her tower. Each is at ten to two on the rim as it's mounted (`Vessel.wheelGrips`, from the wheel's centre, axis and radius). The mate's spot at her helm uses the bridge's.
+- **`Together._place`** gives the avatar its helm's grips, on the boat as she's drawn there: someone at your helm, or at their own on their copy, or at a third player's.
+- **Left as they are:**
+  - the kayak, which has no wheel (sat in, a paddle in the hands: `SeatPose`);
+  - Pearl's boatman at the pirogue's tiller (`idle_neutral_01`);
+  - the stand-in figure's own helm pose.
+
+**Where a player at a helm stands (the user's call after the first renders: hands on the wheel, for every look).** It's in `Crew.helmStand`, the one rule for `_place`, the tests and the renders, worked out per helm from where its wheel's grips are:
+- **The reach it allows for:** the shortest among the looks, the women's (shoulders 1.37 m up, 0.49 m to the wrist), with 3 cm to spare.
+- **No nearer than the toes allow:** the men's feet, 0.2 m to the toes, are kept 3 cm short of whatever's solid ahead of them (her dash, her console).
+- **Clear of a seat behind:** the heels, 0.1 m back, are kept clear of it, but never at the toes' cost.
+- **The tower helm is left as it was.** Its wheel's in reach from under its eye.
+- **The player's own view doesn't move:** the eye they look from at a helm (`helmEye`, `atHelm.eye`) is where it was. Only how others see them there changes.
+
+| Helm | Was | Now | Hands, every look | Feet |
+|---|---|---|---|---|
+| Lobster boat | 0.30 m (in her helm seat's pedestal) | 0.66 m | on the rim | in front of her seat, 0.12 m from the toes to her dash |
+| Console | −0.94 m | −0.85 m | on the rim, leaning in to it | between her console and her leaning post, 3 cm from the toes to the console |
+| Sportfisher, bridge | 0.02 m (the `stand`) | 0.19 m | on the rim | 3 cm from the toes to the console's foot, well clear of her seat |
+| Sportfisher, tower | −0.58 m | as it was | on the rim | as they were |
+
+(her frame, along her: where the feet are drawn. Measured in the game, `tools/deckhand/helms.mjs`, on low, mid and high, every look's wrists 5 cm shy of their grips, where the hand closes round the rim.)
+- **The console's wheel is low on its slope,** 0.91 m off her sole, over a face as high as a knee, so standing upright with the toes at the console the rim's still out of reach. Every look leans in to it over the clip's own stance, which sways: the men's looks 18 to 24°, the women's 24 to 34°. It reads as someone bent to a low wheel.
+- **Her leaning post's footrest bars** stick out 0.14 m ahead of its box, at shin height. Between them and the console's face there's no room for a pair of feet, so a bar crosses the left shin. The space between the console and the post (0.36 m at the sole) is the model's, not this stream's to move.
+
+### The black sea in the renders (the coordinator's question)
+
+**What was black:** a sector of the sea near the horizon in `look.mjs`' and `helms.mjs`' shots out at sea (`helms/mid/lobster-player-f1-side.png`, `deckhand/high/cockpit-quarter.png`).
+- **The cause is the tools' camera.** The sea is one instanced grid whose patches are picked each frame for the camera, the frustum's view of them (`CDLOD.update`, from `WaterSurface.update` in `App.frame`), before the world's drawn. The tools put their own camera in just before the world's drawn (`drawWorld`), so the sea's patches were the ones in the player's view. Where the shot looked past it, there was no sea: black.
+- **Tested** (the same view three ways, on mid):
+  - the shot's camera at once: black;
+  - eight seconds later: still black, so it's not the sea's tiles catching up after the boat's jump;
+  - with the sea's patches picked for the shot's camera: the whole sea;
+  - the player's own camera turned that way: the whole sea.
+- **A player sailing out doesn't see it.** Their camera is the one the patches are picked for.
+- **Fixed in the tools:** `look.mjs` and `helms.mjs` have the sea pick its patches for their camera (`water.update( camera )`) once they've put it in. Their renders were made again.
+- **Sam's views in `crew.mjs`** (`crew-mate-guest.png`, `-back.png`) are his own camera, so the patches are picked for it. There's no black sector in them. The run notes his sea: the whole one, not the plain one a CPU device starts on, 121 patches.
+  - There are darker streaks on the sea out there, which vary from run to run.
+  - They aren't missing sea: they're drawn over it.
+  - I haven't traced them; they may be the blue water's weedlines.
+
+### The chair on low
+
+**Before:** on low your sportfisher's `nearDetail` names her chair, so it's drawn only near the camera. `App.updateNearDetail` set it visible whenever it was near, whether `fit` had hidden it or not, so an unbought fighting chair showed in her cockpit.
+
+**Now:**
+- **Your own boat:** `SportfisherModel.fit` keeps what it hides as `userData.shown`, which `updateNearDetail` already honours (Joe's roof's sheets use it). That's her tower and its helm's parts, her outriggers and her chair.
+- **Copies on low were the other way round.** `dressCopy` showed what's fitted at any distance, so a phone drew a copy's tower, outriggers and chair however far off she was, till she'd once been near. `BoatCopies.dress` now leaves what's past her low meshes to `near`, where it's drawn only near and only if it's fitted.
+- **The other boats' fits** don't hide meshes:
+  - the console's are cut out of her index (`_keptInto`);
+  - the kayak's are folded away in her vertices;
+  - the lobster boat has nothing that comes and goes.
+
+  None of them leaves a hidden mesh for near detail to bring back. `test/helm-reach.mjs` holds it for every boat.
+
+### Checked
+- **`test/helm-reach.mjs`** (new, in `pnpm test`):
+  - **the reach:** within reach, the wrist 5 cm shy of the point, the bones their own lengths and the elbow out and down; out of reach, straight toward it with its shortfall said; both hands to a rim;
+  - **each wheel's grips** on its rim at ten to two, the right to starboard;
+  - **where a player at each helm stands:** the feet clear of her console, dash, seat and leaning post, and the eye they look from unmoved;
+  - **every look's hands on the rim** at every helm, on figures of the men's and the women's proportions, leaning in where it takes (the console's) with the feet where they stood;
+  - **near detail and fit:** for every boat on low, what her fit hides is kept hidden near the camera, and shown again once bought;
+  - **a phone's copy of the sportfisher:** none of her extras far off, near only what's fitted, the chair once it's bought.
+- **`test/mate.mjs`:** the mate's spot uses her bridge's grips, his hands within reach.
+- **`crew.mjs`' `mate` part** has one more check: Robin at her helm on Sam's game, `trolley_idle`, her hands on the wheel's rim.
+- **The renders**, `tools/render-slot.sh node tools/deckhand/helms.mjs qa-output/helms <tier>`, are in `qa-output/helms/<tier>/`:
+  - for each helm, Sam in `player-m2` and `player-f1`, from beside, from behind, and from ahead and above at the feet (`-feet`);
+  - on low, `chair-unbought.png` and `chair-bought.png`, looking aft over her cockpit from its forward end;
+  - `report.json`: every look's wrists at every helm.
+
+  Looked at, every shot: the hands on the rim at every helm; the feet on the sole clear of the dash, the consoles and the seats; the console's figures bent to the wheel, a footrest bar across the left shin. The unbought chair isn't drawn, its socket in the sole is; bought, it is. No black sea.
+
 ## What's left
 
 - **He isn't solid:** you walk through him in her corner. A collider for him would be hers, and walked on by guests' games too.
 - **He doesn't walk** from his corner up the ladder to her helm and back: a cut. Walking him would mean the ladder's climb for a character.
 - **His hands stay at ten to two** as the wheel turns under them.
-- **The other players at someone's helm** are drawn on the same `trolley_idle`, so their hands hang by their sides there too (`Avatar.js`, not this stream's). His reach (`reach` in `Mate.js`) would serve them.
-- **Found, not touched:** on low the fighting chair is drawn on your sportfisher near the camera even when it isn't bought. Her `nearDetail` names it, and `App.updateNearDetail` shows near meshes regardless of `fit` (`qa-output/deckhand/low/cockpit-quarter.png` has it; mid and high don't).
-- **At her berth he's ashore** (above), the user's to change.
+- **The console's leaning post's footrest bars** cross the left shin of whoever's at her helm (above): there's no room for the feet between them and the console's face.
+- **At her berth he's ashore** (above), as the user decided.
 - **A second copy of his look** loads if a player in `player-m1` comes after him: theirs is loaded with all the players' clips, his with two.
 - **Someone else's mate on a copy of their sportfisher** (Robin's, on Sam's game) loads `player-m1` on Sam's game, as Robin's own game does. That's one skinned character more on a guest's phone.

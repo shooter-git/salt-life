@@ -5,7 +5,8 @@
 // hold, on her ice, and his. ((v2.4.1) Its two bars: room for fish, and how long the ice keeps them.)
 //   tools/render-slot.sh node tools/two-players/crew.mjs [dir] [port] <part>
 //   parts: rods  lights  traps  hold  box  mate ((M20) her mate backing her down on a guest's fish in her chair; (M21) and drawn on
-//          the guest's game: in her cockpit, at her helm while he backs her down, then in her cockpit again)
+//          the guest's game: in her cockpit, at her helm while he backs her down, then in her cockpit again; and her owner at her
+//          helm on the guest's game, her hands to her wheel's rim)
 import { OTHER as other, start } from './lib.mjs';
 import { boxBars, iceSaid } from '../../src/game/Seaworthy.js';
 import { LB } from '../../src/game/Units.js';
@@ -457,6 +458,12 @@ if ( PART === 'mate' ) {
 	await G.helm( owner );
 	await G.toSea( owner );
 	await until( guest.game, `Math.hypot( window.__app.player.boat.position.x + 2600, window.__app.player.boat.position.z - 3000 ) < 300` );
+	// ((M21) Robin at her helm as Sam's game draws her: her hands reached to her wheel's rim after the clip (game/ArmReach.js), each
+	// wrist 5 cm shy of its grip, or as near as her arms reach from where a figure at her bridge's helm stands (Crew.helmStand))
+	await until( guest.game, `${ other }.avatar.character && ${ other }.cur && ${ other }.cur.mode === 'helm' && ${ other }.wheel && ${ other }.avatar.short !== null`, 300000 ).catch( () => {} );
+	const atHelm = await guest.game.evaluate( `( () => { const o = ${ other }, A = o.avatar, B = A.arms, V = o.wheel.r.constructor, w = ( b ) => b.getWorldPosition( new V() ); if ( ! B || A.short === null ) return { look: A.look, short: A.short }; A.group.updateMatrixWorld( true ); return { look: A.look, clip: A.character && A.character.current, short: +A.short.toFixed( 3 ), right: +w( B.handR ).distanceTo( o.wheel.r ).toFixed( 3 ), left: +w( B.handL ).distanceTo( o.wheel.l ).toFixed( 3 ) }; } )()` );
+	const most = Math.max( atHelm.right, atHelm.left ) - 0.05;
+	say( atHelm.short !== null && atHelm.clip === 'trolley_idle' && Math.abs( most - atHelm.short ) < 0.01 && Math.min( atHelm.right, atHelm.left ) > 0.04 && atHelm.short < 0.15, `Robin at her helm on Sam's game, her hands to her wheel's rim (${ JSON.stringify( atHelm ) }: ${ atHelm.short ? ( atHelm.short * 100 ).toFixed( 0 ) + ' cm short of it, as far as her arms reach' : 'on it' })` );
 	await toasts( owner );
 	// (Robin off her helm, on her deck: her engines left running for him)
 	await owner.game.evaluate( () => { const a = window.__app; a.player.leaveHelm(); a.boatCtl.engineOn = true; } );
@@ -566,6 +573,7 @@ if ( PART === 'mate' ) {
 	// (Sam at her transom, looking forward to port at him in her cockpit's corner)
 	await guest.game.evaluate( () => { const p = window.__app.player; p.deckPos.set( - 0.6, 0.5, - 5.8 ); p.deckVel.set( 0, 0, 0 ); p.deckYaw = Math.atan2( 2.2, 1.8 ); p.pitch = - 0.12; } );
 	await frames( guest.game, 3 );
+	note( `Sam's sea: ${ JSON.stringify( await guest.game.evaluate( () => ( { plain: !! window.__app.water.plainMaterial, nodes: window.__app.water.lod.count } ) ) ) }` );
 	await shot( guest, 'crew-mate-guest-back' );
 	await G.end( 'crew mate' );
 

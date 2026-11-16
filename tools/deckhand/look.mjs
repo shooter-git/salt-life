@@ -112,6 +112,9 @@ await page.evaluate( ( SEA ) => {
 			cam.position.copy( G.localToWorld( new V( ...c[ 0 ] ) ) );
 			cam.lookAt( G.localToWorld( new V( ...c[ 1 ] ) ) );
 			cam.updateMatrixWorld();
+			// (the sea's nodes chosen for this camera: it chose them for the player's, before the world's drawn, and those outside
+			// the player's view were missing from this one's, the sea black there: WaterSurface.update)
+			a.water.update( cam );
 
 		}
 
