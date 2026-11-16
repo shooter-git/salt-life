@@ -1,12 +1,17 @@
 import { Vector3 } from '../engine/index.js';
 import { RigMesh } from '../game/rigs/RigMesh.js';
+import { HolderRods } from '../game/rigs/HolderRods.js';
+import { DEFAULT_SPREAD, LINES } from '../game/rigs/GearModels.js';
+import { UPGRADES } from '../game/Gear.js';
 import { G } from '../core/Globals.js';
 import { fitStats } from './BoatCopies.js';
 
 // (M16) What someone's got out of their boat, on everyone else's game: their spread of rods and lines, their kite, and for someone
 // riding along, the rod that's gone off, to take. In the pose: a few numbers a line (spreadWire), the kite's place (kiteWire). The
 // fish, its bait and how much line's on the rod come when you take it ('rod', 'rodIs': Together). One draw for all of it,
-// nothing until someone's lines are out, and drawn only with her copy.
+// nothing until someone's lines are out, and drawn only with her copy. (M21) Her owner's own rods and reels standing in her
+// holders (game/rigs/HolderRods.js: a draw each), as her pose says (sg: Together), each line its colour; from a game that
+// doesn't say, the stand-up rod with the two-speed (it was a dark tube)
 //   spreadWire( lines ) -> [ code, len, on, ... ]   kiteWire( kite ) -> [ x, y, z ] | undefined
 //   const s = new Spread( app );  s.update( others )   s.alert( reachKey ) -> a prompt   s.take() -> whether you've asked for the rod
 const KINDS = [ 'flat', 'rigger', 'shotgun' ], ROD_LONG = 2.2, REACH = 3.6, MOST = 8;
@@ -71,6 +76,8 @@ export class Spread {
 		this.app = app;
 		this.together = together;
 		this.draw = null;
+		this.holders = null; // ((M21) HolderRods, made when first wanted)
+		this._t = 0;
 
 	}
 
@@ -99,12 +106,17 @@ export class Spread {
 		if ( ! any ) {
 
 			if ( this.draw ) this.draw.hide();
+			if ( this.holders ) this.holders.hide();
 			return;
 
 		}
 
 		const D = this.draw = this.draw || new RigMesh( this.app.scene ), waves = this.app.waves;
+		const H = this.holders = this.holders || new HolderRods( this.app.scene );
+		const now = performance.now() / 1000, dt = Math.min( 0.1, Math.max( 0, now - ( this._t || now ) ) );
+		this._t = now;
 		D.begin( this.app.camera );
+		H.begin();
 		for ( const o of others.values() ) {
 
 			const c = o.cur;
@@ -127,18 +139,22 @@ export class Spread {
 			if ( ! o.boat || ! o.boat.visible || ! c.spread ) continue;
 			const M = this.together.copies.walked( o.boat.userData.model, c.boatId, c.fit ), f = o.boat;
 			f.updateWorldMatrix( false, false );
+			const g = c.spreadGear || DEFAULT_SPREAD, hex = ( LINES[ g.line ] || LINES[ 0 ] ).color, spoolM = UPGRADES.reel.levels[ g.reel ]?.spoolM || 900;
 			if ( M.lines ) for ( const L of c.spread ) {
 
 				rodOf( M, L, R );
 				f.localToWorld( _b.copy( R.butt ) );
 				f.localToWorld( _t.copy( R.tip ) );
-				D.tube( [ _b.clone(), _t.clone() ], [ 0.016, 0.004 ], 0x20242a, 0.4, 0.1 );
-				const from = R.hasClip ? f.localToWorld( _c.copy( R.clip ) ) : _t;
-				if ( R.hasClip ) D.line( _t, _m.copy( _t ).lerp( from, 0.5 ), from, 4 );
 				// (astern of her by what's out, a little to its side, on the water)
-				f.localToWorld( _p.set( from === _t ? R.tip.x : R.clip.x, 0, ( from === _t ? R.tip.z : R.clip.z ) - L.len ) );
+				f.localToWorld( _p.set( R.hasClip ? R.clip.x : R.tip.x, 0, ( R.hasClip ? R.clip.z : R.tip.z ) - L.len ) );
 				_p.y = waves ? waves.heightAt( _p.x, _p.z ) : G.seaLevel.value;
-				D.line( from, _m.copy( from ).lerp( _p, 0.5 ).setY( ( from.y + _p.y ) / 2 - ( L.on ? 0 : 0.015 * L.len ) ), _p, 12 );
+				if ( R.hasClip ) f.localToWorld( _c.copy( R.clip ) );
+				// ((M21) her rod in its holder, bowed toward its line with a fish on it; the line off its tip)
+				_a.subVectors( _t, _b ).normalize();
+				const tip = H.rod( g, _b, _a, R.hasClip ? _c : _p, L.on ? 0.26 : 0.03, 1 - Math.min( 1, L.len / spoolM ) * 0.5, L.len, dt, _d, D.eye );
+				const from = R.hasClip ? _c : tip;
+				if ( R.hasClip ) D.line( tip, _m.copy( tip ).lerp( from, 0.5 ), from, 4, hex );
+				D.line( from, _m.copy( from ).lerp( _p, 0.5 ).setY( ( from.y + _p.y ) / 2 - ( L.on ? 0 : 0.015 * L.len ) ), _p, 12, hex );
 
 			}
 
@@ -148,6 +164,7 @@ export class Spread {
 		}
 
 		D.end();
+		H.end();
 
 	}
 

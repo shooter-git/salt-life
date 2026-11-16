@@ -15,7 +15,7 @@ const LOCK = join( ROOT, 'assets.lock.json' );
 
 // The same lists All the Spaces uses (packages/qa/src/licenses.ts, snapshot.ts).
 const ASSET_EXTENSIONS = new Set( [ 'glb', 'gltf', 'bin', 'png', 'jpg', 'jpeg', 'webp', 'avif', 'gif', 'svg', 'ktx2', 'hdr', 'exr', 'mp3', 'ogg', 'opus', 'wav', 'm4a', 'flac', 'mp4', 'webm', 'woff', 'woff2', 'ttf', 'otf' ] );
-const SKIP_DIRS = new Set( [ 'node_modules', 'dist', '.git', '.vite', '.turbo', '.cache', 'qa-output' ] );
+const SKIP_DIRS = new Set( [ 'node_modules', 'dist', '.git', '.vite', '.turbo', '.cache', 'qa-output', '.claude' ] ); // ((M21) .claude: Claude Code's own, its worktrees whole copies of the project)
 
 const TIDEWATER = 'https://github.com/dgreenheck/tidewater';
 const TIDEWATER_AUTHOR = 'Dan Greenheck (DRG Software Solutions)';

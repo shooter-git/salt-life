@@ -21,8 +21,8 @@ import { PLACES } from '../game/Places.js';
 import { KINDS, lifeOf } from '../game/LifeList.js';
 import { SLAMS, slamTold } from '../game/Trophies.js';
 import { VARIATION } from '../game/Chart.js';
-import { ROD_L, SEAT_Y, placeNet } from '../game/FishingRod.js';
-import { FLY_K, FLY_L, FLY_HOLD } from '../game/rigs/FlyRod.js';
+import { fitRodMesh, placeNet } from '../game/FishingRod.js';
+import { DEFAULT_GEAR, LINES, gearCode, modelOf, readGear } from '../game/rigs/GearModels.js';
 import { FlyLine, loopShape, newPoints } from '../game/rigs/FlyLine.js';
 import { Deckhand, mateRead } from '../game/rigs/Mate.js';
 import { FLY, strokeTime } from '../game/FlyCast.js';
@@ -122,8 +122,13 @@ const NAMES = { w: 'walk', s: 'swim', d: 'deck', h: 'helm' };
 // and how it's held then (rad above level: past a right angle, back over the shoulder)
 // ((M19) 7: a fly's false casts, with how far through which stroke (fp) and the line in the air (fl), drawn as the loop; shot,
 // it's 3 as a cast is. fw: the fly rod's weight, in your hands. An older game draws a held rod for 7)
+// ((M21) gr: the rod, reel and line in your hands, sg: those in your holders with your spread out (rigs/GearModels.js'
+// gearCode: rod * 100 + reel * 10 + line); a game that doesn't send them is drawn as before: its fly rod by fw, else the
+// graphite rod and the smooth reel, clear mono; its spread's rods the stand-up rod and the two-speed)
 const ROD = { stowed: 0, idle: 1, windup: 2, flick: 3, flying: 3, floating: 4, retrieving: 4, fighting: 5, landing: 6, falsecast: 7, shoot: 3 };
 const ROD_ELEV = [ 0, 0.5, 1.95, 0.18, 0.45, 0.95, 0.9, 1.2 ];
+// ((M21) an older game's fly rod, drawn by its weight: GearModels')
+const OLD_FLY = { 8: modelOf( { fly: 8 } ), 10: modelOf( { fly: 10 } ), 12: modelOf( { fly: 12 } ) };
 // (Salt Life) the cast net: 0 put away, 1 loaded in the hands, 2 winding up, 3 thrown, 4 in the water, 5
 // its purse up in front of them, 6 being loaded again (their net, here: game/CastNet.js, thrown as
 // they threw it, the 'net' message)
@@ -1630,6 +1635,7 @@ export class Together {
 			if ( rod.netMesh && rod.netMesh.visible ) body.Ln = 1;
 			// ((M19) the fly rod, and its false casts)
 			if ( rod.flyRod ) body.fw = rod.flyWt | 0;
+			if ( rod.gear ) body.gr = gearCode( rod.gear ); // ((M21) and the rod, reel and line it is)
 			if ( r === 7 && app.game.flyCast ) {
 
 				body.fp = r2( app.game.flyCast.phase );
@@ -1658,6 +1664,7 @@ export class Together {
 
 			const rl = spreadWire( rigs.lines ), kt = kiteWire( rigs.kite );
 			if ( rl ) body.rl = rl;
+			if ( rl ) body.sg = gearCode( rigs.spreadGear ); // ((M21) the rods and reels in her holders)
 			if ( kt ) body.kt = kt;
 
 		}
@@ -2612,6 +2619,9 @@ export class Together {
 		cur.rod = near.r || 0;
 		// ((M19) their fly rod, and a false cast: how far through which stroke, and the line in the air)
 		cur.fw = Number.isFinite( near.fw ) && near.fw > 0 ? near.fw : 0;
+		// ((M21) the rod, reel and line in their hands, and in their holders: null from a game that doesn't say)
+		if ( near.gr !== cur.gr ) cur.gear = readGear( cur.gr = near.gr );
+		if ( near.sg !== cur.sg ) cur.spreadGear = readGear( cur.sg = near.sg );
 		cur.fp = Number.isFinite( near.fp ) ? MathUtils.clamp( near.fp, - 1, 1 ) : null;
 		cur.fl = Number.isFinite( near.fl ) ? MathUtils.clamp( near.fl, 0, 30 ) : null;
 		cur.ride = typeof near.R === 'string' ? near.R : null;
@@ -2872,20 +2882,33 @@ export class Together {
 			if ( _z.lengthSq() < 1e-6 ) _z.set( 0, 0, 1 );
 			_z.normalize();
 			_x.crossVectors( _y, _z ).normalize();
-			// ((M19) their fly rod: its own model, stretched back to its 9 ft along the blank and held by its cork)
-			if ( flyRod !== !! T.flyFit ) {
+			// ((M21) their rod and reel as their pose says (gr), each its own model (rigs/GearModels.js, shared with every mesh of the
+			// same), the line its colour; from a game that doesn't say, as before: (M19) their fly rod by its weight, else the
+			// spinning rod. Held where the model's held, its reel on top if it rides there, at its own length)
+			const gear = c.gear || ( flyRod ? OLD_FLY[ c.fw >= 12 ? 12 : c.fw >= 10 ? 10 : 8 ] : DEFAULT_GEAR );
+			if ( gear !== T.rod.userData.gear ) {
 
-				T.smallRod = T.smallRod || T.rod.geometry;
-				T.rod.geometry = flyRod ? app.game.rod.flyRodGeometry() : T.smallRod;
-				T.flyFit = flyRod;
+				T.rod.userData.model = fitRodMesh( T.rod, gear );
+				T.rod.userData.gear = gear;
+				const L = LINES[ gear.line ] || LINES[ 0 ];
+				T.line.material.color.setHex( L.color );
+				T.line.material.roughness = L.braid ? 0.75 : 0.35;
+				T.line.material.uniforms.lineShow.value = gear.rod >= 5 ? 1.8 : 1;
 
 			}
 
-			if ( flyRod ) _m.makeBasis( _x, _e.copy( _y ).multiplyScalar( FLY_K ), _z ).setPosition( _p.copy( _hand ).addScaledVector( _y, - FLY_HOLD ) );
-			else _m.makeBasis( _x, _y, _z ).setPosition( _p.copy( _hand ).addScaledVector( _y, - SEAT_Y ) );
+			const fit = T.rod.userData.model.fit;
+			if ( fit.top ) {
+
+				_x.negate();
+				_z.negate();
+
+			}
+
+			_m.makeBasis( _x, _y, _z ).setPosition( _p.copy( _hand ).addScaledVector( _y, - fit.hold ) );
 			T.rod.matrix.copy( _m );
 			T.rod.matrixWorldNeedsUpdate = true;
-			_tip.copy( _p ).addScaledVector( _y, flyRod ? FLY_L : ROD_L );
+			_tip.copy( _p ).addScaledVector( _y, fit.L );
 			// ((M19) and the loop in the air, as theirs unrolls)
 			if ( casting ) {
 
@@ -2906,6 +2929,16 @@ export class Together {
 				U.rodBend.value.set( _q.x, 0, _q.z, 0.06 + 0.3 * c.tension );
 
 			} else U.rodBend.value.set( 0, 0, 0, 0 );
+
+			// ((M21) their reel: its crank turning as their line comes in (a fish brought in, a line reeled back), the rotor or the
+			// spool with it, a spinning reel's bail open as they cast)
+			const out = c.bobber && c.rod >= 4 ? _tip.distanceTo( c.bobber ) : null, was = T.rod.userData.out;
+			const rate = out !== null && was !== null && was !== undefined && dt > 0 ? Math.max( 0, ( was - out ) / dt - 0.3 ) : 0;
+			T.rod.userData.out = out;
+			const turn = Math.min( 1.6, rate / 0.8 ) * Math.PI * 2 * dt, spin = fit.kind === 'spin', ud = T.rod.userData;
+			ud.crank = ( ud.crank || 0 ) + turn;
+			ud.spun = ( ud.spun || 0 ) + Math.min( turn * fit.ratio, 3.1 * Math.PI * 2 * dt ) * ( spin || fit.kind === 'fly' ? 1 : - 1 );
+			U.reelAnim.value.set( spin ? ud.spun : 0, spin && ( c.rod === 2 || c.rod === 3 ) ? 1 : 0, ud.crank, spin ? 0 : ud.spun );
 
 		}
 

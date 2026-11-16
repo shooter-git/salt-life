@@ -3,12 +3,14 @@ import { Vector3 } from '../../engine/index.js';
 import { G } from '../../core/Globals.js';
 import { BAITS, BAIT_IDS, onHand } from '../Bait.js';
 import { FISH } from '../FishTable.js';
-import { realTackle, UPGRADES, FLY_RODS, flyRodFor } from '../Gear.js';
+import { realTackle, UPGRADES, FLY_RODS, flyRodFor, tackleOf } from '../Gear.js';
 import { pickSpecies, rollWeight } from '../Bites.js';
 import { placeOf } from '../Places.js';
 import { fishLength } from '../CatchDisplay.js';
 import { atHook, baitFits, hookOf, KNOTS, LEADER_IDS, leaderOn, leaderRisk, leapsOf, LEADERS, pickOnRig, RIG_IDS, RIGS, towTaste, waitOnRig } from './Presentation.js';
 import { RigMesh } from './RigMesh.js';
+import { HolderRods } from './HolderRods.js';
+import { DEFAULT_SPREAD, LINES, modelOf } from './GearModels.js';
 import { Glasses } from './Glasses.js';
 
 // (M16) The ways of fishing past a float under a rod in your hands, and what you've got for them. Game.js asks this for
@@ -70,7 +72,7 @@ const LEADER_CHIP = { mono: 'mono', fluoro: 'fluoro', wire: 'wire', heavy: '200 
 const LEADER_WORD = { mono: 'fine, and teeth go through it', fluoro: 'shy fish can\'t see it, and teeth go through it', wire: 'nothing bites through it, and shy fish keep off', heavy: 'it holds a bill and most teeth, and some shy fish keep off' };
 
 const _a = new Vector3(), _b = new Vector3(), _c = new Vector3(), _d = new Vector3(), _e = new Vector3(), _up = new Vector3( 0, 1, 0 );
-const _bend = [ new Vector3(), new Vector3(), new Vector3(), new Vector3(), new Vector3(), new Vector3() ];
+const _tip = new Vector3();
 
 export class Rigs {
 
@@ -83,6 +85,9 @@ export class Rigs {
 		this.kite = null;
 		this.slick = null;
 		this.draw = null; // (RigMesh, made when first wanted)
+		this.holders = null; // ((M21) the rods in her holders: HolderRods, made when first wanted)
+		this.spreadGear = DEFAULT_SPREAD; // ((M21) the rod, reel and line in them: your heavy tackle's)
+		this._gearSig = null;
 		this.glasses = new Glasses( game );
 		this.hookAt = null; // (Vector3: the bait, where that's not the rod's line's end)
 		this.alert = null; // what the deck's prompt says
@@ -135,14 +140,56 @@ export class Rigs {
 
 	}
 
-	// (M19) the rod in your hands for the rig that's picked: its reach, its reel, its spool, and whether it's the stand-up rod
+	// (M19) the rod in your hands for the rig that's picked: its reach, its reel, its spool, and whether it's the stand-up rod.
+	// ((M21) And the rod, reel and line to draw: rodModel)
 	rodGear( rig = this.pick ) {
 
-		// ((M19) a fly's on the fly rod it's tied for)
+		// ((M19) a fly's on the fly rod it's tied for. (M21) The model's for the rig on the line, if there's one out: a fish taken
+		// off a holder's on your heavy tackle whatever's picked; and looked at again next frame: _gearNow)
+		const model = this.rodModel( rig === this.pick ? this._rigInHand() : rig );
+		this._gearSig = null;
 		const w = rig === 'fly' ? this.flyWt() : null;
-		if ( w ) return { castM: FLY_RODS[ w ].castM, reelSpeed: FLY_RODS[ w ].reelSpeed, spoolM: FLY_RODS[ w ].spoolM, standUp: false, fly: w };
+		if ( w ) return { castM: FLY_RODS[ w ].castM, reelSpeed: FLY_RODS[ w ].reelSpeed, spoolM: FLY_RODS[ w ].spoolM, standUp: false, fly: w, model };
 		const t = this.heavy( rig ) ? this.stats : this.stats.light;
-		return { castM: t.castM, reelSpeed: t.reelSpeed, spoolM: t.spoolM, standUp: !! t.standUp };
+		return { castM: t.castM, reelSpeed: t.reelSpeed, spoolM: t.spoolM, standUp: !! t.standUp, model };
+
+	}
+
+	// (M21) the rod, reel and line in your hands for a rig (rigs/GearModels.js' modelOf): your light tackle's for a cast, your
+	// heavy tackle's for the rest (Gear's tackleOf: the bent-butt chair rod with the 130-class reel), the sportfisher's electric
+	// reel on it for a deep drop, a fly rod by its weight; with a fish on her rod riding along, or on her kite or her electric
+	// reel, her owner's (their game sends her tackle's levels with her kit: kitOf; an older one's, the stand-up rod's or the
+	// surf rod's with the two-speed)
+	rodModel( rig = this.pick ) {
+
+		const k = this.kit;
+		const w = rig === 'fly' && ! k ? this.flyWt() : null;
+		if ( w ) return modelOf( { fly: w } );
+		const t = k ? ( Number.isInteger( k.rd ) ? { rod: k.rd, reel: k.rl, line: k.ln } : { rod: k.standUp ? 3 : 2, reel: 3, line: 3 } ) : tackleOf( this.state.upgrades, this.heavy( rig ) );
+		return modelOf( { rod: t.rod, reel: t.reel, line: t.line, electric: rig === 'drop' && !! ( k || this.stats ).electricReel } );
+
+	}
+
+	// (M21) the rig on the rod in your hands: what's on its line, or what's picked while there's nothing out
+	_rigInHand() {
+
+		const rod = this.game.rod;
+		return ! rod || rod.state === 'stowed' || rod.state === 'idle' || rod.state === 'rigging' ? this.pick : rod.rig || this.pick;
+
+	}
+
+	// (M21) the rod and reel in your hands, and those in her holders, as what decides them changes: the rig on the line, her
+	// kit, your levels, the fly you've picked, the electric reel (a number of them, so nothing's made each frame to tell)
+	_gearNow() {
+
+		const rig = this._rigInHand(), k = this.kit, u = this.state.upgrades;
+		const kit = k ? 1 + ( Number.isInteger( k.rd ) ? k.rd + k.rl * 8 + k.ln * 64 : 511 ) : 0;
+		const sig = RIG_IDS.indexOf( rig ) + 16 * ( ( u.rod | 0 ) + 8 * ( ( u.reel | 0 ) + 8 * ( ( u.line | 0 ) + 8 * ( ( this.stats.electricReel ? 1 : 0 ) + 2 * ( ( rig === 'fly' ? this.flyWt() | 0 : 0 ) + 16 * kit ) ) ) ) );
+		if ( sig === this._gearSig ) return;
+		this._gearSig = sig;
+		this.game.rod.setModel( this.rodModel( rig ) );
+		const h = tackleOf( u, true );
+		this.spreadGear = modelOf( { rod: h.rod, reel: h.reel, line: h.line } );
 
 	}
 
@@ -169,8 +216,10 @@ export class Rigs {
 		const s = this.stats, st = this.state, b = {};
 		for ( const id of BAIT_IDS ) if ( ! BAITS[ id ].lure && st.bait[ id ] > 0 ) b[ id ] = st.bait[ id ];
 		const seated = !! this.app.boat.seated;
+		// ((M21) and her tackle's levels, so the rod in your hands off her holder, her kite or her electric reel is drawn as hers)
+		const h = tackleOf( st.upgrades, true );
 		return {
-			t: { lineKg: s.lineKg, reelSpeed: s.reelSpeed, dragKg: s.dragKg, spoolM: s.spoolM, twoSpeed: !! s.twoSpeed, standUp: !! s.standUp, electricReel: !! s.electricReel, leader: s.leader | 0 },
+			t: { lineKg: s.lineKg, reelSpeed: s.reelSpeed, dragKg: s.dragKg, spoolM: s.spoolM, twoSpeed: !! s.twoSpeed, standUp: !! s.standUp, electricReel: !! s.electricReel, leader: s.leader | 0, rd: h.rod, rl: h.reel, ln: h.line },
 			b, lu: st.upgrades.lures | 0, sp: seated ? 0 : this.spots().length, kite: ! seated,
 		};
 
@@ -184,10 +233,11 @@ export class Rigs {
 		// ((M17) from a game still on the old figures, its line and drag as they are now)
 		const T = { ...k.t, ...realTackle( k.t.lineKg, k.t.dragKg, k.t.spoolM ) };
 		if ( k.b && typeof k.b === 'object' ) for ( const id of BAIT_IDS ) if ( ! BAITS[ id ].lure && Number.isFinite( k.b[ id ] ) && k.b[ id ] > 0 ) b[ id ] = Math.floor( k.b[ id ] );
-		return {
-			t: { lineKg: n( T.lineKg, 1, 200, UPGRADES.line.levels[ 0 ].lineKg ), reelSpeed: n( T.reelSpeed, 0.5, 6, 1.1 ), dragKg: Number.isFinite( T.dragKg ) ? n( T.dragKg, 0, 60, null ) : null, spoolM: n( T.spoolM, 50, 2000, 180 ), twoSpeed: !! T.twoSpeed, standUp: !! T.standUp, electricReel: !! T.electricReel, leader: n( T.leader | 0, 0, 3, 0 ) },
-			b, lu: n( k.lu | 0, 0, 3, 0 ), sp: n( k.sp | 0, 0, 5, 0 ), kite: !! k.kite,
-		};
+		const t = { lineKg: n( T.lineKg, 1, 200, UPGRADES.line.levels[ 0 ].lineKg ), reelSpeed: n( T.reelSpeed, 0.5, 6, 1.1 ), dragKg: Number.isFinite( T.dragKg ) ? n( T.dragKg, 0, 60, null ) : null, spoolM: n( T.spoolM, 50, 2000, 180 ), twoSpeed: !! T.twoSpeed, standUp: !! T.standUp, electricReel: !! T.electricReel, leader: n( T.leader | 0, 0, 3, 0 ) };
+		// ((M21) her tackle's levels, as Gear has them, if they came: kitOf)
+		const lv = ( v, k ) => Number.isInteger( v ) && v >= 0 && v < UPGRADES[ k ].levels.length;
+		if ( lv( T.rd, 'rod' ) && lv( T.rl, 'reel' ) && lv( T.ln, 'line' ) ) Object.assign( t, { rd: T.rd, rl: T.rl, ln: T.ln } );
+		return { t, b, lu: n( k.lu | 0, 0, 3, 0 ), sp: n( k.sp | 0, 0, 5, 0 ), kite: !! k.kite };
 
 	}
 
@@ -1293,6 +1343,7 @@ export class Rigs {
 	update( dt, { rDown, inp } ) {
 
 		if ( this.game.rod ) this.game.rod.electric = this.game.rod.rig === 'drop' && !! this.tackle.electricReel;
+		if ( this.game.rod ) this._gearNow();
 
 		const g = this.game, rod = g.rod, p = this.app.player, app = this.app;
 		// she's left, or berthed, or you're ashore: what's out of her comes in
@@ -1360,15 +1411,16 @@ export class Rigs {
 		const chair = this.updateChair( inp );
 		if ( chair ) this.alert = chair;
 		this.glasses.update( dt );
-		this._draw();
+		this._draw( dt );
 
 	}
 
 	// ---- what's drawn
 
-	_draw() {
+	_draw( dt = 0 ) {
 
 		const any = this.lines.length || this.kite || this.slick || this.theirSlicks.length;
+		if ( this.holders && ! this.lines.length ) this.holders.hide();
 		if ( ! any ) {
 
 			if ( this.draw ) this.draw.hide();
@@ -1379,7 +1431,15 @@ export class Rigs {
 		const D = this.draw = this.draw || new RigMesh( this.app.scene );
 		const cam = this.app.camera;
 		D.begin( cam );
-		for ( const L of this.lines ) this._drawLine( D, L );
+		if ( this.lines.length ) {
+
+			const H = this.holders = this.holders || new HolderRods( this.app.scene );
+			H.begin();
+			for ( const L of this.lines ) this._drawLine( D, L, dt );
+			H.end();
+
+		}
+
 		// ((M19) her teasers, with her spread out)
 		if ( this.lines.length && this.stats.teasers && this.app.boat && this.app.boat.id === 'sportfisher' ) {
 
@@ -1395,39 +1455,26 @@ export class Rigs {
 
 	}
 
-	_drawLine( D, L ) {
+	_drawLine( D, L, dt ) {
 
-		// the rod in its holder, bowed toward its line with a fish on it
-		const a = L.clip || L.p;
-		_a.subVectors( L.tip, L.butt );
-		_c.subVectors( a, L.tip ).normalize();
-		const n = _bend.length;
-		for ( let i = 0; i < n; i ++ ) {
-
-			const t = i / ( n - 1 ), w = t * t;
-			_bend[ i ].copy( L.butt ).addScaledVector( _a, t ).addScaledVector( _c, w * L.bend * ROD_LONG );
-
-		}
-
-		D.tube( _bend, [ 0.016, 0.014, 0.011, 0.008, 0.006, 0.004 ], 0x20242a, 0.4, 0.1 );
-		// the reel, low on the rod
-		_d.copy( L.butt ).addScaledVector( _a, 0.16 ).addScaledVector( _up, 0.05 );
-		_e.copy( _d ).add( _b.set( 0.05, 0, 0 ) );
-		_d.sub( _b );
-		D.tube( [ _d.clone(), _e.clone() ], [ 0.05, 0.05 ], 0xb8923c, 0.3, 0.9, 8 );
+		// the rod in its holder, bowed toward its line with a fish on it. ((M21) Her owner's own rod and reel, your heavy tackle's
+		// (rigs/HolderRods.js), the line its colour; the line's place in the game (L.tip) is as it was)
+		const a = L.clip || L.p, g = this.spreadGear;
+		_a.subVectors( L.tip, L.butt ).normalize();
+		const tip = this.holders.rod( g, L.butt, _a, a, L.bend, 1 - Math.min( 1, L.len / Math.max( 1, this.stats.spoolM ) ) * 0.5, L.len, dt, _tip, D.eye );
+		const hex = ( LINES[ g.line ] || LINES[ 0 ] ).color;
 		// the line: off the tip, by way of the outrigger's clip, and out to the bait
-		const tip = _bend[ n - 1 ];
 		if ( L.clip ) {
 
 			_e.copy( tip ).lerp( L.clip, 0.5 );
-			D.line( tip, _e, L.clip, 4 );
+			D.line( tip, _e, L.clip, 4, hex );
 
 		}
 
 		const from = L.clip || tip;
 		_e.copy( from ).lerp( L.p, 0.5 );
 		_e.y -= L.on ? 0 : 0.015 * L.len;
-		D.line( from, _e, L.p, 12 );
+		D.line( from, _e, L.p, 12, hex );
 		if ( ! L.bait ) return;
 		// the bait: grown with distance as a float is, so it can be seen at all, and a little of the water it's kicking up
 		const toEye = Math.max( 1, L.p.distanceTo( D.eye ) / 12 );
