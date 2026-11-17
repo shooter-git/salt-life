@@ -136,7 +136,7 @@ if ( doing( 'loop' ) ) {
 
 		const o = window.__app.together.others.values().next().value, c = o.cur, L = o.flyLine, P = o.flyPts;
 		const vis = !! L && L.meshes.every( ( m ) => m.visible ), tip = P && P[ 0 ], end = P && P[ 12 ];
-		return { rod: c.rod, fp: c.fp, fl: c.fl, fw: c.fw, vis, span: tip ? +Math.hypot( end.x - tip.x, end.z - tip.z ).toFixed( 1 ) : null, rodGeo: o.tackle.flyFit };
+		return { rod: c.rod, fp: c.fp, fl: c.fl, fw: c.fw, vis, span: tip ? +Math.hypot( end.x - tip.x, end.z - tip.z ).toFixed( 1 ) : null, rodGeo: ( o.tackle.rod.userData.gear || {} ).rod === 5 }; // ((M21) the model drawn: GearModels' RODS[ 5 ], the 8-weight (it was flyFit)
 
 	} );
 	say( seen.rod === 7 && seen.fw === 8 && seen.rodGeo && seen.vis, `on Robin's game Sam's copy false casts: his pose's ${ seen.rod }, stroke ${ seen.fp }, ${ seen.fl } m in the air, the 8-weight in his hands, the loop drawn` );

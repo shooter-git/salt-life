@@ -1423,6 +1423,7 @@ export class App {
 		performance.mark( 'world: characters' );
 		// ((M15) those far off loaded when you first come near them: Pearl at the fish camp, Game)
 		for ( const v of this.game.vendors ) if ( ! v.lazy ) await this.loadVendorCharacter( v );
+		this._peopleIn = true; // ((M21) the sportfisher's deck hand waits for them: rigs/Mate.js)
 
 	}
 

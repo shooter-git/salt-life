@@ -4,7 +4,9 @@
 // the work seen from both games, and a boat taken out showing her hold at once. (v2.3.0) One fish box aboard: his catch in her
 // hold, on her ice, and his. ((v2.4.1) Its two bars: room for fish, and how long the ice keeps them.)
 //   tools/render-slot.sh node tools/two-players/crew.mjs [dir] [port] <part>
-//   parts: rods  lights  traps  hold  box  mate ((M20) her mate backing her down on a guest's fish in her chair)
+//   parts: rods  lights  traps  hold  box  mate ((M20) her mate backing her down on a guest's fish in her chair; (M21) and drawn on
+//          the guest's game: in her cockpit, at her helm while he backs her down, then in her cockpit again; and her owner at her
+//          helm on the guest's game, her hands to her wheel's rim)
 import { OTHER as other, start } from './lib.mjs';
 import { boxBars, iceSaid } from '../../src/game/Seaworthy.js';
 import { LB } from '../../src/game/Units.js';
@@ -430,7 +432,22 @@ if ( PART === 'box' ) {
 // hires him and stands on her deck; Sam takes a big fish off her holder into her chair. On her game her mate has her helm
 // (helmsman 'mate'), brings her stern round to Sam's line and backs her down on it, closing at 1 to 3 m/s; on Sam's, his fight
 // takes her way through the water as she moves on his screen (Game._riddenVelocity), so the line comes back to him with it.
+// ((M21) And her mate seen (docs/m21/deckhand.md): on her game and on Sam's copy of her, in her cockpit once she's out, at her helm
+// while he backs her down, in her cockpit again once the fish is off; on Sam's game in his own look once it's loaded)
 if ( PART === 'mate' ) {
+
+	// (her mate as each game draws him: where, shown, his look or the stand-in, and where he stands in her frame against where
+	// he should: her cockpit's spot, or hers for him at her helm: SportfisherModel.mateSpot)
+	const seen = ( who, mine ) => who.game.evaluate( `( () => {
+
+		const a = window.__app, o = ${ other };
+		const b = ${ mine } ? a.boat.group : o && o.boat, M = ${ mine } ? a.boat : b && b.userData.model, d = ${ mine } ? a.game.mate.hand : b && b.userData.mate;
+		if ( ! d ) return null;
+		const s = d.where === 'cockpit' ? M.mateSpot : d.where === 'helm' ? M.mateSpot.helm : null, r = d.root.position;
+		return { where: d.where, shown: d.root.visible && !! b && b.visible, inHer: d.root.parent === b, look: !! d.character, standIn: !! d.standIn, clip: d.character ? d.character.current : null, at: r.toArray().map( ( v ) => +v.toFixed( 2 ) ), off: s ? +Math.hypot( r.x - s.x, r.y - s.y, r.z - s.z ).toFixed( 3 ) : null };
+
+	} )()` );
+	const placed = ( m, where ) => !! m && m.where === where && m.shown && m.inHer && m.off === 0;
 
 	const owner = await G.open( 'Robin', 'sportfisher', 30 ), guest = await G.open( 'Sam', 'lobster', 30 );
 	await ready( owner, guest );
@@ -441,11 +458,26 @@ if ( PART === 'mate' ) {
 	await G.helm( owner );
 	await G.toSea( owner );
 	await until( guest.game, `Math.hypot( window.__app.player.boat.position.x + 2600, window.__app.player.boat.position.z - 3000 ) < 300` );
+	// ((M21) Robin at her helm as Sam's game draws her: her hands reached to her wheel's rim after the clip (game/ArmReach.js), each
+	// wrist 5 cm shy of its grip, or as near as her arms reach from where a figure at her bridge's helm stands (Crew.helmStand))
+	await until( guest.game, `${ other }.avatar.character && ${ other }.cur && ${ other }.cur.mode === 'helm' && ${ other }.wheel && ${ other }.avatar.short !== null`, 300000 ).catch( () => {} );
+	const atHelm = await guest.game.evaluate( `( () => { const o = ${ other }, A = o.avatar, B = A.arms, V = o.wheel.r.constructor, w = ( b ) => b.getWorldPosition( new V() ); if ( ! B || A.short === null ) return { look: A.look, short: A.short }; A.group.updateMatrixWorld( true ); return { look: A.look, clip: A.character && A.character.current, short: +A.short.toFixed( 3 ), right: +w( B.handR ).distanceTo( o.wheel.r ).toFixed( 3 ), left: +w( B.handL ).distanceTo( o.wheel.l ).toFixed( 3 ) }; } )()` );
+	const most = Math.max( atHelm.right, atHelm.left ) - 0.05;
+	say( atHelm.short !== null && atHelm.clip === 'trolley_idle' && Math.abs( most - atHelm.short ) < 0.01 && Math.min( atHelm.right, atHelm.left ) > 0.04 && atHelm.short < 0.15, `Robin at her helm on Sam's game, her hands to her wheel's rim (${ JSON.stringify( atHelm ) }: ${ atHelm.short ? ( atHelm.short * 100 ).toFixed( 0 ) + ' cm short of it, as far as her arms reach' : 'on it' })` );
 	await toasts( owner );
 	// (Robin off her helm, on her deck: her engines left running for him)
 	await owner.game.evaluate( () => { const a = window.__app; a.player.leaveHelm(); a.boatCtl.engineOn = true; } );
 	await frames( owner.game, 10 );
 	say( await owner.game.evaluate( () => window.__app.player.mode === 'deck' && ! window.__app.player.riding ), 'Robin on her deck, off her helm' );
+	// ((M21) her mate aboard, in her cockpit, on both games; on Sam's in his own look (the islander in the polo shirt) once it's in.
+	// (Nothing of him on a game till Joe's and Marta's looks are in: on a CPU that can be minutes after the start)
+	await until( guest.game, `${ other }.boat && ${ other }.boat.userData.mate && ${ other }.boat.userData.mate.where === 'cockpit'`, 300000 ).catch( () => {} );
+	const herCockpit = await seen( owner, true ), hisCockpit = await seen( guest, false );
+	say( placed( herCockpit, 'cockpit' ) && await owner.game.evaluate( () => window.__app.game.mate.wire() === 2 ), `her mate in her cockpit on her game, Mt 2 in her pose (${ JSON.stringify( herCockpit ) })` );
+	say( placed( hisCockpit, 'cockpit' ), `and on Sam's copy of her (${ JSON.stringify( hisCockpit ) })` );
+	await until( guest.game, `${ other }.boat.userData.mate.character`, 300000 ).catch( () => {} );
+	const hisLook = await seen( guest, false );
+	say( placed( hisLook, 'cockpit' ) && hisLook.look && ! hisLook.standIn && hisLook.clip === 'idle_neutral_01', `in his own look on Sam's game, standing (${ JSON.stringify( hisLook ) })` );
 
 	// a blue marlin on her first rod, off to port and long on it
 	await owner.game.evaluate( async () => {
@@ -491,6 +523,10 @@ if ( PART === 'mate' ) {
 	await until( owner.game, 'window.__app.boatCtl.helmsman === "mate"', 90000 ).catch( () => {} );
 	const took = await owner.game.evaluate( `( () => { const a = window.__app, g = a.game, b = a.boatCtl, p = a.player, o = ${ other }, T = a.together, crew = T && T.crew && T.crew.aboard ? T.crew.aboard() : null, V = b.position.constructor; return { helmsman: b.helmsman, fishOn: !! ( o && o.fishOn ), bobber: !! ( o && o.cur && o.cur.bobber ), figure: !! ( g.mate.figure && g.mate.figure.visible ), why: { mate: !! g.state.stats.mate, boat: a.boat.id, mode: p.mode, riding: !! p.riding, crew: crew ? crew.length : null, fish: !! g.mate._fishAt( new V() ), moored: !! b.moored, hauled: !! b.hauled, beached: !! b.beached, engineOn: !! b.engineOn, handed: !! T._handed, fuel: g.state.fuelL } }; } )()` );
 	say( took.helmsman === 'mate', `her mate has her helm on Sam's fish (${ JSON.stringify( took ) })` );
+	// ((M21) at her helm on both games, both hands on her wheel)
+	await until( guest.game, `${ other }.boat.userData.mate.where === 'helm'`, 60000 ).catch( () => {} );
+	const herHelm = await seen( owner, true ), hisHelm = await seen( guest, false );
+	say( placed( herHelm, 'helm' ) && placed( hisHelm, 'helm' ) && ( ! hisHelm.look || hisHelm.clip === 'trolley_idle' ), `at her helm while he backs her down, on her game (${ JSON.stringify( herHelm ) }) and on Sam's (${ JSON.stringify( hisHelm ) })` );
 	await owner.game.evaluate( `( () => { window.__mate = []; const a = window.__app, b = a.boatCtl, o = ${ other }; window.__mateT = setInterval( () => { const c = o && o.cur && o.cur.bobber; if ( ! c ) return; const dx = c.x - b.position.x, dz = c.z - b.position.z, l = Math.hypot( dx, dz ) || 1; let err = Math.atan2( - dx, - dz ) - b.getYaw(); err = Math.atan2( Math.sin( err ), Math.cos( err ) ); window.__mate.push( { t: Date.now(), d: l, err, closing: ( b.velocity.x * dx + b.velocity.z * dz ) / l, helm: b.helmsman, th: b.throttle } ); }, 250 ); } )()` );
 	await until( owner.game, 'window.__mate.some( ( m ) => Math.abs( m.err ) < 0.5 )', 120000 ).catch( () => {} );
 	await frames( owner.game, 120 );
@@ -530,6 +566,15 @@ if ( PART === 'mate' ) {
 	await until( owner.game, 'window.__app.boatCtl.helmsman !== "mate"', 60000 ).catch( () => {} );
 	const back = await owner.game.evaluate( () => { const b = window.__app.boatCtl; return { helmsman: b.helmsman, throttle: b.throttle, driven: b.driven }; } );
 	say( back.helmsman !== 'mate' && ! back.driven, `the fish off, she's Robin's again, stopped (${ JSON.stringify( back ) })` );
+	// ((M21) and her mate back in her cockpit on both games)
+	await until( guest.game, `${ other }.boat.userData.mate.where === 'cockpit'`, 60000 ).catch( () => {} );
+	const herBack = await seen( owner, true ), hisBack = await seen( guest, false );
+	say( placed( herBack, 'cockpit' ) && placed( hisBack, 'cockpit' ) && ( ! hisBack.look || hisBack.clip === 'idle_neutral_01' ), `handed back: in her cockpit again on her game (${ JSON.stringify( herBack ) }) and on Sam's (${ JSON.stringify( hisBack ) })` );
+	// (Sam at her transom, looking forward to port at him in her cockpit's corner)
+	await guest.game.evaluate( () => { const p = window.__app.player; p.deckPos.set( - 0.6, 0.5, - 5.8 ); p.deckVel.set( 0, 0, 0 ); p.deckYaw = Math.atan2( 2.2, 1.8 ); p.pitch = - 0.12; } );
+	await frames( guest.game, 3 );
+	note( `Sam's sea: ${ JSON.stringify( await guest.game.evaluate( () => ( { plain: !! window.__app.water.plainMaterial, nodes: window.__app.water.lod.count } ) ) ) }` );
+	await shot( guest, 'crew-mate-guest-back' );
 	await G.end( 'crew mate' );
 
 }

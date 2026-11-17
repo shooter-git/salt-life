@@ -20,7 +20,7 @@ You can walk, swim and take the boat around the island. You can fish from the pi
 boat, or dive and spear a fish, sell your catch to Joe and buy better gear from Marta. It plays with a
 mouse and keyboard, a gamepad or a touch screen.
 
-Done, M0 to M20 (no M18: its list went into M19 and M20):
+Done, M0 to M21 (no M18: its list went into M19 and M20):
 - the sea and its shore, spray, gusts and slicks, and the haze;
 - the whole world: the village, the pier, the reef and its fish, the birds and crabs, the beach's
   debris, the whale and the lights at night;
@@ -257,6 +257,14 @@ Done, M0 to M20 (no M18: its list went into M19 and M20):
     standing in the Pilot, the trolling motor's batteries, and the poles refusing rock and live coral.
   - **The sounds measured in the game,** another player's kayak heard at last, and the sportfisher's mate taking her helm.
   - **The tone curve tried again** (ACES kept), and high's moonlit night without its haze.
+- the gear as it is (M21):
+  - **Every rod and reel drawn as itself,** at its real size: the hand-me-down, the 7 ft graphite, the 9 ft surf rod, the
+    stand-up rod, the bent-butt chair rod and the fly rods by weight; the old and the smooth spinning reels, the conventional,
+    the 50, 80 and 130-class two-speeds, the electric reel and the fly reels. Their moving parts turn, and the line's in its
+    colour.
+  - **Seen by others:** what's in your hands, and your rods in your boat's holders.
+  - **The sportfisher's deck hand:** one of the islanders, in her cockpit while she's out, at her helm as he backs her down.
+  - **At a helm,** another player's hands are on the wheel.
 - playing together:
   - you see the others on the island, walking, swimming, fishing and out in their boats, each the boat
     she is, with her paint and what's fitted on her; far off a boat is a speck on the horizon;
@@ -309,6 +317,7 @@ The island's day:
 | M17 | The flats on a tide: sight-fishing from the kayak and on foot on the west's new flats, a tide with the moon behind it, everything M16 left for guests aboard, coming back where you were, a life list of every kind with the slams, the wakes as waves, and the figures from sources ([docs/M17.md](docs/M17.md)) |
 | M19 | The fly, the big fish and the stalls: a fly rod for the flats, the biggest marlin landed alone, the boats' new gear, the bait and the ice at Joe's and Pearl's challenges, line-class records, and most of what M17 left (M18's list: no M18 milestone) ([docs/M19.md](docs/M19.md)) |
 | M20 | What M19 left: the surf's water height, the moon in the sea, wakes in shallow water, the blue-water gun's floats, the landing net, the anchor's splash, the boats' details, the sounds measured in the game, the tone curve's trial, and the checks M19 didn't run ([docs/M20.md](docs/M20.md)) |
+| M21 | The gear as it is: every rod and reel drawn as itself at its real size, in your hands, on others' copies and in the boats' holders; the line in its colour; the sportfisher's deck hand as one of the islanders; hands on the wheel at a helm ([docs/M21.md](docs/M21.md)) |
 
 ## How it fits All the Spaces
 

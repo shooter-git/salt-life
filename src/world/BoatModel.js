@@ -2,7 +2,7 @@ import { MathUtils, Mesh, Object3D, Quaternion, Vector3 } from '../engine/index.
 import { G } from '../core/Globals.js';
 import { HullLines } from './boat/HullLines.js';
 import { GeoKit } from './boat/GeoKit.js';
-import { Vessel, GIMBAL, geometryView } from './boat/Vessel.js';
+import { Vessel, GIMBAL, geometryView, wheelGrips } from './boat/Vessel.js';
 import { LOBSTER_HANDLING } from './boat/Handling.js';
 import { wheelhousePoints } from '../fx/Drips.js';
 import { BoatMaterials } from './boat/BoatMaterials.js';
@@ -137,6 +137,7 @@ export class BoatModel extends Vessel {
 
 		this.helmEye = new Vector3( HOUSE.helmX, 1.85, 0.3 );
 		this.helm = { x: HOUSE.helmX, z: HOUSE.seatZ, eye: this.helmEye, rise: [ HOUSE.helmX + 0.45, HOUSE.seatZ - 0.1 ] };
+		this.helm.grips = wheelGrips( parts.wheelCenter, parts.wheelAxis, 0.2 ); // ((M21) her wheel's rim: Wheelhouse.wheelGeometry's R)
 		this.boardPoint = new Vector3( 0, lines.deckY, - 1.75 );
 
 		// ((M16) and on her foredeck: there's no walking aft from it, should you be put there)

@@ -1,5 +1,5 @@
 import { BufferAttribute, MathUtils, Mesh, Object3D, Quaternion, Vector3 } from '../../../engine/index.js';
-import { Vessel, geometryView } from '../Vessel.js';
+import { Vessel, geometryView, wheelGrips } from '../Vessel.js';
 import { compassCardGeometry } from '../Wheelhouse.js';
 import { mergePrepared, prepare } from '../GeoKit.js';
 import { VARIATION } from '../../../game/Chart.js';
@@ -122,6 +122,7 @@ export class ConsoleModel extends Vessel {
 		const S = DECK.sole, eyeY = S + 1.62;
 		this.helmEye = new Vector3( WHEEL.x, eyeY, CONSOLE.back - 0.32 );
 		this.helm = { x: WHEEL.x, z: CONSOLE.back - 0.2, eye: this.helmEye, rise: [ 0.72, CONSOLE.back - 0.15 ], open: true };
+		this.helm.grips = wheelGrips( parts.wheelCenter, parts.wheelAxis, WHEEL.r ); // ((M21) her wheel's rim)
 		this.boardPoint = new Vector3( 0.5, S, - 2.1 );
 		// (at the rail anywhere along her, from the box aft to the seats, to jump or step off)
 		// (and on the platform, by the ladder)

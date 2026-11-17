@@ -12,7 +12,7 @@ import { BoatCopies, airOf, bareOf, isBoat, sizeOf, fitWire, fitStats } from './
 import { BoatLamps } from '../world/boat/BoatLamps.js';
 import { stackedOn } from '../game/TrapWork.js';
 import { SWING, atDock, berthShare, cradleGeometry, inTheYard, laidAt, leaving, onTheSand, sandBerth, spareYard, stemBerth } from './Berths.js';
-import { Crew, footY, perched } from './Crew.js';
+import { Crew, helmStand, perched } from './Crew.js';
 import { SharedBox } from './SharedBox.js';
 import { Specks } from './Specks.js';
 import { RADAR_RPM, PROP_DISPLAY_RPS } from '../world/BoatModel.js';
@@ -21,9 +21,10 @@ import { PLACES } from '../game/Places.js';
 import { KINDS, lifeOf } from '../game/LifeList.js';
 import { SLAMS, slamTold } from '../game/Trophies.js';
 import { VARIATION } from '../game/Chart.js';
-import { ROD_L, SEAT_Y, placeNet } from '../game/FishingRod.js';
-import { FLY_K, FLY_L, FLY_HOLD } from '../game/rigs/FlyRod.js';
+import { fitRodMesh, placeNet } from '../game/FishingRod.js';
+import { DEFAULT_GEAR, LINES, gearCode, modelOf, readGear } from '../game/rigs/GearModels.js';
 import { FlyLine, loopShape, newPoints } from '../game/rigs/FlyLine.js';
+import { Deckhand, mateRead } from '../game/rigs/Mate.js';
 import { FLY, strokeTime } from '../game/FlyCast.js';
 import { gunModels, setBands, floatGeometry, placeFloats, FLOAT } from '../game/Speargun.js';
 import { isClass, counts, ratio } from '../game/LineClass.js';
@@ -102,6 +103,10 @@ const SETTLE_MS = 8000; // (Salt Life) after this long with nobody else in the l
 const DELAY = 0.15; // s behind the newest pose: room to ease between two
 const STALE = 6; // s without a pose: not shown
 const STALE_ABOARD = 90; // (M16) and the boat you're aboard, in the open sea: a quiet spell isn't her gone. When they leave the room, she is
+// (M21) s with everyone else in the session silent: said once. All the Spaces lost a session's connection for good and never
+// told the game, until its own fix (its room holding a dropped player's place, its app joining again: docs/M21.md); someone's
+// game paused out of sight is silent too, so it's put as a maybe
+const QUIET_S = 20;
 const TAG_FAR = 70; // m: names fade out toward here
 const DRIFT_MS = 3000; // (M15) ms between workings-out of where an away boat adrift has got to
 const KEEP_S = 10; // (M15) s between the host's looks at the boats whose owners are away
@@ -117,8 +122,13 @@ const NAMES = { w: 'walk', s: 'swim', d: 'deck', h: 'helm' };
 // and how it's held then (rad above level: past a right angle, back over the shoulder)
 // ((M19) 7: a fly's false casts, with how far through which stroke (fp) and the line in the air (fl), drawn as the loop; shot,
 // it's 3 as a cast is. fw: the fly rod's weight, in your hands. An older game draws a held rod for 7)
+// ((M21) gr: the rod, reel and line in your hands, sg: those in your holders with your spread out (rigs/GearModels.js'
+// gearCode: rod * 100 + reel * 10 + line); a game that doesn't send them is drawn as before: its fly rod by fw, else the
+// graphite rod and the smooth reel, clear mono; its spread's rods the stand-up rod and the two-speed)
 const ROD = { stowed: 0, idle: 1, windup: 2, flick: 3, flying: 3, floating: 4, retrieving: 4, fighting: 5, landing: 6, falsecast: 7, shoot: 3 };
 const ROD_ELEV = [ 0, 0.5, 1.95, 0.18, 0.45, 0.95, 0.9, 1.2 ];
+// ((M21) an older game's fly rod, drawn by its weight: GearModels')
+const OLD_FLY = { 8: modelOf( { fly: 8 } ), 10: modelOf( { fly: 10 } ), 12: modelOf( { fly: 12 } ) };
 // (Salt Life) the cast net: 0 put away, 1 loaded in the hands, 2 winding up, 3 thrown, 4 in the water, 5
 // its purse up in front of them, 6 being loaded again (their net, here: game/CastNet.js, thrown as
 // they threw it, the 'net' message)
@@ -143,6 +153,7 @@ const _p = new Vector3(), _q = new Vector3(), _tip = new Vector3(), _hand = new 
 const _x = new Vector3(), _y = new Vector3(), _z = new Vector3(), _up = new Vector3( 0, 1, 0 );
 const _qa = new Quaternion(), _qb = new Quaternion(), _m = new Matrix4(), _mt = new Matrix4();
 const _bp = new Vector3(), _bq = new Quaternion(), _bow = new Vector3(), _at3 = new Vector3();
+const _stand = { x: 0, y: 0, z: 0, grips: null }; // ((M21) where a figure at a helm stands: Crew.helmStand)
 
 // another player's boat, to ride in: the boat's shape (yours: the same model) at their boat's pose,
 // with what the Player asks of a boat while you're on its deck
@@ -1624,6 +1635,7 @@ export class Together {
 			if ( rod.netMesh && rod.netMesh.visible ) body.Ln = 1;
 			// ((M19) the fly rod, and its false casts)
 			if ( rod.flyRod ) body.fw = rod.flyWt | 0;
+			if ( rod.gear ) body.gr = gearCode( rod.gear ); // ((M21) and the rod, reel and line it is)
 			if ( r === 7 && app.game.flyCast ) {
 
 				body.fp = r2( app.game.flyCast.phase );
@@ -1652,6 +1664,7 @@ export class Together {
 
 			const rl = spreadWire( rigs.lines ), kt = kiteWire( rigs.kite );
 			if ( rl ) body.rl = rl;
+			if ( rl ) body.sg = gearCode( rigs.spreadGear ); // ((M21) the rods and reels in her holders)
 			if ( kt ) body.kt = kt;
 
 		}
@@ -1675,7 +1688,9 @@ export class Together {
 		// (the engine's revs: what the others hear. (M16) Whoever's at her helm, you or one of them; riding, not yours)
 		const running = boat.driven && ! p.riding;
 		if ( running ) body.E = r2( boat.rpm );
-		if ( body.B && boat.helmsman === 'mate' ) body.Mt = 1; // ((M19) her mate has her helm: game/rigs/Mate.js)
+		// ((M19) her mate has her helm: game/rigs/Mate.js. (M21) Or he's aboard, in her cockpit: 2)
+		const mt = app.game.mate ? app.game.mate.wire() : 0;
+		if ( body.B && mt ) body.Mt = mt;
 		// (M10) the starter turning her over (1; 2: it'll catch), heard by whoever's aboard
 		const crank = running && this.app.game ? this.app.game.hull.crank : 0;
 		if ( crank ) body.K = crank;
@@ -1843,6 +1858,7 @@ export class Together {
 
 		const app = this.app;
 		if ( ! app.game.hud ) return; // (the HUD comes with the game's first frame)
+		this._quiet();
 		this._sendT += dt;
 		if ( this.others.size && this._sendT >= ( this._inSight() ? SEND : SEND_FAR ) ) {
 
@@ -2603,6 +2619,9 @@ export class Together {
 		cur.rod = near.r || 0;
 		// ((M19) their fly rod, and a false cast: how far through which stroke, and the line in the air)
 		cur.fw = Number.isFinite( near.fw ) && near.fw > 0 ? near.fw : 0;
+		// ((M21) the rod, reel and line in their hands, and in their holders: null from a game that doesn't say)
+		if ( near.gr !== cur.gr ) cur.gear = readGear( cur.gr = near.gr );
+		if ( near.sg !== cur.sg ) cur.spreadGear = readGear( cur.sg = near.sg );
 		cur.fp = Number.isFinite( near.fp ) ? MathUtils.clamp( near.fp, - 1, 1 ) : null;
 		cur.fl = Number.isFinite( near.fl ) ? MathUtils.clamp( near.fl, 0, 30 ) : null;
 		cur.ride = typeof near.R === 'string' ? near.R : null;
@@ -2627,7 +2646,7 @@ export class Together {
 		cur.flood = MathUtils.clamp( Number( near.L ) || 0, 0, 1 ); // ((M14) her floodlights' lenses)
 		cur.rpm = ( Number( a.E ) || 0 ) + ( ( Number( b.E ) || 0 ) - ( Number( a.E ) || 0 ) ) * f;
 		cur.crank = near.K === 1 || near.K === 2 ? near.K : 0;
-		cur.mate = near.Mt === 1; // ((M19) her mate at her helm)
+		cur.mate = mateRead( near.Mt ); // ((M19) her mate at her helm. (M21) 'helm', 'cockpit' or null: aboard in her cockpit too)
 		// (M11) her hull as the skipper hears it (none sent: nothing to hear)
 		const H = Array.isArray( near.H ) && near.H.length === 5 && near.H.every( Number.isFinite ) ? near.H : null;
 		cur.hull = H ? Object.assign( cur._hull, { flood: MathUtils.clamp( H[ 0 ], 0, 3 ), pump: H[ 1 ] === 1, scrape: Math.max( 0, H[ 2 ] ), wear: MathUtils.clamp( H[ 3 ], 0, 1 ), motion: MathUtils.clamp( H[ 4 ], 0, 1 ) } ) : null;
@@ -2712,7 +2731,7 @@ export class Together {
 			boat.userData.lamps.set( { underway: c.mode === 'helm' || ! c.anchored, spot: c.spot } );
 			boat.userData.floodOn.value = c.flood;
 			this._spin( boat, c.rpm, dt );
-			this._mate( boat, c.mate );
+			this._mate( boat, c.mate, dt );
 
 		}
 
@@ -2778,7 +2797,7 @@ export class Together {
 
 		// the figure: aboard, it stands where they stand on her deck or at her helm (M16: hers, and sitting where she's sat in, or in her chair)
 		const chair = c.mode === 'deck' && c.job === 'chair' && M && M.stations && M.stations.chair;
-		let sit = !! M && !! M.seated;
+		let sit = !! M && !! M.seated, wheel = null;
 		if ( seat ) {
 
 			g.position.copy( M.seat ).applyQuaternion( deck.quat ).add( deck.pos );
@@ -2786,12 +2805,21 @@ export class Together {
 
 		} else if ( deck && c.mode === 'helm' ) {
 
-			// (on the sole under her helm: its camera's eye is lower than a figure standing there)
-			const up = c.job === 'tower' && M.towerHelm, helm = up ? M.towerHelm.eye : M.helmEye, at = ! up && M.helm && M.helm.stand, hx = at ? at[ 0 ] : helm.x, hz = at ? at[ 1 ] : helm.z;
-			_bp.set( hx, footY( M, hx, hz, helm.y - 1 ), hz ).applyQuaternion( deck.quat ).add( deck.pos );
+			// (on the sole under her helm: its camera's eye is lower than a figure standing there. (M21) Crew.helmStand)
+			const at = helmStand( M, c.job === 'tower', _stand );
+			_bp.set( at.x, at.y, at.z ).applyQuaternion( deck.quat ).add( deck.pos );
 			g.position.copy( _bp );
 			_bq.setFromAxisAngle( _up, c.yaw + Math.PI );
 			g.quaternion.copy( _bq );
+			// ((M21) and their hands on its wheel's rim, where it has one (Vessel.wheelGrips), on her as she's drawn here
+			const grips = at.grips;
+			if ( grips ) {
+
+				wheel = o.wheel || ( o.wheel = { r: new Vector3(), l: new Vector3() } );
+				wheel.r.copy( grips[ 0 ] ).applyQuaternion( deck.quat ).add( deck.pos );
+				wheel.l.copy( grips[ 1 ] ).applyQuaternion( deck.quat ).add( deck.pos );
+
+			}
 
 		} else if ( chair ) {
 
@@ -2811,7 +2839,7 @@ export class Together {
 
 		// (Salt Life) their cast net first: their arms reach for where its hands are
 		this._net( o, c, g, dt );
-		o.avatar.pose( { mode: c.mode, speed: c.speed, rod: c.rod > 0, gun: c.gun > 0, sit: sit && ! seat, seat, reach: o.net && o.net.equipped ? o.netHands : null }, dt );
+		o.avatar.pose( { mode: c.mode, speed: c.speed, rod: c.rod > 0, gun: c.gun > 0, sit: sit && ! seat, seat, reach: o.net && o.net.equipped ? o.netHands : null, wheel }, dt );
 		// meeting someone: a wave, the first time
 		if ( ! o.waved && g.position.distanceTo( app.player.position ) < WAVE_NEAR && c.mode !== 'swim' && app.player.mode !== 'swim' ) {
 
@@ -2854,20 +2882,33 @@ export class Together {
 			if ( _z.lengthSq() < 1e-6 ) _z.set( 0, 0, 1 );
 			_z.normalize();
 			_x.crossVectors( _y, _z ).normalize();
-			// ((M19) their fly rod: its own model, stretched back to its 9 ft along the blank and held by its cork)
-			if ( flyRod !== !! T.flyFit ) {
+			// ((M21) their rod and reel as their pose says (gr), each its own model (rigs/GearModels.js, shared with every mesh of the
+			// same), the line its colour; from a game that doesn't say, as before: (M19) their fly rod by its weight, else the
+			// spinning rod. Held where the model's held, its reel on top if it rides there, at its own length)
+			const gear = c.gear || ( flyRod ? OLD_FLY[ c.fw >= 12 ? 12 : c.fw >= 10 ? 10 : 8 ] : DEFAULT_GEAR );
+			if ( gear !== T.rod.userData.gear ) {
 
-				T.smallRod = T.smallRod || T.rod.geometry;
-				T.rod.geometry = flyRod ? app.game.rod.flyRodGeometry() : T.smallRod;
-				T.flyFit = flyRod;
+				T.rod.userData.model = fitRodMesh( T.rod, gear );
+				T.rod.userData.gear = gear;
+				const L = LINES[ gear.line ] || LINES[ 0 ];
+				T.line.material.color.setHex( L.color );
+				T.line.material.roughness = L.braid ? 0.75 : 0.35;
+				T.line.material.uniforms.lineShow.value = gear.rod >= 5 ? 1.8 : 1;
 
 			}
 
-			if ( flyRod ) _m.makeBasis( _x, _e.copy( _y ).multiplyScalar( FLY_K ), _z ).setPosition( _p.copy( _hand ).addScaledVector( _y, - FLY_HOLD ) );
-			else _m.makeBasis( _x, _y, _z ).setPosition( _p.copy( _hand ).addScaledVector( _y, - SEAT_Y ) );
+			const fit = T.rod.userData.model.fit;
+			if ( fit.top ) {
+
+				_x.negate();
+				_z.negate();
+
+			}
+
+			_m.makeBasis( _x, _y, _z ).setPosition( _p.copy( _hand ).addScaledVector( _y, - fit.hold ) );
 			T.rod.matrix.copy( _m );
 			T.rod.matrixWorldNeedsUpdate = true;
-			_tip.copy( _p ).addScaledVector( _y, flyRod ? FLY_L : ROD_L );
+			_tip.copy( _p ).addScaledVector( _y, fit.L );
 			// ((M19) and the loop in the air, as theirs unrolls)
 			if ( casting ) {
 
@@ -2888,6 +2929,16 @@ export class Together {
 				U.rodBend.value.set( _q.x, 0, _q.z, 0.06 + 0.3 * c.tension );
 
 			} else U.rodBend.value.set( 0, 0, 0, 0 );
+
+			// ((M21) their reel: its crank turning as their line comes in (a fish brought in, a line reeled back), the rotor or the
+			// spool with it, a spinning reel's bail open as they cast)
+			const out = c.bobber && c.rod >= 4 ? _tip.distanceTo( c.bobber ) : null, was = T.rod.userData.out;
+			const rate = out !== null && was !== null && was !== undefined && dt > 0 ? Math.max( 0, ( was - out ) / dt - 0.3 ) : 0;
+			T.rod.userData.out = out;
+			const turn = Math.min( 1.6, rate / 0.8 ) * Math.PI * 2 * dt, spin = fit.kind === 'spin', ud = T.rod.userData;
+			ud.crank = ( ud.crank || 0 ) + turn;
+			ud.spun = ( ud.spun || 0 ) + Math.min( turn * fit.ratio, 3.1 * Math.PI * 2 * dt ) * ( spin || fit.kind === 'fly' ? 1 : - 1 );
+			U.reelAnim.value.set( spin ? ud.spun : 0, spin && ( c.rod === 2 || c.rod === 3 ) ? 1 : 0, ud.crank, spin ? 0 : ud.spun );
 
 		}
 
@@ -2957,21 +3008,15 @@ export class Together {
 
 	// their boat's radar turning, and her propeller at her engine's revs (rpm: 0..1, as sent), as yours do
 	// (BoatModel.update)
-	// (M19) her mate at her helm on her copy, as she's backing down on someone's fish: a stand-in figure (Figure.js, one mesh),
-	// made the first time it's wanted
-	_mate( boat, on ) {
+	// (M19) her mate at her helm on her copy, as she's backing down on someone's fish. ((M21) Or in her cockpit, aboard: by her
+	// pose's Mt (where: mateRead), drawn as on her owner's game, the islander in his polo shirt (rigs/Mate.js' Deckhand), made the
+	// first time he's aboard her copy)
+	_mate( boat, where, dt ) {
 
-		const u = boat.userData, M = u.model;
-		if ( ! on && ! u.mate ) return;
-		if ( ! u.mate && M && M.helmEye ) {
-
-			u.mate = figureStandIn();
-			u.mate.position.set( M.helmEye.x, M.helmEye.y - 1.62, M.helmEye.z );
-			boat.add( u.mate );
-
-		}
-
-		if ( u.mate ) u.mate.visible = !! on;
+		const u = boat.userData;
+		if ( ! where && ! u.mate ) return;
+		u.mate = u.mate || new Deckhand( this.app );
+		u.mate.update( where, u.model, boat, dt );
 
 	}
 
@@ -3134,6 +3179,29 @@ export class Together {
 		}
 
 		return best;
+
+	}
+
+	// (M21) everyone else still in the session and none of them heard from for QUIET_S: once, till one's heard again
+	_quiet() {
+
+		let newest = - Infinity, first = null;
+		for ( const o of this.others.values() ) {
+
+			if ( o.last > newest ) newest = o.last;
+			first = first || o;
+
+		}
+
+		const silent = !! first && Number.isFinite( newest ) && performance.now() / 1000 - newest > QUIET_S;
+		if ( silent && ! this._quietSaid && this.app.game && this.app.game.toast ) {
+
+			const who = this.others.size > 1 ? 'the others' : first.person.name;
+			this.app.game.toast( `Not hearing from ${ who } for a while · if they're still playing, reload to rejoin them`, 6000 );
+
+		}
+
+		this._quietSaid = silent;
 
 	}
 

@@ -1,6 +1,6 @@
 import { AdditiveBlending, BufferGeometry, DynamicDrawUsage, Float32BufferAttribute, InstancedMesh, MathUtils, Matrix4, Mesh, MeshBasicMaterial, Quaternion, Vector3 } from '../../../engine/index.js';
 import { GeoKit, rod, cylinder, box } from '../GeoKit.js';
-import { Vessel } from '../Vessel.js';
+import { Vessel, wheelGrips } from '../Vessel.js';
 import { propellerAndRudder } from '../Handling.js';
 import { propellerGeometry, rudderGeometry, RUDDER } from '../Running.js';
 import { throttleGeometry, radarArrayGeometry, compassCardGeometry } from '../Wheelhouse.js';
@@ -23,6 +23,7 @@ import { SEATS } from './seats.data.js';
 //   setUnderLights( on )  her underwater lights' green pool, 0..1
 //   setOutriggersOut( out ) the poles down for trolling, or up
 //   bunks, chair, rodHolders, outriggerTips, stations  what the days out, the tackle and the crew's jobs read
+//   mateSpot              ((M21) where her hired mate stands in her cockpit, and at her helm with his hands on its wheel: rigs/Mate.js)
 //   ladders, ladderAt( p ) the two climbs (LadderClimb)
 //   towerHelm, helmAt( p, reach ) her second helm, on the tower's platform, if she has the tower
 //   walkedAs( stats ), dressCopy( copy, stats )  what's fitted on someone else's (Vessel's)
@@ -242,6 +243,9 @@ export class SportfisherModel extends Vessel {
 		this.bowAnchor = { x: HELM.halfW + 0.25, z: ( HELM.consoleZ0 + HELM.consoleZ1 ) / 2, r: 0.6, y: SF.bridge, windlass: true };
 		this.helmEye = HELM.eye;
 		this.towerHelm = { x: 0, z: TOWER_HELM.z, y: SF.tower, eye: TOWER_HELM.eye, rise: TOWER_HELM.rise, reach: TOWER_HELM.reach, upper: true, open: true };
+		// ((M21) where the hands of whoever's at each helm hold its wheel's rim (wheelOf's 0.2 m, the tower's drawn at 0.75 of it)
+		this.helm.grips = wheelGrips( parts.wheelCenter, parts.wheelAxis, 0.2 );
+		this.towerHelm.grips = wheelGrips( TOWER_HELM.wheelCenter, TOWER_HELM.wheelAxis, 0.2 * TOWER_HELM.wheelScale );
 		this.helmInUse = this.helm; // (whose wheel and lever move: Player.takeHelm)
 		this.boardPoint = V( 0, SF.cockpit, - 3.75 ); // (clear of the chair, which is someone's job: stations)
 		this.exitPoints = this.railPoints( [ - 5.4, - 4.5, - 3.6 ] );
@@ -250,6 +254,13 @@ export class SportfisherModel extends Vessel {
 		const chairY = SF.cockpit + 0.55;
 		this.chair = { at: V( 0, chairY, CHAIR_Z ), eye: V( 0, SF.cockpit + 1.25, CHAIR_Z + 0.05 ), yaw: Math.PI };
 		this.rodHolders = [ - 5.5, - 4.5, - 3.6 ].flatMap( ( z ) => [ 1, - 1 ].map( ( s ) => V( s * ( L.sheerX( L.tAtSheerZ( z ) ) - 0.12 ), L.sheerY( L.tAtSheerZ( z ) ) + 0.005, z ) ) );
+		// ((M21) where her hired mate stands in her cockpit (rigs/Mate.js' Deckhand), facing aft and a little inboard over it: its
+		// forward corner to port, his back to the mezzanine's box. 1.7 m off the chair, 1.6 m off where you're put aboard and outside
+		// the step's width (where you walk down into her), 0.5 m in from her side under the holders (their rods lean outboard), and
+		// across her from the transom door and the bridge ladder (both to starboard). yaw: rad about up, 0 facing her bow.
+		// At her helm (helm): a step nearer her wheel than its stand, his hands on its rim at ten to two (the helm's grips), his toes
+		// 0.15 m short of the console's foot and further still from her seat
+		this.mateSpot = { x: 1.6, y: SF.cockpit, z: - 4.0, yaw: - 2.6, helm: { x: 0, y: SF.bridge, z: 0.15, yaw: 0, grips: this.helm.grips } };
 		this.outriggerTips = [ riggerTip( 1, true ), riggerTip( - 1, true ) ];
 		this.stations = {
 			tower: { x: 0, y: SF.tower, z: ( TOWER.z0 + TOWER.z1 ) / 2, r: 1 },
@@ -439,12 +450,15 @@ export class SportfisherModel extends Vessel {
 	fit( stats = {} ) {
 
 		this.fitted = fittedOf( stats );
-		const M = this.meshes;
-		if ( M.tower ) M.tower.visible = this.fitted.tower;
-		if ( M.wheel ) M.wheel.count = this.fitted.tower ? 2 : 1;
-		for ( const k of [ 'towerThrottle', 'towerDisplay', 'towerCompass' ] ) if ( M[ k ] ) M[ k ].visible = this.fitted.tower;
-		if ( M.outriggers ) M.outriggers.visible = this.fitted.outriggers;
-		if ( M.chair ) M.chair.visible = this.fitted.chair;
+		const M = this.meshes, F = this.fitted;
+		// ((M21) and kept so where a phone draws her detail only near the camera (App.updateNearDetail, by her nearDetail: her chair):
+		// its userData.shown. Near the camera on low, her chair was drawn whether it was bought or not)
+		const show = ( m, on ) => m && ( m.visible = m.userData.shown = on );
+		show( M.tower, F.tower );
+		if ( M.wheel ) M.wheel.count = F.tower ? 2 : 1;
+		for ( const k of [ 'towerThrottle', 'towerDisplay', 'towerCompass' ] ) show( M[ k ], F.tower );
+		show( M.outriggers, F.outriggers );
+		show( M.chair, F.chair );
 		for ( const c of this.colliders ) if ( c.tag === 'chair' ) c.solid = this.fitted.chair;
 		this.chair = this.fitted.chair ? this.chair || this._chairWas : ( this._chairWas = this.chair, null );
 

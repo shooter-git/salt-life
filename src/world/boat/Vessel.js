@@ -44,6 +44,7 @@ function swingAxis( t, now, limit, dt ) {
 //   handling               how she handles (world/boat/Handling.js)
 //   dimensions, hydro, hullSamples   from floatBody() below
 //   helm                   { x, z, eye, rise } where you take the wheel; eye: Vector3 of your eye there; rise: [ x, z ] where you stand up to; open: it's in the open air, not a wheelhouse (what you hear)
+//                          ((M21) grips: [ right, left ], where the hands of whoever's at it hold its wheel's rim, if it has one: wheelGrips)
 //   helmEye                helm.eye, by the older name
 //   boardPoint, exitPoints where you step aboard, where you can step off
 //   propeller, rudder      Vector3s: her wash and Handling.propellerAndRudder
@@ -68,6 +69,19 @@ function swingAxis( t, now, limit, dt ) {
 //
 // And these, which do nothing until a boat needs them: setSteering, setThrottle, setPropellerRPM, setNavLights, update,
 // fit( stats ): what's fitted on her now (Gear.gearStats: called as it changes, and as she's built), setPaint( hex | null ).
+// (M21) where two hands hold a wheel at ten to two, for someone facing her bow at it (boat frame, Vector3s: [ right, left ]): its
+// centre, its axis (either way along it) and its rim's radius. Across the wheel is her beam as near as its face lets it be, up it
+// the way that rises; right is to starboard (-x). Who's at her helm reaches them after their clip (game/ArmReach.js)
+export function wheelGrips( center, axis, r ) {
+
+	const n = axis.clone().normalize(), across = new Vector3( 1, 0, 0 ).addScaledVector( n, - n.x ).normalize();
+	const up = new Vector3().crossVectors( n, across ).normalize();
+	if ( up.y < 0 ) up.negate();
+	const grip = ( s ) => center.clone().addScaledVector( across, s * r * Math.cos( Math.PI / 6 ) ).addScaledVector( up, r * Math.sin( Math.PI / 6 ) );
+	return [ grip( - 1 ), grip( 1 ) ];
+
+}
+
 // (together/) a geometry for one copy: g's attributes and index, until it's given its own (let go with dropView)
 export function geometryView( g ) {
 

@@ -277,6 +277,9 @@ export class BoatCopies {
 			return v;
 
 		} );
+		// ((M21) on a phone, what's past her low meshes only as near as she is (near), and only what's fitted: dressCopy showed
+		// what's fitted at any distance, her tower, outriggers and chair over a phone's triangles till she'd once been near)
+		if ( u.extras ) for ( const m of u.extras ) m.visible = !! u.nearOn && m.userData.fits !== false;
 		const hex = fitPaint( f );
 		let p = hex === null ? null : e.paints.get( hex );
 		if ( hex !== null && ! p ) {
@@ -395,8 +398,9 @@ export class BoatCopies {
 		const app = this.app;
 		if ( e.template ) return e.template;
 		const t = e.template = e.model.group.clone( true );
-		// (what's yours or hers alone: her lamps, her name on her transom, her pool of light)
-		for ( const name of [ 'BoatLamps', 'boat-name', 'boat-underGlowOwn' ] ) {
+		// (what's yours or hers alone: her lamps, her name on her transom, her pool of light; ((M21) her mate, rigs/Mate.js: a copy has
+		// its own, by her pose)
+		for ( const name of [ 'BoatLamps', 'boat-name', 'boat-underGlowOwn', 'Deckhand' ] ) {
 
 			const own = t.getObjectByName( name );
 			if ( own ) own.removeFromParent();

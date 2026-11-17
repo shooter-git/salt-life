@@ -3,6 +3,7 @@ import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
 import { Character } from '../game/Character.js';
 import { Figure } from './Figure.js';
 import { seatPose } from '../world/boat/kayak/SeatPose.js';
+import { armsOf, gripWheel } from '../game/ArmReach.js';
 
 // (Salt Life) Another player on the island: one of four islanders (Microsoft Rocketbox, as Joe and
 // Marta: tools/characters/players.sh), the one they chose (in the cooler; it comes with their poses),
@@ -11,10 +12,14 @@ import { seatPose } from '../world/boat/kayak/SeatPose.js';
 // front (an umbrella's handle in Rocketbox), both hands on the wheel at the helm (a trolley's), a cheer
 // and a wave. Swimming has no clip: the arms turn over and the legs kick, posed here on the idle, the
 // body lying face down. Until their look has loaded (or if it doesn't) a stand-in figure (Figure.js).
+// (M21) At a helm the trolley's hold keeps the hands at the hips: given her wheel's grips (wheel: { r, l }, world), the arms are
+// reached to its rim after the clip (game/ArmReach.js, as the sportfisher's mate's are).
 //   const a = new Avatar( person );  scene.add( a.group );  a.look = name;  a.setLook( gltf )  (again to change)
-//   a.pose( { mode, speed, rod, gun, reach }, dt )   mode 'walk' | 'swim' | 'deck' | 'helm'; rod: holding one;
+//   a.pose( { mode, speed, rod, gun, reach, wheel }, dt )   mode 'walk' | 'swim' | 'deck' | 'helm'; rod: holding one;
 //                                        gun (Salt Life): swimming with a speargun; reach: { r, l }, the
-//                                        hands held out to these (world: a cast net in them)
+//                                        hands held out to these (world: a cast net in them); (M21) wheel:
+//                                        { r, l }, at a helm, the hands on its wheel's rim there (world)
+//   a.short                              ((M21) how far the further wrist is from its grip, m (0: on the wheel)
 //   a.hand( out )                        the right hand (world): the rod's grip
 //   a.once( 'wave_01' | 'cheer_01' )     a gesture, when standing
 // Feet at the group's origin facing +Z.
@@ -91,6 +96,8 @@ export class Avatar {
 		this.body.add( this.figure.group );
 		this.character = null;
 		this.bones = null;
+		this.arms = null; // ((M21) the arms that reach a wheel: ArmReach.armsOf)
+		this.short = null;
 		this._swim = 0;
 		this._sit = 0;
 		this._phase = 0;
@@ -141,6 +148,7 @@ export class Avatar {
 			hand: bone( /R_?Hand$/ ), handL: bone( /L_?Hand$/ ), armL: bone( /L_?UpperArm$/ ), armR: bone( /R_?UpperArm$/ ),
 			thighL: bone( /L_?Thigh$/ ), thighR: bone( /R_?Thigh$/ ), calfL: bone( /L_?Calf$/ ), calfR: bone( /R_?Calf$/ ),
 		};
+		this.arms = armsOf( scene ); // ((M21) to reach the wheel at a helm)
 		if ( this.figure ) {
 
 			this.body.remove( this.figure.group );
@@ -172,7 +180,7 @@ export class Avatar {
 	// (Salt Life) gun: swimming with a speargun, held out ahead in the right hand; reach: { r, l } (world)
 	// where their hands hold something out (a cast net), or null
 	// (M16) sit: in a seat (a kayak's, a fighting chair), facing as the group does
-	pose( { mode, speed = 0, rod = false, gun = false, reach = null, seat = null, sit = false }, dt ) {
+	pose( { mode, speed = 0, rod = false, gun = false, reach = null, seat = null, sit = false, wheel = null }, dt ) {
 
 		// lying face down in the water (the chest at the float point), upright otherwise
 		this._swim += ( ( mode === 'swim' ? 1 : 0 ) - this._swim ) * ( 1 - Math.exp( - dt * 6 ) );
@@ -255,6 +263,15 @@ export class Avatar {
 			turnBone( B.thighR, _axis, - a );
 			turnBone( B.calfL, _axis, a );
 			turnBone( B.calfR, _axis, a );
+
+		}
+
+		// ((M21) both hands on the wheel at a helm (not sat in a kayak's seat, which has a paddle in them)
+		this.short = null;
+		if ( mode === 'helm' && ! seat && wheel ) {
+
+			this.group.updateMatrixWorld( true );
+			this.short = gripWheel( this.arms, this.body, wheel.r, wheel.l );
 
 		}
 

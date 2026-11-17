@@ -1,11 +1,11 @@
 import { Mesh, BufferGeometry, Float32BufferAttribute, Matrix4, Quaternion, Vector3, Vector4, MathUtils } from '../engine/index.js';
-import { prepare, mergePrepared, cylinder, torus, sphere, rod, mat4, lathe, roundedBox, tube } from '../world/boat/GeoKit.js';
+import { prepare, mergePrepared, cylinder, torus, sphere, mat4, lathe } from '../world/boat/GeoKit.js';
 import { createPropMaterial, createLineMaterial, PAT } from './GameMaterials.js';
 import { G } from '../core/Globals.js';
 import { windBeyondFair } from './Weather.js';
 import { RIGS } from './rigs/Presentation.js';
-import { buildBigRodGeometry } from './rigs/BigRod.js';
-import { buildFlyRodGeometry, FLY_K, FLY_HOLD, FLY_LINE_COLOR, FLY_LINE_GLOW } from './rigs/FlyRod.js';
+import { FLY_LINE_COLOR, FLY_LINE_GLOW } from './rigs/FlyRod.js';
+import { DEFAULT_GEAR, FLY_LINE, LINES, fitUniforms, gearModel, hasModel, modelOf } from './rigs/GearModels.js';
 
 // (M20) the landing net's hoop, ready, this far off a netted fish as it comes in (m: Rigs' NET.reach, and a little more)
 const NET_SHOWN = 2.2;
@@ -47,23 +47,27 @@ export function placeNet( mesh, at, from, y ) {
 
 // The fishing rod in the player's hands, its line and the bobber.
 //
-// A 7 ft medium saltwater spinning combo at real scale: a tapered carbon blank under clear coat,
-// split EVA grip, screw-down reel seat with hoods, eight graduated guides with ceramic inserts and
-// thread wraps, a hook keeper and tip-top; and a 3000-size spinning reel hanging under the seat
-// (gearbox body, rotor with a bail arm and line roller, spool wound with braid, front drag knob,
-// crank handle with a T-knob).
+// (M21) Each rod and each reel drawn as itself (rigs/GearModels.js: the hand-me-down, the 7 ft graphite, the 9 ft surf rod, the
+// stand-up rod, the bent-butt chair rod and the fly rods; the old and the smooth spinning reels, the conventional, the
+// two-speed, the wide 80, the 130, the electric and the fly reels), each at its real size, built the first time it's wanted
+// and kept by what it is. Before M21 one model stood for every spinning rod and reel: a 7 ft medium saltwater spinning combo,
+// a carbon blank, split EVA grip, screw-down seat, eight guides, a spinning reel under it; it's the graphite rod's and the
+// smooth reel's shape now.
 //
-// Rod frame: +Y along the blank (butt at 0, tip at ROD_L), the reel hangs toward -Z, +X to the
-// right. Held in first person by the reel seat (SEAT_Y), relative to the camera: a pose (elevation
-// of the rod above the view direction, sideways swing, hand position) is eased between idle /
-// wind-up / flick / fighting.
+// Rod frame: +Y along the blank (butt at 0, tip at the model's length), the reel and the guides toward -Z, +X to the right.
+// Held in first person where the model says (its fit's hold: a spinning rod's reel seat, a fly rod's cork), relative to the
+// camera: a pose (elevation of the rod above the view direction, sideways swing, hand position) is eased between idle /
+// wind-up / flick / fighting. A reel that rides on top (a conventional, a big-game reel, the electric) is the same frame
+// turned over.
 //
-// Everything is one merged mesh; the moving parts are tagged in aux.w and animated in the vertex
-// shader: 1 rotor, 2 bail (opens about its pivots, turns with the rotor), 3 crank handle, 4 spool
-// and drag knob (oscillates in and out as you crank, turns backwards when the drag slips), 5 braid
-// on the spool (as 4, its radius follows the line left on the spool). The blank bends toward the
-// line with a fast action: under a light load only the tip section bends, under a heavy one the
-// bend works down into the butt. The same curve is evaluated here for the tip the line leaves from.
+// Rod and reel are one merged mesh; the moving parts are tagged in aux.w (rigs/RodParts.js' PART) and moved in the vertex
+// shader about the model's own axes (uniforms rodFit and reelAxis, set as a model's fitted): a spinning reel's rotor, bail
+// (opens about its pivots, turns with the rotor), crank, spool (in and out as you crank, back when the drag slips) and the
+// line on it (its radius following the line left); a drum's (a conventional's, a big-game reel's, a fly reel's) crank and
+// spool (turning as you wind, back as a fish takes line) and the line on it. The line on the spool and along the rod is the
+// line in use's colour (reelLine), as the line in the air is (lineMat). The blank bends toward the line with a fast action:
+// under a light load only the tip section bends, under a heavy one the bend works down into the butt. The same curve is
+// evaluated here for the tip the line leaves from.
 //
 // States: 'stowed' -> 'idle' -> ( hold ) 'windup' -> ( release ) 'flick' -> 'flying' (bobber in the
 // air) -> 'floating' (on the water; bites come here) -> 'fighting' (fish on) -> back to 'idle';
@@ -72,15 +76,13 @@ export function placeNet( mesh, at, from, y ) {
 //
 // (M16) rig ('float', 'bottom', 'drop', 'kite', 'troll': rigs/Presentation.js) says what's on the line, hookM how far down
 // the hook is: under a float a little way, or sinking on a lead from where it went in until it's on the bottom or
-// you've no more line you can work. Past 'float' there's no float to draw. big: the stand-up rod (rigs/BigRod.js), its
-// reel on top of it, so it's the same frame turned over.
+// you've no more line you can work. Past 'float' there's no float to draw.
 //
-// (M19) flyRod: the 9 ft fly rod (rigs/FlyRod.js), drawn by this rod's material stretched FLY_K along the blank, held by its
-// cork. With it, 'idle' -> 'falsecast' (the line in the air, back and forth) -> 'shoot' (shot, unrolling and laid down) ->
-// 'floating' (the fly on the water, stripped back) as game/FlyCast.js drives them: it sets the pose through each stroke
-// (flyPose), the fly's place (the bobber) and draws the line in the air (rigs/FlyLine.js); the fly's line on the water is this
-// line, wider and the fly line's colour.
-export const ROD_L = 2.13; // 7 ft
+// (M19) flyRod: a fly rod (rigs/FlyRod.js), held by its cork. With it, 'idle' -> 'falsecast' (the line in the air, back and
+// forth) -> 'shoot' (shot, unrolling and laid down) -> 'floating' (the fly on the water, stripped back) as game/FlyCast.js
+// drives them: it sets the pose through each stroke (flyPose), the fly's place (the bobber) and draws the line in the air
+// (rigs/FlyLine.js); the fly's line on the water is this line, wider and the fly line's colour.
+export const ROD_L = 2.13; // (the 7 ft graphite's length: the one model's before M21)
 
 // The blank's bend: a damped spring toward its load (~2.5 Hz, lightly damped), stepped in substeps of at
 // most BEND_STEP whatever the frame's length. Stepped once a frame, a frame of 0.0985 s or more (the
@@ -105,12 +107,7 @@ export function bendStep( s, target, dt ) {
 }
 const _bs = { x: 0, v: 0 };
 
-const BLANK_START = 0.535; // front of the fore grip: the blank bends from here
-export const SEAT_Y = 0.405; // the hand holds the reel seat (reel foot between the fingers)
-const REEL_Z = - 0.092; // reel axis below the blank
-const BODY_Y = 0.327; // crank axis height along the rod
-const PIVOT_Y = 0.403; // bail pivots at the rotor arm ends
-const GEAR = 5.2; // rotor turns per crank turn
+// (M21) the hand holds the model where its fit says, its blank bends from where its fit says: rigs/GearModels.js
 const LINE_PER_CRANK = 0.8; // m of line per crank turn
 const LINE_SEGS = 48;
 const GRAV = 9.81;
@@ -127,23 +124,17 @@ const DRIFT_DEPTH = 0.3;
 // line are pushed), washed up where the water ends, until it's out of sight (LOST_FAR m) or LOST_S s on
 const RIG_S = 8, LOST_TAIL = 1.6, LOST_DRIFT = 0.03, LOST_DRIFT_MIN = 0.08, LOST_FAR = 120, LOST_S = 150;
 
-// guides: position along the rod, ring inner radius, ring centre height below the blank's axis
-const GUIDES = [
-	[ 0.86, 0.0125, 0.068 ], [ 1.1, 0.0085, 0.046 ], [ 1.31, 0.0058, 0.031 ], [ 1.49, 0.0045, 0.023 ],
-	[ 1.65, 0.004, 0.0195 ], [ 1.8, 0.0036, 0.0165 ], [ 1.93, 0.0034, 0.0145 ], [ 2.035, 0.0032, 0.0125 ],
-];
-
-const blankR = ( y ) => MathUtils.lerp( 0.0074, 0.0011, Math.pow( MathUtils.clamp( ( y - BLANK_START ) / ( ROD_L - BLANK_START ), 0, 1 ), 0.85 ) );
-
 // bend of the blank at rod height y (same curve in the vertex shader): lateral deflection along the
-// bend direction and the drop along the rod that keeps its length about constant
-const BEND_P = ( load ) => MathUtils.lerp( 3.4, 1.7, MathUtils.clamp( load, 0, 1 ) );
-function bendAt( y, bend, p, out ) {
+// bend direction and the drop along the rod that keeps its length about constant. ((M21) Each model's own: fit's blankStart,
+// length (L) and the length its bend's a share of (bendL: its own, a fly rod's M19's 7 ft, so it bends as FlyCast has it);
+// exported for the rods in the holders: rigs/HolderRods.js)
+export const BEND_P = ( load ) => MathUtils.lerp( 3.4, 1.7, MathUtils.clamp( load, 0, 1 ) );
+export function bendAt( y, bend, p, out, fit ) {
 
-	const s = MathUtils.clamp( ( y - BLANK_START ) / ( ROD_L - BLANK_START ), 0, 1 );
-	const lat = bend * ROD_L * Math.pow( s, p );
+	const s = MathUtils.clamp( ( y - fit.blankStart ) / ( fit.L - fit.blankStart ), 0, 1 );
+	const lat = bend * fit.bendL * Math.pow( s, p );
 	out.lat = lat;
-	out.drop = 0.5 * lat * lat / ( y - BLANK_START + 0.06 );
+	out.drop = 0.5 * lat * lat / ( y - fit.blankStart + 0.06 );
 	return out;
 
 }
@@ -151,6 +142,11 @@ function bendAt( y, bend, p, out ) {
 const _b = { lat: 0, drop: 0 };
 const _m = new Matrix4(), _q = new Quaternion(), _v = new Vector3(), _w = new Vector3(), _x = new Vector3(), _y = new Vector3(), _z = new Vector3();
 const _tipOld = new Vector3(); // last frame's tip: its own vector (the scratch vectors are reused during update)
+// (M21) the tip the cast, the line out and the fight go by, wherever the drawn rod's is: the one model's before M21, a 7 ft rod
+// held 0.405 m up it, its blank bending from 0.535 (the stand-up rod's the same), and M19's fly rod, drawn 7 ft long stretched
+// back to 9 ft by FLY_K0, held 0.3 m up. So what's cast and fought is as it was (a longer or shorter rod drawn puts its line's
+// end on the water a little further or nearer: lineTip)
+const OLD_TIP = { L: 2.13, blankStart: 0.535, bendL: 2.13, hold: 0.405 }, FLY_K0 = 2.74 / 2.13, FLY_HOLD0 = 0.3;
 const _up = new Vector3( 0, 1, 0 );
 const _h = new Vector3();
 
@@ -166,77 +162,113 @@ export const POSES = {
 	rigging: { elev: 0.12, side: 0.3, hand: [ 0.12, - 0.16, - 0.36 ] }, // ((M14) held low and close, tying on a new hook)
 	fly: { elev: 0.22, side: 0.12, hand: [ 0.17, - 0.1, - 0.42 ] }, // ((M19) a fly rod's false casting: FlyCast sets its elevation
 };
-const FLY_MONO = 0xd8dde0; // (the fishing line's own colour, given back off the fly rig)
 
-// the rod's material: the carbon blank, its wraps and the reel, with the reel's and the blank's
-// animation in the vertex shader (uniforms rodBend, rodShape, reelAnim, reelAnim2)
-function createRodMaterial() {
+// the rod's material: the blank, its wraps and the reel, with the reel's and the blank's animation in the vertex shader
+// (uniforms rodBend, rodShape, reelAnim, reelAnim2). (M21) One program for every rod and reel: each model's own figures are
+// per-material uniforms, set as it's fitted (GearModels' fitUniforms): rodFit (where its blank bends from, its length, the
+// least radius of the line on its spool, its bail's pivots), reelAxis (its spool's centre, y and z, and its crank's) and
+// reelLine (the line in use's colour, and whether it's braid). Before M21 these were constants written into the source,
+// which every model had to be built around. Exported for the others' copies (Together) and the rods in the holders
+// (rigs/HolderRods.js)
+export function createRodMaterial() {
 
-	const f = ( x ) => x.toFixed( 4 );
 	return createPropMaterial( 'fishingRod', {
 		clearcoat: true,
 		uniforms: {
 			rodBend: { value: new Vector4() }, // xyz bend direction (rod space), w bend
-			rodShape: { value: new Vector4( 3, 0, 0, 0 ) }, // x: bend exponent (fast action)
+			rodShape: { value: new Vector4( 3, ROD_L, 0, 0 ) }, // x: bend exponent (fast action), (M21) y: the length its bend's a share of
 			reelAnim: { value: new Vector4() }, // rotor angle, bail open 0..1, crank angle, spool angle
 			reelAnim2: { value: new Vector4( 0, 1, 0, 0 ) }, // spool oscillation (m), line fill
+			rodFit: { value: new Vector4( 0.44, ROD_L, 0.0185, 0.403 ) }, // (M21) blank's start, length, the line's least radius, the bail's pivots
+			reelAxis: { value: new Vector4( 0.326, - 0.104, 0.256, - 0.104 ) }, // (M21) the spool's centre (y, z), the crank's (y, z)
+			reelLine: { value: new Vector4( 0.69, 0.72, 0.74, 0 ) }, // (M21) the line's colour (linear), 1 braid
 		},
 		vertex: /* glsl */`
 	float part = aux.w;
-	vec3 axisC = vec3( 0.0, 0.0, ${ f( REEL_Z ) } );
-	if ( part > 0.5 ) {
+	if ( part > 0.5 && part < 7.5 ) {
 		if ( part < 2.5 ) {
 			if ( part > 1.5 ) {
-				// the bail flips back about the line through its two pivots
+				// a spinning reel's bail flips back about the line through its two pivots
 				float a = - reelAnim.y * 1.95;
-				vec3 c = vec3( 0.0, ${ f( PIVOT_Y ) }, ${ f( REEL_Z ) } );
+				vec3 c = vec3( 0.0, rodFit.w, reelAxis.y );
 				float ca = cos( a ); float sa = sin( a );
 				vec3 q = P - c;
 				P = c + vec3( q.x, q.y * ca - q.z * sa, q.y * sa + q.z * ca );
 				Nn = vec3( Nn.x, Nn.y * ca - Nn.z * sa, Nn.y * sa + Nn.z * ca );
 			}
-			// rotor (and the bail on it) turn about the reel axis
+			// its rotor (and the bail on it) turn about the reel's axis
 			float a = reelAnim.x;
 			float ca = cos( a ); float sa = sin( a );
-			vec3 q = P - axisC;
-			P = vec3( q.x * ca + q.z * sa, P.y, - q.x * sa + q.z * ca ) + vec3( 0.0, 0.0, axisC.z );
+			vec3 q = P - vec3( 0.0, 0.0, reelAxis.y );
+			P = vec3( q.x * ca + q.z * sa, P.y, - q.x * sa + q.z * ca + reelAxis.y );
 			Nn = vec3( Nn.x * ca + Nn.z * sa, Nn.y, - Nn.x * sa + Nn.z * ca );
 		} else if ( part < 3.5 ) {
-			// crank handle about its shaft (along x)
+			// a crank about its shaft (along x)
 			float a = reelAnim.z;
-			vec3 c = vec3( 0.0, ${ f( BODY_Y ) }, ${ f( REEL_Z ) } );
+			vec3 c = vec3( 0.0, reelAxis.z, reelAxis.w );
 			float ca = cos( a ); float sa = sin( a );
 			vec3 q = P - c;
 			P = c + vec3( q.x, q.y * ca - q.z * sa, q.y * sa + q.z * ca );
 			Nn = vec3( Nn.x, Nn.y * ca - Nn.z * sa, Nn.y * sa + Nn.z * ca );
-		} else {
-			// spool: in and out with the crank, turning back when the drag slips; the braid on it
-			// shrinks as line goes out
-			vec3 q = P - axisC;
+		} else if ( part < 5.5 ) {
+			// a spinning reel's spool: in and out with the crank, turning back when the drag slips; the line on it shrinks as
+			// it goes out
+			vec3 q = P - vec3( 0.0, 0.0, reelAxis.y );
 			if ( part > 4.5 ) {
 				float r = length( q.xz );
-				float r2 = mix( 0.0205, r, reelAnim2.y );
-				q = vec3( q.x * r2 / max( r, 1e-5 ), q.y, q.z * r2 / max( r, 1e-5 ) );
+				q.xz *= mix( rodFit.z, r, reelAnim2.y ) / max( r, 1e-5 );
 			}
 			float a = reelAnim.w;
 			float ca = cos( a ); float sa = sin( a );
-			P = vec3( q.x * ca + q.z * sa, P.y + reelAnim2.x, - q.x * sa + q.z * ca ) + vec3( 0.0, 0.0, axisC.z );
+			P = vec3( q.x * ca + q.z * sa, P.y + reelAnim2.x, - q.x * sa + q.z * ca + reelAxis.y );
 			Nn = vec3( Nn.x * ca + Nn.z * sa, Nn.y, - Nn.x * sa + Nn.z * ca );
+		} else {
+			// a drum's spool (a conventional's, a big-game reel's, a fly reel's) about its axis across the rod, the line on it
+			// shrinking as it goes out
+			vec3 q = P - vec3( 0.0, reelAxis.x, reelAxis.y );
+			if ( part > 6.5 ) {
+				float r = length( q.yz );
+				q.yz *= mix( rodFit.z, r, reelAnim2.y ) / max( r, 1e-5 );
+			}
+			float a = reelAnim.w;
+			float ca = cos( a ); float sa = sin( a );
+			P = vec3( q.x, q.y * ca - q.z * sa + reelAxis.x, q.y * sa + q.z * ca + reelAxis.y );
+			Nn = vec3( Nn.x, Nn.y * ca - Nn.z * sa, Nn.y * sa + Nn.z * ca );
 		}
 	}
+	// the line on the spool and along the rod: the line in use's colour; braid matt and woven, mono glossy
+	if ( ( part > 4.5 && part < 5.5 ) || part > 6.5 ) {
+		vColor.rgb = reelLine.rgb;
+		vAux.x = mix( 0.32, 0.72, reelLine.w );
+		vAux.z = reelLine.w * 11.0;
+	}
 	// the blank bends toward the line (fast action: rodShape.x = exponent of the deflection)
-	float span = ${ f( ROD_L - BLANK_START ) };
-	float s = clamp( ( P.y - ${ f( BLANK_START ) } ) / span, 0.0, 1.0 );
+	float span = rodFit.y - rodFit.x;
+	float s = clamp( ( P.y - rodFit.x ) / span, 0.0, 1.0 );
 	float pw = rodShape.x;
-	float lat = rodBend.w * ${ f( ROD_L ) } * pow( s, pw );
-	float slope = rodBend.w * ${ f( ROD_L ) } * pw * pow( max( s, 1e-4 ), pw - 1.0 ) / span;
-	float drop = 0.5 * lat * lat / ( max( P.y - ${ f( BLANK_START ) }, 0.0 ) + 0.06 );
+	float lat = rodBend.w * rodShape.y * pow( s, pw );
+	float slope = rodBend.w * rodShape.y * pw * pow( max( s, 1e-4 ), pw - 1.0 ) / span;
+	float drop = 0.5 * lat * lat / ( max( P.y - rodFit.x, 0.0 ) + 0.06 );
 	P = P + rodBend.xyz * lat - vec3( 0.0, drop, 0.0 );
 	Nn = normalize( Nn - vec3( 0.0, slope * dot( Nn, rodBend.xyz ), 0.0 ) );
 `,
 	} );
 
 }
+
+// (M21) a rod mesh made the model `gear` ({ rod, reel, line }: GearModels'), its geometry and its material's figures -> the model
+export function fitRodMesh( mesh, gear ) {
+
+	const m = gearModel( gear.rod, gear.reel );
+	mesh.geometry = m.geometry;
+	fitUniforms( mesh.material.uniforms, m, gear.line );
+	return m;
+
+}
+
+// (M21) what you start with: the hand-me-down and the old spinning reel, 8 lb mono (Gear's first levels)
+const START = { rod: 0, reel: 0, line: 0 };
+const sameGear = ( a, b ) => !! a && !! b && a.rod === b.rod && a.reel === b.reel && a.line === b.line;
 
 export class FishingRod {
 
@@ -271,6 +303,7 @@ export class FishingRod {
 		this._wander = 0;
 		this.onLand = null; // callback( 'water' | 'ground' ) when the bobber lands
 		this.tip = new Vector3();
+		this.lineTip = new Vector3(); // ((M21) the drawn rod's own tip, where the line's drawn from)
 		this._rig = 0; // ((M14) s left tying on a new hook and float)
 		this.lost = null; // ((M14) a snapped line's float: { pos, back (unit: the way it broke), t, waterY, ashore })
 		this.rig = 'float'; // ((M16) what's on the line)
@@ -282,10 +315,14 @@ export class FishingRod {
 		this.dropReach = Infinity; // the most line you can work there (m)
 		this.stopM = null; // ((M16) where you've stopped a lead on its way down, m: null, it goes on: Rigs.holdLead)
 		this.hung = null; // (Vector3: where a kite's clip holds the line up: Kite.js)
-		this.big = false;
-		this.flyRod = false; // ((M19) the fly rod's in your hands: rigs/FlyRod.js)
-		this._kind = 'small'; // ((M19) the rod that's fitted, and the one that's wanted: 'small' | 'big' | 'fly')
-		this._want = 'small';
+		this.big = false; // ((M16) a reel on top: the frame turned over. (M21) the model's: fit.top)
+		this.flyRod = false; // ((M19) a fly rod's in your hands: rigs/FlyRod.js)
+		// ((M21) the rod, reel and line that are fitted ({ rod, reel, line }: rigs/GearModels.js), the model and its figures, and
+		// those that are wanted: a model's built the first time it's wanted in your hands)
+		this.gear = null;
+		this.model = null;
+		this.fit = null;
+		this._wantGear = START;
 		this.flyPose = null; // ((M19) { elev, bend }: FlyCast's, through a false cast and the fly fished)
 		this.scream = 0; // (a rod in its holder taking line, m/s: its reel's the sound you hear)
 
@@ -293,6 +330,7 @@ export class FishingRod {
 		this.bendVel = 0;
 		this.load = 0; // 0..1: how deep the bend works into the blank
 		this.rotor = 0; this.crank = 0; this.spoolAng = 0; this.spoolOsc = 0;
+		this.spoolTurn = 0; // ((M21) a drum's spool, turned as you wind)
 		this.bail = 0; // 0 closed .. 1 open
 		this.bailTarget = 0;
 		this.crankRate = 0; // crank turns / s (smoothed)
@@ -301,7 +339,8 @@ export class FishingRod {
 
 		// ---- meshes
 		this.rodMat = createRodMaterial();
-		this.rodMesh = new Mesh( buildRodGeometry(), this.rodMat );
+		// ((M21) in the scene from the start, as the one model was: what you start with, built now)
+		this.rodMesh = new Mesh( undefined, this.rodMat );
 		this.rodMesh.name = 'FishingRod';
 		this.rodMesh.frustumCulled = false;
 		this.rodMesh.castShadow = false;
@@ -338,6 +377,7 @@ export class FishingRod {
 		}
 
 		scene.add( this.rodMesh, this.bobberMesh, this.lineMesh, this.lostMesh, this.lostLine );
+		this._fitGear( START );
 		// ((M20) the landing net (Gear's landingNet), drawn as a netted fish comes alongside and as it's lifted out: netting, set by
 		// the game as the fight starts (Rigs' net). Made, and put in the scene, the first time it's wanted: in it from the start, the
 		// load's compile built the bobber's program before ready, a 17th)
@@ -348,10 +388,13 @@ export class FishingRod {
 	}
 
 	// (Salt Life) another player's rod, bobber and line (together/Together.js): the same geometry, and
-	// materials of their own (the rod's bend and the line's ends are uniforms) in the same programs
+	// materials of their own (the rod's bend and the line's ends are uniforms) in the same programs. ((M21) Their rod's the model
+	// their pose says, fitted by Together; till then the one drawn for a game that doesn't say: GearModels' DEFAULT_GEAR)
 	tackle() {
 
-		const rod = new Mesh( this._smallRod || this.rodMesh.geometry, createRodMaterial() ); // ((M19) the spinning rod's, whichever's in your hands)
+		const rod = new Mesh( undefined, createRodMaterial() );
+		rod.userData.gear = DEFAULT_GEAR;
+		rod.userData.model = fitRodMesh( rod, DEFAULT_GEAR );
 		const bobber = new Mesh( this.bobberMesh.geometry, this.bobberMat );
 		const line = new Mesh( this.lineMesh.geometry, createLineMaterial( LINE_SEGS ) );
 		const net = new Mesh( undefined, this.bobberMat ); // ((M20) their landing net: netGeometry, when it's first wanted)
@@ -369,47 +412,60 @@ export class FishingRod {
 
 	}
 
-	setGear( { castM, reelSpeed, spoolM = 180, standUp = false, fly = 0 } ) {
+	// model: the rod, reel and line to draw ({ rod, reel, line }: GearModels' modelOf, Rigs.rodGear's); without it, as before
+	// M21: a fly rod by its weight, the stand-up rod, or what you start with
+	setGear( { castM, reelSpeed, spoolM = 180, standUp = false, fly = 0, model = null } ) {
 
 		this.castM = castM;
 		this.reelSpeed = reelSpeed;
 		this.spoolM = spoolM;
 		this.standUp = standUp;
 		this.flyWt = fly; // ((M19) the fly rod's weight, 0 none)
-		// ((M16) the stand-up rod's built as it's first bought or taken out: most never get there; (M19) the fly rod too)
-		this._want = fly ? 'fly' : standUp ? 'big' : 'small';
-		if ( this._want !== this._kind && ( this._want === 'small' || this.equipped ) ) this._fitRod( this._want );
+		this.setModel( model || ( fly ? modelOf( { fly } ) : standUp ? modelOf( { rod: 3, reel: 3, line: 3 } ) : START ) );
 
 	}
 
-	// (M19) the fly rod's model, built the first time it's wanted (yours, or another player's in their hands: Together)
-	flyRodGeometry() {
+	// (M21) the rod, reel and line in your hands: fitted now if it's built already or the rod's in your hands, else as it's
+	// taken up (equip). ((M16) the stand-up rod's built as it's first bought or taken out: most never get there; (M19) the fly
+	// rod too. Each model's so now)
+	setModel( gear ) {
 
-		return ( this._flyRod = this._flyRod || buildFlyRodGeometry() );
+		if ( ! gear ) return;
+		this._wantGear = gear;
+		if ( sameGear( gear, this.gear ) ) return;
+		if ( this.equipped || hasModel( gear.rod, gear.reel ) ) this._fitGear( gear );
 
 	}
 
-	_fitRod( kind ) {
+	_fitGear( gear ) {
 
-		this._kind = kind;
-		this.big = kind === 'big';
-		this.flyRod = kind === 'fly';
-		this._smallRod = this._smallRod || this.rodMesh.geometry;
-		this.rodMesh.geometry = kind === 'big' ? ( this._bigRod = this._bigRod || buildBigRodGeometry() ) : kind === 'fly' ? this.flyRodGeometry() : this._smallRod;
+		this.gear = { rod: gear.rod, reel: gear.reel, line: gear.line };
+		this.model = fitRodMesh( this.rodMesh, gear );
+		this.fit = this.model.fit;
+		this.big = this.fit.top;
+		this.flyRod = this.fit.fly;
+		this._lineLook();
+
+	}
+
+	// (M21) the line in the air and on the water as the line in use: its colour (GearModels' LINES), matt as braid is; a fly's the
+	// fly line, its colour and its glow (FlyLine's), and wider
+	_lineLook() {
+
+		const fly = this.rig === 'fly', L = LINES[ fly ? FLY_LINE : this.gear ? this.gear.line : 0 ] || LINES[ 0 ];
+		this.lineMat.color.setHex( fly ? FLY_LINE_COLOR : L.color );
+		this.lineMat.roughness = L.braid ? 0.75 : 0.35;
+		if ( ! fly ) this.lineMat.emissive.setHex( 0 );
 
 	}
 
 	// (M16) what's on the line for the next cast
 	setRig( rig, floatOff = false ) {
 
-		// ((M19) a fly's line is the fly line: its colour and its glow (FlyLine's), and wider)
-		if ( ( rig === 'fly' ) !== ( this.rig === 'fly' ) ) {
-
-			this.lineMat.color.setHex( rig === 'fly' ? FLY_LINE_COLOR : FLY_MONO );
-			if ( rig !== 'fly' ) this.lineMat.emissive.setHex( 0 );
-
-		}
+		// ((M19) a fly's line is the fly line: its colour and its glow (FlyLine's), and wider. (M21) Off it, the line in use's)
+		const was = this.rig;
 		this.rig = rig;
+		if ( ( rig === 'fly' ) !== ( was === 'fly' ) ) this._lineLook();
 		this.floatOff = floatOff;
 		this.hookM = 0;
 		this.settled = false;
@@ -433,7 +489,7 @@ export class FishingRod {
 
 	equip( on ) {
 
-		if ( on && this._want !== this._kind ) this._fitRod( this._want );
+		if ( on && ! sameGear( this._wantGear, this.gear ) ) this._fitGear( this._wantGear );
 		this.equipped = on;
 		if ( on && this.state === 'stowed' ) this.setState( 'idle' );
 		if ( on && this.audio && this.audio.rodReady ) this.audio.rodReady();
@@ -531,7 +587,7 @@ export class FishingRod {
 
 		this.t += dt;
 		const cam = this.camera;
-		const tipOld = _tipOld.copy( this.tip );
+		const tipOld = _tipOld.copy( this.lineTip );
 		// ((M14) tying on a new hook and float after a snap: no cast until it's on, whatever's happened since)
 		if ( this._rig > 0 ) this._rig = Math.max( 0, this._rig - dt );
 		if ( this.state === 'idle' && this._rig > 0 ) this.setState( 'rigging' );
@@ -581,6 +637,7 @@ export class FishingRod {
 		_z.set( 0, 1, 0 ).addScaledVector( _y, - _y.y ).normalize();
 		_x.crossVectors( _y, _z ).normalize();
 		// ((M16) a conventional rod's reel and guides ride on top of it)
+		const fit = this.fit;
 		if ( this.big ) {
 
 			_x.negate();
@@ -588,9 +645,9 @@ export class FishingRod {
 
 		}
 
-		// ((M19) the fly rod: stretched back to its 9 ft along the blank, held by its cork)
-		if ( this.flyRod ) _m.makeBasis( _x, _w.copy( _y ).multiplyScalar( FLY_K ), _z ).setPosition( _h.copy( p.hand ).addScaledVector( _y, - FLY_HOLD ) );
-		else _m.makeBasis( _x, _y, _z ).setPosition( _h.copy( p.hand ).addScaledVector( _y, - SEAT_Y ) );
+		// ((M21) held where the model says: a spinning rod's reel seat, a big rod's fore-grip at its reel, a fly rod's cork. Each at
+		// its real length: M19's fly rod was drawn the spinning rod's length and stretched back by the hand's matrix)
+		_m.makeBasis( _x, _y, _z ).setPosition( _h.copy( p.hand ).addScaledVector( _y, - fit.hold ) );
 		cam.updateMatrixWorld();
 		this.rodMesh.matrix.multiplyMatrices( cam.matrixWorld, _m );
 		this.rodMesh.matrixWorldNeedsUpdate = true;
@@ -641,16 +698,21 @@ export class FishingRod {
 		} else this.bendDir.lerp( _w.set( 0, 0, this.big ? 1 : - 1 ), 1 - Math.exp( - dt * 10 ) ).normalize();
 		const P = BEND_P( this.load );
 		this.rodMat.uniforms.rodBend.value.set( this.bendDir.x, 0, this.bendDir.z, this.bend );
-		this.rodMat.uniforms.rodShape.value.set( P, 0, 0, 0 );
+		this.rodMat.uniforms.rodShape.value.x = P;
 
-		// tip in world space (same curve as the shader)
-		bendAt( ROD_L, this.bend, P, _b );
-		this.tip.set( this.bendDir.x * _b.lat, ROD_L - _b.drop, this.bendDir.z * _b.lat ).applyMatrix4( this.rodMesh.matrix );
+		// tip in world space (same curve as the shader): ((M21) the drawn rod's, the line's drawn from it)
+		bendAt( fit.L, this.bend, P, _b, fit );
+		this.lineTip.set( this.bendDir.x * _b.lat, fit.L - _b.drop, this.bendDir.z * _b.lat ).applyMatrix4( this.rodMesh.matrix );
+		// ((M21) and the one the fishing goes by, as it was before M21: OLD_TIP)
+		bendAt( OLD_TIP.L, this.bend, P, _b, OLD_TIP );
+		const along = this.flyRod ? FLY_K0 * ( OLD_TIP.L - _b.drop ) - FLY_HOLD0 : OLD_TIP.L - _b.drop - OLD_TIP.hold;
+		this.tip.set( this.bendDir.x * _b.lat, fit.hold + along, this.bendDir.z * _b.lat ).applyMatrix4( this.rodMesh.matrix );
 
 		// ---- reel: the bail opens as you wind up (finger on the line) and snaps shut on the first
 		// crank; the handle and rotor turn with the line coming in, the spool slips back when a fish
 		// takes line against the drag
-		this.bailTarget = ! this.flyRod && ( this.state === 'windup' || this.state === 'flick' || this.state === 'flying' ) ? 1 : 0; // ((M19) a fly reel's none
+		const spin = fit.kind === 'spin';
+		this.bailTarget = spin && ( this.state === 'windup' || this.state === 'flick' || this.state === 'flying' ) ? 1 : 0; // ((M19) a fly reel's none; (M21) nor a drum's
 		if ( this.bailTarget !== this._bailSnd ) {
 
 			if ( this._bailSnd !== undefined && this.audio && this.audio.bail ) this.audio.bail( this.bailTarget === 1 );
@@ -666,19 +728,22 @@ export class FishingRod {
 		if ( ( this.state === 'fighting' || this.state === 'retrieving' || this.state === 'landing' ) && dt > 0 ) {
 
 			if ( dOut < 0 ) rateT = Math.min( 1.6, - dOut / dt / LINE_PER_CRANK );
-			else if ( this.state === 'fighting' ) this.spoolAng -= Math.min( dOut, 0.5 ) / 0.023; // drag slipping
+			else if ( this.state === 'fighting' ) this.spoolAng -= Math.min( dOut, 0.5 ) / fit.lineR * ( fit.kind === 'drum' ? - 1 : 1 ); // drag slipping
 			if ( this.state === 'landing' ) rateT = this.t < 0.5 ? 1.2 : 0;
 
 		}
 
 		this.crankRate += ( rateT - this.crankRate ) * ( 1 - Math.exp( - dt * 10 ) );
 		const dCrank = this.crankRate * Math.PI * 2 * dt;
-		this.crank += dCrank;
-		// the rotor turns GEAR times faster; shown at most ~3 turns a second (it would strobe)
-		this.rotor += Math.min( dCrank * GEAR, 3.1 * Math.PI * 2 * dt );
-		this.spoolOsc = Math.sin( this.crank * 0.5 ) * 0.0035;
+		if ( ! this.electric ) this.crank += dCrank; // ((M21) the electric reel's motor turns its spool, not its handle)
+		// the rotor turns its gear's times faster; shown at most ~3 turns a second (it would strobe). ((M21) A drum's spool turns
+		// against its crank (a gear's between them) at its own gear, a fly reel's with it: its knob's on the spool)
+		const turn = Math.min( dCrank * fit.ratio, 3.1 * Math.PI * 2 * dt );
+		if ( spin ) this.rotor += turn;
+		else this.spoolTurn += fit.kind === 'fly' ? turn : - turn;
+		this.spoolOsc = Math.sin( this.crank * 0.5 ) * fit.osc;
 		this.lineFill = 1 - Math.min( 1, this.lineOut / this.spoolM ) * 0.5;
-		this.rodMat.uniforms.reelAnim.value.set( this.rotor, this.bail, this.crank, this.spoolAng );
+		this.rodMat.uniforms.reelAnim.value.set( this.rotor, this.bail, this.crank, this.spoolAng + this.spoolTurn );
 		if ( this.audio && this.audio.rodLoop ) this.audio.rodLoop( this.crankRate, this.state === 'fighting' && dOut > 0 && dt > 0 ? dOut / dt : this.scream || 0, this.state === 'fighting' && fight ? fight.tension : 0, this.electric );
 		this.rodMat.uniforms.reelAnim2.value.set( this.spoolOsc, this.lineFill, 0, 0 );
 
@@ -829,15 +894,15 @@ export class FishingRod {
 		const out = this.lineInWater;
 		this.lineOut = out ? this.tip.distanceTo( this.bobber ) + ( this.state === 'fighting' ? 0 : this.hookM ) : 0;
 		const lm = this.lineMat.uniforms;
-		lm.lineA.value.copy( this.tip );
+		lm.lineA.value.copy( this.lineTip );
 		lm.lineB.value.copy( this.bobber );
 		const taut = this.state === 'fighting' ? Math.min( 1, ( fight ? fight.tension : 0 ) * 1.5 ) : this.state === 'retrieving' ? 0.6 : 0;
 		const sag = this.lineOut * ( this.state === 'flying' ? 0.03 : 0.07 ) * ( 1 - taut ) + 0.02;
-		lm.lineCtl.value.copy( this.tip ).lerp( this.bobber, 0.5 ).y -= sag;
+		lm.lineCtl.value.copy( this.lineTip ).lerp( this.bobber, 0.5 ).y -= sag;
 		// ((M19) a fly line on the water lies on it: down from the tip and along the surface to the fly, not sagging under it)
-		if ( this.rig === 'fly' && ( this.state === 'floating' || this.state === 'retrieving' ) ) lm.lineCtl.value.copy( this.tip ).lerp( this.bobber, 0.15 ).setY( this.waterY + 0.02 );
+		if ( this.rig === 'fly' && ( this.state === 'floating' || this.state === 'retrieving' ) ) lm.lineCtl.value.copy( this.lineTip ).lerp( this.bobber, 0.15 ).setY( this.waterY + 0.02 );
 		// the line near the rod follows the rod's motion a little (whips on the flick)
-		if ( this.state === 'flying' ) lm.lineCtl.value.addScaledVector( _v.copy( this.tip ).sub( tipOld ), - 2 );
+		if ( this.state === 'flying' ) lm.lineCtl.value.addScaledVector( _v.copy( this.lineTip ).sub( tipOld ), - 2 );
 		lm.lineShow.value = this.rig === 'fly' ? 1.8 : 1; // ((M19) a fly line's 1.1 to 1.5 mm, mono's a third of it: rigs/FlyLine.js)
 		if ( this.rig === 'fly' ) this.lineMat.emissive.setHex( FLY_LINE_COLOR ).multiplyScalar( FLY_LINE_GLOW * ( 1 - Math.min( 1, G.night.value ) ) ); // (and its glow, by day)
 		this.lineMesh.visible = visible && out && this.state !== 'shoot'; // ((M19) shot, it's drawn as it unrolls: FlyLine
@@ -945,179 +1010,6 @@ export class FishingRod {
 }
 
 // ---- geometry
-
-function buildRodGeometry() {
-
-	const L = ROD_L;
-	const parts = [];
-	const M = ( x, y, z, rx = 0, ry = 0, rz = 0, sx = 1, sy = sx, sz = sx ) => mat4( x, y, z, rx, ry, rz, sx, sy, sz );
-	const add = ( g, o ) => parts.push( prepare( g, o ) );
-	const V = ( x, y, z ) => new Vector3( x, y, z );
-	// materials ( colour, roughness, metalness, pattern )
-	const BLANK = { color: 0x15191e, rough: 0.42, metal: 0.15, pattern: PAT.carbon };
-	const WRAP = { color: 0x0c0d10, rough: 0.35, metal: 0, pattern: PAT.thread };
-	const TRIM = { color: 0x8a6a2a, rough: 0.3, metal: 0.4, pattern: PAT.thread }; // gold metallic trim thread
-	const EVA = { color: 0x2a2b2d, rough: 0.82, metal: 0, pattern: PAT.eva };
-	const RUBBER = { color: 0x151515, rough: 0.8, metal: 0, pattern: PAT.rubber };
-	const GUN = { color: 0x2d3034, rough: 0.32, metal: 0.85, pattern: PAT.machined }; // gunmetal
-	const SEAT = { color: 0x1c1e21, rough: 0.45, metal: 0.2, pattern: PAT.plain }; // graphite reel seat
-	const KNURL = { color: 0x3a3d42, rough: 0.35, metal: 0.9, pattern: PAT.knurl };
-	const FRAME = { color: 0x2a2c2f, rough: 0.25, metal: 1, pattern: PAT.machined }; // guide frames
-	const INSERT = { color: 0x55595e, rough: 0.12, metal: 0.3, pattern: PAT.plain }; // SiC insert
-	const STAINLESS = { color: 0xb7bcc0, rough: 0.16, metal: 1, pattern: PAT.machined };
-	const CHAMP = { color: 0xa88d5a, rough: 0.24, metal: 1, pattern: PAT.machined }; // champagne anodised
-	const BLACK = { color: 0x111214, rough: 0.4, metal: 0.3, pattern: PAT.plain };
-	const BRAID = { color: 0x7f9a5a, rough: 0.7, metal: 0, pattern: PAT.braid }; // moss-green braid
-
-	// ---------------------------------------------------------------- rod
-	// butt cap
-	add( lathe( [ [ 0, 0 ], [ 0.012, 0.001 ], [ 0.0152, 0.006 ], [ 0.0156, 0.016 ], [ 0.0149, 0.022 ] ], 24 ), RUBBER );
-	// rear grip (EVA), swelling a little in the middle
-	add( lathe( [ [ 0.0147, 0.022 ], [ 0.0151, 0.07 ], [ 0.0152, 0.13 ], [ 0.0144, 0.2 ], [ 0.0131, 0.248 ] ], 24 ), EVA );
-	// winding check, a short bare blank (split grip) with a trim ring
-	add( lathe( [ [ 0.0128, 0.248 ], [ 0.0128, 0.252 ], [ 0.0098, 0.256 ] ], 20 ), CHAMP );
-	add( cylinder( 0.0086, 0.009, 0.074, 16 ), { ...BLANK, matrix: M( 0, 0.293, 0 ) } );
-	add( cylinder( 0.0093, 0.0093, 0.006, 16 ), { ...TRIM, matrix: M( 0, 0.305, 0 ) } );
-	// reel seat: knurled lock nut, threads, rear hood, barrel (foot on the -Z side), front hood
-	add( cylinder( 0.0128, 0.0128, 0.024, 24 ), { ...KNURL, matrix: M( 0, 0.342, 0 ) } );
-	add( lathe( [ [ 0.0105, 0.354 ], [ 0.0118, 0.358 ], [ 0.0121, 0.372 ], [ 0.0112, 0.38 ] ], 20 ), GUN );
-	add( cylinder( 0.0104, 0.0104, 0.056, 20 ), { ...SEAT, matrix: M( 0, 0.405, 0 ) } );
-	add( lathe( [ [ 0.0112, 0.43 ], [ 0.0121, 0.438 ], [ 0.0118, 0.448 ], [ 0.0102, 0.452 ] ], 20 ), GUN );
-	// fore grip (EVA) and winding check
-	add( lathe( [ [ 0.0112, 0.452 ], [ 0.0118, 0.462 ], [ 0.0112, 0.5 ], [ 0.0095, 0.53 ] ], 20 ), EVA );
-	add( lathe( [ [ 0.0095, 0.53 ], [ 0.0095, 0.533 ], [ 0.0078, 0.536 ] ], 16 ), CHAMP );
-	// the blank: tapered, many rings so it bends smoothly
-	{
-		const prof = [];
-		const n = 70;
-		for ( let i = 0; i <= n; i ++ ) {
-
-			const y = MathUtils.lerp( BLANK_START, L - 0.004, i / n );
-			prof.push( [ blankR( y ), y ] );
-
-		}
-
-		add( lathe( prof, 12 ), BLANK );
-
-	}
-
-	// decal band and trim ahead of the fore grip
-	add( cylinder( blankR( 0.6 ) + 0.0004, blankR( 0.56 ) + 0.0004, 0.05, 12 ), { ...WRAP, matrix: M( 0, 0.585, 0 ) } );
-	add( cylinder( blankR( 0.61 ) + 0.0006, blankR( 0.61 ) + 0.0006, 0.003, 12 ), { ...TRIM, matrix: M( 0, 0.612, 0 ) } );
-	// hook keeper: a small wire loop under the blank
-	add( torus( 0.0035, 0.0006, 5, 14, Math.PI ), { ...STAINLESS, matrix: M( 0, 0.572, - blankR( 0.572 ) - 0.0005, 0, Math.PI / 2, Math.PI / 2 ) } );
-	add( cylinder( blankR( 0.572 ) + 0.0005, blankR( 0.572 ) + 0.0005, 0.012, 10 ), { ...WRAP, matrix: M( 0, 0.572, 0 ) } );
-
-	// guides: frame ring with a ceramic insert, two legs to a foot on the blank, thread wraps
-	for ( let i = 0; i < GUIDES.length; i ++ ) {
-
-		const [ y, r, hgt ] = GUIDES[ i ];
-		const br = blankR( y );
-		const zc = - hgt;
-		const fr = r + Math.max( 0.0011, r * 0.16 ); // frame ring radius
-		const t = Math.max( 0.0006, r * 0.07 );
-		add( torus( fr, t * 1.3, 6, 22 ), { ...FRAME, matrix: M( 0, y, zc, Math.PI / 2, 0, 0 ) } );
-		add( torus( r + t * 0.6, t * 0.9, 6, 22 ), { ...INSERT, matrix: M( 0, y, zc, Math.PI / 2, 0, 0 ) } );
-		// legs splay from the foot to either side of the ring
-		const footL = Math.max( 0.012, hgt * 0.55 );
-		const yf = y - footL * 0.7;
-		for ( const sx of [ - 1, 1 ] ) {
-
-			const top = V( sx * fr * 0.72, y - 0.0005, zc + fr * 0.69 );
-			add( rod( V( 0, yf, - br - 0.0008 ), top, Math.max( 0.0007, r * 0.09 ), 5, Math.max( 0.0005, r * 0.07 ) ), FRAME );
-
-		}
-
-		// the foot on the blank and its wrap
-		add( roundedBox( 0.0035, footL, 0.0012, 0.0005, 1 ), { ...FRAME, matrix: M( 0, yf, - br - 0.0006 ) } );
-		add( cylinder( blankR( yf + footL * 0.6 ) + 0.0007, blankR( yf - footL * 0.6 ) + 0.0007, footL * 1.25, 10 ), { ...WRAP, matrix: M( 0, yf, 0 ) } );
-		add( cylinder( blankR( yf + footL * 0.64 ) + 0.00085, blankR( yf + footL * 0.64 ) + 0.00085, 0.0016, 10 ), { ...TRIM, matrix: M( 0, yf + footL * 0.64, 0 ) } );
-
-	}
-
-	// tip-top: tube over the blank end and a small ring
-	add( cylinder( 0.0014, 0.0016, 0.012, 8 ), { ...FRAME, matrix: M( 0, L - 0.006, 0 ) } );
-	add( torus( 0.0029, 0.0007, 6, 16 ), { ...FRAME, matrix: M( 0, L, - 0.004, Math.PI / 2, 0, 0 ) } );
-	add( torus( 0.0023, 0.0005, 6, 16 ), { ...INSERT, matrix: M( 0, L, - 0.004, Math.PI / 2, 0, 0 ) } );
-
-	// the line from the spool through every guide to the tip (bends with the blank)
-	{
-		const pts = [ V( 0, 0.425, REEL_Z + 0.022 ) ];
-		for ( const [ y, , hgt ] of GUIDES ) pts.push( V( 0, y, - hgt + 0.0005 ) );
-		pts.push( V( 0, L, - 0.004 ) );
-		const LINE = { color: 0x9fb07e, rough: 0.6, metal: 0 };
-		for ( let i = 0; i < pts.length - 1; i ++ ) add( rod( pts[ i ], pts[ i + 1 ], 0.00028, 3 ), LINE );
-
-	}
-
-	// ---------------------------------------------------------------- reel (axis along +Y at z = REEL_Z)
-	const RZ = REEL_Z;
-	// foot in the seat and the stem down to the body
-	add( roundedBox( 0.011, 0.062, 0.004, 0.0015, 2 ), { ...GUN, matrix: M( 0, 0.405, - 0.0118 ) } );
-	// the stem: one flat blade, wide along the rod, raked forward from the body to the foot
-	add( roundedBox( 0.0072, 0.02, 0.08, 0.0032, 3 ), { ...GUN, matrix: M( 0, 0.377, - 0.045, - 0.675, 0, 0 ) } );
-	add( roundedBox( 0.0082, 0.03, 0.012, 0.004, 3 ), { ...GUN, matrix: M( 0, 0.352, RZ + 0.02, - 0.35, 0, 0 ) } );
-	// gearbox body: one smooth teardrop shell from the rotor neck back to the tail, flattened at
-	// the sides where the side plates sit
-	add( lathe( [ [ 0, 0.279 ], [ 0.006, 0.28 ], [ 0.0125, 0.286 ], [ 0.0185, 0.298 ], [ 0.0225, 0.314 ], [ 0.0238, 0.33 ], [ 0.0228, 0.342 ], [ 0.0198, 0.35 ], [ 0.018, 0.352 ] ], 32 ), { ...GUN, matrix: M( 0, 0, RZ, 0, 0, 0, 0.82, 1, 1 ) } );
-	// side plates: slim inset discs with a machined trim ring (the handle side carries the crank boss)
-	for ( const sx of [ - 1, 1 ] ) {
-
-		add( cylinder( 0.0142, 0.0148, 0.0022, 28 ), { ...BLACK, matrix: M( sx * 0.0188, BODY_Y, RZ, 0, 0, Math.PI / 2 ) } );
-		add( torus( 0.0145, 0.0007, 6, 32 ), { ...CHAMP, matrix: M( sx * 0.0197, BODY_Y, RZ, 0, Math.PI / 2, 0 ) } );
-
-	}
-
-	add( cylinder( 0.0068, 0.0085, 0.011, 18 ), { ...GUN, matrix: M( - 0.025, BODY_Y, RZ, 0, 0, Math.PI / 2 ) } );
-	add( cylinder( 0.0045, 0.0045, 0.004, 12 ), { ...CHAMP, matrix: M( 0.021, BODY_Y, RZ, 0, 0, Math.PI / 2 ) } ); // screw cap
-	// neck and trim ring between body and rotor
-	add( lathe( [ [ 0.018, 0.348 ], [ 0.0205, 0.353 ], [ 0.0208, 0.357 ] ], 28 ), { ...CHAMP, matrix: M( 0, 0, RZ ) } );
-
-	// rotor (anim 1): a cup open to the front, two arms carrying the bail
-	const ROT = { ...BLACK, anim: 1 };
-	add( lathe( [ [ 0.006, 0.356 ], [ 0.017, 0.358 ], [ 0.0235, 0.362 ], [ 0.0268, 0.37 ], [ 0.0275, 0.381 ], [ 0.0262, 0.386 ] ], 32 ), { ...ROT, matrix: M( 0, 0, RZ ) } );
-	add( lathe( [ [ 0.0262, 0.386 ], [ 0.0248, 0.3865 ] ], 32 ), { ...CHAMP, anim: 1, matrix: M( 0, 0, RZ ) } );
-	for ( const sx of [ - 1, 1 ] ) {
-
-		add( roundedBox( 0.0065, 0.044, 0.013, 0.002, 2 ), { ...ROT, matrix: M( sx * 0.0285, 0.382, RZ ) } );
-		// bail arm plates at the pivots (anim 2: they flip with the bail)
-		add( roundedBox( 0.003, 0.012, 0.008, 0.001, 1 ), { ...STAINLESS, anim: 2, matrix: M( sx * 0.0322, PIVOT_Y, RZ ) } );
-
-	}
-
-	// bail wire (anim 2): around the spool from one arm to the other, and the line roller
-	{
-		const pts = [];
-		for ( let i = 0; i <= 16; i ++ ) {
-
-			const a = Math.PI * i / 16;
-			pts.push( V( 0.0322 * Math.cos( a ), PIVOT_Y + 0.006 * Math.sin( a ), RZ - 0.0322 * Math.sin( a ) ) );
-
-		}
-
-		add( tube( pts, 0.0011, 40, 6 ), { ...STAINLESS, anim: 2 } );
-		add( cylinder( 0.0032, 0.0032, 0.006, 12 ), { ...CHAMP, anim: 2, matrix: M( 0.0302, PIVOT_Y + 0.0015, RZ - 0.0035, Math.PI / 2, 0, 0 ) } );
-
-	}
-
-	// spool (anim 4) with braid (anim 5), front lip and drag knob
-	const SP = ( o ) => ( { ...o, anim: 4, matrix: M( 0, 0, RZ ) } );
-	add( lathe( [ [ 0.0282, 0.375 ], [ 0.0288, 0.381 ], [ 0.0285, 0.388 ], [ 0.0252, 0.392 ], [ 0.0238, 0.393 ] ], 36 ), SP( CHAMP ) );
-	add( lathe( [ [ 0.0236, 0.3925 ], [ 0.0238, 0.395 ], [ 0.0238, 0.41 ], [ 0.0236, 0.4125 ] ], 36 ), { ...BRAID, anim: 5, matrix: M( 0, 0, RZ ) } );
-	add( lathe( [ [ 0.0205, 0.3922 ], [ 0.0205, 0.4128 ] ], 24 ), SP( CHAMP ) ); // arbor under the braid
-	add( lathe( [ [ 0.0236, 0.4125 ], [ 0.0262, 0.4135 ], [ 0.0266, 0.4155 ], [ 0.0235, 0.418 ], [ 0.016, 0.4195 ], [ 0.012, 0.42 ] ], 36 ), SP( CHAMP ) );
-	add( lathe( [ [ 0.012, 0.42 ], [ 0.0125, 0.422 ], [ 0.0126, 0.431 ], [ 0.0118, 0.434 ], [ 0.009, 0.4355 ], [ 0, 0.436 ] ], 24 ), SP( { ...BLACK, pattern: PAT.knurl } ) );
-
-	// crank handle (anim 3): shaft cap, arm, T-knob (on the left, cranked with the other hand)
-	const CR = ( o, m ) => ( { ...o, anim: 3, matrix: m } );
-	add( cylinder( 0.0052, 0.0052, 0.008, 12 ), CR( GUN, M( - 0.0315, BODY_Y, RZ, 0, 0, Math.PI / 2 ) ) );
-	add( roundedBox( 0.0038, 0.058, 0.0075, 0.0018, 2 ), CR( CHAMP, M( - 0.036, BODY_Y - 0.026, RZ ) ) );
-	add( cylinder( 0.0026, 0.0026, 0.01, 8 ), CR( STAINLESS, M( - 0.042, BODY_Y - 0.052, RZ, 0, 0, Math.PI / 2 ) ) );
-	add( lathe( [ [ 0.003, 0 ], [ 0.0062, 0.0015 ], [ 0.0071, 0.007 ], [ 0.0068, 0.018 ], [ 0.0048, 0.0225 ], [ 0, 0.0235 ] ], 16 ), CR( { ...RUBBER, color: 0x1d1e20 }, M( - 0.046, BODY_Y - 0.052, RZ, 0, 0, Math.PI / 2 ) ) );
-
-	return mergePrepared( parts );
-
-}
 
 function buildBobberGeometry() {
 

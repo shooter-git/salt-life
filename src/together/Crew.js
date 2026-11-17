@@ -17,6 +17,8 @@ import { nearestOnWeed } from '../game/Finds.js';
 //   spotted( finds, cam, look ) -> { kind, x, z, d } | null   (what you're looking at from up there)
 //   perched( model ) -> the model, or for a boat that's sat in, the same with a place for a rider
 //   footY( model, x, z, maxY ) -> the deck under that spot
+//   helmStand( model, upper, out ) -> out: where someone at her helm is drawn standing ({ x, y, z }, her frame), and its wheel's grips
+//                                     (null: no wheel), the tower's if upper ((M21) Together._place, and the helms' renders)
 //   const c = new Crew( together );  c.update( dt )  c.job  c.aboard()  c.backing()  c.theirCall( body )
 
 const BACKING = 0.4; // m/s of line she takes back, backing down at a knot or so against the fish's run
@@ -95,6 +97,50 @@ export function perched( model ) {
 	};
 
 	return v;
+
+}
+
+// (on the sole under her helm, at its stand if it says where a figure's seen at it (clear of a seat), else under its eye: its
+// camera's eye is lower than a figure standing there. (M21) At a helm with a wheel, the user's call of 2026-11-16: hands on it, for
+// every look. So nearer it, worked out from where its grips are: as near as the shortest reach among the players' looks needs
+// (NEAR), as long as the toes stay clear of whatever's solid ahead of the feet (her console, her dash), and the heels clear of a
+// seat behind. Someone at the console, whose wheel is low on its slope over a face as high as a knee, still leans in to it from
+// there (ArmReach.gripWheel). Not the tower's: its wheel's in reach from under its eye. Only how others see someone at a helm: the
+// eye they look from at it (helmEye, atHelm.eye) is where it was)
+// (the women's looks: shoulders 1.37 m up, 5 cm behind the feet, 0.17 m out; 0.49 m to the wrist, the hand 5 cm on round the rim,
+// less 3 cm to spare. The men's feet, 0.2 m to the toes; 0.1 m back to the heels; 3 cm clear; how wide the feet go, either side)
+const NEAR = { shoulder: 1.37, back: 0.05, out: 0.17, reach: 0.51, toes: 0.2, heels: 0.1, clear: 0.03, wide: 0.15 };
+const STANDS = new WeakMap(); // ((M21) a helm's -> { x, z }: worked out once)
+
+function nearWheel( model, H, eye ) {
+
+	const was = STANDS.get( H );
+	if ( was ) return was;
+	const N = NEAR, s = H.stand, x = s ? s[ 0 ] : eye.x, z0 = s ? s[ 1 ] : eye.z, y = footY( model, x, z0, eye.y - 1 );
+	const G = H.grips, gy = ( G[ 0 ].y + G[ 1 ].y ) / 2, gz = ( G[ 0 ].z + G[ 1 ].z ) / 2;
+	// (the shoulders that far back from the grips, flat, leaves each in reach)
+	const dy = y + N.shoulder - gy, dx = Math.max( Math.abs( G[ 0 ].x - ( x - N.out ) ), Math.abs( G[ 1 ].x - ( x + N.out ) ) );
+	let z = gz - Math.sqrt( Math.max( 0, N.reach * N.reach - dy * dy - dx * dx ) ) + N.back;
+	// (what's solid where the feet go: the heels not into what's behind (a seat), then the toes not into what's ahead, whatever's
+	// behind: the console's leaning post leaves the feet just room)
+	const under = ( c, y0, y1 ) => c.solid !== false && Math.abs( x - c.center.x ) < c.half.x + N.wide && y0 < c.center.y + c.half.y && y1 > c.center.y - c.half.y;
+	for ( const c of model.colliders ) if ( under( c, y + 0.05, y + 1 ) && c.center.z + c.half.z < z + N.toes && c.center.z + c.half.z > z - N.heels - N.clear ) z = Math.max( z, c.center.z + c.half.z + N.heels + N.clear );
+	for ( const c of model.colliders ) if ( under( c, y + 0.05, y + 0.4 ) && c.center.z - c.half.z > z0 ) z = Math.min( z, c.center.z - c.half.z - N.toes - N.clear );
+	const out = { x, z };
+	STANDS.set( H, out );
+	return out;
+
+}
+
+export function helmStand( model, upper, out = { x: 0, y: 0, z: 0, grips: null } ) {
+
+	const up = upper && model.towerHelm, H = up ? model.towerHelm : model.helm, eye = up ? model.towerHelm.eye : model.helmEye;
+	const at = ! up && H && H.stand, near = ! up && H && H.grips ? nearWheel( model, H, eye ) : null;
+	out.x = near ? near.x : at ? at[ 0 ] : eye.x;
+	out.z = near ? near.z : at ? at[ 1 ] : eye.z;
+	out.y = footY( model, out.x, out.z, eye.y - 1 );
+	out.grips = ( H && H.grips ) || null;
+	return out;
 
 }
 
