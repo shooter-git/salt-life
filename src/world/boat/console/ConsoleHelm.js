@@ -208,11 +208,13 @@ function leaningPost( kit ) {
 
 	}
 
+	// ((M21) folded flat against the post, as a leaning post's footrest folds out of the way of whoever stands at the wheel: out, its
+	// treads took 14 cm of the 36 between the post and the console's foot, across the shins of a player stood at it, docs/m21/deckhand.md)
 	for ( const x of [ - 0.25, 0.25 ] ) {
 
-		const y = S + 0.21, z = P.z1 + 0.09;
-		kit.add( 'fittings', box( 0.2, 0.012, 0.1 ).translate( x, y, z ), BLACK );
-		for ( const d of [ - 0.09, 0.09 ] ) kit.add( 'fittings', rod( V( x + d, y - 0.004, z ), V( x + d, y - 0.004, P.z1 ), 0.008, 5 ), STAINLESS );
+		const y = S + 0.21, z = P.z1 + 0.008;
+		kit.add( 'fittings', box( 0.2, 0.1, 0.012 ).translate( x, y - 0.05, z ), BLACK );
+		for ( const d of [ - 0.09, 0.09 ] ) kit.add( 'fittings', rod( V( x + d, y, P.z1 + 0.004 ), V( x + d, y - 0.1, P.z1 + 0.004 ), 0.008, 5 ), STAINLESS );
 
 	}
 

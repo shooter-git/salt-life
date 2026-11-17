@@ -224,7 +224,7 @@ Asked after the deck hand was merged: he stays ashore at her berth, as built; th
 - **He isn't solid:** you walk through him in her corner. A collider for him would be hers, and walked on by guests' games too.
 - **He doesn't walk** from his corner up the ladder to her helm and back: a cut. Walking him would mean the ladder's climb for a character.
 - **His hands stay at ten to two** as the wheel turns under them.
-- **The console's leaning post's footrest bars** cross the left shin of whoever's at her helm (above): there's no room for the feet between them and the console's face.
+- ~~**The console's leaning post's footrest bars** cross the left shin of whoever's at her helm (above).~~ Fixed on the user's word (2026-11-17): the bars are drawn folded flat against the post (`ConsoleHelm.js`' `leaningPost`), as a leaning post's footrest folds away for whoever stands at the wheel. Out, their treads took 14 cm of the 36 between the post and the console's foot. Re-rendered on low and mid (`tools/deckhand/helms.mjs`): the legs clear, the folded treads behind the calves; the hands still on the rim for every look, the stands unchanged.
 - **At her berth he's ashore** (above), as the user decided.
 - **A second copy of his look** loads if a player in `player-m1` comes after him: theirs is loaded with all the players' clips, his with two.
 - **Someone else's mate on a copy of their sportfisher** (Robin's, on Sam's game) loads `player-m1` on Sam's game, as Robin's own game does. That's one skinned character more on a guest's phone.
